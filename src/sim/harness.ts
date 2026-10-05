@@ -11,7 +11,7 @@ import { pack } from './values';
 /** Does this component only make sense at switch level (contains transistors)? */
 export function needsSwitchLevel(def: ComponentDef): boolean {
   if (def.prim === 'nmos' || def.prim === 'pmos' || def.prim === 'vdd' || def.prim === 'gnd') return true;
-  if (def.prim || def.behavior) return false;
+  // Anything whose own inside is transistors (including the NAND primitive) is shown at switch level.
   const nl = netlistOf(def);
   return !!nl && nl.level === 'switch';
 }

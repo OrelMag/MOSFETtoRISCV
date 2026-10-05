@@ -1,0 +1,137 @@
+/* Design tokens. Every colour is defined for light and dark; "auto" follows the OS. */
+
+:root {
+  color-scheme: light;
+  --font-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
+
+  --bg: #f5f6fa;
+  --surface: #ffffff;
+  --surface-2: #f0f2f7;
+  --surface-3: #e7eaf2;
+  --border: #e1e4ec;
+  --border-strong: #cdd2de;
+  --text: #141824;
+  --text-2: #4d5568;
+  --muted: #858ca0;
+  --accent: #5b4cf0;
+  --accent-soft: #ecebff;
+  --accent-text: #ffffff;
+  --good: #0f9f6e;
+  --good-soft: #e3f7ef;
+  --warn: #c2700c;
+  --warn-soft: #fff4e0;
+  --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 4px 16px rgb(16 24 40 / 6%);
+  --shadow-lg: 0 8px 40px rgb(16 24 40 / 14%);
+
+  /* schematic */
+  --canvas: #fbfbfd;
+  --grid: #d6dae4;
+  --sym-stroke: #2b3142;
+  --sym-fill: #ffffff;
+  --box-fill: #f4f4ff;
+  --box-stroke: #4a5170;
+  --plumb: #6b7390;
+  --w0: #b3bac9;
+  --w1: #e8590c;
+  --w1-glow: rgb(232 89 12 / 22%);
+  --wx: #e11d48;
+  --wz: #8b5cf6;
+  --bus: #2f6fe4;
+  --bus1: #1e5fd8;
+  --bus-label-bg: #e8f0ff;
+  --bus-label-text: #1b4fb8;
+  --hl: #5b4cf0;
+  --channel-on: #e8590c;
+  --sel: #5b4cf0;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --topbar-h: 56px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #0a0c12;
+    --surface: #11141c;
+    --surface-2: #171b25;
+    --surface-3: #1f2430;
+    --border: #232835;
+    --border-strong: #313849;
+    --text: #e8eaf1;
+    --text-2: #a7adbd;
+    --muted: #6d7488;
+    --accent: #8b7fff;
+    --accent-soft: #221f45;
+    --accent-text: #0a0c12;
+    --good: #34d399;
+    --good-soft: #0f2a22;
+    --warn: #f5a524;
+    --warn-soft: #2d2210;
+    --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 25%);
+    --shadow-lg: 0 8px 40px rgb(0 0 0 / 50%);
+
+    --canvas: #0c0f16;
+    --grid: #232a38;
+    --sym-stroke: #c9cfdc;
+    --sym-fill: #141824;
+    --box-fill: #171b2a;
+    --box-stroke: #8d95b3;
+    --plumb: #8891ab;
+    --w0: #3a4152;
+    --w1: #ff8a3d;
+    --w1-glow: rgb(255 138 61 / 30%);
+    --wx: #fb5779;
+    --wz: #a78bfa;
+    --bus: #4d8dff;
+    --bus1: #7aa9ff;
+    --bus-label-bg: #13213f;
+    --bus-label-text: #a9c6ff;
+    --hl: #a397ff;
+    --channel-on: #ff8a3d;
+    --sel: #a397ff;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0a0c12;
+  --surface: #11141c;
+  --surface-2: #171b25;
+  --surface-3: #1f2430;
+  --border: #232835;
+  --border-strong: #313849;
+  --text: #e8eaf1;
+  --text-2: #a7adbd;
+  --muted: #6d7488;
+  --accent: #8b7fff;
+  --accent-soft: #221f45;
+  --accent-text: #0a0c12;
+  --good: #34d399;
+  --good-soft: #0f2a22;
+  --warn: #f5a524;
+  --warn-soft: #2d2210;
+  --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 25%);
+  --shadow-lg: 0 8px 40px rgb(0 0 0 / 50%);
+
+  --canvas: #0c0f16;
+  --grid: #232a38;
+  --sym-stroke: #c9cfdc;
+  --sym-fill: #141824;
+  --box-fill: #171b2a;
+  --box-stroke: #8d95b3;
+  --plumb: #8891ab;
+  --w0: #3a4152;
+  --w1: #ff8a3d;
+  --w1-glow: rgb(255 138 61 / 30%);
+  --wx: #fb5779;
+  --wz: #a78bfa;
+  --bus: #4d8dff;
+  --bus1: #7aa9ff;
+  --bus-label-bg: #13213f;
+  --bus-label-text: #a9c6ff;
+  --hl: #a397ff;
+  --channel-on: #ff8a3d;
+  --sel: #a397ff;
+}

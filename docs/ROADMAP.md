@@ -61,17 +61,18 @@ equivalent of the primer's Yosys proofs.
 
 Status legend: ✅ done · 🚧 in progress · ⏳ planned
 
-### Phase 0 — Foundation 🚧
+### Phase 0 — Foundation ✅
 - ✅ Repo, Vite + TypeScript, Vitest, GitHub Pages CI
-- 🚧 Simulation core: values, flattener, event-driven engine, oscillation guard
-- 🚧 Switch-level solver for transistor views
-- 🚧 Schematic renderer: symbols, routing, value-coloured wires, bus labels, pan/zoom
-- 🚧 Drill-down inspector with breadcrumbs; "isolate on workbench"
-- 🚧 Side panels: info and stats, live truth table, generated and behavioural Verilog
-- 🚧 App shell: chapter navigation, light / dark / auto theme, radix setting, deep links
-- 🚧 Propagation mode: step or animate one gate delay at a time
+- ✅ Simulation core: values, flattener, event-driven engine, oscillation detection + relaxation (metastability)
+- ✅ Switch-level solver for transistor views (conducting channels highlighted)
+- ✅ Schematic renderer: symbols, routing, value-coloured wires, bus labels, junction dots, pan/zoom
+- ✅ Drill-down with breadcrumbs down to a single live MOSFET; "open on workbench"
+- ✅ Inspector: info and measured cost, live truth table, hand-written + generated Verilog, waveforms
+- ✅ App shell: chapters, progress, light / dark / auto theme, HEX/BIN/DEC, deep links, mobile layout
+- ✅ Propagation: "slow motion" animation and single-step, settle time in gate delays
+- ⏳ Mixed-level simulation (behavioural leaves + lock-step sub-simulation) for CPU-scale designs
 
-### Phase 1 — The early chapters 🚧
+### Phase 1 — The early chapters ✅
 | # | Chapter | Content |
 |---|---|---|
 | 0 | The map | The abstraction ladder; how to inspect anything |
@@ -90,7 +91,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ALU (add, sub, and, or, xor, shifts, slt/sltu) and flags; barrel shifter
 - Carry-lookahead and Kogge–Stone adders with depth comparison (optimization intro)
 - Register file (32 × 32, x0 hard-wired), two read ports and one write port
-- **Sandbox**: full wiring editor (place parts from the library, wire, package into a new
+- **Sandbox**: full wiring editor (today the *workbench* opens any library component with free inputs) (place parts from the library, wire, package into a new
   chip, save to local storage and share via URL); Turing-Complete-style build challenges
   checked against a truth table or test vectors
 

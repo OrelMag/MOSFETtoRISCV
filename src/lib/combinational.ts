@@ -409,6 +409,8 @@ export const busMux2 = memo((w: number): ComponentDef => {
  * Select bit 0 drives the first column, bit k-1 the last.
  */
 export const muxTree = memo((k: number, w: number, pitch: number = 2): ComponentDef => {
+  // A one-level tree is just a bus multiplexer (ports a, b, s); keep d0/d1 naming via a tree only for k ≥ 2.
+  if (k === 1 && pitch === 2) return muxTree1(w);
   const N = 2 ** k;
   const m2 = busMux2(w);
   const mh = symbolGeom(m2).h;
@@ -449,5 +451,28 @@ export const muxTree = memo((k: number, w: number, pitch: number = 2): Component
     symbol: { kind: pitch === 2 && N <= 8 ? 'mux' : 'box', label: `MUX ${N}:1`, pitch },
     spec: (v) => [v[v[N]]],
     netlist: () => ({ pins, instances, nets }),
+  });
+});
+
+/** 2:1 word multiplexer with tree-style port names (d0, d1, s, y). */
+const muxTree1 = memo((w: number): ComponentDef => {
+  const m = busMux2(w);
+  return define({
+    id: `mux2tree${w}`, name: `2:1 multiplexer (${w}-bit)`, category: 'routing',
+    summary: `Selects one of two ${w}-bit inputs: a single 2:1 multiplexer.`,
+    ports: [
+      { name: 'd0', width: w, dir: 'in' }, { name: 'd1', width: w, dir: 'in' },
+      { name: 's', width: 1, dir: 'in', side: 'bottom' }, { name: 'y', width: w, dir: 'out' },
+    ],
+    symbol: { kind: 'mux' },
+    spec: ([d0, d1, s]) => [s ? d1 : d0],
+    netlist: () => ({
+      pins: { d0: [1, 4], d1: [1, 6], s: [1, 11], y: [13, 5] },
+      instances: [{ name: 'm', def: m, at: [5, 2] }],
+      nets: [
+        { name: 'd0', ends: ['d0', 'm.a'] }, { name: 'd1', ends: ['d1', 'm.b'] },
+        { name: 's', ends: ['s', 'm.s'] }, { name: 'y', ends: ['m.y', 'y'] },
+      ],
+    }),
   });
 });

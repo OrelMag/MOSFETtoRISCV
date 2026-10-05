@@ -1,0 +1,29 @@
+import { chAdders, chRouting } from './ch-arith';
+import { chBinary, chGates } from './ch-gates';
+import { chLatches, chMemory, chRegisters } from './ch-memory';
+import { chInverter, chMap, chMosfet, chNand } from './ch-transistors';
+import type { Chapter, FutureChapter } from './types';
+
+export const chapters: Chapter[] = [
+  chMap, chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
+];
+
+export const future: FutureChapter[] = [
+  { num: 11, title: 'The ALU', level: 'Computing', blurb: 'Add, subtract, AND, OR, XOR, shifts and comparisons in one block, chosen by a control code.' },
+  { num: 12, title: 'Faster adders', level: 'Optimization', blurb: 'Carry-lookahead and Kogge–Stone: trading gates for speed.' },
+  { num: 13, title: 'The register file', level: 'Computing', blurb: '32 registers, two read ports, one write port, and x0 wired to zero.' },
+  { num: 14, title: 'Instructions & assembly', level: 'ISA', blurb: 'RISC-V encodings, an in-browser assembler, and your first programs.' },
+  { num: 15, title: 'A single-cycle CPU', level: 'Processor', blurb: 'Datapath + control: watch each instruction light up its path.' },
+  { num: 16, title: 'Multicycle & microcode', level: 'Processor', blurb: 'Hardwired FSM versus microprogrammed control.' },
+  { num: 17, title: 'Pipelining', level: 'Processor', blurb: 'Five stages, forwarding, stalls, flushes and branch prediction.' },
+  { num: 18, title: 'Multiply & divide', level: 'Arithmetic', blurb: 'Array, Booth and Dadda multipliers; restoring division; the M extension.' },
+  { num: 19, title: 'Traps & interrupts', level: 'Privileged ISA', blurb: 'CSRs, exceptions, a timer interrupt, and the trap handler.' },
+  { num: 20, title: 'Caches & the memory hierarchy', level: 'Memory', blurb: 'SRAM and DRAM cells, direct-mapped and set-associative caches.' },
+  { num: 21, title: 'Floating point', level: 'Arithmetic', blurb: 'IEEE 754 and an FPU, from the primer\'s design.' },
+  { num: 22, title: 'Many cores', level: 'Systems', blurb: 'Coherence, atomics and a spin-lock on a multi-core RISC-V.' },
+  { num: 23, title: 'From netlist to silicon', level: 'Physical design', blurb: 'Standard cells, layout, place & route, and the finished die.' },
+];
+
+export function chapterById(id: string): Chapter | undefined {
+  return chapters.find((c) => c.id === id);
+}

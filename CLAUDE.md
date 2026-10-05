@@ -137,7 +137,8 @@ as a black box only after its inside has been shown. Say what each thing *costs*
   3. For visual changes, check `npm run dev` in light and dark themes.
 - **Merge with `--no-ff`** so every feature stays a visible merge commit:
   `git checkout main && git pull && git merge --no-ff <branch>`, then push `main`.
-- After a successful merge and push, delete the branch locally and on `origin`.
+- **Never delete branches on GitHub (`origin`).** They are kept as history. Deleting the
+  local copy after a successful merge and push is fine.
 - Never force-push `main`, never rewrite its history, never skip hooks (`--no-verify`).
 
 ## Testing expectations
