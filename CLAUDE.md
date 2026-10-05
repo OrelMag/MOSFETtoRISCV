@@ -1,0 +1,147 @@
+# CLAUDE.md
+
+Guidance for Claude Code (and humans) working in this repository.
+
+## What this is
+
+**MOSFET → RISC-V**: an educational static website that walks a learner from a single
+transistor to a multi-core RISC-V processor laid out on silicon. Each level is built only
+from the levels below it, and every component on screen is a **transparent box**: the
+learner can open any instance and keep drilling down to MOSFETs.
+
+It is *not* primarily a logic simulator. The simulator exists so that every value, gate
+count and delay on screen is computed rather than drawn. The product is the narrative
+journey. See `docs/ROADMAP.md` for the plan and phase status.
+
+Inspirations: Turing Complete (progression and challenges), Sebastian Lague's Digital
+Logic Sim (visual style, packaging circuits into chips), nand2tetris, Harris & Harris.
+`References/` holds an earlier primer (PDF) and its SystemVerilog sources
+(`nand2cpu_sources.zip`), which are the canonical reference for structure and for HDL
+snippets (e.g. the 9-NAND full adder, master–slave DFF, RV32I single-cycle and pipeline).
+
+## Commands
+
+```bash
+npm install          # once
+npm run dev          # Vite dev server
+npm test             # Vitest (simulation + library correctness), must stay green
+npm run typecheck    # tsc --noEmit (strict)
+npm run build        # typecheck + production build into dist/ (relative base, deploy anywhere)
+npm run preview      # serve dist/
+```
+
+CI (`.github/workflows/deploy.yml`) runs tests + build and deploys `dist/` to GitHub Pages
+on every push to `main`.
+
+## Stack and conventions
+
+- Vite + TypeScript (strict, `verbatimModuleSyntax`: use `import type` for types). No UI
+  framework: plain DOM + SVG with small helpers in `src/ui/dom.ts`. Keep the bundle small.
+- Hash routing (`#/c/<chapter>/<step>`, `#/workbench/<componentId>`) so the site works on
+  any static host or sub-path.
+- Theme: CSS custom properties in `src/styles/`; `data-theme="light|dark"` on `<html>`, or
+  absent for auto (`prefers-color-scheme`). Always define new colours for both themes.
+- Match the surrounding code: terse, typed, comments explain *why*.
+
+## Architecture
+
+```
+src/sim/       simulation core (no DOM)
+  types.ts       ComponentDef / PortDef / Netlist / NetDef: the single source of truth
+  geometry.ts    symbol sizes and port positions (grid units) shared by authors, router, renderer
+  flatten.ts     hierarchy → flat 1-bit nets + leaves, keeping a HierNode tree mapping every
+                 level's ports/wires to flat nets (this is what makes every box transparent)
+  gatesim.ts     event-driven 3-valued (0/1/X) simulator, unit NAND delay, transport delay,
+                 relaxation for power-on and oscillation resolution
+  switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes)
+  harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench
+  stats.ts       transistor / NAND counts, logic depth
+  verilog.ts     structural Verilog generated from any netlist
+src/lib/       the component library (registered in `registry` via define())
+  transistors.ts NMOS, PMOS, rails, CMOS inverter/NOR, NAND (prim + 4-transistor netlist), tie cells
+  gates.ts       NOT, AND, OR, NOR, XOR, XNOR, MUX2 from NAND
+  combinational.ts adders (HA, FA 13- and 9-NAND, rca(n), addSub(n), incrementer(n)), andN,
+                 decoder(n, en, pitch), busMux2(w), muxTree(k, w, pitch)
+  sequential.ts  SR latch, D latch, DFF (master–slave), DFFE, register(n), counter(n)
+  memory.ts      ram(k, w): decoder + registers + mux tree, user-scalable
+src/view/      SVG schematic renderer, router, inspector panels, waveform, truth table
+src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...)
+src/chapters/  narrative content: chapters → steps → scene / widget / challenge
+src/ui/        app shell, router, theme, settings, progress
+tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
+               bits) or randomly against its structure; sequential behaviour tests
+```
+
+### Key ideas (read before changing the core)
+
+1. **One description per component.** A `ComponentDef` has ports, a symbol, and either a
+   primitive (`prim`), a lazy `netlist()`, and/or a `behavior`. The netlist carries layout
+   (instance `at`, pin positions, optional `trunk` / `via` routing hints). Simulation,
+   drawing, statistics and Verilog are all derived from it, so they cannot drift apart.
+2. **NAND is the brick.** At gate level the only real primitive is `prim: 'nand'`. NAND's
+   own netlist is its 4-transistor CMOS circuit (`level: 'switch'`), which is shown when
+   the learner opens a NAND (solved by `SwitchSim`, driven by the parent's values).
+3. **Bit-level nets.** Buses are bundles of 1-bit flat nets. Splitters and mergers are
+   `prim: 'alias'`: pure wiring, merged by union-find in the flattener, with zero cost.
+4. **Mixed-level simulation (planned for the CPU chapters).** The flattener accepts an
+   `expand` policy. Components with a `behavior` can be kept as leaves above a size budget.
+   Opening such a box will start a lock-step sub-simulation of its structure. Tests must
+   prove behaviour ≡ structure.
+5. **Timing is real.** Every NAND has a delay of 1. `GateSim.step()` advances one time
+   instant, so the UI can animate propagation (watch the carry ripple). Transport delay
+   shows glitches. Perfectly symmetric races (an SR latch with both inputs released at
+   once) are resolved by `relax()` (Gauss–Seidel), modelling metastability resolution;
+   `sim.unstable` reports it.
+6. **Power-on.** `reset('zero')` applies `powerOn` hints (e.g. SR latch q = 0), relaxes,
+   then forces any remaining X storage loops. `'x'` keeps them unknown (educational), and
+   `'random'` models real silicon.
+
+### Authoring components
+
+- Use `define({...})` so the component appears in the library and gets tested.
+- Give every combinational component a `spec` (packed inputs → packed outputs). Tests
+  pick it up automatically from the registry or from `tests/library.test.ts`.
+- Generators (`rca(n)`, `ram(k, w)`, ...) must be memoized (one parameter set → one object).
+- Layout in grid units (1 unit = 10 px). Port positions come from `geometry.ts`; check
+  them there before placing instances. Gate shapes: inputs at y = 1, 3 (+top), output at
+  mid-height, width 4. Box pins are spaced `symbol.pitch` (default 2). Use splitter and
+  merger `pitch` and box `pitch` to line rows up so wires stay straight; use `trunk` (x of
+  the vertical trunk for horizontal drivers, y for vertical ones) and `via` (corner points)
+  to untangle feedback paths.
+- Prefer hierarchy (a box of boxes) over flat netlists: it is the whole point of the site.
+- Hand-written SystemVerilog goes in `hdl.verilog` (behavioural or structural, matching the
+  primer's style). Structural Verilog is also generated automatically.
+
+### Writing chapters
+
+A chapter is a list of steps. Each step has narrative HTML and either a `scene` (a root
+component, initial inputs, optional drill path, highlights, probes) or a `widget`, plus an
+optional `challenge`. Keep the prose short, concrete and honest. Introduce a component
+as a black box only after its inside has been shown. Say what each thing *costs*.
+
+## Git workflow
+
+- **Never work directly on `main`.** Every change or feature goes on its own branch, cut
+  from an up-to-date `main`: `feat/<topic>`, `fix/<topic>`, `docs/<topic>`, `chore/<topic>`.
+- **Commit and push often**: one logical change per commit, pushed to `origin` as you go
+  (`git push -u origin <branch>` the first time). Don't let work pile up locally.
+- Commit messages: short imperative subject (≤ 72 chars), body explaining *why* when it
+  isn't obvious. Stage files explicitly; never commit `dist/`, `node_modules/` or secrets.
+- **Ask the user before merging into `main`.** Merging deploys the site (see CI above), so
+  it is never done on Claude's own initiative. Summarize what the branch changes when asking.
+- Before merging, on the branch:
+  1. Bring it up to date with `main` (`git fetch && git merge origin/main`, or rebase if
+     the branch is unpushed/private) and resolve conflicts.
+  2. Run the full gate: `npm test`, `npm run typecheck`, `npm run build`. All must pass;
+     report failures instead of merging.
+  3. For visual changes, check `npm run dev` in light and dark themes.
+- **Merge with `--no-ff`** so every feature stays a visible merge commit:
+  `git checkout main && git pull && git merge --no-ff <branch>`, then push `main`.
+- After a successful merge and push, delete the branch locally and on `origin`.
+- Never force-push `main`, never rewrite its history, never skip hooks (`--no-verify`).
+
+## Testing expectations
+
+- `npm test` and `npm run typecheck` must pass before committing.
+- New component → spec or behaviour test. New simulator feature → unit test.
+- Visual changes: run `npm run dev` and look at it, in both light and dark themes.
