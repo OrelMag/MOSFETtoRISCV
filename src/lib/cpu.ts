@@ -102,7 +102,7 @@ export function dataMemory(k = 5): ComponentDef {
 // ---- immediates ----------------------------------------------------------------------------
 
 type BitSrc = number | 'zero';
-function wiring(id: string, name: string, map: (i: number) => BitSrc, summary: string): ComponentDef {
+function wiring(id: string, name: string, map: (i: number) => BitSrc, summary: string, label?: string): ComponentDef {
   const alias: [string, number, string, number][] = [];
   for (let i = 0; i < 32; i++) {
     const s = map(i);
@@ -112,7 +112,7 @@ function wiring(id: string, name: string, map: (i: number) => BitSrc, summary: s
   return define({
     id, name, category: 'plumbing', summary,
     ports: [bus('in', 32, 'in'), ...(usesZero ? [bit('zero', 'in', 'bottom')] : []), bus('out', 32, 'out')],
-    symbol: { kind: 'box', label: name.replace(/ .*/, ''), w: 6, h: 2 }, prim: 'alias', alias,
+    symbol: { kind: 'box', label: label ?? name.replace(/ .*/, ''), w: 6, h: 2 }, prim: 'alias', alias,
   });
 }
 
@@ -315,11 +315,11 @@ export const CONTROL: ComponentDef = (() => {
     summary: 'Turns the instruction\'s opcode and function fields into the switch settings for the datapath: which mux inputs to pick, whether to write a register or memory, which ALU operation.',
     ports: [
       bus('op', 7, 'in'), bus('funct3', 3, 'in'), bus('funct7', 7, 'in'),
-      bit('regWrite', 'out', 'bottom'), bus('immSrc', 3, 'out', 'bottom'), bit('aluSrcA', 'out', 'bottom'), bit('aluSrcB', 'out', 'bottom'),
-      bit('memWrite', 'out', 'bottom'), bus('resultSrc', 2, 'out', 'bottom'), bit('branch', 'out', 'bottom'), bit('jump', 'out', 'bottom'),
-      bit('jalr', 'out', 'bottom'), bus('aluCtl', 4, 'out', 'bottom'),
+      bit('regWrite', 'out'), bus('immSrc', 3, 'out'), bit('aluSrcA', 'out'), bit('aluSrcB', 'out'),
+      bit('memWrite', 'out'), bus('resultSrc', 2, 'out'), bit('branch', 'out'), bit('jump', 'out'),
+      bit('jalr', 'out'), bus('aluCtl', 4, 'out'),
     ],
-    symbol: { kind: 'box', label: 'CONTROL', w: 26 },
+    symbol: { kind: 'box', label: 'CONTROL' },
     netlist: () => ({ pins, instances, nets: merged }),
     notes: `<table><tr><th>class</th><th>RegW</th><th>ImmSrc</th><th>SrcA</th><th>SrcB</th><th>MemW</th><th>Result</th></tr>
       <tr><td>R</td><td>1</td><td>–</td><td>rs1</td><td>rs2</td><td>0</td><td>ALU</td></tr>
@@ -417,7 +417,7 @@ export const PLUS4: ComponentDef = define({
 });
 
 /** Clear bit 0 (jalr targets are always even). */
-export const CLEAR_BIT0: ComponentDef = wiring('clr0', 'AND ~1 (wiring)', (i) => (i === 0 ? 'zero' : i), 'jalr target = (rs1 + imm) with bit 0 cleared: wire bit 0 to ground.');
+export const CLEAR_BIT0: ComponentDef = wiring('clr0', 'Clear bit 0 (wiring)', (i) => (i === 0 ? 'zero' : i), 'jalr target = (rs1 + imm) with bit 0 cleared: wire bit 0 to ground.', 'bit0 := 0');
 
 // ---- the processor ------------------------------------------------------------------------
 
@@ -438,114 +438,106 @@ export function singleCycleCpu(program: number[], opts: CpuOptions = {}): Compon
 
 function buildCpu(IM: ComponentDef, dmemK: number): ComponentDef {
   const PC = register(32), RF = regfile(5, 32), ALU = alu(32), DM = dataMemory(dmemK);
-  const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = rca(32);
+  const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = rca(32), SI = splitter([7, 5, 3, 5, 5, 7]);
   const g = (d: ComponentDef) => symbolGeom(d);
   const at = new Map<string, [number, number]>();
-  const P = (inst: string, def: ComponentDef, port: string): [number, number] => {
+  const defs = new Map<string, ComponentDef>();
+  const place = (name: string, def: ComponentDef, xy: [number, number]) => { at.set(name, xy); defs.set(name, def); };
+  /** Absolute position of an instance port. */
+  const P = (inst: string, port: string): [number, number] => {
     const a = at.get(inst)!;
-    const p = g(def).ports[port].pos;
+    const p = g(defs.get(inst)!).ports[port].pos;
     return [a[0] + p[0], a[1] + p[1]];
   };
+  /** Place `inst` at column x so that its `port` lands on row y. */
+  const alignY = (inst: string, def: ComponentDef, x: number, port: string, y: number) => place(inst, def, [x, y - g(def).ports[port].pos[1]]);
 
-  // Main row baseline.
-  const Y = 40;
-  at.set('pcmux', [4, Y - 2]);
-  at.set('pc', [14, Y + g(M4).ports.y.pos[1] - 2 - g(PC).ports.d.pos[1]]);
-  at.set('imem', [30, P('pc', PC, 'q')[1] - g(IM).ports.addr.pos[1]]);
-  const instrY = P('imem', IM, 'data')[1];
-  at.set('si', [48, instrY - 6]); // instruction field splitter: op, rd, f3, rs1, rs2, f7
-  at.set('rf', [62, Y - 2]);
-  at.set('imm', [62, Y + 22]);
-  at.set('srcA', [86, P('rf', RF, 'rd1')[1] - g(M2).ports.a.pos[1]]);
-  at.set('srcB', [86, P('rf', RF, 'rd2')[1] - g(M2).ports.a.pos[1] + 4]);
-  at.set('alu', [98, P('srcA', M2, 'y')[1] - g(ALU).ports.a.pos[1]]);
-  at.set('dm', [124, P('alu', ALU, 'y')[1] - g(DM).ports.addr.pos[1]]);
-  at.set('res', [146, P('dm', DM, 'rd')[1] - g(M4).ports.d1.pos[1]]);
-  at.set('plus4', [24, Y - 18]);
-  at.set('target', [100, Y + 30]);
-  at.set('clr0', [128, Y + 30]);
-  at.set('ctl', [56, 0]);
-  at.set('npc', [106, 2]);
-  at.set('one', [8, P('pc', PC, 'en')[1] - 1]);
+  const Y = 36; // main datapath row
+  alignY('pcmux', M4, 4, 'y', Y);
+  alignY('pc', PC, 12, 'd', Y);
+  place('one', TIE1, [8, P('pc', 'en')[1] - 1]);
+  const pcY = P('pc', 'q')[1];
+  alignY('imem', IM, 27, 'addr', pcY);
+  const instrY = P('imem', 'data')[1];
+  alignY('si', SI, 45, 'in', instrY);
+  alignY('rf', RF, 60, 'wa', P('si', 'o1')[1]);
+  alignY('imm', IMM_GEN, 60, 'instr', Y + 18);
+  const rfR = at.get('rf')![0] + g(RF).w;
+  alignY('srcA', M2, rfR + 8, 'a', P('rf', 'rd1')[1]);
+  alignY('srcB', M2, rfR + 8, 'a', P('rf', 'rd2')[1] + 9);
+  alignY('alu', ALU, rfR + 18, 'a', P('srcA', 'y')[1]);
+  const aluR = at.get('alu')![0] + g(ALU).w;
+  alignY('dm', DM, aluR + 18, 'addr', P('alu', 'y')[1]);
+  alignY('res', M4, aluR + 18 + g(DM).w + 10, 'd1', P('dm', 'rd')[1]);
+  place('plus4', PLUS4, [27, Y - 10]);
+  alignY('target', ADD, rfR + 18, 'a', Y + 24);
+  place('gndT', TIE0, [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 3]);
+  alignY('clr0', CLEAR_BIT0, aluR + 12, 'in', Y + 18);
+  place('gndJ', TIE0, [P('clr0', 'zero')[0] - 6, P('clr0', 'zero')[1] + 1]);
+  place('ctl', CONTROL, [8, 0]);
+  place('npc', NEXT_PC, [62, 0]);
 
-  const instances: InstanceDef[] = [
-    { name: 'pcmux', def: M4, at: at.get('pcmux'), label: 'next PC' },
-    { name: 'pc', def: PC, at: at.get('pc'), label: 'PC' },
-    { name: 'one', def: TIE1, at: at.get('one') },
-    { name: 'imem', def: IM, at: at.get('imem') },
-    { name: 'si', def: splitter([7, 5, 3, 5, 5, 7]), at: at.get('si') },
-    { name: 'rf', def: RF, at: at.get('rf') },
-    { name: 'imm', def: IMM_GEN, at: at.get('imm') },
-    { name: 'srcA', def: M2, at: at.get('srcA'), label: 'SrcA' },
-    { name: 'srcB', def: M2, at: at.get('srcB'), label: 'SrcB' },
-    { name: 'alu', def: ALU, at: at.get('alu') },
-    { name: 'dm', def: DM, at: at.get('dm') },
-    { name: 'res', def: M4, at: at.get('res'), label: 'result' },
-    { name: 'plus4', def: PLUS4, at: at.get('plus4') },
-    { name: 'target', def: ADD, at: at.get('target'), label: 'PC + imm' },
-    { name: 'clr0', def: CLEAR_BIT0, at: at.get('clr0') },
-    { name: 'gnd', def: TIE0, at: [at.get('target')![0] - 6, at.get('target')![1] - 4] },
-    { name: 'ctl', def: CONTROL, at: at.get('ctl') },
-    { name: 'npc', def: NEXT_PC, at: at.get('npc') },
-  ];
+  const labels: Record<string, string> = { pcmux: 'next PC', pc: 'PC', srcA: 'SrcA', srcB: 'SrcB', res: 'result', target: 'PC + imm' };
+  const instances: InstanceDef[] = [...at.keys()].map((name) => ({ name, def: defs.get(name)!, at: at.get(name), label: labels[name] }));
 
-  const ctlBottom = at.get('ctl')![1] + g(CONTROL).h;
-  const lane = (i: number) => ctlBottom + 2 + i; // horizontal control lanes under the control unit
-  const bottom = Y + 44;
-  const pcq = P('pc', PC, 'q');
+  const pcq = P('pc', 'q');
+  const aluY = P('alu', 'y');
+  const immY = P('imm', 'imm');
+  const bottom = Y + 38;
+  const resY = P('res', 'y');
+  const clkVia: Record<string, [number, number][]> = {};
+  for (const u of ['pc', 'rf', 'dm']) clkVia[`${u}.clk`] = [[P(u, 'clk')[0], bottom]];
   const nets: NetDef[] = [
-    { name: 'pcNext', ends: ['pcmux.y', 'pc.d'] },
-    { name: 'en1', ends: ['one.y', 'pc.en'] },
-    { name: 'clk', ends: ['clk', 'pc.clk', 'rf.clk', 'dm.clk'], trunk: bottom + 6, via: { 'pc.clk': [[P('pc', PC, 'clk')[0], bottom + 6]], 'rf.clk': [[P('rf', RF, 'clk')[0], bottom + 6]], 'dm.clk': [[P('dm', DM, 'clk')[0], bottom + 6]] } },
-    {
-      name: 'pc', ends: ['pc.q', 'imem.addr', 'plus4.a', 'srcA.b', 'target.a', 'pcOut'], trunk: pcq[0] + 2,
-      via: {
-        'srcA.b': [[pcq[0] + 2, Y + 18], [82, Y + 18], [82, P('srcA', M2, 'b')[1]]],
-        'target.a': [[pcq[0] + 2, P('target', ADD, 'a')[1]]],
-        'pcOut': [[pcq[0] + 2, bottom + 10]],
-      },
-    },
-    { name: 'instr', ends: ['imem.data', 'si.in', 'imm.instr', 'instrOut'], trunk: 44, via: { 'imm.instr': [[44, P('imm', IMM_GEN, 'instr')[1]]], instrOut: [[44, bottom + 12]] } },
-    { name: 'op', ends: ['si.o0', 'ctl.op'], via: { 'ctl.op': [[52, P('ctl', CONTROL, 'op')[1]]] } },
-    { name: 'rd', ends: ['si.o1', 'rf.wa'], via: { 'rf.wa': [[55, P('si', splitter([7, 5, 3, 5, 5, 7]), 'o1')[1]], [55, P('rf', RF, 'wa')[1]]] } },
-    { name: 'funct3', ends: ['si.o2', 'ctl.funct3', 'npc.funct3'], via: { 'ctl.funct3': [[53, P('ctl', CONTROL, 'funct3')[1]]], 'npc.funct3': [[53, lane(11)], [102, lane(11)], [102, P('npc', NEXT_PC, 'funct3')[1]]] } },
-    { name: 'rs1', ends: ['si.o3', 'rf.ra1'], via: { 'rf.ra1': [[57, P('si', splitter([7, 5, 3, 5, 5, 7]), 'o3')[1]], [57, P('rf', RF, 'ra1')[1]]] } },
-    { name: 'rs2', ends: ['si.o4', 'rf.ra2'], via: { 'rf.ra2': [[58.5, P('si', splitter([7, 5, 3, 5, 5, 7]), 'o4')[1]], [58.5, P('rf', RF, 'ra2')[1]]] } },
-    { name: 'funct7', ends: ['si.o5', 'ctl.funct7'], via: { 'ctl.funct7': [[54, P('ctl', CONTROL, 'funct7')[1]]] } },
+    // fetch
+    { name: 'PCNext', ends: ['pcmux.y', 'pc.d'] },
+    { name: 'en', ends: ['one.y', 'pc.en'] },
+    { name: 'PC', ends: ['pc.q', 'imem.addr', 'plus4.a', 'srcA.b', 'target.a', 'pcOut'], trunk: pcq[0] + 3, tags: ['srcA.b', 'target.a', 'pcOut'] },
+    { name: 'PCPlus4', ends: ['plus4.y', 'pcmux.d0', 'pcmux.d3', 'res.d2'], tags: true },
+    { name: 'PCTarget', ends: ['target.s', 'pcmux.d1'], tags: true },
+    { name: 'JalrTarget', ends: ['clr0.out', 'pcmux.d2'], tags: true },
+    { name: 'PCSrc', ends: ['npc.pcSrc', 'pcmux.s'], tags: true },
+    // decode
+    { name: 'Instr', ends: ['imem.data', 'si.in', 'imm.instr', 'instrOut'], trunk: 43, tags: ['instrOut'] },
+    { name: 'op', ends: ['si.o0', 'ctl.op'], tags: true },
+    { name: 'rd', ends: ['si.o1', 'rf.wa'] },
+    { name: 'funct3', ends: ['si.o2', 'ctl.funct3', 'npc.funct3'], tags: true },
+    { name: 'rs1', ends: ['si.o3', 'rf.ra1'], trunk: 55 },
+    { name: 'rs2', ends: ['si.o4', 'rf.ra2'], trunk: 56.5 },
+    { name: 'funct7', ends: ['si.o5', 'ctl.funct7'], tags: true },
+    { name: 'ImmExt', ends: ['imm.imm', 'srcB.b', 'target.b', 'res.d3'], trunk: immY[0] + 3, tags: ['res.d3'] },
+    // execute
     { name: 'rd1', ends: ['rf.rd1', 'srcA.a'] },
-    { name: 'rd2', ends: ['rf.rd2', 'srcB.a', 'dm.wd'], via: { 'dm.wd': [[80, P('rf', RF, 'rd2')[1]], [80, Y + 16], [120, Y + 16], [120, P('dm', DM, 'wd')[1]]] } },
-    { name: 'imm', ends: ['imm.imm', 'srcB.b', 'target.b', 'res.d3'], via: { 'srcB.b': [[84, P('imm', IMM_GEN, 'imm')[1]], [84, P('srcB', M2, 'b')[1]]], 'target.b': [[84, P('imm', IMM_GEN, 'imm')[1]], [84, P('target', ADD, 'b')[1]]], 'res.d3': [[84, P('imm', IMM_GEN, 'imm')[1]], [84, bottom], [142, bottom], [142, P('res', M4, 'd3')[1]]] } },
-    { name: 'srcA', ends: ['srcA.y', 'alu.a'] },
-    { name: 'srcB', ends: ['srcB.y', 'alu.b'] },
+    { name: 'WriteData', ends: ['rf.rd2', 'srcB.a', 'dm.wd'], trunk: rfR + 2.5, tags: ['dm.wd'] },
+    { name: 'SrcA', ends: ['srcA.y', 'alu.a'] },
+    { name: 'SrcB', ends: ['srcB.y', 'alu.b'] },
     {
-      name: 'aluResult', ends: ['alu.y', 'dm.addr', 'res.d0', 'clr0.in', 'aluOut'], trunk: P('alu', ALU, 'y')[0] + 3,
-      via: { 'res.d0': [[P('alu', ALU, 'y')[0] + 3, P('alu', ALU, 'y')[1] - 6], [140, P('alu', ALU, 'y')[1] - 6], [140, P('res', M4, 'd0')[1]]], 'clr0.in': [[P('alu', ALU, 'y')[0] + 3, P('clr0', CLEAR_BIT0, 'in')[1]]], aluOut: [[P('alu', ALU, 'y')[0] + 3, bottom + 14]] },
+      name: 'ALUResult', ends: ['alu.y', 'dm.addr', 'res.d0', 'clr0.in', 'aluOut'], trunk: aluY[0] + 9, tags: ['aluOut'],
+      via: { 'res.d0': [[aluY[0] + 9, aluY[1] - 8], [P('res', 'd0')[0] - 3, aluY[1] - 8], [P('res', 'd0')[0] - 3, P('res', 'd0')[1]]] },
     },
-    { name: 'readData', ends: ['dm.rd', 'res.d1'] },
-    { name: 'pcPlus4', ends: ['plus4.y', 'pcmux.d0', 'pcmux.d3', 'res.d2'], via: { 'pcmux.d0': [[P('plus4', PLUS4, 'y')[0] + 2, Y - 22], [2, Y - 22], [2, P('pcmux', M4, 'd0')[1]]], 'pcmux.d3': [[P('plus4', PLUS4, 'y')[0] + 2, Y - 22], [2, Y - 22], [2, P('pcmux', M4, 'd3')[1]]], 'res.d2': [[P('plus4', PLUS4, 'y')[0] + 2, Y - 22], [143, Y - 22], [143, P('res', M4, 'd2')[1]]] } },
-    { name: 'pcTarget', ends: ['target.s', 'pcmux.d1'], via: { 'pcmux.d1': [[P('target', ADD, 's')[0] + 2, bottom + 2], [1, bottom + 2], [1, P('pcmux', M4, 'd1')[1]]] } },
-    { name: 'gnd0', ends: ['gnd.y', 'target.cin', 'clr0.zero'], via: { 'clr0.zero': [[at.get('target')![0] - 2, bottom + 4]] } },
-    { name: 'jalrTarget', ends: ['clr0.out', 'pcmux.d2'], via: { 'pcmux.d2': [[P('clr0', CLEAR_BIT0, 'out')[0] + 2, bottom + 3], [0, bottom + 3], [0, P('pcmux', M4, 'd2')[1]]] } },
-    { name: 'result', ends: ['res.y', 'rf.wd'], via: { 'rf.wd': [[P('res', M4, 'y')[0] + 2, bottom + 8], [59.5, bottom + 8], [59.5, P('rf', RF, 'wd')[1]]] } },
-    // control lines
-    { name: 'regWrite', ends: ['ctl.regWrite', 'rf.we'], via: { 'rf.we': [[P('ctl', CONTROL, 'regWrite')[0], lane(0)], [60.5, lane(0)], [60.5, P('rf', RF, 'we')[1]]] } },
-    { name: 'immSrc', ends: ['ctl.immSrc', 'imm.src'], via: { 'imm.src': [[P('ctl', CONTROL, 'immSrc')[0], lane(1)], [61, lane(1)], [61, P('imm', IMM_GEN, 'src')[1]]] } },
-    { name: 'aluSrcA', ends: ['ctl.aluSrcA', 'srcA.s'], via: { 'srcA.s': [[P('ctl', CONTROL, 'aluSrcA')[0], lane(2)], [P('srcA', M2, 's')[0] + 3, lane(2)], [P('srcA', M2, 's')[0] + 3, P('srcA', M2, 's')[1] + 1], [P('srcA', M2, 's')[0], P('srcA', M2, 's')[1] + 1]] } },
-    { name: 'aluSrcB', ends: ['ctl.aluSrcB', 'srcB.s'], via: { 'srcB.s': [[P('ctl', CONTROL, 'aluSrcB')[0], lane(3)], [P('srcB', M2, 's')[0] + 3, lane(3)], [P('srcB', M2, 's')[0] + 3, P('srcB', M2, 's')[1] + 1], [P('srcB', M2, 's')[0], P('srcB', M2, 's')[1] + 1]] } },
-    { name: 'memWrite', ends: ['ctl.memWrite', 'dm.we'], via: { 'dm.we': [[P('ctl', CONTROL, 'memWrite')[0], lane(4)], [121, lane(4)], [121, P('dm', DM, 'we')[1]]] } },
-    { name: 'resultSrc', ends: ['ctl.resultSrc', 'res.s'], via: { 'res.s': [[P('ctl', CONTROL, 'resultSrc')[0], lane(5)], [P('res', M4, 's')[0] + 3, lane(5)], [P('res', M4, 's')[0] + 3, P('res', M4, 's')[1] + 1], [P('res', M4, 's')[0], P('res', M4, 's')[1] + 1]] } },
-    { name: 'branch', ends: ['ctl.branch', 'npc.branch'], via: { 'npc.branch': [[P('ctl', CONTROL, 'branch')[0], lane(6)], [103, lane(6)], [103, P('npc', NEXT_PC, 'branch')[1]]] } },
-    { name: 'jump', ends: ['ctl.jump', 'npc.jump'], via: { 'npc.jump': [[P('ctl', CONTROL, 'jump')[0], lane(7)], [103.5, lane(7)], [103.5, P('npc', NEXT_PC, 'jump')[1]]] } },
-    { name: 'jalr', ends: ['ctl.jalr', 'npc.jalr'], via: { 'npc.jalr': [[P('ctl', CONTROL, 'jalr')[0], lane(8)], [104, lane(8)], [104, P('npc', NEXT_PC, 'jalr')[1]]] } },
-    { name: 'aluCtl', ends: ['ctl.aluCtl', 'alu.ctl'], via: { 'alu.ctl': [[P('ctl', CONTROL, 'aluCtl')[0], lane(9)], [95, lane(9)], [95, P('alu', ALU, 'ctl')[1]]] } },
-    // flags → next-PC logic
-    { name: 'zero', ends: ['alu.zero', 'npc.zero'], via: { 'npc.zero': [[P('alu', ALU, 'zero')[0] + 1, lane(10) + 0.5], [101, lane(10) + 0.5], [101, P('npc', NEXT_PC, 'zero')[1]]] } },
-    { name: 'neg', ends: ['alu.neg', 'npc.neg'], via: { 'npc.neg': [[P('alu', ALU, 'neg')[0] + 2, lane(12)], [100, lane(12)], [100, P('npc', NEXT_PC, 'neg')[1]]] } },
-    { name: 'ovf', ends: ['alu.ovf', 'npc.ovf'], via: { 'npc.ovf': [[P('alu', ALU, 'ovf')[0] + 3, lane(13)], [99, lane(13)], [99, P('npc', NEXT_PC, 'ovf')[1]]] } },
-    { name: 'carry', ends: ['alu.carry', 'npc.carry'], via: { 'npc.carry': [[P('alu', ALU, 'carry')[0] + 4, lane(14)], [98, lane(14)], [98, P('npc', NEXT_PC, 'carry')[1]]] } },
-    { name: 'pcSrc', ends: ['npc.pcSrc', 'pcmux.s'], via: { 'pcmux.s': [[P('npc', NEXT_PC, 'pcSrc')[0] + 2, -3], [P('pcmux', M4, 's')[0] - 3.5, -3], [P('pcmux', M4, 's')[0] - 3.5, P('pcmux', M4, 's')[1] + 1], [P('pcmux', M4, 's')[0], P('pcmux', M4, 's')[1] + 1]] } },
-    { name: 'memWriteOut', ends: ['dm.we'] },
-  ].filter((n) => n.ends.length > 1) as NetDef[];
+    { name: 'ReadData', ends: ['dm.rd', 'res.d1'] },
+    {
+      name: 'Result', ends: ['res.y', 'rf.wd'],
+      via: { 'rf.wd': [[resY[0] + 3, resY[1]], [resY[0] + 3, bottom - 4], [58, bottom - 4], [58, P('rf', 'wd')[1]]] },
+    },
+    { name: 'gndT', ends: ['gndT.y', 'target.cin'], via: { 'target.cin': [[P('target', 'cin')[0], P('gndT', 'y')[1]]] } },
+    { name: 'gndJ', ends: ['gndJ.y', 'clr0.zero'], via: { 'clr0.zero': [[P('clr0', 'zero')[0], P('gndJ', 'y')[1]]] } },
+    { name: 'clk', ends: ['clk', 'pc.clk', 'rf.clk', 'dm.clk'], via: clkVia },
+    // control, as net labels
+    { name: 'RegWrite', ends: ['ctl.regWrite', 'rf.we'], tags: true },
+    { name: 'ImmSrc', ends: ['ctl.immSrc', 'imm.src'], tags: true },
+    { name: 'ALUSrcA', ends: ['ctl.aluSrcA', 'srcA.s'], tags: true },
+    { name: 'ALUSrcB', ends: ['ctl.aluSrcB', 'srcB.s'], tags: true },
+    { name: 'MemWrite', ends: ['ctl.memWrite', 'dm.we'], tags: true },
+    { name: 'ResultSrc', ends: ['ctl.resultSrc', 'res.s'], tags: true },
+    { name: 'Branch', ends: ['ctl.branch', 'npc.branch'], tags: true },
+    { name: 'Jump', ends: ['ctl.jump', 'npc.jump'], tags: true },
+    { name: 'Jalr', ends: ['ctl.jalr', 'npc.jalr'], tags: true },
+    { name: 'ALUControl', ends: ['ctl.aluCtl', 'alu.ctl'], tags: true },
+    { name: 'Zero', ends: ['alu.zero', 'npc.zero'], tags: true },
+    { name: 'Neg', ends: ['alu.neg', 'npc.neg'], tags: true },
+    { name: 'Ovf', ends: ['alu.ovf', 'npc.ovf'], tags: true },
+    { name: 'Carry', ends: ['alu.carry', 'npc.carry'], tags: true },
+  ];
 
   return {
     id: key2(IM), name: 'Single-cycle RV32I CPU', category: 'cpu',
@@ -553,11 +545,14 @@ function buildCpu(IM: ComponentDef, dmemK: number): ComponentDef {
     ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out')],
     symbol: { kind: 'box', label: 'RV32I' },
     netlist: () => ({
-      pins: { clk: [-4, bottom + 6], pcOut: [170, bottom + 10], instrOut: [170, bottom + 12], aluOut: [170, bottom + 14] },
+      pins: { clk: [0, bottom], pcOut: [resY[0] + 22, bottom - 8], instrOut: [resY[0] + 22, bottom - 5], aluOut: [resY[0] + 22, bottom - 2] },
       instances, nets,
     }),
-    hdl: {
-      verilog: `// Structure of the processor (cf. primer hdl/rv_single.sv, extended to all of RV32I)
+    hdl: { verilog: CPU_VERILOG },
+  };
+}
+
+const CPU_VERILOG = `// Structure of the processor (cf. primer hdl/rv_single.sv, extended to all of RV32I)
 module rv_single (input logic clk);
   logic [31:0] pc, pcnext, pcplus4, pctarget, instr, imm, srca, srcb, aluresult, readdata, result, rd1, rd2;
   logic [3:0] aluctl; logic [2:0] immsrc; logic [1:0] resultsrc, pcsrc;
@@ -581,10 +576,7 @@ module rv_single (input logic clk);
   alu      alu (.a(srca), .b(srcb), .ctl(aluctl), .y(aluresult), .zero, .neg, .ovf, .carry);
   dmem     dm  (.clk, .we(memwrite), .addr(aluresult), .wd(rd2), .rd(readdata));
   always_comb case (resultsrc) 2'd0: result = aluresult; 2'd1: result = readdata; 2'd2: result = pcplus4; default: result = imm; endcase
-endmodule`,
-    },
-  };
-}
+endmodule`;
 
 function key2(IM: ComponentDef): string {
   return `rv32i_${IM.id.replace(/^rom_/, '')}`;

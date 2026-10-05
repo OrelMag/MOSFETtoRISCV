@@ -20,6 +20,7 @@ export interface SchematicEvents {
 interface WireEls {
   net: RoutedNet;
   paths: SVGPathElement[];
+  tags: SVGGElement[];
   dots: SVGCircleElement[];
   label?: SVGGElement;
   labelText?: SVGTextElement;
@@ -58,6 +59,8 @@ export class SchematicView {
   private interactive = false;
   private selected: string | null = null;
   radix: Radix = 'hex';
+  /** Screen pixels on the right covered by a docked panel; fit() keeps the circuit clear of them. */
+  insetRight = 0;
   private tooltip: HTMLDivElement;
 
   constructor(private host: HTMLElement, private events: SchematicEvents) {
@@ -102,7 +105,24 @@ export class SchematicView {
     // Wires
     for (const net of nets) {
       const cls = net.width > 1 ? 'wire bus' : 'wire';
-      const w: WireEls = { net, paths: [], dots: [] };
+      const w: WireEls = { net, paths: [], dots: [], tags: [] };
+      const name = nl.nets[net.index].name ?? `n${net.index}`;
+      for (const t of net.tags) {
+        const D: Record<string, [number, number]> = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
+        const d = D[t.dir];
+        const E: Vec = [t.pos[0] + d[0] * 1.4, t.pos[1] + d[1] * 1.4];
+        const tw = textWidth(name, 0.8) + 0.6, th = 1.35;
+        const rx = t.dir === 'right' ? E[0] : t.dir === 'left' ? E[0] - tw : E[0] - tw / 2;
+        const ry = t.dir === 'down' ? E[1] : t.dir === 'up' ? E[1] - th : E[1] - th / 2;
+        const g = s('g', { class: 'net-tag', 'data-net': net.index });
+        const stub = s('path', { d: `M${t.pos[0]},${t.pos[1]} L${E[0]},${E[1]}`, class: cls });
+        g.append(stub, s('rect', { x: rx, y: ry, width: tw, height: th, rx: 0.35 }),
+          s('text', { x: rx + tw / 2, y: ry + th / 2 + 0.3, 'text-anchor': 'middle' }, name));
+        w.tags.push(g);
+        labelG.append(g);
+        grow(rx, ry);
+        grow(rx + tw, ry + th);
+      }
       for (const p of net.paths) {
         p.forEach(([x, y]) => grow(x, y));
         const d = 'M' + p.map(([x, y]) => `${x},${y}`).join(' L');
@@ -240,6 +260,11 @@ export class SchematicView {
       const bits = ctx.netBits(w.net.index);
       const cls = w.net.width > 1 ? `wire ${busClass(bits)}` : `wire ${bitClass(bits[0])}`;
       for (const p of w.paths) p.setAttribute('class', cls);
+      const vcls = w.net.width > 1 ? busClass(bits) : bitClass(bits[0]);
+      for (const t of w.tags) {
+        t.setAttribute('class', `net-tag ${vcls}`);
+        t.firstElementChild!.setAttribute('class', cls);
+      }
       const dcls = `dot ${w.net.width > 1 ? busClass(bits) : bitClass(bits[0])}`;
       for (const d of w.dots) d.setAttribute('class', dcls);
       if (w.labelText && w.labelBg && w.net.label) {
@@ -304,7 +329,8 @@ export class SchematicView {
 
   fit(): void {
     const r = this.host.getBoundingClientRect();
-    const aspect = r.width > 0 && r.height > 0 ? r.width / r.height : 16 / 10;
+    const usable = Math.max(200, r.width - this.insetRight);
+    const aspect = usable > 0 && r.height > 0 ? usable / r.height : 16 / 10;
     let { x, y, w, h } = this.bbox;
     // Never zoom in so far that a tiny circuit looks cartoonish.
     const minW = 34;
@@ -314,6 +340,8 @@ export class SchematicView {
     } else {
       const nw = h * aspect; x -= (nw - w) / 2; w = nw;
     }
+    // Extend the view to the right so the circuit sits in the uncovered part.
+    if (this.insetRight > 0 && r.width > 0) w = w * (r.width / usable);
     this.vb = { x, y, w, h };
     this.applyViewBox();
   }
@@ -377,13 +405,23 @@ export class SchematicView {
     this.el.addEventListener('pointerleave', () => (this.tooltip.style.opacity = '0'));
   }
 
+  private hovered = -1;
+  private setHover(idx: number): void {
+    if (idx === this.hovered) return;
+    this.el.querySelectorAll('.net-hover').forEach((e) => e.classList.remove('net-hover'));
+    this.hovered = idx;
+    if (idx >= 0) this.el.querySelectorAll(`[data-net="${idx}"]`).forEach((e) => e.classList.add('net-hover'));
+  }
+
   private hoverTip(e: PointerEvent): void {
     const t = (e.target as Element).closest('[data-net]');
     if (!t || !this.ctx) {
       this.tooltip.style.opacity = '0';
+      this.setHover(-1);
       return;
     }
     const idx = Number(t.getAttribute('data-net'));
+    this.setHover(idx);
     const nl = netlistOf(this.ctx.def)!;
     const net = nl.nets[idx];
     const bits = this.ctx.netBits(idx);

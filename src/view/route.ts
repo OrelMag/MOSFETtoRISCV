@@ -6,9 +6,17 @@
 import { type ExitDir, instPort, type PortGeom, symbolGeom, type Vec } from '../sim/geometry';
 import { type ComponentDef, type Netlist, parseEnd } from '../sim/types';
 
+export interface NetTag {
+  end: string;
+  /** Port position and the direction the stub leaves it. */
+  pos: Vec;
+  dir: ExitDir;
+}
+
 export interface RoutedNet {
   index: number;
   width: number;
+  tags: NetTag[];
   /** One polyline per sink (driver → sink). */
   paths: Vec[][];
   dots: Vec[];
@@ -82,10 +90,19 @@ export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[
     const drv = ends[0];
     const P = drv.pos;
     const P1 = add(P, DIR[drv.exit], STUB);
-    const sinks = ends.slice(1);
+    const tagged = (i: number) => net.tags === true || (net.tags?.includes(net.ends[i]) ?? false);
+    const tags: NetTag[] = [];
+    const drawn: number[] = [];
+    for (let i = 1; i < ends.length; i++) {
+      if (tagged(i)) tags.push({ end: net.ends[i], pos: ends[i].pos, dir: ends[i].exit });
+      else drawn.push(i);
+    }
+    if (tags.length && (drawn.length === 0 || tagged(0))) tags.unshift({ end: net.ends[0], pos: P, dir: drv.exit });
+    const sinks = drawn.map((i) => ends[i]);
+    const sinkNames = drawn.map((i) => net.ends[i]);
     const multi = sinks.length > 1;
     const paths = sinks.map((s, si) => {
-      const via = net.via?.[net.ends[si + 1]];
+      const via = net.via?.[sinkNames[si]];
       if (via && via.length) {
         const pts: Vec[] = [P];
         // Leave the driver in its exit direction.
@@ -111,7 +128,7 @@ export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[
       const ym = net.trunk ?? (multi ? P1[1] : half((P1[1] + S1[1]) / 2));
       return simplify([P, P1, [P1[0], ym], [S1[0], ym], S1, S]);
     });
-    return { index, width, paths, dots: junctions(paths), label: width > 1 ? labelAnchor(paths) : null };
+    return { index, width, tags, paths, dots: junctions(paths), label: width > 1 ? labelAnchor(paths) : null };
   });
   return { nets, pins };
 }

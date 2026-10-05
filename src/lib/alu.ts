@@ -373,7 +373,7 @@ export const alu = memo((n: number): ComponentDef => {
   return define({
     id: `alu${n}`, name: `${n}-bit ALU`, category: 'arithmetic',
     summary: 'Every RV32I integer operation in one block: add, subtract, shifts, set-less-than, XOR, OR, AND. All units compute in parallel; a multiplexer picks one result.',
-    ports: [bus('a', n, 'in'), bus('b', n, 'in'), bus('ctl', 4, 'in'), bus('y', n, 'out'), bit('zero', 'out'), bit('neg', 'out'), bit('ovf', 'out'), bit('carry', 'out')],
+    ports: [bus('a', n, 'in'), bus('b', n, 'in'), bus('ctl', 4, 'in', 'bottom'), bus('y', n, 'out'), bit('zero', 'out'), bit('neg', 'out'), bit('ovf', 'out'), bit('carry', 'out')],
     symbol: { kind: 'box', label: 'ALU' },
     spec,
     netlist: () => ({

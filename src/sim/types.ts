@@ -65,6 +65,11 @@ export interface NetDef {
   via?: { [end: string]: [number, number][] | undefined };
   /** Draw the bus value label for this net (default: true for buses, false for bits). */
   showValue?: boolean;
+  /**
+   * Endpoints drawn as named net labels (tags) instead of wires, like a schematic's global
+   * net names. `true` tags every endpoint. The driver is tagged when all its sinks are.
+   */
+  tags?: string[] | true;
 }
 
 export interface Netlist {

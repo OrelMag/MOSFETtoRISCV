@@ -77,6 +77,8 @@ export class Stage {
   private lastSimTime = 0;
   private selected: string | null = null;
   leafFactory: LeafWidgetFactory | null = null;
+  /** Rising clock edges since the scene was loaded or reset. */
+  cycles = 0;
 
   constructor(inspector: Inspector) {
     this.inspector = inspector;
@@ -158,6 +160,7 @@ export class Stage {
     sim.reset(scene.powerOn ?? 'zero');
     sim.settle();
     this.sim = sim;
+    this.cycles = 0;
     this.rootCtx = new ViewCtx(sim, design.root);
     this.lastSettle = null;
     this.lastSimTime = sim.time;
@@ -167,6 +170,9 @@ export class Stage {
     this.panels.forEach((p) => { p.destroy?.(); p.el.remove(); });
     this.panels = (scene.panels ?? []).map((f) => f(this));
     for (const p of this.panels) this.canvas.append(p.el);
+    const docked = this.panels.filter((p) => p.el.dataset.dock === 'right');
+    this.view.insetRight = docked.length ? Math.max(...docked.map((p) => p.el.getBoundingClientRect().width)) + 24 : 0;
+    this.view.fit();
     this.view.highlight(scene.highlight ?? []);
     this.refresh();
   }
@@ -283,7 +289,9 @@ export class Stage {
   }
 
   toggleInput(port: string): void {
-    this.setInput(port, this.getInput(port) ? 0 : 1);
+    const v = this.getInput(port) ? 0 : 1;
+    if (v === 1 && port === this.clockPort()) this.cycles++;
+    this.setInput(port, v);
   }
 
   private editInput(port: string, anchor: DOMRect): void {
@@ -296,11 +304,36 @@ export class Stage {
     const clk = this.clockPort();
     if (!clk || !this.sim) return;
     this.stopAnim();
+    // Measure the rising edge: that is when the flip-flops launch new values through the logic.
+    const t0 = this.sim.time;
     this.sim.setInput(clk, 1);
+    this.cycles++;
     this.sim.settle();
+    const rise = this.sim.time - t0;
     this.sample();
     this.sim.setInput(clk, 0);
-    this.propagate();
+    this.sim.settle();
+    this.lastSettle = rise;
+    this.refresh();
+  }
+
+  /** Run n clock cycles as fast as possible, refreshing the view once at the end. */
+  runCycles(n: number, stop?: () => boolean): number {
+    const clk = this.clockPort();
+    if (!clk || !this.sim) return 0;
+    this.stopAnim();
+    let i = 0;
+    for (; i < n && !(stop && stop()); i++) {
+      this.sim.setInput(clk, 1);
+      this.cycles++;
+      this.sim.settle();
+      this.sim.setInput(clk, 0);
+      this.sim.settle();
+      this.sample();
+    }
+    this.lastSettle = null;
+    this.refresh();
+    return i;
   }
 
   private propagate(): void {
@@ -381,9 +414,11 @@ export class Stage {
     c.append(this.status);
   }
 
-  private powerCycle(): void {
+  powerCycle(): void {
     if (!this.sim || !this.scene) return;
     this.stopAnim();
+    this.stopClock();
+    this.cycles = 0;
     this.sim.reset(this.scene.powerOn ?? 'zero');
     this.lastSettle = null;
     this.initWaves();
@@ -424,7 +459,7 @@ export class Stage {
     let msg: string;
     if (sim.unstable) msg = 'race detected: resolved (metastability)';
     else if (busy) msg = `propagating… t = ${sim.time - this.changeStart}`;
-    else if (this.lastSettle !== null && sim.kind === 'gate') msg = `settled in ${this.lastSettle} gate delay${this.lastSettle === 1 ? '' : 's'}`;
+    else if (this.lastSettle !== null && sim.kind === 'gate') msg = `${this.clockPort() && this.cycles ? 'clock edge ' : ''}settled in ${this.lastSettle} gate delay${this.lastSettle === 1 ? '' : 's'}`;
     else msg = sim.kind === 'switch' ? 'switch level: solved instantly' : 'settled';
     this.status.replaceChildren(h('span', { class: `pulse${busy ? ' busy' : ''}${sim.unstable ? ' warn' : ''}` }), msg);
   }
@@ -518,6 +553,12 @@ export class Stage {
       c.append(h('button', { class: last ? 'cur' : '', onclick: () => (last ? null : this.goTo(item.path)) },
         item.label, item.kind ? h('span', { class: 'kind' }, item.kind) : null));
     });
+  }
+
+  /** Reserve screen space on the right for a docked panel and refit. */
+  setInset(px: number): void {
+    this.view.insetRight = px;
+    this.view.fit();
   }
 
   /** Bits of a root port as 0/1 booleans (helper for challenges). */

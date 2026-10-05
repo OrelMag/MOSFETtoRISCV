@@ -6,6 +6,10 @@ import { addSub, andN, busMux2, decoder, incrementer, muxTree, rca } from './com
 import { registry } from './define';
 import { ram } from './memory';
 import { alu, bitwise, isZero, shifter } from './alu';
+import { singleCycleCpu } from './cpu';
+import { regfile } from './regfile';
+import { assemble } from '../riscv/asm';
+import { PROGRAMS } from '../riscv/programs';
 import { counter, register } from './sequential';
 
 const log2 = (n: number) => Math.round(Math.log2(n));
@@ -23,6 +27,8 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^counter(\d+)$/, (m) => counter(+m[1])],
   [/^ram(\d+)x(\d+)$/, (m) => ram(log2(+m[1]), +m[2])],
   [/^alu(\d+)$/, (m) => alu(+m[1])],
+  [/^regfile(\d+)x(\d+)$/, (m) => regfile(log2(+m[1]), +m[2])],
+  [/^cpu_(\w+)$/, (m) => singleCycleCpu(assemble(PROGRAMS.find((p) => p.id === m[1])?.source ?? '').words)],
   [/^shift(\d+)$/, (m) => shifter(+m[1])],
   [/^zero(\d+)$/, (m) => isZero(+m[1])],
   [/^(and|or|xor)x(\d+)$/, (m) => bitwise(m[1] as 'and' | 'or' | 'xor', +m[2])],

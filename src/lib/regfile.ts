@@ -108,7 +108,7 @@ export function regfile(k: number, w: number): ComponentDef {
       id: `regfile${N}x${w}`, name: `Register file (${N} × ${w})`, category: 'memory',
       summary: `${N} registers of ${w} bits; x0 always reads 0. Two read ports (two operands per instruction) and one write port, all in one cycle.`,
       ports: [
-        bus('ra1', k, 'in'), bus('ra2', k, 'in'), bus('wa', k, 'in'), bus('wd', w, 'in'), bit('we', 'in'),
+        bus('wa', k, 'in'), bus('ra1', k, 'in'), bus('ra2', k, 'in'), bus('wd', w, 'in'), bit('we', 'in'),
         bit('clk', 'in', 'bottom', true), bus('rd1', w, 'out'), bus('rd2', w, 'out'),
       ],
       symbol: { kind: 'box', label: 'REGISTERS' },

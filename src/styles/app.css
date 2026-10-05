@@ -308,6 +308,16 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .bus-label rect { fill: var(--bus-label-bg); stroke: color-mix(in srgb, var(--bus) 50%, transparent); stroke-width: 0.06; }
 .bus-label text { font: 600 0.82px var(--font-mono); fill: var(--bus-label-text); }
 .bus-label.vx text { fill: var(--wx); }
+.net-tag rect { fill: var(--surface); stroke: var(--w0); stroke-width: 0.1; }
+.net-tag text { font: 600 0.8px var(--font-mono); fill: var(--text-2); }
+.net-tag.v1 rect { stroke: var(--w1); fill: color-mix(in srgb, var(--w1) 14%, var(--surface)); }
+.net-tag.v1 text { fill: var(--w1); }
+.net-tag.vx rect { stroke: var(--wx); }
+.net-tag.bus rect { stroke: var(--bus); }
+.net-tag.bus.bus1 rect { fill: color-mix(in srgb, var(--bus) 10%, var(--surface)); }
+.net-tag { cursor: help; }
+.wire.net-hover { stroke-width: 0.5 !important; opacity: 1 !important; }
+.net-tag.net-hover rect { stroke-width: 0.25; stroke: var(--hl); }
 .wire-tip {
   position: absolute; pointer-events: none; opacity: 0; transition: opacity 0.1s; z-index: 5;
   background: var(--text); color: var(--surface); font: 600 12px var(--font-mono);
@@ -455,3 +465,47 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- CPU panel, assembler ---------- */
+.cpu-panel { width: 330px; top: 12px; bottom: auto; max-height: calc(100% - 24px); font-size: 12.5px; }
+.cpu-status { display: flex; flex-wrap: wrap; gap: 4px 10px; font: 12px var(--font-mono); color: var(--text-2); margin-bottom: 6px; }
+.cpu-status .good { color: var(--good); font-weight: 600; }
+.cpu-status .bad { color: var(--wx); font-weight: 600; }
+.cpu-status .warn { color: var(--warn); font-weight: 600; }
+.cpu-now { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; background: var(--accent-soft); margin-bottom: 4px; }
+.cpu-now .fmt { font: 700 11px var(--font-mono); color: var(--accent); }
+.cpu-now code { background: none; padding: 0; font-weight: 600; color: var(--text); }
+.cpu-now .hexw { margin-left: auto; font: 11px var(--font-mono); color: var(--muted); }
+.cpu-sec { font: 600 10.5px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 8px 0 3px; }
+.cpu-listing { max-height: 170px; overflow: auto; font: 11.5px var(--font-mono); border: 1px solid var(--border); border-radius: 8px; padding: 3px 0; }
+.cpu-listing .ln { display: flex; gap: 8px; padding: 0 8px; white-space: nowrap; }
+.cpu-listing .ln.cur { background: color-mix(in srgb, var(--w1) 20%, transparent); font-weight: 700; }
+.cpu-listing .a { color: var(--muted); }
+.cpu-listing .w { color: var(--bus-label-text); }
+.cpu-regs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px 10px; font: 11.5px var(--font-mono); }
+.cpu-regs .r { display: flex; justify-content: space-between; padding: 0 4px; border-radius: 4px; }
+.cpu-regs .r.z .v { color: var(--muted); }
+.cpu-regs .r.chg { background: color-mix(in srgb, var(--w1) 22%, transparent); }
+.cpu-regs .n { color: var(--text-2); }
+.cpu-mem { font: 11.5px var(--font-mono); }
+.cpu-mem .m { display: flex; gap: 10px; }
+.cpu-mem .n { color: var(--muted); width: 56px; }
+.cpu-mem .d { color: var(--muted); margin-left: auto; }
+.asm-editor { width: 100%; font: 12px/1.45 var(--font-mono); background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px; resize: vertical; tab-size: 8; }
+.asm-errors { color: var(--wx); font: 12px var(--font-mono); white-space: pre-wrap; margin-top: 4px; }
+.fields { display: flex; margin: 10px 0; font: 12px var(--font-mono); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+.fields > div { flex: var(--w); text-align: center; padding: 6px 2px; border-right: 1px solid var(--border); min-width: 0; }
+.fields > div:last-child { border-right: 0; }
+.fields .fname { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fields .fbits { font-weight: 700; letter-spacing: 0.04em; word-break: break-all; }
+.fields .fval { font-size: 11px; color: var(--text-2); }
+.f-op { background: color-mix(in srgb, #8b5cf6 14%, var(--surface)); }
+.f-rd { background: color-mix(in srgb, #10b981 14%, var(--surface)); }
+.f-rs { background: color-mix(in srgb, #3b82f6 14%, var(--surface)); }
+.f-fn { background: color-mix(in srgb, #f59e0b 16%, var(--surface)); }
+.f-imm { background: color-mix(in srgb, #ef4444 12%, var(--surface)); }
+.asm-table { width: 100%; border-collapse: collapse; font: 12px var(--font-mono); }
+.asm-table td { padding: 2px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.asm-table td.a { color: var(--muted); }
+.asm-table td.w { color: var(--bus-label-text); }
+.asm-table tr.err td { color: var(--wx); }
