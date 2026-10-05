@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addSub, andN, busMux2, counter, decoder, DFF, D_LATCH, incrementer, muxTree, ram, rca, register, SR_LATCH,
+  addSub, alu, andN, bitwise, busMux2, constWord, counter, decoder, DFF, D_LATCH, incrementer, isZero, muxTree, orN, ram, rca,
+  register, regfile, shifter, SR_LATCH, zext,
 } from '../src/lib';
 import { evalOnce, forEachInput, inputBits, simulate } from '../src/sim/harness';
 import type { ComponentDef } from '../src/sim/types';
@@ -123,5 +124,35 @@ describe('oscillation handling', () => {
     const q = out(s, 'q'), qn = out(s, 'q_n');
     expect(q === 0 || q === 1).toBe(true);
     expect(qn).toBe(1 - q);
+  });
+});
+
+describe('ALU and its parts match their specs', () => {
+  const defs = [
+    shifter(8), shifter(16), bitwise('xor', 4), orN(5), isZero(8), zext(4), constWord(8, 0xa5),
+    alu(4), alu(8), alu(32), shifter(32), addSub(32),
+  ];
+  for (const d of defs) it(d.id, () => checkSpec(d));
+});
+
+describe('register file', () => {
+  it('8 × 8: writes, two independent reads, x0 stays zero', () => {
+    const s = simulate(regfile(3, 8));
+    set(s, { clk: 0, we: 1 });
+    for (let r = 0; r < 8; r++) { set(s, { wa: r, wd: 0x10 + r }); tick(s); }
+    set(s, { we: 0 });
+    for (let r = 0; r < 8; r++) {
+      set(s, { ra1: r, ra2: 7 - r });
+      expect(out(s, 'rd1')).toBe(r === 0 ? 0 : 0x10 + r);
+      expect(out(s, 'rd2')).toBe(7 - r === 0 ? 0 : 0x10 + 7 - r);
+    }
+  });
+  it('32 × 32 builds and works', () => {
+    const s = simulate(regfile(5, 32));
+    set(s, { clk: 0, we: 1, wa: 31, wd: 0xdeadbeef }); tick(s);
+    set(s, { wa: 1, wd: 0x12345678 }); tick(s);
+    set(s, { we: 0, ra1: 31, ra2: 1 });
+    expect(out(s, 'rd1')).toBe(0xdeadbeef);
+    expect(out(s, 'rd2')).toBe(0x12345678);
   });
 });

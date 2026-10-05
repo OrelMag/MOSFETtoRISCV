@@ -30,6 +30,8 @@ export const chLatches: Chapter = {
       challenge: {
         kind: 'reach', goal: 'Store a 1: q = 1 with both inputs back at 1.',
         check: (st) => st.getInput('s_n') === 1 && st.getInput('r_n') === 1 && st.value('q') === 1,
+        answer: 'Pulse s_n: set it to 0 (q becomes 1), then back to 1. The latch keeps q = 1.',
+        solve: (st) => { st.setInputs({ r_n: 1, s_n: 0 }); st.setInputs({ s_n: 1 }); },
       },
     },
     {
@@ -59,7 +61,8 @@ export const chLatches: Chapter = {
       challenge: {
         kind: 'reach', goal: 'Make the latch hold a 1 while d = 0.',
         check: (st) => st.getInput('d') === 0 && st.value('q') === 1,
-        hint: 'Store the 1 while the latch is open, close it, then change d.',
+        answer: 'd = 1 with e = 1 (transparent), then e = 0 (closed), then d = 0. q stays 1.',
+        solve: (st) => { st.setInputs({ d: 1, e: 1 }); st.setInputs({ e: 0 }); st.setInputs({ d: 0 }); },
       },
     },
     {
@@ -100,6 +103,8 @@ export const chRegisters: Chapter = {
       challenge: {
         kind: 'reach', goal: 'Store 0xA in the register, then change d to something else.',
         check: (st) => st.value('q') === 0xa && st.getInput('d') !== 0xa,
+        answer: 'd = 0xA, en = 1, Pulse; then set d to anything else (or en = 0 first).',
+        solve: (st) => { st.setInputs({ d: 0xa, en: 1 }); st.pulse(); st.setInputs({ en: 0, d: 0 }); },
       },
     },
     {
@@ -122,7 +127,8 @@ export const chRegisters: Chapter = {
       challenge: {
         kind: 'reach', goal: 'Stop the counter at exactly 9.',
         check: (st) => st.value('q') === 9 && st.getInput('en') === 0,
-        hint: 'Pulse until q = 9, then set en = 0 so later clock edges change nothing.',
+        answer: 'Pulse until q = 9, then set en = 0 so later clock edges change nothing.',
+        solve: (st) => { st.setInputs({ en: 1 }); for (let i = 0; i < 32 && st.value('q') !== 9; i++) st.pulse(); st.setInputs({ en: 0 }); },
       },
     },
   ],
@@ -152,6 +158,8 @@ export const chMemory: Chapter = {
       challenge: {
         kind: 'reach', goal: 'Store 0x2 at address 0 and 0x5 at address 3.',
         check: (st) => word(st, 0) === 0x2 && word(st, 3) === 0x5,
+        answer: 'addr = 0, din = 0x2, we = 1, Pulse; then addr = 3, din = 0x5, Pulse.',
+        solve: (st) => { st.setInputs({ addr: 0, din: 2, we: 1 }); st.pulse(); st.setInputs({ addr: 3, din: 5 }); st.pulse(); st.setInputs({ we: 0 }); },
       },
     },
     {
@@ -175,6 +183,8 @@ export const chMemory: Chapter = {
       challenge: {
         kind: 'reach', goal: 'In a memory with at least 16 words, store 0x2A at address 13.',
         check: (st) => (st.rootCtx?.node.children?.size ?? 0) >= 18 && word(st, 13) === 0x2a,
+        answer: 'With 16 words or more: addr = 13, din = 0x2A, we = 1, Pulse.',
+        solve: (st) => { st.setInputs({ addr: 13, din: 0x2a, we: 1 }); st.pulse(); },
       },
     },
   ],

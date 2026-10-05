@@ -32,6 +32,7 @@ function bitChar(b: number): string {
 export function formatBits(bits: ArrayLike<number>, radix: Radix): string {
   const w = bits.length;
   if (w === 1) return bitChar(bits[0]);
+  if (w > 64) return `[${w} wires]`;
   const v = pack(bits);
   if (radix === 'bin' || (v < 0 && radix !== 'hex')) {
     let s = '';

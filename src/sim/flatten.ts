@@ -109,7 +109,7 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
     const kind = leafKind(def, mode);
     const nl = netlistOf(def);
     const canExpand = !!nl && (mode === 'switch' || nl.level !== 'switch');
-    const wantExpand = canExpand && (kind === null) && (!def.behavior || !opts.expand || opts.expand(def, node));
+    const wantExpand = canExpand && (kind === null) && (!def.behavior || (opts.expand ? opts.expand(def, node) : !def.preferBehavior));
 
     if (!wantExpand) {
       if (kind === null && !def.behavior) {

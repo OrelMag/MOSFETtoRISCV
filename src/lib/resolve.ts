@@ -5,6 +5,7 @@ import type { ComponentDef } from '../sim/types';
 import { addSub, andN, busMux2, decoder, incrementer, muxTree, rca } from './combinational';
 import { registry } from './define';
 import { ram } from './memory';
+import { alu, bitwise, isZero, shifter } from './alu';
 import { counter, register } from './sequential';
 
 const log2 = (n: number) => Math.round(Math.log2(n));
@@ -21,6 +22,10 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^reg(\d+)$/, (m) => register(+m[1])],
   [/^counter(\d+)$/, (m) => counter(+m[1])],
   [/^ram(\d+)x(\d+)$/, (m) => ram(log2(+m[1]), +m[2])],
+  [/^alu(\d+)$/, (m) => alu(+m[1])],
+  [/^shift(\d+)$/, (m) => shifter(+m[1])],
+  [/^zero(\d+)$/, (m) => isZero(+m[1])],
+  [/^(and|or|xor)x(\d+)$/, (m) => bitwise(m[1] as 'and' | 'or' | 'xor', +m[2])],
 ];
 
 export function resolveComponent(id: string): ComponentDef | undefined {
@@ -58,6 +63,8 @@ export const families: Family[] = [
   { id: 'rca', name: 'Ripple-carry adder', category: 'arithmetic', params: [{ name: 'bits', values: [1, 2, 4, 8, 16], initial: 4 }], make: (p) => rca(p.bits) },
   { id: 'addsub', name: 'Adder / subtractor', category: 'arithmetic', params: [{ name: 'bits', values: [2, 4, 8, 16], initial: 8 }], make: (p) => addSub(p.bits) },
   { id: 'inc', name: 'Incrementer', category: 'arithmetic', params: [{ name: 'bits', values: [2, 4, 8, 16], initial: 4 }], make: (p) => incrementer(p.bits) },
+  { id: 'alu', name: 'ALU', category: 'arithmetic', params: [{ name: 'bits', values: [4, 8, 16, 32], initial: 8 }], make: (p) => alu(p.bits) },
+  { id: 'shift', name: 'Barrel shifter', category: 'arithmetic', params: [{ name: 'bits', values: [4, 8, 16, 32], initial: 8 }], make: (p) => shifter(p.bits) },
   { id: 'and', name: 'Wide AND', category: 'gate', params: [{ name: 'inputs', values: [3, 4, 5, 6, 8], initial: 4 }], make: (p) => andN(p.inputs) },
   {
     id: 'dec', name: 'Decoder', category: 'routing',

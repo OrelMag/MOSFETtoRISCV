@@ -133,6 +133,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .challenge .options button.right { border-color: var(--good); background: var(--good-soft); }
 .challenge .options button.wrong { border-color: var(--wx); opacity: 0.75; }
 .challenge .explain { margin-top: 8px; font-size: 14px; color: var(--text-2); }
+.challenge-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .challenge .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
 
 /* ---------- stage ---------- */

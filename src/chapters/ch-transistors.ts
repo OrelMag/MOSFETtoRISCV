@@ -36,7 +36,8 @@ export const chMap: Chapter = {
       challenge: {
         kind: 'reach', goal: 'Make the adder output s = 15 (0xF) with the carry-out at 0.',
         check: (st) => st.value('s') === 15 && st.value('cout') === 0,
-        hint: 'Try a = 7 and b = 8, or any pair that adds up to 15.',
+        answer: 'Any pair with a + b = 15 and cin = 0, for example a = 7, b = 8.',
+        solve: (st) => st.setInputs({ a: 7, b: 8, cin: 0 }),
       },
     },
     {
@@ -172,7 +173,8 @@ export const chNand: Chapter = {
       scene: () => ({ root: NAND, inputs: { a: 1, b: 0 } }),
       challenge: {
         kind: 'reach', goal: 'Make the NAND output 0.', check: (st) => st.value('y') === 0,
-        hint: 'Both NMOS transistors have to conduct at the same time.',
+        answer: 'a = 1 and b = 1: both series NMOS conduct, connecting y to GND, and both PMOS are off.',
+        solve: (st) => st.setInputs({ a: 1, b: 1 }),
       },
     },
     {

@@ -54,7 +54,8 @@ export const chAdders: Chapter = {
       challenge: {
         kind: 'reach', goal: 'Find inputs where every full adder produces a carry (cout = 1 and s = 0xF).',
         check: (st) => st.value('s') === 15 && st.value('cout') === 1,
-        hint: 'a = 15, b = 15, cin = 1 gives 31 = 1_1111.',
+        answer: 'a = 0xF, b = 0xF, cin = 1: 15 + 15 + 1 = 31 = 0b1_1111. Every column adds 1 + 1 + carry.',
+        solve: (st) => st.setInputs({ a: 15, b: 15, cin: 1 }),
       },
     },
     {
@@ -82,6 +83,8 @@ export const chAdders: Chapter = {
       challenge: {
         kind: 'reach', goal: 'Use the circuit to compute 5 − 7 (the result is −2 = 0xFE).',
         check: (st) => st.getInput('sub') === 1 && st.value('s') === 0xfe,
+        answer: 'a = 5, b = 7, sub = 1: 5 + NOT(7) + 1 = 5 + 0xF8 + 1 = 0xFE = −2.',
+        solve: (st) => st.setInputs({ a: 5, b: 7, sub: 1 }),
       },
     },
   ],
@@ -110,6 +113,8 @@ export const chRouting: Chapter = {
       challenge: {
         kind: 'reach', goal: 'Light up output y6, and only y6.',
         check: (st) => st.value('y6') === 1 && [0, 1, 2, 3, 4, 5, 7].every((k) => st.value(`y${k}`) === 0),
+        answer: 'a = 6 (0b110) with en = 1.',
+        solve: (st) => st.setInputs({ a: 6, en: 1 }),
       },
     },
     {
@@ -137,7 +142,8 @@ export const chRouting: Chapter = {
       challenge: {
         kind: 'reach', goal: 'Make the output 0xA by changing only the inputs (not s = 3).',
         check: (st) => st.getInput('s') === 3 && st.value('y') === 0xa,
-        hint: 'The output shows whichever word the select line points at.',
+        answer: 's = 3 selects d3, so set d3 = 0xA.',
+        solve: (st) => st.setInputs({ d3: 0xa }),
       },
     },
   ],

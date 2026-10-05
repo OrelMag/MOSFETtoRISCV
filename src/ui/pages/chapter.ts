@@ -95,11 +95,16 @@ export class ChapterPage implements Page {
     };
     if (ch.kind === 'reach') {
       box.append(h('div', { class: 'challenge-head' }, tag, ch.goal));
-      if (ch.hint) {
-        const hint = h('div', { class: 'hint' });
-        const btn = h('button', { class: 'btn ghost sm', onclick: () => { hint.textContent = `Hint: ${ch.hint}`; btn.remove(); } }, 'Show a hint');
-        box.append(btn, hint);
-      }
+      const ans = h('div', { class: 'explain' });
+      const row = h('div', { class: 'challenge-actions' });
+      const show = h('button', { class: 'btn ghost sm' }, 'Show answer');
+      show.addEventListener('click', () => {
+        ans.textContent = ch.answer;
+        show.remove();
+        if (ch.solve) row.append(h('button', { class: 'btn sm', onclick: () => ch.solve!(this.stage) }, 'Do it for me'));
+      });
+      row.append(show);
+      box.append(row, ans);
       if (settings.isSolved(key)) markSolved();
       const check = () => {
         if (!box.classList.contains('solved') && ch.check(this.stage)) markSolved();
@@ -109,12 +114,19 @@ export class ChapterPage implements Page {
       box.append(h('div', { class: 'challenge-head' }, tag, ch.question));
       const explain = h('div', { class: 'explain' });
       const opts = h('div', { class: 'options' });
+      const reveal = h('button', { class: 'btn ghost sm', style: 'margin-top:8px' }, 'Show answer');
+      reveal.addEventListener('click', () => {
+        (opts.children[ch.answer] as HTMLElement).classList.add('right');
+        explain.textContent = ch.explain;
+        reveal.remove();
+      });
       ch.options.forEach((o, i) => {
         const btn = h('button', { class: 'btn' }, o);
         btn.addEventListener('click', () => {
           if (i === ch.answer) {
             btn.classList.add('right');
             explain.textContent = ch.explain;
+            reveal.remove();
             markSolved();
           } else {
             btn.classList.add('wrong');
@@ -123,8 +135,9 @@ export class ChapterPage implements Page {
         });
         opts.append(btn);
       });
-      box.append(opts, explain);
+      box.append(opts, reveal, explain);
       if (settings.isSolved(key)) {
+        reveal.remove();
         markSolved();
         explain.textContent = ch.explain;
         (opts.children[ch.answer] as HTMLElement).classList.add('right');

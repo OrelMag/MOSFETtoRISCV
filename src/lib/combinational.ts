@@ -192,54 +192,90 @@ endmodule`,
   });
 });
 
-/** a ± b: invert b through XOR gates and inject the +1 as the carry-in (two's complement). */
+/**
+ * a ± b: invert b through XOR gates and inject the +1 as the carry-in (two's complement).
+ * Also produces the flags the ALU needs: v (signed overflow = carry into the MSB XOR carry
+ * out of it) and n (the sign of the result).
+ */
 export const addSub = memo((n: number): ComponentDef => {
   const P = 10, X = 18, Y0 = 3;
+  const yt = Y0 + P * (n - 1); // top of the last full adder
   const xorAt = (i: number): [number, number] => [11, Y0 + P * i + 3]; // below the a-line, jogs up into fa.b
   const instances: InstanceDef[] = [
     { name: 'sa', def: splitter(ones(n), P), at: [4, Y0 - 3] },
     { name: 'sb', def: splitter(ones(n), P), at: [6, Y0 - 1] },
     { name: 'ms', def: merger(ones(n), P), at: [27, Y0 - 2] },
+    { name: 'vx', def: XOR, at: [24, yt + 9] },
   ];
   const subEnds = ['sub'];
   const nets: NetDef[] = [
     { name: 'a', ends: ['a', 'sa.in'] },
     { name: 'b', ends: ['b', 'sb.in'] },
     { name: 's', ends: ['ms.out', 's'] },
+    { name: 'v', ends: ['vx.y', 'v'] },
   ];
+  const vxA: [number, number][] = [[X + 3, yt - 2], [16, yt - 2], [16, yt + 10]];
   for (let i = 0; i < n; i++) {
     instances.push({ name: `x${i}`, def: XOR, at: xorAt(i) });
     instances.push({ name: `fa${i}`, def: FULL_ADDER, at: [X, Y0 + P * i] });
     nets.push({ name: `a${i}`, ends: [`sa.o${i}`, `fa${i}.a`] });
     nets.push({ name: `b${i}`, ends: [`sb.o${i}`, `x${i}.a`] });
     nets.push({ name: `bx${i}`, ends: [`x${i}.y`, `fa${i}.b`] });
-    nets.push({ name: `s${i}`, ends: [`fa${i}.s`, `ms.i${i}`] });
-    nets.push({ name: `c${i + 1}`, ends: [`fa${i}.cout`, i < n - 1 ? `fa${i + 1}.cin` : 'cout'] });
+    if (i === n - 1) {
+      nets.push({ name: `s${i}`, ends: [`fa${i}.s`, `ms.i${i}`, 'n'], via: { n: [[25.5, yt + 3], [25.5, yt + 7]] } });
+      nets.push({
+        name: `c${i + 1}`, ends: [`fa${i}.cout`, 'cout', 'vx.b'],
+        via: { cout: [[X + 3, yt + 15]], 'vx.b': [[X + 3, yt + 12]] },
+      });
+    } else {
+      nets.push({ name: `s${i}`, ends: [`fa${i}.s`, `ms.i${i}`] });
+      const ends = [`fa${i}.cout`, `fa${i + 1}.cin`];
+      if (i === n - 2) ends.push('vx.a');
+      nets.push({ name: `c${i + 1}`, ends, via: i === n - 2 ? { 'vx.a': vxA } : undefined });
+    }
     subEnds.push(`x${i}.b`);
   }
   subEnds.push('fa0.cin');
-  nets.push({
-    name: 'sub', ends: subEnds, trunk: 9,
-    via: { 'fa0.cin': [[9, 0], [X + 3, 0]] },
-  });
+  const subVia: Record<string, [number, number][]> = { 'fa0.cin': [[9, 0], [X + 3, 0]] };
+  if (n === 1) {
+    subEnds.push('vx.a');
+    subVia['vx.a'] = [[9, yt + 10]];
+  }
+  nets.push({ name: 'sub', ends: subEnds, trunk: 9, via: subVia });
   const M = mask(n);
+  const H = 2 ** (n - 1);
   return define({
     id: `addsub${n}`, name: `${n}-bit adder / subtractor`, category: 'arithmetic',
-    summary: 'sub = 0: a + b. sub = 1: a + NOT b + 1 = a − b in two\'s complement. One adder does both.',
+    summary: "sub = 0: a + b. sub = 1: a + NOT b + 1 = a − b in two's complement. One adder does both, and reports overflow (v) and sign (n).",
     ports: [
       { name: 'a', width: n, dir: 'in' }, { name: 'b', width: n, dir: 'in' }, bit('sub', 'in'),
-      { name: 's', width: n, dir: 'out' }, bit('cout', 'out'),
+      { name: 's', width: n, dir: 'out' }, bit('cout', 'out'), bit('v', 'out'), bit('n', 'out'),
     ],
     symbol: { kind: 'box', label: `ADD/SUB${n}` },
     spec: ([a, b, sub]) => {
-      const t = a + (sub ? (~b & M) >>> 0 : b) + sub;
-      return [t % (M + 1), t > M ? 1 : 0];
+      const bb = sub ? (~b & M) >>> 0 : b;
+      const t = a + bb + sub;
+      const s = t % (M + 1);
+      const sa = a >= H, sbb = bb >= H, ss = s >= H;
+      return [s, t > M ? 1 : 0, sa === sbb && ss !== sa ? 1 : 0, ss ? 1 : 0];
     },
     netlist: () => ({
-      pins: { a: [1, Y0 - 3 + 5 * n], b: [1, Y0 - 1 + 5 * n], sub: [1, Y0 + P * n + 2], s: [32, Y0 - 2 + 5 * n], cout: [X + 3, Y0 + P * n + 1] },
-      pinDirs: { cout: 'up' },
+      pins: {
+        a: [1, Y0 - 3 + 5 * n], b: [1, Y0 - 1 + 5 * n], sub: [1, Y0 + P * n + 2], s: [32, Y0 - 2 + 5 * n],
+        n: [32, yt + 7], v: [32, yt + 11], cout: [32, yt + 15],
+      },
       instances, nets,
     }),
+    hdl: {
+      verilog: `module addsub #(parameter int N = ${n}) (input logic [N-1:0] a, b, input logic sub,
+                                       output logic [N-1:0] s, output logic cout, v, n);
+  logic [N-1:0] bx;
+  assign bx = b ^ {N{sub}};          // invert b for subtraction
+  assign {cout, s} = a + bx + sub;   // +1 completes the two's complement
+  assign v = (a[N-1] == bx[N-1]) && (s[N-1] != a[N-1]);  // signed overflow
+  assign n = s[N-1];
+endmodule`,
+    },
   });
 });
 

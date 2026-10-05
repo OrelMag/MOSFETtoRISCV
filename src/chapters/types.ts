@@ -8,7 +8,10 @@ export type Challenge =
       /** What to achieve, shown to the learner. */
       goal: string;
       check: (stage: Stage) => boolean;
-      hint?: string;
+      /** Worked answer, revealed on request. */
+      answer: string;
+      /** Optional: perform the answer on the live circuit. */
+      solve?: (stage: Stage) => void;
     }
   | {
       kind: 'quiz';

@@ -57,7 +57,8 @@ export const chGates: Chapter = {
       challenge: {
         kind: 'reach', goal: 'With a = 1, make the XOR output 0.',
         check: (st) => st.getInput('a') === 1 && st.value('y') === 0,
-        hint: 'XOR is 0 when both inputs are equal.',
+        answer: 'Set b = 1. XOR is 0 when both inputs are equal.',
+        solve: (st) => st.setInputs({ a: 1, b: 1 }),
       },
     },
     {
@@ -79,6 +80,8 @@ export const chGates: Chapter = {
       challenge: {
         kind: 'reach', goal: 'Make the output follow input b, then set b = 1.',
         check: (st) => st.getInput('s') === 1 && st.getInput('b') === 1 && st.value('y') === 1,
+        answer: 's = 1 selects input b; then b = 1 drives y = 1.',
+        solve: (st) => st.setInputs({ s: 1, b: 1 }),
       },
     },
   ],

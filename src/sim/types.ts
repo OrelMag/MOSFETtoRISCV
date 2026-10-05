@@ -112,6 +112,8 @@ export interface ComponentDef {
   netlist?: () => Netlist;
   /** Fast model used when the flattener cuts above this component. */
   behavior?: Behavior;
+  /** Simulate by behaviour by default (the structure is still shown when the box is opened). */
+  preferBehavior?: boolean;
   /** Reference function for tests and truth tables: packed inputs → packed outputs. */
   spec?: (inputs: number[]) => number[];
   /** Power-on hints for 'zero' mode: internal net name → value. */

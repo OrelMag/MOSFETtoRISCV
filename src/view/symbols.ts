@@ -114,8 +114,8 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
       break;
     default: {
       inner.append(s('rect', { x: 0, y: 0, width: w, height: h, rx: 0.6, class: 'sym-body sym-box' }));
-      // Port names inside the box (not mirrored).
-      for (const p of def.ports) {
+      // Port names inside the box (not mirrored). Pure-wiring boxes are too small for them.
+      for (const p of def.prim === 'alias' ? [] : def.ports) {
         const pg = g.ports[p.name];
         const side = p.side ?? (p.dir === 'out' ? 'right' : 'left');
         let x = pg.pos[0], y = pg.pos[1] + 0.38;

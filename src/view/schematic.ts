@@ -29,6 +29,7 @@ interface WireEls {
 interface PinEls {
   pin: PinGeom;
   g: SVGGElement;
+  name?: SVGTextElement;
   value?: SVGTextElement;
   valueBg?: SVGRectElement;
 }
@@ -202,15 +203,16 @@ export class SchematicView {
         els.value = t;
         els.valueBg = bg;
       }
-      // Name label, away from the circuit (above the value box for buses).
-      const bus = pin.width > 1 && back !== 0;
-      const ax = bus ? cx - back * 0.6 : back !== 0 ? cx + back * 1.3 : cx;
-      const ay = bus ? cy - 1.25 : vert !== 0 ? cy + vert * 1.6 + (vert > 0 ? 0.4 : 0) : cy + 0.42;
-      const anchor = bus ? (back < 0 ? 'end' : 'start') : back > 0 ? 'start' : back < 0 ? 'end' : 'middle';
+      // Name label, away from the circuit (beyond the value box for buses; placed in update()).
+      const ax = back !== 0 ? cx + back * 1.3 : cx;
+      const ay = vert !== 0 ? cy + vert * 1.6 + (vert > 0 ? 0.4 : 0) : cy + 0.42;
+      const anchor = back > 0 ? 'start' : back < 0 ? 'end' : 'middle';
       const name = s('text', { class: 'pin-name', x: ax, y: ay, 'text-anchor': anchor }, portLabel(pin.name));
       g.append(name);
-      grow(cx - 2 - (back < 0 ? textWidth(pin.name, 1.1) + 3 : 0), cy - 2);
-      grow(cx + 2 + (back > 0 ? textWidth(pin.name, 1.1) + 3 : 0), cy + 2);
+      els.name = name;
+      const extra = textWidth(pin.name, 1.1) + 3 + (pin.width > 1 ? textWidth('0x'.padEnd(2 + Math.ceil(pin.width / 4), '0'), 1.05) : 0);
+      grow(cx - 2 - (back < 0 ? extra : 0), cy - 2);
+      grow(cx + 2 + (back > 0 ? extra : 0), cy + 2);
       if (clickable) {
         g.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -265,6 +267,7 @@ export class SchematicView {
         p.valueBg!.setAttribute('x', String(bx));
         p.valueBg!.setAttribute('width', String(tw));
         p.value!.setAttribute('x', String(bx + tw / 2));
+        if (back !== 0) p.name?.setAttribute('x', String(back < 0 ? bx - 0.4 : bx + tw + 0.4));
         const stub = p.g.querySelector('.pin-stub');
         stub?.setAttribute('class', `wire ${busClass(bits)} pin-stub`);
       }
