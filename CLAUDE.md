@@ -9,6 +9,10 @@ transistor to a multi-core RISC-V processor laid out on silicon. Each level is b
 from the levels below it, and every component on screen is a **transparent box**: the
 learner can open any instance and keep drilling down to MOSFETs.
 
+**Audience: engineers.** Prose is dense and precise (encodings, timing, cost, trade-offs); no
+hand-holding. **Challenges are optional** and every one has a "Show answer" (reach challenges
+also "Do it for me" via `solve`).
+
 It is *not* primarily a logic simulator. The simulator exists so that every value, gate
 count and delay on screen is computed rather than drawn. The product is the narrative
 journey. See `docs/ROADMAP.md` for the plan and phase status.
@@ -64,6 +68,12 @@ src/lib/       the component library (registered in `registry` via define())
                  decoder(n, en, pitch), busMux2(w), muxTree(k, w, pitch)
   sequential.ts  SR latch, D latch, DFF (master–slave), DFFE, register(n), counter(n)
   memory.ts      ram(k, w): decoder + registers + mux tree, user-scalable
+  alu.ts         constWord, zext, wiring boxes, bitwise, orN, isZero, barrel shifter, alu(n)
+  regfile.ts     regfile(k, w) with x0 = 0, two read ports fed by one bundled word bus
+  cpu.ts         single-cycle RV32I: rom (preferBehavior), dataMemory, IMM_GEN, OPCODE_DECODER,
+                 CONTROL, NEXT_PC, PLUS4, singleCycleCpu(program)
+src/riscv/     isa.ts (tables, decode, disasm), asm.ts (two-pass assembler), iss.ts (golden
+               model), programs.ts (samples), cosim.ts (read CPU state from a simulation)
 src/view/      SVG schematic renderer, router, inspector panels, waveform, truth table
 src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...)
 src/chapters/  narrative content: chapters → steps → scene / widget / challenge
@@ -83,10 +93,11 @@ tests/         Vitest: every component with a `spec` is checked exhaustively (�
    the learner opens a NAND (solved by `SwitchSim`, driven by the parent's values).
 3. **Bit-level nets.** Buses are bundles of 1-bit flat nets. Splitters and mergers are
    `prim: 'alias'`: pure wiring, merged by union-find in the flattener, with zero cost.
-4. **Mixed-level simulation (planned for the CPU chapters).** The flattener accepts an
-   `expand` policy. Components with a `behavior` can be kept as leaves above a size budget.
-   Opening such a box will start a lock-step sub-simulation of its structure. Tests must
-   prove behaviour ≡ structure.
+4. **Mixed-level simulation.** `preferBehavior: true` keeps a component (the instruction ROM) as a
+   behavioural leaf; opening it starts a lock-step sub-simulation of its structure. The
+   flattener also accepts an `expand` policy for more cuts (needed for pipelined / multi-core
+   designs). Tests must prove behaviour ≡ structure; the CPU is co-simulated against the ISS
+   after every instruction (`tests/cpu.test.ts`).
 5. **Timing is real.** Every NAND has a delay of 1. `GateSim.step()` advances one time
    instant, so the UI can animate propagation (watch the carry ripple). Transport delay
    shows glitches. Perfectly symmetric races (an SR latch with both inputs released at
@@ -109,6 +120,9 @@ tests/         Vitest: every component with a `spec` is checked exhaustively (�
   the vertical trunk for horizontal drivers, y for vertical ones) and `via` (corner points)
   to untangle feedback paths.
 - Prefer hierarchy (a box of boxes) over flat netlists: it is the whole point of the site.
+- Large top-level schematics: draw the main data path, and use **net labels** (`tags` on a
+  NetDef) for control signals and long feedback paths, like a real schematic. Place
+  instances so that ports line up (see `alignY` in cpu.ts) and data wires stay straight.
 - Hand-written SystemVerilog goes in `hdl.verilog` (behavioural or structural, matching the
   primer's style). Structural Verilog is also generated automatically.
 

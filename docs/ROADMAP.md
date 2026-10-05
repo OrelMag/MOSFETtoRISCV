@@ -87,25 +87,28 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 | 9 | Registers & counters | n-bit register with enable, counter, clocks |
 | 10 | Memory arrays | N words × W bits (user-scalable: 4×4 … 64×16), write path (decoder), read path (mux tree), cell grid view, timing |
 
-### Phase 2 — Computing ⏳
-- ALU (add, sub, and, or, xor, shifts, slt/sltu) and flags; barrel shifter
-- Carry-lookahead and Kogge–Stone adders with depth comparison (optimization intro)
-- Register file (32 × 32, x0 hard-wired), two read ports and one write port
+### Phase 2 — Computing 🚧
+- ✅ ALU (add, sub, and, or, xor, shifts, slt/sltu) and flags; barrel shifter
+- ⏳ Carry-lookahead and Kogge–Stone adders with depth comparison (optimization intro)
+- ✅ Register file (32 × 32, x0 hard-wired), two read ports and one write port
 - **Sandbox**: full wiring editor (today the *workbench* opens any library component with free inputs) (place parts from the library, wire, package into a new
   chip, save to local storage and share via URL); Turing-Complete-style build challenges
   checked against a truth table or test vectors
 
-### Phase 3 — The instruction set & assembly ⏳
-- RV32I instruction formats with an interactive encoder / decoder (bit-field explorer)
-- In-browser assembler + disassembler (port of `References/.../sim/asm.py`), with labels and pseudo-instructions
-- Reference ISA simulator (golden model) used to check every CPU
-- Program editor with sample programs (sum, Fibonacci, memcpy, sort, multiply by shifts)
+### Phase 3 — The instruction set & assembly ✅
+- ✅ RV32I instruction formats with an interactive encoder / decoder (bit-field explorer)
+- ✅ In-browser assembler + disassembler, labels and pseudo-instructions (bit-exact vs the primer)
+- ✅ Reference ISA simulator (golden model) used to check every CPU
+- ✅ Program editor with sample programs (sum, Fibonacci, multiply, sort, GCD, primer test)
 
-### Phase 4 — Single-cycle CPU ⏳
-- Datapath built from Phase 1–3 parts; control unit (main decoder + ALU decoder)
-- Instruction walk-through: highlight the active path per instruction type
-- Critical path measured from the netlist → maximum clock frequency
-- Memory-mapped I/O: LEDs, 7-segment display, a text console, a small pixel screen
+### Phase 4 — Single-cycle CPU 🚧
+- ✅ Datapath from Phase 1–3 parts; control unit (opcode decoder + ALU decoder), next-PC logic
+- ✅ Gate-level (48k NAND) RV32I minus byte/half memory & system; co-simulated vs the ISS every cycle
+- ✅ CPU panel: listing, registers, memory, live golden-model check, run to halt, program editor
+- ✅ Per-instruction settle time in gate delays (dynamic critical path)
+- ⏳ Static critical-path analysis → maximum clock frequency
+- ⏳ Animated active path per instruction
+- ⏳ Memory-mapped I/O: LEDs, 7-segment display, a text console, a small pixel screen
 
 ### Phase 5 — Multicycle & microcode ⏳
 - FSM control vs microprogrammed control (primer Appendix D), equivalence shown
