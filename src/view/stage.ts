@@ -812,6 +812,11 @@ export class Stage {
     this.view.highlight(names, focus);
   }
 
+  /** Colour nets of the current view (index in its netlist → classes); cleared on navigation. */
+  markNets(marks: Map<number, string>): void {
+    this.view.markNets(marks);
+  }
+
   /** Reserve screen space on the right for a docked panel and refit. */
   setInset(px: number): void {
     this.view.insetRight = px;

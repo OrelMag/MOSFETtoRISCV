@@ -121,7 +121,10 @@ export const chIsa: Chapter = {
         <p>Immediates pay for that. The S format splits its immediate around rs2; B and J scramble theirs so that the sign
         is always bit 31 and most immediate bits sit in the same place across formats. The immediate generator then needs
         fewer multiplexer inputs per bit.</p>
-        <div class="try">Try <code>beq a0, zero, 16</code> and <code>jal ra, 2048</code>: watch where the offset bits go.</div>`,
+        <p>Under the fields, the immediate is rebuilt bit by bit the way the hardware does it: each result bit is a wire
+        from one instruction bit (the number below it), a sign copy of bit 31 (<code>s</code>), or ground. No gates.</p>
+        <div class="try">Try <code>beq a0, zero, 16</code> and <code>jal ra, 2048</code>: watch where the offset bits go.
+        Point at a bit of the immediate to see its source.</div>`,
       widget: () => instructionExplorer(),
       challenge: {
         kind: 'quiz', question: 'Why is the branch offset stored in units of 2 bytes, not 4, even though RV32I instructions are 4 bytes?',
@@ -177,6 +180,9 @@ export const chSingleCycle: Chapter = {
         memory, PC+4 or immediate, and it is written to rd on the next rising edge.</li></ul>
         <p>Control signals are drawn as <em>net labels</em> (tags). Hover one to highlight every place that net goes.
         The panel shows the program, registers and memory, and checks every cycle against the golden model.</p>
+        <p>Click a program line: its <strong>fields</strong> appear in the panel and the wires that carry them take the
+        same colours (opcode to the control unit, rd to the write address, and so on). Point at a field to follow only
+        its wires; open <code>imm</code> or <code>ctl</code> and the colours follow you inside.</p>
         <p><strong>Slow</strong> runs the program at the speed you set, keeping the current instruction's hardware lit
         and logging each retired instruction in the trace. At the <em>gate</em> level each rising edge plays out one
         NAND delay at a time: the new PC leaves its register, fetches the next instruction, which is decoded and

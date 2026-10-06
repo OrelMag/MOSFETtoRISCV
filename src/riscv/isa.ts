@@ -194,6 +194,22 @@ export function immJ(w: number) {
   return sext((((w >>> 31) & 1) << 20) | (((w >>> 12) & 0xff) << 12) | (((w >>> 20) & 1) << 11) | (((w >>> 21) & 0x3ff) << 1), 21);
 }
 
+/** Formats that carry an immediate. */
+export type ImmFmt = Exclude<Fmt, 'R' | 'R4'>;
+/**
+ * Where bit i of each format's immediate comes from: an instruction bit, or a constant 0. The
+ * hardware immediate generator (lib/cpu.ts) is wired from this table and the instruction
+ * breakdown draws it, so they cannot disagree. Bits above IMM_TOP are sign copies of instr[31].
+ */
+export const IMM_SRC: Record<ImmFmt, (i: number) => number | 'zero'> = {
+  I: (i) => (i < 12 ? 20 + i : 31),
+  S: (i) => (i < 5 ? 7 + i : i < 11 ? 25 + (i - 5) : 31),
+  B: (i) => (i === 0 ? 'zero' : i < 5 ? 7 + i : i < 11 ? 25 + (i - 5) : i === 11 ? 7 : 31),
+  U: (i) => (i < 12 ? 'zero' : i),
+  J: (i) => (i === 0 ? 'zero' : i < 11 ? 20 + i : i === 11 ? 20 : i < 20 ? i : 31),
+};
+export const IMM_TOP: Record<ImmFmt, number> = { I: 11, S: 11, B: 12, U: 31, J: 20 };
+
 export function decode(word: number): Decoded {
   const w = word >>> 0;
   const opcode = w & 0x7f, rd = (w >>> 7) & 31, funct3 = (w >>> 12) & 7, rs1 = (w >>> 15) & 31, rs2 = (w >>> 20) & 31, funct7 = w >>> 25;

@@ -20,7 +20,9 @@ import { h, icon } from '../ui/dom';
 import { settings, type TraceLevel } from '../ui/settings';
 import { fmtRate, ratePos, rateScale, stepEffect } from '../riscv/trace';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
-import { instrUse, stageUse, STAGE_UNITS } from './insthw';
+import type { FieldKey } from '../riscv/fields';
+import { instrMarks, instrUse, stageUse, STAGE_UNITS } from './insthw';
+import { instrBreakdown } from './instrfields';
 import { timingPanel } from './timing';
 
 const hex = (v: number, d = 8) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(d, '0');
@@ -85,6 +87,10 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     /** The listing line the user clicked: its hardware stays highlighted. */
     let selPc: number | null = null;
     const usePath = h('div', { class: 'cpu-use' });
+    /** Instruction breakdown: the field pinned by a click, the one under the pointer. */
+    let fieldPin: FieldKey | null = null, fieldHover: FieldKey | null = null;
+    const fieldsBox = h('div', { class: 'cpu-fields' });
+    let fieldsShown = '';
 
     const status = h('div', { class: 'cpu-status' });
     const listing = h('div', { class: 'cpu-listing' });
@@ -242,6 +248,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       slowRow,
       editWrap, status, now,
       h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its hardware')), listing, usePath,
+      h('div', { class: 'cpu-sec' }, 'Fields', h('span', { class: 'cpu-sec-hint' }, 'point at a field: its wires')), fieldsBox,
       h('div', { class: 'cpu-sec' }, 'Trace', h('span', { class: 'cpu-sec-hint' }, 'retired instructions, newest last')), trace,
       h('div', { class: 'cpu-sec' }, 'Registers'), regs,
       ...(opts.fpu ? [h('div', { class: 'cpu-sec' }, 'Floating-point registers (non-zero)'), fregs] : []),
@@ -393,37 +400,82 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         h('span', { class: 'n' }, `[${hex(i * 4, 2)}]`), h('span', { class: 'v' }, hex(v)), h('span', { class: 'd' }, String(v | 0)))) : [h('div', { class: 'm z' }, 'all zero')]));
     };
     const wordAt = (pc: number) => asm.words[pc >>> 2] ?? 0x13;
+    const atRoot = () => stage.path.length === 0;
     const light = (names: string[]) => {
       const have = stage.rootCtx?.node.children;
-      if (stage.path.length === 0) stage.highlight(names.filter((n) => have?.has(n)), true);
+      if (atRoot()) stage.highlight(names.filter((n) => have?.has(n)), true);
+    };
+    const fieldFocus = () => fieldHover ?? fieldPin;
+    /**
+     * Colour the wires that carry each field of `word` in the view shown now (null: no colours) and
+     * highlight. At the top level `units` stand unless a field is in focus; inside IMM_GEN, CONTROL
+     * or the opcode decoder the marks choose the parts. Returns a note for the use line.
+     */
+    const markFields = (word: number | null, units: string[]): string | undefined => {
+      const def = stage.ctx?.def;
+      const m = def && word !== null ? instrMarks(def, word, fieldFocus()) : null;
+      stage.markNets(m?.nets ?? new Map());
+      if (!m) light(units);
+      else if (atRoot()) light(fieldFocus() ? m.units : units);
+      else stage.highlight(m.units, m.units.length > 0);
+      return m?.note;
+    };
+    /** The breakdown of the instruction at pc, rebuilt only when that instruction changes. */
+    const showFields = (pc: number, role: string) => {
+      const w = wordAt(pc);
+      const key = `${pc}:${w}:${role}`;
+      if (key !== fieldsShown) {
+        fieldsShown = key;
+        fieldsBox.replaceChildren(
+          h('div', { class: 'cpu-fields-head' }, h('code', null, disasm(w, pc)), h('span', null, role)),
+          instrBreakdown(w, {
+            compact: true, onField: (k, sticky) => {
+              if (sticky) fieldPin = fieldPin === k ? null : k;
+              else fieldHover = k;
+              update();
+            },
+          }));
+      }
+      fieldsBox.querySelectorAll<HTMLElement>('[data-field]').forEach((e) => e.classList.toggle('on', e.dataset.field === fieldPin));
     };
     /**
      * Highlight what the selected instruction uses (or, in the pipeline, the stage it is in now).
      * In slow mode with nothing selected, follow execution: the current instruction, or every
-     * in-flight instruction's part of the work in its stage.
+     * in-flight instruction's part of the work in its stage. The wires of the instruction's fields
+     * take their colours, also inside the immediate generator and the control unit.
      */
     const showUse = (inFlight: Map<number, string[]>, shownPc: number) => {
-      if (selPc === null && tracing && opts.pipeline) {
+      // The pipeline splits the instruction in Decode, so its field wires carry the one in D.
+      const dPc = [...inFlight].find(([, s]) => s.includes('D'))?.[0];
+      const bdPc = selPc ?? dPc ?? shownPc;
+      showFields(bdPc, selPc !== null ? 'selected' : dPc !== undefined ? 'in Decode' : 'current');
+      if (selPc === null && tracing && opts.pipeline && !fieldFocus()) {
         const order = Object.keys(STAGE_UNITS);
         const rows = [...inFlight].flatMap(([pc, stgs]) => stgs.map((s) => [s as keyof typeof STAGE_UNITS, pc] as const))
           .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
-        light(rows.flatMap(([s, pc]) => stageUse(s, instrUse(wordAt(pc)))));
-        usePath.replaceChildren(...rows.map(([s, pc]) => h('div', { class: 'flight' }, h('span', { class: 'stg' }, s), h('code', null, disasm(wordAt(pc), pc)))));
+        const note = markFields(dPc === undefined ? null : wordAt(dPc), rows.flatMap(([s, pc]) => stageUse(s, instrUse(wordAt(pc)))));
+        usePath.replaceChildren(...rows.map(([s, pc]) => h('div', { class: 'flight' }, h('span', { class: 'stg' }, s), h('code', null, disasm(wordAt(pc), pc)))),
+          note ? h('div', { class: 'ibd-note' }, note) : '');
         return;
       }
-      const pc = selPc ?? (tracing ? shownPc : null);
+      const pc = selPc ?? (tracing || fieldFocus() ? bdPc : null);
       if (pc === null) {
         usePath.replaceChildren();
-        if (stage.path.length === 0) stage.highlight(stage.scene?.highlight ?? []);
+        stage.markNets(new Map());
+        if (atRoot()) stage.highlight(stage.scene?.highlight ?? []);
+        else if (stage.ctx && instrMarks(stage.ctx.def, 0x13)) stage.highlight([]);
         return;
       }
       const w = wordAt(pc);
       const use = instrUse(w);
       const stages = inFlight.get(pc) ?? [];
-      light(stages.length ? stages.flatMap((s) => stageUse(s as keyof typeof STAGE_UNITS, use)) : use.units);
+      const carried = !opts.pipeline || !stages.length || stages.includes('D');
+      const note = markFields(carried ? w : null, stages.length ? stages.flatMap((s) => stageUse(s as keyof typeof STAGE_UNITS, use)) : use.units);
       usePath.replaceChildren(h('code', null, disasm(w, pc)), h('span', null,
         opts.pipeline ? (stages.length ? ` · now in ${stages.join(' + ')}; highlighted: that stage's part of the work.` : ' · not in the pipeline now; highlighted: all the hardware it uses.') : ''),
-        h('div', null, use.path));
+        h('div', null, use.path),
+        !carried ? h('div', { class: 'ibd-note' }, 'Field colours appear while it is in D, where the instruction is split.') : '',
+        note ? h('div', { class: 'ibd-note' }, note) : '');
     };
     /** Append the newly retired instructions to the trace (the log is never rebuilt while it grows). */
     const showTrace = () => {
@@ -440,8 +492,18 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       trace.scrollTop = trace.scrollHeight;
       logShown = logSeq;
     };
+    // Opening the immediate generator or the control unit keeps the instruction's colours.
+    const unNav = stage.onNavigate(() => update());
     update();
-    return { el, update, destroy: () => { stopRun(); stopSlow(); if (stage.path.length === 0) stage.highlight(stage.scene?.highlight ?? []); } };
+    return {
+      el, update, destroy: () => {
+        stopRun();
+        stopSlow();
+        unNav();
+        stage.markNets(new Map());
+        if (stage.path.length === 0) stage.highlight(stage.scene?.highlight ?? []);
+      },
+    };
   };
 }
 
