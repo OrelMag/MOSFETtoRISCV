@@ -123,8 +123,12 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
     transistors (and a single MOSFET); the Inspector (info, truth table, Verilog) in a drawer
   - ✅ "Open in Sandbox" from the workbench and chapter scenes: the circuit on screen as an
     editable chip, pointers included (a CPU's ROM, constants and data memory come along)
-  - ⏳ Probes and timing in the sandbox, build challenges (Turing-Complete style, checked against
-    a truth table or test vectors)
+  - ✅ Build challenges (Turing-Complete style, optional): 21 chips from a CMOS inverter to an
+    instruction fetch unit, every level of the journey; each checked exhaustively (truth table) or by a
+    clocked sequence, the palette restriction (transistors / NAND / any) enforced on the compiled
+    hierarchy, scored against par (NANDs, transistors, depth); Show answer imports the reference chips,
+    Do it for me fills the challenge chip; progress in the site settings
+  - ⏳ Probes and timing in the sandbox
 
 ### Phase 3 — The instruction set & assembly ✅
 - ✅ RV32I instruction formats with an interactive encoder / decoder (bit-field explorer)
