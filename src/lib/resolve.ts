@@ -20,6 +20,7 @@ import { bankedMemory } from './lsu';
 import { clearableRegister } from './pipeline';
 import { boothMul, pipeMul, seqMul } from './multiply';
 import { bcdAdder, carrySelect, carrySkip } from './adders';
+import { cam, fifo, pla, regfileMP, romArray, stack } from './storage';
 import { clockDivider, lfsr, ringCounter, shiftRegister, upDownCounter } from './seqparts';
 import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
 import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
@@ -92,6 +93,7 @@ const FMT_NAMES = ['E3M4 (8-bit)', 'E4M3 (8-bit)', 'binary16', 'float32'];
 const format: Param = { name: 'format', values: [0, 1, 2, 3], initial: 0, label: (v) => FMT_NAMES[v] };
 const fmt = (p: P) => FORMATS[p.format];
 const OPS = ['and', 'or', 'xor'] as const;
+const ROMS = ['squares', 'seg7', 'sine'], PLAS = ['fa', 'seg7'];
 
 /** A family with one `bits` parameter. */
 const nBit = (id: string, name: string, category: string, values: number[], initial: number, key: (n: number) => string, make: (n: number) => ComponentDef): Family =>
@@ -136,6 +138,7 @@ export const families: Family[] = [
   nBit('popcnt', 'Population count', 'arithmetic', [2, 4, 8, 16, 32], 8, (n) => `popcnt${n}`, popcount),
   nBit('abs', 'Absolute value', 'arithmetic', [4, 8, 16, 32], 8, (n) => `abs${n}`, absValue),
   // gates
+  { id: 'pla', name: 'PLA (AND + OR planes)', category: 'gate', params: [{ name: 'function', values: [0, 1], initial: 0, label: (v) => PLAS[v] }], key: (p) => `pla_${PLAS[p.function]}`, make: (p) => pla(PLAS[p.function]) },
   nBit('parity', 'Parity', 'gate', [3, 4, 8, 16, 32], 8, (n) => `parity${n}`, parity),
   { id: 'hamenc', name: 'Hamming SEC-DED encoder', category: 'gate', params: [count('data bits', [4, 8, 16], 8)], key: (p) => `hamenc${p['data bits']}`, make: (p) => hammingEnc(p['data bits']) },
   { id: 'hamdec', name: 'Hamming SEC-DED decoder', category: 'gate', params: [count('data bits', [4, 8, 16], 8)], key: (p) => `hamdec${p['data bits']}`, make: (p) => hammingDec(p['data bits']) },
@@ -192,6 +195,27 @@ export const families: Family[] = [
     id: 'ram', name: 'Memory (RAM)', category: 'memory',
     params: [count('words', [4, 8, 16, 32, 64], 16), bits([4, 8, 16], 8)],
     key: (p) => `ram${p.words}x${p.bits}`, make: (p) => ram(log2(p.words), p.bits),
+  },
+  {
+    id: 'rom', name: 'ROM (decoder + OR plane)', category: 'memory', params: [{ name: 'contents', values: [0, 1, 2], initial: 0, label: (v) => ROMS[v] }],
+    key: (p) => `rom_${ROMS[p.contents]}`, make: (p) => romArray(ROMS[p.contents]),
+  },
+  {
+    id: 'fifo', name: 'FIFO', category: 'memory', params: [count('words', [4, 8, 16], 4), bits([4, 8], 8)],
+    key: (p) => `fifo${p.words}x${p.bits}`, make: (p) => fifo(log2(p.words), p.bits),
+  },
+  {
+    id: 'stack', name: 'Stack', category: 'memory', params: [count('words', [4, 8, 16], 4), bits([4, 8], 8)],
+    key: (p) => `stack${p.words}x${p.bits}`, make: (p) => stack(log2(p.words), p.bits),
+  },
+  {
+    id: 'cam', name: 'Content-addressable memory', category: 'memory', params: [count('entries', [2, 4, 8], 4), bits([4, 8], 4)],
+    key: (p) => `cam${p.entries}x${p.bits}`, make: (p) => cam(log2(p.entries), p.bits),
+  },
+  {
+    id: 'rfmp', name: 'Multi-ported register file', category: 'memory',
+    params: [count('registers', [4, 8], 4), count('read ports', [2, 4], 4), count('write ports', [1, 2], 2)],
+    key: (p) => `rfmp${p.registers}x8_${p['read ports']}r${p['write ports']}w`, make: (p) => regfileMP(log2(p.registers), 8, p['read ports'], p['write ports'] as 1 | 2),
   },
   {
     id: 'regfile', name: 'Register file', category: 'memory',

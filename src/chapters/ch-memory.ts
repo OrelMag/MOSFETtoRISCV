@@ -1,7 +1,8 @@
-import { clockDivider, counter, DFF, DFF_R, DFFE, D_LATCH, JKFF, lfsr, ram, register, ringCounter, shiftRegister, SR_LATCH, upDownCounter } from '../lib';
+import { cam, fifo, pla, romArray, stack, clockDivider, counter, DFF, DFF_R, DFFE, D_LATCH, JKFF, lfsr, ram, register, ringCounter, shiftRegister, SR_LATCH, upDownCounter } from '../lib';
 import { pack } from '../sim/values';
 import { memGridPanel } from '../widgets/memgrid';
 import { memSizePanel } from '../widgets/memsize';
+import { portCost } from '../widgets/storage';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
 
@@ -223,7 +224,7 @@ export const chRegisters: Chapter = {
 
 export const chMemory: Chapter = {
   id: 'memory', num: 10, title: 'Memory arrays', level: 'Memory',
-  blurb: 'Many registers, one address: decoders write, multiplexers read.',
+  blurb: 'Many registers, one address: decoders write, multiplexers read. Then ROM, PLA, FIFO, stack, CAM and extra ports.',
   steps: [
     {
       title: 'Four words, one address',
@@ -273,6 +274,90 @@ export const chMemory: Chapter = {
         answer: 'With 16 words or more: addr = 13, din = 0x2A, we = 1, Pulse.',
         solve: (st) => { st.setInputs({ addr: 13, din: 0x2a, we: 1 }); st.pulse(); },
       },
+    },
+    {
+      title: 'Read-only memory',
+      body: `
+        <p>If the contents never change, the flip-flops can go. A decoder raises one word line; output bit j is the OR of the word lines
+        of every word whose bit j is 1. The data is in the wiring. Mask ROMs were made exactly like this, the pattern set by one metal layer;
+        a fuse PROM blows the unwanted connections once; flash keeps the same array but stores each connection as charge, so it can be rewritten.</p>
+        <p>This one holds the squares of 0–15. The CPU's instruction memory in chapter 14 is a ROM too (built there from constants and a
+        multiplexer tree, the read port's view of the same thing).</p>
+        <div class="try">Set addr = 7: data = 0x31 = 49. Open the decoder, then one of the OR gates, and count its inputs.</div>`,
+      scene: () => ({ root: romArray('squares'), inputs: { addr: 3 } }),
+      challenge: {
+        kind: 'quiz', question: 'Output bit 0 of the squares ROM has an OR gate with eight inputs. Why eight?',
+        options: ['n² is odd exactly when n is odd, and 8 of the 16 addresses are odd', 'Every output bit uses half the words', 'A 4-bit address needs 8 lines', 'It is a coincidence'],
+        answer: 0,
+        explain: 'Bit 0 of n² equals bit 0 of n: the OR collects the word lines of 1, 3, 5, …, 15. Other bits use other subsets (bit 1 of n² is always 0, so its OR gate disappears entirely).',
+      },
+    },
+    {
+      title: 'The PLA',
+      body: `
+        <p>A ROM decodes every possible input, even when the function only cares about a few patterns. A <strong>programmable logic array</strong>
+        keeps the two planes but makes the first one flexible: true and complemented input rails, an AND plane that builds only the product
+        terms the outputs need, and an OR plane that sums them. The terms here come from Quine–McCluskey minimization, run when the page loads.</p>
+        <p>The 7-segment font needs 28 terms (more than the ROM's 16 words, because the seven outputs share few of them), but each term is a
+        2- or 3-input AND, so the PLA costs 164 NANDs against 313 for the ROM. Early microprocessors decoded instructions with PLAs; the FPGA's
+        lookup tables are their descendants.</p>
+        <div class="try">Set x to 0–15 and read y as segments a (bit 0) to g (bit 6). Open a term, then an output's OR gate.</div>`,
+      scene: () => ({ root: pla('seg7'), inputs: { x: 5 } }),
+    },
+    {
+      title: 'FIFO',
+      body: `
+        <p>A <strong>first-in first-out</strong> queue decouples a producer from a consumer: a UART receiving bytes faster than software reads
+        them, a pipeline stage that sometimes stalls. Here, four words in registers, written through a decoder at the write pointer and read
+        through a multiplexer at the read pointer. Both pointers only ever count up, wrapping around: a <em>circular buffer</em>.</p>
+        <p>The trick is one extra pointer bit. Equal pointers mean empty; same slot but different extra bit means the writer is a full lap ahead:
+        full. Without it, full and empty would look the same.</p>
+        <div class="try">push = 1: pulse with din = 0x11, 0x22, 0x33. Then push = 0, pop = 1: dout shows 0x11 first.</div>`,
+      scene: () => ({ root: fifo(2, 8), inputs: { push: 1, pop: 0, din: 0x11, clk: 0 } }),
+      challenge: {
+        kind: 'reach', goal: 'Fill the FIFO until full = 1.',
+        check: (st) => st.value('full') === 1,
+        answer: 'push = 1, pop = 0, pulse four times (any data). A fifth push is refused.',
+        solve: (st) => { st.setInputs({ push: 1, pop: 0 }); for (let i = 0; i < 4; i++) { st.setInputs({ din: 0x11 * (i + 1) }); st.pulse(); } },
+      },
+    },
+    {
+      title: 'Stack',
+      body: `
+        <p>Swap the queue's discipline for <strong>last-in first-out</strong> and one pointer is enough: the stack pointer counts the words held.
+        Push writes at slot sp and increments it; pop decrements it; the top is slot sp − 1. Return-address predictors in CPUs are small stacks
+        like this one; the program's call stack is the same idea kept in memory, with sp in a register (x2 in RISC-V).</p>`,
+      scene: () => ({ root: stack(2, 8), inputs: { push: 1, pop: 0, din: 0x0a, clk: 0 } }),
+      challenge: {
+        kind: 'reach', goal: 'Push 0x0A then 0x0B, then pop once: the top should be 0x0A again.',
+        check: (st) => st.value('top') === 0x0a && st.value('empty') === 0 && st.getInput('pop') === 1 && st.getInput('push') === 0,
+        answer: 'push = 1: din = 0x0A, pulse; din = 0x0B, pulse. Then push = 0, pop = 1, pulse: top = 0x0A.',
+        solve: (st) => { st.setInputs({ push: 1, pop: 0, din: 0x0a }); st.pulse(); st.setInputs({ din: 0x0b }); st.pulse(); st.setInputs({ push: 0, pop: 1 }); st.pulse(); },
+      },
+    },
+    {
+      title: 'Content-addressable memory',
+      body: `
+        <p>An ordinary memory answers "what is at this address?". A <strong>CAM</strong> answers "where is this value?". Each entry gets its own
+        comparator, all comparing with the key at the same time, and a priority encoder (chapter 7) turns the matches into hit and index.
+        A valid bit per entry keeps never-written entries from matching.</p>
+        <p>One comparator per entry is why CAMs stay small: a TLB (address translation) has tens of entries, a fully associative cache a few
+        hundred lines at most, a network router's lookup table is the big exception, and burns power accordingly.</p>`,
+      scene: () => ({ root: cam(2, 4), inputs: { we: 1, waddr: 2, wdata: 9, key: 9, clk: 0 } }),
+      challenge: {
+        kind: 'reach', goal: 'Store 9 in entry 2, then search for 9: hit = 1, index = 2.',
+        check: (st) => st.value('hit') === 1 && st.value('index') === 2 && st.getInput('key') === 9,
+        answer: 'we = 1, waddr = 2, wdata = 9, pulse; we = 0; key = 9.',
+        solve: (st) => { st.setInputs({ we: 1, waddr: 2, wdata: 9 }); st.pulse(); st.setInputs({ we: 0, key: 9 }); },
+      },
+    },
+    {
+      title: 'Ports cost area',
+      body: `
+        <p>The register file of chapter 12 has two read ports and one write port: enough for one instruction per cycle. A core that issues two
+        instructions per cycle needs four reads and two writes. Each read port is another multiplexer tree over every register; each write port
+        another decoder, plus a multiplexer in front of every register to choose which port wins.</p>`,
+      widget: portCost,
     },
   ],
 };
