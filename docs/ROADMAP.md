@@ -104,8 +104,13 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
     parameters, my chips; purist toggle), free-hand wires with corners / L flip / branches, pointers
     with jump-to-twin, select / drag / rubber band / copy / paste / undo, live values (switch level
     included), properties and diagnostics, tabs per chip, autosave, cycle (Hz) and gate-delay run modes
+  - ✅ Files and links: File menu (export a chip with its dependencies or the whole sandbox, import
+    with an added / renamed / skipped summary, drag and drop onto the canvas), share links
+    (`#/sandbox/s/…`, the circuit compressed into the URL, imported only on a click, never
+    overwriting), structural Verilog and SVG / PNG images of the canvas, a chip manager (sizes,
+    users, duplicate, delete refused while used), autosave indicator, recovery of unreadable data
   - ⏳ Packaging polish and looking inside placed chips, "Open in Sandbox", program ROM editor,
-    file import / export and share links in the UI, probes and timing, build challenges
+    probes and timing, build challenges
     (Turing-Complete style, checked against a truth table or test vectors)
 
 ### Phase 3 — The instruction set & assembly ✅

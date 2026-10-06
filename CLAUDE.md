@@ -41,7 +41,8 @@ on every push to `main`.
 
 - Vite + TypeScript (strict, `verbatimModuleSyntax`: use `import type` for types). No UI
   framework: plain DOM + SVG with small helpers in `src/ui/dom.ts`. Keep the bundle small.
-- Hash routing (`#/c/<chapter>/<step>`, `#/workbench/<componentId>`, `#/sandbox/<chipId>`) so the site works on
+- Hash routing (`#/c/<chapter>/<step>`, `#/workbench/<componentId>`, `#/sandbox/<chipId>`,
+  `#/sandbox/s/<payload>` for a share link) so the site works on
   any static host or sub-path.
 - Theme: CSS custom properties in `src/styles/`; `data-theme="light|dark"` on `<html>`, or
   absent for auto (`prefers-color-scheme`). Always define new colours for both themes.
@@ -137,7 +138,8 @@ src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over 
 src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...);
                insthw.ts maps an instruction to the units it uses (and pipeline stage units)
 src/chapters/  narrative content: chapters → steps → scene / widget / challenge
-src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui/pages/sandbox.ts, its own chunk).
+src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui/pages/sandbox.ts, its own chunk;
+               #/sandbox/s/<payload> opens a share link: a banner, imported only on the user's click).
                DOM-free (tested in Node):
   model.ts       Workspace / ChipDoc (pins, parts, wires = interior corners, pointers = named net labels)
   compile.ts     compileChip(doc) → ComponentDef + diags, netOfWire / netOfEnd / netOfLabel, connKey
@@ -145,7 +147,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip
   ops.ts         pure edits (add / move / delete / flip / set*, copy / paste); wires stay orthogonal
   history.ts     History<T>: undo / redo, transactions (a drag = one step), replace (not undone)
-  store.ts       localStorage, sanitizer, JSON export / import; share.ts: share-link encoding
+  store.ts       localStorage, sanitizer, JSON export / import (importChips: never overwrites, renames on
+                 conflict, recognizes its own earlier renames); share.ts: share-link encoding
+  files.ts       shareRoute / shareUrl, download names, import summaries, duplicateChip / deleteChip
   derive.ts      circuitMode, deriveBehavior (a combinational transistor chip → gate-level brick)
   program.ts     ROM program text (asm / hex) → words
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
@@ -157,6 +161,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   view.ts        EditorView: one SVG element per object updated in place, live values, overlays
   tools.ts       the mouse / keyboard state machine (place, select, drag, band, free-hand wires, pointers)
   props.ts       properties of the selection or the chip, diagnostics; registerPropsSection
+  fileui.ts      File menu (export / import / share link / Verilog / images / chip manager), share banner,
+                 drag-and-drop import, autosave indicator, backup notice; installFiles(ed) per page
+  image.ts       the canvas as a standalone SVG (computed styles inlined, current theme) and PNG
 src/ui/        app shell, router, theme, settings, progress
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
@@ -246,7 +253,8 @@ While `stage.inEdge`, panels must not compare the hardware with the golden model
 - The simulator is rebuilt only when `simKey` (connectivity + part definitions) changes; input
   values are stripped before compiling, so toggling an input recompiles nothing.
 - Later phases plug in through `registerPaletteGroup`, `registerPropsSection`,
-  `registerToolbarAction` and `editor.slots` (`overlay` over the canvas, `bottom` above the run bar).
+  `registerToolbarAction` and `editor.slots` (`overlay` over the canvas, `bottom` above the run bar,
+  `top` in the tab bar). `editor.saveState` / `onSave()` report autosave (saved / saving / error).
 - Keys are handled on `document` while the page is mounted and ignored while typing in a field.
 
 ### Writing chapters
