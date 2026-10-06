@@ -9,6 +9,14 @@ import { compileChip, type Compiled, hash } from './compile';
 import { chipDeps, type ChipDoc, type EndRef, SCHEMA, type Workspace } from './model';
 import { partDef } from './parts';
 
+/** Hash of a document, once per object (documents are immutable; a big one takes a while to serialize). */
+const docHashes = new WeakMap<ChipDoc, string>();
+function docHash(doc: ChipDoc): string {
+  let h = docHashes.get(doc);
+  if (h === undefined) docHashes.set(doc, (h = hash(JSON.stringify(doc))));
+  return h;
+}
+
 export class UserLibrary {
   private ws: Workspace = { schema: SCHEMA, chips: {}, open: [] };
   private cache = new Map<string, { key: string; c: Compiled }>();
@@ -33,7 +41,7 @@ export class UserLibrary {
       if (done) return done;
       const doc = ws.chips[id];
       const deps = chipDeps(doc).map((d) => `${d}=${!ws.chips[d] ? 'missing' : cut(id, d) ? 'cycle' : visit(d)}`);
-      const key = hash(`${JSON.stringify(doc)}|${deps.join(',')}`);
+      const key = hash(`${docHash(doc)}|${deps.join(',')}`);
       const hit = this.cache.get(id);
       let c: Compiled;
       if (hit && hit.key === key) c = hit.c;
