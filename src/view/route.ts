@@ -85,10 +85,9 @@ interface NetPlan {
   index: number;
   width: number;
   tags: NetTag[];
-  /** Fixed paths (authored `via`). */
-  fixed: Vec[][];
-  /** Sinks routed through the trunk: [P, P1, S1, S]. */
-  free: [Vec, Vec, Vec, Vec][];
+  /** Per sink, in netlist order: an authored (`via`) path, or the stub points [P, P1, S1, S]
+   *  of a route through the trunk. */
+  sinks: ({ path: Vec[] } | { free: Quad })[];
   /** The trunk runs vertically (x = trunk) for a horizontal driver, else horizontally. */
   h: boolean;
   /** Preferred trunk coordinate. */
@@ -96,11 +95,14 @@ interface NetPlan {
 }
 
 /** Unsimplified points of a trunk route (`simplify` would hide a wire folding back on itself). */
-function rawPath([P, P1, S1, S]: [Vec, Vec, Vec, Vec], h: boolean, t: number): Vec[] {
+type Quad = [Vec, Vec, Vec, Vec];
+const freeOf = (n: NetPlan, i: number): Quad | null => { const s = n.sinks[i]; return 'free' in s ? s.free : null; };
+
+function rawPath([P, P1, S1, S]: Quad, h: boolean, t: number): Vec[] {
   return h ? [P, P1, [t, P1[1]], [t, S1[1]], S1, S] : [P, P1, [P1[0], t], [S1[0], t], S1, S];
 }
 
-const pathsOf = (n: NetPlan, t: number): Vec[][] => [...n.fixed, ...n.free.map((f) => simplify(rawPath(f, n.h, t)))];
+const pathsOf = (n: NetPlan, t: number): Vec[][] => n.sinks.map((s) => ('free' in s ? simplify(rawPath(s.free, n.h, t)) : s.path));
 
 export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[]; pins: Map<string, PinGeom> } {
   const pins = pinGeoms(def, nl);
@@ -125,7 +127,7 @@ export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[
     const sinkNames = drawn.map((i) => net.ends[i]);
     const multi = sinks.length > 1;
     const h = horiz(drv.exit);
-    const plan: NetPlan = { index, width, tags, fixed: [], free: [], h, t0: 0 };
+    const plan: NetPlan = { index, width, tags, sinks: [], h, t0: 0 };
     sinks.forEach((s, si) => {
       const via = net.via?.[sinkNames[si]];
       if (via && via.length) {
@@ -142,12 +144,12 @@ export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[
         const S = s.pos;
         if (last[0] !== S[0] && last[1] !== S[1]) pts.push(horiz(s.exit) ? [last[0], S[1]] : [S[0], last[1]]);
         pts.push(S);
-        plan.fixed.push(simplify(pts));
+        plan.sinks.push({ path: simplify(pts) });
       } else {
-        plan.free.push([P, P1, add(s.pos, DIR[s.exit], STUB), s.pos]);
+        plan.sinks.push({ free: [P, P1, add(s.pos, DIR[s.exit], STUB), s.pos] });
       }
     });
-    const a = h ? 0 : 1, f = plan.free[0];
+    const a = h ? 0 : 1, f = plan.sinks.map((_, i) => freeOf(plan, i)).find((q) => q);
     plan.t0 = net.trunk ?? (multi || !f ? P1[a] : half((P1[a] + f[2][a]) / 2));
     return plan;
   });
@@ -223,9 +225,10 @@ function place(plans: NetPlan[]): number[] {
   };
   const cost = (n: NetPlan, t: number): number => {
     let c = W_MOVE * Math.abs(t - n.t0);
-    for (const f of n.free) {
+    for (const s of n.sinks) {
+      if (!('free' in s)) continue;
       // A fold: consecutive collinear segments running in opposite directions.
-      const r = rawPath(f, n.h, t);
+      const r = rawPath(s.free, n.h, t);
       for (let i = 2; i < r.length; i++) {
         const [a, b, d] = [r[i - 2], r[i - 1], r[i]];
         const u = [b[0] - a[0], b[1] - a[1]], v = [d[0] - b[0], d[1] - b[1]];
@@ -238,7 +241,10 @@ function place(plans: NetPlan[]): number[] {
       pathsOf(n, t),
       (h, at, lo, hi) => {
         for (const s of (h ? hSeg : vSeg).get(at) ?? []) {
-          if (s.net !== n.index) c += W_OVERLAP * Math.max(0, Math.min(hi, s.hi) - Math.max(lo, s.lo));
+          // Per overlap, not per unit of length: shortening an overlap the trunk can't remove
+          // (it sits on a fixed row) would only drag the trunk off its place. untangle() fixes those.
+          const len = Math.min(hi, s.hi) - Math.max(lo, s.lo);
+          if (s.net !== n.index && len > eps) c += W_OVERLAP + 0.5 * len;
         }
         for (const p of (h ? ptByY : ptByX).get(at) ?? []) {
           if (p.net !== n.index && p.c > lo + eps && p.c < hi - eps) c += W_TOUCH;
@@ -255,7 +261,7 @@ function place(plans: NetPlan[]): number[] {
   for (let pass = 0; pass < 3; pass++) {
     let changed = false;
     for (const n of plans) {
-      if (!n.free.length) continue;
+      if (!n.sinks.some((s) => 'free' in s)) continue;
       remove(n.index);
       let best = trunks[n.index], bestCost = cost(n, best);
       // Look further out only while a candidate could still win (moving costs W_MOVE per unit).
@@ -298,7 +304,7 @@ function overlapping(plans: NetPlan[], all: Vec[][][]): [number, number][] {
     }
   }));
   const out = new Map<string, [number, number]>();
-  const free = (r: { net: number; path: number }) => r.path >= plans[r.net].fixed.length;
+  const free = (r: { net: number; path: number }) => freeOf(plans[r.net], r.path) !== null;
   for (const l of lines.values()) {
     for (let i = 0; i < l.length; i++) {
       for (let j = i + 1; j < l.length; j++) {
@@ -321,7 +327,7 @@ interface Box { x: number; y: number; w: number; h: number }
  * Bends and crossings cost extra, so the detour stays as plain as the layout allows.
  */
 function untangle(plans: NetPlan[], all: Vec[][][], boxes: Box[]) {
-  const G = 0.5, MARGIN = 4, BEND = 1.5, CROSS = 1, eps = 1e-6;
+  const G = 0.5, MARGIN = 4, BEND = 1.5, CROSS = 1, CHEAP = 0.3, eps = 1e-6;
   const DX = [1, 0, -1, 0], DY = [0, 1, 0, -1];
   const heading = (a: Vec, b: Vec) => (b[0] > a[0] ? 0 : b[1] > a[1] ? 1 : b[0] < a[0] ? 2 : 3);
   const onGrid = (v: number) => Math.abs(v / G - Math.round(v / G)) < eps;
@@ -349,15 +355,28 @@ function untangle(plans: NetPlan[], all: Vec[][][], boxes: Box[]) {
     // horizontal / vertical wire, a wire's end or corner. A cell shared by several nets keeps
     // one of them, which is all `other` needs.
     const hEdge = new Int32Array(N), vEdge = new Int32Array(N), hOn = new Int32Array(N), vOn = new Int32Array(N), pt = new Int32Array(N);
+    // Edges of the path's own route and of its net's other wires (bit 0 east, bit 1 south):
+    // cheap to follow, so a detour leaves the drawn route only around the conflict.
+    const mine = new Uint8Array(N);
     const dist = new Float64Array(N * 4), prev = new Int32Array(N * 4);
     for (const [net, pi] of todo) {
       const n = plans[net];
-      const [P, P1, S1, S] = n.free[pi - n.fixed.length];
+      const [P, P1, S1, S] = freeOf(n, pi)!;
       if (![P1, S1].every((v) => onGrid(v[0]) && onGrid(v[1]))) continue;
       const other = (v: number) => v !== 0 && v !== net + 1;
-      for (const a of [hEdge, vEdge, hOn, vOn, pt]) a.fill(0);
+      for (const a of [hEdge, vEdge, hOn, vOn, pt, mine]) a.fill(0);
       all.forEach((paths, m) => paths.forEach((p, k) => {
-        if (m === net && k === pi) return;
+        if (m === net) {
+          for (let s = 1; s < p.length; s++) {
+            const [a, b] = [p[s - 1], p[s]];
+            const h = a[1] === b[1];
+            if (!onGrid(h ? a[1] : a[0])) continue;
+            const c0 = cell([Math.min(a[0], b[0]), Math.min(a[1], b[1])]);
+            const len = Math.round(Math.abs(h ? b[0] - a[0] : b[1] - a[1]) / G);
+            for (let t = 0; t < len; t++) mine[c0 + (h ? t : t * W)] |= h ? 1 : 2;
+          }
+          if (k === pi) return;
+        }
         const id = m + 1;
         for (const q of p) if (onGrid(q[0]) && onGrid(q[1]) && !other(pt[cell(q)])) pt[cell(q)] = id;
         for (let s = 1; s < p.length; s++) {
@@ -406,9 +425,10 @@ function untangle(plans: NetPlan[], all: Vec[][][], boxes: Box[]) {
         }
         return top;
       };
-      // A*: the heap is keyed on cost so far plus the Manhattan distance left (a lower bound).
+      // A*: the heap is keyed on cost so far plus the Manhattan distance left at the cheapest
+      // step cost (a lower bound).
       const gx = goal % W, gy = Math.floor(goal / W);
-      const rest = (c: number) => (Math.abs((c % W) - gx) + Math.abs(Math.floor(c / W) - gy)) * G;
+      const rest = (c: number) => (Math.abs((c % W) - gx) + Math.abs(Math.floor(c / W) - gy)) * G * CHEAP;
       dist[start * 4 + d0] = 0;
       up(rest(start), start * 4 + d0);
       // A detour much longer than the direct route is worse than the overlap it avoids.
@@ -433,7 +453,8 @@ function untangle(plans: NetPlan[], all: Vec[][][], boxes: Box[]) {
           const nc = ny * W + nx;
           if (nc !== goal && (blocked[nc] || other(pt[nc]))) continue;
           if (other(e === 0 ? hEdge[c] : e === 2 ? hEdge[nc] : e === 1 ? vEdge[c] : vEdge[nc])) continue;
-          const nd = d + G + (e !== h ? BEND : 0) + (other(e % 2 ? hOn[nc] : vOn[nc]) ? CROSS : 0);
+          const own = e === 0 ? mine[c] & 1 : e === 2 ? mine[nc] & 1 : e === 1 ? mine[c] & 2 : mine[nc] & 2;
+          const nd = d + G * (own ? CHEAP : 1) + (e !== h ? BEND : 0) + (other(e % 2 ? hOn[nc] : vOn[nc]) ? CROSS : 0);
           const ns = nc * 4 + e;
           if (nd < dist[ns]) {
             dist[ns] = nd;
