@@ -154,7 +154,9 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   (bit-parallel simulator, 32 vectors per pass); ISS on the exact reference
 - ✅ fdiv.s / fsqrt.s: prenormalize + radix-2 restoring digit recurrences (27 / 26 steps, 29 / 28 cycles), each
   ending in the generic normalize & round, stalling the single-cycle CPU (retire gates PC, register writes and fflags); exhaustive small formats
-- ⏳ fma (R4 format); a pipelined FPU
+- ✅ fmadd / fmsub / fnmsub / fnmadd.s (R4 format in isa / asm / disasm / ISS, third f-register read port): exact
+  product, swap-and-align add, one normalize & round; exhaustive on E3M2 (5.2 M cases), random on E4M3 / E5M2 / float32
+- ⏳ a pipelined FPU
 - Superscalar and out-of-order intuition (scoreboard / Tomasulo widget)
 - Compressed instructions (C), A extension (LR/SC, AMO)
 - Virtual memory (Sv32), TLB, U/S/M privilege levels (stretch)

@@ -3,7 +3,7 @@ import { singleCycleCpu } from '../src/lib';
 import { assemble } from '../src/riscv/asm';
 import { clockCycle, cpuState, retiring } from '../src/riscv/cosim';
 import { F_PROGRAMS } from '../src/riscv/fprograms';
-import { disasm } from '../src/riscv/isa';
+import { decode, disasm } from '../src/riscv/isa';
 import { FDIV_CYCLES, FSQRT_CYCLES, ISS } from '../src/riscv/iss';
 import { PROGRAMS } from '../src/riscv/programs';
 import { flatten } from '../src/sim/flatten';
@@ -49,6 +49,11 @@ describe('assembler and ISS: F extension', () => {
     expect(c.errors).toEqual([]);
     expect(c.words.map((w) => disasm(w))).toEqual(['csrrs a0, fcsr, zero', 'csrrw zero, fcsr, t0', 'csrrwi a1, frm, 3', 'csrrw zero, fflags, zero', 'csrrs a2, fflags, zero']);
     expect(assemble('fadd.s ft0, ft1, ft2, up').errors.length).toBe(1);
+    const m = assemble('fmadd.s fa0, fa1, fa2, fa3\nfmsub.s ft0, ft1, ft2, ft3, rtz\nfnmsub.s fs0, fs1, fs2, fs3\nfnmadd.s ft8, ft9, ft10, ft11, rmm');
+    expect(m.errors).toEqual([]);
+    expect(m.words.map((w) => disasm(w))).toEqual(['fmadd.s fa0, fa1, fa2, fa3', 'fmsub.s ft0, ft1, ft2, ft3, rtz', 'fnmsub.s fs0, fs1, fs2, fs3', 'fnmadd.s ft8, ft9, ft10, ft11, rmm']);
+    expect(m.words[0]).toBe(0x68c5f543); // rs3 = 13 (fa3), fmt = 00, rs2 = 12, rs1 = 11, rm = dyn, rd = 10, opcode 0x43
+    expect(decode(m.words[3]).fmt).toBe('R4');
   });
   it('computes the expected surprises', () => {
     const t = run('tenth');
@@ -79,6 +84,12 @@ describe('assembler and ISS: F extension', () => {
     expect([d.x[10], d.x[11], d.x[12], d.x[13], d.x[14]]).toEqual([0x01, 0x08, 0x10, 0x11, 0x3fb504f3]);
     const n = run('newton');
     expect([n.x[10], n.x[11]]).toEqual([1, 0x3fb504f3]);
+  });
+  it('fused multiply-add', () => {
+    const m = run('fma');
+    expect([10, 11, 12, 13, 14, 15, 16].map((i) => m.x[i] | 0)).toEqual([0, 0x33800000, 1, 17, 7, -7, -17]);
+    const h = run('horner');
+    expect([h.x[10], h.x[11], h.x[12]]).toEqual([0x3facbc6b, 0x3facbc6a, 0]);
   });
 });
 
