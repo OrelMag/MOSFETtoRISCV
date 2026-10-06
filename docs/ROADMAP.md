@@ -96,7 +96,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   encoder, demultiplexer, population count, absolute value, parity, Hamming SEC-DED encoder / decoder (ECC step in ch. 21)
 - ✅ Workbench lists every library component: each generator is a family with parameter dropdowns
   (adders, multipliers, dividers, float units, register files, caches, …), plus every fixed processor part
-- 🚧 **Sandbox** (`#/sandbox`): a Digital-Logic-Sim-style editor
+- ✅ **Sandbox** (`#/sandbox`): a Digital-Logic-Sim-style editor
   - ✅ Core (DOM-free, tested): chip documents, compile to ComponentDefs (pointers = named nets,
     switch level, derived gate-level models of transistor chips), user-chip library with cycle
     checks, pure edit operations, undo with transactions, local storage, share-link encoding
@@ -128,7 +128,11 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
     on it, lint (nets drawn on one line, pointers without a twin, open inputs reading X);
     incremental drawing during drags, derived models cached by structure, per-chip simulations
     kept across tab switches
-  - ⏳ Build challenges (Turing-Complete style, checked against a truth table or test vectors)
+  - ✅ Build challenges (Turing-Complete style, optional): 21 chips from a CMOS inverter to an
+    instruction fetch unit, every level of the journey; each checked exhaustively (truth table) or by a
+    clocked sequence, the palette restriction (transistors / NAND / any) enforced on the compiled
+    hierarchy, scored against par (NANDs, transistors, depth); Show answer imports the reference chips,
+    Do it for me fills the challenge chip; progress in the site settings
 
 ### Phase 3 — The instruction set & assembly ✅
 - ✅ RV32I instruction formats with an interactive encoder / decoder (bit-field explorer)

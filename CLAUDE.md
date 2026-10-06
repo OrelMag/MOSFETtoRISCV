@@ -162,6 +162,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run
   palette.ts     registerPaletteGroup + the palette panel (purist filter)
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
+  challenges.ts  build challenges: BuildChallenge (ports, table / sequence check, allowed parts, par),
+                 startChallenge (u_ch_<id> with the pins placed), checkChallenge (BitSim / GateSim / SwitchSim;
+                 failing vectors, restriction violations on the compiled hierarchy, score), importAnswer,
+                 solveChallenge; challengeset.ts: CHALLENGES and their reference answers (chip documents
+                 drawn with a small kit, each answer built from the answers of the rungs below)
   remix.ts       "Open in Sandbox": remixDef / remixIntoStorage (a shown def → a new chip; parts a reload could
                  not find by id come along as ROM / constant parts or chips); loaded on demand by the stage
   hops.ts        HopCache: wire hops recomputed for the moved wires and those crossing them only
@@ -180,6 +185,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  contents), the program editor dialog, Examples ▸; values polled per frame while shown
   package.ts     "Package as chip…" dialog (name, hue, notes, symbol preview, pin order; Save & new circuit)
   inside.ts      lookInside(ed, path): read-only live schematic over the canvas on EditorSim's simulator (ViewCtx)
+  challengeui.ts "Challenges" list drawer (solved ticks via settings), the strip under the canvas while a
+                 challenge chip is open (brief, Check, Show answer, Do it for me), purist palette while restricted
   inspect.ts     the Inspector in a drawer for the chip or a part; chipprops.ts: chip / part property sections
   analysis.ts    plugin: probe mode (P) + LogicAnalyzer in slots.bottom, Timing props section with
                  the critical path drawn on the chip, lint as a diag source, open-input marks

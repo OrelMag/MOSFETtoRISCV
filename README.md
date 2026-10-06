@@ -26,7 +26,8 @@ built on the same simulator, so whatever you build is a real component of the si
 
 - Place parts from the whole library (or only NAND and transistors in *purist* mode), draw wires
   freehand with corners and branches, and connect distant nets with **pointers** (named net labels).
-- Watch values live, per clock cycle or one gate delay at a time.
+- Watch values live, per clock cycle or one gate delay at a time; probe wires into a timing
+  diagram (VCD export), and read a chip's static timing with its critical path drawn on it.
 - **Package** a circuit as a chip (name, colour, pin order), use it in other circuits, nest chips
   to any depth and edit them later: every user of the chip is rebuilt.
 - **Look inside** any placed part, live, down to the transistors.
@@ -37,6 +38,8 @@ built on the same simulator, so whatever you build is a real component of the si
   an editable copy.
 - Save automatically in the browser, export / import chip files, share a circuit as a link,
   export structural Verilog or an image.
+- 21 optional **build challenges** at every level, from a CMOS inverter to an instruction fetch
+  unit, checked against a truth table or a clocked sequence, with par scores and reference answers.
 
 ## Run it
 
