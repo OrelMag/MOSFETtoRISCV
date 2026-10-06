@@ -4,6 +4,8 @@
 
 import '../../styles/editor.css';
 import { Editor } from '../../editor/editor';
+// The analysis tools plug into every editor (probes, timing, lint).
+import '../../editor/analysis';
 import type { Page } from './chapter';
 
 export class SandboxPage implements Page {

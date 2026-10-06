@@ -3,11 +3,9 @@
 import { koggeStone, rca, CLA4 } from '../lib';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
-import { analyzeTiming, CLK_TO_Q, SETUP, type TimingReport } from '../sim/timing';
+import { analyzeTiming, CLK_TO_Q, PS_PER_NAND, SETUP, type TimingReport } from '../sim/timing';
 import { h } from '../ui/dom';
 import type { ScenePanel, Stage, Widget } from '../view/stage';
-
-const PS_PER_NAND = 25; // a 28 nm-class process, loaded NAND2
 
 const reports = new WeakMap<object, TimingReport | null>();
 
