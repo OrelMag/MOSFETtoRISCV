@@ -12,7 +12,8 @@ narrative: why each step exists, what problem it solves, and what it costs.
 Inspirations: *Turing Complete* (progression, "build it to unlock it"), Sebastian Lague's
 *Digital Logic Sim* (clean visuals, packaging a circuit into a chip), *nand2tetris*, Harris &
 Harris *Digital Design and Computer Architecture: RISC-V Edition*, and the companion primer
-in `References/` (NAND → pipelined RV32I, with SystemVerilog sources).
+in `References/` (NAND → pipelined RV32I, with SystemVerilog sources). What the two games
+have and this site still lacks is Phase 12.
 
 ---
 
@@ -248,6 +249,46 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Simulated-annealing placer + two-layer Lee maze router on real flattened netlists (FA, 4-bit adder, counter)
 - ✅ Clock distribution (H-tree vs spine, skew); floorplan of the dual-core from its NAND counts; wafer / yield / cost
 - ⏳ Full-chip layout of the final CPU (see open questions); Yosys / OpenROAD / sky130 export
+
+### Phase 12 — Parity with Turing Complete and Digital Logic Sim ⏳
+The simulator already goes further than both games: transistors and Z, real gate delays (glitches,
+metastability), X, static timing, VCD, Verilog with a Yosys-checked testbench, wide pins, golden-model
+CPUs, and every library part opens down to a MOSFET. What they have and the sandbox lacks is I/O,
+chip presentation, capacity and the program-solving half of Turing Complete.
+
+**I/O parts** (placeable, zero-cost like the displays, absent from Verilog)
+- ⏳ Key input: a pin bound to a keyboard key, high while held (DLS Key, TC Keyboard), plus a
+  keyboard part that latches the last key's code with a ready flag
+- ⏳ Pixel screen: a dot-matrix / RGB display driven by a frame-buffer RAM or row/column/colour
+  pins (DLS dot display, TC screen); the 7-segment display already exists
+- ⏳ Console, LED bank and switch bank as parts, not only in the system CPU's I/O panel, so a hand-built
+  CPU can memory-map them
+- ⏳ Buzzer (DLS): a tone while its input is high, or a frequency from a bus
+- ⏳ Random source, cycle counter / time, and a halt part that stops Run (TC)
+
+**Chips and canvas**
+- ⏳ Chip appearance: resizable box, pins on any side and in any order, displays inside a chip
+  shown on the packaged chip's face (DLS)
+- ⏳ Free-text comments on the canvas, kept out of the compiled netlist (TC)
+- ⏳ Library organization: collections / folders of chips, a starred bar for frequent parts,
+  several projects (separate workspaces) (DLS)
+
+**Capacity and speed**
+- ⏳ Large memories: RAM well beyond 2^6 words and ROM beyond 2^8 (both games reach tens of KB),
+  behavioural at runtime with the structure still openable (as the CPU's ROM already is)
+- ⏳ Measure, then speed up, large sandbox circuits: compiled or levelized evaluation of settled
+  combinational chips (DLS caches them), keeping the event-driven engine for anything timed or probed;
+  publish cycles/s next to the cross-cutting performance budget
+
+**Programs on your own CPU** (the second half of Turing Complete)
+- ⏳ Custom ISA: define instruction fields, opcodes and mnemonics in a table, and get an assembler,
+  a disassembler and the ROM listing from it (TC's assembly editor); RV32 stays the built-in ISA
+- ⏳ Program puzzles: tasks with level inputs and expected outputs (a sequence over I/O pins, a
+  maze, sorting), solved by writing a program for a CPU you built, scored on cycles and on the
+  hardware's NANDs and depth; optional, each with a reference solution, as with the build challenges
+
+**Not planned**: locked progression (challenges stay optional), online leaderboards and score
+histograms (static site; share links take their place).
 
 ### Cross-cutting features 🚧
 - ✅ Probe mode + logic-analyzer Timing panel (exact transitions in gate delays, clock edges,
