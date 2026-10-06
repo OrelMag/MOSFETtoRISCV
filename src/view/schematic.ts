@@ -6,6 +6,7 @@ import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, netlistOf } from '../sim/types';
 import { formatBits, type Radix } from '../sim/values';
 import { icon, s } from '../ui/dom';
+import { reducedMotion } from '../ui/motion';
 import type { ViewCtx } from './context';
 import { hopPathData, routeNetlist, splitterBars, type PinGeom, type RoutedNet } from './route';
 import { drawSymbol, portLabel } from './symbols';
@@ -670,6 +671,3 @@ function splitterTaps(nl: NonNullable<ReturnType<typeof netlistOf>>): Map<number
   }
   return out;
 }
-
-const motionQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
-const reducedMotion = () => !!motionQuery?.matches;
