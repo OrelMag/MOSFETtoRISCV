@@ -160,6 +160,10 @@ tests/         Vitest: every component with a `spec` is checked exhaustively (â‰
   merger `pitch` and box `pitch` to line rows up so wires stay straight; use `trunk` (x of
   the vertical trunk for horizontal drivers, y for vertical ones) and `via` (corner points)
   to untangle feedback paths.
+- No two nets may share a line (`tests/route.test.ts` checks every registered netlist). The
+  router moves a colliding trunk in half-grid steps (`trunk` is a preference) and reroutes a
+  path that still collides around symbols (A*); `via` paths are never moved, so make sure
+  your vias don't run along another net.
 - Prefer hierarchy (a box of boxes) over flat netlists: it is the whole point of the site.
 - Large top-level schematics: draw the main data path, and use **net labels** (`tags` on a
   NetDef) for control signals and long feedback paths, like a real schematic. Place
