@@ -12,8 +12,8 @@ import { andN, busMux2, equal, incrementer, muxTree } from './combinational';
 import { define, merger, ones, splitter } from './define';
 import { addSubFast, fanout, koggeStone } from './fastadd';
 import { AND, MUX2, NOT, OR, XNOR, XOR } from './gates';
-import { condNegate, treeMul } from './muldiv';
-import { register } from './sequential';
+import { condNegate, divStep, treeMul } from './muldiv';
+import { DFF, register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { bitwise, orN } from './wide';
 import {
@@ -762,8 +762,306 @@ export function fpClassify(f: FpFormat): ComponentDef {
   });
 }
 
-const FPU_VERILOG = `module fpu32 (input logic [31:0] a, b, xa, input logic [6:0] funct7, input logic [2:0] funct3,
-              input logic [4:0] rs2, input logic [2:0] frm, output logic [31:0] y, output logic [4:0] flags);
+// ---- division and square root: iterative digit recurrences -------------------------------------
+
+/**
+ * Normalize a significand: shift out its leading zeros (a subnormal's) so the top bit is 1, and
+ * lower the exponent to match. The exponent comes out XE bits wide, two's complement (it can drop
+ * below 1). Division and square root need normalized operands; addition and multiplication don't.
+ */
+export function fpPrenorm(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fppre${E}_${M}`, () => {
+    const XE = xeOf(f), P = pow2ceil(M + 1), k = Math.log2(P);
+    const b = new Builder();
+    const pad = P === M + 1 ? 'mant' : b.op1(merger([P - M - 1, M + 1]), [b.op1(K(P - M - 1, 2 ** (P - M - 1) - 1), []), 'mant']);
+    b.next();
+    const lz = b.op(lzc(P), [pad], 'leading zeros');
+    b.next();
+    b.wire(b.op1(shiftLeft(M + 1, k), ['mant', `${lz}.c`], 'normalize'), 'm');
+    const ze = b.op1(merger([E, XE - E]), ['exp', b.op1(K(XE - E, 0), [])]);
+    const zl = b.op1(merger([k, XE - k]), [`${lz}.c`, b.op1(K(XE - k, 0), [])]);
+    b.wire(`${b.op(addSubFast(XE), [ze, zl, b.op1(TIE1, [])], 'exp − lz')}.s`, 'e');
+    return define({
+      id: `fppre${E}_${M}`, name: 'Prenormalize', category: 'arithmetic',
+      summary: 'A subnormal significand has leading zeros. Count them, shift them out, and subtract the count from the exponent, so every non-zero operand looks like 1.f × 2^e (e may now be below the format\'s minimum).',
+      ports: [bus('mant', M + 1, 'in'), bus('exp', E, 'in'), bus('m', M + 1, 'out'), bus('e', XE, 'out')],
+      symbol: { kind: 'box', label: 'PRENORM' },
+      spec: ([m, e]) => {
+        if (m === 0) return [0, (e - (P > M + 1 ? M + 1 : M) + 2 ** XE) % 2 ** XE];
+        let z = 0;
+        while (m * 2 ** z < 2 ** M) z++;
+        return [m * 2 ** z, (e - z + 2 ** XE) % 2 ** XE];
+      },
+      netlist: () => ({ pins: { mant: [0, 4], exp: [0, 10], m: [b.right, 4], e: [b.right, 10] }, instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
+/**
+ * The control of an iterative unit: start (while idle) loads the datapath registers (load) and
+ * sets busy; every busy cycle is one step (en); after n steps done is 1 for one cycle, with the
+ * result on the outputs, and busy falls. n + 2 cycles from start to the edge that retires.
+ */
+export function iterControl(n: number): ComponentDef {
+  return memo(`iterctl${n}`, () => {
+    const cw = log2c(n + 1);
+    const b = new Builder();
+    const nb = b.op1(NOT, ['run.q']);
+    const load = b.name(b.op1(AND, ['start', nb], 'load'), 'load');
+    b.next();
+    const en = b.name(b.op1(OR, [load, 'run.q'], 'step'), 'en');
+    const inc = b.op1(incrementer(cw), ['cnt.q']);
+    const eq = b.op1(equal(cw), ['cnt.q', b.op1(K(cw, n), [])], `count = ${n}?`);
+    b.next();
+    b.wire(b.op1(busMux2(cw), [inc, b.op1(K(cw, 0), []), load]), 'cnt.d');
+    b.wire(en, 'cnt.en');
+    b.add(register(cw), 'step count', 'cnt');
+    const done = b.name(b.op1(AND, ['run.q', eq], 'done'), 'done');
+    b.next();
+    b.wire(b.op1(OR, [load, b.op1(AND, ['run.q', b.op1(NOT, [done])])], 'busy next'), 'run.d');
+    b.add(DFF, 'busy', 'run');
+    b.wire('clk', 'cnt.clk');
+    b.wire('clk', 'run.clk');
+    b.wire(load, 'load');
+    b.wire(en, 'en');
+    b.wire(done, 'done');
+    b.wire('run.q', 'busy');
+    return define({
+      id: `iterctl${n}`, name: `Iteration control (${n} steps)`, category: 'sequential',
+      summary: `A busy flip-flop and a step counter. start while idle loads the datapath (load) and sets busy; each busy cycle steps it (en = load OR busy); when the count reaches ${n}, done = 1 for one cycle and busy clears. ${n + 2} cycles from start to the edge that consumes the result.`,
+      ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bit('load', 'out'), bit('en', 'out'), bit('done', 'out'), bit('busy', 'out')],
+      symbol: { kind: 'box', label: 'ITER CTL' },
+      netlist: () => ({ pins: { start: [0, 4], clk: [0, 10], load: [b.right, 2], en: [b.right, 6], done: [b.right, 10], busy: [b.right, 14] }, instances: b.instances, nets: b.nets() }),
+      hdl: {
+        verilog: `module iter_ctl #(parameter int N = ${n}) (input logic clk, start, output logic load, en, done, busy);
+  logic [$clog2(N+1)-1:0] count;
+  assign load = start & ~busy;
+  assign en   = load | busy;
+  assign done = busy & (count == N);
+  always_ff @(posedge clk) begin
+    if (en) count <= load ? '0 : count + 1;
+    busy <= load | (busy & ~done);
+  end
+endmodule`,
+      },
+    });
+  });
+}
+
+/**
+ * One step of the restoring square root: bring down the next two radicand bits (r' = 4r + x2), try
+ * to subtract 4q + 1 (the trial value for appending a 1 to the root), keep the difference if it fits.
+ */
+export function sqrtStep(n: number): ComponentDef {
+  return memo(`sqrtstep${n}`, () => {
+    const W = n + 3;
+    const b = new Builder();
+    const full = b.name(b.op1(merger([2, n + 1]), ['x2', 'r'], "r' = 4r + x2"), "r'");
+    const t = b.name(b.op1(merger([2, n, 1]), [b.op1(K(2, 1), []), 'q', b.op1(TIE0, [])], 't = 4q + 1'), 't');
+    b.next();
+    const sub = b.op(addSubFast(W), [full, t, b.op1(TIE1, [])], "r' − t");
+    b.next();
+    const fits = b.name(`${sub}.cout`, 'fits');
+    const ro = b.op(splitter([n + 1, 2]), [b.op1(busMux2(W), [full, `${sub}.s`, fits], 'keep?')]);
+    const qs = b.op(splitter([n - 1, 1]), ['q']);
+    b.next();
+    b.wire(`${ro}.o0`, 'rout');
+    b.wire(b.op1(merger([1, n - 1]), [fits, `${qs}.o0`]), 'qout');
+    return define({
+      id: `sqrtstep${n}`, name: `${n}-bit square-root step`, category: 'arithmetic',
+      summary: "Long-hand square root, one bit per step: shift the next two radicand bits into the remainder (r' = 4r + x2), try subtracting 4q + 1, which is (2q + 1)² − (2q)² scaled: if it fits, the next root bit is 1. Same shape as a division step, with a divisor that is the root found so far.",
+      ports: [bus('r', n + 1, 'in'), bus('x2', 2, 'in'), bus('q', n, 'in'), bus('rout', n + 1, 'out'), bus('qout', n, 'out')],
+      symbol: { kind: 'box', label: 'SQRT STEP' },
+      spec: ([r, x2, q]) => {
+        const f2 = r * 4 + x2, t = q * 4 + 1, fit = f2 >= t;
+        return [(fit ? f2 - t : f2) % 2 ** (n + 1), (q * 2 + (fit ? 1 : 0)) % 2 ** n];
+      },
+      netlist: () => ({ pins: { r: [0, 4], x2: [0, 10], q: [0, 16], rout: [b.right, 4], qout: [b.right, 10] }, instances: b.instances, nets: b.nets() }),
+      hdl: {
+        verilog: `wire [N+2:0] r2 = {r, x2};               // 4r + next two radicand bits
+wire [N+2:0] d  = r2 - {1'b0, q, 2'b01};    // try 4q + 1
+wire fits = ~d[N+2];
+assign rout = fits ? d[N:0] : r2[N:0];
+assign qout = {q[N-2:0], fits};`,
+      },
+    });
+  });
+}
+
+/** Wire a register into a Builder: d, en, clk (q is read as `${name}.q`). */
+function reg(b: Builder, name: string, w: number, d: string, en: string, label: string): void {
+  b.wire(d, `${name}.d`);
+  b.wire(en, `${name}.en`);
+  b.wire('clk', `${name}.clk`);
+  b.add(register(w), label, name);
+}
+
+/**
+ * The special results of a division: NaN for NaN in, 0/0 and ∞/∞ (NV, or for a signaling NaN);
+ * ∞ for ∞/x and x/0 (DZ when x is finite); 0 for 0/x and x/∞.
+ */
+function divSpecials(b: Builder, f: FpFormat, ua: string, ub: string, sign: string, nr: string): void {
+  const N = 1 + f.E + f.M;
+  const z2 = b.op1(AND, [`${ua}.zero`, `${ub}.zero`]), i2 = b.op1(AND, [`${ua}.inf`, `${ub}.inf`]);
+  const invalid = b.name(b.op1(orN(4), [`${ua}.snan`, `${ub}.snan`, z2, i2], 'invalid'), 'NV');
+  const nan = b.op1(orN(4), [`${ua}.nan`, `${ub}.nan`, z2, i2], 'NaN?');
+  const finA = b.op1(NOT, [b.op1(orN(3), [`${ua}.zero`, `${ua}.inf`, `${ua}.nan`])], 'a finite, ≠ 0');
+  b.next();
+  const dz = b.name(b.op1(AND, [`${ub}.zero`, finA], 'x / 0'), 'DZ');
+  const inf = b.op1(OR, [`${ua}.inf`, `${ub}.zero`], '∞ result');
+  const zero = b.op1(OR, [`${ua}.zero`, `${ub}.inf`], '0 result');
+  b.next();
+  const zv = b.op1(merger([N - 1, 1]), [b.op1(K(N - 1, 0), []), sign]);
+  const y0 = b.op1(busMux2(N), [`${nr}.y`, zv, zero], 'zero');
+  const y1 = b.op1(busMux2(N), [y0, infValue(b, f, sign), inf], 'infinity');
+  b.wire(b.op1(busMux2(N), [y1, nanValue(b, f), nan], 'NaN'), 'y');
+  const special = b.op1(orN(3), [nan, inf, zero]);
+  b.wire(b.op1(busMux2(5), [`${nr}.flags`, flagWord(b, { nv: invalid, dz: dz }), special], 'flags'), 'flags');
+}
+
+/**
+ * a / b, iteratively: prenormalize both significands, then one restoring division step per
+ * clock (the integer divider's step, chapter 20) produces M + 4 quotient bits, most significant
+ * first, and the final remainder is the sticky bit. Normalize & round finishes in the done cycle.
+ */
+export function fpDiv(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fpdiv${E}_${M}`, () => {
+    const XE = xeOf(f), N = 1 + E + M, n = M + 4;
+    const b = new Builder();
+    const ua = b.op(fpUnpack(f), ['a'], 'unpack a'), ub = b.op(fpUnpack(f), ['b'], 'unpack b');
+    const ctl = b.op(iterControl(n), ['clk', 'start'], 'control');
+    b.next();
+    const pa = b.op(fpPrenorm(f), [`${ua}.mant`, `${ua}.exp`], 'normalize a'), pb = b.op(fpPrenorm(f), [`${ub}.mant`, `${ub}.exp`], 'normalize b');
+    b.next();
+    // the dividend enters bit by bit: its top M bits start as the remainder, its last bit and then zeros follow
+    const sa = b.op(splitter([1, M]), [`${pa}.m`]);
+    const R0 = b.op1(merger([M, 1]), [`${sa}.o1`, b.op1(TIE0, [])]);
+    const Q0 = b.op1(merger([n - 1, 1]), [b.op1(K(n - 1, 0), []), `${sa}.o0`]);
+    const qs = b.op(splitter([n - 1, 1]), ['Q.q']);
+    b.next();
+    const st = b.op(divStep(M + 1), ['R.q', `${qs}.o1`, `${pb}.m`], 'restoring step');
+    b.next();
+    const Qn = b.op1(merger([1, n - 1]), [`${st}.q`, `${qs}.o0`]);
+    reg(b, 'R', M + 1, b.op1(busMux2(M + 1), [`${st}.rout`, R0, `${ctl}.load`]), `${ctl}.en`, 'remainder');
+    reg(b, 'Q', n, b.op1(busMux2(n), [Qn, Q0, `${ctl}.load`]), `${ctl}.en`, 'quotient / dividend bits');
+    b.next();
+    const ed = b.op(addSubFast(XE), [`${pa}.e`, `${pb}.e`, b.op1(TIE1, [])], 'ea − eb');
+    const eq = b.op(koggeStone(XE), [`${ed}.s`, b.op1(K(XE, fbias(f)), []), b.op1(TIE0, [])], '+ bias');
+    const sign = b.op1(XOR, [`${ua}.sign`, `${ub}.sign`], 'sign');
+    const stk = nonZero(b, 'R.q', M + 1);
+    b.next();
+    const nr = b.op(normRound(f, n), [sign, `${eq}.s`, 'Q.q', stk, 'rm'], 'normalize & round');
+    b.next();
+    divSpecials(b, f, ua, ub, sign, nr);
+    b.wire(`${ctl}.done`, 'done');
+    b.wire(`${ctl}.busy`, 'busy');
+    return define({
+      id: `fpdiv${E}_${M}`, name: `${fmtName(f)} divider (iterative)`, category: 'arithmetic',
+      summary: `Radix-2 restoring division of the normalized significands: one quotient bit per clock, ${n} steps (M + 1 bits, a guard bit and two more so that a quotient below 1 still has them), the final remainder ≠ 0 is the sticky bit. Exponent = ea − eb + bias. ${n + 2} cycles from start to the edge that writes the result. x / 0 = ∞ with DZ; 0 / 0 and ∞ / ∞ are NaN with NV.`,
+      ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bus('a', N, 'in'), bus('b', N, 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out'), bit('done', 'out'), bit('busy', 'out')],
+      symbol: { kind: 'box', label: 'FDIV (iterative)' },
+      netlist: () => ({ pins: { start: [0, 2], a: [0, 6], b: [0, 10], rm: [0, 14], clk: [0, 18], y: [b.right, 4], flags: [b.right, 8], done: [b.right, 12], busy: [b.right, 16] }, instances: b.instances, nets: b.nets() }),
+      hdl: {
+        verilog: `module fdiv_iter (input logic clk, start, input logic [31:0] a, b, input logic [2:0] rm,
+                  output logic [31:0] y, output logic [4:0] flags, output logic done, busy);
+  logic [23:0] ma, mb;  logic signed [15:0] ea, eb;         // prenormalized: ma, mb in [1, 2)
+  fp_prenorm na (.x(a), .m(ma), .e(ea)), nb (.x(b), .m(mb), .e(eb));
+  logic load, en;  iter_ctl #(27) ctl (.clk, .start, .load, .en, .done, .busy);
+  logic [23:0] r;  logic [26:0] q;                         // remainder, quotient (MSB first)
+  wire [24:0] r2 = {r, q[26]};  wire [24:0] d = r2 - {1'b0, mb};  wire fits = ~d[24];
+  always_ff @(posedge clk) if (en) begin
+    r <= load ? {1'b0, ma[23:1]} : (fits ? d[23:0] : r2[23:0]);
+    q <= load ? {ma[0], 26'b0}    : {q[25:0], fits};
+  end
+  normround #(27) nr (.sign(a[31] ^ b[31]), .exp(ea - eb + 16'd127), .mant(q), .stin(|r), .rm, .y(yr), .flags(fr));
+  // + special cases: NaN, 0/0, inf/inf (NV); x/0 = inf (DZ); inf/x = inf; 0/x, x/inf = 0
+endmodule`,
+      },
+    });
+  });
+}
+
+/**
+ * √a, iteratively: prenormalize, make the exponent even (doubling the significand if it was
+ * odd), then one restoring square-root step per clock produces M + 3 root bits; the remainder
+ * is the sticky bit. The result exponent is the halved exponent, the root lies in [1, 2).
+ */
+export function fpSqrt(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fpsqrt${E}_${M}`, () => {
+    const XE = xeOf(f), N = 1 + E + M, n = M + 3, XW = M + 2 + ((M + 2) % 2);
+    const b = new Builder();
+    const u = b.op(fpUnpack(f), ['a'], 'unpack');
+    const ctl = b.op(iterControl(n), ['clk', 'start'], 'control');
+    b.next();
+    const p = b.op(fpPrenorm(f), [`${u}.mant`, `${u}.exp`], 'normalize');
+    b.next();
+    // the bias is odd, so the unbiased exponent is odd exactly when the biased one is even
+    const es = b.op(splitter([1, XE - 1]), [`${p}.e`]);
+    const odd = b.name(b.op1(NOT, [`${es}.o0`], 'exponent odd?'), 'odd');
+    const xOdd = b.op1(merger([1, M + 1]), [b.op1(TIE0, []), `${p}.m`]);
+    const xEven = b.op1(merger([M + 1, 1]), [`${p}.m`, b.op1(TIE0, [])]);
+    b.next();
+    let X = b.name(b.op1(busMux2(M + 2), [xEven, xOdd, odd], 'radicand in [1, 4)'), 'X');
+    if (XW > M + 2) X = b.op1(merger([1, M + 2]), [b.op1(TIE0, []), X]);
+    const xs = b.op(splitter([XW - 2, 2]), ['X.q']);
+    b.next();
+    const st = b.op(sqrtStep(n), ['R.q', `${xs}.o1`, 'Q.q'], 'restoring step');
+    const Xn = b.op1(merger([2, XW - 2]), [b.op1(K(2, 0), []), `${xs}.o0`]);
+    b.next();
+    reg(b, 'X', XW, b.op1(busMux2(XW), [Xn, X, `${ctl}.load`]), `${ctl}.en`, 'radicand bits');
+    reg(b, 'R', n + 1, b.op1(busMux2(n + 1), [`${st}.rout`, b.op1(K(n + 1, 0), []), `${ctl}.load`]), `${ctl}.en`, 'remainder');
+    reg(b, 'Q', n, b.op1(busMux2(n), [`${st}.qout`, b.op1(K(n, 0), []), `${ctl}.load`]), `${ctl}.en`, 'root');
+    b.next();
+    // result exponent: floor((e − bias) / 2) + bias = (e + bias) >> 1, arithmetic
+    const eb = b.op(splitter([1, XE - 2, 1]), [`${b.op(koggeStone(XE), [`${p}.e`, b.op1(K(XE, fbias(f)), []), b.op1(TIE0, [])], 'e + bias')}.s`]);
+    const er = b.op1(merger([XE - 2, 1, 1]), [`${eb}.o1`, `${eb}.o2`, `${eb}.o2`], '÷ 2');
+    const stk = nonZero(b, 'R.q', n + 1);
+    b.next();
+    const nr = b.op(normRound(f, n), [b.op1(TIE0, []), er, 'Q.q', stk, 'rm'], 'normalize & round');
+    b.next();
+    const neg = b.op1(andN(3), [`${u}.sign`, b.op1(NOT, [`${u}.zero`]), b.op1(NOT, [`${u}.nan`])], 'a < 0');
+    const passA = b.op1(OR, [`${u}.zero`, `${u}.inf`], '±0, +∞: itself');
+    b.next();
+    const nan = b.op1(OR, [`${u}.nan`, neg], 'NaN?');
+    const invalid = b.name(b.op1(OR, [`${u}.snan`, neg], 'invalid'), 'NV');
+    const y1 = b.op1(busMux2(N), [`${nr}.y`, 'a', passA]);
+    b.next();
+    b.wire(b.op1(busMux2(N), [y1, nanValue(b, f), nan], 'NaN'), 'y');
+    b.wire(b.op1(busMux2(5), [`${nr}.flags`, flagWord(b, { nv: invalid }), b.op1(OR, [nan, passA])], 'flags'), 'flags');
+    b.wire(`${ctl}.done`, 'done');
+    b.wire(`${ctl}.busy`, 'busy');
+    return define({
+      id: `fpsqrt${E}_${M}`, name: `${fmtName(f)} square root (iterative)`, category: 'arithmetic',
+      summary: `Radix-2 restoring square root: the radicand (the significand, doubled if the exponent is odd) feeds two bits per clock into the remainder; each step tries 4q + 1 and appends one root bit. ${n} steps, ${n + 2} cycles. The exponent is halved; √−0 = −0, the root of a negative number is NaN with NV.`,
+      ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bus('a', N, 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out'), bit('done', 'out'), bit('busy', 'out')],
+      symbol: { kind: 'box', label: 'FSQRT (iterative)' },
+      netlist: () => ({ pins: { start: [0, 2], a: [0, 6], rm: [0, 10], clk: [0, 14], y: [b.right, 4], flags: [b.right, 8], done: [b.right, 12], busy: [b.right, 16] }, instances: b.instances, nets: b.nets() }),
+      hdl: {
+        verilog: `module fsqrt_iter (input logic clk, start, input logic [31:0] a, input logic [2:0] rm,
+                   output logic [31:0] y, output logic [4:0] flags, output logic done, busy);
+  logic [23:0] m;  logic signed [15:0] e;  fp_prenorm na (.x(a), .m, .e);
+  wire odd = ~e[0];                                       // bias is odd: unbiased e odd <=> biased even
+  logic load, en;  iter_ctl #(26) ctl (.clk, .start, .load, .en, .done, .busy);
+  logic [25:0] x, q;  logic [26:0] r;
+  wire [28:0] r2 = {r, x[25:24]};  wire [28:0] d = r2 - {1'b0, q, 2'b01};  wire fits = ~d[28];
+  always_ff @(posedge clk) if (en) begin
+    x <= load ? {1'b0, odd ? {m, 1'b0} : {1'b0, m}} : {x[23:0], 2'b00};
+    r <= load ? '0 : (fits ? d[26:0] : r2[26:0]);
+    q <= load ? '0 : {q[24:0], fits};
+  end
+  normround #(26) nr (.sign(1'b0), .exp((e + 16'sd127) >>> 1), .mant(q), .stin(|r), .rm, .y(yr), .flags(fr));
+  // + special cases: NaN, negative (NV), +-0 and +inf pass through
+endmodule`,
+      },
+    });
+  });
+}
+
+const FPU_VERILOG = `module fpu32 (input logic clk, go, input logic [31:0] a, b, xa, input logic [6:0] funct7, input logic [2:0] funct3,
+              input logic [4:0] rs2, input logic [2:0] frm, output logic [31:0] y, output logic [4:0] flags, output logic stall);
   wire [2:0] rm = funct3 == 3'd7 ? frm : funct3;       // dynamic rounding mode
   wire sgn = ~rs2[0];                                   // fcvt.w.s / fcvt.s.w vs the unsigned forms
   logic [31:0] add, mul, mm, toi, cvt;  logic [4:0] fa, fm, fmm, fti, fcv;  logic [9:0] cls;
@@ -775,12 +1073,18 @@ const FPU_VERILOG = `module fpu32 (input logic [31:0] a, b, xa, input logic [6:0
   fcvt_w_s u_ti (.a, .signed_(sgn), .rm, .y(toi), .flags(fti));
   fcvt_s_w u_cv (.x(xa), .signed_(sgn), .rm, .y(cvt), .flags(fcv));
   fclass  u_cl  (.a, .y(cls));
+  logic [31:0] dq, sq;  logic [4:0] fd, fs;  logic dDone, sDone;
+  wire isDiv = go & funct7[6:2] == 5'b00011, isSqrt = go & funct7[6:2] == 5'b01011;
+  fdiv_iter  u_dv (.clk, .start(isDiv), .a, .b, .rm, .y(dq), .flags(fd), .done(dDone), .busy());
+  fsqrt_iter u_sq (.clk, .start(isSqrt), .a, .rm, .y(sq), .flags(fs), .done(sDone), .busy());
+  assign stall = (isDiv & ~dDone) | (isSqrt & ~sDone);   // the CPU holds the instruction
   wire sj = funct3[1] ? a[31] ^ b[31] : funct3[0] ? ~b[31] : b[31];
   wire c  = funct3[1] ? eq : funct3[0] ? lt : le;
   always_comb case (funct7[6:3])
     4'h0: {y, flags} = {add, fa};                                          // fadd.s / fsub.s
-    4'h1: {y, flags} = {mul, fm};                                          // fmul.s
+    4'h1: {y, flags} = funct7[2] ? {dq, fd} : {mul, fm};                    // fdiv.s, fmul.s
     4'h2: {y, flags} = funct7[2] ? {mm, fmm} : {{sj, a[30:0]}, 5'b0};       // fmin/fmax.s, fsgnj*.s
+    4'h5: {y, flags} = {sq, fs};                                           // fsqrt.s
     4'ha: {y, flags} = {31'b0, c, (funct3[1] ? snan : unord), 4'b0};       // feq / flt / fle.s
     4'hc: {y, flags} = {toi, fti};                                         // fcvt.w[u].s
     4'hd: {y, flags} = {cvt, fcv};                                         // fcvt.s.w[u]
@@ -791,10 +1095,11 @@ const FPU_VERILOG = `module fpu32 (input logic [31:0] a, b, xa, input logic [6:0
 endmodule`;
 
 /**
- * The CPU's FPU: RV32F without division, square root and fused multiply-add, selected by funct7
- * (funct5): fadd.s, fsub.s, fmul.s, fsgnj[n|x].s, fmin/fmax.s, feq/flt/fle.s, fcvt.w[u].s,
- * fcvt.s.w[u], fmv.x.w, fclass.s, fmv.w.x. a, b are the f-register operands, xa the integer rs1.
- * The rounding mode is funct3, or frm when funct3 = 7 (dynamic); flags go to fflags.
+ * The CPU's FPU: RV32F without fused multiply-add, selected by funct7 (funct5): fadd.s, fsub.s,
+ * fmul.s, fdiv.s, fsqrt.s, fsgnj[n|x].s, fmin/fmax.s, feq/flt/fle.s, fcvt.w[u].s, fcvt.s.w[u],
+ * fmv.x.w, fclass.s, fmv.w.x. a, b are the f-register operands, xa the integer rs1. The rounding
+ * mode is funct3, or frm when funct3 = 7 (dynamic); flags go to fflags. fdiv.s and fsqrt.s are
+ * iterative: while they run, stall = 1 and the CPU holds the instruction (go = it is OP-FP).
  */
 export const FPU32: ComponentDef = (() => {
   const f = F32;
@@ -816,6 +1121,14 @@ export const FPU32: ComponentDef = (() => {
   const cvt = b.op(fpFromInt(f), ['xa', nr2, rm], 'int → float');
   const toI = b.op(fpToInt(f), ['a', nr2, rm], 'float → int');
   const cls = b.op1(fpClassify(f), ['a'], 'classify');
+  const f5 = b.op1(merger([1, 1, 1, 1, 1]), [`${f7}.o1`, `${f7}.o2`, `${f7}.o3`, `${f7}.o4`, `${f7}.o5`], 'funct5');
+  const isDiv = b.name(b.op1(AND, ['go', b.op1(equal(5), [f5, b.op1(K(5, 0b00011), [])], 'fdiv?')]), 'isDiv');
+  const isSqrt = b.name(b.op1(AND, ['go', b.op1(equal(5), [f5, b.op1(K(5, 0b01011), [])], 'fsqrt?')]), 'isSqrt');
+  b.next();
+  const dv = b.op(fpDiv(f), ['clk', isDiv, 'a', 'b', rm], 'divider (iterative)');
+  const sq = b.op(fpSqrt(f), ['clk', isSqrt, 'a', rm], 'square root (iterative)');
+  const waitD = b.op1(AND, [isDiv, b.op1(NOT, [`${dv}.done`])]), waitS = b.op1(AND, [isSqrt, b.op1(NOT, [`${sq}.done`])]);
+  b.wire(b.op1(OR, [waitD, waitS], 'stall'), 'stall');
   b.next();
   const sj = b.op1(muxTree(2, 1), [`${bs}.o1`, b.op1(NOT, [`${bs}.o1`]), b.op1(XOR, [`${as}.o1`, `${bs}.o1`]), `${bs}.o1`, b.op1(merger([1, 1]), [`${f3}.o0`, `${f3}.o1`])], 'sign injection');
   const sgnj = b.op1(merger([31, 1]), [`${as}.o0`, sj]);
@@ -825,23 +1138,26 @@ export const FPU32: ComponentDef = (() => {
   const cls32 = b.op1(merger([10, 22]), [cls, b.op1(K(22, 0), [])]);
   const sel = b.name(b.op1(merger([1, 1, 1, 1]), [`${f7}.o2`, `${f7}.o3`, `${f7}.o4`, `${f7}.o5`]), 'op');
   b.next();
+  const g1 = b.op1(busMux2(32), [`${mul}.y`, `${dv}.y`, `${f7}.o1`], 'fmul / fdiv');
   const g2 = b.op1(busMux2(32), [sgnj, `${mm}.y`, `${f7}.o1`], 'sgnj / min-max');
   const g14 = b.op1(busMux2(32), ['a', cls32, `${f3}.o0`], 'fmv.x.w / fclass');
   const fl2 = b.op1(busMux2(5), [b.op1(K(5, 0), []), `${mm}.flags`, `${f7}.o1`]);
+  const fl1 = b.op1(busMux2(5), [`${mul}.flags`, `${dv}.flags`, `${f7}.o1`]);
   const nvW = flagWord(b, { nv: cmpNV });
   b.next();
   const z = b.op1(K(32, 0), []), z5 = b.op1(K(5, 0), []);
   const ins = Array.from({ length: 16 }, () => z), fls = Array.from({ length: 16 }, () => z5);
-  ins[0] = `${add}.y`; ins[1] = `${mul}.y`; ins[2] = g2; ins[10] = cmp32; ins[12] = `${toI}.y`; ins[13] = `${cvt}.y`; ins[14] = g14; ins[15] = 'xa';
-  fls[0] = `${add}.flags`; fls[1] = `${mul}.flags`; fls[2] = fl2; fls[10] = nvW; fls[12] = `${toI}.flags`; fls[13] = `${cvt}.flags`;
+  ins[0] = `${add}.y`; ins[1] = g1; ins[2] = g2; ins[5] = `${sq}.y`; ins[10] = cmp32; ins[12] = `${toI}.y`; ins[13] = `${cvt}.y`; ins[14] = g14; ins[15] = 'xa';
+  fls[0] = `${add}.flags`; fls[1] = fl1; fls[2] = fl2; fls[5] = `${sq}.flags`; fls[10] = nvW; fls[12] = `${toI}.flags`; fls[13] = `${cvt}.flags`;
   b.wire(b.op1(muxTree(4, 32), [...ins, sel], 'result'), 'y');
   b.wire(b.op1(muxTree(4, 5), [...fls, sel], 'flags'), 'flags');
   return define({
-    id: 'fpu32', name: 'Floating-point unit (RV32F without div, sqrt, fma)', category: 'cpu',
-    summary: 'fadd.s, fsub.s, fmul.s, sign injection, min / max, compares, conversions both ways, moves and fclass, all in one cycle, in any rounding mode (funct3, or frm when funct3 = 7). funct7 picks the result and the exception flags.',
-    ports: [bus('a', 32, 'in'), bus('b', 32, 'in'), bus('xa', 32, 'in'), bus('funct7', 7, 'in'), bus('funct3', 3, 'in'), bus('rs2', 5, 'in'), bus('frm', 3, 'in'), bus('y', 32, 'out'), bus('flags', 5, 'out')],
+    id: 'fpu32', name: 'Floating-point unit (RV32F without fma)', category: 'cpu',
+    summary: 'fadd.s, fsub.s, fmul.s, sign injection, min / max, compares, conversions both ways, moves and fclass in one cycle; fdiv.s (29 cycles) and fsqrt.s (28 cycles) on iterative units that stall the CPU. Any rounding mode (funct3, or frm when funct3 = 7). funct7 picks the result and the exception flags.',
+    ports: [bit('clk', 'in', 'bottom', true), bus('a', 32, 'in'), bus('b', 32, 'in'), bus('xa', 32, 'in'), bus('funct7', 7, 'in'), bus('funct3', 3, 'in'), bus('rs2', 5, 'in'), bus('frm', 3, 'in'), bit('go', 'in'),
+      bus('y', 32, 'out'), bus('flags', 5, 'out'), bit('stall', 'out')],
     symbol: { kind: 'box', label: 'FPU' },
-    netlist: () => ({ pins: { a: [0, 4], b: [0, 8], xa: [0, 12], funct7: [0, 16], funct3: [0, 20], rs2: [0, 24], frm: [0, 28], y: [b.right, 8], flags: [b.right, 14] }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { a: [0, 4], b: [0, 8], xa: [0, 12], funct7: [0, 16], funct3: [0, 20], rs2: [0, 24], frm: [0, 28], go: [0, 32], clk: [0, 36], y: [b.right, 8], flags: [b.right, 14], stall: [b.right, 20] }, instances: b.instances, nets: b.nets() }),
     hdl: { verilog: FPU_VERILOG },
   });
 })();
