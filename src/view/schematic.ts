@@ -4,7 +4,7 @@
 import { symbolGeom, type Vec } from '../sim/geometry';
 import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, netlistOf } from '../sim/types';
-import { formatBits, type Radix } from '../sim/values';
+import { describeBits, formatBits, type Radix } from '../sim/values';
 import { icon, s } from '../ui/dom';
 import { Camera, installPanZoom } from './camera';
 import type { ViewCtx } from './context';
@@ -551,9 +551,7 @@ export class SchematicView {
     const net = nl.nets[idx];
     const bits = this.ctx.netBits(idx);
     const name = net.name ?? net.ends[0];
-    const val = bits.length === 1
-      ? formatBits(bits, 'bin')
-      : `${formatBits(bits, 'hex')} · ${formatBits(bits, 'bin')} · ${formatBits(bits, 'dec')}`;
+    const val = describeBits(bits);
     this.tooltip.textContent = `${name}${bits.length > 1 ? `[${bits.length - 1}:0]` : ''} = ${val}`;
     const r = this.host.getBoundingClientRect();
     this.tooltip.style.left = `${e.clientX - r.left + 14}px`;

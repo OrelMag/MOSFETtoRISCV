@@ -23,7 +23,7 @@ import { matchNets, sharedInputs } from './carry';
 import type { FlatDesign } from './flatten';
 import type { PowerOnMode, Sim } from './sim';
 import { B0, B1, BX, BZ, type Bit } from './types';
-import { unpack } from './values';
+import { pack, unpack } from './values';
 
 export class SwitchSim implements Sim {
   readonly kind = 'switch' as const;
@@ -34,7 +34,11 @@ export class SwitchSim implements Sim {
   onTrace?: (net: number, value: Bit, time: number) => void;
 
   private val: Uint8Array;
-  private inputs = new Map<string, number>();
+  /**
+   * Root input values: a number from setInput (negative: every bit −v, i.e. X or Z), bits from
+   * setInputBits (wide values stay exact).
+   */
+  private inputs = new Map<string, number | Bit[]>();
   private inputNets = new Map<string, number[]>();
   private dirty = true;
   /** Per leaf: 1 if the transistor conducts, 2 if it might (gate X/Z), 0 if off. */
@@ -66,7 +70,22 @@ export class SwitchSim implements Sim {
     return nets.map((n) => this.val[n] as Bit);
   }
   getInput(port: string): number {
-    return this.inputs.get(port) ?? 0;
+    const v = this.inputs.get(port) ?? 0;
+    if (typeof v === 'number') return v;
+    return v.every((b) => b === v[0]) && v[0] !== B0 && v[0] !== B1 ? -v[0] : pack(v);
+  }
+  getInputBits(port: string): Bit[] {
+    return this.inputBits(port, this.inputs.get(port) ?? 0);
+  }
+  private inputBits(port: string, v: number | Bit[]): Bit[] {
+    const w = this.inputNets.get(port)?.length ?? 0;
+    return typeof v !== 'number' ? v.slice() : v >= 0 ? unpack(v, w) : new Array<Bit>(w).fill((-v) as Bit);
+  }
+  setInputBits(port: string, bits: ArrayLike<number>): void {
+    const nets = this.inputNets.get(port);
+    if (!nets) throw new Error(`no input port '${port}'`);
+    this.inputs.set(port, nets.map((_, i) => (bits[i] ?? BZ) as Bit));
+    this.dirty = true;
   }
   setInput(port: string, value: number): void {
     if (!this.inputNets.has(port)) throw new Error(`no input port '${port}'`);
@@ -93,11 +112,11 @@ export class SwitchSim implements Sim {
    * `known`, X nodes of `prev` are not copied.
    */
   carry(prev: Sim, opts: { known?: boolean } = {}): void {
-    for (const name of sharedInputs(this.design, prev.design)) this.inputs.set(name, prev.getInput(name));
+    for (const name of sharedInputs(this.design, prev.design)) this.inputs.set(name, prev.getInputBits(name));
     // root inouts too (only a switch-level simulation drives them)
     for (const p of this.design.root.def.ports) {
       const q = p.dir === 'inout' && prev.kind === 'switch' && prev.design.root.def.ports.find((x) => x.name === p.name);
-      if (q && q.dir === 'inout' && q.width === p.width) this.inputs.set(p.name, prev.getInput(p.name));
+      if (q && q.dir === 'inout' && q.width === p.width) this.inputs.set(p.name, prev.getInputBits(p.name));
     }
     const map = matchNets(this.design, prev.design);
     for (let net = 0; net < map.length; net++) {
@@ -143,7 +162,7 @@ export class SwitchSim implements Sim {
     }
     for (const [port, v] of this.inputs) {
       const nets = this.inputNets.get(port)!;
-      const bits: Bit[] = v >= 0 ? unpack(v, nets.length) : nets.map(() => (-v) as Bit);
+      const bits = this.inputBits(port, v);
       nets.forEach((net, i) => { if (bits[i] !== BZ) source[net] = bits[i]; });
     }
 

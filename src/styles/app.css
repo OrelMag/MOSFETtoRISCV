@@ -480,6 +480,9 @@ svg.schematic .dot.fld { fill: var(--fc); }
 }
 .bits button.one { background: var(--w1); border-color: var(--w1); color: #fff; }
 .bits .idx { display: block; font-size: 8px; font-weight: 500; opacity: 0.7; line-height: 1; }
+/* wide inputs: rows of 16 bits, top bits first, each row's LSB at the right */
+.bits.rows { flex-direction: column; flex-wrap: nowrap; align-items: flex-end; }
+.bits-row { display: flex; gap: 3px; }
 
 /* ---------- home ---------- */
 .home { max-width: 1120px; margin: 0 auto; padding: 48px 24px 80px; }
