@@ -192,7 +192,9 @@ export function hazardUnit(pre: boolean): ComponentDef {
       sink(a, `${n}.a`);
     });
     const A3 = andN(3), A4 = andN(4);
-    const gx = 32;
+    // Comparator outputs (x = 20) are tagged to the right and the gate inputs to the left: the
+    // gap holds the longest names ('rs1E=rdW' one way, '¬resSrcE[1]' the other) side by side.
+    const gx = 38;
     let gy = 2;
     const gate = (name: string, def: ComponentDef) => { instances.push({ name, def, at: [gx, gy] }); gy += symbolGeom(def).h + 3; };
     gate('fA1', A3); gate('nfA1', NOT); gate('fA0', A4);
@@ -201,7 +203,8 @@ export function hazardUnit(pre: boolean): ComponentDef {
     gate('nres1', NOT); gate('isLoad', AND); gate('lwUse', OR); gate('lwStall', andN(3));
     gate('taken', OR); gate('noStall', NOT); gate('flDE', OR);
     const ySp = yN + nzs.length * 6 + 4;
-    instances.push({ name: 'mfa', def: merger([1, 1]), at: [gx + 10, 4] }, { name: 'mfb', def: merger([1, 1]), at: [gx + 10, 30] });
+    // Mergers sit with their M input (i1) level with the M gate's output, so that wire is straight.
+    instances.push({ name: 'mfa', def: merger([1, 1]), at: [gx + 12, 2] }, { name: 'mfb', def: merger([1, 1]), at: [gx + 12, 27] });
     instances.push({ name: 'srs', def: splitter([1, 1]), at: [6, ySp] }, { name: 'sps', def: splitter([1, 1]), at: [6, ySp + 6] });
     // Which comparators feed forwarding: E-stage versions, or the D-stage look-ahead versions.
     const fA1src = pre ? 'eq_lw1.eq' : 'eq_aM.eq', fA0src = pre ? 'eq_aM.eq' : 'eq_aW.eq';
@@ -229,7 +232,10 @@ export function hazardUnit(pre: boolean): ComponentDef {
       'srs.o1': 'resSrcE[1]', 'srs.o0': 'resSrcE[0]', 'nres1.y': '¬resSrcE[1]', 'isLoad.y': 'loadE', 'lwUse.y': 'uses rdE',
       'sps.o0': 'pcSrcE[0]', 'sps.o1': 'pcSrcE[1]', 'lwStall.y': 'lwStall', 'taken.y': 'taken',
     };
-    for (const [drv, ss] of wires) nets.push({ name: named[drv], ends: [drv, ...ss], tags: true });
+    // fwd*_M is drawn: straight into its merger, and looped under its gate into the inverter below.
+    const loop = (g: number): NetDef['via'] => ({ [`nf${g === 0 ? 'A' : 'B'}1.a`]: [[gx + 6, g === 0 ? 9 : 34], [gx - 2, g === 0 ? 9 : 34]] });
+    const drawnNets: Record<string, Partial<NetDef>> = { 'fA1.y': { tags: undefined, via: loop(0) }, 'fB1.y': { tags: undefined, via: loop(1) } };
+    for (const [drv, ss] of wires) nets.push({ name: named[drv], ends: [drv, ...ss], tags: true, ...drawnNets[drv] });
     nets.push(
       { name: regM, ends: [regM, 'fA1.i2', 'fB1.i2'], tags: ['fA1.i2', 'fB1.i2'] },
       { name: regW, ends: [regW, 'fA0.i2', 'fB0.i2', ...(pre ? [] : ['byA.i2', 'byB.i2'])], tags: ['fA0.i2', 'fB0.i2', ...(pre ? [] : ['byA.i2', 'byB.i2'])] },
@@ -238,7 +244,7 @@ export function hazardUnit(pre: boolean): ComponentDef {
       { name: 'validE', ends: ['validE', 'lwStall.i2'], tags: ['lwStall.i2'] },
       { name: 'pcSrcE', ends: ['pcSrcE', 'sps.in'] },
       { name: 'forwardA', ends: ['mfa.out', 'forwardA'] },
-      { name: 'forwardB', ends: ['mfb.out', 'forwardB'] },
+      { name: 'forwardB', ends: ['mfb.out', 'forwardB'], trunk: gx + 14 },
       { name: 'bypassA', ends: ['byA.y', 'bypassA'], tags: true },
       { name: 'bypassB', ends: ['byB.y', 'bypassB'], tags: true },
       { name: 'enable', ends: ['noStall.y', 'enPC', 'enFD'], tags: true },
@@ -302,7 +308,8 @@ export const BRANCH_CMP: ComponentDef = (() => {
   const EQ = equal(32), SUB = addSubFast(32), NP = NEXT_PC;
   const eg = symbolGeom(EQ), sg = symbolGeom(SUB), ng = symbolGeom(NP);
   const sAt: [number, number] = [10, eg.h + 6];
-  const nAt: [number, number] = [sAt[0] + sg.w + 10, 2];
+  // Wide enough for the subtractor's flag tags and the next-PC input tags side by side.
+  const nAt: [number, number] = [sAt[0] + sg.w + 12, 2];
   return define({
     id: 'branchcmp', name: 'Branch comparator', category: 'cpu',
     summary: 'Decides the branch from the (forwarded) operands with its own equality comparator and a fast subtractor, in parallel with the ALU, so the branch no longer waits for the ALU\'s result multiplexer and zero detector.',
@@ -350,7 +357,7 @@ export const SAT_COUNTER: ComponentDef = define({
     pins: { c: [0, 4], taken: [0, 16], hit: [0, 22], next: [52, 10] },
     instances: [
       { name: 'sc', def: splitter([1, 1]), at: [3, 2] },
-      { name: 'nc0', def: NOT, at: [8, 8] },
+      { name: 'nc0', def: NOT, at: [6, 8] },
       { name: 'inc1', def: OR, at: [14, 0] }, { name: 'inc0', def: OR, at: [14, 6] },
       { name: 'dec1', def: AND, at: [14, 12] }, { name: 'dec0', def: AND, at: [14, 18] },
       { name: 'nt', def: NOT, at: [8, 24] },
@@ -362,7 +369,7 @@ export const SAT_COUNTER: ComponentDef = define({
       { name: 'c', ends: ['c', 'sc.in'] },
       { name: 'c1', ends: ['sc.o1', 'inc1.a', 'inc0.a', 'dec1.a', 'dec0.a'], tags: true },
       { name: 'c0', ends: ['sc.o0', 'inc1.b', 'nc0.a', 'dec1.b'], tags: true },
-      { name: '¬c0', ends: ['nc0.y', 'inc0.b', 'dec0.b'], tags: true },
+      { name: '¬c0', ends: ['nc0.y', 'inc0.b', 'dec0.b'], tags: ['dec0.b'] },
       { name: 'inc1', ends: ['inc1.y', 'm1.d1'] }, { name: 'inc0', ends: ['inc0.y', 'm0.d1'] },
       { name: 'dec1', ends: ['dec1.y', 'm1.d0'] }, { name: 'dec0', ends: ['dec0.y', 'm0.d0'] },
       { name: 'taken', ends: ['taken', 'm1.s', 'm0.s', 'nt.a', 'h1.d0'], tags: true },
@@ -402,12 +409,12 @@ export const BTB: ComponentDef = (() => {
     { name: 'bundle', def: merger(Array(N).fill(W), P), at: [xQ, mqTop] },
     { name: 'rdF', def: RP, at: rpF, label: 'read (fetch)' },
     { name: 'rdE', def: RP, at: rpE, label: 'read (update)' },
-    { name: 'spF', def: splitter([2, K, 26]), at: [4, -6] },
-    { name: 'spE', def: splitter([2, K, 26]), at: [4, 4] },
+    { name: 'spF', def: splitter([2, K, 26]), at: [4, -7] },
+    { name: 'spE', def: splitter([2, K, 26]), at: [4, 3] },
     { name: 'fF', def: splitter([1, 26, 32, 1, 1, 1]), at: [xP + rpg.w + 6, rpF[1] + rpg.ports.y.pos[1] - 6] },
     { name: 'fE', def: splitter(fields), at: [xP + rpg.w + 6, rpE[1] + rpg.ports.y.pos[1] - 5] },
-    { name: 'hitF', def: equal(26), at: [xP + rpg.w + 14, rpF[1] - 6] },
-    { name: 'hitE', def: equal(26), at: [xP + rpg.w + 14, rpE[1] - 6] },
+    { name: 'hitF', def: equal(26), at: [xP + rpg.w + 24, rpF[1] - 5] },
+    { name: 'hitE', def: equal(26), at: [xP + rpg.w + 24, rpE[1] - 4] },
     { name: 'vF', def: AND, at: [xP + rpg.w + 40, rpF[1] - 4] },
     { name: 'vE', def: AND, at: [xP + rpg.w + 40, rpE[1] - 4] },
     { name: 'dir', def: OR, at: [xP + rpg.w + 40, rpF[1] + 4] },
@@ -428,7 +435,7 @@ export const BTB: ComponentDef = (() => {
     { name: 'entryF', ends: ['rdF.y', 'fF.in'] },
     { name: 'entryE', ends: ['rdE.y', 'fE.in'] },
     { name: 'validF', ends: ['fF.o0', 'vF.a'], tags: true },
-    { name: 'storedTagF', ends: ['fF.o1', 'hitF.b'], tags: true },
+    { name: 'storedTagF', ends: ['fF.o1', 'hitF.b'] },
     { name: 'predTarget', ends: ['fF.o2', 'predTarget'], tags: true },
     { name: 'ctrF[1]', ends: ['fF.o4', 'dir.b'], tags: true },
     { name: 'jmpF', ends: ['fF.o5', 'dir.a'], tags: true },
@@ -437,7 +444,7 @@ export const BTB: ComponentDef = (() => {
     { name: 'dirF', ends: ['dir.y', 'pt.b'] },
     { name: 'predTaken', ends: ['pt.y', 'predTaken'], tags: true },
     { name: 'validE', ends: ['fE.o0', 'vE.a'], tags: true },
-    { name: 'storedTagE', ends: ['fE.o1', 'hitE.b'], tags: true },
+    { name: 'storedTagE', ends: ['fE.o1', 'hitE.b'] },
     { name: 'ctrE', ends: ['fE.o3', 'ctr.c'], tags: true },
     { name: 'tagEqE', ends: ['hitE.eq', 'vE.b'] },
     { name: 'hitE', ends: ['vE.y', 'ctr.hit'], tags: true },
@@ -467,7 +474,7 @@ export const BTB: ComponentDef = (() => {
     ],
     symbol: { kind: 'box', label: 'BTB' },
     netlist: () => ({
-      pins: { pcF: [0, -4], pcE: [0, 6], updE: [0, 10], takenE: [0, 12], isJumpE: [0, 14], targetE: [0, 16], clk: [0, 30], predTaken: [xP + rpg.w + 60, rpF[1] + 1], predTarget: [xP + rpg.w + 60, rpF[1] + 6] },
+      pins: { pcF: [0, -4], pcE: [0, 6], updE: [0, 10], takenE: [0, 12], isJumpE: [0, 14], targetE: [0, 16], clk: [0, 34], predTaken: [xP + rpg.w + 60, rpF[1] + 1], predTarget: [xP + rpg.w + 60, rpF[1] + 6] },
       instances, nets,
     }),
     hdl: {

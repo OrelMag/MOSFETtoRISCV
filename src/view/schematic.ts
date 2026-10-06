@@ -1,13 +1,13 @@
 // The schematic: one component's internal netlist drawn as SVG, with live wire values.
 // Rendering builds the DOM once; update() only touches classes and labels.
 
-import { instPort, symbolGeom, type Vec } from '../sim/geometry';
+import { symbolGeom, type Vec } from '../sim/geometry';
 import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, netlistOf } from '../sim/types';
 import { formatBits, type Radix } from '../sim/values';
 import { icon, s } from '../ui/dom';
 import type { ViewCtx } from './context';
-import { hopPathData, routeNetlist, splitterBars, type PinGeom, type RoutedNet } from './route';
+import { hopPathData, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type RoutedNet, type TapLabel } from './route';
 import { drawSymbol, portLabel } from './symbols';
 
 export interface SchematicEvents {
@@ -58,8 +58,6 @@ function busClass(bits: Bit[]): string {
   return bits.some((b) => b === B1) ? 'bus bus1' : 'bus bus0';
 }
 
-const textWidth = (t: string, size: number) => t.length * size * 0.62 + 0.8;
-
 export class SchematicView {
   readonly el: SVGSVGElement;
   private ctx: ViewCtx | null = null;
@@ -106,7 +104,8 @@ export class SchematicView {
     if (!nl) return;
     const { nets, pins } = routeNetlist(ctx.def, nl);
     const pathData = hopPathData(nets, splitterBars(nl));
-    const tapsOf = splitterTaps(nl);
+    const tapsOf = new Map<number, TapLabel[]>();
+    for (const t of tapLabels(nl)) tapsOf.set(t.net, [...tapsOf.get(t.net) ?? [], t]);
 
     const defs = s('defs');
     defs.innerHTML = `<pattern id="grid" width="1" height="1" patternUnits="userSpaceOnUse">
@@ -133,12 +132,7 @@ export class SchematicView {
       const w: WireEls = { net, paths: [], dots: [], tags: [], taps: [] };
       const name = nl.nets[net.index].name ?? `n${net.index}`;
       for (const t of net.tags) {
-        const D: Record<string, [number, number]> = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
-        const d = D[t.dir];
-        const E: Vec = [t.pos[0] + d[0] * 1.4, t.pos[1] + d[1] * 1.4];
-        const tw = textWidth(name, 0.8) + 0.6, th = 1.35;
-        const rx = t.dir === 'right' ? E[0] : t.dir === 'left' ? E[0] - tw : E[0] - tw / 2;
-        const ry = t.dir === 'down' ? E[1] : t.dir === 'up' ? E[1] - th : E[1] - th / 2;
+        const { tip: E, rect: { x: rx, y: ry, w: tw, h: th } } = tagGeom(t, name);
         const g = s('g', { class: 'net-tag', 'data-net': net.index });
         const stub = s('path', { d: `M${t.pos[0]},${t.pos[1]} L${E[0]},${E[1]}`, class: cls });
         g.append(stub, s('rect', { x: rx, y: ry, width: tw, height: th, rx: 0.35 }),
@@ -161,9 +155,7 @@ export class SchematicView {
       }
       for (const t of tapsOf.get(net.index) ?? []) {
         const g = s('g', { class: 'tap-label' });
-        const tw = textWidth(t.text, t.size) + 0.1, th = t.size * 1.3;
-        const x = t.right ? t.pos[0] + 0.12 : t.pos[0] - 0.12 - tw;
-        const y = t.pos[1] - th - 0.1;
+        const { x, y, w: tw, h: th } = t.rect;
         g.append(s('rect', { x, y, width: tw, height: th, rx: th / 2 }),
           s('text', { x: x + tw / 2, y: y + th * 0.76, 'text-anchor': 'middle', style: `font-size:${t.size}px` }, t.text));
         w.taps.push(g);
@@ -311,6 +303,9 @@ export class SchematicView {
         const tw = textWidth(txt, 0.95);
         w.labelBg.setAttribute('x', String(w.net.label[0] - tw / 2));
         w.labelBg.setAttribute('width', String(tw));
+        // Too wide for its segment (a 64-bit value on a short hop): it would cover the ports at
+        // either end. The value is still in the hover tooltip, and a narrower radix may fit.
+        w.label!.setAttribute('display', tw > w.net.labelRoom - 0.4 ? 'none' : 'inline');
         w.label!.setAttribute('class', `bus-label ${busClass(bits)}${this.marks(w.net.index)}`);
       }
     }
@@ -642,33 +637,6 @@ export class SchematicView {
     this.tooltip.style.top = `${e.clientY - r.top + 14}px`;
     this.tooltip.style.opacity = '1';
   }
-}
-
-interface TapLabel { pos: Vec; right: boolean; text: string; size: number }
-
-/** Bit ranges carried by each splitter output / merger input, keyed by the net on the tap. */
-function splitterTaps(nl: NonNullable<ReturnType<typeof netlistOf>>): Map<number, TapLabel[]> {
-  const netOf = new Map<string, number>();
-  nl.nets.forEach((n, i) => n.ends.forEach((e) => netOf.set(e, i)));
-  const out = new Map<number, TapLabel[]>();
-  for (const inst of nl.instances) {
-    const k = inst.def.symbol.kind;
-    if (k !== 'split' && k !== 'merge') continue;
-    const size = Math.min(0.72, (inst.def.symbol.pitch ?? 2) * 0.4);
-    let bit = 0;
-    for (const p of inst.def.ports) {
-      if ((k === 'split') !== (p.dir === 'out')) continue;
-      const text = p.width === 1 ? `${bit}` : `${bit + p.width - 1}:${bit}`;
-      bit += p.width;
-      const net = netOf.get(`${inst.name}.${p.name}`);
-      if (net === undefined) continue;
-      const g = instPort(inst.def, inst.at ?? [0, 0], inst.flip, p.name);
-      const list = out.get(net) ?? [];
-      list.push({ pos: g.pos, right: g.exit === 'right', text, size });
-      out.set(net, list);
-    }
-  }
-  return out;
 }
 
 const motionQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;

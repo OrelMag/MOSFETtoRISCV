@@ -30,7 +30,11 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
   return d;
 }
 
-/** Place instances in columns (top to bottom), returning positioned InstanceDefs. */
+/**
+ * Place instances in columns (top to bottom), returning positioned InstanceDefs. A symbol with a
+ * bottom port (mux select, clock) gets 4 units below it, so the net label hanging from that port
+ * clears the next symbol and the name drawn above it.
+ */
 function columns(cols: [string, ComponentDef, string?][][], x0: number, y0: number, gapX = 10, gapY = 3): InstanceDef[] {
   const out: InstanceDef[] = [];
   let x = x0;
@@ -39,7 +43,7 @@ function columns(cols: [string, ComponentDef, string?][][], x0: number, y0: numb
     for (const [name, def, label] of col) {
       const g = symbolGeom(def);
       out.push({ name, def, at: [x, y], label });
-      y += g.h + gapY;
+      y += g.h + (Object.values(g.ports).some((p) => p.exit === 'down') ? Math.max(gapY, 4) : gapY);
       w = Math.max(w, g.w);
     }
     x += w + gapX;
@@ -117,7 +121,8 @@ export function sysDecode(m = false): ComponentDef {
   const merged = mergeByDriver(nets);
   const pins: Record<string, [number, number]> = { op: [0, 2], funct3: [0, 6], funct7: [0, 10], imm12: [0, 14], rs1: [0, 18], csrKnown: [0, 22] };
   const instances = columns(chunk(ins, 14), 12, 0, 12, 2);
-  const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 8;
+  // room for the last column's output labels and the output pins' labels side by side
+  const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 14;
   ['illegal', 'ecall', 'ebreak', 'mret', 'csrOp', 'csrWrite', ...(m ? ['isM'] : [])].forEach((n, i) => (pins[n] = [right, 2 + 4 * i]));
   return define({
     id: `sysdec${m ? '_m' : ''}`, name: 'System & illegal-instruction decoder', category: 'cpu',
@@ -298,8 +303,9 @@ export function csrUnit(m = false): ComponentDef {
   net('mtvec', 'vTvec.out', 'mtvecOut');
   net('mepc', 'vEpc.out', 'mepcOut');
   const merged = mergeByDriver(nets);
-  const instances = columns(chunk(ins, 12), 14, 0, 12, 2);
-  const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 8;
+  // 14 between columns: an output label pointing right and an input label pointing left share the gap
+  const instances = columns(chunk(ins, 12), 14, 0, 14, 2);
+  const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 11;
   const inNames = ['addr', 'funct3', 'rs1v', 'zimm5', 'csrWrite', 'trap', 'trapCause', 'trapPC', 'trapVal', 'mret', 'mtime', 'mtip', 'meip', 'clk'];
   const outNames = ['rdata', 'known', 'mtvecOut', 'mepcOut', 'irqTake', 'irqCause'];
   const pins: Record<string, [number, number]> = {};
@@ -324,34 +330,44 @@ export const CSR_UNIT = csrUnit();
 // ---- trap selection --------------------------------------------------------------------------------------------
 
 export const TRAP_UNIT: ComponentDef = (() => {
-  const ins: [string, ComponentDef, string?][] = [];
+  const instances: InstanceDef[] = [];
   const nets: NetDef[] = [];
   const net = (name: string | undefined, drv: string, ...s: string[]) => nets.push({ name, ends: [drv, ...s], tags: true });
   // priority chain, lowest first: storeMis (6, addr), loadMis (4, addr), fetchMis (0, target), ecall (11), ebreak (3), illegal (2), interrupt
   const chain: [string, number | null, string][] = [['storeMis', 6, 'addr'], ['loadMis', 4, 'addr'], ['fetchMis', 0, 'target'], ['ecall', 11, 'z'], ['ebreak', 3, 'z'], ['illegal', 2, 'z'], ['irq', null, 'z']];
-  ins.push(['z', constWord(32, 0)]);
+  // One column per stage: the cause mux on top, the value mux below, each stage a row lower so
+  // the chain wires (y of one stage → a of the next) run straight; the cause constant sits left.
+  const X = (i: number) => 20 + 14 * i, CY = (i: number) => 8 + i, VY = (i: number) => 22 + i;
+  const M2 = busMux2(32);
+  instances.push({ name: 'z', def: constWord(32, 0), at: [12, 2] });
   let c = 'z.y', v = 'z.y';
   chain.forEach(([src, cause, val], i) => {
-    ins.push([`c${i}`, busMux2(32)], [`v${i}`, busMux2(32)]);
-    net(undefined, c, `c${i}.a`);
-    net(undefined, v, `v${i}.a`);
+    instances.push({ name: `c${i}`, def: M2, at: [X(i), CY(i)] }, { name: `v${i}`, def: M2, at: [X(i), VY(i)] });
+    // the constant zero feeding stage 0 is labelled (it also feeds later value inputs); the chain is drawn
+    const t = i === 0 ? { tags: true as const } : {};
+    nets.push({ ends: [c, `c${i}.a`], ...t }, { ends: [v, `v${i}.a`], ...t });
     if (cause === null) net('irqCause', 'irqCause', `c${i}.b`);
-    else { ins.push([`k${i}`, constWord(32, cause)]); net(undefined, `k${i}.y`, `c${i}.b`); }
+    else {
+      instances.push({ name: `k${i}`, def: constWord(32, cause), at: [X(i) - 8, CY(i) + 4] });
+      nets.push({ ends: [`k${i}.y`, `c${i}.b`] });
+    }
     net(val === 'z' ? 'zero' : val, val === 'z' ? 'z.y' : val, `v${i}.b`);
     net(src, src, `c${i}.s`, `v${i}.s`, `any.i${i}`);
     c = `c${i}.y`;
     v = `v${i}.y`;
   });
-  ins.push(['any', orN(chain.length)]);
-  net('cause', c, 'cause');
-  net('tval', v, 'tval');
-  net('trap', 'any.y', 'trap');
+  const last = chain.length - 1;
+  instances.push({ name: 'any', def: orN(chain.length), at: [X(last), VY(last) + 12] });
+  nets.push({ name: 'cause', ends: [c, 'cause'] }, { name: 'tval', ends: [v, 'tval'] }, { name: 'trap', ends: ['any.y', 'trap'] });
   const merged = mergeByDriver(nets);
-  const instances = columns(chunk(ins, 8), 14, 0, 10, 2);
-  const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 8;
+  const right = X(last) + 12;
   const pins: Record<string, [number, number]> = {};
   ['irq', 'irqCause', 'illegal', 'ebreak', 'ecall', 'fetchMis', 'loadMis', 'storeMis', 'addr', 'target'].forEach((n, i) => (pins[n] = [0, 2 + 3 * i]));
-  ['trap', 'cause', 'tval'].forEach((n, i) => (pins[n] = [right, 2 + 4 * i]));
+  // outputs level with their drivers
+  const yOf = (inst: string, port: string) => instances.find((i) => i.name === inst)!.at![1] + symbolGeom(instances.find((i) => i.name === inst)!.def).ports[port].pos[1];
+  pins.cause = [right, yOf(`c${last}`, 'y')];
+  pins.tval = [right, yOf(`v${last}`, 'y')];
+  pins.trap = [right, yOf('any', 'y')];
   return define({
     id: 'trapunit', name: 'Trap unit', category: 'cpu',
     summary: 'Any interrupt or exception becomes a trap. A priority chain of multiplexers picks the cause (interrupts first, then illegal instruction, ebreak, ecall, misaligned fetch / load / store) and the value for mtval (the faulting address or target).',
@@ -397,13 +413,16 @@ export const IO_UNIT: ComponentDef = (() => {
   net(undefined, 'zLed.out', 'rsel.d1');
   net(undefined, 'zSw.out', 'rsel.d2');
   net(undefined, 'z32.y', 'rsel.d0', 'rsel.d3', 'rsel.d6', 'rsel.d7');
-  net('rdata', 'rsel.y', 'rdata');
+  nets.push({ name: 'rdata', ends: ['rsel.y', 'rdata'] });
   net('clk', 'clk', 'rLed.clk', 'rCmp.clk', 'mtime.clk');
   const merged = mergeByDriver(nets);
   const instances = columns(chunk(ins, 6), 14, 0, 12, 3);
   const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 8;
   const pins: Record<string, [number, number]> = { addr: [0, 2], wdata: [0, 6], we: [0, 10], switches: [0, 14], clk: [0, 18] };
-  ['rdata', 'consoleData', 'consoleValid', 'leds', 'mtimeOut', 'mtip'].forEach((n, i) => (pins[n] = [right, 2 + 4 * i]));
+  // rdata straight out of the read multiplexer; the other outputs below its select label
+  const rs = instances.find((i) => i.name === 'rsel')!, rg = symbolGeom(rs.def);
+  pins.rdata = [right, rs.at![1] + rg.ports.y.pos[1]];
+  ['consoleData', 'consoleValid', 'leds', 'mtimeOut', 'mtip'].forEach((n, i) => (pins[n] = [right, rs.at![1] + rg.h + 4 + 4 * i]));
   return define({
     id: 'iounit', name: 'I/O devices', category: 'cpu',
     summary: 'Memory-mapped devices: a console (store a byte to 0x8000_0000), LEDs (0x04), switches (0x08), a free-running cycle counter mtime (0x10) and its compare register mtimecmp (0x14). The timer interrupt is pending while mtime ≥ mtimecmp.',
@@ -425,7 +444,7 @@ function incrementerCounter32(): ComponentDef {
       symbol: { kind: 'box', label: 'COUNT' },
       netlist: () => ({
         pins: { clk: [0, 20], q: [40, 4] },
-        instances: [{ name: 'r', def: R, at: [8, 2] }, { name: 'inc', def: I, at: [8, 14], flip: true }, { name: 'en', def: TIE1, at: [2, 3] }],
+        instances: [{ name: 'r', def: R, at: [8, 2] }, { name: 'inc', def: I, at: [8, 14], flip: true }, { name: 'en', def: TIE1, at: [2, 5] }],
         nets: [
           { name: 'q', ends: ['r.q', 'q', 'inc.a'], tags: ['inc.a'] },
           { name: 'next', ends: ['inc.y', 'r.d'], tags: true },

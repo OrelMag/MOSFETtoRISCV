@@ -94,10 +94,15 @@ export const MC_FSM: ComponentDef = (() => {
   const nets: NetDef[] = [];
   const ends = new Map<string, string[]>();
   const sink = (drv: string, s: string) => { if (!ends.has(drv)) ends.set(drv, []); ends.get(drv)!.push(s); };
-  const xR = 8, xD = xR + rg.w + 8, xO = 8, yO = rg.h + 14;
+  // Columns: state register and opcode decoder | state decoder | AND terms | next-state ORs | output ORs.
+  // Each gap leaves room for a tag pointing right out of one column and one pointing left into the next.
+  const tagLen = (s: string) => 2.8 + 0.5 * s.length;
+  const longest = (xs: string[]) => Math.max(...xs.map(tagLen));
+  const stateTag = longest(MC_STATES.map((s) => s.name)), condTag = longest(MC_DISPATCH.map(([c]) => `is${c}`));
+  const xR = 8, xO = 8, xD = Math.ceil(xO + og.w + condTag + 1), yO = rg.h + 14;
   instances.push(
     { name: 'st', def: REG, at: [xR, 2], label: 'state' },
-    { name: 'one', def: TIE1, at: [xR - 6, rg.ports.en.pos[1]] },
+    { name: 'one', def: TIE1, at: [xR - 8, 2 + rg.ports.en.pos[1] - 1] },
     { name: 'dec', def: DEC, at: [xD, 2], label: 'one wire per state' },
     { name: 'opd', def: OPD, at: [xO, yO] },
   );
@@ -109,65 +114,78 @@ export const MC_FSM: ComponentDef = (() => {
     if (typeof s.next === 'number') { if (s.next !== 0) trans.push([i, null, s.next]); }
     else for (const [cls, t] of s.next === 'decode' ? MC_DISPATCH : MC_DISPATCH2) trans.push([i, `opd.${cls}`, t]);
   });
-  const xT = xD + dg.w + 14;
-  let yT = 2;
+  const xT = Math.ceil(xD + dg.w + stateTag + Math.max(stateTag, condTag) + 1);
+  let yT = 2, nT = 0;
   const termOf = trans.map(([s, cond], k) => {
     if (!cond) return S(s);
     const nm = `t${k}`;
     instances.push({ name: nm, def: AND, at: [xT, yT] });
     yT += 5;
+    nT = Math.max(nT, nm.length);
     sink(S(s), `${nm}.a`);
     sink(cond, `${nm}.b`);
     return `${nm}.y`;
   });
-  const xN = xT + 10;
-  instances.push({ name: 'nx', def: merger([1, 1, 1, 1]), at: [xN + 10, 6] });
+  const xN = Math.ceil(xT + 4 + tagLen('t'.repeat(nT)) + stateTag + 1);
+  // The next-state ORs stacked; n0 wired straight into the merger, the others by tag.
+  let yN = 2, yNx = 0;
   for (let b = 0; b < 4; b++) {
     const terms = trans.map((t, k) => ((t[2] >> b) & 1 ? termOf[k] : null)).filter((x): x is string => !!x);
     const nm = `n${b}`;
     if (terms.length === 1) sink(terms[0], `nx.i${b}`);
     else {
-      instances.push({ name: nm, def: orN(terms.length), at: [xN, 2 + 14 * b] });
+      const d = orN(terms.length), h = symbolGeom(d).h;
+      instances.push({ name: nm, def: d, at: [xN, yN] });
+      if (b === 0) yNx = yN + h / 2 - 1;
+      yN += h + 2;
       terms.forEach((t, i) => sink(t, `${nm}.i${i}`));
-      nets.push({ name: `next${b}`, ends: [`${nm}.y`, `nx.i${b}`], tags: true });
+      nets.push({ name: `next${b}`, ends: [`${nm}.y`, `nx.i${b}`], tags: b === 0 ? undefined : true });
     }
   }
+  instances.push({ name: 'nx', def: merger([1, 1, 1, 1]), at: [xN + 10, yNx] });
   nets.push({ name: 'next', ends: ['nx.out', 'st.d'], tags: true });
-  // outputs: per field bit, the OR of the states asserting it
-  const xC = xN + 22;
+  // outputs: per field bit, the OR of the states asserting it. Each output's pin sits on its
+  // driver's row so the wire is straight; a field's bits are spaced to match its merger's pitch.
+  const xC = Math.ceil(xN + 11 + tagLen('next') + stateTag + 1), xP = xC + 20;
   let yC = 2, ties = 0;
   const pins: Record<string, [number, number]> = { clk: [0, rg.h + 4], op: [0, yO + og.ports.op.pos[1]] };
-  MC_FIELDS.forEach(([f, n], fi) => {
-    const bitsDrv: string[] = [];
-    for (let b = 0; b < n; b++) {
-      const states = MC_STATES.map((s, i) => (((s.sig[f] ?? 0) >> b) & 1 ? i : -1)).filter((i) => i >= 0);
+  MC_FIELDS.forEach(([f, n]) => {
+    const bits = Array.from({ length: n }, (_, b) => MC_STATES.map((s, i) => (((s.sig[f] ?? 0) >> b) & 1 ? i : -1)).filter((i) => i >= 0));
+    const defOf = (states: number[]) => (states.length < 2 ? null : states.length === 2 ? OR : orN(states.length));
+    const hOf = (states: number[]) => { const d = defOf(states); return d ? symbolGeom(d).h : 2; };
+    const hs = bits.map(hOf);
+    let pitch = 2;
+    for (let b = 1; b < n; b++) pitch = Math.max(pitch, 2 * Math.ceil((hs[b - 1] / 2 + hs[b] / 2 + 2) / 2));
+    const y0 = yC + hs[0] / 2;
+    const bitsDrv = bits.map((states, b) => {
+      const yo = y0 + pitch * b, d = defOf(states);
+      yC = yo + hs[b] / 2 + 2;
       if (states.length === 0) {
-        instances.push({ name: `z${ties}`, def: TIE0, at: [xC, yC] });
-        bitsDrv.push(`z${ties++}.y`);
-        yC += 3;
-      } else if (states.length === 1) bitsDrv.push(S(states[0]));
-      else {
-        const nm = `o_${f}${b}`;
-        const d = states.length === 2 ? OR : orN(states.length);
-        instances.push({ name: nm, def: d, at: [xC, yC], label: n > 1 ? `${f}[${b}]` : f });
-        const ins = d.ports.filter((p) => p.dir === 'in').map((p) => p.name);
-        states.forEach((s, i) => sink(S(s), `${nm}.${ins[i]}`));
-        bitsDrv.push(`${nm}.y`);
-        yC += symbolGeom(d).h + 2;
+        instances.push({ name: `z${ties}`, def: TIE0, at: [xC, yo - 1] });
+        return `z${ties++}.y`;
       }
-    }
-    if (n === 1) sink(bitsDrv[0], f);
+      if (!d) return S(states[0]);
+      const nm = `o_${f}${b}`;
+      instances.push({ name: nm, def: d, at: [xC, yo - hs[b] / 2], label: n > 1 ? `${f}[${b}]` : f });
+      const ins = d.ports.filter((p) => p.dir === 'in').map((p) => p.name);
+      states.forEach((s, i) => sink(S(s), `${nm}.${ins[i]}`));
+      return `${nm}.y`;
+    });
+    if (n === 1) { sink(bitsDrv[0], f); pins[f] = [xP, y0]; }
     else {
-      instances.push({ name: `m_${f}`, def: merger([1, 1]), at: [xC + 12, yC - 6] });
+      instances.push({ name: `m_${f}`, def: merger(Array(n).fill(1), pitch), at: [xC + 12, y0 - pitch / 2] });
       bitsDrv.forEach((d, b) => sink(d, `m_${f}.i${b}`));
-      nets.push({ name: f, ends: [`m_${f}.out`, f], tags: true });
+      nets.push({ name: f, ends: [`m_${f}.out`, f] });
+      pins[f] = [xP, y0 + (pitch * (n - 1)) / 2];
     }
-    pins[f] = [xC + 20, 2 + 4 * fi];
   });
-  pins.state = [xC + 20, 2 + 4 * MC_FIELDS.length];
+  pins.state = [xP, yC + 1];
+  const cls = new Map(MC_DISPATCH.map(([c]) => [`opd.${c}`, `is${c}`]));
   for (const [drv, ss] of ends) {
-    const si = /^dec\.y(\d+)$/.exec(drv);
-    nets.push({ name: si ? MC_STATES[Number(si[1])]?.name ?? `S${si[1]}` : undefined, ends: [drv, ...ss], tags: true });
+    const si = /^dec\.y(\d+)$/.exec(drv), gate = /^(o_\w+|t\d+|z\d+)\.y$/.exec(drv);
+    const name = si ? MC_STATES[Number(si[1])]?.name ?? `S${si[1]}` : cls.get(drv) ?? (gate ? instances.find((i) => i.name === gate[1])?.label ?? gate[1] : undefined);
+    // State and condition wires fan out across the sheet by tag; an output OR is wired to its pin.
+    nets.push({ name, ends: [drv, ...ss], tags: /^(o_|z)/.test(drv) ? undefined : true });
   }
   return define({
     id: 'mc_fsm', name: 'Hardwired multicycle controller', category: 'cpu',
@@ -203,7 +221,7 @@ export const MC_MICRO: ComponentDef = (() => {
     { name: 'urom', def: UROM, at: [xU, 14], label: 'microcode ROM' },
     { name: 'sw', def: SW, at: [xS, 4] },
     { name: 'op', def: splitter([2, 3, 1, 1]), at: [4, 60] },
-    { name: 'opx', def: merger([3, 1, 1]), at: [8, 60] },
+    { name: 'opx', def: merger([3, 1, 1]), at: [10, 60] },
     { name: 'd1a', def: merger([2, 5, 25]), at: [14, 58] },
     { name: 'd2a', def: merger([2, 1, 29]), at: [14, 70] },
     { name: 'd1', def: D1, at: [xU, 52], label: 'decode dispatch' },
