@@ -52,7 +52,8 @@ export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<strin
       list.push({ a: Math.min(a, b), b: Math.max(a, b), net, wire: w.id });
     }
   }
-  const pairs = new Map<string, { wires: [string, string]; nets: [string, string]; at: string }>();
+  // One warning per pair of nets on one line, with every wire involved.
+  const pairs = new Map<string, { wires: Set<string>; nets: [Seg, Seg]; at: string }>();
   for (const [k, segs] of rows) {
     segs.sort((x, y) => x.a - y.a);
     const active: Seg[] = [];
@@ -60,17 +61,19 @@ export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<strin
       for (let i = active.length - 1; i >= 0; i--) if (active[i].b <= s.a) active.splice(i, 1);
       for (const o of active) {
         if (o.net === s.net || Math.min(o.b, s.b) - s.a <= 0) continue;
-        const key = [o.wire, s.wire].sort().join('|');
-        if (!pairs.has(key)) pairs.set(key, { wires: [o.wire, s.wire], nets: [o.net, s.net], at: `${k[0] === 'h' ? 'y' : 'x'} = ${k.slice(1)}` });
+        const [x, y] = o.net < s.net ? [o, s] : [s, o];
+        const key = `${x.net}|${y.net}|${k}`;
+        const p = pairs.get(key) ?? pairs.set(key, { wires: new Set(), nets: [x, y], at: `${k[0] === 'h' ? 'y' : 'x'} = ${k.slice(1)}` }).get(key)!;
+        p.wires.add(o.wire).add(s.wire);
       }
       active.push(s);
     }
   }
-  const name = (key: string, wire: string) => (key.startsWith('n') ? netName(Number(key.slice(1))) : `wire ${wire}`);
+  const name = (s: Seg) => (s.net.startsWith('n') ? netName(Number(s.net.slice(1))) : `wire ${s.wire}`);
   let shown = 0;
   for (const p of pairs.values()) {
     if (shown++ >= MAX_OVERLAPS) break;
-    diags.push({ level: 'warn', msg: `two nets drawn on one line (${p.at}): ${name(p.nets[0], p.wires[0])} and ${name(p.nets[1], p.wires[1])}`, wires: p.wires });
+    diags.push({ level: 'warn', msg: `two nets drawn on one line (${p.at}): ${name(p.nets[0])} and ${name(p.nets[1])}`, wires: [...p.wires] });
   }
   if (pairs.size > MAX_OVERLAPS) diags.push({ level: 'warn', msg: `${pairs.size - MAX_OVERLAPS} more places where two nets are drawn on one line` });
 

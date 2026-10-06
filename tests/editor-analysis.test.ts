@@ -223,9 +223,11 @@ describe('lint', () => {
     });
     const r = lint(doc);
     const over = r.diags.filter((d) => /one line/.test(d.msg));
-    // wb runs along a's wire and along its branch (which itself lies on wa: same net, fine).
-    expect(over.map((d) => d.wires!.sort().join('+')).sort()).toEqual(['wa+wb', 'wa2+wb']);
-    expect(over[0].msg).toMatch(/y = 1/);
+    // wb runs along a's wire and along its branch (which itself lies on wa: same net, fine):
+    // one warning for the two nets on that line.
+    expect(over).toHaveLength(1);
+    expect(over[0].wires!.sort()).toEqual(['wa', 'wa2', 'wb']);
+    expect(over[0].msg).toBe('two nets drawn on one line (y = 1): a and b');
     // g2.b is open; the outputs g1.y and g2.y are not inputs.
     expect(r.open).toEqual([{ part: 'g2', port: 'b' }]);
     expect(r.diags.some((d) => /1 input not connected, reading X: g2\.b/.test(d.msg) && !!d.parts?.includes('g2'))).toBe(true);

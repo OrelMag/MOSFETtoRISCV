@@ -9,6 +9,7 @@ import { compileChip } from '../src/editor/compile';
 import { docFromDef } from '../src/editor/fromdef';
 import { wireGroups } from '../src/editor/geom';
 import { UserLibrary } from '../src/editor/library';
+import { lintChip } from '../src/editor/lint';
 import { type ChipDoc, type DefOf, polyline, SCHEMA, type Workspace } from '../src/editor/model';
 import { moveSel } from '../src/editor/ops';
 import { partDef } from '../src/editor/parts';
@@ -19,7 +20,9 @@ import { resolveComponent } from '../src/lib/resolve';
 import { netlistOf } from '../src/sim/types';
 import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
+import { flatten } from '../src/sim/flatten';
 import type { Vec } from '../src/sim/geometry';
+import { analyzeTiming } from '../src/sim/timing';
 import { hopPathData, type RoutedNet } from '../src/view/route';
 
 const time = (label: string, f: () => unknown, n = 5): number => {
@@ -100,3 +103,10 @@ const kn: RoutedNet[] = [];
 kg.forEach((ids, gi) => { for (const id of ids) { const w = ks.wires.find((x) => x.id === id)!; const p = polyline(ks, w, defOf); if (p) kn.push({ index: gi, width: 1, tags: [], paths: [p], dots: [], label: null, labelRoom: 0 }); } });
 time('hopPathData all (ks64)', () => hopPathData(kn));
 time('hopPathData only 3 groups (ks64)', () => hopPathData(kn, [], 0.45, new Set([0, 1, 2])));
+
+// Analysis on the big chips: lint after an edit, static timing on the CPU's flattening.
+const ksC = compile(ks);
+const ksPolys = new Map(ks.wires.flatMap((w) => { const p = polyline(ks, w, defOf); return p ? [[w.id, p] as const] : []; }));
+time('lintChip (ks64)', () => lintChip(ks, ksC, ksPolys));
+const cpuDesign = flatten(c.def, { mode: 'gate' });
+time('analyzeTiming (CPU)', () => analyzeTiming(cpuDesign), 3);
