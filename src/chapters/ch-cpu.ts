@@ -179,8 +179,8 @@ export const chSingleCycle: Chapter = {
         The panel shows the program, registers and memory, and checks every cycle against the golden model.</p>
         <p><strong>Slow</strong> runs the program at the speed you set, keeping the current instruction's hardware lit
         and logging each retired instruction in the trace. At the <em>gate</em> level each rising edge plays out one
-        NAND delay at a time: the new PC leaves its register, ripples through +4 and the adder, and reaches the
-        register file's inputs after the critical path, the delay that sets the clock period.</p>`,
+        NAND delay at a time: the new PC leaves its register, fetches the next instruction, which is decoded and
+        executed until the result waits at the register file's inputs. That longest ripple sets the clock period.</p>`,
       scene: () => cpuScene({ source: src('sum') }),
     },
     {
