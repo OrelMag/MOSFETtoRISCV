@@ -7,7 +7,7 @@
 // memory-mapped I/O, CSRs, exceptions and interrupts (one step = one clock cycle; a cycle in
 // which an interrupt is taken executes no instruction).
 
-import { bitsToF32, f32ToBits } from '../sim/fpref';
+import { F32, fpAddX, fpClass, fpCmpX, fpFromIntX, fpMinMaxX, fpMulX, fpToIntX, type FpResult } from '../sim/fpref';
 import { CSRS, decode, disasm, OPCODES } from './isa';
 
 export interface IssOptions {
@@ -83,6 +83,9 @@ export class ISS {
   readonly fext: boolean;
   /** Floating-point registers (raw float32 bits). */
   readonly f = new Uint32Array(32);
+  /** fcsr: accrued exception flags (NV DZ OF UF NX) and the dynamic rounding mode. */
+  fflags = 0;
+  frm = 0;
   private readonly imemWords: number;
 
   // machine-mode state
@@ -198,6 +201,9 @@ export class ISS {
       case CSRS.mip: return this.mip;
       case CSRS.mcycle: case CSRS.cycle: return this.mtime;
       case CSRS.mhartid: return 0;
+      case CSRS.fflags: return this.fext ? this.fflags : null;
+      case CSRS.frm: return this.fext ? this.frm : null;
+      case CSRS.fcsr: return this.fext ? (this.frm << 5) | this.fflags : null;
       default: return null;
     }
   }
@@ -212,6 +218,9 @@ export class ISS {
       case CSRS.mepc: this.mepc = (v & ~3) >>> 0; break;
       case CSRS.mcause: this.mcause = v; break;
       case CSRS.mtval: this.mtval = v; break;
+      case CSRS.fflags: this.fflags = v & 31; break;
+      case CSRS.frm: this.frm = v & 7; break;
+      case CSRS.fcsr: this.fflags = v & 31; this.frm = (v >>> 5) & 7; break;
       default: break; // read-only (misa, mip, mcycle, cycle, mhartid): writes ignored
     }
   }
@@ -262,22 +271,29 @@ export class ISS {
     if (this.system && (!d.spec || (isM && !this.m) || (isF && !this.fext))) trap = new Trap(CAUSE.ILLEGAL);
     else if (isF) {
       const fa = this.f[d.rs1], fb = this.f[d.rs2];
-      const A = bitsToF32(fa), B = bitsToF32(fb);
+      // rounding mode: the instruction's rm field, or frm when rm = 7 (dynamic)
+      const rm = d.funct3 === 7 ? this.frm : d.funct3;
+      const fr = (r: FpResult) => { this.fflags |= r.fl; return r.y >>> 0; };
       switch (d.name) {
         case 'flw': fWrite = this.load((a + d.imm) >>> 0, 2) >>> 0; break;
         case 'fsw': { const addr = (a + d.imm) >>> 0; this.store(addr, 2, fb); store = { addr, value: fb }; break; }
-        case 'fadd.s': fWrite = f32ToBits(Math.fround(A + B)); break;
-        case 'fsub.s': fWrite = f32ToBits(Math.fround(A - B)); break;
-        case 'fmul.s': fWrite = f32ToBits(Math.fround(A * B)); break;
+        case 'fadd.s': fWrite = fr(fpAddX(fa, fb, false, F32, rm)); break;
+        case 'fsub.s': fWrite = fr(fpAddX(fa, fb, true, F32, rm)); break;
+        case 'fmul.s': fWrite = fr(fpMulX(fa, fb, F32, rm)); break;
         case 'fsgnj.s': fWrite = ((fa & 0x7fffffff) | (fb & 0x80000000)) >>> 0; break;
         case 'fsgnjn.s': fWrite = ((fa & 0x7fffffff) | (~fb & 0x80000000)) >>> 0; break;
         case 'fsgnjx.s': fWrite = (fa ^ (fb & 0x80000000)) >>> 0; break;
-        case 'feq.s': write(A === B ? 1 : 0); break;
-        case 'flt.s': write(A < B ? 1 : 0); break;
-        case 'fle.s': write(A <= B ? 1 : 0); break;
+        case 'fmin.s': fWrite = fr(fpMinMaxX(fa, fb, false, F32)); break;
+        case 'fmax.s': fWrite = fr(fpMinMaxX(fa, fb, true, F32)); break;
+        case 'feq.s': write(fr(fpCmpX(fa, fb, 'eq', F32))); break;
+        case 'flt.s': write(fr(fpCmpX(fa, fb, 'lt', F32))); break;
+        case 'fle.s': write(fr(fpCmpX(fa, fb, 'le', F32))); break;
+        case 'fcvt.w.s': write(fr(fpToIntX(fa, true, F32, rm))); break;
+        case 'fcvt.wu.s': write(fr(fpToIntX(fa, false, F32, rm))); break;
         case 'fmv.x.w': write(fa); break;
-        case 'fcvt.s.w': fWrite = f32ToBits(Math.fround(a)); break;
-        case 'fcvt.s.wu': fWrite = f32ToBits(Math.fround(ua >>> 0)); break;
+        case 'fclass.s': write(fpClass(fa, F32)); break;
+        case 'fcvt.s.w': fWrite = fr(fpFromIntX(ua, true, F32, rm)); break;
+        case 'fcvt.s.wu': fWrite = fr(fpFromIntX(ua, false, F32, rm)); break;
         case 'fmv.w.x': fWrite = ua >>> 0; break;
         default: break;
       }
@@ -343,8 +359,20 @@ export class ISS {
       }
       case OPCODES.SYSTEM: {
         if (!this.system) {
-          // user-level programs on the multi-core: only csrr rd, mhartid
-          if (d.funct3 === 2 && ((word >>> 20) & 0xfff) === 0xf14 && d.rs1 === 0) write(this.hartid);
+          // user-level programs: csrr rd, mhartid (multi-core) and the F CSRs fflags, frm, fcsr
+          const csrA = (word >>> 20) & 0xfff;
+          if (d.funct3 === 2 && csrA === 0xf14 && d.rs1 === 0) write(this.hartid);
+          else if (d.funct3 & 3 && csrA >= 1 && csrA <= 3) {
+            const old = csrA === 1 ? this.fflags : csrA === 2 ? this.frm : (this.frm << 5) | this.fflags;
+            const src = d.funct3 & 4 ? d.rs1 : ua, op = d.funct3 & 3;
+            if (op === 1 || d.rs1 !== 0) {
+              const v = op === 1 ? src : op === 2 ? old | src : old & ~src;
+              if (csrA !== 2) this.fflags = v & 31;
+              if (csrA === 2) this.frm = v & 7;
+              if (csrA === 3) this.frm = (v >>> 5) & 7;
+            }
+            write(old);
+          }
           break;
         }
         if (d.name === 'ecall') trap = new Trap(CAUSE.ECALL);

@@ -1,7 +1,7 @@
 // A two-pass RV32I assembler: labels, ABI register names, the common pseudo-instructions and
 // .word. Errors are collected per line instead of thrown, so the editor can show them all.
 
-import { BY_NAME, CSRS, encB, encI, encJ, encR, encS, encU, fregNumber, OPCODES, regNumber } from './isa';
+import { BY_NAME, CSRS, encB, encI, encJ, encR, encS, encU, fregNumber, OPCODES, regNumber, RM_OPERANDS } from './isa';
 
 export interface AsmLine {
   addr: number;
@@ -177,7 +177,13 @@ function encode(st: Stmt, labels: Map<string, number>): number[] {
     const R = (role: 'f' | 'x' | undefined, a: string) => (role === 'f' ? freg(a) : reg(a));
     if (fspec.fmt === 'I') { need(2); const m = mem(args[1]); return [encI(fspec.opcode, freg(args[0]), 2, m.base, m.off)]; }
     if (fspec.fmt === 'S') { need(2); const m = mem(args[1]); return [encS(fspec.opcode, 2, m.base, freg(args[0]), m.off)]; }
-    const f3 = fp.rm ? 7 : fspec.funct3!; // rm = dyn: use frm (round to nearest even here)
+    const nOps = fp.rs2fixed !== undefined ? 2 : 3;
+    let f3 = fspec.funct3 ?? 7; // rm defaults to dyn: use frm
+    if (fp.rm && args.length === nOps + 1) {
+      const m = RM_OPERANDS.indexOf(args.pop()!.trim().toLowerCase());
+      if (m < 0 || !RM_OPERANDS[m]) throw new AsmError('rounding mode must be rne, rtz, rdn, rup, rmm or dyn');
+      f3 = m;
+    }
     if (fp.rs2fixed !== undefined) { need(2); return [encR(fspec.opcode, R(fp.rd, args[0]), f3, R(fp.rs1, args[1]), fp.rs2fixed, fspec.funct7!)]; }
     need(3);
     return [encR(fspec.opcode, R(fp.rd, args[0]), f3, R(fp.rs1, args[1]), R(fp.rs2, args[2]), fspec.funct7!)];
@@ -205,6 +211,17 @@ function encode(st: Stmt, labels: Map<string, number>): number[] {
     const f3 = csrOps[op];
     const src = f3 & 4 ? imm(args[2], 0, 31) : reg(args[2]);
     return [encI(OPCODES.SYSTEM, reg(args[0]), f3, src, csr(args[1]))];
+  }
+
+  // F control and status: frcsr / fscsr, frrm / fsrm(i), frflags / fsflags(i)
+  const fcsrOps: Record<string, number> = { frcsr: 3, fscsr: 3, frrm: 2, fsrm: 2, fsrmi: 2, frflags: 1, fsflags: 1, fsflagsi: 1 };
+  if (op in fcsrOps) {
+    const a = fcsrOps[op];
+    if (op.startsWith('fr')) { need(1); return [encI(OPCODES.SYSTEM, reg(args[0]), 2, 0, a)]; }
+    const rd = args.length === 2 ? reg(args[0]) : 0;
+    if (args.length !== 1 && args.length !== 2) throw new AsmError(`${op} expects 1 or 2 operands`);
+    const src = args[args.length - 1];
+    return op.endsWith('i') ? [encI(OPCODES.SYSTEM, rd, 5, imm(src, 0, 31), a)] : [encI(OPCODES.SYSTEM, rd, 1, reg(src), a)];
   }
 
   // Pseudo-instructions first.

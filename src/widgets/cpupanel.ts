@@ -13,7 +13,7 @@ import { M_PROGRAMS } from '../riscv/mprograms';
 import { CACHE_CPU_PROGRAMS } from '../riscv/cprograms';
 import { F_PROGRAMS } from '../riscv/fprograms';
 import { FABI } from '../riscv/isa';
-import { bitsToF32 } from '../sim/fpref';
+import { bitsToF32, flagNames, RM_NAMES } from '../sim/fpref';
 import { CAUSE } from '../riscv/iss';
 import { pack } from '../sim/values';
 import { h } from '../ui/dom';
@@ -166,6 +166,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
           const f = cpuState(stage.sim).f;
           const fd = f ? f.findIndex((v, i) => v !== iss.f[i]) : -1;
           if (fd >= 0 && diff < 0) mismatch = `${FABI[fd]} differs: hardware ${hex(f![fd])}, model ${hex(iss.f[fd])}`;
+          const fc = cpuState(stage.sim).fcsr;
+          if (fc !== undefined && fc !== ((iss.frm << 5) | iss.fflags) && diff < 0 && fd < 0) mismatch = `fcsr differs: hardware ${hex(fc, 2)}, model ${hex((iss.frm << 5) | iss.fflags, 2)}`;
           if (diff >= 0) mismatch = `${ABI[diff]} differs after "${disasm(iss.imem[(iss.pc >>> 2) % 64] ?? 0x13)}": hardware ${hex(x[diff])}, model ${hex(iss.x[diff])}`;
         }
       },
@@ -213,7 +215,10 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         h('span', { class: 'n' }, `${ABI[i]}`), h('span', { class: 'v' }, hex(v)))));
       if (st.f) {
         const nz = st.f.map((v, i) => [i, v] as const).filter(([, v]) => v !== 0);
-        fregs.replaceChildren(...(nz.length ? nz.map(([i, v]) => h('div', { class: 'm' },
+        const fc = st.fcsr ?? 0;
+        const fcsrRow = h('div', { class: 'm', title: 'fcsr: the dynamic rounding mode frm and the accrued exception flags (sticky)' },
+          h('span', { class: 'n' }, 'fcsr'), h('span', { class: 'v' }, `frm ${RM_NAMES[fc >> 5] ?? fc >> 5}`), h('span', { class: 'd' }, `flags ${flagNames(fc & 31)}`));
+        fregs.replaceChildren(fcsrRow, ...(nz.length ? nz.map(([i, v]) => h('div', { class: 'm' },
           h('span', { class: 'n' }, FABI[i]), h('span', { class: 'v' }, hex(v)), h('span', { class: 'd' }, String(+bitsToF32(v).toPrecision(8))))) : [h('div', { class: 'm z' }, 'all +0.0')]));
       }
       if (opts.dcache) {
