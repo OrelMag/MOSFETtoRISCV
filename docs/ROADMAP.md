@@ -168,12 +168,19 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Clock distribution (H-tree vs spine, skew); floorplan of the dual-core from its NAND counts; wafer / yield / cost
 - ⏳ Full-chip layout of the final CPU (see open questions); Yosys / OpenROAD / sky130 export
 
-### Cross-cutting features ⏳
-- Waveform viewer for any probed nets (also VCD export)
+### Cross-cutting features 🚧
+- ✅ Probe mode + logic-analyzer Timing panel (exact transitions in gate delays, clock edges,
+  A/B cursors, VCD export); fixed-period clock that can be overclocked (late edges marked)
+- ✅ Wire palettes: default, colour-blind safe (Okabe–Ito), Logic Sim, high contrast, print
+- ✅ Hops at wire crossings; bit ranges on splitter / merger taps; click a net label to pair it
+- ✅ Slow motion draws each change as a front travelling along its wires
+- ✅ Download any component's hierarchy as SystemVerilog (exact structure or synthesizable),
+  with a self-checking testbench; verified through Yosys
+- ✅ Click a program line: the hardware it uses (and its pipeline stage), or its word in the ROM
 - Glossary with hover definitions; search / command palette (`Ctrl+K`)
 - Progress tracking and unlocks (local storage); "reset progress"
-- Keyboard navigation; reduced-motion; colour-blind-safe wire palette option
-- Export schematic as SVG/PNG; download Verilog for any component
+- Keyboard navigation; reduced-motion (the signal fronts already respect it)
+- Export schematic as SVG/PNG
 - VHDL view of every component
 - Performance budget: 60 fps rendering of ≤ 5 000 visible elements; ≥ 100 CPU cycles/s at gate level
 - i18n-ready strings
