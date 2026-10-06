@@ -2,7 +2,7 @@
 // what does it look like in Verilog.
 
 import { evalOnce, forEachInput, inputBits, simulate } from '../sim/harness';
-import { logicDepth, stats } from '../sim/stats';
+import { hasFeedback, logicDepth, stats } from '../sim/stats';
 import { type Bit, type Category, type ComponentDef, inPorts, netlistOf, outPorts } from '../sim/types';
 import { formatBits, formatNumber, pack, type Radix } from '../sim/values';
 import { exportHdl, testableComb, type HdlFlavor } from '../sim/svexport';
@@ -123,7 +123,7 @@ export class Inspector {
       this.body.append(h('p', { class: 'empty' }, `A switch: ${d.prim === 'nmos' ? 'gate = 1 → conducts, gate = 0 → open' : 'gate = 0 → conducts, gate = 1 → open'}.`));
       return;
     }
-    if (logicDepthSafe(d) === null && netlistOf(d)) {
+    if (netlistOf(d) && hasFeedbackSafe(d)) {
       this.body.append(h('p', { class: 'empty' }, 'This component has feedback, so its outputs depend on its history, not only on its inputs. A truth table cannot describe it. Open the Timing panel to see it over time.'));
       return;
     }
@@ -200,6 +200,14 @@ function logicDepthSafe(d: ComponentDef): number | null {
     return logicDepth(d);
   } catch {
     return null;
+  }
+}
+
+function hasFeedbackSafe(d: ComponentDef): boolean {
+  try {
+    return hasFeedback(d);
+  } catch {
+    return true;
   }
 }
 

@@ -2,6 +2,7 @@
 // logic depth (longest input → output path in NAND delays) for combinational parts.
 
 import { flatten } from './flatten';
+import { needsSwitchLevel } from './harness';
 import { type ComponentDef, netlistOf } from './types';
 
 export interface Stats {
@@ -84,5 +85,52 @@ export function logicDepth(def: ComponentDef): number | null {
     result = null;
   }
   depthCache.set(def, result);
+  return result;
+}
+
+const fbCache = new WeakMap<ComponentDef, boolean>();
+
+/**
+ * Does the component remember (outputs depend on history)? At gate level: a cycle. At switch
+ * level logicDepth does not apply (gate-mode flattening rejects MOSFETs), so: a capacitive net,
+ * or a cycle between channel-connected groups (nets joined by transistor channels, cut at rails
+ * and inputs), where a group feeds a gate in the next one. Cross-coupled inverters form such a cycle.
+ */
+export function hasFeedback(def: ComponentDef): boolean {
+  if (!needsSwitchLevel(def)) return logicDepth(def) === null;
+  if (def.prim) return false;
+  const hit = fbCache.get(def);
+  if (hit !== undefined) return hit;
+  const d = flatten(def, { mode: 'switch' });
+  let result = d.caps.size > 0;
+  if (!result) {
+    const source = new Uint8Array(d.netCount);
+    for (const l of d.leaves) if (l.kind === 'vdd' || l.kind === 'gnd') source[l.terminals![0]] = 1;
+    for (const p of def.ports) if (p.dir === 'in') for (const n of d.root.ports[p.name]) source[n] = 1;
+    const parent = Int32Array.from({ length: d.netCount }, (_, i) => i);
+    const find = (x: number): number => (parent[x] === x ? x : (parent[x] = find(parent[x])));
+    const fets = d.leaves.filter((l) => l.kind === 'nmos' || l.kind === 'pmos').map((l) => l.terminals!);
+    for (const [, a, b] of fets) if (!source[a] && !source[b]) parent[find(a)] = find(b);
+    const edges = new Map<number, Set<number>>();
+    const edge = (from: number, to: number) => {
+      if (source[from] || source[to]) return;
+      const f = find(from);
+      if (!edges.has(f)) edges.set(f, new Set());
+      edges.get(f)!.add(find(to));
+    };
+    for (const [g, a, b] of fets) edge(g, source[a] ? b : a);
+    // behavioural leaves inside a switch-level design: every input may affect every output
+    for (const l of d.leaves) if (!l.terminals) for (const i of l.inputs.flat()) for (const o of l.outputs.flat()) edge(i, o);
+    const state = new Uint8Array(d.netCount); // 0 new, 1 visiting, 2 done
+    const cyclic = (g: number): boolean => {
+      if (state[g]) return state[g] === 1;
+      state[g] = 1;
+      for (const h of edges.get(g) ?? []) if (cyclic(h)) return true;
+      state[g] = 2;
+      return false;
+    };
+    result = [...edges.keys()].some(cyclic);
+  }
+  fbCache.set(def, result);
   return result;
 }
