@@ -320,7 +320,7 @@ export class PropsPanel {
       h('div', { class: 'sb-badges' },
         h('span', { class: `sb-level ${c?.mode ?? 'gate'}` }, c?.mode === 'switch' ? 'switch level' : 'gate level'),
         c?.mode === 'switch' && c.derived ? h('span', { class: `sb-derived${c.derived.ok ? ' ok' : ''}`, title: c.derived.ok ? 'Its truth table is used as a gate-level model, so it can be a brick of gate-level chips' : c.derived.reason },
-          c.derived.ok ? 'usable as a gate-level brick' : `switch level only: ${c.derived.reason}`) : null),
+          c.derived.ok ? 'usable as a gate-level brick' : `switch level only: ${c.derived.reason.replace(/: switch level only$/, '')}`) : null),
       c?.mode === 'switch' && c.derived?.ok ? h('p', { class: 'sb-sum' }, 'Combinational: its truth table, derived from its transistors, models it when a gate-level chip places it.') : null,
       h('div', { class: 'sb-ports' }, h('b', null, 'Ports, in order'),
         ports.length ? h('ol', null, ports.map((p) => h('li', null, h('span', { class: `sb-dir ${p.dir}` }, p.dir), ` ${p.name}`, p.width > 1 ? h('small', null, ` [${p.width - 1}:0]`) : null, p.clock ? h('small', null, ' clock') : null)))
