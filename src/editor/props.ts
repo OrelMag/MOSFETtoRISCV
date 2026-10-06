@@ -206,11 +206,9 @@ export class PropsPanel {
         this.row('Width', this.num(ref.width ?? 1, 1, 64, (w) => setR({ display: ref.display, width: w }))));
     } else if ('ram' in ref) {
       const { k, w } = ref.ram;
-      out.append(this.row('Words', this.select(k, Array.from({ length: MAX_RAM_K }, (_, i): [number, string] => [i + 1, String(2 ** (i + 1))]), (v) => setR({ ram: { k: v, w } }))),
-        this.row('Word width', this.select(w, [1, 2, 4, 8, 16, 32].map((v): [number, string] => [v, `${v} bits`]), (v) => setR({ ram: { k, w: v } }))));
-    } else if ('rom' in ref) {
-      out.append(h('p', { class: 'sb-sum' }, `ROM: ${2 ** ref.rom.k} words of ${ref.rom.w} bits.`));
-    }
+      out.append(this.row('Words', this.select(k, Array.from({ length: MAX_RAM_K }, (_, i): [number, string] => [i + 1, String(2 ** (i + 1))]), (v) => setR({ ram: { ...ref.ram, k: v } }))),
+        this.row('Word width', this.select(w, [1, 2, 4, 8, 16, 32].map((v): [number, string] => [v, `${v} bits`]), (v) => setR({ ram: { ...ref.ram, w: v } }))));
+    } // a ROM's size, addressing and program: memui.ts's section
     if (def) out.append(costLine(def));
     out.append(h('div', { class: 'sb-btns' },
       this.btn('Flip', 'Mirror left–right (F)', () => ed.edit((d) => flipParts(d, [p.id], ed.defOf))),

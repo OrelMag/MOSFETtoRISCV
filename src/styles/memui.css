@@ -1,0 +1,53 @@
+/* Sandbox memories (editor/memui.ts): ROM listing and program editor, RAM contents, Examples
+   menu. Only existing tokens, so both themes follow. */
+
+.sb-sec-props h3 small { font-weight: 500; color: var(--muted); font-size: 12px; }
+
+/* ROM properties */
+.sb-rom .sb-btns .btn { gap: 6px; }
+.sb-rom-err { font: 12px var(--font-mono); color: var(--wx); margin: 6px 0; display: grid; gap: 2px; }
+.sb-rom-err b { font: 600 12.5px var(--font-ui); }
+.sb-rom-now { font-size: 12.5px; color: var(--text-2); margin: 10px 0 6px; min-height: 1.4em; }
+.sb-rom-now code { font: 12px var(--font-mono); color: var(--text); white-space: pre; }
+.sb-rom-list { max-height: 240px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); position: relative; }
+.sb-rom-list .asm-table td { padding: 2px 6px; }
+.sb-rom-list .asm-table td.d { color: var(--text); width: 100%; }
+.sb-rom-list .asm-table tr { cursor: pointer; }
+.sb-rom-list .asm-table tr:hover td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.sb-rom-list .asm-table tr.cur td { background: color-mix(in srgb, var(--bus) 22%, transparent); color: var(--text); }
+.sb-rom-list .asm-table tr.cur td.a { box-shadow: inset 3px 0 0 var(--bus); }
+.sb-rom-list .sb-sum { margin: 8px; }
+
+/* The program editor dialog */
+.sb-rom-dlg .panel { width: min(1080px, 96vw); max-height: 92vh; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.sb-rom-dlg h3 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 15px; }
+.sb-rom-dlg h3 small { font: 500 12px var(--font-ui); color: var(--muted); }
+.sb-rom-dlg-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; min-height: 0; }
+.sb-rom-dlg-src { min-width: 0; }
+.sb-rom-dlg-src .code-edit { height: min(calc(24 * var(--ce-lh) + 2 * var(--ce-pad) + 2px), 64vh); }
+.sb-rom-dlg-list { min-width: 0; display: flex; }
+.sb-rom-dlg-list .sb-rom-list { flex: 1; max-height: min(450px, 64vh); }
+.sb-rom-dlg-foot { display: flex; align-items: center; gap: 8px; }
+.sb-rom-dlg-status { flex: 1; min-width: 0; font: 12.5px var(--font-mono); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-rom-dlg-status.err { color: var(--wx); }
+@media (max-width: 760px) {
+  .sb-rom-dlg-body { grid-template-columns: minmax(0, 1fr); }
+  .sb-rom-dlg-list .sb-rom-list { max-height: 30vh; }
+}
+
+/* RAM contents */
+.sb-ram-grid { max-height: 300px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 4px 0; background: var(--surface-2); font-size: 11.5px; }
+.sb-ram-grid .row { gap: 6px; padding: 1px 6px; border-radius: 0; }
+.sb-ram-grid .addr { width: 34px; }
+.sb-ram-grid .cells { gap: 1px; }
+.sb-ram-grid .cell { width: 8px; height: 11px; border-radius: 2px; }
+.sb-ram-grid .hex { margin-left: auto; color: var(--text); }
+.sb-ram textarea.sb-ram-init { width: 100%; font: 12px var(--font-mono); resize: vertical; }
+
+/* Examples menu */
+.sb-menu { position: fixed; z-index: 55; display: grid; gap: 2px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); }
+.sb-menu-head { font-size: 11.5px; color: var(--muted); padding: 2px 8px 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.sb-menu-item { display: grid; gap: 2px; text-align: left; padding: 7px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text); cursor: pointer; font: inherit; }
+.sb-menu-item b { font-size: 13.5px; font-weight: 600; }
+.sb-menu-item small { font-size: 12px; color: var(--text-2); }
+.sb-menu-item:hover, .sb-menu-item:focus-visible { background: var(--surface-2); outline: none; }

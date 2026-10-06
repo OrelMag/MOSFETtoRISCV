@@ -4,6 +4,7 @@
 
 import '../../styles/editor.css';
 import { Editor } from '../../editor/editor';
+import '../../editor/memui';
 import type { Page } from './chapter';
 
 export class SandboxPage implements Page {
