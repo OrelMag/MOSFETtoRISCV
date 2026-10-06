@@ -11,6 +11,7 @@ import { ISS } from '../riscv/iss';
 import { PROGRAMS } from '../riscv/programs';
 import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';
 import { M_PROGRAMS } from '../riscv/mprograms';
+import { PIPE_M_PROGRAMS } from '../riscv/pmprograms';
 import { CACHE_CPU_PROGRAMS } from '../riscv/cprograms';
 import { F_PROGRAMS } from '../riscv/fprograms';
 import { FABI } from '../riscv/isa';
@@ -62,7 +63,7 @@ export function cpuScene(opts: CpuSceneOptions): Scene {
     root: opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder })
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
-      : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined })
+      : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m })
         : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
@@ -106,7 +107,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     let loads = 0, misses = 0, prevStall = false, stallRun = 0;
     const wb = opts.dcache === 'wb' || opts.dcache === 'wb2';
     const sel = h('select', { 'aria-label': 'program' }) as HTMLSelectElement;
-    const progs = opts.fpu ? [...F_PROGRAMS, ...PROGRAMS] : opts.dcache ? [...CACHE_CPU_PROGRAMS, ...PROGRAMS] : opts.m ? [...M_PROGRAMS, ...SYSTEM_PROGRAMS, ...PROGRAMS] : opts.system ? [...SYSTEM_PROGRAMS, ...PROGRAMS] : PROGRAMS;
+    const progs = opts.fpu ? [...F_PROGRAMS, ...PROGRAMS] : opts.dcache ? [...CACHE_CPU_PROGRAMS, ...PROGRAMS] : opts.pipeline && opts.m ? [...PIPE_M_PROGRAMS, ...PROGRAMS] : opts.m ? [...M_PROGRAMS, ...SYSTEM_PROGRAMS, ...PROGRAMS] : opts.system ? [...SYSTEM_PROGRAMS, ...PROGRAMS] : PROGRAMS;
     for (const p of progs) sel.append(h('option', { value: p.id }, p.name));
     sel.append(h('option', { value: '__custom' }, 'My program'));
     const match = progs.find((p) => p.source === opts.source);
@@ -262,7 +263,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       ...(opts.fpu ? [h('div', { class: 'cpu-sec' }, 'Floating-point registers (non-zero)'), fregs] : []),
       ...(opts.dcache ? [h('div', { class: 'cpu-sec' }, opts.dcache === 'wb2' ? 'Data cache (2 sets × 2 ways × 4 words, write-back)' : opts.dcache === 'wb' ? 'Data cache (4 lines × 4 words, write-back)' : 'Data cache (4 lines × 4 words)'), dlines] : []),
       h('div', { class: 'cpu-sec' }, wb ? 'Memory as the program sees it (dirty lines included)' : opts.dcache ? 'Main memory (non-zero words)' : 'Data memory (non-zero words)'), mem);
-    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.pipeline ? 'RV32I pipeline' : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.pipeline ? (opts.m ? 'RV32IM pipeline' : 'RV32I pipeline') : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
     const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right' }, title, body);
     title.addEventListener('click', () => {
       el.classList.toggle('collapsed');
@@ -335,7 +336,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       const parts: HTMLElement[] = [
         h('span', null, `cycle ${stage.cycles}`),
         h('span', null, opts.pipeline || opts.m || opts.fpu || opts.multicycle ? `retired ${iss.steps}${iss.steps ? ` · CPI ${(stage.cycles / iss.steps).toFixed(2)}` : ''}` : `PC ${hex(st.pc, 4)}`),
-        ...(opts.m && !retiring(sim) ? [h('span', { class: 'warn', title: 'The iterative divider is working; the PC and register writes are stalled' }, 'dividing… stalled')] : []),
+        ...(opts.m && (opts.pipeline ? divStall(sim) : !retiring(sim)) ? [h('span', { class: 'warn', title: 'The iterative divider is working; the PC and register writes are stalled' }, 'dividing… stalled')] : []),
         ...(opts.fpu && !opts.pipeline && !retiring(sim) ? [h('span', { class: 'warn', title: 'An iterative unit (fdiv.s / fsqrt.s) is working; the PC and register writes are stalled' }, 'fdiv / fsqrt… stalled')] : []),
         ...(opts.dcache ? [h('span', null, `${wb ? 'accesses' : 'loads'} ${loads} · misses ${misses}${loads ? ` · hit rate ${(100 * (loads - misses) / loads).toFixed(0)} %` : ''}`)] : []),
         ...((opts.dcache || opts.icache) && cacheStall(sim) ? [h('span', { class: 'warn', title: 'A cache missed: the PC and register write wait while the line is moved' }, `miss: waiting for memory (cycle ${stallRun + 1})`)] : []),
@@ -552,7 +553,7 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
       return {
         cycle: stage.cycles, slots,
         // with a data cache, a miss freezes every stage (go = 0) and the flushes are gated (gFl1)
-        stall: six ? v('go', 'y') === 0 : v('hz', 'enFD') === 0 || (frozenPipe && v('go', 'y') === 0),
+        stall: six ? v('go', 'y') === 0 : v('hz', 'enFD') === 0 || (frozenPipe && v('go', 'y') === 0) || (root.children.has('dive') && v('dive', 'stall') === 1),
         flush: six ? v('hz', 'taken') === 1 : frozenPipe ? v('gFl1', 'y') === 1 : v('hz', 'flushFD') === 1,
         // Balanced design: the E-stage selects travel in ID/EX (the hazard unit's outputs are for D).
         fwdA: root.children.get('DE')!.ports.fwdAE ? v('DE', 'fwdAE') : v('hz', 'forwardA'),
@@ -703,6 +704,12 @@ export function controllerPanel(control: 'fsm' | 'micro', compact = false): Scen
 }
 
 /** Is a cache (data or instruction) holding the processor this cycle? */
+/** The pipelined RV32IM CPU: the divider holds the front of the pipeline. */
+function divStall(sim: Sim): boolean {
+  const p = sim.design.root.children?.get('dive')?.ports.stall;
+  return !!p && sim.getBits(p)[0] === 1;
+}
+
 function cacheStall(sim: Sim): boolean {
   const root = sim.design.root;
   const p = root.children?.get('dm')?.ports.stall ?? root.children?.get('imem')?.ports.stall;

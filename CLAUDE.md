@@ -100,7 +100,8 @@ src/lib/       the component library (registered in `registry` via define())
   wide.ts        bitwise(op, n), orN(n) (shared by alu.ts and fastadd.ts to avoid an import cycle)
   pipeline.ts    equal, nonZero, clearableRegister, pipeline registers (fields on fixed rows),
                  hazardUnit(lookAhead), BRANCH_CMP, BTB (16 × 62-bit), SAT_COUNTER, MISPREDICT,
-                 pipelinedCpu(program, { adder, balanced, predictor, dcache }) (a cache miss in M freezes every stage)
+                 pipelinedCpu(program, { adder, balanced, predictor, dcache, m }) (a cache miss in M freezes every stage;
+                 m: multiply split E/M, behaving like a load for hazards; divide stalls F/D/E)
   lsu.ts         STORE_ALIGN, LOAD_EXTRACT, bankedMemory(k) (byte / halfword access)
   system.ts      SYS_DECODE (illegal-instruction detection), CSR_UNIT, TRAP_UNIT, IO_UNIT,
                  systemCpu(program, { m }): the complete RV32I(M) + Zicsr + M-mode traps / interrupts + MMIO;
@@ -125,6 +126,7 @@ src/lib/       the component library (registered in `registry` via define())
                  SRT_SELECT, srtStep, srtNorm, srtFinish, srtDivider(n) (radix-2 SRT, carry-save remainder)
   srt4.ts        srt4Thresholds() (computed), SRT4_SELECT (carry-save comparisons), srt4Term, srt4Step, srt4Finish,
                  srt4Divider(n) (radix 4, n/2 + 3 cycles); iterCtrl(n) handles any step count
+  pipem.ts       MUL_E / MUL_M (Booth tree in E, 64-bit Kogge–Stone in M), DIV_E (radix-4 SRT, stall until done)
   multiply.ts    seqMul(n) (shift and add), boothRow / boothPP / boothReduce / boothTree / boothMul(n) (radix-4 Booth,
                  sign-constant trick), pipeMul(n) (3-stage pipelined Booth)
   adders.ts      carrySelect(n, k), carrySkip(n, k), BCD_DIGIT, bcdAdder(d)
@@ -132,7 +134,7 @@ src/lib/       the component library (registered in `registry` via define())
                  outW) (Wallace + KS), MUL32, BOOTH_ENC, divStep, arrayDiv, seqDivider(n), condNegate, MDU
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
                instructions), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
-               interrupts; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / cprograms.ts / fprograms.ts (samples), multi.ts (MultiISS: N harts, shared memory, same arbitration), mcprograms.ts, cosim.ts (CPU state;
+               interrupts; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts (samples), multi.ts (MultiISS: N harts, shared memory, same arbitration), mcprograms.ts, cosim.ts (CPU state;
                `retiring()` = step the ISS this cycle?)
 src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over crossings),
                inspector (info, truth table, Verilog + download), analyzer.ts (the Timing panel:

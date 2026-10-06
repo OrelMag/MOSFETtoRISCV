@@ -176,7 +176,8 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   measured against Baugh–Wooley; 3-stage pipelined Booth multiplier (latency 4, one product per cycle)
 - ✅ Radix-4 SRT divider: digits −2…+2, selection thresholds computed from the containment bounds and checked
   exhaustively, carry-save comparisons; n/2 + 3 cycles, 21 % faster than radix 2 at 32 bits
-- ⏳ Pipelined multiplier in the pipelined CPU
+- ✅ M extension in the pipelined CPU (chapter 20): multiplier split over E / M (a multiply is a load for hazards), radix-4 SRT
+  divide stalling the front for 18 cycles; +45 % NANDs, period 93 → 93 (fast adders), 59 → 79 (balanced: divider sign fix, Booth tree)
 - ⏳ Passing the official `riscv-tests` / architecture tests in the browser (stretch)
 
 ### Phase 8 — Memory hierarchy 🚧

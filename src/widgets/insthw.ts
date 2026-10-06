@@ -23,7 +23,8 @@ export function instrUse(word: number): InstrUse {
   const u = (extra: string[], path: string): InstrUse => ({ units: [...FETCH, ...extra], path });
   switch (op) {
     case OPCODES.OP:
-      if (funct7 === 1) return u(['rf', 'md', 'mres', 'res'], 'rs1, rs2 → multiply / divide unit → result mux → rd');
+      // pipelined RV32IM: a multiply is split across E (mule) and M (mulm); a divide stays in E (dive)
+      if (funct7 === 1) return u(['rf', 'md', 'mres', 'res', ...((word >>> 14) & 1 ? ['dive', 'mdE'] : ['mule', 'msM', 'mcM', 'mulm', 'rdm'])], 'rs1, rs2 → multiply / divide unit → result mux → rd');
       return u(['rf', 'srcA', 'srcB', 'alu', 'res'], 'rs1, rs2 → ALU → result mux → rd');
     case OPCODES.OPIMM: return u(['rf', 'imm', 'srcA', 'srcB', 'alu', 'res'], 'rs1, immediate → ALU → result mux → rd');
     case OPCODES.LOAD: return u([...ADDR, 'dm', 'ld', 'ldsel', 'res'], 'rs1 + immediate (ALU) → data memory → load extract → result mux → rd');
@@ -46,8 +47,8 @@ export function instrUse(word: number): InstrUse {
 export const STAGE_UNITS: Record<'F' | 'D' | 'E' | 'M' | 'W', string[]> = {
   F: ['pc', 'pcmux', 'imem', 'plus4', 'btb', 'fsel', 'corr', 'mis', 'mspc', 'vF', 'one'],
   D: ['FD', 'si', 'rf', 'ctl', 'imm', 'hz', 'byA', 'byB'],
-  E: ['DE', 'fwdA', 'fwdB', 'srcA', 'srcB', 'alu', 'target', 'clr0', 'clr0E', 'bcmp', 'jtgt', 'npc'],
-  M: ['EM', 'dm', 'fwdM'],
+  E: ['DE', 'fwdA', 'fwdB', 'srcA', 'srcB', 'alu', 'target', 'clr0', 'clr0E', 'bcmp', 'jtgt', 'npc', 'mule', 'dive', 'mdE'],
+  M: ['EM', 'dm', 'fwdM', 'msM', 'mcM', 'mulm', 'rdm'],
   W: ['MW', 'res', 'rf'],
 };
 
