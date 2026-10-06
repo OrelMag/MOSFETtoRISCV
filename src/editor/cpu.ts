@@ -281,6 +281,27 @@ export function romProgram(doc: ChipDoc, rom: string): { words: number[]; k: num
   return img.error ? null : { words: img.words, k: p.ref.rom.k };
 }
 
+/**
+ * Where each in-flight instruction of a pipelined CPU is (the site's pipeline: pipeline registers
+ * FD, DE, EM, (MX, XW |) MW with pc<stage> / valid<stage> ports); null for any other CPU.
+ * F is the PC being fetched.
+ */
+export function pipelineSlots(v: CpuSimView, doc: ChipDoc, d: CpuDesc): { stage: string; pc: number }[] | null {
+  const sim = v.sim;
+  const kids = sim?.design.root.children;
+  if (!sim || !kids || !d.pipeline || !kids.has('FD') || !kids.has('DE') || !kids.has('EM')) return null;
+  const val = (inst: string, port: string) => {
+    const n = kids.get(inst)?.ports[port];
+    return n ? pack(sim.getBits(n)) : -1;
+  };
+  const regs: [string, string][] = [['D', 'FD'], ['E', 'DE'], ['M', 'EM'], ...(kids.has('MX') ? [['X', 'MX'], ['W', 'XW']] as [string, string][] : [['W', 'MW']] as [string, string][])];
+  const out: { stage: string; pc: number }[] = [];
+  const f = d.pc ? refValue(v, doc, d.pc) : null;
+  if (f !== null && f >= 0) out.push({ stage: 'F', pc: f });
+  for (const [stage, inst] of regs) if (val(inst, `valid${stage}`) === 1 && val(inst, `pc${stage}`) >= 0) out.push({ stage, pc: val(inst, `pc${stage}`) });
+  return out;
+}
+
 // ---- lock-step -------------------------------------------------------------------------------
 
 export interface Mismatch {
@@ -328,7 +349,10 @@ export class CpuMonitor {
   seq = 0;
   /** Why there is no golden model (no ROM, a ROM program that does not build). */
   problem: string | null = null;
+  /** The program the ISS runs (null: none). */
+  prog: { words: number[]; k: number } | null = null;
   private progKey = '';
+  private lastDoc: ChipDoc | null = null;
   private resets = -1;
   private willRetire = false;
   private hook = { before: () => this.before(), after: () => this.after() };
@@ -346,8 +370,11 @@ export class CpuMonitor {
   /** Re-read the description (the document or the build changed); restart on a reset or a new program. Returns true when the program changed. */
   sync(): boolean {
     const doc = this.doc();
+    if (doc === this.lastDoc && this.es.resets === this.resets) return false;
+    this.lastDoc = doc;
     this.desc = resolveCpu(doc);
     const prog = this.desc ? romProgram(doc, this.desc.rom) : null;
+    this.prog = prog;
     const key = this.desc ? JSON.stringify([prog?.words ?? null, prog?.k, this.desc.iss, this.desc.dmem, this.desc.regs]) : '';
     const changed = key !== this.progKey;
     if (changed || this.es.resets !== this.resets) {
@@ -408,6 +435,13 @@ export class CpuMonitor {
     const iss = this.iss, d = this.desc;
     if (!this.willRetire || !iss || !d || iss.halted) return;
     this.willRetire = false;
+    if (!d.regs) {
+      // Nothing to compare with (a datapath being built): count, but do not let the model run
+      // its own course (it takes branches the hardware may not have yet).
+      this.retired++;
+      this.seq++;
+      return;
+    }
     const info = iss.step();
     this.retired++;
     this.seq++;
@@ -436,7 +470,7 @@ export class CpuMonitor {
 
   /** Run until the program halts (the ISS says so), a mismatch, `cap` cycles in all, or the time budget. */
   runToHalt(budgetMs = 12, cap = 50000): number {
-    if (!this.iss) return 0;
+    if (!this.checking) return 0;
     const left = cap - this.es.cycles;
     if (left <= 0) return 0;
     return this.es.runCycles(left, () => this.done, budgetMs);
@@ -445,9 +479,8 @@ export class CpuMonitor {
   /** Clock until the next instruction retires (at most `cap` cycles). */
   stepInstr(cap = 400): number {
     const n0 = this.retired;
-    const noIss = !this.iss || !this.synced;
-    if (noIss) return this.es.runCycles(1);
-    return this.es.runCycles(cap, () => this.retired > n0 || !!this.iss?.halted);
+    if (!this.iss || !this.synced) return this.es.runCycles(1);
+    return this.es.runCycles(cap, () => this.retired > n0 || (!!this.iss?.halted && !!this.desc?.regs));
   }
 
   /** Nothing more to run: halted, or a mismatch. */
@@ -457,8 +490,7 @@ export class CpuMonitor {
 
   /** The instruction at a byte address of the program. */
   wordAt(pc: number): number | null {
-    const doc = this.doc();
-    const prog = this.desc ? romProgram(doc, this.desc.rom) : null;
+    const prog = this.prog;
     if (!prog || pc < 0) return null;
     return prog.words[(pc >>> 2) % 2 ** prog.k] ?? 0x13;
   }
