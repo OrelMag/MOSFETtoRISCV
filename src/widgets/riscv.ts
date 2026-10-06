@@ -1,41 +1,14 @@
 // RISC-V explainers: the instruction-format explorer and the assembler workspace.
 
 import { assemble } from '../riscv/asm';
-import { ABI, decode, disasm, FIELDS, type Fmt } from '../riscv/isa';
+import { ABI, decode, disasm, type Fmt } from '../riscv/isa';
+import { formatStrip, instrBreakdown } from './instrfields';
 import { ISS } from '../riscv/iss';
 import { PROGRAMS } from '../riscv/programs';
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
 
 const hex = (v: number, d = 8) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(d, '0');
-
-function fieldClass(name: string): string {
-  if (name === 'opcode') return 'f-op';
-  if (name === 'rd') return 'f-rd';
-  if (name.startsWith('rs')) return 'f-rs';
-  if (name.startsWith('funct')) return 'f-fn';
-  return 'f-imm';
-}
-
-function fieldValue(name: string, v: number): string {
-  if (name === 'rd' || name.startsWith('rs')) return `x${v} (${ABI[v]})`;
-  return String(v);
-}
-
-/** The bit-field strip for one instruction word. */
-export function fieldStrip(word: number, fmt: Fmt): HTMLElement {
-  const strip = h('div', { class: 'fields' });
-  for (const f of FIELDS[fmt]) {
-    const width = f.hi - f.lo + 1;
-    const v = Math.floor((word >>> 0) / 2 ** f.lo) % 2 ** width;
-    const el = h('div', { class: fieldClass(f.name), style: `--w:${width}` },
-      h('div', { class: 'fname', title: `bits ${f.hi}:${f.lo}` }, `${f.name} [${f.hi}:${f.lo}]`),
-      h('div', { class: 'fbits' }, v.toString(2).padStart(width, '0')),
-      h('div', { class: 'fval' }, fieldValue(f.name, v)));
-    strip.append(el);
-  }
-  return strip;
-}
 
 const MEANING: Record<string, string> = {
   R: 'Register–register: rd = rs1 op rs2. funct3 and funct7 select the operation.',
@@ -50,38 +23,41 @@ export function instructionExplorer(): Widget {
   const input = h('input', { type: 'text', class: 'num-in', value: 'addi a0, a0, -5', spellcheck: 'false', 'aria-label': 'instruction' }) as HTMLInputElement;
   input.style.cssText = 'width:100%;padding:8px 10px;border-radius:9px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font:600 14px var(--font-mono)';
   const out = h('div');
-  const examples = ['add t0, t1, t2', 'addi a0, a0, -5', 'lw s0, 8(sp)', 'sw a1, -4(s0)', 'beq a0, zero, 16', 'lui a0, 0x12345', 'jal ra, 2048', 'sra t3, t4, t5'];
+  const examples = ['add t0, t1, t2', 'addi a0, a0, -5', 'srai t0, t1, 3', 'lw s0, 8(sp)', 'sw a1, -4(s0)', 'beq a0, zero, 16', 'lui a0, 0x12345', 'jal ra, 2048', 'li a0, 0x12345678', 'csrrw t0, mscratch, t1', 'flw fa0, 4(a0)'];
   const render = () => {
     const t = input.value.trim();
-    let word: number | null = null;
+    let words: number[] = [];
     let err = '';
-    if (/^(0x)?[0-9a-f]{8}$/i.test(t)) word = parseInt(t.replace(/^0x/i, ''), 16) >>> 0;
+    if (/^(0x)?[0-9a-f]{8}$/i.test(t)) words = [parseInt(t.replace(/^0x/i, ''), 16) >>> 0];
     else {
       const r = assemble(t);
       if (r.errors.length) err = r.errors[0].message;
-      else word = r.words[0];
+      else words = r.words;
     }
     out.replaceChildren();
-    if (word === null) {
+    if (!words.length) {
       out.append(h('p', { class: 'asm-errors' }, err || 'Type an instruction or a hex word.'));
       return;
     }
-    const d = decode(word);
-    out.append(
-      h('div', { class: 'readout' },
-        h('div', null, h('b', null, hex(word)), h('span', null, 'machine code')),
-        h('div', null, h('b', null, `${d.fmt}-type`), h('span', null, 'format')),
-        h('div', null, h('b', null, d.name), h('span', null, 'operation')),
-        h('div', null, h('b', null, d.fmt === 'R' ? '–' : String(d.fmt === 'U' ? d.imm >>> 12 : d.imm)), h('span', null, 'immediate (decoded)'))),
-      fieldStrip(word, d.fmt),
-      h('p', { class: 'sub' }, MEANING[d.fmt]),
-      h('p', { class: 'sub' }, 'Disassembled: ', h('code', null, disasm(word))),
-    );
+    // A pseudo-instruction (li, la, call) may expand to two real instructions: show each.
+    if (words.length > 1) out.append(h('p', { class: 'sub' }, `A pseudo-instruction: the assembler emits ${words.length} instructions.`));
+    for (const word of words) {
+      const d = decode(word);
+      out.append(
+        h('div', { class: 'readout' },
+          h('div', null, h('b', null, hex(word)), h('span', null, 'machine code')),
+          h('div', null, h('b', null, `${d.fmt}-type`), h('span', null, 'format')),
+          h('div', null, h('b', null, d.name), h('span', null, 'operation')),
+          h('div', null, h('b', null, disasm(word)), h('span', null, 'disassembled'))),
+        instrBreakdown(word),
+        h('p', { class: 'sub' }, MEANING[d.fmt]),
+      );
+    }
   };
   input.addEventListener('input', render);
   render();
   const formats = h('div', null, (['R', 'I', 'S', 'B', 'U', 'J'] as Fmt[]).map((f) =>
-    h('div', { style: 'margin-bottom:6px' }, h('b', { style: 'font-family:var(--font-mono)' }, `${f}-type`), fieldStrip(0, f))));
+    h('div', { style: 'margin-bottom:6px' }, h('b', { style: 'font-family:var(--font-mono)' }, `${f}-type`), formatStrip(f))));
   return {
     el: h('div', { class: 'widget' }, h('div', { class: 'wgrid' },
       h('div', { class: 'panel' },

@@ -86,7 +86,9 @@ export function instrMarks(def: ComponentDef, word: number, focus: FieldKey | nu
   const want = (k: FieldKey) => !focus || focus === k;
   const has = (k: FieldKey) => fields.find((f) => f.key === k && f.used);
   const hasImm = IMM_KEYS.some(has);
-  const onNets = () => [...new Set([...nets.keys()].flatMap((i) => nl.nets[i].ends.filter((e) => e.includes('.')).map((e) => e.slice(0, e.indexOf('.')))))];
+  // Parts on the coloured wires (wires whose bits this instruction ignores do not count).
+  const onNets = () => [...new Set([...nets].filter(([, c]) => !c.includes('fld-off'))
+    .flatMap(([i]) => nl.nets[i].ends.filter((e) => e.includes('.')).map((e) => e.slice(0, e.indexOf('.')))))];
   const cls5 = ((word & 0x7f) >> 2);
   const klass = (word & 3) === 3 ? CLASSES.find(([, c]) => c === cls5)?.[0] : undefined;
 
@@ -127,14 +129,10 @@ export function instrMarks(def: ComponentDef, word: number, focus: FieldKey | nu
     if (!want('opcode')) return { nets, units: [] };
     mark(named('op'), cls('op'));
     if (!klass) return { nets, units: ['sa'], note: 'No AND gate matches this opcode.' };
+    // Each rail fans out to every gate that wants that bit value, so colouring rails would
+    // flood the view: the focus highlight picks out the matching gate and its inverters instead.
     const units = ['sa', `is_${klass}`];
-    for (let i = 0; i < 5; i++) {
-      mark(named(`op${i + 2}`), cls('op'));
-      if (!((cls5 >> i) & 1)) {
-        mark(named(`op${i + 2}_n`), cls('op'));
-        units.push(`inv${i}`);
-      }
-    }
+    for (let i = 0; i < 5; i++) if (!((cls5 >> i) & 1)) units.push(`inv${i}`);
     mark(named(klass), cls('op'));
     return { nets, units };
   }

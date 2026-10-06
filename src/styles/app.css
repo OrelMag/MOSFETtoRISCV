@@ -443,6 +443,18 @@ svg.schematic.focus .inst.hl .hit { animation: none; fill: color-mix(in srgb, va
 .tap-label.bus rect { stroke: color-mix(in srgb, var(--bus) 60%, transparent); }
 .tap-label.bus text { fill: var(--bus-label-text); }
 .tap-label.vx text { fill: var(--wx); }
+/* instruction fields on the hardware: the wires that carry each field take its colour */
+.fld-op, .f-op { --fc: var(--fld-op); }
+.fld-rd, .f-rd { --fc: var(--fld-rd); }
+.fld-rs, .f-rs { --fc: var(--fld-rs); }
+.fld-fn, .f-fn { --fc: var(--fld-fn); }
+.fld-imm, .f-imm { --fc: var(--fld-imm); }
+svg.schematic .wire.fld { stroke: var(--fc); opacity: 1; stroke-dasharray: none; stroke-width: calc(var(--wire-bus) + 0.12); filter: drop-shadow(0 0 0.3px var(--fc)); }
+svg.schematic .wire.fld.fld-off { stroke-dasharray: 0.5 0.35; opacity: 0.6; filter: none; }
+svg.schematic .dot.fld { fill: var(--fc); }
+.tap-label.fld rect { stroke: var(--fc); stroke-width: 0.1; fill: color-mix(in srgb, var(--fc) 16%, var(--surface)); }
+.tap-label.fld text { fill: var(--fc); }
+.net-tag.fld rect { stroke: var(--fc); stroke-width: 0.18; }
 .wire-tip {
   position: absolute; pointer-events: none; opacity: 0; transition: opacity 0.1s; z-index: 5;
   background: var(--text); color: var(--surface); font: 600 12px var(--font-mono);
@@ -650,11 +662,38 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .fields .fname { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fields .fbits { font-weight: 700; letter-spacing: 0.04em; word-break: break-all; }
 .fields .fval { font-size: 11px; color: var(--text-2); }
-.f-op { background: color-mix(in srgb, #8b5cf6 14%, var(--surface)); }
-.f-rd { background: color-mix(in srgb, #10b981 14%, var(--surface)); }
-.f-rs { background: color-mix(in srgb, #3b82f6 14%, var(--surface)); }
-.f-fn { background: color-mix(in srgb, #f59e0b 16%, var(--surface)); }
-.f-imm { background: color-mix(in srgb, #ef4444 12%, var(--surface)); }
+.fields > div[class^='f-'] { background: color-mix(in srgb, var(--fc) 14%, var(--surface)); }
+.fields > div.unused { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--fc) 8%, var(--surface)) 0 5px, var(--surface) 5px 10px); }
+.fields > div.unused .fbits { color: var(--muted); }
+.fields.live > div { cursor: pointer; transition: box-shadow 0.12s; }
+.fields.live > div:hover, .fields > div.on { box-shadow: inset 0 0 0 2px var(--fc); }
+.fields .fname b { color: var(--fc); font-weight: 700; }
+.fields .bit.src { outline: 1.5px solid var(--fc); border-radius: 2px; }
+/* instruction breakdown: meaning per field, the immediate assembled bit by bit */
+.ibd-meaning { display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; font: 11.5px var(--font-mono); margin: 4px 0; }
+.ibd-meaning .k { color: var(--fc); font-weight: 700; white-space: nowrap; }
+.ibd-meaning .v { color: var(--text-2); min-width: 0; overflow-wrap: anywhere; }
+.ibd-meaning .row { display: contents; cursor: pointer; }
+.ibd-meaning .row.off .k, .ibd-meaning .row.off .v { opacity: 0.55; }
+.ibd-meaning .row:hover .v, .ibd-meaning .row.on .v { color: var(--text); }
+.ibd-imm { margin: 6px 0 2px; }
+.ibd-imm summary { cursor: pointer; font: 600 11.5px var(--font-mono); color: var(--text-2); }
+.ibd-imm .cells { display: flex; gap: 2px; margin-top: 4px; font: 11px var(--font-mono); text-align: center; }
+.ibd-imm .c { flex: var(--n) 1 0; min-width: 20px; border-radius: 4px; padding: 2px 1px; background: color-mix(in srgb, var(--fc) 18%, var(--surface)); cursor: default; }
+.ibd-imm .c.sign { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--fc) 16%, var(--surface)) 0 4px, color-mix(in srgb, var(--fc) 6%, var(--surface)) 4px 8px); }
+.ibd-imm .c.zero { background: var(--surface-2); color: var(--muted); }
+.ibd-imm .c b { display: block; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.ibd-imm .c i { display: block; font-style: normal; font-size: 9.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ibd-imm .c.hi { outline: 1.5px solid var(--fc); }
+.ibd-imm .axis { font: 9.5px var(--font-mono); color: var(--muted); margin-top: 2px; }
+.ibd-note { font-size: 11.5px; color: var(--muted); margin: 2px 0; }
+.cpu-fields-head { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
+.cpu-fields-head code { font: 600 12px var(--font-mono); color: var(--text); }
+.cpu-fields-head span { margin-left: auto; font: 10.5px var(--font-mono); color: var(--muted); }
+.cpu-fields .fields { margin: 4px 0; font-size: 11px; }
+.cpu-fields .fields > div { padding: 3px 1px; }
+.cpu-fields .fields .fname { font-size: 10px; }
+.cpu-fields .ibd-imm .cells { font-size: 10px; }
 .asm-table { width: 100%; border-collapse: collapse; font: 12px var(--font-mono); }
 .asm-table td { padding: 2px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .asm-table td.a { color: var(--muted); }

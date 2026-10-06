@@ -44,7 +44,7 @@ const OPNAME: Record<number, string> = {
 const ALU3 = ['add/sub', 'sll', 'slt', 'sltu', 'xor', 'srl/sra', 'or', 'and'];
 const F3: Record<number, string[]> = {
   [OPCODES.OP]: ALU3, [OPCODES.OPIMM]: ALU3,
-  [OPCODES.BRANCH]: ['=', '≠', '', '', '< signed', '≥ signed', '< unsigned', '≥ unsigned'],
+  [OPCODES.BRANCH]: ['taken if rs1 = rs2', 'taken if rs1 ≠ rs2', '', '', 'taken if rs1 < rs2 (signed)', 'taken if rs1 ≥ rs2 (signed)', 'taken if rs1 < rs2 (unsigned)', 'taken if rs1 ≥ rs2 (unsigned)'],
   [OPCODES.LOAD]: ['byte', 'half', 'word', '', 'byte, zero-ext.', 'half, zero-ext.'],
   [OPCODES.STORE]: ['byte', 'half', 'word'],
   [OPCODES.SYSTEM]: ['', 'CSR write', 'CSR set', 'CSR clear', '', 'CSR write imm.', 'CSR set imm.', 'CSR clear imm.'],
