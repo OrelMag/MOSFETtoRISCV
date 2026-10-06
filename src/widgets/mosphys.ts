@@ -38,7 +38,7 @@ export const Q_MIN = 0.06;
 
 /** Carrier drift speed in channel lengths per second of animation, ∝ the field dV/dx = I / (K·Q).
  *  The same current through a thinner channel means faster carriers. */
-export function carrierVelocity(id: number, q: number, scale = 1.6): number {
+export function carrierVelocity(id: number, q: number, scale = 2): number {
   return id <= 0 ? 0 : (scale * id) / (K * Math.max(q, Q_MIN));
 }
 
