@@ -222,6 +222,22 @@ export class GateSim implements Sim {
     return true;
   }
 
+  /**
+   * Process every event up to and including time t, then stand at t even if events are
+   * still pending beyond it (a clock edge that does not wait for the logic to settle).
+   */
+  runUntil(t: number): void {
+    for (;;) {
+      if (this.dirty.length) this.evalDirty();
+      if (this.pendingEvents === 0) break;
+      let n = this.time + 1;
+      while (this.wheelNets[n % RING].length === 0) n++;
+      if (n > t) break;
+      this.step();
+    }
+    if (t > this.time) this.time = t;
+  }
+
   settle(): void {
     const start = this.time;
     this.unstable = false;
