@@ -5,12 +5,13 @@
 //  - 'structure': exactly the schematics. Each module is its structural netlist; NAND and the
 //    tie cells are one-line assigns (their transistor netlists are below gate level). Latches and
 //    flip-flops stay cross-coupled NAND loops, as drawn. Switch-level designs (the transistor
-//    chapters) keep nmos/pmos primitives. Good for reading and for event simulators (Icarus).
+//    chapters) keep nmos/pmos primitives, resistors are rtran, capacitive nets trireg. Good for
+//    reading and for event simulators (Icarus).
 //  - 'synth': vexport's synthesizable Verilog-2005 (flip-flops as clocked processes), for Yosys,
 //    Verilator and FPGA tools.
 
 import { evalOnce, forEachInput, inputBits, simulate } from './harness';
-import { type ComponentDef, inPorts, netlistOf, outPorts } from './types';
+import { type ComponentDef, inPorts, isSwitchPrim, netlistOf, outPorts } from './types';
 import { moduleName, structuralVerilog } from './verilog';
 import { logicDepth, stats } from './stats';
 import { ident, synthVerilog } from './vexport';
@@ -47,8 +48,7 @@ function structureModules(root: ComponentDef): string[] {
     const nl = netlistOf(d);
     if (!nl) throw new Error(`${d.name} has no structure to export`);
     for (const i of nl.instances) {
-      const p = i.def.prim;
-      if (p === 'alias' || p === 'nmos' || p === 'pmos' || p === 'vdd' || p === 'gnd') continue;
+      if (i.def.prim === 'alias' || isSwitchPrim(i.def)) continue; // written inline (verilog.ts)
       visit(i.def, false);
     }
     out.push(structuralVerilog(d)!);

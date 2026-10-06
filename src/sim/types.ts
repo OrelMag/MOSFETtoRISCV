@@ -22,13 +22,22 @@ export interface PortDef {
   clock?: boolean;
   /** Human description for tooltips / the inspector. */
   doc?: string;
+  /**
+   * Switch level: an output that can let go of its net (Z, or only a weak pull): a tri-state
+   * driver, an open-drain stage, a pull-up. Several such outputs may share one net (a bus); the
+   * sandbox warns only when outputs that always drive share one. Purely descriptive: the
+   * switch-level solver needs no flag to resolve a shared net.
+   */
+  tri?: boolean;
 }
 
 /** Visual kinds. Gate shapes follow ANSI/IEEE 91 distinctive shapes. */
 export type SymbolKind =
   | 'nand' | 'and' | 'or' | 'nor' | 'xor' | 'xnor' | 'not' | 'buf'
   | 'mux' | 'box' | 'split' | 'merge'
-  | 'nmos' | 'pmos' | 'vdd' | 'gnd';
+  | 'nmos' | 'pmos' | 'vdd' | 'gnd'
+  /** Switch-level parts: resistor, pull-up / pull-down, capacitor, transmission gate, tri-states. */
+  | 'res' | 'pullup' | 'pulldown' | 'cap' | 'tgate' | 'tribuf' | 'triinv';
 
 export interface SymbolSpec {
   kind: SymbolKind;
@@ -125,10 +134,12 @@ export interface ComponentDef {
   symbol: SymbolSpec;
 
   /** Built-in primitive handled directly by the simulators. */
-  prim?: 'nand' | 'nmos' | 'pmos' | 'vdd' | 'gnd' | 'alias';
+  prim?: 'nand' | 'nmos' | 'pmos' | 'vdd' | 'gnd' | 'res' | 'cap' | 'alias';
   /**
-   * Switch level: drive strength of a transistor, 2 (weak) … 4 (strong); default 3. Where paths of
-   * different strength fight, the stronger one decides the node (ratioed logic, SRAM writes).
+   * Switch level: drive strength of a conducting element, 1 … 4. Transistors are 2 (weak) … 4
+   * (strong), default 3; a resistor (prim 'res') is 1 by default, weaker than any transistor. Where
+   * paths of different strength fight, the stronger one decides the node (ratioed logic, SRAM
+   * writes, pull-ups).
    */
   strength?: number;
   /**
@@ -197,4 +208,13 @@ export function parseEnd(end: string): { inst: string | null; port: string } {
   return i < 0 ? { inst: null, port: end } : { inst: end.slice(0, i), port: end.slice(i + 1) };
 }
 
-export type HierLeafKind = 'nand' | 'nmos' | 'pmos' | 'vdd' | 'gnd' | 'behavior';
+export type HierLeafKind = 'nand' | 'nmos' | 'pmos' | 'vdd' | 'gnd' | 'res' | 'cap' | 'behavior';
+
+/**
+ * Primitives of the switch-level solver: transistors, rails, resistors (always-on weak paths) and
+ * capacitors (mark their net as charge-keeping). A gate-level flatten cannot simulate them.
+ */
+export function isSwitchPrim(d: ComponentDef): boolean {
+  const p = d.prim;
+  return p === 'nmos' || p === 'pmos' || p === 'vdd' || p === 'gnd' || p === 'res' || p === 'cap';
+}

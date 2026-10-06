@@ -3,7 +3,7 @@
 
 import { evalOnce, forEachInput, inputBits, simulate } from '../sim/harness';
 import { hasFeedback, logicDepth, stats } from '../sim/stats';
-import { type Bit, type Category, type ComponentDef, inPorts, netlistOf, outPorts } from '../sim/types';
+import { type Bit, BZ, type Category, type ComponentDef, inPorts, netlistOf, outPorts } from '../sim/types';
 import { formatBits, formatNumber, pack, type Radix } from '../sim/values';
 import { exportHdl, testableComb, type HdlFlavor } from '../sim/svexport';
 import { structuralVerilog } from '../sim/verilog';
@@ -92,8 +92,12 @@ export class Inspector {
 
     const cells: [string, string][] = [];
     if (d.prim === 'nmos' || d.prim === 'pmos') cells.push(['1', 'transistor']);
+    else if (d.prim === 'res') cells.push(['1', 'resistor']);
+    else if (d.prim === 'cap') cells.push(['1', 'capacitor']);
     else if (d.prim !== 'alias' && d.prim !== 'vdd' && d.prim !== 'gnd') {
       cells.push([st.transistors.toLocaleString(), 'transistors']);
+      if (st.resistors) cells.push([st.resistors.toLocaleString(), `resistor${st.resistors > 1 ? 's' : ''}`]);
+      if (st.capacitors) cells.push([st.capacitors.toLocaleString(), `capacitor${st.capacitors > 1 ? 's' : ''}`]);
       cells.push([st.nands.toLocaleString(), 'NAND gates']);
       if (depth !== null && depth > 0) cells.push([String(depth), 'gate delays (worst path)']);
       else if (st.nands > 0 && depth === null) cells.push(['∞', 'has feedback: it remembers']);
@@ -123,6 +127,12 @@ export class Inspector {
       this.body.append(h('p', { class: 'empty' }, `A switch: ${d.prim === 'nmos' ? 'gate = 1 → conducts, gate = 0 → open' : 'gate = 0 → conducts, gate = 1 → open'}.`));
       return;
     }
+    if (d.prim === 'res' || d.prim === 'cap') {
+      this.body.append(h('p', { class: 'empty' }, d.prim === 'res'
+        ? 'Always conducts, more weakly than any transistor: a node it alone reaches follows it; any transistor path overrides it.'
+        : 'Keeps the last value of its node while nothing drives it (stored charge).'));
+      return;
+    }
     if (netlistOf(d) && hasFeedbackSafe(d)) {
       this.body.append(h('p', { class: 'empty' }, 'This component has feedback, so its outputs depend on its history, not only on its inputs. A truth table cannot describe it. Open the Timing panel to see it over time.'));
       return;
@@ -134,7 +144,7 @@ export class Inspector {
     const table = truthTable(d);
     const ins = inPorts(d), outs = outPorts(d);
     const cur = t.portBits ? ins.map((p) => pack(t.portBits!(p.name))) : null;
-    const fmt = (v: number, w: number) => (w === 1 ? String(v) : v < 0 ? 'x' : formatNumber(v, w, w <= 4 ? 'bin' : this.radix));
+    const fmt = (v: number, w: number) => (v === -2 ? 'Z' : v < 0 ? 'X' : w === 1 ? String(v) : formatNumber(v, w, w <= 4 ? 'bin' : this.radix));
     const head = h('tr', null, ins.map((p) => h('th', null, p.name)), outs.map((p) => h('th', { class: 'out' }, p.name)));
     const body = table.map(({ ins: iv, outs: ov }) => {
       const isCur = cur !== null && cur.every((v, i) => v === iv[i]);
@@ -217,12 +227,17 @@ export function truthTable(d: ComponentDef): { ins: number[]; outs: number[] }[]
   if (hit) return hit;
   const sim = simulate(d);
   const rows: { ins: number[]; outs: number[] }[] = [];
-  forEachInput(d, (ins) => rows.push({ ins, outs: evalOnce(sim, ins) }));
+  // -1: unknown (X somewhere); -2: floating (every bit Z, a tri-state output let go)
+  const floating = (p: string) => sim.getBits(sim.design.root.ports[p]).every((b) => b === BZ);
+  forEachInput(d, (ins) => {
+    const outs = evalOnce(sim, ins);
+    rows.push({ ins, outs: outs.map((v, i) => (v < 0 && floating(outPorts(d)[i].name) ? -2 : v)) });
+  });
   ttCache.set(d, rows);
   return rows;
 }
 
-const KW = /\b(module|endmodule|input|output|inout|logic|wire|assign|always_ff|always_comb|always|posedge|negedge|if|else|case|endcase|begin|end|for|genvar|parameter|int|supply0|supply1|nmos|pmos|default)\b/g;
+const KW = /\b(module|endmodule|input|output|inout|logic|wire|assign|always_ff|always_comb|always|posedge|negedge|if|else|case|endcase|begin|end|for|genvar|parameter|int|supply0|supply1|nmos|pmos|rtran|tran|trireg|pullup|pulldown|default)\b/g;
 function highlight(code: string): string {
   const esc = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return esc.split('\n').map((line) => {
