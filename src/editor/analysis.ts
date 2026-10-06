@@ -55,7 +55,6 @@ class Analysis {
   private note: HTMLElement;
   private gFlags: SVGGElement;
   private gCrit: SVGGElement;
-  private gHints: SVGGElement;
   private timingEl = h('section', { class: 'sb-sec-props sb-timing' });
   private timingKey: unknown[] = [];
   private timing: ChipTiming | null = null;
@@ -70,11 +69,9 @@ class Analysis {
     this.la.onLanesChange = () => this.lanesChanged();
     const svg = ed.view.svg;
     this.gCrit = s('g', { class: 'ed-crit-wires' });
-    this.gHints = s('g', { class: 'ed-open-ins' });
     this.gFlags = s('g', { class: 'probes ed-probes' });
-    // Under the wires: a halo; over everything but the editing overlays: hints and flags.
+    // Under the wires: a halo; over everything but the editing overlays: the probe flags.
     svg.insertBefore(this.gCrit, svg.querySelector('g.wires'));
-    svg.insertBefore(this.gHints, svg.querySelector('g.ed-over'));
     svg.insertBefore(this.gFlags, svg.querySelector('g.ed-over'));
     ed.tools.onPress = (hit, e) => this.press(hit, e);
     this.off.push(ed.onChange(() => this.sync(true)), ed.onSimChange(() => this.sync(false)));
@@ -355,18 +352,22 @@ class Analysis {
     }
   }
 
-  /** A small mark on every part input left open (it reads X). */
+  /**
+   * A small mark on every part input left open (it reads X). Drawn inside the part's own group,
+   * in its coordinates, so it moves with the part during a drag.
+   */
   private drawHints(): void {
-    const g = this.gHints;
-    g.replaceChildren();
+    const svg = this.ed.view.svg;
+    svg.querySelectorAll('.ed-open-in').forEach((e) => e.remove());
     const doc = this.ed.doc;
     for (const o of this.lint().open) {
       const p = doc.parts.find((q) => q.id === o.part);
       const def = p && this.ed.defOf(p);
-      if (!p || !def) continue;
+      const g = p && svg.querySelector(`[data-part="${CSS.escape(p.id)}"]`);
+      if (!p || !def || !g) continue;
       let pos: Vec;
       try {
-        pos = instPort(def, p.at, p.flip, o.port).pos;
+        pos = instPort(def, [0, 0], p.flip, o.port).pos;
       } catch {
         continue;
       }

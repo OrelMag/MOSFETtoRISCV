@@ -263,7 +263,7 @@
 .ed-crit-wire { fill: none; stroke: var(--ed-crit); stroke-width: 0.75; stroke-linecap: round; stroke-linejoin: round; opacity: 0.38; pointer-events: none; }
 .ed-part.ed-crit .hit { display: inline; fill: color-mix(in srgb, var(--ed-crit) 9%, transparent); stroke: var(--ed-crit); stroke-width: 0.16; }
 .ed-pin.ed-crit .ed-pin-hit { stroke: var(--ed-crit); stroke-width: 0.16; }
-.ed-open-ins { pointer-events: none; }
+.ed-open-in { pointer-events: none; }
 .ed-open-in circle { fill: var(--surface); stroke: var(--wx); stroke-width: 0.09; }
 .ed-open-in path { stroke: var(--wx); stroke-width: 0.08; stroke-linecap: round; }
 .sb-tm-read { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 2px 0 6px; }
