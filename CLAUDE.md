@@ -87,6 +87,8 @@ src/lib/       the component library (registered in `registry` via define())
   cells.ts       NMOS_STRONG / PMOS_WEAK, SRAM_CELL (6T), SRAM_COLUMN, DRAM_CELL (switch level)
   cache.ts       cachedMemory(k, ib) (direct-mapped write-through cache + main memory, stall on
                  miss), wayLookup2; singleCycleCpu(â€¦, { dcache }) uses it (adds `retire`, `dhit`)
+  multicycle.ts  MC_STATES (the state table), MC_FSM (hardwired), MC_MICRO (microcode), microword(),
+                 multicycleCpu(program, { control: 'fsm' | 'micro' }) with `retire`, `fetch`, `state` outputs
   muldiv.ts      ppRow, arrayMul(n), compressor()/csa(n) (3:2 rows with word offsets), treeMul(n, signed,
                  outW) (Wallace + KS), MUL32, BOOTH_ENC, divStep, arrayDiv, seqDivider(n), condNegate, MDU
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
@@ -147,7 +149,7 @@ tests/         Vitest: every component with a `spec` is checked exhaustively (â‰
 
 ### CPU scenes
 
-`cpuScene({ source, pipeline?, adder?, timing? })` (widgets/cpupanel.ts) builds a CPU scene
+`cpuScene({ source, pipeline?, system?, m?, dcache?, multicycle?, adder?, timing? })` (widgets/cpupanel.ts) builds a CPU scene
 with the CPU panel (listing, registers, memory, golden-model lock-step) and optionally the
 pipeline diagram and the static-timing panel. Panels observe clock edges through
 `stage.edgeHooks` (before / after every rising edge), so they stay correct during fast runs.

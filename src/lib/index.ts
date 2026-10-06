@@ -15,3 +15,4 @@ export { registry, splitter, merger } from './define';
 export * from './muldiv';
 export * from './cells';
 export * from './cache';
+export * from './multicycle';
