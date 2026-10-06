@@ -58,7 +58,8 @@ export function chipLayoutWidget(): Widget {
     const tip = h('div', { class: 'chip-tip' });
     view.append(tilesEl, cv, tip);
     let scale = W / T.side, ox = 0, oy = 0; // px per µm, offset in px
-    let mode: 'block' | 'kind' | 'none' = sum.tiles ? 'none' : 'block';
+    const hasBlocks = Object.keys(sum.blockArea).some((b) => b.startsWith('core')) && (sum.blockArea.other ?? 0) < 0.5 * Object.values(sum.blockArea).reduce((a, v) => a + v, 0);
+    let mode: 'block' | 'kind' | 'none' = sum.tiles ? 'none' : hasBlocks ? 'block' : 'kind';
     let showTiles = !!sum.tiles;
     const toScreen = (x: number, y: number): [number, number] => [ox + (x - T.x0) * scale, oy + (T.y0 + T.side - y) * scale];
 
@@ -128,7 +129,7 @@ export function chipLayoutWidget(): Widget {
     const dieW = dx1 - dx0, dieH = dy1 - dy0;
     const kinds = Object.entries(sum.kinds).filter(([k]) => k !== 'filler');
     const insts = kinds.reduce((a, [, v]) => a + v, 0);
-    const ws = num(/finish__timing__setup__ws$/), power = num(/finish__power__total$/), util = num(/finish__design__instance__utilization$/), wl = num(/route__wirelength$/);
+    const ws = num(/finish__timing__setup__ws$/), power = num(/finish__power__total$/), util = num(/finish__design__instance__utilization$/), wl = num(/^detailedroute__route__wirelength$/);
     const rows: [string, string][] = [
       ['die', `${dieW.toFixed(0)} × ${dieH.toFixed(0)} µm (${((dieW * dieH) / 1e6).toFixed(3)} mm²)`],
       ['standard cells', `${insts.toLocaleString()} (${kinds.map(([k, v]) => `${v.toLocaleString()} ${k}`).join(', ')})`],
@@ -142,6 +143,12 @@ export function chipLayoutWidget(): Widget {
     rows.push(['most used cells', sum.masters.slice(0, 8).map(([n, c]) => `${n.replace('sky130_fd_sc_hd__', '')} ×${c}`).join(', ')]);
     rows.push(['generated', `${new Date(sum.generated).toLocaleString()}${sum.run ? `, flow ran ${Math.round(sum.run.seconds / 60)} min` : ''}`]);
 
+    const GALLERY: [string, string][] = [
+      ['final_all', 'everything'], ['final_placement', 'placed cells'], ['final_routing', 'routing'], ['final_clocks', 'the clock tree'],
+      ['final_congestion', 'routing congestion'], ['final_ir_drop', 'IR drop on the power grid'], ['final_worst_path', 'the critical path'],
+    ];
+    const gallery = h('div', { class: 'chip-gallery' }, ...GALLERY.map(([f, cap]) => h('a', { href: `layout/reports/base/${f}.webp.png`, target: '_blank', rel: 'noopener' },
+      h('img', { src: `layout/reports/base/${f}.webp.png`, alt: cap, loading: 'lazy', onerror: (e: Event) => ((e.target as HTMLElement).parentElement!.style.display = 'none') }), h('span', null, cap))));
     const btn = (label: string, f: () => void) => h('button', { class: 'btn sm', onclick: f }, label);
     root.replaceChildren(
       h('div', { class: 'param-row' },
@@ -150,6 +157,7 @@ export function chipLayoutWidget(): Widget {
         ...(sum.tiles ? [h('label', { class: 'lay-chk' }, h('input', { type: 'checkbox', checked: '', onchange: (e: Event) => { showTiles = (e.target as HTMLInputElement).checked; redraw(); } }), 'GDS layers')] : [])),
       legendEl, view,
       h('div', { class: 'cpu-mem chip-stats' }, ...rows.map(([k, v]) => h('div', { class: 'm' }, h('span', { class: 'n' }, k), h('span', { class: 'v' }, v)))),
+      h('div', { class: 'cpu-sec' }, 'OpenROAD\'s own views of the result'), gallery,
       h('p', { class: 'sub' }, h('a', { href: 'layout/mosfet_riscv.v', download: '' }, 'Download the exported Verilog'), '. The flow reports are in layout/reports/.'));
     redraw();
   }
