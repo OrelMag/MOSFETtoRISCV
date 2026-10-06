@@ -1,9 +1,9 @@
 // The workbench: open any component from the library on its own, drive its inputs freely,
-// and drill into it. (The full wiring sandbox comes in a later phase.)
+// and drill into it; "Open in Sandbox" (stage bar) copies it into the editor as a chip.
 
 import { bench } from '../../chapters/types';
-import { registry } from '../../lib';
-import { families, familyOf, initialParams, resolveComponent } from '../../lib/resolve';
+import { libraryItems } from '../../lib/catalog';
+import { familyOf, resolveComponent } from '../../lib/resolve';
 import { needsSwitchLevel } from '../../sim/harness';
 import type { ComponentDef } from '../../sim/types';
 import { netlistOf } from '../../sim/types';
@@ -13,17 +13,6 @@ import { memGridPanel } from '../../widgets/memgrid';
 import { transistorLeaf } from '../../widgets/mosfet';
 import { h } from '../dom';
 import type { Page } from './chapter';
-
-const CATS: [string, string][] = [
-  ['transistor', 'Transistors'], ['cell', 'CMOS cells'], ['gate', 'Gates'], ['arithmetic', 'Arithmetic'],
-  ['routing', 'Selection & routing'], ['sequential', 'Sequential'], ['memory', 'Memory'], ['cpu', 'Processor parts'],
-  ['plumbing', 'Wiring & constants'],
-];
-
-// Single (non-family) components whose id contains a digit. Other ids with digits are generated
-// widths (families, or internal parts such as the 33-bit rows of MUL32) and stay out of the list.
-const FIXED = new Set(['nmos', 'pmos', 'nand3', 'cla4', 'mul32', 'sram6t', 'sramcol2', 'dram1t1c', 'arb2', 'btb16', 'fpu32', 'freectr32', 'plus4', 'plus4ks']);
-const listed = (id: string) => FIXED.has(id) || (!/\d/.test(id.replace(/^(full_adder|half_adder)/, '')) && !id.startsWith('bench_') && !id.startsWith('pipe_'));
 
 export class WorkbenchPage implements Page {
   readonly el: HTMLElement;
@@ -82,18 +71,14 @@ export class WorkbenchPage implements Page {
   private renderList(): void {
     const l = this.list;
     l.replaceChildren();
-    const statics = [...registry.values()].filter((d) => d.prim !== 'alias' && listed(d.id) && !familyOf(d.id));
-    for (const [cat, title] of CATS) {
-      const items: { id: string; name: string; tag?: string }[] = [];
-      for (const d of statics) if (d.category === cat) items.push({ id: d.id, name: d.name });
-      for (const f of families) if (f.category === cat) items.push({ id: f.key(initialParams(f)), name: f.name, tag: 'n-bit' });
+    for (const { title, items } of libraryItems()) {
       const shown = items.filter((i) => !this.filter || i.name.toLowerCase().includes(this.filter) || i.id.includes(this.filter));
       if (!shown.length) continue;
       l.append(h('div', { class: 'lib-cat' }, title));
       const fam = familyOf(this.current)?.fam;
       for (const it of shown) {
-        const on = it.id === this.current || (!!it.tag && familyOf(it.id)?.fam === fam);
-        l.append(h('button', { class: `lib-item${on ? ' on' : ''}`, onclick: () => this.open(it.id) }, it.name, it.tag ? h('small', null, it.tag) : null));
+        const on = it.id === this.current || (!!it.family && familyOf(it.id)?.fam === fam);
+        l.append(h('button', { class: `lib-item${on ? ' on' : ''}`, onclick: () => this.open(it.id) }, it.name, it.family ? h('small', null, 'n-bit') : null));
       }
     }
   }

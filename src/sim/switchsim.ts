@@ -11,7 +11,15 @@
 // driver overpower an SRAM cell's weak pull-up. Nets marked `cap` keep their charge (weakest of all)
 // when undriven. Iteration starts from the previous solution, so storage loops (cross-coupled
 // inverters) remember their state; for loop-free circuits the result is unique anyway.
+//
+// Sources are ideal: rails and driven inputs are terminals, never internal conducting nodes. A
+// path ends at a source; it never runs through one from a transistor to another. So one VDD (or
+// GND, or input) net shared by many transistors behaves exactly like one rail symbol per
+// transistor (a 6T cell with a single VDD writes from X just like the library cell). An input
+// driven Z is not a source: it floats, and the circuit may drive it. Root `inout` ports are
+// inputs that start undriven (Z) until setInput / setInputBit drives them.
 
+import { matchNets, sharedInputs } from './carry';
 import type { FlatDesign } from './flatten';
 import type { PowerOnMode, Sim } from './sim';
 import { B0, B1, BX, BZ, type Bit } from './types';
@@ -43,6 +51,9 @@ export class SwitchSim implements Sim {
       if (p.dir === 'in') {
         this.inputNets.set(p.name, design.root.ports[p.name]);
         this.inputs.set(p.name, 0);
+      } else if (p.dir === 'inout') {
+        this.inputNets.set(p.name, design.root.ports[p.name]);
+        this.inputs.set(p.name, -BZ);
       }
     }
     this.settle();
@@ -75,6 +86,43 @@ export class SwitchSim implements Sim {
     this.dirty = true;
     this.settle();
   }
+  /**
+   * Take over the node values of a simulation of a previous version of the design: nets matched
+   * through the hierarchy (see matchNets), root inputs by port name and width. The solve starts
+   * from them, so cross-coupled inverters keep their bit and `cap` nets keep their charge. With
+   * `known`, X nodes of `prev` are not copied.
+   */
+  carry(prev: Sim, opts: { known?: boolean } = {}): void {
+    for (const name of sharedInputs(this.design, prev.design)) this.inputs.set(name, prev.getInput(name));
+    // root inouts too (only a switch-level simulation drives them)
+    for (const p of this.design.root.def.ports) {
+      const q = p.dir === 'inout' && prev.kind === 'switch' && prev.design.root.def.ports.find((x) => x.name === p.name);
+      if (q && q.dir === 'inout' && q.width === p.width) this.inputs.set(p.name, prev.getInput(p.name));
+    }
+    const map = matchNets(this.design, prev.design);
+    for (let net = 0; net < map.length; net++) {
+      if (map[net] < 0) continue;
+      const b = prev.get(map[net]);
+      if (!opts.known || b !== BX) this.val[net] = b;
+    }
+    this.dirty = true;
+    this.settle();
+  }
+
+  /** A copy of every node value (index = flat net). */
+  snapshot(): Uint8Array {
+    return this.val.slice();
+  }
+
+  /**
+   * Overwrite node values (as if the circuit had been left in that state: storage loops and
+   * charge start from them). Inputs and rails still win at the next settle().
+   */
+  restore(vals: ArrayLike<number>): void {
+    for (let i = 0; i < this.val.length; i++) this.val[i] = vals[i];
+    this.dirty = true;
+  }
+
   step(): boolean {
     if (!this.dirty) return false;
     this.settle();
@@ -96,7 +144,7 @@ export class SwitchSim implements Sim {
     for (const [port, v] of this.inputs) {
       const nets = this.inputNets.get(port)!;
       const bits: Bit[] = v >= 0 ? unpack(v, nets.length) : nets.map(() => (-v) as Bit);
-      nets.forEach((net, i) => (source[net] = bits[i]));
+      nets.forEach((net, i) => { if (bits[i] !== BZ) source[net] = bits[i]; });
     }
 
     const val = this.val;
@@ -105,12 +153,28 @@ export class SwitchSim implements Sim {
     const charge = new Int8Array(n).fill(-1);
     for (const c of this.design.caps) if (source[c] < 0 && (val[c] === B0 || val[c] === B1)) charge[c] = val[c];
 
+    // Sources are terminals, never conducting nodes: every transistor terminal on a rail or a driven
+    // input gets its own copy of that source (a virtual node n, n + 1, …), so paths cannot pass
+    // through a source from one transistor to another. One VDD symbol feeding many pull-ups then
+    // behaves exactly like one symbol per transistor.
+    const srcLv: number[] = [], srcV: number[] = [];
+    for (let i = 0; i < n; i++) {
+      srcLv.push(charge[i] >= 0 ? 1 : 0);
+      srcV.push(charge[i]);
+    }
+    const term = (net: number) => {
+      if (source[net] < 0) return net;
+      srcLv.push(5);
+      srcV.push(source[net]);
+      return srcLv.length - 1;
+    };
     const fets: { li: number; g: number; a: number; b: number; nmos: boolean; s: number }[] = [];
     leaves.forEach((l, li) => {
       if (l.kind !== 'nmos' && l.kind !== 'pmos') return;
       const [g, a, b] = l.terminals!;
-      fets.push({ li, g, a, b, nmos: l.kind === 'nmos', s: l.def.strength ?? 3 });
+      fets.push({ li, g, a: term(a), b: term(b), nmos: l.kind === 'nmos', s: l.def.strength ?? 3 });
     });
+    const N = srcLv.length;
 
     let iter = 0;
     let changed = true;
@@ -131,20 +195,18 @@ export class SwitchSim implements Sim {
       // 5 = rails and inputs, 4..2 = transistors, 1 = stored charge.
       const d1 = new Uint8Array(n), d0 = new Uint8Array(n), dX = new Uint8Array(n);
       const m1 = new Uint8Array(n), m0 = new Uint8Array(n), mX = new Uint8Array(n);
-      const srcLevel = (i: number) => (source[i] >= 0 ? 5 : charge[i] >= 0 ? 1 : 0);
-      const srcVal = (i: number) => (source[i] >= 0 ? source[i] : charge[i]);
       for (let L = 5; L >= 1; L--) {
-        const sure = new UF(n), maybe = new UF(n);
+        const sure = new UF(N), maybe = new UF(N);
         fets.forEach((f, k) => {
           if (f.s < L) return;
           if (on[k]) sure.union(f.a, f.b);
           if (maybeOn[k]) maybe.union(f.a, f.b);
         });
-        const sHi = new Uint8Array(n), sLo = new Uint8Array(n), sX = new Uint8Array(n);
-        const mHi = new Uint8Array(n), mLo = new Uint8Array(n), mXx = new Uint8Array(n);
-        for (let i = 0; i < n; i++) {
-          if (srcLevel(i) < L) continue;
-          const v = srcVal(i), rs = sure.find(i), rm = maybe.find(i);
+        const sHi = new Uint8Array(N), sLo = new Uint8Array(N), sX = new Uint8Array(N);
+        const mHi = new Uint8Array(N), mLo = new Uint8Array(N), mXx = new Uint8Array(N);
+        for (let i = 0; i < N; i++) {
+          if (srcLv[i] < L) continue;
+          const v = srcV[i], rs = sure.find(i), rm = maybe.find(i);
           if (v === B1) { sHi[rs] = 1; mHi[rm] = 1; } else if (v === B0) { sLo[rs] = 1; mLo[rm] = 1; } else { sX[rs] = 1; mXx[rm] = 1; }
         }
         for (let i = 0; i < n; i++) {

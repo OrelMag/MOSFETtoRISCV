@@ -106,6 +106,38 @@ export class LogicAnalyzer {
     this.render();
   }
 
+  /**
+   * Follow a rebuilt simulation of the same circuit (an editor rebuilds on every connectivity
+   * change; time carries over): every lane gets its nets in the new numbering (null drops it)
+   * and keeps what it recorded.
+   */
+  rebind(sim: Sim, nets: (l: Lane) => number[] | null): void {
+    const keep: Lane[] = [];
+    for (const l of this.lanes) {
+      const n = nets(l);
+      if (!n) { this.traces.delete(l.id); continue; }
+      l.nets = n;
+      l.key = netKey(n);
+      l.width = n.length;
+      keep.push(l);
+    }
+    this.lanes = keep;
+    this.byNet.clear();
+    for (const l of keep) for (const n of l.nets) this.byNet.set(n, [...(this.byNet.get(n) ?? []), l]);
+    this.sim = sim;
+    sim.onTrace = (net) => this.record(net);
+    for (const l of keep) {
+      sim.watch(l.nets);
+      const tr = this.traces.get(l.id) ?? { t: [], v: [] };
+      this.traces.set(l.id, tr);
+      const v = this.valueOf(l), n = tr.t.length - 1;
+      if (n >= 0 && tr.t[n] >= sim.time) tr.v[n] = v;
+      else if (n < 0 || tr.v[n] !== v) { tr.t.push(sim.time); tr.v.push(v); }
+    }
+    this.onLanesChange();
+    this.update();
+  }
+
   setLanes(lanes: Omit<Lane, 'id' | 'key'>[]): void {
     this.lanes = [];
     this.byNet.clear();

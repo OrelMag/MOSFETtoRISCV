@@ -1,0 +1,135 @@
+/* Code editor (widgets/codeedit.ts): a transparent textarea over a highlighted pre. Both layers
+   must share every metric (font, line height, padding, tab size, no wrapping), and tokens only
+   change colour, never weight or style, so glyph advances stay identical to the textarea's. */
+
+:root {
+  --tok-op: #5b4cf0;
+  --tok-ps: #b5179e;
+  --tok-dir: #0e7490;
+  --tok-lbl: #b45309;
+  --tok-sym: #9a5b13;
+  --tok-reg: #047857;
+  --tok-num: #1d4ed8;
+  --tok-csr: #be123c;
+  --tok-kw: #a16207;
+  --tok-addr: #b5179e;
+  --tok-com: var(--muted);
+  --tok-pun: var(--text-2);
+  --tok-bad: var(--wx);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --tok-op: #a397ff;
+    --tok-ps: #f08ae6;
+    --tok-dir: #67e8f9;
+    --tok-lbl: #fbbf24;
+    --tok-sym: #fdba74;
+    --tok-reg: #34d399;
+    --tok-num: #7aa9ff;
+    --tok-csr: #fb7185;
+    --tok-kw: #fcd34d;
+    --tok-addr: #f08ae6;
+  }
+}
+
+:root[data-theme='dark'] {
+  --tok-op: #a397ff;
+  --tok-ps: #f08ae6;
+  --tok-dir: #67e8f9;
+  --tok-lbl: #fbbf24;
+  --tok-sym: #fdba74;
+  --tok-reg: #34d399;
+  --tok-num: #7aa9ff;
+  --tok-csr: #fb7185;
+  --tok-kw: #fcd34d;
+  --tok-addr: #f08ae6;
+}
+
+.code-edit {
+  --ce-lh: 18px;
+  --ce-pad: 8px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  width: 100%;
+  height: calc(var(--rows, 14) * var(--ce-lh) + 2 * var(--ce-pad) + 2px);
+  min-height: calc(3 * var(--ce-lh) + 2 * var(--ce-pad) + 2px);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  resize: vertical;
+  font: 12px/var(--ce-lh) var(--font-mono);
+}
+.code-edit:focus-within { border-color: var(--accent); }
+.ce-gutter {
+  overflow: hidden;
+  padding: var(--ce-pad) 0;
+  color: var(--muted);
+  background: var(--surface-3);
+  border-right: 1px solid var(--border);
+  text-align: right;
+  user-select: none;
+  cursor: default;
+}
+.ce-n { height: var(--ce-lh); line-height: var(--ce-lh); padding: 0 8px 0 6px; white-space: nowrap; }
+.ce-n::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; vertical-align: 1px; }
+.ce-n.e { color: var(--wx); }
+.ce-n.e::before { background: var(--wx); }
+.ce-n.w { color: var(--warn); }
+.ce-n.w::before { background: var(--warn); }
+.ce-n.cur { color: var(--text); background: color-mix(in srgb, var(--w1) 20%, transparent); }
+.ce-n.e[title], .ce-n.w[title] { cursor: help; }
+
+.ce-body { position: relative; overflow: hidden; }
+.ce-hl, .ce-ta {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: var(--ce-pad);
+  border: 0;
+  font: inherit;
+  line-height: var(--ce-lh);
+  letter-spacing: 0;
+  font-variant-ligatures: none;
+  tab-size: 8;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.ce-hl { overflow: hidden; color: var(--text); pointer-events: none; }
+.ce-in { will-change: transform; }
+.ce-l { height: var(--ce-lh); }
+.ce-l.cur { background: color-mix(in srgb, var(--w1) 20%, transparent); }
+.ce-l.e { background: color-mix(in srgb, var(--wx) 12%, transparent); }
+.ce-l.w { background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.ce-l.e.cur, .ce-l.w.cur { box-shadow: inset 3px 0 0 var(--w1); }
+/* The message sits after the text, so it never shifts a line: the textarea above stays aligned. */
+.ce-msg { margin-left: 3ch; color: var(--wx); opacity: 0.9; }
+.ce-l.w .ce-msg { color: var(--warn); }
+.ce-ta {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  overflow: auto;
+  background: transparent;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: var(--text);
+  outline: none;
+}
+.ce-ta::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.code-edit.ro .ce-ta { caret-color: transparent; }
+
+.tk-op { color: var(--tok-op); }
+.tk-ps { color: var(--tok-ps); }
+.tk-dir { color: var(--tok-dir); }
+.tk-lbl { color: var(--tok-lbl); }
+.tk-sym { color: var(--tok-sym); }
+.tk-reg { color: var(--tok-reg); }
+.tk-num { color: var(--tok-num); }
+.tk-csr { color: var(--tok-csr); }
+.tk-kw { color: var(--tok-kw); }
+.tk-addr { color: var(--tok-addr); }
+.tk-com { color: var(--tok-com); }
+.tk-pun { color: var(--tok-pun); }
+.tk-bad { color: var(--tok-bad); text-decoration: underline wavy var(--tok-bad); text-decoration-skip-ink: none; text-underline-offset: 2px; }

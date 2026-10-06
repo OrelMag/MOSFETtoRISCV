@@ -45,6 +45,8 @@ export interface SymbolSpec {
   noPortLabels?: boolean;
   /** Draw the label vertically (narrow boxes). */
   verticalLabel?: boolean;
+  /** Hue (0–359) tinting a user chip's box; lightness comes from the theme. */
+  color?: number;
 }
 
 export interface InstanceDef {
@@ -76,6 +78,12 @@ export interface NetDef {
    * net names. `true` tags every endpoint. The driver is tagged when all its sinks are.
    */
   tags?: string[] | true;
+  /**
+   * Hand-placed tags: the tag of that endpoint is drawn at this point, joined to the endpoint
+   * by an orthogonal stub (leaving the pin in its exit direction, then turning once). Used by
+   * the sandbox, so a packaged chip shows its pointers where the user put them.
+   */
+  tagAt?: { [end: string]: [number, number] | undefined };
   /**
    * Switch level: the net has significant capacitance (a bit line, a DRAM storage node). When
    * nothing drives it, it keeps its last value as stored charge instead of floating to Z.
@@ -139,6 +147,14 @@ export interface ComponentDef {
   spec?: (inputs: number[]) => number[];
   /** Power-on hints for 'zero' mode: internal net name → value. */
   powerOn?: Record<string, 0 | 1>;
+  /**
+   * Marks an edge-triggered flip-flop (port names, all 1 bit): q takes d at the rising edge of
+   * clk (when en = 1, if there is an en). Static timing (timing.ts) makes it a register boundary
+   * and synthesis export (vexport.ts) writes it as a process instead of its gates. Set on the
+   * library DFF / DFFE, and by the sandbox when the user ticks "this chip is a flip-flop" (after
+   * checking that it behaves like one).
+   */
+  ff?: { d: string; q: string; clk: string; en?: string };
 
   hdl?: { verilog?: string; vhdl?: string };
   /** Long-form notes for the inspector (HTML allowed). */
@@ -147,7 +163,9 @@ export interface ComponentDef {
 
 export type Category =
   | 'transistor' | 'cell' | 'gate' | 'plumbing' | 'arithmetic'
-  | 'routing' | 'sequential' | 'memory' | 'cpu';
+  | 'routing' | 'sequential' | 'memory' | 'cpu'
+  /** User chips made in the sandbox. */
+  | 'custom';
 
 export function inPorts(d: ComponentDef): PortDef[] {
   return d.ports.filter((p) => p.dir === 'in');

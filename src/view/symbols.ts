@@ -4,6 +4,7 @@
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
 import { s } from '../ui/dom';
+import { type PinGeom, type Rect, textWidth } from './route';
 
 const BUBBLE = 0.3;
 
@@ -59,7 +60,9 @@ function transistor(def: ComponentDef): SVGElement[] {
 export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
   const g = symbolGeom(def);
   const k = def.symbol.kind;
-  const root = s('g', { class: `sym kind-${k}` });
+  // A user chip's hue tints its box (styles: .sym.chip); lightness follows the theme.
+  const hue = k === 'box' && def.symbol.color !== undefined ? def.symbol.color : null;
+  const root = s('g', hue === null ? { class: `sym kind-${k}` } : { class: `sym kind-${k} chip`, style: `--chip-h:${hue}` });
   const inner = s('g', flip ? { transform: `translate(${g.w},0) scale(-1,1)` } : null);
   root.append(inner);
   const { w, h } = g;
@@ -149,4 +152,63 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
     }
   }
   return root;
+}
+
+export interface PinGlyph {
+  g: SVGGElement;
+  name: SVGTextElement;
+  /** Value box of a bus pin (placed by placePinValue once the value is known). */
+  value?: SVGTextElement;
+  valueBg?: SVGRectElement;
+  /** What the glyph may cover, with room for the widest value of its width. */
+  bounds: Rect;
+}
+
+/** Steps from the pin back to its knob: the knob sits outside the circuit, opposite the exit. */
+const pinBack = (pin: PinGeom): [number, number] =>
+  [pin.exit === 'right' ? -1 : pin.exit === 'left' ? 1 : 0, pin.exit === 'down' ? -1 : pin.exit === 'up' ? 1 : 0];
+
+/**
+ * One of a component's own pins in its internal view: a stub from the pin to a knob (1 bit)
+ * or a value box (bus), and the name beyond it, away from the circuit. Value classes are the
+ * caller's (bitClass / busClass on the group).
+ */
+export function drawPinGlyph(pin: PinGeom, clickable: boolean): PinGlyph {
+  const [px, py] = pin.pos;
+  const [back, vert] = pinBack(pin);
+  const cx = px + back * 0.9, cy = py + vert * 0.9;
+  const isIn = pin.dir !== 'out';
+  const g = s('g', { class: `pin ${isIn ? 'pin-in' : 'pin-out'}${clickable ? ' clickable' : ''}`, 'data-pin': pin.name });
+  g.append(s('path', { d: `M${cx},${cy} L${px},${py}`, class: pin.width > 1 ? 'wire bus pin-stub' : 'wire pin-stub' }));
+  let value: SVGTextElement | undefined, valueBg: SVGRectElement | undefined;
+  if (pin.width === 1) {
+    g.append(s('circle', { cx, cy, r: 0.8, class: 'pin-knob' }));
+  } else {
+    valueBg = s('rect', { class: 'pin-box', rx: 0.5, height: 1.6, y: cy - 0.8 });
+    value = s('text', { class: 'pin-value', y: cy + 0.42, 'text-anchor': 'middle' });
+    g.append(valueBg, value);
+  }
+  // Name label, away from the circuit (beyond the value box for buses; see placePinValue).
+  const ax = back !== 0 ? cx + back * 1.3 : cx;
+  const ay = vert !== 0 ? cy + vert * 1.6 + (vert > 0 ? 0.4 : 0) : cy + 0.42;
+  const anchor = back > 0 ? 'start' : back < 0 ? 'end' : 'middle';
+  const name = s('text', { class: 'pin-name', x: ax, y: ay, 'text-anchor': anchor }, portLabel(pin.name));
+  g.append(name);
+  const extra = textWidth(pin.name, 1.1) + 3 + (pin.width > 1 ? textWidth('0x'.padEnd(2 + Math.ceil(pin.width / 4), '0'), 1.05) : 0);
+  const x0 = cx - 2 - (back < 0 ? extra : 0), x1 = cx + 2 + (back > 0 ? extra : 0);
+  return { g, name, value, valueBg, bounds: { x: x0, y: cy - 2, w: x1 - x0, h: 4 } };
+}
+
+/** Show a bus pin's value text, sizing its box and pushing the name clear of it. */
+export function placePinValue(pin: PinGeom, glyph: Pick<PinGlyph, 'name' | 'value' | 'valueBg'>, txt: string): void {
+  if (!glyph.value || !glyph.valueBg) return;
+  glyph.value.textContent = txt;
+  const tw = Math.max(3, textWidth(txt, 1.05));
+  const [back] = pinBack(pin);
+  const cx = pin.pos[0] + back * 0.9;
+  const bx = back < 0 ? cx - tw + 0.6 : back > 0 ? cx - 0.6 : cx - tw / 2;
+  glyph.valueBg.setAttribute('x', String(bx));
+  glyph.valueBg.setAttribute('width', String(tw));
+  glyph.value.setAttribute('x', String(bx + tw / 2));
+  if (back !== 0) glyph.name.setAttribute('x', String(back < 0 ? bx - 0.4 : bx + tw + 0.4));
 }

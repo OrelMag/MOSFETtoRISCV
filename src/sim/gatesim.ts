@@ -2,9 +2,10 @@
 // Every NAND has a delay of one time unit; behavioural leaves use their declared delay.
 // Transport delay is used, so glitches are visible when propagation is animated.
 
-import type { FlatDesign } from './flatten';
+import { matchNets, sharedInputs } from './carry';
+import { findNode, type FlatDesign } from './flatten';
 import type { PowerOnMode, Sim } from './sim';
-import { B0, B1, BX, type Bit, outPorts } from './types';
+import { B0, B1, BX, BZ, type Bit, outPorts } from './types';
 import { pack, unpack } from './values';
 
 const RING = 64; // event wheel size; must exceed the largest leaf delay
@@ -158,6 +159,54 @@ export class GateSim implements Sim {
     }
     this.time = 0;
     this.unstable = false;
+  }
+
+  /**
+   * Take over the state of a simulation of a previous version of the design (an editor rebuilds
+   * the circuit on every edit). Nets are matched through the hierarchy (see matchNets: instance
+   * paths, port names, internal nets), so a counter keeps its count when an unrelated gate is
+   * added. Root inputs carry over by port name when the widths match; behavioural leaves at the
+   * same path with the same definition id get a copy of their private state; the time carries
+   * over. Anything new keeps its power-on value. Pending events of `prev` are dropped: the
+   * result is relaxed to a fixed point, so a storage loop that held a value keeps it, and logic
+   * that changed is recomputed. A switch-level `prev` works too (Z becomes X). With `known`,
+   * X / Z nets of `prev` are not copied (they keep their power-on value).
+   */
+  carry(prev: Sim, opts: { known?: boolean } = {}): void {
+    const d = this.design;
+    for (const name of sharedInputs(d, prev.design)) this.inputs.set(name, prev.getInput(name));
+    const map = matchNets(d, prev.design);
+    for (let net = 0; net < d.netCount; net++) {
+      if (map[net] < 0) continue;
+      const b = prev.get(map[net]);
+      if (opts.known && b !== B0 && b !== B1) continue;
+      this.val[net] = b === BZ ? BX : b;
+      this.proj[net] = this.val[net];
+    }
+    for (const [port, v] of this.inputs) {
+      const nets = this.inputNets.get(port)!;
+      unpack(v, nets.length).forEach((b, i) => {
+        this.val[nets[i]] = b;
+        this.proj[nets[i]] = b;
+      });
+    }
+    if (prev instanceof GateSim) {
+      d.leaves.forEach((l, li) => {
+        if (l.kind !== 'behavior' || !l.def.behavior?.init) return;
+        const o = findNode(prev.design.root, l.node.path);
+        if (o?.leafIndex === undefined || o.def.id !== l.def.id) return;
+        this.state[li] = cloneState(prev.state[o.leafIndex]);
+      });
+    }
+    this.wheelNets.forEach((b) => (b.length = 0));
+    this.wheelVals.forEach((b) => (b.length = 0));
+    this.pendingEvents = 0;
+    this.dirty.length = 0;
+    this.dirtyMark.fill(0);
+    for (let i = 0; i < d.leaves.length; i++) this.markDirty(i);
+    this.unstable = false;
+    this.relax();
+    this.time = prev.time;
   }
 
   /**
@@ -315,6 +364,22 @@ export class GateSim implements Sim {
     this.wheelNets[slot].push(net);
     this.wheelVals[slot].push(b);
     this.pendingEvents++;
+  }
+}
+
+/**
+ * Deep copy of plain data (objects, arrays, typed arrays, maps, sets), so the two simulations do
+ * not share it. A class instance would lose its prototype in structuredClone: share it instead.
+ */
+function cloneState(s: unknown): unknown {
+  if (s === null || typeof s !== 'object') return s;
+  const proto = Object.getPrototypeOf(s);
+  const plain = proto === Object.prototype || proto === null || Array.isArray(s) || ArrayBuffer.isView(s) || s instanceof Map || s instanceof Set;
+  if (!plain) return s;
+  try {
+    return structuredClone(s);
+  } catch {
+    return s;
   }
 }
 

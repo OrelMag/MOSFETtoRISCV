@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { cachedMemory, dualCore, multicycleCpu, pipelinedCpu, singleCycleCpu, systemCpu } from '../src/lib';
-import { define, registry } from '../src/lib/define';
+import { define } from '../src/lib/define';
+import { reachableDefs } from '../src/lib/resolve';
 import { NAND } from '../src/lib/transistors';
 import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
-import type { ComponentDef } from '../src/sim/types';
-import { netlistOf } from '../src/sim/types';
+import { type ComponentDef, netlistOf } from '../src/sim/types';
 import { routeNetlist, wireOverlaps } from '../src/view/route';
 import { cpuTops } from './tops';
 
@@ -21,16 +21,15 @@ multicycleCpu(words, { control: 'micro' });
 dualCore(words);
 cachedMemory(6, 2);
 
-/** Every component reachable from the registry, including generated sub-components. */
+/** Every component reachable from the registry, plus the top-level CPUs (not registered) and their parts. */
 function allDefs(): ComponentDef[] {
-  const seen = new Set<ComponentDef>();
+  const seen = new Set<ComponentDef>(reachableDefs());
   const visit = (d: ComponentDef) => {
     if (seen.has(d)) return;
     seen.add(d);
     for (const i of netlistOf(d)?.instances ?? []) visit(i.def);
   };
-  for (const d of registry.values()) visit(d);
-  for (const d of cpuTops()) visit(d); // top-level CPUs are not registered
+  for (const d of cpuTops()) visit(d);
   return [...seen];
 }
 

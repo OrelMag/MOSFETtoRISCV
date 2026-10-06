@@ -70,17 +70,32 @@ function splitArgs(s: string): string[] {
   return out;
 }
 
-/** Remove a trailing comment (#, // or ;) that is not inside a character literal. */
-function stripComment(line: string): string {
+/** Index of a trailing comment (#, // or ;) that is not inside a character literal, or the
+ *  line length. Exported so the editor's highlighter splits lines exactly like the assembler. */
+export function commentStart(line: string): number {
   let q = false;
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     if (ch === "'") q = !q;
     if (q) continue;
-    if (ch === '#' || ch === ';' || (ch === '/' && line[i + 1] === '/')) return line.slice(0, i);
+    if (ch === '#' || ch === ';' || (ch === '/' && line[i + 1] === '/')) return i;
   }
-  return line;
+  return line.length;
 }
+
+const stripComment = (line: string) => line.slice(0, commentStart(line));
+
+/** Every mnemonic encode() accepts besides the real instructions in BY_NAME (for the highlighter;
+ *  tests/codeedit.test.ts checks the list against the assembler). */
+export const PSEUDO_OPS: readonly string[] = [
+  'nop', 'mv', 'not', 'neg', 'seqz', 'snez', 'li', 'la', 'j', 'jr', 'ret', 'call', 'tail',
+  'beqz', 'bnez', 'blez', 'bgez', 'bltz', 'bgtz', 'bgt', 'ble', 'bgtu', 'bleu',
+  'csrr', 'csrw', 'csrs', 'csrc', 'csrwi', 'csrsi', 'csrci',
+  'fmv.s', 'fneg.s', 'fabs.s', 'frcsr', 'fscsr', 'frrm', 'fsrm', 'fsrmi', 'frflags', 'fsflags', 'fsflagsi',
+];
+
+/** Directives: .word emits data, the others are accepted and ignored. */
+export const DIRECTIVES: readonly string[] = ['.word', '.text', '.globl', '.global', '.section', '.align'];
 
 export function assemble(src: string): AsmResult {
   const stmts: Stmt[] = [];

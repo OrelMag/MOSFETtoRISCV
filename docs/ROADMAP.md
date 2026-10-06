@@ -96,9 +96,43 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   encoder, demultiplexer, population count, absolute value, parity, Hamming SEC-DED encoder / decoder (ECC step in ch. 21)
 - ✅ Workbench lists every library component: each generator is a family with parameter dropdowns
   (adders, multipliers, dividers, float units, register files, caches, …), plus every fixed processor part
-- **Sandbox**: full wiring editor (today the *workbench* opens any library component with free inputs) (place parts from the library, wire, package into a new
-  chip, save to local storage and share via URL); Turing-Complete-style build challenges
-  checked against a truth table or test vectors
+- ✅ **Sandbox** (`#/sandbox`): a Digital-Logic-Sim-style editor
+  - ✅ Core (DOM-free, tested): chip documents, compile to ComponentDefs (pointers = named nets,
+    switch level, derived gate-level models of transistor chips), user-chip library with cycle
+    checks, pure edit operations, undo with transactions, local storage, share-link encoding
+  - ✅ Editor: palette (IO, transistors, constants, displays, wiring, the whole library with family
+    parameters, my chips; purist toggle), free-hand wires with corners / L flip / branches, pointers
+    with jump-to-twin, select / drag / rubber band / copy / paste / undo, live values (switch level
+    included), properties and diagnostics, tabs per chip, autosave, cycle (Hz) and gate-delay run modes
+  - ✅ Files and links: File menu (export a chip with its dependencies or the whole sandbox, import
+    with an added / renamed / skipped summary, drag and drop onto the canvas), share links
+    (`#/sandbox/s/…`, the circuit compressed into the URL, imported only on a click, never
+    overwriting), structural Verilog and SVG / PNG images of the canvas, a chip manager (sizes,
+    users, duplicate, delete refused while used), autosave indicator, recovery of unreadable data
+  - ✅ Memories: Memory palette group (program ROM, word ROM, RAM); ROM properties (size, byte /
+    word addressing, asm / hex with conversion, sample programs) and a program editor (code editor,
+    live re-assembly, gutter diagnostics, listing, Apply = one undo step); the listing and the editor
+    follow the address the running circuit reads; RAM contents live in the properties and initial
+    contents seeded at power-on; Examples ▸ (fetch loop, counter on a 7-segment digit); the CPU
+    panel's Edit box is the code editor too
+  - ✅ Chips: "Package as chip" (name, colour, notes, live preview of the box and its pin order;
+    Save & new circuit), My chips with colour and pin count (greyed when it would make a cycle),
+    Edit chip with a breadcrumb and Back, pin renames that keep every parent wired, used by / uses,
+    the flip-flop marking with the compiler's verdict, bidirectional pins driven Z / 0 / 1
+  - ✅ Look inside any placed part, read-only and live on the editor's own simulation, down to
+    transistors (and a single MOSFET); the Inspector (info, truth table, Verilog) in a drawer
+  - ✅ "Open in Sandbox" from the workbench and chapter scenes: the circuit on screen as an
+    editable chip, pointers included (a CPU's ROM, constants and data memory come along)
+  - ✅ Analysis: probe mode and a timing panel (lanes follow the drawing across rebuilds, VCD),
+    static timing of a chip (period, max clock, per-capture periods) with the critical path drawn
+    on it, lint (nets drawn on one line, pointers without a twin, open inputs reading X);
+    incremental drawing during drags, derived models cached by structure, per-chip simulations
+    kept across tab switches
+  - ✅ Build challenges (Turing-Complete style, optional): 21 chips from a CMOS inverter to an
+    instruction fetch unit, every level of the journey; each checked exhaustively (truth table) or by a
+    clocked sequence, the palette restriction (transistors / NAND / any) enforced on the compiled
+    hierarchy, scored against par (NANDs, transistors, depth); Show answer imports the reference chips,
+    Do it for me fills the challenge chip; progress in the site settings
 
 ### Phase 3 — The instruction set & assembly ✅
 - ✅ RV32I instruction formats with an interactive encoder / decoder (bit-field explorer)

@@ -113,8 +113,10 @@ export class Stage {
       icon('probe', 15), h('span', { class: 'lbl' }, 'Probe')) as HTMLButtonElement;
     this.timingBtn = h('button', { class: 'btn ghost sm toggle', title: 'Timing diagram: probed nets and ports over time', onclick: () => this.showAnalyzer(!this.el.classList.contains('with-analyzer')) },
       icon('wave', 15), h('span', { class: 'lbl' }, 'Timing')) as HTMLButtonElement;
+    const remix = h('button', { class: 'btn ghost sm remix-btn', title: 'Open in Sandbox: an editable copy of the circuit on screen, as one of your own chips', onclick: () => this.remix() },
+      icon('chip', 15), h('span', { class: 'lbl' }, 'Open in Sandbox'));
     const bar = h('div', { class: 'stage-bar' },
-      this.crumbs, this.probeBtn, this.timingBtn,
+      this.crumbs, remix, this.probeBtn, this.timingBtn,
       btn('up', 'Up one level (Esc)', () => this.up()),
       btn('minus', 'Zoom out', () => this.view.zoom(1.25)),
       btn('plus', 'Zoom in', () => this.view.zoom(0.8)),
@@ -277,6 +279,17 @@ export class Stage {
       return;
     }
     if (this.ctx?.parent) this.goTo(this.ctx.parent.path);
+  }
+
+  /** The level on screen as a new sandbox chip (remix.ts is loaded on demand), then go there. */
+  private remix(): void {
+    const def = this.ctx?.def;
+    if (!def) return;
+    import('../editor/remix').then((m) => {
+      const r = m.remixIntoStorage(def);
+      if ('error' in r) this.status.replaceChildren(h('span', { class: 'pulse warn' }), `Cannot open in the sandbox: ${r.error}`);
+      else location.hash = `#/sandbox/${r.id}`;
+    }, (e) => this.status.replaceChildren(h('span', { class: 'pulse warn' }), `The sandbox could not load: ${String(e)}`));
   }
 
   select(child: string | null): void {

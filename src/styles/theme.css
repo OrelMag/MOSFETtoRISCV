@@ -31,6 +31,11 @@
   --sym-fill: #ffffff;
   --box-fill: #f4f4ff;
   --box-stroke: #4a5170;
+  /* user chips: hsl(var(--chip-h) …) with these saturations / lightnesses */
+  --chip-fill-s: 70%;
+  --chip-fill-l: 94%;
+  --chip-stroke-s: 45%;
+  --chip-stroke-l: 38%;
   --plumb: #6b7390;
   --hl: #5b4cf0;
   --sel: #5b4cf0;
@@ -83,6 +88,10 @@
     --sym-fill: #141824;
     --box-fill: #171b2a;
     --box-stroke: #8d95b3;
+    --chip-fill-s: 35%;
+    --chip-fill-l: 16%;
+    --chip-stroke-s: 55%;
+    --chip-stroke-l: 68%;
     --plumb: #8891ab;
     --hl: #a397ff;
     --sel: #a397ff;
@@ -121,6 +130,10 @@
   --sym-fill: #141824;
   --box-fill: #171b2a;
   --box-stroke: #8d95b3;
+  --chip-fill-s: 35%;
+  --chip-fill-l: 16%;
+  --chip-stroke-s: 55%;
+  --chip-stroke-l: 68%;
   --plumb: #8891ab;
   --hl: #a397ff;
   --sel: #a397ff;

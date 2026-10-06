@@ -41,7 +41,8 @@ on every push to `main`.
 
 - Vite + TypeScript (strict, `verbatimModuleSyntax`: use `import type` for types). No UI
   framework: plain DOM + SVG with small helpers in `src/ui/dom.ts`. Keep the bundle small.
-- Hash routing (`#/c/<chapter>/<step>`, `#/workbench/<componentId>`) so the site works on
+- Hash routing (`#/c/<chapter>/<step>`, `#/workbench/<componentId>`, `#/sandbox/<chipId>`,
+  `#/sandbox/s/<payload>` for a share link) so the site works on
   any static host or sub-path.
 - Theme: CSS custom properties in `src/styles/`; `data-theme="light|dark"` on `<html>`, or
   absent for auto (`prefers-color-scheme`). Always define new colours for both themes.
@@ -54,7 +55,8 @@ src/sim/       simulation core (no DOM)
   types.ts       ComponentDef / PortDef / Netlist / NetDef: the single source of truth
   geometry.ts    symbol sizes and port positions (grid units) shared by authors, router, renderer
   flatten.ts     hierarchy → flat 1-bit nets + leaves, keeping a HierNode tree mapping every
-                 level's ports/wires to flat nets (this is what makes every box transparent)
+                 level's ports/wires to flat nets (this is what makes every box transparent);
+                 powerOn hints may be dotted paths into children ('w3.ff0.ff.slave.sr.q')
   gatesim.ts     event-driven 3-valued (0/1/X) simulator, unit NAND delay, transport delay,
                  relaxation for power-on and oscillation resolution; runUntil(t) for a
                  fixed-period clock (an edge does not wait for the logic to settle); onTrace +
@@ -66,7 +68,10 @@ src/sim/       simulation core (no DOM)
   pnr.ts         problemOf(def), Layout (annealing placer), route / routeAll (two-layer Lee router)
   techmap.ts     techMap(def): inverter recognition and double-inversion removal
   cachemodel.ts  behavioural cache model (size/line/ways/replacement/write policy, 3C classes)
-  harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench
+  carry.ts       matchNets(next, prev): flat nets of a rebuilt design ↔ the old one, through the
+                 hierarchy; GateSim / SwitchSim.carry(prev) use it so state survives an edit
+  harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench;
+                 reachesTransistors(def) (would a gate-level flatten hit a transistor?)
   stats.ts       transistor / NAND counts, logic depth
   settle.ts      outputSettle(def, vectors): simulated input-to-last-output-change delay (sees false paths)
   timing.ts      static timing: register-to-register critical path, per-capture-stage periods
@@ -138,6 +143,57 @@ src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over 
 src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...);
                insthw.ts maps an instruction to the units it uses (and pipeline stage units)
 src/chapters/  narrative content: chapters → steps → scene / widget / challenge
+src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui/pages/sandbox.ts, its own chunk;
+               #/sandbox/s/<payload> opens a share link: a banner, imported only on the user's click).
+               DOM-free (tested in Node):
+  model.ts       Workspace / ChipDoc (pins, parts, wires = interior corners, pointers = named net labels)
+  compile.ts     compileChip(doc) → ComponentDef + diags, netOfWire / netOfEnd / netOfLabel, connKey
+  parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays, ROM, RAM
+  library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip
+  ops.ts         pure edits (add / move / delete / flip / set*, copy / paste); wires stay orthogonal
+  history.ts     History<T>: undo / redo, transactions (a drag = one step), replace (not undone)
+  store.ts       localStorage, sanitizer, JSON export / import (importChips: never overwrites, renames on
+                 conflict, recognizes its own earlier renames); share.ts: share-link encoding
+  files.ts       shareRoute / shareUrl, download names, import summaries, duplicateChip / deleteChip
+  derive.ts      circuitMode, deriveBehavior (a combinational transistor chip → gate-level brick)
+  program.ts     ROM program text (asm / hex) → words
+  memory.ts      romImage (problems on source lines), romListing / romIndex (the row the circuit reads),
+                 asm ↔ hex conversion, ROM_SAMPLES; readRam (live words), ramWithInit (initial contents
+                 as dotted power-on hints into the flip-flops' latches)
+  examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit), addExample: new chip, opened
+  geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
+  session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
+  runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run
+  palette.ts     registerPaletteGroup + the palette panel (purist filter)
+  chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
+  challenges.ts  build challenges: BuildChallenge (ports, table / sequence check, allowed parts, par),
+                 startChallenge (u_ch_<id> with the pins placed), checkChallenge (BitSim / GateSim / SwitchSim;
+                 failing vectors, restriction violations on the compiled hierarchy, score), importAnswer,
+                 solveChallenge; challengeset.ts: CHALLENGES and their reference answers (chip documents
+                 drawn with a small kit, each answer built from the answers of the rungs below)
+  remix.ts       "Open in Sandbox": remixDef / remixIntoStorage (a shown def → a new chip; parts a reload could
+                 not find by id come along as ROM / constant parts or chips); loaded on demand by the stage
+  hops.ts        HopCache: wire hops recomputed for the moved wires and those crossing them only
+  probes.ts      ProbeTarget (wires / pin / pointer name) → flat nets of each new build (resolveProbe)
+  sta.ts         chipTiming: static timing of a chip, critical path mapped to its parts / wires / pins
+  lint.ts        lintChip: two nets drawn on one line, pointers without a twin, inputs left open
+               DOM:
+  editor.ts      Editor: workspace + history + library + sim + panels; registerToolbarAction, slots
+  view.ts        EditorView: one SVG element per object updated in place, live values, overlays
+  tools.ts       the mouse / keyboard state machine (place, select, drag, band, free-hand wires, pointers)
+  props.ts       properties of the selection or the chip, diagnostics; registerPropsSection
+  fileui.ts      File menu (export / import / share link / Verilog / images / chip manager), share banner,
+                 drag-and-drop import, autosave indicator, backup notice; installFiles(ed) per page
+  image.ts       the canvas as a standalone SVG (computed styles inlined, current theme) and PNG
+  memui.ts       Memory palette group, ROM / RAM property sections (live listing, RAM grid, initial
+                 contents), the program editor dialog, Examples ▸; values polled per frame while shown
+  package.ts     "Package as chip…" dialog (name, hue, notes, symbol preview, pin order; Save & new circuit)
+  inside.ts      lookInside(ed, path): read-only live schematic over the canvas on EditorSim's simulator (ViewCtx)
+  challengeui.ts "Challenges" list drawer (solved ticks via settings), the strip under the canvas while a
+                 challenge chip is open (brief, Check, Show answer, Do it for me), purist palette while restricted
+  inspect.ts     the Inspector in a drawer for the chip or a part; chipprops.ts: chip / part property sections
+  analysis.ts    plugin: probe mode (P) + LogicAnalyzer in slots.bottom, Timing props section with
+                 the critical path drawn on the chip, lint as a diag source, open-input marks
 src/ui/        app shell, router, theme, settings, progress
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
@@ -218,6 +274,32 @@ While `stage.inEdge`, panels must not compare the hardware with the golden model
   delay (`SchematicView.flowMs`); the simulation's timing is unchanged.
 - The Timing panel only records nets of the scene's own simulation (`ctx.sim === stage.sim`);
   sub-simulations (an opened NAND, the ROM) cannot be probed. `Scene.analyzer` opens it.
+
+### Sandbox editor
+
+- Every change goes through `Editor.edit()` (one undo step), `begin()` / `commit()` (a drag: one
+  step) or `volatile()` (open tabs, input values: saved, never undone); `refresh()` then updates
+  the library, view, simulation and panels. During a drag only the drawing follows.
+- The simulator is rebuilt only when `simKey` (connectivity + part definitions) changes; input
+  values are stripped before compiling, so toggling an input recompiles nothing.
+- Later phases plug in through `registerPaletteGroup`, `registerPropsSection`,
+  `registerToolbarAction` (`active` for toggles), `registerEditorPlugin` (per-editor state, with a
+  cleanup), `registerDiagSource` (extra diagnostics, e.g. lint), `Editor.onSimChange`,
+  `Tools.onPress` (a mode that takes clicks first) and `editor.slots` (`overlay` over the canvas,
+  `bottom` above the run bar, `top` in the tab bar). `editor.saveState` / `onSave()` report autosave
+  (saved / saving / error). `editor.paintHooks` run after every repaint (live views over the
+  simulation: look inside, inspector). Feature modules and plugins register themselves when
+  ui/pages/sandbox.ts imports them (not editor.ts: they import it).
+- Double-click a placed user chip: `editChip` (tab breadcrumb, Back); any other part: `lookInside`.
+  A bidirectional pin's `value` is what the user drives onto it (absent: Z), switch level only.
+- Performance: a drag refits only wires on moved objects (ops.ts `refit`), the view recomputes
+  polylines / hops / dots only for what moved, a transistor chip's derived model and flip-flop
+  check are cached by a structural key (compile.ts), and the last four chips keep their
+  simulation across tab switches. `npx vite-node scripts/sandbox-perf.ts` measures the
+  DOM-free costs on a CPU and a 64-bit Kogge–Stone adder opened in the sandbox.
+- Probes and the timing panel are gate level only (the switch-level solver has no time); lanes
+  name what was drawn and survive rebuilds (`LogicAnalyzer.rebind` keeps the recording).
+- Keys are handled on `document` while the page is mounted and ignored while typing in a field.
 
 ### Writing chapters
 

@@ -3,7 +3,7 @@
 
 import { evalOnce, forEachInput, inputBits, simulate } from '../sim/harness';
 import { hasFeedback, logicDepth, stats } from '../sim/stats';
-import { type Bit, type ComponentDef, inPorts, netlistOf, outPorts } from '../sim/types';
+import { type Bit, type Category, type ComponentDef, inPorts, netlistOf, outPorts } from '../sim/types';
 import { formatBits, formatNumber, pack, type Radix } from '../sim/values';
 import { exportHdl, testableComb, type HdlFlavor } from '../sim/svexport';
 import { structuralVerilog } from '../sim/verilog';
@@ -21,10 +21,10 @@ export interface InspectTarget {
 
 type Tab = 'info' | 'truth' | 'hdl';
 
-const CATEGORY: Record<string, string> = {
+const CATEGORY: Record<Category, string> = {
   transistor: 'Transistor level', cell: 'CMOS cell', gate: 'Logic gate', plumbing: 'Wiring',
   arithmetic: 'Arithmetic', routing: 'Selection & routing', sequential: 'Sequential logic',
-  memory: 'Memory', cpu: 'Processor',
+  memory: 'Memory', cpu: 'Processor', custom: 'User chip',
 };
 
 export class Inspector {

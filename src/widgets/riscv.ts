@@ -5,7 +5,8 @@ import { ABI, decode, disasm, type Fmt } from '../riscv/isa';
 import { formatStrip, instrBreakdown } from './instrfields';
 import { ISS } from '../riscv/iss';
 import { PROGRAMS } from '../riscv/programs';
-import { h } from '../ui/dom';
+import { debounce, h } from '../ui/dom';
+import { codeEditor } from './codeedit';
 import type { Widget } from '../view/stage';
 
 const hex = (v: number, d = 8) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(d, '0');
@@ -71,8 +72,7 @@ export function instructionExplorer(): Widget {
 }
 
 export function assemblerWorkspace(initial = PROGRAMS[0].source): Widget {
-  const editor = h('textarea', { class: 'asm-editor', spellcheck: 'false', wrap: 'off', rows: 18 }) as HTMLTextAreaElement;
-  editor.value = initial;
+  const editor = codeEditor({ value: initial, lang: 'rvasm', rows: 18, onChange: () => later() });
   const table = h('div', { style: 'max-height:360px;overflow:auto' });
   const result = h('div');
   const sel = h('select', { 'aria-label': 'sample program' }) as HTMLSelectElement;
@@ -84,8 +84,9 @@ export function assemblerWorkspace(initial = PROGRAMS[0].source): Widget {
   const render = () => {
     const r = assemble(editor.value);
     const errLines = new Set(r.errors.map((e) => e.line));
+    editor.setDiagnostics(r.errors);
     table.replaceChildren(h('table', { class: 'asm-table' }, h('tbody', null, r.lines.map((l) =>
-      h('tr', { class: errLines.has(l.srcLine) ? 'err' : '' },
+      h('tr', { class: errLines.has(l.srcLine) ? 'err' : '', style: 'cursor:pointer', onclick: () => editor.setActiveLine(l.srcLine) },
         h('td', { class: 'a' }, l.addr.toString(16).padStart(4, '0')),
         h('td', { class: 'w' }, l.word.toString(16).padStart(8, '0')),
         h('td', null, disasm(l.word, l.addr)))))));
@@ -105,14 +106,13 @@ export function assemblerWorkspace(initial = PROGRAMS[0].source): Widget {
       h('div', { class: 'cpu-mem' }, mem.map(([i, v]) => h('div', { class: 'm' }, h('span', { class: 'n' }, `[${hex(i * 4, 2)}]`), h('span', { class: 'v' }, hex(v)), h('span', { class: 'd' }, String(v | 0))))),
     );
   };
-  let t: ReturnType<typeof setTimeout> | undefined;
-  editor.addEventListener('input', () => { clearTimeout(t); t = setTimeout(render, 250); });
+  const later = debounce(render, 250);
   render();
   return {
     el: h('div', { class: 'widget' }, h('div', { class: 'wgrid' },
       h('div', { class: 'panel' }, h('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px' }, h('h3', null, 'Assembler'), sel),
         h('p', { class: 'sub' }, 'Labels, ABI register names (a0, sp, …) and pseudo-instructions (li, mv, j, ret, beqz, …) are supported. A jump to itself is "halt".'),
-        editor),
+        editor.el),
       h('div', { class: 'panel' }, h('h3', null, 'Machine code'), table, h('h3', { style: 'margin-top:12px' }, 'Run on the golden model'), result))),
   };
 }
