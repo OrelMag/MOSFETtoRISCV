@@ -161,3 +161,28 @@ describe('SwitchSim.carry', () => {
     expect([q(b, 'c0'), q(b, 'c1')]).toEqual([B1, B0]);
   });
 });
+
+describe('carry({ known })', () => {
+  const C = counter(4);
+  const en: NetDef = { ends: ['en', 'cnt.en'] }, q: NetDef = { ends: ['cnt.q', 'q'] };
+  // The clock not wired yet: it floats at X, and so does the count.
+  const half = wrap('t_cnt_half', [bit('en', 'in'), bit('q', 'out', 4)], [{ name: 'cnt', def: C }], [en, q]);
+  const full = wrap('t_cnt_full', [bit('en', 'in'), bit('clk', 'in'), bit('q', 'out', 4)], [{ name: 'cnt', def: C }], [en, { ends: ['clk', 'cnt.clk'] }, q]);
+
+  it('heals storage that went X while half wired; a plain carry keeps the X', () => {
+    // A rebuild re-evaluates everything: with the clock at X the latches lose their bit.
+    const a = new GateSim(flatten(half));
+    a.carry(new GateSim(flatten(half)));
+    set(a, { en: 1 });
+    expect(out(a, 'q')).toBe(-1);
+    const plain = new GateSim(flatten(full));
+    plain.carry(a);
+    expect(out(plain, 'q')).toBe(-1);
+    const healed = new GateSim(flatten(full));
+    healed.carry(a, { known: true });
+    expect(out(healed, 'q')).toBe(0);
+    set(healed, { clk: 0 });
+    tick(healed);
+    expect(out(healed, 'q')).toBe(1);
+  });
+});

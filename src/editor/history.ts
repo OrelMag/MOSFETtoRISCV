@@ -51,6 +51,14 @@ export class History<T> {
     this.cur = next;
   }
 
+  /**
+   * Replaces the current state without an undo step: view state kept in the document (open
+   * tabs, input pin values) that must not be undone. Inside a transaction the base is unchanged.
+   */
+  replace(next: T): void {
+    this.cur = next;
+  }
+
   begin(): void {
     if (this.depth++ === 0) this.base = this.cur;
   }

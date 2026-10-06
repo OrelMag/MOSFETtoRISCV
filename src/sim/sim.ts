@@ -28,8 +28,10 @@ export interface Sim {
   /**
    * Take over the state of `prev`, a simulation of an earlier version of the design (an editor
    * rebuilds the design on every edit): nets matched through the hierarchy, root inputs by name.
+   * With `known`, only 0/1 values carry over: a net that was unknown (X) takes its power-on
+   * value instead, so an edit heals storage that went X while it was half wired.
    */
-  carry(prev: Sim): void;
+  carry(prev: Sim, opts?: { known?: boolean }): void;
   /** Called after any net changes value (gate sim only reports watched nets). */
   onTrace?: (net: number, value: Bit, time: number) => void;
   watch(nets: readonly number[]): void;

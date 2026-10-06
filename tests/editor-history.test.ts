@@ -90,3 +90,14 @@ describe('same', () => {
     expect(same(null, {})).toBe(false);
   });
 });
+
+describe('replace', () => {
+  it('changes the current state without an undo step', () => {
+    const h = new History(0);
+    h.push(1);
+    h.replace(2);
+    expect([h.current, h.canRedo]).toEqual([2, false]);
+    expect(h.undo()).toBe(0);
+    expect(h.redo()).toBe(2);
+  });
+});

@@ -89,9 +89,10 @@ export class SwitchSim implements Sim {
   /**
    * Take over the node values of a simulation of a previous version of the design: nets matched
    * through the hierarchy (see matchNets), root inputs by port name and width. The solve starts
-   * from them, so cross-coupled inverters keep their bit and `cap` nets keep their charge.
+   * from them, so cross-coupled inverters keep their bit and `cap` nets keep their charge. With
+   * `known`, X nodes of `prev` are not copied.
    */
-  carry(prev: Sim): void {
+  carry(prev: Sim, opts: { known?: boolean } = {}): void {
     for (const name of sharedInputs(this.design, prev.design)) this.inputs.set(name, prev.getInput(name));
     // root inouts too (only a switch-level simulation drives them)
     for (const p of this.design.root.def.ports) {
@@ -99,7 +100,11 @@ export class SwitchSim implements Sim {
       if (q && q.dir === 'inout' && q.width === p.width) this.inputs.set(p.name, prev.getInput(p.name));
     }
     const map = matchNets(this.design, prev.design);
-    for (let net = 0; net < map.length; net++) if (map[net] >= 0) this.val[net] = prev.get(map[net]);
+    for (let net = 0; net < map.length; net++) {
+      if (map[net] < 0) continue;
+      const b = prev.get(map[net]);
+      if (!opts.known || b !== BX) this.val[net] = b;
+    }
     this.dirty = true;
     this.settle();
   }

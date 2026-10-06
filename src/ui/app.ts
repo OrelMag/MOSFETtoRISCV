@@ -14,7 +14,8 @@ export function startApp(root: HTMLElement): void {
   const nav = h('nav', { class: 'nav' });
   const navLink = (href: string, ic: string, label: string, key: string) =>
     h('a', { href, 'data-key': key }, icon(ic, 16), h('span', null, label));
-  nav.append(navLink('#/', 'layers', 'Journey', 'home'), navLink('#/c/map/0', 'book', 'Chapters', 'c'), navLink('#/workbench/rca4', 'bench', 'Workbench', 'workbench'));
+  nav.append(navLink('#/', 'layers', 'Journey', 'home'), navLink('#/c/map/0', 'book', 'Chapters', 'c'), navLink('#/workbench/rca4', 'bench', 'Workbench', 'workbench'),
+    navLink('#/sandbox', 'chip', 'Sandbox', 'sandbox'));
 
   const radix = h('div', { class: 'seg', title: 'How buses show their value' });
   const radixes: [Radix, string][] = [['hex', 'HEX'], ['bin', 'BIN'], ['dec', 'DEC']];
@@ -68,7 +69,10 @@ export function startApp(root: HTMLElement): void {
   root.append(topbar, view);
 
   let page: Page | null = null;
+  // A route that loads its page asynchronously must not mount it if another route came since.
+  let routeSeq = 0;
   const route = () => {
+    const seq = ++routeSeq;
     const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
     const key = parts[0] ?? 'home';
     for (const a of nav.querySelectorAll<HTMLAnchorElement>('a')) a.classList.toggle('active', a.dataset.key === key || (key === '' && a.dataset.key === 'home'));
@@ -86,6 +90,18 @@ export function startApp(root: HTMLElement): void {
         return;
       }
       mount(new WorkbenchPage(parts[1] ?? 'rca4'));
+    } else if (key === 'sandbox') {
+      const sb = page as (Page & { kind?: string; open?(id?: string): void }) | null;
+      if (sb?.kind === 'sandbox') {
+        sb.open?.(parts[1]);
+        return;
+      }
+      // The editor is a separate chunk: most visitors never open it.
+      import('./pages/sandbox').then((m) => {
+        if (seq === routeSeq) mount(new m.SandboxPage(parts[1]));
+      }, (e) => {
+        if (seq === routeSeq) view.replaceChildren(h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'The sandbox could not load'), h('p', { class: 'sub' }, String(e)))));
+      });
     } else {
       mount(homePage());
     }

@@ -96,9 +96,17 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   encoder, demultiplexer, population count, absolute value, parity, Hamming SEC-DED encoder / decoder (ECC step in ch. 21)
 - ✅ Workbench lists every library component: each generator is a family with parameter dropdowns
   (adders, multipliers, dividers, float units, register files, caches, …), plus every fixed processor part
-- **Sandbox**: full wiring editor (today the *workbench* opens any library component with free inputs) (place parts from the library, wire, package into a new
-  chip, save to local storage and share via URL); Turing-Complete-style build challenges
-  checked against a truth table or test vectors
+- 🚧 **Sandbox** (`#/sandbox`): a Digital-Logic-Sim-style editor
+  - ✅ Core (DOM-free, tested): chip documents, compile to ComponentDefs (pointers = named nets,
+    switch level, derived gate-level models of transistor chips), user-chip library with cycle
+    checks, pure edit operations, undo with transactions, local storage, share-link encoding
+  - ✅ Editor: palette (IO, transistors, constants, displays, wiring, the whole library with family
+    parameters, my chips; purist toggle), free-hand wires with corners / L flip / branches, pointers
+    with jump-to-twin, select / drag / rubber band / copy / paste / undo, live values (switch level
+    included), properties and diagnostics, tabs per chip, autosave, cycle (Hz) and gate-delay run modes
+  - ⏳ Packaging polish and looking inside placed chips, "Open in Sandbox", program ROM editor,
+    file import / export and share links in the UI, probes and timing, build challenges
+    (Turing-Complete style, checked against a truth table or test vectors)
 
 ### Phase 3 — The instruction set & assembly ✅
 - ✅ RV32I instruction formats with an interactive encoder / decoder (bit-field explorer)
