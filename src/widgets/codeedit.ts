@@ -33,6 +33,8 @@ export interface CodeEditor {
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ESC[c]);
 const LABEL_PREFIX = /^\s*(?:[A-Za-z_.$][\w.$]*\s*:\s*)+/;
+/** Start of the line holding offset i (lastIndexOf clamps -1 to 0, which a leading \n would hit). */
+const lineStart = (v: string, i: number) => (i > 0 ? v.lastIndexOf('\n', i - 1) + 1 : 0);
 
 export function codeEditor(opts: CodeEditorOpts): CodeEditor {
   const { lang } = opts;
@@ -116,7 +118,7 @@ export function codeEditor(opts: CodeEditorOpts): CodeEditor {
   /** The whole lines the selection touches (a selection ending at column 0 excludes that line). */
   const block = () => {
     const v = ta.value, s = ta.selectionStart, e = ta.selectionEnd;
-    const a = v.lastIndexOf('\n', s - 1) + 1;
+    const a = lineStart(v, s);
     let b = v.indexOf('\n', e > s && v[e - 1] === '\n' ? e - 1 : e);
     if (b < 0) b = v.length;
     return { a, b, s, e, lines: v.slice(a, b).split('\n') };
@@ -153,14 +155,14 @@ export function codeEditor(opts: CodeEditorOpts): CodeEditor {
       if (ev.shiftKey) rewrite(outdent);
       else if (ta.value.slice(s, e).includes('\n')) rewrite((l) => (l.trim() ? ' '.repeat(tab) + l : l));
       else {
-        const col = s - (ta.value.lastIndexOf('\n', s - 1) + 1);
+        const col = s - lineStart(ta.value, s);
         const pad = ' '.repeat(tab - (col % tab));
         edit(s, e, pad, s + pad.length, s + pad.length);
       }
     } else if (ev.key === 'Enter' && !mod && !ev.altKey && !ev.shiftKey) {
       ev.preventDefault();
       const s = ta.selectionStart, e = ta.selectionEnd, v = ta.value;
-      const head = v.slice(v.lastIndexOf('\n', s - 1) + 1, s);
+      const head = v.slice(lineStart(v, s), s);
       let ind = head.match(/^[ \t]*/)![0];
       // After "loop:   add ..." continue in the mnemonic column; after a bare "loop:", one stop in.
       const lab = lang === 'rvasm' ? head.match(LABEL_PREFIX) : null;
