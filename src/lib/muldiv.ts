@@ -243,14 +243,16 @@ export function compressor(x: Word, y: Word, z: Word, maxW = Infinity): { def: C
       ports: [bus('x', x.w, 'in'), bus('y', y.w, 'in'), bus('z', z.w, 'in'), bus('s', s.w, 'out'), ...(c ? [bus('c', c.w, 'out')] : [])],
       symbol: { kind: 'box', label: '3:2' },
       spec,
-      netlist: () => ({
-        pins: {
-          x: [0, Y0 + 2], y: [0, Y0 + 4], z: [0, Y0 + 6],
-          s: [carAt + 6, Y0 + fg.ports.s.pos[1] + (P * s.w) / 2 - P / 2],
-          ...(c ? { c: [carAt + 6, Y0 + P * (c.lo - 1 - L) + fg.ports.cout.pos[1] + (P * c.w) / 2 - P / 2 + 2] as [number, number] } : {}),
-        },
-        instances, nets,
-      }),
+      netlist: () => {
+        const sy = Y0 + fg.ports.s.pos[1] + (P * s.w) / 2 - P / 2;
+        const pins: Record<string, [number, number]> = { x: [0, Y0 + 2], y: [0, Y0 + 4], z: [0, Y0 + 6], s: [carAt + 6, sy] };
+        if (c) {
+          // The c pin sits a step below mc's output, unless s is already there.
+          const cOut = Y0 + P * (c.lo - 1 - L) + fg.ports.cout.pos[1] + (P * c.w) / 2 - P / 2;
+          pins.c = [carAt + 6, cOut + 2 === sy ? cOut : cOut + 2];
+        }
+        return { pins, instances, nets };
+      },
       hdl: {
         verilog: `// carry-save: every column independent
 assign s = x ^ y ^ z;

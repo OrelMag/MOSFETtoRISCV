@@ -236,8 +236,10 @@ export function koggeStone(n: number): ComponentDef {
     for (let i = 0; i < n; i++) {
       instances.push({ name: `x${i}`, def: XOR, at: [XS, rowY(i) + 2] });
       addSink(`gp${i}.p`, `x${i}.a`, [[15, rowY(i) + 2], [15, rowY(i) + 6], [XS - 1, rowY(i) + 6], [XS - 1, rowY(i) + 3]]);
-      if (i === 0) addSink('cin', 'x0.b', [[XS - 2.5, -2], [XS - 2.5, rowY(0) + 5]]);
-      else addSink(curG[i - 1], `x${i}.b`, [[XS - 2.5, rowY(i - 1) + 1], [XS - 2.5, rowY(i) + 5]]);
+      // Each carry drops more than a row, so neighbouring bits alternate columns.
+      const xb = XS - 2.5 - (i % 2) * 0.5;
+      if (i === 0) addSink('cin', 'x0.b', [[xb, -2], [xb, rowY(0) + 5]]);
+      else addSink(curG[i - 1], `x${i}.b`, [[xb, rowY(i - 1) + 1], [xb, rowY(i) + 5]]);
       nets.push({ name: `s${i}`, ends: [`x${i}.y`, `ms.i${i}`] });
     }
     instances.push({ name: 'ms', def: merger(ones(n), R), at: [XS + 7, rowY(0) + 4 - R / 2] });
