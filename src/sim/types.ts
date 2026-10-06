@@ -76,6 +76,11 @@ export interface NetDef {
    * net names. `true` tags every endpoint. The driver is tagged when all its sinks are.
    */
   tags?: string[] | true;
+  /**
+   * Switch level: the net has significant capacitance (a bit line, a DRAM storage node). When
+   * nothing drives it, it keeps its last value as stored charge instead of floating to Z.
+   */
+  cap?: boolean;
 }
 
 export interface Netlist {
@@ -113,6 +118,11 @@ export interface ComponentDef {
 
   /** Built-in primitive handled directly by the simulators. */
   prim?: 'nand' | 'nmos' | 'pmos' | 'vdd' | 'gnd' | 'alias';
+  /**
+   * Switch level: drive strength of a transistor, 2 (weak) … 4 (strong); default 3. Where paths of
+   * different strength fight, the stronger one decides the node (ratioed logic, SRAM writes).
+   */
+  strength?: number;
   /**
    * For prim 'alias' (splitters / mergers): pairs of [portA, bitA, portB, bitB] that are the
    * same electrical node. Costs nothing and has no delay.

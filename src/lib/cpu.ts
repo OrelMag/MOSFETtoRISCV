@@ -12,6 +12,7 @@ import { andN, busMux2, incrementer, muxTree, rca } from './combinational';
 import { define, merger, splitter } from './define';
 import { AND, NOT, OR, XNOR, XOR } from './gates';
 import { ram } from './memory';
+import { cachedMemory } from './cache';
 import { regfile } from './regfile';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
@@ -428,6 +429,8 @@ export interface CpuOptions {
   dmemK?: number;
   /** 'ks' uses Kogge–Stone adders in the ALU, the branch-target adder and PC + 4. */
   adder?: 'rca' | 'ks';
+  /** Put a 4-line direct-mapped data cache in front of a slow main memory (loads can stall). */
+  dcache?: boolean;
 }
 
 /** PC + 4 with a parallel-prefix adder. */
@@ -464,12 +467,12 @@ export const PLUS4_FAST: ComponentDef = define({
 export function singleCycleCpu(program: number[], opts: CpuOptions = {}): ComponentDef {
   const IM = rom(program);
   const adder = opts.adder ?? 'rca';
-  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}`;
-  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder));
+  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? '_dc' : ''}`;
+  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, !!opts.dcache));
 }
 
-function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks'): ComponentDef {
-  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dataMemory(dmemK);
+function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache = false): ComponentDef {
+  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dcache ? cachedMemory(dmemK) : dataMemory(dmemK);
   const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = adder === 'ks' ? koggeStone(32) : rca(32), SI = splitter([7, 5, 3, 5, 5, 7]);
   const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4;
   const g = (d: ComponentDef) => symbolGeom(d);
@@ -572,15 +575,41 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks'): Compone
     { name: 'Carry', ends: ['alu.carry', 'npc.carry'], tags: true },
   ];
 
+  const pins: Record<string, [number, number]> = { clk: [0, bottom], pcOut: [resY[0] + 22, bottom - 8], instrOut: [resY[0] + 22, bottom - 5], aluOut: [resY[0] + 22, bottom - 2] };
+  if (dcache) {
+    // a load (ResultSrc = 01) that misses stalls the PC and the register write until the line arrives
+    const add = (name: string, def: ComponentDef, xy: [number, number]) => instances.push({ name, def, at: xy });
+    add('rsplit', splitter([1, 1]), [aluR + 4, bottom - 12]);
+    add('nr1', NOT, [aluR + 8, bottom - 10]);
+    add('isLoad', AND, [aluR + 13, bottom - 12]);
+    add('nstall', NOT, [8, P('pc', 'en')[1] - 1]);
+    add('rwg', AND, [52, bottom - 8]);
+    instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
+    const net = (name: string) => nets.find((n) => n.name === name)!;
+    nets.splice(nets.indexOf(net('en')), 1);
+    net('ResultSrc').ends.push('rsplit.in');
+    net('RegWrite').ends = ['ctl.regWrite', 'rwg.a'];
+    nets.push(
+      { name: 'rs0', ends: ['rsplit.o0', 'isLoad.a'], tags: true },
+      { name: 'rs1', ends: ['rsplit.o1', 'nr1.a'], tags: true },
+      { name: '¬rs1', ends: ['nr1.y', 'isLoad.b'], tags: true },
+      { name: 'MemRead', ends: ['isLoad.y', 'dm.re'], tags: true },
+      { name: 'stall', ends: ['dm.stall', 'nstall.a'], tags: true },
+      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwg.b', 'retire'], tags: ['rwg.b', 'retire'] },
+      { name: 'RegWriteQ', ends: ['rwg.y', 'rf.we'], tags: true },
+      { name: 'dhit', ends: ['dm.hit', 'dhit'], tags: true },
+    );
+    pins.retire = [resY[0] + 22, bottom + 1];
+    pins.dhit = [resY[0] + 22, bottom + 4];
+  }
   return {
-    id: key2(IM) + (adder === 'ks' ? '_ks' : ''), name: `Single-cycle RV32I CPU${adder === 'ks' ? ' (fast adders)' : ''}`, category: 'cpu',
-    summary: 'A complete RISC-V processor: every instruction is fetched, decoded, executed and retired in one clock cycle. Built entirely from the blocks of the previous chapters.',
-    ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out')],
-    symbol: { kind: 'box', label: 'RV32I' },
-    netlist: () => ({
-      pins: { clk: [0, bottom], pcOut: [resY[0] + 22, bottom - 8], instrOut: [resY[0] + 22, bottom - 5], aluOut: [resY[0] + 22, bottom - 2] },
-      instances, nets,
-    }),
+    id: key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dmemK}` : ''), name: `Single-cycle RV32I CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ' with a data cache' : ''}`, category: 'cpu',
+    summary: dcache
+      ? 'The single-cycle processor with its data memory replaced by a slow main memory behind a 64-byte direct-mapped cache. A load that misses holds the PC and the register write (retire = 0) for 8 cycles while the line is fetched.'
+      : 'A complete RISC-V processor: every instruction is fetched, decoded, executed and retired in one clock cycle. Built entirely from the blocks of the previous chapters.',
+    ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out'), ...(dcache ? [bit('retire', 'out'), bit('dhit', 'out')] : [])],
+    symbol: { kind: 'box', label: dcache ? 'RV32I + D$' : 'RV32I' },
+    netlist: () => ({ pins, instances, nets }),
     hdl: { verilog: CPU_VERILOG },
   };
 }

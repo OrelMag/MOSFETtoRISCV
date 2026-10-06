@@ -132,10 +132,15 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ⏳ Full Booth-recoded multiplier; non-restoring / SRT division; pipelined multiplier in the pipelined CPU
 - ⏳ Passing the official `riscv-tests` / architecture tests in the browser (stretch)
 
-### Phase 8 — Memory hierarchy ⏳
-- SRAM cell (6T) at transistor level vs the flip-flop array; DRAM cell (1T1C) intuition
-- Caches: direct-mapped → set-associative, write-back, hit/miss animation, measured hit rates
-- Bus / interconnect basics; MMIO
+### Phase 8 — Memory hierarchy 🚧
+- ✅ Switch level gains transistor strengths and capacitive (charge-holding) nets
+- ✅ 6T SRAM column (precharge, read, write, no read disturb, contention = short) and 1T1C DRAM cell at transistor level
+- ✅ DRAM retention / refresh / charge-sharing widget; memory hierarchy table
+- ✅ Gate-level direct-mapped write-through cache (4 × 4 words) with an 8-cycle miss FSM; 2-way tag compare
+- ✅ Cache explorer on real ISS traces: size, line, ways, LRU/FIFO/random, write-back/through, 3C classification
+- ✅ Single-cycle CPU with the data cache (stalls on misses), co-simulated per retirement
+- ⏳ Write-back gate-level cache with dirty bits; instruction cache; cache in the pipelined CPU
+- ⏳ Bus / interconnect basics
 
 ### Phase 9 — Performance & optimization ⏳
 - Floating point (F extension): IEEE 754 explorer, FPU add/mul

@@ -544,3 +544,34 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .sw { width: 18px; height: 24px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface-2); font: 600 9px var(--font-mono); color: var(--muted); cursor: pointer; padding: 0; }
 .sw.on { background: var(--w1); color: #fff; border-color: var(--w1); }
 .cpu-mem .m .n { width: 72px; }
+
+/* chapter 21: cache explorer, DRAM plot */
+.cx-controls { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 8px 0; }
+.cx-field { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--text-2); }
+.cx-field .num { font: 12px var(--font-mono); color: var(--text); }
+.cx-now { font: 13px var(--font-mono); margin: 8px 0; min-height: 20px; }
+.cx-now code { padding: 1px 3px; border-radius: 3px; }
+.cx-tag { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.cx-idx { background: color-mix(in srgb, var(--bus) 25%, transparent); }
+.cx-off { background: color-mix(in srgb, var(--w1) 22%, transparent); }
+.cx-grid { display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow: auto; margin: 6px 0; }
+.cx-set { display: flex; gap: 2px; align-items: center; }
+.cx-set.cur .cx-si { color: var(--accent); font-weight: 700; }
+.cx-si { width: 26px; text-align: right; font: 10px var(--font-mono); color: var(--muted); margin-right: 4px; }
+.cx-line { min-width: 34px; height: 16px; border-radius: 3px; background: var(--surface-2); border: 1px solid var(--border); font: 10px/14px var(--font-mono); text-align: center; color: var(--text-2); }
+.cx-line.v { background: var(--surface-3); color: var(--text); }
+.cx-line.d { border-color: var(--warn, #d97706); }
+.cx-line.hit { background: #16a34a; color: #fff; border-color: #16a34a; }
+.cx-line.miss { background: #dc2626; color: #fff; border-color: #dc2626; }
+.cx-bars { display: flex; height: 10px; border-radius: 4px; overflow: hidden; background: var(--surface-2); margin: 6px 0 4px; }
+.cx-bar.h, .cx-legend i.h { background: #16a34a; }
+.cx-bar.c1, .cx-legend i.c1 { background: #64748b; }
+.cx-bar.c2, .cx-legend i.c2 { background: #d97706; }
+.cx-bar.c3, .cx-legend i.c3 { background: #dc2626; }
+.cx-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text-2); }
+.cx-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.dram-plot { width: 100%; max-width: 560px; display: block; margin: 8px 0; }
+.dram-plot .v { fill: none; stroke: var(--w1); stroke-width: 2; }
+.dram-plot .thr { stroke: var(--muted); stroke-dasharray: 4 3; }
+.dram-plot .lbl { font: 10px var(--font-mono); fill: var(--muted); }
+.dcache-lines .m .v { letter-spacing: 0; }

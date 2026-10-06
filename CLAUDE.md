@@ -57,7 +57,9 @@ src/sim/       simulation core (no DOM)
                  level's ports/wires to flat nets (this is what makes every box transparent)
   gatesim.ts     event-driven 3-valued (0/1/X) simulator, unit NAND delay, transport delay,
                  relaxation for power-on and oscillation resolution
-  switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes)
+  switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes); transistor
+                 `strength` (ratioed logic) and `cap` nets that keep their charge
+  cachemodel.ts  behavioural cache model (size/line/ways/replacement/write policy, 3C classes)
   harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench
   stats.ts       transistor / NAND counts, logic depth
   timing.ts      static timing: register-to-register critical path, per-capture-stage periods
@@ -82,11 +84,14 @@ src/lib/       the component library (registered in `registry` via define())
   system.ts      SYS_DECODE (illegal-instruction detection), CSR_UNIT, TRAP_UNIT, IO_UNIT,
                  systemCpu(program, { m }): the complete RV32I(M) + Zicsr + M-mode traps / interrupts + MMIO;
                  with m the CPU gains a `retire` output (low while a divide stalls it)
+  cells.ts       NMOS_STRONG / PMOS_WEAK, SRAM_CELL (6T), SRAM_COLUMN, DRAM_CELL (switch level)
+  cache.ts       cachedMemory(k, ib) (direct-mapped write-through cache + main memory, stall on
+                 miss), wayLookup2; singleCycleCpu(…, { dcache }) uses it (adds `retire`, `dhit`)
   muldiv.ts      ppRow, arrayMul(n), compressor()/csa(n) (3:2 rows with word offsets), treeMul(n, signed,
                  outW) (Wallace + KS), MUL32, BOOTH_ENC, divStep, arrayDiv, seqDivider(n), condNegate, MDU
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
                instructions), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
-               interrupts; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts (samples), cosim.ts (CPU state;
+               interrupts; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / cprograms.ts (samples), cosim.ts (CPU state;
                `retiring()` = step the ISS this cycle?)
 src/view/      SVG schematic renderer, router, inspector panels, waveform, truth table
 src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...)
