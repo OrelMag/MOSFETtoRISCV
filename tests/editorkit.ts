@@ -1,7 +1,7 @@
 // Builders for sandbox documents in tests: terse pins, parts and wires.
 
 import { compileChip } from '../src/editor/compile';
-import type { ChipDoc, EndRef, LabelDoc, PartDoc, PartRef, PinDoc, Vec, WireDoc } from '../src/editor/model';
+import { type ChipDoc, type EndRef, type LabelDoc, type PartDoc, type PartRef, type PinDoc, SCHEMA, type Vec, type WireDoc, type Workspace } from '../src/editor/model';
 import { partDef } from '../src/editor/parts';
 
 export const pin = (id: string, dir: 'in' | 'out', at: Vec, width = 1, name = id): PinDoc => ({ id, name, dir, width, at });
@@ -45,3 +45,11 @@ export function halfAdder(id = 'u_ha'): ChipDoc {
     ],
   });
 }
+
+/** A wire from `from` to each of `to` (ids `<id>_1`, `<id>_2`, …): how a user fans a signal out. */
+export const fan = (id: string, from: string | EndRef, ...to: (string | EndRef)[]): WireDoc[] =>
+  to.map((t, i) => wire(`${id}_${i + 1}`, from, t));
+
+/** Workspace holding these chips (the first one open). */
+export const workspace = (...chips: ChipDoc[]): Workspace =>
+  ({ schema: SCHEMA, chips: Object.fromEntries(chips.map((c) => [c.id, c])), open: [chips[0].id] });
