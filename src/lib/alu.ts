@@ -94,7 +94,7 @@ export const reverseWire = memo((n: number): ComponentDef => define({
   id: `rev${n}`, name: 'Wiring: reverse bits', category: 'plumbing',
   summary: 'Bit i goes to position n−1−i. A left shift is a right shift of the reversed word, reversed back.',
   ports: [bus('in', n, 'in'), bus('out', n, 'out')],
-  symbol: { kind: 'box', label: '⇅', w: 4, h: 2 }, prim: 'alias',
+  symbol: { kind: 'box', label: 'REV', w: 4, h: 2 }, prim: 'alias',
   alias: Array.from({ length: n }, (_, i): [string, number, string, number] => ['in', i, 'out', n - 1 - i]),
 }));
 
