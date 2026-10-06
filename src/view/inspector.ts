@@ -5,6 +5,7 @@ import { evalOnce, forEachInput, inputBits, simulate } from '../sim/harness';
 import { logicDepth, stats } from '../sim/stats';
 import { type Bit, type ComponentDef, inPorts, netlistOf, outPorts } from '../sim/types';
 import { formatBits, formatNumber, pack, type Radix } from '../sim/values';
+import { exportHdl, testableComb, type HdlFlavor } from '../sim/svexport';
 import { structuralVerilog } from '../sim/verilog';
 import { h, icon } from '../ui/dom';
 
@@ -147,6 +148,29 @@ export class Inspector {
     );
   }
 
+  /** Download the whole hierarchy as one file, optionally with a self-checking testbench. */
+  private downloadRow(d: ComponentDef): HTMLElement {
+    const tbOk = testableComb(d);
+    const tb = h('input', { type: 'checkbox', checked: tbOk, disabled: !tbOk }) as HTMLInputElement;
+    const note = h('div', { class: 'dl-note' });
+    const go = (flavor: HdlFlavor) => {
+      try {
+        const f = exportHdl(d, flavor, tb.checked);
+        download(f.filename, f.text);
+        note.textContent = `${f.filename}: ${f.modules} module${f.modules > 1 ? 's' : ''}${f.vectors ? `, testbench with ${f.vectors} vectors` : ''}.`;
+      } catch (e) {
+        note.textContent = `Cannot export: ${(e as Error).message}`;
+      }
+    };
+    return h('div', { class: 'dl-hdl' },
+      h('div', { class: 'code-head' }, 'Download the whole hierarchy'),
+      h('div', { class: 'dl-btns' },
+        h('button', { class: 'btn sm', title: 'Every module exactly as drawn: NAND gates, flip-flops as NAND loops (.sv)', onclick: () => go('structure') }, icon('code', 14), 'Exact structure'),
+        h('button', { class: 'btn sm', title: 'Synthesizable Verilog-2005 for Yosys / Verilator / FPGA tools: flip-flops as clocked processes (.v)', onclick: () => go('synth') }, icon('chip', 14), 'Synthesizable'),
+        h('label', { class: 'dl-tb', title: tbOk ? 'Append a self-checking testbench with vectors from this site’s simulation' : 'Testbenches are generated for loop-free (combinational) logic only' }, tb, 'testbench')),
+      note);
+  }
+
   private renderHdl(t: InspectTarget): void {
     const d = t.def;
     const gen = structuralVerilog(d);
@@ -157,11 +181,18 @@ export class Inspector {
       this.body.append(h('p', { class: 'empty' }, 'No HDL for this element.'));
       return;
     }
+    if (gen) this.body.append(this.downloadRow(d));
     for (const [title, code] of blocks) {
       const copy = h('button', { class: 'btn ghost sm', onclick: () => navigator.clipboard?.writeText(code) }, 'Copy');
       this.body.append(h('div', { class: 'code-head' }, title, copy), h('pre', { class: 'code', html: highlight(code) }));
     }
   }
+}
+
+function download(name: string, text: string): void {
+  const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })), download: name });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 function logicDepthSafe(d: ComponentDef): number | null {
