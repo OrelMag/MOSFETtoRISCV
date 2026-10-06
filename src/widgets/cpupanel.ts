@@ -2,7 +2,7 @@
 // register file, data memory, and a live check against the golden model (the ISS runs in
 // lock-step and every register is compared after each clock edge).
 
-import { MC_FIELDS, MC_STATES, microword, multicycleCpu, pipelinedCpu, singleCycleCpu, systemCpu } from '../lib';
+import { MC_FIELDS, MC_STATES, microword, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu } from '../lib';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { cpuState, retiring } from '../riscv/cosim';
 import { ABI, decode, disasm } from '../riscv/isa';
@@ -13,14 +13,16 @@ import { M_PROGRAMS } from '../riscv/mprograms';
 import { CACHE_CPU_PROGRAMS } from '../riscv/cprograms';
 import { F_PROGRAMS } from '../riscv/fprograms';
 import { FABI } from '../riscv/isa';
-import { bitsToF32 } from '../sim/fpref';
+import { bitsToF32, flagNames, RM_NAMES } from '../sim/fpref';
 import { CAUSE } from '../riscv/iss';
 import { pack } from '../sim/values';
 import { h, icon } from '../ui/dom';
 import { settings, type TraceLevel } from '../ui/settings';
 import { fmtRate, ratePos, rateScale, stepEffect } from '../riscv/trace';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
-import { instrUse, stageUse, STAGE_UNITS } from './insthw';
+import type { FieldKey } from '../riscv/fields';
+import { instrMarks, instrUse, stageUse, STAGE_UNITS } from './insthw';
+import { instrBreakdown } from './instrfields';
 import { timingPanel } from './timing';
 
 const hex = (v: number, d = 8) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(d, '0');
@@ -55,6 +57,7 @@ export function cpuScene(opts: CpuSceneOptions): Scene {
   return {
     root: opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder })
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
+      : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
       : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor })
         : singleCycleCpu(asm.words, opts.dcache ? { adder: opts.adder, dmemK: 6, dcache: true } : { adder: opts.adder, fpu: opts.fpu }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
@@ -84,6 +87,10 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     /** The listing line the user clicked: its hardware stays highlighted. */
     let selPc: number | null = null;
     const usePath = h('div', { class: 'cpu-use' });
+    /** Instruction breakdown: the field pinned by a click, the one under the pointer. */
+    let fieldPin: FieldKey | null = null, fieldHover: FieldKey | null = null;
+    const fieldsBox = h('div', { class: 'cpu-fields' });
+    let fieldsShown = '';
 
     const status = h('div', { class: 'cpu-status' });
     const listing = h('div', { class: 'cpu-listing' });
@@ -116,7 +123,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       tracing = false;
       runBtn.textContent = 'Stop';
       const tick = () => {
-        stage.runCycles(opts.pipeline ? 3 : opts.m || opts.dcache || opts.multicycle ? 10 : 4, () => iss.halted);
+        stage.runCycles(opts.pipeline ? 3 : opts.m || opts.fpu || opts.dcache || opts.multicycle ? 10 : 4, () => iss.halted);
         if (iss.halted || mismatch || stage.cycles > 20000) return stopRun();
         running = requestAnimationFrame(tick);
       };
@@ -241,12 +248,13 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       slowRow,
       editWrap, status, now,
       h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its hardware')), listing, usePath,
+      h('div', { class: 'cpu-sec' }, 'Fields', h('span', { class: 'cpu-sec-hint' }, 'point at a field: its wires')), fieldsBox,
       h('div', { class: 'cpu-sec' }, 'Trace', h('span', { class: 'cpu-sec-hint' }, 'retired instructions, newest last')), trace,
       h('div', { class: 'cpu-sec' }, 'Registers'), regs,
       ...(opts.fpu ? [h('div', { class: 'cpu-sec' }, 'Floating-point registers (non-zero)'), fregs] : []),
       ...(opts.dcache ? [h('div', { class: 'cpu-sec' }, 'Data cache (4 lines × 4 words)'), dlines] : []),
       h('div', { class: 'cpu-sec' }, opts.dcache ? 'Main memory (non-zero words)' : 'Data memory (non-zero words)'), mem);
-    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? 'RV32IF CPU' : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.pipeline ? 'RV32I pipeline' : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.pipeline ? 'RV32I pipeline' : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
     const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right' }, title, body);
     title.addEventListener('click', () => {
       el.classList.toggle('collapsed');
@@ -284,6 +292,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
           const f = cpuState(stage.sim).f;
           const fd = f ? f.findIndex((v, i) => v !== iss.f[i]) : -1;
           if (fd >= 0 && diff < 0) mismatch = `${FABI[fd]} differs: hardware ${hex(f![fd])}, model ${hex(iss.f[fd])}`;
+          const fc = cpuState(stage.sim).fcsr;
+          if (fc !== undefined && fc !== ((iss.frm << 5) | iss.fflags) && diff < 0 && fd < 0) mismatch = `fcsr differs: hardware ${hex(fc, 2)}, model ${hex((iss.frm << 5) | iss.fflags, 2)}`;
           if (diff >= 0) mismatch = `${ABI[diff]} differs after "${disasm(iss.imem[(iss.pc >>> 2) % 64] ?? 0x13)}": hardware ${hex(x[diff])}, model ${hex(iss.x[diff])}`;
         }
       },
@@ -311,8 +321,9 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       const halted = iss.halted;
       const parts: HTMLElement[] = [
         h('span', null, `cycle ${stage.cycles}`),
-        h('span', null, opts.pipeline || opts.m || opts.multicycle ? `retired ${iss.steps}${iss.steps ? ` · CPI ${(stage.cycles / iss.steps).toFixed(2)}` : ''}` : `PC ${hex(st.pc, 4)}`),
+        h('span', null, opts.pipeline || opts.m || opts.fpu || opts.multicycle ? `retired ${iss.steps}${iss.steps ? ` · CPI ${(stage.cycles / iss.steps).toFixed(2)}` : ''}` : `PC ${hex(st.pc, 4)}`),
         ...(opts.m && !retiring(sim) ? [h('span', { class: 'warn', title: 'The iterative divider is working; the PC and register writes are stalled' }, 'dividing… stalled')] : []),
+        ...(opts.fpu && !opts.pipeline && !retiring(sim) ? [h('span', { class: 'warn', title: 'An iterative unit (fdiv.s / fsqrt.s) is working; the PC and register writes are stalled' }, 'fdiv / fsqrt… stalled')] : []),
         ...(opts.dcache ? [h('span', null, `loads ${loads} · misses ${misses}${loads ? ` · hit rate ${(100 * (loads - misses) / loads).toFixed(0)} %` : ''}`)] : []),
         ...(opts.dcache && !retiring(sim) ? [h('span', { class: 'warn', title: 'A load missed: the PC and register write wait while the line is fetched' }, `miss: fetching line (${pack(sim.getBits(sim.design.root.children!.get('dm')!.children!.get('cnt')!.ports.q)) + 1} / 8)`)] : []),
         mismatch ? h('span', { class: 'bad' }, `✗ ${mismatch}`) : h('span', { class: 'good', title: 'Every register and the PC match the instruction-set simulator after every cycle' }, '✓ matches golden model'),
@@ -334,7 +345,10 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         const v = (inst: string, port: string) => pack(sim.getBits(root.get(inst)!.ports[port]));
         const slots: [string, number, boolean][] = [
           ['F', v('pc', 'q'), true], ['D', v('FD', 'pcD'), v('FD', 'validD') === 1], ['E', v('DE', 'pcE'), v('DE', 'validE') === 1],
-          ['M', v('EM', 'pcM'), v('EM', 'validM') === 1], ['W', v('MW', 'pcW'), v('MW', 'validW') === 1],
+          ['M', v('EM', 'pcM'), v('EM', 'validM') === 1],
+          // the pipelined FPU CPU has a sixth stage, X, between M and W
+          ...(root.has('MX') ? [['X', v('MX', 'pcX'), v('MX', 'validX') === 1], ['W', v('XW', 'pcW'), v('XW', 'validW') === 1]] as [string, number, boolean][]
+            : [['W', v('MW', 'pcW'), v('MW', 'validW') === 1]] as [string, number, boolean][]),
         ];
         for (const [stg, pc, valid] of slots) if (valid && pc >= 0) inFlight.set(pc >>> 0, [...(inFlight.get(pc >>> 0) ?? []), stg]);
       }
@@ -365,7 +379,10 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         h('span', { class: 'n' }, `${ABI[i]}`), h('span', { class: 'v' }, hex(v)))));
       if (st.f) {
         const nz = st.f.map((v, i) => [i, v] as const).filter(([, v]) => v !== 0);
-        fregs.replaceChildren(...(nz.length ? nz.map(([i, v]) => h('div', { class: 'm' },
+        const fc = st.fcsr ?? 0;
+        const fcsrRow = h('div', { class: 'm', title: 'fcsr: the dynamic rounding mode frm and the accrued exception flags (sticky)' },
+          h('span', { class: 'n' }, 'fcsr'), h('span', { class: 'v' }, `frm ${RM_NAMES[fc >> 5] ?? fc >> 5}`), h('span', { class: 'd' }, `flags ${flagNames(fc & 31)}`));
+        fregs.replaceChildren(fcsrRow, ...(nz.length ? nz.map(([i, v]) => h('div', { class: 'm' },
           h('span', { class: 'n' }, FABI[i]), h('span', { class: 'v' }, hex(v)), h('span', { class: 'd' }, String(+bitsToF32(v).toPrecision(8))))) : [h('div', { class: 'm z' }, 'all +0.0')]));
       }
       if (opts.dcache) {
@@ -383,37 +400,82 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         h('span', { class: 'n' }, `[${hex(i * 4, 2)}]`), h('span', { class: 'v' }, hex(v)), h('span', { class: 'd' }, String(v | 0)))) : [h('div', { class: 'm z' }, 'all zero')]));
     };
     const wordAt = (pc: number) => asm.words[pc >>> 2] ?? 0x13;
+    const atRoot = () => stage.path.length === 0;
     const light = (names: string[]) => {
       const have = stage.rootCtx?.node.children;
-      if (stage.path.length === 0) stage.highlight(names.filter((n) => have?.has(n)), true);
+      if (atRoot()) stage.highlight(names.filter((n) => have?.has(n)), true);
+    };
+    const fieldFocus = () => fieldHover ?? fieldPin;
+    /**
+     * Colour the wires that carry each field of `word` in the view shown now (null: no colours) and
+     * highlight. At the top level `units` stand unless a field is in focus; inside IMM_GEN, CONTROL
+     * or the opcode decoder the marks choose the parts. Returns a note for the use line.
+     */
+    const markFields = (word: number | null, units: string[]): string | undefined => {
+      const def = stage.ctx?.def;
+      const m = def && word !== null ? instrMarks(def, word, fieldFocus()) : null;
+      stage.markNets(m?.nets ?? new Map());
+      if (!m) light(units);
+      else if (atRoot()) light(fieldFocus() ? m.units : units);
+      else stage.highlight(m.units, m.units.length > 0);
+      return m?.note;
+    };
+    /** The breakdown of the instruction at pc, rebuilt only when that instruction changes. */
+    const showFields = (pc: number, role: string) => {
+      const w = wordAt(pc);
+      const key = `${pc}:${w}:${role}`;
+      if (key !== fieldsShown) {
+        fieldsShown = key;
+        fieldsBox.replaceChildren(
+          h('div', { class: 'cpu-fields-head' }, h('code', null, disasm(w, pc)), h('span', null, role)),
+          instrBreakdown(w, {
+            compact: true, onField: (k, sticky) => {
+              if (sticky) fieldPin = fieldPin === k ? null : k;
+              else fieldHover = k;
+              update();
+            },
+          }));
+      }
+      fieldsBox.querySelectorAll<HTMLElement>('[data-field]').forEach((e) => e.classList.toggle('on', e.dataset.field === fieldPin));
     };
     /**
      * Highlight what the selected instruction uses (or, in the pipeline, the stage it is in now).
      * In slow mode with nothing selected, follow execution: the current instruction, or every
-     * in-flight instruction's part of the work in its stage.
+     * in-flight instruction's part of the work in its stage. The wires of the instruction's fields
+     * take their colours, also inside the immediate generator and the control unit.
      */
     const showUse = (inFlight: Map<number, string[]>, shownPc: number) => {
-      if (selPc === null && tracing && opts.pipeline) {
+      // The pipeline splits the instruction in Decode, so its field wires carry the one in D.
+      const dPc = [...inFlight].find(([, s]) => s.includes('D'))?.[0];
+      const bdPc = selPc ?? dPc ?? shownPc;
+      showFields(bdPc, selPc !== null ? 'selected' : dPc !== undefined ? 'in Decode' : 'current');
+      if (selPc === null && tracing && opts.pipeline && !fieldFocus()) {
         const order = Object.keys(STAGE_UNITS);
         const rows = [...inFlight].flatMap(([pc, stgs]) => stgs.map((s) => [s as keyof typeof STAGE_UNITS, pc] as const))
           .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
-        light(rows.flatMap(([s, pc]) => stageUse(s, instrUse(wordAt(pc)))));
-        usePath.replaceChildren(...rows.map(([s, pc]) => h('div', { class: 'flight' }, h('span', { class: 'stg' }, s), h('code', null, disasm(wordAt(pc), pc)))));
+        const note = markFields(dPc === undefined ? null : wordAt(dPc), rows.flatMap(([s, pc]) => stageUse(s, instrUse(wordAt(pc)))));
+        usePath.replaceChildren(...rows.map(([s, pc]) => h('div', { class: 'flight' }, h('span', { class: 'stg' }, s), h('code', null, disasm(wordAt(pc), pc)))),
+          note ? h('div', { class: 'ibd-note' }, note) : '');
         return;
       }
-      const pc = selPc ?? (tracing ? shownPc : null);
+      const pc = selPc ?? (tracing || fieldFocus() ? bdPc : null);
       if (pc === null) {
         usePath.replaceChildren();
-        if (stage.path.length === 0) stage.highlight(stage.scene?.highlight ?? []);
+        stage.markNets(new Map());
+        if (atRoot()) stage.highlight(stage.scene?.highlight ?? []);
+        else if (stage.ctx && instrMarks(stage.ctx.def, 0x13)) stage.highlight([]);
         return;
       }
       const w = wordAt(pc);
       const use = instrUse(w);
       const stages = inFlight.get(pc) ?? [];
-      light(stages.length ? stages.flatMap((s) => stageUse(s as keyof typeof STAGE_UNITS, use)) : use.units);
+      const carried = !opts.pipeline || !stages.length || stages.includes('D');
+      const note = markFields(carried ? w : null, stages.length ? stages.flatMap((s) => stageUse(s as keyof typeof STAGE_UNITS, use)) : use.units);
       usePath.replaceChildren(h('code', null, disasm(w, pc)), h('span', null,
         opts.pipeline ? (stages.length ? ` · now in ${stages.join(' + ')}; highlighted: that stage's part of the work.` : ' · not in the pipeline now; highlighted: all the hardware it uses.') : ''),
-        h('div', null, use.path));
+        h('div', null, use.path),
+        !carried ? h('div', { class: 'ibd-note' }, 'Field colours appear while it is in D, where the instruction is split.') : '',
+        note ? h('div', { class: 'ibd-note' }, note) : '');
     };
     /** Append the newly retired instructions to the trace (the log is never rebuilt while it grows). */
     const showTrace = () => {
@@ -430,8 +492,18 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       trace.scrollTop = trace.scrollHeight;
       logShown = logSeq;
     };
+    // Opening the immediate generator or the control unit keeps the instruction's colours.
+    const unNav = stage.onNavigate(() => update());
     update();
-    return { el, update, destroy: () => { stopRun(); stopSlow(); if (stage.path.length === 0) stage.highlight(stage.scene?.highlight ?? []); } };
+    return {
+      el, update, destroy: () => {
+        stopRun();
+        stopSlow();
+        unNav();
+        stage.markNets(new Map());
+        if (stage.path.length === 0) stage.highlight(stage.scene?.highlight ?? []);
+      },
+    };
   };
 }
 
@@ -441,7 +513,7 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
     type Slot = { pc: number; valid: boolean };
     type Snap = { cycle: number; slots: Slot[]; stall: boolean; flush: boolean; fwdA: number; fwdB: number; byp: boolean };
     const history: Snap[] = [];
-    const STAGES = ['F', 'D', 'E', 'M', 'W'];
+    let STAGES = ['F', 'D', 'E', 'M', 'W'];
     const grid = h('div', { class: 'pipe-grid' });
     const title = h('h4', null, 'Pipeline diagram', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'stage × cycle'));
     const el = h('div', { class: 'mem-panel pipe-panel' }, title, grid);
@@ -455,16 +527,20 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
         for (let i = bits.length - 1; i >= 0; i--) x = x * 2 + (bits[i] === 1 ? 1 : 0);
         return x;
       };
+      // the pipelined FPU CPU has a sixth stage, X, between M and W
+      const six = root.children.has('MX');
+      STAGES = six ? ['F', 'D', 'E', 'M', 'X', 'W'] : ['F', 'D', 'E', 'M', 'W'];
       const slots: Slot[] = [
         { pc: v('pc', 'q'), valid: true },
         { pc: v('FD', 'pcD'), valid: v('FD', 'validD') === 1 },
         { pc: v('DE', 'pcE'), valid: v('DE', 'validE') === 1 },
         { pc: v('EM', 'pcM'), valid: v('EM', 'validM') === 1 },
-        { pc: v('MW', 'pcW'), valid: v('MW', 'validW') === 1 },
+        ...(six ? [{ pc: v('MX', 'pcX'), valid: v('MX', 'validX') === 1 }, { pc: v('XW', 'pcW'), valid: v('XW', 'validW') === 1 }]
+          : [{ pc: v('MW', 'pcW'), valid: v('MW', 'validW') === 1 }]),
       ];
       return {
         cycle: stage.cycles, slots,
-        stall: v('hz', 'enFD') === 0, flush: v('hz', 'flushFD') === 1,
+        stall: six ? v('go', 'y') === 0 : v('hz', 'enFD') === 0, flush: six ? v('hz', 'taken') === 1 : v('hz', 'flushFD') === 1,
         // Balanced design: the E-stage selects travel in ID/EX (the hazard unit's outputs are for D).
         fwdA: root.children.get('DE')!.ports.fwdAE ? v('DE', 'fwdAE') : v('hz', 'forwardA'),
         fwdB: root.children.get('DE')!.ports.fwdBE ? v('DE', 'fwdBE') : v('hz', 'forwardB'),
@@ -503,6 +579,7 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
         if (s.stall) tags.push('stall');
         if (s.flush) tags.push('flush');
         if (s.fwdA === 2 || s.fwdB === 2) tags.push('M→E');
+        if (STAGES.length === 6 && (s.fwdA === 3 || s.fwdB === 3)) tags.push('X→E');
         if (s.fwdA === 1 || s.fwdB === 1) tags.push('W→E');
         if (s.byp) tags.push('W→D');
         return h('span', { class: 'pg-c ev', title: tags.join(', ') }, tags.join(' '));

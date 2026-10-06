@@ -33,16 +33,15 @@ function allDefs(): ComponentDef[] {
 }
 
 describe('schematic routing', () => {
-  it('never draws two nets on one line', () => {
-    const bad: string[] = [];
-    for (const def of allDefs()) {
-      const nl = netlistOf(def);
-      if (!nl) continue;
-      for (const o of wireOverlaps(routeNetlist(def, nl).nets)) {
-        const [a, b] = o.nets.map((n) => nl.nets[n].name ?? nl.nets[n].ends[0]);
-        bad.push(`${def.id}: ${a} / ${b} on ${o.axis === 'h' ? 'y' : 'x'}=${o.at} (${o.from}..${o.to})`);
-      }
-    }
+  // One test per schematic: each is quick, and the runner gets the event loop back in between
+  // (a single loop over every design starved Vitest's worker RPC on CI).
+  const defs = allDefs().filter((d) => netlistOf(d));
+  it.each(defs.map((d) => [d.id, d] as const))('%s: never draws two nets on one line', (_, def) => {
+    const nl = netlistOf(def)!;
+    const bad = wireOverlaps(routeNetlist(def, nl).nets).map((o) => {
+      const [a, b] = o.nets.map((n) => nl.nets[n].name ?? nl.nets[n].ends[0]);
+      return `${a} / ${b} on ${o.axis === 'h' ? 'y' : 'x'}=${o.at} (${o.from}..${o.to})`;
+    });
     expect(bad).toEqual([]);
   });
 

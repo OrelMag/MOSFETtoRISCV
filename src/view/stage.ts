@@ -604,7 +604,7 @@ export class Stage {
     const root = this.scene!.root;
     const ins = inPorts(root).filter((p) => !(this.scene!.hiddenInputs ?? []).includes(p.name));
     const clk = this.clockPort();
-    if (ins.length) c.append(h('span', { class: 'label' }, 'Inputs'));
+    if (ins.some((p) => p.name !== clk)) c.append(h('span', { class: 'label' }, 'Inputs'));
     for (const p of ins) {
       if (p.name === clk) continue;
       c.append(p.width === 1 ? this.bitToggle(p) : this.numInput(p));
@@ -810,6 +810,11 @@ export class Stage {
   /** Highlight instances in the current view (empty list clears). */
   highlight(names: string[], focus = false): void {
     this.view.highlight(names, focus);
+  }
+
+  /** Colour nets of the current view (index in its netlist → classes); cleared on navigation. */
+  markNets(marks: Map<number, string>): void {
+    this.view.markNets(marks);
   }
 
   /** Reserve screen space on the right for a docked panel and refit. */

@@ -1,16 +1,17 @@
 // RV32I: encodings, decoding and disassembly. The single source of truth for the assembler,
 // the instruction-set simulator and the instruction explorer.
 
-export type Fmt = 'R' | 'I' | 'S' | 'B' | 'U' | 'J';
+export type Fmt = 'R' | 'R4' | 'I' | 'S' | 'B' | 'U' | 'J';
 
 export const OPCODES = {
   LUI: 0b0110111, AUIPC: 0b0010111, JAL: 0b1101111, JALR: 0b1100111, BRANCH: 0b1100011,
   LOAD: 0b0000011, STORE: 0b0100011, OPIMM: 0b0010011, OP: 0b0110011, SYSTEM: 0b1110011, FENCE: 0b0001111,
   LOADFP: 0b0000111, STOREFP: 0b0100111, OPFP: 0b1010011, AMO: 0b0101111,
+  FMADD: 0b1000011, FMSUB: 0b1000111, FNMSUB: 0b1001011, FNMADD: 0b1001111,
 } as const;
 
 /** Register roles of a floating-point instruction: which operands live in the f registers. */
-export interface FpRoles { rd?: 'f' | 'x'; rs1?: 'f' | 'x'; rs2?: 'f' | 'x'; rm?: boolean; rs2fixed?: number }
+export interface FpRoles { rd?: 'f' | 'x'; rs1?: 'f' | 'x'; rs2?: 'f' | 'x'; rs3?: 'f'; rm?: boolean; rs2fixed?: number }
 
 export interface InstrSpec {
   name: string;
@@ -60,22 +61,33 @@ export const INSTRS: InstrSpec[] = [
   { name: 'csrrsi', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 6, hw: false },
   { name: 'csrrci', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 7, hw: false },
   { name: 'fence', fmt: 'I', opcode: OPCODES.FENCE, funct3: 0, hw: false },
-  // F extension (the subset the gate-level FPU implements; round to nearest even)
+  // F extension (single precision; rm = rounding mode, 7 = dynamic: use frm)
   { name: 'flw', fmt: 'I', opcode: OPCODES.LOADFP, funct3: 2, hw: false, fp: { rd: 'f', rs1: 'x' } },
   { name: 'fsw', fmt: 'S', opcode: OPCODES.STOREFP, funct3: 2, hw: false, fp: { rs1: 'x', rs2: 'f' } },
   FR('fadd.s', 0x00, { rd: 'f', rs1: 'f', rs2: 'f', rm: true }),
   FR('fsub.s', 0x04, { rd: 'f', rs1: 'f', rs2: 'f', rm: true }),
   FR('fmul.s', 0x08, { rd: 'f', rs1: 'f', rs2: 'f', rm: true }),
+  FR('fdiv.s', 0x0c, { rd: 'f', rs1: 'f', rs2: 'f', rm: true }),
+  FR('fsqrt.s', 0x2c, { rd: 'f', rs1: 'f', rs2fixed: 0, rm: true }),
   FR('fsgnj.s', 0x10, { rd: 'f', rs1: 'f', rs2: 'f' }, 0),
   FR('fsgnjn.s', 0x10, { rd: 'f', rs1: 'f', rs2: 'f' }, 1),
   FR('fsgnjx.s', 0x10, { rd: 'f', rs1: 'f', rs2: 'f' }, 2),
+  FR('fmin.s', 0x14, { rd: 'f', rs1: 'f', rs2: 'f' }, 0),
+  FR('fmax.s', 0x14, { rd: 'f', rs1: 'f', rs2: 'f' }, 1),
   FR('fle.s', 0x50, { rd: 'x', rs1: 'f', rs2: 'f' }, 0),
   FR('flt.s', 0x50, { rd: 'x', rs1: 'f', rs2: 'f' }, 1),
   FR('feq.s', 0x50, { rd: 'x', rs1: 'f', rs2: 'f' }, 2),
+  FR('fcvt.w.s', 0x60, { rd: 'x', rs1: 'f', rs2fixed: 0, rm: true }),
+  FR('fcvt.wu.s', 0x60, { rd: 'x', rs1: 'f', rs2fixed: 1, rm: true }),
   FR('fmv.x.w', 0x70, { rd: 'x', rs1: 'f', rs2fixed: 0 }, 0),
+  FR('fclass.s', 0x70, { rd: 'x', rs1: 'f', rs2fixed: 0 }, 1),
   FR('fcvt.s.w', 0x68, { rd: 'f', rs1: 'x', rs2fixed: 0, rm: true }),
   FR('fcvt.s.wu', 0x68, { rd: 'f', rs1: 'x', rs2fixed: 1, rm: true }),
   FR('fmv.w.x', 0x78, { rd: 'f', rs1: 'x', rs2fixed: 0 }, 0),
+  // fused multiply-add (R4 format: rs3 in bits 31:27, fmt = 00 for single precision in 26:25)
+  ...(['fmadd.s', 'fmsub.s', 'fnmsub.s', 'fnmadd.s'] as const).map((name, i): InstrSpec => ({
+    name, fmt: 'R4', opcode: OPCODES.FMADD + 4 * i, hw: false, fp: { rd: 'f', rs1: 'f', rs2: 'f', rs3: 'f', rm: true },
+  })),
   // A extension: the two atomic memory operations the multi-core chapter uses (aq / rl bits ignored)
   { name: 'amoswap.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x04, hw: false },
   { name: 'amoadd.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x00, hw: false },
@@ -99,7 +111,12 @@ export const BY_NAME = new Map(INSTRS.map((i) => [i.name, i]));
 export const CSRS: Record<string, number> = {
   mstatus: 0x300, misa: 0x301, mie: 0x304, mtvec: 0x305, mscratch: 0x340, mepc: 0x341, mcause: 0x342,
   mtval: 0x343, mip: 0x344, mcycle: 0xb00, cycle: 0xc00, mhartid: 0xf14,
+  // F extension: accrued exception flags, dynamic rounding mode, and both together
+  fflags: 0x001, frm: 0x002, fcsr: 0x003,
 };
+
+/** Rounding-mode operand names (rm field); 7 = dyn (use frm). */
+export const RM_OPERANDS = ['rne', 'rtz', 'rdn', 'rup', 'rmm', '', '', 'dyn'];
 export const CSR_NAMES: Record<number, string> = Object.fromEntries(Object.entries(CSRS).map(([k, v]) => [v, k]));
 
 export const ABI = [
@@ -122,6 +139,10 @@ export const sext = (v: number, bits: number) => (v & (1 << (bits - 1)) ? v - 2 
 
 export function encR(op: number, rd: number, f3: number, rs1: number, rs2: number, f7: number): number {
   return u32((f7 << 25) | (rs2 << 20) | (rs1 << 15) | (f3 << 12) | (rd << 7) | op);
+}
+/** R4 (fused multiply-add): rs3 in the top five bits, fmt (00 = single) below it. */
+export function encR4(op: number, rd: number, f3: number, rs1: number, rs2: number, rs3: number, fmt = 0): number {
+  return u32((rs3 << 27) | (fmt << 25) | (rs2 << 20) | (rs1 << 15) | (f3 << 12) | (rd << 7) | op);
 }
 export function encI(op: number, rd: number, f3: number, rs1: number, imm: number): number {
   return u32(((imm & 0xfff) << 20) | (rs1 << 15) | (f3 << 12) | (rd << 7) | op);
@@ -155,6 +176,8 @@ export interface Decoded {
   rd: number;
   rs1: number;
   rs2: number;
+  /** Third source (R4 format only; otherwise bits 31:27). */
+  rs3: number;
   funct3: number;
   funct7: number;
   /** Sign-extended immediate (for U-type: the value placed in the upper 20 bits, i.e. imm << 12). */
@@ -171,6 +194,22 @@ export function immJ(w: number) {
   return sext((((w >>> 31) & 1) << 20) | (((w >>> 12) & 0xff) << 12) | (((w >>> 20) & 1) << 11) | (((w >>> 21) & 0x3ff) << 1), 21);
 }
 
+/** Formats that carry an immediate. */
+export type ImmFmt = Exclude<Fmt, 'R' | 'R4'>;
+/**
+ * Where bit i of each format's immediate comes from: an instruction bit, or a constant 0. The
+ * hardware immediate generator (lib/cpu.ts) is wired from this table and the instruction
+ * breakdown draws it, so they cannot disagree. Bits above IMM_TOP are sign copies of instr[31].
+ */
+export const IMM_SRC: Record<ImmFmt, (i: number) => number | 'zero'> = {
+  I: (i) => (i < 12 ? 20 + i : 31),
+  S: (i) => (i < 5 ? 7 + i : i < 11 ? 25 + (i - 5) : 31),
+  B: (i) => (i === 0 ? 'zero' : i < 5 ? 7 + i : i < 11 ? 25 + (i - 5) : i === 11 ? 7 : 31),
+  U: (i) => (i < 12 ? 'zero' : i),
+  J: (i) => (i === 0 ? 'zero' : i < 11 ? 20 + i : i === 11 ? 20 : i < 20 ? i : 31),
+};
+export const IMM_TOP: Record<ImmFmt, number> = { I: 11, S: 11, B: 12, U: 31, J: 20 };
+
 export function decode(word: number): Decoded {
   const w = word >>> 0;
   const opcode = w & 0x7f, rd = (w >>> 7) & 31, funct3 = (w >>> 12) & 7, rs1 = (w >>> 15) & 31, rs2 = (w >>> 20) & 31, funct7 = w >>> 25;
@@ -179,6 +218,7 @@ export function decode(word: number): Decoded {
     if (s.opcode !== opcode) continue;
     if (s.funct3 !== undefined && s.funct3 !== funct3 && s.fmt !== 'U' && s.fmt !== 'J') continue;
     if (s.fmt === 'R' && s.funct7 !== (s.opcode === OPCODES.AMO ? funct7 & 0x7c : funct7)) continue;
+    if (s.fmt === 'R4' && (funct7 & 3) !== 0) continue; // only fmt = S (single precision)
     if (s.fp?.rs2fixed !== undefined && s.fp.rs2fixed !== rs2) continue;
     if (s.opcode === OPCODES.OPIMM && (funct3 === 1 || funct3 === 5) && s.funct7 !== undefined && s.funct7 !== (funct7 & 0x7e)) continue;
     if (s.opcode === OPCODES.OPIMM && (funct3 === 1 || funct3 === 5) && s.funct7 === undefined) continue;
@@ -200,7 +240,7 @@ export function decode(word: number): Decoded {
     case 'J': imm = immJ(w); break;
     default: imm = 0;
   }
-  return { word: w, spec, name: spec?.name ?? 'unknown', fmt, opcode, rd, rs1, rs2, funct3, funct7, imm };
+  return { word: w, spec, name: spec?.name ?? 'unknown', fmt, opcode, rd, rs1, rs2, rs3: w >>> 27, funct3, funct7, imm };
 }
 
 const rn = (r: number) => ABI[r];
@@ -218,12 +258,14 @@ export function disasm(word: number, pc?: number): string {
     const R = (role: 'f' | 'x' | undefined, r: number) => (role === 'f' ? frn(r) : rn(r));
     if (d.fmt === 'I') return `${n} ${frn(d.rd)}, ${d.imm}(${rn(d.rs1)})`;
     if (d.fmt === 'S') return `${n} ${frn(d.rs2)}, ${d.imm}(${rn(d.rs1)})`;
-    if (fp.rs2fixed !== undefined) return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}`;
-    return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}, ${R(fp.rs2, d.rs2)}`;
+    const rm = fp.rm && d.funct3 !== 7 ? `, ${RM_OPERANDS[d.funct3] || d.funct3}` : '';
+    if (fp.rs2fixed !== undefined) return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}${rm}`;
+    if (d.fmt === 'R4') return `${n} ${frn(d.rd)}, ${frn(d.rs1)}, ${frn(d.rs2)}, ${frn(d.rs3)}${rm}`;
+    return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}, ${R(fp.rs2, d.rs2)}${rm}`;
   }
   if (d.opcode === OPCODES.AMO) return `${n} ${rn(d.rd)}, ${rn(d.rs2)}, (${rn(d.rs1)})`;
   switch (d.fmt) {
-    case 'R': return `${n} ${rn(d.rd)}, ${rn(d.rs1)}, ${rn(d.rs2)}`;
+    case 'R': case 'R4': return `${n} ${rn(d.rd)}, ${rn(d.rs1)}, ${rn(d.rs2)}`;
     case 'I':
       if (d.opcode === OPCODES.LOAD || n === 'jalr') return `${n} ${rn(d.rd)}, ${d.imm}(${rn(d.rs1)})`;
       if (d.opcode === OPCODES.SYSTEM && d.funct3 !== 0) {
@@ -241,6 +283,7 @@ export function disasm(word: number, pc?: number): string {
 
 /** Bit fields of each format, high to low, for the instruction explorer. */
 export const FIELDS: Record<Fmt, { name: string; hi: number; lo: number }[]> = {
+  R4: [{ name: 'rs3', hi: 31, lo: 27 }, { name: 'fmt', hi: 26, lo: 25 }, { name: 'rs2', hi: 24, lo: 20 }, { name: 'rs1', hi: 19, lo: 15 }, { name: 'rm', hi: 14, lo: 12 }, { name: 'rd', hi: 11, lo: 7 }, { name: 'opcode', hi: 6, lo: 0 }],
   R: [{ name: 'funct7', hi: 31, lo: 25 }, { name: 'rs2', hi: 24, lo: 20 }, { name: 'rs1', hi: 19, lo: 15 }, { name: 'funct3', hi: 14, lo: 12 }, { name: 'rd', hi: 11, lo: 7 }, { name: 'opcode', hi: 6, lo: 0 }],
   I: [{ name: 'imm[11:0]', hi: 31, lo: 20 }, { name: 'rs1', hi: 19, lo: 15 }, { name: 'funct3', hi: 14, lo: 12 }, { name: 'rd', hi: 11, lo: 7 }, { name: 'opcode', hi: 6, lo: 0 }],
   S: [{ name: 'imm[11:5]', hi: 31, lo: 25 }, { name: 'rs2', hi: 24, lo: 20 }, { name: 'rs1', hi: 19, lo: 15 }, { name: 'funct3', hi: 14, lo: 12 }, { name: 'imm[4:0]', hi: 11, lo: 7 }, { name: 'opcode', hi: 6, lo: 0 }],

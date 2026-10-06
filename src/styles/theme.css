@@ -34,6 +34,12 @@
   --plumb: #6b7390;
   --hl: #5b4cf0;
   --sel: #5b4cf0;
+  /* instruction fields (strip and wires) */
+  --fld-op: #c026d3;
+  --fld-rd: #059669;
+  --fld-rs: #2563eb;
+  --fld-fn: #d97706;
+  --fld-imm: #dc2626;
 
   /* wire shape (palettes may override; see palettes.css) */
   --wire-w0: 0.16;
@@ -80,6 +86,11 @@
     --plumb: #8891ab;
     --hl: #a397ff;
     --sel: #a397ff;
+    --fld-op: #e879f9;
+    --fld-rd: #34d399;
+    --fld-rs: #60a5fa;
+    --fld-fn: #fbbf24;
+    --fld-imm: #f87171;
   }
 }
 
@@ -113,4 +124,9 @@
   --plumb: #8891ab;
   --hl: #a397ff;
   --sel: #a397ff;
+  --fld-op: #e879f9;
+  --fld-rd: #34d399;
+  --fld-rs: #60a5fa;
+  --fld-fn: #fbbf24;
+  --fld-imm: #f87171;
 }
