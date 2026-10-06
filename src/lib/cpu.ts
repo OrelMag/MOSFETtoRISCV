@@ -40,10 +40,10 @@ function hash(words: number[]): string {
  * open it to see the real structure: a multiplexer tree whose inputs are constants, i.e. wires
  * tied to VDD or GND.
  */
-export function rom(words: number[], k = 6): ComponentDef {
+export function rom(words: number[], k = 6, label?: string): ComponentDef {
   const N = 2 ** k;
   const content = Array.from({ length: N }, (_, i) => (words[i] ?? 0x00000013) >>> 0);
-  return memo(`rom${k}_${hash(content)}`, () => {
+  return memo(`rom${k}_${hash(content)}${label ? `_${label}` : ''}`, () => {
     const M = muxTree(k, 32, 4);
     const mg = symbolGeom(M);
     const instances: InstanceDef[] = [
@@ -60,10 +60,10 @@ export function rom(words: number[], k = 6): ComponentDef {
       nets.push({ ends: [`c${i}.y`, `mux.d${i}`] });
     });
     return {
-      id: `rom_${hash(content)}`, name: 'Instruction memory', category: 'memory',
+      id: `rom_${hash(content)}${label ? `_${label.replace(/\W+/g, '_')}` : ''}`, name: label ?? 'Instruction memory', category: 'memory',
       summary: `${N} words of program, read-only. The address selects a word; a ROM is just a multiplexer tree whose inputs are tied to constants.`,
       ports: [bus('addr', 32, 'in'), bus('data', 32, 'out')],
-      symbol: { kind: 'box', label: 'INSTR MEM' },
+      symbol: { kind: 'box', label: label ? label.toUpperCase() : 'INSTR MEM' },
       // Delay = depth of the real structure (k levels of MUX2, 3 NANDs each).
       behavior: { eval: ([a]) => [a < 0 ? -1 : content[Math.floor(a / 4) % N]], delay: 3 * k },
       preferBehavior: true,

@@ -2,7 +2,7 @@
 // register file, data memory, and a live check against the golden model (the ISS runs in
 // lock-step and every register is compared after each clock edge).
 
-import { pipelinedCpu, singleCycleCpu, systemCpu } from '../lib';
+import { MC_FIELDS, MC_STATES, microword, multicycleCpu, pipelinedCpu, singleCycleCpu, systemCpu } from '../lib';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { cpuState, retiring } from '../riscv/cosim';
 import { ABI, decode, disasm } from '../riscv/isa';
@@ -35,6 +35,8 @@ export interface CpuSceneOptions {
   m?: boolean;
   /** Single-cycle CPU with a data cache in front of a slow main memory (adds cache statistics). */
   dcache?: boolean;
+  /** The multicycle CPU with a hardwired or microprogrammed controller (adds the controller panel). */
+  multicycle?: 'fsm' | 'micro';
   /** Show the program editor. */
   editable?: boolean;
 }
@@ -43,12 +45,13 @@ export interface CpuSceneOptions {
 export function cpuScene(opts: CpuSceneOptions): Scene {
   const asm = assemble(opts.source);
   return {
-    root: opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
+    root: opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder })
+      : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor })
         : singleCycleCpu(asm.words, opts.dcache ? { adder: opts.adder, dmemK: 6, dcache: true } : { adder: opts.adder }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
-    panels: [cpuPanel({ ...opts, asm }), ...(opts.pipeline ? [pipeDiagram(asm)] : []), ...(opts.system ? [ioPanel] : []), ...(opts.timing ? [timingPanel] : [])],
+    panels: [cpuPanel({ ...opts, asm }), ...(opts.pipeline ? [pipeDiagram(asm)] : []), ...(opts.system ? [ioPanel] : []), ...(opts.multicycle ? [controllerPanel(opts.multicycle, true)] : []), ...(opts.timing ? [timingPanel] : [])],
   };
 }
 
@@ -90,7 +93,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       if (running) return stopRun();
       runBtn.textContent = 'Stop';
       const tick = () => {
-        stage.runCycles(opts.pipeline ? 3 : opts.m || opts.dcache ? 10 : 4, () => iss.halted);
+        stage.runCycles(opts.pipeline ? 3 : opts.m || opts.dcache || opts.multicycle ? 10 : 4, () => iss.halted);
         if (iss.halted || mismatch || stage.cycles > 20000) return stopRun();
         running = requestAnimationFrame(tick);
       };
@@ -122,7 +125,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       h('div', { class: 'cpu-sec' }, 'Registers'), regs,
       ...(opts.dcache ? [h('div', { class: 'cpu-sec' }, 'Data cache (4 lines × 4 words)'), dlines] : []),
       h('div', { class: 'cpu-sec' }, opts.dcache ? 'Main memory (non-zero words)' : 'Data memory (non-zero words)'), mem);
-    const title = h('h4', null, opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.pipeline ? 'RV32I pipeline' : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.pipeline ? 'RV32I pipeline' : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
     const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right' }, title, body);
     title.addEventListener('click', () => {
       el.classList.toggle('collapsed');
@@ -169,11 +172,12 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       changed = new Set();
       st.x.forEach((v, i) => { if (v !== lastX[i]) changed.add(i); });
       lastX = st.x;
-      if (!mismatch && !opts.pipeline && st.pc !== iss.pc) mismatch = `PC differs: hardware ${hex(st.pc)}, model ${hex(iss.pc)}`;
+      const atBoundary = !sim.design.root.ports.fetch || sim.getBits(sim.design.root.ports.fetch)[0] === 1;
+      if (!mismatch && !opts.pipeline && atBoundary && st.pc !== iss.pc) mismatch = `PC differs: hardware ${hex(st.pc)}, model ${hex(iss.pc)}`;
       const halted = iss.halted;
       const parts: HTMLElement[] = [
         h('span', null, `cycle ${stage.cycles}`),
-        h('span', null, opts.pipeline || opts.m ? `retired ${iss.steps}${iss.steps ? ` · CPI ${(stage.cycles / iss.steps).toFixed(2)}` : ''}` : `PC ${hex(st.pc, 4)}`),
+        h('span', null, opts.pipeline || opts.m || opts.multicycle ? `retired ${iss.steps}${iss.steps ? ` · CPI ${(stage.cycles / iss.steps).toFixed(2)}` : ''}` : `PC ${hex(st.pc, 4)}`),
         ...(opts.m && !retiring(sim) ? [h('span', { class: 'warn', title: 'The iterative divider is working; the PC and register writes are stalled' }, 'dividing… stalled')] : []),
         ...(opts.dcache ? [h('span', null, `loads ${loads} · misses ${misses}${loads ? ` · hit rate ${(100 * (loads - misses) / loads).toFixed(0)} %` : ''}`)] : []),
         ...(opts.dcache && !retiring(sim) ? [h('span', { class: 'warn', title: 'A load missed: the PC and register write wait while the line is fetched' }, `miss: fetching line (${pack(sim.getBits(sim.design.root.children!.get('dm')!.children!.get('cnt')!.ports.q)) + 1} / 8)`)] : []),
@@ -181,14 +185,15 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       ];
       if (halted) parts.push(h('span', { class: 'warn' }, 'halted'));
       status.replaceChildren(...parts);
-      const w = asm.words[st.pc >>> 2] ?? 0x13;
+      const shownPc = opts.multicycle && !atBoundary ? iss.pc : st.pc;
+      const w = asm.words[shownPc >>> 2] ?? 0x13;
       const d = decode(w);
       now.replaceChildren(
         h('span', { class: 'fmt' }, `${d.fmt}-type`),
-        h('code', null, disasm(w, st.pc)),
+        h('code', null, disasm(w, shownPc)),
         h('span', { class: 'hexw' }, hex(w)),
       );
-      listing.replaceChildren(...asm.lines.map((l) => h('div', { class: `ln${l.addr === st.pc ? ' cur' : ''}` },
+      listing.replaceChildren(...asm.lines.map((l) => h('div', { class: `ln${l.addr === shownPc ? ' cur' : ''}` },
         h('span', { class: 'a' }, l.addr.toString(16).padStart(4, '0')),
         h('span', { class: 'w' }, l.word.toString(16).padStart(8, '0')),
         h('span', { class: 't' }, l.text))));
@@ -360,3 +365,34 @@ const ioPanel: ScenePanel = (stage: Stage): Widget => {
   update();
   return { el, update };
 };
+
+/** The controller's state table, the current state highlighted (and, for microcode, the microwords). */
+export function controllerPanel(control: 'fsm' | 'micro', compact = false): ScenePanel {
+  return (stage: Stage): Widget => {
+    const body = h('div', { class: 'mc-table' });
+    const title = h('h4', null, control === 'fsm' ? 'Controller: state machine' : 'Controller: microcode ROM', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+    const el = h('div', { class: `mem-panel mc-panel${compact ? ' compact' : ''}` }, title, body);
+    title.addEventListener('click', () => el.classList.toggle('collapsed'));
+    const ctrlBits = MC_FIELDS.reduce((a, [, n]) => a + n, 0);
+    const nextText = (n: (typeof MC_STATES)[number]['next']) => (typeof n === 'number' ? MC_STATES[n].name : n === 'decode' ? (compact ? 'by opcode' : 'dispatch (opcode)') : (compact ? 'ld / st' : 'dispatch (load / store)'));
+    const rows = MC_STATES.map((st, i) => {
+      const w = microword(st);
+      return h('div', { class: 'mc-row', 'data-i': String(i) },
+        h('span', { class: 'mc-i' }, String(i)),
+        h('span', { class: 'mc-n' }, st.name),
+        compact ? h('span') : control === 'micro'
+          ? h('code', { class: 'mc-w', title: 'microword: sequencing | next address | control fields' }, `${(w >>> (ctrlBits + 4)).toString(2).padStart(2, '0')} ${((w >>> ctrlBits) & 15).toString(2).padStart(4, '0')} ${(w & (2 ** ctrlBits - 1)).toString(2).padStart(ctrlBits, '0')}`)
+          : h('span', { class: 'mc-d' }, st.does),
+        h('span', { class: 'mc-x' }, `→ ${nextText(st.next)}`));
+    });
+    body.append(...rows);
+    const update = () => {
+      const sim = stage.sim;
+      if (!sim) return;
+      const cur = pack(sim.getBits(sim.design.root.ports.state));
+      rows.forEach((r, i) => r.classList.toggle('cur', i === cur));
+    };
+    update();
+    return { el, update };
+  };
+}

@@ -110,8 +110,10 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ⏳ Animated active path per instruction
 - ⏳ Memory-mapped I/O: LEDs, 7-segment display, a text console, a small pixel screen
 
-### Phase 5 — Multicycle & microcode ⏳
-- FSM control vs microprogrammed control (primer Appendix D), equivalence shown
+### Phase 5 — Multicycle & microcode ✅
+- ✅ Gate-level multicycle RV32I (one ALU, one memory port; IR, OldPC, A, B, Data, ALUOut), co-simulated per retirement
+- ✅ One 13-state table → hardwired FSM (~400 NAND) and microprogrammed controller (µPC, microcode + dispatch ROMs)
+- ✅ Equivalence: both controllers in lock-step over all states; live state-table panel; honest timing (period 85 vs 103, CPI ≈ 3.8)
 
 ### Phase 6 — Pipelining ✅
 - ✅ Five-stage gate-level pipeline (61k NAND), co-simulated vs the ISS at every retirement
