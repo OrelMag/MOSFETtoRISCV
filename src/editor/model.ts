@@ -37,16 +37,20 @@ export interface ChipDoc {
   labels: LabelDoc[];
 }
 
-/** One of the chip's own pins. Inputs become `in` ports, outputs `out` ports. */
+/**
+ * One of the chip's own pins. Inputs become `in` ports, outputs `out` ports, bidirectional pins
+ * `inout` ports (switch level only: a transistor terminal brought out, like an SRAM cell's bit
+ * lines; any number of transistors, and the chip's parent, may drive the net).
+ */
 export interface PinDoc {
   id: string;
   /** Port name: unique within the chip, identifier characters only, no '.'. */
   name: string;
-  dir: 'in' | 'out';
+  dir: 'in' | 'out' | 'inout';
   width: number;
   /** Connection point (where wires attach). */
   at: Vec;
-  /** Direction a wire leaves the pin (inputs default 'right', outputs 'left'). */
+  /** Direction a wire leaves the pin (inputs and inouts default 'right', outputs 'left'). */
   face?: ExitDir;
   /** Inputs only: how the user drives it. 'clock' marks the port `clock: true`. */
   kind?: 'toggle' | 'button' | 'clock';
@@ -153,7 +157,8 @@ export function endKey(e: EndRef): string {
   return `w:${e.wire}@${e.at[0]},${e.at[1]}`;
 }
 
-export const defaultFace = (p: PinDoc): ExitDir => p.face ?? (p.dir === 'in' ? 'right' : 'left');
+/** Inputs and inouts sit on the left of a chip's box (geometry.ts), so their pins face right. */
+export const defaultFace = (p: PinDoc): ExitDir => p.face ?? (p.dir === 'out' ? 'left' : 'right');
 
 /** Resolves a part to its definition (compile supplies it; undefined = unresolved part). */
 export type DefOf = (part: PartDoc) => ComponentDef | undefined;

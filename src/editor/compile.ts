@@ -8,6 +8,10 @@
 // no wire between them. Each group becomes one NetDef, or is dropped with a diagnostic when it
 // cannot be one (mixed widths, two outputs at gate level, nothing driving it).
 //
+// Bidirectional (inout) pins exist at switch level only: like a transistor terminal, the pin
+// is neither a driver nor a sink, and its net may be driven from inside and from the parent at
+// once (an SRAM cell's bit lines). In a gate-level chip such a pin is an error and is dropped.
+//
 // compileChip never throws: an unfinished drawing is the normal state of an editor.
 
 import { flatten } from '../sim/flatten';
@@ -113,6 +117,15 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
     parts.set(p.id, { doc: p, def: r });
   }
   const defOfPart = (p: PartDoc) => (parts.get(p.id)?.doc === p ? parts.get(p.id)!.def : undefined);
+
+  // A chip is solved at switch level when a gate-level flatten would reach a transistor (the
+  // test circuitMode() applies to the finished def). There, several drivers on a node are legal.
+  const mode: 'gate' | 'switch' = [...parts.values()].some((p) => reachesTransistors(p.def)) ? 'switch' : 'gate';
+  if (mode === 'gate') {
+    for (const p of pins.values()) {
+      if (p.dir === 'inout') { err(`pin '${p.name}': bidirectional pins need switch level (transistors inside)`, { pins: [p.id] }); pins.delete(p.id); }
+    }
+  }
   const labels = new Map(doc.labels.map((l) => [l.id, l]));
 
   // ---- wires: keep those whose ends all resolve (a branch needs its wire to be kept) ----
@@ -196,7 +209,7 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
         });
       } else if ('pin' in e) {
         const p = pins.get(e.pin)!;
-        eps.set(k, { key: k, end: p.name, width: p.width, role: p.dir === 'in' ? 'drv' : 'sink', rail: false, pin: p.id });
+        eps.set(k, { key: k, end: p.name, width: p.width, role: p.dir === 'in' ? 'drv' : p.dir === 'inout' ? 'bi' : 'sink', rail: false, pin: p.id });
       }
     }
   }
@@ -212,10 +225,6 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
   for (const id of valid) groupOf(`w:${id}`).wires.push(id);
   for (const l of doc.labels) groupOf(`lbl:${l.id}`).labels.push(l.id);
   for (const ep of eps.values()) groupOf(ep.key).eps.push(ep);
-
-  // A chip is solved at switch level when a gate-level flatten would reach a transistor (the
-  // test circuitMode() applies to the finished def). There, several drivers on a node are legal.
-  const mode: 'gate' | 'switch' = [...parts.values()].some((p) => reachesTransistors(p.def)) ? 'switch' : 'gate';
 
   const graph = wireGraph(valid, wires, lines);
   const labelAt = (id: string) => labels.get(id)!.at;
@@ -263,8 +272,8 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
       continue;
     }
     // The end drawn as the source: the chip's input, else a rail, else an output, else (a node
-    // between transistors) the first terminal.
-    const drv = drivers.find((e) => e.pin) ?? drivers.find((e) => e.rail) ?? drivers[0] ?? bis[0];
+    // between transistors) a bidirectional pin or the first terminal.
+    const drv = drivers.find((e) => e.pin) ?? drivers.find((e) => e.rail) ?? drivers[0] ?? bis.find((e) => e.pin) ?? bis[0];
     const ends = [drv, ...g.eps.filter((e) => e !== drv)];
     const index = nets.length;
     const net: NetDef = { ends: ends.map((e) => e.end) };
@@ -326,10 +335,11 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
     if (inits[i] !== undefined) powerOn[n.name!] = inits[i]!;
   });
 
-  // ---- ports: DLS pin order, top to bottom (then left to right), inputs before outputs ----
+  // ---- ports: DLS pin order, top to bottom (then left to right): inputs, then inouts (both on
+  // the left of the box, geometry.ts), then outputs ----
   const byPos = (a: PinDoc, b: PinDoc) => a.at[1] - b.at[1] || a.at[0] - b.at[0];
   const pinList = [...pins.values()];
-  const ordered = [...pinList.filter((p) => p.dir === 'in').sort(byPos), ...pinList.filter((p) => p.dir === 'out').sort(byPos)];
+  const ordered = (['in', 'inout', 'out'] as const).flatMap((d) => pinList.filter((p) => p.dir === d).sort(byPos));
   const ports: PortDef[] = ordered.map((p) => ({ name: p.name, width: p.width, dir: p.dir, ...(p.kind === 'clock' ? { clock: true } : {}) }));
 
   const nl: Netlist = {

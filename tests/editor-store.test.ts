@@ -78,7 +78,7 @@ describe('migrate', () => {
         u_a: {
           id: 'u_a', name: 'A', hue: 400, extra: 'ignored',
           pins: [{ id: 'pin1', name: 'x', dir: 'in', width: 1, at: [0, 0] }, { id: 'pin2', name: 'y', dir: 'sideways', width: 1, at: [0, 2] },
-            { id: 'pin3', name: 'x', dir: 'out', width: 1, at: [9, 9] }],
+            { id: 'pin3', name: 'x', dir: 'out', width: 1, at: [9, 9] }, { id: 'pin4', name: 'io', dir: 'inout', width: 1, at: [0, 4] }],
           parts: [{ id: 'g1', ref: { lib: 'nand' }, at: [4, 0] }, { id: 'g2', ref: { bogus: 1 }, at: [4, 8] }, { id: 'g3', at: [1, 1] }],
           wires: [
             { id: 'w1', a: { pin: 'pin1' }, b: { part: 'g1', port: 'a' }, pts: [] },
@@ -99,7 +99,7 @@ describe('migrate', () => {
     const a = w.chips.u_a;
     expect(a.hue).toBe(40);
     expect('extra' in a).toBe(false);
-    expect(a.pins.map((p) => p.id)).toEqual(['pin1']); // pin2 bad dir, pin3 duplicate name
+    expect(a.pins.map((p) => p.id)).toEqual(['pin1', 'pin4']); // pin2 bad dir, pin3 duplicate name
     expect(a.parts.map((p) => p.id)).toEqual(['g1']);
     expect(a.wires.map((x) => x.id)).toEqual(['w1']); // w2 → pin2 gone, w3 → w2 gone, w4 bad corner
     expect(a.labels).toEqual([{ id: 'l2', name: 'clk', at: [3, 3] }]);

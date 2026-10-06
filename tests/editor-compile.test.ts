@@ -162,6 +162,25 @@ describe('compileChip: diagnostics', () => {
     expect(c.def.ports.map((p) => p.name)).toEqual(['a', 'b', 's', 'c']);
   });
 
+  it('bidirectional pins: switch level only; ports ordered inputs, inouts, outputs', () => {
+    // A pass transistor brought out on an inout pin: legal at switch level, wherever it is drawn.
+    const sw = chip('u_pass', 'pass', {
+      pins: [pin('io', 'inout', [0, 0]), pin('y', 'out', [20, 4]), pin('g', 'in', [0, 8])],
+      parts: [part('t', { lib: 'nmos' }, [6, 2])],
+      wires: [wire('a', 'pin:io', 't.d'), wire('b', 't.s', 'pin:y'), wire('c', 'pin:g', 't.g')],
+    });
+    const c = compileLib(sw);
+    expect(c.diags).toEqual([]);
+    expect(c.mode).toBe('switch');
+    expect(c.def.ports.map((p) => [p.name, p.dir])).toEqual([['g', 'in'], ['io', 'inout'], ['y', 'out']]);
+    expect(netlistOf(c.def)!.nets.find((n) => n.ends.includes('io'))!.ends[0]).toBe('io'); // drawn from the pin
+    expect(checkSimulatable(c)).toEqual([]);
+    // At gate level an inout pin is an error, and the pin is left out.
+    const gate = compileLib({ ...halfAdder(), pins: [...halfAdder().pins, pin('io', 'inout', [0, 12])] });
+    expect(errors(gate).map((d) => [d.msg, d.pins])).toEqual([["pin 'io': bidirectional pins need switch level (transistors inside)", ['io']]]);
+    expect(gate.def.ports.map((p) => p.name)).toEqual(['a', 'b', 's', 'c']);
+  });
+
   it('a ROM with a bad program names its first error; never throws on garbage', () => {
     const doc = { ...base, parts: [...base.parts, part('r', { rom: { k: 2, w: 8, addr: 'word', lang: 'hex', src: '1 zz' } }, [30, 0])] };
     expect(errors(compileLib(doc)).map((d) => d.msg)).toEqual(['r: ROM program: line 1: not a hex number: "zz"']);

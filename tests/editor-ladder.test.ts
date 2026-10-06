@@ -7,13 +7,13 @@ import { checkSimulatable, type Compiled } from '../src/editor/compile';
 import { UserLibrary } from '../src/editor/library';
 import type { ChipDoc, PartRef, Vec, WireDoc } from '../src/editor/model';
 import { buildProgram } from '../src/editor/program';
-import { aluSpec, AND, D_LATCH, DFF, DRAM_CELL, INV_CMOS, NAND, NOR_CMOS, NOT, OR, ram, SR_LATCH, SRAM_COLUMN, XOR } from '../src/lib';
+import { aluSpec, AND, D_LATCH, DFF, DRAM_CELL, INV_CMOS, NAND, NOR_CMOS, NOT, OR, ram, SR_LATCH, SRAM_CELL, SRAM_COLUMN, XOR } from '../src/lib';
 import { counter, register } from '../src/lib/sequential';
 import { flatten, findNode } from '../src/sim/flatten';
 import { evalOnce, forEachInput, simulate } from '../src/sim/harness';
 import type { Sim } from '../src/sim/sim';
 import { SwitchSim } from '../src/sim/switchsim';
-import { B0, B1, type ComponentDef, inPorts, netlistOf } from '../src/sim/types';
+import { B0, B1, BZ, type ComponentDef, inPorts, netlistOf } from '../src/sim/types';
 import { chip, fan, lbl, part, pin, wire, workspace } from './editorkit';
 import { lcg, out, set, tick } from './util';
 
@@ -217,6 +217,44 @@ const sramcol = chip('u_sramcol', 'SRAM column', {
     ...c0.wires, ...c1.wires,
   ],
 });
+// The cell packaged as a chip: its bit lines are bidirectional pins (the parent precharges and
+// writes through them, the cell discharges them on a read).
+const sramcell = chip('u_sram6t', '6T cell', {
+  pins: [pin('wl', 'in', [0, 26]), { ...pin('bl', 'inout', [2, 0]), face: 'down' }, { ...pin('blb', 'inout', [40, 0]), face: 'down' }],
+  parts: [
+    part('a1', L('nmos'), [6, 9]), part('vdd', L('vdd'), [21, 0]), part('p1', L('pmos_weak'), [14, 4]), part('n1', L('nmos_strong'), [14, 14]),
+    part('gnd', L('gnd'), [21, 20]), part('p2', L('pmos_weak'), [24, 4]), part('n2', L('nmos_strong'), [24, 14]), part('a2', L('nmos'), [34, 9]),
+  ],
+  wires: [
+    ...fan('wl', 'pin:wl', 'a1.g', 'a2.g'), wire('bl', 'pin:bl', 'a1.d'), wire('blb', 'pin:blb', 'a2.d'),
+    ...fan('v', 'vdd.p', 'p1.s', 'p2.s'), ...fan('g', 'gnd.p', 'n1.s', 'n2.s'),
+    wire('q', 'p1.d', 'n1.d', [], { name: 'q' }), ...fan('qx', 'n1.d', 'a1.s', 'p2.g', 'n2.g'),
+    wire('qb', 'p2.d', 'n2.d', [], { name: 'qb' }), ...fan('qbx', 'n2.d', 'a2.s', 'p1.g', 'n1.g'),
+  ],
+});
+// Two of them in a column: the bit lines are pointers past both cells.
+const sramcolchip = chip('u_sramcol_chips', 'SRAM column (cell chips)', {
+  pins: [...sramcol.pins],
+  parts: [
+    part('vdd0', L('vdd'), [12, 0]), part('pre0', L('pmos'), [10, 2]), part('vdd1', L('vdd'), [38, 0]), part('pre1', L('pmos'), [36, 2]),
+    part('c0', C('u_sram6t'), [20, 16]), part('c1', C('u_sram6t'), [20, 32]),
+    part('d0', L('nmos_strong'), [10, 66]), part('d1', L('nmos_strong'), [36, 66]), part('g0', L('gnd'), [12, 72]), part('g1', L('gnd'), [38, 72]),
+  ],
+  labels: [
+    lbl('bl_top', 'bl', [13, 10]), lbl('blb_top', 'blb', [39, 10]), lbl('bl_bot', 'bl', [13, 62]), lbl('blb_bot', 'blb', [39, 62]),
+    ...[0, 1].flatMap((i) => [lbl(`c${i}lbl`, 'bl', [14, 18 + 16 * i], 'left'), lbl(`c${i}lblb`, 'blb', [14, 20 + 16 * i], 'left')]),
+  ],
+  wires: [
+    ...fan('pre', 'pin:pre_n', 'pre0.g', 'pre1.g'), wire('v0', 'vdd0.p', 'pre0.s'), wire('v1', 'vdd1.p', 'pre1.s'),
+    wire('blp', 'pre0.d', 'lbl:bl_top', [], { cap: true }), wire('blbp', 'pre1.d', 'lbl:blb_top', [], { cap: true }),
+    wire('blo', 'lbl:bl_top', 'pin:bl'), wire('blbo', 'lbl:blb_top', 'pin:blb'),
+    wire('bld', 'lbl:bl_bot', 'd0.d'), wire('blbd', 'lbl:blb_bot', 'd1.d'),
+    wire('w0', 'pin:w0', 'd0.g'), wire('w1', 'pin:w1', 'd1.g'), wire('gn0', 'g0.p', 'd0.s'), wire('gn1', 'g1.p', 'd1.s'),
+    ...[0, 1].flatMap((i) => [
+      wire(`c${i}wl`, `pin:wl${i}`, `c${i}.wl`), wire(`c${i}bl`, `lbl:c${i}lbl`, `c${i}.bl`), wire(`c${i}blb`, `lbl:c${i}lblb`, `c${i}.blb`),
+    ]),
+  ],
+});
 const dram = chip('u_dram', 'DRAM cell', {
   pins: [pin('wl', 'in', [0, 6]), pin('bl', 'in', [6, 0]), pin('q', 'out', [20, 10])],
   parts: [part('a', L('nmos'), [3, 4])],
@@ -282,7 +320,7 @@ const fetch = chip('u_fetch', 'Fetch', {
   ],
 });
 
-const ALL = [inverter, nand, nor, not, and, or, xor, fa, rca4, sr, dlatch, dff, dffe, reg4, cnt4, sramcol, dram, ram4, alu4, fetch];
+const ALL = [inverter, nand, nor, not, and, or, xor, fa, rca4, sr, dlatch, dff, dffe, reg4, cnt4, sramcol, sramcell, sramcolchip, dram, ram4, alu4, fetch];
 const lib = new UserLibrary(workspace(...ALL));
 const compiled = (id: string): Compiled => lib.compiled(id)!;
 const def = (id: string): ComponentDef => lib.defOf(id)!;
@@ -425,6 +463,44 @@ describe('5. memory cells at switch level', () => {
     });
     expect([mine('q0'), mine('q1')]).toEqual([B1, B1]); // cell 0 written 1, cell 1 overwritten with 1
     expect([out(a, 'bl'), out(a, 'blb')]).toEqual([B1, B0]); // reading a stored 1 discharges bl̄
+  });
+  it('the cell packaged as a chip: bidirectional bit-line pins, ≡ the library cell driven from outside', () => {
+    const c = compiled('u_sram6t');
+    expect(c.mode).toBe('switch');
+    expect(c.def.ports).toEqual(SRAM_CELL.ports);
+    expect(c.derived).toMatchObject({ ok: false });
+    const a = new SwitchSim(flatten(c.def, { mode: 'switch' })), b = new SwitchSim(flatten(SRAM_CELL, { mode: 'switch' }));
+    const Z = -BZ;
+    const steps: [number, number, number][] = [[0, Z, Z], [1, 1, 0], [0, Z, Z], [1, Z, Z], [1, 0, 1], [0, 1, 1], [1, Z, Z]];
+    for (const [k, [wl, bl, blb]] of steps.entries()) {
+      for (const s of [a, b]) { s.setInput('wl', wl); s.setInput('bl', bl); s.setInput('blb', blb); s.settle(); }
+      expect([out(a, 'bl'), out(a, 'blb')], `step ${k}`).toEqual([out(b, 'bl'), out(b, 'blb')]);
+    }
+    expect([a.getBits(a.design.root.ports.bl)[0], a.getBits(a.design.root.ports.blb)[0]]).toEqual([B0, B1]); // reads the 0 written at step 4
+  });
+  it('a column of two packaged cells (bit lines through their inout pins) ≡ the library column', () => {
+    const c = compiled('u_sramcol_chips');
+    expect(c.mode).toBe('switch');
+    const a = new SwitchSim(flatten(c.def, { mode: 'switch' })), b = new SwitchSim(flatten(SRAM_COLUMN, { mode: 'switch' }));
+    const q = (s: SwitchSim, cell: string, net: string) => {
+      const n = findNode(s.design.root, [cell])!;
+      return s.get(n.nets![netlistOf(n.def)!.nets.findIndex((x) => x.name === net)][0]);
+    };
+    const steps: Record<string, number>[] = [
+      { pre_n: 1, w0: 0, w1: 0, wl0: 0, wl1: 0 }, { w1: 1, wl0: 1 }, { wl0: 0, w1: 0 }, { w0: 1, wl1: 1 }, { wl1: 0, w0: 0 },
+      { pre_n: 0 }, { pre_n: 1 }, { wl0: 1 }, { wl0: 0, pre_n: 0 }, { pre_n: 1, wl1: 1 }, { wl1: 1, w1: 1 },
+      { wl1: 0, w1: 0 }, { pre_n: 0 }, { pre_n: 1, wl1: 1 }, { wl1: 0, pre_n: 0 }, { pre_n: 1, wl0: 1 }, { wl0: 1, w0: 1 },
+    ];
+    steps.forEach((st, k) => {
+      set(a, st);
+      set(b, st);
+      const at = `step ${k}: ${JSON.stringify(st)}`;
+      expect([out(a, 'bl'), out(a, 'blb')], at).toEqual([out(b, 'bl'), out(b, 'blb')]);
+      expect([q(a, 'c0', 'q'), q(a, 'c0', 'qb'), q(a, 'c1', 'q'), q(a, 'c1', 'qb')], at)
+        .toEqual([q(b, 'c0', 'q'), q(b, 'c0', 'q̄'), q(b, 'c1', 'q'), q(b, 'c1', 'q̄')]);
+      expect(a.shorted.some((x) => x), at).toBe(false);
+    });
+    expect([q(a, 'c0', 'q'), q(a, 'c1', 'q')]).toEqual([B0, B1]);
   });
   it('1T1C DRAM cell (a capacitive storage net) ≡ library', () => {
     const c = compiled('u_dram');

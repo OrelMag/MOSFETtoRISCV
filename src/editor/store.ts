@@ -86,7 +86,7 @@ function sanitizeEnd(e: unknown): EndRef | null {
 }
 
 function sanitizePin(p: unknown): PinDoc | null {
-  if (!isObj(p) || !str(p.id) || !str(p.name) || !isIdent(p.name) || (p.dir !== 'in' && p.dir !== 'out') || !int(p.width, 1)) return null;
+  if (!isObj(p) || !str(p.id) || !str(p.name) || !isIdent(p.name) || (p.dir !== 'in' && p.dir !== 'out' && p.dir !== 'inout') || !int(p.width, 1)) return null;
   const at = vec(p.at);
   if (!at) return null;
   const kind = p.kind === 'toggle' || p.kind === 'button' || p.kind === 'clock' ? p.kind : undefined;

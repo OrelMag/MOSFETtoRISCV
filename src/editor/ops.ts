@@ -98,13 +98,13 @@ export function addPart(doc: ChipDoc, ref: PartRef, at: Vec, id?: string): Added
   return { doc: { ...doc, parts: [...doc.parts, { id: pid, ref, at: [at[0], at[1]] }] }, id: pid };
 }
 
-export function addPin(doc: ChipDoc, dir: 'in' | 'out', width: number, at: Vec, name?: string): Added {
+export function addPin(doc: ChipDoc, dir: PinDoc['dir'], width: number, at: Vec, name?: string): Added {
   if (!Number.isInteger(width) || width < 1) return { doc, reason: 'width must be a positive integer' };
   const names = doc.pins.map((p) => p.name);
   if (name !== undefined && !isIdent(name)) return { doc, reason: `'${name}' is not a valid pin name` };
   if (name !== undefined && names.includes(name)) return { doc, reason: `a pin is already called '${name}'` };
   const id = nextId('pin', doc.pins.map((p) => p.id));
-  const pin: PinDoc = { id, name: name ?? nextId(dir, [...names, ...doc.parts.map((p) => p.id)]), dir, width, at: [at[0], at[1]] };
+  const pin: PinDoc = { id, name: name ?? nextId(dir === 'inout' ? 'io' : dir, [...names, ...doc.parts.map((p) => p.id)]), dir, width, at: [at[0], at[1]] };
   return { doc: { ...doc, pins: [...doc.pins, pin] }, id };
 }
 

@@ -4,7 +4,7 @@ import { compileChip } from '../src/editor/compile';
 import { type ChipDoc, type EndRef, type LabelDoc, type PartDoc, type PartRef, type PinDoc, SCHEMA, type Vec, type WireDoc, type Workspace } from '../src/editor/model';
 import { partDef } from '../src/editor/parts';
 
-export const pin = (id: string, dir: 'in' | 'out', at: Vec, width = 1, name = id): PinDoc => ({ id, name, dir, width, at });
+export const pin = (id: string, dir: PinDoc['dir'], at: Vec, width = 1, name = id): PinDoc => ({ id, name, dir, width, at });
 export const part = (id: string, ref: PartRef, at: Vec, flip?: boolean): PartDoc => ({ id, ref, at, ...(flip ? { flip } : {}) });
 export const lbl = (id: string, name: string, at: Vec, face?: LabelDoc['face']): LabelDoc => ({ id, name, at, ...(face ? { face } : {}) });
 

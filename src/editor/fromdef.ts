@@ -22,7 +22,7 @@ export interface FromDefOptions {
 
 /**
  * The chip document of a component with a netlist, or why it cannot be one: a port the sandbox
- * has no pin for (inout, wider than MAX_WIDTH), a name that is not an identifier, or a part that
+ * has no pin for (wider than MAX_WIDTH), a name that is not an identifier, or a part that
  * cannot be placed by reference (partDef must give back the very same def).
  *
  * Wires: one per drawn sink path (driver → sink). A path that shares its beginning with an
@@ -36,7 +36,6 @@ export function docFromDef(def: ComponentDef, opts: FromDefOptions = {}): ChipDo
   const nl = netlistOf(def);
   if (!nl) return { error: `${def.id} has no netlist (a primitive): nothing to draw` };
   for (const p of def.ports) {
-    if (p.dir === 'inout') return { error: `port '${p.name}' is bidirectional: sandbox pins are inputs or outputs` };
     if (!isIdent(p.name) || p.name.includes('.')) return { error: `port name '${p.name}' is not an identifier` };
     if (p.width > MAX_WIDTH) return { error: `port '${p.name}' is ${p.width} bits wide (pins: at most ${MAX_WIDTH})` };
   }
@@ -56,9 +55,9 @@ export function docFromDef(def: ComponentDef, opts: FromDefOptions = {}): ChipDo
   const { nets: routed, pins: pg } = routeNetlist(def, nl);
   const pins: PinDoc[] = def.ports.map((p) => {
     const g = pg.get(p.name)!;
-    const face: ExitDir = p.dir === 'in' ? 'right' : 'left';
+    const face: ExitDir = p.dir === 'out' ? 'left' : 'right';
     return {
-      id: p.name, name: p.name, dir: p.dir as 'in' | 'out', width: p.width, at: [g.pos[0], g.pos[1]],
+      id: p.name, name: p.name, dir: p.dir, width: p.width, at: [g.pos[0], g.pos[1]],
       ...(g.exit !== face ? { face: g.exit } : {}), ...(p.clock ? { kind: 'clock' as const } : {}),
     };
   });

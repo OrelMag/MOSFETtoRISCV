@@ -37,9 +37,6 @@ cachedMemory(6, 2);
  * instead where the sandbox can express the circuit.
  */
 const CANNOT: Record<string, RegExp> = {
-  // Its bit lines are bidirectional ports; sandbox pins are inputs or outputs. (Placed as a part,
-  // e.g. in the SRAM column, it is fine: part ports may be inout.)
-  sram6t: /bidirectional/,
   // Pipeline registers and register-file read ports wider than a sandbox pin (64 bits: a value
   // the editor shows and drives must fit in a number). They are fine as parts of a chip.
   // (The pipeline registers: register, clearable register and the AND that clears them.)
