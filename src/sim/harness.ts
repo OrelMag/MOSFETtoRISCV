@@ -16,6 +16,31 @@ export function needsSwitchLevel(def: ComponentDef): boolean {
   return !!nl && nl.level === 'switch';
 }
 
+const reachCache = new WeakMap<ComponentDef, boolean>();
+
+/**
+ * Would a gate-level flatten of this component reach a transistor or a rail, i.e. can it only be
+ * simulated at switch level? Unlike needsSwitchLevel (is its own inside drawn in transistors?),
+ * this follows what flatten does in gate mode: a NAND primitive or a behaviour hides the
+ * transistors below it, a gate-level netlist is expanded (unless a behaviour is preferred).
+ */
+export function reachesTransistors(def: ComponentDef): boolean {
+  const hit = reachCache.get(def);
+  if (hit !== undefined) return hit;
+  let r: boolean;
+  if (def.prim === 'nmos' || def.prim === 'pmos' || def.prim === 'vdd' || def.prim === 'gnd') r = true;
+  else if (def.prim) r = false; // nand, alias
+  else {
+    const nl = netlistOf(def);
+    if (nl && nl.level !== 'switch' && !(def.behavior && def.preferBehavior)) {
+      reachCache.set(def, false); // provisional, in case of a (malformed) cycle
+      r = nl.instances.some((i) => reachesTransistors(i.def));
+    } else r = !def.behavior && !!nl;
+  }
+  reachCache.set(def, r);
+  return r;
+}
+
 export function simulate(def: ComponentDef, level: 'gate' | 'switch' = needsSwitchLevel(def) ? 'switch' : 'gate'): Sim {
   const design = flatten(def, { mode: level });
   return level === 'switch' ? new SwitchSim(design) : new GateSim(design);
