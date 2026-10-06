@@ -78,8 +78,12 @@ src/lib/       the component library (registered in `registry` via define())
   pipeline.ts    equal, nonZero, clearableRegister, pipeline registers (fields on fixed rows),
                  hazardUnit(lookAhead), BRANCH_CMP, BTB (16 × 62-bit), SAT_COUNTER, MISPREDICT,
                  pipelinedCpu(program, { adder, balanced, predictor })
-src/riscv/     isa.ts (tables, decode, disasm), asm.ts (two-pass assembler), iss.ts (golden
-               model), programs.ts (samples), cosim.ts (read CPU state from a simulation)
+  lsu.ts         STORE_ALIGN, LOAD_EXTRACT, bankedMemory(k) (byte / halfword access)
+  system.ts      SYS_DECODE (illegal-instruction detection), CSR_UNIT, TRAP_UNIT, IO_UNIT,
+                 systemCpu(program): the complete RV32I + Zicsr + M-mode traps / interrupts + MMIO
+src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
+               instructions), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
+               interrupts), programs.ts / sysprograms.ts (samples), cosim.ts (read CPU state)
 src/view/      SVG schematic renderer, router, inspector panels, waveform, truth table
 src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...)
 src/chapters/  narrative content: chapters → steps → scene / widget / challenge

@@ -9,4 +9,6 @@ export * from './fastadd';
 export * from './regfile';
 export * from './cpu';
 export * from './pipeline';
+export * from './lsu';
+export * from './system';
 export { registry, splitter, merger } from './define';

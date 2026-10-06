@@ -5,8 +5,17 @@ import type { Category, ComponentDef, PortDef, SymbolSpec } from '../sim/types';
 /** Every named component, for the workbench / library browser. */
 export const registry = new Map<string, ComponentDef>();
 
+/**
+ * Register a component. Generators may be reached with and without default arguments, so a
+ * second definition with the same id and name is the same component: the first one is kept
+ * (ids encode every parameter). The same id with a different name is a real collision.
+ */
 export function define(d: ComponentDef): ComponentDef {
-  if (registry.has(d.id) && registry.get(d.id) !== d) throw new Error(`duplicate component id '${d.id}'`);
+  const prev = registry.get(d.id);
+  if (prev && prev !== d) {
+    if (prev.name !== d.name) throw new Error(`duplicate component id '${d.id}' (${prev.name} / ${d.name})`);
+    return prev;
+  }
   registry.set(d.id, d);
   return d;
 }

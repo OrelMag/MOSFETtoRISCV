@@ -40,10 +40,25 @@ export const INSTRS: InstrSpec[] = [
   R('xor', 4, 0), R('srl', 5, 0), R('sra', 5, 0x20), R('or', 6, 0), R('and', 7, 0),
   { name: 'ecall', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 0, hw: false },
   { name: 'ebreak', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 0, hw: false },
+  { name: 'mret', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 0, hw: false },
+  { name: 'wfi', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 0, hw: false },
+  { name: 'csrrw', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 1, hw: false },
+  { name: 'csrrs', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 2, hw: false },
+  { name: 'csrrc', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 3, hw: false },
+  { name: 'csrrwi', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 5, hw: false },
+  { name: 'csrrsi', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 6, hw: false },
+  { name: 'csrrci', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 7, hw: false },
   { name: 'fence', fmt: 'I', opcode: OPCODES.FENCE, funct3: 0, hw: false },
 ];
 
 export const BY_NAME = new Map(INSTRS.map((i) => [i.name, i]));
+
+/** Machine-mode CSRs implemented by the full system CPU. */
+export const CSRS: Record<string, number> = {
+  mstatus: 0x300, misa: 0x301, mie: 0x304, mtvec: 0x305, mscratch: 0x340, mepc: 0x341, mcause: 0x342,
+  mtval: 0x343, mip: 0x344, mcycle: 0xb00, cycle: 0xc00, mhartid: 0xf14,
+};
+export const CSR_NAMES: Record<number, string> = Object.fromEntries(Object.entries(CSRS).map(([k, v]) => [v, k]));
 
 export const ABI = [
   'zero', 'ra', 'sp', 'gp', 'tp', 't0', 't1', 't2', 's0', 's1', 'a0', 'a1', 'a2', 'a3', 'a4', 'a5',
@@ -124,7 +139,11 @@ export function decode(word: number): Decoded {
     if (s.fmt === 'R' && s.funct7 !== funct7) continue;
     if (s.opcode === OPCODES.OPIMM && (funct3 === 1 || funct3 === 5) && s.funct7 !== undefined && s.funct7 !== (funct7 & 0x7e)) continue;
     if (s.opcode === OPCODES.OPIMM && (funct3 === 1 || funct3 === 5) && s.funct7 === undefined) continue;
-    if (s.opcode === OPCODES.SYSTEM && (s.name === 'ecall') !== ((w >>> 20) === 0)) continue;
+    if (s.opcode === OPCODES.SYSTEM && funct3 === 0) {
+      const imm = w >>> 20;
+      const want = imm === 0 ? 'ecall' : imm === 1 ? 'ebreak' : imm === 0x302 ? 'mret' : imm === 0x105 ? 'wfi' : '';
+      if (s.name !== want) continue;
+    }
     spec = s;
     break;
   }
@@ -154,6 +173,10 @@ export function disasm(word: number, pc?: number): string {
     case 'R': return `${n} ${rn(d.rd)}, ${rn(d.rs1)}, ${rn(d.rs2)}`;
     case 'I':
       if (d.opcode === OPCODES.LOAD || n === 'jalr') return `${n} ${rn(d.rd)}, ${d.imm}(${rn(d.rs1)})`;
+      if (d.opcode === OPCODES.SYSTEM && d.funct3 !== 0) {
+        const csr = CSR_NAMES[(word >>> 20) & 0xfff] ?? `0x${((word >>> 20) & 0xfff).toString(16)}`;
+        return d.funct3 & 4 ? `${n} ${rn(d.rd)}, ${csr}, ${d.rs1}` : `${n} ${rn(d.rd)}, ${csr}, ${rn(d.rs1)}`;
+      }
       if (d.opcode === OPCODES.SYSTEM || d.opcode === OPCODES.FENCE) return n;
       return `${n} ${rn(d.rd)}, ${rn(d.rs1)}, ${d.imm}`;
     case 'S': return `${n} ${rn(d.rs2)}, ${d.imm}(${rn(d.rs1)})`;

@@ -2,12 +2,15 @@
 // register file, data memory, and a live check against the golden model (the ISS runs in
 // lock-step and every register is compared after each clock edge).
 
-import { pipelinedCpu, singleCycleCpu } from '../lib';
+import { pipelinedCpu, singleCycleCpu, systemCpu } from '../lib';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { cpuState, retiring } from '../riscv/cosim';
 import { ABI, decode, disasm } from '../riscv/isa';
 import { ISS } from '../riscv/iss';
 import { PROGRAMS } from '../riscv/programs';
+import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';
+import { CAUSE } from '../riscv/iss';
+import { pack } from '../sim/values';
 import { h } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { timingPanel } from './timing';
@@ -24,6 +27,8 @@ export interface CpuSceneOptions {
   pipeline?: boolean;
   balanced?: boolean;
   predictor?: boolean;
+  /** The complete machine: Zicsr, traps, interrupts and memory-mapped I/O (adds the I/O panel). */
+  system?: boolean;
   /** Show the program editor. */
   editable?: boolean;
 }
@@ -32,17 +37,20 @@ export interface CpuSceneOptions {
 export function cpuScene(opts: CpuSceneOptions): Scene {
   const asm = assemble(opts.source);
   return {
-    root: opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor }) : singleCycleCpu(asm.words, { adder: opts.adder }),
-    inputs: { clk: 0 },
+    root: opts.system ? systemCpu(asm.words, { adder: opts.adder })
+      : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor })
+        : singleCycleCpu(asm.words, { adder: opts.adder }),
+    inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
-    panels: [cpuPanel({ ...opts, asm }), ...(opts.pipeline ? [pipeDiagram(asm)] : []), ...(opts.timing ? [timingPanel] : [])],
+    panels: [cpuPanel({ ...opts, asm }), ...(opts.pipeline ? [pipeDiagram(asm)] : []), ...(opts.system ? [ioPanel] : []), ...(opts.timing ? [timingPanel] : [])],
   };
 }
 
 function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
   return (stage: Stage): Widget => {
     const asm = opts.asm;
-    let iss = new ISS(asm.words);
+    const issOpts = opts.system ? { system: true, imemWords: 128 } : {};
+    let iss = new ISS(asm.words, issOpts);
     let lastX: number[] = new Array(32).fill(0);
     let changed = new Set<number>();
     let mismatch: string | null = null;
@@ -54,12 +62,13 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     const mem = h('div', { class: 'cpu-mem' });
     const now = h('div', { class: 'cpu-now' });
     const sel = h('select', { 'aria-label': 'program' }) as HTMLSelectElement;
-    for (const p of PROGRAMS) sel.append(h('option', { value: p.id }, p.name));
+    const progs = opts.system ? [...SYSTEM_PROGRAMS, ...PROGRAMS] : PROGRAMS;
+    for (const p of progs) sel.append(h('option', { value: p.id }, p.name));
     sel.append(h('option', { value: '__custom' }, 'My program'));
-    const match = PROGRAMS.find((p) => p.source === opts.source);
+    const match = progs.find((p) => p.source === opts.source);
     sel.value = match ? match.id : '__custom';
     sel.addEventListener('change', () => {
-      const p = PROGRAMS.find((q) => q.id === sel.value);
+      const p = progs.find((q) => q.id === sel.value);
       if (p) stage.load(cpuScene({ ...opts, source: p.source }));
     });
 
@@ -104,7 +113,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       h('div', { class: 'cpu-sec' }, 'Program'), listing,
       h('div', { class: 'cpu-sec' }, 'Registers'), regs,
       h('div', { class: 'cpu-sec' }, 'Data memory (non-zero words)'), mem);
-    const title = h('h4', null, opts.pipeline ? 'RV32I pipeline' : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+    const title = h('h4', null, opts.system ? 'RV32I system' : opts.pipeline ? 'RV32I pipeline' : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
     const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right' }, title, body);
     title.addEventListener('click', () => {
       el.classList.toggle('collapsed');
@@ -115,7 +124,13 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     // (every cycle for the single-cycle CPU; when a valid instruction leaves W for the pipeline).
     let willRetire = false;
     stage.edgeHooks.add({
-      before: () => { willRetire = !opts.pipeline || (!!stage.sim && retiring(stage.sim)); },
+      before: () => {
+        willRetire = !opts.pipeline || (!!stage.sim && retiring(stage.sim));
+        if (opts.system) {
+          iss.irq = stage.getInput('irq') === 1;
+          iss.switches = stage.getInput('switches');
+        }
+      },
       after: () => {
         if (!willRetire || iss.halted || !stage.sim) return;
         iss.step();
@@ -130,7 +145,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       const sim = stage.sim;
       if (!sim) return;
       if (stage.cycles === 0 && iss.steps > 0) {
-        iss = new ISS(asm.words);
+        iss = new ISS(asm.words, issOpts);
         mismatch = null;
       }
       const st = cpuState(sim);
@@ -248,3 +263,70 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
     return { el, update };
   };
 }
+
+const CAUSE_NAMES: Record<number, string> = {
+  [CAUSE.MISALIGNED_FETCH]: 'misaligned fetch', [CAUSE.ILLEGAL]: 'illegal instruction', [CAUSE.BREAKPOINT]: 'breakpoint',
+  [CAUSE.MISALIGNED_LOAD]: 'misaligned load', [CAUSE.MISALIGNED_STORE]: 'misaligned store', [CAUSE.ECALL]: 'ecall',
+  [CAUSE.TIMER_IRQ]: 'timer interrupt', [CAUSE.EXTERNAL_IRQ]: 'external interrupt',
+};
+
+/** Console, LEDs, switches, the IRQ button and the machine-mode CSRs of a system CPU scene. */
+const ioPanel: ScenePanel = (stage: Stage): Widget => {
+  let text = '';
+  const con = h('pre', { class: 'console' });
+  const leds = h('div', { class: 'leds' });
+  const sw = h('div', { class: 'switches' });
+  const csrs = h('div', { class: 'cpu-mem' });
+  const irqBtn = h('button', { class: 'btn sm primary', title: 'Raise the external interrupt for one clock cycle' }, 'IRQ (one cycle)');
+  irqBtn.addEventListener('click', () => {
+    stage.setInputs({ irq: 1 });
+    stage.pulse();
+    stage.setInputs({ irq: 0 });
+  });
+  stage.edgeHooks.add({
+    before: () => {
+      const sim = stage.sim;
+      if (!sim) return;
+      const r = sim.design.root;
+      if (sim.getBits(r.ports.consoleValid)[0] === 1) text += String.fromCharCode(pack(sim.getBits(r.ports.consoleData)) & 0xff);
+    },
+  });
+  const title = h('h4', null, 'I/O & machine state', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'memory-mapped at 0x8000_0000'));
+  const el = h('div', { class: 'mem-panel io-panel' }, title,
+    h('div', { class: 'cpu-sec' }, 'Console'), con,
+    h('div', { class: 'io-row' }, h('div', null, h('div', { class: 'cpu-sec' }, 'LEDs'), leds), h('div', null, h('div', { class: 'cpu-sec' }, 'Switches'), sw)),
+    h('div', { style: 'margin:6px 0' }, irqBtn),
+    h('div', { class: 'cpu-sec' }, 'Machine-mode CSRs'), csrs);
+  title.addEventListener('click', () => el.classList.toggle('collapsed'));
+  const update = () => {
+    const sim = stage.sim, root = stage.rootCtx?.node;
+    if (!sim || !root?.children) return;
+    if (stage.cycles === 0) text = '';
+    con.textContent = text || ' ';
+    con.scrollTop = con.scrollHeight;
+    const ledv = pack(sim.getBits(root.ports.leds));
+    leds.replaceChildren(...Array.from({ length: 8 }, (_, i) => h('span', { class: `led${(ledv >> (7 - i)) & 1 ? ' on' : ''}`, title: `LED ${7 - i}` })));
+    const swv = stage.getInput('switches');
+    sw.replaceChildren(...Array.from({ length: 8 }, (_, i) => {
+      const b = 7 - i, on = (swv >> b) & 1;
+      return h('button', { class: `sw${on ? ' on' : ''}`, title: `switch ${b}`, onclick: () => stage.setInputs({ switches: swv ^ (1 << b) }) }, String(b));
+    }));
+    const csr = root.children.get('csr')!, io = root.children.get('io')!;
+    const q = (n: typeof csr, inst: string) => pack(sim.getBits(n.children!.get(inst)!.ports.q)) >>> 0;
+    const mie = q(csr, 'rMIE'), mpie = q(csr, 'rMPIE'), en = q(csr, 'rMIEN');
+    const cause = q(csr, 'rCause');
+    const rows: [string, string][] = [
+      ['mstatus', `MIE=${mie} MPIE=${mpie}`],
+      ['mie', `MTIE=${en & 1} MEIE=${(en >> 1) & 1}`],
+      ['mtvec', hex(q(csr, 'rTvec') * 4)],
+      ['mepc', hex(q(csr, 'rEpc') * 4)],
+      ['mcause', `${hex(cause)} ${cause === 0 && q(csr, 'rEpc') === 0 ? '(no trap yet)' : CAUSE_NAMES[cause] ?? ''}`],
+      ['mtval', hex(q(csr, 'rTval'))],
+      ['mtime', String(q(io, 'mtime'))],
+      ['mtimecmp', String(q(io, 'rCmp'))],
+    ];
+    csrs.replaceChildren(...rows.map(([k, v]) => h('div', { class: 'm' }, h('span', { class: 'n' }, k), h('span', { class: 'v' }, v))));
+  };
+  update();
+  return { el, update };
+};

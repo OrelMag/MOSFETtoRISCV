@@ -532,3 +532,15 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .pg-row.head .pg-c { background: none; color: var(--muted); }
 .pg-c.bubble { background: var(--surface-2); color: var(--muted); }
 .pg-row.ev .pg-c { background: none; color: var(--warn); font-size: 9.5px; white-space: normal; line-height: 1.15; }
+
+.io-panel { left: 12px; right: auto; bottom: 12px; top: auto; width: 330px; }
+.console { background: #0b0d12; color: #9fe6a0; font: 12.5px var(--font-mono); border-radius: 8px; padding: 8px 10px; margin: 0;
+  min-height: 48px; max-height: 120px; overflow: auto; white-space: pre-wrap; border: 1px solid var(--border); }
+.io-row { display: flex; gap: 16px; }
+.leds { display: flex; gap: 4px; }
+.led { width: 14px; height: 14px; border-radius: 50%; background: var(--surface-3); border: 1px solid var(--border-strong); }
+.led.on { background: #ff3b3b; border-color: #ff3b3b; box-shadow: 0 0 8px #ff3b3b; }
+.switches { display: flex; gap: 3px; }
+.sw { width: 18px; height: 24px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface-2); font: 600 9px var(--font-mono); color: var(--muted); cursor: pointer; padding: 0; }
+.sw.on { background: var(--w1); color: #fff; border-color: var(--w1); }
+.cpu-mem .m .n { width: 72px; }

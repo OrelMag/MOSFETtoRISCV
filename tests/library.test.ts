@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addSub, alu, andN, bitwise, busMux2, constWord, counter, decoder, DFF, D_LATCH, incrementer, isZero, muxTree, orN, ram, rca,
-  register, regfile, shifter, SR_LATCH, zext, CLA4, koggeStone, addSubFast,
+  register, regfile, shifter, SR_LATCH, zext, CLA4, koggeStone, addSubFast, STORE_ALIGN, LOAD_EXTRACT, bankedMemory,
 } from '../src/lib';
 import { evalOnce, forEachInput, inputBits, simulate } from '../src/sim/harness';
 import type { ComponentDef } from '../src/sim/types';
@@ -167,5 +167,30 @@ describe('fast adders match their specs', () => {
     expect(ks[3] - ks[2]).toBeLessThanOrEqual(4); // one more level per doubling
     expect(rc[3] - rc[2]).toBeGreaterThanOrEqual(30); // two per bit
     expect(ks[3]).toBeLessThan(rc[3] / 3);
+  });
+});
+
+describe('load/store unit', () => {
+  for (const d of [STORE_ALIGN, LOAD_EXTRACT]) it(d.id, () => checkSpec(d));
+  it('banked memory writes single bytes', () => {
+    const s = simulate(bankedMemory(3));
+    set(s, { clk: 0, we: 1, addr: 8, wdata: 0x11223344, be: 0b1111 }); tick(s);
+    set(s, { wdata: 0xaaaaaaaa, be: 0b0100 }); tick(s);
+    set(s, { we: 0 });
+    expect(out(s, 'rdata')).toBe(0x11aa3344);
+  });
+});
+
+describe('every workbench component can be built', async () => {
+  const { families, resolveComponent } = await import('../src/lib/resolve');
+  it('all families × parameters, and their ids resolve back', () => {
+    for (const f of families) {
+      let combos: Record<string, number>[] = [{}];
+      for (const p of f.params) combos = combos.flatMap((o) => p.values.map((v) => ({ ...o, [p.name]: v })));
+      for (const c of combos) {
+        const d = f.make(c);
+        expect(resolveComponent(d.id), `${f.id} ${JSON.stringify(c)}`).toBe(d);
+      }
+    }
   });
 });

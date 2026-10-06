@@ -11,6 +11,7 @@ export interface Rung {
 
 export const LADDER: Rung[] = [
   { title: 'Multi-core chip on silicon', madeOf: 'cores, caches, interconnect, layout', ready: false },
+  { title: 'Complete RV32I system', madeOf: 'CSRs, traps, interrupts, I/O', ready: true },
   { title: 'Pipelined RISC-V core', madeOf: 'pipeline registers, hazard unit, branch predictor', ready: true },
   { title: 'Single-cycle RISC-V CPU', madeOf: 'register file, ALU, control, memories', ready: true },
   { title: 'Instruction set & assembly', madeOf: 'bits with agreed meanings', ready: true },

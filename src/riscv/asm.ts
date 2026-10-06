@@ -1,7 +1,7 @@
 // A two-pass RV32I assembler: labels, ABI register names, the common pseudo-instructions and
 // .word. Errors are collected per line instead of thrown, so the editor can show them all.
 
-import { BY_NAME, encB, encI, encJ, encR, encS, encU, OPCODES, regNumber } from './isa';
+import { BY_NAME, CSRS, encB, encI, encJ, encR, encS, encU, OPCODES, regNumber } from './isa';
 
 export interface AsmLine {
   addr: number;
@@ -57,8 +57,29 @@ function sizeOf(op: string, args: string[]): number {
   return 1;
 }
 
+/** Split operands on commas that are not inside a character literal. */
 function splitArgs(s: string): string[] {
-  return s.trim() ? s.split(',').map((a) => a.trim()) : [];
+  if (!s.trim()) return [];
+  const out: string[] = [];
+  let cur = '', q = false;
+  for (const ch of s) {
+    if (ch === "'") q = !q;
+    if (ch === ',' && !q) { out.push(cur.trim()); cur = ''; } else cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+/** Remove a trailing comment (#, // or ;) that is not inside a character literal. */
+function stripComment(line: string): string {
+  let q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === "'") q = !q;
+    if (q) continue;
+    if (ch === '#' || ch === ';' || (ch === '/' && line[i + 1] === '/')) return line.slice(0, i);
+  }
+  return line;
 }
 
 export function assemble(src: string): AsmResult {
@@ -69,7 +90,7 @@ export function assemble(src: string): AsmResult {
 
   // Pass 1: strip comments, collect labels, size every statement.
   src.split(/\r?\n/).forEach((raw, i) => {
-    let ln = raw.replace(/(#|\/\/|;).*$/, '').trim();
+    let ln = stripComment(raw).trim();
     while (true) {
       const m = ln.match(/^([A-Za-z_.$][\w.$]*)\s*:/);
       if (!m) break;
@@ -149,8 +170,32 @@ function encode(st: Stmt, labels: Map<string, number>): number[] {
     return { hi, lo };
   };
 
+  const csr = (s: string) => {
+    const t = s.trim().toLowerCase();
+    if (t in CSRS) return CSRS[t];
+    const v = parseImm(t);
+    if (v < 0 || v > 0xfff) throw new AsmError(`CSR address out of range: ${s}`);
+    return v;
+  };
+  const csrOps: Record<string, number> = { csrrw: 1, csrrs: 2, csrrc: 3, csrrwi: 5, csrrsi: 6, csrrci: 7 };
+  if (op in csrOps) {
+    need(3);
+    const f3 = csrOps[op];
+    const src = f3 & 4 ? imm(args[2], 0, 31) : reg(args[2]);
+    return [encI(OPCODES.SYSTEM, reg(args[0]), f3, src, csr(args[1]))];
+  }
+
   // Pseudo-instructions first.
   switch (op) {
+    case 'csrr': need(2); return [encI(OPCODES.SYSTEM, reg(args[0]), 2, 0, csr(args[1]))];
+    case 'csrw': need(2); return [encI(OPCODES.SYSTEM, 0, 1, reg(args[1]), csr(args[0]))];
+    case 'csrs': need(2); return [encI(OPCODES.SYSTEM, 0, 2, reg(args[1]), csr(args[0]))];
+    case 'csrc': need(2); return [encI(OPCODES.SYSTEM, 0, 3, reg(args[1]), csr(args[0]))];
+    case 'csrwi': need(2); return [encI(OPCODES.SYSTEM, 0, 5, imm(args[1], 0, 31), csr(args[0]))];
+    case 'csrsi': need(2); return [encI(OPCODES.SYSTEM, 0, 6, imm(args[1], 0, 31), csr(args[0]))];
+    case 'csrci': need(2); return [encI(OPCODES.SYSTEM, 0, 7, imm(args[1], 0, 31), csr(args[0]))];
+    case 'mret': need(0); return [0x30200073];
+    case 'wfi': need(0); return [0x10500073];
     case 'nop': need(0); return [encI(OPCODES.OPIMM, 0, 0, 0, 0)];
     case 'mv': need(2); return [encI(OPCODES.OPIMM, reg(args[0]), 0, reg(args[1]), 0)];
     case 'not': need(2); return [encI(OPCODES.OPIMM, reg(args[0]), 4, reg(args[1]), -1)];

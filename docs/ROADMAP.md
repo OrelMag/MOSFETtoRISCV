@@ -121,12 +121,13 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Balanced stages: look-ahead forwarding, dedicated branch comparator and jalr adder (145/93 → 103/59)
 - ✅ Branch prediction: 16-entry BTB + 2-bit counters, parallel target check; measured CPI and time/instruction
 
-### Phase 7 — Full RV32IM + privileged architecture ⏳
-- Complete RV32I (all loads/stores, shifts, LUI/AUIPC, JALR, all branches)
-- M extension: array multiplier, shift-add, Booth, Dadda tree; restoring / non-restoring division
-- Zicsr, machine mode, traps and exceptions (illegal instruction, misaligned access, ECALL/EBREAK)
-- Interrupts: CLINT timer, external interrupts via a minimal PLIC, mtvec/mepc/mcause flow animated
-- Passing the official `riscv-tests` / architecture tests in the browser (stretch)
+### Phase 7 — Full RV32I + Zicsr + machine mode 🚧
+- ✅ Complete RV32I incl. byte/halfword loads & stores (load/store unit, byte-banked memory)
+- ✅ Memory-mapped I/O: console, LEDs, switches, mtime / mtimecmp timer
+- ✅ Zicsr + machine mode: 12 CSRs, traps (illegal, ecall, ebreak, misaligned fetch/load/store), mret
+- ✅ Timer and external interrupts; I/O panel with live CSR state; 67k-NAND system CPU co-simulated every cycle
+- ⏳ M extension: array multiplier, shift-add, Booth, Dadda tree; restoring / non-restoring division
+- ⏳ Passing the official `riscv-tests` / architecture tests in the browser (stretch)
 
 ### Phase 8 — Memory hierarchy ⏳
 - SRAM cell (6T) at transistor level vs the flip-flop array; DRAM cell (1T1C) intuition

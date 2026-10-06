@@ -81,3 +81,44 @@ describe('instruction-set simulator', () => {
     expect(a.x[8]).toBe(0x12345678);
   });
 });
+
+describe('golden model: machine-mode system', async () => {
+  const { SYSTEM_PROGRAMS } = await import('../src/riscv/sysprograms');
+  const sys = (id: string) => {
+    const r = assemble(SYSTEM_PROGRAMS.find((p) => p.id === id)!.source);
+    expect(r.errors).toEqual([]);
+    return new ISS(r.words, { system: true, imemWords: 128 });
+  };
+  it('console output', () => {
+    const s = sys('hello'); s.run(200);
+    expect(s.console).toBe('Hello, RISC-V!\n');
+  });
+  it('byte and halfword loads/stores', () => {
+    const s = sys('bytes'); s.run(200);
+    expect([...s.x.slice(10, 16)]).toEqual([0xffffffab, 0xab, 0xfffffffe, 0xfffe, 0x1234ab78, 0x12]);
+  });
+  it('ecall traps to the handler and returns', () => {
+    const s = sys('syscall'); s.run(500);
+    expect(s.console).toBe('OK\n');
+  });
+  it('timer interrupts fire periodically', () => {
+    const s = sys('timer');
+    for (let i = 0; i < 400; i++) s.step();
+    expect(s.console.length).toBeGreaterThanOrEqual(8);
+    expect(s.console).toMatch(/^\.+$/);
+    expect(s.x[9]).toBe(s.console.length);
+  });
+  it('external interrupt is taken only when enabled and pending', () => {
+    const s = sys('irq');
+    for (let i = 0; i < 50; i++) s.step();
+    expect(s.x[9]).toBe(0);
+    s.irq = true; s.step(); s.irq = false;
+    for (let i = 0; i < 50; i++) s.step();
+    expect(s.x[9]).toBe(1);
+    expect(s.leds).toBe(0xff);
+  });
+  it('exceptions record mcause and mtval', () => {
+    const s = sys('faults'); s.run(500);
+    expect([...s.dmem.slice(0, 6)]).toEqual([2, 0, 4, 3, 3, 0]);
+  });
+});
