@@ -67,7 +67,11 @@ export class Tools {
     on(svg, 'pointercancel', () => this.cancel());
     on(svg, 'dblclick', (e) => this.dbl(e));
     on(svg, 'contextmenu', (e) => { e.preventDefault(); if (this.state.k === 'wire' || this.state.k === 'place') this.cancel(); });
-    on(svg, 'pointerleave', () => { if (this.state.k === 'place' && !this.state.drag) this.ed.view.showGhost(null); this.ed.view.showHot(null); });
+    on(svg, 'pointerleave', () => {
+      if (this.state.k === 'place' && !this.state.drag) this.ed.view.showGhost(null);
+      this.ed.view.showHot(null);
+      this.ed.hoverWire(null);
+    });
     on(document, 'keydown', (e) => this.key(e));
     on(document, 'keyup', (e) => { if (e.key === ' ') this.space = false; });
   }
@@ -120,6 +124,7 @@ export class Tools {
   // ---- pointer -----------------------------------------------------------------------------
 
   private down(e: PointerEvent): void {
+    this.ed.hoverWire(null);
     if (this.panning || e.button !== 0) return;
     const ed = this.ed;
     const p = this.world(e);
@@ -190,6 +195,7 @@ export class Tools {
       default: {
         const h = this.hit(p);
         ed.view.showHot(h.k === 'port' ? h.pos : null);
+        ed.hoverWire(h.k === 'wire' ? h.id : null, e);
         const pin = h.k === 'pin' ? ed.doc.pins.find((q) => q.id === h.id) : undefined;
         ed.view.svg.style.cursor = h.k === 'port' ? 'crosshair' : pin?.dir === 'in' ? 'pointer' : h.k === 'none' ? '' : this.isSelected(h) ? 'move' : 'pointer';
       }

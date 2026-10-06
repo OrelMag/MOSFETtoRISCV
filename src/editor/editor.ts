@@ -10,7 +10,8 @@
 import { setUserResolver } from '../lib/resolve';
 import type { Vec } from '../sim/geometry';
 import type { PowerOnMode } from '../sim/sim';
-import type { ComponentDef } from '../sim/types';
+import { type ComponentDef, netlistOf } from '../sim/types';
+import { formatBits } from '../sim/values';
 import { h, icon } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { closePopover } from '../view/popover';
@@ -58,6 +59,24 @@ registerToolbarAction({ id: 'help', title: 'Keyboard shortcuts (?)', icon: 'info
 
 const withChip = (ws: Workspace, doc: ChipDoc): Workspace => ({ ...ws, chips: { ...ws.chips, [doc.id]: doc } });
 
+/**
+ * The workspace as the library compiles it: without input values, which only drive the
+ * simulation. Toggling an input then recompiles nothing (the library keys chips by content).
+ */
+const stripped = new WeakMap<ChipDoc, ChipDoc>();
+function compiledView(ws: Workspace): Workspace {
+  const chips: Record<string, ChipDoc> = {};
+  for (const [id, doc] of Object.entries(ws.chips)) {
+    let s = stripped.get(doc);
+    if (!s) {
+      s = doc.pins.some((p) => p.value !== undefined) ? { ...doc, pins: doc.pins.map(({ value: _v, ...p }) => p) } : doc;
+      stripped.set(doc, s);
+    }
+    chips[id] = s;
+  }
+  return { ...ws, chips };
+}
+
 export class Editor {
   readonly el: HTMLElement;
   readonly history: History<Workspace>;
@@ -78,7 +97,10 @@ export class Editor {
   private controls: HTMLElement;
   private status: HTMLElement;
   private toastEl: HTMLElement;
+  private tipEl: HTMLElement;
   private lastWs: Workspace | null = null;
+  /** The view shows a drag in progress (a cancelled drag must be redrawn). */
+  private dragDrawn = false;
   private lastChip = '';
   private tabsKey = '';
   private paletteKey = '';
@@ -101,8 +123,9 @@ export class Editor {
     this.view = new EditorView(this.canvas);
     this.view.radix = settings.radix;
     this.toastEl = h('div', { class: 'sb-toast', role: 'status', 'aria-live': 'polite' });
+    this.tipEl = h('div', { class: 'wire-tip' });
     const overlay = h('div', { class: 'sb-overlay' });
-    this.canvas.append(overlay, this.toastEl,
+    this.canvas.append(overlay, this.toastEl, this.tipEl,
       h('div', { class: 'hint-badge sb-hint' }, 'drag from a pin to wire · L pointer · wheel zoom · Space+drag pan · ? shortcuts'));
     this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }) };
 
@@ -278,9 +301,17 @@ export class Editor {
 
   refresh(): void {
     const ws = this.ws;
-    if (ws === this.lastWs) return;
+    if (ws === this.lastWs && !this.dragDrawn) return;
+    // A drag only moves things: connectivity, diagnostics and the simulation stay as they are,
+    // so only the drawing follows (compiling every frame would also re-derive transistor chips).
+    if (this.history.inTransaction && this.lastWs && activeChip(this.lastWs) === this.chipId) {
+      this.view.render(ws.chips[this.chipId], this.defOf);
+      this.dragDrawn = true;
+      return;
+    }
+    this.dragDrawn = false;
     this.lastWs = ws;
-    this.lib.update(ws);
+    this.lib.update(compiledView(ws));
     setUserResolver(this.lib.resolver());
     const id = this.chipId;
     const doc = ws.chips[id];
@@ -453,6 +484,23 @@ export class Editor {
     if (this.status.dataset.key === key) return;
     this.status.dataset.key = key;
     this.status.replaceChildren(...bits.map((b) => (typeof b === 'string' ? h('span', null, b) : b)));
+  }
+
+  /** The value of the wire under the cursor (null hides it), like the schematic's tooltip. */
+  hoverWire(id: string | null, e?: PointerEvent): void {
+    if (!id || !e) return void (this.tipEl.style.opacity = '0');
+    const bits = this.sim.wireBits(id);
+    const built = this.sim.built;
+    const net = built?.netOfWire.get(id) ?? -1;
+    const nd = built && net >= 0 ? netlistOf(built.def)?.nets[net] : undefined;
+    const name = nd?.name ?? nd?.ends[0] ?? id;
+    const val = !bits ? 'not connected' : bits.length === 1 ? formatBits(bits, 'bin')
+      : `${formatBits(bits, 'hex')} · ${formatBits(bits, 'bin')} · ${formatBits(bits, 'dec')}`;
+    this.tipEl.textContent = `${name}${bits && bits.length > 1 ? `[${bits.length - 1}:0]` : ''} = ${val}`;
+    const r = this.canvas.getBoundingClientRect();
+    this.tipEl.style.left = `${e.clientX - r.left + 14}px`;
+    this.tipEl.style.top = `${e.clientY - r.top + 14}px`;
+    this.tipEl.style.opacity = '1';
   }
 
   private toastTimer: ReturnType<typeof setTimeout> | null = null;

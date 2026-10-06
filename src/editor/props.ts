@@ -301,7 +301,7 @@ export class PropsPanel {
       h('div', { class: 'sb-ports' }, h('b', null, 'Ports, in order'),
         ports.length ? h('ol', null, ports.map((p) => h('li', null, h('span', { class: `sb-dir ${p.dir}` }, p.dir), ` ${p.name}`, p.width > 1 ? h('small', null, ` [${p.width - 1}:0]`) : null, p.clock ? h('small', null, ' clock') : null)))
           : h('p', { class: 'sb-sum' }, 'No pins yet: place inputs and outputs from the palette.')),
-      c ? costLine(c.def, true, (el) => this.depthLater(c.def, el)) : null);
+      c ? costLine(c.def, (el) => this.depthLater(c.def, el)) : null);
     const users = ed.lib.usedBy(doc.id);
     out.append(h('p', { class: 'sb-sum' }, `id ${doc.id}${users.length ? ` · used by ${users.map((u) => ed.ws.chips[u]?.name ?? u).join(', ')}` : ''}`),
       h('div', { class: 'sb-btns' }, this.btn('Delete chip', users.length ? 'Remove it from the chips that use it first' : 'Delete this chip (Ctrl+Z brings it back)', () => this.deleteChip(doc))));
@@ -376,20 +376,19 @@ export class PropsPanel {
   }
 }
 
-/** NAND and transistor counts (and, for the chip, its depth computed later). */
-function costLine(def: ComponentDef, chip = false, depth?: (el: HTMLElement) => void): HTMLElement {
+/** NAND and transistor counts; `depth` fills in a slot for the logic depth (computed later). */
+function costLine(def: ComponentDef, depth?: (el: HTMLElement) => void): HTMLElement {
   let st;
   try {
     st = stats(def);
   } catch {
     return h('p', { class: 'sb-sum' });
   }
-  const d = h('span', null, chip ? '' : '');
+  const slot = depth ? h('span') : null;
   const el = h('p', { class: 'sb-cost' },
     h('span', null, h('b', null, st.nands.toLocaleString()), ' NAND'),
-    h('span', null, h('b', null, st.transistors.toLocaleString()), ' transistors'),
-    chip ? d : null);
-  if (depth) depth(d);
+    h('span', null, h('b', null, st.transistors.toLocaleString()), ' transistors'), slot);
+  if (depth && slot) depth(slot);
   return el;
 }
 
