@@ -145,7 +145,10 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ⏳ Bus / interconnect basics
 
 ### Phase 9 — Performance & optimization ⏳
-- Floating point (F extension): IEEE 754 explorer, FPU add/mul
+- ✅ Floating point (chapter 23): IEEE 754 explorer and number line; parametric gate-level FPU (unpack, align with sticky,
+  add/sub, tree multiply, shared normalize & round with RNE and subnormals, compare, int→float), exhaustively tested on
+  small formats and against host float32; single-cycle RV32IF CPU (subset) co-simulated with both register files
+- ⏳ fdiv / fsqrt / fma, rounding modes and fflags; a pipelined FPU
 - Superscalar and out-of-order intuition (scoreboard / Tomasulo widget)
 - Compressed instructions (C), A extension (LR/SC, AMO)
 - Virtual memory (Sv32), TLB, U/S/M privilege levels (stretch)

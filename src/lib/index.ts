@@ -16,3 +16,4 @@ export * from './muldiv';
 export * from './cells';
 export * from './cache';
 export * from './multicycle';
+export * from './fpu';

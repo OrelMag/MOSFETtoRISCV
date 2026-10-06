@@ -1,7 +1,7 @@
 // A two-pass RV32I assembler: labels, ABI register names, the common pseudo-instructions and
 // .word. Errors are collected per line instead of thrown, so the editor can show them all.
 
-import { BY_NAME, CSRS, encB, encI, encJ, encR, encS, encU, OPCODES, regNumber } from './isa';
+import { BY_NAME, CSRS, encB, encI, encJ, encR, encS, encU, fregNumber, OPCODES, regNumber } from './isa';
 
 export interface AsmLine {
   addr: number;
@@ -140,6 +140,11 @@ function encode(st: Stmt, labels: Map<string, number>): number[] {
     if (r === null) throw new AsmError(`not a register: "${s ?? ''}"`);
     return r;
   };
+  const freg = (s: string | undefined) => {
+    const r = s === undefined ? null : fregNumber(s);
+    if (r === null) throw new AsmError(`not a floating-point register: "${s ?? ''}"`);
+    return r;
+  };
   const imm = (s: string, lo: number, hi: number) => {
     const v = labels.has(s.trim()) ? labels.get(s.trim())! : parseImm(s);
     if (v < lo || v > hi) throw new AsmError(`immediate ${v} out of range [${lo}, ${hi}]`);
@@ -160,6 +165,23 @@ function encode(st: Stmt, labels: Map<string, number>): number[] {
     if (!m) throw new AsmError(`expected offset(register), got "${s}"`);
     return { off: m[1].trim() ? imm(m[1], -2048, 2047) : 0, base: reg(m[2]) };
   };
+  // F pseudo-instructions
+  if (op === 'fmv.s' || op === 'fneg.s' || op === 'fabs.s') {
+    need(2);
+    const rd = freg(args[0]), rs = freg(args[1]);
+    return [encR(OPCODES.OPFP, rd, op === 'fmv.s' ? 0 : op === 'fneg.s' ? 1 : 2, rs, rs, 0x10)];
+  }
+  const fspec = BY_NAME.get(op);
+  if (fspec?.fp) {
+    const fp = fspec.fp;
+    const R = (role: 'f' | 'x' | undefined, a: string) => (role === 'f' ? freg(a) : reg(a));
+    if (fspec.fmt === 'I') { need(2); const m = mem(args[1]); return [encI(fspec.opcode, freg(args[0]), 2, m.base, m.off)]; }
+    if (fspec.fmt === 'S') { need(2); const m = mem(args[1]); return [encS(fspec.opcode, 2, m.base, freg(args[0]), m.off)]; }
+    const f3 = fp.rm ? 7 : fspec.funct3!; // rm = dyn: use frm (round to nearest even here)
+    if (fp.rs2fixed !== undefined) { need(2); return [encR(fspec.opcode, R(fp.rd, args[0]), f3, R(fp.rs1, args[1]), fp.rs2fixed, fspec.funct7!)]; }
+    need(3);
+    return [encR(fspec.opcode, R(fp.rd, args[0]), f3, R(fp.rs1, args[1]), R(fp.rs2, args[2]), fspec.funct7!)];
+  }
   const value = (s: string) => {
     const t = s.trim();
     return labels.has(t) ? labels.get(t)! : parseImm(t);

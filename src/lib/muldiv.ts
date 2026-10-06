@@ -340,7 +340,7 @@ export function treeMul(n: number, signed = false, outW = 2 * n): ComponentDef {
     }
     treeInfo.set(id, { levels: level, compressors: count });
     // final carry-propagate adder over the two remaining words, zero-padded to outW
-    const ADD = (outW & (outW - 1)) === 0 && outW >= 4 ? koggeStone(outW) : rca(outW);
+    const ADD = outW >= 4 ? koggeStone(outW) : rca(outW);
     const yA = Math.round((words[0].y + (words[1]?.y ?? words[0].y)) / 2);
     const pad = (wd: Live, k: number) => {
       const hi = Math.min(outW, wd.lo + wd.w);

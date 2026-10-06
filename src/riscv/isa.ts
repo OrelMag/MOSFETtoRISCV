@@ -6,7 +6,11 @@ export type Fmt = 'R' | 'I' | 'S' | 'B' | 'U' | 'J';
 export const OPCODES = {
   LUI: 0b0110111, AUIPC: 0b0010111, JAL: 0b1101111, JALR: 0b1100111, BRANCH: 0b1100011,
   LOAD: 0b0000011, STORE: 0b0100011, OPIMM: 0b0010011, OP: 0b0110011, SYSTEM: 0b1110011, FENCE: 0b0001111,
+  LOADFP: 0b0000111, STOREFP: 0b0100111, OPFP: 0b1010011,
 } as const;
+
+/** Register roles of a floating-point instruction: which operands live in the f registers. */
+export interface FpRoles { rd?: 'f' | 'x'; rs1?: 'f' | 'x'; rs2?: 'f' | 'x'; rm?: boolean; rs2fixed?: number }
 
 export interface InstrSpec {
   name: string;
@@ -16,7 +20,11 @@ export interface InstrSpec {
   funct7?: number;
   /** Supported by the gate-level single-cycle CPU (byte/half memory ops and system come later). */
   hw: boolean;
+  /** F extension: register files of the operands (absent: integer instruction). */
+  fp?: FpRoles;
 }
+
+const FR = (name: string, f7: number, fp: FpRoles, f3?: number): InstrSpec => ({ name, fmt: 'R', opcode: OPCODES.OPFP, funct7: f7, funct3: fp.rm ? undefined : f3, hw: false, fp });
 
 const R = (name: string, f3: number, f7: number): InstrSpec => ({ name, fmt: 'R', opcode: OPCODES.OP, funct3: f3, funct7: f7, hw: true });
 const I = (name: string, f3: number, opcode: number = OPCODES.OPIMM, hw = true): InstrSpec => ({ name, fmt: 'I', opcode, funct3: f3, hw });
@@ -52,7 +60,35 @@ export const INSTRS: InstrSpec[] = [
   { name: 'csrrsi', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 6, hw: false },
   { name: 'csrrci', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 7, hw: false },
   { name: 'fence', fmt: 'I', opcode: OPCODES.FENCE, funct3: 0, hw: false },
+  // F extension (the subset the gate-level FPU implements; round to nearest even)
+  { name: 'flw', fmt: 'I', opcode: OPCODES.LOADFP, funct3: 2, hw: false, fp: { rd: 'f', rs1: 'x' } },
+  { name: 'fsw', fmt: 'S', opcode: OPCODES.STOREFP, funct3: 2, hw: false, fp: { rs1: 'x', rs2: 'f' } },
+  FR('fadd.s', 0x00, { rd: 'f', rs1: 'f', rs2: 'f', rm: true }),
+  FR('fsub.s', 0x04, { rd: 'f', rs1: 'f', rs2: 'f', rm: true }),
+  FR('fmul.s', 0x08, { rd: 'f', rs1: 'f', rs2: 'f', rm: true }),
+  FR('fsgnj.s', 0x10, { rd: 'f', rs1: 'f', rs2: 'f' }, 0),
+  FR('fsgnjn.s', 0x10, { rd: 'f', rs1: 'f', rs2: 'f' }, 1),
+  FR('fsgnjx.s', 0x10, { rd: 'f', rs1: 'f', rs2: 'f' }, 2),
+  FR('fle.s', 0x50, { rd: 'x', rs1: 'f', rs2: 'f' }, 0),
+  FR('flt.s', 0x50, { rd: 'x', rs1: 'f', rs2: 'f' }, 1),
+  FR('feq.s', 0x50, { rd: 'x', rs1: 'f', rs2: 'f' }, 2),
+  FR('fmv.x.w', 0x70, { rd: 'x', rs1: 'f', rs2fixed: 0 }, 0),
+  FR('fcvt.s.w', 0x68, { rd: 'f', rs1: 'x', rs2fixed: 0, rm: true }),
+  FR('fcvt.s.wu', 0x68, { rd: 'f', rs1: 'x', rs2fixed: 1, rm: true }),
+  FR('fmv.w.x', 0x78, { rd: 'f', rs1: 'x', rs2fixed: 0 }, 0),
 ];
+
+export const FABI = [
+  'ft0', 'ft1', 'ft2', 'ft3', 'ft4', 'ft5', 'ft6', 'ft7', 'fs0', 'fs1', 'fa0', 'fa1', 'fa2', 'fa3', 'fa4', 'fa5',
+  'fa6', 'fa7', 'fs2', 'fs3', 'fs4', 'fs5', 'fs6', 'fs7', 'fs8', 'fs9', 'fs10', 'fs11', 'ft8', 'ft9', 'ft10', 'ft11',
+];
+
+export function fregNumber(s: string): number | null {
+  const t = s.trim().toLowerCase();
+  if (/^f([0-9]|[12][0-9]|3[01])$/.test(t)) return Number(t.slice(1));
+  const i = FABI.indexOf(t);
+  return i >= 0 ? i : null;
+}
 
 export const BY_NAME = new Map(INSTRS.map((i) => [i.name, i]));
 
@@ -140,6 +176,7 @@ export function decode(word: number): Decoded {
     if (s.opcode !== opcode) continue;
     if (s.funct3 !== undefined && s.funct3 !== funct3 && s.fmt !== 'U' && s.fmt !== 'J') continue;
     if (s.fmt === 'R' && s.funct7 !== funct7) continue;
+    if (s.fp?.rs2fixed !== undefined && s.fp.rs2fixed !== rs2) continue;
     if (s.opcode === OPCODES.OPIMM && (funct3 === 1 || funct3 === 5) && s.funct7 !== undefined && s.funct7 !== (funct7 & 0x7e)) continue;
     if (s.opcode === OPCODES.OPIMM && (funct3 === 1 || funct3 === 5) && s.funct7 === undefined) continue;
     if (s.opcode === OPCODES.SYSTEM && funct3 === 0) {
@@ -164,6 +201,7 @@ export function decode(word: number): Decoded {
 }
 
 const rn = (r: number) => ABI[r];
+const frn = (r: number) => FABI[r];
 
 /** Disassemble one word; pc (if given) resolves branch / jump targets to absolute addresses. */
 export function disasm(word: number, pc?: number): string {
@@ -172,6 +210,14 @@ export function disasm(word: number, pc?: number): string {
   if (!d.spec) return `.word 0x${d.word.toString(16).padStart(8, '0')}`;
   const n = d.name;
   if (word === 0x00000013) return 'nop';
+  const fp = d.spec.fp;
+  if (fp) {
+    const R = (role: 'f' | 'x' | undefined, r: number) => (role === 'f' ? frn(r) : rn(r));
+    if (d.fmt === 'I') return `${n} ${frn(d.rd)}, ${d.imm}(${rn(d.rs1)})`;
+    if (d.fmt === 'S') return `${n} ${frn(d.rs2)}, ${d.imm}(${rn(d.rs1)})`;
+    if (fp.rs2fixed !== undefined) return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}`;
+    return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}, ${R(fp.rs2, d.rs2)}`;
+  }
   switch (d.fmt) {
     case 'R': return `${n} ${rn(d.rd)}, ${rn(d.rs1)}, ${rn(d.rs2)}`;
     case 'I':
