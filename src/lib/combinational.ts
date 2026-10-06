@@ -4,7 +4,7 @@
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { symbolGeom } from '../sim/geometry';
 import { define, merger, ones, splitter } from './define';
-import { AND, MUX2, NOT, OR, XOR } from './gates';
+import { AND, MUX2, NOT, OR, XNOR, XOR } from './gates';
 import { NAND, TIE1 } from './transistors';
 import { mask } from '../sim/values';
 
@@ -511,4 +511,33 @@ const muxTree1 = memo((w: number): ComponentDef => {
       ],
     }),
   });
+});
+
+/** a == b: one XNOR per bit and an AND tree. */
+export const equal = memo((n: number): ComponentDef => {
+  {
+    const P = 6;
+    const A = andN(n);
+    const ag = symbolGeom(A);
+    const aIns = A.ports.filter((p) => p.dir === 'in').map((p) => p.name);
+    const instances: InstanceDef[] = [
+      { name: 'sa', def: splitter(ones(n), P), at: [4, 0] },
+      { name: 'sb', def: splitter(ones(n), P), at: [7, 2] },
+      { name: 'all', def: A, at: [24, (P * n) / 2 - ag.h / 2 + 1] },
+    ];
+    const nets: NetDef[] = [{ name: 'a', ends: ['a', 'sa.in'] }, { name: 'b', ends: ['b', 'sb.in'] }, { name: 'eq', ends: ['all.y', 'eq'] }];
+    for (let i = 0; i < n; i++) {
+      instances.push({ name: `x${i}`, def: XNOR, at: [10, 2 + P * i] });
+      nets.push({ ends: [`sa.o${i}`, `x${i}.a`] }, { ends: [`sb.o${i}`, `x${i}.b`] });
+      nets.push({ name: `same${i}`, ends: [`x${i}.y`, `all.${aIns[i]}`], trunk: 16 + i });
+    }
+    return define({
+      id: `eq${n}`, name: `${n}-bit equality comparator`, category: 'routing',
+      summary: 'Equal when every bit pair is equal: an XNOR per bit, ANDed together.',
+      ports: [{ name: 'a', width: n, dir: 'in' }, { name: 'b', width: n, dir: 'in' }, bit('eq', 'out')],
+      symbol: { kind: 'box', label: '=' },
+      spec: ([a, b]) => [a === b ? 1 : 0],
+      netlist: () => ({ pins: { a: [1, (P * n) / 2], b: [1, 2 + (P * n) / 2], eq: [24 + ag.w + 4, (P * n) / 2 + 1] }, instances, nets }),
+    });
+  }
 });

@@ -9,11 +9,12 @@
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { alu } from './alu';
-import { andN, busMux2, decoder, muxTree, rca } from './combinational';
+import { andN, busMux2, decoder, equal, muxTree, rca } from './combinational';
+export { equal } from './combinational';
 import { CLEAR_BIT0, CONTROL, IMM_GEN, NEXT_PC, PLUS4, PLUS4_FAST, dataMemory, rom } from './cpu';
 import { define, merger, ones, splitter } from './define';
 import { addSubFast, fanout, koggeStone } from './fastadd';
-import { AND, NOT, OR, XNOR, XOR } from './gates';
+import { AND, NOT, OR, XOR } from './gates';
 import { readPort, regfile } from './regfile';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
@@ -31,34 +32,6 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
 
 // ---- small parts ---------------------------------------------------------------------------
 
-/** a == b: one XNOR per bit and an AND tree. */
-export function equal(n: number): ComponentDef {
-  return memo(`eq${n}`, () => {
-    const P = 6;
-    const A = andN(n);
-    const ag = symbolGeom(A);
-    const aIns = A.ports.filter((p) => p.dir === 'in').map((p) => p.name);
-    const instances: InstanceDef[] = [
-      { name: 'sa', def: splitter(ones(n), P), at: [4, 0] },
-      { name: 'sb', def: splitter(ones(n), P), at: [7, 2] },
-      { name: 'all', def: A, at: [24, (P * n) / 2 - ag.h / 2 + 1] },
-    ];
-    const nets: NetDef[] = [{ name: 'a', ends: ['a', 'sa.in'] }, { name: 'b', ends: ['b', 'sb.in'] }, { name: 'eq', ends: ['all.y', 'eq'] }];
-    for (let i = 0; i < n; i++) {
-      instances.push({ name: `x${i}`, def: XNOR, at: [10, 2 + P * i] });
-      nets.push({ ends: [`sa.o${i}`, `x${i}.a`] }, { ends: [`sb.o${i}`, `x${i}.b`] });
-      nets.push({ name: `same${i}`, ends: [`x${i}.y`, `all.${aIns[i]}`], trunk: 16 + i });
-    }
-    return define({
-      id: `eq${n}`, name: `${n}-bit equality comparator`, category: 'routing',
-      summary: 'Equal when every bit pair is equal: an XNOR per bit, ANDed together.',
-      ports: [bus('a', n, 'in'), bus('b', n, 'in'), bit('eq', 'out')],
-      symbol: { kind: 'box', label: '=' },
-      spec: ([a, b]) => [a === b ? 1 : 0],
-      netlist: () => ({ pins: { a: [1, (P * n) / 2], b: [1, 2 + (P * n) / 2], eq: [24 + ag.w + 4, (P * n) / 2 + 1] }, instances, nets }),
-    });
-  });
-}
 
 /** Is the word non-zero? An OR tree. */
 export function nonZero(n: number): ComponentDef {

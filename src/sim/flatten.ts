@@ -39,6 +39,8 @@ export interface FlatDesign {
   netCount: number;
   leaves: FlatLeaf[];
   powerOn: Map<number, 0 | 1>;
+  /** Nets marked `cap` (switch level): they hold their charge when undriven. */
+  caps: Set<number>;
 }
 
 export type FlattenMode = 'gate' | 'switch';
@@ -90,6 +92,7 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
   const uf = new UnionFind();
   const leaves: FlatLeaf[] = [];
   const hints: [number, 0 | 1][] = [];
+  const capsRaw: number[] = [];
 
   const alloc = (w: number): number[] => Array.from({ length: w }, () => uf.make());
 
@@ -158,6 +161,7 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
       });
       const bits = alloc(width);
       node.nets!.push(bits);
+      if (net.cap) capsRaw.push(...bits);
       for (const { inst, port } of resolved) {
         if (inst === null) {
           bits.forEach((b, i) => uf.union(b, node.ports[port][i]));
@@ -216,7 +220,7 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
   const powerOn = new Map<number, 0 | 1>();
   for (const [raw, v] of hints) powerOn.set(id(raw), v);
 
-  return { root, netCount: dense.size, leaves, powerOn };
+  return { root, netCount: dense.size, leaves, powerOn, caps: new Set(capsRaw.map(id)) };
 }
 
 export function findNode(root: HierNode, path: readonly string[]): HierNode | null {

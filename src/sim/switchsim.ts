@@ -4,6 +4,13 @@
 //   VDD only → 1, GND only → 0, both → X (a short: current flows from VDD to GND),
 //   neither → Z (floating). A gate driven by X/Z "maybe" conducts, which yields X.
 // Nodes feed the gates of other transistors, so we iterate to a fixed point.
+//
+// Strengths (ratioed logic): a path is as strong as its weakest transistor (rails and inputs are
+// strongest). A node takes the value of its strongest definite path, unless an equally strong or
+// stronger path to the opposite value exists or might exist (then X). This is what lets a bit-line
+// driver overpower an SRAM cell's weak pull-up. Nets marked `cap` keep their charge (weakest of all)
+// when undriven. Iteration starts from the previous solution, so storage loops (cross-coupled
+// inverters) remember their state; for loop-free circuits the result is unique anyway.
 
 import type { FlatDesign } from './flatten';
 import type { PowerOnMode, Sim } from './sim';
@@ -93,7 +100,17 @@ export class SwitchSim implements Sim {
     }
 
     const val = this.val;
-    for (let i = 0; i < n; i++) val[i] = source[i] >= 0 ? source[i] : BZ;
+    for (let i = 0; i < n; i++) if (source[i] >= 0) val[i] = source[i];
+    // stored charge: the value a capacitive net had before this solve
+    const charge = new Int8Array(n).fill(-1);
+    for (const c of this.design.caps) if (source[c] < 0 && (val[c] === B0 || val[c] === B1)) charge[c] = val[c];
+
+    const fets: { li: number; g: number; a: number; b: number; nmos: boolean; s: number }[] = [];
+    leaves.forEach((l, li) => {
+      if (l.kind !== 'nmos' && l.kind !== 'pmos') return;
+      const [g, a, b] = l.terminals!;
+      fets.push({ li, g, a, b, nmos: l.kind === 'nmos', s: l.def.strength ?? 3 });
+    });
 
     let iter = 0;
     let changed = true;
@@ -101,39 +118,55 @@ export class SwitchSim implements Sim {
       iter++;
       changed = false;
       this.evaluations++;
-      const sure = new UF(n);
-      const maybe = new UF(n);
-      leaves.forEach((l, li) => {
-        if (l.kind !== 'nmos' && l.kind !== 'pmos') return;
-        const [g, a, b] = l.terminals!;
-        const gv = val[g];
-        const on = l.kind === 'nmos' ? gv === B1 : gv === B0;
-        const off = l.kind === 'nmos' ? gv === B0 : gv === B1;
-        this.conducting[li] = on ? 1 : off ? 0 : 2;
-        if (on) sure.union(a, b);
-        if (!off) maybe.union(a, b);
+      // conduction state from the current gate values
+      const on = new Uint8Array(fets.length), maybeOn = new Uint8Array(fets.length);
+      fets.forEach((f, k) => {
+        const gv = val[f.g];
+        const o = f.nmos ? gv === B1 : gv === B0, off = f.nmos ? gv === B0 : gv === B1;
+        this.conducting[f.li] = o ? 1 : off ? 0 : 2;
+        on[k] = o ? 1 : 0;
+        maybeOn[k] = off ? 0 : 1;
       });
-      // Which rails reach each component.
-      const sureHi = new Uint8Array(n), sureLo = new Uint8Array(n), sureX = new Uint8Array(n);
-      const mayHi = new Uint8Array(n), mayLo = new Uint8Array(n), mayX = new Uint8Array(n);
-      for (let i = 0; i < n; i++) {
-        const s = source[i];
-        if (s < 0) continue;
-        const rs = sure.find(i), rm = maybe.find(i);
-        if (s === B1) { sureHi[rs] = 1; mayHi[rm] = 1; }
-        else if (s === B0) { sureLo[rs] = 1; mayLo[rm] = 1; }
-        else { sureX[rs] = 1; mayX[rm] = 1; }
+      // Strongest definite / possible path from a 1, a 0 or an X source, per node. Levels:
+      // 5 = rails and inputs, 4..2 = transistors, 1 = stored charge.
+      const d1 = new Uint8Array(n), d0 = new Uint8Array(n), dX = new Uint8Array(n);
+      const m1 = new Uint8Array(n), m0 = new Uint8Array(n), mX = new Uint8Array(n);
+      const srcLevel = (i: number) => (source[i] >= 0 ? 5 : charge[i] >= 0 ? 1 : 0);
+      const srcVal = (i: number) => (source[i] >= 0 ? source[i] : charge[i]);
+      for (let L = 5; L >= 1; L--) {
+        const sure = new UF(n), maybe = new UF(n);
+        fets.forEach((f, k) => {
+          if (f.s < L) return;
+          if (on[k]) sure.union(f.a, f.b);
+          if (maybeOn[k]) maybe.union(f.a, f.b);
+        });
+        const sHi = new Uint8Array(n), sLo = new Uint8Array(n), sX = new Uint8Array(n);
+        const mHi = new Uint8Array(n), mLo = new Uint8Array(n), mXx = new Uint8Array(n);
+        for (let i = 0; i < n; i++) {
+          if (srcLevel(i) < L) continue;
+          const v = srcVal(i), rs = sure.find(i), rm = maybe.find(i);
+          if (v === B1) { sHi[rs] = 1; mHi[rm] = 1; } else if (v === B0) { sLo[rs] = 1; mLo[rm] = 1; } else { sX[rs] = 1; mXx[rm] = 1; }
+        }
+        for (let i = 0; i < n; i++) {
+          const rs = sure.find(i), rm = maybe.find(i);
+          if (sHi[rs] && !d1[i]) d1[i] = L;
+          if (sLo[rs] && !d0[i]) d0[i] = L;
+          if (sX[rs] && !dX[i]) dX[i] = L;
+          if (mHi[rm] && !m1[i]) m1[i] = L;
+          if (mLo[rm] && !m0[i]) m0[i] = L;
+          if (mXx[rm] && !mX[i]) mX[i] = L;
+        }
       }
       for (let i = 0; i < n; i++) {
         if (source[i] >= 0) { this.shorted[i] = 0; continue; }
-        const rs = sure.find(i), rm = maybe.find(i);
-        const hi = sureHi[rs], lo = sureLo[rs];
         let v: number;
-        if (sureX[rs] || (hi && lo)) v = BX;
-        else if (hi) v = mayLo[rm] || mayX[rm] ? BX : B1;
-        else if (lo) v = mayHi[rm] || mayX[rm] ? BX : B0;
-        else v = mayHi[rm] || mayLo[rm] || mayX[rm] ? BX : BZ;
-        this.shorted[i] = hi && lo ? 1 : 0;
+        const best = Math.max(d1[i], d0[i]);
+        if (dX[i] && dX[i] >= best) v = BX;
+        else if (d1[i] > d0[i] && d1[i] > m0[i] && d1[i] > mX[i]) v = B1;
+        else if (d0[i] > d1[i] && d0[i] > m1[i] && d0[i] > mX[i]) v = B0;
+        else v = m1[i] || m0[i] || mX[i] ? BX : BZ;
+        // current flows from a rail to the other through conducting transistors
+        this.shorted[i] = d1[i] >= 2 && d0[i] >= 2 ? 1 : 0;
         if (val[i] !== v) {
           val[i] = v;
           changed = true;

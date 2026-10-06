@@ -130,7 +130,11 @@ export class ISS {
     return this.isIo(addr) ? this.ioRead(addr) >>> 0 : this.dmem[this.wordIndex(addr)];
   }
 
+  /** When set, every data-memory access (not I/O) is appended here: for cache studies. */
+  memTrace: { addr: number; write: boolean }[] | null = null;
+
   load(addr: number, f3: number): number {
+    if (this.memTrace && !this.isIo(addr)) this.memTrace.push({ addr: addr >>> 0, write: false });
     const w = this.readWord(addr);
     const sh = (addr & 3) * 8;
     switch (f3) {
@@ -154,6 +158,7 @@ export class ISS {
       }
       return;
     }
+    if (this.memTrace) this.memTrace.push({ addr: addr >>> 0, write: true });
     const i = this.wordIndex(addr);
     if (f3 === 2) this.dmem[i] = v >>> 0;
     else {
