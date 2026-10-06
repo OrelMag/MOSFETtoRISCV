@@ -37,15 +37,18 @@ export class Builder {
     if (!this.sinks.has(drv)) this.sinks.set(drv, []);
     this.sinks.get(drv)!.push(sink);
   }
-  name(drv: string, n: string): string {
+  private tagged = new Set<string>();
+  /** Name a driver's net; tag = draw it as labels (for long or feedback nets). */
+  name(drv: string, n: string, tag = false): string {
     this.names.set(drv, n);
+    if (tag) this.tagged.add(drv);
     return drv;
   }
   /** Instantiate def and wire its inputs (in port order) from drivers; returns the instance name. */
   op(def: ComponentDef, inputs: string[], label?: string, name?: string): string {
     const nm = this.add(def, label, name);
     const ins = def.ports.filter((p) => p.dir === 'in').map((p) => p.name);
-    inputs.forEach((d, i) => this.wire(d, `${nm}.${ins[i]}`));
+    inputs.forEach((d, i) => d && this.wire(d, `${nm}.${ins[i]}`)); // '' = wired later
     return nm;
   }
   /** Single-output helper: returns "inst.out". */
@@ -57,7 +60,7 @@ export class Builder {
   get height(): number { return Math.max(...this.instances.map((i) => (i.at![1] + symbolGeom(i.def).h))); }
   nets(): NetDef[] {
     const out: NetDef[] = [];
-    for (const [d, ss] of this.sinks) out.push({ name: this.names.get(d), ends: [d, ...ss], tags: ss.length > 1 || !d.includes('.') ? true : undefined });
+    for (const [d, ss] of this.sinks) out.push({ name: this.names.get(d), ends: [d, ...ss], tags: ss.length > 1 || !d.includes('.') || this.tagged.has(d) ? true : undefined });
     return out;
   }
 }
