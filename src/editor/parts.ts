@@ -5,13 +5,12 @@
 
 import { muxTree } from '../lib/combinational';
 import { merger, ones, splitter } from '../lib/define';
-import { ram } from '../lib/memory';
 import { symbolGeom } from '../sim/geometry';
 import { defIndex, resolveComponent } from '../lib/resolve';
 import { TIE0, TIE1 } from '../lib/transistors';
 import type { ComponentDef, InstanceDef, NetDef } from '../sim/types';
 import type { DisplayKind, PartRef } from './model';
-import { buildProgram } from './program';
+import { ramWithInit, romImage } from './memory';
 
 export type PartResult = ComponentDef | { error: string };
 
@@ -54,10 +53,10 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
     return display(ref.display, w);
   }
   if ('ram' in ref) {
-    const { k, w } = ref.ram;
+    const { k, w, init } = ref.ram;
     if (!Number.isInteger(k) || k < 1 || k > MAX_RAM_K) return { error: `RAM: 2^k words with k = 1–${MAX_RAM_K}` };
     if (!okWidth(w) || w > 32) return { error: 'RAM: word width must be 1–32' };
-    return ram(k, w);
+    return ramWithInit(k, w, init);
   }
   if ('rom' in ref) return romPart(ref.rom);
   return { error: 'unknown part kind' };
@@ -149,16 +148,8 @@ function romPart(r: RomRef): PartResult {
   if (addr === 'rv32' && w !== 32) return { error: 'ROM: byte addressing (rv32) needs 32-bit words' };
   if (lang !== 'asm' && lang !== 'hex') return { error: `ROM: unknown language '${String(lang)}'` };
   if (typeof src !== 'string') return { error: 'ROM: no program' };
-  const p = buildProgram(lang, src);
-  if (p.errors.length) return { error: `ROM program: line ${p.errors[0].line}: ${p.errors[0].message}` };
-  const N = 2 ** k;
-  if (p.words.length > N) return { error: `ROM program: ${p.words.length} words do not fit in 2^${k} = ${N} words` };
-  for (let i = 0; i < p.words.length; i++) {
-    if (w < 32 && p.words[i] >>> 0 >= 2 ** w) {
-      const line = p.lines.find((l) => l.addr === 4 * i)?.srcLine ?? 0;
-      return { error: `ROM program: line ${line}: word ${i} (0x${(p.words[i] >>> 0).toString(16)}) does not fit in ${w} bits` };
-    }
-  }
+  const p = romImage(r);
+  if (p.error) return { error: p.error };
   return wordRom(k, w, addr, p.words);
 }
 

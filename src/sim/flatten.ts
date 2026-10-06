@@ -87,6 +87,29 @@ function leafKind(def: ComponentDef, mode: FlattenMode): HierLeafKind | null {
   return null;
 }
 
+/**
+ * Raw bits of a power-on hint: a net or port of `node`, or a dotted path through its instances
+ * ('w3.ff0.ff.slave.sr.q'), so a component can seed storage deep inside its children (a RAM's
+ * initial contents). Undefined: no such net; null: the path ends inside a leaf of this
+ * simulation (an unexpanded child), where there is nothing to seed.
+ */
+function hintBits(node: HierNode, name: string): number[] | null | undefined {
+  const path = name.split('.');
+  const net = path.pop()!;
+  let n = node;
+  for (const seg of path) {
+    if (!n.expanded) return null;
+    const c = n.children?.get(seg);
+    if (!c) return undefined;
+    n = c;
+  }
+  if (n.expanded) {
+    const ni = netlistOf(n.def)!.nets.findIndex((q) => q.name === net);
+    if (ni >= 0) return n.nets![ni];
+  }
+  return n.ports[net] ?? (n.expanded || n === node ? undefined : null);
+}
+
 export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatDesign {
   const mode = opts.mode ?? 'gate';
   const uf = new UnionFind();
@@ -187,10 +210,9 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
 
     if (def.powerOn) {
       for (const [name, v] of Object.entries(def.powerOn)) {
-        const ni = netlist.nets.findIndex((n) => n.name === name);
-        const bits = ni >= 0 ? node.nets[ni] : node.ports[name];
-        if (!bits) throw new Error(`${def.id}: powerOn hint for unknown net '${name}'`);
-        for (const b of bits) hints.push([b, v]);
+        const bits = hintBits(node, name);
+        if (bits === undefined) throw new Error(`${def.id}: powerOn hint for unknown net '${name}'`);
+        if (bits) for (const b of bits) hints.push([b, v]);
       }
     }
   };
