@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addSub, alu, andN, bitwise, busMux2, constWord, counter, decoder, DFF, D_LATCH, incrementer, isZero, muxTree, orN, ram, rca,
-  register, regfile, shifter, SR_LATCH, zext,
+  register, regfile, shifter, SR_LATCH, zext, CLA4, koggeStone, addSubFast,
 } from '../src/lib';
 import { evalOnce, forEachInput, inputBits, simulate } from '../src/sim/harness';
 import type { ComponentDef } from '../src/sim/types';
@@ -154,5 +154,18 @@ describe('register file', () => {
     set(s, { we: 0, ra1: 31, ra2: 1 });
     expect(out(s, 'rd1')).toBe(0xdeadbeef);
     expect(out(s, 'rd2')).toBe(0x12345678);
+  });
+});
+
+describe('fast adders match their specs', () => {
+  const defs = [CLA4, koggeStone(4), koggeStone(8), koggeStone(16), koggeStone(32), addSubFast(8), addSubFast(32), alu(8, 'ks'), alu(32, 'ks')];
+  for (const d of defs) it(d.id, () => checkSpec(d));
+  it('Kogge–Stone is logarithmically shallow', async () => {
+    const { logicDepth } = await import('../src/sim/stats');
+    const ks = [4, 8, 16, 32].map((n) => logicDepth(koggeStone(n))!);
+    const rc = [4, 8, 16, 32].map((n) => logicDepth(rca(n))!);
+    expect(ks[3] - ks[2]).toBeLessThanOrEqual(4); // one more level per doubling
+    expect(rc[3] - rc[2]).toBeGreaterThanOrEqual(30); // two per bit
+    expect(ks[3]).toBeLessThan(rc[3] / 3);
   });
 });

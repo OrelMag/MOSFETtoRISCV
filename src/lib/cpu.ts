@@ -7,6 +7,7 @@
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { alu, constWord, orN } from './alu';
+import { koggeStone } from './fastadd';
 import { andN, busMux2, incrementer, muxTree, rca } from './combinational';
 import { define, merger, splitter } from './define';
 import { AND, NOT, OR, XNOR, XOR } from './gates';
@@ -62,7 +63,8 @@ export function rom(words: number[], k = 6): ComponentDef {
       summary: `${N} words of program, read-only. The address selects a word; a ROM is just a multiplexer tree whose inputs are tied to constants.`,
       ports: [bus('addr', 32, 'in'), bus('data', 32, 'out')],
       symbol: { kind: 'box', label: 'INSTR MEM' },
-      behavior: { eval: ([a]) => [a < 0 ? -1 : content[Math.floor(a / 4) % N]] },
+      // Delay = depth of the real structure (k levels of MUX2, 3 NANDs each).
+      behavior: { eval: ([a]) => [a < 0 ? -1 : content[Math.floor(a / 4) % N]], delay: 3 * k },
       preferBehavior: true,
       netlist: () => ({ pins: { addr: [0, mg.h + 6 + 1 + 0], data: [16 + mg.w + 6, mg.ports.y.pos[1]] }, instances, nets }),
       notes: 'Simulated as a lookup table for speed. Its structure (shown when you open it) is the real circuit: a 64:1 multiplexer tree of 32-bit words whose inputs are wired to the program\'s bits.',
@@ -424,7 +426,36 @@ export const CLEAR_BIT0: ComponentDef = wiring('clr0', 'Clear bit 0 (wiring)', (
 export interface CpuOptions {
   /** Data memory: 2^k words. */
   dmemK?: number;
+  /** 'ks' uses Kogge–Stone adders in the ALU, the branch-target adder and PC + 4. */
+  adder?: 'rca' | 'ks';
 }
+
+/** PC + 4 with a parallel-prefix adder. */
+export const PLUS4_FAST: ComponentDef = define({
+  id: 'plus4ks', name: 'PC + 4 (fast)', category: 'arithmetic',
+  summary: 'PC + 4 with a Kogge–Stone adder: the carry into the top bit no longer ripples through 30 half adders.',
+  ports: [bus('a', 32, 'in'), bus('y', 32, 'out')],
+  symbol: { kind: 'box', label: '+4' },
+  spec: ([a]) => [(a + 4) % 2 ** 32],
+  netlist: () => {
+    const K = koggeStone(32);
+    const kg = symbolGeom(K);
+    return {
+      pins: { a: [0, 2 + kg.ports.a.pos[1]], y: [16 + kg.w + 6, 2 + kg.ports.s.pos[1]] },
+      instances: [
+        { name: 'four', def: constWord(32, 4), at: [4, 2 + kg.ports.b.pos[1] + 3] },
+        { name: 'gnd', def: TIE0, at: [8, -3] },
+        { name: 'add', def: K, at: [16, 2] },
+      ],
+      nets: [
+        { name: 'a', ends: ['a', 'add.a'] },
+        { name: 'four', ends: ['four.y', 'add.b'] },
+        { name: 'gnd', ends: ['gnd.y', 'add.cin'] },
+        { name: 'y', ends: ['add.s', 'y'] },
+      ],
+    };
+  },
+});
 
 /**
  * Single-cycle RV32I CPU running `program` (instruction words). Inputs: clk. Outputs expose
@@ -432,13 +463,15 @@ export interface CpuOptions {
  */
 export function singleCycleCpu(program: number[], opts: CpuOptions = {}): ComponentDef {
   const IM = rom(program);
-  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}`;
-  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5));
+  const adder = opts.adder ?? 'rca';
+  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}`;
+  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder));
 }
 
-function buildCpu(IM: ComponentDef, dmemK: number): ComponentDef {
-  const PC = register(32), RF = regfile(5, 32), ALU = alu(32), DM = dataMemory(dmemK);
-  const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = rca(32), SI = splitter([7, 5, 3, 5, 5, 7]);
+function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks'): ComponentDef {
+  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dataMemory(dmemK);
+  const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = adder === 'ks' ? koggeStone(32) : rca(32), SI = splitter([7, 5, 3, 5, 5, 7]);
+  const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4;
   const g = (d: ComponentDef) => symbolGeom(d);
   const at = new Map<string, [number, number]>();
   const defs = new Map<string, ComponentDef>();
@@ -469,7 +502,7 @@ function buildCpu(IM: ComponentDef, dmemK: number): ComponentDef {
   const aluR = at.get('alu')![0] + g(ALU).w;
   alignY('dm', DM, aluR + 18, 'addr', P('alu', 'y')[1]);
   alignY('res', M4, aluR + 18 + g(DM).w + 10, 'd1', P('dm', 'rd')[1]);
-  place('plus4', PLUS4, [27, Y - 10]);
+  place('plus4', P4, [27, Y - 10]);
   alignY('target', ADD, rfR + 18, 'a', Y + 24);
   place('gndT', TIE0, [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 3]);
   alignY('clr0', CLEAR_BIT0, aluR + 12, 'in', Y + 18);
@@ -540,7 +573,7 @@ function buildCpu(IM: ComponentDef, dmemK: number): ComponentDef {
   ];
 
   return {
-    id: key2(IM), name: 'Single-cycle RV32I CPU', category: 'cpu',
+    id: key2(IM) + (adder === 'ks' ? '_ks' : ''), name: `Single-cycle RV32I CPU${adder === 'ks' ? ' (fast adders)' : ''}`, category: 'cpu',
     summary: 'A complete RISC-V processor: every instruction is fetched, decoded, executed and retired in one clock cycle. Built entirely from the blocks of the previous chapters.',
     ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out')],
     symbol: { kind: 'box', label: 'RV32I' },

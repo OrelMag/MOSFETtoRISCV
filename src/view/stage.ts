@@ -168,12 +168,12 @@ export class Stage {
     this.goTo(scene.path ?? [], false);
     this.buildControls();
     this.panels.forEach((p) => { p.destroy?.(); p.el.remove(); });
+    this.view.highlight(scene.highlight ?? []);
     this.panels = (scene.panels ?? []).map((f) => f(this));
     for (const p of this.panels) this.canvas.append(p.el);
     const docked = this.panels.filter((p) => p.el.dataset.dock === 'right');
     this.view.insetRight = docked.length ? Math.max(...docked.map((p) => p.el.getBoundingClientRect().width)) + 24 : 0;
     this.view.fit();
-    this.view.highlight(scene.highlight ?? []);
     this.refresh();
   }
 
@@ -553,6 +553,11 @@ export class Stage {
       c.append(h('button', { class: last ? 'cur' : '', onclick: () => (last ? null : this.goTo(item.path)) },
         item.label, item.kind ? h('span', { class: 'kind' }, item.kind) : null));
     });
+  }
+
+  /** Highlight instances in the current view (empty list clears). */
+  highlight(names: string[]): void {
+    this.view.highlight(names);
   }
 
   /** Reserve screen space on the right for a docked panel and refit. */

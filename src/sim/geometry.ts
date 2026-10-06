@@ -99,6 +99,12 @@ export function symbolGeom(def: ComponentDef): SymbolGeom {
     spread(by.right.length, h, pitch).forEach((y, i) => (ports[by.right[i].name] = { pos: [w, y], exit: 'right' }));
     spread(by.top.length, w).forEach((x, i) => (ports[by.top[i].name] = { pos: [x, 0], exit: 'up' }));
     spread(by.bottom.length, w).forEach((x, i) => (ports[by.bottom[i].name] = { pos: [x, h], exit: 'down' }));
+    for (const [name, v] of Object.entries(def.symbol.portPos ?? {})) {
+      const pg = ports[name];
+      if (!pg) continue;
+      if (pg.exit === 'left' || pg.exit === 'right') pg.pos = [pg.pos[0], v];
+      else pg.pos = [v, pg.pos[1]];
+    }
   }
   cache.set(def, g);
   return g;

@@ -1,5 +1,6 @@
 import { chAdders, chRouting } from './ch-arith';
 import { chAlu, chIsa, chRegfile, chSingleCycle } from './ch-cpu';
+import { chFastAdders } from './ch-perf';
 import { chBinary, chGates } from './ch-gates';
 import { chLatches, chMemory, chRegisters } from './ch-memory';
 import { chInverter, chMap, chMosfet, chNand } from './ch-transistors';
@@ -7,11 +8,10 @@ import type { Chapter, FutureChapter } from './types';
 
 export const chapters: Chapter[] = [
   chMap, chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
-  chAlu, chRegfile, chIsa, chSingleCycle,
+  chAlu, chRegfile, chIsa, chSingleCycle, chFastAdders,
 ];
 
 export const future: FutureChapter[] = [
-  { num: 15, title: 'Faster adders', level: 'Optimization', blurb: 'Carry-lookahead and Kogge–Stone: trading gates for speed, measured on our CPU’s critical path.' },
   { num: 16, title: 'Multicycle & microcode', level: 'Processor', blurb: 'Hardwired FSM versus microprogrammed control.' },
   { num: 17, title: 'Pipelining', level: 'Processor', blurb: 'Five stages, forwarding, stalls, flushes and branch prediction.' },
   { num: 18, title: 'Multiply & divide', level: 'Arithmetic', blurb: 'Array, Booth and Dadda multipliers; restoring division; the M extension.' },

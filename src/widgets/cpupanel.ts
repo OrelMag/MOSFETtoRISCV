@@ -10,12 +10,16 @@ import { ISS } from '../riscv/iss';
 import { PROGRAMS } from '../riscv/programs';
 import { h } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
+import { timingPanel } from './timing';
 
 const hex = (v: number, d = 8) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(d, '0');
 
 export interface CpuSceneOptions {
   source: string;
   highlight?: string[];
+  adder?: 'rca' | 'ks';
+  /** Attach the static-timing panel. */
+  timing?: boolean;
   /** Show the program editor. */
   editable?: boolean;
 }
@@ -24,10 +28,10 @@ export interface CpuSceneOptions {
 export function cpuScene(opts: CpuSceneOptions): Scene {
   const asm = assemble(opts.source);
   return {
-    root: singleCycleCpu(asm.words),
+    root: singleCycleCpu(asm.words, { adder: opts.adder }),
     inputs: { clk: 0 },
     highlight: opts.highlight,
-    panels: [cpuPanel({ ...opts, asm })],
+    panels: [cpuPanel({ ...opts, asm }), ...(opts.timing ? [timingPanel] : [])],
   };
 }
 

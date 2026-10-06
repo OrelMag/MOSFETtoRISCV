@@ -37,3 +37,32 @@ describe('single-cycle CPU (gate level) vs golden model', () => {
     }, 120000);
   }
 });
+
+describe('fast-adder CPU and static timing', () => {
+  it('Kogge–Stone variant still matches the golden model', () => {
+    for (const id of ['primer', 'sort', 'alu']) {
+      const words = assemble(PROGRAMS.find((p) => p.id === id)!.source).words;
+      const sim = new GateSim(flatten(singleCycleCpu(words, { adder: 'ks' })));
+      sim.setInput('clk', 0);
+      sim.settle();
+      const iss = new ISS(words);
+      let n = 0;
+      while (!iss.halted && n++ < 1500) {
+        iss.step();
+        clockCycle(sim);
+        expect(cpuState(sim).x, `${id} cycle ${n}`).toEqual([...iss.x]);
+      }
+    }
+  }, 120000);
+
+  it('reports the critical path, and fast adders shorten it', async () => {
+    const { analyzeTiming } = await import('../src/sim/timing');
+    const words = assemble(PROGRAMS[0].source).words;
+    const slow = analyzeTiming(flatten(singleCycleCpu(words)))!;
+    const fast = analyzeTiming(flatten(singleCycleCpu(words, { adder: 'ks' })))!;
+    console.log('rca:', slow.period, slow.stages.map((s) => `${s.inst}@${s.arrival}`).join(' → '));
+    console.log('ks :', fast.period, fast.stages.map((s) => `${s.inst}@${s.arrival}`).join(' → '));
+    expect(slow.stages[0].inst).toBe('pc');
+    expect(fast.period).toBeLessThan(slow.period * 0.75);
+  }, 60000);
+});

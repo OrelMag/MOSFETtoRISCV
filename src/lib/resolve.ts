@@ -7,6 +7,7 @@ import { registry } from './define';
 import { ram } from './memory';
 import { alu, bitwise, isZero, shifter } from './alu';
 import { singleCycleCpu } from './cpu';
+import { koggeStone } from './fastadd';
 import { regfile } from './regfile';
 import { assemble } from '../riscv/asm';
 import { PROGRAMS } from '../riscv/programs';
@@ -26,7 +27,8 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^reg(\d+)$/, (m) => register(+m[1])],
   [/^counter(\d+)$/, (m) => counter(+m[1])],
   [/^ram(\d+)x(\d+)$/, (m) => ram(log2(+m[1]), +m[2])],
-  [/^alu(\d+)$/, (m) => alu(+m[1])],
+  [/^alu(\d+)(ks)?$/, (m) => alu(+m[1], m[2] ? 'ks' : 'rca')],
+  [/^ks(\d+)$/, (m) => koggeStone(+m[1])],
   [/^regfile(\d+)x(\d+)$/, (m) => regfile(log2(+m[1]), +m[2])],
   [/^cpu_(\w+)$/, (m) => singleCycleCpu(assemble(PROGRAMS.find((p) => p.id === m[1])?.source ?? '').words)],
   [/^shift(\d+)$/, (m) => shifter(+m[1])],
@@ -70,6 +72,7 @@ export const families: Family[] = [
   { id: 'addsub', name: 'Adder / subtractor', category: 'arithmetic', params: [{ name: 'bits', values: [2, 4, 8, 16], initial: 8 }], make: (p) => addSub(p.bits) },
   { id: 'inc', name: 'Incrementer', category: 'arithmetic', params: [{ name: 'bits', values: [2, 4, 8, 16], initial: 4 }], make: (p) => incrementer(p.bits) },
   { id: 'alu', name: 'ALU', category: 'arithmetic', params: [{ name: 'bits', values: [4, 8, 16, 32], initial: 8 }], make: (p) => alu(p.bits) },
+  { id: 'ks', name: 'Kogge–Stone adder', category: 'arithmetic', params: [{ name: 'bits', values: [4, 8, 16, 32], initial: 8 }], make: (p) => koggeStone(p.bits) },
   { id: 'shift', name: 'Barrel shifter', category: 'arithmetic', params: [{ name: 'bits', values: [4, 8, 16, 32], initial: 8 }], make: (p) => shifter(p.bits) },
   { id: 'and', name: 'Wide AND', category: 'gate', params: [{ name: 'inputs', values: [3, 4, 5, 6, 8], initial: 4 }], make: (p) => andN(p.inputs) },
   {

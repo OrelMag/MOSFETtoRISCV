@@ -11,6 +11,10 @@ import { busMux2, muxTree } from './combinational';
 import { define, merger, ones, splitter } from './define';
 import { AND, NOT, OR, XOR } from './gates';
 import { TIE0, TIE1 } from './transistors';
+import { bitwise, orN } from './wide';
+import { addSubFast } from './fastadd';
+
+export { bitwise, orN } from './wide';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width: 1, dir, side });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -93,70 +97,6 @@ export const reverseWire = memo((n: number): ComponentDef => define({
   symbol: { kind: 'box', label: '⇅', w: 4, h: 2 }, prim: 'alias',
   alias: Array.from({ length: n }, (_, i): [string, number, string, number] => ['in', i, 'out', n - 1 - i]),
 }));
-
-// ---- bitwise, reduction ------------------------------------------------------------------
-
-/** n copies of a 2-input gate working bit by bit. */
-export const bitwise = memo((op: 'and' | 'or' | 'xor', n: number): ComponentDef => {
-  const g = op === 'and' ? AND : op === 'or' ? OR : XOR;
-  const P = 6;
-  const instances: InstanceDef[] = [
-    { name: 'sa', def: splitter(ones(n), P), at: [4, 0] },
-    { name: 'sb', def: splitter(ones(n), P), at: [7, 2] },
-    { name: 'my', def: merger(ones(n), P), at: [17, 1] },
-  ];
-  const nets: NetDef[] = [
-    { name: 'a', ends: ['a', 'sa.in'] }, { name: 'b', ends: ['b', 'sb.in'] }, { name: 'y', ends: ['my.out', 'y'] },
-  ];
-  for (let i = 0; i < n; i++) {
-    instances.push({ name: `g${i}`, def: g, at: [10, 2 + P * i] });
-    nets.push({ ends: [`sa.o${i}`, `g${i}.a`] }, { ends: [`sb.o${i}`, `g${i}.b`] }, { ends: [`g${i}.y`, `my.i${i}`] });
-  }
-  const f = op === 'and' ? (a: number, b: number) => (a & b) >>> 0 : op === 'or' ? (a: number, b: number) => (a | b) >>> 0 : (a: number, b: number) => (a ^ b) >>> 0;
-  return define({
-    id: `${op}x${n}`, name: `${n}-bit ${op.toUpperCase()}`, category: 'gate',
-    summary: `${n} ${op.toUpperCase()} gates side by side: bit i of the result depends only on bit i of the inputs.`,
-    ports: [bus('a', n, 'in'), bus('b', n, 'in'), bus('y', n, 'out')],
-    symbol: { kind: 'box', label: `${op.toUpperCase()}${n}` },
-    spec: ([a, b]) => [f(a, b)],
-    netlist: () => ({ pins: { a: [1, (P * n) / 2], b: [1, 2 + (P * n) / 2], y: [21, 1 + (P * n) / 2] }, instances, nets }),
-  });
-});
-
-/** Balanced tree of 2-input gates reducing n inputs i0..i(n-1) to y. */
-function gateTree(gate: ComponentDef, n: number, id: string, name: string, spec: (v: number[]) => number[]): ComponentDef {
-  const ins = Array.from({ length: n }, (_, i) => bit(`i${i}`, 'in'));
-  const instances: InstanceDef[] = [];
-  const nets: NetDef[] = [];
-  let level: string[] = ins.map((p) => p.name);
-  const ypos = new Map<string, number>(level.map((s, i) => [s, 2 + 2 * i]));
-  let col = 0, k = 0;
-  while (level.length > 1) {
-    const next: string[] = [];
-    for (let i = 0; i + 1 < level.length; i += 2) {
-      const nm = `g${k++}`;
-      const yc = (ypos.get(level[i])! + ypos.get(level[i + 1])!) / 2;
-      instances.push({ name: nm, def: gate, at: [5 + col * 8, yc - 2] });
-      nets.push({ ends: [level[i], `${nm}.a`] }, { ends: [level[i + 1], `${nm}.b`] });
-      next.push(`${nm}.y`);
-      ypos.set(`${nm}.y`, yc);
-    }
-    if (level.length % 2) next.push(level[level.length - 1]);
-    level = next;
-    col++;
-  }
-  nets.push({ ends: [level[0], 'y'] });
-  const pins: Record<string, [number, number]> = { y: [5 + col * 8 + 2, ypos.get(level[0])!] };
-  ins.forEach((p, i) => (pins[p.name] = [1, 2 + 2 * i]));
-  return define({
-    id, name, category: 'gate', summary: `A tree of ${n - 1} two-input gates, ${col} levels deep.`,
-    ports: [...ins, bit('y', 'out')], symbol: { kind: gate.symbol.kind }, spec,
-    netlist: () => ({ pins, instances, nets }),
-  });
-}
-
-export const orN = memo((n: number): ComponentDef =>
-  gateTree(OR, n, `or${n}`, `${n}-input OR`, (v) => [v.some((x) => x === 1) ? 1 : 0]));
 
 /** 1 when every bit of the word is 0: an OR tree and an inverter. */
 export const isZero = memo((n: number): ComponentDef => {
@@ -297,10 +237,10 @@ export function aluSpec(n: number): (v: number[]) => number[] {
   };
 }
 
-export const alu = memo((n: number): ComponentDef => {
+export const alu = memo((n: number, adder: 'rca' | 'ks' = 'rca'): ComponentDef => {
   const k = log2(n);
   const P = 16;
-  const AS = addSub(n), SH = shifter(n), MX = muxTree(3, n, P), ZD = isZero(n), ZX = zext(n);
+  const AS = adder === 'ks' ? addSubFast(n) : addSub(n), SH = shifter(n), MX = muxTree(3, n, P), ZD = isZero(n), ZX = zext(n);
   const asg = symbolGeom(AS), shg = symbolGeom(SH), mxg = symbolGeom(MX), zdg = symbolGeom(ZD);
   const ux = 14; // unit column
   const mxAt: [number, number] = [50, 4];
@@ -371,7 +311,7 @@ export const alu = memo((n: number): ComponentDef => {
   void asN; void asV; void asC;
   const spec = aluSpec(n);
   return define({
-    id: `alu${n}`, name: `${n}-bit ALU`, category: 'arithmetic',
+    id: `alu${n}${adder === 'ks' ? 'ks' : ''}`, name: `${n}-bit ALU${adder === 'ks' ? ' (Kogge–Stone)' : ''}`, category: 'arithmetic',
     summary: 'Every RV32I integer operation in one block: add, subtract, shifts, set-less-than, XOR, OR, AND. All units compute in parallel; a multiplexer picks one result.',
     ports: [bus('a', n, 'in'), bus('b', n, 'in'), bus('ctl', 4, 'in', 'bottom'), bus('y', n, 'out'), bit('zero', 'out'), bit('neg', 'out'), bit('ovf', 'out'), bit('carry', 'out')],
     symbol: { kind: 'box', label: 'ALU' },

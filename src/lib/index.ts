@@ -5,6 +5,7 @@ export * from './combinational';
 export * from './sequential';
 export * from './memory';
 export * from './alu';
+export * from './fastadd';
 export * from './regfile';
 export * from './cpu';
 export { registry, splitter, merger } from './define';

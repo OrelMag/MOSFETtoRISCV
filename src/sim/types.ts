@@ -39,6 +39,8 @@ export interface SymbolSpec {
   label?: string;
   /** Pin spacing in grid units for boxes, splitters and mergers (default 2). */
   pitch?: number;
+  /** Explicit y (left/right ports) or x (top/bottom ports) offsets for box ports. */
+  portPos?: Record<string, number>;
 }
 
 export interface InstanceDef {

@@ -509,3 +509,16 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .asm-table td.a { color: var(--muted); }
 .asm-table td.w { color: var(--bus-label-text); }
 .asm-table tr.err td { color: var(--wx); }
+
+.tstages { font: 11.5px var(--font-mono); display: grid; gap: 2px; }
+.tstages .ts { display: grid; grid-template-columns: 52px 1fr 30px; gap: 6px; align-items: center; }
+.tstages .bar { height: 8px; border-radius: 3px; background: var(--w1); opacity: 0.8; }
+.tstages .a { text-align: right; color: var(--muted); }
+.cmp { border-collapse: collapse; width: 100%; font: 13px var(--font-mono); }
+.cmp th, .cmp td { padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.cmp th { color: var(--text-2); font-weight: 600; text-align: left; }
+.cmp td.num { text-align: right; }
+.cmp td.barcell { width: 22%; }
+.cbar { display: block; height: 10px; border-radius: 3px; }
+.cbar.r { background: var(--w1); }
+.cbar.k { background: var(--bus); }
