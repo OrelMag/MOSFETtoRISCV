@@ -65,6 +65,8 @@ export class Stage {
   private crumbs: HTMLElement;
   private controls: HTMLElement;
   private canvas: HTMLElement;
+  /** Bottom-left stack for panels with `data-dock="left"` (see layoutDock). */
+  private dock: HTMLElement;
   private levelBadge: HTMLElement;
   private status: HTMLElement;
   private leaf: { name: string; widget: Widget } | null = null;
@@ -119,7 +121,8 @@ export class Stage {
       btn('fit', 'Fit to screen', () => this.view.fit()));
     this.canvas = h('div', { class: 'canvas' });
     this.levelBadge = h('div', { class: 'level-badge' });
-    this.canvas.append(this.levelBadge, h('div', { class: 'hint-badge' }, 'double-click a part to open it · drag to pan · wheel to zoom'));
+    this.dock = h('div', { class: 'panel-dock' });
+    this.canvas.append(this.levelBadge, h('div', { class: 'hint-badge' }, 'double-click a part to open it · drag to pan · wheel to zoom'), this.dock);
     this.controls = h('div', { class: 'controls' });
     this.status = h('div', { class: 'status' });
     this.el = h('section', { class: 'stage' }, bar, this.canvas, this.analyzer.el, this.controls);
@@ -154,7 +157,11 @@ export class Stage {
     });
     this.view.radix = settings.radix;
     this.inspector.radix = settings.radix;
-    new ResizeObserver(() => this.view.fit()).observe(this.canvas);
+    new ResizeObserver(() => {
+      this.view.insetRight = this.rightInset();
+      this.view.fit();
+      this.layoutDock();
+    }).observe(this.canvas);
   }
 
   onChange(f: () => void): () => void {
@@ -210,9 +217,9 @@ export class Stage {
     this.panels.forEach((p) => { p.destroy?.(); p.el.remove(); });
     this.view.highlight(scene.highlight ?? []);
     this.panels = (scene.panels ?? []).map((f) => f(this));
-    for (const p of this.panels) this.canvas.append(p.el);
-    const docked = this.panels.filter((p) => p.el.dataset.dock === 'right');
-    this.view.insetRight = docked.length ? Math.max(...docked.map((p) => p.el.getBoundingClientRect().width)) + 24 : 0;
+    for (const p of this.panels) (p.el.dataset.dock === 'left' ? this.dock : this.canvas).append(p.el);
+    this.view.insetRight = this.rightInset();
+    this.layoutDock();
     this.view.fit();
     this.refresh();
   }
@@ -821,6 +828,27 @@ export class Stage {
   setInset(px: number): void {
     this.view.insetRight = px;
     this.view.fit();
+    this.layoutDock();
+  }
+
+  /** Screen space the expanded right-docked panels need. Measured live: a scene's panels are built
+   *  before the stage is laid out, when they are 0 px wide. */
+  private rightInset(): number {
+    const docked = this.panels.filter((p) => p.el.dataset.dock === 'right' && !p.el.classList.contains('collapsed'));
+    return docked.length ? Math.max(...docked.map((p) => p.el.offsetWidth)) + 24 : 0;
+  }
+
+  /** Bottom-left panels sit beside the right dock: side by side when they fit, else stacked, each
+   *  shrinking and scrolling. Several scenes combine two of them (I/O or pipeline + static timing). */
+  private layoutDock(): void {
+    const panels = [...this.dock.children] as HTMLElement[];
+    if (!panels.length) return;
+    const inset = this.view.insetRight;
+    // Too narrow beside the right dock: overlap it rather than squeeze the panels to nothing.
+    this.dock.style.right = `${inset && this.canvas.clientWidth - inset - 12 >= 260 ? inset : 12}px`;
+    this.dock.classList.remove('row');
+    const need = panels.reduce((a, p) => a + p.offsetWidth, 0) + 8 * (panels.length - 1);
+    this.dock.classList.toggle('row', need <= this.dock.clientWidth);
   }
 
   /** Bits of a root port as 0/1 booleans (helper for challenges). */
