@@ -58,6 +58,8 @@ export class EditorSim {
   powerOn: PowerOnMode = 'zero';
   /** Rising clock edges since the last reset. */
   cycles = 0;
+  /** Power cycles so far: time restarts at 0 (a recording of the old time must start over). */
+  resets = 0;
   /** Clock rate actually achieved over the last second (cycle mode, running). */
   achievedHz = 0;
   /** Called whenever values on screen may have changed. */
@@ -291,6 +293,7 @@ export class EditorSim {
     if (!sim) return;
     this.clkHigh = false;
     this.cycles = 0;
+    this.resets++;
     this.due = 0;
     this.applyPins(sim);
     sim.reset(mode);

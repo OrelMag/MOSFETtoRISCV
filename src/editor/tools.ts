@@ -50,6 +50,8 @@ export class Tools {
   private panning = false;
   private buttonHeld: PinDoc | null = null;
   private off: (() => void)[] = [];
+  /** A mode that takes clicks first (probing): true when it consumed the press. */
+  onPress: ((h: Hit, e: PointerEvent) => boolean) | null = null;
 
   constructor(private ed: Editor) {
     const svg = ed.view.svg;
@@ -146,6 +148,7 @@ export class Tools {
     }
 
     const h = this.hit(p);
+    if (this.onPress?.(h, e)) return;
     if (h.k === 'port') return this.startWire(h.end, h.pos, e);
     if (h.k === 'wire' && (e.ctrlKey || e.altKey || e.metaKey)) {
       const poly = ed.view.polys.get(h.id);

@@ -60,6 +60,12 @@ export class PropsPanel {
     this.body.addEventListener('focusout', () => setTimeout(() => this.update()));
   }
 
+  /** Rebuild even though nothing it keys on changed (a section was registered late). */
+  rebuild(): void {
+    this.key = '';
+    this.update();
+  }
+
   /** Rebuild if what it shows changed (`force`: even if the user is typing in it). */
   update(force = false): void {
     const ed = this.ed;
