@@ -169,15 +169,17 @@ export class GateSim implements Sim {
    * same path with the same definition id get a copy of their private state; the time carries
    * over. Anything new keeps its power-on value. Pending events of `prev` are dropped: the
    * result is relaxed to a fixed point, so a storage loop that held a value keeps it, and logic
-   * that changed is recomputed. A switch-level `prev` works too (Z becomes X).
+   * that changed is recomputed. A switch-level `prev` works too (Z becomes X). With `known`,
+   * X / Z nets of `prev` are not copied (they keep their power-on value).
    */
-  carry(prev: Sim): void {
+  carry(prev: Sim, opts: { known?: boolean } = {}): void {
     const d = this.design;
     for (const name of sharedInputs(d, prev.design)) this.inputs.set(name, prev.getInput(name));
     const map = matchNets(d, prev.design);
     for (let net = 0; net < d.netCount; net++) {
       if (map[net] < 0) continue;
       const b = prev.get(map[net]);
+      if (opts.known && b !== B0 && b !== B1) continue;
       this.val[net] = b === BZ ? BX : b;
       this.proj[net] = this.val[net];
     }
