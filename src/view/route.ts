@@ -89,7 +89,8 @@ const horiz = (d: ExitDir) => d === 'left' || d === 'right';
 
 export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[]; pins: Map<string, PinGeom> } {
   const pins = pinGeoms(def, nl);
-  const taps = new Map(tapLabels(nl).map((t) => [t.end, t]));
+  const allTaps = tapLabels(nl);
+  const taps = new Map(allTaps.map((t) => [t.end, t]));
   const nets = nl.nets.map((net, index): RoutedNet => {
     const ends = net.ends.map((e) => endGeom(def, nl, pins, e));
     const { inst, port } = parseEnd(net.ends[0]);
@@ -104,13 +105,16 @@ export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[
       const tap = taps.get(net.ends[i]);
       return { end: net.ends[i], pos: ends[i].pos, dir: ends[i].exit, stub: tap ? TAP_GAP + tap.rect.w + 0.5 : TAG_STUB };
     };
-    // A tagged sink so close to its driver that the two labels would collide is just wired.
+    // A net whose every tagged sink is so close to the driver that the labels would collide is
+    // just wired. (If some tags remain, the driver keeps its tag, which would sit on that wire.)
     const name = net.name ?? `n${index}`;
     const near = (i: number) => overlaps(tagGeom(tag(0), name).rect, tagGeom(tag(i), name).rect);
+    const sinkIdx = ends.map((_, i) => i).slice(1);
+    const wireAll = sinkIdx.some(tagged) && sinkIdx.filter(tagged).every(near);
     const tags: NetTag[] = [];
     const drawn: number[] = [];
-    for (let i = 1; i < ends.length; i++) {
-      if (tagged(i) && !near(i)) tags.push(tag(i));
+    for (const i of sinkIdx) {
+      if (tagged(i) && !wireAll) tags.push(tag(i));
       else drawn.push(i);
     }
     if (tags.length && (drawn.length === 0 || tagged(0))) tags.unshift(tag(0));
@@ -144,9 +148,15 @@ export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[
       const ym = net.trunk ?? (multi ? P1[1] : half((P1[1] + S1[1]) / 2));
       return simplify([P, P1, [P1[0], ym], [S1[0], ym], S1, S]);
     });
-    const anchor = width > 1 ? labelAnchor(paths) : null;
-    return { index, width, tags, paths, dots: junctions(paths), label: anchor?.pos ?? null, labelRoom: anchor?.room ?? 0 };
+    return { index, width, tags, paths, dots: junctions(paths), label: null, labelRoom: 0 };
   });
+  // Bus value labels go last, clear of every tap label and net tag.
+  const obstacles = [...allTaps.map((t) => t.rect), ...nets.flatMap((n) => n.tags.map((t) => tagGeom(t, nl.nets[n.index].name ?? `n${n.index}`).rect))];
+  for (const n of nets) {
+    const anchor = n.width > 1 ? labelAnchor(n.paths, obstacles) : null;
+    n.label = anchor?.pos ?? null;
+    n.labelRoom = anchor?.room ?? 0;
+  }
   return { nets, pins };
 }
 
@@ -255,19 +265,30 @@ function junctions(paths: Vec[][]): Vec[] {
   return dots;
 }
 
-function labelAnchor(paths: Vec[][]): { pos: Vec; room: number } | null {
-  // Midpoint of the longest horizontal segment of the first path. A label on a horizontal
-  // segment must fit within it; one beside a vertical segment only crosses it.
+function labelAnchor(paths: Vec[][], obstacles: Rect[]): { pos: Vec; room: number } | null {
+  // The longest free stretch of a horizontal segment of the first path: labels that sit where
+  // the value label would (just above the wire) are cut out of it. A label beside a
+  // vertical segment only crosses it.
   const p = paths[0];
   if (!p) return null;
   let best: { pos: Vec; room: number } | null = null, len = -1;
   for (let i = 1; i < p.length; i++) {
     const [a, b] = [p[i - 1], p[i]];
-    const horiz = a[1] === b[1];
-    const l = horiz ? Math.abs(a[0] - b[0]) : Math.abs(a[1] - b[1]) * 0.5;
-    if (l > len) {
-      len = l;
-      best = { pos: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], room: horiz ? l : Infinity };
+    if (a[1] !== b[1]) {
+      const l = Math.abs(a[1] - b[1]) * 0.5;
+      if (l > len) { len = l; best = { pos: [a[0], (a[1] + b[1]) / 2], room: Infinity }; }
+      continue;
+    }
+    const y = a[1];
+    let free: [number, number][] = [[Math.min(a[0], b[0]), Math.max(a[0], b[0])]];
+    for (const r of obstacles) {
+      if (r.y >= y - 0.25 || r.y + r.h <= y - 1.55) continue;
+      const [x0, x1] = [r.x - 0.2, r.x + r.w + 0.2];
+      free = free.flatMap(([lo, hi]): [number, number][] =>
+        x1 <= lo || x0 >= hi ? [[lo, hi]] : [[lo, x0], [x1, hi]].filter(([u, v]) => v > u) as [number, number][]);
+    }
+    for (const [lo, hi] of free) {
+      if (hi - lo > len) { len = hi - lo; best = { pos: [(lo + hi) / 2, y], room: hi - lo }; }
     }
   }
   return len >= 3 ? best : null;
