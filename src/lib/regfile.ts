@@ -49,9 +49,12 @@ export function readPort(k: number, w: number): ComponentDef {
   });
 }
 
-/** zero = false: register 0 is an ordinary register (the floating-point file has no hard-wired f0). */
-export function regfile(k: number, w: number, zero = true): ComponentDef {
-  return memo(`rf${k}x${w}${zero ? '' : 'f'}`, () => {
+/**
+ * zero = false: register 0 is an ordinary register (the floating-point file has no hard-wired f0).
+ * reads = 3 adds a third read port (rs3 of the fused multiply-add instructions).
+ */
+export function regfile(k: number, w: number, zero = true, reads: 2 | 3 = 2): ComponentDef {
+  return memo(`rf${k}x${w}${zero ? '' : 'f'}${reads === 3 ? '_3r' : ''}`, () => {
     const pre = zero ? 'x' : 'f';
     const N = 2 ** k;
     const R = register(w);
@@ -75,6 +78,7 @@ export function regfile(k: number, w: number, zero = true): ComponentDef {
     const xP = xQ + 8;
     const rp1At: [number, number] = [xP, busY - rpg.ports.words.pos[1]];
     const rp2At: [number, number] = [xP, rp1At[1] + rpg.h + 10];
+    const rp3At: [number, number] = [xP, rp2At[1] + rpg.h + 10];
 
     const instances: InstanceDef[] = [
       { name: 'dec', def: D, at: dAt },
@@ -82,6 +86,7 @@ export function regfile(k: number, w: number, zero = true): ComponentDef {
       { name: 'bundle', def: merger(Array(N).fill(w), P), at: [xQ, mqTop] },
       { name: 'rp1', def: RP, at: rp1At },
       { name: 'rp2', def: RP, at: rp2At },
+      ...(reads === 3 ? [{ name: 'rp3', def: RP, at: rp3At }] : []),
     ];
     const nets: NetDef[] = zero ? [{ name: 'q0', ends: ['x0.y', 'bundle.i0'] }] : [];
     const wd = ['wd'], clk = ['clk'];
@@ -92,27 +97,28 @@ export function regfile(k: number, w: number, zero = true): ComponentDef {
       wd.push(`w${i}.d`);
       clk.push(`w${i}.clk`);
     }
-    const bottom = Math.max(rTop(N - 1) + rg.h, dAt[1] + dg.h, rp2At[1] + rpg.h) + 3;
-    const sel1x = rp1At[0] + rpg.ports.sel.pos[0], sel2x = rp2At[0] + rpg.ports.sel.pos[0];
+    const bottom = Math.max(rTop(N - 1) + rg.h, dAt[1] + dg.h, (reads === 3 ? rp3At : rp2At)[1] + rpg.h) + 3;
+    const sel1x = rp1At[0] + rpg.ports.sel.pos[0], sel2x = rp2At[0] + rpg.ports.sel.pos[0], sel3x = rp3At[0] + rpg.ports.sel.pos[0];
     nets.push(
       { name: 'wa', ends: ['wa', 'dec.a'] },
       { name: 'we', ends: ['we', 'dec.en'] },
       { name: 'wd', ends: wd, trunk: xR - 3 },
       { name: 'clk', ends: clk, trunk: xR + rg.w + 2 },
-      { name: 'regs', ends: ['bundle.out', 'rp1.words', 'rp2.words'], trunk: xP - 3 },
+      { name: 'regs', ends: ['bundle.out', 'rp1.words', 'rp2.words', ...(reads === 3 ? ['rp3.words'] : [])], trunk: xP - 3 },
       // ra1 climbs left of rp2 and crosses into the gap between the ports, under rp1.sel.
       { name: 'ra1', ends: ['ra1', 'rp1.sel'], via: { 'rp1.sel': [[xP - 1.5, bottom + 4], [xP - 1.5, rp1At[1] + rpg.h + 5], [sel1x, rp1At[1] + rpg.h + 5]] } },
       { name: 'ra2', ends: ['ra2', 'rp2.sel'], via: { 'rp2.sel': [[sel2x, bottom + 6]] } },
       { name: 'rd1', ends: ['rp1.y', 'rd1'] },
       { name: 'rd2', ends: ['rp2.y', 'rd2'] },
     );
+    if (reads === 3) nets.push({ name: 'ra3', ends: ['ra3', 'rp3.sel'], via: { 'rp3.sel': [[sel3x, bottom + 8]] } }, { name: 'rd3', ends: ['rp3.y', 'rd3'] });
     const outX = xP + rpg.w + 6;
     return define({
-      id: `regfile${N}x${w}${zero ? '' : '_f'}`, name: `${zero ? 'Register file' : 'Floating-point register file'} (${N} × ${w})`, category: 'memory',
-      summary: `${N} registers of ${w} bits${zero ? '; x0 always reads 0' : ' (f0 is an ordinary register)'}. Two read ports (two operands per instruction) and one write port, all in one cycle.`,
+      id: `regfile${N}x${w}${zero ? '' : '_f'}${reads === 3 ? '_3r' : ''}`, name: `${zero ? 'Register file' : 'Floating-point register file'} (${N} × ${w}${reads === 3 ? ', 3 read ports' : ''})`, category: 'memory',
+      summary: `${N} registers of ${w} bits${zero ? '; x0 always reads 0' : ' (f0 is an ordinary register)'}. ${reads === 3 ? 'Three read ports (fused multiply-add reads three operands)' : 'Two read ports (two operands per instruction)'} and one write port, all in one cycle.`,
       ports: [
-        bus('wa', k, 'in'), bus('ra1', k, 'in'), bus('ra2', k, 'in'), bus('wd', w, 'in'), bit('we', 'in'),
-        bit('clk', 'in', 'bottom', true), bus('rd1', w, 'out'), bus('rd2', w, 'out'),
+        bus('wa', k, 'in'), bus('ra1', k, 'in'), bus('ra2', k, 'in'), ...(reads === 3 ? [bus('ra3', k, 'in')] : []), bus('wd', w, 'in'), bit('we', 'in'),
+        bit('clk', 'in', 'bottom', true), bus('rd1', w, 'out'), bus('rd2', w, 'out'), ...(reads === 3 ? [bus('rd3', w, 'out')] : []),
       ],
       symbol: { kind: 'box', label: zero ? 'REGISTERS' : 'FP REGISTERS' },
       netlist: () => ({
@@ -120,6 +126,7 @@ export function regfile(k: number, w: number, zero = true): ComponentDef {
           wa: [0, dAt[1] + dg.ports.a.pos[1]], we: [0, dAt[1] + dg.ports.en.pos[1]],
           wd: [0, bottom], clk: [0, bottom + 2], ra1: [0, bottom + 4], ra2: [0, bottom + 6],
           rd1: [outX, rp1At[1] + rpg.ports.y.pos[1]], rd2: [outX, rp2At[1] + rpg.ports.y.pos[1]],
+          ...(reads === 3 ? { ra3: [0, bottom + 8] as [number, number], rd3: [outX, rp3At[1] + rpg.ports.y.pos[1]] as [number, number] } : {}),
         },
         instances, nets,
       }),

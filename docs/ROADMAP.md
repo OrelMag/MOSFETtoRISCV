@@ -91,6 +91,10 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ ALU (add, sub, and, or, xor, shifts, slt/sltu) and flags; barrel shifter
 - ✅ Carry-lookahead and Kogge–Stone adders with depth comparison (optimization intro)
 - ✅ Register file (32 × 32, x0 hard-wired), two read ports and one write port
+- ✅ Comparison and coding blocks: log-depth magnitude comparator (signed / unsigned), encoder, recursive priority
+  encoder, demultiplexer, population count, absolute value, parity, Hamming SEC-DED encoder / decoder (ECC step in ch. 21)
+- ✅ Workbench lists every library component: each generator is a family with parameter dropdowns
+  (adders, multipliers, dividers, float units, register files, caches, …), plus every fixed processor part
 - **Sandbox**: full wiring editor (today the *workbench* opens any library component with free inputs) (place parts from the library, wire, package into a new
   chip, save to local storage and share via URL); Turing-Complete-style build challenges
   checked against a truth table or test vectors
@@ -148,7 +152,17 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Floating point (chapter 23): IEEE 754 explorer and number line; parametric gate-level FPU (unpack, align with sticky,
   add/sub, tree multiply, shared normalize & round with RNE and subnormals, compare, int→float), exhaustively tested on
   small formats and against host float32; single-cycle RV32IF CPU (subset) co-simulated with both register files
-- ⏳ fdiv / fsqrt / fma, rounding modes and fflags; a pipelined FPU
+- ✅ RV32F without div / sqrt / fma: all five rounding modes (and dyn → frm) and the five exception flags in the shared
+  normalize & round (tininess after rounding), fcvt.w[u].s with saturation, fmin / fmax (IEEE 754-2019), fclass, signaling
+  compares, fcsr (fflags / frm / fcsr via Zicsr) in the FPU path; exhaustive small-format tests in every mode with flags
+  (bit-parallel simulator, 32 vectors per pass); ISS on the exact reference
+- ✅ fdiv.s / fsqrt.s: prenormalize + radix-2 restoring digit recurrences (27 / 26 steps, 29 / 28 cycles), each
+  ending in the generic normalize & round, stalling the single-cycle CPU (retire gates PC, register writes and fflags); exhaustive small formats
+- ✅ fmadd / fmsub / fnmsub / fnmadd.s (R4 format in isa / asm / disasm / ISS, third f-register read port): exact
+  product, swap-and-align add, one normalize & round; exhaustive on E3M2 (5.2 M cases), random on E4M3 / E5M2 / float32
+- ✅ Pipelined FPU: six-stage RV32IF pipeline (F D E M X W, in-order retirement), the FMA split over E / M / X as the FP pipe
+  for fadd / fsub / fmul / fma / fcvt.s.w and (unrounded) fdiv / fsqrt, one shared rounder; FP interlocks + forwarding from W,
+  CSR serialization, structural stalls for the iterative units; period 121 vs 313 (single-cycle), CPI 1.6–2.7, co-simulated
 - Superscalar and out-of-order intuition (scoreboard / Tomasulo widget)
 - Compressed instructions (C), A extension (LR/SC, AMO)
 - Virtual memory (Sv32), TLB, U/S/M privilege levels (stretch)

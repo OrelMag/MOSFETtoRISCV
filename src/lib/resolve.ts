@@ -2,19 +2,27 @@
 // parameter families shown in the workbench.
 
 import type { ComponentDef } from '../sim/types';
-import { addSub, andN, busMux2, decoder, incrementer, muxTree, rca } from './combinational';
+import type { FpFormat } from '../sim/fpref';
+import { addSub, andN, busMux2, decoder, equal, incrementer, muxTree, rca } from './combinational';
 import { registry } from './define';
 import { ram } from './memory';
-import { alu, bitwise, isZero, shifter } from './alu';
+import { alu, bitwise, isZero, orN, shifter, zext } from './alu';
 import { singleCycleCpu } from './cpu';
-import { koggeStone } from './fastadd';
+import { addSubFast, koggeStone } from './fastadd';
 import { regfile } from './regfile';
 import { assemble } from '../riscv/asm';
 import { PROGRAMS } from '../riscv/programs';
 import { counter, register } from './sequential';
+import { arrayDiv, arrayMul, condNegate, csa, divStep, seqDivider, treeMul } from './muldiv';
+import { fpAdd, fpCompare, fpMul, fpUnpack, lzc, shiftLeft } from './fpu';
+import { cachedMemory, wayLookup2 } from './cache';
+import { bankedMemory } from './lsu';
+import { clearableRegister } from './pipeline';
+import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
 
 const log2 = (n: number) => Math.round(Math.log2(n));
 
+// Ids that are not (or not only) family members.
 const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^rca(\d+)$/, (m) => rca(+m[1])],
   [/^addsub(\d+)$/, (m) => addSub(+m[1])],
@@ -39,6 +47,8 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
 export function resolveComponent(id: string): ComponentDef | undefined {
   const hit = registry.get(id);
   if (hit) return hit;
+  const f = familyOf(id);
+  if (f) return f.fam.make(f.values);
   for (const [re, make] of patterns) {
     const m = id.match(re);
     if (m) {
@@ -64,33 +74,145 @@ export interface Family {
   name: string;
   category: string;
   params: Param[];
+  /** The id make(p) will have, computed without building anything (so the index stays cheap). */
+  key: (p: Record<string, number>) => string;
   make: (p: Record<string, number>) => ComponentDef;
 }
 
+type P = Record<string, number>;
+const bits = (values: number[], initial: number): Param => ({ name: 'bits', values, initial });
+const count = (name: string, values: number[], initial: number): Param => ({ name, values, initial });
+const flag = (name: string, on: string, off: string): Param => ({ name, values: [0, 1], initial: 0, label: (v) => (v ? on : off) });
+const FORMATS: FpFormat[] = [{ E: 3, M: 4 }, { E: 4, M: 3 }, { E: 5, M: 10 }, { E: 8, M: 23 }];
+const FMT_NAMES = ['E3M4 (8-bit)', 'E4M3 (8-bit)', 'binary16', 'float32'];
+const format: Param = { name: 'format', values: [0, 1, 2, 3], initial: 0, label: (v) => FMT_NAMES[v] };
+const fmt = (p: P) => FORMATS[p.format];
+const OPS = ['and', 'or', 'xor'] as const;
+
+/** A family with one `bits` parameter. */
+const nBit = (id: string, name: string, category: string, values: number[], initial: number, key: (n: number) => string, make: (n: number) => ComponentDef): Family =>
+  ({ id, name, category, params: [bits(values, initial)], key: (p) => key(p.bits), make: (p) => make(p.bits) });
+const float = (id: string, name: string, make: (f: FpFormat) => ComponentDef): Family =>
+  ({ id, name, category: 'arithmetic', params: [format], key: (p) => `${id}${fmt(p).E}_${fmt(p).M}`, make: (p) => make(fmt(p)) });
+
 export const families: Family[] = [
-  { id: 'rca', name: 'Ripple-carry adder', category: 'arithmetic', params: [{ name: 'bits', values: [1, 2, 4, 8, 16], initial: 4 }], make: (p) => rca(p.bits) },
-  { id: 'addsub', name: 'Adder / subtractor', category: 'arithmetic', params: [{ name: 'bits', values: [2, 4, 8, 16], initial: 8 }], make: (p) => addSub(p.bits) },
-  { id: 'inc', name: 'Incrementer', category: 'arithmetic', params: [{ name: 'bits', values: [2, 4, 8, 16], initial: 4 }], make: (p) => incrementer(p.bits) },
-  { id: 'alu', name: 'ALU', category: 'arithmetic', params: [{ name: 'bits', values: [4, 8, 16, 32], initial: 8 }], make: (p) => alu(p.bits) },
-  { id: 'ks', name: 'Kogge–Stone adder', category: 'arithmetic', params: [{ name: 'bits', values: [4, 8, 16, 32], initial: 8 }], make: (p) => koggeStone(p.bits) },
-  { id: 'shift', name: 'Barrel shifter', category: 'arithmetic', params: [{ name: 'bits', values: [4, 8, 16, 32], initial: 8 }], make: (p) => shifter(p.bits) },
-  { id: 'and', name: 'Wide AND', category: 'gate', params: [{ name: 'inputs', values: [3, 4, 5, 6, 8], initial: 4 }], make: (p) => andN(p.inputs) },
+  // arithmetic
+  nBit('rca', 'Ripple-carry adder', 'arithmetic', [1, 2, 4, 8, 16], 4, (n) => `rca${n}`, rca),
+  nBit('addsub', 'Adder / subtractor', 'arithmetic', [2, 4, 8, 16], 8, (n) => `addsub${n}`, addSub),
+  nBit('inc', 'Incrementer', 'arithmetic', [2, 4, 8, 16], 4, (n) => `inc${n}`, incrementer),
+  {
+    id: 'alu', name: 'ALU', category: 'arithmetic', params: [bits([4, 8, 16, 32], 8), flag('adder', 'Kogge–Stone', 'ripple carry')],
+    key: (p) => `alu${p.bits}${p.adder ? 'ks' : ''}`, make: (p) => alu(p.bits, p.adder ? 'ks' : 'rca'),
+  },
+  nBit('ks', 'Kogge–Stone adder', 'arithmetic', [4, 8, 16, 32], 8, (n) => `ks${n}`, koggeStone),
+  nBit('addsubks', 'Fast adder / subtractor', 'arithmetic', [4, 8, 16, 32], 8, (n) => `addsubks${n}`, addSubFast),
+  nBit('shift', 'Barrel shifter', 'arithmetic', [4, 8, 16, 32], 8, (n) => `shift${n}`, shifter),
+  nBit('shl', 'Left shifter', 'arithmetic', [4, 8, 16, 32], 8, (n) => `shl${n}_${log2(n)}`, (n) => shiftLeft(n, log2(n))),
+  nBit('lzc', 'Leading-zero counter', 'arithmetic', [2, 4, 8, 16, 32], 8, (n) => `lzc${n}`, lzc),
+  nBit('cneg', 'Conditional negate', 'arithmetic', [4, 8, 16, 32], 8, (n) => `cneg${n}`, condNegate),
+  nBit('csa', 'Carry-save adder', 'arithmetic', [2, 4, 8, 16], 4, (n) => `csa${n}`, csa),
+  nBit('amul', 'Array multiplier', 'arithmetic', [2, 4, 8, 16], 4, (n) => `amul${n}`, arrayMul),
+  {
+    id: 'wmul', name: 'Wallace-tree multiplier', category: 'arithmetic', params: [bits([4, 8, 16], 8), flag('signed', 'signed', 'unsigned')],
+    key: (p) => `wmul${p.bits}${p.signed ? 's' : ''}`, make: (p) => treeMul(p.bits, p.signed === 1),
+  },
+  nBit('divstep', 'Division step (restoring)', 'arithmetic', [2, 4, 8, 16, 32], 4, (n) => `divstep${n}${n >= 16 ? 'f' : ''}`, (n) => divStep(n)),
+  nBit('adiv', 'Array divider', 'arithmetic', [2, 4, 8, 16], 4, (n) => `adiv${n}`, arrayDiv),
+  float('fpun', 'Float unpack', fpUnpack),
+  float('fpadd', 'Float adder / subtractor', fpAdd),
+  float('fpmul', 'Float multiplier', fpMul),
+  float('fpcmp', 'Float comparator', fpCompare),
+  nBit('popcnt', 'Population count', 'arithmetic', [2, 4, 8, 16, 32], 8, (n) => `popcnt${n}`, popcount),
+  nBit('abs', 'Absolute value', 'arithmetic', [4, 8, 16, 32], 8, (n) => `abs${n}`, absValue),
+  // gates
+  nBit('parity', 'Parity', 'gate', [3, 4, 8, 16, 32], 8, (n) => `parity${n}`, parity),
+  { id: 'hamenc', name: 'Hamming SEC-DED encoder', category: 'gate', params: [count('data bits', [4, 8, 16], 8)], key: (p) => `hamenc${p['data bits']}`, make: (p) => hammingEnc(p['data bits']) },
+  { id: 'hamdec', name: 'Hamming SEC-DED decoder', category: 'gate', params: [count('data bits', [4, 8, 16], 8)], key: (p) => `hamdec${p['data bits']}`, make: (p) => hammingDec(p['data bits']) },
+  { id: 'ecc', name: 'SEC-DED round trip', category: 'gate', params: [count('data bits', [4, 8, 16], 8)], key: (p) => `ecc${p['data bits']}`, make: (p) => eccChannel(p['data bits']) },
+  { id: 'and', name: 'Wide AND', category: 'gate', params: [count('inputs', [3, 4, 5, 6, 8], 4)], key: (p) => `and${p.inputs}`, make: (p) => andN(p.inputs) },
+  { id: 'or', name: 'Wide OR', category: 'gate', params: [count('inputs', [3, 4, 8, 16, 32], 4)], key: (p) => `or${p.inputs}`, make: (p) => orN(p.inputs) },
+  {
+    id: 'bitwise', name: 'Bitwise operation', category: 'gate',
+    params: [{ name: 'op', values: [0, 1, 2], initial: 0, label: (v) => OPS[v].toUpperCase() }, bits([4, 8, 16, 32], 8)],
+    key: (p) => `${OPS[p.op]}x${p.bits}`, make: (p) => bitwise(OPS[p.op], p.bits),
+  },
+  nBit('zero', 'Zero detect', 'gate', [4, 8, 16, 32], 8, (n) => `zero${n}`, isZero),
+  // routing
   {
     id: 'dec', name: 'Decoder', category: 'routing',
-    params: [{ name: 'bits', values: [1, 2, 3, 4], initial: 2 }, { name: 'enable', values: [0, 1], initial: 0, label: (v) => (v ? 'with enable' : 'no enable') }],
-    make: (p) => decoder(p.bits, p.enable === 1),
+    params: [bits([1, 2, 3, 4], 2), flag('enable', 'with enable', 'no enable')],
+    key: (p) => `dec${p.bits}${p.enable ? 'e' : ''}`, make: (p) => decoder(p.bits, p.enable === 1),
   },
-  { id: 'mux2x', name: 'Bus multiplexer 2:1', category: 'routing', params: [{ name: 'bits', values: [1, 2, 4, 8], initial: 4 }], make: (p) => busMux2(p.bits) },
+  nBit('mux2x', 'Bus multiplexer 2:1', 'routing', [2, 4, 8, 16], 4, (n) => `mux2x${n}`, busMux2),
   {
     id: 'mux', name: 'Multiplexer tree', category: 'routing',
-    params: [{ name: 'inputs', values: [2, 4, 8, 16], initial: 4 }, { name: 'bits', values: [1, 2, 4, 8], initial: 1 }],
-    make: (p) => muxTree(log2(p.inputs), p.bits),
+    params: [count('inputs', [2, 4, 8, 16], 4), bits([1, 2, 4, 8], 1)],
+    key: (p) => (p.inputs === 2 ? `mux2tree${p.bits}` : `mux${p.inputs}x${p.bits}`), make: (p) => muxTree(log2(p.inputs), p.bits),
   },
-  { id: 'reg', name: 'Register', category: 'sequential', params: [{ name: 'bits', values: [1, 2, 4, 8, 16], initial: 4 }], make: (p) => register(p.bits) },
-  { id: 'counter', name: 'Counter', category: 'sequential', params: [{ name: 'bits', values: [2, 3, 4, 8], initial: 4 }], make: (p) => counter(p.bits) },
+  {
+    id: 'cmp', name: 'Magnitude comparator', category: 'routing', params: [bits([2, 4, 8, 16, 32], 4), flag('signed', 'signed', 'unsigned')],
+    key: (p) => `cmp${p.bits}${p.signed ? 's' : ''}`, make: (p) => magComparator(p.bits, p.signed === 1),
+  },
+  { id: 'prienc', name: 'Priority encoder', category: 'routing', params: [count('inputs', [2, 4, 8, 16, 32], 8)], key: (p) => `prienc${p.inputs}`, make: (p) => priorityEncoder(p.inputs) },
+  { id: 'enc', name: 'Encoder', category: 'routing', params: [count('inputs', [4, 8, 16], 8)], key: (p) => `enc${p.inputs}`, make: (p) => encoder(p.inputs) },
+  {
+    id: 'demux', name: 'Demultiplexer', category: 'routing', params: [count('outputs', [2, 4, 8], 4), bits([1, 4, 8], 1)],
+    key: (p) => `demux${p.outputs}x${p.bits}`, make: (p) => demux(log2(p.outputs), p.bits),
+  },
+  nBit('eq', 'Equality comparator', 'routing', [2, 4, 8, 16, 32], 4, (n) => `eq${n}`, equal),
+  // sequential
+  nBit('reg', 'Register', 'sequential', [1, 2, 4, 8, 16], 4, (n) => `reg${n}`, register),
+  nBit('creg', 'Register with clear', 'sequential', [1, 4, 8, 16, 32], 4, (n) => `creg${n}`, clearableRegister),
+  nBit('counter', 'Counter', 'sequential', [2, 3, 4, 8], 4, (n) => `counter${n}`, counter),
+  nBit('sdiv', 'Iterative divider', 'sequential', [4, 8, 16, 32], 8, (n) => `sdiv${n}`, seqDivider),
+  // memory
   {
     id: 'ram', name: 'Memory (RAM)', category: 'memory',
-    params: [{ name: 'words', values: [4, 8, 16, 32, 64], initial: 16 }, { name: 'bits', values: [4, 8, 16], initial: 8 }],
-    make: (p) => ram(log2(p.words), p.bits),
+    params: [count('words', [4, 8, 16, 32, 64], 16), bits([4, 8, 16], 8)],
+    key: (p) => `ram${p.words}x${p.bits}`, make: (p) => ram(log2(p.words), p.bits),
   },
+  {
+    id: 'regfile', name: 'Register file', category: 'memory',
+    params: [count('registers', [4, 8, 16, 32], 8), bits([4, 8, 16, 32], 8)],
+    key: (p) => `regfile${p.registers}x${p.bits}`, make: (p) => regfile(log2(p.registers), p.bits),
+  },
+  {
+    id: 'bmem', name: 'Byte-banked memory', category: 'memory', params: [count('words', [16, 32, 64], 16)],
+    key: (p) => `bmem${log2(p.words)}`, make: (p) => bankedMemory(log2(p.words)),
+  },
+  {
+    id: 'dcache', name: 'Memory with a cache', category: 'memory',
+    params: [count('memory words', [64, 128, 256], 64), count('cache lines', [2, 4, 8], 4)],
+    key: (p) => `dcache${log2(p['memory words'])}_${log2(p['cache lines'])}`,
+    make: (p) => cachedMemory(log2(p['memory words']), log2(p['cache lines'])),
+  },
+  {
+    id: 'way2', name: '2-way tag compare', category: 'memory',
+    params: [count('tag bits', [2, 3, 4, 8], 3), bits([4, 8, 32], 8)],
+    key: (p) => `way2_${p['tag bits']}_${p.bits}`, make: (p) => wayLookup2(p['tag bits'], p.bits),
+  },
+  // wiring
+  nBit('zext', 'Zero-extend 1 → n', 'plumbing', [2, 4, 8, 32], 8, (n) => `zext${n}`, zext),
 ];
+
+export function combos(f: Family): P[] {
+  let out: P[] = [{}];
+  for (const p of f.params) out = out.flatMap((o) => p.values.map((v) => ({ ...o, [p.name]: v })));
+  return out;
+}
+
+export const initialParams = (f: Family): P => Object.fromEntries(f.params.map((p) => [p.name, p.initial]));
+
+let index: Map<string, { fam: Family; values: P }> | null = null;
+
+/** The family (and parameter values) that generates this id, if any. */
+export function familyOf(id: string): { fam: Family; values: P } | null {
+  if (!index) {
+    index = new Map();
+    for (const fam of families) for (const values of combos(fam)) {
+      const k = fam.key(values);
+      if (!index.has(k)) index.set(k, { fam, values });
+    }
+  }
+  return index.get(id) ?? null;
+}

@@ -80,3 +80,7 @@ function gateTree(gate: ComponentDef, n: number, id: string, name: string, spec:
 export const orN = memo((n: number): ComponentDef =>
   gateTree(OR, n, `or${n}`, `${n}-input OR`, (v) => [v.some((x) => x === 1) ? 1 : 0]));
 
+/** n-input XOR (odd parity) tree. */
+export const xorN = memo((n: number): ComponentDef =>
+  gateTree(XOR, n, `xor${n}`, `${n}-input XOR`, (v) => [v.reduce((p, x) => p ^ x, 0)]));
+

@@ -604,7 +604,7 @@ export class Stage {
     const root = this.scene!.root;
     const ins = inPorts(root).filter((p) => !(this.scene!.hiddenInputs ?? []).includes(p.name));
     const clk = this.clockPort();
-    if (ins.length) c.append(h('span', { class: 'label' }, 'Inputs'));
+    if (ins.some((p) => p.name !== clk)) c.append(h('span', { class: 'label' }, 'Inputs'));
     for (const p of ins) {
       if (p.name === clk) continue;
       c.append(p.width === 1 ? this.bitToggle(p) : this.numInput(p));

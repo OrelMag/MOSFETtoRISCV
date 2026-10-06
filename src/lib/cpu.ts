@@ -14,7 +14,7 @@ import { define, merger, splitter } from './define';
 import { AND, NOT, OR, XNOR, XOR } from './gates';
 import { ram } from './memory';
 import { cachedMemory } from './cache';
-import { FPU32, FP_DECODE } from './fpu';
+import { FCSR, FPU32, FP_DECODE } from './fpu';
 import { MP_DECODE } from './mpdecode';
 import { regfile } from './regfile';
 import { register } from './sequential';
@@ -435,7 +435,7 @@ export interface CpuOptions {
   adder?: 'rca' | 'ks';
   /** Put a 4-line direct-mapped data cache in front of a slow main memory (loads can stall). */
   dcache?: boolean;
-  /** Add the floating-point register file and FPU (the RV32F subset of chapter 23). */
+  /** Add the floating-point register file, the FPU and fcsr (RV32F of chapter 23). */
   fpu?: boolean;
   /**
    * A core of the multi-core processor: no data memory of its own but a memory port (address,
@@ -616,11 +616,12 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
     pins.retire = [resY[0] + 22, bottom + 1];
     pins.dhit = [resY[0] + 22, bottom + 4];
   }
+  if (fpu) pins.retire = [resY[0] + 22, bottom + 1];
   if (fpu) {
     // ---- RV32F subset: a second register file, the FPU, and a few multiplexers
     const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => instances.push({ name, def, at: xy, label });
     const rfAt = at.get('rf')!, rfR = rfAt[0] + g(RF).w;
-    const FRF = regfile(5, 32, false);
+    const FRF = regfile(5, 32, false, 3);
     add('frf', FRF, [rfAt[0], bottom + 10], 'f registers');
     add('fpu', FPU32, [rfR + 24, bottom + 14], 'FPU');
     add('fdec', FP_DECODE, [8, bottom + 10]);
@@ -629,17 +630,29 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
     add('swd', M2, [rfR + 4, bottom - 6], 'x / f store');
     add('nflw', NOT, [52, bottom - 14]);
     add('rwx', AND, [56, bottom - 14]);
-    add('rwi', OR, [62, bottom - 14]);
+    add('rwi', orN(3), [62, bottom - 14]);
+    add('fcsr', FCSR, [rfR + 24, bottom + 62], 'fcsr');
+    add('sr3', splitter([2, 5]), [rfAt[0] - 6, bottom + 40]);
+    add('cres', M2, [resY[0] + 12, resY[1] - 6], 'FP / CSR');
+    // fdiv.s / fsqrt.s stall: the PC and every register write wait for the iterative unit
+    if (dcache) throw new Error('singleCycleCpu: fpu and dcache together are not supported');
+    add('nstall', NOT, [8, P('pc', 'en')[1] - 1]);
+    add('xwg', AND, [68, bottom - 14]);
+    add('fwg', AND, [rfAt[0] - 6, bottom + 6]);
+    add('fpg', AND, [rfR + 18, bottom + 58]);
+    instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
     const net = (name: string) => nets.find((n) => n.name === name)!;
-    net('op').ends = ['si.o0', 'fdec.op'];
+    nets.splice(nets.indexOf(net('en')), 1);
+    net('op').ends = ['si.o0', 'fdec.op', 'fpu.op'];
     nets.push({ name: 'opInt', ends: ['fdec.opInt', 'ctl.op'], tags: true });
-    net('rs1').ends.push('frf.ra1');
-    net('rs2').ends.push('frf.ra2', 'fpu.rs2');
+    net('op').ends.push('fcsr.op');
+    net('rs1').ends.push('frf.ra1', 'fcsr.rs1');
+    net('rs2').ends.push('frf.ra2', 'fpu.rs2', 'fcsr.rs2');
     net('rd').ends.push('frf.wa');
-    net('funct7').ends.push('fpu.funct7', 'fdec.funct7');
-    net('funct3').ends.push('fpu.funct3');
-    net('rd1').ends.push('fpu.xa');
-    (net('rd1') as NetDef).tags = ['fpu.xa'];
+    net('funct7').ends.push('fpu.funct7', 'fdec.funct7', 'fcsr.funct7', 'sr3.in');
+    net('funct3').ends.push('fpu.funct3', 'fcsr.funct3');
+    net('rd1').ends.push('fpu.xa', 'fcsr.xa');
+    (net('rd1') as NetDef).tags = ['fpu.xa', 'fcsr.xa'];
     const wdn = net('WriteData');
     wdn.ends = wdn.ends.filter((e) => e !== 'dm.wd').concat('swd.a');
     wdn.tags = ['swd.a'];
@@ -648,21 +661,35 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
     res.ends = ['res.y', 'xres.a'];
     res.via = undefined;
     net('RegWrite').ends = ['ctl.regWrite', 'rwx.a'];
-    net('clk').ends.push('frf.clk');
+    net('clk').ends.push('frf.clk', 'fcsr.clk', 'fpu.clk');
     nets.push(
       { name: 'frs1', ends: ['frf.rd1', 'fpu.a'], tags: true },
       { name: 'frs2', ends: ['frf.rd2', 'fpu.b', 'swd.b'], tags: true },
       { name: 'StoreData', ends: ['swd.y', 'dm.wd'], tags: true },
       { name: 'FPUResult', ends: ['fpu.y', 'xres.b', 'fwd.b'], tags: true },
       { name: 'FWriteData', ends: ['fwd.y', 'frf.wd'], tags: true },
-      { name: 'XResult', ends: ['xres.y', 'rf.wd'], tags: true },
+      { name: 'XResult0', ends: ['xres.y', 'cres.a'], tags: true },
+      { name: 'CSRData', ends: ['fcsr.rdata', 'cres.b'], tags: true },
+      { name: 'isCSR', ends: ['fcsr.hit', 'cres.s', 'rwi.i2'], tags: true },
+      { name: 'XResult', ends: ['cres.y', 'rf.wd'], tags: true },
+      { name: 'FFlags', ends: ['fpu.flags', 'fcsr.flags'], tags: true },
+      { name: 'isOPFP', ends: ['fdec.opfp', 'fpu.go'], tags: true },
+      { name: 'FPOp', ends: ['fdec.fpOp', 'fpg.a'], tags: true },
+      { name: 'rs3', ends: ['sr3.o1', 'frf.ra3'], tags: true },
+      { name: 'frs3', ends: ['frf.rd3', 'fpu.c'], tags: true },
+      { name: 'FFlagsWE', ends: ['fpg.y', 'fcsr.fpOp'], tags: true },
+      { name: 'stall', ends: ['fpu.stall', 'nstall.a'], tags: true },
+      { name: 'retire', ends: ['nstall.y', 'pc.en', 'xwg.b', 'fwg.b', 'fpg.b', 'retire'], tags: ['xwg.b', 'fwg.b', 'fpg.b', 'retire'] },
+      { name: 'frm', ends: ['fcsr.frm', 'fpu.frm'], tags: true },
       { name: 'isFLW', ends: ['fdec.flw', 'fwd.s', 'nflw.a'], tags: true },
       { name: 'isFSW', ends: ['fdec.fsw', 'swd.s'], tags: true },
-      { name: 'toInt', ends: ['fdec.toInt', 'xres.s', 'rwi.b'], tags: true },
-      { name: 'FRegWrite', ends: ['fdec.fWrite', 'frf.we'], tags: true },
+      { name: 'toInt', ends: ['fdec.toInt', 'xres.s', 'rwi.i1'], tags: true },
+      { name: 'FRegWrite', ends: ['fdec.fWrite', 'fwg.a'], tags: true },
+      { name: 'FRegWriteQ', ends: ['fwg.y', 'frf.we'], tags: true },
       { name: '¬flw', ends: ['nflw.y', 'rwx.b'], tags: true },
-      { name: 'RegWriteInt', ends: ['rwx.y', 'rwi.a'], tags: true },
-      { name: 'XRegWrite', ends: ['rwi.y', 'rf.we'], tags: true },
+      { name: 'RegWriteInt', ends: ['rwx.y', 'rwi.i0'], tags: true },
+      { name: 'XRegWrite', ends: ['rwi.y', 'xwg.a'], tags: true },
+      { name: 'XRegWriteQ', ends: ['xwg.y', 'rf.we'], tags: true },
     );
     // fwd: a = ReadData? the FPU result is the common case, the memory word only for flw
     nets.find((n) => n.name === 'ReadData')!.ends = nets.find((n) => n.name === 'ReadData')!.ends.map((e) => (e === 'fwd.a' ? 'fwd.b' : e));
@@ -757,7 +784,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
     summary: dcache
       ? 'The single-cycle processor with its data memory replaced by a slow main memory behind a 64-byte direct-mapped cache. A load that misses holds the PC and the register write (retire = 0) for 8 cycles while the line is fetched.'
       : 'A complete RISC-V processor: every instruction is fetched, decoded, executed and retired in one clock cycle. Built entirely from the blocks of the previous chapters.',
-    ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out'), ...(dcache ? [bit('retire', 'out'), bit('dhit', 'out')] : []), ...extraPorts],
+    ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out'), ...(dcache ? [bit('retire', 'out'), bit('dhit', 'out')] : []), ...(fpu ? [bit('retire', 'out')] : []), ...extraPorts],
     symbol: { kind: 'box', label: shared ? 'CORE' : dcache ? 'RV32I + D$' : 'RV32I' },
     netlist: () => ({ pins, instances, nets }),
     hdl: { verilog: CPU_VERILOG },
