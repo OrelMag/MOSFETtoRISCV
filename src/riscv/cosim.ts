@@ -6,7 +6,7 @@ import type { Sim } from '../sim/sim';
 import { pack } from '../sim/values';
 
 /** Read the CPU's architectural state from a simulation of singleCycleCpu(). */
-export function cpuState(sim: Sim, root: HierNode = sim.design.root): { pc: number; x: number[]; dmem: number[]; f?: number[]; fcsr?: number } {
+export function cpuState(sim: Pick<Sim, 'getBits' | 'design'>, root: HierNode = sim.design.root): { pc: number; x: number[]; dmem: number[]; f?: number[]; fcsr?: number } {
   const rf = root.children!.get('rf')!;
   const x = [0];
   for (let i = 1; i < 32; i++) x.push(pack(sim.getBits(rf.children!.get(`w${i}`)!.ports.q)) >>> 0);
@@ -36,7 +36,7 @@ export function cpuState(sim: Sim, root: HierNode = sim.design.root): { pc: numb
 }
 
 /** One clock cycle: rising edge, settle, falling edge, settle. */
-export function clockCycle(sim: Sim): void {
+export function clockCycle(sim: Pick<Sim, 'setInput' | 'settle'>): void {
   sim.setInput('clk', 1);
   sim.settle();
   sim.setInput('clk', 0);
@@ -47,7 +47,7 @@ export function clockCycle(sim: Sim): void {
  * Does an instruction retire at the next edge? Pipelines: a valid instruction is in write-back.
  * CPUs with multi-cycle instructions: their retire output. Otherwise: every cycle.
  */
-export function retiring(sim: Sim, root: HierNode = sim.design.root): boolean {
+export function retiring(sim: Pick<Sim, 'getBits' | 'design'>, root: HierNode = sim.design.root): boolean {
   const port = root.ports.validW ?? root.ports.retire;
   return port ? sim.getBits(port)[0] === 1 : true;
 }
