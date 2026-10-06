@@ -84,7 +84,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 | 6 | Adders | Half adder, 9-NAND full adder, ripple-carry (watch the carry ripple), adder/subtractor |
 | 7 | Choosing & routing | Decoders 2→4 / 3→8, multiplexers 4:1 / 8:1, bus multiplexers |
 | 8 | Memory from feedback | SR latch, gated D latch, master–slave D flip-flop, waveforms, setup/hold intuition |
-| 9 | Registers & counters | n-bit register with enable, counter, clocks |
+| 9 | Registers & counters | n-bit register with enable, counter, clocks; async reset, T/JK, up/down counter, universal shift register, LFSR, ring / Johnson counters, ripple clock divider |
 | 10 | Memory arrays | N words × W bits (user-scalable: 4×4 … 64×16), write path (decoder), read path (mux tree), cell grid view, timing |
 
 ### Phase 2 — Computing 🚧

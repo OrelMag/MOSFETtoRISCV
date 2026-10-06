@@ -18,6 +18,7 @@ export * from './divide';
 export * from './multiply';
 export * from './adders';
 export * from './arrays';
+export * from './seqparts';
 export * from './cells';
 export * from './cache';
 export * from './multicycle';

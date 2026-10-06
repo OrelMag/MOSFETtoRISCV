@@ -1,4 +1,4 @@
-import { counter, DFF, DFFE, D_LATCH, ram, register, SR_LATCH } from '../lib';
+import { clockDivider, counter, DFF, DFF_R, DFFE, D_LATCH, JKFF, lfsr, ram, register, ringCounter, shiftRegister, SR_LATCH, upDownCounter } from '../lib';
 import { pack } from '../sim/values';
 import { memGridPanel } from '../widgets/memgrid';
 import { memSizePanel } from '../widgets/memsize';
@@ -90,7 +90,7 @@ export const chLatches: Chapter = {
 
 export const chRegisters: Chapter = {
   id: 'registers', num: 9, title: 'Registers & counters', level: 'Sequential blocks',
-  blurb: 'Store a whole word on every clock edge; count edges.',
+  blurb: 'Store a whole word on every clock edge; count, shift, reset, and divide a clock.',
   steps: [
     {
       title: 'A register is a row of flip-flops',
@@ -130,6 +130,93 @@ export const chRegisters: Chapter = {
         answer: 'Pulse until q = 9, then set en = 0 so later clock edges change nothing.',
         solve: (st) => { st.setInputs({ en: 1 }); for (let i = 0; i < 32 && st.value('q') !== 9; i++) st.pulse(); st.setInputs({ en: 0 }); },
       },
+    },
+    {
+      title: 'Asynchronous reset',
+      body: `
+        <p>At power-on every flip-flop holds whatever the race inside it produced. A chip needs a way to force a known state, and it
+        must work before any clock runs. Give two NANDs of each latch a third input, <code>rst_n</code>: held low, it blocks the set side
+        and forces the reset side, so q = 0 at once, clock or no clock. Both latches of the flip-flop get it.</p>
+        <p>"Asynchronous" is the catch: releasing reset is itself an input change that can land right next to a clock edge. Real designs
+        assert reset asynchronously but release it through a small synchronizer.</p>
+        <div class="try">Clock a 1 in (d = 1, pulse), then pull rst_n low: q clears immediately, without a clock edge.</div>`,
+      scene: () => ({ root: DFF_R, inputs: { d: 1, clk: 0, rst_n: 1 } }),
+      challenge: {
+        kind: 'reach', goal: 'Get q = 1 into the flip-flop, then clear it without touching the clock.',
+        check: (st) => st.getInput('rst_n') === 0 && st.value('q') === 0 && st.getInput('d') === 1,
+        answer: 'd = 1, pulse the clock (q = 1), then rst_n = 0: q drops to 0 straight away, and stays 0 while rst_n is low.',
+        solve: (st) => { st.setInputs({ d: 1, rst_n: 1 }); st.pulse(); st.setInputs({ rst_n: 0 }); },
+      },
+    },
+    {
+      title: 'T and JK',
+      body: `
+        <p>Two classic flip-flops are a D flip-flop with a little logic in front. The <strong>T</strong> (toggle) flip-flop loads
+        t XOR q: with t = 1 it flips on every edge, which divides the clock by two. The <strong>JK</strong> flip-flop loads j·¬q + ¬k·q:
+        j sets, k resets, both together toggle. It gives the SR latch's forbidden input a meaning.</p>
+        <p>Textbooks built counters from them when flip-flops came in packages of two. On a chip, a D flip-flop plus logic is what synthesis
+        produces anyway.</p>`,
+      scene: () => ({ root: JKFF, inputs: { j: 1, k: 1, clk: 0, rst_n: 1 } }),
+    },
+    {
+      title: 'Counting both ways',
+      body: `
+        <p>Replace the incrementer with an adder/subtractor adding the constant 1, its <code>sub</code> input driven by NOT up, and add a
+        multiplexer for a parallel load. Now the counter counts up or down, and can be preset: the shape of a timer that counts down to zero
+        from a loaded value.</p>`,
+      scene: () => ({ root: upDownCounter(4), inputs: { up: 0, en: 1, load: 0, d: 5, clk: 0 } }),
+      challenge: {
+        kind: 'reach', goal: 'Load 5, then count down to 2 and stop.',
+        check: (st) => st.value('q') === 2 && st.getInput('en') === 0 && st.getInput('load') === 0,
+        answer: 'load = 1, d = 5, pulse; load = 0, up = 0, en = 1, pulse three times; en = 0.',
+        solve: (st) => { st.setInputs({ load: 1, d: 5 }); st.pulse(); st.setInputs({ load: 0, up: 0, en: 1 }); for (let i = 0; i < 3; i++) st.pulse(); st.setInputs({ en: 0 }); },
+      },
+    },
+    {
+      title: 'Shift registers',
+      body: `
+        <p>Connect each flip-flop to its neighbour instead of to an adder and the word moves one place per clock. A 4:1 multiplexer per bit
+        chooses: hold, shift right, shift left, or load in parallel (mode 0–3). Fed one bit at a time at <code>sr</code>, it turns a serial
+        stream into a parallel word; loaded in parallel and shifted, it does the reverse. That is the heart of every serial link: UART, SPI,
+        PCIe lanes, the iterative multiplier and divider of chapter 20.</p>
+        <div class="try">mode = 1 (shift right) with sr = 1: pulse four times and watch the ones march in from the top.</div>`,
+      scene: () => ({ root: shiftRegister(4), inputs: { mode: 1, sr: 1, sl: 0, d: 0, clk: 0 } }),
+      challenge: {
+        kind: 'reach', goal: 'Send the serial bits 1, 0, 1, 1 (first bit first) in at sr so that q = 0b1101 at the end.',
+        check: (st) => st.value('q') === 0b1101 && st.getInput('mode') === 1,
+        answer: 'Shifting right, the first bit ends up in q[0]: sr = 1, pulse; sr = 0, pulse; sr = 1, pulse; sr = 1, pulse. q = 1101 (bit 0 = the first bit sent).',
+        solve: (st) => { st.setInputs({ mode: 1 }); for (const b of [1, 0, 1, 1]) { st.setInputs({ sr: b }); st.pulse(); } },
+      },
+    },
+    {
+      title: 'LFSR: cheap pseudo-random',
+      body: `
+        <p>Shift left, and feed back the XOR of a few chosen bits (the <em>taps</em>). With the right taps the register steps through every
+        non-zero value, 2ⁿ − 1 of them, in an order that looks random. Here 4 bits and taps 4, 3: 15 states from one XOR gate.</p>
+        <p>Linear-feedback shift registers generate test patterns for chips (built-in self-test), scramble serial links so the signal has
+        enough transitions, compute CRCs, and make noise. They are not secure random numbers: 2n consecutive outputs reveal the taps.</p>
+        <div class="try">Load the seed, then Run: the sequence repeats after 15 clocks. Try loading 0: it never leaves.</div>`,
+      scene: () => ({ root: lfsr(4), inputs: { load: 1, seed: 1, clk: 0 } }),
+    },
+    {
+      title: 'Ring and Johnson counters',
+      body: `
+        <p>Close a shift register on itself and a single 1 circulates: a <strong>ring counter</strong>, n states from n flip-flops, already
+        one-hot (no decoder). Invert the bit on its way round and you get a <strong>Johnson counter</strong>: 2n states (0000, 0001, 0011, …,
+        1111, 1110, …), only one bit changing per step, and each state is recognised by a single 2-input gate. Both trade flip-flops for
+        decoding logic, which is why they show up in state machines and multiphase clocks.</p>`,
+      scene: () => ({ root: ringCounter(4, true), inputs: { init: 1, clk: 0 } }),
+    },
+    {
+      title: 'Dividing a clock',
+      body: `
+        <p>The simplest frequency divider is a chain of toggle flip-flops, each clocked by the output of the one before: output i runs at
+        f / 2ⁱ⁺¹. It costs one flip-flop per halving and no adder at all.</p>
+        <p>As a counter it is a poor one. Each stage switches one flip-flop delay after the previous, so after an edge the bits change one
+        after another and the value is briefly wrong (watch the Timing panel). That is why the counters on this page share a single clock
+        (synchronous), and why a ripple divider's outputs should not be used as clocks for logic that also sees the original one.</p>
+        <div class="try">Release rst_n, then Run with the Timing panel open.</div>`,
+      scene: () => ({ root: clockDivider(3), inputs: { clk: 0, rst_n: 0 }, analyzer: true }),
     },
   ],
 };

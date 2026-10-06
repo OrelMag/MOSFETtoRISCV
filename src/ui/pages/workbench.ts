@@ -22,7 +22,7 @@ const CATS: [string, string][] = [
 
 // Single (non-family) components whose id contains a digit. Other ids with digits are generated
 // widths (families, or internal parts such as the 33-bit rows of MUL32) and stay out of the list.
-const FIXED = new Set(['nmos', 'pmos', 'cla4', 'mul32', 'sram6t', 'sramcol2', 'dram1t1c', 'arb2', 'btb16', 'fpu32', 'freectr32', 'plus4', 'plus4ks']);
+const FIXED = new Set(['nmos', 'pmos', 'nand3', 'cla4', 'mul32', 'sram6t', 'sramcol2', 'dram1t1c', 'arb2', 'btb16', 'fpu32', 'freectr32', 'plus4', 'plus4ks']);
 const listed = (id: string) => FIXED.has(id) || (!/\d/.test(id.replace(/^(full_adder|half_adder)/, '')) && !id.startsWith('bench_') && !id.startsWith('pipe_'));
 
 export class WorkbenchPage implements Page {
