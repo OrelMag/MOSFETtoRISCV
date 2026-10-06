@@ -17,6 +17,7 @@ export * from './coding';
 export * from './divide';
 export * from './multiply';
 export * from './adders';
+export * from './arrays';
 export * from './seqparts';
 export * from './storage';
 export * from './cells';

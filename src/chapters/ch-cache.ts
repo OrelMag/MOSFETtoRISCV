@@ -1,4 +1,4 @@
-import { DRAM_CELL, SRAM_COLUMN, cachedMemory, eccChannel, wayLookup2 } from '../lib';
+import { DRAM_CELL, SRAM_COLUMN, cachedMemory, eccChannel, sramArray, wayLookup2 } from '../lib';
 import { CACHE_CPU_PROGRAMS } from '../riscv/cprograms';
 import { cpuState } from '../riscv/cosim';
 import { findNode } from '../sim/flatten';
@@ -54,6 +54,37 @@ export const chCache: Chapter = {
           st.setInputs({ pre_n: 1, wl1: 0, w0: 0, w1: 1, wl0: 1 }); st.setInputs({ wl0: 0, w1: 0 });
           st.setInputs({ w0: 1, wl1: 1 }); st.setInputs({ wl1: 0, w0: 0 });
           st.setInputs({ pre_n: 0 }); st.setInputs({ pre_n: 1, wl0: 1 });
+        },
+      },
+    },
+    {
+      title: 'From a column to an array',
+      body: `
+        <p>A real SRAM is a grid. Each row of cells shares a <strong>word line</strong>, raised by a row decoder (the gate-level decoder
+        of chapter 7, here running as its transistors); each column shares a bit-line pair with its own precharge, <strong>write driver</strong>
+        and <strong>sense amplifier</strong>. One access reads or writes a whole row, one bit per column.</p>
+        <p>The sense amplifier is a latch: while <code>sae</code> = 0 it follows the bit lines (unpowered, so it never drives them); when
+        <code>sae</code> rises it isolates itself and latches the value, which it holds while the bit lines are precharged for the next access.
+        In silicon it also <em>amplifies</em>: it fires when the bit lines differ by ~100 mV, long before a small cell could swing a long
+        bit line fully. Our simulator has no analog voltages, so here the swing is full.</p>
+        <p>Cost of this 4×4: 320 transistors, of which the cells are 96. The periphery is shared per row and per column, so it amortizes:
+        at 8×8 the cells are 43 %, and in a real 32 KB array over 90 %. Sixteen bits of flip-flop registers would cost 960.</p>
+        <div class="try">Use the buttons: Precharge, set <code>din</code> and <code>addr</code>, Write; then Precharge and Read.</div>`,
+      scene: () => ({ root: sramArray(4, 4), inputs: { addr: 0, wl: 0, pre_n: 1, we: 0, din: 0, sae: 0 } }),
+      actions: [
+        { label: 'Precharge', run: (st) => { st.setInputs({ wl: 0, we: 0, sae: 0, pre_n: 0 }); st.setInputs({ pre_n: 1 }); } },
+        { label: 'Write din → addr', run: (st) => { st.setInputs({ sae: 0, we: 1 }); st.setInputs({ wl: 1 }); st.setInputs({ wl: 0, we: 0 }); } },
+        { label: 'Read addr', run: (st) => { st.setInputs({ we: 0, sae: 0 }); st.setInputs({ wl: 1 }); st.setInputs({ sae: 1 }); st.setInputs({ wl: 0 }); } },
+      ],
+      challenge: {
+        kind: 'reach', goal: 'Store 0xA in word 2, then read word 2 back so that dout = 0xA.',
+        check: (st) => st.value('dout') === 0xa && st.getInput('addr') === 2 && st.getInput('sae') === 1 && st.getInput('we') === 0,
+        answer: 'addr = 2, din = 0xA. Precharge, Write (we = 1, raise and drop the word line), Precharge again, Read (raise the word line, then sae). Without the precharge before the read, the bit lines still hold what the write left on them.',
+        solve: (st) => {
+          st.setInputs({ addr: 2, din: 0xa, wl: 0, we: 0, sae: 0, pre_n: 0 }); st.setInputs({ pre_n: 1 });
+          st.setInputs({ we: 1 }); st.setInputs({ wl: 1 }); st.setInputs({ wl: 0, we: 0 });
+          st.setInputs({ pre_n: 0 }); st.setInputs({ pre_n: 1 });
+          st.setInputs({ wl: 1 }); st.setInputs({ sae: 1 }); st.setInputs({ wl: 0 });
         },
       },
     },

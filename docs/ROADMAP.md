@@ -146,6 +146,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 ### Phase 8 — Memory hierarchy 🚧
 - ✅ Switch level gains transistor strengths and capacitive (charge-holding) nets
 - ✅ 6T SRAM column (precharge, read, write, no read disturb, contention = short) and 1T1C DRAM cell at transistor level
+- ✅ Transistor-level SRAM array (R × C): row decoder, per-column precharge, write driver and latch-type sense amplifier
 - ✅ DRAM retention / refresh / charge-sharing widget; memory hierarchy table
 - ✅ Gate-level direct-mapped write-through cache (4 × 4 words) with an 8-cycle miss FSM; 2-way tag compare
 - ✅ Cache explorer on real ISS traces: size, line, ways, LRU/FIFO/random, write-back/through, 3C classification
