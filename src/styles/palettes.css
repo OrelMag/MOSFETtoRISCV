@@ -1,0 +1,92 @@
+/* Wire palettes, selected with data-palette on <html> (absent = default).
+   Each palette sets the signal tokens for both themes at once with light-dark(), which
+   follows the color-scheme the theme rules already set. Shape tokens (width, dash, glow)
+   let a palette stay readable without colour (print). The selectors also match any element
+   carrying data-palette, so the palette menu can show each palette's swatch. */
+
+:root, [data-palette='default'] {
+  --w0: light-dark(#b3bac9, #3a4152);
+  --w1: light-dark(#e8590c, #ff8a3d);
+  --w1-glow: light-dark(rgb(232 89 12 / 22%), rgb(255 138 61 / 30%));
+  --wx: light-dark(#e11d48, #fb5779);
+  --wz: light-dark(#8b5cf6, #a78bfa);
+  --bus: light-dark(#2f6fe4, #4d8dff);
+  --bus1: light-dark(#1e5fd8, #7aa9ff);
+  --bus-label-bg: light-dark(#e8f0ff, #13213f);
+  --bus-label-text: light-dark(#1b4fb8, #a9c6ff);
+  --channel-on: var(--w1);
+}
+
+:root[data-palette='cb'], [data-palette='cb'] {
+  /* Okabe–Ito: distinguishable with deuteranopia / protanopia / tritanopia. */
+  --w0: light-dark(#b3bac9, #3a4152);
+  --w1: light-dark(#0072b2, #56b4e9);
+  --w1-glow: light-dark(rgb(0 114 178 / 20%), rgb(86 180 233 / 28%));
+  --wx: light-dark(#d55e00, #ff7f2a);
+  --wz: light-dark(#cc79a7, #e3a3c8);
+  --bus: light-dark(#009e73, #2fbf95);
+  --bus1: light-dark(#00805d, #5fd6b0);
+  --bus-label-bg: light-dark(#e2f5ee, #0f2a22);
+  --bus-label-text: light-dark(#006b4e, #8fe3c6);
+  --channel-on: var(--w1);
+}
+
+:root[data-palette='lsim'], [data-palette='lsim'] {
+  /* After Digital Logic Sim: red means 1, near-black means 0, flat and bold. */
+  --w0: light-dark(#3b3f4a, #535968);
+  --w1: light-dark(#e5322d, #ff4b42);
+  --w1-glow: light-dark(rgb(229 50 45 / 22%), rgb(255 75 66 / 30%));
+  --wx: light-dark(#d4a017, #f2c230);
+  --wz: light-dark(#7c8aa5, #8b97b0);
+  --bus: light-dark(#3b3f4a, #3a3f4c);
+  --bus1: light-dark(#c42a26, #ff5a52);
+  --bus-label-bg: light-dark(#fde8e7, #331716);
+  --bus-label-text: light-dark(#a3201c, #ffaaa5);
+  --channel-on: var(--w1);
+  --wire-w0: 0.22;
+  --wire-w1: 0.26;
+  --wire-bus: 0.42;
+  --wire-glow: none;
+  --bus0-opacity: 0.85;
+}
+
+:root[data-palette='contrast'], [data-palette='contrast'] {
+  --w0: light-dark(#4a4f5c, #8a91a3);
+  --w1: light-dark(#e04f00, #ffb000);
+  --w1-glow: light-dark(rgb(224 79 0 / 25%), rgb(255 176 0 / 32%));
+  --wx: light-dark(#d0005a, #ff3b7b);
+  --wz: light-dark(#6d28d9, #c4a5ff);
+  --bus: light-dark(#0047d6, #4d9aff);
+  --bus1: light-dark(#0038b0, #8cc0ff);
+  --bus-label-bg: light-dark(#ffffff, #000000);
+  --bus-label-text: light-dark(#002f8f, #bcd9ff);
+  --sym-stroke: light-dark(#000000, #ffffff);
+  --box-stroke: light-dark(#000000, #e6e9f2);
+  --channel-on: var(--w1);
+  --wire-w0: 0.2;
+  --wire-w1: 0.34;
+  --wire-bus: 0.48;
+  --wire-glow: none;
+  --bus0-opacity: 0.9;
+}
+
+:root[data-palette='print'], [data-palette='print'] {
+  /* No hue needed: 1 is heavy and solid, 0 thin and dashed, X dotted, buses solid black. */
+  --w0: light-dark(#8c8c8c, #8a8a8a);
+  --w1: light-dark(#000000, #ffffff);
+  --w1-glow: light-dark(rgb(0 0 0 / 12%), rgb(255 255 255 / 16%));
+  --wx: light-dark(#000000, #ffffff);
+  --wz: light-dark(#8c8c8c, #8a8a8a);
+  --bus: light-dark(#555555, #aaaaaa);
+  --bus1: light-dark(#000000, #ffffff);
+  --bus-label-bg: light-dark(#ffffff, #000000);
+  --bus-label-text: light-dark(#000000, #ffffff);
+  --channel-on: var(--w1);
+  --wire-w0: 0.12;
+  --wire-w1: 0.32;
+  --wire-bus: 0.42;
+  --wire-dash0: 0.45 0.3;
+  --wire-dash-x: 0.1 0.25;
+  --wire-glow: none;
+  --bus0-opacity: 0.8;
+}

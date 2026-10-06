@@ -32,18 +32,17 @@
   --box-fill: #f4f4ff;
   --box-stroke: #4a5170;
   --plumb: #6b7390;
-  --w0: #b3bac9;
-  --w1: #e8590c;
-  --w1-glow: rgb(232 89 12 / 22%);
-  --wx: #e11d48;
-  --wz: #8b5cf6;
-  --bus: #2f6fe4;
-  --bus1: #1e5fd8;
-  --bus-label-bg: #e8f0ff;
-  --bus-label-text: #1b4fb8;
   --hl: #5b4cf0;
-  --channel-on: #e8590c;
   --sel: #5b4cf0;
+
+  /* wire shape (palettes may override; see palettes.css) */
+  --wire-w0: 0.16;
+  --wire-w1: 0.22;
+  --wire-bus: 0.36;
+  --wire-dash0: none;
+  --wire-dash-x: 0.5 0.3;
+  --wire-glow: drop-shadow(0 0 0.25px var(--w1));
+  --bus0-opacity: 0.55;
 
   --radius: 12px;
   --radius-sm: 8px;
@@ -79,17 +78,7 @@
     --box-fill: #171b2a;
     --box-stroke: #8d95b3;
     --plumb: #8891ab;
-    --w0: #3a4152;
-    --w1: #ff8a3d;
-    --w1-glow: rgb(255 138 61 / 30%);
-    --wx: #fb5779;
-    --wz: #a78bfa;
-    --bus: #4d8dff;
-    --bus1: #7aa9ff;
-    --bus-label-bg: #13213f;
-    --bus-label-text: #a9c6ff;
     --hl: #a397ff;
-    --channel-on: #ff8a3d;
     --sel: #a397ff;
   }
 }
@@ -122,16 +111,6 @@
   --box-fill: #171b2a;
   --box-stroke: #8d95b3;
   --plumb: #8891ab;
-  --w0: #3a4152;
-  --w1: #ff8a3d;
-  --w1-glow: rgb(255 138 61 / 30%);
-  --wx: #fb5779;
-  --wz: #a78bfa;
-  --bus: #4d8dff;
-  --bus1: #7aa9ff;
-  --bus-label-bg: #13213f;
-  --bus-label-text: #a9c6ff;
   --hl: #a397ff;
-  --channel-on: #ff8a3d;
   --sel: #a397ff;
 }
