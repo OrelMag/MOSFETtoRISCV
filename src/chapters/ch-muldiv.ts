@@ -1,9 +1,10 @@
-import { BOOTH_ENC, MDU, SRT_SELECT, arrayDiv, arrayMul, csa, divStep, nrArrayDiv, popcount, seqDivider, srtDivider, treeMul } from '../lib';
+import { BOOTH_ENC, MDU, SRT_SELECT, arrayDiv, arrayMul, boothMul, csa, divStep, nrArrayDiv, pipeMul, popcount, seqDivider, seqMul, srtDivider, treeMul } from '../lib';
 import { cpuState } from '../riscv/cosim';
 import { M_PROGRAMS } from '../riscv/mprograms';
 import { cpuScene } from '../widgets/cpupanel';
 import { divComparison } from '../widgets/divide';
 import { boothWidget, mulComparison } from '../widgets/muldiv';
+import { mulStyles } from '../widgets/multiply';
 import type { Chapter } from './types';
 
 const msrc = (id: string) => M_PROGRAMS.find((p) => p.id === id)!.source;
@@ -26,6 +27,23 @@ export const chMulDiv: Chapter = {
         check: (st) => st.value('p') === 225,
         answer: 'a = b = 15: 15 × 15 = 225 = 0xE1. (225 is also 9 × 25, but 25 does not fit in 4 bits.)',
         solve: (st) => st.setInputs({ a: 15, b: 15 }),
+      },
+    },
+    {
+      title: 'Or reuse one adder',
+      body: `
+        <p>The cheapest multiplier has one adder and does the rows one per clock. A 2n-bit product register starts as {0, b}. Each cycle, if its
+        lowest bit is 1 the adder adds a to the upper half, and the whole register shifts right one place, the adder's carry entering at the top.
+        The multiplier bits leave at the bottom as product bits come in. After n cycles the register holds a·b.</p>
+        <p>8 bits: 633 NANDs and 10 cycles (load, 8 steps, done), against 1 cycle for an array several times larger. It is the multiply of
+        microcontrollers without a hardware multiplier, done in software with the same loop.</p>
+        <div class="try">start = 1 is set. Pulse the clock and watch p fill from the top as b drains out of the bottom.</div>`,
+      scene: () => ({ root: seqMul(8), inputs: { a: 13, b: 11, start: 1, clk: 0 } }),
+      challenge: {
+        kind: 'reach', goal: 'Clock the multiplier until done = 1, with p = 143 (13 × 11).',
+        check: (st) => st.value('done') === 1 && st.value('p') === 143,
+        answer: 'Nine pulses: one load, eight shift-and-add steps, then done is high for one cycle.',
+        solve: (st) => { st.runCycles(9); },
       },
     },
     {
@@ -120,6 +138,51 @@ export const chMulDiv: Chapter = {
       title: 'Booth, worked',
       body: '<p>Every 8-bit multiplier becomes four digits. Negative numbers need no special handling.</p>',
       widget: boothWidget,
+    },
+    {
+      title: 'A Booth multiplier',
+      body: `
+        <p>Now the whole circuit. Each Booth encoder turns three overlapping bits of b into a digit; each row picks 0, a or 2a (a wire shift) and
+        inverts it for a negative digit. The +1 that completes a negation is added as a separate bit, and instead of sign-extending every row
+        across the full width, each row's sign bit is inverted and one constant row corrects for all of them. Then the same 3:2 tree and fast adder.</p>
+        <p>Measured honestly: at 8 bits the Booth version is 1 062 NANDs and 47 delays deep, against 972 and 40 for Baugh–Wooley. Each Booth bit
+        is a select and an XOR instead of one AND, and the encoders sit in front of everything. Halving the rows only pays at 32 bits
+        (12 658 NANDs against 13 293), and more at 64, which is where real designs use it: fewer rows also means less wiring and power.</p>
+        <div class="try">Open a row and a <code>BIT</code> cell. Then set b = 0x80 (−128): one digit of −2, the others 0.</div>`,
+      scene: () => ({ root: boothMul(8), inputs: { a: 0xf9, b: 100 } }),
+      challenge: {
+        kind: 'quiz', question: 'Why invert each row\'s sign bit and add a constant, instead of sign-extending the rows?',
+        options: [
+          'A sign-extended row needs copies of its sign bit across the whole width, so many more adder cells; ¬s and one shared constant give the same sum',
+          'Sign extension gives the wrong answer for negative digits',
+          'The constant is needed for the +1 of negative digits',
+          'It makes the multiplier unsigned',
+        ],
+        answer: 0,
+        explain: 'A two\'s-complement row with sign s equals the row with ¬s in the sign position, minus 2^(sign position). Every row\'s correction is a fixed number, so they add up to one constant row computed in advance. The +1 bits of negative digits are a separate matter.',
+      },
+    },
+    {
+      title: 'Pipelining the multiplier',
+      body: `
+        <p>A tree multiplier is one long combinational path. Put registers inside it, after the Booth rows and after the 3:2 tree, and each clock
+        only has to cover one stage. 16 bits: the period drops from 67 to 41 NAND delays. Each product now takes four edges to come out (latency),
+        but a new one can start every cycle (throughput). The price is about twice the area: the registers hold every row and both tree outputs.</p>
+        <p>The tree is the slowest stage. A deeper pipeline would cut it in the middle; real cores use 3 to 5 multiplier stages and keep the
+        integer pipeline busy with other instructions meanwhile.</p>
+        <div class="try">Pulse the clock with new a and b each time: p shows the product of the operands from four edges earlier.</div>`,
+      scene: () => ({ root: pipeMul(8), inputs: { a: 12, b: 11, clk: 0 } }),
+    },
+    {
+      title: 'Four ways to multiply',
+      body: '<p>The same 16×16 product, four circuits.</p>',
+      widget: mulStyles,
+      challenge: {
+        kind: 'quiz', question: 'A loop computes 1 000 independent products. Which multiplier finishes first?',
+        options: ['The pipelined one', 'The combinational Booth tree', 'The iterative one', 'They all take the same time'],
+        answer: 0,
+        explain: 'Independent products stream through the pipeline at one per (short) cycle: about 1 000 × 41 delays. The combinational Booth tree needs 1 000 × 67. When each product feeds the next (a dependency chain), the pipeline\'s latency of 4 × 41 = 164 per product makes it the slowest of the three trees.',
+      },
     },
     {
       title: 'Division: one restoring step',
