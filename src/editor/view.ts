@@ -13,7 +13,7 @@ import { hopPathData, junctions, type PinGeom, type RoutedNet, textWidth } from 
 import { bitClass, busClass } from '../view/schematic';
 import { drawPinGlyph, drawSymbol, type PinGlyph, placePinValue } from '../view/symbols';
 import type { Compiled, Diag } from './compile';
-import { partBox, pinBody, pointerGeom, wireGroups } from './geom';
+import { partBox, pinBody, pinKnob, pointerGeom, wireGroups } from './geom';
 import {
   type ChipDoc, type DefOf, defaultFace, type DisplayKind, type LabelDoc, type PartDoc, type PinDoc, polyline, type WireDoc,
 } from './model';
@@ -140,7 +140,7 @@ export class EditorView {
       const e = this.pins.get(p.id);
       if (e && e.doc === p) continue;
       const geom: PinGeom = { name: p.name, dir: p.dir, width: p.width, pos: p.at, exit: defaultFace(p) };
-      const glyph = drawPinGlyph(geom, p.dir === 'in');
+      const glyph = drawPinGlyph(geom, p.dir !== 'out');
       const g = glyph.g;
       g.setAttribute('data-pin-id', p.id);
       g.classList.add('ed-pin');
@@ -153,6 +153,12 @@ export class EditorView {
             d: p.kind === 'clock' ? `M${kx - 0.45},${ky + 0.25} h0.3 v-0.5 h0.3 v0.5 h0.3` : `M${kx - 0.35},${ky - 0.35} h0.7 v0.7 h-0.7 z`,
           }));
         }
+      }
+      if (p.dir === 'inout') {
+        // What the user drives onto a bidirectional pin (Z: nothing); the knob shows the net.
+        const [kx, ky] = pinKnob(p);
+        const v = p.value === undefined ? 'Z' : p.width === 1 ? String(p.value) : `0x${p.value.toString(16).toUpperCase()}`;
+        g.append(s('text', { class: 'ed-pin-drv', x: kx, y: p.width === 1 ? ky + 0.34 : ky - 1.25, 'text-anchor': 'middle' }, v));
       }
       // A wide transparent target over the knob (the glyph's own shapes are small).
       const b = pinBody(p);
@@ -416,7 +422,7 @@ export class EditorView {
     for (const e of this.pins.values()) {
       const p = e.doc;
       const bits = v?.pinBits(p.name) ?? null;
-      const base = `pin ${p.dir === 'in' ? 'pin-in clickable' : 'pin-out'} ed-pin${p.kind && p.dir === 'in' && p.kind !== 'toggle' ? ` ed-pin-${p.kind}` : ''}`;
+      const base = `pin ${p.dir === 'in' ? 'pin-in clickable' : p.dir === 'inout' ? 'pin-in clickable ed-pin-io' : 'pin-out'} ed-pin${p.kind && p.dir === 'in' && p.kind !== 'toggle' ? ` ed-pin-${p.kind}` : ''}`;
       const vc = bits ? (p.width === 1 ? bitClass(bits[0]) : busClass(bits)) : p.width === 1 ? '' : 'bus';
       const cls = `${base} ${vc}${e.cls}`;
       if (e.g.getAttribute('class') !== cls) {

@@ -33,13 +33,17 @@ export function newChip(ws: Workspace, name = 'Chip'): { ws: Workspace; id: stri
   return { ws: { ...ws, chips, open: [...ws.open.filter((o) => ws.chips[o]), id] }, id };
 }
 
-/** Set an input pin's value (kept across reloads, not an undo step). */
-export function setPinValue(ws: Workspace, chipId: string, pinId: string, value: number): Workspace {
+/**
+ * Set an input pin's value (kept across reloads, not an undo step). For a bidirectional pin it
+ * is what the user drives onto it; undefined leaves it undriven (Z).
+ */
+export function setPinValue(ws: Workspace, chipId: string, pinId: string, value: number | undefined): Workspace {
   const doc = ws.chips[chipId];
   const i = doc?.pins.findIndex((p) => p.id === pinId) ?? -1;
   if (i < 0 || doc.pins[i].value === value) return ws;
   const pins = doc.pins.slice();
   pins[i] = { ...pins[i], value };
+  if (value === undefined) delete pins[i].value;
   return { ...ws, chips: { ...ws.chips, [chipId]: { ...doc, pins } } };
 }
 
@@ -56,7 +60,7 @@ export function keepVolatile(next: Workspace, cur: Workspace): Workspace {
     let changed = false;
     const pins = doc.pins.map((p) => {
       const o = vals.get(p.id);
-      if (!o || o.value === p.value || o.dir !== 'in' || o.width !== p.width) return p;
+      if (!o || o.value === p.value || o.dir === 'out' || o.dir !== p.dir || o.width !== p.width) return p;
       changed = true;
       const q = { ...p, value: o.value };
       if (o.value === undefined) delete q.value;

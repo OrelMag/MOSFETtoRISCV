@@ -286,11 +286,35 @@ export class Editor {
     this.changed();
   }
 
-  setPinValue(pinId: string, v: number): void {
+  /** Drive an input pin, or a bidirectional one (undefined: release it to Z). */
+  setPinValue(pinId: string, v: number | undefined): void {
     const pin = this.doc.pins.find((p) => p.id === pinId);
     if (!pin) return;
     this.volatile(setPinValue(this.ws, this.chipId, pinId, v));
-    this.sim.setInput(pin, v);
+    if (pin.dir === 'inout') this.sim.driveInout(pin, v);
+    else if (v !== undefined) this.sim.setInput(pin, v);
+  }
+
+  /**
+   * The chips opened by "Edit chip", from the one it started in to the active one: the tab bar
+   * shows it as a breadcrumb with Back. Opening a chip any other way leaves it behind.
+   */
+  trail: string[] = [];
+
+  /** Open a placed chip for editing, remembering where it was placed (Back returns there). */
+  editChip(id: string): void {
+    if (!this.ws.chips[id] || id === this.chipId) return;
+    const from = this.chipId;
+    this.trail = this.trail[this.trail.length - 1] === from ? [...this.trail, id] : [from, id];
+    this.openChip(id);
+  }
+
+  back(): void {
+    if (this.trail.length < 2 || this.trail[this.trail.length - 1] !== this.chipId) return;
+    const trail = this.trail.slice(0, -1);
+    const to = trail[trail.length - 1];
+    this.trail = trail.length > 1 ? trail : [];
+    if (this.ws.chips[to]) this.openChip(to);
   }
 
   // ---- refresh -----------------------------------------------------------------------------
@@ -346,7 +370,7 @@ export class Editor {
     this.repaint();
     this.renderTabs();
     this.renderActions();
-    const pk = JSON.stringify([id, !!ws.purist, Object.values(ws.chips).map((c) => [c.id, c.name, chipDeps(c)])]);
+    const pk = JSON.stringify([id, !!ws.purist, Object.values(ws.chips).map((c) => [c.id, c.name, c.hue, chipDeps(c), c.pins.map((p) => p.dir)])]);
     if (pk !== this.paletteKey) {
       this.paletteKey = pk;
       this.palette.render();
@@ -372,10 +396,14 @@ export class Editor {
     this.repaint();
   }
 
+  /** Called after every repaint (live views over the simulation: look inside, inspector). */
+  readonly paintHooks = new Set<() => void>();
+
   /** Values on screen from the simulation. */
   repaint(): void {
     this.view.paint(this.sim.sim ? this.sim : null, this.sim.built);
     this.updateStatus();
+    this.paintHooks.forEach((f) => f());
   }
 
   private scheduleSave(): void {
@@ -408,10 +436,24 @@ export class Editor {
 
   private renderTabs(): void {
     const ws = this.ws;
-    const key = JSON.stringify([ws.open, this.chipId, ws.open.map((o) => ws.chips[o]?.name)]);
+    if (this.trail.length && (this.trail[this.trail.length - 1] !== this.chipId || this.trail.some((t) => !ws.chips[t]))) this.trail = [];
+    const key = JSON.stringify([ws.open, this.chipId, ws.open.map((o) => ws.chips[o]?.name), this.trail, this.trail.map((t) => ws.chips[t]?.name)]);
     if (key === this.tabsKey) return;
     this.tabsKey = key;
     this.tabs.replaceChildren();
+    if (this.trail.length > 1) {
+      // Where "Edit chip" came from: Back, then the path of chips (each one opens).
+      const from = ws.chips[this.trail[this.trail.length - 2]].name;
+      const crumbs = h('nav', { class: 'sb-trail', 'aria-label': 'Opened from' },
+        h('button', { class: 'btn ghost sm sb-back', title: `Back to ${from}`, onclick: () => this.back() }, icon('chevL', 13), 'Back'));
+      this.trail.forEach((id, i) => {
+        if (i) crumbs.append(h('span', { class: 'sep' }, '›'));
+        const last = i === this.trail.length - 1;
+        crumbs.append(h('button', { class: last ? 'cur' : '', title: last ? 'Editing' : `Back to ${ws.chips[id].name}`, disabled: last,
+          onclick: () => { if (!last) { this.trail = i ? this.trail.slice(0, i + 1) : []; this.openChip(id); } } }, ws.chips[id].name));
+      });
+      this.tabs.append(crumbs);
+    }
     for (const id of ws.open) {
       const c = ws.chips[id];
       if (!c) continue;

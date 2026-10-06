@@ -59,6 +59,14 @@ export function setUserResolver(f: Resolver | null): void {
   userResolver = f;
 }
 
+/**
+ * Can `id` be rebuilt from its name alone (a family member or a generator pattern), so that a
+ * stored reference still resolves on a fresh page load before anything has generated it?
+ */
+export function regenerable(id: string): boolean {
+  return !!familyOf(id) || patterns.some(([re]) => re.test(id));
+}
+
 export function resolveComponent(id: string): ComponentDef | undefined {
   if (userResolver && id.startsWith('u_')) {
     const u = userResolver(id);

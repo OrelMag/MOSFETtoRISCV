@@ -161,6 +161,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run
   palette.ts     registerPaletteGroup + the palette panel (purist filter)
+  chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
+  remix.ts       "Open in Sandbox": remixDef / remixIntoStorage (a shown def → a new chip; parts a reload could
+                 not find by id come along as ROM / constant parts or chips); loaded on demand by the stage
                DOM:
   editor.ts      Editor: workspace + history + library + sim + panels; registerToolbarAction, slots
   view.ts        EditorView: one SVG element per object updated in place, live values, overlays
@@ -171,6 +174,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   image.ts       the canvas as a standalone SVG (computed styles inlined, current theme) and PNG
   memui.ts       Memory palette group, ROM / RAM property sections (live listing, RAM grid, initial
                  contents), the program editor dialog, Examples ▸; values polled per frame while shown
+  package.ts     "Package as chip…" dialog (name, hue, notes, symbol preview, pin order; Save & new circuit)
+  inside.ts      lookInside(ed, path): read-only live schematic over the canvas on EditorSim's simulator (ViewCtx)
+  inspect.ts     the Inspector in a drawer for the chip or a part; chipprops.ts: chip / part property sections
 src/ui/        app shell, router, theme, settings, progress
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
@@ -262,6 +268,10 @@ While `stage.inEdge`, panels must not compare the hardware with the golden model
 - Later phases plug in through `registerPaletteGroup`, `registerPropsSection`,
   `registerToolbarAction` and `editor.slots` (`overlay` over the canvas, `bottom` above the run bar,
   `top` in the tab bar). `editor.saveState` / `onSave()` report autosave (saved / saving / error).
+  `editor.paintHooks` run after every repaint (live views over the simulation: look inside, inspector).
+  Feature modules register themselves when ui/pages/sandbox.ts imports them.
+- Double-click a placed user chip: `editChip` (tab breadcrumb, Back); any other part: `lookInside`.
+  A bidirectional pin's `value` is what the user drives onto it (absent: Z), switch level only.
 - Keys are handled on `document` while the page is mounted and ignored while typing in a field.
 
 ### Writing chapters

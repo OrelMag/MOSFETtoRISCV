@@ -1,0 +1,96 @@
+/* Sandbox chips: packaging dialog, look-inside view, inspector drawer, chip relations and flags,
+   breadcrumb of edited chips, bidirectional pins. Only theme tokens (both themes defined in
+   theme.css / editor.css), no raw colours. */
+
+/* ---------- breadcrumb of "Edit chip" ---------- */
+.sb-trail { display: flex; align-items: center; gap: 2px; flex: none; padding-right: 8px; margin-right: 4px; border-right: 1px solid var(--border); font-size: 13px; }
+.sb-trail .sb-back { padding: 3px 8px 3px 4px; }
+.sb-trail > button:not(.btn) { border: 0; background: transparent; color: var(--text-2); cursor: pointer; padding: 3px 6px; border-radius: 6px; font: inherit; white-space: nowrap; }
+.sb-trail > button:not(.btn):hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.sb-trail > button.cur { color: var(--text); font-weight: 650; cursor: default; }
+.sb-trail .sep { color: var(--muted); font-size: 12px; }
+
+/* ---------- palette swatches ---------- */
+.sb-swatch-dot {
+  display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; align-self: center;
+  background: hsl(var(--chip-h) var(--chip-fill-s) var(--chip-fill-l)); border: 1.5px solid hsl(var(--chip-h) var(--chip-stroke-s) var(--chip-stroke-l));
+}
+.sb-item .sb-swatch-dot + span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- package dialog ---------- */
+.sb-pack .panel { width: min(760px, 94vw); }
+.sb-pack .sb-sum { margin: 6px 0 12px; }
+.sb-pack-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.sb-pack-form .sb-row { grid-template-columns: 64px minmax(0, 1fr); margin: 8px 0; }
+.sb-pack-form input[type=text], .sb-pack-form textarea {
+  width: 100%; min-width: 0; font: 13px var(--font-ui); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text);
+}
+.sb-pack-form input[type=text] { font-weight: 600; font-size: 14px; }
+.sb-pack-form textarea { resize: vertical; }
+.sb-pack-form input[type=range] { width: 100%; accent-color: var(--accent); margin: 6px 0 0; }
+.sb-swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+.sb-swatch {
+  width: 22px; height: 22px; border-radius: 6px; cursor: pointer; padding: 0;
+  background: hsl(var(--chip-h) var(--chip-fill-s) var(--chip-fill-l)); border: 2px solid hsl(var(--chip-h) var(--chip-stroke-s) var(--chip-stroke-l));
+}
+.sb-swatch.on { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sb-pack-preview { display: grid; place-items: center; min-height: 150px; max-height: 260px; background: var(--canvas); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; }
+.sb-pack-svg { width: 100%; max-height: 236px; overflow: visible; }
+.sb-pack-stub { stroke: var(--w0); }
+.sb-pack-pins { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; font-size: 12.5px; }
+.sb-pack-col b { font-size: 12px; color: var(--text-2); }
+.sb-pack-col ol { margin: 4px 0 0; padding-left: 20px; font-family: var(--font-mono); font-size: 12px; }
+.sb-pack-col .sb-sum { margin: 4px 0; }
+.sb-pack-side > .sb-sum { margin: 8px 0 0; }
+.sb-pack-warn p { margin: 10px 0 0; padding: 6px 10px; border-radius: 6px; font-size: 12.5px; background: var(--warn-soft); color: var(--warn); }
+.sb-pack-btns { justify-content: flex-end; margin-top: 16px; }
+@media (max-width: 640px) {
+  .sb-pack-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- look inside ---------- */
+.sb-inside {
+  position: absolute; inset: 0 0 0 38%; display: flex; flex-direction: column; background: var(--canvas); outline: none;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); box-shadow: var(--shadow-lg);
+}
+.sb-inside.wide { left: 0; border-left: 0; }
+@media (max-width: 900px) { .sb-inside { left: 0; border-left: 0; } }
+.sb-inside-bar .crumbs { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+.sb-inside-bar .crumbs button { white-space: nowrap; }
+.sb-inside-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.sb-inside-tag {
+  display: inline-flex; align-items: center; gap: 5px; flex: none; font: 600 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--accent); background: var(--accent-soft); padding: 3px 8px; border-radius: 99px;
+}
+.sb-inside-canvas { flex: 1; }
+
+/* ---------- inspector drawer ---------- */
+.sb-drawer {
+  position: absolute; top: 8px; right: 8px; bottom: 8px; width: min(360px, calc(100% - 16px)); z-index: 5;
+  display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg); overflow: hidden;
+}
+.sb-drawer-head { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 12px; border-bottom: 1px solid var(--border); color: var(--text-2); }
+.sb-drawer-head h3 { flex: 1; margin: 0; font-size: 13.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-drawer .inspector { flex: 1; border-left: 0; min-height: 0; overflow: hidden; }
+
+/* ---------- properties: relations, flip-flop ---------- */
+.sb-rel-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; align-items: baseline; margin: 8px 0 0; }
+.sb-rel-row > span:first-child { color: var(--text-2); font-size: 12.5px; }
+.sb-rel-row .sb-sum { margin: 0; }
+.sb-rel-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.sb-rel { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-ui); color: var(--text); }
+.sb-rel:hover { border-color: var(--accent); }
+.sb-check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; margin: 4px 0; }
+.sb-check input { accent-color: var(--accent); margin: 0; }
+.sb-verdict { display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; margin: 8px 0 0; padding: 6px 8px; border-radius: 6px; }
+.sb-verdict .icon { flex: none; margin-top: 1px; }
+.sb-verdict.ok { background: var(--good-soft); color: var(--good); }
+.sb-verdict.err { background: color-mix(in srgb, var(--ed-err) 10%, transparent); color: var(--ed-err); }
+.sb-dir.inout { color: var(--warn); }
+
+/* ---------- bidirectional pins ---------- */
+.ed-pin-drv { font: 700 0.95px var(--font-mono); fill: var(--text-2); pointer-events: none; }
+.ed-pin.v1 .ed-pin-drv { fill: var(--surface); }
+.ed-pin-io .pin-knob { stroke-dasharray: 0.35 0.2; }
