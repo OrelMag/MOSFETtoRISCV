@@ -14,6 +14,7 @@ import {
   type BuildChallenge, challengeChipId, challengeOf, type CheckResult, checkChallenge, importAnswer, LEVELS, solveChallenge,
   solvedKey, startChallenge,
 } from './challenges';
+import { dockPane, paneShown, showPane, undockPane } from './dock';
 import { type Editor, registerToolbarAction } from './editor';
 
 const RULE: Record<BuildChallenge['allowed'], [string, string]> = {
@@ -222,19 +223,21 @@ class ChallengeUi {
   // ---- the list -------------------------------------------------------------------------------
 
   toggleList(): void {
+    // Behind another drawer of the dock: bring it to the front rather than closing it.
+    if (this.drawer && !paneShown(this.ed, 'challenges')) return showPane(this.ed, 'challenges');
     if (this.drawer) return this.closeList();
     this.drawer = h('aside', { class: 'sb-drawer sb-chal-list', 'aria-label': 'Build challenges' });
     this.drawer.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Escape') this.closeList();
     });
-    this.ed.slots.overlay.append(this.drawer);
+    dockPane(this.ed, { id: 'challenges', label: 'Challenges', icon: 'flag', el: this.drawer, width: 380 });
     this.renderList();
     this.drawer.querySelector<HTMLElement>('.sb-chal-item')?.focus();
   }
 
   private closeList(): void {
-    this.drawer?.remove();
+    if (this.drawer) undockPane(this.ed, 'challenges');
     this.drawer = null;
   }
 

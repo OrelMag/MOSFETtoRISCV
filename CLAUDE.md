@@ -185,10 +185,15 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   sta.ts         chipTiming: static timing of a chip, critical path mapped to its parts / wires / pins
   lint.ts        lintChip: two nets drawn on one line, pointers without a twin, inputs left open
   cpu.ts         ChipDoc.cpu (rom, pc / retire as NetRef: pin / pointer / wire / part port, regs, fregs,
-                 dmem, pipeline, iss options); detectCpu (the chapters' instance and pin names: imem, rf,
-                 dm, frf, pcOut / pcF, retire, validW), resolveCpu (settings over detection), readers
+                 dmem, pipeline, iss options); part fields are paths into user chips ('imem.rom', partAt,
+                 nestedRoms: detection takes the workspace's chips); detectCpu (the chapters' instance and
+                 pin names: imem, rf, dm, frf, fcsr, pcOut / pcF, retire, validW, switches / irq /
+                 consoleData / consoleValid / leds), resolveCpu (settings over detection), readers
                  (readRegs / readMem find w<i> registers via storageOf, banks, cache lines), pipelineSlots,
-                 CpuMonitor: the ISS in lock-step on EditorSim.edgeHooks, first mismatch, Run to halt
+                 CpuMonitor: the ISS in lock-step on EditorSim.edgeHooks (registers, PC, fcsr, memory
+                 after stores or at a pipeline's halt, console, LEDs), first mismatch, Run to halt
+  multicpu.ts    detectMulti (two or more placed CPU chips + a shared memory), MultiMonitor: MultiISS in
+                 lock-step (which cores retired, each core's registers and PC, shared memory)
                DOM:
   editor.ts      Editor: workspace + history + library + sim + panels; registerToolbarAction, slots
   view.ts        EditorView: one SVG element per object updated in place, live values, overlays
@@ -204,11 +209,16 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   challengeui.ts "Challenges" list drawer (solved ticks via settings), the strip under the canvas while a
                  challenge chip is open (brief, Check, Show answer, Do it for me), purist palette while restricted
   inspect.ts     the Inspector in a drawer for the chip or a part; chipprops.ts: chip / part property sections
+  dock.ts        the right-hand dock: drawers (Inspector, CPU, challenges) share it, tabs when several;
+                 sets --dock-space on the overlay so look inside stops at its edge
   analysis.ts    plugin: probe mode (P) + LogicAnalyzer in slots.bottom, Timing props section with
                  the critical path drawn on the chip, lint as a diag source, open-input marks
-  cpuui.ts       plugin: the CPU panel (drawer: status, listing with the PC and pipeline stages, a click
-                 marks the instruction's parts (insthw names), registers, memory, retired; Run to halt,
-                 Step instr, Reset, Edit program), opened by itself for a complete CPU; CPU props section
+  cpuui.ts       plugin: the CPU panel (docked drawer: status, listing with the PC and pipeline stages, a
+                 click marks the instruction's parts (insthw names) and colours its field wires
+                 (instrMarks → wires by net), field breakdown (widgets/instrfields), pipeline diagram
+                 (widgets/pipegrid), the system CPU's I/O, registers, fcsr, memory, retired; Run to halt,
+                 Step, Slow (instructions per second), Reset, Edit program; the multi-core view),
+                 opened by itself for a complete CPU; CPU props section
 src/ui/        app shell, router, theme, settings, progress
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
@@ -278,6 +288,9 @@ three levels: `gate` (`stage.startEdge()` / `edgeStep()`: a rising edge one gate
 `src/sim/edge.ts`, which `Stage.cycle` also uses), `cycle` (`pulse(flowMs)`) or `instr` (run to the next
 retirement). The highlight then follows execution, and the trace logs `stepEffect(iss.step())` (riscv/trace.ts).
 While `stage.inEdge`, panels must not compare the hardware with the golden model (it steps after the edge).
+The pipeline diagram reads `pipeSnap` (riscv/cosim.ts) and draws with `widgets/pipegrid.ts`, shared with
+the sandbox's CPU drawer (editor/cpuui.ts), which mirrors these panels for any CPU opened in the sandbox:
+keep the two in step when a panel gains a feature.
 
 ### Viewing aids (all derived, none stored in the netlists)
 
@@ -305,7 +318,9 @@ While `stage.inEdge`, panels must not compare the hardware with the golden model
   (saved / saving / error). `editor.paintHooks` run after every repaint (live views over the
   simulation: look inside, inspector). `editor.sim.edgeHooks` observe rising clock edges (before /
   after, whatever drives them: Run, Step, a click on a clock, `runCycles`); the CPU panel's golden
-  model steps there. `editor.sim` is per chip: a plugin keyed on it must follow tab switches. Feature modules and plugins register themselves when
+  model steps there. `editor.sim` is per chip: a plugin keyed on it must follow tab switches. Drawers
+  go in the right-hand dock (`dockPane` / `undockPane`, dock.ts), not straight into `slots.overlay`:
+  they share the edge as tabs and look inside stays clear of them. Feature modules and plugins register themselves when
   ui/pages/sandbox.ts imports them (not editor.ts: they import it).
 - Pins are 1 to `MAX_WIDTH` (1024) bits, and values are exact at any width: `PinDoc.value` is a
   `PinValue`, a number while exact (< 2^53) else lowercase `'0x…'` text, one spelling per value

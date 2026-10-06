@@ -134,10 +134,17 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
     data memory, retire signal, ISS options; detected for the chapters' single-cycle, multicycle,
     pipelined, system, M, F and cache CPUs and for the fetch loop, overridable in the properties).
     A drawer with status, listing (current PC, pipeline stages, a click marks the parts the
-    instruction uses), registers, FP registers, data memory and the retired instructions; Run to
-    halt, Step instruction, Reset, Edit program; the ISS steps on every retiring edge (EditorSim
-    edge hooks) and the first register / PC difference is reported. Not yet: the dual-core CPU
-    (two harts), the chapters' I/O panel (console, LEDs, switches) and pipeline diagram
+    instruction uses and colours its field wires), the field breakdown, the pipeline diagram, the
+    system CPU's I/O (console, LEDs, switches, IRQ, CSRs), registers, FP registers and fcsr, data
+    memory and the retired instructions; Run to halt, Step instruction, Slow (an instruction at a
+    set rate, the marks following execution), Reset, Edit program; the ISS steps on every retiring
+    edge (EditorSim edge hooks) and the first difference (registers, PC, fcsr, memory after a store,
+    console, LEDs) is reported. Parts inside chips are followed by path (the instruction cache's
+    ROM); a chip of placed CPUs (the dual-core) runs against the multi-hart model (arbitration,
+    every core's registers and PC, shared memory). Not yet: gate-level slow mode inside the drawer
+    (the run bar's gate mode does it), the data-cache line view
+  - ✅ One right-hand dock for the drawers (Inspector, CPU, challenges): tabs when several, the
+    look-inside view beside it
   - ✅ Analysis: probe mode and a timing panel (lanes follow the drawing across rebuilds, VCD),
     static timing of a chip (period, max clock, per-capture periods) with the critical path drawn
     on it, lint (nets drawn on one line, pointers without a twin, open inputs reading X);
