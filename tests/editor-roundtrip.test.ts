@@ -9,7 +9,7 @@ import { docFromDef } from '../src/editor/fromdef';
 import { type ChipDoc, emptyWorkspace } from '../src/editor/model';
 import { UserLibrary } from '../src/editor/library';
 import { remixDef } from '../src/editor/remix';
-import { partDef } from '../src/editor/parts';
+import { MAX_WIDTH, partDef } from '../src/editor/parts';
 import { cachedMemory, dualCore, multicycleCpu, pipelinedCpu, singleCycleCpu, systemCpu } from '../src/lib';
 import { reachableDefs, resolveComponent } from '../src/lib/resolve';
 import { assemble } from '../src/riscv/asm';
@@ -38,22 +38,15 @@ cachedMemory(6, 2);
 /**
  * Components that cannot be drawn in the sandbox, and why. Keep this short: fix docFromDef
  * instead where the sandbox can express the circuit.
+ * - A port wider than a sandbox pin (MAX_WIDTH bits: a value the editor shows and drives must fit
+ *   in a number): pipeline registers, register-file read ports, wide multiplier rows. They are
+ *   fine as parts of a chip.
+ * - A dual-core's cores hold the program ROM, like the CPU tops (opened through remixDef below).
  */
-const CANNOT: Record<string, RegExp> = {
-  // Pipeline registers and register-file read ports wider than a sandbox pin (64 bits: a value
-  // the editor shows and drives must fit in a number). They are fine as parts of a chip.
-  // (The pipeline registers: register, clearable register and the AND that clears them.)
-  ...Object.fromEntries([97, 130, 169, 170, 192, 229].flatMap((n) => [`reg${n}`, `creg${n}`, `andx${n}`].map((id) => [id, /bits wide/]))),
-  readport32x32: /bits wide/,
-  readport16x62: /bits wide/,
-};
-/** The same by id pattern: every pipeline-register width any CPU variant generates. */
-const CANNOT_LIKE: [RegExp, RegExp][] = [
-  [/^(c?reg|andx)\d{3}$/, /bits wide/],
-  // A dual-core's cores hold the program ROM, like the CPU tops (opened through remixDef below).
-  [/_core$/, /unknown library part 'rom_/],
-];
-const cannot = (id: string): RegExp | undefined => CANNOT[id] ?? CANNOT_LIKE.find(([re]) => re.test(id))?.[1];
+const cannot = (def: ComponentDef): RegExp | undefined =>
+  def.ports.some((p) => p.width > MAX_WIDTH) ? /bits wide/
+    : /_core$/.test(def.id) ? /unknown library part 'rom_/
+      : undefined;
 
 // Top-level CPUs are not registered (only their parts), so walk their parts in explicitly. The
 // tops themselves hold a ROM generated for one program, which no id can bring back after a
@@ -128,11 +121,11 @@ describe('library → sandbox document → compiled chip', () => {
   it.each(defs.map((d) => [d.id, d] as const))('%s', (id, def) => {
     const doc = docFromDef(def);
     if ('error' in doc) {
-      expect(cannot(id), `${id}: ${doc.error}`).toBeDefined();
-      expect(doc.error).toMatch(cannot(id)!);
+      expect(cannot(def), `${id}: ${doc.error}`).toBeDefined();
+      expect(doc.error).toMatch(cannot(def)!);
       return;
     }
-    expect(cannot(id), `${id} is allowlisted but round-trips`).toBeUndefined();
+    expect(cannot(def), `${id} is allowlisted but round-trips`).toBeUndefined();
     const c = compileChip(doc, (ref) => partDef(ref, () => undefined));
     expect(c.diags.filter((x) => x.level === 'error').map((x) => x.msg)).toEqual([]);
     expect(c.def.ports.map((p) => [p.name, p.width, p.dir]).sort()).toEqual(def.ports.map((p) => [p.name, p.width, p.dir]).sort());

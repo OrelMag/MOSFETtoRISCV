@@ -20,8 +20,8 @@ export const isError = (r: PartResult): r is { error: string } => 'error' in r;
 export const MAX_WIDTH = 64;
 /** Largest RAM: 2^6 words (the structure is a decoder, registers and a mux tree, all drawn). */
 export const MAX_RAM_K = 6;
-/** Widest splitter / merger pin spacing (the library's tall fans use up to 14). */
-export const MAX_PITCH = 16;
+/** Widest splitter / merger pin spacing (the library's tall fans and multiplier rows use up to 18). */
+export const MAX_PITCH = 32;
 /** Largest ROM: 2^8 words (simulated as a lookup; its mux tree is only built when opened). */
 export const MAX_ROM_K = 8;
 
