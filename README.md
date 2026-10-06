@@ -22,7 +22,8 @@ and route on silicon. Each chapter has optional challenges, each with a revealab
 drive its inputs, drill into it, read its truth table, timing and Verilog.
 
 **Sandbox** (`#/sandbox`): a circuit editor in the spirit of Sebastian Lague's *Digital Logic Sim*,
-built on the same simulator, so whatever you build is a real component of the site.
+built on the same simulator, so whatever you build is a real component of the site. The full
+guide is [docs/SANDBOX.md](docs/SANDBOX.md).
 
 - Place parts from the whole library (or only NAND and transistors in *purist* mode), draw wires
   freehand with corners and branches, and connect distant nets with **pointers** (named net labels).
