@@ -89,7 +89,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 
 ### Phase 2 — Computing 🚧
 - ✅ ALU (add, sub, and, or, xor, shifts, slt/sltu) and flags; barrel shifter
-- ⏳ Carry-lookahead and Kogge–Stone adders with depth comparison (optimization intro)
+- ✅ Carry-lookahead and Kogge–Stone adders with depth comparison (optimization intro)
 - ✅ Register file (32 × 32, x0 hard-wired), two read ports and one write port
 - **Sandbox**: full wiring editor (today the *workbench* opens any library component with free inputs) (place parts from the library, wire, package into a new
   chip, save to local storage and share via URL); Turing-Complete-style build challenges
@@ -106,18 +106,20 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Gate-level (48k NAND) RV32I minus byte/half memory & system; co-simulated vs the ISS every cycle
 - ✅ CPU panel: listing, registers, memory, live golden-model check, run to halt, program editor
 - ✅ Per-instruction settle time in gate delays (dynamic critical path)
-- ⏳ Static critical-path analysis → maximum clock frequency
+- ✅ Static critical-path analysis → maximum clock frequency (highlighted on the schematic)
 - ⏳ Animated active path per instruction
 - ⏳ Memory-mapped I/O: LEDs, 7-segment display, a text console, a small pixel screen
 
 ### Phase 5 — Multicycle & microcode ⏳
 - FSM control vs microprogrammed control (primer Appendix D), equivalence shown
 
-### Phase 6 — Pipelining ⏳
-- Five-stage pipeline with pipeline-diagram widget (stage × cycle)
-- Data hazards → forwarding; load-use stall; control hazards → flush
-- Branch prediction (static, then BTB + 2-bit counters) with measured CPI
-- Does pipelining pay? Clock period vs CPI comparison from real netlists
+### Phase 6 — Pipelining 🚧
+- ✅ Five-stage gate-level pipeline (61k NAND), co-simulated vs the ISS at every retirement
+- ✅ Live pipeline diagram (stage × cycle) with stall / flush / forwarding events
+- ✅ Data hazards → forwarding (M→E, W→E) and a W→D bypass; load-use stall; branch flush
+- ✅ Does pipelining pay? Clock period (static timing) × CPI (measured), with honest analysis
+- ⏳ Balanced stages: precomputed forwarding, dedicated branch comparator
+- ⏳ Branch prediction (static, then BTB + 2-bit counters) with measured CPI
 
 ### Phase 7 — Full RV32IM + privileged architecture ⏳
 - Complete RV32I (all loads/stores, shifts, LUI/AUIPC, JALR, all branches)

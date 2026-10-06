@@ -522,3 +522,13 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .cbar { display: block; height: 10px; border-radius: 3px; }
 .cbar.r { background: var(--w1); }
 .cbar.k { background: var(--bus); }
+
+.pipe-panel { left: 12px; right: auto; bottom: 12px; top: auto; max-width: calc(100% - 380px); }
+.pipe-grid { font: 11px var(--font-mono); overflow-x: auto; }
+.pg-row { display: flex; gap: 2px; margin-bottom: 2px; }
+.pg-st { width: 16px; color: var(--muted); font-weight: 700; flex: none; }
+.pg-c { width: 46px; flex: none; text-align: center; border-radius: 4px; padding: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: hsl(var(--h, 220) 70% 50% / 0.18); color: var(--text); }
+.pg-row.head .pg-c { background: none; color: var(--muted); }
+.pg-c.bubble { background: var(--surface-2); color: var(--muted); }
+.pg-row.ev .pg-c { background: none; color: var(--warn); font-size: 9.5px; white-space: normal; line-height: 1.15; }

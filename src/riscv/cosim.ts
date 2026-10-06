@@ -13,7 +13,8 @@ export function cpuState(sim: Sim, root: HierNode = sim.design.root): { pc: numb
   const ram = root.children!.get('dm')!.children!.get('ram')!;
   const dmem: number[] = [];
   for (const [name, n] of ram.children!) if (/^w\d+$/.test(name)) dmem[Number(name.slice(1))] = pack(sim.getBits(n.ports.q)) >>> 0;
-  const pc = pack(sim.getBits(root.ports.pcOut)) >>> 0;
+  const pcPort = root.ports.pcOut ?? root.ports.pcF;
+  const pc = pcPort ? pack(sim.getBits(pcPort)) >>> 0 : 0;
   return { pc, x, dmem };
 }
 
@@ -23,4 +24,9 @@ export function clockCycle(sim: Sim): void {
   sim.settle();
   sim.setInput('clk', 0);
   sim.settle();
+}
+
+/** Pipelined CPU: is a valid instruction in write-back right now (it retires at the next edge)? */
+export function retiring(sim: Sim, root: HierNode = sim.design.root): boolean {
+  return sim.getBits(root.ports.validW)[0] === 1;
 }

@@ -60,6 +60,7 @@ src/sim/       simulation core (no DOM)
   switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes)
   harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench
   stats.ts       transistor / NAND counts, logic depth
+  timing.ts      static timing: register-to-register critical path, per-capture-stage periods
   verilog.ts     structural Verilog generated from any netlist
 src/lib/       the component library (registered in `registry` via define())
   transistors.ts NMOS, PMOS, rails, CMOS inverter/NOR, NAND (prim + 4-transistor netlist), tie cells
@@ -71,7 +72,11 @@ src/lib/       the component library (registered in `registry` via define())
   alu.ts         constWord, zext, wiring boxes, bitwise, orN, isZero, barrel shifter, alu(n)
   regfile.ts     regfile(k, w) with x0 = 0, two read ports fed by one bundled word bus
   cpu.ts         single-cycle RV32I: rom (preferBehavior), dataMemory, IMM_GEN, OPCODE_DECODER,
-                 CONTROL, NEXT_PC, PLUS4, singleCycleCpu(program)
+                 CONTROL, NEXT_PC, PLUS4(_FAST), singleCycleCpu(program, { adder })
+  fastadd.ts     gp / gray / black prefix cells, CLA4, koggeStone(n), addSubFast(n)
+  wide.ts        bitwise(op, n), orN(n) (shared by alu.ts and fastadd.ts to avoid an import cycle)
+  pipeline.ts    equal, nonZero, clearableRegister, pipeline registers (fields on fixed rows),
+                 HAZARD unit, pipelinedCpu(program, { adder })
 src/riscv/     isa.ts (tables, decode, disasm), asm.ts (two-pass assembler), iss.ts (golden
                model), programs.ts (samples), cosim.ts (read CPU state from a simulation)
 src/view/      SVG schematic renderer, router, inspector panels, waveform, truth table
@@ -125,6 +130,14 @@ tests/         Vitest: every component with a `spec` is checked exhaustively (â‰
   instances so that ports line up (see `alignY` in cpu.ts) and data wires stay straight.
 - Hand-written SystemVerilog goes in `hdl.verilog` (behavioural or structural, matching the
   primer's style). Structural Verilog is also generated automatically.
+
+### CPU scenes
+
+`cpuScene({ source, pipeline?, adder?, timing? })` (widgets/cpupanel.ts) builds a CPU scene
+with the CPU panel (listing, registers, memory, golden-model lock-step) and optionally the
+pipeline diagram and the static-timing panel. Panels observe clock edges through
+`stage.edgeHooks` (before / after every rising edge), so they stay correct during fast runs.
+The pipeline's golden model steps when a valid instruction is in W (`retiring()`).
 
 ### Writing chapters
 

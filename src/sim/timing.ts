@@ -20,6 +20,8 @@ export interface TimingReport {
   path: { node: string[]; arrival: number }[];
   /** Top-level instances crossed, in order, with the arrival time when the path leaves each. */
   stages: { inst: string; arrival: number }[];
+  /** Worst arrival (+ setup) at each top-level instance that captures (pipeline registers, PC, …). */
+  byCapture: { inst: string; period: number }[];
 }
 
 export function analyzeTiming(design: FlatDesign): TimingReport | null {
@@ -78,9 +80,12 @@ export function analyzeTiming(design: FlatDesign): TimingReport | null {
   };
 
   let worst = -1, cap = captures[0];
+  const byInst = new Map<string, number>();
   for (const c of captures) {
     const a = arr(c.net);
     if (a > worst) { worst = a; cap = c; }
+    const top = c.dff[0] ?? '';
+    byInst.set(top, Math.max(byInst.get(top) ?? 0, a + SETUP));
   }
   // Trace back.
   const path: { node: string[]; arrival: number }[] = [];
@@ -100,5 +105,6 @@ export function analyzeTiming(design: FlatDesign): TimingReport | null {
     if (stages.length && stages[stages.length - 1].inst === top) stages[stages.length - 1].arrival = p.arrival;
     else stages.push({ inst: top, arrival: p.arrival });
   }
-  return { period: worst + SETUP, logic: worst - CLK_TO_Q, launch, capture: cap.dff, path, stages };
+  const byCapture = [...byInst].map(([inst, period]) => ({ inst, period })).sort((a, b) => b.period - a.period);
+  return { period: worst + SETUP, logic: worst - CLK_TO_Q, launch, capture: cap.dff, path, stages, byCapture };
 }

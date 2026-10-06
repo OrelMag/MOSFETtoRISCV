@@ -115,7 +115,7 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
     default: {
       inner.append(s('rect', { x: 0, y: 0, width: w, height: h, rx: 0.6, class: 'sym-body sym-box' }));
       // Port names inside the box (not mirrored). Pure-wiring boxes are too small for them.
-      for (const p of def.prim === 'alias' ? [] : def.ports) {
+      for (const p of def.prim === 'alias' || def.symbol.noPortLabels ? [] : def.ports) {
         const pg = g.ports[p.name];
         const side = p.side ?? (p.dir === 'out' ? 'right' : 'left');
         let x = pg.pos[0], y = pg.pos[1] + 0.38;
@@ -141,7 +141,11 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
         }
         root.append(s('text', { x, y, class: 'sym-port', 'text-anchor': anchor }, portLabel(p.name)));
       }
-      root.append(s('text', { x: w / 2, y: h / 2 + 0.45, class: 'sym-label', 'text-anchor': 'middle' }, def.symbol.label ?? def.name));
+      if (def.symbol.verticalLabel) {
+        root.append(s('text', { x: w / 2, y: h / 2, class: 'sym-label', 'text-anchor': 'middle', transform: `rotate(-90 ${w / 2} ${h / 2})`, dy: 0.4 }, def.symbol.label ?? def.name));
+      } else {
+        root.append(s('text', { x: w / 2, y: h / 2 + 0.45, class: 'sym-label', 'text-anchor': 'middle' }, def.symbol.label ?? def.name));
+      }
     }
   }
   return root;

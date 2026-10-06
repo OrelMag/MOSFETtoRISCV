@@ -8,4 +8,5 @@ export * from './alu';
 export * from './fastadd';
 export * from './regfile';
 export * from './cpu';
+export * from './pipeline';
 export { registry, splitter, merger } from './define';

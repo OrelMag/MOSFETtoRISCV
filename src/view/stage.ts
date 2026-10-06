@@ -79,6 +79,10 @@ export class Stage {
   leafFactory: LeafWidgetFactory | null = null;
   /** Rising clock edges since the scene was loaded or reset. */
   cycles = 0;
+  /** Observers of every rising clock edge: before (inputs still old) and after it settled. */
+  readonly edgeHooks = new Set<{ before?: () => void; after?: () => void }>();
+  private beforeEdge(): void { this.edgeHooks.forEach((h) => h.before?.()); }
+  private afterEdge(): void { this.edgeHooks.forEach((h) => h.after?.()); }
 
   constructor(inspector: Inspector) {
     this.inspector = inspector;
@@ -148,6 +152,7 @@ export class Stage {
   }
 
   load(scene: Scene): void {
+    this.edgeHooks.clear();
     this.showWidget(null);
     this.stopAnim();
     this.stopClock();
@@ -290,7 +295,17 @@ export class Stage {
 
   toggleInput(port: string): void {
     const v = this.getInput(port) ? 0 : 1;
-    if (v === 1 && port === this.clockPort()) this.cycles++;
+    const edge = v === 1 && port === this.clockPort();
+    if (edge) {
+      this.beforeEdge();
+      this.cycles++;
+      this.sim?.setInput(port, 1);
+      this.sim?.settle();
+      this.afterEdge();
+      this.lastSettle = null;
+      this.refresh();
+      return;
+    }
     this.setInput(port, v);
   }
 
@@ -306,9 +321,11 @@ export class Stage {
     this.stopAnim();
     // Measure the rising edge: that is when the flip-flops launch new values through the logic.
     const t0 = this.sim.time;
+    this.beforeEdge();
     this.sim.setInput(clk, 1);
     this.cycles++;
     this.sim.settle();
+    this.afterEdge();
     const rise = this.sim.time - t0;
     this.sample();
     this.sim.setInput(clk, 0);
@@ -324,9 +341,11 @@ export class Stage {
     this.stopAnim();
     let i = 0;
     for (; i < n && !(stop && stop()); i++) {
+      this.beforeEdge();
       this.sim.setInput(clk, 1);
       this.cycles++;
       this.sim.settle();
+      this.afterEdge();
       this.sim.setInput(clk, 0);
       this.sim.settle();
       this.sample();

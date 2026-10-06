@@ -41,6 +41,10 @@ export interface SymbolSpec {
   pitch?: number;
   /** Explicit y (left/right ports) or x (top/bottom ports) offsets for box ports. */
   portPos?: Record<string, number>;
+  /** Do not print port names inside the box (e.g. tall pipeline registers). */
+  noPortLabels?: boolean;
+  /** Draw the label vertically (narrow boxes). */
+  verticalLabel?: boolean;
 }
 
 export interface InstanceDef {
