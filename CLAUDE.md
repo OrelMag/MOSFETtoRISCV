@@ -152,11 +152,17 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run
   palette.ts     registerPaletteGroup + the palette panel (purist filter)
+  hops.ts        HopCache: wire hops recomputed for the moved wires and those crossing them only
+  probes.ts      ProbeTarget (wires / pin / pointer name) → flat nets of each new build (resolveProbe)
+  sta.ts         chipTiming: static timing of a chip, critical path mapped to its parts / wires / pins
+  lint.ts        lintChip: two nets drawn on one line, pointers without a twin, inputs left open
                DOM:
   editor.ts      Editor: workspace + history + library + sim + panels; registerToolbarAction, slots
   view.ts        EditorView: one SVG element per object updated in place, live values, overlays
   tools.ts       the mouse / keyboard state machine (place, select, drag, band, free-hand wires, pointers)
   props.ts       properties of the selection or the chip, diagnostics; registerPropsSection
+  analysis.ts    plugin: probe mode (P) + LogicAnalyzer in slots.bottom, Timing props section with
+                 the critical path drawn on the chip, lint as a diag source, open-input marks
 src/ui/        app shell, router, theme, settings, progress
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
@@ -246,7 +252,18 @@ While `stage.inEdge`, panels must not compare the hardware with the golden model
 - The simulator is rebuilt only when `simKey` (connectivity + part definitions) changes; input
   values are stripped before compiling, so toggling an input recompiles nothing.
 - Later phases plug in through `registerPaletteGroup`, `registerPropsSection`,
-  `registerToolbarAction` and `editor.slots` (`overlay` over the canvas, `bottom` above the run bar).
+  `registerToolbarAction` (`active` for toggles), `registerEditorPlugin` (per-editor state, with a
+  cleanup), `registerDiagSource` (extra diagnostics, e.g. lint), `Editor.onSimChange`,
+  `Tools.onPress` (a mode that takes clicks first) and `editor.slots` (`overlay` over the canvas,
+  `bottom` above the run bar). Plugins are imported by ui/pages/sandbox.ts (not by editor.ts:
+  they import it).
+- Performance: a drag refits only wires on moved objects (ops.ts `refit`), the view recomputes
+  polylines / hops / dots only for what moved, a transistor chip's derived model and flip-flop
+  check are cached by a structural key (compile.ts), and the last four chips keep their
+  simulation across tab switches. `npx vite-node scripts/sandbox-perf.ts` measures the
+  DOM-free costs on a CPU and a 64-bit Kogge–Stone adder opened in the sandbox.
+- Probes and the timing panel are gate level only (the switch-level solver has no time); lanes
+  name what was drawn and survive rebuilds (`LogicAnalyzer.rebind` keeps the recording).
 - Keys are handled on `document` while the page is mounted and ignored while typing in a field.
 
 ### Writing chapters

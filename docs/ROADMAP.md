@@ -104,8 +104,13 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
     parameters, my chips; purist toggle), free-hand wires with corners / L flip / branches, pointers
     with jump-to-twin, select / drag / rubber band / copy / paste / undo, live values (switch level
     included), properties and diagnostics, tabs per chip, autosave, cycle (Hz) and gate-delay run modes
+  - ✅ Analysis: probe mode and a timing panel (lanes follow the drawing across rebuilds, VCD),
+    static timing of a chip (period, max clock, per-capture periods) with the critical path drawn
+    on it, lint (nets drawn on one line, pointers without a twin, open inputs reading X);
+    incremental drawing during drags, derived models cached by structure, per-chip simulations
+    kept across tab switches
   - ⏳ Packaging polish and looking inside placed chips, "Open in Sandbox", program ROM editor,
-    file import / export and share links in the UI, probes and timing, build challenges
+    file import / export and share links in the UI, marking a chip as a flip-flop, build challenges
     (Turing-Complete style, checked against a truth table or test vectors)
 
 ### Phase 3 — The instruction set & assembly ✅
