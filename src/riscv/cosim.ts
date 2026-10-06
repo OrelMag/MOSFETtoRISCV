@@ -12,12 +12,12 @@ export function cpuState(sim: Sim, root: HierNode = sim.design.root): { pc: numb
   for (let i = 1; i < 32; i++) x.push(pack(sim.getBits(rf.children!.get(`w${i}`)!.ports.q)) >>> 0);
   const frf = root.children!.get('frf');
   const f = frf ? Array.from({ length: 32 }, (_, i) => pack(sim.getBits(frf.children!.get(`w${i}`)!.ports.q)) >>> 0) : undefined;
-  const dm = root.children!.get('dm')!;
+  const dm = root.children!.get('dm');
   const dmem: number[] = [];
-  const ram = dm.children!.get('ram');
+  const ram = dm?.children!.get('ram');
   if (ram) {
     for (const [name, n] of ram.children!) if (/^w\d+$/.test(name)) dmem[Number(name.slice(1))] = pack(sim.getBits(n.ports.q)) >>> 0;
-  } else {
+  } else if (dm) {
     // byte-banked memory: word i = {b3[i], b2[i], b1[i], b0[i]}
     for (let lane = 0; lane < 4; lane++) {
       const bank = dm.children!.get(`b${lane}`)!;

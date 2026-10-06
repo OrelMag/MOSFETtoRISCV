@@ -14,6 +14,7 @@ import { AND, NOT, OR, XNOR, XOR } from './gates';
 import { ram } from './memory';
 import { cachedMemory } from './cache';
 import { FPU32, FP_DECODE } from './fpu';
+import { MP_DECODE } from './mpdecode';
 import { regfile } from './regfile';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
@@ -434,6 +435,12 @@ export interface CpuOptions {
   dcache?: boolean;
   /** Add the floating-point register file and FPU (the RV32F subset of chapter 23). */
   fpu?: boolean;
+  /**
+   * A core of the multi-core processor: no data memory of its own but a memory port (address,
+   * write data, write enable, request; read data and grant come back), amoswap.w / amoadd.w, and
+   * csrr mhartid from the hartid input. A core that loses arbitration stalls (retire = 0).
+   */
+  shared?: boolean;
 }
 
 /** PC + 4 with a parallel-prefix adder. */
@@ -470,11 +477,11 @@ export const PLUS4_FAST: ComponentDef = define({
 export function singleCycleCpu(program: number[], opts: CpuOptions = {}): ComponentDef {
   const IM = rom(program);
   const adder = opts.adder ?? 'rca';
-  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? '_dc' : ''}${opts.fpu ? '_fp' : ''}`;
-  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, !!opts.dcache, !!opts.fpu));
+  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? '_dc' : ''}${opts.fpu ? '_fp' : ''}${opts.shared ? '_mp' : ''}`;
+  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, !!opts.dcache, !!opts.fpu, !!opts.shared));
 }
 
-function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache = false, fpu = false): ComponentDef {
+function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache = false, fpu = false, shared = false): ComponentDef {
   const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dcache ? cachedMemory(dmemK) : dataMemory(dmemK);
   const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = adder === 'ks' ? koggeStone(32) : rca(32), SI = splitter([7, 5, 3, 5, 5, 7]);
   const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4;
@@ -657,13 +664,88 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
     nets.find((n) => n.name === 'ReadData')!.ends = nets.find((n) => n.name === 'ReadData')!.ends.map((e) => (e === 'fwd.a' ? 'fwd.b' : e));
     nets.find((n) => n.name === 'FPUResult')!.ends = ['fpu.y', 'xres.b', 'fwd.a'];
   }
+  const extraPorts: PortDef[] = [];
+  if (shared) {
+    // ---- a core of the multi-core: memory goes through ports; atomics; hart id
+    const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => instances.push({ name, def, at: xy, label });
+    const dmAt = at.get('dm')!;
+    instances.splice(instances.findIndex((i) => i.name === 'dm'), 1);
+    instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
+    add('mpd', MP_DECODE, [8, bottom + 10]);
+    add('amux', M2, [dmAt[0], dmAt[1]], 'address: ALU / rs1');
+    add('amoadd', ADD, [dmAt[0] + 14, bottom + 10], 'old + rs2');
+    add('gndA', TIE0, [dmAt[0] + 8, bottom + 6]);
+    add('wmux', M2, [dmAt[0] + 14, dmAt[1] + 22], 'store / amoadd');
+    add('rsplit', splitter([1, 1]), [aluR + 4, bottom - 12]);
+    add('nr1', NOT, [aluR + 8, bottom - 10]);
+    add('isLoad', AND, [aluR + 13, bottom - 12]);
+    add('req', OR, [aluR + 20, bottom - 12]);
+    add('weo', OR, [aluR + 20, bottom - 6]);
+    add('weg', AND, [aluR + 26, bottom - 6]);
+    add('ngr', NOT, [aluR + 20, bottom]);
+    add('stl', AND, [aluR + 26, bottom]);
+    add('nstall', NOT, [8, P('pc', 'en')[1] - 1]);
+    add('rwg', AND, [52, bottom - 8]);
+    add('rwh', OR, [56, bottom - 2]);
+    add('hmux', M2, [resY[0] + 6, resY[1] - 6], 'result / hart id');
+    const net = (name: string) => nets.find((n) => n.name === name)!;
+    const drop = (n: NetDef, e: string) => { n.ends = n.ends.filter((x) => x !== e); if (Array.isArray(n.tags)) n.tags = n.tags.filter((x) => x !== e); };
+    nets.splice(nets.indexOf(net('en')), 1);
+    drop(net('ALUResult'), 'dm.addr'); net('ALUResult').ends.push('amux.a');
+    drop(net('WriteData'), 'dm.wd'); net('WriteData').ends.push('wmux.a', 'amoadd.b');
+    const clkN = net('clk');
+    drop(clkN, 'dm.clk');
+    if (clkN.via) delete clkN.via['dm.clk'];
+    net('ReadData').ends = ['memRData', 'res.d1', 'amoadd.a'];
+    net('MemWrite').ends = ['ctl.memWrite', 'weo.a', 'req.b'];
+    net('op').ends = ['si.o0', 'mpd.op'];
+    net('funct3').ends.push('mpd.funct3');
+    net('funct7').ends.push('mpd.funct7');
+    net('rs1').ends.push('mpd.rs1');
+    net('rs2').ends.push('mpd.rs2');
+    net('rd1').ends.push('amux.b');
+    net('ResultSrc').ends.push('rsplit.in');
+    net('RegWrite').ends = ['ctl.regWrite', 'rwg.a'];
+    const res = net('Result');
+    res.ends = ['res.y', 'hmux.a'];
+    res.via = undefined;
+    nets.push(
+      { name: 'opInt', ends: ['mpd.opInt', 'ctl.op'], tags: true },
+      { name: 'isAMO', ends: ['mpd.isAMO', 'amux.s', 'weo.b'], tags: true },
+      { name: 'amoAdd', ends: ['mpd.amoAdd', 'wmux.s'], tags: true },
+      { name: 'isHart', ends: ['mpd.isHart', 'hmux.s', 'rwh.b'], tags: true },
+      { name: 'gndA', ends: ['gndA.y', 'amoadd.cin'] },
+      { name: 'amoSum', ends: ['amoadd.s', 'wmux.b'], tags: true },
+      { name: 'memAddr', ends: ['amux.y', 'memAddr'], tags: true },
+      { name: 'memWData', ends: ['wmux.y', 'memWData'], tags: true },
+      { name: 'rs0', ends: ['rsplit.o0', 'isLoad.a'], tags: true },
+      { name: 'rs1bit', ends: ['rsplit.o1', 'nr1.a'], tags: true },
+      { name: '¬rs1', ends: ['nr1.y', 'isLoad.b'], tags: true },
+      { name: 'MemRead', ends: ['isLoad.y', 'req.a'], tags: true },
+      { name: 'memReq', ends: ['req.y', 'memReq', 'stl.a'], tags: true },
+      { name: 'wantWrite', ends: ['weo.y', 'weg.a'], tags: true },
+      { name: 'grant', ends: ['grant', 'weg.b', 'ngr.a'], tags: true },
+      { name: 'memWE', ends: ['weg.y', 'memWE'], tags: true },
+      { name: '¬grant', ends: ['ngr.y', 'stl.b'], tags: true },
+      { name: 'stall', ends: ['stl.y', 'nstall.a'], tags: true },
+      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwg.b', 'retire'], tags: ['rwg.b', 'retire'] },
+      { name: 'RegWriteQ', ends: ['rwg.y', 'rwh.a'], tags: true },
+      { name: 'XRegWrite', ends: ['rwh.y', 'rf.we'], tags: true },
+      { name: 'hartid', ends: ['hartid', 'hmux.b'], tags: true },
+      { name: 'XResult', ends: ['hmux.y', 'rf.wd'], tags: true },
+    );
+    const ox = resY[0] + 22;
+    Object.assign(pins, { hartid: [0, bottom + 6], memRData: [0, bottom + 9], grant: [0, bottom + 12], memAddr: [ox, bottom + 1], memWData: [ox, bottom + 4], memWE: [ox, bottom + 7], memReq: [ox, bottom + 10], retire: [ox, bottom + 13] });
+    extraPorts.push(bus('hartid', 32, 'in'), bus('memRData', 32, 'in'), bit('grant', 'in'),
+      bus('memAddr', 32, 'out'), bus('memWData', 32, 'out'), bit('memWE', 'out'), bit('memReq', 'out'), bit('retire', 'out'));
+  }
   return {
-    id: key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dmemK}` : '') + (fpu ? '_fp' : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ' with a data cache' : ''}`, category: 'cpu',
+    id: key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dmemK}` : '') + (fpu ? '_fp' : '') + (shared ? '_core' : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ' with a data cache' : ''}`, category: 'cpu',
     summary: dcache
       ? 'The single-cycle processor with its data memory replaced by a slow main memory behind a 64-byte direct-mapped cache. A load that misses holds the PC and the register write (retire = 0) for 8 cycles while the line is fetched.'
       : 'A complete RISC-V processor: every instruction is fetched, decoded, executed and retired in one clock cycle. Built entirely from the blocks of the previous chapters.',
-    ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out'), ...(dcache ? [bit('retire', 'out'), bit('dhit', 'out')] : [])],
-    symbol: { kind: 'box', label: dcache ? 'RV32I + D$' : 'RV32I' },
+    ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out'), ...(dcache ? [bit('retire', 'out'), bit('dhit', 'out')] : []), ...extraPorts],
+    symbol: { kind: 'box', label: shared ? 'CORE' : dcache ? 'RV32I + D$' : 'RV32I' },
     netlist: () => ({ pins, instances, nets }),
     hdl: { verilog: CPU_VERILOG },
   };
