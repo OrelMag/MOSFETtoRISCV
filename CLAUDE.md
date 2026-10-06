@@ -54,7 +54,8 @@ src/sim/       simulation core (no DOM)
   types.ts       ComponentDef / PortDef / Netlist / NetDef: the single source of truth
   geometry.ts    symbol sizes and port positions (grid units) shared by authors, router, renderer
   flatten.ts     hierarchy → flat 1-bit nets + leaves, keeping a HierNode tree mapping every
-                 level's ports/wires to flat nets (this is what makes every box transparent)
+                 level's ports/wires to flat nets (this is what makes every box transparent);
+                 powerOn hints may be dotted paths into children ('w3.ff0.ff.slave.sr.q')
   gatesim.ts     event-driven 3-valued (0/1/X) simulator, unit NAND delay, transport delay,
                  relaxation for power-on and oscillation resolution; runUntil(t) for a
                  fixed-period clock (an edge does not wait for the logic to settle); onTrace +
@@ -141,13 +142,17 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                DOM-free (tested in Node):
   model.ts       Workspace / ChipDoc (pins, parts, wires = interior corners, pointers = named net labels)
   compile.ts     compileChip(doc) → ComponentDef + diags, netOfWire / netOfEnd / netOfLabel, connKey
-  parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays, RAM (ROM later)
+  parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays, ROM, RAM
   library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip
   ops.ts         pure edits (add / move / delete / flip / set*, copy / paste); wires stay orthogonal
   history.ts     History<T>: undo / redo, transactions (a drag = one step), replace (not undone)
   store.ts       localStorage, sanitizer, JSON export / import; share.ts: share-link encoding
   derive.ts      circuitMode, deriveBehavior (a combinational transistor chip → gate-level brick)
   program.ts     ROM program text (asm / hex) → words
+  memory.ts      romImage (problems on source lines), romListing / romIndex (the row the circuit reads),
+                 asm ↔ hex conversion, ROM_SAMPLES; readRam (live words), ramWithInit (initial contents
+                 as dotted power-on hints into the flip-flops' latches)
+  examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit), addExample: new chip, opened
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run
@@ -157,6 +162,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   view.ts        EditorView: one SVG element per object updated in place, live values, overlays
   tools.ts       the mouse / keyboard state machine (place, select, drag, band, free-hand wires, pointers)
   props.ts       properties of the selection or the chip, diagnostics; registerPropsSection
+  memui.ts       Memory palette group, ROM / RAM property sections (live listing, RAM grid, initial
+                 contents), the program editor dialog, Examples ▸; values polled per frame while shown
 src/ui/        app shell, router, theme, settings, progress
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests

@@ -104,7 +104,13 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
     parameters, my chips; purist toggle), free-hand wires with corners / L flip / branches, pointers
     with jump-to-twin, select / drag / rubber band / copy / paste / undo, live values (switch level
     included), properties and diagnostics, tabs per chip, autosave, cycle (Hz) and gate-delay run modes
-  - ⏳ Packaging polish and looking inside placed chips, "Open in Sandbox", program ROM editor,
+  - ✅ Memories: Memory palette group (program ROM, word ROM, RAM); ROM properties (size, byte /
+    word addressing, asm / hex with conversion, sample programs) and a program editor (code editor,
+    live re-assembly, gutter diagnostics, listing, Apply = one undo step); the listing and the editor
+    follow the address the running circuit reads; RAM contents live in the properties and initial
+    contents seeded at power-on; Examples ▸ (fetch loop, counter on a 7-segment digit); the CPU
+    panel's Edit box is the code editor too
+  - ⏳ Packaging polish and looking inside placed chips, "Open in Sandbox",
     file import / export and share links in the UI, probes and timing, build challenges
     (Turing-Complete style, checked against a truth table or test vectors)
 
