@@ -82,6 +82,8 @@ src/lib/       the component library (registered in `registry` via define())
   combinational.ts adders (HA, FA 13- and 9-NAND, rca(n), addSub(n), incrementer(n)), andN,
                  decoder(n, en, pitch), busMux2(w), muxTree(k, w, pitch)
   sequential.ts  SR latch, D latch, DFF (master–slave), DFFE, register(n), counter(n)
+  seqparts.ts    NAND3, D_LATCH_R / DFF_R (async reset), TFF, JKFF, upDownCounter(n), shiftRegister(n) (74194-style),
+                 lfsr(n) (LFSR_TAPS, lfsrNext), ringCounter(n, johnson), clockDivider(k)
   memory.ts      ram(k, w): decoder + registers + mux tree, user-scalable
   alu.ts         constWord, zext, wiring boxes, bitwise, orN, isZero, barrel shifter, alu(n)
   regfile.ts     regfile(k, w) with x0 = 0, two read ports fed by one bundled word bus

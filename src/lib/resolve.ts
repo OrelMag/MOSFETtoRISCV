@@ -20,6 +20,7 @@ import { bankedMemory } from './lsu';
 import { clearableRegister } from './pipeline';
 import { boothMul, pipeMul, seqMul } from './multiply';
 import { bcdAdder, carrySelect, carrySkip } from './adders';
+import { clockDivider, lfsr, ringCounter, shiftRegister, upDownCounter } from './seqparts';
 import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
 import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
 
@@ -176,6 +177,12 @@ export const families: Family[] = [
   nBit('counter', 'Counter', 'sequential', [2, 3, 4, 8], 4, (n) => `counter${n}`, counter),
   nBit('smul', 'Iterative multiplier', 'sequential', [4, 8, 16, 32], 8, (n) => `smul${n}`, seqMul),
   nBit('pmul', 'Pipelined multiplier', 'sequential', [4, 8, 16, 32], 8, (n) => `pmul${n}`, pipeMul),
+  nBit('updown', 'Up/down counter', 'sequential', [2, 4, 8, 16], 4, (n) => `updown${n}`, upDownCounter),
+  nBit('shreg', 'Universal shift register', 'sequential', [4, 8, 16], 4, (n) => `shreg${n}`, shiftRegister),
+  nBit('lfsr', 'LFSR', 'sequential', [3, 4, 5, 8, 16], 4, (n) => `lfsr${n}`, lfsr),
+  nBit('ring', 'Ring counter', 'sequential', [3, 4, 8], 4, (n) => `ring${n}`, (n) => ringCounter(n)),
+  nBit('johnson', 'Johnson counter', 'sequential', [3, 4, 8], 4, (n) => `johnson${n}`, (n) => ringCounter(n, true)),
+  { id: 'clkdiv', name: 'Ripple clock divider', category: 'sequential', params: [count('stages', [1, 2, 3, 4, 8], 3)], key: (p) => `clkdiv${p.stages}`, make: (p) => clockDivider(p.stages) },
   nBit('sdiv', 'Iterative divider', 'sequential', [4, 8, 16, 32], 8, (n) => `sdiv${n}`, seqDivider),
   nBit('nrsdiv', 'Iterative non-restoring divider', 'sequential', [4, 8, 16, 32], 8, (n) => `nrsdiv${n}`, nrSeqDivider),
   nBit('srtdiv', 'Iterative SRT divider', 'sequential', [4, 8, 16, 32], 8, (n) => `srtdiv${n}`, srtDivider),

@@ -89,7 +89,7 @@ export const DFF_R: ComponentDef = define({
   netlist: () => {
     const g = symbolGeom(D_LATCH_R), x2 = 10 + g.w + 8;
     return {
-      pins: { d: [0, 1 + g.ports.d.pos[1]], clk: [0, 1 + g.ports.e.pos[1] + 8], rst_n: [0, 1 + g.h + 4], q: [x2 + g.w + 6, 1 + g.ports.q.pos[1]] },
+      pins: { d: [0, 1 + g.ports.d.pos[1]], clk: [0, 1 + g.ports.e.pos[1]], rst_n: [0, 1 + g.h + 4], q: [x2 + g.w + 6, 1 + g.ports.q.pos[1]] },
       instances: [
         { name: 'inv', def: NOT, at: [4, g.ports.e.pos[1]] },
         { name: 'master', def: D_LATCH_R, at: [10, 1] },
@@ -166,7 +166,7 @@ export const JKFF: ComponentDef = define({
 /** n-bit up/down counter with parallel load: q ← load ? d : q ± 1 (when en or load). */
 export function upDownCounter(n: number): ComponentDef {
   return memo(`updown${n}`, () => {
-    const b = new Builder(8, 12);
+    const b = new Builder(16, 12);
     b.pins('up', 'en', 'load', 'd', 'clk');
     const down = b.op1(NOT, ['up'], 'down?');
     const one = b.op1(constWord(n, 1), []);
