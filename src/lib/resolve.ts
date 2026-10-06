@@ -20,6 +20,7 @@ import { bankedMemory } from './lsu';
 import { clearableRegister } from './pipeline';
 import { boothMul, pipeMul, seqMul } from './multiply';
 import { bcdAdder, carrySelect, carrySkip } from './adders';
+import { sramArray, sramColumn } from './arrays';
 import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
 import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
 
@@ -195,6 +196,12 @@ export const families: Family[] = [
     id: 'bmem', name: 'Byte-banked memory', category: 'memory', params: [count('words', [16, 32, 64], 16)],
     key: (p) => `bmem${log2(p.words)}`, make: (p) => bankedMemory(log2(p.words)),
   },
+  {
+    id: 'sram', name: 'SRAM array (transistor level)', category: 'memory',
+    params: [count('rows', [2, 4, 8], 4), count('columns', [1, 2, 4, 8], 4)],
+    key: (p) => `sram${p.rows}x${p.columns}`, make: (p) => sramArray(p.rows, p.columns),
+  },
+  { id: 'sramcolio', name: 'SRAM column with I/O', category: 'memory', params: [count('cells', [2, 4, 8], 4)], key: (p) => `sramcolio${p.cells}`, make: (p) => sramColumn(p.cells) },
   {
     id: 'dcache', name: 'Memory with a cache', category: 'memory',
     params: [count('memory words', [64, 128, 256], 64), count('cache lines', [2, 4, 8], 4)],
