@@ -8,7 +8,7 @@ import { needsSwitchLevel } from '../sim/harness';
 import { completeEdge, type Edge, riseEdge, stepEdge } from '../sim/edge';
 import type { PowerOnMode, Sim } from '../sim/sim';
 import { SwitchSim } from '../sim/switchsim';
-import { B0, B1, type Bit, type ComponentDef, inPorts, netlistOf, outPorts, type PortDef } from '../sim/types';
+import { B0, B1, BZ, type Bit, type ComponentDef, inPorts, netlistOf, outPorts, type PortDef } from '../sim/types';
 import { formatBits, formatNumber, mask, pack, packBig, type Radix, unpackBig } from '../sim/values';
 import { LogicAnalyzer, netKey } from './analyzer';
 import { h, icon } from '../ui/dom';
@@ -732,8 +732,10 @@ export class Stage {
     for (const el of this.controls.querySelectorAll<HTMLElement>('[data-out]')) {
       const p = this.scene!.root.ports.find((q) => q.name === el.dataset.out)!;
       const bits = this.sim.getBits(root.ports[p.name]);
-      const x = bits.some((b) => b !== B0 && b !== B1);
+      // floating (every bit Z: a tri-state output let go) is not unknown
+      const z = bits.every((b) => b === BZ), x = !z && bits.some((b) => b !== B0 && b !== B1);
       el.classList.toggle('vx', x);
+      el.classList.toggle('vz', z);
       if (p.width === 1) el.classList.toggle('v1', bits[0] === B1);
       else el.querySelector('.v')!.textContent = formatBits(bits, this.outRadixOf(p));
     }

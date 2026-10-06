@@ -400,7 +400,7 @@ export class PropsPanel {
   }
 }
 
-/** NAND and transistor counts; `depth` fills in a slot for the logic depth (computed later). */
+/** NAND, transistor (and resistor, capacitor) counts; `depth` fills in a slot for the logic depth (computed later). */
 function costLine(def: ComponentDef, depth?: (el: HTMLElement) => void): HTMLElement {
   let st;
   try {
@@ -411,7 +411,9 @@ function costLine(def: ComponentDef, depth?: (el: HTMLElement) => void): HTMLEle
   const slot = depth ? h('span') : null;
   const el = h('p', { class: 'sb-cost' },
     h('span', null, h('b', null, st.nands.toLocaleString()), ' NAND'),
-    h('span', null, h('b', null, st.transistors.toLocaleString()), ' transistors'), slot);
+    h('span', null, h('b', null, st.transistors.toLocaleString()), ' transistors'),
+    st.resistors ? h('span', null, h('b', null, st.resistors.toLocaleString()), st.resistors > 1 ? ' resistors' : ' resistor') : null,
+    st.capacitors ? h('span', null, h('b', null, st.capacitors.toLocaleString()), st.capacitors > 1 ? ' capacitors' : ' capacitor') : null, slot);
   if (depth && slot) depth(slot);
   return el;
 }

@@ -5,12 +5,12 @@ import { flatten } from './flatten';
 import { GateSim } from './gatesim';
 import type { Sim } from './sim';
 import { SwitchSim } from './switchsim';
-import { type ComponentDef, inPorts, netlistOf, outPorts } from './types';
+import { type ComponentDef, inPorts, isSwitchPrim, netlistOf, outPorts } from './types';
 import { pack } from './values';
 
 /** Does this component only make sense at switch level (contains transistors)? */
 export function needsSwitchLevel(def: ComponentDef): boolean {
-  if (def.prim === 'nmos' || def.prim === 'pmos' || def.prim === 'vdd' || def.prim === 'gnd') return true;
+  if (isSwitchPrim(def)) return true;
   // Anything whose own inside is transistors (including the NAND primitive) is shown at switch level.
   const nl = netlistOf(def);
   return !!nl && nl.level === 'switch';
@@ -19,7 +19,8 @@ export function needsSwitchLevel(def: ComponentDef): boolean {
 const reachCache = new WeakMap<ComponentDef, boolean>();
 
 /**
- * Would a gate-level flatten of this component reach a transistor or a rail, i.e. can it only be
+ * Would a gate-level flatten of this component reach a transistor, a rail, a resistor or a
+ * capacitor, i.e. can it only be
  * simulated at switch level? Unlike needsSwitchLevel (is its own inside drawn in transistors?),
  * this follows what flatten does in gate mode: a NAND primitive or a behaviour hides the
  * transistors below it, a gate-level netlist is expanded (unless a behaviour is preferred).
@@ -28,7 +29,7 @@ export function reachesTransistors(def: ComponentDef): boolean {
   const hit = reachCache.get(def);
   if (hit !== undefined) return hit;
   let r: boolean;
-  if (def.prim === 'nmos' || def.prim === 'pmos' || def.prim === 'vdd' || def.prim === 'gnd') r = true;
+  if (isSwitchPrim(def)) r = true;
   else if (def.prim) r = false; // nand, alias
   else {
     const nl = netlistOf(def);

@@ -90,6 +90,73 @@ export function counterSeg7Chip(id: string, name: string): ChipDoc {
   });
 }
 
+/**
+ * A shared bus: two tri-state buffers drive one wire, a pull-down holds it at 0 while neither is
+ * enabled. Enable both with different values and the drivers fight (X).
+ */
+export function sharedBusChip(id: string, name: string): ChipDoc {
+  return chip(id, name, {
+    notes: 'Two tri-state buffers on one wire. Enable one: the bus carries its value. Enable none: the pull-down holds the bus at 0 (delete it and the bus floats, Z). Enable both with different values: VDD shorts to GND through both drivers (X). Solved at switch level.',
+    pins: [
+      pin('ea', 'in', [2, 2], 1, { value: 1 }), pin('a', 'in', [2, 6], 1, { value: 1 }),
+      pin('eb', 'in', [2, 12]), pin('b', 'in', [2, 16]),
+      pin('bus', 'out', [30, 11]),
+    ],
+    parts: [
+      part('ta', { lib: 'tribuf' }, [10, 4]), part('tb', { lib: 'tribuf' }, [10, 14]),
+      part('pd', { lib: 'pulldown' }, [23, 13]),
+    ],
+    wires: [
+      wire('ea', 'pin:ea', 'ta.en', [[12, 2]]), wire('a', 'pin:a', 'ta.a'),
+      wire('eb', 'pin:eb', 'tb.en', [[12, 12]]), wire('b', 'pin:b', 'tb.a'),
+      wire('bus', 'ta.y', 'pin:bus', [[20, 6], [20, 11]], { name: 'bus' }),
+      wire('busb', 'tb.y', { wire: 'bus', at: [20, 11] }, [[20, 16]]),
+      wire('pull', { wire: 'bus', at: [24, 11] }, 'pd.y'),
+    ],
+  });
+}
+
+/**
+ * Wired logic: open-drain (or open-source) stages on one wire with a pull resistor. Each stage is
+ * an inverter and one transistor that either pulls the wire or lets go of it. With NMOS to GND
+ * and a pull-up the wire is the AND of the inputs; with PMOS to VDD and a pull-down, the OR.
+ */
+export function wiredChip(id: string, name: string, kind: 'and' | 'or'): ChipDoc {
+  const and = kind === 'and';
+  return chip(id, name, {
+    notes: and
+      ? 'Open-drain wired-AND: each stage pulls the wire to 0 when its input is 0 and otherwise lets go; the pull-up makes it 1 when every stage lets go. Any number of stages can share the wire (I²C, interrupt lines). The price: static current through the pull-up while the wire is low.'
+      : 'Open-source wired-OR: each stage pulls the wire to 1 when its input is 1 and otherwise lets go; the pull-down makes it 0 when every stage lets go. The price: static current through the pull-down while the wire is high.',
+    pins: [pin('a', 'in', [2, and ? 9 : 10], 1, { value: 1 }), pin('b', 'in', [2, and ? 16 : 3], 1, { value: 1 }), pin('y', 'out', [30, and ? 5 : 14])],
+    parts: and ? [
+      part('ia', { lib: 'inv_cmos' }, [6, 8]), part('ib', { lib: 'inv_cmos' }, [14, 15]),
+      part('na', { lib: 'nmos' }, [12, 7]), part('nb', { lib: 'nmos' }, [20, 7]),
+      part('ga', { lib: 'gnd' }, [14, 12]), part('gb', { lib: 'gnd' }, [22, 12]),
+      part('pu', { lib: 'pullup' }, [18, 0]),
+    ] : [
+      part('ia', { lib: 'inv_cmos' }, [6, 9]), part('ib', { lib: 'inv_cmos' }, [14, 2]),
+      part('pa', { lib: 'pmos' }, [12, 8]), part('pb', { lib: 'pmos' }, [20, 8]),
+      part('va', { lib: 'vdd' }, [14, 6]), part('vb', { lib: 'vdd' }, [22, 6]),
+      part('pd', { lib: 'pulldown' }, [18, 15]),
+    ],
+    wires: and ? [
+      wire('a', 'pin:a', 'ia.a'), wire('an', 'ia.y', 'na.g'),
+      wire('b', 'pin:b', 'ib.a'), wire('bn', 'ib.y', 'nb.g', [[18, 16], [18, 9]]),
+      wire('sa', 'na.s', 'ga.p'), wire('sb', 'nb.s', 'gb.p'),
+      wire('bus', 'na.d', 'pin:y', [[15, 5]], { name: 'bus' }),
+      wire('busb', 'nb.d', { wire: 'bus', at: [23, 5] }),
+      wire('pull', 'pu.y', { wire: 'bus', at: [19, 5] }),
+    ] : [
+      wire('a', 'pin:a', 'ia.a'), wire('an', 'ia.y', 'pa.g'),
+      wire('b', 'pin:b', 'ib.a'), wire('bn', 'ib.y', 'pb.g', [[18, 3], [18, 10]]),
+      wire('sa', 'va.p', 'pa.s'), wire('sb', 'vb.p', 'pb.s'),
+      wire('bus', 'pa.d', 'pin:y', [[15, 14]], { name: 'bus' }),
+      wire('busb', 'pb.d', { wire: 'bus', at: [23, 14] }),
+      wire('pull', { wire: 'bus', at: [19, 14] }, 'pd.y'),
+    ],
+  });
+}
+
 export interface Example {
   id: string;
   name: string;
@@ -100,6 +167,9 @@ export interface Example {
 export const EXAMPLES: Example[] = [
   { id: 'fetch', name: 'Fetch loop', blurb: 'PC register, PC + 4 and a program ROM: the instruction fetch of a CPU.', build: (id, n) => fetchChip(id, n) },
   { id: 'counter7', name: '4-bit counter on a 7-segment display', blurb: 'A counter, a font ROM as the decoder, a 7-segment digit.', build: counterSeg7Chip },
+  { id: 'sharedbus', name: 'Shared bus', blurb: 'Two tri-state drivers and a pull-down on one wire: a value, a held 0, or a fight (X).', build: sharedBusChip },
+  { id: 'wiredand', name: 'Wired-AND', blurb: 'Open-drain NMOS stages and a pull-up: the wire is 1 only when every stage lets go.', build: (id, n) => wiredChip(id, n, 'and') },
+  { id: 'wiredor', name: 'Wired-OR', blurb: 'Open-source PMOS stages and a pull-down: the wire is 1 when any stage pulls it up.', build: (id, n) => wiredChip(id, n, 'or') },
 ];
 
 /** Add an example as a new chip (fresh id and name) and open it. */

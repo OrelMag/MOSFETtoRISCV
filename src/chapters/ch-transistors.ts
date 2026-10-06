@@ -1,4 +1,4 @@
-import { FULL_ADDER, INV_CMOS, NAND, NMOS_SWITCH, NOR_CMOS, PMOS_SWITCH, rca } from '../lib';
+import { FULL_ADDER, INV_CMOS, INV_PSEUDO, NAND, NMOS_SWITCH, NOR_CMOS, PMOS_SWITCH, rca } from '../lib';
 import { journeyWidget } from '../widgets/journey';
 import { mosfetWidget } from '../widgets/mosfet';
 import { bench, type Chapter } from './types';
@@ -153,6 +153,27 @@ export const chInverter: Chapter = {
         <p>Switch to the <strong>Truth table</strong> tab: it was computed by actually solving the transistor
         network for every input.</p>`,
       scene: () => ({ root: INV_CMOS, inputs: { a: 1 } }),
+    },
+    {
+      title: 'The cheaper, hotter way: a pull-up',
+      body: `
+        <p>Replace the PMOS with a <strong>resistor</strong> to VDD and keep the NMOS: a
+        <strong>pseudo-NMOS</strong> inverter. With <code>a = 0</code> the resistor pulls <code>y</code> to 1.
+        With <code>a = 1</code> both paths conduct and the NMOS wins, because it is sized to be much stronger
+        (<em>ratioed</em> logic; here a resistor is weaker than any transistor).</p>
+        <p>What it costs: while <code>y = 0</code> a current flows from VDD through the resistor and the NMOS
+        to ground, all the time, not just while switching. The low level is only as good as the ratio, and the
+        rising edge is as slow as the resistor. What it saves: one device per input. An n-input NOR is n
+        transistors and one resistor instead of 2n transistors, which is why wide NORs (PLA and ROM rows) and
+        open-drain buses still pull up.</p>
+        <div class="try">Toggle <code>a</code> and watch the NMOS override the pull-up. The truth table is the
+        CMOS inverter's: same function, half the transistors, none of the standby savings.</div>`,
+      scene: () => ({ root: INV_PSEUDO, inputs: { a: 1 } }),
+      challenge: {
+        kind: 'quiz', question: 'When does the pseudo-NMOS inverter draw current with its input held still?',
+        options: ['Never', 'While a = 0', 'While a = 1', 'Always'], answer: 2,
+        explain: 'While a = 1 the NMOS conducts and the resistor connects VDD to it: a resistive path from VDD to ground. With a = 0 the NMOS is open and no current flows once y has charged to 1.',
+      },
     },
   ],
 };

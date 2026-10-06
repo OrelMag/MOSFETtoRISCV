@@ -31,6 +31,8 @@ built on the same simulator, so whatever you build is a real component of the si
 - **Package** a circuit as a chip (name, colour, pin order), use it in other circuits, nest chips
   to any depth and edit them later: every user of the chip is rebuilt.
 - **Look inside** any placed part, live, down to the transistors.
+- Switch-level parts beyond the MOSFET: resistors, pull-ups / pull-downs, capacitors, transmission
+  gates and tri-state drivers, so shared buses, wired-AND / wired-OR and pseudo-NMOS logic work.
 - Recreate **every level** of the journey: chips built from transistors are solved at switch
   level and become gate-level bricks; latches, flip-flops (recognised by static timing), RAM with
   initial contents, and a **program ROM** whose contents you write in RISC-V assembly or hex.
