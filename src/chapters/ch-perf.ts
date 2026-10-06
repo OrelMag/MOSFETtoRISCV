@@ -1,6 +1,7 @@
-import { CLA4, koggeStone, rca } from '../lib';
+import { CLA4, carrySelect, carrySkip, koggeStone, rca } from '../lib';
 import { PROGRAMS } from '../riscv/programs';
 import { cpuScene } from '../widgets/cpupanel';
+import { adderVariants } from '../widgets/adders';
 import { adderComparison } from '../widgets/timing';
 import type { Chapter } from './types';
 
@@ -8,7 +9,7 @@ const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
 
 export const chFastAdders: Chapter = {
   id: 'fastadd', num: 15, title: 'Faster adders', level: 'Optimization',
-  blurb: 'Carry-lookahead and Kogge–Stone: trading gates for speed, measured on the CPU\'s critical path.',
+  blurb: 'Carry-lookahead, Kogge–Stone, carry-select and carry-skip: trading gates for speed, measured on the CPU\'s critical path.',
   steps: [
     {
       title: 'The ripple problem',
@@ -50,6 +51,43 @@ export const chFastAdders: Chapter = {
       actions: [{ label: 'Toggle cin', run: (st) => st.toggleInput('cin') }],
     },
     {
+      title: 'Carry-select: compute both answers',
+      body: `
+        <p>A cruder way to stop waiting for the carry: build each block twice, once assuming its carry-in is 0 and once 1, and let both work
+        while the real carry is still on its way. When it arrives, a multiplexer picks the right sum. The carry then crosses one multiplexer
+        per block instead of rippling through it.</p>
+        <p>At 32 bits with 4-bit blocks: 32 NAND delays instead of 68, for 680 NANDs instead of 288. Uneven blocks (small first, growing
+        later, so every block's answers are ready just as its carry arrives) do better; so does selecting at two levels.</p>
+        <div class="try">Toggle <code>cin</code> (slow motion is on): only the first block and the chain of multiplexers react.</div>`,
+      scene: () => ({ root: carrySelect(8), inputs: { a: 0xff, b: 0, cin: 0 }, animate: true }),
+      actions: [{ label: 'Toggle cin', run: (st) => st.toggleInput('cin') }],
+    },
+    {
+      title: 'Carry-skip, and a false path',
+      body: `
+        <p>Carry-skip spends much less: plain ripple blocks, plus one test per block, "does every bit propagate?" (all a XOR b = 1). If so, the
+        block's carry-out must equal its carry-in, and a multiplexer passes the carry-in straight on. A long carry ripples out of the first
+        block, skips the middle ones, and ripples into the last.</p>
+        <p>Here static analysis gets it wrong. The Info tab reports a depth larger than ripple carry's, because the path that ripples through
+        every block <em>and</em> its multiplexer is still in the netlist. But that path can never carry the last change: whenever a block would
+        ripple all the way through, its multiplexer has already chosen the skip. It is a <strong>false path</strong>. Simulated, the 32-bit
+        version settles in about 31 NAND delays, not 83.</p>
+        <div class="try">With a = 0xFF, toggle <code>cin</code>: both blocks propagate, so the carry skips. Then set b = 1 and toggle again.</div>`,
+      scene: () => ({ root: carrySkip(8), inputs: { a: 0xff, b: 0, cin: 0 }, animate: true }),
+      actions: [{ label: 'Toggle cin', run: (st) => st.toggleInput('cin') }],
+      challenge: {
+        kind: 'quiz', question: 'Why does a static timing tool overestimate the carry-skip adder?',
+        options: [
+          'It assumes every path in the netlist can carry the last change, including the ripple through a block whose skip multiplexer is selected',
+          'It ignores the multiplexers',
+          'It counts the XOR gates twice',
+          'Static timing is always pessimistic by a constant factor',
+        ],
+        answer: 0,
+        explain: 'Static timing is pessimistic only where the circuit has paths that no input can sensitize. Designers declare them as false paths (set_false_path in SDC), or prefer structures without them. That is one reason carry-skip is rare in synthesized logic.',
+      },
+    },
+    {
       title: 'Measured, not quoted',
       body: `
         <p>The table is computed from the netlists: NAND count and worst-case depth for both adders. Kogge–Stone buys
@@ -62,6 +100,11 @@ export const chFastAdders: Chapter = {
         options: ['Twice as deep', 'One more prefix level', 'Not at all', 'Four times as deep'], answer: 1,
         explain: 'Depth is ~log₂ n prefix levels: doubling the width adds one level (2 NANDs here). The ripple adder adds 32 more NAND delays for the same step.',
       },
+    },
+    {
+      title: 'Four adders, measured two ways',
+      body: '<p>Static depth against simulated delay, from the netlists of this chapter.</p>',
+      widget: adderVariants,
     },
     {
       title: 'Static timing on our CPU',
