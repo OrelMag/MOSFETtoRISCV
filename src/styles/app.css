@@ -337,9 +337,24 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .net-tag.vx rect { stroke: var(--wx); }
 .net-tag.bus rect { stroke: var(--bus); }
 .net-tag.bus.bus1 rect { fill: color-mix(in srgb, var(--bus) 10%, var(--surface)); }
-.net-tag { cursor: help; }
 .wire.net-hover { stroke-width: 0.5 !important; opacity: 1 !important; }
 .net-tag.net-hover rect { stroke-width: 0.25; stroke: var(--hl); }
+.wire-hit { fill: none; stroke: transparent; stroke-width: 0.9; pointer-events: stroke; cursor: pointer; }
+.wire.net-sel { stroke-width: calc(var(--wire-w1) + 0.22) !important; opacity: 1 !important; filter: drop-shadow(0 0 0.35px var(--sel)); }
+.net-tag.net-sel rect { stroke: var(--sel); stroke-width: 0.26; }
+.net-tag.net-sel text { fill: var(--text); }
+.net-tag.net-ping rect { animation: ping 0.3s ease-in-out 3; }
+@keyframes ping { 50% { stroke-width: 0.6; } }
+.net-tag { cursor: pointer; }
+/* bit ranges at splitter / merger taps */
+.tap-label { pointer-events: none; }
+.tap-label rect { fill: var(--surface); stroke: var(--w0); stroke-width: 0.05; }
+.tap-label text { font-family: var(--font-mono); font-weight: 600; fill: var(--muted); }
+.tap-label.v1 rect { stroke: var(--w1); fill: color-mix(in srgb, var(--w1) 12%, var(--surface)); }
+.tap-label.v1 text { fill: var(--w1); }
+.tap-label.bus rect { stroke: color-mix(in srgb, var(--bus) 60%, transparent); }
+.tap-label.bus text { fill: var(--bus-label-text); }
+.tap-label.vx text { fill: var(--wx); }
 .wire-tip {
   position: absolute; pointer-events: none; opacity: 0; transition: opacity 0.1s; z-index: 5;
   background: var(--text); color: var(--surface); font: 600 12px var(--font-mono);

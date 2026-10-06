@@ -1,13 +1,13 @@
 // The schematic: one component's internal netlist drawn as SVG, with live wire values.
 // Rendering builds the DOM once; update() only touches classes and labels.
 
-import { symbolGeom, type Vec } from '../sim/geometry';
+import { instPort, symbolGeom, type Vec } from '../sim/geometry';
 import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, netlistOf } from '../sim/types';
 import { formatBits, type Radix } from '../sim/values';
 import { icon, s } from '../ui/dom';
 import type { ViewCtx } from './context';
-import { routeNetlist, type PinGeom, type RoutedNet } from './route';
+import { hopPathData, routeNetlist, splitterBars, type PinGeom, type RoutedNet } from './route';
 import { drawSymbol, portLabel } from './symbols';
 
 export interface SchematicEvents {
@@ -22,6 +22,8 @@ interface WireEls {
   paths: SVGPathElement[];
   tags: SVGGElement[];
   dots: SVGCircleElement[];
+  /** Bit-range labels where this net leaves a splitter tap or enters a merger tap. */
+  taps: SVGGElement[];
   label?: SVGGElement;
   labelText?: SVGTextElement;
   labelBg?: SVGRectElement;
@@ -58,6 +60,7 @@ export class SchematicView {
   private radixOverride = new Map<number, Radix>();
   private interactive = false;
   private selected: string | null = null;
+  private selectedNet = -1;
   radix: Radix = 'hex';
   /** Screen pixels on the right covered by a docked panel; fit() keeps the circuit clear of them. */
   insetRight = 0;
@@ -77,6 +80,7 @@ export class SchematicView {
     this.interactive = interactive;
     this.radixOverride.clear();
     this.selected = null;
+    this.selectedNet = -1;
     const nl = netlistOf(ctx.def);
     this.el.replaceChildren();
     this.wires = [];
@@ -84,6 +88,8 @@ export class SchematicView {
     this.insts.clear();
     if (!nl) return;
     const { nets, pins } = routeNetlist(ctx.def, nl);
+    const pathData = hopPathData(nets, splitterBars(nl));
+    const tapsOf = splitterTaps(nl);
 
     const defs = s('defs');
     defs.innerHTML = `<pattern id="grid" width="1" height="1" patternUnits="userSpaceOnUse">
@@ -91,10 +97,11 @@ export class SchematicView {
     this.el.append(defs);
     const gridRect = s('rect', { class: 'grid-bg', x: -500, y: -500, width: 1000, height: 1000, fill: 'url(#grid)' });
     const wiresG = s('g', { class: 'wires' });
+    const hitG = s('g', { class: 'wire-hits' });
     const instG = s('g', { class: 'insts' });
     const pinG = s('g', { class: 'pins' });
     const labelG = s('g', { class: 'labels' });
-    this.el.append(gridRect, wiresG, instG, pinG, labelG);
+    this.el.append(gridRect, wiresG, hitG, instG, pinG, labelG);
 
     // Bounding box of everything drawn.
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -105,7 +112,7 @@ export class SchematicView {
     // Wires
     for (const net of nets) {
       const cls = net.width > 1 ? 'wire bus' : 'wire';
-      const w: WireEls = { net, paths: [], dots: [], tags: [] };
+      const w: WireEls = { net, paths: [], dots: [], tags: [], taps: [] };
       const name = nl.nets[net.index].name ?? `n${net.index}`;
       for (const t of net.tags) {
         const D: Record<string, [number, number]> = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
@@ -123,12 +130,26 @@ export class SchematicView {
         grow(rx, ry);
         grow(rx + tw, ry + th);
       }
-      for (const p of net.paths) {
+      net.paths.forEach((p, pi) => {
         p.forEach(([x, y]) => grow(x, y));
-        const d = 'M' + p.map(([x, y]) => `${x},${y}`).join(' L');
-        const path = s('path', { d, class: cls, 'data-net': net.index });
+        const path = s('path', { d: pathData[net.index][pi], class: cls, 'data-net': net.index });
         w.paths.push(path);
         wiresG.append(path);
+      });
+      // One wide invisible stroke per net makes thin wires easy to point at and click.
+      if (net.paths.length) {
+        const d = net.paths.map((p) => 'M' + p.map(([x, y]) => `${x},${y}`).join(' L')).join(' ');
+        hitG.append(s('path', { d, class: 'wire-hit', 'data-net': net.index }));
+      }
+      for (const t of tapsOf.get(net.index) ?? []) {
+        const g = s('g', { class: 'tap-label' });
+        const tw = textWidth(t.text, t.size) + 0.1, th = t.size * 1.3;
+        const x = t.right ? t.pos[0] + 0.12 : t.pos[0] - 0.12 - tw;
+        const y = t.pos[1] - th - 0.1;
+        g.append(s('rect', { x, y, width: tw, height: th, rx: th / 2 }),
+          s('text', { x: x + tw / 2, y: y + th * 0.76, 'text-anchor': 'middle', style: `font-size:${t.size}px` }, t.text));
+        w.taps.push(g);
+        labelG.append(g);
       }
       for (const [x, y] of net.dots) {
         const c = s('circle', { cx: x, cy: y, r: net.width > 1 ? 0.32 : 0.24, class: 'dot' });
@@ -267,6 +288,7 @@ export class SchematicView {
       }
       const dcls = `dot ${w.net.width > 1 ? busClass(bits) : bitClass(bits[0])}`;
       for (const d of w.dots) d.setAttribute('class', dcls);
+      for (const t of w.taps) t.setAttribute('class', `tap-label ${vcls}`);
       if (w.labelText && w.labelBg && w.net.label) {
         const txt = formatBits(bits, this.radixOverride.get(w.net.index) ?? this.radix);
         w.labelText.textContent = txt;
@@ -319,6 +341,40 @@ export class SchematicView {
   select(name: string | null): void {
     this.selected = name;
     for (const [n, g] of this.insts) g.classList.toggle('selected', n === name);
+    if (name !== null) this.selectNet(-1);
+  }
+
+  /** Select a net: every wire, label and tag of it stays highlighted (-1 clears). */
+  selectNet(idx: number): void {
+    this.selectedNet = idx;
+    this.el.querySelectorAll('.net-sel').forEach((e) => e.classList.remove('net-sel'));
+    if (idx >= 0) this.el.querySelectorAll(`[data-net="${idx}"]`).forEach((e) => e.classList.add('net-sel'));
+  }
+
+  /** Clicking a net selects it; clicking one of its tags again pans to the net's next tag. */
+  private clickNet(idx: number, target: Element): void {
+    if (idx !== this.selectedNet) {
+      this.select(null);
+      this.events.select(null);
+      this.selectNet(idx);
+      return;
+    }
+    const w = this.wires.find((x) => x.net.index === idx);
+    const tag = target.closest('.net-tag');
+    if (!w || !tag || w.tags.length < 2) return;
+    const k = (w.tags.indexOf(tag as SVGGElement) + 1) % w.tags.length;
+    this.centerOn(w.net.tags[k].pos);
+    w.tags[k].classList.add('net-ping');
+    setTimeout(() => w.tags[k].classList.remove('net-ping'), 900);
+  }
+
+  /** Pan (without zooming) so that a point is centred, unless it is already well inside the view. */
+  centerOn(p: Vec): void {
+    const v = this.vb;
+    const mx = v.w * 0.15, my = v.h * 0.15;
+    if (p[0] > v.x + mx && p[0] < v.x + v.w - mx && p[1] > v.y + my && p[1] < v.y + v.h - my) return;
+    this.vb = { ...v, x: p[0] - v.w / 2, y: p[1] - v.h / 2 };
+    this.applyViewBox();
   }
 
   get selection(): string | null {
@@ -368,7 +424,7 @@ export class SchematicView {
   }
 
   private installPanZoom(): void {
-    let drag: { x: number; y: number; vx: number; vy: number; moved: boolean } | null = null;
+    let drag: { x: number; y: number; vx: number; vy: number; moved: boolean; target: Element } | null = null;
     this.el.addEventListener('wheel', (e) => {
       e.preventDefault();
       const [wx, wy] = this.toWorld(e.clientX, e.clientY);
@@ -376,7 +432,7 @@ export class SchematicView {
     }, { passive: false });
     this.el.addEventListener('pointerdown', (e) => {
       if ((e.target as Element).closest('.inst, .pin.clickable, .bus-label')) return;
-      drag = { x: e.clientX, y: e.clientY, vx: this.vb.x, vy: this.vb.y, moved: false };
+      drag = { x: e.clientX, y: e.clientY, vx: this.vb.x, vy: this.vb.y, moved: false, target: e.target as Element };
       this.el.setPointerCapture(e.pointerId);
     });
     this.el.addEventListener('pointermove', (e) => {
@@ -394,8 +450,13 @@ export class SchematicView {
     });
     const end = (e: PointerEvent) => {
       if (drag && !drag.moved) {
-        this.select(null);
-        this.events.select(null);
+        const n = drag.target.closest('[data-net]');
+        if (n) this.clickNet(Number(n.getAttribute('data-net')), drag.target);
+        else {
+          this.select(null);
+          this.events.select(null);
+          this.selectNet(-1);
+        }
       }
       drag = null;
       if (this.el.hasPointerCapture(e.pointerId)) this.el.releasePointerCapture(e.pointerId);
@@ -435,4 +496,31 @@ export class SchematicView {
     this.tooltip.style.top = `${e.clientY - r.top + 14}px`;
     this.tooltip.style.opacity = '1';
   }
+}
+
+interface TapLabel { pos: Vec; right: boolean; text: string; size: number }
+
+/** Bit ranges carried by each splitter output / merger input, keyed by the net on the tap. */
+function splitterTaps(nl: NonNullable<ReturnType<typeof netlistOf>>): Map<number, TapLabel[]> {
+  const netOf = new Map<string, number>();
+  nl.nets.forEach((n, i) => n.ends.forEach((e) => netOf.set(e, i)));
+  const out = new Map<number, TapLabel[]>();
+  for (const inst of nl.instances) {
+    const k = inst.def.symbol.kind;
+    if (k !== 'split' && k !== 'merge') continue;
+    const size = Math.min(0.72, (inst.def.symbol.pitch ?? 2) * 0.4);
+    let bit = 0;
+    for (const p of inst.def.ports) {
+      if ((k === 'split') !== (p.dir === 'out')) continue;
+      const text = p.width === 1 ? `${bit}` : `${bit + p.width - 1}:${bit}`;
+      bit += p.width;
+      const net = netOf.get(`${inst.name}.${p.name}`);
+      if (net === undefined) continue;
+      const g = instPort(inst.def, inst.at ?? [0, 0], inst.flip, p.name);
+      const list = out.get(net) ?? [];
+      list.push({ pos: g.pos, right: g.exit === 'right', text, size });
+      out.set(net, list);
+    }
+  }
+  return out;
 }
