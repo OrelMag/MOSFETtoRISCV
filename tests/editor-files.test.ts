@@ -110,6 +110,19 @@ describe('chip management', () => {
 });
 
 describe('import summary', () => {
+  it('numbers the name of a renamed chip whose name is taken too', () => {
+    const r = importJson(exportJson(workspace(fullAdder(), halfAdder()), ['u_fa']), workspace({ ...otherHa(), name: 'HA' }));
+    if ('error' in r) throw new Error(r.error);
+    expect(r.ws.chips.u_ha.name).toBe('HA');
+    expect(r.ws.chips.u_ha_2.name).toBe('HA 2');
+    expect(summarize(r).renamed).toEqual([{ from: 'u_ha', to: 'u_ha_2', name: 'HA 2' }]);
+    // Again: recognized as the same chips despite the new name.
+    const again = importJson(exportJson(workspace(fullAdder(), halfAdder()), ['u_fa']), r.ws);
+    if ('error' in again) throw new Error(again.error);
+    expect(again.added).toEqual([]);
+    expect(again.skipped).toEqual(['u_ha_2', 'u_fa']);
+  });
+
   it('names what was added, renamed and skipped, and opens the top chip', () => {
     const target = workspace(otherHa());
     const r = importJson(exportJson(workspace(fullAdder(), halfAdder()), ['u_fa']), target);

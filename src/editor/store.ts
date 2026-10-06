@@ -258,8 +258,10 @@ function depOrder(chips: ChipDoc[]): ChipDoc[] {
  * Adds the chips of an exported file (or a decoded share link) to the workspace. A chip whose id
  * exists with the same content is skipped; with different content it comes in under a new id
  * (u_x_2) and the imported chips that place it are rewritten. Existing chips are never touched.
- * A chip that an earlier import of the same file already renamed (u_x_2 with the same content)
- * is recognized and skipped too, so opening a link twice does not pile up copies.
+ * A renamed chip whose name is also taken gets a numbered name ("Adder 2"), so the two can be
+ * told apart in tabs and the palette. A chip that an earlier import of the same file already
+ * renamed (u_x_2, same content but for the name) is recognized and skipped, so opening a link
+ * twice does not pile up copies.
  */
 export function importChips(chips: ChipDoc[], ws: Workspace): Imported {
   const incoming = depOrder(chips);
@@ -269,7 +271,9 @@ export function importChips(chips: ChipDoc[], ws: Workspace): Imported {
   const renamed: Record<string, string> = {};
   /** Every incoming id → the id it ends up as (refs of later chips are rewritten through it). */
   const ids: Record<string, string> = {};
-  const earlier = (c: ChipDoc) => Object.keys(ws.chips).find((k) => k.startsWith(`${c.id}_`) && /^\d+$/.test(k.slice(c.id.length + 1)) && same(ws.chips[k], { ...c, id: k }));
+  const earlier = (c: ChipDoc) => Object.keys(ws.chips).find((k) => k.startsWith(`${c.id}_`) && /^\d+$/.test(k.slice(c.id.length + 1))
+    && same(ws.chips[k], { ...c, id: k, name: ws.chips[k].name }));
+  const names = new Set(Object.values(ws.chips).map((c) => c.name));
   for (const c0 of incoming) {
     const c = renameRefs(c0, ids);
     const have = ws.chips[c.id];
@@ -287,7 +291,10 @@ export function importChips(chips: ChipDoc[], ws: Workspace): Imported {
       taken.add(id);
       renamed[c.id] = ids[c.id] = id;
     }
-    all[id] = id === c.id ? c : { ...c, id };
+    let name = c.name;
+    if (have && names.has(name)) for (let i = 2; names.has(name); i++) name = `${c.name} ${i}`;
+    names.add(name);
+    all[id] = id === c.id ? c : { ...c, id, name };
     added.push(id);
     order.push(id);
   }

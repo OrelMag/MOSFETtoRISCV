@@ -287,7 +287,7 @@ function manageDialog(ed: Editor): void {
       if (info.usedBy.length) del.classList.add('sb-blocked');
       return h('tr', { class: c.id === ed.chipId ? 'on' : '', 'data-chip': c.id },
         h('td', null, h('b', null, c.name), h('code', null, c.id)),
-        h('td', { class: 'num' }, `${info.parts}`, h('small', null, ' parts'), h('br'), `${info.wires}`, h('small', null, ' wires')),
+        h('td', { class: 'num' }, `${info.parts}`, h('small', null, info.parts === 1 ? ' part' : ' parts'), h('br'), `${info.wires}`, h('small', null, info.wires === 1 ? ' wire' : ' wires')),
         h('td', { class: 'sb-users' }, info.usedBy.length ? info.usedBy.map(name).join(', ') : h('span', { class: 'sb-none' }, '—')),
         h('td', { class: 'acts' },
           h('button', { class: 'btn ghost sm', disabled: c.id === ed.chipId, onclick: () => { ed.openChip(c.id); d.close(); } }, 'Open'),
@@ -422,7 +422,7 @@ export function installFiles(ed: Editor): FilesUi {
   let lastState = '';
   const storageFull = (force = false) => {
     if (!force && banners.querySelector('[data-banner="save"]')) return;
-    const el = banner('warn', 'save', [h('b', null, 'Not saved: '), `${ed.saveState.reason ?? 'browser storage failed'}. Your work stays here until you close the tab; export it to keep it.`],
+    const el = banner('warn', 'save', [h('b', null, 'Not saved: '), `${ed.saveState.reason ?? 'browser storage failed'}. Until then your work lives only in this tab.`],
       [btn('Export all chips', () => exportAll(ed), true), btn('Dismiss', () => el.remove())]);
   };
   const showSave = () => {

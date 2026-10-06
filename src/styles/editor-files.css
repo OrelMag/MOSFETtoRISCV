@@ -61,7 +61,8 @@
 
 /* ---------- banners over the canvas ---------- */
 .sb-banners {
-  position: absolute; left: 50%; top: 10px; transform: translateX(-50%); width: min(720px, calc(100% - 24px));
+  /* Below the editor's toast (top: 12px), which must stay readable while a banner is up. */
+  position: absolute; left: 50%; top: 52px; transform: translateX(-50%); width: min(720px, calc(100% - 24px));
   display: grid; gap: 8px; pointer-events: none;
 }
 .sb-banners:empty { display: none; }
