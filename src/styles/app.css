@@ -277,6 +277,8 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .grid-bg { pointer-events: all; }
 .grid-dot { fill: var(--grid); }
 .wire { fill: none; stroke: var(--w0); stroke-width: var(--wire-w0); stroke-dasharray: var(--wire-dash0); stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.12s; }
+.flow-front { pointer-events: none; }
+.flow-front.v1 { filter: drop-shadow(0 0 0.5px var(--w1)); }
 .wire.v1 { stroke: var(--w1); stroke-width: var(--wire-w1); stroke-dasharray: none; filter: var(--wire-glow); }
 .wire.vx { stroke: var(--wx); stroke-dasharray: var(--wire-dash-x); }
 .wire.vz { stroke: var(--wz); stroke-dasharray: 0.25 0.35; }

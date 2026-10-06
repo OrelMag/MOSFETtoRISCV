@@ -375,7 +375,7 @@ export class Stage {
         this.stopAnim();
         this.lastSettle = sim.time - this.changeStart;
       }
-      this.refresh();
+      this.refreshFlowing(950 / settings.speed);
     };
     tick();
     if (sim.busy()) this.anim = setInterval(tick, 1000 / settings.speed);
@@ -396,7 +396,14 @@ export class Stage {
     if (!this.sim) return;
     this.stopAnim();
     if (!this.sim.step()) this.lastSettle = this.sim.time - this.changeStart;
+    this.refreshFlowing(Math.max(350, 950 / settings.speed));
+  }
+
+  /** Refresh after one gate delay: changed wires show the new value travelling as a front. */
+  private refreshFlowing(ms: number): void {
+    this.view.flowMs = ms;
     this.refresh();
+    this.view.flowMs = 0;
   }
 
   private buildControls(): void {

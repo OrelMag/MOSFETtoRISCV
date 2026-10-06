@@ -24,6 +24,11 @@ interface WireEls {
   dots: SVGCircleElement[];
   /** Bit-range labels where this net leaves a splitter tap or enters a merger tap. */
   taps: SVGGElement[];
+  /** Value class on screen, the one a front in flight is drawing, and that front. */
+  shown?: string;
+  target?: string;
+  flow?: Animation[];
+  flowEls?: SVGPathElement[];
   label?: SVGGElement;
   labelText?: SVGTextElement;
   labelBg?: SVGRectElement;
@@ -35,6 +40,8 @@ interface PinEls {
   name?: SVGTextElement;
   value?: SVGTextElement;
   valueBg?: SVGRectElement;
+  /** The wire inside that ends on this pin. */
+  wire?: WireEls;
 }
 
 export function bitClass(b: Bit | undefined): string {
@@ -62,6 +69,8 @@ export class SchematicView {
   private selected: string | null = null;
   private selectedNet = -1;
   radix: Radix = 'hex';
+  /** When > 0, value changes travel along the wires as fronts lasting this many ms. */
+  flowMs = 0;
   /** Screen pixels on the right covered by a docked panel; fit() keeps the circuit clear of them. */
   insetRight = 0;
   private tooltip: HTMLDivElement;
@@ -261,6 +270,7 @@ export class SchematicView {
           else this.events.editInput(pin.name, (g as unknown as Element).getBoundingClientRect());
         });
       }
+      els.wire = this.wires.find((w) => nl.nets[w.net.index].ends.includes(pin.name));
       this.pins.push(els);
       pinG.append(g);
     }
@@ -277,28 +287,43 @@ export class SchematicView {
     const ctx = this.ctx;
     if (!ctx) return;
     ctx.sync();
+    const flow = this.flowMs > 0 && !reducedMotion();
     for (const w of this.wires) {
       const bits = ctx.netBits(w.net.index);
-      const cls = w.net.width > 1 ? `wire ${busClass(bits)}` : `wire ${bitClass(bits[0])}`;
-      for (const p of w.paths) p.setAttribute('class', cls);
       const vcls = w.net.width > 1 ? busClass(bits) : bitClass(bits[0]);
-      for (const t of w.tags) {
-        t.setAttribute('class', `net-tag ${vcls}`);
-        t.firstElementChild!.setAttribute('class', cls);
+      if (vcls !== w.shown) {
+        if (flow && w.shown !== undefined && w.paths.length) this.flowWire(w, vcls);
+        else this.paintWire(w, vcls);
       }
-      const dcls = `dot ${w.net.width > 1 ? busClass(bits) : bitClass(bits[0])}`;
-      for (const d of w.dots) d.setAttribute('class', dcls);
-      for (const t of w.taps) t.setAttribute('class', `tap-label ${vcls}`);
       if (w.labelText && w.labelBg && w.net.label) {
         const txt = formatBits(bits, this.radixOverride.get(w.net.index) ?? this.radix);
         w.labelText.textContent = txt;
         const tw = textWidth(txt, 0.95);
         w.labelBg.setAttribute('x', String(w.net.label[0] - tw / 2));
         w.labelBg.setAttribute('width', String(tw));
-        w.label!.setAttribute('class', `bus-label ${busClass(bits)}`);
+        w.label!.setAttribute('class', `bus-label ${busClass(bits)}${this.marks(w.net.index)}`);
       }
     }
+    this.updatePins();
+    // Transistors: show which ones conduct.
+    if (ctx.sim instanceof SwitchSim) {
+      for (const [name, g] of this.insts) {
+        const li = ctx.childLeaf(name);
+        if (li === undefined) continue;
+        const k = ctx.sim.design.leaves[li].kind;
+        if (k !== 'nmos' && k !== 'pmos') continue;
+        const c = ctx.sim.conducting[li];
+        g.classList.toggle('conducting', c === 1);
+        g.classList.toggle('maybe', c === 2);
+      }
+    }
+  }
+
+  /** Output pins wait for the front on their wire to arrive. */
+  private updatePins(): void {
+    const ctx = this.ctx!;
     for (const p of this.pins) {
+      if (p.pin.dir === 'out' && p.wire?.flow) continue;
       const bits = ctx.portBits(p.pin.name);
       const base = `pin ${p.pin.dir !== 'out' ? 'pin-in' : 'pin-out'}${p.pin.dir !== 'out' && this.interactive ? ' clickable' : ''}`;
       if (p.pin.width === 1) {
@@ -319,18 +344,64 @@ export class SchematicView {
         stub?.setAttribute('class', `wire ${busClass(bits)} pin-stub`);
       }
     }
-    // Transistors: show which ones conduct.
-    if (ctx.sim instanceof SwitchSim) {
-      for (const [name, g] of this.insts) {
-        const li = ctx.childLeaf(name);
-        if (li === undefined) continue;
-        const k = ctx.sim.design.leaves[li].kind;
-        if (k !== 'nmos' && k !== 'pmos') continue;
-        const c = ctx.sim.conducting[li];
-        g.classList.toggle('conducting', c === 1);
-        g.classList.toggle('maybe', c === 2);
-      }
+  }
+
+  /** Selection / hover classes a net's elements keep across repaints. */
+  private marks(idx: number): string {
+    return `${idx === this.selectedNet ? ' net-sel' : ''}${idx === this.hovered ? ' net-hover' : ''}`;
+  }
+
+  /** Give every element of a wire the value class vcls (finishing any front in flight). */
+  private paintWire(w: WireEls, vcls: string): void {
+    w.flow?.forEach((a) => a.cancel());
+    w.flow = undefined;
+    w.flowEls?.forEach((e) => e.remove());
+    w.flowEls = undefined;
+    w.shown = vcls;
+    const m = this.marks(w.net.index);
+    const cls = `wire ${vcls}${m}`;
+    for (const p of w.paths) p.setAttribute('class', cls);
+    for (const t of w.tags) {
+      t.setAttribute('class', `net-tag ${vcls}${m}`);
+      t.firstElementChild!.setAttribute('class', cls);
     }
+    for (const d of w.dots) d.setAttribute('class', `dot ${vcls}`);
+    for (const t of w.taps) t.setAttribute('class', `tap-label ${vcls}`);
+  }
+
+  /**
+   * Draw the new value as a front travelling from the driver along every branch, over
+   * flowMs (one gate delay of the animation). The wire keeps its old colour underneath
+   * until the front arrives; tags, dots and tap labels switch when it does.
+   */
+  private flowWire(w: WireEls, vcls: string): void {
+    if (w.flow) this.paintWire(w, w.target!);
+    w.target = vcls;
+    const cls = `wire ${vcls} flow-front`;
+    const els: SVGPathElement[] = [];
+    const anims: Animation[] = [];
+    for (const p of w.paths) {
+      const L = p.getTotalLength();
+      const f = p.cloneNode() as SVGPathElement;
+      f.setAttribute('class', cls);
+      f.removeAttribute('data-net');
+      f.style.strokeDasharray = `${L} ${L + 1}`;
+      p.after(f);
+      els.push(f);
+      const timing: KeyframeAnimationOptions = { duration: this.flowMs, easing: 'linear', fill: 'forwards' };
+      anims.push(f.animate([{ strokeDashoffset: L }, { strokeDashoffset: 0 }], timing));
+      // The old value retreats ahead of the front (complementary dash), so a thin new
+      // colour never sits on top of a thicker old one.
+      const dash = `${L} ${L + 1}`;
+      anims.push(p.animate([{ strokeDasharray: dash, strokeDashoffset: 0 }, { strokeDasharray: dash, strokeDashoffset: -L }], timing));
+    }
+    w.flowEls = els;
+    w.flow = anims;
+    anims[0].finished.then(() => {
+      if (w.flow !== anims) return;
+      this.paintWire(w, vcls);
+      this.updatePins();
+    }, () => {});
   }
 
   highlight(names: string[]): void {
@@ -347,6 +418,7 @@ export class SchematicView {
   /** Select a net: every wire, label and tag of it stays highlighted (-1 clears). */
   selectNet(idx: number): void {
     this.selectedNet = idx;
+    for (const w of this.wires) if (w.shown !== undefined && !w.flow) this.paintWire(w, w.shown);
     this.el.querySelectorAll('.net-sel').forEach((e) => e.classList.remove('net-sel'));
     if (idx >= 0) this.el.querySelectorAll(`[data-net="${idx}"]`).forEach((e) => e.classList.add('net-sel'));
   }
@@ -524,3 +596,6 @@ function splitterTaps(nl: NonNullable<ReturnType<typeof netlistOf>>): Map<number
   }
   return out;
 }
+
+const motionQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+const reducedMotion = () => !!motionQuery?.matches;
