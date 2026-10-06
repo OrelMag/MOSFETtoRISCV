@@ -135,7 +135,9 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ M extension (chapter 20): array and Wallace-tree multipliers (measured depth 310 vs 68 at 32 bits), Baugh–Wooley signed
   products, radix-4 Booth encoder + recoding explorer, restoring division (step, array divider, iterative divider), and an
   RV32IM system CPU (104k NAND) with one-cycle multiplies and 34-cycle stalling divides, co-simulated per retirement
-- ⏳ Full Booth-recoded multiplier; non-restoring / SRT division; pipelined multiplier in the pipelined CPU
+- ✅ Non-restoring division (step, array, iterative) and radix-2 SRT (carry-save remainder, 4-bit digit selection,
+  normalization, signed-digit quotient), compared on area, step depth and clock period
+- ⏳ Full Booth-recoded multiplier; radix-4 SRT; pipelined multiplier in the pipelined CPU
 - ⏳ Passing the official `riscv-tests` / architecture tests in the browser (stretch)
 
 ### Phase 8 — Memory hierarchy 🚧

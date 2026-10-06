@@ -1,7 +1,8 @@
-import { BOOTH_ENC, MDU, arrayDiv, arrayMul, csa, divStep, popcount, seqDivider, treeMul } from '../lib';
+import { BOOTH_ENC, MDU, SRT_SELECT, arrayDiv, arrayMul, csa, divStep, nrArrayDiv, popcount, seqDivider, srtDivider, treeMul } from '../lib';
 import { cpuState } from '../riscv/cosim';
 import { M_PROGRAMS } from '../riscv/mprograms';
 import { cpuScene } from '../widgets/cpupanel';
+import { divComparison } from '../widgets/divide';
 import { boothWidget, mulComparison } from '../widgets/muldiv';
 import type { Chapter } from './types';
 
@@ -9,7 +10,7 @@ const msrc = (id: string) => M_PROGRAMS.find((p) => p.id === id)!.source;
 
 export const chMulDiv: Chapter = {
   id: 'muldiv', num: 20, title: 'Multiply & divide', level: 'Arithmetic',
-  blurb: 'Array and Wallace-tree multipliers, Baugh–Wooley and Booth, restoring division, and the M extension in the CPU.',
+  blurb: 'Array and Wallace-tree multipliers, Baugh–Wooley and Booth, restoring, non-restoring and SRT division, and the M extension in the CPU.',
   steps: [
     {
       title: 'Long multiplication is AND and add',
@@ -158,6 +159,83 @@ export const chMulDiv: Chapter = {
         check: (st) => st.value('done') === 1 && st.value('q') === 28 && st.value('r') === 4,
         answer: 'Nine pulses: the first loads the operands, the next eight each make one quotient bit, and then done is high for one cycle (the tenth).',
         solve: (st) => { st.runCycles(9); },
+      },
+    },
+    {
+      title: "Don't restore: non-restoring division",
+      body: `
+        <p>When the trial subtraction fails, restoring division puts the old remainder back (the multiplexer) and next step tries
+        2r − d again. Non-restoring division keeps the negative remainder r − d instead. Next step, 2(r − d) + d = 2r − d, which is
+        exactly the subtraction the restoring divider would have done. So the rule is: if the remainder is ≥ 0, subtract d, otherwise add it.
+        The quotient bit is still "is the new remainder ≥ 0".</p>
+        <p>The remainder is now signed (one bit wider), each row is a single adder/subtractor with its <code>sub</code> input driven by the
+        previous sign, and a negative remainder at the very end needs one correction: add d once (the <code>fix</code> block).</p>
+        <div class="try">Compare with the restoring array two steps back: same q and r, no multiplexers. Here (13 / 3) the last step leaves
+        −2, and the correction adds 3 back to give r = 1.</div>`,
+      scene: () => ({ root: nrArrayDiv(4), inputs: { a: 13, b: 3 } }),
+      challenge: {
+        kind: 'quiz', question: 'Is a non-restoring step faster than a restoring one?',
+        options: [
+          'Not much: the restore multiplexer is gone, but the add/subtract choice puts an XOR on the divisor in the same place',
+          'Yes, about twice as fast, because it never restores',
+          'No, it is slower because it needs an extra step',
+          'Yes, because it does not need a carry chain',
+        ],
+        answer: 0,
+        explain: 'Both steps are a full-width carry chain plus about two gates (a multiplexer after it, or an XOR before it): 27 NAND delays each at 8 bits, measured. What non-restoring buys is regularity: every step is "add ±d". That is the form that lets the next idea keep the remainder in carry-save form.',
+      },
+    },
+    {
+      title: 'SRT: a redundant quotient',
+      body: `
+        <p>The carry chain is the problem: each step must know the sign of a full-width sum before it can choose. SRT division
+        (Sweeney, Robertson and Tocher, 1958) removes it with two ideas. First, allow quotient digits <strong>−1, 0 and +1</strong>. The
+        choice then no longer has to be exact: when the remainder is near zero, either neighbouring digit keeps it in range, and the error is
+        fixed by a later digit. Second, since the choice only needs a rough idea of the remainder, keep the remainder in <strong>carry-save form</strong>,
+        two words whose sum is the true value. Each step is then one row of independent full adders, whatever the width.</p>
+        <p>For that to work the divisor must be normalized (½ ≤ d < 1, its top bit set): the leading zeros of b are counted and both operands
+        shifted. The quotient comes out as two words, the +1 digits and the −1 digits, and their difference is the answer. One carry-propagate
+        addition at the end resolves the remainder; if it is negative, the usual correction applies; the remainder is shifted back.</p>
+        <div class="try">start = 1 is set. Pulse the clock and watch the +1 and −1 digit registers fill (open the divider), then compare q and r.</div>`,
+      scene: () => ({ root: srtDivider(8), inputs: { a: 200, b: 7, start: 1, clk: 0 } }),
+      challenge: {
+        kind: 'reach', goal: 'Clock the SRT divider until done = 1, with q = 28 and r = 4 (200 / 7).',
+        check: (st) => st.value('done') === 1 && st.value('q') === 28 && st.value('r') === 4,
+        answer: 'Nine pulses, the same protocol as the restoring divider: one load (which also normalizes 7 to 0b11100000), eight digits, then done.',
+        solve: (st) => { st.runCycles(9); },
+      },
+    },
+    {
+      title: 'Choosing the digit',
+      body: `
+        <p>The digit is chosen from the shifted remainder 2w, in units of half the divisor: +1 if 2w ≥ 0, 0 if −½ ≤ 2w < 0, −1 below.
+        Only the top four bits of the sum and carry words are added, so the estimate can be low by up to one unit. That is safe:
+        +1 is correct anywhere in [0, 2d), and −1 anywhere in [−2d, 0); the regions overlap around zero and the 0 digit covers the gap.</p>
+        <p>The circuit does not even form the 4-bit sum. It needs only its sign (a carry into bit 3, looked ahead from the bits below)
+        and whether it is −1, which happens exactly when every bit pair differs. 14 NAND delays, at any operand width.</p>`,
+      scene: () => ({ root: SRT_SELECT, inputs: { s: 0b1110, c: 0b0001 } }),
+      challenge: {
+        kind: 'reach', goal: 'Find inputs that select the digit −1 (qn = 1).',
+        check: (st) => st.value('qn') === 1,
+        answer: 'Any pair whose 4-bit sum is 8 to 14 (a negative estimate other than −1), for example s = 0b1000, c = 0b0000: estimate −8 halves, digit −1.',
+        solve: (st) => st.setInputs({ s: 0b1000, c: 0 }),
+      },
+    },
+    {
+      title: 'Dividers compared',
+      body: `
+        <p>The same protocol, three steps. The table is computed from the circuits on this page.</p>`,
+      widget: divComparison,
+      challenge: {
+        kind: 'quiz', question: 'Real SRT dividers retire two or more quotient bits per cycle. What does radix 4 change?',
+        options: [
+          'Digits from −2 to +2: the term is ±d or ±2d (a shift), and selection looks at a few more remainder and divisor bits, so half the cycles for a slightly longer step',
+          'Nothing: radix 4 is just two radix-2 steps chained in one cycle',
+          'It needs a full carry-propagate adder per step',
+          'It only works for even divisors',
+        ],
+        answer: 0,
+        explain: 'Radix 4 picks a digit in {−2, …, +2} from about 7 bits of the remainder and 4 of the divisor (a table of 2048 entries in the Pentium), and the multiples are free shifts. The step stays carry-save, so the cycle time barely grows while the cycle count halves. The Pentium FDIV bug was five missing entries in exactly such a table.',
       },
     },
     {

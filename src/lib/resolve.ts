@@ -18,6 +18,7 @@ import { fpAdd, fpCompare, fpMul, fpUnpack, lzc, shiftLeft } from './fpu';
 import { cachedMemory, wayLookup2 } from './cache';
 import { bankedMemory } from './lsu';
 import { clearableRegister } from './pipeline';
+import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
 import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
 
 const log2 = (n: number) => Math.round(Math.log2(n));
@@ -118,6 +119,9 @@ export const families: Family[] = [
   },
   nBit('divstep', 'Division step (restoring)', 'arithmetic', [2, 4, 8, 16, 32], 4, (n) => `divstep${n}${n >= 16 ? 'f' : ''}`, (n) => divStep(n)),
   nBit('adiv', 'Array divider', 'arithmetic', [2, 4, 8, 16], 4, (n) => `adiv${n}`, arrayDiv),
+  nBit('nrstep', 'Division step (non-restoring)', 'arithmetic', [2, 4, 8, 16, 32], 4, (n) => `nrstep${n}${n >= 16 ? 'f' : ''}`, (n) => nrDivStep(n)),
+  nBit('nrdiv', 'Non-restoring array divider', 'arithmetic', [2, 4, 8, 16], 4, (n) => `nrdiv${n}`, nrArrayDiv),
+  nBit('srtstep', 'SRT division step', 'arithmetic', [4, 8, 16, 32], 8, (n) => `srtstep${n}`, srtStep),
   float('fpun', 'Float unpack', fpUnpack),
   float('fpadd', 'Float adder / subtractor', fpAdd),
   float('fpmul', 'Float multiplier', fpMul),
@@ -165,6 +169,9 @@ export const families: Family[] = [
   nBit('creg', 'Register with clear', 'sequential', [1, 4, 8, 16, 32], 4, (n) => `creg${n}`, clearableRegister),
   nBit('counter', 'Counter', 'sequential', [2, 3, 4, 8], 4, (n) => `counter${n}`, counter),
   nBit('sdiv', 'Iterative divider', 'sequential', [4, 8, 16, 32], 8, (n) => `sdiv${n}`, seqDivider),
+  nBit('nrsdiv', 'Iterative non-restoring divider', 'sequential', [4, 8, 16, 32], 8, (n) => `nrsdiv${n}`, nrSeqDivider),
+  nBit('srtdiv', 'Iterative SRT divider', 'sequential', [4, 8, 16, 32], 8, (n) => `srtdiv${n}`, srtDivider),
+  nBit('iter', 'Iteration control', 'sequential', [4, 8, 16, 32], 8, (n) => `iter${n}`, iterCtrl),
   // memory
   {
     id: 'ram', name: 'Memory (RAM)', category: 'memory',
