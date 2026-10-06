@@ -2,9 +2,9 @@
 // shifts split funct7 from shamt, CSR ops carry a CSR number and maybe a zimm, FP operands name
 // f registers. The instruction breakdown draws this; the hardware view colours wires from it.
 
-import { ABI, CSR_NAMES, decode, FABI, IMM_SRC, IMM_TOP, OPCODES, type Fmt } from './isa';
+import { ABI, CSR_NAMES, decode, FABI, IMM_SRC, IMM_TOP, OPCODES, RM_OPERANDS } from './isa';
 
-export type FieldKey = 'opcode' | 'rd' | 'funct3' | 'rs1' | 'rs2' | 'funct7' | 'imm' | 'shamt' | 'csr' | 'zimm' | 'funct12';
+export type FieldKey = 'opcode' | 'rd' | 'funct3' | 'rs1' | 'rs2' | 'rs3' | 'funct7' | 'fmt' | 'imm' | 'shamt' | 'csr' | 'zimm' | 'funct12';
 export type FieldRole = 'op' | 'rd' | 'rs' | 'fn' | 'imm';
 
 export interface Field {
@@ -23,8 +23,8 @@ export interface Field {
 export function fieldRole(key: FieldKey): FieldRole {
   if (key === 'opcode') return 'op';
   if (key === 'rd') return 'rd';
-  if (key === 'rs1' || key === 'rs2') return 'rs';
-  if (key.startsWith('funct')) return 'fn';
+  if (key === 'rs1' || key === 'rs2' || key === 'rs3') return 'rs';
+  if (key.startsWith('funct') || key === 'fmt') return 'fn';
   return 'imm';
 }
 
@@ -39,6 +39,7 @@ const OPNAME: Record<number, string> = {
   [OPCODES.BRANCH]: 'BRANCH', [OPCODES.LOAD]: 'LOAD', [OPCODES.STORE]: 'STORE', [OPCODES.OPIMM]: 'OP-IMM',
   [OPCODES.OP]: 'OP', [OPCODES.SYSTEM]: 'SYSTEM', [OPCODES.FENCE]: 'MISC-MEM', [OPCODES.LOADFP]: 'LOAD-FP',
   [OPCODES.STOREFP]: 'STORE-FP', [OPCODES.OPFP]: 'OP-FP', [OPCODES.AMO]: 'AMO',
+  [OPCODES.FMADD]: 'MADD', [OPCODES.FMSUB]: 'MSUB', [OPCODES.FNMSUB]: 'NMSUB', [OPCODES.FNMADD]: 'NMADD',
 };
 
 const ALU3 = ['add/sub', 'sll', 'slt', 'sltu', 'xor', 'srl/sra', 'or', 'and'];
@@ -68,7 +69,7 @@ export function fieldsOf(word: number): Field[] {
   const f3name = (F3[d.opcode] ?? [])[d.funct3];
   let f3m = s ? (f3name || s.name) : '?';
   if (d.opcode === OPCODES.OP && d.funct7 === 1) f3m = s?.name ?? '?';
-  else if (d.opcode === OPCODES.OPFP && fp?.rm) f3m = 'rm: rounding mode (only RNE is built)';
+  else if (fp?.rm) f3m = `rounding: ${RM_OPERANDS[d.funct3] || 'reserved'}${d.funct3 === 7 ? ' (the mode in frm)' : ''}`;
   else if (d.opcode === OPCODES.OPFP || d.opcode === OPCODES.AMO) f3m = `→ ${s?.name ?? '?'}`;
   const funct3 = F('funct3', 14, 12, f3m, fp?.rm ? 'rm' : 'funct3');
   const rd = F('rd', 11, 7, reg(fp?.rd, d.rd));
@@ -82,6 +83,8 @@ export function fieldsOf(word: number): Field[] {
   if (!s) return [F('funct7', 31, 25, '?'), F('rs2', 24, 20, '?'), F('rs1', 19, 15, '?'), F('funct3', 14, 12, '?'), F('rd', 11, 7, '?'), opcode];
 
   switch (d.fmt) {
+    case 'R4':
+      return [F('rs3', 31, 27, reg('f', d.rs3)), F('fmt', 26, 25, 'single precision'), rs2, rs1, funct3, rd, opcode];
     case 'R': {
       let f7m = `→ ${s.name}`;
       if (d.opcode === OPCODES.OP) f7m = d.funct7 === 1 ? 'M extension' : d.funct7 === 0x20 ? 'bit 5 set: sub / sra' : 'base op';
@@ -129,8 +132,8 @@ export interface ImmBit {
 
 /** How the immediate generator assembles this instruction's 32-bit immediate (empty for R-type). */
 export function immBits(word: number): ImmBit[] {
-  const fmt: Fmt = decode(word).fmt;
-  if (fmt === 'R') return [];
+  const fmt = decode(word).fmt;
+  if (fmt === 'R' || fmt === 'R4') return [];
   const map = IMM_SRC[fmt];
   return Array.from({ length: 32 }, (_, i) => {
     const src = map(i);

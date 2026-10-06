@@ -94,8 +94,10 @@ export function instrMarks(def: ComponentDef, word: number, focus: FieldKey | nu
 
   if (nl.instances.some((i) => i.name === 'si')) {
     SLICES.forEach((sl, k) => {
-      const f = fieldAt(fields, sl.lo);
-      if (want(f.key)) mark(at(`si.o${k}`), cls(fieldRole(f.key), f.used));
+      // A slice can hold two fields (R4: rs3 and fmt share 31:25); the top one names its colour.
+      const inSlice = fields.filter((f) => f.lo <= sl.hi && sl.lo <= f.hi);
+      const f = fieldAt(fields, sl.hi);
+      if (!focus || inSlice.some((g) => g.key === focus)) mark(at(`si.o${k}`), cls(fieldRole(f.key), f.used));
     });
     if (hasImm && (!focus || IMM_KEYS.includes(focus))) {
       mark(at('imm.imm'), cls('imm'));
@@ -107,7 +109,7 @@ export function instrMarks(def: ComponentDef, word: number, focus: FieldKey | nu
   }
   if (def.id === 'immgen') {
     const d = decode(word);
-    if (d.fmt === 'R') return { nets, units: [], note: 'R-type: no immediate; ImmSrc is a don\'t-care and the mux output is ignored.' };
+    if (d.fmt === 'R' || d.fmt === 'R4') return { nets, units: [], note: `${d.fmt}-type: no immediate; ImmSrc is a don't-care and the mux output is ignored.` };
     if (focus && !IMM_KEYS.includes(focus)) return { nets, units: [] };
     const box = { I: 'i', S: 's', B: 'b', U: 'u', J: 'j' }[d.fmt];
     mark(named(`imm_${box}`), cls('imm', hasImm));

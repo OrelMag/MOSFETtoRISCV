@@ -17,14 +17,14 @@ export interface BreakdownOpts {
 
 const role = (key: FieldKey) => `f-${fieldRole(key)}`;
 /** Reading order of the meaning list: what kind of instruction, then operands. */
-const ORDER: FieldKey[] = ['opcode', 'funct3', 'funct7', 'funct12', 'rd', 'rs1', 'zimm', 'rs2', 'shamt', 'csr', 'imm'];
+const ORDER: FieldKey[] = ['opcode', 'funct3', 'funct7', 'fmt', 'funct12', 'rd', 'rs1', 'zimm', 'rs2', 'rs3', 'shamt', 'csr', 'imm'];
 // The immediate row stays open or folded across rebuilds (the CPU panel rebuilds per instruction).
 let immOpen = false;
 
 /** The empty field template of a format (the "six formats" table). */
 export function formatStrip(fmt: Fmt): HTMLElement {
   return h('div', { class: 'fields' }, FIELDS[fmt].map((f) => {
-    const key: FieldKey = f.name.startsWith('imm') ? 'imm' : f.name as FieldKey;
+    const key: FieldKey = f.name.startsWith('imm') ? 'imm' : f.name === 'rm' ? 'funct3' : f.name as FieldKey;
     return h('div', { class: role(key), style: `--w:${f.hi - f.lo + 1}` },
       h('div', { class: 'fname' }, `${f.name} [${f.hi}:${f.lo}]`),
       h('div', { class: 'fbits' }, '·'.repeat(f.hi - f.lo + 1)));

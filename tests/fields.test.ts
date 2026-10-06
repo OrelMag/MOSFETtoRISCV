@@ -29,6 +29,7 @@ flw fa0, 4(a0)
 fsw fa1, 8(a0)
 fadd.s fa0, fa1, fa2
 fcvt.s.w fa0, a0
+fmadd.s fa0, fa1, fa2, fa3
 amoadd.w a0, a1, (a2)`;
 const words = assemble(SAMPLES).words;
 
@@ -50,7 +51,8 @@ describe('instruction fields', () => {
 
   it('every field boundary falls on a splitter slice boundary', () => {
     const cuts = new Set(SLICES.map((s) => s.lo));
-    for (const w of words) for (const f of fieldsOf(w)) expect(cuts.has(f.lo), `${decode(w).name} ${f.label}`).toBe(true);
+    // Except R4 (fused multiply-add), whose rs3 and fmt share the funct7 slice.
+    for (const w of words.filter((x) => decode(x).fmt !== 'R4')) for (const f of fieldsOf(w)) expect(cuts.has(f.lo), `${decode(w).name} ${f.label}`).toBe(true);
   });
 
   it('names the parts that differ from the format template', () => {
@@ -60,6 +62,7 @@ describe('instruction fields', () => {
     expect(keys('ecall')).toEqual(['funct12', 'rs1', 'funct3', 'rd', 'opcode']);
     expect(fieldsOf(assemble('flw fa0, 4(a0)').words[0]).find((f) => f.key === 'rd')!.meaning).toBe('f10 (fa0)');
     expect(fieldsOf(assemble('sub a0, a1, a2').words[0])[0].meaning).toMatch(/sub/);
+    expect(keys('fmadd.s fa0, fa1, fa2, fa3')).toEqual(['rs3', 'fmt', 'rs2', 'rs1', 'funct3', 'rd', 'opcode']);
   });
 
   it('the immediate wiring reassembles the decoded immediate', () => {
