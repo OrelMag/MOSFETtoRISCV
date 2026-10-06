@@ -1,7 +1,7 @@
 {
   "name": "mosfet-to-riscv",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "An interactive journey from a single MOSFET to a multi-core RISC-V processor. Every block is a transparent box.",
   "type": "module",
   "scripts": {
