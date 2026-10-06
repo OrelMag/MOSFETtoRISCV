@@ -511,14 +511,14 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   const alignY = (inst: string, def: ComponentDef, x: number, port: string, y: number) => place(inst, def, [x, y - g(def).ports[port].pos[1]]);
 
   const Y = 36; // main datapath row
-  alignY('pcmux', M4, 4, 'y', Y);
+  alignY('pcmux', M4, 2, 'y', Y);
   alignY('pc', PC, 12, 'd', Y);
   place('one', TIE1, [8, P('pc', 'en')[1] - 1]);
   const pcY = P('pc', 'q')[1];
   alignY('imem', IMEM, 27, 'addr', pcY);
   const instrY = P('imem', 'data')[1];
   alignY('si', SI, 45, 'in', instrY);
-  alignY('rf', RF, 60, 'wa', P('si', 'o1')[1]);
+  alignY('rf', RF, 62, 'wa', P('si', 'o1')[1]);
   alignY('imm', IMM_GEN, 60, 'instr', Y + 18);
   const rfR = at.get('rf')![0] + g(RF).w;
   alignY('srcA', M2, rfR + 8, 'a', P('rf', 'rd1')[1]);
@@ -526,10 +526,10 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   alignY('alu', ALU, rfR + 18, 'a', P('srcA', 'y')[1]);
   const aluR = at.get('alu')![0] + g(ALU).w;
   alignY('dm', DM, aluR + 18, 'addr', P('alu', 'y')[1]);
-  alignY('res', M4, aluR + 18 + g(DM).w + 10, 'd1', P('dm', 'rd')[1]);
+  alignY('res', M4, aluR + 18 + g(DM).w + (dcache ? 18 : 10), 'd1', P('dm', 'rd')[1]); // a cache's stall / hit labels need room
   place('plus4', P4, [27, Y - 10]);
   alignY('target', ADD, rfR + 18, 'a', Y + 24);
-  place('gndT', TIE0, [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 3]);
+  place('gndT', TIE0, [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 5]);
   alignY('clr0', CLEAR_BIT0, aluR + 12, 'in', Y + 18);
   place('gndJ', TIE0, [P('clr0', 'zero')[0] - 6, P('clr0', 'zero')[1] + 1]);
   place('ctl', CONTROL, [8, 0]);
@@ -600,56 +600,61 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   const pins: Record<string, [number, number]> = { clk: [0, bottom], pcOut: [resY[0] + 22, bottom - 8], instrOut: [resY[0] + 22, bottom - 5], aluOut: [resY[0] + 22, bottom - 2] };
   if (dcache || icache) {
     // a load (ResultSrc = 01) or, with an I-cache, a fetch that misses stalls the PC and the register
-    // write until the line arrives
+    // write until the line arrives. The extra gates sit in a strip below the datapath, lined up so that
+    // neighbours connect with straight wires.
     const add = (name: string, def: ComponentDef, xy: [number, number]) => instances.push({ name, def, at: xy });
+    const xs = aluR - 12, y0 = bottom + 10;
     if (dcache) {
-      add('rsplit', splitter([1, 1]), [aluR + 4, bottom - 12]);
-      add('nr1', NOT, [aluR + 8, bottom - 10]);
-      add('isLoad', AND, [aluR + 13, bottom - 12]);
+      add('rsplit', splitter([1, 1]), [xs, y0]);
+      add('nr1', NOT, [xs + 5, y0 + 2]);
+      add('isLoad', AND, [xs + 12, y0]);
     }
-    add('nstall', NOT, [8, P('pc', 'en')[1] - 1]);
     add('rwg', AND, [52, bottom - 8]);
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
     const net = (name: string) => nets.find((n) => n.name === name)!;
     nets.splice(nets.indexOf(net('en')), 1);
     net('RegWrite').ends = ['ctl.regWrite', 'rwg.a'];
-    let stall = 'dm.stall';
     if (icache) {
       // while the fetch misses, the instruction is not valid: hold back its data-memory request too
-      add('ivalid', NOT, [aluR + 8, bottom - 18]);
-      add('weg', AND, [aluR + 13, bottom - 20]);
-      net('MemWrite').ends = ['ctl.memWrite', 'weg.a'];
+      add('ivalid', NOT, [xs + 12, y0 + 10]);
+      add('weg', AND, [xs + 20, y0 + 10]);
+      net('MemWrite').ends = ['ctl.memWrite', 'weg.b'];
       net('clk').ends.push('imem.clk');
       nets.push(
-        { name: 'istall', ends: ['imem.stall', 'ivalid.a', ...(dcache ? ['anyStall.b'] : [])], tags: true },
-        { name: 'instrValid', ends: ['ivalid.y', 'weg.b', ...(dcache ? ['reg.b'] : [])], tags: true },
+        { name: 'instrValid', ends: ['ivalid.y', 'weg.a', ...(dcache ? ['reg.b'] : [])], tags: dcache ? ['reg.b'] : undefined },
         { name: 'MemWriteQ', ends: ['weg.y', 'dm.we'], tags: true },
         { name: 'ihit', ends: ['imem.hit', 'ihit'], tags: true },
       );
-      if (dcache) {
-        add('reg', AND, [aluR + 19, bottom - 12]);
-        add('anyStall', OR, [52, bottom - 16]);
-        nets.push({ name: 'dstall', ends: ['dm.stall', 'anyStall.a'], tags: true });
-        stall = 'anyStall.y';
-      } else stall = 'imem.stall';
+      if (dcache) add('reg', AND, [xs + 24, y0 + 1]);
       pins.ihit = [resY[0] + 22, bottom + 7];
     }
+    // stall = the data cache's, the instruction cache's, or either
+    const both = dcache && icache;
+    if (both) add('anyStall', OR, [xs + 12, y0 + 18]);
+    add('nstall', NOT, both ? [xs + 20, y0 + 19] : [xs + 20, y0 + 18]);
+    if (both) {
+      nets.push(
+        { name: 'dstall', ends: ['dm.stall', 'anyStall.a'], tags: true },
+        { name: 'istall', ends: ['imem.stall', 'anyStall.b', 'ivalid.a'], tags: true },
+        { name: 'stall', ends: ['anyStall.y', 'nstall.a'] },
+      );
+    } else if (dcache) nets.push({ name: 'stall', ends: ['dm.stall', 'nstall.a'], tags: true });
+    else nets.push({ name: 'istall', ends: ['imem.stall', 'nstall.a', 'ivalid.a'], tags: true });
     if (dcache) {
       net('ResultSrc').ends.push('rsplit.in');
       nets.push(
-        { name: 'rs0', ends: ['rsplit.o0', 'isLoad.a'], tags: true },
-        { name: 'rs1', ends: ['rsplit.o1', 'nr1.a'], tags: true },
-        { name: '¬rs1', ends: ['nr1.y', 'isLoad.b'], tags: true },
+        { name: 'rs0', ends: ['rsplit.o0', 'isLoad.a'] },
+        { name: 'rs1', ends: ['rsplit.o1', 'nr1.a'] },
+        { name: '¬rs1', ends: ['nr1.y', 'isLoad.b'] },
         ...(icache
-          ? [{ name: 'MemRead', ends: ['isLoad.y', 'reg.a'], tags: true as const }, { name: 'MemReadQ', ends: ['reg.y', 'dm.re'], tags: true as const }]
+          ? [{ name: 'MemRead', ends: ['isLoad.y', 'reg.a'] }, { name: 'MemReadQ', ends: ['reg.y', 'dm.re'], tags: true as const }]
           : [{ name: 'MemRead', ends: ['isLoad.y', 'dm.re'], tags: true as const }]),
         { name: 'dhit', ends: ['dm.hit', 'dhit'], tags: true },
       );
       pins.dhit = [resY[0] + 22, bottom + 4];
     }
     nets.push(
-      { name: 'stall', ends: [stall, 'nstall.a'], tags: true },
-      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwg.b', 'retire'], tags: ['rwg.b', 'retire'] },
+      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwg.b', 'retire'], tags: ['pc.en', 'rwg.b', 'retire'] },
       { name: 'RegWriteQ', ends: ['rwg.y', 'rf.we'], tags: true },
     );
     pins.retire = [resY[0] + 22, bottom + 1];
@@ -663,19 +668,23 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     add('frf', FRF, [rfAt[0], bottom + 10], 'f registers');
     add('fpu', FPU32, [rfR + 24, bottom + 14], 'FPU');
     add('fdec', FP_DECODE, [8, bottom + 10]);
-    add('fwd', M2, [rfAt[0] - 12, bottom + 14], 'mem / FPU');
-    add('xres', M2, [resY[0] + 6, resY[1] - 6], 'ALU / FPU');
+    add('fwd', M2, [rfAt[0] - 18, bottom + 14], 'mem / FPU');
+    const mg = g(M2), xresAt: [number, number] = [resY[0] + 10, resY[1] - 6];
+    add('xres', M2, xresAt, 'ALU / FPU');
     add('swd', M2, [rfR + 4, bottom - 6], 'x / f store');
-    add('nflw', NOT, [52, bottom - 14]);
-    add('rwx', AND, [56, bottom - 14]);
-    add('rwi', orN(3), [62, bottom - 14]);
+    // x-register write enable: (RegWrite AND NOT flw) OR toInt OR isCSR, then AND retire; each gate's
+    // output on the next one's input row
+    const yw = bottom - 10;
+    add('nflw', NOT, [30, yw]);
+    add('rwx', AND, [38, yw - 2]);
+    add('rwi', orN(3), [48, yw - 1]);
     add('fcsr', FCSR, [rfR + 24, bottom + 62], 'fcsr');
     add('sr3', splitter([2, 5]), [rfAt[0] - 6, bottom + 40]);
-    add('cres', M2, [resY[0] + 12, resY[1] - 6], 'FP / CSR');
+    add('cres', M2, [xresAt[0] + mg.w + 10, xresAt[1] + mg.ports.y.pos[1] - mg.ports.a.pos[1]], 'FP / CSR');
     // fdiv.s / fsqrt.s stall: the PC and every register write wait for the iterative unit
     if (dcache) throw new Error('singleCycleCpu: fpu and dcache together are not supported');
-    add('nstall', NOT, [8, P('pc', 'en')[1] - 1]);
-    add('xwg', AND, [68, bottom - 14]);
+    add('nstall', NOT, [20, yw + 6]);
+    add('xwg', AND, [60, yw + 1]);
     add('fwg', AND, [rfAt[0] - 6, bottom + 6]);
     add('fpg', AND, [rfR + 18, bottom + 58]);
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
@@ -706,7 +715,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       { name: 'StoreData', ends: ['swd.y', 'dm.wd'], tags: true },
       { name: 'FPUResult', ends: ['fpu.y', 'xres.b', 'fwd.b'], tags: true },
       { name: 'FWriteData', ends: ['fwd.y', 'frf.wd'], tags: true },
-      { name: 'XResult0', ends: ['xres.y', 'cres.a'], tags: true },
+      { name: 'XResult0', ends: ['xres.y', 'cres.a'] },
       { name: 'CSRData', ends: ['fcsr.rdata', 'cres.b'], tags: true },
       { name: 'isCSR', ends: ['fcsr.hit', 'cres.s', 'rwi.i2'], tags: true },
       { name: 'XResult', ends: ['cres.y', 'rf.wd'], tags: true },
@@ -717,16 +726,16 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       { name: 'frs3', ends: ['frf.rd3', 'fpu.c'], tags: true },
       { name: 'FFlagsWE', ends: ['fpg.y', 'fcsr.fpOp'], tags: true },
       { name: 'stall', ends: ['fpu.stall', 'nstall.a'], tags: true },
-      { name: 'retire', ends: ['nstall.y', 'pc.en', 'xwg.b', 'fwg.b', 'fpg.b', 'retire'], tags: ['xwg.b', 'fwg.b', 'fpg.b', 'retire'] },
+      { name: 'retire', ends: ['nstall.y', 'pc.en', 'xwg.b', 'fwg.b', 'fpg.b', 'retire'], tags: ['pc.en', 'xwg.b', 'fwg.b', 'fpg.b', 'retire'] },
       { name: 'frm', ends: ['fcsr.frm', 'fpu.frm'], tags: true },
       { name: 'isFLW', ends: ['fdec.flw', 'fwd.s', 'nflw.a'], tags: true },
       { name: 'isFSW', ends: ['fdec.fsw', 'swd.s'], tags: true },
       { name: 'toInt', ends: ['fdec.toInt', 'xres.s', 'rwi.i1'], tags: true },
       { name: 'FRegWrite', ends: ['fdec.fWrite', 'fwg.a'], tags: true },
       { name: 'FRegWriteQ', ends: ['fwg.y', 'frf.we'], tags: true },
-      { name: '¬flw', ends: ['nflw.y', 'rwx.b'], tags: true },
-      { name: 'RegWriteInt', ends: ['rwx.y', 'rwi.i0'], tags: true },
-      { name: 'XRegWrite', ends: ['rwi.y', 'xwg.a'], tags: true },
+      { name: '¬flw', ends: ['nflw.y', 'rwx.b'] },
+      { name: 'RegWriteInt', ends: ['rwx.y', 'rwi.i0'] },
+      { name: 'XRegWrite', ends: ['rwi.y', 'xwg.a'] },
       { name: 'XRegWriteQ', ends: ['xwg.y', 'rf.we'], tags: true },
     );
     // fwd: a = ReadData? the FPU result is the common case, the memory word only for flw

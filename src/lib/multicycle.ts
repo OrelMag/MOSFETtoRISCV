@@ -324,12 +324,13 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
   alignY('data', R32, right('memsel') + 10, 'd', P('memsel', 'y')[1] + 24);
   alignY('oldpc', R32, right('memsel') + 10, 'd', P('ir', 'd')[1] - 26);
   alignY('si', SI, right('ir') + 8, 'in', P('ir', 'q')[1]);
-  alignY('rf', RF, right('si') + 10, 'wa', P('si', 'o1')[1]);
+  alignY('rf', RF, right('si') + 16, 'wa', P('si', 'o1')[1]);
   alignY('imm', IMM_GEN, right('si') + 10, 'instr', P('rf', 'rd2')[1] + 22);
   alignY('ra', R32, right('rf') + 8, 'd', P('rf', 'rd1')[1]);
-  alignY('rb', R32, right('rf') + 8, 'd', P('rf', 'rd2')[1] + 4);
-  alignY('srcA', M4, right('ra') + 10, 'd2', P('ra', 'q')[1]);
-  alignY('srcB', M4, right('ra') + 10, 'd0', P('rb', 'q')[1] + 6);
+  alignY('rb', R32, right('rf') + 8, 'd', P('rf', 'rd2')[1] + 8);
+  // 16 units after A / B: the constant inputs of the source multiplexers sit in between
+  alignY('srcA', M4, right('ra') + 16, 'd2', P('ra', 'q')[1]);
+  alignY('srcB', M4, right('ra') + 16, 'd0', P('rb', 'q')[1] + 6);
   alignY('alu', ALU, right('srcA') + 10, 'a', P('srcA', 'y')[1]);
   alignY('aluout', R32, right('alu') + 10, 'd', P('alu', 'y')[1]);
   alignY('res', M4, right('aluout') + 10, 'd0', P('aluout', 'q')[1]);
@@ -338,7 +339,7 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
   place('c4', constWord(32, 4), [P('srcB', 'd2')[0] - 14, P('srcB', 'd2')[1] - 1]);
   place('z32', constWord(32, 0), [P('srcA', 'd3')[0] - 14, P('srcA', 'd3')[1] - 1]);
   place('z32b', constWord(32, 0), [P('srcB', 'd3')[0] - 14, P('srcB', 'd3')[1] + 2]);
-  place('actl', busMux2(4), [P('alu', 'ctl')[0] - 10, at.get('alu')![1] + g(ALU).h + 6]);
+  place('actl', busMux2(4), [P('alu', 'ctl')[0] - 10, at.get('alu')![1] + g(ALU).h + 20]);
   place('z4', constWord(4, 0), [P('actl', 'a')[0] - 14, P('actl', 'a')[1] - 1]);
   place('ctl', CONTROL, [right('si') + 10, 2]);
   place('npc', NEXT_PC, [right('alu') + 6, 2]);
@@ -346,8 +347,8 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
   place('one', TIE1, [right('ra') + 2, P('ra', 'en')[1] + 6]);
   place('gnd', TIE0, [P('npc', 'jump')[0] - 6, P('npc', 'jump')[1] + 4]);
   place('ps', splitter([1, 1]), [right('npc') + 4, P('npc', 'pcSrc')[1] - 2]);
-  place('pcw', OR, [2, P('pc', 'en')[1] - 3]);
-  place('fz', isZero(4), [right('ctrl') + 4, 2 + g(CTRL).h - 8]);
+  place('pcw', OR, [4, P('pc', 'en')[1] + 4]);
+  place('fz', isZero(4), [right('ctrl') + 14, 2 + g(CTRL).h - 8]);
 
   const labels: Record<string, string> = {
     pc: 'PC', adr: 'Adr', memsel: 'one memory port', ir: 'IR', data: 'Data', oldpc: 'OldPC', ra: 'A', rb: 'B', srcA: 'SrcA', srcB: 'SrcB',
