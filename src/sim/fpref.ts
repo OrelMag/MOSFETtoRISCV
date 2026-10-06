@@ -1,11 +1,23 @@
 // Reference IEEE 754 arithmetic for any binary format (E exponent bits, M fraction bits): exact
-// rational arithmetic with BigInt, then one correct round-to-nearest-even. Used to check the
-// gate-level floating-point units exhaustively on small formats and on float32, and by the
-// floating-point explorer. NaN results are RISC-V's canonical quiet NaN.
+// rational arithmetic with BigInt, then one correct rounding in any of RISC-V's five rounding
+// modes, with the five exception flags. Used to check the gate-level floating-point units
+// exhaustively on small formats and on float32, by the instruction-set simulator, and by the
+// floating-point explorer. NaN results are RISC-V's canonical quiet NaN; tininess is detected
+// after rounding, as RISC-V specifies.
 
 export interface FpFormat { E: number; M: number }
 export const F32: FpFormat = { E: 8, M: 23 };
 export const F16: FpFormat = { E: 5, M: 10 };
+
+/** Rounding modes, numbered as in the rm field and frm. 5 and 6 are reserved (treated as RTZ here). */
+export const RM = { RNE: 0, RTZ: 1, RDN: 2, RUP: 3, RMM: 4 } as const;
+export const RM_NAMES = ['rne', 'rtz', 'rdn', 'rup', 'rmm'] as const;
+/** Exception flags, as in fflags: NV invalid, DZ divide by zero, OF overflow, UF underflow, NX inexact. */
+export const FLAG = { NX: 1, UF: 2, OF: 4, DZ: 8, NV: 16 } as const;
+export const flagNames = (fl: number) => (['NV', 'DZ', 'OF', 'UF', 'NX'] as const).filter((_, i) => fl & (16 >> i)).join(' ') || '–';
+
+/** A rounded result and the flags it raised. */
+export interface FpResult { y: number; fl: number }
 
 export type FpKind = 'zero' | 'subnormal' | 'normal' | 'inf' | 'nan';
 
@@ -21,7 +33,13 @@ export function parts(bits: number, f: FpFormat): FpParts {
   return { sign, field, frac, kind, bias: bias(f) };
 }
 
+/** A signaling NaN: exponent all ones, quiet bit (top fraction bit) 0, fraction non-zero. */
+export const isSNaN = (bits: number, f: FpFormat) => { const p = parts(bits, f); return p.kind === 'nan' && p.frac < 2 ** (f.M - 1); };
+
 const pack = (sign: number, field: number, frac: number, f: FpFormat) => (sign * 2 ** f.E + field) * 2 ** f.M + frac;
+const infOf = (sign: number, f: FpFormat) => pack(sign, 2 ** f.E - 1, 0, f);
+const maxFinite = (sign: number, f: FpFormat) => pack(sign, 2 ** f.E - 2, 2 ** f.M - 1, f);
+const nanResult = (fl: number, f: FpFormat): FpResult => ({ y: canonicalNaN(f), fl });
 
 /** value = mant × 2^exp2 exactly (finite, non-NaN). */
 function exact(bits: number, f: FpFormat): { sign: number; mant: bigint; exp2: number } {
@@ -32,57 +50,146 @@ function exact(bits: number, f: FpFormat): { sign: number; mant: bigint; exp2: n
 
 const bitLength = (v: bigint) => v.toString(2).length;
 
-/** Round sign × mant × 2^exp2 (mant > 0) to the format, nearest-even, with overflow to infinity. */
-export function roundTo(sign: number, mant: bigint, exp2: number, f: FpFormat): number {
-  const b = bias(f), top = 2 ** f.E - 1;
-  const e = bitLength(mant) - 1 + exp2;            // unbiased exponent of the leading 1
-  let qe = Math.max(e, 1 - b) - f.M;              // weight of the last fraction bit
-  const sh = exp2 - qe;
-  let n: bigint;
-  if (sh >= 0) n = mant << BigInt(sh);
-  else {
-    const d = BigInt(-sh), q = mant >> d, r = mant - (q << d), half = 1n << (d - 1n);
-    n = r > half || (r === half && (q & 1n) === 1n) ? q + 1n : q;
+/** Should a magnitude be rounded up? lsb = last kept bit, g = first dropped bit, s = any later bit. */
+export function roundUp(rm: number, sign: number, lsb: boolean, g: boolean, s: boolean): boolean {
+  switch (rm) {
+    case RM.RNE: return g && (s || lsb);
+    case RM.RDN: return !!sign && (g || s);
+    case RM.RUP: return !sign && (g || s);
+    case RM.RMM: return g;
+    default: return false; // RTZ (and the reserved encodings)
   }
-  if (n === 1n << BigInt(f.M + 1)) { n >>= 1n; qe += 1; }
-  if (n < 1n << BigInt(f.M)) return pack(sign, 0, Number(n), f);   // subnormal (or zero)
-  const field = qe + f.M + b;
-  if (field >= top) return pack(sign, top, 0, f);                  // overflow → infinity
-  return pack(sign, field, Number(n - (1n << BigInt(f.M))), f);
+}
+/** Does an overflow round to infinity (otherwise to the largest finite number)? */
+export const overflowToInf = (rm: number, sign: number) => rm === RM.RNE || rm === RM.RMM || (rm === RM.RUP && !sign) || (rm === RM.RDN && !!sign);
+
+/** Round mant / 2^d (d > 0) to an integer: quotient, rounded quotient, inexact. */
+function roundShift(mant: bigint, d: number, rm: number, sign: number): { n: bigint; inexact: boolean } {
+  const D = BigInt(d), q = mant >> D, r = mant - (q << D);
+  const g = ((r >> (D - 1n)) & 1n) === 1n, s = (r & ((1n << (D - 1n)) - 1n)) !== 0n;
+  return { n: roundUp(rm, sign, (q & 1n) === 1n, g, s) ? q + 1n : q, inexact: r !== 0n };
 }
 
-export function fpAddRef(a: number, b: number, sub: boolean, f: FpFormat): number {
+/** Round sign × mant × 2^exp2 (mant > 0) to the format: the encoding and the flags. */
+export function roundToX(sign: number, mant: bigint, exp2: number, f: FpFormat, rm: number = RM.RNE): FpResult {
+  const b = bias(f), top = 2 ** f.E - 1, emin = 1 - b;
+  const e = bitLength(mant) - 1 + exp2;            // unbiased exponent of the leading 1
+  let qe = Math.max(e, emin) - f.M;               // weight of the last fraction bit
+  const sh = exp2 - qe;
+  let n: bigint, inexact = false;
+  if (sh >= 0) n = mant << BigInt(sh);
+  else ({ n, inexact } = roundShift(mant, -sh, rm, sign));
+  if (n === 1n << BigInt(f.M + 1)) { n >>= 1n; qe += 1; }
+  let fl = inexact ? FLAG.NX : 0;
+  if (e < emin && inexact) {
+    // tiny after rounding: rounded to M + 1 bits with an unbounded exponent, still below 2^emin?
+    const u = exp2 - (e - f.M) < 0 ? roundShift(mant, e - f.M - exp2, rm, sign).n : mant << BigInt(exp2 - (e - f.M));
+    if (!(e === emin - 1 && u === 1n << BigInt(f.M + 1))) fl |= FLAG.UF;
+  }
+  if (n < 1n << BigInt(f.M)) return { y: pack(sign, 0, Number(n), f), fl };   // subnormal (or zero)
+  const field = qe + f.M + b;
+  if (field >= top) return { y: overflowToInf(rm, sign) ? infOf(sign, f) : maxFinite(sign, f), fl: FLAG.OF | FLAG.NX };
+  return { y: pack(sign, field, Number(n - (1n << BigInt(f.M))), f), fl };
+}
+
+/** Round to nearest even, encoding only (the explorer's and the original units' interface). */
+export const roundTo = (sign: number, mant: bigint, exp2: number, f: FpFormat) => roundToX(sign, mant, exp2, f).y;
+
+export function fpAddX(a: number, b: number, sub: boolean, f: FpFormat, rm: number = RM.RNE): FpResult {
   const pa = parts(a, f), pb0 = parts(b, f);
   const sb = pb0.sign ^ (sub ? 1 : 0);
-  if (pa.kind === 'nan' || pb0.kind === 'nan') return canonicalNaN(f);
-  if (pa.kind === 'inf' && pb0.kind === 'inf') return pa.sign !== sb ? canonicalNaN(f) : pack(pa.sign, 2 ** f.E - 1, 0, f);
-  if (pa.kind === 'inf') return pack(pa.sign, 2 ** f.E - 1, 0, f);
-  if (pb0.kind === 'inf') return pack(sb, 2 ** f.E - 1, 0, f);
+  if (pa.kind === 'nan' || pb0.kind === 'nan') return nanResult(isSNaN(a, f) || isSNaN(b, f) ? FLAG.NV : 0, f);
+  if (pa.kind === 'inf' && pb0.kind === 'inf') return pa.sign !== sb ? nanResult(FLAG.NV, f) : { y: infOf(pa.sign, f), fl: 0 };
+  if (pa.kind === 'inf') return { y: infOf(pa.sign, f), fl: 0 };
+  if (pb0.kind === 'inf') return { y: infOf(sb, f), fl: 0 };
   const x = exact(a, f), y = exact(b, f);
   const e = Math.min(x.exp2, y.exp2);
   const vx = (x.sign ? -1n : 1n) * (x.mant << BigInt(x.exp2 - e)), vy = (sb ? -1n : 1n) * (y.mant << BigInt(y.exp2 - e));
   const s = vx + vy;
-  if (s === 0n) return pack(pa.sign === sb ? pa.sign : 0, 0, 0, f); // exact zero: +0 unless both were -0
-  return roundTo(s < 0n ? 1 : 0, s < 0n ? -s : s, e, f);
+  // exact zero: the common sign if both agree, otherwise +0 (−0 when rounding down)
+  if (s === 0n) return { y: pack(pa.sign === sb ? pa.sign : rm === RM.RDN ? 1 : 0, 0, 0, f), fl: 0 };
+  return roundToX(s < 0n ? 1 : 0, s < 0n ? -s : s, e, f, rm);
 }
 
-export function fpMulRef(a: number, b: number, f: FpFormat): number {
+export function fpMulX(a: number, b: number, f: FpFormat, rm: number = RM.RNE): FpResult {
   const pa = parts(a, f), pb = parts(b, f), sign = pa.sign ^ pb.sign;
-  if (pa.kind === 'nan' || pb.kind === 'nan') return canonicalNaN(f);
-  if ((pa.kind === 'inf' && pb.kind === 'zero') || (pa.kind === 'zero' && pb.kind === 'inf')) return canonicalNaN(f);
-  if (pa.kind === 'inf' || pb.kind === 'inf') return pack(sign, 2 ** f.E - 1, 0, f);
-  if (pa.kind === 'zero' || pb.kind === 'zero') return pack(sign, 0, 0, f);
+  if (pa.kind === 'nan' || pb.kind === 'nan') return nanResult(isSNaN(a, f) || isSNaN(b, f) ? FLAG.NV : 0, f);
+  if ((pa.kind === 'inf' && pb.kind === 'zero') || (pa.kind === 'zero' && pb.kind === 'inf')) return nanResult(FLAG.NV, f);
+  if (pa.kind === 'inf' || pb.kind === 'inf') return { y: infOf(sign, f), fl: 0 };
+  if (pa.kind === 'zero' || pb.kind === 'zero') return { y: pack(sign, 0, 0, f), fl: 0 };
   const x = exact(a, f), y = exact(b, f);
-  return roundTo(sign, x.mant * y.mant, x.exp2 + y.exp2, f);
+  return roundToX(sign, x.mant * y.mant, x.exp2 + y.exp2, f, rm);
 }
 
 /** Integer (two's complement if signed) to float. */
-export function fpFromIntRef(v: number, signed: boolean, f: FpFormat, width = 32): number {
-  let x = BigInt(v >>> 0);
+export function fpFromIntX(v: number, signed: boolean, f: FpFormat, rm: number = RM.RNE, width = 32): FpResult {
+  let x = BigInt(Math.floor(v) % 2 ** width);
   if (signed && x >= 1n << BigInt(width - 1)) x -= 1n << BigInt(width);
-  if (x === 0n) return 0;
-  return roundTo(x < 0n ? 1 : 0, x < 0n ? -x : x, 0, f);
+  if (x === 0n) return { y: 0, fl: 0 };
+  return roundToX(x < 0n ? 1 : 0, x < 0n ? -x : x, 0, f, rm);
 }
+
+/**
+ * Float to integer (fcvt.w.s / fcvt.wu.s): round in the given mode, then saturate. NaN and
+ * out-of-range values (after rounding) raise NV and give the largest integer of the operand's
+ * sign (NaN counts as positive); otherwise NX if rounding changed the value. The result is the
+ * width-bit pattern.
+ */
+export function fpToIntX(a: number, signed: boolean, f: FpFormat, rm: number = RM.RNE, width = 32): FpResult {
+  const p = parts(a, f), W = BigInt(width);
+  const max = signed ? (1n << (W - 1n)) - 1n : (1n << W) - 1n, min = signed ? -(1n << (W - 1n)) : 0n;
+  const enc = (v: bigint) => Number(BigInt.asUintN(width, v));
+  if (p.kind === 'nan') return { y: enc(max), fl: FLAG.NV };
+  if (p.kind === 'inf') return { y: enc(p.sign ? min : max), fl: FLAG.NV };
+  const x = exact(a, f);
+  let n: bigint, inexact = false;
+  if (x.exp2 >= 0) n = x.mant << BigInt(x.exp2);
+  else ({ n, inexact } = roundShift(x.mant, -x.exp2, rm, p.sign));
+  const v = p.sign ? -n : n;
+  if (v > max || v < min) return { y: enc(p.sign ? min : max), fl: FLAG.NV };
+  return { y: enc(v), fl: inexact ? FLAG.NX : 0 };
+}
+
+/** feq / flt / fle: 0 or 1. feq is quiet (NV only for signaling NaNs), flt and fle signal on any NaN. */
+export function fpCmpX(a: number, b: number, op: 'eq' | 'lt' | 'le', f: FpFormat): FpResult {
+  const pa = parts(a, f), pb = parts(b, f);
+  if (pa.kind === 'nan' || pb.kind === 'nan') return { y: 0, fl: op !== 'eq' || isSNaN(a, f) || isSNaN(b, f) ? FLAG.NV : 0 };
+  const A = fpValue(a, f), B = fpValue(b, f);
+  return { y: (op === 'eq' ? A === B : op === 'lt' ? A < B : A <= B) ? 1 : 0, fl: 0 };
+}
+
+/**
+ * fmin.s / fmax.s (IEEE 754-2019 minimumNumber / maximumNumber): a NaN operand is ignored,
+ * two NaNs give the canonical NaN, −0 is smaller than +0, and NV only for a signaling NaN.
+ */
+export function fpMinMaxX(a: number, b: number, max: boolean, f: FpFormat): FpResult {
+  const pa = parts(a, f), pb = parts(b, f);
+  const fl = isSNaN(a, f) || isSNaN(b, f) ? FLAG.NV : 0;
+  if (pa.kind === 'nan' && pb.kind === 'nan') return { y: canonicalNaN(f), fl };
+  if (pa.kind === 'nan') return { y: b, fl };
+  if (pb.kind === 'nan') return { y: a, fl };
+  const A = fpValue(a, f), B = fpValue(b, f);
+  const aLess = A < B || (A === B && pa.sign > pb.sign);
+  return { y: aLess !== max ? a : b, fl };
+}
+
+/** fclass.s: a one-hot 10-bit mask. */
+export function fpClass(a: number, f: FpFormat): number {
+  const p = parts(a, f);
+  switch (p.kind) {
+    case 'nan': return isSNaN(a, f) ? 1 << 8 : 1 << 9;
+    case 'inf': return p.sign ? 1 << 0 : 1 << 7;
+    case 'normal': return p.sign ? 1 << 1 : 1 << 6;
+    case 'subnormal': return p.sign ? 1 << 2 : 1 << 5;
+    default: return p.sign ? 1 << 3 : 1 << 4;
+  }
+}
+export const FCLASS_NAMES = ['−∞', '−normal', '−subnormal', '−0', '+0', '+subnormal', '+normal', '+∞', 'sNaN', 'qNaN'];
+
+// the original round-to-nearest-even interface (encodings only)
+export const fpAddRef = (a: number, b: number, sub: boolean, f: FpFormat) => fpAddX(a, b, sub, f).y;
+export const fpMulRef = (a: number, b: number, f: FpFormat) => fpMulX(a, b, f).y;
+export const fpFromIntRef = (v: number, signed: boolean, f: FpFormat, width = 32) => fpFromIntX(v >>> 0, signed, f, RM.RNE, width).y;
 
 /** The real value of an encoding (Infinity / NaN included), as a JS number when it fits. */
 export function fpValue(bits: number, f: FpFormat): number {
