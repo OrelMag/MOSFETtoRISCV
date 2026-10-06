@@ -1,12 +1,13 @@
 // "Inspect": the site's Inspector (what it is, what it costs, truth table, Verilog to read or
-// download) for the chip being edited or one of its parts, in a drawer over the right edge of
-// the canvas. Port values are live: they are read from the editor's simulation on repaints
+// download) for the chip being edited or one of its parts, in a drawer of the right-hand dock
+// (dock.ts). Port values are live: they are read from the editor's simulation on repaints
 // (at most a few times a second, and only when they changed).
 
 import type { Bit, ComponentDef } from '../sim/types';
 import { h, icon } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { Inspector } from '../view/inspector';
+import { dockPane, undockPane } from './dock';
 import { type Editor, registerToolbarAction } from './editor';
 
 const drawers = new WeakMap<Editor, InspectDrawer>();
@@ -39,7 +40,7 @@ class InspectDrawer {
       e.stopPropagation();
       if (e.key === 'Escape') this.close();
     });
-    ed.slots.overlay.append(this.el);
+    dockPane(ed, { id: 'inspect', label: 'Inspector', icon: 'table', el: this.el, width: 360 });
     ed.paintHooks.add(this.hook);
     this.tick(true);
   }
@@ -77,8 +78,10 @@ class InspectDrawer {
 
   close(): void {
     this.ed.paintHooks.delete(this.hook);
-    this.el.remove();
-    if (drawers.get(this.ed) === this) drawers.delete(this.ed);
+    if (drawers.get(this.ed) === this) {
+      drawers.delete(this.ed);
+      undockPane(this.ed, 'inspect');
+    } else this.el.remove();
   }
 }
 
