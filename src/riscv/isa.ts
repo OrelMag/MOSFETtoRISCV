@@ -60,7 +60,7 @@ export const INSTRS: InstrSpec[] = [
   { name: 'csrrsi', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 6, hw: false },
   { name: 'csrrci', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 7, hw: false },
   { name: 'fence', fmt: 'I', opcode: OPCODES.FENCE, funct3: 0, hw: false },
-  // F extension (the subset the gate-level FPU implements; round to nearest even)
+  // F extension (single precision; rm = rounding mode, 7 = dynamic: use frm)
   { name: 'flw', fmt: 'I', opcode: OPCODES.LOADFP, funct3: 2, hw: false, fp: { rd: 'f', rs1: 'x' } },
   { name: 'fsw', fmt: 'S', opcode: OPCODES.STOREFP, funct3: 2, hw: false, fp: { rs1: 'x', rs2: 'f' } },
   FR('fadd.s', 0x00, { rd: 'f', rs1: 'f', rs2: 'f', rm: true }),
@@ -69,10 +69,15 @@ export const INSTRS: InstrSpec[] = [
   FR('fsgnj.s', 0x10, { rd: 'f', rs1: 'f', rs2: 'f' }, 0),
   FR('fsgnjn.s', 0x10, { rd: 'f', rs1: 'f', rs2: 'f' }, 1),
   FR('fsgnjx.s', 0x10, { rd: 'f', rs1: 'f', rs2: 'f' }, 2),
+  FR('fmin.s', 0x14, { rd: 'f', rs1: 'f', rs2: 'f' }, 0),
+  FR('fmax.s', 0x14, { rd: 'f', rs1: 'f', rs2: 'f' }, 1),
   FR('fle.s', 0x50, { rd: 'x', rs1: 'f', rs2: 'f' }, 0),
   FR('flt.s', 0x50, { rd: 'x', rs1: 'f', rs2: 'f' }, 1),
   FR('feq.s', 0x50, { rd: 'x', rs1: 'f', rs2: 'f' }, 2),
+  FR('fcvt.w.s', 0x60, { rd: 'x', rs1: 'f', rs2fixed: 0, rm: true }),
+  FR('fcvt.wu.s', 0x60, { rd: 'x', rs1: 'f', rs2fixed: 1, rm: true }),
   FR('fmv.x.w', 0x70, { rd: 'x', rs1: 'f', rs2fixed: 0 }, 0),
+  FR('fclass.s', 0x70, { rd: 'x', rs1: 'f', rs2fixed: 0 }, 1),
   FR('fcvt.s.w', 0x68, { rd: 'f', rs1: 'x', rs2fixed: 0, rm: true }),
   FR('fcvt.s.wu', 0x68, { rd: 'f', rs1: 'x', rs2fixed: 1, rm: true }),
   FR('fmv.w.x', 0x78, { rd: 'f', rs1: 'x', rs2fixed: 0 }, 0),
@@ -99,7 +104,12 @@ export const BY_NAME = new Map(INSTRS.map((i) => [i.name, i]));
 export const CSRS: Record<string, number> = {
   mstatus: 0x300, misa: 0x301, mie: 0x304, mtvec: 0x305, mscratch: 0x340, mepc: 0x341, mcause: 0x342,
   mtval: 0x343, mip: 0x344, mcycle: 0xb00, cycle: 0xc00, mhartid: 0xf14,
+  // F extension: accrued exception flags, dynamic rounding mode, and both together
+  fflags: 0x001, frm: 0x002, fcsr: 0x003,
 };
+
+/** Rounding-mode operand names (rm field); 7 = dyn (use frm). */
+export const RM_OPERANDS = ['rne', 'rtz', 'rdn', 'rup', 'rmm', '', '', 'dyn'];
 export const CSR_NAMES: Record<number, string> = Object.fromEntries(Object.entries(CSRS).map(([k, v]) => [v, k]));
 
 export const ABI = [
@@ -218,8 +228,9 @@ export function disasm(word: number, pc?: number): string {
     const R = (role: 'f' | 'x' | undefined, r: number) => (role === 'f' ? frn(r) : rn(r));
     if (d.fmt === 'I') return `${n} ${frn(d.rd)}, ${d.imm}(${rn(d.rs1)})`;
     if (d.fmt === 'S') return `${n} ${frn(d.rs2)}, ${d.imm}(${rn(d.rs1)})`;
-    if (fp.rs2fixed !== undefined) return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}`;
-    return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}, ${R(fp.rs2, d.rs2)}`;
+    const rm = fp.rm && d.funct3 !== 7 ? `, ${RM_OPERANDS[d.funct3] || d.funct3}` : '';
+    if (fp.rs2fixed !== undefined) return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}${rm}`;
+    return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}, ${R(fp.rs2, d.rs2)}${rm}`;
   }
   if (d.opcode === OPCODES.AMO) return `${n} ${rn(d.rd)}, ${rn(d.rs2)}, (${rn(d.rs1)})`;
   switch (d.fmt) {
