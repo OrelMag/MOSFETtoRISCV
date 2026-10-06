@@ -1,4 +1,4 @@
-import { BOOTH_ENC, MDU, SRT_SELECT, arrayDiv, arrayMul, boothMul, csa, divStep, nrArrayDiv, pipeMul, popcount, seqDivider, seqMul, srtDivider, treeMul } from '../lib';
+import { BOOTH_ENC, MDU, SRT_SELECT, arrayDiv, arrayMul, boothMul, csa, divStep, nrArrayDiv, pipeMul, popcount, seqDivider, seqMul, srt4Divider, srtDivider, treeMul } from '../lib';
 import { cpuState } from '../riscv/cosim';
 import { M_PROGRAMS } from '../riscv/mprograms';
 import { cpuScene } from '../widgets/cpupanel';
@@ -285,20 +285,42 @@ export const chMulDiv: Chapter = {
       },
     },
     {
+      title: 'Radix 4: two bits per clock',
+      body: `
+        <p>With digits from −2 to +2, each step retires two quotient bits. The multiples d and 2d are wires (2d is d shifted), so the
+        term row is still one AND-OR per bit. The price is selection: the redundancy is smaller (ρ = 2/3: the remainder must stay within
+        ±⅔ d), so the digit depends on the divisor as well. The estimate is 8 bits of the remainder (4 fractional) and the divisor is
+        known to 3 bits after its leading one; for each of those 8 divisor intervals, 4 thresholds split the estimate into the 5 digits.</p>
+        <p>The thresholds here are not copied from a book. Each comes from two inequalities: the smallest estimate that picks digit k must
+        still allow k, and the largest that picks k − 1 must still allow k − 1, for every divisor in the interval, with the carry-save estimate
+        up to 2⁄16 low. The tests check them against every reachable remainder exactly, and the divider against every 4-bit pair. A table
+        built the same way, with five entries missing, was the Pentium's FDIV bug (1994).</p>
+        <p>Each comparison stays in carry-save form: one 3:2 row computes s + c − m and an 8-bit adder gives its sign. A 32-bit division takes
+        19 cycles of 44 NAND delays (836) against radix 2's 34 of 31 (1 054).</p>
+        <div class="try">start = 1 is set. Pulse the clock: the quotient fills two bits at a time.</div>`,
+      scene: () => ({ root: srt4Divider(8), inputs: { a: 200, b: 7, start: 1, clk: 0 } }),
+      challenge: {
+        kind: 'reach', goal: 'Clock the radix-4 divider until done = 1, with q = 28 and r = 4.',
+        check: (st) => st.value('done') === 1 && st.value('q') === 28 && st.value('r') === 4,
+        answer: 'Six pulses: one load, five radix-4 steps (the dividend is shifted down two places first, so 8 bits need 5 digits), then done: 7 cycles instead of 10.',
+        solve: (st) => { st.runCycles(6); },
+      },
+    },
+    {
       title: 'Dividers compared',
       body: `
-        <p>The same protocol, three steps. The table is computed from the circuits on this page.</p>`,
+        <p>The same protocol, four steps. The table is computed from the circuits on this page.</p>`,
       widget: divComparison,
       challenge: {
-        kind: 'quiz', question: 'Real SRT dividers retire two or more quotient bits per cycle. What does radix 4 change?',
+        kind: 'quiz', question: 'Why is the radix-4 divider slower than radix 2 at 8 bits, but faster at 32?',
         options: [
-          'Digits from −2 to +2: the term is ±d or ±2d (a shift), and selection looks at a few more remainder and divisor bits, so half the cycles for a slightly longer step',
-          'Nothing: radix 4 is just two radix-2 steps chained in one cycle',
-          'It needs a full carry-propagate adder per step',
-          'It only works for even divisors',
+          'Its step is longer (44 against 29 NAND delays); halving the steps only pays when there are many of them',
+          'Radix 4 needs more cycles at 8 bits',
+          'Normalization is slower for small numbers',
+          'The 8-bit version uses a ripple adder',
         ],
         answer: 0,
-        explain: 'Radix 4 picks a digit in {−2, …, +2} from about 7 bits of the remainder and 4 of the divisor (a table of 2048 entries in the Pentium), and the multiples are free shifts. The step stays carry-save, so the cycle time barely grows while the cycle count halves. The Pentium FDIV bug was five missing entries in exactly such a table.',
+        explain: 'Both have a fixed overhead of load, done and one extra digit. At 8 bits radix 4 saves 3 cycles of 44 against 10 of 29: 308 against 290. At 32 bits it saves 15 cycles: 836 against 1 054. Real dividers go further: radix 8 or 16 by overlapping two or three radix-2 or radix-4 stages per cycle.',
       },
     },
     {
