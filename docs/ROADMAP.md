@@ -91,6 +91,8 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ ALU (add, sub, and, or, xor, shifts, slt/sltu) and flags; barrel shifter
 - ✅ Carry-lookahead and Kogge–Stone adders with depth comparison (optimization intro)
 - ✅ Register file (32 × 32, x0 hard-wired), two read ports and one write port
+- ✅ Workbench lists every library component: each generator is a family with parameter dropdowns
+  (adders, multipliers, dividers, float units, register files, caches, …), plus every fixed processor part
 - **Sandbox**: full wiring editor (today the *workbench* opens any library component with free inputs) (place parts from the library, wire, package into a new
   chip, save to local storage and share via URL); Turing-Complete-style build challenges
   checked against a truth table or test vectors
