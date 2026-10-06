@@ -303,6 +303,9 @@ export class SchematicView {
         const tw = textWidth(txt, 0.95);
         w.labelBg.setAttribute('x', String(w.net.label[0] - tw / 2));
         w.labelBg.setAttribute('width', String(tw));
+        // Too wide for its segment (a 64-bit value on a short hop): it would cover the ports at
+        // either end. The value is still in the hover tooltip, and a narrower radix may fit.
+        w.label!.setAttribute('display', tw > w.net.labelRoom - 0.4 ? 'none' : 'inline');
         w.label!.setAttribute('class', `bus-label ${busClass(bits)}${this.marks(w.net.index)}`);
       }
     }

@@ -27,8 +27,9 @@ export interface RoutedNet {
   /** One polyline per sink (driver → sink). */
   paths: Vec[][];
   dots: Vec[];
-  /** Where to draw the bus value label. */
+  /** Where to draw the bus value label, and how wide it may be before it runs off its segment. */
   label: Vec | null;
+  labelRoom: number;
 }
 
 export interface PinGeom extends PortGeom {
@@ -143,7 +144,8 @@ export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[
       const ym = net.trunk ?? (multi ? P1[1] : half((P1[1] + S1[1]) / 2));
       return simplify([P, P1, [P1[0], ym], [S1[0], ym], S1, S]);
     });
-    return { index, width, tags, paths, dots: junctions(paths), label: width > 1 ? labelAnchor(paths) : null };
+    const anchor = width > 1 ? labelAnchor(paths) : null;
+    return { index, width, tags, paths, dots: junctions(paths), label: anchor?.pos ?? null, labelRoom: anchor?.room ?? 0 };
   });
   return { nets, pins };
 }
@@ -253,17 +255,19 @@ function junctions(paths: Vec[][]): Vec[] {
   return dots;
 }
 
-function labelAnchor(paths: Vec[][]): Vec | null {
-  // Midpoint of the longest horizontal segment of the first path.
+function labelAnchor(paths: Vec[][]): { pos: Vec; room: number } | null {
+  // Midpoint of the longest horizontal segment of the first path. A label on a horizontal
+  // segment must fit within it; one beside a vertical segment only crosses it.
   const p = paths[0];
   if (!p) return null;
-  let best: Vec | null = null, len = -1;
+  let best: { pos: Vec; room: number } | null = null, len = -1;
   for (let i = 1; i < p.length; i++) {
     const [a, b] = [p[i - 1], p[i]];
-    const l = a[1] === b[1] ? Math.abs(a[0] - b[0]) : Math.abs(a[1] - b[1]) * 0.5;
+    const horiz = a[1] === b[1];
+    const l = horiz ? Math.abs(a[0] - b[0]) : Math.abs(a[1] - b[1]) * 0.5;
     if (l > len) {
       len = l;
-      best = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      best = { pos: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], room: horiz ? l : Infinity };
     }
   }
   return len >= 3 ? best : null;
