@@ -14,7 +14,7 @@ import { flatten } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import type { PowerOnMode, Sim } from '../sim/sim';
 import { SwitchSim } from '../sim/switchsim';
-import { type Bit, type ComponentDef, netlistOf } from '../sim/types';
+import { type Bit, BZ, type ComponentDef, netlistOf } from '../sim/types';
 import { mask } from '../sim/values';
 import { checkSimulatable, type Compiled, type Diag } from './compile';
 import type { PinDoc } from './model';
@@ -139,6 +139,7 @@ export class EditorSim {
   /** Drive every input pin from its document value (clocks keep the level the run loop gave them). */
   private applyPins(sim: Sim): void {
     for (const p of this.pins) {
+      if (p.dir === 'inout' && this.hasInput(sim, p)) drive(sim, p, p.value);
       if (p.dir !== 'in' || !this.hasInput(sim, p)) continue;
       if (p.kind === 'clock') sim.setInput(p.name, this.clkHigh ? 1 : 0);
       else if (p.kind === 'button') sim.setInput(p.name, 0);
@@ -146,8 +147,10 @@ export class EditorSim {
     }
   }
 
+  /** Inputs, and (switch level only) bidirectional pins the user may drive. */
   private hasInput(sim: Sim, p: PinDoc): boolean {
-    return sim.design.root.def.ports.some((q) => q.name === p.name && q.dir === 'in' && q.width === p.width);
+    if (p.dir === 'inout' && !(sim instanceof SwitchSim)) return false;
+    return p.dir !== 'out' && sim.design.root.def.ports.some((q) => q.name === p.name && q.dir === p.dir && q.width === p.width);
   }
 
   private clocks(): string[] {
@@ -204,6 +207,15 @@ export class EditorSim {
     if (!sim || !this.hasInput(sim, p)) return;
     sim.setInput(p.name, v % (mask(p.width) + 1));
     if (this.mode === 'cycle') sim.settle();
+    this.onChange();
+  }
+
+  /** Drive a bidirectional pin from outside with a value, or release it (undefined: Z). */
+  driveInout(p: PinDoc, v: number | undefined): void {
+    const sim = this.sim;
+    if (!sim || p.dir !== 'inout' || !this.hasInput(sim, p)) return;
+    drive(sim, p, v);
+    sim.settle();
     this.onChange();
   }
 
@@ -345,6 +357,13 @@ export class EditorSim {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
   }
+}
+
+/** A root inout of a switch-level simulation: driven with a value, or left floating (Z). */
+function drive(sim: Sim, p: PinDoc, v: number | undefined): void {
+  if (!(sim instanceof SwitchSim)) return;
+  if (v === undefined) sim.setInputBit(p.name, BZ);
+  else sim.setInput(p.name, v % (mask(p.width) + 1));
 }
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
