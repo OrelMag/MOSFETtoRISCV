@@ -7,7 +7,7 @@ import { sharedBusChip, wiredChip } from '../src/editor/examples';
 import { UserLibrary } from '../src/editor/library';
 import type { ChipDoc } from '../src/editor/model';
 import {
-  CAP, GND, INV_CMOS, NMOS, PMOS, PULLDOWN, PULLUP, RES, TGATE, TRIBUF, TRIINV, VDD,
+  CAP, GND, INV_CMOS, INV_PSEUDO, NMOS, PMOS, PULLDOWN, PULLUP, RES, TGATE, TRIBUF, TRIINV, VDD,
 } from '../src/lib';
 import { flatten } from '../src/sim/flatten';
 import { forEachInput, needsSwitchLevel, reachesTransistors } from '../src/sim/harness';
@@ -77,6 +77,13 @@ describe('resistors: weaker than any transistor', () => {
     set(s, { a: 0, b: 1 }); expect(show(bit(s, 'y'))).toBe('1');
     set(s, { a: 1, b: 1 }); expect(show(bit(s, 'y'))).toBe('0');
     set(s, { a: 0, b: 0 }); expect(show(bit(s, 'y'))).toBe('Z');
+  });
+
+  it('the library pseudo-NMOS inverter: one transistor and one resistor, a gate-level model like CMOS', () => {
+    const s = sw(INV_PSEUDO);
+    for (const a of [0, 1]) { set(s, { a }); expect(show(bit(s, 'y'))).toBe(String(1 - a)); }
+    expect(stats(INV_PSEUDO)).toMatchObject({ transistors: 1, resistors: 1 });
+    expect(deriveBehavior(INV_PSEUDO)).toMatchObject({ ok: true });
   });
 
   it('only at switch level; counted as resistors, not transistors', () => {

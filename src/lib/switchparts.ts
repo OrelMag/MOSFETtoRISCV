@@ -186,3 +186,36 @@ export const TRIBUF: ComponentDef = define({
     Two that disagree: a short from VDD to GND through both (X), the bug a bus arbiter exists to prevent.`,
   hdl: { verilog: 'module tribuf (input a, en, output y);\n  bufif1 b (y, a, en);   // or: assign y = en ? a : 1\'bz;\nendmodule' },
 });
+
+/**
+ * Pseudo-NMOS inverter: the PMOS of a CMOS inverter replaced by a pull-up resistor. The NMOS wins
+ * while it conducts (ratioed logic); the price is current from VDD to GND for as long as a = 1.
+ */
+export const INV_PSEUDO: ComponentDef = define({
+  id: 'inv_pseudo', name: 'Pseudo-NMOS inverter', category: 'cell',
+  summary: 'A pull-up resistor and one NMOS: the NMOS overrides the resistor while a = 1. One transistor, but it draws current from VDD to GND the whole time a = 1.',
+  ports: [{ name: 'a', width: 1, dir: 'in' }, { name: 'y', width: 1, dir: 'out' }],
+  symbol: { kind: 'not' },
+  spec: ([a]) => [a ? 0 : 1],
+  netlist: () => ({
+    level: 'switch',
+    pins: { a: [1, 9], y: [12, 5] },
+    instances: [
+      { name: 'pu', def: PULLUP, at: [7, 0] },
+      { name: 'n1', def: NMOS, at: [5, 7] },
+      { name: 'gnd', def: GND, at: [7, 12] },
+    ],
+    nets: [
+      { name: 'a', ends: ['a', 'n1.g'] },
+      { name: 'y', ends: ['n1.d', 'pu.y', 'y'], via: { y: [[8, 5]] } },
+      { name: 'gnd', ends: ['gnd.p', 'n1.s'] },
+    ],
+  }),
+  hdl: {
+    verilog: `module inv_pseudo (input a, output y);
+  supply0 gnd;
+  pullup  (y);           // the resistor: a pull-strength 1
+  nmos n1 (y, gnd, a);   // strong 0 while a = 1: overrides the pull-up
+endmodule`,
+  },
+});
