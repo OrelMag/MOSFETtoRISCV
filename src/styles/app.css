@@ -623,3 +623,46 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .coh-cell.hot { box-shadow: 0 0 0 2px var(--accent); }
 .btn.xs { padding: 0 5px; font-size: 10px; height: 18px; line-height: 16px; }
 .coh-log { font-size: 12px; display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow: auto; margin-top: 6px; }
+
+/* chapter 25: layout, fab, P&R, clock tree, floorplan, wafer */
+.lay-svg { width: 100%; max-width: 360px; display: block; margin: 8px auto; }
+.lay-svg .L-nwell { fill: rgba(250, 204, 21, 0.14); stroke: rgba(250, 204, 21, 0.5); stroke-width: 0.15; stroke-dasharray: 0.6 0.4; }
+.lay-svg .L-pdiff { fill: #c8a26a; }
+.lay-svg .L-ndiff { fill: #6aa86a; }
+.lay-svg .L-poly { fill: #d0473a; opacity: 0.9; }
+.lay-svg .L-metal { fill: rgba(70, 120, 235, 0.55); stroke: rgba(70, 120, 235, 0.9); stroke-width: 0.1; }
+.lay-svg .L-contact { fill: #111; }
+.lay-svg .v1 { filter: brightness(1.25) saturate(1.2); }
+.lay-svg .v0 { filter: brightness(0.6); }
+.lay-svg .vz { opacity: 0.45; }
+.lay-svg .chan { fill: #7a2a22; }
+.lay-svg .chan.on { fill: #d0473a; stroke: #22c55e; stroke-width: 0.35; }
+.lay-svg .lbl { font: 1.6px var(--font-mono); fill: var(--text); }
+.lay-chk { font-size: 12px; color: var(--text-2); display: inline-flex; gap: 3px; align-items: center; }
+.fab-svg { width: 100%; max-width: 640px; display: block; margin: 8px 0; }
+.fab-svg .si { fill: #8a8f9c; } .fab-svg .nwell { fill: #b9a35a; } .fab-svg .sti { fill: #dfe7ee; }
+.fab-svg .gox { fill: #f2f2f2; } .fab-svg .poly { fill: #c0392b; } .fab-svg .resist { fill: rgba(180, 80, 200, 0.35); } .fab-svg .resist-hard { fill: rgba(180, 80, 200, 0.85); }
+.fab-svg .mask { fill: rgba(200, 220, 255, 0.4); } .fab-svg .mask-dark { fill: #333; } .fab-svg .uv { stroke: #8b5cf6; stroke-width: 2; stroke-dasharray: 4 3; }
+.fab-svg .nplus { fill: #4ade80; } .fab-svg .pplus { fill: #f59e0b; } .fab-svg .ild { fill: rgba(200, 225, 240, 0.55); } .fab-svg .plug { fill: #6b7280; }
+.fab-svg .cu { fill: #d97706; } .fab-svg .upper { fill: rgba(217, 119, 6, 0.18); } .fab-svg .lbl { font: 11px var(--font-mono); fill: var(--text); }
+.fab-text { font-size: 13px; min-height: 40px; }
+.pnr-svg { width: 100%; max-width: 620px; display: block; margin: 8px 0; background: var(--surface-2); border-radius: 8px; }
+.pnr-svg .site { fill: none; stroke: var(--border); stroke-width: 0.5; stroke-dasharray: 2 2; }
+.pnr-svg .cell { fill: var(--surface-3); stroke: var(--border-strong); stroke-width: 0.6; }
+.pnr-svg .clbl { font: 9px var(--font-mono); fill: var(--muted); }
+.pnr-svg .rat { stroke: var(--muted); stroke-width: 0.5; opacity: 0.6; }
+.pnr-svg .m0 { stroke: #3b82f6; stroke-width: 2.4; stroke-linecap: round; }
+.pnr-svg .m1 { stroke: #ef4444; stroke-width: 2.4; stroke-linecap: round; opacity: 0.85; }
+.pnr-svg .via { fill: var(--text); }
+.pnr-svg .fail { stroke: #ef4444; stroke-width: 1; stroke-dasharray: 3 2; }
+.pnr-svg .pin { fill: var(--text); }
+.pnr-svg .iol { font: 8px var(--font-mono); fill: var(--text-2); }
+.ct-svg { width: 100%; max-width: 760px; display: block; margin: 8px 0; }
+.ct-svg .ht { stroke: var(--w1); stroke-width: 2; } .ct-svg .sp { stroke: #ef4444; stroke-width: 3; } .ct-svg .sp2 { stroke: #ef4444; stroke-width: 1; opacity: 0.6; }
+.ct-svg .ff { fill: var(--text); } .ct-svg .lbl { font: 13px var(--font-mono); fill: var(--text-2); }
+.fp-svg { width: 100%; max-width: 440px; display: block; margin: 8px 0; }
+.fp-svg .die { fill: var(--surface-2); stroke: var(--border-strong); } .fp-svg .pad { fill: #d4a017; }
+.fp-svg .blk { stroke: var(--surface); stroke-width: 1; } .fp-svg .c0 { fill: #3b82f6; } .fp-svg .c1 { fill: #6366f1; } .fp-svg .mem { fill: #16a34a; }
+.fp-svg .blbl { font: 12px var(--font-mono); fill: #fff; }
+.wf-svg { width: 100%; max-width: 420px; display: block; margin: 8px 0; }
+.wf-svg .wafer { fill: #9ca3af; stroke: var(--border-strong); } .wf-svg .good { fill: #3b82f6; } .wf-svg .bad { fill: #ef4444; }
