@@ -14,7 +14,7 @@ import { andN, busMux2, equal, muxTree } from './combinational';
 import { CLEAR_BIT0, CONTROL, IMM_GEN, NEXT_PC, PLUS4, PLUS4_FAST, dataMemory, rom } from './cpu';
 import { define, merger, splitter } from './define';
 import { fanout, koggeStone } from './fastadd';
-import { Builder, FP_DECODE, fmaAdd, fmaMultiply, fmaRound, fpClassify, fpCompare, fpDivSqrtHeld, fpMinMax, fpToInt } from './fpu';
+import { Builder, FP_DECODE, fmaAdd, fmaMultiply, fmaRound, fpClassify, fpCompare, fpDivSqrtHeld, fpMinMax, fpToIntAlign, fpToIntRound } from './fpu';
 import { F32 } from '../sim/fpref';
 import { AND, MUX2, NOT, OR, XOR } from './gates';
 import { condNegate } from './muldiv';
@@ -80,9 +80,10 @@ function fpPipeReg(name: string, from: string, to: string, fields: [string, numb
 const INT_LATE = ['valid', 'pc', 'pcPlus4', 'aluResult', 'readData', 'imm', 'rd', 'regWrite', 'resultSrc'];
 const CTRL: [string, number][] = [['fWrite', 1], ['toInt', 1], ['fpOp', 1], ['isFlw', 1], ['isCsr', 1]];
 const CSRW: [string, number][] = [['csrNew', 8], ['csrWeF', 1], ['csrWeR', 1]];
-const ARITH: [string, number][] = [['arith', 1], ['simpleY', 32], ['simpleFl', 5], ['nan', 1], ['invalid', 1], ['anyInf', 1], ['infSign', 1], ['rm', 3]];
-const REG_DEF = () => fpPipeReg('ID/EX', 'D', 'E', [['instr', 32], ['frd1', 32], ['frd2', 32], ['frd3', 32], ['isFsw', 1], ...CTRL]);
-const REG_EMF = () => fpPipeReg('EX/MEM', 'E', 'M', [['p', 48], ['mc', 24], ['dsat', 6], ['cBig', 1], ['eB', 16], ['sB', 1], ['effSub', 1], ...ARITH, ...CTRL, ...CSRW]);
+const ARITH: [string, number][] = [['arith', 1], ['simpleY', 32], ['simpleFl', 5], ['nan', 1], ['invalid', 1], ['anyInf', 1], ['infSign', 1], ['dz', 1], ['rm', 3]];
+const REG_DEF = () => fpPipeReg('ID/EX', 'D', 'E', [['instr', 32], ['frd1', 32], ['frd2', 32], ['frd3', 32], ['fwdA', 1], ['fwdB', 1], ['fwdC', 1], ['isFsw', 1], ...CTRL]);
+const TOINT: [string, number][] = [['tiT', 33], ['tiSt', 1], ['tiSign', 1], ['tiNaN', 1], ['tiBad', 1], ['cvtW', 1], ['tiSigned', 1]];
+const REG_EMF = () => fpPipeReg('EX/MEM', 'E', 'M', [['p', 48], ['mc', 24], ['dsat', 6], ['cBig', 1], ['eB', 16], ['sB', 1], ['effSub', 1], ...ARITH, ...TOINT, ...CTRL, ...CSRW]);
 const REG_MXF = () => fpPipeReg('MEM/X', 'M', 'X', [['sign', 1], ['ex', 16], ['sum', 52], ...ARITH, ...CTRL, ...CSRW]);
 const REG_XWF = () => fpPipeReg('X/WB', 'X', 'W', [['fpResult', 32], ['flags', 5], ...CTRL, ...CSRW]);
 
@@ -204,16 +205,17 @@ export const FP_HAZARD: ComponentDef = (() => {
   b.next();
   b.wire(b.op1(orN(4), [rawF, rawT, drain, fence], 'stall'), 'stall');
   b.next();
-  const w = (rs: string) => hit(rs, 'rdW', 'fWriteW');
-  b.wire(w('rs1E'), 'fwdA'); b.wire(w('rs2E'), 'fwdB'); b.wire(w('rs3E'), 'fwdC');
+  // forwarding into E from W, decided one cycle early: the instruction now in X will be in W
+  const x = (rs: string) => hit(rs, 'rdX', 'fWriteX'), w = (rs: string) => hit(rs, 'rdW', 'fWriteW');
+  b.wire(x('rs1D'), 'fwdA'); b.wire(x('rs2D'), 'fwdB'); b.wire(x('rs3D'), 'fwdC');
   b.wire(w('rs1D'), 'byA'); b.wire(w('rs2D'), 'byB'); b.wire(w('rs3D'), 'byC');
-  const ins = ['rs1D', 'rs2D', 'rs3D', 'usesF1', 'usesF2', 'usesF3', 'readsX1', 'readsX2', 'isCsrD', 'fpOpD', 'rs1E', 'rs2E', 'rs3E',
-    'rdE', 'fWriteE', 'toIntE', 'fpOpE', 'csrE', 'rdM', 'fWriteM', 'toIntM', 'fpOpM', 'csrM', 'fpOpX', 'csrX', 'rdW', 'fWriteW', 'fpOpW'];
-  const five = new Set(['rs1D', 'rs2D', 'rs3D', 'rs1E', 'rs2E', 'rs3E', 'rdE', 'rdM', 'rdW']);
+  const ins = ['rs1D', 'rs2D', 'rs3D', 'usesF1', 'usesF2', 'usesF3', 'readsX1', 'readsX2', 'isCsrD', 'fpOpD',
+    'rdE', 'fWriteE', 'toIntE', 'fpOpE', 'csrE', 'rdM', 'fWriteM', 'toIntM', 'fpOpM', 'csrM', 'rdX', 'fWriteX', 'fpOpX', 'csrX', 'rdW', 'fWriteW', 'fpOpW'];
+  const five = new Set(['rs1D', 'rs2D', 'rs3D', 'rdE', 'rdM', 'rdX', 'rdW']);
   const outs = ['stall', 'fwdA', 'fwdB', 'fwdC', 'byA', 'byB', 'byC'];
   return define({
     id: 'fphazard', name: 'FP hazard unit', category: 'cpu',
-    summary: 'Interlocks for the FP pipe: an instruction in D that reads a register an FP instruction in E or M will write waits (the result exists only after X); then the value comes forwarded from W into E (fwd) or bypassed into D (by). CSR accesses to fcsr wait for every FP instruction in flight (their flags are accrued at W), and FP instructions wait behind a pending CSR write.',
+    summary: 'Interlocks for the FP pipe: an instruction in D that reads a register an FP instruction in E or M will write waits (the result exists only after X); then the value comes forwarded from W into E (fwd, decided while the instruction is still in D, against the producer in X, and carried in ID/EX) or bypassed into D (by). CSR accesses to fcsr wait for every FP instruction in flight (their flags are accrued at W), and FP instructions wait behind a pending CSR write.',
     ports: [...ins.map((n) => (five.has(n) ? bus(n, 5, 'in') : bit(n, 'in'))), ...outs.map((n) => bit(n, 'out'))],
     symbol: { kind: 'box', label: 'FP HAZARDS' },
     netlist: () => ({
@@ -226,7 +228,8 @@ wire rawX = readsX1 && rs1D != 0 && (toIntE && rs1D == rdE || toIntM && rs1D == 
 wire drain = isCsrD && (fpOpE || fpOpM || fpOpX || fpOpW);      // flags accrue at W
 wire fence = (fpOpD || isCsrD) && (csrE || csrM || csrX);       // fcsr is written at W
 assign stall = rawF || rawX || drain || fence;
-assign fwdA = fWriteW && rs1E == rdW;   assign byA = fWriteW && rs1D == rdW;   // (B, C alike)`,
+assign fwdA = fWriteX && rs1D == rdX;   // registered in ID/EX: next cycle the producer is in W
+assign byA  = fWriteW && rs1D == rdW;   // (B, C alike)`,
     },
   });
 })();
@@ -279,23 +282,34 @@ export const FP_EXEC: ComponentDef = (() => {
   const mag = b.op1(condNegate(32), ['xa', xneg], '|x|');
   b.next();
   const pc = b.op1(merger([16, 32]), [b.op1(K(16, 0), []), mag]);
-  b.wire(b.op1(busMux2(48), [`${mul}.p`, pc, isCvt], 'product or |x|'), 'p');
-  b.wire(b.op1(busMux2(24), [`${mul}.mc`, b.op1(K(24, 0), []), isCvt]), 'mc');
+  // fdiv / fsqrt: the unrounded quotient or root (and its sticky bit) takes the product's place too
+  const ds = b.op(fpDivSqrtHeld(f), ['clk', isDiv, isSqrt, 'a', 'b', rm], 'divide / square root (iterative)');
+  const iter = b.name(b.op1(OR, [isDiv, isSqrt]), 'iterative');
+  const pIt = b.op1(merger([20, 1, 27]), [b.op1(K(20, 0), []), `${ds}.sticky`, `${ds}.m`]);
+  const other = b.op1(OR, [isCvt, iter], 'not a multiply-add');
+  b.next();
+  b.wire(b.op1(busMux2(48), [b.op1(busMux2(48), [`${mul}.p`, pc, isCvt], 'product or |x|'), pIt, iter], 'or quotient / root'), 'p');
+  b.wire(b.op1(busMux2(24), [`${mul}.mc`, b.op1(K(24, 0), []), other]), 'mc');
   b.wire(`${mul}.dsat`, 'dsat');
-  const ncv = b.op1(NOT, [isCvt]);
+  const ncv = b.op1(NOT, [other]);
   b.wire(b.op1(AND, [`${mul}.cBig`, ncv]), 'cBig');
-  b.wire(b.op1(busMux2(16), [`${mul}.eB`, b.op1(K(16, 31 + 127), []), isCvt]), 'eB');
-  b.wire(b.op1(MUX2, [`${mul}.sB`, xneg, isCvt]), 'sB');
+  b.wire(b.op1(busMux2(16), [b.op1(busMux2(16), [`${mul}.eB`, b.op1(K(16, 31 + 127), []), isCvt]), `${ds}.e`, iter]), 'eB');
+  b.wire(b.op1(MUX2, [b.op1(MUX2, [`${mul}.sB`, xneg, isCvt]), `${ds}.sign`, iter]), 'sB');
   b.wire(b.op1(AND, [`${mul}.effSub`, ncv]), 'effSub');
-  for (const s of ['nan', 'invalid', 'anyInf', 'infSign']) b.wire(b.op1(AND, [`${mul}.${s}`, ncv]), s);
+  for (const [s, d] of [['nan', 'nan'], ['invalid', 'invalid'], ['anyInf', 'inf'], ['infSign', 'infSign']]) {
+    b.wire(b.op1(MUX2, [b.op1(AND, [`${mul}.${s}`, b.op1(NOT, [isCvt])]), `${ds}.${d}`, iter]), s);
+  }
+  b.wire(b.op1(AND, [`${ds}.dz`, iter]), 'dz');
   b.wire(rm, 'rmOut');
-  b.wire(b.op1(orN(4), [addSub, isMul, isFma, isCvt], 'goes down the FMA pipe'), 'arith');
+  b.wire(b.op1(orN(5), [addSub, isMul, isFma, isCvt, iter], 'goes down the FMA pipe'), 'arith');
   // the operations that finish here
   const cmp = b.op(fpCompare(f), ['a', 'b'], 'comparator');
   const mm = b.op(fpMinMax(f), ['a', 'b', `${f3s}.o0`], 'min / max');
-  const toI = b.op(fpToInt(f), ['a', signed, rm], 'float → int');
+  const toI = b.op(fpToIntAlign(f), ['a'], 'float → int: align (round in M)');
+  b.wire(`${toI}.t`, 'tiT'); b.wire(`${toI}.sticky`, 'tiSt'); b.wire(`${toI}.sign`, 'tiSign'); b.wire(`${toI}.nan`, 'tiNaN'); b.wire(`${toI}.bad`, 'tiBad');
+  b.wire(is(0b11000, 'fcvt.w.s?'), 'cvtW');
+  b.wire(signed, 'tiSigned');
   const cls = b.op1(fpClassify(f), ['a'], 'classify');
-  const ds = b.op(fpDivSqrtHeld(f), ['clk', isDiv, isSqrt, 'a', 'b', rm], 'divide / square root');
   b.next();
   const sjSel = b.op1(merger([1, 1]), [`${f3s}.o0`, `${f3s}.o1`]);
   const sj = b.op1(muxTree(2, 1), [`${bs}.o1`, b.op1(NOT, [`${bs}.o1`]), b.op1(XOR, [`${as}.o1`, `${bs}.o1`]), `${bs}.o1`, sjSel], 'sign injection');
@@ -312,8 +326,8 @@ export const FP_EXEC: ComponentDef = (() => {
   b.next();
   const z = b.op1(K(32, 0), []), z5 = b.op1(K(5, 0), []);
   const ys = Array.from({ length: 16 }, () => z), fs = Array.from({ length: 16 }, () => z5);
-  ys[1] = `${ds}.y`; ys[2] = g2; ys[5] = `${ds}.y`; ys[10] = cmp32; ys[12] = `${toI}.y`; ys[14] = g14; ys[15] = 'xa';
-  fs[1] = `${ds}.flags`; fs[2] = fl2; fs[5] = `${ds}.flags`; fs[10] = cmpNV; fs[12] = `${toI}.flags`;
+  ys[2] = g2; ys[10] = cmp32; ys[14] = g14; ys[15] = 'xa';
+  fs[2] = fl2; fs[10] = cmpNV;
   b.wire(b.op1(muxTree(4, 32), [...ys, sel], 'simple result'), 'simpleY');
   b.wire(b.op1(muxTree(4, 5), [...fs, sel], 'simple flags'), 'simpleFl');
   const wait = b.op1(AND, [b.op1(OR, [isDiv, isSqrt]), b.op1(NOT, [`${ds}.done`])]);
@@ -323,13 +337,13 @@ export const FP_EXEC: ComponentDef = (() => {
     summary: 'fadd, fsub, fmul, the fused multiply-adds and fcvt.s.w all become one operation, a × b + c (fadd: b = 1; fmul: c = ±0; fcvt.s.w: |x| in place of the product), and this stage does its multiply step; align / add and round follow in M and X. Sign injection, min / max, compares, fclass, fcvt.w[u].s and the moves finish here; fdiv and fsqrt run on the iterative units behind operand latches and stall the pipeline until done.',
     ports: [bit('clk', 'in', 'bottom', true), bus('a', 32, 'in'), bus('b', 32, 'in'), bus('c', 32, 'in'), bus('xa', 32, 'in'), bus('instr', 32, 'in'), bus('frm', 3, 'in'),
       bus('p', 48, 'out'), bus('mc', 24, 'out'), bus('dsat', 6, 'out'), bit('cBig', 'out'), bus('eB', 16, 'out'), bit('sB', 'out'), bit('effSub', 'out'),
-      bit('nan', 'out'), bit('invalid', 'out'), bit('anyInf', 'out'), bit('infSign', 'out'), bus('rmOut', 3, 'out'), bit('arith', 'out'),
-      bus('simpleY', 32, 'out'), bus('simpleFl', 5, 'out'), bit('stall', 'out')],
+      bit('nan', 'out'), bit('invalid', 'out'), bit('anyInf', 'out'), bit('infSign', 'out'), bit('dz', 'out'), bus('rmOut', 3, 'out'), bit('arith', 'out'),
+      bus('simpleY', 32, 'out'), bus('simpleFl', 5, 'out'), bus('tiT', 33, 'out'), bit('tiSt', 'out'), bit('tiSign', 'out'), bit('tiNaN', 'out'), bit('tiBad', 'out'), bit('cvtW', 'out'), bit('tiSigned', 'out'), bit('stall', 'out')],
     symbol: { kind: 'box', label: 'FP EXECUTE' },
     netlist: () => ({
       pins: Object.fromEntries([
         ...['a', 'b', 'c', 'xa', 'instr', 'frm', 'clk'].map((n, i) => [n, [0, 4 + 4 * i]]),
-        ...['p', 'mc', 'dsat', 'cBig', 'eB', 'sB', 'effSub', 'nan', 'invalid', 'anyInf', 'infSign', 'rmOut', 'arith', 'simpleY', 'simpleFl', 'stall'].map((n, i) => [n, [b.right, 2 + 3 * i]]),
+        ...['p', 'mc', 'dsat', 'cBig', 'eB', 'sB', 'effSub', 'nan', 'invalid', 'anyInf', 'infSign', 'dz', 'rmOut', 'arith', 'simpleY', 'simpleFl', 'tiT', 'tiSt', 'tiSign', 'tiNaN', 'tiBad', 'cvtW', 'tiSigned', 'stall'].map((n, i) => [n, [b.right, 2 + 3 * i]]),
       ]) as Record<string, [number, number]>,
       instances: b.instances, nets: b.nets(),
     }),
@@ -349,18 +363,18 @@ fma_multiply s1 (.a, .b(B), .c(C), .negProd(isFma & op[3]), .negC, ...);
 export const FP_RESULT: ComponentDef = (() => {
   const f = F32;
   const b = new Builder();
-  const r = b.op(fmaRound(f), ['sign', 'ex', 'sum', 'rm', 'nan', 'invalid', 'anyInf', 'infSign'], 'FMA stage 3: round');
+  const r = b.op(fmaRound(f), ['sign', 'ex', 'sum', 'rm', 'nan', 'invalid', 'anyInf', 'infSign', 'dz'], 'FMA stage 3: round');
   b.next();
   b.wire(b.op1(busMux2(32), ['simpleY', `${r}.y`, 'arith']), 'y');
   b.wire(b.op1(busMux2(5), ['simpleFl', `${r}.flags`, 'arith']), 'flags');
   return define({
     id: 'fpresult', name: 'FP result stage', category: 'cpu',
-    summary: 'The third stage of the FP pipe: normalize & round for the multiply-add group, or the result computed back in E.',
-    ports: [bit('sign', 'in'), bus('ex', 16, 'in'), bus('sum', 52, 'in'), bus('rm', 3, 'in'), bit('nan', 'in'), bit('invalid', 'in'), bit('anyInf', 'in'), bit('infSign', 'in'),
+    summary: 'The third stage of the FP pipe: one shared normalize & round for the multiply-add group and for fdiv / fsqrt, or the result computed back in E.',
+    ports: [bit('sign', 'in'), bus('ex', 16, 'in'), bus('sum', 52, 'in'), bus('rm', 3, 'in'), bit('nan', 'in'), bit('invalid', 'in'), bit('anyInf', 'in'), bit('infSign', 'in'), bit('dz', 'in'),
       bit('arith', 'in'), bus('simpleY', 32, 'in'), bus('simpleFl', 5, 'in'), bus('y', 32, 'out'), bus('flags', 5, 'out')],
     symbol: { kind: 'box', label: 'FP ROUND' },
     netlist: () => ({
-      pins: Object.fromEntries([...['sign', 'ex', 'sum', 'rm', 'nan', 'invalid', 'anyInf', 'infSign', 'arith', 'simpleY', 'simpleFl'].map((n, i) => [n, [0, 2 + 3 * i]]), ['y', [b.right, 4]], ['flags', [b.right, 10]]]) as Record<string, [number, number]>,
+      pins: Object.fromEntries([...['sign', 'ex', 'sum', 'rm', 'nan', 'invalid', 'anyInf', 'infSign', 'dz', 'arith', 'simpleY', 'simpleFl'].map((n, i) => [n, [0, 2 + 3 * i]]), ['y', [b.right, 4]], ['flags', [b.right, 10]]]) as Record<string, [number, number]>,
       instances: b.instances, nets: b.nets(),
     }),
   });
@@ -514,7 +528,6 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
   place('fA', M2, [xDE + 8, yF + 4], 'forward fa');
   place('fB', M2, [xDE + 8, yF + 14], 'forward fb');
   place('fC', M2, [xDE + 8, yF + 24], 'forward fc');
-  place('sr3E', splitter([27, 5]), [xDE + 6, yF + 36]);
   place('fpx', FP_EXEC, [xDE + 22, yF + 4], 'FP execute (stage 1)');
   place('fcsrE', FCSR_CALC, [xDE + 22, yF + 120], 'fcsr read');
   place('siE', splitter([7, 5, 3, 5, 5, 7]), [xDE + 14, yF + 120]);
@@ -522,6 +535,8 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
   alignY('dm', DM, xEM + 12, 'addr', row('aluResult'));
   alignY('fwdM', M4, xEM + 12, 'd0', row('imm') + 14, 'M result');
   place('fadd', fmaAdd(F32), [xEM + 10, yF + 10], 'FP align + add (stage 2)');
+  place('ftoi', fpToIntRound(F32), [xEM + 10, yF + 70], 'float → int: round');
+  place('tiY', M2, [xEM + 28, yF + 70]); place('tiF', busMux2(5), [xEM + 28, yF + 80]);
   // X
   alignY('resX', M4, xMX + 12, 'd0', row('aluResult'), 'X result');
   place('fres', FP_RESULT, [xMX + 10, yF + 10], 'FP round (stage 3)');
@@ -598,7 +613,7 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
     N('PCPlus4E', ['DE.pcPlus4E', 'EM.pcPlus4E'], undefined),
     N('RD1E', ['DE.rd1E', 'fwdA.d0'], undefined), N('RD2E', ['DE.rd2E', 'fwdB.d0'], undefined),
     N('ImmExtE', ['DE.immE', 'EM.immE', 'srcB.b', 'target.b'], ['srcB.b', 'target.b']),
-    N('rs1E', ['DE.rs1E', 'hz.rs1E', 'fhz.rs1E']), N('rs2E', ['DE.rs2E', 'hz.rs2E', 'fhz.rs2E']),
+    N('rs1E', ['DE.rs1E', 'hz.rs1E']), N('rs2E', ['DE.rs2E', 'hz.rs2E']),
     N('rdE', ['DE.rdE', 'EM.rdE', 'hz.rdE', 'fhz.rdE'], ['hz.rdE', 'fhz.rdE']),
     N('regWriteE', ['DE.regWriteE', 'rwc.a']), N('regWriteE2', ['rwc.y', 'EM.regWriteE']),
     N('memWriteE', ['DE.memWriteE', 'EM.memWriteE'], undefined),
@@ -618,12 +633,12 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
     N('gT', ['gT.y', 'target.cin'], undefined), N('gJ', ['gJ.y', 'clr0.zero'], undefined),
     N('PCTargetE', ['target.s', 'pcmux.d1']), N('JalrTargetE', ['clr0.out', 'pcmux.d2']),
     N('PCSrcE', ['npc.pcSrc', 'pcmux.s', 'hz.pcSrcE']),
-    N('InstrE', ['DEF.instrE', 'fpx.instr', 'siE.in', 'sr3E.in']),
-    N('rs3E', ['sr3E.o1', 'fhz.rs3E']),
+    N('InstrE', ['DEF.instrE', 'fpx.instr', 'siE.in']),
     N('opE', ['siE.o0', 'fcsrE.op']), N('csrF3E', ['siE.o2', 'fcsrE.funct3']), N('csrRs1E', ['siE.o3', 'fcsrE.rs1']),
     N('csrRs2E', ['siE.o4', 'fcsrE.rs2']), N('csrF7E', ['siE.o5', 'fcsrE.funct7']),
     N('FRD1E', ['DEF.frd1E', 'fA.a'], undefined), N('FRD2E', ['DEF.frd2E', 'fB.a'], undefined), N('FRD3E', ['DEF.frd3E', 'fC.a'], undefined),
-    N('ffwdA', ['fhz.fwdA', 'fA.s']), N('ffwdB', ['fhz.fwdB', 'fB.s']), N('ffwdC', ['fhz.fwdC', 'fC.s']),
+    N('ffwdAD', ['fhz.fwdA', 'DEF.fwdAD']), N('ffwdBD', ['fhz.fwdB', 'DEF.fwdBD']), N('ffwdCD', ['fhz.fwdC', 'DEF.fwdCD']),
+    N('ffwdA', ['DEF.fwdAE', 'fA.s']), N('ffwdB', ['DEF.fwdBE', 'fB.s']), N('ffwdC', ['DEF.fwdCE', 'fC.s']),
     N('FAE', ['fA.y', 'fpx.a']), N('FBE', ['fB.y', 'fpx.b', 'stData.b']), N('FCE', ['fC.y', 'fpx.c']),
     N('isFswE', ['DEF.isFswE', 'stData.s']),
     N('StoreDataE', ['stData.y', 'EM.writeDataE']),
@@ -631,7 +646,7 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
     N('ALUorCSR', ['aluOrCsr.y', 'EM.aluResultE']),
     N('frm', ['fcsr.frm', 'fpx.frm']), N('fcsrNow', ['fcsr.fcsr', 'fcsrE.fcsr']),
     N('csrNewE', ['fcsrE.newv', 'EMF.csrNewE']), N('csrWeFE', ['fcsrE.weF', 'EMF.csrWeFE']), N('csrWeRE', ['fcsrE.weR', 'EMF.csrWeRE']),
-    ...['p', 'mc', 'dsat', 'cBig', 'eB', 'sB', 'effSub', 'nan', 'invalid', 'anyInf', 'infSign', 'arith', 'simpleY', 'simpleFl'].map((f) => N(`${f}E`, [`fpx.${f}`, `EMF.${f}E`])),
+    ...['p', 'mc', 'dsat', 'cBig', 'eB', 'sB', 'effSub', 'nan', 'invalid', 'anyInf', 'infSign', 'dz', 'arith', 'simpleY', 'simpleFl', ...TOINT.map(([f]) => f)].map((f) => N(`${f}E`, [`fpx.${f}`, `EMF.${f}E`])),
     N('rmE', ['fpx.rmOut', 'EMF.rmE']),
     N('fWriteE', ['DEF.fWriteE', 'EMF.fWriteE', 'fhz.fWriteE']), N('toIntE', ['DEF.toIntE', 'EMF.toIntE', 'fhz.toIntE']),
     N('fpOpE', ['DEF.fpOpE', 'EMF.fpOpE', 'fhz.fpOpE']), N('isFlwE', ['DEF.isFlwE', 'EMF.isFlwE']), N('isCsrE', ['DEF.isCsrE', 'EMF.isCsrE', 'fhz.csrE']),
@@ -647,9 +662,13 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
     N('resultSrcM', ['EM.resultSrcM', 'MX.resultSrcM', 'fwdM.s'], ['fwdM.s']),
     N('ReadDataM', ['dm.rd', 'MX.readDataM'], undefined),
     ...['p', 'mc', 'dsat', 'cBig', 'eB', 'sB', 'effSub'].map((f) => N(`${f}M`, [`EMF.${f}M`, `fadd.${f}`])),
-    N('rmM', ['EMF.rmM', 'fadd.rm', 'MXF.rmM']),
+    N('rmM', ['EMF.rmM', 'fadd.rm', 'MXF.rmM', 'ftoi.rm']),
     N('signM', ['fadd.sign', 'MXF.signM']), N('exM', ['fadd.ex', 'MXF.exM']), N('sumM', ['fadd.sum', 'MXF.sumM']),
-    ...['nan', 'invalid', 'anyInf', 'infSign', 'arith', 'simpleY', 'simpleFl', 'csrNew', 'csrWeF', 'csrWeR', 'isFlw'].map((f) => N(`${f}M`, [`EMF.${f}M`, `MXF.${f}M`], undefined)),
+    ...['nan', 'invalid', 'anyInf', 'infSign', 'dz', 'arith', 'csrNew', 'csrWeF', 'csrWeR', 'isFlw'].map((f) => N(`${f}M`, [`EMF.${f}M`, `MXF.${f}M`], undefined)),
+    N('tiTM', ['EMF.tiTM', 'ftoi.t']), N('tiStM', ['EMF.tiStM', 'ftoi.sticky']), N('tiSignM', ['EMF.tiSignM', 'ftoi.sign']), N('tiNaNM', ['EMF.tiNaNM', 'ftoi.nan']),
+    N('tiBadM', ['EMF.tiBadM', 'ftoi.bad']), N('tiSignedM', ['EMF.tiSignedM', 'ftoi.signed']), N('cvtWM', ['EMF.cvtWM', 'tiY.s', 'tiF.s']),
+    N('simpleY_EM', ['EMF.simpleYM', 'tiY.a']), N('intY', ['ftoi.y', 'tiY.b']), N('simpleYM', ['tiY.y', 'MXF.simpleYM']),
+    N('simpleFl_EM', ['EMF.simpleFlM', 'tiF.a']), N('intFl', ['ftoi.flags', 'tiF.b']), N('simpleFlM', ['tiF.y', 'MXF.simpleFlM']),
     N('fWriteM', ['EMF.fWriteM', 'MXF.fWriteM', 'fhz.fWriteM']), N('toIntM', ['EMF.toIntM', 'MXF.toIntM', 'fhz.toIntM']),
     N('fpOpM', ['EMF.fpOpM', 'MXF.fpOpM', 'fhz.fpOpM']), N('isCsrM', ['EMF.isCsrM', 'MXF.isCsrM', 'fhz.csrM']),
     // X
@@ -658,12 +677,13 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
     N('ALUResultX', ['MX.aluResultX', 'XW.aluResultX', 'resX.d0'], ['resX.d0']),
     N('ReadDataX', ['MX.readDataX', 'XW.readDataX', 'resX.d1'], ['resX.d1']),
     N('ImmExtX', ['MX.immX', 'XW.immX', 'resX.d3'], ['resX.d3']),
-    N('rdX', ['MX.rdX', 'XW.rdX', 'hz.rdX'], ['hz.rdX']),
+    N('rdX', ['MX.rdX', 'XW.rdX', 'hz.rdX', 'fhz.rdX'], ['hz.rdX', 'fhz.rdX']),
     N('regWriteX', ['MX.regWriteX', 'XW.regWriteX', 'hz.regWriteX'], ['hz.regWriteX']),
     N('resultSrcX', ['MX.resultSrcX', 'XW.resultSrcX', 'resX.s'], ['resX.s']),
-    ...['sign', 'ex', 'sum', 'rm', 'nan', 'invalid', 'anyInf', 'infSign', 'arith', 'simpleY', 'simpleFl'].map((f) => N(`${f}X`, [`MXF.${f}X`, `fres.${f}`])),
+    ...['sign', 'ex', 'sum', 'rm', 'nan', 'invalid', 'anyInf', 'infSign', 'dz', 'arith', 'simpleY', 'simpleFl'].map((f) => N(`${f}X`, [`MXF.${f}X`, `fres.${f}`])),
     N('fpResultX', ['fres.y', 'XWF.fpResultX']), N('flagsX', ['fres.flags', 'XWF.flagsX']),
-    ...['csrNew', 'csrWeF', 'csrWeR', 'fWrite', 'toInt', 'isFlw'].map((f) => N(`${f}X`, [`MXF.${f}X`, `XWF.${f}X`], undefined)),
+    ...['csrNew', 'csrWeF', 'csrWeR', 'toInt', 'isFlw'].map((f) => N(`${f}X`, [`MXF.${f}X`, `XWF.${f}X`], undefined)),
+    N('fWriteX', ['MXF.fWriteX', 'XWF.fWriteX', 'fhz.fWriteX']),
     N('fpOpX', ['MXF.fpOpX', 'XWF.fpOpX', 'fhz.fpOpX']), N('isCsrX', ['MXF.isCsrX', 'XWF.isCsrX', 'fhz.csrX']),
     // W
     N('validW', ['XW.validW', 'validW']), N('PCW', ['XW.pcW', 'pcW']),

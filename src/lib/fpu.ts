@@ -468,12 +468,12 @@ const isMode = (b: Builder, rm: string, m: number, label?: string) => b.op1(equa
  * of sign `infSign` if `anyInf`, else the rounded result; the flags are the rounding flags unless
  * the result is special, in which case only NV (`invalid`) can be raised.
  */
-function specials(b: Builder, f: FpFormat, nr: string, nrFlags: string, nan: string, anyInf: string, infSign: string, invalid: string): void {
+function specials(b: Builder, f: FpFormat, nr: string, nrFlags: string, nan: string, anyInf: string, infSign: string, invalid: string, dz?: string): void {
   const N = 1 + f.E + f.M;
   const y1 = b.op1(busMux2(N), [nr, infValue(b, f, infSign), anyInf], 'infinity');
   b.wire(b.op1(busMux2(N), [y1, nanValue(b, f), nan], 'NaN'), 'y');
   const special = b.op1(OR, [nan, anyInf]);
-  b.wire(b.op1(busMux2(5), [nrFlags, flagWord(b, { nv: invalid }), special], 'flags'), 'flags');
+  b.wire(b.op1(busMux2(5), [nrFlags, flagWord(b, { nv: invalid, dz }), special], 'flags'), 'flags');
 }
 
 /** a ± b: swap so |big| ≥ |small|, align small by the exponent difference, add or subtract, normalize & round. */
@@ -596,14 +596,10 @@ export function fpFromInt(f: FpFormat, w = 32): ComponentDef {
   });
 }
 
-/**
- * Float → integer (fcvt.w.s / fcvt.wu.s): place the significand so that its hidden bit has weight
- * 2^(w−1), shift right by (w − 1) − exponent keeping G and a sticky bit, round in mode rm, then
- * check the range. NaN, ∞ and out-of-range values saturate and raise NV.
- */
-export function fpToInt(f: FpFormat, w = 32): ComponentDef {
+/** Float → integer, part 1: place the significand with its hidden bit at weight 2^(w−1) and shift it to the binary point (G and a sticky bit below). */
+export function fpToIntAlign(f: FpFormat, w = 32): ComponentDef {
   const { E, M } = f;
-  return memo(`fptoint${E}_${M}_${w}`, () => {
+  return memo(`fptoia${E}_${M}_${w}`, () => {
     const XE = xeOf(f), k = log2c(w + 2);
     if (w < M + 1) throw new Error('fpToInt: the integer must be at least as wide as the significand');
     const b = new Builder();
@@ -613,16 +609,34 @@ export function fpToInt(f: FpFormat, w = 32): ComponentDef {
     const sAmt = b.op(addSubFast(XE), [b.op1(K(XE, w - 1 + fbias(f)), []), ze, b.op1(TIE1, [])], `(${w - 1} + bias) − exp`);
     b.next();
     const ss = b.op(splitter([k, XE - 1 - k, 1]), [`${sAmt}.s`]);
-    const tooBig = b.name(`${ss}.o2`, 'exp too big');
     const sat = b.op1(busMux2(k), [`${ss}.o0`, b.op1(K(k, 2 ** k - 1), []), nonZero(b, `${ss}.o1`, XE - 1 - k)], 'shift');
     const T = b.op1(merger([w - M, M + 1]), [b.op1(K(w - M, 0), []), `${u}.mant`]);
     b.next();
     const sh = b.op(shiftRightSticky(w + 1, k), [T, sat], 'align to the binary point');
-    b.next();
-    const gi = b.op(splitter([1, w]), [`${sh}.y`]);
+    b.wire(`${sh}.y`, 't');
+    b.wire(`${sh}.sticky`, 'sticky');
+    b.wire(`${u}.sign`, 'sign');
+    b.wire(`${u}.nan`, 'nan');
+    b.wire(b.op1(orN(3), [`${u}.nan`, `${u}.inf`, `${ss}.o2`], 'NaN, ∞ or exponent too big'), 'bad');
+    return define({
+      id: `fptoia${E}_${M}_${w}`, name: `${fmtName(f)} → int${w}: align`, category: 'arithmetic',
+      summary: `The significand is placed with its hidden bit at weight 2^${w - 1} and shifted right by (${w - 1} + bias) − exponent: t holds the integer part and, below it, G; everything further down is ORed into sticky. bad: NaN, ∞, or an exponent too big for any integer.`,
+      ports: [bus('a', 1 + E + M, 'in'), bus('t', w + 1, 'out'), bit('sticky', 'out'), bit('sign', 'out'), bit('nan', 'out'), bit('bad', 'out')],
+      symbol: { kind: 'box', label: 'F→I ALIGN' },
+      netlist: () => ({ pins: { a: [0, 4], ...outPins(b, ['t', 'sticky', 'sign', 'nan', 'bad']) }, instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
+/** Float → integer, part 2: round in mode rm, check the range, negate, or saturate with NV. */
+export function fpToIntRound(f: FpFormat, w = 32): ComponentDef {
+  const { E, M } = f;
+  return memo(`fptoir${E}_${M}_${w}`, () => {
+    const b = new Builder();
+    const gi = b.op(splitter([1, w]), ['t']);
     const il = b.op(splitter([1, w - 1]), [`${gi}.o1`]);
-    const rd = b.op(ROUND_DECIDE, ['rm', `${u}.sign`, `${il}.o0`, `${gi}.o0`, `${sh}.sticky`], 'round up?');
-    const nx0 = b.op1(OR, [`${gi}.o0`, `${sh}.sticky`], 'inexact');
+    const rd = b.op(ROUND_DECIDE, ['rm', 'sign', `${il}.o0`, `${gi}.o0`, 'sticky'], 'round up?');
+    const nx0 = b.op1(OR, [`${gi}.o0`, 'sticky'], 'inexact');
     b.next();
     const inc = b.op(incFast(w), [`${gi}.o1`]);
     const I = b.name(b.op1(busMux2(w), [`${gi}.o1`, `${inc}.y`, `${rd}.up`], 'rounded'), 'n');
@@ -637,18 +651,43 @@ export function fpToInt(f: FpFormat, w = 32): ComponentDef {
     const okSP = b.op1(AND, [nc, nTop]), okSN = b.op1(AND, [nc, b.op1(OR, [nTop, lowZ])]);
     const okUN = b.op1(AND, [nc, allZ]);
     b.next();
-    const okS = b.op1(MUX2, [okSP, okSN, `${u}.sign`]), okU = b.op1(MUX2, [nc, okUN, `${u}.sign`]);
+    const okS = b.op1(MUX2, [okSP, okSN, 'sign']), okU = b.op1(MUX2, [nc, okUN, 'sign']);
     const ok = b.op1(MUX2, [okU, okS, 'signed'], 'in range?');
     b.next();
-    const invalid = b.name(b.op1(orN(4), [`${u}.nan`, `${u}.inf`, tooBig, b.op1(NOT, [ok])], 'invalid'), 'NV');
-    const val = b.op1(condNegate(w), [I, `${u}.sign`], '±n');
-    const satNeg = b.op1(AND, [`${u}.sign`, b.op1(NOT, [`${u}.nan`])]);
+    const invalid = b.name(b.op1(OR, ['bad', b.op1(NOT, [ok])], 'invalid'), 'NV');
+    const val = b.op1(condNegate(w), [I, 'sign'], '±n');
+    const satNeg = b.op1(AND, ['sign', b.op1(NOT, ['nan'])]);
     const nsn = b.op1(NOT, [satNeg]);
     const satTop = b.op1(MUX2, [nsn, satNeg, 'signed']);
     b.next();
     const satV = b.op1(merger([w - 1, 1]), [b.op1(fanout(w - 1), [nsn]), satTop], 'saturate');
     b.wire(b.op1(busMux2(w), [val, satV, invalid], 'result'), 'y');
     b.wire(flagWord(b, { nv: invalid, nx: b.op1(AND, [nx0, b.op1(NOT, [invalid])]) }), 'flags');
+    return define({
+      id: `fptoir${E}_${M}_${w}`, name: `${fmtName(f)} → int${w}: round`, category: 'arithmetic',
+      summary: 'Round the aligned value in mode rm (G and sticky), check the range of the signed or unsigned result, negate a negative one; NaN, ∞ and out-of-range values saturate to the largest integer of their sign (NaN counts as positive) with NV, otherwise NX if inexact.',
+      ports: [bus('t', w + 1, 'in'), bit('sticky', 'in'), bit('sign', 'in'), bit('nan', 'in'), bit('bad', 'in'), bit('signed', 'in'), bus('rm', 3, 'in'), bus('y', w, 'out'), bus('flags', 5, 'out')],
+      symbol: { kind: 'box', label: 'F→I ROUND' },
+      netlist: () => ({ pins: { t: [0, 2], sticky: [0, 6], sign: [0, 10], nan: [0, 14], bad: [0, 18], signed: [0, 22], rm: [0, 26], y: [b.right, 6], flags: [b.right, 12] }, instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
+/**
+ * Float → integer (fcvt.w.s / fcvt.wu.s): place the significand so that its hidden bit has weight
+ * 2^(w−1), shift right by (w − 1) − exponent keeping G and a sticky bit, round in mode rm, then
+ * check the range. NaN, ∞ and out-of-range values saturate and raise NV. Two boxes (align, round),
+ * which the pipelined FPU puts in two stages.
+ */
+export function fpToInt(f: FpFormat, w = 32): ComponentDef {
+  const { E, M } = f;
+  return memo(`fptoint${E}_${M}_${w}`, () => {
+    const b = new Builder();
+    const al = b.op(fpToIntAlign(f, w), ['a'], 'align');
+    b.next();
+    const rd = b.op(fpToIntRound(f, w), [`${al}.t`, `${al}.sticky`, `${al}.sign`, `${al}.nan`, `${al}.bad`, 'signed', 'rm'], 'round and saturate');
+    b.wire(`${rd}.y`, 'y');
+    b.wire(`${rd}.flags`, 'flags');
     const lim = (s: number) => (s ? `−2^${w - 1} … 2^${w - 1} − 1` : `0 … 2^${w} − 1`);
     return define({
       id: `fptoint${E}_${M}_${w}`, name: `${fmtName(f)} → int${w}`, category: 'arithmetic',
@@ -954,14 +993,23 @@ function divSpecials(b: Builder, f: FpFormat, ua: string, ub: string, sign: stri
   b.wire(b.op1(busMux2(5), [`${nr}.flags`, flagWord(b, { nv: invalid, dz: dz }), special], 'flags'), 'flags');
 }
 
+/** Output pins down the right edge, 4 apart. */
+const outPins = (b: Builder, names: string[]): Record<string, [number, number]> => Object.fromEntries(names.map((n, i) => [n, [b.right, 4 + 4 * i] as [number, number]]));
+
+/** Pre-rounding outputs of the iterative units, for a pipeline that rounds in a later stage. */
+const preRoundPorts = (f: FpFormat, n: number): PortDef[] => [bit('sign', 'out'), bus('e', xeOf(f), 'out'), bus('m', n, 'out'), bit('sticky', 'out'),
+  bit('nan', 'out'), bit('invalid', 'out'), bit('dz', 'out'), bit('inf', 'out'), bit('infSign', 'out')];
+
 /**
  * a / b, iteratively: prenormalize both significands, then one restoring division step per
  * clock (the integer divider's step, chapter 20) produces M + 4 quotient bits, most significant
- * first, and the final remainder is the sticky bit. Normalize & round finishes in the done cycle.
+ * first, and the final remainder is the sticky bit. Normalize & round finishes in the done cycle;
+ * with round = false the unit stops before it (the pipelined FPU rounds in its X stage) and
+ * outputs the quotient, its exponent and sign, the sticky bit and the special cases instead.
  */
-export function fpDiv(f: FpFormat): ComponentDef {
+export function fpDiv(f: FpFormat, round = true): ComponentDef {
   const { E, M } = f;
-  return memo(`fpdiv${E}_${M}`, () => {
+  return memo(`fpdiv${E}_${M}${round ? '' : '_pre'}`, () => {
     const XE = xeOf(f), N = 1 + E + M, n = M + 4;
     const b = new Builder();
     const ua = b.op(fpUnpack(f), ['a'], 'unpack a'), ub = b.op(fpUnpack(f), ['b'], 'unpack b');
@@ -986,17 +1034,35 @@ export function fpDiv(f: FpFormat): ComponentDef {
     const sign = b.op1(XOR, [`${ua}.sign`, `${ub}.sign`], 'sign');
     const stk = nonZero(b, 'R.q', M + 1);
     b.next();
-    const nr = b.op(normRound(f, n), [sign, `${eq}.s`, 'Q.q', stk, 'rm'], 'normalize & round');
-    b.next();
-    divSpecials(b, f, ua, ub, sign, nr);
+    if (round) {
+      const nr = b.op(normRound(f, n), [sign, `${eq}.s`, 'Q.q', stk, 'rm'], 'normalize & round');
+      b.next();
+      divSpecials(b, f, ua, ub, sign, nr);
+    } else {
+      const z2 = b.op1(AND, [`${ua}.zero`, `${ub}.zero`]), i2 = b.op1(AND, [`${ua}.inf`, `${ub}.inf`]);
+      const finA = b.op1(NOT, [b.op1(orN(3), [`${ua}.zero`, `${ua}.inf`, `${ua}.nan`])], 'a finite, ≠ 0');
+      const zero = b.op1(OR, [`${ua}.zero`, `${ub}.inf`], '0 result');
+      const nz = b.op1(NOT, [zero]);
+      b.next();
+      b.wire(b.op1(orN(4), [`${ua}.snan`, `${ub}.snan`, z2, i2], 'invalid'), 'invalid');
+      b.wire(b.op1(orN(4), [`${ua}.nan`, `${ub}.nan`, z2, i2], 'NaN?'), 'nan');
+      b.wire(b.op1(AND, [`${ub}.zero`, finA], 'x / 0'), 'dz');
+      b.wire(b.op1(OR, [`${ua}.inf`, `${ub}.zero`], '∞ result'), 'inf');
+      b.wire(sign, 'infSign');
+      b.wire(sign, 'sign');
+      b.wire(`${eq}.s`, 'e');
+      b.wire(b.op1(bitwise('and', n), ['Q.q', b.op1(fanout(n), [nz])], 'quotient (0 for a zero result)'), 'm');
+      b.wire(b.op1(AND, [stk, nz]), 'sticky');
+    }
     b.wire(`${ctl}.done`, 'done');
     b.wire(`${ctl}.busy`, 'busy');
     return define({
-      id: `fpdiv${E}_${M}`, name: `${fmtName(f)} divider (iterative)`, category: 'arithmetic',
+      id: `fpdiv${E}_${M}${round ? '' : '_pre'}`, name: `${fmtName(f)} divider (iterative${round ? '' : ', unrounded'})`, category: 'arithmetic',
       summary: `Radix-2 restoring division of the normalized significands: one quotient bit per clock, ${n} steps (M + 1 bits, a guard bit and two more so that a quotient below 1 still has them), the final remainder ≠ 0 is the sticky bit. Exponent = ea − eb + bias. ${n + 2} cycles from start to the edge that writes the result. x / 0 = ∞ with DZ; 0 / 0 and ∞ / ∞ are NaN with NV.`,
-      ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bus('a', N, 'in'), bus('b', N, 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out'), bit('done', 'out'), bit('busy', 'out')],
+      ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bus('a', N, 'in'), bus('b', N, 'in'), bus('rm', 3, 'in'),
+        ...(round ? [bus('y', N, 'out'), bus('flags', 5, 'out')] : preRoundPorts(f, n)), bit('done', 'out'), bit('busy', 'out')],
       symbol: { kind: 'box', label: 'FDIV (iterative)' },
-      netlist: () => ({ pins: { start: [0, 2], a: [0, 6], b: [0, 10], rm: [0, 14], clk: [0, 18], y: [b.right, 4], flags: [b.right, 8], done: [b.right, 12], busy: [b.right, 16] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { start: [0, 2], a: [0, 6], b: [0, 10], rm: [0, 14], clk: [0, 18], ...outPins(b, round ? ['y', 'flags', 'done', 'busy'] : ['sign', 'e', 'm', 'sticky', 'nan', 'invalid', 'dz', 'inf', 'infSign', 'done', 'busy']) }, instances: b.instances, nets: b.nets() }),
       hdl: {
         verilog: `module fdiv_iter (input logic clk, start, input logic [31:0] a, b, input logic [2:0] rm,
                   output logic [31:0] y, output logic [4:0] flags, output logic done, busy);
@@ -1022,9 +1088,9 @@ endmodule`,
  * odd), then one restoring square-root step per clock produces M + 3 root bits; the remainder
  * is the sticky bit. The result exponent is the halved exponent, the root lies in [1, 2).
  */
-export function fpSqrt(f: FpFormat): ComponentDef {
+export function fpSqrt(f: FpFormat, round = true): ComponentDef {
   const { E, M } = f;
-  return memo(`fpsqrt${E}_${M}`, () => {
+  return memo(`fpsqrt${E}_${M}${round ? '' : '_pre'}`, () => {
     const XE = xeOf(f), N = 1 + E + M, n = M + 3, XW = M + 2 + ((M + 2) % 2);
     const b = new Builder();
     const u = b.op(fpUnpack(f), ['a'], 'unpack');
@@ -1054,25 +1120,40 @@ export function fpSqrt(f: FpFormat): ComponentDef {
     const er = b.op1(merger([XE - 2, 1, 1]), [`${eb}.o1`, `${eb}.o2`, `${eb}.o2`], '÷ 2');
     const stk = nonZero(b, 'R.q', n + 1);
     b.next();
-    const nr = b.op(normRound(f, n), [b.op1(TIE0, []), er, 'Q.q', stk, 'rm'], 'normalize & round');
-    b.next();
     const neg = b.op1(andN(3), [`${u}.sign`, b.op1(NOT, [`${u}.zero`]), b.op1(NOT, [`${u}.nan`])], 'a < 0');
-    const passA = b.op1(OR, [`${u}.zero`, `${u}.inf`], '±0, +∞: itself');
-    b.next();
-    const nan = b.op1(OR, [`${u}.nan`, neg], 'NaN?');
-    const invalid = b.name(b.op1(OR, [`${u}.snan`, neg], 'invalid'), 'NV');
-    const y1 = b.op1(busMux2(N), [`${nr}.y`, 'a', passA]);
-    b.next();
-    b.wire(b.op1(busMux2(N), [y1, nanValue(b, f), nan], 'NaN'), 'y');
-    b.wire(b.op1(busMux2(5), [`${nr}.flags`, flagWord(b, { nv: invalid }), b.op1(OR, [nan, passA])], 'flags'), 'flags');
+    if (round) {
+      const nr = b.op(normRound(f, n), [b.op1(TIE0, []), er, 'Q.q', stk, 'rm'], 'normalize & round');
+      b.next();
+      const passA = b.op1(OR, [`${u}.zero`, `${u}.inf`], '±0, +∞: itself');
+      b.next();
+      const nan = b.op1(OR, [`${u}.nan`, neg], 'NaN?');
+      const invalid = b.name(b.op1(OR, [`${u}.snan`, neg], 'invalid'), 'NV');
+      const y1 = b.op1(busMux2(N), [`${nr}.y`, 'a', passA]);
+      b.next();
+      b.wire(b.op1(busMux2(N), [y1, nanValue(b, f), nan], 'NaN'), 'y');
+      b.wire(b.op1(busMux2(5), [`${nr}.flags`, flagWord(b, { nv: invalid }), b.op1(OR, [nan, passA])], 'flags'), 'flags');
+    } else {
+      const nz = b.op1(NOT, [`${u}.zero`]);
+      b.next();
+      b.wire(b.op1(OR, [`${u}.nan`, neg], 'NaN?'), 'nan');
+      b.wire(b.op1(OR, [`${u}.snan`, neg], 'invalid'), 'invalid');
+      b.wire(b.op1(TIE0, []), 'dz');
+      b.wire(b.op1(AND, [`${u}.inf`, b.op1(NOT, [`${u}.sign`])], '+∞'), 'inf');
+      b.wire(b.op1(TIE0, []), 'infSign');
+      b.wire(b.op1(AND, [`${u}.sign`, `${u}.zero`], '√−0 = −0'), 'sign');
+      b.wire(er, 'e');
+      b.wire(b.op1(bitwise('and', n), ['Q.q', b.op1(fanout(n), [nz])], 'root (0 for ±0)'), 'm');
+      b.wire(b.op1(AND, [stk, nz]), 'sticky');
+    }
     b.wire(`${ctl}.done`, 'done');
     b.wire(`${ctl}.busy`, 'busy');
     return define({
-      id: `fpsqrt${E}_${M}`, name: `${fmtName(f)} square root (iterative)`, category: 'arithmetic',
+      id: `fpsqrt${E}_${M}${round ? '' : '_pre'}`, name: `${fmtName(f)} square root (iterative${round ? '' : ', unrounded'})`, category: 'arithmetic',
       summary: `Radix-2 restoring square root: the radicand (the significand, doubled if the exponent is odd) feeds two bits per clock into the remainder; each step tries 4q + 1 and appends one root bit. ${n} steps, ${n + 2} cycles. The exponent is halved; √−0 = −0, the root of a negative number is NaN with NV.`,
-      ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bus('a', N, 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out'), bit('done', 'out'), bit('busy', 'out')],
+      ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bus('a', N, 'in'), bus('rm', 3, 'in'),
+        ...(round ? [bus('y', N, 'out'), bus('flags', 5, 'out')] : preRoundPorts(f, n)), bit('done', 'out'), bit('busy', 'out')],
       symbol: { kind: 'box', label: 'FSQRT (iterative)' },
-      netlist: () => ({ pins: { start: [0, 2], a: [0, 6], rm: [0, 10], clk: [0, 14], y: [b.right, 4], flags: [b.right, 8], done: [b.right, 12], busy: [b.right, 16] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { start: [0, 2], a: [0, 6], rm: [0, 10], clk: [0, 14], ...outPins(b, round ? ['y', 'flags', 'done', 'busy'] : ['sign', 'e', 'm', 'sticky', 'nan', 'invalid', 'dz', 'inf', 'infSign', 'done', 'busy']) }, instances: b.instances, nets: b.nets() }),
       hdl: {
         verilog: `module fsqrt_iter (input logic clk, start, input logic [31:0] a, input logic [2:0] rm,
                    output logic [31:0] y, output logic [4:0] flags, output logic done, busy);
@@ -1092,6 +1173,23 @@ endmodule`,
       },
     });
   });
+}
+
+/** x + y + z: a row of full adders (carry-save), then one prefix adder. */
+function sum3(b: Builder, w: number, x: string, y: string, z: string, label?: string): string {
+  const xy = b.op1(bitwise('xor', w), [x, y]);
+  const s0 = b.op1(bitwise('xor', w), [xy, z]);
+  const c0 = b.op1(bitwise('or', w), [b.op1(bitwise('and', w), [x, y]), b.op1(bitwise('and', w), [xy, z])]);
+  const cs = b.op(splitter([w - 1, 1]), [c0]);
+  return `${b.op(koggeStone(w), [s0, b.op1(merger([1, w - 1]), [b.op1(TIE0, []), `${cs}.o0`]), b.op1(TIE0, [])], label)}.s`;
+}
+/** x + y + z + k (k a constant): two carry-save rows, then one prefix adder. */
+function sum4(b: Builder, w: number, x: string, y: string, z: string, k: number, label?: string): string {
+  const xy = b.op1(bitwise('xor', w), [x, y]);
+  const s0 = b.op1(bitwise('xor', w), [xy, z]);
+  const c0 = b.op1(bitwise('or', w), [b.op1(bitwise('and', w), [x, y]), b.op1(bitwise('and', w), [xy, z])]);
+  const cs = b.op(splitter([w - 1, 1]), [c0]);
+  return sum3(b, w, s0, b.op1(merger([1, w - 1]), [b.op1(TIE0, []), `${cs}.o0`]), b.op1(K(w, k), []), label);
 }
 
 // ---- fused multiply-add ----------------------------------------------------------------------
@@ -1120,18 +1218,21 @@ export function fmaMultiply(f: FpFormat): ComponentDef {
     b.next();
     b.wire(b.op1(treeMul(M + 1), [`${pa}.m`, `${pb}.m`], 'exact product'), 'p');
     b.wire(`${pc}.m`, 'mc');
-    const s1 = b.op(koggeStone(XE), [`${pa}.e`, `${pb}.e`, b.op1(TIE0, [])], 'ea + eb');
     const effSub = b.name(b.op1(XOR, [ps, sc], 'subtract?'), 'effSub');
     b.wire(effSub, 'effSub');
     const pZero = b.op1(OR, [`${ua}.zero`, `${ub}.zero`], 'product = 0');
+    // exponents, each in one carry-propagate addition: eP = ea + eb + 1 − bias, and both
+    // eP − eC and eC − eP at once, so that |eP − eC| needs no negation afterwards
+    const K1 = (1 - B + 2 ** XE) % 2 ** XE, inv = (x: string) => b.op1(bitwise('xor', XE), [x, b.op1(K(XE, 2 ** XE - 1), [])]);
+    const ea = `${pa}.e`, eb = `${pb}.e`, ec = `${pc}.e`;
+    const ep = b.name(sum3(b, XE, ea, eb, b.op1(K(XE, K1), []), 'ea + eb + 1 − bias'), 'eP');
+    const d = b.name(sum4(b, XE, ea, eb, inv(ec), (K1 + 1) % 2 ** XE, 'eP − eC'), 'eP−eC');
+    const nd = b.name(sum4(b, XE, inv(ea), inv(eb), ec, (2 - K1 + 2 ** XE) % 2 ** XE, 'eC − eP'), 'eC−eP');
     b.next();
-    const ep = b.name(`${b.op(koggeStone(XE), [`${s1}.s`, b.op1(K(XE, (1 - B + 2 ** XE) % 2 ** XE), []), b.op1(TIE0, [])], '− bias + 1')}.s`, 'eP');
-    b.next();
-    const d = b.op(addSubFast(XE), [ep, `${pc}.e`, b.op1(TIE1, [])], 'eP − eC');
-    b.next();
+    const dNeg = b.name(b.op(splitter([XE - 1, 1]), [d]) + '.o1', 'eP<eC');
     // the base is the operand with the larger exponent; a zero product always yields to c, a zero c to the product
-    const cBig = b.name(b.op1(AND, [b.op1(NOT, [`${uc}.zero`]), b.op1(OR, [pZero, `${d}.n`])], 'c bigger?'), 'cBig');
-    const ad = b.op(splitter([kA, XE - kA]), [b.op1(condNegate(XE), [`${d}.s`, `${d}.n`], '|eP − eC|')]);
+    const cBig = b.name(b.op1(AND, [b.op1(NOT, [`${uc}.zero`]), b.op1(OR, [pZero, dNeg])], 'c bigger?'), 'cBig');
+    const ad = b.op(splitter([kA, XE - kA]), [b.op1(busMux2(XE), [d, nd, dNeg], '|eP − eC|')]);
     b.next();
     b.wire(b.op1(busMux2(kA), [`${ad}.o0`, b.op1(K(kA, 2 ** kA - 1), []), nonZero(b, `${ad}.o1`, XE - kA)], 'shift'), 'dsat');
     b.wire(cBig, 'cBig');
@@ -1215,15 +1316,15 @@ export function fmaRound(f: FpFormat): ComponentDef {
     const b = new Builder();
     const nr = b.op(normRound(f, WS + 1), ['sign', 'ex', 'sum', b.op1(TIE0, []), 'rm'], 'normalize & round (once)');
     b.next();
-    specials(b, f, `${nr}.y`, `${nr}.flags`, 'nan', 'anyInf', 'infSign', 'invalid');
+    specials(b, f, `${nr}.y`, `${nr}.flags`, 'nan', 'anyInf', 'infSign', 'invalid', 'dz');
     return define({
       id: `fmarnd${E}_${M}`, name: `${fmtName(f)} FMA stage 3: round`, category: 'arithmetic',
-      summary: `Normalize & round on ${WS + 1} bits, the only rounding of the whole operation; then NaN or ∞ if stage 1 said so (and only NV as a flag in that case).`,
-      ports: [bit('sign', 'in'), bus('ex', XE, 'in'), bus('sum', WS + 1, 'in'), bus('rm', 3, 'in'), bit('nan', 'in'), bit('invalid', 'in'), bit('anyInf', 'in'), bit('infSign', 'in'),
+      summary: `Normalize & round on ${WS + 1} bits, the only rounding of the whole operation; then NaN or ∞ if stage 1 said so (and then only NV, or DZ for a division by zero, as flags).`,
+      ports: [bit('sign', 'in'), bus('ex', XE, 'in'), bus('sum', WS + 1, 'in'), bus('rm', 3, 'in'), bit('nan', 'in'), bit('invalid', 'in'), bit('anyInf', 'in'), bit('infSign', 'in'), bit('dz', 'in'),
         bus('y', N, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'FMA 3: ROUND' },
       netlist: () => ({
-        pins: { sign: [0, 2], ex: [0, 6], sum: [0, 10], rm: [0, 14], nan: [0, 18], invalid: [0, 22], anyInf: [0, 26], infSign: [0, 30], y: [b.right, 6], flags: [b.right, 12] },
+        pins: { sign: [0, 2], ex: [0, 6], sum: [0, 10], rm: [0, 14], nan: [0, 18], invalid: [0, 22], anyInf: [0, 26], infSign: [0, 30], dz: [0, 34], y: [b.right, 6], flags: [b.right, 12] },
         instances: b.instances, nets: b.nets(),
       }),
     });
@@ -1246,7 +1347,7 @@ export function fpFma(f: FpFormat): ComponentDef {
     b.next();
     const s2 = b.op(S2, [`${s1}.p`, `${s1}.mc`, `${s1}.dsat`, `${s1}.cBig`, `${s1}.eB`, `${s1}.sB`, `${s1}.effSub`, 'rm'], 'align and add');
     b.next();
-    const s3 = b.op(S3, [`${s2}.sign`, `${s2}.ex`, `${s2}.sum`, 'rm', `${s1}.nan`, `${s1}.invalid`, `${s1}.anyInf`, `${s1}.infSign`], 'round');
+    const s3 = b.op(S3, [`${s2}.sign`, `${s2}.ex`, `${s2}.sum`, 'rm', `${s1}.nan`, `${s1}.invalid`, `${s1}.anyInf`, `${s1}.infSign`, b.op1(TIE0, [])], 'round');
     b.wire(`${s3}.y`, 'y');
     b.wire(`${s3}.flags`, 'flags');
     return define({
@@ -1285,12 +1386,14 @@ endmodule`,
 /**
  * fdiv / fsqrt with operand latches, for a pipeline: the operands are captured when an operation
  * starts and fed from the latches while it runs, so the forwarding paths that supplied them may
- * move on. Both units share the latches; y, flags and done come from the one selected by sqrt.
+ * move on. Both units share the latches and stop before rounding (the pipeline's X stage rounds);
+ * the outputs come from the one selected by sqrt, the root padded to the quotient's width.
  */
 export function fpDivSqrtHeld(f: FpFormat): ComponentDef {
   const { E, M } = f;
   return memo(`fpdsh${E}_${M}`, () => {
-    const N = 1 + E + M;
+    const N = 1 + E + M, XE = xeOf(f), n = M + 4;
+    const DV = fpDiv(f, false), SQ = fpSqrt(f, false);
     const b = new Builder();
     const ldD = b.op1(AND, ['div', b.op1(NOT, ['dv.busy'])]), ldS = b.op1(AND, ['sqrt', b.op1(NOT, ['sq.busy'])]);
     const hold = b.name(b.op1(OR, ['dv.busy', 'sq.busy'], 'running'), 'hold');
@@ -1302,21 +1405,26 @@ export function fpDivSqrtHeld(f: FpFormat): ComponentDef {
     b.next();
     const A = b.op1(busMux2(N), ['a', 'La.q', hold]), Bv = b.op1(busMux2(N), ['b', 'Lb.q', hold]), R = b.op1(busMux2(3), ['rm', 'Lr.q', hold]);
     b.next();
-    b.add(fpDiv(f), 'divider', 'dv');
-    b.add(fpSqrt(f), 'square root', 'sq');
+    b.add(DV, 'divider', 'dv');
+    b.add(SQ, 'square root', 'sq');
     for (const [p, d] of [['clk', 'clk'], ['start', 'div'], ['a', A], ['b', Bv], ['rm', R]] as const) b.wire(d, `dv.${p}`);
     for (const [p, d] of [['clk', 'clk'], ['start', 'sqrt'], ['a', A], ['rm', R]] as const) b.wire(d, `sq.${p}`);
     b.next();
-    b.wire(b.op1(busMux2(N), ['dv.y', 'sq.y', 'sqrt']), 'y');
-    b.wire(b.op1(busMux2(5), ['dv.flags', 'sq.flags', 'sqrt']), 'flags');
-    b.wire(b.op1(MUX2, ['dv.done', 'sq.done', 'sqrt']), 'done');
+    const sqm = b.op1(merger([1, n - 1]), [b.op1(TIE0, []), 'sq.m']);
+    b.wire(b.op1(busMux2(n), ['dv.m', sqm, 'sqrt']), 'm');
+    b.wire(b.op1(busMux2(XE), ['dv.e', 'sq.e', 'sqrt']), 'e');
+    for (const o of ['sign', 'sticky', 'nan', 'invalid', 'dz', 'inf', 'infSign', 'done']) b.wire(b.op1(MUX2, [`dv.${o}`, `sq.${o}`, 'sqrt']), o);
+    b.wire(R, 'rmOut');
     b.wire(hold, 'busy');
+    const outs = ['sign', 'e', 'm', 'sticky', 'nan', 'invalid', 'dz', 'inf', 'infSign', 'rmOut', 'done', 'busy'];
     return define({
-      id: `fpdsh${E}_${M}`, name: `${fmtName(f)} divide / square root with operand latches`, category: 'arithmetic',
-      summary: 'The iterative divider and square-root unit behind one set of operand latches: in the start cycle the live operands are used and captured; while the unit runs it reads the latches, so the pipeline\'s forwarding paths are free to move on.',
-      ports: [bit('clk', 'in', 'bottom', true), bit('div', 'in'), bit('sqrt', 'in'), bus('a', N, 'in'), bus('b', N, 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out'), bit('done', 'out'), bit('busy', 'out')],
+      id: `fpdsh${E}_${M}`, name: `${fmtName(f)} divide / square root (unrounded, operand latches)`, category: 'arithmetic',
+      summary: 'The iterative divider and square-root unit behind one set of operand latches: in the start cycle the live operands are used and captured; while the unit runs it reads the latches, so the pipeline\'s forwarding paths are free to move on. It stops before rounding: quotient or root, exponent, sign, sticky bit and special cases go down the FP pipe to the shared rounder.',
+      ports: [bit('clk', 'in', 'bottom', true), bit('div', 'in'), bit('sqrt', 'in'), bus('a', N, 'in'), bus('b', N, 'in'), bus('rm', 3, 'in'),
+        bit('sign', 'out'), bus('e', XE, 'out'), bus('m', n, 'out'), bit('sticky', 'out'), bit('nan', 'out'), bit('invalid', 'out'), bit('dz', 'out'), bit('inf', 'out'), bit('infSign', 'out'),
+        bus('rmOut', 3, 'out'), bit('done', 'out'), bit('busy', 'out')],
       symbol: { kind: 'box', label: 'FDIV / FSQRT' },
-      netlist: () => ({ pins: { div: [0, 2], sqrt: [0, 5], a: [0, 8], b: [0, 11], rm: [0, 14], clk: [0, 17], y: [b.right, 4], flags: [b.right, 8], done: [b.right, 12], busy: [b.right, 16] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { div: [0, 2], sqrt: [0, 5], a: [0, 8], b: [0, 11], rm: [0, 14], clk: [0, 17], ...outPins(b, outs) }, instances: b.instances, nets: b.nets() }),
     });
   });
 }

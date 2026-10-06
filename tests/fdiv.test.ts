@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { fpDiv, fpPrenorm, fpSqrt, iterControl, sqrtStep } from '../src/lib';
+import { fpDiv, fpDivSqrtHeld, fpPrenorm, fpSqrt, iterControl, sqrtStep } from '../src/lib';
 import { BitSim, LANES, evalMany } from '../src/sim/bitsim';
-import { F32, FLAG, RM, fpDivX, fpSqrtX, type FpFormat } from '../src/sim/fpref';
+import { F32, FLAG, RM, bias, canonicalNaN, fpDivX, fpSqrtX, roundToX, type FpFormat } from '../src/sim/fpref';
 import { flatten } from '../src/sim/flatten';
 import { simulate } from '../src/sim/harness';
 import { stats, logicDepth } from '../src/sim/stats';
@@ -78,6 +78,45 @@ describe('small-format division and square root in every rounding mode', () => {
       await runIter(fpDiv(f), f.M + 4, dv, (v) => fpDivX(v.a, v.b, f, v.rm));
       await runIter(fpSqrt(f), f.M + 3, sq, (v) => fpSqrtX(v.a, f, v.rm));
     }, 120000);
+  }
+});
+
+describe('unrounded division / square root with operand latches (for the pipelined FPU)', () => {
+  // The unit's outputs, rounded here in JavaScript, must equal the reference; the operands are
+  // replaced by garbage one cycle after the start, as forwarding would in a pipeline.
+  const roundPre = (o: Record<string, number>, f: FpFormat, rm: number, n: number) => {
+    if (o.nan) return { y: canonicalNaN(f), fl: o.invalid ? FLAG.NV : 0 };
+    if (o.inf) return { y: (o.infSign * 2 ** f.E + 2 ** f.E - 1) * 2 ** f.M, fl: o.dz ? FLAG.DZ : 0 };
+    const mant = BigInt(o.m) * 2n + BigInt(o.sticky);
+    if (mant === 0n) return { y: o.sign * 2 ** (f.E + f.M), fl: 0 };
+    const XE = f.E + 3 <= 8 ? 8 : 16, e = o.e >= 2 ** (XE - 1) ? o.e - 2 ** XE : o.e;
+    return roundToX(o.sign, mant, e - bias(f) - (n - 1) - 1, f, rm);
+  };
+  for (const f of [{ E: 4, M: 3 }, F32]) {
+    it(`${f.M === 23 ? 'float32' : 'E4M3'}: latched operands, every mode`, async () => {
+      const def = fpDivSqrtHeld(f), sim = new BitSim(flatten(def)), n = f.M + 4, N = 1 + f.E + f.M;
+      let seed = 31;
+      const r = () => (seed = (seed * 1103515245 + 12345) >>> 0);
+      const pairs = f.M === 3 ? operandPairs(f, 1000) : Array.from({ length: 640 }, () => [r() >>> 0, r() >>> 0] as [number, number]);
+      for (let at = 0, k = 0; at < pairs.length; at += LANES, k++) {
+        if (k % 16 === 15) await breathe();
+        const batch = pairs.slice(at, at + LANES), sq = k & 1, rms = batch.map((_, l) => (l + k) % 5);
+        sim.setInput('div', sq ? 0 : 1); sim.setInput('sqrt', sq);
+        sim.setInput('a', batch.map((p) => p[0])); sim.setInput('b', batch.map((p) => p[1])); sim.setInput('rm', rms);
+        sim.cycle();
+        sim.setInput('a', batch.map(() => r() % 2 ** N)); sim.setInput('b', batch.map(() => r() % 2 ** N)); sim.setInput('rm', batch.map(() => r() % 5));
+        for (let c = 0; c < (sq ? n - 1 : n); c++) sim.cycle();
+        const outs = Object.fromEntries(['sign', 'e', 'm', 'sticky', 'nan', 'invalid', 'dz', 'inf', 'infSign', 'done'].map((p) => [p, sim.get(p, batch.length)]));
+        batch.forEach(([a, b], l) => {
+          const o = Object.fromEntries(Object.entries(outs).map(([p, v]) => [p, v[l]]));
+          expect(o.done).toBe(1);
+          const want = sq ? fpSqrtX(a, f, rms[l]) : fpDivX(a, b, f, rms[l]);
+          const got = roundPre(o, f, rms[l], n);
+          if (got.y !== want.y || got.fl !== want.fl) expect(got, `${sq ? 'sqrt' : 'div'}(${a.toString(16)}, ${b.toString(16)}) rm ${rms[l]}`).toEqual(want);
+        });
+        sim.cycle();
+      }
+    }, 60000);
   }
 });
 
