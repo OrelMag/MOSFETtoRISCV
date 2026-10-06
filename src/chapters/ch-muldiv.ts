@@ -1,6 +1,7 @@
 import { BOOTH_ENC, MDU, SRT_SELECT, arrayDiv, arrayMul, boothMul, csa, divStep, nrArrayDiv, pipeMul, popcount, seqDivider, seqMul, srt4Divider, srtDivider, treeMul } from '../lib';
 import { cpuState } from '../riscv/cosim';
 import { M_PROGRAMS } from '../riscv/mprograms';
+import { PIPE_M_PROGRAMS } from '../riscv/pmprograms';
 import { cpuScene } from '../widgets/cpupanel';
 import { divComparison } from '../widgets/divide';
 import { boothWidget, mulComparison } from '../widgets/muldiv';
@@ -11,7 +12,7 @@ const msrc = (id: string) => M_PROGRAMS.find((p) => p.id === id)!.source;
 
 export const chMulDiv: Chapter = {
   id: 'muldiv', num: 20, title: 'Multiply & divide', level: 'Arithmetic',
-  blurb: 'Array and Wallace-tree multipliers, Baugh–Wooley and Booth, restoring, non-restoring and SRT division, and the M extension in the CPU.',
+  blurb: 'Array and Wallace-tree multipliers, Baugh–Wooley and Booth, restoring, non-restoring and SRT division, and the M extension in the single-cycle and pipelined CPUs.',
   steps: [
     {
       title: 'Long multiplication is AND and add',
@@ -361,6 +362,31 @@ export const chMulDiv: Chapter = {
         kind: 'quiz', question: 'On this CPU, a loop body has 20 instructions, one of which is a divide (34 cycles; everything else takes 1). What is the CPI?',
         options: ['1.0', '1.65', '2.65', '34'], answer: 2,
         explain: '19 instructions × 1 cycle + 1 divide × 34 cycles = 53 cycles for 20 instructions: CPI = 2.65. One instruction in twenty makes the loop 2.65× slower. That is why compilers replace division by a constant with a multiply by its reciprocal (a mulh and a shift), and why fast cores spend area on faster dividers.',
+      },
+    },
+    {
+      title: 'M in the pipeline',
+      body: `
+        <p>The pipelined CPU with the M extension. The <strong>multiplier is split across two stages</strong>: E extends the operands to
+        34 bits (sign or zero, as funct3 says), forms the radix-4 Booth rows and reduces them with the 3:2 tree to two 64-bit words, which ride in
+        the E/M register; M adds them (a 64-bit Kogge–Stone) and picks the low or high word in place of the memory word. A multiply's result
+        therefore appears where a load's does, and decode sets ResultSrc to the load path: the existing hazard unit gives a dependent instruction
+        the one-cycle load-use stall and then forwards from W. Nothing new in the hazard unit.</p>
+        <p>A <strong>divide</strong> runs on the radix-4 SRT divider in E. While it works, <code>divStall</code> holds PC, IF/ID and ID/EX, and
+        sends bubbles into M; the result leaves through the ALU's place in E/M on the 19th cycle and is forwarded like any ALU result.</p>
+        <p>Cost: 70 900 → 102 900 NANDs (+45 %, the 64-bit tree and adder dominate). Speed, with fast adders: 93 → 93 gate delays, because the
+        branch-resolution path in E is longer than both units. With the balanced design (branch compare in its own unit) the period
+        was 59 and becomes <strong>79</strong>: the divider's sign fix after its registers (q / r mux and a conditional negate, 70 deep)
+        now sets the E/M capture, and the multiplier tree (74 into the sum register) is close behind. Real cores register the divider's result and
+        cut the tree in two; here the timing panel shows the honest number.</p>
+        <div class="try">Run "Multiply and divide hazards": 17 instructions in 98 cycles. Watch the pipeline diagram: one bubble after each
+        dependent multiply, a long hold for each divide. Open <code>mule</code>, <code>mulm</code> and <code>dive</code> to see the parts above.</div>`,
+      scene: () => cpuScene({ source: PIPE_M_PROGRAMS.find((p) => p.id === 'mhazards')!.source, pipeline: true, m: true, adder: 'ks', timing: true, highlight: ['mule', 'mulm', 'dive'] }),
+      challenge: {
+        kind: 'quiz', question: 'mul t0, a0, a1 is followed by add t1, t0, a0. How many cycles does the add wait, and why?',
+        options: ['None: the product is forwarded from M', 'One: the product exists only at the end of M, like a loaded word', 'Two: the product must be written back first', '18: as long as a divide'],
+        answer: 1,
+        explain: 'The 64-bit addition happens in M, so the product is ready at the same point as a word read from memory. Decode marks a multiply as using the load path, and the load-use logic stalls the add for one cycle; then the product is forwarded from W. Splitting the multiplier costs one bubble per dependent use and keeps the clock from growing by a whole 64-bit adder.',
       },
     },
   ],

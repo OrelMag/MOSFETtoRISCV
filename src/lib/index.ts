@@ -16,6 +16,7 @@ export * from './muldiv';
 export * from './coding';
 export * from './divide';
 export * from './srt4';
+export * from './pipem';
 export * from './multiply';
 export * from './adders';
 export * from './arrays';

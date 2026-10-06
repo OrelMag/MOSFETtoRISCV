@@ -9,6 +9,19 @@ import { checkSpec, corners, lcg, out, set, tick } from './util';
 describe('Booth parts match their specs', () => {
   for (const d of [boothRow(3), boothRow(4), boothMul(4)]) it(d.id, () => checkSpec(d));
   for (const d of [boothRow(8), boothMul(6), boothMul(8), boothMul(16), boothMul(24)]) it(d.id, () => checkSpec(d, 300, corners(d)));
+  it('wide trees are exact too (the sign constant no longer fits a double)', () => {
+    for (const n of [32, 34]) {
+      const s = simulate(boothTree(n)), r = lcg(n), W = 2n * BigInt(n);
+      for (let t = 0; t < 40; t++) {
+        const a = r(2 ** n), b = r(2 ** n);
+        evalOnce(s, [a, b]);
+        // 64+ bit words: read the bits, not a packed number
+        const big = (port: string) => s.getBits(s.design.root.ports[port]).reduce((acc, v, i) => acc | (BigInt(v) << BigInt(i)), 0n);
+        const sx = (v: number) => BigInt.asIntN(n, BigInt(v));
+        expect(BigInt.asUintN(Number(W), big('s') + big('c')), `${n}: ${a} × ${b}`).toBe(BigInt.asUintN(Number(W), sx(a) * sx(b)));
+      }
+    }
+  });
   it('the tree alone: s + c is the signed product', () => {
     const s = simulate(boothTree(8)), r = lcg(5);
     for (let t = 0; t < 300; t++) {

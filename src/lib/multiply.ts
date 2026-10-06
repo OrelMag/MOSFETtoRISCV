@@ -236,7 +236,16 @@ export function boothReduce(n: number): ComponentDef {
     const K = BigInt.asUintN(W, k);
     let lowest = 0;
     while (lowest < W && !((K >> B(lowest)) & 1n)) lowest++;
-    if (lowest < W) words.push({ lo: lowest, w: W - lowest, drv: b.op1(constWord(W - lowest, Number(K >> B(lowest))), [], 'sign constant') });
+    if (lowest < W) {
+      // a constant wider than a double's 53-bit mantissa: build it from 32-bit pieces
+      const cw = W - lowest, kv = K >> B(lowest), widths: number[] = [], parts: string[] = [];
+      for (let lo = 0; lo < cw; lo += 32) {
+        const w = Math.min(32, cw - lo);
+        widths.push(w);
+        parts.push(b.op1(constWord(w, Number((kv >> B(lo)) & ((1n << B(w)) - 1n))), []));
+      }
+      words.push({ lo: lowest, w: cw, drv: widths.length === 1 ? parts[0] : b.op1(merger(widths), parts, 'sign constant') });
+    }
     const count = words.length;
     let level = 0;
     let live = words;

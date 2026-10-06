@@ -8,12 +8,13 @@
 
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
-import { alu } from './alu';
+import { alu, constWord } from './alu';
 import { andN, busMux2, decoder, equal, muxTree, rca } from './combinational';
 export { equal } from './combinational';
 import { cachedMemory } from './cache';
 import { wbCache } from './cache2';
 import { CLEAR_BIT0, CONTROL, IMM_GEN, NEXT_PC, PLUS4, PLUS4_FAST, dataMemory, rom } from './cpu';
+import { DIV_E, MUL_E, MUL_M } from './pipem';
 import { define, merger, ones, splitter } from './define';
 import { addSubFast, fanout, koggeStone } from './fastadd';
 import { AND, NOT, OR, XOR } from './gates';
@@ -552,16 +553,28 @@ export interface PipeOptions {
    * A miss freezes the whole pipeline until the line is in (main memory of 64 words).
    */
   dcache?: 'wt' | 'wb' | 'wb2';
+  /**
+   * The M extension: multiplies split across E and M (they behave like loads for hazards), divides on
+   * the radix-4 SRT divider in E, which stalls the front of the pipeline for 18 cycles.
+   */
+  m?: boolean;
+}
+
+/** Replace one end of a net (and its tag, if it had one). */
+function retargetEnd(n: NetDef, from: string, to: string): void {
+  n.ends = n.ends.map((e) => (e === from ? to : e));
+  if (Array.isArray(n.tags)) n.tags = n.tags.map((e) => (e === from ? to : e));
 }
 
 export function pipelinedCpu(program: number[], opts: PipeOptions = {}): ComponentDef {
   const IM = rom(program);
-  const o = { dmemK: opts.dcache ? 6 : opts.dmemK ?? 5, adder: opts.adder ?? 'rca', balanced: !!opts.balanced, predictor: !!opts.predictor, dcache: opts.dcache } as const;
-  return memo(`pipe_${IM.id}_${o.dmemK}_${o.adder}_${o.balanced}_${o.predictor}_${o.dcache ?? ''}`, () => buildPipe(IM, o));
+  const o = { dmemK: opts.dcache ? 6 : opts.dmemK ?? 5, adder: opts.adder ?? 'rca', balanced: !!opts.balanced, predictor: !!opts.predictor, dcache: opts.dcache, m: !!opts.m } as const;
+  return memo(`pipe_${IM.id}_${o.dmemK}_${o.adder}_${o.balanced}_${o.predictor}_${o.dcache ?? ''}_${o.m}`, () => buildPipe(IM, o));
 }
 
-function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; balanced: boolean; predictor: boolean; dcache?: 'wt' | 'wb' | 'wb2' }): ComponentDef {
-  const { adder, balanced: bal, predictor: pred, dcache } = o;
+function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; balanced: boolean; predictor: boolean; dcache?: 'wt' | 'wb' | 'wb2'; m: boolean }): ComponentDef {
+  const { adder, balanced: bal, predictor: pred, dcache, m } = o;
+  if (m && dcache) throw new Error('pipelinedCpu: m and dcache together are not supported');
   const DM = dcache === 'wt' ? cachedMemory(o.dmemK) : dcache === 'wb' ? wbCache(o.dmemK, 2, 1) : dcache === 'wb2' ? wbCache(o.dmemK, 1, 2) : dataMemory(o.dmemK);
   const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder);
   const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = adder === 'ks' || bal ? koggeStone(32) : rca(32);
@@ -837,10 +850,95 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     );
     extraPorts.push(bit('dstall', 'out'));
   }
+  if (m) {
+    // ---- M extension. D: decode; E: multiply (first half) and divide; M: multiply (second half).
+    const ym = T + PIPE_H + 72; // below the hazard unit and the prediction row
+    const add = (name: string, def: ComponentDef, x: number, y: number, label?: string) => { instances.push({ name, def, at: [x, ym + y], label }); defs.set(name, def); };
+    const at2 = (name: string, def: ComponentDef, xy: [number, number], label?: string) => { instances.push({ name, def, at: xy, label }); defs.set(name, def); };
+    const net = (name: string) => nets.find((n) => n.name === name)!;
+    const drop = (name: string, end: string) => { const n = net(name); n.ends = n.ends.filter((e) => e !== end); if (Array.isArray(n.tags)) n.tags = n.tags.filter((e) => e !== end); };
+    const R = register(64), CR2 = clearableRegister(2), CR3 = clearableRegister(3), M22 = busMux2(2);
+    // D: isM = (op = OP) and (funct7 = 1); a multiply asks for the load path (ResultSrc = 01)
+    add('kOp', constWord(7, 0x33), xFD - 12, 2); add('opM', equal(7), xFD + 6, 0);
+    add('kF7', constWord(7, 1), xFD - 12, 16); add('f7M', equal(7), xFD + 6, 14);
+    add('sf3D', splitter([2, 1]), xFD + 6, 30); add('nf2', NOT, xFD + 30, 32);
+    add('isMD', AND, xFD + 30, 6);
+    add('isMul', AND, xFD + 44, 7); add('isDiv', AND, xFD + 44, 16);
+    add('mfl', merger([1, 1]), xFD + 58, 8); add('kLd', constWord(2, 1), xFD + 52, 26);
+    at2('rsm', M22, [xDE - 6, P('DE', 'resultSrcD')[1] - g(M22).ports.y.pos[1]], 'load path');
+    // E: the multiplier's first half, the divider, and the result multiplexer
+    add('mE', CR2, xDE + 4, 6, 'M flags');
+    add('smE', splitter([1, 1]), xDE + 18, 6); add('sf3E', splitter([2, 1]), xDE + 18, 20);
+    add('goDiv', AND, xDE + 28, 2);
+    add('mule', MUL_E, xDE + 40, 20, 'multiply (E)');
+    add('dive', DIV_E, xDE + 40, 44, 'divide');
+    add('mdE', busMux2(32), xDE + 56, -16, 'ALU / divide');
+    add('run', NOT, xDE + 58, -4);
+    add('gPC', AND, 4, 44); add('gFD', AND, 24, 44);
+    // M: the multiplier's second half, and its result in place of the memory word
+    add('mfMd', merger([1, 2]), xEM - 30, 6);
+    add('mfM', CR3, xEM - 20, 4, 'mul?, funct3'); add('msM', R, xEM - 20, 20, 'sum'); add('mcM', R, xEM - 20, 36, 'carry');
+    add('smM', splitter([1, 2]), xEM + 4, 6);
+    add('mulm', MUL_M, xEM + 12, 22, 'multiply (M)');
+    add('rdm', busMux2(32), xEM + 34, 4, 'memory / product');
+    // the ID/EX enable now comes from the stall; the constants that remain move clear of the clock labels
+    instances.find((x) => x.name === 'en1')!.at = [xDE - 6, T + PIPE_H + 3];
+    instances.find((x) => x.name === 'clr0E')!.at = [xMW - 6, T + PIPE_H + 3];
+    // D wiring
+    net('opD').ends.push('opM.a'); net('funct7D').ends.push('f7M.a'); net('funct3D').ends.push('sf3D.in');
+    retargetEnd(net('resultSrcD'), 'DE.resultSrcD', 'rsm.a');
+    nets.push(
+      { ends: ['kOp.y', 'opM.b'] }, { ends: ['kF7.y', 'f7M.b'] },
+      { name: 'isOP', ends: ['opM.eq', 'isMD.a'], tags: true }, { name: 'f7is1', ends: ['f7M.eq', 'isMD.b'], tags: true },
+      { name: 'isMD', ends: ['isMD.y', 'isMul.a', 'isDiv.a'], tags: ['isDiv.a'] },
+      { name: 'f3hi', ends: ['sf3D.o1', 'nf2.a', 'isDiv.b'], tags: ['isDiv.b'] }, { name: '¬f3hi', ends: ['nf2.y', 'isMul.b'], tags: true },
+      { name: 'isMulD', ends: ['isMul.y', 'mfl.i0', 'rsm.s'], tags: ['rsm.s'] }, { name: 'isDivD', ends: ['isDiv.y', 'mfl.i1'], tags: true },
+      { ends: ['kLd.y', 'rsm.b'] }, { name: 'resultSrcD2', ends: ['rsm.y', 'DE.resultSrcD'] },
+      { name: 'mFlagsD', ends: ['mfl.out', 'mE.d'], tags: true },
+    );
+    // the divider's stall holds PC, IF/ID and ID/EX (and the M flags with them) and sends bubbles into M
+    retargetEnd(net('enPC'), 'pc.en', 'gPC.a');
+    retargetEnd(net('enFD'), 'FD.en', 'gFD.a');
+    drop('en1', 'DE.en');
+    net('flushDE').ends.push('mE.clr');
+    drop('clr0', 'EM.clr');
+    net('clk').ends.push('mE.clk', 'dive.clk', 'msM.clk', 'mcM.clk', 'mfM.clk');
+    net('en1').ends.push('msM.en', 'mcM.en', 'mfM.en');
+    nets.push(
+      { name: 'enPCm', ends: ['gPC.y', 'pc.en'], tags: true }, { name: 'enFDm', ends: ['gFD.y', 'FD.en'], tags: true },
+      { name: 'divStall', ends: ['dive.stall', 'run.a', 'EM.clr', 'mfM.clr'], tags: true },
+      { name: 'runE', ends: ['run.y', 'DE.en', 'mE.en', 'gPC.b', 'gFD.b'], tags: true },
+      // E wiring
+      { name: 'mFlagsE', ends: ['mE.q', 'smE.in'] },
+      { name: 'isMulE', ends: ['smE.o0', 'mfMd.i0'], tags: true }, { name: 'isDivE', ends: ['smE.o1', 'goDiv.a', 'mdE.s'], tags: true },
+      { name: 'f3E', ends: ['sf3E.o0', 'mule.f', 'dive.f', 'mfMd.i1'], tags: true },
+      { name: 'divGo', ends: ['goDiv.y', 'dive.go'], tags: true },
+      { name: 'mulS', ends: ['mule.s', 'msM.d'], tags: true }, { name: 'mulC', ends: ['mule.c', 'mcM.d'], tags: true },
+      { name: 'divY', ends: ['dive.y', 'mdE.b'], tags: true },
+      { name: 'ALUResultE2', ends: ['mdE.y', 'EM.aluResultE'], tags: true },
+      // M wiring
+      { name: 'mFlagsM', ends: ['mfM.q', 'smM.in'] },
+      // mfM holds {isMul (bit 0), funct3[1:0]}
+      { name: 'isMulM', ends: ['smM.o0', 'rdm.s'], tags: true }, { name: 'f3M', ends: ['smM.o1', 'mulm.f'], tags: true },
+      { name: 'mulSM', ends: ['msM.q', 'mulm.s'] }, { name: 'mulCM', ends: ['mcM.q', 'mulm.c'] },
+      { name: 'productM', ends: ['mulm.y', 'rdm.b'], tags: true },
+      { name: 'ReadDataM2', ends: ['rdm.y', 'MW.readDataM'], tags: true },
+    );
+    nets.push({ name: 'mFlagsE2', ends: ['mfMd.out', 'mfM.d'] });
+    net('funct3E').ends.push('sf3E.in'); (net('funct3E').tags as true | string[]) = true;
+    net('validE').ends.push('goDiv.b');
+    if (Array.isArray(net('validE').tags)) (net('validE').tags as string[]).push('goDiv.b');
+    net('SrcAE').ends.push('mule.a', 'dive.a');
+    net('WriteDataE').ends.push('mule.b', 'dive.b');
+    { const t = net('SrcAE').tags; net('SrcAE').tags = [...(Array.isArray(t) ? t : []), 'mule.a', 'dive.a']; }
+    { const t = net('WriteDataE').tags; net('WriteDataE').tags = [...(Array.isArray(t) ? t : []), 'mule.b', 'dive.b']; }
+    retargetEnd(net('ALUResultE'), 'EM.aluResultE', 'mdE.a');
+    retargetEnd(net('ReadDataM'), 'MW.readDataM', 'rdm.a');
+  }
   const variant = [adder === 'ks' ? 'fast adders' : '', bal ? 'balanced' : '', pred ? 'branch prediction' : '', dcache ? `${dcache === 'wt' ? 'write-through' : dcache === 'wb2' ? '2-way write-back' : 'write-back'} data cache` : ''].filter(Boolean).join(', ');
   return {
-    id: `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}${dcache ? `_dc${dcache}` : ''}`,
-    name: `Pipelined RV32I CPU${variant ? ` (${variant})` : ''}`, category: 'cpu',
+    id: `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}${dcache ? `_dc${dcache}` : ''}${m ? '_m' : ''}`,
+    name: `Pipelined RV32I${m ? 'M' : ''} CPU${variant ? ` (${variant})` : ''}`, category: 'cpu',
     summary: 'Five stages, one instruction entering per cycle. Forwarding, a W→D bypass, load-use stalls and branch flushes keep it architecturally identical to the single-cycle machine.',
     ports: [bit('clk', 'in', 'left', true), bus('pcF', 32, 'out'), bit('validW', 'out'), bus('pcW', 32, 'out'), ...extraPorts],
     symbol: { kind: 'box', label: dcache ? 'RV32I PIPE + D$' : 'RV32I PIPE' },
