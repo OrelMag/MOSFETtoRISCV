@@ -614,6 +614,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
     pins.retire = [resY[0] + 22, bottom + 1];
     pins.dhit = [resY[0] + 22, bottom + 4];
   }
+  if (fpu) pins.retire = [resY[0] + 22, bottom + 1];
   if (fpu) {
     // ---- RV32F subset: a second register file, the FPU, and a few multiplexers
     const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => instances.push({ name, def, at: xy, label });
@@ -630,7 +631,15 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
     add('rwi', orN(3), [62, bottom - 14]);
     add('fcsr', FCSR, [rfR + 24, bottom + 62], 'fcsr');
     add('cres', M2, [resY[0] + 12, resY[1] - 6], 'FP / CSR');
+    // fdiv.s / fsqrt.s stall: the PC and every register write wait for the iterative unit
+    if (dcache) throw new Error('singleCycleCpu: fpu and dcache together are not supported');
+    add('nstall', NOT, [8, P('pc', 'en')[1] - 1]);
+    add('xwg', AND, [68, bottom - 14]);
+    add('fwg', AND, [rfAt[0] - 6, bottom + 6]);
+    add('fpg', AND, [rfR + 18, bottom + 58]);
+    instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
     const net = (name: string) => nets.find((n) => n.name === name)!;
+    nets.splice(nets.indexOf(net('en')), 1);
     net('op').ends = ['si.o0', 'fdec.op'];
     nets.push({ name: 'opInt', ends: ['fdec.opInt', 'ctl.op'], tags: true });
     net('op').ends.push('fcsr.op');
@@ -649,7 +658,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
     res.ends = ['res.y', 'xres.a'];
     res.via = undefined;
     net('RegWrite').ends = ['ctl.regWrite', 'rwx.a'];
-    net('clk').ends.push('frf.clk', 'fcsr.clk');
+    net('clk').ends.push('frf.clk', 'fcsr.clk', 'fpu.clk');
     nets.push(
       { name: 'frs1', ends: ['frf.rd1', 'fpu.a'], tags: true },
       { name: 'frs2', ends: ['frf.rd2', 'fpu.b', 'swd.b'], tags: true },
@@ -661,15 +670,20 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
       { name: 'isCSR', ends: ['fcsr.hit', 'cres.s', 'rwi.i2'], tags: true },
       { name: 'XResult', ends: ['cres.y', 'rf.wd'], tags: true },
       { name: 'FFlags', ends: ['fpu.flags', 'fcsr.flags'], tags: true },
-      { name: 'isOPFP', ends: ['fdec.opfp', 'fcsr.fpOp'], tags: true },
+      { name: 'isOPFP', ends: ['fdec.opfp', 'fpu.go', 'fpg.a'], tags: true },
+      { name: 'FFlagsWE', ends: ['fpg.y', 'fcsr.fpOp'], tags: true },
+      { name: 'stall', ends: ['fpu.stall', 'nstall.a'], tags: true },
+      { name: 'retire', ends: ['nstall.y', 'pc.en', 'xwg.b', 'fwg.b', 'fpg.b', 'retire'], tags: ['xwg.b', 'fwg.b', 'fpg.b', 'retire'] },
       { name: 'frm', ends: ['fcsr.frm', 'fpu.frm'], tags: true },
       { name: 'isFLW', ends: ['fdec.flw', 'fwd.s', 'nflw.a'], tags: true },
       { name: 'isFSW', ends: ['fdec.fsw', 'swd.s'], tags: true },
       { name: 'toInt', ends: ['fdec.toInt', 'xres.s', 'rwi.i1'], tags: true },
-      { name: 'FRegWrite', ends: ['fdec.fWrite', 'frf.we'], tags: true },
+      { name: 'FRegWrite', ends: ['fdec.fWrite', 'fwg.a'], tags: true },
+      { name: 'FRegWriteQ', ends: ['fwg.y', 'frf.we'], tags: true },
       { name: '¬flw', ends: ['nflw.y', 'rwx.b'], tags: true },
       { name: 'RegWriteInt', ends: ['rwx.y', 'rwi.i0'], tags: true },
-      { name: 'XRegWrite', ends: ['rwi.y', 'rf.we'], tags: true },
+      { name: 'XRegWrite', ends: ['rwi.y', 'xwg.a'], tags: true },
+      { name: 'XRegWriteQ', ends: ['xwg.y', 'rf.we'], tags: true },
     );
     // fwd: a = ReadData? the FPU result is the common case, the memory word only for flw
     nets.find((n) => n.name === 'ReadData')!.ends = nets.find((n) => n.name === 'ReadData')!.ends.map((e) => (e === 'fwd.a' ? 'fwd.b' : e));
@@ -764,7 +778,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
     summary: dcache
       ? 'The single-cycle processor with its data memory replaced by a slow main memory behind a 64-byte direct-mapped cache. A load that misses holds the PC and the register write (retire = 0) for 8 cycles while the line is fetched.'
       : 'A complete RISC-V processor: every instruction is fetched, decoded, executed and retired in one clock cycle. Built entirely from the blocks of the previous chapters.',
-    ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out'), ...(dcache ? [bit('retire', 'out'), bit('dhit', 'out')] : []), ...extraPorts],
+    ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out'), ...(dcache ? [bit('retire', 'out'), bit('dhit', 'out')] : []), ...(fpu ? [bit('retire', 'out')] : []), ...extraPorts],
     symbol: { kind: 'box', label: shared ? 'CORE' : dcache ? 'RV32I + D$' : 'RV32I' },
     netlist: () => ({ pins, instances, nets }),
     hdl: { verilog: CPU_VERILOG },
