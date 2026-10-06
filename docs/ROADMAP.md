@@ -158,7 +158,9 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   ending in the generic normalize & round, stalling the single-cycle CPU (retire gates PC, register writes and fflags); exhaustive small formats
 - ✅ fmadd / fmsub / fnmsub / fnmadd.s (R4 format in isa / asm / disasm / ISS, third f-register read port): exact
   product, swap-and-align add, one normalize & round; exhaustive on E3M2 (5.2 M cases), random on E4M3 / E5M2 / float32
-- ⏳ a pipelined FPU
+- ✅ Pipelined FPU: six-stage RV32IF pipeline (F D E M X W, in-order retirement), the FMA split over E / M / X as the FP pipe
+  for fadd / fsub / fmul / fma / fcvt.s.w and (unrounded) fdiv / fsqrt, one shared rounder; FP interlocks + forwarding from W,
+  CSR serialization, structural stalls for the iterative units; period 121 vs 313 (single-cycle), CPI 1.6–2.7, co-simulated
 - Superscalar and out-of-order intuition (scoreboard / Tomasulo widget)
 - Compressed instructions (C), A extension (LR/SC, AMO)
 - Virtual memory (Sv32), TLB, U/S/M privilege levels (stretch)

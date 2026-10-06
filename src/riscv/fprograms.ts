@@ -280,4 +280,45 @@ halt:   j    halt`,
         feq.s a2, ft0, ft1           # 0
 halt:   j    halt`,
   },
+  {
+    id: 'fpchain',
+    name: 'Dependent vs independent adds',
+    blurb: 'Twelve fadd.s into one accumulator (each waits for the previous one: the FP pipe is three stages deep), then the same twelve spread over three accumulators. On the pipelined CPU the second half runs without a single stall.',
+    source: `# one accumulator: every fadd.s needs the previous result
+        li   t0, 1
+        fcvt.s.w ft0, t0       # 1.0
+        fmv.w.x fa0, zero
+        fadd.s fa0, fa0, ft0
+        fadd.s fa0, fa0, ft0
+        fadd.s fa0, fa0, ft0
+        fadd.s fa0, fa0, ft0
+        fadd.s fa0, fa0, ft0
+        fadd.s fa0, fa0, ft0
+        fadd.s fa0, fa0, ft0
+        fadd.s fa0, fa0, ft0
+        fadd.s fa0, fa0, ft0
+        fadd.s fa0, fa0, ft0
+        fadd.s fa0, fa0, ft0
+        fadd.s fa0, fa0, ft0   # 12.0
+# three accumulators: three independent chains, interleaved
+        fmv.w.x fa1, zero
+        fmv.w.x fa2, zero
+        fmv.w.x fa3, zero
+        fadd.s fa1, fa1, ft0
+        fadd.s fa2, fa2, ft0
+        fadd.s fa3, fa3, ft0
+        fadd.s fa1, fa1, ft0
+        fadd.s fa2, fa2, ft0
+        fadd.s fa3, fa3, ft0
+        fadd.s fa1, fa1, ft0
+        fadd.s fa2, fa2, ft0
+        fadd.s fa3, fa3, ft0
+        fadd.s fa1, fa1, ft0
+        fadd.s fa2, fa2, ft0
+        fadd.s fa3, fa3, ft0
+        fadd.s fa4, fa1, fa2
+        fadd.s fa4, fa4, fa3   # 12.0
+        feq.s a0, fa0, fa4     # 1
+halt:   j    halt`,
+  },
 ];

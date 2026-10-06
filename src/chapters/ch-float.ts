@@ -105,7 +105,8 @@ export const chFloat: Chapter = {
         <p>Underflow is subtle. A result is <em>tiny</em> if it lies below 2<sup>emin</sup>; RISC-V checks tininess <em>after rounding</em>,
         as if the exponent were unbounded. And UF is raised only if the tiny result is also inexact: a subnormal computed exactly raises nothing. Detecting
         "after rounding" costs a second rounding decision: with G as the last bit and the bit below it (R) as the new guard, would the M + 1 kept
-        bits carry into 2<sup>emin</sup>? Modes and flags add 254 NANDs (4.5 %) and 2 levels to the float32 normalize &amp; round unit: 5 916 NANDs, 142 deep.</p>
+        bits carry into 2<sup>emin</sup>? Modes and flags add about 250 NANDs (4.5 %) to the float32 normalize &amp; round unit. With its incrementers
+        and overflow test made parallel (see the pipelined FPU at the end of the chapter) it is 6 120 NANDs and 102 NAND delays deep.</p>
         <div class="try">exp = 0, mant = 1111 0000: 1.111 × 2<sup>−7</sup>. It rounds to 0x08 = 2<sup>−6</sup>, the smallest normal, yet flags = UF NX (0x03): with an unbounded exponent it is exact at 1.111 × 2<sup>−7</sup>, below 2<sup>−6</sup>. Now mant = 1111 1100: the same result, but only NX. In RTZ (rm = 1) the first stays subnormal, 0x07.</div>`,
       scene: () => ({ root: normRound(E4M3, 8), inputs: { sign: 0, exp: 0, mant: 0b11110000, stin: 0, rm: 0 } }),
     },
@@ -126,7 +127,8 @@ export const chFloat: Chapter = {
         (an incrementer), then check the range: −2<sup>31</sup> … 2<sup>31</sup> − 1 signed, 0 … 2<sup>32</sup> − 1 unsigned. NaN, ±∞ and anything out
         of range after rounding saturate to the largest integer of that sign (NaN counts as positive) and raise NV; otherwise NX if G or S. −0.3 → unsigned
         is 0 (just NX), but −0.7 rounds (in RNE) to −1: invalid.</p>
-        <p>The float32 → int32 converter costs 3 223 NANDs and is 142 deep (a 33-bit sticky shifter, an incrementer, a negator).</p>
+        <p>The float32 → int32 converter costs 3 450 NANDs and is 104 deep: an aligning box (a 33-bit sticky shifter) and a rounding box (a prefix
+        incrementer, the range check, a negator), which the pipelined FPU puts in two stages.</p>
         <div class="try">a = 0x42 is 2.5 (0 1000 010), into an 8-bit integer: y = 2 in RNE. Try rm = 3 (RUP) and rm = 4 (RMM). Then 0x7F (NaN): 127 and NV.</div>`,
       scene: () => ({ root: fpToInt(E4M3, 8), inputs: { a: 0x42, signed: 1, rm: 0 } }),
       challenge: {
@@ -149,7 +151,7 @@ export const chFloat: Chapter = {
         <p>Why restoring? It is the integer step unchanged, and a mux is cheap. Non-restoring division drops the mux (add or subtract by the previous
         sign) but needs a correction step before the remainder can serve as a sticky bit; real FPUs use SRT radix-4 with a redundant remainder,
         2 bits per clock with no carry chain in the loop, at the price of a quotient-digit table. float32: 27 steps, <strong>29 cycles</strong>,
-        10 100 NANDs (5 900 of them normalize &amp; round, 2 300 the two prenormalizers); the step loop is 58 NAND delays.</p>
+        10 300 NANDs (6 100 of them normalize &amp; round, 2 300 the two prenormalizers); the step loop is 58 NAND delays.</p>
         <div class="try">1.0 / 3.0 in the 8-bit format: start = 1. Pulse the clock 8 times: q fills from the right, then done = 1 and y = 0x2B (1.011₂ × 2<sup>−2</sup> = 0.34375, rounded up: NX). Try b = 0 (1 / 0 = ∞, DZ).</div>`,
       scene: () => ({ root: fpDiv(E4M3), inputs: { a: 0x38, b: 0x44, rm: 0, start: 1, clk: 0 } }),
       challenge: {
@@ -167,7 +169,7 @@ export const chFloat: Chapter = {
         (r ← 4r + next two) and tries to subtract 4q + 1, the difference between (2q + 1)² and (2q)², scaled; if it fits, the next root bit is 1. M + 3
         steps, the remainder is the sticky bit. √−0 = −0, the root of anything negative is NaN with NV.</p>
         <p>A square root never overflows or underflows (it halves the exponent), and never lands exactly halfway between two floats, so RNE and RMM
-        always agree. float32: 26 steps, <strong>28 cycles</strong>, 9 000 NANDs. Real FPUs share one SRT unit between division and square root;
+        always agree. float32: 26 steps, <strong>28 cycles</strong>, 9 200 NANDs. Real FPUs share one SRT unit between division and square root;
         here they are two transparent boxes.</p>
         <div class="try">a = 0x40 (2.0): pulse the clock 7 times. y = 0x3B (1.011₂ = 1.375, with NX): √2 = 1.0110101…₂ rounds down. Try rm = 3 (RUP): 0x3C.</div>`,
       scene: () => ({ root: fpSqrt(E4M3), inputs: { a: 0x40, rm: 0, start: 1, clk: 0 } }),
@@ -190,9 +192,10 @@ export const chFloat: Chapter = {
         out negative when the exponents are within 3 of each other; it is then exact and is negated), and send the 52-bit result to the same normalize
         &amp; round. fmsub, fnmsub and fnmadd only flip the signs of c and the product. ∞ × 0 is invalid even when c is a quiet NaN, as RISC-V requires.</p>
         <p>One rounding makes x·x − p exact where fmul then fsub gives 0, and makes dot products, polynomial evaluation (Horner) and Newton steps
-        both faster and more accurate. float32 fma: 25 100 NANDs, 325 deep: deeper than either multiplier (216) or adder (225), but shallower than
-        the two in a row (441). A production FMA shifts the addend in a 3M + 5-bit window <em>while</em> the tree multiplies; this one swaps like the
-        adder, which is simpler but puts the shifter after the tree.</p>
+        both faster and more accurate. float32 fma: 26 300 NANDs, 270 deep: deeper than either multiplier (176) or adder (181), but shallower than
+        the two in a row (357). It is built as three boxes, multiply (92 deep), align and add (91), round (106): the stages of the pipelined FPU.
+        A production FMA shifts the addend in a 3M + 5-bit window <em>while</em> the tree multiplies; this one swaps like the adder, which is
+        simpler but puts the shifter after the tree.</p>
         <div class="try">x = 0x39 (1.125): x² = 1.265625 = 1.010001₂ needs 6 fraction bits. fmul gives 1.010₂ = 1.25 (0x3A). Here c = 0x3A with negC = 1: fma(x, x, −1.25) = 2<sup>−6</sup> = 0x08, exactly, no flags; fmul then fsub would give 0.</div>`,
       scene: () => ({ root: fpFma(E4M3), inputs: { a: 0x39, b: 0x39, c: 0x3a, negProd: 0, negC: 1, rm: 0 } }),
       challenge: {
@@ -209,8 +212,8 @@ export const chFloat: Chapter = {
     {
       title: 'float32: the same circuit, bigger',
       body: `
-        <p>Generated from the same code with 8 exponent and 23 fraction bits. The float32 adder costs about <strong>7 900 NANDs</strong> and is
-        225 NAND delays deep. The multiplier costs about <strong>14 700</strong> (mostly its 24 × 24 tree) and is 216 deep. The small formats are tested on
+        <p>Generated from the same code with 8 exponent and 23 fraction bits. The float32 adder costs about <strong>8 200 NANDs</strong> and is
+        181 NAND delays deep. The multiplier costs about <strong>14 900</strong> (mostly its 24 × 24 tree) and is 176 deep. The small formats are tested on
         every operand pair in every rounding mode, flags included, against exact rational arithmetic (a few million cases, simulated 32 at a time);
         float32 on random and special operands (subnormals, infinities, NaNs, cancellation), and against the host CPU in round to nearest even.</p>
         <div class="try">1.5 (0x3FC00000) + 2.25 (0x40100000) = 3.75 (0x40700000). Open the adder and follow the significands.</div>`,
@@ -223,8 +226,8 @@ export const chFloat: Chapter = {
         flw, fsw, fadd.s, fsub.s, fmul.s, the four fused multiply-adds, fdiv.s and fsqrt.s (iterative: they stall the CPU, see below), sign injection
         (fmv.s, fneg.s, fabs.s), fmin/fmax.s, feq/flt/fle.s, fcvt.w[u].s, fcvt.s.w[u], fmv.x.w, fmv.w.x and fclass.s, in all five rounding modes, with
         the exception flags. flw and fsw reuse the integer load/store path, disguised as lw and sw. The opcode or funct7 selects one of the units'
-        results; the FPU is 82 700 NANDs.</p>
-        <p>The cost: about 169 900 NANDs (2.9 times the integer CPU), and a clock period of <strong>368</strong> NAND delays instead of 103, set by
+        results; the FPU is 85 200 NANDs.</p>
+        <p>The cost: about 172 500 NANDs (3 times the integer CPU), and a clock period of <strong>313</strong> NAND delays instead of 103, set by
         the fused multiply-add. A float operation in one cycle makes every instruction slow. Real cores pipeline the FPU over 3 to 5 cycles.</p>
         <div class="try">Run "0.1 ten times": the sum is 0x3F800001, one ulp above 1.0, and feq.s says 0.</div>`,
       scene: () => cpuScene({ source: fsrc('tenth'), fpu: true, adder: 'ks', timing: true, highlight: ['fpu', 'frf'] }),
@@ -260,7 +263,7 @@ export const chFloat: Chapter = {
         and not done, exactly like the integer divider of the RV32IM system CPU. retire = ¬stall gates the PC enable and both register-file write
         enables, so the instruction stays in place until its result is ready, then retires in the done cycle. The fflags write is gated too: during the
         stall the flags at the FPU's output belong to a half-finished quotient. The golden model steps only when retire = 1.</p>
-        <p>The two units add 19 300 NANDs. They do not lengthen the clock: one step is 58 NAND delays, far below a float add.
+        <p>The two units add 19 500 NANDs. They do not lengthen the clock: one step is 58 NAND delays, far below a float add.
         "Division and square root" takes 215 cycles for 22 instructions. "Newton's √2" computes x ← (x + 2 / x) / 2 four times: 132 cycles to reach the
         same correctly rounded float that one fsqrt.s gives in 28.</p>
         <div class="try">Run "Division and square root": the PC waits at each fdiv.s and fsqrt.s while the panel says stalled, and the CPI climbs.</div>`,
@@ -283,8 +286,8 @@ export const chFloat: Chapter = {
         rs3 in bits 31:27, the format (00 = single) in 26:25, rm in funct3. Three operands need a third read port on the f register file: one more
         32-way multiplexer tree of 32-bit words, 3 970 NANDs. Bits 3:2 of the opcode are the two negations (c, then the product), so the decoder
         hands them to the unit directly.</p>
-        <p>In a single-cycle CPU the deepest instruction sets the clock: with the fma the period grows from 274 to <strong>368</strong> NAND delays (+34 %),
-        paid by every add and branch. A pipelined FPU (at the end of this chapter) gives fma several cycles of latency instead.</p>
+        <p>In a single-cycle CPU the deepest instruction sets the clock: adding the fma took the period from 274 to 368 NAND delays (+34 %), paid by
+        every add and branch (313 once the rounder is shortened, below). A pipelined FPU gives fma several cycles of latency instead.</p>
         <div class="try">Run "Fused multiply-add": a0 = 0 (fmul then fsub), a1 = 0x33800000 (fmsub.s, 2<sup>−24</sup>), then 17, 7, −7, −17 from the four variants.
         "Horner with fmadd" evaluates a cubic in 3 instructions instead of 6.</div>`,
       scene: () => cpuScene({ source: fsrc('fma'), fpu: true, adder: 'ks', highlight: ['fpu', 'frf'] }),
@@ -292,6 +295,68 @@ export const chFloat: Chapter = {
         kind: 'quiz', question: 'fnmadd.s computes −(a × b) − c. With a × b = 2 and c = −2, what does it return in RNE, and with which sign?',
         options: ['+0', '−0', '−4', '+4'], answer: 0,
         explain: '−(2) − (−2) = −2 + 2: an exact zero from two terms of opposite sign, which is +0 in every mode except RDN (−0).',
+      },
+    },
+    {
+      title: 'A pipelined FPU',
+      body: `
+        <p>The five-stage pipeline of chapter 18 gains a sixth stage, <strong>X</strong>, between M and W. Every instruction, integer or FP,
+        walks F D E M X W, so they all retire in program order and the golden model can still be stepped at W. The FP pipe is the fused
+        multiply-add cut into its three boxes: <em>multiply</em> in E, <em>align and add</em> in M, <em>round</em> in X. fadd is a × 1 + b, fmul is
+        a × b + 0 (the zero signed like the product), fcvt.s.w puts |x| where the product would be; fdiv and fsqrt iterate in E behind operand
+        latches and send their unrounded quotient or root down the same pipe. One rounder serves them all, so the pipelined RV32IF CPU,
+        163 500 NANDs, is <em>smaller</em> than the single-cycle one (172 500). The other operations (sign injection, min / max, compares, fclass,
+        moves) finish in E; fcvt.w.s aligns in E and rounds in M.</p>
+        <p>Hazards. An FP result exists only at the end of X, so an instruction in D that reads an f register written by an instruction in E or M
+        <strong>waits</strong> (an interlock), and then gets the value <strong>forwarded from W</strong> (the select is decided in D, one cycle early).
+        Forwarding from X instead would chain the rounder (118 deep) into the next multiply (92) in one cycle and nearly double the period. FP results
+        bound for x registers wait the same way; loads are forwarded from X. fdiv / fsqrt hold F, D and E and send bubbles into M (a structural stall).
+        fcsr is read in E and written in W: CSR accesses wait until no FP instruction is in flight, and FP instructions wait behind a CSR write.</p>
+        <p>The clock: <strong>121</strong> NAND delays instead of 313. The E stage (unpack, prenormalize, the 24 × 24 tree) sets it; X, the rounder,
+        is 118; the integer stages are at most 97. Getting there meant shortening the rounder first: its two ripple incrementers became prefix trees
+        (49 → 13 levels) and its overflow test now runs in parallel with the rounding, 142 → 102 deep, which also took the single-cycle CPU from 368 to 313.</p>
+        <div class="try">Run "Dependent vs independent adds" and watch the pipeline diagram: in the first half every fadd.s waits two cycles for the previous
+        one; with three accumulators the adds flow one per cycle. The timing panel shows the critical path.</div>`,
+      scene: () => cpuScene({ source: fsrc('fpchain'), pipeline: true, fpu: true, adder: 'ks', timing: true, highlight: ['fpx', 'fadd', 'fres'] }),
+      challenge: {
+        kind: 'quiz', question: 'fadd.s fa0, fa0, ft0 repeated: how many cycles does each one take on this pipeline, and why?',
+        options: [
+          'Three: it waits in D while the previous one is in E and in M, then takes its result forwarded from W',
+          'One: forwarding removes every stall',
+          'Two: one stall for the load-use hazard',
+          'Six: one per stage',
+        ], answer: 0,
+        explain: 'The sum exists only at the end of X. The next fadd can enter E when its producer reaches W, three cycles after the producer entered E: two stall cycles each. Twelve dependent adds take 45 cycles with the fill; spread over three accumulators the same adds have no stalls at all (23 instructions in 35 cycles).',
+      },
+    },
+    {
+      title: 'Pipelined vs single-cycle: CPI × period',
+      body: `
+        <p>Measured on the gate-level CPUs, every program co-simulated against the golden model: single-cycle → pipelined, cycles (the pipeline's
+        include its five-cycle fill) and time = cycles × period (313 and 121 NAND delays).</p>
+        <table>
+          <tr><th>program</th><th>cycles</th><th>time (NAND delays)</th><th>gain</th></tr>
+          <tr><td>0.1 ten times</td><td>41 → 67</td><td>12.8 k → 8.1 k</td><td>1.58×</td></tr>
+          <tr><td>dot product</td><td>80 → 137</td><td>25.0 k → 16.6 k</td><td>1.51×</td></tr>
+          <tr><td>fused multiply-add</td><td>26 → 42</td><td>8.1 k → 5.1 k</td><td>1.60×</td></tr>
+          <tr><td>Horner with fmadd</td><td>23 → 45</td><td>7.2 k → 5.4 k</td><td>1.32×</td></tr>
+          <tr><td>division and square root</td><td>215 → 257</td><td>67.3 k → 31.1 k</td><td>2.16×</td></tr>
+          <tr><td>Newton's √2</td><td>170 → 199</td><td>53.2 k → 24.1 k</td><td>2.21×</td></tr>
+          <tr><td>exception flags</td><td>28 → 76</td><td>8.8 k → 9.2 k</td><td>0.95×</td></tr>
+        </table>
+        <p>The pipeline wins 1.3 to 2.2 times; the iterative units gain most, because their 28 cycles now run at the short clock. CPI rises from 1 to
+        1.6–2.7 (fadd chains, the fill; 11.7 with divisions). "Exception flags" is slower: almost every other instruction reads fflags, and each CSR access waits for
+        the FP pipe to drain. Real code keeps CSR accesses out of loops and interleaves independent work, as the compiler would schedule it.</p>`,
+      scene: () => cpuScene({ source: fsrc('dot'), pipeline: true, fpu: true, adder: 'ks', highlight: ['fhz'] }),
+      challenge: {
+        kind: 'quiz', question: 'Why must an integer instruction pass through X too, although it has nothing to do there?',
+        options: [
+          'So that every instruction has the same path length and results retire in order: an add must not write its register before an older fmul',
+          'To give the ALU more time',
+          'Because the register file needs two cycles to write',
+          'To forward loads',
+        ], answer: 0,
+        explain: 'With different path lengths a younger integer instruction would finish before an older FP instruction: write-after-write and precise state would need extra logic (a scoreboard or a reorder buffer). Equal lengths keep it simple; the cost is one more forwarding source (X) and one stage of latency for nothing.',
       },
     },
     {

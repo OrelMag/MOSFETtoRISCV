@@ -2,7 +2,7 @@
 // register file, data memory, and a live check against the golden model (the ISS runs in
 // lock-step and every register is compared after each clock edge).
 
-import { MC_FIELDS, MC_STATES, microword, multicycleCpu, pipelinedCpu, singleCycleCpu, systemCpu } from '../lib';
+import { MC_FIELDS, MC_STATES, microword, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu } from '../lib';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { cpuState, retiring } from '../riscv/cosim';
 import { ABI, decode, disasm } from '../riscv/isa';
@@ -55,6 +55,7 @@ export function cpuScene(opts: CpuSceneOptions): Scene {
   return {
     root: opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder })
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
+      : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
       : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor })
         : singleCycleCpu(asm.words, opts.dcache ? { adder: opts.adder, dmemK: 6, dcache: true } : { adder: opts.adder, fpu: opts.fpu }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
@@ -246,7 +247,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       ...(opts.fpu ? [h('div', { class: 'cpu-sec' }, 'Floating-point registers (non-zero)'), fregs] : []),
       ...(opts.dcache ? [h('div', { class: 'cpu-sec' }, 'Data cache (4 lines × 4 words)'), dlines] : []),
       h('div', { class: 'cpu-sec' }, opts.dcache ? 'Main memory (non-zero words)' : 'Data memory (non-zero words)'), mem);
-    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? 'RV32IF CPU' : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.pipeline ? 'RV32I pipeline' : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.pipeline ? 'RV32I pipeline' : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
     const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right' }, title, body);
     title.addEventListener('click', () => {
       el.classList.toggle('collapsed');
@@ -315,7 +316,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         h('span', null, `cycle ${stage.cycles}`),
         h('span', null, opts.pipeline || opts.m || opts.fpu || opts.multicycle ? `retired ${iss.steps}${iss.steps ? ` · CPI ${(stage.cycles / iss.steps).toFixed(2)}` : ''}` : `PC ${hex(st.pc, 4)}`),
         ...(opts.m && !retiring(sim) ? [h('span', { class: 'warn', title: 'The iterative divider is working; the PC and register writes are stalled' }, 'dividing… stalled')] : []),
-        ...(opts.fpu && !retiring(sim) ? [h('span', { class: 'warn', title: 'An iterative unit (fdiv.s / fsqrt.s) is working; the PC and register writes are stalled' }, 'fdiv / fsqrt… stalled')] : []),
+        ...(opts.fpu && !opts.pipeline && !retiring(sim) ? [h('span', { class: 'warn', title: 'An iterative unit (fdiv.s / fsqrt.s) is working; the PC and register writes are stalled' }, 'fdiv / fsqrt… stalled')] : []),
         ...(opts.dcache ? [h('span', null, `loads ${loads} · misses ${misses}${loads ? ` · hit rate ${(100 * (loads - misses) / loads).toFixed(0)} %` : ''}`)] : []),
         ...(opts.dcache && !retiring(sim) ? [h('span', { class: 'warn', title: 'A load missed: the PC and register write wait while the line is fetched' }, `miss: fetching line (${pack(sim.getBits(sim.design.root.children!.get('dm')!.children!.get('cnt')!.ports.q)) + 1} / 8)`)] : []),
         mismatch ? h('span', { class: 'bad' }, `✗ ${mismatch}`) : h('span', { class: 'good', title: 'Every register and the PC match the instruction-set simulator after every cycle' }, '✓ matches golden model'),
@@ -337,7 +338,10 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         const v = (inst: string, port: string) => pack(sim.getBits(root.get(inst)!.ports[port]));
         const slots: [string, number, boolean][] = [
           ['F', v('pc', 'q'), true], ['D', v('FD', 'pcD'), v('FD', 'validD') === 1], ['E', v('DE', 'pcE'), v('DE', 'validE') === 1],
-          ['M', v('EM', 'pcM'), v('EM', 'validM') === 1], ['W', v('MW', 'pcW'), v('MW', 'validW') === 1],
+          ['M', v('EM', 'pcM'), v('EM', 'validM') === 1],
+          // the pipelined FPU CPU has a sixth stage, X, between M and W
+          ...(root.has('MX') ? [['X', v('MX', 'pcX'), v('MX', 'validX') === 1], ['W', v('XW', 'pcW'), v('XW', 'validW') === 1]] as [string, number, boolean][]
+            : [['W', v('MW', 'pcW'), v('MW', 'validW') === 1]] as [string, number, boolean][]),
         ];
         for (const [stg, pc, valid] of slots) if (valid && pc >= 0) inFlight.set(pc >>> 0, [...(inFlight.get(pc >>> 0) ?? []), stg]);
       }
@@ -447,7 +451,7 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
     type Slot = { pc: number; valid: boolean };
     type Snap = { cycle: number; slots: Slot[]; stall: boolean; flush: boolean; fwdA: number; fwdB: number; byp: boolean };
     const history: Snap[] = [];
-    const STAGES = ['F', 'D', 'E', 'M', 'W'];
+    let STAGES = ['F', 'D', 'E', 'M', 'W'];
     const grid = h('div', { class: 'pipe-grid' });
     const title = h('h4', null, 'Pipeline diagram', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'stage × cycle'));
     const el = h('div', { class: 'mem-panel pipe-panel' }, title, grid);
@@ -461,16 +465,20 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
         for (let i = bits.length - 1; i >= 0; i--) x = x * 2 + (bits[i] === 1 ? 1 : 0);
         return x;
       };
+      // the pipelined FPU CPU has a sixth stage, X, between M and W
+      const six = root.children.has('MX');
+      STAGES = six ? ['F', 'D', 'E', 'M', 'X', 'W'] : ['F', 'D', 'E', 'M', 'W'];
       const slots: Slot[] = [
         { pc: v('pc', 'q'), valid: true },
         { pc: v('FD', 'pcD'), valid: v('FD', 'validD') === 1 },
         { pc: v('DE', 'pcE'), valid: v('DE', 'validE') === 1 },
         { pc: v('EM', 'pcM'), valid: v('EM', 'validM') === 1 },
-        { pc: v('MW', 'pcW'), valid: v('MW', 'validW') === 1 },
+        ...(six ? [{ pc: v('MX', 'pcX'), valid: v('MX', 'validX') === 1 }, { pc: v('XW', 'pcW'), valid: v('XW', 'validW') === 1 }]
+          : [{ pc: v('MW', 'pcW'), valid: v('MW', 'validW') === 1 }]),
       ];
       return {
         cycle: stage.cycles, slots,
-        stall: v('hz', 'enFD') === 0, flush: v('hz', 'flushFD') === 1,
+        stall: six ? v('go', 'y') === 0 : v('hz', 'enFD') === 0, flush: six ? v('hz', 'taken') === 1 : v('hz', 'flushFD') === 1,
         // Balanced design: the E-stage selects travel in ID/EX (the hazard unit's outputs are for D).
         fwdA: root.children.get('DE')!.ports.fwdAE ? v('DE', 'fwdAE') : v('hz', 'forwardA'),
         fwdB: root.children.get('DE')!.ports.fwdBE ? v('DE', 'fwdBE') : v('hz', 'forwardB'),
@@ -509,6 +517,7 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
         if (s.stall) tags.push('stall');
         if (s.flush) tags.push('flush');
         if (s.fwdA === 2 || s.fwdB === 2) tags.push('M→E');
+        if (STAGES.length === 6 && (s.fwdA === 3 || s.fwdB === 3)) tags.push('X→E');
         if (s.fwdA === 1 || s.fwdB === 1) tags.push('W→E');
         if (s.byp) tags.push('W→D');
         return h('span', { class: 'pg-c ev', title: tags.join(', ') }, tags.join(' '));
