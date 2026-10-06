@@ -14,6 +14,7 @@ code, kbd, pre { font-family: var(--font-mono); font-size: 0.9em; }
 code { background: var(--surface-3); padding: 0.08em 0.35em; border-radius: 5px; }
 kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding: 0 0.35em; border-radius: 5px; font-size: 0.8em; }
 .icon { flex: none; display: block; }
+[hidden] { display: none !important; }
 ::selection { background: var(--accent-soft); }
 
 /* ---------- top bar ---------- */
