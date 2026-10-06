@@ -2,7 +2,7 @@
    classes (cpu-status, cpu-listing, cpu-regs, cpu-mem, cpu-trace), the parts an instruction uses,
    and the CPU properties. Only existing tokens, so both themes follow. */
 
-.sb-drawer.sb-cpu { width: min(350px, calc(100% - 16px)); font-size: 12.5px; }
+.sb-drawer.sb-cpu { font-size: 12.5px; }
 .sb-cpu-body, .sb-cpu-none { flex: 1; min-height: 0; overflow: auto; padding: 8px 12px 12px; }
 .sb-cpu-body[hidden], .sb-cpu-none[hidden] { display: none; }
 .sb-cpu-none p { margin: 6px 0; color: var(--text-2); line-height: 1.45; }
@@ -36,3 +36,37 @@
 .sb-cpu-iss .sb-check { margin: 0; }
 .sb-cpu-sechead { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .sb-cpu-sechead .btn { text-transform: none; letter-spacing: 0; padding: 1px 6px; gap: 4px; font: 500 11.5px var(--font-ui); }
+
+/* run controls: Run, Step, Slow + its rate, Reset on one row when they fit */
+.sb-cpu-btns { flex-wrap: wrap; gap: 4px; }
+.sb-cpu-btns > .btn:not(.icon-only) { padding-left: 8px; padding-right: 9px; }
+.sb-cpu-btns .btn.toggle.on { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.sb-cpu-rate { font: 12px var(--font-ui); padding: 2px 4px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
+
+/* fields, pipeline, I/O */
+.sb-cpu .cpu-fields[hidden], .sb-cpu .pipe-grid[hidden], .sb-cpu-io[hidden], .sb-cpu [hidden].cpu-sec { display: none; }
+.sb-cpu .cpu-fields { margin: 2px 0 4px; }
+.sb-cpu-pipe { margin: 2px 0 4px; }
+.sb-cpu-pipe .pg-c { width: 38px; font-size: 10.5px; }
+.sb-cpu-pipe .pg-row.ev .pg-c { font-size: 9px; }
+.sb-cpu-io .console { max-height: 96px; min-height: 2.2em; overflow: auto; margin: 2px 0 6px; white-space: pre-wrap; word-break: break-all; }
+.sb-cpu-io .io-row { gap: 14px; flex-wrap: wrap; }
+.sb-cpu-io .io-row .cpu-sec { margin-top: 0; }
+.sb-cpu-irq { margin: 8px 0 2px; }
+.sb-cpu-irq[hidden] { display: none; }
+.sb-cpu-io .sw:disabled { cursor: default; opacity: 0.5; }
+
+/* several cores: each core's instruction, registers side by side, which core retired */
+.sb-cpu-cores { display: grid; gap: 3px; width: 100%; }
+.sb-cpu-core { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.sb-cpu-core code { font: 12px var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.sb-cpu-core .warn { margin-left: auto; font-size: 11px; color: var(--warn); }
+.sb-cpu-hart { font: 700 10.5px var(--font-mono); color: var(--accent); margin-right: 6px; }
+.sb-cpu-core .sb-cpu-hart { margin-right: 0; }
+.sb-cpu .cpu-regs.sb-cpu-mregs { display: grid; grid-template-columns: auto repeat(var(--n, 2), minmax(0, 1fr)); gap: 1px 10px; font: 11.5px var(--font-mono); }
+.sb-cpu-mregs .hd { color: var(--muted); font: 600 10.5px var(--font-ui); text-transform: uppercase; letter-spacing: 0.04em; }
+.sb-cpu-mregs .n { color: var(--text-2); }
+.sb-cpu-mregs .v { color: var(--text); }
+.sb-cpu-mregs .v.z { color: var(--muted); }
+.sb-cpu-mregs .v.chg { color: var(--accent); font-weight: 700; }
+.sb-cpu-btns .sb-cpu-reset { margin-left: auto; }
