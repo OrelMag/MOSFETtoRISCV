@@ -93,6 +93,8 @@ export interface CheckResult {
   restrictionViolations: string[];
   /** Vectors (table) or steps (sequence) that were run. */
   tested: number;
+  /** Table checks: the first failing input vector, by pin name (to put it on the canvas). */
+  vector?: Record<string, number>;
 }
 
 /** Progress key in settings.solve(). */
@@ -138,6 +140,9 @@ const RANDOM_VECTORS = 4096;
 
 const ZERO: Score = { nand: 0, transistors: 0, depth: null };
 
+/** What a simulation run found. */
+interface Run { failures: string[]; tested: number; vector?: Record<string, number> }
+
 /** Check a compiled chip against a challenge. Never throws. */
 export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefined): CheckResult {
   const res: CheckResult = { ok: false, failures: [], score: { ...ZERO }, restrictionViolations: [], tested: 0 };
@@ -154,9 +159,12 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
     res.failures.push(...pinProblems, ...errors.slice(0, 3));
     if (errors.length > 3) res.failures.push(`… and ${errors.length - 3} more errors`);
     if (!res.failures.length) {
-      const r = ch.check.kind === 'table' ? runTable(def, compiled.mode, ch.ports, ch.check.spec) : runSequence(def, compiled.mode, ch.ports, ch.check);
+      const r: Run = ch.check.kind === 'table'
+        ? runTable(def, compiled.mode, ch.ports, ch.check.spec)
+        : runSequence(def, compiled.mode, ch.ports, ch.check);
       res.failures.push(...r.failures);
       res.tested = r.tested;
+      if (r.vector) res.vector = r.vector;
     }
   } catch (e) {
     res.failures.push(`cannot simulate: ${e instanceof Error ? e.message : String(e)}`);
@@ -271,12 +279,13 @@ function vectors(ps: PinSpec[]): number[][] {
   return Array.from({ length: RANDOM_VECTORS }, () => ps.map((p) => rnd(p.width)));
 }
 
-function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], spec: (ins: number[]) => number[]): { failures: string[]; tested: number } {
+function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], spec: (ins: number[]) => number[]): Run {
   const I = ins(ports), O = outs(ports);
   const vs = vectors(I);
   const { sim, design } = simFor(def, mode);
   const failures: string[] = [];
   let bad = 0;
+  let vector: Record<string, number> | undefined;
   const compare = (v: number[], got: Bit[][]) => {
     const want = spec(v);
     const wrong = O.map((p, k) => {
@@ -286,6 +295,7 @@ function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], 
     });
     if (wrong.every((w) => w === null)) return;
     bad++;
+    vector ??= Object.fromEntries(I.map((p, i) => [p.name, v[i]]));
     if (failures.length < SHOW) {
       failures.push(`${fmtIns(I, v)} → ${wrong.filter(Boolean).join(' ')}, expected ${O.map((p, k) => (wrong[k] ? `${p.name}=${fmtNum(want[k], p.width)}` : '')).filter(Boolean).join(' ')}`);
     }
@@ -319,10 +329,10 @@ function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], 
   }
   for (const v of rest) slow(v);
   if (bad > failures.length) failures.push(`… ${bad - failures.length} more of ${vs.length} rows wrong`);
-  return { failures, tested: vs.length };
+  return { failures, tested: vs.length, ...(vector ? { vector } : {}) };
 }
 
-function runSequence(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], check: Extract<ChallengeCheck, { kind: 'sequence' }>): { failures: string[]; tested: number } {
+function runSequence(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], check: Extract<ChallengeCheck, { kind: 'sequence' }>): Run {
   const I = ins(ports);
   const clk = I.find((p) => p.clock)?.name ?? 'clk';
   const { sim } = simFor(def, mode);

@@ -68,6 +68,7 @@ describe('checkChallenge', () => {
     const r = check(ch('g_xor'), doc, or);
     expect(r.ok).toBe(false);
     expect(r.failures).toEqual(['a=1 b=1 → y=1, expected y=0']);
+    expect(r.vector).toEqual({ a: 1, b: 1 });
     expect(r.restrictionViolations).toEqual([]);
     expect(r.score.nand).toBe(3);
   });
