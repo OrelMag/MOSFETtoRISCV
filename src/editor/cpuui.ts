@@ -22,7 +22,7 @@ import { instrMarks, instrUse, STAGE_UNITS, stageUse } from '../widgets/insthw';
 import { PipeHistory, pipeGridRows } from '../widgets/pipegrid';
 import {
   type CpuDesc, type CpuDoc, CpuMonitor, type CpuRead, cpuGaps, detectCpu, fmtWord, mismatchText, type NetRef, nestedRoms, partAt, partNode,
-  pinNamed, pipelineSlots, resolveCpu, romParts, storageOf,
+  pinNamed, pipelineSlots, refValue, resolveCpu, romParts, storageOf,
 } from './cpu';
 import { dockPane, paneShown, showPane, undockPane } from './dock';
 import { type Editor, registerEditorPlugin, registerToolbarAction } from './editor';
@@ -519,7 +519,7 @@ class CpuPanel {
       const dpc = pipelineSlots(this.ed.sim, this.ed.doc, d)?.find((s) => s.stage === 'D')?.pc;
       if (dpc !== undefined) return { pc: dpc, role: 'in Decode' };
     }
-    const pc = d?.pc ? mon.read()?.pc ?? null : null;
+    const pc = d?.pc ? refValue(this.ed.sim, this.ed.doc, d.pc) : null;
     return pc !== null && pc >= 0 ? { pc, role: 'current' } : null;
   }
 
@@ -693,6 +693,8 @@ class CpuPanel {
   private marked: string[] = [];
   private wireMarks = new Map<string, string>();
   private useKey = '';
+  private markKey = '';
+  private markBuilt: unknown = null;
   private wiresOfNet: { built: unknown; map: Map<number, string[]> } = { built: null, map: new Map() };
 
   /**
@@ -707,9 +709,15 @@ class CpuPanel {
     let path = '';
     const f = this.sel !== null ? { pc: this.sel, role: 'selected' } : this.slow ? this.focusPc() : null;
     const focus = this.fieldHover ?? this.fieldPin;
-    if (mon && f && !(mon instanceof MultiMonitor) && this.sel === null && mon.desc?.pipeline) {
+    const slots = mon instanceof CpuMonitor && mon.desc?.pipeline ? pipelineSlots(ed.sim, ed.doc, mon.desc) ?? [] : null;
+    const built = ed.sim.built ?? ed.compiled;
+    // Recomputed only when what it depends on changed (the panel redraws every frame while running).
+    const key = [ed.chipId, f?.pc, this.sel, !!this.slow, focus, slots?.map((x) => x.stage + x.pc).join(), this.open].join('|');
+    if (key === this.markKey && built === this.markBuilt) return this.applyMarks();
+    this.markKey = key;
+    this.markBuilt = built;
+    if (mon && f && slots && this.sel === null) {
       // slow mode in a pipeline: every stage's part of the work
-      const slots = pipelineSlots(ed.sim, ed.doc, mon.desc) ?? [];
       units = slots.flatMap((s) => (s.stage in STAGE_UNITS ? stageUse(s.stage as keyof typeof STAGE_UNITS, instrUse(mon.wordAt(s.pc) ?? 0x13)) : []));
       word = mon.wordAt(f.pc);
     } else if (mon && f) {
@@ -721,8 +729,8 @@ class CpuPanel {
       }
     }
     // field wires: only while the instruction is in D, where a pipeline splits it
-    const inD = !(mon instanceof CpuMonitor && mon.desc?.pipeline) || (f && this.focusPcIsD(f.pc));
-    const def = (ed.sim.built ?? ed.compiled)?.def;
+    const inD = !slots || (!!f && slots.some((x) => x.stage === 'D' && x.pc === f.pc));
+    const def = built?.def;
     const m = def && word !== null && inD ? instrMarks(def, word, focus) : null;
     if (m && focus) units = m.units;
     const have = new Set(ed.doc.parts.map((p) => p.id));
@@ -740,12 +748,6 @@ class CpuPanel {
     } else keyed(this.use, '', () => []);
   }
 
-  private focusPcIsD(pc: number): boolean {
-    const mon = this.mon;
-    if (!(mon instanceof CpuMonitor) || !mon.desc) return false;
-    return !!pipelineSlots(this.ed.sim, this.ed.doc, mon.desc)?.some((s) => s.stage === 'D' && s.pc === pc);
-  }
-
   /** Wire ids of each net of the compile the simulation runs (instrMarks numbers nets like the netlist). */
   private netWires(): Map<number, string[]> {
     const b = this.ed.sim.built ?? this.ed.compiled;
@@ -758,6 +760,7 @@ class CpuPanel {
   }
 
   private clearMarks(): void {
+    this.markKey = '';
     this.marked = [];
     this.wireMarks = new Map();
     this.useKey = '';
