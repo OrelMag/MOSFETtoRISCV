@@ -109,7 +109,7 @@ const WIDTH: Record<string, number> = {
 export const rowY = (field: string) => { const r = ROWS[field]; return r <= 9 ? 2 + 4 * r : 42 + 2 * (r - 10); };
 export const PIPE_H = rowY('predTaken') + 6;
 
-function pipeReg(name: string, from: string, to: string, fields: string[]): ComponentDef {
+export function pipeReg(name: string, from: string, to: string, fields: string[]): ComponentDef {
   const sig = fields.join(',');
   return memo(`pipe_${name}_${sig}`, () => {
     const widths = fields.map((f) => WIDTH[f]);

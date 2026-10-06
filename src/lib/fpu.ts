@@ -38,7 +38,7 @@ const log2c = (n: number) => Math.ceil(Math.log2(n));
  * Every net is drawn as a named label unless it is short and local; these are arithmetic
  * blocks best read by drilling into the sub-units.
  */
-class Builder {
+export class Builder {
   instances: InstanceDef[] = [];
   private sinks = new Map<string, string[]>();
   private names = new Map<string, string>();
@@ -217,6 +217,37 @@ export function shiftRightSticky(w: number, k: number): ComponentDef {
   });
 }
 
+/**
+ * Incrementer with a parallel-prefix carry: bit i flips when every bit below it is 1, and those
+ * "all ones below" signals come from a Kogge–Stone tree of ANDs (log2 n levels) instead of a
+ * ripple of half adders (n levels). Used on the rounding paths, where the ripple was the longest chain.
+ */
+export function incFast(n: number): ComponentDef {
+  return memo(`incf${n}`, () => {
+    const b = new Builder();
+    const sp = b.op(splitter(ones(n)), ['a']);
+    // pre[i] = AND of bits 0 .. i (inclusive), by doubling spans
+    let pre = Array.from({ length: n }, (_, i) => `${sp}.o${i}`);
+    for (let d = 1; d < n; d *= 2) {
+      b.next();
+      pre = pre.map((p, i) => (i >= d ? b.op1(AND, [p, pre[i - d]]) : p));
+    }
+    b.next();
+    const ys = Array.from({ length: n }, (_, i) => (i === 0 ? b.op1(NOT, [`${sp}.o0`]) : b.op1(XOR, [`${sp}.o${i}`, pre[i - 1]])));
+    b.next();
+    b.wire(b.op1(merger(ones(n)), ys), 'y');
+    b.wire(pre[n - 1], 'cout');
+    return define({
+      id: `incf${n}`, name: `${n}-bit fast incrementer`, category: 'arithmetic',
+      summary: `a + 1. Bit i flips when all lower bits are 1; a prefix tree of ANDs computes those conditions in ${Math.ceil(Math.log2(n))} levels instead of a ${n}-stage ripple.`,
+      ports: [bus('a', n, 'in'), bus('y', n, 'out'), bit('cout', 'out')],
+      symbol: { kind: 'box', label: '+1 (fast)' },
+      spec: ([a]) => [(a + 1) % 2 ** n, a === 2 ** n - 1 ? 1 : 0],
+      netlist: () => ({ pins: { a: [0, 4], y: [b.right, 4], cout: [b.right, 10] }, instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
 /** Exponent arithmetic width: two's complement, wide enough for every intermediate exponent. */
 const xeOf = (f: FpFormat) => (f.E + 3 <= 8 ? 8 : 16);
 
@@ -350,8 +381,12 @@ export function normRound(f: FpFormat, w: number): ComponentDef {
     const hiNZ = b.op1(NOT, [b.op1(isZero(XE - k), [`${ns}.o1`])]);
     const Rsat = b.op1(busMux2(k), [`${ns}.o0`, b.op1(K(k, 2 ** k - 1), []), hiNZ]);
     const R = b.name(b.op1(bitwise('and', k), [Rsat, b.op1(fanout(k), [em1Neg])], 'right shift'), 'R');
-    const eNorm = b.op1(incrementer(XE), [`${t}.s`]);
+    const eNorm = b.op1(incFast(XE), [`${t}.s`]);
     const eAfter = b.name(b.op1(busMux2(XE), [b.op1(K(XE, 1), []), eNorm, canNorm]), 'e');
+    // in parallel with the shifts and the rounding: e + 1 (for a carry out of the rounding) and the overflow tests on e
+    const eInc = b.name(b.op1(incFast(XE), [eAfter], 'e + 1'), 'e+1');
+    const geTop = b.name(b.op1(NOT, [`${b.op(addSubFast(XE), [eAfter, b.op1(K(XE, 2 ** E - 1), []), b.op1(TIE1, [])], 'e ≥ max?')}.n`]), 'e≥max');
+    const atTop = b.name(b.op1(equal(XE), [eAfter, b.op1(K(XE, 2 ** E - 2), [])], 'e = max − 1?'), 'e=max−1');
     b.next();
     // 2. shift
     const sh1 = b.op1(shiftLeft(w, k), ['mant', L], 'normalize');
@@ -382,18 +417,17 @@ export function normRound(f: FpFormat, w: number): ComponentDef {
     const fracOnes = b.op1(andN(M), Array.from({ length: M }, (_, i) => `${kf}.o${i}`), 'fraction all 1s');
     const rd2 = b.op(ROUND_DECIDE, ['rm', 'sign', b.op1(TIE1, []), Rb, S2], 'unbounded rounding');
     b.next();
-    const mi = b.op(incrementer(M + 1), [`${parts}.o2`]);
+    const mi = b.op(incFast(M + 1), [`${parts}.o2`]);
     const mR = b.op1(busMux2(M + 1), [`${parts}.o2`, `${mi}.y`, inc]);
     const carry = b.name(b.op1(AND, [inc, `${mi}.cout`]), 'carry');
     const reach = b.op1(andN(3), [fracOnes, G, `${rd2}.up`]);
     b.next();
     const ms = b.op(splitter([M, 1]), [mR]);
     const hidden = b.name(b.op1(OR, [`${ms}.o1`, carry]), 'hidden');
-    const eF = b.name(`${b.op(koggeStone(XE), [eAfter, b.op1(K(XE, 0), []), carry], 'exp + carry')}.s`, 'eFinal');
+    const eF = b.name(b.op1(busMux2(XE), [eAfter, eInc, carry], 'exp + carry'), 'eFinal');
     const tiny = b.name(b.op1(AND, [b.op1(NOT, [`${kt}.o1`]), b.op1(NOT, [reach])], 'tiny?'), 'tiny');
     b.next();
-    const ov = b.op(addSubFast(XE), [eF, b.op1(K(XE, 2 ** E - 1), []), b.op1(TIE1, [])], 'overflow?');
-    const inf = b.name(b.op1(AND, [hidden, b.op1(NOT, [`${ov}.n`])]), 'overflow');
+    const inf = b.name(b.op1(AND, [hidden, b.op1(OR, [geTop, b.op1(AND, [carry, atTop])], 'overflow?')]), 'overflow');
     const satMax = b.name(b.op1(AND, [inf, b.op1(NOT, [`${rd}.toInf`])], 'largest finite instead'), 'satMax');
     const ef = b.op(splitter([E, XE - E]), [eF]);
     b.next();
@@ -480,7 +514,7 @@ export function fpAdd(f: FpFormat): ComponentDef {
     const zs = b.op1(isZero(WS + 1), [sm]);
     const exactZero = b.name(b.op1(AND, [effSub, zs], 'x − x'), 'cancel');
     const sign = b.op1(MUX2, [sB, isMode(b, 'rm', RM.RDN, 'RDN?'), exactZero], 'x − x = +0 (−0 in RDN)');
-    const ex = b.op1(incrementer(XE), [b.op1(merger([E, XE - E]), [eB, b.op1(K(XE - E, 0), [])])]);
+    const ex = b.op1(incFast(XE), [b.op1(merger([E, XE - E]), [eB, b.op1(K(XE - E, 0), [])])]);
     b.next();
     const nr = b.op(normRound(f, WS + 1), [sign, ex, sm, b.op1(TIE0, []), 'rm'], 'normalize & round');
     b.next();
@@ -590,7 +624,7 @@ export function fpToInt(f: FpFormat, w = 32): ComponentDef {
     const rd = b.op(ROUND_DECIDE, ['rm', `${u}.sign`, `${il}.o0`, `${gi}.o0`, `${sh}.sticky`], 'round up?');
     const nx0 = b.op1(OR, [`${gi}.o0`, `${sh}.sticky`], 'inexact');
     b.next();
-    const inc = b.op(incrementer(w), [`${gi}.o1`]);
+    const inc = b.op(incFast(w), [`${gi}.o1`]);
     const I = b.name(b.op1(busMux2(w), [`${gi}.o1`, `${inc}.y`, `${rd}.up`], 'rounded'), 'n');
     const carry = b.op1(AND, [`${rd}.up`, `${inc}.cout`]);
     b.next();
@@ -1061,20 +1095,20 @@ endmodule`,
 }
 
 // ---- fused multiply-add ----------------------------------------------------------------------
+// Three boxes, which are also the three stages of the pipelined FPU: multiply (unpack,
+// prenormalize, exact product, exponent difference), add (align, add, negate) and round.
+
+const fmaDims = (f: FpFormat) => { const W0 = 2 * f.M + 2, WA = W0 + 2; return { XE: xeOf(f), W0, WA, WS: W0 + 3, kA: log2c(WA + 1) }; };
 
 /**
- * ±a × b ± c with one rounding. All three significands are prenormalized; the product is kept
- * exact (2M + 2 bits from the tree multiplier); c is placed at the top of an equally wide field.
- * Then it is an addition of two (2M + 2)-bit significands: the one with the larger exponent is the
- * base, the other is shifted right with guard bits and a sticky bit, added or subtracted (the
- * difference may be negative when the exponents are within 3: then it is exact and is negated),
- * and normalize & round rounds the 2M + 6-bit result once. negProd negates the product, negC the
- * addend: fmadd (0, 0), fmsub (0, 1), fnmsub (1, 0), fnmadd (1, 1).
+ * FMA stage 1: unpack and prenormalize a, b, c; the exact product (2M + 2 bits); its exponent;
+ * which of product and addend has the larger exponent (the base); how far to shift the other;
+ * and the special cases (NaN, ∞, invalid), which are known from the operands alone.
  */
-export function fpFma(f: FpFormat): ComponentDef {
+export function fmaMultiply(f: FpFormat): ComponentDef {
   const { E, M } = f;
-  return memo(`fpfma${E}_${M}`, () => {
-    const XE = xeOf(f), N = 1 + E + M, W0 = 2 * M + 2, WA = W0 + 2, WS = W0 + 3, kA = log2c(WA + 1), B = fbias(f);
+  return memo(`fmamul${E}_${M}`, () => {
+    const { XE, W0, kA } = fmaDims(f), N = 1 + E + M, B = fbias(f);
     const b = new Builder();
     const ua = b.op(fpUnpack(f), ['a'], 'unpack a'), ub = b.op(fpUnpack(f), ['b'], 'unpack b'), uc = b.op(fpUnpack(f), ['c'], 'unpack c');
     b.next();
@@ -1084,10 +1118,11 @@ export function fpFma(f: FpFormat): ComponentDef {
     const ps = b.name(b.op1(XOR, [b.op1(XOR, [`${ua}.sign`, `${ub}.sign`]), 'negProd'], 'product sign'), 'signP');
     const sc = b.name(b.op1(XOR, [`${uc}.sign`, 'negC'], 'addend sign'), 'signC');
     b.next();
-    const P = b.name(b.op1(treeMul(M + 1), [`${pa}.m`, `${pb}.m`], 'exact product'), 'product');
+    b.wire(b.op1(treeMul(M + 1), [`${pa}.m`, `${pb}.m`], 'exact product'), 'p');
+    b.wire(`${pc}.m`, 'mc');
     const s1 = b.op(koggeStone(XE), [`${pa}.e`, `${pb}.e`, b.op1(TIE0, [])], 'ea + eb');
-    const Cw = b.name(b.op1(merger([M + 1, M + 1]), [b.op1(K(M + 1, 0), []), `${pc}.m`], 'c, as wide'), 'cWide');
     const effSub = b.name(b.op1(XOR, [ps, sc], 'subtract?'), 'effSub');
+    b.wire(effSub, 'effSub');
     const pZero = b.op1(OR, [`${ua}.zero`, `${ub}.zero`], 'product = 0');
     b.next();
     const ep = b.name(`${b.op(koggeStone(XE), [`${s1}.s`, b.op1(K(XE, (1 - B + 2 ** XE) % 2 ** XE), []), b.op1(TIE0, [])], '− bias + 1')}.s`, 'eP');
@@ -1098,44 +1133,125 @@ export function fpFma(f: FpFormat): ComponentDef {
     const cBig = b.name(b.op1(AND, [b.op1(NOT, [`${uc}.zero`]), b.op1(OR, [pZero, `${d}.n`])], 'c bigger?'), 'cBig');
     const ad = b.op(splitter([kA, XE - kA]), [b.op1(condNegate(XE), [`${d}.s`, `${d}.n`], '|eP − eC|')]);
     b.next();
-    const dsat = b.op1(busMux2(kA), [`${ad}.o0`, b.op1(K(kA, 2 ** kA - 1), []), nonZero(b, `${ad}.o1`, XE - kA)], 'shift');
-    const mB = b.name(b.op1(busMux2(W0), [P, Cw, cBig], 'base'), 'mBig');
-    const mS = b.op1(busMux2(W0), [Cw, P, cBig]);
-    const eB = b.name(b.op1(busMux2(XE), [ep, `${pc}.e`, cBig]), 'eBig');
-    const sB = b.name(b.op1(MUX2, [ps, sc, cBig]), 'signBig');
-    b.next();
-    const al = b.op(shiftRightSticky(WA, kA), [b.op1(merger([2, W0]), [b.op1(K(2, 0), []), mS]), dsat], 'align');
-    b.next();
-    const opB = b.op1(merger([1, 2, W0]), [b.op1(TIE0, []), b.op1(K(2, 0), []), mB]);
-    const opS = b.op1(merger([1, WA]), [`${al}.sticky`, `${al}.y`]);
-    const sum = b.op(addSubFast(WS), [opB, opS, effSub], 'add / subtract');
-    b.next();
-    const neg = b.name(b.op1(AND, [effSub, b.op1(NOT, [`${sum}.cout`])], 'negative?'), 'neg');
-    const mag = b.op1(condNegate(WS), [`${sum}.s`, neg], '|sum|');
-    const top = b.op1(AND, [`${sum}.cout`, b.op1(NOT, [effSub])]);
-    b.next();
-    const sm = b.name(b.op1(merger([WS, 1]), [mag, top]), 'sum');
-    const zs = b.op1(isZero(WS + 1), [sm]);
-    const exactZero = b.op1(AND, [effSub, zs], 'cancelled');
-    const sign = b.op1(MUX2, [b.op1(XOR, [sB, neg]), isMode(b, 'rm', RM.RDN, 'RDN?'), exactZero], 'sign (+0, −0 in RDN)');
-    const ex = b.op1(incrementer(XE), [eB]);
-    b.next();
-    const nr = b.op(normRound(f, WS + 1), [sign, ex, sm, b.op1(TIE0, []), 'rm'], 'normalize & round (once)');
-    b.next();
+    b.wire(b.op1(busMux2(kA), [`${ad}.o0`, b.op1(K(kA, 2 ** kA - 1), []), nonZero(b, `${ad}.o1`, XE - kA)], 'shift'), 'dsat');
+    b.wire(cBig, 'cBig');
+    b.wire(b.op1(busMux2(XE), [ep, `${pc}.e`, cBig]), 'eB');
+    b.wire(b.op1(MUX2, [ps, sc, cBig]), 'sB');
+    // special cases
     const pInf = b.op1(OR, [`${ua}.inf`, `${ub}.inf`]);
     const infZero = b.op1(OR, [b.op1(AND, [`${ua}.inf`, `${ub}.zero`]), b.op1(AND, [`${ua}.zero`, `${ub}.inf`])], '∞ × 0');
     const pNaN = b.op1(OR, [`${ua}.nan`, `${ub}.nan`]);
     const infDiff = b.op1(andN(4), [pInf, b.op1(NOT, [pNaN]), `${uc}.inf`, effSub], '∞ − ∞');
     b.next();
-    const invalid = b.name(b.op1(orN(5), [`${ua}.snan`, `${ub}.snan`, `${uc}.snan`, infZero, infDiff], 'invalid'), 'NV');
-    const nan = b.op1(orN(4), [`${ua}.nan`, `${ub}.nan`, `${uc}.nan`, invalid], 'NaN?');
-    const anyInf = b.op1(OR, [pInf, `${uc}.inf`]);
-    const infS = b.op1(MUX2, [sc, ps, pInf]);
+    const invalid = b.op1(orN(5), [`${ua}.snan`, `${ub}.snan`, `${uc}.snan`, infZero, infDiff], 'invalid');
+    b.wire(invalid, 'invalid');
+    b.wire(b.op1(orN(4), [`${ua}.nan`, `${ub}.nan`, `${uc}.nan`, invalid], 'NaN?'), 'nan');
+    b.wire(b.op1(OR, [pInf, `${uc}.inf`]), 'anyInf');
+    b.wire(b.op1(MUX2, [sc, ps, pInf]), 'infSign');
+    return define({
+      id: `fmamul${E}_${M}`, name: `${fmtName(f)} FMA stage 1: multiply`, category: 'arithmetic',
+      summary: `Unpacks and prenormalizes a, b, c; multiplies the significands exactly (${W0} bits); computes the product's exponent and compares it with c's: the larger one is the base, the other will be shifted right by dsat. The special cases (NaN, ∞, ∞ × 0, ∞ − ∞, signaling NaNs) are decided here, from the operands alone.`,
+      ports: [bus('a', N, 'in'), bus('b', N, 'in'), bus('c', N, 'in'), bit('negProd', 'in'), bit('negC', 'in'),
+        bus('p', W0, 'out'), bus('mc', M + 1, 'out'), bus('dsat', kA, 'out'), bit('cBig', 'out'), bus('eB', XE, 'out'), bit('sB', 'out'), bit('effSub', 'out'),
+        bit('nan', 'out'), bit('invalid', 'out'), bit('anyInf', 'out'), bit('infSign', 'out')],
+      symbol: { kind: 'box', label: 'FMA 1: MULTIPLY' },
+      netlist: () => ({
+        pins: { a: [0, 4], b: [0, 8], c: [0, 12], negProd: [0, 16], negC: [0, 20], p: [b.right, 2], mc: [b.right, 6], dsat: [b.right, 10], cBig: [b.right, 14], eB: [b.right, 18], sB: [b.right, 22], effSub: [b.right, 26], nan: [b.right, 30], invalid: [b.right, 34], anyInf: [b.right, 38], infSign: [b.right, 42] },
+        instances: b.instances, nets: b.nets(),
+      }),
+    });
+  });
+}
+
+/**
+ * FMA stage 2: widen c to the product's width, shift the smaller operand right (guard bits and a
+ * sticky bit), add or subtract, and take the magnitude: a sign, an exponent and a 2M + 6-bit sum.
+ */
+export function fmaAdd(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fmaadd${E}_${M}`, () => {
+    const { XE, W0, WA, WS, kA } = fmaDims(f);
+    const b = new Builder();
+    const Cw = b.name(b.op1(merger([M + 1, M + 1]), [b.op1(K(M + 1, 0), []), 'mc'], 'c, as wide'), 'cWide');
     b.next();
-    specials(b, f, `${nr}.y`, `${nr}.flags`, nan, anyInf, infS, invalid);
+    const mB = b.name(b.op1(busMux2(W0), ['p', Cw, 'cBig'], 'base'), 'mBig');
+    const mS = b.op1(busMux2(W0), [Cw, 'p', 'cBig']);
+    b.next();
+    const al = b.op(shiftRightSticky(WA, kA), [b.op1(merger([2, W0]), [b.op1(K(2, 0), []), mS]), 'dsat'], 'align');
+    b.next();
+    const opB = b.op1(merger([1, 2, W0]), [b.op1(TIE0, []), b.op1(K(2, 0), []), mB]);
+    const opS = b.op1(merger([1, WA]), [`${al}.sticky`, `${al}.y`]);
+    const sum = b.op(addSubFast(WS), [opB, opS, 'effSub'], 'add / subtract');
+    b.next();
+    const neg = b.name(b.op1(AND, ['effSub', b.op1(NOT, [`${sum}.cout`])], 'negative?'), 'neg');
+    const mag = b.op1(condNegate(WS), [`${sum}.s`, neg], '|sum|');
+    const top = b.op1(AND, [`${sum}.cout`, b.op1(NOT, ['effSub'])]);
+    b.next();
+    const sm = b.name(b.op1(merger([WS, 1]), [mag, top]), 'sum');
+    const zs = b.op1(isZero(WS + 1), [sm]);
+    const exactZero = b.op1(AND, ['effSub', zs], 'cancelled');
+    b.wire(b.op1(MUX2, [b.op1(XOR, ['sB', neg]), isMode(b, 'rm', RM.RDN, 'RDN?'), exactZero], 'sign (+0, −0 in RDN)'), 'sign');
+    b.wire(b.op1(incFast(XE), ['eB']), 'ex');
+    b.wire(sm, 'sum');
+    return define({
+      id: `fmaadd${E}_${M}`, name: `${fmtName(f)} FMA stage 2: align and add`, category: 'arithmetic',
+      summary: `The smaller operand is shifted right by dsat into a ${WA}-bit field (two guard bits; the rest ORed into a sticky bit), then one ${WS}-bit addition or subtraction. A difference can go negative only when the exponents are within 3, where the shift is exact; it is then negated. An exact zero is +0 (−0 when rounding down).`,
+      ports: [bus('p', W0, 'in'), bus('mc', M + 1, 'in'), bus('dsat', kA, 'in'), bit('cBig', 'in'), bus('eB', XE, 'in'), bit('sB', 'in'), bit('effSub', 'in'), bus('rm', 3, 'in'),
+        bit('sign', 'out'), bus('ex', XE, 'out'), bus('sum', WS + 1, 'out')],
+      symbol: { kind: 'box', label: 'FMA 2: ADD' },
+      netlist: () => ({
+        pins: { p: [0, 2], mc: [0, 6], dsat: [0, 10], cBig: [0, 14], eB: [0, 18], sB: [0, 22], effSub: [0, 26], rm: [0, 30], sign: [b.right, 4], ex: [b.right, 10], sum: [b.right, 16] },
+        instances: b.instances, nets: b.nets(),
+      }),
+    });
+  });
+}
+
+/** FMA stage 3: one normalize & round of the wide sum, then the special results decided in stage 1. */
+export function fmaRound(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fmarnd${E}_${M}`, () => {
+    const { XE, WS } = fmaDims(f), N = 1 + E + M;
+    const b = new Builder();
+    const nr = b.op(normRound(f, WS + 1), ['sign', 'ex', 'sum', b.op1(TIE0, []), 'rm'], 'normalize & round (once)');
+    b.next();
+    specials(b, f, `${nr}.y`, `${nr}.flags`, 'nan', 'anyInf', 'infSign', 'invalid');
+    return define({
+      id: `fmarnd${E}_${M}`, name: `${fmtName(f)} FMA stage 3: round`, category: 'arithmetic',
+      summary: `Normalize & round on ${WS + 1} bits, the only rounding of the whole operation; then NaN or ∞ if stage 1 said so (and only NV as a flag in that case).`,
+      ports: [bit('sign', 'in'), bus('ex', XE, 'in'), bus('sum', WS + 1, 'in'), bus('rm', 3, 'in'), bit('nan', 'in'), bit('invalid', 'in'), bit('anyInf', 'in'), bit('infSign', 'in'),
+        bus('y', N, 'out'), bus('flags', 5, 'out')],
+      symbol: { kind: 'box', label: 'FMA 3: ROUND' },
+      netlist: () => ({
+        pins: { sign: [0, 2], ex: [0, 6], sum: [0, 10], rm: [0, 14], nan: [0, 18], invalid: [0, 22], anyInf: [0, 26], infSign: [0, 30], y: [b.right, 6], flags: [b.right, 12] },
+        instances: b.instances, nets: b.nets(),
+      }),
+    });
+  });
+}
+
+/**
+ * ±a × b ± c with one rounding: stage 1 (multiply), stage 2 (align and add), stage 3 (round).
+ * The product is kept exact (2M + 2 bits); c is placed at the top of an equally wide field; the one
+ * with the larger exponent is the base; one wide addition; one normalize & round. negProd negates
+ * the product, negC the addend: fmadd (0, 0), fmsub (0, 1), fnmsub (1, 0), fnmadd (1, 1).
+ */
+export function fpFma(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fpfma${E}_${M}`, () => {
+    const { W0, WS } = fmaDims(f), N = 1 + E + M;
+    const S1 = fmaMultiply(f), S2 = fmaAdd(f), S3 = fmaRound(f);
+    const b = new Builder();
+    const s1 = b.op(S1, ['a', 'b', 'c', 'negProd', 'negC'], 'multiply');
+    b.next();
+    const s2 = b.op(S2, [`${s1}.p`, `${s1}.mc`, `${s1}.dsat`, `${s1}.cBig`, `${s1}.eB`, `${s1}.sB`, `${s1}.effSub`, 'rm'], 'align and add');
+    b.next();
+    const s3 = b.op(S3, [`${s2}.sign`, `${s2}.ex`, `${s2}.sum`, 'rm', `${s1}.nan`, `${s1}.invalid`, `${s1}.anyInf`, `${s1}.infSign`], 'round');
+    b.wire(`${s3}.y`, 'y');
+    b.wire(`${s3}.flags`, 'flags');
     return define({
       id: `fpfma${E}_${M}`, name: `${fmtName(f)} fused multiply-add`, category: 'arithmetic',
-      summary: `±(a × b) ± c rounded once. The ${M + 1} × ${M + 1} product is kept exact (${W0} bits); c is widened to match, the operand with the larger exponent is the base, the other is aligned with guard and sticky bits, then one ${WS}-bit addition (negated if it went negative), and one normalize & round on ${WS + 1} bits. ∞ × 0 is invalid even if c is a quiet NaN.`,
+      summary: `±(a × b) ± c rounded once, in three boxes (the stages of the pipelined FPU): the ${M + 1} × ${M + 1} product kept exact (${W0} bits) and the exponents compared; the smaller operand aligned with guard and sticky bits and one ${WS}-bit addition (negated if it went negative); one normalize & round on ${WS + 1} bits. ∞ × 0 is invalid even if c is a quiet NaN.`,
       ports: [bus('a', N, 'in'), bus('b', N, 'in'), bus('c', N, 'in'), bit('negProd', 'in'), bit('negC', 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'FMA' },
       spec: ([a, bb, c, np, nc, rm]) => { const r = fpFmaX(a, bb, c, !!np, !!nc, f, rm); return [r.y, r.fl]; },
@@ -1151,15 +1267,56 @@ export function fpFma(f: FpFormat): ComponentDef {
   wire sp = a[31] ^ b[31] ^ negProd, sc = c[31] ^ negC, sub = sp ^ sc;
   wire cBig = ~cZero & (pZero | ec > ep);                             // base: the larger exponent
   wire [15:0] d = cBig ? ec - ep : ep - ec;
+  // ---- stage 2
   logic [49:0] s;  logic st;                                          // smaller one, aligned, sticky
   shift_right_sticky #(50) al (.x({cBig ? p : cw, 2'b00}), .s(d > 63 ? 6'd63 : d[5:0]), .y(s), .sticky(st));
   wire [51:0] sum = {1'b0, cBig ? cw : p, 3'b000} + (sub ? -{1'b0, s, st} : {1'b0, s, st});
   wire negative = sub & sum[51];                                      // only when the exponents are close: exact
   wire [51:0] mag = negative ? -sum : sum;
+  // ---- stage 3
   normround #(52) nr (.sign((cBig ? sc : sp) ^ negative), .exp((cBig ? ec : ep) + 1), .mant(mag), .stin(1'b0), .rm, .y(yr), .flags(fr));
   // + special cases: NaN in, inf x 0 (NV even with a quiet NaN c), inf - inf (NV), infinite terms; exact zero is +0 (-0 in RDN)
 endmodule`,
       },
+    });
+  });
+}
+
+/**
+ * fdiv / fsqrt with operand latches, for a pipeline: the operands are captured when an operation
+ * starts and fed from the latches while it runs, so the forwarding paths that supplied them may
+ * move on. Both units share the latches; y, flags and done come from the one selected by sqrt.
+ */
+export function fpDivSqrtHeld(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fpdsh${E}_${M}`, () => {
+    const N = 1 + E + M;
+    const b = new Builder();
+    const ldD = b.op1(AND, ['div', b.op1(NOT, ['dv.busy'])]), ldS = b.op1(AND, ['sqrt', b.op1(NOT, ['sq.busy'])]);
+    const hold = b.name(b.op1(OR, ['dv.busy', 'sq.busy'], 'running'), 'hold');
+    b.next();
+    const ld = b.name(b.op1(OR, [ldD, ldS], 'capture'), 'capture');
+    reg(b, 'La', N, 'a', ld, 'a held');
+    reg(b, 'Lb', N, 'b', ld, 'b held');
+    reg(b, 'Lr', 3, 'rm', ld, 'rm held');
+    b.next();
+    const A = b.op1(busMux2(N), ['a', 'La.q', hold]), Bv = b.op1(busMux2(N), ['b', 'Lb.q', hold]), R = b.op1(busMux2(3), ['rm', 'Lr.q', hold]);
+    b.next();
+    b.add(fpDiv(f), 'divider', 'dv');
+    b.add(fpSqrt(f), 'square root', 'sq');
+    for (const [p, d] of [['clk', 'clk'], ['start', 'div'], ['a', A], ['b', Bv], ['rm', R]] as const) b.wire(d, `dv.${p}`);
+    for (const [p, d] of [['clk', 'clk'], ['start', 'sqrt'], ['a', A], ['rm', R]] as const) b.wire(d, `sq.${p}`);
+    b.next();
+    b.wire(b.op1(busMux2(N), ['dv.y', 'sq.y', 'sqrt']), 'y');
+    b.wire(b.op1(busMux2(5), ['dv.flags', 'sq.flags', 'sqrt']), 'flags');
+    b.wire(b.op1(MUX2, ['dv.done', 'sq.done', 'sqrt']), 'done');
+    b.wire(hold, 'busy');
+    return define({
+      id: `fpdsh${E}_${M}`, name: `${fmtName(f)} divide / square root with operand latches`, category: 'arithmetic',
+      summary: 'The iterative divider and square-root unit behind one set of operand latches: in the start cycle the live operands are used and captured; while the unit runs it reads the latches, so the pipeline\'s forwarding paths are free to move on.',
+      ports: [bit('clk', 'in', 'bottom', true), bit('div', 'in'), bit('sqrt', 'in'), bus('a', N, 'in'), bus('b', N, 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out'), bit('done', 'out'), bit('busy', 'out')],
+      symbol: { kind: 'box', label: 'FDIV / FSQRT' },
+      netlist: () => ({ pins: { div: [0, 2], sqrt: [0, 5], a: [0, 8], b: [0, 11], rm: [0, 14], clk: [0, 17], y: [b.right, 4], flags: [b.right, 8], done: [b.right, 12], busy: [b.right, 16] }, instances: b.instances, nets: b.nets() }),
     });
   });
 }
@@ -1304,12 +1461,13 @@ export const FP_DECODE: ComponentDef = (() => {
   b.wire(b.op1(merger([2, 1, 4]), [`${os}.o0`, b.op1(AND, [`${os}.o1`, b.op1(NOT, [mem])]), `${os}.o2`], 'as lw / sw'), 'opInt');
   b.wire(isOp, 'opfp');
   b.wire(b.op1(OR, [isOp, isFma], 'raises flags'), 'fpOp');
+  b.wire(isFma, 'fma');
   return define({
     id: 'fpdec', name: 'Floating-point decoder', category: 'cpu',
     summary: 'Recognises flw, fsw, the OP-FP group and the four fused multiply-adds (opcodes 0x43, 0x47, 0x4B, 0x4F). flw and fsw are passed to the integer control unit disguised as lw and sw (same address calculation); only their register file differs. OP-FP results go to an f register, except compares, fclass, fcvt.w[u].s and fmv.x.w, which write an x register; fma results always go to an f register. opfp starts the iterative units; fpOp (OP-FP or fma) lets the exception flags into fflags.',
-    ports: [bus('op', 7, 'in'), bus('funct7', 7, 'in'), bit('flw', 'out'), bit('fsw', 'out'), bit('toInt', 'out'), bit('fWrite', 'out'), bus('opInt', 7, 'out'), bit('opfp', 'out'), bit('fpOp', 'out')],
+    ports: [bus('op', 7, 'in'), bus('funct7', 7, 'in'), bit('flw', 'out'), bit('fsw', 'out'), bit('toInt', 'out'), bit('fWrite', 'out'), bus('opInt', 7, 'out'), bit('opfp', 'out'), bit('fpOp', 'out'), bit('fma', 'out')],
     symbol: { kind: 'box', label: 'FP DECODE' },
-    netlist: () => ({ pins: { op: [0, 4], funct7: [0, 10], flw: [b.right, 2], fsw: [b.right, 6], toInt: [b.right, 10], fWrite: [b.right, 14], opInt: [b.right, 18], opfp: [b.right, 22], fpOp: [b.right, 26] }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { op: [0, 4], funct7: [0, 10], flw: [b.right, 2], fsw: [b.right, 6], toInt: [b.right, 10], fWrite: [b.right, 14], opInt: [b.right, 18], opfp: [b.right, 22], fpOp: [b.right, 26], fma: [b.right, 30] }, instances: b.instances, nets: b.nets() }),
   });
 })();
 

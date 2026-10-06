@@ -19,3 +19,4 @@ export * from './multicycle';
 export * from './fpu';
 export * from './mpdecode';
 export * from './multicore';
+export * from './fppipe';
