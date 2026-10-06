@@ -18,6 +18,7 @@ export function cpuTops(): ComponentDef[] {
     pipelinedCpu(w), pipelinedCpu(w, { adder: 'ks' }), pipelinedCpu(w, { adder: 'ks', balanced: true }),
     pipelinedCpu(w, { predictor: true }), pipelinedCpu(w, { adder: 'ks', balanced: true, predictor: true }),
     pipelinedCpu(cw, { adder: 'ks', dcache: 'wb2' }), pipelinedCpu(cw, { adder: 'ks', dcache: 'wt', predictor: true, balanced: true }),
+    pipelinedCpu(w, { adder: 'ks', m: true }), pipelinedCpu(w, { adder: 'ks', balanced: true, predictor: true, m: true }),
     pipelinedFpCpu(w), systemCpu(w), systemCpu(w, { m: true }),
     multicycleCpu(w, { control: 'fsm' }), multicycleCpu(w, { control: 'micro' }), dualCore(w),
   ];
