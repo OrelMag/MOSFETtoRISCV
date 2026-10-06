@@ -19,6 +19,7 @@ import { cachedMemory, wayLookup2 } from './cache';
 import { bankedMemory } from './lsu';
 import { clearableRegister } from './pipeline';
 import { boothMul, pipeMul, seqMul } from './multiply';
+import { bcdAdder, carrySelect, carrySkip } from './adders';
 import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
 import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
 
@@ -107,6 +108,9 @@ export const families: Family[] = [
     key: (p) => `alu${p.bits}${p.adder ? 'ks' : ''}`, make: (p) => alu(p.bits, p.adder ? 'ks' : 'rca'),
   },
   nBit('ks', 'Kogge–Stone adder', 'arithmetic', [4, 8, 16, 32], 8, (n) => `ks${n}`, koggeStone),
+  nBit('csel', 'Carry-select adder', 'arithmetic', [8, 16, 32], 16, (n) => `csel${n}_4`, (n) => carrySelect(n)),
+  nBit('cskip', 'Carry-skip adder', 'arithmetic', [8, 16, 32], 16, (n) => `cskip${n}_4`, (n) => carrySkip(n)),
+  { id: 'bcd', name: 'BCD adder', category: 'arithmetic', params: [count('digits', [2, 3, 4], 2)], key: (p) => `bcd${p.digits}`, make: (p) => bcdAdder(p.digits) },
   nBit('addsubks', 'Fast adder / subtractor', 'arithmetic', [4, 8, 16, 32], 8, (n) => `addsubks${n}`, addSubFast),
   nBit('shift', 'Barrel shifter', 'arithmetic', [4, 8, 16, 32], 8, (n) => `shift${n}`, shifter),
   nBit('shl', 'Left shifter', 'arithmetic', [4, 8, 16, 32], 8, (n) => `shl${n}_${log2(n)}`, (n) => shiftLeft(n, log2(n))),

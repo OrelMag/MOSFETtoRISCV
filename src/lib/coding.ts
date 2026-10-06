@@ -246,6 +246,7 @@ export function encoder(n: number): ComponentDef {
   const k = log2(n);
   return memo(`enc${n}`, () => {
     const b = new Builder(8);
+    b.pins('x');
     const s = b.op(splitter(ones(n)), ['x']);
     b.next();
     const ys: string[] = [];
@@ -461,6 +462,7 @@ export function hammingEnc(k: number): ComponentDef {
   const { r, n, dataPos } = hammingLayout(k);
   return memo(`hamenc${k}`, () => {
     const b = new Builder(8);
+    b.pins('d');
     const sd = b.op(splitter(ones(k)), ['d']);
     b.next();
     const at = new Map<number, string>();
@@ -490,6 +492,7 @@ export function hammingDec(k: number): ComponentDef {
   const { r, n, dataPos } = hammingLayout(k);
   return memo(`hamdec${k}`, () => {
     const b = new Builder(8);
+    b.pins('c');
     const sc = b.op(splitter(ones(n)), ['c']);
     b.next();
     const cb = (p: number) => `${sc}.o${p}`;

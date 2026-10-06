@@ -68,6 +68,7 @@ src/sim/       simulation core (no DOM)
   cachemodel.ts  behavioural cache model (size/line/ways/replacement/write policy, 3C classes)
   harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench
   stats.ts       transistor / NAND counts, logic depth
+  settle.ts      outputSettle(def, vectors): simulated input-to-last-output-change delay (sees false paths)
   timing.ts      static timing: register-to-register critical path, per-capture-stage periods
   verilog.ts     structural Verilog generated from any netlist (identifiers sanitized, alias
                  boxes from their bit map)
@@ -112,6 +113,7 @@ src/lib/       the component library (registered in `registry` via define())
                  SRT_SELECT, srtStep, srtNorm, srtFinish, srtDivider(n) (radix-2 SRT, carry-save remainder)
   multiply.ts    seqMul(n) (shift and add), boothRow / boothPP / boothReduce / boothTree / boothMul(n) (radix-4 Booth,
                  sign-constant trick), pipeMul(n) (3-stage pipelined Booth)
+  adders.ts      carrySelect(n, k), carrySkip(n, k), BCD_DIGIT, bcdAdder(d)
   muldiv.ts      ppRow, arrayMul(n), compressor()/csa(n) (3:2 rows with word offsets), treeMul(n, signed,
                  outW) (Wallace + KS), MUL32, BOOTH_ENC, divStep, arrayDiv, seqDivider(n), condNegate, MDU
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR

@@ -90,6 +90,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 ### Phase 2 — Computing 🚧
 - ✅ ALU (add, sub, and, or, xor, shifts, slt/sltu) and flags; barrel shifter
 - ✅ Carry-lookahead and Kogge–Stone adders with depth comparison (optimization intro)
+- ✅ Carry-select and carry-skip adders, static depth against simulated delay (carry-skip's false path); BCD adder
 - ✅ Register file (32 × 32, x0 hard-wired), two read ports and one write port
 - ✅ Comparison and coding blocks: log-depth magnitude comparator (signed / unsigned), encoder, recursive priority
   encoder, demultiplexer, population count, absolute value, parity, Hamming SEC-DED encoder / decoder (ECC step in ch. 21)

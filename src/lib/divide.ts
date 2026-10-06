@@ -405,6 +405,7 @@ const SRT_TERM: ComponentDef = define({
 export function srtTerm(n: number, W: number): ComponentDef {
   return memo(`srtterms${n}_${W}`, () => {
     const b = new Builder(8, 10);
+    b.pins('s', 'c', 'x', 'd');
     const one = b.op1(fanout(n), [b.op1(TIE1, [])]);
     const sd = b.op(splitter(ones(n)), ['d']);
     b.next();
@@ -435,6 +436,7 @@ export function srtStep(n: number): ComponentDef {
   const W = n + 3;
   return memo(`srtstep${n}`, () => {
     const b = new Builder(8, 10);
+    b.pins('d', 'qp', 'qn');
     const ss = b.op(splitter([W - 1, 1]), ['s']);
     const cs = b.op(splitter([W - 1, 1]), ['c']);
     const z = b.op1(TIE0, []);
@@ -496,6 +498,7 @@ export function srtNorm(n: number): ComponentDef {
   const k = log2(n);
   return memo(`srtnorm${n}`, () => {
     const b = new Builder(8, 10);
+    b.pins('a', 'b');
     const lz = b.op(lzc(n), ['b'], 'leading zeros');
     b.next();
     // b = 0 has no leading one: shift by 0, and the zero divisor makes every step a plain shift.
@@ -571,6 +574,7 @@ export function srtDivider(n: number): ComponentDef {
   const k = log2(n), W = n + 3;
   return memo(`srtdiv${n}`, () => {
     const b = new Builder(8, 10);
+    b.pins('clk', 'start', 'a', 'b');
     const ctl = b.op(iterCtrl(n), ['clk', 'start'], 'control');
     const nm = b.op(srtNorm(n), ['a', 'b']);
     const load = b.name(`${ctl}.load`, 'load', true), step = b.name(`${ctl}.step`, 'step', true);

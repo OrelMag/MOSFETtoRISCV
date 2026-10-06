@@ -14,7 +14,8 @@ export class Builder {
   private colW = 0;
   private x: number;
   private n = 0;
-  constructor(x0 = 10, private gap = 12) {
+  /** x0: first column; gap: between columns; vgap: between parts stacked in a column. */
+  constructor(x0 = 10, private gap = 12, private vgap = 4) {
     this.x = x0;
   }
   /** Start a new column. */
@@ -28,7 +29,7 @@ export class Builder {
     const nm = name ?? `u${this.n++}`;
     const g = symbolGeom(def);
     this.instances.push({ name: nm, def, at: [this.x, this.y + 2], label });
-    this.y += g.h + 4;
+    this.y += g.h + this.vgap;
     this.colW = Math.max(this.colW, g.w);
     return nm;
   }
@@ -43,6 +44,10 @@ export class Builder {
     this.names.set(drv, n);
     if (tag) this.tagged.add(drv);
     return drv;
+  }
+  /** Call the nets driven by these component pins by the pins' names (otherwise their labels are numbered). */
+  pins(...names: string[]): void {
+    for (const p of names) this.names.set(p, p);
   }
   /** Instantiate def and wire its inputs (in port order) from drivers; returns the instance name. */
   op(def: ComponentDef, inputs: string[], label?: string, name?: string): string {
