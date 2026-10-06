@@ -427,7 +427,7 @@ export function normRound(f: FpFormat, w: number): ComponentDef {
     const eF = b.name(b.op1(busMux2(XE), [eAfter, eInc, carry], 'exp + carry'), 'eFinal');
     const tiny = b.name(b.op1(AND, [b.op1(NOT, [`${kt}.o1`]), b.op1(NOT, [reach])], 'tiny?'), 'tiny');
     b.next();
-    const inf = b.name(b.op1(AND, [hidden, b.op1(OR, [geTop, b.op1(AND, [carry, atTop])], 'overflow?')]), 'overflow');
+    const inf = b.name(b.op1(AND, [hidden, b.op1(OR, [geTop, b.op1(AND, [carry, atTop])], 'overflow?')]), 'ovf');
     const satMax = b.name(b.op1(AND, [inf, b.op1(NOT, [`${rd}.toInf`])], 'largest finite instead'), 'satMax');
     const ef = b.op(splitter([E, XE - E]), [eF]);
     b.next();
@@ -815,8 +815,8 @@ export function fpClassify(f: FpFormat): ComponentDef {
     const ms = b.op(splitter([M, 1]), [`${u}.mant`]);
     b.next();
     const s = `${u}.sign`, ns = b.op1(NOT, [s]);
-    const sub = b.name(b.op1(AND, [b.op1(NOT, [`${ms}.o1`]), b.op1(NOT, [`${u}.zero`])], 'subnormal'), 'subnormal');
-    const normal = b.name(b.op1(AND, [`${ms}.o1`, b.op1(NOT, [b.op1(OR, [`${u}.inf`, `${u}.nan`])])], 'normal'), 'normal');
+    const sub = b.name(b.op1(AND, [b.op1(NOT, [`${ms}.o1`]), b.op1(NOT, [`${u}.zero`])], 'subnormal'), 'sub');
+    const normal = b.name(b.op1(AND, [`${ms}.o1`, b.op1(NOT, [b.op1(OR, [`${u}.inf`, `${u}.nan`])])], 'normal'), 'norm');
     const qnan = b.op1(AND, [`${u}.nan`, b.op1(NOT, [`${u}.snan`])], 'quiet NaN');
     b.next();
     const cls = [
