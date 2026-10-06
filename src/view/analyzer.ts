@@ -75,6 +75,7 @@ export class LogicAnalyzer {
       this.followBtn,
       btn('fit', 'Fit everything recorded', () => this.fit()),
       btn('reset', 'Clear the recording (keep the lanes)', () => this.clear()),
+      btn('probe', 'Remove every probe (keep the port lanes)', () => this.removeProbes(), 'Clear probes'),
       btn('code', 'Download as VCD (GTKWave, Surfer)', () => this.downloadVcd(), 'VCD'),
       btn('close', 'Close the timing panel', () => this.onClose()));
     this.names = h('div', { class: 'la-names' });
@@ -139,6 +140,20 @@ export class LogicAnalyzer {
     this.lanes = this.lanes.filter((l) => l !== lane);
     for (const n of lane.nets) this.byNet.set(n, (this.byNet.get(n) ?? []).filter((l) => l !== lane));
     this.traces.delete(id);
+    this.onLanesChange();
+    this.render();
+  }
+
+  /** Remove every lane added by probing a wire. */
+  removeProbes(): void {
+    const ids = this.lanes.filter((l) => l.probe).map((l) => l.id);
+    if (!ids.length) return;
+    for (const id of ids) {
+      const lane = this.lanes.find((l) => l.id === id)!;
+      for (const n of lane.nets) this.byNet.set(n, (this.byNet.get(n) ?? []).filter((l) => l !== lane));
+      this.traces.delete(id);
+    }
+    this.lanes = this.lanes.filter((l) => !l.probe);
     this.onLanesChange();
     this.render();
   }
