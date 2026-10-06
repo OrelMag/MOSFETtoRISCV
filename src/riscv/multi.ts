@@ -3,7 +3,7 @@
 // except harts that need memory and lose arbitration: they stall and retry.
 
 import { decode, OPCODES } from './isa';
-import { ISS } from './iss';
+import { ISS, type StepInfo } from './iss';
 
 export const isMemOp = (word: number) => {
   const op = decode(word).opcode;
@@ -16,6 +16,8 @@ export class MultiISS {
   /** Round-robin priority: on a conflict, the hart with priority wins and priority moves on. */
   priority = 0;
   cycles = 0;
+  /** What each hart executed in the last cycle (null: stalled). */
+  last: (StepInfo | null)[] = [];
 
   constructor(program: number[], n = 2, dmemWords = 32) {
     this.dmem = new Uint32Array(dmemWords);
@@ -45,11 +47,8 @@ export class MultiISS {
   /** One clock cycle. Returns which harts retired an instruction. */
   step(): boolean[] {
     const { wants, grant } = this.arbitrate();
-    const retired = this.harts.map((h, i) => {
-      if (wants[i] && i !== grant) return false;
-      h.step();
-      return true;
-    });
+    this.last = this.harts.map((h, i) => (wants[i] && i !== grant ? null : h.step()));
+    const retired = this.last.map((x) => x !== null);
     if (wants.filter(Boolean).length > 1) this.priority = (grant + 1) % this.harts.length;
     this.cycles++;
     return retired;

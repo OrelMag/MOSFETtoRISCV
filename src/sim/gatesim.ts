@@ -30,7 +30,8 @@ export class GateSim implements Sim {
   private fanList: Int32Array;
   private delay: Int32Array;
   private state: unknown[];
-  private inputs = new Map<string, number>();
+  /** Root input values: a number from setInput, bits from setInputBits (wide values stay exact). */
+  private inputs = new Map<string, number | Bit[]>();
   private inputNets = new Map<string, number[]>();
 
   private dirty: number[] = [];
@@ -93,7 +94,16 @@ export class GateSim implements Sim {
   }
 
   getInput(port: string): number {
-    return this.inputs.get(port) ?? 0;
+    const v = this.inputs.get(port) ?? 0;
+    return typeof v === 'number' ? v : pack(v);
+  }
+
+  getInputBits(port: string): Bit[] {
+    return this.inputBits(port, this.inputs.get(port) ?? 0);
+  }
+
+  private inputBits(port: string, v: number | Bit[]): Bit[] {
+    return typeof v === 'number' ? unpack(v, this.inputNets.get(port)?.length ?? 0) : v.slice();
   }
 
   setInput(port: string, value: number): void {
@@ -102,6 +112,15 @@ export class GateSim implements Sim {
     this.inputs.set(port, value);
     const bits = unpack(value, nets.length);
     nets.forEach((net, i) => this.force(net, bits[i]));
+  }
+
+  setInputBits(port: string, bits: ArrayLike<number>): void {
+    const nets = this.inputNets.get(port);
+    if (!nets) throw new Error(`no input port '${port}'`);
+    // no Z at gate level: an undriven input reads as unknown
+    const b = nets.map((_, i) => (bits[i] === B0 || bits[i] === B1 ? bits[i] : BX) as Bit);
+    this.inputs.set(port, b);
+    nets.forEach((net, i) => this.force(net, b[i]));
   }
 
   watch(nets: readonly number[]): void {
@@ -125,7 +144,7 @@ export class GateSim implements Sim {
     });
     for (const [port, v] of this.inputs) {
       const nets = this.inputNets.get(port)!;
-      unpack(v, nets.length).forEach((b, i) => {
+      this.inputBits(port, v).forEach((b, i) => {
         this.val[nets[i]] = b;
         this.proj[nets[i]] = b;
       });
@@ -174,7 +193,7 @@ export class GateSim implements Sim {
    */
   carry(prev: Sim, opts: { known?: boolean } = {}): void {
     const d = this.design;
-    for (const name of sharedInputs(d, prev.design)) this.inputs.set(name, prev.getInput(name));
+    for (const name of sharedInputs(d, prev.design)) this.inputs.set(name, prev.getInputBits(name).map((b) => (b === BZ ? BX : b)));
     const map = matchNets(d, prev.design);
     for (let net = 0; net < d.netCount; net++) {
       if (map[net] < 0) continue;
@@ -185,7 +204,7 @@ export class GateSim implements Sim {
     }
     for (const [port, v] of this.inputs) {
       const nets = this.inputNets.get(port)!;
-      unpack(v, nets.length).forEach((b, i) => {
+      this.inputBits(port, v).forEach((b, i) => {
         this.val[nets[i]] = b;
         this.proj[nets[i]] = b;
       });

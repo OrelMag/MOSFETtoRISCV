@@ -176,8 +176,8 @@ registerPropsSection({
 // ---- the program editor --------------------------------------------------------------------
 
 /** A large editor for a ROM's program: live re-assembly, gutter diagnostics, listing; Apply = one undo step. */
-export function openProgramEditor(ed: Editor, partId: string): void {
-  const chipId = ed.chipId;
+/** The program editor of a ROM part of the chip being edited, or of another chip (a ROM inside a placed chip). */
+export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId): void {
   const part = () => ed.ws.chips[chipId]?.parts.find((p) => p.id === partId);
   const p0 = part();
   if (!p0 || !('rom' in p0.ref)) return;
@@ -223,11 +223,13 @@ export function openProgramEditor(ed: Editor, partId: string): void {
       ed.toast(`The ROM '${partId}' is gone: nothing to apply to`, 'err');
       return close();
     }
-    if (ed.chipId !== chipId) ed.openChip(chipId);
     if (p.ref.rom.src !== ce.value) {
-      const r = setRef(ed.doc, partId, { rom: { ...p.ref.rom, src: ce.value } }, ed.defOf);
+      const doc = ed.ws.chips[chipId];
+      const r = setRef(doc, partId, { rom: { ...p.ref.rom, src: ce.value } }, ed.defOf);
       if (r.reason) return void ed.toast(r.reason, 'err');
-      ed.edit(() => r.doc);
+      // A ROM inside a placed chip (an instruction cache's) is applied where it is, without leaving this tab.
+      if (chipId === ed.chipId) ed.edit(() => r.doc);
+      else ed.editWs((ws) => ({ ...ws, chips: { ...ws.chips, [chipId]: r.doc } }));
     }
     close();
   };

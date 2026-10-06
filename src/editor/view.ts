@@ -11,12 +11,12 @@ import { s } from '../ui/dom';
 import { Camera, type ViewBox } from '../view/camera';
 import { junctions, type PinGeom, textWidth } from '../view/route';
 import { bitClass, busClass } from '../view/schematic';
-import { drawPinGlyph, drawSymbol, type PinGlyph, placePinValue } from '../view/symbols';
+import { drawPinGlyph, drawSymbol, instNameAt, type PinGlyph, placePinValue } from '../view/symbols';
 import type { Compiled, Diag } from './compile';
 import { partBox, pinBody, pinKnob, pointerGeom, wireGroups } from './geom';
 import { HopCache } from './hops';
 import {
-  type ChipDoc, type DefOf, defaultFace, type DisplayKind, type LabelDoc, type PartDoc, type PinDoc, polyline, type WireDoc,
+  type ChipDoc, type DefOf, defaultFace, type DisplayKind, type LabelDoc, type PartDoc, type PinDoc, pinBig, polyline, type WireDoc,
 } from './model';
 import type { Sel } from './ops';
 
@@ -165,7 +165,7 @@ export class EditorView {
       if (p.dir === 'inout') {
         // What the user drives onto a bidirectional pin (Z: nothing); the knob shows the net.
         const [kx, ky] = pinKnob(p);
-        const v = p.value === undefined ? 'Z' : p.width === 1 ? String(p.value) : `0x${p.value.toString(16).toUpperCase()}`;
+        const v = p.value === undefined ? 'Z' : p.width === 1 ? String(p.value) : `0x${pinBig(p.value).toString(16).toUpperCase()}`;
         g.append(s('text', { class: 'ed-pin-drv', x: kx, y: p.width === 1 ? ky + 0.34 : ky - 1.25, 'text-anchor': 'middle' }, v));
       }
       // A wide transparent target over the knob (the glyph's own shapes are small).
@@ -319,14 +319,8 @@ export class EditorView {
     let disp: DisplayEls | undefined;
     if ('display' in p.ref) disp = this.drawDisplay(g, p.ref.display, p.ref.width ?? 1, geo.w, geo.h, !!p.flip);
     else g.append(drawSymbol(def, p.flip));
-    if (def.prim !== 'alias' && def.prim !== 'vdd' && def.prim !== 'gnd') {
-      const isBox = def.symbol.kind === 'box';
-      const isFet = def.symbol.kind === 'nmos' || def.symbol.kind === 'pmos';
-      g.append(s('text', {
-        class: 'inst-name', x: isFet ? 3.4 : isBox ? 0.1 : geo.w / 2, y: isFet ? 1.45 : isBox ? -0.45 : -0.35,
-        'text-anchor': isFet || isBox ? 'start' : 'middle',
-      }, p.label ?? p.id));
-    }
+    const nameAt = instNameAt(def);
+    if (nameAt) g.append(s('text', { class: 'inst-name', x: nameAt.x, y: nameAt.y, 'text-anchor': nameAt.anchor }, p.label ?? p.id));
     return { g, disp };
   }
 
@@ -479,8 +473,9 @@ export class EditorView {
   }
 
   private paintDisplay(d: DisplayEls, bits: Bit[] | null): void {
-    const v = bits ? pack(bits) : -1;
     const x = !bits || bits.some((b) => b === BX || b === BZ);
+    // segments read the low byte only (pack is exact there at any width)
+    const v = bits && !x ? pack(bits.slice(0, 8)) : -1;
     const key = bits ? bits.join('') + this.radix : '';
     if (key === d.shown) return;
     d.shown = key;

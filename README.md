@@ -31,11 +31,16 @@ built on the same simulator, so whatever you build is a real component of the si
 - **Package** a circuit as a chip (name, colour, pin order), use it in other circuits, nest chips
   to any depth and edit them later: every user of the chip is rebuilt.
 - **Look inside** any placed part, live, down to the transistors.
+- Switch-level parts beyond the MOSFET: resistors, pull-ups / pull-downs, capacitors, transmission
+  gates and tri-state drivers, so shared buses, wired-AND / wired-OR and pseudo-NMOS logic work.
 - Recreate **every level** of the journey: chips built from transistors are solved at switch
   level and become gate-level bricks; latches, flip-flops (recognised by static timing), RAM with
   initial contents, and a **program ROM** whose contents you write in RISC-V assembly or hex.
 - **Open in Sandbox** turns any schematic from the chapters or the workbench, CPUs included, into
   an editable copy.
+- A **CPU panel** for any chip that is a processor (opened from a chapter or built by you): the
+  program with the current instruction, registers, memory, Run to halt / Step instruction, and every
+  retired instruction checked against the golden model.
 - Save automatically in the browser, export / import chip files, share a circuit as a link,
   export structural Verilog or an image.
 - 21 optional **build challenges** at every level, from a CMOS inverter to an instruction fetch

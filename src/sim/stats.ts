@@ -8,6 +8,9 @@ import { type ComponentDef, netlistOf } from './types';
 export interface Stats {
   nands: number;
   transistors: number;
+  /** Resistors (pull-ups, pull-downs) and capacitors: switch-level parts, not transistors. */
+  resistors: number;
+  capacitors: number;
   /** Number of instances one level down. */
   parts: number;
   /** Total number of components in the hierarchy below (all levels). */
@@ -22,17 +25,22 @@ export function stats(def: ComponentDef): Stats {
   const hit = cache.get(def);
   if (hit) return hit;
   let s: Stats;
-  if (def.prim === 'nand') s = { nands: 1, transistors: 4, parts: 4, descendants: 4, levels: 1 };
-  else if (def.prim === 'nmos' || def.prim === 'pmos') s = { nands: 0, transistors: 1, parts: 0, descendants: 0, levels: 0 };
-  else if (def.prim) s = { nands: 0, transistors: 0, parts: 0, descendants: 0, levels: 0 };
+  const zero = { nands: 0, transistors: 0, resistors: 0, capacitors: 0, parts: 0, descendants: 0, levels: 0 };
+  if (def.prim === 'nand') s = { ...zero, nands: 1, transistors: 4, parts: 4, descendants: 4, levels: 1 };
+  else if (def.prim === 'nmos' || def.prim === 'pmos') s = { ...zero, transistors: 1 };
+  else if (def.prim === 'res') s = { ...zero, resistors: 1 };
+  else if (def.prim === 'cap') s = { ...zero, capacitors: 1 };
+  else if (def.prim) s = zero;
   else {
     const nl = netlistOf(def);
-    s = { nands: 0, transistors: 0, parts: 0, descendants: 0, levels: 0 };
+    s = { ...zero };
     if (nl) {
       for (const inst of nl.instances) {
         const c = stats(inst.def);
         s.nands += c.nands;
         s.transistors += c.transistors;
+        s.resistors += c.resistors;
+        s.capacitors += c.capacitors;
         if (inst.def.prim !== 'alias') {
           s.parts++;
           s.descendants += 1 + c.descendants;
@@ -111,6 +119,11 @@ export function hasFeedback(def: ComponentDef): boolean {
     const find = (x: number): number => (parent[x] === x ? x : (parent[x] = find(parent[x])));
     const fets = d.leaves.filter((l) => l.kind === 'nmos' || l.kind === 'pmos').map((l) => l.terminals!);
     for (const [, a, b] of fets) if (!source[a] && !source[b]) parent[find(a)] = find(b);
+    // a resistor joins its ends into one channel-connected group too (it has no gate to feed)
+    for (const l of d.leaves) {
+      const [a, b] = l.terminals ?? [];
+      if (l.kind === 'res' && !source[a] && !source[b]) parent[find(a)] = find(b);
+    }
     const edges = new Map<number, Set<number>>();
     const edge = (from: number, to: number) => {
       if (source[from] || source[to]) return;

@@ -7,7 +7,7 @@
 import { flatten, type FlatDesign } from '../sim/flatten';
 import { inputBits, reachesTransistors } from '../sim/harness';
 import { SwitchSim } from '../sim/switchsim';
-import { B0, B1, type Behavior, type ComponentDef, inPorts, outPorts } from '../sim/types';
+import { B0, B1, BZ, type Behavior, type ComponentDef, inPorts, outPorts } from '../sim/types';
 import { pack } from '../sim/values';
 
 export type CircuitMode = 'gate' | 'switch';
@@ -31,8 +31,9 @@ const STATE = 'has state (e.g. a latch or memory cell): switch level only';
 
 /**
  * Gate-level behaviour of a transistor-level chip, from its exhaustive truth table. Inputs are
- * packed per input port (the Behavior contract); an output that is floating (Z) or contested (X)
- * for some input is X (-1) there, and any X input gives all-X outputs. Delay 1, like a NAND.
+ * packed per input port (the Behavior contract); an output that is contested (X) for some input
+ * is X (-1) there, and any X input gives all-X outputs. An output that can float (Z) is refused:
+ * on a shared bus its Z is not an X, so such a chip stays at switch level. Delay 1, like a NAND.
  *
  * State detection: the table is solved several times, each from a different initial node state
  * (all 0, all 1, alternating, pseudo-random: storage loops and stored charge start from it) and
@@ -44,6 +45,9 @@ export function deriveBehavior(def: ComponentDef): Derived {
   const ins = inPorts(def), outs = outPorts(def);
   const nIn = inputBits(def);
   if (nIn > MAX_DERIVE_BITS) return fail(`too many inputs (${nIn} bits, at most ${MAX_DERIVE_BITS}): switch level only`);
+  // a behaviour's values are JS numbers: exact to 53 bits per port
+  const wide = outs.find((p) => p.width > 53);
+  if (wide) return fail(`output '${wide.name}' is ${wide.width} bits wide (a behaviour holds at most 53): switch level only`);
   let design: FlatDesign;
   try {
     design = flatten(def, { mode: 'switch' });
@@ -87,6 +91,13 @@ export function deriveBehavior(def: ComponentDef): Derived {
     }
   }
   if (def.ports.some((p) => p.dir === 'inout')) return fail('has bidirectional (inout) ports: switch level only');
+  // A floating output is not "unknown": on a shared bus another driver or a pull-up decides it.
+  // A gate-level model would turn its Z into X, so a chip that can let go of an output (a
+  // tri-state driver, an open-drain stage) stays at switch level, and so do the chips around it.
+  for (const p of outs) {
+    const v = snaps.findIndex((s) => design.root.ports[p.name].some((net) => s[net] === BZ));
+    if (v >= 0) return fail(`output '${p.name}' floats (Z) for some inputs (e.g. ${inputText(ins, v)}): a tri-state or open-drain output, whose Z a gate-level model would turn into X`);
+  }
 
   const table = snaps.map((s) => outs.map((p) => pack(design.root.ports[p.name].map((net) => s[net]))));
   const eval_ = (inputs: number[]): number[] => {
@@ -100,6 +111,16 @@ export function deriveBehavior(def: ComponentDef): Derived {
     return table[v].slice();
   };
   return { ok: true, behavior: { delay: 1, eval: eval_ }, spec: eval_ };
+}
+
+/** Input vector v (packed, first port lowest) as `a = 1, en = 0`. */
+function inputText(ins: { name: string; width: number }[], v: number): string {
+  let off = 0;
+  return ins.map((p) => {
+    const x = Math.floor(v / 2 ** off) % 2 ** p.width;
+    off += p.width;
+    return `${p.name} = ${x}`;
+  }).join(', ') || 'no inputs';
 }
 
 function fail(reason: string): Derived {

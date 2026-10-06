@@ -2,8 +2,8 @@
 // theirs, e.g. a ROM, without editing this file); each lists its items for the current context,
 // so "My chips" can grey out chips that would contain the chip being edited.
 //
-// Purist mode keeps only what the journey builds from: transistors, NAND, pins, constants,
-// wiring, displays and the user's own chips.
+// Purist mode keeps only what the journey builds from: transistors (and resistors, capacitors),
+// NAND, pins, constants, wiring, displays and the user's own chips.
 
 import { libraryItems } from '../lib/catalog';
 import { h } from '../ui/dom';
@@ -98,6 +98,22 @@ registerPaletteGroup({
     lib('vdd', 'VDD', 'Supply rail: a constant 1'), lib('gnd', 'GND', 'Ground rail: a constant 0'),
     lib('nmos_strong', 'NMOS strong', 'A wide NMOS: wins a fight against a weak PMOS (ratioed logic, SRAM)'),
     lib('pmos_weak', 'PMOS weak', 'A narrow PMOS: a pull-up that a strong NMOS overrides'),
+  ],
+});
+
+// Solved by the switch-level solver like the transistors. Resistors and capacitors are primitives
+// (purist); the transmission gate and the tri-states are cells built from transistors.
+const PASSIVE = new Set(['res', 'pullup', 'pulldown', 'cap']);
+registerPaletteGroup({
+  id: 'switch', title: 'Switch level', order: 25, purist: (it) => PASSIVE.has(it.id),
+  items: () => [
+    lib('res', 'Resistor', 'Always conducts, weaker than any transistor: a node it alone reaches follows it, any transistor overrides it'),
+    lib('pullup', 'Pull-up', 'A resistor to VDD: the node reads 1 unless a transistor pulls it down (pseudo-NMOS, open-drain buses). Costs static current while pulled down'),
+    lib('pulldown', 'Pull-down', 'A resistor to GND: the node reads 0 unless a transistor pulls it up; holds an idle bus at 0'),
+    lib('cap', 'Capacitor', 'A capacitor to GND: its node keeps its last value while nothing drives it (like ticking "keeps charge" on the wire)'),
+    lib('tgate', 'Transmission gate', 'NMOS + PMOS in parallel: passes 0 and 1, both ways, while en = 1 and en_n = 0'),
+    lib('tribuf', 'Tri-state buffer', 'y = a while en = 1, floating (Z) while en = 0: several may drive one bus, one at a time'),
+    lib('triinv', 'Tri-state inverter', 'y = NOT a while en = 1, floating (Z) while en = 0'),
   ],
 });
 

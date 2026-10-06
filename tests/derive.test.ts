@@ -52,9 +52,8 @@ describe('deriveBehavior', () => {
     expect(d.behavior.eval(def.ports.filter((p) => p.dir === 'in').map(() => -1), undefined)).toEqual([-1]);
   });
 
-  it('a floating output is X', () => {
-    const d = deriveBehavior(NMOS_SWITCH);
-    expect(d.ok && [d.spec([0]), d.spec([1])]).toEqual([[-1], [0]]);
+  it('refuses an output that can float (Z would become X): it stays at switch level', () => {
+    expect(deriveBehavior(NMOS_SWITCH)).toMatchObject({ ok: false, reason: expect.stringMatching(/output 'out' floats \(Z\).*g = 0.*would turn into X/) });
   });
 
   it('the derived NAND is the only brick of a gate-level XOR', () => {

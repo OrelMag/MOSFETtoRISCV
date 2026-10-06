@@ -10,15 +10,16 @@ import { familyOf } from '../lib/resolve';
 import type { Vec } from '../sim/geometry';
 import { logicDepth, stats } from '../sim/stats';
 import { type ComponentDef, netlistOf } from '../sim/types';
+import { parseBig } from '../sim/values';
 import { h, icon } from '../ui/dom';
 import type { Diag } from './compile';
 import type { Editor } from './editor';
 import { pinKnob, pointerGeom } from './geom';
 import { renamePin } from './chips';
 import { removeChip } from './library';
-import type { ChipDoc, DisplayKind, ExitDir, LabelDoc, PartDoc, PartRef, PinDoc, WireDoc } from './model';
+import { allOnes, type ChipDoc, type DisplayKind, type ExitDir, type LabelDoc, type PartDoc, type PartRef, pinBig, type PinDoc, pinValue, type WireDoc } from './model';
 import { deleteSel, flipParts, setLabel, setPart, setPin, setRef, setWire } from './ops';
-import { MAX_RAM_K } from './parts';
+import { MAX_RAM_K, MAX_WIDTH } from './parts';
 import { openChip } from './session';
 
 export interface PropsSection {
@@ -210,7 +211,7 @@ export class PropsPanel {
     } else if ('display' in ref) {
       const kinds: [DisplayKind, string][] = [['led', 'LED'], ['seg7', '7-segment'], ['hex', 'Hex digit'], ['value', 'Value']];
       out.append(this.row('Shows', this.select(ref.display, kinds, (k) => setR({ display: k, width: k === 'led' ? 1 : k === 'hex' ? 4 : k === 'seg7' ? 8 : ref.width ?? 8 }))),
-        this.row('Width', this.num(ref.width ?? 1, 1, 64, (w) => setR({ display: ref.display, width: w }))));
+        this.row('Width', this.num(ref.width ?? 1, 1, MAX_WIDTH, (w) => setR({ display: ref.display, width: w }))));
     } else if ('ram' in ref) {
       const { k, w } = ref.ram;
       out.append(this.row('Words', this.select(k, Array.from({ length: MAX_RAM_K }, (_, i): [number, string] => [i + 1, String(2 ** (i + 1))]), (v) => setR({ ram: { ...ref.ram, k: v } }))),
@@ -239,21 +240,21 @@ export class PropsPanel {
       this.row('Name', this.text(p.name, rename), 'The port name of the chip (chips that use it keep their wires)'),
       this.row('Direction', this.select(p.dir, [['in', 'input'], ['out', 'output'], ['inout', 'bidirectional']],
         (v) => set({ dir: v, ...(v !== 'in' ? { kind: undefined, value: undefined } : {}) })), 'Bidirectional: switch level only'),
-      this.row('Width', this.num(p.width, 1, 64, (w) => set({ width: w, value: undefined }))),
+      this.row('Width', this.num(p.width, 1, MAX_WIDTH, (w) => set({ width: w, value: undefined }))),
       this.row('Faces', this.select(p.face ?? (p.dir === 'in' ? 'right' : 'left'), FACES.map((f): [ExitDir, string] => [f, f]), (f) => set({ face: f })), 'Direction the wire leaves the pin'));
     if (p.dir === 'inout') {
       out.append(h('p', { class: 'sb-sum' }, 'A transistor terminal brought out, like an SRAM cell’s bit line: the chip and its parent may both drive it, so it needs switch level (transistors inside). Click the pin to drive it: Z (nothing) → 0 → 1 → Z.'),
-        this.row('Drives', this.select(p.value === undefined ? 'z' : String(p.value), [['z', 'Z (undriven)'], ['0', '0'], [String(2 ** p.width - 1), p.width === 1 ? '1' : `0x${(2 ** p.width - 1).toString(16).toUpperCase()}`]],
-          (v) => ed.setPinValue(p.id, v === 'z' ? undefined : Number(v))), 'What the outside drives onto the pin'));
+        this.row('Drives', this.select(p.value === undefined ? 'z' : String(p.value), [['z', 'Z (undriven)'], ['0', '0'], [String(allOnes(p.width)), p.width === 1 ? '1' : `0x${pinBig(allOnes(p.width)).toString(16).toUpperCase()}`]],
+          (v) => ed.setPinValue(p.id, v === 'z' ? undefined : pinValue(BigInt(v)))), 'What the outside drives onto the pin'));
     }
     if (p.dir === 'in') {
       out.append(this.row('Kind', this.select(p.kind ?? 'toggle', [['toggle', 'toggle'], ['button', 'button (momentary)'], ['clock', 'clock']], (k) => set({ kind: k === 'toggle' ? undefined : k })),
         'A clock pin is driven by Run / Step and becomes a clock input of the chip'));
       if (p.kind !== 'clock' && p.kind !== 'button') {
-        out.append(this.row('Value', this.text(p.width > 4 ? `0x${(p.value ?? 0).toString(16).toUpperCase()}` : String(p.value ?? 0), (v) => {
-          const n = parseNum(v);
-          if (n === null || n >= 2 ** p.width) return void ed.toast(`Value: 0 to ${2 ** p.width - 1}`, 'err');
-          ed.setPinValue(p.id, n);
+        out.append(this.row('Value', this.text(p.width > 4 ? `0x${pinBig(p.value).toString(16).toUpperCase()}` : String(p.value ?? 0), (v) => {
+          const n = parseBig(v);
+          if (n === null || n >> BigInt(p.width)) return void ed.toast(`Value: 0 to ${p.width > 16 ? `2^${p.width} − 1` : 2 ** p.width - 1}`, 'err');
+          ed.setPinValue(p.id, pinValue(n));
         }), 'Decimal, 0x hex or 0b binary (or click the pin)'));
       }
     }
@@ -319,7 +320,7 @@ export class PropsPanel {
       h('div', { class: 'sb-badges' },
         h('span', { class: `sb-level ${c?.mode ?? 'gate'}` }, c?.mode === 'switch' ? 'switch level' : 'gate level'),
         c?.mode === 'switch' && c.derived ? h('span', { class: `sb-derived${c.derived.ok ? ' ok' : ''}`, title: c.derived.ok ? 'Its truth table is used as a gate-level model, so it can be a brick of gate-level chips' : c.derived.reason },
-          c.derived.ok ? 'usable as a gate-level brick' : `switch level only: ${c.derived.reason}`) : null),
+          c.derived.ok ? 'usable as a gate-level brick' : `switch level only: ${c.derived.reason.replace(/: switch level only$/, '')}`) : null),
       c?.mode === 'switch' && c.derived?.ok ? h('p', { class: 'sb-sum' }, 'Combinational: its truth table, derived from its transistors, models it when a gate-level chip places it.') : null,
       h('div', { class: 'sb-ports' }, h('b', null, 'Ports, in order'),
         ports.length ? h('ol', null, ports.map((p) => h('li', null, h('span', { class: `sb-dir ${p.dir}` }, p.dir), ` ${p.name}`, p.width > 1 ? h('small', null, ` [${p.width - 1}:0]`) : null, p.clock ? h('small', null, ' clock') : null)))
@@ -399,7 +400,7 @@ export class PropsPanel {
   }
 }
 
-/** NAND and transistor counts; `depth` fills in a slot for the logic depth (computed later). */
+/** NAND, transistor (and resistor, capacitor) counts; `depth` fills in a slot for the logic depth (computed later). */
 function costLine(def: ComponentDef, depth?: (el: HTMLElement) => void): HTMLElement {
   let st;
   try {
@@ -410,7 +411,9 @@ function costLine(def: ComponentDef, depth?: (el: HTMLElement) => void): HTMLEle
   const slot = depth ? h('span') : null;
   const el = h('p', { class: 'sb-cost' },
     h('span', null, h('b', null, st.nands.toLocaleString()), ' NAND'),
-    h('span', null, h('b', null, st.transistors.toLocaleString()), ' transistors'), slot);
+    h('span', null, h('b', null, st.transistors.toLocaleString()), ' transistors'),
+    st.resistors ? h('span', null, h('b', null, st.resistors.toLocaleString()), st.resistors > 1 ? ' resistors' : ' resistor') : null,
+    st.capacitors ? h('span', null, h('b', null, st.capacitors.toLocaleString()), st.capacitors > 1 ? ' capacitors' : ' capacitor') : null, slot);
   if (depth && slot) depth(slot);
   return el;
 }

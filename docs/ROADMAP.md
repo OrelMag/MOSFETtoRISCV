@@ -119,10 +119,32 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
     Save & new circuit), My chips with colour and pin count (greyed when it would make a cycle),
     Edit chip with a breadcrumb and Back, pin renames that keep every parent wired, used by / uses,
     the flip-flop marking with the compiler's verdict, bidirectional pins driven Z / 0 / 1
+  - ✅ Wide pins (up to 1024 bits, exact): pipeline registers, register-file read ports and the
+    multiplier's 68-bit rows open in the sandbox too, so every library component round-trips;
+    values are BigInt-exact in pins, the bit editor, labels, tooltips, probes and VCD
+  - ✅ Switch-level parts: resistor (weaker than any transistor), pull-up / pull-down, capacitor
+    (a charge-keeping node), transmission gate, tri-state buffer / inverter; shared buses (several
+    drivers: value / Z / pulled value / X, contention warning for outputs that always drive),
+    Examples ▸ shared bus, wired-AND, wired-OR; a pseudo-NMOS step in the inverter chapter
   - ✅ Look inside any placed part, read-only and live on the editor's own simulation, down to
     transistors (and a single MOSFET); the Inspector (info, truth table, Verilog) in a drawer
   - ✅ "Open in Sandbox" from the workbench and chapter scenes: the circuit on screen as an
     editable chip, pointers included (a CPU's ROM, constants and data memory come along)
+  - ✅ CPU panel: a chip with a program ROM runs as a processor (ChipDoc.cpu: ROM, PC, register file,
+    data memory, retire signal, ISS options; detected for the chapters' single-cycle, multicycle,
+    pipelined, system, M, F and cache CPUs and for the fetch loop, overridable in the properties).
+    A drawer with status, listing (current PC, pipeline stages, a click marks the parts the
+    instruction uses and colours its field wires), the field breakdown, the pipeline diagram, the
+    system CPU's I/O (console, LEDs, switches, IRQ, CSRs), registers, FP registers and fcsr, data
+    memory and the retired instructions; Run to halt, Step instruction, Slow (an instruction at a
+    set rate, the marks following execution), Reset, Edit program; the ISS steps on every retiring
+    edge (EditorSim edge hooks) and the first difference (registers, PC, fcsr, memory after a store,
+    console, LEDs) is reported. Parts inside chips are followed by path (the instruction cache's
+    ROM); a chip of placed CPUs (the dual-core) runs against the multi-hart model (arbitration,
+    every core's registers and PC, shared memory). Not yet: gate-level slow mode inside the drawer
+    (the run bar's gate mode does it), the data-cache line view
+  - ✅ One right-hand dock for the drawers (Inspector, CPU, challenges): tabs when several, the
+    look-inside view beside it
   - ✅ Analysis: probe mode and a timing panel (lanes follow the drawing across rebuilds, VCD),
     static timing of a chip (period, max clock, per-capture periods) with the critical path drawn
     on it, lint (nets drawn on one line, pointers without a twin, open inputs reading X);

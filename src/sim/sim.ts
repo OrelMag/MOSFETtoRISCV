@@ -15,7 +15,12 @@ export interface Sim {
   getBits(nets: readonly number[]): Bit[];
   /** Drive a root input port with a packed value. Does not propagate until step/settle. */
   setInput(port: string, value: number): void;
+  /** Drive a root input bit by bit (LSB first; exact at any width, X allowed; Z at switch level). */
+  setInputBits(port: string, bits: ArrayLike<number>): void;
+  /** The value driven on a root input (packed: −1 if any bit is X or Z). */
   getInput(port: string): number;
+  /** The bits driven on a root input, LSB first. */
+  getInputBits(port: string): Bit[];
   /** Advance one time instant. Returns false when nothing is left to do. */
   step(): boolean;
   /** Gate level only: process events up to time t and stand at t (pending ones stay pending). */

@@ -15,6 +15,8 @@ import '../../editor/inspect';
 import '../../editor/chipprops';
 // The analysis tools plug into every editor (probes, timing, lint).
 import '../../editor/analysis';
+// The CPU panel: program, registers, memory and the golden model for a chip that is a processor.
+import '../../editor/cpuui';
 import type { Page } from './chapter';
 
 export class SandboxPage implements Page {

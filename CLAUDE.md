@@ -61,8 +61,10 @@ src/sim/       simulation core (no DOM)
                  relaxation for power-on and oscillation resolution; runUntil(t) for a
                  fixed-period clock (an edge does not wait for the logic to settle); onTrace +
                  watch() report every change of watched nets at its exact time
-  switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes); transistor
-                 `strength` (ratioed logic) and `cap` nets that keep their charge
+  switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes); `strength` levels:
+                 rails/inputs > transistors (strength 4..2, ratioed logic) > resistors (prim 'res',
+                 strength 1: pull-ups lose to any transistor; two opposing → X) > stored charge
+                 (`cap` nets and prim 'cap' capacitors keep their value when undriven)
   fpref.ts       exact reference float arithmetic for any format (BigInt, RNE), float32 helpers
   coherence.ts   MSI / MESI snooping model (per block, no capacity)
   pnr.ts         problemOf(def), Layout (annealing placer), route / routeAll (two-layer Lee router)
@@ -83,6 +85,8 @@ src/sim/       simulation core (no DOM)
   vcd.ts         toVcd(): Value Change Dump of recorded traces
 src/lib/       the component library (registered in `registry` via define())
   transistors.ts NMOS, PMOS, rails, CMOS inverter/NOR, NAND (prim + 4-transistor netlist), tie cells
+  switchparts.ts RES, CAP (prims), PULLUP / PULLDOWN (resistor + rail), TGATE (transmission gate),
+                 TRIINV (clocked CMOS) and TRIBUF (tri-state: y is Z while en = 0), INV_PSEUDO (pseudo-NMOS)
   gates.ts       NOT, AND, OR, NOR, XOR, XNOR, MUX2 from NAND
   combinational.ts adders (HA, FA 13- and 9-NAND, rca(n), addSub(n), incrementer(n)), andN,
                  decoder(n, en, pitch), busMux2(w), muxTree(k, w, pitch)
@@ -155,15 +159,18 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   store.ts       localStorage, sanitizer, JSON export / import (importChips: never overwrites, renames on
                  conflict, recognizes its own earlier renames); share.ts: share-link encoding
   files.ts       shareRoute / shareUrl, download names, import summaries, duplicateChip / deleteChip
-  derive.ts      circuitMode, deriveBehavior (a combinational transistor chip → gate-level brick)
+  derive.ts      circuitMode, deriveBehavior (a combinational transistor chip → gate-level brick;
+                 refused when an output can float: Z is not X on a shared bus)
   program.ts     ROM program text (asm / hex) → words
   memory.ts      romImage (problems on source lines), romListing / romIndex (the row the circuit reads),
                  asm ↔ hex conversion, ROM_SAMPLES; readRam (live words), ramWithInit (initial contents
                  as dotted power-on hints into the flip-flops' latches)
-  examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit), addExample: new chip, opened
+  examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, shared bus, wired-AND / OR),
+                 addExample: new chip, opened
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
-  runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run
+  runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run;
+                 edgeHooks (before / after every rising edge, gate mode: after once quiet), runCycles
   palette.ts     registerPaletteGroup + the palette panel (purist filter)
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
   challenges.ts  build challenges: BuildChallenge (ports, table / sequence check, allowed parts, par),
@@ -177,6 +184,16 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   probes.ts      ProbeTarget (wires / pin / pointer name) → flat nets of each new build (resolveProbe)
   sta.ts         chipTiming: static timing of a chip, critical path mapped to its parts / wires / pins
   lint.ts        lintChip: two nets drawn on one line, pointers without a twin, inputs left open
+  cpu.ts         ChipDoc.cpu (rom, pc / retire as NetRef: pin / pointer / wire / part port, regs, fregs,
+                 dmem, pipeline, iss options); part fields are paths into user chips ('imem.rom', partAt,
+                 nestedRoms: detection takes the workspace's chips); detectCpu (the chapters' instance and
+                 pin names: imem, rf, dm, frf, fcsr, pcOut / pcF, retire, validW, switches / irq /
+                 consoleData / consoleValid / leds), resolveCpu (settings over detection), readers
+                 (readRegs / readMem find w<i> registers via storageOf, banks, cache lines), pipelineSlots,
+                 CpuMonitor: the ISS in lock-step on EditorSim.edgeHooks (registers, PC, fcsr, memory
+                 after stores or at a pipeline's halt, console, LEDs), first mismatch, Run to halt
+  multicpu.ts    detectMulti (two or more placed CPU chips + a shared memory), MultiMonitor: MultiISS in
+                 lock-step (which cores retired, each core's registers and PC, shared memory)
                DOM:
   editor.ts      Editor: workspace + history + library + sim + panels; registerToolbarAction, slots
   view.ts        EditorView: one SVG element per object updated in place, live values, overlays
@@ -192,8 +209,16 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   challengeui.ts "Challenges" list drawer (solved ticks via settings), the strip under the canvas while a
                  challenge chip is open (brief, Check, Show answer, Do it for me), purist palette while restricted
   inspect.ts     the Inspector in a drawer for the chip or a part; chipprops.ts: chip / part property sections
+  dock.ts        the right-hand dock: drawers (Inspector, CPU, challenges) share it, tabs when several;
+                 sets --dock-space on the overlay so look inside stops at its edge
   analysis.ts    plugin: probe mode (P) + LogicAnalyzer in slots.bottom, Timing props section with
                  the critical path drawn on the chip, lint as a diag source, open-input marks
+  cpuui.ts       plugin: the CPU panel (docked drawer: status, listing with the PC and pipeline stages, a
+                 click marks the instruction's parts (insthw names) and colours its field wires
+                 (instrMarks → wires by net), field breakdown (widgets/instrfields), pipeline diagram
+                 (widgets/pipegrid), the system CPU's I/O, registers, fcsr, memory, retired; Run to halt,
+                 Step, Slow (instructions per second), Reset, Edit program; the multi-core view),
+                 opened by itself for a complete CPU; CPU props section
 src/ui/        app shell, router, theme, settings, progress
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
@@ -263,6 +288,9 @@ three levels: `gate` (`stage.startEdge()` / `edgeStep()`: a rising edge one gate
 `src/sim/edge.ts`, which `Stage.cycle` also uses), `cycle` (`pulse(flowMs)`) or `instr` (run to the next
 retirement). The highlight then follows execution, and the trace logs `stepEffect(iss.step())` (riscv/trace.ts).
 While `stage.inEdge`, panels must not compare the hardware with the golden model (it steps after the edge).
+The pipeline diagram reads `pipeSnap` (riscv/cosim.ts) and draws with `widgets/pipegrid.ts`, shared with
+the sandbox's CPU drawer (editor/cpuui.ts), which mirrors these panels for any CPU opened in the sandbox:
+keep the two in step when a panel gains a feature.
 
 ### Viewing aids (all derived, none stored in the netlists)
 
@@ -288,10 +316,25 @@ While `stage.inEdge`, panels must not compare the hardware with the golden model
   `Tools.onPress` (a mode that takes clicks first) and `editor.slots` (`overlay` over the canvas,
   `bottom` above the run bar, `top` in the tab bar). `editor.saveState` / `onSave()` report autosave
   (saved / saving / error). `editor.paintHooks` run after every repaint (live views over the
-  simulation: look inside, inspector). Feature modules and plugins register themselves when
+  simulation: look inside, inspector). `editor.sim.edgeHooks` observe rising clock edges (before /
+  after, whatever drives them: Run, Step, a click on a clock, `runCycles`); the CPU panel's golden
+  model steps there. `editor.sim` is per chip: a plugin keyed on it must follow tab switches. Drawers
+  go in the right-hand dock (`dockPane` / `undockPane`, dock.ts), not straight into `slots.overlay`:
+  they share the edge as tabs and look inside stays clear of them. Feature modules and plugins register themselves when
   ui/pages/sandbox.ts imports them (not editor.ts: they import it).
+- Pins are 1 to `MAX_WIDTH` (1024) bits, and values are exact at any width: `PinDoc.value` is a
+  `PinValue`, a number while exact (< 2^53) else lowercase `'0x…'` text, one spelling per value
+  (`pinValue(bigint)`, `pinBig`; the store canonicalizes). EditorSim drives inputs bit by bit
+  (`Sim.setInputBits`, `pinBits`); labels and tooltips format bit arrays (`formatBits`, BigInt
+  decimal past 53 bits; `describeBits`), the bit editor (`editNumber`) and the analyzer / VCD
+  use BigInt. Never route a pin value through a JS number (`pack`, `2 **`, `%`): it rounds past
+  53 bits. Constants (≤ 53), RAM words (≤ 32) and derived behaviours (outputs ≤ 53) stay numeric.
 - Double-click a placed user chip: `editChip` (tab breadcrumb, Back); any other part: `lookInside`.
   A bidirectional pin's `value` is what the user drives onto it (absent: Z), switch level only.
+- Shared buses: at switch level any number of outputs may drive one net (the solver resolves value /
+  Z / pulled value / X). `PortDef.tri` marks outputs that can let go (TRIBUF, pull-ups, a user chip
+  whose output nothing inside drives hard); two outputs that always drive on one net get a
+  contention warning. Tri-state cells have no behaviour, so any chip using them is switch level.
 - Performance: a drag refits only wires on moved objects (ops.ts `refit`), the view recomputes
   polylines / hops / dots only for what moved, a transistor chip's derived model and flip-flop
   check are cached by a structural key (compile.ts), and the last four chips keep their

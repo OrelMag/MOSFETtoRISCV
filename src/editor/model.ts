@@ -10,6 +10,7 @@
 
 import { instPort, type ExitDir, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
+import type { CpuDoc } from './cpu';
 
 export type { Vec, ExitDir };
 
@@ -37,6 +38,8 @@ export interface ChipDoc {
    * writes it as a process).
    */
   ff?: { d: string; q: string; clk: string; en?: string };
+  /** "This chip is a processor": its program ROM, PC, registers, ... (cpu.ts; absent fields are detected). */
+  cpu?: CpuDoc;
   pins: PinDoc[];
   parts: PartDoc[];
   wires: WireDoc[];
@@ -60,9 +63,28 @@ export interface PinDoc {
   face?: ExitDir;
   /** Inputs only: how the user drives it. 'clock' marks the port `clock: true`. */
   kind?: 'toggle' | 'button' | 'clock';
-  /** Inputs only: the value it is set to (kept across reloads). */
-  value?: number;
+  /** Inputs only: the value it is set to (kept across reloads). See PinValue. */
+  value?: PinValue;
 }
+
+/**
+ * A pin's value: a number while it is exact (below 2^53), else lowercase hex text '0x…' (a wide
+ * pin, up to MAX_WIDTH bits). One value has one spelling (pinValue), so `===` compares values.
+ */
+export type PinValue = number | string;
+
+/** The canonical PinValue of a non-negative BigInt. */
+export const pinValue = (v: bigint): PinValue => (v <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(v) : `0x${v.toString(16)}`);
+
+/** A PinValue as a BigInt (absent: 0). */
+export const pinBig = (v: PinValue | undefined): bigint => (v === undefined ? 0n : BigInt(v));
+
+/** Is `x` a PinValue as stored (a safe non-negative integer, or 0x hex text)? */
+export const isPinValue = (x: unknown): x is PinValue =>
+  typeof x === 'number' ? Number.isSafeInteger(x) && x >= 0 : typeof x === 'string' && /^0x[0-9a-f]+$/i.test(x);
+
+/** All ones on a w-bit pin. */
+export const allOnes = (w: number): PinValue => pinValue((1n << BigInt(w)) - 1n);
 
 export interface PartDoc {
   /** Instance name: unique within the chip, identifier characters only, no '.'. */

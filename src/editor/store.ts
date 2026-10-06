@@ -5,11 +5,12 @@
 // Loading never throws and never loses data silently: anything it cannot read (corrupt JSON, a
 // newer schema) is copied to BACKUP_KEY before the empty workspace replaces it.
 
+import { sanitizeCpu } from './cpu';
 import { same } from './history';
 import {
-  SCHEMA, chipDeps, emptyWorkspace, isIdent, uniqueName,
+  SCHEMA, chipDeps, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
   type ChipDoc, type DisplayKind, type EndRef, type ExitDir, type LabelDoc, type PartDoc, type PartRef,
-  type PinDoc, type Vec, type WireDoc, type Workspace,
+  type PinDoc, type PinValue, type Vec, type WireDoc, type Workspace,
 } from './model';
 
 export interface KV {
@@ -92,8 +93,15 @@ function sanitizePin(p: unknown): PinDoc | null {
   const at = vec(p.at);
   if (!at) return null;
   const kind = p.kind === 'toggle' || p.kind === 'button' || p.kind === 'clock' ? p.kind : undefined;
-  return compact<PinDoc>({ id: p.id, name: p.name, dir: p.dir, width: p.width, at, face: face(p.face), kind, value: int(p.value) ? p.value : undefined });
+  return compact<PinDoc>({ id: p.id, name: p.name, dir: p.dir, width: p.width, at, face: face(p.face), kind, value: pinValueOf(p.value) });
 }
+
+/**
+ * A stored pin value in its one spelling: integers (older documents may hold one past 2^53,
+ * which BigInt takes exactly as written) and 0x hex text (wide pins).
+ */
+const pinValueOf = (x: unknown): PinValue | undefined =>
+  int(x) || (typeof x === 'string' && isPinValue(x)) ? pinValue(BigInt(x)) : undefined;
 
 function sanitizeFf(f: unknown): ChipDoc['ff'] {
   if (!isObj(f) || !str(f.d) || !str(f.q) || !str(f.clk) || (f.en !== undefined && !str(f.en))) return undefined;
@@ -161,6 +169,7 @@ export function sanitizeChip(c: unknown): ChipDoc | null {
     hue: num(c.hue) ? ((Math.round(c.hue) % 360) + 360) % 360 : undefined,
     notes: str(c.notes) ? c.notes : undefined,
     ff: sanitizeFf(c.ff),
+    cpu: sanitizeCpu(c.cpu),
     pins: uniquePins, parts, wires, labels,
   });
 }

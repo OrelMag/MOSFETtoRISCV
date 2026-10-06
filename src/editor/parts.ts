@@ -16,8 +16,12 @@ export type PartResult = ComponentDef | { error: string };
 
 export const isError = (r: PartResult): r is { error: string } => 'error' in r;
 
-/** Widest bus the sandbox builds (constants, displays, RAM words). */
-export const MAX_WIDTH = 64;
+/**
+ * Widest pin, splitter field or display. Values stay exact at any width (pins hold BigInt-backed
+ * PinValues, inputs are driven bit by bit); this only bounds a typo. The library's widest port
+ * is a 229-bit pipeline register.
+ */
+export const MAX_WIDTH = 1024;
 /** Largest RAM: 2^6 words (the structure is a decoder, registers and a mux tree, all drawn). */
 export const MAX_RAM_K = 6;
 /** Widest splitter / merger pin spacing (the library's tall fans and multiplier rows use up to 18). */
@@ -35,7 +39,7 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
   if ('chip' in ref) return chipDef(ref.chip) ?? { error: `unknown chip '${ref.chip}'` };
   if ('split' in ref || 'merge' in ref) {
     const ws = 'split' in ref ? ref.split : ref.merge;
-    if (!Array.isArray(ws) || !ws.length || !ws.every(okWidth)) return { error: 'splitter / merger: widths must be 1–64' };
+    if (!Array.isArray(ws) || !ws.length || !ws.every(okWidth)) return { error: `splitter / merger: widths must be 1–${MAX_WIDTH}` };
     const pitch = ref.pitch ?? 2;
     if (!(pitch > 0 && pitch <= MAX_PITCH)) return { error: 'splitter / merger: bad pitch' };
     return 'split' in ref ? splitter(ws, pitch) : merger(ws, pitch);
@@ -48,7 +52,7 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
   }
   if ('display' in ref) {
     const w = ref.width ?? 1;
-    if (!okWidth(w)) return { error: 'display: width must be 1–64' };
+    if (!okWidth(w)) return { error: `display: width must be 1–${MAX_WIDTH}` };
     if (!(ref.display in DISPLAY_LABEL)) return { error: `unknown display '${ref.display}'` };
     return display(ref.display, w);
   }

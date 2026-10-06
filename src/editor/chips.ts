@@ -3,7 +3,7 @@
 // for the flip-flop roles, and how a click drives a bidirectional pin.
 
 import { renamePort } from './library';
-import { chipDeps, type ChipDoc, type DefOf, type PinDoc, type Workspace } from './model';
+import { allOnes, chipDeps, type ChipDoc, type DefOf, type PinDoc, type PinValue, type Workspace } from './model';
 import { setPin } from './ops';
 
 /** Chips that place `id` directly, and chips `id` places directly (names sorted). */
@@ -62,7 +62,7 @@ export function guessFf(doc: ChipDoc): NonNullable<ChipDoc['ff']> | null {
  * What a click drives onto a bidirectional pin next: Z (undriven, `undefined`) → 0 → all ones
  * → Z. The pin's `value` holds it; undefined means nothing drives it from outside.
  */
-export function nextDrive(p: PinDoc): number | undefined {
+export function nextDrive(p: PinDoc): PinValue | undefined {
   if (p.value === undefined) return 0;
-  return p.value === 0 ? 2 ** p.width - 1 : undefined;
+  return p.value === 0 ? allOnes(p.width) : undefined;
 }

@@ -9,7 +9,7 @@ import { docFromDef } from '../src/editor/fromdef';
 import { type ChipDoc, emptyWorkspace } from '../src/editor/model';
 import { UserLibrary } from '../src/editor/library';
 import { remixDef } from '../src/editor/remix';
-import { MAX_WIDTH, partDef } from '../src/editor/parts';
+import { partDef } from '../src/editor/parts';
 import { cachedMemory, dualCore, multicycleCpu, pipelinedCpu, singleCycleCpu, systemCpu } from '../src/lib';
 import { reachableDefs, resolveComponent } from '../src/lib/resolve';
 import { assemble } from '../src/riscv/asm';
@@ -38,15 +38,10 @@ cachedMemory(6, 2);
 /**
  * Components that cannot be drawn in the sandbox, and why. Keep this short: fix docFromDef
  * instead where the sandbox can express the circuit.
- * - A port wider than a sandbox pin (MAX_WIDTH bits: a value the editor shows and drives must fit
- *   in a number): pipeline registers, register-file read ports, wide multiplier rows. They are
- *   fine as parts of a chip.
  * - A dual-core's cores hold the program ROM, like the CPU tops (opened through remixDef below).
  */
 const cannot = (def: ComponentDef): RegExp | undefined =>
-  def.ports.some((p) => p.width > MAX_WIDTH) ? /bits wide/
-    : /_core$/.test(def.id) ? /unknown library part 'rom_/
-      : undefined;
+  /_core$/.test(def.id) ? /unknown library part 'rom_/ : undefined;
 
 // Top-level CPUs are not registered (only their parts), so walk their parts in explicitly. The
 // tops themselves hold a ROM generated for one program, which no id can bring back after a

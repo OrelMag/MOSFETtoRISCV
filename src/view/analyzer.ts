@@ -3,7 +3,7 @@
 // at the exact instant it happened. Docked under the schematic.
 
 import type { Sim } from '../sim/sim';
-import { formatNumber, pack, type Radix } from '../sim/values';
+import { formatNumber, pack, packBig, type Radix } from '../sim/values';
 import { toVcd, type TraceSignal } from '../sim/vcd';
 import { h, icon, s } from '../ui/dom';
 
@@ -23,9 +23,12 @@ export interface Lane {
   key: string;
 }
 
+/** A lane's value: packed (−1 = X / Z); a BigInt past 53 bits, so wide lanes stay exact. */
+type Val = number | bigint;
+
 interface Trace {
   t: number[];
-  v: number[];
+  v: Val[];
 }
 
 const LANE_H = 24;
@@ -217,8 +220,9 @@ export class LogicAnalyzer {
 
   // ---- recording --------------------------------------------------------------------------
 
-  private valueOf(l: Lane): number {
-    return pack(this.sim!.getBits(l.nets));
+  private valueOf(l: Lane): Val {
+    const bits = this.sim!.getBits(l.nets);
+    return bits.length <= 53 ? pack(bits) : (packBig(bits) ?? -1);
   }
 
   private record(net: number): void {
@@ -261,7 +265,7 @@ export class LogicAnalyzer {
     this.render();
   }
 
-  private valueAt(tr: Trace, t: number): number {
+  private valueAt(tr: Trace, t: number): Val {
     let lo = 0, hi = tr.t.length - 1;
     if (hi < 0 || t < tr.t[0]) return NaN;
     while (lo < hi) {
@@ -271,7 +275,7 @@ export class LogicAnalyzer {
     return tr.v[lo];
   }
 
-  private fmt(v: number, w: number): string {
+  private fmt(v: Val, w: number): string {
     if (Number.isNaN(v)) return '';
     if (v < 0) return 'X';
     return w === 1 ? String(v) : formatNumber(v, w, this.radix);

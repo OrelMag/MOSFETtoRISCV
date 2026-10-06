@@ -4,12 +4,12 @@
 import { symbolGeom, type Vec } from '../sim/geometry';
 import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, netlistOf } from '../sim/types';
-import { formatBits, type Radix } from '../sim/values';
+import { describeBits, formatBits, type Radix } from '../sim/values';
 import { icon, s } from '../ui/dom';
 import { Camera, installPanZoom } from './camera';
 import type { ViewCtx } from './context';
 import { hopPathData, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type RoutedNet, type TapLabel } from './route';
-import { drawPinGlyph, drawSymbol, placePinValue } from './symbols';
+import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
 
 export interface SchematicEvents {
   open(child: string): void;
@@ -220,14 +220,8 @@ export class SchematicView {
       });
       g.append(s('rect', { class: 'hit', x: -0.4, y: -0.4, width: geo.w + 0.8, height: geo.h + 0.8, rx: 0.6 }));
       g.append(drawSymbol(inst.def, inst.flip));
-      if (inst.def.prim !== 'alias' && inst.def.prim !== 'vdd' && inst.def.prim !== 'gnd') {
-        const isBox = inst.def.symbol.kind === 'box';
-        const isFet = inst.def.symbol.kind === 'nmos' || inst.def.symbol.kind === 'pmos';
-        g.append(s('text', {
-          class: 'inst-name', x: isFet ? 3.4 : isBox ? 0.1 : geo.w / 2, y: isFet ? 1.45 : isBox ? -0.45 : -0.35,
-          'text-anchor': isFet || isBox ? 'start' : 'middle',
-        }, inst.label ?? inst.name));
-      }
+      const nameAt = instNameAt(inst.def);
+      if (nameAt) g.append(s('text', { class: 'inst-name', x: nameAt.x, y: nameAt.y, 'text-anchor': nameAt.anchor }, inst.label ?? inst.name));
       if (openable) {
         const badge = s('g', { class: 'open-badge', transform: `translate(${geo.w - 0.2},${-0.9})` });
         badge.append(s('circle', { r: 0.62, cx: 0.5, cy: 0.5 }));
@@ -551,9 +545,7 @@ export class SchematicView {
     const net = nl.nets[idx];
     const bits = this.ctx.netBits(idx);
     const name = net.name ?? net.ends[0];
-    const val = bits.length === 1
-      ? formatBits(bits, 'bin')
-      : `${formatBits(bits, 'hex')} · ${formatBits(bits, 'bin')} · ${formatBits(bits, 'dec')}`;
+    const val = describeBits(bits);
     this.tooltip.textContent = `${name}${bits.length > 1 ? `[${bits.length - 1}:0]` : ''} = ${val}`;
     const r = this.host.getBoundingClientRect();
     this.tooltip.style.left = `${e.clientX - r.left + 14}px`;

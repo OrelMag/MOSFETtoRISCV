@@ -5,12 +5,20 @@
 //   neither → Z (floating). A gate driven by X/Z "maybe" conducts, which yields X.
 // Nodes feed the gates of other transistors, so we iterate to a fixed point.
 //
-// Strengths (ratioed logic): a path is as strong as its weakest transistor (rails and inputs are
+// Strengths (ratioed logic): a path is as strong as its weakest element (rails and inputs are
 // strongest). A node takes the value of its strongest definite path, unless an equally strong or
 // stronger path to the opposite value exists or might exist (then X). This is what lets a bit-line
-// driver overpower an SRAM cell's weak pull-up. Nets marked `cap` keep their charge (weakest of all)
-// when undriven. Iteration starts from the previous solution, so storage loops (cross-coupled
-// inverters) remember their state; for loop-free circuits the result is unique anyway.
+// driver overpower an SRAM cell's weak pull-up. Levels, strongest first:
+//   6        rails and driven inputs
+//   5, 4, 3  transistors of strength 4 (wide), 3 (default), 2 (narrow)
+//   2        resistors (strength 1): always conducting, weaker than any transistor
+//   1        stored charge: nets marked `cap` (or with a capacitor) keep their value when undriven
+// So a node reached only through a pull-up resistor is 1, any conducting transistor path to GND
+// overrides it (pseudo-NMOS, open-drain buses), and two resistors pulling opposite ways give X.
+// A short (`shorted`) is a fight between transistor paths; a resistor that loses draws current
+// by design (that static current is the cost of ratioed logic) and is not flagged.
+// Iteration starts from the previous solution, so storage loops (cross-coupled inverters)
+// remember their state; for loop-free circuits the result is unique anyway.
 //
 // Sources are ideal: rails and driven inputs are terminals, never internal conducting nodes. A
 // path ends at a source; it never runs through one from a transistor to another. So one VDD (or
@@ -23,7 +31,7 @@ import { matchNets, sharedInputs } from './carry';
 import type { FlatDesign } from './flatten';
 import type { PowerOnMode, Sim } from './sim';
 import { B0, B1, BX, BZ, type Bit } from './types';
-import { unpack } from './values';
+import { pack, unpack } from './values';
 
 export class SwitchSim implements Sim {
   readonly kind = 'switch' as const;
@@ -34,10 +42,14 @@ export class SwitchSim implements Sim {
   onTrace?: (net: number, value: Bit, time: number) => void;
 
   private val: Uint8Array;
-  private inputs = new Map<string, number>();
+  /**
+   * Root input values: a number from setInput (negative: every bit −v, i.e. X or Z), bits from
+   * setInputBits (wide values stay exact).
+   */
+  private inputs = new Map<string, number | Bit[]>();
   private inputNets = new Map<string, number[]>();
   private dirty = true;
-  /** Per leaf: 1 if the transistor conducts, 2 if it might (gate X/Z), 0 if off. */
+  /** Per leaf: 1 if the transistor conducts (a resistor always does), 2 if it might (gate X/Z), 0 if off. */
   readonly conducting: Uint8Array;
   /** Nets that are part of a VDD–GND short in the last solution. */
   readonly shorted: Uint8Array;
@@ -66,7 +78,22 @@ export class SwitchSim implements Sim {
     return nets.map((n) => this.val[n] as Bit);
   }
   getInput(port: string): number {
-    return this.inputs.get(port) ?? 0;
+    const v = this.inputs.get(port) ?? 0;
+    if (typeof v === 'number') return v;
+    return v.every((b) => b === v[0]) && v[0] !== B0 && v[0] !== B1 ? -v[0] : pack(v);
+  }
+  getInputBits(port: string): Bit[] {
+    return this.inputBits(port, this.inputs.get(port) ?? 0);
+  }
+  private inputBits(port: string, v: number | Bit[]): Bit[] {
+    const w = this.inputNets.get(port)?.length ?? 0;
+    return typeof v !== 'number' ? v.slice() : v >= 0 ? unpack(v, w) : new Array<Bit>(w).fill((-v) as Bit);
+  }
+  setInputBits(port: string, bits: ArrayLike<number>): void {
+    const nets = this.inputNets.get(port);
+    if (!nets) throw new Error(`no input port '${port}'`);
+    this.inputs.set(port, nets.map((_, i) => (bits[i] ?? BZ) as Bit));
+    this.dirty = true;
   }
   setInput(port: string, value: number): void {
     if (!this.inputNets.has(port)) throw new Error(`no input port '${port}'`);
@@ -93,11 +120,11 @@ export class SwitchSim implements Sim {
    * `known`, X nodes of `prev` are not copied.
    */
   carry(prev: Sim, opts: { known?: boolean } = {}): void {
-    for (const name of sharedInputs(this.design, prev.design)) this.inputs.set(name, prev.getInput(name));
+    for (const name of sharedInputs(this.design, prev.design)) this.inputs.set(name, prev.getInputBits(name));
     // root inouts too (only a switch-level simulation drives them)
     for (const p of this.design.root.def.ports) {
       const q = p.dir === 'inout' && prev.kind === 'switch' && prev.design.root.def.ports.find((x) => x.name === p.name);
-      if (q && q.dir === 'inout' && q.width === p.width) this.inputs.set(p.name, prev.getInput(p.name));
+      if (q && q.dir === 'inout' && q.width === p.width) this.inputs.set(p.name, prev.getInputBits(p.name));
     }
     const map = matchNets(this.design, prev.design);
     for (let net = 0; net < map.length; net++) {
@@ -143,7 +170,7 @@ export class SwitchSim implements Sim {
     }
     for (const [port, v] of this.inputs) {
       const nets = this.inputNets.get(port)!;
-      const bits: Bit[] = v >= 0 ? unpack(v, nets.length) : nets.map(() => (-v) as Bit);
+      const bits = this.inputBits(port, v);
       nets.forEach((net, i) => { if (bits[i] !== BZ) source[net] = bits[i]; });
     }
 
@@ -159,20 +186,28 @@ export class SwitchSim implements Sim {
     // behaves exactly like one symbol per transistor.
     const srcLv: number[] = [], srcV: number[] = [];
     for (let i = 0; i < n; i++) {
-      srcLv.push(charge[i] >= 0 ? 1 : 0);
+      srcLv.push(charge[i] >= 0 ? LV_CHARGE : 0);
       srcV.push(charge[i]);
     }
     const term = (net: number) => {
       if (source[net] < 0) return net;
-      srcLv.push(5);
+      srcLv.push(LV_SOURCE);
       srcV.push(source[net]);
       return srcLv.length - 1;
     };
+    // Conducting elements: transistors (switched by their gate) and resistors (always on).
     const fets: { li: number; g: number; a: number; b: number; nmos: boolean; s: number }[] = [];
+    const ress: { a: number; b: number; s: number }[] = [];
     leaves.forEach((l, li) => {
+      if (l.kind === 'res') {
+        const [a, b] = l.terminals!;
+        ress.push({ a: term(a), b: term(b), s: level(l.def.strength ?? 1) });
+        this.conducting[li] = 1;
+        return;
+      }
       if (l.kind !== 'nmos' && l.kind !== 'pmos') return;
       const [g, a, b] = l.terminals!;
-      fets.push({ li, g, a: term(a), b: term(b), nmos: l.kind === 'nmos', s: l.def.strength ?? 3 });
+      fets.push({ li, g, a: term(a), b: term(b), nmos: l.kind === 'nmos', s: level(l.def.strength ?? 3) });
     });
     const N = srcLv.length;
 
@@ -191,17 +226,22 @@ export class SwitchSim implements Sim {
         on[k] = o ? 1 : 0;
         maybeOn[k] = off ? 0 : 1;
       });
-      // Strongest definite / possible path from a 1, a 0 or an X source, per node. Levels:
-      // 5 = rails and inputs, 4..2 = transistors, 1 = stored charge.
+      // Strongest definite / possible path from a 1, a 0 or an X source, per node (levels: see
+      // the header).
       const d1 = new Uint8Array(n), d0 = new Uint8Array(n), dX = new Uint8Array(n);
       const m1 = new Uint8Array(n), m0 = new Uint8Array(n), mX = new Uint8Array(n);
-      for (let L = 5; L >= 1; L--) {
+      for (let L = LV_SOURCE; L >= LV_CHARGE; L--) {
         const sure = new UF(N), maybe = new UF(N);
         fets.forEach((f, k) => {
           if (f.s < L) return;
           if (on[k]) sure.union(f.a, f.b);
           if (maybeOn[k]) maybe.union(f.a, f.b);
         });
+        for (const r of ress) {
+          if (r.s < L) continue;
+          sure.union(r.a, r.b);
+          maybe.union(r.a, r.b);
+        }
         const sHi = new Uint8Array(N), sLo = new Uint8Array(N), sX = new Uint8Array(N);
         const mHi = new Uint8Array(N), mLo = new Uint8Array(N), mXx = new Uint8Array(N);
         for (let i = 0; i < N; i++) {
@@ -228,7 +268,7 @@ export class SwitchSim implements Sim {
         else if (d0[i] > d1[i] && d0[i] > m1[i] && d0[i] > mX[i]) v = B0;
         else v = m1[i] || m0[i] || mX[i] ? BX : BZ;
         // current flows from a rail to the other through conducting transistors
-        this.shorted[i] = d1[i] >= 2 && d0[i] >= 2 ? 1 : 0;
+        this.shorted[i] = d1[i] >= LV_FET && d0[i] >= LV_FET ? 1 : 0;
         if (val[i] !== v) {
           val[i] = v;
           changed = true;
@@ -238,6 +278,11 @@ export class SwitchSim implements Sim {
     this.unstable = changed;
   }
 }
+
+/** Solver levels (see the header): sources, the weakest transistor, stored charge. */
+const LV_SOURCE = 6, LV_FET = 3, LV_CHARGE = 1;
+/** Level of a conducting element of strength s (1 = resistor … 4 = wide transistor). */
+const level = (s: number) => Math.min(LV_SOURCE - 1, Math.max(LV_CHARGE + 1, Math.round(s) + 1));
 
 class UF {
   p: Int32Array;
