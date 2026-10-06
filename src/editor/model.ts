@@ -10,6 +10,7 @@
 
 import { instPort, type ExitDir, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
+import type { CpuDoc } from './cpu';
 
 export type { Vec, ExitDir };
 
@@ -37,6 +38,8 @@ export interface ChipDoc {
    * writes it as a process).
    */
   ff?: { d: string; q: string; clk: string; en?: string };
+  /** "This chip is a processor": its program ROM, PC, registers, ... (cpu.ts; absent fields are detected). */
+  cpu?: CpuDoc;
   pins: PinDoc[];
   parts: PartDoc[];
   wires: WireDoc[];
