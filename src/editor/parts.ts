@@ -21,6 +21,8 @@ export const isError = (r: PartResult): r is { error: string } => 'error' in r;
 export const MAX_WIDTH = 64;
 /** Largest RAM: 2^6 words (the structure is a decoder, registers and a mux tree, all drawn). */
 export const MAX_RAM_K = 6;
+/** Widest splitter / merger pin spacing (the library's tall fans use up to 14). */
+export const MAX_PITCH = 16;
 /** Largest ROM: 2^8 words (simulated as a lookup; its mux tree is only built when opened). */
 export const MAX_ROM_K = 8;
 
@@ -36,7 +38,7 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
     const ws = 'split' in ref ? ref.split : ref.merge;
     if (!Array.isArray(ws) || !ws.length || !ws.every(okWidth)) return { error: 'splitter / merger: widths must be 1–64' };
     const pitch = ref.pitch ?? 2;
-    if (!(pitch > 0 && pitch <= 8)) return { error: 'splitter / merger: bad pitch' };
+    if (!(pitch > 0 && pitch <= MAX_PITCH)) return { error: 'splitter / merger: bad pitch' };
     return 'split' in ref ? splitter(ws, pitch) : merger(ws, pitch);
   }
   if ('const' in ref) {
