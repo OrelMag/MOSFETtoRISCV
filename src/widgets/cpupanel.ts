@@ -218,7 +218,10 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         const v = (inst: string, port: string) => pack(sim.getBits(root.get(inst)!.ports[port]));
         const slots: [string, number, boolean][] = [
           ['F', v('pc', 'q'), true], ['D', v('FD', 'pcD'), v('FD', 'validD') === 1], ['E', v('DE', 'pcE'), v('DE', 'validE') === 1],
-          ['M', v('EM', 'pcM'), v('EM', 'validM') === 1], ['W', v('MW', 'pcW'), v('MW', 'validW') === 1],
+          ['M', v('EM', 'pcM'), v('EM', 'validM') === 1],
+          // the pipelined FPU CPU has a sixth stage, X, between M and W
+          ...(root.has('MX') ? [['X', v('MX', 'pcX'), v('MX', 'validX') === 1], ['W', v('XW', 'pcW'), v('XW', 'validW') === 1]] as [string, number, boolean][]
+            : [['W', v('MW', 'pcW'), v('MW', 'validW') === 1]] as [string, number, boolean][]),
         ];
         for (const [stg, pc, valid] of slots) if (valid && pc >= 0) inFlight.set(pc >>> 0, [...(inFlight.get(pc >>> 0) ?? []), stg]);
       }
