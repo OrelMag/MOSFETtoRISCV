@@ -6,7 +6,7 @@ export type Fmt = 'R' | 'I' | 'S' | 'B' | 'U' | 'J';
 export const OPCODES = {
   LUI: 0b0110111, AUIPC: 0b0010111, JAL: 0b1101111, JALR: 0b1100111, BRANCH: 0b1100011,
   LOAD: 0b0000011, STORE: 0b0100011, OPIMM: 0b0010011, OP: 0b0110011, SYSTEM: 0b1110011, FENCE: 0b0001111,
-  LOADFP: 0b0000111, STOREFP: 0b0100111, OPFP: 0b1010011,
+  LOADFP: 0b0000111, STOREFP: 0b0100111, OPFP: 0b1010011, AMO: 0b0101111,
 } as const;
 
 /** Register roles of a floating-point instruction: which operands live in the f registers. */
@@ -76,6 +76,9 @@ export const INSTRS: InstrSpec[] = [
   FR('fcvt.s.w', 0x68, { rd: 'f', rs1: 'x', rs2fixed: 0, rm: true }),
   FR('fcvt.s.wu', 0x68, { rd: 'f', rs1: 'x', rs2fixed: 1, rm: true }),
   FR('fmv.w.x', 0x78, { rd: 'f', rs1: 'x', rs2fixed: 0 }, 0),
+  // A extension: the two atomic memory operations the multi-core chapter uses (aq / rl bits ignored)
+  { name: 'amoswap.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x04, hw: false },
+  { name: 'amoadd.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x00, hw: false },
 ];
 
 export const FABI = [
@@ -175,7 +178,7 @@ export function decode(word: number): Decoded {
   for (const s of INSTRS) {
     if (s.opcode !== opcode) continue;
     if (s.funct3 !== undefined && s.funct3 !== funct3 && s.fmt !== 'U' && s.fmt !== 'J') continue;
-    if (s.fmt === 'R' && s.funct7 !== funct7) continue;
+    if (s.fmt === 'R' && s.funct7 !== (s.opcode === OPCODES.AMO ? funct7 & 0x7c : funct7)) continue;
     if (s.fp?.rs2fixed !== undefined && s.fp.rs2fixed !== rs2) continue;
     if (s.opcode === OPCODES.OPIMM && (funct3 === 1 || funct3 === 5) && s.funct7 !== undefined && s.funct7 !== (funct7 & 0x7e)) continue;
     if (s.opcode === OPCODES.OPIMM && (funct3 === 1 || funct3 === 5) && s.funct7 === undefined) continue;
@@ -218,6 +221,7 @@ export function disasm(word: number, pc?: number): string {
     if (fp.rs2fixed !== undefined) return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}`;
     return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}, ${R(fp.rs2, d.rs2)}`;
   }
+  if (d.opcode === OPCODES.AMO) return `${n} ${rn(d.rd)}, ${rn(d.rs2)}, (${rn(d.rs1)})`;
   switch (d.fmt) {
     case 'R': return `${n} ${rn(d.rd)}, ${rn(d.rs1)}, ${rn(d.rs2)}`;
     case 'I':

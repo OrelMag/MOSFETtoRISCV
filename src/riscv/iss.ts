@@ -21,6 +21,8 @@ export interface IssOptions {
   m?: boolean;
   /** Implement the F subset (otherwise illegal in system mode). */
   f?: boolean;
+  /** Hart id read by csrr mhartid (multi-core). */
+  hartid?: number;
 }
 
 /** Cycles a div / divu / rem / remu occupies on the iterative divider (1 load + 32 steps + 1 write). */
@@ -71,7 +73,9 @@ export class ISS {
   readonly x = new Uint32Array(32);
   pc = 0;
   readonly imem: number[];
-  readonly dmem: Uint32Array;
+  /** Data memory; harts of a multi-core system share one array. */
+  dmem: Uint32Array;
+  readonly hartid: number;
   halted = false;
   steps = 0;
   readonly system: boolean;
@@ -108,6 +112,7 @@ export class ISS {
     this.system = !!opts.system;
     this.m = !!opts.m;
     this.fext = !!opts.f;
+    this.hartid = opts.hartid ?? 0;
   }
 
   fetch(pc: number): number {
@@ -325,8 +330,23 @@ export class ISS {
         write(r);
         break;
       }
+      case OPCODES.AMO: {
+        // the read and the write happen in the same memory access: nothing can come in between
+        if (this.system) { trap = new Trap(CAUSE.ILLEGAL); break; }
+        const addr = ua >>> 0;
+        const old = this.load(addr, 2) >>> 0;
+        const nv = d.name === 'amoadd.w' ? (old + ub) >>> 0 : ub >>> 0;
+        this.store(addr, 2, nv);
+        store = { addr, value: nv };
+        write(old);
+        break;
+      }
       case OPCODES.SYSTEM: {
-        if (!this.system) break;
+        if (!this.system) {
+          // user-level programs on the multi-core: only csrr rd, mhartid
+          if (d.funct3 === 2 && ((word >>> 20) & 0xfff) === 0xf14 && d.rs1 === 0) write(this.hartid);
+          break;
+        }
         if (d.name === 'ecall') trap = new Trap(CAUSE.ECALL);
         else if (d.name === 'ebreak') trap = new Trap(CAUSE.BREAKPOINT);
         else if (d.name === 'mret') { next = this.mepc; this.mie = this.mpie; this.mpie = true; }

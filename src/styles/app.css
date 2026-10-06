@@ -607,3 +607,19 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .fx-line .normal { fill: var(--bus); }
 .fx-line .subnormal { fill: #d97706; }
 .fx-line .zero { fill: var(--text); }
+
+/* chapter 24: dual-core panel, coherence explorer */
+.dual-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dual-core .cpu-mem .m .n { width: 30px; }
+.coh-grid { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
+.coh-row { display: grid; grid-template-columns: 64px repeat(4, minmax(90px, 1fr)); gap: 4px; align-items: center; }
+.coh-row.head span { font-size: 11px; color: var(--muted); text-align: center; }
+.coh-core { font-size: 12px; color: var(--text-2); }
+.coh-cell { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 4px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); transition: box-shadow .2s; }
+.coh-cell b { font: 700 14px var(--font-mono); width: 16px; text-align: center; }
+.coh-cell.st-M { background: color-mix(in srgb, #dc2626 22%, transparent); }
+.coh-cell.st-E { background: color-mix(in srgb, #d97706 22%, transparent); }
+.coh-cell.st-S { background: color-mix(in srgb, #16a34a 22%, transparent); }
+.coh-cell.hot { box-shadow: 0 0 0 2px var(--accent); }
+.btn.xs { padding: 0 5px; font-size: 10px; height: 18px; line-height: 16px; }
+.coh-log { font-size: 12px; display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow: auto; margin-top: 6px; }

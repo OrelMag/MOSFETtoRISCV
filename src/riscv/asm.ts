@@ -267,6 +267,12 @@ function encode(st: Stmt, labels: Map<string, number>): number[] {
 
   const spec = BY_NAME.get(op);
   if (!spec) throw new AsmError(`unknown instruction "${op}"`);
+  if (spec.opcode === OPCODES.AMO) {
+    need(3);
+    const m = mem(args[2]);
+    if (m.off !== 0) throw new AsmError('atomic memory operations take no offset: (rs1)');
+    return [encR(spec.opcode, reg(args[0]), 2, m.base, reg(args[1]), spec.funct7!)];
+  }
   const f3 = spec.funct3 ?? 0;
   switch (spec.fmt) {
     case 'R': need(3); return [encR(spec.opcode, reg(args[0]), f3, reg(args[1]), reg(args[2]), spec.funct7!)];
