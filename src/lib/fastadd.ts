@@ -301,7 +301,7 @@ export function fanout(w: number): ComponentDef {
     id: `fan${w}`, name: `Wiring: 1→${w} fan-out`, category: 'plumbing',
     summary: 'One wire driving w bit positions.',
     ports: [bit('in', 'in'), bus('out', w, 'out')],
-    symbol: { kind: 'box', label: '⋔', w: 4, h: 2 }, prim: 'alias',
+    symbol: { kind: 'box', label: `1→${w}`, w: 4, h: 2 }, prim: 'alias',
     alias: Array.from({ length: w }, (_, i): [string, number, string, number] => ['in', 0, 'out', i]),
   }));
 }
