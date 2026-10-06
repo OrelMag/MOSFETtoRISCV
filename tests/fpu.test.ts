@@ -20,18 +20,41 @@ describe('FPU building blocks', () => {
   });
 });
 
-describe('small-format FPUs, exhaustively against exact arithmetic', () => {
+// Every pair of every small format takes minutes on a CI runner; FPU_EXHAUSTIVE=1 restores it.
+const EXHAUSTIVE = process.env.FPU_EXHAUSTIVE === '1';
+
+/** Operand pairs: all pairs for tiny formats (or when exhaustive); otherwise every boundary value
+ *  (zeros, subnormals, the smallest and largest normals, infinities, NaNs) against every operand,
+ *  plus a random sample. */
+function operandPairs(f: FpFormat): [number, number][] {
+  const N = 1 + f.E + f.M, all = [...Array(2 ** N).keys()];
+  if (EXHAUSTIVE || N <= 6) return all.flatMap((a) => all.map((b): [number, number] => [a, b]));
+  const field = (x: number) => Math.floor(x / 2 ** f.M) % 2 ** f.E;
+  const frac = (x: number) => x % 2 ** f.M, top = 2 ** f.E - 1, ones = 2 ** f.M - 1;
+  // zeros and subnormals, infinities and NaNs, and the extremes of the lowest and highest normal exponents
+  const edge = all.filter((x) => field(x) === 0 || field(x) === top || ((field(x) === 1 || field(x) === top - 1) && (frac(x) === 0 || frac(x) === ones)));
+  const pairs = edge.flatMap((a) => all.map((b): [number, number] => [a, b]));
+  let seed = 17;
+  for (let k = 0; k < 3000; k++) {
+    seed = (seed * 1103515245 + 12345) >>> 0;
+    pairs.push([(seed >>> 8) % 2 ** N, (seed >>> 20) % 2 ** N]);
+  }
+  return pairs;
+}
+
+describe('small-format FPUs against exact arithmetic', () => {
   for (const f of small) {
-    it(`E${f.E}M${f.M}: every add, sub and mul`, async () => {
-      const N = 1 + f.E + f.M;
+    it(`E${f.E}M${f.M}: add, sub and mul (${EXHAUSTIVE || 1 + f.E + f.M <= 6 ? 'every pair' : 'all boundary values × every operand, plus a sample'})`, async () => {
       const add = simulate(fpAdd(f)), mul = simulate(fpMul(f));
-      for (let a = 0; a < 2 ** N; a++) for (let b = 0; b < 2 ** N; b++) {
-        if (b === 0 && a % 8 === 0) await new Promise((res) => setTimeout(res)); // let the test runner breathe
+      const pairs = operandPairs(f);
+      for (let k = 0; k < pairs.length; k++) {
+        if (k % 2000 === 0) await new Promise((res) => setTimeout(res)); // let the test runner breathe
+        const [a, b] = pairs[k];
         expect(evalOnce(add, [a, b, 0]), `${a} + ${b}`).toEqual([fpAddRef(a, b, false, f)]);
         expect(evalOnce(add, [a, b, 1]), `${a} - ${b}`).toEqual([fpAddRef(a, b, true, f)]);
         expect(evalOnce(mul, [a, b]), `${a} * ${b}`).toEqual([fpMulRef(a, b, f)]);
       }
-    }, 300000);
+    }, 600000);
   }
   it('E4M3: int → float for every 8-bit integer', () => {
     const f = small[0], c = simulate(fpFromInt(f, 8));
@@ -60,7 +83,7 @@ describe('float32 units', () => {
   const pick = () => (r() % 5 === 0 ? special[r() % special.length] : ((r() >>> 8) | ((r() & 0xff) << 24)) >>> 0);
   it('fadd / fsub / fmul / fcvt agree with the host float32', async () => {
     const add = simulate(fpAdd(F32)), mul = simulate(fpMul(F32)), cvt = simulate(fpFromInt(F32));
-    for (let i = 0; i < 1500; i++) {
+    for (let i = 0; i < (EXHAUSTIVE ? 1500 : 500); i++) {
       if (i % 50 === 0) await new Promise((res) => setTimeout(res));
       const a = pick();
       let b = pick();
