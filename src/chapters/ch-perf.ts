@@ -75,6 +75,20 @@ export const chFastAdders: Chapter = {
       scene: () => cpuScene({ source: src('sum'), timing: true }),
     },
     {
+      title: 'Overclock it',
+      body: `
+        <p>So far every clock edge waited until the logic had settled. Real clocks don't wait. Type a number into
+        <strong>period</strong> (gate delays per cycle) and the edges come on schedule, finished or not; the timing panel
+        marks an edge that arrives while signals are still switching with a red triangle.</p>
+        <p>Measured on this program (static critical path 155): at 150 every edge is clean; at 140 one edge comes
+        early, yet the sum is still right, because the path being exercised that cycle was shorter than the worst case;
+        at 130 a half-rippled result is captured and the program ends with a0 = 66 instead of 55. The gap between the
+        worst case and the typical case is where overclockers find headroom, and why vendors keep a guard band.</p>
+        <div class="try">Set the period to the critical path, run to halt; then halve it, reset and run again. Probe
+        (<kbd>P</kbd>) the ALU result to watch it arrive late.</div>`,
+      scene: () => ({ ...cpuScene({ source: src('sum'), timing: true }), analyzer: true }),
+    },
+    {
       title: 'Swap in fast adders',
       body: `
         <p>Same CPU, same program, with Kogge–Stone adders in the ALU, the branch-target adder and PC + 4. Every block

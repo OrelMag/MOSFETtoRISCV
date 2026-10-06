@@ -15,6 +15,10 @@ export interface SchematicEvents {
   select(child: string | null): void;
   toggleInput(port: string): void;
   editInput(port: string, anchor: DOMRect): void;
+  /** A click on a wire; return true to consume it (probe mode). */
+  netClick?(net: number): boolean;
+  /** The probe on a net of the current view, if any. */
+  probeOf?(net: number): { color: number; label: string } | null;
 }
 
 interface WireEls {
@@ -68,6 +72,7 @@ export class SchematicView {
   private interactive = false;
   private selected: string | null = null;
   private selectedNet = -1;
+  private probeG: SVGGElement | null = null;
   radix: Radix = 'hex';
   /** When > 0, value changes travel along the wires as fronts lasting this many ms. */
   flowMs = 0;
@@ -110,7 +115,8 @@ export class SchematicView {
     const instG = s('g', { class: 'insts' });
     const pinG = s('g', { class: 'pins' });
     const labelG = s('g', { class: 'labels' });
-    this.el.append(gridRect, wiresG, hitG, instG, pinG, labelG);
+    this.probeG = s('g', { class: 'probes' });
+    this.el.append(gridRect, wiresG, hitG, instG, pinG, labelG, this.probeG);
 
     // Bounding box of everything drawn.
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -279,6 +285,7 @@ export class SchematicView {
     this.bbox = { x: x0 - m, y: y0 - m - 1, w: x1 - x0 + 2 * m, h: y1 - y0 + 2 * m + 1 };
     if (!keepView) this.fit();
     else this.applyViewBox();
+    this.drawProbes();
     this.update();
   }
 
@@ -343,6 +350,35 @@ export class SchematicView {
         const stub = p.g.querySelector('.pin-stub');
         stub?.setAttribute('class', `wire ${busClass(bits)} pin-stub`);
       }
+    }
+  }
+
+  /** Probe flags: a coloured flag on every probed wire of this view (same flat nets). */
+  drawProbes(): void {
+    const g = this.probeG;
+    if (!g) return;
+    g.replaceChildren();
+    for (const w of this.wires) {
+      const p = this.events.probeOf?.(w.net.index);
+      if (!p) continue;
+      // Pin the flag to the middle of the net's longest segment.
+      let best: Vec | null = null, len = -1;
+      for (const path of w.net.paths) {
+        for (let i = 1; i < path.length; i++) {
+          const [a, b] = [path[i - 1], path[i]];
+          const l = Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
+          if (l > len) { len = l; best = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; }
+        }
+      }
+      if (!best) continue;
+      const tw = textWidth(p.label, 0.78) + 0.7;
+      const [x, y] = best;
+      const f = s('g', { class: `probe-flag p${p.color}`, transform: `translate(${x},${y})` });
+      f.append(s('circle', { r: 0.42, class: 'probe-tip' }),
+        s('path', { d: 'M0,0 L0.9,-1.6', class: 'probe-pole' }),
+        s('rect', { x: 0.9, y: -2.65, width: tw, height: 1.2, rx: 0.3 }),
+        s('text', { x: 0.9 + tw / 2, y: -1.8, 'text-anchor': 'middle' }, p.label));
+      g.append(f);
     }
   }
 
@@ -425,6 +461,7 @@ export class SchematicView {
 
   /** Clicking a net selects it; clicking one of its tags again pans to the net's next tag. */
   private clickNet(idx: number, target: Element): void {
+    if (this.events.netClick?.(idx)) return;
     if (idx !== this.selectedNet) {
       this.select(null);
       this.events.select(null);

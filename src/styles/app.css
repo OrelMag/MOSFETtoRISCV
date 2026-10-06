@@ -219,6 +219,65 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .status .pulse.warn { background: var(--wx); }
 @keyframes blink { 50% { opacity: 0.3; } }
 
+/* ---------- probes & timing ---------- */
+.stage-bar .btn.toggle.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.canvas.probing > svg.schematic, .canvas.probing .wire-hit { cursor: crosshair; }
+.canvas.probing .wire-hit:hover { stroke: color-mix(in srgb, var(--accent) 22%, transparent); }
+.period { display: inline-flex; align-items: center; gap: 6px; font: 600 12px var(--font-mono); color: var(--muted); }
+.period input {
+  width: 64px; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: 99px; padding: 3px 8px; font: 600 13px var(--font-mono); text-align: right;
+}
+.p0 { --pc: var(--probe-0); } .p1 { --pc: var(--probe-1); } .p2 { --pc: var(--probe-2); } .p3 { --pc: var(--probe-3); }
+.p4 { --pc: var(--probe-4); } .p5 { --pc: var(--probe-5); } .p6 { --pc: var(--probe-6); } .p7 { --pc: var(--probe-7); }
+.probe-flag { pointer-events: none; }
+.probe-flag .probe-tip { fill: var(--pc); stroke: var(--surface); stroke-width: 0.12; }
+.probe-flag .probe-pole { stroke: var(--pc); stroke-width: 0.14; }
+.probe-flag rect { fill: var(--pc); }
+.probe-flag text { font: 700 0.78px var(--font-mono); fill: #fff; }
+
+.analyzer {
+  display: none; flex-direction: column; height: 220px; min-height: 110px; flex: none; position: relative;
+  border-top: 1px solid var(--border); background: var(--surface);
+}
+.stage.with-analyzer .analyzer { display: flex; }
+.stage.widget-mode .analyzer { display: none; }
+.la-grip { position: absolute; left: 0; right: 0; top: -4px; height: 8px; cursor: ns-resize; z-index: 3; }
+.la-head { display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.la-head .la-hint { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.la-head .spacer { flex: 1; }
+.la-readout { font: 600 12px var(--font-mono); color: var(--text-2); white-space: nowrap; }
+.la-head .btn.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.la-body { flex: 1; display: flex; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.la-names { flex: none; width: 200px; border-right: 1px solid var(--border); }
+.la-name { height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 10px; font: 600 12px var(--font-mono); }
+.la-name.ruler { height: 18px; color: var(--muted); font-weight: 500; font-size: 11px; }
+.la-name .chip { width: 8px; height: 8px; border-radius: 2px; background: var(--text-2); flex: none; }
+.la-name .chip.clk { background: var(--muted); border-radius: 50%; }
+.la-name .chip[class*=' p'] { background: var(--pc); }
+.la-name .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.la-name .v { color: var(--text-2); }
+.la-name .x { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 2px; opacity: 0; }
+.la-name:hover .x { opacity: 1; }
+.la-plot { flex: 1; min-width: 0; position: relative; cursor: crosshair; touch-action: none; }
+.la-svg { display: block; }
+.la-tick { stroke: var(--border); stroke-width: 1; }
+.la-time { font: 10px var(--font-mono); fill: var(--muted); }
+.la-edge { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.6; }
+.la-late { fill: var(--wx); }
+.la-trace { fill: none; stroke: var(--text-2); stroke-width: 1.5; stroke-linejoin: round; }
+.la-trace[class*=' p'] { stroke: var(--pc); }
+.la-trace.bus { fill: color-mix(in srgb, currentColor 0%, transparent); stroke-width: 1.2; }
+.la-trace.bus[class*=' p'] { fill: color-mix(in srgb, var(--pc) 10%, transparent); }
+.la-trace.bus.x, .la-x { fill: color-mix(in srgb, var(--wx) 22%, transparent); stroke: var(--wx); }
+.la-x { stroke: none; }
+.la-val { font: 600 11px var(--font-mono); fill: var(--text); pointer-events: none; }
+.la-now { stroke: var(--accent); stroke-width: 1; opacity: 0.5; }
+.la-cursor { stroke: var(--accent); stroke-width: 1.5; }
+.la-cursor.b { stroke-dasharray: 4 3; }
+.la-cursor-l { font: 700 10px var(--font-mono); fill: var(--accent); }
+.la-hover { stroke: var(--text-2); stroke-width: 1; opacity: 0.35; }
+
 .stage.widget-mode .schematic, .stage.widget-mode .controls, .stage.widget-mode .stage-bar,
 .stage.widget-mode .level-badge, .stage.widget-mode .hint-badge, .stage.widget-mode .mem-panel { display: none; }
 .stage.widget-mode .canvas { background: var(--bg); }
@@ -495,6 +554,8 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .wgrid { grid-template-columns: 1fr; }
   .topbar { padding: 0 10px; gap: 6px; }
   .tools .seg { display: none; }
+  .stage-bar .btn .lbl, .la-hint { display: none; }
+  .la-names { width: 120px; }
   .tools .lbl { display: none; }
   .brand { font-size: 14px; }
   .rung { flex-wrap: wrap; gap: 2px 12px; }
@@ -711,3 +772,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .chip-overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
 .chip-tip { position: absolute; left: 8px; bottom: 6px; font: 11px var(--font-mono); color: #cbd5e1; background: rgba(0, 0, 0, .5); padding: 2px 6px; border-radius: 4px; pointer-events: none; }
 .chip-stats .m .n { width: 170px; }
+
+.chip-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 6px 0 10px; }
+.chip-gallery a { display: flex; flex-direction: column; gap: 3px; text-decoration: none; color: var(--text-2); font-size: 12px; }
+.chip-gallery img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; background: #000; border: 1px solid var(--border); }

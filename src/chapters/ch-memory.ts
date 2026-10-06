@@ -74,7 +74,7 @@ export const chLatches: Chapter = {
         <strong>slave</strong> while it is high. At the moment the clock rises, the master closes (capturing d)
         and the slave opens (showing it). This is the <strong>edge-triggered D flip-flop</strong>.</p>
         <div class="try">Change d while the clock is low: q does not move. Press <strong>Pulse</strong>: q
-        takes d's value at the rising edge. Open the <strong>Waves</strong> tab to see it over time.</div>`,
+        takes d's value at the rising edge. Open the <strong>Timing</strong> panel to see it over time.</div>`,
       scene: () => ({ root: DFF, inputs: { d: 1, clk: 0 } }),
     },
     {
@@ -122,7 +122,7 @@ export const chRegisters: Chapter = {
         its input. Every clock edge, it loads its own value plus one: a <strong>counter</strong>.</p>
         <p>This loop of register → logic → register is the shape of every synchronous circuit, including a
         processor: the program counter is exactly this, plus the ability to jump.</p>
-        <div class="try">Press <strong>Run</strong> to clock it continuously, and watch the Waves tab.</div>`,
+        <div class="try">Press <strong>Run</strong> to clock it continuously, and watch the <strong>Timing</strong> panel.</div>`,
       scene: () => ({ root: counter(4), inputs: { en: 1, clk: 0 } }),
       challenge: {
         kind: 'reach', goal: 'Stop the counter at exactly 9.',

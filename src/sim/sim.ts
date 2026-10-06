@@ -18,6 +18,8 @@ export interface Sim {
   getInput(port: string): number;
   /** Advance one time instant. Returns false when nothing is left to do. */
   step(): boolean;
+  /** Gate level only: process events up to time t and stand at t (pending ones stay pending). */
+  runUntil?(t: number): void;
   /** Run until quiet. */
   settle(): void;
   /** True if there are events still to process. */
