@@ -16,9 +16,9 @@ const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name
 
 const cache = new Map<string, ComponentDef>();
 
-export function dualCore(program: number[], dmemK = 5): ComponentDef {
-  const CORE = singleCycleCpu(program, { shared: true, adder: 'ks', dmemK });
-  const key = `${CORE.id}_x2`;
+export function dualCore(program: number[], dmemK = 5, imemPort = false): ComponentDef {
+  const CORE = singleCycleCpu(imemPort ? [] : program, { shared: true, adder: 'ks', dmemK, imemPort });
+  const key = imemPort ? 'mosfet_riscv_dualcore' : `${CORE.id}_x2`;
   let d = cache.get(key);
   if (d) return d;
   const cg = symbolGeom(CORE), DM = dataMemory(dmemK), dg = symbolGeom(DM), M2 = busMux2(32);
@@ -27,10 +27,10 @@ export function dualCore(program: number[], dmemK = 5): ComponentDef {
   d = {
     id: key, name: 'Dual-core RV32I (shared memory)', category: 'cpu',
     summary: 'Two identical cores, one data memory. The arbiter grants the memory port to one core per cycle; the other stalls. Each core reads its hart id (0 or 1) with csrr mhartid; amoswap.w and amoadd.w read and write memory in one indivisible access.',
-    ports: [bit('clk', 'in', true), bus('pc0', 32, 'out'), bus('pc1', 32, 'out'), bit('retire0', 'out'), bit('retire1', 'out'), bit('grant0', 'out'), bit('grant1', 'out')],
+    ports: [bit('clk', 'in', true), ...(imemPort ? [bus('instr0', 32, 'in'), bus('instr1', 32, 'in')] : []), bus('pc0', 32, 'out'), bus('pc1', 32, 'out'), bit('retire0', 'out'), bit('retire1', 'out'), bit('grant0', 'out'), bit('grant1', 'out')],
     symbol: { kind: 'box', label: '2 × RV32I' },
     netlist: () => ({
-      pins: { clk: [0, y1 - 6], pc0: [xD + dg.w + 12, y0 + 4], pc1: [xD + dg.w + 12, y0 + 8], retire0: [xD + dg.w + 12, y0 + 12], retire1: [xD + dg.w + 12, y0 + 16], grant0: [xD + dg.w + 12, y0 + 20], grant1: [xD + dg.w + 12, y0 + 24] },
+      pins: { clk: [0, y1 - 6], instr0: [0, y0 + 10], instr1: [0, y1 + 10], pc0: [xD + dg.w + 12, y0 + 4], pc1: [xD + dg.w + 12, y0 + 8], retire0: [xD + dg.w + 12, y0 + 12], retire1: [xD + dg.w + 12, y0 + 16], grant0: [xD + dg.w + 12, y0 + 20], grant1: [xD + dg.w + 12, y0 + 24] },
       instances: [
         { name: 'h0', def: constWord(32, 0), at: [4, y0 + 4], label: 'hart 0' },
         { name: 'h1', def: constWord(32, 1), at: [4, y1 + 4], label: 'hart 1' },
@@ -54,6 +54,7 @@ export function dualCore(program: number[], dmemK = 5): ComponentDef {
         { name: 'rdata', ends: ['dm.rd', 'core0.memRData', 'core1.memRData'], tags: true },
         { name: 'pc0', ends: ['core0.pcOut', 'pc0'], tags: true }, { name: 'pc1', ends: ['core1.pcOut', 'pc1'], tags: true },
         { name: 'retire0', ends: ['core0.retire', 'retire0'], tags: true }, { name: 'retire1', ends: ['core1.retire', 'retire1'], tags: true },
+        ...(imemPort ? [{ name: 'instr0', ends: ['instr0', 'core0.instr'], tags: true as const }, { name: 'instr1', ends: ['instr1', 'core1.instr'], tags: true as const }] : []),
       ],
     }),
   };

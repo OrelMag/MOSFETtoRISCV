@@ -1,3 +1,4 @@
+import { chipLayoutWidget } from '../widgets/chiplayout';
 import { journeyWidget } from '../widgets/journey';
 import { clockTreeWidget, fabWidget, floorplanWidget, layoutWidget, mappingWidget, pnrWidget, waferWidget } from '../widgets/silicon';
 import type { Chapter } from './types';
@@ -70,6 +71,16 @@ export const chSilicon: Chapter = {
         <p>The open-source flow is real: Yosys (synthesis) and OpenROAD (placement, clock tree, routing) take Verilog like the structural Verilog on every component's Verilog tab and produce
         a layout that SkyWater can manufacture.</p>`,
       widget: floorplanWidget,
+    },
+    {
+      title: 'The real thing',
+      body: `
+        <p>The same dual-core, exported as Verilog by this site (each core's program ROM becomes an instruction port, as a memory macro would be), and pushed
+        through the real open-source flow for SkyWater's 130 nm process: <strong>Yosys</strong> synthesizes it to the sky130 standard-cell library, and
+        <strong>OpenROAD</strong> floorplans, places, builds the clock tree, routes and checks it, producing a GDS file a foundry could manufacture.</p>
+        <p>Before the flow ran, the exported Verilog was checked: Yosys's synthesized gate netlist, simulated cycle by cycle, matches this site's own gate-level
+        simulation on all four multi-core programs. Colour the cells by block to find the two cores, the shared memory and the arbiter; zoom in until the routing shows.</p>`,
+      widget: chipLayoutWidget,
     },
     {
       title: 'Wafers, yield and cost',

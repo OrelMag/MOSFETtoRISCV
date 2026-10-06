@@ -8,6 +8,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "layout:export": "vite-node scripts/export-layout.ts layout/design",
+    "layout:verify": "vite-node scripts/verify-export.ts",
+    "layout:fetch": "gh release download layout-latest -p layout.tar.gz -D layout --clobber && mkdir -p public/layout && tar -xzf layout/layout.tar.gz -C public/layout",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -16,6 +19,7 @@
     "@types/node": "^22.20.5",
     "typescript": "^5.9.0",
     "vite": "^7.0.0",
+    "vite-node": "^3.2.4",
     "vitest": "^3.2.0"
   }
 }

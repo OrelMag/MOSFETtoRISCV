@@ -26,6 +26,16 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - name: Add the chip layout (published by the layout workflow, if any)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist/layout
+          if gh release download layout-latest -p layout.tar.gz -D /tmp --repo "$GITHUB_REPOSITORY"; then
+            tar -xzf /tmp/layout.tar.gz -C dist/layout && ls dist/layout
+          else
+            echo "no layout published yet"
+          fi
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
