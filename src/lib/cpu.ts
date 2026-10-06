@@ -14,6 +14,7 @@ import { define, merger, splitter } from './define';
 import { AND, NOT, OR, XNOR, XOR } from './gates';
 import { ram } from './memory';
 import { cachedMemory } from './cache';
+import { iCache, wbCache } from './cache2';
 import { FCSR, FPU32, FP_DECODE } from './fpu';
 import { MP_DECODE } from './mpdecode';
 import { regfile } from './regfile';
@@ -433,8 +434,13 @@ export interface CpuOptions {
   dmemK?: number;
   /** 'ks' uses Kogge–Stone adders in the ALU, the branch-target adder and PC + 4. */
   adder?: 'rca' | 'ks';
-  /** Put a 4-line direct-mapped data cache in front of a slow main memory (loads can stall). */
-  dcache?: boolean;
+  /**
+   * Put a data cache in front of a slow main memory: true = 4-line direct-mapped write-through (loads
+   * can stall); 'wb' = write-back, write-allocate; 'wb2' = 2-way write-back with LRU (loads and stores can stall).
+   */
+  dcache?: boolean | 'wb' | 'wb2';
+  /** Fetch through an 8-line instruction cache in front of the ROM (fetch misses stall). */
+  icache?: boolean;
   /** Add the floating-point register file, the FPU and fcsr (RV32F of chapter 23). */
   fpu?: boolean;
   /**
@@ -481,12 +487,14 @@ export const PLUS4_FAST: ComponentDef = define({
 export function singleCycleCpu(program: number[], opts: CpuOptions = {}): ComponentDef {
   const IM = rom(program);
   const adder = opts.adder ?? 'rca';
-  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? '_dc' : ''}${opts.fpu ? '_fp' : ''}${opts.shared ? '_mp' : ''}${opts.imemPort ? '_ip' : ''}`;
-  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, !!opts.dcache, !!opts.fpu, !!opts.shared, !!opts.imemPort));
+  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? `_dc${opts.dcache === true ? '' : opts.dcache}` : ''}${opts.fpu ? '_fp' : ''}${opts.shared ? '_mp' : ''}${opts.imemPort ? '_ip' : ''}${opts.icache ? '_ic' : ''}`;
+  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, opts.dcache ?? false, !!opts.fpu, !!opts.shared, !!opts.imemPort, !!opts.icache));
 }
 
-function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache = false, fpu = false, shared = false, imemPort = false): ComponentDef {
-  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dcache ? cachedMemory(dmemK) : dataMemory(dmemK);
+function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: boolean | 'wb' | 'wb2' = false, fpu = false, shared = false, imemPort = false, icache = false): ComponentDef {
+  if (icache && (fpu || shared)) throw new Error('singleCycleCpu: icache with fpu or shared is not supported');
+  const IMEM = icache ? iCache(IM) : IM;
+  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dcache === 'wb' ? wbCache(dmemK, 2, 1) : dcache === 'wb2' ? wbCache(dmemK, 1, 2) : dcache ? cachedMemory(dmemK) : dataMemory(dmemK);
   const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = adder === 'ks' ? koggeStone(32) : rca(32), SI = splitter([7, 5, 3, 5, 5, 7]);
   const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4;
   const g = (d: ComponentDef) => symbolGeom(d);
@@ -507,7 +515,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
   alignY('pc', PC, 12, 'd', Y);
   place('one', TIE1, [8, P('pc', 'en')[1] - 1]);
   const pcY = P('pc', 'q')[1];
-  alignY('imem', IM, 27, 'addr', pcY);
+  alignY('imem', IMEM, 27, 'addr', pcY);
   const instrY = P('imem', 'data')[1];
   alignY('si', SI, 45, 'in', instrY);
   alignY('rf', RF, 60, 'wa', P('si', 'o1')[1]);
@@ -590,31 +598,61 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
   ];
 
   const pins: Record<string, [number, number]> = { clk: [0, bottom], pcOut: [resY[0] + 22, bottom - 8], instrOut: [resY[0] + 22, bottom - 5], aluOut: [resY[0] + 22, bottom - 2] };
-  if (dcache) {
-    // a load (ResultSrc = 01) that misses stalls the PC and the register write until the line arrives
+  if (dcache || icache) {
+    // a load (ResultSrc = 01) or, with an I-cache, a fetch that misses stalls the PC and the register
+    // write until the line arrives
     const add = (name: string, def: ComponentDef, xy: [number, number]) => instances.push({ name, def, at: xy });
-    add('rsplit', splitter([1, 1]), [aluR + 4, bottom - 12]);
-    add('nr1', NOT, [aluR + 8, bottom - 10]);
-    add('isLoad', AND, [aluR + 13, bottom - 12]);
+    if (dcache) {
+      add('rsplit', splitter([1, 1]), [aluR + 4, bottom - 12]);
+      add('nr1', NOT, [aluR + 8, bottom - 10]);
+      add('isLoad', AND, [aluR + 13, bottom - 12]);
+    }
     add('nstall', NOT, [8, P('pc', 'en')[1] - 1]);
     add('rwg', AND, [52, bottom - 8]);
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
     const net = (name: string) => nets.find((n) => n.name === name)!;
     nets.splice(nets.indexOf(net('en')), 1);
-    net('ResultSrc').ends.push('rsplit.in');
     net('RegWrite').ends = ['ctl.regWrite', 'rwg.a'];
+    let stall = 'dm.stall';
+    if (icache) {
+      // while the fetch misses, the instruction is not valid: hold back its data-memory request too
+      add('ivalid', NOT, [aluR + 8, bottom - 18]);
+      add('weg', AND, [aluR + 13, bottom - 20]);
+      net('MemWrite').ends = ['ctl.memWrite', 'weg.a'];
+      net('clk').ends.push('imem.clk');
+      nets.push(
+        { name: 'istall', ends: ['imem.stall', 'ivalid.a', ...(dcache ? ['anyStall.b'] : [])], tags: true },
+        { name: 'instrValid', ends: ['ivalid.y', 'weg.b', ...(dcache ? ['reg.b'] : [])], tags: true },
+        { name: 'MemWriteQ', ends: ['weg.y', 'dm.we'], tags: true },
+        { name: 'ihit', ends: ['imem.hit', 'ihit'], tags: true },
+      );
+      if (dcache) {
+        add('reg', AND, [aluR + 19, bottom - 12]);
+        add('anyStall', OR, [52, bottom - 16]);
+        nets.push({ name: 'dstall', ends: ['dm.stall', 'anyStall.a'], tags: true });
+        stall = 'anyStall.y';
+      } else stall = 'imem.stall';
+      pins.ihit = [resY[0] + 22, bottom + 7];
+    }
+    if (dcache) {
+      net('ResultSrc').ends.push('rsplit.in');
+      nets.push(
+        { name: 'rs0', ends: ['rsplit.o0', 'isLoad.a'], tags: true },
+        { name: 'rs1', ends: ['rsplit.o1', 'nr1.a'], tags: true },
+        { name: '¬rs1', ends: ['nr1.y', 'isLoad.b'], tags: true },
+        ...(icache
+          ? [{ name: 'MemRead', ends: ['isLoad.y', 'reg.a'], tags: true as const }, { name: 'MemReadQ', ends: ['reg.y', 'dm.re'], tags: true as const }]
+          : [{ name: 'MemRead', ends: ['isLoad.y', 'dm.re'], tags: true as const }]),
+        { name: 'dhit', ends: ['dm.hit', 'dhit'], tags: true },
+      );
+      pins.dhit = [resY[0] + 22, bottom + 4];
+    }
     nets.push(
-      { name: 'rs0', ends: ['rsplit.o0', 'isLoad.a'], tags: true },
-      { name: 'rs1', ends: ['rsplit.o1', 'nr1.a'], tags: true },
-      { name: '¬rs1', ends: ['nr1.y', 'isLoad.b'], tags: true },
-      { name: 'MemRead', ends: ['isLoad.y', 'dm.re'], tags: true },
-      { name: 'stall', ends: ['dm.stall', 'nstall.a'], tags: true },
+      { name: 'stall', ends: [stall, 'nstall.a'], tags: true },
       { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwg.b', 'retire'], tags: ['rwg.b', 'retire'] },
       { name: 'RegWriteQ', ends: ['rwg.y', 'rf.we'], tags: true },
-      { name: 'dhit', ends: ['dm.hit', 'dhit'], tags: true },
     );
     pins.retire = [resY[0] + 22, bottom + 1];
-    pins.dhit = [resY[0] + 22, bottom + 4];
   }
   if (fpu) pins.retire = [resY[0] + 22, bottom + 1];
   if (fpu) {
@@ -780,11 +818,13 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
       bus('memAddr', 32, 'out'), bus('memWData', 32, 'out'), bit('memWE', 'out'), bit('memReq', 'out'), bit('retire', 'out'));
   }
   return {
-    id: imemPort ? 'rv32i_core' : key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dmemK}` : '') + (fpu ? '_fp' : '') + (shared ? '_core' : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ' with a data cache' : ''}`, category: 'cpu',
-    summary: dcache
+    id: imemPort ? 'rv32i_core' : key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
+    summary: dcache === 'wb' || dcache === 'wb2'
+      ? `The single-cycle processor with its data memory behind a ${dcache === 'wb2' ? '2-way set-associative' : 'direct-mapped'} write-back cache. Loads and stores that miss hold the PC and the register write (retire = 0): 8 cycles, or 12 when a dirty line must be written back first.`
+      : dcache
       ? 'The single-cycle processor with its data memory replaced by a slow main memory behind a 64-byte direct-mapped cache. A load that misses holds the PC and the register write (retire = 0) for 8 cycles while the line is fetched.'
       : 'A complete RISC-V processor: every instruction is fetched, decoded, executed and retired in one clock cycle. Built entirely from the blocks of the previous chapters.',
-    ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out'), ...(dcache ? [bit('retire', 'out'), bit('dhit', 'out')] : []), ...(fpu ? [bit('retire', 'out')] : []), ...extraPorts],
+    ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out'), ...(dcache || icache ? [bit('retire', 'out')] : []), ...(dcache ? [bit('dhit', 'out')] : []), ...(icache ? [bit('ihit', 'out')] : []), ...(fpu ? [bit('retire', 'out')] : []), ...extraPorts],
     symbol: { kind: 'box', label: shared ? 'CORE' : dcache ? 'RV32I + D$' : 'RV32I' },
     netlist: () => ({ pins, instances, nets }),
     hdl: { verilog: CPU_VERILOG },

@@ -30,6 +30,8 @@ export function cpuState(sim: Pick<Sim, 'getBits' | 'design'>, root: HierNode = 
       }
     }
   }
+  // A write-back cache holds the newest copy of its dirty lines: overlay them on main memory.
+  if (dm) for (const l of cacheLines(sim, dm)) if (l.valid && l.dirty) l.words.forEach((v, i) => (dmem[l.base + i] = v));
   const pcPort = root.ports.pcOut ?? root.ports.pcF;
   const pc = pcPort ? pack(sim.getBits(pcPort)) >>> 0 : 0;
   return { pc, x, dmem, f, fcsr };
@@ -50,4 +52,31 @@ export function clockCycle(sim: Pick<Sim, 'setInput' | 'settle'>): void {
 export function retiring(sim: Pick<Sim, 'getBits' | 'design'>, root: HierNode = sim.design.root): boolean {
   const port = root.ports.validW ?? root.ports.retire;
   return port ? sim.getBits(port)[0] === 1 : true;
+}
+
+export interface CacheLine { way: number; set: number; valid: boolean; dirty: boolean; tag: number; base: number; words: number[] }
+
+/**
+ * The lines of a data cache, write-through (tags / data arrays) or write-back (way0, way1, each with
+ * tags holding {dirty, valid, tag} and data). base = main-memory word index of the line's first word.
+ */
+export function cacheLines(sim: Pick<Sim, 'getBits'>, dm: HierNode): CacheLine[] {
+  const word = (arr: HierNode, i: number) => pack(sim.getBits(arr.children!.get(`w${i}`)!.ports.q)) >>> 0;
+  const ways = dm.children!.has('way0') ? [...dm.children!.entries()].filter(([n]) => /^way\d$/.test(n)).map(([, n]) => n)
+    : dm.children!.has('tags') ? [dm] : [];
+  const out: CacheLine[] = [];
+  ways.forEach((w, way) => {
+    const tags = w.children!.get('tags')!, data = w.children!.get('data')!;
+    const sets = [...tags.children!.keys()].filter((n) => /^w\d+$/.test(n)).length;
+    const tb = tags.def.ports.find((p) => p.name === 'din')!.width - (w === dm ? 1 : 2);
+    const ib = Math.round(Math.log2(sets));
+    for (let set = 0; set < sets; set++) {
+      const tv = word(tags, set), tag = tv & ((1 << tb) - 1);
+      out.push({
+        way, set, tag, valid: !!((tv >> tb) & 1), dirty: w !== dm && !!((tv >> (tb + 1)) & 1),
+        base: (tag << (ib + 2)) | (set << 2), words: [0, 1, 2, 3].map((i) => word(data, set * 4 + i)),
+      });
+    }
+  });
+  return out;
 }

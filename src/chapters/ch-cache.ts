@@ -1,4 +1,5 @@
-import { DRAM_CELL, SRAM_COLUMN, cachedMemory, eccChannel, wayLookup2 } from '../lib';
+import { DRAM_CELL, SRAM_COLUMN, cachedMemory, eccChannel, sramArray, wayLookup2 } from '../lib';
+import { assemble } from '../riscv/asm';
 import { CACHE_CPU_PROGRAMS } from '../riscv/cprograms';
 import { cpuState } from '../riscv/cosim';
 import { findNode } from '../sim/flatten';
@@ -54,6 +55,37 @@ export const chCache: Chapter = {
           st.setInputs({ pre_n: 1, wl1: 0, w0: 0, w1: 1, wl0: 1 }); st.setInputs({ wl0: 0, w1: 0 });
           st.setInputs({ w0: 1, wl1: 1 }); st.setInputs({ wl1: 0, w0: 0 });
           st.setInputs({ pre_n: 0 }); st.setInputs({ pre_n: 1, wl0: 1 });
+        },
+      },
+    },
+    {
+      title: 'From a column to an array',
+      body: `
+        <p>A real SRAM is a grid. Each row of cells shares a <strong>word line</strong>, raised by a row decoder (the gate-level decoder
+        of chapter 7, here running as its transistors); each column shares a bit-line pair with its own precharge, <strong>write driver</strong>
+        and <strong>sense amplifier</strong>. One access reads or writes a whole row, one bit per column.</p>
+        <p>The sense amplifier is a latch: while <code>sae</code> = 0 it follows the bit lines (unpowered, so it never drives them); when
+        <code>sae</code> rises it isolates itself and latches the value, which it holds while the bit lines are precharged for the next access.
+        In silicon it also <em>amplifies</em>: it fires when the bit lines differ by ~100 mV, long before a small cell could swing a long
+        bit line fully. Our simulator has no analog voltages, so here the swing is full.</p>
+        <p>Cost of this 4×4: 320 transistors, of which the cells are 96. The periphery is shared per row and per column, so it amortizes:
+        at 8×8 the cells are 43 %, and in a real 32 KB array over 90 %. Sixteen bits of flip-flop registers would cost 960.</p>
+        <div class="try">Use the buttons: Precharge, set <code>din</code> and <code>addr</code>, Write; then Precharge and Read.</div>`,
+      scene: () => ({ root: sramArray(4, 4), inputs: { addr: 0, wl: 0, pre_n: 1, we: 0, din: 0, sae: 0 } }),
+      actions: [
+        { label: 'Precharge', run: (st) => { st.setInputs({ wl: 0, we: 0, sae: 0, pre_n: 0 }); st.setInputs({ pre_n: 1 }); } },
+        { label: 'Write din → addr', run: (st) => { st.setInputs({ sae: 0, we: 1 }); st.setInputs({ wl: 1 }); st.setInputs({ wl: 0, we: 0 }); } },
+        { label: 'Read addr', run: (st) => { st.setInputs({ we: 0, sae: 0 }); st.setInputs({ wl: 1 }); st.setInputs({ sae: 1 }); st.setInputs({ wl: 0 }); } },
+      ],
+      challenge: {
+        kind: 'reach', goal: 'Store 0xA in word 2, then read word 2 back so that dout = 0xA.',
+        check: (st) => st.value('dout') === 0xa && st.getInput('addr') === 2 && st.getInput('sae') === 1 && st.getInput('we') === 0,
+        answer: 'addr = 2, din = 0xA. Precharge, Write (we = 1, raise and drop the word line), Precharge again, Read (raise the word line, then sae). Without the precharge before the read, the bit lines still hold what the write left on them.',
+        solve: (st) => {
+          st.setInputs({ addr: 2, din: 0xa, wl: 0, we: 0, sae: 0, pre_n: 0 }); st.setInputs({ pre_n: 1 });
+          st.setInputs({ we: 1 }); st.setInputs({ wl: 1 }); st.setInputs({ wl: 0, we: 0 });
+          st.setInputs({ pre_n: 0 }); st.setInputs({ pre_n: 1 });
+          st.setInputs({ wl: 1 }); st.setInputs({ sae: 1 }); st.setInputs({ wl: 0 });
         },
       },
     },
@@ -168,6 +200,57 @@ export const chCache: Chapter = {
         check: (st) => { try { return st.sim ? cpuState(st.sim).dmem[32] === 960 : false; } catch { return false; } },
         answer: '"Run to halt": 188 instructions in 220 cycles. 32 loads, 4 misses × 8 cycles. Hit rate 87.5 %, CPI 1.17.',
         solve: () => { [...document.querySelectorAll<HTMLButtonElement>('.cpu-panel button')].find((b) => b.textContent === 'Run to halt')?.click(); },
+      },
+    },
+    {
+      title: 'Write-back: dirty lines',
+      body: `
+        <p>Write-through sends every store to main memory. A <strong>write-back</strong> cache keeps the store in the line and marks it
+        <strong>dirty</strong>; memory sees the line only when it is evicted. Stores now allocate on a miss as well (write-allocate), and a
+        miss whose victim is dirty must write it back first: 12 cycles instead of 8. The miss controller is a 4-bit counter: 0–3 write the
+        victim back, 4–7 wait, 8–11 fill, and a clean victim jumps from 0 to 5.</p>
+        <p>The panel's memory view now shows the memory <em>as the program sees it</em>: main memory overlaid with the dirty lines, which are
+        the only up-to-date copy. That is the coherence problem of chapter 24 in its simplest form.</p>
+        <div class="try">Run "Update an array in place": 48 stores, all of them hits after the first pass's 4 misses. Open <code>dm</code> → <code>ram</code>: main memory is still all zero.</div>`,
+      scene: () => cpuScene({ source: csrc('inplace'), dcache: 'wb', adder: 'ks', highlight: ['dm'] }),
+      challenge: {
+        kind: 'quiz', question: 'In "Update an array in place" (48 stores to 16 words), how many words reach main memory with each cache?',
+        options: ['Write-through 48, write-back 0 (until the lines are evicted)', 'Both 48', 'Write-through 16, write-back 48', 'Both 0'],
+        answer: 0,
+        explain: 'Measured in the tests: the write-through cache writes main memory on every store, 48 words; the write-back cache none during the run, because the four lines stay resident and dirty. Each line would cost 4 words when evicted, 16 in all, and only once.',
+      },
+    },
+    {
+      title: 'Two ways and an LRU bit',
+      body: `
+        <p>"Two arrays, one set" is the worst case for direct mapping: a[i] and b[i] share an index, so each access evicts the other, and every
+        load misses. A <strong>2-way set-associative</strong> cache of the same size has half as many sets, but each holds two lines: both
+        arrays fit. Both ways are compared at once (the 2-way tag compare of a few steps back), and one <strong>LRU</strong> bit per set,
+        flipped on every hit, names the way to evict next.</p>
+        <p>Measured: 33 misses direct-mapped (32 loads and the final store), 9 with two ways; the run takes less than half the cycles.</p>
+        <div class="try">Run "Two arrays, one set" here, then compare with the direct-mapped CPU two steps back.</div>`,
+      scene: () => cpuScene({ source: csrc('pingpong'), dcache: 'wb2', adder: 'ks', highlight: ['dm'] }),
+      challenge: {
+        kind: 'reach', goal: 'Run the program to the end.',
+        check: (st) => { try { return st.sim ? cpuState(st.sim).pc === assemble(csrc('pingpong')).labels.get('halt') : false; } catch { return false; } },
+        answer: '"Run to halt". 9 misses: one per line of a and of b (4 + 4), and one for the final store, which allocates its line.',
+        solve: () => { [...document.querySelectorAll<HTMLButtonElement>('.cpu-panel button')].find((b) => b.textContent === 'Run to halt')?.click(); },
+      },
+    },
+    {
+      title: 'Caching instructions too',
+      body: `
+        <p>Fetch needs a cache as much as loads do, and an <strong>instruction cache</strong> is simpler: nothing is ever written, so no dirty
+        bits and no write-back. Here 8 lines of 4 instructions sit in front of the instruction ROM, which now plays the slow memory. Every fetch
+        is an access; a miss stalls 8 cycles. While it does, the instruction on the bus is not valid, so its store or load is held back too.</p>
+        <p>A loop that fits misses once per line and then always hits: the run takes exactly one cycle per instruction plus 8 per line.
+        Real cores split the two caches (a Harvard L1) so that a fetch and a load never compete.</p>`,
+      scene: () => cpuScene({ source: csrc('inplace'), icache: true, adder: 'ks', highlight: ['imem'] }),
+      challenge: {
+        kind: 'quiz', question: 'The program is 11 instructions. How many cycles does the instruction cache add to the whole run?',
+        options: ['24: three lines, 8 cycles each', '88: every instruction misses once', '0: a loop always hits', '8: one miss'],
+        answer: 0,
+        explain: '11 instructions occupy three 4-word lines, each fetched once (8 cycles); every later fetch hits. The tests check exactly this: cycles = instructions + 8 × lines.',
       },
     },
     {

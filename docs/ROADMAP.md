@@ -84,12 +84,13 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 | 6 | Adders | Half adder, 9-NAND full adder, ripple-carry (watch the carry ripple), adder/subtractor |
 | 7 | Choosing & routing | Decoders 2→4 / 3→8, multiplexers 4:1 / 8:1, bus multiplexers |
 | 8 | Memory from feedback | SR latch, gated D latch, master–slave D flip-flop, waveforms, setup/hold intuition |
-| 9 | Registers & counters | n-bit register with enable, counter, clocks |
-| 10 | Memory arrays | N words × W bits (user-scalable: 4×4 … 64×16), write path (decoder), read path (mux tree), cell grid view, timing |
+| 9 | Registers & counters | n-bit register with enable, counter, clocks; async reset, T/JK, up/down counter, universal shift register, LFSR, ring / Johnson counters, ripple clock divider |
+| 10 | Memory arrays | N words × W bits (user-scalable: 4×4 … 64×16), write path (decoder), read path (mux tree), cell grid view, timing; ROM (decoder + OR plane), PLA (Quine–McCluskey terms), FIFO, stack, CAM, multi-ported register file |
 
 ### Phase 2 — Computing 🚧
 - ✅ ALU (add, sub, and, or, xor, shifts, slt/sltu) and flags; barrel shifter
 - ✅ Carry-lookahead and Kogge–Stone adders with depth comparison (optimization intro)
+- ✅ Carry-select and carry-skip adders, static depth against simulated delay (carry-skip's false path); BCD adder
 - ✅ Register file (32 × 32, x0 hard-wired), two read ports and one write port
 - ✅ Comparison and coding blocks: log-depth magnitude comparator (signed / unsigned), encoder, recursive priority
   encoder, demultiplexer, population count, absolute value, parity, Hamming SEC-DED encoder / decoder (ECC step in ch. 21)
@@ -145,11 +146,14 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 ### Phase 8 — Memory hierarchy 🚧
 - ✅ Switch level gains transistor strengths and capacitive (charge-holding) nets
 - ✅ 6T SRAM column (precharge, read, write, no read disturb, contention = short) and 1T1C DRAM cell at transistor level
+- ✅ Transistor-level SRAM array (R × C): row decoder, per-column precharge, write driver and latch-type sense amplifier
 - ✅ DRAM retention / refresh / charge-sharing widget; memory hierarchy table
 - ✅ Gate-level direct-mapped write-through cache (4 × 4 words) with an 8-cycle miss FSM; 2-way tag compare
 - ✅ Cache explorer on real ISS traces: size, line, ways, LRU/FIFO/random, write-back/through, 3C classification
 - ✅ Single-cycle CPU with the data cache (stalls on misses), co-simulated per retirement
-- ⏳ Write-back gate-level cache with dirty bits; instruction cache; cache in the pipelined CPU
+- ✅ Gate-level write-back, write-allocate cache with dirty bits and a write-back-then-fill miss controller; 2-way
+  set-associative with an LRU bit; instruction cache; all three in the single-cycle CPU, co-simulated per cycle
+- ⏳ Cache in the pipelined CPU
 - ⏳ Bus / interconnect basics
 
 ### Phase 9 — Performance & optimization ⏳

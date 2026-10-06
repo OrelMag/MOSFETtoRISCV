@@ -192,6 +192,7 @@ export function boothPP(n: number): ComponentDef {
   const m = n / 2;
   return memo(`bpp${n}`, () => {
     const b = new Builder(8, 18);
+    b.pins('a', 'b');
     // digits from b: bit triples (2j+1, 2j, 2j−1), with b_{−1} = 0
     const sb = b.op(splitter(ones(n)), ['b']);
     const z = b.op1(TIE0, []);
@@ -221,7 +222,8 @@ export function boothPP(n: number): ComponentDef {
 export function boothReduce(n: number): ComponentDef {
   const m = n / 2, W = 2 * n;
   return memo(`bred${n}`, () => {
-    const b = new Builder(8, 10);
+    const b = new Builder(16, 10);
+    b.pins('neg', ...Array.from({ length: m }, (_, j) => `pp${j}`));
     const sn = b.op(splitter(ones(m)), ['neg']);
     b.next();
     const words: Word[] = [];

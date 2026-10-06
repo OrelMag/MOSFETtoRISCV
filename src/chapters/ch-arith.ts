@@ -1,4 +1,4 @@
-import { addSub, decoder, demux, encoder, FULL_ADDER, FULL_ADDER_HA, HALF_ADDER, busMux2, magComparator, muxTree, priorityEncoder, rca } from '../lib';
+import { addSub, bcdAdder, decoder, demux, encoder, FULL_ADDER, FULL_ADDER_HA, HALF_ADDER, busMux2, magComparator, muxTree, priorityEncoder, rca } from '../lib';
 import type { Chapter } from './types';
 
 export const chAdders: Chapter = {
@@ -114,6 +114,23 @@ export const chAdders: Chapter = {
         check: (st) => st.value('lt') === 1 && st.getInput('a') > st.getInput('b'),
         answer: "Any a with the sign bit set and b without it: a = 8 is −8 in 4-bit two's complement, b = 1. Unsigned 8 > 1, signed −8 < 1.",
         solve: (st) => st.setInputs({ a: 8, b: 1 }),
+      },
+    },
+    {
+      title: 'Decimal: the BCD adder',
+      body: `
+        <p>Calculators, clocks and money keep numbers in decimal: four bits per digit, values 0–9, the codes 1010–1111 unused. This is
+        <strong>binary-coded decimal</strong>. Read a BCD number in hex and it looks decimal: 0x38 is thirty-eight.</p>
+        <p>Adding two digits in binary is right up to 9. Above that the sum must skip the six unused codes, so whenever the binary sum is
+        more than 9 (a carry out, or 1010–1111) the digit adder adds 6 and sends a decimal carry to the next digit. 80 NANDs per digit,
+        against 36 for a 4-bit binary adder: the price of decimal. x86 kept <code>daa</code> (decimal adjust) for exactly this; RISC-V has none.</p>
+        <div class="try">In HEX mode, set a = 0x38 and b = 0x45: s = 0x83, thirty-eight plus forty-five.</div>`,
+      scene: () => ({ root: bcdAdder(2), inputs: { a: 0x38, b: 0x45, cin: 0 } }),
+      challenge: {
+        kind: 'reach', goal: 'Make the adder overflow into the next hundred: s = 0x00 with cout = 1.',
+        check: (st) => st.value('s') === 0 && st.value('cout') === 1,
+        answer: 'Any pair that sums to exactly 100, for example a = 0x99, b = 0x01 (99 + 1), or 0x50 + 0x50.',
+        solve: (st) => st.setInputs({ a: 0x99, b: 0x01, cin: 0 }),
       },
     },
   ],

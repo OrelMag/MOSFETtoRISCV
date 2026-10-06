@@ -4,7 +4,7 @@
 
 import { MC_FIELDS, MC_STATES, microword, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu } from '../lib';
 import { assemble, type AsmResult } from '../riscv/asm';
-import { cpuState, retiring } from '../riscv/cosim';
+import { cacheLines, cpuState, retiring } from '../riscv/cosim';
 import { ABI, decode, disasm } from '../riscv/isa';
 import { ISS } from '../riscv/iss';
 import { PROGRAMS } from '../riscv/programs';
@@ -41,8 +41,10 @@ export interface CpuSceneOptions {
   system?: boolean;
   /** Add the M extension to the system CPU (multiply / divide unit). */
   m?: boolean;
-  /** Single-cycle CPU with a data cache in front of a slow main memory (adds cache statistics). */
-  dcache?: boolean;
+  /** Single-cycle CPU with a data cache in front of a slow main memory (adds cache statistics): see CpuOptions.dcache. */
+  dcache?: boolean | 'wb' | 'wb2';
+  /** Fetch through an instruction cache (adds fetch-miss stalls). */
+  icache?: boolean;
   /** The multicycle CPU with a hardwired or microprogrammed controller (adds the controller panel). */
   multicycle?: 'fsm' | 'micro';
   /** Single-cycle CPU with the FPU and f registers (chapter 23). */
@@ -59,7 +61,7 @@ export function cpuScene(opts: CpuSceneOptions): Scene {
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
       : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor })
-        : singleCycleCpu(asm.words, opts.dcache ? { adder: opts.adder, dmemK: 6, dcache: true } : { adder: opts.adder, fpu: opts.fpu }),
+        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
     panels: [cpuPanel({ ...opts, asm }), ...(opts.pipeline ? [pipeDiagram(asm)] : []), ...(opts.system ? [ioPanel] : []), ...(opts.multicycle ? [controllerPanel(opts.multicycle, true)] : []), ...(opts.timing ? [timingPanel] : [])],
@@ -99,7 +101,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     const now = h('div', { class: 'cpu-now' });
     const dlines = h('div', { class: 'cpu-mem dcache-lines' });
     const fregs = h('div', { class: 'cpu-mem' });
-    let loads = 0, misses = 0;
+    let loads = 0, misses = 0, prevStall = false, stallRun = 0;
+    const wb = opts.dcache === 'wb' || opts.dcache === 'wb2';
     const sel = h('select', { 'aria-label': 'program' }) as HTMLSelectElement;
     const progs = opts.fpu ? [...F_PROGRAMS, ...PROGRAMS] : opts.dcache ? [...CACHE_CPU_PROGRAMS, ...PROGRAMS] : opts.m ? [...M_PROGRAMS, ...SYSTEM_PROGRAMS, ...PROGRAMS] : opts.system ? [...SYSTEM_PROGRAMS, ...PROGRAMS] : PROGRAMS;
     for (const p of progs) sel.append(h('option', { value: p.id }, p.name));
@@ -123,7 +126,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       tracing = false;
       runBtn.textContent = 'Stop';
       const tick = () => {
-        stage.runCycles(opts.pipeline ? 3 : opts.m || opts.fpu || opts.dcache || opts.multicycle ? 10 : 4, () => iss.halted);
+        stage.runCycles(opts.pipeline ? 3 : opts.m || opts.fpu || opts.dcache || opts.icache || opts.multicycle ? 10 : 4, () => iss.halted);
         if (iss.halted || mismatch || stage.cycles > 20000) return stopRun();
         running = requestAnimationFrame(tick);
       };
@@ -132,7 +135,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
 
     // Slow mode: the learner sets the pace and the level of detail; the highlight follows execution.
     /** Cycles and instructions differ only when an instruction can take several cycles. */
-    const multiCycle = !!(opts.pipeline || opts.multicycle || opts.m || opts.dcache);
+    const multiCycle = !!(opts.pipeline || opts.multicycle || opts.m || opts.dcache || opts.icache);
     let level: TraceLevel = settings.traceLevel === 'cycle' && !multiCycle ? 'instr' : settings.traceLevel;
     let stepRate = settings.traceRate, gateRate = settings.speed;
     const RANGE: Record<'gate' | 'steps', [number, number]> = { gate: [2, 400], steps: [0.25, 20] };
@@ -252,8 +255,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       h('div', { class: 'cpu-sec' }, 'Trace', h('span', { class: 'cpu-sec-hint' }, 'retired instructions, newest last')), trace,
       h('div', { class: 'cpu-sec' }, 'Registers'), regs,
       ...(opts.fpu ? [h('div', { class: 'cpu-sec' }, 'Floating-point registers (non-zero)'), fregs] : []),
-      ...(opts.dcache ? [h('div', { class: 'cpu-sec' }, 'Data cache (4 lines × 4 words)'), dlines] : []),
-      h('div', { class: 'cpu-sec' }, opts.dcache ? 'Main memory (non-zero words)' : 'Data memory (non-zero words)'), mem);
+      ...(opts.dcache ? [h('div', { class: 'cpu-sec' }, opts.dcache === 'wb2' ? 'Data cache (2 sets × 2 ways × 4 words, write-back)' : opts.dcache === 'wb' ? 'Data cache (4 lines × 4 words, write-back)' : 'Data cache (4 lines × 4 words)'), dlines] : []),
+      h('div', { class: 'cpu-sec' }, wb ? 'Memory as the program sees it (dirty lines included)' : opts.dcache ? 'Main memory (non-zero words)' : 'Data memory (non-zero words)'), mem);
     const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.pipeline ? 'RV32I pipeline' : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
     const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right' }, title, body);
     title.addEventListener('click', () => {
@@ -267,12 +270,16 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     stage.edgeHooks.add({
       before: () => {
         willRetire = !!stage.sim && retiring(stage.sim);
+        stallRun = willRetire ? 0 : stallRun + 1;
         if (opts.dcache && stage.sim) {
           const dm = stage.sim.design.root.children!.get('dm')!;
-          if (stage.sim.getBits(dm.ports.re)[0] === 1) {
+          // a miss starts on the first stalled cycle of an access (loads; stores too when write-back)
+          const acc = stage.sim.getBits(dm.ports.re)[0] === 1 || (wb && stage.sim.getBits(dm.ports.we)[0] === 1);
+          if (acc) {
             if (willRetire) loads++;
-            else if (pack(stage.sim.getBits(dm.children!.get('cnt')!.ports.q)) === 0) misses++;
+            else if (!prevStall) misses++;
           }
+          prevStall = acc && !willRetire;
         }
         if (opts.system) {
           iss.irq = stage.getInput('irq') === 1;
@@ -309,6 +316,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         logSeq = logShown = 0;
         trace.replaceChildren();
         loads = misses = 0;
+        prevStall = false;
+        stallRun = 0;
       }
       const st = cpuState(sim);
       changed = new Set();
@@ -324,8 +333,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         h('span', null, opts.pipeline || opts.m || opts.fpu || opts.multicycle ? `retired ${iss.steps}${iss.steps ? ` · CPI ${(stage.cycles / iss.steps).toFixed(2)}` : ''}` : `PC ${hex(st.pc, 4)}`),
         ...(opts.m && !retiring(sim) ? [h('span', { class: 'warn', title: 'The iterative divider is working; the PC and register writes are stalled' }, 'dividing… stalled')] : []),
         ...(opts.fpu && !opts.pipeline && !retiring(sim) ? [h('span', { class: 'warn', title: 'An iterative unit (fdiv.s / fsqrt.s) is working; the PC and register writes are stalled' }, 'fdiv / fsqrt… stalled')] : []),
-        ...(opts.dcache ? [h('span', null, `loads ${loads} · misses ${misses}${loads ? ` · hit rate ${(100 * (loads - misses) / loads).toFixed(0)} %` : ''}`)] : []),
-        ...(opts.dcache && !retiring(sim) ? [h('span', { class: 'warn', title: 'A load missed: the PC and register write wait while the line is fetched' }, `miss: fetching line (${pack(sim.getBits(sim.design.root.children!.get('dm')!.children!.get('cnt')!.ports.q)) + 1} / 8)`)] : []),
+        ...(opts.dcache ? [h('span', null, `${wb ? 'accesses' : 'loads'} ${loads} · misses ${misses}${loads ? ` · hit rate ${(100 * (loads - misses) / loads).toFixed(0)} %` : ''}`)] : []),
+        ...((opts.dcache || opts.icache) && !retiring(sim) ? [h('span', { class: 'warn', title: 'A cache missed: the PC and register write wait while the line is moved' }, `miss: waiting for memory (cycle ${stallRun + 1})`)] : []),
         mismatch ? h('span', { class: 'bad' }, `✗ ${mismatch}`) : h('span', { class: 'good', title: 'Every register and the PC match the instruction-set simulator after every cycle' }, '✓ matches golden model'),
       ];
       if (halted) parts.push(h('span', { class: 'warn' }, 'halted'));
@@ -362,7 +371,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
           ...(inFlight.get(l.addr) ?? []).map((s) => h('span', { class: 'stg' }, s)),
           sel && stage.rootCtx?.canOpen('imem') ? h('button', { class: 'rom-btn', title: 'Open the instruction memory at the word that holds this instruction', onclick: (e: Event) => {
             e.stopPropagation();
-            stage.reveal(['imem'], `c${(l.addr >>> 2)}`);
+            stage.reveal(opts.icache ? ['imem', 'rom'] : ['imem'], `c${(l.addr >>> 2)}`);
           } }, 'in ROM ↗') : null);
         line.addEventListener('click', () => {
           selPc = sel ? null : l.addr;
@@ -386,14 +395,11 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
           h('span', { class: 'n' }, FABI[i]), h('span', { class: 'v' }, hex(v)), h('span', { class: 'd' }, String(+bitsToF32(v).toPrecision(8))))) : [h('div', { class: 'm z' }, 'all +0.0')]));
       }
       if (opts.dcache) {
-        const dm = sim.design.root.children!.get('dm')!;
-        const q = (arr: string, w: string) => pack(sim.getBits(dm.children!.get(arr)!.children!.get(w)!.ports.q)) >>> 0;
-        const tb = dm.children!.get('tags')!.def.ports.find((p) => p.name === 'din')!.width - 1;
-        dlines.replaceChildren(...[0, 1, 2, 3].map((line) => {
-          const tv = q('tags', `w${line}`), valid = (tv >> tb) & 1, tag = tv & ((1 << tb) - 1);
-          return h('div', { class: `m${valid ? '' : ' z'}` }, h('span', { class: 'n' }, `${line}: ${valid ? `tag ${tag}` : 'empty'}`),
-            h('span', { class: 'v' }, valid ? [0, 1, 2, 3].map((o) => q('data', `w${line * 4 + o}`).toString(16)).join(' ') : ''));
-        }));
+        const lines = cacheLines(sim, sim.design.root.children!.get('dm')!);
+        const twoWay = lines.some((l) => l.way > 0);
+        dlines.replaceChildren(...lines.map((l) => h('div', { class: `m${l.valid ? '' : ' z'}` },
+          h('span', { class: 'n' }, `${l.set}${twoWay ? `.${l.way}` : ''}: ${l.valid ? `tag ${l.tag}${l.dirty ? ' dirty' : ''}` : 'empty'}`),
+          h('span', { class: 'v' }, l.valid ? l.words.map((v) => v.toString(16)).join(' ') : ''))));
       }
       const words = st.dmem.map((v, i) => [i, v] as const).filter(([, v]) => v !== 0);
       mem.replaceChildren(...(words.length ? words.map(([i, v]) => h('div', { class: 'm' },

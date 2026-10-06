@@ -71,6 +71,7 @@ src/sim/       simulation core (no DOM)
   harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench;
                  reachesTransistors(def) (would a gate-level flatten hit a transistor?)
   stats.ts       transistor / NAND counts, logic depth
+  settle.ts      outputSettle(def, vectors): simulated input-to-last-output-change delay (sees false paths)
   timing.ts      static timing: register-to-register critical path, per-capture-stage periods
   verilog.ts     structural Verilog generated from any netlist (identifiers sanitized, alias
                  boxes from their bit map)
@@ -84,6 +85,10 @@ src/lib/       the component library (registered in `registry` via define())
   combinational.ts adders (HA, FA 13- and 9-NAND, rca(n), addSub(n), incrementer(n)), andN,
                  decoder(n, en, pitch), busMux2(w), muxTree(k, w, pitch)
   sequential.ts  SR latch, D latch, DFF (master–slave), DFFE, register(n), counter(n)
+  seqparts.ts    NAND3, D_LATCH_R / DFF_R (async reset), TFF, JKFF, upDownCounter(n), shiftRegister(n) (74194-style),
+                 lfsr(n) (LFSR_TAPS, lfsrNext), ringCounter(n, johnson), clockDivider(k)
+  storage.ts     romArray(preset), minimize() (Quine–McCluskey), pla(preset), fifo(k, w), stack(k, w), cam(k, w),
+                 regfileMP(k, w, reads, writes)
   memory.ts      ram(k, w): decoder + registers + mux tree, user-scalable
   alu.ts         constWord, zext, wiring boxes, bitwise, orN, isZero, barrel shifter, alu(n)
   regfile.ts     regfile(k, w) with x0 = 0, two read ports fed by one bundled word bus
@@ -99,8 +104,11 @@ src/lib/       the component library (registered in `registry` via define())
                  systemCpu(program, { m }): the complete RV32I(M) + Zicsr + M-mode traps / interrupts + MMIO;
                  with m the CPU gains a `retire` output (low while a divide stalls it)
   cells.ts       NMOS_STRONG / PMOS_WEAK, SRAM_CELL (6T), SRAM_COLUMN, DRAM_CELL (switch level)
+  arrays.ts      WRITE_DRIVER, SENSE_AMP (latch type), sramColumn(R), sramArray(R, C): switch-level SRAM with periphery
   cache.ts       cachedMemory(k, ib) (direct-mapped write-through cache + main memory, stall on
                  miss), wayLookup2; singleCycleCpu(…, { dcache }) uses it (adds `retire`, `dhit`)
+  cache2.ts      cacheWay(ib, t), MISS_CTRL, wbCache(k, ib, ways) (write-back, write-allocate, LRU), iCache(rom, ib);
+                 singleCycleCpu(…, { dcache: 'wb' | 'wb2', icache }); riscv/cosim.ts cacheLines() + coherent cpuState().dmem
   multicycle.ts  MC_STATES (the state table), MC_FSM (hardwired), MC_MICRO (microcode), microword(),
                  multicycleCpu(program, { control: 'fsm' | 'micro' }) with `retire`, `fetch`, `state` outputs
   fpu.ts         parametric IEEE 754 units (format {E, M}): lzc, shiftLeft, shiftRightSticky, fpUnpack,
@@ -115,6 +123,7 @@ src/lib/       the component library (registered in `registry` via define())
                  SRT_SELECT, srtStep, srtNorm, srtFinish, srtDivider(n) (radix-2 SRT, carry-save remainder)
   multiply.ts    seqMul(n) (shift and add), boothRow / boothPP / boothReduce / boothTree / boothMul(n) (radix-4 Booth,
                  sign-constant trick), pipeMul(n) (3-stage pipelined Booth)
+  adders.ts      carrySelect(n, k), carrySkip(n, k), BCD_DIGIT, bcdAdder(d)
   muldiv.ts      ppRow, arrayMul(n), compressor()/csa(n) (3:2 rows with word offsets), treeMul(n, signed,
                  outW) (Wallace + KS), MUL32, BOOTH_ENC, divStep, arrayDiv, seqDivider(n), condNegate, MDU
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
