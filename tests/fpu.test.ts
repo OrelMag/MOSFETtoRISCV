@@ -48,7 +48,7 @@ describe('small-format FPUs against exact arithmetic', () => {
       const add = simulate(fpAdd(f)), mul = simulate(fpMul(f));
       const pairs = operandPairs(f);
       for (let k = 0; k < pairs.length; k++) {
-        if (k % 2000 === 0) await new Promise((res) => setTimeout(res)); // let the test runner breathe
+        if (k % 2000 === 0) await new Promise((res) => setImmediate(res)); // let the test runner breathe
         const [a, b] = pairs[k];
         expect(evalOnce(add, [a, b, 0]), `${a} + ${b}`).toEqual([fpAddRef(a, b, false, f)]);
         expect(evalOnce(add, [a, b, 1]), `${a} - ${b}`).toEqual([fpAddRef(a, b, true, f)]);
@@ -84,7 +84,7 @@ describe('float32 units', () => {
   it('fadd / fsub / fmul / fcvt agree with the host float32', async () => {
     const add = simulate(fpAdd(F32)), mul = simulate(fpMul(F32)), cvt = simulate(fpFromInt(F32));
     for (let i = 0; i < (EXHAUSTIVE ? 1500 : 500); i++) {
-      if (i % 50 === 0) await new Promise((res) => setTimeout(res));
+      if (i % 50 === 0) await new Promise((res) => setImmediate(res));
       const a = pick();
       let b = pick();
       if (i % 4 === 0) b = ((a & 0xff800000) | (r() & 0x7fffff)) >>> 0;
