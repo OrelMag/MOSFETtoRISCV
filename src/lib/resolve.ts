@@ -1,7 +1,7 @@
 // Look up any component by id, including parameterized ones (rca8, ram16x8, …), and the
 // parameter families shown in the workbench.
 
-import type { ComponentDef } from '../sim/types';
+import { type ComponentDef, netlistOf } from '../sim/types';
 import type { FpFormat } from '../sim/fpref';
 import { addSub, andN, busMux2, decoder, equal, incrementer, muxTree, rca } from './combinational';
 import { registry } from './define';
@@ -45,7 +45,19 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^(and|or|xor)x(\d+)$/, (m) => bitwise(m[1] as 'and' | 'or' | 'xor', +m[2])],
 ];
 
+type Resolver = (id: string) => ComponentDef | undefined;
+let userResolver: Resolver | null = null;
+
+/** Where user chips (ids `u_…`, made in the sandbox) come from; null removes it. */
+export function setUserResolver(f: Resolver | null): void {
+  userResolver = f;
+}
+
 export function resolveComponent(id: string): ComponentDef | undefined {
+  if (userResolver && id.startsWith('u_')) {
+    const u = userResolver(id);
+    if (u) return u;
+  }
   const hit = registry.get(id);
   if (hit) return hit;
   const f = familyOf(id);
@@ -222,4 +234,31 @@ export function familyOf(id: string): { fam: Family; values: P } | null {
     }
   }
   return index.get(id) ?? null;
+}
+
+/** Every component reachable from the registry, including generated sub-components. */
+export function reachableDefs(): ComponentDef[] {
+  const seen = new Set<ComponentDef>();
+  const visit = (d: ComponentDef) => {
+    if (seen.has(d)) return;
+    seen.add(d);
+    for (const i of netlistOf(d)?.instances ?? []) visit(i.def);
+  };
+  for (const d of registry.values()) visit(d);
+  return [...seen];
+}
+
+let defs: { size: number; map: Map<string, ComponentDef> } | null = null;
+
+/**
+ * id → definition over reachableDefs(). Rebuilt when the registry has grown (generators
+ * register as they are first called), so a stored design can find any part by id.
+ */
+export function defIndex(): Map<string, ComponentDef> {
+  if (!defs || defs.size !== registry.size) {
+    const map = new Map<string, ComponentDef>();
+    for (const d of reachableDefs()) if (!map.has(d.id)) map.set(d.id, d);
+    defs = { size: registry.size, map };
+  }
+  return defs.map;
 }
