@@ -247,7 +247,13 @@ export class EditorView {
    */
   private drawWireShapes(doc: ChipDoc): void {
     this.version++;
-    if (this.groups.wires !== doc.wires) this.groups = { wires: doc.wires, ids: wireGroups(doc.wires) };
+    // A drag rewrites wires' corners, not their ends: the groups stay.
+    const prev = this.groups.wires;
+    if (prev !== doc.wires) {
+      const end = (x: WireDoc['a'], y: WireDoc['a']) => x === y || ('wire' in x && 'wire' in y && x.wire === y.wire);
+      const same = prev?.length === doc.wires.length && doc.wires.every((w, i) => w.id === prev[i].id && end(w.a, prev[i].a) && end(w.b, prev[i].b));
+      this.groups = { wires: doc.wires, ids: same ? this.groups.ids : wireGroups(doc.wires) };
+    }
     const groups = this.groups.ids;
     const shapes = groups.flatMap((ids, gi) => ids.map((id) => ({ id, group: gi, poly: this.wires.get(id)?.poly ?? null })));
     for (const id of this.hops.update(shapes)) this.wires.get(id)?.path.setAttribute('d', this.hops.d.get(id) ?? '');
