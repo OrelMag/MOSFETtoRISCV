@@ -16,6 +16,28 @@ export interface IssOptions {
   imemWords?: number;
   /** Model I/O, CSRs, traps and interrupts. */
   system?: boolean;
+  /** Implement the M extension (otherwise its encodings are illegal in system mode). */
+  m?: boolean;
+}
+
+/** Cycles a div / divu / rem / remu occupies on the iterative divider (1 load + 32 steps + 1 write). */
+export const DIV_CYCLES = 34;
+
+/** RV32M arithmetic, exactly as specified (including division by zero and overflow). */
+export function mExec(f3: number, a: number, b: number): number {
+  const sa = BigInt(a | 0), sb = BigInt(b | 0), ua = BigInt(a >>> 0), ub = BigInt(b >>> 0);
+  const lo = (v: bigint) => Number(BigInt.asUintN(32, v));
+  const hi = (v: bigint) => Number(BigInt.asUintN(32, v >> 32n));
+  switch (f3) {
+    case 0: return lo(sa * sb);
+    case 1: return hi(sa * sb);
+    case 2: return hi(sa * ub);
+    case 3: return hi(ua * ub);
+    case 4: if (b === 0) return 0xffffffff; if ((a | 0) === -0x80000000 && (b | 0) === -1) return 0x80000000; return lo(sa / sb);
+    case 5: if (b === 0) return 0xffffffff; return lo(ua / ub);
+    case 6: if (b === 0) return a >>> 0; if ((a | 0) === -0x80000000 && (b | 0) === -1) return 0; return lo(sa % sb);
+    default: if (b === 0) return a >>> 0; return lo(ua % ub);
+  }
 }
 
 export interface StepInfo {
@@ -50,6 +72,7 @@ export class ISS {
   halted = false;
   steps = 0;
   readonly system: boolean;
+  readonly m: boolean;
   private readonly imemWords: number;
 
   // machine-mode state
@@ -77,6 +100,7 @@ export class ISS {
     this.dmem = new Uint32Array(opts.dmemWords ?? 32);
     this.imemWords = opts.imemWords ?? 64;
     this.system = !!opts.system;
+    this.m = !!opts.m;
   }
 
   fetch(pc: number): number {
@@ -147,7 +171,7 @@ export class ISS {
   csrRead(a: number): number | null {
     switch (a) {
       case CSRS.mstatus: return (this.mie ? 8 : 0) | (this.mpie ? 0x80 : 0) | 0x1800;
-      case CSRS.misa: return 0x40000100;
+      case CSRS.misa: return this.m ? 0x40001100 : 0x40000100;
       case CSRS.mie: return (this.mtie ? 0x80 : 0) | (this.meie ? 0x800 : 0);
       case CSRS.mtvec: return this.mtvec;
       case CSRS.mscratch: return this.mscratch;
@@ -214,8 +238,13 @@ export class ISS {
       if (this.system && t & 3) trap = new Trap(CAUSE.MISALIGNED_FETCH, t);
       else next = t;
     };
-    if (this.system && !d.spec) trap = new Trap(CAUSE.ILLEGAL);
-    else switch (d.opcode) {
+    const isM = d.opcode === OPCODES.OP && d.funct7 === 1;
+    let extraCycles = 0;
+    if (this.system && (!d.spec || (isM && !this.m))) trap = new Trap(CAUSE.ILLEGAL);
+    else if (isM) {
+      write(mExec(d.funct3, ua, ub));
+      if (d.funct3 >= 4) extraCycles = DIV_CYCLES - 1;
+    } else switch (d.opcode) {
       case OPCODES.LUI: write(d.imm); break;
       case OPCODES.AUIPC: write(pc + d.imm); break;
       case OPCODES.JAL: jumpTo(pc + d.imm); if (!trap) write(pc + 4); break;
@@ -292,7 +321,7 @@ export class ISS {
       this.pc = next;
       this.retired++;
     }
-    if (this.system) this.mtime = (this.mtime + 1) >>> 0;
+    if (this.system) this.mtime = (this.mtime + 1 + extraCycles) >>> 0;
     this.steps++;
     const t = trap as Trap | null;
     return { pc, word, text: disasm(word, pc), rd, value, store, trap: t ? { cause: t.cause, interrupt: false } : undefined, halted: this.halted };

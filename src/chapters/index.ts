@@ -4,6 +4,7 @@ import { chFastAdders } from './ch-perf';
 import { chPipeline } from './ch-pipe';
 import { chPipePay } from './ch-pipe2';
 import { chIO, chTraps } from './ch-system';
+import { chMulDiv } from './ch-muldiv';
 import { chBinary, chGates } from './ch-gates';
 import { chLatches, chMemory, chRegisters } from './ch-memory';
 import { chInverter, chMap, chMosfet, chNand } from './ch-transistors';
@@ -11,11 +12,10 @@ import type { Chapter, FutureChapter } from './types';
 
 export const chapters: Chapter[] = [
   chMap, chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
-  chAlu, chRegfile, chIsa, chSingleCycle, chFastAdders, chPipeline, chPipePay, chIO, chTraps,
+  chAlu, chRegfile, chIsa, chSingleCycle, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv,
 ];
 
 export const future: FutureChapter[] = [
-  { num: 20, title: 'Multiply & divide', level: 'Arithmetic', blurb: 'Array, Booth and Dadda multipliers; restoring division; the M extension.' },
   { num: 21, title: 'Caches & the memory hierarchy', level: 'Memory', blurb: 'SRAM and DRAM cells, direct-mapped and set-associative caches.' },
   { num: 22, title: 'Multicycle & microcode', level: 'Processor', blurb: 'Hardwired FSM versus microprogrammed control.' },
   { num: 23, title: 'Floating point', level: 'Arithmetic', blurb: 'IEEE 754 and an FPU, from the primer’s design.' },

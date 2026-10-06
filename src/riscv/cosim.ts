@@ -39,7 +39,11 @@ export function clockCycle(sim: Sim): void {
   sim.settle();
 }
 
-/** Pipelined CPU: is a valid instruction in write-back right now (it retires at the next edge)? */
+/**
+ * Does an instruction retire at the next edge? Pipelines: a valid instruction is in write-back.
+ * CPUs with multi-cycle instructions: their retire output. Otherwise: every cycle.
+ */
 export function retiring(sim: Sim, root: HierNode = sim.design.root): boolean {
-  return sim.getBits(root.ports.validW)[0] === 1;
+  const port = root.ports.validW ?? root.ports.retire;
+  return port ? sim.getBits(port)[0] === 1 : true;
 }

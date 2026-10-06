@@ -9,6 +9,7 @@ import { ABI, decode, disasm } from '../riscv/isa';
 import { ISS } from '../riscv/iss';
 import { PROGRAMS } from '../riscv/programs';
 import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';
+import { M_PROGRAMS } from '../riscv/mprograms';
 import { CAUSE } from '../riscv/iss';
 import { pack } from '../sim/values';
 import { h } from '../ui/dom';
@@ -29,6 +30,8 @@ export interface CpuSceneOptions {
   predictor?: boolean;
   /** The complete machine: Zicsr, traps, interrupts and memory-mapped I/O (adds the I/O panel). */
   system?: boolean;
+  /** Add the M extension to the system CPU (multiply / divide unit). */
+  m?: boolean;
   /** Show the program editor. */
   editable?: boolean;
 }
@@ -37,7 +40,7 @@ export interface CpuSceneOptions {
 export function cpuScene(opts: CpuSceneOptions): Scene {
   const asm = assemble(opts.source);
   return {
-    root: opts.system ? systemCpu(asm.words, { adder: opts.adder })
+    root: opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor })
         : singleCycleCpu(asm.words, { adder: opts.adder }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
@@ -49,7 +52,7 @@ export function cpuScene(opts: CpuSceneOptions): Scene {
 function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
   return (stage: Stage): Widget => {
     const asm = opts.asm;
-    const issOpts = opts.system ? { system: true, imemWords: 128 } : {};
+    const issOpts = opts.system ? { system: true, imemWords: 128, m: !!opts.m } : {};
     let iss = new ISS(asm.words, issOpts);
     let lastX: number[] = new Array(32).fill(0);
     let changed = new Set<number>();
@@ -62,7 +65,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     const mem = h('div', { class: 'cpu-mem' });
     const now = h('div', { class: 'cpu-now' });
     const sel = h('select', { 'aria-label': 'program' }) as HTMLSelectElement;
-    const progs = opts.system ? [...SYSTEM_PROGRAMS, ...PROGRAMS] : PROGRAMS;
+    const progs = opts.m ? [...M_PROGRAMS, ...SYSTEM_PROGRAMS, ...PROGRAMS] : opts.system ? [...SYSTEM_PROGRAMS, ...PROGRAMS] : PROGRAMS;
     for (const p of progs) sel.append(h('option', { value: p.id }, p.name));
     sel.append(h('option', { value: '__custom' }, 'My program'));
     const match = progs.find((p) => p.source === opts.source);
@@ -82,8 +85,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       if (running) return stopRun();
       runBtn.textContent = 'Stop';
       const tick = () => {
-        stage.runCycles(opts.pipeline ? 3 : 4, () => iss.halted);
-        if (iss.halted || mismatch || stage.cycles > 5000) return stopRun();
+        stage.runCycles(opts.pipeline ? 3 : opts.m ? 10 : 4, () => iss.halted);
+        if (iss.halted || mismatch || stage.cycles > 20000) return stopRun();
         running = requestAnimationFrame(tick);
       };
       running = requestAnimationFrame(tick);
@@ -113,7 +116,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       h('div', { class: 'cpu-sec' }, 'Program'), listing,
       h('div', { class: 'cpu-sec' }, 'Registers'), regs,
       h('div', { class: 'cpu-sec' }, 'Data memory (non-zero words)'), mem);
-    const title = h('h4', null, opts.system ? 'RV32I system' : opts.pipeline ? 'RV32I pipeline' : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+    const title = h('h4', null, opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.pipeline ? 'RV32I pipeline' : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
     const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right' }, title, body);
     title.addEventListener('click', () => {
       el.classList.toggle('collapsed');
@@ -125,7 +128,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     let willRetire = false;
     stage.edgeHooks.add({
       before: () => {
-        willRetire = !opts.pipeline || (!!stage.sim && retiring(stage.sim));
+        willRetire = !!stage.sim && retiring(stage.sim);
         if (opts.system) {
           iss.irq = stage.getInput('irq') === 1;
           iss.switches = stage.getInput('switches');
@@ -156,7 +159,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       const halted = iss.halted;
       const parts: HTMLElement[] = [
         h('span', null, `cycle ${stage.cycles}`),
-        h('span', null, opts.pipeline ? `retired ${iss.steps}${iss.steps ? ` · CPI ${(stage.cycles / iss.steps).toFixed(2)}` : ''}` : `PC ${hex(st.pc, 4)}`),
+        h('span', null, opts.pipeline || opts.m ? `retired ${iss.steps}${iss.steps ? ` · CPI ${(stage.cycles / iss.steps).toFixed(2)}` : ''}` : `PC ${hex(st.pc, 4)}`),
+        ...(opts.m && !retiring(sim) ? [h('span', { class: 'warn', title: 'The iterative divider is working; the PC and register writes are stalled' }, 'dividing… stalled')] : []),
         mismatch ? h('span', { class: 'bad' }, `✗ ${mismatch}`) : h('span', { class: 'good', title: 'Every register and the PC match the instruction-set simulator after every cycle' }, '✓ matches golden model'),
       ];
       if (halted) parts.push(h('span', { class: 'warn' }, 'halted'));

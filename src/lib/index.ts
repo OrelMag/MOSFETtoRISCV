@@ -12,3 +12,4 @@ export * from './pipeline';
 export * from './lsu';
 export * from './system';
 export { registry, splitter, merger } from './define';
+export * from './muldiv';

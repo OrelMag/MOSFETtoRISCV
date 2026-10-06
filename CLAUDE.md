@@ -80,10 +80,14 @@ src/lib/       the component library (registered in `registry` via define())
                  pipelinedCpu(program, { adder, balanced, predictor })
   lsu.ts         STORE_ALIGN, LOAD_EXTRACT, bankedMemory(k) (byte / halfword access)
   system.ts      SYS_DECODE (illegal-instruction detection), CSR_UNIT, TRAP_UNIT, IO_UNIT,
-                 systemCpu(program): the complete RV32I + Zicsr + M-mode traps / interrupts + MMIO
+                 systemCpu(program, { m }): the complete RV32I(M) + Zicsr + M-mode traps / interrupts + MMIO;
+                 with m the CPU gains a `retire` output (low while a divide stalls it)
+  muldiv.ts      ppRow, arrayMul(n), compressor()/csa(n) (3:2 rows with word offsets), treeMul(n, signed,
+                 outW) (Wallace + KS), MUL32, BOOTH_ENC, divStep, arrayDiv, seqDivider(n), condNegate, MDU
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
                instructions), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
-               interrupts), programs.ts / sysprograms.ts (samples), cosim.ts (read CPU state)
+               interrupts; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts (samples), cosim.ts (CPU state;
+               `retiring()` = step the ISS this cycle?)
 src/view/      SVG schematic renderer, router, inspector panels, waveform, truth table
 src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...)
 src/chapters/  narrative content: chapters → steps → scene / widget / challenge

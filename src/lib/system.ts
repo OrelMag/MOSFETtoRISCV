@@ -18,6 +18,7 @@ import { TIE0, TIE1 } from './transistors';
 import { andN, rca } from './combinational';
 import { bitwise, orN } from './wide';
 import { CSRS } from '../riscv/isa';
+import { MDU } from './muldiv';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -56,7 +57,8 @@ function isConst(name: string, w: number, v: number, input: string, nets: NetDef
 
 // ---- illegal-instruction and system decoding --------------------------------------------------------
 
-export const SYS_DECODE: ComponentDef = (() => {
+export function sysDecode(m = false): ComponentDef {
+  return memo(`sysdec${m ? '_m' : ''}`, () => {
   const ins: [string, ComponentDef, string?][] = [];
   const nets: NetDef[] = [];
   const C = (name: string, w: number, v: number, input: string) => isConst(name, w, v, input, nets, ins);
@@ -82,7 +84,8 @@ export const SYS_DECODE: ComponentDef = (() => {
   const and = (name: string, ...xs: string[]) => g(name, xs.length === 2 ? AND : andN(xs.length), ...xs);
   // R: funct7 0, or 0x20 with funct3 0/5
   const f3_0or5 = or('f3_05', f3[0], f3[5]);
-  const okR = and('okR', opc.R, or('r7', f7zero, and('r7a', f7alt, f3_0or5)));
+  const f7one = m ? C('f7m', 7, 1, 'funct7') : '';
+  const okR = and('okR', opc.R, or('r7', f7zero, and('r7a', f7alt, f3_0or5), ...(m ? [f7one] : [])));
   // I: shifts need funct7 0 (slli, srli) or 0x20 (srai)
   const notShift = g('nsh', NOT, or('sh', f3[1], f3[5]));
   const okI = and('okI', opc.I, or('i7', notShift, and('isl', f3[1], f7zero), and('isr', f3[5], or('i7s', f7zero, f7alt))));
@@ -109,21 +112,24 @@ export const SYS_DECODE: ComponentDef = (() => {
     { name: 'csrOp', ends: [csrOp, 'csrOp'], tags: true },
     { name: 'csrWrite', ends: [csrWrites, 'csrWrite'], tags: true },
   );
+  if (m) nets.push({ name: 'isM', ends: [and('isMul', opc.R, f7one), 'isM'], tags: true });
   // merge nets that share a driver (inputs used several times)
   const merged = mergeByDriver(nets);
   const pins: Record<string, [number, number]> = { op: [0, 2], funct3: [0, 6], funct7: [0, 10], imm12: [0, 14], rs1: [0, 18], csrKnown: [0, 22] };
   const instances = columns(chunk(ins, 14), 12, 0, 12, 2);
   const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 8;
-  ['illegal', 'ecall', 'ebreak', 'mret', 'csrOp', 'csrWrite'].forEach((n, i) => (pins[n] = [right, 2 + 4 * i]));
+  ['illegal', 'ecall', 'ebreak', 'mret', 'csrOp', 'csrWrite', ...(m ? ['isM'] : [])].forEach((n, i) => (pins[n] = [right, 2 + 4 * i]));
   return define({
-    id: 'sysdec', name: 'System & illegal-instruction decoder', category: 'cpu',
-    summary: 'Recognises ecall, ebreak, mret, wfi and the CSR instructions, and flags anything that is not a valid RV32I / Zicsr encoding as an illegal instruction (which traps).',
+    id: `sysdec${m ? '_m' : ''}`, name: 'System & illegal-instruction decoder', category: 'cpu',
+    summary: `Recognises ecall, ebreak, mret, wfi and the CSR instructions, and flags anything that is not a valid RV32I${m ? 'M' : ''} / Zicsr encoding as an illegal instruction (which traps).${m ? ' Also spots the M-extension instructions (OP with funct7 = 1).' : ''}`,
     ports: [bus('op', 7, 'in'), bus('funct3', 3, 'in'), bus('funct7', 7, 'in'), bus('imm12', 12, 'in'), bus('rs1', 5, 'in'), bit('csrKnown', 'in'),
-      bit('illegal', 'out'), bit('ecall', 'out'), bit('ebreak', 'out'), bit('mret', 'out'), bit('csrOp', 'out'), bit('csrWrite', 'out')],
+      bit('illegal', 'out'), bit('ecall', 'out'), bit('ebreak', 'out'), bit('mret', 'out'), bit('csrOp', 'out'), bit('csrWrite', 'out'), ...(m ? [bit('isM', 'out')] : [])],
     symbol: { kind: 'box', label: 'SYSTEM DECODE' },
     netlist: () => ({ pins, instances, nets: merged }),
   });
-})();
+  });
+}
+export const SYS_DECODE = sysDecode();
 
 function chunk<T>(xs: T[], n: number): T[][] {
   const out: T[][] = [];
@@ -157,7 +163,8 @@ const CSR_ORDER: [string, number][] = [
   ['mcause', CSRS.mcause], ['mtval', CSRS.mtval], ['mip', CSRS.mip], ['mcycle', CSRS.mcycle], ['cycle', CSRS.cycle], ['mhartid', CSRS.mhartid],
 ];
 
-export const CSR_UNIT: ComponentDef = (() => {
+export function csrUnit(m = false): ComponentDef {
+  return memo(`csrunit${m ? '_m' : ''}`, () => {
   const ins: [string, ComponentDef, string?][] = [];
   const nets: NetDef[] = [];
   const net = (name: string | undefined, drv: string, ...sinks: string[]) => nets.push({ name, ends: [drv, ...sinks], tags: true });
@@ -200,7 +207,7 @@ export const CSR_UNIT: ComponentDef = (() => {
   net(undefined, 'z2.y', 'vTvec.i0', 'vEpc.i0');
   net('mtvecHi', 'rTvec.q', 'vTvec.i1');
   net('mepcHi', 'rEpc.q', 'vEpc.i1');
-  ins.push(['misa', constWord(32, 0x40000100)], ['zero32', constWord(32, 0)]);
+  ins.push(['misa', constWord(32, m ? 0x40001100 : 0x40000100)], ['zero32', constWord(32, 0)]);
   const RM = muxTree(4, 32);
   ins.push(['rsel', RM]);
   const vals = ['vStatus.out', 'misa.y', 'vMie.out', 'vTvec.out', 'rScratch.q', 'vEpc.out', 'rCause.q', 'rTval.q', 'vMip.out', 'mtime', 'mtime', 'zero32.y'];
@@ -299,7 +306,7 @@ export const CSR_UNIT: ComponentDef = (() => {
   inNames.forEach((n, i) => (pins[n] = [0, 2 + 3 * i]));
   outNames.forEach((n, i) => (pins[n] = [right, 2 + 4 * i]));
   return define({
-    id: 'csrunit', name: 'CSR unit', category: 'cpu',
+    id: `csrunit${m ? '_m' : ''}`, name: 'CSR unit', category: 'cpu',
     summary: 'The machine-mode control and status registers: address decode, a read multiplexer, read-modify-write for csrrw/csrrs/csrrc, and the hardware updates on a trap (mepc, mcause, mtval, MIE→MPIE) or an mret. Also decides whether an interrupt is taken.',
     ports: [
       bus('addr', 12, 'in'), bus('funct3', 3, 'in'), bus('rs1v', 32, 'in'), bus('zimm5', 5, 'in'), bit('csrWrite', 'in'),
@@ -310,7 +317,9 @@ export const CSR_UNIT: ComponentDef = (() => {
     symbol: { kind: 'box', label: 'CSRs' },
     netlist: () => ({ pins, instances, nets: merged }),
   });
-})();
+  });
+}
+export const CSR_UNIT = csrUnit();
 
 // ---- trap selection --------------------------------------------------------------------------------------------
 
@@ -432,15 +441,18 @@ function incrementerCounter32(): ComponentDef {
 
 export interface SystemCpuOptions {
   adder?: 'rca' | 'ks';
+  /** Add the M extension: a multiply/divide unit (divides stall the CPU). */
+  m?: boolean;
 }
 
 export function systemCpu(program: number[], opts: SystemCpuOptions = {}): ComponentDef {
   const IM = rom(program, 7);
   const adder = opts.adder ?? 'ks';
-  return memo(`sys_${IM.id}_${adder}`, () => buildSystem(IM, adder));
+  return memo(`sys_${IM.id}_${adder}${opts.m ? '_m' : ''}`, () => buildSystem(IM, adder, !!opts.m));
 }
 
-function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks'): ComponentDef {
+function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): ComponentDef {
+  const SYSD = sysDecode(m), CSRU = csrUnit(m);
   const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = bankedMemory(5);
   const M2 = busMux2(32), M4 = muxTree(2, 32), M8 = muxTree(3, 32), ADD = adder === 'ks' ? koggeStone(32) : rca(32);
   const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4;
@@ -485,9 +497,9 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks'): ComponentDef {
   // system blocks along the bottom
   const yS = Y + 60;
   place('imm12', IMM12, [52, yS - 6]);
-  place('sys', SYS_DECODE, [4, yS + 4]);
-  place('csr', CSR_UNIT, [4 + g(SYS_DECODE).w + 10, yS + 4]);
-  place('trap', TRAP_UNIT, [4 + g(SYS_DECODE).w + 10 + g(CSR_UNIT).w + 10, yS + 4]);
+  place('sys', SYSD, [4, yS + 4]);
+  place('csr', CSRU, [4 + g(SYSD).w + 10, yS + 4]);
+  place('trap', TRAP_UNIT, [4 + g(SYSD).w + 10 + g(CSRU).w + 10, yS + 4]);
   // glue logic
   const glue: [string, ComponentDef][] = [
     ['ntrap', NOT], ['rw', OR], ['rwq', AND], ['isIO', splitter([31, 1])], ['nio', NOT], ['memWq', andN(3)], ['ioWq', andN(3)],
@@ -506,7 +518,7 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks'): ComponentDef {
   const instances: InstanceDef[] = [...at.keys()].map((name) => ({ name, def: defs.get(name)!, at: at.get(name), label: labels[name] }));
   const pcq = P('pc', 'q');
   const aluY = P('alu', 'y');
-  const bottom = yS + Math.max(g(CSR_UNIT).h, g(SYS_DECODE).h) + 12;
+  const bottom = yS + Math.max(g(CSRU).h, g(SYSD).h) + 12;
   const nets: NetDef[] = [
     { name: 'PCNormal', ends: ['pcmux.y', 'trapmux.d0', 'tgt1.in', 'trap.target'], tags: ['tgt1.in', 'trap.target'] },
     { name: 'PCNext', ends: ['trapmux.y', 'pc.d'] },
@@ -616,14 +628,47 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks'): ComponentDef {
   nets.splice(nets.findIndex((n) => n.name === 'PCTargetChk'), 1);
   void bottom;
   void fanout;
+  const pins: Record<string, [number, number]> = { clk: [0, yS - 10], switches: [0, yS - 6], irq: [0, yS - 2], pcOut: [P('res', 'y')[0] + 20, yS - 10], consoleData: [P('res', 'y')[0] + 20, yS - 6], consoleValid: [P('res', 'y')[0] + 20, yS - 2], leds: [P('res', 'y')[0] + 20, yS + 2] };
+  if (m) {
+    // ---- M extension: the multiply/divide unit, a result multiplexer, and the stall it causes
+    const xM = P('res', 'y')[0] + 8, yM = yS + Math.max(g(CSRU).h, g(SYSD).h) + 16;
+    const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => { instances.push({ name, def, at: xy, label }); defs.set(name, def); at.set(name, xy); };
+    add('md', MDU, [4 + g(SYSD).w + 10, yM], 'M unit');
+    add('mres', M2, [xM, P('res', 'y')[1] - g(M2).ports.a.pos[1]], 'ALU / M');
+    add('nstall', NOT, [17, P('pc', 'en')[1] - 1]);
+    add('rwm', AND, [aluR - 20, yS - 24]);
+    add('nbusy', NOT, [aluR - 20, yS - 18]);
+    add('irqg', AND, [aluR - 20, yS - 14]);
+    instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
+    const net = (name: string) => nets.find((n) => n.name === name)!;
+    nets.splice(nets.indexOf(net('en')), 1);
+    net('Result').ends = ['res.y', 'mres.a'];
+    net('RegWrite').ends = ['rwq.y', 'rwm.a'];
+    net('irqTake').ends = ['csr.irqTake', 'irqg.a'];
+    net('rd1').ends.push('md.a');
+    net('WriteData').ends.push('md.b');
+    net('funct3').ends.push('md.funct3');
+    net('NoTrap').ends.push('md.noTrap');
+    net('clk').ends.push('md.clk');
+    (net('clk').tags as string[]).push('md.clk');
+    nets.push(
+      { name: 'isM', ends: ['sys.isM', 'md.isM', 'mres.s'], tags: true },
+      { name: 'MResult', ends: ['md.y', 'mres.b'], tags: true },
+      { name: 'WriteBack', ends: ['mres.y', 'rf.wd'], tags: true },
+      { name: 'stall', ends: ['md.stall', 'nstall.a'], tags: true },
+      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwm.b', 'retire'], tags: ['rwm.b', 'retire'] },
+      { name: 'RegWriteQ', ends: ['rwm.y', 'rf.we'], tags: true },
+      { name: 'divBusy', ends: ['md.busy', 'nbusy.a'], tags: true },
+      { name: '¬divBusy', ends: ['nbusy.y', 'irqg.b'], tags: true },
+      { name: 'irqTakeQ', ends: ['irqg.y', 'trap.irq'], tags: true },
+    );
+    pins.retire = [P('res', 'y')[0] + 20, yS + 6];
+  }
   return {
-    id: `sys_${IM.id}${adder === 'ks' ? '' : '_rca'}`, name: 'RV32I system (single-cycle, Zicsr, traps, I/O)', category: 'cpu',
-    summary: 'The complete processor: every RV32I instruction including byte and halfword memory access, the Zicsr instructions, machine-mode exceptions and interrupts, and memory-mapped I/O (console, LEDs, switches, timer).',
-    ports: [bit('clk', 'in', 'left', true), bus('switches', 8, 'in'), bit('irq', 'in'), bus('pcOut', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out')],
-    symbol: { kind: 'box', label: 'RV32I SYSTEM' },
-    netlist: () => ({
-      pins: { clk: [0, yS - 10], switches: [0, yS - 6], irq: [0, yS - 2], pcOut: [P('res', 'y')[0] + 20, yS - 10], consoleData: [P('res', 'y')[0] + 20, yS - 6], consoleValid: [P('res', 'y')[0] + 20, yS - 2], leds: [P('res', 'y')[0] + 20, yS + 2] },
-      instances, nets,
-    }),
+    id: `sys_${IM.id}${adder === 'ks' ? '' : '_rca'}${m ? '_m' : ''}`, name: `RV32I${m ? 'M' : ''} system (single-cycle, Zicsr, traps, I/O)`, category: 'cpu',
+    summary: `The complete processor: every RV32I instruction including byte and halfword memory access, the Zicsr instructions, machine-mode exceptions and interrupts, and memory-mapped I/O (console, LEDs, switches, timer).${m ? ' Plus the M extension: one-cycle multiplies and 34-cycle divides that stall the processor (retire = 0 while they run).' : ''}`,
+    ports: [bit('clk', 'in', 'left', true), bus('switches', 8, 'in'), bit('irq', 'in'), bus('pcOut', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out'), ...(m ? [bit('retire', 'out')] : [])],
+    symbol: { kind: 'box', label: m ? 'RV32IM SYSTEM' : 'RV32I SYSTEM' },
+    netlist: () => ({ pins, instances, nets }),
   };
 }

@@ -126,7 +126,10 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Memory-mapped I/O: console, LEDs, switches, mtime / mtimecmp timer
 - ✅ Zicsr + machine mode: 12 CSRs, traps (illegal, ecall, ebreak, misaligned fetch/load/store), mret
 - ✅ Timer and external interrupts; I/O panel with live CSR state; 67k-NAND system CPU co-simulated every cycle
-- ⏳ M extension: array multiplier, shift-add, Booth, Dadda tree; restoring / non-restoring division
+- ✅ M extension (chapter 20): array and Wallace-tree multipliers (measured depth 310 vs 68 at 32 bits), Baugh–Wooley signed
+  products, radix-4 Booth encoder + recoding explorer, restoring division (step, array divider, iterative divider), and an
+  RV32IM system CPU (104k NAND) with one-cycle multiplies and 34-cycle stalling divides, co-simulated per retirement
+- ⏳ Full Booth-recoded multiplier; non-restoring / SRT division; pipelined multiplier in the pipelined CPU
 - ⏳ Passing the official `riscv-tests` / architecture tests in the browser (stretch)
 
 ### Phase 8 — Memory hierarchy ⏳

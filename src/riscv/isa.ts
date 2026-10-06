@@ -38,6 +38,9 @@ export const INSTRS: InstrSpec[] = [
   { name: 'srai', fmt: 'I', opcode: OPCODES.OPIMM, funct3: 5, funct7: 0x20, hw: true },
   R('add', 0, 0), R('sub', 0, 0x20), R('sll', 1, 0), R('slt', 2, 0), R('sltu', 3, 0),
   R('xor', 4, 0), R('srl', 5, 0), R('sra', 5, 0x20), R('or', 6, 0), R('and', 7, 0),
+  // M extension (funct7 = 1)
+  { ...R('mul', 0, 1), hw: false }, { ...R('mulh', 1, 1), hw: false }, { ...R('mulhsu', 2, 1), hw: false }, { ...R('mulhu', 3, 1), hw: false },
+  { ...R('div', 4, 1), hw: false }, { ...R('divu', 5, 1), hw: false }, { ...R('rem', 6, 1), hw: false }, { ...R('remu', 7, 1), hw: false },
   { name: 'ecall', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 0, hw: false },
   { name: 'ebreak', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 0, hw: false },
   { name: 'mret', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 0, hw: false },
