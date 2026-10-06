@@ -704,9 +704,16 @@ export class Stage {
     });
   }
 
+  /** Open `path` and highlight (and bring into view) the instance `name` inside it. */
+  reveal(path: string[], name: string): void {
+    this.goTo(path);
+    this.view.highlight([name]);
+    this.view.focusInst(name);
+  }
+
   /** Highlight instances in the current view (empty list clears). */
-  highlight(names: string[]): void {
-    this.view.highlight(names);
+  highlight(names: string[], focus = false): void {
+    this.view.highlight(names, focus);
   }
 
   /** Reserve screen space on the right for a docked panel and refit. */

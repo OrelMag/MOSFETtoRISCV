@@ -72,6 +72,8 @@ export class SchematicView {
   private interactive = false;
   private selected: string | null = null;
   private selectedNet = -1;
+  /** Nets faded by a focus highlight. */
+  private faded = new Set<number>();
   private probeG: SVGGElement | null = null;
   radix: Radix = 'hex';
   /** When > 0, value changes travel along the wires as fronts lasting this many ms. */
@@ -95,6 +97,7 @@ export class SchematicView {
     this.radixOverride.clear();
     this.selected = null;
     this.selectedNet = -1;
+    this.faded.clear();
     const nl = netlistOf(ctx.def);
     this.el.replaceChildren();
     this.wires = [];
@@ -384,7 +387,7 @@ export class SchematicView {
 
   /** Selection / hover classes a net's elements keep across repaints. */
   private marks(idx: number): string {
-    return `${idx === this.selectedNet ? ' net-sel' : ''}${idx === this.hovered ? ' net-hover' : ''}`;
+    return `${idx === this.selectedNet ? ' net-sel' : ''}${idx === this.hovered ? ' net-hover' : ''}${this.faded.has(idx) ? ' faded' : ''}`;
   }
 
   /** Give every element of a wire the value class vcls (finishing any front in flight). */
@@ -440,9 +443,29 @@ export class SchematicView {
     }, () => {});
   }
 
-  highlight(names: string[]): void {
-    for (const [name, g] of this.insts) g.classList.toggle('hl', names.includes(name));
-    for (const p of this.pins) p.g.classList.toggle('hl', names.includes(`pin:${p.pin.name}`));
+  /**
+   * Highlight instances. With `focus`, everything else fades, and so does every wire that does
+   * not join two highlighted parts (or a highlighted part and a pin): the data path stands out.
+   */
+  highlight(names: string[], focus = false): void {
+    const on = new Set(names);
+    for (const [name, g] of this.insts) g.classList.toggle('hl', on.has(name));
+    for (const p of this.pins) p.g.classList.toggle('hl', on.has(`pin:${p.pin.name}`));
+    this.el.classList.toggle('focus', focus && names.length > 0);
+    const nl = this.ctx ? netlistOf(this.ctx.def) : undefined;
+    for (const w of this.wires) {
+      let live = !focus;
+      if (focus && nl) {
+        const ends = nl.nets[w.net.index].ends;
+        const hit = ends.filter((e) => !e.includes('.') || on.has(e.slice(0, e.indexOf('.')))).length;
+        live = hit >= 2 && ends.some((e) => e.includes('.') && on.has(e.slice(0, e.indexOf('.'))));
+      }
+      if (live) this.faded.delete(w.net.index);
+      else this.faded.add(w.net.index);
+      for (const p of w.paths) p.classList.toggle('faded', !live);
+      for (const t of w.tags) t.classList.toggle('faded', !live);
+      w.label?.classList.toggle('faded', !live);
+    }
   }
 
   select(name: string | null): void {
@@ -475,6 +498,20 @@ export class SchematicView {
     this.centerOn(w.net.tags[k].pos);
     w.tags[k].classList.add('net-ping');
     setTimeout(() => w.tags[k].classList.remove('net-ping'), 900);
+  }
+
+  /** Zoom to an instance (about `span` grid units wide around it). */
+  focusInst(name: string, span = 70): void {
+    const g = this.insts.get(name);
+    if (!g) return;
+    const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(g.getAttribute('transform') ?? '');
+    if (!m) return;
+    const r = this.host.getBoundingClientRect();
+    const usable = Math.max(200, r.width - this.insetRight);
+    const h = span * (r.height / usable || 0.6);
+    const w = span * (r.width / usable || 1);
+    this.vb = { x: Number(m[1]) - span / 2 + 6, y: Number(m[2]) - h / 2, w, h };
+    this.applyViewBox();
   }
 
   /** Pan (without zooming) so that a point is centred, unless it is already well inside the view. */

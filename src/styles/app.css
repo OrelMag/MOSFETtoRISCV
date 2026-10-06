@@ -372,7 +372,10 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .inst.openable { cursor: zoom-in; }
 .inst.openable:hover .hit { fill: color-mix(in srgb, var(--accent) 8%, transparent); stroke: color-mix(in srgb, var(--accent) 40%, transparent); stroke-width: 0.08; }
 .inst.selected .hit { fill: color-mix(in srgb, var(--sel) 12%, transparent); stroke: var(--sel); stroke-width: 0.12; }
-.inst.hl .hit { stroke: var(--hl); stroke-width: 0.2; fill: color-mix(in srgb, var(--hl) 10%, transparent); animation: hl 1.4s ease-in-out infinite; }
+.inst.hl .hit { vector-effect: non-scaling-stroke; stroke: var(--hl); stroke-width: 2.5px; fill: color-mix(in srgb, var(--hl) 10%, transparent); animation: hl 1.4s ease-in-out infinite; }
+svg.schematic.focus .inst:not(.hl):not(.plumbing) { opacity: 0.28; }
+svg.schematic.focus .faded { opacity: 0.18; }
+svg.schematic.focus .inst.hl .hit { animation: none; fill: color-mix(in srgb, var(--hl) 14%, transparent); }
 @keyframes hl { 50% { stroke-opacity: 0.25; } }
 .open-badge { opacity: 0; transition: opacity 0.15s; cursor: pointer; }
 .open-badge circle { fill: var(--accent); }
@@ -584,6 +587,15 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .cpu-sec { font: 600 10.5px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 8px 0 3px; }
 .cpu-listing { max-height: 170px; overflow: auto; font: 11.5px var(--font-mono); border: 1px solid var(--border); border-radius: 8px; padding: 3px 0; }
 .cpu-listing .ln { display: flex; gap: 8px; padding: 0 8px; white-space: nowrap; }
+.cpu-listing .ln { cursor: pointer; }
+.cpu-listing .ln:hover { background: var(--surface-2); }
+.cpu-listing .ln.sel { outline: 1.5px solid var(--hl); outline-offset: -1.5px; border-radius: 4px; }
+.cpu-listing .stg { margin-left: 6px; font: 700 10px var(--font-mono); padding: 0 4px; border-radius: 4px; background: var(--hl); color: var(--accent-text); }
+.cpu-listing .rom-btn { margin-left: auto; border: 1px solid var(--border); background: var(--surface); color: var(--accent); border-radius: 6px; font: 600 11px var(--font-ui); padding: 0 6px; cursor: pointer; }
+.cpu-use { font-size: 12px; color: var(--text-2); margin: 4px 0 2px; }
+.cpu-use:empty { display: none; }
+.cpu-use code { font: 600 12px var(--font-mono); color: var(--text); }
+.cpu-sec-hint { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--muted); margin-left: 6px; }
 .cpu-listing .ln.cur { background: color-mix(in srgb, var(--w1) 20%, transparent); font-weight: 700; }
 .cpu-listing .a { color: var(--muted); }
 .cpu-listing .w { color: var(--bus-label-text); }
