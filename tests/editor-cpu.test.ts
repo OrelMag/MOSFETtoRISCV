@@ -190,7 +190,7 @@ describe('golden model in lock-step', { timeout: 60000 }, () => {
     const doc = c.doc();
     const src = PROGRAMS.find((p) => p.id === 'gcd')!.source;
     c.set({ ...doc, parts: doc.parts.map((p) => ('rom' in p.ref ? { ...p, ref: { rom: { ...p.ref.rom, lang: 'asm' as const, src } } } : p)) });
-    expect(m.sync()).toBe(true);
+    expect(m.sync()).toBe('program');
     // Mid-run the hardware is not where the new program starts: the check waits for a reset.
     expect(m.checking).toBe(false);
     c.es.reset();

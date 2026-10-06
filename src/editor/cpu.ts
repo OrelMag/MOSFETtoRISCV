@@ -352,6 +352,7 @@ export class CpuMonitor {
   /** The program the ISS runs (null: none). */
   prog: { words: number[]; k: number } | null = null;
   private progKey = '';
+  private cfgKey = '';
   private lastDoc: ChipDoc | null = null;
   private resets = -1;
   private willRetire = false;
@@ -367,24 +368,29 @@ export class CpuMonitor {
     this.es.edgeHooks.delete(this.hook);
   }
 
-  /** Re-read the description (the document or the build changed); restart on a reset or a new program. Returns true when the program changed. */
-  sync(): boolean {
+  /**
+   * Re-read the description (the document changed); restart on a reset, a new program or new
+   * settings. Returns what changed mid-run ('program' or 'settings'; null otherwise): the caller
+   * resets the hardware so both start over together.
+   */
+  sync(): 'program' | 'settings' | null {
     const doc = this.doc();
-    if (doc === this.lastDoc && this.es.resets === this.resets) return false;
+    if (doc === this.lastDoc && this.es.resets === this.resets) return null;
     this.lastDoc = doc;
     this.desc = resolveCpu(doc);
     const prog = this.desc ? romProgram(doc, this.desc.rom) : null;
     this.prog = prog;
-    const key = this.desc ? JSON.stringify([prog?.words ?? null, prog?.k, this.desc.iss, this.desc.dmem, this.desc.regs]) : '';
-    const changed = key !== this.progKey;
-    if (changed || this.es.resets !== this.resets) {
-      const progChanged = changed && this.progKey !== '';
-      this.progKey = key;
+    const pk = JSON.stringify(prog ? [prog.words, prog.k] : null);
+    const ck = this.desc ? JSON.stringify([this.desc.rom, this.desc.iss, this.desc.dmem, this.desc.regs, this.desc.fregs, this.desc.retire, this.desc.pipeline, this.desc.pc]) : '';
+    const what = this.progKey && pk !== this.progKey ? 'program' : this.cfgKey && ck !== this.cfgKey ? 'settings' : null;
+    if (what || this.es.resets !== this.resets || !this.progKey) {
+      this.progKey = pk;
+      this.cfgKey = ck;
       this.resets = this.es.resets;
       this.restart(prog);
-      return progChanged;
+      return this.es.cycles > 0 ? what : null;
     }
-    return false;
+    return null;
   }
 
   private restart(prog: { words: number[]; k: number } | null): void {

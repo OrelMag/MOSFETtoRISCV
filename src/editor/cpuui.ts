@@ -158,11 +158,13 @@ class CpuPanel {
         entry = { chip, mon: new CpuMonitor(es, () => ed.ws.chips[chip] ?? ed.doc) };
         this.monitors.set(es, entry);
       }
-      if (entry && entry.mon.sync() && es.cycles > 0) {
-        // A new program: run it from the start (the old one's state means nothing to it).
+      const changed = entry?.mon.sync();
+      if (entry && changed) {
+        // A new program (or a new idea of what the CPU is): start the hardware and the golden
+        // model over together; the old run's state means nothing to the new one.
         es.reset();
         entry.mon.sync();
-        ed.toast('Program changed: the CPU was reset to run it from the start');
+        ed.toast(changed === 'program' ? 'Program changed: the CPU was reset to run it from the start' : 'CPU settings changed: the CPU was reset so the golden model starts with it');
       }
       if (chip !== this.shownFor) {
         this.shownFor = chip;
@@ -453,10 +455,16 @@ function netOptions(ed: Editor, width: number): [string, string][] {
   const doc = ed.doc;
   const out: [string, string][] = [];
   for (const p of doc.pins) if (p.width === width) out.push([JSON.stringify({ pin: p.id }), `pin ${p.name}`]);
-  for (const n of [...new Set(doc.labels.map((l) => l.name))].sort()) out.push([JSON.stringify({ pointer: n }), `pointer ${n}`]);
+  // Pointers of that width (all of them before the first build).
+  const nets = ed.sim.sim?.design.root.nets, built = ed.sim.built;
+  const wide = (id: string) => {
+    const i = built?.netOfLabel.get(id);
+    return !nets || i === undefined || i < 0 || nets[i]?.length === width;
+  };
+  for (const n of [...new Set(doc.labels.filter((l) => wide(l.id)).map((l) => l.name))].sort()) out.push([JSON.stringify({ pointer: n }), `pointer ${n}`]);
   for (const p of doc.parts) {
     const def = ed.defOf(p);
-    if (!def || 'split' in p.ref || 'merge' in p.ref || 'const' in p.ref) continue;
+    if (!def || 'split' in p.ref || 'merge' in p.ref || 'const' in p.ref || /^tie[01]$/.test(def.id)) continue;
     for (const q of def.ports) if (q.dir === 'out' && q.width === width) out.push([JSON.stringify({ part: p.id, port: q.name }), `${p.id}.${q.name}`]);
   }
   return out;
