@@ -522,7 +522,7 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
     let STAGES = ['F', 'D', 'E', 'M', 'W'];
     const grid = h('div', { class: 'pipe-grid' });
     const title = h('h4', null, 'Pipeline diagram', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'stage × cycle'));
-    const el = h('div', { class: 'mem-panel pipe-panel' }, title, grid);
+    const el = h('div', { class: 'mem-panel pipe-panel', 'data-dock': 'left' }, title, grid);
     title.addEventListener('click', () => el.classList.toggle('collapsed'));
     const read = (): Snap | null => {
       const sim = stage.sim, root = stage.rootCtx?.node;
@@ -625,7 +625,7 @@ const ioPanel: ScenePanel = (stage: Stage): Widget => {
     },
   });
   const title = h('h4', null, 'I/O & machine state', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'memory-mapped at 0x8000_0000'));
-  const el = h('div', { class: 'mem-panel io-panel' }, title,
+  const el = h('div', { class: 'mem-panel io-panel', 'data-dock': 'left' }, title,
     h('div', { class: 'cpu-sec' }, 'Console'), con,
     h('div', { class: 'io-row' }, h('div', null, h('div', { class: 'cpu-sec' }, 'LEDs'), leds), h('div', null, h('div', { class: 'cpu-sec' }, 'Switches'), sw)),
     h('div', { style: 'margin:6px 0' }, irqBtn),
@@ -669,7 +669,7 @@ export function controllerPanel(control: 'fsm' | 'micro', compact = false): Scen
   return (stage: Stage): Widget => {
     const body = h('div', { class: 'mc-table' });
     const title = h('h4', null, control === 'fsm' ? 'Controller: state machine' : 'Controller: microcode ROM', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
-    const el = h('div', { class: `mem-panel mc-panel${compact ? ' compact' : ''}` }, title, body);
+    const el = h('div', { class: `mem-panel mc-panel${compact ? ' compact' : ''}`, 'data-dock': 'left' }, title, body);
     title.addEventListener('click', () => el.classList.toggle('collapsed'));
     const ctrlBits = MC_FIELDS.reduce((a, [, n]) => a + n, 0);
     const nextText = (n: (typeof MC_STATES)[number]['next']) => (typeof n === 'number' ? MC_STATES[n].name : n === 'decode' ? (compact ? 'by opcode' : 'dispatch (opcode)') : (compact ? 'ld / st' : 'dispatch (load / store)'));
