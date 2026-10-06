@@ -11,7 +11,7 @@ import { s } from '../ui/dom';
 import { Camera, type ViewBox } from '../view/camera';
 import { junctions, type PinGeom, textWidth } from '../view/route';
 import { bitClass, busClass } from '../view/schematic';
-import { drawPinGlyph, drawSymbol, type PinGlyph, placePinValue } from '../view/symbols';
+import { drawPinGlyph, drawSymbol, instNameAt, type PinGlyph, placePinValue } from '../view/symbols';
 import type { Compiled, Diag } from './compile';
 import { partBox, pinBody, pinKnob, pointerGeom, wireGroups } from './geom';
 import { HopCache } from './hops';
@@ -319,14 +319,8 @@ export class EditorView {
     let disp: DisplayEls | undefined;
     if ('display' in p.ref) disp = this.drawDisplay(g, p.ref.display, p.ref.width ?? 1, geo.w, geo.h, !!p.flip);
     else g.append(drawSymbol(def, p.flip));
-    if (def.prim !== 'alias' && def.prim !== 'vdd' && def.prim !== 'gnd') {
-      const isBox = def.symbol.kind === 'box';
-      const isFet = def.symbol.kind === 'nmos' || def.symbol.kind === 'pmos';
-      g.append(s('text', {
-        class: 'inst-name', x: isFet ? 3.4 : isBox ? 0.1 : geo.w / 2, y: isFet ? 1.45 : isBox ? -0.45 : -0.35,
-        'text-anchor': isFet || isBox ? 'start' : 'middle',
-      }, p.label ?? p.id));
-    }
+    const nameAt = instNameAt(def);
+    if (nameAt) g.append(s('text', { class: 'inst-name', x: nameAt.x, y: nameAt.y, 'text-anchor': nameAt.anchor }, p.label ?? p.id));
     return { g, disp };
   }
 

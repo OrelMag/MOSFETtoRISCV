@@ -57,6 +57,59 @@ function transistor(def: ComponentDef): SVGElement[] {
   return els;
 }
 
+/** A vertical resistor zig-zag at x = 1 from y0 to y1 (n half-waves), as path commands after a point at y0. */
+function zigzag(y0: number, y1: number, n = 6, amp = 0.45): string {
+  const d = (y1 - y0) / n;
+  let p = '';
+  for (let i = 0; i < n; i++) p += ` L${i % 2 ? 1 - amp : 1 + amp},${y0 + d * (i + 0.5)}`;
+  return `${p} L1,${y1}`;
+}
+
+/** Ground below (1, y): the lead and three shrinking bars (as the GND symbol). */
+const groundAt = (y: number) => `M1,${y} V${y + 0.55} M0.2,${y + 0.55} H1.8 M0.5,${y + 0.95} H1.5 M0.8,${y + 1.35} H1.2`;
+
+/** Switch-level parts: resistor, pull-up / pull-down, capacitor, transmission gate, tri-states. */
+function switchPart(k: string): SVGElement[] {
+  const line = (d: string, thick = false) => s('path', { d, class: thick ? 'sym-line thick' : 'sym-line' });
+  switch (k) {
+    case 'res':
+      return [line(`M1,0 V0.7${zigzag(0.7, 3.3)} V4`)];
+    case 'pullup':
+      return [line('M0.2,0.15 H1.8 M1,0.15 V0.7', true), line(`M1,0.7${zigzag(0.7, 3.3)} V4`)];
+    case 'pulldown':
+      return [line(`M1,0 V0.5${zigzag(0.5, 2.9)}`), line(groundAt(2.9), true)];
+    case 'cap':
+      return [line('M1,0 V1.1'), line(`M0.2,1.1 H1.8 M0.2,1.6 H1.8 ${groundAt(1.6)}`, true)];
+    case 'tgate':
+      // two triangles back to back: an NMOS and a PMOS in parallel (en_n drives the PMOS)
+      return [
+        line('M0,2 H0.6 M3.4,2 H4 M2,0 V1.4 M2,3.2 V4'),
+        s('path', { d: 'M0.6,0.8 L3.4,2 L0.6,3.2 Z', class: 'sym-body' }),
+        s('path', { d: 'M3.4,0.8 L0.6,2 L3.4,3.2 Z', class: 'sym-line' }),
+        s('circle', { cx: 2, cy: 2.9, r: 0.3, class: 'sym-body' }),
+      ];
+    case 'tribuf':
+      return [line('M0,2 H0.5 M3.5,2 H4 M2,0 V1.25'), s('path', { d: 'M0.5,0.5 L3.5,2 L0.5,3.5 Z', class: 'sym-body' })];
+    case 'triinv':
+      return [
+        line('M0,2 H0.5 M3.8,2 H4 M2,0 V1.33'), s('path', { d: 'M0.5,0.5 L3.2,2 L0.5,3.5 Z', class: 'sym-body' }),
+        s('circle', { cx: 3.5, cy: 2, r: 0.3, class: 'sym-body' }),
+      ];
+  }
+  return [];
+}
+
+/** Where an instance's name goes, relative to its symbol (null: rails and wiring are not named). */
+export function instNameAt(def: ComponentDef): { x: number; y: number; anchor: 'start' | 'middle' } | null {
+  if (def.prim === 'alias' || def.prim === 'vdd' || def.prim === 'gnd') return null;
+  const k = def.symbol.kind, g = symbolGeom(def);
+  if (k === 'nmos' || k === 'pmos') return { x: 3.4, y: 1.45, anchor: 'start' };
+  if (k === 'box') return { x: 0.1, y: -0.45, anchor: 'start' };
+  if (k === 'res' || k === 'pullup' || k === 'pulldown' || k === 'cap') return { x: 1.75, y: g.h / 2 + 0.3, anchor: 'start' };
+  if (k === 'tgate' || k === 'tribuf' || k === 'triinv') return { x: 2.4, y: 0.95, anchor: 'start' };
+  return { x: g.w / 2, y: -0.35, anchor: 'middle' };
+}
+
 export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
   const g = symbolGeom(def);
   const k = def.symbol.kind;
@@ -107,6 +160,13 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
     }
     case 'nmos': case 'pmos':
       inner.append(...transistor(def));
+      break;
+    case 'res': case 'pulldown': case 'cap': case 'tgate': case 'tribuf': case 'triinv':
+      inner.append(...switchPart(k));
+      break;
+    case 'pullup':
+      inner.append(...switchPart(k));
+      root.append(s('text', { x: 1, y: -0.35, class: 'sym-rail', 'text-anchor': 'middle' }, 'VDD'));
       break;
     case 'vdd':
       inner.append(s('path', { d: 'M0.2,0.15 H1.8 M1,0.15 V1', class: 'sym-line thick' }));
