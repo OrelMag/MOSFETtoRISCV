@@ -169,26 +169,23 @@ const cnt4 = chip('u_cnt4', 'Counter 4', {
 // ---- rung 5: memory cells at switch level --------------------------------------------------------
 
 /**
- * One hand-drawn 6T cell at (x, y): weak pull-ups, strong pull-downs, access transistors. Each
- * transistor gets its own rail symbol, as in the library cell: the switch-level solver joins
- * nodes through a shared rail net, so one VDD feeding both pull-ups would let a write see a
- * "maybe" path from VDD through the other pull-up (its gate still X) and leave the node X.
+ * One hand-drawn 6T cell at (x, y): weak pull-ups, strong pull-downs, access transistors, one VDD
+ * for both pull-ups and one GND for both pull-downs (a rail is a terminal, never a path between
+ * the two halves of the cell, so this behaves like the library cell's one rail per transistor).
  */
 function cell6t(i: number, x: number, y: number): { parts: ChipDoc['parts']; wires: WireDoc[] } {
   const p = (n: string) => `c${i}${n}`;
   return {
     parts: [
       part(p('a1'), L('nmos'), [x, y + 8]),
-      part(p('vdd1'), L('vdd'), [x + 10, y]), part(p('p1'), L('pmos_weak'), [x + 8, y + 3]),
-      part(p('n1'), L('nmos_strong'), [x + 8, y + 13]), part(p('gnd1'), L('gnd'), [x + 10, y + 19]),
-      part(p('vdd2'), L('vdd'), [x + 20, y]), part(p('p2'), L('pmos_weak'), [x + 18, y + 3]),
-      part(p('n2'), L('nmos_strong'), [x + 18, y + 13]), part(p('gnd2'), L('gnd'), [x + 20, y + 19]),
+      part(p('vdd'), L('vdd'), [x + 15, y]), part(p('p1'), L('pmos_weak'), [x + 8, y + 3]),
+      part(p('n1'), L('nmos_strong'), [x + 8, y + 13]), part(p('gnd'), L('gnd'), [x + 15, y + 19]),
+      part(p('p2'), L('pmos_weak'), [x + 18, y + 3]), part(p('n2'), L('nmos_strong'), [x + 18, y + 13]),
       part(p('a2'), L('nmos'), [x + 28, y + 8]),
     ],
     wires: [
       ...fan(p('wl'), `pin:wl${i}`, `${p('a1')}.g`, `${p('a2')}.g`),
-      wire(p('v1'), `${p('vdd1')}.p`, `${p('p1')}.s`), wire(p('v2'), `${p('vdd2')}.p`, `${p('p2')}.s`),
-      wire(p('g1'), `${p('gnd1')}.p`, `${p('n1')}.s`), wire(p('g2'), `${p('gnd2')}.p`, `${p('n2')}.s`),
+      ...fan(p('v'), `${p('vdd')}.p`, `${p('p1')}.s`, `${p('p2')}.s`), ...fan(p('g'), `${p('gnd')}.p`, `${p('n1')}.s`, `${p('n2')}.s`),
       wire(p('q'), `${p('p1')}.d`, `${p('n1')}.d`, [], { name: `q${i}` }), ...fan(p('qx'), `${p('n1')}.d`, `${p('a1')}.s`, `${p('p2')}.g`, `${p('n2')}.g`),
       wire(p('qb'), `${p('p2')}.d`, `${p('n2')}.d`, [], { name: `qb${i}` }), ...fan(p('qbx'), `${p('n2')}.d`, `${p('a2')}.s`, `${p('p1')}.g`, `${p('n1')}.g`),
       // The bit lines run past every cell: pointers named bl / blb.
