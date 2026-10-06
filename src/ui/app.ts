@@ -5,7 +5,7 @@ import { h, icon } from './dom';
 import { ChapterPage, type Page } from './pages/chapter';
 import { homePage } from './pages/home';
 import { WorkbenchPage } from './pages/workbench';
-import { applyTheme, settings, type Theme } from './settings';
+import { applyTheme, PALETTES, settings, type Theme } from './settings';
 import type { Radix } from '../sim/values';
 
 export function startApp(root: HTMLElement): void {
@@ -30,7 +30,30 @@ export function startApp(root: HTMLElement): void {
     applyTheme();
   });
 
+  // Palette menu: a swatch button opening a small list (0, 1, X and bus colours per entry).
+  const swatch = () => h('span', { class: 'pal-sw' }, h('i', { class: 's0' }), h('i', { class: 's1' }), h('i', { class: 'sx' }), h('i', { class: 'sb' }));
+  const palMenu = h('div', { class: 'pal-menu', role: 'menu' });
+  for (const p of PALETTES) {
+    const item = h('button', { role: 'menuitemradio', 'data-p': p.id, onclick: () => {
+      settings.set('palette', p.id);
+      applyTheme();
+      palMenu.classList.remove('open');
+    } }, h('span', { class: 'pal-sw', 'data-palette': p.id }, h('i', { class: 's0' }), h('i', { class: 's1' }), h('i', { class: 'sx' }), h('i', { class: 'sb' })),
+    h('span', null, h('b', null, p.name), h('small', null, p.blurb)));
+    palMenu.append(item);
+  }
+  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire colours', 'aria-label': 'Wire colours', 'aria-haspopup': 'menu' }, swatch());
+  palBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    palMenu.classList.toggle('open');
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (!palMenu.contains(e.target as Node) && !palBtn.contains(e.target as Node)) palMenu.classList.remove('open');
+  });
+  const palWrap = h('div', { class: 'pal-wrap' }, palBtn, palMenu);
+
   const syncTools = () => {
+    for (const b of palMenu.querySelectorAll<HTMLButtonElement>('button')) b.setAttribute('aria-checked', String(b.dataset.p === settings.palette));
     for (const b of radix.querySelectorAll<HTMLButtonElement>('button')) b.classList.toggle('on', b.dataset.r === settings.radix);
     animate.classList.toggle('on', settings.animate);
     themeBtn.replaceChildren(icon(settings.theme === 'light' ? 'sun' : settings.theme === 'dark' ? 'moon' : 'auto', 18));
@@ -41,7 +64,7 @@ export function startApp(root: HTMLElement): void {
 
   const topbar = h('header', { class: 'topbar' },
     h('a', { class: 'brand', href: '#/' }, h('span', { class: 'brand-mark' }, icon('chip', 18)), 'MOSFET → RISC-V', h('small', null, 'a journey through abstraction')),
-    nav, h('div', { class: 'spacer' }), h('div', { class: 'tools' }, radix, animate, themeBtn));
+    nav, h('div', { class: 'spacer' }), h('div', { class: 'tools' }, radix, animate, palWrap, themeBtn));
   root.append(topbar, view);
 
   let page: Page | null = null;

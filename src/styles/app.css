@@ -42,6 +42,28 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .spacer { flex: 1; }
 .tools { display: flex; align-items: center; gap: 8px; }
 
+/* palette menu */
+.pal-wrap { position: relative; }
+.pal-sw { display: inline-grid; grid-template-columns: repeat(2, 7px); gap: 2px; }
+.pal-sw i { width: 7px; height: 7px; border-radius: 2px; display: block; }
+.pal-sw .s0 { background: var(--w0); } .pal-sw .s1 { background: var(--w1); }
+.pal-sw .sx { background: var(--wx); } .pal-sw .sb { background: var(--bus); }
+.pal-menu {
+  display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 320px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 6px;
+}
+.pal-menu.open { display: grid; gap: 2px; }
+.pal-menu button {
+  display: flex; align-items: center; gap: 12px; text-align: left; border: 0; background: transparent; color: var(--text);
+  padding: 8px 10px; border-radius: 8px; cursor: pointer; font: inherit;
+}
+.pal-menu button:hover { background: var(--surface-2); }
+.pal-menu button[aria-checked='true'] { background: var(--accent-soft); }
+.pal-menu button .pal-sw { grid-template-columns: repeat(4, 10px); }
+.pal-menu button .pal-sw i { width: 10px; height: 10px; }
+.pal-menu b { display: block; font-size: 13px; font-weight: 600; }
+.pal-menu small { display: block; font-size: 12px; color: var(--muted); }
+
 .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px; padding: 2px; }
 .seg button {
   border: 0; background: transparent; padding: 3px 9px; border-radius: 7px; cursor: pointer;
@@ -254,11 +276,11 @@ pre.code .num { color: var(--w1); }
 svg.schematic { font-family: var(--font-ui); user-select: none; }
 .grid-bg { pointer-events: all; }
 .grid-dot { fill: var(--grid); }
-.wire { fill: none; stroke: var(--w0); stroke-width: 0.16; stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.12s; }
-.wire.v1 { stroke: var(--w1); stroke-width: 0.22; filter: drop-shadow(0 0 0.25px var(--w1)); }
-.wire.vx { stroke: var(--wx); stroke-dasharray: 0.5 0.3; }
+.wire { fill: none; stroke: var(--w0); stroke-width: var(--wire-w0); stroke-dasharray: var(--wire-dash0); stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.12s; }
+.wire.v1 { stroke: var(--w1); stroke-width: var(--wire-w1); stroke-dasharray: none; filter: var(--wire-glow); }
+.wire.vx { stroke: var(--wx); stroke-dasharray: var(--wire-dash-x); }
 .wire.vz { stroke: var(--wz); stroke-dasharray: 0.25 0.35; }
-.wire.bus { stroke-width: 0.36; stroke: var(--bus); opacity: 0.55; }
+.wire.bus { stroke-width: var(--wire-bus); stroke: var(--bus); opacity: var(--bus0-opacity); stroke-dasharray: none; }
 .wire.bus.bus1 { stroke: var(--bus1); opacity: 1; }
 .wire.bus.vx { stroke: var(--wx); opacity: 1; }
 .dot { fill: var(--w0); }
