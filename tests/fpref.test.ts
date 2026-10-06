@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { F32, FLAG, RM, bitsToF32, f32ToBits, fpAddRef, fpAddX, fpDivX, fpFromIntRef, fpMulRef, fpMulX, fpSqrtX, fpToIntX, fpValue } from '../src/sim/fpref';
+import { F32, FLAG, RM, bitsToF32, f32ToBits, fpAddRef, fpAddX, fpDivX, fpFmaX, fpFromIntRef, fpMulRef, fpMulX, fpSqrtX, fpToIntX, fpValue } from '../src/sim/fpref';
 
 describe('reference float arithmetic agrees with the host float32', () => {
   it('add, sub, mul and int conversion on random and special operands', () => {
@@ -25,28 +25,47 @@ describe('rounding modes: the reference obeys their definitions', () => {
   // E4M3: every sum, difference and product is exact in a double, so it can be compared directly.
   const f = { E: 4, M: 3 }, emaxNext = 2 ** 8; // ∞ stands for 2^(emax + 1) when measuring distance
   const val = (y: number) => { const v = fpValue(y, f); return Math.abs(v) === Infinity ? Math.sign(v) * emaxNext : v; };
+  /** One exact value and its five roundings: check each mode against its definition. */
+  function checkModes(label: string, exact: number, r: (rm: number) => { y: number; fl: number }): void {
+    if (!Number.isFinite(exact) || exact === 0 || Math.abs(exact) >= emaxNext) return; // (beyond 2^8: overflow in every mode)
+    const res = [0, 1, 2, 3, 4].map(r), v = res.map((x) => val(x.y));
+    const [ne, tz, dn, up, mm] = v;
+    if (!(res[0].fl & FLAG.NX)) {
+      if (!v.every((x) => x === exact)) expect(v, label).toEqual(v.map(() => exact));
+      return;
+    }
+    if (!(dn < exact && exact < up)) expect(false, `${label}: ${dn} < ${exact} < ${up}`).toBe(true);
+    expect(res.every((x) => x.fl & FLAG.NX)).toBe(true);
+    expect(tz).toBe(Math.abs(dn) < Math.abs(up) ? dn : up);
+    const dd = exact - dn, du = up - exact;
+    const even = (res[2].y & 1) === 0 ? dn : up;
+    expect(ne, `${label} RNE`).toBe(dd < du ? dn : du < dd ? up : even);
+    expect(mm, `${label} RMM`).toBe(dd < du ? dn : du < dd ? up : Math.abs(dn) > Math.abs(up) ? dn : up);
+    // underflow: only for results below the smallest normal (2^-6)
+    if (res[0].fl & FLAG.UF) expect(Math.abs(exact)).toBeLessThan(2 ** -6);
+  }
   it('RDN ≤ exact ≤ RUP; RTZ, RNE and RMM pick the right neighbour; NX iff inexact', () => {
     for (let a = 0; a < 256; a++) for (let b = 0; b < 256; b++) {
       const A = fpValue(a, f), B = fpValue(b, f);
-      for (const [exact, r] of [[A + B, (rm: number) => fpAddX(a, b, false, f, rm)], [A * B, (rm: number) => fpMulX(a, b, f, rm)]] as const) {
-        if (!Number.isFinite(exact) || exact === 0 || Math.abs(exact) >= emaxNext) continue; // (beyond 2^8: overflow in every mode)
-        const res = [0, 1, 2, 3, 4].map(r), v = res.map((x) => val(x.y));
-        const [ne, tz, dn, up, mm] = v;
-        if (!(res[0].fl & FLAG.NX)) {
-          expect(v.every((x) => x === exact), `${a} ${b}`).toBe(true);
-          continue;
-        }
-        expect(dn < exact && exact < up, `${a} ${b}: ${dn} < ${exact} < ${up}`).toBe(true);
-        expect(res.every((x) => x.fl & FLAG.NX)).toBe(true);
-        expect(tz).toBe(Math.abs(dn) < Math.abs(up) ? dn : up);
-        const dd = exact - dn, du = up - exact;
-        const even = (res[2].y & 1) === 0 ? dn : up;
-        expect(ne, `${a} ${b} RNE`).toBe(dd < du ? dn : du < dd ? up : even);
-        expect(mm, `${a} ${b} RMM`).toBe(dd < du ? dn : du < dd ? up : Math.abs(dn) > Math.abs(up) ? dn : up);
-        // underflow: only for results below the smallest normal (2^-6)
-        if (res[0].fl & FLAG.UF) expect(Math.abs(exact)).toBeLessThan(2 ** -6);
-      }
+      checkModes(`${a} + ${b}`, A + B, (rm) => fpAddX(a, b, false, f, rm));
+      checkModes(`${a} * ${b}`, A * B, (rm) => fpMulX(a, b, f, rm));
     }
+  }, 60000);
+  it('fused multiply-add rounds once', () => {
+    let seed = 77;
+    const r = () => (seed = (seed * 1103515245 + 12345) >>> 0) >>> 24;
+    for (let i = 0; i < 60000; i++) {
+      const a = r(), b = r(), c = i % 3 ? r() : (r() & 0x80) | (((a & 0x78) + (b & 0x78) - 0x38) & 0x78) | (r() & 7); // c near a × b: cancellation
+      const A = fpValue(a, f), B = fpValue(b, f), C = fpValue(c, f), np = !!(i & 1), nc = !!(i & 2);
+      checkModes(`fma ${a} ${b} ${c}`, (np ? -1 : 1) * A * B + (nc ? -1 : 1) * C, (rm) => fpFmaX(a, b, c, np, nc, f, rm));
+    }
+    // c = ±0 or a = 1.0 reduce fma to a single multiply or add
+    for (let a = 0; a < 256; a++) for (let b = 0; b < 256; b++) {
+      expect(fpFmaX(a, b, 0x80, false, false, f, RM.RUP), `${a} ${b}`).toEqual(fpMulX(a, b, f, RM.RUP));
+      expect(fpFmaX(0x38, a, b, false, true, f, RM.RDN), `${a} ${b}`).toEqual(fpAddX(a, b, true, f, RM.RDN));
+    }
+    expect(fpFmaX(0x7f800000, 0, 0x7fc00000, false, false, F32)).toEqual({ y: 0x7fc00000, fl: FLAG.NV }); // ∞ × 0 + qNaN: NV
+    expect(fpFmaX(0x7f800000, 0x3f800000, 0x7f800000, false, true, F32)).toEqual({ y: 0x7fc00000, fl: FLAG.NV }); // ∞ − ∞
   }, 60000);
   it('division and square root agree with the host (RNE) and bracket the exact value (RDN / RUP)', () => {
     let seed = 5;
