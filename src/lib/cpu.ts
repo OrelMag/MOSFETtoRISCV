@@ -441,6 +441,8 @@ export interface CpuOptions {
    * csrr mhartid from the hartid input. A core that loses arbitration stalls (retire = 0).
    */
   shared?: boolean;
+  /** With shared: no instruction ROM inside; the instruction arrives on an `instr` input (for layout). */
+  imemPort?: boolean;
 }
 
 /** PC + 4 with a parallel-prefix adder. */
@@ -477,11 +479,11 @@ export const PLUS4_FAST: ComponentDef = define({
 export function singleCycleCpu(program: number[], opts: CpuOptions = {}): ComponentDef {
   const IM = rom(program);
   const adder = opts.adder ?? 'rca';
-  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? '_dc' : ''}${opts.fpu ? '_fp' : ''}${opts.shared ? '_mp' : ''}`;
-  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, !!opts.dcache, !!opts.fpu, !!opts.shared));
+  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? '_dc' : ''}${opts.fpu ? '_fp' : ''}${opts.shared ? '_mp' : ''}${opts.imemPort ? '_ip' : ''}`;
+  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, !!opts.dcache, !!opts.fpu, !!opts.shared, !!opts.imemPort));
 }
 
-function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache = false, fpu = false, shared = false): ComponentDef {
+function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache = false, fpu = false, shared = false, imemPort = false): ComponentDef {
   const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dcache ? cachedMemory(dmemK) : dataMemory(dmemK);
   const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = adder === 'ks' ? koggeStone(32) : rca(32), SI = splitter([7, 5, 3, 5, 5, 7]);
   const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4;
@@ -736,11 +738,20 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
     );
     const ox = resY[0] + 22;
     Object.assign(pins, { hartid: [0, bottom + 6], memRData: [0, bottom + 9], grant: [0, bottom + 12], memAddr: [ox, bottom + 1], memWData: [ox, bottom + 4], memWE: [ox, bottom + 7], memReq: [ox, bottom + 10], retire: [ox, bottom + 13] });
+    if (imemPort) {
+      // the program comes from outside (an instruction memory macro in a real chip)
+      instances.splice(instances.findIndex((i) => i.name === 'imem'), 1);
+      drop(net('PC'), 'imem.addr');
+      const ins = net('Instr');
+      ins.ends = ['instr', ...ins.ends.filter((e) => e !== 'imem.data')];
+      pins.instr = [0, bottom + 15];
+      extraPorts.push(bus('instr', 32, 'in'));
+    }
     extraPorts.push(bus('hartid', 32, 'in'), bus('memRData', 32, 'in'), bit('grant', 'in'),
       bus('memAddr', 32, 'out'), bus('memWData', 32, 'out'), bit('memWE', 'out'), bit('memReq', 'out'), bit('retire', 'out'));
   }
   return {
-    id: key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dmemK}` : '') + (fpu ? '_fp' : '') + (shared ? '_core' : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ' with a data cache' : ''}`, category: 'cpu',
+    id: imemPort ? 'rv32i_core' : key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dmemK}` : '') + (fpu ? '_fp' : '') + (shared ? '_core' : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ' with a data cache' : ''}`, category: 'cpu',
     summary: dcache
       ? 'The single-cycle processor with its data memory replaced by a slow main memory behind a 64-byte direct-mapped cache. A load that misses holds the PC and the register write (retire = 0) for 8 cycles while the line is fetched.'
       : 'A complete RISC-V processor: every instruction is fetched, decoded, executed and retired in one clock cycle. Built entirely from the blocks of the previous chapters.',

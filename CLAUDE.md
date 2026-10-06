@@ -61,6 +61,8 @@ src/sim/       simulation core (no DOM)
                  `strength` (ratioed logic) and `cap` nets that keep their charge
   fpref.ts       exact reference float arithmetic for any format (BigInt, RNE), float32 helpers
   coherence.ts   MSI / MESI snooping model (per block, no capacity)
+  pnr.ts         problemOf(def), Layout (annealing placer), route / routeAll (two-layer Lee router)
+  techmap.ts     techMap(def): inverter recognition and double-inversion removal
   cachemodel.ts  behavioural cache model (size/line/ways/replacement/write policy, 3C classes)
   harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench
   stats.ts       transistor / NAND counts, logic depth

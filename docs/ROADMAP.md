@@ -160,12 +160,13 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ MSI / MESI snooping coherence explorer (false sharing, private data, ping-pong); memory-ordering discussion
 - ⏳ Private caches in the gate-level cores with a coherent bus; lr.w / sc.w; more than two cores
 
-### Phase 11 — From netlist to silicon ⏳
-- Standard cells: the NAND you met in Chapter 3 drawn as layout (diffusion, poly, metal, contacts)
-- Stick diagrams → layout rules (λ rules); DRC intuition
-- Synthesis → placement → routing → clock tree → timing closure, applied to *our* CPU's netlist
-- Floorplan of the multi-core chip; die, wafer, fabrication steps (photolithography, doping, etching), packaging
-- Optional export of the netlist / Verilog for real open-source flows (Yosys, OpenROAD, SkyWater 130 nm)
+### Phase 11 — From netlist to silicon ✅ (chapter 25)
+- ✅ INV / NAND2 / NOR2 standard cells in layout (layers, live conduction), λ dimensions, sky130 reference
+- ✅ Fabrication cross-section, step by step (wells, STI, gate, lithography, etch, implants, contacts, metal)
+- ✅ Technology mapping measured on our designs (inverters, double inversions)
+- ✅ Simulated-annealing placer + two-layer Lee maze router on real flattened netlists (FA, 4-bit adder, counter)
+- ✅ Clock distribution (H-tree vs spine, skew); floorplan of the dual-core from its NAND counts; wafer / yield / cost
+- ⏳ Full-chip layout of the final CPU (see open questions); Yosys / OpenROAD / sky130 export
 
 ### Cross-cutting features ⏳
 - Waveform viewer for any probed nets (also VCD export)
