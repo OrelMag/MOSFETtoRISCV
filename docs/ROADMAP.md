@@ -113,13 +113,13 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 ### Phase 5 — Multicycle & microcode ⏳
 - FSM control vs microprogrammed control (primer Appendix D), equivalence shown
 
-### Phase 6 — Pipelining 🚧
+### Phase 6 — Pipelining ✅
 - ✅ Five-stage gate-level pipeline (61k NAND), co-simulated vs the ISS at every retirement
 - ✅ Live pipeline diagram (stage × cycle) with stall / flush / forwarding events
 - ✅ Data hazards → forwarding (M→E, W→E) and a W→D bypass; load-use stall; branch flush
 - ✅ Does pipelining pay? Clock period (static timing) × CPI (measured), with honest analysis
-- ⏳ Balanced stages: precomputed forwarding, dedicated branch comparator
-- ⏳ Branch prediction (static, then BTB + 2-bit counters) with measured CPI
+- ✅ Balanced stages: look-ahead forwarding, dedicated branch comparator and jalr adder (145/93 → 103/59)
+- ✅ Branch prediction: 16-entry BTB + 2-bit counters, parallel target check; measured CPI and time/instruction
 
 ### Phase 7 — Full RV32IM + privileged architecture ⏳
 - Complete RV32I (all loads/stores, shifts, LUI/AUIPC, JALR, all branches)

@@ -8,13 +8,13 @@
 
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
-import { alu, constWord } from './alu';
-import { andN, busMux2, muxTree, rca } from './combinational';
+import { alu } from './alu';
+import { andN, busMux2, decoder, muxTree, rca } from './combinational';
 import { CLEAR_BIT0, CONTROL, IMM_GEN, NEXT_PC, PLUS4, PLUS4_FAST, dataMemory, rom } from './cpu';
 import { define, merger, ones, splitter } from './define';
-import { fanout, koggeStone } from './fastadd';
-import { AND, NOT, OR, XNOR } from './gates';
-import { regfile } from './regfile';
+import { addSubFast, fanout, koggeStone } from './fastadd';
+import { AND, NOT, OR, XNOR, XOR } from './gates';
+import { readPort, regfile } from './regfile';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { bitwise, orN } from './wide';
@@ -122,20 +122,23 @@ export function clearableRegister(n: number): ComponentDef {
 
 /** Row of each field in every pipeline register, so that shared fields line up across stages. */
 const ROWS: Record<string, number> = {
-  valid: 0, pc: 1, pcPlus4: 2, instr: 3, rd1: 3, aluResult: 3, rd2: 4, writeData: 4, readData: 4, imm: 5,
-  rs1: 6, rs2: 7, rd: 8,
-  regWrite: 9, aluSrcA: 11, aluSrcB: 12, memWrite: 13, resultSrc: 14, branch: 15, jump: 16, jalr: 17, aluCtl: 18, funct3: 19,
+  valid: 0, pc: 1, pcPlus4: 2, instr: 3, rd1: 3, aluResult: 3, rd2: 4, writeData: 4, readData: 4, imm: 5, predTarget: 6,
+  rs1: 7, rs2: 8, rd: 9,
+  regWrite: 10, aluSrcA: 12, aluSrcB: 13, memWrite: 14, resultSrc: 15, branch: 16, jump: 17, jalr: 18, aluCtl: 19, funct3: 20,
+  fwdA: 21, fwdB: 22, predTaken: 23,
 };
 const WIDTH: Record<string, number> = {
-  valid: 1, pc: 32, pcPlus4: 32, instr: 32, rd1: 32, aluResult: 32, rd2: 32, writeData: 32, readData: 32, imm: 32,
+  valid: 1, pc: 32, pcPlus4: 32, instr: 32, rd1: 32, aluResult: 32, rd2: 32, writeData: 32, readData: 32, imm: 32, predTarget: 32,
   rs1: 5, rs2: 5, rd: 5, regWrite: 1, aluSrcA: 1, aluSrcB: 1, memWrite: 1, resultSrc: 2, branch: 1, jump: 1, jalr: 1, aluCtl: 4, funct3: 3,
+  fwdA: 2, fwdB: 2, predTaken: 1,
 };
 /** y of a field row relative to the top of a pipeline register. Data rows are 4 apart, control rows 2. */
-export const rowY = (field: string) => { const r = ROWS[field]; return r <= 8 ? 2 + 4 * r : 38 + 2 * (r - 9); };
-export const PIPE_H = rowY('funct3') + 6;
+export const rowY = (field: string) => { const r = ROWS[field]; return r <= 9 ? 2 + 4 * r : 42 + 2 * (r - 10); };
+export const PIPE_H = rowY('predTaken') + 6;
 
 function pipeReg(name: string, from: string, to: string, fields: string[]): ComponentDef {
-  return memo(`pipe_${name}`, () => {
+  const sig = fields.join(',');
+  return memo(`pipe_${name}_${sig}`, () => {
     const widths = fields.map((f) => WIDTH[f]);
     const total = widths.reduce((a, b) => a + b, 0);
     const C = clearableRegister(total);
@@ -147,7 +150,7 @@ function pipeReg(name: string, from: string, to: string, fields: string[]): Comp
     }
     const P = 3;
     return define({
-      id: `pipe_${name}`, name: `${name} pipeline register`, category: 'sequential',
+      id: `pipe_${name.replace('/', '')}_${total}`, name: `${name} pipeline register`, category: 'sequential',
       summary: `Holds everything the next stage needs (${total} bits): ${fields.join(', ')}. en = 0 stalls it, clr = 1 turns its contents into a bubble.`,
       ports: [
         ...fields.map((f) => bus(f + from, WIDTH[f], 'in')), bit('en', 'in'), bit('clr', 'in'), bit('clk', 'in', 'bottom', true),
@@ -178,104 +181,123 @@ function pipeReg(name: string, from: string, to: string, fields: string[]): Comp
 }
 
 const CTRL_E = ['regWrite', 'aluSrcA', 'aluSrcB', 'memWrite', 'resultSrc', 'branch', 'jump', 'jalr', 'aluCtl', 'funct3'];
-export const REG_FD = () => pipeReg('IF/ID', 'F', 'D', ['valid', 'pc', 'pcPlus4', 'instr']);
-export const REG_DE = () => pipeReg('ID/EX', 'D', 'E', ['valid', 'pc', 'pcPlus4', 'rd1', 'rd2', 'imm', 'rs1', 'rs2', 'rd', ...CTRL_E]);
+export const REG_FD = (pred = false) => pipeReg('IF/ID', 'F', 'D', ['valid', 'pc', 'pcPlus4', 'instr', ...(pred ? ['predTarget', 'predTaken'] : [])]);
+export const REG_DE = (pre = false, pred = false) => pipeReg('ID/EX', 'D', 'E', [
+  'valid', 'pc', 'pcPlus4', 'rd1', 'rd2', 'imm', ...(pred ? ['predTarget'] : []), 'rs1', 'rs2', 'rd', ...CTRL_E,
+  ...(pre ? ['fwdA', 'fwdB'] : []), ...(pred ? ['predTaken'] : []),
+]);
 export const REG_EM = () => pipeReg('EX/MEM', 'E', 'M', ['valid', 'pc', 'pcPlus4', 'aluResult', 'writeData', 'imm', 'rd', 'regWrite', 'memWrite', 'resultSrc']);
 export const REG_MW = () => pipeReg('MEM/WB', 'M', 'W', ['valid', 'pc', 'pcPlus4', 'aluResult', 'readData', 'imm', 'rd', 'regWrite', 'resultSrc']);
 
 // ---- hazard unit ---------------------------------------------------------------------------------
 
-export const HAZARD: ComponentDef = (() => {
-  const E5 = equal(5), NZ = nonZero(5);
-  const eg = symbolGeom(E5);
-  const cmps: [string, string, string][] = [
-    ['aM', 'rs1E', 'rdM'], ['aW', 'rs1E', 'rdW'], ['bM', 'rs2E', 'rdM'], ['bW', 'rs2E', 'rdW'],
-    ['lw1', 'rs1D', 'rdE'], ['lw2', 'rs2D', 'rdE'], ['dA', 'rs1D', 'rdW'], ['dB', 'rs2D', 'rdW'],
-  ];
-  const nzs: [string, string][] = [['nz1E', 'rs1E'], ['nz2E', 'rs2E'], ['nz1D', 'rs1D'], ['nz2D', 'rs2D']];
-  const instances: InstanceDef[] = [];
-  const ends = new Map<string, string[]>();
-  const sink = (net: string, end: string) => { if (!ends.has(net)) ends.set(net, [net]); ends.get(net)!.push(end); };
-  cmps.forEach(([n, a, b], i) => {
-    instances.push({ name: `eq_${n}`, def: E5, at: [14, 2 + i * (eg.h + 2)] });
-    sink(a, `eq_${n}.a`);
-    sink(b, `eq_${n}.b`);
-  });
-  const yN = 2 + cmps.length * (eg.h + 2);
-  nzs.forEach(([n, a], i) => {
-    instances.push({ name: n, def: NZ, at: [14, yN + i * 6] });
-    sink(a, `${n}.a`);
-  });
-  const A3 = andN(3), A4 = andN(4);
-  const gx = 32;
-  let gy = 2;
-  const gate = (name: string, def: ComponentDef) => { instances.push({ name, def, at: [gx, gy] }); gy += symbolGeom(def).h + 3; };
-  gate('fA1', A3); gate('nfA1', NOT); gate('fA0', A4);
-  gate('fB1', A3); gate('nfB1', NOT); gate('fB0', A4);
-  gate('byA', A3); gate('byB', A3);
-  gate('nres1', NOT); gate('isLoad', AND); gate('lwUse', OR); gate('lwStall', andN(3));
-  gate('taken', OR); gate('noStall', NOT); gate('flDE', OR);
-  instances.push({ name: 'mfa', def: merger([1, 1]), at: [gx + 10, 4] }, { name: 'mfb', def: merger([1, 1]), at: [gx + 10, 30] });
-  instances.push({ name: 'srs', def: splitter([1, 1]), at: [6, yN + 26] }, { name: 'sps', def: splitter([1, 1]), at: [6, yN + 32] });
-  const ins3 = ['i0', 'i1', 'i2'], ins4 = ['i0', 'i1', 'i2', 'i3'];
-  const wires: [string, string[]][] = [
-    ['eq_aM.eq', ['fA1.i1']], ['eq_aW.eq', ['fA0.i1']], ['eq_bM.eq', ['fB1.i1']], ['eq_bW.eq', ['fB0.i1']],
-    ['eq_lw1.eq', ['lwUse.a']], ['eq_lw2.eq', ['lwUse.b']], ['eq_dA.eq', ['byA.i1']], ['eq_dB.eq', ['byB.i1']],
-    ['nz1E.nz', ['fA1.i0', 'fA0.i0']], ['nz2E.nz', ['fB1.i0', 'fB0.i0']], ['nz1D.nz', ['byA.i0']], ['nz2D.nz', ['byB.i0']],
-    ['fA1.y', ['nfA1.a', 'mfa.i1']], ['nfA1.y', ['fA0.i3']], ['fA0.y', ['mfa.i0']],
-    ['fB1.y', ['nfB1.a', 'mfb.i1']], ['nfB1.y', ['fB0.i3']], ['fB0.y', ['mfb.i0']],
-    ['srs.o1', ['nres1.a']], ['srs.o0', ['isLoad.a']], ['nres1.y', ['isLoad.b']],
-    ['isLoad.y', ['lwStall.i0']], ['lwUse.y', ['lwStall.i1']],
-    ['sps.o0', ['taken.a']], ['sps.o1', ['taken.b']],
-    ['lwStall.y', ['noStall.a', 'flDE.a']], ['taken.y', ['flDE.b', 'flushFD']],
-  ];
-  void ins3; void ins4;
-  const nets: NetDef[] = [];
-  for (const [n, e] of ends) nets.push({ name: n, ends: e, tags: e.slice(1) });
-  for (const [drv, ss] of wires) nets.push({ ends: [drv, ...ss], tags: true });
-  nets.push(
-    { name: 'regWriteM', ends: ['regWriteM', 'fA1.i2', 'fB1.i2'], tags: ['fA1.i2', 'fB1.i2'] },
-    { name: 'regWriteW', ends: ['regWriteW', 'fA0.i2', 'fB0.i2', 'byA.i2', 'byB.i2'], tags: ['fA0.i2', 'fB0.i2', 'byA.i2', 'byB.i2'] },
-    { name: 'resultSrcE', ends: ['resultSrcE', 'srs.in'] },
-    { name: 'validE', ends: ['validE', 'lwStall.i2'], tags: ['lwStall.i2'] },
-    { name: 'pcSrcE', ends: ['pcSrcE', 'sps.in'] },
-    { name: 'forwardA', ends: ['mfa.out', 'forwardA'] },
-    { name: 'forwardB', ends: ['mfb.out', 'forwardB'] },
-    { name: 'bypassA', ends: ['byA.y', 'bypassA'], tags: true },
-    { name: 'bypassB', ends: ['byB.y', 'bypassB'], tags: true },
-    { name: 'enable', ends: ['noStall.y', 'enPC', 'enFD'], tags: true },
-    { name: 'flushDE', ends: ['flDE.y', 'flushDE'], tags: true },
-  );
-  // tag renaming for the wires list: give them readable names
-  const named: Record<string, string> = {
-    'eq_aM.eq': 'rs1E=rdM', 'eq_aW.eq': 'rs1E=rdW', 'eq_bM.eq': 'rs2E=rdM', 'eq_bW.eq': 'rs2E=rdW', 'eq_lw1.eq': 'rs1D=rdE', 'eq_lw2.eq': 'rs2D=rdE',
-    'eq_dA.eq': 'rs1D=rdW', 'eq_dB.eq': 'rs2D=rdW', 'nz1E.nz': 'rs1E≠0', 'nz2E.nz': 'rs2E≠0', 'nz1D.nz': 'rs1D≠0', 'nz2D.nz': 'rs2D≠0',
-    'fA1.y': 'fwdA_M', 'nfA1.y': '¬fwdA_M', 'fA0.y': 'fwdA_W', 'fB1.y': 'fwdB_M', 'nfB1.y': '¬fwdB_M', 'fB0.y': 'fwdB_W',
-    'srs.o1': 'resSrcE[1]', 'srs.o0': 'resSrcE[0]', 'nres1.y': '¬resSrcE[1]', 'isLoad.y': 'loadE', 'lwUse.y': 'uses rdE',
-    'sps.o0': 'pcSrcE[0]', 'sps.o1': 'pcSrcE[1]', 'lwStall.y': 'lwStall', 'taken.y': 'taken',
-  };
-  for (const n of nets) if (!n.name && named[n.ends[0]]) n.name = named[n.ends[0]];
-  // Input pins on the left; output pins on the right.
-  const inNames = ['rs1D', 'rs2D', 'rs1E', 'rs2E', 'rdE', 'rdM', 'rdW', 'regWriteM', 'regWriteW', 'validE', 'resultSrcE', 'pcSrcE'];
-  const pins: Record<string, [number, number]> = {};
-  inNames.forEach((n, i) => (pins[n] = [0, 2 + 3 * i]));
-  pins.resultSrcE = [0, yN + 27];
-  pins.pcSrcE = [0, yN + 33];
-  const outNames = ['forwardA', 'forwardB', 'bypassA', 'bypassB', 'enPC', 'enFD', 'flushFD', 'flushDE'];
-  outNames.forEach((n, i) => (pins[n] = [gx + 22, 4 + 6 * i]));
-  return define({
-    id: 'hazard', name: 'Hazard unit', category: 'cpu',
-    summary: 'Watches register numbers across the stages. Forwards results from M or W to the ALU inputs, bypasses W into D, stalls on load-use, and flushes the two wrong-path instructions after a taken branch.',
-    ports: [
-      bus('rs1D', 5, 'in'), bus('rs2D', 5, 'in'), bus('rs1E', 5, 'in'), bus('rs2E', 5, 'in'), bus('rdE', 5, 'in'), bus('rdM', 5, 'in'), bus('rdW', 5, 'in'),
-      bit('regWriteM', 'in'), bit('regWriteW', 'in'), bit('validE', 'in'), bus('resultSrcE', 2, 'in'), bus('pcSrcE', 2, 'in'),
-      bus('forwardA', 2, 'out'), bus('forwardB', 2, 'out'), bit('bypassA', 'out'), bit('bypassB', 'out'),
-      bit('enPC', 'out'), bit('enFD', 'out'), bit('flushFD', 'out'), bit('flushDE', 'out'),
-    ],
-    symbol: { kind: 'box', label: 'HAZARD UNIT' },
-    netlist: () => ({ pins, instances, nets }),
-    hdl: {
-      verilog: `module hazard (
+/**
+ * Hazard unit. With `pre` (balanced pipeline) the forwarding decision for the instruction in D
+ * is computed one stage early from rdE / rdM (which will be in M / W next cycle) and handed
+ * to ID/EX, so no comparator sits in the execute stage.
+ */
+export function hazardUnit(pre: boolean): ComponentDef {
+  return memo(`hazard_${pre}`, () => {
+    const E5 = equal(5), NZ = nonZero(5);
+    const eg = symbolGeom(E5);
+    const cmps: [string, string, string][] = pre
+      ? [['aM', 'rs1D', 'rdM'], ['bM', 'rs2D', 'rdM'], ['lw1', 'rs1D', 'rdE'], ['lw2', 'rs2D', 'rdE'], ['dA', 'rs1D', 'rdW'], ['dB', 'rs2D', 'rdW']]
+      : [['aM', 'rs1E', 'rdM'], ['aW', 'rs1E', 'rdW'], ['bM', 'rs2E', 'rdM'], ['bW', 'rs2E', 'rdW'],
+        ['lw1', 'rs1D', 'rdE'], ['lw2', 'rs2D', 'rdE'], ['dA', 'rs1D', 'rdW'], ['dB', 'rs2D', 'rdW']];
+    const nzs: [string, string][] = pre ? [['nz1D', 'rs1D'], ['nz2D', 'rs2D']] : [['nz1E', 'rs1E'], ['nz2E', 'rs2E'], ['nz1D', 'rs1D'], ['nz2D', 'rs2D']];
+    const instances: InstanceDef[] = [];
+    const ends = new Map<string, string[]>();
+    const sink = (net: string, end: string) => { if (!ends.has(net)) ends.set(net, [net]); ends.get(net)!.push(end); };
+    cmps.forEach(([n, a, b], i) => {
+      instances.push({ name: `eq_${n}`, def: E5, at: [14, 2 + i * (eg.h + 2)] });
+      sink(a, `eq_${n}.a`);
+      sink(b, `eq_${n}.b`);
+    });
+    const yN = 2 + cmps.length * (eg.h + 2);
+    nzs.forEach(([n, a], i) => {
+      instances.push({ name: n, def: NZ, at: [14, yN + i * 6] });
+      sink(a, `${n}.a`);
+    });
+    const A3 = andN(3), A4 = andN(4);
+    const gx = 32;
+    let gy = 2;
+    const gate = (name: string, def: ComponentDef) => { instances.push({ name, def, at: [gx, gy] }); gy += symbolGeom(def).h + 3; };
+    gate('fA1', A3); gate('nfA1', NOT); gate('fA0', A4);
+    gate('fB1', A3); gate('nfB1', NOT); gate('fB0', A4);
+    gate('byA', A3); gate('byB', A3);
+    gate('nres1', NOT); gate('isLoad', AND); gate('lwUse', OR); gate('lwStall', andN(3));
+    gate('taken', OR); gate('noStall', NOT); gate('flDE', OR);
+    const ySp = yN + nzs.length * 6 + 4;
+    instances.push({ name: 'mfa', def: merger([1, 1]), at: [gx + 10, 4] }, { name: 'mfb', def: merger([1, 1]), at: [gx + 10, 30] });
+    instances.push({ name: 'srs', def: splitter([1, 1]), at: [6, ySp] }, { name: 'sps', def: splitter([1, 1]), at: [6, ySp + 6] });
+    // Which comparators feed forwarding: E-stage versions, or the D-stage look-ahead versions.
+    const fA1src = pre ? 'eq_lw1.eq' : 'eq_aM.eq', fA0src = pre ? 'eq_aM.eq' : 'eq_aW.eq';
+    const fB1src = pre ? 'eq_lw2.eq' : 'eq_bM.eq', fB0src = pre ? 'eq_bM.eq' : 'eq_bW.eq';
+    const nzA = pre ? 'nz1D.nz' : 'nz1E.nz', nzB = pre ? 'nz2D.nz' : 'nz2E.nz';
+    const regM = pre ? 'regWriteE' : 'regWriteM', regW = pre ? 'regWriteM' : 'regWriteW';
+    const wires = new Map<string, string[]>();
+    const w = (drv: string, ...ss: string[]) => wires.set(drv, [...(wires.get(drv) ?? []), ...ss]);
+    w(fA1src, 'fA1.i1'); w(fA0src, 'fA0.i1'); w(fB1src, 'fB1.i1'); w(fB0src, 'fB0.i1');
+    w('eq_lw1.eq', 'lwUse.a'); w('eq_lw2.eq', 'lwUse.b'); w('eq_dA.eq', 'byA.i1'); w('eq_dB.eq', 'byB.i1');
+    w(nzA, 'fA1.i0', 'fA0.i0'); w(nzB, 'fB1.i0', 'fB0.i0'); w('nz1D.nz', 'byA.i0'); w('nz2D.nz', 'byB.i0');
+    w('fA1.y', 'nfA1.a', 'mfa.i1'); w('nfA1.y', 'fA0.i3'); w('fA0.y', 'mfa.i0');
+    w('fB1.y', 'nfB1.a', 'mfb.i1'); w('nfB1.y', 'fB0.i3'); w('fB0.y', 'mfb.i0');
+    w('srs.o1', 'nres1.a'); w('srs.o0', 'isLoad.a'); w('nres1.y', 'isLoad.b');
+    w('isLoad.y', 'lwStall.i0'); w('lwUse.y', 'lwStall.i1');
+    w('sps.o0', 'taken.a'); w('sps.o1', 'taken.b');
+    w('lwStall.y', 'noStall.a', 'flDE.a'); w('taken.y', 'flDE.b', 'flushFD');
+    const nets: NetDef[] = [];
+    for (const [n, e] of ends) nets.push({ name: n, ends: e, tags: e.slice(1) });
+    const named: Record<string, string> = {
+      'eq_aM.eq': pre ? 'rs1D=rdM' : 'rs1E=rdM', 'eq_aW.eq': 'rs1E=rdW', 'eq_bM.eq': pre ? 'rs2D=rdM' : 'rs2E=rdM', 'eq_bW.eq': 'rs2E=rdW',
+      'eq_lw1.eq': 'rs1D=rdE', 'eq_lw2.eq': 'rs2D=rdE', 'eq_dA.eq': 'rs1D=rdW', 'eq_dB.eq': 'rs2D=rdW',
+      'nz1E.nz': 'rs1E≠0', 'nz2E.nz': 'rs2E≠0', 'nz1D.nz': 'rs1D≠0', 'nz2D.nz': 'rs2D≠0',
+      'fA1.y': 'fwdA_M', 'nfA1.y': '¬fwdA_M', 'fA0.y': 'fwdA_W', 'fB1.y': 'fwdB_M', 'nfB1.y': '¬fwdB_M', 'fB0.y': 'fwdB_W',
+      'srs.o1': 'resSrcE[1]', 'srs.o0': 'resSrcE[0]', 'nres1.y': '¬resSrcE[1]', 'isLoad.y': 'loadE', 'lwUse.y': 'uses rdE',
+      'sps.o0': 'pcSrcE[0]', 'sps.o1': 'pcSrcE[1]', 'lwStall.y': 'lwStall', 'taken.y': 'taken',
+    };
+    for (const [drv, ss] of wires) nets.push({ name: named[drv], ends: [drv, ...ss], tags: true });
+    nets.push(
+      { name: regM, ends: [regM, 'fA1.i2', 'fB1.i2'], tags: ['fA1.i2', 'fB1.i2'] },
+      { name: regW, ends: [regW, 'fA0.i2', 'fB0.i2', ...(pre ? [] : ['byA.i2', 'byB.i2'])], tags: ['fA0.i2', 'fB0.i2', ...(pre ? [] : ['byA.i2', 'byB.i2'])] },
+      ...(pre ? [{ name: 'regWriteW', ends: ['regWriteW', 'byA.i2', 'byB.i2'], tags: ['byA.i2', 'byB.i2'] } as NetDef] : []),
+      { name: 'resultSrcE', ends: ['resultSrcE', 'srs.in'] },
+      { name: 'validE', ends: ['validE', 'lwStall.i2'], tags: ['lwStall.i2'] },
+      { name: 'pcSrcE', ends: ['pcSrcE', 'sps.in'] },
+      { name: 'forwardA', ends: ['mfa.out', 'forwardA'] },
+      { name: 'forwardB', ends: ['mfb.out', 'forwardB'] },
+      { name: 'bypassA', ends: ['byA.y', 'bypassA'], tags: true },
+      { name: 'bypassB', ends: ['byB.y', 'bypassB'], tags: true },
+      { name: 'enable', ends: ['noStall.y', 'enPC', 'enFD'], tags: true },
+      { name: 'flushDE', ends: ['flDE.y', 'flushDE'], tags: true },
+    );
+    const regIns = pre ? ['regWriteE', 'regWriteM', 'regWriteW'] : ['regWriteM', 'regWriteW'];
+    const rsIns = pre ? ['rs1D', 'rs2D'] : ['rs1D', 'rs2D', 'rs1E', 'rs2E'];
+    const inNames = [...rsIns, 'rdE', 'rdM', 'rdW', ...regIns, 'validE'];
+    const pins: Record<string, [number, number]> = {};
+    inNames.forEach((n, i) => (pins[n] = [0, 2 + 3 * i]));
+    pins.resultSrcE = [0, ySp + 1];
+    pins.pcSrcE = [0, ySp + 7];
+    const outNames = ['forwardA', 'forwardB', 'bypassA', 'bypassB', 'enPC', 'enFD', 'flushFD', 'flushDE'];
+    outNames.forEach((n, i) => (pins[n] = [gx + 22, 4 + 6 * i]));
+    return define({
+      id: pre ? 'hazard_pre' : 'hazard', name: pre ? 'Hazard unit (look-ahead forwarding)' : 'Hazard unit', category: 'cpu',
+      summary: pre
+        ? 'Like the basic hazard unit, but forwarding is decided while the instruction is still in D (against the instructions that will be in M and W next cycle), and handed to ID/EX. The execute stage only sees a ready-made mux select.'
+        : 'Watches register numbers across the stages. Forwards results from M or W to the ALU inputs, bypasses W into D, stalls on load-use, and flushes the two wrong-path instructions after a taken branch.',
+      ports: [
+        ...rsIns.map((n) => bus(n, 5, 'in')), bus('rdE', 5, 'in'), bus('rdM', 5, 'in'), bus('rdW', 5, 'in'),
+        ...regIns.map((n) => bit(n, 'in')), bit('validE', 'in'), bus('resultSrcE', 2, 'in'), bus('pcSrcE', 2, 'in'),
+        bus('forwardA', 2, 'out'), bus('forwardB', 2, 'out'), bit('bypassA', 'out'), bit('bypassB', 'out'),
+        bit('enPC', 'out'), bit('enFD', 'out'), bit('flushFD', 'out'), bit('flushDE', 'out'),
+      ],
+      symbol: { kind: 'box', label: 'HAZARD UNIT' },
+      netlist: () => ({ pins, instances, nets }),
+      hdl: {
+        verilog: pre ? `// Look-ahead forwarding: decided in D for the instruction about to enter E.
+assign forwardA[1] = (rs1D != 0) && (rs1D == rdE) && regWriteE;           // producer will be in M
+assign forwardA[0] = (rs1D != 0) && (rs1D == rdM) && regWriteM && !forwardA[1];  // ... or in W
+// (same for B; bypass, load-use stall and flushes as in the basic unit)` : `module hazard (
   input  logic [4:0] rs1D, rs2D, rs1E, rs2E, rdE, rdM, rdW,
   input  logic       regWriteM, regWriteW, validE,
   input  logic [1:0] resultSrcE, pcSrcE,
@@ -290,32 +312,274 @@ export const HAZARD: ComponentDef = (() => {
   assign bypassA = (rs1D != 0) && (rs1D == rdW) && regWriteW;
   assign bypassB = (rs2D != 0) && (rs2D == rdW) && regWriteW;
   assign lwStall = validE && (resultSrcE == 2'b01) && ((rs1D == rdE) || (rs2D == rdE));   // load in E, use in D
-  assign taken   = pcSrcE != 2'b00;                                         // branch / jump resolved in E
+  assign taken   = pcSrcE != 2'b00;                                         // redirect from E
   assign enPC = !lwStall;  assign enFD = !lwStall;
   assign flushFD = taken;  assign flushDE = lwStall || taken;
 endmodule`,
+      },
+    });
+  });
+}
+export const HAZARD = hazardUnit(false);
+
+// ---- E-stage helpers for the balanced pipeline ------------------------------------------------------
+
+/** Branch decision from the operands directly: equality comparator + fast subtractor, in parallel with the ALU. */
+export const BRANCH_CMP: ComponentDef = (() => {
+  const EQ = equal(32), SUB = addSubFast(32), NP = NEXT_PC;
+  const eg = symbolGeom(EQ), sg = symbolGeom(SUB), ng = symbolGeom(NP);
+  const sAt: [number, number] = [10, eg.h + 6];
+  const nAt: [number, number] = [sAt[0] + sg.w + 10, 2];
+  return define({
+    id: 'branchcmp', name: 'Branch comparator', category: 'cpu',
+    summary: 'Decides the branch from the (forwarded) operands with its own equality comparator and a fast subtractor, in parallel with the ALU, so the branch no longer waits for the ALU\'s result multiplexer and zero detector.',
+    ports: [bus('a', 32, 'in'), bus('b', 32, 'in'), bus('funct3', 3, 'in'), bit('branch', 'in'), bit('jump', 'in'), bit('jalr', 'in'), bus('pcSrc', 2, 'out')],
+    symbol: { kind: 'box', label: 'BRANCH' },
+    netlist: () => ({
+      pins: { a: [0, 4], b: [0, 6], funct3: [0, sAt[1] + sg.h + 4], branch: [0, sAt[1] + sg.h + 7], jump: [0, sAt[1] + sg.h + 10], jalr: [0, sAt[1] + sg.h + 13], pcSrc: [nAt[0] + ng.w + 5, nAt[1] + ng.ports.pcSrc.pos[1]] },
+      instances: [
+        { name: 'eq', def: EQ, at: [10, 2] },
+        { name: 'sub', def: SUB, at: sAt },
+        { name: 'one', def: TIE1, at: [4, sAt[1] + sg.ports.sub.pos[1] - 1] },
+        { name: 'npc', def: NP, at: nAt },
+      ],
+      nets: [
+        { name: 'a', ends: ['a', 'eq.a', 'sub.a'], trunk: 3 },
+        { name: 'b', ends: ['b', 'eq.b', 'sub.b'], trunk: 5 },
+        { name: 'sub1', ends: ['one.y', 'sub.sub'] },
+        { name: 'equal', ends: ['eq.eq', 'npc.zero'], tags: true },
+        { name: 'neg', ends: ['sub.n', 'npc.neg'], tags: true },
+        { name: 'ovf', ends: ['sub.v', 'npc.ovf'], tags: true },
+        { name: 'carry', ends: ['sub.cout', 'npc.carry'], tags: true },
+        { name: 'funct3', ends: ['funct3', 'npc.funct3'], tags: ['npc.funct3'] },
+        { name: 'branch', ends: ['branch', 'npc.branch'], tags: ['npc.branch'] },
+        { name: 'jump', ends: ['jump', 'npc.jump'], tags: ['npc.jump'] },
+        { name: 'jalr', ends: ['jalr', 'npc.jalr'], tags: ['npc.jalr'] },
+        { name: 'pcSrc', ends: ['npc.pcSrc', 'pcSrc'] },
+      ],
+    }),
+  });
+})();
+
+// ---- branch prediction -----------------------------------------------------------------------------------
+
+/** 2-bit saturating counter update: new entries start weak; hits count up when taken, down otherwise. */
+export const SAT_COUNTER: ComponentDef = define({
+  id: 'satctr', name: '2-bit saturating counter (next state)', category: 'cpu',
+  summary: 'Next prediction state: 00/01 predict not-taken, 10/11 taken. Taken counts up, not-taken counts down, saturating at the ends; a new entry starts weakly in the direction just seen.',
+  ports: [bus('c', 2, 'in'), bit('taken', 'in'), bit('hit', 'in'), bus('next', 2, 'out')],
+  symbol: { kind: 'box', label: '2-bit' },
+  spec: ([c, t, hit]) => {
+    if (!hit) return [t ? 2 : 1];
+    return [t ? Math.min(3, c + 1) : Math.max(0, c - 1)];
+  },
+  netlist: () => ({
+    pins: { c: [0, 4], taken: [0, 16], hit: [0, 22], next: [52, 10] },
+    instances: [
+      { name: 'sc', def: splitter([1, 1]), at: [3, 2] },
+      { name: 'nc0', def: NOT, at: [8, 8] },
+      { name: 'inc1', def: OR, at: [14, 0] }, { name: 'inc0', def: OR, at: [14, 6] },
+      { name: 'dec1', def: AND, at: [14, 12] }, { name: 'dec0', def: AND, at: [14, 18] },
+      { name: 'nt', def: NOT, at: [8, 24] },
+      { name: 'm1', def: muxTree(1, 1), at: [24, 2] }, { name: 'm0', def: muxTree(1, 1), at: [24, 12] },
+      { name: 'h1', def: muxTree(1, 1), at: [34, 4] }, { name: 'h0', def: muxTree(1, 1), at: [34, 14] },
+      { name: 'mo', def: merger([1, 1]), at: [44, 9] },
+    ],
+    nets: [
+      { name: 'c', ends: ['c', 'sc.in'] },
+      { name: 'c1', ends: ['sc.o1', 'inc1.a', 'inc0.a', 'dec1.a', 'dec0.a'], tags: true },
+      { name: 'c0', ends: ['sc.o0', 'inc1.b', 'nc0.a', 'dec1.b'], tags: true },
+      { name: '¬c0', ends: ['nc0.y', 'inc0.b', 'dec0.b'], tags: true },
+      { name: 'inc1', ends: ['inc1.y', 'm1.d1'] }, { name: 'inc0', ends: ['inc0.y', 'm0.d1'] },
+      { name: 'dec1', ends: ['dec1.y', 'm1.d0'] }, { name: 'dec0', ends: ['dec0.y', 'm0.d0'] },
+      { name: 'taken', ends: ['taken', 'm1.s', 'm0.s', 'nt.a', 'h1.d0'], tags: true },
+      { name: '¬taken', ends: ['nt.y', 'h0.d0'], tags: true },
+      { name: 'cnt1', ends: ['m1.y', 'h1.d1'] }, { name: 'cnt0', ends: ['m0.y', 'h0.d1'] },
+      { name: 'hit', ends: ['hit', 'h1.s', 'h0.s'], tags: true },
+      { name: 'n1', ends: ['h1.y', 'mo.i1'] }, { name: 'n0', ends: ['h0.y', 'mo.i0'] },
+      { name: 'next', ends: ['mo.out', 'next'] },
+    ],
+  }),
+});
+
+/**
+ * Branch target buffer: 16 entries of {valid, tag, target, 2-bit counter, is-jump}, built like
+ * the register file (decoder + registers + two read ports). Read in F (predict), written in E.
+ */
+export const BTB: ComponentDef = (() => {
+  const K = 4, N = 16, W = 1 + 26 + 32 + 2 + 1; // valid, tag, target, ctr, jmp
+  const R = register(W);
+  const rg = symbolGeom(R);
+  const P = Math.max(rg.h + 4, 10);
+  const D = decoder(K, true, P);
+  const dg = symbolGeom(D);
+  const RP = readPort(K, W), rpg = symbolGeom(RP);
+  const fields = [1, 26, 32, 2, 1];
+  const dAt: [number, number] = [20, 2];
+  const xR = dAt[0] + dg.w + 8;
+  const rTop = (i: number) => dAt[1] + dg.ports[`y${i}`].pos[1] - rg.ports.en.pos[1];
+  const qY = (i: number) => rTop(i) + rg.ports.q.pos[1];
+  const xQ = xR + rg.w + 6;
+  const mqTop = qY(0) - P / 2;
+  const xP = xQ + 8;
+  const rpF: [number, number] = [xP, mqTop + 10];
+  const rpE: [number, number] = [xP, rpF[1] + rpg.h + 20];
+  const instances: InstanceDef[] = [
+    { name: 'dec', def: D, at: dAt },
+    { name: 'bundle', def: merger(Array(N).fill(W), P), at: [xQ, mqTop] },
+    { name: 'rdF', def: RP, at: rpF, label: 'read (fetch)' },
+    { name: 'rdE', def: RP, at: rpE, label: 'read (update)' },
+    { name: 'spF', def: splitter([2, K, 26]), at: [4, -6] },
+    { name: 'spE', def: splitter([2, K, 26]), at: [4, 4] },
+    { name: 'fF', def: splitter([1, 26, 32, 1, 1, 1]), at: [xP + rpg.w + 6, rpF[1] + rpg.ports.y.pos[1] - 6] },
+    { name: 'fE', def: splitter(fields), at: [xP + rpg.w + 6, rpE[1] + rpg.ports.y.pos[1] - 5] },
+    { name: 'hitF', def: equal(26), at: [xP + rpg.w + 14, rpF[1] - 6] },
+    { name: 'hitE', def: equal(26), at: [xP + rpg.w + 14, rpE[1] - 6] },
+    { name: 'vF', def: AND, at: [xP + rpg.w + 40, rpF[1] - 4] },
+    { name: 'vE', def: AND, at: [xP + rpg.w + 40, rpE[1] - 4] },
+    { name: 'dir', def: OR, at: [xP + rpg.w + 40, rpF[1] + 4] },
+    { name: 'pt', def: AND, at: [xP + rpg.w + 48, rpF[1]] },
+    { name: 'ctr', def: SAT_COUNTER, at: [xP + rpg.w + 48, rpE[1] + 4] },
+    { name: 'one', def: TIE1, at: [6, 18] },
+    { name: 'newE', def: merger(fields), at: [10, 22] },
+  ];
+  const nets: NetDef[] = [
+    { name: 'pcF', ends: ['pcF', 'spF.in'] },
+    { name: 'pcE', ends: ['pcE', 'spE.in'] },
+    { name: 'idxF', ends: ['spF.o1', 'rdF.sel'], tags: true },
+    { name: 'tagF', ends: ['spF.o2', 'hitF.a'], tags: true },
+    { name: 'idxE', ends: ['spE.o1', 'dec.a', 'rdE.sel'], tags: true },
+    { name: 'tagE', ends: ['spE.o2', 'hitE.a', 'newE.i1'], tags: true },
+    { name: 'upd', ends: ['updE', 'dec.en'], tags: true },
+    { name: 'entries', ends: ['bundle.out', 'rdF.words', 'rdE.words'], trunk: xP - 3 },
+    { name: 'entryF', ends: ['rdF.y', 'fF.in'] },
+    { name: 'entryE', ends: ['rdE.y', 'fE.in'] },
+    { name: 'validF', ends: ['fF.o0', 'vF.a'], tags: true },
+    { name: 'storedTagF', ends: ['fF.o1', 'hitF.b'], tags: true },
+    { name: 'predTarget', ends: ['fF.o2', 'predTarget'], tags: true },
+    { name: 'ctrF[1]', ends: ['fF.o4', 'dir.b'], tags: true },
+    { name: 'jmpF', ends: ['fF.o5', 'dir.a'], tags: true },
+    { name: 'tagEqF', ends: ['hitF.eq', 'vF.b'] },
+    { name: 'hitF', ends: ['vF.y', 'pt.a'], tags: true },
+    { name: 'dirF', ends: ['dir.y', 'pt.b'] },
+    { name: 'predTaken', ends: ['pt.y', 'predTaken'], tags: true },
+    { name: 'validE', ends: ['fE.o0', 'vE.a'], tags: true },
+    { name: 'storedTagE', ends: ['fE.o1', 'hitE.b'], tags: true },
+    { name: 'ctrE', ends: ['fE.o3', 'ctr.c'], tags: true },
+    { name: 'tagEqE', ends: ['hitE.eq', 'vE.b'] },
+    { name: 'hitE', ends: ['vE.y', 'ctr.hit'], tags: true },
+    { name: 'takenE', ends: ['takenE', 'ctr.taken'], tags: true },
+    { name: 'ctrNext', ends: ['ctr.next', 'newE.i3'], tags: true },
+    { name: 'v1', ends: ['one.y', 'newE.i0'] },
+    { name: 'targetE', ends: ['targetE', 'newE.i2'], tags: true },
+    { name: 'isJumpE', ends: ['isJumpE', 'newE.i4'], tags: true },
+  ];
+  const fieldsSink = Array.from({ length: N }, (_, i) => `w${i}.d`);
+  const clk: string[] = ['clk'];
+  for (let i = 0; i < N; i++) {
+    instances.push({ name: `w${i}`, def: R, at: [xR, rTop(i)], label: `entry ${i}` });
+    nets.push({ name: `en${i}`, ends: [`dec.y${i}`, `w${i}.en`] });
+    nets.push({ name: `e${i}`, ends: [`w${i}.q`, `bundle.i${i}`] });
+    clk.push(`w${i}.clk`);
+  }
+  nets.push({ name: 'newEntry', ends: ['newE.out', ...fieldsSink], trunk: xR - 3 });
+  nets.push({ name: 'clk', ends: clk, tags: clk.slice(1) });
+  void fieldsSink;
+  return define({
+    id: 'btb16', name: 'Branch target buffer (16 entries)', category: 'cpu',
+    summary: '16 entries indexed by PC[5:2], each {valid, tag = PC[31:6], target, 2-bit counter, is-jump}. Fetch reads it to predict; Execute writes the outcome back. Built from the register file\'s parts: a decoder, registers and two read ports.',
+    ports: [
+      bus('pcF', 32, 'in'), bus('pcE', 32, 'in'), bit('updE', 'in'), bit('takenE', 'in'), bit('isJumpE', 'in'), bus('targetE', 32, 'in'),
+      bit('clk', 'in', 'bottom', true), bit('predTaken', 'out'), bus('predTarget', 32, 'out'),
+    ],
+    symbol: { kind: 'box', label: 'BTB' },
+    netlist: () => ({
+      pins: { pcF: [0, -4], pcE: [0, 6], updE: [0, 10], takenE: [0, 12], isJumpE: [0, 14], targetE: [0, 16], clk: [0, 30], predTaken: [xP + rpg.w + 60, rpF[1] + 1], predTarget: [xP + rpg.w + 60, rpF[1] + 6] },
+      instances, nets,
+    }),
+    hdl: {
+      verilog: `// Primer hdl/rv_pipe_bp.sv
+assign hitF = valid[iF] && (tag[iF] == pcF[31:6]);
+assign predTakenF  = hitF && (jmp[iF] || ctr[iF][1]);
+assign predTargetF = tgt[iF];
+always_ff @(posedge clk)
+  if (updE) begin
+    valid[iE] <= 1; tag[iE] <= pcE[31:6]; tgt[iE] <= targetE; jmp[iE] <= isJumpE;
+    if (!hitE)       ctr[iE] <= takenE ? 2'b10 : 2'b01;      // new entry: weak
+    else if (takenE) ctr[iE] <= (ctr[iE] == 2'b11) ? 2'b11 : ctr[iE] + 1;
+    else             ctr[iE] <= (ctr[iE] == 2'b00) ? 2'b00 : ctr[iE] - 1;
+  end`,
     },
   });
 })();
+
+/** Misprediction check in E: wrong direction, or right direction with a wrong target. */
+export const MISPREDICT: ComponentDef = define({
+  id: 'mispredict', name: 'Misprediction detector', category: 'cpu',
+  summary: 'Compares the prediction made in Fetch with the outcome computed in Execute: a control instruction mispredicts if its direction differs, or if it was taken to a different target; any other instruction mispredicts only if Fetch predicted it taken. The predicted target is checked against both candidate targets in parallel (PC + imm, and rs1 + imm for jalr), so the check does not wait for the branch decision.',
+  ports: [bit('branch', 'in'), bit('jump', 'in'), bit('jalr', 'in'), bus('pcSrc', 2, 'in'), bit('predTaken', 'in'), bus('predTarget', 32, 'in'), bus('tgtB', 32, 'in'), bus('tgtJ', 32, 'in'), bit('valid', 'in'), bit('mispredict', 'out'), bit('isCtrl', 'out'), bit('taken', 'out')],
+  symbol: { kind: 'box', label: 'MISPREDICT?' },
+  netlist: () => ({
+    pins: { branch: [0, 2], jump: [0, 4], jalr: [0, 6], pcSrc: [0, 12], predTaken: [0, 18], predTarget: [0, 26], tgtB: [0, 30], tgtJ: [0, 44], valid: [0, 58], mispredict: [70, 14], isCtrl: [70, 4], taken: [70, 24] },
+    instances: [
+      { name: 'ctl', def: orN(3), at: [8, 1] },
+      { name: 'sp', def: splitter([1, 1]), at: [4, 10] },
+      { name: 'tk', def: OR, at: [10, 10] },
+      { name: 'dirx', def: XOR, at: [20, 14] },
+      { name: 'teq', def: equal(32), at: [8, 24] },
+      { name: 'jeq', def: equal(32), at: [8, 40] },
+      { name: 'tsel', def: muxTree(1, 1), at: [36, 30] },
+      { name: 'tne', def: NOT, at: [44, 26] },
+      { name: 'badt', def: AND, at: [50, 22] },
+      { name: 'wrong', def: OR, at: [57, 16] },
+      { name: 'sel', def: muxTree(1, 1), at: [62, 8] },
+      { name: 'gate', def: AND, at: [62, 30] },
+    ],
+    nets: [
+      { name: 'branch', ends: ['branch', 'ctl.i0'] }, { name: 'jump', ends: ['jump', 'ctl.i1'] },
+      { name: 'isCtrl', ends: ['ctl.y', 'sel.s', 'isCtrl'], tags: true },
+      { name: 'pcSrc', ends: ['pcSrc', 'sp.in'] },
+      { ends: ['sp.o0', 'tk.a'] }, { ends: ['sp.o1', 'tk.b'] },
+      { name: 'taken', ends: ['tk.y', 'dirx.a', 'badt.a', 'taken'], tags: true },
+      { name: 'predTaken', ends: ['predTaken', 'dirx.b', 'sel.d0'], tags: ['dirx.b', 'sel.d0'] },
+      { name: 'predTarget', ends: ['predTarget', 'teq.a', 'jeq.a'], tags: ['jeq.a'] },
+      { name: 'tgtB', ends: ['tgtB', 'teq.b'] }, { name: 'tgtJ', ends: ['tgtJ', 'jeq.b'] },
+      { name: 'okB', ends: ['teq.eq', 'tsel.d0'] }, { name: 'okJ', ends: ['jeq.eq', 'tsel.d1'] },
+      { name: 'jalr', ends: ['jalr', 'ctl.i2', 'tsel.s'], tags: ['tsel.s'] },
+      { name: 'targetOk', ends: ['tsel.y', 'tne.a'] }, { name: 'targetBad', ends: ['tne.y', 'badt.b'] },
+      { name: 'dirWrong', ends: ['dirx.y', 'wrong.a'], tags: true }, { name: 'tgtWrong', ends: ['badt.y', 'wrong.b'] },
+      { name: 'wrong', ends: ['wrong.y', 'sel.d1'], tags: true },
+      { name: 'mis', ends: ['sel.y', 'gate.a'], tags: true },
+      { name: 'valid', ends: ['valid', 'gate.b'], tags: ['gate.b'] },
+      { name: 'mispredict', ends: ['gate.y', 'mispredict'] },
+    ],
+  }),
+});
 
 // ---- the pipelined processor -----------------------------------------------------------------------
 
 export interface PipeOptions {
   dmemK?: number;
   adder?: 'rca' | 'ks';
+  /** Look-ahead forwarding, dedicated branch comparator and jalr adder: shorter execute stage. */
+  balanced?: boolean;
+  /** BTB + 2-bit counters in Fetch; only mispredictions flush. */
+  predictor?: boolean;
 }
 
 export function pipelinedCpu(program: number[], opts: PipeOptions = {}): ComponentDef {
   const IM = rom(program);
-  const adder = opts.adder ?? 'rca';
-  return memo(`pipe_${IM.id}_${opts.dmemK ?? 5}_${adder}`, () => buildPipe(IM, opts.dmemK ?? 5, adder));
+  const o = { dmemK: opts.dmemK ?? 5, adder: opts.adder ?? 'rca', balanced: !!opts.balanced, predictor: !!opts.predictor } as const;
+  return memo(`pipe_${IM.id}_${o.dmemK}_${o.adder}_${o.balanced}_${o.predictor}`, () => buildPipe(IM, o));
 }
 
-function buildPipe(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks'): ComponentDef {
-  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dataMemory(dmemK);
-  const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = adder === 'ks' ? koggeStone(32) : rca(32);
+function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; balanced: boolean; predictor: boolean }): ComponentDef {
+  const { adder, balanced: bal, predictor: pred } = o;
+  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dataMemory(o.dmemK);
+  const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = adder === 'ks' || bal ? koggeStone(32) : rca(32);
   const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4, SI = splitter([7, 5, 3, 5, 5, 7]);
-  const FD = REG_FD(), DE = REG_DE(), EM = REG_EM(), MW = REG_MW();
+  const FD = REG_FD(pred), DE = REG_DE(bal, pred), EM = REG_EM(), MW = REG_MW();
+  const HZ = hazardUnit(bal);
   const g = (d: ComponentDef) => symbolGeom(d);
   const at = new Map<string, [number, number]>();
   const defs = new Map<string, ComponentDef>();
@@ -329,7 +593,6 @@ function buildPipe(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks'): Compon
   const T = 6; // top of the pipeline registers
   const row = (f: string) => T + rowY(f);
   const xFD = 40, xDE = 112, xEM = 196, xMW = 232;
-  // pipeline registers
   place('FD', FD, [xFD, T]); place('DE', DE, [xDE, T]); place('EM', EM, [xEM, T]); place('MW', MW, [xMW, T]);
   // F
   alignY('pcmux', M4, 4, 'y', row('pc') + 10);
@@ -338,13 +601,21 @@ function buildPipe(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks'): Compon
   alignY('imem', IM, 24, 'addr', row('instr'));
   alignY('plus4', P4, 26, 'a', row('pcPlus4'));
   place('vF', TIE1, [xFD - 6, row('valid') - 1]);
+  if (pred) {
+    place('btb', BTB, [6, row('rs1') + 4]);
+    place('fsel', merger([1, 1]), [0, P('pcmux', 's')[1] + 2]);
+    alignY('corr', M4, xDE + 52, 'y', row('rd') + 30);
+    place('mis', MISPREDICT, [xDE + 60, row('rd') + 26]);
+    place('gndM', TIE0, [xFD + 30, T + PIPE_H + 12]);
+    place('mspc', merger([1, 1]), [xFD + 26, T + PIPE_H + 14]);
+  }
   // D
   alignY('si', SI, xFD + 8, 'in', row('instr'));
   alignY('rf', RF, xFD + 22, 'ra1', row('rd1') + 6);
   alignY('byA', M2, xFD + 46, 'a', P('rf', 'rd1')[1]);
   alignY('byB', M2, xFD + 46, 'a', P('rf', 'rd2')[1] + 6);
   alignY('ctl', CONTROL, xFD + 46, 'regWrite', row('regWrite'));
-  alignY('imm', IMM_GEN, xFD + 22, 'instr', row('imm') + 22);
+  alignY('imm', IMM_GEN, xFD + 22, 'instr', row('imm') + 26);
   // E
   alignY('fwdA', M4, xDE + 12, 'd0', row('rd1'));
   alignY('fwdB', M4, xDE + 12, 'd0', row('rd2') + 12);
@@ -353,7 +624,13 @@ function buildPipe(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks'): Compon
   alignY('alu', ALU, xDE + 36, 'a', P('srcA', 'y')[1]);
   alignY('target', ADD, xDE + 36, 'a', row('regWrite') + 6);
   alignY('clr0', CLEAR_BIT0, xDE + 58, 'in', row('rd') + 2);
-  place('npc', NEXT_PC, [xDE + 52, row('jalr') + 4]);
+  if (bal) {
+    place('bcmp', BRANCH_CMP, [xDE + 50, row('jalr') + 6]);
+    alignY('jtgt', koggeStone(32), xDE + 36, 'a', row('rd') + 40);
+    place('gJT', TIE0, [P('jtgt', 'cin')[0] - 6, P('jtgt', 'cin')[1] - 4]);
+  } else {
+    place('npc', NEXT_PC, [xDE + 52, row('jalr') + 4]);
+  }
   place('gT', TIE0, [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 4]);
   place('gJ', TIE0, [P('clr0', 'zero')[0] - 5, P('clr0', 'zero')[1] + 1]);
   // M
@@ -362,22 +639,23 @@ function buildPipe(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks'): Compon
   // W
   alignY('res', M4, xMW + 10, 'd0', row('aluResult'));
   // hazard unit and register controls
-  place('hz', HAZARD, [xFD + 30, T + PIPE_H + 18]);
+  place('hz', HZ, [xFD + 40, T + PIPE_H + 18]);
   place('en1', TIE1, [xDE - 6, T + PIPE_H - 5]);
   place('clr0E', TIE0, [xEM - 6, T + PIPE_H - 3]);
 
-  const instances: InstanceDef[] = [...at.keys()].map((n) => ({
-    name: n, def: defs.get(n)!, at: at.get(n),
-    label: ({ pcmux: 'next PC', pc: 'PC', byA: 'bypass A', byB: 'bypass B', fwdA: 'forward A', fwdB: 'forward B', srcA: 'SrcA', srcB: 'SrcB', target: 'PC + imm', fwdM: 'M result', res: 'result', hz: 'hazard unit' } as Record<string, string>)[n],
-  }));
+  const labels: Record<string, string> = {
+    pcmux: 'next PC', pc: 'PC', byA: 'bypass A', byB: 'bypass B', fwdA: 'forward A', fwdB: 'forward B', srcA: 'SrcA', srcB: 'SrcB',
+    target: 'PC + imm', fwdM: 'M result', res: 'result', hz: 'hazard unit', jtgt: 'rs1 + imm', corr: 'correct PC', btb: 'branch predictor',
+  };
+  const instances: InstanceDef[] = [...at.keys()].map((n) => ({ name: n, def: defs.get(n)!, at: at.get(n), label: labels[n] }));
 
+  const decide = bal ? 'bcmp' : 'npc';
   const nets: NetDef[] = [
     // F
     { name: 'PCNext', ends: ['pcmux.y', 'pc.d'] },
     { name: 'enPC', ends: ['hz.enPC', 'pc.en'], tags: true },
-    { name: 'PCF', ends: ['pc.q', 'imem.addr', 'plus4.a', 'FD.pcF'], trunk: P('pc', 'q')[0] + 3 },
+    { name: 'PCF', ends: ['pc.q', 'imem.addr', 'plus4.a', 'FD.pcF', 'pcF', ...(pred ? ['btb.pcF'] : [])], trunk: P('pc', 'q')[0] + 3, tags: ['pcF', ...(pred ? ['btb.pcF'] : [])] },
     { name: 'InstrF', ends: ['imem.data', 'FD.instrF'] },
-    { name: 'PCPlus4F', ends: ['plus4.y', 'FD.pcPlus4F', 'pcmux.d0', 'pcmux.d3'], tags: ['pcmux.d0', 'pcmux.d3'] },
     { name: 'vF', ends: ['vF.y', 'FD.validF'] },
     { name: 'enFD', ends: ['hz.enFD', 'FD.en'], tags: true },
     { name: 'flushFD', ends: ['hz.flushFD', 'FD.clr'], tags: true },
@@ -405,41 +683,47 @@ function buildPipe(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks'): Compon
     { name: 'en1', ends: ['en1.y', 'DE.en', 'EM.en', 'MW.en'], tags: ['EM.en', 'MW.en'] },
     { name: 'flushDE', ends: ['hz.flushDE', 'DE.clr'], tags: true },
     // E
-    { name: 'validE', ends: ['DE.validE', 'EM.validE', 'hz.validE'], tags: ['hz.validE'] },
-    { name: 'PCE', ends: ['DE.pcE', 'EM.pcE', 'srcA.b', 'target.a'], tags: ['srcA.b', 'target.a'] },
-    { name: 'PCPlus4E', ends: ['DE.pcPlus4E', 'EM.pcPlus4E'] },
+    { name: 'validE', ends: ['DE.validE', 'EM.validE', 'hz.validE', ...(pred ? ['mis.valid'] : [])], tags: ['hz.validE', ...(pred ? ['mis.valid'] : [])] },
+    { name: 'PCE', ends: ['DE.pcE', 'EM.pcE', 'srcA.b', 'target.a', ...(pred ? ['btb.pcE'] : [])], tags: ['srcA.b', 'target.a', ...(pred ? ['btb.pcE'] : [])] },
+    { name: 'PCPlus4E', ends: ['DE.pcPlus4E', 'EM.pcPlus4E', ...(pred ? ['corr.d0', 'corr.d3'] : [])], tags: pred ? ['corr.d0', 'corr.d3'] : undefined },
     { name: 'RD1E', ends: ['DE.rd1E', 'fwdA.d0'] },
     { name: 'RD2E', ends: ['DE.rd2E', 'fwdB.d0'] },
-    { name: 'ImmExtE', ends: ['DE.immE', 'EM.immE', 'srcB.b', 'target.b'], tags: ['srcB.b', 'target.b'] },
-    { name: 'rs1E', ends: ['DE.rs1E', 'hz.rs1E'], tags: true },
-    { name: 'rs2E', ends: ['DE.rs2E', 'hz.rs2E'], tags: true },
+    { name: 'ImmExtE', ends: ['DE.immE', 'EM.immE', 'srcB.b', 'target.b', ...(bal ? ['jtgt.b'] : [])], tags: ['srcB.b', 'target.b', ...(bal ? ['jtgt.b'] : [])] },
+    { name: 'rs1E', ends: ['DE.rs1E', ...(bal ? [] : ['hz.rs1E'])], tags: true },
+    { name: 'rs2E', ends: ['DE.rs2E', ...(bal ? [] : ['hz.rs2E'])], tags: true },
     { name: 'rdE', ends: ['DE.rdE', 'EM.rdE', 'hz.rdE'], tags: ['hz.rdE'] },
-    { name: 'regWriteE', ends: ['DE.regWriteE', 'EM.regWriteE'] },
+    { name: 'regWriteE', ends: ['DE.regWriteE', 'EM.regWriteE', ...(bal ? ['hz.regWriteE'] : [])], tags: bal ? ['hz.regWriteE'] : undefined },
     { name: 'memWriteE', ends: ['DE.memWriteE', 'EM.memWriteE'] },
     { name: 'resultSrcE', ends: ['DE.resultSrcE', 'EM.resultSrcE', 'hz.resultSrcE'], tags: ['hz.resultSrcE'] },
     { name: 'ALUSrcAE', ends: ['DE.aluSrcAE', 'srcA.s'], tags: true },
     { name: 'ALUSrcBE', ends: ['DE.aluSrcBE', 'srcB.s'], tags: true },
-    { name: 'BranchE', ends: ['DE.branchE', 'npc.branch'], tags: true },
-    { name: 'JumpE', ends: ['DE.jumpE', 'npc.jump'], tags: true },
-    { name: 'JalrE', ends: ['DE.jalrE', 'npc.jalr'], tags: true },
+    { name: 'BranchE', ends: ['DE.branchE', `${decide}.branch`, ...(pred ? ['mis.branch'] : [])], tags: true },
+    { name: 'JumpE', ends: ['DE.jumpE', `${decide}.jump`, ...(pred ? ['mis.jump'] : [])], tags: true },
+    { name: 'JalrE', ends: ['DE.jalrE', `${decide}.jalr`, ...(pred ? ['mis.jalr'] : [])], tags: true },
     { name: 'ALUControlE', ends: ['DE.aluCtlE', 'alu.ctl'], tags: true },
-    { name: 'funct3E', ends: ['DE.funct3E', 'npc.funct3'], tags: true },
-    { name: 'forwardA', ends: ['hz.forwardA', 'fwdA.s'], tags: true },
-    { name: 'forwardB', ends: ['hz.forwardB', 'fwdB.s'], tags: true },
+    { name: 'funct3E', ends: ['DE.funct3E', `${decide}.funct3`], tags: true },
+    { name: 'forwardA', ends: bal ? ['DE.fwdAE', 'fwdA.s'] : ['hz.forwardA', 'fwdA.s'], tags: true },
+    { name: 'forwardB', ends: bal ? ['DE.fwdBE', 'fwdB.s'] : ['hz.forwardB', 'fwdB.s'], tags: true },
+    ...(bal ? [
+      { name: 'fwdNextA', ends: ['hz.forwardA', 'DE.fwdAD'], tags: true } as NetDef,
+      { name: 'fwdNextB', ends: ['hz.forwardB', 'DE.fwdBD'], tags: true } as NetDef,
+    ] : []),
     { name: 'ResultW', ends: ['res.y', 'fwdA.d1', 'fwdB.d1', 'byA.b', 'byB.b', 'rf.wd'], tags: true },
     { name: 'FwdM', ends: ['fwdM.y', 'fwdA.d2', 'fwdA.d3', 'fwdB.d2', 'fwdB.d3'], tags: true },
-    { name: 'SrcAE', ends: ['fwdA.y', 'srcA.a'] },
-    { name: 'WriteDataE', ends: ['fwdB.y', 'srcB.a', 'EM.writeDataE'], tags: ['EM.writeDataE'] },
+    { name: 'SrcAE', ends: ['fwdA.y', 'srcA.a', ...(bal ? ['bcmp.a', 'jtgt.a'] : [])], tags: bal ? ['bcmp.a', 'jtgt.a'] : undefined },
+    { name: 'WriteDataE', ends: ['fwdB.y', 'srcB.a', 'EM.writeDataE', ...(bal ? ['bcmp.b'] : [])], tags: ['EM.writeDataE', ...(bal ? ['bcmp.b'] : [])] },
     { name: 'SrcA', ends: ['srcA.y', 'alu.a'] },
     { name: 'SrcB', ends: ['srcB.y', 'alu.b'] },
-    { name: 'ALUResultE', ends: ['alu.y', 'EM.aluResultE', 'clr0.in'], trunk: P('alu', 'y')[0] + 8 },
-    { name: 'Zero', ends: ['alu.zero', 'npc.zero'], tags: true },
-    { name: 'Neg', ends: ['alu.neg', 'npc.neg'], tags: true },
-    { name: 'Ovf', ends: ['alu.ovf', 'npc.ovf'], tags: true },
-    { name: 'Carry', ends: ['alu.carry', 'npc.carry'], tags: true },
-    { name: 'PCTargetE', ends: ['target.s', 'pcmux.d1'], tags: true },
-    { name: 'JalrTargetE', ends: ['clr0.out', 'pcmux.d2'], tags: true },
-    { name: 'PCSrcE', ends: ['npc.pcSrc', 'pcmux.s', 'hz.pcSrcE'], tags: true },
+    { name: 'ALUResultE', ends: ['alu.y', 'EM.aluResultE', ...(bal ? [] : ['clr0.in'])], trunk: P('alu', 'y')[0] + 8 },
+    ...(bal ? [
+      { name: 'JalrSum', ends: ['jtgt.s', 'clr0.in'], tags: true } as NetDef,
+      { name: 'gJT', ends: ['gJT.y', 'jtgt.cin'], via: { 'jtgt.cin': [[P('jtgt', 'cin')[0], P('gJT', 'y')[1]]] } } as NetDef,
+    ] : [
+      { name: 'Zero', ends: ['alu.zero', 'npc.zero'], tags: true } as NetDef,
+      { name: 'Neg', ends: ['alu.neg', 'npc.neg'], tags: true } as NetDef,
+      { name: 'Ovf', ends: ['alu.ovf', 'npc.ovf'], tags: true } as NetDef,
+      { name: 'Carry', ends: ['alu.carry', 'npc.carry'], tags: true } as NetDef,
+    ]),
     { name: 'gT', ends: ['gT.y', 'target.cin'], via: { 'target.cin': [[P('target', 'cin')[0], P('gT', 'y')[1]]] } },
     { name: 'gJ', ends: ['gJ.y', 'clr0.zero'], via: { 'clr0.zero': [[P('clr0', 'zero')[0], P('gJ', 'y')[1]]] } },
     // M
@@ -465,24 +749,57 @@ function buildPipe(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks'): Compon
     { name: 'rdW', ends: ['MW.rdW', 'rf.wa', 'hz.rdW'], tags: true },
     { name: 'regWriteW', ends: ['MW.regWriteW', 'rf.we', 'hz.regWriteW'], tags: true },
     { name: 'resultSrcW', ends: ['MW.resultSrcW', 'res.s'], tags: true },
-    // clock to every register (as a net label)
-    { name: 'clk', ends: ['clk', 'pc.clk', 'FD.clk', 'rf.clk', 'DE.clk', 'EM.clk', 'dm.clk', 'MW.clk'], tags: ['pc.clk', 'FD.clk', 'rf.clk', 'DE.clk', 'EM.clk', 'dm.clk', 'MW.clk'] },
-    { name: 'pcF_out', ends: ['pc.q', 'pcF'] },
+    { name: 'clk', ends: ['clk', 'pc.clk', 'FD.clk', 'rf.clk', 'DE.clk', 'EM.clk', 'dm.clk', 'MW.clk', ...(pred ? ['btb.clk'] : [])], tags: ['pc.clk', 'FD.clk', 'rf.clk', 'DE.clk', 'EM.clk', 'dm.clk', 'MW.clk', ...(pred ? ['btb.clk'] : [])] },
   ];
-  // pc.q appears twice: fold the observation pin into the PCF net.
-  const pcfNet = nets.find((n) => n.name === 'PCF')!;
-  pcfNet.ends.push('pcF');
-  pcfNet.tags = ['pcF'];
-  const filtered = nets.filter((n) => n.name !== 'pcF_out');
-  void constWord;
+  if (pred) {
+    nets.push(
+      // F: predicted next PC, overridden by the E-stage correction.
+      { name: 'PCPlus4F', ends: ['plus4.y', 'FD.pcPlus4F', 'pcmux.d0'], tags: ['pcmux.d0'] },
+      { name: 'PredTargetF', ends: ['btb.predTarget', 'pcmux.d1', 'FD.predTargetF'], tags: true },
+      { name: 'PredTakenF', ends: ['btb.predTaken', 'fsel.i0', 'FD.predTakenF'], tags: true },
+      { name: 'Mispredict', ends: ['mis.mispredict', 'fsel.i1', 'mspc.i0'], tags: true },
+      { name: 'PCSel', ends: ['fsel.out', 'pcmux.s'] },
+      { name: 'CorrectPC', ends: ['corr.y', 'pcmux.d2', 'pcmux.d3'], tags: true },
+      { name: 'PCSrcE', ends: [`${decide}.pcSrc`, 'corr.s', 'mis.pcSrc'], tags: true },
+      { name: 'PCTargetE', ends: ['target.s', 'corr.d1', 'mis.tgtB'], tags: true },
+      { name: 'JalrTargetE', ends: ['clr0.out', 'corr.d2', 'mis.tgtJ'], tags: true },
+      { name: 'predTargetD', ends: ['FD.predTargetD', 'DE.predTargetD'] },
+      { name: 'predTakenD', ends: ['FD.predTakenD', 'DE.predTakenD'] },
+      { name: 'predTargetE', ends: ['DE.predTargetE', 'mis.predTarget'], tags: true },
+      { name: 'predTakenE', ends: ['DE.predTakenE', 'mis.predTaken'], tags: true },
+      { name: 'updE', ends: ['mis.isCtrl', 'btb.updE'], tags: true },
+      { name: 'takenE', ends: ['mis.taken', 'btb.takenE'], tags: true },
+      { name: 'isJumpE', ends: [`${decide === 'bcmp' ? 'bcmp' : 'npc'}.pcSrc`] },
+      { name: 'redirect', ends: ['mspc.out', 'hz.pcSrcE'], tags: true },
+      { name: 'gndM', ends: ['gndM.y', 'mspc.i1'] },
+    );
+    // targetE for the BTB = the actual target (correct PC when taken); isJump = jump | jalr.
+    const cpcNet = nets.find((n) => n.name === 'CorrectPC')!;
+    cpcNet.ends.push('btb.targetE'); // tags: true covers the new end too
+    nets.splice(nets.findIndex((n) => n.name === 'isJumpE'), 1);
+    instances.push({ name: 'isJ', def: OR, at: [xDE + 60, row('rd') + 70] });
+    defs.set('isJ', OR);
+    nets.find((n) => n.name === 'JumpE')!.ends.push('isJ.a');
+    nets.find((n) => n.name === 'JalrE')!.ends.push('isJ.b');
+    nets.push({ name: 'isJumpE', ends: ['isJ.y', 'btb.isJumpE'], tags: true });
+  } else {
+    nets.push(
+      { name: 'PCPlus4F', ends: ['plus4.y', 'FD.pcPlus4F', 'pcmux.d0', 'pcmux.d3'], tags: ['pcmux.d0', 'pcmux.d3'] },
+      { name: 'PCTargetE', ends: ['target.s', 'pcmux.d1'], tags: true },
+      { name: 'JalrTargetE', ends: ['clr0.out', 'pcmux.d2'], tags: true },
+      { name: 'PCSrcE', ends: [`${decide}.pcSrc`, 'pcmux.s', 'hz.pcSrcE'], tags: true },
+    );
+  }
 
   const yb = T + PIPE_H + 6;
+  const variant = [adder === 'ks' ? 'fast adders' : '', bal ? 'balanced' : '', pred ? 'branch prediction' : ''].filter(Boolean).join(', ');
   return {
-    id: `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}`, name: `Pipelined RV32I CPU${adder === 'ks' ? ' (fast adders)' : ''}`, category: 'cpu',
+    id: `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}`,
+    name: `Pipelined RV32I CPU${variant ? ` (${variant})` : ''}`, category: 'cpu',
     summary: 'Five stages, one instruction entering per cycle. Forwarding, a W→D bypass, load-use stalls and branch flushes keep it architecturally identical to the single-cycle machine.',
     ports: [bit('clk', 'in', 'left', true), bus('pcF', 32, 'out'), bit('validW', 'out'), bus('pcW', 32, 'out')],
     symbol: { kind: 'box', label: 'RV32I PIPE' },
-    netlist: () => ({ pins: { clk: [0, yb], pcF: [xMW + 30, yb + 4], validW: [xMW + 30, yb + 7], pcW: [xMW + 30, yb + 10] }, instances, nets: filtered }),
-    hdl: { verilog: '// See the hazard unit, pipeline registers and stage blocks; structure follows the primer\'s hdl/rv_pipe.sv.' },
+    netlist: () => ({ pins: { clk: [0, yb], pcF: [xMW + 30, yb + 4], validW: [xMW + 30, yb + 7], pcW: [xMW + 30, yb + 10] }, instances, nets }),
+    hdl: { verilog: '// Structure follows the primer\'s hdl/rv_pipe.sv (and rv_pipe_bp.sv for branch prediction), extended to all of RV32I.' },
   };
 }

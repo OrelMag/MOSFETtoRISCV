@@ -7,9 +7,9 @@ import { PROGRAMS } from '../src/riscv/programs';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 
-function run(id: string, adder: 'rca' | 'ks' = 'rca') {
+function run(id: string, adder: 'rca' | 'ks' = 'rca', extra: { balanced?: boolean; predictor?: boolean } = {}) {
   const words = assemble(PROGRAMS.find((p) => p.id === id)!.source).words;
-  const design = flatten(pipelinedCpu(words, { adder }));
+  const design = flatten(pipelinedCpu(words, { adder, ...extra }));
   const sim = new GateSim(design);
   sim.setInput('clk', 0);
   sim.settle();
@@ -58,5 +58,26 @@ describe('pipeline timing', () => {
     console.log(rows.join('\n'));
     expect(per['pipe rca']).toBeLessThan(per['single rca']);
     expect(per['pipe ks']).toBeLessThan(per['single ks']);
+  }, 120000);
+});
+
+describe('balanced and branch-predicting pipelines vs golden model', () => {
+  for (const variant of [{ balanced: true }, { predictor: true }, { balanced: true, predictor: true }]) {
+    for (const id of ['primer', 'sort', 'gcd', 'alu', 'mul']) {
+      it(`${JSON.stringify(variant)} ${id}`, () => {
+        const r = run(id, 'ks', variant);
+        console.log(`${JSON.stringify(variant)} ${id}: CPI ${(r.cycles / r.retired).toFixed(2)}`);
+      }, 120000);
+    }
+  }
+  it('timing of the variants', async () => {
+    const { analyzeTiming } = await import('../src/sim/timing');
+    const words = assemble(PROGRAMS[0].source).words;
+    for (const v of [{}, { balanced: true }, { balanced: true, predictor: true }]) {
+      for (const adder of ['rca', 'ks'] as const) {
+        const t = analyzeTiming(flatten(pipelinedCpu(words, { adder, ...v })))!;
+        console.log(`${JSON.stringify(v)} ${adder}: ${t.period} ${t.byCapture.slice(0, 4).map((c) => `${c.inst}:${c.period}`).join(' ')} | ${t.stages.map((s) => s.inst).join('→')}`);
+      }
+    }
   }, 120000);
 });

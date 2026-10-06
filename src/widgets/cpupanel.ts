@@ -22,6 +22,8 @@ export interface CpuSceneOptions {
   timing?: boolean;
   /** Use the five-stage pipelined CPU (adds the pipeline diagram). */
   pipeline?: boolean;
+  balanced?: boolean;
+  predictor?: boolean;
   /** Show the program editor. */
   editable?: boolean;
 }
@@ -30,7 +32,7 @@ export interface CpuSceneOptions {
 export function cpuScene(opts: CpuSceneOptions): Scene {
   const asm = assemble(opts.source);
   return {
-    root: opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder }) : singleCycleCpu(asm.words, { adder: opts.adder }),
+    root: opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor }) : singleCycleCpu(asm.words, { adder: opts.adder }),
     inputs: { clk: 0 },
     highlight: opts.highlight,
     panels: [cpuPanel({ ...opts, asm }), ...(opts.pipeline ? [pipeDiagram(asm)] : []), ...(opts.timing ? [timingPanel] : [])],
@@ -198,7 +200,10 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
       return {
         cycle: stage.cycles, slots,
         stall: v('hz', 'enFD') === 0, flush: v('hz', 'flushFD') === 1,
-        fwdA: v('hz', 'forwardA'), fwdB: v('hz', 'forwardB'), byp: v('hz', 'bypassA') === 1 || v('hz', 'bypassB') === 1,
+        // Balanced design: the E-stage selects travel in ID/EX (the hazard unit's outputs are for D).
+        fwdA: root.children.get('DE')!.ports.fwdAE ? v('DE', 'fwdAE') : v('hz', 'forwardA'),
+        fwdB: root.children.get('DE')!.ports.fwdBE ? v('DE', 'fwdBE') : v('hz', 'forwardB'),
+        byp: v('hz', 'bypassA') === 1 || v('hz', 'bypassB') === 1,
       };
     };
     const record = () => {

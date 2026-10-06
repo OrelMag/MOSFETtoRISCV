@@ -2,6 +2,7 @@ import { chAdders, chRouting } from './ch-arith';
 import { chAlu, chIsa, chRegfile, chSingleCycle } from './ch-cpu';
 import { chFastAdders } from './ch-perf';
 import { chPipeline } from './ch-pipe';
+import { chPipePay } from './ch-pipe2';
 import { chBinary, chGates } from './ch-gates';
 import { chLatches, chMemory, chRegisters } from './ch-memory';
 import { chInverter, chMap, chMosfet, chNand } from './ch-transistors';
@@ -9,11 +10,10 @@ import type { Chapter, FutureChapter } from './types';
 
 export const chapters: Chapter[] = [
   chMap, chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
-  chAlu, chRegfile, chIsa, chSingleCycle, chFastAdders, chPipeline,
+  chAlu, chRegfile, chIsa, chSingleCycle, chFastAdders, chPipeline, chPipePay,
 ];
 
 export const future: FutureChapter[] = [
-  { num: 17, title: 'Branch prediction', level: 'Processor', blurb: 'BTB and 2-bit counters: getting the CPI back towards 1, measured.' },
   { num: 18, title: 'Multicycle & microcode', level: 'Processor', blurb: 'Hardwired FSM versus microprogrammed control.' },
   { num: 19, title: 'Multiply & divide', level: 'Arithmetic', blurb: 'Array, Booth and Dadda multipliers; restoring division; the M extension.' },
   { num: 20, title: 'Byte loads, CSRs & interrupts', level: 'Privileged ISA', blurb: 'Load/store unit, CSRs, exceptions, a timer interrupt and the trap handler.' },

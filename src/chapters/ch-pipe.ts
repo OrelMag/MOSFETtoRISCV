@@ -151,7 +151,8 @@ export const chPipeline: Chapter = {
         only ~20 NAND delays, because our memories are tiny multiplexer trees, much faster than real SRAM.</p>
         <p>Pipelining pays when stages are balanced. Real designs: precompute forwarding selects a stage early, compute branch
         conditions with a dedicated comparator, predict branches, and split the slowest stage. Here the clock must fit
-        the slowest stage, and in a real chip memory access, not the ALU, dominates the single-cycle path.</p>`,
+        the slowest stage, and in a real chip memory access, not the ALU, dominates the single-cycle path.</p>
+        <p>The next chapter does exactly that, one measured step at a time.</p>`,
       widget: () => payWidget(),
       challenge: {
         kind: 'quiz', question: 'Which change would most directly shorten this pipeline\'s clock period?',

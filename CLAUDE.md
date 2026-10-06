@@ -76,7 +76,8 @@ src/lib/       the component library (registered in `registry` via define())
   fastadd.ts     gp / gray / black prefix cells, CLA4, koggeStone(n), addSubFast(n)
   wide.ts        bitwise(op, n), orN(n) (shared by alu.ts and fastadd.ts to avoid an import cycle)
   pipeline.ts    equal, nonZero, clearableRegister, pipeline registers (fields on fixed rows),
-                 HAZARD unit, pipelinedCpu(program, { adder })
+                 hazardUnit(lookAhead), BRANCH_CMP, BTB (16 × 62-bit), SAT_COUNTER, MISPREDICT,
+                 pipelinedCpu(program, { adder, balanced, predictor })
 src/riscv/     isa.ts (tables, decode, disasm), asm.ts (two-pass assembler), iss.ts (golden
                model), programs.ts (samples), cosim.ts (read CPU state from a simulation)
 src/view/      SVG schematic renderer, router, inspector panels, waveform, truth table
