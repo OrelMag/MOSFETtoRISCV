@@ -7,8 +7,8 @@ import { GateSim } from '../sim/gatesim';
 import { needsSwitchLevel } from '../sim/harness';
 import type { PowerOnMode, Sim } from '../sim/sim';
 import { SwitchSim } from '../sim/switchsim';
-import { B1, type Bit, type ComponentDef, inPorts, netlistOf, type PortDef } from '../sim/types';
-import { formatNumber, mask, pack } from '../sim/values';
+import { B0, B1, type Bit, type ComponentDef, inPorts, netlistOf, outPorts, type PortDef } from '../sim/types';
+import { formatBits, formatNumber, mask, pack, type Radix } from '../sim/values';
 import { LogicAnalyzer, netKey } from './analyzer';
 import { h, icon } from '../ui/dom';
 import { settings } from '../ui/settings';
@@ -85,6 +85,8 @@ export class Stage {
   /** Events still pending at the last rising edge (fixed period only). */
   private lateEvents = 0;
   private lateCount = 0;
+  /** Per-output radix chosen by clicking its value (else the global setting). */
+  private outRadix = new Map<string, Radix>();
   private flash: string | null = null;
   private selected: string | null = null;
   leafFactory: LeafWidgetFactory | null = null;
@@ -548,6 +550,12 @@ export class Stage {
       if (p.name === clk) continue;
       c.append(p.width === 1 ? this.bitToggle(p) : this.numInput(p));
     }
+    const outs = outPorts(root);
+    if (outs.length) {
+      // One group, so the label wraps together with its chips.
+      c.append(h('span', { class: 'ctl-group' }, h('span', { class: 'label', style: 'margin-left:6px' }, 'Outputs'),
+        outs.map((p) => (p.width === 1 ? this.bitLamp(p) : this.numOutput(p)))));
+    }
     if (clk) {
       c.append(h('span', { class: 'label', style: 'margin-left:6px' }, 'Clock'));
       c.append(this.bitToggle(root.ports.find((q) => q.name === clk)!));
@@ -613,8 +621,37 @@ export class Stage {
       h('button', { title: 'Edit bits', onclick: (e: Event) => this.editInput(p.name, (e.currentTarget as HTMLElement).getBoundingClientRect()) }, '⋯'));
   }
 
+  /** A 1-bit output: a lamp, like an input toggle but not clickable. */
+  private bitLamp(p: PortDef): HTMLElement {
+    return h('span', { class: 'out-lamp', 'data-out': p.name, title: `${p.name} (output)` }, h('span', { class: 'knob' }), p.name);
+  }
+
+  /** A bus output: its value; click to cycle hex → bin → dec → signed for this output. */
+  private numOutput(p: PortDef): HTMLElement {
+    const val = h('button', { class: 'v', title: 'Click to change the radix of this output' });
+    val.addEventListener('click', () => {
+      const order: Radix[] = ['hex', 'bin', 'dec', 'sdec'];
+      this.outRadix.set(p.name, order[(order.indexOf(this.outRadixOf(p)) + 1) % order.length]);
+      this.updateControls();
+    });
+    return h('span', { class: 'out-num', 'data-out': p.name }, p.name, val);
+  }
+
+  private outRadixOf(p: PortDef): Radix {
+    return this.outRadix.get(p.name) ?? (settings.radix === 'bin' && p.width > 8 ? 'hex' : settings.radix);
+  }
+
   private updateControls(): void {
     if (!this.sim) return;
+    const root = this.sim.design.root;
+    for (const el of this.controls.querySelectorAll<HTMLElement>('[data-out]')) {
+      const p = this.scene!.root.ports.find((q) => q.name === el.dataset.out)!;
+      const bits = this.sim.getBits(root.ports[p.name]);
+      const x = bits.some((b) => b !== B0 && b !== B1);
+      el.classList.toggle('vx', x);
+      if (p.width === 1) el.classList.toggle('v1', bits[0] === B1);
+      else el.querySelector('.v')!.textContent = formatBits(bits, this.outRadixOf(p));
+    }
     for (const el of this.controls.querySelectorAll<HTMLElement>('.in-toggle')) {
       const v = this.getInput(el.dataset.port!);
       el.classList.toggle('v1', v === 1);

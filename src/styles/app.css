@@ -214,6 +214,25 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   border-radius: 99px; padding: 2px 8px; font: 600 13px var(--font-mono); text-align: right;
 }
 .in-num button { border: 0; background: transparent; cursor: pointer; padding: 0 4px; color: var(--text-2); font: 600 14px var(--font-mono); }
+/* outputs: read-only twins of the input controls */
+.ctl-group { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.out-lamp {
+  display: inline-flex; align-items: center; gap: 7px; user-select: none;
+  border: 1px dashed var(--border-strong); background: transparent; border-radius: 99px; padding: 3px 10px 3px 4px;
+  font: 600 13px var(--font-mono); color: var(--text-2);
+}
+.out-lamp .knob { width: 20px; height: 20px; border-radius: 50%; background: var(--w0); transition: background 0.15s, box-shadow 0.15s; }
+.out-lamp.v1 .knob { background: var(--w1); box-shadow: 0 0 0 4px var(--w1-glow); }
+.out-lamp.vx .knob { background: var(--wx); }
+.out-num {
+  display: inline-flex; align-items: center; gap: 8px; border: 1px dashed var(--border-strong);
+  border-radius: 99px; padding: 2px 4px 2px 10px; font: 600 13px var(--font-mono); color: var(--text-2);
+}
+.out-num .v {
+  min-width: 74px; border: 0; background: color-mix(in srgb, var(--bus) 12%, var(--surface)); color: var(--bus-label-text);
+  border-radius: 99px; padding: 2px 10px; font: 700 13px var(--font-mono); text-align: right; cursor: pointer;
+}
+.out-num.vx .v { color: var(--wx); background: color-mix(in srgb, var(--wx) 12%, var(--surface)); }
 .status { margin-left: auto; font: 12px var(--font-mono); color: var(--muted); display: flex; align-items: center; gap: 8px; }
 .status .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
 .status .pulse.busy { background: var(--w1); animation: blink 0.6s infinite; }
