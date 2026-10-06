@@ -100,7 +100,8 @@ export function regfile(k: number, w: number, zero = true): ComponentDef {
       { name: 'wd', ends: wd, trunk: xR - 3 },
       { name: 'clk', ends: clk, trunk: xR + rg.w + 2 },
       { name: 'regs', ends: ['bundle.out', 'rp1.words', 'rp2.words'], trunk: xP - 3 },
-      { name: 'ra1', ends: ['ra1', 'rp1.sel'], via: { 'rp1.sel': [[sel1x - 0, bottom + 4]] } },
+      // ra1 climbs left of rp2 and crosses into the gap between the ports, under rp1.sel.
+      { name: 'ra1', ends: ['ra1', 'rp1.sel'], via: { 'rp1.sel': [[xP - 1.5, bottom + 4], [xP - 1.5, rp1At[1] + rpg.h + 5], [sel1x, rp1At[1] + rpg.h + 5]] } },
       { name: 'ra2', ends: ['ra2', 'rp2.sel'], via: { 'rp2.sel': [[sel2x, bottom + 6]] } },
       { name: 'rd1', ends: ['rp1.y', 'rd1'] },
       { name: 'rd2', ends: ['rp2.y', 'rd2'] },

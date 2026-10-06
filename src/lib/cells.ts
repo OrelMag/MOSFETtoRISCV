@@ -53,7 +53,7 @@ export const SRAM_CELL: ComponentDef = define({
       { ends: ['vdd1.p', 'p1.s'] }, { ends: ['vdd2.p', 'p2.s'] },
       { ends: ['gnd1.p', 'n1.s'] }, { ends: ['gnd2.p', 'n2.s'] },
       { name: 'q', ends: ['p1.d', 'n1.d', 'a1.s', 'p2.g', 'n2.g'], via: { 'a1.s': [[9, 12]], 'p2.g': [[20, 11], [20, 6]], 'n2.g': [[20, 11], [20, 16]] } },
-      { name: 'q̄', ends: ['p2.d', 'n2.d', 'a2.s', 'p1.g', 'n1.g'], via: { 'a2.s': [[37, 12]], 'p1.g': [[30, 11], [30, 23], [12, 23], [12, 6]], 'n1.g': [[12, 23], [12, 16]] } },
+      { name: 'q̄', ends: ['p2.d', 'n2.d', 'a2.s', 'p1.g', 'n1.g'], via: { 'a2.s': [[37, 12]], 'p1.g': [[30, 11], [30, 23], [12, 23], [12, 6]], 'n1.g': [[30, 11], [30, 23], [12, 23], [12, 16]] } },
     ],
   }),
   notes: `Sizing makes it work. Reading: the bit lines are precharged high and the side storing 0 pulls its bit line
