@@ -148,7 +148,11 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Floating point (chapter 23): IEEE 754 explorer and number line; parametric gate-level FPU (unpack, align with sticky,
   add/sub, tree multiply, shared normalize & round with RNE and subnormals, compare, int→float), exhaustively tested on
   small formats and against host float32; single-cycle RV32IF CPU (subset) co-simulated with both register files
-- ⏳ fdiv / fsqrt / fma, rounding modes and fflags; a pipelined FPU
+- ✅ RV32F without div / sqrt / fma: all five rounding modes (and dyn → frm) and the five exception flags in the shared
+  normalize & round (tininess after rounding), fcvt.w[u].s with saturation, fmin / fmax (IEEE 754-2019), fclass, signaling
+  compares, fcsr (fflags / frm / fcsr via Zicsr) in the FPU path; exhaustive small-format tests in every mode with flags
+  (bit-parallel simulator, 32 vectors per pass); ISS on the exact reference
+- ⏳ fdiv / fsqrt / fma; a pipelined FPU
 - Superscalar and out-of-order intuition (scoreboard / Tomasulo widget)
 - Compressed instructions (C), A extension (LR/SC, AMO)
 - Virtual memory (Sv32), TLB, U/S/M privilege levels (stretch)
