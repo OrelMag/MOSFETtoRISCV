@@ -583,7 +583,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   const xFD = 40, xDE = 112, xEM = 196, xMW = 232;
   place('FD', FD, [xFD, T]); place('DE', DE, [xDE, T]); place('EM', EM, [xEM, T]); place('MW', MW, [xMW, T]);
   // F
-  alignY('pcmux', M4, 4, 'y', row('pc') + 10);
+  alignY('pcmux', M4, 2, 'y', row('pc') + 10);
   alignY('pc', PC, 12, 'd', row('pc') + 10);
   place('one', TIE1, [6, P('pc', 'en')[1] + 2]);
   alignY('imem', IM, 24, 'addr', row('instr'));
@@ -591,9 +591,10 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   place('vF', TIE1, [xFD - 6, row('valid') - 1]);
   if (pred) {
     place('btb', BTB, [6, row('rs1') + 4]);
-    place('fsel', merger([1, 1]), [0, P('pcmux', 's')[1] + 2]);
-    alignY('corr', M4, xDE + 52, 'y', row('rd') + 30);
-    place('mis', MISPREDICT, [xDE + 60, row('rd') + 26]);
+    place('fsel', merger([1, 1]), [-3, P('pcmux', 's')[1] + 2]);
+    // prediction and correction sit in a row below the pipeline registers, out of the E-stage datapath
+    place('corr', M4, [xDE + 64, T + PIPE_H + 12]);
+    place('mis', MISPREDICT, [xDE + 84, T + PIPE_H + 12]);
     place('gndM', TIE0, [xFD + 30, T + PIPE_H + 12]);
     place('mspc', merger([1, 1]), [xFD + 26, T + PIPE_H + 14]);
   }
@@ -601,25 +602,27 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   alignY('si', SI, xFD + 8, 'in', row('instr'));
   alignY('rf', RF, xFD + 22, 'ra1', row('rd1') + 6);
   alignY('byA', M2, xFD + 46, 'a', P('rf', 'rd1')[1]);
-  alignY('byB', M2, xFD + 46, 'a', P('rf', 'rd2')[1] + 6);
+  alignY('byB', M2, xFD + 46, 'a', P('rf', 'rd2')[1] + 8);
   alignY('ctl', CONTROL, xFD + 46, 'regWrite', row('regWrite'));
   alignY('imm', IMM_GEN, xFD + 22, 'instr', row('imm') + 26);
   // E
   alignY('fwdA', M4, xDE + 12, 'd0', row('rd1'));
-  alignY('fwdB', M4, xDE + 12, 'd0', row('rd2') + 12);
+  alignY('fwdB', M4, xDE + 12, 'd0', row('rd2') + 18);
   alignY('srcA', M2, xDE + 24, 'a', P('fwdA', 'y')[1]);
   alignY('srcB', M2, xDE + 24, 'a', P('fwdB', 'y')[1]);
   alignY('alu', ALU, xDE + 36, 'a', P('srcA', 'y')[1]);
   alignY('target', ADD, xDE + 36, 'a', row('regWrite') + 6);
   alignY('clr0', CLEAR_BIT0, xDE + 58, 'in', row('rd') + 2);
   if (bal) {
-    place('bcmp', BRANCH_CMP, [xDE + 50, row('jalr') + 6]);
-    alignY('jtgt', koggeStone(32), xDE + 36, 'a', row('rd') + 40);
-    place('gJT', TIE0, [P('jtgt', 'cin')[0] - 6, P('jtgt', 'cin')[1] - 4]);
+    place('bcmp', BRANCH_CMP, [xDE + 14, T + PIPE_H + 12]);
+    place('jtgt', koggeStone(32), [xDE + 40, T + PIPE_H + 30]);
+    place('gJT', TIE0, [P('jtgt', 'cin')[0] - 10, P('jtgt', 'cin')[1] + 3]);
   } else {
-    place('npc', NEXT_PC, [xDE + 52, row('jalr') + 4]);
+    place('npc', NEXT_PC, pred ? [xDE + 14, T + PIPE_H + 12] : [xDE + 52, row('jalr') + 4]);
   }
-  place('gT', TIE0, [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 4]);
+  // the tie for the target adder's carry-in: above it when cin is on top (ripple carry), below-left otherwise
+  const cinTop = g(ADD).ports.cin.exit === 'up';
+  place('gT', TIE0, cinTop ? [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 4] : [P('target', 'cin')[0] - 10, P('target', 'cin')[1] + 3]);
   place('gJ', TIE0, [P('clr0', 'zero')[0] - 5, P('clr0', 'zero')[1] + 1]);
   // M
   alignY('dm', DM, xEM + 12, 'addr', row('aluResult'));
@@ -629,7 +632,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   // hazard unit and register controls
   place('hz', HZ, [xFD + 40, T + PIPE_H + 18]);
   place('en1', TIE1, [xDE - 6, T + PIPE_H - 5]);
-  place('clr0E', TIE0, [xEM - 6, T + PIPE_H - 3]);
+  place('clr0E', TIE0, [xEM - 6, T + PIPE_H + 2]);
 
   const labels: Record<string, string> = {
     pcmux: 'next PC', pc: 'PC', byA: 'bypass A', byB: 'bypass B', fwdA: 'forward A', fwdB: 'forward B', srcA: 'SrcA', srcB: 'SrcB',
@@ -705,14 +708,14 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     { name: 'ALUResultE', ends: ['alu.y', 'EM.aluResultE', ...(bal ? [] : ['clr0.in'])], trunk: P('alu', 'y')[0] + 8 },
     ...(bal ? [
       { name: 'JalrSum', ends: ['jtgt.s', 'clr0.in'], tags: true } as NetDef,
-      { name: 'gJT', ends: ['gJT.y', 'jtgt.cin'], via: { 'jtgt.cin': [[P('jtgt', 'cin')[0], P('gJT', 'y')[1]]] } } as NetDef,
+      { name: 'gJT', ends: ['gJT.y', 'jtgt.cin'], via: { 'jtgt.cin': [[P('jtgt', 'cin')[0] - 2, P('gJT', 'y')[1]], [P('jtgt', 'cin')[0] - 2, P('jtgt', 'cin')[1]]] } } as NetDef,
     ] : [
       { name: 'Zero', ends: ['alu.zero', 'npc.zero'], tags: true } as NetDef,
       { name: 'Neg', ends: ['alu.neg', 'npc.neg'], tags: true } as NetDef,
       { name: 'Ovf', ends: ['alu.ovf', 'npc.ovf'], tags: true } as NetDef,
       { name: 'Carry', ends: ['alu.carry', 'npc.carry'], tags: true } as NetDef,
     ]),
-    { name: 'gT', ends: ['gT.y', 'target.cin'], via: { 'target.cin': [[P('target', 'cin')[0], P('gT', 'y')[1]]] } },
+    { name: 'gT', ends: ['gT.y', 'target.cin'], via: { 'target.cin': cinTop ? [[P('target', 'cin')[0], P('gT', 'y')[1]]] : [[P('target', 'cin')[0] - 2, P('gT', 'y')[1]], [P('target', 'cin')[0] - 2, P('target', 'cin')[1]]] } },
     { name: 'gJ', ends: ['gJ.y', 'clr0.zero'], via: { 'clr0.zero': [[P('clr0', 'zero')[0], P('gJ', 'y')[1]]] } },
     // M
     { name: 'validM', ends: ['EM.validM', 'MW.validM'] },
@@ -765,7 +768,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     const cpcNet = nets.find((n) => n.name === 'CorrectPC')!;
     cpcNet.ends.push('btb.targetE'); // tags: true covers the new end too
     nets.splice(nets.findIndex((n) => n.name === 'isJumpE'), 1);
-    instances.push({ name: 'isJ', def: OR, at: [xDE + 60, row('rd') + 70] });
+    instances.push({ name: 'isJ', def: OR, at: [xDE + 64, T + PIPE_H + 30] });
     defs.set('isJ', OR);
     nets.find((n) => n.name === 'JumpE')!.ends.push('isJ.a');
     nets.find((n) => n.name === 'JalrE')!.ends.push('isJ.b');
@@ -784,7 +787,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   if (dcache) {
     // A load or store that misses in M freezes every stage: the PC and all pipeline registers hold,
     // flushes and predictor updates wait, and W reports a retirement only once, when the miss is over.
-    const yc = yb + 16, add = (name: string, def: ComponentDef, x: number, y: number) => { instances.push({ name, def, at: [x, yc + y] }); defs.set(name, def); };
+    const yc = yb + 44, add = (name: string, def: ComponentDef, x: number, y: number) => { instances.push({ name, def, at: [x, yc + y] }); defs.set(name, def); };
     const net = (name: string) => nets.find((n) => n.name === name)!;
     const retarget = (name: string, from: string, to: string) => { const e = net(name).ends; e[e.indexOf(from)] = to; };
     add('rsl', splitter([1, 1]), xEM - 20, 0);

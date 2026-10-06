@@ -486,88 +486,91 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
   const alignY = (n: string, d: ComponentDef, x: number, port: string, y: number, label?: string) => place(n, d, [x, y - g(d).ports[port].pos[1]], label);
 
   const T = 6, row = (f: string) => T + rowY(f);
-  const xFD = 40, xDE = 120, xEM = 200, xMX = 236, xXW = 272;
+  // stage columns: wide enough for the FP blocks of M (align + add, float → int), X (round) and W
+  const xFD = 40, xDE = 150, xEM = xDE + 92, xMX = xEM + 64, xXW = xMX + 54;
   const yF = T + PIPE_H + 60; // top of the FP pipeline registers
   place('FD', FD, [xFD, T]); place('DE', DE, [xDE, T]); place('EM', EM, [xEM, T]); place('MX', MX, [xMX, T]); place('XW', XW, [xXW, T]);
   place('DEF', DEF, [xDE, yF]); place('EMF', EMF, [xEM, yF]); place('MXF', MXF, [xMX, yF]); place('XWF', XWF, [xXW, yF]);
   // F
-  alignY('pcmux', M4, 4, 'y', row('pc') + 10);
+  alignY('pcmux', M4, 2, 'y', row('pc') + 10);
   alignY('pc', PC, 12, 'd', row('pc') + 10, 'PC');
   alignY('imem', IM, 24, 'addr', row('instr'));
   alignY('plus4', P4, 26, 'a', row('pcPlus4'));
   place('vF', TIE1, [xFD - 6, row('valid') - 1]);
   // D
-  alignY('si', SI, xFD + 8, 'in', row('instr'));
-  alignY('rf', RF, xFD + 22, 'ra1', row('rd1') + 6, 'x registers');
-  alignY('byA', M2, xFD + 50, 'a', P('rf', 'rd1')[1], 'bypass A');
-  alignY('byB', M2, xFD + 50, 'a', P('rf', 'rd2')[1] + 6, 'bypass B');
-  alignY('ctl', CONTROL, xFD + 50, 'regWrite', row('regWrite'));
-  alignY('imm', IMM_GEN, xFD + 22, 'instr', row('imm') + 26);
+  alignY('si', SI, xFD + 12, 'in', row('instr'));
+  alignY('rf', RF, xFD + 28, 'ra1', row('rd1') + 6, 'x registers');
+  alignY('byA', M2, xFD + 54, 'a', P('rf', 'rd1')[1], 'bypass A');
+  alignY('byB', M2, xFD + 54, 'a', P('rf', 'rd2')[1] + 8, 'bypass B');
+  alignY('ctl', CONTROL, xFD + 54, 'regWrite', row('regWrite'));
+  alignY('imm', IMM_GEN, xFD + 26, 'instr', row('imm') + 26);
   place('fdec', FP_DECODE, [xFD + 8, yF + 4]);
-  place('fuse', FP_USES, [xFD + 30, yF + 4]);
+  place('fuse', FP_USES, [xFD + 40, yF + 4]);
   place('frf', FRF, [xFD + 22, yF + 44], 'f registers');
-  place('sr3', splitter([2, 5]), [xFD + 16, yF + 40]);
+  place('sr3', splitter([2, 5]), [xFD + 10, yF + 40]);
   place('fbyA', M2, [xFD + 66, yF + 44], 'f bypass A');
   place('fbyB', M2, [xFD + 66, yF + 54], 'f bypass B');
   place('fbyC', M2, [xFD + 66, yF + 64], 'f bypass C');
-  place('nflw', NOT, [xFD + 66, yF + 4]); place('rwx', AND, [xFD + 72, yF + 4]); place('rwi', OR, [xFD + 78, yF + 4]);
+  // x write enable: (RegWrite AND NOT flw) OR toInt, each output on the next input's row
+  place('nflw', NOT, [xFD + 72, yF + 6]); place('rwx', AND, [xFD + 80, yF + 4]); place('rwi', OR, [xFD + 90, yF + 5]);
   // E
-  alignY('fwdA', M4, xDE + 12, 'd0', row('rd1'), 'forward A');
-  alignY('fwdB', M4, xDE + 12, 'd0', row('rd2') + 12, 'forward B');
-  alignY('srcA', M2, xDE + 26, 'a', P('fwdA', 'y')[1], 'SrcA');
-  alignY('srcB', M2, xDE + 26, 'a', P('fwdB', 'y')[1], 'SrcB');
-  alignY('alu', ALU, xDE + 38, 'a', P('srcA', 'y')[1]);
-  alignY('target', ADD, xDE + 38, 'a', row('regWrite') + 6, 'PC + imm');
+  alignY('fwdA', M4, xDE + 20, 'd0', row('rd1'), 'forward A');
+  alignY('fwdB', M4, xDE + 20, 'd0', row('rd2') + 18, 'forward B');
+  alignY('srcA', M2, xDE + 32, 'a', P('fwdA', 'y')[1], 'SrcA');
+  alignY('srcB', M2, xDE + 32, 'a', P('fwdB', 'y')[1], 'SrcB');
+  alignY('alu', ALU, xDE + 44, 'a', P('srcA', 'y')[1]);
+  alignY('target', ADD, xDE + 44, 'a', row('regWrite') + 6, 'PC + imm');
   alignY('clr0', CLEAR_BIT0, xDE + 62, 'in', row('rd') + 2);
-  place('npc', NEXT_PC, [xDE + 56, row('jalr') + 4]);
-  place('gT', TIE0, [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 4]);
+  place('npc', NEXT_PC, [xDE + 58, row('jalr') + 4]);
+  place('gT', TIE0, [P('target', 'cin')[0] - 10, P('target', 'cin')[1] + 3]);
   place('gJ', TIE0, [P('clr0', 'zero')[0] - 5, P('clr0', 'zero')[1] + 1]);
-  place('aluOrCsr', M2, [xDE + 66, row('aluResult') - 4], 'ALU / CSR');
-  place('stData', M2, [xDE + 66, row('writeData') + 4], 'x / f store');
-  place('rwc', OR, [xDE + 66, row('regWrite') - 2]);
-  place('fA', M2, [xDE + 8, yF + 4], 'forward fa');
-  place('fB', M2, [xDE + 8, yF + 14], 'forward fb');
-  place('fC', M2, [xDE + 8, yF + 24], 'forward fc');
-  place('fpx', FP_EXEC, [xDE + 22, yF + 4], 'FP execute (stage 1)');
-  place('fcsrE', FCSR_CALC, [xDE + 22, yF + 120], 'fcsr read');
+  place('aluOrCsr', M2, [xDE + 72, row('aluResult') - 4], 'ALU / CSR');
+  place('stData', M2, [xDE + 72, row('writeData') + 4], 'x / f store');
+  place('rwc', OR, [xDE + 84, row('regWrite') - 2]);
+  place('fA', M2, [xDE + 20, yF + 4], 'forward fa');
+  place('fB', M2, [xDE + 20, yF + 16], 'forward fb');
+  place('fC', M2, [xDE + 20, yF + 28], 'forward fc');
+  place('fpx', FP_EXEC, [xDE + 36, yF + 4], 'FP execute (stage 1)');
+  place('fcsrE', FCSR_CALC, [xDE + 30, yF + 120], 'fcsr read');
   place('siE', splitter([7, 5, 3, 5, 5, 7]), [xDE + 14, yF + 120]);
   // M
-  alignY('dm', DM, xEM + 12, 'addr', row('aluResult'));
+  alignY('dm', DM, xEM + 18, 'addr', row('aluResult'));
   alignY('fwdM', M4, xEM + 12, 'd0', row('imm') + 14, 'M result');
-  place('fadd', fmaAdd(F32), [xEM + 10, yF + 10], 'FP align + add (stage 2)');
-  place('ftoi', fpToIntRound(F32), [xEM + 10, yF + 70], 'float → int: round');
-  place('tiY', M2, [xEM + 28, yF + 70]); place('tiF', busMux2(5), [xEM + 28, yF + 80]);
+  place('fadd', fmaAdd(F32), [xEM + 18, yF + 10], 'FP align + add (stage 2)');
+  place('ftoi', fpToIntRound(F32), [xEM + 18, yF + 70], 'float → int: round');
+  place('tiY', M2, [xEM + 44, yF + 70]); place('tiF', busMux2(5), [xEM + 44, yF + 82]);
   // X
   alignY('resX', M4, xMX + 12, 'd0', row('aluResult'), 'X result');
-  place('fres', FP_RESULT, [xMX + 10, yF + 10], 'FP round (stage 3)');
+  place('fres', FP_RESULT, [xMX + 18, yF + 10], 'FP round (stage 3)');
   // W
   alignY('resW', M4, xXW + 10, 'd0', row('aluResult'), 'result');
   place('xres', M2, [xXW + 24, row('aluResult') - 6], 'int / FP');
-  place('fwres', M2, [xXW + 10, yF + 10], 'FP / load');
-  place('fcsr', FCSR_REGS, [xXW + 10, yF + 40], 'fcsr');
+  place('fwres', M2, [xXW + 16, yF + 10], 'FP / load');
+  place('fcsr', FCSR_REGS, [xXW + 16, yF + 40], 'fcsr');
   // hazards and stall logic
   place('hz', HAZARD6, [xFD + 40, T + PIPE_H + 4], 'hazard unit');
-  place('fhz', FP_HAZARD, [xFD + 70, T + PIPE_H + 4], 'FP hazards');
-  place('stD', OR, [xFD + 96, T + PIPE_H + 4]); place('stAll', OR, [xFD + 102, T + PIPE_H + 4]); place('go', NOT, [xFD + 108, T + PIPE_H + 4]);
-  place('ndv', NOT, [xFD + 96, T + PIPE_H + 10]); place('flD', OR, [xFD + 102, T + PIPE_H + 10]); place('flDg', AND, [xFD + 108, T + PIPE_H + 10]);
+  place('fhz', FP_HAZARD, [xFD + 78, T + PIPE_H + 4], 'FP hazards');
+  place('stD', OR, [xFD + 106, T + PIPE_H + 4]); place('stAll', OR, [xFD + 118, T + PIPE_H + 5]); place('go', NOT, [xFD + 130, T + PIPE_H + 6]);
+  place('ndv', NOT, [xFD + 112, T + PIPE_H + 24]); place('flD', OR, [xFD + 118, T + PIPE_H + 16]); place('flDg', AND, [xFD + 130, T + PIPE_H + 16]);
   place('en1', TIE1, [xEM - 8, T + PIPE_H - 5]); place('zero', TIE0, [xMX - 8, T + PIPE_H - 3]);
 
   const instances: InstanceDef[] = [...at.keys()].map((n) => ({ name: n, def: defs.get(n)!, at: at.get(n), label: labels[n] }));
-  const N = (name: string, ends: string[], tags: NetDef['tags'] = true): NetDef => ({ name, ends, tags });
+  // tags default to all ends; 'wire' draws the net as wires (an explicit undefined would select the default)
+  const N = (name: string, ends: string[], tags: NetDef['tags'] | 'wire' = true): NetDef => ({ name, ends, tags: tags === 'wire' ? undefined : tags });
   const nets: NetDef[] = [
     // F
-    N('PCNext', ['pcmux.y', 'pc.d'], undefined),
+    N('PCNext', ['pcmux.y', 'pc.d'], 'wire'),
     N('enPC', ['go.y', 'pc.en', 'FD.en']),
-    N('PCF', ['pc.q', 'imem.addr', 'plus4.a', 'FD.pcF', 'pcF'], ['pcF']),
+    { name: 'PCF', ends: ['pc.q', 'imem.addr', 'plus4.a', 'FD.pcF', 'pcF'], tags: ['pcF'], trunk: P('pc', 'q')[0] + 3 },
     N('PCPlus4F', ['plus4.y', 'FD.pcPlus4F', 'pcmux.d0', 'pcmux.d3'], ['pcmux.d0', 'pcmux.d3']),
-    N('InstrF', ['imem.data', 'FD.instrF'], undefined),
-    N('vF', ['vF.y', 'FD.validF'], undefined),
+    N('InstrF', ['imem.data', 'FD.instrF'], 'wire'),
+    N('vF', ['vF.y', 'FD.validF'], 'wire'),
     N('flushFD', ['hz.taken', 'FD.clr', 'flD.b']),
     // D
-    N('validD', ['FD.validD', 'DE.validD'], undefined),
-    N('PCD', ['FD.pcD', 'DE.pcD'], undefined),
-    N('PCPlus4D', ['FD.pcPlus4D', 'DE.pcPlus4D'], undefined),
-    N('InstrD', ['FD.instrD', 'si.in', 'imm.instr', 'DEF.instrD']),
+    N('validD', ['FD.validD', 'DE.validD'], 'wire'),
+    N('PCD', ['FD.pcD', 'DE.pcD'], 'wire'),
+    N('PCPlus4D', ['FD.pcPlus4D', 'DE.pcPlus4D'], 'wire'),
+    N('InstrD', ['FD.instrD', 'si.in', 'imm.instr', 'DEF.instrD'], ['imm.instr', 'DEF.instrD']),
     N('opD', ['si.o0', 'fdec.op', 'fuse.op']),
     N('opIntD', ['fdec.opInt', 'ctl.op']),
     N('rdD', ['si.o1', 'DE.rdD']),
@@ -576,17 +579,17 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
     N('rs2D', ['si.o4', 'rf.ra2', 'frf.ra2', 'DE.rs2D', 'hz.rs2D', 'fhz.rs2D', 'fuse.rs2']),
     N('funct7D', ['si.o5', 'ctl.funct7', 'fdec.funct7', 'fuse.funct7', 'sr3.in']),
     N('rs3D', ['sr3.o1', 'frf.ra3', 'fhz.rs3D']),
-    N('rfRd1', ['rf.rd1', 'byA.a'], undefined), N('rfRd2', ['rf.rd2', 'byB.a'], undefined),
-    N('RD1D', ['byA.y', 'DE.rd1D'], undefined), N('RD2D', ['byB.y', 'DE.rd2D'], undefined),
+    N('rfRd1', ['rf.rd1', 'byA.a'], 'wire'), N('rfRd2', ['rf.rd2', 'byB.a'], 'wire'),
+    N('RD1D', ['byA.y', 'DE.rd1D'], 'wire'), N('RD2D', ['byB.y', 'DE.rd2D'], 'wire'),
     N('bypassA', ['hz.bypassA', 'byA.s']), N('bypassB', ['hz.bypassB', 'byB.s']),
-    N('ImmSrcD', ['ctl.immSrc', 'imm.src']), N('ImmExtD', ['imm.imm', 'DE.immD'], undefined),
+    N('ImmSrcD', ['ctl.immSrc', 'imm.src']), N('ImmExtD', ['imm.imm', 'DE.immD'], 'wire'),
     ...['aluSrcA', 'aluSrcB', 'memWrite', 'resultSrc', 'branch', 'jump', 'jalr'].map((f) => N(`${f}D`, [`ctl.${f}`, `DE.${f}D`], undefined)),
-    N('aluCtlD', ['ctl.aluCtl', 'DE.aluCtlD'], undefined),
+    N('aluCtlD', ['ctl.aluCtl', 'DE.aluCtlD'], 'wire'),
     N('ctlRegWrite', ['ctl.regWrite', 'rwx.a']),
-    N('isFlwD', ['fdec.flw', 'nflw.a', 'DEF.isFlwD', 'fuse.flw']), N('¬flw', ['nflw.y', 'rwx.b']),
+    N('isFlwD', ['fdec.flw', 'nflw.a', 'DEF.isFlwD', 'fuse.flw']), N('¬flw', ['nflw.y', 'rwx.b'], 'wire'),
     N('isFswD', ['fdec.fsw', 'DEF.isFswD', 'fuse.fsw']),
     N('toIntD', ['fdec.toInt', 'rwi.b', 'DEF.toIntD']),
-    N('RegWriteIntD', ['rwx.y', 'rwi.a']), N('regWriteD', ['rwi.y', 'DE.regWriteD']),
+    N('RegWriteIntD', ['rwx.y', 'rwi.a'], 'wire'), N('regWriteD', ['rwi.y', 'DE.regWriteD']),
     N('fWriteD', ['fdec.fWrite', 'DEF.fWriteD']),
     N('opfpD', ['fdec.opfp', 'fuse.opfp']),
     N('fpOpD', ['fdec.fpOp', 'DEF.fpOpD', 'fhz.fpOpD']),
@@ -594,29 +597,29 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
     N('usesF1', ['fuse.usesF1', 'fhz.usesF1']), N('usesF2', ['fuse.usesF2', 'fhz.usesF2']), N('usesF3', ['fuse.usesF3', 'fhz.usesF3']),
     N('readsX1', ['fuse.readsX1', 'fhz.readsX1']), N('readsX2', ['fuse.readsX2', 'fhz.readsX2']),
     N('isCsrD', ['fuse.isCsr', 'fhz.isCsrD', 'DEF.isCsrD']),
-    N('frfRd1', ['frf.rd1', 'fbyA.a'], undefined), N('frfRd2', ['frf.rd2', 'fbyB.a'], undefined), N('frfRd3', ['frf.rd3', 'fbyC.a'], undefined),
+    N('frfRd1', ['frf.rd1', 'fbyA.a'], 'wire'), N('frfRd2', ['frf.rd2', 'fbyB.a'], 'wire'), N('frfRd3', ['frf.rd3', 'fbyC.a'], 'wire'),
     N('FRD1D', ['fbyA.y', 'DEF.frd1D']), N('FRD2D', ['fbyB.y', 'DEF.frd2D']), N('FRD3D', ['fbyC.y', 'DEF.frd3D']),
     N('fbypassA', ['fhz.byA', 'fbyA.s']), N('fbypassB', ['fhz.byB', 'fbyB.s']), N('fbypassC', ['fhz.byC', 'fbyC.s']),
     // stall / flush: D waits (load-use, FP interlocks), E waits (fdiv / fsqrt), a taken branch flushes F and D
     N('lwStall', ['hz.lwStall', 'stD.a']), N('fpStall', ['fhz.stall', 'stD.b']),
-    N('stallD', ['stD.y', 'stAll.a', 'flD.a']),
+    N('stallD', ['stD.y', 'stAll.a', 'flD.a'], ['flD.a']),
     N('divStall', ['fpx.stall', 'stAll.b', 'ndv.a', 'EM.clr', 'EMF.clr']),
-    N('stall', ['stAll.y', 'go.a']),
+    N('stall', ['stAll.y', 'go.a'], 'wire'),
     N('¬divStall', ['ndv.y', 'DE.en', 'DEF.en', 'flDg.b']),
     N('flushOrStall', ['flD.y', 'flDg.a']),
     N('flushDE', ['flDg.y', 'DE.clr', 'DEF.clr']),
-    N('en1', ['en1.y', 'EM.en', 'EMF.en', 'MX.en', 'MXF.en', 'XW.en', 'XWF.en']),
-    N('noClear', ['zero.y', 'MX.clr', 'MXF.clr', 'XW.clr', 'XWF.clr']),
+    N('en1', ['en1.y', 'EM.en', 'EMF.en', 'MX.en', 'MXF.en', 'XW.en', 'XWF.en'], ['EMF.en', 'MX.en', 'MXF.en', 'XW.en', 'XWF.en']),
+    N('noClear', ['zero.y', 'MX.clr', 'MXF.clr', 'XW.clr', 'XWF.clr'], ['MXF.clr', 'XW.clr', 'XWF.clr']),
     // E
     N('validE', ['DE.validE', 'EM.validE', 'hz.validE'], ['hz.validE']),
     N('PCE', ['DE.pcE', 'EM.pcE', 'srcA.b', 'target.a'], ['srcA.b', 'target.a']),
-    N('PCPlus4E', ['DE.pcPlus4E', 'EM.pcPlus4E'], undefined),
-    N('RD1E', ['DE.rd1E', 'fwdA.d0'], undefined), N('RD2E', ['DE.rd2E', 'fwdB.d0'], undefined),
+    N('PCPlus4E', ['DE.pcPlus4E', 'EM.pcPlus4E'], 'wire'),
+    N('RD1E', ['DE.rd1E', 'fwdA.d0'], 'wire'), N('RD2E', ['DE.rd2E', 'fwdB.d0'], 'wire'),
     N('ImmExtE', ['DE.immE', 'EM.immE', 'srcB.b', 'target.b'], ['srcB.b', 'target.b']),
     N('rs1E', ['DE.rs1E', 'hz.rs1E']), N('rs2E', ['DE.rs2E', 'hz.rs2E']),
     N('rdE', ['DE.rdE', 'EM.rdE', 'hz.rdE', 'fhz.rdE'], ['hz.rdE', 'fhz.rdE']),
     N('regWriteE', ['DE.regWriteE', 'rwc.a']), N('regWriteE2', ['rwc.y', 'EM.regWriteE']),
-    N('memWriteE', ['DE.memWriteE', 'EM.memWriteE'], undefined),
+    N('memWriteE', ['DE.memWriteE', 'EM.memWriteE'], 'wire'),
     N('resultSrcE', ['DE.resultSrcE', 'EM.resultSrcE', 'hz.resultSrcE'], ['hz.resultSrcE']),
     N('ALUSrcAE', ['DE.aluSrcAE', 'srcA.s']), N('ALUSrcBE', ['DE.aluSrcBE', 'srcB.s']),
     N('BranchE', ['DE.branchE', 'npc.branch']), N('JumpE', ['DE.jumpE', 'npc.jump']), N('JalrE', ['DE.jalrE', 'npc.jalr']),
@@ -627,16 +630,16 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
     N('ResultX', ['resX.y', 'fwdA.d3', 'fwdB.d3']),
     N('SrcAE', ['fwdA.y', 'srcA.a', 'fpx.xa', 'fcsrE.xa'], ['fpx.xa', 'fcsrE.xa']),
     N('WriteDataE', ['fwdB.y', 'srcB.a', 'stData.a'], ['stData.a']),
-    N('SrcA', ['srcA.y', 'alu.a'], undefined), N('SrcB', ['srcB.y', 'alu.b'], undefined),
+    N('SrcA', ['srcA.y', 'alu.a'], 'wire'), N('SrcB', ['srcB.y', 'alu.b'], 'wire'),
     N('ALUResultE', ['alu.y', 'aluOrCsr.a', 'clr0.in'], ['clr0.in']),
     N('Zero', ['alu.zero', 'npc.zero']), N('Neg', ['alu.neg', 'npc.neg']), N('Ovf', ['alu.ovf', 'npc.ovf']), N('Carry', ['alu.carry', 'npc.carry']),
-    N('gT', ['gT.y', 'target.cin'], undefined), N('gJ', ['gJ.y', 'clr0.zero'], undefined),
+    { name: 'gT', ends: ['gT.y', 'target.cin'], via: { 'target.cin': [[P('target', 'cin')[0] - 2, P('gT', 'y')[1]], [P('target', 'cin')[0] - 2, P('target', 'cin')[1]]] } }, N('gJ', ['gJ.y', 'clr0.zero'], 'wire'),
     N('PCTargetE', ['target.s', 'pcmux.d1']), N('JalrTargetE', ['clr0.out', 'pcmux.d2']),
     N('PCSrcE', ['npc.pcSrc', 'pcmux.s', 'hz.pcSrcE']),
     N('InstrE', ['DEF.instrE', 'fpx.instr', 'siE.in']),
     N('opE', ['siE.o0', 'fcsrE.op']), N('csrF3E', ['siE.o2', 'fcsrE.funct3']), N('csrRs1E', ['siE.o3', 'fcsrE.rs1']),
     N('csrRs2E', ['siE.o4', 'fcsrE.rs2']), N('csrF7E', ['siE.o5', 'fcsrE.funct7']),
-    N('FRD1E', ['DEF.frd1E', 'fA.a'], undefined), N('FRD2E', ['DEF.frd2E', 'fB.a'], undefined), N('FRD3E', ['DEF.frd3E', 'fC.a'], undefined),
+    N('FRD1E', ['DEF.frd1E', 'fA.a'], 'wire'), N('FRD2E', ['DEF.frd2E', 'fB.a'], 'wire'), N('FRD3E', ['DEF.frd3E', 'fC.a'], 'wire'),
     N('ffwdAD', ['fhz.fwdA', 'DEF.fwdAD']), N('ffwdBD', ['fhz.fwdB', 'DEF.fwdBD']), N('ffwdCD', ['fhz.fwdC', 'DEF.fwdCD']),
     N('ffwdA', ['DEF.fwdAE', 'fA.s']), N('ffwdB', ['DEF.fwdBE', 'fB.s']), N('ffwdC', ['DEF.fwdCE', 'fC.s']),
     N('FAE', ['fA.y', 'fpx.a']), N('FBE', ['fB.y', 'fpx.b', 'stData.b']), N('FCE', ['fC.y', 'fpx.c']),
@@ -651,16 +654,16 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
     N('fWriteE', ['DEF.fWriteE', 'EMF.fWriteE', 'fhz.fWriteE']), N('toIntE', ['DEF.toIntE', 'EMF.toIntE', 'fhz.toIntE']),
     N('fpOpE', ['DEF.fpOpE', 'EMF.fpOpE', 'fhz.fpOpE']), N('isFlwE', ['DEF.isFlwE', 'EMF.isFlwE']), N('isCsrE', ['DEF.isCsrE', 'EMF.isCsrE', 'fhz.csrE']),
     // M
-    N('validM', ['EM.validM', 'MX.validM'], undefined), N('PCM', ['EM.pcM', 'MX.pcM'], undefined),
+    N('validM', ['EM.validM', 'MX.validM'], 'wire'), N('PCM', ['EM.pcM', 'MX.pcM'], 'wire'),
     N('PCPlus4M', ['EM.pcPlus4M', 'MX.pcPlus4M', 'fwdM.d2'], ['fwdM.d2']),
     N('ALUResultM', ['EM.aluResultM', 'dm.addr', 'MX.aluResultM', 'fwdM.d0', 'fwdM.d1'], ['fwdM.d0', 'fwdM.d1']),
-    N('WriteDataM', ['EM.writeDataM', 'dm.wd'], undefined),
+    N('WriteDataM', ['EM.writeDataM', 'dm.wd'], 'wire'),
     N('ImmExtM', ['EM.immM', 'MX.immM', 'fwdM.d3'], ['fwdM.d3']),
     N('rdM', ['EM.rdM', 'MX.rdM', 'hz.rdM', 'fhz.rdM'], ['hz.rdM', 'fhz.rdM']),
     N('regWriteM', ['EM.regWriteM', 'MX.regWriteM', 'hz.regWriteM'], ['hz.regWriteM']),
     N('MemWriteM', ['EM.memWriteM', 'dm.we']),
     N('resultSrcM', ['EM.resultSrcM', 'MX.resultSrcM', 'fwdM.s'], ['fwdM.s']),
-    N('ReadDataM', ['dm.rd', 'MX.readDataM'], undefined),
+    N('ReadDataM', ['dm.rd', 'MX.readDataM'], 'wire'),
     ...['p', 'mc', 'dsat', 'cBig', 'eB', 'sB', 'effSub'].map((f) => N(`${f}M`, [`EMF.${f}M`, `fadd.${f}`])),
     N('rmM', ['EMF.rmM', 'fadd.rm', 'MXF.rmM', 'ftoi.rm']),
     N('signM', ['fadd.sign', 'MXF.signM']), N('exM', ['fadd.ex', 'MXF.exM']), N('sumM', ['fadd.sum', 'MXF.sumM']),
@@ -672,7 +675,7 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
     N('fWriteM', ['EMF.fWriteM', 'MXF.fWriteM', 'fhz.fWriteM']), N('toIntM', ['EMF.toIntM', 'MXF.toIntM', 'fhz.toIntM']),
     N('fpOpM', ['EMF.fpOpM', 'MXF.fpOpM', 'fhz.fpOpM']), N('isCsrM', ['EMF.isCsrM', 'MXF.isCsrM', 'fhz.csrM']),
     // X
-    N('validX', ['MX.validX', 'XW.validX'], undefined), N('PCX', ['MX.pcX', 'XW.pcX'], undefined),
+    N('validX', ['MX.validX', 'XW.validX'], 'wire'), N('PCX', ['MX.pcX', 'XW.pcX'], 'wire'),
     N('PCPlus4X', ['MX.pcPlus4X', 'XW.pcPlus4X', 'resX.d2'], ['resX.d2']),
     N('ALUResultX', ['MX.aluResultX', 'XW.aluResultX', 'resX.d0'], ['resX.d0']),
     N('ReadDataX', ['MX.readDataX', 'XW.readDataX', 'resX.d1'], ['resX.d1']),
@@ -687,13 +690,13 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
     N('fpOpX', ['MXF.fpOpX', 'XWF.fpOpX', 'fhz.fpOpX']), N('isCsrX', ['MXF.isCsrX', 'XWF.isCsrX', 'fhz.csrX']),
     // W
     N('validW', ['XW.validW', 'validW']), N('PCW', ['XW.pcW', 'pcW']),
-    N('ALUResultW', ['XW.aluResultW', 'resW.d0'], undefined),
+    N('ALUResultW', ['XW.aluResultW', 'resW.d0'], 'wire'),
     N('ReadDataW', ['XW.readDataW', 'resW.d1', 'fwres.b'], ['fwres.b']),
     N('PCPlus4W', ['XW.pcPlus4W', 'resW.d2'], ['resW.d2']), N('ImmExtW', ['XW.immW', 'resW.d3'], ['resW.d3']),
     N('rdW', ['XW.rdW', 'rf.wa', 'frf.wa', 'hz.rdW', 'fhz.rdW']),
     N('regWriteW', ['XW.regWriteW', 'rf.we', 'hz.regWriteW']),
     N('resultSrcW', ['XW.resultSrcW', 'resW.s']),
-    N('IntResultW', ['resW.y', 'xres.a'], undefined),
+    N('IntResultW', ['resW.y', 'xres.a'], 'wire'),
     N('fpResultW', ['XWF.fpResultW', 'xres.b', 'fwres.a']),
     N('toIntW', ['XWF.toIntW', 'xres.s']), N('isFlwW', ['XWF.isFlwW', 'fwres.s']),
     N('FResultW', ['fwres.y', 'frf.wd', 'fA.b', 'fB.b', 'fC.b', 'fbyA.b', 'fbyB.b', 'fbyC.b']),

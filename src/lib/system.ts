@@ -487,13 +487,13 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
   const alignY = (inst: string, def: ComponentDef, x: number, port: string, y: number) => place(inst, def, [x, y - g(def).ports[port].pos[1]]);
 
   const Y = 36;
-  alignY('pcmux', M4, 4, 'y', Y);
-  alignY('trapmux', M4, 12, 'd0', Y);
+  alignY('pcmux', M4, 0, 'y', Y);
+  alignY('trapmux', M4, 10, 'd0', Y);
   alignY('pc', PC, 22, 'd', P('trapmux', 'y')[1]);
   place('one', TIE1, [17, P('pc', 'en')[1] - 1]);
   alignY('imem', IM, 36, 'addr', P('pc', 'q')[1]);
   alignY('si', SI, 56, 'in', P('imem', 'data')[1]);
-  alignY('rf', RF, 70, 'wa', P('si', 'o1')[1]);
+  alignY('rf', RF, 74, 'wa', P('si', 'o1')[1]);
   alignY('imm', IMM_GEN, 70, 'instr', Y + 22);
   const rfR = at.get('rf')![0] + g(RF).w;
   alignY('srcA', M2, rfR + 8, 'a', P('rf', 'rd1')[1]);
@@ -504,11 +504,11 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
   alignY('dm', DM, aluR + 30, 'addr', P('alu', 'y')[1]);
   alignY('io', IO_UNIT, aluR + 30, 'addr', Y + 70);
   alignY('ldsel', M2, aluR + 30 + g(DM).w + 8, 'a', P('dm', 'rdata')[1]);
-  alignY('ld', LOAD_EXTRACT, P('ldsel', 'y')[0] + 6, 'rdata', P('ldsel', 'y')[1]);
+  alignY('ld', LOAD_EXTRACT, P('ldsel', 'y')[0] + 10, 'rdata', P('ldsel', 'y')[1]);
   alignY('res', M8, P('ld', 'value')[0] + 8, 'd1', P('ld', 'value')[1]);
   place('plus4', P4, [36, Y - 10]);
   alignY('target', ADD, rfR + 18, 'a', Y + 26);
-  place('gndT', TIE0, [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 3]);
+  place('gndT', TIE0, [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 5]);
   alignY('clr0', CLEAR_BIT0, aluR + 12, 'in', Y + 40);
   place('gndJ', TIE0, [P('clr0', 'zero')[0] - 6, P('clr0', 'zero')[1] + 1]);
   place('ctl', CONTROL, [26, 0]);
@@ -517,8 +517,9 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
   const yS = Y + 60;
   place('imm12', IMM12, [52, yS - 6]);
   place('sys', SYSD, [4, yS + 4]);
-  place('csr', CSRU, [4 + g(SYSD).w + 10, yS + 4]);
-  place('trap', TRAP_UNIT, [4 + g(SYSD).w + 10 + g(CSRU).w + 10, yS + 4]);
+  // 24 units between the blocks: both facing sides carry labels
+  place('csr', CSRU, [4 + g(SYSD).w + 24, yS + 4]);
+  place('trap', TRAP_UNIT, [4 + g(SYSD).w + 24 + g(CSRU).w + 24, yS + 4]);
   // glue logic
   const glue: [string, ComponentDef][] = [
     ['ntrap', NOT], ['rw', OR], ['rwq', AND], ['isIO', splitter([31, 1])], ['nio', NOT], ['memWq', andN(3)], ['ioWq', andN(3)],
@@ -526,12 +527,11 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
     ['ldMis', AND], ['stMis', AND], ['isLoad', AND], ['nres1', NOT], ['taken', OR], ['tgt1', splitter([1, 1, 30])], ['fMis', AND],
     ['psplit', splitter([1, 1])], ['rssplit', splitter([1, 1])], ['z32', constWord(32, 0)],
   ];
-  let gy = yS - 30;
-  for (const [n, d] of glue) {
-    place(n, d, [aluR - 10, gy]);
-    gy += g(d).h + 2;
-  }
-  void gy;
+  // glue gates on a grid right of the trap unit, clear of the datapath (later additions continue it)
+  const gridX0 = 4 + g(SYSD).w + 24 + g(CSRU).w + 24, gridY0 = yS + 4 + Math.max(g(CSRU).h, g(SYSD).h, g(IO_UNIT).h) + 14;
+  let gi = 0;
+  const gridAt = (): [number, number] => { const i = gi++; return [gridX0 + 24 * (i % 4), gridY0 + 14 * Math.floor(i / 4)]; };
+  for (const [n, d] of glue) place(n, d, gridAt());
 
   const labels: Record<string, string> = { pcmux: 'next PC', trapmux: 'trap / mret', pc: 'PC', srcA: 'SrcA', srcB: 'SrcB', res: 'result', target: 'PC + imm', ldsel: 'mem / I/O', sys: 'system decode', csr: 'CSRs', trap: 'trap unit', io: 'I/O' };
   const instances: InstanceDef[] = [...at.keys()].map((name) => ({ name, def: defs.get(name)!, at: at.get(name), label: labels[name] }));
@@ -638,7 +638,7 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
   ];
   // CSR writes happen only if the instruction does not trap
   nets.splice(nets.findIndex((n) => n.name === 'csrWriteRaw'), 1);
-  instances.push({ name: 'csrWq', def: AND, at: [aluR - 20, yS - 30] });
+  instances.push({ name: 'csrWq', def: AND, at: gridAt() });
   defs.set('csrWq', AND);
   nets.push({ name: 'csrWriteRaw', ends: ['sys.csrWrite', 'csrWq.a'], tags: true });
   nets.find((n) => n.name === 'NoTrap')!.ends.push('csrWq.b');
@@ -652,12 +652,12 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
     // ---- M extension: the multiply/divide unit, a result multiplexer, and the stall it causes
     const xM = P('res', 'y')[0] + 8, yM = yS + Math.max(g(CSRU).h, g(SYSD).h) + 16;
     const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => { instances.push({ name, def, at: xy, label }); defs.set(name, def); at.set(name, xy); };
-    add('md', MDU, [4 + g(SYSD).w + 10, yM], 'M unit');
+    add('md', MDU, [4 + g(SYSD).w + 24, yM], 'M unit');
     add('mres', M2, [xM, P('res', 'y')[1] - g(M2).ports.a.pos[1]], 'ALU / M');
-    add('nstall', NOT, [17, P('pc', 'en')[1] - 1]);
-    add('rwm', AND, [aluR - 20, yS - 24]);
-    add('nbusy', NOT, [aluR - 20, yS - 18]);
-    add('irqg', AND, [aluR - 20, yS - 14]);
+    add('nstall', NOT, gridAt());
+    add('rwm', AND, gridAt());
+    add('nbusy', NOT, gridAt());
+    add('irqg', AND, gridAt());
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
     const net = (name: string) => nets.find((n) => n.name === name)!;
     nets.splice(nets.indexOf(net('en')), 1);
@@ -675,7 +675,7 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
       { name: 'MResult', ends: ['md.y', 'mres.b'], tags: true },
       { name: 'WriteBack', ends: ['mres.y', 'rf.wd'], tags: true },
       { name: 'stall', ends: ['md.stall', 'nstall.a'], tags: true },
-      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwm.b', 'retire'], tags: ['rwm.b', 'retire'] },
+      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwm.b', 'retire'], tags: ['pc.en', 'rwm.b', 'retire'] },
       { name: 'RegWriteQ', ends: ['rwm.y', 'rf.we'], tags: true },
       { name: 'divBusy', ends: ['md.busy', 'nbusy.a'], tags: true },
       { name: '¬divBusy', ends: ['nbusy.y', 'irqg.b'], tags: true },

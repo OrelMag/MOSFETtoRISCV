@@ -7,6 +7,7 @@ import { PROGRAMS } from '../src/riscv/programs';
 import type { ComponentDef } from '../src/sim/types';
 import { netlistOf } from '../src/sim/types';
 import { routeNetlist, wireOverlaps } from '../src/view/route';
+import { cpuTops } from './tops';
 
 // Build the parametric designs the chapters show, so their schematics are in the registry too.
 const words = assemble(PROGRAMS[0].source).words;
@@ -29,6 +30,7 @@ function allDefs(): ComponentDef[] {
     for (const i of netlistOf(d)?.instances ?? []) visit(i.def);
   };
   for (const d of registry.values()) visit(d);
+  for (const d of cpuTops()) visit(d); // top-level CPUs are not registered
   return [...seen];
 }
 

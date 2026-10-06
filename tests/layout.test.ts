@@ -6,6 +6,7 @@ import { PROGRAMS } from '../src/riscv/programs';
 import { netlistOf } from '../src/sim/types';
 import { labelOverlaps } from '../src/view/route';
 import { families, initialParams } from '../src/lib/resolve';
+import { cpuTops } from './tops';
 
 // Build the parametric designs the chapters show, so their schematics are in the registry too.
 const words = assemble(PROGRAMS[0].source).words;
@@ -22,7 +23,9 @@ cachedMemory(6, 2);
 for (const f of families) f.make(initialParams(f));
 
 describe('schematic labels', () => {
-  const defs = [...registry.values()].filter((d) => d.netlist);
+  // the top-level CPUs are not registered (only their parts are): add them explicitly
+  const tops = cpuTops();
+  const defs = [...new Set([...registry.values(), ...tops])].filter((d) => d.netlist);
   it.each(defs.map((d) => [d.id, d] as const))('%s: no label hides another', (_, d) => {
     expect(labelOverlaps(d, netlistOf(d)!)).toEqual([]);
   });
