@@ -162,9 +162,9 @@ describe('compileChip: diagnostics', () => {
     expect(c.def.ports.map((p) => p.name)).toEqual(['a', 'b', 's', 'c']);
   });
 
-  it('a ROM is not available yet; never throws on garbage', () => {
-    const doc = { ...base, parts: [...base.parts, part('r', { rom: { k: 2, w: 8, addr: 'word', lang: 'hex', src: '' } }, [30, 0])] };
-    expect(errors(compileLib(doc)).map((d) => d.msg)).toEqual(['r: ROM: not yet available']);
+  it('a ROM with a bad program names its first error; never throws on garbage', () => {
+    const doc = { ...base, parts: [...base.parts, part('r', { rom: { k: 2, w: 8, addr: 'word', lang: 'hex', src: '1 zz' } }, [30, 0])] };
+    expect(errors(compileLib(doc)).map((d) => d.msg)).toEqual(['r: ROM program: line 1: not a hex number: "zz"']);
     const junk = { id: 'u_j', name: 'J', pins: [{ id: 'p' }], parts: [{ id: 'z', ref: {} }], wires: [{ id: 'w', a: {}, b: {} }], labels: [] } as unknown as ChipDoc;
     const c = compileChip(junk, (ref) => partDef(ref, () => undefined));
     expect(c.diags.length).toBeGreaterThan(0);
