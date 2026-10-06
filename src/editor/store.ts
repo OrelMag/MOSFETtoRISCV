@@ -239,7 +239,8 @@ export function exportJson(ws: Workspace, ids: string[]): string {
   return JSON.stringify({ format: FORMAT, schema: SCHEMA, chips: closure(ws, ids) }, null, 2);
 }
 
-export type Imported = { ws: Workspace; added: string[]; renamed: Record<string, string>; skipped: string[] };
+/** `order`: the id every incoming chip ended up as (added or already there), dependencies first. */
+export type Imported = { ws: Workspace; added: string[]; renamed: Record<string, string>; skipped: string[]; order: string[] };
 
 /** Rewrites the chip refs of a chip's parts (only copying parts that change). */
 function renameRefs(c: ChipDoc, renamed: Record<string, string>): ChipDoc {
@@ -257,27 +258,40 @@ function depOrder(chips: ChipDoc[]): ChipDoc[] {
  * Adds the chips of an exported file (or a decoded share link) to the workspace. A chip whose id
  * exists with the same content is skipped; with different content it comes in under a new id
  * (u_x_2) and the imported chips that place it are rewritten. Existing chips are never touched.
+ * A chip that an earlier import of the same file already renamed (u_x_2 with the same content)
+ * is recognized and skipped too, so opening a link twice does not pile up copies.
  */
 export function importChips(chips: ChipDoc[], ws: Workspace): Imported {
   const incoming = depOrder(chips);
   const taken = new Set([...Object.keys(ws.chips), ...incoming.map((c) => c.id)]);
   const all = { ...ws.chips };
-  const added: string[] = [], skipped: string[] = [];
+  const added: string[] = [], skipped: string[] = [], order: string[] = [];
   const renamed: Record<string, string> = {};
+  /** Every incoming id → the id it ends up as (refs of later chips are rewritten through it). */
+  const ids: Record<string, string> = {};
+  const earlier = (c: ChipDoc) => Object.keys(ws.chips).find((k) => k.startsWith(`${c.id}_`) && /^\d+$/.test(k.slice(c.id.length + 1)) && same(ws.chips[k], { ...c, id: k }));
   for (const c0 of incoming) {
-    const c = renameRefs(c0, renamed);
+    const c = renameRefs(c0, ids);
     const have = ws.chips[c.id];
-    if (have && same(have, c)) { skipped.push(c.id); continue; }
+    const prev = have && !same(have, c) ? earlier(c) : undefined;
+    if (have && (prev || same(have, c))) {
+      const id = prev ?? c.id;
+      if (prev) ids[c.id] = prev;
+      skipped.push(id);
+      order.push(id);
+      continue;
+    }
     let id = c.id;
     if (have) {
       id = uniqueName(c.id, taken);
       taken.add(id);
-      renamed[c.id] = id;
+      renamed[c.id] = ids[c.id] = id;
     }
     all[id] = id === c.id ? c : { ...c, id };
     added.push(id);
+    order.push(id);
   }
-  return { ws: added.length ? { ...ws, chips: all } : ws, added, renamed, skipped };
+  return { ws: added.length ? { ...ws, chips: all } : ws, added, renamed, skipped, order };
 }
 
 export function importJson(text: string, ws: Workspace): Imported | { error: string } {
