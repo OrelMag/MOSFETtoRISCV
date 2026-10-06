@@ -107,6 +107,7 @@ describe('compileChip: diagnostics', () => {
     expect(e[0].pins).toEqual(['a']);
     expect(e[0].parts).toEqual(['x', 'n']);
     expect(c.netOfWire.get('w1')).toBe(-1);
+    expect(c.netOfEnd.get('pin:a')).toBe(-1);
     expect(netlistOf(c.def)!.nets).toHaveLength(3);
     expect(checkSimulatable(c)).toEqual([]);
   });

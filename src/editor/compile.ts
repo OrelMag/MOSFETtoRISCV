@@ -37,7 +37,7 @@ export interface Compiled {
   diags: Diag[];
   /** Wire id → index into the netlist's nets; -1 when its group was dropped or the wire is broken. */
   netOfWire: Map<string, number>;
-  /** endKey of a part port (`p:part.port`) or pin (`pin:id`) → net index (absent: unconnected). */
+  /** endKey of a part port (`p:part.port`) or pin (`pin:id`) → net index; -1 dropped, absent unconnected. */
   netOfEnd: Map<string, number>;
   /** Pointer id → net index; -1 when dropped, absent when it touches nothing. */
   netOfLabel: Map<string, number>;
@@ -236,6 +236,7 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
     };
     const drop = () => {
       for (const l of g.labels) netOfLabel.set(l, -1);
+      for (const e of g.eps) netOfEnd.set(e.key, -1);
     };
     if (!g.eps.length) {
       if (g.wires.length) warn('wire connects no pin or part', where);
