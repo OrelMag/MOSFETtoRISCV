@@ -6,6 +6,7 @@
 
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
+import { IMM_SRC } from '../riscv/isa';
 import { alu, constWord, orN } from './alu';
 import { koggeStone } from './fastadd';
 import { andN, busMux2, incrementer, muxTree, rca } from './combinational';
@@ -121,11 +122,11 @@ function wiring(id: string, name: string, map: (i: number) => BitSrc, summary: s
   });
 }
 
-export const IMM_I = wiring('imm_i', 'I-imm (wiring)', (i) => (i < 12 ? 20 + i : 31), 'instr[31:20], sign-extended: bit 31 is copied into every upper bit.');
-export const IMM_S = wiring('imm_s', 'S-imm (wiring)', (i) => (i < 5 ? 7 + i : i < 11 ? 25 + (i - 5) : 31), '{instr[31:25], instr[11:7]}, sign-extended. The split keeps rs1/rs2 in the same place in every format.');
-export const IMM_B = wiring('imm_b', 'B-imm (wiring)', (i) => (i === 0 ? 'zero' : i < 5 ? 7 + i : i < 11 ? 25 + (i - 5) : i === 11 ? 7 : 31), 'Branch offset: like S but in units of 2 bytes, so bit 0 is always 0 and bit 11 moves to instr[7].');
-export const IMM_U = wiring('imm_u', 'U-imm (wiring)', (i) => (i < 12 ? 'zero' : i), 'instr[31:12] in the upper 20 bits, zeros below (lui, auipc).');
-export const IMM_J = wiring('imm_j', 'J-imm (wiring)', (i) => (i === 0 ? 'zero' : i < 11 ? 20 + i : i === 11 ? 20 : i < 20 ? i : 31), 'Jump offset: instr[31|19:12|20|30:21] scrambled so that the sign bit is always instr[31].');
+export const IMM_I = wiring('imm_i', 'I-imm (wiring)', IMM_SRC.I, 'instr[31:20], sign-extended: bit 31 is copied into every upper bit.');
+export const IMM_S = wiring('imm_s', 'S-imm (wiring)', IMM_SRC.S, '{instr[31:25], instr[11:7]}, sign-extended. The split keeps rs1/rs2 in the same place in every format.');
+export const IMM_B = wiring('imm_b', 'B-imm (wiring)', IMM_SRC.B, 'Branch offset: like S but in units of 2 bytes, so bit 0 is always 0 and bit 11 moves to instr[7].');
+export const IMM_U = wiring('imm_u', 'U-imm (wiring)', IMM_SRC.U, 'instr[31:12] in the upper 20 bits, zeros below (lui, auipc).');
+export const IMM_J = wiring('imm_j', 'J-imm (wiring)', IMM_SRC.J, 'Jump offset: instr[31|19:12|20|30:21] scrambled so that the sign bit is always instr[31].');
 
 /** Immediate generator: all five formats are pure wiring; a multiplexer picks one (ImmSrc). */
 export const IMM_GEN: ComponentDef = (() => {
@@ -180,7 +181,8 @@ endmodule`,
 
 // ---- control ---------------------------------------------------------------------------------
 
-const CLASSES: [string, number][] = [
+/** Opcode classes the decoder recognises: name and opcode[6:2]. */
+export const CLASSES: [string, number][] = [
   ['R', 0b01100], ['I', 0b00100], ['LOAD', 0b00000], ['STORE', 0b01000], ['BRANCH', 0b11000],
   ['JAL', 0b11011], ['JALR', 0b11001], ['LUI', 0b01101], ['AUIPC', 0b00101],
 ];
