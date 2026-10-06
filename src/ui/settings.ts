@@ -3,6 +3,8 @@
 import type { Radix } from '../sim/values';
 
 export type Theme = 'auto' | 'light' | 'dark';
+/** What one slow-mode tick advances: a gate delay, a clock cycle, or a retired instruction. */
+export type TraceLevel = 'gate' | 'cycle' | 'instr';
 export type Palette = 'default' | 'cb' | 'lsim' | 'contrast' | 'print';
 
 /** Wire palettes (colours live in styles/palettes.css). */
@@ -23,6 +25,9 @@ interface State {
   analyzer: boolean;
   /** Gate delays per second when animating propagation. */
   speed: number;
+  /** CPU slow mode: the step unit, and steps (cycles or instructions) per second. */
+  traceLevel: TraceLevel;
+  traceRate: number;
   /** chapterId → indices of visited steps */
   visited: Record<string, number[]>;
   /** "chapterId:step" → solved */
@@ -30,7 +35,7 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, analyzer: false, speed: 12, visited: {}, solved: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {} };
 
 function load(): State {
   try {
@@ -56,7 +61,9 @@ export const settings = {
   get animate() { return state.animate; },
   get analyzer() { return state.analyzer; },
   get speed() { return state.speed; },
-  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'analyzer' | 'speed'>(k: K, v: State[K]): void {
+  get traceLevel() { return state.traceLevel; },
+  get traceRate() { return state.traceRate; },
+  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
     state[k] = v;
     save();
     listeners.forEach((f) => f());
