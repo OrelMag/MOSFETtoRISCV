@@ -108,11 +108,13 @@ src/lib/       the component library (registered in `registry` via define())
                  singleCycleCpu(…, { fpu }) adds the f register file (regfile(5, 32, false))
   mpdecode.ts    MP_DECODE (atomics, csrr mhartid), ARBITER2 (round-robin)
   multicore.ts   dualCore(program): two singleCycleCpu(…, { shared }) cores + arbiter + shared memory
-  builder.ts     Builder: column-by-column netlist builder for blocks read by drilling in (fpu.ts keeps a copy)
+  builder.ts     Builder: column-by-column netlist builder for blocks read by drilling in (fpu, fppipe, coding, divide)
   coding.ts      magComparator(n, signed), priorityEncoder(n), encoder(n), demux(k, w), popcount(n), absValue(n),
                  parity(n), hammingEnc/Dec(k) (SEC-DED, with TS reference models), eccChannel(k)
   divide.ts      nrDivStep / nrArrayDiv / nrSeqDivider (non-restoring), iterCtrl(n) (load / step / done control),
                  SRT_SELECT, srtStep, srtNorm, srtFinish, srtDivider(n) (radix-2 SRT, carry-save remainder)
+  multiply.ts    seqMul(n) (shift and add), boothRow / boothPP / boothReduce / boothTree / boothMul(n) (radix-4 Booth,
+                 sign-constant trick), pipeMul(n) (3-stage pipelined Booth)
   muldiv.ts      ppRow, arrayMul(n), compressor()/csa(n) (3:2 rows with word offsets), treeMul(n, signed,
                  outW) (Wallace + KS), MUL32, BOOTH_ENC, divStep, arrayDiv, seqDivider(n), condNegate, MDU
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR

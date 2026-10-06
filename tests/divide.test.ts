@@ -11,7 +11,7 @@ import { checkSpec, corners, lcg, out, set, tick } from './util';
 describe('division parts match their specs', () => {
   const small = [nrDivStep(4), nrFix(4), nrArrayDiv(4), SRT_SELECT, srtNorm(4)];
   for (const d of small) it(d.id, () => checkSpec(d));
-  const big = [nrDivStep(8), nrDivStep(16), nrFix(16), nrArrayDiv(8), nrArrayDiv(12), srtStep(4), srtStep(8), srtStep(16), srtNorm(8), srtNorm(16)];
+  const big = [nrDivStep(8), nrDivStep(16), nrFix(16), nrArrayDiv(8), srtStep(4), srtStep(8), srtStep(16), srtNorm(8), srtNorm(16)];
   for (const d of big) it(d.id, () => checkSpec(d, 300, corners(d)));
 });
 

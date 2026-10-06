@@ -18,6 +18,7 @@ import { fpAdd, fpCompare, fpMul, fpUnpack, lzc, shiftLeft } from './fpu';
 import { cachedMemory, wayLookup2 } from './cache';
 import { bankedMemory } from './lsu';
 import { clearableRegister } from './pipeline';
+import { boothMul, pipeMul, seqMul } from './multiply';
 import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
 import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
 
@@ -129,6 +130,7 @@ export const families: Family[] = [
     id: 'wmul', name: 'Wallace-tree multiplier', category: 'arithmetic', params: [bits([4, 8, 16], 8), flag('signed', 'signed', 'unsigned')],
     key: (p) => `wmul${p.bits}${p.signed ? 's' : ''}`, make: (p) => treeMul(p.bits, p.signed === 1),
   },
+  nBit('bmul', 'Booth multiplier (signed)', 'arithmetic', [4, 8, 16, 32], 8, (n) => `bmul${n}`, boothMul),
   nBit('divstep', 'Division step (restoring)', 'arithmetic', [2, 4, 8, 16, 32], 4, (n) => `divstep${n}${n >= 16 ? 'f' : ''}`, (n) => divStep(n)),
   nBit('adiv', 'Array divider', 'arithmetic', [2, 4, 8, 16], 4, (n) => `adiv${n}`, arrayDiv),
   nBit('nrstep', 'Division step (non-restoring)', 'arithmetic', [2, 4, 8, 16, 32], 4, (n) => `nrstep${n}${n >= 16 ? 'f' : ''}`, (n) => nrDivStep(n)),
@@ -180,6 +182,8 @@ export const families: Family[] = [
   nBit('reg', 'Register', 'sequential', [1, 2, 4, 8, 16], 4, (n) => `reg${n}`, register),
   nBit('creg', 'Register with clear', 'sequential', [1, 4, 8, 16, 32], 4, (n) => `creg${n}`, clearableRegister),
   nBit('counter', 'Counter', 'sequential', [2, 3, 4, 8], 4, (n) => `counter${n}`, counter),
+  nBit('smul', 'Iterative multiplier', 'sequential', [4, 8, 16, 32], 8, (n) => `smul${n}`, seqMul),
+  nBit('pmul', 'Pipelined multiplier', 'sequential', [4, 8, 16, 32], 8, (n) => `pmul${n}`, pipeMul),
   nBit('sdiv', 'Iterative divider', 'sequential', [4, 8, 16, 32], 8, (n) => `sdiv${n}`, seqDivider),
   nBit('nrsdiv', 'Iterative non-restoring divider', 'sequential', [4, 8, 16, 32], 8, (n) => `nrsdiv${n}`, nrSeqDivider),
   nBit('srtdiv', 'Iterative SRT divider', 'sequential', [4, 8, 16, 32], 8, (n) => `srtdiv${n}`, srtDivider),

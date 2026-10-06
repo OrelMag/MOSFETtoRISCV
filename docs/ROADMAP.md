@@ -137,7 +137,9 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   RV32IM system CPU (104k NAND) with one-cycle multiplies and 34-cycle stalling divides, co-simulated per retirement
 - ✅ Non-restoring division (step, array, iterative) and radix-2 SRT (carry-save remainder, 4-bit digit selection,
   normalization, signed-digit quotient), compared on area, step depth and clock period
-- ⏳ Full Booth-recoded multiplier; radix-4 SRT; pipelined multiplier in the pipelined CPU
+- ✅ Iterative shift-and-add multiplier; full radix-4 Booth multiplier (rows, +1 bits, one sign constant, 3:2 tree),
+  measured against Baugh–Wooley; 3-stage pipelined Booth multiplier (latency 4, one product per cycle)
+- ⏳ Radix-4 SRT; pipelined multiplier in the pipelined CPU
 - ⏳ Passing the official `riscv-tests` / architecture tests in the browser (stretch)
 
 ### Phase 8 — Memory hierarchy 🚧

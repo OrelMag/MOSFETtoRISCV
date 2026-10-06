@@ -1,7 +1,7 @@
 // A small netlist builder for blocks best read by drilling into their sub-units: instances are
 // added in columns (left to right as data flows) and nets are collected per driver, so a
 // component can be written as a sequence of operations. Nets with several sinks, or driven by a
-// component pin, are drawn as labels. (fpu.ts has its own copy of this class.)
+// component pin, are drawn as labels.
 
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef } from '../sim/types';
