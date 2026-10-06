@@ -6,9 +6,10 @@ import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, netlistOf } from '../sim/types';
 import { formatBits, type Radix } from '../sim/values';
 import { icon, s } from '../ui/dom';
+import { Camera, installPanZoom } from './camera';
 import type { ViewCtx } from './context';
 import { hopPathData, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type RoutedNet, type TapLabel } from './route';
-import { drawSymbol, portLabel } from './symbols';
+import { drawPinGlyph, drawSymbol, placePinValue } from './symbols';
 
 export interface SchematicEvents {
   open(child: string): void;
@@ -41,7 +42,7 @@ interface WireEls {
 interface PinEls {
   pin: PinGeom;
   g: SVGGElement;
-  name?: SVGTextElement;
+  name: SVGTextElement;
   value?: SVGTextElement;
   valueBg?: SVGRectElement;
   /** The wire inside that ends on this pin. */
@@ -52,7 +53,7 @@ export function bitClass(b: Bit | undefined): string {
   return b === B1 ? 'v1' : b === B0 ? 'v0' : b === BZ ? 'vz' : 'vx';
 }
 
-function busClass(bits: Bit[]): string {
+export function busClass(bits: Bit[]): string {
   if (bits.some((b) => b === BX)) return 'bus vx';
   if (bits.every((b) => b === BZ)) return 'bus vz';
   return bits.some((b) => b === B1) ? 'bus bus1' : 'bus bus0';
@@ -65,7 +66,7 @@ export class SchematicView {
   private pins: PinEls[] = [];
   private insts = new Map<string, SVGGElement>();
   private bbox = { x: 0, y: 0, w: 10, h: 10 };
-  private vb = { x: 0, y: 0, w: 10, h: 10 };
+  private cam: Camera;
   private radixOverride = new Map<number, Radix>();
   private interactive = false;
   private selected: string | null = null;
@@ -88,7 +89,21 @@ export class SchematicView {
     this.tooltip = document.createElement('div');
     this.tooltip.className = 'wire-tip';
     host.append(this.el, this.tooltip);
-    this.installPanZoom();
+    this.cam = new Camera(this.el, host);
+    installPanZoom(this.el, this.cam, {
+      canStart: (e) => !(e.target as Element).closest('.inst, .pin.clickable, .bus-label'),
+      onTap: (target) => {
+        const n = target.closest('[data-net]');
+        if (n) this.clickNet(Number(n.getAttribute('data-net')), target);
+        else {
+          this.select(null);
+          this.events.select(null);
+          this.selectNet(-1);
+        }
+      },
+      onHover: (e) => this.hoverTip(e),
+      onLeave: () => (this.tooltip.style.opacity = '0'),
+    });
   }
 
   /** Draw the inside of ctx. `interactive` makes the root input pins clickable. */
@@ -240,34 +255,11 @@ export class SchematicView {
 
     // The component's own pins
     for (const pin of pins.values()) {
-      const [px, py] = pin.pos;
-      const back = pin.exit === 'right' ? -1 : pin.exit === 'left' ? 1 : 0;
-      const vert = pin.exit === 'down' ? -1 : pin.exit === 'up' ? 1 : 0;
-      const cx = px + back * 0.9, cy = py + vert * 0.9;
-      const isIn = pin.dir !== 'out';
-      const clickable = isIn && interactive;
-      const g = s('g', { class: `pin ${isIn ? 'pin-in' : 'pin-out'}${clickable ? ' clickable' : ''}`, 'data-pin': pin.name });
-      g.append(s('path', { d: `M${cx},${cy} L${px},${py}`, class: pin.width > 1 ? 'wire bus pin-stub' : 'wire pin-stub' }));
-      const els: PinEls = { pin, g };
-      if (pin.width === 1) {
-        g.append(s('circle', { cx, cy, r: 0.8, class: 'pin-knob' }));
-      } else {
-        const bg = s('rect', { class: 'pin-box', rx: 0.5, height: 1.6, y: cy - 0.8 });
-        const t = s('text', { class: 'pin-value', y: cy + 0.42, 'text-anchor': 'middle' });
-        g.append(bg, t);
-        els.value = t;
-        els.valueBg = bg;
-      }
-      // Name label, away from the circuit (beyond the value box for buses; placed in update()).
-      const ax = back !== 0 ? cx + back * 1.3 : cx;
-      const ay = vert !== 0 ? cy + vert * 1.6 + (vert > 0 ? 0.4 : 0) : cy + 0.42;
-      const anchor = back > 0 ? 'start' : back < 0 ? 'end' : 'middle';
-      const name = s('text', { class: 'pin-name', x: ax, y: ay, 'text-anchor': anchor }, portLabel(pin.name));
-      g.append(name);
-      els.name = name;
-      const extra = textWidth(pin.name, 1.1) + 3 + (pin.width > 1 ? textWidth('0x'.padEnd(2 + Math.ceil(pin.width / 4), '0'), 1.05) : 0);
-      grow(cx - 2 - (back < 0 ? extra : 0), cy - 2);
-      grow(cx + 2 + (back > 0 ? extra : 0), cy + 2);
+      const clickable = pin.dir !== 'out' && interactive;
+      const { g, name, value, valueBg, bounds: b } = drawPinGlyph(pin, clickable);
+      const els: PinEls = { pin, g, name, value, valueBg };
+      grow(b.x, b.y);
+      grow(b.x + b.w, b.y + b.h);
       if (clickable) {
         g.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -283,7 +275,7 @@ export class SchematicView {
     const m = 3;
     this.bbox = { x: x0 - m, y: y0 - m - 1, w: x1 - x0 + 2 * m, h: y1 - y0 + 2 * m + 1 };
     if (!keepView) this.fit();
-    else this.applyViewBox();
+    else this.cam.apply();
     this.drawProbes();
     this.update();
   }
@@ -339,16 +331,7 @@ export class SchematicView {
         p.g.setAttribute('class', `${base} ${bitClass(bits[0])}`);
       } else {
         p.g.setAttribute('class', `${base} ${busClass(bits)}`);
-        const txt = formatBits(bits, this.radix);
-        p.value!.textContent = txt;
-        const tw = Math.max(3, textWidth(txt, 1.05));
-        const back = p.pin.exit === 'right' ? -1 : p.pin.exit === 'left' ? 1 : 0;
-        const cx = p.pin.pos[0] + back * 0.9;
-        const bx = back < 0 ? cx - tw + 0.6 : back > 0 ? cx - 0.6 : cx - tw / 2;
-        p.valueBg!.setAttribute('x', String(bx));
-        p.valueBg!.setAttribute('width', String(tw));
-        p.value!.setAttribute('x', String(bx + tw / 2));
-        if (back !== 0) p.name?.setAttribute('x', String(back < 0 ? bx - 0.4 : bx + tw + 0.4));
+        placePinValue(p.pin, p, formatBits(bits, this.radix));
         const stub = p.g.querySelector('.pin-stub');
         stub?.setAttribute('class', `wire ${busClass(bits)} pin-stub`);
       }
@@ -523,17 +506,13 @@ export class SchematicView {
     const usable = Math.max(200, r.width - this.insetRight);
     const h = span * (r.height / usable || 0.6);
     const w = span * (r.width / usable || 1);
-    this.vb = { x: Number(m[1]) - span / 2 + 6, y: Number(m[2]) - h / 2, w, h };
-    this.applyViewBox();
+    this.cam.vb = { x: Number(m[1]) - span / 2 + 6, y: Number(m[2]) - h / 2, w, h };
+    this.cam.apply();
   }
 
   /** Pan (without zooming) so that a point is centred, unless it is already well inside the view. */
   centerOn(p: Vec): void {
-    const v = this.vb;
-    const mx = v.w * 0.15, my = v.h * 0.15;
-    if (p[0] > v.x + mx && p[0] < v.x + v.w - mx && p[1] > v.y + my && p[1] < v.y + v.h - my) return;
-    this.vb = { ...v, x: p[0] - v.w / 2, y: p[1] - v.h / 2 };
-    this.applyViewBox();
+    this.cam.centerOn(p);
   }
 
   get selection(): string | null {
@@ -543,86 +522,11 @@ export class SchematicView {
   // ---- pan & zoom ---------------------------------------------------------------------
 
   fit(): void {
-    const r = this.host.getBoundingClientRect();
-    const usable = Math.max(200, r.width - this.insetRight);
-    const aspect = usable > 0 && r.height > 0 ? usable / r.height : 16 / 10;
-    let { x, y, w, h } = this.bbox;
-    // Never zoom in so far that a tiny circuit looks cartoonish.
-    const minW = 34;
-    if (w < minW) { x -= (minW - w) / 2; w = minW; }
-    if (w / h > aspect) {
-      const nh = w / aspect; y -= (nh - h) / 2; h = nh;
-    } else {
-      const nw = h * aspect; x -= (nw - w) / 2; w = nw;
-    }
-    // Extend the view to the right so the circuit sits in the uncovered part.
-    if (this.insetRight > 0 && r.width > 0) w = w * (r.width / usable);
-    this.vb = { x, y, w, h };
-    this.applyViewBox();
+    this.cam.fit(this.bbox, this.insetRight);
   }
 
   zoom(factor: number, cx?: number, cy?: number): void {
-    const v = this.vb;
-    const px = cx ?? v.x + v.w / 2, py = cy ?? v.y + v.h / 2;
-    const nw = Math.min(Math.max(v.w * factor, 8), 4000);
-    const k = nw / v.w;
-    this.vb = { x: px - (px - v.x) * k, y: py - (py - v.y) * k, w: v.w * k, h: v.h * k };
-    this.applyViewBox();
-  }
-
-  private applyViewBox(): void {
-    const { x, y, w, h } = this.vb;
-    this.el.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
-  }
-
-  private toWorld(clientX: number, clientY: number): Vec {
-    const m = this.el.getScreenCTM();
-    if (!m) return [0, 0];
-    const p = new DOMPoint(clientX, clientY).matrixTransform(m.inverse());
-    return [p.x, p.y];
-  }
-
-  private installPanZoom(): void {
-    let drag: { x: number; y: number; vx: number; vy: number; moved: boolean; target: Element } | null = null;
-    this.el.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      const [wx, wy] = this.toWorld(e.clientX, e.clientY);
-      this.zoom(Math.exp(e.deltaY * 0.0015), wx, wy);
-    }, { passive: false });
-    this.el.addEventListener('pointerdown', (e) => {
-      if ((e.target as Element).closest('.inst, .pin.clickable, .bus-label')) return;
-      drag = { x: e.clientX, y: e.clientY, vx: this.vb.x, vy: this.vb.y, moved: false, target: e.target as Element };
-      this.el.setPointerCapture(e.pointerId);
-    });
-    this.el.addEventListener('pointermove', (e) => {
-      if (drag) {
-        const r = this.el.getBoundingClientRect();
-        const k = Math.max(this.vb.w / r.width, this.vb.h / r.height);
-        const dx = (e.clientX - drag.x) * k, dy = (e.clientY - drag.y) * k;
-        if (Math.abs(dx) + Math.abs(dy) > 0.2) drag.moved = true;
-        this.vb.x = drag.vx - dx;
-        this.vb.y = drag.vy - dy;
-        this.applyViewBox();
-        return;
-      }
-      this.hoverTip(e);
-    });
-    const end = (e: PointerEvent) => {
-      if (drag && !drag.moved) {
-        const n = drag.target.closest('[data-net]');
-        if (n) this.clickNet(Number(n.getAttribute('data-net')), drag.target);
-        else {
-          this.select(null);
-          this.events.select(null);
-          this.selectNet(-1);
-        }
-      }
-      drag = null;
-      if (this.el.hasPointerCapture(e.pointerId)) this.el.releasePointerCapture(e.pointerId);
-    };
-    this.el.addEventListener('pointerup', end);
-    this.el.addEventListener('pointercancel', end);
-    this.el.addEventListener('pointerleave', () => (this.tooltip.style.opacity = '0'));
+    this.cam.zoom(factor, cx, cy);
   }
 
   private hovered = -1;
