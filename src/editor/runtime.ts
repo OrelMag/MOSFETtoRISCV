@@ -21,6 +21,16 @@ import type { PinDoc } from './model';
 
 export type RunMode = 'cycle' | 'gate';
 
+/**
+ * Observers of rising clock edges (like the chapters' stage.edgeHooks): `before` runs with the
+ * clock still low and the logic settled, `after` once the edge has propagated (gate mode: when the
+ * logic is quiet again). A CPU's golden model steps in `after`.
+ */
+export interface EdgeHook {
+  before?(): void;
+  after?(): void;
+}
+
 /** Clock rates offered in cycle mode (Infinity: as fast as the frame budget allows). */
 export const HZ_STEPS = [1, 2, 5, 10, 20, 50, 100, 1000, 10000, Infinity];
 
@@ -64,6 +74,8 @@ export class EditorSim {
   achievedHz = 0;
   /** Called whenever values on screen may have changed. */
   onChange: () => void = () => {};
+  /** Rising-edge observers (every edge the run loop, Step, a click on a clock or runCycles makes). */
+  readonly edgeHooks = new Set<EdgeHook>();
 
   private latest: Compiled | null = null;
   private pins: PinDoc[] = [];
@@ -73,6 +85,8 @@ export class EditorSim {
   private lastFrame = 0;
   private due = 0;
   private clkHigh = false;
+  /** A rising edge whose `after` hooks have not run yet (gate mode: still propagating). */
+  private edgeOpen = false;
   private samples: [number, number][] = [];
   private readonly debounceMs: number;
   private readonly gateRate: () => number;
@@ -226,21 +240,75 @@ export class EditorSim {
     const sim = this.sim;
     const clks = this.clocks();
     if (!sim || !clks.length) return;
-    this.clkHigh = !this.clkHigh;
-    for (const c of clks) sim.setInput(c, this.clkHigh ? 1 : 0);
-    if (this.clkHigh) this.cycles++;
-    if (this.mode === 'cycle') sim.settle();
+    if (this.clkHigh) {
+      this.clkHigh = false;
+      for (const c of clks) sim.setInput(c, 0);
+    } else this.rise(sim, clks);
+    if (this.mode === 'cycle') {
+      sim.settle();
+      this.endEdge();
+    }
     this.onChange();
+  }
+
+  /** True while a rising edge propagates in gate mode (its `after` hooks have not run). */
+  get inEdge(): boolean {
+    return this.edgeOpen;
+  }
+
+  /** Clock pins high, with the edge hooks' `before` first. */
+  private rise(sim: Sim, clks: string[]): void {
+    this.endEdge();
+    for (const hk of this.edgeHooks) hk.before?.();
+    this.clkHigh = true;
+    for (const c of clks) sim.setInput(c, 1);
+    this.cycles++;
+    this.edgeOpen = true;
+  }
+
+  /** The edge has propagated: the hooks' `after`. */
+  private endEdge(): void {
+    if (!this.edgeOpen) return;
+    this.edgeOpen = false;
+    for (const hk of this.edgeHooks) hk.after?.();
   }
 
   /** One full clock cycle: every clock pin high, settle, low, settle. */
   private cycle(sim: Sim, clks: string[]): void {
-    for (const c of clks) sim.setInput(c, 1);
+    this.rise(sim, clks);
     sim.settle();
+    this.endEdge();
     for (const c of clks) sim.setInput(c, 0);
     sim.settle();
     this.clkHigh = false;
-    this.cycles++;
+  }
+
+  /**
+   * Up to `n` full clock cycles at once (a CPU panel's Run to halt / Step instruction), stopping
+   * early when `stop()` says so (checked before each cycle) or after `budgetMs` of work. Whatever
+   * was propagating (gate mode) settles first. Returns the cycles run.
+   */
+  runCycles(n: number, stop?: () => boolean, budgetMs = Infinity): number {
+    this.flush();
+    const sim = this.sim;
+    const clks = this.clocks();
+    if (!sim || !clks.length) return 0;
+    sim.settle();
+    this.endEdge();
+    if (this.clkHigh) {
+      for (const c of clks) sim.setInput(c, 0);
+      sim.settle();
+      this.clkHigh = false;
+    }
+    const t0 = now();
+    let k = 0;
+    while (k < n && !stop?.()) {
+      this.cycle(sim, clks);
+      k++;
+      if (now() - t0 > budgetMs) break;
+    }
+    this.onChange();
+    return k;
   }
 
   /** One gate delay; when the logic is quiet, the next clock half period instead. */
@@ -250,10 +318,12 @@ export class EditorSim {
       else sim.settle();
       return true;
     }
+    this.endEdge();
     if (!clks.length) return false;
-    this.clkHigh = !this.clkHigh;
-    for (const c of clks) sim.setInput(c, this.clkHigh ? 1 : 0);
-    if (this.clkHigh) this.cycles++;
+    if (this.clkHigh) {
+      this.clkHigh = false;
+      for (const c of clks) sim.setInput(c, 0);
+    } else this.rise(sim, clks);
     return true;
   }
 
@@ -304,6 +374,7 @@ export class EditorSim {
     const sim = this.sim;
     if (!sim) return;
     this.clkHigh = false;
+    this.edgeOpen = false;
     this.cycles = 0;
     this.resets++;
     this.due = 0;
@@ -318,6 +389,8 @@ export class EditorSim {
     this.due = 0;
     // Leaving gate mode: finish whatever was propagating, so cycle mode starts settled.
     if (m === 'cycle' && this.sim) {
+      this.sim.settle();
+      this.endEdge();
       if (this.clkHigh) for (const c of this.clocks()) this.sim.setInput(c, 0);
       this.clkHigh = false;
       this.sim.settle();
