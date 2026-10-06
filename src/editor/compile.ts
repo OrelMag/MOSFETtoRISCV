@@ -12,6 +12,15 @@
 // is neither a driver nor a sink, and its net may be driven from inside and from the parent at
 // once (an SRAM cell's bit lines). In a gate-level chip such a pin is an error and is dropped.
 //
+// Shared buses: at switch level any number of outputs may drive one net, and the solver decides
+// (one enabled tri-state driver: its value; none: Z, or what a pull-up / pull-down holds; two that
+// disagree: X). A chip with a tri-state part is always switch level: those cells have no
+// gate-level behaviour (a Z would become X), so reachesTransistors() is true for them. Outputs
+// marked `tri` (PortDef: tri-state buffers, pull-ups, open-drain stages) are expected to share;
+// two or more outputs that always drive on one net get a warning, since they fight whenever they
+// disagree. A compiled chip's output is `tri` when nothing inside drives it hard (only transistor
+// terminals and tri outputs), so the rule follows a bus up through the user's own chips.
+//
 // compileChip never throws: an unfinished drawing is the normal state of an editor.
 
 import { flatten } from '../sim/flatten';
@@ -74,6 +83,8 @@ interface Ep {
   /** drv: part output or chip input; sink: part input or chip output; bi: inout (transistor terminal). */
   role: 'drv' | 'sink' | 'bi';
   rail: boolean;
+  /** A driver that can let go of the net (PortDef.tri): it may share it with others. */
+  tri?: boolean;
   part?: string;
   pin?: string;
 }
@@ -205,7 +216,7 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
         eps.set(k, {
           key: k, end: `${e.part}.${e.port}`, width: port.width, part: e.part,
           role: port.dir === 'out' ? 'drv' : port.dir === 'inout' ? 'bi' : 'sink',
-          rail: d.prim === 'vdd' || d.prim === 'gnd',
+          rail: d.prim === 'vdd' || d.prim === 'gnd', ...(port.tri ? { tri: true } : {}),
         });
       } else if ('pin' in e) {
         const p = pins.get(e.pin)!;
@@ -235,6 +246,8 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
   for (const w of doc.wires) netOfWire.set(w.id, -1);
 
   const nets: NetDef[] = [];
+  /** Output pins on a net that only tri outputs and transistor terminals drive: they can float. */
+  const triPins = new Set<string>();
   const wantName: (string | undefined)[] = [];
   const nameFromLabel: boolean[] = [];
   const inits: (0 | 1 | undefined)[] = [];
@@ -270,6 +283,15 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
       });
       drop();
       continue;
+    }
+    const hard = drivers.filter((e) => !e.tri && !e.rail);
+    if (mode === 'switch' && hard.length > 1) {
+      warn(`${hard.length} outputs that always drive share one net (${hard.map((e) => e.end).join(', ')}): they fight (X) whenever they disagree. A shared bus needs tri-state drivers`, {
+        ...where, parts: uniq(hard.flatMap((e) => (e.part ? [e.part] : []))), pins: hard.flatMap((e) => (e.pin ? [e.pin] : [])),
+      });
+    }
+    if (mode === 'switch' && !hard.length && !drivers.some((e) => e.rail)) {
+      for (const e of g.eps) if (e.pin && e.role === 'sink') triPins.add(e.pin);
     }
     // The end drawn as the source: the chip's input, else a rail, else an output, else (a node
     // between transistors) a bidirectional pin or the first terminal.
@@ -340,7 +362,9 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
   const byPos = (a: PinDoc, b: PinDoc) => a.at[1] - b.at[1] || a.at[0] - b.at[0];
   const pinList = [...pins.values()];
   const ordered = (['in', 'inout', 'out'] as const).flatMap((d) => pinList.filter((p) => p.dir === d).sort(byPos));
-  const ports: PortDef[] = ordered.map((p) => ({ name: p.name, width: p.width, dir: p.dir, ...(p.kind === 'clock' ? { clock: true } : {}) }));
+  const ports: PortDef[] = ordered.map((p) => ({
+    name: p.name, width: p.width, dir: p.dir, ...(p.kind === 'clock' ? { clock: true } : {}), ...(triPins.has(p.id) ? { tri: true } : {}),
+  }));
 
   const nl: Netlist = {
     level: mode,
@@ -361,7 +385,7 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
 
   const conn = [
     [...parts.values()].map(({ doc: p }) => [p.id, p.ref]).sort((a, b) => (a[0] < b[0] ? -1 : 1)),
-    ports.map((p) => [p.name, p.width, p.dir, !!p.clock]),
+    ports.map((p) => [p.name, p.width, p.dir, !!p.clock, !!p.tri]),
     nets.map((n) => JSON.stringify([[...n.ends].sort(), !!n.cap])).sort(),
     Object.entries(powerOn).sort(),
   ];
