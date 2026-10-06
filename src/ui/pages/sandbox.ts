@@ -3,7 +3,12 @@
 // so the editor stays out of the main bundle.
 
 import '../../styles/editor.css';
+import '../../styles/sbchips.css';
 import { Editor } from '../../editor/editor';
+// Chip packaging, inspector, and their property sections (they register themselves).
+import '../../editor/package';
+import '../../editor/inspect';
+import '../../editor/chipprops';
 import type { Page } from './chapter';
 
 export class SandboxPage implements Page {

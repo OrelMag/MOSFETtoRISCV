@@ -11,7 +11,9 @@ import { installPanZoom } from '../view/camera';
 import { closePopover, editNumber } from '../view/popover';
 import { drawPinGlyph } from '../view/symbols';
 import { s } from '../ui/dom';
+import { nextDrive } from './chips';
 import type { Editor } from './editor';
+import { lookInside } from './inside';
 import { branchPoint, drives, type Hit, hitTest, hitWire, nextSameName, partAnchor, pointerGeom, snapPt, WireDraft } from './geom';
 import { type ChipDoc, endGeom, endKey, type EndRef, type ExitDir as Face, type PinDoc } from './model';
 import {
@@ -202,7 +204,7 @@ export class Tools {
         ed.view.showHot(h.k === 'port' ? h.pos : null);
         ed.hoverWire(h.k === 'wire' ? h.id : null, e);
         const pin = h.k === 'pin' ? ed.doc.pins.find((q) => q.id === h.id) : undefined;
-        ed.view.svg.style.cursor = h.k === 'port' ? 'crosshair' : pin?.dir === 'in' ? 'pointer' : h.k === 'none' ? '' : this.isSelected(h) ? 'move' : 'pointer';
+        ed.view.svg.style.cursor = h.k === 'port' ? 'crosshair' : pin && pin.dir !== 'out' ? 'pointer' : h.k === 'none' ? '' : this.isSelected(h) ? 'move' : 'pointer';
       }
     }
   }
@@ -258,6 +260,7 @@ export class Tools {
     if (ed.selCount > 1) ed.select(selOf(h));
     if (h.k === 'pin') {
       const pin = ed.doc.pins.find((q) => q.id === h.id);
+      if (pin?.dir === 'inout') return ed.setPinValue(pin.id, nextDrive(pin));
       if (!pin || pin.dir !== 'in') return;
       if (pin.kind === 'clock') return ed.sim.toggleClocks();
       if (pin.kind === 'button') return;
@@ -275,8 +278,10 @@ export class Tools {
     const h = this.hit(this.world(e));
     if (h.k === 'label') return; // the second click of a double-click already jumped
     if (h.k === 'part') {
+      // A user chip opens for editing; anything else opens read-only, live (look inside).
       const part = ed.doc.parts.find((q) => q.id === h.id);
-      if (part && 'chip' in part.ref) ed.openChip(part.ref.chip);
+      if (part && 'chip' in part.ref) ed.editChip(part.ref.chip);
+      else if (part) lookInside(ed, [part.id]);
     }
   }
 

@@ -14,6 +14,7 @@ import { h, icon } from '../ui/dom';
 import type { Diag } from './compile';
 import type { Editor } from './editor';
 import { pinKnob, pointerGeom } from './geom';
+import { renamePin } from './chips';
 import { removeChip } from './library';
 import type { ChipDoc, DisplayKind, ExitDir, LabelDoc, PartDoc, PartRef, PinDoc, WireDoc } from './model';
 import { deleteSel, flipParts, setLabel, setPart, setPin, setRef, setWire } from './ops';
@@ -179,7 +180,7 @@ export class PropsPanel {
       }
       out.append(h('p', { class: 'sb-links' }, h('a', { href: `#/workbench/${ref.lib}`, title: 'Open this part on its own in the workbench' }, icon('bench', 13), 'Open in workbench')));
     } else if ('chip' in ref) {
-      out.append(h('div', { class: 'sb-btns' }, this.btn('Edit chip', 'Open this chip in a tab (or double-click it)', () => ed.openChip(ref.chip), 'chip')));
+      out.append(h('div', { class: 'sb-btns' }, this.btn('Edit chip', 'Open this chip for editing (or double-click it); Back returns here', () => ed.editChip(ref.chip), 'chip')));
     } else if ('split' in ref || 'merge' in ref) {
       const ws = 'split' in ref ? ref.split : ref.merge;
       const mk = (w: number[], pitch?: number): PartRef => {
@@ -221,11 +222,26 @@ export class PropsPanel {
   private pin(p: PinDoc): HTMLElement {
     const ed = this.ed;
     const set = (patch: Partial<PinDoc>) => this.apply((d) => setPin(d, p.id, patch, ed.defOf));
-    const out = this.section(p.dir === 'in' ? 'Input pin' : 'Output pin',
-      this.row('Name', this.text(p.name, (v) => set({ name: v.trim() })), 'The port name of the chip'),
-      this.row('Direction', this.select(p.dir, [['in', 'input'], ['out', 'output']], (v) => set({ dir: v, ...(v === 'out' ? { kind: undefined, value: undefined } : {}) }))),
+    // A rename also rewires the port in every chip that places this one (renamePort).
+    const rename = (v: string) => {
+      const r = renamePin(ed.ws, ed.chipId, p.id, v.trim(), ed.defOf);
+      if ('reason' in r) {
+        ed.toast(r.reason, 'err');
+        this.key = '';
+        this.update(true);
+      } else ed.editWs(() => r.ws);
+    };
+    const out = this.section(p.dir === 'in' ? 'Input pin' : p.dir === 'inout' ? 'Bidirectional pin' : 'Output pin',
+      this.row('Name', this.text(p.name, rename), 'The port name of the chip (chips that use it keep their wires)'),
+      this.row('Direction', this.select(p.dir, [['in', 'input'], ['out', 'output'], ['inout', 'bidirectional']],
+        (v) => set({ dir: v, ...(v !== 'in' ? { kind: undefined, value: undefined } : {}) })), 'Bidirectional: switch level only'),
       this.row('Width', this.num(p.width, 1, 64, (w) => set({ width: w, value: undefined }))),
       this.row('Faces', this.select(p.face ?? (p.dir === 'in' ? 'right' : 'left'), FACES.map((f): [ExitDir, string] => [f, f]), (f) => set({ face: f })), 'Direction the wire leaves the pin'));
+    if (p.dir === 'inout') {
+      out.append(h('p', { class: 'sb-sum' }, 'A transistor terminal brought out, like an SRAM cell’s bit line: the chip and its parent may both drive it, so it needs switch level (transistors inside). Click the pin to drive it: Z (nothing) → 0 → 1 → Z.'),
+        this.row('Drives', this.select(p.value === undefined ? 'z' : String(p.value), [['z', 'Z (undriven)'], ['0', '0'], [String(2 ** p.width - 1), p.width === 1 ? '1' : `0x${(2 ** p.width - 1).toString(16).toUpperCase()}`]],
+          (v) => ed.setPinValue(p.id, v === 'z' ? undefined : Number(v))), 'What the outside drives onto the pin'));
+    }
     if (p.dir === 'in') {
       out.append(this.row('Kind', this.select(p.kind ?? 'toggle', [['toggle', 'toggle'], ['button', 'button (momentary)'], ['clock', 'clock']], (k) => set({ kind: k === 'toggle' ? undefined : k })),
         'A clock pin is driven by Run / Step and becomes a clock input of the chip'));
@@ -299,13 +315,14 @@ export class PropsPanel {
       h('div', { class: 'sb-badges' },
         h('span', { class: `sb-level ${c?.mode ?? 'gate'}` }, c?.mode === 'switch' ? 'switch level' : 'gate level'),
         c?.mode === 'switch' && c.derived ? h('span', { class: `sb-derived${c.derived.ok ? ' ok' : ''}`, title: c.derived.ok ? 'Its truth table is used as a gate-level model, so it can be a brick of gate-level chips' : c.derived.reason },
-          c.derived.ok ? 'usable at gate level' : `switch level only: ${c.derived.reason}`) : null),
+          c.derived.ok ? 'usable as a gate-level brick' : `switch level only: ${c.derived.reason}`) : null),
+      c?.mode === 'switch' && c.derived?.ok ? h('p', { class: 'sb-sum' }, 'Combinational: its truth table, derived from its transistors, models it when a gate-level chip places it.') : null,
       h('div', { class: 'sb-ports' }, h('b', null, 'Ports, in order'),
         ports.length ? h('ol', null, ports.map((p) => h('li', null, h('span', { class: `sb-dir ${p.dir}` }, p.dir), ` ${p.name}`, p.width > 1 ? h('small', null, ` [${p.width - 1}:0]`) : null, p.clock ? h('small', null, ' clock') : null)))
           : h('p', { class: 'sb-sum' }, 'No pins yet: place inputs and outputs from the palette.')),
       c ? costLine(c.def, (el) => this.depthLater(c.def, el)) : null);
     const users = ed.lib.usedBy(doc.id);
-    out.append(h('p', { class: 'sb-sum' }, `id ${doc.id}${users.length ? ` · used by ${users.map((u) => ed.ws.chips[u]?.name ?? u).join(', ')}` : ''}`),
+    out.append(h('p', { class: 'sb-sum' }, `id ${doc.id}`),
       h('div', { class: 'sb-btns' }, this.btn('Delete chip', users.length ? 'Remove it from the chips that use it first' : 'Delete this chip (Ctrl+Z brings it back)', () => this.deleteChip(doc))));
     return out;
   }

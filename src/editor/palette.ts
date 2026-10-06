@@ -30,6 +30,8 @@ export interface PaletteItem {
   place: Placement;
   /** Why it cannot be placed here (shown greyed out with this as tooltip). */
   disabled?: string;
+  /** A user chip's colour: a swatch before the name. */
+  hue?: number;
 }
 
 export interface PaletteCtx {
@@ -145,10 +147,14 @@ registerPaletteGroup({
 
 registerPaletteGroup({
   id: 'mine', title: 'My chips', order: 70, purist: true,
-  items: (ctx) => Object.values(ctx.ws.chips).filter((c) => c.id !== ctx.chipId).map((c): PaletteItem => ({
-    id: c.id, name: c.name, place: { part: { chip: c.id } },
-    disabled: ctx.canPlace(c.id) ? undefined : `${c.name} contains this chip: placing it would make a chip contain itself`,
-  })),
+  items: (ctx) => Object.values(ctx.ws.chips).filter((c) => c.id !== ctx.chipId).map((c): PaletteItem => {
+    const ins = c.pins.filter((p) => p.dir !== 'out').length, outs = c.pins.length - ins;
+    return {
+      id: c.id, name: c.name, place: { part: { chip: c.id } }, hue: c.hue ?? 250, tag: `${ins}→${outs}`,
+      title: `${c.name}: ${ins} input${ins === 1 ? '' : 's'}, ${outs} output${outs === 1 ? '' : 's'}${c.notes ? `. ${c.notes}` : ''}`,
+      disabled: ctx.canPlace(c.id) ? undefined : `${c.name} contains this chip: placing it would make a chip contain itself`,
+    };
+  }),
 });
 
 // ---- the panel ------------------------------------------------------------------------------
@@ -213,7 +219,7 @@ export class PalettePanel {
         const b = h('button', {
           class: `lib-item sb-item${it.disabled ? ' disabled' : ''}${this.armed === `${g.id}/${it.id}` ? ' on' : ''}`,
           title: it.disabled ?? it.title ?? it.name, 'data-item': `${g.id}/${it.id}`, 'aria-disabled': it.disabled ? 'true' : null,
-        }, h('span', null, it.name), it.tag ? h('small', null, it.tag) : null);
+        }, it.hue !== undefined ? h('i', { class: 'sb-swatch-dot', style: `--chip-h:${it.hue}` }) : null, h('span', null, it.name), it.tag ? h('small', null, it.tag) : null);
         b.addEventListener('pointerdown', (e) => {
           if (it.disabled || e.button !== 0) return;
           e.preventDefault();
