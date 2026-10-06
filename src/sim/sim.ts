@@ -25,6 +25,11 @@ export interface Sim {
   /** True if there are events still to process. */
   busy(): boolean;
   reset(mode?: PowerOnMode): void;
+  /**
+   * Take over the state of `prev`, a simulation of an earlier version of the design (an editor
+   * rebuilds the design on every edit): nets matched through the hierarchy, root inputs by name.
+   */
+  carry(prev: Sim): void;
   /** Called after any net changes value (gate sim only reports watched nets). */
   onTrace?: (net: number, value: Bit, time: number) => void;
   watch(nets: readonly number[]): void;

@@ -66,7 +66,10 @@ src/sim/       simulation core (no DOM)
   pnr.ts         problemOf(def), Layout (annealing placer), route / routeAll (two-layer Lee router)
   techmap.ts     techMap(def): inverter recognition and double-inversion removal
   cachemodel.ts  behavioural cache model (size/line/ways/replacement/write policy, 3C classes)
-  harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench
+  carry.ts       matchNets(next, prev): flat nets of a rebuilt design ↔ the old one, through the
+                 hierarchy; GateSim / SwitchSim.carry(prev) use it so state survives an edit
+  harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench;
+                 reachesTransistors(def) (would a gate-level flatten hit a transistor?)
   stats.ts       transistor / NAND counts, logic depth
   timing.ts      static timing: register-to-register critical path, per-capture-stage periods
   verilog.ts     structural Verilog generated from any netlist (identifiers sanitized, alias
@@ -123,6 +126,8 @@ src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over 
 src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...);
                insthw.ts maps an instruction to the units it uses (and pipeline stage units)
 src/chapters/  narrative content: chapters → steps → scene / widget / challenge
+src/editor/    sandbox editor, DOM-free parts: derive.ts (circuitMode, deriveBehavior: a combinational
+               transistor chip → truth-table behaviour, so it can be a brick at gate level)
 src/ui/        app shell, router, theme, settings, progress
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests

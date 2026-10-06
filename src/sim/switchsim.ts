@@ -12,6 +12,7 @@
 // when undriven. Iteration starts from the previous solution, so storage loops (cross-coupled
 // inverters) remember their state; for loop-free circuits the result is unique anyway.
 
+import { matchNets, sharedInputs } from './carry';
 import type { FlatDesign } from './flatten';
 import type { PowerOnMode, Sim } from './sim';
 import { B0, B1, BX, BZ, type Bit } from './types';
@@ -75,6 +76,33 @@ export class SwitchSim implements Sim {
     this.dirty = true;
     this.settle();
   }
+  /**
+   * Take over the node values of a simulation of a previous version of the design: nets matched
+   * through the hierarchy (see matchNets), root inputs by port name and width. The solve starts
+   * from them, so cross-coupled inverters keep their bit and `cap` nets keep their charge.
+   */
+  carry(prev: Sim): void {
+    for (const name of sharedInputs(this.design, prev.design)) this.inputs.set(name, prev.getInput(name));
+    const map = matchNets(this.design, prev.design);
+    for (let net = 0; net < map.length; net++) if (map[net] >= 0) this.val[net] = prev.get(map[net]);
+    this.dirty = true;
+    this.settle();
+  }
+
+  /** A copy of every node value (index = flat net). */
+  snapshot(): Uint8Array {
+    return this.val.slice();
+  }
+
+  /**
+   * Overwrite node values (as if the circuit had been left in that state: storage loops and
+   * charge start from them). Inputs and rails still win at the next settle().
+   */
+  restore(vals: ArrayLike<number>): void {
+    for (let i = 0; i < this.val.length; i++) this.val[i] = vals[i];
+    this.dirty = true;
+  }
+
   step(): boolean {
     if (!this.dirty) return false;
     this.settle();
