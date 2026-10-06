@@ -86,8 +86,10 @@ export class Editor {
   readonly palette: PalettePanel;
   readonly props: PropsPanel;
   readonly tools: Tools;
-  /** Where later phases put things: over the canvas, and between the canvas and the run bar. */
-  readonly slots: { overlay: HTMLElement; bottom: HTMLElement };
+  /** Where later phases put things: over the canvas, between the canvas and the run bar, and in the top bar. */
+  readonly slots: { overlay: HTMLElement; bottom: HTMLElement; top: HTMLElement };
+  /** Autosave: 'saving' while a save is pending, else the result of the last one. */
+  saveState: { state: 'saved' | 'saving' | 'error'; reason?: string } = { state: 'saved' };
   sel: Sel = {};
   compiled!: Compiled;
 
@@ -127,7 +129,7 @@ export class Editor {
     const overlay = h('div', { class: 'sb-overlay' });
     this.canvas.append(overlay, this.toastEl, this.tipEl,
       h('div', { class: 'hint-badge sb-hint' }, 'drag from a pin to wire · L pointer · wheel zoom · Space+drag pan · ? shortcuts'));
-    this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }) };
+    this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }), top: h('div', { class: 'sb-top-slot' }) };
 
     this.sim = new EditorSim({ gateRate: () => settings.speed });
     this.sim.onChange = () => this.simChanged();
@@ -145,7 +147,7 @@ export class Editor {
     this.controls = h('div', { class: 'controls sb-controls' });
     const center = h('section', { class: 'sb-center' }, this.canvas, this.slots.bottom, this.controls);
     this.el = h('div', { class: 'sandbox' },
-      h('div', { class: 'sb-top' }, this.tabs, this.actionsEl), this.palette.el, center, this.props.el);
+      h('div', { class: 'sb-top' }, this.tabs, this.slots.top, this.actionsEl), this.palette.el, center, this.props.el);
 
     this.tools = new Tools(this);
     this.buildControls();
@@ -321,7 +323,8 @@ export class Editor {
       this.lastChip = id;
       this.sel = {};
       const want = `#/sandbox/${id}`;
-      if (location.hash.startsWith('#/sandbox') && location.hash !== want) history.replaceState(null, '', want);
+      // A share link (#/sandbox/s/…) stays in the address bar until it is imported or dismissed.
+      if (/^#\/sandbox(?!\/s\/)/.test(location.hash) && location.hash !== want) history.replaceState(null, '', want);
     }
     this.sel = prune(this.sel, doc);
     this.view.render(doc, this.defOf);
@@ -378,6 +381,18 @@ export class Editor {
   private scheduleSave(): void {
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => this.save(), 400);
+    if (this.saveState.state === 'saved') this.setSaveState({ state: 'saving' });
+  }
+
+  private saveWatchers = new Set<() => void>();
+  /** Called when saveState changes. */
+  onSave(f: () => void): () => void {
+    this.saveWatchers.add(f);
+    return () => this.saveWatchers.delete(f);
+  }
+  private setSaveState(st: Editor['saveState']): void {
+    this.saveState = st;
+    this.saveWatchers.forEach((f) => f());
   }
 
   save(): void {
@@ -386,6 +401,7 @@ export class Editor {
     const r = saveWorkspace(this.ws);
     if (!r.ok && r.reason !== this.saveError) this.toast(r.reason, 'err');
     this.saveError = r.ok ? '' : r.reason;
+    this.setSaveState(r.ok ? { state: 'saved' } : { state: 'error', reason: r.reason });
   }
 
   // ---- chrome ------------------------------------------------------------------------------
