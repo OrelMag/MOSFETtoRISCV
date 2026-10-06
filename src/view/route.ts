@@ -607,7 +607,7 @@ export function tapLabels(nl: Netlist): TapLabel[] {
 }
 
 /** A junction dot wherever three or more wire directions meet. */
-function junctions(paths: Vec[][]): Vec[] {
+export function junctions(paths: Vec[][]): Vec[] {
   const segs: [Vec, Vec][] = [];
   for (const p of paths) for (let i = 1; i < p.length; i++) segs.push([p[i - 1], p[i]]);
   const key = (v: Vec) => `${v[0]},${v[1]}`;
@@ -670,8 +670,10 @@ function labelAnchor(paths: Vec[][], obstacles: Rect[]): { pos: Vec; room: numbe
  * SVG path data for every routed path, with a hop (a small arc) wherever a horizontal
  * segment crosses a vertical segment of another net. Crossings closer than a hop's width
  * share one wider arc. Same-net crossings are left alone (they meet at junction dots).
+ * With `only`, just those nets' paths are computed (every net still counts as an obstacle);
+ * the others get an empty list: a cheap repaint of the wires an edit touched.
  */
-export function hopPathData(nets: RoutedNet[], bars: { x: number; y0: number; y1: number }[] = [], r = 0.45): string[][] {
+export function hopPathData(nets: RoutedNet[], bars: { x: number; y0: number; y1: number }[] = [], r = 0.45, only?: Set<number>): string[][] {
   const eps = 0.01;
   // Vertical segments of every net, bucketed by x for quick lookup. Splitter / merger bars
   // are obstacles too (net -1): a wire passing over another bus's bar hops it.
@@ -704,7 +706,7 @@ export function hopPathData(nets: RoutedNet[], bars: { x: number; y0: number; y1
     }
     return out;
   };
-  return nets.map((n) => n.paths.map((p) => {
+  return nets.map((n) => only && !only.has(n.index) ? [] : n.paths.map((p) => {
     let d = `M${p[0][0]},${p[0][1]}`;
     for (let i = 1; i < p.length; i++) {
       const [a, b] = [p[i - 1], p[i]];
