@@ -587,3 +587,23 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .mc-big td { font-size: 12px; padding: 3px 5px; }
 .mc-panel.compact { width: 230px; }
 .mc-panel.compact .mc-row { grid-template-columns: 18px 70px 0 auto; }
+
+/* chapter 23: float explorer */
+.fx-bits { display: flex; flex-wrap: wrap; gap: 2px; margin: 10px 0; }
+.fx-bit { width: 18px; height: 24px; padding: 0; border-radius: 3px; border: 1px solid var(--border); font: 600 11px var(--font-mono); cursor: pointer; color: var(--text-2); background: var(--surface-2); }
+.fx-bit.s { border-bottom: 3px solid #dc2626; }
+.fx-bit.e { border-bottom: 3px solid var(--bus); }
+.fx-bit.m { border-bottom: 3px solid #16a34a; }
+.fx-bit.on { background: var(--surface-3); color: var(--text); }
+.fx-bit.s.on { background: color-mix(in srgb, #dc2626 30%, transparent); }
+.fx-bit.e.on { background: color-mix(in srgb, var(--bus) 30%, transparent); }
+.fx-bit.m.on { background: color-mix(in srgb, #16a34a 30%, transparent); }
+.fx-info { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.fx-k { display: inline-block; width: 70px; color: var(--muted); font-size: 12px; }
+.fx-in { width: 140px; font: 13px var(--font-mono); padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.fx-line { width: 100%; max-width: 680px; display: block; margin: 8px 0; }
+.fx-line .ax { stroke: var(--muted); }
+.fx-line .lbl { font: 10px var(--font-mono); fill: var(--muted); }
+.fx-line .normal { fill: var(--bus); }
+.fx-line .subnormal { fill: #d97706; }
+.fx-line .zero { fill: var(--text); }

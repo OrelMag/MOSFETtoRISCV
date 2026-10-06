@@ -20,3 +20,16 @@ describe('reference float arithmetic agrees with the host float32', () => {
     }
   });
 });
+
+import { encodeNumber } from '../src/widgets/float';
+describe('decimal → float encoding for the explorer', () => {
+  it('matches Math.fround', () => {
+    let seed = 11;
+    const r = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32);
+    for (let i = 0; i < 20000; i++) {
+      const x = (r() - 0.5) * 10 ** Math.floor(r() * 90 - 50);
+      expect(encodeNumber(x, F32), String(x)).toBe(f32ToBits(Math.fround(x)));
+    }
+    for (const x of [0, -0, 0.1, 1e-45, 1.4e-45, 3.4028235e38, 3.5e38, Infinity, -Infinity, NaN]) expect(encodeNumber(x, F32), String(x)).toBe(f32ToBits(Math.fround(x)));
+  });
+});

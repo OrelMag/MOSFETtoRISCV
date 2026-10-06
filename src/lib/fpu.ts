@@ -524,3 +524,34 @@ export const FPU32: ComponentDef = (() => {
     netlist: () => ({ pins: { a: [0, 4], b: [0, 8], xa: [0, 12], funct7: [0, 16], funct3: [0, 20], rs2: [0, 24], y: [b.right, 8] }, instances: b.instances, nets: b.nets() }),
   });
 })();
+
+/**
+ * Which floating-point instruction is this? flw / fsw / OP-FP, and for OP-FP whether the result
+ * goes to an integer register (compares, fmv.x.w) or a floating-point one.
+ */
+export const FP_DECODE: ComponentDef = (() => {
+  const b = new Builder();
+  const isFlw = b.name(b.op1(equal(7), ['op', b.op1(K(7, 0b0000111), [])], 'flw?'), 'isFLW');
+  const isFsw = b.name(b.op1(equal(7), ['op', b.op1(K(7, 0b0100111), [])], 'fsw?'), 'isFSW');
+  const isOp = b.name(b.op1(equal(7), ['op', b.op1(K(7, 0b1010011), [])], 'OP-FP?'), 'isOPFP');
+  const f7 = b.op(splitter([2, 1, 1, 1, 1, 1]), ['funct7']);
+  const os = b.op(splitter([2, 1, 4]), ['op']);
+  b.next();
+  const toInt = b.op1(andN(3), [isOp, `${f7}.o5`, b.op1(NOT, [`${f7}.o2`])], 'result → x');
+  const toF = b.op1(AND, [isOp, b.op1(NOT, [toInt])], 'result → f');
+  const mem = b.op1(OR, [isFlw, isFsw]);
+  b.next();
+  b.wire(isFlw, 'flw');
+  b.wire(isFsw, 'fsw');
+  b.wire(toInt, 'toInt');
+  b.wire(b.op1(OR, [toF, isFlw], 'write f register'), 'fWrite');
+  // flw / fsw look like lw / sw to the integer control unit: clear opcode bit 2
+  b.wire(b.op1(merger([2, 1, 4]), [`${os}.o0`, b.op1(AND, [`${os}.o1`, b.op1(NOT, [mem])]), `${os}.o2`], 'as lw / sw'), 'opInt');
+  return define({
+    id: 'fpdec', name: 'Floating-point decoder', category: 'cpu',
+    summary: 'Recognises flw, fsw and the OP-FP group. flw and fsw are passed to the integer control unit disguised as lw and sw (same address calculation); only their register file differs. OP-FP results go to an f register, except compares and fmv.x.w, which write an x register.',
+    ports: [bus('op', 7, 'in'), bus('funct7', 7, 'in'), bit('flw', 'out'), bit('fsw', 'out'), bit('toInt', 'out'), bit('fWrite', 'out'), bus('opInt', 7, 'out')],
+    symbol: { kind: 'box', label: 'FP DECODE' },
+    netlist: () => ({ pins: { op: [0, 4], funct7: [0, 10], flw: [b.right, 2], fsw: [b.right, 6], toInt: [b.right, 10], fWrite: [b.right, 14], opInt: [b.right, 18] }, instances: b.instances, nets: b.nets() }),
+  });
+})();

@@ -11,6 +11,9 @@ import { PROGRAMS } from '../riscv/programs';
 import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';
 import { M_PROGRAMS } from '../riscv/mprograms';
 import { CACHE_CPU_PROGRAMS } from '../riscv/cprograms';
+import { F_PROGRAMS } from '../riscv/fprograms';
+import { FABI } from '../riscv/isa';
+import { bitsToF32 } from '../sim/fpref';
 import { CAUSE } from '../riscv/iss';
 import { pack } from '../sim/values';
 import { h } from '../ui/dom';
@@ -37,6 +40,8 @@ export interface CpuSceneOptions {
   dcache?: boolean;
   /** The multicycle CPU with a hardwired or microprogrammed controller (adds the controller panel). */
   multicycle?: 'fsm' | 'micro';
+  /** Single-cycle CPU with the FPU and f registers (chapter 23). */
+  fpu?: boolean;
   /** Show the program editor. */
   editable?: boolean;
 }
@@ -48,7 +53,7 @@ export function cpuScene(opts: CpuSceneOptions): Scene {
     root: opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder })
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor })
-        : singleCycleCpu(asm.words, opts.dcache ? { adder: opts.adder, dmemK: 6, dcache: true } : { adder: opts.adder }),
+        : singleCycleCpu(asm.words, opts.dcache ? { adder: opts.adder, dmemK: 6, dcache: true } : { adder: opts.adder, fpu: opts.fpu }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
     panels: [cpuPanel({ ...opts, asm }), ...(opts.pipeline ? [pipeDiagram(asm)] : []), ...(opts.system ? [ioPanel] : []), ...(opts.multicycle ? [controllerPanel(opts.multicycle, true)] : []), ...(opts.timing ? [timingPanel] : [])],
@@ -71,9 +76,10 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     const mem = h('div', { class: 'cpu-mem' });
     const now = h('div', { class: 'cpu-now' });
     const dlines = h('div', { class: 'cpu-mem dcache-lines' });
+    const fregs = h('div', { class: 'cpu-mem' });
     let loads = 0, misses = 0;
     const sel = h('select', { 'aria-label': 'program' }) as HTMLSelectElement;
-    const progs = opts.dcache ? [...CACHE_CPU_PROGRAMS, ...PROGRAMS] : opts.m ? [...M_PROGRAMS, ...SYSTEM_PROGRAMS, ...PROGRAMS] : opts.system ? [...SYSTEM_PROGRAMS, ...PROGRAMS] : PROGRAMS;
+    const progs = opts.fpu ? [...F_PROGRAMS, ...PROGRAMS] : opts.dcache ? [...CACHE_CPU_PROGRAMS, ...PROGRAMS] : opts.m ? [...M_PROGRAMS, ...SYSTEM_PROGRAMS, ...PROGRAMS] : opts.system ? [...SYSTEM_PROGRAMS, ...PROGRAMS] : PROGRAMS;
     for (const p of progs) sel.append(h('option', { value: p.id }, p.name));
     sel.append(h('option', { value: '__custom' }, 'My program'));
     const match = progs.find((p) => p.source === opts.source);
@@ -123,9 +129,10 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       editWrap, status, now,
       h('div', { class: 'cpu-sec' }, 'Program'), listing,
       h('div', { class: 'cpu-sec' }, 'Registers'), regs,
+      ...(opts.fpu ? [h('div', { class: 'cpu-sec' }, 'Floating-point registers (non-zero)'), fregs] : []),
       ...(opts.dcache ? [h('div', { class: 'cpu-sec' }, 'Data cache (4 lines × 4 words)'), dlines] : []),
       h('div', { class: 'cpu-sec' }, opts.dcache ? 'Main memory (non-zero words)' : 'Data memory (non-zero words)'), mem);
-    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.pipeline ? 'RV32I pipeline' : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? 'RV32IF CPU' : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.pipeline ? 'RV32I pipeline' : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
     const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right' }, title, body);
     title.addEventListener('click', () => {
       el.classList.toggle('collapsed');
@@ -156,6 +163,9 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         if (!mismatch) {
           const x = cpuState(stage.sim).x;
           const diff = x.findIndex((v, i) => v !== iss.x[i]);
+          const f = cpuState(stage.sim).f;
+          const fd = f ? f.findIndex((v, i) => v !== iss.f[i]) : -1;
+          if (fd >= 0 && diff < 0) mismatch = `${FABI[fd]} differs: hardware ${hex(f![fd])}, model ${hex(iss.f[fd])}`;
           if (diff >= 0) mismatch = `${ABI[diff]} differs after "${disasm(iss.imem[(iss.pc >>> 2) % 64] ?? 0x13)}": hardware ${hex(x[diff])}, model ${hex(iss.x[diff])}`;
         }
       },
@@ -201,6 +211,11 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       if (cur) listing.scrollTop = Math.max(0, cur.offsetTop - listing.offsetTop - 40);
       regs.replaceChildren(...st.x.map((v, i) => h('div', { class: `r${changed.has(i) && stage.cycles > 0 ? ' chg' : ''}${v ? '' : ' z'}`, title: `x${i} = ${v | 0}` },
         h('span', { class: 'n' }, `${ABI[i]}`), h('span', { class: 'v' }, hex(v)))));
+      if (st.f) {
+        const nz = st.f.map((v, i) => [i, v] as const).filter(([, v]) => v !== 0);
+        fregs.replaceChildren(...(nz.length ? nz.map(([i, v]) => h('div', { class: 'm' },
+          h('span', { class: 'n' }, FABI[i]), h('span', { class: 'v' }, hex(v)), h('span', { class: 'd' }, String(+bitsToF32(v).toPrecision(8))))) : [h('div', { class: 'm z' }, 'all +0.0')]));
+      }
       if (opts.dcache) {
         const dm = sim.design.root.children!.get('dm')!;
         const q = (arr: string, w: string) => pack(sim.getBits(dm.children!.get(arr)!.children!.get(w)!.ports.q)) >>> 0;
