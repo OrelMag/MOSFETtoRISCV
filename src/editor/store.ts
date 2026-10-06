@@ -70,8 +70,10 @@ function sanitizeRef(r: unknown): PartRef | null {
     return { rom: { k, w, addr, lang, src } };
   }
   if (isObj(r.ram)) {
-    const { k, w } = r.ram;
-    return int(k) && int(w, 1) ? { ram: { k, w } } : null;
+    const { k, w, init } = r.ram;
+    if (!int(k) || !int(w, 1)) return null;
+    const words = Array.isArray(init) && init.length <= 1 << 16 && init.every((x) => int(x)) ? (init as number[]).slice() : undefined;
+    return { ram: words?.some((x) => x) ? { k, w, init: words } : { k, w } };
   }
   return null;
 }

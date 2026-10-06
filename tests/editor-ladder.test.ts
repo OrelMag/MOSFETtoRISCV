@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { checkSimulatable, type Compiled } from '../src/editor/compile';
 import { UserLibrary } from '../src/editor/library';
 import type { ChipDoc, PartRef, Vec, WireDoc } from '../src/editor/model';
+import { fetchChip } from '../src/editor/examples';
 import { buildProgram } from '../src/editor/program';
 import { aluSpec, AND, D_LATCH, DFF, DRAM_CELL, INV_CMOS, NAND, NOR_CMOS, NOT, OR, ram, SR_LATCH, SRAM_CELL, SRAM_COLUMN, XOR } from '../src/lib';
 import { counter, register } from '../src/lib/sequential';
@@ -310,20 +311,7 @@ loop:
   sw   x3, 0(x0)
   beq  x0, x0, loop
 `;
-const fetch = chip('u_fetch', 'Fetch', {
-  pins: [clk([0, 20]), pin('instr', 'out', [80, 4], 32), pin('pc', 'out', [80, 30], 32)],
-  parts: [
-    part('pcr', L('reg32'), [10, 2]), part('one', { const: { width: 1, value: 1 } }, [2, 12]),
-    part('inc', L('plus4'), [10, 40]), part('rom', { rom: { k: 3, w: 32, addr: 'rv32', lang: 'asm', src: PROGRAM } }, [50, 2]),
-  ],
-  labels: [lbl('p1', 'pc', [40, 34]), lbl('p2', 'pc', [4, 44], 'left')],
-  wires: [
-    wire('clk', 'pin:clk', 'pcr.clk'), wire('en', 'one.y', 'pcr.en'),
-    ...fan('q', 'pcr.q', 'rom.addr', 'pin:pc', 'lbl:p1'),
-    wire('ia', 'lbl:p2', 'inc.a'), wire('nx', 'inc.y', 'pcr.d', [[46, 44], [46, 60], [6, 60], [6, 4]]),
-    wire('i', 'rom.data', 'pin:instr'),
-  ],
-});
+const fetch = fetchChip('u_fetch', 'Fetch', { k: 3, src: PROGRAM });
 
 const ALL = [inverter, nand, nor, not, and, or, xor, fa, rca4, sr, dlatch, dff, dffe, reg4, cnt4, sramcol, sramcell, sramcolchip, dram, ram4, alu4, fetch];
 const lib = new UserLibrary(workspace(...ALL));

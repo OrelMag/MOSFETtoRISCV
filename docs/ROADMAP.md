@@ -109,8 +109,14 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
     (`#/sandbox/s/…`, the circuit compressed into the URL, imported only on a click, never
     overwriting), structural Verilog and SVG / PNG images of the canvas, a chip manager (sizes,
     users, duplicate, delete refused while used), autosave indicator, recovery of unreadable data
-  - ⏳ Packaging polish and looking inside placed chips, "Open in Sandbox", program ROM editor,
-    probes and timing, build challenges
+  - ✅ Memories: Memory palette group (program ROM, word ROM, RAM); ROM properties (size, byte /
+    word addressing, asm / hex with conversion, sample programs) and a program editor (code editor,
+    live re-assembly, gutter diagnostics, listing, Apply = one undo step); the listing and the editor
+    follow the address the running circuit reads; RAM contents live in the properties and initial
+    contents seeded at power-on; Examples ▸ (fetch loop, counter on a 7-segment digit); the CPU
+    panel's Edit box is the code editor too
+  - ⏳ Packaging polish and looking inside placed chips, "Open in Sandbox", probes and timing,
+    build challenges
     (Turing-Complete style, checked against a truth table or test vectors)
 
 ### Phase 3 — The instruction set & assembly ✅

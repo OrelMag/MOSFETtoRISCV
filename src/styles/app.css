@@ -661,7 +661,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .cpu-mem .m { display: flex; gap: 10px; }
 .cpu-mem .n { color: var(--muted); width: 56px; }
 .cpu-mem .d { color: var(--muted); margin-left: auto; }
-.asm-editor { width: 100%; font: 12px/1.45 var(--font-mono); background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px; resize: vertical; tab-size: 8; }
+/* .asm-editor: the CPU panel's program box, a codeEditor (styles/codeedit.css) */
 .asm-errors { color: var(--wx); font: 12px var(--font-mono); white-space: pre-wrap; margin-top: 4px; }
 .fields { display: flex; margin: 10px 0; font: 12px var(--font-mono); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
 .fields > div { flex: var(--w); text-align: center; padding: 6px 2px; border-right: 1px solid var(--border); min-width: 0; }

@@ -6,6 +6,7 @@ import '../../styles/editor.css';
 import { Editor } from '../../editor/editor';
 import { SHARE_SEG, shareRoute } from '../../editor/files';
 import { installFiles, type FilesUi } from '../../editor/fileui';
+import '../../editor/memui';
 import type { Page } from './chapter';
 
 export class SandboxPage implements Page {
