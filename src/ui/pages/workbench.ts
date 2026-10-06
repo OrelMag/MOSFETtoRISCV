@@ -1,5 +1,5 @@
 // The workbench: open any component from the library on its own, drive its inputs freely,
-// and drill into it. (The full wiring sandbox comes in a later phase.)
+// and drill into it; "Open in Sandbox" (stage bar) copies it into the editor as a chip.
 
 import { bench } from '../../chapters/types';
 import { libraryItems } from '../../lib/catalog';

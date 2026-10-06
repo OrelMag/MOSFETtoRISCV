@@ -104,9 +104,16 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
     parameters, my chips; purist toggle), free-hand wires with corners / L flip / branches, pointers
     with jump-to-twin, select / drag / rubber band / copy / paste / undo, live values (switch level
     included), properties and diagnostics, tabs per chip, autosave, cycle (Hz) and gate-delay run modes
-  - ⏳ Packaging polish and looking inside placed chips, "Open in Sandbox", program ROM editor,
-    file import / export and share links in the UI, probes and timing, build challenges
-    (Turing-Complete style, checked against a truth table or test vectors)
+  - ✅ Chips: "Package as chip" (name, colour, notes, live preview of the box and its pin order;
+    Save & new circuit), My chips with colour and pin count (greyed when it would make a cycle),
+    Edit chip with a breadcrumb and Back, pin renames that keep every parent wired, used by / uses,
+    the flip-flop marking with the compiler's verdict, bidirectional pins driven Z / 0 / 1
+  - ✅ Look inside any placed part, read-only and live on the editor's own simulation, down to
+    transistors (and a single MOSFET); the Inspector (info, truth table, Verilog) in a drawer
+  - ✅ "Open in Sandbox" from the workbench and chapter scenes: the circuit on screen as an
+    editable chip, pointers included (a CPU's ROM, constants and data memory come along)
+  - ⏳ Program ROM editor, file import / export and share links in the UI, probes and timing,
+    build challenges (Turing-Complete style, checked against a truth table or test vectors)
 
 ### Phase 3 — The instruction set & assembly ✅
 - ✅ RV32I instruction formats with an interactive encoder / decoder (bit-field explorer)
