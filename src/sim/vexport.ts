@@ -1,8 +1,8 @@
 // Synthesizable Verilog for the whole hierarchy below a component, for real tools (Yosys, OpenROAD):
-// one module per ComponentDef, NAND as a continuous assignment, the master–slave flip-flops as
-// clocked processes (a synthesis tool cannot use cross-coupled NAND loops as storage), constant
-// ties as 1'b0 / 1'b1, splitters and mergers as bit slices. Plain Verilog-2005 with identifiers
-// sanitized, so any tool reads it.
+// one module per ComponentDef, NAND as a continuous assignment, flip-flops (`ff`: the master–slave
+// DFF, a user chip ticked as one) as clocked processes (a synthesis tool cannot use cross-coupled
+// NAND loops as storage), constant ties as 1'b0 / 1'b1, splitters and mergers as bit slices. Plain
+// Verilog-2005 with identifiers sanitized, so any tool reads it.
 
 import { type ComponentDef, netlistOf, parseEnd, type PortDef } from './types';
 
@@ -18,13 +18,19 @@ export function ident(s: string, fallback: string): string {
 
 const range = (w: number) => (w > 1 ? `[${w - 1}:0] ` : '');
 
+/** A flip-flop (`ff`) whose only ports are d, q, clk (and en): exported as a process. */
+const ffLeaf = (def: ComponentDef) => {
+  const ff = def.ff;
+  return ff && def.ports.every((p) => [ff.d, ff.q, ff.clk, ff.en].includes(p.name)) ? ff : undefined;
+};
+
 /** Leaves of the exported hierarchy: written as behaviour, not expanded. */
 function leafBody(def: ComponentDef): string[] | null {
-  switch (def.id) {
-    case 'nand': return ['  assign y = ~(a & b);'];
-    case 'dff': return ['  always @(posedge clk) q <= d;'];
-    case 'dffe': return ['  always @(posedge clk) if (en) q <= d;'];
-    default: break;
+  if (def.id === 'nand') return ['  assign y = ~(a & b);'];
+  const ff = ffLeaf(def);
+  if (ff) {
+    const n = (port: string) => portNameOf(def, port);
+    return [`  always @(posedge ${n(ff.clk)}) ${ff.en ? `if (${n(ff.en)}) ` : ''}${n(ff.q)} <= ${n(ff.d)};`];
   }
   if (def.id === 'tie0' || def.id === 'tie1') return [`  assign ${def.ports[0].name} = 1'b${def.id === 'tie1' ? 1 : 0};`];
   return null;
@@ -74,7 +80,7 @@ function moduleText(def: ComponentDef, nameOf: (d: ComponentDef) => string): str
     portName.set(p.name, n);
   }
   const leaf = leafBody(def);
-  const isReg = (p: PortDef) => !!leaf && p.dir === 'out' && (def.id === 'dff' || def.id === 'dffe');
+  const isReg = (p: PortDef) => !!leaf && p.name === ffLeaf(def)?.q;
   const lines: string[] = [];
   lines.push(`module ${nameOf(def)} (${def.ports.map((p) => portName.get(p.name)).join(', ')});`);
   for (const p of def.ports) lines.push(`  ${p.dir === 'in' ? 'input' : p.dir === 'out' ? 'output' : 'inout'} ${isReg(p) ? 'reg ' : ''}${range(p.width)}${portName.get(p.name)};`);

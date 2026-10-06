@@ -147,6 +147,14 @@ export interface ComponentDef {
   spec?: (inputs: number[]) => number[];
   /** Power-on hints for 'zero' mode: internal net name → value. */
   powerOn?: Record<string, 0 | 1>;
+  /**
+   * Marks an edge-triggered flip-flop (port names, all 1 bit): q takes d at the rising edge of
+   * clk (when en = 1, if there is an en). Static timing (timing.ts) makes it a register boundary
+   * and synthesis export (vexport.ts) writes it as a process instead of its gates. Set on the
+   * library DFF / DFFE, and by the sandbox when the user ticks "this chip is a flip-flop" (after
+   * checking that it behaves like one).
+   */
+  ff?: { d: string; q: string; clk: string; en?: string };
 
   hdl?: { verilog?: string; vhdl?: string };
   /** Long-form notes for the inspector (HTML allowed). */

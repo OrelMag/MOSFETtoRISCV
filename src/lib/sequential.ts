@@ -93,6 +93,7 @@ export const DFF: ComponentDef = define({
   summary: 'Samples D at the rising clock edge and holds it for a whole cycle. Two D latches, master and slave, open on opposite clock phases.',
   ports: [bit('d', 'in'), bit('clk', 'in', 'left', true), bit('q', 'out')],
   symbol: { kind: 'box', label: 'DFF' },
+  ff: { d: 'd', q: 'q', clk: 'clk' },
   netlist: () => ({
     pins: { d: [1, 3], clk: [1, 10], q: [38, 3] },
     instances: [
@@ -130,6 +131,7 @@ export const DFFE: ComponentDef = define({
   summary: 'Loads D on the clock edge only when en = 1; otherwise a multiplexer feeds the old value back in.',
   ports: [bit('d', 'in'), bit('en', 'in'), bit('clk', 'in', 'bottom', true), bit('q', 'out')],
   symbol: { kind: 'box', label: 'DFFE' },
+  ff: { d: 'd', q: 'q', clk: 'clk', en: 'en' },
   netlist: () => ({
     pins: { d: [1, 5], en: [1, 8], clk: [1, 11], q: [25, 5] },
     instances: [

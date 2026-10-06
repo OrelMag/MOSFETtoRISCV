@@ -1,9 +1,13 @@
 // Static timing analysis: the longest register-to-register path in NAND delays.
-// Flip-flops (the 'dff' component) are the timing boundaries: their q nets launch at
-// clk-to-q, their d nets must arrive a setup time before the next rising edge. Everything
-// in between is combinational and is traversed backwards from every capture point.
+// Flip-flops (components marked `ff`: the library DFF, a user chip ticked as a flip-flop) are the
+// timing boundaries: their outputs launch at clk-to-q, their data inputs (d, and en if any) must
+// arrive a setup time before the next rising edge. Everything in between is combinational and
+// is traversed backwards from every capture point. A flip-flop that contains flip-flops (the
+// DFFE: a mux in front of a DFF) is not a boundary itself: its inner ones are, so the logic
+// around them counts.
 
 import type { FlatDesign, HierNode } from './flatten';
+import { type ComponentDef, netlistOf } from './types';
 
 /** Delays of our NAND master–slave flip-flop, in NAND delays (measured from its structure). */
 export const CLK_TO_Q = 3;
@@ -24,6 +28,18 @@ export interface TimingReport {
   byCapture: { inst: string; period: number }[];
 }
 
+const innerFf = new WeakMap<ComponentDef, boolean>();
+/** Does a flip-flop's inside contain another flip-flop? (Then the inner ones are the boundaries.) */
+function hasInnerFf(def: ComponentDef): boolean {
+  let r = innerFf.get(def);
+  if (r === undefined) {
+    innerFf.set(def, false); // (a malformed cycle)
+    r = !!netlistOf(def)?.instances.some((i) => !!i.def.ff || hasInnerFf(i.def));
+    innerFf.set(def, r);
+  }
+  return r;
+}
+
 export function analyzeTiming(design: FlatDesign): TimingReport | null {
   const leaves = design.leaves;
   const excluded = new Uint8Array(leaves.length);
@@ -31,10 +47,12 @@ export function analyzeTiming(design: FlatDesign): TimingReport | null {
   const captures: { net: number; dff: string[] }[] = [];
 
   const walk = (n: HierNode, insideDff: boolean): void => {
-    const isDff = n.def.id === 'dff';
-    if (isDff) {
-      for (const net of n.ports.q) qSource.set(net, n.path);
-      captures.push({ net: n.ports.d[0], dff: n.path });
+    const ff = insideDff ? undefined : n.def.ff;
+    const isDff = !!ff && !hasInnerFf(n.def);
+    if (ff && isDff) {
+      for (const p of n.def.ports) if (p.dir === 'out') for (const net of n.ports[p.name]) qSource.set(net, n.path);
+      captures.push({ net: n.ports[ff.d][0], dff: n.path });
+      if (ff.en) captures.push({ net: n.ports[ff.en][0], dff: n.path });
     }
     if (n.leafIndex !== undefined && (insideDff || isDff)) excluded[n.leafIndex] = 1;
     n.children?.forEach((c) => walk(c, insideDff || isDff));
