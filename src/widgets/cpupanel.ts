@@ -16,7 +16,8 @@ import { FABI } from '../riscv/isa';
 import { bitsToF32, flagNames, RM_NAMES } from '../sim/fpref';
 import { CAUSE } from '../riscv/iss';
 import { pack } from '../sim/values';
-import { h, icon } from '../ui/dom';
+import { debounce, h, icon } from '../ui/dom';
+import { codeEditor } from './codeedit';
 import { settings, type TraceLevel } from '../ui/settings';
 import { fmtRate, ratePos, rateScale, stepEffect } from '../riscv/trace';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
@@ -228,14 +229,17 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     syncRate();
     const slowRow = h('div', { class: 'cpu-slow' }, slowBtn, stepBtn, seg, h('label', { class: 'cpu-rate' }, rateIn, rateLbl));
 
-    const editor = h('textarea', { class: 'asm-editor', spellcheck: 'false', wrap: 'off', rows: 14 }) as HTMLTextAreaElement;
-    editor.value = opts.source;
+    // Errors go to the gutter as you type (debounced) and below the box on Assemble & load.
     const errBox = h('div', { class: 'asm-errors' });
-    const editWrap = h('div', { class: 'cpu-edit', style: 'display:none' }, editor, errBox,
+    const check = debounce(() => editor.setDiagnostics(assemble(editor.value).errors), 300);
+    const editor = codeEditor({ value: opts.source, lang: 'rvasm', rows: 14, onChange: () => { errBox.textContent = ''; check(); } });
+    editor.el.classList.add('asm-editor');
+    const editWrap = h('div', { class: 'cpu-edit', style: 'display:none' }, editor.el, errBox,
       h('div', { style: 'display:flex;gap:6px;margin-top:6px' },
         h('button', {
           class: 'btn sm primary', onclick: () => {
             const r = assemble(editor.value);
+            editor.setDiagnostics(r.errors);
             if (r.errors.length) {
               errBox.textContent = r.errors.map((e) => `line ${e.line}: ${e.message}`).join('\n');
               return;
