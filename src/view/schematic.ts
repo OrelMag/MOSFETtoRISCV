@@ -1,13 +1,13 @@
 // The schematic: one component's internal netlist drawn as SVG, with live wire values.
 // Rendering builds the DOM once; update() only touches classes and labels.
 
-import { symbolGeom, type Vec } from '../sim/geometry';
+import { instPort, symbolGeom, type Vec } from '../sim/geometry';
 import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, netlistOf } from '../sim/types';
 import { formatBits, type Radix } from '../sim/values';
 import { icon, s } from '../ui/dom';
 import type { ViewCtx } from './context';
-import { routeNetlist, type PinGeom, type RoutedNet } from './route';
+import { hopPathData, routeNetlist, splitterBars, type PinGeom, type RoutedNet } from './route';
 import { drawSymbol, portLabel } from './symbols';
 
 export interface SchematicEvents {
@@ -15,6 +15,10 @@ export interface SchematicEvents {
   select(child: string | null): void;
   toggleInput(port: string): void;
   editInput(port: string, anchor: DOMRect): void;
+  /** A click on a wire; return true to consume it (probe mode). */
+  netClick?(net: number): boolean;
+  /** The probe on a net of the current view, if any. */
+  probeOf?(net: number): { color: number; label: string } | null;
 }
 
 interface WireEls {
@@ -22,6 +26,13 @@ interface WireEls {
   paths: SVGPathElement[];
   tags: SVGGElement[];
   dots: SVGCircleElement[];
+  /** Bit-range labels where this net leaves a splitter tap or enters a merger tap. */
+  taps: SVGGElement[];
+  /** Value class on screen, the one a front in flight is drawing, and that front. */
+  shown?: string;
+  target?: string;
+  flow?: Animation[];
+  flowEls?: SVGPathElement[];
   label?: SVGGElement;
   labelText?: SVGTextElement;
   labelBg?: SVGRectElement;
@@ -33,6 +44,8 @@ interface PinEls {
   name?: SVGTextElement;
   value?: SVGTextElement;
   valueBg?: SVGRectElement;
+  /** The wire inside that ends on this pin. */
+  wire?: WireEls;
 }
 
 export function bitClass(b: Bit | undefined): string {
@@ -58,7 +71,13 @@ export class SchematicView {
   private radixOverride = new Map<number, Radix>();
   private interactive = false;
   private selected: string | null = null;
+  private selectedNet = -1;
+  /** Nets faded by a focus highlight. */
+  private faded = new Set<number>();
+  private probeG: SVGGElement | null = null;
   radix: Radix = 'hex';
+  /** When > 0, value changes travel along the wires as fronts lasting this many ms. */
+  flowMs = 0;
   /** Screen pixels on the right covered by a docked panel; fit() keeps the circuit clear of them. */
   insetRight = 0;
   private tooltip: HTMLDivElement;
@@ -77,6 +96,8 @@ export class SchematicView {
     this.interactive = interactive;
     this.radixOverride.clear();
     this.selected = null;
+    this.selectedNet = -1;
+    this.faded.clear();
     const nl = netlistOf(ctx.def);
     this.el.replaceChildren();
     this.wires = [];
@@ -84,6 +105,8 @@ export class SchematicView {
     this.insts.clear();
     if (!nl) return;
     const { nets, pins } = routeNetlist(ctx.def, nl);
+    const pathData = hopPathData(nets, splitterBars(nl));
+    const tapsOf = splitterTaps(nl);
 
     const defs = s('defs');
     defs.innerHTML = `<pattern id="grid" width="1" height="1" patternUnits="userSpaceOnUse">
@@ -91,10 +114,12 @@ export class SchematicView {
     this.el.append(defs);
     const gridRect = s('rect', { class: 'grid-bg', x: -500, y: -500, width: 1000, height: 1000, fill: 'url(#grid)' });
     const wiresG = s('g', { class: 'wires' });
+    const hitG = s('g', { class: 'wire-hits' });
     const instG = s('g', { class: 'insts' });
     const pinG = s('g', { class: 'pins' });
     const labelG = s('g', { class: 'labels' });
-    this.el.append(gridRect, wiresG, instG, pinG, labelG);
+    this.probeG = s('g', { class: 'probes' });
+    this.el.append(gridRect, wiresG, hitG, instG, pinG, labelG, this.probeG);
 
     // Bounding box of everything drawn.
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -105,7 +130,7 @@ export class SchematicView {
     // Wires
     for (const net of nets) {
       const cls = net.width > 1 ? 'wire bus' : 'wire';
-      const w: WireEls = { net, paths: [], dots: [], tags: [] };
+      const w: WireEls = { net, paths: [], dots: [], tags: [], taps: [] };
       const name = nl.nets[net.index].name ?? `n${net.index}`;
       for (const t of net.tags) {
         const D: Record<string, [number, number]> = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
@@ -123,12 +148,26 @@ export class SchematicView {
         grow(rx, ry);
         grow(rx + tw, ry + th);
       }
-      for (const p of net.paths) {
+      net.paths.forEach((p, pi) => {
         p.forEach(([x, y]) => grow(x, y));
-        const d = 'M' + p.map(([x, y]) => `${x},${y}`).join(' L');
-        const path = s('path', { d, class: cls, 'data-net': net.index });
+        const path = s('path', { d: pathData[net.index][pi], class: cls, 'data-net': net.index });
         w.paths.push(path);
         wiresG.append(path);
+      });
+      // One wide invisible stroke per net makes thin wires easy to point at and click.
+      if (net.paths.length) {
+        const d = net.paths.map((p) => 'M' + p.map(([x, y]) => `${x},${y}`).join(' L')).join(' ');
+        hitG.append(s('path', { d, class: 'wire-hit', 'data-net': net.index }));
+      }
+      for (const t of tapsOf.get(net.index) ?? []) {
+        const g = s('g', { class: 'tap-label' });
+        const tw = textWidth(t.text, t.size) + 0.1, th = t.size * 1.3;
+        const x = t.right ? t.pos[0] + 0.12 : t.pos[0] - 0.12 - tw;
+        const y = t.pos[1] - th - 0.1;
+        g.append(s('rect', { x, y, width: tw, height: th, rx: th / 2 }),
+          s('text', { x: x + tw / 2, y: y + th * 0.76, 'text-anchor': 'middle', style: `font-size:${t.size}px` }, t.text));
+        w.taps.push(g);
+        labelG.append(g);
       }
       for (const [x, y] of net.dots) {
         const c = s('circle', { cx: x, cy: y, r: net.width > 1 ? 0.32 : 0.24, class: 'dot' });
@@ -240,6 +279,7 @@ export class SchematicView {
           else this.events.editInput(pin.name, (g as unknown as Element).getBoundingClientRect());
         });
       }
+      els.wire = this.wires.find((w) => nl.nets[w.net.index].ends.includes(pin.name));
       this.pins.push(els);
       pinG.append(g);
     }
@@ -248,6 +288,7 @@ export class SchematicView {
     this.bbox = { x: x0 - m, y: y0 - m - 1, w: x1 - x0 + 2 * m, h: y1 - y0 + 2 * m + 1 };
     if (!keepView) this.fit();
     else this.applyViewBox();
+    this.drawProbes();
     this.update();
   }
 
@@ -256,27 +297,43 @@ export class SchematicView {
     const ctx = this.ctx;
     if (!ctx) return;
     ctx.sync();
+    const flow = this.flowMs > 0 && !reducedMotion();
     for (const w of this.wires) {
       const bits = ctx.netBits(w.net.index);
-      const cls = w.net.width > 1 ? `wire ${busClass(bits)}` : `wire ${bitClass(bits[0])}`;
-      for (const p of w.paths) p.setAttribute('class', cls);
       const vcls = w.net.width > 1 ? busClass(bits) : bitClass(bits[0]);
-      for (const t of w.tags) {
-        t.setAttribute('class', `net-tag ${vcls}`);
-        t.firstElementChild!.setAttribute('class', cls);
+      if (vcls !== w.shown) {
+        if (flow && w.shown !== undefined && w.paths.length) this.flowWire(w, vcls);
+        else this.paintWire(w, vcls);
       }
-      const dcls = `dot ${w.net.width > 1 ? busClass(bits) : bitClass(bits[0])}`;
-      for (const d of w.dots) d.setAttribute('class', dcls);
       if (w.labelText && w.labelBg && w.net.label) {
         const txt = formatBits(bits, this.radixOverride.get(w.net.index) ?? this.radix);
         w.labelText.textContent = txt;
         const tw = textWidth(txt, 0.95);
         w.labelBg.setAttribute('x', String(w.net.label[0] - tw / 2));
         w.labelBg.setAttribute('width', String(tw));
-        w.label!.setAttribute('class', `bus-label ${busClass(bits)}`);
+        w.label!.setAttribute('class', `bus-label ${busClass(bits)}${this.marks(w.net.index)}`);
       }
     }
+    this.updatePins();
+    // Transistors: show which ones conduct.
+    if (ctx.sim instanceof SwitchSim) {
+      for (const [name, g] of this.insts) {
+        const li = ctx.childLeaf(name);
+        if (li === undefined) continue;
+        const k = ctx.sim.design.leaves[li].kind;
+        if (k !== 'nmos' && k !== 'pmos') continue;
+        const c = ctx.sim.conducting[li];
+        g.classList.toggle('conducting', c === 1);
+        g.classList.toggle('maybe', c === 2);
+      }
+    }
+  }
+
+  /** Output pins wait for the front on their wire to arrive. */
+  private updatePins(): void {
+    const ctx = this.ctx!;
     for (const p of this.pins) {
+      if (p.pin.dir === 'out' && p.wire?.flow) continue;
       const bits = ctx.portBits(p.pin.name);
       const base = `pin ${p.pin.dir !== 'out' ? 'pin-in' : 'pin-out'}${p.pin.dir !== 'out' && this.interactive ? ' clickable' : ''}`;
       if (p.pin.width === 1) {
@@ -297,28 +354,173 @@ export class SchematicView {
         stub?.setAttribute('class', `wire ${busClass(bits)} pin-stub`);
       }
     }
-    // Transistors: show which ones conduct.
-    if (ctx.sim instanceof SwitchSim) {
-      for (const [name, g] of this.insts) {
-        const li = ctx.childLeaf(name);
-        if (li === undefined) continue;
-        const k = ctx.sim.design.leaves[li].kind;
-        if (k !== 'nmos' && k !== 'pmos') continue;
-        const c = ctx.sim.conducting[li];
-        g.classList.toggle('conducting', c === 1);
-        g.classList.toggle('maybe', c === 2);
+  }
+
+  /** Probe flags: a coloured flag on every probed wire of this view (same flat nets). */
+  drawProbes(): void {
+    const g = this.probeG;
+    if (!g) return;
+    g.replaceChildren();
+    for (const w of this.wires) {
+      const p = this.events.probeOf?.(w.net.index);
+      if (!p) continue;
+      // Pin the flag to the middle of the net's longest segment.
+      let best: Vec | null = null, len = -1;
+      for (const path of w.net.paths) {
+        for (let i = 1; i < path.length; i++) {
+          const [a, b] = [path[i - 1], path[i]];
+          const l = Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
+          if (l > len) { len = l; best = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; }
+        }
       }
+      if (!best) continue;
+      const tw = textWidth(p.label, 0.78) + 0.7;
+      const [x, y] = best;
+      const f = s('g', { class: `probe-flag p${p.color}`, transform: `translate(${x},${y})` });
+      f.append(s('circle', { r: 0.42, class: 'probe-tip' }),
+        s('path', { d: 'M0,0 L0.9,-1.6', class: 'probe-pole' }),
+        s('rect', { x: 0.9, y: -2.65, width: tw, height: 1.2, rx: 0.3 }),
+        s('text', { x: 0.9 + tw / 2, y: -1.8, 'text-anchor': 'middle' }, p.label));
+      g.append(f);
     }
   }
 
-  highlight(names: string[]): void {
-    for (const [name, g] of this.insts) g.classList.toggle('hl', names.includes(name));
-    for (const p of this.pins) p.g.classList.toggle('hl', names.includes(`pin:${p.pin.name}`));
+  /** Selection / hover classes a net's elements keep across repaints. */
+  private marks(idx: number): string {
+    return `${idx === this.selectedNet ? ' net-sel' : ''}${idx === this.hovered ? ' net-hover' : ''}${this.faded.has(idx) ? ' faded' : ''}`;
+  }
+
+  /** Give every element of a wire the value class vcls (finishing any front in flight). */
+  private paintWire(w: WireEls, vcls: string): void {
+    w.flow?.forEach((a) => a.cancel());
+    w.flow = undefined;
+    w.flowEls?.forEach((e) => e.remove());
+    w.flowEls = undefined;
+    w.shown = vcls;
+    const m = this.marks(w.net.index);
+    const cls = `wire ${vcls}${m}`;
+    for (const p of w.paths) p.setAttribute('class', cls);
+    for (const t of w.tags) {
+      t.setAttribute('class', `net-tag ${vcls}${m}`);
+      t.firstElementChild!.setAttribute('class', cls);
+    }
+    for (const d of w.dots) d.setAttribute('class', `dot ${vcls}`);
+    for (const t of w.taps) t.setAttribute('class', `tap-label ${vcls}`);
+  }
+
+  /**
+   * Draw the new value as a front travelling from the driver along every branch, over
+   * flowMs (one gate delay of the animation). The wire keeps its old colour underneath
+   * until the front arrives; tags, dots and tap labels switch when it does.
+   */
+  private flowWire(w: WireEls, vcls: string): void {
+    if (w.flow) this.paintWire(w, w.target!);
+    w.target = vcls;
+    const cls = `wire ${vcls} flow-front`;
+    const els: SVGPathElement[] = [];
+    const anims: Animation[] = [];
+    for (const p of w.paths) {
+      const L = p.getTotalLength();
+      const f = p.cloneNode() as SVGPathElement;
+      f.setAttribute('class', cls);
+      f.removeAttribute('data-net');
+      f.style.strokeDasharray = `${L} ${L + 1}`;
+      p.after(f);
+      els.push(f);
+      const timing: KeyframeAnimationOptions = { duration: this.flowMs, easing: 'linear', fill: 'forwards' };
+      anims.push(f.animate([{ strokeDashoffset: L }, { strokeDashoffset: 0 }], timing));
+      // The old value retreats ahead of the front (complementary dash), so a thin new
+      // colour never sits on top of a thicker old one.
+      const dash = `${L} ${L + 1}`;
+      anims.push(p.animate([{ strokeDasharray: dash, strokeDashoffset: 0 }, { strokeDasharray: dash, strokeDashoffset: -L }], timing));
+    }
+    w.flowEls = els;
+    w.flow = anims;
+    anims[0].finished.then(() => {
+      if (w.flow !== anims) return;
+      this.paintWire(w, vcls);
+      this.updatePins();
+    }, () => {});
+  }
+
+  /**
+   * Highlight instances. With `focus`, everything else fades, and so does every wire that does
+   * not join two highlighted parts (or a highlighted part and a pin): the data path stands out.
+   */
+  highlight(names: string[], focus = false): void {
+    const on = new Set(names);
+    for (const [name, g] of this.insts) g.classList.toggle('hl', on.has(name));
+    for (const p of this.pins) p.g.classList.toggle('hl', on.has(`pin:${p.pin.name}`));
+    this.el.classList.toggle('focus', focus && names.length > 0);
+    const nl = this.ctx ? netlistOf(this.ctx.def) : undefined;
+    for (const w of this.wires) {
+      let live = !focus;
+      if (focus && nl) {
+        const ends = nl.nets[w.net.index].ends;
+        const hit = ends.filter((e) => !e.includes('.') || on.has(e.slice(0, e.indexOf('.')))).length;
+        live = hit >= 2 && ends.some((e) => e.includes('.') && on.has(e.slice(0, e.indexOf('.'))));
+      }
+      if (live) this.faded.delete(w.net.index);
+      else this.faded.add(w.net.index);
+      for (const p of w.paths) p.classList.toggle('faded', !live);
+      for (const t of w.tags) t.classList.toggle('faded', !live);
+      w.label?.classList.toggle('faded', !live);
+    }
   }
 
   select(name: string | null): void {
     this.selected = name;
     for (const [n, g] of this.insts) g.classList.toggle('selected', n === name);
+    if (name !== null) this.selectNet(-1);
+  }
+
+  /** Select a net: every wire, label and tag of it stays highlighted (-1 clears). */
+  selectNet(idx: number): void {
+    this.selectedNet = idx;
+    for (const w of this.wires) if (w.shown !== undefined && !w.flow) this.paintWire(w, w.shown);
+    this.el.querySelectorAll('.net-sel').forEach((e) => e.classList.remove('net-sel'));
+    if (idx >= 0) this.el.querySelectorAll(`[data-net="${idx}"]`).forEach((e) => e.classList.add('net-sel'));
+  }
+
+  /** Clicking a net selects it; clicking one of its tags again pans to the net's next tag. */
+  private clickNet(idx: number, target: Element): void {
+    if (this.events.netClick?.(idx)) return;
+    if (idx !== this.selectedNet) {
+      this.select(null);
+      this.events.select(null);
+      this.selectNet(idx);
+      return;
+    }
+    const w = this.wires.find((x) => x.net.index === idx);
+    const tag = target.closest('.net-tag');
+    if (!w || !tag || w.tags.length < 2) return;
+    const k = (w.tags.indexOf(tag as SVGGElement) + 1) % w.tags.length;
+    this.centerOn(w.net.tags[k].pos);
+    w.tags[k].classList.add('net-ping');
+    setTimeout(() => w.tags[k].classList.remove('net-ping'), 900);
+  }
+
+  /** Zoom to an instance (about `span` grid units wide around it). */
+  focusInst(name: string, span = 70): void {
+    const g = this.insts.get(name);
+    if (!g) return;
+    const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(g.getAttribute('transform') ?? '');
+    if (!m) return;
+    const r = this.host.getBoundingClientRect();
+    const usable = Math.max(200, r.width - this.insetRight);
+    const h = span * (r.height / usable || 0.6);
+    const w = span * (r.width / usable || 1);
+    this.vb = { x: Number(m[1]) - span / 2 + 6, y: Number(m[2]) - h / 2, w, h };
+    this.applyViewBox();
+  }
+
+  /** Pan (without zooming) so that a point is centred, unless it is already well inside the view. */
+  centerOn(p: Vec): void {
+    const v = this.vb;
+    const mx = v.w * 0.15, my = v.h * 0.15;
+    if (p[0] > v.x + mx && p[0] < v.x + v.w - mx && p[1] > v.y + my && p[1] < v.y + v.h - my) return;
+    this.vb = { ...v, x: p[0] - v.w / 2, y: p[1] - v.h / 2 };
+    this.applyViewBox();
   }
 
   get selection(): string | null {
@@ -368,7 +570,7 @@ export class SchematicView {
   }
 
   private installPanZoom(): void {
-    let drag: { x: number; y: number; vx: number; vy: number; moved: boolean } | null = null;
+    let drag: { x: number; y: number; vx: number; vy: number; moved: boolean; target: Element } | null = null;
     this.el.addEventListener('wheel', (e) => {
       e.preventDefault();
       const [wx, wy] = this.toWorld(e.clientX, e.clientY);
@@ -376,7 +578,7 @@ export class SchematicView {
     }, { passive: false });
     this.el.addEventListener('pointerdown', (e) => {
       if ((e.target as Element).closest('.inst, .pin.clickable, .bus-label')) return;
-      drag = { x: e.clientX, y: e.clientY, vx: this.vb.x, vy: this.vb.y, moved: false };
+      drag = { x: e.clientX, y: e.clientY, vx: this.vb.x, vy: this.vb.y, moved: false, target: e.target as Element };
       this.el.setPointerCapture(e.pointerId);
     });
     this.el.addEventListener('pointermove', (e) => {
@@ -394,8 +596,13 @@ export class SchematicView {
     });
     const end = (e: PointerEvent) => {
       if (drag && !drag.moved) {
-        this.select(null);
-        this.events.select(null);
+        const n = drag.target.closest('[data-net]');
+        if (n) this.clickNet(Number(n.getAttribute('data-net')), drag.target);
+        else {
+          this.select(null);
+          this.events.select(null);
+          this.selectNet(-1);
+        }
       }
       drag = null;
       if (this.el.hasPointerCapture(e.pointerId)) this.el.releasePointerCapture(e.pointerId);
@@ -436,3 +643,33 @@ export class SchematicView {
     this.tooltip.style.opacity = '1';
   }
 }
+
+interface TapLabel { pos: Vec; right: boolean; text: string; size: number }
+
+/** Bit ranges carried by each splitter output / merger input, keyed by the net on the tap. */
+function splitterTaps(nl: NonNullable<ReturnType<typeof netlistOf>>): Map<number, TapLabel[]> {
+  const netOf = new Map<string, number>();
+  nl.nets.forEach((n, i) => n.ends.forEach((e) => netOf.set(e, i)));
+  const out = new Map<number, TapLabel[]>();
+  for (const inst of nl.instances) {
+    const k = inst.def.symbol.kind;
+    if (k !== 'split' && k !== 'merge') continue;
+    const size = Math.min(0.72, (inst.def.symbol.pitch ?? 2) * 0.4);
+    let bit = 0;
+    for (const p of inst.def.ports) {
+      if ((k === 'split') !== (p.dir === 'out')) continue;
+      const text = p.width === 1 ? `${bit}` : `${bit + p.width - 1}:${bit}`;
+      bit += p.width;
+      const net = netOf.get(`${inst.name}.${p.name}`);
+      if (net === undefined) continue;
+      const g = instPort(inst.def, inst.at ?? [0, 0], inst.flip, p.name);
+      const list = out.get(net) ?? [];
+      list.push({ pos: g.pos, right: g.exit === 'right', text, size });
+      out.set(net, list);
+    }
+  }
+  return out;
+}
+
+const motionQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+const reducedMotion = () => !!motionQuery?.matches;

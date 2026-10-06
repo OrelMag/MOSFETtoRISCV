@@ -19,6 +19,8 @@ interface State {
   palette: Palette;
   radix: Radix;
   animate: boolean;
+  /** Timing panel open (stays open across scenes). */
+  analyzer: boolean;
   /** Gate delays per second when animating propagation. */
   speed: number;
   /** chapterId → indices of visited steps */
@@ -28,7 +30,7 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, speed: 12, visited: {}, solved: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, analyzer: false, speed: 12, visited: {}, solved: {} };
 
 function load(): State {
   try {
@@ -52,8 +54,9 @@ export const settings = {
   get palette() { return state.palette; },
   get radix() { return state.radix; },
   get animate() { return state.animate; },
+  get analyzer() { return state.analyzer; },
   get speed() { return state.speed; },
-  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'speed'>(k: K, v: State[K]): void {
+  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'analyzer' | 'speed'>(k: K, v: State[K]): void {
     state[k] = v;
     save();
     listeners.forEach((f) => f());

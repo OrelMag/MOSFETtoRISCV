@@ -65,6 +65,7 @@ const ICONS: Record<string, string> = {
   check: '<path d="M5 12l5 5L20 7"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
+  probe: '<path d="M14 3l7 7-4 1-7 7-3-3 7-7z"/><path d="M7 17l-4 4"/>',
   wave: '<path d="M2 12h4V6h6v12h6v-6h4"/>',
   table: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M10 4v16"/>',
   code: '<path d="M8 6l-6 6 6 6M16 6l6 6-6 6"/>',

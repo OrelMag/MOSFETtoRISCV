@@ -56,7 +56,9 @@ src/sim/       simulation core (no DOM)
   flatten.ts     hierarchy → flat 1-bit nets + leaves, keeping a HierNode tree mapping every
                  level's ports/wires to flat nets (this is what makes every box transparent)
   gatesim.ts     event-driven 3-valued (0/1/X) simulator, unit NAND delay, transport delay,
-                 relaxation for power-on and oscillation resolution
+                 relaxation for power-on and oscillation resolution; runUntil(t) for a
+                 fixed-period clock (an edge does not wait for the logic to settle); onTrace +
+                 watch() report every change of watched nets at its exact time
   switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes); transistor
                  `strength` (ratioed logic) and `cap` nets that keep their charge
   fpref.ts       exact reference float arithmetic for any format (BigInt, RNE), float32 helpers
@@ -67,7 +69,12 @@ src/sim/       simulation core (no DOM)
   harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench
   stats.ts       transistor / NAND counts, logic depth
   timing.ts      static timing: register-to-register critical path, per-capture-stage periods
-  verilog.ts     structural Verilog generated from any netlist
+  verilog.ts     structural Verilog generated from any netlist (identifiers sanitized, alias
+                 boxes from their bit map)
+  svexport.ts    exportHdl(def, 'structure' | 'synth', testbench?): whole hierarchy in one file,
+                 self-checking testbench from our simulation (checked against Yosys when installed)
+  vexport.ts     synthesizable Verilog-2005 (flip-flops as processes) for Yosys / OpenROAD
+  vcd.ts         toVcd(): Value Change Dump of recorded traces
 src/lib/       the component library (registered in `registry` via define())
   transistors.ts NMOS, PMOS, rails, CMOS inverter/NOR, NAND (prim + 4-transistor netlist), tie cells
   gates.ts       NOT, AND, OR, NOR, XOR, XNOR, MUX2 from NAND
@@ -104,8 +111,12 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                instructions), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
                interrupts; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / cprograms.ts / fprograms.ts (samples), multi.ts (MultiISS: N harts, shared memory, same arbitration), mcprograms.ts, cosim.ts (CPU state;
                `retiring()` = step the ISS this cycle?)
-src/view/      SVG schematic renderer, router, inspector panels, waveform, truth table
-src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...)
+src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over crossings),
+               inspector (info, truth table, Verilog + download), analyzer.ts (the Timing panel:
+               lanes from onTrace, cursors, VCD), stage.ts (probe mode, clock period, slow-motion
+               fronts)
+src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...);
+               insthw.ts maps an instruction to the units it uses (and pipeline stage units)
 src/chapters/  narrative content: chapters → steps → scene / widget / challenge
 src/ui/        app shell, router, theme, settings, progress
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
@@ -163,6 +174,19 @@ with the CPU panel (listing, registers, memory, golden-model lock-step) and opti
 pipeline diagram and the static-timing panel. Panels observe clock edges through
 `stage.edgeHooks` (before / after every rising edge), so they stay correct during fast runs.
 The pipeline's golden model steps when a valid instruction is in W (`retiring()`).
+Clicking a listing line highlights the instruction's hardware (insthw.ts) in focus mode
+(`stage.highlight(names, true)` fades the rest); "in ROM" calls `stage.reveal(['imem'], 'c<i>')`.
+
+### Viewing aids (all derived, none stored in the netlists)
+
+- Wire palettes: `data-palette` on `<html>` (styles/palettes.css, `light-dark()` tokens). Use
+  `--w0 --w1 --wx --wz --bus --bus1` and the shape tokens (`--wire-w0` …), never raw colours.
+  Probe colours are `--probe-0..7` (class `p0..p7` sets `--pc`).
+- Hops, tap bit ranges, net selection and probe flags are computed in the view from the
+  routed nets; nothing to author. Slow motion draws each change as a front over one gate
+  delay (`SchematicView.flowMs`); the simulation's timing is unchanged.
+- The Timing panel only records nets of the scene's own simulation (`ctx.sim === stage.sim`);
+  sub-simulations (an opened NAND, the ROM) cannot be probed. `Scene.analyzer` opens it.
 
 ### Writing chapters
 

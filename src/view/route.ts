@@ -179,3 +179,82 @@ function labelAnchor(paths: Vec[][]): Vec | null {
   }
   return len >= 3 ? best : null;
 }
+
+/**
+ * SVG path data for every routed path, with a hop (a small arc) wherever a horizontal
+ * segment crosses a vertical segment of another net. Crossings closer than a hop's width
+ * share one wider arc. Same-net crossings are left alone (they meet at junction dots).
+ */
+export function hopPathData(nets: RoutedNet[], bars: { x: number; y0: number; y1: number }[] = [], r = 0.45): string[][] {
+  const eps = 0.01;
+  // Vertical segments of every net, bucketed by x for quick lookup. Splitter / merger bars
+  // are obstacles too (net -1): a wire passing over another bus's bar hops it.
+  const vert = new Map<number, { y0: number; y1: number; net: number }[]>();
+  for (const b of bars) {
+    const list = vert.get(b.x) ?? [];
+    list.push({ y0: b.y0, y1: b.y1, net: -1 });
+    vert.set(b.x, list);
+  }
+  for (const n of nets) {
+    for (const p of n.paths) {
+      for (let i = 1; i < p.length; i++) {
+        const [a, b] = [p[i - 1], p[i]];
+        if (a[0] !== b[0] || a[1] === b[1]) continue;
+        const list = vert.get(a[0]) ?? [];
+        list.push({ y0: Math.min(a[1], b[1]), y1: Math.max(a[1], b[1]), net: n.index });
+        vert.set(a[0], list);
+      }
+    }
+  }
+  const xs = [...vert.keys()].sort((a, b) => a - b);
+  const crossings = (y: number, xa: number, xb: number, net: number): number[] => {
+    const lo = Math.min(xa, xb) + r + eps, hi = Math.max(xa, xb) - r - eps;
+    const out: number[] = [];
+    // binary search the first x ≥ lo
+    let l = 0, h = xs.length;
+    while (l < h) { const m = (l + h) >> 1; if (xs[m] < lo) l = m + 1; else h = m; }
+    for (let i = l; i < xs.length && xs[i] <= hi; i++) {
+      if (vert.get(xs[i])!.some((v) => v.net !== net && v.y0 < y - eps && v.y1 > y + eps)) out.push(xs[i]);
+    }
+    return out;
+  };
+  return nets.map((n) => n.paths.map((p) => {
+    let d = `M${p[0][0]},${p[0][1]}`;
+    for (let i = 1; i < p.length; i++) {
+      const [a, b] = [p[i - 1], p[i]];
+      if (a[1] === b[1] && a[0] !== b[0]) {
+        const dir = Math.sign(b[0] - a[0]);
+        const hits = crossings(a[1], a[0], b[0], n.index).sort((u, v) => (u - v) * dir);
+        // Group crossings whose hops would overlap.
+        const groups: [number, number][] = [];
+        for (const x of hits) {
+          const g = groups[groups.length - 1];
+          if (g && Math.abs(x - g[1]) < 2 * r + 0.15) g[1] = x;
+          else groups.push([x, x]);
+        }
+        for (const [x0, x1] of groups) {
+          const s = x0 - dir * r, e = x1 + dir * r;
+          const rx = Math.abs(e - s) / 2;
+          // The arc always bulges upward: sweep 1 going right, 0 going left.
+          d += ` L${s},${a[1]} A${rx},${r * 1.1} 0 0 ${dir > 0 ? 1 : 0} ${e},${a[1]}`;
+        }
+      }
+      d += ` L${b[0]},${b[1]}`;
+    }
+    return d;
+  }));
+}
+
+/** Vertical bars of the splitters and mergers in a netlist (obstacles for hops). */
+export function splitterBars(nl: Netlist): { x: number; y0: number; y1: number }[] {
+  const out: { x: number; y0: number; y1: number }[] = [];
+  for (const i of nl.instances) {
+    const k = i.def.symbol.kind;
+    if (k !== 'split' && k !== 'merge') continue;
+    const g = symbolGeom(i.def);
+    const at = i.at ?? [0, 0];
+    const ys = i.def.ports.filter((p) => (k === 'split' ? p.dir === 'out' : p.dir === 'in')).map((p) => g.ports[p.name].pos[1]);
+    out.push({ x: at[0] + 0.5, y0: at[1] + Math.min(...ys) - 0.4, y1: at[1] + Math.max(...ys) + 0.4 });
+  }
+  return out;
+}

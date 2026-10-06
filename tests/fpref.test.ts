@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { breathe, operandPairs } from './fptest';
 import { F32, FLAG, RM, bitsToF32, f32ToBits, fpAddRef, fpAddX, fpFromIntRef, fpMulRef, fpMulX, fpToIntX, fpValue } from '../src/sim/fpref';
 
 describe('reference float arithmetic agrees with the host float32', () => {
@@ -25,8 +26,11 @@ describe('rounding modes: the reference obeys their definitions', () => {
   // E4M3: every sum, difference and product is exact in a double, so it can be compared directly.
   const f = { E: 4, M: 3 }, emaxNext = 2 ** 8; // ∞ stands for 2^(emax + 1) when measuring distance
   const val = (y: number) => { const v = fpValue(y, f); return Math.abs(v) === Infinity ? Math.sign(v) * emaxNext : v; };
-  it('RDN ≤ exact ≤ RUP; RTZ, RNE and RMM pick the right neighbour; NX iff inexact', () => {
-    for (let a = 0; a < 256; a++) for (let b = 0; b < 256; b++) {
+  it('RDN ≤ exact ≤ RUP; RTZ, RNE and RMM pick the right neighbour; NX iff inexact', async () => {
+    const pairs = operandPairs(f);
+    for (let k = 0; k < pairs.length; k++) {
+      if (k % 4000 === 3999) await breathe();
+      const [a, b] = pairs[k];
       const A = fpValue(a, f), B = fpValue(b, f);
       for (const [exact, r] of [[A + B, (rm: number) => fpAddX(a, b, false, f, rm)], [A * B, (rm: number) => fpMulX(a, b, f, rm)]] as const) {
         if (!Number.isFinite(exact) || exact === 0 || Math.abs(exact) >= emaxNext) continue; // (beyond 2^8: overflow in every mode)

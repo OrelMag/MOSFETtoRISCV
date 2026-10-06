@@ -20,7 +20,7 @@ export function startApp(root: HTMLElement): void {
   const radixes: [Radix, string][] = [['hex', 'HEX'], ['bin', 'BIN'], ['dec', 'DEC']];
   for (const [r, label] of radixes) radix.append(h('button', { 'data-r': r, onclick: () => settings.set('radix', r) }, label));
 
-  const animate = h('button', { class: 'btn sm toggle', title: 'Animate signal propagation one gate delay at a time' }, icon('play', 14), h('span', { class: 'lbl' }, 'Slow motion'));
+  const animate = h('button', { class: 'btn sm toggle', title: 'Slow motion: one gate delay at a time, each change travelling along its wires' }, icon('play', 14), h('span', { class: 'lbl' }, 'Slow motion'));
   animate.addEventListener('click', () => settings.set('animate', !settings.animate));
 
   const themeBtn = h('button', { class: 'btn ghost icon-only', 'aria-label': 'Theme' });

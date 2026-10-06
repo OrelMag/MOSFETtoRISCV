@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { singleCycleCpu } from '../src/lib';
 import { assemble } from '../src/riscv/asm';
 import { clockCycle, cpuState } from '../src/riscv/cosim';
+import { breathe } from './fptest';
 import { F_PROGRAMS } from '../src/riscv/fprograms';
 import { disasm } from '../src/riscv/isa';
 import { ISS } from '../src/riscv/iss';
@@ -9,7 +10,7 @@ import { PROGRAMS } from '../src/riscv/programs';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 
-function cosim(source: string, cycles = 400) {
+async function cosim(source: string, cycles = 400) {
   const asm = assemble(source);
   expect(asm.errors).toEqual([]);
   const design = flatten(singleCycleCpu(asm.words, { fpu: true, adder: 'ks' }));
@@ -18,6 +19,7 @@ function cosim(source: string, cycles = 400) {
   sim.settle();
   const iss = new ISS(asm.words);
   for (let c = 0; c < cycles && !iss.halted; c++) {
+    if (c % 50 === 49) await breathe();
     const info = iss.step();
     clockCycle(sim);
     const st = cpuState(sim);
@@ -72,6 +74,6 @@ describe('assembler and ISS: F extension', () => {
 });
 
 describe('single-cycle RV32IF CPU (gate level) vs golden model', () => {
-  for (const p of F_PROGRAMS) it(p.id, () => { const r = cosim(p.source); console.log(`${p.id}: ${r.leaves} leaves`); }, 300000);
-  it('still runs integer programs', () => { for (const id of ['sort', 'gcd']) cosim(PROGRAMS.find((p) => p.id === id)!.source, 2000); }, 300000);
+  for (const p of F_PROGRAMS) it(p.id, async () => { const r = await cosim(p.source); console.log(`${p.id}: ${r.leaves} leaves`); }, 300000);
+  it('still runs integer programs', async () => { for (const id of ['sort', 'gcd']) await cosim(PROGRAMS.find((p) => p.id === id)!.source, 2000); }, 300000);
 });

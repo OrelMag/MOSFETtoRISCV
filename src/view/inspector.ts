@@ -5,8 +5,9 @@ import { evalOnce, forEachInput, inputBits, simulate } from '../sim/harness';
 import { logicDepth, stats } from '../sim/stats';
 import { type Bit, type ComponentDef, inPorts, netlistOf, outPorts } from '../sim/types';
 import { formatBits, formatNumber, pack, type Radix } from '../sim/values';
+import { exportHdl, testableComb, type HdlFlavor } from '../sim/svexport';
 import { structuralVerilog } from '../sim/verilog';
-import { h, icon, s } from '../ui/dom';
+import { h, icon } from '../ui/dom';
 
 export interface InspectTarget {
   def: ComponentDef;
@@ -18,17 +19,7 @@ export interface InspectTarget {
   onOpen?: () => void;
 }
 
-export interface WaveSample {
-  t: number;
-  values: number[];
-}
-export interface WaveData {
-  names: string[];
-  widths: number[];
-  samples: WaveSample[];
-}
-
-type Tab = 'info' | 'truth' | 'hdl' | 'waves';
+type Tab = 'info' | 'truth' | 'hdl';
 
 const CATEGORY: Record<string, string> = {
   transistor: 'Transistor level', cell: 'CMOS cell', gate: 'Logic gate', plumbing: 'Wiring',
@@ -42,7 +33,6 @@ export class Inspector {
   private tabBtns = new Map<Tab, HTMLButtonElement>();
   private tab: Tab = 'info';
   private target: InspectTarget | null = null;
-  private waves: WaveData | null = null;
   radix: Radix = 'hex';
 
   constructor() {
@@ -56,7 +46,6 @@ export class Inspector {
     add('info', 'Info', 'info');
     add('truth', 'Table', 'table');
     add('hdl', 'Verilog', 'code');
-    add('waves', 'Waves', 'wave');
     this.el = h('aside', { class: 'inspector' }, tabs, this.body);
     this.setTab('info');
   }
@@ -72,14 +61,9 @@ export class Inspector {
     this.render();
   }
 
-  setWaves(w: WaveData | null): void {
-    this.waves = w;
-    if (this.tab === 'waves') this.render();
-  }
-
   /** Cheap refresh of live values (called on every simulation change). */
   update(): void {
-    if (this.tab === 'info' || this.tab === 'truth' || this.tab === 'waves') this.render();
+    if (this.tab === 'info' || this.tab === 'truth') this.render();
   }
 
   private render(): void {
@@ -88,8 +72,7 @@ export class Inspector {
     if (!t) return;
     if (this.tab === 'info') this.renderInfo(t);
     else if (this.tab === 'truth') this.renderTruth(t);
-    else if (this.tab === 'hdl') this.renderHdl(t);
-    else this.renderWaves();
+    else this.renderHdl(t);
   }
 
   private renderInfo(t: InspectTarget): void {
@@ -141,7 +124,7 @@ export class Inspector {
       return;
     }
     if (logicDepthSafe(d) === null && netlistOf(d)) {
-      this.body.append(h('p', { class: 'empty' }, 'This component has feedback, so its outputs depend on its history, not only on its inputs. A truth table cannot describe it. See the Waves tab.'));
+      this.body.append(h('p', { class: 'empty' }, 'This component has feedback, so its outputs depend on its history, not only on its inputs. A truth table cannot describe it. Open the Timing panel to see it over time.'));
       return;
     }
     if (n > 8) {
@@ -165,6 +148,29 @@ export class Inspector {
     );
   }
 
+  /** Download the whole hierarchy as one file, optionally with a self-checking testbench. */
+  private downloadRow(d: ComponentDef): HTMLElement {
+    const tbOk = testableComb(d);
+    const tb = h('input', { type: 'checkbox', checked: tbOk, disabled: !tbOk }) as HTMLInputElement;
+    const note = h('div', { class: 'dl-note' });
+    const go = (flavor: HdlFlavor) => {
+      try {
+        const f = exportHdl(d, flavor, tb.checked);
+        download(f.filename, f.text);
+        note.textContent = `${f.filename}: ${f.modules} module${f.modules > 1 ? 's' : ''}${f.vectors ? `, testbench with ${f.vectors} vectors` : ''}.`;
+      } catch (e) {
+        note.textContent = `Cannot export: ${(e as Error).message}`;
+      }
+    };
+    return h('div', { class: 'dl-hdl' },
+      h('div', { class: 'code-head' }, 'Download the whole hierarchy'),
+      h('div', { class: 'dl-btns' },
+        h('button', { class: 'btn sm', title: 'Every module exactly as drawn: NAND gates, flip-flops as NAND loops (.sv)', onclick: () => go('structure') }, icon('code', 14), 'Exact structure'),
+        h('button', { class: 'btn sm', title: 'Synthesizable Verilog-2005 for Yosys / Verilator / FPGA tools: flip-flops as clocked processes (.v)', onclick: () => go('synth') }, icon('chip', 14), 'Synthesizable'),
+        h('label', { class: 'dl-tb', title: tbOk ? 'Append a self-checking testbench with vectors from this site’s simulation' : 'Testbenches are generated for loop-free (combinational) logic only' }, tb, 'testbench')),
+      note);
+  }
+
   private renderHdl(t: InspectTarget): void {
     const d = t.def;
     const gen = structuralVerilog(d);
@@ -175,54 +181,18 @@ export class Inspector {
       this.body.append(h('p', { class: 'empty' }, 'No HDL for this element.'));
       return;
     }
+    if (gen) this.body.append(this.downloadRow(d));
     for (const [title, code] of blocks) {
       const copy = h('button', { class: 'btn ghost sm', onclick: () => navigator.clipboard?.writeText(code) }, 'Copy');
       this.body.append(h('div', { class: 'code-head' }, title, copy), h('pre', { class: 'code', html: highlight(code) }));
     }
   }
+}
 
-  private renderWaves(): void {
-    const w = this.waves;
-    if (!w || w.samples.length < 1) {
-      this.body.append(h('p', { class: 'empty' }, 'Change an input to start recording.'));
-      return;
-    }
-    const W = 300, laneH = 26, left = 52;
-    const t0 = w.samples[0].t, t1 = Math.max(t0 + 1, w.samples[w.samples.length - 1].t + 2);
-    const x = (t: number) => left + ((t - t0) / (t1 - t0)) * (W - left - 4);
-    const svg = s('svg', { viewBox: `0 0 ${W} ${w.names.length * laneH + 18}` });
-    w.names.forEach((name, li) => {
-      const y0 = li * laneH + 6, y1 = y0 + 16;
-      svg.append(s('text', { x: 0, y: y0 + 12, class: 'lane-name' }, name));
-      svg.append(s('line', { x1: left, x2: W, y1: y1 + 4, y2: y1 + 4, class: 'grid-line' }));
-      const width = w.widths[li];
-      if (width === 1) {
-        let d = '';
-        w.samples.forEach((smp, i) => {
-          const v = smp.values[li];
-          const yy = v === 1 ? y0 : v === 0 ? y1 : (y0 + y1) / 2;
-          d += i === 0 ? `M${x(smp.t)},${yy}` : ` H${x(smp.t)} V${yy}`;
-        });
-        d += ` H${x(t1)}`;
-        svg.append(s('path', { d, class: 'trace' }));
-      } else {
-        w.samples.forEach((smp, i) => {
-          const xa = x(smp.t), xb = i + 1 < w.samples.length ? x(w.samples[i + 1].t) : x(t1);
-          if (i > 0 && w.samples[i - 1].values[li] === smp.values[li]) return;
-          let j = i + 1;
-          while (j < w.samples.length && w.samples[j].values[li] === smp.values[li]) j++;
-          const xe = j < w.samples.length ? x(w.samples[j].t) : x(t1);
-          svg.append(s('path', { d: `M${xa + 2},${y0} H${xe - 2} L${xe},${(y0 + y1) / 2} L${xe - 2},${y1} H${xa + 2} L${xa},${(y0 + y1) / 2} Z`, class: 'trace bus' }));
-          if (xe - xa > 22) svg.append(s('text', { x: (xa + xe) / 2, y: y0 + 11.5, 'text-anchor': 'middle', class: 'bus-val' }, smp.values[li] < 0 ? 'x' : formatNumber(smp.values[li], width, this.radix)));
-          void xb;
-        });
-      }
-    });
-    const tl = w.names.length * laneH + 14;
-    svg.append(s('text', { x: left, y: tl, class: 'bus-val' }, `t = ${t0}`));
-    svg.append(s('text', { x: W - 2, y: tl, class: 'bus-val', 'text-anchor': 'end' }, `${t1} gate delays`));
-    this.body.append(h('p', { class: 'insp-summary' }, 'The scene\'s pins over time, in gate delays. Rising edges of the clock are when flip-flops capture.'), h('div', { class: 'waves' }, svg));
-  }
+function download(name: string, text: string): void {
+  const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })), download: name });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 function logicDepthSafe(d: ComponentDef): number | null {
