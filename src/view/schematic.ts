@@ -375,8 +375,10 @@ export class SchematicView {
       if (!best) continue;
       const tw = textWidth(p.label, 0.78) + 0.7;
       const [x, y] = best;
-      const f = s('g', { class: `probe-flag p${p.color}`, transform: `translate(${x},${y})` });
-      f.append(s('circle', { r: 0.42, class: 'probe-tip' }),
+      // data-net: a click on the flag acts as a click on its wire (in probe mode: remove the probe).
+      const f = s('g', { class: `probe-flag p${p.color}`, transform: `translate(${x},${y})`, 'data-net': String(w.net.index) });
+      f.append(s('title', null, `${p.label}: click to remove the probe`),
+        s('circle', { r: 0.42, class: 'probe-tip' }),
         s('path', { d: 'M0,0 L0.9,-1.6', class: 'probe-pole' }),
         s('rect', { x: 0.9, y: -2.65, width: tw, height: 1.2, rx: 0.3 }),
         s('text', { x: 0.9 + tw / 2, y: -1.8, 'text-anchor': 'middle' }, p.label));

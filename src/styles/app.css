@@ -250,7 +250,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .p0 { --pc: var(--probe-0); } .p1 { --pc: var(--probe-1); } .p2 { --pc: var(--probe-2); } .p3 { --pc: var(--probe-3); }
 .p4 { --pc: var(--probe-4); } .p5 { --pc: var(--probe-5); } .p6 { --pc: var(--probe-6); } .p7 { --pc: var(--probe-7); }
-.probe-flag { pointer-events: none; }
+/* Flags belong to probe mode: hidden outside it (the lanes stay in the timing panel). */
+.canvas:not(.probing) .probes { display: none; }
+.probe-flag { cursor: pointer; }
+.probe-flag:hover rect, .probe-flag:hover .probe-tip { filter: brightness(1.15); }
 .probe-flag .probe-tip { fill: var(--pc); stroke: var(--surface); stroke-width: 0.12; }
 .probe-flag .probe-pole { stroke: var(--pc); stroke-width: 0.14; }
 .probe-flag rect { fill: var(--pc); }
