@@ -369,7 +369,7 @@ export const SAT_COUNTER: ComponentDef = define({
       { name: 'c', ends: ['c', 'sc.in'] },
       { name: 'c1', ends: ['sc.o1', 'inc1.a', 'inc0.a', 'dec1.a', 'dec0.a'], tags: true },
       { name: 'c0', ends: ['sc.o0', 'inc1.b', 'nc0.a', 'dec1.b'], tags: true },
-      { name: '¬c0', ends: ['nc0.y', 'inc0.b', 'dec0.b'], tags: true },
+      { name: '¬c0', ends: ['nc0.y', 'inc0.b', 'dec0.b'], tags: ['dec0.b'] },
       { name: 'inc1', ends: ['inc1.y', 'm1.d1'] }, { name: 'inc0', ends: ['inc0.y', 'm0.d1'] },
       { name: 'dec1', ends: ['dec1.y', 'm1.d0'] }, { name: 'dec0', ends: ['dec0.y', 'm0.d0'] },
       { name: 'taken', ends: ['taken', 'm1.s', 'm0.s', 'nt.a', 'h1.d0'], tags: true },
