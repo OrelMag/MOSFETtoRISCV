@@ -151,9 +151,10 @@ export class SchematicView {
       const w: WireEls = { net, paths: [], dots: [], tags: [], taps: [] };
       const name = nl.nets[net.index].name ?? `n${net.index}`;
       for (const t of net.tags) {
-        const { tip: E, rect: { x: rx, y: ry, w: tw, h: th } } = tagGeom(t, name);
+        const { stub: sp, rect: { x: rx, y: ry, w: tw, h: th } } = tagGeom(t, name);
         const g = s('g', { class: 'net-tag', 'data-net': net.index });
-        const stub = s('path', { d: `M${t.pos[0]},${t.pos[1]} L${E[0]},${E[1]}`, class: cls });
+        // A hand-placed tag's stub is one of the net's paths (drawn below with the wires).
+        const stub = s('path', { d: sp.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join(' '), class: cls });
         g.append(stub, s('rect', { x: rx, y: ry, width: tw, height: th, rx: 0.35 }),
           s('text', { x: rx + tw / 2, y: ry + th / 2 + 0.3, 'text-anchor': 'middle' }, name));
         w.tags.push(g);

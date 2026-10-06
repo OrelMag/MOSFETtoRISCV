@@ -9,11 +9,16 @@ import { type ComponentDef, type Netlist, parseEnd } from '../sim/types';
 
 export interface NetTag {
   end: string;
-  /** Port position and the direction the stub leaves it. */
+  /** Port position and the direction the stub leaves it (with `at`: the label's direction). */
   pos: Vec;
   dir: ExitDir;
   /** Stub length: longer on a splitter / merger tap, so the label clears the tap's bit range. */
   stub: number;
+  /**
+   * Authored label position (NetDef.tagAt). The stub from `pos` to here is then a wire of the
+   * net (in RoutedNet.paths, so hops and overlap checks see it), and `dir` is its last leg.
+   */
+  at?: Vec;
 }
 
 export interface Rect { x: number; y: number; w: number; h: number }
@@ -113,6 +118,24 @@ function rawPath([P, P1, S1, S]: Quad, h: boolean, t: number): Vec[] {
 
 const pathsOf = (n: NetPlan, t: number): Vec[][] => n.sinks.map((s) => ('free' in s ? simplify(rawPath(s.free, n.h, t)) : s.path));
 
+/**
+ * The stub from a pin to an authored tag position: it leaves the pin in its exit direction
+ * (stepping out first if the tag lies behind the pin), then turns once onto the tag. The label
+ * continues the last leg, so it never sits on its own stub.
+ */
+export function tagStub(pos: Vec, exit: ExitDir, at: Vec): { path: Vec[]; dir: ExitDir } {
+  const d = DIR[exit], h = horiz(exit);
+  const ahead = h ? (at[0] - pos[0]) * d[0] : (at[1] - pos[1]) * d[1];
+  const out = add(pos, d, STUB);
+  const path = simplify(ahead > 0
+    ? [pos, h ? [at[0], pos[1]] : [pos[0], at[1]], at]
+    : [pos, out, h ? [out[0], at[1]] : [at[0], out[1]], at]);
+  if (path.length < 2) return { path, dir: exit };
+  const [a, b] = path.slice(-2);
+  const dir: ExitDir = b[0] > a[0] ? 'right' : b[0] < a[0] ? 'left' : b[1] > a[1] ? 'down' : 'up';
+  return { path, dir };
+}
+
 export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[]; pins: Map<string, PinGeom> } {
   const pins = pinGeoms(def, nl);
   const allTaps = tapLabels(nl);
@@ -127,14 +150,18 @@ export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[
     const P = drv.pos;
     const P1 = add(P, DIR[drv.exit], STUB);
     const tagged = (i: number) => net.tags === true || (net.tags?.includes(net.ends[i]) ?? false);
+    const authored = (i: number) => net.tagAt?.[net.ends[i]];
     const tag = (i: number): NetTag => {
+      const at = authored(i);
+      if (at) return { end: net.ends[i], pos: ends[i].pos, dir: tagStub(ends[i].pos, ends[i].exit, at).dir, stub: 0, at };
       const tap = taps.get(net.ends[i]);
       return { end: net.ends[i], pos: ends[i].pos, dir: ends[i].exit, stub: tap ? TAP_GAP + tap.rect.w + 0.5 : TAG_STUB };
     };
     // A net whose every tagged sink is so close to the driver that the labels would collide is
     // just wired. (If some tags remain, the driver keeps its tag, which would sit on that wire.)
+    // Tags placed by hand stay where they were put.
     const name = net.name ?? `n${index}`;
-    const near = (i: number) => overlaps(tagGeom(tag(0), name).rect, tagGeom(tag(i), name).rect);
+    const near = (i: number) => !authored(0) && !authored(i) && overlaps(tagGeom(tag(0), name).rect, tagGeom(tag(i), name).rect);
     const sinkIdx = ends.map((_, i) => i).slice(1);
     const wireAll = sinkIdx.some(tagged) && sinkIdx.filter(tagged).every(near);
     const tags: NetTag[] = [];
@@ -170,6 +197,13 @@ export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[
         plan.sinks.push({ free: [P, P1, add(s.pos, DIR[s.exit], STUB), s.pos] });
       }
     });
+    // Stubs to hand-placed tags are fixed paths of the net, after the drawn sinks. Like every
+    // path they run in the direction of signal flow: out of the driver, into a sink.
+    for (const t of tags) {
+      if (!t.at) continue;
+      const { path } = tagStub(t.pos, ends[net.ends.indexOf(t.end)].exit, t.at);
+      if (path.length > 1) plan.sinks.push({ path: t.end === net.ends[0] ? path : path.reverse() });
+    }
     const a = h ? 0 : 1, f = plan.sinks.map((_, i) => freeOf(plan, i)).find((q) => q);
     plan.t0 = net.trunk ?? (multi || !f ? P1[a] : half((P1[a] + f[2][a]) / 2));
     return plan;
@@ -534,14 +568,17 @@ export function wireOverlaps(nets: RoutedNet[]): WireOverlap[] {
 
 const TAG_STUB = 1.4, TAG_H = 1.35, TAP_GAP = 0.12;
 
-/** Where a net tag's stub ends and the rectangle of its name label. */
-export function tagGeom(t: NetTag, name: string): { tip: Vec; rect: Rect } {
+/**
+ * Where a net tag's stub ends, the rectangle of its name label, and the stub the tag draws
+ * itself (empty for a hand-placed tag, whose stub is one of the net's paths).
+ */
+export function tagGeom(t: NetTag, name: string): { tip: Vec; rect: Rect; stub: Vec[] } {
   const d = DIR[t.dir];
-  const tip: Vec = [t.pos[0] + d[0] * t.stub, t.pos[1] + d[1] * t.stub];
+  const tip: Vec = t.at ?? [t.pos[0] + d[0] * t.stub, t.pos[1] + d[1] * t.stub];
   const w = textWidth(name, 0.8) + 0.6, h = TAG_H;
   const x = t.dir === 'right' ? tip[0] : t.dir === 'left' ? tip[0] - w : tip[0] - w / 2;
   const y = t.dir === 'down' ? tip[1] : t.dir === 'up' ? tip[1] - h : tip[1] - h / 2;
-  return { tip, rect: { x, y, w, h } };
+  return { tip, rect: { x, y, w, h }, stub: t.at ? [] : [t.pos, tip] };
 }
 
 export interface TapLabel {

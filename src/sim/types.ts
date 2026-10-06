@@ -79,6 +79,12 @@ export interface NetDef {
    */
   tags?: string[] | true;
   /**
+   * Hand-placed tags: the tag of that endpoint is drawn at this point, joined to the endpoint
+   * by an orthogonal stub (leaving the pin in its exit direction, then turning once). Used by
+   * the sandbox, so a packaged chip shows its pointers where the user put them.
+   */
+  tagAt?: { [end: string]: [number, number] | undefined };
+  /**
    * Switch level: the net has significant capacitance (a bit line, a DRAM storage node). When
    * nothing drives it, it keeps its last value as stored charge instead of floating to Z.
    */
