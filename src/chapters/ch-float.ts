@@ -1,4 +1,4 @@
-import { fpAdd, fpMul, fpToInt, fpUnpack, normRound, ROUND_DECIDE } from '../lib';
+import { fpAdd, fpDiv, fpMul, fpSqrt, fpToInt, fpUnpack, normRound, ROUND_DECIDE } from '../lib';
 import { cpuState } from '../riscv/cosim';
 import { F_PROGRAMS } from '../riscv/fprograms';
 import { F32 } from '../sim/fpref';
@@ -137,6 +137,52 @@ export const chFloat: Chapter = {
       },
     },
     {
+      title: 'Division, one bit per clock',
+      body: `
+        <p>Division has no shortcut like the multiplier's tree: each quotient bit depends on the remainder left by the previous one. So the FPU
+        reuses the integer divider of chapter 20: <strong>radix-2 restoring division</strong>, one step per clock. Both significands are first
+        <em>prenormalized</em> (a subnormal's leading zeros shifted out, the exponent lowered), so they lie in [1, 2) and the quotient in (½, 2).
+        The step tries remainder − divisor; if it does not borrow, the quotient bit is 1 and the difference is kept, otherwise the remainder is
+        restored (a multiplexer). M + 4 steps give the M + 1 kept bits, G and one more bit (for tininess) even when the quotient is below 1; the final
+        remainder ≠ 0 is the sticky bit, and the shared normalize &amp; round does the rest, in any mode. Exponent: e<sub>a</sub> − e<sub>b</sub> + bias.
+        x / 0 is ∞ with <strong>DZ</strong>; 0 / 0 and ∞ / ∞ are NaN with NV.</p>
+        <p>Why restoring? It is the integer step unchanged, and a mux is cheap. Non-restoring division drops the mux (add or subtract by the previous
+        sign) but needs a correction step before the remainder can serve as a sticky bit; real FPUs use SRT radix-4 with a redundant remainder,
+        2 bits per clock with no carry chain in the loop, at the price of a quotient-digit table. float32: 27 steps, <strong>29 cycles</strong>,
+        10 100 NANDs (5 900 of them normalize &amp; round, 2 300 the two prenormalizers); the step loop is 58 NAND delays.</p>
+        <div class="try">1.0 / 3.0 in the 8-bit format: start = 1. Pulse the clock 8 times: q fills from the right, then done = 1 and y = 0x2B (1.011₂ × 2<sup>−2</sup> = 0.34375, rounded up: NX). Try b = 0 (1 / 0 = ∞, DZ).</div>`,
+      scene: () => ({ root: fpDiv(E4M3), inputs: { a: 0x38, b: 0x44, rm: 0, start: 1, clk: 0 } }),
+      challenge: {
+        kind: 'reach', goal: 'Clock the divider until done = 1 with y = 0x2B (1 / 3, rounded to nearest).',
+        check: (st) => st.value('done') === 1 && st.value('y') === 0x2b,
+        answer: 'Eight pulses: one loads the remainder with the dividend, seven make one quotient bit each (M + 4 = 7), and in the ninth cycle done = 1 while normalize & round presents the result.',
+        solve: (st) => { st.setInputs({ a: 0x38, b: 0x44, rm: 0, start: 1 }); st.runCycles(8); },
+      },
+    },
+    {
+      title: 'Square root, the same way',
+      body: `
+        <p>Long-hand square root is division by a divisor that is still being built. Write the radicand as 1.f × 2<sup>e</sup>, make e even (double
+        the significand if it is odd), and the root of a number in [1, 4) is in [1, 2) with exponent e / 2. Each clock brings down two radicand bits
+        (r ← 4r + next two) and tries to subtract 4q + 1, the difference between (2q + 1)² and (2q)², scaled; if it fits, the next root bit is 1. M + 3
+        steps, the remainder is the sticky bit. √−0 = −0, the root of anything negative is NaN with NV.</p>
+        <p>A square root never overflows or underflows (it halves the exponent), and never lands exactly halfway between two floats, so RNE and RMM
+        always agree. float32: 26 steps, <strong>28 cycles</strong>, 9 000 NANDs. Real FPUs share one SRT unit between division and square root;
+        here they are two transparent boxes.</p>
+        <div class="try">a = 0x40 (2.0): pulse the clock 7 times. y = 0x3B (1.011₂ = 1.375, with NX): √2 = 1.0110101…₂ rounds down. Try rm = 3 (RUP): 0x3C.</div>`,
+      scene: () => ({ root: fpSqrt(E4M3), inputs: { a: 0x40, rm: 0, start: 1, clk: 0 } }),
+      challenge: {
+        kind: 'quiz', question: 'Why can a correctly rounded square root never be an exact tie?',
+        options: [
+          'If √x were a (p + 1)-bit number ending in 1, its square would end in a 1 below x\'s last bit, so it could not equal x',
+          'Because the hardware computes one extra bit',
+          'Because the exponent is always even',
+          'It can; ties are just rare',
+        ], answer: 0,
+        explain: 'A tie means √x = q + ½ ulp exactly: a number whose last significant bit is 1 at position p + 1. Squaring doubles the number of bits, and the last 1 lands at position 2p + 2, beyond anything x (p bits) can hold. So G = 1 always comes with S = 1, and RNE never needs its tie rule here.',
+      },
+    },
+    {
       title: 'float32: the same circuit, bigger',
       body: `
         <p>Generated from the same code with 8 exponent and 23 fraction bits. The float32 adder costs about <strong>7 900 NANDs</strong> and is
@@ -149,11 +195,11 @@ export const chFloat: Chapter = {
     {
       title: 'An FPU in the CPU',
       body: `
-        <p>The single-cycle CPU gains a second register file (f0–f31, no hard-wired zero) and an FPU implementing RV32F except division, square root
-        and fused multiply-add: flw, fsw, fadd.s, fsub.s, fmul.s, sign injection (fmv.s, fneg.s, fabs.s), fmin/fmax.s, feq/flt/fle.s, fcvt.w[u].s,
-        fcvt.s.w[u], fmv.x.w, fmv.w.x and fclass.s, in all five rounding modes, with the exception flags. flw and fsw reuse the integer load/store path,
-        disguised as lw and sw. funct7 selects one of the units' results; the FPU is 38 100 NANDs.</p>
-        <p>The cost: about 121 000 NANDs (twice the integer CPU), and a clock period of <strong>274</strong> NAND delays instead of 103. A float add in one
+        <p>The single-cycle CPU gains a second register file (f0–f31, no hard-wired zero) and an FPU implementing RV32F except fused multiply-add:
+        flw, fsw, fadd.s, fsub.s, fmul.s, fdiv.s and fsqrt.s (iterative: they stall the CPU, two steps on), sign injection (fmv.s, fneg.s, fabs.s),
+        fmin/fmax.s, feq/flt/fle.s, fcvt.w[u].s, fcvt.s.w[u], fmv.x.w, fmv.w.x and fclass.s, in all five rounding modes, with the exception flags.
+        flw and fsw reuse the integer load/store path, disguised as lw and sw. funct7 selects one of the units' results; the FPU is 57 400 NANDs.</p>
+        <p>The cost: about 140 700 NANDs (2.4 times the integer CPU), and a clock period of <strong>274</strong> NAND delays instead of 103. A float add in one
         cycle makes every instruction slow. Real cores pipeline the FPU over 3 to 5 cycles.</p>
         <div class="try">Run "0.1 ten times": the sum is 0x3F800001, one ulp above 1.0, and feq.s says 0.</div>`,
       scene: () => cpuScene({ source: fsrc('tenth'), fpu: true, adder: 'ks', timing: true, highlight: ['fpu', 'frf'] }),
@@ -180,6 +226,29 @@ export const chFloat: Chapter = {
         kind: 'quiz', question: 'After fmul.s of 0.75 × 2⁻¹²⁶ (a subnormal result, computed exactly), which flags are set?',
         options: ['UF', 'UF and NX', 'None', 'NX'], answer: 2,
         explain: 'Underflow needs both a tiny result and a loss of accuracy. 0.75 × 2⁻¹²⁶ = 0.11₂ × 2⁻¹²⁶ fits the subnormal format exactly, so no flag. 2⁻¹²⁶ / 3 does not: UF and NX.',
+      },
+    },
+    {
+      title: 'Stalling for fdiv and fsqrt',
+      body: `
+        <p>A 29-cycle instruction in a single-cycle CPU: the FPU raises <strong>stall</strong> while its divider or square-root unit is busy
+        and not done, exactly like the integer divider of the RV32IM system CPU. retire = ¬stall gates the PC enable and both register-file write
+        enables, so the instruction stays in place until its result is ready, then retires in the done cycle. The fflags write is gated too: during the
+        stall the flags at the FPU's output belong to a half-finished quotient. The golden model steps only when retire = 1.</p>
+        <p>The two units add 19 300 NANDs: the CPU is now 140 700. The clock period stays 274: one step is 58 NAND delays, far below a float add.
+        "Division and square root" takes 215 cycles for 22 instructions. "Newton's √2" computes x ← (x + 2 / x) / 2 four times: 132 cycles to reach the
+        same correctly rounded float that one fsqrt.s gives in 28.</p>
+        <div class="try">Run "Division and square root": the PC waits at each fdiv.s and fsqrt.s while the panel says stalled, and the CPI climbs.</div>`,
+      scene: () => cpuScene({ source: fsrc('divsqrt'), fpu: true, adder: 'ks', highlight: ['fpu'] }),
+      challenge: {
+        kind: 'quiz', question: 'Why must the fflags update be gated by retire, when the register writes already are?',
+        options: [
+          'Because fflags is sticky: an OR of 28 cycles of intermediate garbage flags would never be undone',
+          'To save power',
+          'Because CSR instructions stall too',
+          'It need not be; the flags only change at the end',
+        ], answer: 0,
+        explain: 'A register write that happens too early is overwritten by the correct one at retirement, but fflags only accumulates: any spurious NX or OF ORed in during the stall would stay set. So the accrual enable is OP-FP AND retire.',
       },
     },
     {

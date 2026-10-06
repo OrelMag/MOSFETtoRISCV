@@ -154,7 +154,9 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   normalize & round (tininess after rounding), fcvt.w[u].s with saturation, fmin / fmax (IEEE 754-2019), fclass, signaling
   compares, fcsr (fflags / frm / fcsr via Zicsr) in the FPU path; exhaustive small-format tests in every mode with flags
   (bit-parallel simulator, 32 vectors per pass); ISS on the exact reference
-- ⏳ fdiv / fsqrt / fma; a pipelined FPU
+- ✅ fdiv.s / fsqrt.s: prenormalize + radix-2 restoring digit recurrences (27 / 26 steps, 29 / 28 cycles), each
+  ending in the generic normalize & round, stalling the single-cycle CPU (retire gates PC, register writes and fflags); exhaustive small formats
+- ⏳ fma (R4 format); a pipelined FPU
 - Superscalar and out-of-order intuition (scoreboard / Tomasulo widget)
 - Compressed instructions (C), A extension (LR/SC, AMO)
 - Virtual memory (Sv32), TLB, U/S/M privilege levels (stretch)

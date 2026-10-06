@@ -121,6 +121,45 @@ export function fpMulX(a: number, b: number, f: FpFormat, rm: number = RM.RNE): 
   return roundToX(sign, x.mant * y.mant, x.exp2 + y.exp2, f, rm);
 }
 
+/** a / b. x / 0 (x finite, non-zero) is ∞ with DZ; 0 / 0 and ∞ / ∞ are invalid. */
+export function fpDivX(a: number, b: number, f: FpFormat, rm: number = RM.RNE): FpResult {
+  const pa = parts(a, f), pb = parts(b, f), sign = pa.sign ^ pb.sign;
+  if (pa.kind === 'nan' || pb.kind === 'nan') return nanResult(isSNaN(a, f) || isSNaN(b, f) ? FLAG.NV : 0, f);
+  if ((pa.kind === 'inf' && pb.kind === 'inf') || (pa.kind === 'zero' && pb.kind === 'zero')) return nanResult(FLAG.NV, f);
+  if (pa.kind === 'inf') return { y: infOf(sign, f), fl: 0 };
+  if (pb.kind === 'zero') return { y: infOf(sign, f), fl: FLAG.DZ };
+  if (pa.kind === 'zero' || pb.kind === 'inf') return { y: pack(sign, 0, 0, f), fl: 0 };
+  const x = exact(a, f), y = exact(b, f);
+  // enough quotient bits that the remainder only matters as a sticky bit below the guard
+  const K = 2 * f.M + 8, num = x.mant << BigInt(K), q = num / y.mant, r = num - q * y.mant;
+  return roundToX(sign, (q << 1n) | (r ? 1n : 0n), x.exp2 - y.exp2 - K - 1, f, rm);
+}
+
+/** Integer square root (floor) of a non-negative BigInt. */
+function isqrt(n: bigint): bigint {
+  if (n < 2n) return n;
+  let x = 1n << BigInt((bitLength(n) + 1) >> 1);
+  for (;;) {
+    const y = (x + n / x) >> 1n;
+    if (y >= x) return x;
+    x = y;
+  }
+}
+
+/** √a. √−0 = −0; the root of anything below zero (−∞ included) is invalid. */
+export function fpSqrtX(a: number, f: FpFormat, rm: number = RM.RNE): FpResult {
+  const p = parts(a, f);
+  if (p.kind === 'nan') return nanResult(isSNaN(a, f) ? FLAG.NV : 0, f);
+  if (p.kind === 'zero') return { y: a, fl: 0 };
+  if (p.sign) return nanResult(FLAG.NV, f);
+  if (p.kind === 'inf') return { y: a, fl: 0 };
+  const x = exact(a, f);
+  let m = x.mant, e = x.exp2;
+  if (e & 1) { m <<= 1n; e -= 1; }               // an even exponent halves exactly
+  const K = 2 * f.M + 8, n = m << BigInt(2 * K), s = isqrt(n);
+  return roundToX(0, (s << 1n) | (s * s !== n ? 1n : 0n), e / 2 - K - 1, f, rm);
+}
+
 /** Integer (two's complement if signed) to float. */
 export function fpFromIntX(v: number, signed: boolean, f: FpFormat, rm: number = RM.RNE, width = 32): FpResult {
   let x = BigInt(Math.floor(v) % 2 ** width);

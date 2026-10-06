@@ -172,4 +172,54 @@ halt:   j    halt`,
         frflags a7             # 0x10
 halt:   j    halt`,
   },
+  {
+    id: 'divsqrt',
+    name: 'Division and square root',
+    blurb: 'fdiv.s and fsqrt.s on the iterative units: each stalls the CPU for 29 or 28 cycles. 1/3, x/0 (DZ), 0/0 (NV), √2, √−0 and √−1.',
+    source: `# iterative division and square root: watch the PC wait while they run
+        li   t0, 1
+        fcvt.s.w ft0, t0       # 1.0
+        li   t0, 3
+        fcvt.s.w ft1, t0       # 3.0
+        fdiv.s ft2, ft0, ft1   # 1/3 = 0x3EAAAAAB (rounded up: 0.333333343)
+        fdiv.s ft3, ft0, ft1, rtz # 0x3EAAAAAA, truncated
+        fsflags a0, zero       # 0x01: NX
+        fmv.w.x ft4, zero      # +0
+        fdiv.s ft5, ft0, ft4   # 1/0 = +inf
+        fsflags a1, zero       # 0x08: DZ
+        fdiv.s ft6, ft4, ft4   # 0/0 = NaN
+        fsflags a2, zero       # 0x10: NV
+        li   t0, 2
+        fcvt.s.w ft7, t0
+        fsqrt.s ft8, ft7       # sqrt 2 = 0x3FB504F3
+        fneg.s ft9, ft4        # -0
+        fsqrt.s ft10, ft9      # sqrt -0 = -0
+        fneg.s ft11, ft0
+        fsqrt.s fs0, ft11      # sqrt -1 = NaN
+        frflags a3             # 0x11: NV NX
+        fmv.x.w a4, ft8
+halt:   j    halt`,
+  },
+  {
+    id: 'newton',
+    name: "Newton's √2",
+    blurb: "Newton's iteration x = (x + 2/x) / 2 from x = 1, four times, against one fsqrt.s: the iteration lands on the same correctly rounded float, at four divisions' cost.",
+    source: `# sqrt(2) by Newton's method, compared with the hardware square root
+        li   t0, 2
+        fcvt.s.w fs0, t0       # a = 2
+        li   t0, 1
+        fcvt.s.w fa0, t0       # x = 1
+        li   t0, 0x3f000000
+        fmv.w.x fs1, t0        # 0.5
+        li   t1, 4
+loop:   fdiv.s ft0, fs0, fa0   # a / x
+        fadd.s ft0, ft0, fa0   # x + a / x
+        fmul.s fa0, ft0, fs1   # x = (x + a / x) / 2
+        addi t1, t1, -1
+        bnez t1, loop
+        fsqrt.s fa1, fs0       # one instruction, 28 cycles
+        feq.s a0, fa0, fa1     # 1: the same float
+        fmv.x.w a1, fa0        # 0x3FB504F3
+halt:   j    halt`,
+  },
 ];

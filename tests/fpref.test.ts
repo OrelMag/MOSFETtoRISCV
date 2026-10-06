@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { breathe, operandPairs } from './fptest';
-import { F32, FLAG, RM, bitsToF32, f32ToBits, fpAddRef, fpAddX, fpFromIntRef, fpMulRef, fpMulX, fpToIntX, fpValue } from '../src/sim/fpref';
+import { F32, FLAG, RM, bitsToF32, f32ToBits, fpAddRef, fpAddX, fpDivX, fpFromIntRef, fpMulRef, fpMulX, fpSqrtX, fpToIntX, fpValue } from '../src/sim/fpref';
 
 describe('reference float arithmetic agrees with the host float32', () => {
   it('add, sub, mul and int conversion on random and special operands', () => {
@@ -52,6 +52,28 @@ describe('rounding modes: the reference obeys their definitions', () => {
       }
     }
   }, 60000);
+  it('division and square root agree with the host (RNE) and bracket the exact value (RDN / RUP)', () => {
+    let seed = 5;
+    const r = () => (seed = (seed * 1103515245 + 12345) >>> 0);
+    const special = [0, 0x80000000, 0x7f800000, 0xff800000, 0x7fc00000, 0x7f800001, 1, 0x00800000, 0x7f7fffff, 0x3f800000, 0xbf800000, 0x40400000];
+    const pick = () => (r() % 5 === 0 ? special[r() % special.length] : ((r() >>> 8) | ((r() & 0xff) << 24)) >>> 0);
+    for (let i = 0; i < 20000; i++) {
+      const a = pick(), b = pick(), A = bitsToF32(a), B = bitsToF32(b);
+      expect(fpDivX(a, b, F32).y, `${a.toString(16)} / ${b.toString(16)}`).toBe(f32ToBits(Math.fround(A / B)));
+      expect(fpSqrtX(a, F32).y, `sqrt ${a.toString(16)}`).toBe(f32ToBits(Math.fround(Math.sqrt(A))));
+      // a double holds the quotient to 53 bits: enough to know which float32 neighbours bracket it
+      const dn = fpValue(fpDivX(a, b, F32, RM.RDN).y, F32), up = fpValue(fpDivX(a, b, F32, RM.RUP).y, F32), q = A / B;
+      if (Number.isFinite(q) && q !== 0 && Math.abs(q) < 3e38 && Math.abs(q) > 1e-37) {
+        const nx = fpDivX(a, b, F32).fl & FLAG.NX;
+        expect(nx ? dn < q && q < up : dn === q && up === q, `${A} / ${B}`).toBe(true);
+      }
+    }
+    expect(fpDivX(0x3f800000, 0, F32)).toEqual({ y: 0x7f800000, fl: FLAG.DZ });
+    expect(fpDivX(0, 0, F32)).toEqual({ y: 0x7fc00000, fl: FLAG.NV });
+    expect(fpSqrtX(0x80000000, F32)).toEqual({ y: 0x80000000, fl: 0 });
+    expect(fpSqrtX(0xbf800000, F32)).toEqual({ y: 0x7fc00000, fl: FLAG.NV });
+    expect(fpSqrtX(0x40000000, F32, RM.RUP)).toEqual({ y: 0x3fb504f4, fl: FLAG.NX }); // √2 rounded up
+  });
   it('float → int saturates and flags like the RISC-V table', () => {
     const F = F32;
     expect(fpToIntX(0x7fc00000, true, F)).toEqual({ y: 0x7fffffff, fl: FLAG.NV });

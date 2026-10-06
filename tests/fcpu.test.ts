@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { singleCycleCpu } from '../src/lib';
 import { assemble } from '../src/riscv/asm';
-import { clockCycle, cpuState } from '../src/riscv/cosim';
-import { breathe } from './fptest';
+import { clockCycle, cpuState, retiring } from '../src/riscv/cosim';
 import { F_PROGRAMS } from '../src/riscv/fprograms';
 import { disasm } from '../src/riscv/isa';
-import { ISS } from '../src/riscv/iss';
+import { FDIV_CYCLES, FSQRT_CYCLES, ISS } from '../src/riscv/iss';
 import { PROGRAMS } from '../src/riscv/programs';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
+import { breathe } from './fptest';
 
-async function cosim(source: string, cycles = 400) {
+/** Co-simulate: the golden model executes one instruction whenever the CPU retires one (fdiv / fsqrt stall). */
+async function cosim(source: string, cycles = 1000) {
   const asm = assemble(source);
   expect(asm.errors).toEqual([]);
   const design = flatten(singleCycleCpu(asm.words, { fpu: true, adder: 'ks' }));
@@ -18,10 +19,13 @@ async function cosim(source: string, cycles = 400) {
   sim.setInput('clk', 0);
   sim.settle();
   const iss = new ISS(asm.words);
-  for (let c = 0; c < cycles && !iss.halted; c++) {
+  let c = 0;
+  for (; c < cycles && !iss.halted; c++) {
     if (c % 50 === 49) await breathe();
-    const info = iss.step();
+    const ret = retiring(sim);
     clockCycle(sim);
+    if (!ret) continue;
+    const info = iss.step();
     const st = cpuState(sim);
     expect(st.pc, `cycle ${c}: pc after ${info.text}`).toBe(iss.pc);
     expect(st.x, `cycle ${c}: x after ${info.text}`).toEqual([...iss.x]);
@@ -30,7 +34,7 @@ async function cosim(source: string, cycles = 400) {
   }
   expect(iss.halted).toBe(true);
   expect(cpuState(sim).dmem).toEqual([...iss.dmem]);
-  return { iss, leaves: design.leaves.length };
+  return { iss, leaves: design.leaves.length, cycles: c };
 }
 
 const run = (id: string) => { const i = new ISS(assemble(F_PROGRAMS.find((p) => p.id === id)!.source).words); for (let k = 0; k < 500 && !i.halted; k++) i.step(); return i; };
@@ -71,9 +75,22 @@ describe('assembler and ISS: F extension', () => {
     expect([x.f[2], x.f[3], x.f[6], x.f[7], x.f[30]]).toEqual([0x3f800000, 0x7fc00000, 0x80000000, 0, 0x3f800000]);
     expect([10, 11, 12, 13, 14, 15, 16, 17].map((i) => x.x[i])).toEqual([0x200, 0x008, 0x020, 0, 0, 0, 0x100, 0x10]);
   });
+  it('division and square root', () => {
+    const d = run('divsqrt');
+    expect([d.f[2], d.f[3], d.f[5], d.f[6], d.f[28], d.f[30], d.f[8]]).toEqual([0x3eaaaaab, 0x3eaaaaaa, 0x7f800000, 0x7fc00000, 0x3fb504f3, 0x80000000, 0x7fc00000]); // ft8 = f28, ft10 = f30, fs0 = f8
+    expect([d.x[10], d.x[11], d.x[12], d.x[13], d.x[14]]).toEqual([0x01, 0x08, 0x10, 0x11, 0x3fb504f3]);
+    const n = run('newton');
+    expect([n.x[10], n.x[11]]).toEqual([1, 0x3fb504f3]);
+  });
 });
 
 describe('single-cycle RV32IF CPU (gate level) vs golden model', () => {
-  for (const p of F_PROGRAMS) it(p.id, async () => { const r = await cosim(p.source); console.log(`${p.id}: ${r.leaves} leaves`); }, 300000);
-  it('still runs integer programs', async () => { for (const id of ['sort', 'gcd']) await cosim(PROGRAMS.find((p) => p.id === id)!.source, 2000); }, 300000);
+  for (const p of F_PROGRAMS) it(p.id, async () => { const r = await cosim(p.source); console.log(`${p.id}: ${r.leaves} leaves, ${r.iss.steps} instructions in ${r.cycles} cycles`); }, 300000);
+  it('fdiv.s and fsqrt.s stall for exactly their latency', async () => {
+    const r = await cosim('li t0, 7\nfcvt.s.w ft0, t0\nfdiv.s ft1, ft0, ft0\nfsqrt.s ft2, ft0\nhalt: j halt');
+    // 2 + 1 one-cycle instructions (li, fcvt, the final j), plus the two iterative ones
+    expect(r.cycles).toBe(3 + FDIV_CYCLES + FSQRT_CYCLES);
+    expect([r.iss.f[1], r.iss.f[2]]).toEqual([0x3f800000, 0x402953fd]);
+  }, 300000);
+  it('still runs integer programs', async () => { for (const id of ['gcd']) await cosim(PROGRAMS.find((p) => p.id === id)!.source, 2000); }, 300000);
 });

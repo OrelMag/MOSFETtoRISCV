@@ -66,6 +66,8 @@ export const INSTRS: InstrSpec[] = [
   FR('fadd.s', 0x00, { rd: 'f', rs1: 'f', rs2: 'f', rm: true }),
   FR('fsub.s', 0x04, { rd: 'f', rs1: 'f', rs2: 'f', rm: true }),
   FR('fmul.s', 0x08, { rd: 'f', rs1: 'f', rs2: 'f', rm: true }),
+  FR('fdiv.s', 0x0c, { rd: 'f', rs1: 'f', rs2: 'f', rm: true }),
+  FR('fsqrt.s', 0x2c, { rd: 'f', rs1: 'f', rs2fixed: 0, rm: true }),
   FR('fsgnj.s', 0x10, { rd: 'f', rs1: 'f', rs2: 'f' }, 0),
   FR('fsgnjn.s', 0x10, { rd: 'f', rs1: 'f', rs2: 'f' }, 1),
   FR('fsgnjx.s', 0x10, { rd: 'f', rs1: 'f', rs2: 'f' }, 2),

@@ -7,7 +7,7 @@
 // memory-mapped I/O, CSRs, exceptions and interrupts (one step = one clock cycle; a cycle in
 // which an interrupt is taken executes no instruction).
 
-import { F32, fpAddX, fpClass, fpCmpX, fpFromIntX, fpMinMaxX, fpMulX, fpToIntX, type FpResult } from '../sim/fpref';
+import { F32, fpAddX, fpClass, fpCmpX, fpDivX, fpFromIntX, fpMinMaxX, fpMulX, fpSqrtX, fpToIntX, type FpResult } from '../sim/fpref';
 import { CSRS, decode, disasm, OPCODES } from './isa';
 
 export interface IssOptions {
@@ -27,6 +27,8 @@ export interface IssOptions {
 
 /** Cycles a div / divu / rem / remu occupies on the iterative divider (1 load + 32 steps + 1 write). */
 export const DIV_CYCLES = 34;
+/** Cycles fdiv.s and fsqrt.s occupy on the iterative units of the single-cycle FPU (1 load + 27 or 26 steps + 1 write). */
+export const FDIV_CYCLES = 29, FSQRT_CYCLES = 28;
 
 /** RV32M arithmetic, exactly as specified (including division by zero and overflow). */
 export function mExec(f3: number, a: number, b: number): number {
@@ -282,6 +284,8 @@ export class ISS {
         case 'fadd.s': fWrite = fr(fpAddX(fa, fb, false, F32, rm)); break;
         case 'fsub.s': fWrite = fr(fpAddX(fa, fb, true, F32, rm)); break;
         case 'fmul.s': fWrite = fr(fpMulX(fa, fb, F32, rm)); break;
+        case 'fdiv.s': fWrite = fr(fpDivX(fa, fb, F32, rm)); break;
+        case 'fsqrt.s': fWrite = fr(fpSqrtX(fa, F32, rm)); break;
         case 'fsgnj.s': fWrite = ((fa & 0x7fffffff) | (fb & 0x80000000)) >>> 0; break;
         case 'fsgnjn.s': fWrite = ((fa & 0x7fffffff) | (~fb & 0x80000000)) >>> 0; break;
         case 'fsgnjx.s': fWrite = (fa ^ (fb & 0x80000000)) >>> 0; break;
