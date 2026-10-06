@@ -70,7 +70,14 @@ export const chMosfet: Chapter = {
         <p>Raise the gate voltage and its electric field pulls electrons up against the oxide. Past a
         <strong>threshold voltage</strong> they form a thin <em>channel</em>, and current can flow from drain
         to source. Lower the gate and the channel disappears.</p>
-        <div class="try">Drag the gate voltage slowly past the threshold (0.45 V) and watch the channel form.</div>`,
+        <p>Below threshold the gate only pushes holes away, leaving a <em>depletion</em> layer. Past it, extra
+        gate charge goes into the channel instead. The channel holds Vgs − Vt of charge at the source but only
+        Vgs − Vt − Vds at the drain, so it tapers. Once Vds ≥ Vgs − Vt it <strong>pinches off</strong> at the
+        drain end and the current stops growing with Vds (<em>saturation</em>). The same current through a
+        thinner channel means faster carriers, and they race across the pinched-off gap.</p>
+        <div class="try">Press <strong>Sweep</strong>, or drag the gate past the threshold (0.45 V): the depletion
+        layer grows then stops, and electrons rise out of the substrate into a channel. Then drag the drain
+        voltage up and watch the channel taper and pinch off.</div>`,
       widget: () => mosfetWidget({ type: 'n', allowTypeSwitch: false }),
     },
     {
@@ -99,7 +106,7 @@ export const chMosfet: Chapter = {
         With <code>g = 0</code> it lets go, and <code>out</code> is connected to <em>nothing</em>. It is
         <strong>floating</strong>, shown as <strong>Z</strong> (dashed purple). A floating wire is not 0. It
         is "whatever charge happened to be left there".</p>
-        <div class="try">Double-click the transistor to see it in cross-section, switching live.</div>`,
+        <div class="try">Double-click the transistor to see it in cross-section, switching live (the gate ramps as the bit flips).</div>`,
       scene: () => ({ root: NMOS_SWITCH, inputs: { g: 0 } }),
       challenge: {
         kind: 'quiz', question: 'With g = 0, what value does "out" have?',
