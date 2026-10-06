@@ -18,6 +18,7 @@ import { fpAdd, fpCompare, fpMul, fpUnpack, lzc, shiftLeft } from './fpu';
 import { cachedMemory, wayLookup2 } from './cache';
 import { bankedMemory } from './lsu';
 import { clearableRegister } from './pipeline';
+import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
 
 const log2 = (n: number) => Math.round(Math.log2(n));
 
@@ -121,7 +122,13 @@ export const families: Family[] = [
   float('fpadd', 'Float adder / subtractor', fpAdd),
   float('fpmul', 'Float multiplier', fpMul),
   float('fpcmp', 'Float comparator', fpCompare),
+  nBit('popcnt', 'Population count', 'arithmetic', [2, 4, 8, 16, 32], 8, (n) => `popcnt${n}`, popcount),
+  nBit('abs', 'Absolute value', 'arithmetic', [4, 8, 16, 32], 8, (n) => `abs${n}`, absValue),
   // gates
+  nBit('parity', 'Parity', 'gate', [3, 4, 8, 16, 32], 8, (n) => `parity${n}`, parity),
+  { id: 'hamenc', name: 'Hamming SEC-DED encoder', category: 'gate', params: [count('data bits', [4, 8, 16], 8)], key: (p) => `hamenc${p['data bits']}`, make: (p) => hammingEnc(p['data bits']) },
+  { id: 'hamdec', name: 'Hamming SEC-DED decoder', category: 'gate', params: [count('data bits', [4, 8, 16], 8)], key: (p) => `hamdec${p['data bits']}`, make: (p) => hammingDec(p['data bits']) },
+  { id: 'ecc', name: 'SEC-DED round trip', category: 'gate', params: [count('data bits', [4, 8, 16], 8)], key: (p) => `ecc${p['data bits']}`, make: (p) => eccChannel(p['data bits']) },
   { id: 'and', name: 'Wide AND', category: 'gate', params: [count('inputs', [3, 4, 5, 6, 8], 4)], key: (p) => `and${p.inputs}`, make: (p) => andN(p.inputs) },
   { id: 'or', name: 'Wide OR', category: 'gate', params: [count('inputs', [3, 4, 8, 16, 32], 4)], key: (p) => `or${p.inputs}`, make: (p) => orN(p.inputs) },
   {
@@ -141,6 +148,16 @@ export const families: Family[] = [
     id: 'mux', name: 'Multiplexer tree', category: 'routing',
     params: [count('inputs', [2, 4, 8, 16], 4), bits([1, 2, 4, 8], 1)],
     key: (p) => (p.inputs === 2 ? `mux2tree${p.bits}` : `mux${p.inputs}x${p.bits}`), make: (p) => muxTree(log2(p.inputs), p.bits),
+  },
+  {
+    id: 'cmp', name: 'Magnitude comparator', category: 'routing', params: [bits([2, 4, 8, 16, 32], 4), flag('signed', 'signed', 'unsigned')],
+    key: (p) => `cmp${p.bits}${p.signed ? 's' : ''}`, make: (p) => magComparator(p.bits, p.signed === 1),
+  },
+  { id: 'prienc', name: 'Priority encoder', category: 'routing', params: [count('inputs', [2, 4, 8, 16, 32], 8)], key: (p) => `prienc${p.inputs}`, make: (p) => priorityEncoder(p.inputs) },
+  { id: 'enc', name: 'Encoder', category: 'routing', params: [count('inputs', [4, 8, 16], 8)], key: (p) => `enc${p.inputs}`, make: (p) => encoder(p.inputs) },
+  {
+    id: 'demux', name: 'Demultiplexer', category: 'routing', params: [count('outputs', [2, 4, 8], 4), bits([1, 4, 8], 1)],
+    key: (p) => `demux${p.outputs}x${p.bits}`, make: (p) => demux(log2(p.outputs), p.bits),
   },
   nBit('eq', 'Equality comparator', 'routing', [2, 4, 8, 16, 32], 4, (n) => `eq${n}`, equal),
   // sequential

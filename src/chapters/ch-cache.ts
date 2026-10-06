@@ -1,4 +1,4 @@
-import { DRAM_CELL, SRAM_COLUMN, cachedMemory, wayLookup2 } from '../lib';
+import { DRAM_CELL, SRAM_COLUMN, cachedMemory, eccChannel, wayLookup2 } from '../lib';
 import { CACHE_CPU_PROGRAMS } from '../riscv/cprograms';
 import { cpuState } from '../riscv/cosim';
 import { findNode } from '../sim/flatten';
@@ -81,6 +81,26 @@ export const chCache: Chapter = {
       title: 'Leaks, refresh and sense amplifiers',
       body: '<p>The stored charge leaks through the off transistor and the junction, so every row must be read and rewritten periodically. A read only produces a small voltage on the bit line.</p>',
       widget: dramWidget,
+    },
+    {
+      title: 'Errors and ECC',
+      body: `
+        <p>A cell can also flip: a weak DRAM cell leaks early, or a particle strike dumps charge into a node. One <strong>parity</strong> bit
+        (an XOR tree) detects any single flip but cannot locate it. A <strong>Hamming code</strong> adds r check bits at positions 1, 2, 4, …:
+        check bit 2ʲ covers every position with bit j set. On read, the recomputed checks (the <em>syndrome</em>) spell the position of a
+        single flipped bit, which the decoder flips back. One more bit of overall parity tells one error from two: <strong>SEC-DED</strong>,
+        single error correct, double error detect.</p>
+        <p>8 data bits need 5 extra bits (13 in all). For 64 bits it is 8 extra bits, the 72-bit words of ECC DIMMs and of most server
+        caches. Encoding costs 76 NANDs here and decoding 280, which sits in the read path of every access.</p>
+        <div class="try">Flip one bit (any bit of <code>flip</code>): dout stays 0x5A and <code>single</code> rises. Flip two: <code>double</code> rises and the data
+        can no longer be trusted.</div>`,
+      scene: () => ({ root: eccChannel(8), inputs: { d: 0x5a, flip: 0 } }),
+      challenge: {
+        kind: 'reach', goal: 'Make the decoder report an uncorrectable error (double = 1).',
+        check: (st) => st.value('double') === 1,
+        answer: 'Flip any two bits, for example flip = 0b10010. Their positions XOR to a non-zero syndrome while the overall parity is even again. With three flips the code mistakes it for a single error and "corrects" the wrong bit: SEC-DED only promises two.',
+        solve: (st) => st.setInputs({ flip: 0b10010 }),
+      },
     },
     {
       title: 'The memory hierarchy',
