@@ -111,4 +111,21 @@ loop:   lw   t1, 0(t0)         # a[i]: evicts b's line
         sw   a0, 128(zero)
 halt:   j    halt`,
   },
+  {
+    id: 'inplace',
+    name: 'Update an array in place',
+    blurb: 'a[i] += 4i over 16 words, three passes: 48 stores. Write-through sends all 48 to memory; write-back keeps them in the cache.',
+    source: `# a[i] += 4 i for i = 0..15, three times (the array fits in the cache)
+        li   s0, 3
+        li   t3, 64
+pass:   li   t0, 0
+loop:   lw   t1, 0(t0)
+        add  t1, t1, t0
+        sw   t1, 0(t0)         # write-through: to memory every time; write-back: dirty line
+        addi t0, t0, 4
+        blt  t0, t3, loop
+        addi s0, s0, -1
+        bnez s0, pass
+halt:   j    halt`,
+  },
 ];

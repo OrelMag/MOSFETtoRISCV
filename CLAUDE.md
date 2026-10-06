@@ -104,6 +104,8 @@ src/lib/       the component library (registered in `registry` via define())
   arrays.ts      WRITE_DRIVER, SENSE_AMP (latch type), sramColumn(R), sramArray(R, C): switch-level SRAM with periphery
   cache.ts       cachedMemory(k, ib) (direct-mapped write-through cache + main memory, stall on
                  miss), wayLookup2; singleCycleCpu(…, { dcache }) uses it (adds `retire`, `dhit`)
+  cache2.ts      cacheWay(ib, t), MISS_CTRL, wbCache(k, ib, ways) (write-back, write-allocate, LRU), iCache(rom, ib);
+                 singleCycleCpu(…, { dcache: 'wb' | 'wb2', icache }); riscv/cosim.ts cacheLines() + coherent cpuState().dmem
   multicycle.ts  MC_STATES (the state table), MC_FSM (hardwired), MC_MICRO (microcode), microword(),
                  multicycleCpu(program, { control: 'fsm' | 'micro' }) with `retire`, `fetch`, `state` outputs
   fpu.ts         parametric IEEE 754 units (format {E, M}): lzc, shiftLeft, shiftRightSticky, fpUnpack,

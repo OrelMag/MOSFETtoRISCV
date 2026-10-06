@@ -22,6 +22,7 @@ import { boothMul, pipeMul, seqMul } from './multiply';
 import { bcdAdder, carrySelect, carrySkip } from './adders';
 import { cam, fifo, pla, regfileMP, romArray, stack } from './storage';
 import { sramArray, sramColumn } from './arrays';
+import { wbCache } from './cache2';
 import { clockDivider, lfsr, ringCounter, shiftRegister, upDownCounter } from './seqparts';
 import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
 import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
@@ -238,6 +239,12 @@ export const families: Family[] = [
     params: [count('memory words', [64, 128, 256], 64), count('cache lines', [2, 4, 8], 4)],
     key: (p) => `dcache${log2(p['memory words'])}_${log2(p['cache lines'])}`,
     make: (p) => cachedMemory(log2(p['memory words']), log2(p['cache lines'])),
+  },
+  {
+    id: 'wbcache', name: 'Memory with a write-back cache', category: 'memory',
+    params: [count('cache lines', [4, 8], 4), count('ways', [1, 2], 1)],
+    key: (p) => `wbcache6_${Math.round(Math.log2(p['cache lines'] / p.ways))}_${p.ways}`,
+    make: (p) => wbCache(6, Math.round(Math.log2(p['cache lines'] / p.ways)), p.ways as 1 | 2),
   },
   {
     id: 'way2', name: '2-way tag compare', category: 'memory',

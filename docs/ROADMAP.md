@@ -151,7 +151,9 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Gate-level direct-mapped write-through cache (4 × 4 words) with an 8-cycle miss FSM; 2-way tag compare
 - ✅ Cache explorer on real ISS traces: size, line, ways, LRU/FIFO/random, write-back/through, 3C classification
 - ✅ Single-cycle CPU with the data cache (stalls on misses), co-simulated per retirement
-- ⏳ Write-back gate-level cache with dirty bits; instruction cache; cache in the pipelined CPU
+- ✅ Gate-level write-back, write-allocate cache with dirty bits and a write-back-then-fill miss controller; 2-way
+  set-associative with an LRU bit; instruction cache; all three in the single-cycle CPU, co-simulated per cycle
+- ⏳ Cache in the pipelined CPU
 - ⏳ Bus / interconnect basics
 
 ### Phase 9 — Performance & optimization ⏳
