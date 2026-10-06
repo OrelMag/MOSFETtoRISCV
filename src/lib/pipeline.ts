@@ -11,6 +11,8 @@ import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { alu } from './alu';
 import { andN, busMux2, decoder, equal, muxTree, rca } from './combinational';
 export { equal } from './combinational';
+import { cachedMemory } from './cache';
+import { wbCache } from './cache2';
 import { CLEAR_BIT0, CONTROL, IMM_GEN, NEXT_PC, PLUS4, PLUS4_FAST, dataMemory, rom } from './cpu';
 import { define, merger, ones, splitter } from './define';
 import { addSubFast, fanout, koggeStone } from './fastadd';
@@ -545,17 +547,23 @@ export interface PipeOptions {
   balanced?: boolean;
   /** BTB + 2-bit counters in Fetch; only mispredictions flush. */
   predictor?: boolean;
+  /**
+   * A data cache in the M stage: 'wt' write-through (4 lines), 'wb' write-back, 'wb2' 2-way write-back.
+   * A miss freezes the whole pipeline until the line is in (main memory of 64 words).
+   */
+  dcache?: 'wt' | 'wb' | 'wb2';
 }
 
 export function pipelinedCpu(program: number[], opts: PipeOptions = {}): ComponentDef {
   const IM = rom(program);
-  const o = { dmemK: opts.dmemK ?? 5, adder: opts.adder ?? 'rca', balanced: !!opts.balanced, predictor: !!opts.predictor } as const;
-  return memo(`pipe_${IM.id}_${o.dmemK}_${o.adder}_${o.balanced}_${o.predictor}`, () => buildPipe(IM, o));
+  const o = { dmemK: opts.dcache ? 6 : opts.dmemK ?? 5, adder: opts.adder ?? 'rca', balanced: !!opts.balanced, predictor: !!opts.predictor, dcache: opts.dcache } as const;
+  return memo(`pipe_${IM.id}_${o.dmemK}_${o.adder}_${o.balanced}_${o.predictor}_${o.dcache ?? ''}`, () => buildPipe(IM, o));
 }
 
-function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; balanced: boolean; predictor: boolean }): ComponentDef {
-  const { adder, balanced: bal, predictor: pred } = o;
-  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dataMemory(o.dmemK);
+function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; balanced: boolean; predictor: boolean; dcache?: 'wt' | 'wb' | 'wb2' }): ComponentDef {
+  const { adder, balanced: bal, predictor: pred, dcache } = o;
+  const DM = dcache === 'wt' ? cachedMemory(o.dmemK) : dcache === 'wb' ? wbCache(o.dmemK, 2, 1) : dcache === 'wb2' ? wbCache(o.dmemK, 1, 2) : dataMemory(o.dmemK);
+  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder);
   const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = adder === 'ks' || bal ? koggeStone(32) : rca(32);
   const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4, SI = splitter([7, 5, 3, 5, 5, 7]);
   const FD = REG_FD(pred), DE = REG_DE(bal, pred), EM = REG_EM(), MW = REG_MW();
@@ -772,14 +780,68 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   }
 
   const yb = T + PIPE_H + 6;
-  const variant = [adder === 'ks' ? 'fast adders' : '', bal ? 'balanced' : '', pred ? 'branch prediction' : ''].filter(Boolean).join(', ');
+  const extraPorts: PortDef[] = [];
+  if (dcache) {
+    // A load or store that misses in M freezes every stage: the PC and all pipeline registers hold,
+    // flushes and predictor updates wait, and W reports a retirement only once, when the miss is over.
+    const yc = yb + 16, add = (name: string, def: ComponentDef, x: number, y: number) => { instances.push({ name, def, at: [x, yc + y] }); defs.set(name, def); };
+    const net = (name: string) => nets.find((n) => n.name === name)!;
+    const retarget = (name: string, from: string, to: string) => { const e = net(name).ends; e[e.indexOf(from)] = to; };
+    add('rsl', splitter([1, 1]), xEM - 20, 0);
+    add('nrs1', NOT, xEM - 16, 2);
+    add('isLd', AND, xEM - 10, 0);
+    add('ldV', AND, xEM - 4, 4);
+    const dmAt = at.get('dm')!, dmg = symbolGeom(DM);
+    instances.push({ name: 'go', def: NOT, at: [dmAt[0] + dmg.w - 6, dmAt[1] + dmg.h + 4] }); defs.set('go', NOT);
+    add('gPC', AND, 14, 44);
+    add('gFD', AND, 34, 44);
+    add('gFl1', AND, 54, 44);
+    add('gFl2', AND, 74, 44);
+    add('gV', AND, xMW + 12, 0);
+    instances.splice(instances.findIndex((i) => i.name === 'en1'), 1);
+    net('resultSrcM').ends.push('rsl.in');
+    net('validM').ends.push('ldV.b');
+    net('validM').tags = ['ldV.b'];
+    retarget('enPC', 'pc.en', 'gPC.a');
+    retarget('enFD', 'FD.en', 'gFD.a');
+    retarget('flushFD', 'FD.clr', 'gFl1.a');
+    retarget('flushDE', 'DE.clr', 'gFl2.a');
+    retarget('validW', 'validW', 'gV.a');
+    const en1 = net('en1');
+    en1.ends = ['go.y', 'gPC.b', 'gFD.b', 'gFl1.b', 'gFl2.b', 'gV.b', 'DE.en', 'EM.en', 'MW.en'];
+    en1.name = 'go';
+    en1.tags = true;
+    if (pred) {
+      add('gU', AND, xDE + 40, 0);
+      retarget('updE', 'btb.updE', 'gU.a');
+      en1.ends.push('gU.b');
+      nets.push({ name: 'updGo', ends: ['gU.y', 'btb.updE'], tags: true });
+    }
+    net('clk').ends.push('dm.clk');
+    nets.push(
+      { name: 'rs0M', ends: ['rsl.o0', 'isLd.a'], tags: true },
+      { name: 'rs1M', ends: ['rsl.o1', 'nrs1.a'] },
+      { ends: ['nrs1.y', 'isLd.b'] },
+      // a flushed bubble may still look like a load: only a valid instruction may access the cache
+      { name: 'isLoadM', ends: ['isLd.y', 'ldV.a'] },
+      { name: 'MemReadM', ends: ['ldV.y', 'dm.re'], tags: true },
+      { name: 'dstall', ends: ['dm.stall', 'go.a', 'dstall'], tags: ['dstall'] },
+      { name: 'enPCgo', ends: ['gPC.y', 'pc.en'], tags: true },
+      { name: 'enFDgo', ends: ['gFD.y', 'FD.en'], tags: true },
+      { name: 'flushFDgo', ends: ['gFl1.y', 'FD.clr'], tags: true },
+      { name: 'flushDEgo', ends: ['gFl2.y', 'DE.clr'], tags: true },
+      { name: 'retireW', ends: ['gV.y', 'validW'], tags: true },
+    );
+    extraPorts.push(bit('dstall', 'out'));
+  }
+  const variant = [adder === 'ks' ? 'fast adders' : '', bal ? 'balanced' : '', pred ? 'branch prediction' : '', dcache ? `${dcache === 'wt' ? 'write-through' : dcache === 'wb2' ? '2-way write-back' : 'write-back'} data cache` : ''].filter(Boolean).join(', ');
   return {
-    id: `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}`,
+    id: `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}${dcache ? `_dc${dcache}` : ''}`,
     name: `Pipelined RV32I CPU${variant ? ` (${variant})` : ''}`, category: 'cpu',
     summary: 'Five stages, one instruction entering per cycle. Forwarding, a W→D bypass, load-use stalls and branch flushes keep it architecturally identical to the single-cycle machine.',
-    ports: [bit('clk', 'in', 'left', true), bus('pcF', 32, 'out'), bit('validW', 'out'), bus('pcW', 32, 'out')],
-    symbol: { kind: 'box', label: 'RV32I PIPE' },
-    netlist: () => ({ pins: { clk: [0, yb], pcF: [xMW + 30, yb + 4], validW: [xMW + 30, yb + 7], pcW: [xMW + 30, yb + 10] }, instances, nets }),
+    ports: [bit('clk', 'in', 'left', true), bus('pcF', 32, 'out'), bit('validW', 'out'), bus('pcW', 32, 'out'), ...extraPorts],
+    symbol: { kind: 'box', label: dcache ? 'RV32I PIPE + D$' : 'RV32I PIPE' },
+    netlist: () => ({ pins: { clk: [0, yb], pcF: [xMW + 30, yb + 4], validW: [xMW + 30, yb + 7], pcW: [xMW + 30, yb + 10], ...(dcache ? { dstall: [xMW + 30, yb + 13] } : {}) }, instances, nets }),
     hdl: { verilog: '// Structure follows the primer\'s hdl/rv_pipe.sv (and rv_pipe_bp.sv for branch prediction), extended to all of RV32I.' },
   };
 }
