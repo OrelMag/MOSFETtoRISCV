@@ -42,9 +42,9 @@ halt:   j    halt`;
 export function fetchChip(id: string, name: string, rom: { k: number; src: string } = { k: 3, src: FETCH_PROGRAM }): ChipDoc {
   return chip(id, name, {
     notes: 'Each clock edge: PC ← PC + 4. The ROM turns the PC into the instruction at that byte address. Open the ROM (Edit program…) to change the program and watch the listing follow the PC.',
-    pins: [pin('clk', 'in', [2, 21], 1, { kind: 'clock' }), pin('instr', 'out', [56, 7], 32), pin('pc', 'out', [56, 2], 32)],
+    pins: [pin('clk', 'in', [2, 12], 1, { kind: 'clock' }), pin('instr', 'out', [56, 7], 32), pin('pc', 'out', [56, 2], 32)],
     parts: [
-      part('pcr', { lib: 'reg32' }, [12, 4], { label: 'PC' }), part('one', { const: { width: 1, value: 1 } }, [9, 7]),
+      part('pcr', { lib: 'reg32' }, [12, 4], { label: 'PC' }), part('one', { const: { width: 1, value: 1 } }, [3, 7]),
       part('inc', { lib: 'plus4' }, [22, 15], { flip: true }),
       part('rom', { rom: { k: rom.k, w: 32, addr: 'rv32', lang: 'asm', src: rom.src } }, [34, 5], { label: 'program' }),
     ],
