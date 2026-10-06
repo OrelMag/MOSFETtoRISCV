@@ -42,3 +42,34 @@ describe('switch-level corner cases', () => {
     expect(sim.get(sim.design.root.ports.y[0])).toBe(BX);
   });
 });
+
+describe('GateSim.runUntil', () => {
+  it('stops mid-propagation at a fixed time and resumes exactly where settle() would go', async () => {
+    const { rca } = await import('../src/lib/combinational');
+    const { GateSim } = await import('../src/sim/gatesim');
+    const { pack } = await import('../src/sim/values');
+    const def = rca(8);
+    const mk = () => {
+      const sim = new GateSim(flatten(def));
+      sim.setInput('a', 0); sim.setInput('b', 0); sim.setInput('cin', 0);
+      sim.reset('zero'); sim.settle();
+      sim.setInput('a', 0xff); sim.setInput('cin', 1);
+      return sim;
+    };
+    const ref = mk();
+    const t0 = ref.time;
+    ref.settle();
+    const full = ref.time - t0;
+    expect(full).toBeGreaterThan(4);
+    const sim = mk();
+    sim.runUntil(t0 + 3);
+    expect(sim.time).toBe(t0 + 3);
+    expect(sim.busy()).toBe(true);
+    // The carry has not rippled through yet: the sum is still wrong at t0 + 3.
+    expect(pack(sim.getBits(sim.design.root.ports.s))).not.toBe(pack(ref.getBits(ref.design.root.ports.s)));
+    sim.runUntil(t0 + full + 10);
+    expect(sim.busy()).toBe(false);
+    expect(sim.time).toBe(t0 + full + 10);
+    expect(pack(sim.getBits(sim.design.root.ports.s))).toBe(pack(ref.getBits(ref.design.root.ports.s)));
+  });
+});

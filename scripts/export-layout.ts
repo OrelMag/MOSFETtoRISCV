@@ -23,7 +23,9 @@ export VERILOG_FILES = $(DESIGN_HOME)/src/$(DESIGN_NICKNAME)/mosfet_riscv.v
 export SDC_FILE      = $(DESIGN_HOME)/$(PLATFORM)/$(DESIGN_NICKNAME)/constraint.sdc
 export CORE_UTILIZATION = 35
 export PLACE_DENSITY = 0.55
-export SYNTH_HIERARCHICAL = 0
+# keep the big modules (cores, memory) so cell names carry their block; flatten the rest
+export SYNTH_HIERARCHICAL = 1
+export SYNTH_MINIMUM_KEEP_SIZE = 2000
 `);
 writeFileSync(join(out, 'source.json'), JSON.stringify({ nands: stats(top).nands, modules: v.modules, top: v.top }, null, 2));
 console.log(`wrote ${out}: ${v.modules} modules, ${stats(top).nands} NAND equivalents, ${v.verilog.length} bytes`);

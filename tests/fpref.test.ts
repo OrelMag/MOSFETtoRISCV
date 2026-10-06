@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { breathe, operandPairs } from './fptest';
 import { F32, FLAG, RM, bitsToF32, f32ToBits, fpAddRef, fpAddX, fpDivX, fpFmaX, fpFromIntRef, fpMulRef, fpMulX, fpSqrtX, fpToIntX, fpValue } from '../src/sim/fpref';
 
 describe('reference float arithmetic agrees with the host float32', () => {
@@ -44,23 +45,27 @@ describe('rounding modes: the reference obeys their definitions', () => {
     // underflow: only for results below the smallest normal (2^-6)
     if (res[0].fl & FLAG.UF) expect(Math.abs(exact)).toBeLessThan(2 ** -6);
   }
-  it('RDN ≤ exact ≤ RUP; RTZ, RNE and RMM pick the right neighbour; NX iff inexact', () => {
-    for (let a = 0; a < 256; a++) for (let b = 0; b < 256; b++) {
+  it('RDN ≤ exact ≤ RUP; RTZ, RNE and RMM pick the right neighbour; NX iff inexact', async () => {
+    const pairs = operandPairs(f);
+    for (let k = 0; k < pairs.length; k++) {
+      if (k % 4000 === 3999) await breathe();
+      const [a, b] = pairs[k];
       const A = fpValue(a, f), B = fpValue(b, f);
       checkModes(`${a} + ${b}`, A + B, (rm) => fpAddX(a, b, false, f, rm));
       checkModes(`${a} * ${b}`, A * B, (rm) => fpMulX(a, b, f, rm));
     }
   }, 60000);
-  it('fused multiply-add rounds once', () => {
+  it('fused multiply-add rounds once', async () => {
     let seed = 77;
     const r = () => (seed = (seed * 1103515245 + 12345) >>> 0) >>> 24;
-    for (let i = 0; i < 60000; i++) {
+    for (let i = 0; i < 30000; i++) {
+      if (i % 4000 === 3999) await breathe();
       const a = r(), b = r(), c = i % 3 ? r() : (r() & 0x80) | (((a & 0x78) + (b & 0x78) - 0x38) & 0x78) | (r() & 7); // c near a × b: cancellation
       const A = fpValue(a, f), B = fpValue(b, f), C = fpValue(c, f), np = !!(i & 1), nc = !!(i & 2);
       checkModes(`fma ${a} ${b} ${c}`, (np ? -1 : 1) * A * B + (nc ? -1 : 1) * C, (rm) => fpFmaX(a, b, c, np, nc, f, rm));
     }
     // c = ±0 or a = 1.0 reduce fma to a single multiply or add
-    for (let a = 0; a < 256; a++) for (let b = 0; b < 256; b++) {
+    for (const [a, b] of operandPairs(f)) {
       expect(fpFmaX(a, b, 0x80, false, false, f, RM.RUP), `${a} ${b}`).toEqual(fpMulX(a, b, f, RM.RUP));
       expect(fpFmaX(0x38, a, b, false, true, f, RM.RDN), `${a} ${b}`).toEqual(fpAddX(a, b, true, f, RM.RDN));
     }

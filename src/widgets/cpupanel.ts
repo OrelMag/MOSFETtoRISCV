@@ -18,6 +18,7 @@ import { CAUSE } from '../riscv/iss';
 import { pack } from '../sim/values';
 import { h } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
+import { instrUse, stageUse, STAGE_UNITS } from './insthw';
 import { timingPanel } from './timing';
 
 const hex = (v: number, d = 8) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(d, '0');
@@ -69,6 +70,9 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     let changed = new Set<number>();
     let mismatch: string | null = null;
     let running: number | null = null;
+    /** The listing line the user clicked: its hardware stays highlighted. */
+    let selPc: number | null = null;
+    const usePath = h('div', { class: 'cpu-use' });
 
     const status = h('div', { class: 'cpu-status' });
     const listing = h('div', { class: 'cpu-listing' });
@@ -127,7 +131,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     const body = h('div', { class: 'cpu-body' },
       h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, editBtn, runBtn),
       editWrap, status, now,
-      h('div', { class: 'cpu-sec' }, 'Program'), listing,
+      h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its hardware')), listing, usePath,
       h('div', { class: 'cpu-sec' }, 'Registers'), regs,
       ...(opts.fpu ? [h('div', { class: 'cpu-sec' }, 'Floating-point registers (non-zero)'), fregs] : []),
       ...(opts.dcache ? [h('div', { class: 'cpu-sec' }, 'Data cache (4 lines × 4 words)'), dlines] : []),
@@ -206,12 +210,39 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         h('code', null, disasm(w, shownPc)),
         h('span', { class: 'hexw' }, hex(w)),
       );
-      listing.replaceChildren(...asm.lines.map((l) => h('div', { class: `ln${l.addr === shownPc ? ' cur' : ''}` },
-        h('span', { class: 'a' }, l.addr.toString(16).padStart(4, '0')),
-        h('span', { class: 'w' }, l.word.toString(16).padStart(8, '0')),
-        h('span', { class: 't' }, l.text))));
+      // Pipelined CPU: where every in-flight instruction is right now.
+      const inFlight = new Map<number, string[]>();
+      if (opts.pipeline) {
+        const root = sim.design.root.children!;
+        const v = (inst: string, port: string) => pack(sim.getBits(root.get(inst)!.ports[port]));
+        const slots: [string, number, boolean][] = [
+          ['F', v('pc', 'q'), true], ['D', v('FD', 'pcD'), v('FD', 'validD') === 1], ['E', v('DE', 'pcE'), v('DE', 'validE') === 1],
+          ['M', v('EM', 'pcM'), v('EM', 'validM') === 1], ['W', v('MW', 'pcW'), v('MW', 'validW') === 1],
+        ];
+        for (const [stg, pc, valid] of slots) if (valid && pc >= 0) inFlight.set(pc >>> 0, [...(inFlight.get(pc >>> 0) ?? []), stg]);
+      }
+      const keepScroll = listing.scrollTop;
+      listing.replaceChildren(...asm.lines.map((l) => {
+        const sel = l.addr === selPc;
+        const line = h('div', { class: `ln${l.addr === shownPc ? ' cur' : ''}${sel ? ' sel' : ''}`, title: 'Show the hardware this instruction uses' },
+          h('span', { class: 'a' }, l.addr.toString(16).padStart(4, '0')),
+          h('span', { class: 'w' }, l.word.toString(16).padStart(8, '0')),
+          h('span', { class: 't' }, l.text),
+          ...(inFlight.get(l.addr) ?? []).map((s) => h('span', { class: 'stg' }, s)),
+          sel && stage.rootCtx?.canOpen('imem') ? h('button', { class: 'rom-btn', title: 'Open the instruction memory at the word that holds this instruction', onclick: (e: Event) => {
+            e.stopPropagation();
+            stage.reveal(['imem'], `c${(l.addr >>> 2)}`);
+          } }, 'in ROM ↗') : null);
+        line.addEventListener('click', () => {
+          selPc = sel ? null : l.addr;
+          update();
+        });
+        return line;
+      }));
       const cur = listing.querySelector('.cur') as HTMLElement | null;
-      if (cur) listing.scrollTop = Math.max(0, cur.offsetTop - listing.offsetTop - 40);
+      if (selPc !== null) listing.scrollTop = keepScroll;
+      else if (cur) listing.scrollTop = Math.max(0, cur.offsetTop - listing.offsetTop - 40);
+      showUse(inFlight);
       regs.replaceChildren(...st.x.map((v, i) => h('div', { class: `r${changed.has(i) && stage.cycles > 0 ? ' chg' : ''}${v ? '' : ' z'}`, title: `x${i} = ${v | 0}` },
         h('span', { class: 'n' }, `${ABI[i]}`), h('span', { class: 'v' }, hex(v)))));
       if (st.f) {
@@ -236,8 +267,27 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       mem.replaceChildren(...(words.length ? words.map(([i, v]) => h('div', { class: 'm' },
         h('span', { class: 'n' }, `[${hex(i * 4, 2)}]`), h('span', { class: 'v' }, hex(v)), h('span', { class: 'd' }, String(v | 0)))) : [h('div', { class: 'm z' }, 'all zero')]));
     };
+    /** Highlight what the selected instruction uses (or, in the pipeline, the stage it is in now). */
+    const showUse = (inFlight: Map<number, string[]>) => {
+      if (selPc === null) {
+        usePath.replaceChildren();
+        if (stage.path.length === 0) stage.highlight(stage.scene?.highlight ?? []);
+        return;
+      }
+      const w = asm.words[selPc >>> 2] ?? 0x13;
+      const use = instrUse(w);
+      const stages = inFlight.get(selPc) ?? [];
+      const names = stages.length
+        ? stages.flatMap((s) => stageUse(s as keyof typeof STAGE_UNITS, use))
+        : use.units;
+      const have = stage.rootCtx?.node.children;
+      if (stage.path.length === 0) stage.highlight(names.filter((n) => have?.has(n)), true);
+      usePath.replaceChildren(h('code', null, disasm(w, selPc)), h('span', null,
+        opts.pipeline ? (stages.length ? ` · now in ${stages.join(' + ')}; highlighted: that stage's part of the work.` : ' · not in the pipeline now; highlighted: all the hardware it uses.') : ''),
+        h('div', null, use.path));
+    };
     update();
-    return { el, update, destroy: stopRun };
+    return { el, update, destroy: () => { stopRun(); if (stage.path.length === 0) stage.highlight(stage.scene?.highlight ?? []); } };
   };
 }
 
