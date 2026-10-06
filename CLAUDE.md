@@ -61,8 +61,10 @@ src/sim/       simulation core (no DOM)
                  relaxation for power-on and oscillation resolution; runUntil(t) for a
                  fixed-period clock (an edge does not wait for the logic to settle); onTrace +
                  watch() report every change of watched nets at its exact time
-  switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes); transistor
-                 `strength` (ratioed logic) and `cap` nets that keep their charge
+  switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes); `strength` levels:
+                 rails/inputs > transistors (strength 4..2, ratioed logic) > resistors (prim 'res',
+                 strength 1: pull-ups lose to any transistor; two opposing → X) > stored charge
+                 (`cap` nets and prim 'cap' capacitors keep their value when undriven)
   fpref.ts       exact reference float arithmetic for any format (BigInt, RNE), float32 helpers
   coherence.ts   MSI / MESI snooping model (per block, no capacity)
   pnr.ts         problemOf(def), Layout (annealing placer), route / routeAll (two-layer Lee router)
@@ -83,6 +85,8 @@ src/sim/       simulation core (no DOM)
   vcd.ts         toVcd(): Value Change Dump of recorded traces
 src/lib/       the component library (registered in `registry` via define())
   transistors.ts NMOS, PMOS, rails, CMOS inverter/NOR, NAND (prim + 4-transistor netlist), tie cells
+  switchparts.ts RES, CAP (prims), PULLUP / PULLDOWN (resistor + rail), TGATE (transmission gate),
+                 TRIINV (clocked CMOS) and TRIBUF (tri-state: y is Z while en = 0), INV_PSEUDO (pseudo-NMOS)
   gates.ts       NOT, AND, OR, NOR, XOR, XNOR, MUX2 from NAND
   combinational.ts adders (HA, FA 13- and 9-NAND, rca(n), addSub(n), incrementer(n)), andN,
                  decoder(n, en, pitch), busMux2(w), muxTree(k, w, pitch)
@@ -155,12 +159,14 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   store.ts       localStorage, sanitizer, JSON export / import (importChips: never overwrites, renames on
                  conflict, recognizes its own earlier renames); share.ts: share-link encoding
   files.ts       shareRoute / shareUrl, download names, import summaries, duplicateChip / deleteChip
-  derive.ts      circuitMode, deriveBehavior (a combinational transistor chip → gate-level brick)
+  derive.ts      circuitMode, deriveBehavior (a combinational transistor chip → gate-level brick;
+                 refused when an output can float: Z is not X on a shared bus)
   program.ts     ROM program text (asm / hex) → words
   memory.ts      romImage (problems on source lines), romListing / romIndex (the row the circuit reads),
                  asm ↔ hex conversion, ROM_SAMPLES; readRam (live words), ramWithInit (initial contents
                  as dotted power-on hints into the flip-flops' latches)
-  examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit), addExample: new chip, opened
+  examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, shared bus, wired-AND / OR),
+                 addExample: new chip, opened
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run
@@ -299,6 +305,10 @@ While `stage.inEdge`, panels must not compare the hardware with the golden model
   53 bits. Constants (≤ 53), RAM words (≤ 32) and derived behaviours (outputs ≤ 53) stay numeric.
 - Double-click a placed user chip: `editChip` (tab breadcrumb, Back); any other part: `lookInside`.
   A bidirectional pin's `value` is what the user drives onto it (absent: Z), switch level only.
+- Shared buses: at switch level any number of outputs may drive one net (the solver resolves value /
+  Z / pulled value / X). `PortDef.tri` marks outputs that can let go (TRIBUF, pull-ups, a user chip
+  whose output nothing inside drives hard); two outputs that always drive on one net get a
+  contention warning. Tri-state cells have no behaviour, so any chip using them is switch level.
 - Performance: a drag refits only wires on moved objects (ops.ts `refit`), the view recomputes
   polylines / hops / dots only for what moved, a transistor chip's derived model and flip-flop
   check are cached by a structural key (compile.ts), and the last four chips keep their

@@ -122,6 +122,10 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   - ✅ Wide pins (up to 1024 bits, exact): pipeline registers, register-file read ports and the
     multiplier's 68-bit rows open in the sandbox too, so every library component round-trips;
     values are BigInt-exact in pins, the bit editor, labels, tooltips, probes and VCD
+  - ✅ Switch-level parts: resistor (weaker than any transistor), pull-up / pull-down, capacitor
+    (a charge-keeping node), transmission gate, tri-state buffer / inverter; shared buses (several
+    drivers: value / Z / pulled value / X, contention warning for outputs that always drive),
+    Examples ▸ shared bus, wired-AND, wired-OR; a pseudo-NMOS step in the inverter chapter
   - ✅ Look inside any placed part, read-only and live on the editor's own simulation, down to
     transistors (and a single MOSFET); the Inspector (info, truth table, Verilog) in a drawer
   - ✅ "Open in Sandbox" from the workbench and chapter scenes: the circuit on screen as an
