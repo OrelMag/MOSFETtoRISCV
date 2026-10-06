@@ -1,4 +1,4 @@
-import { BOOTH_ENC, MDU, arrayDiv, arrayMul, csa, divStep, seqDivider, treeMul } from '../lib';
+import { BOOTH_ENC, MDU, arrayDiv, arrayMul, csa, divStep, popcount, seqDivider, treeMul } from '../lib';
 import { cpuState } from '../riscv/cosim';
 import { M_PROGRAMS } from '../riscv/mprograms';
 import { cpuScene } from '../widgets/cpupanel';
@@ -48,6 +48,23 @@ export const chMulDiv: Chapter = {
         kind: 'quiz', question: 'x = 5, y = 6, z = 7. The CSA outputs s = 4 and c = 7. What is x + y + z?',
         options: ['11', '18', '4 + 7 = 11 with a carry lost', '25'], answer: 1,
         explain: 'c has weight 2: x + y + z = s + 2c = 4 + 14 = 18. Nothing is lost, only postponed: the carries are kept in a separate word instead of being propagated.',
+      },
+    },
+    {
+      title: 'Counting ones',
+      body: `
+        <p>A full adder is also a <em>counter</em>: it turns three bits of equal weight into a 2-bit count of how many are 1. That is why
+        it is called a 3:2 counter as well as a 3:2 compressor. Counting all the ones in a word (<strong>population count</strong>,
+        RISC-V's <code>cpop</code> in the Zbb extension) is the same problem as summing a column of partial products.</p>
+        <p>This version is the plain recursive one: count each half, add the two counts with a small ripple adder. The count gains a
+        bit per level: 83 NANDs and 19 gate delays for 8 bits, 449 NANDs and 35 delays for 32.</p>
+        <div class="try">Open the top adder: it adds two 3-bit counts of the two nibbles.</div>`,
+      scene: () => ({ root: popcount(8), inputs: { x: 0xb7 } }),
+      challenge: {
+        kind: 'quiz', question: 'The 32-bit popcount is 35 gate delays deep. A carry-save version compresses all 32 bits with full adders first. Roughly how deep would that tree be before the final adder?',
+        options: ['About 8 full-adder levels (log base 3/2 of 32)', '32 levels, one per bit', '1 level', '5 levels exactly, like a binary tree'],
+        answer: 0,
+        explain: 'Each 3:2 level shrinks the number of rows by a factor of 1.5. Going from 32 one-bit rows to 2 rows takes about log₁.₅(16) ≈ 7 levels, then one fast adder. Same structure as the Wallace multiplier.',
       },
     },
     {

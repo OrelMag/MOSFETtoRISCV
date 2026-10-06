@@ -1,4 +1,4 @@
-import { addSub, decoder, FULL_ADDER, FULL_ADDER_HA, HALF_ADDER, busMux2, muxTree, rca } from '../lib';
+import { addSub, decoder, demux, encoder, FULL_ADDER, FULL_ADDER_HA, HALF_ADDER, busMux2, magComparator, muxTree, priorityEncoder, rca } from '../lib';
 import type { Chapter } from './types';
 
 export const chAdders: Chapter = {
@@ -87,6 +87,35 @@ export const chAdders: Chapter = {
         solve: (st) => st.setInputs({ a: 5, b: 7, sub: 1 }),
       },
     },
+    {
+      title: 'Comparing without subtracting',
+      body: `
+        <p>The subtractor already compares: a &lt; b exactly when a − b borrows. But the borrow is the slowest signal it has, at the
+        end of the full carry chain. A dedicated <strong>magnitude comparator</strong> skips the arithmetic. Each bit says
+        <em>greater here</em> (a·¬b) and <em>equal here</em> (a XNOR b). A tree of combine cells then merges neighbouring fields:
+        the high field decides, unless it is equal. lt is neither greater nor equal.</p>
+        <p>At 32 bits that is 27 gate delays against 73 for the subtractor's borrow, for about the same 450 NANDs. The depth grows
+        with log n instead of n.</p>
+        <div class="try">Open a <code>combine</code> cell: it is the same "the higher one decides" rule as the carry-lookahead cells in
+        chapter 15.</div>`,
+      scene: () => ({ root: magComparator(4), inputs: { a: 9, b: 6 } }),
+    },
+    {
+      title: 'Signed comparison',
+      body: `
+        <p>In two's complement the sign bit has weight −2ⁿ⁻¹, so the order flips <em>in that bit only</em>. A 1 there means negative,
+        the smaller number. The signed comparator differs in one cell: the sign bit's "greater" is ¬a·b. Everything below the sign
+        bit compares as unsigned.</p>
+        <p>This is why RISC-V needs both <code>slt</code> and <code>sltu</code>, and <code>blt</code> and <code>bltu</code>: the same bits
+        order differently.</p>`,
+      scene: () => ({ root: magComparator(4, true), inputs: { a: 3, b: 5 } }),
+      challenge: {
+        kind: 'reach', goal: 'Find a and b where a is the larger unsigned number but the signed comparator says lt = 1.',
+        check: (st) => st.value('lt') === 1 && st.getInput('a') > st.getInput('b'),
+        answer: "Any a with the sign bit set and b without it: a = 8 is −8 in 4-bit two's complement, b = 1. Unsigned 8 > 1, signed −8 < 1.",
+        solve: (st) => st.setInputs({ a: 8, b: 1 }),
+      },
+    },
   ],
 };
 
@@ -145,6 +174,45 @@ export const chRouting: Chapter = {
         answer: 's = 3 selects d3, so set d3 = 0xA.',
         solve: (st) => st.setInputs({ d3: 0xa }),
       },
+    },
+    {
+      title: 'Encoders: back to a number',
+      body: `
+        <p>An <strong>encoder</strong> undoes a decoder: one of 2ⁿ inputs is 1, and the output says which. Output bit j is simply the
+        OR of every input whose index has bit j set. Eight inputs, three 4-input ORs, 27 NANDs.</p>
+        <p>Input 0 is not connected to anything: "input 0 is set" and "nothing is set" both give 0. With two inputs set the output is
+        the OR of their indices, which is meaningless. Both problems need the next circuit.</p>`,
+      scene: () => ({ root: encoder(8), inputs: { x: 0b00100000 } }),
+    },
+    {
+      title: 'Priority: the highest request wins',
+      body: `
+        <p>A <strong>priority encoder</strong> accepts any pattern of requests and reports the highest one, plus <code>v</code> (valid)
+        to tell "request 0" from "no request". It is built recursively: two half-size encoders, and if the upper half has any
+        request it wins, so its <code>v</code> becomes the top index bit and steers a multiplexer for the low bits.</p>
+        <p>log₂ n levels of multiplexers: 7 gate delays for 8 inputs, 11 for 32. Interrupt controllers, arbiters, floating-point
+        normalization (find the leading 1) and content-addressable memories all rely on one.</p>`,
+      scene: () => ({ root: priorityEncoder(8), inputs: { r: 0b00010110 } }),
+      challenge: {
+        kind: 'reach', goal: 'Raise at least three requests so that the output is y = 5.',
+        check: (st) => {
+          const r = st.getInput('r');
+          let c = 0;
+          for (let i = 0; i < 8; i++) c += (r >> i) & 1;
+          return c >= 3 && st.value('y') === 5 && st.value('v') === 1;
+        },
+        answer: 'Request 5 must be the highest: any r with bit 5 set, bits 6 and 7 clear, and two more bits below, for example 0b00100011.',
+        solve: (st) => st.setInputs({ r: 0b00100011 }),
+      },
+    },
+    {
+      title: 'The demultiplexer',
+      body: `
+        <p>The mirror image of a multiplexer: one input word, 2ᵏ outputs, and the select chooses which output gets it. The others
+        are 0. Inside it is a decoder whose one-hot output gates a row of AND gates per output. A decoder with an enable is the
+        same thing for a single bit, with the enable as the data.</p>
+        <p>A memory's write path is a demultiplexer: the address picks the row, and the write enable is the data.</p>`,
+      scene: () => ({ root: demux(2, 4), inputs: { x: 0xa, s: 2 } }),
     },
   ],
 };
