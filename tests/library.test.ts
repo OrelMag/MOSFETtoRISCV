@@ -182,14 +182,14 @@ describe('load/store unit', () => {
 });
 
 describe('every workbench component can be built', async () => {
-  const { families, resolveComponent } = await import('../src/lib/resolve');
-  it('all families × parameters, and their ids resolve back', () => {
+  const { combos, families, familyOf, resolveComponent } = await import('../src/lib/resolve');
+  it('all families × parameters: key() predicts the id, and ids resolve back', () => {
     for (const f of families) {
-      let combos: Record<string, number>[] = [{}];
-      for (const p of f.params) combos = combos.flatMap((o) => p.values.map((v) => ({ ...o, [p.name]: v })));
-      for (const c of combos) {
+      for (const c of combos(f)) {
         const d = f.make(c);
+        expect(f.key(c), `${f.id} ${JSON.stringify(c)}`).toBe(d.id);
         expect(resolveComponent(d.id), `${f.id} ${JSON.stringify(c)}`).toBe(d);
+        expect(familyOf(d.id)?.fam).toBe(f);
       }
     }
   });

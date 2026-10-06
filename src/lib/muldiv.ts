@@ -91,6 +91,7 @@ export function arrayMul(n: number): ComponentDef {
     const instances: InstanceDef[] = [];
     const nets: NetDef[] = [];
     const rowH = Math.max(pg.h, ag.h) + 6, dx = 6;
+    const gap = n >= 10 ? 13 : 11; // splitter → merger: room for the product-bit tag and the merger's tap label
     const aEnds = ['a'];
     instances.push({ name: 'sb', def: splitter(ones(n), rowH), at: [2, 2 + pg.ports.b.pos[1] - rowH / 2] });
     nets.push({ name: 'b', ends: ['b', 'sb.in'] });
@@ -104,8 +105,8 @@ export function arrayMul(n: number): ComponentDef {
       if (i === 0) {
         instances.push({ name: 'sp0', def: SPL, at: [x + pg.w + 3, y + pg.ports.pp.pos[1] - 2], label: undefined });
         nets.push({ name: 'pp0', ends: ['pp0.pp', 'sp0.in'] });
-        instances.push({ name: 'w0', def: MRG, at: [x + pg.w + 7, y + pg.ports.pp.pos[1] - 1] });
-        instances.push({ name: 'z0', def: TIE0, at: [x + pg.w + 4, y + pg.ports.pp.pos[1] + 2] });
+        instances.push({ name: 'w0', def: MRG, at: [x + pg.w + gap, y + pg.ports.pp.pos[1] - 1] });
+        instances.push({ name: 'z0', def: TIE0, at: [x + pg.w + gap - 3, y + pg.ports.pp.pos[1] + 2] });
         nets.push({ name: 'u0', ends: ['sp0.o1', 'w0.i0'] }, { ends: ['z0.y', 'w0.i1'] });
         prodBits.push('sp0.o0');
         prev = 'w0.out';
@@ -120,7 +121,7 @@ export function arrayMul(n: number): ComponentDef {
         { ends: [`gc${i}.y`, `add${i}.cin`] },
       );
       instances.push({ name: `sp${i}`, def: SPL, at: [ax + ag.w + 3, y + ag.ports.s.pos[1] - 2] });
-      instances.push({ name: `w${i}`, def: MRG, at: [ax + ag.w + 7, y + ag.ports.s.pos[1] - 1] });
+      instances.push({ name: `w${i}`, def: MRG, at: [ax + ag.w + gap, y + ag.ports.s.pos[1] - 1] });
       nets.push(
         { name: `S${i}`, ends: [`add${i}.s`, `sp${i}.in`] },
         { name: `u${i}`, ends: [`sp${i}.o1`, `w${i}.i0`] },
@@ -130,7 +131,7 @@ export function arrayMul(n: number): ComponentDef {
       prev = `w${i}.out`;
     }
     nets.push({ name: 'a', ends: aEnds, trunk: 7 });
-    const right = 10 + dx * (n - 1) + pg.w + 6 + ag.w + 16;
+    const right = 10 + dx * (n - 1) + pg.w + 6 + ag.w + gap + 9;
     const PM = merger([...ones(n), n]);
     instances.push({ name: 'mp', def: PM, at: [right, 2] });
     prodBits.forEach((d, i) => nets.push({ name: `p${i}`, ends: [d, `mp.i${i}`], tags: true }));
@@ -374,7 +375,7 @@ export function treeMul(n: number, signed = false, outW = 2 * n): ComponentDef {
     };
     const sa = pad(words[0], 0);
     const sbw = words[1] ? pad(words[1], 1) : null;
-    x += 10;
+    x += 18; // room for the 'sum' / 'carry' tags between the pads and the adder
     instances.push({ name: 'cpa', def: ADD, at: [x, yA], label: 'final adder' });
     instances.push({ name: 'gnd', def: TIE0, at: [x - 4, yA - 4] });
     nets.push({ name: 'sum', ends: [sa, 'cpa.a'], tags: true });

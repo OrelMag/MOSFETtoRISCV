@@ -5,6 +5,7 @@ import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
 import { netlistOf } from '../src/sim/types';
 import { labelOverlaps } from '../src/view/route';
+import { families, initialParams } from '../src/lib/resolve';
 
 // Build the parametric designs the chapters show, so their schematics are in the registry too.
 const words = assemble(PROGRAMS[0].source).words;
@@ -17,6 +18,8 @@ multicycleCpu(words, { control: 'fsm' });
 multicycleCpu(words, { control: 'micro' });
 dualCore(words);
 cachedMemory(6, 2);
+// Every workbench family as it first opens.
+for (const f of families) f.make(initialParams(f));
 
 describe('schematic labels', () => {
   const defs = [...registry.values()].filter((d) => d.netlist);

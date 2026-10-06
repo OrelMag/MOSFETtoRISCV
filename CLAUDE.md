@@ -154,6 +154,8 @@ tests/         Vitest: every component with a `spec` is checked exhaustively (�
 - Give every combinational component a `spec` (packed inputs → packed outputs). Tests
   pick it up automatically from the registry or from `tests/library.test.ts`.
 - Generators (`rca(n)`, `ram(k, w)`, ...) must be memoized (one parameter set → one object).
+  To show one in the workbench, add a `Family` in `src/lib/resolve.ts` (`key(p)` must return the
+  id `make(p)` builds; `tests/library.test.ts` checks it, and `tests/layout.test.ts` label-checks the default).
 - Layout in grid units (1 unit = 10 px). Port positions come from `geometry.ts`; check
   them there before placing instances. Gate shapes: inputs at y = 1, 3 (+top), output at
   mid-height, width 4. Box pins are spaced `symbol.pitch` (default 2). Use splitter and

@@ -3,7 +3,7 @@
 
 import { bench } from '../../chapters/types';
 import { registry } from '../../lib';
-import { families, type Family, resolveComponent } from '../../lib/resolve';
+import { families, familyOf, initialParams, resolveComponent } from '../../lib/resolve';
 import { needsSwitchLevel } from '../../sim/harness';
 import type { ComponentDef } from '../../sim/types';
 import { netlistOf } from '../../sim/types';
@@ -16,8 +16,14 @@ import type { Page } from './chapter';
 
 const CATS: [string, string][] = [
   ['transistor', 'Transistors'], ['cell', 'CMOS cells'], ['gate', 'Gates'], ['arithmetic', 'Arithmetic'],
-  ['routing', 'Selection & routing'], ['sequential', 'Sequential'], ['memory', 'Memory'],
+  ['routing', 'Selection & routing'], ['sequential', 'Sequential'], ['memory', 'Memory'], ['cpu', 'Processor parts'],
+  ['plumbing', 'Wiring & constants'],
 ];
+
+// Single (non-family) components whose id contains a digit. Other ids with digits are generated
+// widths (families, or internal parts such as the 33-bit rows of MUL32) and stay out of the list.
+const FIXED = new Set(['nmos', 'pmos', 'cla4', 'mul32', 'sram6t', 'sramcol2', 'dram1t1c', 'arb2', 'btb16', 'fpu32', 'freectr32', 'plus4', 'plus4ks']);
+const listed = (id: string) => FIXED.has(id) || (!/\d/.test(id.replace(/^(full_adder|half_adder)/, '')) && !id.startsWith('bench_') && !id.startsWith('pipe_'));
 
 export class WorkbenchPage implements Page {
   readonly el: HTMLElement;
@@ -50,7 +56,7 @@ export class WorkbenchPage implements Page {
     // Primitives and transistor-level parts are shown inside a test bench so they can be opened.
     const root: ComponentDef = def.prim === 'nand' || def.prim === 'nmos' || def.prim === 'pmos' || (!netlistOf(def) && !needsSwitchLevel(def))
       ? bench(def) : def;
-    const panels = def.category === 'memory' ? [memGridPanel] : [];
+    const panels = /^ram\d/.test(def.id) ? [memGridPanel] : [];
     this.stage.load({ root, panels });
     const want = `#/workbench/${def.id}`;
     if (location.hash !== want) history.replaceState(null, '', want);
@@ -58,17 +64,9 @@ export class WorkbenchPage implements Page {
     this.renderList();
   }
 
-  private familyOf(id: string): { fam: Family; values: Record<string, number> } | null {
-    if (!familyIndex) {
-      familyIndex = new Map();
-      for (const fam of families) for (const combo of combos(fam)) familyIndex.set(fam.make(combo).id, { fam, values: combo });
-    }
-    return familyIndex.get(id) ?? null;
-  }
-
   private renderParams(): void {
     this.params.replaceChildren();
-    const f = this.familyOf(this.current);
+    const f = familyOf(this.current);
     if (!f) return;
     for (const p of f.fam.params) {
       const sel = h('select', { 'aria-label': p.name }) as HTMLSelectElement;
@@ -84,20 +82,17 @@ export class WorkbenchPage implements Page {
   private renderList(): void {
     const l = this.list;
     l.replaceChildren();
-    const statics = [...registry.values()].filter((d) => d.prim !== 'alias' && !/\d/.test(d.id.replace(/^(full_adder|half_adder)/, '')) || ['nmos', 'pmos'].includes(d.id));
+    const statics = [...registry.values()].filter((d) => d.prim !== 'alias' && listed(d.id) && !familyOf(d.id));
     for (const [cat, title] of CATS) {
       const items: { id: string; name: string; tag?: string }[] = [];
-      for (const d of statics) if (d.category === cat && !d.id.startsWith('bench_')) items.push({ id: d.id, name: d.name });
-      for (const f of families) if (f.category === cat) {
-        const initial = Object.fromEntries(f.params.map((p) => [p.name, p.initial]));
-        items.push({ id: f.make(initial).id, name: f.name, tag: 'n-bit' });
-      }
+      for (const d of statics) if (d.category === cat) items.push({ id: d.id, name: d.name });
+      for (const f of families) if (f.category === cat) items.push({ id: f.key(initialParams(f)), name: f.name, tag: 'n-bit' });
       const shown = items.filter((i) => !this.filter || i.name.toLowerCase().includes(this.filter) || i.id.includes(this.filter));
       if (!shown.length) continue;
       l.append(h('div', { class: 'lib-cat' }, title));
-      const fam = this.familyOf(this.current)?.fam;
+      const fam = familyOf(this.current)?.fam;
       for (const it of shown) {
-        const on = it.id === this.current || (fam && it.tag && families.find((f) => f.name === it.name) === fam);
+        const on = it.id === this.current || (!!it.tag && familyOf(it.id)?.fam === fam);
         l.append(h('button', { class: `lib-item${on ? ' on' : ''}`, onclick: () => this.open(it.id) }, it.name, it.tag ? h('small', null, it.tag) : null));
       }
     }
@@ -108,10 +103,3 @@ export class WorkbenchPage implements Page {
   }
 }
 
-let familyIndex: Map<string, { fam: Family; values: Record<string, number> }> | null = null;
-
-function combos(f: Family): Record<string, number>[] {
-  let out: Record<string, number>[] = [{}];
-  for (const p of f.params) out = out.flatMap((o) => p.values.map((v) => ({ ...o, [p.name]: v })));
-  return out;
-}
