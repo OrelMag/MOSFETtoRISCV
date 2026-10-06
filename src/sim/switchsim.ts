@@ -93,6 +93,11 @@ export class SwitchSim implements Sim {
    */
   carry(prev: Sim): void {
     for (const name of sharedInputs(this.design, prev.design)) this.inputs.set(name, prev.getInput(name));
+    // root inouts too (only a switch-level simulation drives them)
+    for (const p of this.design.root.def.ports) {
+      const q = p.dir === 'inout' && prev.kind === 'switch' && prev.design.root.def.ports.find((x) => x.name === p.name);
+      if (q && q.dir === 'inout' && q.width === p.width) this.inputs.set(p.name, prev.getInput(p.name));
+    }
     const map = matchNets(this.design, prev.design);
     for (let net = 0; net < map.length; net++) if (map[net] >= 0) this.val[net] = prev.get(map[net]);
     this.dirty = true;

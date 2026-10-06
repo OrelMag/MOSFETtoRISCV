@@ -89,6 +89,13 @@ describe('SwitchSim: rails and inputs are terminals', () => {
     s.setInputBit('bl', BZ); s.setInputBit('blb', BZ); s.settle();
     expect([outBit(s, 'bl'), outBit(s, 'blb')]).toEqual([B0, B1]);
   });
+  it('carry() keeps how root inouts are driven', () => {
+    const a = sw(SRAM_SHARED);
+    a.setInput('wl', 1); a.setInput('bl', 1); a.setInput('blb', 0); a.settle();
+    const b = sw(SRAM_SHARED);
+    b.carry(a);
+    expect([b.getInput('bl'), b.getInput('blb'), outBit(b, 'bl')]).toEqual([1, 0, B1]);
+  });
   for (const def of [NAND, NOR_CMOS]) {
     it(`${def.id}: shared rails ≡ one rail per transistor, for 0 / 1 / X / Z inputs`, () => {
       const a = sw(def), b = sw(splitRails(def));
