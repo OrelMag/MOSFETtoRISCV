@@ -359,36 +359,65 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
     ...(Object.keys(powerOn).length ? { powerOn } : {}),
   };
 
+  const conn = [
+    [...parts.values()].map(({ doc: p }) => [p.id, p.ref]).sort((a, b) => (a[0] < b[0] ? -1 : 1)),
+    ports.map((p) => [p.name, p.width, p.dir, !!p.clock]),
+    nets.map((n) => JSON.stringify([[...n.ends].sort(), !!n.cap])).sort(),
+    Object.entries(powerOn).sort(),
+  ];
+  // The circuit without its drawing, down to the leaves: what the derived model and the
+  // flip-flop check depend on. Moving things keeps it, so neither is recomputed.
+  const struct = hash(`${JSON.stringify(conn)}|${[...parts.values()].map(({ doc: p, def: d }) => `${p.id}=${structOf(d)}`).sort().join(',')}`);
+
   // A switch-level chip that turns out to be combinational also gets a gate-level model, so it
   // can be a brick of gate-level chips the way the library NAND is.
   let def = base;
   let derived: Derived | undefined;
   if (mode === 'switch') {
-    try {
-      derived = deriveBehavior(base);
-    } catch (e) {
-      derived = { ok: false, reason: e instanceof Error ? e.message : String(e) };
-    }
+    derived = cached(deriveCache, struct, () => {
+      try {
+        return deriveBehavior(base);
+      } catch (e) {
+        return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+      }
+    });
     if (derived.ok) def = { ...base, behavior: derived.behavior, spec: derived.spec };
   }
 
   // "This chip is a flip-flop": only once it behaves like one.
   if (doc.ff) {
     const names = Object.values(doc.ff);
-    const why = ffProblem(def, doc.ff, mode);
+    const ff = doc.ff;
+    const why = cached(ffCache, `${struct}|${JSON.stringify(ff)}`, () => ffProblem(def, ff, mode));
     if (why) err(`not an edge-triggered flip-flop: ${why}`, { pins: doc.pins.filter((p) => names.includes(p.name)).map((p) => p.id) });
     else def = { ...def, ff: { ...doc.ff } };
   }
+  structKeys.set(def, hash(`${struct}|${JSON.stringify(def.ff ?? null)}`));
 
-  const connKey = hash(JSON.stringify([
-    [...parts.values()].map(({ doc: p }) => [p.id, p.ref]).sort((a, b) => (a[0] < b[0] ? -1 : 1)),
-    ports.map((p) => [p.name, p.width, p.dir, !!p.clock]),
-    nets.map((n) => JSON.stringify([[...n.ends].sort(), !!n.cap])).sort(),
-    Object.entries(powerOn).sort(),
-    def.ff ?? null,
-  ]));
+  const connKey = hash(JSON.stringify([...conn, def.ff ?? null]));
 
   return { def, diags, netOfWire, netOfEnd, netOfLabel, connKey, mode, ...(derived ? { derived } : {}) };
+}
+
+/** Structural key of every compiled chip def (library defs: their id, which names their circuit). */
+const structKeys = new WeakMap<ComponentDef, string>();
+const structOf = (d: ComponentDef) => structKeys.get(d) ?? `lib:${d.id}`;
+
+/** Derived models and flip-flop checks by structural key; small LRUs (a few chips are edited at once). */
+const deriveCache = new Map<string, Derived>();
+const ffCache = new Map<string, string | null>();
+const CACHE_SIZE = 32;
+function cached<T>(m: Map<string, T>, key: string, make: () => T): T {
+  if (m.has(key)) {
+    const v = m.get(key)!;
+    m.delete(key);
+    m.set(key, v);
+    return v;
+  }
+  const v = make();
+  m.set(key, v);
+  if (m.size > CACHE_SIZE) m.delete(m.keys().next().value!);
+  return v;
 }
 
 /**

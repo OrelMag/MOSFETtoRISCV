@@ -210,7 +210,9 @@ export function wireGroups(wires: WireDoc[]): string[][] {
   const groups = new Map<string, string[]>();
   for (const w of wires) {
     const r = find(`w:${w.id}`);
-    groups.set(r, [...groups.get(r) ?? [], w.id]);
+    const g = groups.get(r);
+    if (g) g.push(w.id);
+    else groups.set(r, [w.id]);
   }
   return [...groups.values()];
 }

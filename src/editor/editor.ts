@@ -38,9 +38,28 @@ export interface ToolbarAction {
   order: number;
   run(ed: Editor): void;
   enabled?(ed: Editor): boolean;
+  /** A toggle that is on (drawn pressed). */
+  active?(ed: Editor): boolean;
 }
 
 const actions: ToolbarAction[] = [];
+
+/** Something that lives as long as an editor (an analysis panel, ...); returns its cleanup. */
+export type EditorPlugin = (ed: Editor) => (() => void) | void;
+const plugins: EditorPlugin[] = [];
+
+/** Run `p` on every editor created from now on. */
+export function registerEditorPlugin(p: EditorPlugin): void {
+  plugins.push(p);
+}
+
+/** Extra diagnostics of the current chip (lint), listed and drawn with the compiler's. */
+export type DiagSource = (ed: Editor) => Diag[];
+const diagSources: DiagSource[] = [];
+
+export function registerDiagSource(f: DiagSource): void {
+  diagSources.push(f);
+}
 
 /** Add a button to the editor's top bar (or replace the one with the same id). */
 export function registerToolbarAction(a: ToolbarAction): void {
@@ -114,6 +133,9 @@ export class Editor {
   private resize: ResizeObserver;
   private fitted = false;
   private refCache = new WeakMap<object, ComponentDef | null>();
+  /** Simulations of recently open chips (least recent first), and the chip this.sim belongs to. */
+  private sims = new Map<string, EditorSim>();
+  private simChip = '';
 
   constructor(chipId?: string) {
     let ws = loadWorkspace();
@@ -163,6 +185,19 @@ export class Editor {
     });
     this.resize.observe(this.canvas);
     this.refresh();
+    for (const p of plugins) {
+      const off = p(this);
+      if (off) this.cleanups.push(off);
+    }
+  }
+
+  private cleanups: (() => void)[] = [];
+  private simListeners = new Set<() => void>();
+
+  /** Called whenever the simulation changed (values, a rebuild, a reset, another chip's sim). */
+  onSimChange(f: () => void): () => void {
+    this.simListeners.add(f);
+    return () => this.simListeners.delete(f);
   }
 
   // ---- state -------------------------------------------------------------------------------
@@ -354,15 +389,31 @@ export class Editor {
     this.view.render(doc, this.defOf);
     if (switched && this.fitted) this.view.fit(this.defOf);
     this.view.setSelection(this.sel);
-    if (switched) {
-      // Another chip: a fresh simulation (its state belongs to the chip that was open).
-      this.sim.destroy();
-      const s = new EditorSim({ gateRate: () => settings.speed });
-      s.mode = this.sim.mode;
-      s.hz = this.sim.hz;
-      s.powerOn = this.sim.powerOn;
+    for (const [k, v] of this.sims) if (!ws.chips[k]) { v.destroy(); this.sims.delete(k); }
+    if (switched && !this.simChip) this.simChip = id; // the first chip: the constructor's simulation
+    else if (switched) {
+      // Another chip, another simulation: its own if it was open recently (a latch keeps its
+      // bit across tab switches), else a fresh one. The one left behind is paused and kept.
+      const old = this.sim;
+      old.onChange = () => {};
+      old.pause();
+      this.sims.set(this.simChip, old);
+      let s = this.sims.get(id);
+      this.sims.delete(id);
+      if (!s) {
+        s = new EditorSim({ gateRate: () => settings.speed });
+        s.mode = old.mode;
+        s.hz = old.hz;
+        s.powerOn = old.powerOn;
+      }
+      while (this.sims.size > KEEP_SIMS) {
+        const [k, v] = this.sims.entries().next().value!;
+        v.destroy();
+        this.sims.delete(k);
+      }
       s.onChange = () => this.simChanged();
       this.sim = s;
+      this.simChip = id;
       this.buildControls();
     }
     this.sim.update(this.compiled, doc.pins);
@@ -380,9 +431,9 @@ export class Editor {
     this.listeners.forEach((f) => f());
   }
 
-  /** Every diagnostic of the current chip: the compiler's and the simulator's. */
+  /** Every diagnostic of the current chip: the compiler's, the simulator's and the registered sources' (lint). */
   get diags(): Diag[] {
-    return [...(this.compiled?.diags ?? []), ...this.sim.diags];
+    return [...(this.compiled?.diags ?? []), ...this.sim.diags, ...diagSources.flatMap((f) => f(this))];
   }
 
   private simDiagKey = '';
@@ -394,6 +445,7 @@ export class Editor {
       this.props.update(true);
     }
     this.repaint();
+    this.simListeners.forEach((f) => f());
   }
 
   /** Called after every repaint (live views over the simulation: look inside, inspector). */
@@ -473,12 +525,18 @@ export class Editor {
     this.tabs.append(h('button', { class: 'btn ghost sm sb-new', title: 'A new empty chip', onclick: () => this.newChip() }, icon('plus', 14), 'New chip'));
   }
 
-  private renderActions(): void {
+  /** Redraw the top bar's buttons (a toggle changed state). */
+  renderActions(): void {
     this.actionsEl.replaceChildren();
     for (const a of actions) {
       const b = h('button', { class: `btn ghost ${a.label ? 'sm' : 'icon-only'}`, title: a.title, 'aria-label': a.title, 'data-action': a.id, onclick: () => a.run(this) },
         icon(a.icon, 16), a.label ? h('span', null, a.label) : null) as HTMLButtonElement;
       if (a.enabled && !a.enabled(this)) b.disabled = true;
+      if (a.active) {
+        const on = a.active(this);
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', String(on));
+      }
       this.actionsEl.append(b);
     }
   }
@@ -630,7 +688,9 @@ export class Editor {
 
   destroy(): void {
     this.save();
+    this.cleanups.forEach((f) => f());
     this.sim.destroy();
+    this.sims.forEach((s) => s.destroy());
     this.tools.destroy();
     this.unsub();
     this.resize.disconnect();
@@ -638,6 +698,9 @@ export class Editor {
     closePopover();
   }
 }
+
+/** Simulations kept for chips that are not the active tab. */
+const KEEP_SIMS = 4;
 
 const fmtHz = (hz: number) => (hz >= 1000 ? `${(hz / 1000).toFixed(1)} kHz` : `${hz.toFixed(hz < 10 ? 1 : 0)} Hz`);
 

@@ -164,6 +164,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
   remix.ts       "Open in Sandbox": remixDef / remixIntoStorage (a shown def → a new chip; parts a reload could
                  not find by id come along as ROM / constant parts or chips); loaded on demand by the stage
+  hops.ts        HopCache: wire hops recomputed for the moved wires and those crossing them only
+  probes.ts      ProbeTarget (wires / pin / pointer name) → flat nets of each new build (resolveProbe)
+  sta.ts         chipTiming: static timing of a chip, critical path mapped to its parts / wires / pins
+  lint.ts        lintChip: two nets drawn on one line, pointers without a twin, inputs left open
                DOM:
   editor.ts      Editor: workspace + history + library + sim + panels; registerToolbarAction, slots
   view.ts        EditorView: one SVG element per object updated in place, live values, overlays
@@ -177,6 +181,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   package.ts     "Package as chip…" dialog (name, hue, notes, symbol preview, pin order; Save & new circuit)
   inside.ts      lookInside(ed, path): read-only live schematic over the canvas on EditorSim's simulator (ViewCtx)
   inspect.ts     the Inspector in a drawer for the chip or a part; chipprops.ts: chip / part property sections
+  analysis.ts    plugin: probe mode (P) + LogicAnalyzer in slots.bottom, Timing props section with
+                 the critical path drawn on the chip, lint as a diag source, open-input marks
 src/ui/        app shell, router, theme, settings, progress
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
@@ -266,12 +272,22 @@ While `stage.inEdge`, panels must not compare the hardware with the golden model
 - The simulator is rebuilt only when `simKey` (connectivity + part definitions) changes; input
   values are stripped before compiling, so toggling an input recompiles nothing.
 - Later phases plug in through `registerPaletteGroup`, `registerPropsSection`,
-  `registerToolbarAction` and `editor.slots` (`overlay` over the canvas, `bottom` above the run bar,
-  `top` in the tab bar). `editor.saveState` / `onSave()` report autosave (saved / saving / error).
-  `editor.paintHooks` run after every repaint (live views over the simulation: look inside, inspector).
-  Feature modules register themselves when ui/pages/sandbox.ts imports them.
+  `registerToolbarAction` (`active` for toggles), `registerEditorPlugin` (per-editor state, with a
+  cleanup), `registerDiagSource` (extra diagnostics, e.g. lint), `Editor.onSimChange`,
+  `Tools.onPress` (a mode that takes clicks first) and `editor.slots` (`overlay` over the canvas,
+  `bottom` above the run bar, `top` in the tab bar). `editor.saveState` / `onSave()` report autosave
+  (saved / saving / error). `editor.paintHooks` run after every repaint (live views over the
+  simulation: look inside, inspector). Feature modules and plugins register themselves when
+  ui/pages/sandbox.ts imports them (not editor.ts: they import it).
 - Double-click a placed user chip: `editChip` (tab breadcrumb, Back); any other part: `lookInside`.
   A bidirectional pin's `value` is what the user drives onto it (absent: Z), switch level only.
+- Performance: a drag refits only wires on moved objects (ops.ts `refit`), the view recomputes
+  polylines / hops / dots only for what moved, a transistor chip's derived model and flip-flop
+  check are cached by a structural key (compile.ts), and the last four chips keep their
+  simulation across tab switches. `npx vite-node scripts/sandbox-perf.ts` measures the
+  DOM-free costs on a CPU and a 64-bit Kogge–Stone adder opened in the sandbox.
+- Probes and the timing panel are gate level only (the switch-level solver has no time); lanes
+  name what was drawn and survive rebuilds (`LogicAnalyzer.rebind` keeps the recording).
 - Keys are handled on `document` while the page is mounted and ignored while typing in a field.
 
 ### Writing chapters

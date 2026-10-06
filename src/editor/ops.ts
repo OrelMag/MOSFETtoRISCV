@@ -258,7 +258,30 @@ function refit(old: ChipDoc, next: ChipDoc, defOf: DefOf, rigid: Map<string, Vec
     return eqv(at, e.at) ? e : { wire: e.wire, at };
   };
 
+  // A wire whose ends all sit on objects that did not change (and branch off wires that did not
+  // move) keeps its shape: no geometry to recompute. Most wires of a big chip, during a drag.
+  const objs = (d: ChipDoc) => new Map<string, object>([
+    ...d.parts.map((p) => [`p:${p.id}`, p] as const), ...d.pins.map((p) => [`pin:${p.id}`, p] as const), ...d.labels.map((l) => [`l:${l.id}`, l] as const),
+  ]);
+  const [oldObj, newObj] = [objs(old), objs(next)];
+  const stableMemo = new Map<string, boolean>();
+  const stableEnd = (e: EndRef): boolean => {
+    if ('wire' in e) return stableWire(e.wire);
+    const k = 'part' in e ? `p:${e.part}` : 'pin' in e ? `pin:${e.pin}` : `l:${e.label}`;
+    return oldObj.get(k) === newObj.get(k);
+  };
+  function stableWire(id: string): boolean {
+    const m = stableMemo.get(id);
+    if (m !== undefined) return m;
+    stableMemo.set(id, false); // a branch cycle is not stable
+    const w = cur.get(id);
+    const r = !!w && w === oldW.get(id) && !rigid.has(id) && stableEnd(w.a) && stableEnd(w.b);
+    stableMemo.set(id, r);
+    return r;
+  }
+
   function refitWire(w: WireDoc): WireDoc {
+    if (stableWire(w.id)) return w;
     const o = oldW.get(w.id) ?? w;
     const a = moveEnd(w.a);
     const b = moveEnd(w.b);

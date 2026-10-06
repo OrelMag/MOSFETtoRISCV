@@ -123,8 +123,12 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
     transistors (and a single MOSFET); the Inspector (info, truth table, Verilog) in a drawer
   - ✅ "Open in Sandbox" from the workbench and chapter scenes: the circuit on screen as an
     editable chip, pointers included (a CPU's ROM, constants and data memory come along)
-  - ⏳ Probes and timing in the sandbox, build challenges (Turing-Complete style, checked against
-    a truth table or test vectors)
+  - ✅ Analysis: probe mode and a timing panel (lanes follow the drawing across rebuilds, VCD),
+    static timing of a chip (period, max clock, per-capture periods) with the critical path drawn
+    on it, lint (nets drawn on one line, pointers without a twin, open inputs reading X);
+    incremental drawing during drags, derived models cached by structure, per-chip simulations
+    kept across tab switches
+  - ⏳ Build challenges (Turing-Complete style, checked against a truth table or test vectors)
 
 ### Phase 3 — The instruction set & assembly ✅
 - ✅ RV32I instruction formats with an interactive encoder / decoder (bit-field explorer)

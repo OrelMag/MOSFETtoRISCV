@@ -9,11 +9,12 @@ import { B1, BX, BZ, type Bit, type ComponentDef } from '../sim/types';
 import { formatBits, pack, type Radix } from '../sim/values';
 import { s } from '../ui/dom';
 import { Camera, type ViewBox } from '../view/camera';
-import { hopPathData, junctions, type PinGeom, type RoutedNet, textWidth } from '../view/route';
+import { junctions, type PinGeom, textWidth } from '../view/route';
 import { bitClass, busClass } from '../view/schematic';
 import { drawPinGlyph, drawSymbol, type PinGlyph, placePinValue } from '../view/symbols';
 import type { Compiled, Diag } from './compile';
 import { partBox, pinBody, pinKnob, pointerGeom, wireGroups } from './geom';
+import { HopCache } from './hops';
 import {
   type ChipDoc, type DefOf, defaultFace, type DisplayKind, type LabelDoc, type PartDoc, type PinDoc, polyline, type WireDoc,
 } from './model';
@@ -30,7 +31,8 @@ export interface ViewValues {
 
 interface PartEls { doc: PartDoc; def: ComponentDef | undefined; g: SVGGElement; disp?: DisplayEls; cls: string }
 interface DisplayEls { kind: DisplayKind; segs: SVGElement[]; led?: SVGCircleElement; text?: SVGTextElement; shown: string }
-interface WireEls { doc: WireDoc; poly: Vec[] | null; key: string; path: SVGPathElement; hit: SVGPathElement; width: number; cls: string }
+interface WireEls { doc: WireDoc; poly: Vec[] | null; key: string; ver: number; path: SVGPathElement; hit: SVGPathElement; width: number; cls: string }
+interface DotEls { el: SVGCircleElement; wire: string; cls: string }
 interface PinEls { doc: PinDoc; g: SVGGElement; glyph: PinGlyph; geom: PinGeom; cls: string; txt: string }
 interface LabelEls { doc: LabelDoc; g: SVGGElement; stub: SVGPathElement; cls: string }
 interface BusLabel { net: number; wire: string; at: Vec; room: number; g: SVGGElement; bg: SVGRectElement; text: SVGTextElement; txt: string }
@@ -58,8 +60,10 @@ export class EditorView {
   private pins = new Map<string, PinEls>();
   private labels = new Map<string, LabelEls>();
   private busLabels: BusLabel[] = [];
-  /** Junction dots, coloured like the wire they sit on. */
-  private dots: { el: SVGCircleElement; wire: string; cls: string }[] = [];
+  /** Junction dots of each net group (keyed by its wires and their versions), coloured like the wire they sit on. */
+  private dots = new Map<string, DotEls[]>();
+  private hops = new HopCache();
+  private groups: { wires: WireDoc[] | null; ids: string[][] } = { wires: null, ids: [] };
   private busLayout: { built: Compiled | null; version: number } = { built: null, version: -1 };
   private version = 0;
   private doc: ChipDoc | null = null;
@@ -113,6 +117,8 @@ export class EditorView {
     const prev = this.doc;
     this.doc = doc;
     const geomChanged = !prev || prev.parts !== doc.parts || prev.pins !== doc.pins || prev.labels !== doc.labels;
+    // Objects that moved or changed: only the wires ending on them need a new polyline.
+    const dirty = new Set<string>();
 
     // Parts
     const seenParts = new Set<string>();
@@ -121,6 +127,7 @@ export class EditorView {
       const def = defOf(p);
       const e = this.parts.get(p.id);
       if (e && e.doc === p && e.def === def) continue;
+      dirty.add(`p:${p.id}`);
       if (e && e.def === def && e.doc.ref === p.ref && !!e.doc.flip === !!p.flip && e.doc.label === p.label) {
         e.g.setAttribute('transform', `translate(${p.at[0]},${p.at[1]})`);
         e.doc = p;
@@ -131,7 +138,7 @@ export class EditorView {
       else this.gParts.append(g);
       this.parts.set(p.id, { doc: p, def, g, cls: '', disp });
     }
-    for (const [id, e] of this.parts) if (!seenParts.has(id)) { e.g.remove(); this.parts.delete(id); }
+    for (const [id, e] of this.parts) if (!seenParts.has(id)) { e.g.remove(); this.parts.delete(id); dirty.add(`p:${id}`); }
 
     // Chip pins
     const seenPins = new Set<string>();
@@ -139,6 +146,7 @@ export class EditorView {
       seenPins.add(p.id);
       const e = this.pins.get(p.id);
       if (e && e.doc === p) continue;
+      dirty.add(`pin:${p.id}`);
       const geom: PinGeom = { name: p.name, dir: p.dir, width: p.width, pos: p.at, exit: defaultFace(p) };
       const glyph = drawPinGlyph(geom, p.dir !== 'out');
       const g = glyph.g;
@@ -167,7 +175,7 @@ export class EditorView {
       else this.gPins.append(g);
       this.pins.set(p.id, { doc: p, g, glyph, geom, cls: '', txt: '' });
     }
-    for (const [id, e] of this.pins) if (!seenPins.has(id)) { e.g.remove(); this.pins.delete(id); }
+    for (const [id, e] of this.pins) if (!seenPins.has(id)) { e.g.remove(); this.pins.delete(id); dirty.add(`pin:${id}`); }
 
     // Pointers
     const seenLabels = new Set<string>();
@@ -175,6 +183,7 @@ export class EditorView {
       seenLabels.add(l.id);
       const e = this.labels.get(l.id);
       if (e && e.doc === l) continue;
+      dirty.add(`l:${l.id}`);
       const pg = pointerGeom(l);
       const g = s('g', { class: 'ed-ptr', 'data-label': l.id });
       const stub = s('path', { class: 'wire', d: pathD([l.at, pg.tip]) });
@@ -185,30 +194,38 @@ export class EditorView {
       else this.gLabels.append(g);
       this.labels.set(l.id, { doc: l, g, stub, cls: '' });
     }
-    for (const [id, e] of this.labels) if (!seenLabels.has(id)) { e.g.remove(); this.labels.delete(id); }
+    for (const [id, e] of this.labels) if (!seenLabels.has(id)) { e.g.remove(); this.labels.delete(id); dirty.add(`l:${id}`); }
 
-    // Wires: polylines follow their ends, so any geometry change rechecks them all.
+    // Wires: polylines follow their ends; a geometry change rechecks the wires on what changed.
     let wiresChanged = prev?.wires !== doc.wires || geomChanged;
     if (wiresChanged) {
-      wiresChanged = false;
+      // A new wire list may regroup nets (hops and dots follow): HopCache sees it and is cheap.
+      wiresChanged = prev?.wires !== doc.wires;
       const seen = new Set<string>();
+      // A branch end is a fixed point; a wire with no part or pin end takes its width from its
+      // host wire, so it is always rechecked.
+      const touches = (w: WireDoc) => [w.a, w.b].some((x) => ('part' in x ? dirty.has(`p:${x.part}`) : 'pin' in x ? dirty.has(`pin:${x.pin}`) : 'label' in x && dirty.has(`l:${x.label}`)))
+        || ![w.a, w.b].some((x) => 'part' in x || 'pin' in x);
       for (const w of doc.wires) {
         seen.add(w.id);
+        let e = this.wires.get(w.id);
+        // An unchanged wire between unchanged ends keeps its polyline and width (no lookups).
+        if (e && e.doc === w && !touches(w)) continue;
         const poly = polyline(doc, w, defOf);
         const key = poly ? pathD(poly) : '';
-        let e = this.wires.get(w.id);
         if (!e) {
           const path = s('path', { class: 'wire', 'data-wire': w.id });
           const hit = s('path', { class: 'wire-hit', 'data-wire': w.id });
           this.gWires.append(path);
           this.gHits.append(hit);
-          e = { doc: w, poly, key: '\0', path, hit, width: 1, cls: '' };
+          e = { doc: w, poly, key: '\0', ver: 0, path, hit, width: 1, cls: '' };
           this.wires.set(w.id, e);
         }
         e.doc = w;
         e.width = this.wireWidth(doc, w, defOf);
         if (key !== e.key) {
           e.key = key;
+          e.ver++;
           e.poly = poly;
           e.hit.setAttribute('d', key);
           wiresChanged = true;
@@ -229,35 +246,40 @@ export class EditorView {
     this.applyClasses();
   }
 
-  /** Hops and junction dots depend on every wire, so they are recomputed together. */
+  /**
+   * Hops and junction dots. Hops of a wire depend on the wires it crosses: HopCache recomputes
+   * only the moved wires and those crossing them. Dots depend on their own group only: a group
+   * whose wires did not move keeps its elements.
+   */
   private drawWireShapes(doc: ChipDoc): void {
     this.version++;
-    const groups = wireGroups(doc.wires);
-    const nets: RoutedNet[] = [];
-    const order: WireEls[] = [];
-    groups.forEach((ids, gi) => {
-      for (const id of ids) {
-        const e = this.wires.get(id);
-        if (!e?.poly) continue;
-        nets.push({ index: gi, width: e.width, tags: [], paths: [e.poly], dots: [], label: null, labelRoom: 0 });
-        order.push(e);
-      }
-    });
-    const data = hopPathData(nets);
-    order.forEach((e, i) => e.path.setAttribute('d', data[i][0] ?? ''));
-    for (const e of this.wires.values()) if (!e.poly) e.path.setAttribute('d', '');
-    this.gDots.replaceChildren();
-    this.dots = [];
+    // A drag rewrites wires' corners, not their ends: the groups stay.
+    const prev = this.groups.wires;
+    if (prev !== doc.wires) {
+      const end = (x: WireDoc['a'], y: WireDoc['a']) => x === y || ('wire' in x && 'wire' in y && x.wire === y.wire);
+      const same = prev?.length === doc.wires.length && doc.wires.every((w, i) => w.id === prev[i].id && end(w.a, prev[i].a) && end(w.b, prev[i].b));
+      this.groups = { wires: doc.wires, ids: same ? this.groups.ids : wireGroups(doc.wires) };
+    }
+    const groups = this.groups.ids;
+    const shapes = groups.flatMap((ids, gi) => ids.map((id) => ({ id, group: gi, poly: this.wires.get(id)?.poly ?? null })));
+    for (const id of this.hops.update(shapes)) this.wires.get(id)?.path.setAttribute('d', this.hops.d.get(id) ?? '');
+    const seen = new Set<string>();
     for (const ids of groups) {
-      const paths = ids.map((id) => this.wires.get(id)?.poly).filter((p): p is Vec[] => !!p);
-      if (paths.length < 2) continue;
-      const bus = ids.some((id) => (this.wires.get(id)?.width ?? 1) > 1);
-      for (const [x, y] of junctions(paths)) {
+      const els = ids.map((id) => this.wires.get(id)).filter((e): e is WireEls => !!e?.poly);
+      if (els.length < 2) continue;
+      const bus = els.some((e) => e.width > 1);
+      const key = `${bus ? 'b' : ''}${els.map((e) => `${e.doc.id}:${e.ver}`).join(' ')}`;
+      seen.add(key);
+      if (this.dots.has(key)) continue;
+      const list: DotEls[] = [];
+      for (const [x, y] of junctions(els.map((e) => e.poly!))) {
         const c = s('circle', { cx: x, cy: y, r: bus ? 0.32 : 0.24, class: 'dot' });
-        this.dots.push({ el: c, wire: ids[0], cls: '' });
+        list.push({ el: c, wire: ids[0], cls: '' });
         this.gDots.append(c);
       }
+      this.dots.set(key, list);
     }
+    for (const [k, list] of this.dots) if (!seen.has(k)) { list.forEach((d) => d.el.remove()); this.dots.delete(k); }
   }
 
   /** Width of a wire from what it touches (before any simulation says so). */
@@ -412,7 +434,7 @@ export class EditorView {
       const vcls = bits ? `wire ${valueClass(bits)}` : `wire${e.width > 1 ? ' bus' : ''} ed-dead`;
       this.paintWire(e, vcls);
     }
-    for (const d of this.dots) {
+    for (const list of this.dots.values()) for (const d of list) {
       const vc = this.wires.get(d.wire)?.cls.split('|')[0].replace(/^wire/, 'dot') ?? 'dot';
       if (vc !== d.cls) {
         d.cls = vc;

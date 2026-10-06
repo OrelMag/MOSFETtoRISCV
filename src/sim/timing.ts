@@ -12,6 +12,8 @@ import { type ComponentDef, netlistOf } from './types';
 /** Delays of our NAND master–slave flip-flop, in NAND delays (measured from its structure). */
 export const CLK_TO_Q = 3;
 export const SETUP = 3;
+/** A loaded NAND2 in a 28 nm-class process: turns NAND delays into a clock rate. */
+export const PS_PER_NAND = 25;
 
 export interface TimingReport {
   /** Clock period needed: clk-to-q + logic + setup, in NAND delays. */
@@ -22,6 +24,8 @@ export interface TimingReport {
   capture: string[];
   /** The critical path as a list of leaves (hierarchical paths) with arrival times. */
   path: { node: string[]; arrival: number }[];
+  /** Flat nets along the critical path, from the capture point back to the launching flip-flop. */
+  nets: number[];
   /** Top-level instances crossed, in order, with the arrival time when the path leaves each. */
   stages: { inst: string; arrival: number }[];
   /** Worst arrival (+ setup) at each top-level instance that captures (pipeline registers, PC, …). */
@@ -107,9 +111,11 @@ export function analyzeTiming(design: FlatDesign): TimingReport | null {
   }
   // Trace back.
   const path: { node: string[]; arrival: number }[] = [];
+  const nets: number[] = [];
   let net = cap.net;
   let launch: string[] = [];
   while (net >= 0) {
+    nets.push(net);
     if (qSource.has(net)) { launch = qSource.get(net)!; break; }
     const d = driver[net];
     if (d < 0) break;
@@ -124,5 +130,5 @@ export function analyzeTiming(design: FlatDesign): TimingReport | null {
     else stages.push({ inst: top, arrival: p.arrival });
   }
   const byCapture = [...byInst].map(([inst, period]) => ({ inst, period })).sort((a, b) => b.period - a.period);
-  return { period: worst + SETUP, logic: worst - CLK_TO_Q, launch, capture: cap.dff, path, stages, byCapture };
+  return { period: worst + SETUP, logic: worst - CLK_TO_Q, launch, capture: cap.dff, path, nets, stages, byCapture };
 }

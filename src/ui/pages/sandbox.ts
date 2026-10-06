@@ -12,6 +12,8 @@ import '../../editor/memui';
 import '../../editor/package';
 import '../../editor/inspect';
 import '../../editor/chipprops';
+// The analysis tools plug into every editor (probes, timing, lint).
+import '../../editor/analysis';
 import type { Page } from './chapter';
 
 export class SandboxPage implements Page {
