@@ -125,6 +125,11 @@ export class Tools {
 
   private down(e: PointerEvent): void {
     this.ed.hoverWire(null);
+    // No text selection or focus change from presses on the canvas (a press that opens the
+    // pointer-name prompt must not blur it right away); a field being edited commits first.
+    e.preventDefault();
+    const act = document.activeElement as HTMLElement | null;
+    if (act && act !== document.body && !this.ed.view.svg.contains(act)) act.blur();
     if (this.panning || e.button !== 0) return;
     const ed = this.ed;
     const p = this.world(e);
@@ -301,6 +306,12 @@ export class Tools {
     const ed = this.ed;
     const h = hitTest(ed.doc, ed.defOf, p, this.tol(), ed.view.polys);
     if (h.k === 'port') return { end: h.end, pos: h.pos, exit: endGeom(ed.doc, h.end, ed.defOf)?.exit ?? null };
+    // A pointer's flag or a pin's knob stands for its attach point.
+    if (h.k === 'label' || h.k === 'pin') {
+      const e: EndRef = h.k === 'label' ? { label: h.id } : { pin: h.id };
+      const g = endGeom(ed.doc, e, ed.defOf);
+      if (g) return { end: e, pos: g.pos, exit: g.exit };
+    }
     const w = h.k === 'wire' ? h : hitWire(ed.doc, ed.defOf, p, this.tol(), ed.view.polys);
     if (w) {
       const poly = ed.view.polys.get(w.id)!;
@@ -444,7 +455,9 @@ export class Tools {
     }
     const at = snapPt(p);
     const names = [...new Set(ed.doc.labels.map((l) => l.name))];
+    this.ghost(item, at); // stays while the name is typed
     ed.promptName(at, lastName ?? names[names.length - 1] ?? 'net', names, (name) => {
+      ed.view.showGhost(null);
       if (!name) return;
       const r = addLabel(ed.doc, name, at);
       if (r.id === undefined) return void ed.toast(r.reason, 'err');

@@ -56,6 +56,8 @@ export class PropsPanel {
     this.body = h('div', { class: 'sb-props-body' });
     this.diagEl = h('div', { class: 'sb-diags' });
     this.el = h('aside', { class: 'sb-props', 'aria-label': 'Properties' }, this.body, this.diagEl);
+    // An update skipped while a field had focus happens when the focus leaves.
+    this.body.addEventListener('focusout', () => setTimeout(() => this.update()));
   }
 
   /** Rebuild if what it shows changed (`force`: even if the user is typing in it). */

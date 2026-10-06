@@ -53,7 +53,9 @@
   grid-template-columns: 236px minmax(0, 1fr) 290px;
   grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas: 'top top top' 'pal center props';
+  user-select: none;
 }
+.sandbox input, .sandbox textarea, .sb-props .sb-sum, .sb-diag { user-select: text; }
 .sb-top {
   grid-area: top; display: flex; align-items: center; gap: 8px; padding: 6px 10px;
   border-bottom: 1px solid var(--border); background: var(--surface); min-height: 46px;
