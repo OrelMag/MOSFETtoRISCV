@@ -8,14 +8,16 @@ import { FDIV_CYCLES, FSQRT_CYCLES, ISS } from '../src/riscv/iss';
 import { PROGRAMS } from '../src/riscv/programs';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
+import { BitSim } from '../src/sim/bitsim';
 import { breathe } from './fptest';
 
 /** Co-simulate: the golden model executes one instruction whenever the CPU retires one (fdiv / fsqrt stall). */
-async function cosim(source: string, cycles = 1000) {
+async function cosim(source: string, cycles = 1000, engine: 'bit' | 'gate' = 'bit') {
   const asm = assemble(source);
   expect(asm.errors).toEqual([]);
   const design = flatten(singleCycleCpu(asm.words, { fpu: true, adder: 'ks' }));
-  const sim = new GateSim(design);
+  // the bit-parallel simulator (one lane) is far faster on this 160 000-gate CPU; one program also runs on GateSim
+  const sim = engine === 'gate' ? new GateSim(design) : new BitSim(design);
   sim.setInput('clk', 0);
   sim.settle();
   const iss = new ISS(asm.words);
@@ -98,7 +100,8 @@ describe('assembler and ISS: F extension', () => {
 describe('single-cycle RV32IF CPU (gate level) vs golden model', () => {
   for (const p of F_PROGRAMS) it(p.id, async () => { const r = await cosim(p.source); console.log(`${p.id}: ${r.leaves} leaves, ${r.iss.steps} instructions in ${r.cycles} cycles`); }, 300000);
   it('fdiv.s and fsqrt.s stall for exactly their latency', async () => {
-    const r = await cosim('li t0, 7\nfcvt.s.w ft0, t0\nfdiv.s ft1, ft0, ft0\nfsqrt.s ft2, ft0\nhalt: j halt');
+    // on the event-driven simulator, as a check of the bit-parallel one used above
+    const r = await cosim('li t0, 7\nfcvt.s.w ft0, t0\nfdiv.s ft1, ft0, ft0\nfsqrt.s ft2, ft0\nhalt: j halt', 1000, 'gate');
     // 2 + 1 one-cycle instructions (li, fcvt, the final j), plus the two iterative ones
     expect(r.cycles).toBe(3 + FDIV_CYCLES + FSQRT_CYCLES);
     expect([r.iss.f[1], r.iss.f[2]]).toEqual([0x3f800000, 0x402953fd]);
