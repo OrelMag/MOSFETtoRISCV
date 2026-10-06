@@ -60,7 +60,9 @@ function transistor(def: ComponentDef): SVGElement[] {
 export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
   const g = symbolGeom(def);
   const k = def.symbol.kind;
-  const root = s('g', { class: `sym kind-${k}` });
+  // A user chip's hue tints its box (styles: .sym.chip); lightness follows the theme.
+  const hue = k === 'box' && def.symbol.color !== undefined ? def.symbol.color : null;
+  const root = s('g', hue === null ? { class: `sym kind-${k}` } : { class: `sym kind-${k} chip`, style: `--chip-h:${hue}` });
   const inner = s('g', flip ? { transform: `translate(${g.w},0) scale(-1,1)` } : null);
   root.append(inner);
   const { w, h } = g;

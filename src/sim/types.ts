@@ -45,6 +45,8 @@ export interface SymbolSpec {
   noPortLabels?: boolean;
   /** Draw the label vertically (narrow boxes). */
   verticalLabel?: boolean;
+  /** Hue (0–359) tinting a user chip's box; lightness comes from the theme. */
+  color?: number;
 }
 
 export interface InstanceDef {
@@ -147,7 +149,9 @@ export interface ComponentDef {
 
 export type Category =
   | 'transistor' | 'cell' | 'gate' | 'plumbing' | 'arithmetic'
-  | 'routing' | 'sequential' | 'memory' | 'cpu';
+  | 'routing' | 'sequential' | 'memory' | 'cpu'
+  /** User chips made in the sandbox. */
+  | 'custom';
 
 export function inPorts(d: ComponentDef): PortDef[] {
   return d.ports.filter((p) => p.dir === 'in');

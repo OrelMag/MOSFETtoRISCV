@@ -377,6 +377,10 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .dot.bus { fill: var(--bus); }
 .sym-body { fill: var(--sym-fill); stroke: var(--sym-stroke); stroke-width: 0.15; stroke-linejoin: round; }
 .sym-box { fill: var(--box-fill); stroke: var(--box-stroke); }
+.sym.chip .sym-box {
+  fill: hsl(var(--chip-h) var(--chip-fill-s) var(--chip-fill-l));
+  stroke: hsl(var(--chip-h) var(--chip-stroke-s) var(--chip-stroke-l));
+}
 .sym-line { fill: none; stroke: var(--sym-stroke); stroke-width: 0.15; stroke-linecap: round; }
 .sym-line.thick { stroke-width: 0.2; }
 .sym-arrow { fill: none; stroke: var(--sym-stroke); stroke-width: 0.13; stroke-linejoin: round; }
