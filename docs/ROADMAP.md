@@ -140,7 +140,9 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   normalization, signed-digit quotient), compared on area, step depth and clock period
 - ✅ Iterative shift-and-add multiplier; full radix-4 Booth multiplier (rows, +1 bits, one sign constant, 3:2 tree),
   measured against Baugh–Wooley; 3-stage pipelined Booth multiplier (latency 4, one product per cycle)
-- ⏳ Radix-4 SRT; pipelined multiplier in the pipelined CPU
+- ✅ Radix-4 SRT divider: digits −2…+2, selection thresholds computed from the containment bounds and checked
+  exhaustively, carry-save comparisons; n/2 + 3 cycles, 21 % faster than radix 2 at 32 bits
+- ⏳ Pipelined multiplier in the pipelined CPU
 - ⏳ Passing the official `riscv-tests` / architecture tests in the browser (stretch)
 
 ### Phase 8 — Memory hierarchy 🚧
