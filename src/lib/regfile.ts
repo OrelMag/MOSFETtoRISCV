@@ -49,8 +49,10 @@ export function readPort(k: number, w: number): ComponentDef {
   });
 }
 
-export function regfile(k: number, w: number): ComponentDef {
-  return memo(`rf${k}x${w}`, () => {
+/** zero = false: register 0 is an ordinary register (the floating-point file has no hard-wired f0). */
+export function regfile(k: number, w: number, zero = true): ComponentDef {
+  return memo(`rf${k}x${w}${zero ? '' : 'f'}`, () => {
+    const pre = zero ? 'x' : 'f';
     const N = 2 ** k;
     const R = register(w);
     const rg = symbolGeom(R);
@@ -76,15 +78,15 @@ export function regfile(k: number, w: number): ComponentDef {
 
     const instances: InstanceDef[] = [
       { name: 'dec', def: D, at: dAt },
-      { name: 'x0', def: Z, at: [xR + rg.w - zg.w, qY(0) - zg.ports.y.pos[1]], label: 'x0 = 0' },
+      ...(zero ? [{ name: 'x0', def: Z, at: [xR + rg.w - zg.w, qY(0) - zg.ports.y.pos[1]] as [number, number], label: 'x0 = 0' }] : []),
       { name: 'bundle', def: merger(Array(N).fill(w), P), at: [xQ, mqTop] },
       { name: 'rp1', def: RP, at: rp1At },
       { name: 'rp2', def: RP, at: rp2At },
     ];
-    const nets: NetDef[] = [{ name: 'q0', ends: ['x0.y', 'bundle.i0'] }];
+    const nets: NetDef[] = zero ? [{ name: 'q0', ends: ['x0.y', 'bundle.i0'] }] : [];
     const wd = ['wd'], clk = ['clk'];
-    for (let i = 1; i < N; i++) {
-      instances.push({ name: `w${i}`, def: R, at: [xR, rTop(i)], label: `x${i}` });
+    for (let i = zero ? 1 : 0; i < N; i++) {
+      instances.push({ name: `w${i}`, def: R, at: [xR, rTop(i)], label: `${pre}${i}` });
       nets.push({ name: `en${i}`, ends: [`dec.y${i}`, `w${i}.en`] });
       nets.push({ name: `q${i}`, ends: [`w${i}.q`, `bundle.i${i}`] });
       wd.push(`w${i}.d`);
@@ -105,13 +107,13 @@ export function regfile(k: number, w: number): ComponentDef {
     );
     const outX = xP + rpg.w + 6;
     return define({
-      id: `regfile${N}x${w}`, name: `Register file (${N} × ${w})`, category: 'memory',
-      summary: `${N} registers of ${w} bits; x0 always reads 0. Two read ports (two operands per instruction) and one write port, all in one cycle.`,
+      id: `regfile${N}x${w}${zero ? '' : '_f'}`, name: `${zero ? 'Register file' : 'Floating-point register file'} (${N} × ${w})`, category: 'memory',
+      summary: `${N} registers of ${w} bits${zero ? '; x0 always reads 0' : ' (f0 is an ordinary register)'}. Two read ports (two operands per instruction) and one write port, all in one cycle.`,
       ports: [
         bus('wa', k, 'in'), bus('ra1', k, 'in'), bus('ra2', k, 'in'), bus('wd', w, 'in'), bit('we', 'in'),
         bit('clk', 'in', 'bottom', true), bus('rd1', w, 'out'), bus('rd2', w, 'out'),
       ],
-      symbol: { kind: 'box', label: 'REGISTERS' },
+      symbol: { kind: 'box', label: zero ? 'REGISTERS' : 'FP REGISTERS' },
       netlist: () => ({
         pins: {
           wa: [0, dAt[1] + dg.ports.a.pos[1]], we: [0, dAt[1] + dg.ports.en.pos[1]],

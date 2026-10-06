@@ -6,10 +6,12 @@ import type { Sim } from '../sim/sim';
 import { pack } from '../sim/values';
 
 /** Read the CPU's architectural state from a simulation of singleCycleCpu(). */
-export function cpuState(sim: Sim, root: HierNode = sim.design.root): { pc: number; x: number[]; dmem: number[] } {
+export function cpuState(sim: Sim, root: HierNode = sim.design.root): { pc: number; x: number[]; dmem: number[]; f?: number[] } {
   const rf = root.children!.get('rf')!;
   const x = [0];
   for (let i = 1; i < 32; i++) x.push(pack(sim.getBits(rf.children!.get(`w${i}`)!.ports.q)) >>> 0);
+  const frf = root.children!.get('frf');
+  const f = frf ? Array.from({ length: 32 }, (_, i) => pack(sim.getBits(frf.children!.get(`w${i}`)!.ports.q)) >>> 0) : undefined;
   const dm = root.children!.get('dm')!;
   const dmem: number[] = [];
   const ram = dm.children!.get('ram');
@@ -28,7 +30,7 @@ export function cpuState(sim: Sim, root: HierNode = sim.design.root): { pc: numb
   }
   const pcPort = root.ports.pcOut ?? root.ports.pcF;
   const pc = pcPort ? pack(sim.getBits(pcPort)) >>> 0 : 0;
-  return { pc, x, dmem };
+  return { pc, x, dmem, f };
 }
 
 /** One clock cycle: rising edge, settle, falling edge, settle. */

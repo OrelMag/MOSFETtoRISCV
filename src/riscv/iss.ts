@@ -7,6 +7,7 @@
 // memory-mapped I/O, CSRs, exceptions and interrupts (one step = one clock cycle; a cycle in
 // which an interrupt is taken executes no instruction).
 
+import { bitsToF32, f32ToBits } from '../sim/fpref';
 import { CSRS, decode, disasm, OPCODES } from './isa';
 
 export interface IssOptions {
@@ -18,6 +19,8 @@ export interface IssOptions {
   system?: boolean;
   /** Implement the M extension (otherwise its encodings are illegal in system mode). */
   m?: boolean;
+  /** Implement the F subset (otherwise illegal in system mode). */
+  f?: boolean;
 }
 
 /** Cycles a div / divu / rem / remu occupies on the iterative divider (1 load + 32 steps + 1 write). */
@@ -73,6 +76,9 @@ export class ISS {
   steps = 0;
   readonly system: boolean;
   readonly m: boolean;
+  readonly fext: boolean;
+  /** Floating-point registers (raw float32 bits). */
+  readonly f = new Uint32Array(32);
   private readonly imemWords: number;
 
   // machine-mode state
@@ -101,6 +107,7 @@ export class ISS {
     this.imemWords = opts.imemWords ?? 64;
     this.system = !!opts.system;
     this.m = !!opts.m;
+    this.fext = !!opts.f;
   }
 
   fetch(pc: number): number {
@@ -244,9 +251,32 @@ export class ISS {
       else next = t;
     };
     const isM = d.opcode === OPCODES.OP && d.funct7 === 1;
+    const isF = !!d.spec?.fp;
     let extraCycles = 0;
-    if (this.system && (!d.spec || (isM && !this.m))) trap = new Trap(CAUSE.ILLEGAL);
-    else if (isM) {
+    let fWrite: number | undefined;
+    if (this.system && (!d.spec || (isM && !this.m) || (isF && !this.fext))) trap = new Trap(CAUSE.ILLEGAL);
+    else if (isF) {
+      const fa = this.f[d.rs1], fb = this.f[d.rs2];
+      const A = bitsToF32(fa), B = bitsToF32(fb);
+      switch (d.name) {
+        case 'flw': fWrite = this.load((a + d.imm) >>> 0, 2) >>> 0; break;
+        case 'fsw': { const addr = (a + d.imm) >>> 0; this.store(addr, 2, fb); store = { addr, value: fb }; break; }
+        case 'fadd.s': fWrite = f32ToBits(Math.fround(A + B)); break;
+        case 'fsub.s': fWrite = f32ToBits(Math.fround(A - B)); break;
+        case 'fmul.s': fWrite = f32ToBits(Math.fround(A * B)); break;
+        case 'fsgnj.s': fWrite = ((fa & 0x7fffffff) | (fb & 0x80000000)) >>> 0; break;
+        case 'fsgnjn.s': fWrite = ((fa & 0x7fffffff) | (~fb & 0x80000000)) >>> 0; break;
+        case 'fsgnjx.s': fWrite = (fa ^ (fb & 0x80000000)) >>> 0; break;
+        case 'feq.s': write(A === B ? 1 : 0); break;
+        case 'flt.s': write(A < B ? 1 : 0); break;
+        case 'fle.s': write(A <= B ? 1 : 0); break;
+        case 'fmv.x.w': write(fa); break;
+        case 'fcvt.s.w': fWrite = f32ToBits(Math.fround(a)); break;
+        case 'fcvt.s.wu': fWrite = f32ToBits(Math.fround(ua >>> 0)); break;
+        case 'fmv.w.x': fWrite = ua >>> 0; break;
+        default: break;
+      }
+    } else if (isM) {
       write(mExec(d.funct3, ua, ub));
       if (d.funct3 >= 4) extraCycles = DIV_CYCLES - 1;
     } else switch (d.opcode) {
@@ -322,6 +352,7 @@ export class ISS {
     } else {
       if (rd !== 0 && value !== undefined) x[rd] = value;
       else rd = 0;
+      if (fWrite !== undefined) this.f[d.rd] = fWrite;
       this.halted = next === pc;
       this.pc = next;
       this.retired++;

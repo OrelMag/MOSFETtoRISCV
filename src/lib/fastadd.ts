@@ -173,7 +173,7 @@ endmodule`,
  */
 export function koggeStone(n: number): ComponentDef {
   return memo(`ks${n}`, () => {
-    const k = Math.round(Math.log2(n));
+    const k = Math.ceil(Math.log2(n)); // any width: the prefix levels must span n
     const R = 7;
     const rowY = (i: number) => 2 + R * i;
     const instances: InstanceDef[] = [
