@@ -17,7 +17,7 @@ import { DFF, register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { bitwise, orN } from './wide';
 import {
-  F32, bias as fbias, fpAddX, fpClass, fpCmpX, fpFromIntX, fpMinMaxX, fpMulX, fpToIntX, overflowToInf, RM, roundUp, type FpFormat,
+  F32, bias as fbias, fpAddX, fpClass, fpFmaX, fpCmpX, fpFromIntX, fpMinMaxX, fpMulX, fpToIntX, overflowToInf, RM, roundUp, type FpFormat,
 } from '../sim/fpref';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
@@ -1060,7 +1060,111 @@ endmodule`,
   });
 }
 
-const FPU_VERILOG = `module fpu32 (input logic clk, go, input logic [31:0] a, b, xa, input logic [6:0] funct7, input logic [2:0] funct3,
+// ---- fused multiply-add ----------------------------------------------------------------------
+
+/**
+ * ±a × b ± c with one rounding. All three significands are prenormalized; the product is kept
+ * exact (2M + 2 bits from the tree multiplier); c is placed at the top of an equally wide field.
+ * Then it is an addition of two (2M + 2)-bit significands: the one with the larger exponent is the
+ * base, the other is shifted right with guard bits and a sticky bit, added or subtracted (the
+ * difference may be negative when the exponents are within 3: then it is exact and is negated),
+ * and normalize & round rounds the 2M + 6-bit result once. negProd negates the product, negC the
+ * addend: fmadd (0, 0), fmsub (0, 1), fnmsub (1, 0), fnmadd (1, 1).
+ */
+export function fpFma(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fpfma${E}_${M}`, () => {
+    const XE = xeOf(f), N = 1 + E + M, W0 = 2 * M + 2, WA = W0 + 2, WS = W0 + 3, kA = log2c(WA + 1), B = fbias(f);
+    const b = new Builder();
+    const ua = b.op(fpUnpack(f), ['a'], 'unpack a'), ub = b.op(fpUnpack(f), ['b'], 'unpack b'), uc = b.op(fpUnpack(f), ['c'], 'unpack c');
+    b.next();
+    const pa = b.op(fpPrenorm(f), [`${ua}.mant`, `${ua}.exp`], 'normalize a');
+    const pb = b.op(fpPrenorm(f), [`${ub}.mant`, `${ub}.exp`], 'normalize b');
+    const pc = b.op(fpPrenorm(f), [`${uc}.mant`, `${uc}.exp`], 'normalize c');
+    const ps = b.name(b.op1(XOR, [b.op1(XOR, [`${ua}.sign`, `${ub}.sign`]), 'negProd'], 'product sign'), 'signP');
+    const sc = b.name(b.op1(XOR, [`${uc}.sign`, 'negC'], 'addend sign'), 'signC');
+    b.next();
+    const P = b.name(b.op1(treeMul(M + 1), [`${pa}.m`, `${pb}.m`], 'exact product'), 'product');
+    const s1 = b.op(koggeStone(XE), [`${pa}.e`, `${pb}.e`, b.op1(TIE0, [])], 'ea + eb');
+    const Cw = b.name(b.op1(merger([M + 1, M + 1]), [b.op1(K(M + 1, 0), []), `${pc}.m`], 'c, as wide'), 'cWide');
+    const effSub = b.name(b.op1(XOR, [ps, sc], 'subtract?'), 'effSub');
+    const pZero = b.op1(OR, [`${ua}.zero`, `${ub}.zero`], 'product = 0');
+    b.next();
+    const ep = b.name(`${b.op(koggeStone(XE), [`${s1}.s`, b.op1(K(XE, (1 - B + 2 ** XE) % 2 ** XE), []), b.op1(TIE0, [])], '− bias + 1')}.s`, 'eP');
+    b.next();
+    const d = b.op(addSubFast(XE), [ep, `${pc}.e`, b.op1(TIE1, [])], 'eP − eC');
+    b.next();
+    // the base is the operand with the larger exponent; a zero product always yields to c, a zero c to the product
+    const cBig = b.name(b.op1(AND, [b.op1(NOT, [`${uc}.zero`]), b.op1(OR, [pZero, `${d}.n`])], 'c bigger?'), 'cBig');
+    const ad = b.op(splitter([kA, XE - kA]), [b.op1(condNegate(XE), [`${d}.s`, `${d}.n`], '|eP − eC|')]);
+    b.next();
+    const dsat = b.op1(busMux2(kA), [`${ad}.o0`, b.op1(K(kA, 2 ** kA - 1), []), nonZero(b, `${ad}.o1`, XE - kA)], 'shift');
+    const mB = b.name(b.op1(busMux2(W0), [P, Cw, cBig], 'base'), 'mBig');
+    const mS = b.op1(busMux2(W0), [Cw, P, cBig]);
+    const eB = b.name(b.op1(busMux2(XE), [ep, `${pc}.e`, cBig]), 'eBig');
+    const sB = b.name(b.op1(MUX2, [ps, sc, cBig]), 'signBig');
+    b.next();
+    const al = b.op(shiftRightSticky(WA, kA), [b.op1(merger([2, W0]), [b.op1(K(2, 0), []), mS]), dsat], 'align');
+    b.next();
+    const opB = b.op1(merger([1, 2, W0]), [b.op1(TIE0, []), b.op1(K(2, 0), []), mB]);
+    const opS = b.op1(merger([1, WA]), [`${al}.sticky`, `${al}.y`]);
+    const sum = b.op(addSubFast(WS), [opB, opS, effSub], 'add / subtract');
+    b.next();
+    const neg = b.name(b.op1(AND, [effSub, b.op1(NOT, [`${sum}.cout`])], 'negative?'), 'neg');
+    const mag = b.op1(condNegate(WS), [`${sum}.s`, neg], '|sum|');
+    const top = b.op1(AND, [`${sum}.cout`, b.op1(NOT, [effSub])]);
+    b.next();
+    const sm = b.name(b.op1(merger([WS, 1]), [mag, top]), 'sum');
+    const zs = b.op1(isZero(WS + 1), [sm]);
+    const exactZero = b.op1(AND, [effSub, zs], 'cancelled');
+    const sign = b.op1(MUX2, [b.op1(XOR, [sB, neg]), isMode(b, 'rm', RM.RDN, 'RDN?'), exactZero], 'sign (+0, −0 in RDN)');
+    const ex = b.op1(incrementer(XE), [eB]);
+    b.next();
+    const nr = b.op(normRound(f, WS + 1), [sign, ex, sm, b.op1(TIE0, []), 'rm'], 'normalize & round (once)');
+    b.next();
+    const pInf = b.op1(OR, [`${ua}.inf`, `${ub}.inf`]);
+    const infZero = b.op1(OR, [b.op1(AND, [`${ua}.inf`, `${ub}.zero`]), b.op1(AND, [`${ua}.zero`, `${ub}.inf`])], '∞ × 0');
+    const pNaN = b.op1(OR, [`${ua}.nan`, `${ub}.nan`]);
+    const infDiff = b.op1(andN(4), [pInf, b.op1(NOT, [pNaN]), `${uc}.inf`, effSub], '∞ − ∞');
+    b.next();
+    const invalid = b.name(b.op1(orN(5), [`${ua}.snan`, `${ub}.snan`, `${uc}.snan`, infZero, infDiff], 'invalid'), 'NV');
+    const nan = b.op1(orN(4), [`${ua}.nan`, `${ub}.nan`, `${uc}.nan`, invalid], 'NaN?');
+    const anyInf = b.op1(OR, [pInf, `${uc}.inf`]);
+    const infS = b.op1(MUX2, [sc, ps, pInf]);
+    b.next();
+    specials(b, f, `${nr}.y`, `${nr}.flags`, nan, anyInf, infS, invalid);
+    return define({
+      id: `fpfma${E}_${M}`, name: `${fmtName(f)} fused multiply-add`, category: 'arithmetic',
+      summary: `±(a × b) ± c rounded once. The ${M + 1} × ${M + 1} product is kept exact (${W0} bits); c is widened to match, the operand with the larger exponent is the base, the other is aligned with guard and sticky bits, then one ${WS}-bit addition (negated if it went negative), and one normalize & round on ${WS + 1} bits. ∞ × 0 is invalid even if c is a quiet NaN.`,
+      ports: [bus('a', N, 'in'), bus('b', N, 'in'), bus('c', N, 'in'), bit('negProd', 'in'), bit('negC', 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')],
+      symbol: { kind: 'box', label: 'FMA' },
+      spec: ([a, bb, c, np, nc, rm]) => { const r = fpFmaX(a, bb, c, !!np, !!nc, f, rm); return [r.y, r.fl]; },
+      netlist: () => ({ pins: { a: [0, 4], b: [0, 8], c: [0, 12], negProd: [0, 16], negC: [0, 20], rm: [0, 24], y: [b.right, 6], flags: [b.right, 12] }, instances: b.instances, nets: b.nets() }),
+      hdl: {
+        verilog: `module fma32 (input logic [31:0] a, b, c, input logic negProd, negC, input logic [2:0] rm,
+              output logic [31:0] y, output logic [4:0] flags);
+  logic [23:0] ma, mb, mc;  logic signed [15:0] ea, eb, ec;          // prenormalized: 1.f x 2^e
+  fp_prenorm na (.x(a), .m(ma), .e(ea)), nb (.x(b), .m(mb), .e(eb)), nc (.x(c), .m(mc), .e(ec));
+  wire [47:0] p  = ma * mb;                                           // exact, in [1, 4)
+  wire signed [15:0] ep = ea + eb - 16'sd126;                         // exponent of p[47]
+  wire [47:0] cw = {mc, 24'b0};
+  wire sp = a[31] ^ b[31] ^ negProd, sc = c[31] ^ negC, sub = sp ^ sc;
+  wire cBig = ~cZero & (pZero | ec > ep);                             // base: the larger exponent
+  wire [15:0] d = cBig ? ec - ep : ep - ec;
+  logic [49:0] s;  logic st;                                          // smaller one, aligned, sticky
+  shift_right_sticky #(50) al (.x({cBig ? p : cw, 2'b00}), .s(d > 63 ? 6'd63 : d[5:0]), .y(s), .sticky(st));
+  wire [51:0] sum = {1'b0, cBig ? cw : p, 3'b000} + (sub ? -{1'b0, s, st} : {1'b0, s, st});
+  wire negative = sub & sum[51];                                      // only when the exponents are close: exact
+  wire [51:0] mag = negative ? -sum : sum;
+  normround #(52) nr (.sign((cBig ? sc : sp) ^ negative), .exp((cBig ? ec : ep) + 1), .mant(mag), .stin(1'b0), .rm, .y(yr), .flags(fr));
+  // + special cases: NaN in, inf x 0 (NV even with a quiet NaN c), inf - inf (NV), infinite terms; exact zero is +0 (-0 in RDN)
+endmodule`,
+      },
+    });
+  });
+}
+
+const FPU_VERILOG = `module fpu32 (input logic clk, go, input logic [31:0] a, b, c, xa, input logic [6:0] op, funct7, input logic [2:0] funct3,
               input logic [4:0] rs2, input logic [2:0] frm, output logic [31:0] y, output logic [4:0] flags, output logic stall);
   wire [2:0] rm = funct3 == 3'd7 ? frm : funct3;       // dynamic rounding mode
   wire sgn = ~rs2[0];                                   // fcvt.w.s / fcvt.s.w vs the unsigned forms
@@ -1078,28 +1182,33 @@ const FPU_VERILOG = `module fpu32 (input logic clk, go, input logic [31:0] a, b,
   fdiv_iter  u_dv (.clk, .start(isDiv), .a, .b, .rm, .y(dq), .flags(fd), .done(dDone), .busy());
   fsqrt_iter u_sq (.clk, .start(isSqrt), .a, .rm, .y(sq), .flags(fs), .done(sDone), .busy());
   assign stall = (isDiv & ~dDone) | (isSqrt & ~sDone);   // the CPU holds the instruction
+  logic [31:0] fq;  logic [4:0] ff;
+  fma32 u_fma (.a, .b, .c, .negProd(op[3]), .negC(op[2]), .rm, .y(fq), .flags(ff));   // fmadd fmsub fnmsub fnmadd
+  logic [31:0] yo;  logic [4:0] fo;
+  assign {y, flags} = op[6:4] == 3'b100 ? {fq, ff} : {yo, fo};
   wire sj = funct3[1] ? a[31] ^ b[31] : funct3[0] ? ~b[31] : b[31];
-  wire c  = funct3[1] ? eq : funct3[0] ? lt : le;
-  always_comb case (funct7[6:3])
-    4'h0: {y, flags} = {add, fa};                                          // fadd.s / fsub.s
-    4'h1: {y, flags} = funct7[2] ? {dq, fd} : {mul, fm};                    // fdiv.s, fmul.s
-    4'h2: {y, flags} = funct7[2] ? {mm, fmm} : {{sj, a[30:0]}, 5'b0};       // fmin/fmax.s, fsgnj*.s
-    4'h5: {y, flags} = {sq, fs};                                           // fsqrt.s
-    4'ha: {y, flags} = {31'b0, c, (funct3[1] ? snan : unord), 4'b0};       // feq / flt / fle.s
-    4'hc: {y, flags} = {toi, fti};                                         // fcvt.w[u].s
-    4'hd: {y, flags} = {cvt, fcv};                                         // fcvt.s.w[u]
-    4'he: {y, flags} = {funct3[0] ? {22'b0, cls} : a, 5'b0};               // fclass.s, fmv.x.w
-    4'hf: {y, flags} = {xa, 5'b0};                                         // fmv.w.x
-    default: {y, flags} = '0;
+  wire cb = funct3[1] ? eq : funct3[0] ? lt : le;
+  always_comb case (funct7[6:3])   // OP-FP
+    4'h0: {yo, fo} = {add, fa};                                          // fadd.s / fsub.s
+    4'h1: {yo, fo} = funct7[2] ? {dq, fd} : {mul, fm};                    // fdiv.s, fmul.s
+    4'h2: {yo, fo} = funct7[2] ? {mm, fmm} : {{sj, a[30:0]}, 5'b0};       // fmin/fmax.s, fsgnj*.s
+    4'h5: {yo, fo} = {sq, fs};                                           // fsqrt.s
+    4'ha: {yo, fo} = {31'b0, cb, (funct3[1] ? snan : unord), 4'b0};       // feq / flt / fle.s
+    4'hc: {yo, fo} = {toi, fti};                                         // fcvt.w[u].s
+    4'hd: {yo, fo} = {cvt, fcv};                                         // fcvt.s.w[u]
+    4'he: {yo, fo} = {funct3[0] ? {22'b0, cls} : a, 5'b0};               // fclass.s, fmv.x.w
+    4'hf: {yo, fo} = {xa, 5'b0};                                         // fmv.w.x
+    default: {yo, fo} = '0;
   endcase
 endmodule`;
 
 /**
- * The CPU's FPU: RV32F without fused multiply-add, selected by funct7 (funct5): fadd.s, fsub.s,
+ * The CPU's FPU: all of RV32F. OP-FP instructions are selected by funct7 (funct5): fadd.s, fsub.s,
  * fmul.s, fdiv.s, fsqrt.s, fsgnj[n|x].s, fmin/fmax.s, feq/flt/fle.s, fcvt.w[u].s, fcvt.s.w[u],
- * fmv.x.w, fclass.s, fmv.w.x. a, b are the f-register operands, xa the integer rs1. The rounding
- * mode is funct3, or frm when funct3 = 7 (dynamic); flags go to fflags. fdiv.s and fsqrt.s are
- * iterative: while they run, stall = 1 and the CPU holds the instruction (go = it is OP-FP).
+ * fmv.x.w, fclass.s, fmv.w.x; the four fused multiply-adds by their opcode (op). a, b, c are the
+ * f-register operands (c = rs3), xa the integer rs1. The rounding mode is funct3, or frm when
+ * funct3 = 7 (dynamic); flags go to fflags. fdiv.s and fsqrt.s are iterative: while they run,
+ * stall = 1 and the CPU holds the instruction (go = it is OP-FP).
  */
 export const FPU32: ComponentDef = (() => {
   const f = F32;
@@ -1121,6 +1230,9 @@ export const FPU32: ComponentDef = (() => {
   const cvt = b.op(fpFromInt(f), ['xa', nr2, rm], 'int → float');
   const toI = b.op(fpToInt(f), ['a', nr2, rm], 'float → int');
   const cls = b.op1(fpClassify(f), ['a'], 'classify');
+  const ops = b.op(splitter([2, 1, 1, 1, 1, 1]), ['op']);
+  const fma = b.op(fpFma(f), ['a', 'b', 'c', `${ops}.o2`, `${ops}.o1`, rm], 'fused multiply-add');
+  const isFma = b.name(b.op1(andN(3), [`${ops}.o5`, b.op1(NOT, [`${ops}.o4`]), b.op1(NOT, [`${ops}.o3`])], 'FMADD group?'), 'isFMA');
   const f5 = b.op1(merger([1, 1, 1, 1, 1]), [`${f7}.o1`, `${f7}.o2`, `${f7}.o3`, `${f7}.o4`, `${f7}.o5`], 'funct5');
   const isDiv = b.name(b.op1(AND, ['go', b.op1(equal(5), [f5, b.op1(K(5, 0b00011), [])], 'fdiv?')]), 'isDiv');
   const isSqrt = b.name(b.op1(AND, ['go', b.op1(equal(5), [f5, b.op1(K(5, 0b01011), [])], 'fsqrt?')]), 'isSqrt');
@@ -1149,15 +1261,18 @@ export const FPU32: ComponentDef = (() => {
   const ins = Array.from({ length: 16 }, () => z), fls = Array.from({ length: 16 }, () => z5);
   ins[0] = `${add}.y`; ins[1] = g1; ins[2] = g2; ins[5] = `${sq}.y`; ins[10] = cmp32; ins[12] = `${toI}.y`; ins[13] = `${cvt}.y`; ins[14] = g14; ins[15] = 'xa';
   fls[0] = `${add}.flags`; fls[1] = fl1; fls[2] = fl2; fls[5] = `${sq}.flags`; fls[10] = nvW; fls[12] = `${toI}.flags`; fls[13] = `${cvt}.flags`;
-  b.wire(b.op1(muxTree(4, 32), [...ins, sel], 'result'), 'y');
-  b.wire(b.op1(muxTree(4, 5), [...fls, sel], 'flags'), 'flags');
+  const yOp = b.op1(muxTree(4, 32), [...ins, sel], 'OP-FP result');
+  const fOp = b.op1(muxTree(4, 5), [...fls, sel], 'OP-FP flags');
+  b.next();
+  b.wire(b.op1(busMux2(32), [yOp, `${fma}.y`, isFma], 'result'), 'y');
+  b.wire(b.op1(busMux2(5), [fOp, `${fma}.flags`, isFma], 'flags'), 'flags');
   return define({
-    id: 'fpu32', name: 'Floating-point unit (RV32F without fma)', category: 'cpu',
-    summary: 'fadd.s, fsub.s, fmul.s, sign injection, min / max, compares, conversions both ways, moves and fclass in one cycle; fdiv.s (29 cycles) and fsqrt.s (28 cycles) on iterative units that stall the CPU. Any rounding mode (funct3, or frm when funct3 = 7). funct7 picks the result and the exception flags.',
-    ports: [bit('clk', 'in', 'bottom', true), bus('a', 32, 'in'), bus('b', 32, 'in'), bus('xa', 32, 'in'), bus('funct7', 7, 'in'), bus('funct3', 3, 'in'), bus('rs2', 5, 'in'), bus('frm', 3, 'in'), bit('go', 'in'),
+    id: 'fpu32', name: 'Floating-point unit (RV32F)', category: 'cpu',
+    summary: 'fadd.s, fsub.s, fmul.s, the four fused multiply-adds, sign injection, min / max, compares, conversions both ways, moves and fclass in one cycle; fdiv.s (29 cycles) and fsqrt.s (28 cycles) on iterative units that stall the CPU. Any rounding mode (funct3, or frm when funct3 = 7). The opcode picks fma, otherwise funct7 picks the result and the exception flags.',
+    ports: [bit('clk', 'in', 'bottom', true), bus('a', 32, 'in'), bus('b', 32, 'in'), bus('c', 32, 'in'), bus('xa', 32, 'in'), bus('op', 7, 'in'), bus('funct7', 7, 'in'), bus('funct3', 3, 'in'), bus('rs2', 5, 'in'), bus('frm', 3, 'in'), bit('go', 'in'),
       bus('y', 32, 'out'), bus('flags', 5, 'out'), bit('stall', 'out')],
     symbol: { kind: 'box', label: 'FPU' },
-    netlist: () => ({ pins: { a: [0, 4], b: [0, 8], xa: [0, 12], funct7: [0, 16], funct3: [0, 20], rs2: [0, 24], frm: [0, 28], go: [0, 32], clk: [0, 36], y: [b.right, 8], flags: [b.right, 14], stall: [b.right, 20] }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { a: [0, 4], b: [0, 8], c: [0, 12], xa: [0, 16], op: [0, 20], funct7: [0, 24], funct3: [0, 28], rs2: [0, 32], frm: [0, 36], go: [0, 40], clk: [0, 44], y: [b.right, 8], flags: [b.right, 14], stall: [b.right, 20] }, instances: b.instances, nets: b.nets() }),
     hdl: { verilog: FPU_VERILOG },
   });
 })();
@@ -1172,6 +1287,8 @@ export const FP_DECODE: ComponentDef = (() => {
   const isFlw = b.name(b.op1(equal(7), ['op', b.op1(K(7, 0b0000111), [])], 'flw?'), 'isFLW');
   const isFsw = b.name(b.op1(equal(7), ['op', b.op1(K(7, 0b0100111), [])], 'fsw?'), 'isFSW');
   const isOp = b.name(b.op1(equal(7), ['op', b.op1(K(7, 0b1010011), [])], 'OP-FP?'), 'isOPFP');
+  const o7 = b.op(splitter([1, 1, 2, 1, 1, 1]), ['op']);
+  const isFma = b.name(b.op1(andN(5), [`${o7}.o0`, `${o7}.o1`, `${o7}.o5`, b.op1(NOT, [`${o7}.o4`]), b.op1(NOT, [`${o7}.o3`])], 'fmadd … fnmadd? (100xx11)'), 'isFMA');
   const f7 = b.op(splitter([2, 1, 1, 1, 1, 1]), ['funct7']);
   const os = b.op(splitter([2, 1, 4]), ['op']);
   b.next();
@@ -1182,16 +1299,17 @@ export const FP_DECODE: ComponentDef = (() => {
   b.wire(isFlw, 'flw');
   b.wire(isFsw, 'fsw');
   b.wire(toInt, 'toInt');
-  b.wire(b.op1(OR, [toF, isFlw], 'write f register'), 'fWrite');
+  b.wire(b.op1(orN(3), [toF, isFlw, isFma], 'write f register'), 'fWrite');
   // flw / fsw look like lw / sw to the integer control unit: clear opcode bit 2
   b.wire(b.op1(merger([2, 1, 4]), [`${os}.o0`, b.op1(AND, [`${os}.o1`, b.op1(NOT, [mem])]), `${os}.o2`], 'as lw / sw'), 'opInt');
   b.wire(isOp, 'opfp');
+  b.wire(b.op1(OR, [isOp, isFma], 'raises flags'), 'fpOp');
   return define({
     id: 'fpdec', name: 'Floating-point decoder', category: 'cpu',
-    summary: 'Recognises flw, fsw and the OP-FP group. flw and fsw are passed to the integer control unit disguised as lw and sw (same address calculation); only their register file differs. OP-FP results go to an f register, except compares, fclass, fcvt.w[u].s and fmv.x.w, which write an x register. opfp lets the FPU\'s exception flags into fflags.',
-    ports: [bus('op', 7, 'in'), bus('funct7', 7, 'in'), bit('flw', 'out'), bit('fsw', 'out'), bit('toInt', 'out'), bit('fWrite', 'out'), bus('opInt', 7, 'out'), bit('opfp', 'out')],
+    summary: 'Recognises flw, fsw, the OP-FP group and the four fused multiply-adds (opcodes 0x43, 0x47, 0x4B, 0x4F). flw and fsw are passed to the integer control unit disguised as lw and sw (same address calculation); only their register file differs. OP-FP results go to an f register, except compares, fclass, fcvt.w[u].s and fmv.x.w, which write an x register; fma results always go to an f register. opfp starts the iterative units; fpOp (OP-FP or fma) lets the exception flags into fflags.',
+    ports: [bus('op', 7, 'in'), bus('funct7', 7, 'in'), bit('flw', 'out'), bit('fsw', 'out'), bit('toInt', 'out'), bit('fWrite', 'out'), bus('opInt', 7, 'out'), bit('opfp', 'out'), bit('fpOp', 'out')],
     symbol: { kind: 'box', label: 'FP DECODE' },
-    netlist: () => ({ pins: { op: [0, 4], funct7: [0, 10], flw: [b.right, 2], fsw: [b.right, 6], toInt: [b.right, 10], fWrite: [b.right, 14], opInt: [b.right, 18], opfp: [b.right, 22] }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { op: [0, 4], funct7: [0, 10], flw: [b.right, 2], fsw: [b.right, 6], toInt: [b.right, 10], fWrite: [b.right, 14], opInt: [b.right, 18], opfp: [b.right, 22], fpOp: [b.right, 26] }, instances: b.instances, nets: b.nets() }),
   });
 })();
 

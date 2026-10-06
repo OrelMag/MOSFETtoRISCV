@@ -222,4 +222,62 @@ loop:   fdiv.s ft0, fs0, fa0   # a / x
         fmv.x.w a1, fa0        # 0x3FB504F3
 halt:   j    halt`,
   },
+  {
+    id: 'fma',
+    name: 'Fused multiply-add',
+    blurb: 'x·x − p with x = 1 + 2^-12: fmul then fsub rounds twice and gets 0; fmsub.s rounds once and gets the exact 2^-24. Then the four sign variants.',
+    source: `# one rounding instead of two
+        li   t0, 0x3f800800    # x = 1 + 2^-12
+        fmv.w.x ft0, t0
+        li   t0, 0x3f801000    # p = 1 + 2^-11, the float nearest to x*x
+        fmv.w.x ft1, t0
+        fmul.s ft2, ft0, ft0   # x*x = 1 + 2^-11 + 2^-24, rounded: p (a tie, to even)
+        fsub.s ft3, ft2, ft1   # 0: the 2^-24 was rounded away
+        fmsub.s ft4, ft0, ft0, ft1  # x*x - p in one step: 2^-24 = 0x33800000, exact
+        fmv.x.w a0, ft3
+        fmv.x.w a1, ft4
+        frflags a2             # 0x01: only fmul was inexact
+        li   t0, 3
+        fcvt.s.w fa0, t0       # 3
+        li   t0, 4
+        fcvt.s.w fa1, t0       # 4
+        li   t0, 5
+        fcvt.s.w fa2, t0       # 5
+        fmadd.s fa3, fa0, fa1, fa2   #  3*4 + 5 =  17
+        fmsub.s fa4, fa0, fa1, fa2   #  3*4 - 5 =   7
+        fnmsub.s fa5, fa0, fa1, fa2  # -3*4 + 5 =  -7
+        fnmadd.s fa6, fa0, fa1, fa2  # -3*4 - 5 = -17
+        fcvt.w.s a3, fa3
+        fcvt.w.s a4, fa4
+        fcvt.w.s a5, fa5
+        fcvt.w.s a6, fa6
+halt:   j    halt`,
+  },
+  {
+    id: 'horner',
+    name: 'Horner with fmadd',
+    blurb: 'Evaluates 1 + t + t²/2 + t³/6 (e^t to third order) at t = 0.3 by Horner\'s rule: three fmadd.s, one rounding each, against three fmul.s + fadd.s pairs. Half the instructions, and here one ulp closer to the exact 1.34950001603.',
+    source: `# p(t) = ((t/6 + 1/2) t + 1) t + 1 at t = 0.3
+        li   t0, 0x3e2aaaab    # 1/6
+        fmv.w.x fs0, t0
+        li   t0, 0x3f000000    # 1/2
+        fmv.w.x fs1, t0
+        li   t0, 1
+        fcvt.s.w fs2, t0       # 1
+        li   t0, 0x3e99999a    # t = 0.3
+        fmv.w.x fs3, t0
+        fmadd.s ft0, fs0, fs3, fs1   # t/6 + 1/2
+        fmadd.s ft0, ft0, fs3, fs2   # (...) t + 1
+        fmadd.s ft0, ft0, fs3, fs2   # (...) t + 1 = 1.34950006 (0x3FACBC6B)
+        fmul.s ft1, fs0, fs3         # the same, rounding twice per step
+        fadd.s ft1, ft1, fs1
+        fmul.s ft1, ft1, fs3
+        fadd.s ft1, ft1, fs2
+        fmul.s ft1, ft1, fs3
+        fadd.s ft1, ft1, fs2         # 1.34949994 (0x3FACBC6A)
+        fmv.x.w a0, ft0
+        fmv.x.w a1, ft1
+        feq.s a2, ft0, ft1           # 0
+halt:   j    halt`,
+  },
 ];

@@ -1,7 +1,7 @@
 // A two-pass RV32I assembler: labels, ABI register names, the common pseudo-instructions and
 // .word. Errors are collected per line instead of thrown, so the editor can show them all.
 
-import { BY_NAME, CSRS, encB, encI, encJ, encR, encS, encU, fregNumber, OPCODES, regNumber, RM_OPERANDS } from './isa';
+import { BY_NAME, CSRS, encB, encI, encJ, encR, encR4, encS, encU, fregNumber, OPCODES, regNumber, RM_OPERANDS } from './isa';
 
 export interface AsmLine {
   addr: number;
@@ -177,7 +177,7 @@ function encode(st: Stmt, labels: Map<string, number>): number[] {
     const R = (role: 'f' | 'x' | undefined, a: string) => (role === 'f' ? freg(a) : reg(a));
     if (fspec.fmt === 'I') { need(2); const m = mem(args[1]); return [encI(fspec.opcode, freg(args[0]), 2, m.base, m.off)]; }
     if (fspec.fmt === 'S') { need(2); const m = mem(args[1]); return [encS(fspec.opcode, 2, m.base, freg(args[0]), m.off)]; }
-    const nOps = fp.rs2fixed !== undefined ? 2 : 3;
+    const nOps = fp.rs2fixed !== undefined ? 2 : fp.rs3 ? 4 : 3;
     let f3 = fspec.funct3 ?? 7; // rm defaults to dyn: use frm
     if (fp.rm && args.length === nOps + 1) {
       const m = RM_OPERANDS.indexOf(args.pop()!.trim().toLowerCase());
@@ -185,6 +185,7 @@ function encode(st: Stmt, labels: Map<string, number>): number[] {
       f3 = m;
     }
     if (fp.rs2fixed !== undefined) { need(2); return [encR(fspec.opcode, R(fp.rd, args[0]), f3, R(fp.rs1, args[1]), fp.rs2fixed, fspec.funct7!)]; }
+    if (fp.rs3) { need(4); return [encR4(fspec.opcode, freg(args[0]), f3, freg(args[1]), freg(args[2]), freg(args[3]))]; }
     need(3);
     return [encR(fspec.opcode, R(fp.rd, args[0]), f3, R(fp.rs1, args[1]), R(fp.rs2, args[2]), fspec.funct7!)];
   }
@@ -292,6 +293,7 @@ function encode(st: Stmt, labels: Map<string, number>): number[] {
   }
   const f3 = spec.funct3 ?? 0;
   switch (spec.fmt) {
+    case 'R4': throw new AsmError('internal: R4 is floating-point only');
     case 'R': need(3); return [encR(spec.opcode, reg(args[0]), f3, reg(args[1]), reg(args[2]), spec.funct7!)];
     case 'U': need(2); return [encU(spec.opcode, reg(args[0]), imm(args[1], 0, 0xfffff))];
     case 'J':

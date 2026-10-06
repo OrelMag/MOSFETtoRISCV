@@ -135,6 +135,28 @@ export function fpDivX(a: number, b: number, f: FpFormat, rm: number = RM.RNE): 
   return roundToX(sign, (q << 1n) | (r ? 1n : 0n), x.exp2 - y.exp2 - K - 1, f, rm);
 }
 
+/**
+ * Fused multiply-add, rounded once: (−1)^negProd × a × b + (−1)^negC × c. fmadd = (0, 0),
+ * fmsub = (0, 1), fnmsub = (1, 0), fnmadd = (1, 1). ∞ × 0 is invalid even when c is a quiet NaN.
+ */
+export function fpFmaX(a: number, b: number, c: number, negProd: boolean, negC: boolean, f: FpFormat, rm: number = RM.RNE): FpResult {
+  const pa = parts(a, f), pb = parts(b, f), pc = parts(c, f);
+  const ps = pa.sign ^ pb.sign ^ (negProd ? 1 : 0), sc = pc.sign ^ (negC ? 1 : 0);
+  if ((pa.kind === 'inf' && pb.kind === 'zero') || (pa.kind === 'zero' && pb.kind === 'inf')) return nanResult(FLAG.NV, f);
+  if (pa.kind === 'nan' || pb.kind === 'nan' || pc.kind === 'nan') return nanResult(isSNaN(a, f) || isSNaN(b, f) || isSNaN(c, f) ? FLAG.NV : 0, f);
+  const pInf = pa.kind === 'inf' || pb.kind === 'inf';
+  if (pInf && pc.kind === 'inf' && ps !== sc) return nanResult(FLAG.NV, f);
+  if (pInf) return { y: infOf(ps, f), fl: 0 };
+  if (pc.kind === 'inf') return { y: infOf(sc, f), fl: 0 };
+  const x = exact(a, f), y = exact(b, f), z = exact(c, f);
+  const ep = x.exp2 + y.exp2, e = Math.min(ep, z.exp2);
+  const vp = (ps ? -1n : 1n) * ((x.mant * y.mant) << BigInt(ep - e)), vc = (sc ? -1n : 1n) * (z.mant << BigInt(z.exp2 - e));
+  const s = vp + vc;
+  // an exact zero: the common sign of two zero terms, otherwise +0 (−0 when rounding down)
+  if (s === 0n) return { y: pack(vp === 0n && vc === 0n && ps === sc ? ps : rm === RM.RDN ? 1 : 0, 0, 0, f), fl: 0 };
+  return roundToX(s < 0n ? 1 : 0, s < 0n ? -s : s, e, f, rm);
+}
+
 /** Integer square root (floor) of a non-negative BigInt. */
 function isqrt(n: bigint): bigint {
   if (n < 2n) return n;

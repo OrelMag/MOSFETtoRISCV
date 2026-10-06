@@ -619,7 +619,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
     // ---- RV32F subset: a second register file, the FPU, and a few multiplexers
     const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => instances.push({ name, def, at: xy, label });
     const rfAt = at.get('rf')!, rfR = rfAt[0] + g(RF).w;
-    const FRF = regfile(5, 32, false);
+    const FRF = regfile(5, 32, false, 3);
     add('frf', FRF, [rfAt[0], bottom + 10], 'f registers');
     add('fpu', FPU32, [rfR + 24, bottom + 14], 'FPU');
     add('fdec', FP_DECODE, [8, bottom + 10]);
@@ -630,6 +630,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
     add('rwx', AND, [56, bottom - 14]);
     add('rwi', orN(3), [62, bottom - 14]);
     add('fcsr', FCSR, [rfR + 24, bottom + 62], 'fcsr');
+    add('sr3', splitter([2, 5]), [rfAt[0] - 6, bottom + 40]);
     add('cres', M2, [resY[0] + 12, resY[1] - 6], 'FP / CSR');
     // fdiv.s / fsqrt.s stall: the PC and every register write wait for the iterative unit
     if (dcache) throw new Error('singleCycleCpu: fpu and dcache together are not supported');
@@ -640,13 +641,13 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
     const net = (name: string) => nets.find((n) => n.name === name)!;
     nets.splice(nets.indexOf(net('en')), 1);
-    net('op').ends = ['si.o0', 'fdec.op'];
+    net('op').ends = ['si.o0', 'fdec.op', 'fpu.op'];
     nets.push({ name: 'opInt', ends: ['fdec.opInt', 'ctl.op'], tags: true });
     net('op').ends.push('fcsr.op');
     net('rs1').ends.push('frf.ra1', 'fcsr.rs1');
     net('rs2').ends.push('frf.ra2', 'fpu.rs2', 'fcsr.rs2');
     net('rd').ends.push('frf.wa');
-    net('funct7').ends.push('fpu.funct7', 'fdec.funct7', 'fcsr.funct7');
+    net('funct7').ends.push('fpu.funct7', 'fdec.funct7', 'fcsr.funct7', 'sr3.in');
     net('funct3').ends.push('fpu.funct3', 'fcsr.funct3');
     net('rd1').ends.push('fpu.xa', 'fcsr.xa');
     (net('rd1') as NetDef).tags = ['fpu.xa', 'fcsr.xa'];
@@ -670,7 +671,10 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache =
       { name: 'isCSR', ends: ['fcsr.hit', 'cres.s', 'rwi.i2'], tags: true },
       { name: 'XResult', ends: ['cres.y', 'rf.wd'], tags: true },
       { name: 'FFlags', ends: ['fpu.flags', 'fcsr.flags'], tags: true },
-      { name: 'isOPFP', ends: ['fdec.opfp', 'fpu.go', 'fpg.a'], tags: true },
+      { name: 'isOPFP', ends: ['fdec.opfp', 'fpu.go'], tags: true },
+      { name: 'FPOp', ends: ['fdec.fpOp', 'fpg.a'], tags: true },
+      { name: 'rs3', ends: ['sr3.o1', 'frf.ra3'], tags: true },
+      { name: 'frs3', ends: ['frf.rd3', 'fpu.c'], tags: true },
       { name: 'FFlagsWE', ends: ['fpg.y', 'fcsr.fpOp'], tags: true },
       { name: 'stall', ends: ['fpu.stall', 'nstall.a'], tags: true },
       { name: 'retire', ends: ['nstall.y', 'pc.en', 'xwg.b', 'fwg.b', 'fpg.b', 'retire'], tags: ['xwg.b', 'fwg.b', 'fpg.b', 'retire'] },

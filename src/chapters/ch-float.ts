@@ -1,4 +1,4 @@
-import { fpAdd, fpDiv, fpMul, fpSqrt, fpToInt, fpUnpack, normRound, ROUND_DECIDE } from '../lib';
+import { fpAdd, fpDiv, fpFma, fpMul, fpSqrt, fpToInt, fpUnpack, normRound, ROUND_DECIDE } from '../lib';
 import { cpuState } from '../riscv/cosim';
 import { F_PROGRAMS } from '../riscv/fprograms';
 import { F32 } from '../sim/fpref';
@@ -183,6 +183,30 @@ export const chFloat: Chapter = {
       },
     },
     {
+      title: 'Fused multiply-add: one rounding',
+      body: `
+        <p>fmadd.s computes a × b + c and rounds <em>once</em>. Keep the product exact: the 24 × 24 tree gives all 48 bits. Widen c to the same 48 bits,
+        take the operand with the larger exponent as the base, shift the other right with guard and sticky bits, add or subtract (a difference can come
+        out negative when the exponents are within 3 of each other; it is then exact and is negated), and send the 52-bit result to the same normalize
+        &amp; round. fmsub, fnmsub and fnmadd only flip the signs of c and the product. ∞ × 0 is invalid even when c is a quiet NaN, as RISC-V requires.</p>
+        <p>One rounding makes x·x − p exact where fmul then fsub gives 0, and makes dot products, polynomial evaluation (Horner) and Newton steps
+        both faster and more accurate. float32 fma: 25 100 NANDs, 325 deep: deeper than either multiplier (216) or adder (225), but shallower than
+        the two in a row (441). A production FMA shifts the addend in a 3M + 5-bit window <em>while</em> the tree multiplies; this one swaps like the
+        adder, which is simpler but puts the shifter after the tree.</p>
+        <div class="try">x = 0x39 (1.125): x² = 1.265625 = 1.010001₂ needs 6 fraction bits. fmul gives 1.010₂ = 1.25 (0x3A). Here c = 0x3A with negC = 1: fma(x, x, −1.25) = 2<sup>−6</sup> = 0x08, exactly, no flags; fmul then fsub would give 0.</div>`,
+      scene: () => ({ root: fpFma(E4M3), inputs: { a: 0x39, b: 0x39, c: 0x3a, negProd: 0, negC: 1, rm: 0 } }),
+      challenge: {
+        kind: 'quiz', question: 'Why must the product be kept to all 2M + 2 bits rather than rounded to M + 3 bits with a sticky bit, as the adder does with its smaller operand?',
+        options: [
+          'Because c may cancel the top of the product, and then the low product bits become the leading bits of the result',
+          'Because the multiplier cannot produce fewer bits',
+          'For the exponent calculation',
+          'It need not be; a sticky bit is always enough',
+        ], answer: 0,
+        explain: 'When c ≈ −a × b, subtraction cancels the leading bits, and the result consists of the product\'s low bits: they must be exact. The adder can use a sticky bit because its operands are already rounded to M + 1 bits; a full product has 2M + 2 significant bits.',
+      },
+    },
+    {
       title: 'float32: the same circuit, bigger',
       body: `
         <p>Generated from the same code with 8 exponent and 23 fraction bits. The float32 adder costs about <strong>7 900 NANDs</strong> and is
@@ -195,12 +219,13 @@ export const chFloat: Chapter = {
     {
       title: 'An FPU in the CPU',
       body: `
-        <p>The single-cycle CPU gains a second register file (f0–f31, no hard-wired zero) and an FPU implementing RV32F except fused multiply-add:
-        flw, fsw, fadd.s, fsub.s, fmul.s, fdiv.s and fsqrt.s (iterative: they stall the CPU, two steps on), sign injection (fmv.s, fneg.s, fabs.s),
-        fmin/fmax.s, feq/flt/fle.s, fcvt.w[u].s, fcvt.s.w[u], fmv.x.w, fmv.w.x and fclass.s, in all five rounding modes, with the exception flags.
-        flw and fsw reuse the integer load/store path, disguised as lw and sw. funct7 selects one of the units' results; the FPU is 57 400 NANDs.</p>
-        <p>The cost: about 140 700 NANDs (2.4 times the integer CPU), and a clock period of <strong>274</strong> NAND delays instead of 103. A float add in one
-        cycle makes every instruction slow. Real cores pipeline the FPU over 3 to 5 cycles.</p>
+        <p>The single-cycle CPU gains a second register file (f0–f31, no hard-wired zero, three read ports) and an FPU implementing all of RV32F:
+        flw, fsw, fadd.s, fsub.s, fmul.s, the four fused multiply-adds, fdiv.s and fsqrt.s (iterative: they stall the CPU, see below), sign injection
+        (fmv.s, fneg.s, fabs.s), fmin/fmax.s, feq/flt/fle.s, fcvt.w[u].s, fcvt.s.w[u], fmv.x.w, fmv.w.x and fclass.s, in all five rounding modes, with
+        the exception flags. flw and fsw reuse the integer load/store path, disguised as lw and sw. The opcode or funct7 selects one of the units'
+        results; the FPU is 82 700 NANDs.</p>
+        <p>The cost: about 169 900 NANDs (2.9 times the integer CPU), and a clock period of <strong>368</strong> NAND delays instead of 103, set by
+        the fused multiply-add. A float operation in one cycle makes every instruction slow. Real cores pipeline the FPU over 3 to 5 cycles.</p>
         <div class="try">Run "0.1 ten times": the sum is 0x3F800001, one ulp above 1.0, and feq.s says 0.</div>`,
       scene: () => cpuScene({ source: fsrc('tenth'), fpu: true, adder: 'ks', timing: true, highlight: ['fpu', 'frf'] }),
       challenge: {
@@ -235,7 +260,7 @@ export const chFloat: Chapter = {
         and not done, exactly like the integer divider of the RV32IM system CPU. retire = ¬stall gates the PC enable and both register-file write
         enables, so the instruction stays in place until its result is ready, then retires in the done cycle. The fflags write is gated too: during the
         stall the flags at the FPU's output belong to a half-finished quotient. The golden model steps only when retire = 1.</p>
-        <p>The two units add 19 300 NANDs: the CPU is now 140 700. The clock period stays 274: one step is 58 NAND delays, far below a float add.
+        <p>The two units add 19 300 NANDs. They do not lengthen the clock: one step is 58 NAND delays, far below a float add.
         "Division and square root" takes 215 cycles for 22 instructions. "Newton's √2" computes x ← (x + 2 / x) / 2 four times: 132 cycles to reach the
         same correctly rounded float that one fsqrt.s gives in 28.</p>
         <div class="try">Run "Division and square root": the PC waits at each fdiv.s and fsqrt.s while the panel says stalled, and the CPI climbs.</div>`,
@@ -249,6 +274,24 @@ export const chFloat: Chapter = {
           'It need not be; the flags only change at the end',
         ], answer: 0,
         explain: 'A register write that happens too early is overwritten by the correct one at retirement, but fflags only accumulates: any spurious NX or OF ORed in during the stall would stay set. So the accrual enable is OP-FP AND retire.',
+      },
+    },
+    {
+      title: 'fma in the CPU',
+      body: `
+        <p>The fused multiply-adds have their own opcodes (0x43, 0x47, 0x4B, 0x4F) and their own format, <strong>R4</strong>: a third source register
+        rs3 in bits 31:27, the format (00 = single) in 26:25, rm in funct3. Three operands need a third read port on the f register file: one more
+        32-way multiplexer tree of 32-bit words, 3 970 NANDs. Bits 3:2 of the opcode are the two negations (c, then the product), so the decoder
+        hands them to the unit directly.</p>
+        <p>In a single-cycle CPU the deepest instruction sets the clock: with the fma the period grows from 274 to <strong>368</strong> NAND delays (+34 %),
+        paid by every add and branch. A pipelined FPU (at the end of this chapter) gives fma several cycles of latency instead.</p>
+        <div class="try">Run "Fused multiply-add": a0 = 0 (fmul then fsub), a1 = 0x33800000 (fmsub.s, 2<sup>−24</sup>), then 17, 7, −7, −17 from the four variants.
+        "Horner with fmadd" evaluates a cubic in 3 instructions instead of 6.</div>`,
+      scene: () => cpuScene({ source: fsrc('fma'), fpu: true, adder: 'ks', highlight: ['fpu', 'frf'] }),
+      challenge: {
+        kind: 'quiz', question: 'fnmadd.s computes −(a × b) − c. With a × b = 2 and c = −2, what does it return in RNE, and with which sign?',
+        options: ['+0', '−0', '−4', '+4'], answer: 0,
+        explain: '−(2) − (−2) = −2 + 2: an exact zero from two terms of opposite sign, which is +0 in every mode except RDN (−0).',
       },
     },
     {

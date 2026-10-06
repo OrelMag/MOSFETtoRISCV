@@ -1,16 +1,17 @@
 // RV32I: encodings, decoding and disassembly. The single source of truth for the assembler,
 // the instruction-set simulator and the instruction explorer.
 
-export type Fmt = 'R' | 'I' | 'S' | 'B' | 'U' | 'J';
+export type Fmt = 'R' | 'R4' | 'I' | 'S' | 'B' | 'U' | 'J';
 
 export const OPCODES = {
   LUI: 0b0110111, AUIPC: 0b0010111, JAL: 0b1101111, JALR: 0b1100111, BRANCH: 0b1100011,
   LOAD: 0b0000011, STORE: 0b0100011, OPIMM: 0b0010011, OP: 0b0110011, SYSTEM: 0b1110011, FENCE: 0b0001111,
   LOADFP: 0b0000111, STOREFP: 0b0100111, OPFP: 0b1010011, AMO: 0b0101111,
+  FMADD: 0b1000011, FMSUB: 0b1000111, FNMSUB: 0b1001011, FNMADD: 0b1001111,
 } as const;
 
 /** Register roles of a floating-point instruction: which operands live in the f registers. */
-export interface FpRoles { rd?: 'f' | 'x'; rs1?: 'f' | 'x'; rs2?: 'f' | 'x'; rm?: boolean; rs2fixed?: number }
+export interface FpRoles { rd?: 'f' | 'x'; rs1?: 'f' | 'x'; rs2?: 'f' | 'x'; rs3?: 'f'; rm?: boolean; rs2fixed?: number }
 
 export interface InstrSpec {
   name: string;
@@ -83,6 +84,10 @@ export const INSTRS: InstrSpec[] = [
   FR('fcvt.s.w', 0x68, { rd: 'f', rs1: 'x', rs2fixed: 0, rm: true }),
   FR('fcvt.s.wu', 0x68, { rd: 'f', rs1: 'x', rs2fixed: 1, rm: true }),
   FR('fmv.w.x', 0x78, { rd: 'f', rs1: 'x', rs2fixed: 0 }, 0),
+  // fused multiply-add (R4 format: rs3 in bits 31:27, fmt = 00 for single precision in 26:25)
+  ...(['fmadd.s', 'fmsub.s', 'fnmsub.s', 'fnmadd.s'] as const).map((name, i): InstrSpec => ({
+    name, fmt: 'R4', opcode: OPCODES.FMADD + 4 * i, hw: false, fp: { rd: 'f', rs1: 'f', rs2: 'f', rs3: 'f', rm: true },
+  })),
   // A extension: the two atomic memory operations the multi-core chapter uses (aq / rl bits ignored)
   { name: 'amoswap.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x04, hw: false },
   { name: 'amoadd.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x00, hw: false },
@@ -135,6 +140,10 @@ export const sext = (v: number, bits: number) => (v & (1 << (bits - 1)) ? v - 2 
 export function encR(op: number, rd: number, f3: number, rs1: number, rs2: number, f7: number): number {
   return u32((f7 << 25) | (rs2 << 20) | (rs1 << 15) | (f3 << 12) | (rd << 7) | op);
 }
+/** R4 (fused multiply-add): rs3 in the top five bits, fmt (00 = single) below it. */
+export function encR4(op: number, rd: number, f3: number, rs1: number, rs2: number, rs3: number, fmt = 0): number {
+  return u32((rs3 << 27) | (fmt << 25) | (rs2 << 20) | (rs1 << 15) | (f3 << 12) | (rd << 7) | op);
+}
 export function encI(op: number, rd: number, f3: number, rs1: number, imm: number): number {
   return u32(((imm & 0xfff) << 20) | (rs1 << 15) | (f3 << 12) | (rd << 7) | op);
 }
@@ -167,6 +176,8 @@ export interface Decoded {
   rd: number;
   rs1: number;
   rs2: number;
+  /** Third source (R4 format only; otherwise bits 31:27). */
+  rs3: number;
   funct3: number;
   funct7: number;
   /** Sign-extended immediate (for U-type: the value placed in the upper 20 bits, i.e. imm << 12). */
@@ -191,6 +202,7 @@ export function decode(word: number): Decoded {
     if (s.opcode !== opcode) continue;
     if (s.funct3 !== undefined && s.funct3 !== funct3 && s.fmt !== 'U' && s.fmt !== 'J') continue;
     if (s.fmt === 'R' && s.funct7 !== (s.opcode === OPCODES.AMO ? funct7 & 0x7c : funct7)) continue;
+    if (s.fmt === 'R4' && (funct7 & 3) !== 0) continue; // only fmt = S (single precision)
     if (s.fp?.rs2fixed !== undefined && s.fp.rs2fixed !== rs2) continue;
     if (s.opcode === OPCODES.OPIMM && (funct3 === 1 || funct3 === 5) && s.funct7 !== undefined && s.funct7 !== (funct7 & 0x7e)) continue;
     if (s.opcode === OPCODES.OPIMM && (funct3 === 1 || funct3 === 5) && s.funct7 === undefined) continue;
@@ -212,7 +224,7 @@ export function decode(word: number): Decoded {
     case 'J': imm = immJ(w); break;
     default: imm = 0;
   }
-  return { word: w, spec, name: spec?.name ?? 'unknown', fmt, opcode, rd, rs1, rs2, funct3, funct7, imm };
+  return { word: w, spec, name: spec?.name ?? 'unknown', fmt, opcode, rd, rs1, rs2, rs3: w >>> 27, funct3, funct7, imm };
 }
 
 const rn = (r: number) => ABI[r];
@@ -232,11 +244,12 @@ export function disasm(word: number, pc?: number): string {
     if (d.fmt === 'S') return `${n} ${frn(d.rs2)}, ${d.imm}(${rn(d.rs1)})`;
     const rm = fp.rm && d.funct3 !== 7 ? `, ${RM_OPERANDS[d.funct3] || d.funct3}` : '';
     if (fp.rs2fixed !== undefined) return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}${rm}`;
+    if (d.fmt === 'R4') return `${n} ${frn(d.rd)}, ${frn(d.rs1)}, ${frn(d.rs2)}, ${frn(d.rs3)}${rm}`;
     return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}, ${R(fp.rs2, d.rs2)}${rm}`;
   }
   if (d.opcode === OPCODES.AMO) return `${n} ${rn(d.rd)}, ${rn(d.rs2)}, (${rn(d.rs1)})`;
   switch (d.fmt) {
-    case 'R': return `${n} ${rn(d.rd)}, ${rn(d.rs1)}, ${rn(d.rs2)}`;
+    case 'R': case 'R4': return `${n} ${rn(d.rd)}, ${rn(d.rs1)}, ${rn(d.rs2)}`;
     case 'I':
       if (d.opcode === OPCODES.LOAD || n === 'jalr') return `${n} ${rn(d.rd)}, ${d.imm}(${rn(d.rs1)})`;
       if (d.opcode === OPCODES.SYSTEM && d.funct3 !== 0) {
@@ -254,6 +267,7 @@ export function disasm(word: number, pc?: number): string {
 
 /** Bit fields of each format, high to low, for the instruction explorer. */
 export const FIELDS: Record<Fmt, { name: string; hi: number; lo: number }[]> = {
+  R4: [{ name: 'rs3', hi: 31, lo: 27 }, { name: 'fmt', hi: 26, lo: 25 }, { name: 'rs2', hi: 24, lo: 20 }, { name: 'rs1', hi: 19, lo: 15 }, { name: 'rm', hi: 14, lo: 12 }, { name: 'rd', hi: 11, lo: 7 }, { name: 'opcode', hi: 6, lo: 0 }],
   R: [{ name: 'funct7', hi: 31, lo: 25 }, { name: 'rs2', hi: 24, lo: 20 }, { name: 'rs1', hi: 19, lo: 15 }, { name: 'funct3', hi: 14, lo: 12 }, { name: 'rd', hi: 11, lo: 7 }, { name: 'opcode', hi: 6, lo: 0 }],
   I: [{ name: 'imm[11:0]', hi: 31, lo: 20 }, { name: 'rs1', hi: 19, lo: 15 }, { name: 'funct3', hi: 14, lo: 12 }, { name: 'rd', hi: 11, lo: 7 }, { name: 'opcode', hi: 6, lo: 0 }],
   S: [{ name: 'imm[11:5]', hi: 31, lo: 25 }, { name: 'rs2', hi: 24, lo: 20 }, { name: 'rs1', hi: 19, lo: 15 }, { name: 'funct3', hi: 14, lo: 12 }, { name: 'imm[4:0]', hi: 11, lo: 7 }, { name: 'opcode', hi: 6, lo: 0 }],

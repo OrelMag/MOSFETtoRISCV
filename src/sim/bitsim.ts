@@ -7,8 +7,8 @@
 // any latch in the sweep. Exhaustive tests of floating-point units use it; tests/bitsim.test.ts
 // checks it against GateSim.
 
-import type { FlatDesign } from './flatten';
-import { inPorts, outPorts } from './types';
+import type { FlatDesign, FlatLeaf } from './flatten';
+import { type Bit, inPorts, outPorts } from './types';
 
 export const LANES = 32;
 
@@ -19,11 +19,14 @@ export class BitSim {
   readonly design: FlatDesign;
   /** One word per net: bit l is the net's value in lane l. */
   readonly v: Int32Array;
-  /** NAND leaves in evaluation order, as (a, b, y) net triples. */
+  /** Leaves in evaluation order: NANDs as (a, b, y) net triples, behaviours as (−1 − index, 0, 0). */
   private readonly ops: Int32Array;
   /** True when the netlist has no feedback: one sweep settles it. */
   readonly acyclic: boolean;
   sweeps = 0;
+
+  /** Behavioural leaves (e.g. an instruction ROM) in the evaluation order, with their state. */
+  private readonly behaviors: { leaf: FlatLeaf; state: unknown }[] = [];
 
   constructor(design: FlatDesign) {
     this.design = design;
@@ -32,16 +35,15 @@ export class BitSim {
     const leaves = design.leaves;
     const driven = new Uint8Array(n);
     for (const p of inPorts(design.root.def)) for (const net of design.root.ports[p.name]) driven[net] = 1;
-    const nands: number[] = [];
+    const nodes: number[] = [];
     const driverOf = new Int32Array(n).fill(-1);
     leaves.forEach((l, li) => {
-      if (l.kind === 'nand') {
-        nands.push(li);
-        driverOf[l.outputs[0][0]] = li;
-        driven[l.outputs[0][0]] = 1;
+      if (l.kind === 'nand' || (l.kind === 'behavior' && l.inputs.length > 0)) {
+        nodes.push(li);
+        for (const port of l.outputs) for (const net of port) { driverOf[net] = li; driven[net] = 1; }
         return;
       }
-      if (l.kind === 'behavior' && l.inputs.length === 0) {
+      if (l.kind === 'behavior') {
         // constants (tie cells): evaluate once
         const outs = l.def.behavior!.eval([], l.def.behavior!.init?.());
         outPorts(l.def).forEach((_, pi) => l.outputs[pi].forEach((net, i) => {
@@ -50,26 +52,26 @@ export class BitSim {
         }));
         return;
       }
-      throw new Error(`BitSim: ${l.node.path.join('.')} (${l.def.id}) is a ${l.kind} leaf; only NANDs and constants are supported`);
+      throw new Error(`BitSim: ${l.node.path.join('.')} (${l.def.id}) is a ${l.kind} leaf; only NANDs and behaviours are supported`);
     });
-    for (const li of nands) for (const port of leaves[li].inputs) for (const net of port) {
+    for (const li of nodes) for (const port of leaves[li].inputs) for (const net of port) {
       if (!driven[net]) throw new Error(`BitSim: undriven net into ${leaves[li].node.path.join('.')}`);
     }
-    // Kahn's algorithm over the NAND graph; when only cycles remain, force the lowest-numbered leaf.
-    const indeg = new Int32Array(nands.length);
+    // Kahn's algorithm over the leaf graph; when only cycles remain, force the lowest-numbered leaf.
+    const indeg = new Int32Array(nodes.length);
     const fan: number[][] = Array.from({ length: n }, () => []);
-    nands.forEach((li, k) => {
+    nodes.forEach((li, k) => {
       for (const port of leaves[li].inputs) for (const net of port) {
         fan[net].push(k);
         if (driverOf[net] >= 0) indeg[k]++;
       }
     });
-    const done = new Uint8Array(nands.length);
+    const done = new Uint8Array(nodes.length);
     const order: number[] = [];
     const queue: number[] = [];
-    nands.forEach((_, k) => { if (indeg[k] === 0) queue.push(k); });
+    nodes.forEach((_, k) => { if (indeg[k] === 0) queue.push(k); });
     let scan = 0, forced = false, head = 0;
-    while (order.length < nands.length) {
+    while (order.length < nodes.length) {
       if (head === queue.length) {
         while (done[scan]) scan++;
         queue.push(scan);
@@ -79,18 +81,44 @@ export class BitSim {
       if (done[k]) continue;
       done[k] = 1;
       order.push(k);
-      for (const c of fan[leaves[nands[k]].outputs[0][0]]) if (!done[c] && --indeg[c] === 0) queue.push(c);
+      for (const port of leaves[nodes[k]].outputs) for (const net of port) for (const c of fan[net]) if (!done[c] && --indeg[c] === 0) queue.push(c);
     }
     this.acyclic = !forced;
     this.ops = new Int32Array(order.length * 3);
     order.forEach((k, i) => {
-      const l = leaves[nands[k]];
-      this.ops[3 * i] = l.inputs[0][0];
-      this.ops[3 * i + 1] = l.inputs[1][0];
-      this.ops[3 * i + 2] = l.outputs[0][0];
+      const l = leaves[nodes[k]];
+      if (l.kind === 'nand') {
+        this.ops[3 * i] = l.inputs[0][0];
+        this.ops[3 * i + 1] = l.inputs[1][0];
+        this.ops[3 * i + 2] = l.outputs[0][0];
+      } else {
+        this.ops[3 * i] = -1 - this.behaviors.length;
+        this.behaviors.push({ leaf: l, state: l.def.behavior!.init?.() });
+      }
     });
     for (const [net, b] of design.powerOn) this.v[net] = b ? -1 : 0;
     this.settle();
+  }
+
+  /**
+   * A behavioural leaf is evaluated on lane 0 and its outputs broadcast to every lane, so designs
+   * with behaviours must be simulated with the same inputs in every lane. Returns: did an output change?
+   */
+  private evalBehavior(k: number): boolean {
+    const { leaf, state } = this.behaviors[k], v = this.v;
+    const ins = leaf.inputs.map((port) => port.reduce((acc, net, i) => acc + (v[net] & 1) * 2 ** i, 0));
+    const outs = leaf.def.behavior!.eval(ins, state);
+    let changed = false;
+    leaf.outputs.forEach((port, pi) => port.forEach((net, i) => {
+      const w = bitOf(outs[pi] ?? 0, i) ? -1 : 0;
+      if (v[net] !== w) { v[net] = w; changed = true; }
+    }));
+    return changed;
+  }
+
+  /** Lane 0 of some nets, as bits (the Sim interface used by the co-simulation helpers). */
+  getBits(nets: readonly number[]): Bit[] {
+    return nets.map((n) => (this.v[n] & 1) as Bit);
   }
 
   /** Drive an input port: one value for every lane, or one value per lane. */
@@ -123,7 +151,7 @@ export class BitSim {
 
   settle(): void {
     const v = this.v, ops = this.ops, n = ops.length;
-    if (this.acyclic) {
+    if (this.acyclic && !this.behaviors.length) {
       for (let i = 0; i < n; i += 3) v[ops[i + 2]] = ~(v[ops[i]] & v[ops[i + 1]]);
       this.sweeps++;
       return;
@@ -131,7 +159,9 @@ export class BitSim {
     for (let sweep = 0; sweep < 1000; sweep++) {
       let changed = false;
       for (let i = 0; i < n; i += 3) {
-        const y = ~(v[ops[i]] & v[ops[i + 1]]);
+        const a = ops[i];
+        if (a < 0) { if (this.evalBehavior(-1 - a)) changed = true; continue; }
+        const y = ~(v[a] & v[ops[i + 1]]);
         if (v[ops[i + 2]] !== y) { v[ops[i + 2]] = y; changed = true; }
       }
       this.sweeps++;

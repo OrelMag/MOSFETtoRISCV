@@ -7,7 +7,7 @@
 // memory-mapped I/O, CSRs, exceptions and interrupts (one step = one clock cycle; a cycle in
 // which an interrupt is taken executes no instruction).
 
-import { F32, fpAddX, fpClass, fpCmpX, fpDivX, fpFromIntX, fpMinMaxX, fpMulX, fpSqrtX, fpToIntX, type FpResult } from '../sim/fpref';
+import { F32, fpAddX, fpClass, fpCmpX, fpDivX, fpFmaX, fpFromIntX, fpMinMaxX, fpMulX, fpSqrtX, fpToIntX, type FpResult } from '../sim/fpref';
 import { CSRS, decode, disasm, OPCODES } from './isa';
 
 export interface IssOptions {
@@ -286,6 +286,11 @@ export class ISS {
         case 'fmul.s': fWrite = fr(fpMulX(fa, fb, F32, rm)); break;
         case 'fdiv.s': fWrite = fr(fpDivX(fa, fb, F32, rm)); break;
         case 'fsqrt.s': fWrite = fr(fpSqrtX(fa, F32, rm)); break;
+        case 'fmadd.s': case 'fmsub.s': case 'fnmsub.s': case 'fnmadd.s': {
+          const neg = (d.opcode >> 2) & 3; // fmadd 0, fmsub 1, fnmsub 2, fnmadd 3: bit 0 negates c, bit 1 the product
+          fWrite = fr(fpFmaX(fa, fb, this.f[d.rs3], !!(neg & 2), !!(neg & 1), F32, rm));
+          break;
+        }
         case 'fsgnj.s': fWrite = ((fa & 0x7fffffff) | (fb & 0x80000000)) >>> 0; break;
         case 'fsgnjn.s': fWrite = ((fa & 0x7fffffff) | (~fb & 0x80000000)) >>> 0; break;
         case 'fsgnjx.s': fWrite = (fa ^ (fb & 0x80000000)) >>> 0; break;

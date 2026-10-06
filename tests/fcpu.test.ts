@@ -3,19 +3,21 @@ import { singleCycleCpu } from '../src/lib';
 import { assemble } from '../src/riscv/asm';
 import { clockCycle, cpuState, retiring } from '../src/riscv/cosim';
 import { F_PROGRAMS } from '../src/riscv/fprograms';
-import { disasm } from '../src/riscv/isa';
+import { decode, disasm } from '../src/riscv/isa';
 import { FDIV_CYCLES, FSQRT_CYCLES, ISS } from '../src/riscv/iss';
 import { PROGRAMS } from '../src/riscv/programs';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
+import { BitSim } from '../src/sim/bitsim';
 import { breathe } from './fptest';
 
 /** Co-simulate: the golden model executes one instruction whenever the CPU retires one (fdiv / fsqrt stall). */
-async function cosim(source: string, cycles = 1000) {
+async function cosim(source: string, cycles = 1000, engine: 'bit' | 'gate' = 'bit') {
   const asm = assemble(source);
   expect(asm.errors).toEqual([]);
   const design = flatten(singleCycleCpu(asm.words, { fpu: true, adder: 'ks' }));
-  const sim = new GateSim(design);
+  // the bit-parallel simulator (one lane) is far faster on this 160 000-gate CPU; one program also runs on GateSim
+  const sim = engine === 'gate' ? new GateSim(design) : new BitSim(design);
   sim.setInput('clk', 0);
   sim.settle();
   const iss = new ISS(asm.words);
@@ -51,6 +53,11 @@ describe('assembler and ISS: F extension', () => {
     expect(c.errors).toEqual([]);
     expect(c.words.map((w) => disasm(w))).toEqual(['csrrs a0, fcsr, zero', 'csrrw zero, fcsr, t0', 'csrrwi a1, frm, 3', 'csrrw zero, fflags, zero', 'csrrs a2, fflags, zero']);
     expect(assemble('fadd.s ft0, ft1, ft2, up').errors.length).toBe(1);
+    const m = assemble('fmadd.s fa0, fa1, fa2, fa3\nfmsub.s ft0, ft1, ft2, ft3, rtz\nfnmsub.s fs0, fs1, fs2, fs3\nfnmadd.s ft8, ft9, ft10, ft11, rmm');
+    expect(m.errors).toEqual([]);
+    expect(m.words.map((w) => disasm(w))).toEqual(['fmadd.s fa0, fa1, fa2, fa3', 'fmsub.s ft0, ft1, ft2, ft3, rtz', 'fnmsub.s fs0, fs1, fs2, fs3', 'fnmadd.s ft8, ft9, ft10, ft11, rmm']);
+    expect(m.words[0]).toBe(0x68c5f543); // rs3 = 13 (fa3), fmt = 00, rs2 = 12, rs1 = 11, rm = dyn, rd = 10, opcode 0x43
+    expect(decode(m.words[3]).fmt).toBe('R4');
   });
   it('computes the expected surprises', () => {
     const t = run('tenth');
@@ -82,12 +89,19 @@ describe('assembler and ISS: F extension', () => {
     const n = run('newton');
     expect([n.x[10], n.x[11]]).toEqual([1, 0x3fb504f3]);
   });
+  it('fused multiply-add', () => {
+    const m = run('fma');
+    expect([10, 11, 12, 13, 14, 15, 16].map((i) => m.x[i] | 0)).toEqual([0, 0x33800000, 1, 17, 7, -7, -17]);
+    const h = run('horner');
+    expect([h.x[10], h.x[11], h.x[12]]).toEqual([0x3facbc6b, 0x3facbc6a, 0]);
+  });
 });
 
 describe('single-cycle RV32IF CPU (gate level) vs golden model', () => {
   for (const p of F_PROGRAMS) it(p.id, async () => { const r = await cosim(p.source); console.log(`${p.id}: ${r.leaves} leaves, ${r.iss.steps} instructions in ${r.cycles} cycles`); }, 300000);
   it('fdiv.s and fsqrt.s stall for exactly their latency', async () => {
-    const r = await cosim('li t0, 7\nfcvt.s.w ft0, t0\nfdiv.s ft1, ft0, ft0\nfsqrt.s ft2, ft0\nhalt: j halt');
+    // on the event-driven simulator, as a check of the bit-parallel one used above
+    const r = await cosim('li t0, 7\nfcvt.s.w ft0, t0\nfdiv.s ft1, ft0, ft0\nfsqrt.s ft2, ft0\nhalt: j halt', 1000, 'gate');
     // 2 + 1 one-cycle instructions (li, fcvt, the final j), plus the two iterative ones
     expect(r.cycles).toBe(3 + FDIV_CYCLES + FSQRT_CYCLES);
     expect([r.iss.f[1], r.iss.f[2]]).toEqual([0x3f800000, 0x402953fd]);
