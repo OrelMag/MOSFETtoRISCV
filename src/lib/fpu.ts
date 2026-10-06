@@ -6,7 +6,7 @@
 //   normalize-and-round unit serves the adder, the multiplier and integer-to-float conversion.
 
 import { symbolGeom } from '../sim/geometry';
-import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
+import type { ComponentDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
 import { andN, busMux2, equal, incrementer, muxTree } from './combinational';
 import { define, merger, ones, splitter } from './define';
@@ -19,6 +19,7 @@ import { bitwise, orN } from './wide';
 import {
   F32, bias as fbias, fpAddX, fpClass, fpFmaX, fpCmpX, fpFromIntX, fpMinMaxX, fpMulX, fpToIntX, overflowToInf, RM, roundUp, type FpFormat,
 } from '../sim/fpref';
+import { Builder } from './builder';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -32,66 +33,8 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
 const pow2ceil = (n: number) => 2 ** Math.ceil(Math.log2(n));
 const log2c = (n: number) => Math.ceil(Math.log2(n));
 
-/**
- * A small netlist builder: instances are added in "columns" (left to right as data flows), and
- * nets are collected per driver, so a component can be written as a sequence of operations.
- * Every net is drawn as a named label unless it is short and local; these are arithmetic
- * blocks best read by drilling into the sub-units.
- */
-export class Builder {
-  instances: InstanceDef[] = [];
-  private sinks = new Map<string, string[]>();
-  private names = new Map<string, string>();
-  private col = 0;
-  private y = 0;
-  private colW = 0;
-  private x = 10;
-  private n = 0;
-  /** Start a new column. */
-  next(): void {
-    if (this.y === 0) return;
-    this.x += this.colW + 12;
-    this.y = 0;
-    this.colW = 0;
-    this.col++;
-  }
-  add(def: ComponentDef, label?: string, name?: string): string {
-    const nm = name ?? `u${this.n++}`;
-    const g = symbolGeom(def);
-    this.instances.push({ name: nm, def, at: [this.x, this.y + 2], label });
-    this.y += g.h + 4;
-    this.colW = Math.max(this.colW, g.w);
-    return nm;
-  }
-  /** Connect a driver ("inst.port" or a component pin) to a sink. */
-  wire(drv: string, sink: string): void {
-    if (!this.sinks.has(drv)) this.sinks.set(drv, []);
-    this.sinks.get(drv)!.push(sink);
-  }
-  name(drv: string, n: string): string {
-    this.names.set(drv, n);
-    return drv;
-  }
-  /** Instantiate def and wire its inputs (in port order) from drivers; returns the instance name. */
-  op(def: ComponentDef, inputs: string[], label?: string): string {
-    const nm = this.add(def, label);
-    const ins = def.ports.filter((p) => p.dir === 'in').map((p) => p.name);
-    inputs.forEach((d, i) => this.wire(d, `${nm}.${ins[i]}`));
-    return nm;
-  }
-  /** Single-output helper: returns "inst.out". */
-  op1(def: ComponentDef, inputs: string[], label?: string): string {
-    const nm = this.op(def, inputs, label);
-    return `${nm}.${def.ports.find((p) => p.dir === 'out')!.name}`;
-  }
-  get right(): number { return this.x + this.colW + 12; }
-  get height(): number { return Math.max(...this.instances.map((i) => (i.at![1] + symbolGeom(i.def).h))); }
-  nets(): NetDef[] {
-    const out: NetDef[] = [];
-    for (const [d, ss] of this.sinks) out.push({ name: this.names.get(d), ends: [d, ...ss], tags: ss.length > 1 || !d.includes('.') ? true : undefined });
-    return out;
-  }
-}
+// The column-by-column netlist builder (shared with the other arithmetic files).
+export { Builder };
 
 const K = (w: number, v: number) => constWord(w, v >>> 0);
 
