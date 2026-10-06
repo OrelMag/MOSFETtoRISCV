@@ -153,10 +153,12 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - Compressed instructions (C), A extension (LR/SC, AMO)
 - Virtual memory (Sv32), TLB, U/S/M privilege levels (stretch)
 
-### Phase 10 — Multi-core ⏳
-- Two or more cores with private caches and shared memory
-- Coherence protocol (MSI → MESI) with an animated bus
-- Atomics and a spin-lock demo; memory ordering (FENCE)
+### Phase 10 — Multi-core ✅ (chapter 24)
+- ✅ Gate-level dual-core: one core definition instantiated twice, csrr mhartid, shared memory behind a round-robin arbiter
+- ✅ amoswap.w / amoadd.w; race (20 of 40 updates survive), atomic add and spin-lock demos
+- ✅ Multi-hart golden model with identical arbitration; both cores co-simulated every cycle
+- ✅ MSI / MESI snooping coherence explorer (false sharing, private data, ping-pong); memory-ordering discussion
+- ⏳ Private caches in the gate-level cores with a coherent bus; lr.w / sc.w; more than two cores
 
 ### Phase 11 — From netlist to silicon ⏳
 - Standard cells: the NAND you met in Chapter 3 drawn as layout (diffusion, poly, metal, contacts)

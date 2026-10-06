@@ -60,6 +60,7 @@ src/sim/       simulation core (no DOM)
   switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes); transistor
                  `strength` (ratioed logic) and `cap` nets that keep their charge
   fpref.ts       exact reference float arithmetic for any format (BigInt, RNE), float32 helpers
+  coherence.ts   MSI / MESI snooping model (per block, no capacity)
   cachemodel.ts  behavioural cache model (size/line/ways/replacement/write policy, 3C classes)
   harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench
   stats.ts       transistor / NAND counts, logic depth
@@ -93,11 +94,13 @@ src/lib/       the component library (registered in `registry` via define())
   fpu.ts         parametric IEEE 754 units (format {E, M}): lzc, shiftLeft, shiftRightSticky, fpUnpack,
                  normRound (shared RNE rounding), fpAdd, fpMul, fpFromInt, fpCompare, FPU32, FP_DECODE;
                  singleCycleCpu(…, { fpu }) adds the f register file (regfile(5, 32, false))
+  mpdecode.ts    MP_DECODE (atomics, csrr mhartid), ARBITER2 (round-robin)
+  multicore.ts   dualCore(program): two singleCycleCpu(…, { shared }) cores + arbiter + shared memory
   muldiv.ts      ppRow, arrayMul(n), compressor()/csa(n) (3:2 rows with word offsets), treeMul(n, signed,
                  outW) (Wallace + KS), MUL32, BOOTH_ENC, divStep, arrayDiv, seqDivider(n), condNegate, MDU
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
                instructions), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
-               interrupts; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / cprograms.ts / fprograms.ts (samples), cosim.ts (CPU state;
+               interrupts; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / cprograms.ts / fprograms.ts (samples), multi.ts (MultiISS: N harts, shared memory, same arbitration), mcprograms.ts, cosim.ts (CPU state;
                `retiring()` = step the ISS this cycle?)
 src/view/      SVG schematic renderer, router, inspector panels, waveform, truth table
 src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...)

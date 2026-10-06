@@ -77,3 +77,17 @@ function cosim(source: string, cycles = 1500) {
 describe('dual-core (gate level) vs multi-hart golden model', () => {
   for (const p of MC_PROGRAMS) it(p.id, () => { const r = cosim(p.source); console.log(`${p.id}: ${r.cycles} cycles, ${r.stalls} stalls, counter ${r.counter}, ${r.leaves} leaves`); }, 600000);
 });
+
+import { Coherence } from '../src/sim/coherence';
+describe('coherence protocols', () => {
+  it('MSI vs MESI on private read-then-write, and ping-pong', () => {
+    const run = (p: 'MSI' | 'MESI', ops: [number, number, boolean][]) => { const c = new Coherence(2, p); for (const [a, b, w] of ops) c.access(a, b, w); return c; };
+    const priv: [number, number, boolean][] = [[0, 0, false], [0, 0, true], [1, 1, false], [1, 1, true]];
+    expect(run('MSI', priv).stats.bus).toBe(4);   // BusRd + BusUpgr each
+    expect(run('MESI', priv).stats.bus).toBe(2);  // E → M is silent
+    const pp = run('MESI', [[0, 0, true], [1, 0, true], [0, 0, true], [1, 0, true]]);
+    expect(pp.stats).toMatchObject({ bus: 4, invalidations: 3, writebacks: 3 });
+    const shared = run('MESI', [[0, 0, false], [1, 0, false]]);
+    expect(shared.state.map((r) => r[0])).toEqual(['S', 'S']);
+  });
+});
