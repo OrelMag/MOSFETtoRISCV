@@ -254,6 +254,32 @@ export const chCache: Chapter = {
       },
     },
     {
+      title: 'A cache in the pipeline',
+      body: `
+        <p>In the pipelined CPU the cache sits in the M stage. A miss there must stop <em>everything</em>: the PC, all four pipeline
+        registers, the flushes the hazard unit may be asking for, and the branch predictor's counters (which are not idempotent). One
+        signal, the cache's <code>stall</code>, gates every enable for the 8 or 12 cycles of the miss, and W reports a retirement only when
+        the freeze is over, so the golden model still steps once per instruction.</p>
+        <p>A bug worth knowing: our first version let flushed bubbles reach the cache. A bubble's fields are not all zero, and one of them looked
+        like a load, so it caused real misses that cost time but not correctness. The co-simulation passed; the miss count did not match the
+        single-cycle CPU's. The fix is one AND gate: only a <em>valid</em> instruction in M may access the cache.</p>
+        <p>Measured with the 2-way write-back cache, "Two arrays, one set" runs 101 instructions in 207 cycles, 72 of them frozen (9 misses);
+        with the direct-mapped write-through cache, 391 cycles, 256 frozen.</p>
+        <div class="try">Run it and watch the pipeline diagram: during a miss every row repeats.</div>`,
+      scene: () => cpuScene({ source: csrc('pingpong'), pipeline: true, dcache: 'wb2', adder: 'ks', highlight: ['dm'] }),
+      challenge: {
+        kind: 'quiz', question: 'Why must a miss in M freeze the F, D and E stages too, instead of letting them run on?',
+        options: [
+          'The instruction in E would move into M while M is still busy, and the hazard and forwarding logic assume one instruction per stage',
+          'The instruction cache would miss as well',
+          'The register file cannot be read during a miss',
+          'It would not have to: only M needs to wait',
+        ],
+        answer: 0,
+        explain: 'An in-order pipeline moves as a whole: if M holds, E must hold or overwrite it, and so on back to the PC. Out-of-order cores avoid this: other instructions continue around a missing load (non-blocking caches, a load queue).',
+      },
+    },
+    {
       title: 'Average memory access time',
       body: `
         <p>AMAT = hit time + miss rate × miss penalty. A modern core: an L1 hit in 4 cycles, 5 % misses, and an L2 behind it that hits in 12

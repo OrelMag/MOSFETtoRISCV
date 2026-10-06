@@ -5,8 +5,9 @@ import { reachableDefs } from '../src/lib/resolve';
 import { NAND } from '../src/lib/transistors';
 import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
-import { netlistOf } from '../src/sim/types';
+import { type ComponentDef, netlistOf } from '../src/sim/types';
 import { routeNetlist, wireOverlaps } from '../src/view/route';
+import { cpuTops } from './tops';
 
 // Build the parametric designs the chapters show, so their schematics are in the registry too.
 const words = assemble(PROGRAMS[0].source).words;
@@ -20,10 +21,22 @@ multicycleCpu(words, { control: 'micro' });
 dualCore(words);
 cachedMemory(6, 2);
 
+/** Every component reachable from the registry, plus the top-level CPUs (not registered) and their parts. */
+function allDefs(): ComponentDef[] {
+  const seen = new Set<ComponentDef>(reachableDefs());
+  const visit = (d: ComponentDef) => {
+    if (seen.has(d)) return;
+    seen.add(d);
+    for (const i of netlistOf(d)?.instances ?? []) visit(i.def);
+  };
+  for (const d of cpuTops()) visit(d);
+  return [...seen];
+}
+
 describe('schematic routing', () => {
   // One test per schematic: each is quick, and the runner gets the event loop back in between
   // (a single loop over every design starved Vitest's worker RPC on CI).
-  const defs = reachableDefs().filter((d) => netlistOf(d));
+  const defs = allDefs().filter((d) => netlistOf(d));
   it.each(defs.map((d) => [d.id, d] as const))('%s: never draws two nets on one line', (_, def) => {
     const nl = netlistOf(def)!;
     const bad = wireOverlaps(routeNetlist(def, nl).nets).map((o) => {

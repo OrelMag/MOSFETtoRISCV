@@ -234,7 +234,7 @@ export function iCache(rom: ComponentDef, ib = 3, k = 6): ComponentDef {
     return define({
       id, name: `Instruction cache (${2 ** ib} lines × 4 instructions)`, category: 'memory',
       summary: `A read-only direct-mapped cache of ${2 ** ib} lines × 4 instructions in front of the instruction memory. Every fetch is an access; a miss stalls ${WB_MISS_CLEAN} cycles while the line is copied in (4 cycles of latency, then a word per cycle). Loops that fit hit every time.`,
-      ports: [bus('addr', 32, 'in'), bit('clk', 'in', 'bottom', true), bus('data', 32, 'out'), bit('stall', 'out'), bit('hit', 'out')],
+      ports: [bus('addr', 32, 'in'), bit('clk', 'in', 'bottom', true), bus('data', 32, 'out'), bit('stall', 'out', 'bottom'), bit('hit', 'out', 'bottom')],
       symbol: { kind: 'box', label: 'I-CACHE + ROM' },
       netlist: () => ({ pins: { addr: [0, 4], clk: [0, 10], data: [R, 4], stall: [R, 8], hit: [R, 12] }, instances: b.instances, nets: b.nets() }),
     });

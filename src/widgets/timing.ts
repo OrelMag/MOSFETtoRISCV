@@ -12,7 +12,7 @@ const reports = new WeakMap<object, TimingReport | null>();
 export const timingPanel: ScenePanel = (stage: Stage): Widget => {
   const body = h('div');
   const title = h('h4', null, 'Critical path', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'static timing'));
-  const el = h('div', { class: 'mem-panel', style: 'left:12px;right:auto;bottom:12px;width:300px' }, title, body);
+  const el = h('div', { class: 'mem-panel', 'data-dock': 'left', style: 'width:300px' }, title, body);
   title.addEventListener('click', () => el.classList.toggle('collapsed'));
   const design = stage.sim!.design;
   let rep = reports.get(design);

@@ -6,7 +6,7 @@ import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { mask } from '../sim/values';
 import { constWord, isZero } from './alu';
-import { addSub, andN, busMux2, incrementer, rca } from './combinational';
+import { addSub, andN, busMux2, equal, incrementer, rca } from './combinational';
 import { Builder } from './builder';
 import { define, merger, ones, splitter } from './define';
 import { addSubFast, fanout, koggeStone } from './fastadd';
@@ -182,7 +182,9 @@ end`,
  * step = 1, for n cycles; done rises for one cycle when the count reaches n. n + 2 cycles in all.
  */
 export function iterCtrl(n: number): ComponentDef {
-  const k = log2(n), cw = k + 1;
+  // A power of two is reached when the count's top bit rises; any other n needs a comparator.
+  const pow2 = 2 ** log2(n) === n;
+  const k = pow2 ? log2(n) : Math.ceil(Math.log2(n + 1)), cw = pow2 ? k + 1 : k;
   return memo(`iter${n}`, () => {
     const CNT = register(cw), MC = busMux2(cw), INC = incrementer(cw);
     const cg = symbolGeom(CNT), mg = symbolGeom(MC), ig = symbolGeom(INC);
@@ -192,7 +194,8 @@ export function iterCtrl(n: number): ComponentDef {
       { name: 'mcnt', def: MC, at: [x1, yC], label: 'load 0' },
       { name: 'cnt', def: CNT, at: [x2, yC], label: 'step count' },
       { name: 'inc', def: INC, at: [x3, yC - 2 - ig.h] },
-      { name: 'sc', def: splitter([k, 1]), at: [x3, yC + 4] },
+      ...(pow2 ? [{ name: 'sc', def: splitter([k, 1]), at: [x3, yC + 4] as [number, number] }]
+        : [{ name: 'nc', def: constWord(cw, n), at: [x3, yC + 12] as [number, number] }, { name: 'sc', def: equal(cw), at: [x3 + 14, yC + 4] as [number, number], label: `= ${n}` }]),
       { name: 'nbusy', def: NOT, at: [2, yG] },
       { name: 'load', def: AND, at: [7, yG + 3] },
       { name: 'en', def: OR, at: [x1 + 8, yG + 5] },
@@ -210,9 +213,10 @@ export function iterCtrl(n: number): ComponentDef {
       { name: 'step', ends: ['en.y', 'cnt.en', 'step'], tags: ['cnt.en', 'step'] },
       { name: 'zc', ends: ['zc.y', 'mcnt.b'] },
       { name: 'cntD', ends: ['mcnt.y', 'cnt.d'] },
-      { name: 'count', ends: ['cnt.q', 'inc.a', 'sc.in'], tags: ['inc.a'] },
+      { name: 'count', ends: ['cnt.q', 'inc.a', pow2 ? 'sc.in' : 'sc.a'], tags: ['inc.a'] },
+      ...(pow2 ? [] : [{ ends: ['nc.y', 'sc.b'] }]),
       { name: 'count+1', ends: ['inc.y', 'mcnt.a'], tags: true },
-      { name: `count[${k}]`, ends: ['sc.o1', 'dn.b'], tags: true },
+      { name: pow2 ? `count[${k}]` : `count = ${n}`, ends: [pow2 ? 'sc.o1' : 'sc.eq', 'dn.b'], tags: true },
       { name: 'done', ends: ['dn.y', 'ndn.a', 'done'], tags: true },
       { name: '¬done', ends: ['ndn.y', 'keep.b'] },
       { name: 'stay', ends: ['keep.y', 'nrun.b'] },
@@ -231,7 +235,7 @@ export function iterCtrl(n: number): ComponentDef {
       }),
       hdl: {
         verilog: `wire load = start & ~busy;
-assign done = busy & count[${k}];
+assign done = busy & ${pow2 ? `count[${k}]` : `count == ${n}`};
 assign step = load | busy;
 always_ff @(posedge clk) begin
   if (step) count <= load ? '0 : count + 1;

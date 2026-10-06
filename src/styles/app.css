@@ -573,6 +573,14 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 
 .mem-panel.collapsed > :not(h4) { display: none; }
 .mem-panel.collapsed h4 { margin: 0; }
+/* Bottom-left panels (Stage.layoutDock sets `right` beside the right dock, and `row` when they fit side by side). */
+.panel-dock {
+  position: absolute; left: 12px; right: 12px; top: 44px; bottom: 12px; z-index: 3; pointer-events: none;
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; gap: 8px;
+}
+.panel-dock.row { flex-direction: row; align-items: flex-end; }
+.panel-dock > .mem-panel { position: relative; inset: auto; pointer-events: auto; flex: 0 1 auto; min-height: 38px; max-width: 100%; max-height: 100%; }
+.panel-dock.row > .mem-panel { flex-shrink: 0; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1180px) {
@@ -720,7 +728,6 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .cbar.r { background: var(--w1); }
 .cbar.k { background: var(--bus); }
 
-.pipe-panel { left: 12px; right: auto; bottom: 12px; top: auto; max-width: calc(100% - 380px); }
 .pipe-grid { font: 11px var(--font-mono); overflow-x: auto; }
 .pg-row { display: flex; gap: 2px; margin-bottom: 2px; }
 .pg-st { width: 16px; color: var(--muted); font-weight: 700; flex: none; }
@@ -730,7 +737,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .pg-c.bubble { background: var(--surface-2); color: var(--muted); }
 .pg-row.ev .pg-c { background: none; color: var(--warn); font-size: 9.5px; white-space: normal; line-height: 1.15; }
 
-.io-panel { left: 12px; right: auto; bottom: 12px; top: auto; width: 330px; }
+.io-panel { width: 330px; }
 .console { background: #0b0d12; color: #9fe6a0; font: 12.5px var(--font-mono); border-radius: 8px; padding: 8px 10px; margin: 0;
   min-height: 48px; max-height: 120px; overflow: auto; white-space: pre-wrap; border: 1px solid var(--border); }
 .io-row { display: flex; gap: 16px; }
@@ -773,7 +780,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .dram-plot .lbl { font: 10px var(--font-mono); fill: var(--muted); }
 .dcache-lines .m .v { letter-spacing: 0; }
 
-.mc-panel { left: 12px; right: auto; top: auto; bottom: 12px; width: 470px; }
+.mc-panel { width: 470px; }
 .mc-table { display: flex; flex-direction: column; gap: 1px; font-size: 11.5px; }
 .mc-row { display: grid; grid-template-columns: 18px 70px 1fr auto; gap: 6px; padding: 2px 4px; border-radius: 4px; color: var(--text-2); }
 .mc-row.cur { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text); font-weight: 600; }

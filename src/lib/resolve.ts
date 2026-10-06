@@ -24,6 +24,7 @@ import { cam, fifo, pla, regfileMP, romArray, stack } from './storage';
 import { sramArray, sramColumn } from './arrays';
 import { wbCache } from './cache2';
 import { clockDivider, lfsr, ringCounter, shiftRegister, upDownCounter } from './seqparts';
+import { srt4Divider, srt4Step } from './srt4';
 import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
 import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
 
@@ -152,6 +153,7 @@ export const families: Family[] = [
   nBit('adiv', 'Array divider', 'arithmetic', [2, 4, 8, 16], 4, (n) => `adiv${n}`, arrayDiv),
   nBit('nrstep', 'Division step (non-restoring)', 'arithmetic', [2, 4, 8, 16, 32], 4, (n) => `nrstep${n}${n >= 16 ? 'f' : ''}`, (n) => nrDivStep(n)),
   nBit('nrdiv', 'Non-restoring array divider', 'arithmetic', [2, 4, 8, 16], 4, (n) => `nrdiv${n}`, nrArrayDiv),
+  nBit('srt4step', 'Radix-4 SRT division step', 'arithmetic', [4, 8, 16, 32], 8, (n) => `srt4step${n}`, srt4Step),
   nBit('srtstep', 'SRT division step', 'arithmetic', [4, 8, 16, 32], 8, (n) => `srtstep${n}`, srtStep),
   float('fpun', 'Float unpack', fpUnpack),
   float('fpadd', 'Float adder / subtractor', fpAdd),
@@ -210,6 +212,7 @@ export const families: Family[] = [
   { id: 'clkdiv', name: 'Ripple clock divider', category: 'sequential', params: [count('stages', [1, 2, 3, 4, 8], 3)], key: (p) => `clkdiv${p.stages}`, make: (p) => clockDivider(p.stages) },
   nBit('sdiv', 'Iterative divider', 'sequential', [4, 8, 16, 32], 8, (n) => `sdiv${n}`, seqDivider),
   nBit('nrsdiv', 'Iterative non-restoring divider', 'sequential', [4, 8, 16, 32], 8, (n) => `nrsdiv${n}`, nrSeqDivider),
+  nBit('srt4div', 'Iterative radix-4 SRT divider', 'sequential', [4, 8, 16, 32], 8, (n) => `srt4div${n}`, srt4Divider),
   nBit('srtdiv', 'Iterative SRT divider', 'sequential', [4, 8, 16, 32], 8, (n) => `srtdiv${n}`, srtDivider),
   nBit('iter', 'Iteration control', 'sequential', [4, 8, 16, 32], 8, (n) => `iter${n}`, iterCtrl),
   // memory

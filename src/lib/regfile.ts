@@ -107,7 +107,8 @@ export function regfile(k: number, w: number, zero = true, reads: 2 | 3 = 2): Co
       { name: 'regs', ends: ['bundle.out', 'rp1.words', 'rp2.words', ...(reads === 3 ? ['rp3.words'] : [])], trunk: xP - 3 },
       // ra1 climbs left of rp2 and crosses into the gap between the ports, under rp1.sel.
       { name: 'ra1', ends: ['ra1', 'rp1.sel'], via: { 'rp1.sel': [[xP - 1.5, bottom + 4], [xP - 1.5, rp1At[1] + rpg.h + 5], [sel1x, rp1At[1] + rpg.h + 5]] } },
-      { name: 'ra2', ends: ['ra2', 'rp2.sel'], via: { 'rp2.sel': [[sel2x, bottom + 6]] } },
+      // with a third port below rp2, ra2 must not climb through it: it goes up the left side like ra1
+      { name: 'ra2', ends: ['ra2', 'rp2.sel'], via: { 'rp2.sel': reads === 3 ? [[xP - 4.5, bottom + 6], [xP - 4.5, rp2At[1] + rpg.h + 5], [sel2x, rp2At[1] + rpg.h + 5]] : [[sel2x, bottom + 6]] } },
       { name: 'rd1', ends: ['rp1.y', 'rd1'] },
       { name: 'rd2', ends: ['rp2.y', 'rd2'] },
     );

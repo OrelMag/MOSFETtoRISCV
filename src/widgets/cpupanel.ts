@@ -2,6 +2,7 @@
 // register file, data memory, and a live check against the golden model (the ISS runs in
 // lock-step and every register is compared after each clock edge).
 
+import type { Sim } from '../sim/sim';
 import { MC_FIELDS, MC_STATES, microword, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu } from '../lib';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { cacheLines, cpuState, retiring } from '../riscv/cosim';
@@ -61,7 +62,7 @@ export function cpuScene(opts: CpuSceneOptions): Scene {
     root: opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder })
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
-      : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor })
+      : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined })
         : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
@@ -274,16 +275,15 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     stage.edgeHooks.add({
       before: () => {
         willRetire = !!stage.sim && retiring(stage.sim);
-        stallRun = willRetire ? 0 : stallRun + 1;
+        stallRun = stage.sim && cacheStall(stage.sim) ? stallRun + 1 : 0;
         if (opts.dcache && stage.sim) {
           const dm = stage.sim.design.root.children!.get('dm')!;
-          // a miss starts on the first stalled cycle of an access (loads; stores too when write-back)
+          // an access completes when it does not stall; a miss starts on the first stalled cycle
+          const dst = stage.sim.getBits(dm.ports.stall)[0] === 1;
           const acc = stage.sim.getBits(dm.ports.re)[0] === 1 || (wb && stage.sim.getBits(dm.ports.we)[0] === 1);
-          if (acc) {
-            if (willRetire) loads++;
-            else if (!prevStall) misses++;
-          }
-          prevStall = acc && !willRetire;
+          if (acc && !dst) loads++;
+          if (dst && !prevStall) misses++;
+          prevStall = dst;
         }
         if (opts.system) {
           iss.irq = stage.getInput('irq') === 1;
@@ -338,7 +338,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         ...(opts.m && !retiring(sim) ? [h('span', { class: 'warn', title: 'The iterative divider is working; the PC and register writes are stalled' }, 'dividing… stalled')] : []),
         ...(opts.fpu && !opts.pipeline && !retiring(sim) ? [h('span', { class: 'warn', title: 'An iterative unit (fdiv.s / fsqrt.s) is working; the PC and register writes are stalled' }, 'fdiv / fsqrt… stalled')] : []),
         ...(opts.dcache ? [h('span', null, `${wb ? 'accesses' : 'loads'} ${loads} · misses ${misses}${loads ? ` · hit rate ${(100 * (loads - misses) / loads).toFixed(0)} %` : ''}`)] : []),
-        ...((opts.dcache || opts.icache) && !retiring(sim) ? [h('span', { class: 'warn', title: 'A cache missed: the PC and register write wait while the line is moved' }, `miss: waiting for memory (cycle ${stallRun + 1})`)] : []),
+        ...((opts.dcache || opts.icache) && cacheStall(sim) ? [h('span', { class: 'warn', title: 'A cache missed: the PC and register write wait while the line is moved' }, `miss: waiting for memory (cycle ${stallRun + 1})`)] : []),
         mismatch ? h('span', { class: 'bad' }, `✗ ${mismatch}`) : h('span', { class: 'good', title: 'Every register and the PC match the instruction-set simulator after every cycle' }, '✓ matches golden model'),
       ];
       if (halted) parts.push(h('span', { class: 'warn' }, 'halted'));
@@ -526,7 +526,7 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
     let STAGES = ['F', 'D', 'E', 'M', 'W'];
     const grid = h('div', { class: 'pipe-grid' });
     const title = h('h4', null, 'Pipeline diagram', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'stage × cycle'));
-    const el = h('div', { class: 'mem-panel pipe-panel' }, title, grid);
+    const el = h('div', { class: 'mem-panel pipe-panel', 'data-dock': 'left' }, title, grid);
     title.addEventListener('click', () => el.classList.toggle('collapsed'));
     const read = (): Snap | null => {
       const sim = stage.sim, root = stage.rootCtx?.node;
@@ -539,6 +539,7 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
       };
       // the pipelined FPU CPU has a sixth stage, X, between M and W
       const six = root.children.has('MX');
+      const frozenPipe = !six && root.children.has('gFl1');
       STAGES = six ? ['F', 'D', 'E', 'M', 'X', 'W'] : ['F', 'D', 'E', 'M', 'W'];
       const slots: Slot[] = [
         { pc: v('pc', 'q'), valid: true },
@@ -550,7 +551,9 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
       ];
       return {
         cycle: stage.cycles, slots,
-        stall: six ? v('go', 'y') === 0 : v('hz', 'enFD') === 0, flush: six ? v('hz', 'taken') === 1 : v('hz', 'flushFD') === 1,
+        // with a data cache, a miss freezes every stage (go = 0) and the flushes are gated (gFl1)
+        stall: six ? v('go', 'y') === 0 : v('hz', 'enFD') === 0 || (frozenPipe && v('go', 'y') === 0),
+        flush: six ? v('hz', 'taken') === 1 : frozenPipe ? v('gFl1', 'y') === 1 : v('hz', 'flushFD') === 1,
         // Balanced design: the E-stage selects travel in ID/EX (the hazard unit's outputs are for D).
         fwdA: root.children.get('DE')!.ports.fwdAE ? v('DE', 'fwdAE') : v('hz', 'forwardA'),
         fwdB: root.children.get('DE')!.ports.fwdBE ? v('DE', 'fwdBE') : v('hz', 'forwardB'),
@@ -629,7 +632,7 @@ const ioPanel: ScenePanel = (stage: Stage): Widget => {
     },
   });
   const title = h('h4', null, 'I/O & machine state', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'memory-mapped at 0x8000_0000'));
-  const el = h('div', { class: 'mem-panel io-panel' }, title,
+  const el = h('div', { class: 'mem-panel io-panel', 'data-dock': 'left' }, title,
     h('div', { class: 'cpu-sec' }, 'Console'), con,
     h('div', { class: 'io-row' }, h('div', null, h('div', { class: 'cpu-sec' }, 'LEDs'), leds), h('div', null, h('div', { class: 'cpu-sec' }, 'Switches'), sw)),
     h('div', { style: 'margin:6px 0' }, irqBtn),
@@ -673,7 +676,7 @@ export function controllerPanel(control: 'fsm' | 'micro', compact = false): Scen
   return (stage: Stage): Widget => {
     const body = h('div', { class: 'mc-table' });
     const title = h('h4', null, control === 'fsm' ? 'Controller: state machine' : 'Controller: microcode ROM', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
-    const el = h('div', { class: `mem-panel mc-panel${compact ? ' compact' : ''}` }, title, body);
+    const el = h('div', { class: `mem-panel mc-panel${compact ? ' compact' : ''}`, 'data-dock': 'left' }, title, body);
     title.addEventListener('click', () => el.classList.toggle('collapsed'));
     const ctrlBits = MC_FIELDS.reduce((a, [, n]) => a + n, 0);
     const nextText = (n: (typeof MC_STATES)[number]['next']) => (typeof n === 'number' ? MC_STATES[n].name : n === 'decode' ? (compact ? 'by opcode' : 'dispatch (opcode)') : (compact ? 'ld / st' : 'dispatch (load / store)'));
@@ -697,4 +700,12 @@ export function controllerPanel(control: 'fsm' | 'micro', compact = false): Scen
     update();
     return { el, update };
   };
+}
+
+/** Is a cache (data or instruction) holding the processor this cycle? */
+function cacheStall(sim: Sim): boolean {
+  const root = sim.design.root;
+  const p = root.children?.get('dm')?.ports.stall ?? root.children?.get('imem')?.ports.stall;
+  const q = root.children?.get('imem')?.ports.stall;
+  return (!!p && sim.getBits(p)[0] === 1) || (!!q && sim.getBits(q)[0] === 1);
 }

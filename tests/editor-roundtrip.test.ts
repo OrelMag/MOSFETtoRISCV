@@ -6,7 +6,9 @@
 import { describe, expect, it } from 'vitest';
 import { compileChip } from '../src/editor/compile';
 import { docFromDef } from '../src/editor/fromdef';
-import type { ChipDoc } from '../src/editor/model';
+import { type ChipDoc, emptyWorkspace } from '../src/editor/model';
+import { UserLibrary } from '../src/editor/library';
+import { remixDef } from '../src/editor/remix';
 import { partDef } from '../src/editor/parts';
 import { cachedMemory, dualCore, multicycleCpu, pipelinedCpu, singleCycleCpu, systemCpu } from '../src/lib';
 import { reachableDefs, resolveComponent } from '../src/lib/resolve';
@@ -18,6 +20,7 @@ import { inputBits } from '../src/sim/harness';
 import { SwitchSim } from '../src/sim/switchsim';
 import { type ComponentDef, inPorts, netlistOf, outPorts } from '../src/sim/types';
 import { pack } from '../src/sim/values';
+import { cpuTops } from './tops';
 import { lcg } from './util';
 
 // The parametric designs the chapters show (as in route.test.ts), so they are covered too.
@@ -44,8 +47,26 @@ const CANNOT: Record<string, RegExp> = {
   readport32x32: /bits wide/,
   readport16x62: /bits wide/,
 };
+/** The same by id pattern: every pipeline-register width any CPU variant generates. */
+const CANNOT_LIKE: [RegExp, RegExp][] = [
+  [/^(c?reg|andx)\d{3}$/, /bits wide/],
+  // A dual-core's cores hold the program ROM, like the CPU tops (opened through remixDef below).
+  [/_core$/, /unknown library part 'rom_/],
+];
+const cannot = (id: string): RegExp | undefined => CANNOT[id] ?? CANNOT_LIKE.find(([re]) => re.test(id))?.[1];
 
-const defs = reachableDefs().filter((d) => netlistOf(d));
+// Top-level CPUs are not registered (only their parts), so walk their parts in explicitly. The
+// tops themselves hold a ROM generated for one program, which no id can bring back after a
+// reload: they are opened through "Open in Sandbox" (remixDef), checked below.
+const tops = new Set(cpuTops());
+const all = new Set<ComponentDef>(reachableDefs());
+const visit = (d: ComponentDef): void => {
+  if (all.has(d)) return;
+  all.add(d);
+  for (const i of netlistOf(d)?.instances ?? []) visit(i.def);
+};
+for (const d of tops) visit(d);
+const defs = [...all].filter((d) => netlistOf(d) && !tops.has(d));
 
 /** Expand the root even when it prefers its behaviour (the ROM); keep the parts' preference. */
 const flat = (def: ComponentDef, mode: 'gate' | 'switch') =>
@@ -107,11 +128,11 @@ describe('library → sandbox document → compiled chip', () => {
   it.each(defs.map((d) => [d.id, d] as const))('%s', (id, def) => {
     const doc = docFromDef(def);
     if ('error' in doc) {
-      expect(CANNOT[id], `${id}: ${doc.error}`).toBeDefined();
-      expect(doc.error).toMatch(CANNOT[id]);
+      expect(cannot(id), `${id}: ${doc.error}`).toBeDefined();
+      expect(doc.error).toMatch(cannot(id)!);
       return;
     }
-    expect(CANNOT[id], `${id} is allowlisted but round-trips`).toBeUndefined();
+    expect(cannot(id), `${id} is allowlisted but round-trips`).toBeUndefined();
     const c = compileChip(doc, (ref) => partDef(ref, () => undefined));
     expect(c.diags.filter((x) => x.level === 'error').map((x) => x.msg)).toEqual([]);
     expect(c.def.ports.map((p) => [p.name, p.width, p.dir]).sort()).toEqual(def.ports.map((p) => [p.name, p.width, p.dir]).sort());
@@ -134,5 +155,19 @@ describe('library → sandbox document → compiled chip', () => {
         expect(got, `${id}(${v})`).toEqual(def.spec(v));
       }
     }
+  });
+});
+
+describe('every CPU opens in the sandbox', () => {
+  // "Open in Sandbox" on each top-level CPU the chapters show: the remix compiles with no errors
+  // and keeps the CPU's ports (behaviour is checked cycle by cycle for one CPU in editor-chips).
+  it.each([...tops].map((d) => [d.id, d] as const))('%s', (_, def) => {
+    const r = remixDef(emptyWorkspace(), def);
+    if ('error' in r) throw new Error(r.error);
+    const lib = new UserLibrary();
+    lib.update(r.ws);
+    const c = lib.compiled(r.id)!;
+    expect(c.diags.filter((x) => x.level === 'error').map((x) => x.msg)).toEqual([]);
+    expect(c.def.ports.map((p) => [p.name, p.width, p.dir]).sort()).toEqual(def.ports.map((p) => [p.name, p.width, p.dir]).sort());
   });
 });
