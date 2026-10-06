@@ -10,7 +10,7 @@ import { GateSim } from '../sim/gatesim';
 import type { Sim } from '../sim/sim';
 import { logicDepth, stats } from '../sim/stats';
 import { SwitchSim } from '../sim/switchsim';
-import { B0, B1, BZ, type Bit, type ComponentDef, netlistOf } from '../sim/types';
+import { B0, B1, BZ, type Bit, type ComponentDef, isSwitchPrim, netlistOf } from '../sim/types';
 import type { Compiled } from './compile';
 import { type ChipDoc, emptyChip, type PartDoc, type PinDoc, type Workspace } from './model';
 import { openChip } from './session';
@@ -201,7 +201,7 @@ function checkPins(def: ComponentDef, want: PinSpec[]): string[] {
 /** Library parts allowed under every restriction: they cost nothing or are below the NAND. */
 function allowedLeaf(d: ComponentDef, allowed: Allowed): string | null {
   if (d.prim === 'alias') return null; // splitters, mergers, displays
-  if (d.prim === 'nmos' || d.prim === 'pmos' || d.prim === 'vdd' || d.prim === 'gnd') return null;
+  if (isSwitchPrim(d)) return null; // transistors, rails, resistors, capacitors
   if (d.id === 'tie0' || d.id === 'tie1' || d.id.startsWith('sb_const')) return null;
   if (d.prim === 'nand') return allowed === 'transistors' ? 'a library NAND: build it from transistors' : null;
   return `library part ${d.name}: ${allowed === 'nand' ? 'only NAND gates (and your chips built from them)' : 'only transistors (and your chips built from them)'}`;

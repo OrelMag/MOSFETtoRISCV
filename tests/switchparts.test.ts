@@ -3,6 +3,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { deriveBehavior, circuitMode } from '../src/editor/derive';
+import { sharedBusChip, wiredChip } from '../src/editor/examples';
+import { UserLibrary } from '../src/editor/library';
+import type { ChipDoc } from '../src/editor/model';
 import {
   CAP, GND, INV_CMOS, NMOS, PMOS, PULLDOWN, PULLUP, RES, TGATE, TRIBUF, TRIINV, VDD,
 } from '../src/lib';
@@ -13,6 +16,7 @@ import { exportHdl } from '../src/sim/svexport';
 import { SwitchSim } from '../src/sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, type ComponentDef, type InstanceDef, type NetDef } from '../src/sim/types';
 import { structuralVerilog } from '../src/sim/verilog';
+import { chip, compileLib, part, pin, wire, workspace } from './editorkit';
 
 const sw = (def: ComponentDef) => new SwitchSim(flatten(def, { mode: 'switch' }));
 const bit = (s: SwitchSim, p: string): Bit => s.get(s.design.root.ports[p][0]);
@@ -220,5 +224,94 @@ describe('HDL', () => {
   it('the synthesizable export refuses switch-level parts with a reason', () => {
     expect(() => exportHdl(PULLUP, 'synth')).toThrow(/not synthesizable/);
     expect(() => exportHdl(TRIBUF, 'synth')).toThrow(/not synthesizable/);
+  });
+});
+
+describe('in the sandbox', () => {
+  const compiled = (doc: ChipDoc, ...more: ChipDoc[]) => {
+    const lib = new UserLibrary(workspace(doc, ...more));
+    return lib.compiled(doc.id)!;
+  };
+  const run = (def: ComponentDef) => sw(def);
+
+  it('the shared-bus example: a value, a held 0, a fight', () => {
+    const c = compiled(sharedBusChip('u_bus', 'Bus'));
+    expect(c.mode).toBe('switch');
+    expect(c.diags).toEqual([]);
+    expect(c.derived).toMatchObject({ ok: true }); // the pull-down means it never floats
+    const s = run(c.def);
+    const y = (v: Record<string, number>) => { set(s, v); return show(bit(s, 'bus')); };
+    expect(y({ ea: 1, a: 1, eb: 0, b: 0 })).toBe('1');
+    expect(y({ ea: 0, eb: 1, b: 1 })).toBe('1');
+    expect(y({ eb: 1, b: 0 })).toBe('0');
+    expect(y({ ea: 0, eb: 0, a: 1, b: 1 })).toBe('0'); // the pull-down
+    expect(y({ ea: 1, eb: 1, a: 1, b: 0 })).toBe('X');
+  });
+
+  it.each([['wiredand', (a: number, b: number) => a & b], ['wiredor', (a: number, b: number) => a | b]] as const)('the %s example', (id, f) => {
+    const c = compiled(wiredChip(`u_${id}`, id, id === 'wiredand' ? 'and' : 'or'));
+    expect(c.diags).toEqual([]);
+    const s = run(c.def);
+    for (const a of [0, 1]) for (const b of [0, 1]) {
+      set(s, { a, b });
+      expect(show(bit(s, 'y')), `(${a}, ${b})`).toBe(String(f(a, b)));
+    }
+  });
+
+  it('a bus through a chip of the user: its output is tri, its parent switch level, no warning', () => {
+    // a chip that is just a tri-state buffer, used twice on one net of another chip
+    const drv = chip('u_drv', 'Drv', {
+      pins: [pin('a', 'in', [0, 6]), pin('en', 'in', [0, 2]), pin('y', 'out', [12, 6])],
+      parts: [part('t', { lib: 'tribuf' }, [4, 4])],
+      wires: [wire('w1', 'pin:a', 't.a'), wire('w2', 'pin:en', 't.en', [[6, 2]]), wire('w3', 't.y', 'pin:y')],
+    });
+    const top = chip('u_top', 'Top', {
+      pins: [pin('a', 'in', [0, 2]), pin('ea', 'in', [0, 4]), pin('b', 'in', [0, 12]), pin('eb', 'in', [0, 14]), pin('y', 'out', [30, 8])],
+      parts: [part('d1', { chip: 'u_drv' }, [6, 1]), part('d2', { chip: 'u_drv' }, [6, 11]), part('pu', { lib: 'pullup' }, [20, 2])],
+      wires: [
+        wire('a', 'pin:a', 'd1.a'), wire('ea', 'pin:ea', 'd1.en'), wire('b', 'pin:b', 'd2.a'), wire('eb', 'pin:eb', 'd2.en'),
+        wire('y1', 'd1.y', 'pin:y'), wire('y2', 'd2.y', 'pin:y'), wire('y3', 'pu.y', 'pin:y'),
+      ],
+    });
+    const lib = new UserLibrary(workspace(top, drv));
+    const d = lib.compiled('u_drv')!;
+    expect(d.def.ports.find((p) => p.name === 'y')!.tri).toBe(true);
+    expect(d.derived).toMatchObject({ ok: false, reason: expect.stringMatching(/floats/) });
+    const t = lib.compiled('u_top')!;
+    expect(t.mode).toBe('switch');
+    expect(t.diags.filter((x) => /share one net/.test(x.msg))).toEqual([]);
+    const s = run(t.def);
+    set(s, { a: 0, ea: 1, b: 1, eb: 0 }); expect(show(bit(s, 'y'))).toBe('0');
+    set(s, { ea: 0 }); expect(show(bit(s, 'y'))).toBe('1'); // the pull-up
+  });
+
+  it('warns when outputs that always drive share a net', () => {
+    const doc = chip('u_fight', 'Fight', {
+      pins: [pin('a', 'in', [0, 2]), pin('b', 'in', [0, 8]), pin('y', 'out', [20, 5])],
+      parts: [part('i1', { lib: 'inv_cmos' }, [6, 1]), part('i2', { lib: 'inv_cmos' }, [6, 7])],
+      wires: [wire('a', 'pin:a', 'i1.a'), wire('b', 'pin:b', 'i2.a'), wire('y1', 'i1.y', 'pin:y'), wire('y2', 'i2.y', 'pin:y')],
+    });
+    const c = compileLib(doc);
+    expect(c.diags.map((x) => x.msg)).toEqual([expect.stringMatching(/2 outputs that always drive share one net.*tri-state/)]);
+    expect(c.def.ports.find((p) => p.name === 'y')!.tri).toBeUndefined();
+  });
+
+  it('a capacitor part keeps charge like a wire marked "keeps charge"', () => {
+    const doc = (capPart: boolean) => chip(capPart ? 'u_c1' : 'u_c2', 'C', {
+      pins: [pin('wl', 'in', [0, 6]), pin('bl', 'in', [6, 0]), pin('q', 'out', [20, 10])],
+      parts: [part('a', { lib: 'nmos' }, [3, 4]), ...(capPart ? [part('c', { lib: 'cap' }, [9, 12])] : [])],
+      wires: [
+        wire('w1', 'pin:wl', 'a.g'), wire('w2', 'pin:bl', 'a.d', [[6, 2]]),
+        wire('w3', 'a.s', 'pin:q', [[6, 10]], capPart ? {} : { cap: true }),
+        ...(capPart ? [wire('w4', { wire: 'w3', at: [10, 10] }, 'c.a')] : []),
+      ],
+    });
+    for (const capPart of [true, false]) {
+      const c = compileLib(doc(capPart));
+      expect(c.diags).toEqual([]);
+      const s = run(c.def);
+      set(s, { wl: 1, bl: 1 }); set(s, { wl: 0, bl: 0 });
+      expect(show(bit(s, 'q'))).toBe('1');
+    }
   });
 });

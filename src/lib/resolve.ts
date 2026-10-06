@@ -27,6 +27,8 @@ import { clockDivider, lfsr, ringCounter, shiftRegister, upDownCounter } from '.
 import { srt4Divider, srt4Step } from './srt4';
 import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
 import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
+// Single parts the sandbox palette and examples place by id (registered on import).
+import './switchparts';
 
 const log2 = (n: number) => Math.round(Math.log2(n));
 
