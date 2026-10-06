@@ -6,6 +6,7 @@ import '../../styles/editor.css';
 import '../../styles/sbchips.css';
 import { Editor } from '../../editor/editor';
 import { SHARE_SEG, shareRoute } from '../../editor/files';
+import { installChallenges } from '../../editor/challengeui';
 import { installFiles, type FilesUi } from '../../editor/fileui';
 import '../../editor/memui';
 // Chip packaging, inspector, and their property sections (they register themselves).
@@ -19,12 +20,14 @@ export class SandboxPage implements Page {
   readonly el: HTMLElement;
   readonly editor: Editor;
   private files: FilesUi;
+  private challenges: { destroy(): void };
 
   constructor(chipId?: string) {
     const share = chipId === SHARE_SEG;
     this.editor = new Editor(share ? undefined : chipId);
     this.el = this.editor.el;
     this.files = installFiles(this.editor);
+    this.challenges = installChallenges(this.editor);
     if (share) this.files.openShare(shareRoute(location.hash));
   }
 
@@ -35,6 +38,7 @@ export class SandboxPage implements Page {
   }
 
   destroy(): void {
+    this.challenges.destroy();
     this.files.destroy();
     this.editor.destroy();
   }
