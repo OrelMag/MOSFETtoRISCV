@@ -53,6 +53,8 @@ export interface StepInfo {
   rd: number;
   value?: number;
   store?: { addr: number; value: number };
+  /** Floating-point register written (RV32F). */
+  fwrite?: { rd: number; value: number };
   trap?: { cause: number; interrupt: boolean };
   halted: boolean;
 }
@@ -380,7 +382,8 @@ export class ISS {
     if (this.system) this.mtime = (this.mtime + 1 + extraCycles) >>> 0;
     this.steps++;
     const t = trap as Trap | null;
-    return { pc, word, text: disasm(word, pc), rd, value, store, trap: t ? { cause: t.cause, interrupt: false } : undefined, halted: this.halted };
+    const fwrite = !t && fWrite !== undefined ? { rd: d.rd, value: fWrite >>> 0 } : undefined;
+    return { pc, word, text: disasm(word, pc), rd, value, store, fwrite, trap: t ? { cause: t.cause, interrupt: false } : undefined, halted: this.halted };
   }
 
   run(maxSteps = 10000): number {

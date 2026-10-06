@@ -5,6 +5,7 @@
 import { flatten } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import { needsSwitchLevel } from '../sim/harness';
+import { completeEdge, type Edge, riseEdge, stepEdge } from '../sim/edge';
 import type { PowerOnMode, Sim } from '../sim/sim';
 import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, type Bit, type ComponentDef, inPorts, netlistOf, outPorts, type PortDef } from '../sim/types';
@@ -71,6 +72,7 @@ export class Stage {
   private panels: Widget[] = [];
   private anim: ReturnType<typeof setInterval> | null = null;
   private runClock: ReturnType<typeof setInterval> | null = null;
+  private runBtn: HTMLElement | null = null;
   private changeStart = 0;
   private lastSettle: number | null = null;
   private listeners = new Set<() => void>();
@@ -94,6 +96,9 @@ export class Stage {
   cycles = 0;
   /** Observers of every rising clock edge: before (inputs still old) and after it settled. */
   readonly edgeHooks = new Set<{ before?: () => void; after?: () => void }>();
+  /** The rising edge in progress (slow mode plays it one gate delay at a time). */
+  private edge: Edge | null = null;
+  private edgePeriod = 0;
   private beforeEdge(): void { this.edgeHooks.forEach((h) => h.before?.()); }
   private afterEdge(): void { this.edgeHooks.forEach((h) => h.after?.()); }
 
@@ -192,6 +197,7 @@ export class Stage {
     sim.reset(scene.powerOn ?? 'zero');
     sim.settle();
     this.sim = sim;
+    this.edge = null;
     this.cycles = 0;
     this.rootCtx = new ViewCtx(sim, design.root);
     this.lastSettle = null;
@@ -324,6 +330,7 @@ export class Stage {
 
   toggleInput(port: string): void {
     const v = this.getInput(port) ? 0 : 1;
+    if (port === this.clockPort()) this.finishEdge(false);
     const edge = v === 1 && port === this.clockPort();
     if (edge) {
       this.beforeEdge();
@@ -349,7 +356,15 @@ export class Stage {
    * the logic is done (which is how real hardware fails when overclocked).
    */
   private cycle(clk: string): void {
+    this.rise(clk);
+    completeEdge(this.sim!, this.edge!);
+    this.fall();
+  }
+
+  /** Raise the clock (the edge hooks' `before` runs first); the logic has not moved yet. */
+  private rise(clk: string): void {
     const sim = this.sim!;
+    let end: number | null = null;
     if (this.period && sim.runUntil) {
       const P = this.period;
       const E = Math.max(sim.time, this.nextEdge);
@@ -359,47 +374,89 @@ export class Stage {
         this.lateCount++;
         this.analyzer.markLate(E);
       }
-      this.beforeEdge();
-      sim.setInput(clk, 1);
-      this.cycles++;
-      sim.runUntil(E + Math.ceil(P / 2));
-      this.afterEdge();
-      sim.setInput(clk, 0);
-      sim.runUntil(E + P);
-      this.nextEdge = E + P;
+      end = E + Math.ceil(P / 2);
+      this.edgePeriod = P;
+    }
+    this.beforeEdge();
+    this.edge = riseEdge(sim, clk, end);
+    this.changeStart = this.edge.start;
+    this.cycles++;
+  }
+
+  /** End of the high phase: the edge hooks' `after`, then the falling half of the cycle. */
+  private fall(): void {
+    const sim = this.sim!;
+    const e = this.edge!;
+    this.edge = null;
+    this.afterEdge();
+    if (e.end !== null) {
+      // e.start is the edge time E; the next one comes at E + P (the period the edge started with).
+      const P = this.edgePeriod;
+      sim.setInput(e.clk, 0);
+      sim.runUntil!(e.start + P);
+      this.nextEdge = e.start + P;
       this.lastSettle = null;
       return;
     }
     // Measure the rising edge: that is when the flip-flops launch new values through the logic.
-    const t0 = sim.time;
-    this.beforeEdge();
-    sim.setInput(clk, 1);
-    this.cycles++;
-    sim.settle();
-    this.afterEdge();
-    this.lastSettle = sim.time - t0;
-    sim.setInput(clk, 0);
+    this.lastSettle = sim.time - e.start;
+    sim.setInput(e.clk, 0);
     sim.settle();
   }
 
-  /** One full clock cycle, then refresh. */
-  pulse(): void {
+  /** A rising edge is being played one gate delay at a time. */
+  get inEdge(): boolean {
+    return !!this.edge;
+  }
+
+  /** Slow mode: raise the clock and show the instant of the edge; edgeStep() plays the rest. */
+  startEdge(): boolean {
+    const clk = this.clockPort();
+    if (!clk || !this.sim) return false;
+    this.finishEdge(false);
+    this.stopAnim();
+    this.rise(clk);
+    this.refresh();
+    return true;
+  }
+
+  /** Slow mode: one gate delay of the edge in progress. Returns true while it is still propagating. */
+  edgeStep(flowMs: number): boolean {
+    if (!this.edge || !this.sim) return false;
+    const more = stepEdge(this.sim, this.edge);
+    if (!more) this.fall();
+    this.refreshFlowing(flowMs);
+    return more;
+  }
+
+  /** Complete a slow-mode edge at once (before anything else touches the clock). */
+  finishEdge(refresh = true): void {
+    if (!this.edge || !this.sim) return;
+    completeEdge(this.sim, this.edge);
+    this.fall();
+    if (refresh) this.refresh();
+  }
+
+  /** One full clock cycle, then refresh (changed wires show a travelling front for flowMs). */
+  pulse(flowMs = 0): void {
     const clk = this.clockPort();
     if (!clk || !this.sim) return;
+    this.finishEdge(false);
     this.stopAnim();
     this.cycle(clk);
-    this.refresh();
+    this.refreshFlowing(flowMs);
   }
 
   /** Run n clock cycles as fast as possible, refreshing the view once at the end. */
-  runCycles(n: number, stop?: () => boolean): number {
+  runCycles(n: number, stop?: () => boolean, flowMs = 0): number {
     const clk = this.clockPort();
     if (!clk || !this.sim) return 0;
+    this.finishEdge(false);
     this.stopAnim();
     let i = 0;
     for (; i < n && !(stop && stop()); i++) this.cycle(clk);
     this.lastSettle = null;
-    this.refresh();
+    this.refreshFlowing(flowMs);
     return i;
   }
 
@@ -519,7 +576,9 @@ export class Stage {
     this.anim = null;
   }
 
-  private stopClock(): void {
+  /** Stop the stage's own Run (the CPU panel's slow mode takes over the clock). */
+  stopClock(): void {
+    this.runBtn?.classList.remove('on');
     if (this.runClock) clearInterval(this.runClock);
     this.runClock = null;
   }
@@ -560,11 +619,10 @@ export class Stage {
       c.append(h('span', { class: 'label', style: 'margin-left:6px' }, 'Clock'));
       c.append(this.bitToggle(root.ports.find((q) => q.name === clk)!));
       c.append(h('button', { class: 'btn sm', title: 'One full clock cycle', onclick: () => this.pulse() }, icon('clock', 14), 'Pulse'));
-      const run = h('button', { class: 'btn sm toggle', title: 'Run the clock' }, icon('play', 14), 'Run');
+      const run = this.runBtn = h('button', { class: 'btn sm toggle', title: 'Run the clock' }, icon('play', 14), 'Run');
       run.addEventListener('click', () => {
         if (this.runClock) {
           this.stopClock();
-          run.classList.remove('on');
         } else {
           this.runClock = setInterval(() => this.pulse(), 500);
           run.classList.add('on');
@@ -592,6 +650,7 @@ export class Stage {
     if (!this.sim || !this.scene) return;
     this.stopAnim();
     this.stopClock();
+    this.edge = null;
     this.cycles = 0;
     this.sim.reset(this.scene.powerOn ?? 'zero');
     this.sim.settle();

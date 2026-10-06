@@ -16,7 +16,9 @@ import { FABI } from '../riscv/isa';
 import { bitsToF32 } from '../sim/fpref';
 import { CAUSE } from '../riscv/iss';
 import { pack } from '../sim/values';
-import { h } from '../ui/dom';
+import { h, icon } from '../ui/dom';
+import { settings, type TraceLevel } from '../ui/settings';
+import { fmtRate, ratePos, rateScale, stepEffect } from '../riscv/trace';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { instrUse, stageUse, STAGE_UNITS } from './insthw';
 import { timingPanel } from './timing';
@@ -70,6 +72,15 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     let changed = new Set<number>();
     let mismatch: string | null = null;
     let running: number | null = null;
+    /** Slow mode: the timer of the next tick, and whether the highlight follows execution. */
+    let slow: ReturnType<typeof setTimeout> | null = null;
+    let tracing = false;
+    let retiredSinceTick = false;
+    /** Retired instructions, newest last (the last LOG_MAX are kept). */
+    const LOG_MAX = 200;
+    const log: { cycle: number; pc: number; text: string; effect: string }[] = [];
+    let logSeq = 0, logShown = 0;
+    const trace = h('div', { class: 'cpu-trace' });
     /** The listing line the user clicked: its hardware stays highlighted. */
     let selPc: number | null = null;
     const usePath = h('div', { class: 'cpu-use' });
@@ -101,6 +112,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     };
     runBtn.addEventListener('click', () => {
       if (running) return stopRun();
+      stopSlow();
+      tracing = false;
       runBtn.textContent = 'Stop';
       const tick = () => {
         stage.runCycles(opts.pipeline ? 3 : opts.m || opts.dcache || opts.multicycle ? 10 : 4, () => iss.halted);
@@ -109,6 +122,101 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       };
       running = requestAnimationFrame(tick);
     });
+
+    // Slow mode: the learner sets the pace and the level of detail; the highlight follows execution.
+    /** Cycles and instructions differ only when an instruction can take several cycles. */
+    const multiCycle = !!(opts.pipeline || opts.multicycle || opts.m || opts.dcache);
+    let level: TraceLevel = settings.traceLevel === 'cycle' && !multiCycle ? 'instr' : settings.traceLevel;
+    let stepRate = settings.traceRate, gateRate = settings.speed;
+    const RANGE: Record<'gate' | 'steps', [number, number]> = { gate: [2, 400], steps: [0.25, 20] };
+    const range = () => RANGE[level === 'gate' ? 'gate' : 'steps'];
+    const rate = () => (level === 'gate' ? gateRate : stepRate);
+    const interval = () => 1000 / rate();
+    const finished = () => iss.halted || !!mismatch || stage.cycles > 20000;
+    const tick = () => {
+      tracing = true;
+      const flow = Math.min(600, (level === 'gate' ? 0.95 : 0.8) * interval());
+      if (level === 'gate') {
+        if (stage.inEdge) stage.edgeStep(flow);
+        else stage.startEdge();
+      } else if (level === 'cycle') stage.pulse(flow);
+      else {
+        // Up to the next retirement (a divide or a cache miss stalls for dozens of cycles).
+        retiredSinceTick = false;
+        stage.runCycles(200, () => retiredSinceTick, flow);
+      }
+    };
+    const slowBtn = h('button', { class: 'btn sm toggle', title: 'Run the program at the speed below: the current instruction and the hardware it uses stay highlighted' }) as HTMLButtonElement;
+    const slowIdle = () => slowBtn.replaceChildren(icon('play', 14), 'Slow');
+    slowIdle();
+    const stopSlow = () => {
+      if (slow) clearTimeout(slow);
+      slow = null;
+      slowBtn.classList.remove('on');
+      slowIdle();
+    };
+    const loop = () => {
+      tick();
+      if (finished()) return stopSlow();
+      slow = setTimeout(loop, interval());
+    };
+    slowBtn.addEventListener('click', () => {
+      if (slow) return stopSlow();
+      if (finished()) return;
+      stopRun();
+      stage.stopClock();
+      slowBtn.classList.add('on');
+      slowBtn.replaceChildren(icon('pause', 14), 'Pause');
+      loop();
+    });
+    const stepBtn = h('button', { class: 'btn sm ghost', title: 'One step at the chosen level', onclick: () => {
+      stopSlow();
+      stopRun();
+      stage.stopClock();
+      if (!finished() || (level === 'gate' && stage.inEdge)) tick();
+    } }, icon('step', 14), 'Step');
+    const rateIn = h('input', { type: 'range', min: 0, max: 1000, 'aria-label': 'Slow-mode speed' }) as HTMLInputElement;
+    const rateLbl = h('span', { class: 'cpu-rate-v' });
+    const unit = () => (level === 'gate' ? 'delays' : level === 'cycle' ? 'cycles' : 'instr');
+    const showRate = () => {
+      rateLbl.textContent = `${fmtRate(rate())} ${unit()}/s`;
+      rateIn.title = level === 'gate' ? 'Gate delays per second' : `${level === 'cycle' ? 'Clock cycles' : 'Instructions'} per second`;
+    };
+    const syncRate = () => {
+      const [lo, hi] = range();
+      rateIn.value = String(Math.round(1000 * ratePos(rate(), lo, hi)));
+      showRate();
+    };
+    rateIn.addEventListener('input', () => {
+      const [lo, hi] = range();
+      const r = rateScale(+rateIn.value / 1000, lo, hi);
+      if (level === 'gate') gateRate = r;
+      else stepRate = r;
+      showRate();
+    });
+    // Persist on release only: every settings change refreshes the whole stage.
+    rateIn.addEventListener('change', () => settings.set(level === 'gate' ? 'speed' : 'traceRate', rate()));
+    const LEVELS: [TraceLevel, string, string][] = [
+      ['gate', 'gate', 'One gate delay per step: watch each clock edge ripple through the datapath'],
+      ...(multiCycle ? [['cycle', 'cycle', 'One clock cycle per step'] as [TraceLevel, string, string]] : []),
+      ['instr', multiCycle ? 'instr' : 'instr / cycle', multiCycle ? 'Run until the next instruction retires' : 'One instruction (one clock cycle) per step'],
+    ];
+    const seg = h('div', { class: 'seg', role: 'radiogroup', 'aria-label': 'Slow-mode step' });
+    const levelBtns = LEVELS.map(([v, label, title]) => {
+      const b = h('button', { title, role: 'radio' }, label);
+      b.addEventListener('click', () => {
+        level = v;
+        levelBtns.forEach((x, i) => { x.classList.toggle('on', LEVELS[i][0] === v); x.setAttribute('aria-checked', String(LEVELS[i][0] === v)); });
+        syncRate();
+        settings.set('traceLevel', v);
+      });
+      b.classList.toggle('on', v === level);
+      b.setAttribute('aria-checked', String(v === level));
+      seg.append(b);
+      return b;
+    });
+    syncRate();
+    const slowRow = h('div', { class: 'cpu-slow' }, slowBtn, stepBtn, seg, h('label', { class: 'cpu-rate' }, rateIn, rateLbl));
 
     const editor = h('textarea', { class: 'asm-editor', spellcheck: 'false', wrap: 'off', rows: 14 }) as HTMLTextAreaElement;
     editor.value = opts.source;
@@ -130,8 +238,10 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
 
     const body = h('div', { class: 'cpu-body' },
       h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, editBtn, runBtn),
+      slowRow,
       editWrap, status, now,
       h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its hardware')), listing, usePath,
+      h('div', { class: 'cpu-sec' }, 'Trace', h('span', { class: 'cpu-sec-hint' }, 'retired instructions, newest last')), trace,
       h('div', { class: 'cpu-sec' }, 'Registers'), regs,
       ...(opts.fpu ? [h('div', { class: 'cpu-sec' }, 'Floating-point registers (non-zero)'), fregs] : []),
       ...(opts.dcache ? [h('div', { class: 'cpu-sec' }, 'Data cache (4 lines × 4 words)'), dlines] : []),
@@ -162,8 +272,12 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         }
       },
       after: () => {
+        if (willRetire) retiredSinceTick = true;
         if (!willRetire || iss.halted || !stage.sim) return;
-        iss.step();
+        const info = iss.step();
+        log.push({ cycle: stage.cycles, pc: info.pc, text: info.text, effect: stepEffect(info) });
+        if (log.length > LOG_MAX) log.shift();
+        logSeq++;
         if (!mismatch) {
           const x = cpuState(stage.sim).x;
           const diff = x.findIndex((v, i) => v !== iss.x[i]);
@@ -180,14 +294,20 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       if (stage.cycles === 0 && iss.steps > 0) {
         iss = new ISS(asm.words, issOpts);
         mismatch = null;
+        tracing = false;
+        log.length = 0;
+        logSeq = logShown = 0;
+        trace.replaceChildren();
         loads = misses = 0;
       }
       const st = cpuState(sim);
       changed = new Set();
       st.x.forEach((v, i) => { if (v !== lastX[i]) changed.add(i); });
-      lastX = st.x;
+      // During a slow-mode edge, keep comparing with the registers before it.
+      if (!stage.inEdge) lastX = st.x;
       const atBoundary = !sim.design.root.ports.fetch || sim.getBits(sim.design.root.ports.fetch)[0] === 1;
-      if (!mismatch && !opts.pipeline && atBoundary && st.pc !== iss.pc) mismatch = `PC differs: hardware ${hex(st.pc)}, model ${hex(iss.pc)}`;
+      // Mid-edge the PC register has already moved but the golden model steps only when the edge is done.
+      if (!mismatch && !opts.pipeline && !stage.inEdge && atBoundary && st.pc !== iss.pc) mismatch = `PC differs: hardware ${hex(st.pc)}, model ${hex(iss.pc)}`;
       const halted = iss.halted;
       const parts: HTMLElement[] = [
         h('span', null, `cycle ${stage.cycles}`),
@@ -239,7 +359,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       const cur = listing.querySelector('.cur') as HTMLElement | null;
       if (selPc !== null) listing.scrollTop = keepScroll;
       else if (cur) listing.scrollTop = Math.max(0, cur.offsetTop - listing.offsetTop - 40);
-      showUse(inFlight);
+      showUse(inFlight, shownPc);
+      showTrace();
       regs.replaceChildren(...st.x.map((v, i) => h('div', { class: `r${changed.has(i) && stage.cycles > 0 ? ' chg' : ''}${v ? '' : ' z'}`, title: `x${i} = ${v | 0}` },
         h('span', { class: 'n' }, `${ABI[i]}`), h('span', { class: 'v' }, hex(v)))));
       if (st.f) {
@@ -261,27 +382,56 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       mem.replaceChildren(...(words.length ? words.map(([i, v]) => h('div', { class: 'm' },
         h('span', { class: 'n' }, `[${hex(i * 4, 2)}]`), h('span', { class: 'v' }, hex(v)), h('span', { class: 'd' }, String(v | 0)))) : [h('div', { class: 'm z' }, 'all zero')]));
     };
-    /** Highlight what the selected instruction uses (or, in the pipeline, the stage it is in now). */
-    const showUse = (inFlight: Map<number, string[]>) => {
-      if (selPc === null) {
+    const wordAt = (pc: number) => asm.words[pc >>> 2] ?? 0x13;
+    const light = (names: string[]) => {
+      const have = stage.rootCtx?.node.children;
+      if (stage.path.length === 0) stage.highlight(names.filter((n) => have?.has(n)), true);
+    };
+    /**
+     * Highlight what the selected instruction uses (or, in the pipeline, the stage it is in now).
+     * In slow mode with nothing selected, follow execution: the current instruction, or every
+     * in-flight instruction's part of the work in its stage.
+     */
+    const showUse = (inFlight: Map<number, string[]>, shownPc: number) => {
+      if (selPc === null && tracing && opts.pipeline) {
+        const order = Object.keys(STAGE_UNITS);
+        const rows = [...inFlight].flatMap(([pc, stgs]) => stgs.map((s) => [s as keyof typeof STAGE_UNITS, pc] as const))
+          .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
+        light(rows.flatMap(([s, pc]) => stageUse(s, instrUse(wordAt(pc)))));
+        usePath.replaceChildren(...rows.map(([s, pc]) => h('div', { class: 'flight' }, h('span', { class: 'stg' }, s), h('code', null, disasm(wordAt(pc), pc)))));
+        return;
+      }
+      const pc = selPc ?? (tracing ? shownPc : null);
+      if (pc === null) {
         usePath.replaceChildren();
         if (stage.path.length === 0) stage.highlight(stage.scene?.highlight ?? []);
         return;
       }
-      const w = asm.words[selPc >>> 2] ?? 0x13;
+      const w = wordAt(pc);
       const use = instrUse(w);
-      const stages = inFlight.get(selPc) ?? [];
-      const names = stages.length
-        ? stages.flatMap((s) => stageUse(s as keyof typeof STAGE_UNITS, use))
-        : use.units;
-      const have = stage.rootCtx?.node.children;
-      if (stage.path.length === 0) stage.highlight(names.filter((n) => have?.has(n)), true);
-      usePath.replaceChildren(h('code', null, disasm(w, selPc)), h('span', null,
+      const stages = inFlight.get(pc) ?? [];
+      light(stages.length ? stages.flatMap((s) => stageUse(s as keyof typeof STAGE_UNITS, use)) : use.units);
+      usePath.replaceChildren(h('code', null, disasm(w, pc)), h('span', null,
         opts.pipeline ? (stages.length ? ` · now in ${stages.join(' + ')}; highlighted: that stage's part of the work.` : ' · not in the pipeline now; highlighted: all the hardware it uses.') : ''),
         h('div', null, use.path));
     };
+    /** Append the newly retired instructions to the trace (the log is never rebuilt while it grows). */
+    const showTrace = () => {
+      const fresh = logSeq - logShown;
+      if (!fresh) return;
+      if (fresh >= log.length) trace.replaceChildren();
+      trace.querySelector('.new')?.classList.remove('new');
+      for (const e of log.slice(-Math.min(fresh, log.length))) {
+        trace.append(h('div', { class: 'tr', title: 'Select this instruction in the listing', onclick: () => { selPc = e.pc; update(); } },
+          h('span', { class: 'c' }, String(e.cycle)), h('span', { class: 't' }, e.text), h('span', { class: 'eff' }, e.effect)));
+      }
+      while (trace.childElementCount > LOG_MAX) trace.firstElementChild!.remove();
+      trace.lastElementChild?.classList.add('new');
+      trace.scrollTop = trace.scrollHeight;
+      logShown = logSeq;
+    };
     update();
-    return { el, update, destroy: () => { stopRun(); if (stage.path.length === 0) stage.highlight(stage.scene?.highlight ?? []); } };
+    return { el, update, destroy: () => { stopRun(); stopSlow(); if (stage.path.length === 0) stage.highlight(stage.scene?.highlight ?? []); } };
   };
 }
 

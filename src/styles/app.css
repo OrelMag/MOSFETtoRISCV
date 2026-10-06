@@ -614,6 +614,21 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .cpu-use { font-size: 12px; color: var(--text-2); margin: 4px 0 2px; }
 .cpu-use:empty { display: none; }
 .cpu-use code { font: 600 12px var(--font-mono); color: var(--text); }
+.cpu-use .flight { display: flex; align-items: center; gap: 6px; }
+.cpu-use .flight .stg { font: 700 10px var(--font-mono); padding: 0 4px; border-radius: 4px; background: var(--hl); color: var(--accent-text); }
+.cpu-slow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.cpu-slow .seg button { padding: 2px 7px; font-size: 11px; }
+.cpu-rate { display: flex; align-items: center; gap: 6px; flex: 1 1 140px; min-width: 0; }
+.cpu-rate input { flex: 1; min-width: 60px; accent-color: var(--accent); }
+.cpu-rate-v { font: 11px var(--font-mono); color: var(--text-2); white-space: nowrap; min-width: 7.5em; }
+.cpu-trace { max-height: 140px; overflow: auto; font: 11px var(--font-mono); border: 1px solid var(--border); border-radius: 8px; padding: 3px 0; }
+.cpu-trace:empty::before { content: 'nothing retired yet'; display: block; padding: 2px 8px; color: var(--muted); }
+.cpu-trace .tr { display: grid; grid-template-columns: 3.2em 1fr; column-gap: 6px; padding: 1px 8px; cursor: pointer; }
+.cpu-trace .tr:hover { background: var(--surface-2); }
+.cpu-trace .tr.new { background: color-mix(in srgb, var(--w1) 20%, transparent); }
+.cpu-trace .c { color: var(--muted); text-align: right; }
+.cpu-trace .t { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cpu-trace .eff { grid-column: 2; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cpu-sec-hint { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--muted); margin-left: 6px; }
 .cpu-listing .ln.cur { background: color-mix(in srgb, var(--w1) 20%, transparent); font-weight: 700; }
 .cpu-listing .a { color: var(--muted); }
