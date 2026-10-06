@@ -2,10 +2,12 @@
 // is its register file (and data memory), when an instruction retires, and what the golden
 // model (the ISS) must implement. ChipDoc.cpu stores what the user set; detectCpu fills the rest
 // from the names the site's CPUs use (a CPU opened with "Open in Sandbox" keeps its instance
-// names: imem, pc, rf, dm, frf; its pins pcOut / pcF, retire, validW), so a remixed CPU and the
-// fetch-loop example need no setup. Readers take the editor's simulation and the compile its nets
-// belong to; CpuMonitor runs the ISS in lock-step on the editor's rising edges and reports the
-// first difference.
+// names: imem, pc, rf, dm, frf, fcsr; its pins pcOut / pcF, retire, validW, and the system CPU's
+// switches, irq, consoleData, consoleValid, leds), so a remixed CPU and the fetch-loop example
+// need no setup. A part may sit inside a user chip: its path is dotted ('imem.rom', the ROM behind
+// an instruction cache). Readers take the editor's simulation and the compile its nets belong
+// to; CpuMonitor runs the ISS in lock-step on the editor's rising edges and reports the first
+// difference: registers, PC, fcsr, data memory (after stores), console and LEDs.
 
 import { cacheLines } from '../riscv/cosim';
 import { ABI, FABI } from '../riscv/isa';
@@ -49,13 +51,18 @@ export interface CpuDoc {
   iss?: CpuIss;
 }
 
-/** A complete description (rom always set). */
+/** A complete description (rom always set). Part fields are paths: 'rf', or 'imem.rom' inside a user chip. */
 export interface CpuDesc extends CpuDoc {
   rom: string;
   iss: CpuIss;
+  /** The part with an `fcsr` output (RV32F: frm and the accrued flags); detected only. */
+  fcsr?: string;
   /** Which fields were detected rather than set by the user. */
   auto: Set<keyof CpuDoc>;
 }
+
+/** The workspace's user chips by id: what a part path follows. */
+export type Chips = Readonly<Record<string, ChipDoc>>;
 
 type RomPart = PartDoc & { ref: { rom: RomRef } };
 const isRvRom = (p: PartDoc): p is RomPart => 'rom' in p.ref && p.ref.rom.addr === 'rv32' && p.ref.rom.w === 32;
@@ -63,22 +70,55 @@ const isRvRom = (p: PartDoc): p is RomPart => 'rom' in p.ref && p.ref.rom.addr =
 /** Program ROMs of a chip (byte addressed, 32-bit words): what a CPU can fetch from. */
 export const romParts = (doc: ChipDoc): RomPart[] => doc.parts.filter(isRvRom);
 
+/** A part by path ('imem.rom': the part rom of the user chip placed as imem), with the chip it is in. */
+export function partAt(doc: ChipDoc, path: string, chips?: Chips): { doc: ChipDoc; part: PartDoc } | null {
+  const ids = path.split('.');
+  let d = doc;
+  for (let i = 0; ; i++) {
+    const p = d.parts.find((q) => q.id === ids[i]);
+    if (!p) return null;
+    if (i === ids.length - 1) return { doc: d, part: p };
+    const sub = 'chip' in p.ref ? chips?.[p.ref.chip] : undefined;
+    if (!sub) return null;
+    d = sub;
+  }
+}
+
+/** Paths of the program ROMs inside the user chips placed in `doc` (up to `depth` levels down). */
+export function nestedRoms(doc: ChipDoc, chips: Chips | undefined, depth = 2): string[] {
+  if (!chips || depth <= 0) return [];
+  const out: string[] = [];
+  for (const p of doc.parts) {
+    const sub = 'chip' in p.ref ? chips[p.ref.chip] : undefined;
+    if (!sub || sub === doc) continue;
+    for (const r of romParts(sub)) out.push(`${p.id}.${r.id}`);
+    for (const r of nestedRoms(sub, chips, depth - 1)) out.push(`${p.id}.${r}`);
+  }
+  return out;
+}
+
 const partNamed = (doc: ChipDoc, ...ids: string[]) => ids.map((id) => doc.parts.find((p) => p.id === id)).find((p) => p);
-const pinNamed = (doc: ChipDoc, dir: 'in' | 'out', width: number, ...names: string[]) =>
+export const pinNamed = (doc: ChipDoc, dir: 'in' | 'out', width: number, ...names: string[]) =>
   names.map((n) => doc.pins.find((p) => p.name === n && p.dir === dir && p.width === width)).find((p) => p);
 
 /**
  * Everything detectCpu can find, or null when the chip has no program ROM. Names first (the
  * site's CPUs), then shapes: the PC is what drives the ROM's address when nothing is named pc.
+ * A ROM inside one placed user chip counts (an instruction cache wrapped around it); ROMs inside
+ * several are several cores (multicpu.ts).
  */
-export function detectCpu(doc: ChipDoc): CpuDesc | null {
+export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   const roms = romParts(doc);
-  const rom = roms.find((p) => p.id === 'imem') ?? roms[0];
-  if (!rom) return null;
+  let rom = (roms.find((p) => p.id === 'imem') ?? roms[0])?.id;
+  if (!rom) {
+    const nested = nestedRoms(doc, chips);
+    if (new Set(nested.map((r) => r.split('.')[0])).size !== 1) return null;
+    rom = nested.find((r) => r.startsWith('imem.')) ?? nested[0];
+  }
   const auto = new Set<keyof CpuDoc>(['rom', 'pc', 'regs', 'fregs', 'dmem', 'retire', 'pipeline', 'iss']);
   const pcPin = pinNamed(doc, 'out', 32, 'pcOut', 'pcF', 'pc');
   const pcReg = partNamed(doc, 'pc');
-  const pc: NetRef = pcPin ? { pin: pcPin.id } : pcReg ? { part: pcReg.id, port: 'q' } : { part: rom.id, port: 'addr' };
+  const pc: NetRef = pcPin ? { pin: pcPin.id } : pcReg ? { part: pcReg.id, port: 'q' } : { part: rom.split('.')[0], port: 'addr' };
   const regs = partNamed(doc, 'rf', 'regs', 'regfile') ?? doc.parts.find((p) => 'lib' in p.ref && /^regfile/.test(p.ref.lib));
   const fregs = partNamed(doc, 'frf', 'fregs');
   const ram32 = doc.parts.filter((p) => 'ram' in p.ref && p.ref.ram.w === 32 && p !== regs);
@@ -87,19 +127,21 @@ export function detectCpu(doc: ChipDoc): CpuDesc | null {
   const retire = validW ?? pinNamed(doc, 'out', 1, 'retire');
   const pipeline = !!validW || (!!partNamed(doc, 'FD') && !!partNamed(doc, 'MW'));
   const system = !!partNamed(doc, 'csr') && !!partNamed(doc, 'trap');
+  const fcsr = partNamed(doc, 'fcsr');
   return {
-    rom: rom.id, pc, auto, iss: { ...(system ? { system } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}) },
+    rom, pc, auto, iss: { ...(system ? { system } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}) },
     ...(regs ? { regs: regs.id } : {}), ...(fregs ? { fregs: fregs.id } : {}), ...(dmem ? { dmem: dmem.id } : {}),
-    ...(retire ? { retire: { pin: retire.id } } : {}), ...(pipeline ? { pipeline } : {}),
+    ...(retire ? { retire: { pin: retire.id } } : {}), ...(pipeline ? { pipeline } : {}), ...(fcsr ? { fcsr: fcsr.id } : {}),
   };
 }
 
 /** The user's settings over what detection finds (null: no program ROM to run). */
-export function resolveCpu(doc: ChipDoc): CpuDesc | null {
+export function resolveCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   const set = doc.cpu;
-  const det = detectCpu(doc);
+  const det = detectCpu(doc, chips);
   if (!set) return det;
-  const romId = set.rom && doc.parts.some((p) => p.id === set.rom && isRvRom(p)) ? set.rom : det?.rom;
+  const at = set.rom ? partAt(doc, set.rom, chips) : null;
+  const romId = at && isRvRom(at.part) ? set.rom! : det?.rom;
   if (!romId) return null;
   const auto = new Set(det?.auto ?? []);
   const out: CpuDesc = { ...(det ?? { rom: romId, iss: {}, auto }), rom: romId, auto };
@@ -109,7 +151,7 @@ export function resolveCpu(doc: ChipDoc): CpuDesc | null {
     auto.delete(k);
   }
   // A ROM chosen by hand: the detected PC may belong to another ROM's address.
-  if (set.rom && !set.pc && det && 'part' in det.pc! && det.pc.port === 'addr') out.pc = { part: romId, port: 'addr' };
+  if (set.rom && !set.pc && det && 'part' in det.pc! && det.pc.port === 'addr') out.pc = { part: romId.split('.')[0], port: 'addr' };
   for (const k of ['regs', 'fregs', 'dmem'] as const) if (out[k] === '') delete out[k];
   out.iss = { ...out.iss };
   return out;
@@ -158,10 +200,11 @@ export interface CpuSimView {
   built: Compiled | null;
 }
 
-/** The flat nets of a NetRef (null: not connected, or not in this build). */
+/** The flat nets of a NetRef (null: not connected, or not in this build). A part's port may be a path's. */
 export function refNets(v: CpuSimView, doc: ChipDoc, r: NetRef): number[] | null {
   const sim = v.sim, b = v.built;
   if (!sim || !b) return null;
+  if ('part' in r && r.part.includes('.')) return partNode(sim, r.part)?.ports[r.port] ?? null;
   let i: number | undefined;
   if ('pin' in r) i = b.netOfEnd.get(`pin:${r.pin}`);
   else if ('part' in r) i = b.netOfEnd.get(`p:${r.part}.${r.port}`);
@@ -177,6 +220,12 @@ export function refNets(v: CpuSimView, doc: ChipDoc, r: NetRef): number[] | null
 export function refValue(v: CpuSimView, doc: ChipDoc, r: NetRef): number | null {
   const nets = refNets(v, doc, r);
   return nets && v.sim ? pack(v.sim.getBits(nets)) : null;
+}
+
+/** The value of a pin by name (-1: unknown), or null when there is no such pin. */
+export function pinValue(v: CpuSimView, doc: ChipDoc, name: string, dir: 'in' | 'out', width: number): number | null {
+  const p = pinNamed(doc, dir, width, name);
+  return p ? refValue(v, doc, { pin: p.id }) : null;
 }
 
 const WORD = /^w(\d+)$/;
@@ -206,7 +255,13 @@ export function storageOf(n: HierNode | undefined, depth = 3): Map<number, HierN
   return found.length === 1 ? found[0] : null;
 }
 
-const partNode = (sim: Sim, id: string | undefined) => (id ? sim.design.root.children?.get(id) : undefined);
+/** The simulation's node of a part path ('rf', 'imem.rom'). */
+export function partNode(sim: Sim, path: string | undefined): HierNode | undefined {
+  if (!path) return undefined;
+  let n: HierNode | undefined = sim.design.root;
+  for (const id of path.split('.')) n = n?.children?.get(id);
+  return n;
+}
 
 /** x0..x31 (or f0..f31) of a register file part; x0 reads 0 when the part has no w0. -1: unknown. */
 export function readRegs(sim: Sim, part: string | undefined): number[] | null {
@@ -250,11 +305,18 @@ export function readMem(sim: Sim, part: string | undefined): number[] | null {
   return words;
 }
 
+/** A part's fcsr output ({frm, fflags}; -1: unknown), or null. */
+export function readFcsr(sim: Sim, part: string | undefined): number | null {
+  const nets = partNode(sim, part)?.ports.fcsr;
+  return nets ? pack(sim.getBits(nets)) : null;
+}
+
 export interface CpuRead {
   /** -1: unknown; null: no PC. */
   pc: number | null;
   x: number[] | null;
   f: number[] | null;
+  fcsr: number | null;
   dmem: number[] | null;
   /** An instruction retires at the next rising edge. */
   retiring: boolean;
@@ -268,14 +330,15 @@ export function readCpu(v: CpuSimView, doc: ChipDoc, d: CpuDesc): CpuRead | null
     pc: d.pc ? refValue(v, doc, d.pc) : null,
     x: readRegs(sim, d.regs),
     f: readRegs(sim, d.fregs),
+    fcsr: readFcsr(sim, d.fcsr),
     dmem: readMem(sim, d.dmem),
     retiring: r === 1 || r === null,
   };
 }
 
 /** The program a ROM part holds (null: no such ROM, or it does not build). */
-export function romProgram(doc: ChipDoc, rom: string): { words: number[]; k: number } | null {
-  const p = doc.parts.find((q) => q.id === rom);
+export function romProgram(doc: ChipDoc, rom: string, chips?: Chips): { words: number[]; k: number } | null {
+  const p = partAt(doc, rom, chips)?.part;
   if (!p || !isRvRom(p)) return null;
   const img = romImage(p.ref.rom);
   return img.error ? null : { words: img.words, k: p.ref.rom.k };
@@ -305,18 +368,22 @@ export function pipelineSlots(v: CpuSimView, doc: ChipDoc, d: CpuDesc): { stage:
 // ---- lock-step -------------------------------------------------------------------------------
 
 export interface Mismatch {
-  /** 'x5', 'f3' or 'pc'. */
+  /** 'x5', 'f3', 'pc', 'fcsr', 'mem', 'console' or 'leds'. */
   what: string;
-  /** ABI name ('a0'), or 'PC'. */
+  /** ABI name ('a0'), 'PC', 'fcsr', 'memory [0x40]', 'LEDs', 'console'. */
   name: string;
   expected: number;
   got: number;
+  /** Replaces "expected …, got …" (the console: the text each one printed). */
+  detail?: string;
   /** The instruction after which it differed. */
   after: string;
   cycle: number;
+  /** Which core (a multi-core chip). */
+  hart?: number;
 }
 
-export interface Retired { cycle: number; pc: number; text: string; effect: string }
+export interface Retired { cycle: number; pc: number; text: string; effect: string; hart?: number }
 
 /** What the monitor needs from EditorSim. */
 export interface MonitorSim extends CpuSimView {
@@ -324,17 +391,27 @@ export interface MonitorSim extends CpuSimView {
   resets: number;
   edgeHooks: Set<{ before?(): void; after?(): void }>;
   runCycles(n: number, stop?: () => boolean, budgetMs?: number): number;
-  pinBits?(name: string): ArrayLike<number> | null;
 }
 
 const hex = (v: number) => (v < 0 ? 'x'.repeat(8) : (v >>> 0).toString(16).padStart(8, '0'));
 export const fmtWord = (v: number) => (v < 0 ? '0x????????' : `0x${hex(v)}`);
 
+/** The first data-memory word where the hardware and the model differ (null: none). */
+export function memDiff(hw: number[], model: ArrayLike<number>): { i: number; hw: number; model: number } | null {
+  const n = Math.min(hw.length, model.length);
+  for (let i = 0; i < n; i++) if (hw[i] !== model[i] >>> 0) return { i, hw: hw[i], model: model[i] >>> 0 };
+  return null;
+}
+
+const memName = (i: number) => `memory [0x${(4 * i).toString(16).padStart(2, '0')}]`;
+const quote = (s: string) => JSON.stringify(s.length > 24 ? `…${s.slice(-24)}` : s);
+
 /**
  * The golden model in lock-step with a CPU chip: on every rising edge at which the hardware
  * retires an instruction, the ISS executes one and the registers (and, outside a pipeline, the
- * PC) are compared. Restarts on a power cycle or when the program changes; a monitor that joins
- * after cycle 0 waits for the next reset (`synced` false).
+ * PC), fcsr, the data memory after a store (a pipeline's at the halt: its stores run ahead of
+ * retirement), the console and the LEDs are compared. Restarts on a power cycle or when the
+ * program changes; a monitor that joins after cycle 0 waits for the next reset (`synced` false).
  */
 export class CpuMonitor {
   iss: ISS | null = null;
@@ -351,15 +428,18 @@ export class CpuMonitor {
   problem: string | null = null;
   /** The program the ISS runs (null: none). */
   prog: { words: number[]; k: number } | null = null;
+  /** What the hardware wrote to the console (consoleValid / consoleData pins) since the reset. */
+  console = '';
   private progKey = '';
   private cfgKey = '';
   private lastDoc: ChipDoc | null = null;
+  private lastChips: Chips | undefined;
   private resets = -1;
   private willRetire = false;
   private hook = { before: () => this.before(), after: () => this.after() };
   private static readonly LOG = 64;
 
-  constructor(readonly es: MonitorSim, private doc: () => ChipDoc) {
+  constructor(readonly es: MonitorSim, private doc: () => ChipDoc, private chips: () => Chips | undefined = () => undefined) {
     es.edgeHooks.add(this.hook);
     this.sync();
   }
@@ -374,11 +454,12 @@ export class CpuMonitor {
    * resets the hardware so both start over together.
    */
   sync(): 'program' | 'settings' | null {
-    const doc = this.doc();
-    if (doc === this.lastDoc && this.es.resets === this.resets) return null;
+    const doc = this.doc(), chips = this.chips();
+    if (doc === this.lastDoc && chips === this.lastChips && this.es.resets === this.resets) return null;
     this.lastDoc = doc;
-    this.desc = resolveCpu(doc);
-    const prog = this.desc ? romProgram(doc, this.desc.rom) : null;
+    this.lastChips = chips;
+    this.desc = resolveCpu(doc, chips);
+    const prog = this.desc ? romProgram(doc, this.desc.rom, chips) : null;
     this.prog = prog;
     const pk = JSON.stringify(prog ? [prog.words, prog.k] : null);
     const ck = this.desc ? JSON.stringify([this.desc.rom, this.desc.iss, this.desc.dmem, this.desc.regs, this.desc.fregs, this.desc.retire, this.desc.pipeline, this.desc.pc]) : '';
@@ -397,6 +478,7 @@ export class CpuMonitor {
     this.mismatch = null;
     this.retired = 0;
     this.log.length = 0;
+    this.console = '';
     this.seq++;
     this.synced = this.es.cycles === 0;
     const d = this.desc;
@@ -421,19 +503,26 @@ export class CpuMonitor {
     return this.desc ? readCpu(this.es, this.doc(), this.desc) : null;
   }
 
+  /** The LEDs pin of a system CPU (null: none; -1: unknown). */
+  get leds(): number | null {
+    return pinValue(this.es, this.doc(), 'leds', 'out', 8);
+  }
+
   private before(): void {
     const d = this.desc, iss = this.iss;
     this.willRetire = false;
-    if (!d || !iss || !this.synced) return;
+    if (!d) return;
     const doc = this.doc();
+    // The console takes a character on every edge with consoleValid (the IO unit's write strobe).
+    if (pinValue(this.es, doc, 'consoleValid', 'out', 1) === 1) this.console += String.fromCharCode(Math.max(0, pinValue(this.es, doc, 'consoleData', 'out', 8) ?? 0) & 0xff);
+    if (!iss || !this.synced) return;
     const r = d.retire && d.retire !== 'every' ? refValue(this.es, doc, d.retire) : 1;
     this.willRetire = r === 1;
     if (iss.system) {
       // The system CPU's inputs, sampled like the hardware samples them.
-      const pin = (n: string) => doc.pins.find((p) => p.name === n && p.dir === 'in');
-      const irq = pin('irq'), sw = pin('switches');
-      if (irq) iss.irq = refValue(this.es, doc, { pin: irq.id }) === 1;
-      if (sw) iss.switches = Math.max(0, refValue(this.es, doc, { pin: sw.id }) ?? 0);
+      const irq = pinValue(this.es, doc, 'irq', 'in', 1), sw = pinValue(this.es, doc, 'switches', 'in', 8);
+      if (irq !== null) iss.irq = irq === 1;
+      if (sw !== null) iss.switches = Math.max(0, sw);
     }
   }
 
@@ -456,8 +545,9 @@ export class CpuMonitor {
     if (this.mismatch) return;
     const sim = this.es.sim;
     if (!sim) return;
-    const at = (what: string, name: string, expected: number, got: number) =>
-      (this.mismatch = { what, name, expected: expected >>> 0, got, after: info.text, cycle: this.es.cycles });
+    const doc = this.doc();
+    const at = (what: string, name: string, expected: number, got: number, detail?: string) =>
+      (this.mismatch = { what, name, expected: expected >>> 0, got, after: info.text, cycle: this.es.cycles, ...(detail ? { detail } : {}) });
     const x = readRegs(sim, d.regs);
     if (x) {
       const i = x.findIndex((v, k) => v !== iss.x[k] >>> 0);
@@ -468,9 +558,25 @@ export class CpuMonitor {
       const i = f.findIndex((v, k) => v !== iss.f[k] >>> 0);
       if (i >= 0) return void at(`f${i}`, FABI[i], iss.f[i], f[i]);
     }
+    const fc = readFcsr(sim, d.fcsr);
+    if (fc !== null && fc !== ((iss.frm << 5) | iss.fflags)) return void at('fcsr', 'fcsr', (iss.frm << 5) | iss.fflags, fc);
     if (!d.pipeline && d.pc) {
-      const pc = refValue(this.es, this.doc(), d.pc);
-      if (pc !== null && pc !== iss.pc >>> 0) at('pc', 'PC', iss.pc, pc);
+      const pc = refValue(this.es, doc, d.pc);
+      if (pc !== null && pc !== iss.pc >>> 0) return void at('pc', 'PC', iss.pc, pc);
+    }
+    if (d.dmem && (d.pipeline ? iss.halted : info.store)) {
+      const mem = readMem(sim, d.dmem);
+      const m = mem && memDiff(mem, iss.dmem);
+      if (m) return void at('mem', memName(m.i), m.model, m.hw);
+    }
+    if (iss.system) {
+      if (this.console !== iss.console) {
+        const i = [...this.console].findIndex((c, k) => c !== iss.console[k]);
+        const k = i < 0 ? this.console.length : i;
+        return void at('console', 'console', iss.console.charCodeAt(k) || 0, this.console.charCodeAt(k) || 0, `console: expected ${quote(iss.console)}, got ${quote(this.console)}`);
+      }
+      const leds = this.leds;
+      if (leds !== null && leds !== iss.leds) return void at('leds', 'LEDs', iss.leds, leds);
     }
   }
 
@@ -504,8 +610,11 @@ export class CpuMonitor {
 
 /** One line for a mismatch: `a0 (x10) after "addi a0, a0, 1", cycle 7: expected 0x…, got 0x…`. */
 export function mismatchText(m: Mismatch): string {
-  const reg = m.what === 'pc' ? 'PC' : `${m.name} (${m.what})`;
-  return `${reg} after “${m.after}”, cycle ${m.cycle}: expected ${fmtWord(m.expected)}, got ${fmtWord(m.got)}`;
+  const core = m.hart !== undefined ? `core ${m.hart}: ` : '';
+  if (m.detail) return `${core}${m.detail} (after “${m.after}”, cycle ${m.cycle})`;
+  const what = m.what === 'pc' || m.what === m.name || m.what === 'mem' || m.what === 'leds' ? m.name : `${m.name} (${m.what})`;
+  const fmt = m.what === 'leds' ? (v: number) => (v < 0 ? '????????' : `0b${v.toString(2).padStart(8, '0')}`) : fmtWord;
+  return `${core}${what} after “${m.after}”, cycle ${m.cycle}: expected ${fmt(m.expected)}, got ${fmt(m.got)}`;
 }
 
 /** What the panel can show and what it cannot, in words (for a CPU being built). */
@@ -516,4 +625,3 @@ export function cpuGaps(d: CpuDesc, r: CpuRead | null): string[] {
   if (d.dmem && !r?.dmem) out.push(`data memory '${d.dmem}' has no words to read`);
   return out;
 }
-
