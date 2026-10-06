@@ -31,6 +31,12 @@ export interface ChipDoc {
   /** Box tint (0–359), shown when the chip is placed. */
   hue?: number;
   notes?: string;
+  /**
+   * "This chip is a flip-flop": pin names of d, q, clk (and en). Compiled into ComponentDef.ff
+   * once a short clocked test confirms it (static timing then stops at it; synthesis export
+   * writes it as a process).
+   */
+  ff?: { d: string; q: string; clk: string; en?: string };
   pins: PinDoc[];
   parts: PartDoc[];
   wires: WireDoc[];

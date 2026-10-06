@@ -388,6 +388,11 @@ export function setPin(doc: ChipDoc, id: string, patch: Partial<Omit<PinDoc, 'id
   const pins = doc.pins.slice();
   pins[i] = patched(doc.pins[i], patch);
   const next = { ...doc, pins };
+  // The flip-flop marking names pins: it follows a rename.
+  const old = doc.pins[i].name;
+  if (doc.ff && name !== undefined && name !== old && Object.values(doc.ff).includes(old)) {
+    next.ff = Object.fromEntries(Object.entries(doc.ff).map(([k, v]) => [k, v === old ? name : v])) as typeof doc.ff;
+  }
   return { doc: refit(doc, next, defOf ?? noDefs) };
 }
 

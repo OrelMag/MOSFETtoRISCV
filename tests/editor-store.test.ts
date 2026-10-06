@@ -105,6 +105,13 @@ describe('migrate', () => {
     expect(a.labels).toEqual([{ id: 'l2', name: 'clk', at: [3, 3] }]);
   });
 
+  it('keeps a well-formed flip-flop marking, drops a malformed one', () => {
+    const ff = { d: 'd', q: 'q', clk: 'clk', en: 'en' };
+    expect(sanitizeChip({ id: 'u_f', ff: { ...ff, extra: 1 } })!.ff).toEqual(ff);
+    expect(sanitizeChip({ id: 'u_f', ff: { d: 'd', q: 'q' } })!.ff).toBeUndefined();
+    expect(sanitizeChip({ id: 'u_f', ff: { d: 'd', q: 'q', clk: 'c', en: 3 } })!.ff).toBeUndefined();
+  });
+
   it('sanitizes every part kind', () => {
     const refs = [
       { lib: 'nand' }, { chip: 'u_x' }, { split: [1, 3], pitch: 2 }, { merge: [4] }, { const: { width: 4, value: 9 } },

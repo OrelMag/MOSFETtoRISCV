@@ -190,6 +190,12 @@ describe('set*', () => {
     expect(ok(setPin(doc, 'pin1', { name: 'sum' })).doc.pins[0].name).toBe('sum');
   });
 
+  it('a renamed pin keeps its flip-flop role', () => {
+    const doc: ChipDoc = { ...fixture(), ff: { d: 'in1', q: 'out1', clk: 'in2' } };
+    expect(ok(setPin(doc, 'pin1', { name: 'q' })).doc.ff).toEqual({ d: 'in1', q: 'q', clk: 'in2' });
+    expect(ok(setPin(doc, 'pin1', { width: 2 })).doc.ff).toBe(doc.ff);
+  });
+
   it('keeps wires to ports a new ref lacks, so changing back restores them', () => {
     const doc = fixture();
     const b = ok(addWire(doc, { pin: 'pin2' }, { part: 'g2', port: 'b' }, [[-5, 3]], defOf));

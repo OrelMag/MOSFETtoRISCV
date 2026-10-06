@@ -19,7 +19,7 @@ import type { Vec } from '../sim/geometry';
 import { GateSim } from '../sim/gatesim';
 import { reachesTransistors } from '../sim/harness';
 import { SwitchSim } from '../sim/switchsim';
-import { type ComponentDef, type NetDef, type Netlist, netlistOf, type PortDef } from '../sim/types';
+import { B0, B1, BX, type ComponentDef, type NetDef, type Netlist, netlistOf, type PortDef } from '../sim/types';
 import { deriveBehavior, type Derived } from './derive';
 import {
   type ChipDoc, defaultFace, type EndRef, endKey, isIdent, onPolyline, orthogonal, type PartDoc, type PartRef,
@@ -372,14 +372,83 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
     if (derived.ok) def = { ...base, behavior: derived.behavior, spec: derived.spec };
   }
 
+  // "This chip is a flip-flop": only once it behaves like one.
+  if (doc.ff) {
+    const names = Object.values(doc.ff);
+    const why = ffProblem(def, doc.ff, mode);
+    if (why) err(`not an edge-triggered flip-flop: ${why}`, { pins: doc.pins.filter((p) => names.includes(p.name)).map((p) => p.id) });
+    else def = { ...def, ff: { ...doc.ff } };
+  }
+
   const connKey = hash(JSON.stringify([
     [...parts.values()].map(({ doc: p }) => [p.id, p.ref]).sort((a, b) => (a[0] < b[0] ? -1 : 1)),
     ports.map((p) => [p.name, p.width, p.dir, !!p.clock]),
     nets.map((n) => JSON.stringify([[...n.ends].sort(), !!n.cap])).sort(),
     Object.entries(powerOn).sort(),
+    def.ff ?? null,
   ]));
 
   return { def, diags, netOfWire, netOfEnd, netOfLabel, connKey, mode, ...(derived ? { derived } : {}) };
+}
+
+/**
+ * Why `def` is not a rising-edge flip-flop with these pins, or null. The pins must exist, be 1 bit
+ * wide, d / clk / en inputs and q an output. Then a short clocked test, from q = 0 and from q = 1
+ * (other inputs held at 0): q loads d at a rising edge of clk (with en = 1), and holds while clk
+ * is low, while it is high (not a latch), at the falling edge, and at a rising edge with en = 0.
+ */
+function ffProblem(def: ComponentDef, ff: NonNullable<ChipDoc['ff']>, mode: 'gate' | 'switch'): string | null {
+  const roles: [string, string | undefined, 'in' | 'out'][] = [['d', ff.d, 'in'], ['q', ff.q, 'out'], ['clk', ff.clk, 'in'], ['en', ff.en, 'in']];
+  const used = new Set<string>();
+  for (const [role, name, dir] of roles) {
+    if (name === undefined) continue;
+    const p = def.ports.find((x) => x.name === name);
+    if (!p) return `no pin '${name}' (${role})`;
+    if (used.has(name)) return `pin '${name}' has two roles`;
+    used.add(name);
+    if (p.width !== 1) return `${role} pin '${name}' must be 1 bit wide`;
+    if (p.dir !== dir) return `${role} pin '${name}' must be an ${dir === 'in' ? 'input' : 'output'}`;
+  }
+  let sim: GateSim | SwitchSim;
+  try {
+    const d = flatten(def, { mode });
+    sim = mode === 'gate' ? new GateSim(d) : new SwitchSim(d);
+  } catch (e) {
+    return `cannot be simulated (${e instanceof Error ? e.message : String(e)})`;
+  }
+  const q = () => {
+    const b = sim.get(sim.design.root.ports[ff.q][0]);
+    return b === B0 ? '0' : b === B1 ? '1' : b === BX ? 'X' : 'Z';
+  };
+  const set = (v: Record<string, number>) => {
+    for (const [k, x] of Object.entries(v)) if (k === ff.d || k === ff.clk || k === ff.en) sim.setInput(k, x);
+    sim.settle();
+    return !sim.unstable;
+  };
+  for (const p of def.ports) if (p.dir === 'in') sim.setInput(p.name, 0);
+  const en = (x: number) => (ff.en ? { [ff.en]: x } : {});
+  for (const init of [0, 1]) {
+    const v = String(init), nv = String(1 - init);
+    const steps: [Record<string, number>, string, string][] = [
+      [{ [ff.clk]: 0, [ff.d]: init, ...en(1) }, '', ''],
+      [{ [ff.clk]: 1 }, '', ''],
+      [{ [ff.clk]: 0 }, v, `q = %q after a rising edge with d = ${v}`],
+      [{ [ff.d]: 1 - init }, v, `q follows d while clk = 0 (q = %q)`],
+      [{ [ff.clk]: 1 }, nv, `q does not take d = ${nv} at the rising edge of clk (q = %q)`],
+      [{ [ff.d]: init }, nv, `q follows d while clk = 1: a latch? (q = %q)`],
+      [{ [ff.clk]: 0 }, nv, `q changes at the falling edge of clk (q = %q)`],
+      ...(ff.en ? [
+        [{ [ff.en]: 0, [ff.d]: init }, nv, ''],
+        [{ [ff.clk]: 1 }, nv, `q loads at a rising edge with ${ff.en} = 0 (q = %q)`],
+        [{ [ff.clk]: 0, [ff.en]: 1 }, nv, ''],
+      ] as [Record<string, number>, string, string][] : []),
+    ];
+    for (const [inputs, want, msg] of steps) {
+      if (!set(inputs)) return 'it does not settle';
+      if (msg && q() !== want) return msg.replace('%q', q());
+    }
+  }
+  return null;
 }
 
 /** Points strictly between the driver and the sink; never empty, so route.ts draws exactly this. */

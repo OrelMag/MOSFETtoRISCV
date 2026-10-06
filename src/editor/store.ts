@@ -93,6 +93,11 @@ function sanitizePin(p: unknown): PinDoc | null {
   return compact<PinDoc>({ id: p.id, name: p.name, dir: p.dir, width: p.width, at, face: face(p.face), kind, value: int(p.value) ? p.value : undefined });
 }
 
+function sanitizeFf(f: unknown): ChipDoc['ff'] {
+  if (!isObj(f) || !str(f.d) || !str(f.q) || !str(f.clk) || (f.en !== undefined && !str(f.en))) return undefined;
+  return compact({ d: f.d, q: f.q, clk: f.clk, en: f.en });
+}
+
 function sanitizePart(p: unknown): PartDoc | null {
   if (!isObj(p) || !str(p.id) || !isIdent(p.id)) return null;
   const ref = sanitizeRef(p.ref);
@@ -153,6 +158,7 @@ export function sanitizeChip(c: unknown): ChipDoc | null {
     name: str(c.name) && c.name.trim() ? c.name : c.id,
     hue: num(c.hue) ? ((Math.round(c.hue) % 360) + 360) % 360 : undefined,
     notes: str(c.notes) ? c.notes : undefined,
+    ff: sanitizeFf(c.ff),
     pins: uniquePins, parts, wires, labels,
   });
 }

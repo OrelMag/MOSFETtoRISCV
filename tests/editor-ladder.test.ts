@@ -13,6 +13,8 @@ import { flatten, findNode } from '../src/sim/flatten';
 import { evalOnce, forEachInput, simulate } from '../src/sim/harness';
 import type { Sim } from '../src/sim/sim';
 import { SwitchSim } from '../src/sim/switchsim';
+import { analyzeTiming } from '../src/sim/timing';
+import { synthVerilog } from '../src/sim/vexport';
 import { B0, B1, BZ, type ComponentDef, inPorts, netlistOf } from '../src/sim/types';
 import { chip, fan, lbl, part, pin, wire, workspace } from './editorkit';
 import { lcg, out, set, tick } from './util';
@@ -129,13 +131,16 @@ const dlatch = chip('u_dlatch', 'D latch', {
     wire('s', 'g1.y', 'sr.s_n'), wire('r', 'g2.y', 'sr.r_n'), wire('q', 'sr.q', 'pin:q'), wire('qn', 'sr.q_n', 'pin:q_n'),
   ],
 });
+// Ticked "this chip is a flip-flop": static timing stops at it, as at the library DFF.
 const dff = chip('u_dff', 'D flip-flop', {
+  ff: { d: 'd', q: 'q', clk: 'clk' },
   pins: [pin('d', 'in', [0, 3]), clk([0, 10]), pin('q', 'out', [40, 3])],
   parts: [part('inv', C('u_not'), [3, 9]), part('master', C('u_dlatch'), [9, 1]), part('slave', C('u_dlatch'), [24, 1])],
   wires: [wire('d', 'pin:d', 'master.d'), ...fan('clk', 'pin:clk', 'inv.a', 'slave.e'), wire('cn', 'inv.y', 'master.e'), wire('m', 'master.q', 'slave.d'), wire('q', 'slave.q', 'pin:q')],
 });
 // Load enable: a multiplexer feeds q back while en = 0.
 const dffe = chip('u_dffe', 'DFF with enable', {
+  ff: { d: 'd', q: 'q', clk: 'clk', en: 'en' },
   pins: [pin('d', 'in', [0, 5]), pin('en', 'in', [0, 8]), clk([0, 12]), pin('q', 'out', [28, 5])],
   parts: [part('mux', L('mux2'), [5, 1]), part('ff', C('u_dff'), [14, 2])],
   wires: [
@@ -433,6 +438,42 @@ describe('4. latches, flip-flops, registers, counters', () => {
     set(a, { en: 1 });
     const q0 = out(a, 'q');
     for (let i = 1; i <= 20; i++) { tick(a); expect(out(a, 'q')).toBe((q0 + i) % 16); }
+  });
+});
+
+describe('4b. user flip-flops in static timing', () => {
+  it('the ticked DFF / DFFE carry ff; a register and a counter built from them time like the library ones', () => {
+    expect(def('u_dff').ff).toEqual(DFF.ff);
+    expect(def('u_dffe').ff).toEqual({ d: 'd', q: 'q', clk: 'clk', en: 'en' });
+    for (const [mine, ref] of [['u_reg4', register(4)], ['u_cnt4', counter(4)]] as const) {
+      const a = analyzeTiming(flatten(def(mine)))!, b = analyzeTiming(flatten(ref))!;
+      expect(a, mine).not.toBeNull();
+      expect([a.period, a.logic, a.path.length, a.launch.length > 0], mine).toEqual([b.period, b.logic, b.path.length, b.launch.length > 0]);
+      expect(a.byCapture.map((c) => c.period).sort(), mine).toEqual(b.byCapture.map((c) => c.period).sort());
+    }
+    expect(analyzeTiming(flatten(def('u_cnt4')))!.logic).toBeGreaterThan(0); // the incrementer and the enable mux
+    // Exported for synthesis as a process, not as its latches.
+    const v = synthVerilog(def('u_cnt4')).verilog;
+    expect(v).toContain('always @(posedge clk) if (en) q <= d;'); // the user DFFE, as the library's
+    expect(v).not.toMatch(/module u_dlatch/);
+  });
+  it('a latch ticked as a flip-flop is refused, and so are wrong pins', () => {
+    const tryFf = (ff: ChipDoc['ff']) => new UserLibrary(workspace(...ALL, { ...dlatch, id: 'u_try', ff })).compiled('u_try')!;
+    const latch = tryFf({ d: 'd', q: 'q', clk: 'e' });
+    expect(latch.def.ff).toBeUndefined();
+    expect(latch.diags.map((d) => d.msg)).toEqual(['not an edge-triggered flip-flop: q follows d while clk = 1: a latch? (q = 0)']);
+    expect(tryFf({ d: 'd', q: 'q', clk: 'nope' }).diags[0].msg).toBe("not an edge-triggered flip-flop: no pin 'nope' (clk)");
+    expect(tryFf({ d: 'q', q: 'q', clk: 'e' }).diags[0].msg).toBe("not an edge-triggered flip-flop: d pin 'q' must be an input");
+    // A negative-edge flip-flop (the clock inverted in front of the user DFF) is refused too.
+    const negedge = chip('u_neg', 'negedge', {
+      ff: { d: 'd', q: 'q', clk: 'clk' },
+      pins: [pin('d', 'in', [0, 2]), clk([0, 6]), pin('q', 'out', [30, 2])],
+      parts: [part('i', C('u_not'), [4, 5]), part('f', C('u_dff'), [12, 1])],
+      wires: [wire('d', 'pin:d', 'f.d'), wire('c', 'pin:clk', 'i.a'), wire('cn', 'i.y', 'f.clk'), wire('q', 'f.q', 'pin:q')],
+    });
+    const n = new UserLibrary(workspace(...ALL, negedge)).compiled('u_neg')!;
+    expect(n.def.ff).toBeUndefined();
+    expect(n.diags[0].msg).toMatch(/^not an edge-triggered flip-flop: q /);
   });
 });
 
