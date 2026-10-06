@@ -80,3 +80,57 @@ export function cacheLines(sim: Pick<Sim, 'getBits'>, dm: HierNode): CacheLine[]
   });
   return out;
 }
+
+/** One cycle of a pipelined CPU: which instruction (PC) each stage holds, and what the hazard logic did. */
+export interface PipeSnap {
+  cycle: number;
+  /** F D E M (X) W. */
+  stages: string[];
+  slots: { pc: number; valid: boolean }[];
+  stall: boolean;
+  flush: boolean;
+  /** Forwarding selects of the E stage (0: register file, 1: from W, 2: from M, 3: from X). */
+  fwdA: number;
+  fwdB: number;
+  /** A W → D bypass into the register-file read. */
+  byp: boolean;
+}
+
+/**
+ * Where every instruction of the site's pipelined CPUs is (pipeline registers FD, DE, EM, MW, or
+ * MX + XW for the six-stage FPU pipeline, with pc<stage> / valid<stage>), read from `root` (the
+ * CPU's node). Null for anything else.
+ */
+export function pipeSnap(sim: Pick<Sim, 'getBits'>, root: HierNode, cycle: number): PipeSnap | null {
+  const kids = root.children;
+  if (!kids || !['pc', 'FD', 'DE', 'EM', 'hz'].every((n) => kids.has(n)) || !(kids.has('MW') || kids.has('XW'))) return null;
+  const v = (inst: string, port: string) => {
+    const nets = kids.get(inst)?.ports[port];
+    if (!nets) return -1;
+    const bits = sim.getBits(nets);
+    let x = 0;
+    for (let i = bits.length - 1; i >= 0; i--) x = x * 2 + (bits[i] === 1 ? 1 : 0);
+    return x;
+  };
+  // the pipelined FPU CPU has a sixth stage, X, between M and W
+  const six = kids.has('MX');
+  const frozenPipe = !six && kids.has('gFl1');
+  const slots = [
+    { pc: v('pc', 'q'), valid: true },
+    { pc: v('FD', 'pcD'), valid: v('FD', 'validD') === 1 },
+    { pc: v('DE', 'pcE'), valid: v('DE', 'validE') === 1 },
+    { pc: v('EM', 'pcM'), valid: v('EM', 'validM') === 1 },
+    ...(six ? [{ pc: v('MX', 'pcX'), valid: v('MX', 'validX') === 1 }, { pc: v('XW', 'pcW'), valid: v('XW', 'validW') === 1 }]
+      : [{ pc: v('MW', 'pcW'), valid: v('MW', 'validW') === 1 }]),
+  ];
+  return {
+    cycle, slots, stages: six ? ['F', 'D', 'E', 'M', 'X', 'W'] : ['F', 'D', 'E', 'M', 'W'],
+    // with a data cache, a miss freezes every stage (go = 0) and the flushes are gated (gFl1)
+    stall: six ? v('go', 'y') === 0 : v('hz', 'enFD') === 0 || (frozenPipe && v('go', 'y') === 0) || (kids.has('dive') && v('dive', 'stall') === 1),
+    flush: six ? v('hz', 'taken') === 1 : frozenPipe ? v('gFl1', 'y') === 1 : v('hz', 'flushFD') === 1,
+    // Balanced design: the E-stage selects travel in ID/EX (the hazard unit's outputs are for D).
+    fwdA: kids.get('DE')!.ports.fwdAE ? v('DE', 'fwdAE') : v('hz', 'forwardA'),
+    fwdB: kids.get('DE')!.ports.fwdBE ? v('DE', 'fwdBE') : v('hz', 'forwardB'),
+    byp: v('hz', 'bypassA') === 1 || v('hz', 'bypassB') === 1,
+  };
+}

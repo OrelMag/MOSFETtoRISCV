@@ -26,6 +26,7 @@ import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import type { FieldKey } from '../riscv/fields';
 import { instrMarks, instrUse, stageUse, STAGE_UNITS } from './insthw';
 import { instrBreakdown } from './instrfields';
+import { PipeHistory, pipeGridRows } from './pipegrid';
 import { timingPanel } from './timing';
 
 const hex = (v: number, d = 8) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(d, '0');
@@ -521,84 +522,22 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
 /** Pipeline diagram: which instruction occupies each stage in each cycle. */
 function pipeDiagram(asm: AsmResult): ScenePanel {
   return (stage: Stage): Widget => {
-    type Slot = { pc: number; valid: boolean };
-    type Snap = { cycle: number; slots: Slot[]; stall: boolean; flush: boolean; fwdA: number; fwdB: number; byp: boolean };
-    const history: Snap[] = [];
-    let STAGES = ['F', 'D', 'E', 'M', 'W'];
+    const history = new PipeHistory();
     const grid = h('div', { class: 'pipe-grid' });
     const title = h('h4', null, 'Pipeline diagram', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'stage × cycle'));
     const el = h('div', { class: 'mem-panel pipe-panel', 'data-dock': 'left' }, title, grid);
     title.addEventListener('click', () => el.classList.toggle('collapsed'));
-    const read = (): Snap | null => {
-      const sim = stage.sim, root = stage.rootCtx?.node;
-      if (!sim || !root?.children) return null;
-      const v = (inst: string, port: string) => {
-        const bits = sim.getBits(root.children!.get(inst)!.ports[port]);
-        let x = 0;
-        for (let i = bits.length - 1; i >= 0; i--) x = x * 2 + (bits[i] === 1 ? 1 : 0);
-        return x;
-      };
-      // the pipelined FPU CPU has a sixth stage, X, between M and W
-      const six = root.children.has('MX');
-      const frozenPipe = !six && root.children.has('gFl1');
-      STAGES = six ? ['F', 'D', 'E', 'M', 'X', 'W'] : ['F', 'D', 'E', 'M', 'W'];
-      const slots: Slot[] = [
-        { pc: v('pc', 'q'), valid: true },
-        { pc: v('FD', 'pcD'), valid: v('FD', 'validD') === 1 },
-        { pc: v('DE', 'pcE'), valid: v('DE', 'validE') === 1 },
-        { pc: v('EM', 'pcM'), valid: v('EM', 'validM') === 1 },
-        ...(six ? [{ pc: v('MX', 'pcX'), valid: v('MX', 'validX') === 1 }, { pc: v('XW', 'pcW'), valid: v('XW', 'validW') === 1 }]
-          : [{ pc: v('MW', 'pcW'), valid: v('MW', 'validW') === 1 }]),
-      ];
-      return {
-        cycle: stage.cycles, slots,
-        // with a data cache, a miss freezes every stage (go = 0) and the flushes are gated (gFl1)
-        stall: six ? v('go', 'y') === 0 : v('hz', 'enFD') === 0 || (frozenPipe && v('go', 'y') === 0) || (root.children.has('dive') && v('dive', 'stall') === 1),
-        flush: six ? v('hz', 'taken') === 1 : frozenPipe ? v('gFl1', 'y') === 1 : v('hz', 'flushFD') === 1,
-        // Balanced design: the E-stage selects travel in ID/EX (the hazard unit's outputs are for D).
-        fwdA: root.children.get('DE')!.ports.fwdAE ? v('DE', 'fwdAE') : v('hz', 'forwardA'),
-        fwdB: root.children.get('DE')!.ports.fwdBE ? v('DE', 'fwdBE') : v('hz', 'forwardB'),
-        byp: v('hz', 'bypassA') === 1 || v('hz', 'bypassB') === 1,
-      };
-    };
     const record = () => {
-      const s = read();
-      if (!s) return;
-      if (history.length && history[history.length - 1].cycle >= s.cycle) history.length = history.findIndex((x) => x.cycle >= s.cycle);
-      history.push(s);
-      if (history.length > 200) history.shift();
+      const sim = stage.sim, root = stage.rootCtx?.node;
+      if (sim && root) history.record(sim, root, stage.cycles);
     };
     stage.edgeHooks.add({ after: record });
-    const mnem = (pc: number) => {
-      const w = asm.words[pc >>> 2];
-      if (w === undefined) return 'nop';
-      return disasm(w, pc).split(' ')[0];
-    };
-    const hue = (pc: number) => (pc * 47) % 360;
     const update = () => {
-      if (stage.cycles === 0 || !history.length || history[history.length - 1].cycle !== stage.cycles) {
-        if (stage.cycles === 0) history.length = 0;
+      if (stage.cycles === 0 || history.last?.cycle !== stage.cycles) {
+        if (stage.cycles === 0) history.clear();
         record();
       }
-      const shown = history.slice(-12);
-      const head = h('div', { class: 'pg-row head' }, h('span', { class: 'pg-st' }, ''), shown.map((s) => h('span', { class: 'pg-c' }, String(s.cycle))));
-      const rows = STAGES.map((st, si) => h('div', { class: 'pg-row' }, h('span', { class: 'pg-st' }, st),
-        shown.map((s) => {
-          const slot = s.slots[si];
-          if (!slot.valid) return h('span', { class: 'pg-c bubble', title: 'bubble' }, '·');
-          return h('span', { class: 'pg-c', style: `--h:${hue(slot.pc)}`, title: `${hex(slot.pc, 4)}: ${disasm(asm.words[slot.pc >>> 2] ?? 0x13, slot.pc)}` }, mnem(slot.pc));
-        })));
-      const ev = h('div', { class: 'pg-row ev' }, h('span', { class: 'pg-st' }, ''), shown.map((s) => {
-        const tags: string[] = [];
-        if (s.stall) tags.push('stall');
-        if (s.flush) tags.push('flush');
-        if (s.fwdA === 2 || s.fwdB === 2) tags.push('M→E');
-        if (STAGES.length === 6 && (s.fwdA === 3 || s.fwdB === 3)) tags.push('X→E');
-        if (s.fwdA === 1 || s.fwdB === 1) tags.push('W→E');
-        if (s.byp) tags.push('W→D');
-        return h('span', { class: 'pg-c ev', title: tags.join(', ') }, tags.join(' '));
-      }));
-      grid.replaceChildren(head, ...rows, ev);
+      grid.replaceChildren(...pipeGridRows(history.snaps, (pc) => asm.words[pc >>> 2]));
     };
     update();
     return { el, update };
