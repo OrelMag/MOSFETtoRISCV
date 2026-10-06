@@ -119,6 +119,9 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
     Save & new circuit), My chips with colour and pin count (greyed when it would make a cycle),
     Edit chip with a breadcrumb and Back, pin renames that keep every parent wired, used by / uses,
     the flip-flop marking with the compiler's verdict, bidirectional pins driven Z / 0 / 1
+  - ✅ Wide pins (up to 1024 bits, exact): pipeline registers, register-file read ports and the
+    multiplier's 68-bit rows open in the sandbox too, so every library component round-trips;
+    values are BigInt-exact in pins, the bit editor, labels, tooltips, probes and VCD
   - ✅ Look inside any placed part, read-only and live on the editor's own simulation, down to
     transistors (and a single MOSFET); the Inspector (info, truth table, Verilog) in a drawer
   - ✅ "Open in Sandbox" from the workbench and chapter scenes: the circuit on screen as an

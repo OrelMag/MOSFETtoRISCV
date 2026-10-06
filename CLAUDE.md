@@ -290,6 +290,13 @@ While `stage.inEdge`, panels must not compare the hardware with the golden model
   (saved / saving / error). `editor.paintHooks` run after every repaint (live views over the
   simulation: look inside, inspector). Feature modules and plugins register themselves when
   ui/pages/sandbox.ts imports them (not editor.ts: they import it).
+- Pins are 1 to `MAX_WIDTH` (1024) bits, and values are exact at any width: `PinDoc.value` is a
+  `PinValue`, a number while exact (< 2^53) else lowercase `'0x…'` text, one spelling per value
+  (`pinValue(bigint)`, `pinBig`; the store canonicalizes). EditorSim drives inputs bit by bit
+  (`Sim.setInputBits`, `pinBits`); labels and tooltips format bit arrays (`formatBits`, BigInt
+  decimal past 53 bits; `describeBits`), the bit editor (`editNumber`) and the analyzer / VCD
+  use BigInt. Never route a pin value through a JS number (`pack`, `2 **`, `%`): it rounds past
+  53 bits. Constants (≤ 53), RAM words (≤ 32) and derived behaviours (outputs ≤ 53) stay numeric.
 - Double-click a placed user chip: `editChip` (tab breadcrumb, Back); any other part: `lookInside`.
   A bidirectional pin's `value` is what the user drives onto it (absent: Z), switch level only.
 - Performance: a drag refits only wires on moved objects (ops.ts `refit`), the view recomputes
