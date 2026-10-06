@@ -11,14 +11,14 @@ import { setUserResolver } from '../lib/resolve';
 import type { Vec } from '../sim/geometry';
 import type { PowerOnMode } from '../sim/sim';
 import { type ComponentDef, netlistOf } from '../sim/types';
-import { formatBits } from '../sim/values';
+import { describeBits } from '../sim/values';
 import { h, icon } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { closePopover } from '../view/popover';
 import type { Compiled, Diag } from './compile';
 import { History } from './history';
 import { UserLibrary } from './library';
-import { chipDeps, type ChipDoc, type DefOf, type PartRef, type Workspace } from './model';
+import { chipDeps, type ChipDoc, type DefOf, type PartRef, type PinValue, type Workspace } from './model';
 import type { Sel } from './ops';
 import { PalettePanel } from './palette';
 import { isError, partDef } from './parts';
@@ -322,7 +322,7 @@ export class Editor {
   }
 
   /** Drive an input pin, or a bidirectional one (undefined: release it to Z). */
-  setPinValue(pinId: string, v: number | undefined): void {
+  setPinValue(pinId: string, v: PinValue | undefined): void {
     const pin = this.doc.pins.find((p) => p.id === pinId);
     if (!pin) return;
     this.volatile(setPinValue(this.ws, this.chipId, pinId, v));
@@ -610,8 +610,7 @@ export class Editor {
     const net = built?.netOfWire.get(id) ?? -1;
     const nd = built && net >= 0 ? netlistOf(built.def)?.nets[net] : undefined;
     const name = nd?.name ?? nd?.ends[0] ?? id;
-    const val = !bits ? 'not connected' : bits.length === 1 ? formatBits(bits, 'bin')
-      : `${formatBits(bits, 'hex')} · ${formatBits(bits, 'bin')} · ${formatBits(bits, 'dec')}`;
+    const val = bits ? describeBits(bits) : 'not connected';
     this.tipEl.textContent = `${name}${bits && bits.length > 1 ? `[${bits.length - 1}:0]` : ''} = ${val}`;
     const r = this.canvas.getBoundingClientRect();
     this.tipEl.style.left = `${e.clientX - r.left + 14}px`;

@@ -15,9 +15,9 @@ import { GateSim } from '../sim/gatesim';
 import type { PowerOnMode, Sim } from '../sim/sim';
 import { SwitchSim } from '../sim/switchsim';
 import { type Bit, BZ, type ComponentDef, netlistOf } from '../sim/types';
-import { mask } from '../sim/values';
+import { unpackBig } from '../sim/values';
 import { checkSimulatable, type Compiled, type Diag } from './compile';
-import type { PinDoc } from './model';
+import { pinBig, type PinDoc, type PinValue } from './model';
 
 export type RunMode = 'cycle' | 'gate';
 
@@ -145,7 +145,7 @@ export class EditorSim {
       if (p.dir !== 'in' || !this.hasInput(sim, p)) continue;
       if (p.kind === 'clock') sim.setInput(p.name, this.clkHigh ? 1 : 0);
       else if (p.kind === 'button') sim.setInput(p.name, 0);
-      else sim.setInput(p.name, (p.value ?? 0) % (mask(p.width) + 1));
+      else sim.setInputBits(p.name, pinBits(p.value, p.width));
     }
   }
 
@@ -204,16 +204,16 @@ export class EditorSim {
   // ---- driving -----------------------------------------------------------------------------
 
   /** Set an input pin. Gate mode lets the run loop (or Step) propagate it one delay at a time. */
-  setInput(p: PinDoc, v: number): void {
+  setInput(p: PinDoc, v: PinValue): void {
     const sim = this.sim;
     if (!sim || !this.hasInput(sim, p)) return;
-    sim.setInput(p.name, v % (mask(p.width) + 1));
+    sim.setInputBits(p.name, pinBits(v, p.width));
     if (this.mode === 'cycle') sim.settle();
     this.onChange();
   }
 
   /** Drive a bidirectional pin from outside with a value, or release it (undefined: Z). */
-  driveInout(p: PinDoc, v: number | undefined): void {
+  driveInout(p: PinDoc, v: PinValue | undefined): void {
     const sim = this.sim;
     if (!sim || p.dir !== 'inout' || !this.hasInput(sim, p)) return;
     drive(sim, p, v);
@@ -363,10 +363,13 @@ export class EditorSim {
 }
 
 /** A root inout of a switch-level simulation: driven with a value, or left floating (Z). */
-function drive(sim: Sim, p: PinDoc, v: number | undefined): void {
+function drive(sim: Sim, p: PinDoc, v: PinValue | undefined): void {
   if (!(sim instanceof SwitchSim)) return;
   if (v === undefined) sim.setInputBit(p.name, BZ);
-  else sim.setInput(p.name, v % (mask(p.width) + 1));
+  else sim.setInputBits(p.name, pinBits(v, p.width));
 }
+
+/** A pin value as the pin's bits: the low `w` bits, exact at any width. */
+export const pinBits = (v: PinValue | undefined, w: number): Bit[] => unpackBig(pinBig(v), w);
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());

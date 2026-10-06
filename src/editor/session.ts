@@ -1,7 +1,7 @@
 // Workspace-level steps of an editing session that need no DOM: the tab stack, new chips, and
 // the "volatile" parts of the document (open tabs, input values) that undo must leave alone.
 
-import { emptyChip, type PinDoc, slug, uniqueName, type Workspace } from './model';
+import { emptyChip, type PinDoc, type PinValue, slug, uniqueName, type Workspace } from './model';
 
 /** The chip being edited: the top of the tab stack (falls back to any chip). */
 export function activeChip(ws: Workspace): string {
@@ -37,7 +37,7 @@ export function newChip(ws: Workspace, name = 'Chip'): { ws: Workspace; id: stri
  * Set an input pin's value (kept across reloads, not an undo step). For a bidirectional pin it
  * is what the user drives onto it; undefined leaves it undriven (Z).
  */
-export function setPinValue(ws: Workspace, chipId: string, pinId: string, value: number | undefined): Workspace {
+export function setPinValue(ws: Workspace, chipId: string, pinId: string, value: PinValue | undefined): Workspace {
   const doc = ws.chips[chipId];
   const i = doc?.pins.findIndex((p) => p.id === pinId) ?? -1;
   if (i < 0 || doc.pins[i].value === value) return ws;

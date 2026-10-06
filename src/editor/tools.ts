@@ -15,7 +15,7 @@ import { nextDrive } from './chips';
 import type { Editor } from './editor';
 import { lookInside } from './inside';
 import { branchPoint, drives, type Hit, hitTest, hitWire, nextSameName, partAnchor, pointerGeom, snapPt, WireDraft } from './geom';
-import { type ChipDoc, endGeom, endKey, type EndRef, type ExitDir as Face, type PinDoc } from './model';
+import { type ChipDoc, endGeom, endKey, type EndRef, type ExitDir as Face, type PinDoc, pinBig, pinValue } from './model';
 import {
   addLabel, addPart, addPin, addWire, boxSelect, type Clip, copySel, deleteSel, duplicate, flipParts, moveSel, pasteClip,
   type Sel, selectAll, setLabel, setPin,
@@ -267,10 +267,10 @@ export class Tools {
       if (!pin || pin.dir !== 'in') return;
       if (pin.kind === 'clock') return ed.sim.toggleClocks();
       if (pin.kind === 'button') return;
-      if (pin.width === 1) return ed.setPinValue(pin.id, (pin.value ?? 0) ? 0 : 1);
+      if (pin.width === 1) return ed.setPinValue(pin.id, pin.value ? 0 : 1);
       const g = ed.view.svg.querySelector(`[data-pin-id="${pin.id}"]`);
       const r = g ? g.getBoundingClientRect() : new DOMRect(e.clientX, e.clientY, 0, 0);
-      editNumber(r, pin.name, pin.width, pin.value ?? 0, (v) => ed.setPinValue(pin.id, v));
+      editNumber(r, pin.name, pin.width, pinBig(pin.value), (v) => ed.setPinValue(pin.id, pinValue(v)));
       return;
     }
     if (h.k === 'label' && st.was) this.jump(h.id);

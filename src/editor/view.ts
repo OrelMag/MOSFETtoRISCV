@@ -16,7 +16,7 @@ import type { Compiled, Diag } from './compile';
 import { partBox, pinBody, pinKnob, pointerGeom, wireGroups } from './geom';
 import { HopCache } from './hops';
 import {
-  type ChipDoc, type DefOf, defaultFace, type DisplayKind, type LabelDoc, type PartDoc, type PinDoc, polyline, type WireDoc,
+  type ChipDoc, type DefOf, defaultFace, type DisplayKind, type LabelDoc, type PartDoc, type PinDoc, pinBig, polyline, type WireDoc,
 } from './model';
 import type { Sel } from './ops';
 
@@ -165,7 +165,7 @@ export class EditorView {
       if (p.dir === 'inout') {
         // What the user drives onto a bidirectional pin (Z: nothing); the knob shows the net.
         const [kx, ky] = pinKnob(p);
-        const v = p.value === undefined ? 'Z' : p.width === 1 ? String(p.value) : `0x${p.value.toString(16).toUpperCase()}`;
+        const v = p.value === undefined ? 'Z' : p.width === 1 ? String(p.value) : `0x${pinBig(p.value).toString(16).toUpperCase()}`;
         g.append(s('text', { class: 'ed-pin-drv', x: kx, y: p.width === 1 ? ky + 0.34 : ky - 1.25, 'text-anchor': 'middle' }, v));
       }
       // A wide transparent target over the knob (the glyph's own shapes are small).
@@ -479,8 +479,9 @@ export class EditorView {
   }
 
   private paintDisplay(d: DisplayEls, bits: Bit[] | null): void {
-    const v = bits ? pack(bits) : -1;
     const x = !bits || bits.some((b) => b === BX || b === BZ);
+    // segments read the low byte only (pack is exact there at any width)
+    const v = bits && !x ? pack(bits.slice(0, 8)) : -1;
     const key = bits ? bits.join('') + this.radix : '';
     if (key === d.shown) return;
     d.shown = key;

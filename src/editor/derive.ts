@@ -44,6 +44,9 @@ export function deriveBehavior(def: ComponentDef): Derived {
   const ins = inPorts(def), outs = outPorts(def);
   const nIn = inputBits(def);
   if (nIn > MAX_DERIVE_BITS) return fail(`too many inputs (${nIn} bits, at most ${MAX_DERIVE_BITS}): switch level only`);
+  // a behaviour's values are JS numbers: exact to 53 bits per port
+  const wide = outs.find((p) => p.width > 53);
+  if (wide) return fail(`output '${wide.name}' is ${wide.width} bits wide (a behaviour holds at most 53): switch level only`);
   let design: FlatDesign;
   try {
     design = flatten(def, { mode: 'switch' });
