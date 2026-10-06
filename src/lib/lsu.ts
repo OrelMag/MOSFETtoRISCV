@@ -51,22 +51,22 @@ export const STORE_ALIGN: ComponentDef = define({
   },
   netlist: () => {
     const M32 = muxTree(2, 32), M4 = muxTree(2, 4), D2 = decoder(2);
-    const mg = symbolGeom(M32);
+    const mg = symbolGeom(M32), bg = symbolGeom(M4);
     return {
-      pins: { wd: [0, 6], addr: [0, 34], size: [0, 46], wdata: [56, 2 + mg.ports.y.pos[1]], be: [56, 30], misaligned: [56, 44] },
+      pins: { wd: [0, 6], addr: [0, 34], size: [0, 46], wdata: [56, 2 + mg.ports.y.pos[1]], be: [56, 29 + bg.ports.y.pos[1]], misaligned: [56, 49] },
       instances: [
         { name: 'r8', def: REP8, at: [8, 2] }, { name: 'r16', def: REP16, at: [8, 6] },
         { name: 'wsel', def: M32, at: [40, 2] },
         { name: 'sa', def: splitter([1, 1]), at: [4, 32] },
         { name: 'dec', def: D2, at: [12, 26] },
-        { name: 'onehot', def: merger([1, 1, 1, 1]), at: [32, 24] },
+        { name: 'onehot', def: merger([1, 1, 1, 1]), at: [28, 27] },
         { name: 'na1', def: NOT, at: [14, 38] },
-        { name: 'hmask', def: merger([1, 1, 1, 1]), at: [32, 34] },
-        { name: 'all', def: constWord(4, 15), at: [26, 40] },
-        { name: 'bsel', def: M4, at: [40, 26] },
+        { name: 'hmask', def: merger([1, 1, 1, 1]), at: [28, 37] },
+        { name: 'all', def: constWord(4, 15), at: [32, 36] },
+        { name: 'bsel', def: M4, at: [40, 29] },
         { name: 'ss', def: splitter([1, 1]), at: [4, 44] },
-        { name: 'mh', def: AND, at: [24, 46] }, { name: 'ao', def: OR, at: [24, 52] }, { name: 'mw', def: AND, at: [32, 52] },
-        { name: 'mis', def: OR, at: [44, 46] },
+        { name: 'mh', def: AND, at: [24, 46] }, { name: 'ao', def: OR, at: [24, 52] }, { name: 'mw', def: AND, at: [36, 51] },
+        { name: 'mis', def: OR, at: [44, 47] },
       ],
       nets: [
         { name: 'wd', ends: ['wd', 'r8.in', 'r16.in', 'wsel.d2', 'wsel.d3'], trunk: 4, tags: ['wsel.d2', 'wsel.d3'] },
@@ -78,7 +78,7 @@ export const STORE_ALIGN: ComponentDef = define({
         { name: 'a1', ends: ['sa.o1', 'na1.a', 'hmask.i2', 'hmask.i3', 'ao.b'], tags: true },
         { name: '¬a1', ends: ['na1.y', 'hmask.i0', 'hmask.i1'], tags: true },
         ...[0, 1, 2, 3].map((i): NetDef => ({ ends: [`dec.y${i}`, `onehot.i${i}`] })),
-        { name: 'byteMask', ends: ['onehot.out', 'bsel.d0'] }, { name: 'halfMask', ends: ['hmask.out', 'bsel.d1'] },
+        { name: 'byteMask', ends: ['onehot.out', 'bsel.d0'] }, { name: 'halfMask', ends: ['hmask.out', 'bsel.d1'], trunk: 31 },
         { name: 'all', ends: ['all.y', 'bsel.d2', 'bsel.d3'] },
         { name: 'be', ends: ['bsel.y', 'be'] },
         { name: 'isHalf', ends: ['ss.o0', 'mh.a'], tags: true }, { name: 'isWord', ends: ['ss.o1', 'mw.a'], tags: true },
@@ -114,7 +114,7 @@ export const LOAD_EXTRACT: ComponentDef = define({
         { name: 'hsel', def: M16, at: [14, 16] },
         { name: 'sa', def: splitter([1, 1]), at: [4, 38] },
         { name: 'sb', def: SEXT8, at: [30, 4] }, { name: 'zb', def: ZEXT8, at: [30, 16] },
-        { name: 'sh', def: SEXT16, at: [30, 10] }, { name: 'zh', def: ZEXT16, at: [30, 20] },
+        { name: 'sh', def: SEXT16, at: [30, 10] }, { name: 'zh', def: ZEXT16, at: [30, 22] },
         { name: 'gnd', def: TIE0, at: [24, 26] },
         { name: 'fsel', def: M32, at: [52, 2] },
       ],
@@ -183,7 +183,7 @@ function buildBanked(k: number): ComponentDef {
     ports: [bus('addr', 32, 'in'), bus('wdata', 32, 'in'), bus('be', 4, 'in'), bit('we', 'in'), bit('clk', 'in', 'bottom', true), bus('rdata', 32, 'out')],
     symbol: { kind: 'box', label: 'DATA MEM' },
     netlist: () => ({
-      pins: { addr: [0, 1], wdata: [0, bankY(1) + 2], be: [0, bankY(4) + 4], we: [0, bankY(4) + 8], clk: [0, bankY(4) + 10], rdata: [24 + rg.w + 12, bankY(2)] },
+      pins: { addr: [0, 1], wdata: [0, bankY(1) + 2], be: [0, bankY(4) + 4], we: [0, bankY(4) + 8], clk: [0, bankY(4) + 11], rdata: [24 + rg.w + 12, bankY(2)] },
       instances, nets,
     }),
   });
