@@ -176,7 +176,11 @@ export const chSingleCycle: Chapter = {
         <li><strong>Memory / write-back</strong>: the data memory is addressed by the ALU result; the result mux picks ALU,
         memory, PC+4 or immediate, and it is written to rd on the next rising edge.</li></ul>
         <p>Control signals are drawn as <em>net labels</em> (tags). Hover one to highlight every place that net goes.
-        The panel shows the program, registers and memory, and checks every cycle against the golden model.</p>`,
+        The panel shows the program, registers and memory, and checks every cycle against the golden model.</p>
+        <p><strong>Slow</strong> runs the program at the speed you set, keeping the current instruction's hardware lit
+        and logging each retired instruction in the trace. At the <em>gate</em> level each rising edge plays out one
+        NAND delay at a time: the new PC leaves its register, ripples through +4 and the adder, and reaches the
+        register file's inputs after the critical path, the delay that sets the clock period.</p>`,
       scene: () => cpuScene({ source: src('sum') }),
     },
     {

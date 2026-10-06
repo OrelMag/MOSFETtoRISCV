@@ -176,6 +176,11 @@ pipeline diagram and the static-timing panel. Panels observe clock edges through
 The pipeline's golden model steps when a valid instruction is in W (`retiring()`).
 Clicking a listing line highlights the instruction's hardware (insthw.ts) in focus mode
 (`stage.highlight(names, true)` fades the rest); "in ROM" calls `stage.reveal(['imem'], 'c<i>')`.
+**Slow mode** (CPU panel) ticks at a learner-set rate (`settings.traceRate`, or `speed` for gates) at one of
+three levels: `gate` (`stage.startEdge()` / `edgeStep()`: a rising edge one gate delay at a time, via
+`src/sim/edge.ts`, which `Stage.cycle` also uses), `cycle` (`pulse(flowMs)`) or `instr` (run to the next
+retirement). The highlight then follows execution, and the trace logs `stepEffect(iss.step())` (riscv/trace.ts).
+While `stage.inEdge`, panels must not compare the hardware with the golden model (it steps after the edge).
 
 ### Viewing aids (all derived, none stored in the netlists)
 
