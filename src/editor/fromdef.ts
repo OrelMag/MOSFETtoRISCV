@@ -18,6 +18,8 @@ export interface FromDefOptions {
   id?: string;
   /** Chip name (default the def's name). */
   name?: string;
+  /** How to place a part other than by library reference (e.g. a user chip: `{ chip: id }`). */
+  refOf?: (def: ComponentDef) => PartRef | undefined;
 }
 
 /**
@@ -43,8 +45,9 @@ export function docFromDef(def: ComponentDef, opts: FromDefOptions = {}): ChipDo
   const parts: PartDoc[] = [];
   for (const inst of nl.instances) {
     if (!isIdent(inst.name)) return { error: `instance name '${inst.name}' is not an identifier` };
-    const ref = refOf(inst.def);
-    const back = partDef(ref, () => undefined);
+    const own = opts.refOf?.(inst.def);
+    const ref = own ?? refOf(inst.def);
+    const back = own ? inst.def : partDef(ref, () => undefined);
     if (isError(back) || back !== inst.def) {
       return { error: `part '${inst.name}' (${inst.def.id}) cannot be placed by reference${isError(back) ? `: ${back.error}` : ' (its id names another component)'}` };
     }
