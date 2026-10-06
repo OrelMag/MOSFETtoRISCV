@@ -96,7 +96,7 @@ export function deriveBehavior(def: ComponentDef): Derived {
   // tri-state driver, an open-drain stage) stays at switch level, and so do the chips around it.
   for (const p of outs) {
     const v = snaps.findIndex((s) => design.root.ports[p.name].some((net) => s[net] === BZ));
-    if (v >= 0) return fail(`output '${p.name}' floats (Z) for some inputs, e.g. ${inputText(ins, v)}: a tri-state or open-drain output, which a gate-level model would turn into X; switch level only`);
+    if (v >= 0) return fail(`output '${p.name}' floats (Z) for some inputs (e.g. ${inputText(ins, v)}): a tri-state or open-drain output, whose Z a gate-level model would turn into X`);
   }
 
   const table = snaps.map((s) => outs.map((p) => pack(design.root.ports[p.name].map((net) => s[net]))));

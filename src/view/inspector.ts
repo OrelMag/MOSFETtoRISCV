@@ -137,6 +137,10 @@ export class Inspector {
       this.body.append(h('p', { class: 'empty' }, 'This component has feedback, so its outputs depend on its history, not only on its inputs. A truth table cannot describe it. Open the Timing panel to see it over time.'));
       return;
     }
+    if (!outPorts(d).length && d.ports.some((p) => p.dir === 'inout')) {
+      this.body.append(h('p', { class: 'empty' }, 'Its signal ports are bidirectional (a switch between two nodes): there is no input → output function to tabulate. Drive one side and watch the other.'));
+      return;
+    }
     if (n > 8) {
       this.body.append(h('p', { class: 'empty' }, `${n} input bits → ${(2 ** n).toLocaleString()} rows. Too many to list. That is why we describe big circuits with arithmetic, not tables.`));
       return;

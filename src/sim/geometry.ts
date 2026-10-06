@@ -97,7 +97,7 @@ export function symbolGeom(def: ComponentDef): SymbolGeom {
     ports[def.ports[0].name] = { pos: [1, 0], exit: 'up' };
   } else if (k === 'cap') {
     // the node on top, the other plate on GND
-    g = { w: 2, h: 3, ports };
+    g = { w: 2, h: 3.5, ports };
     ports[def.ports[0].name] = { pos: [1, 0], exit: 'up' };
   } else if (k === 'tgate') {
     // ports in order: a (left), b (right), en (top), en_n (bottom)

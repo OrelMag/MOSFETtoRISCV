@@ -53,7 +53,6 @@ function transistor(def: ComponentDef): SVGElement[] {
   els.push(p
     ? s('path', { d: 'M2.55,0.75 L2.05,1 L2.55,1.25', class: 'sym-arrow' })
     : s('path', { d: 'M2.2,2.75 L2.7,3 L2.2,3.25', class: 'sym-arrow' }));
-  els.push(s('text', { x: 3.35, y: 2.35, class: 'sym-tiny' }, p ? 'P' : 'N'));
   return els;
 }
 
@@ -79,7 +78,11 @@ function switchPart(k: string): SVGElement[] {
     case 'pulldown':
       return [line(`M1,0 V0.5${zigzag(0.5, 2.9)}`), line(groundAt(2.9), true)];
     case 'cap':
-      return [line('M1,0 V1.1'), line(`M0.2,1.1 H1.8 M0.2,1.6 H1.8 ${groundAt(1.6)}`, true)];
+      // wide plates, then a small ground well below them, so it does not read as a ground symbol
+      return [
+        line('M1,0 V1.05 M1,1.55 V2.45'), line('M0,1.05 H2 M0,1.55 H2', true),
+        line('M0.4,2.45 H1.6 M0.65,2.8 H1.35 M0.9,3.15 H1.1', true),
+      ];
     case 'tgate':
       // two triangles back to back: an NMOS and a PMOS in parallel (en_n drives the PMOS)
       return [
@@ -160,6 +163,8 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
     }
     case 'nmos': case 'pmos':
       inner.append(...transistor(def));
+      // the type letter stays readable when the symbol is mirrored
+      root.append(s('text', { x: flip ? w - 3.35 : 3.35, y: 2.35, class: 'sym-tiny', 'text-anchor': flip ? 'end' : 'start' }, k === 'pmos' ? 'P' : 'N'));
       break;
     case 'res': case 'pulldown': case 'cap': case 'tgate': case 'tribuf': case 'triinv':
       inner.append(...switchPart(k));
