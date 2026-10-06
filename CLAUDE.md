@@ -163,7 +163,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit), addExample: new chip, opened
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
-  runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run
+  runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run;
+                 edgeHooks (before / after every rising edge, gate mode: after once quiet), runCycles
   palette.ts     registerPaletteGroup + the palette panel (purist filter)
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
   challenges.ts  build challenges: BuildChallenge (ports, table / sequence check, allowed parts, par),
@@ -177,6 +178,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   probes.ts      ProbeTarget (wires / pin / pointer name) → flat nets of each new build (resolveProbe)
   sta.ts         chipTiming: static timing of a chip, critical path mapped to its parts / wires / pins
   lint.ts        lintChip: two nets drawn on one line, pointers without a twin, inputs left open
+  cpu.ts         ChipDoc.cpu (rom, pc / retire as NetRef: pin / pointer / wire / part port, regs, fregs,
+                 dmem, pipeline, iss options); detectCpu (the chapters' instance and pin names: imem, rf,
+                 dm, frf, pcOut / pcF, retire, validW), resolveCpu (settings over detection), readers
+                 (readRegs / readMem find w<i> registers via storageOf, banks, cache lines), pipelineSlots,
+                 CpuMonitor: the ISS in lock-step on EditorSim.edgeHooks, first mismatch, Run to halt
                DOM:
   editor.ts      Editor: workspace + history + library + sim + panels; registerToolbarAction, slots
   view.ts        EditorView: one SVG element per object updated in place, live values, overlays
@@ -194,6 +200,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   inspect.ts     the Inspector in a drawer for the chip or a part; chipprops.ts: chip / part property sections
   analysis.ts    plugin: probe mode (P) + LogicAnalyzer in slots.bottom, Timing props section with
                  the critical path drawn on the chip, lint as a diag source, open-input marks
+  cpuui.ts       plugin: the CPU panel (drawer: status, listing with the PC and pipeline stages, a click
+                 marks the instruction's parts (insthw names), registers, memory, retired; Run to halt,
+                 Step instr, Reset, Edit program), opened by itself for a complete CPU; CPU props section
 src/ui/        app shell, router, theme, settings, progress
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
@@ -288,7 +297,9 @@ While `stage.inEdge`, panels must not compare the hardware with the golden model
   `Tools.onPress` (a mode that takes clicks first) and `editor.slots` (`overlay` over the canvas,
   `bottom` above the run bar, `top` in the tab bar). `editor.saveState` / `onSave()` report autosave
   (saved / saving / error). `editor.paintHooks` run after every repaint (live views over the
-  simulation: look inside, inspector). Feature modules and plugins register themselves when
+  simulation: look inside, inspector). `editor.sim.edgeHooks` observe rising clock edges (before /
+  after, whatever drives them: Run, Step, a click on a clock, `runCycles`); the CPU panel's golden
+  model steps there. `editor.sim` is per chip: a plugin keyed on it must follow tab switches. Feature modules and plugins register themselves when
   ui/pages/sandbox.ts imports them (not editor.ts: they import it).
 - Pins are 1 to `MAX_WIDTH` (1024) bits, and values are exact at any width: `PinDoc.value` is a
   `PinValue`, a number while exact (< 2^53) else lowercase `'0x…'` text, one spelling per value

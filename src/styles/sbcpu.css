@@ -1,0 +1,38 @@
+/* Sandbox CPU panel (editor/cpuui.ts): a drawer over the canvas reusing the chapters' CPU-panel
+   classes (cpu-status, cpu-listing, cpu-regs, cpu-mem, cpu-trace), the parts an instruction uses,
+   and the CPU properties. Only existing tokens, so both themes follow. */
+
+.sb-drawer.sb-cpu { width: min(350px, calc(100% - 16px)); font-size: 12.5px; }
+.sb-cpu-body, .sb-cpu-none { flex: 1; min-height: 0; overflow: auto; padding: 8px 12px 12px; }
+.sb-cpu-body[hidden], .sb-cpu-none[hidden] { display: none; }
+.sb-cpu-none p { margin: 6px 0; color: var(--text-2); line-height: 1.45; }
+.sb-cpu-none b { color: var(--text); }
+.sb-cpu-btns { margin: 0 0 8px; }
+.sb-cpu-btns .btn { gap: 5px; }
+.sb-cpu .cpu-status { margin: 0 0 6px; }
+.sb-cpu .cpu-status .bad { white-space: normal; }
+.sb-cpu-gaps { font-size: 12px; color: var(--warn); margin: 0 0 6px; line-height: 1.4; }
+.sb-cpu-gaps:empty { display: none; }
+.sb-cpu-gaps .sb-sum { margin: 2px 0 0; }
+.sb-cpu-list { max-height: 220px; background: var(--surface-2); }
+.sb-cpu-list .ln { align-items: baseline; }
+.sb-cpu-list .ln .t { overflow: hidden; text-overflow: ellipsis; }
+.sb-cpu-list .ln .stg { margin-left: auto; }
+.sb-cpu-list .ln .stg + .stg { margin-left: 3px; }
+.sb-cpu-span { grid-column: 1 / -1; margin: 0; }
+.sb-cpu .cpu-regs { padding: 2px 0; }
+.sb-cpu-trace { max-height: 150px; }
+.sb-cpu-trace .tr .eff { grid-column: 2; color: var(--muted); }
+.sb-cpu .cpu-sec[hidden], .sb-cpu .cpu-mem[hidden], .sb-cpu .cpu-trace[hidden] { display: none; }
+
+/* parts the selected instruction uses */
+.ed-part.ed-cpu-use .hit { display: inline; fill: color-mix(in srgb, var(--hl) 16%, transparent); stroke: var(--hl); stroke-width: 0.3; }
+
+/* properties */
+.sb-cpu-props .sb-check { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); margin: 6px 0; }
+.sb-cpu-props .sb-check input { accent-color: var(--accent); margin: 0; }
+.sb-cpu-iss { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin: 6px 0; }
+.sb-cpu-iss > span { width: 82px; color: var(--text-2); font-size: 12.5px; }
+.sb-cpu-iss .sb-check { margin: 0; }
+.sb-cpu-sechead { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.sb-cpu-sechead .btn { text-transform: none; letter-spacing: 0; padding: 1px 6px; gap: 4px; font: 500 11.5px var(--font-ui); }

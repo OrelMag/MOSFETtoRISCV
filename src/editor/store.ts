@@ -5,6 +5,7 @@
 // Loading never throws and never loses data silently: anything it cannot read (corrupt JSON, a
 // newer schema) is copied to BACKUP_KEY before the empty workspace replaces it.
 
+import { sanitizeCpu } from './cpu';
 import { same } from './history';
 import {
   SCHEMA, chipDeps, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
@@ -168,6 +169,7 @@ export function sanitizeChip(c: unknown): ChipDoc | null {
     hue: num(c.hue) ? ((Math.round(c.hue) % 360) + 360) % 360 : undefined,
     notes: str(c.notes) ? c.notes : undefined,
     ff: sanitizeFf(c.ff),
+    cpu: sanitizeCpu(c.cpu),
     pins: uniquePins, parts, wires, labels,
   });
 }
