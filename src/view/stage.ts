@@ -54,6 +54,9 @@ const LEVEL_NAME: Record<string, string> = {
   routing: 'gates & blocks', sequential: 'latches & flip-flops', memory: 'memory', plumbing: 'wiring', cpu: 'processor',
 };
 
+/** The direction mark of the bottom bar: before an input's name (into the circuit), after an output (out of it). */
+const DIR = () => h('span', { class: 'dir', 'aria-hidden': 'true' }, '▸');
+
 export class Stage {
   readonly el: HTMLElement;
   readonly inspector: Inspector;
@@ -637,8 +640,8 @@ export class Stage {
     }
     const outs = outPorts(root);
     if (outs.length) {
-      // One group, so the label wraps together with its chips.
-      c.append(h('span', { class: 'ctl-group' }, h('span', { class: 'label', style: 'margin-left:6px' }, 'Outputs'),
+      // One sunken strip, so the label wraps together with its readouts.
+      c.append(h('span', { class: 'ctl-group out-strip' }, h('span', { class: 'label' }, 'Outputs'),
         outs.map((p) => (p.width === 1 ? this.bitLamp(p) : this.numOutput(p)))));
     }
     if (clk) {
@@ -688,9 +691,9 @@ export class Stage {
   }
 
   private bitToggle(p: PortDef): HTMLElement {
-    const el = h('button', { class: 'in-toggle', 'data-port': p.name, title: `Toggle ${p.name}`, onclick: () => this.toggleInput(p.name) },
-      h('span', { class: 'knob' }), p.name);
-    return el;
+    // A switch: the knob slides along its track (1 to the right).
+    return h('button', { class: 'in-toggle', role: 'switch', 'aria-checked': 'false', 'data-port': p.name, title: `Toggle ${p.name} (input)`, onclick: () => this.toggleInput(p.name) },
+      DIR(), h('span', { class: 'track' }, h('span', { class: 'knob' })), p.name);
   }
 
   private numInput(p: PortDef): HTMLElement {
@@ -701,14 +704,14 @@ export class Stage {
       if (!Number.isNaN(n)) this.setInput(p.name, ((n % (mask(p.width) + 1)) + mask(p.width) + 1) % (mask(p.width) + 1));
     });
     const bump = (d: number) => this.setInput(p.name, (this.getInput(p.name) + d + mask(p.width) + 1) % (mask(p.width) + 1));
-    return h('span', { class: 'in-num' }, p.name,
+    return h('span', { class: 'in-num', title: `${p.name} (input)` }, DIR(), p.name,
       h('button', { title: '−1', onclick: () => bump(-1) }, '−'), inp, h('button', { title: '+1', onclick: () => bump(1) }, '+'),
       h('button', { title: 'Edit bits', onclick: (e: Event) => this.editInput(p.name, (e.currentTarget as HTMLElement).getBoundingClientRect()) }, '⋯'));
   }
 
-  /** A 1-bit output: a lamp, like an input toggle but not clickable. */
+  /** A 1-bit output: a lamp (inputs are switches: what you set and what you read look different). */
   private bitLamp(p: PortDef): HTMLElement {
-    return h('span', { class: 'out-lamp', 'data-out': p.name, title: `${p.name} (output)` }, h('span', { class: 'knob' }), p.name);
+    return h('span', { class: 'out-lamp', 'data-out': p.name, title: `${p.name} (output)` }, h('span', { class: 'knob' }), p.name, DIR());
   }
 
   /** A bus output: its value; click to cycle hex → bin → dec → signed for this output. */
@@ -719,7 +722,7 @@ export class Stage {
       this.outRadix.set(p.name, order[(order.indexOf(this.outRadixOf(p)) + 1) % order.length]);
       this.updateControls();
     });
-    return h('span', { class: 'out-num', 'data-out': p.name }, p.name, val);
+    return h('span', { class: 'out-num', 'data-out': p.name, title: `${p.name} (output)` }, p.name, val, DIR());
   }
 
   private outRadixOf(p: PortDef): Radix {
@@ -742,6 +745,7 @@ export class Stage {
     for (const el of this.controls.querySelectorAll<HTMLElement>('.in-toggle')) {
       const v = this.getInput(el.dataset.port!);
       el.classList.toggle('v1', v === 1);
+      el.setAttribute('aria-checked', String(v === 1));
     }
     for (const el of this.controls.querySelectorAll<HTMLInputElement>('.in-num input')) {
       const p = this.scene!.root.ports.find((q) => q.name === el.dataset.port)!;
