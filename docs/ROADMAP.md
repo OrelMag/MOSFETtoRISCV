@@ -146,6 +146,8 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
     (the run bar's gate mode does it), the data-cache line view
   - ✅ One right-hand dock for the drawers (Inspector, CPU, challenges): tabs when several, the
     look-inside view beside it
+  - ✅ I/O bar above the run bar: the chip's pins as switches, bus fields, buttons and the clock, outputs as lamps and
+    readouts (the workbench's bar: inputs raised with ▸ before, outputs on a sunken strip with ▸ after); hideable
   - ✅ Rename in place (a click on a selected part's or pin's name, a double-click on it, or F2, pointers
     included) and a right-click menu: the selection's actions with their shortcuts, or the canvas's own
     (paste here, add a comment or pointer, select all, fit)

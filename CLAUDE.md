@@ -205,6 +205,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   tools.ts       the mouse / keyboard state machine (place, select, drag, band, free-hand wires, pointers, rename
                  in place: F2 / a click on a selected name / editInline)
   ctxmenu.ts     plugin: the right-click menu (selection actions with their shortcuts, or the canvas's own)
+  iobar.ts       plugin: the chip's pins as a bar above the run bar (the workbench's switches and lamps, I/O toggle);
+                 each control acts as a click on the pin
   props.ts       properties of the selection or the chip, diagnostics; registerPropsSection
   fileui.ts      File menu (export / import / share link / Verilog / images / chip manager), share banner,
                  drag-and-drop import, autosave indicator, backup notice; installFiles(ed) per page
