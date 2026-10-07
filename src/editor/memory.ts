@@ -4,12 +4,13 @@
 
 import { ram } from '../lib/memory';
 import { PROGRAMS } from '../riscv/programs';
+import { disasm16 } from '../riscv/rv16/isa16';
 import type { HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
 import type { Bit, ComponentDef } from '../sim/types';
 import { pack } from '../sim/values';
 import type { PartRef } from './model';
-import { buildProgram, type BuiltProgram, type ProgramError } from './program';
+import { buildProgram, type ProgramLang, type BuiltProgram, type ProgramError } from './program';
 
 export type RomRef = Extract<PartRef, { rom: unknown }>['rom'];
 export type RamRef = Extract<PartRef, { ram: unknown }>['ram'];
@@ -83,22 +84,41 @@ export const addrValue = (bits: Bit[] | null): number | null => (bits ? pack(bit
  * A program in the other language: assembly → hex words (each with its disassembly as a
  * comment); hex → `.word` lines. Null when the source does not build (nothing to convert).
  */
-export function convertProgram(src: string, to: 'asm' | 'hex'): string | null {
-  const p = buildProgram(to === 'hex' ? 'asm' : 'hex', src);
+export function convertProgram(src: string, to: ProgramLang, from: ProgramLang = to === 'hex' ? 'asm' : 'hex'): string | null {
+  if (from === to) return src;
+  if (to !== 'hex' && from !== 'hex') return null; // assembly ↔ assembly of another ISA: no
+  const p = buildProgram(from, src);
   if (p.errors.length) return null;
   if (!src.trim()) return '';
-  return p.lines.map((l) => {
-    const w = `0x${(l.word >>> 0).toString(16).padStart(8, '0')}`;
-    return to === 'hex' ? `${w}  # ${l.text}` : `        .word ${w}   # ${l.text}`;
+  const d = to === 'rv16' || from === 'rv16' ? 4 : 8;
+  return p.lines.map((l, i) => {
+    const w = `0x${(l.word >>> 0).toString(16).padStart(d, '0')}`;
+    const text = to === 'rv16' ? disasm16(l.word, i) : l.text;
+    return to === 'hex' ? `${w}  # ${l.text}` : `        .word ${w}   # ${text}`;
   }).join('\n');
 }
 
 export interface RomSample {
   id: string;
   name: string;
-  lang: 'asm' | 'hex';
+  lang: ProgramLang;
   src: string;
 }
+
+/** The campaign's computer: Fibonacci numbers through the RAM to the LEDs (0xFFFB), forever. */
+export const RV16_LEDS = `# RV16: Fibonacci numbers, each stored to RAM, read back and shown on the LEDs
+        li   sp, 0x20        # a RAM pointer
+        li   a0, 0
+        li   a1, 1
+loop:   sw   a0, 0(sp)
+        lw   t0, 0(sp)       # through the RAM
+        sw   t0, -5(x0)      # LEDS (0xFFFB)
+        add  a2, a0, a1
+        mv   a0, a1
+        mv   a1, a2
+        addi sp, sp, 1
+        j    loop
+`;
 
 /** Segments a…g of a 7-segment digit for 0–F (bit 0 = a), the classic font. */
 export const SEG7_FONT = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f, 0x77, 0x7c, 0x39, 0x5e, 0x79, 0x71];
@@ -111,6 +131,7 @@ export const ROM_SAMPLES: RomSample[] = [
   { id: 'seg7', name: '7-segment font 0–F', lang: 'hex', src: `# segments a..g = bits 0..6, one word per digit 0-F\n${hexDigits(SEG7_FONT.slice(0, 8))}\n${hexDigits(SEG7_FONT.slice(8))}` },
   { id: 'squares', name: 'Squares 0–15', lang: 'hex', src: `# n * n for n = 0..15\n${hexDigits(Array.from({ length: 16 }, (_, i) => i * i))}` },
   { id: 'hello', name: 'ASCII "Hello, RISC-V"', lang: 'hex', src: `# one character per word\n${hexDigits([...'Hello, RISC-V'].map((c) => c.charCodeAt(0)))} 00` },
+  { id: 'rv16leds', name: 'RV16: Fibonacci on the LEDs', lang: 'rv16', src: RV16_LEDS },
 ];
 
 /** Smallest k whose 2^k words hold n words (at least 1). */

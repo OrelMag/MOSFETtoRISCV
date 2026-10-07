@@ -381,4 +381,42 @@ function decodeSame(x: number, y: number): boolean {
     && (!['R', 'S', 'B'].includes(f) || a.rs2 === b.rs2);
 }
 
-export const DRILLS: Record<string, Drill> = { binary, twos, kmap, boolean, isa16 };
+// ---- floating point (binary16) -------------------------------------------------------------------
+
+/** binary16 bits of a value exactly representable as a normal number (or 0). */
+function f16bits(v: number): number {
+  if (v === 0) return Object.is(v, -0) ? 0x8000 : 0;
+  const s = v < 0 ? 1 : 0;
+  let a = Math.abs(v), e = 0;
+  while (a >= 2) { a /= 2; e++; }
+  while (a < 1) { a *= 2; e--; }
+  return (s << 15) | ((e + 15) << 10) | Math.round((a - 1) * 1024);
+}
+const f16value = (w: number): number => {
+  const s = w >> 15 ? -1 : 1, e = (w >> 10) & 31, m = w & 1023;
+  if (e === 31) return m ? NaN : s * Infinity;
+  return e ? s * (1 + m / 1024) * 2 ** (e - 15) : s * (m / 1024) * 2 ** -14;
+};
+
+const float: Drill = {
+  id: 'float', title: 'binary16', goal: 6,
+  how: 'binary16: 1 sign bit, 5 exponent bits (bias 15), 10 fraction bits with a hidden leading 1. Give values in decimal (fractions like 0.375 are fine), patterns in hex.',
+  make(r) {
+    const e = int(r, -4, 6), m = int(r, 0, 7) * 128, s = r() < 0.3 ? -1 : 1;
+    const v = s * (1 + m / 1024) * 2 ** e;
+    const w = f16bits(v);
+    if (r() < 0.5) {
+      return {
+        prompt: `Encode <b>${v}</b> as binary16 (hex).`, placeholder: '0x....', check: numAnswer(w, 16), answer: `0x${hex(w, 16)}`,
+        explain: `${v} = ${s < 0 ? '−' : ''}1.${(m / 1024).toString(2).slice(2) || '0'}₂ × 2^${e}: sign ${s < 0 ? 1 : 0}, exponent ${e} + 15 = ${e + 15}, fraction ${bin(m, 10)}.`,
+      };
+    }
+    return {
+      prompt: `What value does the binary16 pattern <code>0x${hex(w, 16)}</code> hold?`, placeholder: '1.5',
+      check: (t) => { const x = Number(t.trim()); return { ok: Number.isFinite(x) && x === f16value(w), why: Number.isFinite(x) ? 'not that value' : 'write a decimal number' }; },
+      answer: String(f16value(w)), explain: `sign ${w >> 15}, exponent ${(w >> 10) & 31} − 15 = ${((w >> 10) & 31) - 15}, fraction 1.${bin(w & 1023, 10)}₂.`,
+    };
+  },
+};
+
+export const DRILLS: Record<string, Drill> = { binary, twos, kmap, boolean, isa16, float };

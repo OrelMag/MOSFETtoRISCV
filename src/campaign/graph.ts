@@ -45,7 +45,8 @@ export function topo(nodes: readonly CampaignNode[] = NODES): CampaignNode[] {
  * a reference answer that passes once passes for everyone.
  */
 export function ruleFor(id: string): LibRule {
-  const lib = new Set<string>(['nand', ...(nodeById(id)?.gives ?? [])]);
+  const n0 = nodeById(id);
+  const lib = new Set<string>(['nand', ...(n0?.gives ?? []), ...(n0?.givesOf?.() ?? [])]);
   for (const a of ancestors(id)) for (const u of nodeById(a)?.unlocks ?? []) lib.add(u);
   const n = lib.size - 1;
   return { lib: [...lib].sort(), label: n ? `NAND + ${n} unlocked part${n === 1 ? '' : 's'}` : 'NAND only' };

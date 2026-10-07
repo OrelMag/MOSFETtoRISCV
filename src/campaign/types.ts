@@ -41,6 +41,8 @@ export interface CampaignNode {
   unlocks?: string[];
   /** Library parts given for this level only (cells it arranges rather than builds). */
   gives?: string[];
+  /** Also given: these parts' ids (the reference design's own building blocks, for side quests). */
+  givesOf?: () => string[];
   /** Blocks of the CPU anatomy diagram this node builds (anatomy.ts). */
   anatomy?: string[];
   chapters?: ChapterLink[];

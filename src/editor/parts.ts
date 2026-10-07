@@ -182,7 +182,8 @@ function romPart(r: RomRef): PartResult {
   if (w !== 8 && w !== 16 && w !== 32) return { error: 'ROM: word width must be 8, 16 or 32' };
   if (addr !== 'word' && addr !== 'rv32') return { error: `ROM: unknown addressing '${String(addr)}'` };
   if (addr === 'rv32' && w !== 32) return { error: 'ROM: byte addressing (rv32) needs 32-bit words' };
-  if (lang !== 'asm' && lang !== 'hex') return { error: `ROM: unknown language '${String(lang)}'` };
+  if (lang !== 'asm' && lang !== 'hex' && lang !== 'rv16') return { error: `ROM: unknown language '${String(lang)}'` };
+  if (lang === 'rv16' && (w !== 16 || addr !== 'word')) return { error: 'ROM: RV16 programs need 16-bit words, word addressed' };
   if (typeof src !== 'string') return { error: 'ROM: no program' };
   const p = romImage(r);
   if (p.error) return { error: p.error };

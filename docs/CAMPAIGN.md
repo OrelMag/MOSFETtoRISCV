@@ -27,7 +27,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 | R1 | Campaign mode: build a NAND from transistors, then build up to a CPU | Acts 0–7 (§5) | ✅ |
 | R2 | A pipelined CPU "with all the goodies": hazards, forwarding, flushes, interrupts, traps | Acts 6–7 | ✅ |
 | R3 | The campaign is a **tree**; each node is a component built on its predecessors | `src/campaign/nodes.ts` (`requires`), map page | 🚧 |
-| R4 | Number systems | Act 2 drills `n_bin`, `n_twos` (✅); Act 8 `n_float` (⏳) | 🚧 |
+| R4 | Number systems | drills `n_bin`, `n_twos`, `n_float` (binary16) | ✅ |
 | R5 | Assembly | Act 4 (ISA lesson, encode drill, 7 program puzzles with an editor and a stepper); `p_handler` in Act 7 | ✅ |
 | R6 | Tips and tricks (Boolean logic, …) | per-node progressive `tips`, codex "trick" entries, `l_bool` (lesson + drill), K-map drill | ✅ |
 | R7 | A complete test set per level (success criteria shown before you start) | `BuildChallenge.check` / puzzle tests / core harness; node panel lists them | 🚧 |
@@ -35,7 +35,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 | R9 | Guidance and complete solutions | tips + "Show solution" / "Do it for me"; every node has a reference answer | 🚧 |
 | R10 | Skipping a level is allowed, and our solution is used | **Skip** marks it skipped and unlocks its part | 🚧 |
 | R11 | Grade solutions on optimization | `grade.ts`: ★ / ★★ / ★★★ against par on NAND, depth, period, cycles, size | 🚧 |
-| R12 | Optional levels: multiply, divide, fast adders, FPU | Act 8 plus `o_fastadd` (✅), `c_fast`, `o_bpred` | 🚧 |
+| R12 | Optional levels: multiply, divide, fast adders, FPU | ✅ fast adders, faster core, multipliers, divider, binary16 adder / multiplier; ⏳ MD in the core, cache, multicycle, branch prediction | 🚧 |
 | R13 | A narrative (nand2tetris / *Code* / Turing Complete) explaining why each block is built | per-node `why`, act intros, the intro's anatomy diagram | 🚧 |
 | R14 | Each level explains why it is needed | `why` field, shown first in the node panel | 🚧 |
 | R15 | Codex for each element discovered, plus laws and tools (K-maps, SoP, De Morgan) | `src/campaign/codex*`, `#/campaign/codex` | ✅ |
@@ -304,7 +304,7 @@ Legend: `id` ← requires · *opt* optional · (ex) an existing sandbox challeng
 - ✅ `c_core1`: OP / OPX / ADDI / SHI / LUI ← c_lesson, c_imm, c_ctl, s_pc, m_rf, a_alu16
 - ✅ `c_core2`: + LW / SW ← c_core1, m_mem
 - ✅ `c_core3`: all of RV16I ← c_core2, c_npc
-- ⏳ `c_computer`: core + ROM + RAM + MMIO + LEDs in the sandbox, running your own program ← c_core3, p_loop
+- ✅ `c_computer`: core + ROM + RAM + LED register with partial address decoding, checked cycle by cycle; then load your own RV16 program ← c_core3, p_loop
 - ✅ *opt* `c_fast`: graded on clock period ← c_core3, o_fastadd
 
 ### Act 6 — Pipelining
@@ -327,13 +327,13 @@ Legend: `id` ← requires · *opt* optional · (ex) an existing sandbox challeng
 - ✅ **`y_final`**: the pipelined RV16 with precise traps and interrupts ← pi_core3, y_irq
 
 ### Act 8 — Side quests (all optional)
-- ⏳ `o_mulseq`: shift-and-add multiplier ← a_add16, s_reg16
-- ⏳ `o_mularr`: 8 × 8 array multiplier ← a_add16
+- ✅ `o_mulseq`: shift-and-add multiplier ← a_add16, s_reg16
+- ✅ `o_mularr`: 8 × 8 array multiplier ← a_add16
 - ⏳ `o_mcore`: the MD opcode in your core ← c_core3, o_mularr
-- ⏳ `o_div`: sequential divider ← a_addsub16, s_fsm
+- ✅ `o_div`: sequential divider ← a_addsub16, s_fsm
 - ⏳ `o_dcore` ← o_mcore, o_div
-- ⏳ `n_float`: floating-point drill (fp16) ← n_twos
-- ⏳ `o_fpadd`, `o_fpmul`: fp16 units ← n_float, a_shift16 / o_mularr
+- ✅ `n_float`: floating-point drill (fp16) ← n_twos
+- ✅ `o_fpadd`, `o_fpmul`: binary16 adder and multiplier, all five rounding modes ← n_float, a_shift16 / o_mularr
 - ⏳ `o_cache`: direct-mapped cache ← m_mem, g_eq16
 - ⏳ `o_mc`: multicycle CPU (FSM or microcode) ← c_core3, s_fsm
 
@@ -380,14 +380,19 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
 - ✅ **D. Single-cycle.**
   - Measure simulation speed first and record it here.
   - Control blocks and the reference core; the core harness; Act 5.
-- ⏳ **H. RV16 in the sandbox.**
-  - An RV16 ROM language and the CPU drawer for RV16 cores (a golden-model interface shared with
-    RV32).
-  - `c_computer`, and "debug this test in the sandbox".
+- 🚧 **H. RV16 in the sandbox.**
+  - ✅ An RV16 ROM language (`lang: 'rv16'`: 16-bit words, word addressed; RV16 highlighting, listing
+    and disassembly; conversion to and from hex; an RV16 sample program).
+  - ✅ `c_computer`.
+  - ⏳ The CPU drawer for RV16 cores (a golden-model interface shared with RV32), and "debug this test
+    in the sandbox".
 - ✅ **E. Pipeline.** Pipeline blocks and the reference pipelined cores; Act 6.
 - ✅ **F. System.** CSRs, traps and interrupts in the golden model, the harness and the
   hardware; Act 7 and the finale.
-- ⏳ **G. Side quests.** Act 8.
+- 🚧 **G. Side quests.** ✅ shift-and-add and array multipliers, the divider, the binary16 drill, adder
+  and multiplier (each gives the reference design's building blocks: side quests are about arranging
+  them). ⏳ `o_mcore` / `o_dcore` (MD in the core), `o_cache`, `o_mc` (multicycle / microcode),
+  `o_bpred` (branch prediction).
 
 ### Budgets
 - **Expected sizes**: about 5k NANDs for the single-cycle core, about 8k pipelined, and about 12k

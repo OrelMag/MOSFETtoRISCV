@@ -67,7 +67,7 @@ function sanitizeRef(r: unknown): PartRef | null {
   if (DISPLAYS.includes(r.display as DisplayKind)) return compact({ display: r.display as DisplayKind, width: int(r.width, 1) ? r.width : undefined });
   if (isObj(r.rom)) {
     const { k, w, addr, lang, src } = r.rom;
-    if (!int(k) || (w !== 8 && w !== 16 && w !== 32) || (addr !== 'word' && addr !== 'rv32') || (lang !== 'asm' && lang !== 'hex') || !str(src)) return null;
+    if (!int(k) || (w !== 8 && w !== 16 && w !== 32) || (addr !== 'word' && addr !== 'rv32') || (lang !== 'asm' && lang !== 'hex' && lang !== 'rv16') || !str(src)) return null;
     return { rom: { k, w, addr, lang, src } };
   }
   if (isObj(r.ram)) {

@@ -7,6 +7,12 @@ import { BUILD1 } from './build1';
 import { BUILD5 } from './build5';
 import { BUILD6 } from './build6';
 import { BUILD7 } from './build7';
+import { BUILD8, partsOf } from './build8';
+import { BUILDH } from './buildh';
+import { fpAdd, fpMul } from '../lib/fpu';
+import { arrayMul, seqDivider } from '../lib/muldiv';
+import { seqMul } from '../lib/multiply';
+import { F16 } from '../sim/fpref';
 import type { BuildChallenge } from '../editor/challenges';
 import type { Act, CampaignNode } from './types';
 
@@ -361,8 +367,10 @@ export const NODES: CampaignNode[] = [
     codex: ['cpi'], unlocks: ['rv16_cpu'],
   },
   {
-    id: 'c_computer', act: 5, title: 'A computer', kind: 'build', requires: ['c_core3', 'p_loop'], soon: true,
-    why: 'Core + ROM + RAM + LEDs: run your own program on your own CPU, in the sandbox.', tips: [], codex: ['mmio'], anatomy: ['mmio'],
+    id: 'c_computer', act: 5, title: 'A computer', kind: 'build', requires: ['c_core3', 'p_loop'], base: BUILDH.c_computer, par: { nand: 28143, period: 110 },
+    why: 'A processor alone computes nothing: it needs a program, memory and a way to show results. Wire your core to a ROM, a RAM and LEDs, decode the addresses, and you have a computer. Then write your own program for it.',
+    tips: ['pc is 16 bits, the ROM has 32 words: a splitter gives pc[4:0].', 'Partial decoding: daddr[15] alone tells I/O from RAM (the program only uses the top of the address space for I/O).', 'The LEDs are a 16-bit register written when dwe and daddr[15].', 'Your own program: select the ROM, Edit program…, RV16 assembly.'],
+    codex: ['mmio', 'harvard'], anatomy: ['mmio'],
   },
   {
     id: 'c_fast', act: 5, title: 'A faster core', kind: 'core', optional: true, requires: ['c_core3', 'o_fastadd'], base: BUILD5.c_fast, par: { period: 81, cycles: 1236 },
@@ -457,14 +465,42 @@ export const NODES: CampaignNode[] = [
   },
 
   // ---- Act 8 --------------------------------------------------------------------------------
-  { id: 'o_mulseq', act: 8, title: 'Sequential multiplier', kind: 'build', optional: true, requires: ['a_add16', 's_reg16'], soon: true, why: 'Shift and add, one bit per cycle: small and slow.', tips: [], codex: ['shiftadd'], chapters: [{ chapter: 'muldiv', label: 'Multiply & divide' }] },
-  { id: 'o_mularr', act: 8, title: 'Array multiplier', kind: 'build', optional: true, requires: ['a_add16'], soon: true, why: 'All partial products at once: big and fast.', tips: [], codex: ['arraymul'] },
+  {
+    id: 'o_mulseq', act: 8, title: 'Shift-and-add multiplier', kind: 'build', optional: true, requires: ['a_add16', 's_reg16'], base: BUILD8.o_mulseq, givesOf: partsOf(() => seqMul(16)), par: { nand: 1169, period: 48 },
+    why: 'Software multiplication (Act 4) in hardware: one adder reused once per clock. Small, and sixteen times slower than an array.',
+    tips: ['The product register starts as {0, b}; each step adds a to its upper half if its lowest bit is 1, then shifts everything right.'],
+    codex: ['shiftadd'], chapters: [{ chapter: 'muldiv', label: 'Multiply & divide' }],
+  },
+  {
+    id: 'o_mularr', act: 8, title: 'Array multiplier', kind: 'build', optional: true, requires: ['a_add16'], base: BUILD8.o_mularr, givesOf: partsOf(() => arrayMul(8)), par: { nand: 632, depth: 70 },
+    why: 'All partial products at once, summed by rows of adders: one long combinational path, n² cells. The opposite trade to shift-and-add.',
+    tips: ['Row k is a AND b[k], shifted left by k.', 'Add the rows one after the other: each adder\'s carry out becomes the next row\'s top bit.'],
+    codex: ['arraymul'],
+  },
   { id: 'o_mcore', act: 8, title: 'Multiply in the core', kind: 'core', optional: true, requires: ['c_core3', 'o_mularr'], soon: true, why: 'The MD opcode: mul, mulh.', tips: [], codex: ['mext'] },
-  { id: 'o_div', act: 8, title: 'Divider', kind: 'build', optional: true, requires: ['a_addsub16', 's_fsm'], soon: true, why: 'Restoring division, one quotient bit per cycle.', tips: [], codex: ['division'] },
+  {
+    id: 'o_div', act: 8, title: 'Divider', kind: 'build', optional: true, requires: ['a_addsub16', 's_fsm'], base: BUILD8.o_div, givesOf: partsOf(() => seqDivider(16)), par: { nand: 1490, period: 31 },
+    why: 'Long division in binary: one subtract-and-compare per quotient bit, run by a small state machine. Division is slow everywhere: even fast CPUs take tens of cycles.',
+    tips: ['Shift the remainder left, bring in the next dividend bit, subtract the divisor: if the result is not negative keep it and set the quotient bit.'],
+    codex: ['division'],
+  },
   { id: 'o_dcore', act: 8, title: 'Divide in the core', kind: 'core', optional: true, requires: ['o_mcore', 'o_div'], soon: true, why: 'div and rem stall the core until done.', tips: [], codex: ['mext'] },
-  { id: 'n_float', act: 8, title: 'Floating point', kind: 'drill', optional: true, requires: ['n_twos'], drill: 'float', soon: true, why: 'Sign, exponent, mantissa: fp16 by hand.', tips: [], codex: ['ieee754'], chapters: [{ chapter: 'float', label: 'Floating point' }] },
-  { id: 'o_fpadd', act: 8, title: 'FP adder', kind: 'build', optional: true, requires: ['n_float', 'a_shift16'], soon: true, why: 'Align, add, normalise, round.', tips: [], codex: ['ieee754', 'rounding'] },
-  { id: 'o_fpmul', act: 8, title: 'FP multiplier', kind: 'build', optional: true, requires: ['o_fpadd', 'o_mularr'], soon: true, why: 'Multiply mantissas, add exponents.', tips: [], codex: ['ieee754'] },
+  {
+    id: 'n_float', act: 8, title: 'Floating point', kind: 'drill', optional: true, requires: ['n_twos'], drill: 'float', par: { mistakes: 2 },
+    why: 'Sign, exponent, fraction: a binary scientific notation that trades exactness for range. Encode and decode binary16 by hand before building its adder.',
+    tips: ['Write the value as 1.f × 2^e; the exponent field is e + 15.'], codex: ['ieee754'], chapters: [{ chapter: 'float', label: 'Floating point' }],
+  },
+  {
+    id: 'o_fpadd', act: 8, title: 'FP adder', kind: 'build', optional: true, requires: ['n_float', 'a_shift16'], base: BUILD8.o_fpadd, givesOf: partsOf(() => fpAdd(F16)), par: { nand: 3785, depth: 163 },
+    why: 'Adding floats means aligning their binary points first, then adding, normalising and rounding: the hardest of the four operations to get exactly right.',
+    tips: ['Swap so that |a| ≥ |b|, shift b right by the exponent difference (keep a sticky bit), add or subtract the significands.', 'One rounder serves every operation: the given one rounds in all five modes.'],
+    codex: ['ieee754', 'rounding'],
+  },
+  {
+    id: 'o_fpmul', act: 8, title: 'FP multiplier', kind: 'build', optional: true, requires: ['o_fpadd', 'o_mularr'], base: BUILD8.o_fpmul, givesOf: partsOf(() => fpMul(F16)), par: { nand: 4965, depth: 150 },
+    why: 'Multiplying floats is simpler than adding them: multiply the significands, add the exponents, XOR the signs, then normalise and round.',
+    tips: ['11 × 11 bits gives a 22-bit product; its top bit decides whether to shift by one.'], codex: ['ieee754'],
+  },
   { id: 'o_cache', act: 8, title: 'A cache', kind: 'build', optional: true, requires: ['m_mem', 'g_eq16'], soon: true, why: 'Keep recently used words close: tags, valid bits, hits and misses.', tips: [], codex: ['cache'], chapters: [{ chapter: 'cache', label: 'Caches' }] },
   { id: 'o_mc', act: 8, title: 'Multicycle CPU', kind: 'core', optional: true, requires: ['c_core3', 's_fsm'], soon: true, why: 'One instruction over several short cycles, run by a state machine or by microcode.', tips: [], codex: ['microcode', 'fsm'], chapters: [{ chapter: 'multicycle', label: 'Multicycle & microcode' }] },
 ];
