@@ -57,7 +57,14 @@ export function startApp(root: HTMLElement): void {
     h('span', null, h('b', null, p.name), h('small', null, p.blurb)));
     palMenu.append(item);
   }
-  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire colours', 'aria-label': 'Wire colours', 'aria-haspopup': 'menu' }, swatch());
+  // Flowing bits: on top of any palette, so a switch under the list rather than another palette.
+  const flowItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => {
+    settings.set('wireFlow', !settings.wireFlow);
+    applyTheme();
+  } }, h('span', { class: 'pal-flow-sw' }, h('i')),
+  h('span', null, h('b', null, 'Flowing bits'), h('small', null, '1s march along wires, buses carry their values')));
+  palMenu.append(h('hr'), flowItem);
+  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire colours and flowing bits', 'aria-label': 'Wire colours and flowing bits', 'aria-haspopup': 'menu' }, swatch());
   palBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     palMenu.classList.toggle('open');
@@ -68,7 +75,8 @@ export function startApp(root: HTMLElement): void {
   const palWrap = h('div', { class: 'pal-wrap' }, palBtn, palMenu);
 
   const syncTools = () => {
-    for (const b of palMenu.querySelectorAll<HTMLButtonElement>('button')) b.setAttribute('aria-checked', String(b.dataset.p === settings.palette));
+    for (const b of palMenu.querySelectorAll<HTMLButtonElement>('button[data-p]')) b.setAttribute('aria-checked', String(b.dataset.p === settings.palette));
+    flowItem.setAttribute('aria-checked', String(settings.wireFlow));
     for (const b of radix.querySelectorAll<HTMLButtonElement>('button')) b.classList.toggle('on', b.dataset.r === settings.radix);
     animate.classList.toggle('on', settings.animate);
     themeBtn.replaceChildren(icon(settings.theme === 'light' ? 'sun' : settings.theme === 'dark' ? 'moon' : 'auto', 18));

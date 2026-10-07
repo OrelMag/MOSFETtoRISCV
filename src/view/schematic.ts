@@ -7,6 +7,8 @@ import { B0, B1, BX, BZ, type Bit, netlistOf } from '../sim/types';
 import { describeBits, formatBits, type Radix } from '../sim/values';
 import { icon, s } from '../ui/dom';
 import { Camera, installPanZoom } from './camera';
+import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
+import { FlowTokens, type Lane } from './flowtokens';
 import type { ViewCtx } from './context';
 import { hopPathData, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type RoutedNet, type TapLabel } from './route';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
@@ -34,6 +36,10 @@ interface WireEls {
   target?: string;
   flow?: Animation[];
   flowEls?: SVGPathElement[];
+  /** Flowing bits: pellets on a 1-bit wire (one overlay per path, made on first use), what they show; a bus's lanes for its riding value. */
+  ants?: SVGPathElement[];
+  antsKey?: string;
+  lanes?: Lane[];
   label?: SVGGElement;
   labelText?: SVGTextElement;
   labelBg?: SVGRectElement;
@@ -77,6 +83,8 @@ export class SchematicView {
   private netMarks = new Map<number, string>();
   private lastHl: { names: string[]; focus: boolean } = { names: [], focus: false };
   private probeG: SVGGElement | null = null;
+  private flowG: SVGGElement | null = null;
+  private tokens: FlowTokens | null = null;
   radix: Radix = 'hex';
   /** When > 0, value changes travel along the wires as fronts lasting this many ms. */
   flowMs = 0;
@@ -132,12 +140,15 @@ export class SchematicView {
     this.el.append(defs);
     const gridRect = s('rect', { class: 'grid-bg', x: -500, y: -500, width: 1000, height: 1000, fill: 'url(#grid)' });
     const wiresG = s('g', { class: 'wires' });
+    this.flowG = s('g', { class: 'wire-flows' });
+    const tokG = s('g', { class: 'flow-tokens-layer' });
+    this.tokens = new FlowTokens(tokG);
     const hitG = s('g', { class: 'wire-hits' });
     const instG = s('g', { class: 'insts' });
     const pinG = s('g', { class: 'pins' });
     const labelG = s('g', { class: 'labels' });
     this.probeG = s('g', { class: 'probes' });
-    this.el.append(gridRect, wiresG, hitG, instG, pinG, labelG, this.probeG);
+    this.el.append(gridRect, wiresG, this.flowG, tokG, hitG, instG, pinG, labelG, this.probeG);
 
     // Bounding box of everything drawn.
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -288,6 +299,7 @@ export class SchematicView {
         if (flow && w.shown !== undefined && w.paths.length) this.flowWire(w, vcls);
         else this.paintWire(w, vcls);
       }
+      if (!w.flow) this.paintFlow(w, bits);
       if (w.labelText && w.labelBg && w.net.label) {
         const txt = formatBits(bits, this.radixOverride.get(w.net.index) ?? this.radix);
         w.labelText.textContent = txt;
@@ -297,7 +309,8 @@ export class SchematicView {
         // Too wide for its segment (a 64-bit value on a short hop): it would cover the ports at
         // either end. The value is still in the hover tooltip, and a narrower radix may fit.
         w.label!.setAttribute('display', tw > w.net.labelRoom - 0.4 ? 'none' : 'inline');
-        w.label!.setAttribute('class', `bus-label ${busClass(bits)}${this.marks(w.net.index)}`);
+        // While its value rides the wire (flowing bits), the fixed label steps aside.
+        w.label!.setAttribute('class', `bus-label ${busClass(bits)}${flowText(bits, 'hex') ? ' riding' : ''}${this.marks(w.net.index)}`);
       }
     }
     this.updatePins();
@@ -397,6 +410,25 @@ export class SchematicView {
     for (const t of w.taps) t.setAttribute('class', `tap-label ${vcls}${m}`);
   }
 
+  /** Bits flowing from the driver along every path of the net (null: none); a bus carries its value. */
+  private paintFlow(w: WireEls, bits: Bit[] | null): void {
+    if (w.net.width > 1) {
+      const text = bits && flowText(bits, this.radixOverride.get(w.net.index) ?? this.radix);
+      this.tokens?.set(w.net.index, text ? (w.lanes ??= laneTails(w.net.paths)) : null, text);
+      return;
+    }
+    const f = bits && flowDash(bits);
+    const key = flowKey(f, 0, 0, false);
+    if (key === (w.antsKey ?? '')) return;
+    w.antsKey = key;
+    if (f && !w.ants) {
+      const cls = `wire-flow${this.faded.has(w.net.index) ? ' faded' : ''}`;
+      w.ants = w.paths.map((p) => s('path', { d: p.getAttribute('d')!, class: cls }));
+      this.flowG?.append(...w.ants);
+    }
+    for (const a of w.ants ?? []) applyFlow(a, f);
+  }
+
   /**
    * Draw the new value as a front travelling from the driver along every branch, over
    * flowMs (one gate delay of the animation). The wire keeps its old colour underneath
@@ -405,6 +437,7 @@ export class SchematicView {
   private flowWire(w: WireEls, vcls: string): void {
     if (w.flow) this.paintWire(w, w.target!);
     w.target = vcls;
+    this.paintFlow(w, null);
     const cls = `wire ${vcls} flow-front`;
     const els: SVGPathElement[] = [];
     const anims: Animation[] = [];
@@ -428,6 +461,7 @@ export class SchematicView {
     anims[0].finished.then(() => {
       if (w.flow !== anims) return;
       this.paintWire(w, vcls);
+      this.paintFlow(w, this.ctx?.netBits(w.net.index) ?? null);
       this.updatePins();
     }, () => {});
   }
@@ -453,6 +487,8 @@ export class SchematicView {
       if (live) this.faded.delete(w.net.index);
       else this.faded.add(w.net.index);
       for (const p of w.paths) p.classList.toggle('faded', !live);
+      for (const a of w.ants ?? []) a.classList.toggle('faded', !live);
+      this.tokens?.fade(w.net.index, !live);
       for (const t of w.tags) t.classList.toggle('faded', !live);
       for (const t of w.taps) t.classList.toggle('faded', !live);
       w.label?.classList.toggle('faded', !live);
