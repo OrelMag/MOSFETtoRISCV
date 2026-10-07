@@ -9,7 +9,7 @@ import type { ViewBox } from '../view/camera';
 const PROPS = [
   'fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin',
   'opacity', 'display', 'visibility', 'font-family', 'font-size', 'font-weight', 'font-style', 'text-anchor',
-  'dominant-baseline', 'paint-order', 'letter-spacing',
+  'dominant-baseline', 'paint-order', 'letter-spacing', 'white-space',
 ];
 
 /** Layers that are editing feedback, not the circuit (hit areas, previews, the grid). */

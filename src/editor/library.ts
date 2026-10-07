@@ -9,11 +9,14 @@ import { compileChip, type Compiled, hash } from './compile';
 import { chipDeps, type ChipDoc, type EndRef, SCHEMA, type Workspace } from './model';
 import { partDef } from './parts';
 
-/** Hash of a document, once per object (documents are immutable; a big one takes a while to serialize). */
+/**
+ * Hash of a document, once per object (documents are immutable; a big one takes a while to
+ * serialize). Comments are left out: writing one recompiles nothing.
+ */
 const docHashes = new WeakMap<ChipDoc, string>();
 function docHash(doc: ChipDoc): string {
   let h = docHashes.get(doc);
-  if (h === undefined) docHashes.set(doc, (h = hash(JSON.stringify(doc))));
+  if (h === undefined) docHashes.set(doc, (h = hash(JSON.stringify(doc, function (k, v) { return k === 'comments' && this === doc ? undefined : v; }))));
   return h;
 }
 

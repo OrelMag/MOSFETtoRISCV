@@ -269,7 +269,8 @@ chip presentation, capacity and the program-solving half of Turing Complete.
 **Chips and canvas**
 - ⏳ Chip appearance: resizable box, pins on any side and in any order, displays inside a chip
   shown on the packaged chip's face (DLS)
-- ⏳ Free-text comments on the canvas, kept out of the compiled netlist (TC)
+- ✅ Free-text comments on the canvas (TC): T or the Wiring palette, multi-line, double-click to edit; selected, moved,
+  copied and deleted with the rest, saved and shared, never compiled (writing one recompiles nothing)
 - ⏳ Library organization: collections / folders of chips, a starred bar for frequent parts,
   several projects (separate workspaces) (DLS)
 

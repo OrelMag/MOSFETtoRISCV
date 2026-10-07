@@ -293,7 +293,7 @@ export class Editor {
 
   get selCount(): number {
     const s = this.sel;
-    return (s.parts?.length ?? 0) + (s.pins?.length ?? 0) + (s.wires?.length ?? 0) + (s.labels?.length ?? 0);
+    return (s.parts?.length ?? 0) + (s.pins?.length ?? 0) + (s.wires?.length ?? 0) + (s.labels?.length ?? 0) + (s.comments?.length ?? 0);
   }
 
   onChange(f: () => void): () => void {
@@ -655,6 +655,40 @@ export class Editor {
     input.select();
   }
 
+  /**
+   * Multi-line text entry over the canvas at a world point (comments): Enter commits, Shift+Enter
+   * starts a new line, Esc cancels, leaving the box commits. Blank text comes back as ''.
+   */
+  promptText(at: Vec, initial: string, done: (text: string | null) => void): void {
+    this.slots.overlay.querySelector('.sb-prompt')?.remove();
+    const m = this.view.svg.getScreenCTM();
+    const r = this.canvas.getBoundingClientRect();
+    const pt = m ? new DOMPoint(at[0], at[1]).matrixTransform(m) : new DOMPoint(r.left + 40, r.top + 40);
+    const lines = initial.split('\n');
+    const area = h('textarea', {
+      spellcheck: 'true', 'aria-label': 'Comment', placeholder: 'comment',
+      rows: String(Math.min(12, Math.max(2, lines.length))), cols: String(Math.min(60, Math.max(24, ...lines.map((l) => l.length + 2)))),
+    }, initial) as HTMLTextAreaElement;
+    const box = h('div', { class: 'sb-prompt sb-prompt-text', style: `left:${pt.x - r.left}px;top:${pt.y - r.top}px` }, area,
+      h('small', null, 'Enter: done · Shift+Enter: new line · Esc: cancel'));
+    let finished = false;
+    const finish = (ok: boolean) => {
+      if (finished) return;
+      finished = true;
+      box.remove();
+      done(ok ? area.value.trim() : null);
+    };
+    area.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finish(true); }
+      if (e.key === 'Escape') finish(false);
+    });
+    area.addEventListener('blur', () => finish(true));
+    this.slots.overlay.append(box);
+    area.focus();
+    area.select();
+  }
+
   showHelp(): void {
     const keys: [string, string][] = [
       ['Drag from a pin or port', 'draw a wire; click empty canvas to add a corner'],
@@ -664,6 +698,7 @@ export class Editor {
       ['Ctrl/Alt + drag a wire', 'start a branch from it'],
       ['L', 'place a pointer (same name = same net)'],
       ['Click a selected pointer / double-click', 'jump to the next pointer with that name'],
+      ['T', 'place a comment · double-click one to edit it'],
       ['Drag empty canvas', 'select with a rubber band (Shift: add)'],
       ['Shift + click', 'add to / remove from the selection'],
       ['Space + drag, middle drag', 'pan · wheel: zoom'],
@@ -712,10 +747,13 @@ function prune(sel: Sel, doc: ChipDoc): Sel {
   };
   const out: Sel = {};
   const parts = keep(sel.parts, doc.parts), pins = keep(sel.pins, doc.pins), wires = keep(sel.wires, doc.wires), labels = keep(sel.labels, doc.labels);
+  const comments = keep(sel.comments, doc.comments ?? []);
   if (parts) out.parts = parts;
   if (pins) out.pins = pins;
   if (wires) out.wires = wires;
   if (labels) out.labels = labels;
+  if (comments) out.comments = comments;
   const same = (a?: string[], b?: string[]) => (a?.length ?? 0) === (b?.length ?? 0);
-  return same(out.parts, sel.parts) && same(out.pins, sel.pins) && same(out.wires, sel.wires) && same(out.labels, sel.labels) ? sel : out;
+  return same(out.parts, sel.parts) && same(out.pins, sel.pins) && same(out.wires, sel.wires) && same(out.labels, sel.labels)
+    && same(out.comments, sel.comments) ? sel : out;
 }

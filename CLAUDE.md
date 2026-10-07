@@ -150,7 +150,8 @@ src/chapters/  narrative content: chapters → steps → scene / widget / challe
 src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui/pages/sandbox.ts, its own chunk;
                #/sandbox/s/<payload> opens a share link: a banner, imported only on the user's click).
                DOM-free (tested in Node):
-  model.ts       Workspace / ChipDoc (pins, parts, wires = interior corners, pointers = named net labels)
+  model.ts       Workspace / ChipDoc (pins, parts, wires = interior corners, pointers = named net labels, comments:
+                 free text drawn under the circuit, never compiled and left out of the compile cache key)
   compile.ts     compileChip(doc) → ComponentDef + diags, netOfWire / netOfEnd / netOfLabel, connKey
   parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays, ROM, RAM
   library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip

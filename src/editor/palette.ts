@@ -15,7 +15,9 @@ export type PinKind = 'toggle' | 'button' | 'clock';
 export type Placement =
   | { part: PartRef }
   | { pin: { dir: 'in' | 'out'; width: number; kind?: PinKind } }
-  | { pointer: true };
+  | { pointer: true }
+  /** A free-text comment (drawn, never compiled). */
+  | { comment: true };
 
 export interface PaletteItem {
   /** Unique within its group. */
@@ -142,6 +144,7 @@ registerPaletteGroup({
   id: 'wiring', title: 'Wiring', order: 50, purist: true,
   items: () => [
     { id: 'pointer', name: 'Pointer', tag: 'L', title: 'A named net label: every pointer with the same name is the same net, no wire needed', place: { pointer: true } },
+    { id: 'comment', name: 'Comment', tag: 'T', title: 'Free text on the canvas: saved and shared with the chip, never part of the circuit', place: { comment: true } },
     { id: 's4', name: 'Split 4 → 1×4', place: { part: { split: many(4, 1) } } },
     { id: 's8', name: 'Split 8 → 1×8', place: { part: { split: many(8, 1) } } },
     { id: 's16', name: 'Split 16 → 8+8', place: { part: { split: [8, 8] } } },

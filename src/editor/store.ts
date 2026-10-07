@@ -9,7 +9,7 @@ import { sanitizeCpu } from './cpu';
 import { same } from './history';
 import {
   SCHEMA, chipDeps, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
-  type ChipDoc, type DisplayKind, type EndRef, type ExitDir, type LabelDoc, type PartDoc, type PartRef,
+  type ChipDoc, type CommentDoc, type DisplayKind, type EndRef, type ExitDir, type LabelDoc, type PartDoc, type PartRef,
   type PinDoc, type PinValue, type Vec, type WireDoc, type Workspace,
 } from './model';
 
@@ -135,6 +135,15 @@ function sanitizeLabel(l: unknown): LabelDoc | null {
   return compact({ id: l.id, name: l.name, at, face: face(l.face) });
 }
 
+/** Comments longer than this are cut (a pasted essay would make a huge box). */
+const MAX_COMMENT = 2000;
+
+function sanitizeComment(c: unknown): CommentDoc | null {
+  const at = isObj(c) ? vec(c.at) : null;
+  if (!isObj(c) || !str(c.id) || !str(c.text) || !c.text.trim() || !at) return null;
+  return { id: c.id, at, text: c.text.slice(0, MAX_COMMENT) };
+}
+
 function list<T extends { id: string }>(x: unknown, f: (v: unknown) => T | null): T[] {
   const seen = new Set<string>();
   const out: T[] = [];
@@ -151,6 +160,7 @@ export function sanitizeChip(c: unknown): ChipDoc | null {
   const pins = list(c.pins, sanitizePin);
   const parts = list(c.parts, sanitizePart);
   const labels = list(c.labels, sanitizeLabel);
+  const comments = list(c.comments, sanitizeComment);
   let wires = list(c.wires, sanitizeWire);
   // Pin names must be unique too (they become port names): later duplicates go.
   const names = new Set<string>();
@@ -171,6 +181,7 @@ export function sanitizeChip(c: unknown): ChipDoc | null {
     ff: sanitizeFf(c.ff),
     cpu: sanitizeCpu(c.cpu),
     pins: uniquePins, parts, wires, labels,
+    comments: comments.length ? comments : undefined,
   });
 }
 

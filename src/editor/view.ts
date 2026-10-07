@@ -16,7 +16,7 @@ import type { Compiled, Diag } from './compile';
 import { partBox, pinBody, pinKnob, pointerGeom, wireGroups } from './geom';
 import { HopCache } from './hops';
 import {
-  type ChipDoc, type DefOf, defaultFace, type DisplayKind, type LabelDoc, type PartDoc, type PinDoc, pinBig, polyline, type WireDoc,
+  type ChipDoc, COMMENT_LINE, type CommentDoc, commentBox, type DefOf, defaultFace, type DisplayKind, type LabelDoc, type PartDoc, type PinDoc, pinBig, polyline, type WireDoc,
 } from './model';
 import type { Sel } from './ops';
 
@@ -35,6 +35,7 @@ interface WireEls { doc: WireDoc; poly: Vec[] | null; key: string; ver: number; 
 interface DotEls { el: SVGCircleElement; wire: string; cls: string }
 interface PinEls { doc: PinDoc; g: SVGGElement; glyph: PinGlyph; geom: PinGeom; cls: string; txt: string }
 interface LabelEls { doc: LabelDoc; g: SVGGElement; stub: SVGPathElement; cls: string }
+interface CommentEls { doc: CommentDoc; g: SVGGElement }
 interface BusLabel { net: number; wire: string; at: Vec; room: number; g: SVGGElement; bg: SVGRectElement; text: SVGTextElement; txt: string }
 
 const pathD = (p: Vec[]) => p.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join(' ');
@@ -47,6 +48,7 @@ export class EditorView {
   readonly polys = new Map<string, Vec[]>();
   radix: Radix = 'hex';
 
+  private gComments: SVGGElement;
   private gWires: SVGGElement;
   private gDots: SVGGElement;
   private gHits: SVGGElement;
@@ -59,6 +61,7 @@ export class EditorView {
   private wires = new Map<string, WireEls>();
   private pins = new Map<string, PinEls>();
   private labels = new Map<string, LabelEls>();
+  private comments = new Map<string, CommentEls>();
   private busLabels: BusLabel[] = [];
   /** Junction dots of each net group (keyed by its wires and their versions), coloured like the wire they sit on. */
   private dots = new Map<string, DotEls[]>();
@@ -82,6 +85,7 @@ export class EditorView {
       <pattern id="ed-grid5" width="5" height="5" patternUnits="userSpaceOnUse">
       <circle cx="0" cy="0" r="0.12" class="grid-dot ed-grid-major"/></pattern>`;
     const L = (cls: string) => s('g', { class: cls });
+    this.gComments = L('ed-notes');
     this.gWires = L('wires');
     this.gDots = L('ed-dots');
     this.gHits = L('wire-hits');
@@ -98,7 +102,7 @@ export class EditorView {
     this.svg.append(defs,
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid)' }),
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid5)' }),
-      this.gWires, this.gDots, this.gHits, this.gParts, this.gPins, this.gLabels, this.gValues, this.gOver);
+      this.gComments, this.gWires, this.gDots, this.gHits, this.gParts, this.gPins, this.gLabels, this.gValues, this.gOver);
     host.append(this.svg);
     this.cam = new Camera(this.svg, host);
     this.cam.vb = { x: -4, y: -4, w: 60, h: 36 };
@@ -195,6 +199,25 @@ export class EditorView {
       this.labels.set(l.id, { doc: l, g, stub, cls: '' });
     }
     for (const [id, e] of this.labels) if (!seenLabels.has(id)) { e.g.remove(); this.labels.delete(id); dirty.add(`l:${id}`); }
+
+    // Comments: under everything, touching nothing.
+    const seenComments = new Set<string>();
+    for (const c of doc.comments ?? []) {
+      seenComments.add(c.id);
+      const e = this.comments.get(c.id);
+      if (e && e.doc === c) continue;
+      if (e && e.doc.text === c.text) {
+        e.g.setAttribute('transform', `translate(${c.at[0]},${c.at[1]})`);
+        e.doc = c;
+        continue;
+      }
+      const g = drawComment(c);
+      if (this.sel.comments?.includes(c.id)) g.classList.add('ed-sel');
+      if (e) e.g.replaceWith(g);
+      else this.gComments.append(g);
+      this.comments.set(c.id, { doc: c, g });
+    }
+    for (const [id, e] of this.comments) if (!seenComments.has(id)) { e.g.remove(); this.comments.delete(id); }
 
     // Wires: polylines follow their ends; a geometry change rechecks the wires on what changed.
     let wiresChanged = prev?.wires !== doc.wires || geomChanged;
@@ -410,6 +433,7 @@ export class EditorView {
       e.g.classList.toggle('ed-err', d === 'ed-err');
       e.g.classList.toggle('ed-warn', d === 'ed-warn');
     }
+    for (const [id, e] of this.comments) e.g.classList.toggle('ed-sel', !!this.sel.comments?.includes(id));
     for (const e of this.wires.values()) this.paintWire(e, e.cls ? e.cls.split('|')[0] : 'wire');
   }
 
@@ -626,6 +650,11 @@ export class EditorView {
       grow(r.x, r.y);
       grow(r.x + r.w, r.y + r.h);
     }
+    for (const c of doc.comments ?? []) {
+      const b = commentBox(c);
+      grow(b.x, b.y);
+      grow(b.x + b.w, b.y + b.h);
+    }
     for (const poly of this.polys.values()) for (const [x, y] of poly) grow(x, y);
     if (x0 === Infinity) return null;
     return { x: x0 - 3, y: y0 - 3, w: x1 - x0 + 6, h: y1 - y0 + 6 };
@@ -638,6 +667,16 @@ export class EditorView {
       this.cam.fit({ x: -4, y: -4, w: 60, h: 36 });
     }
   }
+}
+
+/** A comment: its lines on a faint note (the box from commentBox, so hits match the drawing). */
+export function drawComment(c: CommentDoc): SVGGElement {
+  const b = commentBox(c);
+  const g = s('g', { class: 'ed-note', transform: `translate(${c.at[0]},${c.at[1]})`, 'data-comment': c.id });
+  const text = s('text', { class: 'ed-note-text', x: 0.6, y: 0 });
+  b.lines.forEach((l, i) => text.append(s('tspan', { x: 0.6, y: (i + 1) * COMMENT_LINE - 0.2 }, l || ' ')));
+  g.append(s('rect', { class: 'ed-note-bg', x: 0, y: 0, width: b.w, height: b.h, rx: 0.4 }), text);
+  return g;
 }
 
 /** Segments a…g lit for each hex digit (bit 0 = a). */

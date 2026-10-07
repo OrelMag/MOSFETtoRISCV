@@ -17,8 +17,8 @@ import type { Editor } from './editor';
 import { pinKnob, pointerGeom } from './geom';
 import { renamePin } from './chips';
 import { removeChip } from './library';
-import { allOnes, type ChipDoc, type DisplayKind, type ExitDir, type LabelDoc, type PartDoc, type PartRef, pinBig, type PinDoc, pinValue, type WireDoc } from './model';
-import { deleteSel, flipParts, setLabel, setPart, setPin, setRef, setWire } from './ops';
+import { allOnes, type ChipDoc, type CommentDoc, type DisplayKind, type ExitDir, type LabelDoc, type PartDoc, type PartRef, pinBig, type PinDoc, pinValue, type WireDoc } from './model';
+import { deleteSel, flipParts, setComment, setLabel, setPart, setPin, setRef, setWire } from './ops';
 import { MAX_RAM_K, MAX_WIDTH } from './parts';
 import { openChip } from './session';
 
@@ -79,6 +79,7 @@ export class PropsPanel {
       ...(s.pins ?? []).map((id) => doc.pins.find((p) => p.id === id)),
       ...(s.labels ?? []).map((id) => doc.labels.find((p) => p.id === id)),
       ...(s.wires ?? []).map((id) => doc.wires.find((p) => p.id === id)),
+      ...(s.comments ?? []).map((id) => doc.comments?.find((p) => p.id === id)),
     ];
     const none = !objs.length;
     const key = JSON.stringify([ed.chipId, s, objs.map(ser), none ? [doc.name, doc.hue, doc.notes, ser(doc.pins), ser(ed.compiled?.def), Object.keys(ed.ws.chips).length] : 0,
@@ -162,7 +163,23 @@ export class PropsPanel {
     if (s.pins?.length) return this.pin(doc.pins.find((p) => p.id === s.pins![0])!);
     if (s.labels?.length) return this.pointer(doc, doc.labels.find((p) => p.id === s.labels![0])!);
     if (s.wires?.length) return this.wire(doc.wires.find((p) => p.id === s.wires![0])!);
+    if (s.comments?.length) return this.comment(doc.comments!.find((p) => p.id === s.comments![0])!);
     return null;
+  }
+
+  private comment(c: CommentDoc): HTMLElement {
+    const ed = this.ed;
+    const text = h('textarea', { rows: String(Math.min(10, Math.max(3, c.text.split('\n').length + 1))), 'aria-label': 'Comment text' }, c.text) as HTMLTextAreaElement;
+    text.addEventListener('change', () => {
+      if (!text.value.trim()) return void (text.value = c.text);
+      this.apply((d) => setComment(d, c.id, { text: text.value }));
+    });
+    return this.section('Comment',
+      h('p', { class: 'sb-sum' }, 'Free text: saved and shared with the chip, never part of the circuit (no net, no cost, not in Verilog).'),
+      text,
+      h('div', { class: 'sb-btns' },
+        this.btn('Edit on canvas', 'Edit in place (double-click the comment)', () => ed.tools.editComment(c.id)),
+        this.btn('Delete', 'Delete (Del)', () => { ed.edit((d) => deleteSel(d, { comments: [c.id] })); ed.select({}); })));
   }
 
   private part(p: PartDoc): HTMLElement {

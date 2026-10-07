@@ -8,7 +8,7 @@ import { type ExitDir, symbolGeom, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
 import { type Rect, textWidth } from '../view/route';
 import {
-  type ChipDoc, type DefOf, defaultFace, endGeom, endKey, type EndRef, type LabelDoc, onPolyline, orthogonal,
+  type ChipDoc, commentBox, type DefOf, defaultFace, endGeom, endKey, type EndRef, type LabelDoc, onPolyline, orthogonal,
   type PinDoc, polyline, type WireDoc,
 } from './model';
 import { nearestOn } from './ops';
@@ -111,6 +111,7 @@ export type Hit =
   | { k: 'label'; id: string }
   /** On a wire; `at` is the nearest point of it. */
   | { k: 'wire'; id: string; at: Vec }
+  | { k: 'comment'; id: string }
   | { k: 'none' };
 
 const dist = (a: Vec, b: Vec) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -139,7 +140,8 @@ export function distToPolyline(poly: Vec[], p: Vec): number {
 
 /**
  * What is under p. Ports win within `tol` (so a wire can start on a pin that sits on a part's
- * edge), then pins, pointers and parts (the last drawn on top), then wires.
+ * edge), then pins, pointers and parts (the last drawn on top), then wires, then comments (drawn
+ * under everything, so a note never hides the circuit from the mouse).
  */
 export function hitTest(doc: ChipDoc, defOf: DefOf, p: Vec, tol: number, polys?: Map<string, Vec[]>): Hit {
   let best: Hit = { k: 'none' }, bd = tol;
@@ -154,7 +156,11 @@ export function hitTest(doc: ChipDoc, defOf: DefOf, p: Vec, tol: number, polys?:
     const q = doc.parts[i];
     if (inRect(partBox(defOf(q), q.at), p, 0.2)) return { k: 'part', id: q.id };
   }
-  return hitWire(doc, defOf, p, tol, polys) ?? { k: 'none' };
+  const w = hitWire(doc, defOf, p, tol, polys);
+  if (w) return w;
+  const cs = doc.comments ?? [];
+  for (let i = cs.length - 1; i >= 0; i--) if (inRect(commentBox(cs[i]), p)) return { k: 'comment', id: cs[i].id };
+  return { k: 'none' };
 }
 
 export function hitWire(doc: ChipDoc, defOf: DefOf, p: Vec, tol: number, polys?: Map<string, Vec[]>): Extract<Hit, { k: 'wire' }> | null {
