@@ -298,8 +298,13 @@ chip presentation, capacity and the program-solving half of Turing Complete.
   maze, sorting), solved by writing a program for a CPU you built, scored on cycles and on the
   hardware's NANDs and depth; optional, each with a reference solution, as with the build challenges
 
-**Not planned**: locked progression (challenges stay optional), online leaderboards and score
-histograms (static site; share links take their place).
+**Campaign** (🚧, plan and status in [`docs/CAMPAIGN.md`](CAMPAIGN.md)): a tree of levels from a
+transistor NAND to a pipelined 16-bit RISC-V-like CPU (RV16) with traps and interrupts. It has
+graded build challenges, number and Boolean drills, assembly puzzles, a codex, skip with a reference
+solution, and Unlock all. Its soft locks apply to the campaign only; the chapters and the sandbox
+challenges stay open.
+
+**Not planned**: online leaderboards and score histograms (static site; share links take their place).
 
 ### Cross-cutting features 🚧
 - ✅ Probe mode + logic-analyzer Timing panel (exact transitions in gate delays, clock edges,
@@ -312,8 +317,8 @@ histograms (static site; share links take their place).
 - ✅ Click a program line: the hardware it uses (and its pipeline stage), or its word in the ROM
 - ✅ Search palette (`Ctrl/⌘ K` or `/`) over every chapter and step; chapter menu on the top bar
 - ⏳ Glossary with hover definitions
-- ✅ Progress tracking (visited steps, solved challenges, in local storage) and "Reset progress"; unlocks are not
-  planned (challenges stay optional)
+- ✅ Progress tracking (visited steps, solved challenges, in local storage) and "Reset progress"; the chapters
+  stay open (soft locks exist only in the campaign, see `docs/CAMPAIGN.md`)
 - ✅ Reduced motion: CSS animations and transitions off, slow-motion fronts drawn as plain changes
 - ⏳ Keyboard navigation beyond the shortcuts (search palette, sandbox keys)
 - ✅ Export the sandbox canvas as SVG / PNG (current theme); ⏳ the same for chapter scenes and the workbench
@@ -325,7 +330,7 @@ histograms (static site; share links take their place).
 
 ## Open questions for the author
 - Target audience depth: high-school / first-year university / practitioner refresher?
-- Should challenges *gate* progress (Turing Complete) or be optional?
+- ~~Should challenges *gate* progress?~~ Decided: the campaign gates softly (skip and Unlock all), the chapters stay open.
 - Branding / name for the site?
 - Hosting target (GitHub Pages assumed; CI already included)
 - Sound effects / gamification (badges)?
