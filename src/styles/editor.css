@@ -221,6 +221,23 @@
 }
 .sb-prompt input { font: 600 13px var(--font-mono); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--accent); background: var(--surface); color: var(--text); width: 150px; outline: none; }
 .sb-prompt small { color: var(--muted); font-size: 11px; }
+.sb-ctx {
+  position: fixed; z-index: 70; min-width: 210px; display: grid; gap: 1px; padding: 5px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg);
+}
+.sb-ctx button {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px; border: 0; background: transparent;
+  color: var(--text); padding: 5px 9px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 13px; text-align: left;
+}
+.sb-ctx button:hover:not(:disabled), .sb-ctx button:focus-visible { background: var(--surface-2); outline: none; }
+.sb-ctx button:disabled { color: var(--muted); cursor: default; }
+.sb-ctx kbd { font: 11px var(--font-mono); color: var(--muted); background: none; border: 0; padding: 0; }
+.sb-ctx hr { border: 0; border-top: 1px solid var(--border); margin: 3px 4px; }
+.ed-svg .inst-name, .ed-svg .pin-name { pointer-events: bounding-box; cursor: text; }
+.sb-inline {
+  position: absolute; z-index: 6; font: 600 13px var(--font-mono); padding: 3px 7px; border-radius: 6px; border: 1px solid var(--accent);
+  background: var(--surface); color: var(--text); outline: none; box-shadow: var(--shadow-lg);
+}
 .sb-prompt-text textarea {
   font: 13px var(--font-mono); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--accent); background: var(--surface);
   color: var(--text); outline: none; resize: both; max-width: 60vw;

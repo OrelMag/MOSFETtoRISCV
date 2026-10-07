@@ -669,6 +669,44 @@ export class Editor {
   }
 
   /**
+   * Edit a name where it is drawn: an input laid over `target` (a name on the canvas), with the
+   * current text selected. Enter or leaving the field commits, Esc cancels (done(null)).
+   */
+  editInline(target: Element, initial: string, opts: { label: string; names?: string[] }, done: (v: string | null) => void): void {
+    this.slots.overlay.querySelector('.sb-prompt, .sb-inline')?.remove();
+    const t = target.getBoundingClientRect();
+    const r = this.canvas.getBoundingClientRect();
+    const list = opts.names?.length ? h('datalist', { id: 'sb-inline-names' }, opts.names.map((n) => h('option', { value: n }))) : null;
+    const input = h('input', {
+      type: 'text', class: 'sb-inline', value: initial, spellcheck: 'false', 'aria-label': opts.label, ...(list ? { list: 'sb-inline-names' } : {}),
+      style: `left:${t.left - r.left - 4}px;top:${t.top - r.top + t.height / 2 - 12}px;width:${Math.max(90, t.width + 40)}px`,
+    }) as HTMLInputElement;
+    let finished = false;
+    const finish = (ok: boolean) => {
+      if (finished) return;
+      finished = true;
+      input.remove();
+      list?.remove();
+      done(ok ? input.value.trim() : null);
+    };
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') finish(true);
+      if (e.key === 'Escape') finish(false);
+    });
+    input.addEventListener('blur', () => finish(true));
+    this.slots.overlay.append(input);
+    if (list) this.slots.overlay.append(list);
+    input.focus();
+    input.select();
+  }
+
+  /** True while a name or comment is being typed over the canvas. */
+  get typingOnCanvas(): boolean {
+    return !!this.slots.overlay.querySelector('.sb-prompt, .sb-inline');
+  }
+
+  /**
    * Multi-line text entry over the canvas at a world point (comments): Enter commits, Shift+Enter
    * starts a new line, Esc cancels, leaving the box commits. Blank text comes back as ''.
    */
@@ -712,6 +750,9 @@ export class Editor {
       ['L', 'place a pointer (same name = same net)'],
       ['Click a selected pointer / double-click', 'jump to the next pointer with that name'],
       ['T', 'place a comment · double-click one to edit it'],
+      ['Click a selected name · double-click a name', 'rename a part or pin where it is drawn'],
+      ['F2', 'rename the selected part, pin or pointer (a comment: edit its text)'],
+      ['Right-click', 'actions for what is under the cursor (or the canvas)'],
       ['Drag empty canvas', 'select with a rubber band (Shift: add)'],
       ['Shift + click', 'add to / remove from the selection'],
       ['Space + drag, middle drag', 'pan · wheel: zoom'],

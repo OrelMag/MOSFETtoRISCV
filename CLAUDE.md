@@ -157,7 +157,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays (LED / LED bank, 7-segment,
                  hex, value, buzzer: buzzerHz; and the halt part), ROM, RAM; audio.ts plays the buzzers
   library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip
-  ops.ts         pure edits (add / move / delete / flip / set*, copy / paste); wires stay orthogonal
+  ops.ts         pure edits (add / move / delete / flip / set*, copy / paste, namePart: rename where the name is
+                 drawn); wires stay orthogonal
   history.ts     History<T>: undo / redo, transactions (a drag = one step), replace (not undone)
   store.ts       localStorage, sanitizer, JSON export / import (importChips: never overwrites, renames on
                  conflict, recognizes its own earlier renames); share.ts: share-link encoding
@@ -201,7 +202,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                DOM:
   editor.ts      Editor: workspace + history + library + sim + panels; registerToolbarAction, slots
   view.ts        EditorView: one SVG element per object updated in place, live values, overlays
-  tools.ts       the mouse / keyboard state machine (place, select, drag, band, free-hand wires, pointers)
+  tools.ts       the mouse / keyboard state machine (place, select, drag, band, free-hand wires, pointers, rename
+                 in place: F2 / a click on a selected name / editInline)
+  ctxmenu.ts     plugin: the right-click menu (selection actions with their shortcuts, or the canvas's own)
   props.ts       properties of the selection or the chip, diagnostics; registerPropsSection
   fileui.ts      File menu (export / import / share link / Verilog / images / chip manager), share banner,
                  drag-and-drop import, autosave indicator, backup notice; installFiles(ed) per page

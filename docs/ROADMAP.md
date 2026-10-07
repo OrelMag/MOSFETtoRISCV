@@ -146,6 +146,9 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
     (the run bar's gate mode does it), the data-cache line view
   - ✅ One right-hand dock for the drawers (Inspector, CPU, challenges): tabs when several, the
     look-inside view beside it
+  - ✅ Rename in place (a click on a selected part's or pin's name, a double-click on it, or F2, pointers
+    included) and a right-click menu: the selection's actions with their shortcuts, or the canvas's own
+    (paste here, add a comment or pointer, select all, fit)
   - ✅ Analysis: probe mode and a timing panel (lanes follow the drawing across rebuilds, VCD),
     static timing of a chip (period, max clock, per-capture periods) with the critical path drawn
     on it, lint (nets drawn on one line, pointers without a twin, open inputs reading X);

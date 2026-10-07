@@ -428,6 +428,22 @@ export function setPart(doc: ChipDoc, id: string, patch: Partial<PartDoc>, defOf
 
 export const setRef = (doc: ChipDoc, partId: string, ref: PartRef, defOf?: DefOf): Edited => setPart(doc, partId, { ref }, defOf);
 
+/**
+ * Rename a part from the text typed over its drawn name, which edits what it shows: its caption
+ * if it has one (blank, or its instance name, clears it), else its instance name; text that
+ * cannot be an instance name (not an identifier, or taken) becomes a caption. `id`: its id after.
+ */
+export function namePart(doc: ChipDoc, id: string, text: string, defOf?: DefOf): Edited & { id: string } {
+  const p = doc.parts.find((q) => q.id === id);
+  if (!p) return { doc, id, reason: `no part '${id}'` };
+  const t = text.trim();
+  if (t === (p.label ?? p.id) || (!t && p.label === undefined)) return { doc, id };
+  if (p.label !== undefined || !t || !isIdent(t) || partNames(doc).includes(t)) {
+    return { ...setPart(doc, id, { label: t && t !== id ? t : undefined }), id };
+  }
+  return { ...setPart(doc, id, { id: t }, defOf), id: t };
+}
+
 export function setPin(doc: ChipDoc, id: string, patch: Partial<Omit<PinDoc, 'id'>>, defOf?: DefOf): Edited {
   const i = doc.pins.findIndex((p) => p.id === id);
   if (i < 0) return { doc, reason: `no pin '${id}'` };
