@@ -755,7 +755,7 @@ export class Editor {
       ['Right-click', 'actions for what is under the cursor (or the canvas)'],
       ['Drag empty canvas', 'select with a rubber band (Shift: add)'],
       ['Shift + click', 'add to / remove from the selection'],
-      ['Space + drag, middle drag', 'pan · wheel: zoom'],
+      ['Space + drag, middle drag, two fingers', 'pan · wheel or pinch: zoom'],
       ['Ctrl+Z · Ctrl+Shift+Z / Ctrl+Y', 'undo · redo'],
       ['Ctrl+C · X · V · D · A', 'copy · cut · paste · duplicate · select all'],
       ['Delete / Backspace', 'delete the selection'],

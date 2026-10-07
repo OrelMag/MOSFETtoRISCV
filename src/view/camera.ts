@@ -3,6 +3,7 @@
 // the sandbox editor so both navigate identically.
 
 import type { Vec } from '../sim/geometry';
+import { installPinch } from './pinch';
 
 export interface ViewBox { x: number; y: number; w: number; h: number }
 
@@ -70,6 +71,19 @@ export class Camera {
     this.apply();
   }
 
+  /**
+   * A pinch step (client coordinates): what was under the fingers' old midpoint ends up under
+   * the new one, scaled by `k` (> 1 zooms in).
+   */
+  pinch(k: number, mid: [number, number], prev: [number, number]): void {
+    const [wx, wy] = this.toWorld(prev[0], prev[1]);
+    this.zoom(1 / k, wx, wy);
+    const s = this.scale();
+    this.vb.x -= (mid[0] - prev[0]) * s;
+    this.vb.y -= (mid[1] - prev[1]) * s;
+    this.apply();
+  }
+
   /** Pan (without zooming) so that a point is centred, unless it is already well inside the view. */
   centerOn(p: Vec): void {
     const v = this.vb;
@@ -103,11 +117,20 @@ export interface PanZoomHooks {
   /** Pointer moving while not panning. */
   onHover?(e: PointerEvent): void;
   onLeave?(): void;
+  /** A two-finger pinch began: abandon what its first finger started. */
+  onPinch?(): void;
 }
 
-/** Wheel zooms around the cursor; a drag on the background pans; a press without drag is a tap. */
+/**
+ * Wheel zooms around the cursor; a drag on the background pans; a press without drag is a tap;
+ * two fingers pinch-zoom and pan, wherever they land.
+ */
 export function installPanZoom(svg: SVGSVGElement, cam: Camera, hooks: PanZoomHooks): void {
   let drag: { x: number; y: number; vx: number; vy: number; moved: boolean; target: Element } | null = null;
+  installPinch(svg, {
+    start: () => { drag = null; hooks.onPinch?.(); },
+    move: (k, mid, prev) => cam.pinch(k, mid, prev),
+  });
   svg.addEventListener('wheel', (e) => {
     e.preventDefault();
     const [wx, wy] = cam.toWorld(e.clientX, e.clientY);
