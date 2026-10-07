@@ -5,6 +5,7 @@ import { h, icon } from './dom';
 import { ChapterPage, type Page } from './pages/chapter';
 import { homePage } from './pages/home';
 import { WorkbenchPage } from './pages/workbench';
+import { installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './quicknav';
 import { applyTheme, PALETTES, settings, type Theme } from './settings';
 import type { Radix } from '../sim/values';
 
@@ -14,8 +15,21 @@ export function startApp(root: HTMLElement): void {
   const nav = h('nav', { class: 'nav' });
   const navLink = (href: string, ic: string, label: string, key: string) =>
     h('a', { href, 'data-key': key }, icon(ic, 16), h('span', null, label));
-  nav.append(navLink('#/', 'layers', 'Journey', 'home'), navLink('#/c/map/0', 'book', 'Chapters', 'c'), navLink('#/workbench/rca4', 'bench', 'Workbench', 'workbench'),
+  // "Chapters" opens the chapter menu rather than the first chapter (still a link: new tab works).
+  const chLink = navLink('#/c/map/0', 'book', 'Chapters', 'c');
+  chLink.append(icon('chevD', 14));
+  chLink.setAttribute('aria-haspopup', 'menu');
+  chLink.setAttribute('aria-expanded', 'false');
+  chLink.title = `All chapters (${QUICK_KEY} to search)`;
+  chLink.addEventListener('click', (e) => {
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    toggleChapterMenu(chLink);
+  });
+  nav.append(navLink('#/', 'layers', 'Journey', 'home'), chLink, navLink('#/workbench/rca4', 'bench', 'Workbench', 'workbench'),
     navLink('#/sandbox', 'chip', 'Sandbox', 'sandbox'));
+  installQuickNav();
+  const searchBtn = h('button', { class: 'btn ghost icon-only', title: `Jump to a chapter or step (${QUICK_KEY})`, 'aria-label': 'Jump to a chapter or step', onclick: () => openQuickNav() }, icon('search', 18));
 
   const radix = h('div', { class: 'seg', title: 'How buses show their value' });
   const radixes: [Radix, string][] = [['hex', 'HEX'], ['bin', 'BIN'], ['dec', 'DEC']];
@@ -65,7 +79,7 @@ export function startApp(root: HTMLElement): void {
 
   const topbar = h('header', { class: 'topbar' },
     h('a', { class: 'brand', href: '#/' }, h('span', { class: 'brand-mark' }, icon('chip', 18)), 'MOSFET → RISC-V', h('small', null, 'a journey through abstraction')),
-    nav, h('div', { class: 'spacer' }), h('div', { class: 'tools' }, radix, animate, palWrap, themeBtn));
+    nav, h('div', { class: 'spacer' }), h('div', { class: 'tools' }, searchBtn, radix, animate, palWrap, themeBtn));
   root.append(topbar, view);
 
   let page: Page | null = null;

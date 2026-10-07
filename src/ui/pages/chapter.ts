@@ -6,6 +6,7 @@ import { Inspector } from '../../view/inspector';
 import { Stage } from '../../view/stage';
 import { transistorLeaf } from '../../widgets/mosfet';
 import { h, icon } from '../dom';
+import { toggleChapterMenu } from '../quicknav';
 import { settings } from '../settings';
 
 export interface Page {
@@ -62,7 +63,10 @@ export class ChapterPage implements Page {
     const visited = settings.visited(c.id);
     this.head.replaceChildren(
       h('div', { class: 'chapter-kicker' }, `Chapter ${c.num} · ${c.level}`),
-      h('h1', { class: 'chapter-title' }, c.title),
+      h('h1', { class: 'chapter-title' }, h('button', {
+        class: 'chapter-switch', title: 'Switch chapter', 'aria-haspopup': 'menu', 'aria-expanded': 'false',
+        onclick: (e: Event) => toggleChapterMenu(e.currentTarget as HTMLElement),
+      }, h('span', null, c.title), icon('chevD', 18))),
       h('div', { class: 'steps-dots', role: 'tablist' }, c.steps.map((s, i) =>
         h('button', {
           class: i === this.step ? 'cur' : visited.includes(i) ? 'done' : '',
