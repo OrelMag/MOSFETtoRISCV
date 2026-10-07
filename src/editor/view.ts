@@ -19,6 +19,7 @@ import {
   type ChipDoc, COMMENT_LINE, type CommentDoc, commentBox, type DefOf, defaultFace, type DisplayKind, type LabelDoc, type PartDoc, type PinDoc, pinBig, polyline, type WireDoc,
 } from './model';
 import type { Sel } from './ops';
+import { buzzerHz, LED_PITCH, ledGrid } from './parts';
 
 /** Live values, read through the compile the simulator was built from (runtime.ts). */
 export interface ViewValues {
@@ -30,7 +31,14 @@ export interface ViewValues {
 }
 
 interface PartEls { doc: PartDoc; def: ComponentDef | undefined; g: SVGGElement; disp?: DisplayEls; cls: string }
-interface DisplayEls { kind: DisplayKind; segs: SVGElement[]; led?: SVGCircleElement; text?: SVGTextElement; shown: string }
+interface DisplayEls {
+  kind: DisplayKind; width: number; segs: SVGElement[]; shown: string;
+  led?: SVGCircleElement; text?: SVGTextElement; halt?: SVGGElement; buzz?: SVGGElement;
+  /** An LED bank: one LED per bit (index = bit). */
+  leds?: SVGCircleElement[];
+  /** A buzzer's tone now (Hz, 0 silent). */
+  hz?: number;
+}
 interface WireEls { doc: WireDoc; poly: Vec[] | null; key: string; ver: number; path: SVGPathElement; hit: SVGPathElement; width: number; cls: string }
 interface DotEls { el: SVGCircleElement; wire: string; cls: string }
 interface PinEls { doc: PinDoc; g: SVGGElement; glyph: PinGlyph; geom: PinGeom; cls: string; txt: string }
@@ -47,6 +55,9 @@ export class EditorView {
   /** Drawn polyline of every wire (null: an end does not resolve). */
   readonly polys = new Map<string, Vec[]>();
   radix: Radix = 'hex';
+  /** Where buzzer tones go (part id → Hz), after every repaint that changes them. */
+  sound: ((tones: Map<string, number>) => void) | null = null;
+  private toneKey = '';
 
   private gComments: SVGGElement;
   private gWires: SVGGElement;
@@ -347,15 +358,36 @@ export class EditorView {
     return { g, disp };
   }
 
-  /** A display: LED, 7-segment digit (bit i = segment a…g, bit 7 = dp), hex digit or value box. */
+  /** A display: LED, 7-segment digit (bit i = segment a…g, bit 7 = dp), hex digit, value box or halt plate. */
   private drawDisplay(g: SVGGElement, kind: DisplayKind, width: number, w: number, h: number, flip: boolean): DisplayEls {
     g.append(s('rect', { class: 'sym-body sym-box ed-disp-box', x: 0, y: 0, width: w, height: h, rx: 0.6 }));
     const port = flip ? w : 0;
     g.append(s('circle', { class: 'ed-disp-port', cx: port, cy: h / 2, r: 0.16 }));
-    const d: DisplayEls = { kind, segs: [], shown: '' };
-    if (kind === 'led') {
+    const d: DisplayEls = { kind, width, segs: [], shown: '' };
+    if (kind === 'led' && width > 1) {
+      // Most significant bit first, rows of 8, as a binary number reads.
+      const gr = ledGrid(width), x0 = (w - gr.cols * LED_PITCH) / 2, y0 = (h - gr.rows * LED_PITCH) / 2;
+      d.leds = Array.from({ length: width }, (_, b) => {
+        const i = width - 1 - b, r = Math.floor(i / gr.cols), c = i % gr.cols;
+        return s('circle', { class: 'ed-led', cx: x0 + LED_PITCH * (c + 0.5), cy: y0 + LED_PITCH * (r + 0.5), r: LED_PITCH / 2 - 0.15 });
+      });
+      g.append(...d.leds);
+    } else if (kind === 'led') {
       d.led = s('circle', { class: 'ed-led', cx: w / 2, cy: h / 2, r: Math.min(w, h) / 2 - 0.25 });
       g.append(d.led);
+    } else if (kind === 'buzzer') {
+      // A speaker cone and two sound waves (lit while it sounds).
+      const cx = w / 2 - 0.5, cy = h / 2;
+      d.buzz = s('g', { class: 'ed-buzz' },
+        s('path', { class: 'ed-buzz-cone', d: `M${cx - 0.9},${cy - 0.35} h0.5 l0.7,-0.5 v1.7 l-0.7,-0.5 h-0.5 Z` }),
+        s('path', { class: 'ed-buzz-wave', d: `M${cx + 0.65},${cy - 0.4} q0.35,0.4 0,0.8` }),
+        s('path', { class: 'ed-buzz-wave', d: `M${cx + 1.05},${cy - 0.7} q0.6,0.7 0,1.4` }));
+      g.append(d.buzz);
+    } else if (kind === 'halt') {
+      d.halt = s('g', { class: 'ed-halt' },
+        s('rect', { class: 'ed-halt-plate', x: 0.45, y: 0.35, width: w - 0.9, height: h - 0.7, rx: 0.3 }),
+        s('text', { class: 'ed-halt-text', x: w / 2, y: h / 2 + 0.32, 'text-anchor': 'middle' }, 'HALT'));
+      g.append(d.halt);
     } else if (kind === 'value') {
       d.text = s('text', { class: 'ed-disp-value', x: w / 2, y: h / 2 + 0.4, 'text-anchor': 'middle' });
       g.append(d.text);
@@ -494,6 +526,18 @@ export class EditorView {
       e.g.classList.toggle('maybe', c === 2);
     }
     this.paintBusLabels(v, built);
+    this.paintTones(v !== null);
+  }
+
+  /** Hand the buzzers' tones to `sound` when they change (all silent without a simulation). */
+  private paintTones(live: boolean): void {
+    if (!this.sound) return;
+    const tones = new Map<string, number>();
+    if (live) for (const [id, e] of this.parts) if (e.disp?.hz) tones.set(id, e.disp.hz);
+    const key = [...tones].join(';');
+    if (key === this.toneKey) return;
+    this.toneKey = key;
+    this.sound(tones);
   }
 
   private paintDisplay(d: DisplayEls, bits: Bit[] | null): void {
@@ -503,7 +547,19 @@ export class EditorView {
     const key = bits ? bits.join('') + this.radix : '';
     if (key === d.shown) return;
     d.shown = key;
-    if (d.led) {
+    if (d.leds) {
+      d.leds.forEach((el, i) => {
+        const b = bits?.[i];
+        el.setAttribute('class', `ed-led${b === B1 ? ' on' : b === BX || b === BZ ? ' vx' : ''}`);
+      });
+    } else if (d.buzz) {
+      // A bus wider than 7 bits with a high bit set is past note 127: the top note.
+      d.hz = !bits || x ? 0 : buzzerHz(d.width, bits.slice(7).includes(B1) ? 127 : pack(bits.slice(0, 7)));
+      d.buzz.setAttribute('class', `ed-buzz${d.hz ? ' on' : x && bits ? ' vx' : ''}`);
+    } else if (d.halt) {
+      const on = !!bits && bits.includes(B1);
+      d.halt.setAttribute('class', `ed-halt${on ? ' ed-halt-on' : x && bits ? ' ed-halt-vx' : ''}`);
+    } else if (d.led) {
       d.led.setAttribute('class', `ed-led${bits && bits.some((b) => b === B1) && !x ? ' on' : x && bits ? ' vx' : ''}`);
     } else if (d.text) {
       d.text.textContent = bits ? formatBits(bits, this.radix) : '–';
@@ -524,7 +580,7 @@ export class EditorView {
       if (built && this.doc) {
         const shown = new Set<number>();
         for (const [k, n] of built.netOfEnd) if (k.startsWith('pin:')) shown.add(n);
-        for (const p of this.doc.parts) if ('display' in p.ref) shown.add(built.netOfEnd.get(`p:${p.id}.a`) ?? -1);
+        for (const p of this.doc.parts) if ('display' in p.ref && p.ref.display !== 'halt') shown.add(built.netOfEnd.get(`p:${p.id}.a`) ?? -1);
         const best = new Map<number, { at: Vec; len: number; wire: string }>();
         for (const e of this.wires.values()) {
           const n = built.netOfWire.get(e.doc.id);

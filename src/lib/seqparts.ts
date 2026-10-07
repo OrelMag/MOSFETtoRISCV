@@ -9,7 +9,7 @@ import { Builder } from './builder';
 import { addSub, busMux2, muxTree } from './combinational';
 import { define, merger, ones, splitter } from './define';
 import { AND, NOT, OR, XOR } from './gates';
-import { DFF, register } from './sequential';
+import { counter, DFF, register } from './sequential';
 import { NAND, TIE1 } from './transistors';
 import { xorN } from './wide';
 
@@ -293,6 +293,79 @@ export function lfsr(n: number): ComponentDef {
       symbol: { kind: 'box', label: `LFSR${n}` },
       netlist: () => ({ pins: { seed: [0, y0 + mg.ports.b.pos[1]], load: [0, y0 + mg.h + 4], clk: [0, y0 + rg.h + 12], q: [R, y0 + rg.ports.q.pos[1] - 6] }, instances, nets }),
       hdl: { verilog: `always_ff @(posedge clk)\n  q <= load ? seed : {q[N-2:0], ${taps.map((t) => `q[${t - 1}]`).join(' ^ ')}};` },
+    });
+  });
+}
+
+/** Software model of randomSource(n): the next state (the shifted-in bit is the XNOR of the taps). */
+export const xnorLfsrNext = (q: number, n: number) => lfsrNext(q, n) ^ 1;
+
+/**
+ * A free-running pseudo-random source: an XNOR LFSR clocked every cycle. XNOR instead of XOR moves
+ * the stuck state from all zeros to all ones, so it runs from the zero a power-on gives it, with no
+ * seed to load; same taps, same 2^n − 1 states (each the complement of the XOR register's).
+ */
+export function randomSource(n: number): ComponentDef {
+  const taps = LFSR_TAPS[n];
+  if (!taps) throw new Error(`no LFSR taps for ${n} bits`);
+  return memo(`random${n}`, () => {
+    const REG = register(n), FB = taps.length === 2 ? XOR : xorN(taps.length);
+    const rg = symbolGeom(REG), fg = symbolGeom(FB);
+    const xr = 8, xs = xr + rg.w + 8, xf = xs + 8, y0 = 4, yq = y0 + rg.ports.q.pos[1];
+    const yf = y0 + rg.h + 8 + n - fg.h / 2, xi = xf + fg.w + 3, xn = xi + 3 + 5;
+    const instances: InstanceDef[] = [
+      { name: 'reg', def: REG, at: [xr, y0] },
+      { name: 'one', def: TIE1, at: [xr - 6, y0 + rg.h + 2] },
+      { name: 'sq', def: splitter([n - 1, 1]), at: [xs, yq - 1] },
+      { name: 'taps', def: splitter(ones(n)), at: [xs, y0 + rg.h + 8] },
+      { name: 'fb', def: FB, at: [xf, yf], label: `taps ${taps.join(', ')}` },
+      { name: 'inv', def: NOT, at: [xi, yf + fg.ports.y.pos[1] - 1] },
+      { name: 'nx', def: merger([1, n - 1]), at: [xn, yq - 1] },
+    ];
+    const fIns = FB.ports.filter((p) => p.dir === 'in').map((p) => p.name);
+    const nets: NetDef[] = [
+      { name: 'clk', ends: ['clk', 'reg.clk'] }, { ends: ['one.y', 'reg.en'] },
+      { name: 'q', ends: ['reg.q', 'sq.in', 'taps.in', 'q'], tags: ['taps.in', 'q'] },
+      { name: 'low', ends: ['sq.o0', 'nx.i1'] },
+      { name: 'xor', ends: ['fb.y', 'inv.a'] },
+      { name: 'shift_in', ends: ['inv.y', 'nx.i0'], tags: true },
+      { name: 'next', ends: ['nx.out', 'reg.d'], tags: true },
+    ];
+    taps.forEach((t, i) => nets.push({ name: `q${t - 1}`, ends: [`taps.o${t - 1}`, `fb.${fIns[i]}`] }));
+    const R = xn + 10;
+    return define({
+      id: `random${n}`, name: `${n}-bit random source`, category: 'sequential',
+      summary: `Pseudo-random numbers, a new one every clock edge: an XNOR linear-feedback shift register (taps ${taps.map((t) => t - 1).join(', ')}). `
+        + `It runs from the all-zeros power-on state with no seed and repeats after ${2 ** n - 1} numbers; all ones is the one state it never reaches. Deterministic, so a run can be replayed.`,
+      ports: [bit('clk', 'in', 'bottom', true), bus('q', n, 'out')],
+      symbol: { kind: 'box', label: `RND${n}` },
+      netlist: () => ({ pins: { clk: [0, y0 + rg.h + 12], q: [R, yq - 6] }, instances, nets }),
+      hdl: { verilog: `always_ff @(posedge clk)\n  q <= {q[N-2:0], ~(${taps.map((t) => `q[${t - 1}]`).join(' ^ ')})};` },
+    });
+  });
+}
+
+/** A cycle counter: a counter enabled for good, so q is the number of clock edges since power-on (mod 2^n). */
+export function cycleCounter(n: number): ComponentDef {
+  return memo(`cycles${n}`, () => {
+    const C = counter(n), cg = symbolGeom(C), tg = symbolGeom(TIE1);
+    const at: [number, number] = [10, 2];
+    const ye = at[1] + cg.ports.en.pos[1];
+    return define({
+      id: `cycles${n}`, name: `${n}-bit cycle counter`, category: 'sequential',
+      summary: `The number of clock edges since power-on, wrapping at 2^${n}: a counter whose enable is tied to 1. Time for a program, a timeout, a benchmark.`,
+      ports: [bit('clk', 'in', 'bottom', true), bus('q', n, 'out')],
+      symbol: { kind: 'box', label: `CYC${n}` },
+      netlist: () => ({
+        pins: { clk: [0, at[1] + cg.h + 3], q: [at[0] + cg.w + 6, at[1] + cg.ports.q.pos[1]] },
+        instances: [{ name: 'one', def: TIE1, at: [2, ye - tg.ports.y.pos[1]] }, { name: 'cnt', def: C, at }],
+        nets: [
+          { ends: ['one.y', 'cnt.en'] },
+          { name: 'clk', ends: ['clk', 'cnt.clk'] },
+          { name: 'q', ends: ['cnt.q', 'q'] },
+        ],
+      }),
+      hdl: { verilog: 'always_ff @(posedge clk)\n  q <= q + 1;' },
     });
   });
 }

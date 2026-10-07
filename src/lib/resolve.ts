@@ -23,7 +23,7 @@ import { bcdAdder, carrySelect, carrySkip } from './adders';
 import { cam, fifo, pla, regfileMP, romArray, stack } from './storage';
 import { sramArray, sramColumn } from './arrays';
 import { wbCache } from './cache2';
-import { clockDivider, lfsr, ringCounter, shiftRegister, upDownCounter } from './seqparts';
+import { clockDivider, cycleCounter, lfsr, randomSource, ringCounter, shiftRegister, upDownCounter } from './seqparts';
 import { srt4Divider, srt4Step } from './srt4';
 import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
 import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
@@ -209,6 +209,8 @@ export const families: Family[] = [
   nBit('updown', 'Up/down counter', 'sequential', [2, 4, 8, 16], 4, (n) => `updown${n}`, upDownCounter),
   nBit('shreg', 'Universal shift register', 'sequential', [4, 8, 16], 4, (n) => `shreg${n}`, shiftRegister),
   nBit('lfsr', 'LFSR', 'sequential', [3, 4, 5, 8, 16], 4, (n) => `lfsr${n}`, lfsr),
+  nBit('random', 'Random source', 'sequential', [4, 8, 16], 8, (n) => `random${n}`, randomSource),
+  nBit('cycles', 'Cycle counter', 'sequential', [8, 16, 32], 16, (n) => `cycles${n}`, cycleCounter),
   nBit('ring', 'Ring counter', 'sequential', [3, 4, 8], 4, (n) => `ring${n}`, (n) => ringCounter(n)),
   nBit('johnson', 'Johnson counter', 'sequential', [3, 4, 8], 4, (n) => `johnson${n}`, (n) => ringCounter(n, true)),
   { id: 'clkdiv', name: 'Ripple clock divider', category: 'sequential', params: [count('stages', [1, 2, 3, 4, 8], 3)], key: (p) => `clkdiv${p.stages}`, make: (p) => clockDivider(p.stages) },

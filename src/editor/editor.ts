@@ -28,6 +28,7 @@ import { activeChip, closeChip, keepVolatile, newChip, openChip, setPinValue } f
 import { loadWorkspace, saveWorkspace } from './store';
 import { Tools } from './tools';
 import { EditorView } from './view';
+import { Buzzers } from './audio';
 
 export interface ToolbarAction {
   id: string;
@@ -145,6 +146,7 @@ export class Editor {
 
     this.canvas = h('div', { class: 'sb-canvas' });
     this.view = new EditorView(this.canvas);
+    this.view.sound = (tones) => this.buzzers.set(tones);
     this.view.radix = settings.radix;
     this.toastEl = h('div', { class: 'sb-toast', role: 'status', 'aria-live': 'polite' });
     this.tipEl = h('div', { class: 'wire-tip' });
@@ -155,6 +157,7 @@ export class Editor {
 
     this.sim = new EditorSim({ gateRate: () => settings.speed });
     this.sim.onChange = () => this.simChanged();
+    this.sim.onHalt = () => this.halted();
 
     this.palette = new PalettePanel(() => ({ ws: this.ws, chipId: this.chipId, canPlace: (c) => this.lib.canPlace(this.chipId, c) }), {
       pick: (item, e) => this.tools.pickFromPalette(item, e),
@@ -396,6 +399,7 @@ export class Editor {
       // bit across tab switches), else a fresh one. The one left behind is paused and kept.
       const old = this.sim;
       old.onChange = () => {};
+      old.onHalt = () => {};
       old.pause();
       this.sims.set(this.simChip, old);
       let s = this.sims.get(id);
@@ -412,6 +416,7 @@ export class Editor {
         this.sims.delete(k);
       }
       s.onChange = () => this.simChanged();
+      s.onHalt = () => this.halted();
       this.sim = s;
       this.simChip = id;
       this.buildControls();
@@ -541,6 +546,7 @@ export class Editor {
     }
   }
 
+  private readonly buzzers = new Buzzers();
   private runBtn!: HTMLButtonElement;
   private rateSel!: HTMLSelectElement;
 
@@ -576,6 +582,12 @@ export class Editor {
     else this.sim.start();
   }
 
+  /** A halt part stopped Run. */
+  private halted(): void {
+    const sim = this.sim;
+    this.toast(sim.hasClock ? `Halted after cycle ${sim.cycles}` : `Halted at t = ${sim.time}`);
+  }
+
   private updateStatus(): void {
     const sim = this.sim;
     if (!this.runBtn) return;
@@ -592,6 +604,7 @@ export class Editor {
     else {
       bits.push(h('span', { class: `pulse${sim.running ? ' busy' : ''}${sim.unstable ? ' warn' : ''}` }));
       if (sim.unstable) bits.push('oscillating');
+      if (sim.halted) bits.push(h('span', { class: 'sb-halted', title: 'A halt part reads 1: Run stops after every step until it reads 0' }, 'halted'));
       if (sim.hasClock) bits.push(`${sim.cycles} cycles`);
       if (sim.sim.kind === 'gate') bits.push(`t = ${sim.time}`);
       if (sim.running && sim.mode === 'cycle' && sim.hasClock) bits.push(`${fmtHz(sim.achievedHz)}`);
@@ -724,6 +737,7 @@ export class Editor {
     this.save();
     this.cleanups.forEach((f) => f());
     this.sim.destroy();
+    this.buzzers.destroy();
     this.sims.forEach((s) => s.destroy());
     this.tools.destroy();
     this.unsub();

@@ -114,22 +114,54 @@ function buildConstant(w: number, v: number): ComponentDef {
 
 // ---- displays ------------------------------------------------------------------------------
 
-const DISPLAY_LABEL: Record<DisplayKind, string> = { led: 'LED', seg7: '7-seg', hex: 'HEX', value: 'value' };
+const DISPLAY_LABEL: Record<DisplayKind, string> = { led: 'LED', seg7: '7-seg', hex: 'HEX', value: 'value', halt: 'HALT', buzzer: 'BUZZ' };
+
+/** LEDs per row of an LED bank, and the pitch of its grid (grid units). */
+const LEDS_PER_ROW = 8;
+export const LED_PITCH = 1.4;
+
+/** An LED bank of w LEDs: rows of 8 (most significant bit first), in a box of even height. */
+export function ledGrid(w: number): { cols: number; rows: number; w: number; h: number } {
+  const cols = Math.min(w, LEDS_PER_ROW), rows = Math.ceil(w / LEDS_PER_ROW);
+  const even = (x: number) => 2 * Math.ceil(x / 2);
+  return { cols, rows, w: Math.max(4, even(cols * LED_PITCH + 1.2)), h: Math.max(2, even(rows * LED_PITCH + 0.6)) };
+}
+
+/**
+ * The tone of a buzzer for the value on its input, in Hz (0: silent). A 1-bit buzzer sounds A4
+ * (440 Hz) while its input is 1; a wider one plays MIDI note v (69 = A4, 60 = middle C), up to 127.
+ */
+export function buzzerHz(width: number, v: number): number {
+  if (v <= 0) return 0;
+  if (width === 1) return 440;
+  return 440 * 2 ** ((Math.min(v, 127) - 69) / 12);
+}
 const dispCache = new Map<string, ComponentDef>();
+
+const DISPLAY_SUMMARY: Partial<Record<DisplayKind, string>> = {
+  halt: 'Stops Run after the step where its input reads non-zero (any bit 1). Pure view: no gates, no delay.',
+  buzzer: 'Sounds while its input is non-zero: 1 bit plays A4 (440 Hz), a bus plays MIDI note v (69 = A4, 60 = middle C). Pure view: no gates, no delay.',
+};
+
+/** Id prefix of the halt part's defs: the run loop finds them in any simulation's hierarchy by it. */
+export const HALT_PREFIX = 'disp_halt_';
 
 /**
  * A pure view: an alias box with no aliases, so it joins nothing, costs nothing, is no leaf of
  * any simulation and emits nothing in Verilog. The editor reads the value of the net on `a`.
+ * The halt part is one too: the circuit cannot tell it is there, only the run loop reads it.
  */
 function display(kind: DisplayKind, w: number): ComponentDef {
   const id = `disp_${kind}_${w}`;
   let d = dispCache.get(id);
   if (d) return d;
+  const box = kind === 'led' ? ledGrid(w) : kind === 'halt' || kind === 'buzzer' ? { w: 4, h: 2 } : null;
   d = {
-    id, name: `Display (${DISPLAY_LABEL[kind]})`, category: 'plumbing',
-    summary: 'Shows the value on its input. Pure view: no gates, no delay.',
+    id, name: kind === 'halt' ? 'Halt' : kind === 'buzzer' ? 'Buzzer' : kind === 'led' && w > 1 ? `LED bank (${w})` : `Display (${DISPLAY_LABEL[kind]})`,
+    category: 'plumbing',
+    summary: DISPLAY_SUMMARY[kind] ?? 'Shows the value on its input. Pure view: no gates, no delay.',
     ports: [{ name: 'a', width: w, dir: 'in' }],
-    symbol: { kind: 'box', label: DISPLAY_LABEL[kind], ...(kind === 'led' ? { w: 4, h: 2 } : {}) },
+    symbol: { kind: 'box', label: DISPLAY_LABEL[kind], ...(box ? { w: box.w, h: box.h } : {}) },
     prim: 'alias', alias: [],
   };
   dispCache.set(id, d);
