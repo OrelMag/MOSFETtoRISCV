@@ -11,6 +11,8 @@ import { GateSim } from '../src/sim/gatesim';
 import { evalOnce, simulate } from '../src/sim/harness';
 import type { ComponentDef } from '../src/sim/types';
 import { netlistOf } from '../src/sim/types';
+import { pack } from '../src/sim/values';
+import { ViewCtx } from '../src/view/context';
 import { routeNetlist, wireOverlaps } from '../src/view/route';
 
 type Rom = Extract<PartRef, { rom: unknown }>['rom'];
@@ -93,6 +95,31 @@ describe('ROM part', () => {
     expect(err({ w: 12 as 8 })).toMatch(/8, 16 or 32/);
     expect(err({ addr: 'rv32', w: 16 })).toMatch(/32-bit/);
     expect(err({ src: '' })).toBe('ok');
+  });
+
+  it('opened, it simulates its structure: the mux opens, inner nets carry values', () => {
+    // A placed ROM is a lookup leaf; look inside starts a sub-simulation of the ROM itself,
+    // which must expand it despite preferBehavior (else nothing inside is live or openable).
+    const words = [0x513, 0x100293, 0xb00313, 0x550533, 0x128293, 0xfe629ce3, 0xa02023, 0x6f];
+    const R = wordRom(3, 32, 'rv32', words);
+    const top: ComponentDef = {
+      id: 't_rom_host', name: 'host', category: 'memory', ports: R.ports, symbol: { kind: 'box' },
+      netlist: () => ({ pins: { addr: [0, 0], data: [0, 0] }, instances: [{ name: 'rom', def: R, at: [0, 0] }],
+        nets: [{ ends: ['addr', 'rom.addr'] }, { ends: ['rom.data', 'data'] }] }),
+    };
+    const sim = new GateSim(flatten(top));
+    sim.setInput('addr', 0x79c);
+    sim.settle();
+    const root = new ViewCtx(sim, sim.design.root);
+    expect(root.childLeaf('rom')).toBeDefined();
+    const rom = root.child('rom')!;
+    expect(rom.isSubSim).toBe(true);
+    expect(rom.canOpen('mux')).toBe(true);
+    expect(pack(rom.sim.getBits(rom.node.children!.get('mux')!.ports.s))).toBe(7);
+    expect(pack(rom.portBits('data'))).toBe(0x6f);
+    const mux = rom.child('mux')!;
+    expect(mux.canOpen('m0_0')).toBe(true);
+    expect(pack(mux.portBits('y'))).toBe(0x6f);
   });
 
   it('its inside view routes cleanly', () => {

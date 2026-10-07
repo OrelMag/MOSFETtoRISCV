@@ -55,7 +55,10 @@ export class ViewCtx {
       const nl = netlistOf(c.def);
       if (!nl) return null;
       const mode = nl.level === 'switch' ? 'switch' : 'gate';
-      const design = flatten(c.def, { mode });
+      // Opening it means seeing its structure: expand the root even when it prefers its
+      // behaviour (the ROM), else the drawing has no simulated nets and nothing to open.
+      // Such parts deeper down stay leaves and open onto their own sub-simulation.
+      const design = flatten(c.def, { mode, expand: (d, n) => n.parent === null || !d.preferBehavior });
       const sub = mode === 'switch' ? new SwitchSim(design) : new GateSim(design);
       ctx = new ViewCtx(sub, design.root, this, c, name);
     }
