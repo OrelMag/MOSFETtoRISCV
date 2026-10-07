@@ -12,7 +12,7 @@ import { B0, B1, BZ, type Bit, type ComponentDef, inPorts, netlistOf, outPorts, 
 import { formatBits, formatNumber, mask, pack, packBig, type Radix, unpackBig } from '../sim/values';
 import { LogicAnalyzer, netKey } from './analyzer';
 import { h, icon } from '../ui/dom';
-import { settings } from '../ui/settings';
+import { applyTheme, settings } from '../ui/settings';
 import { ViewCtx } from './context';
 import { Inspector } from './inspector';
 import { closePopover, editNumber } from './popover';
@@ -86,6 +86,7 @@ export class Stage {
   private probeMode = false;
   private probeBtn: HTMLButtonElement;
   private timingBtn: HTMLButtonElement;
+  private panesBtn: HTMLButtonElement;
   /** Fixed clock period in gate delays (null: every edge waits for the logic to settle). */
   private period: number | null = null;
   private nextEdge = 0;
@@ -118,12 +119,20 @@ export class Stage {
       icon('wave', 15), h('span', { class: 'lbl' }, 'Timing')) as HTMLButtonElement;
     const remix = h('button', { class: 'btn ghost sm remix-btn', title: 'Open in Sandbox: an editable copy of the circuit on screen, as one of your own chips', onclick: () => this.remix() },
       icon('chip', 15), h('span', { class: 'lbl' }, 'Open in Sandbox'));
+    // The side panes (narrative or library, inspector) fold away for a full-width circuit; the
+    // choice is a setting (data-wide on <html>), so it holds across steps and pages.
+    this.panesBtn = h('button', { class: 'btn ghost icon-only toggle panes-btn', onclick: () => {
+      settings.set('wide', !settings.wide);
+      applyTheme();
+    } }, icon('sidebar', 16)) as HTMLButtonElement;
+    this.syncPanesBtn();
     const bar = h('div', { class: 'stage-bar' },
       this.crumbs, remix, this.probeBtn, this.timingBtn,
       btn('up', 'Up one level (Esc)', () => this.up()),
       btn('minus', 'Zoom out', () => this.view.zoom(1.25)),
       btn('plus', 'Zoom in', () => this.view.zoom(0.8)),
-      btn('fit', 'Fit to screen', () => this.view.fit()));
+      btn('fit', 'Fit to screen', () => this.view.fit()),
+      this.panesBtn);
     this.canvas = h('div', { class: 'canvas' });
     this.levelBadge = h('div', { class: 'level-badge' });
     this.dock = h('div', { class: 'panel-dock' });
@@ -155,6 +164,7 @@ export class Stage {
       }
     });
     settings.onChange(() => {
+      this.syncPanesBtn();
       this.analyzer.radix = settings.radix;
       this.view.radix = settings.radix;
       this.inspector.radix = settings.radix;
@@ -169,6 +179,14 @@ export class Stage {
       this.view.resized();
       this.layoutDock();
     }).observe(this.canvas);
+  }
+
+  private syncPanesBtn(): void {
+    const t = settings.wide ? 'Show the side panes' : 'Hide the side panes: the circuit full width';
+    this.panesBtn.classList.toggle('on', settings.wide);
+    this.panesBtn.title = t;
+    this.panesBtn.setAttribute('aria-label', t);
+    this.panesBtn.setAttribute('aria-pressed', String(settings.wide));
   }
 
   onChange(f: () => void): () => void {

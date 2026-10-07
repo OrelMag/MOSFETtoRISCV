@@ -310,7 +310,8 @@ keep the two in step when a panel gains a feature.
   Probe colours are `--probe-0..7` (class `p0..p7` sets `--pc`).
 - Module colours: library boxes and muxes are tinted by `CATEGORY_HUE[def.category]` (view/symbols.ts,
   class `.sym.cat`, the same `--chip-h` styling as a user chip's hue); `data-modules="plain"` on
-  `<html>` (settings.modules) turns it off.
+  `<html>` (settings.modules) turns it off. `data-wide` (settings.wide, the stage bar's panes button)
+  hides the chapter / workbench side panes.
 - Camera: `fitted` stays true until the learner zooms or pans; a canvas resize (the bottom bar rewraps
   during a run) refits only a fitted view, else `resized()` keeps the scale and top-left corner.
 - Hops, tap bit ranges, net selection and probe flags are computed in the view from the
