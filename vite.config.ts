@@ -23,5 +23,10 @@ export default defineConfig({
     __APP_COMMIT__: JSON.stringify(git('rev-parse --short HEAD', 'dev')),
     __APP_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)),
   },
-  test: { include: ['tests/**/*.test.ts'], environment: 'node', setupFiles: ['tests/setup.ts'] },
+  test: {
+    include: ['tests/**/*.test.ts'], environment: 'node', setupFiles: ['tests/setup.ts'],
+    // The registry-wide sweeps (round-trip, layout, routing) take seconds per large component, more on a
+    // slow runner; 30 s still catches a real hang. Explicit per-test timeouts are unchanged.
+    testTimeout: 30_000,
+  },
 });
