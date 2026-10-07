@@ -147,7 +147,9 @@ export const MC_FSM: ComponentDef = (() => {
   // outputs: per field bit, the OR of the states asserting it. Each output's pin sits on its
   // driver's row so the wire is straight; a field's bits are spaced to match its merger's pitch.
   const xC = Math.ceil(xN + 11 + tagLen('next') + stateTag + 1), xP = xC + 20;
-  let yC = 2, ties = 0;
+  // floor: bottom of the last field's merger. A tall merger (wide pitch) reaches below its
+  // field's gates, so the next field starts below it: neither its merger nor its pin wire may cross it.
+  let yC = 2, ties = 0, floor = -Infinity;
   const pins: Record<string, [number, number]> = { clk: [0, rg.h + 4], op: [0, yO + og.ports.op.pos[1]] };
   MC_FIELDS.forEach(([f, n]) => {
     const bits = Array.from({ length: n }, (_, b) => MC_STATES.map((s, i) => (((s.sig[f] ?? 0) >> b) & 1 ? i : -1)).filter((i) => i >= 0));
@@ -156,7 +158,7 @@ export const MC_FSM: ComponentDef = (() => {
     const hs = bits.map(hOf);
     let pitch = 2;
     for (let b = 1; b < n; b++) pitch = Math.max(pitch, 2 * Math.ceil((hs[b - 1] / 2 + hs[b] / 2 + 2) / 2));
-    const y0 = yC + hs[0] / 2;
+    const y0 = Math.max(yC + hs[0] / 2, floor + 2 + (n > 1 ? pitch / 2 : 0));
     const bitsDrv = bits.map((states, b) => {
       const yo = y0 + pitch * b, d = defOf(states);
       yC = yo + hs[b] / 2 + 2;
@@ -177,6 +179,7 @@ export const MC_FSM: ComponentDef = (() => {
       bitsDrv.forEach((d, b) => sink(d, `m_${f}.i${b}`));
       nets.push({ name: f, ends: [`m_${f}.out`, f] });
       pins[f] = [xP, y0 + (pitch * (n - 1)) / 2];
+      floor = y0 - pitch / 2 + pitch * n;
     }
   });
   pins.state = [xP, yC + 1];

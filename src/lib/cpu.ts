@@ -11,7 +11,7 @@ import { alu, constWord, orN } from './alu';
 import { koggeStone } from './fastadd';
 import { andN, busMux2, incrementer, muxTree, rca } from './combinational';
 import { define, merger, splitter } from './define';
-import { AND, NOT, OR, XNOR, XOR } from './gates';
+import { AND, NOT, OR, XOR } from './gates';
 import { ram } from './memory';
 import { cachedMemory } from './cache';
 import { iCache, wbCache } from './cache2';
@@ -361,9 +361,11 @@ export const NEXT_PC: ComponentDef = (() => {
       instances: [
         { name: 'nz', def: NOT, at: [8, dY(1) - 1] },
         { name: 'lt', def: XOR, at: [6, dY(4) - 2] },
-        { name: 'ge', def: XNOR, at: [6, dY(5) + 1] },
-        { name: 'nc', def: NOT, at: [8, dY(6) - 1] },
-        { name: 'gnd', def: TIE0, at: [14, dY(2) - 1] },
+        // bge = ¬blt: one inverter on lt rather than an XNOR of its own beside it
+        { name: 'ge', def: NOT, at: [16, dY(5) - 1] },
+        { name: 'nc', def: NOT, at: [12, dY(6) - 1] },
+        // low enough that its name clears nz's output wire
+        { name: 'gnd', def: TIE0, at: [14, dY(3) - 1] },
         { name: 'cond', def: M, at: [mx, 0] },
         { name: 'take', def: AND, at: [mx + 7, mg.h / 2 + 1] },
         { name: 'src0', def: OR, at: [mx + 14, mg.h / 2 + 2] },
@@ -372,9 +374,9 @@ export const NEXT_PC: ComponentDef = (() => {
       nets: [
         { name: 'zero', ends: ['zero', 'cond.d0', 'nz.a'], trunk: 3 },
         { name: 'nzero', ends: ['nz.y', 'cond.d1'] },
-        { name: 'neg', ends: ['neg', 'lt.a', 'ge.a'], trunk: 2 },
-        { name: 'ovf', ends: ['ovf', 'lt.b', 'ge.b'], trunk: 4 },
-        { name: 'lt', ends: ['lt.y', 'cond.d4'] },
+        { name: 'neg', ends: ['neg', 'lt.a'] },
+        { name: 'ovf', ends: ['ovf', 'lt.b'] },
+        { name: 'lt', ends: ['lt.y', 'cond.d4', 'ge.a'], trunk: 15 },
         { name: 'ge', ends: ['ge.y', 'cond.d5'] },
         { name: 'carry', ends: ['carry', 'cond.d7', 'nc.a'], trunk: 5 },
         { name: 'ltu', ends: ['nc.y', 'cond.d6'] },
