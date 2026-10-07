@@ -92,7 +92,8 @@ src/lib/       the component library (registered in `registry` via define())
                  decoder(n, en, pitch), busMux2(w), muxTree(k, w, pitch)
   sequential.ts  SR latch, D latch, DFF (master–slave), DFFE, register(n), counter(n)
   seqparts.ts    NAND3, D_LATCH_R / DFF_R (async reset), TFF, JKFF, upDownCounter(n), shiftRegister(n) (74194-style),
-                 lfsr(n) (LFSR_TAPS, lfsrNext), ringCounter(n, johnson), clockDivider(k)
+                 lfsr(n) (LFSR_TAPS, lfsrNext), randomSource(n) (XNOR LFSR, xnorLfsrNext), cycleCounter(n),
+                 ringCounter(n, johnson), clockDivider(k)
   storage.ts     romArray(preset), minimize() (Quine–McCluskey), pla(preset), fifo(k, w), stack(k, w), cam(k, w),
                  regfileMP(k, w, reads, writes)
   memory.ts      ram(k, w): decoder + registers + mux tree, user-scalable
@@ -152,7 +153,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                DOM-free (tested in Node):
   model.ts       Workspace / ChipDoc (pins, parts, wires = interior corners, pointers = named net labels)
   compile.ts     compileChip(doc) → ComponentDef + diags, netOfWire / netOfEnd / netOfLabel, connKey
-  parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays (and the halt part), ROM, RAM
+  parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays (LED / LED bank, 7-segment,
+                 hex, value, buzzer: buzzerHz; and the halt part), ROM, RAM; audio.ts plays the buzzers
   library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip
   ops.ts         pure edits (add / move / delete / flip / set*, copy / paste); wires stay orthogonal
   history.ts     History<T>: undo / redo, transactions (a drag = one step), replace (not undone)

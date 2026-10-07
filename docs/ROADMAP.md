@@ -261,13 +261,15 @@ chip presentation, capacity and the program-solving half of Turing Complete.
   keyboard part that latches the last key's code with a ready flag
 - ⏳ Pixel screen: a dot-matrix / RGB display driven by a frame-buffer RAM or row/column/colour
   pins (DLS dot display, TC screen); the 7-segment display already exists
-- ⏳ Console, LED bank and switch bank as parts, not only in the system CPU's I/O panel, so a hand-built
-  CPU can memory-map them
-- ⏳ Buzzer (DLS): a tone while its input is high, or a frequency from a bus
+- ✅ LED bank: a wide LED shows one LED per bit (most significant first, rows of 8)
+- ⏳ Console and switch bank as parts, not only in the system CPU's I/O panel, so a hand-built CPU can
+  memory-map them
+- ✅ Buzzer (DLS): A4 while its 1-bit input is high, or MIDI note v from a bus (Web Audio, square wave)
 - ✅ Halt part (TC): a zero-cost sink that stops Run (and the CPU panel's Run to halt) after the step where its input
   reads 1 (any bit of a bus), from any depth of the hierarchy, so a hand-built CPU can halt itself; level sensitive
   (Run advances one step at a time while it stays 1; Step ignores it)
-- ⏳ Random source, cycle counter / time (TC)
+- ✅ Random source and cycle counter (TC), as library parts that open down to gates: an XNOR LFSR that runs
+  from the power-on zero with no seed (4 / 8 / 16 bits) and a counter with its enable tied to 1 (8 / 16 / 32)
 
 **Chips and canvas**
 - ⏳ Chip appearance: resizable box, pins on any side and in any order, displays inside a chip

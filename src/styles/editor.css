@@ -178,6 +178,11 @@
 .ed-seg.ed-dp.on { fill: var(--w1); }
 .ed-seg.vx { stroke: color-mix(in srgb, var(--wx) 35%, transparent); }
 .ed-disp-value { font: 700 1.05px var(--font-mono); fill: var(--bus-label-text); }
+.ed-buzz-cone { fill: var(--sym-stroke); }
+.ed-buzz-wave { fill: none; stroke: var(--ed-led-off); stroke-width: 0.16; stroke-linecap: round; }
+.ed-buzz.on .ed-buzz-cone { fill: var(--w1); }
+.ed-buzz.on .ed-buzz-wave { stroke: var(--w1); filter: drop-shadow(0 0 0.3px var(--w1)); }
+.ed-buzz.vx .ed-buzz-cone { fill: var(--wx); }
 .ed-halt-plate { fill: var(--ed-led-off); stroke: var(--sym-stroke); stroke-width: 0.1; transition: fill 0.1s; }
 .ed-halt-text { font: 700 0.9px var(--font-mono); fill: var(--sym-stroke); letter-spacing: 0.05px; }
 .ed-halt-on .ed-halt-plate { fill: var(--ed-halt); filter: drop-shadow(0 0 0.4px var(--ed-halt)); }

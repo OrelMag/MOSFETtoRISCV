@@ -28,6 +28,7 @@ import { activeChip, closeChip, keepVolatile, newChip, openChip, setPinValue } f
 import { loadWorkspace, saveWorkspace } from './store';
 import { Tools } from './tools';
 import { EditorView } from './view';
+import { Buzzers } from './audio';
 
 export interface ToolbarAction {
   id: string;
@@ -145,6 +146,7 @@ export class Editor {
 
     this.canvas = h('div', { class: 'sb-canvas' });
     this.view = new EditorView(this.canvas);
+    this.view.sound = (tones) => this.buzzers.set(tones);
     this.view.radix = settings.radix;
     this.toastEl = h('div', { class: 'sb-toast', role: 'status', 'aria-live': 'polite' });
     this.tipEl = h('div', { class: 'wire-tip' });
@@ -544,6 +546,7 @@ export class Editor {
     }
   }
 
+  private readonly buzzers = new Buzzers();
   private runBtn!: HTMLButtonElement;
   private rateSel!: HTMLSelectElement;
 
@@ -699,6 +702,7 @@ export class Editor {
     this.save();
     this.cleanups.forEach((f) => f());
     this.sim.destroy();
+    this.buzzers.destroy();
     this.sims.forEach((s) => s.destroy());
     this.tools.destroy();
     this.unsub();

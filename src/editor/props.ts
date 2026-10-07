@@ -209,8 +209,8 @@ export class PropsPanel {
           setR({ const: { width, value: n } });
         }), 'Decimal, 0x hex or 0b binary'));
     } else if ('display' in ref) {
-      const kinds: [DisplayKind, string][] = [['led', 'LED'], ['seg7', '7-segment'], ['hex', 'Hex digit'], ['value', 'Value'], ['halt', 'Halt (stops Run)']];
-      out.append(this.row('Shows', this.select(ref.display, kinds, (k) => setR({ display: k, width: k === 'led' || k === 'halt' ? 1 : k === 'hex' ? 4 : k === 'seg7' ? 8 : ref.width ?? 8 }))),
+      const kinds: [DisplayKind, string][] = [['led', 'LED'], ['seg7', '7-segment'], ['hex', 'Hex digit'], ['value', 'Value'], ['buzzer', 'Buzzer'], ['halt', 'Halt (stops Run)']];
+      out.append(this.row('Shows', this.select(ref.display, kinds, (k) => setR({ display: k, width: k === 'led' || k === 'halt' || k === 'buzzer' ? 1 : k === 'hex' ? 4 : k === 'seg7' ? 8 : ref.width ?? 8 }))),
         this.row('Width', this.num(ref.width ?? 1, 1, MAX_WIDTH, (w) => setR({ display: ref.display, width: w }))));
     } else if ('ram' in ref) {
       const { k, w } = ref.ram;

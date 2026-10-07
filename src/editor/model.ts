@@ -97,7 +97,7 @@ export interface PartDoc {
   label?: string;
 }
 
-export type DisplayKind = 'led' | 'seg7' | 'hex' | 'value' | 'halt';
+export type DisplayKind = 'led' | 'seg7' | 'hex' | 'value' | 'halt' | 'buzzer';
 
 export type PartRef =
   /** Any library component, by id (registry, family key or generator pattern). */
@@ -107,7 +107,10 @@ export type PartRef =
   | { split: number[]; pitch?: number }
   | { merge: number[]; pitch?: number }
   | { const: { width: number; value: number } }
-  /** Pure view: zero-cost sink that shows the value of the net on its input `a` ('halt': and stops Run while it is non-zero). */
+  /**
+   * Pure view: zero-cost sink that shows the value of the net on its input `a` (a wide LED: a bank,
+   * one LED per bit; 'halt': stops Run while it is non-zero; 'buzzer': sounds while it is non-zero).
+   */
   | { display: DisplayKind; width?: number }
   /** Read-only memory: 2^k words of w bits. 'rv32' addresses bytes like a PC (addr = 4·word). */
   | { rom: { k: number; w: 8 | 16 | 32; addr: 'word' | 'rv32'; lang: 'asm' | 'hex'; src: string } }
