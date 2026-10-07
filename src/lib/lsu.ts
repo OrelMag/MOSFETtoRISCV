@@ -162,7 +162,8 @@ function buildBanked(k: number): ComponentDef {
     { name: 'rdata', ends: ['mr.out', 'rdata'] },
   ];
   const instances = [
-    { name: 'sa', def: splitter([2, k, 30 - k]), at: [4, 0] as [number, number] },
+    // above the lanes splitter, which shares its column
+    { name: 'sa', def: splitter([2, k, 30 - k]), at: [4, -6] as [number, number] },
     { name: 'lanes', def: splitter([8, 8, 8, 8], pitch), at: [4, bankY(0) + rg.ports.din.pos[1] - pitch / 2] as [number, number] },
     { name: 'sbe', def: splitter([1, 1, 1, 1]), at: [4, bankY(4) + 2] as [number, number] },
     { name: 'mr', def: merger([8, 8, 8, 8], pitch), at: [24 + rg.w + 6, bankY(0) + rg.ports.dout.pos[1] - pitch / 2] as [number, number] },
@@ -183,7 +184,7 @@ function buildBanked(k: number): ComponentDef {
     ports: [bus('addr', 32, 'in'), bus('wdata', 32, 'in'), bus('be', 4, 'in'), bit('we', 'in'), bit('clk', 'in', 'bottom', true), bus('rdata', 32, 'out')],
     symbol: { kind: 'box', label: 'DATA MEM' },
     netlist: () => ({
-      pins: { addr: [0, 1], wdata: [0, bankY(1) + 2], be: [0, bankY(4) + 4], we: [0, bankY(4) + 8], clk: [0, bankY(4) + 11], rdata: [24 + rg.w + 12, bankY(2)] },
+      pins: { addr: [0, -3], wdata: [0, bankY(1) + 2], be: [0, bankY(4) + 4], we: [0, bankY(4) + 8], clk: [0, bankY(4) + 11], rdata: [24 + rg.w + 12, bankY(2)] },
       instances, nets,
     }),
   });

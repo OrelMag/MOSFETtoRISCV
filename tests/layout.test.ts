@@ -4,7 +4,7 @@ import { registry } from '../src/lib/define';
 import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
 import { netlistOf } from '../src/sim/types';
-import { labelOverlaps } from '../src/view/route';
+import { labelOverlaps, symbolOverlaps } from '../src/view/route';
 import { families, initialParams } from '../src/lib/resolve';
 import { cpuTops } from './tops';
 
@@ -28,5 +28,8 @@ describe('schematic labels', () => {
   const defs = [...new Set([...registry.values(), ...tops])].filter((d) => d.netlist);
   it.each(defs.map((d) => [d.id, d] as const))('%s: no label hides another', (_, d) => {
     expect(labelOverlaps(d, netlistOf(d)!)).toEqual([]);
+  });
+  it.each(defs.map((d) => [d.id, d] as const))('%s: no symbol sits on another', (_, d) => {
+    expect(symbolOverlaps(netlistOf(d)!)).toEqual([]);
   });
 });
