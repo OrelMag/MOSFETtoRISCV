@@ -4,6 +4,7 @@
 
 import { challengeById } from '../editor/challengeset';
 import { BUILD1 } from './build1';
+import { BUILD5 } from './build5';
 import type { BuildChallenge } from '../editor/challenges';
 import type { Act, CampaignNode } from './types';
 
@@ -189,7 +190,7 @@ export const NODES: CampaignNode[] = [
     id: 'o_fastadd', act: 2, title: 'Fast adders', kind: 'build', optional: true, requires: ['a_add16'],
     why: 'The ripple adder\'s carry chain is the CPU\'s critical path. Computing carries with a prefix tree takes log2(n) levels: more gates, a faster clock.',
     tips: ['Generate g = a·b, propagate p = a ⊕ b; (g, p) pairs combine associatively.', 'Kogge–Stone: log2(16) = 4 levels of combining.'],
-    codex: ['cla', 'prefix'], unlocks: ['ks16', 'cla4'], chapters: [{ chapter: 'fastadd', label: 'Faster adders' }], base: BUILD1.o_fastadd, par: { nand: 366, depth: 16 }, gives: ['gp', 'graycell', 'blackcell'] },
+    codex: ['cla', 'prefix'], unlocks: ['ks16', 'cla4', 'alu16ks', 'rv16_nextpc_ks'], chapters: [{ chapter: 'fastadd', label: 'Faster adders' }], base: BUILD1.o_fastadd, par: { nand: 366, depth: 16 }, gives: ['gp', 'graycell', 'blackcell'] },
 
   // ---- Act 3 --------------------------------------------------------------------------------
   {
@@ -315,15 +316,58 @@ export const NODES: CampaignNode[] = [
     why: 'Follow one instruction through the blocks you built: PC → ROM → decode → registers → ALU → write back. The datapath is the wiring; the control unit sets the muxes.',
     body: 'datapath', tips: [], codex: ['datapath', 'control'], chapters: [{ chapter: 'cpu', label: 'A single-cycle CPU' }],
   },
-  { id: 'c_imm', act: 5, title: 'Immediate generator', kind: 'build', requires: ['i_isa', 'g_mux8'], soon: true, why: 'Four immediate formats, one 16-bit sign-extended operand.', tips: [], codex: ['immediates', 'signext'], anatomy: ['imm'] },
-  { id: 'c_ctl', act: 5, title: 'Control unit', kind: 'build', requires: ['i_enc', 'g_dec', 'd_kmap'], soon: true, why: 'Opcode in, control signals out: which mux takes which input, which register is written.', tips: [], codex: ['control'], anatomy: ['ctl'] },
-  { id: 'c_br', act: 5, title: 'Branch comparator', kind: 'build', requires: ['g_eq16', 'a_slt'], soon: true, why: 'Decide taken / not taken for beq, bne, blt, bge.', tips: [], codex: ['branches'], anatomy: ['br'] },
-  { id: 'c_npc', act: 5, title: 'Next PC', kind: 'build', requires: ['a_add16', 'a_inc16', 'c_br'], soon: true, why: 'pc + 1, pc + offset or rs1 + offset.', tips: [], codex: ['pc'], anatomy: ['npc'] },
-  { id: 'c_core1', act: 5, title: 'Core I: arithmetic', kind: 'core', requires: ['c_lesson', 'c_imm', 'c_ctl', 's_pc', 'm_rf', 'a_alu16'], soon: true, why: 'Your first processor: register and immediate arithmetic.', tips: [], codex: ['singlecycle'] },
-  { id: 'c_core2', act: 5, title: 'Core II: memory', kind: 'core', requires: ['c_core1', 'm_mem'], soon: true, why: 'Add lw and sw: the data memory port.', tips: [], codex: ['loadstore'], anatomy: ['wb'] },
-  { id: 'c_core3', act: 5, title: 'Core III: control flow', kind: 'core', requires: ['c_core2', 'c_npc'], soon: true, why: 'Branches and jumps: the complete RV16I.', tips: [], codex: ['cpi'] },
-  { id: 'c_computer', act: 5, title: 'A computer', kind: 'build', requires: ['c_core3', 'p_loop'], soon: true, why: 'Core + ROM + RAM + LEDs: run your own program on your own CPU, in the sandbox.', tips: [], codex: ['mmio'], anatomy: ['mmio'] },
-  { id: 'c_fast', act: 5, title: 'Faster core', kind: 'core', optional: true, requires: ['c_core3', 'o_fastadd'], soon: true, why: 'Same instructions, shorter clock period.', tips: [], codex: ['criticalpath'] },
+  {
+    id: 'c_imm', act: 5, title: 'Immediate generator', kind: 'build', requires: ['i_isa', 'g_mux8'], base: BUILD5.c_imm, par: { nand: 0, depth: 0 },
+    why: 'Constants live inside instructions, in four formats. The immediate generator extracts each and sign-extends it to 16 bits. Because RV16 keeps the immediate bits where they are, it needs no gates at all.',
+    tips: ['Sign extension is wiring: fan the sign bit (instr[15]) out to every upper bit.', 'Splitters and mergers cost nothing; a 6-bit constant 0 makes the low bits of U.'],
+    codex: ['immediates', 'signext'], unlocks: ['rv16_imm'], anatomy: ['imm'],
+  },
+  {
+    id: 'c_ctl', act: 5, title: 'Control unit', kind: 'build', requires: ['i_enc', 'g_dec', 'd_kmap'], base: BUILD5.c_ctl, par: { nand: 200, depth: 13 },
+    why: 'The datapath has muxes and enables; something must set them for each instruction. The control unit is a table (opcode → signals) turned into logic: decode the opcode, then each signal is an OR of the opcodes that need it.',
+    tips: ['A 4→16 decoder on op gives one line per opcode.', 'rwe: OP, OPX, ADDI, SHI, LW, LUI (op 7 and 15), JAL, JALR.', 'Don\'t-cares (signals an instruction ignores) are free: choose whatever makes the logic smaller.'],
+    codex: ['control', 'dontcare'], unlocks: ['rv16_ctl'], anatomy: ['ctl'],
+  },
+  {
+    id: 'c_br', act: 5, title: 'Branch comparator', kind: 'build', requires: ['g_eq16', 'a_slt', 'g_mux'], base: BUILD5.c_br, par: { nand: 335, depth: 49 },
+    why: 'beq, bne, blt and bge differ only in the comparison. One equality test and one signed less-than, a mux and an XOR cover all four.',
+    tips: ['Bit 1 of cond picks between "equal" and "less than", bit 0 inverts.'],
+    codex: ['branches', 'comparator'], unlocks: ['rv16_branch'], anatomy: ['br'],
+  },
+  {
+    id: 'c_npc', act: 5, title: 'Next PC', kind: 'build', requires: ['a_add16', 'a_inc16', 'c_br', 'g_mux8'], base: BUILD5.c_npc, par: { nand: 440, depth: 38 },
+    why: 'Where does the next instruction come from? Usually pc + 1; for a taken branch or jal, pc + imm; for jalr, rs1 + imm (returns, function pointers). jal and jalr also save pc + 1 as the return address.',
+    tips: ['Two adders, an incrementer and a bus mux.', 'ld = jal | jalr | (br & take).'],
+    codex: ['pc', 'branches'], unlocks: ['rv16_nextpc'], anatomy: ['npc'],
+  },
+  {
+    id: 'c_core1', act: 5, title: 'Core I: arithmetic', kind: 'core', requires: ['c_lesson', 'c_imm', 'c_ctl', 's_pc', 'm_rf', 'a_alu16'], base: BUILD5.c_core1, par: { nand: 4973, period: 98, cycles: 701 },
+    why: 'Your first processor: the PC addresses the program, the control unit decodes, the register file and ALU compute, the result goes back. Arithmetic only: the PC just counts.',
+    tips: ['Wire the instruction\'s fields straight to the register file: rs1 = instr[9:7], rs2 = instr[12:10], rd = instr[6:4].', 'A mux picks the ALU\'s b (rs2 or the immediate); another picks what is written back (ALU, memory, pc + 1, immediate).', 'Use pointers (net labels) for long wires: pc, imm, the result.'],
+    codex: ['singlecycle', 'datapath'],
+  },
+  {
+    id: 'c_core2', act: 5, title: 'Core II: memory', kind: 'core', requires: ['c_core1', 'm_mem'], base: BUILD5.c_core2, par: { nand: 4973, period: 98, cycles: 824 },
+    why: 'Loads and stores: the ALU computes the address, the memory answers in the same cycle. Now programs can use more data than eight registers hold.',
+    tips: ['daddr = the ALU result, dwdata = rs2, dwe = the control\'s mwe.', 'A load writes drdata back: the result mux\'s second input.'],
+    codex: ['loadstore'], anatomy: ['wb'],
+  },
+  {
+    id: 'c_core3', act: 5, title: 'Core III: control flow', kind: 'core', requires: ['c_core2', 'c_npc'], base: BUILD5.c_core3, par: { nand: 5748, period: 98, cycles: 1236 },
+    why: 'Branches and jumps make loops and functions possible: the complete RV16I. Every program from Act 4 now runs on hardware you built.',
+    tips: ['The branch comparator takes rs1, rs2 and op[1:0]; the next-PC logic loads the PC when it must jump.', 'jal and jalr write pc + 1: the result mux\'s third input.'],
+    codex: ['cpi'], unlocks: ['rv16_cpu'],
+  },
+  {
+    id: 'c_computer', act: 5, title: 'A computer', kind: 'build', requires: ['c_core3', 'p_loop'], soon: true,
+    why: 'Core + ROM + RAM + LEDs: run your own program on your own CPU, in the sandbox.', tips: [], codex: ['mmio'], anatomy: ['mmio'],
+  },
+  {
+    id: 'c_fast', act: 5, title: 'A faster core', kind: 'core', optional: true, requires: ['c_core3', 'o_fastadd'], base: BUILD5.c_fast, par: { period: 81, cycles: 1236 },
+    why: 'Same instructions, shorter clock period: the critical path runs through the adders. Static timing finds it; fast adders shorten it.',
+    tips: ['The Timing panel shows the critical path through your core.', 'Swap the ripple adders on that path for the unlocked Kogge–Stone ALU and adders.'],
+    codex: ['criticalpath', 'cla'],
+  },
 
   // ---- Act 6 --------------------------------------------------------------------------------
   { id: 'pi_lesson', act: 6, title: 'Pipelining', kind: 'lesson', requires: ['c_core3'], why: 'Cut the datapath into five stages with registers: five instructions in flight, a clock five times faster in the ideal.', body: 'pipe', tips: [], codex: ['pipeline', 'hazards'], chapters: [{ chapter: 'pipeline', label: 'Pipelining' }] },

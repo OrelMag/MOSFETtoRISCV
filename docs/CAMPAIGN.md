@@ -31,7 +31,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 | R5 | Assembly | Act 4 (ISA lesson, encode drill, 7 program puzzles with an editor and a stepper); `p_handler` in Act 7 | ✅ |
 | R6 | Tips and tricks (Boolean logic, …) | per-node progressive `tips`, codex "trick" entries, `l_bool` (lesson + drill), K-map drill | ✅ |
 | R7 | A complete test set per level (success criteria shown before you start) | `BuildChallenge.check` / puzzle tests / core harness; node panel lists them | 🚧 |
-| R8 | Simplified 16-bit CPU similar to RISC-V | RV16 (§3): ISA, assembler, golden model ✅; hardware 🚧 | 🚧 |
+| R8 | Simplified 16-bit CPU similar to RISC-V | RV16 (§3): ISA, assembler, golden model, single-cycle core ✅; pipeline 🚧 | 🚧 |
 | R9 | Guidance and complete solutions | tips + "Show solution" / "Do it for me"; every node has a reference answer | 🚧 |
 | R10 | Skipping a level is allowed, and our solution is used | **Skip** marks it skipped and unlocks its part | 🚧 |
 | R11 | Grade solutions on optimization | `grade.ts`: ★ / ★★ / ★★★ against par on NAND, depth, period, cycles, size | 🚧 |
@@ -208,8 +208,14 @@ neither part of the design nor of its score. Each cycle the harness:
 2. samples the store port and the register-write port;
 3. applies a rising clock edge and then a falling one.
 
-**The test set is 8 directed programs and 24 seeded random programs.** They run side by side as
-32 lanes of the bit-parallel simulator.
+**The test set** (`src/campaign/coretests.ts`): directed programs (ALU edge cases, memory, a table,
+every branch condition, calls with a stack, gcd) plus seeded random programs
+(`src/riscv/rv16/randprog.ts`: registers initialised first, loads / stores in words 0–31, forward
+branches only): 15 programs for Core I, 19 for Core II, 28 for Core III. They run side by side as
+lanes of the bit-parallel simulator (the event-driven one when the circuit has behavioural leaves).
+The clock period is measured on a bench with 8-delay instruction and data memories, so the path
+PC → memory → decode → … → register counts. The core levels share one pin set, so one chip can grow
+from Core I to Core III.
 
 - **Pass**: the register-write trace and the store trace are equal to the golden model's, the
   final data memory is equal, and the core finishes within the cycle budget.
@@ -286,15 +292,15 @@ Legend: `id` ← requires · *opt* optional · (ex) an existing sandbox challeng
 
 ### Act 5 — A single-cycle CPU
 - ✅ `c_lesson`: the datapath ← i_isa, a_alu16, m_rf
-- ⏳ `c_imm`: immediate generator ← i_isa, g_mux8
-- ⏳ `c_ctl`: decoder / control unit ← i_enc, g_dec, d_kmap
-- ⏳ `c_br`: branch comparator ← g_eq16, a_slt
-- ⏳ `c_npc`: next-PC logic ← a_add16, a_inc16, c_br
-- ⏳ `c_core1`: OP / OPX / ADDI / SHI / LUI ← c_lesson, c_imm, c_ctl, s_pc, m_rf, a_alu16
-- ⏳ `c_core2`: + LW / SW ← c_core1, m_mem
-- ⏳ `c_core3`: all of RV16I ← c_core2, c_npc
+- ✅ `c_imm`: immediate generator ← i_isa, g_mux8
+- ✅ `c_ctl`: decoder / control unit (checked with don't-cares) ← i_enc, g_dec, d_kmap
+- ✅ `c_br`: branch comparator ← g_eq16, a_slt, g_mux
+- ✅ `c_npc`: next-PC logic ← a_add16, a_inc16, c_br, g_mux8
+- ✅ `c_core1`: OP / OPX / ADDI / SHI / LUI ← c_lesson, c_imm, c_ctl, s_pc, m_rf, a_alu16
+- ✅ `c_core2`: + LW / SW ← c_core1, m_mem
+- ✅ `c_core3`: all of RV16I ← c_core2, c_npc
 - ⏳ `c_computer`: core + ROM + RAM + MMIO + LEDs in the sandbox, running your own program ← c_core3, p_loop
-- ⏳ *opt* `c_fast`: graded on clock period ← c_core3, o_fastadd
+- ✅ *opt* `c_fast`: graded on clock period ← c_core3, o_fastadd
 
 ### Act 6 — Pipelining
 - ✅ `pi_lesson` ← c_core3
@@ -366,7 +372,7 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
   - isa16, asm16, iss16 and the samples.
   - Highlighting in the code editor.
   - Program puzzles and their UI; Act 4.
-- ⏳ **D. Single-cycle.**
+- ✅ **D. Single-cycle.**
   - Measure simulation speed first and record it here.
   - Control blocks and the reference core; the core harness; Act 5.
 - ⏳ **H. RV16 in the sandbox.**
@@ -383,7 +389,9 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
   with traps and interrupts.
 - **Core check in the browser**: ≤ 1.5 s (32 lanes × ≤ 1200 cycles).
 - **Test suite**: ≤ 5 s per reference core and ≤ 60 s for the whole campaign.
-- **Measured**: (filled in phase D).
+- **Measured** (phase D): the reference single-cycle core is 5 748 NANDs, clock period 98 NAND delays with
+  8-delay memories in the path (81 with Kogge–Stone adders). The bench runs 28 programs (≈1 240 cycles in
+  all) in 0.2–0.6 s on 32 bit-parallel lanes; the event-driven fallback gives identical results.
 
 ---
 
