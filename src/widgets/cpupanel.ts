@@ -7,7 +7,7 @@ import { MC_FIELDS, MC_STATES, microword, multicycleCpu, pipelinedCpu, pipelined
 import { assemble, type AsmResult } from '../riscv/asm';
 import { cacheLines, cpuState, retiring } from '../riscv/cosim';
 import { ABI, decode, disasm } from '../riscv/isa';
-import { ISS } from '../riscv/iss';
+import { ISS, type ModelState } from '../riscv/iss';
 import { PROGRAMS } from '../riscv/programs';
 import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';
 import { M_PROGRAMS } from '../riscv/mprograms';
@@ -128,6 +128,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       if (running) return stopRun();
       stopSlow();
       tracing = false;
+      // Back after a run returns to where it started.
+      stage.checkpoint();
       runBtn.textContent = 'Stop';
       const tick = () => {
         stage.runCycles(opts.pipeline ? 3 : opts.m || opts.fpu || opts.dcache || opts.icache || opts.multicycle ? 10 : 4, () => iss.halted);
@@ -149,6 +151,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     const finished = () => iss.halted || !!mismatch || stage.cycles > 20000;
     const tick = () => {
       tracing = true;
+      stage.checkpoint();
       const flow = Math.min(600, (level === 'gate' ? 0.95 : 0.8) * interval());
       if (level === 'gate') {
         if (stage.inEdge) stage.edgeStep(flow);
@@ -189,6 +192,11 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       stage.stopClock();
       if (!finished() || (level === 'gate' && stage.inEdge)) tick();
     } }, icon('step', 14), 'Step');
+    const backBtn = h('button', { class: 'btn sm ghost', title: 'Step back: undo the last step (the golden model and the trace go back too)', onclick: () => {
+      stopSlow();
+      stopRun();
+      stage.back();
+    } }, icon('stepBack', 14), 'Back') as HTMLButtonElement;
     const rateIn = h('input', { type: 'range', min: 0, max: 1000, 'aria-label': 'Slow-mode speed' }) as HTMLInputElement;
     const rateLbl = h('span', { class: 'cpu-rate-v' });
     const unit = () => (level === 'gate' ? 'delays' : level === 'cycle' ? 'cycles' : 'instr');
@@ -230,7 +238,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       return b;
     });
     syncRate();
-    const slowRow = h('div', { class: 'cpu-slow' }, slowBtn, stepBtn, seg, h('label', { class: 'cpu-rate' }, rateIn, rateLbl));
+    const slowRow = h('div', { class: 'cpu-slow' }, slowBtn, backBtn, stepBtn, seg, h('label', { class: 'cpu-rate' }, rateIn, rateLbl));
 
     // Errors go to the gutter as you type (debounced) and below the box on Assemble & load.
     const errBox = h('div', { class: 'asm-errors' });
@@ -311,9 +319,29 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         }
       },
     });
+    // Back: the golden model, the trace and the counters return with the hardware.
+    stage.historyHooks.add({
+      save: () => ({ iss: iss.save(), lastX: lastX.slice(), mismatch, log: log.slice(), logSeq, loads, misses, prevStall, stallRun }),
+      restore: (v) => {
+        const st = v as { iss: ModelState; lastX: number[]; mismatch: string | null; log: typeof log; logSeq: number; loads: number; misses: number; prevStall: boolean; stallRun: number };
+        stopRun();
+        stopSlow();
+        iss.restore(st.iss);
+        lastX = st.lastX.slice();
+        mismatch = st.mismatch;
+        log.splice(0, log.length, ...st.log);
+        logSeq = st.logSeq;
+        ({ loads, misses, prevStall, stallRun } = st);
+        // rebuilt in full by the next showTrace
+        trace.replaceChildren();
+        logShown = logSeq - log.length;
+        if (!log.length) logShown = logSeq;
+      },
+    });
     const update = () => {
       const sim = stage.sim;
       if (!sim) return;
+      backBtn.disabled = !stage.canBack;
       if (stage.cycles === 0 && iss.steps > 0) {
         iss = new ISS(asm.words, issOpts);
         mismatch = null;
@@ -578,6 +606,7 @@ const ioPanel: ScenePanel = (stage: Stage): Widget => {
     h('div', { style: 'margin:6px 0' }, irqBtn),
     h('div', { class: 'cpu-sec' }, 'Machine-mode CSRs'), csrs);
   title.addEventListener('click', () => el.classList.toggle('collapsed'));
+  stage.historyHooks.add({ save: () => text, restore: (v) => { text = v as string; } });
   const update = () => {
     const sim = stage.sim, root = stage.rootCtx?.node;
     if (!sim || !root?.children) return;

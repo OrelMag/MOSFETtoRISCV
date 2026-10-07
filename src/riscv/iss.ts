@@ -112,6 +112,15 @@ export class ISS {
   /** Instructions retired (excludes trap-entry cycles and trapping instructions). */
   retired = 0;
 
+  /** Every field, for stepping back (see restore). */
+  save(): ModelState {
+    return saveFields(this);
+  }
+
+  restore(s: ModelState): void {
+    restoreFields(this, s);
+  }
+
   constructor(program: number[], opts: IssOptions = {}) {
     this.imem = program.slice();
     this.dmem = new Uint32Array(opts.dmemWords ?? 32);
@@ -430,5 +439,25 @@ export class ISS {
       n++;
     }
     return n;
+  }
+}
+
+/** A model's fields, arrays copied (ISS.save, MultiISS.save). */
+export type ModelState = Record<string, unknown>;
+
+export function saveFields(o: object): ModelState {
+  const s: ModelState = {};
+  for (const [k, v] of Object.entries(o)) s[k] = ArrayBuffer.isView(v) ? (v as Uint32Array).slice() : Array.isArray(v) ? v.slice() : v;
+  return s;
+}
+
+/** Put saved fields back. Arrays are refilled in place: the harts of a multi-core model share one memory. */
+export function restoreFields(o: object, s: ModelState): void {
+  const t = o as Record<string, unknown>;
+  for (const [k, v] of Object.entries(s)) {
+    const cur = t[k];
+    if (ArrayBuffer.isView(cur)) (cur as Uint32Array).set(v as Uint32Array);
+    else if (Array.isArray(cur)) cur.splice(0, cur.length, ...(v as unknown[]));
+    else t[k] = v;
   }
 }

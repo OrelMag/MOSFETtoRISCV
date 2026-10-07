@@ -3,6 +3,9 @@ import type { Bit } from './types';
 
 export type PowerOnMode = 'x' | 'zero' | 'random';
 
+/** An opaque saved state (Sim.saveState). */
+export type SimState = { readonly __simState: true };
+
 /** Common interface of the gate-level and switch-level engines, as seen by views. */
 export interface Sim {
   readonly design: FlatDesign;
@@ -37,6 +40,13 @@ export interface Sim {
    * value instead, so an edit heals storage that went X while it was half wired.
    */
   carry(prev: Sim, opts?: { known?: boolean }): void;
+  /**
+   * Everything a later step, edge or input change can alter (values, inputs, time, pending
+   * events, behavioural state), for stepping back: restoreState(saveState()) puts the simulation
+   * exactly where it was. The value is opaque and may only go back to the simulation it came from.
+   */
+  saveState(): SimState;
+  restoreState(s: SimState): void;
   /** Called after any net changes value (gate sim only reports watched nets). */
   onTrace?: (net: number, value: Bit, time: number) => void;
   watch(nets: readonly number[]): void;

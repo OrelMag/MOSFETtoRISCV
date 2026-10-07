@@ -299,6 +299,12 @@ three levels: `gate` (`stage.startEdge()` / `edgeStep()`: a rising edge one gate
 `src/sim/edge.ts`, which `Stage.cycle` also uses), `cycle` (`pulse(flowMs)`) or `instr` (run to the next
 retirement). The highlight then follows execution, and the trace logs `stepEffect(iss.step())` (riscv/trace.ts).
 While `stage.inEdge`, panels must not compare the hardware with the golden model (it steps after the edge).
+**Back** (CPU panel and the stage's bottom bar) undoes a step, a clock cycle, an input change or a whole Run to
+halt: the stage's controls call `stage.checkpoint()` before acting (an unchanged state is not saved twice), panels
+call it before an action made of several (a run, an instruction); `Sim.saveState()` / `restoreState()` copy the
+whole simulation (values, inputs, time, pending events), and a panel with its own state (golden model via
+`ISS.save()` / `MultiISS.save()`, trace, counters, console) registers a `stage.historyHooks` entry. The analyzer
+`rewind`s to the restored time. History is cleared on load and Reset.
 The pipeline diagram reads `pipeSnap` (riscv/cosim.ts) and draws with `widgets/pipegrid.ts`, shared with
 the sandbox's CPU drawer (editor/cpuui.ts), which mirrors these panels for any CPU opened in the sandbox:
 keep the two in step when a panel gains a feature.

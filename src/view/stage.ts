@@ -6,7 +6,7 @@ import { flatten } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import { needsSwitchLevel } from '../sim/harness';
 import { completeEdge, type Edge, riseEdge, stepEdge } from '../sim/edge';
-import type { PowerOnMode, Sim } from '../sim/sim';
+import type { PowerOnMode, Sim, SimState } from '../sim/sim';
 import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, BZ, type Bit, type ComponentDef, inPorts, netlistOf, outPorts, type PortDef } from '../sim/types';
 import { formatBits, formatNumber, mask, pack, packBig, type Radix, unpackBig } from '../sim/values';
@@ -53,6 +53,30 @@ const LEVEL_NAME: Record<string, string> = {
   transistor: 'transistors', cell: 'transistors', gate: 'gates', arithmetic: 'gates & blocks',
   routing: 'gates & blocks', sequential: 'latches & flip-flops', memory: 'memory', plumbing: 'wiring', cpu: 'processor',
 };
+
+/** Steps Back can undo (each a full copy of the simulation's state). */
+const HISTORY_MAX = 100;
+
+/** Panel state that Back restores together with the simulation (a golden model, a trace log). */
+export interface HistoryHook {
+  save(): unknown;
+  restore(s: unknown): void;
+}
+
+interface Checkpoint {
+  sim: SimState;
+  /** time · evaluations · cycles: what the state looked like (an unchanged one is not saved twice) */
+  key: string;
+  cycles: number;
+  edge: Edge | null;
+  edgePeriod: number;
+  nextEdge: number;
+  lateEvents: number;
+  lateCount: number;
+  lastSettle: number | null;
+  changeStart: number;
+  panels: [HistoryHook, unknown][];
+}
 
 /** The direction mark of the bottom bar: before an input's name (into the circuit), after an output (out of it). */
 const DIR = () => h('span', { class: 'dir', 'aria-hidden': 'true' }, '▸');
@@ -105,6 +129,10 @@ export class Stage {
   /** The rising edge in progress (slow mode plays it one gate delay at a time). */
   private edge: Edge | null = null;
   private edgePeriod = 0;
+  /** Panels' own state saved with every checkpoint and put back by back(). */
+  readonly historyHooks = new Set<HistoryHook>();
+  private history: Checkpoint[] = [];
+  private backBtn: HTMLButtonElement | null = null;
   private beforeEdge(): void { this.edgeHooks.forEach((h) => h.before?.()); }
   private afterEdge(): void { this.edgeHooks.forEach((h) => h.after?.()); }
 
@@ -217,6 +245,8 @@ export class Stage {
 
   load(scene: Scene): void {
     this.edgeHooks.clear();
+    this.historyHooks.clear();
+    this.history = [];
     this.showWidget(null);
     this.stopAnim();
     this.stopClock();
@@ -351,12 +381,14 @@ export class Stage {
 
   setInput(port: string, value: number): void {
     if (!this.sim) return;
+    this.checkpoint();
     this.sim.setInput(port, value);
     this.propagate();
   }
 
   setInputs(values: Record<string, number>): void {
     if (!this.sim) return;
+    this.checkpoint();
     for (const [k, v] of Object.entries(values)) this.sim.setInput(k, v);
     this.propagate();
   }
@@ -372,6 +404,7 @@ export class Stage {
   }
 
   toggleInput(port: string): void {
+    this.checkpoint();
     const v = this.getInput(port) ? 0 : 1;
     if (port === this.clockPort()) this.finishEdge(false);
     const edge = v === 1 && port === this.clockPort();
@@ -394,6 +427,7 @@ export class Stage {
     const bits = this.sim?.getInputBits(port);
     editNumber(anchor, port, p.width, (bits && packBig(bits)) ?? 0n, (v) => {
       if (!this.sim) return;
+      this.checkpoint();
       this.sim.setInputBits(port, unpackBig(v, p.width));
       this.propagate();
     });
@@ -462,6 +496,7 @@ export class Stage {
   startEdge(): boolean {
     const clk = this.clockPort();
     if (!clk || !this.sim) return false;
+    this.checkpoint();
     this.finishEdge(false);
     this.stopAnim();
     this.rise(clk);
@@ -472,6 +507,7 @@ export class Stage {
   /** Slow mode: one gate delay of the edge in progress. Returns true while it is still propagating. */
   edgeStep(flowMs: number): boolean {
     if (!this.edge || !this.sim) return false;
+    this.checkpoint();
     const more = stepEdge(this.sim, this.edge);
     if (!more) this.fall();
     this.refreshFlowing(flowMs);
@@ -490,6 +526,7 @@ export class Stage {
   pulse(flowMs = 0): void {
     const clk = this.clockPort();
     if (!clk || !this.sim) return;
+    this.checkpoint();
     this.finishEdge(false);
     this.stopAnim();
     this.cycle(clk);
@@ -635,9 +672,58 @@ export class Stage {
   /** Step one gate delay (works whether or not animation is on). */
   stepOnce(): void {
     if (!this.sim) return;
+    this.checkpoint();
     this.stopAnim();
     if (!this.sim.step()) this.lastSettle = this.sim.time - this.changeStart;
     this.refreshFlowing(Math.max(350, 950 / settings.speed));
+  }
+
+  private stateKey(): string {
+    const sim = this.sim!;
+    return `${sim.time}·${sim.evaluations}·${this.cycles}`;
+  }
+
+  /**
+   * Remember the state before a step, an edge or an input change, for back(). The stage's own
+   * controls take one before acting; a panel that drives several of them as one step (Run to
+   * halt, an instruction) takes one first, and the ones inside it then find nothing changed.
+   */
+  checkpoint(): void {
+    if (!this.sim) return;
+    const key = this.stateKey();
+    if (this.history[this.history.length - 1]?.key === key) return;
+    this.history.push({
+      sim: this.sim.saveState(), key, cycles: this.cycles, edge: this.edge && { ...this.edge }, edgePeriod: this.edgePeriod,
+      nextEdge: this.nextEdge, lateEvents: this.lateEvents, lateCount: this.lateCount, lastSettle: this.lastSettle,
+      changeStart: this.changeStart, panels: [...this.historyHooks].map((h) => [h, h.save()]),
+    });
+    if (this.history.length > HISTORY_MAX) this.history.shift();
+  }
+
+  get canBack(): boolean {
+    return this.history.length > 0;
+  }
+
+  /** Undo the last step, clock edge or input change (and whatever a panel saved with it). */
+  back(): boolean {
+    const c = this.history.pop();
+    const sim = this.sim;
+    if (!c || !sim) return false;
+    this.stopAnim();
+    this.stopClock();
+    sim.restoreState(c.sim);
+    this.cycles = c.cycles;
+    this.edge = c.edge && { ...c.edge };
+    this.edgePeriod = c.edgePeriod;
+    this.nextEdge = c.nextEdge;
+    this.lateEvents = c.lateEvents;
+    this.lateCount = c.lateCount;
+    this.lastSettle = c.lastSettle;
+    this.changeStart = c.changeStart;
+    for (const [h, st] of c.panels) if (this.historyHooks.has(h)) h.restore(st);
+    this.analyzer.rewind(sim.time);
+    this.refresh();
+    return true;
   }
 
   /** Refresh after one gate delay: changed wires show the new value travelling as a front. */
@@ -688,6 +774,9 @@ export class Stage {
         c.append(h('label', { class: 'period', title: 'Clock period in gate delays. Empty: each edge waits until the logic has settled. A number: edges come on time, settled or not.' }, 'period', per));
       }
     }
+    this.backBtn = h('button', { class: 'btn sm ghost', title: 'Step back: undo the last step, clock cycle or input change', onclick: () => this.back() },
+      icon('stepBack', 14), 'Back') as HTMLButtonElement;
+    c.append(this.backBtn);
     if (this.sim?.kind === 'gate') {
       c.append(h('button', { class: 'btn sm ghost', title: 'Advance one gate delay', onclick: () => this.stepOnce() }, icon('step', 14), 'Step'));
     }
@@ -707,6 +796,7 @@ export class Stage {
     this.nextEdge = this.sim.time;
     this.lateEvents = 0;
     this.analyzer.attach(this.sim);
+    this.history = [];
     this.refresh();
   }
 
@@ -771,6 +861,7 @@ export class Stage {
       const p = this.scene!.root.ports.find((q) => q.name === el.dataset.port)!;
       if (document.activeElement !== el) el.value = formatNumber(this.getInput(p.name), p.width, settings.radix === 'bin' && p.width > 8 ? 'hex' : settings.radix);
     }
+    if (this.backBtn) this.backBtn.disabled = !this.history.length;
     const sim = this.sim;
     const busy = sim.busy();
     let msg: string;

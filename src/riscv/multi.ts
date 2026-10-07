@@ -3,7 +3,7 @@
 // except harts that need memory and lose arbitration: they stall and retry.
 
 import { decode, OPCODES } from './isa';
-import { ISS, type StepInfo } from './iss';
+import { ISS, type ModelState, restoreFields, saveFields, type StepInfo } from './iss';
 
 export const isMemOp = (word: number) => {
   const op = decode(word).opcode;
@@ -26,6 +26,16 @@ export class MultiISS {
       h.dmem = this.dmem;
       return h;
     });
+  }
+
+  /** Every hart and the shared state, for stepping back. */
+  save(): { self: ModelState; harts: ModelState[] } {
+    return { self: saveFields(this), harts: this.harts.map((h) => h.save()) };
+  }
+
+  restore(s: { self: ModelState; harts: ModelState[] }): void {
+    restoreFields(this, s.self);
+    this.harts.forEach((h, i) => h.restore(s.harts[i]));
   }
 
   private nextWord(h: ISS): number {

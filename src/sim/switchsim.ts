@@ -29,7 +29,7 @@
 
 import { matchNets, sharedInputs } from './carry';
 import type { FlatDesign } from './flatten';
-import type { PowerOnMode, Sim } from './sim';
+import type { PowerOnMode, Sim, SimState } from './sim';
 import { B0, B1, BX, BZ, type Bit } from './types';
 import { pack, unpack } from './values';
 
@@ -134,6 +134,26 @@ export class SwitchSim implements Sim {
     }
     this.dirty = true;
     this.settle();
+  }
+
+  saveState(): SimState {
+    const st: SwitchState = {
+      val: this.val.slice(), conducting: this.conducting.slice(), shorted: this.shorted.slice(),
+      inputs: new Map([...this.inputs].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v])),
+      unstable: this.unstable, evaluations: this.evaluations, dirty: this.dirty,
+    };
+    return st as unknown as SimState;
+  }
+
+  restoreState(saved: SimState): void {
+    const s = saved as unknown as SwitchState;
+    this.val.set(s.val);
+    this.conducting.set(s.conducting);
+    this.shorted.set(s.shorted);
+    this.inputs = new Map([...s.inputs].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v]));
+    this.unstable = s.unstable;
+    this.evaluations = s.evaluations;
+    this.dirty = s.dirty;
   }
 
   /** A copy of every node value (index = flat net). */
@@ -302,4 +322,9 @@ class UF {
     const ra = this.find(a), rb = this.find(b);
     if (ra !== rb) this.p[ra] = rb;
   }
+}
+
+interface SwitchState {
+  val: Uint8Array; conducting: Uint8Array; shorted: Uint8Array; inputs: Map<string, number | Bit[]>;
+  unstable: boolean; evaluations: number; dirty: boolean;
 }
