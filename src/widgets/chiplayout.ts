@@ -4,6 +4,7 @@
 
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
+import { installPinch } from '../view/pinch';
 
 interface LayoutSummary {
   generated: string;
@@ -27,7 +28,7 @@ export function chipLayoutWidget(): Widget {
   const root = h('div', null, h('p', { class: 'sub' }, 'Loading the layout…'));
   const el = h('div', { class: 'widget' }, h('div', { class: 'panel' },
     h('h3', null, 'Our dual-core, placed and routed in SkyWater 130 nm'),
-    h('p', { class: 'sub' }, 'Produced by the real open-source flow: the Verilog exported from this site\'s netlists, then Yosys (synthesis to sky130 standard cells), OpenROAD (floorplan, placement, clock tree, routing) and KLayout (rendering the GDS). Drag to pan; wheel or buttons to zoom.'),
+    h('p', { class: 'sub' }, 'Produced by the real open-source flow: the Verilog exported from this site\'s netlists, then Yosys (synthesis to sky130 standard cells), OpenROAD (floorplan, placement, clock tree, routing) and KLayout (rendering the GDS). Drag to pan; wheel, pinch or buttons to zoom.'),
     root));
   let raf = 0;
   let alive = true;
@@ -98,15 +99,25 @@ export function chipLayoutWidget(): Widget {
     };
     const redraw = () => { if (!raf) raf = requestAnimationFrame(draw); };
     const zoomAt = (f: number, px: number, py: number) => { ox = px - (px - ox) * f; oy = py - (py - oy) * f; scale *= f; redraw(); };
-    const local = (e: MouseEvent): [number, number] => {
+    const local = (e: { clientX: number; clientY: number }): [number, number] => {
       const r = view.getBoundingClientRect();
       return [((e.clientX - r.left) / r.width) * W, ((e.clientY - r.top) / r.height) * H];
     };
     view.addEventListener('wheel', (e) => { e.preventDefault(); const [px, py] = local(e); zoomAt(e.deltaY < 0 ? 1.25 : 0.8, px, py); }, { passive: false });
     let drag: [number, number] | null = null;
-    view.addEventListener('mousedown', (e) => { drag = local(e); });
-    window.addEventListener('mouseup', () => { drag = null; });
-    view.addEventListener('mousemove', (e) => {
+    installPinch(view, {
+      start: () => { drag = null; },
+      move: (k, mid, prev) => {
+        const [px, py] = local({ clientX: prev[0], clientY: prev[1] }), [mx, my] = local({ clientX: mid[0], clientY: mid[1] });
+        ox += mx - px; oy += my - py;
+        zoomAt(k, mx, my);
+      },
+    });
+    view.addEventListener('pointerdown', (e) => { drag = local(e); view.setPointerCapture(e.pointerId); });
+    const up = () => { drag = null; };
+    view.addEventListener('pointerup', up);
+    view.addEventListener('pointercancel', up);
+    view.addEventListener('pointermove', (e) => {
       const [px, py] = local(e);
       if (drag) { ox += px - drag[0]; oy += py - drag[1]; drag = [px, py]; redraw(); return; }
       const x = T.x0 + (px - ox) / scale, y = T.y0 + T.side - (py - oy) / scale;

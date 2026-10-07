@@ -6,6 +6,7 @@ import type { Sim } from '../sim/sim';
 import { formatNumber, pack, packBig, type Radix } from '../sim/values';
 import { toVcd, type TraceSignal } from '../sim/vcd';
 import { h, icon, s } from '../ui/dom';
+import { installPinch } from './pinch';
 
 export interface Lane {
   id: number;
@@ -73,7 +74,7 @@ export class LogicAnalyzer {
       this.render();
     }, 'Live') as HTMLButtonElement;
     const head = h('div', { class: 'la-head' },
-      h('b', null, 'Timing'), h('span', { class: 'la-hint' }, 'gate delays · click: cursor A · shift-click: B · wheel: zoom · drag: pan'),
+      h('b', null, 'Timing'), h('span', { class: 'la-hint' }, 'gate delays · click: cursor A · shift-click: B · wheel or pinch: zoom · drag: pan'),
       h('span', { class: 'spacer' }), this.readout,
       this.followBtn,
       btn('fit', 'Fit everything recorded', () => this.fit()),
@@ -407,6 +408,18 @@ export class LogicAnalyzer {
       this.span = span;
       this.render();
     }, { passive: false });
+    // Two fingers stretch time around their midpoint and slide it with them.
+    installPinch(this.plot, {
+      start: () => { drag = null; },
+      move: (k, mid, prev) => {
+        const t = tAt(prev[0]);
+        const span = Math.min(Math.max(this.span / k, 4), 1e8);
+        this.t0 = t - (t - this.t0) * (span / this.span) - ((mid[0] - prev[0]) / this.plot.clientWidth) * span;
+        this.span = span;
+        this.follow = false;
+        this.render();
+      },
+    });
     this.plot.addEventListener('pointerdown', (e) => {
       drag = { x: e.clientX, t0: this.t0, moved: false };
       this.plot.setPointerCapture(e.pointerId);

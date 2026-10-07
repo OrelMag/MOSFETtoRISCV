@@ -64,6 +64,7 @@ export class Tools {
     installPanZoom(svg, ed.view.cam, {
       canStart: (e) => this.panStart(e),
       onTap: () => {},
+      onPinch: () => this.pinched(),
     });
     const on = <K extends keyof DocumentEventMap>(t: Document | SVGSVGElement, k: K, f: (e: DocumentEventMap[K]) => void) => {
       t.addEventListener(k, f as EventListener);
@@ -87,6 +88,17 @@ export class Tools {
   destroy(): void {
     this.off.forEach((f) => f());
     this.off = [];
+  }
+
+  /**
+   * Two fingers came down: what the first one started (a press, drag or band) is dropped; a
+   * wire being drawn or a part being placed carries on after the zoom.
+   */
+  private pinched(): void {
+    const st = this.state;
+    if (st.k === 'press' || st.k === 'move' || st.k === 'band') this.cancel();
+    else if (st.k === 'wire') st.held = false;
+    if (this.buttonHeld) this.release();
   }
 
   private panStart(e: PointerEvent): boolean {
