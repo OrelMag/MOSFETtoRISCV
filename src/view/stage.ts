@@ -162,9 +162,11 @@ export class Stage {
     });
     this.view.radix = settings.radix;
     this.inspector.radix = settings.radix;
+    // The canvas also changes size during a run (the bottom bar rewraps as values and the status
+    // change): a view the learner zoomed into must survive that.
     new ResizeObserver(() => {
       this.view.insetRight = this.rightInset();
-      this.view.fit();
+      this.view.resized();
       this.layoutDock();
     }).observe(this.canvas);
   }

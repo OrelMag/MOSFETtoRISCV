@@ -8,6 +8,10 @@ export interface ViewBox { x: number; y: number; w: number; h: number }
 
 export class Camera {
   vb: ViewBox = { x: 0, y: 0, w: 10, h: 10 };
+  /** Showing what the last fit() chose: the learner has not zoomed or panned since. */
+  fitted = false;
+  /** Host size (px) the view box was last set for (see resized()). */
+  private size: { w: number; h: number } | null = null;
 
   /** `host` gives the visible size (the svg itself unless it sits in a larger container). */
   constructor(readonly svg: SVGSVGElement, private host: Element = svg) {}
@@ -36,7 +40,23 @@ export class Camera {
     // Extend the view to the right so the drawing sits in the uncovered part.
     if (insetRight > 0 && r.width > 0) w = w * (r.width / usable);
     this.vb = { x, y, w, h };
+    this.fitted = true;
+    this.size = r.width > 0 && r.height > 0 ? { w: r.width, h: r.height } : null;
     this.apply();
+  }
+
+  /**
+   * The host changed size. A view the learner has zoomed or panned keeps its scale and its
+   * top-left corner (the edge that moved shows more or less); returns false when the view is
+   * still the fitted one, so the caller fits it again.
+   */
+  resized(): boolean {
+    const r = this.host.getBoundingClientRect();
+    if (this.fitted || !this.size || r.width <= 0 || r.height <= 0) return false;
+    this.vb = { ...this.vb, w: this.vb.w * r.width / this.size.w, h: this.vb.h * r.height / this.size.h };
+    this.size = { w: r.width, h: r.height };
+    this.apply();
+    return true;
   }
 
   /** Scale the view by `factor` (< 1 zooms in) around a world point (default: the centre). */
@@ -46,6 +66,7 @@ export class Camera {
     const nw = Math.min(Math.max(v.w * factor, 8), 4000);
     const k = nw / v.w;
     this.vb = { x: px - (px - v.x) * k, y: py - (py - v.y) * k, w: v.w * k, h: v.h * k };
+    this.fitted = false;
     this.apply();
   }
 
@@ -55,6 +76,7 @@ export class Camera {
     const mx = v.w * 0.15, my = v.h * 0.15;
     if (p[0] > v.x + mx && p[0] < v.x + v.w - mx && p[1] > v.y + my && p[1] < v.y + v.h - my) return;
     this.vb = { ...v, x: p[0] - v.w / 2, y: p[1] - v.h / 2 };
+    this.fitted = false;
     this.apply();
   }
 
@@ -104,6 +126,7 @@ export function installPanZoom(svg: SVGSVGElement, cam: Camera, hooks: PanZoomHo
       if (Math.abs(dx) + Math.abs(dy) > 0.2) drag.moved = true;
       cam.vb.x = drag.vx - dx;
       cam.vb.y = drag.vy - dy;
+      if (drag.moved) cam.fitted = false;
       cam.apply();
       return;
     }
