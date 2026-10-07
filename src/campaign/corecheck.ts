@@ -13,12 +13,15 @@ import { GateSim } from '../sim/gatesim';
 import { analyzeTiming } from '../sim/timing';
 import { B0, B1, type ComponentDef } from '../sim/types';
 import { assemble16 } from '../riscv/rv16/asm16';
-import { disasm16, MMIO_BASE, REG_NAMES16 } from '../riscv/rv16/isa16';
+import { disasm16, MMIO16, MMIO_BASE, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { Iss16 } from '../riscv/rv16/iss16';
 
 export interface CoreTest {
   name: string;
-  src: string;
+  /** Assembly, or the words (and data) directly. */
+  src?: string;
+  words?: number[];
+  data?: Map<number, number>;
 }
 
 export interface CoreSpec {
@@ -47,7 +50,7 @@ const rname = (r: number) => `${REG_NAMES16[r]} (x${r})`;
 
 /** Run a test on the golden model; throws when the test itself is broken (a bug in the campaign). */
 export function golden(t: CoreTest, spec: Pick<CoreSpec, 'm' | 'system'>, maxSteps = 20000): Golden {
-  const a = assemble16(t.src);
+  const a = t.words ? { words: t.words, data: t.data ?? new Map<number, number>(), errors: [] } : assemble16(t.src ?? '');
   if (a.errors.length) throw new Error(`core test ${t.name}: ${a.errors[0].line}: ${a.errors[0].message}`);
   const iss = new Iss16(a.words, { m: spec.m, system: spec.system, strictInit: true }, a.data);
   const regs: Event[] = [], stores: Event[] = [];
@@ -107,6 +110,8 @@ interface Lane {
   cycles: number;
   /** Cycle the last expected event was seen (-1: not yet). */
   doneAt: number;
+  /** The interrupt line, raised and lowered by stores to IRQ (0xFFF9). */
+  irq: number;
   fail?: string;
 }
 
@@ -128,14 +133,15 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
   for (let i = 0; i < tests.length; i += width) groups.push(tests.slice(i, i + width));
   for (const group of groups) {
     const b = bench && group === groups[0] ? bench : (engine === 'gate' ? null : bitBench(def)) ?? gateBench(def);
-    const lanes: Lane[] = group.map((g) => ({ g, dmem: g.dmem.slice(), ri: 0, si: 0, cycles: 0, doneAt: -1 }));
+    const lanes: Lane[] = group.map((g) => ({ g, dmem: g.dmem.slice(), ri: 0, si: 0, cycles: 0, doneAt: -1, irq: 0 }));
+    const hasIrq = have.has('irq');
     const n = lanes.length;
     const fill = (v: (l: Lane, k: number) => number) => {
       const arr = lanes.map(v);
       while (arr.length < b.lanes) arr.push(arr[0] ?? 0);
       return arr;
     };
-    for (const p of PORTS_IN) b.set(p, fill(() => 0));
+    for (const p of [...PORTS_IN, ...(hasIrq ? ['irq'] : [])]) b.set(p, fill(() => 0));
     const serve = () => {
       // instr from pc, drdata from daddr, until nothing moves (a single-cycle core: two rounds).
       let lastPc: number[] = [], lastA: number[] = [];
@@ -168,6 +174,7 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
     b.set('rst', fill(() => 0));
     const limit = Math.max(...lanes.map((l) => Math.ceil(spec.budget.cpi * l.g.steps + spec.budget.extra)));
     for (let cyc = 1; cyc <= limit + drain; cyc++) {
+      if (hasIrq) b.set('irq', fill((l) => l.irq));
       serve();
       const dwe = b.get('dwe'), daddr = b.get('daddr'), dwd = b.get('dwdata'), rwe = b.get('rwe'), rwa = b.get('rwa'), rwd = b.get('rwd'), pc = b.get('pc');
       lanes.forEach((l, k) => {
@@ -195,6 +202,7 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
           } else {
             l.si++;
             if (a < MMIO_BASE) l.dmem[a] = v;
+            if (a === MMIO16.IRQ) l.irq = v & 1;
           }
         }
         if (!l.fail && l.doneAt < 0 && l.ri === l.g.regs.length && l.si === l.g.stores.length) l.doneAt = cyc;

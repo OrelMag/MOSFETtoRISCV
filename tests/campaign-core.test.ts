@@ -56,3 +56,16 @@ describe('the core bench', () => {
     expect(corePeriod(rv16Core(true, true))!).toBeLessThan(p);
   });
 });
+
+describe('the pipeline levels', () => {
+  it('each mechanism is needed: without it, the next level\'s programs fail', async () => {
+    const { rv16Pipe } = await import('../src/lib/rv16/pipe');
+    const { pipeTests } = await import('../src/campaign/coretests');
+    const run = (o: { fwd: boolean; stall: boolean; flush: boolean }, st: 1 | 2 | 3) =>
+      runCore(rv16Pipe(o), 'gate', { tests: () => pipeTests(st).slice(0, 8), budget: { cpi: 2.5, extra: 10 } });
+    expect(run({ fwd: false, stall: false, flush: false }, 1).failures.length).toBeGreaterThan(0);
+    expect(run({ fwd: true, stall: false, flush: false }, 2).failures.length).toBeGreaterThan(0);
+    expect(run({ fwd: true, stall: true, flush: false }, 3).failures.length).toBeGreaterThan(0);
+    expect(run({ fwd: true, stall: true, flush: true }, 3).failures).toEqual([]);
+  });
+});

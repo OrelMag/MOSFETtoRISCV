@@ -5,6 +5,8 @@
 import { challengeById } from '../editor/challengeset';
 import { BUILD1 } from './build1';
 import { BUILD5 } from './build5';
+import { BUILD6 } from './build6';
+import { BUILD7 } from './build7';
 import type { BuildChallenge } from '../editor/challenges';
 import type { Act, CampaignNode } from './types';
 
@@ -107,7 +109,7 @@ export const NODES: CampaignNode[] = [
     id: 'g_wide', act: 1, title: 'Wide gates', kind: 'build', requires: ['g_and', 'g_or'],
     why: 'The branch unit asks "is the result zero?": a 16-input NOR. A chain of 2-input gates is 15 deep; a tree is 4. Depth, not gate count, sets the clock.',
     tips: ['Balance the tree: pairs, then pairs of pairs.', 'Alternate NAND and NOR levels to avoid inverters (bubble pushing).'],
-    codex: ['fanin', 'depth', 'bubble'], unlocks: ['rv16_wide16', 'and3', 'and4', 'and8', 'or3', 'or4', 'or8', 'or16', 'zero4', 'zero8', 'zero16', 'andx*', 'orx*', 'xorx*'], base: BUILD1.g_wide, par: { nand: 46, depth: 9 } },
+    codex: ['fanin', 'depth', 'bubble'], unlocks: ['rv16_wide16', 'and3', 'and4', 'and8', 'or3', 'or4', 'or8', 'or16', 'zero*', 'andx*', 'orx*', 'xorx*'], base: BUILD1.g_wide, par: { nand: 46, depth: 9 } },
   {
     id: 'g_dec', act: 1, title: '3→8 decoder', kind: 'build', requires: ['g_wide'],
     why: 'Eight registers, one write port: a decoder turns the 3-bit register number into eight enable lines, only one of them 1. Decoders also select memory words and MMIO devices.',
@@ -370,28 +372,89 @@ export const NODES: CampaignNode[] = [
   },
 
   // ---- Act 6 --------------------------------------------------------------------------------
-  { id: 'pi_lesson', act: 6, title: 'Pipelining', kind: 'lesson', requires: ['c_core3'], why: 'Cut the datapath into five stages with registers: five instructions in flight, a clock five times faster in the ideal.', body: 'pipe', tips: [], codex: ['pipeline', 'hazards'], chapters: [{ chapter: 'pipeline', label: 'Pipelining' }] },
-  { id: 'pi_reg', act: 6, title: 'Pipeline register', kind: 'build', requires: ['s_reg16'], soon: true, why: 'A register that can hold (stall) or clear to a bubble (flush).', tips: [], codex: ['stall', 'flush'], anatomy: ['p1', 'p2', 'p3', 'p4'] },
-  { id: 'pi_core0', act: 6, title: 'Pipeline I', kind: 'core', requires: ['pi_lesson', 'pi_reg'], soon: true, why: 'Five stages, tested on programs with no dependences close together.', tips: [], codex: ['pipeline'] },
-  { id: 'pi_fwd', act: 6, title: 'Forwarding unit', kind: 'build', requires: ['g_eq16', 'pi_lesson'], soon: true, why: 'Take a result from a later stage instead of waiting for write-back.', tips: [], codex: ['forwarding'], anatomy: ['fwd'] },
-  { id: 'pi_core1', act: 6, title: 'Pipeline II: forwarding', kind: 'core', requires: ['pi_core0', 'pi_fwd'], soon: true, why: 'Back-to-back dependent instructions at full speed.', tips: [], codex: ['forwarding'] },
-  { id: 'pi_haz', act: 6, title: 'Hazard unit', kind: 'build', requires: ['g_eq16', 'pi_lesson'], soon: true, why: 'A load\'s value arrives too late to forward: stall one cycle.', tips: [], codex: ['loaduse'], anatomy: ['haz'] },
-  { id: 'pi_core2', act: 6, title: 'Pipeline III: load-use', kind: 'core', requires: ['pi_core1', 'pi_haz'], soon: true, why: 'Stall when forwarding cannot help.', tips: [], codex: ['stall'] },
-  { id: 'pi_core3', act: 6, title: 'Pipeline IV: branches', kind: 'core', requires: ['pi_core2'], soon: true, why: 'Flush the wrongly fetched instructions after a taken branch.', tips: [], codex: ['flush', 'controlhazard'] },
+  {
+    id: 'pi_lesson', act: 6, title: 'Pipelining', kind: 'lesson', requires: ['c_core3'], body: 'pipe',
+    why: 'Cut the datapath into five stages with registers: five instructions in flight, and a clock period set by the slowest stage instead of the whole path.',
+    tips: [], codex: ['pipeline', 'hazards'], chapters: [{ chapter: 'pipeline', label: 'Pipelining' }],
+  },
+  {
+    id: 'pi_reg', act: 6, title: 'Pipeline register', kind: 'build', requires: ['s_reg16', 'g_mux8', 'g_or'], base: BUILD6.pi_reg, par: { nand: 307, period: 8 },
+    why: 'Between two stages, a register that can hold its value (a stall: the stage waits) or clear itself (a flush: a bubble, all-zero control, does nothing).',
+    tips: ['A mux in front picks 0 when clr; the register loads when en or clr.'], codex: ['stall', 'flush'], unlocks: ['rv16_preg'], anatomy: ['p1', 'p2', 'p3', 'p4'],
+  },
+  {
+    id: 'pi_core0', act: 6, title: 'Pipeline I: five stages', kind: 'core', requires: ['pi_lesson', 'pi_reg'], base: BUILD6.pi_core0, par: { nand: 10487, period: 65, cycles: 2508 },
+    why: 'The datapath cut into F, D, E, M, W. These programs keep dependent instructions apart and have no branches, so the stages can work without talking to each other.',
+    tips: ['Write the register file at the falling edge (clock it with ¬clk): an instruction three behind its producer then reads the new value.', 'Carry everything a later stage needs in the pipeline registers: rd, control signals, the immediate, pc.', 'Report register writes from W and stores from M.'],
+    codex: ['pipeline'],
+  },
+  {
+    id: 'pi_fwd', act: 6, title: 'Forwarding unit', kind: 'build', requires: ['g_eq16', 'pi_lesson'], base: BUILD6.pi_fwd, par: { nand: 110, depth: 13 },
+    why: 'A result exists at the end of E, but is written back two stages later. The forwarding unit spots when E needs a value that M or W is still carrying, and routes it there.',
+    tips: ['Compare 3-bit register numbers: the library equality comparators are unlocked.', 'x0 is never forwarded; M has priority over W (it is newer).'],
+    codex: ['forwarding', 'comparator'], unlocks: ['rv16_fwd'], anatomy: ['fwd'],
+  },
+  {
+    id: 'pi_core1', act: 6, title: 'Pipeline II: forwarding', kind: 'core', requires: ['pi_core0', 'pi_fwd'], base: BUILD6.pi_core1, par: { nand: 10981, period: 78, cycles: 970 },
+    why: 'Now an instruction uses the result of the one just before it. Two 3:1 muxes in front of the ALU, steered by the forwarding unit, keep the pipeline at one instruction per cycle.',
+    tips: ['M\'s forwarded value is its result before memory (ALU, pc + 1 or immediate).', 'Forward rs2 too: stores and branches use it.'],
+    codex: ['forwarding'],
+  },
+  {
+    id: 'pi_haz', act: 6, title: 'Hazard unit', kind: 'build', requires: ['g_eq16', 'pi_lesson'], base: BUILD6.pi_haz, par: { nand: 53, depth: 12 },
+    why: 'A load\'s value only exists after M. If the very next instruction needs it, no forwarding can help: hold it one cycle.',
+    tips: ['A load in E: rwe and wb = memory.', 'Being conservative is allowed (a stall too many only costs a cycle).'],
+    codex: ['loaduse'], unlocks: ['rv16_haz'], anatomy: ['haz'],
+  },
+  {
+    id: 'pi_core2', act: 6, title: 'Pipeline III: load-use', kind: 'core', requires: ['pi_core1', 'pi_haz'], base: BUILD6.pi_core2, par: { nand: 11105, period: 78, cycles: 917 },
+    why: 'Loads used at once: stall the front (PC and F/D hold), send a bubble into E, then forward from W the cycle after.',
+    tips: ['stall: PC en = 0, F/D en = 0, D/E clr = 1.'], codex: ['stall', 'loaduse'],
+  },
+  {
+    id: 'pi_core3', act: 6, title: 'Pipeline IV: branches', kind: 'core', requires: ['pi_core2'], base: BUILD6.pi_core3, par: { nand: 11172, period: 82, cycles: 1495 },
+    why: 'A branch is resolved in E; by then the next two instructions were fetched on the guess "not taken". When the guess is wrong, flush them and fetch from the target.',
+    tips: ['redirect = the next-PC logic\'s ld in E; it loads the PC and clears F/D and D/E.', 'Every taken branch costs two cycles: the price predictors (and earlier resolution) try to lower.'],
+    codex: ['flush', 'controlhazard'],
+  },
   { id: 'o_bpred', act: 6, title: 'Branch prediction', kind: 'core', optional: true, requires: ['pi_core3'], soon: true, why: 'Guess taken or not before knowing: fewer flushes, lower CPI.', tips: [], codex: ['bpred'], chapters: [{ chapter: 'pipepay', label: 'Making the pipeline pay' }] },
 
   // ---- Act 7 --------------------------------------------------------------------------------
-  { id: 'y_lesson', act: 7, title: 'Traps and interrupts', kind: 'lesson', requires: ['c_core3'], why: 'When the program errs or the world calls, the CPU must stop, save where it was, and jump to a handler.', body: 'traps', tips: [], codex: ['traps', 'csr'], chapters: [{ chapter: 'traps', label: 'Traps and interrupts' }] },
-  { id: 'y_csr', act: 7, title: 'CSR file', kind: 'build', requires: ['s_reg16', 'g_dec', 'y_lesson'], soon: true, why: 'mstatus, mtvec, mepc, mcause: the registers of the trap machinery.', tips: [], codex: ['csr'], anatomy: ['csr'] },
-  { id: 'y_trap', act: 7, title: 'Exceptions', kind: 'core', requires: ['c_core3', 'y_csr'], soon: true, why: 'ecall, ebreak, illegal instructions and mret.', tips: [], codex: ['traps'] },
-  { id: 'y_irq', act: 7, title: 'Interrupts', kind: 'core', requires: ['y_trap'], soon: true, why: 'Take an external interrupt between two instructions.', tips: [], codex: ['interrupts'] },
+  {
+    id: 'y_lesson', act: 7, title: 'Traps and interrupts', kind: 'lesson', requires: ['c_core3'], body: 'traps',
+    why: 'When the program errs or the world calls, the CPU must stop, save where it was, and jump to a handler.',
+    tips: [], codex: ['traps', 'csr'], chapters: [{ chapter: 'traps', label: 'Traps and interrupts' }],
+  },
+  {
+    id: 'y_csr', act: 7, title: 'CSR file', kind: 'build', requires: ['s_reg16', 'g_dec', 'g_mux8', 'y_lesson'], base: BUILD7.y_csr, par: { nand: 2156, period: 19 },
+    why: 'mstatus, mtvec, mepc, mcause: the registers of the trap machinery. A trap updates three of them at once; mret undoes it.',
+    tips: ['Six 16-bit registers and an 8:1 read mux.', 'mstatus: bits 3 (MIE) and 7 (MPIE) have their own next-value logic; the other bits only change on a write.'],
+    codex: ['csr'], unlocks: ['rv16_csr'], anatomy: ['csr'],
+  },
+  {
+    id: 'y_trap', act: 7, title: 'Exceptions', kind: 'core', requires: ['c_core3', 'y_csr'], base: BUILD7.y_trap, par: { nand: 9004, period: 100, cycles: 712 },
+    why: 'ecall asks the system for help; ebreak stops for a debugger; an illegal word is a bug. All three replace the instruction by a jump to mtvec, remembering where and why.',
+    tips: ['The illegal-instruction detector and the system decoder are given (open them: the detector is a function of the 16-bit word, the decoder computes the CSR write value).', 'On a trap: no register write, no store, pc ← mtvec, mepc ← pc.', 'csrr* write the old CSR value to rd.'],
+    codex: ['traps'], gives: ['rv16_ill', 'rv16_sysdec'], unlocks: ['rv16_ill', 'rv16_sysdec'],
+  },
+  {
+    id: 'y_irq', act: 7, title: 'Interrupts', kind: 'core', requires: ['y_trap'], base: BUILD7.y_irq, par: { nand: 9004, period: 100, cycles: 740 },
+    why: 'The outside world (a timer, a device) interrupts the program between two instructions. Taken like an exception, but with cause bit 15 set, and only when enabled.',
+    tips: ['intr = MIE · MEIE · irq, from the CSR file.', 'Check it before the instruction at pc runs; it wins over everything else.'],
+    codex: ['interrupts'], unlocks: ['rv16_cpu_irq'],
+  },
   {
     id: 'p_handler', act: 7, title: 'An interrupt handler', kind: 'program', requires: ['y_lesson', 'p_call'], par: { size: 22 },
     why: 'An interrupt can arrive between any two instructions of main: the handler must save every register it touches, service the device, acknowledge it and return with mret, leaving main none the wiser.',
     tips: ['mtvec ← the handler\'s address; mie ← 0x800 (MEIE); then set mstatus bit 3 (MIE) last.', 'push / pop what the handler uses (main\'s registers must survive).', 'Acknowledge with <code>sw x0, -7(x0)</code> before mret, or the interrupt fires again at once.'],
     codex: ['interrupts', 'traps'],
   },
-  { id: 'y_final', act: 7, title: 'Finale: the complete RV16', kind: 'core', requires: ['pi_core3', 'y_irq'], soon: true, why: 'The pipelined processor with precise traps and interrupts: everything you built, in one chip.', tips: [], codex: ['precise'] },
+  {
+    id: 'y_final', act: 7, title: 'Finale: the complete RV16', kind: 'core', requires: ['pi_core3', 'y_irq'], base: BUILD7.y_final, par: { nand: 15050, period: 88, cycles: 2399 },
+    why: 'The pipelined processor with precise traps and interrupts: every block you built, from the NAND up, in one chip that runs real programs, handles its own errors and answers the outside world.',
+    tips: ['Take traps in E: older instructions in M and W still complete, younger ones in F and D are flushed.', 'Carry a valid bit: a bubble\'s all-zero word would otherwise look like an illegal instruction.', 'A CSR instruction reads and writes in E; its old value travels down as the result.'],
+    codex: ['precise'],
+  },
 
   // ---- Act 8 --------------------------------------------------------------------------------
   { id: 'o_mulseq', act: 8, title: 'Sequential multiplier', kind: 'build', optional: true, requires: ['a_add16', 's_reg16'], soon: true, why: 'Shift and add, one bit per cycle: small and slow.', tips: [], codex: ['shiftadd'], chapters: [{ chapter: 'muldiv', label: 'Multiply & divide' }] },

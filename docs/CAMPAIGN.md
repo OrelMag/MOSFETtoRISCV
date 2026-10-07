@@ -24,14 +24,14 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 
 | # | Requirement | Where | Status |
 |---|---|---|---|
-| R1 | Campaign mode: build a NAND from transistors, then build up to a CPU | Acts 0–7 (§5) | 🚧 |
-| R2 | A pipelined CPU "with all the goodies": hazards, forwarding, flushes, interrupts, traps | Acts 6–7 | ⏳ |
+| R1 | Campaign mode: build a NAND from transistors, then build up to a CPU | Acts 0–7 (§5) | ✅ |
+| R2 | A pipelined CPU "with all the goodies": hazards, forwarding, flushes, interrupts, traps | Acts 6–7 | ✅ |
 | R3 | The campaign is a **tree**; each node is a component built on its predecessors | `src/campaign/nodes.ts` (`requires`), map page | 🚧 |
 | R4 | Number systems | Act 2 drills `n_bin`, `n_twos` (✅); Act 8 `n_float` (⏳) | 🚧 |
 | R5 | Assembly | Act 4 (ISA lesson, encode drill, 7 program puzzles with an editor and a stepper); `p_handler` in Act 7 | ✅ |
 | R6 | Tips and tricks (Boolean logic, …) | per-node progressive `tips`, codex "trick" entries, `l_bool` (lesson + drill), K-map drill | ✅ |
 | R7 | A complete test set per level (success criteria shown before you start) | `BuildChallenge.check` / puzzle tests / core harness; node panel lists them | 🚧 |
-| R8 | Simplified 16-bit CPU similar to RISC-V | RV16 (§3): ISA, assembler, golden model, single-cycle core ✅; pipeline 🚧 | 🚧 |
+| R8 | Simplified 16-bit CPU similar to RISC-V | RV16 (§3): ISA, assembler, golden model, single-cycle, pipelined and trap-capable cores | ✅ |
 | R9 | Guidance and complete solutions | tips + "Show solution" / "Do it for me"; every node has a reference answer | 🚧 |
 | R10 | Skipping a level is allowed, and our solution is used | **Skip** marks it skipped and unlocks its part | 🚧 |
 | R11 | Grade solutions on optimization | `grade.ts`: ★ / ★★ / ★★★ against par on NAND, depth, period, cycles, size | 🚧 |
@@ -217,7 +217,12 @@ The clock period is measured on a bench with 8-delay instruction and data memori
 PC → memory → decode → … → register counts. The core levels share one pin set, so one chip can grow
 from Core I to Core III.
 
-- **Pass**: the register-write trace and the store trace are equal to the golden model's, the
+- **Pipelines** report register writes from W and stores from M; the same comparison works because a
+correct pipeline makes the same writes in the same order, only later. Interrupt tests are written so
+that nothing in main depends on exactly which instruction the interrupt lands on (main spins until the
+handler has run).
+
+**Pass**: the register-write trace and the store trace are equal to the golden model's, the
   final data memory is equal, and the core finishes within the cycle budget.
 - **A failure names**: the test, the write number, the instruction (disassembled) and the cycle.
 - **Interrupt tests** are software-raised and independent of where exactly the core takes the
@@ -304,22 +309,22 @@ Legend: `id` ← requires · *opt* optional · (ex) an existing sandbox challeng
 
 ### Act 6 — Pipelining
 - ✅ `pi_lesson` ← c_core3
-- ⏳ `pi_reg`: pipeline register with stall / flush ← s_reg16
-- ⏳ `pi_core0`: 5 stages, programs without hazards ← pi_lesson, pi_reg
-- ⏳ `pi_fwd`: forwarding unit ← g_eq16, pi_lesson
-- ⏳ `pi_core1`: + forwarding ← pi_core0, pi_fwd
-- ⏳ `pi_haz`: load-use hazard detection ← g_eq16, pi_lesson
-- ⏳ `pi_core2`: + load-use stall ← pi_core1, pi_haz
-- ⏳ `pi_core3`: + branch / jump flush ← pi_core2
+- ✅ `pi_reg`: pipeline register with stall / flush ← s_reg16, g_mux8, g_or
+- ✅ `pi_core0`: 5 stages, programs without hazards ← pi_lesson, pi_reg
+- ✅ `pi_fwd`: forwarding unit ← g_eq16, pi_lesson
+- ✅ `pi_core1`: + forwarding ← pi_core0, pi_fwd
+- ✅ `pi_haz`: load-use hazard detection ← g_eq16, pi_lesson
+- ✅ `pi_core2`: + load-use stall ← pi_core1, pi_haz
+- ✅ `pi_core3`: + branch / jump flush ← pi_core2
 - ⏳ *opt* `o_bpred`: branch prediction, graded on CPI ← pi_core3
 
 ### Act 7 — The system: traps and interrupts
 - ✅ `y_lesson` ← c_core3
-- ⏳ `y_csr`: CSR file ← s_reg16, g_dec, y_lesson
-- ⏳ `y_trap`: CSR instructions, ecall / ebreak / illegal, mret ← c_core3, y_csr
-- ⏳ `y_irq`: interrupts ← y_trap
+- ✅ `y_csr`: CSR file (a long random sequence against a model) ← s_reg16, g_dec, g_mux8, y_lesson
+- ✅ `y_trap`: CSR instructions, ecall / ebreak / illegal, mret (the illegal-instruction detector and the system decoder are given) ← c_core3, y_csr
+- ✅ `y_irq`: interrupts ← y_trap
 - ✅ `p_handler`: an interrupt-driven program ← y_lesson, p_call
-- ⏳ **`y_final`**: the pipelined RV16 with precise traps and interrupts ← pi_core3, y_irq
+- ✅ **`y_final`**: the pipelined RV16 with precise traps and interrupts ← pi_core3, y_irq
 
 ### Act 8 — Side quests (all optional)
 - ⏳ `o_mulseq`: shift-and-add multiplier ← a_add16, s_reg16
@@ -379,8 +384,8 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
   - An RV16 ROM language and the CPU drawer for RV16 cores (a golden-model interface shared with
     RV32).
   - `c_computer`, and "debug this test in the sandbox".
-- ⏳ **E. Pipeline.** Pipeline blocks and the reference pipelined cores; Act 6.
-- ⏳ **F. System.** CSRs, traps and interrupts in the golden model, the harness and the
+- ✅ **E. Pipeline.** Pipeline blocks and the reference pipelined cores; Act 6.
+- ✅ **F. System.** CSRs, traps and interrupts in the golden model, the harness and the
   hardware; Act 7 and the finale.
 - ⏳ **G. Side quests.** Act 8.
 
@@ -389,6 +394,12 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
   with traps and interrupts.
 - **Core check in the browser**: ≤ 1.5 s (32 lanes × ≤ 1200 cycles).
 - **Test suite**: ≤ 5 s per reference core and ≤ 60 s for the whole campaign.
+- **Measured** (phases E, F): the reference pipelines are 10.5k (no hazard handling), 11.0k (forwarding),
+  11.1k (load-use stall) and 11.2k NANDs (branch flush), period 65–82; the single-cycle core with traps and
+  interrupts 9.0k (period 100); the finale, the pipeline with precise traps and interrupts, 15.1k NANDs,
+  period 88, its 45 programs checked in about 1.5 s. Honest lesson for the learner: with a 16-bit ripple ALU
+  the E stage is almost as slow as the whole single-cycle path, so pipelining pays only once the stages are
+  balanced (the fast-adder side quest).
 - **Measured** (phase D): the reference single-cycle core is 5 748 NANDs, clock period 98 NAND delays with
   8-delay memories in the path (81 with Kogge–Stone adders). The bench runs 28 programs (≈1 240 cycles in
   all) in 0.2–0.6 s on 32 bit-parallel lanes; the event-driven fallback gives identical results.

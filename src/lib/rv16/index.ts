@@ -2,3 +2,5 @@
 // unlocked part resolves by id after a reload.
 export * from './logic';
 export * from './cpu';
+export * from './system';
+export * from './pipe';

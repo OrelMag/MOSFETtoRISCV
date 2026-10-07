@@ -2,6 +2,8 @@
 // ones), by stage: 1 arithmetic, 2 + memory, 3 + control flow. Each is checked against the golden
 // model with strict register initialisation (tests/campaign-core.test.ts).
 
+import { assemble16 } from '../riscv/rv16/asm16';
+import { decode16 } from '../riscv/rv16/isa16';
 import { randomProgram } from '../riscv/rv16/randprog';
 import type { CoreTest } from './corecheck';
 
@@ -162,4 +164,120 @@ export function coreTests(stage: 1 | 2 | 3): CoreTest[] {
   if (stage >= 2) t.push(...rand(2, stage === 2 ? 10 : 6));
   if (stage >= 3) t.push(...rand(3, 10));
   return t;
+}
+
+const NOP = 0x0004;
+
+/**
+ * A branch-free program with nops inserted at the word level: `after` nops after every instruction,
+ * or after loads only. Keeps the data image.
+ */
+function padded(t: CoreTest, after: number, loadsOnly: boolean): CoreTest {
+  const a = assemble16(t.src!);
+  const words: number[] = [];
+  for (const w of a.words) {
+    words.push(w);
+    const isLoad = decode16(w).spec?.name === 'lw';
+    for (let k = 0; k < (loadsOnly ? (isLoad ? after : 0) : after); k++) words.push(NOP);
+  }
+  return { name: t.name, words, data: a.data };
+}
+
+/**
+ * The pipeline levels' programs. 0: no hazards (two nops after every instruction, no branches);
+ * 1: back-to-back dependences, but a nop after every load; 2: loads used at once; 3: everything.
+ */
+export function pipeTests(stage: 0 | 1 | 2 | 3): CoreTest[] {
+  if (stage === 3) return coreTests(3);
+  const base = coreTests(2);
+  if (stage === 0) return base.map((t) => padded(t, 2, false));
+  if (stage === 1) return base.map((t) => padded(t, 1, true));
+  return base;
+}
+
+const TRAPS = `# ecall, ebreak and an illegal word trap to mtvec; the handler skips them and counts
+        la   t0, handler
+        csrw mtvec, t0
+        li   a2, 0
+        li   a0, 7
+        ecall
+        addi a0, a0, 1
+        ebreak
+        .word 0x0000         # illegal
+        .word 0x2002         # OPX with f3 = 1: illegal
+        .word 0xc005         # shift type 3: illegal
+        .word 0x0003         # MD without M: illegal
+        sw   a2, -3(x0)
+        csrr t1, mcause
+        sw   t1, -3(x0)
+        halt
+handler:
+        addi a2, a2, 1
+        csrr t1, mcause
+        sw   t1, -3(x0)
+        csrr t1, mepc
+        addi t1, t1, 1
+        csrw mepc, t1
+        mret
+`;
+
+const CSRS = `# csrrw / csrrs / csrrc, x0 sources, mscratch, mstatus bits around a trap
+        li   a0, 0x1234
+        csrrw a1, mscratch, a0   # a1 = 0
+        li   a0, 0x00f0
+        csrrs a1, mscratch, a0   # a1 = 0x1234
+        csrrc a1, mscratch, a0   # a1 = 0x12f4
+        csrrs a2, mscratch, x0   # read only
+        csrrc a2, mscratch, x0
+        li   t0, 8
+        csrs mstatus, t0         # MIE
+        csrr a0, mstatus
+        la   t1, h
+        csrw mtvec, t1
+        ecall                    # MIE → MPIE
+        csrr a1, mstatus         # MIE back (mret), MPIE = 1
+        csrr t0, mtvec
+        csrr t1, mie
+        halt
+h:      csrr a2, mstatus         # MIE = 0, MPIE = 1
+        csrr t0, mepc
+        addi t0, t0, 1
+        csrw mepc, t0
+        mret
+`;
+
+const IRQ = `# the external interrupt, raised by a store to IRQ; main spins until the handler has run.
+# Nothing in main depends on exactly which instruction the interrupt lands on (a pipeline may
+# take it a little later than the golden model).
+        li   sp, 0x400
+        la   t0, handler
+        csrw mtvec, t0
+        li   t0, 0x800
+        csrw mie, t0
+        li   a2, 0
+        li   t0, 8
+        csrs mstatus, t0
+        li   t1, 1
+        sw   t1, -7(x0)          # raise
+wait:   beqz a2, wait
+        csrc mstatus, t0         # interrupts off
+        sw   t1, -7(x0)          # raise again: not taken
+        nop
+        nop
+        sw   x0, -7(x0)          # lower
+        sw   a2, -3(x0)
+        halt
+handler:
+        push t0
+        csrr t0, mcause
+        sw   t0, -3(x0)
+        sw   x0, -7(x0)          # acknowledge
+        addi a2, a2, 1
+        pop  t0
+        mret
+`;
+
+/** Act 7's programs: traps (and with irq, the interrupt) plus the core's own tests. */
+export function sysTests(irq: boolean): CoreTest[] {
+  return [{ name: 'traps', src: TRAPS }, { name: 'csrs', src: CSRS }, ...(irq ? [{ name: 'interrupt', src: IRQ }] : []), ...coreTests(3).filter((_, i) => i % 2 === 0)];
 }
