@@ -186,6 +186,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   remix.ts       "Open in Sandbox": remixDef / remixIntoStorage (a shown def → a new chip; parts a reload could
                  not find by id come along as ROM / constant parts or chips); loaded on demand by the stage
   hops.ts        HopCache: wire hops recomputed for the moved wires and those crossing them only
+  flowdir.ts     wireFlows: which way each drawn wire carries its signal (from part outputs / chip inputs,
+                 cut at branch points; distance from the driver, sink or junction at the far end), for flowing bits
   probes.ts      ProbeTarget (wires / pin / pointer name) → flat nets of each new build (resolveProbe)
   sta.ts         chipTiming: static timing of a chip, critical path mapped to its parts / wires / pins
   lint.ts        lintChip: two nets drawn on one line, pointers without a twin, inputs left open
@@ -321,7 +323,16 @@ keep the two in step when a panel gains a feature.
 - Camera: `fitted` stays true until the learner zooms or pans; a canvas resize (the bottom bar rewraps
   during a run) refits only a fitted view, else `resized()` keeps the scale and top-left corner.
 - Hops, tap bit ranges, net selection and probe flags are computed in the view from the
-  routed nets; nothing to author. Slow motion draws each change as a front over one gate
+  routed nets; nothing to author.
+- Flowing bits (`settings.wireFlow`, a switch in the wire-colour menu; `data-wireflow="off"` on
+  `<html>` hides it): a 1-bit wire carrying a 1 shows pellets (view/flow.ts: a dash pattern on an
+  overlay path `.wire-flow`, CSS-animated); a bus carrying a non-zero word shows its value riding
+  along as tags (view/flowtokens.ts: one rAF loop, positions from polylines, `.bus-label.riding` steps
+  aside); nothing flows on 0 / X / Z. Both take their phase from one clock and lanes carry their
+  distance from the driver (`laneTails` for a schematic net's paths, editor/flowdir.ts for the
+  sandbox's wires), so a value reaching a junction carries on along every branch; tags fade only at
+  the driver and at a sink. Both SchematicView and EditorView draw it; wire classes are untouched.
+- Slow motion draws each change as a front over one gate
   delay (`SchematicView.flowMs`); the simulation's timing is unchanged.
 - The Timing panel only records nets of the scene's own simulation (`ctx.sim === stage.sim`);
   sub-simulations (an opened NAND, the ROM) cannot be probed. `Scene.analyzer` opens it.

@@ -68,6 +68,15 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .pal-menu button .pal-sw i { width: 10px; height: 10px; }
 .pal-menu b { display: block; font-size: 13px; font-weight: 600; }
 .pal-menu small { display: block; font-size: 12px; color: var(--muted); }
+/* The flowing-bits switch: a short wire, its pellets moving while on. */
+.pal-flow-sw { width: 46px; height: 10px; display: grid; align-items: center; flex: none; }
+.pal-flow-sw i { display: block; height: 4px; border-radius: 2px; background: var(--w0); }
+.pal-flow[aria-checked='true'] .pal-flow-sw i {
+  background: repeating-linear-gradient(90deg, var(--flow1) 0 5px, var(--w1) 5px 16px);
+  animation: pal-flow 0.8s linear infinite;
+}
+@keyframes pal-flow { from { background-position: 0 0; } to { background-position: 16px 0; } }
+@media (prefers-reduced-motion: reduce) { .pal-flow-sw i { animation: none !important; } }
 
 /* quick navigation: chapter menu and search palette (src/ui/quicknav.ts) */
 .nav a .icon:last-child:not(:first-child) { opacity: 0.6; margin-left: -2px; }
@@ -443,6 +452,15 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .wire.bus { stroke-width: var(--wire-bus); stroke: var(--bus); opacity: var(--bus0-opacity); stroke-dasharray: none; }
 .wire.bus.bus1 { stroke: var(--bus1); opacity: 1; }
 .wire.bus.vx { stroke: var(--wx); opacity: 1; }
+/* Flowing bits (view/flow.ts): pellets on a 1-bit wire, an overlay per path; a bus's value rides it as tags (view/flowtokens.ts). */
+.wire-flow { fill: none; pointer-events: none; stroke: var(--flow1); stroke-width: calc(var(--wire-w1) * 0.5); stroke-linecap: butt; }
+.flow-tokens { pointer-events: none; }
+.flow-token rect { fill: var(--bus1); stroke: var(--flow-token-edge); stroke-width: 0.07; }
+.flow-token text { font: 600 0.78px var(--font-mono); fill: var(--flow-token-text); }
+.wire-flow.faded, .flow-tokens.faded, :root[data-wireflow='off'] :is(.wire-flow, .flow-tokens) { display: none; }
+@keyframes wire-flow { from { stroke-dashoffset: var(--flow-from); } to { stroke-dashoffset: var(--flow-to); } }
+@media (prefers-reduced-motion: reduce) { .wire-flow, .flow-tokens { display: none; } }
+@media (prefers-reduced-motion: no-preference) { :root:not([data-wireflow='off']) .bus-label.riding { display: none; } }
 .dot { fill: var(--w0); }
 .dot.v1 { fill: var(--w1); }
 .dot.vx { fill: var(--wx); }

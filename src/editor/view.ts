@@ -9,10 +9,13 @@ import { B1, BX, BZ, type Bit, type ComponentDef } from '../sim/types';
 import { formatBits, pack, type Radix } from '../sim/values';
 import { s } from '../ui/dom';
 import { Camera, type ViewBox } from '../view/camera';
+import { applyFlow, flowDash, flowKey, flowText } from '../view/flow';
+import { FlowTokens, type Lane } from '../view/flowtokens';
 import { junctions, type PinGeom, textWidth } from '../view/route';
 import { bitClass, busClass } from '../view/schematic';
 import { drawPinGlyph, drawSymbol, instNameAt, type PinGlyph, placePinValue } from '../view/symbols';
 import type { Compiled, Diag } from './compile';
+import { type WireFlow, wireFlows } from './flowdir';
 import { partBox, pinBody, pinKnob, pointerGeom, wireGroups } from './geom';
 import { HopCache } from './hops';
 import {
@@ -39,7 +42,12 @@ interface DisplayEls {
   /** A buzzer's tone now (Hz, 0 silent). */
   hz?: number;
 }
-interface WireEls { doc: WireDoc; poly: Vec[] | null; key: string; ver: number; path: SVGPathElement; hit: SVGPathElement; width: number; cls: string }
+interface WireEls {
+  doc: WireDoc; poly: Vec[] | null; key: string; ver: number; path: SVGPathElement; hit: SVGPathElement; width: number; cls: string;
+  /** Flowing bits: which way the signal runs (null: no driver reaches it) as lanes, the pellet overlays of a
+   *  1-bit wire and what they show, the bits last painted. */
+  flow?: WireFlow | null; flowGeom?: string; lanes?: Lane[] | null; ants?: SVGPathElement[]; antsKey?: string; bits?: Bit[] | null;
+}
 interface DotEls { el: SVGCircleElement; wire: string; cls: string }
 interface PinEls { doc: PinDoc; g: SVGGElement; glyph: PinGlyph; geom: PinGeom; cls: string; txt: string }
 interface LabelEls { doc: LabelDoc; g: SVGGElement; stub: SVGPathElement; cls: string }
@@ -61,6 +69,8 @@ export class EditorView {
 
   private gComments: SVGGElement;
   private gWires: SVGGElement;
+  private gFlow: SVGGElement;
+  private tokens: FlowTokens;
   private gDots: SVGGElement;
   private gHits: SVGGElement;
   private gParts: SVGGElement;
@@ -98,6 +108,9 @@ export class EditorView {
     const L = (cls: string) => s('g', { class: cls });
     this.gComments = L('ed-notes');
     this.gWires = L('wires');
+    this.gFlow = L('wire-flows');
+    const gTokens = L('flow-tokens-layer');
+    this.tokens = new FlowTokens(gTokens);
     this.gDots = L('ed-dots');
     this.gHits = L('wire-hits');
     this.gParts = L('insts');
@@ -113,7 +126,7 @@ export class EditorView {
     this.svg.append(defs,
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid)' }),
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid5)' }),
-      this.gComments, this.gWires, this.gDots, this.gHits, this.gParts, this.gPins, this.gLabels, this.gValues, this.gOver);
+      this.gComments, this.gWires, this.gFlow, this.gDots, gTokens, this.gHits, this.gParts, this.gPins, this.gLabels, this.gValues, this.gOver);
     host.append(this.svg);
     this.cam = new Camera(this.svg, host);
     this.cam.vb = { x: -4, y: -4, w: 60, h: 36 };
@@ -271,12 +284,15 @@ export class EditorView {
         if (seen.has(id)) continue;
         e.path.remove();
         e.hit.remove();
+        e.ants?.forEach((a) => a.remove());
+        this.tokens.set(id, null, null);
         this.wires.delete(id);
         this.polys.delete(id);
         wiresChanged = true;
       }
     }
     if (wiresChanged) this.drawWireShapes(doc);
+    if (wiresChanged || geomChanged) this.layoutFlows(doc, defOf);
     this.applyClasses();
   }
 
@@ -314,6 +330,52 @@ export class EditorView {
       this.dots.set(key, list);
     }
     for (const [k, list] of this.dots) if (!seen.has(k)) { list.forEach((d) => d.el.remove()); this.dots.delete(k); }
+  }
+
+  /** Which way bits flow on every wire; overlays whose shape changed are redrawn. */
+  private layoutFlows(doc: ChipDoc, defOf: DefOf): void {
+    const flows = wireFlows(doc, this.polys, defOf);
+    for (const [id, e] of this.wires) {
+      const f = flows.get(id) ?? null;
+      const geom = !f ? '' : f.whole ? `${f.reverse}|${f.d0}|${f.len}|${this.hops.d.get(id) ?? ''}` : JSON.stringify(f.pieces);
+      if (geom === e.flowGeom) continue;
+      e.flow = f;
+      e.flowGeom = geom;
+      e.lanes = !f ? null : f.whole ? [{ pts: f.reverse ? [...e.poly!].reverse() : e.poly!, d0: f.d0, sink: f.sink }] : f.pieces;
+      e.ants?.forEach((a) => a.remove());
+      e.ants = undefined;
+      e.antsKey = undefined;
+      this.paintFlow(e, e.bits ?? null);
+    }
+  }
+
+  /** Show `bits` flowing along a wire (null: nothing flows): pellets, or a bus's value. Overlays are made on first use. */
+  private paintFlow(e: WireEls, bits: Bit[] | null): void {
+    e.bits = bits;
+    const f = e.flow;
+    if (bits && bits.length > 1) {
+      const text = flowText(bits, this.radix);
+      this.tokens.set(e.doc.id, text ? e.lanes ?? null : null, text);
+      if (e.antsKey) e.ants?.forEach((x) => applyFlow(x, null));
+      e.antsKey = '';
+      return;
+    }
+    this.tokens.set(e.doc.id, null, null);
+    const dash = bits && flowDash(bits);
+    const key = f ? flowKey(dash, 0, 0, false) : '';
+    if (key === (e.antsKey ?? '')) return;
+    e.antsKey = key;
+    if (!f) return;
+    if (dash && !e.ants) {
+      const cls = 'wire-flow';
+      e.ants = f.whole
+        ? [s('path', { class: cls, d: this.hops.d.get(e.doc.id) ?? '' })]
+        : f.pieces.map((p) => s('path', { class: cls, d: pathD(p.pts) }));
+      this.gFlow.append(...e.ants);
+    }
+    if (!e.ants) return;
+    if (f.whole) applyFlow(e.ants[0], dash, f.d0, f.len, f.reverse);
+    else e.ants.forEach((a, i) => applyFlow(a, dash, f.pieces[i].d0));
   }
 
   /** Width of a wire from what it touches (before any simulation says so). */
@@ -483,6 +545,7 @@ export class EditorView {
       const bits = v?.wireBits(e.doc.id);
       const vcls = bits ? `wire ${valueClass(bits)}` : `wire${e.width > 1 ? ' bus' : ''} ed-dead`;
       this.paintWire(e, vcls);
+      this.paintFlow(e, bits ?? null);
     }
     for (const list of this.dots.values()) for (const d of list) {
       const vc = this.wires.get(d.wire)?.cls.split('|')[0].replace(/^wire/, 'dot') ?? 'dot';
@@ -612,7 +675,8 @@ export class EditorView {
       l.bg.setAttribute('x', String(l.at[0] - tw / 2));
       l.bg.setAttribute('width', String(tw));
       l.g.setAttribute('display', txt && tw <= l.room - 0.4 ? 'inline' : 'none');
-      if (nets) l.g.setAttribute('class', `bus-label ${busClass(nets)}`);
+      // While its value rides the wire (flowing bits), the fixed label steps aside.
+      if (nets) l.g.setAttribute('class', `bus-label ${busClass(nets)}${flowText(nets, this.radix) ? ' riding' : ''}`);
     }
   }
 
