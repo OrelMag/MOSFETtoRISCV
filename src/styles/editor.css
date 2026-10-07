@@ -234,6 +234,13 @@
 .sb-ctx kbd { font: 11px var(--font-mono); color: var(--muted); background: none; border: 0; padding: 0; }
 .sb-ctx hr { border: 0; border-top: 1px solid var(--border); margin: 3px 4px; }
 .ed-svg .inst-name, .ed-svg .pin-name { pointer-events: bounding-box; cursor: text; }
+.sb-iobar { min-height: 0; padding: 6px 12px; }
+.sb-iobar .sb-io-v {
+  min-width: 74px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 99px;
+  padding: 2px 8px; font: 600 13px var(--font-mono); text-align: right; cursor: pointer;
+}
+.in-button .track { width: 16px; }
+.in-button.v1 .knob { left: 2px; }
 .sb-inline {
   position: absolute; z-index: 6; font: 600 13px var(--font-mono); padding: 3px 7px; border-radius: 6px; border: 1px solid var(--accent);
   background: var(--surface); color: var(--text); outline: none; box-shadow: var(--shadow-lg);

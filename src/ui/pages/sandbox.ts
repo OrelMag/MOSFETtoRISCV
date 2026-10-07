@@ -15,6 +15,8 @@ import '../../editor/inspect';
 import '../../editor/chipprops';
 // The canvas's right-click menu.
 import '../../editor/ctxmenu';
+// The pins as a bar of switches and lamps above the run bar.
+import '../../editor/iobar';
 // The analysis tools plug into every editor (probes, timing, lint).
 import '../../editor/analysis';
 // The CPU panel: program, registers, memory and the golden model for a chip that is a processor.

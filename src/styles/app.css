@@ -249,41 +249,53 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   padding: 8px 12px; border-top: 1px solid var(--border); background: var(--surface); min-height: 52px;
 }
 .controls .label { font: 600 11px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-.in-toggle {
-  display: inline-flex; align-items: center; gap: 7px; cursor: pointer; user-select: none;
-  border: 1px solid var(--border); background: var(--surface-2); border-radius: 99px; padding: 3px 10px 3px 4px;
-  font: 600 13px var(--font-mono);
+/* Inputs and outputs read differently by shape, depth and direction, not by colour alone:
+   inputs are raised controls (a 1-bit one a switch whose knob slides to the right on 1) with ▸
+   before the name; outputs are lamps and readouts on one sunken strip with ▸ after them. */
+.controls .dir { font-size: 10px; line-height: 1; }
+.in-toggle, .in-num {
+  display: inline-flex; align-items: center; gap: 7px; user-select: none; font: 600 13px var(--font-mono); color: var(--text);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--surface);
+  border-radius: 99px; box-shadow: 0 1px 2px rgb(0 0 0 / 12%); transition: border-color 0.15s;
+}
+.in-toggle .dir, .in-num .dir { color: var(--accent); }
+.in-toggle { cursor: pointer; padding: 3px 10px 3px 8px; }
+.in-toggle:hover, .in-num:hover, .in-num:focus-within { border-color: var(--accent); }
+.in-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.in-toggle .track {
+  position: relative; width: 30px; height: 16px; border-radius: 99px; background: var(--w0); flex: none;
+  transition: background 0.15s, box-shadow 0.15s;
 }
 .in-toggle .knob {
-  width: 20px; height: 20px; border-radius: 50%; background: var(--w0); display: grid; place-items: center;
-  color: #fff; font-size: 11px; transition: background 0.15s, box-shadow 0.15s;
+  position: absolute; left: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 25%); transition: left 0.15s;
 }
-.in-toggle.v1 .knob { background: var(--w1); box-shadow: 0 0 0 4px var(--w1-glow); }
-.in-toggle.vx .knob { background: var(--wx); }
-.in-num {
-  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border);
-  background: var(--surface-2); border-radius: 99px; padding: 2px 4px 2px 10px; font: 600 13px var(--font-mono);
-}
+.in-toggle.v1 .track { background: var(--w1); box-shadow: 0 0 0 3px var(--w1-glow); }
+.in-toggle.v1 .knob { left: 16px; }
+.in-toggle.vx .track { background: var(--wx); }
+.in-num { gap: 6px; padding: 2px 4px 2px 8px; }
 .in-num input {
   width: 74px; border: 1px solid var(--border); background: var(--surface); color: var(--text);
   border-radius: 99px; padding: 2px 8px; font: 600 13px var(--font-mono); text-align: right;
 }
 .in-num button { border: 0; background: transparent; cursor: pointer; padding: 0 4px; color: var(--text-2); font: 600 14px var(--font-mono); }
-/* outputs: read-only twins of the input controls */
 .ctl-group { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.out-lamp {
-  display: inline-flex; align-items: center; gap: 7px; user-select: none;
-  border: 1px dashed var(--border-strong); background: transparent; border-radius: 99px; padding: 3px 10px 3px 4px;
+.out-strip {
+  padding: 4px 12px; border-radius: 10px; background: color-mix(in srgb, var(--bus) 7%, var(--surface-2));
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 14%);
+}
+.out-lamp, .out-num {
+  display: inline-flex; align-items: center; gap: 7px; user-select: none; padding: 2px 4px;
   font: 600 13px var(--font-mono); color: var(--text-2);
 }
-.out-lamp .knob { width: 20px; height: 20px; border-radius: 50%; background: var(--w0); transition: background 0.15s, box-shadow 0.15s; }
-.out-lamp.v1 .knob { background: var(--w1); box-shadow: 0 0 0 4px var(--w1-glow); }
-.out-lamp.vx .knob { background: var(--wx); }
-.out-lamp.vz .knob { background: transparent; border: 2px dashed var(--wz); }
-.out-num {
-  display: inline-flex; align-items: center; gap: 8px; border: 1px dashed var(--border-strong);
-  border-radius: 99px; padding: 2px 4px 2px 10px; font: 600 13px var(--font-mono); color: var(--text-2);
+.out-lamp .dir, .out-num .dir { color: var(--bus); margin-left: -2px; }
+.out-lamp .knob {
+  width: 16px; height: 16px; border-radius: 50%; background: var(--w0); border: 2px solid var(--border-strong);
+  transition: background 0.15s, box-shadow 0.15s;
 }
+.out-lamp.v1 .knob { background: var(--w1); border-color: var(--w1); box-shadow: 0 0 0 4px var(--w1-glow); }
+.out-lamp.vx .knob { background: var(--wx); border-color: var(--wx); }
+.out-lamp.vz .knob { background: transparent; border: 2px dashed var(--wz); }
 .out-num .v {
   min-width: 74px; border: 0; background: color-mix(in srgb, var(--bus) 12%, var(--surface)); color: var(--bus-label-text);
   border-radius: 99px; padding: 2px 10px; font: 700 13px var(--font-mono); text-align: right; cursor: pointer;
