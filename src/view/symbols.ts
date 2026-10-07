@@ -2,7 +2,7 @@
 // symbol's top-left corner. Port positions match geometry.ts exactly.
 
 import { symbolGeom } from '../sim/geometry';
-import type { ComponentDef } from '../sim/types';
+import type { Category, ComponentDef } from '../sim/types';
 import { s } from '../ui/dom';
 import { type PinGeom, type Rect, textWidth } from './route';
 
@@ -113,12 +113,21 @@ export function instNameAt(def: ComponentDef): { x: number; y: number; anchor: '
   return { x: g.w / 2, y: -0.35, anchor: 'middle' };
 }
 
+/** Hue of a library box by its kind (styles: .sym.cat), so a schematic reads at a glance: the ALU
+ *  green, memories amber, control blue. Wiring boxes and user chips (their own hue) are not tinted. */
+export const CATEGORY_HUE: Partial<Record<Category, number>> = {
+  transistor: 25, cell: 25, gate: 250, arithmetic: 145, routing: 185, sequential: 330, memory: 45, cpu: 215,
+};
+
 export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
   const g = symbolGeom(def);
   const k = def.symbol.kind;
-  // A user chip's hue tints its box (styles: .sym.chip); lightness follows the theme.
-  const hue = k === 'box' && def.symbol.color !== undefined ? def.symbol.color : null;
-  const root = s('g', hue === null ? { class: `sym kind-${k}` } : { class: `sym kind-${k} chip`, style: `--chip-h:${hue}` });
+  // A user chip's hue tints its box (styles: .sym.chip); lightness follows the theme. Library
+  // boxes and muxes take their category's hue (.sym.cat: the setting can turn it off).
+  const own = k === 'box' && def.symbol.color !== undefined ? def.symbol.color : null;
+  const cat = own === null && (k === 'box' || k === 'mux') && def.prim !== 'alias' ? CATEGORY_HUE[def.category] ?? null : null;
+  const root = s('g', own !== null ? { class: `sym kind-${k} chip`, style: `--chip-h:${own}` }
+    : cat !== null ? { class: `sym kind-${k} cat`, style: `--chip-h:${cat}` } : { class: `sym kind-${k}` });
   const inner = s('g', flip ? { transform: `translate(${g.w},0) scale(-1,1)` } : null);
   root.append(inner);
   const { w, h } = g;

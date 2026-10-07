@@ -4,7 +4,7 @@
 
 import { matchNets, sharedInputs } from './carry';
 import { findNode, type FlatDesign } from './flatten';
-import type { PowerOnMode, Sim } from './sim';
+import type { PowerOnMode, Sim, SimState } from './sim';
 import { B0, B1, BX, BZ, type Bit, outPorts } from './types';
 import { pack, unpack } from './values';
 
@@ -228,6 +228,35 @@ export class GateSim implements Sim {
     this.time = prev.time;
   }
 
+  saveState(): SimState {
+    const st: GateState = {
+      val: this.val.slice(), proj: this.proj.slice(), state: this.state.map(cloneState),
+      inputs: new Map([...this.inputs].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v])),
+      time: this.time, unstable: this.unstable, evaluations: this.evaluations,
+      wheelNets: this.wheelNets.map((b) => b.slice()), wheelVals: this.wheelVals.map((b) => b.slice()),
+      pending: this.pendingEvents, dirty: this.dirty.slice(),
+    };
+    return st as unknown as SimState;
+  }
+
+  restoreState(saved: SimState): void {
+    const s = saved as unknown as GateState;
+    this.val.set(s.val);
+    this.proj.set(s.proj);
+    // copies again: the same saved state may be restored more than once
+    this.state = s.state.map(cloneState);
+    this.inputs = new Map([...s.inputs].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v]));
+    this.time = s.time;
+    this.unstable = s.unstable;
+    this.evaluations = s.evaluations;
+    this.wheelNets = s.wheelNets.map((b) => b.slice());
+    this.wheelVals = s.wheelVals.map((b) => b.slice());
+    this.pendingEvents = s.pending;
+    this.dirtyMark.fill(0);
+    this.dirty = [];
+    for (const li of s.dirty) this.markDirty(li);
+  }
+
   /**
    * Zero-delay relaxation: evaluate dirty leaves one at a time, applying each output
    * immediately (Gauss–Seidel). Unlike the timed simulation, this cannot get stuck in the
@@ -400,6 +429,12 @@ function cloneState(s: unknown): unknown {
   } catch {
     return s;
   }
+}
+
+interface GateState {
+  val: Uint8Array; proj: Uint8Array; state: unknown[]; inputs: Map<string, number | Bit[]>;
+  time: number; unstable: boolean; evaluations: number;
+  wheelNets: number[][]; wheelVals: number[][]; pending: number; dirty: number[];
 }
 
 function pathOf(l: { node: { path: string[] } }): string {

@@ -57,7 +57,14 @@ export function startApp(root: HTMLElement): void {
     h('span', null, h('b', null, p.name), h('small', null, p.blurb)));
     palMenu.append(item);
   }
-  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire colours', 'aria-label': 'Wire colours', 'aria-haspopup': 'menu' }, swatch());
+  // Module colours: library boxes tinted by kind (view/symbols.ts CATEGORY_HUE).
+  const modItem = h('button', { role: 'menuitemcheckbox', class: 'pal-mod', onclick: () => {
+    settings.set('modules', !settings.modules);
+    applyTheme();
+  } }, h('span', { class: 'pal-sw pal-mods' }, h('i', { class: 'm0' }), h('i', { class: 'm1' }), h('i', { class: 'm2' }), h('i', { class: 'm3' })),
+  h('span', null, h('b', null, 'Coloured modules'), h('small', null, 'Boxes tinted by kind: green arithmetic, amber memory, blue control')));
+  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), modItem);
+  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire and module colours', 'aria-label': 'Wire and module colours', 'aria-haspopup': 'menu' }, swatch());
   palBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     palMenu.classList.toggle('open');
@@ -68,7 +75,8 @@ export function startApp(root: HTMLElement): void {
   const palWrap = h('div', { class: 'pal-wrap' }, palBtn, palMenu);
 
   const syncTools = () => {
-    for (const b of palMenu.querySelectorAll<HTMLButtonElement>('button')) b.setAttribute('aria-checked', String(b.dataset.p === settings.palette));
+    for (const b of palMenu.querySelectorAll<HTMLButtonElement>('button[data-p]')) b.setAttribute('aria-checked', String(b.dataset.p === settings.palette));
+    modItem.setAttribute('aria-checked', String(settings.modules));
     for (const b of radix.querySelectorAll<HTMLButtonElement>('button')) b.classList.toggle('on', b.dataset.r === settings.radix);
     animate.classList.toggle('on', settings.animate);
     themeBtn.replaceChildren(icon(settings.theme === 'light' ? 'sun' : settings.theme === 'dark' ? 'moon' : 'auto', 18));

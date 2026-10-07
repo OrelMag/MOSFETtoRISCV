@@ -55,6 +55,7 @@ const ICONS: Record<string, string> = {
   play: '<path d="M7 4l13 8-13 8z"/>',
   pause: '<path d="M7 4h4v16H7zM14 4h4v16h-4z"/>',
   step: '<path d="M6 4l10 8-10 8zM18 4v16"/>',
+  stepBack: '<path d="M18 4L8 12l10 8zM6 4v16"/>',
   reset: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',

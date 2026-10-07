@@ -60,6 +60,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .pal-menu button:hover { background: var(--surface-2); }
 .pal-menu button[aria-checked='true'] { background: var(--accent-soft); }
+.pal-sep { height: 1px; background: var(--border); margin: 4px 2px; }
+.pal-mods i { background: hsl(var(--chip-h) var(--chip-fill-s) var(--chip-fill-l)); border: 1px solid hsl(var(--chip-h) var(--chip-stroke-s) var(--chip-stroke-l)); }
+.pal-mods .m0 { --chip-h: 145; } .pal-mods .m1 { --chip-h: 45; } .pal-mods .m2 { --chip-h: 215; } .pal-mods .m3 { --chip-h: 330; }
+.pal-menu .pal-mod[aria-checked='false'] .pal-mods i { --chip-fill-s: 0%; --chip-stroke-s: 0%; }
 .pal-menu button .pal-sw { grid-template-columns: repeat(4, 10px); }
 .pal-menu button .pal-sw i { width: 10px; height: 10px; }
 .pal-menu b { display: block; font-size: 13px; font-weight: 600; }
@@ -445,7 +449,8 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .dot.bus { fill: var(--bus); }
 .sym-body { fill: var(--sym-fill); stroke: var(--sym-stroke); stroke-width: 0.15; stroke-linejoin: round; }
 .sym-box { fill: var(--box-fill); stroke: var(--box-stroke); }
-.sym.chip .sym-box {
+.sym.chip .sym-box,
+:root:not([data-modules='plain']) .sym.cat .sym-body {
   fill: hsl(var(--chip-h) var(--chip-fill-s) var(--chip-fill-l));
   stroke: hsl(var(--chip-h) var(--chip-stroke-s) var(--chip-stroke-l));
 }
@@ -466,11 +471,12 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .inst.openable { cursor: zoom-in; }
 .inst.openable:hover .hit { fill: color-mix(in srgb, var(--accent) 8%, transparent); stroke: color-mix(in srgb, var(--accent) 40%, transparent); stroke-width: 0.08; }
 .inst.selected .hit { fill: color-mix(in srgb, var(--sel) 12%, transparent); stroke: var(--sel); stroke-width: 0.12; }
-.inst.hl .hit { vector-effect: non-scaling-stroke; stroke: var(--hl); stroke-width: 2.5px; fill: color-mix(in srgb, var(--hl) 10%, transparent); animation: hl 1.4s ease-in-out infinite; }
+/* Thin enough to sit beside the module colours; the tint and a gentle pulse carry the highlight. */
+.inst.hl .hit { vector-effect: non-scaling-stroke; stroke: var(--hl); stroke-width: 1.25px; fill: color-mix(in srgb, var(--hl) 12%, transparent); animation: hl 1.4s ease-in-out infinite; }
 svg.schematic.focus .inst:not(.hl):not(.plumbing) { opacity: 0.28; }
 svg.schematic.focus .faded { opacity: 0.18; }
 svg.schematic.focus .inst.hl .hit { animation: none; fill: color-mix(in srgb, var(--hl) 14%, transparent); }
-@keyframes hl { 50% { stroke-opacity: 0.25; } }
+@keyframes hl { 50% { stroke-opacity: 0.45; } }
 .open-badge { opacity: 0; transition: opacity 0.15s; cursor: pointer; }
 .open-badge circle { fill: var(--accent); }
 .open-badge .icon { color: #fff; stroke-width: 2.6; }
@@ -652,6 +658,11 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .panel-dock.row { flex-direction: row; align-items: flex-end; }
 .panel-dock > .mem-panel { position: relative; inset: auto; pointer-events: auto; flex: 0 1 auto; min-height: 38px; max-width: 100%; max-height: 100%; }
 .panel-dock.row > .mem-panel { flex-shrink: 0; }
+
+/* Side panes hidden (stage bar button, settings.wide): the stage takes the whole width. */
+:root[data-wide] .layout, :root[data-wide] .bench { grid-template-columns: 1fr; }
+:root[data-wide] .layout > .narrative, :root[data-wide] .layout > .inspector,
+:root[data-wide] .bench > .library, :root[data-wide] .bench > .inspector { display: none; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1180px) {

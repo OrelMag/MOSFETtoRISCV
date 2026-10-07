@@ -502,6 +502,7 @@ export class SchematicView {
     const h = span * (r.height / usable || 0.6);
     const w = span * (r.width / usable || 1);
     this.cam.vb = { x: Number(m[1]) - span / 2 + 6, y: Number(m[2]) - h / 2, w, h };
+    this.cam.fitted = false;
     this.cam.apply();
   }
 
@@ -518,6 +519,11 @@ export class SchematicView {
 
   fit(): void {
     this.cam.fit(this.bbox, this.insetRight);
+  }
+
+  /** The canvas changed size: refit only a view the learner has not zoomed or panned. */
+  resized(): void {
+    if (!this.cam.resized()) this.fit();
   }
 
   zoom(factor: number, cx?: number, cy?: number): void {
