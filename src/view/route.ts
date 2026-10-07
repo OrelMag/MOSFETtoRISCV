@@ -784,6 +784,16 @@ export function splitterBars(nl: Netlist): { x: number; y0: number; y1: number }
   return out;
 }
 
+/** Instance bodies drawn on top of one another (wiring aliases included: a splitter under a gate hides it). */
+export function symbolOverlaps(nl: Netlist): string[] {
+  const bodies = symbolRects(nl).filter((r) => r.what.startsWith('instance '));
+  const out: string[] = [];
+  bodies.forEach((a, i) => bodies.slice(i + 1).forEach((b) => {
+    if (overlaps(a.r, b.r)) out.push(`${a.inst} × ${b.inst}`);
+  }));
+  return out;
+}
+
 /**
  * Labels drawn on top of each other or over a symbol: net tags, tap bit ranges, instance
  * bodies and box names. Used by tests so that a layout change can't silently hide a label.

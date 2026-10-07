@@ -708,11 +708,12 @@ export function condNegate(n: number): ComponentDef {
       symbol: { kind: 'box', label: '±' },
       spec: ([x, neg]) => [neg ? (2 ** n - x) % 2 ** n : x],
       netlist: () => ({
-        pins: { x: [0, 4], neg: [0, xg.h + 8], y: [xk + kg.w + 8, 2 + kg.ports.s.pos[1]] },
+        pins: { x: [0, 3], neg: [0, xg.h + 8], y: [xk + kg.w + 8, 2 + kg.ports.s.pos[1]] },
         instances: [
           { name: 'f', def: F, at: [10, xg.h + 6] },
-          { name: 'x', def: X, at: [20, 2] },
-          { name: 'z', def: Z, at: [xk - 14, 2 + kg.ports.b.pos[1] - 1] },
+          // x's output on k.a's row, the zero word in the gap between them (not on x)
+          { name: 'x', def: X, at: [20, 2 + kg.ports.a.pos[1] - xg.ports.y.pos[1]] },
+          { name: 'z', def: Z, at: [xk - 8, 2 + kg.ports.b.pos[1] - 1] },
           { name: 'k', def: K, at: [xk, 2] },
         ],
         nets: [
