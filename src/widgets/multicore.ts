@@ -38,6 +38,7 @@ function dualPanel(source: string, asm: AsmResult): ScenePanel {
     const stop = () => { if (running) cancelAnimationFrame(running); running = null; runBtn.textContent = 'Run to halt'; };
     runBtn.addEventListener('click', () => {
       if (running) return stop();
+      stage.checkpoint();
       runBtn.textContent = 'Stop';
       const tick = () => {
         stage.runCycles(6, () => m.halted);
@@ -70,6 +71,18 @@ function dualPanel(source: string, asm: AsmResult): ScenePanel {
           if (d >= 0) mismatch = `core ${i}: ${ABI[d]} differs from the model`;
           else if (st.pc !== m.harts[i].pc) mismatch = `core ${i}: PC differs from the model`;
         });
+      },
+    });
+    // Back: the model and the counters return with the hardware.
+    stage.historyHooks.add({
+      save: () => ({ m: m.save(), mismatch, stalls: stalls.slice(), lastStall: lastStall.slice() }),
+      restore: (v) => {
+        const st = v as { m: ReturnType<MultiISS['save']>; mismatch: string | null; stalls: number[]; lastStall: boolean[] };
+        stop();
+        m.restore(st.m);
+        mismatch = st.mismatch;
+        stalls = st.stalls.slice();
+        lastStall = st.lastStall.slice();
       },
     });
     const update = () => {

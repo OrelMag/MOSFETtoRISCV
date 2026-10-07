@@ -252,6 +252,27 @@ export class LogicAnalyzer {
     if (this.sim) this.attach(this.sim);
   }
 
+  /** The simulation went back to time t (a step undone): forget what was recorded after it. */
+  rewind(t: number): void {
+    for (const l of this.lanes) {
+      const tr = this.traces.get(l.id);
+      if (!tr) continue;
+      let n = tr.t.length;
+      while (n > 1 && tr.t[n - 1] > t) n--;
+      tr.t.length = tr.v.length = n;
+      if (this.sim) {
+        const v = this.valueOf(l);
+        if (tr.t[n - 1] === t) tr.v[n - 1] = v;
+        else if (tr.v[n - 1] !== v) { tr.t.push(t); tr.v.push(v); }
+      }
+    }
+    this.edges = this.edges.filter((e) => e <= t);
+    this.late = this.late.filter((e) => e <= t);
+    if (this.cursorA !== null && this.cursorA > t) this.cursorA = null;
+    if (this.cursorB !== null && this.cursorB > t) this.cursorB = null;
+    this.update();
+  }
+
   private now(): number {
     return this.sim?.time ?? 0;
   }

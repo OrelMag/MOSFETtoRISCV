@@ -21,6 +21,10 @@ interface State {
   palette: Palette;
   radix: Radix;
   animate: boolean;
+  /** Tint library boxes by kind (arithmetic, memory, ...); off: all boxes plain. */
+  modules: boolean;
+  /** Chapter pages: the narrative and inspector hidden, the stage full width. */
+  wide: boolean;
   /** Bits flow along the wires that carry them (off: wires are only coloured). */
   wireFlow: boolean;
   /** Timing panel open (stays open across scenes). */
@@ -37,7 +41,7 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, wireFlow: true, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {} };
 
 function load(): State {
   try {
@@ -61,12 +65,14 @@ export const settings = {
   get palette() { return state.palette; },
   get radix() { return state.radix; },
   get animate() { return state.animate; },
+  get modules() { return state.modules; },
+  get wide() { return state.wide; },
   get wireFlow() { return state.wireFlow; },
   get analyzer() { return state.analyzer; },
   get speed() { return state.speed; },
   get traceLevel() { return state.traceLevel; },
   get traceRate() { return state.traceRate; },
-  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'wireFlow' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
+  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
     state[k] = v;
     save();
     listeners.forEach((f) => f());
@@ -106,6 +112,9 @@ export function applyTheme(): void {
   else root.setAttribute('data-theme', state.theme);
   if (state.palette === 'default') root.removeAttribute('data-palette');
   else root.setAttribute('data-palette', state.palette);
+  if (state.modules) root.removeAttribute('data-modules');
+  else root.setAttribute('data-modules', 'plain');
+  root.toggleAttribute('data-wide', state.wide);
   if (state.wireFlow) root.removeAttribute('data-wireflow');
   else root.setAttribute('data-wireflow', 'off');
 }

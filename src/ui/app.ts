@@ -57,14 +57,20 @@ export function startApp(root: HTMLElement): void {
     h('span', null, h('b', null, p.name), h('small', null, p.blurb)));
     palMenu.append(item);
   }
+  // Module colours: library boxes tinted by kind (view/symbols.ts CATEGORY_HUE).
+  const modItem = h('button', { role: 'menuitemcheckbox', class: 'pal-mod', onclick: () => {
+    settings.set('modules', !settings.modules);
+    applyTheme();
+  } }, h('span', { class: 'pal-sw pal-mods' }, h('i', { class: 'm0' }), h('i', { class: 'm1' }), h('i', { class: 'm2' }), h('i', { class: 'm3' })),
+  h('span', null, h('b', null, 'Coloured modules'), h('small', null, 'Boxes tinted by kind: green arithmetic, amber memory, blue control')));
   // Flowing bits: on top of any palette, so a switch under the list rather than another palette.
   const flowItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => {
     settings.set('wireFlow', !settings.wireFlow);
     applyTheme();
   } }, h('span', { class: 'pal-flow-sw' }, h('i')),
   h('span', null, h('b', null, 'Flowing bits'), h('small', null, '1s march along wires, buses carry their values')));
-  palMenu.append(h('hr'), flowItem);
-  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire colours and flowing bits', 'aria-label': 'Wire colours and flowing bits', 'aria-haspopup': 'menu' }, swatch());
+  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), modItem, flowItem);
+  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire and module colours, flowing bits', 'aria-label': 'Wire and module colours, flowing bits', 'aria-haspopup': 'menu' }, swatch());
   palBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     palMenu.classList.toggle('open');
@@ -76,6 +82,7 @@ export function startApp(root: HTMLElement): void {
 
   const syncTools = () => {
     for (const b of palMenu.querySelectorAll<HTMLButtonElement>('button[data-p]')) b.setAttribute('aria-checked', String(b.dataset.p === settings.palette));
+    modItem.setAttribute('aria-checked', String(settings.modules));
     flowItem.setAttribute('aria-checked', String(settings.wireFlow));
     for (const b of radix.querySelectorAll<HTMLButtonElement>('button')) b.classList.toggle('on', b.dataset.r === settings.radix);
     animate.classList.toggle('on', settings.animate);

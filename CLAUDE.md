@@ -301,6 +301,12 @@ three levels: `gate` (`stage.startEdge()` / `edgeStep()`: a rising edge one gate
 `src/sim/edge.ts`, which `Stage.cycle` also uses), `cycle` (`pulse(flowMs)`) or `instr` (run to the next
 retirement). The highlight then follows execution, and the trace logs `stepEffect(iss.step())` (riscv/trace.ts).
 While `stage.inEdge`, panels must not compare the hardware with the golden model (it steps after the edge).
+**Back** (CPU panel and the stage's bottom bar) undoes a step, a clock cycle, an input change or a whole Run to
+halt: the stage's controls call `stage.checkpoint()` before acting (an unchanged state is not saved twice), panels
+call it before an action made of several (a run, an instruction); `Sim.saveState()` / `restoreState()` copy the
+whole simulation (values, inputs, time, pending events), and a panel with its own state (golden model via
+`ISS.save()` / `MultiISS.save()`, trace, counters, console) registers a `stage.historyHooks` entry. The analyzer
+`rewind`s to the restored time. History is cleared on load and Reset.
 The pipeline diagram reads `pipeSnap` (riscv/cosim.ts) and draws with `widgets/pipegrid.ts`, shared with
 the sandbox's CPU drawer (editor/cpuui.ts), which mirrors these panels for any CPU opened in the sandbox:
 keep the two in step when a panel gains a feature.
@@ -310,6 +316,12 @@ keep the two in step when a panel gains a feature.
 - Wire palettes: `data-palette` on `<html>` (styles/palettes.css, `light-dark()` tokens). Use
   `--w0 --w1 --wx --wz --bus --bus1` and the shape tokens (`--wire-w0` …), never raw colours.
   Probe colours are `--probe-0..7` (class `p0..p7` sets `--pc`).
+- Module colours: library boxes and muxes are tinted by `CATEGORY_HUE[def.category]` (view/symbols.ts,
+  class `.sym.cat`, the same `--chip-h` styling as a user chip's hue); `data-modules="plain"` on
+  `<html>` (settings.modules) turns it off. `data-wide` (settings.wide, the stage bar's panes button)
+  hides the chapter / workbench side panes.
+- Camera: `fitted` stays true until the learner zooms or pans; a canvas resize (the bottom bar rewraps
+  during a run) refits only a fitted view, else `resized()` keeps the scale and top-left corner.
 - Hops, tap bit ranges, net selection and probe flags are computed in the view from the
   routed nets; nothing to author.
 - Flowing bits (`settings.wireFlow`, a switch in the wire-colour menu; `data-wireflow="off"` on
