@@ -92,7 +92,8 @@ src/lib/       the component library (registered in `registry` via define())
                  decoder(n, en, pitch), busMux2(w), muxTree(k, w, pitch)
   sequential.ts  SR latch, D latch, DFF (master–slave), DFFE, register(n), counter(n)
   seqparts.ts    NAND3, D_LATCH_R / DFF_R (async reset), TFF, JKFF, upDownCounter(n), shiftRegister(n) (74194-style),
-                 lfsr(n) (LFSR_TAPS, lfsrNext), ringCounter(n, johnson), clockDivider(k)
+                 lfsr(n) (LFSR_TAPS, lfsrNext), randomSource(n) (XNOR LFSR, xnorLfsrNext), cycleCounter(n),
+                 ringCounter(n, johnson), clockDivider(k)
   storage.ts     romArray(preset), minimize() (Quine–McCluskey), pla(preset), fifo(k, w), stack(k, w), cam(k, w),
                  regfileMP(k, w, reads, writes)
   memory.ts      ram(k, w): decoder + registers + mux tree, user-scalable
@@ -150,11 +151,14 @@ src/chapters/  narrative content: chapters → steps → scene / widget / challe
 src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui/pages/sandbox.ts, its own chunk;
                #/sandbox/s/<payload> opens a share link: a banner, imported only on the user's click).
                DOM-free (tested in Node):
-  model.ts       Workspace / ChipDoc (pins, parts, wires = interior corners, pointers = named net labels)
+  model.ts       Workspace / ChipDoc (pins, parts, wires = interior corners, pointers = named net labels, comments:
+                 free text drawn under the circuit, never compiled and left out of the compile cache key)
   compile.ts     compileChip(doc) → ComponentDef + diags, netOfWire / netOfEnd / netOfLabel, connKey
-  parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays, ROM, RAM
+  parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays (LED / LED bank, 7-segment,
+                 hex, value, buzzer: buzzerHz; and the halt part), ROM, RAM; audio.ts plays the buzzers
   library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip
-  ops.ts         pure edits (add / move / delete / flip / set*, copy / paste); wires stay orthogonal
+  ops.ts         pure edits (add / move / delete / flip / set*, copy / paste, namePart: rename where the name is
+                 drawn); wires stay orthogonal
   history.ts     History<T>: undo / redo, transactions (a drag = one step), replace (not undone)
   store.ts       localStorage, sanitizer, JSON export / import (importChips: never overwrites, renames on
                  conflict, recognizes its own earlier renames); share.ts: share-link encoding
@@ -170,7 +174,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run;
-                 edgeHooks (before / after every rising edge, gate mode: after once quiet), runCycles
+                 edgeHooks (before / after every rising edge, gate mode: after once quiet), runCycles;
+                 halt parts at any depth stop Run / runCycles after the step where they read 1
   palette.ts     registerPaletteGroup + the palette panel (purist filter)
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
   challenges.ts  build challenges: BuildChallenge (ports, table / sequence check, allowed parts, par),
@@ -197,7 +202,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                DOM:
   editor.ts      Editor: workspace + history + library + sim + panels; registerToolbarAction, slots
   view.ts        EditorView: one SVG element per object updated in place, live values, overlays
-  tools.ts       the mouse / keyboard state machine (place, select, drag, band, free-hand wires, pointers)
+  tools.ts       the mouse / keyboard state machine (place, select, drag, band, free-hand wires, pointers, rename
+                 in place: F2 / a click on a selected name / editInline)
+  ctxmenu.ts     plugin: the right-click menu (selection actions with their shortcuts, or the canvas's own)
   props.ts       properties of the selection or the chip, diagnostics; registerPropsSection
   fileui.ts      File menu (export / import / share link / Verilog / images / chip manager), share banner,
                  drag-and-drop import, autosave indicator, backup notice; installFiles(ed) per page

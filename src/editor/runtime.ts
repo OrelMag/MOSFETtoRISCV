@@ -9,15 +9,21 @@
 // advances one gate delay per tick so propagation can be watched, toggling the clock only once
 // the logic is quiet. advance() holds the stepping logic and needs no DOM; the rAF loop lives in
 // start()/pause().
+//
+// Halt parts (displays of kind 'halt', at any depth of the hierarchy) stop Run after the step on
+// which their input reads non-zero, like Turing Complete's halt. The test is on levels, not edges:
+// while a halt still reads 1, Run advances one step and stops again; Step ignores it.
 
 import { flatten } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import type { PowerOnMode, Sim } from '../sim/sim';
 import { SwitchSim } from '../sim/switchsim';
-import { type Bit, BZ, type ComponentDef, netlistOf } from '../sim/types';
+import { B1, type Bit, BZ, type ComponentDef, netlistOf } from '../sim/types';
 import { unpackBig } from '../sim/values';
+import type { HierNode } from '../sim/flatten';
 import { checkSimulatable, type Compiled, type Diag } from './compile';
 import { pinBig, type PinDoc, type PinValue } from './model';
+import { HALT_PREFIX } from './parts';
 
 export type RunMode = 'cycle' | 'gate';
 
@@ -74,6 +80,8 @@ export class EditorSim {
   achievedHz = 0;
   /** Called whenever values on screen may have changed. */
   onChange: () => void = () => {};
+  /** Called when a halt part stops Run (after the pause). */
+  onHalt: () => void = () => {};
   /** Rising-edge observers (every edge the run loop, Step, a click on a clock or runCycles makes). */
   readonly edgeHooks = new Set<EdgeHook>();
 
@@ -88,6 +96,10 @@ export class EditorSim {
   /** A rising edge whose `after` hooks have not run yet (gate mode: still propagating). */
   private edgeOpen = false;
   private samples: [number, number][] = [];
+  /** Flat nets of every halt part's input in the current simulation. */
+  private haltNets: number[] = [];
+  /** advance() stopped on a halt: the run loop pauses. */
+  private haltHit = false;
   private readonly debounceMs: number;
   private readonly gateRate: () => number;
   private readonly budgetMs: number;
@@ -141,11 +153,13 @@ export class EditorSim {
       this.applyPins(sim);
       sim.settle();
       this.sim = sim;
+      this.haltNets = haltNets(sim.design.root);
       this.diags = [];
     } catch (e) {
       const ds = checkSimulatable(c);
       this.diags = ds.length ? ds : [{ level: 'error', msg: `cannot simulate: ${e instanceof Error ? e.message : String(e)}` }];
       this.sim = null;
+      this.haltNets = [];
     }
     this.built = c;
     this.key = key;
@@ -207,6 +221,15 @@ export class EditorSim {
     if (li === undefined) return undefined;
     const k = sim.design.leaves[li].kind;
     return k === 'nmos' || k === 'pmos' ? sim.conducting[li] : undefined;
+  }
+  /** Does the chip contain a halt part (in it or in any chip it places)? */
+  get hasHalt(): boolean {
+    return this.haltNets.length > 0;
+  }
+  /** Some halt part's input reads 1 on at least one bit (X and Z do not halt). */
+  get halted(): boolean {
+    const sim = this.sim;
+    return !!sim && this.haltNets.length > 0 && sim.getBits(this.haltNets).includes(B1);
   }
   get unstable(): boolean {
     return !!this.sim?.unstable;
@@ -285,8 +308,9 @@ export class EditorSim {
 
   /**
    * Up to `n` full clock cycles at once (a CPU panel's Run to halt / Step instruction), stopping
-   * early when `stop()` says so (checked before each cycle) or after `budgetMs` of work. Whatever
-   * was propagating (gate mode) settles first. Returns the cycles run.
+   * early when `stop()` says so (checked before each cycle), when a halt part reads 1 after a
+   * cycle, or after `budgetMs` of work. Whatever was propagating (gate mode) settles first.
+   * Returns the cycles run.
    */
   runCycles(n: number, stop?: () => boolean, budgetMs = Infinity): number {
     this.flush();
@@ -305,7 +329,7 @@ export class EditorSim {
     while (k < n && !stop?.()) {
       this.cycle(sim, clks);
       k++;
-      if (now() - t0 > budgetMs) break;
+      if (this.halted || now() - t0 > budgetMs) break;
     }
     this.onChange();
     return k;
@@ -329,7 +353,8 @@ export class EditorSim {
 
   /**
    * Advance by `dt` seconds of run time within `budgetMs` of work. Returns the number of steps
-   * taken (cycles in cycle mode, ticks in gate mode).
+   * taken (cycles in cycle mode, ticks in gate mode). Stops early, with `stoppedOnHalt` set, after
+   * a step that leaves a halt part reading 1.
    */
   advance(dt: number, budgetMs = this.budgetMs): number {
     this.flush();
@@ -340,6 +365,7 @@ export class EditorSim {
     this.due = Math.min(this.due + dt * rate, Number.isFinite(rate) ? rate + 1 : Infinity);
     const t0 = now();
     let n = 0;
+    this.haltHit = false;
     while (this.due >= 1 || !Number.isFinite(this.due)) {
       if (this.mode === 'cycle') {
         if (!clks.length) { sim.settle(); this.due = 0; break; }
@@ -347,11 +373,17 @@ export class EditorSim {
       } else if (!this.gateTick(sim, clks)) { this.due = 0; break; }
       n++;
       if (Number.isFinite(this.due)) this.due--;
+      if (this.halted) { this.haltHit = true; this.due = 0; break; }
       if (now() - t0 > budgetMs) break;
     }
     // Behind schedule: drop the backlog rather than spiral (the achieved rate shows it).
     if (!Number.isFinite(this.due) || this.due > 2) this.due = 0;
     return n;
+  }
+
+  /** The last advance() stopped on a halt (cleared by the next one). */
+  get stoppedOnHalt(): boolean {
+    return this.haltHit;
   }
 
   /** Step: one cycle (cycle mode) or one gate delay (gate mode). */
@@ -409,6 +441,11 @@ export class EditorSim {
       const dt = Math.min(0.25, (t - this.lastFrame) / 1000);
       this.lastFrame = t;
       this.advance(dt);
+      if (this.haltHit) {
+        this.pause();
+        this.onHalt();
+        return;
+      }
       this.samples.push([t, this.cycles]);
       while (this.samples.length > 2 && t - this.samples[0][0] > 1000) this.samples.shift();
       const [t0, c0] = this.samples[0];
@@ -433,6 +470,15 @@ export class EditorSim {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
   }
+}
+
+/** The input nets of every halt part under `node` (any depth: a CPU chip may halt itself). */
+function haltNets(node: HierNode, out: number[] = []): number[] {
+  for (const c of node.children?.values() ?? []) {
+    if (c.def.id.startsWith(HALT_PREFIX)) out.push(...c.ports.a);
+    else haltNets(c, out);
+  }
+  return out;
 }
 
 /** A root inout of a switch-level simulation: driven with a value, or left floating (Z). */

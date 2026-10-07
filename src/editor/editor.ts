@@ -28,6 +28,7 @@ import { activeChip, closeChip, keepVolatile, newChip, openChip, setPinValue } f
 import { loadWorkspace, saveWorkspace } from './store';
 import { Tools } from './tools';
 import { EditorView } from './view';
+import { Buzzers } from './audio';
 
 export interface ToolbarAction {
   id: string;
@@ -145,6 +146,7 @@ export class Editor {
 
     this.canvas = h('div', { class: 'sb-canvas' });
     this.view = new EditorView(this.canvas);
+    this.view.sound = (tones) => this.buzzers.set(tones);
     this.view.radix = settings.radix;
     this.toastEl = h('div', { class: 'sb-toast', role: 'status', 'aria-live': 'polite' });
     this.tipEl = h('div', { class: 'wire-tip' });
@@ -155,6 +157,7 @@ export class Editor {
 
     this.sim = new EditorSim({ gateRate: () => settings.speed });
     this.sim.onChange = () => this.simChanged();
+    this.sim.onHalt = () => this.halted();
 
     this.palette = new PalettePanel(() => ({ ws: this.ws, chipId: this.chipId, canPlace: (c) => this.lib.canPlace(this.chipId, c) }), {
       pick: (item, e) => this.tools.pickFromPalette(item, e),
@@ -293,7 +296,7 @@ export class Editor {
 
   get selCount(): number {
     const s = this.sel;
-    return (s.parts?.length ?? 0) + (s.pins?.length ?? 0) + (s.wires?.length ?? 0) + (s.labels?.length ?? 0);
+    return (s.parts?.length ?? 0) + (s.pins?.length ?? 0) + (s.wires?.length ?? 0) + (s.labels?.length ?? 0) + (s.comments?.length ?? 0);
   }
 
   onChange(f: () => void): () => void {
@@ -396,6 +399,7 @@ export class Editor {
       // bit across tab switches), else a fresh one. The one left behind is paused and kept.
       const old = this.sim;
       old.onChange = () => {};
+      old.onHalt = () => {};
       old.pause();
       this.sims.set(this.simChip, old);
       let s = this.sims.get(id);
@@ -412,6 +416,7 @@ export class Editor {
         this.sims.delete(k);
       }
       s.onChange = () => this.simChanged();
+      s.onHalt = () => this.halted();
       this.sim = s;
       this.simChip = id;
       this.buildControls();
@@ -541,6 +546,7 @@ export class Editor {
     }
   }
 
+  private readonly buzzers = new Buzzers();
   private runBtn!: HTMLButtonElement;
   private rateSel!: HTMLSelectElement;
 
@@ -576,6 +582,12 @@ export class Editor {
     else this.sim.start();
   }
 
+  /** A halt part stopped Run. */
+  private halted(): void {
+    const sim = this.sim;
+    this.toast(sim.hasClock ? `Halted after cycle ${sim.cycles}` : `Halted at t = ${sim.time}`);
+  }
+
   private updateStatus(): void {
     const sim = this.sim;
     if (!this.runBtn) return;
@@ -592,6 +604,7 @@ export class Editor {
     else {
       bits.push(h('span', { class: `pulse${sim.running ? ' busy' : ''}${sim.unstable ? ' warn' : ''}` }));
       if (sim.unstable) bits.push('oscillating');
+      if (sim.halted) bits.push(h('span', { class: 'sb-halted', title: 'A halt part reads 1: Run stops after every step until it reads 0' }, 'halted'));
       if (sim.hasClock) bits.push(`${sim.cycles} cycles`);
       if (sim.sim.kind === 'gate') bits.push(`t = ${sim.time}`);
       if (sim.running && sim.mode === 'cycle' && sim.hasClock) bits.push(`${fmtHz(sim.achievedHz)}`);
@@ -655,6 +668,78 @@ export class Editor {
     input.select();
   }
 
+  /**
+   * Edit a name where it is drawn: an input laid over `target` (a name on the canvas), with the
+   * current text selected. Enter or leaving the field commits, Esc cancels (done(null)).
+   */
+  editInline(target: Element, initial: string, opts: { label: string; names?: string[] }, done: (v: string | null) => void): void {
+    this.slots.overlay.querySelector('.sb-prompt, .sb-inline')?.remove();
+    const t = target.getBoundingClientRect();
+    const r = this.canvas.getBoundingClientRect();
+    const list = opts.names?.length ? h('datalist', { id: 'sb-inline-names' }, opts.names.map((n) => h('option', { value: n }))) : null;
+    const input = h('input', {
+      type: 'text', class: 'sb-inline', value: initial, spellcheck: 'false', 'aria-label': opts.label, ...(list ? { list: 'sb-inline-names' } : {}),
+      style: `left:${t.left - r.left - 4}px;top:${t.top - r.top + t.height / 2 - 12}px;width:${Math.max(90, t.width + 40)}px`,
+    }) as HTMLInputElement;
+    let finished = false;
+    const finish = (ok: boolean) => {
+      if (finished) return;
+      finished = true;
+      input.remove();
+      list?.remove();
+      done(ok ? input.value.trim() : null);
+    };
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') finish(true);
+      if (e.key === 'Escape') finish(false);
+    });
+    input.addEventListener('blur', () => finish(true));
+    this.slots.overlay.append(input);
+    if (list) this.slots.overlay.append(list);
+    input.focus();
+    input.select();
+  }
+
+  /** True while a name or comment is being typed over the canvas. */
+  get typingOnCanvas(): boolean {
+    return !!this.slots.overlay.querySelector('.sb-prompt, .sb-inline');
+  }
+
+  /**
+   * Multi-line text entry over the canvas at a world point (comments): Enter commits, Shift+Enter
+   * starts a new line, Esc cancels, leaving the box commits. Blank text comes back as ''.
+   */
+  promptText(at: Vec, initial: string, done: (text: string | null) => void): void {
+    this.slots.overlay.querySelector('.sb-prompt')?.remove();
+    const m = this.view.svg.getScreenCTM();
+    const r = this.canvas.getBoundingClientRect();
+    const pt = m ? new DOMPoint(at[0], at[1]).matrixTransform(m) : new DOMPoint(r.left + 40, r.top + 40);
+    const lines = initial.split('\n');
+    const area = h('textarea', {
+      spellcheck: 'true', 'aria-label': 'Comment', placeholder: 'comment',
+      rows: String(Math.min(12, Math.max(2, lines.length))), cols: String(Math.min(60, Math.max(24, ...lines.map((l) => l.length + 2)))),
+    }, initial) as HTMLTextAreaElement;
+    const box = h('div', { class: 'sb-prompt sb-prompt-text', style: `left:${pt.x - r.left}px;top:${pt.y - r.top}px` }, area,
+      h('small', null, 'Enter: done · Shift+Enter: new line · Esc: cancel'));
+    let finished = false;
+    const finish = (ok: boolean) => {
+      if (finished) return;
+      finished = true;
+      box.remove();
+      done(ok ? area.value.trim() : null);
+    };
+    area.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finish(true); }
+      if (e.key === 'Escape') finish(false);
+    });
+    area.addEventListener('blur', () => finish(true));
+    this.slots.overlay.append(box);
+    area.focus();
+    area.select();
+  }
+
   showHelp(): void {
     const keys: [string, string][] = [
       ['Drag from a pin or port', 'draw a wire; click empty canvas to add a corner'],
@@ -664,6 +749,10 @@ export class Editor {
       ['Ctrl/Alt + drag a wire', 'start a branch from it'],
       ['L', 'place a pointer (same name = same net)'],
       ['Click a selected pointer / double-click', 'jump to the next pointer with that name'],
+      ['T', 'place a comment · double-click one to edit it'],
+      ['Click a selected name · double-click a name', 'rename a part or pin where it is drawn'],
+      ['F2', 'rename the selected part, pin or pointer (a comment: edit its text)'],
+      ['Right-click', 'actions for what is under the cursor (or the canvas)'],
       ['Drag empty canvas', 'select with a rubber band (Shift: add)'],
       ['Shift + click', 'add to / remove from the selection'],
       ['Space + drag, middle drag', 'pan · wheel: zoom'],
@@ -689,6 +778,7 @@ export class Editor {
     this.save();
     this.cleanups.forEach((f) => f());
     this.sim.destroy();
+    this.buzzers.destroy();
     this.sims.forEach((s) => s.destroy());
     this.tools.destroy();
     this.unsub();
@@ -712,10 +802,13 @@ function prune(sel: Sel, doc: ChipDoc): Sel {
   };
   const out: Sel = {};
   const parts = keep(sel.parts, doc.parts), pins = keep(sel.pins, doc.pins), wires = keep(sel.wires, doc.wires), labels = keep(sel.labels, doc.labels);
+  const comments = keep(sel.comments, doc.comments ?? []);
   if (parts) out.parts = parts;
   if (pins) out.pins = pins;
   if (wires) out.wires = wires;
   if (labels) out.labels = labels;
+  if (comments) out.comments = comments;
   const same = (a?: string[], b?: string[]) => (a?.length ?? 0) === (b?.length ?? 0);
-  return same(out.parts, sel.parts) && same(out.pins, sel.pins) && same(out.wires, sel.wires) && same(out.labels, sel.labels) ? sel : out;
+  return same(out.parts, sel.parts) && same(out.pins, sel.pins) && same(out.wires, sel.wires) && same(out.labels, sel.labels)
+    && same(out.comments, sel.comments) ? sel : out;
 }

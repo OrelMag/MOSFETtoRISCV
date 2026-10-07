@@ -16,9 +16,10 @@ import type { Compiled, Diag } from './compile';
 import { partBox, pinBody, pinKnob, pointerGeom, wireGroups } from './geom';
 import { HopCache } from './hops';
 import {
-  type ChipDoc, type DefOf, defaultFace, type DisplayKind, type LabelDoc, type PartDoc, type PinDoc, pinBig, polyline, type WireDoc,
+  type ChipDoc, COMMENT_LINE, type CommentDoc, commentBox, type DefOf, defaultFace, type DisplayKind, type LabelDoc, type PartDoc, type PinDoc, pinBig, polyline, type WireDoc,
 } from './model';
 import type { Sel } from './ops';
+import { buzzerHz, LED_PITCH, ledGrid } from './parts';
 
 /** Live values, read through the compile the simulator was built from (runtime.ts). */
 export interface ViewValues {
@@ -30,11 +31,19 @@ export interface ViewValues {
 }
 
 interface PartEls { doc: PartDoc; def: ComponentDef | undefined; g: SVGGElement; disp?: DisplayEls; cls: string }
-interface DisplayEls { kind: DisplayKind; segs: SVGElement[]; led?: SVGCircleElement; text?: SVGTextElement; shown: string }
+interface DisplayEls {
+  kind: DisplayKind; width: number; segs: SVGElement[]; shown: string;
+  led?: SVGCircleElement; text?: SVGTextElement; halt?: SVGGElement; buzz?: SVGGElement;
+  /** An LED bank: one LED per bit (index = bit). */
+  leds?: SVGCircleElement[];
+  /** A buzzer's tone now (Hz, 0 silent). */
+  hz?: number;
+}
 interface WireEls { doc: WireDoc; poly: Vec[] | null; key: string; ver: number; path: SVGPathElement; hit: SVGPathElement; width: number; cls: string }
 interface DotEls { el: SVGCircleElement; wire: string; cls: string }
 interface PinEls { doc: PinDoc; g: SVGGElement; glyph: PinGlyph; geom: PinGeom; cls: string; txt: string }
 interface LabelEls { doc: LabelDoc; g: SVGGElement; stub: SVGPathElement; cls: string }
+interface CommentEls { doc: CommentDoc; g: SVGGElement }
 interface BusLabel { net: number; wire: string; at: Vec; room: number; g: SVGGElement; bg: SVGRectElement; text: SVGTextElement; txt: string }
 
 const pathD = (p: Vec[]) => p.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join(' ');
@@ -46,7 +55,11 @@ export class EditorView {
   /** Drawn polyline of every wire (null: an end does not resolve). */
   readonly polys = new Map<string, Vec[]>();
   radix: Radix = 'hex';
+  /** Where buzzer tones go (part id → Hz), after every repaint that changes them. */
+  sound: ((tones: Map<string, number>) => void) | null = null;
+  private toneKey = '';
 
+  private gComments: SVGGElement;
   private gWires: SVGGElement;
   private gDots: SVGGElement;
   private gHits: SVGGElement;
@@ -59,6 +72,7 @@ export class EditorView {
   private wires = new Map<string, WireEls>();
   private pins = new Map<string, PinEls>();
   private labels = new Map<string, LabelEls>();
+  private comments = new Map<string, CommentEls>();
   private busLabels: BusLabel[] = [];
   /** Junction dots of each net group (keyed by its wires and their versions), coloured like the wire they sit on. */
   private dots = new Map<string, DotEls[]>();
@@ -82,6 +96,7 @@ export class EditorView {
       <pattern id="ed-grid5" width="5" height="5" patternUnits="userSpaceOnUse">
       <circle cx="0" cy="0" r="0.12" class="grid-dot ed-grid-major"/></pattern>`;
     const L = (cls: string) => s('g', { class: cls });
+    this.gComments = L('ed-notes');
     this.gWires = L('wires');
     this.gDots = L('ed-dots');
     this.gHits = L('wire-hits');
@@ -98,7 +113,7 @@ export class EditorView {
     this.svg.append(defs,
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid)' }),
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid5)' }),
-      this.gWires, this.gDots, this.gHits, this.gParts, this.gPins, this.gLabels, this.gValues, this.gOver);
+      this.gComments, this.gWires, this.gDots, this.gHits, this.gParts, this.gPins, this.gLabels, this.gValues, this.gOver);
     host.append(this.svg);
     this.cam = new Camera(this.svg, host);
     this.cam.vb = { x: -4, y: -4, w: 60, h: 36 };
@@ -195,6 +210,25 @@ export class EditorView {
       this.labels.set(l.id, { doc: l, g, stub, cls: '' });
     }
     for (const [id, e] of this.labels) if (!seenLabels.has(id)) { e.g.remove(); this.labels.delete(id); dirty.add(`l:${id}`); }
+
+    // Comments: under everything, touching nothing.
+    const seenComments = new Set<string>();
+    for (const c of doc.comments ?? []) {
+      seenComments.add(c.id);
+      const e = this.comments.get(c.id);
+      if (e && e.doc === c) continue;
+      if (e && e.doc.text === c.text) {
+        e.g.setAttribute('transform', `translate(${c.at[0]},${c.at[1]})`);
+        e.doc = c;
+        continue;
+      }
+      const g = drawComment(c);
+      if (this.sel.comments?.includes(c.id)) g.classList.add('ed-sel');
+      if (e) e.g.replaceWith(g);
+      else this.gComments.append(g);
+      this.comments.set(c.id, { doc: c, g });
+    }
+    for (const [id, e] of this.comments) if (!seenComments.has(id)) { e.g.remove(); this.comments.delete(id); }
 
     // Wires: polylines follow their ends; a geometry change rechecks the wires on what changed.
     let wiresChanged = prev?.wires !== doc.wires || geomChanged;
@@ -324,15 +358,36 @@ export class EditorView {
     return { g, disp };
   }
 
-  /** A display: LED, 7-segment digit (bit i = segment a…g, bit 7 = dp), hex digit or value box. */
+  /** A display: LED, 7-segment digit (bit i = segment a…g, bit 7 = dp), hex digit, value box or halt plate. */
   private drawDisplay(g: SVGGElement, kind: DisplayKind, width: number, w: number, h: number, flip: boolean): DisplayEls {
     g.append(s('rect', { class: 'sym-body sym-box ed-disp-box', x: 0, y: 0, width: w, height: h, rx: 0.6 }));
     const port = flip ? w : 0;
     g.append(s('circle', { class: 'ed-disp-port', cx: port, cy: h / 2, r: 0.16 }));
-    const d: DisplayEls = { kind, segs: [], shown: '' };
-    if (kind === 'led') {
+    const d: DisplayEls = { kind, width, segs: [], shown: '' };
+    if (kind === 'led' && width > 1) {
+      // Most significant bit first, rows of 8, as a binary number reads.
+      const gr = ledGrid(width), x0 = (w - gr.cols * LED_PITCH) / 2, y0 = (h - gr.rows * LED_PITCH) / 2;
+      d.leds = Array.from({ length: width }, (_, b) => {
+        const i = width - 1 - b, r = Math.floor(i / gr.cols), c = i % gr.cols;
+        return s('circle', { class: 'ed-led', cx: x0 + LED_PITCH * (c + 0.5), cy: y0 + LED_PITCH * (r + 0.5), r: LED_PITCH / 2 - 0.15 });
+      });
+      g.append(...d.leds);
+    } else if (kind === 'led') {
       d.led = s('circle', { class: 'ed-led', cx: w / 2, cy: h / 2, r: Math.min(w, h) / 2 - 0.25 });
       g.append(d.led);
+    } else if (kind === 'buzzer') {
+      // A speaker cone and two sound waves (lit while it sounds).
+      const cx = w / 2 - 0.5, cy = h / 2;
+      d.buzz = s('g', { class: 'ed-buzz' },
+        s('path', { class: 'ed-buzz-cone', d: `M${cx - 0.9},${cy - 0.35} h0.5 l0.7,-0.5 v1.7 l-0.7,-0.5 h-0.5 Z` }),
+        s('path', { class: 'ed-buzz-wave', d: `M${cx + 0.65},${cy - 0.4} q0.35,0.4 0,0.8` }),
+        s('path', { class: 'ed-buzz-wave', d: `M${cx + 1.05},${cy - 0.7} q0.6,0.7 0,1.4` }));
+      g.append(d.buzz);
+    } else if (kind === 'halt') {
+      d.halt = s('g', { class: 'ed-halt' },
+        s('rect', { class: 'ed-halt-plate', x: 0.45, y: 0.35, width: w - 0.9, height: h - 0.7, rx: 0.3 }),
+        s('text', { class: 'ed-halt-text', x: w / 2, y: h / 2 + 0.32, 'text-anchor': 'middle' }, 'HALT'));
+      g.append(d.halt);
     } else if (kind === 'value') {
       d.text = s('text', { class: 'ed-disp-value', x: w / 2, y: h / 2 + 0.4, 'text-anchor': 'middle' });
       g.append(d.text);
@@ -410,6 +465,7 @@ export class EditorView {
       e.g.classList.toggle('ed-err', d === 'ed-err');
       e.g.classList.toggle('ed-warn', d === 'ed-warn');
     }
+    for (const [id, e] of this.comments) e.g.classList.toggle('ed-sel', !!this.sel.comments?.includes(id));
     for (const e of this.wires.values()) this.paintWire(e, e.cls ? e.cls.split('|')[0] : 'wire');
   }
 
@@ -470,6 +526,18 @@ export class EditorView {
       e.g.classList.toggle('maybe', c === 2);
     }
     this.paintBusLabels(v, built);
+    this.paintTones(v !== null);
+  }
+
+  /** Hand the buzzers' tones to `sound` when they change (all silent without a simulation). */
+  private paintTones(live: boolean): void {
+    if (!this.sound) return;
+    const tones = new Map<string, number>();
+    if (live) for (const [id, e] of this.parts) if (e.disp?.hz) tones.set(id, e.disp.hz);
+    const key = [...tones].join(';');
+    if (key === this.toneKey) return;
+    this.toneKey = key;
+    this.sound(tones);
   }
 
   private paintDisplay(d: DisplayEls, bits: Bit[] | null): void {
@@ -479,7 +547,19 @@ export class EditorView {
     const key = bits ? bits.join('') + this.radix : '';
     if (key === d.shown) return;
     d.shown = key;
-    if (d.led) {
+    if (d.leds) {
+      d.leds.forEach((el, i) => {
+        const b = bits?.[i];
+        el.setAttribute('class', `ed-led${b === B1 ? ' on' : b === BX || b === BZ ? ' vx' : ''}`);
+      });
+    } else if (d.buzz) {
+      // A bus wider than 7 bits with a high bit set is past note 127: the top note.
+      d.hz = !bits || x ? 0 : buzzerHz(d.width, bits.slice(7).includes(B1) ? 127 : pack(bits.slice(0, 7)));
+      d.buzz.setAttribute('class', `ed-buzz${d.hz ? ' on' : x && bits ? ' vx' : ''}`);
+    } else if (d.halt) {
+      const on = !!bits && bits.includes(B1);
+      d.halt.setAttribute('class', `ed-halt${on ? ' ed-halt-on' : x && bits ? ' ed-halt-vx' : ''}`);
+    } else if (d.led) {
       d.led.setAttribute('class', `ed-led${bits && bits.some((b) => b === B1) && !x ? ' on' : x && bits ? ' vx' : ''}`);
     } else if (d.text) {
       d.text.textContent = bits ? formatBits(bits, this.radix) : '–';
@@ -500,7 +580,7 @@ export class EditorView {
       if (built && this.doc) {
         const shown = new Set<number>();
         for (const [k, n] of built.netOfEnd) if (k.startsWith('pin:')) shown.add(n);
-        for (const p of this.doc.parts) if ('display' in p.ref) shown.add(built.netOfEnd.get(`p:${p.id}.a`) ?? -1);
+        for (const p of this.doc.parts) if ('display' in p.ref && p.ref.display !== 'halt') shown.add(built.netOfEnd.get(`p:${p.id}.a`) ?? -1);
         const best = new Map<number, { at: Vec; len: number; wire: string }>();
         for (const e of this.wires.values()) {
           const n = built.netOfWire.get(e.doc.id);
@@ -626,6 +706,11 @@ export class EditorView {
       grow(r.x, r.y);
       grow(r.x + r.w, r.y + r.h);
     }
+    for (const c of doc.comments ?? []) {
+      const b = commentBox(c);
+      grow(b.x, b.y);
+      grow(b.x + b.w, b.y + b.h);
+    }
     for (const poly of this.polys.values()) for (const [x, y] of poly) grow(x, y);
     if (x0 === Infinity) return null;
     return { x: x0 - 3, y: y0 - 3, w: x1 - x0 + 6, h: y1 - y0 + 6 };
@@ -638,6 +723,16 @@ export class EditorView {
       this.cam.fit({ x: -4, y: -4, w: 60, h: 36 });
     }
   }
+}
+
+/** A comment: its lines on a faint note (the box from commentBox, so hits match the drawing). */
+export function drawComment(c: CommentDoc): SVGGElement {
+  const b = commentBox(c);
+  const g = s('g', { class: 'ed-note', transform: `translate(${c.at[0]},${c.at[1]})`, 'data-comment': c.id });
+  const text = s('text', { class: 'ed-note-text', x: 0.6, y: 0 });
+  b.lines.forEach((l, i) => text.append(s('tspan', { x: 0.6, y: (i + 1) * COMMENT_LINE - 0.2 }, l || ' ')));
+  g.append(s('rect', { class: 'ed-note-bg', x: 0, y: 0, width: b.w, height: b.h, rx: 0.4 }), text);
+  return g;
 }
 
 /** Segments a…g lit for each hex digit (bit 0 = a). */

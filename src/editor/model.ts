@@ -44,6 +44,8 @@ export interface ChipDoc {
   parts: PartDoc[];
   wires: WireDoc[];
   labels: LabelDoc[];
+  /** Free-text notes on the canvas: drawn, saved and shared, never compiled (absent: none). */
+  comments?: CommentDoc[];
 }
 
 /**
@@ -97,7 +99,7 @@ export interface PartDoc {
   label?: string;
 }
 
-export type DisplayKind = 'led' | 'seg7' | 'hex' | 'value';
+export type DisplayKind = 'led' | 'seg7' | 'hex' | 'value' | 'halt' | 'buzzer';
 
 export type PartRef =
   /** Any library component, by id (registry, family key or generator pattern). */
@@ -107,7 +109,10 @@ export type PartRef =
   | { split: number[]; pitch?: number }
   | { merge: number[]; pitch?: number }
   | { const: { width: number; value: number } }
-  /** Pure view: zero-cost sink that shows the value of the net on its input `a`. */
+  /**
+   * Pure view: zero-cost sink that shows the value of the net on its input `a` (a wide LED: a bank,
+   * one LED per bit; 'halt': stops Run while it is non-zero; 'buzzer': sounds while it is non-zero).
+   */
   | { display: DisplayKind; width?: number }
   /** Read-only memory: 2^k words of w bits. 'rv32' addresses bytes like a PC (addr = 4·word). */
   | { rom: { k: number; w: 8 | 16 | 32; addr: 'word' | 'rv32'; lang: 'asm' | 'hex'; src: string } }
@@ -145,6 +150,25 @@ export interface LabelDoc {
   name: string;
   at: Vec;
   face?: ExitDir;
+}
+
+/** A comment on the canvas, as in Turing Complete: `at` is its top-left corner, `text` may span lines. */
+export interface CommentDoc {
+  id: string;
+  at: Vec;
+  text: string;
+}
+
+/** Comment text size and line height (grid units; monospace, so the box is known without a DOM). */
+export const COMMENT_FONT = 1.1;
+export const COMMENT_LINE = 1.5;
+const COMMENT_PAD = 0.6;
+
+/** A comment's lines and its box (hit testing, rubber band, drawing). */
+export function commentBox(c: CommentDoc): { lines: string[]; x: number; y: number; w: number; h: number } {
+  const lines = c.text.split('\n');
+  const cols = Math.max(1, ...lines.map((l) => l.length));
+  return { lines, x: c.at[0], y: c.at[1], w: cols * COMMENT_FONT * 0.6 + 2 * COMMENT_PAD, h: lines.length * COMMENT_LINE + COMMENT_PAD };
 }
 
 // ---------------------------------------------------------------------------------------------

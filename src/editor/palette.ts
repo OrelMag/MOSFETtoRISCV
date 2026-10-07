@@ -15,7 +15,9 @@ export type PinKind = 'toggle' | 'button' | 'clock';
 export type Placement =
   | { part: PartRef }
   | { pin: { dir: 'in' | 'out'; width: number; kind?: PinKind } }
-  | { pointer: true };
+  | { pointer: true }
+  /** A free-text comment (drawn, never compiled). */
+  | { comment: true };
 
 export interface PaletteItem {
   /** Unique within its group. */
@@ -91,6 +93,15 @@ registerPaletteGroup({
   ],
 });
 
+// Clocked sources built from gates (not purist: they open to a register and feedback logic).
+registerPaletteGroup({
+  id: 'sources', title: 'Sources', order: 15,
+  items: () => [
+    lib('cycles16', 'Cycle counter', 'Clock edges since power-on (16 bits; 8 or 32 in the properties)'),
+    lib('random8', 'Random', 'A new pseudo-random number every clock edge: an XNOR LFSR that needs no seed (4, 8 or 16 bits in the properties)'),
+  ],
+});
+
 registerPaletteGroup({
   id: 'fets', title: 'Transistors', order: 20, purist: true,
   items: () => [
@@ -130,9 +141,12 @@ registerPaletteGroup({
   id: 'disp', title: 'Displays', order: 40, purist: true,
   items: () => [
     { id: 'led', name: 'LED', title: 'Lights when its input is 1', place: { part: { display: 'led' } } },
+    { id: 'leds', name: 'LED bank', tag: '8-bit', title: 'One LED per bit, most significant first, rows of 8 (width in the properties)', place: { part: { display: 'led', width: 8 } } },
     { id: 'seg7', name: '7-segment', tag: '8-bit', title: 'Bit 0 = segment a … bit 6 = g, bit 7 = decimal point', place: { part: { display: 'seg7', width: 8 } } },
     { id: 'hex', name: 'Hex digit', tag: '4-bit', title: 'Shows a 4-bit value as 0–F', place: { part: { display: 'hex', width: 4 } } },
     { id: 'value', name: 'Value', tag: '8-bit', title: 'Shows a bus value in the chosen radix', place: { part: { display: 'value', width: 8 } } },
+    { id: 'buzzer', name: 'Buzzer', title: 'Sounds while its input is 1 (A4, 440 Hz); give it a bus to play MIDI note v (60 = middle C)', place: { part: { display: 'buzzer' } } },
+    { id: 'halt', name: 'Halt', title: 'Stops Run after the step where its input reads 1 (any bit of a bus); placed inside a chip, it still stops Run', place: { part: { display: 'halt' } } },
   ],
 });
 
@@ -142,6 +156,7 @@ registerPaletteGroup({
   id: 'wiring', title: 'Wiring', order: 50, purist: true,
   items: () => [
     { id: 'pointer', name: 'Pointer', tag: 'L', title: 'A named net label: every pointer with the same name is the same net, no wire needed', place: { pointer: true } },
+    { id: 'comment', name: 'Comment', tag: 'T', title: 'Free text on the canvas: saved and shared with the chip, never part of the circuit', place: { comment: true } },
     { id: 's4', name: 'Split 4 → 1×4', place: { part: { split: many(4, 1) } } },
     { id: 's8', name: 'Split 8 → 1×8', place: { part: { split: many(8, 1) } } },
     { id: 's16', name: 'Split 16 → 8+8', place: { part: { split: [8, 8] } } },

@@ -9,12 +9,12 @@
 
 import { symbolGeom } from '../sim/geometry';
 import {
-  chipDeps, endGeom, endKey, isIdent, nextId, onPolyline, orthogonal, polyline, uniqueName,
-  type ChipDoc, type DefOf, type EndRef, type ExitDir, type LabelDoc, type PartDoc, type PartRef,
+  chipDeps, commentBox, endGeom, endKey, isIdent, nextId, onPolyline, orthogonal, polyline, uniqueName,
+  type ChipDoc, type CommentDoc, type DefOf, type EndRef, type ExitDir, type LabelDoc, type PartDoc, type PartRef,
   type PinDoc, type Vec, type WireDoc, type Workspace,
 } from './model';
 
-export type Sel = { parts?: string[]; pins?: string[]; wires?: string[]; labels?: string[] };
+export type Sel = { parts?: string[]; pins?: string[]; wires?: string[]; labels?: string[]; comments?: string[] };
 
 /** What copySel puts on the clipboard: plain objects, ids still those of the source chip. */
 export interface Clip {
@@ -22,6 +22,7 @@ export interface Clip {
   pins: PinDoc[];
   labels: LabelDoc[];
   wires: WireDoc[];
+  comments?: CommentDoc[];
 }
 
 export type Added = { doc: ChipDoc; id: string; reason?: undefined } | { doc: ChipDoc; id?: undefined; reason: string };
@@ -34,14 +35,14 @@ const eqv = (a: Vec, b: Vec) => a[0] === b[0] && a[1] === b[1];
 const ZERO: Vec = [0, 0];
 const eqPts = (a: Vec[], b: Vec[]) => a.length === b.length && a.every((p, i) => eqv(p, b[i]));
 
-/** Instance-name prefix per kind of part: g1 (library), u1 (user chip), s1/m1, k1, d1, rom1, ram1. */
+/** Instance-name prefix per kind of part: g1 (library), u1 (user chip), s1/m1, k1, d1, halt1, rom1, ram1. */
 export function idPrefix(ref: PartRef): string {
   if ('lib' in ref) return 'g';
   if ('chip' in ref) return 'u';
   if ('split' in ref) return 's';
   if ('merge' in ref) return 'm';
   if ('const' in ref) return 'k';
-  if ('display' in ref) return 'd';
+  if ('display' in ref) return ref.display === 'halt' ? 'halt' : 'd';
   return 'rom' in ref ? 'rom' : 'ram';
 }
 
@@ -113,6 +114,30 @@ export function addLabel(doc: ChipDoc, name: string, at: Vec, face?: ExitDir): A
   const id = nextId('l', doc.labels.map((l) => l.id));
   const l: LabelDoc = { id, name: name.trim(), at: [at[0], at[1]], ...(face ? { face } : {}) };
   return { doc: { ...doc, labels: [...doc.labels, l] }, id };
+}
+
+const commentsOf = (doc: ChipDoc): CommentDoc[] => doc.comments ?? [];
+
+/** A comment (its text trimmed at the ends; blank text is refused). */
+export function addComment(doc: ChipDoc, text: string, at: Vec): Added {
+  const t = text.trim();
+  if (!t) return { doc, reason: 'a comment needs some text' };
+  const cs = commentsOf(doc);
+  const id = nextId('note', cs.map((c) => c.id));
+  return { doc: { ...doc, comments: [...cs, { id, at: [at[0], at[1]], text: t }] }, id };
+}
+
+export function setComment(doc: ChipDoc, id: string, patch: Partial<Omit<CommentDoc, 'id'>>): Edited {
+  const cs = commentsOf(doc);
+  const i = cs.findIndex((c) => c.id === id);
+  if (i < 0) return { doc, reason: `no comment '${id}'` };
+  if (patch.text !== undefined && !patch.text.trim()) return { doc, reason: 'a comment needs some text' };
+  const c = cs[i];
+  const next = patched(c, patch.text === undefined ? patch : { ...patch, text: patch.text.trim() });
+  if (next.text === c.text && eqv(next.at, c.at)) return { doc };
+  const comments = cs.slice();
+  comments[i] = next;
+  return { doc: { ...doc, comments } };
 }
 
 /** Why a wire between a and b cannot exist, or null. defOf (optional) also checks ports and branch points. */
@@ -334,9 +359,12 @@ export function moveSel(doc: ChipDoc, sel: Sel, d: Vec, defOf: DefOf): ChipDoc {
   const parts = moveAll(doc.parts, sel.parts, d);
   const pins = moveAll(doc.pins, sel.pins, d);
   const labels = moveAll(doc.labels, sel.labels, d);
+  const comments = doc.comments && moveAll(doc.comments, sel.comments, d);
   const rigid = new Map((sel.wires ?? []).filter((id) => doc.wires.some((w) => w.id === id)).map((id): [string, Vec] => [id, d]));
-  if (parts === doc.parts && pins === doc.pins && labels === doc.labels && !rigid.size) return doc;
-  return refit(doc, { ...doc, parts, pins, labels }, defOf, rigid);
+  if (parts === doc.parts && pins === doc.pins && labels === doc.labels && comments === doc.comments && !rigid.size) return doc;
+  // Comments touch no wire: moving only comments needs no refit.
+  if (parts === doc.parts && pins === doc.pins && labels === doc.labels && !rigid.size) return { ...doc, comments };
+  return refit(doc, { ...doc, parts, pins, labels, comments }, defOf, rigid);
 }
 
 /** Wires ending on a deleted object go, and so do wires branched from deleted wires (transitively). */
@@ -350,7 +378,8 @@ export function deleteSel(doc: ChipDoc, sel: Sel): ChipDoc {
   }
   const keep = <T extends { id: string }>(xs: T[], s: Set<string | undefined>) => (xs.some((x) => s.has(x.id)) ? xs.filter((x) => !s.has(x.id)) : xs);
   const r = { ...doc, parts: keep(doc.parts, parts), pins: keep(doc.pins, pins), labels: keep(doc.labels, labels), wires: keep(doc.wires, wires) };
-  return r.parts === doc.parts && r.pins === doc.pins && r.labels === doc.labels && r.wires === doc.wires ? doc : r;
+  if (doc.comments) r.comments = keep(doc.comments, new Set(sel.comments));
+  return r.parts === doc.parts && r.pins === doc.pins && r.labels === doc.labels && r.wires === doc.wires && r.comments === doc.comments ? doc : r;
 }
 
 /** Mirrors parts left-right. With defOf, attached wires are refit to the mirrored ports. */
@@ -398,6 +427,22 @@ export function setPart(doc: ChipDoc, id: string, patch: Partial<PartDoc>, defOf
 }
 
 export const setRef = (doc: ChipDoc, partId: string, ref: PartRef, defOf?: DefOf): Edited => setPart(doc, partId, { ref }, defOf);
+
+/**
+ * Rename a part from the text typed over its drawn name, which edits what it shows: its caption
+ * if it has one (blank, or its instance name, clears it), else its instance name; text that
+ * cannot be an instance name (not an identifier, or taken) becomes a caption. `id`: its id after.
+ */
+export function namePart(doc: ChipDoc, id: string, text: string, defOf?: DefOf): Edited & { id: string } {
+  const p = doc.parts.find((q) => q.id === id);
+  if (!p) return { doc, id, reason: `no part '${id}'` };
+  const t = text.trim();
+  if (t === (p.label ?? p.id) || (!t && p.label === undefined)) return { doc, id };
+  if (p.label !== undefined || !t || !isIdent(t) || partNames(doc).includes(t)) {
+    return { ...setPart(doc, id, { label: t && t !== id ? t : undefined }), id };
+  }
+  return { ...setPart(doc, id, { id: t }, defOf), id: t };
+}
 
 export function setPin(doc: ChipDoc, id: string, patch: Partial<Omit<PinDoc, 'id'>>, defOf?: DefOf): Edited {
   const i = doc.pins.findIndex((p) => p.id === id);
@@ -448,7 +493,7 @@ export function setWire(doc: ChipDoc, id: string, patch: Partial<Omit<WireDoc, '
 // ---------------------------------------------------------------------------------------------
 // Clipboard and selection
 
-/** The selected parts / pins / labels and every wire with both ends among them (branch chains included). */
+/** The selected parts / pins / labels / comments and every wire with both ends among them (branch chains included). */
 export function copySel(doc: ChipDoc, sel: Sel): Clip {
   const ps = new Set(sel.parts), pins = new Set(sel.pins), ls = new Set(sel.labels), ws = new Set<string>();
   const inside = (e: EndRef) =>
@@ -462,6 +507,7 @@ export function copySel(doc: ChipDoc, sel: Sel): Clip {
     pins: doc.pins.filter((p) => pins.has(p.id)),
     labels: doc.labels.filter((l) => ls.has(l.id)),
     wires: doc.wires.filter((w) => ws.has(w.id)),
+    comments: commentsOf(doc).filter((c) => sel.comments?.includes(c.id)),
   };
 }
 
@@ -525,22 +571,27 @@ export function pasteClip(doc: ChipDoc, clip: Clip, offset: Vec): { doc: ChipDoc
     const [a, b] = [end(w.a), end(w.b)];
     if (a && b) wires.push({ ...w, id: wm.get(w.id)!, a, b, pts: w.pts.map((p) => add(p, offset)) });
   }
-  return {
-    doc: { ...doc, parts: [...doc.parts, ...parts], pins: [...doc.pins, ...pins], labels: [...doc.labels, ...labels], wires: [...doc.wires, ...wires] },
-    sel: { parts: parts.map((p) => p.id), pins: pins.map((p) => p.id), labels: labels.map((l) => l.id), wires: wires.map((w) => w.id) },
-  };
+  const noteIds = new Set(commentsOf(doc).map((c) => c.id));
+  const comments = (clip.comments ?? []).map((c) => ({ ...c, id: take(noteIds, nextId('note', noteIds)), at: add(c.at, offset) }));
+  const out: ChipDoc = { ...doc, parts: [...doc.parts, ...parts], pins: [...doc.pins, ...pins], labels: [...doc.labels, ...labels], wires: [...doc.wires, ...wires] };
+  if (comments.length) out.comments = [...commentsOf(doc), ...comments];
+  const sel: Sel = { parts: parts.map((p) => p.id), pins: pins.map((p) => p.id), labels: labels.map((l) => l.id), wires: wires.map((w) => w.id) };
+  if (comments.length) sel.comments = comments.map((c) => c.id);
+  return { doc: out, sel };
 }
 
 export const duplicate = (doc: ChipDoc, sel: Sel, offset: Vec): { doc: ChipDoc; sel: Sel } => pasteClip(doc, copySel(doc, sel), offset);
 
 export function selectAll(doc: ChipDoc): Sel {
-  return { parts: doc.parts.map((p) => p.id), pins: doc.pins.map((p) => p.id), wires: doc.wires.map((w) => w.id), labels: doc.labels.map((l) => l.id) };
+  const sel: Sel = { parts: doc.parts.map((p) => p.id), pins: doc.pins.map((p) => p.id), wires: doc.wires.map((w) => w.id), labels: doc.labels.map((l) => l.id) };
+  if (doc.comments?.length) sel.comments = doc.comments.map((c) => c.id);
+  return sel;
 }
 
 /**
  * Everything fully inside the rectangle spanned by two corners (any order): parts by their
- * symbol's box (just the anchor when the part does not resolve), pins and pointers by their
- * point, wires by their whole polyline.
+ * symbol's box (just the anchor when the part does not resolve), comments by their box, pins and
+ * pointers by their point, wires by their whole polyline.
  */
 export function boxSelect(doc: ChipDoc, rect: [Vec, Vec], defOf: DefOf): Sel {
   const [x0, x1] = [Math.min(rect[0][0], rect[1][0]), Math.max(rect[0][0], rect[1][0])];
@@ -556,10 +607,16 @@ export function boxSelect(doc: ChipDoc, rect: [Vec, Vec], defOf: DefOf): Sel {
     const poly = polyline(doc, w, defOf);
     return poly ? poly.every(inn) : false;
   });
-  return {
+  const sel: Sel = {
     parts: parts.map((p) => p.id),
     pins: doc.pins.filter((p) => inn(p.at)).map((p) => p.id),
     wires: wires.map((w) => w.id),
     labels: doc.labels.filter((l) => inn(l.at)).map((l) => l.id),
   };
+  const cs = commentsOf(doc).filter((c) => {
+    const b = commentBox(c);
+    return inn(c.at) && inn([b.x + b.w, b.y + b.h]);
+  });
+  if (cs.length) sel.comments = cs.map((c) => c.id);
+  return sel;
 }

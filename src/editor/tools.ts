@@ -15,17 +15,19 @@ import { nextDrive } from './chips';
 import type { Editor } from './editor';
 import { lookInside } from './inside';
 import { branchPoint, drives, type Hit, hitTest, hitWire, nextSameName, partAnchor, pointerGeom, snapPt, WireDraft } from './geom';
-import { type ChipDoc, endGeom, endKey, type EndRef, type ExitDir as Face, type PinDoc, pinBig, pinValue } from './model';
+import { renamePin } from './chips';
+import { type ChipDoc, commentBox, endGeom, endKey, type EndRef, type ExitDir as Face, type PinDoc, pinBig, pinValue } from './model';
 import {
-  addLabel, addPart, addPin, addWire, boxSelect, type Clip, copySel, deleteSel, duplicate, flipParts, moveSel, pasteClip,
-  type Sel, selectAll, setLabel, setPin,
+  addComment, addLabel, addPart, addPin, addWire, boxSelect, type Clip, copySel, deleteSel, duplicate, flipParts, moveSel, pasteClip,
+  namePart, type Sel, selectAll, setComment, setLabel, setPin,
 } from './ops';
 import type { PaletteItem } from './palette';
 
 type State =
   | { k: 'idle' }
   /** Pressed on an object; a click or a drag, not decided yet. */
-  | { k: 'press'; hit: Hit; at: Vec; sx: number; sy: number; was: boolean; shift: boolean }
+  /** `name`: the press was on the object's drawn name (a click then renames a selected object). */
+  | { k: 'press'; hit: Hit; at: Vec; sx: number; sy: number; was: boolean; shift: boolean; name: boolean }
   | { k: 'move'; at: Vec; base: ChipDoc; sel: Sel; d: Vec }
   | { k: 'band'; at: Vec; add: boolean }
   /** `held`: the button is still down since the press that started it (drag-to-connect). */
@@ -54,6 +56,8 @@ export class Tools {
   private off: (() => void)[] = [];
   /** A mode that takes clicks first (probing): true when it consumed the press. */
   onPress: ((h: Hit, e: PointerEvent) => boolean) | null = null;
+  /** The right-click menu (ctxmenu.ts plugs it in), at a screen point, for the selection or the canvas point `at`. */
+  onContext: ((x: number, y: number, at: Vec) => void) | null = null;
 
   constructor(private ed: Editor) {
     const svg = ed.view.svg;
@@ -70,7 +74,7 @@ export class Tools {
     on(svg, 'pointerup', (e) => this.up(e));
     on(svg, 'pointercancel', () => this.cancel());
     on(svg, 'dblclick', (e) => this.dbl(e));
-    on(svg, 'contextmenu', (e) => { e.preventDefault(); if (this.state.k === 'wire' || this.state.k === 'place') this.cancel(); });
+    on(svg, 'contextmenu', (e) => this.context(e));
     on(svg, 'pointerleave', () => {
       if (this.state.k === 'place' && !this.state.drag) this.ed.view.showGhost(null);
       this.ed.view.showHot(null);
@@ -108,6 +112,7 @@ export class Tools {
     if (h.k === 'pin') return !!s.pins?.includes(h.id);
     if (h.k === 'label') return !!s.labels?.includes(h.id);
     if (h.k === 'wire') return !!s.wires?.includes(h.id);
+    if (h.k === 'comment') return !!s.comments?.includes(h.id);
     return false;
   }
 
@@ -149,7 +154,8 @@ export class Tools {
       return;
     }
 
-    const h = this.hit(p);
+    const named = nameHit(e.target);
+    const h = named ?? this.hit(p);
     if (this.onPress?.(h, e)) return;
     if (h.k === 'port') return this.startWire(h.end, h.pos, e);
     if (h.k === 'wire' && (e.ctrlKey || e.altKey || e.metaKey)) {
@@ -171,7 +177,7 @@ export class Tools {
         ed.sim.setInput(pin, 1);
       }
     }
-    this.state = { k: 'press', hit: h, at: p, sx: e.clientX, sy: e.clientY, was, shift: e.shiftKey };
+    this.state = { k: 'press', hit: h, at: p, sx: e.clientX, sy: e.clientY, was, shift: e.shiftKey, name: !!named };
   }
 
   private move(e: PointerEvent): void {
@@ -261,6 +267,8 @@ export class Tools {
       return;
     }
     if (ed.selCount > 1) ed.select(selOf(h));
+    // A click on the name of what was already selected: type a new one.
+    if (st.was && st.name && ed.selCount <= 1) return this.rename(h);
     if (h.k === 'pin') {
       const pin = ed.doc.pins.find((q) => q.id === h.id);
       if (pin?.dir === 'inout') return ed.setPinValue(pin.id, nextDrive(pin));
@@ -278,14 +286,114 @@ export class Tools {
 
   private dbl(e: MouseEvent): void {
     const ed = this.ed;
+    const named = nameHit(e.target);
+    if (named) {
+      if (!ed.typingOnCanvas) this.rename(named);
+      return;
+    }
     const h = this.hit(this.world(e));
     if (h.k === 'label') return; // the second click of a double-click already jumped
+    if (h.k === 'comment') return this.editComment(h.id);
     if (h.k === 'part') {
       // A user chip opens for editing; anything else opens read-only, live (look inside).
       const part = ed.doc.parts.find((q) => q.id === h.id);
       if (part && 'chip' in part.ref) ed.editChip(part.ref.chip);
       else if (part) lookInside(ed, [part.id]);
     }
+  }
+
+  /** Right-click: cancel what is in progress, else the actions for what is under the cursor. */
+  private context(e: MouseEvent): void {
+    e.preventDefault();
+    if (this.state.k === 'wire' || this.state.k === 'place') return this.cancel();
+    if (this.state.k !== 'idle') return;
+    const ed = this.ed;
+    const p = this.world(e);
+    this.cursor = p;
+    const h = nameHit(e.target) ?? this.hit(p);
+    const target: Hit = h.k === 'port' ? hitOwner(h) : h;
+    if (target.k !== 'none' && !this.isSelected(target)) ed.select(selOf(target));
+    if (target.k === 'none' && ed.selCount) ed.select({});
+    this.onContext?.(e.clientX, e.clientY, p);
+  }
+
+  /** Rename the one selected object (F2). */
+  renameSel(): void {
+    const s = this.ed.sel;
+    if (this.ed.selCount !== 1) return;
+    const h: Hit = s.parts?.length ? { k: 'part', id: s.parts[0] } : s.pins?.length ? { k: 'pin', id: s.pins[0] }
+      : s.labels?.length ? { k: 'label', id: s.labels[0] } : s.comments?.length ? { k: 'comment', id: s.comments[0] } : { k: 'none' };
+    this.rename(h);
+  }
+
+  /**
+   * Type a new name where the object's name is drawn. A part edits what it shows: its caption if
+   * it has one, else its instance name (text that cannot be an instance name becomes a caption).
+   * A pin's rename keeps the chips that place this one wired; a comment edits its text.
+   */
+  rename(h: Hit): void {
+    const ed = this.ed;
+    const svg = ed.view.svg;
+    const el = (sel: string) => svg.querySelector(sel);
+    if (h.k === 'comment') return this.editComment(h.id);
+    if (h.k === 'part') {
+      const p = ed.doc.parts.find((q) => q.id === h.id);
+      const at = p && (el(`[data-part="${p.id}"] .inst-name`) ?? el(`[data-part="${p.id}"]`));
+      if (!p || !at) return;
+      ed.editInline(at, p.label ?? p.id, { label: 'Part name' }, (v) => {
+        if (v === null) return;
+        const r = namePart(ed.doc, p.id, v, ed.defOf);
+        if (r.reason) return void ed.toast(r.reason, 'err');
+        if (r.doc === ed.doc) return;
+        ed.edit(() => r.doc);
+        if (r.id !== p.id) ed.select({ parts: [r.id] });
+      });
+      return;
+    }
+    if (h.k === 'pin') {
+      const pin = ed.doc.pins.find((q) => q.id === h.id);
+      const at = pin && (el(`[data-pin-id="${pin.id}"] .pin-name`) ?? el(`[data-pin-id="${pin.id}"]`));
+      if (!pin || !at) return;
+      ed.editInline(at, pin.name, { label: 'Pin name' }, (v) => {
+        if (!v || v === pin.name) return;
+        const r = renamePin(ed.ws, ed.chipId, pin.id, v, ed.defOf);
+        if ('reason' in r) return void ed.toast(r.reason, 'err');
+        ed.editWs(() => r.ws);
+      });
+      return;
+    }
+    if (h.k === 'label') {
+      const l = ed.doc.labels.find((q) => q.id === h.id);
+      const at = l && (el(`[data-label="${l.id}"] .ed-ptr-name`) ?? el(`[data-label="${l.id}"]`));
+      if (!l || !at) return;
+      ed.editInline(at, l.name, { label: 'Pointer name', names: [...new Set(ed.doc.labels.map((q) => q.name))] }, (v) => {
+        if (!v || v === l.name) return;
+        const r = setLabel(ed.doc, l.id, { name: v }, ed.defOf);
+        if (r.reason) return void ed.toast(r.reason, 'err');
+        ed.edit(() => r.doc);
+      });
+    }
+  }
+
+  /** Place a palette item at a world point (the context menu's "Add … here"). */
+  placeAt(item: PaletteItem, p: Vec): void {
+    this.cancel();
+    this.place(item, p, false);
+  }
+
+  /** Edit a comment's text in place (blank text deletes it). */
+  editComment(id: string): void {
+    const ed = this.ed;
+    const c = ed.doc.comments?.find((q) => q.id === id);
+    if (!c) return;
+    ed.promptText(c.at, c.text, (text) => {
+      if (text === null) return;
+      if (!text) {
+        ed.edit((d) => deleteSel(d, { comments: [id] }));
+        return ed.select({});
+      }
+      ed.edit((d) => setComment(d, id, { text }).doc);
+    });
   }
 
   /** Select the next pointer with the same name and bring it into view. */
@@ -401,6 +509,14 @@ export class Tools {
     document.addEventListener('pointerup', upH);
   }
 
+  /** Arm the comment tool (key T). */
+  armComment(): void {
+    this.cancel();
+    this.state = { k: 'place', item: { id: 'comment', name: 'Comment', place: { comment: true } }, drag: false, sx: 0, sy: 0, key: 'wiring/comment' };
+    this.ed.palette.setArmed('wiring/comment');
+    if (this.cursor) this.ghost(this.state.item, this.cursor);
+  }
+
   /** Arm the pointer tool (key L). */
   armPointer(): void {
     this.cancel();
@@ -419,6 +535,12 @@ export class Tools {
       return v.showGhost(key, () => v.ghostOf(def, pl.part), partAnchor(def, p));
     }
     v.showGhost(key, () => {
+      if ('comment' in pl) {
+        const b = commentBox({ id: '', at: [0, 0], text: 'comment' });
+        return s('g', { class: 'ed-note' },
+          s('rect', { class: 'ed-note-bg', x: 0, y: 0, width: b.w, height: b.h, rx: 0.4 }),
+          s('text', { class: 'ed-note-text', x: 0.6, y: 1.3 }, 'comment'));
+      }
       if ('pin' in pl) {
         return drawPinGlyph({ name: pl.pin.dir === 'in' ? 'in' : 'out', dir: pl.pin.dir, width: pl.pin.width, pos: [0, 0], exit: pl.pin.dir === 'in' ? 'right' : 'left' }, false).g;
       }
@@ -462,6 +584,19 @@ export class Tools {
       return again();
     }
     const at = snapPt(p);
+    if ('comment' in pl) {
+      this.ghost(item, at);
+      ed.promptText(at, '', (text) => {
+        ed.view.showGhost(null);
+        if (!text) return;
+        const r = addComment(ed.doc, text, at);
+        if (r.id === undefined) return void ed.toast(r.reason, 'err');
+        const id = r.id;
+        ed.edit(() => r.doc);
+        ed.select({ comments: [id] });
+      });
+      return;
+    }
     const names = [...new Set(ed.doc.labels.map((l) => l.name))];
     this.ghost(item, at); // stays while the name is typed
     ed.promptName(at, lastName ?? names[names.length - 1] ?? 'net', names, (name) => {
@@ -518,6 +653,8 @@ export class Tools {
       case 'Delete': case 'Backspace': done(); this.del(); return;
       case 'f': case 'F': done(); this.flip(); return;
       case 'l': case 'L': done(); this.armPointer(); return;
+      case 't': case 'T': done(); this.armComment(); return;
+      case 'F2': done(); this.renameSel(); return;
       case '?': done(); ed.showHelp(); return;
       case 'ArrowLeft': case 'ArrowRight': case 'ArrowUp': case 'ArrowDown': {
         if (!ed.selCount) return;
@@ -529,24 +666,25 @@ export class Tools {
     }
   }
 
-  private del(): void {
+  del(): void {
     const ed = this.ed;
     if (!ed.selCount) return;
     ed.edit((doc) => deleteSel(doc, ed.sel));
     ed.select({});
   }
 
-  private copy(): void {
+  copy(): void {
     const ed = this.ed;
     if (!ed.selCount) return;
     clipboard = copySel(ed.doc, ed.sel);
   }
 
-  private paste(): void {
+  /** Paste at the cursor. */
+  paste(): void {
     const ed = this.ed;
     if (!clipboard) return;
     const c = clipboard;
-    const xs = [...c.parts.map((p) => p.at), ...c.pins.map((p) => p.at), ...c.labels.map((l) => l.at), ...c.wires.flatMap((w) => w.pts)];
+    const xs = [...c.parts.map((p) => p.at), ...c.pins.map((p) => p.at), ...c.labels.map((l) => l.at), ...(c.comments ?? []).map((q) => q.at), ...c.wires.flatMap((w) => w.pts)];
     if (!xs.length) return;
     const o: Vec = [Math.min(...xs.map((q) => q[0])), Math.min(...xs.map((q) => q[1]))];
     const want = this.cursor ? snapPt(this.cursor) : [o[0] + 2, o[1] + 2] as Vec;
@@ -555,7 +693,7 @@ export class Tools {
     ed.select(r.sel);
   }
 
-  private dup(): void {
+  dup(): void {
     const ed = this.ed;
     if (!ed.selCount) return;
     const r = duplicate(ed.doc, ed.sel, [2, 2]);
@@ -564,7 +702,7 @@ export class Tools {
   }
 
   /** Mirror the selection: parts flip, pins and pointers face the other way. */
-  private flip(): void {
+  flip(): void {
     const ed = this.ed;
     const sel = ed.sel;
     if (!ed.selCount) return;
@@ -585,6 +723,30 @@ export class Tools {
 
 let lastName: string | undefined;
 
+/** The clipboard holds something to paste. */
+export const canPaste = () => !!clipboard;
+
+/**
+ * The part or pin whose drawn name is under the pointer. Not a pointer's: its name fills its flag,
+ * whose click jumps to the next pointer of that name (F2 or the menu renames it).
+ */
+function nameHit(t: EventTarget | null): Hit | null {
+  const el = t as Element | null;
+  if (!el?.closest) return null;
+  const name = el.closest('.inst-name, .pin-name');
+  if (!name) return null;
+  const part = name.closest('[data-part]')?.getAttribute('data-part');
+  if (part) return { k: 'part', id: part };
+  const pin = name.closest('[data-pin-id]')?.getAttribute('data-pin-id');
+  return pin ? { k: 'pin', id: pin } : null;
+}
+
+/** The object a port belongs to (a right-click on a port acts on its part, pin or pointer). */
+function hitOwner(h: Extract<Hit, { k: 'port' }>): Hit {
+  const e = h.end;
+  return 'part' in e ? { k: 'part', id: e.part } : 'pin' in e ? { k: 'pin', id: e.pin } : 'label' in e ? { k: 'label', id: e.label } : { k: 'none' };
+}
+
 function uniqueLike(doc: ChipDoc, base: string): string {
   const taken = new Set([...doc.pins.map((p) => p.name), ...doc.parts.map((p) => p.id)]);
   if (!taken.has(base)) return base;
@@ -596,11 +758,12 @@ function selOf(h: Hit): Sel {
   if (h.k === 'pin') return { pins: [h.id] };
   if (h.k === 'label') return { labels: [h.id] };
   if (h.k === 'wire') return { wires: [h.id] };
+  if (h.k === 'comment') return { comments: [h.id] };
   return {};
 }
 
 function toggle(sel: Sel, h: Hit): Sel {
-  const key = h.k === 'part' ? 'parts' : h.k === 'pin' ? 'pins' : h.k === 'label' ? 'labels' : h.k === 'wire' ? 'wires' : null;
+  const key = h.k === 'part' ? 'parts' : h.k === 'pin' ? 'pins' : h.k === 'label' ? 'labels' : h.k === 'wire' ? 'wires' : h.k === 'comment' ? 'comments' : null;
   if (!key || !('id' in h)) return sel;
   const cur = sel[key] ?? [];
   return { ...sel, [key]: cur.includes(h.id) ? cur.filter((x) => x !== h.id) : [...cur, h.id] };
@@ -608,5 +771,8 @@ function toggle(sel: Sel, h: Hit): Sel {
 
 function union(a: Sel, b: Sel): Sel {
   const u = (x?: string[], y?: string[]) => [...new Set([...(x ?? []), ...(y ?? [])])];
-  return { parts: u(a.parts, b.parts), pins: u(a.pins, b.pins), wires: u(a.wires, b.wires), labels: u(a.labels, b.labels) };
+  const r: Sel = { parts: u(a.parts, b.parts), pins: u(a.pins, b.pins), wires: u(a.wires, b.wires), labels: u(a.labels, b.labels) };
+  const cs = u(a.comments, b.comments);
+  if (cs.length) r.comments = cs;
+  return r;
 }

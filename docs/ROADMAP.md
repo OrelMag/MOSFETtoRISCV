@@ -146,6 +146,9 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
     (the run bar's gate mode does it), the data-cache line view
   - ✅ One right-hand dock for the drawers (Inspector, CPU, challenges): tabs when several, the
     look-inside view beside it
+  - ✅ Rename in place (a click on a selected part's or pin's name, a double-click on it, or F2, pointers
+    included) and a right-click menu: the selection's actions with their shortcuts, or the canvas's own
+    (paste here, add a comment or pointer, select all, fit)
   - ✅ Analysis: probe mode and a timing panel (lanes follow the drawing across rebuilds, VCD),
     static timing of a chip (period, max clock, per-capture periods) with the critical path drawn
     on it, lint (nets drawn on one line, pointers without a twin, open inputs reading X);
@@ -261,15 +264,21 @@ chip presentation, capacity and the program-solving half of Turing Complete.
   keyboard part that latches the last key's code with a ready flag
 - ⏳ Pixel screen: a dot-matrix / RGB display driven by a frame-buffer RAM or row/column/colour
   pins (DLS dot display, TC screen); the 7-segment display already exists
-- ⏳ Console, LED bank and switch bank as parts, not only in the system CPU's I/O panel, so a hand-built
-  CPU can memory-map them
-- ⏳ Buzzer (DLS): a tone while its input is high, or a frequency from a bus
-- ⏳ Random source, cycle counter / time, and a halt part that stops Run (TC)
+- ✅ LED bank: a wide LED shows one LED per bit (most significant first, rows of 8)
+- ⏳ Console and switch bank as parts, not only in the system CPU's I/O panel, so a hand-built CPU can
+  memory-map them
+- ✅ Buzzer (DLS): A4 while its 1-bit input is high, or MIDI note v from a bus (Web Audio, square wave)
+- ✅ Halt part (TC): a zero-cost sink that stops Run (and the CPU panel's Run to halt) after the step where its input
+  reads 1 (any bit of a bus), from any depth of the hierarchy, so a hand-built CPU can halt itself; level sensitive
+  (Run advances one step at a time while it stays 1; Step ignores it)
+- ✅ Random source and cycle counter (TC), as library parts that open down to gates: an XNOR LFSR that runs
+  from the power-on zero with no seed (4 / 8 / 16 bits) and a counter with its enable tied to 1 (8 / 16 / 32)
 
 **Chips and canvas**
 - ⏳ Chip appearance: resizable box, pins on any side and in any order, displays inside a chip
   shown on the packaged chip's face (DLS)
-- ⏳ Free-text comments on the canvas, kept out of the compiled netlist (TC)
+- ✅ Free-text comments on the canvas (TC): T or the Wiring palette, multi-line, double-click to edit; selected, moved,
+  copied and deleted with the rest, saved and shared, never compiled (writing one recompiles nothing)
 - ⏳ Library organization: collections / folders of chips, a starred bar for frequent parts,
   several projects (separate workspaces) (DLS)
 
@@ -299,10 +308,13 @@ histograms (static site; share links take their place).
 - ✅ Download any component's hierarchy as SystemVerilog (exact structure or synthesizable),
   with a self-checking testbench; verified through Yosys
 - ✅ Click a program line: the hardware it uses (and its pipeline stage), or its word in the ROM
-- Glossary with hover definitions; search / command palette (`Ctrl+K`)
-- Progress tracking and unlocks (local storage); "reset progress"
-- Keyboard navigation; reduced-motion (the signal fronts already respect it)
-- Export schematic as SVG/PNG
+- ✅ Search palette (`Ctrl/⌘ K` or `/`) over every chapter and step; chapter menu on the top bar
+- ⏳ Glossary with hover definitions
+- ✅ Progress tracking (visited steps, solved challenges, in local storage) and "Reset progress"; unlocks are not
+  planned (challenges stay optional)
+- ✅ Reduced motion: CSS animations and transitions off, slow-motion fronts drawn as plain changes
+- ⏳ Keyboard navigation beyond the shortcuts (search palette, sandbox keys)
+- ✅ Export the sandbox canvas as SVG / PNG (current theme); ⏳ the same for chapter scenes and the workbench
 - VHDL view of every component
 - Performance budget: 60 fps rendering of ≤ 5 000 visible elements; ≥ 100 CPU cycles/s at gate level
 - i18n-ready strings
