@@ -471,11 +471,12 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .inst.openable { cursor: zoom-in; }
 .inst.openable:hover .hit { fill: color-mix(in srgb, var(--accent) 8%, transparent); stroke: color-mix(in srgb, var(--accent) 40%, transparent); stroke-width: 0.08; }
 .inst.selected .hit { fill: color-mix(in srgb, var(--sel) 12%, transparent); stroke: var(--sel); stroke-width: 0.12; }
-.inst.hl .hit { vector-effect: non-scaling-stroke; stroke: var(--hl); stroke-width: 2.5px; fill: color-mix(in srgb, var(--hl) 10%, transparent); animation: hl 1.4s ease-in-out infinite; }
+/* Thin enough to sit beside the module colours; the tint and a gentle pulse carry the highlight. */
+.inst.hl .hit { vector-effect: non-scaling-stroke; stroke: var(--hl); stroke-width: 1.25px; fill: color-mix(in srgb, var(--hl) 12%, transparent); animation: hl 1.4s ease-in-out infinite; }
 svg.schematic.focus .inst:not(.hl):not(.plumbing) { opacity: 0.28; }
 svg.schematic.focus .faded { opacity: 0.18; }
 svg.schematic.focus .inst.hl .hit { animation: none; fill: color-mix(in srgb, var(--hl) 14%, transparent); }
-@keyframes hl { 50% { stroke-opacity: 0.25; } }
+@keyframes hl { 50% { stroke-opacity: 0.45; } }
 .open-badge { opacity: 0; transition: opacity 0.15s; cursor: pointer; }
 .open-badge circle { fill: var(--accent); }
 .open-badge .icon { color: #fff; stroke-width: 2.6; }
