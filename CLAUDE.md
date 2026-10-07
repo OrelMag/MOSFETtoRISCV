@@ -41,7 +41,7 @@ on every push to `main`.
 
 - Vite + TypeScript (strict, `verbatimModuleSyntax`: use `import type` for types). No UI
   framework: plain DOM + SVG with small helpers in `src/ui/dom.ts`. Keep the bundle small.
-- Hash routing (`#/c/<chapter>/<step>`, `#/workbench/<componentId>`, `#/sandbox/<chipId>`,
+- Hash routing (`#/c/<chapter>/<step>`, `#/workbench/<componentId>`, `#/sandbox/<chipId>`, `#/campaign[/n/<node> | /intro | /codex[/<id>]]`,
   `#/sandbox/s/<payload>` for a share link) so the site works on
   any static host or sub-path.
 - Theme: CSS custom properties in `src/styles/`; `data-theme="light|dark"` on `<html>`, or
@@ -180,7 +180,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
   challenges.ts  build challenges: BuildChallenge (ports, table / sequence check, allowed parts, par),
                  startChallenge (u_ch_<id> with the pins placed), checkChallenge (BitSim / GateSim / SwitchSim;
-                 failing vectors, restriction violations on the compiled hierarchy, score), importAnswer,
+                 failing vectors, restriction violations on the compiled hierarchy, score incl. static-timing
+                 period for clocked chips), Allowed also `{ lib }` (the campaign: NAND + listed parts), importAnswer,
                  solveChallenge; challengeset.ts: CHALLENGES and their reference answers (chip documents
                  drawn with a small kit, each answer built from the answers of the rungs below)
   remix.ts       "Open in Sandbox": remixDef / remixIntoStorage (a shown def → a new chip; parts a reload could
@@ -230,6 +231,22 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  (widgets/pipegrid), the system CPU's I/O, registers, fcsr, memory, retired; Run to halt,
                  Step, Slow (instructions per second), Reset, Edit program; the multi-core view),
                  opened by itself for a complete CPU; CPU props section
+src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/CAMPAIGN.md). DOM-free:
+  types.ts       CampaignNode (act, kind lesson / drill / build / program / core, requires, why, tips, codex,
+                 unlocks: library ids or `prefix*` later levels may place, anatomy blocks, base challenge, par, soon)
+  nodes.ts       ACTS and NODES: the tree, act 0 (transistors) to act 8 (side quests)
+  graph.ts       ancestors, topo, ruleFor(id) (NAND + unlocks of the requirements' closure: fixed per level),
+                 statusOf (locked / available / started / solved / skipped; Unlock all), nextAvailable
+  levels.ts      levelChallenge(node): the base BuildChallenge with the campaign rule and par, id cp_<node>,
+                 chip u_ch_cp_<node>; nodeOfChip
+  grade.ts       measured(score), stars (★ pass, ★★ ≤ 1.5 × par, ★★★ ≤ par on every graded metric), better
+  progress.ts    Progress (own storage key, injected KV): status, best, stars, tips, seen; codexUnlocked;
+                 exportCampaign / importCampaign (progress + level chips' closure, merged, never overwriting)
+  codex.ts       CODEX entries (component / law / tool / trick / concept); lessons.ts lesson HTML
+  anatomy.ts     the target CPU as blocks (intro diagram), blockNodes; layout.ts the map's placement
+               DOM: ui/svgs.ts (map and anatomy SVG); the page is ui/pages/campaign.ts. Levels are played in the
+               sandbox: challengeui.ts recognizes u_ch_cp_* chips (breadcrumb, tips, stars, Next), records passes in
+               the campaign's progress, and fills the palette's "Unlocked parts" group from the level's rule
 src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-free: every chapter / step as a
                searchable entry, searchNav ranking), quicknav.ts (chapter menu on the top bar and the chapter title,
                Ctrl/⌘ K or `/` search palette; `/` is left to the sandbox there)

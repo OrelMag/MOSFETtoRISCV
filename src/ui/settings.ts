@@ -102,6 +102,10 @@ export const settings = {
     state.visited = {};
     state.solved = {};
     save();
+    // The campaign keeps its own key (campaign/progress.ts CAMPAIGN_KEY); its page reloads it.
+    try {
+      localStorage.removeItem('mosfet2riscv:campaign:v1');
+    } catch { /* ignore */ }
     listeners.forEach((f) => f());
   },
 };

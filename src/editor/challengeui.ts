@@ -5,23 +5,68 @@
 // (the chip's drawing replaced by the answer, one undo step). A challenge restricted to NANDs or
 // transistors switches the palette to purist mode while its chip is open. Progress lives in the
 // site's settings (sandbox:<id>); nothing else is stored beyond the workspace.
+//
+// Campaign levels (chips u_ch_cp_<node>) use the same strip: a breadcrumb back to the campaign,
+// stars against par, tips one at a time, the next level; a pass is recorded in the campaign's
+// progress. Their rule (NAND + the parts unlocked by the levels below) fills the palette's
+// "Unlocked parts" group.
 
 import '../styles/sbchallenges.css';
+import { measured } from '../campaign/grade';
+import { nextAvailable } from '../campaign/graph';
+import { levelChallenge, nodeOfChip } from '../campaign/levels';
+import { ACTS } from '../campaign/nodes';
+import { progress } from '../campaign/progress';
+import type { CampaignNode } from '../campaign/types';
+import { libraryItems } from '../lib/catalog';
+import { resolveComponent } from '../lib/resolve';
 import { h, icon } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { CHALLENGES } from './challengeset';
 import {
-  type BuildChallenge, challengeChipId, challengeOf, type CheckResult, checkChallenge, importAnswer, LEVELS, solveChallenge,
-  solvedKey, startChallenge,
+  type Allowed, type BuildChallenge, challengeChipId, challengeOf, type CheckResult, checkChallenge, importAnswer, LEVELS, libAllowed, type LibRule,
+  ruleKind, solveChallenge, solvedKey, startChallenge,
 } from './challenges';
 import { dockPane, paneShown, showPane, undockPane } from './dock';
 import { type Editor, registerToolbarAction } from './editor';
+import { type PaletteItem, registerPaletteGroup } from './palette';
 
-const RULE: Record<BuildChallenge['allowed'], [string, string]> = {
+const RULE: Record<'transistors' | 'nand' | 'any', [string, string]> = {
   transistors: ['transistors only', 'Transistors, rails, wiring and your own chips built from them'],
   nand: ['NAND only', 'NAND gates (or below), wiring, constants and your own chips built from them'],
   any: ['any part', 'The whole library is allowed'],
 };
+
+/** Badge text and tooltip of a rule. */
+function rule(a: Allowed): [string, string] {
+  if (typeof a === 'string') return RULE[a];
+  return [a.label ?? 'unlocked parts', `NAND, wiring, constants, your own chips, and the parts unlocked by the levels this one builds on: ${a.lib.filter((x) => x !== 'nand').join(', ') || 'none yet'}`];
+}
+
+// ---- the "Unlocked parts" palette group ----------------------------------------------------------
+
+/** The campaign rule of the chip being edited (set by the strip), listed by the palette group. */
+let activeRule: LibRule | null = null;
+
+function unlockedItems(r: LibRule): PaletteItem[] {
+  const out = new Map<string, PaletteItem>();
+  for (const c of libraryItems()) {
+    for (const it of c.items) {
+      if (it.id !== 'nand' && libAllowed(r, it.id)) out.set(it.id, { id: it.id, name: it.name, section: c.title, place: { part: { lib: it.id } } });
+    }
+  }
+  for (const id of r.lib) {
+    if (id.endsWith('*') || id === 'nand' || out.has(id)) continue;
+    const d = resolveComponent(id);
+    if (d) out.set(id, { id, name: d.name, place: { part: { lib: id } } });
+  }
+  return [...out.values()];
+}
+
+registerPaletteGroup({
+  id: 'unlocked', title: 'Unlocked parts', order: 65, purist: true,
+  items: () => (activeRule ? unlockedItems(activeRule) : []),
+});
 
 const uis = new WeakMap<Editor, ChallengeUi>();
 
@@ -54,14 +99,22 @@ class ChallengeUi {
   }
 
   destroy(): void {
+    activeRule = null;
     this.unsub();
     this.panel.remove();
     this.closeList();
     uis.delete(this.ed);
   }
 
+  /** The campaign level of the open chip, if it is one. */
+  private get level(): CampaignNode | undefined {
+    const n = nodeOfChip(this.ed.chipId);
+    return n && levelChallenge(n) ? n : undefined;
+  }
+
   private get challenge(): BuildChallenge | undefined {
-    return challengeOf(this.ed.chipId, CHALLENGES);
+    const n = this.level;
+    return n ? levelChallenge(n) : challengeOf(this.ed.chipId, CHALLENGES);
   }
 
   private sync(): void {
@@ -70,11 +123,17 @@ class ChallengeUi {
     if (ed.chipId !== this.lastChip) {
       this.lastChip = ed.chipId;
       this.confirming = false;
+      const lib = ch && typeof ch.allowed === 'object' ? ch.allowed : null;
+      if (lib !== activeRule) {
+        activeRule = lib;
+        ed.refresh();
+      }
+      if (this.level) progress().open(this.level.id, true);
       const restricted = !!ch && ch.allowed !== 'any';
       if (restricted && !ed.ws.purist) {
         this.forcedPurist = true;
         ed.volatile({ ...ed.ws, purist: true });
-        ed.toast(`Palette limited to what this challenge allows (${RULE[ch.allowed][0]})`);
+        ed.toast(`Palette limited to what this ${this.level ? 'level' : 'challenge'} allows (${rule(ch.allowed)[0]})`);
         return; // volatile() refreshed the editor, which called sync() again
       }
       if (!restricted && this.forcedPurist) {
@@ -93,13 +152,15 @@ class ChallengeUi {
     const ed = this.ed;
     const res = ch ? this.results.get(ed.chipId) : undefined;
     const stale = !!res && res.conn !== ed.compiled?.connKey;
-    const key = JSON.stringify([ed.chipId, !!ch, this.collapsed, this.confirming, this.version, stale, ch && settings.isSolved(solvedKey(ch))]);
+    const lv = this.level;
+    const lp = lv ? progress().get(lv.id) : undefined;
+    const key = JSON.stringify([ed.chipId, !!ch, this.collapsed, this.confirming, this.version, stale, ch && settings.isSolved(solvedKey(ch)), lp]);
     if (key === this.key) return;
     this.key = key;
     this.panel.hidden = !ch;
     this.panel.replaceChildren();
     if (!ch) return;
-    const solved = settings.isSolved(solvedKey(ch));
+    const solved = lv ? lp?.status === 'solved' : settings.isSolved(solvedKey(ch));
     const pinList = (dir: 'in' | 'out') => ch.ports.filter((p) => p.dir === dir).map((p) => h('code', null, p.width > 1 ? `${p.name}[${p.width - 1}:0]` : p.name));
     const actions = this.confirming
       ? [h('span', { class: 'sb-chal-ask' }, 'Replace your circuit with the answer?'),
@@ -112,25 +173,47 @@ class ChallengeUi {
       h('header', { class: 'sb-chal-head' },
         h('button', { class: `btn ghost icon-only sb-chal-fold${this.collapsed ? '' : ' open'}`, title: this.collapsed ? 'Show the brief' : 'Hide the brief', 'aria-expanded': String(!this.collapsed),
           onclick: () => { this.collapsed = !this.collapsed; this.render(); } }, icon('chevR', 14)),
-        h('span', { class: `sb-chal-flag${solved ? ' solved' : ''}`, title: solved ? 'Solved' : 'Challenge' }, icon(solved ? 'check' : 'flag', 13), LEVELS.find((l) => l.id === ch.level)?.title ?? ch.level),
+        lv
+          ? h('a', { class: `sb-chal-flag${solved ? ' solved' : ''}`, href: `#/campaign/n/${lv.id}`, title: `Back to the campaign: ${ACTS[lv.act]?.title ?? ''}` }, icon(solved ? 'check' : 'flag', 13), `Campaign · Act ${lv.act}`)
+          : h('span', { class: `sb-chal-flag${solved ? ' solved' : ''}`, title: solved ? 'Solved' : 'Challenge' }, icon(solved ? 'check' : 'flag', 13), LEVELS.find((l) => l.id === ch.level)?.title ?? ch.level),
         h('h3', null, ch.title),
+        lv && lp?.stars ? h('span', { class: 'sb-chal-stars', title: `Best: ${lp.stars} of 3 stars` }, '★'.repeat(lp.stars) + '☆'.repeat(3 - lp.stars)) : null,
         h('span', { class: 'sb-chal-pins', title: 'The pins to build' }, ...pinList('in'), h('span', { class: 'arrow' }, '→'), ...pinList('out')),
-        h('span', { class: `sb-chal-rule ${ch.allowed}`, title: RULE[ch.allowed][1] }, RULE[ch.allowed][0]),
+        h('span', { class: `sb-chal-rule ${ruleKind(ch.allowed)}`, title: rule(ch.allowed)[1] }, rule(ch.allowed)[0]),
         // One group: when the strip is narrow it wraps as a whole, to the right of the next row.
         h('span', { class: 'sb-chal-actions' }, ...actions,
-          h('button', { class: 'btn ghost icon-only', title: 'All challenges', 'aria-label': 'All challenges', onclick: () => this.toggleList() }, icon('menu', 15)))),
+          lv ? null : h('button', { class: 'btn ghost icon-only', title: 'All challenges', 'aria-label': 'All challenges', onclick: () => this.toggleList() }, icon('menu', 15)))),
     );
     if (this.collapsed) return;
     const brief = h('p', { class: 'sb-chal-brief' });
     brief.innerHTML = ch.brief;
     const body = h('div', { class: 'sb-chal-body' }, brief);
+    if (lv) body.append(this.levelEl(lv));
     if (res) body.append(this.resultEl(ch, res.r, stale));
     this.panel.append(body);
   }
 
+  /** A campaign level's tips (one at a time) and its way back / onward. */
+  private levelEl(n: CampaignNode): HTMLElement {
+    const p = progress();
+    const shown = Math.min(p.get(n.id)?.tips ?? 0, n.tips.length);
+    const tips = h('ol', { class: 'sb-chal-tips' }, n.tips.slice(0, shown).map((t) => {
+      const li = h('li');
+      li.innerHTML = t;
+      return li;
+    }));
+    const next = p.get(n.id)?.status === 'solved' ? nextAvailable(p.view, p.unlockAll, n.id) : undefined;
+    return h('div', { class: 'sb-chal-level' },
+      shown ? tips : null,
+      h('div', { class: 'sb-chal-links' },
+        shown < n.tips.length ? h('button', { class: 'btn sm ghost', 'data-chal': 'tip', onclick: () => { p.revealTip(n.id, n.tips.length); this.version++; this.render(); } }, icon('info', 13), shown ? 'Another tip' : 'A tip') : null,
+        h('a', { class: 'btn sm ghost', href: `#/campaign/n/${n.id}` }, icon('chevL', 13), 'Campaign'),
+        next ? h('a', { class: 'btn sm', href: `#/campaign/n/${next.id}`, title: next.title }, `Next: ${next.title}`, icon('chevR', 13)) : null));
+  }
+
   private resultEl(ch: BuildChallenge, r: CheckResult, stale: boolean): HTMLElement {
     const el = h('div', { class: `sb-chal-result ${r.ok ? 'ok' : 'bad'}${stale ? ' stale' : ''}`, role: 'status' });
-    const what = ch.check.kind === 'table' ? `${r.tested} input combination${r.tested === 1 ? '' : 's'}` : `${r.tested} steps`;
+    const what = ch.check.kind === 'table' ? `${r.tested} input combination${r.tested === 1 ? '' : 's'}` : ch.check.kind === 'custom' ? `${r.tested} test program${r.tested === 1 ? '' : 's'}` : `${r.tested} steps`;
     el.append(h('div', { class: 'sb-chal-verdict' },
       r.ok ? h('b', null, icon('check', 14), 'Passes') : h('b', null, icon('close', 14), 'Not yet'),
       h('span', null, r.ok ? `all ${what} correct` : r.tested ? `checked ${what}` : 'not simulated'),
@@ -163,9 +246,13 @@ class ChallengeUi {
       return h('span', { class: cls, title: cls === 'par' ? 'At or under par' : cls ? 'Over par (allowed: par is a target)' : '' },
         before ? `${unit} ` : null, h('b', null, v.toLocaleString()), before ? null : ` ${unit}`, par !== undefined ? h('small', null, ` par ${par}`) : null);
     };
+    const period = r.score.period;
     const parts = ch.allowed === 'transistors'
       ? [item(r.score.transistors, 'transistors', lim.maxTransistors)]
-      : [item(r.score.nand, 'NAND', lim.maxNand), r.score.depth !== null ? item(r.score.depth, 'depth', lim.maxDepth, true) : null, h('span', null, h('b', null, r.score.transistors.toLocaleString()), ' transistors')];
+      : [item(r.score.nand, 'NAND', lim.maxNand), r.score.depth !== null ? item(r.score.depth, 'depth', lim.maxDepth, true) : null,
+        period !== undefined && period !== null ? item(period, 'period', lim.maxPeriod, true) : null,
+        r.score.cycles !== undefined ? item(r.score.cycles, 'cycles', lim.maxCycles) : null,
+        h('span', null, h('b', null, r.score.transistors.toLocaleString()), ' transistors')];
     return h('p', { class: 'sb-chal-score' }, ...parts);
   }
 
@@ -177,7 +264,12 @@ class ChallengeUi {
     this.results.set(ed.chipId, { r, conn: ed.compiled?.connKey ?? '' });
     this.version++;
     this.collapsed = false;
-    if (r.ok) {
+    const lv = this.level;
+    if (r.ok && lv) {
+      const g = progress().solve(lv.id, measured(r.score));
+      const st = '★'.repeat(g.stars) + '☆'.repeat(3 - g.stars);
+      ed.toast(`${g.first ? 'Solved' : 'Passes'}: ${ch.title} ${st}${g.best && !g.first ? ' (new best)' : ''}`);
+    } else if (r.ok) {
       const first = !settings.isSolved(solvedKey(ch));
       settings.solve(solvedKey(ch));
       ed.toast(first ? `Solved: ${ch.title}` : `Still passes: ${ch.title}`);
@@ -252,8 +344,8 @@ class ChallengeUi {
       const cs = CHALLENGES.filter((c) => c.level === l.id);
       if (!cs.length) continue;
       // One rule for the whole level is said once, in its heading.
-      const rule = cs.every((c) => c.allowed === cs[0].allowed) ? cs[0].allowed : null;
-      body.append(h('h4', null, h('span', null, l.title), rule ? h('small', { class: `sb-chal-rule ${rule}`, title: RULE[rule][1] }, RULE[rule][0]) : null,
+      const one = cs.every((c) => c.allowed === cs[0].allowed) ? cs[0].allowed : null;
+      body.append(h('h4', null, h('span', null, l.title), one ? h('small', { class: `sb-chal-rule ${ruleKind(one)}`, title: rule(one)[1] }, rule(one)[0]) : null,
         h('small', { class: 'n' }, `${cs.filter((c) => settings.isSolved(solvedKey(c))).length}/${cs.length}`)));
       for (const c of cs) {
         const solved = settings.isSolved(solvedKey(c));
@@ -265,7 +357,7 @@ class ChallengeUi {
         },
         h('span', { class: 'tick', 'aria-label': solved ? 'solved' : started ? 'started' : 'not started' }, solved ? icon('check', 13) : h('i', { class: started ? 'started' : '' })),
         h('span', { class: 'name' }, c.title),
-        rule ? null : h('small', { class: `sb-chal-rule ${c.allowed}` }, RULE[c.allowed][0]),
+        one ? null : h('small', { class: `sb-chal-rule ${ruleKind(c.allowed)}` }, rule(c.allowed)[0]),
         h('span', { class: 'go' }, cur ? 'open' : started ? 'Open' : 'Start')));
       }
     }

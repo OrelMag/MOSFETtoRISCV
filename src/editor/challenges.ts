@@ -8,8 +8,9 @@ import { BitSim } from '../sim/bitsim';
 import { flatten, type FlatDesign } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import type { Sim } from '../sim/sim';
-import { logicDepth, stats } from '../sim/stats';
+import { hasFeedback, logicDepth, stats } from '../sim/stats';
 import { SwitchSim } from '../sim/switchsim';
+import { analyzeTiming } from '../sim/timing';
 import { B0, B1, BZ, type Bit, type ComponentDef, isSwitchPrim, netlistOf } from '../sim/types';
 import type { Compiled } from './compile';
 import { type ChipDoc, emptyChip, type PartDoc, type PinDoc, type Workspace } from './model';
@@ -42,23 +43,61 @@ export interface SeqStep {
 }
 
 export type ChallengeCheck =
-  /** Combinational: spec(inputs in port order) → outputs in port order, every input combination. */
-  | { kind: 'table'; spec: (ins: number[]) => number[] }
+  /**
+   * Combinational: spec(inputs in port order) → outputs in port order, every input combination (random
+   * ones above 16 input bits, after the directed `vectors` if any: edge cases a random draw would miss).
+   * `care`: per output, the bits that must match (absent: all); the others are don't-cares.
+   */
+  | { kind: 'table'; spec: (ins: number[]) => number[]; vectors?: () => number[][]; care?: (ins: number[]) => number[] }
   /** Sequential: inputs start at `init` (others 0), power on, then the steps in order. */
-  | { kind: 'sequence'; init?: Record<string, number>; steps: SeqStep[] };
+  | { kind: 'sequence'; init?: Record<string, number>; steps: SeqStep[] }
+  /**
+   * A test bench of its own (the campaign's CPU cores: programs run against a golden model). It gets
+   * the compiled circuit and reports like the built-in kinds; `describe` names what it runs.
+   */
+  | { kind: 'custom'; describe: string; run: (def: ComponentDef, mode: 'gate' | 'switch') => CustomRun };
+
+/** What a custom test bench found: failures (empty: pass), how much it ran, extra metrics. */
+export interface CustomRun {
+  failures: string[];
+  tested: number;
+  /** Clock cycles over every program (a CPU core). */
+  cycles?: number;
+  /** The clock period, when the bench measures it itself (a core with its memories). */
+  period?: number;
+}
 
 /**
  * What the chip may be built from. 'transistors': MOSFETs and rails; 'nand': NAND gates (and
  * anything below them); wiring, constants, displays and the learner's own chips (built from the
- * same) are always allowed. 'any': the whole library.
+ * same) are always allowed. 'any': the whole library. `{ lib }` (the campaign): NAND plus the
+ * library parts listed (exact ids, or a prefix ending in `*`).
  */
-export type Allowed = 'transistors' | 'nand' | 'any';
+export type Allowed = 'transistors' | 'nand' | 'any' | LibRule;
+
+export interface LibRule {
+  lib: readonly string[];
+  /** Short text for the rule badge ('NAND + 6 unlocked parts'). */
+  label?: string;
+}
+
+/** The rule's kind, for badges and CSS ('lib' for a campaign rule). */
+export const ruleKind = (a: Allowed): 'transistors' | 'nand' | 'any' | 'lib' => (typeof a === 'string' ? a : 'lib');
+
+/** Does a library id match a rule's list (exact, or a `prefix*`)? */
+export function libAllowed(rule: LibRule, id: string): boolean {
+  return rule.lib.some((g) => (g.endsWith('*') ? id.startsWith(g.slice(0, -1)) : g === id));
+}
 
 export interface Limits {
   maxNand?: number;
   maxTransistors?: number;
   /** Longest input → output path, in NAND delays (combinational chips). */
   maxDepth?: number;
+  /** Clock period from static timing, in NAND delays (clocked chips). */
+  maxPeriod?: number;
+  /** Clock cycles of a custom bench (CPU cores). */
+  maxCycles?: number;
 }
 
 export interface BuildChallenge {
@@ -83,6 +122,10 @@ export interface Score {
   transistors: number;
   /** null: sequential (feedback) or switch level. */
   depth: number | null;
+  /** Clock period (static timing, NAND delays) of a chip with flip-flops; null otherwise. */
+  period?: number | null;
+  /** Clock cycles a custom bench counted (CPU cores). */
+  cycles?: number;
 }
 
 export interface CheckResult {
@@ -141,7 +184,7 @@ const RANDOM_VECTORS = 4096;
 const ZERO: Score = { nand: 0, transistors: 0, depth: null };
 
 /** What a simulation run found. */
-interface Run { failures: string[]; tested: number; vector?: Record<string, number> }
+interface Run { failures: string[]; tested: number; vector?: Record<string, number>; cycles?: number; period?: number }
 
 /** Check a compiled chip against a challenge. Never throws. */
 export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefined): CheckResult {
@@ -152,19 +195,22 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
   }
   try {
     const def = compiled.def;
-    res.score = score(def, compiled.mode);
+    res.score = score(def, compiled.mode, ch.check.kind !== 'table');
     res.restrictionViolations = violations(def, ch.allowed);
     const pinProblems = checkPins(def, ch.ports);
     const errors = compiled.diags.filter((d) => d.level === 'error').map((d) => `error: ${d.msg}`);
     res.failures.push(...pinProblems, ...errors.slice(0, 3));
     if (errors.length > 3) res.failures.push(`… and ${errors.length - 3} more errors`);
     if (!res.failures.length) {
-      const r: Run = ch.check.kind === 'table'
-        ? runTable(def, compiled.mode, ch.ports, ch.check.spec)
-        : runSequence(def, compiled.mode, ch.ports, ch.check);
+      const c = ch.check;
+      const r: Run = c.kind === 'table'
+        ? runTable(def, compiled.mode, ch.ports, c.spec, c.vectors?.(), c.care)
+        : c.kind === 'sequence' ? runSequence(def, compiled.mode, ch.ports, c) : c.run(def, compiled.mode);
       res.failures.push(...r.failures);
       res.tested = r.tested;
       if (r.vector) res.vector = r.vector;
+      if (r.cycles !== undefined) res.score.cycles = r.cycles;
+      if (r.period !== undefined) res.score.period = r.period;
     }
   } catch (e) {
     res.failures.push(`cannot simulate: ${e instanceof Error ? e.message : String(e)}`);
@@ -173,14 +219,20 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
   return res;
 }
 
-function score(def: ComponentDef, mode: 'gate' | 'switch'): Score {
+function score(def: ComponentDef, mode: 'gate' | 'switch', clocked: boolean): Score {
   let s = { nands: 0, transistors: 0 };
   try { s = stats(def); } catch { /* a broken part: no score */ }
   let depth: number | null = null;
+  let period: number | null = null;
   if (mode === 'gate') {
     try { depth = logicDepth(def); } catch { /* ditto */ }
+    if (clocked && depth === null) {
+      try {
+        if (hasFeedback(def)) period = analyzeTiming(flatten(def, { mode: 'gate' }))?.period ?? null;
+      } catch { /* no timing */ }
+    }
   }
-  return { nand: s.nands, transistors: s.transistors, depth };
+  return { nand: s.nands, transistors: s.transistors, depth, period };
 }
 
 function checkPins(def: ComponentDef, want: PinSpec[]): string[] {
@@ -201,9 +253,12 @@ function checkPins(def: ComponentDef, want: PinSpec[]): string[] {
 /** Library parts allowed under every restriction: they cost nothing or are below the NAND. */
 function allowedLeaf(d: ComponentDef, allowed: Allowed): string | null {
   if (d.prim === 'alias') return null; // splitters, mergers, displays
-  if (isSwitchPrim(d)) return null; // transistors, rails, resistors, capacitors
-  if (d.id === 'tie0' || d.id === 'tie1' || d.id.startsWith('sb_const')) return null;
+  const lib = typeof allowed === 'object' ? allowed : null;
+  if (isSwitchPrim(d)) return null; // transistors, rails, resistors, capacitors (your own NAND stays usable)
+  if (d.id === 'tie0' || d.id === 'tie1' || d.id.startsWith('sb_const') || /^const\d+_[0-9a-f]+$/.test(d.id)) return null;
   if (d.prim === 'nand') return allowed === 'transistors' ? 'a library NAND: build it from transistors' : null;
+  // Wiring and constants (zero-extension, fan-out, bit reversal) cost nothing.
+  if (lib) return libAllowed(lib, d.id) || d.category === 'plumbing' ? null : `library part ${d.name}: not unlocked by the levels this one builds on`;
   return `library part ${d.name}: ${allowed === 'nand' ? 'only NAND gates (and your chips built from them)' : 'only transistors (and your chips built from them)'}`;
 }
 
@@ -279,18 +334,20 @@ function vectors(ps: PinSpec[]): number[][] {
   return Array.from({ length: RANDOM_VECTORS }, () => ps.map((p) => rnd(p.width)));
 }
 
-function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], spec: (ins: number[]) => number[]): Run {
+function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], spec: (ins: number[]) => number[], directed: number[][] = [],
+  care?: (ins: number[]) => number[]): Run {
   const I = ins(ports), O = outs(ports);
-  const vs = vectors(I);
+  const vs = [...directed, ...vectors(I)];
   const { sim, design } = simFor(def, mode);
   const failures: string[] = [];
   let bad = 0;
   let vector: Record<string, number> | undefined;
   const compare = (v: number[], got: Bit[][]) => {
     const want = spec(v);
+    const mask = care?.(v);
     const wrong = O.map((p, k) => {
       const g = got[k];
-      const ok = g.every((b, i) => b === (Math.floor(want[k] / 2 ** i) % 2 ? B1 : B0));
+      const ok = g.every((b, i) => (mask && !(Math.floor(mask[k] / 2 ** i) % 2)) || b === (Math.floor(want[k] / 2 ** i) % 2 ? B1 : B0));
       return ok ? null : `${p.name}=${fmtBits(g)}`;
     });
     if (wrong.every((w) => w === null)) return;
