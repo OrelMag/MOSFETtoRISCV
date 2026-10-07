@@ -219,7 +219,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  (widgets/pipegrid), the system CPU's I/O, registers, fcsr, memory, retired; Run to halt,
                  Step, Slow (instructions per second), Reset, Edit program; the multi-core view),
                  opened by itself for a complete CPU; CPU props section
-src/ui/        app shell, router, theme, settings, progress
+src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-free: every chapter / step as a
+               searchable entry, searchNav ranking), quicknav.ts (chapter menu on the top bar and the chapter title,
+               Ctrl/⌘ K or `/` search palette; `/` is left to the sandbox there)
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
 ```
