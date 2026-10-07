@@ -152,7 +152,7 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                DOM-free (tested in Node):
   model.ts       Workspace / ChipDoc (pins, parts, wires = interior corners, pointers = named net labels)
   compile.ts     compileChip(doc) → ComponentDef + diags, netOfWire / netOfEnd / netOfLabel, connKey
-  parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays, ROM, RAM
+  parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays (and the halt part), ROM, RAM
   library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip
   ops.ts         pure edits (add / move / delete / flip / set*, copy / paste); wires stay orthogonal
   history.ts     History<T>: undo / redo, transactions (a drag = one step), replace (not undone)
@@ -170,7 +170,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run;
-                 edgeHooks (before / after every rising edge, gate mode: after once quiet), runCycles
+                 edgeHooks (before / after every rising edge, gate mode: after once quiet), runCycles;
+                 halt parts at any depth stop Run / runCycles after the step where they read 1
   palette.ts     registerPaletteGroup + the palette panel (purist filter)
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
   challenges.ts  build challenges: BuildChallenge (ports, table / sequence check, allowed parts, par),

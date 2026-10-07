@@ -114,22 +114,28 @@ function buildConstant(w: number, v: number): ComponentDef {
 
 // ---- displays ------------------------------------------------------------------------------
 
-const DISPLAY_LABEL: Record<DisplayKind, string> = { led: 'LED', seg7: '7-seg', hex: 'HEX', value: 'value' };
+const DISPLAY_LABEL: Record<DisplayKind, string> = { led: 'LED', seg7: '7-seg', hex: 'HEX', value: 'value', halt: 'HALT' };
 const dispCache = new Map<string, ComponentDef>();
+
+/** Id prefix of the halt part's defs: the run loop finds them in any simulation's hierarchy by it. */
+export const HALT_PREFIX = 'disp_halt_';
 
 /**
  * A pure view: an alias box with no aliases, so it joins nothing, costs nothing, is no leaf of
  * any simulation and emits nothing in Verilog. The editor reads the value of the net on `a`.
+ * The halt part is one too: the circuit cannot tell it is there, only the run loop reads it.
  */
 function display(kind: DisplayKind, w: number): ComponentDef {
   const id = `disp_${kind}_${w}`;
   let d = dispCache.get(id);
   if (d) return d;
   d = {
-    id, name: `Display (${DISPLAY_LABEL[kind]})`, category: 'plumbing',
-    summary: 'Shows the value on its input. Pure view: no gates, no delay.',
+    id, name: kind === 'halt' ? 'Halt' : `Display (${DISPLAY_LABEL[kind]})`, category: 'plumbing',
+    summary: kind === 'halt'
+      ? 'Stops Run after the step where its input reads non-zero (any bit 1). Pure view: no gates, no delay.'
+      : 'Shows the value on its input. Pure view: no gates, no delay.',
     ports: [{ name: 'a', width: w, dir: 'in' }],
-    symbol: { kind: 'box', label: DISPLAY_LABEL[kind], ...(kind === 'led' ? { w: 4, h: 2 } : {}) },
+    symbol: { kind: 'box', label: DISPLAY_LABEL[kind], ...(kind === 'led' || kind === 'halt' ? { w: 4, h: 2 } : {}) },
     prim: 'alias', alias: [],
   };
   dispCache.set(id, d);

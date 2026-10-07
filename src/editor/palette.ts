@@ -133,6 +133,7 @@ registerPaletteGroup({
     { id: 'seg7', name: '7-segment', tag: '8-bit', title: 'Bit 0 = segment a … bit 6 = g, bit 7 = decimal point', place: { part: { display: 'seg7', width: 8 } } },
     { id: 'hex', name: 'Hex digit', tag: '4-bit', title: 'Shows a 4-bit value as 0–F', place: { part: { display: 'hex', width: 4 } } },
     { id: 'value', name: 'Value', tag: '8-bit', title: 'Shows a bus value in the chosen radix', place: { part: { display: 'value', width: 8 } } },
+    { id: 'halt', name: 'Halt', title: 'Stops Run after the step where its input reads 1 (any bit of a bus); placed inside a chip, it still stops Run', place: { part: { display: 'halt' } } },
   ],
 });
 

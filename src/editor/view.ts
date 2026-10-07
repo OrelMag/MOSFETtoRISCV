@@ -30,7 +30,7 @@ export interface ViewValues {
 }
 
 interface PartEls { doc: PartDoc; def: ComponentDef | undefined; g: SVGGElement; disp?: DisplayEls; cls: string }
-interface DisplayEls { kind: DisplayKind; segs: SVGElement[]; led?: SVGCircleElement; text?: SVGTextElement; shown: string }
+interface DisplayEls { kind: DisplayKind; segs: SVGElement[]; led?: SVGCircleElement; text?: SVGTextElement; halt?: SVGGElement; shown: string }
 interface WireEls { doc: WireDoc; poly: Vec[] | null; key: string; ver: number; path: SVGPathElement; hit: SVGPathElement; width: number; cls: string }
 interface DotEls { el: SVGCircleElement; wire: string; cls: string }
 interface PinEls { doc: PinDoc; g: SVGGElement; glyph: PinGlyph; geom: PinGeom; cls: string; txt: string }
@@ -324,7 +324,7 @@ export class EditorView {
     return { g, disp };
   }
 
-  /** A display: LED, 7-segment digit (bit i = segment a…g, bit 7 = dp), hex digit or value box. */
+  /** A display: LED, 7-segment digit (bit i = segment a…g, bit 7 = dp), hex digit, value box or halt plate. */
   private drawDisplay(g: SVGGElement, kind: DisplayKind, width: number, w: number, h: number, flip: boolean): DisplayEls {
     g.append(s('rect', { class: 'sym-body sym-box ed-disp-box', x: 0, y: 0, width: w, height: h, rx: 0.6 }));
     const port = flip ? w : 0;
@@ -333,6 +333,11 @@ export class EditorView {
     if (kind === 'led') {
       d.led = s('circle', { class: 'ed-led', cx: w / 2, cy: h / 2, r: Math.min(w, h) / 2 - 0.25 });
       g.append(d.led);
+    } else if (kind === 'halt') {
+      d.halt = s('g', { class: 'ed-halt' },
+        s('rect', { class: 'ed-halt-plate', x: 0.45, y: 0.35, width: w - 0.9, height: h - 0.7, rx: 0.3 }),
+        s('text', { class: 'ed-halt-text', x: w / 2, y: h / 2 + 0.32, 'text-anchor': 'middle' }, 'HALT'));
+      g.append(d.halt);
     } else if (kind === 'value') {
       d.text = s('text', { class: 'ed-disp-value', x: w / 2, y: h / 2 + 0.4, 'text-anchor': 'middle' });
       g.append(d.text);
@@ -479,7 +484,10 @@ export class EditorView {
     const key = bits ? bits.join('') + this.radix : '';
     if (key === d.shown) return;
     d.shown = key;
-    if (d.led) {
+    if (d.halt) {
+      const on = !!bits && bits.includes(B1);
+      d.halt.setAttribute('class', `ed-halt${on ? ' ed-halt-on' : x && bits ? ' ed-halt-vx' : ''}`);
+    } else if (d.led) {
       d.led.setAttribute('class', `ed-led${bits && bits.some((b) => b === B1) && !x ? ' on' : x && bits ? ' vx' : ''}`);
     } else if (d.text) {
       d.text.textContent = bits ? formatBits(bits, this.radix) : '–';
@@ -500,7 +508,7 @@ export class EditorView {
       if (built && this.doc) {
         const shown = new Set<number>();
         for (const [k, n] of built.netOfEnd) if (k.startsWith('pin:')) shown.add(n);
-        for (const p of this.doc.parts) if ('display' in p.ref) shown.add(built.netOfEnd.get(`p:${p.id}.a`) ?? -1);
+        for (const p of this.doc.parts) if ('display' in p.ref && p.ref.display !== 'halt') shown.add(built.netOfEnd.get(`p:${p.id}.a`) ?? -1);
         const best = new Map<number, { at: Vec; len: number; wire: string }>();
         for (const e of this.wires.values()) {
           const n = built.netOfWire.get(e.doc.id);

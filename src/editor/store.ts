@@ -44,7 +44,7 @@ const str = (x: unknown): x is string => typeof x === 'string';
 const vec = (x: unknown): Vec | null => (Array.isArray(x) && x.length === 2 && num(x[0]) && num(x[1]) ? [x[0], x[1]] : null);
 const DIRS: ExitDir[] = ['left', 'right', 'up', 'down'];
 const face = (x: unknown): ExitDir | undefined => (DIRS.includes(x as ExitDir) ? (x as ExitDir) : undefined);
-const DISPLAYS: DisplayKind[] = ['led', 'seg7', 'hex', 'value'];
+const DISPLAYS: DisplayKind[] = ['led', 'seg7', 'hex', 'value', 'halt'];
 
 /** Copies only the keys whose value is not undefined (so optional fields stay absent). */
 function compact<T extends object>(o: T): T {

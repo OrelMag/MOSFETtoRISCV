@@ -155,6 +155,7 @@ export class Editor {
 
     this.sim = new EditorSim({ gateRate: () => settings.speed });
     this.sim.onChange = () => this.simChanged();
+    this.sim.onHalt = () => this.halted();
 
     this.palette = new PalettePanel(() => ({ ws: this.ws, chipId: this.chipId, canPlace: (c) => this.lib.canPlace(this.chipId, c) }), {
       pick: (item, e) => this.tools.pickFromPalette(item, e),
@@ -396,6 +397,7 @@ export class Editor {
       // bit across tab switches), else a fresh one. The one left behind is paused and kept.
       const old = this.sim;
       old.onChange = () => {};
+      old.onHalt = () => {};
       old.pause();
       this.sims.set(this.simChip, old);
       let s = this.sims.get(id);
@@ -412,6 +414,7 @@ export class Editor {
         this.sims.delete(k);
       }
       s.onChange = () => this.simChanged();
+      s.onHalt = () => this.halted();
       this.sim = s;
       this.simChip = id;
       this.buildControls();
@@ -576,6 +579,12 @@ export class Editor {
     else this.sim.start();
   }
 
+  /** A halt part stopped Run. */
+  private halted(): void {
+    const sim = this.sim;
+    this.toast(sim.hasClock ? `Halted after cycle ${sim.cycles}` : `Halted at t = ${sim.time}`);
+  }
+
   private updateStatus(): void {
     const sim = this.sim;
     if (!this.runBtn) return;
@@ -592,6 +601,7 @@ export class Editor {
     else {
       bits.push(h('span', { class: `pulse${sim.running ? ' busy' : ''}${sim.unstable ? ' warn' : ''}` }));
       if (sim.unstable) bits.push('oscillating');
+      if (sim.halted) bits.push(h('span', { class: 'sb-halted', title: 'A halt part reads 1: Run stops after every step until it reads 0' }, 'halted'));
       if (sim.hasClock) bits.push(`${sim.cycles} cycles`);
       if (sim.sim.kind === 'gate') bits.push(`t = ${sim.time}`);
       if (sim.running && sim.mode === 'cycle' && sim.hasClock) bits.push(`${fmtHz(sim.achievedHz)}`);
