@@ -21,6 +21,8 @@ interface State {
   palette: Palette;
   radix: Radix;
   animate: boolean;
+  /** Tint library boxes by kind (arithmetic, memory, ...); off: all boxes plain. */
+  modules: boolean;
   /** Timing panel open (stays open across scenes). */
   analyzer: boolean;
   /** Gate delays per second when animating propagation. */
@@ -35,7 +37,7 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {} };
 
 function load(): State {
   try {
@@ -59,11 +61,12 @@ export const settings = {
   get palette() { return state.palette; },
   get radix() { return state.radix; },
   get animate() { return state.animate; },
+  get modules() { return state.modules; },
   get analyzer() { return state.analyzer; },
   get speed() { return state.speed; },
   get traceLevel() { return state.traceLevel; },
   get traceRate() { return state.traceRate; },
-  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
+  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
     state[k] = v;
     save();
     listeners.forEach((f) => f());
@@ -103,4 +106,6 @@ export function applyTheme(): void {
   else root.setAttribute('data-theme', state.theme);
   if (state.palette === 'default') root.removeAttribute('data-palette');
   else root.setAttribute('data-palette', state.palette);
+  if (state.modules) root.removeAttribute('data-modules');
+  else root.setAttribute('data-modules', 'plain');
 }
