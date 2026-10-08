@@ -35,7 +35,10 @@ npm run preview      # serve dist/
 ```
 
 CI (`.github/workflows/deploy.yml`) runs tests + build and deploys `dist/` to GitHub Pages
-on every push to `main`.
+on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-export.ts all`
+(Yosys synthesizes the exported dual-core, its netlist is simulated against ours on every multi-core
+program). Run it locally (`npx vite-node scripts/verify-export.ts all`, needs `pip install yowasp-yosys`)
+before merging a change to the exporters or the dual-core.
 
 ## Stack and conventions
 
