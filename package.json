@@ -2,6 +2,7 @@
   "name": "mosfet-to-riscv",
   "private": true,
   "version": "1.0.0",
+  "license": "MIT",
   "description": "An interactive journey from a single MOSFET to a multi-core RISC-V processor. Every block is a transparent box.",
   "type": "module",
   "scripts": {
