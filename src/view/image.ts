@@ -1,9 +1,13 @@
-// The canvas as a standalone image. The editor's SVG is styled by the site's CSS (custom
+// A drawn circuit as a standalone image: the sandbox's canvas (editor/fileui.ts) or the level on
+// a chapter's or the workbench's stage (exportSchematic, loaded on demand). The SVG is styled by the site's CSS (custom
 // properties that change with the theme and the wire palette), which a file opened elsewhere
 // does not have: every element's computed style is copied inline, so the image looks exactly
 // like the screen in the current theme. PNG draws that SVG on a canvas at 2× scale.
 
-import type { ViewBox } from '../view/camera';
+import { fileBase } from '../editor/files';
+import { h } from '../ui/dom';
+import type { ViewBox } from './camera';
+import type { SchematicView } from './schematic';
 
 /** Presentation properties the editor's CSS sets (computed values are already resolved). */
 const PROPS = [
@@ -12,8 +16,8 @@ const PROPS = [
   'dominant-baseline', 'paint-order', 'letter-spacing', 'white-space',
 ];
 
-/** Layers that are editing feedback, not the circuit (hit areas, previews, the grid). */
-const DROP = '.wire-hits, .ed-over, .grid-bg, defs';
+/** Layers that are editing feedback, not the circuit (hit areas, previews, the grid, probe flags). */
+const DROP = '.wire-hits, .ed-over, .grid-bg, .probes, defs';
 
 /** Grid units → output pixels (1 unit = 10 px, like the schematics). */
 const UNIT = 10;
@@ -70,4 +74,31 @@ export async function pngImage(svgText: string, scale = 2): Promise<Blob> {
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** Download `data` as a file named `name`. */
+export function saveFile(name: string, data: string | Blob, type = 'application/json'): void {
+  const blob = typeof data === 'string' ? new Blob([data], { type }) : data;
+  const a = h('a', { href: URL.createObjectURL(blob), download: name });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/** The first opaque background at or above `el` (the canvas itself is transparent). */
+function backgroundOf(el: Element | null): string {
+  for (; el; el = el.parentElement) {
+    const c = getComputedStyle(el).backgroundColor;
+    if (c && c !== 'transparent' && !/^rgba\(.*,\s*0\)$/.test(c)) return c;
+  }
+  return 'white';
+}
+
+/** The level a stage shows, whole (not just the part in view), as an SVG or PNG download. */
+export async function exportSchematic(view: SchematicView, name: string, kind: 'svg' | 'png'): Promise<void> {
+  const text = svgImage(view.el, view.contentBox(), backgroundOf(view.el));
+  const base = fileBase(name, 'circuit');
+  if (kind === 'svg') saveFile(`${base}.svg`, text, 'image/svg+xml');
+  else saveFile(`${base}.png`, await pngImage(text));
 }

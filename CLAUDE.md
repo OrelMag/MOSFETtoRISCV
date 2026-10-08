@@ -154,7 +154,9 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
 src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over crossings),
                inspector (info, truth table, Verilog + download), analyzer.ts (the Timing panel:
                lanes from onTrace, cursors, VCD), stage.ts (probe mode, clock period, slow-motion
-               fronts)
+               fronts, the Image menu), image.ts (a drawn circuit as a standalone SVG: computed styles
+               inlined, current theme; PNG at 2×; saveFile; exportSchematic for a stage's level, loaded on
+               demand; the sandbox's File menu uses it too)
 src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...);
                insthw.ts maps an instruction to the units it uses (and pipeline stage units)
 src/chapters/  narrative content: chapters → steps → scene / widget / challenge
@@ -250,7 +252,6 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   props.ts       properties of the selection or the chip, diagnostics; registerPropsSection
   fileui.ts      File menu (export / import / share link / Verilog / images / chip manager), share banner,
                  drag-and-drop import, autosave indicator, backup notice; installFiles(ed) per page
-  image.ts       the canvas as a standalone SVG (computed styles inlined, current theme) and PNG
   memui.ts       Memory palette group, ROM / RAM property sections (live listing, RAM grid, initial
                  contents), the program editor dialog, Examples ▸; values polled per frame while shown
   package.ts     "Package as chip…" dialog (name, hue, notes, symbol preview, pin order; Save & new circuit)

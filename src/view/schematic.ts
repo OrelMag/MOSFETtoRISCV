@@ -6,7 +6,7 @@ import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, netlistOf } from '../sim/types';
 import { describeBits, formatBits, type Radix } from '../sim/values';
 import { icon, s } from '../ui/dom';
-import { Camera, installPanZoom } from './camera';
+import { Camera, installPanZoom, type ViewBox } from './camera';
 import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
 import { FlowTokens, type Lane } from './flowtokens';
 import type { ViewCtx } from './context';
@@ -564,6 +564,11 @@ export class SchematicView {
   }
 
   // ---- pan & zoom ---------------------------------------------------------------------
+
+  /** Everything drawn at this level, in grid units (what fit() frames, and what an image exports). */
+  contentBox(): ViewBox {
+    return { ...this.bbox };
+  }
 
   fit(): void {
     this.cam.fit(this.bbox, this.insetRight);

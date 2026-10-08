@@ -147,6 +147,20 @@ export class Stage {
       icon('wave', 15), h('span', { class: 'lbl' }, 'Timing')) as HTMLButtonElement;
     const remix = h('button', { class: 'btn ghost sm remix-btn', title: 'Open in Sandbox: an editable copy of the circuit on screen, as one of your own chips', onclick: () => this.remix() },
       icon('chip', 15), h('span', { class: 'lbl' }, 'Open in Sandbox'));
+    // The level on screen as an image file (view/image.ts, loaded on first use).
+    const imgMenu = h('div', { class: 'pal-menu img-menu', role: 'menu' });
+    const imgItem = (kind: 'svg' | 'png', label: string, hint: string) => h('button', { role: 'menuitem', onclick: () => {
+      imgMenu.classList.remove('open');
+      this.exportImage(kind);
+    } }, h('span', null, h('b', null, label), h('small', null, hint)));
+    imgMenu.append(imgItem('svg', 'SVG', 'This level, whole, as drawn in the current theme'), imgItem('png', 'PNG', 'The same at 2× resolution'));
+    const imgBtn = h('button', { class: 'btn ghost sm', title: 'Export this level as an image (SVG or PNG)', 'aria-haspopup': 'menu', onclick: (e: Event) => {
+      e.stopPropagation();
+      imgMenu.classList.toggle('open');
+    } }, icon('image', 15), h('span', { class: 'lbl' }, 'Image'));
+    document.addEventListener('pointerdown', (e) => {
+      if (!imgMenu.contains(e.target as Node) && !imgBtn.contains(e.target as Node)) imgMenu.classList.remove('open');
+    });
     // The side panes (narrative or library, inspector) fold away for a full-width circuit; the
     // choice is a setting (data-wide on <html>), so it holds across steps and pages.
     this.panesBtn = h('button', { class: 'btn ghost icon-only toggle panes-btn', onclick: () => {
@@ -155,7 +169,7 @@ export class Stage {
     } }, icon('sidebar', 16)) as HTMLButtonElement;
     this.syncPanesBtn();
     const bar = h('div', { class: 'stage-bar' },
-      this.crumbs, remix, this.probeBtn, this.timingBtn,
+      this.crumbs, remix, h('div', { class: 'pal-wrap' }, imgBtn, imgMenu), this.probeBtn, this.timingBtn,
       btn('up', 'Up one level (Esc)', () => this.up()),
       btn('minus', 'Zoom out', () => this.view.zoom(1.25)),
       btn('plus', 'Zoom in', () => this.view.zoom(0.8)),
@@ -343,6 +357,13 @@ export class Stage {
       if ('error' in r) this.status.replaceChildren(h('span', { class: 'pulse warn' }), `Cannot open in the sandbox: ${r.error}`);
       else location.hash = `#/sandbox/${r.id}`;
     }, (e) => this.status.replaceChildren(h('span', { class: 'pulse warn' }), `The sandbox could not load: ${String(e)}`));
+  }
+
+  private exportImage(kind: 'svg' | 'png'): void {
+    const def = this.ctx?.def;
+    if (!def) return;
+    const fail = (e: unknown) => this.status.replaceChildren(h('span', { class: 'pulse warn' }), `Cannot export the image: ${e instanceof Error ? e.message : String(e)}`);
+    import('./image').then((m) => m.exportSchematic(this.view, def.name, kind)).catch(fail);
   }
 
   select(child: string | null): void {

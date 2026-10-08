@@ -60,6 +60,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .pal-menu button:hover { background: var(--surface-2); }
 .pal-menu button[aria-checked='true'] { background: var(--accent-soft); }
+.img-menu { min-width: 240px; left: 0; right: auto; }
 .pal-sep { height: 1px; background: var(--border); margin: 4px 2px; }
 .pal-mods i { background: hsl(var(--chip-h) var(--chip-fill-s) var(--chip-fill-l)); border: 1px solid hsl(var(--chip-h) var(--chip-stroke-s) var(--chip-stroke-l)); }
 .pal-mods .m0 { --chip-h: 145; } .pal-mods .m1 { --chip-h: 45; } .pal-mods .m2 { --chip-h: 215; } .pal-mods .m3 { --chip-h: 330; }
