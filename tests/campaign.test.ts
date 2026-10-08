@@ -284,3 +284,19 @@ describe('codex datasheets', () => {
     }
   });
 });
+
+describe('map lines', () => {
+  it('draws only direct requirements: every requirement left out is reached through a drawn one', async () => {
+    const { drawnRequires } = await import('../src/campaign/ui/svgs');
+    let left = 0;
+    for (const n of NODES) {
+      const drawn = drawnRequires(n);
+      for (const r of n.requires) {
+        if (drawn.includes(r) || r === 'intro') continue;
+        left++;
+        expect(drawn.some((d) => ancestors(d).has(r)), `${n.id} ← ${r}`).toBe(true);
+      }
+    }
+    expect(left).toBeGreaterThan(0);
+  });
+});
