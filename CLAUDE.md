@@ -271,9 +271,11 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
   anatomy.ts     the target CPU as blocks (intro diagram), blockNodes; layout.ts the map's placement
   drills.ts      generated questions with exact checkers (numbers, Boolean parser, exact K-map minimum, RV16
                  encoding, binary16); puzzles.ts RV16 program puzzles on the golden model (size, cycles)
-  build1/5/6/7/8/9.ts, buildh.ts  the levels new to the campaign by act: BuildChallenges whose reference answers
-                 are library blocks drawn as chips (docFromDef; build9 also draws sub-units as chips of their own);
-                 a side quest gives its reference's parts (givesOf)
+  build1/5/6/7/8/9.ts, buildh.ts, buildfp.ts  the levels new to the campaign by act: BuildChallenges whose reference
+                 answers are library blocks drawn as chips (docFromDef; build9 / buildfp also draw sub-units as chips of
+                 their own); a side quest gives its reference's parts (givesOf); buildfp: the FP ladder (unpack, rounding
+                 decision, sticky shifter, leading-zero counter, normalize & round, compare, int → float), whose blocks
+                 (FP_BLOCK) are never given, only unlocked by the rung that built them (fpGives)
   bench.ts       addBench: a failing core test as a computer chip around the learner's core (RV16 ROM, 64-word
                  RAM, LEDs, IRQ line), opened with the CPU drawer; failingTest names it from a failure line
   datasheet.ts   a codex component entry's datasheets: the unlocked library parts' pins, cost, depth, truth table

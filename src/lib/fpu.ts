@@ -382,7 +382,7 @@ export function normRound(f: FpFormat, w: number): ComponentDef {
     b.wire(b.op1(merger([M, 1, E - 1, 1]), [fracOut, e0, `${expOr}.o1`, 'sign']), 'y');
     b.wire(flagWord(b, { of: inf, uf: b.op1(AND, [tiny, nx0], 'UF'), nx: b.op1(OR, [nx0, inf], 'NX') }), 'flags');
     return define({
-      id: `fpnr${E}_${M}_${w}`, name: 'Normalize & round', category: 'arithmetic',
+      id: `fpnr${E}_${M}_${w}`, name: `Normalize & round (${w}-bit significand)`, category: 'arithmetic',
       summary: 'Counts leading zeros, shifts them out (or shifts right for a subnormal result), then rounds in mode rm using the guard bit G and the sticky bit S (round to nearest even: up if G and (S or the last kept bit)). A carry out of the rounding bumps the exponent; an exponent past the top becomes ∞ or the largest finite number, depending on the mode. Flags: NX if G or S, OF on overflow, UF if inexact and tiny after rounding.',
       ports: [bit('sign', 'in'), bus('exp', XE, 'in'), bus('mant', w, 'in'), bit('stin', 'in'), bus('rm', 3, 'in'), bus('y', 1 + E + M, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'NORMALIZE & ROUND' },

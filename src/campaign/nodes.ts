@@ -9,8 +9,9 @@ import { BUILD6 } from './build6';
 import { BUILD7 } from './build7';
 import { BUILD8, partsOf } from './build8';
 import { BUILD9 } from './build9';
+import { BUILDFP, FP_REF, fpGives } from './buildfp';
 import { BUILDH } from './buildh';
-import { fpAdd, fpMul } from '../lib/fpu';
+import { fpAdd, fpMul, lzc, ROUND_DECIDE } from '../lib/fpu';
 import { arrayMul, seqDivider } from '../lib/muldiv';
 import { seqMul } from '../lib/multiply';
 import { F16 } from '../sim/fpref';
@@ -507,15 +508,57 @@ export const NODES: CampaignNode[] = [
     tips: ['Write the value as 1.f × 2^e; the exponent field is e + 15.'], codex: ['ieee754'], chapters: [{ chapter: 'float', label: 'Floating point' }],
   },
   {
-    id: 'o_fpadd', act: 8, title: 'FP adder', kind: 'build', optional: true, requires: ['n_float', 'a_shift16'], base: BUILD8.o_fpadd, givesOf: partsOf(() => fpAdd(F16)), par: { nand: 3785, depth: 163 },
-    why: 'Adding floats means aligning their binary points first, then adding, normalising and rounding: the hardest of the four operations to get exactly right.',
-    tips: ['Swap so that |a| ≥ |b|, shift b right by the exponent difference (keep a sticky bit), add or subtract the significands.', 'One rounder serves every operation: the given one rounds in all five modes.'],
+    id: 'o_fpunpack', act: 8, title: 'Float unpack', kind: 'build', optional: true, requires: ['n_float'], base: BUILDFP.o_fpunpack, givesOf: fpGives(FP_REF.unpack), par: { nand: 63, depth: 14 }, unlocks: ['fpun5_10'],
+    why: 'Every FP unit starts here: the hidden bit is not stored, subnormals and zero have none, and the all-ones exponent marks the values that are not numbers at all. Decode once, and the arithmetic only sees sign, exponent and significand.',
+    tips: ['The hidden bit is NOT (exponent field = 0).', 'A subnormal\'s exponent is 1, not 0: OR the field\'s low bit with "field = 0".', 'inf and nan share "field all 1s"; the fraction tells them apart.'],
+    codex: ['ieee754', 'subnormal'],
+  },
+  {
+    id: 'o_fpround', act: 8, title: 'Rounding decision', kind: 'build', optional: true, requires: ['n_float'], base: BUILDFP.o_fpround, givesOf: fpGives(() => ROUND_DECIDE), par: { nand: 62, depth: 13 }, unlocks: ['fpround'],
+    why: 'An exact result has more bits than the format keeps. Three bits are enough to round it correctly in every mode: the last kept bit, the first dropped one (guard) and whether anything below that was 1 (sticky).',
+    tips: ['Decode rm into one wire per mode first; each mode is then a small AND.', 'Ties to even: a tie is g = 1 and s = 0; then round up only if lsb = 1.'],
+    codex: ['rounding'],
+  },
+  {
+    id: 'o_fpsticky', act: 8, title: 'Sticky shifter', kind: 'build', optional: true, requires: ['n_float', 'a_shift16'], base: BUILDFP.o_fpsticky, givesOf: fpGives(FP_REF.sticky), par: { nand: 264, depth: 21 }, unlocks: ['shrs13_4', 'shrs15_4'],
+    why: 'Before adding, the smaller operand is shifted right until the binary points line up. The bits that fall off still matter to rounding, but only as one bit: were they all zero?',
+    tips: ['The barrel shifter again, right only: level k shifts by 2^k.', 'Each level also ORs the bits it drops; sticky is the OR of the levels that shifted.'],
+    codex: ['sticky', 'shifter'],
+  },
+  {
+    id: 'o_fplzc', act: 8, title: 'Leading-zero counter', kind: 'build', optional: true, requires: ['n_float'], base: BUILDFP.o_fplzc, givesOf: fpGives(FP_REF.lzc, () => [lzc(8), lzc(4), lzc(2)]), par: { nand: 104, depth: 9 }, unlocks: ['lzc*'],
+    why: 'Subtracting close numbers cancels the top bits: 1.0001 − 1.0000 leaves 0.0001. Normalizing shifts the first 1 back to the top, and the shift amount is the number of leading zeros.',
+    tips: ['A 2-bit counter: c = NOT a1, v = a1 OR a0.', 'Two n/2-bit counters make an n-bit one: if the upper half has a 1, take its count; else n/2 + the lower count. The top bit of c is just NOT v_upper.', 'Build the 8-bit one as a chip from two 4-bit ones, and so on: the recursion is the design.'],
+    codex: ['lzc'],
+  },
+  {
+    id: 'o_fpnorm', act: 8, title: 'Normalize & round', kind: 'build', optional: true, requires: ['o_fpround', 'o_fpsticky', 'o_fplzc'], base: BUILDFP.o_fpnorm, givesOf: fpGives(FP_REF.norm), par: { nand: 2058, depth: 86 }, unlocks: ['fpnr5_10_15', 'fpnr5_10_16', 'fpnr5_10_22'],
+    why: 'Add, multiply and convert all end the same way: a raw significand and exponent become a correctly rounded encoding. Build it once, carefully, and every unit after it is mostly wiring.',
+    tips: ['Left shift by min(leading zeros, exp − 1): never below exponent 1. If exp < 1, shift right by 1 − exp instead (sticky shifter).', 'After the shift the kept bits are the top 11; then the guard bit; everything below it, and stin, is the sticky bit.', 'Rounding up 1.111…1 carries into a new top bit: the exponent goes up by one and the fraction is 0.', 'Overflow: a final field of 31 or more. Then toInf picks ∞ or 0x7BFF.'],
+    codex: ['normalize', 'rounding', 'subnormal'],
+  },
+  {
+    id: 'o_fpadd', act: 8, title: 'FP adder', kind: 'build', optional: true, requires: ['o_fpunpack', 'o_fpnorm'], base: BUILD8.o_fpadd, givesOf: fpGives(() => fpAdd(F16)), par: { nand: 3785, depth: 163 },
+    why: 'Adding floats means aligning their binary points first, then adding, normalising and rounding: the hardest of the four operations to get exactly right. Every block it needs is one you have built.',
+    tips: ['Swap so that |a| ≥ |b|, shift b right by the exponent difference (keep a sticky bit), add or subtract the significands.', 'Leave room: put the significands at bits 13..3 of a 15-bit word (a carry above, guard and sticky below), and hand normalize & round exponent + 1.', 'x − x is +0 (−0 in RDN). NaN in, or ∞ − ∞, gives the canonical NaN 0x7E00.'],
     codex: ['ieee754', 'rounding'],
   },
   {
-    id: 'o_fpmul', act: 8, title: 'FP multiplier', kind: 'build', optional: true, requires: ['o_fpadd', 'o_mularr'], base: BUILD8.o_fpmul, givesOf: partsOf(() => fpMul(F16)), par: { nand: 4965, depth: 150 },
+    id: 'o_fpmul', act: 8, title: 'FP multiplier', kind: 'build', optional: true, requires: ['o_fpadd', 'o_mularr'], base: BUILD8.o_fpmul, givesOf: fpGives(() => fpMul(F16)), par: { nand: 4965, depth: 150 },
     why: 'Multiplying floats is simpler than adding them: multiply the significands, add the exponents, XOR the signs, then normalise and round.',
     tips: ['11 × 11 bits gives a 22-bit product; its top bit decides whether to shift by one.'], codex: ['ieee754'],
+  },
+  {
+    id: 'o_fpcmp', act: 8, title: 'FP comparator', kind: 'build', optional: true, requires: ['o_fpunpack'], base: BUILDFP.o_fpcmp, givesOf: fpGives(FP_REF.cmp), par: { nand: 682, depth: 25 },
+    why: 'The format was designed so that comparing floats is almost comparing integers: the exponent sits above the fraction, so for positive numbers the bit patterns are in order. Only the signs, the two zeros and NaN need care.',
+    tips: ['|a| < |b| is a 15-bit unsigned compare of the patterns without their sign bits.', 'Two negatives: the order flips. Different signs: the negative one is smaller, unless both are zeros.', 'Any NaN: eq, lt and le are all 0.'],
+    codex: ['fpcompare'],
+  },
+  {
+    id: 'o_fpcvt', act: 8, title: 'Integer to float', kind: 'build', optional: true, requires: ['o_fpnorm'], base: BUILDFP.o_fpcvt, givesOf: fpGives(FP_REF.cvt), par: { nand: 2840, depth: 109 },
+    why: 'fcvt.h.w: an integer is already a significand, with its binary point at the right. Take the magnitude, and normalize & round finds the leading 1 and rounds what does not fit in 11 bits.',
+    tips: ['|x| = signed and x < 0 ? −x : x (a conditional negate).', 'The integer\'s top bit weighs 2^15: the exponent you hand normalize & round is 15 + bias.'],
+    codex: ['normalize'],
   },
   {
     id: 'o_cache', act: 8, title: 'A cache', kind: 'build', optional: true, requires: ['m_mem', 'g_eq16'], base: BUILD9.o_cache, par: { nand: 3527, period: 36 },

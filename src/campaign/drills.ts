@@ -398,10 +398,57 @@ const f16value = (w: number): number => {
   return e ? s * (1 + m / 1024) * 2 ** (e - 15) : s * (m / 1024) * 2 ** -14;
 };
 
+const KIND_WORDS: Record<string, string[]> = {
+  zero: ['zero', '0', '+0', '-0', '−0'], subnormal: ['subnormal', 'denormal', 'denormalized'], normal: ['normal'],
+  infinity: ['infinity', 'inf', '+inf', '-inf', '∞', '+∞', '−∞', 'infinite'], NaN: ['nan', 'not a number'],
+};
+
+/** A pattern of the asked kind (zero, subnormal, normal, infinity, NaN). */
+function f16of(r: () => number, kind: string): number {
+  const s = r() < 0.5 ? 0x8000 : 0;
+  if (kind === 'zero') return s;
+  if (kind === 'subnormal') return s | int(r, 1, 1023);
+  if (kind === 'infinity') return s | 0x7c00;
+  if (kind === 'NaN') return s | 0x7c00 | int(r, 1, 1023);
+  return s | (int(r, 1, 30) << 10) | int(r, 0, 1023);
+}
+
+/** Round 1.m|x × 2^e (m: 10 bits kept, x: 3 more bits) to binary16, nearest even. */
+function roundQuestion(r: () => number): Question {
+  const e = int(r, -4, 6), sg = r() < 0.3 ? 1 : 0;
+  let m = int(r, 0, 1023);
+  if (r() < 0.2) m = 1023; // the carry into the exponent
+  const x = r() < 0.35 ? 4 : int(r, 1, 7); // 4 = exactly halfway: a tie
+  const g = x >> 2, st = x & 3 ? 1 : 0, up = g && (st || m & 1) ? 1 : 0;
+  const m2 = m + up, e2 = m2 === 1024 ? e + 1 : e;
+  const w = (sg << 15) | ((e2 + 15) << 10) | (m2 & 1023);
+  return {
+    prompt: `Round <b>${sg ? '−' : ''}1.${bin(m, 10)}<u>${bin(x, 3)}</u>₂ × 2^${e}</b> to binary16, to nearest even (hex). The underlined bits do not fit.`,
+    placeholder: '0x....', check: numAnswer(w, 16), answer: `0x${hex(w, 16)}`,
+    explain: `Guard bit G = ${g}, sticky S = OR of the rest = ${st}, last kept bit = ${m & 1}: ${up ? `round up${g && !st ? ' (a tie, to the even neighbour)' : ''}` : g && !st ? 'a tie, the kept bits are already even: keep' : 'keep'}.${m2 === 1024 ? ' 1.111…1 + 1 carries: the fraction becomes 0 and the exponent goes up.' : ''} Sign ${sg}, exponent ${e2} + 15 = ${e2 + 15}, fraction ${bin(m2 & 1023, 10)}.`,
+  };
+}
+
 const float: Drill = {
   id: 'float', title: 'binary16', goal: 6,
-  how: 'binary16: 1 sign bit, 5 exponent bits (bias 15), 10 fraction bits with a hidden leading 1. Give values in decimal (fractions like 0.375 are fine), patterns in hex.',
+  how: 'binary16: 1 sign bit, 5 exponent bits (bias 15), 10 fraction bits with a hidden leading 1. Exponent field 0: zero or a subnormal (no hidden bit); all 1s: infinity (fraction 0) or NaN. Give values in decimal (fractions like 0.375 are fine), patterns in hex, kinds in words.',
   make(r) {
+    const q = r();
+    if (q < 0.2) {
+      const kind = ['zero', 'subnormal', 'normal', 'infinity', 'NaN'][int(r, 0, 4)];
+      const w = f16of(r, kind);
+      const e = (w >> 10) & 31, m = w & 1023;
+      return {
+        prompt: `What is the binary16 pattern <code>0x${hex(w, 16)}</code>: zero, subnormal, normal, infinity or NaN?`, placeholder: 'normal',
+        check: (t) => {
+          const a = t.trim().toLowerCase();
+          const k = Object.keys(KIND_WORDS).find((x) => KIND_WORDS[x].includes(a));
+          return k ? { ok: k === kind, why: k === kind ? undefined : 'not that kind' } : { ok: false, why: 'answer zero, subnormal, normal, infinity or NaN' };
+        },
+        answer: kind, explain: `exponent field ${bin(e, 5)}, fraction ${m ? 'not ' : ''}0: ${kind}.`,
+      };
+    }
+    if (q < 0.45) return roundQuestion(r);
     const e = int(r, -4, 6), m = int(r, 0, 7) * 128, s = r() < 0.3 ? -1 : 1;
     const v = s * (1 + m / 1024) * 2 ** e;
     const w = f16bits(v);

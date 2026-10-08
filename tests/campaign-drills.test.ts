@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { checkExpr, DRILLS, evalBool, minimumCover, parseBool, parseNum, rng, sopLiterals, sopText } from '../src/campaign/drills';
+import { F16, parts, RM, roundToX } from '../src/sim/fpref';
 
 describe('the Boolean parser', () => {
   const V = ['a', 'b', 'c', 'd'];
@@ -65,6 +66,28 @@ describe('drills', () => {
       expect(q.check(q.answer), `${q.prompt} → ${q.answer}`).toMatchObject({ ok: true });
       expect(q.check('zz').ok, q.prompt).toBe(false);
     }
+  });
+
+  it('binary16: rounding questions agree with the reference float model, kinds with the encoding', () => {
+    const r = rng(7);
+    let rounds = 0, kinds = 0;
+    for (let i = 0; i < 400; i++) {
+      const q = DRILLS.float.make(r);
+      const m = q.prompt.match(/(−?)1\.([01]{10})<u>([01]{3})<\/u>₂ × 2\^(-?\d+)/);
+      if (m) {
+        rounds++;
+        const want = roundToX(m[1] ? 1 : 0, BigInt(`0b1${m[2]}${m[3]}`), Number(m[4]) - 13, F16, RM.RNE).y;
+        expect(q.answer, q.prompt).toBe(`0x${want.toString(16).toUpperCase().padStart(4, '0')}`);
+      }
+      const k = q.prompt.match(/pattern <code>0x([0-9A-F]{4})<\/code>: zero/);
+      if (k) {
+        kinds++;
+        const p = parts(parseInt(k[1], 16), F16);
+        expect(q.answer).toBe({ zero: 'zero', subnormal: 'subnormal', normal: 'normal', inf: 'infinity', nan: 'NaN' }[p.kind]);
+      }
+    }
+    expect(rounds).toBeGreaterThan(50);
+    expect(kinds).toBeGreaterThan(40);
   });
 
   it('a K-map answer must also be minimal', () => {

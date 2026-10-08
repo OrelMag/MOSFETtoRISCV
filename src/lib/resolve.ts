@@ -14,7 +14,7 @@ import { assemble } from '../riscv/asm';
 import { PROGRAMS } from '../riscv/programs';
 import { counter, register } from './sequential';
 import { arrayDiv, arrayMul, condNegate, csa, divStep, seqDivider, treeMul } from './muldiv';
-import { fpAdd, fpCompare, fpMul, fpUnpack, lzc, shiftLeft } from './fpu';
+import { fpAdd, fpCompare, fpFromInt, fpMul, fpUnpack, incFast, lzc, normRound, shiftLeft, shiftRightSticky } from './fpu';
 import { cachedMemory, wayLookup2 } from './cache';
 import { bankedMemory } from './lsu';
 import { clearableRegister } from './pipeline';
@@ -52,6 +52,13 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^shift(\d+)$/, (m) => shifter(+m[1])],
   [/^zero(\d+)$/, (m) => isZero(+m[1])],
   [/^(and|or|xor)x(\d+)$/, (m) => bitwise(m[1] as 'and' | 'or' | 'xor', +m[2])],
+  // the FP blocks the campaign's FP ladder unlocks (a learner's chip may place them by id)
+  [/^shrs(\d+)_(\d+)$/, (m) => shiftRightSticky(+m[1], +m[2])],
+  [/^shl(\d+)_(\d+)$/, (m) => shiftLeft(+m[1], +m[2])],
+  [/^incf(\d+)$/, (m) => incFast(+m[1])],
+  [/^fpun(\d+)_(\d+)$/, (m) => fpUnpack({ E: +m[1], M: +m[2] })],
+  [/^fpnr(\d+)_(\d+)_(\d+)$/, (m) => normRound({ E: +m[1], M: +m[2] }, +m[3])],
+  [/^fpcvt(\d+)_(\d+)_(\d+)$/, (m) => fpFromInt({ E: +m[1], M: +m[2] }, +m[3])],
 ];
 
 type Resolver = (id: string) => ComponentDef | undefined;
