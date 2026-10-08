@@ -349,7 +349,7 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
   converted to time by an illustrative 25 ps / NAND (`PS_PER_NAND`), not characterized from a cell library; the
   built-in placer and router are a teaching model, the OpenROAD run is the real one; power-on state comes from a
   resolution model, not physics; CPUs are checked against our own ISS plus the independent checks below
-- ⏳ A short demo at the top of the README (GIF: MOSFET → NAND → adder → a CPU running)
+- ✅ Screenshots and GIFs in the README (drill-down to transistors, carry ripple, pipeline, sandbox, layout)
 - ✅ The timing panels (chapters and sandbox) and the static-timing step name the 25 ps / NAND as illustrative
 - ⏳ Chapter 25 separates the teaching P&R from the OpenROAD run; the pipeline chapters call cache-miss freezing and
   arbiter-serialized atomics deliberate simplifications
