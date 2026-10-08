@@ -302,9 +302,12 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   saved in the chip document, shared with it, inherited by the net's other drawn wires
 - ✅ Colour per net: a switch in the wire-colour menu (off by default) gives every net a hue of its own, from its name
   or else its ends (stable across rebuilds, edits and reloads; a circuit opened in the sandbox keeps its chapter
-  colours); brightness still says the value (0 a dim tint, 1 bright with its glow), X and Z keep their colours and
+  colours, bar the few nets its new drawing puts next to others); brightness still says the value (0 a dim tint, 1 bright with its glow), X and Z keep their colours and
   dashes, hues avoid the X red. Wires, dots, pointers, tap labels, bus labels, riding values and slow-motion fronts,
-  in the chapters, the workbench and the sandbox. ⏳ Neighbouring nets that land on close hues
+  in the chapters, the workbench and the sandbox. Nets drawn side by side are kept apart: a net whose own hue lies within
+  60° of a neighbour's (running within a few units, or crossing it) moves to the nearest hue clear of them, the most
+  crowded nets first, two refining passes; the rest keep their own. Across the 632 library schematics, neighbouring
+  pairs closer than 20° drop from 8 338 to 3 058 (none left on the CPU tops); 40 ms on the 64-bit Kogge–Stone
 - ⏳ Vivid look: a dark grid, filled bright part bodies tinted by category or chip hue, thicker wires; a setting
   like `data-palette`, applied to the sandbox, the chapters' schematics and the workbench
 - ⏳ Optional cartoonish components: a playful symbol set (rounded, chunky bodies, bold outlines, small icons for

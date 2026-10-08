@@ -11,7 +11,7 @@ import { s } from '../ui/dom';
 import { Camera, type ViewBox } from '../view/camera';
 import { applyFlow, flowDash, flowKey, flowText } from '../view/flow';
 import { FlowTokens, type Lane } from '../view/flowtokens';
-import { netHue, netKey, setNetHue } from '../view/nethue';
+import { netKey, setNetHue, spreadHues } from '../view/nethue';
 import { junctions, type PinGeom, textWidth } from '../view/route';
 import { bitClass, busClass } from '../view/schematic';
 import { drawPinGlyph, drawSymbol, instNameAt, type PinGlyph, placePinValue } from '../view/symbols';
@@ -63,15 +63,6 @@ interface CommentEls { doc: CommentDoc; g: SVGGElement }
 interface BusLabel { net: number; wire: string; at: Vec; room: number; g: SVGGElement; bg: SVGRectElement; text: SVGTextElement; txt: string }
 
 const pathD = (p: Vec[]) => p.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join(' ');
-/** Each built net's hue (colour per net), by net index; computed once per build. */
-const huesOf = (() => {
-  const memo = new WeakMap<Compiled, number[]>();
-  return (built: Compiled): number[] => {
-    let h = memo.get(built);
-    if (!h) memo.set(built, (h = (netlistOf(built.def)?.nets ?? []).map((n) => netHue(netKey(n)))));
-    return h;
-  };
-})();
 const valueClass = (bits: Bit[]) => (bits.length > 1 ? busClass(bits) : bitClass(bits[0]));
 
 export class EditorView {
@@ -107,6 +98,7 @@ export class EditorView {
   private groups: { wires: WireDoc[] | null; ids: string[][] } = { wires: null, ids: [] };
   private busLayout: { built: Compiled | null; version: number } = { built: null, version: -1 };
   private version = 0;
+  private hueMemo: { built: Compiled | null; version: number; hues: number[] } = { built: null, version: -1, hues: [] };
   private doc: ChipDoc | null = null;
   private sel: Sel = {};
   private diagCls = new Map<string, string>();
@@ -607,9 +599,26 @@ export class EditorView {
     e.path.setAttribute('class', full);
   }
 
+  /**
+   * Each built net's hue (colour per net), by net index: spread apart where nets are drawn side by
+   * side, so recomputed when the build or a wire's shape changes (never during a drag: no repaint).
+   */
+  private huesOf(built: Compiled | null): number[] {
+    const m = this.hueMemo;
+    if (m.built === built && m.version === this.version) return m.hues;
+    const nets = (built && netlistOf(built.def)?.nets) || [];
+    const polys = nets.map((): Vec[][] => []);
+    if (built) for (const e of this.wires.values()) {
+      const n = built.netOfWire.get(e.doc.id);
+      if (n !== undefined && n >= 0 && e.poly) polys[n]?.push(e.poly);
+    }
+    this.hueMemo = { built, version: this.version, hues: spreadHues(nets.map((n, i) => ({ key: netKey(n), polys: polys[i] }))) };
+    return this.hueMemo.hues;
+  }
+
   /** Repaint every value from the simulation (null: no simulation, everything neutral). */
   paint(v: ViewValues | null, built: Compiled | null): void {
-    const hues = built ? huesOf(built) : [];
+    const hues = this.huesOf(built);
     for (const e of this.wires.values()) {
       const hue = hues[built?.netOfWire.get(e.doc.id) ?? -1];
       if (hue !== e.hue) {
@@ -760,7 +769,7 @@ export class EditorView {
         }
         for (const [net, { at, len, wire }] of best) {
           const g = s('g', { class: 'bus-label' });
-          setNetHue(g, huesOf(built)[net]);
+          setNetHue(g, this.huesOf(built)[net]);
           const bg = s('rect', { rx: 0.45, height: 1.3, y: at[1] - 0.65 - 0.9 });
           const text = s('text', { x: at[0], y: at[1] - 0.9 + 0.38, 'text-anchor': 'middle' });
           g.append(bg, text);
