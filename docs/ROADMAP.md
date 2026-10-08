@@ -262,8 +262,13 @@ CPUs, and every library part opens down to a MOSFET. What they have and the sand
 chip presentation, capacity and the program-solving half of Turing Complete.
 
 **I/O parts** (placeable, zero-cost like the displays, absent from Verilog)
-- ⏳ Key input: a pin bound to a keyboard key, high while held (DLS Key, TC Keyboard), plus a
-  keyboard part that latches the last key's code with a ready flag
+- ✅ Key input (DLS Key, TC Keyboard): a Key part bound to a keyboard key (rebind it in the properties), 1 while the
+  key is held, listening from any depth of the hierarchy and taking the key from the editor's shortcuts while that
+  chip is open; a Keyboard part that queues typed keys (16 deep: `code` = the oldest as ASCII, `ready`, `ack` drops
+  it, sampled at rising clock edges or, without a clock, whenever the logic has settled), fed while the circuit runs
+  or with the Type toggle on. Both are *external sources*: behaviour-only leaves the editor drives through `Sim.poke`,
+  at gate level (one delay, visible in gate mode) and at switch level (a key on a CMOS inverter); zero cost, a
+  comment in Verilog, refused by the gate-level derivation of a transistor chip, released on every check
 - ⏳ Pixel screen: a dot-matrix / RGB display driven by a frame-buffer RAM or row/column/colour
   pins (DLS dot display, TC screen); the 7-segment display already exists
 - ✅ LED bank: a wide LED shows one LED per bit (most significant first, rows of 8)

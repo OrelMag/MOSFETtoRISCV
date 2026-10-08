@@ -28,7 +28,8 @@
 // inputs that start undriven (Z) until setInput / setInputBit drives them.
 
 import { matchNets, sharedInputs } from './carry';
-import type { FlatDesign } from './flatten';
+import { findNode, type FlatDesign } from './flatten';
+import { cloneState } from './gatesim';
 import type { PowerOnMode, Sim, SimState } from './sim';
 import { B0, B1, BX, BZ, type Bit } from './types';
 import { pack, unpack } from './values';
@@ -49,6 +50,12 @@ export class SwitchSim implements Sim {
   private inputs = new Map<string, number | Bit[]>();
   private inputNets = new Map<string, number[]>();
   private dirty = true;
+  /**
+   * Private state of the behavioural leaves (external sources: a key part in a transistor
+   * circuit). Their outputs are sources, as strong as rails and driven inputs.
+   */
+  private state: unknown[];
+  private readonly behaviors: number[];
   /** Per leaf: 1 if the transistor conducts (a resistor always does), 2 if it might (gate X/Z), 0 if off. */
   readonly conducting: Uint8Array;
   /** Nets that are part of a VDD–GND short in the last solution. */
@@ -59,6 +66,8 @@ export class SwitchSim implements Sim {
     this.val = new Uint8Array(design.netCount).fill(BZ);
     this.conducting = new Uint8Array(design.leaves.length);
     this.shorted = new Uint8Array(design.netCount);
+    this.behaviors = design.leaves.flatMap((l, li) => (l.kind === 'behavior' ? [li] : []));
+    this.state = design.leaves.map((l) => l.def.behavior?.init?.());
     for (const p of design.root.def.ports) {
       if (p.dir === 'in') {
         this.inputNets.set(p.name, design.root.ports[p.name]);
@@ -106,10 +115,18 @@ export class SwitchSim implements Sim {
     this.dirty = true;
   }
   watch(): void {}
+  poke(leaf: number, state: unknown): void {
+    this.state[leaf] = state;
+    this.dirty = true;
+  }
+  leafState(leaf: number): unknown {
+    return this.state[leaf];
+  }
   busy(): boolean {
     return this.dirty;
   }
   reset(_mode?: PowerOnMode): void {
+    this.state = this.design.leaves.map((l) => l.def.behavior?.init?.());
     this.dirty = true;
     this.settle();
   }
@@ -132,6 +149,12 @@ export class SwitchSim implements Sim {
       const b = prev.get(map[net]);
       if (!opts.known || b !== BX) this.val[net] = b;
     }
+    // behavioural leaves at the same path with the same definition keep their state (a held key)
+    for (const li of this.behaviors) {
+      const l = this.design.leaves[li];
+      const o = findNode(prev.design.root, l.node.path);
+      if (o?.leafIndex !== undefined && o.def.id === l.def.id) this.state[li] = cloneState(prev.leafState(o.leafIndex));
+    }
     this.dirty = true;
     this.settle();
   }
@@ -140,6 +163,7 @@ export class SwitchSim implements Sim {
     const st: SwitchState = {
       val: this.val.slice(), conducting: this.conducting.slice(), shorted: this.shorted.slice(),
       inputs: new Map([...this.inputs].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v])),
+      state: this.state.map(cloneState),
       unstable: this.unstable, evaluations: this.evaluations, dirty: this.dirty,
     };
     return st as unknown as SimState;
@@ -151,6 +175,7 @@ export class SwitchSim implements Sim {
     this.conducting.set(s.conducting);
     this.shorted.set(s.shorted);
     this.inputs = new Map([...s.inputs].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v]));
+    this.state = s.state.map(cloneState);
     this.unstable = s.unstable;
     this.evaluations = s.evaluations;
     this.dirty = s.dirty;
@@ -193,7 +218,44 @@ export class SwitchSim implements Sim {
       const bits = this.inputBits(port, v);
       nets.forEach((net, i) => { if (bits[i] !== BZ) source[net] = bits[i]; });
     }
+    if (!this.behaviors.length) return this.solve(source);
 
+    // Behavioural leaves drive their outputs as sources too. One whose outputs depend on its
+    // inputs is re-evaluated on the solution until nothing changes (a few rounds at most).
+    let outs = this.behaviorOutputs();
+    this.unstable = false;
+    for (let round = 0; ; round++) {
+      const src = source.slice();
+      for (const [net, b] of outs) src[net] = b;
+      const was: boolean = this.unstable;
+      this.solve(src);
+      this.unstable ||= was;
+      const next = this.behaviorOutputs();
+      if (round >= 8 || [...next].every(([net, b]) => outs.get(net) === b)) {
+        if (round >= 8) this.unstable = true;
+        return;
+      }
+      outs = next;
+    }
+  }
+
+  /** Output bits of every behavioural leaf for the node values now (X when a packed input has X / Z). */
+  private behaviorOutputs(): Map<number, Bit> {
+    const out = new Map<number, Bit>();
+    for (const li of this.behaviors) {
+      const l = this.design.leaves[li];
+      const ins = l.inputs.map((p) => pack(p.map((net) => this.val[net])));
+      const res = l.def.behavior!.eval(ins, this.state[li]);
+      this.evaluations++;
+      l.outputs.forEach((p, pi) => unpack(res[pi] ?? -1, p.length).forEach((b, i) => out.set(p[i], b)));
+    }
+    return out;
+  }
+
+  /** One solve of the node values from the given sources (−1: not a source). */
+  private solve(source: Int8Array): void {
+    const n = this.design.netCount;
+    const leaves = this.design.leaves;
     const val = this.val;
     for (let i = 0; i < n; i++) if (source[i] >= 0) val[i] = source[i];
     // stored charge: the value a capacitive net had before this solve
@@ -325,6 +387,6 @@ class UF {
 }
 
 interface SwitchState {
-  val: Uint8Array; conducting: Uint8Array; shorted: Uint8Array; inputs: Map<string, number | Bit[]>;
+  val: Uint8Array; conducting: Uint8Array; shorted: Uint8Array; inputs: Map<string, number | Bit[]>; state: unknown[];
   unstable: boolean; evaluations: number; dirty: boolean;
 }

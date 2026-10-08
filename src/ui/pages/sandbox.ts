@@ -17,6 +17,8 @@ import '../../editor/chipprops';
 import '../../editor/ctxmenu';
 // The pins as a bar of switches and lamps above the run bar.
 import '../../editor/iobar';
+// Keyboard keys driving key and keyboard parts.
+import '../../editor/keys';
 // The analysis tools plug into every editor (probes, timing, lint).
 import '../../editor/analysis';
 // The CPU panel: program, registers, memory and the golden model for a chip that is a processor.

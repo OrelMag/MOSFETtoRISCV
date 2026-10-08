@@ -200,6 +200,21 @@
 .ed-halt-on .ed-halt-plate { fill: var(--ed-halt); filter: drop-shadow(0 0 0.4px var(--ed-halt)); }
 .ed-halt-on .ed-halt-text { fill: var(--ed-halt-text); }
 .ed-halt-vx .ed-halt-plate { fill: color-mix(in srgb, var(--wx) 35%, transparent); }
+/* Key part: a keycap, lit while held. The keyboard: a cell with the oldest key, a ready lamp, how many more wait. */
+.ed-key-cap { fill: var(--ed-led-off); stroke: var(--sym-stroke); stroke-width: 0.1; transition: fill 0.1s; }
+.ed-key-text { font: 700 0.85px var(--font-mono); fill: var(--sym-stroke); }
+.ed-key.on .ed-key-cap { fill: var(--w1); filter: drop-shadow(0 0 0.4px var(--w1)); }
+.ed-key.on .ed-key-text { fill: var(--ed-halt-text); }
+.ed-key.vx .ed-key-cap { fill: color-mix(in srgb, var(--wx) 35%, transparent); }
+.ed-kbd-cell { fill: var(--ed-seg-off); stroke: var(--sym-stroke); stroke-width: 0.08; transition: stroke 0.1s; }
+.ed-kbd-cell.on { stroke: var(--w1); stroke-width: 0.14; filter: drop-shadow(0 0 0.3px var(--w1)); }
+.ed-kbd-cell.vx { stroke: var(--wx); }
+.ed-kbd-char { font: 700 1.05px var(--font-mono); fill: var(--bus-label-text); }
+.ed-kbd-char.dim { fill: var(--sym-stroke); opacity: 0.45; }
+.ed-kbd-n { font: 600 0.62px var(--font-mono); fill: var(--sym-stroke); }
+.sb-keys { font: 600 11px var(--font-mono); color: var(--text-2); }
+.sb-keyfield { cursor: pointer; }
+.sb-keyfield:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
 
 /* editing feedback */
 .ed-preview { fill: none; stroke: var(--ed-preview); stroke-width: 0.2; stroke-dasharray: 0.5 0.3; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }

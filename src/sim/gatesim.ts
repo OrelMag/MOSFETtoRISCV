@@ -127,6 +127,15 @@ export class GateSim implements Sim {
     for (const n of nets) this.watched[n] = 1;
   }
 
+  poke(leaf: number, state: unknown): void {
+    this.state[leaf] = state;
+    this.markDirty(leaf);
+  }
+
+  leafState(leaf: number): unknown {
+    return this.state[leaf];
+  }
+
   busy(): boolean {
     return this.pendingEvents > 0 || this.dirty.length > 0;
   }
@@ -209,14 +218,13 @@ export class GateSim implements Sim {
         this.proj[nets[i]] = b;
       });
     }
-    if (prev instanceof GateSim) {
-      d.leaves.forEach((l, li) => {
-        if (l.kind !== 'behavior' || !l.def.behavior?.init) return;
-        const o = findNode(prev.design.root, l.node.path);
-        if (o?.leafIndex === undefined || o.def.id !== l.def.id) return;
-        this.state[li] = cloneState(prev.state[o.leafIndex]);
-      });
-    }
+    d.leaves.forEach((l, li) => {
+      if (l.kind !== 'behavior' || !l.def.behavior?.init) return;
+      const o = findNode(prev.design.root, l.node.path);
+      if (o?.leafIndex === undefined || o.def.id !== l.def.id) return;
+      const s = prev.leafState(o.leafIndex);
+      if (s !== undefined) this.state[li] = cloneState(s);
+    });
     this.wheelNets.forEach((b) => (b.length = 0));
     this.wheelVals.forEach((b) => (b.length = 0));
     this.pendingEvents = 0;
@@ -419,7 +427,7 @@ export class GateSim implements Sim {
  * Deep copy of plain data (objects, arrays, typed arrays, maps, sets), so the two simulations do
  * not share it. A class instance would lose its prototype in structuredClone: share it instead.
  */
-function cloneState(s: unknown): unknown {
+export function cloneState(s: unknown): unknown {
   if (s === null || typeof s !== 'object') return s;
   const proto = Object.getPrototypeOf(s);
   const plain = proto === Object.prototype || proto === null || Array.isArray(s) || ArrayBuffer.isView(s) || s instanceof Map || s instanceof Set;

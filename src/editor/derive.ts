@@ -7,7 +7,7 @@
 import { flatten, type FlatDesign } from '../sim/flatten';
 import { inputBits, reachesTransistors } from '../sim/harness';
 import { SwitchSim } from '../sim/switchsim';
-import { B0, B1, BZ, type Behavior, type ComponentDef, inPorts, outPorts } from '../sim/types';
+import { B0, B1, BZ, type Behavior, type ComponentDef, inPorts, isExternal, outPorts } from '../sim/types';
 import { pack } from '../sim/values';
 
 export type CircuitMode = 'gate' | 'switch';
@@ -54,6 +54,7 @@ export function deriveBehavior(def: ComponentDef): Derived {
   } catch (e) {
     return fail(`cannot be solved at switch level: ${e instanceof Error ? e.message : String(e)}`);
   }
+  if (design.leaves.some((l) => isExternal(l.def))) return fail('has a key or keyboard part (a behavioural source from outside): an input no truth table can capture: switch level only');
   if (design.leaves.some((l) => l.kind === 'behavior')) return fail('contains a behavioural part (no transistors inside it to solve)');
   if (!design.leaves.some((l) => l.kind === 'nmos' || l.kind === 'pmos')) return fail('no transistors');
 

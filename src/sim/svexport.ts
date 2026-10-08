@@ -11,7 +11,7 @@
 //    Verilator and FPGA tools.
 
 import { evalOnce, forEachInput, inputBits, simulate } from './harness';
-import { type ComponentDef, inPorts, isSwitchPrim, netlistOf, outPorts } from './types';
+import { type ComponentDef, inPorts, isExternal, isSwitchPrim, netlistOf, outPorts } from './types';
 import { moduleName, structuralVerilog } from './verilog';
 import { logicDepth, stats } from './stats';
 import { ident, synthVerilog } from './vexport';
@@ -48,7 +48,7 @@ function structureModules(root: ComponentDef): string[] {
     const nl = netlistOf(d);
     if (!nl) throw new Error(`${d.name} has no structure to export`);
     for (const i of nl.instances) {
-      if (i.def.prim === 'alias' || isSwitchPrim(i.def)) continue; // written inline (verilog.ts)
+      if (i.def.prim === 'alias' || isSwitchPrim(i.def) || isExternal(i.def)) continue; // written inline (verilog.ts)
       visit(i.def, false);
     }
     out.push(structuralVerilog(d)!);

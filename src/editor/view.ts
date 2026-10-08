@@ -22,7 +22,7 @@ import {
   type ChipDoc, COMMENT_LINE, type CommentDoc, commentBox, type DefOf, defaultFace, type DisplayKind, type LabelDoc, type PartDoc, type PinDoc, pinBig, polyline, type WireDoc,
 } from './model';
 import type { Sel } from './ops';
-import { buzzerHz, LED_PITCH, ledGrid } from './parts';
+import { buzzerHz, codeGlyph, keyLabel, LED_PITCH, ledGrid } from './parts';
 
 /** Live values, read through the compile the simulator was built from (runtime.ts). */
 export interface ViewValues {
@@ -31,16 +31,21 @@ export interface ViewValues {
   labelBits(id: string): Bit[] | null;
   pinBits(name: string): Bit[] | null;
   conducting(part: string): number | undefined;
+  /** The keys waiting in a keyboard part of this chip (null: not one). */
+  keyboardQueue(part: string): number[] | null;
 }
 
 interface PartEls { doc: PartDoc; def: ComponentDef | undefined; g: SVGGElement; disp?: DisplayEls; cls: string }
+/** The live face of a display, a key part ('key') or a keyboard part ('keyboard'). */
 interface DisplayEls {
-  kind: DisplayKind; width: number; segs: SVGElement[]; shown: string;
+  kind: DisplayKind | 'key' | 'keyboard'; width: number; segs: SVGElement[]; shown: string;
   led?: SVGCircleElement; text?: SVGTextElement; halt?: SVGGElement; buzz?: SVGGElement;
   /** An LED bank: one LED per bit (index = bit). */
   leds?: SVGCircleElement[];
   /** A buzzer's tone now (Hz, 0 silent). */
   hz?: number;
+  /** A key part's keycap; a keyboard's code cell (lit while a key waits), its glyph and the "more waiting" count. */
+  key?: SVGGElement; kbdCell?: SVGRectElement; kbdChar?: SVGTextElement; kbdMore?: SVGTextElement;
 }
 interface WireEls {
   doc: WireDoc; poly: Vec[] | null; key: string; ver: number; path: SVGPathElement; hit: SVGPathElement; width: number; cls: string;
@@ -435,10 +440,38 @@ export class EditorView {
     g.append(s('rect', { class: 'hit', x: -0.4, y: -0.4, width: geo.w + 0.8, height: geo.h + 0.8, rx: 0.6 }));
     let disp: DisplayEls | undefined;
     if ('display' in p.ref) disp = this.drawDisplay(g, p.ref.display, p.ref.width ?? 1, geo.w, geo.h, !!p.flip);
+    else if ('key' in p.ref) disp = this.drawKey(g, p.ref.key, geo.w, geo.h, !!p.flip);
+    else if ('keyboard' in p.ref) disp = this.drawKeyboard(g, def, geo.w, geo.h, !!p.flip);
     else g.append(drawSymbol(def, p.flip));
     const nameAt = instNameAt(def);
     if (nameAt) g.append(s('text', { class: 'inst-name', x: nameAt.x, y: nameAt.y, 'text-anchor': nameAt.anchor }, p.label ?? p.id));
     return { g, disp };
+  }
+
+  /** A key part: a keycap with the key's name, lit while the key is held; its output on the right. */
+  private drawKey(g: SVGGElement, bind: string, w: number, h: number, flip: boolean): DisplayEls {
+    g.append(s('rect', { class: 'sym-body sym-box ed-disp-box', x: 0, y: 0, width: w, height: h, rx: 0.6 }),
+      s('circle', { class: 'ed-disp-port', cx: flip ? 0 : w, cy: h / 2, r: 0.16 }));
+    const label = keyLabel(bind);
+    const key = s('g', { class: 'ed-key' },
+      s('rect', { class: 'ed-key-cap', x: 0.45, y: 0.3, width: w - 0.9, height: h - 0.6, rx: 0.35 }),
+      s('text', { class: 'ed-key-text', x: w / 2, y: h / 2 + 0.3, 'text-anchor': 'middle', style: label.length > 4 ? `font-size:${(0.85 * 4) / label.length}px` : null }, label));
+    g.append(key);
+    return { kind: 'key', width: 1, segs: [], shown: '', key };
+  }
+
+  /**
+   * A keyboard part: the library box (ports named) with a cell showing the oldest waiting key, lit
+   * while one waits (ready), and how many more wait under it.
+   */
+  private drawKeyboard(g: SVGGElement, def: ComponentDef, w: number, h: number, flip: boolean): DisplayEls {
+    g.append(drawSymbol(def, flip));
+    const cx = w / 2;
+    const kbdCell = s('rect', { class: 'ed-kbd-cell', x: cx - 0.95, y: 0.55, width: 1.9, height: 1.65, rx: 0.25 });
+    const kbdChar = s('text', { class: 'ed-kbd-char dim', x: cx, y: 1.75, 'text-anchor': 'middle' }, '·');
+    const kbdMore = s('text', { class: 'ed-kbd-n', x: cx, y: h - 0.65, 'text-anchor': 'middle' }, '');
+    g.append(kbdCell, kbdChar, kbdMore);
+    return { kind: 'keyboard', width: 8, segs: [], shown: '', kbdCell, kbdChar, kbdMore };
   }
 
   /** A display: LED, 7-segment digit (bit i = segment a…g, bit 7 = dp), hex digit, value box or halt plate. */
@@ -605,7 +638,9 @@ export class EditorView {
       }
     }
     for (const [id, e] of this.parts) {
-      if (e.disp) this.paintDisplay(e.disp, v?.endBits(`p:${id}.a`) ?? null);
+      if (e.disp?.kind === 'key') this.paintKey(e.disp, v?.endBits(`p:${id}.q`) ?? null);
+      else if (e.disp?.kind === 'keyboard') this.paintKeyboard(e.disp, v?.endBits(`p:${id}.code`) ?? null, v?.endBits(`p:${id}.ready`) ?? null, v?.keyboardQueue(id) ?? null);
+      else if (e.disp) this.paintDisplay(e.disp, v?.endBits(`p:${id}.a`) ?? null);
       const c = v?.conducting(id);
       e.g.classList.toggle('conducting', c === 1);
       e.g.classList.toggle('maybe', c === 2);
@@ -623,6 +658,26 @@ export class EditorView {
     if (key === this.toneKey) return;
     this.toneKey = key;
     this.sound(tones);
+  }
+
+  private paintKey(d: DisplayEls, bits: Bit[] | null): void {
+    const key = bits ? bits.join('') : '';
+    if (key === d.shown) return;
+    d.shown = key;
+    const b = bits?.[0];
+    d.key!.setAttribute('class', `ed-key${b === B1 ? ' on' : b === BX || b === BZ ? ' vx' : ''}`);
+  }
+
+  private paintKeyboard(d: DisplayEls, code: Bit[] | null, ready: Bit[] | null, queue: number[] | null): void {
+    const key = code && ready ? `${code.join('')}|${ready[0]}|${queue?.length ?? 0}` : '';
+    if (key === d.shown) return;
+    d.shown = key;
+    const v = code ? pack(code) : -1;
+    d.kbdChar!.textContent = v > 0 ? codeGlyph(v) : v === 0 ? '·' : '?';
+    d.kbdChar!.setAttribute('class', `ed-kbd-char${v > 0 ? '' : ' dim'}`);
+    const r = ready?.[0];
+    d.kbdCell!.setAttribute('class', `ed-kbd-cell${r === B1 ? ' on' : r === BX || r === BZ ? ' vx' : ''}`);
+    d.kbdMore!.textContent = queue && queue.length > 1 ? `+${queue.length - 1}` : '';
   }
 
   private paintDisplay(d: DisplayEls, bits: Bit[] | null): void {
@@ -665,7 +720,10 @@ export class EditorView {
       if (built && this.doc) {
         const shown = new Set<number>();
         for (const [k, n] of built.netOfEnd) if (k.startsWith('pin:')) shown.add(n);
-        for (const p of this.doc.parts) if ('display' in p.ref && p.ref.display !== 'halt') shown.add(built.netOfEnd.get(`p:${p.id}.a`) ?? -1);
+        for (const p of this.doc.parts) {
+          if ('display' in p.ref && p.ref.display !== 'halt') shown.add(built.netOfEnd.get(`p:${p.id}.a`) ?? -1);
+          else if ('keyboard' in p.ref) shown.add(built.netOfEnd.get(`p:${p.id}.code`) ?? -1);
+        }
         const best = new Map<number, { at: Vec; len: number; wire: string }>();
         for (const e of this.wires.values()) {
           const n = built.netOfWire.get(e.doc.id);

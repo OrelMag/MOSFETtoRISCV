@@ -21,7 +21,7 @@ import { UserLibrary } from './library';
 import { chipDeps, type ChipDoc, type DefOf, type PartRef, type PinValue, type Workspace } from './model';
 import type { Sel } from './ops';
 import { PalettePanel } from './palette';
-import { isError, partDef } from './parts';
+import { isError, keyLabel, partDef } from './parts';
 import { PropsPanel } from './props';
 import { EditorSim, HZ_STEPS, type RunMode } from './runtime';
 import { activeChip, closeChip, keepVolatile, newChip, openChip, setPinValue } from './session';
@@ -605,6 +605,11 @@ export class Editor {
       bits.push(h('span', { class: `pulse${sim.running ? ' busy' : ''}${sim.unstable ? ' warn' : ''}` }));
       if (sim.unstable) bits.push('oscillating');
       if (sim.halted) bits.push(h('span', { class: 'sb-halted', title: 'A halt part reads 1: Run stops after every step until it reads 0' }, 'halted'));
+      const keys = sim.keyBinds.map(keyLabel);
+      if (sim.hasKeyboard) keys.push('⌨');
+      if (keys.length) {
+        bits.push(h('span', { class: 'sb-keys', title: `${sim.keyBinds.length ? 'Key parts listen to these keys: hold one to drive them' : ''}${sim.keyBinds.length && sim.hasKeyboard ? '. ' : ''}${sim.hasKeyboard ? 'Keyboard part: typed keys reach it while the circuit runs or with Type on' : ''}` }, keys.join(' ')));
+      }
       if (sim.hasClock) bits.push(`${sim.cycles} cycles`);
       if (sim.sim.kind === 'gate') bits.push(`t = ${sim.time}`);
       if (sim.running && sim.mode === 'cycle' && sim.hasClock) bits.push(`${fmtHz(sim.achievedHz)}`);
@@ -765,7 +770,9 @@ export class Editor {
       ['F', 'flip the selection left–right'],
       ['Arrows (Shift: ×5)', 'nudge the selection'],
       ['Ctrl+Enter', 'run / pause the simulation'],
-      ['Esc', 'cancel · clear the selection'],
+      ['A key a Key part listens to', 'drives it while held (and is not a shortcut while that chip is open)'],
+      ['Any key, while running or with Type on', 'is typed into the chip\'s Keyboard parts'],
+      ['Esc', 'cancel · clear the selection · leave Type'],
     ];
     const close = () => ov.remove();
     const ov = h('div', { class: 'sb-help', role: 'dialog', 'aria-label': 'Keyboard shortcuts', onclick: (e: Event) => { if (e.target === ov) close(); } },
