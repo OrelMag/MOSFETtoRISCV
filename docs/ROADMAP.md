@@ -292,6 +292,20 @@ chip presentation, capacity and the program-solving half of Turing Complete.
   copied and deleted with the rest, saved and shared, never compiled (writing one recompiles nothing)
 - ⏳ Library organization: collections / folders of chips, a starred bar for frequent parts,
   several projects (separate workspaces) (DLS)
+- ⏳ Waypoints from the right-click menu: "Add a bend here" on a wire puts a corner at the clicked point, ready to
+  drag (the menu already has "Remove this bend"; `ops.ts` dragWire / removeBend are the model). One undo step;
+  on a straight wire the corner becomes a breakpoint
+
+**Colourful mode** (Turing Complete style; mockup first). Colour says *which* signal, brightness and the
+flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every combination); light and dark themes
+- ⏳ User-coloured wires: pick a colour for a wire or a whole net (right-click menu, properties, a swatch row);
+  saved in the chip document, shared with it, inherited by the net's other drawn wires
+- ⏳ Auto colour per net: every bus and named net gets a distinct hue (stable across edits, by net identity), so
+  a data path can be followed across the canvas; a toggle beside the wire palettes
+- ⏳ Vivid look: a dark grid, filled bright part bodies tinted by category or chip hue, thicker wires; a setting
+  like `data-palette`, applied to the sandbox, the chapters' schematics and the workbench
+- ⏳ Optional cartoonish components: a playful symbol set (rounded, chunky bodies, bold outlines, small icons for
+  displays and memories) with the same sizes and port positions, so no layout or routing changes
 
 **Capacity and speed**
 - ⏳ Large memories: RAM well beyond 2^6 words and ROM beyond 2^8 (both games reach tens of KB),
@@ -311,7 +325,25 @@ chip presentation, capacity and the program-solving half of Turing Complete.
 transistor NAND to a pipelined 16-bit RISC-V-like CPU (RV16) with traps and interrupts. It has
 graded build challenges, number and Boolean drills, assembly puzzles, a codex, skip with a reference
 solution, and Unlock all. Its soft locks apply to the campaign only; the chapters and the sandbox
-challenges stay open.
+challenges stay open. Next:
+- ⏳ **A level screen of its own** (`#/campaign/play/<node>`; mockup first): today a level opens in the general
+  sandbox with a strip under the canvas. The level screen keeps the editor but drops the sandbox chrome (tabs, File
+  menu, the full palette): the brief and the *why* in a side panel, the anatomy diagram with this block lit, only
+  the level's unlocked parts, Check / stars / par / tips / Next built in, and a way out to the full sandbox
+- ⏳ **Why we are building it**: each level's `why` grows from a line into a short explanation: which problem in
+  the CPU this block solves (shown on the anatomy diagram), what breaks or slows down without it, what it costs
+  against the alternatives, and which later levels use it. Shown before the level and again, with the learner's
+  measured cost, after a pass
+- ⏳ **Step-by-step solution walkthrough**, in every level: the reference answer built on the level's canvas one
+  step at a time (a part, its wires, a sub-chip), each step narrated: why this part, which law or trick it applies
+  (codex links), the cost so far against par, and the truth-table rows or test cases it already satisfies.
+  Forward / back, and "I'll take it from here" at any step, which leaves the partial circuit to finish. Steps are
+  generated from the reference chip documents in dataflow order, with authored narration per level; core levels
+  go block by block. Complements "Show answer" (all at once) and "Do it for me" (no explanation)
+- ⏳ **A fuller codex**: entries are dense shorthand today. Each gains an explanation an engineer can learn from,
+  not only recall: the idea in a paragraph, a worked example (numbers, a K-map, a waveform), a diagram or a live
+  mini-scene, common mistakes, where it sits in the CPU, and links to the chapter steps and levels that use it.
+  The current one-liner stays as the summary (the glossary's hover text)
 
 **Not planned**: online leaderboards and score histograms (static site; share links take their place).
 
@@ -395,6 +427,44 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
   computed; the cross-section widget carries the intuition
 - A configurable-depth pipeline lab (3 / 5 / 7 stages): large; the adder swap, predictor, cache and multicycle
   comparisons already show the trade-offs
+
+### Phase 14 — Before the transistor: relays, vacuum tubes, punch cards ⏳
+Why the MOSFET won is best felt, not told: build the same adder from relays and from tubes and *see* the machine
+it becomes. Mockup first for the 3D view, the technology setting and the new act. In the journey, a prologue act
+before the MOSFET chapter; in the campaign, an act of its own (or a side branch) ending in a machine programmed
+with punch cards.
+
+**Relay and tube bricks** (switch level, like the MOSFET)
+- ⏳ Relay: a coil driving changeover contacts (normally open / normally closed), contacts conducting both ways (a
+  pass switch), milliseconds per operation, a latching (self-holding) relay as memory
+- ⏳ Triode: the grid controls the plate current, one way only, with a plate resistor as the pull-up (ratioed
+  logic, which `switchsim.ts` already models with its resistor strength); tube inverter and NOR, cathode follower,
+  the Eccles–Jordan flip-flop; microseconds per operation, watts per tube
+- ⏳ Gates and blocks in each technology, measured like the CMOS ones (relays / tubes, delay, power): first the
+  NAND-mapped versions (the brick principle), then native designs that show what each technology is good at
+  (changeover contacts make a relay XOR or a mux nearly free; tube logic prefers NOR), so the comparison is honest
+- ⏳ A technology setting for any chip (CMOS / relay / tube) in the chapters, the workbench and the sandbox:
+  the netlist is the same, the counts, delay, power and volume follow the technology; sandbox palette parts for
+  the relay and the triode
+
+**The 3D machine** (to show the bulk)
+- ⏳ A 3D view of any design at physical scale: its flattened netlist as relays on boards in racks, or tubes in
+  chassis in cabinets, with the same design in CMOS beside it (a speck) and a human figure for scale. Sizes,
+  power and heat from per-device constants labelled illustrative (as the 25 ps / NAND is); historical machines
+  for reference (Zuse Z3: about 2 600 relays; ENIAC: 17 468 tubes, about 150 kW and 27 t)
+- ⏳ Live: relays click and tubes glow with the simulation's values; orbit, zoom, and a click on a rack opens
+  that block's schematic (transparent boxes in 3D too)
+- ⏳ Its own lazily loaded chunk (a small WebGL renderer, or three.js if it earns its size); the main bundle does
+  not grow
+
+**Punch cards**
+- ⏳ History step in the journey: Jacquard's loom (1804), Hollerith's census cards (1890), the IBM 80-column
+  card (1928) and its Hollerith code
+- ⏳ A card editor: 80 columns × 12 rows, click to punch, or type and it punches the Hollerith code; a binary
+  mode for machine words (one word per column or per row); a deck of cards, reorderable, exportable
+- ⏳ A card reader part (sandbox and campaign) feeding a ROM or a word stream (like the keyboard part), and the
+  program input of the relay / tube machine
+- ⏳ In the campaign: a Hollerith-code drill and a level where the program arrives on cards
 
 ---
 
