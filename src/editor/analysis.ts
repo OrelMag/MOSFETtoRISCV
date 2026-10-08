@@ -9,7 +9,7 @@
 
 import { instPort, type Vec } from '../sim/geometry';
 import type { Sim } from '../sim/sim';
-import { CLK_TO_Q, PS_PER_NAND, SETUP } from '../sim/timing';
+import { CLK_TO_Q, PS_NOTE, PS_PER_NAND, SETUP } from '../sim/timing';
 import { h, icon, s } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { LogicAnalyzer, type Lane } from '../view/analyzer';
@@ -427,7 +427,7 @@ class Analysis {
     el.append(
       h('div', { class: 'sb-tm-read' },
         h('div', null, h('b', null, String(r.period)), h('span', null, 'NAND delays per cycle')),
-        h('div', null, h('b', null, t.mhz >= 1000 ? `${(t.mhz / 1000).toFixed(2)} GHz` : `${t.mhz.toFixed(0)} MHz`), h('span', null, `max clock at ~${PS_PER_NAND} ps / NAND`))),
+        h('div', { title: PS_NOTE }, h('b', null, t.mhz >= 1000 ? `${(t.mhz / 1000).toFixed(2)} GHz` : `${t.mhz.toFixed(0)} MHz`), h('span', null, `max clock at an illustrative ${PS_PER_NAND} ps / NAND`))),
       h('p', { class: 'sb-sum' }, `clk→q ${CLK_TO_Q} + logic ${r.logic} + setup ${SETUP}. Launch ${r.launch.join('.') || 'an input'}, capture ${r.capture.join('.')}.`),
       h('div', { class: 'tstages sb-tm-stages' }, r.stages.map((st) => {
         const w = Math.max(2, ((st.arrival - prev) / maxA) * 100);

@@ -111,7 +111,9 @@ export const chFastAdders: Chapter = {
       body: `
         <p><strong>Static timing analysis</strong> finds the longest register-to-register path without running any
         program: start at every flip-flop output (clk→q), propagate arrival times through every gate, and take the
-        latest arrival at any flip-flop input (+ setup). The panel shows the result and highlights the path.</p>
+        latest arrival at any flip-flop input (+ setup). The panel shows the result and highlights the path. Its clock rate
+        converts NAND delays at an illustrative 25 ps each, a loaded NAND2 at 28 nm; real sign-off timing comes from a
+        characterized cell library, with slew, load and wire RC per arc (chapter 25 runs our dual-core through one).</p>
         <p>Surprise: it is not <code>lw</code>. It is a <strong>branch</strong>: PC → instruction memory → decode →
         immediate mux → SrcB → 32-bit subtract in the ALU → zero detect → next-PC logic → PC.
         <p>The ALU is about 60% of the path, and most of that is the ripple carry.</p>`,

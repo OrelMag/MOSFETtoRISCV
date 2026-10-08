@@ -12,8 +12,11 @@ import { type ComponentDef, netlistOf } from './types';
 /** Delays of our NAND master–slave flip-flop, in NAND delays (measured from its structure). */
 export const CLK_TO_Q = 3;
 export const SETUP = 3;
-/** A loaded NAND2 in a 28 nm-class process: turns NAND delays into a clock rate. */
+/** An illustrative loaded NAND2 in a 28 nm-class process, not characterized from a cell library:
+ *  turns NAND delays into a clock rate. */
 export const PS_PER_NAND = 25;
+/** Tooltip for every clock rate derived from PS_PER_NAND. */
+export const PS_NOTE = `Clock rates assume an illustrative ${PS_PER_NAND} ps per NAND delay (a loaded NAND2 in a 28 nm-class process), not timing characterized from a cell library.`;
 
 export interface TimingReport {
   /** Clock period needed: clk-to-q + logic + setup, in NAND delays. */
