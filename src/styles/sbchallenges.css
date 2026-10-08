@@ -85,3 +85,59 @@ a.sb-chal-flag:hover { filter: brightness(1.1); text-decoration: underline; }
 .sb-chal-level { margin: 2px 0 6px; }
 .sb-chal-tips { margin: 2px 0 6px; padding-left: 20px; color: var(--text-2); line-height: 1.45; }
 .sb-chal-links { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- the test player (Check's cases played on the circuit) ---------- */
+.sb-chal-watch { margin-left: auto; }
+.sb-chal-tests { border-top: 1px solid var(--border); padding: 4px 12px 6px 34px; background: var(--surface); }
+.sb-tp-bar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; row-gap: 2px; }
+.sb-tp-nav, .sb-tp-tools, .sb-tp-fails { display: inline-flex; align-items: center; gap: 4px; }
+.sb-tp-tools { margin-left: auto; }
+.sb-tp-bar .btn.icon-only { padding: 3px; }
+.sb-tp-bar .btn[disabled] { opacity: 0.4; cursor: default; }
+.sb-tp-name { display: inline-flex; align-items: center; gap: 5px; font: 600 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); margin-right: 4px; }
+.sb-tp-pos { font: 12px var(--font-mono); color: var(--text-2); margin: 0 6px 0 4px; white-space: nowrap; }
+.sb-tp-pos b { color: var(--text); }
+.sb-tp-nav > b { display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; }
+.sb-tp-nav > b.ok { color: var(--good); }
+.sb-tp-nav > b.bad { color: var(--ed-err); }
+.sb-tp-fails { margin-left: 8px; }
+.sb-tp-fails small { font: 11.5px var(--font-mono); color: var(--ed-err); }
+.sb-tp-rate { font: 12px var(--font-mono); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 4px; }
+
+.sb-tp-scrub { position: relative; margin: 2px 0; }
+.sb-tp-scrub input[type=range] { width: 100%; margin: 0; accent-color: var(--accent); }
+.sb-tp-marks { position: absolute; left: 8px; right: 8px; top: 0; bottom: 0; pointer-events: none; }
+.sb-tp-marks i { position: absolute; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ed-err); opacity: 0.75; }
+.sb-tp-marks.stale i { opacity: 0.3; }
+
+.sb-tp-table { overflow-x: auto; max-width: 100%; }
+.sb-tp-table table { border-collapse: collapse; font: 12px/1.35 var(--font-mono); color: var(--text-2); }
+.sb-tp-table th { font-weight: 600; text-align: right; padding: 1px 8px; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+.sb-tp-table th.in { color: var(--text-2); }
+.sb-tp-table th.out { color: var(--text); }
+.sb-tp-table td { text-align: right; padding: 1px 8px; white-space: nowrap; }
+.sb-tp-table td.n, .sb-tp-table th.n { color: var(--muted); text-align: right; }
+.sb-tp-table td.clk, .sb-tp-table th.clk { text-align: center; color: var(--accent); }
+.sb-tp-table td.dc { color: var(--muted); }
+.sb-tp-table td.st { color: var(--good); text-align: center; padding: 0 4px; }
+.sb-tp-table tr.bad td.st { color: var(--ed-err); }
+.sb-tp-table tbody tr { cursor: pointer; }
+.sb-tp-table tbody tr:hover td { background: var(--surface-2); }
+.sb-tp-table tr.cur { cursor: default; }
+.sb-tp-table tr.cur td { background: var(--accent-soft); color: var(--text); }
+.sb-tp-table tr.cur td.good { color: var(--good); font-weight: 600; }
+.sb-tp-table tr.cur td.wrong { color: var(--ed-err); font-weight: 600; }
+.sb-tp-table td.wrong s { opacity: 0.85; }
+.sb-tp-note { margin: 3px 0 0; font-size: 12px; color: var(--text-2); }
+.sb-tp-note.err { color: var(--ed-err); }
+
+.sb-tp-progs { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 6px 0 0; max-height: 84px; overflow: auto; }
+.sb-tp-progs-h { font-size: 12.5px; color: var(--text-2); margin-right: 4px; }
+.sb-tp-prog {
+  display: inline-flex; align-items: center; gap: 3px; font: 11.5px var(--font-mono); color: var(--text-2); cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 99px; padding: 1px 8px;
+}
+.sb-tp-prog .icon { color: var(--good); }
+.sb-tp-prog.bad { color: var(--text); border-color: color-mix(in srgb, var(--ed-err) 50%, var(--border)); }
+.sb-tp-prog.bad .icon { color: var(--ed-err); }
+.sb-tp-prog:hover { background: var(--surface-2); }

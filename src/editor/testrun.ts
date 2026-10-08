@@ -136,14 +136,20 @@ export class TestReplay {
       return es.notify();
     }
     if (!this.saved) this.begin();
+    let restarted = false;
     if (sim !== this.on) {
-      // A new simulation (an edit while paused): no position, no checkpoints on it.
+      // A new simulation (the first move, an edit while paused): no position, no checkpoints on it.
       this.on = sim;
       this.marks.clear();
       this.k = -1;
+      if (this.set.kind === 'table') {
+        // Check runs a table on a fresh simulation, where nothing is known before the inputs are:
+        // a value the editor carried over onto a net nothing drives any more must not pass a row.
+        sim.reset('x');
+        restarted = true;
+      }
     }
     this.error = undefined;
-    let restarted = false;
     try {
       if (this.set.kind === 'table') this.drive(sim, this.set.at(k).inputs);
       else restarted = this.play(sim, k);
