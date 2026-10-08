@@ -9,12 +9,12 @@ import { Builder } from '../builder';
 import { busMux2, equal, incrementer, muxTree } from '../combinational';
 import { define, merger, splitter } from '../define';
 import { orN } from '../wide';
-import { AND, NOT, OR } from '../gates';
+import { AND, NOT, OR, XOR } from '../gates';
 import { register } from '../sequential';
 import { TIE0, TIE1 } from '../transistors';
 import { CAUSE } from '../../riscv/rv16/isa16';
 import { BRANCH16, CTL16, IMM16, NEXTPC16 } from './cpu';
-import { RF8 } from './logic';
+import { ADD16, RF8 } from './logic';
 import { CSR16F, ILL16, SYSDEC16 } from './system';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
@@ -35,7 +35,7 @@ export const PREG16: ComponentDef = (() => {
   return define({
     id: 'rv16_preg', name: 'Pipeline register (16-bit)', category: 'sequential',
     summary: 'q ← clr ? 0 : en ? d : q. en = 0 holds the stage (a stall); clr = 1 turns it into a bubble (a flush): all-zero control bits do nothing.',
-    ports: [bus('d', 16, 'in'), bit('en', 'in'), bit('clr', 'in'), bit('clk', 'in'), bus('q', 16, 'out')],
+    ports: [bus('d', 16, 'in'), bit('en', 'in'), bit('clr', 'in'), { name: 'clk', width: 1, dir: 'in', clock: true }, bus('q', 16, 'out')],
     symbol: { kind: 'box', label: 'PIPE REG' },
     netlist: () => ({ pins: { ...pinsAt(['d', 'en', 'clr', 'clk'], 0), q: [R, 8] }, instances: b.instances, nets: b.nets() }),
   });
@@ -117,6 +117,11 @@ export interface Rv16PipeOptions {
   flush: boolean;
   /** CSRs, precise traps and the external interrupt, taken in E (needs flush). */
   sys?: boolean;
+  /**
+   * Static branch prediction in F (needs flush, not sys): jal and backward branches are taken at
+   * once (target = pc + imm, computed in F); E redirects only when the guess was wrong.
+   */
+  predict?: boolean;
 }
 
 const pipes = new Map<string, ComponentDef>();
@@ -128,7 +133,7 @@ const pipes = new Map<string, ComponentDef>();
  * resolves in E, redirecting the PC and flushing F/D and D/E.
  */
 export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
-  const key = `${+o.fwd}${+o.stall}${+o.flush}${o.sys ? 's' : ''}`;
+  const key = `${+o.fwd}${+o.stall}${+o.flush}${o.sys ? 's' : ''}${o.predict ? 'p' : ''}`;
   let d = pipes.get(key);
   if (d) return d;
   const b = new Builder(10, 16, 6);
@@ -142,13 +147,28 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
 
   // ---- F: the PC (hold on a stall, jump on a redirect, 0 on reset) ----
   const pcInc = b.op(incrementer(16), [''], 'pc + 1');
+  let seq = `${pcInc}.y`, predF = zero1, tgtF = '';
+  if (o.predict) {
+    // Predict in F, from the fetched word: jal, or a branch whose offset is negative (a loop).
+    const op = b.op(splitter([1, 1, 1, 1, 11, 1], 2), ['instr'], 'op, sign (F)');
+    const immF = b.op(IMM16, ['instr'], 'immediates (F)');
+    b.next();
+    const isBr = b.op1(AND, [`${op}.o3`, b.op1(NOT, [`${op}.o2`])], 'branch?');
+    const isJal = b.op1(AND, [b.op1(AND, [`${op}.o3`, `${op}.o2`]), b.op1(NOT, [b.op1(OR, [`${op}.o1`, `${op}.o0`])])], 'jal?');
+    b.next();
+    predF = b.name(b.op1(OR, [b.op1(AND, [isBr, `${op}.o5`], 'backward'), isJal], 'predict taken'), 'predF', true);
+    tgtF = b.op(ADD16, ['', b.op1(busMux2(16), [`${immF}.sb`, `${immF}.j`, isJal]), zero1], 'pc + imm (F)');
+    b.next();
+    seq = b.op1(busMux2(16), [seq, `${tgtF}.s`, predF], 'predicted');
+  }
   b.next();
-  const hold = o.stall ? b.op1(busMux2(16), [`${pcInc}.y`, '', ''], 'stall: hold') : `${pcInc}.y`;
+  const hold = o.stall ? b.op1(busMux2(16), [seq, '', ''], 'stall: hold') : seq;
   const jump = o.flush ? b.op1(busMux2(16), [hold, '', ''], 'redirect') : hold;
   const pcNext = b.op1(busMux2(16), [jump, zero16, 'rst'], 'reset');
   b.next();
   const pcq = b.name(`${b.op(register(16), [pcNext, one, 'clk'], 'PC')}.q`, 'pcF', true);
   b.wire(pcq, `${pcInc}.a`);
+  if (tgtF) b.wire(pcq, `${tgtF}.a`);
   if (o.stall) b.wire(pcq, `${inst(hold)}.b`);
   b.wire(pcq, 'pc');
   b.next();
@@ -160,6 +180,7 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
   const pcD = b.name(P(pcq, nstall, fdClr, 'F/D pc'), 'pcD', true);
   // A valid bit: 0 in a bubble (whose all-zero word would otherwise be an illegal instruction).
   const validD = o.sys ? `${b.op(splitter([1, 15], 2), [P(b.op1(constWord(16, 1), []), nstall, fdClr, 'F/D valid')])}.o0` : zero1;
+  const predD = o.predict ? `${b.op(splitter([1, 15], 2), [P(b.op1(merger([1, 15], 2), [predF, b.op1(constWord(15, 0), [])]), nstall, fdClr, 'F/D predicted')])}.o0` : zero1;
   b.next();
 
   // ---- D: decode, read registers ----
@@ -171,7 +192,7 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
   const immD = b.op1(muxTree(2, 16), [`${imm}.i`, `${imm}.sb`, `${imm}.j`, `${imm}.u`, `${ctl}.isel`], 'imm');
   const rf = b.op(RF8, ['', '', '', rs1D, rs2D, nclk], 'registers (written at the falling edge)');
   // Control word: rwe bimm alu[4] mwe wb[2] br jal jalr cond[2] valid + 1 spare = 16 bits.
-  const cw = b.op1(merger([1, 1, 4, 1, 2, 1, 1, 1, 2, 1, 1], 2), [`${ctl}.rwe`, `${ctl}.bimm`, `${ctl}.alu`, `${ctl}.mwe`, `${ctl}.wb`, `${ctl}.br`, `${ctl}.jal`, `${ctl}.jalr`, `${f}.o0`, validD, zero1], 'control word');
+  const cw = b.op1(merger([1, 1, 4, 1, 2, 1, 1, 1, 2, 1, 1], 2), [`${ctl}.rwe`, `${ctl}.bimm`, `${ctl}.alu`, `${ctl}.mwe`, `${ctl}.wb`, `${ctl}.br`, `${ctl}.jal`, `${ctl}.jalr`, `${f}.o0`, validD, predD], 'control word');
   const rw = b.op1(merger([3, 3, 3, 7], 2), [rdD, rs1D, rs2D, b.op1(constWord(7, 0), [])], 'register numbers');
   b.next();
 
@@ -212,6 +233,13 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
   b.next();
   const np = b.op(NEXTPC16, [pcE, immE, aE, brE, take, jalE, jalrE], 'next PC');
   let redirect = b.name(`${np}.ld`, 'redirect', true), target = `${np}.target`;
+  if (o.predict) {
+    // Wrong guess: taken but not predicted (go to the target), or predicted but not taken (go back to pc + 1).
+    const predE = `${ce}.o10`;
+    redirect = b.name(b.op1(XOR, [`${np}.ld`, predE], 'mispredicted'), 'redirect2', true);
+    target = b.op1(busMux2(16), [`${np}.target`, `${np}.pc1`, predE], 'target or pc + 1');
+    b.next();
+  }
   if (o.sys) {
     // ---- traps, taken in E: the instruction in E does not run, older ones complete (precise) ----
     const ill = b.op1(ILL16, [instrE], 'illegal?');
@@ -312,12 +340,13 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
     b.wire(redirect, `${inst(deClr)}.i2`);
   } else void redirect;
   const R = b.right;
-  const name = o.sys ? 'RV16 pipeline with traps and interrupts' : o.flush ? 'RV16 pipeline' : o.stall ? 'RV16 pipeline (no branches)' : o.fwd ? 'RV16 pipeline (forwarding only)' : 'RV16 pipeline (no hazard handling)';
+  const name = o.predict ? 'RV16 pipeline with branch prediction' : o.sys ? 'RV16 pipeline with traps and interrupts' : o.flush ? 'RV16 pipeline' : o.stall ? 'RV16 pipeline (no branches)' : o.fwd ? 'RV16 pipeline (forwarding only)' : 'RV16 pipeline (no hazard handling)';
   d = define({
     id: `rv16_pipe_${key}`, name, category: 'cpu',
     summary: 'Five stages, F D E M W, with pipeline registers between them; the register file is written at the falling edge. '
+      + (o.predict ? 'jal and backward branches are predicted taken in F (target = pc + imm there); E redirects only on a wrong guess. ' : '')
       + (o.fwd ? 'Forwarding from M and W into E. ' : '') + (o.stall ? 'A load followed by a user stalls one cycle. ' : '') + (o.flush ? 'Branches and jumps resolve in E and flush two instructions. ' : '') + (o.sys ? 'Traps and the external interrupt are taken in E: precise, with a valid bit so bubbles never trap.' : ''),
-    ports: [bit('clk', 'in'), bit('rst', 'in'), bus('instr', 16, 'in'), bus('drdata', 16, 'in'), ...(o.sys ? [bit('irq', 'in')] : []),
+    ports: [{ name: 'clk', width: 1, dir: 'in', clock: true }, bit('rst', 'in'), bus('instr', 16, 'in'), bus('drdata', 16, 'in'), ...(o.sys ? [bit('irq', 'in')] : []),
       bus('pc', 16, 'out'), bus('daddr', 16, 'out'), bus('dwdata', 16, 'out'), bit('dwe', 'out'), bit('rwe', 'out'), bus('rwa', 3, 'out'), bus('rwd', 16, 'out')],
     symbol: { kind: 'box', label: 'RV16 PIPE' },
     netlist: () => ({
@@ -332,3 +361,4 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
 // Built at load (resolvable by id after a reload).
 export const RV16_PIPE = rv16Pipe({ fwd: true, stall: true, flush: true });
 export const RV16_PIPE_SYS = rv16Pipe({ fwd: true, stall: true, flush: true, sys: true });
+export const RV16_PIPE_PRED = rv16Pipe({ fwd: true, stall: true, flush: true, predict: true });

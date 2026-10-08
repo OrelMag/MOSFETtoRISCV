@@ -20,7 +20,11 @@ function mulberry(seed: number): () => number {
   };
 }
 
-export function randomProgram(seed: number, level: RandLevel, n = 40): string {
+const MUL_OPS = ['mul', 'mulh', 'mulhsu', 'mulhu'];
+const DIV_OPS = ['div', 'divu', 'rem', 'remu'];
+
+/** md: also the MD opcode (multiplies only, or multiplies and divides). */
+export function randomProgram(seed: number, level: RandLevel, n = 40, md?: 'mul' | 'all'): string {
   const r = mulberry(seed * 7919 + level);
   const pick = <T>(xs: readonly T[]): T => xs[Math.floor(r() * xs.length)];
   const int = (lo: number, hi: number) => lo + Math.floor(r() * (hi - lo + 1));
@@ -42,6 +46,10 @@ export function randomProgram(seed: number, level: RandLevel, n = 40): string {
     if (level >= 2 && u < 0.35) {
       const k = int(0, 31);
       lines.push(r() < 0.5 ? `        sw   ${a}, ${k}(zero)` : `        lw   ${rd}, ${k}(zero)`);
+      continue;
+    }
+    if (md && r() < 0.3) {
+      lines.push(`        ${pick(md === 'all' && r() < 0.5 ? DIV_OPS : MUL_OPS)} ${rd}, ${a}, ${b}`);
       continue;
     }
     const v = r();

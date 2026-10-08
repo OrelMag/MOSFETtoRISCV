@@ -195,7 +195,7 @@ export const PC16: ComponentDef = (() => {
   return define({
     id: 'rv16_pc', name: 'Program counter (16-bit)', category: 'sequential',
     summary: 'pc ← rst ? 0 : ld ? d : pc + 1 at every rising edge: a register, an incrementer and two bus multiplexers.',
-    ports: [bit('rst', 'in'), bit('ld', 'in'), bus('d', 16, 'in'), bit('clk', 'in'), bus('pc', 16, 'out')],
+    ports: [bit('rst', 'in'), bit('ld', 'in'), bus('d', 16, 'in'), { name: 'clk', width: 1, dir: 'in', clock: true }, bus('pc', 16, 'out')],
     symbol: { kind: 'box', label: 'PC' },
     netlist: () => ({ pins: { ...pinsAt(['rst', 'ld', 'd', 'clk'], 0), pc: [R, 8] }, instances: b.instances, nets: b.nets() }),
   });
@@ -220,7 +220,7 @@ export const RF8: ComponentDef = (() => {
   return define({
     id: 'rv16_rf', name: 'Register file (8 × 16)', category: 'memory',
     summary: 'Write: the decoder (enabled by we) loads one of x1…x7 at the clock edge. Read: two 8:1 bus multiplexers, combinational. x0 is the constant 0: no register.',
-    ports: [bus('wa', 3, 'in'), bit('we', 'in'), bus('wd', 16, 'in'), bus('ra1', 3, 'in'), bus('ra2', 3, 'in'), bit('clk', 'in'), bus('rd1', 16, 'out'), bus('rd2', 16, 'out')],
+    ports: [bus('wa', 3, 'in'), bit('we', 'in'), bus('wd', 16, 'in'), bus('ra1', 3, 'in'), bus('ra2', 3, 'in'), { name: 'clk', width: 1, dir: 'in', clock: true }, bus('rd1', 16, 'out'), bus('rd2', 16, 'out')],
     symbol: { kind: 'box', label: 'REGS' },
     netlist: () => ({ pins: { ...pinsAt(['wa', 'we', 'wd', 'ra1', 'ra2', 'clk'], 0), rd1: [R, 8], rd2: [R, 16] }, instances: b.instances, nets: b.nets() }),
   });
@@ -256,7 +256,7 @@ export const DET101: ComponentDef = (() => {
   return define({
     id: 'rv16_det101', name: '"101" detector (state machine)', category: 'sequential',
     summary: 'A Mealy machine: two flip-flops hold the state (nothing, saw 1, saw 10); y = 1 when x = 1 completes 1-0-1. Synchronous reset.',
-    ports: [bit('x', 'in'), bit('rst', 'in'), bit('clk', 'in'), bit('y', 'out')],
+    ports: [bit('x', 'in'), bit('rst', 'in'), { name: 'clk', width: 1, dir: 'in', clock: true }, bit('y', 'out')],
     symbol: { kind: 'box', label: '101?' },
     netlist: () => ({ pins: { ...pinsAt(['x', 'rst', 'clk'], 0), y: [R, 8] }, instances: b.instances, nets: b.nets() }),
   });

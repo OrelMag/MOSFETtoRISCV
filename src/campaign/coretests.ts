@@ -281,3 +281,144 @@ handler:
 export function sysTests(irq: boolean): CoreTest[] {
   return [{ name: 'traps', src: TRAPS }, { name: 'csrs', src: CSRS }, ...(irq ? [{ name: 'interrupt', src: IRQ }] : []), ...coreTests(3).filter((_, i) => i % 2 === 0)];
 }
+
+const MULS = `# every multiply on edge values
+        li   a0, -1
+        li   a1, 0x7fff
+        li   a2, -32768
+        mul  t0, a0, a0      # 1
+        mulh t0, a0, a0      # 0
+        mulhu t0, a0, a0     # 0xfffe
+        mulhsu t0, a0, a0    # -1 × 65535 >> 16 = -1
+        mul  t1, a1, a1
+        mulh t1, a1, a1      # 0x3fff
+        mulh ra, a2, a2      # 0x4000
+        mulhsu ra, a2, a0    # -32768 × 65535
+        mulhu sp, a2, a2     # 0x4000
+        mulh sp, a2, a1
+        li   t0, 300
+        li   t1, 7
+        mul  a0, t0, t1      # 2100
+        mul  a1, a0, a0      # wraps
+        mulhu a2, a0, a0
+        mul  x0, t0, t1      # x0 stays 0
+        sw   a1, -3(x0)
+        halt
+`;
+
+const DIVS = `# every divide on edge values: by zero, overflow, mixed signs
+        li   a0, 7
+        li   a1, -2
+        li   a2, 0
+        div  t0, a0, a1      # -3
+        rem  t0, a0, a1      # 1
+        div  t1, a1, a0      # 0
+        rem  t1, a1, a0      # -2
+        divu ra, a0, a1      # 0
+        remu ra, a0, a1      # 7
+        divu sp, a1, a0      # 0xfffe / 7
+        remu sp, a1, a0
+        div  t0, a0, a2      # by zero: -1
+        rem  t0, a0, a2      # a
+        divu t1, a1, a2      # 0xffff
+        remu t1, a1, a2      # a
+        li   a2, -32768
+        li   a0, -1
+        div  ra, a2, a0      # overflow: -32768
+        rem  ra, a2, a0      # 0
+        div  sp, a2, a2      # 1
+        div  a1, a1, a1      # back to back
+        rem  a1, a1, a0
+        sw   a1, -3(x0)
+        halt
+`;
+
+const MULLOOP = `# a power and a division loop: digits of a number
+        li   a0, 3
+        li   a1, 1
+        li   t0, 9
+pow:    mul  a1, a1, a0
+        addi t0, t0, -1
+        bnez t0, pow         # a1 = 3^9 = 19683
+        li   t1, 10
+dig:    remu a2, a1, t1
+        sw   a2, -3(x0)
+        divu a1, a1, t1
+        bnez a1, dig
+        halt
+`;
+
+/** The MD levels' programs: multiplies (and divides), then the core's own tests. */
+export function mdTests(md: 'mul' | 'all'): CoreTest[] {
+  const own = coreTests(3).filter((_, i) => i % 3 === 0);
+  const rnd = Array.from({ length: 10 }, (_, i): CoreTest => ({ name: `random md.${i + 1}`, src: randomProgram(100 + i, 3, 30 + 5 * (i % 4), md) }));
+  return [{ name: 'multiplies', src: MULS }, ...(md === 'all' ? [{ name: 'divides', src: DIVS }, { name: 'digits', src: MULLOOP }] : []), ...rnd, ...own];
+}
+
+const NESTED = `# nested loops: a multiplication table summed, inner loop taken 9 times out of 10
+        li   a0, 0
+        li   t0, 10
+outer:  li   t1, 10
+inner:  add  a0, a0, t0
+        addi t1, t1, -1
+        bnez t1, inner
+        addi t0, t0, -1
+        bnez t0, outer
+        sw   a0, -3(x0)
+        halt
+`;
+
+const COPY = `# copy and reverse a table, calls in a loop
+        li   sp, 0x300
+        li   a0, 0x40
+        li   a1, 0x80
+        li   a2, 16
+copy:   lw   t0, 0(a0)
+        sw   t0, 0(a1)
+        addi a0, a0, 1
+        addi a1, a1, 1
+        addi a2, a2, -1
+        bnez a2, copy
+        li   a2, 12
+        li   t1, 0
+calls:  call bump
+        addi a2, a2, -1
+        bgt  a2, zero, calls
+        sw   t1, -3(x0)
+        halt
+bump:   addi t1, t1, 3
+        ret
+        .data
+        .word 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        .word 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        .word 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
+`;
+
+const SORT = `# bubble sort of eight words: data-dependent branches
+        li   a2, 7
+pass:   li   a0, 0x40
+        mv   t1, a2
+step:   lw   t0, 0(a0)
+        lw   a1, 1(a0)
+        bge  a1, t0, keep
+        sw   a1, 0(a0)
+        sw   t0, 1(a0)
+keep:   addi a0, a0, 1
+        addi t1, t1, -1
+        bnez t1, step
+        addi a2, a2, -1
+        bnez a2, pass
+        li   a0, 0x40
+        lw   a0, 0(a0)
+        sw   a0, -3(x0)
+        halt
+        .data
+        .word 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        .word 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        .word 9, -3, 7, 0, 32767, -32768, 5, 5
+`;
+
+/** Branch prediction's programs: loops first (where a guess pays), then the pipeline's tests. */
+export function predictTests(): CoreTest[] {
+  return [{ name: 'nested loops', src: NESTED }, { name: 'copy and calls', src: COPY }, { name: 'sort', src: SORT }, ...pipeTests(3)];
+}

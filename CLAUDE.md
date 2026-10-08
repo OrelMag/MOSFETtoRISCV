@@ -151,7 +151,10 @@ src/chapters/  narrative content: chapters → steps → scene / widget / challe
 src/lib/rv16/  the campaign's RV16 hardware, every block built only from parts its level's requirements unlock:
                logic.ts (acts 1–3), cpu.ts (immediates, control, branch, next PC, single-cycle cores),
                pipe.ts (pipeline register, forwarding, hazard, rv16Pipe with fwd / stall / flush / sys),
-               system.ts (illegal detector, CSR file, system decode, cores with traps and interrupts)
+               system.ts (illegal detector, CSR file, system decode, cores with traps and interrupts),
+               md.ts (MUL16: unsigned array + sign corrections, DIV16: signs around the iterative divider; rv16Core(…, md)),
+               multi.ts (RV16_MULTI: one-hot F/E/M/W multicycle core, RV16_CACHE: direct-mapped, write-through);
+               rv16Pipe({ predict }) adds static prediction in F
 src/riscv/rv16/ isa16.ts (fields, encode / decode / disasm), asm16.ts, iss16.ts (golden model: MMIO, CSRs, traps,
                interrupts; halts on jal x0, 0), randprog.ts (seeded random programs for fuzzing cores)
 src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui/pages/sandbox.ts, its own chunk;
@@ -206,6 +209,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  (readRegs / readMem find w<i> registers via storageOf, banks, cache lines), pipelineSlots,
                  CpuMonitor: the ISS in lock-step on EditorSim.edgeHooks (registers, PC, fcsr, memory
                  after stores or at a pipeline's halt, console, LEDs), first mismatch, Run to halt
+  cpu16.ts       detectRv16 (an RV16 ROM + a part with the core pins), Rv16Monitor: Iss16 in lock-step through the
+                 core's write and store ports in program order (the campaign bench, live; RAM wrap, drain, next write)
   multicpu.ts    detectMulti (two or more placed CPU chips + a shared memory), MultiMonitor: MultiISS in
                  lock-step (which cores retired, each core's registers and PC, shared memory)
                DOM:
@@ -244,7 +249,8 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
   graph.ts       ancestors, topo, ruleFor(id) (NAND + unlocks of the requirements' closure: fixed per level),
                  statusOf (locked / available / started / solved / skipped; Unlock all), nextAvailable
   levels.ts      levelChallenge(node): the base BuildChallenge with the campaign rule and par, id cp_<node>,
-                 chip u_ch_cp_<node>; nodeOfChip
+                 chip u_ch_cp_<node>; nodeOfChip; startCandidates / startFrom (a core level begun as a copy of an
+                 earlier core level's chip, plus the new pins)
   grade.ts       measured(score), stars (★ pass, ★★ ≤ 1.5 × par, ★★★ ≤ par on every graded metric), better
   progress.ts    Progress (own storage key, injected KV): status, best, stars, tips, seen; codexUnlocked;
                  exportCampaign / importCampaign (progress + level chips' closure, merged, never overwriting)
@@ -252,9 +258,14 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
   anatomy.ts     the target CPU as blocks (intro diagram), blockNodes; layout.ts the map's placement
   drills.ts      generated questions with exact checkers (numbers, Boolean parser, exact K-map minimum, RV16
                  encoding, binary16); puzzles.ts RV16 program puzzles on the golden model (size, cycles)
-  build1/5/6/7/8.ts, buildh.ts  the levels new to the campaign by act: BuildChallenges whose reference answers
-                 are library blocks drawn as chips (docFromDef); a side quest gives its reference's parts (givesOf)
-  corecheck.ts   the CPU core bench: instr / drdata served combinationally, register-write and store traces
+  build1/5/6/7/8/9.ts, buildh.ts  the levels new to the campaign by act: BuildChallenges whose reference answers
+                 are library blocks drawn as chips (docFromDef; build9 also draws sub-units as chips of their own);
+                 a side quest gives its reference's parts (givesOf)
+  bench.ts       addBench: a failing core test as a computer chip around the learner's core (RV16 ROM, 64-word
+                 RAM, LEDs, IRQ line), opened with the CPU drawer; failingTest names it from a failure line
+  datasheet.ts   a codex component entry's datasheets: the unlocked library parts' pins, cost, depth, truth table
+  corecheck.ts   the CPU core bench (coreCheck carries its CoreSpec: coreSpecOf): instr / drdata served
+                 combinationally, register-write and store traces
                  compared with iss16 in order, cycle budget, irq from stores to 0xFFF9, 32 BitSim lanes (GateSim
                  fallback), corePeriod (static timing with 8-delay memories); coretests.ts the programs by stage
                DOM: ui/svgs.ts (map and anatomy SVG); the page is ui/pages/campaign.ts. Levels are played in the

@@ -6,10 +6,11 @@
 import '../../styles/campaign.css';
 import { BLOCKS, blockNodes } from '../../campaign/anatomy';
 import { CODEX, CODEX_KINDS, codexById } from '../../campaign/codex';
+import { type Datasheet, datasheets } from '../../campaign/datasheet';
 import { METRIC } from '../../campaign/grade';
 import { ancestors, dependents, isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { LESSONS } from '../../campaign/lessons';
-import { levelChallenge, levelChipId } from '../../campaign/levels';
+import { levelChallenge, levelChipId, startCandidates, startFrom } from '../../campaign/levels';
 import { ACTS, NODES, nodeById } from '../../campaign/nodes';
 import { exportCampaign, importCampaign, progress } from '../../campaign/progress';
 import type { CampaignNode, Metric } from '../../campaign/types';
@@ -163,7 +164,7 @@ export class CampaignPage implements Page {
     const svg = mapSvg(p.view, p.unlockAll, sel?.id, (id) => { location.hash = `#/campaign/n/${id}`; });
     const legend = h('div', { class: 'cp-legend' },
       h('span', { class: 'l available' }, 'available'), h('span', { class: 'l solved' }, 'solved'), h('span', { class: 'l skipped' }, 'skipped'),
-      h('span', { class: 'l locked' }, 'locked'), h('span', { class: 'l opt' }, 'optional'), h('span', { class: 'l soon' }, 'coming soon'));
+      h('span', { class: 'l locked' }, 'locked'), h('span', { class: 'l opt' }, 'optional'), NODES.some((n) => n.soon) ? h('span', { class: 'l soon' }, 'coming soon') : null);
     return h('div', { class: 'cp-split' },
       h('section', { class: 'cp-map-pane' }, legend, h('div', { class: 'cp-map-scroll' }, svg)),
       h('aside', { class: 'cp-panel' }, sel ? this.nodePanel(sel) : this.welcome()));
@@ -303,8 +304,11 @@ export class CampaignPage implements Page {
     } else if (ch) {
       const chip = levelChipId(n);
       const exists = !!loadWorkspace().chips[chip];
-      bar.append(h('button', { class: 'btn primary', onclick: () => this.start(n, ch) }, icon('play', 14), exists ? 'Continue in the sandbox' : 'Start in the sandbox'),
-        h('button', { class: 'btn', title: 'Import the reference solution as new chips and open it in the sandbox', onclick: () => this.solution(ch) }, 'Show solution'));
+      bar.append(h('button', { class: 'btn primary', onclick: () => this.start(n, ch) }, icon('play', 14), exists ? 'Continue in the sandbox' : 'Start in the sandbox'));
+      // A core level: start from a copy of the core you built for an earlier level.
+      const from = exists ? undefined : startCandidates(n, loadWorkspace())[0];
+      if (from) bar.append(h('button', { class: 'btn', title: `A copy of your “${from.title}” chip, with this level's pins added`, onclick: () => this.start(n, ch, levelChipId(from)) }, `Start from ${from.title}`));
+      bar.append(h('button', { class: 'btn', title: 'Import the reference solution as new chips and open it in the sandbox', onclick: () => this.solution(ch) }, 'Show solution'));
     }
     if (n.kind !== 'lesson' && st !== 'solved') {
       bar.append(st === 'skipped'
@@ -316,8 +320,8 @@ export class CampaignPage implements Page {
     return bar;
   }
 
-  private start(n: CampaignNode, ch: BuildChallenge): void {
-    const r = startChallenge(loadWorkspace(), ch);
+  private start(n: CampaignNode, ch: BuildChallenge, from?: string): void {
+    const r = from ? startFrom(loadWorkspace(), ch, from) : startChallenge(loadWorkspace(), ch);
     const saved = saveWorkspace(r.ws);
     if (!saved.ok) return this.say(saved.reason);
     progress().open(n.id, true);
@@ -389,9 +393,25 @@ export class CampaignPage implements Page {
     } else {
       detail = h('div', { class: 'cp-codex-entry' }, h('span', { class: 'cp-badge kind' }, CODEX_KINDS.find((k) => k.id === e.kind)!.title.replace(/s$/, '')),
         h('h2', null, e.title), html('div', 'cp-codex-body', e.body),
+        ...(e.kind === 'component' ? datasheets(e.id).map(sheetEl) : []),
         e.related?.length ? h('p', null, h('b', null, 'See also: '), e.related.map((r, i) => [i ? ', ' : '', h('a', { href: `#/campaign/codex/${r}` }, codexById(r)?.title ?? r)])) : null,
         h('p', { class: 'sub' }, 'Taught in: ', foundIn(e.id).map((n, i) => [i ? ', ' : '', h('a', { href: `#/campaign/n/${n.id}` }, n.title)])));
     }
     return h('div', { class: 'cp-codex' }, list, detail);
   }
+}
+
+/** A library part's datasheet: cost, pins, and a small part's truth table. */
+function sheetEl(d: Datasheet): HTMLElement {
+  const fmt = (v: number, w: number) => (w > 4 ? `0x${v.toString(16)}` : w > 1 ? v.toString(2).padStart(w, '0') : String(v));
+  const ins = d.pins.filter((p) => p.dir !== 'out').length;
+  const widths = [...d.pins.filter((p) => p.dir !== 'out'), ...d.pins.filter((p) => p.dir === 'out')].map((p) => p.width);
+  return h('div', { class: 'cp-sheet' },
+    h('h4', null, 'Datasheet: ', h('a', { href: `#/workbench/${d.id}`, title: 'Open it in the workbench' }, d.name)),
+    h('p', { class: 'sub' }, `${d.nand.toLocaleString('en')} NAND · ${d.transistors.toLocaleString('en')} transistors · ${d.depth !== null ? `depth ${d.depth}` : 'sequential'}`),
+    h('div', { class: 'cp-sheet-cols' },
+      h('table', null, h('tr', null, h('th', null, 'pin'), h('th', null, 'dir'), h('th', null, 'bits')),
+        d.pins.map((p) => h('tr', null, h('td', null, p.name), h('td', null, p.dir), h('td', null, String(p.width))))),
+      d.table ? h('table', null, h('tr', null, d.table.head.map((x, i) => h('th', i >= ins ? { class: 'out' } : null, x))),
+        d.table.rows.map((r) => h('tr', null, r.map((v, i) => h('td', i >= ins ? { class: 'out' } : null, fmt(v, widths[i])))))) : null));
 }

@@ -149,7 +149,7 @@ export const CSR16F: ComponentDef = (() => {
   return define({
     id: 'rv16_csr', name: 'CSR file (RV16)', category: 'cpu',
     summary: 'mstatus, mie, mtvec, mepc, mcause, mscratch (mip shows the interrupt line, mcycle reads 0). A trap saves pc and cause and moves MIE into MPIE; mret moves it back; otherwise csrr* write the selected register. intr = MIE · MEIE · irq.',
-    ports: [bus('sel', 3, 'in'), bus('wdata', 16, 'in'), bit('we', 'in'), bit('trap', 'in'), bus('cause', 16, 'in'), bus('pc', 16, 'in'), bit('mret', 'in'), bit('irq', 'in'), bit('clk', 'in'),
+    ports: [bus('sel', 3, 'in'), bus('wdata', 16, 'in'), bit('we', 'in'), bit('trap', 'in'), bus('cause', 16, 'in'), bus('pc', 16, 'in'), bit('mret', 'in'), bit('irq', 'in'), { name: 'clk', width: 1, dir: 'in', clock: true },
       bus('rdata', 16, 'out'), bus('mtvec', 16, 'out'), bus('mepc', 16, 'out'), bit('intr', 'out')],
     symbol: { kind: 'box', label: 'CSRs' },
     netlist: () => ({ pins: { ...pinsAt(['sel', 'wdata', 'we', 'trap', 'cause', 'pc', 'mret', 'irq', 'clk'], 0), ...pinsAt(['rdata', 'mtvec', 'mepc', 'intr'], R) }, instances: b.instances, nets: b.nets() }),

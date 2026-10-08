@@ -4,3 +4,5 @@ export * from './logic';
 export * from './cpu';
 export * from './system';
 export * from './pipe';
+export * from './md';
+export * from './multi';

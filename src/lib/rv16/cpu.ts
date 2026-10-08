@@ -9,10 +9,11 @@ import { koggeStone } from '../fastadd';
 import { Builder } from '../builder';
 import { busMux2, decoder, incrementer, muxTree } from '../combinational';
 import { define, merger, splitter } from '../define';
-import { AND, MUX2, OR, XOR } from '../gates';
+import { AND, MUX2, NOT, OR, XOR } from '../gates';
 import { orN } from '../wide';
 import { TIE0 } from '../transistors';
 import { ADD16, CMP16, EQ16, PC16, RF8 } from './logic';
+import { DIV16, MUL16 } from './md';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -200,19 +201,23 @@ export const NEXTPC16F = nextPc(true);
 
 /** The pins every core level shares (memories are outside: the test bench serves them). */
 export const CORE_PORTS: PortDef[] = [
-  bit('clk', 'in'), bit('rst', 'in'), bus('instr', 16, 'in'), bus('drdata', 16, 'in'),
+  { name: 'clk', width: 1, dir: 'in', clock: true }, bit('rst', 'in'), bus('instr', 16, 'in'), bus('drdata', 16, 'in'),
   bus('pc', 16, 'out'), bus('daddr', 16, 'out'), bus('dwdata', 16, 'out'), bit('dwe', 'out'),
   bit('rwe', 'out'), bus('rwa', 3, 'out'), bus('rwd', 16, 'out'),
 ];
 
 const cores = new Map<string, ComponentDef>();
 
+/** The MD opcode in a single-cycle core: multiplies only, or multiplies and (stalling) divides. */
+export type CoreMd = '' | 'mul' | 'div';
+
 /**
  * The single-cycle RV16 core. full = false: no branch or jump hardware (the PC only counts), the
- * reference for the first two core levels; full = true: all of RV16I.
+ * reference for the first two core levels; full = true: all of RV16I. md: the MD opcode too (full
+ * only): a multiplier on the result mux, and a divider that holds the PC until it is done.
  */
-export function rv16Core(full: boolean, fast = false): ComponentDef {
-  const key = `${full ? 'full' : 'straight'}${fast ? '_ks' : ''}`;
+export function rv16Core(full: boolean, fast = false, md: CoreMd = ''): ComponentDef {
+  const key = `${full ? 'full' : 'straight'}${fast ? '_ks' : ''}${md ? `_${md}` : ''}`;
   let d = cores.get(key);
   if (d) return d;
   const b = new Builder(10, 16, 6);
@@ -225,8 +230,8 @@ export function rv16Core(full: boolean, fast = false): ComponentDef {
   const imm = b.op(IMM16, ['instr'], 'immediates');
   b.next();
   const immv = b.name(b.op1(muxTree(2, 16), [`${imm}.i`, `${imm}.sb`, `${imm}.j`, `${imm}.u`, `${ctl}.isel`], 'imm'), 'imm', true);
-  const rwe = b.name(`${ctl}.rwe`, 'rwe', true);
-  const rf = b.op(RF8, [rd, rwe, '', rs1, rs2, 'clk'], 'registers');
+  let rwe = b.name(`${ctl}.rwe`, 'rwe', true);
+  const rf = b.op(RF8, [rd, md ? '' : rwe, '', rs1, rs2, 'clk'], 'registers');
   const r1 = b.name(`${rf}.rd1`, 'r1', true), r2 = b.name(`${rf}.rd2`, 'r2', true);
   b.next();
   const bsrc = b.op1(busMux2(16), [r2, immv, `${ctl}.bimm`], 'ALU b');
@@ -247,12 +252,44 @@ export function rv16Core(full: boolean, fast = false): ComponentDef {
     pc1 = b.op1(constWord(16, 0), [], 'no jumps');
   }
   b.next();
-  const wbv = b.name(b.op1(muxTree(2, 16), [y, 'drdata', pc1, immv, `${ctl}.wb`], 'result'), 'wbv', true);
+  let wbv = b.name(b.op1(muxTree(2, 16), [y, 'drdata', pc1, immv, `${ctl}.wb`], 'result'), 'wbv', true);
+  let hold = '';
+  if (md) {
+    // MD = opcode 0011; f3[2] picks a divide, f3[1:0] the variant.
+    const ops = b.op(splitter([1, 1, 1, 1], 2), [b.op1(merger([2, 2], 2), [cond, `${f}.o1`])], 'opcode');
+    const fs = b.op(splitter([2, 1], 2), [`${f}.o5`], 'f3');
+    b.next();
+    const lo = b.op1(AND, [`${ops}.o0`, `${ops}.o1`]);
+    const hi = b.op1(OR, [`${ops}.o2`, `${ops}.o3`]);
+    const mul = b.op1(MUL16, [r1, r2, `${fs}.o0`], 'multiplier');
+    b.next();
+    const isMd = b.name(b.op1(AND, [lo, b.op1(NOT, [hi])], 'MD?'), 'md', true);
+    let mdY = mul, mdWe = isMd;
+    if (md === 'div') {
+      const start = b.op1(AND, [isMd, `${fs}.o1`], 'divide?');
+      b.next();
+      const dv = b.op(DIV16, ['clk', start, r1, r2, `${fs}.o0`], 'divider');
+      b.next();
+      hold = b.name(b.op1(AND, [start, b.op1(NOT, [`${dv}.done`])], 'wait for the divider'), 'stall', true);
+      mdY = b.op1(busMux2(16), [mul, `${dv}.y`, `${fs}.o1`], 'mul or div');
+      b.next();
+      mdWe = b.op1(AND, [isMd, b.op1(NOT, [hold])]);
+    }
+    b.next();
+    rwe = b.name(b.op1(OR, [rwe, mdWe], 'rwe'), 'rwe2', true);
+    wbv = b.name(b.op1(busMux2(16), [wbv, mdY, isMd], 'or MD'), 'wbv2', true);
+    b.wire(rwe, `${rf}.we`);
+  }
   b.wire(wbv, `${rf}.wd`);
   b.next();
+  if (hold) {
+    ld = b.op1(OR, [ld, hold], 'load (or hold)');
+    target = b.op1(busMux2(16), [target, '', hold], 'hold: pc');
+  }
   const pc = b.op(PC16, ['rst', ld, target, 'clk'], 'PC');
   b.name(`${pc}.pc`, 'pc', true);
   if (np) b.wire(`${pc}.pc`, `${np}.pc`);
+  if (hold) b.wire(`${pc}.pc`, `${target.split('.')[0]}.b`);
   b.wire(`${pc}.pc`, 'pc');
   b.wire(y, 'daddr');
   b.wire(r2, 'dwdata');
@@ -262,10 +299,12 @@ export function rv16Core(full: boolean, fast = false): ComponentDef {
   b.wire(wbv, 'rwd');
   const R = b.right;
   d = define({
-    id: `${full ? 'rv16_cpu' : 'rv16_cpu_nb'}${fast ? '_ks' : ''}`, name: `${full ? 'RV16 single-cycle core' : 'RV16 single-cycle core (no branches)'}${fast ? ', fast adders' : ''}`, category: 'cpu',
-    summary: 'PC → (instruction from the bench) → control and immediates → register file → ALU → result mux → register file. The bench serves instr = imem[pc] and drdata = dmem[daddr] combinationally.',
+    id: `${full ? 'rv16_cpu' : 'rv16_cpu_nb'}${fast ? '_ks' : ''}${md === 'mul' ? '_m' : md === 'div' ? '_md' : ''}`,
+    name: `${full ? 'RV16 single-cycle core' : 'RV16 single-cycle core (no branches)'}${fast ? ', fast adders' : ''}${md === 'mul' ? ', multiply' : md === 'div' ? ', multiply and divide' : ''}`, category: 'cpu',
+    summary: 'PC → (instruction from the bench) → control and immediates → register file → ALU → result mux → register file. The bench serves instr = imem[pc] and drdata = dmem[daddr] combinationally.'
+      + (md === 'mul' ? ' MD instructions take the multiplier\'s result instead.' : md === 'div' ? ' MD instructions take the multiplier\'s or the divider\'s result; a divide holds the PC (and writes nothing) until the divider is done.' : ''),
     ports: CORE_PORTS,
-    symbol: { kind: 'box', label: full ? 'RV16' : 'RV16 (no br)' },
+    symbol: { kind: 'box', label: full ? (md ? 'RV16 M' : 'RV16') : 'RV16 (no br)' },
     netlist: () => ({
       pins: { ...pinsAt(['clk', 'rst', 'instr', 'drdata'], 0, 4), ...pinsAt(['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'], R, 4) },
       instances: b.instances, nets: b.nets(),
@@ -279,3 +318,5 @@ export function rv16Core(full: boolean, fast = false): ComponentDef {
 export const RV16_CORE = rv16Core(true);
 export const RV16_CORE_NB = rv16Core(false);
 export const RV16_CORE_KS = rv16Core(true, true);
+export const RV16_CORE_M = rv16Core(true, false, 'mul');
+export const RV16_CORE_MD = rv16Core(true, false, 'div');

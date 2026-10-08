@@ -132,6 +132,8 @@ export const CODEX: CodexEntry[] = [
   E('rounding', 'Rounding', 'concept', 'Round to nearest, ties to even, using guard, round and sticky bits. Every FP operation is exact then rounded once.', ['ieee754']),
   E('cache', 'Cache', 'component', 'A small fast memory of recently used lines: index → set, tag compare → hit. Misses fetch from the next level. Direct-mapped, set-associative; write-through or write-back.', ['comparator']),
   E('microcode', 'Microcode', 'tool', 'Control as a program: each state is a ROM word of control signals and a next-state field. Easier to change than hardwired logic, usually slower.', ['fsm', 'control']),
+  E('multicycle', 'Multicycle processor', 'concept', 'One instruction over several short cycles (fetch, execute, memory, write back), with registers between the steps and a state machine (or microcode) in charge. The period shrinks to the slowest step, but CPI grows to 3–5: it wins only when the steps share hardware (one memory, one ALU for pc + 1 and the address). Pipelining keeps the short period and brings CPI back to about 1.', ['fsm', 'microcode', 'cpi', 'pipeline']),
+  E('signedmul', 'Signed products from an unsigned multiplier', 'trick', 'As unsigned, a negative 16-bit a is worth a + 2^16. So (a + 2^16) · b = a · b + b · 2^16: the low half is the same either way, and the signed high half is the unsigned one <b>minus b when a &lt; 0</b> (minus a when b &lt; 0, both when both are signed). One multiplier, two subtractors: mul, mulh, mulhsu and mulhu.', ['mext', 'twos']),
 ];
 
 export const codexById = (id: string): CodexEntry | undefined => CODEX.find((e) => e.id === id);
