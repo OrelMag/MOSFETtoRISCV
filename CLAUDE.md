@@ -113,6 +113,8 @@ src/lib/       the component library (registered in `registry` via define())
                  CONTROL, NEXT_PC, PLUS4(_FAST), singleCycleCpu(program, { adder })
   fastadd.ts     gp / gray / black prefix cells, CLA4, koggeStone(n), addSubFast(n)
   wide.ts        bitwise(op, n), orN(n) (shared by alu.ts and fastadd.ts to avoid an import cycle)
+  usage.ts       usedIn(def) (parents with instance counts, the chapters' CPUs included), copiesIn(top, def),
+                 referenceCpus(): the inspector's "Where it is used"
   pipeline.ts    equal, nonZero, clearableRegister, pipeline registers (fields on fixed rows),
                  hazardUnit(lookAhead), BRANCH_CMP, BTB (16 × 62-bit), SAT_COUNTER, MISPREDICT,
                  pipelinedCpu(program, { adder, balanced, predictor, dcache, m }) (a cache miss in M freezes every stage;
@@ -152,7 +154,7 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                interrupts; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts (samples), multi.ts (MultiISS: N harts, shared memory, same arbitration), mcprograms.ts, cosim.ts (CPU state;
                `retiring()` = step the ISS this cycle?)
 src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over crossings),
-               inspector (info, truth table, Verilog + download), analyzer.ts (the Timing panel:
+               inspector (info with "Where it is used", truth table, Verilog + download), analyzer.ts (the Timing panel:
                lanes from onTrace, cursors, VCD), stage.ts (probe mode, clock period, slow-motion
                fronts, the Image menu), image.ts (a drawn circuit as a standalone SVG: computed styles
                inlined, current theme; PNG at 2×; saveFile; exportSchematic for a stage's level, loaded on

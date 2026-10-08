@@ -422,6 +422,14 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .ports td:first-child { font-family: var(--font-mono); font-weight: 600; }
 .ports td.val { font-family: var(--font-mono); text-align: right; }
 .ports td.dir { color: var(--muted); font-size: 12px; }
+.insp-used { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 12px; font-size: 13px; }
+.insp-used summary { cursor: pointer; font-weight: 600; color: var(--text); }
+.insp-used-h { color: var(--muted); font-size: 12px; margin: 10px 0 4px; }
+.ports.used td:first-child { font-family: inherit; font-weight: 500; }
+.ports.used a { color: var(--accent); text-decoration: none; }
+.ports.used a:hover { text-decoration: underline; }
+.ports.used small { color: var(--muted); font-size: 11.5px; }
+.insp-used .btn { margin-top: 6px; }
 .insp-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
 
 .truth { border-collapse: collapse; font: 12.5px var(--font-mono); width: 100%; }

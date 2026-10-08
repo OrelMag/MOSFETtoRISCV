@@ -8,6 +8,7 @@ import { formatBits, formatNumber, pack, type Radix } from '../sim/values';
 import { exportHdl, testableComb, type HdlFlavor } from '../sim/svexport';
 import { structuralVerilog } from '../sim/verilog';
 import { h, icon } from '../ui/dom';
+import { copiesIn, referenceCpus, usedIn, type Parent } from '../lib/usage';
 
 export interface InspectTarget {
   def: ComponentDef;
@@ -34,6 +35,10 @@ export class Inspector {
   private tab: Tab = 'info';
   private target: InspectTarget | null = null;
   radix: Radix = 'hex';
+  /** "Where it is used" is open (kept across parts and re-renders); a list shown in full, per part. */
+  private usedOpen = false;
+  private usedAll = new WeakSet<ComponentDef>();
+  private usage = new WeakMap<ComponentDef, { parents: Parent[]; cpus: { label: string; n: number }[] }>();
 
   constructor() {
     this.body = h('div', { class: 'tab-body' });
@@ -114,6 +119,44 @@ export class Inspector {
     });
     if (rows.length) b.append(h('table', { class: 'ports' }, h('tbody', null, rows)));
     if (d.notes) b.append(h('div', { class: 'insp-notes', html: d.notes }));
+    // Library parts only: a user chip has the sandbox's own "used by" (editor/chips.ts).
+    if (d.prim !== 'alias' && d.prim !== 'vdd' && d.prim !== 'gnd' && d.category !== 'custom') b.append(this.usedSection(d));
+  }
+
+  /** The components that place this part, and its copies in each of the chapters' CPUs (lib/usage.ts, on first open). */
+  private usedSection(d: ComponentDef): HTMLElement {
+    const det = h('details', { class: 'insp-used' }, h('summary', null, 'Where it is used'));
+    const fill = () => {
+      let u = this.usage.get(d);
+      if (!u) this.usage.set(d, (u = { parents: usedIn(d), cpus: referenceCpus().map((c) => ({ label: c.label, n: copiesIn(c.def, d) })) }));
+      // Sizes of one generator share a name (twelve "3:2 compressor row"s): one row each, with the range.
+      const groups = new Map<string, Parent[]>();
+      for (const p of u.parents) groups.get(p.def.name)?.push(p) ?? groups.set(p.def.name, [p]);
+      const list = [...groups.values()];
+      const SHOW = 8;
+      const all = this.usedAll.has(d) || list.length <= SHOW + 2;
+      const rows = (all ? list : list.slice(0, SHOW)).map((g) => {
+        const p = g[0], lo = g[g.length - 1].count;
+        return h('tr', null,
+          h('td', { title: g.map((x) => x.def.id).join(', ') }, g.length === 1 && p.openable ? h('a', { href: `#/workbench/${p.def.id}` }, p.def.name) : p.def.name,
+            g.length > 1 ? h('small', null, ` ${g.length} sizes`) : null),
+          h('td', { class: 'val' }, `× ${lo === p.count ? p.count : `${lo}–${p.count}`}`));
+      });
+      det.append(h('div', { class: 'insp-used-h' }, u.parents.length ? `Placed directly in ${u.parents.length} component${u.parents.length > 1 ? 's' : ''}` : 'Not placed in any library component'));
+      if (rows.length) det.append(h('table', { class: 'ports used' }, h('tbody', null, rows)));
+      if (!all) det.append(h('button', { class: 'btn ghost sm', onclick: () => { this.usedAll.add(d); this.render(); } }, `Show all ${list.length}`));
+      det.append(h('div', { class: 'insp-used-h' }, 'Copies in the chapters’ CPUs, flattened'),
+        h('table', { class: 'ports used' }, h('tbody', null, u.cpus.map((c) => h('tr', null, h('td', null, c.label), h('td', { class: 'val' }, c.n ? c.n.toLocaleString() : '—'))))));
+    };
+    if (this.usedOpen) {
+      det.open = true;
+      fill();
+    }
+    det.addEventListener('toggle', () => {
+      this.usedOpen = det.open;
+      if (det.open && det.childElementCount === 1) fill();
+    });
+    return det;
   }
 
   private renderTruth(t: InspectTarget): void {
