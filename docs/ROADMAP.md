@@ -353,7 +353,7 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
 - ✅ The timing panels (chapters and sandbox) and the static-timing step name the 25 ps / NAND as illustrative
 - ⏳ Chapter 25 separates the teaching P&R from the OpenROAD run; the pipeline chapters call cache-miss freezing and
   arbiter-serialized atomics deliberate simplifications
-- ⏳ Repository description and topics on GitHub (the author's account)
+- ✅ Repository description, homepage and topics on GitHub
 
 **Independent verification** (our ISS and our CPUs share one author: a misreading of the spec passes in both)
 - ⏳ Official `riscv-tests` (`rv32ui`, `rv32um`, `rv32uf`, `rv32mi`, `-p` environment): self-checking, so they need
