@@ -33,8 +33,11 @@ type State =
   /** `name`: the press was on the object's drawn name (a click then renames a selected object). */
   | { k: 'press'; hit: Hit; at: Vec; sx: number; sy: number; was: boolean; shift: boolean; name: boolean }
   | { k: 'move'; at: Vec; base: ChipDoc; sel: Sel; d: Vec }
-  /** Reshaping one wire: what the press grabbed on it (geom.ts grabOn), from the document before the drag. */
-  | { k: 'reshape'; id: string; grab: WireGrab; at: Vec; base: ChipDoc; d: Vec }
+  /**
+   * Reshaping one wire: what the press grabbed on it (geom.ts grabOn), from the document before the drag.
+   * `hover`: carried with the button up (Add a bend here) until a click drops it.
+   */
+  | { k: 'reshape'; id: string; grab: WireGrab; at: Vec; base: ChipDoc; d: Vec; hover?: boolean }
   | { k: 'band'; at: Vec; add: boolean }
   /** `held`: the button is still down since the press that started it (drag-to-connect). */
   | { k: 'wire'; draft: WireDraft; held: boolean; sx: number; sy: number }
@@ -165,6 +168,12 @@ export class Tools {
     closePopover();
     const st = this.state;
 
+    if (st.k === 'reshape' && st.hover) {
+      this.state = { k: 'idle' };
+      ed.view.svg.style.cursor = '';
+      ed.commit();
+      return;
+    }
     if (st.k === 'place') return this.place(st.item, p, e.shiftKey);
     if (st.k === 'wire') {
       this.wireClick(st.draft, p);
@@ -266,6 +275,7 @@ export class Tools {
         return this.click(st, e);
       case 'move':
       case 'reshape':
+        if (st.k === 'reshape' && st.hover) return;
         this.state = { k: 'idle' };
         ed.commit();
         return;
@@ -348,7 +358,7 @@ export class Tools {
   /** Right-click: cancel what is in progress, else the actions for what is under the cursor. */
   private context(e: MouseEvent): void {
     e.preventDefault();
-    if (this.state.k === 'wire' || this.state.k === 'place') return this.cancel();
+    if (this.state.k === 'wire' || this.state.k === 'place' || (this.state.k === 'reshape' && this.state.hover)) return this.cancel();
     if (this.state.k !== 'idle') return;
     const ed = this.ed;
     const p = this.world(e);
@@ -423,6 +433,19 @@ export class Tools {
     const r = removeBend(this.ed.doc, id, j, this.ed.defOf);
     if (r.reason) return void this.ed.toast(r.reason);
     this.ed.edit(() => r.doc);
+  }
+
+  /** Add a bend here: a new corner on the wire at p, carried by the pointer until a click drops it (Esc cancels). */
+  bendAt(id: string, p: Vec): void {
+    const poly = this.ed.view.polys.get(id);
+    const g = poly && grabOn(poly, p, this.tol());
+    if (!g || !('seg' in g)) return;
+    this.cancel();
+    const at: Vec = [Math.round(g.at[0]), Math.round(g.at[1])];
+    this.ed.begin();
+    this.state = { k: 'reshape', id, grab: { bend: g.seg, at }, at, base: this.ed.doc, d: [0, 0], hover: true };
+    this.ed.view.svg.style.cursor = 'move';
+    this.ed.toast('Move the bend, click to drop it (Esc cancels)');
   }
 
   /** The corner of a wire's polyline under p (within the click tolerance), or -1. */
@@ -691,6 +714,8 @@ export class Tools {
     const k = e.key;
     const done = () => e.preventDefault();
 
+    // A bend being carried: any key but a modifier drops the edit (Esc included).
+    if (st.k === 'reshape' && st.hover && !['Control', 'Shift', 'Alt', 'Meta'].includes(k)) { done(); this.cancel(); return; }
     if (st.k === 'wire') {
       if (k === ' ' || k === '/') { done(); st.draft.flip(); if (this.cursor) this.previewWire(st.draft, this.cursor); return; }
       if (k === 'Backspace') { done(); if (!st.draft.undo()) this.cancel(); else if (this.cursor) this.previewWire(st.draft, this.cursor); return; }

@@ -174,7 +174,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip
   ops.ts         pure edits (add / move / delete / flip / set*, copy / paste, namePart: rename where the name is
                  drawn); wires stay orthogonal (a straight wire's breakpoints stay put); dragWire (a corner or
-                 segment grabbed: geom.ts grabOn), removeBend, setStraight, clearBends
+                 segment grabbed: geom.ts grabOn; or a new corner: `{ bend }`, carried by the cursor after the right-click menu's
+                 "Add a bend here"), removeBend, setStraight, clearBends
   history.ts     History<T>: undo / redo, transactions (a drag = one step), replace (not undone)
   store.ts       localStorage, sanitizer, JSON export / import (importChips: never overwrites, renames on
                  conflict, recognizes its own earlier renames); share.ts: share-link encoding

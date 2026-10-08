@@ -113,6 +113,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
     const id = wires[0].id;
     const j = t.cornerAt(id, at);
     return [
+      { label: 'Add a bend here', run: () => t.bendAt(id, at), disabled: j >= 0 },
       { label: 'Remove this bend', key: 'double-click', run: () => t.unbend(id, j), disabled: j < 0 },
       ...shape, null, { label: 'Delete', key: 'Del', run: () => t.del() },
     ];

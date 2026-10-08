@@ -754,6 +754,7 @@ export class Editor {
       ['Ctrl/Alt + drag a wire', 'start a branch from it'],
       ['Drag a wire', 'reshape it: a corner moves, a segment slides (a simple connection bends)'],
       ['Double-click a corner', 'remove that bend'],
+      ['Right-click a wire ▸ Add a bend here', 'a new corner on the cursor: move it, click to drop it'],
       ['Wire colours ▸ Simple connections', 'new wires run straight between the points you click'],
       ['L', 'place a pointer (same name = same net)'],
       ['Click a selected pointer / double-click', 'jump to the next pointer with that name'],

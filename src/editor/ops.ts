@@ -512,8 +512,11 @@ export function setWire(doc: ChipDoc, id: string, patch: Partial<Omit<WireDoc, '
 // ---------------------------------------------------------------------------------------------
 // Reshaping a wire by hand: its corners (a straight wire's breakpoints) and segments
 
-/** What a drag grabbed on a wire's drawn polyline: corner `i` (an interior point), or segment `i` (poly[i] → poly[i + 1]) at `at`. */
-export type WireGrab = { corner: number } | { seg: number; at: Vec };
+/**
+ * What a drag grabbed on a wire's drawn polyline: corner `i` (an interior point), or segment `i`
+ * (poly[i] → poly[i + 1]) at `at`; `bend`: a new corner on segment i at `at` (Add a bend here).
+ */
+export type WireGrab = { corner: number } | { seg: number; at: Vec } | { bend: number; at: Vec };
 
 /**
  * Moves segment k of an orthogonal polyline by d across its direction (a horizontal one up or
@@ -536,7 +539,8 @@ function shiftSeg(poly: Vec[], k: number, d: Vec): Vec[] {
  * Reshapes wire `id` by dragging what `grab` names on its polyline by d (grid units). On an
  * orthogonal wire a segment moves across its direction (its neighbours stretch, an end grows a
  * leg) and a corner moves both of its segments; on a straight wire a corner moves freely and a
- * segment bends where it was grabbed (a new breakpoint). Branches on the wire follow.
+ * segment bends where it was grabbed (a new breakpoint); a `bend` grab puts a new corner where it is
+ * dragged to. Branches on the wire follow.
  */
 export function dragWire(doc: ChipDoc, id: string, grab: WireGrab, d: Vec, defOf: DefOf): Edited {
   const w = doc.wires.find((q) => q.id === id);
@@ -549,6 +553,14 @@ export function dragWire(doc: ChipDoc, id: string, grab: WireGrab, d: Vec, defOf
     if (j < 1 || j > poly.length - 2) return { doc, reason: 'not a corner' };
     if (w.straight) next = poly.map((p, i) => (i === j ? add(p, d) : p));
     else next = shiftSeg(shiftSeg(poly, j, d), j - 1, d);
+  } else if ('bend' in grab) {
+    // The new corner p joins the segment's ends; an orthogonal one leaves along the segment and
+    // returns parallel to it (a corner on the segment's own line would be simplified away).
+    const k = grab.bend;
+    if (k < 0 || k > poly.length - 2) return { doc, reason: 'not a segment' };
+    const [a, b, p] = [poly[k], poly[k + 1], add(grab.at, d)];
+    const mid: Vec[] = w.straight ? [p] : orient(a, b) === 'v' ? [[a[0], p[1]], p, [p[0], b[1]]] : [[p[0], a[1]], p, [b[0], p[1]]];
+    next = [...poly.slice(0, k + 1), ...mid, ...poly.slice(k + 1)];
   } else {
     const k = grab.seg;
     if (k < 0 || k > poly.length - 2) return { doc, reason: 'not a segment' };
