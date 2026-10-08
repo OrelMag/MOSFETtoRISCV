@@ -292,9 +292,9 @@ chip presentation, capacity and the program-solving half of Turing Complete.
   copied and deleted with the rest, saved and shared, never compiled (writing one recompiles nothing)
 - ⏳ Library organization: collections / folders of chips, a starred bar for frequent parts,
   several projects (separate workspaces) (DLS)
-- ⏳ Waypoints from the right-click menu: "Add a bend here" on a wire puts a corner at the clicked point, ready to
-  drag (the menu already has "Remove this bend"; `ops.ts` dragWire / removeBend are the model). One undo step;
-  on a straight wire the corner becomes a breakpoint
+- ✅ Waypoints from the right-click menu: "Add a bend here" on a wire puts a new corner on the cursor, which carries
+  it until a click drops it (Esc cancels; one undo step). On a simple connection it is a breakpoint; on a square wire
+  the segment detours through it (a corner on the segment's own line would be simplified away)
 
 **Colourful mode** (Turing Complete style; mockup first). Colour says *which* signal, brightness and the
 flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every combination); light and dark themes

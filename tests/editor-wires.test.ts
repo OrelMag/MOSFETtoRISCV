@@ -129,6 +129,20 @@ describe('reshaping a wire', () => {
     expect(wire(b, 'w1').pts).toEqual([[11, 9]]);
   });
 
+  it('adds a bend where the wire is dragged to: a breakpoint, or an orthogonal detour through it', () => {
+    const doc = z();
+    const a = ok(dragWire(doc, 'w1', { bend: 0, at: [5, 2] }, [0, -2], defOf)).doc;
+    expect(poly(a, 'w1')).toEqual([[4, 2], [5, 2], [5, 0], [7, 0], [7, 5], [10, 5]]);
+    const b = ok(dragWire(doc, 'w1', { bend: 1, at: [7, 3] }, [2, 0], defOf)).doc;
+    expect(poly(b, 'w1')).toEqual([[4, 2], [7, 2], [7, 3], [9, 3], [9, 5], [10, 5]]);
+    // not moved, or only along the segment: nothing to add
+    expect(dragWire(doc, 'w1', { bend: 0, at: [5, 2] }, [0, 0], defOf).doc).toBe(doc);
+    expect(ok(dragWire(doc, 'w1', { bend: 0, at: [5, 2] }, [1, 0], defOf)).doc).toBe(doc);
+    const s = pair([20, 10], [[10, 8]], true);
+    expect(wire(ok(dragWire(s, 'w1', { bend: 0, at: [7, 5] }, [0, -3], defOf)).doc, 'w1').pts).toEqual([[7, 2], [10, 8]]);
+    expect(dragWire(doc, 'w1', { bend: 3, at: [5, 2] }, [0, 1], defOf).reason).toBeTruthy();
+  });
+
   it('moves branches with the segment they sit on', () => {
     let doc = z();
     doc = ok(addPin(doc, 'out', 1, [2, 10])).doc;

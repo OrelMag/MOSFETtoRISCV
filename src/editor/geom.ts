@@ -187,7 +187,7 @@ export function branchPoint(poly: Vec[], p: Vec): Vec {
  * What a press at p grabs on a wire's polyline: a corner within tol (interior points only: the
  * ends belong to what they attach to), else the nearest segment and the grid point grabbed on it.
  */
-export function grabOn(poly: Vec[], p: Vec, tol: number): WireGrab {
+export function grabOn(poly: Vec[], p: Vec, tol: number): Exclude<WireGrab, { bend: number }> {
   let best = -1, bd = tol;
   for (let i = 1; i < poly.length - 1; i++) {
     const d = dist(poly[i], p);
