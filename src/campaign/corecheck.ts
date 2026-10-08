@@ -104,6 +104,8 @@ function gateBench(def: ComponentDef): Bench {
 
 interface Lane {
   g: Golden;
+  /** Index of the test in spec.tests(). */
+  i: number;
   dmem: Uint16Array;
   ri: number;
   si: number;
@@ -126,14 +128,16 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
   const tests = spec.tests().map((t) => golden(t, spec));
   const bench = engine === 'gate' ? null : bitBench(def);
   const failures: string[] = [];
+  const failed: number[] = [];
   let cycles = 0;
   const drain = spec.drain ?? 8;
-  const groups: Golden[][] = [];
+  const groups: { g: Golden; i: number }[][] = [];
   const width = bench?.lanes ?? 1;
-  for (let i = 0; i < tests.length; i += width) groups.push(tests.slice(i, i + width));
+  const indexed = tests.map((g, i) => ({ g, i }));
+  for (let i = 0; i < tests.length; i += width) groups.push(indexed.slice(i, i + width));
   for (const group of groups) {
     const b = bench && group === groups[0] ? bench : (engine === 'gate' ? null : bitBench(def)) ?? gateBench(def);
-    const lanes: Lane[] = group.map((g) => ({ g, dmem: g.dmem.slice(), ri: 0, si: 0, cycles: 0, doneAt: -1, irq: 0 }));
+    const lanes: Lane[] = group.map(({ g, i }) => ({ g, i, dmem: g.dmem.slice(), ri: 0, si: 0, cycles: 0, doneAt: -1, irq: 0 }));
     const hasIrq = have.has('irq');
     const n = lanes.length;
     const fill = (v: (l: Lane, k: number) => number) => {
@@ -216,11 +220,14 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
         l.fail = `${l.g.name}: after ${budget} cycles only ${l.ri} of ${l.g.regs.length} register writes and ${l.si} of ${l.g.stores.length} stores happened`
           + (l.g.regs[l.ri] ? `; next expected: ${rname(l.g.regs[l.ri].rd!)} ← ${hex(l.g.regs[l.ri].value)} from "${disasm16(l.g.regs[l.ri].instr, l.g.regs[l.ri].pc)}"` : '');
       } else if (!l.fail && l.doneAt > budget) l.fail = `${l.g.name}: correct, but ${l.doneAt} cycles for ${l.g.steps} instructions (budget ${budget})`;
-      if (l.fail) failures.push(l.fail);
+      if (l.fail) {
+        failures.push(l.fail);
+        failed.push(l.i);
+      }
       cycles += l.doneAt >= 0 ? l.doneAt : l.cycles;
     }
   }
-  return { failures: failures.slice(0, 6).concat(failures.length > 6 ? [`… and ${failures.length - 6} more programs fail`] : []), tested: tests.length, cycles };
+  return { failures: failures.slice(0, 6).concat(failures.length > 6 ? [`… and ${failures.length - 6} more programs fail`] : []), tested: tests.length, cycles, failed };
 }
 
 /** Read delay of the bench's memories, in NAND delays (an asynchronous SRAM / ROM read). */

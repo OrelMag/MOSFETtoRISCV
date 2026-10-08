@@ -32,6 +32,8 @@ import {
 import { dockPane, paneShown, showPane, undockPane } from './dock';
 import { type Editor, registerToolbarAction } from './editor';
 import { type PaletteItem, registerPaletteGroup } from './palette';
+import { TestPlayer } from './testplayer';
+import { testSet } from './testrun';
 
 const RULE: Record<'transistors' | 'nand' | 'any', [string, string]> = {
   transistors: ['transistors only', 'Transistors, rails, wiring and your own chips built from them'],
@@ -92,17 +94,25 @@ class ChallengeUi {
   private key = '';
   /** Bumped when a result is stored or dropped. */
   private version = 0;
+  /** The test player, while Check's cases are played on the circuit. */
+  private player: TestPlayer | null = null;
+  /** The document's input values when the player opened (changing one by hand ends it). */
+  private playerPins = '';
   private unsub: () => void;
+  private unsubSim: () => void;
 
   constructor(private ed: Editor) {
     ed.slots.bottom.append(this.panel);
     this.unsub = ed.onChange(() => this.sync());
+    this.unsubSim = ed.onSimChange(() => this.player?.simChanged());
     this.sync();
   }
 
   destroy(): void {
     activeRule = null;
+    this.closePlayer();
     this.unsub();
+    this.unsubSim();
     this.panel.remove();
     this.closeList();
     uis.delete(this.ed);
@@ -122,6 +132,11 @@ class ChallengeUi {
   private sync(): void {
     const ed = this.ed;
     const ch = this.challenge;
+    if (this.player && (ed.chipId !== this.lastChip || this.inputsKey() !== this.playerPins)) {
+      // Another chip, or an input changed by hand: the replay gives the circuit back first.
+      this.closePlayer();
+      if (ed.chipId === this.lastChip) ed.sim.reapply();
+    }
     if (ed.chipId !== this.lastChip) {
       this.lastChip = ed.chipId;
       this.confirming = false;
@@ -186,13 +201,43 @@ class ChallengeUi {
         h('span', { class: 'sb-chal-actions' }, ...actions,
           lv ? null : h('button', { class: 'btn ghost icon-only', title: 'All challenges', 'aria-label': 'All challenges', onclick: () => this.toggleList() }, icon('menu', 15)))),
     );
-    if (this.collapsed) return;
+    if (this.collapsed) {
+      if (this.player) this.panel.append(this.player.el);
+      return;
+    }
     const brief = h('p', { class: 'sb-chal-brief' });
     brief.innerHTML = ch.brief;
     const body = h('div', { class: 'sb-chal-body' }, brief);
     if (lv) body.append(this.levelEl(lv));
     if (res) body.append(this.resultEl(ch, res.r, stale));
     this.panel.append(body);
+    if (this.player) this.panel.append(this.player.el);
+  }
+
+  // ---- the test player ------------------------------------------------------------------------
+
+  private inputsKey(): string {
+    return JSON.stringify(this.ed.doc?.pins.filter((p) => p.dir !== 'out').map((p) => [p.id, p.value]) ?? []);
+  }
+
+  /** Play Check's cases on the circuit, from case k. */
+  private openPlayer(ch: BuildChallenge, r: CheckResult, k: number): void {
+    this.closePlayer();
+    const set = testSet(ch);
+    if (!set || !set.n) return;
+    const p = new TestPlayer(this.ed, ch, set, r, () => { this.closePlayer(); this.version++; this.render(); });
+    this.player = p;
+    this.playerPins = this.inputsKey();
+    p.goto(k);
+    this.version++;
+    this.render();
+  }
+
+  private closePlayer(): void {
+    const p = this.player;
+    if (!p) return;
+    this.player = null;
+    p.close();
   }
 
   /** A campaign level's tips (one at a time) and its way back / onward. */
@@ -219,10 +264,29 @@ class ChallengeUi {
     el.append(h('div', { class: 'sb-chal-verdict' },
       r.ok ? h('b', null, icon('check', 14), 'Passes') : h('b', null, icon('close', 14), 'Not yet'),
       h('span', null, r.ok ? `all ${what} correct` : r.tested ? `checked ${what}` : 'not simulated'),
-      stale ? h('span', { class: 'sb-chal-stale' }, 'edited since: check again') : null));
+      stale ? h('span', { class: 'sb-chal-stale' }, 'edited since: check again') : null,
+      !this.player && r.tested && ch.check.kind !== 'custom'
+        ? h('button', { class: 'btn sm ghost sb-chal-watch', 'data-chal': 'watch', title: 'Play the tests one by one on your circuit: step, scrub, jump to failures',
+          onclick: () => this.openPlayer(ch, r, r.failed?.[0] ?? 0) }, icon('play', 12), r.ok ? 'Watch the tests' : 'Watch the failing test')
+        : null));
     if (r.failures.length || r.restrictionViolations.length || !r.ok) el.append(this.problems(r, ch));
+    const progs = this.programsEl(ch, r);
+    if (progs) el.append(progs);
     el.append(this.scoreEl(ch, r));
     return el;
+  }
+
+  /** A core level: every test program, failing ones first; each can be watched on a bench around this core. */
+  private programsEl(ch: BuildChallenge, r: CheckResult): HTMLElement | null {
+    const spec = coreSpecOf(ch.check);
+    if (!spec || !r.tested || !r.failed) return null;
+    const bad = new Set(r.failed);
+    const tests = spec.tests().map((t, i) => ({ t, bad: bad.has(i) }));
+    tests.sort((a, b) => Number(b.bad) - Number(a.bad));
+    return h('div', { class: 'sb-tp-progs' },
+      h('span', { class: 'sb-tp-progs-h', title: 'Each opens a new chip: the program in a ROM, your core, a RAM and LEDs, with the CPU panel running it against the golden model' }, 'Watch a program run:'),
+      tests.map(({ t, bad: b }) => h('button', { class: `sb-tp-prog${b ? ' bad' : ''}`, 'data-chal': 'program', title: `${b ? 'Fails' : 'Passes'}: open “${t.name}” on a bench around your core`, onclick: () => this.debug(t) },
+        icon(b ? 'close' : 'check', 11), t.name)));
   }
 
   private problems(r: CheckResult, ch: BuildChallenge): HTMLElement {
@@ -234,11 +298,6 @@ class ChallengeUi {
     if (t) {
       box.append(h('button', { class: 'sb-chal-apply', 'data-chal': 'bench', title: 'A new chip: this program in a ROM, your core, a RAM and LEDs; the CPU panel runs it against the golden model and stops at the first wrong write', onclick: () => this.debug(t) },
         icon('code', 13), `Debug “${t.name}” in the sandbox`));
-    }
-    if (r.vector) {
-      const v = r.vector;
-      box.append(h('button', { class: 'sb-chal-apply', 'data-chal': 'apply', title: 'Set the input pins to the first failing combination', onclick: () => this.apply(v) },
-        'Set the inputs to the first failing row'));
     }
     if (r.restrictionViolations.length) {
       box.append(h('p', { class: 'sb-chal-viol-h' }, 'Not allowed in this challenge:'),
@@ -269,6 +328,9 @@ class ChallengeUi {
     const ed = this.ed;
     const ch = this.challenge;
     if (!ch) return;
+    // Check's own simulators are separate; the player's replay is given back first all the same,
+    // so a new result never opens over an old replay.
+    this.closePlayer();
     const r = checkChallenge(ch, ed.compiled);
     this.results.set(ed.chipId, { r, conn: ed.compiled?.connKey ?? '' });
     this.version++;
@@ -283,7 +345,9 @@ class ChallengeUi {
       settings.solve(solvedKey(ch));
       ed.toast(first ? `Solved: ${ch.title}` : `Still passes: ${ch.title}`);
     }
-    this.render();
+    // A failure opens the player on the first failing test: the circuit shows it.
+    if (!r.ok && r.failed?.length && ch.check.kind !== 'custom') this.openPlayer(ch, r, r.failed[0]);
+    else this.render();
     if (this.drawer) this.renderList();
   }
 
@@ -298,14 +362,6 @@ class ChallengeUi {
       return b.ws;
     });
     ed.toast(err ? `Cannot build the bench: ${err}` : `New chip “${ed.doc.name}”: Run to halt in the CPU panel (Ctrl+Z removes it)`);
-  }
-
-  private apply(v: Record<string, number>): void {
-    const ed = this.ed;
-    for (const [name, x] of Object.entries(v)) {
-      const p = ed.doc.pins.find((q) => q.name === name && q.dir === 'in');
-      if (p) ed.setPinValue(p.id, x);
-    }
   }
 
   private showAnswer(): void {
@@ -327,6 +383,7 @@ class ChallengeUi {
     const ch = this.challenge;
     this.confirming = false;
     if (!ch) return;
+    this.closePlayer();
     ed.editWs((ws) => solveChallenge(ws, ch).ws);
     this.results.delete(challengeChipId(ch));
     this.version++;

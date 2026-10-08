@@ -192,7 +192,13 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  failing vectors, restriction violations on the compiled hierarchy, score incl. static-timing
                  period for clocked chips), Allowed also `{ lib }` (the campaign: NAND + listed parts), importAnswer,
                  solveChallenge; challengeset.ts: CHALLENGES and their reference answers (chip documents
-                 drawn with a small kit, each answer built from the answers of the rungs below)
+                 drawn with a small kit, each answer built from the answers of the rungs below);
+                 CheckResult.failed: indices of the failing cases; tableRows / seqStart / seqStep: the
+                 cases Check runs, shared with the test player
+  testrun.ts     testSet(ch) (Check's cases, made on demand), TestReplay: a case played on the editor's own
+                 simulation (EditorSim.notify / reapply), never the document; sequences step back from
+                 checkpoints every 32 steps; a table replay starts from X (as Check's fresh simulation);
+                 begin() / end() save and give back the simulation's state
   remix.ts       "Open in Sandbox": remixDef / remixIntoStorage (a shown def → a new chip; parts a reload could
                  not find by id come along as ROM / constant parts or chips); loaded on demand by the stage
   hops.ts        HopCache: wire hops recomputed for the moved wires and those crossing them only
@@ -230,7 +236,12 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   package.ts     "Package as chip…" dialog (name, hue, notes, symbol preview, pin order; Save & new circuit)
   inside.ts      lookInside(ed, path): read-only live schematic over the canvas on EditorSim's simulator (ViewCtx)
   challengeui.ts "Challenges" list drawer (solved ticks via settings), the strip under the canvas while a
-                 challenge chip is open (brief, Check, Show answer, Do it for me), purist palette while restricted
+                 challenge chip is open (brief, Check, Show answer, Do it for me), purist palette while restricted;
+                 a failing Check opens the test player on the first failing case; a core level lists its
+                 programs, each watchable on a bench (campaign/bench.ts)
+  testplayer.ts  the test player (Turing Complete style): step, scrub, play at a rate stopping at a failure,
+                 jump between failures, a window of cases with the live row; an edit while paused replays the
+                 case on the rebuilt circuit; Run / Step / a clock / Reset or an input set by hand ends it
   inspect.ts     the Inspector in a drawer for the chip or a part; chipprops.ts: chip / part property sections
   dock.ts        the right-hand dock: drawers (Inspector, CPU, challenges) share it, tabs when several;
                  sets --dock-space on the overlay so look inside stops at its edge

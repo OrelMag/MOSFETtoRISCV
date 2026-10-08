@@ -92,7 +92,8 @@ class IoBar {
       const el = h('button', { class: 'in-toggle', role: 'switch', 'aria-checked': 'false', title: `Toggle ${p.name} (input)`,
         onclick: () => { const q = cur(ed, p); ed.setPinValue(p.id, q.value ? 0 : 1); } },
       DIR(), h('span', { class: 'track' }, h('span', { class: 'knob' })), p.name);
-      this.ins.push({ pin: p, paint: () => { const on = !!cur(ed, p).value; el.classList.toggle('v1', on); el.setAttribute('aria-checked', String(on)); } });
+      // What the simulation is driven with (the test player drives it without the document).
+      this.ins.push({ pin: p, paint: (b) => { const on = b ? b[0] === B1 : !!cur(ed, p).value; el.classList.toggle('v1', on); el.setAttribute('aria-checked', String(on)); } });
       return el;
     }
     // A bus: its value (click to edit the bits), −1 / +1, exact at any width.
@@ -100,7 +101,7 @@ class IoBar {
     const bump = (d: bigint) => { const q = cur(ed, p); ed.setPinValue(p.id, pinValue((pinBig(q.value) + d) & m)); };
     const v = h('button', { class: 'sb-io-v', title: 'Edit the value' }) as HTMLButtonElement;
     v.addEventListener('click', () => { const q = cur(ed, p); editNumber(v.getBoundingClientRect(), q.name, q.width, pinBig(q.value), (n) => ed.setPinValue(q.id, pinValue(n))); });
-    this.ins.push({ pin: p, paint: () => { v.textContent = formatBits(bitsOf(cur(ed, p)), ed.view.radix); } });
+    this.ins.push({ pin: p, paint: (b) => { v.textContent = formatBits(b && b.length === p.width ? b : bitsOf(cur(ed, p)), ed.view.radix); } });
     return h('span', { class: 'in-num', title: `${p.name} (input)` }, DIR(), p.name,
       h('button', { title: '−1', onclick: () => bump(m) }, '−'), v, h('button', { title: '+1', onclick: () => bump(1n) }, '+'));
   }

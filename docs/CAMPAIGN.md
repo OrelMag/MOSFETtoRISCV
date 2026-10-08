@@ -428,6 +428,11 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
 
 - ✅ **Continue from your previous core**: a core stage starts from a copy of your last one.
 - ✅ **Debug a failing test**: open it as a sandbox bench with probes and the timing panel.
+- ✅ **Watch the tests** (Turing Complete style, `src/editor/testrun.ts`, `testplayer.ts`): after Check, the
+  level's cases play one at a time on the learner's own circuit (pins, wires, displays and the I/O bar show
+  the case); step, scrub, play at 1–30 per second or one per frame (stopping at a failing case), jump between
+  the failures Check found, and edit while paused: the case plays again on the rebuilt circuit. A failing
+  Check opens it on the first failure. Core levels list every program, each watchable on a bench.
 - ⏳ **Codex as a glossary**: hover definitions in the chapters, which closes the roadmap's
   ⏳ Glossary.
 - ⏳ **Achievements**: XOR in 4 NANDs, a full adder in 9, CPI < 1.2, a period below the

@@ -65,6 +65,8 @@ export interface CustomRun {
   cycles?: number;
   /** The clock period, when the bench measures it itself (a core with its memories). */
   period?: number;
+  /** Indices of the tests (e.g. the programs) that failed. */
+  failed?: number[];
 }
 
 /**
@@ -138,6 +140,11 @@ export interface CheckResult {
   tested: number;
   /** Table checks: the first failing input vector, by pin name (to put it on the canvas). */
   vector?: Record<string, number>;
+  /**
+   * Indices of the failing cases (at most MAX_FAILED): table rows of tableRows(), sequence steps,
+   * a custom bench's tests. Absent when nothing was simulated.
+   */
+  failed?: number[];
 }
 
 /** Progress key in settings.solve(). */
@@ -177,6 +184,8 @@ export function startChallenge(ws: Workspace, ch: BuildChallenge): { ws: Workspa
 
 /** Most failing vectors / steps listed. */
 const SHOW = 5;
+/** Most failing case indices kept (for the test player's marks). */
+export const MAX_FAILED = 4096;
 /** Exhaustive up to this many input bits; random vectors above. */
 const MAX_EXHAUSTIVE = 16;
 const RANDOM_VECTORS = 4096;
@@ -184,7 +193,7 @@ const RANDOM_VECTORS = 4096;
 const ZERO: Score = { nand: 0, transistors: 0, depth: null };
 
 /** What a simulation run found. */
-interface Run { failures: string[]; tested: number; vector?: Record<string, number>; cycles?: number; period?: number }
+interface Run { failures: string[]; tested: number; vector?: Record<string, number>; cycles?: number; period?: number; failed?: number[] }
 
 /** Check a compiled chip against a challenge. Never throws. */
 export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefined): CheckResult {
@@ -204,11 +213,12 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
     if (!res.failures.length) {
       const c = ch.check;
       const r: Run = c.kind === 'table'
-        ? runTable(def, compiled.mode, ch.ports, c.spec, c.vectors?.(), c.care)
+        ? runTable(def, compiled.mode, ch.ports, c)
         : c.kind === 'sequence' ? runSequence(def, compiled.mode, ch.ports, c) : c.run(def, compiled.mode);
       res.failures.push(...r.failures);
       res.tested = r.tested;
       if (r.vector) res.vector = r.vector;
+      if (r.failed) res.failed = r.failed.slice(0, MAX_FAILED);
       if (r.cycles !== undefined) res.score.cycles = r.cycles;
       if (r.period !== undefined) res.score.period = r.period;
     }
@@ -288,12 +298,12 @@ function violations(def: ComponentDef, allowed: Allowed): string[] {
 
 // ---- simulation ------------------------------------------------------------------------------
 
-const ins = (ports: PinSpec[]) => ports.filter((p) => p.dir === 'in');
-const outs = (ports: PinSpec[]) => ports.filter((p) => p.dir === 'out');
+export const ins = (ports: PinSpec[]) => ports.filter((p) => p.dir === 'in');
+export const outs = (ports: PinSpec[]) => ports.filter((p) => p.dir === 'out');
 
-const fmtNum = (v: number, w: number) => (w >= 8 ? `0x${v.toString(16).padStart(Math.ceil(w / 4), '0')}` : String(v));
+export const fmtNum = (v: number, w: number) => (w >= 8 ? `0x${v.toString(16).padStart(Math.ceil(w / 4), '0')}` : String(v));
 
-function fmtBits(bits: Bit[]): string {
+export function fmtBits(bits: Bit[]): string {
   const v = bits.every((b) => b === B0 || b === B1) ? bits.reduce((a: number, b, i) => a + b * 2 ** i, 0) : -1;
   if (v >= 0) return fmtNum(v, bits.length);
   const ch = (b: Bit) => (b === B1 ? '1' : b === B0 ? '0' : b === BZ ? 'Z' : 'X');
@@ -309,6 +319,46 @@ function simFor(def: ComponentDef, mode: 'gate' | 'switch'): { sim: Sim; design:
 }
 
 const readBits = (sim: Sim, port: string): Bit[] => sim.getBits(sim.design.root.ports[port]);
+
+/** Do the bits read `want` (on the bits `mask` cares about; absent: all)? */
+export const matches = (bits: Bit[], want: number, mask?: number): boolean =>
+  bits.every((b, i) => (mask !== undefined && !(Math.floor(mask / 2 ** i) % 2)) || b === (Math.floor(want / 2 ** i) % 2 ? B1 : B0));
+
+/** Every row a table check runs, in order: the directed vectors, then vectors() of the inputs. */
+export function tableRows(check: Extract<ChallengeCheck, { kind: 'table' }>, ports: PinSpec[]): number[][] {
+  return [...(check.vectors?.() ?? []), ...vectors(ins(ports))];
+}
+
+/** The clock a sequence check ticks. */
+export const seqClock = (ports: PinSpec[]): string => ins(ports).find((p) => p.clock)?.name ?? 'clk';
+
+/** A sequence check's start: inputs at `init` (others 0), power-on, settled. Returns the input values. */
+export function seqStart(sim: Sim, ports: PinSpec[], check: Extract<ChallengeCheck, { kind: 'sequence' }>): Record<string, number> {
+  const vals: Record<string, number> = Object.fromEntries(ins(ports).map((p) => [p.name, check.init?.[p.name] ?? 0]));
+  for (const [k, v] of Object.entries(vals)) sim.setInput(k, v);
+  sim.reset('zero');
+  sim.settle();
+  return vals;
+}
+
+/** Step k of a sequence: its inputs (kept in `vals`), then a clock cycle if it ticks. Throws when it oscillates. */
+export function seqStep(sim: Sim, clk: string, st: SeqStep, k: number, vals: Record<string, number>): void {
+  const settle = (what: string) => {
+    sim.settle();
+    if (sim.unstable) throw new Error(`it does not settle (${what})`);
+  };
+  for (const [p, v] of Object.entries(st.set ?? {})) {
+    vals[p] = v;
+    sim.setInput(p, v);
+  }
+  settle(`step ${k + 1}`);
+  if (st.tick) {
+    sim.setInput(clk, 1);
+    settle(`rising edge, step ${k + 1}`);
+    sim.setInput(clk, 0);
+    settle(`falling edge, step ${k + 1}`);
+  }
+}
 
 /** Vectors: every combination (first input port most significant), or random ones above 16 bits. */
 function vectors(ps: PinSpec[]): number[][] {
@@ -334,24 +384,22 @@ function vectors(ps: PinSpec[]): number[][] {
   return Array.from({ length: RANDOM_VECTORS }, () => ps.map((p) => rnd(p.width)));
 }
 
-function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], spec: (ins: number[]) => number[], directed: number[][] = [],
-  care?: (ins: number[]) => number[]): Run {
+function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], check: Extract<ChallengeCheck, { kind: 'table' }>): Run {
+  const { spec, care } = check;
   const I = ins(ports), O = outs(ports);
-  const vs = [...directed, ...vectors(I)];
+  const vs = tableRows(check, ports);
   const { sim, design } = simFor(def, mode);
   const failures: string[] = [];
+  const failed: number[] = [];
   let bad = 0;
   let vector: Record<string, number> | undefined;
-  const compare = (v: number[], got: Bit[][]) => {
+  const compare = (v: number[], got: Bit[][], row: number) => {
     const want = spec(v);
     const mask = care?.(v);
-    const wrong = O.map((p, k) => {
-      const g = got[k];
-      const ok = g.every((b, i) => (mask && !(Math.floor(mask[k] / 2 ** i) % 2)) || b === (Math.floor(want[k] / 2 ** i) % 2 ? B1 : B0));
-      return ok ? null : `${p.name}=${fmtBits(g)}`;
-    });
+    const wrong = O.map((p, k) => (matches(got[k], want[k], mask?.[k]) ? null : `${p.name}=${fmtBits(got[k])}`));
     if (wrong.every((w) => w === null)) return;
     bad++;
+    if (failed.length < MAX_FAILED) failed.push(row);
     vector ??= Object.fromEntries(I.map((p, i) => [p.name, v[i]]));
     if (failures.length < SHOW) {
       failures.push(`${fmtIns(I, v)} → ${wrong.filter(Boolean).join(' ')}, expected ${O.map((p, k) => (wrong[k] ? `${p.name}=${fmtNum(want[k], p.width)}` : '')).filter(Boolean).join(' ')}`);
@@ -359,14 +407,15 @@ function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], 
   };
   // The event-driven simulator sees X and Z (an unconnected output, a short); once the first
   // vectors pass, an acyclic NAND netlist is swept 32 vectors at a time.
-  const slow = (v: number[]) => {
+  const slow = (v: number[], row: number) => {
     I.forEach((p, i) => sim.setInput(p.name, v[i]));
     sim.settle();
     if (sim.unstable) throw new Error(`it does not settle for ${fmtIns(I, v)} (it oscillates)`);
-    compare(v, O.map((p) => readBits(sim, p.name)));
+    compare(v, O.map((p) => readBits(sim, p.name)), row);
   };
   const head = Math.min(vs.length, 64);
-  for (let k = 0; k < head; k++) slow(vs[k]);
+  for (let k = 0; k < head; k++) slow(vs[k], k);
+  let from = head;
   let rest = vs.slice(head);
   if (rest.length && !bad && mode === 'gate' && design.leaves.every((l) => l.kind === 'nand' || (l.kind === 'behavior' && !l.inputs.length))) {
     let bs: BitSim | null = null;
@@ -379,56 +428,41 @@ function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], 
         I.forEach((p, i) => bs!.setInput(p.name, batch.map((v) => v[i])));
         bs.settle();
         const got = O.map((p) => bs!.get(p.name, batch.length));
-        batch.forEach((v, l) => compare(v, O.map((p, k) => Array.from({ length: p.width }, (_, i) => (Math.floor(got[k][l] / 2 ** i) % 2) as Bit))));
+        batch.forEach((v, l) => compare(v, O.map((p, k) => Array.from({ length: p.width }, (_, i) => (Math.floor(got[k][l] / 2 ** i) % 2) as Bit)), head + at + l));
       }
       rest = [];
+      from = vs.length;
     }
   }
-  for (const v of rest) slow(v);
+  rest.forEach((v, i) => slow(v, from + i));
   if (bad > failures.length) failures.push(`… ${bad - failures.length} more of ${vs.length} rows wrong`);
-  return { failures, tested: vs.length, ...(vector ? { vector } : {}) };
+  return { failures, tested: vs.length, failed, ...(vector ? { vector } : {}) };
 }
 
 function runSequence(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], check: Extract<ChallengeCheck, { kind: 'sequence' }>): Run {
   const I = ins(ports);
-  const clk = I.find((p) => p.clock)?.name ?? 'clk';
+  const clk = seqClock(ports);
   const { sim } = simFor(def, mode);
-  const vals: Record<string, number> = Object.fromEntries(I.map((p) => [p.name, check.init?.[p.name] ?? 0]));
-  for (const [k, v] of Object.entries(vals)) sim.setInput(k, v);
-  sim.reset('zero');
-  sim.settle();
+  const vals = seqStart(sim, ports, check);
   const failures: string[] = [];
+  const failed: number[] = [];
   let bad = 0;
-  const settle = (what: string) => {
-    sim.settle();
-    if (sim.unstable) throw new Error(`it does not settle (${what})`);
-  };
   check.steps.forEach((st, k) => {
-    for (const [p, v] of Object.entries(st.set ?? {})) {
-      vals[p] = v;
-      sim.setInput(p, v);
-    }
-    settle(`step ${k + 1}`);
-    if (st.tick) {
-      sim.setInput(clk, 1);
-      settle(`rising edge, step ${k + 1}`);
-      sim.setInput(clk, 0);
-      settle(`falling edge, step ${k + 1}`);
-    }
+    seqStep(sim, clk, st, k, vals);
     const wrong = Object.entries(st.expect).flatMap(([p, want]) => {
       const g = readBits(sim, p);
-      const ok = g.every((b, i) => b === (Math.floor(want / 2 ** i) % 2 ? B1 : B0));
-      return ok ? [] : [[p, fmtBits(g), fmtNum(want, g.length)]];
+      return matches(g, want) ? [] : [[p, fmtBits(g), fmtNum(want, g.length)]];
     });
     if (!wrong.length) return;
     bad++;
+    if (failed.length < MAX_FAILED) failed.push(k);
     if (failures.length < SHOW) {
       const inputs = I.filter((p) => p.name !== clk || !st.tick).map((p) => `${p.name}=${fmtNum(vals[p.name], p.width)}`).join(' ');
       failures.push(`step ${k + 1}: ${inputs}${st.tick ? ', clock edge' : ''} → ${wrong.map(([p, g]) => `${p}=${g}`).join(' ')}, expected ${wrong.map(([p, , w]) => `${p}=${w}`).join(' ')}`);
     }
   });
   if (bad > failures.length) failures.push(`… ${bad - failures.length} more of ${check.steps.length} steps wrong`);
-  return { failures, tested: check.steps.length };
+  return { failures, tested: check.steps.length, failed };
 }
 
 // ---- answers ---------------------------------------------------------------------------------

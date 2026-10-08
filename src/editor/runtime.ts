@@ -240,6 +240,24 @@ export class EditorSim {
 
   // ---- driving -----------------------------------------------------------------------------
 
+  /**
+   * Something else drove the simulation (the test player): repaint. `restarted`: its time went
+   * back (a restored state, a reset), so recordings over it start over (`resets` is bumped).
+   */
+  notify(restarted = false): void {
+    if (restarted) this.resets++;
+    this.onChange();
+  }
+
+  /** Put the document's input values back on the simulation (after the test player drove it). */
+  reapply(): void {
+    const sim = this.sim;
+    if (!sim) return;
+    this.applyPins(sim);
+    sim.settle();
+    this.onChange();
+  }
+
   /** Set an input pin. Gate mode lets the run loop (or Step) propagate it one delay at a time. */
   setInput(p: PinDoc, v: PinValue): void {
     const sim = this.sim;
