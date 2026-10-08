@@ -450,3 +450,7 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
 - ⏳ **Where your NANDs go**: a per-component breakdown of your CPU.
 - ⏳ **Boss level**: snake on an LED matrix, on your own pipelined core.
 - ⏳ **Custom ISA**: an instruction table that generates the assembler (reusing isa16's tables).
+- ⏳ **A level screen of its own**, **why we are building it**, a **step-by-step solution walkthrough** in every
+  level and a **fuller codex**: details in the roadmap's Phase 12, Campaign.
+- ⏳ **Before the transistor**: an act with relay and tube bricks, a 3D view of the machine and punch-card
+  programs (roadmap Phase 14).

@@ -457,6 +457,12 @@ component, initial inputs, optional drill path, highlights, probes) or a `widget
 optional `challenge`. Keep the prose short, concrete and honest. Introduce a component
 as a black box only after its inside has been shown. Say what each thing *costs*.
 
+## Major changes: mockup first
+
+Before building a major change (a new screen or page, a new visual mode, restructured navigation, a new act
+or chapter structure, a 3D or other new view), show the author a mockup (an image or a static HTML page) and
+get approval. Small fixes and additions inside an existing screen don't need one.
+
 ## Git workflow
 
 - **Never work directly on `main`.** Every change or feature goes on its own branch, cut
