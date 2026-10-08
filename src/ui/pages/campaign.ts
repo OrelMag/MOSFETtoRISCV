@@ -164,7 +164,8 @@ export class CampaignPage implements Page {
     const svg = mapSvg(p.view, p.unlockAll, sel?.id, (id) => { location.hash = `#/campaign/n/${id}`; });
     const legend = h('div', { class: 'cp-legend' },
       h('span', { class: 'l available' }, 'available'), h('span', { class: 'l solved' }, 'solved'), h('span', { class: 'l skipped' }, 'skipped'),
-      h('span', { class: 'l locked' }, 'locked'), h('span', { class: 'l opt' }, 'optional'), NODES.some((n) => n.soon) ? h('span', { class: 'l soon' }, 'coming soon') : null);
+      h('span', { class: 'l locked' }, 'locked'), h('span', { class: 'l opt' }, 'optional'), NODES.some((n) => n.soon) ? h('span', { class: 'l soon' }, 'coming soon') : null,
+      h('span', { class: 'l port', title: 'Lines between acts are drawn for the level you point at or select' }, 'builds on earlier acts (point at it)'));
     return h('div', { class: 'cp-split' },
       h('section', { class: 'cp-map-pane' }, legend, h('div', { class: 'cp-map-scroll' }, svg)),
       h('aside', { class: 'cp-panel' }, sel ? this.nodePanel(sel) : this.welcome()));

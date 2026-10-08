@@ -38,8 +38,11 @@
 .cp-edge { fill: none; stroke: var(--border-strong); stroke-width: 1.4; }
 .cp-edge.done { stroke: var(--good); opacity: 0.7; }
 .cp-edge.opt { stroke-dasharray: 4 3; }
-.cp-edge.cross { opacity: 0.28; }
-.cp-edge.hot { stroke: var(--accent); stroke-width: 2.2; opacity: 1; }
+.cp-edge.cross { display: none; }
+.cp-edge.cross.hot, .cp-edge.cross.hover { display: inline; }
+.cp-edge.hot, .cp-edge.hover { stroke: var(--accent); stroke-width: 2.2; opacity: 1; }
+.cp-port { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; }
+.cp-legend .port::before { border-radius: 50%; border-color: var(--accent); width: 7px; height: 7px; }
 .cp-node { cursor: pointer; outline: none; }
 .cp-node rect { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.4; transition: stroke 0.12s, fill 0.12s; }
 .cp-node.available rect, .cp-node.started rect { stroke: var(--accent); stroke-width: 2; }
