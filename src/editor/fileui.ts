@@ -11,7 +11,7 @@ import {
   chipFileName, chipInfo, deleteChip, duplicateChip, fileBase, SHARE_WARN, shareUrl, summarize, summaryLine,
   workspaceFileName, type ImportSummary,
 } from './files';
-import { pngImage, svgImage } from './image';
+import { pngImage, saveFile, svgImage } from '../view/image';
 import { decodeShare, encodeShare } from './share';
 import { BACKUP_KEY, closure, exportJson, importChips, importJson } from './store';
 
@@ -23,7 +23,6 @@ const GLYPHS: Record<string, string> = {
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
   upload: '<path d="M12 16V5M7 10l5-5 5 5M5 20h14"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
-  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',
   file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
   stack: '<rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/>',
 };
@@ -32,15 +31,6 @@ function glyph(name: string, size = 16): SVGSVGElement {
   const el = s('svg', { viewBox: '0 0 24 24', width: size, height: size, fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
   el.innerHTML = GLYPHS[name];
   return el;
-}
-
-function saveFile(name: string, data: string | Blob, type = 'application/json'): void {
-  const blob = typeof data === 'string' ? new Blob([data], { type }) : data;
-  const a = h('a', { href: URL.createObjectURL(blob), download: name });
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;

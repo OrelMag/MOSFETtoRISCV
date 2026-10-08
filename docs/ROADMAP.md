@@ -368,7 +368,8 @@ challenges stay open. Next:
   stay open (soft locks exist only in the campaign, see `docs/CAMPAIGN.md`)
 - ✅ Reduced motion: CSS animations and transitions off, slow-motion fronts drawn as plain changes
 - ⏳ Keyboard navigation beyond the shortcuts (search palette, sandbox keys)
-- ✅ Export the sandbox canvas as SVG / PNG (current theme); ⏳ the same for chapter scenes and the workbench
+- ✅ Export the sandbox canvas as SVG / PNG (current theme), and the level on a chapter's or the workbench's stage (the
+  stage bar's Image menu: the whole level with its live values, whatever the zoom, without probe flags)
 - VHDL view of every component
 - Performance budget: 60 fps rendering of ≤ 5 000 visible elements; ≥ 100 CPU cycles/s at gate level
 - i18n-ready strings
