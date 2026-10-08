@@ -32,7 +32,14 @@ npm test             # Vitest (simulation + library correctness), must stay gree
 npm run typecheck    # tsc --noEmit (strict)
 npm run build        # typecheck + production build into dist/ (relative base, deploy anywhere)
 npm run preview      # serve dist/
+npm run desktop      # build + desktop/ (Electron, own package): portable Windows .exe in desktop/release/
 ```
+
+`desktop/`: main.cjs serves the staged site (stage.mjs: dist/ without source maps, Google Fonts swapped for
+local @fontsource copies) on a private `app://mosfet` origin; data next to the .exe (PORTABLE_EXECUTABLE_DIR);
+fuses off (runAsNode: VS Code sets ELECTRON_RUN_AS_NODE, so run `electron .` there with it unset). Share links
+made in the program point at the public site (editor/files.ts `SITE_URL`). `.github/workflows/desktop.yml`
+(manual or `v*` tag) publishes the release `desktop-latest`.
 
 CI (`.github/workflows/deploy.yml`) runs tests + build and deploys `dist/` to GitHub Pages
 on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-export.ts all`

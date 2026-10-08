@@ -15,8 +15,12 @@ export const SHARE_WARN = 32 * 1024;
 
 export const shareHash = (payload: string) => `#/sandbox/${SHARE_SEG}/${payload}`;
 
-/** The full link: the page's URL without its hash, plus the share route. */
-export const shareUrl = (href: string, payload: string) => href.replace(/#.*$/s, '') + shareHash(payload);
+/** The public site: where a link made outside the web (the desktop program's app:// page) points. */
+export const SITE_URL = 'https://orelmag.github.io/MOSFETtoRISCV/';
+
+/** The full link: the page's URL without its hash (the public site if the page is not on the web), plus the share route. */
+export const shareUrl = (href: string, payload: string) =>
+  (/^https?:/i.test(href) ? href.replace(/#.*$/s, '') : SITE_URL) + shareHash(payload);
 
 /** The payload of a share route (#/sandbox/s/<payload>), or null for any other hash. */
 export function shareRoute(hash: string): string | null {
