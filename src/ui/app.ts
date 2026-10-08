@@ -1,7 +1,7 @@
 // App shell: top bar, theme, global settings and hash routing.
 
 import { chapterById, chapters } from '../chapters';
-import { h, icon } from './dom';
+import { h, icon, s } from './dom';
 import { ChapterPage, type Page } from './pages/chapter';
 import { homePage } from './pages/home';
 import { WorkbenchPage } from './pages/workbench';
@@ -69,8 +69,13 @@ export function startApp(root: HTMLElement): void {
     applyTheme();
   } }, h('span', { class: 'pal-flow-sw' }, h('i')),
   h('span', null, h('b', null, 'Flowing bits'), h('small', null, '1s march along wires, buses carry their values')));
-  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), modItem, flowItem);
-  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire and module colours, flowing bits', 'aria-label': 'Wire and module colours, flowing bits', 'aria-haspopup': 'menu' }, swatch());
+  // Simple connections: how the sandbox draws new wires (Turing Complete style), not a colour, so a switch too.
+  const simpleItem = h('button', { role: 'menuitemcheckbox', class: 'pal-simple', onclick: () => settings.set('simpleWires', !settings.simpleWires) },
+    h('span', { class: 'pal-simple-sw' }, s('svg', { viewBox: '0 0 46 14', 'aria-hidden': 'true' },
+      s('path', { class: 'sq', d: 'M2,12 H16 V2 H30 V12 H44' }), s('path', { class: 'st', d: 'M2,12 L16,2 L30,12 L44,2' }))),
+    h('span', null, h('b', null, 'Simple connections'), h('small', null, 'Sandbox: new wires run straight between the points you click, at any angle')));
+  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), modItem, flowItem, simpleItem);
+  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire and module colours, flowing bits, simple connections', 'aria-label': 'Wire and module colours, flowing bits, simple connections', 'aria-haspopup': 'menu' }, swatch());
   palBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     palMenu.classList.toggle('open');
@@ -84,6 +89,7 @@ export function startApp(root: HTMLElement): void {
     for (const b of palMenu.querySelectorAll<HTMLButtonElement>('button[data-p]')) b.setAttribute('aria-checked', String(b.dataset.p === settings.palette));
     modItem.setAttribute('aria-checked', String(settings.modules));
     flowItem.setAttribute('aria-checked', String(settings.wireFlow));
+    simpleItem.setAttribute('aria-checked', String(settings.simpleWires));
     for (const b of radix.querySelectorAll<HTMLButtonElement>('button')) b.classList.toggle('on', b.dataset.r === settings.radix);
     animate.classList.toggle('on', settings.animate);
     themeBtn.replaceChildren(icon(settings.theme === 'light' ? 'sun' : settings.theme === 'dark' ? 'moon' : 'auto', 18));

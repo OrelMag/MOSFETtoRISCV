@@ -169,7 +169,9 @@
 .wire.ed-err { filter: drop-shadow(0 0 0.25px var(--ed-err)) drop-shadow(0 0 0.25px var(--ed-err)); }
 .wire.ed-warn { filter: drop-shadow(0 0 0.25px var(--ed-warn)); }
 .wire.ed-dead { stroke-dasharray: 0.45 0.3; }
-.ed-svg .wire-hit { cursor: pointer; stroke-width: 0.8; }
+.ed-svg .wire-hit { cursor: inherit; stroke-width: 0.8; }
+/* a selected wire's corners (squares) and a straight wire's breakpoints (circles): drag to reshape, double-click to remove */
+.ed-handle { fill: var(--surface); stroke: var(--ed-sel); stroke-width: 0.12; pointer-events: none; }
 .ed-svg .wire-hit:hover { stroke: color-mix(in srgb, var(--ed-sel) 14%, transparent); }
 
 /* displays */

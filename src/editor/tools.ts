@@ -2,7 +2,10 @@
 // Logic Sim. Press on a port starts a free-hand wire (clicks add corners, a click on a port,
 // pointer or wire ends it); press on an object selects and drags it; press on empty canvas
 // draws a rubber band; Space or the middle button pans (camera.ts). Palette items are dragged
-// onto the canvas, or clicked and then placed with a click.
+// onto the canvas, or clicked and then placed with a click. Dragging a wire reshapes it: a
+// corner (a straight wire's breakpoint) moves, a segment slides across (a straight one bends
+// where it was grabbed); a double-click on a corner takes it out. With the "Simple connections"
+// setting new wires run straight between the clicked points.
 //
 // Geometry and the wire being drawn are DOM-free (geom.ts); this file only routes events.
 
@@ -11,15 +14,16 @@ import { installPanZoom } from '../view/camera';
 import { closePopover, editNumber } from '../view/popover';
 import { drawPinGlyph } from '../view/symbols';
 import { s } from '../ui/dom';
+import { settings } from '../ui/settings';
 import { nextDrive } from './chips';
 import type { Editor } from './editor';
 import { lookInside } from './inside';
-import { branchPoint, drives, type Hit, hitTest, hitWire, nextSameName, partAnchor, pointerGeom, snapPt, WireDraft } from './geom';
+import { branchPoint, drives, grabOn, type Hit, hitTest, hitWire, nextSameName, partAnchor, pointerGeom, snapPt, WireDraft } from './geom';
 import { renamePin } from './chips';
 import { type ChipDoc, commentBox, endGeom, endKey, type EndRef, type ExitDir as Face, type PinDoc, pinBig, pinValue } from './model';
 import {
-  addComment, addLabel, addPart, addPin, addWire, boxSelect, type Clip, copySel, deleteSel, duplicate, flipParts, moveSel, pasteClip,
-  namePart, type Sel, selectAll, setComment, setLabel, setPin,
+  addComment, addLabel, addPart, addPin, addWire, boxSelect, type Clip, copySel, deleteSel, dragWire, duplicate, flipParts, moveSel, pasteClip,
+  namePart, removeBend, type Sel, selectAll, setComment, setLabel, setPin, type WireGrab,
 } from './ops';
 import type { PaletteItem } from './palette';
 
@@ -29,6 +33,8 @@ type State =
   /** `name`: the press was on the object's drawn name (a click then renames a selected object). */
   | { k: 'press'; hit: Hit; at: Vec; sx: number; sy: number; was: boolean; shift: boolean; name: boolean }
   | { k: 'move'; at: Vec; base: ChipDoc; sel: Sel; d: Vec }
+  /** Reshaping one wire: what the press grabbed on it (geom.ts grabOn), from the document before the drag. */
+  | { k: 'reshape'; id: string; grab: WireGrab; at: Vec; base: ChipDoc; d: Vec }
   | { k: 'band'; at: Vec; add: boolean }
   /** `held`: the button is still down since the press that started it (drag-to-connect). */
   | { k: 'wire'; draft: WireDraft; held: boolean; sx: number; sy: number }
@@ -96,7 +102,7 @@ export class Tools {
    */
   private pinched(): void {
     const st = this.state;
-    if (st.k === 'press' || st.k === 'move' || st.k === 'band') this.cancel();
+    if (st.k === 'press' || st.k === 'move' || st.k === 'reshape' || st.k === 'band') this.cancel();
     else if (st.k === 'wire') st.held = false;
     if (this.buttonHeld) this.release();
   }
@@ -131,7 +137,7 @@ export class Tools {
   /** Abandon whatever is in progress. */
   cancel(): void {
     const st = this.state;
-    if (st.k === 'move') this.ed.cancel();
+    if (st.k === 'move' || st.k === 'reshape') this.ed.cancel();
     this.state = { k: 'idle' };
     this.ed.view.showPreview(null);
     this.ed.view.showBand(null);
@@ -201,6 +207,15 @@ export class Tools {
     switch (st.k) {
       case 'press': {
         if (Math.hypot(e.clientX - st.sx, e.clientY - st.sy) < DRAG_PX) return;
+        const h = st.hit;
+        // A wire dragged on its own reshapes; one of several selected moves with the rest.
+        const poly = h.k === 'wire' && ed.selCount <= 1 ? ed.view.polys.get(h.id) : undefined;
+        if (h.k === 'wire' && poly) {
+          if (!st.was) ed.select(selOf(h));
+          ed.begin();
+          this.state = { k: 'reshape', id: h.id, grab: grabOn(poly, st.at, this.tol()), at: st.at, base: ed.doc, d: [0, 0] };
+          return this.move(e);
+        }
         if (!this.isSelected(st.hit)) ed.select(selOf(st.hit));
         ed.begin();
         this.state = { k: 'move', at: st.at, base: ed.doc, sel: ed.sel, d: [0, 0] };
@@ -211,6 +226,13 @@ export class Tools {
         if (d[0] === st.d[0] && d[1] === st.d[1]) return;
         st.d = d;
         ed.edit(() => moveSel(st.base, st.sel, d, ed.defOf));
+        return;
+      }
+      case 'reshape': {
+        const d: Vec = [Math.round(p[0] - st.at[0]), Math.round(p[1] - st.at[1])];
+        if (d[0] === st.d[0] && d[1] === st.d[1]) return;
+        st.d = d;
+        ed.edit(() => dragWire(st.base, st.id, st.grab, d, ed.defOf).doc);
         return;
       }
       case 'band':
@@ -225,7 +247,8 @@ export class Tools {
         ed.view.showHot(h.k === 'port' ? h.pos : null);
         ed.hoverWire(h.k === 'wire' ? h.id : null, e);
         const pin = h.k === 'pin' ? ed.doc.pins.find((q) => q.id === h.id) : undefined;
-        ed.view.svg.style.cursor = h.k === 'port' ? 'crosshair' : pin && pin.dir !== 'out' ? 'pointer' : h.k === 'none' ? '' : this.isSelected(h) ? 'move' : 'pointer';
+        ed.view.svg.style.cursor = h.k === 'wire' ? this.wireCursor(h.id, p)
+          : h.k === 'port' ? 'crosshair' : pin && pin.dir !== 'out' ? 'pointer' : h.k === 'none' ? '' : this.isSelected(h) ? 'move' : 'pointer';
       }
     }
   }
@@ -242,6 +265,7 @@ export class Tools {
         this.state = { k: 'idle' };
         return this.click(st, e);
       case 'move':
+      case 'reshape':
         this.state = { k: 'idle' };
         ed.commit();
         return;
@@ -303,9 +327,16 @@ export class Tools {
       if (!ed.typingOnCanvas) this.rename(named);
       return;
     }
-    const h = this.hit(this.world(e));
+    const p = this.world(e);
+    const h = this.hit(p);
     if (h.k === 'label') return; // the second click of a double-click already jumped
     if (h.k === 'comment') return this.editComment(h.id);
+    if (h.k === 'wire') {
+      const poly = ed.view.polys.get(h.id);
+      const g = poly && grabOn(poly, p, this.tol());
+      if (g && 'corner' in g) this.unbend(h.id, g.corner);
+      return;
+    }
     if (h.k === 'part') {
       // A user chip opens for editing; anything else opens read-only, live (look inside).
       const part = ed.doc.parts.find((q) => q.id === h.id);
@@ -387,6 +418,32 @@ export class Tools {
     }
   }
 
+  /** Take corner j (of its drawn polyline) out of a wire. */
+  unbend(id: string, j: number): void {
+    const r = removeBend(this.ed.doc, id, j, this.ed.defOf);
+    if (r.reason) return void this.ed.toast(r.reason);
+    this.ed.edit(() => r.doc);
+  }
+
+  /** The corner of a wire's polyline under p (within the click tolerance), or -1. */
+  cornerAt(id: string, p: Vec): number {
+    const poly = this.ed.view.polys.get(id);
+    const g = poly && grabOn(poly, p, this.tol());
+    return g && 'corner' in g ? g.corner : -1;
+  }
+
+  /** What a drag would do to a wire under p: move a corner, slide a segment across, bend a straight one. */
+  private wireCursor(id: string, p: Vec): string {
+    const poly = this.ed.view.polys.get(id);
+    if (!poly) return 'pointer';
+    if (this.ed.selCount > 1 && this.ed.sel.wires?.includes(id)) return 'move';
+    const g = grabOn(poly, p, this.tol());
+    if ('corner' in g) return 'move';
+    if (this.ed.doc.wires.find((w) => w.id === id)?.straight) return 'grab';
+    const [a, b] = [poly[g.seg], poly[g.seg + 1]];
+    return a[1] === b[1] ? 'ns-resize' : 'ew-resize';
+  }
+
   /** Place a palette item at a world point (the context menu's "Add … here"). */
   placeAt(item: PaletteItem, p: Vec): void {
     this.cancel();
@@ -423,7 +480,7 @@ export class Tools {
   private startWire(from: EndRef, pos: Vec, e: PointerEvent): void {
     const ed = this.ed;
     const g = 'wire' in from ? null : endGeom(ed.doc, from, ed.defOf);
-    const draft = new WireDraft(from, pos, g?.exit ?? null);
+    const draft = new WireDraft(from, pos, g?.exit ?? null, settings.simpleWires);
     this.state = { k: 'wire', draft, held: true, sx: e.clientX, sy: e.clientY };
     ed.view.svg.style.cursor = 'crosshair';
     this.previewWire(draft, this.world(e));
@@ -478,7 +535,7 @@ export class Tools {
       ed.toast(why, 'err');
       return;
     }
-    const r = addWire(ed.doc, draft.from, end, draft.corners(pos, exit), ed.defOf);
+    const r = addWire(ed.doc, draft.from, end, draft.corners(pos, exit), ed.defOf, draft.straight);
     if (r.reason) {
       ed.toast(`Cannot wire: ${r.reason}`, 'err');
       return;

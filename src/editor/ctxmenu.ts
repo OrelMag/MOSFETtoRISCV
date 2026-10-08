@@ -9,7 +9,7 @@ import { type Editor, registerEditorPlugin } from './editor';
 import { canLookInside, lookInside } from './inside';
 import { inspect } from './inspect';
 import { nextSameName } from './geom';
-import { setPin } from './ops';
+import { clearBends, setPin, setStraight } from './ops';
 import { canPaste } from './tools';
 
 interface Item { label: string; key?: string; run(): void; disabled?: boolean }
@@ -59,7 +59,16 @@ function entries(ed: Editor, at: Vec): Entry[] {
     ];
   }
   const flip: Item = { label: 'Flip', key: 'F', run: () => t.flip() };
-  if (n > 1) return [flip, null, ...edits];
+  // Wires: straight (simple connections) or square, bends out.
+  const wireIds = s.wires ?? [];
+  const wires = ed.doc.wires.filter((w) => wireIds.includes(w.id));
+  const shape: Entry[] = !wires.length ? [] : [
+    wires.some((w) => !w.straight)
+      ? { label: n > 1 ? 'Make the wires simple connections' : 'Make it a simple connection', run: () => ed.edit((d) => setStraight(d, wireIds, true, ed.defOf)) }
+      : { label: n > 1 ? 'Square the wires' : 'Square it', run: () => ed.edit((d) => setStraight(d, wireIds, false, ed.defOf)) },
+    { label: 'Remove all bends', run: () => ed.edit((d) => clearBends(d, wireIds, ed.defOf)), disabled: !wires.some((w) => w.pts.length) },
+  ];
+  if (n > 1) return [flip, ...shape, null, ...edits];
   if (s.parts?.length) {
     const p = ed.doc.parts.find((q) => q.id === s.parts![0]);
     if (!p) return edits;
@@ -99,6 +108,14 @@ function entries(ed: Editor, at: Vec): Entry[] {
   if (s.comments?.length) {
     const id = s.comments[0];
     return [{ label: 'Edit text', key: 'double-click', run: () => t.editComment(id) }, null, ...edits];
+  }
+  if (wires.length) {
+    const id = wires[0].id;
+    const j = t.cornerAt(id, at);
+    return [
+      { label: 'Remove this bend', key: 'double-click', run: () => t.unbend(id, j), disabled: j < 0 },
+      ...shape, null, { label: 'Delete', key: 'Del', run: () => t.del() },
+    ];
   }
   return [{ label: 'Delete', key: 'Del', run: () => t.del() }];
 }

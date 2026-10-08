@@ -659,7 +659,17 @@ export function junctions(paths: Vec[][]): Vec[] {
     for (const [a, b] of segs) {
       const onH = a[1] === b[1] && c[1] === a[1] && c[0] >= Math.min(a[0], b[0]) && c[0] <= Math.max(a[0], b[0]);
       const onV = a[0] === b[0] && c[0] === a[0] && c[1] >= Math.min(a[1], b[1]) && c[1] <= Math.max(a[1], b[1]);
-      if (!onH && !onV) continue;
+      if (!onH && !onV) {
+        // A slanted segment (a sandbox's straight wire): the directions to its ends, by angle.
+        if (a[0] === b[0] || a[1] === b[1]) continue;
+        const [dx, dy] = [b[0] - a[0], b[1] - a[1]], l = Math.hypot(dx, dy);
+        const t = ((c[0] - a[0]) * dx + (c[1] - a[1]) * dy) / (l * l);
+        if (t < -1e-3 || t > 1 + 1e-3 || Math.abs(dx * (c[1] - a[1]) - dy * (c[0] - a[0])) / l > 1e-3) continue;
+        const ang = (x: number, y: number) => `a${Math.round(Math.atan2(y, x) * 1000)}`;
+        if (t * l > 1e-3) dirs.add(ang(-dx, -dy));
+        if ((1 - t) * l > 1e-3) dirs.add(ang(dx, dy));
+        continue;
+      }
       if (onH) {
         if (c[0] > Math.min(a[0], b[0])) dirs.add('l');
         if (c[0] < Math.max(a[0], b[0])) dirs.add('r');
