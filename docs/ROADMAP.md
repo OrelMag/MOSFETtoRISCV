@@ -206,7 +206,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   exhaustively, carry-save comparisons; n/2 + 3 cycles, 21 % faster than radix 2 at 32 bits
 - ✅ M extension in the pipelined CPU (chapter 20): multiplier split over E / M (a multiply is a load for hazards), radix-4 SRT
   divide stalling the front for 18 cycles; +45 % NANDs, period 93 → 93 (fast adders), 59 → 79 (balanced: divider sign fix, Booth tree)
-- ⏳ Passing the official `riscv-tests` / architecture tests in the browser (stretch)
+- ⏳ Passing the official `riscv-tests` on every RV32 CPU (see Phase 13, independent verification)
 
 ### Phase 8 — Memory hierarchy 🚧
 - ✅ Switch level gains transistor strengths and capacitive (charge-holding) nets
@@ -253,10 +253,14 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Technology mapping measured on our designs (inverters, double inversions)
 - ✅ Simulated-annealing placer + two-layer Lee maze router on real flattened netlists (FA, 4-bit adder, counter)
 - ✅ Clock distribution (H-tree vs spine, skew); floorplan of the dual-core from its NAND counts; wafer / yield / cost
-- ⏳ Full-chip layout of the final CPU (see open questions); Yosys / OpenROAD / sky130 export
+- ✅ The real flow: the dual-core exported as Verilog, synthesized by Yosys to the sky130 cell library and placed,
+  clock-tree-built and routed by OpenROAD into a GDS (`.github/workflows/layout.yml`, published into the site); the
+  export first cross-checked cycle by cycle against our gate-level simulation (`scripts/verify-export.ts`)
+- ⏳ The same flow for the system CPU (RV32IM + Zicsr); the flow's timing and area reports shown next to our own
+  static timing and NAND-count floorplan, so the learner sees how far the unit-delay estimate is from sky130
 
 ### Phase 12 — Parity with Turing Complete and Digital Logic Sim ⏳
-The simulator already goes further than both games: transistors and Z, real gate delays (glitches,
+The simulator already goes further than both games: transistors and Z, gate delays (glitches,
 metastability), X, static timing, VCD, Verilog with a Yosys-checked testbench, wide pins, golden-model
 CPUs, and every library part opens down to a MOSFET. What they have and the sandbox lacks is I/O,
 chip presentation, capacity and the program-solving half of Turing Complete.
@@ -330,6 +334,66 @@ challenges stay open.
 - VHDL view of every component
 - Performance budget: 60 fps rendering of ≤ 5 000 visible elements; ≥ 100 CPU cycles/s at gate level
 - i18n-ready strings
+
+### Phase 13 — Verification, precise claims, measurement ⏳
+From an external review (2026-10). The project's depth is ahead of how it presents and proves itself: the CPUs are
+checked only against our own golden model, the README both oversells (gate delays) and undersells (the sky130 flow),
+and some measurements the simulator could make (power, benchmarks) are not made. Ideas the review raised that are
+already done (adder and CPU comparisons, golden-model lock-step in the UI, instruction → hardware marks, cache and
+coherence explorers, delay animation, static vs simulated paths, Yosys cross-check, the OpenROAD flow) are not repeated.
+
+**Say exactly what is modelled**
+- ⏳ A license (the author's choice)
+- ⏳ README rebuilt around the thesis: what it is, a short demo (GIF: MOSFET → NAND → adder → a CPU running), the
+  journey, the campaign, the sandbox, verification, timing, HDL and the sky130 flow, and a **Scope and limitations**
+  section: MOSFETs are switches with strengths and stored charge, not a SPICE model; timing is one unit per NAND,
+  converted to time by an illustrative 25 ps / NAND (`PS_PER_NAND`), not characterized from a cell library; the
+  built-in placer and router are a teaching model, the OpenROAD run is the real one; power-on state comes from a
+  resolution model, not physics; CPUs are checked against our own ISS plus the independent checks below
+- ⏳ The same honesty on the site: the timing panel and "Overclock it" name the calibration as illustrative;
+  chapter 25 separates the teaching P&R from the OpenROAD run; the pipeline chapters call cache-miss freezing and
+  arbiter-serialized atomics deliberate simplifications
+- ⏳ Repository description and topics on GitHub (the author's account)
+
+**Independent verification** (our ISS and our CPUs share one author: a misreading of the spec passes in both)
+- ⏳ Official `riscv-tests` (`rv32ui`, `rv32um`, `rv32uf`, `rv32mi`, `-p` environment): self-checking, so they need
+  no oracle. Prebuilt images (checked in, with their source revision) run on the ISS in `npm test` and on every RV32
+  CPU (single-cycle, multicycle, pipelined with and without prediction and caches, system, M, F, pipelined FPU)
+  within a cycle budget; `tohost` mapped to a store the harness watches. A pass / fail matrix per CPU in `docs/`
+- ⏳ A second ISS as oracle for ours: Spike (or Sail) in a CI job, random programs, commit logs compared
+  instruction by instruction
+- ⏳ RV32 random-program fuzzing (`randprog` exists for RV16 only): constrained generators for ALU, branches,
+  loads / stores of every width, hazard-dense sequences (back-to-back dependences, load-use, branch after load),
+  CSRs, traps and interrupts, M and F; each CPU co-simulated against the ISS; a failure keeps the seed, the program,
+  the cycle and the first differing state; a short run in `npm test`, a long one in a scheduled CI job
+- ⏳ Coverage of the CPU suites: opcodes executed, hazard events seen (M→E / W→E forwarding, load-use stall,
+  flush, misprediction), cache hit / miss / write-back, trap causes; reported as a table, gaps become directed tests
+- ⏳ `scripts/verify-export.ts` (Yosys netlist simulated against our gate-level run) as a CI job with
+  `yowasp-yosys`, on the dual-core and the system CPU, so a change that breaks the exported hardware cannot deploy
+- ⏳ GateSim: refuse a behavioural delay of 64 or more (the event wheel) instead of clamping it silently
+
+**Measure more** (computed from the circuits, like every other number)
+- ⏳ Dynamic power, P ≈ α C V² f: α from the gate simulator's toggle counts over a program or a vector set
+  (glitches included: the ripple adder pays for its glitches), C from fan-out (NAND inputs driven, plus a wire
+  estimate), V set by the learner, f from static timing. Per-block breakdown in the inspector, an energy column in
+  the adder and CPU comparisons, energy per instruction in the CPU panel; labelled an estimate
+- ⏳ Benchmarks: one fixed program set (Fibonacci, sort, matrix multiply, CRC, a float kernel) on every CPU:
+  instructions, cycles, CPI, period, time, NANDs, cache misses, energy; generated by a script, shown on one page
+- ⏳ Hardware statistics page: every library component (transistors, NANDs, depth, period) in one sortable table
+  from the registry, each row opening it on the workbench
+- ⏳ Where is it used: for any library part, the components that instantiate it and how many copies flatten into
+  each CPU (the sandbox's used by / uses, for the library); in the inspector
+
+**Onboarding**
+- ⏳ The sandbox as a fourth entry on the home page (journey, campaign, workbench, sandbox)
+
+**Not planned** (from the same review)
+- Restructuring `src/` into new namespaces, splitting `ComponentDef`, separating geometry from netlists: churn with
+  no learner-visible gain; the boundaries are documented in `CLAUDE.md`
+- An analog MOSFET mode (voltages, currents): without a real device solver its numbers would be drawn, not
+  computed; the cross-section widget carries the intuition
+- A configurable-depth pipeline lab (3 / 5 / 7 stages): large; the adder swap, predictor, cache and multicycle
+  comparisons already show the trade-offs
 
 ---
 
