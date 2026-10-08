@@ -178,6 +178,14 @@ npm run build      # static site in dist/ (works from any path or host)
 Pushing to `main` deploys to GitHub Pages via `.github/workflows/deploy.yml`
 (enable it once under *Settings → Pages → Source: GitHub Actions*).
 
+**Offline, as a Windows program.** `npm run desktop` builds `desktop/release/MOSFET-to-RISCV-<version>-portable.exe`:
+one file, nothing to install, no network (fonts included). It is the built site inside Electron
+(`desktop/`, a package of its own so the site's install stays small), served from inside the
+executable. Progress and sandbox chips live in a `MOSFET-to-RISCV-data` folder next to the `.exe`,
+so a copy on a USB stick carries them along. The *Desktop program* workflow (run by hand, or a `v*`
+tag) builds it on GitHub and publishes it as the release `desktop-latest`. The `.exe` is unsigned:
+SmartScreen asks once (*More info → Run anyway*).
+
 ## How it is built
 
 Vite + TypeScript, no UI framework: plain DOM and SVG.

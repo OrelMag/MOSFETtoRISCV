@@ -1,0 +1,63 @@
+name: Desktop program
+
+# Builds the portable Windows program (desktop/: the site inside Electron, one .exe, nothing to install)
+# and publishes it as the release "desktop-latest". Run by hand, or by pushing a v* tag.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the build number in the version is the commit count
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - run: npm ci
+      - name: Add the chip layout (published by the layout workflow, if any)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p public/layout
+          if gh release download layout-latest -p layout.tar.gz -D "$RUNNER_TEMP" --repo "$GITHUB_REPOSITORY"; then
+            tar -xzf "$RUNNER_TEMP/layout.tar.gz" -C public/layout
+          else
+            echo "no layout published yet"
+          fi
+      - run: npm run build
+      - run: npm ci
+        working-directory: desktop
+      - run: npm run dist
+        working-directory: desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows
+          path: desktop/release/*.exe
+      - name: Publish the program
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete desktop-latest --yes --cleanup-tag || true
+          gh release create desktop-latest desktop/release/*.exe --target "$GITHUB_SHA" \
+            --title "Desktop program (Windows, portable)" \
+            --notes "One .exe, nothing to install: the whole site offline in a window of its own. Built from $GITHUB_SHA ($GITHUB_REF_NAME). Progress and sandbox chips are kept in a MOSFET-to-RISCV-data folder next to the .exe. Unsigned: Windows SmartScreen asks once (More info → Run anyway)." \
+            --prerelease

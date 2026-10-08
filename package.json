@@ -9,6 +9,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "desktop": "npm run build && npm --prefix desktop install && npm --prefix desktop run dist",
     "layout:export": "vite-node scripts/export-layout.ts layout/design",
     "layout:verify": "vite-node scripts/verify-export.ts",
     "layout:fetch": "gh release download layout-latest -p layout.tar.gz -D layout --clobber && mkdir -p public/layout && tar -xzf layout/layout.tar.gz -C public/layout",

@@ -4,7 +4,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  chipFileName, chipInfo, deleteChip, duplicateChip, fileBase, shareHash, shareRoute, shareUrl, summarize, summaryLine, workspaceFileName,
+  chipFileName, chipInfo, deleteChip, duplicateChip, fileBase, shareHash, shareRoute, shareUrl, SITE_URL, summarize, summaryLine, workspaceFileName,
 } from '../src/editor/files';
 import { UserLibrary } from '../src/editor/library';
 import type { ChipDoc } from '../src/editor/model';
@@ -54,6 +54,8 @@ describe('share route', () => {
     expect(shareHash('1zQ')).toBe('#/sandbox/s/1zQ');
     expect(shareUrl('https://x.org/site/?a=1#/sandbox/u_top', '1zQ')).toBe('https://x.org/site/?a=1#/sandbox/s/1zQ');
     expect(shareUrl('http://localhost:4313/', '1jQ')).toBe('http://localhost:4313/#/sandbox/s/1jQ');
+    // The desktop program's page is not on the web: its links open the public site.
+    expect(shareUrl('app://mosfet/index.html#/sandbox/u_top', '1zQ')).toBe(`${SITE_URL}#/sandbox/s/1zQ`);
   });
 });
 

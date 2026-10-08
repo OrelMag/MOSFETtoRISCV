@@ -1,0 +1,21 @@
+{
+  "name": "mosfet-to-riscv-desktop",
+  "private": true,
+  "version": "1.0.0",
+  "description": "MOSFET → RISC-V as a portable Windows program",
+  "license": "MIT",
+  "author": "OrelMag",
+  "main": "main.cjs",
+  "scripts": {
+    "stage": "node stage.mjs",
+    "start": "node stage.mjs && electron .",
+    "dist": "node build.mjs",
+    "icon": "electron scripts/icon.cjs"
+  },
+  "devDependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
+  }
+}
