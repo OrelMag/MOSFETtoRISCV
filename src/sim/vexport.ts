@@ -4,7 +4,7 @@
 // NAND loops as storage), constant ties as 1'b0 / 1'b1, splitters and mergers as bit slices. Plain
 // Verilog-2005 with identifiers sanitized, so any tool reads it.
 
-import { type ComponentDef, isSwitchPrim, netlistOf, parseEnd, type PortDef } from './types';
+import { type ComponentDef, isExternal, isSwitchPrim, netlistOf, parseEnd, type PortDef } from './types';
 
 const KEYWORDS = new Set(('always and assign automatic begin buf bufif0 bufif1 case casex casez cell cmos config deassign default defparam design disable edge else end endcase endconfig endfunction endgenerate endmodule endprimitive endspecify endtable endtask event for force forever fork function generate genvar highz0 highz1 if ifnone incdir include initial inout input instance integer join large liblist library localparam macromodule medium module nand negedge nmos nor noshowcancelled not notif0 notif1 or output parameter pmos posedge primitive pull0 pull1 pulldown pullup pulsestyle_onevent pulsestyle_ondetect rcmos real realtime reg release repeat rnmos rpmos rtran rtranif0 rtranif1 scalared showcancelled signed small specify specparam strong0 strong1 supply0 supply1 table task time tran tranif0 tranif1 tri tri0 tri1 triand trior trireg unsigned use uwire vectored wait wand weak0 weak1 while wire wor xnor xor logic bit byte int priority unique final do')
   .split(' '));
@@ -62,7 +62,7 @@ export function synthVerilog(root: ComponentDef, topName?: string): ExportResult
       }
       const nl = netlistOf(d);
       if (!nl) throw new Error(`${d.id}: no netlist and no behaviour for export`);
-      for (const i of nl.instances) if (i.def.prim !== 'alias') visit(i.def);
+      for (const i of nl.instances) if (i.def.prim !== 'alias' && !isExternal(i.def)) visit(i.def);
     }
     if (!order.includes(d)) order.push(d);
   };
@@ -132,6 +132,10 @@ function moduleText(def: ComponentDef, nameOf: (d: ComponentDef) => string): str
         const from = bitOf(src, sb), to = bitOf(dst, db);
         if (from && to) assigns.push(`  assign ${to} = ${from};`);
       }
+      continue;
+    }
+    if (isExternal(c)) {
+      lines.push(`  // ${inst.name}: ${c.name} (an input from the sandbox, not hardware): its outputs are left undriven`);
       continue;
     }
     let iname = ident(inst.name, 'u');

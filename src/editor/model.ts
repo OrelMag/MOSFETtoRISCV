@@ -115,6 +115,16 @@ export type PartRef =
    * one LED per bit; 'halt': stops Run while it is non-zero; 'buzzer': sounds while it is non-zero).
    */
   | { display: DisplayKind; width?: number }
+  /**
+   * A keyboard key (KeyboardEvent.key, letters lowercase: 'a', ' ', 'Enter', 'ArrowUp'): the 1-bit
+   * output q is 1 while the key is held. An input from outside the circuit: zero cost.
+   */
+  | { key: string }
+  /**
+   * A keyboard: typed keys wait in order; `code` is the oldest (ASCII, 0 when none), `ready` says one
+   * waits, `ack` removes it (sampled at rising clock edges, or continuously without a clock). Zero cost.
+   */
+  | { keyboard: true }
   /** Read-only memory: 2^k words of w bits. 'rv32' addresses bytes like a PC (addr = 4·word). */
   | { rom: { k: number; w: 8 | 16 | 32; addr: 'word' | 'rv32'; lang: 'asm' | 'hex' | 'rv16'; src: string } }
   /** Read-write memory: 2^k words of w bits; `init`: the words it holds at power-on ('to 0' mode). */

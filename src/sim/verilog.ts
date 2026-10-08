@@ -1,6 +1,6 @@
 // Structural SystemVerilog generated from a netlist: exactly the circuit on screen.
 
-import { type ComponentDef, netlistOf, parseEnd, type PortDef } from './types';
+import { type ComponentDef, isExternal, netlistOf, parseEnd, type PortDef } from './types';
 import { ident } from './vexport';
 
 const MODULE_NAME: Record<string, string> = { nand: 'nand2' };
@@ -117,6 +117,12 @@ export function structuralVerilog(def: ComponentDef): string | null {
     }
     if (c.prim === 'cap') {
       lines.push(`  // ${inst.name}: capacitor on ${conn(c.ports[0].name) || '(unconnected)'} (declared trireg: it keeps its charge)`);
+      continue;
+    }
+    if (isExternal(c)) {
+      // a key or keyboard: the world outside the circuit, so no module; its nets are left undriven
+      const outs = c.ports.filter((p) => p.dir === 'out').map((p) => conn(p.name)).filter(Boolean);
+      lines.push(`  // ${inst.name}: ${c.name} (an input from the sandbox, not hardware)${outs.length ? `: ${outs.join(', ')} left undriven` : ''}`);
       continue;
     }
     const args = c.ports.map((p) => `.${id(p.name)}(${conn(p.name)})`);

@@ -19,7 +19,7 @@ import { renamePin } from './chips';
 import { removeChip } from './library';
 import { allOnes, type ChipDoc, type CommentDoc, type DisplayKind, type ExitDir, type LabelDoc, type PartDoc, type PartRef, pinBig, type PinDoc, pinValue, type WireDoc } from './model';
 import { deleteSel, flipParts, setComment, setLabel, setPart, setPin, setRef, setWire } from './ops';
-import { MAX_RAM_K, MAX_WIDTH } from './parts';
+import { keyLabel, MAX_RAM_K, MAX_WIDTH, normalizeKey } from './parts';
 import { openChip } from './session';
 
 export interface PropsSection {
@@ -229,6 +229,21 @@ export class PropsPanel {
       const kinds: [DisplayKind, string][] = [['led', 'LED'], ['seg7', '7-segment'], ['hex', 'Hex digit'], ['value', 'Value'], ['buzzer', 'Buzzer'], ['halt', 'Halt (stops Run)']];
       out.append(this.row('Shows', this.select(ref.display, kinds, (k) => setR({ display: k, width: k === 'led' || k === 'halt' || k === 'buzzer' ? 1 : k === 'hex' ? 4 : k === 'seg7' ? 8 : ref.width ?? 8 }))),
         this.row('Width', this.num(ref.width ?? 1, 1, MAX_WIDTH, (w) => setR({ display: ref.display, width: w }))));
+    } else if ('key' in ref) {
+      // Click the field, press the key: that is the binding (Tab still moves the focus on).
+      const field = h('input', { type: 'text', class: 'sb-keyfield', value: keyLabel(ref.key), readonly: 'readonly', placeholder: 'press a key' }) as HTMLInputElement;
+      field.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') return;
+        e.preventDefault();
+        e.stopPropagation();
+        const k = normalizeKey(e.key);
+        if (k && k !== ref.key) setR({ key: k });
+      });
+      out.append(this.row('Key', field, 'Click here, then press the key this part listens to (letters ignore Shift)'),
+        h('p', { class: 'sb-sum' }, 'While this chip is open the key drives the part instead of acting as a shortcut.'));
+    } else if ('keyboard' in ref) {
+      out.append(h('p', { class: 'sb-sum' }, 'Type while the circuit runs, or turn on Type in the top bar, and the keys queue up here. Codes: ASCII; Enter 10, Backspace 8, Tab 9, Delete 127, arrows ↑ 128 ↓ 129 ← 130 → 131.'),
+        h('div', { class: 'sb-btns' }, this.btn('Clear', 'Drop the waiting keys', () => ed.sim.clearKeyboards(), 'close')));
     } else if ('ram' in ref) {
       const { k, w } = ref.ram;
       out.append(this.row('Words', this.select(k, Array.from({ length: MAX_RAM_K }, (_, i): [number, string] => [i + 1, String(2 ** (i + 1))]), (v) => setR({ ram: { ...ref.ram, k: v } }))),

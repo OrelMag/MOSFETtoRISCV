@@ -90,6 +90,8 @@ registerPaletteGroup({
     { id: 'in8', name: 'Input bus', tag: '8-bit', title: 'An N-bit input pin: click it to edit the value (width in the properties)', place: { pin: { dir: 'in', width: 8 } } },
     { id: 'out1', name: 'Output', title: 'A 1-bit output pin', place: { pin: { dir: 'out', width: 1 } } },
     { id: 'out8', name: 'Output bus', tag: '8-bit', title: 'An N-bit output pin', place: { pin: { dir: 'out', width: 8 } } },
+    { id: 'key', name: 'Key', tag: 'A', title: 'A keyboard key: 1 while it is held (pick the key in the properties). Listens from inside a placed chip too; costs nothing', place: { part: { key: 'a' } } },
+    { id: 'keyboard', name: 'Keyboard', tag: '8-bit', title: 'Typed keys wait in order: code = the oldest (ASCII), ready = 1 while one waits, ack removes it. Keys reach it while the circuit runs or with Type on; costs nothing', place: { part: { keyboard: true } } },
   ],
 });
 

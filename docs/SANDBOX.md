@@ -71,7 +71,7 @@ displays and your own chips.
 
 | Group | Parts |
 |---|---|
-| Inputs & outputs | Input (toggle), Button (momentary), Clock (driven by Run / Step), Input bus, Output, Output bus. A pin can also be bidirectional (switch level). |
+| Inputs & outputs | Input (toggle), Button (momentary), Clock (driven by Run / Step), Input bus, Output, Output bus. A pin can also be bidirectional (switch level). **Key**: 1 while a keyboard key is held (pick the key in the properties; letters ignore Shift; while the chip is open that key is no longer a shortcut). **Keyboard**: typed keys wait in order, 16 at most: `code` is the oldest (ASCII; Enter 10, Backspace 8, Tab 9, Delete 127, arrows 128–131; 0 when none), `ready` is 1 while one waits, `ack` = 1 drops it, read at every rising clock edge or, without a clock, whenever the logic has settled. Keys reach a keyboard while the circuit runs or with **Type** on (top bar; Esc leaves). Both listen from inside placed chips, cost nothing and are a comment in Verilog. |
 | Transistors | NMOS, PMOS, VDD, GND, strong NMOS, weak PMOS |
 | Switch level | Resistor, Pull-up, Pull-down, Capacitor, Transmission gate, Tri-state buffer, Tri-state inverter |
 | Constants | 0, 1, N-bit |

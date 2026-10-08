@@ -218,3 +218,13 @@ export function isSwitchPrim(d: ComponentDef): boolean {
   const p = d.prim;
   return p === 'nmos' || p === 'pmos' || p === 'vdd' || p === 'gnd' || p === 'res' || p === 'cap';
 }
+
+/**
+ * An external source: a behaviour with no structure and no primitive (the sandbox's key and
+ * keyboard parts). It is a leaf of every simulation, driven from outside through Sim.poke (its
+ * private state holds the value), costs nothing and has no Verilog: it stands for the world
+ * around the circuit, not for hardware in it.
+ */
+export function isExternal(d: ComponentDef): boolean {
+  return !d.prim && !d.netlist && !!d.behavior;
+}

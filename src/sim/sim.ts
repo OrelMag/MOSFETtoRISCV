@@ -47,6 +47,14 @@ export interface Sim {
    */
   saveState(): SimState;
   restoreState(s: SimState): void;
+  /**
+   * Replace the private state of behavioural leaf `leaf` (an index into design.leaves) and
+   * re-evaluate it: how an external source (a key) is driven from outside. Propagates like an
+   * input change (step / settle).
+   */
+  poke(leaf: number, state: unknown): void;
+  /** The private state of a behavioural leaf (undefined for any other leaf). */
+  leafState(leaf: number): unknown;
   /** Called after any net changes value (gate sim only reports watched nets). */
   onTrace?: (net: number, value: Bit, time: number) => void;
   watch(nets: readonly number[]): void;

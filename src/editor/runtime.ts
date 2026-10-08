@@ -13,6 +13,12 @@
 // Halt parts (displays of kind 'halt', at any depth of the hierarchy) stop Run after the step on
 // which their input reads non-zero, like Turing Complete's halt. The test is on levels, not edges:
 // while a halt still reads 1, Run advances one step and stops again; Step ignores it.
+//
+// Key and keyboard parts (parts.ts, at any depth too) are external sources: leaves whose private
+// state the editor sets (Sim.poke). A key is held or not (setKey; the held set survives rebuilds
+// and resets, since the finger is still on the key). A keyboard queues typed codes (typeKey) and
+// drops the oldest when its `ack` input reads 1, sampled like a clocked peripheral would: just
+// before every rising clock edge, or, in a chip without a clock, whenever the logic has settled.
 
 import { flatten } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
@@ -23,7 +29,7 @@ import { unpackBig } from '../sim/values';
 import type { HierNode } from '../sim/flatten';
 import { checkSimulatable, type Compiled, type Diag } from './compile';
 import { pinBig, type PinDoc, type PinValue } from './model';
-import { HALT_PREFIX } from './parts';
+import { HALT_PREFIX, KEYBOARD_DEPTH, KEYBOARD_ID, keyBindOf, type KeyboardState, type KeyState } from './parts';
 
 export type RunMode = 'cycle' | 'gate';
 
@@ -100,6 +106,11 @@ export class EditorSim {
   private haltNets: number[] = [];
   /** advance() stopped on a halt: the run loop pauses. */
   private haltHit = false;
+  /** Key parts of the current simulation (leaf index, the key each listens to) and keyboard parts (leaf indices). */
+  private keyLeaves: { li: number; bind: string }[] = [];
+  private kbdLeaves: number[] = [];
+  /** Keys held now (as normalizeKey names them): applied again after a rebuild or a reset. */
+  private held = new Set<string>();
   private readonly debounceMs: number;
   private readonly gateRate: () => number;
   private readonly budgetMs: number;
@@ -151,7 +162,9 @@ export class EditorSim {
       if (this.sim) sim.carry(this.sim, { known: this.powerOn !== 'x' });
       else sim.reset(this.powerOn);
       this.applyPins(sim);
-      sim.settle();
+      this.scanSources(sim);
+      this.applyKeys(sim);
+      this.quiet(sim);
       this.sim = sim;
       this.haltNets = haltNets(sim.design.root);
       this.diags = [];
@@ -160,6 +173,8 @@ export class EditorSim {
       this.diags = ds.length ? ds : [{ level: 'error', msg: `cannot simulate: ${e instanceof Error ? e.message : String(e)}` }];
       this.sim = null;
       this.haltNets = [];
+      this.keyLeaves = [];
+      this.kbdLeaves = [];
     }
     this.built = c;
     this.key = key;
@@ -184,8 +199,113 @@ export class EditorSim {
   }
 
   private clocks(): string[] {
+    return this.sim ? this.clocksOf(this.sim) : [];
+  }
+
+  private clocksOf(sim: Sim): string[] {
+    return this.pins.filter((p) => p.dir === 'in' && p.kind === 'clock' && this.hasInput(sim, p)).map((p) => p.name);
+  }
+
+  // ---- external sources: keys and keyboards ------------------------------------------------
+
+  /** Find the key and keyboard leaves of a (new) simulation, at any depth. */
+  private scanSources(sim: Sim): void {
+    this.keyLeaves = [];
+    this.kbdLeaves = [];
+    sim.design.leaves.forEach((l, li) => {
+      if (l.def.id === KEYBOARD_ID) this.kbdLeaves.push(li);
+      else {
+        const bind = keyBindOf(l.def);
+        if (bind !== null) this.keyLeaves.push({ li, bind });
+      }
+    });
+  }
+
+  /** Every key part reads whether its key is held (after a rebuild or a reset: the finger is still there). */
+  private applyKeys(sim: Sim): void {
+    for (const k of this.keyLeaves) sim.poke(k.li, { v: this.held.has(k.bind) ? 1 : 0 } satisfies KeyState);
+  }
+
+  /**
+   * Settle, and in a chip without a clock let the keyboards see `ack` (with a clock they look at
+   * each rising edge instead, in rise()).
+   */
+  private quiet(sim: Sim): void {
+    sim.settle();
+    if (this.kbdLeaves.length && !this.clocksOf(sim).length && this.serviceKeyboards(sim)) sim.settle();
+  }
+
+  /** Every keyboard whose `ack` reads 1 drops its oldest key. Returns whether any did. */
+  private serviceKeyboards(sim: Sim): boolean {
+    let popped = false;
+    for (const li of this.kbdLeaves) {
+      const q = queueOf(sim, li);
+      if (q.length && sim.getBits(sim.design.leaves[li].inputs[0])[0] === B1) {
+        sim.poke(li, { q: q.slice(1) } satisfies KeyboardState);
+        popped = true;
+      }
+    }
+    return popped;
+  }
+
+  /** An external input changed: in cycle mode it takes effect now, in gate mode the run loop (or Step) propagates it. */
+  private afterInput(sim: Sim): void {
+    if (this.mode === 'cycle') this.quiet(sim);
+    this.onChange();
+  }
+
+  /** The keys the chip's key parts listen to (at any depth), each once. */
+  get keyBinds(): string[] {
+    return [...new Set(this.keyLeaves.map((k) => k.bind))];
+  }
+
+  /** Does the chip contain a keyboard part (in it or in any chip it places)? */
+  get hasKeyboard(): boolean {
+    return this.kbdLeaves.length > 0;
+  }
+
+  /** The key `bind` went down or up: every key part listening to it follows. Returns whether any does. */
+  setKey(bind: string, down: boolean): boolean {
+    if (down) this.held.add(bind);
+    else this.held.delete(bind);
+    const hits = this.keyLeaves.filter((k) => k.bind === bind);
     const sim = this.sim;
-    return sim ? this.pins.filter((p) => p.dir === 'in' && p.kind === 'clock' && this.hasInput(sim, p)).map((p) => p.name) : [];
+    if (!sim || !hits.length) return hits.length > 0;
+    for (const k of hits) sim.poke(k.li, { v: down ? 1 : 0 } satisfies KeyState);
+    this.afterInput(sim);
+    return true;
+  }
+
+  /** Every held key let go (the window lost focus). */
+  releaseKeys(): void {
+    for (const b of [...this.held]) this.setKey(b, false);
+  }
+
+  /** A key typed into every keyboard part (its code: parts.ts keyCode). A full keyboard drops it. */
+  typeKey(code: number): void {
+    const sim = this.sim;
+    if (!sim || !this.kbdLeaves.length) return;
+    for (const li of this.kbdLeaves) {
+      const q = queueOf(sim, li);
+      if (q.length < KEYBOARD_DEPTH) sim.poke(li, { q: [...q, code] } satisfies KeyboardState);
+    }
+    this.afterInput(sim);
+  }
+
+  /** Every keyboard part forgets its waiting keys. */
+  clearKeyboards(): void {
+    const sim = this.sim;
+    if (!sim || !this.kbdLeaves.length) return;
+    for (const li of this.kbdLeaves) sim.poke(li, { q: [] } satisfies KeyboardState);
+    this.afterInput(sim);
+  }
+
+  /** The keys waiting in a keyboard part placed in this chip (by part id), oldest first; null for any other part. */
+  keyboardQueue(part: string): number[] | null {
+    const sim = this.sim;
+    if (!sim) return null;
+    const li = this.kbdLeaves.find((i) => { const p = sim.design.leaves[i].node.path; return p.length === 1 && p[0] === part; });
+    return li === undefined ? null : queueOf(sim, li);
   }
 
   get hasClock(): boolean {
@@ -254,7 +374,8 @@ export class EditorSim {
     const sim = this.sim;
     if (!sim) return;
     this.applyPins(sim);
-    sim.settle();
+    this.applyKeys(sim);
+    this.quiet(sim);
     this.onChange();
   }
 
@@ -263,8 +384,7 @@ export class EditorSim {
     const sim = this.sim;
     if (!sim || !this.hasInput(sim, p)) return;
     sim.setInputBits(p.name, pinBits(v, p.width));
-    if (this.mode === 'cycle') sim.settle();
-    this.onChange();
+    this.afterInput(sim);
   }
 
   /** Drive a bidirectional pin from outside with a value, or release it (undefined: Z). */
@@ -301,6 +421,8 @@ export class EditorSim {
   private rise(sim: Sim, clks: string[]): void {
     this.endEdge();
     for (const hk of this.edgeHooks) hk.before?.();
+    // a keyboard samples `ack` at the edge, like a register its D: the next key shows after it
+    if (this.kbdLeaves.length) this.serviceKeyboards(sim);
     this.clkHigh = true;
     for (const c of clks) sim.setInput(c, 1);
     this.cycles++;
@@ -361,7 +483,8 @@ export class EditorSim {
       return true;
     }
     this.endEdge();
-    if (!clks.length) return false;
+    // no clock: quiet, unless a keyboard has a key to drop (its outputs then propagate, one delay at a time)
+    if (!clks.length) return this.kbdLeaves.length > 0 && this.serviceKeyboards(sim);
     if (this.clkHigh) {
       this.clkHigh = false;
       for (const c of clks) sim.setInput(c, 0);
@@ -386,7 +509,7 @@ export class EditorSim {
     this.haltHit = false;
     while (this.due >= 1 || !Number.isFinite(this.due)) {
       if (this.mode === 'cycle') {
-        if (!clks.length) { sim.settle(); this.due = 0; break; }
+        if (!clks.length) { this.quiet(sim); this.due = 0; break; }
         this.cycle(sim, clks);
       } else if (!this.gateTick(sim, clks)) { this.due = 0; break; }
       n++;
@@ -412,7 +535,7 @@ export class EditorSim {
     const clks = this.clocks();
     if (this.mode === 'cycle') {
       if (clks.length) this.cycle(sim, clks);
-      else sim.settle();
+      else this.quiet(sim);
     } else this.gateTick(sim, clks);
     this.onChange();
   }
@@ -430,7 +553,9 @@ export class EditorSim {
     this.due = 0;
     this.applyPins(sim);
     sim.reset(mode);
-    sim.settle();
+    // keys still held stay pressed; the keyboards' queues went with the power
+    this.applyKeys(sim);
+    this.quiet(sim);
     this.onChange();
   }
 
@@ -497,6 +622,12 @@ function haltNets(node: HierNode, out: number[] = []): number[] {
     else haltNets(c, out);
   }
   return out;
+}
+
+/** The waiting keys of keyboard leaf `li` (the state the simulation holds, never mutated in place). */
+function queueOf(sim: Sim, li: number): number[] {
+  const s = sim.leafState(li) as KeyboardState | undefined;
+  return s?.q ?? [];
 }
 
 /** A root inout of a switch-level simulation: driven with a value, or left floating (Z). */

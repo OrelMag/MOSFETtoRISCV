@@ -56,6 +56,11 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
     if (!(ref.display in DISPLAY_LABEL)) return { error: `unknown display '${ref.display}'` };
     return display(ref.display, w);
   }
+  if ('key' in ref) {
+    if (typeof ref.key !== 'string' || !ref.key.length || ref.key.length > MAX_KEY_LENGTH) return { error: 'key: the name of a keyboard key' };
+    return keyPart(ref.key);
+  }
+  if ('keyboard' in ref) return KEYBOARD;
   if ('ram' in ref) {
     const { k, w, init } = ref.ram;
     if (!Number.isInteger(k) || k < 1 || k > MAX_RAM_K) return { error: `RAM: 2^k words with k = 1–${MAX_RAM_K}` };
@@ -167,6 +172,109 @@ function display(kind: DisplayKind, w: number): ComponentDef {
   dispCache.set(id, d);
   return d;
 }
+
+// ---- external sources: keys and the keyboard ------------------------------------------------
+// Inputs from outside the circuit (isExternal): behaviours with no structure, so they cost
+// nothing and have no Verilog, and leaves of every simulation, whose private state the editor
+// sets through Sim.poke (EditorSim.setKey / typeKey). The run loop finds them in any
+// simulation's hierarchy by their ids, like the halt parts.
+
+/** Id prefix of key parts (`key_` + the key's code points in hex, '_' between them). */
+export const KEY_PREFIX = 'key_';
+export const KEYBOARD_ID = 'keyboard';
+/** Longest key name accepted ('ArrowLeft', 'MediaTrackNext', …; a typo stays short). */
+export const MAX_KEY_LENGTH = 32;
+/** Keys a keyboard part holds at most; further ones are dropped until the circuit takes some. */
+export const KEYBOARD_DEPTH = 16;
+
+/** Private state of a key leaf: 1 while held. */
+export interface KeyState { v: 0 | 1 }
+/** Private state of a keyboard leaf: the waiting key codes, oldest first. */
+export interface KeyboardState { q: number[] }
+
+/** Keys that modify others, or are the editor's own: a key part cannot listen to them. */
+const RESERVED_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock', 'NumLock', 'ScrollLock', 'Fn', 'FnLock',
+  'Hyper', 'Super', 'Symbol', 'SymbolLock', 'OS', 'Dead', 'Unidentified', 'Escape']);
+
+/**
+ * A key as a key part names it, from KeyboardEvent.key: a character (letters lowercase, so Shift
+ * does not matter) or a named key ('Enter', 'ArrowUp', 'F1'); null for modifiers and Escape.
+ */
+export function normalizeKey(key: string): string | null {
+  if (RESERVED_KEYS.has(key) || !key.length || key.length > MAX_KEY_LENGTH) return null;
+  return [...key].length === 1 ? key.toLowerCase() : key;
+}
+
+const KEY_NAMES: Record<string, string> = {
+  ' ': 'Space', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Enter: '⏎', Backspace: '⌫', Tab: '⇥', Delete: 'Del',
+};
+
+/** How a key is shown on its part and in the properties. */
+export function keyLabel(bind: string): string {
+  return KEY_NAMES[bind] ?? ([...bind].length === 1 ? bind.toUpperCase() : bind);
+}
+
+/** Codes of the named keys a keyboard part reports (printable characters are their ASCII code). */
+export const KEY_CODES: Record<string, number> = { Enter: 10, Backspace: 8, Tab: 9, Delete: 127, ArrowUp: 128, ArrowDown: 129, ArrowLeft: 130, ArrowRight: 131 };
+
+/** The 8-bit code a keyboard part reports for KeyboardEvent.key, or null for a key it ignores. */
+export function keyCode(key: string): number | null {
+  if (key in KEY_CODES) return KEY_CODES[key];
+  if ([...key].length !== 1) return null;
+  const c = key.codePointAt(0)!;
+  return c >= 32 && c < 127 ? c : null;
+}
+
+/** What a keyboard code looks like on the part's face. */
+export function codeGlyph(code: number): string {
+  const named = Object.entries(KEY_CODES).find(([, c]) => c === code);
+  if (named) return KEY_NAMES[named[0]] ?? named[0];
+  if (code === 32) return '␣';
+  return code > 32 && code < 127 ? String.fromCharCode(code) : code.toString(16).toUpperCase().padStart(2, '0');
+}
+
+const keyCache = new Map<string, ComponentDef>();
+
+/** The key a key part's definition listens to (null for any other definition). */
+export function keyBindOf(def: ComponentDef): string | null {
+  if (!def.id.startsWith(KEY_PREFIX)) return null;
+  return def.id.slice(KEY_PREFIX.length).split('_').map((hex) => String.fromCodePoint(parseInt(hex, 16))).join('');
+}
+
+/** A key part: q = 1 while the key `bind` is held. */
+export function keyPart(bind: string): ComponentDef {
+  const id = `${KEY_PREFIX}${[...bind].map((c) => c.codePointAt(0)!.toString(16)).join('_')}`;
+  let d = keyCache.get(id);
+  if (d) return d;
+  const label = keyLabel(bind);
+  d = {
+    id, name: `Key ${label}`, category: 'plumbing',
+    summary: `1 while the ${label} key is held (letters ignore Shift; rebind it in the properties). An input from outside the circuit: no gates, nothing in Verilog.`,
+    ports: [{ name: 'q', width: 1, dir: 'out', doc: '1 while the key is held' }],
+    symbol: { kind: 'box', label, w: 4, h: 2, noPortLabels: true },
+    behavior: { init: (): KeyState => ({ v: 0 }), eval: (_ins, s) => [(s as KeyState).v] },
+  };
+  keyCache.set(id, d);
+  return d;
+}
+
+/** The keyboard part: typed keys wait in order until the circuit takes them. */
+export const KEYBOARD: ComponentDef = {
+  id: KEYBOARD_ID, name: 'Keyboard', category: 'plumbing',
+  summary: `Keys typed while the circuit runs (or with Type on) wait here in order, ${KEYBOARD_DEPTH} at most. code: the oldest `
+    + '(ASCII; Enter 10, Backspace 8, Tab 9, Delete 127, arrows 128–131; 0 when none). ready: 1 while one waits. ack = 1 removes it, '
+    + 'sampled at every rising clock edge (without a clock: whenever the logic has settled). An input from outside the circuit: no gates, nothing in Verilog.',
+  ports: [
+    { name: 'ack', width: 1, dir: 'in', doc: 'Removes the key in code: read at each rising clock edge, or continuously without a clock' },
+    { name: 'code', width: 8, dir: 'out', doc: 'The oldest waiting key (0 when none)' },
+    { name: 'ready', width: 1, dir: 'out', doc: '1 while a key waits' },
+  ],
+  symbol: { kind: 'box', label: '', w: 6, h: 4 },
+  behavior: {
+    init: (): KeyboardState => ({ q: [] }),
+    eval: (_ins, s) => { const q = (s as KeyboardState).q; return [q[0] ?? 0, q.length ? 1 : 0]; },
+  },
+};
 
 // ---- read-only memory ----------------------------------------------------------------------
 

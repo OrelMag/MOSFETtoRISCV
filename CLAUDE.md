@@ -165,7 +165,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  free text drawn under the circuit, never compiled and left out of the compile cache key)
   compile.ts     compileChip(doc) → ComponentDef + diags, netOfWire / netOfEnd / netOfLabel, connKey
   parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays (LED / LED bank, 7-segment,
-                 hex, value, buzzer: buzzerHz; and the halt part), ROM, RAM; audio.ts plays the buzzers
+                 hex, value, buzzer: buzzerHz; and the halt part), keys and the keyboard (external sources: behaviour-only
+                 leaves, isExternal; keyPart(bind), KEYBOARD, normalizeKey / keyLabel / keyCode / codeGlyph), ROM, RAM;
+                 audio.ts plays the buzzers
   library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip
   ops.ts         pure edits (add / move / delete / flip / set*, copy / paste, namePart: rename where the name is
                  drawn); wires stay orthogonal (a straight wire's breakpoints stay put); dragWire (a corner or
@@ -186,7 +188,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run;
                  edgeHooks (before / after every rising edge, gate mode: after once quiet), runCycles;
-                 halt parts at any depth stop Run / runCycles after the step where they read 1
+                 halt parts at any depth stop Run / runCycles after the step where they read 1; key / keyboard
+                 leaves at any depth driven through Sim.poke (setKey: held keys survive rebuilds and resets; typeKey;
+                 a keyboard drops its oldest key when `ack` reads 1 just before a rising edge, or once settled
+                 without a clock)
   palette.ts     registerPaletteGroup + the palette panel (purist filter)
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
   challenges.ts  build challenges: BuildChallenge (ports, table / sequence check, allowed parts, par),
@@ -229,6 +234,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   ctxmenu.ts     plugin: the right-click menu (selection actions with their shortcuts, or the canvas's own)
   iobar.ts       plugin: the chip's pins as a bar above the run bar (the workbench's switches and lamps, I/O toggle);
                  each control acts as a click on the pin
+  keys.ts        plugin: document keys → key parts (a bound key is taken from the shortcuts while the chip is open)
+                 and keyboard parts (while running, or with the Type toolbar toggle); released on blur
   props.ts       properties of the selection or the chip, diagnostics; registerPropsSection
   fileui.ts      File menu (export / import / share link / Verilog / images / chip manager), share banner,
                  drag-and-drop import, autosave indicator, backup notice; installFiles(ed) per page
@@ -302,6 +309,10 @@ tests/         Vitest: every component with a `spec` is checked exhaustively (�
 2. **NAND is the brick.** At gate level the only real primitive is `prim: 'nand'`. NAND's
    own netlist is its 4-transistor CMOS circuit (`level: 'switch'`), which is shown when
    the learner opens a NAND (solved by `SwitchSim`, driven by the parent's values).
+   The one exception is an *external source* (`isExternal`: a behaviour with no structure and no
+   primitive, the sandbox's key and keyboard parts): it stands for the world outside, so it is a
+   leaf of every simulation whose state the editor sets through `Sim.poke`, costs nothing and is
+   a comment in Verilog.
 3. **Bit-level nets.** Buses are bundles of 1-bit flat nets. Splitters and mergers are
    `prim: 'alias'`: pure wiring, merged by union-find in the flattener, with zero cost.
 4. **Mixed-level simulation.** `preferBehavior: true` keeps a component (the instruction ROM) as a
