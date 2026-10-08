@@ -69,3 +69,59 @@ describe('the pipeline levels', () => {
     expect(run({ fwd: true, stall: true, flush: true }, 3).failures).toEqual([]);
   });
 });
+
+describe('the side-quest cores', () => {
+  it('MD, prediction and loop programs halt on the golden model with strict initialisation', async () => {
+    const { mdTests, predictTests } = await import('../src/campaign/coretests');
+    for (const t of mdTests('all')) expect(() => golden(t, { m: true }), t.name).not.toThrow();
+    for (const t of predictTests()) expect(() => golden(t, {}), t.name).not.toThrow();
+    for (let seed = 1; seed <= 30; seed++) for (const md of ['mul', 'all'] as const) {
+      const src = randomProgram(seed, 3, 30, md);
+      expect(() => golden({ name: `${md}.${seed}`, src }, { m: true }), src).not.toThrow();
+    }
+    // The MD option leaves the other levels' programs unchanged.
+    expect(randomProgram(5, 3)).toBe(randomProgram(5, 3, 40, undefined));
+  });
+
+  it('multiplies need the multiplier, divides the divider and its stall', async () => {
+    const { mdTests } = await import('../src/campaign/coretests');
+    const mul = { tests: () => mdTests('mul'), budget: { cpi: 1, extra: 2 }, m: true };
+    const all = { tests: () => mdTests('all'), budget: { cpi: 20, extra: 20 }, m: true };
+    expect(runCore(rv16Core(true), 'gate', mul).failures.join('\n')).toMatch(/from "mul/);
+    expect(runCore(rv16Core(true, false, 'mul'), 'gate', mul).failures).toEqual([]);
+    expect(runCore(rv16Core(true, false, 'mul'), 'gate', all).failures.join('\n')).toMatch(/from "(div|rem)/);
+    expect(runCore(rv16Core(true, false, 'div'), 'gate', all).failures).toEqual([]);
+  });
+
+  it('the divide core agrees on both benches', async () => {
+    const { mdTests } = await import('../src/campaign/coretests');
+    const spec = { tests: () => mdTests('all').slice(0, 2), budget: { cpi: 20, extra: 20 }, m: true };
+    const a = runCore(rv16Core(true, false, 'div'), 'gate', spec), b = runCore(rv16Core(true, false, 'div'), 'gate', spec, 'gate');
+    expect(b.failures).toEqual([]);
+    expect(b.cycles).toBe(a.cycles);
+  });
+
+  it('the multicycle core takes 3 to 4 cycles per instruction at a shorter period', async () => {
+    const { RV16_MULTI } = await import('../src/lib/rv16/multi');
+    const spec = { tests: () => coreTests(3), budget: { cpi: 1, extra: 2 } };
+    const one = runCore(rv16Core(true), 'gate', spec);
+    const mc = runCore(RV16_MULTI, 'gate', { ...spec, budget: { cpi: 4, extra: 4 } });
+    expect(mc.failures).toEqual([]);
+    expect(mc.cycles!).toBeGreaterThan(3 * one.cycles!);
+    expect(mc.cycles!).toBeLessThan(4 * one.cycles!);
+    expect(corePeriod(RV16_MULTI)!).toBeLessThan(corePeriod(rv16Core(true))!);
+  });
+
+  it('branch prediction saves cycles on loops: without it the level misses par', async () => {
+    const { predictTests } = await import('../src/campaign/coretests');
+    const { rv16Pipe } = await import('../src/lib/rv16/pipe');
+    const { nodeById } = await import('../src/campaign/nodes');
+    const spec = { tests: predictTests, budget: { cpi: 3, extra: 8 } };
+    const plain = runCore(rv16Pipe({ fwd: true, stall: true, flush: true }), 'gate', spec);
+    const pred = runCore(rv16Pipe({ fwd: true, stall: true, flush: true, predict: true }), 'gate', spec);
+    expect(plain.failures).toEqual([]);
+    expect(pred.failures).toEqual([]);
+    expect(pred.cycles!).toBeLessThan(plain.cycles! * 0.9);
+    expect(plain.cycles!).toBeGreaterThan(nodeById('o_bpred')!.par!.cycles!);
+  });
+});

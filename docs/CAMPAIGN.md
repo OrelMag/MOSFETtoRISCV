@@ -35,7 +35,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 | R9 | Guidance and complete solutions | tips + "Show solution" / "Do it for me"; every node has a reference answer | 🚧 |
 | R10 | Skipping a level is allowed, and our solution is used | **Skip** marks it skipped and unlocks its part | 🚧 |
 | R11 | Grade solutions on optimization | `grade.ts`: ★ / ★★ / ★★★ against par on NAND, depth, period, cycles, size | 🚧 |
-| R12 | Optional levels: multiply, divide, fast adders, FPU | ✅ fast adders, faster core, multipliers, divider, binary16 adder / multiplier; ⏳ MD in the core, cache, multicycle, branch prediction | 🚧 |
+| R12 | Optional levels: multiply, divide, fast adders, FPU | ✅ fast adders, faster core, multipliers, divider, binary16 adder / multiplier, MD in the core (multiply, stalling divide), cache, multicycle core, branch prediction | ✅ |
 | R13 | A narrative (nand2tetris / *Code* / Turing Complete) explaining why each block is built | per-node `why`, act intros, the intro's anatomy diagram | 🚧 |
 | R14 | Each level explains why it is needed | `why` field, shown first in the node panel | 🚧 |
 | R15 | Codex for each element discovered, plus laws and tools (K-maps, SoP, De Morgan) | `src/campaign/codex*`, `#/campaign/codex` | ✅ |
@@ -316,7 +316,7 @@ Legend: `id` ← requires · *opt* optional · (ex) an existing sandbox challeng
 - ✅ `pi_haz`: load-use hazard detection ← g_eq16, pi_lesson
 - ✅ `pi_core2`: + load-use stall ← pi_core1, pi_haz
 - ✅ `pi_core3`: + branch / jump flush ← pi_core2
-- ⏳ *opt* `o_bpred`: branch prediction, graded on CPI ← pi_core3
+- ✅ *opt* `o_bpred`: static branch prediction in F (jal and backward branches taken), graded on cycles over loop programs ← pi_core3
 
 ### Act 7 — The system: traps and interrupts
 - ✅ `y_lesson` ← c_core3
@@ -329,13 +329,13 @@ Legend: `id` ← requires · *opt* optional · (ex) an existing sandbox challeng
 ### Act 8 — Side quests (all optional)
 - ✅ `o_mulseq`: shift-and-add multiplier ← a_add16, s_reg16
 - ✅ `o_mularr`: 8 × 8 array multiplier ← a_add16
-- ⏳ `o_mcore`: the MD opcode in your core ← c_core3, o_mularr
+- ✅ `o_mcore`: the MD opcode's multiplies in your core (a 16 × 16 array is given; signed high halves by correction) ← c_core3, o_mularr
 - ✅ `o_div`: sequential divider ← a_addsub16, s_fsm
-- ⏳ `o_dcore` ← o_mcore, o_div
+- ✅ `o_dcore`: div / divu / rem / remu, holding the PC until the iterative divider is done ← o_mcore, o_div
 - ✅ `n_float`: floating-point drill (fp16) ← n_twos
 - ✅ `o_fpadd`, `o_fpmul`: binary16 adder and multiplier, all five rounding modes ← n_float, a_shift16 / o_mularr
-- ⏳ `o_cache`: direct-mapped cache ← m_mem, g_eq16
-- ⏳ `o_mc`: multicycle CPU (FSM or microcode) ← c_core3, s_fsm
+- ✅ `o_cache`: direct-mapped cache, 8 one-word lines, write-through; on a hit the bench serves junk for memory ← m_mem, g_eq16
+- ✅ `o_mc`: multicycle CPU (one-hot FSM: F, E, M, W) ← c_core3, s_fsm
 
 ---
 
@@ -389,10 +389,11 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
 - ✅ **E. Pipeline.** Pipeline blocks and the reference pipelined cores; Act 6.
 - ✅ **F. System.** CSRs, traps and interrupts in the golden model, the harness and the
   hardware; Act 7 and the finale.
-- 🚧 **G. Side quests.** ✅ shift-and-add and array multipliers, the divider, the binary16 drill, adder
+- ✅ **G. Side quests.** Shift-and-add and array multipliers, the divider, the binary16 drill, adder
   and multiplier (each gives the reference design's building blocks: side quests are about arranging
-  them). ⏳ `o_mcore` / `o_dcore` (MD in the core), `o_cache`, `o_mc` (multicycle / microcode),
-  `o_bpred` (branch prediction).
+  them); the MD opcode in the core (`o_mcore`, `o_dcore`: their multiplier and divider units come with
+  the reference as chips of their own), the cache, the multicycle core and branch prediction
+  (`src/campaign/build9.ts`, hardware in `src/lib/rv16/md.ts` and `multi.ts`, `rv16Pipe({ predict })`).
 
 ### Budgets
 - **Expected sizes**: about 5k NANDs for the single-cycle core, about 8k pipelined, and about 12k
@@ -405,6 +406,10 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
   period 88, its 45 programs checked in about 1.5 s. Honest lesson for the learner: with a 16-bit ripple ALU
   the E stage is almost as slow as the whole single-cycle path, so pipelining pays only once the stages are
   balanced (the fast-adder side quest).
+- **Measured** (phase G): the multiply core 9.1k NANDs, period 191 (the 16 × 16 array doubles it: why real
+  cores pipeline the multiplier); with the stalling divider 11.7k, period 193, 18 cycles per divide; the
+  multicycle core 6.2k, period 78 against 98, but 3.1× the cycles; the predicting pipeline 11.8k, period 85,
+  13% fewer cycles than Pipeline IV on loop programs; the cache 3.5k NANDs, period 36.
 - **Measured** (phase D): the reference single-cycle core is 5 748 NANDs, clock period 98 NAND delays with
   8-delay memories in the path (81 with Kogge–Stone adders). The bench runs 28 programs (≈1 240 cycles in
   all) in 0.2–0.6 s on 32 bit-parallel lanes; the event-driven fallback gives identical results.

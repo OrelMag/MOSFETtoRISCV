@@ -8,6 +8,7 @@ import { BUILD5 } from './build5';
 import { BUILD6 } from './build6';
 import { BUILD7 } from './build7';
 import { BUILD8, partsOf } from './build8';
+import { BUILD9 } from './build9';
 import { BUILDH } from './buildh';
 import { fpAdd, fpMul } from '../lib/fpu';
 import { arrayMul, seqDivider } from '../lib/muldiv';
@@ -425,7 +426,12 @@ export const NODES: CampaignNode[] = [
     tips: ['redirect = the next-PC logic\'s ld in E; it loads the PC and clears F/D and D/E.', 'Every taken branch costs two cycles: the price predictors (and earlier resolution) try to lower.'],
     codex: ['flush', 'controlhazard'],
   },
-  { id: 'o_bpred', act: 6, title: 'Branch prediction', kind: 'core', optional: true, requires: ['pi_core3'], soon: true, why: 'Guess taken or not before knowing: fewer flushes, lower CPI.', tips: [], codex: ['bpred'], chapters: [{ chapter: 'pipepay', label: 'Making the pipeline pay' }] },
+  {
+    id: 'o_bpred', act: 6, title: 'Branch prediction', kind: 'core', optional: true, requires: ['pi_core3'], base: BUILD9.o_bpred, par: { nand: 11835, period: 85, cycles: 2303 },
+    why: 'Every taken branch costs Pipeline IV two flushed cycles, and loops take their branch almost every time. Guess at fetch instead: most guesses are right, and only a wrong one costs the flush.',
+    tips: ['Static prediction is enough for ★★★: backward branches (offset sign bit, instr[15]) are loops, so predict them taken; jal is always taken.', 'The target in F is pc + imm: decode the fetched word there (the immediate generator is pure wiring) and add.', 'Carry the guess down the pipeline; in E, redirect when (taken ≠ predicted): to the target, or back to pc + 1 when a predicted branch falls through.', 'Mind the stall: holding the PC must win over the guess.'],
+    codex: ['bpred', 'controlhazard'], chapters: [{ chapter: 'pipepay', label: 'Making the pipeline pay' }],
+  },
 
   // ---- Act 7 --------------------------------------------------------------------------------
   {
@@ -477,14 +483,24 @@ export const NODES: CampaignNode[] = [
     tips: ['Row k is a AND b[k], shifted left by k.', 'Add the rows one after the other: each adder\'s carry out becomes the next row\'s top bit.'],
     codex: ['arraymul'],
   },
-  { id: 'o_mcore', act: 8, title: 'Multiply in the core', kind: 'core', optional: true, requires: ['c_core3', 'o_mularr'], soon: true, why: 'The MD opcode: mul, mulh.', tips: [], codex: ['mext'] },
   {
-    id: 'o_div', act: 8, title: 'Divider', kind: 'build', optional: true, requires: ['a_addsub16', 's_fsm'], base: BUILD8.o_div, givesOf: partsOf(() => seqDivider(16)), par: { nand: 1490, period: 31 },
+    id: 'o_mcore', act: 8, title: 'Multiply in the core', kind: 'core', optional: true, requires: ['c_core3', 'o_mularr'], base: BUILD9.o_mcore, gives: ['amul16'], par: { nand: 9125, period: 191, cycles: 876 },
+    why: 'Act 4 multiplied with a loop of adds: tens of cycles per product. The MD opcode does it in one instruction. The array is big and slow: watch what it does to the clock period of the whole core.',
+    tips: ['The MD opcode is 0011: decode it next to the control unit, and OR its write into rwe.', 'Put the multiplier\'s result on the write-back path with one more mux.', 'Signed high halves: subtract b when a < 0 (mulh, mulhsu) and a when b < 0 (mulh) from the unsigned high half (codex).'],
+    codex: ['mext', 'signedmul', 'arraymul'], unlocks: ['rv16_mul'], chapters: [{ chapter: 'muldiv', label: 'Multiply & divide' }],
+  },
+  {
+    id: 'o_div', act: 8, title: 'Divider', kind: 'build', optional: true, requires: ['a_addsub16', 's_fsm'], base: BUILD8.o_div, givesOf: partsOf(() => seqDivider(16)), par: { nand: 1490, period: 31 }, unlocks: ['sdiv16'],
     why: 'Long division in binary: one subtract-and-compare per quotient bit, run by a small state machine. Division is slow everywhere: even fast CPUs take tens of cycles.',
     tips: ['Shift the remainder left, bring in the next dividend bit, subtract the divisor: if the result is not negative keep it and set the quotient bit.'],
     codex: ['division'],
   },
-  { id: 'o_dcore', act: 8, title: 'Divide in the core', kind: 'core', optional: true, requires: ['o_mcore', 'o_div'], soon: true, why: 'div and rem stall the core until done.', tips: [], codex: ['mext'] },
+  {
+    id: 'o_dcore', act: 8, title: 'Divide in the core', kind: 'core', optional: true, requires: ['o_mcore', 'o_div'], base: BUILD9.o_dcore, par: { nand: 11724, period: 193, cycles: 1859 },
+    why: 'A divider takes many cycles, so the core must wait for it: the first instruction that does not finish in one cycle. Holding the PC is the single-cycle core\'s version of a stall.',
+    tips: ['start = (a divide); hold = start and not done. Hold the PC by loading it with itself: ld = ld | hold, target = hold ? pc : target.', 'Write nothing while holding: rwe for MD = MD and not hold.', 'Signs: an adder / subtractor with a = 0 negates when sub = 1. Negate the quotient only when b ≠ 0.'],
+    codex: ['mext', 'division', 'stall'], unlocks: ['rv16_div'],
+  },
   {
     id: 'n_float', act: 8, title: 'Floating point', kind: 'drill', optional: true, requires: ['n_twos'], drill: 'float', par: { mistakes: 2 },
     why: 'Sign, exponent, fraction: a binary scientific notation that trades exactness for range. Encode and decode binary16 by hand before building its adder.',
@@ -501,8 +517,18 @@ export const NODES: CampaignNode[] = [
     why: 'Multiplying floats is simpler than adding them: multiply the significands, add the exponents, XOR the signs, then normalise and round.',
     tips: ['11 × 11 bits gives a 22-bit product; its top bit decides whether to shift by one.'], codex: ['ieee754'],
   },
-  { id: 'o_cache', act: 8, title: 'A cache', kind: 'build', optional: true, requires: ['m_mem', 'g_eq16'], soon: true, why: 'Keep recently used words close: tags, valid bits, hits and misses.', tips: [], codex: ['cache'], chapters: [{ chapter: 'cache', label: 'Caches' }] },
-  { id: 'o_mc', act: 8, title: 'Multicycle CPU', kind: 'core', optional: true, requires: ['c_core3', 's_fsm'], soon: true, why: 'One instruction over several short cycles, run by a state machine or by microcode.', tips: [], codex: ['microcode', 'fsm'], chapters: [{ chapter: 'multicycle', label: 'Multicycle & microcode' }] },
+  {
+    id: 'o_cache', act: 8, title: 'A cache', kind: 'build', optional: true, requires: ['m_mem', 'g_eq16'], base: BUILD9.o_cache, par: { nand: 3527, period: 36 },
+    why: 'Main memory is far slower than the core. A small memory that keeps the words used recently answers most accesses at once: programs use the same words again and again (locality). It must know which word each line holds: a tag, and a valid bit.',
+    tips: ['Two small RAMs indexed by addr[2:0]: one for the data, one for {valid, tag}.', 'hit = valid AND (stored tag = addr[7:3]): a 5-bit equality comparator.', 'Write the line when wr, or when rd and not hit; its data is wdata on a write, mdata on a fill.', 'At power-on every valid bit is 0: nothing hits until it is filled.'],
+    codex: ['cache'], chapters: [{ chapter: 'cache', label: 'Caches' }],
+  },
+  {
+    id: 'o_mc', act: 8, title: 'Multicycle CPU', kind: 'core', optional: true, requires: ['c_core3', 's_fsm'], base: BUILD9.o_mc, par: { nand: 6223, period: 78, cycles: 3865 },
+    why: 'Before pipelines, processors ran each instruction as a sequence of short steps under a state machine (or microcode). The clock gets faster, the instruction slower: measure whether it pays here.',
+    tips: ['One-hot states (a flip-flop each): F → E → M → W → F, skipping M unless the instruction loads or stores; reset → F.', 'The instruction register loads in F; everything after decodes from it, not from instr.', 'Registers cut the long path: the ALU result is registered at the end of E, and memory reads it in M.', 'Write rd and load the PC only in W; stores only in M.'],
+    codex: ['multicycle', 'fsm', 'microcode', 'cpi'], chapters: [{ chapter: 'multicycle', label: 'Multicycle & microcode' }],
+  },
 ];
 
 export const nodeById = (id: string): CampaignNode | undefined => NODES.find((n) => n.id === id);

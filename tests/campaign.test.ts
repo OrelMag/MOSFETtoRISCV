@@ -20,6 +20,7 @@ import { UserLibrary } from '../src/editor/library';
 import { emptyWorkspace } from '../src/editor/model';
 import { resolveComponent } from '../src/lib/resolve';
 import { chip, part, pin, wire, workspace } from './editorkit';
+import type { ComponentDef } from '../src/sim/types';
 
 class MapKV {
   m = new Map<string, string>();
@@ -224,5 +225,26 @@ describe('progress', () => {
     expect(r.ws.chips[levelChipId(n)]).toBeDefined();
     expect(importCampaign('{"format":"x"}', p.state, ws)).toEqual({ error: 'not a campaign export' });
     expect(importCampaign('nope', p.state, ws)).toEqual({ error: 'not JSON' });
+  });
+});
+
+describe('the cache level', () => {
+  it('a "cache" that always goes to memory fails: on a hit the memory is not read', async () => {
+    const { Builder } = await import('../src/lib/builder');
+    const { TIE0 } = await import('../src/lib/transistors');
+    const b = new Builder();
+    b.pins('clk', 'addr', 'rd', 'wr', 'wdata', 'mdata');
+    b.wire('mdata', 'rdata');
+    b.wire(b.op1(TIE0, []), 'hit');
+    const fake: ComponentDef = {
+      id: 'fake_cache', name: 'no cache', category: 'memory', symbol: { kind: 'box' },
+      ports: levelChallenge(nodeById('o_cache')!)!.ports.map((p) => ({ name: p.name, width: p.width, dir: p.dir === 'out' ? 'out' : 'in' })),
+      netlist: () => ({ instances: b.instances, nets: b.nets() }),
+    };
+    const { docFromDef } = await import('../src/editor/fromdef');
+    const doc = docFromDef(fake, { id: 'u_fake_cache' });
+    if ('error' in doc) throw new Error(doc.error);
+    const r = checkChallenge(levelChallenge(nodeById('o_cache')!)!, new UserLibrary(workspace(doc)).compiled(doc.id));
+    expect(r.ok).toBe(false);
   });
 });
