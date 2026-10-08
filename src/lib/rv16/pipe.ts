@@ -35,7 +35,7 @@ export const PREG16: ComponentDef = (() => {
   return define({
     id: 'rv16_preg', name: 'Pipeline register (16-bit)', category: 'sequential',
     summary: 'q ← clr ? 0 : en ? d : q. en = 0 holds the stage (a stall); clr = 1 turns it into a bubble (a flush): all-zero control bits do nothing.',
-    ports: [bus('d', 16, 'in'), bit('en', 'in'), bit('clr', 'in'), bit('clk', 'in'), bus('q', 16, 'out')],
+    ports: [bus('d', 16, 'in'), bit('en', 'in'), bit('clr', 'in'), { name: 'clk', width: 1, dir: 'in', clock: true }, bus('q', 16, 'out')],
     symbol: { kind: 'box', label: 'PIPE REG' },
     netlist: () => ({ pins: { ...pinsAt(['d', 'en', 'clr', 'clk'], 0), q: [R, 8] }, instances: b.instances, nets: b.nets() }),
   });
@@ -346,7 +346,7 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
     summary: 'Five stages, F D E M W, with pipeline registers between them; the register file is written at the falling edge. '
       + (o.predict ? 'jal and backward branches are predicted taken in F (target = pc + imm there); E redirects only on a wrong guess. ' : '')
       + (o.fwd ? 'Forwarding from M and W into E. ' : '') + (o.stall ? 'A load followed by a user stalls one cycle. ' : '') + (o.flush ? 'Branches and jumps resolve in E and flush two instructions. ' : '') + (o.sys ? 'Traps and the external interrupt are taken in E: precise, with a valid bit so bubbles never trap.' : ''),
-    ports: [bit('clk', 'in'), bit('rst', 'in'), bus('instr', 16, 'in'), bus('drdata', 16, 'in'), ...(o.sys ? [bit('irq', 'in')] : []),
+    ports: [{ name: 'clk', width: 1, dir: 'in', clock: true }, bit('rst', 'in'), bus('instr', 16, 'in'), bus('drdata', 16, 'in'), ...(o.sys ? [bit('irq', 'in')] : []),
       bus('pc', 16, 'out'), bus('daddr', 16, 'out'), bus('dwdata', 16, 'out'), bit('dwe', 'out'), bit('rwe', 'out'), bus('rwa', 3, 'out'), bus('rwd', 16, 'out')],
     symbol: { kind: 'box', label: 'RV16 PIPE' },
     netlist: () => ({

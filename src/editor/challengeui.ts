@@ -12,6 +12,8 @@
 // "Unlocked parts" group.
 
 import '../styles/sbchallenges.css';
+import { addBench, failingTest } from '../campaign/bench';
+import { coreSpecOf } from '../campaign/corecheck';
 import { measured } from '../campaign/grade';
 import { nextAvailable } from '../campaign/graph';
 import { levelChallenge, nodeOfChip } from '../campaign/levels';
@@ -218,14 +220,21 @@ class ChallengeUi {
       r.ok ? h('b', null, icon('check', 14), 'Passes') : h('b', null, icon('close', 14), 'Not yet'),
       h('span', null, r.ok ? `all ${what} correct` : r.tested ? `checked ${what}` : 'not simulated'),
       stale ? h('span', { class: 'sb-chal-stale' }, 'edited since: check again') : null));
-    if (r.failures.length || r.restrictionViolations.length || !r.ok) el.append(this.problems(r));
+    if (r.failures.length || r.restrictionViolations.length || !r.ok) el.append(this.problems(r, ch));
     el.append(this.scoreEl(ch, r));
     return el;
   }
 
-  private problems(r: CheckResult): HTMLElement {
+  private problems(r: CheckResult, ch: BuildChallenge): HTMLElement {
     const box = h('div', { class: 'sb-chal-problems' });
     if (r.failures.length) box.append(h('ul', { class: 'sb-chal-fails' }, r.failures.map((f) => h('li', null, f))));
+    // A core level: open the first failing program as a computer around this core, with the CPU panel.
+    const spec = coreSpecOf(ch.check);
+    const t = spec && r.failures.length ? failingTest(spec, r.failures[0]) : null;
+    if (t) {
+      box.append(h('button', { class: 'sb-chal-apply', 'data-chal': 'bench', title: 'A new chip: this program in a ROM, your core, a RAM and LEDs; the CPU panel runs it against the golden model and stops at the first wrong write', onclick: () => this.debug(t) },
+        icon('code', 13), `Debug “${t.name}” in the sandbox`));
+    }
     if (r.vector) {
       const v = r.vector;
       box.append(h('button', { class: 'sb-chal-apply', 'data-chal': 'apply', title: 'Set the input pins to the first failing combination', onclick: () => this.apply(v) },
@@ -276,6 +285,19 @@ class ChallengeUi {
     }
     this.render();
     if (this.drawer) this.renderList();
+  }
+
+  private debug(t: NonNullable<ReturnType<typeof failingTest>>): void {
+    const ed = this.ed;
+    const core = ed.compiled?.def, coreId = ed.chipId;
+    if (!core) return;
+    let err = '';
+    ed.editWs((ws) => {
+      const b = addBench(ws, core, coreId, t);
+      if ('error' in b) { err = b.error; return ws; }
+      return b.ws;
+    });
+    ed.toast(err ? `Cannot build the bench: ${err}` : `New chip “${ed.doc.name}”: Run to halt in the CPU panel (Ctrl+Z removes it)`);
   }
 
   private apply(v: Record<string, number>): void {

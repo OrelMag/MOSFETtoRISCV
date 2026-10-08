@@ -129,7 +129,7 @@ export const RV16_CACHE: ComponentDef = (() => {
   return define({
     id: 'rv16_cache', name: 'Direct-mapped cache (8 lines)', category: 'memory',
     summary: 'index = addr[2:0] picks one of eight lines; hit = valid and tag = addr[7:3]. A read miss fills the line from main memory (mdata), a write fills it with wdata (write-through: the memory is written too, outside). 8 × (16 + 5 + 1) bits of storage.',
-    ports: [bit('clk', 'in'), bus('addr', 8, 'in'), bit('rd', 'in'), bit('wr', 'in'), bus('wdata', 16, 'in'), bus('mdata', 16, 'in'), bus('rdata', 16, 'out'), bit('hit', 'out')],
+    ports: [{ name: 'clk', width: 1, dir: 'in', clock: true }, bus('addr', 8, 'in'), bit('rd', 'in'), bit('wr', 'in'), bus('wdata', 16, 'in'), bus('mdata', 16, 'in'), bus('rdata', 16, 'out'), bit('hit', 'out')],
     symbol: { kind: 'box', label: 'CACHE' },
     netlist: () => ({ pins: { ...pinsAt(['clk', 'addr', 'rd', 'wr', 'wdata', 'mdata'], 0, 4), rdata: [R, 4], hit: [R, 8] }, instances: b.instances, nets: b.nets() }),
   });

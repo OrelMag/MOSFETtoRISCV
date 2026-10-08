@@ -17,6 +17,8 @@ export interface Iss16Options {
   system?: boolean;
   /** Reading a register that was never written is an error (tests: the hardware powers up unknown). */
   strictInit?: boolean;
+  /** Data addresses below MMIO wrap around dmemWords, like a small RAM decoded on its low bits only. */
+  wrap?: boolean;
 }
 
 export interface Step16 {
@@ -58,7 +60,7 @@ export class Iss16 {
   readonly opts: Required<Iss16Options>;
 
   constructor(program: ArrayLike<number>, opts: Iss16Options = {}, data?: Map<number, number>) {
-    this.opts = { dmemWords: 65536, m: false, system: false, strictInit: false, ...opts };
+    this.opts = { dmemWords: 65536, m: false, system: false, strictInit: false, wrap: false, ...opts };
     this.imem = new Uint16Array(Math.max(1, program.length));
     this.imem.set(Array.from(program, (w) => w & M16));
     this.dmem = new Uint16Array(this.opts.dmemWords);
@@ -90,6 +92,7 @@ export class Iss16 {
         default: return 0;
       }
     }
+    if (this.opts.wrap) a %= this.dmem.length;
     return a < this.dmem.length ? this.dmem[a] : 0;
   }
 
@@ -108,6 +111,7 @@ export class Iss16 {
       }
       return;
     }
+    if (this.opts.wrap) a %= this.dmem.length;
     if (a < this.dmem.length) this.dmem[a] = v;
   }
 

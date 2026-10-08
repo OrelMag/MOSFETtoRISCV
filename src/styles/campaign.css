@@ -134,6 +134,14 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 .cp-codex-body { font-size: 15px; line-height: 1.6; }
 .cp-codex-body code { font: 13px var(--font-mono); background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
 .cp-codex-entry a { color: var(--accent); }
+.cp-sheet { margin: 14px 0 4px; padding-top: 10px; border-top: 1px solid var(--border); }
+.cp-sheet h4 { margin: 0 0 4px; font-size: 14px; }
+.cp-sheet .sub { margin: 0 0 8px; }
+.cp-sheet-cols { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+.cp-sheet table { border-collapse: collapse; font: 12px var(--font-mono); }
+.cp-sheet th, .cp-sheet td { padding: 1px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+.cp-sheet th { color: var(--muted); font-weight: 500; }
+.cp-sheet td.out, .cp-sheet th.out { background: var(--surface-2); }
 
 @media (max-width: 1000px) {
   .cp-split, .cp-intro-top, .cp-codex { grid-template-columns: minmax(0, 1fr); }

@@ -105,7 +105,7 @@ export const DIV16: ComponentDef = (() => {
   return define({
     id: 'rv16_div', name: 'MD divider (RV16)', category: 'sequential',
     summary: 'div, divu, rem, remu: signs off (|a|, |b|), the iterative unsigned divider (18 cycles), signs back on. start loads it while idle; done rises for one cycle with y valid.',
-    ports: [bit('clk', 'in'), bit('start', 'in'), bus('a', 16, 'in'), bus('b', 16, 'in'), bus('f3', 2, 'in'), bus('y', 16, 'out'), bit('done', 'out')],
+    ports: [{ name: 'clk', width: 1, dir: 'in', clock: true }, bit('start', 'in'), bus('a', 16, 'in'), bus('b', 16, 'in'), bus('f3', 2, 'in'), bus('y', 16, 'out'), bit('done', 'out')],
     symbol: { kind: 'box', label: 'DIV' },
     netlist: () => ({ pins: { clk: [0, 4], start: [0, 8], a: [0, 12], b: [0, 16], f3: [0, 20], y: [R, 8], done: [R, 12] }, instances: b.instances, nets: b.nets() }),
   });

@@ -66,7 +66,7 @@ function computerDef(): ComponentDef {
   refDef = {
     id: 'rv16_computer', name: 'RV16 computer', category: 'cpu',
     summary: 'A core, a 32-word program ROM, a 64-word RAM and an LED register. Partial address decoding: bit 15 of the data address selects the I/O (the LEDs), the low 6 bits address the RAM.',
-    ports: [{ name: 'clk', width: 1, dir: 'in' }, { name: 'rst', width: 1, dir: 'in' }, { name: 'leds', width: 16, dir: 'out' }],
+    ports: [{ name: 'clk', width: 1, dir: 'in', clock: true }, { name: 'rst', width: 1, dir: 'in' }, { name: 'leds', width: 16, dir: 'out' }],
     symbol: { kind: 'box', label: 'COMPUTER' },
     netlist: () => ({ pins: { clk: [0, 4], rst: [0, 8], leds: [R, 6] }, instances: b.instances, nets: b.nets() }),
   };

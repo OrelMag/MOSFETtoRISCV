@@ -201,7 +201,7 @@ export const NEXTPC16F = nextPc(true);
 
 /** The pins every core level shares (memories are outside: the test bench serves them). */
 export const CORE_PORTS: PortDef[] = [
-  bit('clk', 'in'), bit('rst', 'in'), bus('instr', 16, 'in'), bus('drdata', 16, 'in'),
+  { name: 'clk', width: 1, dir: 'in', clock: true }, bit('rst', 'in'), bus('instr', 16, 'in'), bus('drdata', 16, 'in'),
   bus('pc', 16, 'out'), bus('daddr', 16, 'out'), bus('dwdata', 16, 'out'), bit('dwe', 'out'),
   bit('rwe', 'out'), bus('rwa', 3, 'out'), bus('rwd', 16, 'out'),
 ];

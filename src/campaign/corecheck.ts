@@ -256,10 +256,16 @@ export function corePeriod(core: ComponentDef): number | null {
   }
 }
 
+/** A core level's check: a custom check that also carries its programs (for "debug this test"). */
+export type CoreCheck = ChallengeCheck & { core: CoreSpec };
+
+/** The programs behind a core level's check, or null for any other check. */
+export const coreSpecOf = (c: ChallengeCheck): CoreSpec | null => ('core' in c ? (c as CoreCheck).core : null);
+
 /** A build challenge's check for a core level: the programs, cycles, and the period with memories. */
-export function coreCheck(spec: CoreSpec, what: string): ChallengeCheck {
+export function coreCheck(spec: CoreSpec, what: string): CoreCheck {
   return {
-    kind: 'custom', describe: what,
+    kind: 'custom', describe: what, core: spec,
     run: (def, mode) => {
       const r = runCore(def, mode, spec);
       const p = r.failures.length ? null : corePeriod(def);

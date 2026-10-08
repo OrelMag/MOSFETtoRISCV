@@ -10,7 +10,7 @@ import { measured, stars } from '../src/campaign/grade';
 import { ancestors, nextAvailable, ruleFor, statusOf, topo } from '../src/campaign/graph';
 import { mapLayout, NODE_H, NODE_W } from '../src/campaign/layout';
 import { LESSONS } from '../src/campaign/lessons';
-import { levelChallenge, levelChipId, nodeOfChip } from '../src/campaign/levels';
+import { levelChallenge, levelChipId, nodeOfChip, startCandidates, startFrom } from '../src/campaign/levels';
 import { ACTS, NODES, nodeById } from '../src/campaign/nodes';
 import { CAMPAIGN_KEY, exportCampaign, importCampaign, mergeCampaign, Progress, sanitizeCampaign } from '../src/campaign/progress';
 import { chapterById } from '../src/chapters';
@@ -246,5 +246,41 @@ describe('the cache level', () => {
     if ('error' in doc) throw new Error(doc.error);
     const r = checkChallenge(levelChallenge(nodeById('o_cache')!)!, new UserLibrary(workspace(doc)).compiled(doc.id));
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('continue from your previous core', () => {
+  it('offers the nearest earlier core chip and copies it with the new level\'s pins', () => {
+    const core3 = levelChallenge(nodeById('c_core3')!)!.answer().at(-1)!;
+    const yIrq = nodeById('y_irq')!;
+    let ws = emptyWorkspace();
+    expect(startCandidates(yIrq, ws)).toEqual([]);
+    const c3 = levelChipId(nodeById('c_core3')!);
+    ws = { ...ws, chips: { ...ws.chips, [c3]: { ...core3, id: c3, name: 'Core III' } } };
+    expect(startCandidates(yIrq, ws).map((n) => n.id)).toEqual(['c_core3']);
+    expect(startCandidates(nodeById('g_and')!, ws)).toEqual([]);
+    const r = startFrom(ws, levelChallenge(yIrq)!, c3);
+    const doc = r.ws.chips[r.chipId];
+    expect(r.created).toBe(true);
+    expect(doc.parts).toEqual(core3.parts);
+    expect(doc.pins.map((p) => p.name).sort()).toEqual([...core3.pins.map((p) => p.name), 'irq'].sort());
+    expect(new Set(doc.pins.map((p) => p.id)).size).toBe(doc.pins.length);
+    // Already started: opened as it is.
+    const again = startFrom(r.ws, levelChallenge(yIrq)!, c3);
+    expect(again.created).toBe(false);
+    expect(again.ws.chips[r.chipId]).toBe(doc);
+  });
+});
+
+describe('codex datasheets', () => {
+  it('a component entry reads its parts from the library: pins, cost, a small part\'s truth table', async () => {
+    const { datasheets } = await import('../src/campaign/datasheet');
+    const withSheets = CODEX.filter((e) => e.kind === 'component' && datasheets(e.id).length);
+    expect(withSheets.length).toBeGreaterThan(10);
+    for (const e of withSheets) for (const d of datasheets(e.id)) {
+      expect(d.pins.length, d.id).toBeGreaterThan(0);
+      expect(d.nand, d.id).toBeGreaterThanOrEqual(0);
+      if (d.table) expect(d.table.rows.length).toBe(2 ** d.pins.filter((p) => p.dir === 'in').reduce((a, p) => a + p.width, 0));
+    }
   });
 });
