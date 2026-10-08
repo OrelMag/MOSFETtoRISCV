@@ -15,7 +15,7 @@ import '../styles/sbchallenges.css';
 import { addBench, failingTest } from '../campaign/bench';
 import { coreSpecOf } from '../campaign/corecheck';
 import { measured } from '../campaign/grade';
-import { nextAvailable } from '../campaign/graph';
+import { isDone, nextAvailable } from '../campaign/graph';
 import { levelChallenge, nodeOfChip } from '../campaign/levels';
 import { ACTS } from '../campaign/nodes';
 import { progress } from '../campaign/progress';
@@ -204,7 +204,7 @@ class ChallengeUi {
       li.innerHTML = t;
       return li;
     }));
-    const next = p.get(n.id)?.status === 'solved' ? nextAvailable(p.view, p.unlockAll, n.id) : undefined;
+    const next = isDone(p.view(n.id)) ? nextAvailable(p.view, p.unlockAll, n.id) : undefined;
     return h('div', { class: 'sb-chal-level' },
       shown ? tips : null,
       h('div', { class: 'sb-chal-links' },
