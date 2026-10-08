@@ -3,7 +3,7 @@
 import { koggeStone, rca, CLA4 } from '../lib';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
-import { analyzeTiming, CLK_TO_Q, PS_PER_NAND, SETUP, type TimingReport } from '../sim/timing';
+import { analyzeTiming, CLK_TO_Q, PS_NOTE, PS_PER_NAND, SETUP, type TimingReport } from '../sim/timing';
 import { h } from '../ui/dom';
 import type { ScenePanel, Stage, Widget } from '../view/stage';
 
@@ -39,7 +39,7 @@ export const timingPanel: ScenePanel = (stage: Stage): Widget => {
   body.append(
     h('div', { class: 'readout', style: 'margin-top:0' },
       h('div', null, h('b', null, String(r.period)), h('span', null, 'NAND delays per cycle')),
-      h('div', null, h('b', null, `${mhz.toFixed(0)} MHz`), h('span', null, `at ~${PS_PER_NAND} ps / NAND`))),
+      h('div', { title: PS_NOTE }, h('b', null, `${mhz.toFixed(0)} MHz`), h('span', null, `at an illustrative ${PS_PER_NAND} ps / NAND`))),
     h('p', { class: 'sub', style: 'margin:8px 0 6px;font-size:12.5px' }, `clk→q ${CLK_TO_Q} + logic ${r.logic} + setup ${SETUP}. Launch: ${r.launch.join('.')}, capture: ${r.capture.slice(0, 2).join('.')}…`),
     h('div', { class: 'tstages' }, r.stages.map((s) => {
       const w = Math.max(2, ((s.arrival - prev) / maxA) * 100);
