@@ -343,15 +343,15 @@ already done (adder and CPU comparisons, golden-model lock-step in the UI, instr
 coherence explorers, delay animation, static vs simulated paths, Yosys cross-check, the OpenROAD flow) are not repeated.
 
 **Say exactly what is modelled**
-- ⏳ A license (the author's choice)
-- ⏳ README rebuilt around the thesis: what it is, a short demo (GIF: MOSFET → NAND → adder → a CPU running), the
-  journey, the campaign, the sandbox, verification, timing, HDL and the sky130 flow, and a **Scope and limitations**
-  section: MOSFETs are switches with strengths and stored charge, not a SPICE model; timing is one unit per NAND,
+- ✅ MIT license
+- ✅ README: the campaign, how everything is checked (components, CPUs, drawings, HDL, the sky130 flow), and a
+  **Scope and limitations** section: MOSFETs are switches with strengths and stored charge, not a SPICE model; timing is one unit per NAND,
   converted to time by an illustrative 25 ps / NAND (`PS_PER_NAND`), not characterized from a cell library; the
   built-in placer and router are a teaching model, the OpenROAD run is the real one; power-on state comes from a
   resolution model, not physics; CPUs are checked against our own ISS plus the independent checks below
-- ⏳ The same honesty on the site: the timing panel and "Overclock it" name the calibration as illustrative;
-  chapter 25 separates the teaching P&R from the OpenROAD run; the pipeline chapters call cache-miss freezing and
+- ⏳ A short demo at the top of the README (GIF: MOSFET → NAND → adder → a CPU running)
+- ✅ The timing panels (chapters and sandbox) and the static-timing step name the 25 ps / NAND as illustrative
+- ⏳ Chapter 25 separates the teaching P&R from the OpenROAD run; the pipeline chapters call cache-miss freezing and
   arbiter-serialized atomics deliberate simplifications
 - ⏳ Repository description and topics on GitHub (the author's account)
 
@@ -370,7 +370,7 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
   flush, misprediction), cache hit / miss / write-back, trap causes; reported as a table, gaps become directed tests
 - ⏳ `scripts/verify-export.ts` (Yosys netlist simulated against our gate-level run) as a CI job with
   `yowasp-yosys`, on the dual-core and the system CPU, so a change that breaks the exported hardware cannot deploy
-- ⏳ GateSim: refuse a behavioural delay of 64 or more (the event wheel) instead of clamping it silently
+- ✅ GateSim refuses a behavioural delay of 64 or more (the event wheel) instead of clamping it silently
 
 **Measure more** (computed from the circuits, like every other number)
 - ⏳ Dynamic power, P ≈ α C V² f: α from the gate simulator's toggle counts over a program or a vector set
@@ -385,7 +385,7 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
   each CPU (the sandbox's used by / uses, for the library); in the inspector
 
 **Onboarding**
-- ⏳ The sandbox as a fourth entry on the home page (journey, campaign, workbench, sandbox)
+- ✅ The sandbox as a fourth entry on the home page (journey, campaign, workbench, sandbox)
 
 **Not planned** (from the same review)
 - Restructuring `src/` into new namespaces, splitting `ComponentDef`, separating geometry from netlists: churn with
