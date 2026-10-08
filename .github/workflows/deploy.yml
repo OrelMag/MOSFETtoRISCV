@@ -41,8 +41,24 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+  # The exported Verilog, synthesized by Yosys and simulated, must match our own simulation of the
+  # dual-core on every multi-core program: a change that breaks the exported hardware does not deploy.
+  verify-hdl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: pip install yowasp-yosys
+      - run: npx vite-node scripts/verify-export.ts all
   deploy:
-    needs: build
+    needs: [build, verify-hdl]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

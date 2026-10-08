@@ -368,8 +368,9 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
   the cycle and the first differing state; a short run in `npm test`, a long one in a scheduled CI job
 - ⏳ Coverage of the CPU suites: opcodes executed, hazard events seen (M→E / W→E forwarding, load-use stall,
   flush, misprediction), cache hit / miss / write-back, trap causes; reported as a table, gaps become directed tests
-- ⏳ `scripts/verify-export.ts` (Yosys netlist simulated against our gate-level run) as a CI job with
-  `yowasp-yosys`, on the dual-core and the system CPU, so a change that breaks the exported hardware cannot deploy
+- ✅ `scripts/verify-export.ts all` (Yosys netlist simulated against our gate-level run, every multi-core program) as
+  the `verify-hdl` CI job with `yowasp-yosys`: the deploy waits on it
+- ⏳ The same cross-check on the system CPU (RV32IM + Zicsr: its MMIO and interrupt pins need a testbench of their own)
 - ✅ GateSim refuses a behavioural delay of 64 or more (the event wheel) instead of clamping it silently
 
 **Measure more** (computed from the circuits, like every other number)
