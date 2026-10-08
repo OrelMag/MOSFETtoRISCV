@@ -66,7 +66,10 @@ export class GateSim implements Sim {
           driver[net] = li;
         }
       }
-      this.delay[li] = l.kind === 'nand' ? 1 : Math.max(1, Math.min(RING - 1, l.def.behavior?.delay ?? 1));
+      const d = l.kind === 'nand' ? 1 : Math.max(1, l.def.behavior?.delay ?? 1);
+      // A longer delay would wrap the event wheel and fire early: refuse it rather than clamp it.
+      if (d >= RING) throw new Error(`${pathOf(l)}: delay ${d} exceeds the event wheel (max ${RING - 1})`);
+      this.delay[li] = d;
     });
     for (let i = 0; i < n; i++) counts[i + 1] += counts[i];
     this.fanStart = counts;
