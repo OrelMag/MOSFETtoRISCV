@@ -38,8 +38,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p public/layout
-          if gh release download layout-latest -p layout.tar.gz -D "$RUNNER_TEMP" --repo "$GITHUB_REPOSITORY"; then
-            tar -xzf "$RUNNER_TEMP/layout.tar.gz" -C public/layout
+          # A relative path: GNU tar takes a drive letter ("D:") for a remote host, so the runner temp folder will not do.
+          if gh release download layout-latest -p layout.tar.gz -D layout-dl --repo "$GITHUB_REPOSITORY"; then
+            tar -xzf layout-dl/layout.tar.gz -C public/layout && ls public/layout
           else
             echo "no layout published yet"
           fi
