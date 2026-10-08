@@ -44,8 +44,8 @@ interface DisplayEls {
   leds?: SVGCircleElement[];
   /** A buzzer's tone now (Hz, 0 silent). */
   hz?: number;
-  /** A key part's keycap; a keyboard's code cell, ready lamp and "more waiting" count. */
-  key?: SVGGElement; kbdChar?: SVGTextElement; kbdReady?: SVGCircleElement; kbdMore?: SVGTextElement;
+  /** A key part's keycap; a keyboard's code cell (lit while a key waits), its glyph and the "more waiting" count. */
+  key?: SVGGElement; kbdCell?: SVGRectElement; kbdChar?: SVGTextElement; kbdMore?: SVGTextElement;
 }
 interface WireEls {
   doc: WireDoc; poly: Vec[] | null; key: string; ver: number; path: SVGPathElement; hit: SVGPathElement; width: number; cls: string;
@@ -460,15 +460,18 @@ export class EditorView {
     return { kind: 'key', width: 1, segs: [], shown: '', key };
   }
 
-  /** A keyboard part: the library box (ports named) with the oldest waiting key, a ready lamp and how many more wait. */
+  /**
+   * A keyboard part: the library box (ports named) with a cell showing the oldest waiting key, lit
+   * while one waits (ready), and how many more wait under it.
+   */
   private drawKeyboard(g: SVGGElement, def: ComponentDef, w: number, h: number, flip: boolean): DisplayEls {
     g.append(drawSymbol(def, flip));
     const cx = w / 2;
+    const kbdCell = s('rect', { class: 'ed-kbd-cell', x: cx - 0.95, y: 0.55, width: 1.9, height: 1.65, rx: 0.25 });
     const kbdChar = s('text', { class: 'ed-kbd-char dim', x: cx, y: 1.75, 'text-anchor': 'middle' }, '·');
-    const kbdReady = s('circle', { class: 'ed-led', cx: cx - 0.55, cy: h - 0.95, r: 0.26 });
-    const kbdMore = s('text', { class: 'ed-kbd-n', x: cx - 0.1, y: h - 0.7 }, '');
-    g.append(s('rect', { class: 'ed-kbd-cell', x: cx - 0.85, y: 0.55, width: 1.7, height: 1.6, rx: 0.25 }), kbdChar, kbdReady, kbdMore);
-    return { kind: 'keyboard', width: 8, segs: [], shown: '', kbdChar, kbdReady, kbdMore };
+    const kbdMore = s('text', { class: 'ed-kbd-n', x: cx, y: h - 0.65, 'text-anchor': 'middle' }, '');
+    g.append(kbdCell, kbdChar, kbdMore);
+    return { kind: 'keyboard', width: 8, segs: [], shown: '', kbdCell, kbdChar, kbdMore };
   }
 
   /** A display: LED, 7-segment digit (bit i = segment a…g, bit 7 = dp), hex digit, value box or halt plate. */
@@ -673,7 +676,7 @@ export class EditorView {
     d.kbdChar!.textContent = v > 0 ? codeGlyph(v) : v === 0 ? '·' : '?';
     d.kbdChar!.setAttribute('class', `ed-kbd-char${v > 0 ? '' : ' dim'}`);
     const r = ready?.[0];
-    d.kbdReady!.setAttribute('class', `ed-led${r === B1 ? ' on' : r === BX || r === BZ ? ' vx' : ''}`);
+    d.kbdCell!.setAttribute('class', `ed-kbd-cell${r === B1 ? ' on' : r === BX || r === BZ ? ' vx' : ''}`);
     d.kbdMore!.textContent = queue && queue.length > 1 ? `+${queue.length - 1}` : '';
   }
 

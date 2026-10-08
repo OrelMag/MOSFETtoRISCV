@@ -269,7 +269,7 @@ export const KEYBOARD: ComponentDef = {
     { name: 'code', width: 8, dir: 'out', doc: 'The oldest waiting key (0 when none)' },
     { name: 'ready', width: 1, dir: 'out', doc: '1 while a key waits' },
   ],
-  symbol: { kind: 'box', label: '', w: 6, h: 4 },
+  symbol: { kind: 'box', label: '', w: 8, h: 4 },
   behavior: {
     init: (): KeyboardState => ({ q: [] }),
     eval: (_ins, s) => { const q = (s as KeyboardState).q; return [q[0] ?? 0, q.length ? 1 : 0]; },
