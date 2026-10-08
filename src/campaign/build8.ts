@@ -1,5 +1,5 @@
 // Act 8's build levels (side quests): an array multiplier, the shift-and-add multiplier, a
-// sequential divider, and binary16 adder / multiplier. Their reference designs come from the
+// sequential divider, and binary16 adder / multiplier (their blocks are buildfp.ts's rungs). Their reference designs come from the
 // library; each level gives the reference's own building blocks (its rule adds them). No DOM.
 
 import type { BuildChallenge, PinSpec, SeqStep } from '../editor/challenges';
@@ -73,7 +73,7 @@ export const BUILD8: Record<string, () => BuildChallenge> = {
   }),
   o_fpadd: () => ({
     id: 'o_fpadd', title: 'binary16 adder', level: 'arithmetic', allowed: 'nand',
-    brief: '<b>y = a + b</b> (or a − b when <code>sub</code>) in IEEE 754 binary16, correctly rounded in the mode <code>rm</code> (0 nearest-even, 1 toward zero, 2 down, 3 up, 4 nearest-max), with subnormals, infinities and NaN. Unpack, align with a sticky bit, add, normalise, round: the unpacker, aligner and rounder are given.',
+    brief: '<b>y = a + b</b> (or a − b when <code>sub</code>) in IEEE 754 binary16, correctly rounded in the mode <code>rm</code> (0 nearest-even, 1 toward zero, 2 down, 3 up, 4 nearest-max), with subnormals, infinities and NaN. Unpack both operands, align the smaller one with a sticky bit, add or subtract, normalize and round: the unpacker, the sticky shifter and normalize & round are the ones you built; the fast adders and muxes are given.',
     ports: pins([['a', 16], ['b', 16], ['sub'], ['rm', 3]], [['y', 16]]),
     check: {
       kind: 'table', spec: ([a, b, s, rm]) => [rm > 4 ? fpAddX(a, b, !!s, F16, 0).y : fpAddX(a, b, !!s, F16, rm).y],
@@ -84,7 +84,7 @@ export const BUILD8: Record<string, () => BuildChallenge> = {
   }),
   o_fpmul: () => ({
     id: 'o_fpmul', title: 'binary16 multiplier', level: 'arithmetic', allowed: 'nand',
-    brief: '<b>y = a × b</b> in binary16, correctly rounded in the mode <code>rm</code>: multiply the 11-bit significands, add the exponents, normalise and round. The significand multiplier and the rounder are given.',
+    brief: '<b>y = a × b</b> in binary16, correctly rounded in the mode <code>rm</code>: multiply the 11-bit significands, add the exponents, normalize and round with the unit you built (22 bits wide here). The 11 × 11 significand multiplier is given.',
     ports: pins([['a', 16], ['b', 16], ['rm', 3]], [['y', 16]]),
     check: {
       kind: 'table', spec: ([a, b, rm]) => [fpMulX(a, b, F16, rm > 4 ? 0 : rm).y],

@@ -40,9 +40,11 @@ export function criteria(ch: BuildChallenge): string[] {
   const out = [`Pins: ${ins.map(pin).join(', ') || '—'}${ch.ports.some((p) => p.clock) ? ', clk' : ''} → ${outs.map(pin).join(', ')}.`];
   if (ch.check.kind === 'table') {
     const bits = ins.reduce((a, p) => a + p.width, 0);
+    const chosen = bits <= 16 ? 0 : ch.check.vectors?.().length ?? 0;
     out.push(bits <= 16
       ? `Every input combination: all ${2 ** bits} rows of the truth table must match.`
-      : `4096 random input vectors (${bits} input bits) must match.`);
+      : `${chosen ? `${chosen} chosen edge cases, then ` : ''}4096 random input vectors (${bits} input bits) must match.`);
+    if (ch.check.care) out.push('Rows the brief leaves open are not checked (don\'t-cares).');
     out.push('An output that is X (undriven, or a short) or Z counts as wrong; the circuit must settle (no oscillation).');
   } else if (ch.check.kind === 'sequence') {
     out.push(`A clocked sequence of ${ch.check.steps.length} steps from power-on: inputs change, the clock ticks, every expected output must match.`);

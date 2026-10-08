@@ -35,7 +35,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 | R9 | Guidance and complete solutions | tips + "Show solution" / "Do it for me"; every node has a reference answer | ✅ |
 | R10 | Skipping a level is allowed, and our solution is used | **Skip** marks it skipped and unlocks its part | ✅ |
 | R11 | Grade solutions on optimization | `grade.ts`: ★ / ★★ / ★★★ against par on NAND, depth, period, cycles, size | ✅ |
-| R12 | Optional levels: multiply, divide, fast adders, FPU | ✅ fast adders, faster core, multipliers, divider, binary16 adder / multiplier, MD in the core (multiply, stalling divide), cache, multicycle core, branch prediction | ✅ |
+| R12 | Optional levels: multiply, divide, fast adders, FPU | ✅ fast adders, faster core, multipliers, divider, binary16 ladder (unpack, rounding decision, sticky shifter, leading-zero counter, normalize & round) to the adder / multiplier, comparator, int → float, MD in the core (multiply, stalling divide), cache, multicycle core, branch prediction | ✅ |
 | R13 | A narrative (nand2tetris / *Code* / Turing Complete) explaining why each block is built | per-node `why`, act intros, the intro's anatomy diagram | ✅ |
 | R14 | Each level explains why it is needed | `why` field, shown first in the node panel | ✅ |
 | R15 | Codex for each element discovered, plus laws and tools (K-maps, SoP, De Morgan) | `src/campaign/codex*`, `#/campaign/codex` | ✅ |
@@ -332,8 +332,15 @@ Legend: `id` ← requires · *opt* optional · (ex) an existing sandbox challeng
 - ✅ `o_mcore`: the MD opcode's multiplies in your core (a 16 × 16 array is given; signed high halves by correction) ← c_core3, o_mularr
 - ✅ `o_div`: sequential divider ← a_addsub16, s_fsm
 - ✅ `o_dcore`: div / divu / rem / remu, holding the PC until the iterative divider is done ← o_mcore, o_div
-- ✅ `n_float`: floating-point drill (fp16) ← n_twos
-- ✅ `o_fpadd`, `o_fpmul`: binary16 adder and multiplier, all five rounding modes ← n_float, a_shift16 / o_mularr
+- ✅ `n_float`: floating-point drill (fp16: encode, decode, special values, rounding with guard / sticky bits) ← n_twos
+- ✅ The binary16 adder's blocks, one rung each (buildfp.ts; each unlocks its library block, never given later):
+  `o_fpunpack` (sign, exponent with subnormals as 1, significand with its hidden bit, zero / inf / NaN / sNaN) ← n_float;
+  `o_fpround` (the rounding decision: up and toInf from lsb, G, S, sign and rm) ← n_float;
+  `o_fpsticky` (13-bit right shifter with a sticky bit) ← n_float, a_shift16;
+  `o_fplzc` (16-bit leading-zero counter, built recursively: its halves are chips) ← n_float;
+  `o_fpnorm` (normalize & round: binary16 from a 15-bit significand, exponent and sticky bit, flags) ← o_fpround, o_fpsticky, o_fplzc
+- ✅ `o_fpadd`, `o_fpmul`: binary16 adder and multiplier, all five rounding modes, from the rungs above (only generic parts and the 11 × 11 significand multiplier given) ← o_fpunpack, o_fpnorm / o_fpadd, o_mularr
+- ✅ `o_fpcmp` (feq / flt / fle, unordered, signaling) ← o_fpunpack; `o_fpcvt` (16-bit integer → binary16) ← o_fpnorm
 - ✅ `o_cache`: direct-mapped cache, 8 one-word lines, write-through; on a hit the bench serves junk for memory ← m_mem, g_eq16
 - ✅ `o_mc`: multicycle CPU (one-hot FSM: F, E, M, W) ← c_core3, s_fsm
 
