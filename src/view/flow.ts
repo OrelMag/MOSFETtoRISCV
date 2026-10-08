@@ -65,9 +65,9 @@ export function applyFlow(el: SVGElement, f: FlowDash | null, d0 = 0, len = 0, r
   el.removeAttribute('display');
 }
 
-// ---- polylines (grid units, orthogonal) ----------------------------------------------------
+// ---- polylines (grid units; a sandbox wire's segments may be slanted) -------------------------
 
-const dist = (p: Vec, q: Vec) => Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]);
+const dist = (p: Vec, q: Vec) => Math.hypot(p[0] - q[0], p[1] - q[1]);
 
 export const polyLength = (pts: Vec[]) => pts.slice(1).reduce((t, q, i) => t + dist(pts[i], q), 0);
 

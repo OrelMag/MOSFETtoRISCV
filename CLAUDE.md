@@ -160,14 +160,16 @@ src/riscv/rv16/ isa16.ts (fields, encode / decode / disasm), asm16.ts, iss16.ts 
 src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui/pages/sandbox.ts, its own chunk;
                #/sandbox/s/<payload> opens a share link: a banner, imported only on the user's click).
                DOM-free (tested in Node):
-  model.ts       Workspace / ChipDoc (pins, parts, wires = interior corners, pointers = named net labels, comments:
+  model.ts       Workspace / ChipDoc (pins, parts, wires = interior corners (`straight`: a simple connection, segments
+                 at any angle, settings.simpleWires for new ones), pointers = named net labels, comments:
                  free text drawn under the circuit, never compiled and left out of the compile cache key)
   compile.ts     compileChip(doc) → ComponentDef + diags, netOfWire / netOfEnd / netOfLabel, connKey
   parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays (LED / LED bank, 7-segment,
                  hex, value, buzzer: buzzerHz; and the halt part), ROM, RAM; audio.ts plays the buzzers
   library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip
   ops.ts         pure edits (add / move / delete / flip / set*, copy / paste, namePart: rename where the name is
-                 drawn); wires stay orthogonal
+                 drawn); wires stay orthogonal (a straight wire's breakpoints stay put); dragWire (a corner or
+                 segment grabbed: geom.ts grabOn), removeBend, setStraight, clearBends
   history.ts     History<T>: undo / redo, transactions (a drag = one step), replace (not undone)
   store.ts       localStorage, sanitizer, JSON export / import (importChips: never overwrites, renames on
                  conflict, recognizes its own earlier renames); share.ts: share-link encoding

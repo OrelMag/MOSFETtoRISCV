@@ -77,6 +77,13 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 @keyframes pal-flow { from { background-position: 0 0; } to { background-position: 16px 0; } }
 @media (prefers-reduced-motion: reduce) { .pal-flow-sw i { animation: none !important; } }
+/* The simple-connections switch: a square wire, or the same points joined straight while on. */
+.pal-simple-sw { width: 46px; height: 14px; flex: none; }
+.pal-simple-sw svg { display: block; width: 46px; height: 14px; overflow: visible; }
+.pal-simple-sw path { fill: none; stroke: var(--w1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.pal-simple .st { display: none; }
+.pal-simple[aria-checked='true'] .sq { display: none; }
+.pal-simple[aria-checked='true'] .st { display: inline; }
 
 /* quick navigation: chapter menu and search palette (src/ui/quicknav.ts) */
 .nav a .icon:last-child:not(:first-child) { opacity: 0.6; margin-left: -2px; }

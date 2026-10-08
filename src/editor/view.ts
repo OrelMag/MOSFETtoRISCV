@@ -97,6 +97,8 @@ export class EditorView {
   private band: SVGRectElement;
   private hot: SVGCircleElement;
   private ghost: SVGGElement;
+  private gHandles: SVGGElement;
+  private handlesKey = '';
 
   constructor(host: HTMLElement) {
     this.svg = s('svg', { class: 'schematic ed-svg', role: 'application', 'aria-label': 'Circuit editor canvas' });
@@ -122,7 +124,8 @@ export class EditorView {
     this.band = s('rect', { class: 'ed-band', width: 0, height: 0, display: 'none' });
     this.hot = s('circle', { class: 'ed-hot', r: 0.42, display: 'none' });
     this.ghost = s('g', { class: 'ed-ghost' });
-    this.gOver.append(this.ghost, this.preview, this.band, this.hot);
+    this.gHandles = s('g', { class: 'ed-handles' });
+    this.gOver.append(this.gHandles, this.ghost, this.preview, this.band, this.hot);
     this.svg.append(defs,
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid)' }),
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid5)' }),
@@ -294,6 +297,24 @@ export class EditorView {
     if (wiresChanged) this.drawWireShapes(doc);
     if (wiresChanged || geomChanged) this.layoutFlows(doc, defOf);
     this.applyClasses();
+    this.drawHandles();
+  }
+
+  /**
+   * Handles on the corners of the selected wires (a few at most: a select-all shows none), where
+   * a drag reshapes the wire (tools.ts, ops.ts dragWire): squares on an orthogonal wire, circles
+   * on a straight one's breakpoints.
+   */
+  private drawHandles(): void {
+    const ids = (this.sel.wires ?? []).length <= 8 ? this.sel.wires ?? [] : [];
+    const els = ids.map((id) => this.wires.get(id)).filter((e): e is WireEls => !!e?.poly);
+    const key = els.map((e) => `${e.doc.straight ? 's' : ''}${e.key}`).join('|');
+    if (key === this.handlesKey) return;
+    this.handlesKey = key;
+    const r = 0.32;
+    this.gHandles.replaceChildren(...els.flatMap((e) => e.poly!.slice(1, -1).map(([x, y]) => (e.doc.straight
+      ? s('circle', { class: 'ed-handle', cx: x, cy: y, r })
+      : s('rect', { class: 'ed-handle', x: x - r, y: y - r, width: 2 * r, height: 2 * r })))));
   }
 
   /**
@@ -482,6 +503,7 @@ export class EditorView {
   setSelection(sel: Sel): void {
     this.sel = sel;
     this.applyClasses();
+    this.drawHandles();
   }
 
   setDiags(diags: Diag[]): void {

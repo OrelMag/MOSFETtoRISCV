@@ -5,11 +5,12 @@
 //
 // Wires store only their interior corners, so anything that moves an endpoint (a move, a flip,
 // a new ref) refits the attached wires: corners slide so every segment stays horizontal or
-// vertical, and branch points ride along on the wire they sit on.
+// vertical (a straight wire's breakpoints stay put), and branch points ride along on the wire
+// they sit on. dragWire / removeBend reshape one wire by its corners and segments.
 
 import { symbolGeom } from '../sim/geometry';
 import {
-  chipDeps, commentBox, endGeom, endKey, isIdent, nextId, onPolyline, orthogonal, polyline, uniqueName,
+  chipDeps, commentBox, endGeom, endKey, isIdent, nextId, onPolyline, onSegment, orthogonal, polyline, roundPt, straightLine, uniqueName,
   type ChipDoc, type CommentDoc, type DefOf, type EndRef, type ExitDir, type LabelDoc, type PartDoc, type PartRef,
   type PinDoc, type Vec, type WireDoc, type Workspace,
 } from './model';
@@ -74,8 +75,8 @@ function exists(doc: ChipDoc, e: EndRef): boolean {
 const posOf = (doc: ChipDoc, e: EndRef, defOf: DefOf): Vec | null => endGeom(doc, e, defOf)?.pos ?? null;
 
 /** Corners between two (possibly unknown) end positions, normalized; null if the wire has no length. */
-function fit(pa: Vec | null, pts: Vec[], pb: Vec | null): Vec[] | null {
-  const full = orthogonal([...(pa ? [pa] : []), ...pts, ...(pb ? [pb] : [])]);
+function fit(pa: Vec | null, pts: Vec[], pb: Vec | null, straight?: boolean): Vec[] | null {
+  const full = (straight ? straightLine : orthogonal)([...(pa ? [pa] : []), ...pts, ...(pb ? [pb] : [])]);
   if (pa && pb && full.length < 2) return null;
   return full.slice(pa ? 1 : 0, pb ? full.length - 1 : full.length);
 }
@@ -158,17 +159,19 @@ function wireProblem(doc: ChipDoc, a: EndRef, b: EndRef, defOf: DefOf | undefine
 }
 
 /**
- * A new wire from a to b through corners `pts`. Corners are normalized (diagonal steps get an L,
- * duplicates and collinear corners go); with defOf, against the ends' actual positions.
+ * A new wire from a to b through corners `pts`. Corners are normalized (diagonal steps get an L
+ * unless `straight`, duplicates and collinear corners go); with defOf, against the ends' actual
+ * positions. `straight`: a simple connection (straight segments at any angle).
  */
-export function addWire(doc: ChipDoc, a: EndRef, b: EndRef, pts: Vec[], defOf?: DefOf): Added {
+export function addWire(doc: ChipDoc, a: EndRef, b: EndRef, pts: Vec[], defOf?: DefOf, straight = false): Added {
   const why = wireProblem(doc, a, b, defOf);
   if (why) return { doc, reason: why };
   const d = defOf ?? noDefs;
-  const corners = fit(posOf(doc, a, d), pts, posOf(doc, b, d));
+  const corners = fit(posOf(doc, a, d), pts, posOf(doc, b, d), straight);
   if (!corners) return { doc, reason: 'the wire has no length' };
   const id = nextId('w', doc.wires.map((w) => w.id));
-  return { doc: { ...doc, wires: [...doc.wires, { id, a, b, pts: corners }] }, id };
+  const w: WireDoc = straight ? { id, a, b, pts: corners, straight: true } : { id, a, b, pts: corners };
+  return { doc: { ...doc, wires: [...doc.wires, w] }, id };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -212,14 +215,20 @@ function fixEnds(pts: Vec[], oa: Vec | null, na: Vec | null, ob: Vec | null, nb:
   return p;
 }
 
-/** Nearest point of an orthogonal polyline to p. */
+/** Nearest point of a polyline to p (on a slanted segment, rounded by roundPt). */
 export function nearestOn(poly: Vec[], p: Vec): Vec {
   if (poly.length === 1) return [poly[0][0], poly[0][1]];
   let best: Vec = [poly[0][0], poly[0][1]];
   let bd = Infinity;
   for (let i = 1; i < poly.length; i++) {
     const [a, b] = [poly[i - 1], poly[i]];
-    const q: Vec = [clamp(p[0], a[0], b[0]), clamp(p[1], a[1], b[1])];
+    let q: Vec;
+    if (a[0] === b[0] || a[1] === b[1]) q = [clamp(p[0], a[0], b[0]), clamp(p[1], a[1], b[1])];
+    else {
+      const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+      const t = Math.min(1, Math.max(0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy)));
+      q = roundPt([a[0] + t * dx, a[1] + t * dy]);
+    }
     const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
     if (d < bd) [bd, best] = [d, q];
   }
@@ -238,8 +247,13 @@ function mapBranch(at: Vec, op: Vec[] | null, np: Vec[] | null): Vec {
   if (op.length === np.length) {
     for (let i = 1; i < op.length; i++) {
       const [p, q, p2, q2] = [op[i - 1], op[i], np[i - 1], np[i]];
-      if (!onPolyline([p, q], at)) continue;
+      if (!onSegment(p, q, at)) continue;
       const o = orient(p, q);
+      // A slanted segment (a straight wire's): the same fraction of the way along.
+      if ((!o || !orient(p2, q2)) && !eqv(p, q) && !eqv(p2, q2)) {
+        const f = Math.hypot(at[0] - p[0], at[1] - p[1]) / Math.hypot(q[0] - p[0], q[1] - p[1]);
+        return roundPt([p2[0] + f * (q2[0] - p2[0]), p2[1] + f * (q2[1] - p2[1])]);
+      }
       if (o !== orient(p2, q2) || !o) break;
       const k = o === 'h' ? 0 : 1;
       const dk = p2[k] - p[k] === q2[k] - q[k] ? p2[k] - p[k] : 0;
@@ -317,8 +331,9 @@ function refit(old: ChipDoc, next: ChipDoc, defOf: DefOf, rigid: Map<string, Vec
     const t = rigid.get(w.id) ?? (eqv(da, db) ? da : ZERO);
     if (w === o && a === w.a && b === w.b && eqv(da, ZERO) && eqv(db, ZERO) && eqv(t, ZERO)) return w;
     const shifted = w.pts.map((p) => add(p, t));
-    const fixed = fixEnds(shifted, oa && add(oa, t), na, ob && add(ob, t), nb, !eqv(da, t), !eqv(db, t));
-    const pts = fit(na, fixed, nb) ?? [];
+    // A straight wire's breakpoints stay where they are: its end segments just swing.
+    const fixed = w.straight ? shifted : fixEnds(shifted, oa && add(oa, t), na, ob && add(ob, t), nb, !eqv(da, t), !eqv(db, t));
+    const pts = fit(na, fixed, nb, w.straight) ?? [];
     if (a === w.a && b === w.b && eqPts(pts, w.pts)) return w;
     return { ...w, a, b, pts };
   }
@@ -483,11 +498,98 @@ export function setWire(doc: ChipDoc, id: string, patch: Partial<Omit<WireDoc, '
     if (why) return { doc, reason: why };
   }
   const d = defOf ?? noDefs;
-  const pts = fit(posOf(doc, w.a, d), w.pts, posOf(doc, w.b, d));
+  const pts = fit(posOf(doc, w.a, d), w.pts, posOf(doc, w.b, d), w.straight);
   if (!pts) return { doc, reason: 'the wire has no length' };
+  if (eqPts(pts, doc.wires[i].pts) && w.straight === doc.wires[i].straight && w.a === doc.wires[i].a && w.b === doc.wires[i].b
+    && w.name === doc.wires[i].name && w.cap === doc.wires[i].cap && w.init === doc.wires[i].init) return { doc };
   const wires = doc.wires.slice();
   wires[i] = { ...w, pts };
   return { doc: refit(doc, { ...doc, wires }, d) };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Reshaping a wire by hand: its corners (a straight wire's breakpoints) and segments
+
+/** What a drag grabbed on a wire's drawn polyline: corner `i` (an interior point), or segment `i` (poly[i] → poly[i + 1]) at `at`. */
+export type WireGrab = { corner: number } | { seg: number; at: Vec };
+
+/**
+ * Moves segment k of an orthogonal polyline by d across its direction (a horizontal one up or
+ * down). An end of the wire stays put: a short leg is put in to reach the moved segment.
+ */
+function shiftSeg(poly: Vec[], k: number, d: Vec): Vec[] {
+  const o = orient(poly[k], poly[k + 1]);
+  if (!o) return poly;
+  const ax = o === 'h' ? 1 : 0;
+  if (!d[ax]) return poly;
+  const q = poly.map((p): Vec => [p[0], p[1]]);
+  if (k + 1 === q.length - 1) q.splice(k + 1, 0, [q[k + 1][0], q[k + 1][1]]);
+  if (k === 0) { q.splice(1, 0, [q[0][0], q[0][1]]); k = 1; }
+  q[k][ax] += d[ax];
+  q[k + 1][ax] += d[ax];
+  return q;
+}
+
+/**
+ * Reshapes wire `id` by dragging what `grab` names on its polyline by d (grid units). On an
+ * orthogonal wire a segment moves across its direction (its neighbours stretch, an end grows a
+ * leg) and a corner moves both of its segments; on a straight wire a corner moves freely and a
+ * segment bends where it was grabbed (a new breakpoint). Branches on the wire follow.
+ */
+export function dragWire(doc: ChipDoc, id: string, grab: WireGrab, d: Vec, defOf: DefOf): Edited {
+  const w = doc.wires.find((q) => q.id === id);
+  const poly = w && polyline(doc, w, defOf);
+  if (!w || !poly) return { doc, reason: `no wire '${id}'` };
+  if (eqv(d, ZERO)) return { doc };
+  let next: Vec[];
+  if ('corner' in grab) {
+    const j = grab.corner;
+    if (j < 1 || j > poly.length - 2) return { doc, reason: 'not a corner' };
+    if (w.straight) next = poly.map((p, i) => (i === j ? add(p, d) : p));
+    else next = shiftSeg(shiftSeg(poly, j, d), j - 1, d);
+  } else {
+    const k = grab.seg;
+    if (k < 0 || k > poly.length - 2) return { doc, reason: 'not a segment' };
+    next = w.straight ? [...poly.slice(0, k + 1), add(grab.at, d), ...poly.slice(k + 1)] : shiftSeg(poly, k, d);
+  }
+  return setWire(doc, id, { pts: next.slice(1, -1) }, defOf);
+}
+
+/**
+ * Takes out corner j of the wire's polyline: a straight wire's breakpoint goes; an orthogonal
+ * wire loses the jog it is part of (the corner and its neighbour), the rest rejoined with an L.
+ */
+export function removeBend(doc: ChipDoc, id: string, j: number, defOf: DefOf): Edited {
+  const w = doc.wires.find((q) => q.id === id);
+  const poly = w && polyline(doc, w, defOf);
+  if (!w || !poly) return { doc, reason: `no wire '${id}'` };
+  if (j < 1 || j > poly.length - 2) return { doc, reason: 'not a corner' };
+  const drop = new Set([j]);
+  if (!w.straight && j + 1 < poly.length - 1) drop.add(j + 1);
+  else if (!w.straight && j > 1) drop.add(j - 1);
+  const pts = poly.filter((_, i) => !drop.has(i)).slice(1, -1);
+  const r = setWire(doc, id, { pts }, defOf);
+  return r.doc === doc && !r.reason ? { doc, reason: 'this corner is the only way to join its ends' } : r;
+}
+
+/** Straight (simple connections) or orthogonal: the wires keep their corners, an orthogonal one gets an L at each slanted step. */
+export function setStraight(doc: ChipDoc, ids: string[], straight: boolean, defOf: DefOf): ChipDoc {
+  let out = doc;
+  for (const id of ids) {
+    const w = out.wires.find((q) => q.id === id);
+    if (w && !!w.straight !== straight) out = setWire(out, id, { straight: straight ? true : undefined }, defOf).doc;
+  }
+  return out;
+}
+
+/** Every corner of the wires removed: a straight wire becomes one line, an orthogonal one a plain L. */
+export function clearBends(doc: ChipDoc, ids: string[], defOf: DefOf): ChipDoc {
+  let out = doc;
+  for (const id of ids) {
+    const w = out.wires.find((q) => q.id === id);
+    if (w?.pts.length) out = setWire(out, id, { pts: [] }, defOf).doc;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------

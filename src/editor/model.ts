@@ -6,7 +6,8 @@
 // Coordinates are grid units (1 unit = 10 px), the same as netlist layouts. Wires store only
 // their interior corners: the ends follow the pins they attach to, so moving a part never
 // detaches a wire. Corners are meant to be orthogonal; `polyline` repairs a diagonal step
-// (left by a move) with an L, horizontal first.
+// (left by a move) with an L, horizontal first. A `straight` wire (a simple connection, as in
+// Turing Complete) instead joins its breakpoints with straight segments at any angle.
 
 import { instPort, type ExitDir, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
@@ -130,8 +131,10 @@ export interface WireDoc {
   id: string;
   a: EndRef;
   b: EndRef;
-  /** Interior corners, from a to b. */
+  /** Interior corners, from a to b (a straight wire's breakpoints). */
   pts: Vec[];
+  /** Simple connection: straight segments between the points, at any angle (absent: horizontal and vertical legs). */
+  straight?: true;
   /** Optional net name (shown in the inside view, used by `init`). */
   name?: string;
   /** Switch level: the net keeps its charge when undriven (DRAM node, bit line). */
@@ -240,14 +243,31 @@ const OPP: Record<ExitDir, ExitDir> = { left: 'right', right: 'left', up: 'down'
 
 /**
  * The full drawn polyline of a wire: a's position, the corners, b's position. A diagonal step
- * gets an L corner (leaving the previous point horizontally), duplicates and collinear middle
- * points are dropped. Null when an end does not resolve.
+ * gets an L corner (leaving the previous point horizontally) unless the wire is straight;
+ * duplicates and collinear middle points are dropped. Null when an end does not resolve.
  */
 export function polyline(doc: ChipDoc, w: WireDoc, defOf: DefOf): Vec[] | null {
   const a = endGeom(doc, w.a, defOf);
   const b = endGeom(doc, w.b, defOf);
   if (!a || !b) return null;
-  return orthogonal([a.pos, ...w.pts, b.pos]);
+  return (w.straight ? straightLine : orthogonal)([a.pos, ...w.pts, b.pos]);
+}
+
+/** A straight wire's points: duplicates and middle points lying on the line through their neighbours dropped. */
+export function straightLine(pts: Vec[]): Vec[] {
+  const out: Vec[] = [];
+  for (const p of pts) {
+    const l = out[out.length - 1];
+    if (!l || l[0] !== p[0] || l[1] !== p[1]) out.push([p[0], p[1]]);
+  }
+  for (let i = out.length - 2; i >= 1; i--) if (between(out[i - 1], out[i + 1], out[i])) out.splice(i, 1);
+  return out;
+}
+
+/** p lies on segment a–b, exactly (a straight wire's redundant breakpoint). */
+function between(a: Vec, b: Vec, p: Vec): boolean {
+  const cross = (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+  return cross === 0 && (p[0] - a[0]) * (p[0] - b[0]) <= 0 && (p[1] - a[1]) * (p[1] - b[1]) <= 0;
 }
 
 export function orthogonal(pts: Vec[]): Vec[] {
@@ -268,13 +288,28 @@ export function orthogonal(pts: Vec[]): Vec[] {
   return out;
 }
 
-/** True if p lies on the polyline (orthogonal segments). */
+/**
+ * How far off a slanted segment a point may be and still lie on it: a branch point on a straight
+ * wire's diagonal is a projection, stored rounded (roundPt).
+ */
+export const ON_EPS = 1e-3;
+
+/** A point rounded to ON_EPS / 10 (what a branch point on a diagonal stores). */
+export const roundPt = (p: Vec): Vec => [Math.round(p[0] * 1e4) / 1e4, Math.round(p[1] * 1e4) / 1e4];
+
+/** True if p lies on segment a–b: exactly on a horizontal or vertical one, within ON_EPS on a slanted one. */
+export function onSegment(a: Vec, b: Vec, p: Vec): boolean {
+  if (a[0] === b[0]) return p[0] === a[0] && p[1] >= Math.min(a[1], b[1]) && p[1] <= Math.max(a[1], b[1]);
+  if (a[1] === b[1]) return p[1] === a[1] && p[0] >= Math.min(a[0], b[0]) && p[0] <= Math.max(a[0], b[0]);
+  const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+  const t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy);
+  if (t < -ON_EPS || t > 1 + ON_EPS) return false;
+  return Math.abs(dx * (p[1] - a[1]) - dy * (p[0] - a[0])) / Math.hypot(dx, dy) <= ON_EPS;
+}
+
+/** True if p lies on the polyline. */
 export function onPolyline(pts: Vec[], p: Vec): boolean {
-  for (let i = 1; i < pts.length; i++) {
-    const [a, b] = [pts[i - 1], pts[i]];
-    if (a[0] === b[0] && p[0] === a[0] && p[1] >= Math.min(a[1], b[1]) && p[1] <= Math.max(a[1], b[1])) return true;
-    if (a[1] === b[1] && p[1] === a[1] && p[0] >= Math.min(a[0], b[0]) && p[0] <= Math.max(a[0], b[0])) return true;
-  }
+  for (let i = 1; i < pts.length; i++) if (onSegment(pts[i - 1], pts[i], p)) return true;
   return false;
 }
 

@@ -9,9 +9,9 @@ import type { ComponentDef } from '../sim/types';
 import { type Rect, textWidth } from '../view/route';
 import {
   type ChipDoc, commentBox, type DefOf, defaultFace, endGeom, endKey, type EndRef, type LabelDoc, onPolyline, orthogonal,
-  type PinDoc, polyline, type WireDoc,
+  type PinDoc, polyline, straightLine, type WireDoc,
 } from './model';
-import { nearestOn } from './ops';
+import { nearestOn, type WireGrab } from './ops';
 
 export const DIR: Record<ExitDir, Vec> = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
 const horiz = (d: ExitDir) => d === 'left' || d === 'right';
@@ -183,6 +183,26 @@ export function branchPoint(poly: Vec[], p: Vec): Vec {
   return onPolyline(poly, g) ? g : q;
 }
 
+/**
+ * What a press at p grabs on a wire's polyline: a corner within tol (interior points only: the
+ * ends belong to what they attach to), else the nearest segment and the grid point grabbed on it.
+ */
+export function grabOn(poly: Vec[], p: Vec, tol: number): WireGrab {
+  let best = -1, bd = tol;
+  for (let i = 1; i < poly.length - 1; i++) {
+    const d = dist(poly[i], p);
+    if (d <= bd) { bd = d; best = i; }
+  }
+  if (best >= 0) return { corner: best };
+  let seg = 0;
+  bd = Infinity;
+  for (let i = 1; i < poly.length; i++) {
+    const d = dist(nearestOn([poly[i - 1], poly[i]], p), p);
+    if (d < bd) { bd = d; seg = i - 1; }
+  }
+  return { seg, at: snapPt(p) };
+}
+
 /** A part output or a chip input: two of these on one wire are always a short at gate level. */
 export function drives(doc: ChipDoc, e: EndRef, defOf: DefOf): boolean {
   if ('part' in e) {
@@ -235,7 +255,8 @@ export function elbow(a: Vec, b: Vec, vFirst: boolean): Vec[] {
  * A wire being drawn free-hand (Digital Logic Sim style): it starts on an attach point, every
  * click on empty canvas fixes the L to the cursor, Space flips the L, Backspace takes the last
  * corner back. The L leaves the previous leg at a right angle unless flipped; when it arrives
- * on a port it enters along the port's axis.
+ * on a port it enters along the port's axis. A `straight` draft (simple connections) runs
+ * straight from each clicked breakpoint to the next instead, at any angle.
  */
 export class WireDraft {
   /** Fixed points after the start (each click adds the L's corner and the click point). */
@@ -244,7 +265,7 @@ export class WireDraft {
   /** Lengths of pts before each click, for Backspace. */
   private marks: number[] = [];
 
-  constructor(readonly from: EndRef, readonly start: Vec, readonly startExit: ExitDir | null) {}
+  constructor(readonly from: EndRef, readonly start: Vec, readonly startExit: ExitDir | null, readonly straight = false) {}
 
   get last(): Vec {
     return this.pts.length ? this.pts[this.pts.length - 1] : this.start;
@@ -279,15 +300,16 @@ export class WireDraft {
 
   /** The whole path from the start to `to` (a snapped cursor or a port). */
   preview(to: Vec, target?: ExitDir | null): Vec[] {
+    if (this.straight) return straightLine([this.start, ...this.pts, to]);
     return orthogonal([this.start, ...this.pts, ...elbow(this.last, to, this.vFirst(target)), to]);
   }
 
-  /** Fix the L to `p` (a click on empty canvas). */
+  /** Fix the L (or a straight wire's breakpoint) to `p` (a click on empty canvas). */
   addCorner(p: Vec): void {
     const l = this.last;
     if (l[0] === p[0] && l[1] === p[1]) return;
     this.marks.push(this.pts.length);
-    this.pts.push(...elbow(l, p, this.vFirst()), [p[0], p[1]]);
+    this.pts.push(...(this.straight ? [] : elbow(l, p, this.vFirst())), [p[0], p[1]]);
     this.flipped = false;
   }
 

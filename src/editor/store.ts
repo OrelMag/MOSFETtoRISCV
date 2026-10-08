@@ -126,6 +126,7 @@ function sanitizeWire(w: unknown): WireDoc | null {
     name: str(w.name) ? w.name : undefined,
     cap: w.cap === true ? true : undefined,
     init: w.init === 0 ? 0 : w.init === 1 ? 1 : undefined,
+    straight: w.straight === true ? true : undefined,
   });
 }
 

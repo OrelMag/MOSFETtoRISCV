@@ -117,7 +117,7 @@ export class FlowTokens {
 
 export function track({ pts, d0, sink }: Lane): Track {
   const cum = [0];
-  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.abs(pts[i][0] - pts[i - 1][0]) + Math.abs(pts[i][1] - pts[i - 1][1]));
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
   return { pts, cum, len: cum[cum.length - 1], d0, sink: sink !== false };
 }
 

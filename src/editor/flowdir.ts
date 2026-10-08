@@ -8,7 +8,7 @@
 
 import type { Vec } from '../sim/geometry';
 import { polyLength, slicePoly } from '../view/flow';
-import type { ChipDoc, DefOf, EndRef } from './model';
+import { type ChipDoc, type DefOf, type EndRef, onSegment } from './model';
 
 export type WireFlow =
   /** The whole wire, from end a (or from b when `reverse`); d0 = distance of that end from the driver;
@@ -20,17 +20,14 @@ export type WireFlow =
 interface Edge { wire: string; pts: Vec[]; a: string; b: string; len: number; from?: string }
 
 const key = ([x, y]: Vec) => `${x},${y}`;
-const dist = (p: Vec, q: Vec) => Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]);
+const dist = (p: Vec, q: Vec) => Math.hypot(p[0] - q[0], p[1] - q[1]);
 
 /** Arc length of `p` along `poly`, or -1 when it is not on it. */
 function along(poly: Vec[], p: Vec): number {
   let s = 0;
   for (let i = 1; i < poly.length; i++) {
     const [a, b] = [poly[i - 1], poly[i]];
-    const on = a[0] === b[0]
-      ? p[0] === a[0] && p[1] >= Math.min(a[1], b[1]) && p[1] <= Math.max(a[1], b[1])
-      : p[1] === a[1] && p[0] >= Math.min(a[0], b[0]) && p[0] <= Math.max(a[0], b[0]);
-    if (on) return s + dist(a, p);
+    if (onSegment(a, b, p)) return s + dist(a, p);
     s += dist(a, b);
   }
   return -1;
@@ -41,8 +38,10 @@ function along(poly: Vec[], p: Vec): number {
  * driver are left out (nothing flows on them).
  */
 export function wireFlows(doc: ChipDoc, polys: Map<string, Vec[]>, defOf: DefOf): Map<string, WireFlow> {
-  // Cut points of each wire: its ends and wherever another wire branches off it.
+  // Cut points of each wire: its ends and wherever another wire branches off it. A branch point
+  // on a slanted segment is named by the branch's own end (slicePoly's float may differ slightly).
   const cuts = new Map<string, number[]>();
+  const named = new Map<string, Map<number, Vec>>();
   for (const w of doc.wires) {
     const p = polys.get(w.id);
     if (p) cuts.set(w.id, [0, polyLength(p)]);
@@ -52,7 +51,9 @@ export function wireFlows(doc: ChipDoc, polys: Map<string, Vec[]>, defOf: DefOf)
       if (!('wire' in e)) continue;
       const host = polys.get(e.wire);
       const s = host ? along(host, e.at) : -1;
-      if (s >= 0) cuts.get(e.wire)!.push(s);
+      if (s < 0) continue;
+      cuts.get(e.wire)!.push(s);
+      (named.get(e.wire) ?? named.set(e.wire, new Map()).get(e.wire)!).set(s, e.at);
     }
   }
   const edges: Edge[] = [];
@@ -65,6 +66,9 @@ export function wireFlows(doc: ChipDoc, polys: Map<string, Vec[]>, defOf: DefOf)
     for (let i = 1; i < sorted.length; i++) {
       const pts = slicePoly(poly, sorted[i - 1], sorted[i]);
       if (pts.length < 2) continue;
+      const [p0, p1] = [named.get(id)?.get(sorted[i - 1]), named.get(id)?.get(sorted[i])];
+      if (p0) pts[0] = p0;
+      if (p1) pts[pts.length - 1] = p1;
       const e: Edge = { wire: id, pts, a: key(pts[0]), b: key(pts[pts.length - 1]), len: sorted[i] - sorted[i - 1] };
       list.push(e);
       edges.push(e);
