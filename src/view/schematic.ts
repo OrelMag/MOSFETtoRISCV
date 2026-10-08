@@ -11,6 +11,7 @@ import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
 import { FlowTokens, type Lane } from './flowtokens';
 import type { ViewCtx } from './context';
 import { hopPathData, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type RoutedNet, type TapLabel } from './route';
+import { netHue, netKey, setNetHue } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
 
 export interface SchematicEvents {
@@ -31,6 +32,8 @@ interface WireEls {
   dots: SVGCircleElement[];
   /** Bit-range labels where this net leaves a splitter tap or enters a merger tap. */
   taps: SVGGElement[];
+  /** Colour per net: the hue its elements carry (nethue.ts). */
+  hue?: number;
   /** Value class on screen, the one a front in flight is drawing, and that front. */
   shown?: string;
   target?: string;
@@ -161,9 +164,12 @@ export class SchematicView {
       const cls = net.width > 1 ? 'wire bus' : 'wire';
       const w: WireEls = { net, paths: [], dots: [], tags: [], taps: [] };
       const name = nl.nets[net.index].name ?? `n${net.index}`;
+      const hue = netHue(netKey(nl.nets[net.index]));
+      w.hue = hue;
       for (const t of net.tags) {
         const { stub: sp, rect: { x: rx, y: ry, w: tw, h: th } } = tagGeom(t, name);
         const g = s('g', { class: 'net-tag', 'data-net': net.index });
+        setNetHue(g, hue);
         // A hand-placed tag's stub is one of the net's paths (drawn below with the wires).
         const stub = s('path', { d: sp.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join(' '), class: cls });
         g.append(stub, s('rect', { x: rx, y: ry, width: tw, height: th, rx: 0.35 }),
@@ -176,6 +182,7 @@ export class SchematicView {
       net.paths.forEach((p, pi) => {
         p.forEach(([x, y]) => grow(x, y));
         const path = s('path', { d: pathData[net.index][pi], class: cls, 'data-net': net.index });
+        setNetHue(path, hue);
         w.paths.push(path);
         wiresG.append(path);
       });
@@ -186,6 +193,7 @@ export class SchematicView {
       }
       for (const t of tapsOf.get(net.index) ?? []) {
         const g = s('g', { class: 'tap-label' });
+        setNetHue(g, hue);
         const { x, y, w: tw, h: th } = t.rect;
         g.append(s('rect', { x, y, width: tw, height: th, rx: th / 2 }),
           s('text', { x: x + tw / 2, y: y + th * 0.76, 'text-anchor': 'middle', style: `font-size:${t.size}px` }, t.text));
@@ -194,12 +202,14 @@ export class SchematicView {
       }
       for (const [x, y] of net.dots) {
         const c = s('circle', { cx: x, cy: y, r: net.width > 1 ? 0.32 : 0.24, class: 'dot' });
+        setNetHue(c, hue);
         w.dots.push(c);
         wiresG.append(c);
       }
       const touchesPin = nl.nets[net.index].ends.some((e) => !e.includes('.'));
       if (net.label && !touchesPin && nl.nets[net.index].showValue !== false) {
         const g = s('g', { class: 'bus-label', 'data-net': net.index });
+        setNetHue(g, hue);
         const bg = s('rect', { rx: 0.45, height: 1.3, y: net.label[1] - 0.65 - 0.9 });
         const t = s('text', { x: net.label[0], y: net.label[1] - 0.9 + 0.38, 'text-anchor': 'middle' });
         g.append(bg, t);
@@ -414,7 +424,7 @@ export class SchematicView {
   private paintFlow(w: WireEls, bits: Bit[] | null): void {
     if (w.net.width > 1) {
       const text = bits && flowText(bits, this.radixOverride.get(w.net.index) ?? this.radix);
-      this.tokens?.set(w.net.index, text ? (w.lanes ??= laneTails(w.net.paths)) : null, text);
+      this.tokens?.set(w.net.index, text ? (w.lanes ??= laneTails(w.net.paths)) : null, text, w.hue);
       return;
     }
     const f = bits && flowDash(bits);
@@ -424,6 +434,7 @@ export class SchematicView {
     if (f && !w.ants) {
       const cls = `wire-flow${this.faded.has(w.net.index) ? ' faded' : ''}`;
       w.ants = w.paths.map((p) => s('path', { d: p.getAttribute('d')!, class: cls }));
+      for (const a of w.ants) setNetHue(a, w.hue);
       this.flowG?.append(...w.ants);
     }
     for (const a of w.ants ?? []) applyFlow(a, f);

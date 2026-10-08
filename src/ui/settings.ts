@@ -27,6 +27,8 @@ interface State {
   wide: boolean;
   /** Bits flow along the wires that carry them (off: wires are only coloured). */
   wireFlow: boolean;
+  /** Every net drawn in a hue of its own (brightness still shows the value); off by default. */
+  netColors: boolean;
   /** Sandbox: new wires are simple connections, straight from point to point at any angle (off: horizontal and vertical legs). */
   simpleWires: boolean;
   /** Timing panel open (stays open across scenes). */
@@ -43,7 +45,7 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, simpleWires: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: false, simpleWires: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {} };
 
 function load(): State {
   try {
@@ -70,12 +72,13 @@ export const settings = {
   get modules() { return state.modules; },
   get wide() { return state.wide; },
   get wireFlow() { return state.wireFlow; },
+  get netColors() { return state.netColors; },
   get simpleWires() { return state.simpleWires; },
   get analyzer() { return state.analyzer; },
   get speed() { return state.speed; },
   get traceLevel() { return state.traceLevel; },
   get traceRate() { return state.traceRate; },
-  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'simpleWires' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
+  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'simpleWires' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
     state[k] = v;
     save();
     listeners.forEach((f) => f());
@@ -124,4 +127,6 @@ export function applyTheme(): void {
   root.toggleAttribute('data-wide', state.wide);
   if (state.wireFlow) root.removeAttribute('data-wireflow');
   else root.setAttribute('data-wireflow', 'off');
+  if (state.netColors) root.setAttribute('data-netcolors', 'on');
+  else root.removeAttribute('data-netcolors');
 }
