@@ -3,8 +3,11 @@
 
 import { assemble } from '../riscv/asm';
 import { disasm } from '../riscv/isa';
+import { assemble16 } from '../riscv/rv16/asm16';
+import { disasm16 } from '../riscv/rv16/isa16';
 
-export type ProgramLang = 'asm' | 'hex';
+/** asm: RV32 assembly; rv16: the campaign's RV16 assembly (16-bit, word addressed); hex: words. */
+export type ProgramLang = 'asm' | 'hex' | 'rv16';
 
 export interface ProgramLine {
   /** Byte address of the word. */
@@ -101,6 +104,11 @@ function buildHex(src: string): BuiltProgram {
 /** Build a program image. asm: the two-pass assembler; hex: one 32-bit word per token. */
 export function buildProgram(lang: ProgramLang, src: string): BuiltProgram {
   if (lang === 'hex') return buildHex(src);
+  if (lang === 'rv16') {
+    // Word addressed: line addr stays 4 × the word index, like the other languages' listings.
+    const r = assemble16(src);
+    return { words: r.words, errors: r.errors, lines: r.lines.map((l) => ({ addr: 4 * l.addr, word: l.word, text: disasm16(l.word, l.addr), srcLine: l.srcLine })) };
+  }
   const r = assemble(src);
   return {
     words: r.words,

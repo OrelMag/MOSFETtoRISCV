@@ -76,3 +76,12 @@
 .sb-chal-item.solved .name { color: var(--text-2); }
 .sb-chal-item .go { flex: none; font-size: 12px; color: var(--accent); min-width: 34px; text-align: right; }
 .sb-chal-item.cur .go { color: var(--muted); }
+
+/* ---------- campaign levels in the strip ---------- */
+a.sb-chal-flag { text-decoration: none; }
+a.sb-chal-flag:hover { filter: brightness(1.1); text-decoration: underline; }
+.sb-chal-stars { color: var(--warn); letter-spacing: 0.1em; font-size: 13px; }
+.sb-chal-rule.lib { border-color: color-mix(in srgb, var(--good) 55%, transparent); color: var(--good); }
+.sb-chal-level { margin: 2px 0 6px; }
+.sb-chal-tips { margin: 2px 0 6px; padding-left: 20px; color: var(--text-2); line-height: 1.45; }
+.sb-chal-links { display: flex; flex-wrap: wrap; gap: 6px; }

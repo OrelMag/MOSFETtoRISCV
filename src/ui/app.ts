@@ -26,8 +26,8 @@ export function startApp(root: HTMLElement): void {
     e.preventDefault();
     toggleChapterMenu(chLink);
   });
-  nav.append(navLink('#/', 'layers', 'Journey', 'home'), chLink, navLink('#/workbench/rca4', 'bench', 'Workbench', 'workbench'),
-    navLink('#/sandbox', 'chip', 'Sandbox', 'sandbox'));
+  nav.append(navLink('#/', 'layers', 'Journey', 'home'), chLink, navLink('#/campaign', 'flag', 'Campaign', 'campaign'),
+    navLink('#/workbench/rca4', 'bench', 'Workbench', 'workbench'), navLink('#/sandbox', 'chip', 'Sandbox', 'sandbox'));
   installQuickNav();
   const searchBtn = h('button', { class: 'btn ghost icon-only', title: `Jump to a chapter or step (${QUICK_KEY})`, 'aria-label': 'Jump to a chapter or step', onclick: () => openQuickNav() }, icon('search', 18));
 
@@ -119,6 +119,18 @@ export function startApp(root: HTMLElement): void {
         return;
       }
       mount(new WorkbenchPage(parts[1] ?? 'rca4'));
+    } else if (key === 'campaign') {
+      const cp = page as (Page & { kind?: string; open?(parts: string[]): void }) | null;
+      if (cp?.kind === 'campaign') {
+        cp.open?.(parts.slice(1));
+        return;
+      }
+      // A chunk of its own, like the sandbox.
+      import('./pages/campaign').then((m) => {
+        if (seq === routeSeq) mount(new m.CampaignPage(parts.slice(1)));
+      }, (e) => {
+        if (seq === routeSeq) view.replaceChildren(h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'The campaign could not load'), h('p', { class: 'sub' }, String(e)))));
+      });
     } else if (key === 'sandbox') {
       const sb = page as (Page & { kind?: string; open?(id?: string): void }) | null;
       if (sb?.kind === 'sandbox') {

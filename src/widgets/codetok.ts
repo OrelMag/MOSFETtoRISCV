@@ -6,8 +6,11 @@
 import { commentStart, DIRECTIVES, PSEUDO_OPS } from '../riscv/asm';
 import { BY_NAME, CSRS, fregNumber, regNumber, RM_OPERANDS } from '../riscv/isa';
 import { scanHexLine } from '../editor/program';
+import { DIRECTIVES16, PSEUDO16 } from '../riscv/rv16/asm16';
+import { BY_NAME16, CSRS16, reg16 } from '../riscv/rv16/isa16';
 
-export type CodeLang = 'rvasm' | 'hex';
+/** rvasm: RV32 assembly; rv16asm: the campaign's RV16; hex: words. */
+export type CodeLang = 'rvasm' | 'rv16asm' | 'hex';
 
 /** Token classes (CSS: .tk-<cls>); '' is plain text / whitespace.
  *  com comment · lbl label · op instruction · ps pseudo-instruction · dir directive · reg register
@@ -26,21 +29,41 @@ const NUM = /^-?(?:0x[0-9a-f_]+|0b[01_]+|\d[\d_]*)(?![\w.$])/i;
 const WORD = /^[A-Za-z_.$][\w.$]*/;
 const LABEL = /^([A-Za-z_.$][\w.$]*)(\s*)(:)/;
 
-function mnemonic(w: string): TokClass {
-  const t = w.toLowerCase();
-  if (t.startsWith('.')) return DIRS.has(t) ? 'dir' : 'bad';
-  return BY_NAME.has(t) ? 'op' : PSEUDO.has(t) ? 'ps' : 'bad';
-}
+/** How an ISA's assembly classifies words. */
+interface AsmWords { mnemonic(w: string): TokClass; operand(w: string): TokClass }
 
-function operand(w: string): TokClass {
-  const t = w.toLowerCase();
-  if (regNumber(t) !== null || fregNumber(t) !== null) return 'reg';
-  if (t in CSRS) return 'csr';
-  if (RMS.has(t)) return 'kw';
-  return 'sym';
-}
+const RV32: AsmWords = {
+  mnemonic(w) {
+    const t = w.toLowerCase();
+    if (t.startsWith('.')) return DIRS.has(t) ? 'dir' : 'bad';
+    return BY_NAME.has(t) ? 'op' : PSEUDO.has(t) ? 'ps' : 'bad';
+  },
+  operand(w) {
+    const t = w.toLowerCase();
+    if (regNumber(t) !== null || fregNumber(t) !== null) return 'reg';
+    if (t in CSRS) return 'csr';
+    if (RMS.has(t)) return 'kw';
+    return 'sym';
+  },
+};
 
-function rvasm(line: string): Tok[] {
+const PSEUDO_16 = new Set(PSEUDO16), DIRS_16 = new Set(DIRECTIVES16), CSRS_16 = new Set(CSRS16);
+const RV16: AsmWords = {
+  mnemonic(w) {
+    const t = w.toLowerCase();
+    if (t.startsWith('.')) return DIRS_16.has(t) ? 'dir' : 'bad';
+    return BY_NAME16.has(t) ? 'op' : PSEUDO_16.has(t) ? 'ps' : 'bad';
+  },
+  operand(w) {
+    const t = w.toLowerCase();
+    if (reg16(t) !== null) return 'reg';
+    if (CSRS_16.has(t)) return 'csr';
+    return 'sym';
+  },
+};
+
+function rvasm(line: string, isa: AsmWords): Tok[] {
+  const { mnemonic, operand } = isa;
   const out: Tok[] = [];
   const push = (text: string, cls: TokClass) => {
     if (!text) return;
@@ -105,5 +128,5 @@ function hex(line: string): Tok[] {
 
 /** Split one line into classified tokens; their texts concatenate to `line`. */
 export function tokenize(line: string, lang: CodeLang): Tok[] {
-  return lang === 'hex' ? hex(line) : rvasm(line);
+  return lang === 'hex' ? hex(line) : rvasm(line, lang === 'rv16asm' ? RV16 : RV32);
 }

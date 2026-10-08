@@ -127,9 +127,9 @@ registerPropsSection({
     sample.addEventListener('change', () => {
       const s = ROM_SAMPLES.find((x) => x.id === sample.value);
       if (!s) return;
-      const n = romImage({ k: MAX_ROM_K, w: 32, lang: s.lang, src: s.src }).words.length;
-      // Assembly needs 32-bit words; the ROM grows to hold the sample (never shrinks).
-      set({ lang: s.lang, src: s.src, k: Math.min(MAX_ROM_K, Math.max(r.k, kFor(n))), ...(s.lang === 'asm' ? { w: 32 } : {}) });
+      const n = romImage({ k: MAX_ROM_K, w: s.lang === 'rv16' ? 16 : 32, lang: s.lang, src: s.src }).words.length;
+      // RV32 assembly needs 32-bit words, RV16 16-bit word-addressed ones; the ROM grows to hold the sample (never shrinks).
+      set({ lang: s.lang, src: s.src, k: Math.min(MAX_ROM_K, Math.max(r.k, kFor(n))), ...(s.lang === 'asm' ? { w: 32 } : s.lang === 'rv16' ? { w: 16, addr: 'word' } : {}) });
     });
 
     const width = select(r.w, [[8, '8 bits'], [16, '16 bits'], [32, '32 bits']], (w) => set({ w }), 'Word width');
@@ -147,10 +147,11 @@ registerPropsSection({
       row('Width', width, r.addr === 'rv32' ? 'Byte addressing reads 32-bit instructions' : 'Bits per word'),
       row('Address', select(r.addr, [['word', 'word index'], ['rv32', 'byte (RV32 PC)']], (addr) => set(addr === 'rv32' ? { addr, w: 32 } : { addr }), 'Addressing'),
         'word: addr is the word number (k bits). byte: a 32-bit address like a PC, word = addr / 4'),
-      row('Language', select(r.lang, [['asm', 'RISC-V assembly'], ['hex', 'hex words']], (lang) => {
-        const src = convertProgram(r.src, lang);
-        set(src === null ? { lang } : { lang, src });
-      }, 'Language'), 'Switching converts the program when it builds'),
+      row('Language', select(r.lang, [['asm', 'RISC-V assembly'], ['rv16', 'RV16 assembly'], ['hex', 'hex words']], (lang) => {
+        const src = convertProgram(r.src, lang, r.lang);
+        const shape = lang === 'rv16' ? { w: 16 as const, addr: 'word' as const } : {};
+        set(src === null ? { lang, ...shape } : { lang, src, ...shape });
+      }, 'Language'), 'Switching converts the program when it builds (RV16: 16-bit words, word addressed)'),
       row('Sample', sample),
       status,
       h('div', { class: 'sb-btns' }, h('button', { class: 'btn sm primary', title: 'Edit the program with a live listing', onclick: () => openProgramEditor(ed, id) }, icon('code', 14), 'Edit program…')),
@@ -191,7 +192,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
   let img = romImage(applied);
   /** Row shown as current (undefined: redraw on the next frame). */
   let cur: number | null | undefined;
-  const ce = codeEditor({ value: applied.src, lang: applied.lang === 'asm' ? 'rvasm' : 'hex', rows: 24, onChange: () => schedule() });
+  const ce = codeEditor({ value: applied.src, lang: applied.lang === 'asm' ? 'rvasm' : applied.lang === 'rv16' ? 'rv16asm' : 'hex', rows: 24, onChange: () => schedule() });
 
   const rebuild = () => {
     img = romImage({ ...applied, src: ce.value });
@@ -244,7 +245,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
   };
 
   const title = h('h3', null, icon('code', 16), `Program · ${partId}`,
-    h('small', null, `${2 ** applied.k} × ${applied.w} bits · ${applied.addr === 'rv32' ? 'byte addressed' : 'word addressed'} · ${applied.lang === 'asm' ? 'RISC-V assembly' : 'hex words'}`));
+    h('small', null, `${2 ** applied.k} × ${applied.w} bits · ${applied.addr === 'rv32' ? 'byte addressed' : 'word addressed'} · ${applied.lang === 'asm' ? 'RISC-V assembly' : applied.lang === 'rv16' ? 'RV16 assembly' : 'hex words'}`));
   const ov = h('div', { class: 'sb-help sb-rom-dlg', role: 'dialog', 'aria-label': `Program of ${partId}` },
     h('div', { class: 'panel' },
       h('div', { class: 'sb-help-head' }, title, h('button', { class: 'btn ghost icon-only', 'aria-label': 'Cancel', title: 'Cancel (Esc)', onclick: cancel }, icon('close', 16))),

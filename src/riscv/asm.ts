@@ -27,9 +27,10 @@ interface Stmt {
   size: number;
 }
 
-class AsmError extends Error {}
+export class AsmError extends Error {}
 
-function parseImm(s: string): number {
+/** A number: decimal, 0x hex, 0b binary (underscores allowed) or a character literal 'c'. Throws. */
+export function parseImm(s: string): number {
   const t = s.trim().toLowerCase().replace(/_/g, '');
   let v: number;
   if (/^-?0x[0-9a-f]+$/.test(t)) v = t.startsWith('-') ? -parseInt(t.slice(3), 16) : parseInt(t.slice(2), 16);
@@ -58,7 +59,7 @@ function sizeOf(op: string, args: string[]): number {
 }
 
 /** Split operands on commas that are not inside a character literal. */
-function splitArgs(s: string): string[] {
+export function splitArgs(s: string): string[] {
   if (!s.trim()) return [];
   const out: string[] = [];
   let cur = '', q = false;

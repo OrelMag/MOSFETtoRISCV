@@ -38,7 +38,7 @@ const lineStart = (v: string, i: number) => (i > 0 ? v.lastIndexOf('\n', i - 1) 
 
 export function codeEditor(opts: CodeEditorOpts): CodeEditor {
   const { lang } = opts;
-  const tab = opts.tabSize ?? (lang === 'rvasm' ? 8 : 4);
+  const tab = opts.tabSize ?? (lang === 'hex' ? 4 : 8);
   const ta = h('textarea', {
     class: 'ce-ta', spellcheck: 'false', wrap: 'off', autocomplete: 'off', autocapitalize: 'off',
     'aria-label': lang === 'hex' ? 'hex words' : 'assembly source',
@@ -165,7 +165,7 @@ export function codeEditor(opts: CodeEditorOpts): CodeEditor {
       const head = v.slice(lineStart(v, s), s);
       let ind = head.match(/^[ \t]*/)![0];
       // After "loop:   add ..." continue in the mnemonic column; after a bare "loop:", one stop in.
-      const lab = lang === 'rvasm' ? head.match(LABEL_PREFIX) : null;
+      const lab = lang !== 'hex' ? head.match(LABEL_PREFIX) : null;
       if (lab) ind = ' '.repeat(head.slice(lab[0].length).trim() ? lab[0].length : tab);
       edit(s, e, '\n' + ind, s + 1 + ind.length, s + 1 + ind.length);
     } else if (mod && ev.key === '/') {

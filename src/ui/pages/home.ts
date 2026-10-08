@@ -34,6 +34,7 @@ export function homePage(): Page {
         h('p', { class: 'lead' }, 'Build a computer one level at a time. Start with a transistor, make a gate, then adders, memory, and a processor. Every box on screen is transparent: open it and keep going down until you reach silicon.'),
         h('div', { class: 'cta' },
           h('a', { class: 'btn primary', href: resume ? `#/c/${resume.id}/0` : '#/c/map/0' }, resume ? `Continue: ${resume.title}` : 'Start the journey', icon('chevR', 16)),
+          h('a', { class: 'btn', href: '#/campaign' }, icon('flag', 16), 'Play the campaign'),
           h('a', { class: 'btn', href: '#/workbench/rca4' }, icon('bench', 16), 'Open the workbench'))),
       ladder()),
     h('h2', { class: 'section-title', id: 'chapters' }, 'Chapters'),
