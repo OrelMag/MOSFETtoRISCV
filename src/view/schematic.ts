@@ -11,7 +11,7 @@ import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
 import { FlowTokens, type Lane } from './flowtokens';
 import type { ViewCtx } from './context';
 import { hopPathData, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type RoutedNet, type TapLabel } from './route';
-import { netHue, netKey, setNetHue } from './nethue';
+import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
 
 export interface SchematicEvents {
@@ -160,11 +160,12 @@ export class SchematicView {
     };
 
     // Wires
-    for (const net of nets) {
+    const hues = spreadHues(nets.map((n) => ({ key: netKey(nl.nets[n.index]), polys: n.paths })));
+    for (const [ni, net] of nets.entries()) {
       const cls = net.width > 1 ? 'wire bus' : 'wire';
       const w: WireEls = { net, paths: [], dots: [], tags: [], taps: [] };
       const name = nl.nets[net.index].name ?? `n${net.index}`;
-      const hue = netHue(netKey(nl.nets[net.index]));
+      const hue = hues[ni];
       w.hue = hue;
       for (const t of net.tags) {
         const { stub: sp, rect: { x: rx, y: ry, w: tw, h: th } } = tagGeom(t, name);
