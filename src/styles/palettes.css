@@ -102,3 +102,18 @@
   --wire-glow: none;
   --bus0-opacity: 0.8;
 }
+
+/* Colour per net (settings.netColors): each drawn net carries its hue as --nh (view/nethue.ts) and
+   the value tokens are rebuilt from it, so colour says which net and brightness says its value
+   (0 a dim tint, 1 bright with its glow). X and Z keep the palette's colours and dashes. On top of
+   any palette; light-dark() follows the theme. */
+:root[data-netcolors='on'] [style*='--nh'] {
+  --w0: light-dark(oklch(0.78 0.08 var(--nh)), oklch(0.50 0.09 var(--nh)));
+  --w1: light-dark(oklch(0.57 0.19 var(--nh)), oklch(0.80 0.16 var(--nh)));
+  --w1-glow: light-dark(oklch(0.57 0.19 var(--nh) / 22%), oklch(0.80 0.16 var(--nh) / 30%));
+  --flow1: light-dark(oklch(0.95 0.05 var(--nh)), oklch(0.97 0.04 var(--nh)));
+  --bus: light-dark(oklch(0.72 0.09 var(--nh)), oklch(0.50 0.10 var(--nh)));
+  --bus1: light-dark(oklch(0.52 0.17 var(--nh)), oklch(0.76 0.15 var(--nh)));
+  --bus-label-bg: light-dark(oklch(0.95 0.03 var(--nh)), oklch(0.25 0.05 var(--nh)));
+  --bus-label-text: light-dark(oklch(0.42 0.14 var(--nh)), oklch(0.85 0.10 var(--nh)));
+}

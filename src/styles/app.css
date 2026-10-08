@@ -78,6 +78,11 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 @keyframes pal-flow { from { background-position: 0 0; } to { background-position: 16px 0; } }
 @media (prefers-reduced-motion: reduce) { .pal-flow-sw i { animation: none !important; } }
 /* The simple-connections switch: a square wire, or the same points joined straight while on. */
+.pal-nets-sw { width: 46px; height: 10px; display: flex; flex-direction: column; justify-content: space-between; flex: none; }
+.pal-nets-sw i { display: block; height: 2px; border-radius: 1px; background: var(--w0); }
+.pal-nets[aria-checked='true'] .n0 { background: light-dark(oklch(0.57 0.19 60), oklch(0.80 0.16 60)); }
+.pal-nets[aria-checked='true'] .n1 { background: light-dark(oklch(0.57 0.19 160), oklch(0.80 0.16 160)); }
+.pal-nets[aria-checked='true'] .n2 { background: light-dark(oklch(0.57 0.19 260), oklch(0.80 0.16 260)); }
 .pal-simple-sw { width: 46px; height: 14px; flex: none; }
 .pal-simple-sw svg { display: block; width: 46px; height: 14px; overflow: visible; }
 .pal-simple-sw path { fill: none; stroke: var(--w1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }

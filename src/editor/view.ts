@@ -5,12 +5,13 @@
 // same here as in the inside view of the chip it becomes.
 
 import { symbolGeom, type Vec } from '../sim/geometry';
-import { B1, BX, BZ, type Bit, type ComponentDef } from '../sim/types';
+import { B1, BX, BZ, type Bit, type ComponentDef, netlistOf } from '../sim/types';
 import { formatBits, pack, type Radix } from '../sim/values';
 import { s } from '../ui/dom';
 import { Camera, type ViewBox } from '../view/camera';
 import { applyFlow, flowDash, flowKey, flowText } from '../view/flow';
 import { FlowTokens, type Lane } from '../view/flowtokens';
+import { netHue, netKey, setNetHue } from '../view/nethue';
 import { junctions, type PinGeom, textWidth } from '../view/route';
 import { bitClass, busClass } from '../view/schematic';
 import { drawPinGlyph, drawSymbol, instNameAt, type PinGlyph, placePinValue } from '../view/symbols';
@@ -52,14 +53,25 @@ interface WireEls {
   /** Flowing bits: which way the signal runs (null: no driver reaches it) as lanes, the pellet overlays of a
    *  1-bit wire and what they show, the bits last painted. */
   flow?: WireFlow | null; flowGeom?: string; lanes?: Lane[] | null; ants?: SVGPathElement[]; antsKey?: string; bits?: Bit[] | null;
+  /** Colour per net: the hue of its net in the last build (nethue.ts). */
+  hue?: number;
 }
-interface DotEls { el: SVGCircleElement; wire: string; cls: string }
+interface DotEls { el: SVGCircleElement; wire: string; cls: string; hue?: number }
 interface PinEls { doc: PinDoc; g: SVGGElement; glyph: PinGlyph; geom: PinGeom; cls: string; txt: string }
 interface LabelEls { doc: LabelDoc; g: SVGGElement; stub: SVGPathElement; cls: string }
 interface CommentEls { doc: CommentDoc; g: SVGGElement }
 interface BusLabel { net: number; wire: string; at: Vec; room: number; g: SVGGElement; bg: SVGRectElement; text: SVGTextElement; txt: string }
 
 const pathD = (p: Vec[]) => p.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join(' ');
+/** Each built net's hue (colour per net), by net index; computed once per build. */
+const huesOf = (() => {
+  const memo = new WeakMap<Compiled, number[]>();
+  return (built: Compiled): number[] => {
+    let h = memo.get(built);
+    if (!h) memo.set(built, (h = (netlistOf(built.def)?.nets ?? []).map((n) => netHue(netKey(n)))));
+    return h;
+  };
+})();
 const valueClass = (bits: Bit[]) => (bits.length > 1 ? busClass(bits) : bitClass(bits[0]));
 
 export class EditorView {
@@ -381,7 +393,7 @@ export class EditorView {
     const f = e.flow;
     if (bits && bits.length > 1) {
       const text = flowText(bits, this.radix);
-      this.tokens.set(e.doc.id, text ? e.lanes ?? null : null, text);
+      this.tokens.set(e.doc.id, text ? e.lanes ?? null : null, text, e.hue);
       if (e.antsKey) e.ants?.forEach((x) => applyFlow(x, null));
       e.antsKey = '';
       return;
@@ -397,6 +409,7 @@ export class EditorView {
       e.ants = f.whole
         ? [s('path', { class: cls, d: this.hops.d.get(e.doc.id) ?? '' })]
         : f.pieces.map((p) => s('path', { class: cls, d: pathD(p.pts) }));
+      for (const a of e.ants) setNetHue(a, e.hue);
       this.gFlow.append(...e.ants);
     }
     if (!e.ants) return;
@@ -596,14 +609,23 @@ export class EditorView {
 
   /** Repaint every value from the simulation (null: no simulation, everything neutral). */
   paint(v: ViewValues | null, built: Compiled | null): void {
+    const hues = built ? huesOf(built) : [];
     for (const e of this.wires.values()) {
+      const hue = hues[built?.netOfWire.get(e.doc.id) ?? -1];
+      if (hue !== e.hue) {
+        e.hue = hue;
+        setNetHue(e.path, hue);
+        e.ants?.forEach((a) => setNetHue(a, hue));
+      }
       const bits = v?.wireBits(e.doc.id);
       const vcls = bits ? `wire ${valueClass(bits)}` : `wire${e.width > 1 ? ' bus' : ''} ed-dead`;
       this.paintWire(e, vcls);
       this.paintFlow(e, bits ?? null);
     }
     for (const list of this.dots.values()) for (const d of list) {
-      const vc = this.wires.get(d.wire)?.cls.split('|')[0].replace(/^wire/, 'dot') ?? 'dot';
+      const w = this.wires.get(d.wire);
+      if (w?.hue !== d.hue) setNetHue(d.el, (d.hue = w?.hue));
+      const vc = w?.cls.split('|')[0].replace(/^wire/, 'dot') ?? 'dot';
       if (vc !== d.cls) {
         d.cls = vc;
         d.el.setAttribute('class', vc);
@@ -628,6 +650,7 @@ export class EditorView {
       }
     }
     for (const e of this.labels.values()) {
+      setNetHue(e.g, hues[built?.netOfLabel.get(e.doc.id) ?? -1]);
       const bits = v?.labelBits(e.doc.id);
       const vc = bits ? valueClass(bits) : '';
       if (vc !== e.cls) {
@@ -737,6 +760,7 @@ export class EditorView {
         }
         for (const [net, { at, len, wire }] of best) {
           const g = s('g', { class: 'bus-label' });
+          setNetHue(g, huesOf(built)[net]);
           const bg = s('rect', { rx: 0.45, height: 1.3, y: at[1] - 0.65 - 0.9 });
           const text = s('text', { x: at[0], y: at[1] - 0.9 + 0.38, 'text-anchor': 'middle' });
           g.append(bg, text);

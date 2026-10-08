@@ -300,8 +300,11 @@ chip presentation, capacity and the program-solving half of Turing Complete.
 flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every combination); light and dark themes
 - ⏳ User-coloured wires: pick a colour for a wire or a whole net (right-click menu, properties, a swatch row);
   saved in the chip document, shared with it, inherited by the net's other drawn wires
-- ⏳ Auto colour per net: every bus and named net gets a distinct hue (stable across edits, by net identity), so
-  a data path can be followed across the canvas; a toggle beside the wire palettes
+- ✅ Colour per net: a switch in the wire-colour menu (off by default) gives every net a hue of its own, from its name
+  or else its ends (stable across rebuilds, edits and reloads; a circuit opened in the sandbox keeps its chapter
+  colours); brightness still says the value (0 a dim tint, 1 bright with its glow), X and Z keep their colours and
+  dashes, hues avoid the X red. Wires, dots, pointers, tap labels, bus labels, riding values and slow-motion fronts,
+  in the chapters, the workbench and the sandbox. ⏳ Neighbouring nets that land on close hues
 - ⏳ Vivid look: a dark grid, filled bright part bodies tinted by category or chip hue, thicker wires; a setting
   like `data-palette`, applied to the sandbox, the chapters' schematics and the workbench
 - ⏳ Optional cartoonish components: a playful symbol set (rounded, chunky bodies, bold outlines, small icons for

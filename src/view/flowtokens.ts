@@ -9,6 +9,7 @@
 import type { Vec } from '../sim/geometry';
 import { s } from '../ui/dom';
 import { FLOW_SPEED } from './flow';
+import { setNetHue } from './nethue';
 import { textWidth } from './route';
 
 /**
@@ -20,7 +21,7 @@ export interface Lane { pts: Vec[]; d0: number; sink?: boolean }
 const FONT = 0.78, H = 1.15, GAP = 5, FADE = 1.5;
 
 export interface Track { pts: Vec[]; cum: number[]; len: number; d0: number; sink: boolean }
-interface Entry { g: SVGGElement; lanes: readonly Lane[]; tracks: Track[]; text: string; w: number; spacing: number; pool: SVGGElement[] }
+interface Entry { hue?: number; g: SVGGElement; lanes: readonly Lane[]; tracks: Track[]; text: string; w: number; spacing: number; pool: SVGGElement[] }
 
 const live = new Set<FlowTokens>();
 let raf = 0;
@@ -45,8 +46,8 @@ export class FlowTokens {
     return this.entries.size;
   }
 
-  /** Show `text` riding along `lanes` (null: nothing). Same lanes (identity) keep their tags. */
-  set(id: string | number, lanes: readonly Lane[] | null, text: string | null): void {
+  /** Show `text` riding along `lanes` (null: nothing). Same lanes (identity) keep their tags; `hue`: colour per net. */
+  set(id: string | number, lanes: readonly Lane[] | null, text: string | null, hue?: number): void {
     let e = this.entries.get(id);
     if (!lanes || !lanes.length || text === null) {
       if (e) {
@@ -60,6 +61,7 @@ export class FlowTokens {
       this.layer.append(e.g);
       this.entries.set(id, e);
     }
+    if (e.hue !== hue) setNetHue(e.g, (e.hue = hue));
     if (e.lanes !== lanes) {
       e.lanes = lanes;
       e.tracks = lanes.map(track);

@@ -389,6 +389,10 @@ keep the two in step when a panel gains a feature.
 - Wire palettes: `data-palette` on `<html>` (styles/palettes.css, `light-dark()` tokens). Use
   `--w0 --w1 --wx --wz --bus --bus1` and the shape tokens (`--wire-w0` …), never raw colours.
   Probe colours are `--probe-0..7` (class `p0..p7` sets `--pc`).
+- Colour per net (settings.netColors, `data-netcolors="on"`, off by default): view/nethue.ts gives each net a hue from
+  `netKey` (its name, else its sorted ends); drawn elements carry it as inline `--nh` (value classes are rewritten on
+  every repaint) and palettes.css rebuilds `--w0 --w1 --bus --bus1 …` from it. A new per-net element must get
+  `setNetHue` too.
 - Module colours: library boxes and muxes are tinted by `CATEGORY_HUE[def.category]` (view/symbols.ts,
   class `.sym.cat`, the same `--chip-h` styling as a user chip's hue); `data-modules="plain"` on
   `<html>` (settings.modules) turns it off. `data-wide` (settings.wide, the stage bar's panes button)
