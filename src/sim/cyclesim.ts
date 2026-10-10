@@ -192,12 +192,17 @@ export class CycleSim implements Sim {
       return m.ins.filter((_, i) => i !== m.table.clk);
     };
     const counts = new Int32Array(n + 1);
-    for (let k = 0; k < N; k++) for (const net of new Set(ins(k))) counts[net + 1]++;
+    const seen = new Int32Array(n).fill(-1);
+    const each = (f: (net: number, k: number) => void): void => {
+      seen.fill(-1);
+      for (let k = 0; k < N; k++) for (const net of ins(k)) if (seen[net] !== k) { seen[net] = k; f(net, k); }
+    };
+    each((net) => { counts[net + 1]++; });
     for (let i = 0; i < n; i++) counts[i + 1] += counts[i];
     this.fanStart = counts;
     this.fanList = new Int32Array(counts[n]);
     const fill = counts.slice(0, n);
-    for (let k = 0; k < N; k++) for (const net of new Set(ins(k))) this.fanList[fill[net]++] = k;
+    each((net, k) => { this.fanList[fill[net]++] = k; });
     for (const p of design.root.def.ports) {
       if (p.dir !== 'in') continue;
       this.inputNets.set(p.name, design.root.ports[p.name]);
@@ -218,8 +223,14 @@ export class CycleSim implements Sim {
     for (const p of design.root.def.ports) if (p.dir === 'in') for (const net of design.root.ports[p.name]) rootIn[net] = 1;
 
     // readers of each net among the design's leaves, to check a flip-flop's insides stay inside
-    const readers: number[][] = Array.from({ length: n }, () => []);
-    leaves.forEach((l, li) => { for (const p of l.inputs) for (const net of p) readers[net].push(li); });
+    const rdStart = new Int32Array(n + 1);
+    for (const l of leaves) for (const p of l.inputs) for (const net of p) rdStart[net + 1]++;
+    for (let i = 0; i < n; i++) rdStart[i + 1] += rdStart[i];
+    const rdList = new Int32Array(rdStart[n]);
+    {
+      const at = rdStart.slice(0, n);
+      leaves.forEach((l, li) => { for (const p of l.inputs) for (const net of p) rdList[at[net]++] = li; });
+    }
 
     const leafRange = (node: HierNode): [number, number] | null => {
       let lo = Infinity, hi = -1;
@@ -257,7 +268,7 @@ export class CycleSim implements Sim {
       // nothing outside may read a net inside (only its outputs)
       for (const b of netOf) {
         if (b < 0 || ports.has(b)) continue;
-        if (readers[b].some((li) => li < r[0] || li > r[1])) return false;
+        for (let i = rdStart[b]; i < rdStart[b + 1]; i++) if (rdList[i] < r[0] || rdList[i] > r[1]) return false;
       }
       const mi = macros.length;
       macros.push({ table: t, node, ins, outs, netOf });
@@ -311,11 +322,15 @@ export class CycleSim implements Sim {
     for (let k = 0; k < G + B; k++) for (const net of nodeOuts(k)) driver[net] = k;
     const level = new Int32Array(N);
     const indeg = new Int32Array(N);
-    const fan: number[][] = Array.from({ length: n }, () => []);
-    for (let k = 0; k < N; k++) {
-      for (const net of nodeIns(k)) {
-        if (driver[net] >= 0) { indeg[k]++; fan[net].push(k); }
-      }
+    // fan-out of driven nets to the nodes ordered by them (CSR)
+    const ins: number[][] = Array.from({ length: N }, (_, k) => nodeIns(k));
+    const fStart = new Int32Array(n + 1);
+    for (let k = 0; k < N; k++) for (const net of ins[k]) if (driver[net] >= 0) { indeg[k]++; fStart[net + 1]++; }
+    for (let i = 0; i < n; i++) fStart[i + 1] += fStart[i];
+    const fList = new Int32Array(fStart[n]);
+    {
+      const at = fStart.slice(0, n);
+      for (let k = 0; k < N; k++) for (const net of ins[k]) if (driver[net] >= 0) fList[at[net]++] = k;
     }
     const queue: number[] = [];
     for (let k = 0; k < N; k++) if (indeg[k] === 0) queue.push(k);
@@ -325,7 +340,8 @@ export class CycleSim implements Sim {
       done++;
       if (level[k] > maxLevel) maxLevel = level[k];
       for (const net of nodeOuts(k)) {
-        for (const c of fan[net]) {
+        for (let i = fStart[net]; i < fStart[net + 1]; i++) {
+          const c = fList[i];
           if (level[c] < level[k] + 1) level[c] = level[k] + 1;
           if (--indeg[c] === 0) queue.push(c);
         }
