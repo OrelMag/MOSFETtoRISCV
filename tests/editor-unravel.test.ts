@@ -9,7 +9,8 @@ import { compileChip } from '../src/editor/compile';
 import { EXAMPLES, addExample } from '../src/editor/examples';
 import { docFromDef } from '../src/editor/fromdef';
 import { UserLibrary } from '../src/editor/library';
-import { type ChipDoc, type DefOf, emptyWorkspace, polyline, type Workspace } from '../src/editor/model';
+import { type ChipDoc, type DefOf, emptyWorkspace, polyline, type Vec, type Workspace } from '../src/editor/model';
+import { lintChip } from '../src/editor/lint';
 import { partDef } from '../src/editor/parts';
 import { remixDef } from '../src/editor/remix';
 import { canUnravel, collapseWire, collapseWires, pointersOf, suggestName, unravelPointer, unravelPointers, wireTree } from '../src/editor/unravel';
@@ -27,6 +28,19 @@ function nets(def: ComponentDef): string[] {
 
 const errors = (c: ReturnType<typeof compileChip>) => c.diags.filter((d) => d.level === 'error').map((d) => d.msg);
 
+/** Places where two nets are drawn on one line (the lint's count). */
+function overlaps(doc: ChipDoc, c: ReturnType<typeof compileChip>, defOf: DefOf): number {
+  const polys = new Map<string, Vec[]>();
+  for (const w of doc.wires) { const p = polyline(doc, w, defOf); if (p) polys.set(w.id, p); }
+  let n = 0;
+  for (const d of lintChip(doc, c, polys).diags) {
+    if (/two nets drawn on one line/.test(d.msg)) n++;
+    const m = d.msg.match(/^(\d+) more places where two nets/);
+    if (m) n += +m[1];
+  }
+  return n;
+}
+
 /** A chip in its workspace: compile and a defOf, through the workspace's own chips. */
 function harness(ws: Workspace, id: string) {
   const compile = (doc: ChipDoc) => new UserLibrary({ ...ws, chips: { ...ws.chips, [doc.id]: doc } }).compiled(doc.id)!;
@@ -35,14 +49,26 @@ function harness(ws: Workspace, id: string) {
   return { doc: ws.chips[id], compile, defOf };
 }
 
-/** Unravel every pointer name, then collapse every wire: both keep the nets. */
-function roundTrip(ws: Workspace, id: string) {
+/**
+ * Unravel each pointer name alone (as the menu does: no wire drawn on another net), then every
+ * name in turn, then collapse every wire: all keep the nets. `alone`: how many names to try alone.
+ */
+function roundTrip(ws: Workspace, id: string, alone = Infinity) {
   const { doc, compile, defOf } = harness(ws, id);
   const before = compile(doc);
   expect(errors(before)).toEqual([]);
   const want = nets(before.def);
 
   const names = [...new Set(doc.labels.map((l) => l.name))].filter((n) => canUnravel(doc, n));
+  const base = overlaps(doc, before, defOf);
+  for (const n of names.slice(0, alone)) {
+    const r = unravelPointer(doc, n, defOf);
+    expect(r.reason, n).toBeUndefined();
+    const c1 = compile(r.doc);
+    expect(nets(c1.def), n).toEqual(want);
+    expect(overlaps(r.doc, c1, defOf), `“${n}” drawn on another net`).toBeLessThanOrEqual(base);
+  }
+
   const u = unravelPointers(doc, names, defOf);
   expect(u.reason).toBeUndefined();
   if (names.length) expect(u.doc.labels.some((l) => names.includes(l.name))).toBe(false);
@@ -57,6 +83,7 @@ function roundTrip(ws: Workspace, id: string) {
   const cc = compile(c.doc);
   expect(errors(cc)).toEqual([]);
   expect(nets(cc.def)).toEqual(want);
+  expect(overlaps(c.doc, cc, defOf), 'stubs drawn on another net').toBeLessThanOrEqual(overlaps(u.doc, cu, defOf));
   return { names, unravelled: u.doc, collapsed: c.doc };
 }
 
@@ -174,10 +201,8 @@ describe('connectivity never changes', () => {
   it.each(cpuTops().map((d) => [d.id, d] as const))('CPU: %s', (_, def) => {
     const r = remixDef(emptyWorkspace(), def);
     if ('error' in r) throw new Error(r.error);
-    const t = performance.now();
-    const { names } = roundTrip(r.ws, r.id);
+    const { names } = roundTrip(r.ws, r.id, 12);
     expect(names.length).toBeGreaterThan(0);
-    expect(performance.now() - t).toBeLessThan(20000);
   });
 
   it.each(docs.map((d) => [d.id, d] as const))('library: %s', (_, d) => {

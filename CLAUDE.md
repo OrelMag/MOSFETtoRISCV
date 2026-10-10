@@ -225,6 +225,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  begin() / end() save and give back the simulation's state
   remix.ts       "Open in Sandbox": remixDef / remixIntoStorage (a shown def → a new chip; parts a reload could
                  not find by id come along as ROM / constant parts or chips); loaded on demand by the stage
+  unravel.ts     unravelPointer(s) (a pointer name → wires from the driver: square shapes, else A* on the half grid;
+                 never on another net), collapseWire(s) (a wire tree → one pointer per end), pointersOf(sel), suggestName
   hops.ts        HopCache: wire hops recomputed for the moved wires and those crossing them only
   flowdir.ts     wireFlows: which way each drawn wire carries its signal (from part outputs / chip inputs,
                  cut at branch points; distance from the driver, sink or junction at the far end), for flowing bits
@@ -248,7 +250,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   view.ts        EditorView: one SVG element per object updated in place, live values, overlays
   tools.ts       the mouse / keyboard state machine (place, select, drag, band, free-hand wires, pointers, rename
                  in place: F2 / a click on a selected name / editInline)
-  ctxmenu.ts     plugin: the right-click menu (selection actions with their shortcuts, or the canvas's own)
+  ctxmenu.ts     plugin: the right-click menu (selection actions with their shortcuts, or the canvas's own);
+                 pointerui.ts: its unravel / collapse actions and their dialogs
   iobar.ts       plugin: the chip's pins as a bar above the run bar (the workbench's switches and lamps, I/O toggle);
                  each control acts as a click on the pin
   keys.ts        plugin: document keys → key parts (a bound key is taken from the shortcuts while the chip is open)

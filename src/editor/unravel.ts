@@ -9,9 +9,10 @@
 // Collapse: a drawn wire (with the wires branched from it or it from, one drawn tree) goes, and
 // each of its ends gets a short stub to a new pointer, all of one name.
 //
-// Routing is a cheap search, not a router: square shapes (an L, or a Z through the channels beside
+// Routing first tries a cheap search over square shapes (an L, or a Z through the channels beside
 // the parts) scored by the parts, pins and pointers they cross, the ports they would touch and the
-// other nets' wires they would run along. The learner tidies the rest by hand.
+// other nets' wires they would run along; when none is clean, an A* on the half grid (maze) finds a
+// way that never runs along another net. The learner tidies the rest by hand.
 
 import type { Rect } from '../view/route';
 import { DIR, attachPoints, drives, partBox, pinBody, pointerGeom } from './geom';
@@ -171,7 +172,8 @@ function cost(path: Vec[], sc: Scene, limit = Infinity): number {
     for (const r of boxes) if (hitsRect(a, b, r)) c += 400;
     for (const s of (a[1] === b[1] ? sc.rows.get(a[1]) : sc.cols.get(a[0])) ?? []) {
       const o = overlap(a, b, s.a, s.b);
-      if (o) c += (sc.same(s.wire) ? 4 : 60) * o + 20;
+      // Two nets on one line read as one (the lint warns): as bad as crossing a part.
+      if (o) c += sc.same(s.wire) ? 4 * o + 20 : 400 + 60 * o;
     }
     // A port on the way would look connected.
     if (a[1] === b[1]) {
@@ -202,7 +204,12 @@ function routeSquare(p: Vec, pd: ExitDir | null, q: Vec, qd: ExitDir | null, sc:
       const [h, t] = [H[H.length - 1], T[0]];
       const [x0, x1, y0, y1] = [Math.min(h[0], t[0]), Math.max(h[0], t[0]), Math.min(h[1], t[1]), Math.max(h[1], t[1])];
       // Channels: beside the parts near the way, and around everything.
+      // Lines just beside the ends too: wires often run on a port's own row.
       const ys = new Set([h[1], t[1]]), xs = new Set([h[0], t[0]]);
+      for (const d of [-2, -1, 1, 2]) {
+        ys.add(Math.round(h[1]) + d); ys.add(Math.round(t[1]) + d);
+        xs.add(Math.round(h[0]) + d); xs.add(Math.round(t[0]) + d);
+      }
       const m = 12 + Math.max(x1 - x0, y1 - y0) / 2;
       let [gx0, gx1, gy0, gy1] = [x0, x1, y0, y1];
       for (const r of sc.boxes) {
@@ -228,6 +235,138 @@ function routeSquare(p: Vec, pd: ExitDir | null, q: Vec, qd: ExitDir | null, sc:
   return best;
 }
 
+/** Above this a simple path hits a part, a port or another net: worth a maze search. */
+const CLEAN = 300;
+
+/**
+ * Fallback when no simple shape is clean: A* over (grid point, heading) from p (leaving towards
+ * `pd`) to any of `goals` ("x,y" grid points). It never enters a part, never passes a port, never
+ * runs along or turns on another net's wire; bends and crossings cost extra. Returns the full
+ * polyline (p first, the goal reached last) or null when there is no way within the budget.
+ */
+function maze(p: Vec, pd: ExitDir | null, goals: Set<string>, sc: Scene): Vec[] | null {
+  if (!goals.size) return null;
+  // The half grid, like the schematic router: twice the channels between the parts' rows.
+  const G = 0.5, M = 6, BEND = 2, CROSS = 1, eps = 1e-6;
+  let [x0, y0, x1, y1] = [p[0], p[1], p[0], p[1]];
+  const grow = (x: number, y: number) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); };
+  for (const r of sc.boxes) { grow(r.x, r.y); grow(r.x + r.w, r.y + r.h); }
+  const goalPts = [...goals].map((g) => g.split(',').map(Number) as Vec);
+  for (const [x, y] of goalPts) grow(x, y);
+  [x0, y0] = [Math.floor(x0) - M, Math.floor(y0) - M];
+  const W = Math.round((Math.ceil(x1) + M - x0) / G) + 1, H = Math.round((Math.ceil(y1) + M - y0) / G) + 1, N = W * H;
+  if (N > 4e6) return null;
+  const on2 = (v: number) => Math.abs(v / G - Math.round(v / G)) < eps;
+  const ix = (x: number) => Math.round((x - x0) / G), iy = (y: number) => Math.round((y - y0) / G);
+  const blocked = new Uint8Array(N);
+  for (const r of sc.boxes) {
+    for (let j = Math.max(0, Math.floor((r.y + E - y0) / G) + 1); j <= Math.ceil((r.y + r.h - E - y0) / G) - 1 && j < H; j++) {
+      for (let i = Math.max(0, Math.floor((r.x + E - x0) / G) + 1); i <= Math.ceil((r.x + r.w - E - x0) / G) - 1 && i < W; i++) blocked[j * W + i] = 1;
+    }
+  }
+  for (const k of sc.ports) {
+    const [x, y] = k.split(',').map(Number);
+    if (on2(x) && on2(y) && !goals.has(k)) blocked[iy(y) * W + ix(x)] = 1;
+  }
+  // Another net's wires: the grid edges they run along (east / south of a point) and the points on them.
+  const hEdge = new Uint8Array(N), vEdge = new Uint8Array(N), on = new Uint8Array(N);
+  const mark = (segs: Map<number, Seg[]>, horiz: boolean) => {
+    for (const [k, list] of segs) {
+      if (!on2(k)) continue;
+      const fixed = horiz ? iy(k) : ix(k), o = horiz ? x0 : y0, len = horiz ? W : H;
+      for (const s of list) {
+        if (sc.same(s.wire)) continue;
+        const [lo, hi] = horiz ? [Math.min(s.a[0], s.b[0]), Math.max(s.a[0], s.b[0])] : [Math.min(s.a[1], s.b[1]), Math.max(s.a[1], s.b[1])];
+        // Every grid edge the segment overlaps, and every grid point it covers.
+        for (let t = Math.max(0, Math.floor((lo - o) / G + eps)); t <= Math.min(len - 1, Math.ceil((hi - o) / G - eps)); t++) {
+          const v = o + t * G;
+          const c = horiz ? fixed * W + t : t * W + fixed;
+          if (v >= lo - eps && v <= hi + eps) on[c] = 1;
+          if (v + G > lo + eps && v < hi - eps) (horiz ? hEdge : vEdge)[c] = 1;
+        }
+      }
+    }
+  };
+  mark(sc.rows, true);
+  mark(sc.cols, false);
+
+  const DX = [1, 0, -1, 0], DY = [0, 1, 0, -1];
+  const HEAD: Record<ExitDir, number> = { right: 0, down: 1, left: 2, up: 3 };
+  const s0 = iy(p[1]) * W + ix(p[0]);
+  if (s0 < 0 || s0 >= N) return null;
+  const goalCells = new Set<number>();
+  for (const [x, y] of goalPts) if (on2(x) && on2(y)) goalCells.add(iy(y) * W + ix(x));
+  if (!goalCells.size) return null;
+  // Lower bound to the nearest goal (Manhattan to the goals' bounding box).
+  let [gx0, gy0, gx1, gy1] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const c of goalCells) { const x = c % W, y = Math.floor(c / W); gx0 = Math.min(gx0, x); gx1 = Math.max(gx1, x); gy0 = Math.min(gy0, y); gy1 = Math.max(gy1, y); }
+  const rest = (c: number) => { const x = c % W, y = Math.floor(c / W); return G * (Math.max(0, gx0 - x, x - gx1) + Math.max(0, gy0 - y, y - gy1)); };
+
+  const dist = new Float64Array(N * 4).fill(Infinity), prev = new Int32Array(N * 4).fill(-1);
+  const heap: [number, number][] = [];
+  const push = (f: number, s: number) => {
+    heap.push([f, s]);
+    for (let i = heap.length - 1; i > 0;) { const q = (i - 1) >> 1; if (heap[q][0] <= heap[i][0]) break; [heap[q], heap[i]] = [heap[i], heap[q]]; i = q; }
+  };
+  const pop = () => {
+    const top = heap[0], last = heap.pop()!;
+    if (heap.length) {
+      heap[0] = last;
+      for (let i = 0; ;) {
+        const l = 2 * i + 1, r = l + 1;
+        let m = i;
+        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+        if (m === i) break;
+        [heap[m], heap[i]] = [heap[i], heap[m]];
+        i = m;
+      }
+    }
+    return top;
+  };
+  for (let h = 0; h < 4; h++) {
+    if (pd && h !== HEAD[pd]) continue;
+    dist[s0 * 4 + h] = 0;
+    push(rest(s0), s0 * 4 + h);
+  }
+  let end = -1, pops = 0;
+  while (heap.length && pops++ < 600000) {
+    const [f, s] = pop();
+    const c = s >> 2, h = s & 3, d = dist[s];
+    if (f > d + rest(c) + 1e-9) continue;
+    if (goalCells.has(c) && c !== s0) { end = s; break; }
+    const cx = c % W, cy = Math.floor(c / W);
+    for (let e = 0; e < 4; e++) {
+      if (e === (h + 2) % 4) continue;
+      if (e !== h && c !== s0 && on[c]) continue; // a turn on another net's wire reads as a junction
+      const nx = cx + DX[e], ny = cy + DY[e];
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      const nc = ny * W + nx;
+      if (blocked[nc] && !goalCells.has(nc)) continue;
+      if (e === 0 ? hEdge[c] : e === 2 ? hEdge[nc] : e === 1 ? vEdge[c] : vEdge[nc]) continue;
+      const nd = d + G + (e !== h ? BEND : 0) + (on[nc] ? CROSS : 0);
+      const ns = nc * 4 + e;
+      if (nd < dist[ns]) { dist[ns] = nd; prev[ns] = s; push(nd + rest(nc), ns); }
+    }
+  }
+  if (end < 0) return null;
+  const cells: Vec[] = [];
+  for (let s = end; s >= 0; s = prev[s]) cells.push([x0 + ((s >> 2) % W) * G, y0 + Math.floor((s >> 2) / W) * G]);
+  return orthogonal([p, ...cells.reverse()]);
+}
+
+/** Half-grid points lying on a polyline's horizontal and vertical segments. */
+function gridPoints(poly: Vec[]): Vec[] {
+  const out: Vec[] = [];
+  const half = (v: number) => Number.isInteger(v * 2);
+  for (let i = 1; i < poly.length; i++) {
+    const [a, b] = [poly[i - 1], poly[i]];
+    if (a[1] === b[1] && half(a[1])) for (let x = Math.ceil(Math.min(a[0], b[0]) * 2) / 2; x <= Math.max(a[0], b[0]); x += 0.5) out.push([x, a[1]]);
+    else if (a[0] === b[0] && half(a[0])) for (let y = Math.ceil(Math.min(a[1], b[1]) * 2) / 2; y <= Math.max(a[1], b[1]); y += 0.5) out.push([a[0], y]);
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Unravel
 
@@ -245,7 +384,7 @@ function dependsOn(wires: Map<string, WireDoc>, id: string, of: Set<string>, see
  * off its wire's line, an end on a missing pointer, both ends on one point. Compared before and
  * after, so a document that already had a fault can still be unravelled elsewhere.
  */
-function faults(doc: ChipDoc, defOf: DefOf, polys: (w: WireDoc) => Vec[] | null): Set<string> {
+function faults(doc: ChipDoc, polys: (w: WireDoc) => Vec[] | null): Set<string> {
   const out = new Set<string>();
   const wires = new Map(doc.wires.map((w) => [w.id, w]));
   const labels = new Set(doc.labels.map((l) => l.id));
@@ -328,6 +467,10 @@ export function unravelPointer(doc: ChipDoc, name: string, defOf: DefOf): Edited
     if (onLabel(wh.a, hub.id)) ph = [...ph].reverse(); // ends at the hub
     if (onLabel(w2.b, second.id)) p2 = [...p2].reverse(); // starts at the twin
     const r = routeSquare(hub.at, hub.face ?? 'right', second.at, second.face ?? 'right', sc);
+    if (r.cost >= CLEAN) {
+      const m = maze(hub.at, hub.face ?? 'right', new Set([`${Math.round(second.at[0] * 2) / 2},${Math.round(second.at[1] * 2) / 2}`]), sc);
+      if (m) r.pts = orthogonal([...m, second.at]).slice(1, -1);
+    }
     sc.add([hub.at, ...r.pts, second.at], wh.id);
     const straight = !!(wh.straight || w2.straight);
     const fa = far(wh, hub.id), fb = far(w2, second.id);
@@ -352,10 +495,12 @@ export function unravelPointer(doc: ChipDoc, name: string, defOf: DefOf): Edited
     const own = new Set(att.get(l.id)!.map((w) => w.id));
     const wires = byId();
     const cands: { wire: string; at: Vec }[] = [];
+    const allowed: { wire: string; poly: Vec[] }[] = [];
     for (const t of cur.wires) {
       if (!sameNet(t.id) || dependsOn(wires, t.id, own)) continue;
       const p = poly(t);
       if (!p) continue;
+      allowed.push({ wire: t.id, poly: p });
       cands.push({ wire: t.id, at: nearestOn(p, l.at) });
       for (const v of p) cands.push({ wire: t.id, at: v });
     }
@@ -366,6 +511,16 @@ export function unravelPointer(doc: ChipDoc, name: string, defOf: DefOf): Edited
       if (best && manhattan(c.at, l.at) >= best.cost) break;
       const r = routeSquare(l.at, l.face ?? 'right', c.at, null, sc, best?.cost);
       if (!best || r.cost < best.cost) best = { ...c, ...r };
+    }
+    if (!best || best.cost >= CLEAN) {
+      // Any grid point on the net drawn so far will do as the branch point.
+      const goals = new Map<string, string>();
+      for (const a of allowed) for (const v of gridPoints(a.poly)) goals.set(`${v[0]},${v[1]}`, a.wire);
+      const m = maze(l.at, l.face ?? 'right', new Set(goals.keys()), sc);
+      if (m) {
+        const end = m[m.length - 1];
+        best = { wire: goals.get(`${end[0]},${end[1]}`)!, at: end, pts: m.slice(1, -1), cost: 0 };
+      }
     }
     sc.same = sameNet;
     if (!best) return { doc, reason: `no wire of the net to join “${name}” to` };
@@ -385,8 +540,8 @@ export function unravelPointer(doc: ChipDoc, name: string, defOf: DefOf): Edited
   }
 
   const out: ChipDoc = { ...cur, labels: doc.labels.filter((l) => !ids.has(l.id)) };
-  const had = faults(doc, defOf, (w) => polyline(doc, w, defOf));
-  if ([...faults(out, defOf, poly)].some((f) => !had.has(f))) return { doc, reason: `“${name}” could not be unravelled without a loop of branches` };
+  const had = faults(doc, (w) => polyline(doc, w, defOf));
+  if ([...faults(out, poly)].some((f) => !had.has(f))) return { doc, reason: `“${name}” could not be unravelled without a loop of branches` };
   return { doc: out, wires: touched };
 }
 
@@ -454,6 +609,9 @@ export function collapseWire(doc: ChipDoc, id: string, name: string, defOf: DefO
   const wires = doc.wires.filter((w) => !gone.has(w.id));
   const old = doc.wires.filter((w) => gone.has(w.id));
   const boxes: Rect[] = [...doc.parts.map((p) => partBox(defOf(p), p.at)), ...doc.pins.map(pinBody), ...doc.labels.map((l) => pointerGeom(l).rect)];
+  // The other wires a stub must not run along (those on the same end are the same net).
+  const segs = new Scene({ ...doc, parts: [], pins: [], labels: [], wires }, defOf, new Set(), (w) => polyline(doc, w, defOf));
+  const endsOf = new Map(wires.map((w) => [w.id, [endKey(w.a), endKey(w.b)]]));
   const labels = [...doc.labels];
   const newLabels: string[] = [], newWires: string[] = [];
   const lids = new Set(labels.map((l) => l.id)), wids = new Set(doc.wires.map((w) => w.id));
@@ -462,13 +620,17 @@ export function collapseWire(doc: ChipDoc, id: string, name: string, defOf: DefO
     if (!g) return { doc, reason: `${endKey(e)} does not resolve` };
     const face: ExitDir = g.exit ?? 'right';
     // The nearest spot out along the port's axis where the flag and its stub hit nothing.
-    let at = add(g.pos, DIR[face], 2);
-    for (const k of [2, 3, 4, 5, 6]) {
+    // Failing that, a stub on no other net's wire (a flag over something only looks untidy).
+    const key = endKey(e);
+    const spots = [2, 3, 4, 5, 6, 1].map((k) => {
       const p = add(g.pos, DIR[face], k);
       const rect = pointerGeom({ at: p, face, name: nm }).rect;
       const clash = (r: Rect) => hitsRect(g.pos, p, r) || (rect.x < r.x + r.w && rect.x + rect.w > r.x && rect.y < r.y + r.h && rect.y + rect.h > r.y);
-      if (!boxes.some(clash)) { at = p; break; }
-    }
+      const along = ((p[1] === g.pos[1] ? segs.rows.get(p[1]) : segs.cols.get(p[0])) ?? [])
+        .some((s) => !endsOf.get(s.wire)?.includes(key) && overlap(g.pos, p, s.a, s.b) > 0);
+      return { p, along, clash: boxes.some(clash) };
+    });
+    const at = (spots.find((s) => !s.along && !s.clash) ?? spots.find((s) => !s.along) ?? spots[0]).p;
     const lid = nextId('l', lids);
     lids.add(lid);
     const l: LabelDoc = { id: lid, name: nm, at, face };

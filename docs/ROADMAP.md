@@ -295,12 +295,14 @@ chip presentation, capacity and the program-solving half of Turing Complete.
 - ✅ Waypoints from the right-click menu: "Add a bend here" on a wire puts a new corner on the cursor, which carries
   it until a click drops it (Esc cancels; one undo step). On a simple connection it is a breakpoint; on a square wire
   the segment detours through it (a corner on the segment's own line would be simplified away)
-- ⏳ Unravel and collapse pointers (right-click): on a pointer, "Unravel" replaces it and its twins with drawn wires
-  (routed square from end to end, a branch per twin); on a part, a wire or a selection, "Unravel pointers…" lists
-  the pointers it touches with check boxes (all / none) and unravels the ones chosen. "Collapse to pointers" on a
-  wire turns it into a pair of pointers at its two ends (the net's name suggested, editable; one pointer per end of
-  a branching net). "Unravel selected" / "Collapse selected" act on every pointer / wire in the selection. One undo
-  step each; connectivity never changes (a test compiles the chip before and after and compares the nets)
+- ✅ Unravel and collapse pointers (right-click, editor/unravel.ts): on a pointer, "Unravel into wires" replaces it and
+  its twins with drawn wires (the driver's island is the hub, each twin's wire runs on to the nearest point of the net:
+  a cheap search over square shapes, then an A* on the half grid when none is clean; the net keeps the pointer's name);
+  on a part, a wire or a selection, "Unravel pointers…" lists the pointers it touches with check boxes (All / None).
+  "Collapse to pointers…" on a wire turns it and the wires branched from it into one pointer per end (the net's
+  name suggested, editable; refused when it names another net). "Unravel selected" / "Collapse selected" act on the
+  selection. One undo step each; a test unravels every pointer and collapses every wire of every example, challenge
+  answer, library block and chapter CPU and compares the nets, and checks no single unravel draws on another net
 
 **Colourful mode** (Turing Complete style; mockup first). Colour says *which* signal, brightness and the
 flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every combination); light and dark themes
