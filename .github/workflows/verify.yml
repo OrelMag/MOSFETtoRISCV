@@ -1,0 +1,52 @@
+name: Verify CPUs (long fuzzing)
+
+# Random RV32 programs on every gate-level CPU against the golden model, far beyond the 32 seeds npm test
+# runs (docs/VERIFICATION.md). Each night takes a new range of seeds; failures (CPU, seed, program, first
+# differing state) are kept as an artifact. Re-run a range by hand with the seeds input.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: 'Seed range, e.g. 5000..7000 (empty: a new range for this run)'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        cpus:
+          - sc sc-ks sc-dc sc-wb2 sc-ic sc-wb-ic
+          - pipe pipe-ks pipe-bal pipe-bp pipe-bal-bp pipe-wb2 pipe-wt-bal-bp
+          - mc-fsm mc-micro dual sys
+          - sc-f fppipe
+          - pipe-m pipe-m-bal-bp sys-m
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Fuzz
+        env:
+          SEEDS: ${{ inputs.seeds }}
+          RUN: ${{ github.run_number }}
+          CPUS: ${{ matrix.cpus }}
+        run: |
+          if [ -z "$SEEDS" ]; then FROM=$((1000 + 2048 * RUN)); SEEDS="$FROM..$((FROM + 2047))"; fi
+          echo "seeds $SEEDS"
+          npx vite-node scripts/fuzz32.ts $CPUS --seeds "$SEEDS" --out failures.json
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-failures-${{ strategy.job-index }}
+          path: failures.json
+          if-no-files-found: ignore
