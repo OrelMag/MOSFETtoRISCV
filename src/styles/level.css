@@ -110,3 +110,26 @@
   .lv-side { border-right: 0; border-bottom: 1px solid var(--border); max-height: 45vh; }
   .lv-ed { height: 80vh; }
 }
+
+/* The full codex entry (campaign/ui/codexentry.ts), on the campaign page. */
+.cx-entry { max-width: 1100px; display: grid; gap: 16px; }
+.cx-head h2 { margin: 0 0 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.cp-badge.cost { background: var(--accent-soft); color: var(--accent); text-transform: none; }
+.cx-sum { font-size: 15px; line-height: 1.55; color: var(--text-2); border-left: 3px solid var(--accent); padding-left: 12px; max-width: 75ch; }
+.cx-sum code, .cx-prose code { font: 0.92em var(--font-mono); background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
+.cx-cols { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+.cx-col { display: grid; gap: 16px; min-width: 0; }
+.cx-entry h4 { margin: 0 0 5px; font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.cx-prose { font-size: 14.5px; line-height: 1.6; color: var(--text); max-width: 72ch; }
+.cx-example { font-size: 14px; }
+.cx-mist { margin: 0; padding-left: 18px; color: var(--text); font-size: 14px; line-height: 1.55; }
+.cx-mist li { margin: 4px 0; }
+.cx-anat { max-width: 460px; }
+.cx-fig { margin: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--canvas); overflow: hidden; }
+.cx-fig-canvas { position: relative; height: 280px; }
+.cx-fig-canvas .schematic { width: 100%; height: 100%; display: block; }
+.cx-fig figcaption { font-size: 12px; color: var(--muted); padding: 6px 10px; border-top: 1px solid var(--border); background: var(--surface); }
+.cx-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.lv-chip.acc { border-color: transparent; background: var(--accent-soft); color: var(--accent); }
+.cx-entry .lv-bars a { color: var(--text); text-decoration: none; font-size: 12px; }
+@media (max-width: 1000px) { .cx-cols { grid-template-columns: minmax(0, 1fr); } }

@@ -5,9 +5,13 @@
 // #/campaign/play/<node>.
 
 import '../../styles/campaign.css';
+// The level screen's chips, bars and diagram frame, shared by the full codex entry.
+import '../../styles/level.css';
 import { BLOCKS, blockNodes } from '../../campaign/anatomy';
 import { CODEX, CODEX_KINDS, codexById } from '../../campaign/codex';
-import { type Datasheet, datasheets } from '../../campaign/datasheet';
+import { type Datasheet, datasheetOf, datasheets } from '../../campaign/datasheet';
+import type { CodexMore } from '../../campaign/codexmore';
+import { codexEntryEl } from '../../campaign/ui/codexentry';
 import { ancestors, dependents, isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { LESSONS } from '../../campaign/lessons';
 import { levelChallenge, levelChipId, startCandidates, startFrom } from '../../campaign/levels';
@@ -35,6 +39,8 @@ const KIND_LABEL: Record<CampaignNode['kind'], string> = { lesson: 'Lesson', dri
 const STATUS_LABEL = { locked: 'Locked', available: 'Available', started: 'In progress', solved: 'Solved', skipped: 'Skipped' };
 
 export class CampaignPage implements Page {
+  /** The fuller codex (loaded on the first visit to an entry). */
+  private moreOf: ((id: string) => CodexMore | undefined) | undefined;
   readonly kind = 'campaign';
   readonly el: HTMLElement;
   private main = h('div', { class: 'cp-main' });
@@ -358,12 +364,18 @@ export class CampaignPage implements Page {
       const where = foundIn(e.id);
       detail = h('div', { class: 'cp-codex-entry locked' }, h('h2', null, e.title),
         h('p', null, 'Not discovered yet. Found in: ', where.map((n, i) => [i ? ', ' : '', h('a', { href: `#/campaign/n/${n.id}` }, n.title)])));
+    } else if (this.moreOf === undefined) {
+      // The fuller texts are a chunk of their own: load them, then draw the entry.
+      detail = h('div', { class: 'cp-codex-entry' }, h('h2', null, e.title), html('div', 'cp-codex-body', e.body));
+      import('../../campaign/codexmore').then((m) => {
+        this.moreOf = m.moreOf;
+        if (location.hash === `#/campaign/codex/${e.id}`) this.main.replaceChildren(this.codexView(e.id));
+      }, () => { this.moreOf = () => undefined; });
     } else {
-      detail = h('div', { class: 'cp-codex-entry' }, h('span', { class: 'cp-badge kind' }, CODEX_KINDS.find((k) => k.id === e.kind)!.title.replace(/s$/, '')),
-        h('h2', null, e.title), html('div', 'cp-codex-body', e.body),
-        ...(e.kind === 'component' ? datasheets(e.id).map(sheetEl) : []),
-        e.related?.length ? h('p', null, h('b', null, 'See also: '), e.related.map((r, i) => [i ? ', ' : '', h('a', { href: `#/campaign/codex/${r}` }, codexById(r)?.title ?? r)])) : null,
-        h('p', { class: 'sub' }, 'Taught in: ', foundIn(e.id).map((n, i) => [i ? ', ' : '', h('a', { href: `#/campaign/n/${n.id}` }, n.title)])));
+      const more = this.moreOf(e.id);
+      const sheet = more?.lib ? datasheetOf(more.lib) : undefined;
+      const sheets = sheet ? [sheetEl(sheet)] : e.kind === 'component' ? datasheets(e.id).map(sheetEl) : [];
+      detail = codexEntryEl(e, more, p.view, sheets);
     }
     return h('div', { class: 'cp-codex' }, list, detail);
   }

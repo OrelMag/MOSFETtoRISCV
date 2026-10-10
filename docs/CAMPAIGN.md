@@ -424,7 +424,7 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
 - **Measured** (phase G): the multiply core 9.1k NANDs, period 191 (the 16 × 16 array doubles it: why real
   cores pipeline the multiplier); with the stalling divider 11.7k, period 193, 18 cycles per divide; the
   multicycle core 6.2k, period 78 against 98, but 3.1× the cycles; the predicting pipeline 11.8k, period 85,
-  13% fewer cycles than Pipeline IV on loop programs; the cache 3.5k NANDs, period 36.
+  13% fewer cycles than Pipeline IV over the prediction programs (25% on the loops); the cache 3.5k NANDs, period 36.
 - **Measured** (phase D): the reference single-cycle core is 5 748 NANDs, clock period 98 NAND delays with
   8-delay memories in the path (81 with Kogge–Stone adders). The bench runs 28 programs (≈1 240 cycles in
   all) in 0.2–0.6 s on 32 bit-parallel lanes; the event-driven fallback gives identical results.

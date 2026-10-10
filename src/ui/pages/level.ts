@@ -20,6 +20,7 @@ import { ACTS, nodeById } from '../../campaign/nodes';
 import { progress } from '../../campaign/progress';
 import type { CampaignNode, Metric } from '../../campaign/types';
 import { criteria, gradeTable } from '../../campaign/ui/levelinfo';
+import { hideGlossary, markTerms } from '../../campaign/ui/glossaryui';
 import { anatomySvg } from '../../campaign/ui/svgs';
 import { installChallenges } from '../../editor/challengeui';
 import { type BuildChallenge, type CheckResult, importAnswer, ruleKind, startChallenge } from '../../editor/challenges';
@@ -28,6 +29,7 @@ import { loadWorkspace, saveWorkspace } from '../../editor/store';
 import '../../editor/features';
 import { resolveComponent } from '../../lib/resolve';
 import { h, icon } from '../dom';
+import { settings } from '../settings';
 import type { Page } from './chapter';
 
 type Tab = 'why' | 'task' | 'tips' | 'codex';
@@ -105,6 +107,7 @@ export class LevelPage implements Page {
   }
 
   destroy(): void {
+    hideGlossary();
     this.offs.forEach((f) => f());
     this.chal?.destroy();
     this.editor?.destroy();
@@ -156,6 +159,7 @@ export class LevelPage implements Page {
     else if (this.tab === 'tips') this.tipsTab(body);
     else this.codexTab(body);
     this.side.replaceChildren(bar, body);
+    if (settings.glossary && this.tab !== 'codex') markTerms(body, 8);
   }
 
   private whyTab(el: HTMLElement): void {

@@ -92,7 +92,7 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'g_xor', act: 1, title: 'XOR from NAND', kind: 'build', requires: ['g_and', 'g_or'], base: sandbox('g_xor'),
-    why: 'XOR is addition without carry, a controlled inverter (the subtractor\'s ¬b), and the equality test (a ⊕ b = 0). It is the most used gate of the ALU.',
+    why: 'XOR is addition without carry, a controlled inverter (the subtractor\'s ¬b), and the difference detector behind the equality test (a ⊕ b = 0).',
     tips: ['Start from n = ¬(a·b).', 'a ⊕ b = ¬(¬(a·n) · ¬(b·n)): four NANDs in total.'],
     codex: ['xor'], unlocks: ['xor', 'xnor'], par: { nand: 4, depth: 3 },
   },
@@ -115,8 +115,8 @@ export const NODES: CampaignNode[] = [
     unlocks: ['rv16_prime4'], codex: ['sop', 'nandnand'], base: BUILD1.g_sop, par: { nand: 20, depth: 7 } },
   {
     id: 'g_wide', act: 1, title: 'Wide gates', kind: 'build', requires: ['g_and', 'g_or'],
-    why: 'The branch unit asks "is the result zero?": a 16-input NOR. A chain of 2-input gates is 15 deep; a tree is 4. Depth, not gate count, sets the clock.',
-    tips: ['Balance the tree: pairs, then pairs of pairs.', 'Alternate NAND and NOR levels to avoid inverters (bubble pushing).'],
+    why: 'The equality test behind beq and bne asks "is a ⊕ b zero?": a 16-input NOR. A chain of 2-input gates is 15 deep; a tree is 4. Depth, not gate count, sets the clock.',
+    tips: ['Balance the tree: pairs, then pairs of pairs.', 'The chain and the tree cost the same NANDs: only the depth differs.'],
     codex: ['fanin', 'depth', 'bubble'], unlocks: ['rv16_wide16', 'and3', 'and4', 'and8', 'or3', 'or4', 'or8', 'or16', 'zero*', 'andx*', 'orx*', 'xorx*'], base: BUILD1.g_wide, par: { nand: 46, depth: 9 } },
   {
     id: 'g_dec', act: 1, title: '3→8 decoder', kind: 'build', requires: ['g_wide'],
@@ -178,7 +178,7 @@ export const NODES: CampaignNode[] = [
     codex: ['incrementer'], unlocks: ['inc16', 'inc4'], base: BUILD1.a_inc16, par: { nand: 80, depth: 33 } },
   {
     id: 'a_addsub16', act: 2, title: 'Adder / subtractor', kind: 'build', requires: ['a_add16', 'n_twos'],
-    why: 'sub, slt, beq/blt all subtract. a − b = a + ¬b + 1: XOR gates invert b when sub = 1, and sub is also the carry in.',
+    why: 'sub and slt subtract (branches compare in their own unit). a − b = a + ¬b + 1: XOR gates invert b when sub = 1, and sub is also the carry in.',
     tips: ['An XOR is a controlled inverter.', 'Feed sub into cin.'],
     codex: ['subtract', 'twos'], unlocks: ['addsub16'], base: BUILD1.a_addsub16, par: { nand: 212, depth: 41 } },
   {
@@ -193,7 +193,7 @@ export const NODES: CampaignNode[] = [
     codex: ['shifter'], unlocks: ['shift16'], base: BUILD1.a_shift16, par: { nand: 389, depth: 14 } },
   {
     id: 'a_alu16', act: 2, title: 'The ALU', kind: 'build', requires: ['a_addsub16', 'a_slt', 'a_shift16', 'g_wide'],
-    why: 'The execute stage: ten operations selected by a 4-bit control word from the instruction\'s op and f3 fields. Every arithmetic instruction, every address and every branch comparison goes through it.',
+    why: 'The execute stage: ten operations selected by a 4-bit control word from the instruction\'s op and f3 fields. Every arithmetic and logic instruction and every load / store address goes through it; branches compare in their own unit.',
     tips: ['Compute everything in parallel, select one result with a mux tree.', 'Share the one adder between add, sub and the comparisons.'],
     codex: ['alu'], unlocks: ['alu16'], anatomy: ['alu'], chapters: [{ chapter: 'alu', label: 'The ALU' }], base: BUILD1.a_alu16, par: { nand: 1250, depth: 64 } },
   {
@@ -474,7 +474,7 @@ export const NODES: CampaignNode[] = [
   // ---- Act 8 --------------------------------------------------------------------------------
   {
     id: 'o_mulseq', act: 8, title: 'Shift-and-add multiplier', kind: 'build', optional: true, requires: ['a_add16', 's_reg16'], base: BUILD8.o_mulseq, givesOf: partsOf(() => seqMul(16)), par: { nand: 1169, period: 48 },
-    why: 'Software multiplication (Act 4) in hardware: one adder reused once per clock. Small, and sixteen times slower than an array.',
+    why: 'Software multiplication (Act 4) in hardware: one adder reused once per clock. Small; sixteen times as many cycles as an array, about 5.5 times the time (its clock is shorter).',
     tips: ['The product register starts as {0, b}; each step adds a to its upper half if its lowest bit is 1, then shifts everything right.'],
     codex: ['shiftadd'], chapters: [{ chapter: 'muldiv', label: 'Multiply & divide' }],
   },
