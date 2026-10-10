@@ -3,9 +3,10 @@
 import { clockCycle, dmemWords } from '../../src/riscv/cosim';
 import { ISS, type IssOptions } from '../../src/riscv/iss';
 import { BitSim, LANES } from '../../src/sim/bitsim';
-import { flatten } from '../../src/sim/flatten';
+import { flatten, type FlatDesign } from '../../src/sim/flatten';
 import { GateSim } from '../../src/sim/gatesim';
 import { type Bit, inPorts } from '../../src/sim/types';
+import type { IsaCoverage, LaneProbe } from './coverage';
 import { issOptions, type CpuConfig } from './cpus';
 import { loadable, verdict, type Loadable, type RvImage } from './images';
 
@@ -18,12 +19,13 @@ export interface RunResult {
   ms: number;
 }
 
-export function runOnIss(img: RvImage, l: Loadable, opts: IssOptions, maxSteps = 100_000): RunResult {
+export function runOnIss(img: RvImage, l: Loadable, opts: IssOptions, maxSteps = 100_000, cov?: IsaCoverage): RunResult {
   const t0 = performance.now();
   const iss = new ISS(l.words, { ...opts, dmemWords: 2 ** l.dmemK, imemWords: 2 ** l.imemK });
   let tohost: number | undefined;
   while (iss.steps < maxSteps && !iss.halted) {
     const s = iss.step();
+    cov?.step(s);
     if (s.store && ((s.store.addr >>> 2) & (2 ** l.dmemK - 1)) === l.tohost && iss.dmem[l.tohost]) { tohost = iss.dmem[l.tohost]; break; }
   }
   return { ...verdict(tohost, img.env), count: iss.steps, ms: performance.now() - t0 };
@@ -44,11 +46,11 @@ export interface LaneBatch { jobs: LaneJob[]; imemK: number; dmemK: number }
  * The images as lane batches for `cfg`: grouped by data-memory size (a bigger memory is a bigger circuit),
  * at most 32 per batch, each with its golden-model run and a cycle budget of the CPU's worst CPI.
  */
-export function cpuJobs(cfg: CpuConfig, imgs: RvImage[]): LaneBatch[] {
+export function cpuJobs(cfg: CpuConfig, imgs: RvImage[], cov?: IsaCoverage): LaneBatch[] {
   const groups = new Map<number, LaneJob[]>();
   for (const img of imgs) {
     const l = loadable(img, cfg.imemK, cfg.fixedDmemK ?? cfg.dmemK);
-    const golden = runOnIss(img, l, issOptions(cfg.isa));
+    const golden = runOnIss(img, l, issOptions(cfg.isa), undefined, cov);
     const job = { img, l, golden, max: Math.ceil(golden.count * cfg.cpi * 1.25) + 100 };
     groups.set(l.dmemK, [...(groups.get(l.dmemK) ?? []), job]);
   }
@@ -67,13 +69,14 @@ export function cpuJobs(cfg: CpuConfig, imgs: RvImage[]): LaneBatch[] {
  * instruction ROM is evaluated per lane (each lane its own program), every other leaf is a NAND.
  * All jobs share the CPU's memory sizes (imemK, dmemK). Returns one result per job.
  */
-export function runLanes(cfg: CpuConfig, jobs: LaneJob[], imemK: number, dmemK: number): RunResult[] {
+export function runLanes(cfg: CpuConfig, jobs: LaneJob[], imemK: number, dmemK: number, probe?: (design: FlatDesign) => LaneProbe): RunResult[] {
   if (jobs.length > LANES) throw new Error('runLanes: at most 32 jobs');
   const t0 = performance.now();
   const design = flatten(cfg.build(jobs[0].l.words, imemK, dmemK));
   const sim = new BitSim(design);
   const N = 2 ** imemK;
   const progs = Array.from({ length: LANES }, (_, l) => jobs[l % jobs.length].l.words);
+  const pr = probe?.(design);
   design.leaves.forEach((leaf, i) => {
     if (leaf.kind !== 'behavior' || leaf.inputs.length === 0) return;
     // stateless ROMs only: the program ROM (imem) gets each lane's program, others (microcode) keep theirs
@@ -92,6 +95,7 @@ export function runLanes(cfg: CpuConfig, jobs: LaneJob[], imemK: number, dmemK: 
   while (c < max && out.some((r) => !r)) {
     sim.cycle();
     c++;
+    pr?.cycle(sim, out.reduce((m, r, l) => (r ? m : m | (1 << l)), 0));
     if ((c & 7) && c !== max) continue;
     jobs.forEach((j, l) => {
       if (out[l]) return;

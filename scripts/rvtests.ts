@@ -59,10 +59,15 @@ if (args.includes('--write')) {
     reasons.set(r, m);
     m.set(n, [...(m.get(n) ?? []), cfg.id]);
   }
+  /** The CPUs a reason applies to: all, all but a few, or a list. */
+  const who = (ids: string[]) => {
+    const rest = cpus.map((c) => c.id).filter((id) => !ids.includes(id));
+    return !rest.length ? 'every CPU' : rest.length < ids.length ? `every CPU but ${rest.join(', ')}` : ids.join(', ');
+  };
   for (const [r, m] of reasons) {
-    const tests = [...m.keys()];
-    const everywhere = tests.every((t) => m.get(t)!.length === m.get(tests[0])!.length);
-    lines.push(`- ${r}: ${tests.map((t) => `\`${t}\``).join(', ')}${everywhere ? ` (${m.get(tests[0])!.length === cpus.length ? 'every CPU' : m.get(tests[0])!.join(', ')})` : ''}`);
+    const tests = [...m.keys()], first = m.get(tests[0])!;
+    const same = tests.every((t) => m.get(t)!.join() === first.join());
+    lines.push(`- ${r}: ${tests.map((t) => `\`${t}\``).join(', ')}${same ? ` (${who(first)})` : ''}`);
   }
   const fails = cpus.flatMap((c) => [...results.get(c.id)!].filter(([, v]) => v !== 'pass' && !v.startsWith('n/a')).map(([n, v]) => `- ${c.name}: \`${n}\` ${v}`));
   lines.push('', fails.length ? 'Failures:' : 'No failures.', '', ...fails);
