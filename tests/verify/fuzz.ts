@@ -67,7 +67,7 @@ export function fuzzCase(cfg: CpuConfig, seed: number, n = 60, cov?: IsaCoverage
 }
 
 /** The architectural state of the CPU in `root` (a lone CPU, or the multi-core with core0 / core1 and a shared dm). */
-function readState(sim: Pick<Sim, 'getBits' | 'design'>, root: HierNode, f: boolean): ArchState {
+export function readState(sim: Pick<Sim, 'getBits' | 'design'>, root: HierNode, f: boolean): ArchState {
   const kids = root.children!;
   if (kids.has('core0')) {
     return { x: ['core0', 'core1'].map((c) => cpuState(sim, kids.get(c)!).x), dmem: dmemWords(sim, kids.get('dm')!) };
