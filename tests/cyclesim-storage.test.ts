@@ -138,15 +138,15 @@ describe('flip-flops drawn from NANDs in the sandbox', () => {
 describe('clocks through inverters', () => {
   /**
    * A flip-flop at the rising edge feeding one at the falling edge (its clock a NOT of clk), a pin
-   * straight into another (the table schedules both), and an AND of two pins into a third (logic:
-   * one delay, as soon as its clock).
+   * straight into another (the table schedules both), and a NAND of two pins into a third, which a
+   * pin reads too (shared logic, outside the table: one delay, as soon as the third's clock).
    */
-  const def = top('t_negedge', [bit('clk', 'in'), bit('d', 'in'), bit('e', 'in'), bit('f', 'in'), bit('q', 'out'), bit('r', 'out'), bit('s', 'out')], () => ({
-    instances: [{ name: 'inv', def: NOT }, { name: 'a', def: DFF }, { name: 'b', def: DFF }, { name: 'c', def: DFF }, { name: 'g', def: AND }, { name: 'h', def: DFF }],
+  const def = top('t_negedge', [bit('clk', 'in'), bit('d', 'in'), bit('e', 'in'), bit('f', 'in'), bit('u', 'in'), bit('q', 'out'), bit('r', 'out'), bit('s', 'out'), bit('t', 'out')], () => ({
+    instances: [{ name: 'inv', def: NOT }, { name: 'a', def: DFF }, { name: 'b', def: DFF }, { name: 'c', def: DFF }, { name: 'g', def: NAND }, { name: 'h', def: DFF }, { name: 'k', def: NOT }],
     nets: [
       { ends: ['clk', 'inv.a', 'a.clk'] }, { ends: ['inv.y', 'b.clk', 'c.clk', 'h.clk'] }, { ends: ['d', 'a.d'] },
-      { ends: ['a.q', 'b.d'] }, { ends: ['b.q', 'q'] }, { ends: ['e', 'c.d', 'g.a'] }, { ends: ['c.q', 'r'] },
-      { ends: ['f', 'g.b'] }, { ends: ['g.y', 'h.d'] }, { ends: ['h.q', 's'] },
+      { ends: ['a.q', 'b.d'] }, { ends: ['b.q', 'q'] }, { ends: ['e', 'c.d'] }, { ends: ['u', 'g.a'] }, { ends: ['c.q', 'r'] },
+      { ends: ['f', 'g.b'] }, { ends: ['g.y', 'h.d', 'k.a'] }, { ends: ['h.q', 's'] }, { ends: ['k.y', 't'] },
     ],
   }));
 
@@ -163,7 +163,7 @@ describe('clocks through inverters', () => {
     sameNets(dual, ref, 'e with clk');
     both((s) => { s.setInput('f', 1); s.settle(); });
     for (const v of [1, 0, 1]) both((s) => { s.setInput('clk', v); s.settle(); });
-    // f with the clock: through the AND it reaches h.d as soon as h's clock does: GateSim's
+    // f with the clock: through the NAND it reaches h.d as soon as h's clock does: GateSim's
     both((s) => { s.setInput('f', 0); s.setInput('clk', 0); s.settle(); });
     expect(dual.whyNot).toMatch(/shorter path/);
     sameNets(dual, ref, 'f with clk');
@@ -244,23 +244,38 @@ describe('what stays on GateSim, and why', () => {
     sameNets(dual, ref, 'after');
   });
 
-  it('a latch whose enable is a glitch of logic (AND of a pin and its inverse)', () => {
-    const def = top('t_glitch', [bit('d', 'in'), bit('a', 'in'), bit('q', 'out')], () => ({
-      instances: [{ name: 'n', def: NOT }, { name: 'g', def: AND }, { name: 'l', def: D_LATCH }],
-      nets: [{ ends: ['a', 'n.a', 'g.a'] }, { ends: ['n.y', 'g.b'] }, { ends: ['g.y', 'l.e'] }, { ends: ['d', 'l.d'] }, { ends: ['l.q', 'q'] }],
-    }));
-    expect(built(def)).toBeInstanceOf(CycleSim);
+  /** A latch enabled by AND(a, NOT a): a pulse when a rises. shared: the AND's output also drives a pin through a NOT. */
+  const glitchy = (shared: boolean) => top(`t_glitch${shared ? '_s' : ''}`, [bit('d', 'in'), bit('a', 'in'), bit('q', 'out'), ...(shared ? [bit('z', 'out')] : [])], () => ({
+    instances: [{ name: 'n', def: NOT }, { name: 'g', def: AND }, { name: 'l', def: D_LATCH }, ...(shared ? [{ name: 'm', def: NOT }] : [])],
+    nets: [
+      { ends: ['a', 'n.a', 'g.a'] }, { ends: ['n.y', 'g.b'] }, { ends: ['g.y', 'l.e', ...(shared ? ['m.a'] : [])] }, { ends: ['d', 'l.d'] }, { ends: ['l.q', 'q'] },
+      ...(shared ? [{ ends: ['m.y', 'z'] }] : []),
+    ],
+  }));
+  const poke = (def: ComponentDef) => {
     const { dual, ref } = pair(def, 'zero');
-    // with q = d an enable pulse changes nothing; d = 1 makes a pulse visible: the table refuses
-    expect(dual.engine).toBe('cycle');
-    for (const s of [dual, ref]) { s.setInput('d', 1); s.settle(); }
-    expect(dual.whyNot).toMatch(/follows e/);
     const rnd = rng(51);
     for (let k = 0; k < 40; k++) {
       const p = rnd() < 0.5 ? 'a' : 'd', v = rnd() < 0.5 ? 1 : 0;
       for (const s of [dual, ref]) { s.setInput(p, v); s.settle(); }
-      sameNets(dual, ref, `op ${k}`);
+      sameNets(dual, ref, `${def.id} op ${k}`);
     }
+    return dual;
+  };
+
+  it('a latch whose enable is a glitch of logic only it reads: the pulse is inside its table, exactly', () => {
+    expect(built(glitchy(false))).toBeInstanceOf(CycleSim);
+    expect(poke(glitchy(false)).engine).toBe('cycle');
+  });
+
+  it('a latch enabled by shared logic: refused where a pulse on its enable would show', () => {
+    const def = glitchy(true);
+    expect(built(def)).toBeInstanceOf(CycleSim);
+    const { dual } = pair(def, 'zero');
+    // d changing as e pulses would be caught: the power-on state is refused already
+    expect(dual.engine).toBe('gate');
+    expect(dual.whyNot).toMatch(/^l: a glitch on e /);
+    poke(def);
   });
 
   it('gated and ripple clocks are refused when the design is built, naming the clock', () => {

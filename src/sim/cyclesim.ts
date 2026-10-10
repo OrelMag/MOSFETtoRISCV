@@ -54,6 +54,12 @@ interface Macro {
   clk: number;
 }
 
+/**
+ * Pins (nets) and poked parts (leaves) that reach the data inputs of clusters clocked through
+ * inverters sooner than their clock: the pins of those clusters that make a settle unsafe with them.
+ */
+interface Hazards { nets: Map<number, number[]>; leaves: Map<number, number[]> }
+
 /** Tables by structure and profile, shared by every design built in this session (bounded). */
 const TABLES = new Map<string, FfTable>();
 const MAX_TABLES = 512;
@@ -102,9 +108,9 @@ export class CycleSim implements Sim {
   private mRoot: Int32Array;
   private mPar: Uint8Array;
   private mClkPin: Int32Array;
-  /** Root nets that clock a cluster; and those whose clusters a short path makes a pin change together with them unsafe for. */
+  /** Root nets that clock a cluster; pins and parts that may not change together with some pins (Hazards). */
   private isClock: Uint8Array;
-  private hazard: Uint8Array;
+  private hazards: Hazards;
   /** Why the last load / settle could not be done here, or the last settle left a cluster where its table cannot follow ('' if none). */
   refusal = '';
   /**
@@ -158,7 +164,7 @@ export class CycleSim implements Sim {
   private inputs = new Map<string, number | Bit[]>();
   private inputNets = new Map<string, number[]>();
 
-  private constructor(design: FlatDesign, macros: Macro[], gates: number[], behaviors: number[], level: Int32Array, maxLevel: number, hazard: Uint8Array) {
+  private constructor(design: FlatDesign, macros: Macro[], gates: number[], behaviors: number[], level: Int32Array, maxLevel: number, hazards: Hazards) {
     this.design = design;
     const n = design.netCount;
     const leaves = design.leaves;
@@ -187,7 +193,7 @@ export class CycleSim implements Sim {
     this.mSlot = new Int32Array(M).fill(-1);
     this.actPos = new Int32Array(M).fill(-1);
     this.isClock = new Uint8Array(n);
-    this.hazard = hazard;
+    this.hazards = hazards;
     const outs: number[] = [], perSlot: number[] = [];
     const tabIndex = new Map<FfTable, number>();
     macros.forEach((m, mi) => {
@@ -370,47 +376,59 @@ export class CycleSim implements Sim {
 
     // Clusters clocked through inverters see their clock k delays late: their data inputs must not
     // change before k + 1 (else the table would need to know when they do). `early` is the soonest a
-    // clock edge reaches them; a change of another pin or a poke reaching them sooner (hazard) makes
-    // the settles where it comes with their clock GateSim's.
-    const hazard = new Uint8Array(n);
-    let fromClocks: Uint8Array | null = null, fromOthers: Uint8Array | null = null;
-    const reach = (sources: [number, number][]): Uint8Array => {
+    // clock edge reaches them; another pin, or a poked part, that reaches them sooner (a hazard)
+    // makes the settles where it changes together with one of their pins GateSim's.
+    const hazards: Hazards = { nets: new Map(), leaves: new Map() };
+    let fromClocks: Uint8Array | null = null;
+    const delayOf = (li: number) => (leaves[li].kind === 'nand' ? 1 : Math.max(1, leaves[li].def.behavior?.delay ?? 1));
+    const reach = (sources: number[]): Uint8Array => {
       const d = new Uint8Array(n).fill(255);
       const buckets: number[][] = Array.from({ length: FAR + 1 }, () => []);
-      for (const [net, k] of sources) if (k < d[net]) { d[net] = k; buckets[k].push(net); }
+      for (const net of sources) { d[net] = 0; buckets[0].push(net); }
       for (let k = 0; k <= FAR; k++) {
         for (const x of buckets[k]) {
           if (d[x] !== k) continue;
           for (let i = rdStart[x]; i < rdStart[x + 1]; i++) {
-            const l = leaves[rdList[i]], t = k + (l.kind === 'nand' ? 1 : Math.max(1, l.def.behavior?.delay ?? 1));
+            const li = rdList[i], t = k + delayOf(li);
             if (t > FAR) continue;
-            for (const p of l.outputs) for (const y of p) if (t < d[y]) { d[y] = t; buckets[t].push(y); }
+            for (const p of leaves[li].outputs) for (const y of p) if (t < d[y]) { d[y] = t; buckets[t].push(y); }
           }
         }
       }
       return d;
     };
+    /** Pins other than clocks, and parts a poke changes, that reach these nets sooner than `early`. */
+    const sooner = (targets: number[], early: number, pins: Set<number>, parts: Set<number>): void => {
+      const d = new Map<number, number>();
+      const queue: number[] = [];
+      for (const x of targets) { d.set(x, 0); queue.push(x); }
+      for (let h = 0; h < queue.length; h++) {
+        const y = queue[h], r = d.get(y)!, li = leafOf[y];
+        if (li < 0) {
+          if (rootIn[y] && !isPrimary[y]) pins.add(y);
+          continue;
+        }
+        const t = r + delayOf(li);
+        if (t >= early) continue;
+        if (leaves[li].kind === 'behavior') parts.add(li);
+        for (const p of leaves[li].inputs) for (const x of p) if (!d.has(x) || d.get(x)! > t) { d.set(x, t); queue.push(x); }
+      }
+    };
+    const note = (m: Map<number, number[]>, k: number, pins: number[]) => m.set(k, [...new Set([...(m.get(k) ?? []), ...pins])]);
     const macros: Macro[] = [];
     clusters.forEach((c, ci) => {
       const p = plans[ci];
       const late = Math.max(0, ...p.delay);
       let early = 1;
       if (late > 0) {
-        if (!fromClocks) {
-          const pins: [number, number][] = [], others: [number, number][] = [];
-          for (let net = 0; net < n; net++) if (rootIn[net]) (isPrimary[net] ? pins : others).push([net, 0]);
-          for (const l of leaves) if (l.kind === 'behavior') for (const q of l.outputs) for (const net of q) others.push([net, 1]);
-          fromClocks = reach(pins);
-          fromOthers = reach(others);
-        }
+        if (!fromClocks) fromClocks = reach([...Array(n).keys()].filter((net) => rootIn[net] && isPrimary[net]));
         early = late + 1;
-        let soonest = 255;
-        p.ins.forEach((x, i) => {
-          if (p.group[i] !== DATA) return;
-          early = Math.min(early, fromClocks![x]);
-          soonest = Math.min(soonest, fromOthers![x]);
-        });
-        if (soonest < early) for (const r of p.pins) hazard[r] = 1;
+        const data = p.ins.filter((_, i) => p.group[i] === DATA);
+        for (const x of data) early = Math.min(early, fromClocks[x]);
+        const pins = new Set<number>(), parts = new Set<number>();
+        sooner(data, early, pins, parts);
+        for (const r of pins) note(hazards.nets, r, p.pins);
+        for (const li of parts) note(hazards.leaves, li, p.pins);
       }
       const profile: Profile = { group: p.group, delay: p.delay, parity: p.parity, primary: p.primary, early };
       const key = `${c.key}#${p.group.join(',')}|${p.delay.join(',')}|${p.parity.join(',')}|${p.primary}|${early}`;
@@ -503,7 +521,7 @@ export class CycleSim implements Sim {
       }
       if (ins.some((net) => clocks.has(net) || derived[net])) for (const net of nodeOuts(k)) derived[net] = 1;
     }
-    return new CycleSim(design, macros, gates, behaviors, level, maxLevel, hazard);
+    return new CycleSim(design, macros, gates, behaviors, level, maxLevel, hazards);
   }
 
   // ---- loading and handing over ----------------------------------------------------------
@@ -718,15 +736,20 @@ export class CycleSim implements Sim {
     const G = this.G, GB = G + this.B, v = this.val;
     const { tabs, mTab, mstate, mBuf, nBuf, mOutStart, mOutList, mClkPin } = this;
     // A clock that is not 0 / 1 (all its clusters, the stable ones too): GateSim's job. So is a
-    // clock that reaches clusters through inverters, changing together with another pin (or a
-    // poke) whose path to their data inputs is shorter than the clock's (hazard).
-    let other = this.poked.length > 0, hazard = false;
+    // pin (or a poke) changing together with a clock that reaches clusters through inverters, when
+    // it reaches their data inputs sooner than the clock (Hazards).
+    const { nets: hn, leaves: hl } = this.hazards, cm = this.changedMark;
     for (const net of this.changedNets) {
-      if (!this.isClock[net]) other = true;
-      else if (v[net] > B1) return this.refuse('a clock pin is X');
-      if (this.hazard[net]) hazard = true;
+      if (this.isClock[net] && v[net] > B1) return this.refuse('a clock pin is X');
+      const h = hn.size ? hn.get(net) : undefined;
+      if (h && h.some((c) => cm[c])) return this.refuse('a pin changed together with a clock that reaches flip-flops through inverters, on a shorter path than the clock');
     }
-    if (hazard && other) return this.refuse('a pin changed together with a clock that reaches flip-flops through inverters, on a shorter path than the clock');
+    if (hl.size) {
+      for (const li of this.poked) {
+        const h = hl.get(li);
+        if (h && h.some((c) => cm[c])) return this.refuse('a part changed together with a clock that reaches flip-flops through inverters, on a shorter path than the clock');
+      }
+    }
     // Phase 1: the active clusters of every clock that changed join the readers of changed pins.
     for (const cs of this.changedClocks) {
       const list = this.actList[cs];
