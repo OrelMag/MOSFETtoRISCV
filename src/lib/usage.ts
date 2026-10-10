@@ -68,18 +68,21 @@ export function copiesIn(top: ComponentDef, part: ComponentDef): number {
   return count(top);
 }
 
-let cpus: { label: string; def: ComponentDef }[] | null = null;
+/** A CPU a chapter builds, and the chapter (route) that shows it. */
+export interface RefCpu { label: string; def: ComponentDef; route: string }
+
+let cpus: RefCpu[] | null = null;
 
 /** The CPUs the chapters build, as the learner first meets each (the first sample program). */
-export function referenceCpus(): { label: string; def: ComponentDef }[] {
+export function referenceCpus(): RefCpu[] {
   if (!cpus) {
     const w = assemble(PROGRAMS[0].source).words;
     cpus = [
-      { label: 'Single-cycle', def: singleCycleCpu(w) },
-      { label: 'Multicycle', def: multicycleCpu(w, { control: 'fsm' }) },
-      { label: 'Pipelined', def: pipelinedCpu(w) },
-      { label: 'System (RV32IM)', def: systemCpu(w, { m: true }) },
-      { label: 'Dual-core', def: dualCore(w) },
+      { label: 'Single-cycle', def: singleCycleCpu(w), route: '#/c/cpu' },
+      { label: 'Multicycle', def: multicycleCpu(w, { control: 'fsm' }), route: '#/c/multicycle' },
+      { label: 'Pipelined', def: pipelinedCpu(w), route: '#/c/pipeline' },
+      { label: 'System (RV32IM)', def: systemCpu(w, { m: true }), route: '#/c/muldiv' },
+      { label: 'Dual-core', def: dualCore(w), route: '#/c/multicore' },
     ];
   }
   return cpus;

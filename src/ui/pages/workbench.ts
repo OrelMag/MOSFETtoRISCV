@@ -11,6 +11,7 @@ import { Inspector } from '../../view/inspector';
 import { Stage } from '../../view/stage';
 import { memGridPanel } from '../../widgets/memgrid';
 import { transistorLeaf } from '../../widgets/mosfet';
+import { benchOpened, benchTabs } from '../benchtabs';
 import { h } from '../dom';
 import type { Page } from './chapter';
 
@@ -30,7 +31,7 @@ export class WorkbenchPage implements Page {
     search.addEventListener('input', () => { this.filter = search.value.toLowerCase(); this.renderList(); });
     this.list = h('div', { class: 'lib-list' });
     this.params = h('div', { class: 'param-row', style: 'padding:0 12px 10px' });
-    const lib = h('aside', { class: 'library' }, search, this.params, this.list);
+    const lib = h('aside', { class: 'library' }, benchTabs('components'), search, this.params, this.list);
     this.el = h('div', { class: 'bench' }, lib, this.stage.el, inspector.el);
     this.open(id || 'rca4');
   }
@@ -42,6 +43,7 @@ export class WorkbenchPage implements Page {
       return;
     }
     this.current = def.id;
+    benchOpened(def.id);
     // Primitives and transistor-level parts are shown inside a test bench so they can be opened.
     const root: ComponentDef = def.prim === 'nand' || def.prim === 'nmos' || def.prim === 'pmos' || (!netlistOf(def) && !needsSwitchLevel(def))
       ? bench(def) : def;
