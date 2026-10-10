@@ -7,7 +7,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../src/lib';
 import { bigRam } from '../src/lib/bigmem';
 import { incrementer } from '../src/lib/combinational';
+import { CpuMonitor } from '../src/editor/cpu';
+import { UserLibrary } from '../src/editor/library';
+import { emptyWorkspace } from '../src/editor/model';
 import { KEYBOARD, keyPart } from '../src/editor/parts';
+import { remixDef } from '../src/editor/remix';
+import { EditorSim } from '../src/editor/runtime';
 import { singleCycleCpu } from '../src/lib/cpu';
 import { splitter } from '../src/lib/define';
 import { NOT } from '../src/lib/gates';
@@ -312,6 +317,34 @@ describe('a large RAM (Behavior.seq) on the cycle engine', () => {
       const li = dual.design.leaves.findIndex((l) => l.def === bigRam(7, 8));
       expect(dual.leafState(li)).toEqual(ref.leafState(li));
     }
+  });
+});
+
+describe('EditorSim on the cycle engine', () => {
+  it('a remixed CPU runs on the cycle engine in lock-step with the golden model; gate mode and back carry the state', () => {
+    const words = randomProgram(51, 30);
+    const r = remixDef(emptyWorkspace(), singleCycleCpu(words));
+    if ('error' in r) throw new Error(r.error);
+    const lib = new UserLibrary(r.ws);
+    const es = new EditorSim({ debounceMs: 0 });
+    es.update(lib.compiled(r.id)!, r.ws.chips[r.id].pins);
+    const mon = new CpuMonitor(es, () => r.ws.chips[r.id], () => r.ws.chips);
+    expect(mon.checking).toBe(true);
+    es.runCycles(20);
+    expect(es.engine).toBe('cycle');
+    const t = es.time;
+    es.runCycles(20);
+    expect(es.time).toBe(t); // no gate time on the cycle engine
+    // gate mode: one delay at a time on GateSim, from the same state
+    es.setMode('gate');
+    expect(es.engine).toBe('gate');
+    for (let i = 0; i < 200; i++) es.stepOnce();
+    expect(es.time).toBeGreaterThan(t);
+    es.setMode('cycle');
+    es.runCycles(40);
+    expect(es.engine).toBe('cycle');
+    expect(mon.mismatch).toBeNull();
+    expect(mon.retired).toBeGreaterThan(30);
   });
 });
 
