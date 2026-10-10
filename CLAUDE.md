@@ -62,7 +62,9 @@ before merging a change to the exporters or the dual-core.
 
 ```
 src/sim/       simulation core (no DOM)
-  types.ts       ComponentDef / PortDef / Netlist / NetDef: the single source of truth
+  types.ts       ComponentDef / PortDef / Netlist / NetDef: the single source of truth; Behavior: init(mode),
+                 seq (edge-triggered state: timing / logicDepth see storage), carry (heal on an edit), inside (seed
+                 an opened leaf's structure: InsideSeed.state / .bits); hdl.synth (vexport's body for a part)
   geometry.ts    symbol sizes and port positions (grid units) shared by authors, router, renderer
   flatten.ts     hierarchy → flat 1-bit nets + leaves, keeping a HierNode tree mapping every
                  level's ports/wires to flat nets (this is what makes every box transparent);
@@ -70,7 +72,21 @@ src/sim/       simulation core (no DOM)
   gatesim.ts     event-driven 3-valued (0/1/X) simulator, unit NAND delay, transport delay,
                  relaxation for power-on and oscillation resolution; runUntil(t) for a
                  fixed-period clock (an edge does not wait for the logic to settle); onTrace +
-                 watch() report every change of watched nets at its exact time
+                 watch() report every change of watched nets at its exact time; hot loops on typed arrays
+                 (tests/ref/gatesim-ref.ts: the old object version, gatesim-fast.test.ts: same events, same times);
+                 adopt(src, changed, dirty): take over another engine's settled state of the same design
+  ffmacro.ts     FfTable.of(def): an `ff` definition (DFF, DFFE) as a state machine of settled net vectors, from
+                 unit-delay simulation of it alone; good(id) checks by simulation that it is exact from a state
+                 (data arriving 1 … K delays after an edge, pairs in any order, pulses; outputs never follow data
+                 with the clock steady); partner(id): the clock-toggle pair a flip-flop sits in while nothing changes
+  cyclesim.ts    CycleSim.build(design) (or a reason): flip-flops as FfTable lookups (stable ones skipped at edges,
+                 internals read from the table), the rest levelized (a `seq` behaviour ordered by its comb inputs);
+                 settle = phase 1 (flip-flops / behaviours reading a changed pin or poked, on pre-edge values) then
+                 one levelized sweep; false, nothing changed, for an X clock or a transition no table vouches for.
+                 Refused: a flip-flop or seq clock not a pin, a behaviour on a clock-derived signal, other loops
+  dualsim.ts     DualSim: GateSim + CycleSim behind one Sim (preferFast: the sandbox's cycle mode; prepare() builds
+                 the cycle engine outside a frame budget); GateSim for step / runUntil / onTrace, power-on and
+                 carry, a settle the cycle engine refuses; the state handed over both ways (tests/cyclesim.test.ts)
   switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes); `strength` levels:
                  rails/inputs > transistors (strength 4..2, ratioed logic) > resistors (prim 'res',
                  strength 1: pull-ups lose to any transistor; two opposing → X) > stored charge
@@ -85,13 +101,16 @@ src/sim/       simulation core (no DOM)
   harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench;
                  reachesTransistors(def) (would a gate-level flatten hit a transistor?)
   stats.ts       transistor / NAND counts, logic depth
+  dead.ts        deadInstances(netlist, ports): parts no path leads from to an output (tested over every netlist
+                 and reference answer; the sandbox lint warns about them)
   settle.ts      outputSettle(def, vectors): simulated input-to-last-output-change delay (sees false paths)
-  timing.ts      static timing: register-to-register critical path, per-capture-stage periods
+  timing.ts      static timing: register-to-register critical path, per-capture-stage periods (a `seq` leaf:
+                 inputs captured, comb inputs → outputs launched at clk-to-q)
   verilog.ts     structural Verilog generated from any netlist (identifiers sanitized, alias
                  boxes from their bit map)
   svexport.ts    exportHdl(def, 'structure' | 'synth', testbench?): whole hierarchy in one file,
                  self-checking testbench from our simulation (checked against Yosys when installed)
-  vexport.ts     synthesizable Verilog-2005 (flip-flops as processes) for Yosys / OpenROAD
+  vexport.ts     synthesizable Verilog-2005 (flip-flops as processes, `hdl.synth` bodies) for Yosys / OpenROAD
   vcd.ts         toVcd(): Value Change Dump of recorded traces
 src/lib/       the component library (registered in `registry` via define())
   transistors.ts NMOS, PMOS, rails, CMOS inverter/NOR, NAND (prim + 4-transistor netlist), tie cells
@@ -107,6 +126,11 @@ src/lib/       the component library (registered in `registry` via define())
   storage.ts     romArray(preset), minimize() (Quine–McCluskey), pla(preset), fifo(k, w), stack(k, w), cam(k, w),
                  regfileMP(k, w, reads, writes)
   memory.ts      ram(k, w): decoder + registers + mux tree, user-scalable
+  bigmem.ts      large memories (2^7 … 2^16 words): bigRam(k, w) = one stateful behavioural leaf (RamState: words +
+                 X flags, sampled while clk is low, written at the rising edge) over a lazy hierarchy of ≤ 16 banks
+                 per level down to ramBank(w) (ram(6, w) as a lookup; opened, its latches are seeded), bankState;
+                 bigRamWithInit (initial words in the leaf's power-on state); romLevels (banks of 2^8-word ROMs,
+                 shared by content hash, wordsHash); ramLeafState / ramWords for readers; kWords labels
   alu.ts         constWord, zext, wiring boxes, bitwise, orN, isZero, barrel shifter, alu(n)
   regfile.ts     regfile(k, w) with x0 = 0, two read ports fed by one bundled word bus
   cpu.ts         single-cycle RV32I: rom (preferBehavior), dataMemory, IMM_GEN, OPCODE_DECODER,
@@ -182,8 +206,16 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   compile.ts     compileChip(doc) → ComponentDef + diags, netOfWire / netOfEnd / netOfLabel, connKey
   parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays (LED / LED bank, 7-segment,
                  hex, value, buzzer: buzzerHz; and the halt part), keys and the keyboard (external sources: behaviour-only
-                 leaves, isExternal; keyPart(bind), KEYBOARD, normalizeKey / keyLabel / keyCode / codeGlyph), ROM, RAM;
-                 audio.ts plays the buzzers
+                 leaves, isExternal; keyPart(bind), KEYBOARD, normalizeKey / keyLabel / keyCode / codeGlyph), ROM, RAM
+                 (both up to 2^16 words: wordRom → romTree ≤ 2^8, else romLevels; RAM > 2^6: bigRam),
+                 consoles / switch banks / screens (ioparts.ts); audio.ts plays the buzzers
+  ioparts.ts     console (data / we / clk: prints at rising edges, \n \b \f, 500 lines of scrollback in the leaf's state),
+                 switch bank (1–32 toggles: an external source; holdSwitches: positions survive Reset), screen (8–128 px
+                 square, mono / RGB111 / CGA 16 / RGB332 / RGB565; write: x / y / color / we into its own frame buffer;
+                 rows: row := data, the bus cut into ≤ 32-bit chunks for its picture leaf (packed behaviour inputs are
+                 exact to 53 bits only); pixels: a pure view of a px bus; optional vsync; X writes ignored and counted);
+                 most significant field first; visual settings in the def but not its id (a resize carries the state);
+                 ioNodes / ioState find them at any depth; colorRgb, pixelsOf, paintScreen (dots, grid, X pattern)
   library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip
   ops.ts         pure edits (add / move / delete / flip / set*, copy / paste, namePart: rename where the name is
                  drawn); wires stay orthogonal (a straight wire's breakpoints stay put); dragWire (a corner or
@@ -197,9 +229,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  refused when an output can float: Z is not X on a shared bus)
   program.ts     ROM program text (asm / rv16 / hex) → words
   memory.ts      romImage (problems on source lines), romListing / romIndex (the row the circuit reads),
-                 asm ↔ hex conversion, ROM_SAMPLES; readRam (live words), ramWithInit (initial contents
-                 as dotted power-on hints into the flip-flops' latches)
-  examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, shared bus, wired-AND / OR),
+                 asm ↔ hex conversion, ROM_SAMPLES; readRam (live words; a large RAM's from its leaf state),
+                 ramWithInit (initial contents as dotted power-on hints into the flip-flops' latches; > 2^6 words:
+                 bigRamWithInit)
+  examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, console, screen, shared bus, wired-AND / OR),
                  addExample: new chip, opened
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
@@ -208,7 +241,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  halt parts at any depth stop Run / runCycles after the step where they read 1; key / keyboard
                  leaves at any depth driven through Sim.poke (setKey: held keys survive rebuilds and resets; typeKey;
                  a keyboard drops its oldest key when `ack` reads 1 just before a rising edge, or once settled
-                 without a clock)
+                 without a clock); pokeLeaf (a switch flipped, a console / screen cleared); gate level is a DualSim
+                 (cycle mode on the cycle engine, `engine`: which runs)
   palette.ts     registerPaletteGroup + the palette panel (purist filter)
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
   challenges.ts  build challenges: BuildChallenge (ports, table / sequence check, allowed parts, par),
@@ -232,13 +266,15 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  cut at branch points; distance from the driver, sink or junction at the far end), for flowing bits
   probes.ts      ProbeTarget (wires / pin / pointer name) → flat nets of each new build (resolveProbe)
   sta.ts         chipTiming: static timing of a chip, critical path mapped to its parts / wires / pins
-  lint.ts        lintChip: two nets drawn on one line, pointers without a twin, inputs left open
+  lint.ts        lintChip: two nets drawn on one line, pointers without a twin, inputs left open (openInputs),
+                 parts driving nothing that reaches an output (deadParts)
   cpu.ts         ChipDoc.cpu (rom, pc / retire as NetRef: pin / pointer / wire / part port, regs, fregs,
                  dmem, pipeline, iss options); part fields are paths into user chips ('imem.rom', partAt,
                  nestedRoms: detection takes the workspace's chips); detectCpu (the chapters' instance and
                  pin names: imem, rf, dm, frf, fcsr, pcOut / pcF, retire, validW, switches / irq /
                  consoleData / consoleValid / leds), resolveCpu (settings over detection), readers
-                 (readRegs / readMem find w<i> registers via storageOf, banks, cache lines), pipelineSlots,
+                 (readRegs / readMem find w<i> registers via storageOf, banks, cache lines; memStoreOf also finds a
+                 large RAM's leaf state), pipelineSlots,
                  CpuMonitor: the ISS in lock-step on EditorSim.edgeHooks (registers, PC, fcsr, memory
                  after stores or at a pipeline's halt, console, LEDs), first mismatch, Run to halt
   cpu16.ts       detectRv16 (an RV16 ROM + a part with the core pins), Rv16Monitor: Iss16 in lock-step through the
@@ -260,9 +296,16 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   fileui.ts      File menu (export / import / share link / Verilog / images / chip manager), share banner,
                  drag-and-drop import, autosave indicator, backup notice; installFiles(ed) per page
   memui.ts       Memory palette group, ROM / RAM property sections (live listing, RAM grid, initial
-                 contents), the program editor dialog, Examples ▸; values polled per frame while shown
+                 contents), the program editor dialog, Examples ▸; values polled per frame while shown; long
+                 lists build only the rows in view (vlist.ts: virtualRows), a large RAM's grid has Go to
   package.ts     "Package as chip…" dialog (name, hue, notes, symbol preview, pin order; Save & new circuit)
-  inside.ts      lookInside(ed, path): read-only live schematic over the canvas on EditorSim's simulator (ViewCtx)
+  inside.ts      lookInside(ed, path): read-only live schematic over the canvas on EditorSim's simulator (ViewCtx);
+                 consoles, screens and switch banks get their live faces there (ioface.ts decorateInside; switches flip)
+  ioface.ts      the I/O parts' SVG faces (canvas and look inside); ScreenCanvas: the picture as a canvas bitmap in a
+                 foreignObject, repainted when the frame buffer's version moves (image.ts exports it as an <image>)
+  ioui.ts        plugin: console / switch / screen property sections (live text, counters, Clear, Save PNG) and the
+                 Screens drawer: every console, screen and switch bank in the hierarchy by path, live; opens by itself
+                 for a nested console or screen (unless closed for that chip)
   challengeui.ts "Challenges" list drawer (solved ticks via settings), the strip under the canvas while a
                  challenge chip is open (brief, Check, Show answer, Do it for me), purist palette while restricted;
                  a failing Check opens the test player on the first failing case; a core level lists its
@@ -271,10 +314,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  jump between failures, a window of cases with the live row; an edit while paused replays the
                  case on the rebuilt circuit; Run / Step / a clock / Reset or an input set by hand ends it
   inspect.ts     the Inspector in a drawer for the chip or a part; chipprops.ts: chip / part property sections
-  dock.ts        the right-hand dock: drawers (Inspector, CPU, challenges) share it, tabs when several;
+  dock.ts        the right-hand dock: drawers (Inspector, CPU, Screens, challenges) share it, tabs when several;
                  sets --dock-space on the overlay so look inside stops at its edge
   analysis.ts    plugin: probe mode (P) + LogicAnalyzer in slots.bottom, Timing props section with
-                 the critical path drawn on the chip, lint as a diag source, open-input marks
+                 the critical path drawn on the chip, lint as a diag source, open-input marks; records only while
+                 the panel is open (its trace listener puts DualSim on GateSim)
   cpuui.ts       plugin: the CPU panel (docked drawer: status, listing with the PC and pipeline stages, a
                  click marks the instruction's parts (insthw names) and colours its field wires
                  (instrMarks → wires by net), field breakdown (widgets/instrfields), pipeline diagram
@@ -335,7 +379,8 @@ tests/         Vitest: every component with a `spec` is checked exhaustively (�
 3. **Bit-level nets.** Buses are bundles of 1-bit flat nets. Splitters and mergers are
    `prim: 'alias'`: pure wiring, merged by union-find in the flattener, with zero cost.
 4. **Mixed-level simulation.** `preferBehavior: true` keeps a component (the instruction ROM) as a
-   behavioural leaf; opening it starts a lock-step sub-simulation of its structure. The
+   behavioural leaf; opening it starts a lock-step sub-simulation of its structure (a stateful
+   leaf, a large RAM, seeds that structure from its state: `Behavior.inside`, ViewCtx.sync). The
    flattener also accepts an `expand` policy for more cuts (needed for pipelined / multi-core
    designs). Tests must prove behaviour ≡ structure; the CPU is co-simulated against the ISS
    after every instruction (`tests/cpu.test.ts`).
@@ -367,7 +412,8 @@ tests/         Vitest: every component with a `spec` is checked exhaustively (�
   path that still collides around symbols (A*); `via` paths are never moved, so make sure
   your vias don't run along another net.
 - No symbol may sit on another, and no label may hide one (`tests/layout.test.ts`: `symbolOverlaps`,
-  `labelOverlaps` over every registered netlist and the CPU tops).
+  `labelOverlaps` over every registered netlist and the CPU tops; `boxTextOverlaps` over every registered box:
+  view/boxtext.ts places a box's port names and label, lifting the label clear of a bottom clock's name).
 - Prefer hierarchy (a box of boxes) over flat netlists: it is the whole point of the site.
 - Large top-level schematics: draw the main data path, and use **net labels** (`tags` on a
   NetDef) for control signals and long feedback paths, like a real schematic. Place
@@ -466,7 +512,12 @@ keep the two in step when a panel gains a feature.
   polylines / hops / dots only for what moved, a transistor chip's derived model and flip-flop
   check are cached by a structural key (compile.ts), and the last four chips keep their
   simulation across tab switches. `npx vite-node scripts/sandbox-perf.ts` measures the
-  DOM-free costs on a CPU and a 64-bit Kogge–Stone adder opened in the sandbox.
+  DOM-free costs on a CPU and a 64-bit Kogge–Stone adder opened in the sandbox; `scripts/sim-perf.ts` the
+  cycles/s of the CPUs on GateSim and the cycle engine (`--ref`: against the old GateSim).
+- Run in cycle mode uses the cycle engine (DualSim): no gate time (the run bar hides `t`), the same values after
+  every settle; gate mode, probes / the open timing panel and stepping use GateSim. A new sequential part runs on it
+  if its flip-flops are `ff` library ones and its other storage a `seq` behaviour; anything else falls back to GateSim.
+  The CPU drawer redraws at most every 100 ms while the clock runs.
 - Probes and the timing panel are gate level only (the switch-level solver has no time); lanes
   name what was drawn and survive rebuilds (`LogicAnalyzer.rebind` keeps the recording).
 - Keys are handled on `document` while the page is mounted and ignored while typing in a field.

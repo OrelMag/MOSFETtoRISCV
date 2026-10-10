@@ -16,6 +16,7 @@ import { SchematicView } from '../view/schematic';
 import type { Widget } from '../view/stage';
 import { transistorLeaf } from '../widgets/mosfet';
 import type { Editor } from './editor';
+import { decorateInside, toggleSwitch } from './ioface';
 
 const views = new WeakMap<Editor, InsideView>();
 
@@ -51,6 +52,8 @@ class InsideView {
   private root: ViewCtx | null = null;
   private ctx: ViewCtx | null = null;
   private leaf: { name: string; w: Widget } | null = null;
+  /** Repaints the faces of the consoles, switches and screens at this level (ioface.ts). */
+  private ioPaint: (() => void) | null = null;
   private readonly chip: string;
   private readonly hook = () => this.tick();
 
@@ -123,6 +126,7 @@ class InsideView {
     if (ctx === this.root && !leaf) return this.close();
     this.ctx = ctx;
     this.view.show(ctx, false, keepView);
+    this.ioPaint = decorateInside(this.view.el, ctx, ctx.isSubSim ? null : (node, bit) => toggleSwitch(this.ed.sim, node, bit));
     // The panel may still be settling into its size on the first frame.
     if (!keepView) requestAnimationFrame(() => this.view.fit());
     if (leaf) this.openLeaf(leaf);
@@ -201,6 +205,7 @@ class InsideView {
     if (ctx.isSubSim) ctx.sync();
     this.view.radix = ed.view.radix;
     this.view.update();
+    this.ioPaint?.();
     this.leaf?.w.update?.();
     const nl = netlistOf(ctx.def);
     const what = this.leaf ? 'a single transistor' : nl?.level === 'switch' ? 'transistors' : 'gates & blocks';

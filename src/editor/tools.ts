@@ -18,6 +18,7 @@ import { settings } from '../ui/settings';
 import { nextDrive } from './chips';
 import type { Editor } from './editor';
 import { lookInside } from './inside';
+import { flipSwitch, ioInfo, switchAt, type SwitchState } from './ioparts';
 import { branchPoint, drives, grabOn, type Hit, hitTest, hitWire, nextSameName, partAnchor, pointerGeom, snapPt, WireDraft } from './geom';
 import { renamePin } from './chips';
 import { type ChipDoc, commentBox, endGeom, endKey, type EndRef, type ExitDir as Face, type PinDoc, pinBig, pinValue } from './model';
@@ -304,6 +305,22 @@ export class Tools {
     if (pin) this.ed.sim.setInput(pin, 0);
   }
 
+  /** A click on a switch of a switch bank flips it (it is the world outside: no undo step). */
+  private flipSwitchAt(id: string, at: Vec): boolean {
+    const ed = this.ed;
+    const p = ed.doc.parts.find((q) => q.id === id);
+    const def = p && ed.defOf(p);
+    const info = ioInfo(def);
+    if (!p || !def || info?.kind !== 'switches') return false;
+    const x = at[0] - p.at[0], y = at[1] - p.at[1];
+    const bit = switchAt(info.width, x, y); // the face is not mirrored (only its port moves)
+    const sim = ed.sim.sim, li = sim?.design.root.children?.get(id)?.leafIndex;
+    if (bit === null || !sim || li === undefined) return bit !== null;
+    const v = (sim.leafState(li) as SwitchState | undefined)?.v ?? 0;
+    ed.sim.pokeLeaf(li, { v: flipSwitch(v, bit) } satisfies SwitchState);
+    return true;
+  }
+
   /** A press released without dragging. */
   private click(st: Extract<State, { k: 'press' }>, e: PointerEvent): void {
     const ed = this.ed;
@@ -327,6 +344,7 @@ export class Tools {
       editNumber(r, pin.name, pin.width, pinBig(pin.value), (v) => ed.setPinValue(pin.id, pinValue(v)));
       return;
     }
+    if (h.k === 'part' && this.flipSwitchAt(h.id, st.at)) return;
     if (h.k === 'label' && st.was) this.jump(h.id);
   }
 

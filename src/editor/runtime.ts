@@ -19,9 +19,11 @@
 // and resets, since the finger is still on the key). A keyboard queues typed codes (typeKey) and
 // drops the oldest when its `ack` input reads 1, sampled like a clocked peripheral would: just
 // before every rising clock edge, or, in a chip without a clock, whenever the logic has settled.
+// Switch banks, consoles and screens (ioparts.ts) keep their state in their leaves too: pokeLeaf
+// flips a switch; a reset puts the switches back where they were (the world outside).
 
+import { DualSim } from '../sim/dualsim';
 import { flatten } from '../sim/flatten';
-import { GateSim } from '../sim/gatesim';
 import type { PowerOnMode, Sim } from '../sim/sim';
 import { SwitchSim } from '../sim/switchsim';
 import { B1, type Bit, BZ, type ComponentDef, netlistOf } from '../sim/types';
@@ -29,6 +31,7 @@ import { unpackBig } from '../sim/values';
 import type { HierNode } from '../sim/flatten';
 import { checkSimulatable, type Compiled, type Diag } from './compile';
 import { pinBig, type PinDoc, type PinValue } from './model';
+import { holdSwitches } from './ioparts';
 import { HALT_PREFIX, KEYBOARD_DEPTH, KEYBOARD_ID, keyBindOf, type KeyboardState, type KeyState } from './parts';
 
 export type RunMode = 'cycle' | 'gate';
@@ -154,7 +157,9 @@ export class EditorSim {
     const key = simKey(c);
     try {
       const d = flatten(c.def, { mode: c.mode });
-      const sim: Sim = c.mode === 'gate' ? new GateSim(d) : new SwitchSim(d);
+      // gate level: GateSim, and the cycle engine while running in cycle mode (DualSim switches)
+      const sim: Sim = c.mode === 'gate' ? new DualSim(d) : new SwitchSim(d);
+      if (sim instanceof DualSim) sim.preferFast = this.mode === 'cycle';
       // Unknown values do not carry (unless X is the power-on mode): storage that went X while
       // half wired (a clock not connected yet) starts from its power-on value once it is.
       // Inputs first: a power-on resolves races (an SR latch released 1/1) with them in place.
@@ -300,6 +305,17 @@ export class EditorSim {
     this.afterInput(sim);
   }
 
+  /**
+   * Set the private state of an external source's leaf from outside (a switch flipped, a console
+   * or screen cleared): it takes effect like an input change.
+   */
+  pokeLeaf(li: number, state: unknown): void {
+    const sim = this.sim;
+    if (!sim || li < 0 || li >= sim.design.leaves.length) return;
+    sim.poke(li, state);
+    this.afterInput(sim);
+  }
+
   /** The keys waiting in a keyboard part placed in this chip (by part id), oldest first; null for any other part. */
   keyboardQueue(part: string): number[] | null {
     const sim = this.sim;
@@ -356,6 +372,15 @@ export class EditorSim {
   }
   get time(): number {
     return this.sim?.time ?? 0;
+  }
+  /**
+   * The engine simulating now: 'gate' (event-driven, the time counts gate delays), 'cycle' (the
+   * cycle engine: settled values only, the time stands still) or 'switch' (transistors).
+   */
+  get engine(): 'gate' | 'cycle' | 'switch' | null {
+    const sim = this.sim;
+    if (!sim) return null;
+    return sim instanceof DualSim ? sim.engine : sim.kind;
   }
 
   // ---- driving -----------------------------------------------------------------------------
@@ -464,6 +489,7 @@ export class EditorSim {
       sim.settle();
       this.clkHigh = false;
     }
+    if (this.mode === 'cycle' && sim instanceof DualSim) sim.prepare();
     const t0 = now();
     let k = 0;
     while (k < n && !stop?.()) {
@@ -504,6 +530,8 @@ export class EditorSim {
     const clks = this.clocks();
     const rate = this.mode === 'cycle' ? this.hz : this.gateRate();
     this.due = Math.min(this.due + dt * rate, Number.isFinite(rate) ? rate + 1 : Infinity);
+    // the cycle engine's one-time set-up is not part of a frame's work
+    if (this.mode === 'cycle' && sim instanceof DualSim && clks.length) sim.prepare();
     const t0 = now();
     let n = 0;
     this.haltHit = false;
@@ -552,9 +580,11 @@ export class EditorSim {
     this.resets++;
     this.due = 0;
     this.applyPins(sim);
+    const switches = holdSwitches(sim);
     sim.reset(mode);
-    // keys still held stay pressed; the keyboards' queues went with the power
+    // keys still held stay pressed and switches where they were; the keyboards' queues, consoles' text and screens' pictures went with the power
     this.applyKeys(sim);
+    switches();
     this.quiet(sim);
     this.onChange();
   }
@@ -562,6 +592,8 @@ export class EditorSim {
   setMode(m: RunMode): void {
     this.mode = m;
     this.due = 0;
+    // gate mode steps one delay at a time: the event-driven engine (the cycle engine takes over again in cycle mode)
+    if (this.sim instanceof DualSim) this.sim.preferFast = m === 'cycle';
     // Leaving gate mode: finish whatever was propagating, so cycle mode starts settled.
     if (m === 'cycle' && this.sim) {
       this.sim.settle();

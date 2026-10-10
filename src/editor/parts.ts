@@ -11,6 +11,8 @@ import { TIE0, TIE1 } from '../lib/transistors';
 import type { ComponentDef, InstanceDef, NetDef } from '../sim/types';
 import type { DisplayKind, PartRef } from './model';
 import { ramWithInit, romImage } from './memory';
+import { ioRefDef } from './ioparts';
+import { ROM_LEAF_K, romLevels, wordsHash } from '../lib/bigmem';
 
 export type PartResult = ComponentDef | { error: string };
 
@@ -22,12 +24,15 @@ export const isError = (r: PartResult): r is { error: string } => 'error' in r;
  * is a 229-bit pipeline register.
  */
 export const MAX_WIDTH = 1024;
-/** Largest RAM: 2^6 words (the structure is a decoder, registers and a mux tree, all drawn). */
-export const MAX_RAM_K = 6;
+/**
+ * Largest RAM: 2^16 words. Up to 2^6 it is gates (decoder, registers, mux tree); beyond, a lookup
+ * whose banks open down to such gate-level banks (lib/bigmem.ts).
+ */
+export const MAX_RAM_K = 16;
 /** Widest splitter / merger pin spacing (the library's tall fans and multiplier rows use up to 18). */
 export const MAX_PITCH = 32;
-/** Largest ROM: 2^8 words (simulated as a lookup; its mux tree is only built when opened). */
-export const MAX_ROM_K = 8;
+/** Largest ROM: 2^16 words (simulated as a lookup; its mux trees are built when opened, banks of 2^8 beyond that). */
+export const MAX_ROM_K = 16;
 
 const okWidth = (w: unknown): w is number => Number.isInteger(w) && (w as number) >= 1 && (w as number) <= MAX_WIDTH;
 
@@ -61,6 +66,8 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
     return keyPart(ref.key);
   }
   if ('keyboard' in ref) return KEYBOARD;
+  const io = ioRefDef(ref);
+  if (io) return io;
   if ('ram' in ref) {
     const { k, w, init } = ref.ram;
     if (!Number.isInteger(k) || k < 1 || k > MAX_RAM_K) return { error: `RAM: 2^k words with k = 1–${MAX_RAM_K}` };
@@ -316,32 +323,49 @@ function fnv(words: number[]): string {
 export function wordRom(k: number, w: 8 | 16 | 32, addr: 'word' | 'rv32', words: number[]): ComponentDef {
   const N = 2 ** k;
   const fill = addr === 'rv32' ? 0x00000013 : 0;
-  const content = Array.from({ length: N }, (_, i) => (words[i] ?? fill) >>> 0);
-  const key = `${k}/${w}/${addr}/${content.join(',')}`;
+  const content = Uint32Array.from({ length: N }, (_, i) => (words[i] ?? fill) >>> 0);
+  // A large ROM is keyed by two independent hashes of its words, not by all of them.
+  const big = k > ROM_LEAF_K;
+  const key = `${k}/${w}/${addr}/${big ? wordsHash(content) : content.join(',')}`;
   const hit = romCache.get(key);
   if (hit) {
     romCache.delete(key);
     romCache.set(key, hit);
     return hit;
   }
+  const rv = addr === 'rv32';
+  const d = big
+    ? romLevels(k, w, rv, content, `sb_rom${k}x${w}${rv ? 'b' : ''}_${wordsHash(content)}`, (ks, _w, slice) => romTree(ks, w, false, Array.from(slice)))
+    : romTree(k, w, rv, Array.from(content));
+  romCache.set(key, d);
+  if (romCache.size > ROM_CACHE_SIZE) romCache.delete(romCache.keys().next().value!);
+  return d;
+}
+
+/** A ROM of 2^k ≤ 2^8 words as one mux tree of constants (uncached: wordRom's, and a large ROM's banks). */
+function romTree(k: number, w: 8 | 16 | 32, rv: boolean, content: number[]): ComponentDef {
+  const N = 2 ** k;
   const M = muxTree(k, w, 4);
   const mg = symbolGeom(M);
-  const consts = new Map<number, ComponentDef>();
-  const constOf = (v: number) => consts.get(v) ?? consts.set(v, buildConstant(w, v)).get(v)!;
-  const rv = addr === 'rv32';
-  const instances: InstanceDef[] = [{ name: 'mux', def: M, at: [16, 0] }];
-  const sel: [number, number] = [16 + mg.ports.s.pos[0], mg.h + 7];
-  const nets: NetDef[] = rv
-    ? [{ name: 'addr', ends: ['addr', 'sa.in'] }, { name: 'index', ends: ['sa.o1', 'mux.s'], via: { 'mux.s': [sel] } }]
-    : [{ name: 'addr', ends: ['addr', 'mux.s'], via: { 'mux.s': [sel] } }];
-  if (rv) instances.unshift({ name: 'sa', def: splitter([2, k, 30 - k]), at: [3, mg.h + 6] });
-  nets.push({ name: 'data', ends: ['mux.y', 'data'] });
-  content.forEach((v, i) => {
-    instances.push({ name: `c${i}`, def: constOf(v), at: [8, mg.ports[`d${i}`].pos[1] - 1], label: `[${i}]` });
-    nets.push({ ends: [`c${i}.y`, `mux.d${i}`] });
-  });
+  // Built when first opened: a large ROM has up to 256 of these banks.
+  const netlist = () => {
+    const consts = new Map<number, ComponentDef>();
+    const constOf = (v: number) => consts.get(v) ?? consts.set(v, buildConstant(w, v)).get(v)!;
+    const instances: InstanceDef[] = [{ name: 'mux', def: M, at: [16, 0] }];
+    const sel: [number, number] = [16 + mg.ports.s.pos[0], mg.h + 7];
+    const nets: NetDef[] = rv
+      ? [{ name: 'addr', ends: ['addr', 'sa.in'] }, { name: 'index', ends: ['sa.o1', 'mux.s'], via: { 'mux.s': [sel] } }]
+      : [{ name: 'addr', ends: ['addr', 'mux.s'], via: { 'mux.s': [sel] } }];
+    if (rv) instances.unshift({ name: 'sa', def: splitter([2, k, 30 - k]), at: [3, mg.h + 6] });
+    nets.push({ name: 'data', ends: ['mux.y', 'data'] });
+    content.forEach((v, i) => {
+      instances.push({ name: `c${i}`, def: constOf(v), at: [8, mg.ports[`d${i}`].pos[1] - 1], label: `[${i}]` });
+      nets.push({ ends: [`c${i}.y`, `mux.d${i}`] });
+    });
+    return { pins: { addr: [0, mg.h + 7] as [number, number], data: [16 + mg.w + 6, mg.ports.y.pos[1]] as [number, number] }, instances, nets };
+  };
   const hex = (v: number) => `0x${v.toString(16).padStart(w / 4, '0')}`;
-  const d: ComponentDef = {
+  return {
     id: `sb_rom${k}x${w}${rv ? 'b' : ''}_${fnv(content)}`, name: `ROM ${N}×${w}`, category: 'memory',
     summary: `${N} words of ${w} bits, read-only: a ${N}:1 multiplexer tree whose inputs are tied to constants.`
       + (rv ? ' Byte addressed like a PC: word = addr / 4.' : ' Word addressed.'),
@@ -350,14 +374,8 @@ export function wordRom(k: number, w: 8 | 16 | 32, addr: 'word' | 'rv32', words:
     behavior: { eval: ([a]) => [a < 0 ? -1 : content[(rv ? Math.floor(a / 4) : a) % N]], delay: 3 * k },
     preferBehavior: true,
     spec: ([a]) => [content[(rv ? Math.floor(a / 4) : a) % N]],
-    netlist: () => ({
-      pins: { addr: [0, mg.h + 7], data: [16 + mg.w + 6, mg.ports.y.pos[1]] },
-      instances, nets,
-    }),
+    netlist,
     notes: `Simulated as a lookup table. Its structure is the real circuit: ${N - 1} two-input multiplexers in ${k} levels, `
       + `their inputs wired to the program's bits. Words: ${content.slice(0, 8).map(hex).join(' ')}${N > 8 ? ' …' : ''}`,
   };
-  romCache.set(key, d);
-  if (romCache.size > ROM_CACHE_SIZE) romCache.delete(romCache.keys().next().value!);
-  return d;
 }

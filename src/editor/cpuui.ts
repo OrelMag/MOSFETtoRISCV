@@ -10,6 +10,7 @@
 // the shared memory. A properties section sets or overrides what detection found (cpu.ts).
 
 import '../styles/sbcpu.css';
+import { wordsHash } from '../lib/bigmem';
 import { ABI, decode, disasm, FABI } from '../riscv/isa';
 import { CAUSE } from '../riscv/iss';
 import { bitsToF32, flagNames, RM_NAMES } from '../sim/fpref';
@@ -22,7 +23,7 @@ import { instrMarks, instrUse, STAGE_UNITS, stageUse } from '../widgets/insthw';
 import { PipeHistory, pipeGridRows } from '../widgets/pipegrid';
 import {
   type CpuDesc, type CpuDoc, CpuMonitor, type CpuRead, cpuGaps, detectCpu, fmtWord, mismatchText, type NetRef, nestedRoms, partAt, partNode,
-  pinNamed, pipelineSlots, refValue, resolveCpu, romParts, storageOf,
+  memStoreOf, pinNamed, pipelineSlots, refValue, resolveCpu, romParts,
 } from './cpu';
 import { dockPane, paneShown, showPane, undockPane } from './dock';
 import { type Editor, registerEditorPlugin, registerToolbarAction } from './editor';
@@ -37,6 +38,9 @@ import type { EdgeHook, EditorSim } from './runtime';
 
 /** Cycles Run to halt gives a program before it stops on its own. */
 const RUN_CAP = 20000;
+/** How often the panel redraws while the clock runs (ms). */
+const RENDER_MS = 100;
+const now = () => performance.now();
 /** Slow mode: instructions (cycles, for several cores) per second. */
 const SLOW_RATES = [0.5, 1, 2, 4, 8, 16];
 
@@ -78,6 +82,9 @@ class CpuPanel {
   private runCap = 0;
   private slow: ReturnType<typeof setTimeout> | null = null;
   private slowRate = 2;
+  /** While the clock runs fast, the panel redraws at most every RENDER_MS (a trailing redraw shows the last state). */
+  private lastRender = 0;
+  private renderTimer: ReturnType<typeof setTimeout> | null = null;
   private sel: number | null = null;
   private fieldPin: FieldKey | null = null;
   private fieldHover: FieldKey | null = null;
@@ -172,6 +179,7 @@ class CpuPanel {
   }
 
   destroy(): void {
+    if (this.renderTimer) clearTimeout(this.renderTimer);
     this.stopRun();
     this.stopSlow();
     this.off.forEach((f) => f());
@@ -281,7 +289,7 @@ class CpuPanel {
         else if (!this.desc && !this.multi && !this.rv16) this.setOpen(false);
       }
       this.redock();
-      if (this.open) this.render();
+      if (this.open) this.renderThrottled();
     } finally {
       this.syncing = false;
     }
@@ -394,7 +402,20 @@ class CpuPanel {
 
   // ---- drawing ---------------------------------------------------------------------------
 
+  /**
+   * render(), but while the circuit runs (Run, or Run to halt) at most every RENDER_MS: the listing,
+   * registers and trace would otherwise be rebuilt on every frame, costing more than the simulation.
+   */
+  private renderThrottled(): void {
+    if (!this.ed.sim.running && !this.running) return this.render();
+    const wait = this.lastRender + RENDER_MS - now();
+    if (wait <= 0) return this.render();
+    this.renderTimer ??= setTimeout(() => { this.renderTimer = null; this.render(); }, wait);
+  }
+
   private render(): void {
+    if (this.renderTimer) { clearTimeout(this.renderTimer); this.renderTimer = null; }
+    this.lastRender = now();
     if (!this.open) return;
     const ed = this.ed, mon = this.mon, doc = ed.doc;
     this.title.textContent = `${mon instanceof MultiMonitor ? `${this.multi?.cores.length ?? 2} cores` : 'CPU'} · ${doc.name}`;
@@ -633,7 +654,8 @@ class CpuPanel {
     this.memSec.hidden = this.mem.hidden = !dm;
     if (!dm) return;
     keyed(this.memSec, `${label}|${dm}|${words?.length}`, () => [label, h('span', { class: 'cpu-sec-hint' }, `${dm}${words ? ` · ${words.length} words, non-zero shown` : ''}`)]);
-    keyed(this.mem, words ? words.join(',') : 'none', () => {
+    // a hash, not the words joined: a large data memory has 65 536 of them
+    keyed(this.mem, words ? `${words.length}:${wordsHash(words)}` : 'none', () => {
       if (!words) return [h('div', { class: 'm z' }, 'not readable (no word registers found)')];
       const nz = words.map((v, i) => [i, v] as const).filter(([, v]) => v !== 0);
       return [...(nz.length ? nz.slice(0, 64).map(([i, v]) => h('div', { class: 'm' },
@@ -885,7 +907,7 @@ registerToolbarAction({
 function storageParts(ed: Editor): string[] {
   const sim = ed.sim.sim;
   const kids = sim?.design.root.children;
-  return ed.doc.parts.filter((p) => !('rom' in p.ref) && (kids ? !!storageOf(kids.get(p.id)) : 'ram' in p.ref || 'chip' in p.ref)).map((p) => p.id);
+  return ed.doc.parts.filter((p) => !('rom' in p.ref) && (kids && sim ? !!memStoreOf(sim, kids.get(p.id)) : 'ram' in p.ref || 'chip' in p.ref)).map((p) => p.id);
 }
 
 function netOptions(ed: Editor, width: number): [string, string][] {

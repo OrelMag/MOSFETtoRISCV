@@ -273,11 +273,14 @@ chip presentation, capacity and the program-solving half of Turing Complete.
   or with the Type toggle on. Both are *external sources*: behaviour-only leaves the editor drives through `Sim.poke`,
   at gate level (one delay, visible in gate mode) and at switch level (a key on a CMOS inverter); zero cost, a
   comment in Verilog, refused by the gate-level derivation of a transistor chip, released on every check
-- ⏳ Pixel screen: a dot-matrix / RGB display driven by a frame-buffer RAM or row/column/colour
-  pins (DLS dot display, TC screen); the 7-segment display already exists
+- ✅ Pixel screen (DLS dot display, TC screen): one part, three modes: write (x, y, colour and we into its own frame
+  buffer, optional vsync), rows (a row latched from a bus: scan-out from your own RAM) and pixels (one wire per pixel);
+  8–128 px, mono / RGB111 / 16-colour / RGB332 / RGB565, square pixels or dots, grid lines; Clear, Save PNG; a Screens
+  drawer shows every screen and console at any depth
 - ✅ LED bank: a wide LED shows one LED per bit (most significant first, rows of 8)
-- ⏳ Console and switch bank as parts, not only in the system CPU's I/O panel, so a hand-built CPU can
-  memory-map them
+- ✅ Console and switch bank as parts, so a hand-built CPU can memory-map them: a console prints data at rising clk
+  edges with we = 1 (\n, \b, \f clears, 500 lines of scrollback); a bank of 1–32 switches clicked on the canvas, in look
+  inside or in the Screens drawer, kept through Reset like a held key. Both zero cost, a comment in Verilog
 - ✅ Buzzer (DLS): A4 while its 1-bit input is high, or MIDI note v from a bus (Web Audio, square wave)
 - ✅ Halt part (TC): a zero-cost sink that stops Run (and the CPU panel's Run to halt) after the step where its input
   reads 1 (any bit of a bus), from any depth of the hierarchy, so a hand-built CPU can halt itself; level sensitive
@@ -322,11 +325,14 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   displays and memories) with the same sizes and port positions, so no layout or routing changes
 
 **Capacity and speed**
-- ⏳ Large memories: RAM well beyond 2^6 words and ROM beyond 2^8 (both games reach tens of KB),
-  behavioural at runtime with the structure still openable (as the CPU's ROM already is)
-- ⏳ Measure, then speed up, large sandbox circuits: compiled or levelized evaluation of settled
-  combinational chips (DLS caches them), keeping the event-driven engine for anything timed or probed;
-  publish cycles/s next to the cross-cutting performance budget
+- ✅ Large memories: RAM and ROM parts up to 2^16 words (lib/bigmem.ts), one behavioural leaf at run time over a
+  real hierarchy of banks of banks (≤ 16 per level, down to gate-level 64-word banks), opened live (banks seeded
+  from the leaf down to the latches); state survives edits and Back; costs, timing and HDL from the hierarchy
+- ✅ Measure, then speed up, large sandbox circuits (scripts/sim-perf.ts): GateSim on typed arrays (same events at
+  the same times), and a cycle engine for Run in cycle mode: flip-flops as verified tables, the rest levelized, every
+  net equal to GateSim after every settle (DualSim hands over to GateSim for gate mode, probes, stepping, X clocks).
+  Single-cycle RV32I in the sandbox, cycles/s: Node 91 → 1 160 (GateSim) → ~9 000 (cycle engine); the page at max,
+  CPU drawer open and checking: 35 Hz → ~4–5 kHz at 60 fps (64K-word data memory ~3.3 kHz, system CPU ~2.4 kHz)
 
 **Programs on your own CPU** (the second half of Turing Complete)
 - ⏳ Custom ISA: define instruction fields, opcodes and mnemonics in a table, and get an assembler,
@@ -388,7 +394,8 @@ challenges stay open. Next:
 - ✅ Export the sandbox canvas as SVG / PNG (current theme), and the level on a chapter's or the workbench's stage (the
   stage bar's Image menu: the whole level with its live values, whatever the zoom, without probe flags)
 - VHDL view of every component
-- Performance budget: 60 fps rendering of ≤ 5 000 visible elements; ≥ 100 CPU cycles/s at gate level
+- Performance budget: 60 fps rendering of ≤ 5 000 visible elements; ≥ 100 CPU cycles/s at gate level (met: the sandbox's
+  single-cycle RV32I runs ~4–5 kHz in the page on the cycle engine, ~400 Hz on GateSim)
 - i18n-ready strings
 
 ### Phase 13 — Verification, precise claims, measurement ⏳

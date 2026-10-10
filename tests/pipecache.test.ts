@@ -7,9 +7,10 @@ import { ISS } from '../src/riscv/iss';
 import { PROGRAMS } from '../src/riscv/programs';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
+import { breathe } from './setup';
 
 /** Pipelined CPU with a data cache vs the ISS, checked at every retirement; counts frozen cycles. */
-function run(source: string, dcache: 'wt' | 'wb' | 'wb2', predictor = false) {
+async function run(source: string, dcache: 'wt' | 'wb' | 'wb2', predictor = false) {
   const words = assemble(source).words;
   const design = flatten(pipelinedCpu(words, { adder: 'ks', dcache, predictor }));
   const sim = new GateSim(design);
@@ -21,7 +22,7 @@ function run(source: string, dcache: 'wt' | 'wb' | 'wb2', predictor = false) {
     const ret = retiring(sim);
     if (sim.getBits(design.root.ports.dstall)[0] === 1) frozen++;
     clockCycle(sim);
-    cycles++;
+    if (++cycles % 200 === 0) await breathe(); // a few seconds of gate-level work: let Vitest's RPC through
     if (ret) {
       iss.step();
       retired++;
@@ -38,18 +39,18 @@ const src = (id: string) => (CACHE_CPU_PROGRAMS.find((p) => p.id === id) ?? PROG
 describe('pipelined CPU with a data cache vs golden model', () => {
   for (const dc of ['wt', 'wb', 'wb2'] as const) {
     for (const id of ['reuse', 'pingpong', 'inplace']) {
-      it(`${dc}: ${id}`, () => {
-        const r = run(src(id), dc);
+      it(`${dc}: ${id}`, async () => {
+        const r = await run(src(id), dc);
         console.log(`${dc} ${id}: ${r.retired} instructions in ${r.cycles} cycles, ${r.frozen} frozen`);
       }, 300000);
     }
   }
-  it('with branch prediction too (the predictor must not update while frozen)', () => {
-    run(src('pingpong'), 'wb2', true);
-    run(src('sort'), 'wb', true);
+  it('with branch prediction too (the predictor must not update while frozen)', async () => {
+    await run(src('pingpong'), 'wb2', true);
+    await run(src('sort'), 'wb', true);
   }, 300000);
-  it('the misses are the only extra cycles: a 2-way cache halves the frozen time of pingpong', () => {
-    const dm = run(src('pingpong'), 'wb'), two = run(src('pingpong'), 'wb2');
+  it('the misses are the only extra cycles: a 2-way cache halves the frozen time of pingpong', async () => {
+    const dm = await run(src('pingpong'), 'wb'), two = await run(src('pingpong'), 'wb2');
     expect(two.frozen).toBeLessThan(dm.frozen / 2);
   }, 300000);
 });

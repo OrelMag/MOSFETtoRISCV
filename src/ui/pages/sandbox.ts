@@ -23,6 +23,8 @@ import '../../editor/keys';
 import '../../editor/analysis';
 // The CPU panel: program, registers, memory and the golden model for a chip that is a processor.
 import '../../editor/cpuui';
+// Consoles, switch banks and screens: their property sections and the Screens drawer.
+import '../../editor/ioui';
 import type { Page } from './chapter';
 
 export class SandboxPage implements Page {

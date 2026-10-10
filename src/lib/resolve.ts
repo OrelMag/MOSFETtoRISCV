@@ -6,6 +6,7 @@ import type { FpFormat } from '../sim/fpref';
 import { addSub, andN, busMux2, decoder, equal, incrementer, muxTree, rca } from './combinational';
 import { registry } from './define';
 import { ram } from './memory';
+import { BANK_K, bigRam, ramBank } from './bigmem';
 import { alu, bitwise, isZero, orN, shifter, zext } from './alu';
 import { singleCycleCpu } from './cpu';
 import { addSubFast, koggeStone } from './fastadd';
@@ -44,7 +45,9 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^mux(\d+)x(\d+)(?:_p(\d+))?$/, (m) => muxTree(log2(+m[1]), +m[2], m[3] ? +m[3] : 2)],
   [/^reg(\d+)$/, (m) => register(+m[1])],
   [/^counter(\d+)$/, (m) => counter(+m[1])],
-  [/^ram(\d+)x(\d+)$/, (m) => ram(log2(+m[1]), +m[2])],
+  // past 64 words a RAM is the large one (lib/bigmem.ts): a lookup whose banks open down to gates
+  [/^ram(\d+)x(\d+)$/, (m) => (log2(+m[1]) > BANK_K ? bigRam : ram)(log2(+m[1]), +m[2])],
+  [/^ram64x(\d+)_bank$/, (m) => ramBank(+m[1])],
   [/^alu(\d+)(ks)?$/, (m) => alu(+m[1], m[2] ? 'ks' : 'rca')],
   [/^ks(\d+)$/, (m) => koggeStone(+m[1])],
   [/^regfile(\d+)x(\d+)$/, (m) => regfile(log2(+m[1]), +m[2])],

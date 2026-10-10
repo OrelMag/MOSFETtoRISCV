@@ -35,7 +35,7 @@ describe('halt part', () => {
 
   it('stops Run after the cycle where its input goes high, and again after each step while high', () => {
     const doc = counter();
-    const es = new EditorSim({ debounceMs: 0 });
+    const es = new EditorSim({ debounceMs: 0, budgetMs: 10_000 }); // a wide frame budget: Run must reach the halt however loaded the machine is
     es.update(compileLib(doc), doc.pins);
     expect(es.hasHalt).toBe(true);
     expect(es.halted).toBe(false);
@@ -59,14 +59,14 @@ describe('halt part', () => {
 
   it('stops runCycles too', () => {
     const doc = counter();
-    const es = new EditorSim({ debounceMs: 0 });
+    const es = new EditorSim({ debounceMs: 0, budgetMs: 10_000 });
     es.update(compileLib(doc), doc.pins);
     expect(es.runCycles(100)).toBe(8);
   });
 
   it('on a bus halts on any 1 bit', () => {
     const doc = counter({ display: 'halt', width: 4 }, true);
-    const es = new EditorSim({ debounceMs: 0 });
+    const es = new EditorSim({ debounceMs: 0, budgetMs: 10_000 });
     es.update(compileLib(doc), doc.pins);
     expect(es.runCycles(100)).toBe(1);
   });
@@ -91,7 +91,7 @@ describe('halt part', () => {
     };
     comp(inner);
     comp(mid);
-    const es = new EditorSim({ debounceMs: 0 });
+    const es = new EditorSim({ debounceMs: 0, budgetMs: 10_000 });
     es.update(comp(top), top.pins);
     expect(es.hasHalt).toBe(true);
     expect(es.runCycles(100)).toBe(8);
