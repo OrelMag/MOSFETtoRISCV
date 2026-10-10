@@ -16,9 +16,9 @@ const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name
 
 const cache = new Map<string, ComponentDef>();
 
-export function dualCore(program: number[], dmemK = 5, imemPort = false): ComponentDef {
-  const CORE = singleCycleCpu(imemPort ? [] : program, { shared: true, adder: 'ks', dmemK, imemPort });
-  const key = imemPort ? 'mosfet_riscv_dualcore' : `${CORE.id}_x2`;
+export function dualCore(program: number[], dmemK = 5, imemPort = false, imemK = 6): ComponentDef {
+  const CORE = singleCycleCpu(imemPort ? [] : program, { shared: true, adder: 'ks', dmemK, imemPort, imemK });
+  const key = imemPort ? 'mosfet_riscv_dualcore' : `${CORE.id}_x2${dmemK === 5 ? '' : `_d${dmemK}`}`;
   let d = cache.get(key);
   if (d) return d;
   const cg = symbolGeom(CORE), DM = dataMemory(dmemK), dg = symbolGeom(DM), M2 = busMux2(32);

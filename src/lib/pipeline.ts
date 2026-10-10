@@ -543,6 +543,8 @@ export const MISPREDICT: ComponentDef = define({
 
 export interface PipeOptions {
   dmemK?: number;
+  /** Instruction ROM of 2^imemK words (default 6). */
+  imemK?: number;
   adder?: 'rca' | 'ks';
   /** Look-ahead forwarding, dedicated branch comparator and jalr adder: shorter execute stage. */
   balanced?: boolean;
@@ -567,7 +569,7 @@ function retargetEnd(n: NetDef, from: string, to: string): void {
 }
 
 export function pipelinedCpu(program: number[], opts: PipeOptions = {}): ComponentDef {
-  const IM = rom(program);
+  const IM = rom(program, opts.imemK ?? 6);
   const o = { dmemK: opts.dcache ? 6 : opts.dmemK ?? 5, adder: opts.adder ?? 'rca', balanced: !!opts.balanced, predictor: !!opts.predictor, dcache: opts.dcache, m: !!opts.m } as const;
   return memo(`pipe_${IM.id}_${o.dmemK}_${o.adder}_${o.balanced}_${o.predictor}_${o.dcache ?? ''}_${o.m}`, () => buildPipe(IM, o));
 }
@@ -937,7 +939,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   }
   const variant = [adder === 'ks' ? 'fast adders' : '', bal ? 'balanced' : '', pred ? 'branch prediction' : '', dcache ? `${dcache === 'wt' ? 'write-through' : dcache === 'wb2' ? '2-way write-back' : 'write-back'} data cache` : ''].filter(Boolean).join(', ');
   return {
-    id: `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}${dcache ? `_dc${dcache}` : ''}${m ? '_m' : ''}`,
+    id: `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}${dcache ? `_dc${dcache}` : ''}${m ? '_m' : ''}${!dcache && o.dmemK !== 5 ? `_d${o.dmemK}` : ''}`,
     name: `Pipelined RV32I${m ? 'M' : ''} CPU${variant ? ` (${variant})` : ''}`, category: 'cpu',
     summary: 'Five stages, one instruction entering per cycle. Forwarding, a W→D bypass, load-use stalls and branch flushes keep it architecturally identical to the single-cycle machine.',
     ports: [bit('clk', 'in', 'left', true), bus('pcF', 32, 'out'), bit('validW', 'out'), bus('pcW', 32, 'out'), ...extraPorts],

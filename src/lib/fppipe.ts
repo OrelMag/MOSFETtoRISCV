@@ -459,11 +459,11 @@ export const FCSR_REGS: ComponentDef = (() => {
 
 // ---- the processor ---------------------------------------------------------------------------------
 
-export interface FpPipeOptions { dmemK?: number; adder?: 'rca' | 'ks' }
+export interface FpPipeOptions { dmemK?: number; adder?: 'rca' | 'ks'; /** Instruction ROM of 2^imemK words (default 6). */ imemK?: number }
 
 /** The pipelined RV32IF CPU: F D E M X W, with the three-stage FP pipe in E, M, X. */
 export function pipelinedFpCpu(program: number[], opts: FpPipeOptions = {}): ComponentDef {
-  const IM = rom(program);
+  const IM = rom(program, opts.imemK ?? 6);
   const o = { dmemK: opts.dmemK ?? 5, adder: opts.adder ?? 'ks' } as const;
   return memo(`fppipe_${IM.id}_${o.dmemK}_${o.adder}`, () => buildFpPipe(IM, o));
 }
@@ -707,7 +707,7 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
   ];
   const yb = yF + 150;
   return {
-    id: `fppipe_${IM.id}${adder === 'ks' ? '_ks' : ''}`,
+    id: `fppipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${o.dmemK !== 5 ? `_d${o.dmemK}` : ''}`,
     name: `Pipelined RV32IF CPU${adder === 'ks' ? ' (fast adders)' : ''}`, category: 'cpu',
     summary: 'Six stages (F D E M X W) so that every instruction, integer or FP, retires in order after the same path. The FP pipe is the fused multiply-add split in three (multiply in E, align and add in M, round in X); fdiv / fsqrt iterate in E and stall the front end. An FP result can be used three cycles after it entered E (forwarded from W); a dependent instruction waits in D.',
     ports: [bit('clk', 'in', 'left', true), bus('pcF', 32, 'out'), bit('validW', 'out'), bus('pcW', 32, 'out')],

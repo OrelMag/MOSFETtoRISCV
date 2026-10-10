@@ -294,16 +294,19 @@ endmodule`;
 export interface MulticycleOptions {
   control?: 'fsm' | 'micro';
   adder?: 'rca' | 'ks';
+  /** Instruction ROM of 2^imemK words (default 6), data memory of 2^dmemK (default 5). */
+  imemK?: number;
+  dmemK?: number;
 }
 
 export function multicycleCpu(program: number[], opts: MulticycleOptions = {}): ComponentDef {
-  const IM = rom(program);
-  const control = opts.control ?? 'fsm', adder = opts.adder ?? 'ks';
-  return memo(`mc_${IM.id}_${control}_${adder}`, () => buildMulticycle(IM, control, adder));
+  const IM = rom(program, opts.imemK ?? 6);
+  const control = opts.control ?? 'fsm', adder = opts.adder ?? 'ks', dmemK = opts.dmemK ?? 5;
+  return memo(`mc_${IM.id}_${control}_${adder}_${dmemK}`, () => buildMulticycle(IM, control, adder, dmemK));
 }
 
-function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca' | 'ks'): ComponentDef {
-  const R32 = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dataMemory(5);
+function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca' | 'ks', dmemK: number): ComponentDef {
+  const R32 = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dataMemory(dmemK);
   const M2 = busMux2(32), M4 = muxTree(2, 32), CTRL = control === 'fsm' ? MC_FSM : MC_MICRO;
   const SI = splitter([7, 5, 3, 5, 5, 7]);
   const g = (d: ComponentDef) => symbolGeom(d);
@@ -416,7 +419,7 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
   ];
   const resY = P('res', 'y');
   return {
-    id: `mc_${IM.id.replace(/^rom_/, '')}_${control}${adder === 'ks' ? '' : '_rca'}`,
+    id: `mc_${IM.id.replace(/^rom_/, '')}_${control}${adder === 'ks' ? '' : '_rca'}${dmemK === 5 ? '' : `_d${dmemK}`}`,
     name: `Multicycle RV32I CPU (${control === 'fsm' ? 'hardwired' : 'microprogrammed'} control)`, category: 'cpu',
     summary: 'One ALU and one memory port, reused over 3 to 5 short cycles per instruction. IR, OldPC, A, B, Data and ALUOut hold values from one cycle to the next; the controller steps through the state table.',
     ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bit('retire', 'out'), bit('fetch', 'out'), bus('state', 4, 'out')],
