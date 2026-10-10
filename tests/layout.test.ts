@@ -5,9 +5,11 @@ import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
 import { deadInstances } from '../src/sim/dead';
 import { netlistOf } from '../src/sim/types';
-import { labelOverlaps, symbolOverlaps } from '../src/view/route';
+import { backwardEnds, labelOverlaps, symbolOverlaps } from '../src/view/route';
 import { families, initialParams } from '../src/lib/resolve';
 import { cpuTops } from './tops';
+import { levelChallenge } from '../src/campaign/levels';
+import { NODES } from '../src/campaign/nodes';
 
 // Build the parametric designs the chapters show, so their schematics are in the registry too.
 const words = assemble(PROGRAMS[0].source).words;
@@ -22,6 +24,8 @@ dualCore(words);
 cachedMemory(6, 2);
 // Every workbench family as it first opens.
 for (const f of families) f.make(initialParams(f));
+// The campaign's reference answers (the RV16 cores are built on demand).
+for (const n of NODES) levelChallenge(n)?.answer();
 
 describe('schematic labels', () => {
   // the top-level CPUs are not registered (only their parts are): add them explicitly
@@ -32,6 +36,9 @@ describe('schematic labels', () => {
   });
   it.each(defs.map((d) => [d.id, d] as const))('%s: no symbol sits on another', (_, d) => {
     expect(symbolOverlaps(netlistOf(d)!)).toEqual([]);
+  });
+  it.each(defs.map((d) => [d.id, d] as const))('%s: no wire reaches a pin from behind its symbol', (_, d) => {
+    expect(backwardEnds(d, netlistOf(d)!)).toEqual([]);
   });
 });
 

@@ -348,7 +348,7 @@ function place(plans: NetPlan[]): number[] {
   return trunks;
 }
 
-/** Free paths (not authored with `via`) that lie along a path of another net. */
+/** Free paths (not authored with `via`) that lie along a path of another net, or reach a pin from behind. */
 function overlapping(plans: NetPlan[], all: Vec[][][]): [number, number][] {
   const lines = new Map<string, { lo: number; hi: number; net: number; path: number }[]>();
   all.forEach((paths, net) => paths.forEach((p, path) => {
@@ -376,12 +376,30 @@ function overlapping(plans: NetPlan[], all: Vec[][][]): [number, number][] {
       }
     }
   }
+  for (const [net, paths] of all.entries()) {
+    paths.forEach((p, path) => {
+      const q = freeOf(plans[net], path);
+      if (q && backwards(p, q)) out.set(`${net}:${path}`, [net, path]);
+    });
+  }
   return [...out.values()].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
 }
 
 /**
+ * A path that leaves its driver or reaches its sink from behind the pin: the trunk lies on the
+ * far side of the stub, so the route runs out and back (simplify folds that into one segment)
+ * straight across the symbol, and the wire looks attached to the wrong side.
+ */
+export function backwards(p: Vec[], [P, P1, S1, S]: Quad): boolean {
+  if (p.length < 2) return false;
+  const behind = (end: Vec, stub: Vec, next: Vec) => (next[0] - end[0]) * (stub[0] - end[0]) + (next[1] - end[1]) * (stub[1] - end[1]) < -1e-6;
+  return behind(P, P1, p[1]) || behind(S, S1, p[p.length - 2]);
+}
+
+/**
  * Fallback for paths still lying on another net after trunk placement, where the overlap is
- * on a fixed row (a long run into a sink, a driver's own row). Such a path is rerouted by a
+ * on a fixed row (a long run into a sink, a driver's own row), and for paths reaching a pin from
+ * behind it (backwards). Such a path is rerouted by a
  * maze search (A* on the half grid) from the driver's stub to the sink's stub that
  * never runs along another net, never turns or stops on one, and never enters a symbol.
  * Bends and crossings cost extra, so the detour stays as plain as the layout allows.
@@ -792,6 +810,28 @@ export function splitterBars(nl: Netlist): { x: number; y0: number; y1: number }
     out.push({ x: at[0] + 0.5, y0: at[1] + Math.min(...ys) - 0.4, y1: at[1] + Math.max(...ys) + 0.4 });
   }
   return out;
+}
+
+/**
+ * Ends ('inst.port' or a pin) whose wire arrives from behind: across the symbol, so it looks
+ * attached to the wrong side (a splitter's input reached from its outputs' side).
+ */
+export function backwardEnds(def: ComponentDef, nl: Netlist): string[] {
+  const { nets, pins } = routeNetlist(def, nl);
+  const out = new Set<string>();
+  for (const n of nets) {
+    const ends = nl.nets[n.index].ends.map((e) => ({ e, g: endGeom(def, nl, pins, e) }));
+    for (const p of n.paths) {
+      if (p.length < 2) continue;
+      for (const [at, next] of [[p[0], p[1]], [p[p.length - 1], p[p.length - 2]]]) {
+        const end = ends.find(({ g }) => g.pos[0] === at[0] && g.pos[1] === at[1]);
+        if (!end) continue;
+        const d = DIR[end.g.exit];
+        if ((next[0] - at[0]) * d[0] + (next[1] - at[1]) * d[1] < -1e-6) out.add(end.e);
+      }
+    }
+  }
+  return [...out];
 }
 
 /** Instance bodies drawn on top of one another (wiring aliases included: a splitter under a gate hides it). */
