@@ -25,6 +25,8 @@ export interface Workspace {
   open: string[];
   /** Palette limited to transistors, NAND, IO, wiring and user chips. */
   purist?: boolean;
+  /** Palette items pinned at the top, in order: '<group>/<item>' keys (palette.ts). Number keys 1–9 arm the first nine. */
+  favorites?: string[];
 }
 
 export interface ChipDoc {

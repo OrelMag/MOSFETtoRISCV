@@ -36,7 +36,7 @@ export const chMulDiv: Chapter = {
         <p>The cheapest multiplier has one adder and does the rows one per clock. A 2n-bit product register starts as {0, b}. Each cycle, if its
         lowest bit is 1 the adder adds a to the upper half, and the whole register shifts right one place, the adder's carry entering at the top.
         The multiplier bits leave at the bottom as product bits come in. After n cycles the register holds a·b.</p>
-        <p>8 bits: 633 NANDs and 10 cycles (load, 8 steps, done), against 1 cycle for an array several times larger. It is the multiply of
+        <p>8 bits: 633 NANDs and 10 cycles (load, 8 steps, done), against 1 cycle for an array of about the same size (632 NANDs) at 8 bits; the array grows as n², the sequential unit as n. It is the multiply of
         microcontrollers without a hardware multiplier, done in software with the same loop.</p>
         <div class="try">start = 1 is set. Pulse the clock and watch p fill from the top as b drains out of the bottom.</div>`,
       scene: () => ({ root: seqMul(8), inputs: { a: 13, b: 11, start: 1, clk: 0 } }),

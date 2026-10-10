@@ -13,7 +13,7 @@ import {
 } from './files';
 import { pngImage, saveFile, svgImage } from '../view/image';
 import { decodeShare, encodeShare } from './share';
-import { BACKUP_KEY, closure, exportJson, importChips, importJson } from './store';
+import { BACKUP_KEY, closure, deleteLocalData, exportJson, importChips, importJson, localData, type DataScope } from './store';
 
 // ---------------------------------------------------------------------------------------------
 // Small DOM helpers
@@ -24,6 +24,7 @@ const GLYPHS: Record<string, string> = {
   upload: '<path d="M12 16V5M7 10l5-5 5 5M5 20h14"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
   file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   stack: '<rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/>',
 };
 function glyph(name: string, size = 16): SVGSVGElement {
@@ -88,6 +89,7 @@ const MENU: (MenuItem | null)[] = [
   { icon: 'image', label: 'Export image (PNG)', hint: 'the same at 2× resolution', run: (ed) => void exportImage(ed, 'png') },
   null,
   { icon: 'stack', label: 'Manage chips…', hint: 'sizes, who uses what; open, duplicate, delete', run: (ed) => manageDialog(ed) },
+  { icon: 'trash', label: 'Delete local data…', hint: 'erase what this site keeps in this browser', run: (ed) => deleteDataDialog(ed) },
 ];
 
 function openMenu(ed: Editor): void {
@@ -302,6 +304,37 @@ function manageDialog(ed: Editor): void {
     head.textContent = `Your chips (${Object.keys(ed.ws.chips).length})`;
     render();
   });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Delete local data
+
+/** Erase the sandbox's storage (or everything the site stored), then reload into a fresh start. */
+function deleteDataDialog(ed: Editor): void {
+  const bytes = (sc: DataScope) => localData(sc).reduce((n, d) => n + d.bytes, 0);
+  let scope: DataScope = 'sandbox';
+  const opt = (sc: DataScope, title: string, hint: string) => {
+    const r = h('input', { type: 'radio', name: 'sb-del-scope', value: sc, checked: sc === scope }) as HTMLInputElement;
+    r.addEventListener('change', () => { if (r.checked) scope = sc; });
+    return h('label', { class: 'sb-del-opt' }, r, h('span', null, h('b', null, title), h('small', null, `${hint} · ${kb(bytes(sc))}`)));
+  };
+  const n = Object.keys(ed.ws.chips).length;
+  const d = dialog(ed, 'Delete local data', [
+    h('p', { class: 'sb-dlg-lead' }, 'Everything you make here lives only in this browser: nothing is kept on a server. ',
+      h('b', null, 'Deleting cannot be undone'), ' (Ctrl+Z will not bring it back): export your chips first to keep a copy.'),
+    h('div', { class: 'sb-del-opts', role: 'radiogroup', 'aria-label': 'What to delete' },
+      opt('sandbox', 'Sandbox', `your ${plural(n, 'chip')}, palette favorites and the sandbox's preferences`),
+      opt('all', 'Everything', 'the sandbox, chapter and campaign progress, and every setting (theme, wire colours, speeds)')),
+  ], [
+    h('button', { class: 'btn ghost sm', onclick: () => exportAll(ed) }, glyph('download', 14), 'Export all chips'),
+    h('button', { class: 'btn ghost sm', onclick: () => d.close() }, 'Cancel'),
+    h('button', { class: 'btn sm sb-danger', onclick: () => {
+      ed.stopSaving();
+      deleteLocalData(scope);
+      history.replaceState(null, '', '#/sandbox');
+      location.reload();
+    } }, glyph('trash', 14), 'Delete and reload'),
+  ]);
 }
 
 // ---------------------------------------------------------------------------------------------

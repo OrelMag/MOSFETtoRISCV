@@ -3,7 +3,8 @@
 import { describe, expect, it } from 'vitest';
 import { emptyChip, emptyWorkspace, type ChipDoc, type Vec, type Workspace } from '../src/editor/model';
 import {
-  BACKUP_KEY, FORMAT, KEY, closure, exportJson, importJson, loadWorkspace, migrate, sanitizeChip, saveWorkspace, type KV,
+  BACKUP_KEY, FORMAT, KEY, MAX_FAVORITES, closure, deleteLocalData, exportJson, importJson, localData, loadWorkspace, migrate, sanitizeChip,
+  saveWorkspace, type KV, type ListKV,
 } from '../src/editor/store';
 
 class MapKV implements KV {
@@ -26,9 +27,34 @@ function chip(id: string, uses: string[] = [], name = id): ChipDoc {
 const ws = (...chips: ChipDoc[]): Workspace => ({ schema: 1, chips: Object.fromEntries(chips.map((c) => [c.id, c])), open: [chips[0].id] });
 
 describe('storage', () => {
+  it('keeps only well-formed favorites, once each, at most MAX_FAVORITES', () => {
+    const raw = { ...ws(chip('u_a')), favorites: ['lib/nand', 'lib/nand', 3, 'nogroup', null, 'io/clock'] };
+    expect(migrate(raw)).toMatchObject({ favorites: ['lib/nand', 'io/clock'] });
+    expect(migrate({ ...ws(chip('u_a')), favorites: 'lib/nand' })).not.toHaveProperty('favorites');
+    const many = Array.from({ length: MAX_FAVORITES + 5 }, (_, i) => `lib/p${i}`);
+    expect((migrate({ ...ws(chip('u_a')), favorites: many }) as Workspace).favorites).toHaveLength(MAX_FAVORITES);
+  });
+
+  it('lists and deletes the site local data by scope, leaving other keys alone', () => {
+    class ListMap extends MapKV implements ListKV {
+      get length() { return this.m.size; }
+      key(i: number) { return [...this.m.keys()][i] ?? null; }
+    }
+    const kv = new ListMap();
+    for (const k of [KEY, BACKUP_KEY, 'mosfet2riscv:sandbox:iobar', 'mosfet2riscv:v1', 'mosfet2riscv:campaign:v1', 'other-app']) kv.setItem(k, 'xy');
+    expect(localData('sandbox', kv).map((d) => d.key).sort()).toEqual([KEY, BACKUP_KEY, 'mosfet2riscv:sandbox:iobar'].sort());
+    expect(localData('sandbox', kv)[0].bytes).toBe(2 * (KEY.length + 2));
+    expect(deleteLocalData('sandbox', kv)).toBe(3);
+    expect([...kv.m.keys()].sort()).toEqual(['mosfet2riscv:campaign:v1', 'mosfet2riscv:v1', 'other-app']);
+    expect(deleteLocalData('all', kv)).toBe(2);
+    expect([...kv.m.keys()]).toEqual(['other-app']);
+    expect(localData('all', null)).toEqual([]);
+  });
+
+
   it('round-trips a workspace', () => {
     const kv = new MapKV();
-    const w = { ...ws(chip('u_full', ['u_half']), chip('u_half')), purist: true };
+    const w = { ...ws(chip('u_full', ['u_half']), chip('u_half')), purist: true, favorites: ['lib/nand', 'mine/u_half'] };
     expect(saveWorkspace(w, kv)).toEqual({ ok: true });
     expect(loadWorkspace(kv)).toEqual(w);
   });

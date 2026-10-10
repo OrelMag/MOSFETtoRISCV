@@ -49,7 +49,7 @@ export function setPinValue(ws: Workspace, chipId: string, pinId: string, value:
 
 /**
  * `next` (a state from undo / redo) with the volatile parts of `cur`: the open tabs, the purist
- * toggle and every input value. Objects that already agree are kept.
+ * toggle, the palette favorites and every input value. Objects that already agree are kept.
  */
 export function keepVolatile(next: Workspace, cur: Workspace): Workspace {
   let chips = next.chips;
@@ -75,5 +75,7 @@ export function keepVolatile(next: Workspace, cur: Workspace): Workspace {
   const res: Workspace = { ...next, chips, open: open.length ? open : next.open.filter((o) => next.chips[o]) };
   if (cur.purist) res.purist = true;
   else delete res.purist;
+  if (cur.favorites?.length) res.favorites = cur.favorites;
+  else delete res.favorites;
   return res;
 }

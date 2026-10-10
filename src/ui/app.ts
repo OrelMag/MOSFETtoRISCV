@@ -80,7 +80,11 @@ export function startApp(root: HTMLElement): void {
     h('span', { class: 'pal-simple-sw' }, s('svg', { viewBox: '0 0 46 14', 'aria-hidden': 'true' },
       s('path', { class: 'sq', d: 'M2,12 H16 V2 H30 V12 H44' }), s('path', { class: 'st', d: 'M2,12 L16,2 L30,12 L44,2' }))),
     h('span', null, h('b', null, 'Simple connections'), h('small', null, 'Sandbox: new wires run straight between the points you click, at any angle')));
-  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), modItem, flowItem, netItem, simpleItem);
+  // Hover definitions in the chapters (campaign/glossary.ts).
+  const glossItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('glossary', !settings.glossary) },
+    h('span', { class: 'pal-flow-sw' }, h('i')),
+    h('span', null, h('b', null, 'Hover definitions'), h('small', null, 'Chapters: codex terms underlined, their summary on hover (from the next step on)')));
+  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), modItem, flowItem, netItem, simpleItem, glossItem);
   const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire and module colours, flowing bits, colour per net, simple connections', 'aria-label': 'Wire and module colours, flowing bits, colour per net, simple connections', 'aria-haspopup': 'menu' }, swatch());
   palBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -97,6 +101,7 @@ export function startApp(root: HTMLElement): void {
     flowItem.setAttribute('aria-checked', String(settings.wireFlow));
     netItem.setAttribute('aria-checked', String(settings.netColors));
     simpleItem.setAttribute('aria-checked', String(settings.simpleWires));
+    glossItem.setAttribute('aria-checked', String(settings.glossary));
     for (const b of radix.querySelectorAll<HTMLButtonElement>('button')) b.classList.toggle('on', b.dataset.r === settings.radix);
     animate.classList.toggle('on', settings.animate);
     themeBtn.replaceChildren(icon(settings.theme === 'light' ? 'sun' : settings.theme === 'dark' ? 'moon' : 'auto', 18));
@@ -148,6 +153,15 @@ export function startApp(root: HTMLElement): void {
         return;
       }
       mount(new WorkbenchPage(parts[1] ?? 'rca4'));
+    } else if (key === 'campaign' && parts[1] === 'play') {
+      // A level on its own screen: the editor's chunk, like the sandbox.
+      const lv = page as (Page & { kind?: string; nodeId?: string }) | null;
+      if (lv?.kind === 'level' && lv.nodeId === parts[2]) return;
+      import('./pages/level').then((m) => {
+        if (seq === routeSeq) mount(new m.LevelPage(parts[2] ?? ''));
+      }, (e) => {
+        if (seq === routeSeq) view.replaceChildren(h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'The level could not load'), h('p', { class: 'sub' }, String(e)))));
+      });
     } else if (key === 'campaign') {
       const cp = page as (Page & { kind?: string; open?(parts: string[]): void }) | null;
       if (cp?.kind === 'campaign') {
