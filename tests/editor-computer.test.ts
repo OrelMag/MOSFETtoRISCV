@@ -43,7 +43,7 @@ function reference(src: string, switches: number, steps = 100000) {
 /** The example in a workspace, compiled, on an EditorSim with the CPU drawer's monitor. */
 function open(src?: string): { ws: Workspace; id: string; es: EditorSim; mon: CpuMonitor; lib: UserLibrary } {
   let { ws, id } = addExample(emptyWorkspace(), EX);
-  if (src) ws = { ...ws, chips: { ...ws.chips, [id]: computerChip(id, ws.chips[id].name, ws.chips[id].parts.find((p) => p.id === 'map')!.ref.chip as string, src) } };
+  if (src) ws = { ...ws, chips: { ...ws.chips, [id]: computerChip(id, ws.chips[id].name, `${id}_map`, src) } };
   const lib = new UserLibrary(ws);
   const es = new EditorSim({ debounceMs: 0 });
   es.update(lib.compiled(id)!, ws.chips[id].pins);

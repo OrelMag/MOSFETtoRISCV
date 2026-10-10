@@ -5,6 +5,7 @@
 import { BANK_K, bigRam, bigRamWithInit, ramLeafState, ramWords } from '../lib/bigmem';
 import { ram } from '../lib/memory';
 import { PROGRAMS } from '../riscv/programs';
+import { COMPUTER_PROGRAMS } from '../riscv/ioprograms';
 import { disasm16 } from '../riscv/rv16/isa16';
 import type { HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
@@ -132,6 +133,7 @@ const hexDigits = (ws: number[], d = 2) => ws.map((x) => x.toString(16).padStart
 /** Programs to start from: the CPU chapters' samples (RV32I) and a few data tables. */
 export const ROM_SAMPLES: RomSample[] = [
   ...PROGRAMS.map((p): RomSample => ({ id: p.id, name: p.name, lang: 'asm', src: p.source })),
+  ...COMPUTER_PROGRAMS.map((p): RomSample => ({ id: p.id, name: p.name, lang: 'asm', src: p.source })),
   { id: 'seg7', name: '7-segment font 0–F', lang: 'hex', src: `# segments a..g = bits 0..6, one word per digit 0-F\n${hexDigits(SEG7_FONT.slice(0, 8))}\n${hexDigits(SEG7_FONT.slice(8))}` },
   { id: 'squares', name: 'Squares 0–15', lang: 'hex', src: `# n * n for n = 0..15\n${hexDigits(Array.from({ length: 16 }, (_, i) => i * i))}` },
   { id: 'hello', name: 'ASCII "Hello, RISC-V"', lang: 'hex', src: `# one character per word\n${hexDigits([...'Hello, RISC-V'].map((c) => c.charCodeAt(0)))} 00` },
