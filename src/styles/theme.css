@@ -19,6 +19,10 @@
   --accent-text: #ffffff;
   --good: #0f9f6e;
   --good-soft: #e3f7ef;
+  /* chart series (benchmarks: single-cycle, multicycle, pipelined), checked for colour-blind separation */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
   --warn: #c2700c;
   --warn-soft: #fff4e0;
   --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 4px 16px rgb(16 24 40 / 6%);
@@ -81,6 +85,9 @@
     --accent-text: #0a0c12;
     --good: #34d399;
     --good-soft: #0f2a22;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
     --warn: #f5a524;
     --warn-soft: #2d2210;
     --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 25%);
@@ -123,6 +130,9 @@
   --accent-text: #0a0c12;
   --good: #34d399;
   --good-soft: #0f2a22;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
   --warn: #f5a524;
   --warn-soft: #2d2210;
   --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 25%);

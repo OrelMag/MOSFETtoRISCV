@@ -1,0 +1,705 @@
+{
+ "programs": "7156b34a3e0a17ba",
+ "psPerNand": 25,
+ "imemWords": 128,
+ "dmemWords": 64,
+ "cpus": [
+  {
+   "id": "sc",
+   "name": "Single-cycle",
+   "nands": 68339,
+   "period": 158,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 4881
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2108
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 2353
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3049
+    }
+   ]
+  },
+  {
+   "id": "sc-ks",
+   "name": "Single-cycle, fast adders",
+   "nands": 70243,
+   "period": 106,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 4881
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2108
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 2353
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3049
+    }
+   ]
+  },
+  {
+   "id": "sc-dc",
+   "name": "Single-cycle, write-through D-cache",
+   "nands": 80471,
+   "period": 106,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 5321,
+     "dmiss": 55,
+     "dstall": 440
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2356,
+     "dmiss": 31,
+     "dstall": 248
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 2681,
+     "dmiss": 41,
+     "dstall": 328
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3081,
+     "dmiss": 4,
+     "dstall": 32
+    }
+   ]
+  },
+  {
+   "id": "sc-wb2",
+   "name": "Single-cycle, 2-way write-back D-cache",
+   "nands": 80880,
+   "period": 110,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 5581,
+     "dmiss": 61,
+     "dstall": 700
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2640,
+     "dmiss": 46,
+     "dstall": 532
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3029,
+     "dmiss": 73,
+     "dstall": 676
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3093,
+     "dmiss": 5,
+     "dstall": 44
+    }
+   ]
+  },
+  {
+   "id": "sc-ic",
+   "name": "Single-cycle, I-cache",
+   "nands": 90723,
+   "period": 115,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 4929,
+     "imiss": 6,
+     "istall": 48
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2164,
+     "imiss": 7,
+     "istall": 56
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 2489,
+     "imiss": 17,
+     "istall": 136
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3113,
+     "imiss": 8,
+     "istall": 64
+    }
+   ]
+  },
+  {
+   "id": "sc-wb-ic",
+   "name": "Single-cycle, write-back D-cache + I-cache",
+   "nands": 99207,
+   "period": 167,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 5629,
+     "dmiss": 61,
+     "dstall": 700,
+     "imiss": 6,
+     "istall": 48
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2612,
+     "dmiss": 39,
+     "dstall": 448,
+     "imiss": 7,
+     "istall": 56
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3437,
+     "dmiss": 95,
+     "dstall": 948,
+     "imiss": 17,
+     "istall": 136
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3157,
+     "dmiss": 5,
+     "dstall": 44,
+     "imiss": 8,
+     "istall": 64
+    }
+   ]
+  },
+  {
+   "id": "sc-f",
+   "name": "Single-cycle RV32IF",
+   "nands": 184321,
+   "period": 316,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 4881
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2108
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 2353
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3049
+    },
+    {
+     "bench": "fmatmul",
+     "instructions": 898,
+     "cycles": 1821
+    }
+   ]
+  },
+  {
+   "id": "mc-fsm",
+   "name": "Multicycle, hardwired control",
+   "nands": 72192,
+   "period": 85,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 20220
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 8106
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 9072
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 11154
+    }
+   ]
+  },
+  {
+   "id": "mc-micro",
+   "name": "Multicycle, microcode",
+   "nands": 77904,
+   "period": 85,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 20220
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 8106
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 9072
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 11154
+    }
+   ]
+  },
+  {
+   "id": "pipe",
+   "name": "Pipelined",
+   "nands": 80798,
+   "period": 145,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 7675
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 3110
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3241
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 4637
+    }
+   ]
+  },
+  {
+   "id": "pipe-ks",
+   "name": "Pipelined, fast adders",
+   "nands": 82702,
+   "period": 93,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 7675
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 3110
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3241
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 4637
+    }
+   ]
+  },
+  {
+   "id": "pipe-bal",
+   "name": "Pipelined, balanced",
+   "nands": 84786,
+   "period": 59,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 7675
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 3110
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3241
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 4637
+    }
+   ]
+  },
+  {
+   "id": "pipe-bp",
+   "name": "Pipelined, branch predictor",
+   "nands": 105629,
+   "period": 156,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 6575
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2480
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3055
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3749
+    }
+   ]
+  },
+  {
+   "id": "pipe-bal-bp",
+   "name": "Pipelined, balanced + predictor",
+   "nands": 109617,
+   "period": 70,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 6575
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2480
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3055
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3749
+    }
+   ]
+  },
+  {
+   "id": "pipe-wb2",
+   "name": "Pipelined, 2-way write-back D-cache",
+   "nands": 93349,
+   "period": 95,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 8375,
+     "dmiss": 61,
+     "dstall": 700
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 3642,
+     "dmiss": 46,
+     "dstall": 532
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3917,
+     "dmiss": 73,
+     "dstall": 676
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 4681,
+     "dmiss": 5,
+     "dstall": 44
+    }
+   ]
+  },
+  {
+   "id": "pipe-wt-bal-bp",
+   "name": "Pipelined, write-through D-cache, balanced + predictor",
+   "nands": 119857,
+   "period": 72,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 7015,
+     "dmiss": 55,
+     "dstall": 440
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2728,
+     "dmiss": 31,
+     "dstall": 248
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3383,
+     "dmiss": 41,
+     "dstall": 328
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3781,
+     "dmiss": 4,
+     "dstall": 32
+    }
+   ]
+  },
+  {
+   "id": "pipe-m",
+   "name": "Pipelined RV32IM",
+   "nands": 114740,
+   "period": 93,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 7675
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 3110
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3241
+    },
+    {
+     "bench": "matmul-m",
+     "instructions": 885,
+     "cycles": 1173
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 4637
+    }
+   ]
+  },
+  {
+   "id": "pipe-m-bal-bp",
+   "name": "Pipelined RV32IM, balanced + predictor",
+   "nands": 141655,
+   "period": 79,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 6575
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2480
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3055
+    },
+    {
+     "bench": "matmul-m",
+     "instructions": 885,
+     "cycles": 1105
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3749
+    }
+   ]
+  },
+  {
+   "id": "fppipe",
+   "name": "Pipelined RV32IF (six stages)",
+   "nands": 175310,
+   "period": 121,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 7676
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 3111
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3242
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 4638
+    },
+    {
+     "bench": "fmatmul",
+     "instructions": 898,
+     "cycles": 2249
+    }
+   ]
+  },
+  {
+   "id": "sys",
+   "name": "System (Zicsr, traps, I/O)",
+   "nands": 88286,
+   "period": 126,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 4881
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2108
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 2353
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3049
+    }
+   ]
+  },
+  {
+   "id": "sys-m",
+   "name": "System RV32IM",
+   "nands": 108864,
+   "period": 127,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 4881
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2108
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 2353
+    },
+    {
+     "bench": "matmul-m",
+     "instructions": 885,
+     "cycles": 885
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3049
+    }
+   ]
+  },
+  {
+   "id": "dual",
+   "name": "Dual-core (hart 0)",
+   "nands": 104293,
+   "period": 119,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4883,
+     "cycles": 4883
+    },
+    {
+     "bench": "sort",
+     "instructions": 2110,
+     "cycles": 2110
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2355,
+     "cycles": 2355
+    },
+    {
+     "bench": "crc",
+     "instructions": 3051,
+     "cycles": 3051
+    }
+   ]
+  }
+ ]
+}
