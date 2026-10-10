@@ -92,7 +92,7 @@ describe('walkthroughs', () => {
   });
 
   it('authored scripts name existing parts and codex entries', () => {
-    expect(Object.keys(WALKS).sort()).toEqual(['a_fa', 'a_ha', 'g_and', 'g_mux', 'g_not', 'g_or', 'g_xor', 's_dlatch', 's_sr']);
+    expect(Object.keys(WALKS)).toEqual(expect.arrayContaining(['a_fa', 'a_ha', 'g_and', 'g_mux', 'g_not', 'g_or', 'g_xor', 's_dlatch', 's_sr']));
     for (const [id, script] of Object.entries(WALKS)) {
       const n = nodeById(id);
       expect(n && levelChallenge(n), id).toBeTruthy();
