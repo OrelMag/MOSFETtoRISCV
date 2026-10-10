@@ -116,6 +116,20 @@ function hasIoParts(doc: ChipDoc, chips: Chips | undefined, depth = 2): boolean 
     || (depth > 0 && 'chip' in p.ref && !!chips?.[p.ref.chip] && chips[p.ref.chip] !== doc && hasIoParts(chips[p.ref.chip], chips, depth - 1)));
 }
 
+/**
+ * Paths of the parts of the user chips placed in `doc` (one level down) that pass `ok`: the
+ * computer example keeps its RAM inside its memory side ('mem.ram') and its LEDs inside its devices.
+ */
+function nestedParts(doc: ChipDoc, chips: Chips | undefined, ok: (p: PartDoc) => boolean): string[] {
+  if (!chips) return [];
+  return doc.parts.flatMap((p) => {
+    const sub = 'chip' in p.ref ? chips[p.ref.chip] : undefined;
+    return sub && sub !== doc ? sub.parts.filter(ok).map((q) => `${p.id}.${q.id}`) : [];
+  });
+}
+
+const isLedBank = (p: PartDoc) => p.id === 'leds' && 'display' in p.ref && p.ref.display === 'led' && (p.ref.width ?? 1) <= 8;
+
 const partNamed = (doc: ChipDoc, ...ids: string[]) => ids.map((id) => doc.parts.find((p) => p.id === id)).find((p) => p);
 export const pinNamed = (doc: ChipDoc, dir: 'in' | 'out', width: number, ...names: string[]) =>
   names.map((n) => doc.pins.find((p) => p.name === n && p.dir === dir && p.width === width)).find((p) => p);
@@ -144,6 +158,8 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   const fregs = partNamed(doc, 'frf', 'fregs');
   const ram32 = doc.parts.filter((p) => 'ram' in p.ref && p.ref.ram.w === 32 && p !== regs);
   const dmem = partNamed(doc, 'dm', 'dmem') ?? (ram32.length === 1 ? ram32[0] : undefined);
+  // A port core's memory may sit inside a user chip of its own (the computer's memory side).
+  const inner = !dmem && core ? nestedParts(doc, chips, (p) => 'ram' in p.ref && p.ref.ram.w === 32) : [];
   const validW = pinNamed(doc, 'out', 1, 'validW');
   const retire = validW ?? pinNamed(doc, 'out', 1, 'retire');
   const pipeline = !!validW || (!!partNamed(doc, 'FD') && !!partNamed(doc, 'MW'));
@@ -152,7 +168,7 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   const mmio = !system && hasIoParts(doc, chips);
   return {
     rom, pc, auto, iss: { ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}) },
-    ...(regsPath ? { regs: regsPath } : {}), ...(fregs ? { fregs: fregs.id } : {}), ...(dmem ? { dmem: dmem.id } : {}),
+    ...(regsPath ? { regs: regsPath } : {}), ...(fregs ? { fregs: fregs.id } : {}), ...(dmem ? { dmem: dmem.id } : inner.length === 1 ? { dmem: inner[0] } : {}),
     ...(retire ? { retire: { pin: retire.id } } : {}), ...(pipeline ? { pipeline } : {}), ...(fcsr ? { fcsr: fcsr.id } : {}),
   };
 }
@@ -560,13 +576,16 @@ export class CpuMonitor {
     return this.desc ? readCpu(this.es, this.doc(), this.desc) : null;
   }
 
-  /** The LEDs pin of a system CPU, or an LED bank part named leds (null: none; -1: unknown). */
+  /** The LEDs pin of a system CPU, or an LED bank part named leds, here or in a placed chip (null: none; -1: unknown). */
   get leds(): number | null {
     const doc = this.doc();
     const pin = pinValue(this.es, doc, 'leds', 'out', 8);
     if (pin !== null) return pin;
-    const p = doc.parts.find((q) => q.id === 'leds' && 'display' in q.ref && q.ref.display === 'led' && (q.ref.width ?? 1) <= 8);
-    return p ? refValue(this.es, doc, { part: p.id, port: 'a' }) : null;
+    const p = doc.parts.find(isLedBank);
+    if (p) return refValue(this.es, doc, { part: p.id, port: 'a' });
+    const inner = nestedParts(doc, this.chips(), isLedBank);
+    const sim = this.es.sim, nets = inner.length === 1 && sim ? partNode(sim, inner[0])?.ports.a : undefined;
+    return nets && sim ? pack(sim.getBits(nets)) : null;
   }
 
   /** The console and switch bank (I/O parts at any depth) standing in for the system CPU's pins. */

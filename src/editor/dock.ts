@@ -30,13 +30,15 @@ class Dock {
     this.host = h('div', { class: 'sb-dock' }, this.tabs);
   }
 
-  add(p: DockPane): void {
+  /** Dock a drawer; `front` false (one opening by itself) keeps the drawer already shown in front. */
+  add(p: DockPane, front = true): void {
     const old = this.panes.find((q) => q.id === p.id);
     if (old && old.el !== p.el) old.el.remove();
     this.panes = [...this.panes.filter((q) => q.id !== p.id), p];
     p.el.classList.add('sb-docked');
     this.host.append(p.el);
-    this.show(p.id);
+    if (front || !this.has(this.active) || this.active === p.id) this.show(p.id);
+    else this.render();
   }
 
   remove(id: string): void {
@@ -99,8 +101,8 @@ class Dock {
 const docks = new WeakMap<Editor, Dock>();
 const dockOf = (ed: Editor) => docks.get(ed) ?? (docks.set(ed, new Dock(ed)), docks.get(ed)!);
 
-/** Put a drawer in the dock and show it. */
-export const dockPane = (ed: Editor, p: DockPane): void => dockOf(ed).add(p);
+/** Put a drawer in the dock and show it (`front` false: behind the drawer shown, if any). */
+export const dockPane = (ed: Editor, p: DockPane, front = true): void => dockOf(ed).add(p, front);
 /** Take a drawer out of the dock. */
 export const undockPane = (ed: Editor, id: string): void => dockOf(ed).remove(id);
 /** Show a docked drawer (its tab). */
