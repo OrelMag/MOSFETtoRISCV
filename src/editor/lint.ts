@@ -3,9 +3,11 @@
 // - A wire ending at a pointer nobody else uses: the net stops there (a typo in a name?);
 //   a pointer touching nothing.
 // - Part inputs left unconnected: they read X, which spreads through everything after them.
+// - Parts whose outputs reach no output of the chip: dead logic, often a wire never drawn.
 // Warnings only: the circuit still compiles and simulates.
 
 import type { Vec } from '../sim/geometry';
+import { deadInstances } from '../sim/dead';
 import { netlistOf } from '../sim/types';
 import type { Compiled, Diag } from './compile';
 import { wireGroups } from './geom';
@@ -89,12 +91,7 @@ export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<strin
   }
 
   // ---- inputs left open ----
-  const open: { part: string; port: string }[] = [];
-  for (const inst of nl?.instances ?? []) {
-    for (const p of inst.def.ports) {
-      if (p.dir === 'in' && !built.netOfEnd.has(`p:${inst.name}.${p.name}`)) open.push({ part: inst.name, port: p.name });
-    }
-  }
+  const open = openInputs(built);
   if (open.length) {
     const list = open.slice(0, 6).map((o) => `${o.part}.${o.port}`).join(', ');
     diags.push({
@@ -103,5 +100,41 @@ export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<strin
       parts: [...new Set(open.map((o) => o.part))],
     });
   }
+
+  // ---- parts nothing reads ----
+  const dead = deadParts(doc, built);
+  if (dead.length) {
+    const label = new Map(doc.parts.map((p) => [p.id, p.label]));
+    const list = dead.slice(0, 6).map((id) => (label.get(id) ? `${id} (${label.get(id)})` : id)).join(', ');
+    diags.push({
+      level: 'warn',
+      msg: `${dead.length} part${dead.length > 1 ? 's' : ''} driving nothing that reaches an output: ${list}${dead.length > 6 ? ', …' : ''}`,
+      parts: dead,
+    });
+  }
   return { diags, open };
+}
+
+/** Part inputs with no net (they read X). */
+export function openInputs(built: Compiled): { part: string; port: string }[] {
+  const open: { part: string; port: string }[] = [];
+  for (const inst of netlistOf(built.def)?.instances ?? []) {
+    for (const p of inst.def.ports) {
+      if (p.dir === 'in' && !built.netOfEnd.has(`p:${inst.name}.${p.name}`)) open.push({ part: inst.name, port: p.name });
+    }
+  }
+  return open;
+}
+
+/**
+ * Parts from which nothing leads to an output pin, a bidirectional pin or a display (sim/dead.ts).
+ * A chip with no output pin and no display is still being drawn: nothing is reported.
+ */
+export function deadParts(doc: ChipDoc, built: Compiled): string[] {
+  const nl = netlistOf(built.def);
+  if (!nl) return [];
+  const sinks = built.def.ports.some((p) => p.dir !== 'in') || nl.instances.some((i) => !i.def.ports.some((p) => p.dir !== 'in'));
+  if (!sinks) return [];
+  const ids = new Set(doc.parts.map((p) => p.id));
+  return deadInstances(nl, built.def.ports).filter((n) => ids.has(n));
 }

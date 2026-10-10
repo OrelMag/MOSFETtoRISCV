@@ -45,7 +45,7 @@ export function instrUse(word: number): InstrUse {
 
 /** Five-stage pipeline: which units belong to which stage (pipeline registers lead each stage). */
 export const STAGE_UNITS: Record<'F' | 'D' | 'E' | 'M' | 'W', string[]> = {
-  F: ['pc', 'pcmux', 'imem', 'plus4', 'btb', 'fsel', 'corr', 'mis', 'mspc', 'vF', 'one'],
+  F: ['pc', 'pcmux', 'imem', 'plus4', 'btb', 'fsel', 'corr', 'mis', 'mspc', 'vF'],
   D: ['FD', 'si', 'rf', 'ctl', 'imm', 'hz', 'byA', 'byB'],
   E: ['DE', 'fwdA', 'fwdB', 'srcA', 'srcB', 'alu', 'target', 'clr0', 'clr0E', 'bcmp', 'jtgt', 'npc', 'mule', 'dive', 'mdE'],
   M: ['EM', 'dm', 'fwdM', 'msM', 'mcM', 'mulm', 'rdm'],

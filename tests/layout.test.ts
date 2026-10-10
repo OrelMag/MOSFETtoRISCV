@@ -3,10 +3,14 @@ import { cachedMemory, dualCore, multicycleCpu, pipelinedCpu, singleCycleCpu, sy
 import { registry } from '../src/lib/define';
 import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
+import { deadInstances } from '../src/sim/dead';
 import { netlistOf } from '../src/sim/types';
-import { labelOverlaps, symbolOverlaps } from '../src/view/route';
+import { backwardEnds, labelOverlaps, symbolOverlaps } from '../src/view/route';
 import { families, initialParams } from '../src/lib/resolve';
 import { cpuTops } from './tops';
+import { rv16Core } from '../src/lib/rv16/cpu';
+import { rv16Pipe } from '../src/lib/rv16/pipe';
+import { rv16SysCore } from '../src/lib/rv16/system';
 
 // Build the parametric designs the chapters show, so their schematics are in the registry too.
 const words = assemble(PROGRAMS[0].source).words;
@@ -21,6 +25,12 @@ dualCore(words);
 cachedMemory(6, 2);
 // Every workbench family as it first opens.
 for (const f of families) f.make(initialParams(f));
+// The campaign's RV16 cores (built on demand, by the levels' reference answers).
+for (const full of [false, true]) rv16Core(full);
+rv16Core(true, true); rv16Core(true, false, 'mul'); rv16Core(true, false, 'div');
+rv16SysCore(false); rv16SysCore(true);
+for (const o of [{ fwd: false, stall: false, flush: false }, { fwd: true, stall: false, flush: false }, { fwd: true, stall: true, flush: false },
+  { fwd: true, stall: true, flush: true }, { fwd: true, stall: true, flush: true, sys: true }, { fwd: true, stall: true, flush: true, predict: true }]) rv16Pipe(o);
 
 describe('schematic labels', () => {
   // the top-level CPUs are not registered (only their parts are): add them explicitly
@@ -31,5 +41,15 @@ describe('schematic labels', () => {
   });
   it.each(defs.map((d) => [d.id, d] as const))('%s: no symbol sits on another', (_, d) => {
     expect(symbolOverlaps(netlistOf(d)!)).toEqual([]);
+  });
+  it.each(defs.map((d) => [d.id, d] as const))('%s: no wire reaches a pin from behind its symbol', (_, d) => {
+    expect(backwardEnds(d, netlistOf(d)!)).toEqual([]);
+  });
+});
+
+describe('dead parts', () => {
+  const defs = [...new Set([...registry.values(), ...cpuTops()])].filter((d) => d.netlist);
+  it.each(defs.map((d) => [d.id, d] as const))('%s: every part reaches an output', (_, d) => {
+    expect(deadInstances(netlistOf(d)!, d.ports)).toEqual([]);
   });
 });

@@ -17,6 +17,7 @@ import { chapterById } from '../src/chapters';
 import { checkChallenge, libAllowed, startChallenge } from '../src/editor/challenges';
 import { checkSimulatable } from '../src/editor/compile';
 import { UserLibrary } from '../src/editor/library';
+import { deadParts, openInputs } from '../src/editor/lint';
 import { emptyWorkspace } from '../src/editor/model';
 import { resolveComponent } from '../src/lib/resolve';
 import { chip, part, pin, wire, workspace } from './editorkit';
@@ -108,7 +109,12 @@ describe('every playable level', () => {
     const chips = c.answer();
     const main = chips[chips.length - 1];
     const lib = new UserLibrary(workspace(main, ...chips.slice(0, -1)));
-    for (const d of chips) expect(checkSimulatable(lib.compiled(d.id)!), d.id).toEqual([]);
+    for (const d of chips) {
+      expect(checkSimulatable(lib.compiled(d.id)!), d.id).toEqual([]);
+      // No orphans: every part reaches an output (dead gates would inflate par), every input is wired.
+      expect(deadParts(d, lib.compiled(d.id)!), d.id).toEqual([]);
+      expect(openInputs(lib.compiled(d.id)!), d.id).toEqual([]);
+    }
     const r = checkChallenge(c, lib.compiled(main.id));
     expect(r.failures).toEqual([]);
     expect(r.restrictionViolations).toEqual([]);

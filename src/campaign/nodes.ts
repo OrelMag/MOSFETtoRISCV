@@ -393,7 +393,7 @@ export const NODES: CampaignNode[] = [
     tips: ['A mux in front picks 0 when clr; the register loads when en or clr.'], codex: ['stall', 'flush'], unlocks: ['rv16_preg'], anatomy: ['p1', 'p2', 'p3', 'p4'],
   },
   {
-    id: 'pi_core0', act: 6, title: 'Pipeline I: five stages', kind: 'core', requires: ['pi_lesson', 'pi_reg'], base: BUILD6.pi_core0, par: { nand: 10487, period: 65, cycles: 2508 },
+    id: 'pi_core0', act: 6, title: 'Pipeline I: five stages', kind: 'core', requires: ['pi_lesson', 'pi_reg'], base: BUILD6.pi_core0, par: { nand: 10290, period: 65, cycles: 2508 },
     why: 'The datapath cut into F, D, E, M, W. These programs keep dependent instructions apart and have no branches, so the stages can work without talking to each other.',
     tips: ['Write the register file at the falling edge (clock it with ¬clk): an instruction three behind its producer then reads the new value.', 'Carry everything a later stage needs in the pipeline registers: rd, control signals, the immediate, pc.', 'Report register writes from W and stores from M.'],
     codex: ['pipeline'],
@@ -405,7 +405,7 @@ export const NODES: CampaignNode[] = [
     codex: ['forwarding', 'comparator'], unlocks: ['rv16_fwd'], anatomy: ['fwd'],
   },
   {
-    id: 'pi_core1', act: 6, title: 'Pipeline II: forwarding', kind: 'core', requires: ['pi_core0', 'pi_fwd'], base: BUILD6.pi_core1, par: { nand: 10981, period: 78, cycles: 970 },
+    id: 'pi_core1', act: 6, title: 'Pipeline II: forwarding', kind: 'core', requires: ['pi_core0', 'pi_fwd'], base: BUILD6.pi_core1, par: { nand: 10976, period: 78, cycles: 970 },
     why: 'Now an instruction uses the result of the one just before it. Two 3:1 muxes in front of the ALU, steered by the forwarding unit, keep the pipeline at one instruction per cycle.',
     tips: ['M\'s forwarded value is its result before memory (ALU, pc + 1 or immediate).', 'Forward rs2 too: stores and branches use it.'],
     codex: ['forwarding'],

@@ -244,4 +244,18 @@ describe('lint', () => {
     expect(msgs).toContain("pointer 'alone' connects nothing");
     expect(lint(halfAdder()).diags).toEqual([]); // a finished circuit is clean
   });
+
+  it('flags parts whose outputs reach no output, through other dead parts too', () => {
+    // a → g1 → y is live; a → g2 → g3 goes nowhere (g3.y unwired), so both are dead.
+    const doc = chip('u_d', 'D', {
+      pins: [pin('a', 'in', [0, 2]), pin('y', 'out', [30, 2])],
+      parts: [part('g1', { lib: 'not' }, [8, 1]), part('g2', { lib: 'not' }, [8, 6]), part('g3', { lib: 'not' }, [16, 6])],
+      wires: [wire('w1', 'pin:a', 'g1.a'), wire('w2', 'g1.y', 'pin:y'), wire('w3', 'pin:a', 'g2.a'), wire('w4', 'g2.y', 'g3.a')],
+    });
+    const d = lint(doc).diags.find((x) => x.msg.includes('driving nothing'));
+    expect(d?.parts).toEqual(['g2', 'g3']);
+    // A chip with no output (nothing to reach yet) is still being drawn: no warning.
+    const draft = { ...doc, pins: [doc.pins[0]], wires: doc.wires.filter((w) => w.id !== 'w2') };
+    expect(lint(draft).diags.some((x) => x.msg.includes('driving nothing'))).toBe(false);
+  });
 });
