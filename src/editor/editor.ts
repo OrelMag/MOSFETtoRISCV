@@ -585,7 +585,7 @@ export class Editor {
   /** A halt part stopped Run. */
   private halted(): void {
     const sim = this.sim;
-    this.toast(sim.hasClock ? `Halted after cycle ${sim.cycles}` : `Halted at t = ${sim.time}`);
+    this.toast(sim.hasClock ? `Halted after cycle ${sim.cycles}` : sim.engine === 'gate' ? `Halted at t = ${sim.time}` : 'Halted');
   }
 
   private updateStatus(): void {
@@ -599,7 +599,10 @@ export class Editor {
     }
     const c = this.compiled;
     const bits: (string | HTMLElement)[] = [];
-    bits.push(h('span', { class: `sb-level ${c?.mode ?? 'gate'}`, title: c?.mode === 'switch' ? 'Contains transistors: solved switch by switch' : 'Gates only: event-driven, one NAND delay each' }, c?.mode === 'switch' ? 'switch level' : 'gate level'));
+    const fast = sim.engine === 'cycle';
+    bits.push(h('span', { class: `sb-level ${c?.mode ?? 'gate'}`, title: c?.mode === 'switch' ? 'Contains transistors: solved switch by switch'
+      : fast ? 'Gates only, on the cycle engine: flip-flops looked up in tables, the rest evaluated level by level. The same values after every settle as the event-driven simulation, which takes over for gate mode, probes and stepping'
+        : 'Gates only: event-driven, one NAND delay each' }, c?.mode === 'switch' ? 'switch level' : fast ? 'gate level · cycle engine' : 'gate level'));
     if (!sim.sim) bits.push(h('span', { class: 'pulse warn' }), sim.pending ? 'building…' : 'not simulated');
     else {
       bits.push(h('span', { class: `pulse${sim.running ? ' busy' : ''}${sim.unstable ? ' warn' : ''}` }));
@@ -611,8 +614,13 @@ export class Editor {
         bits.push(h('span', { class: 'sb-keys', title: `${sim.keyBinds.length ? 'Key parts listen to these keys: hold one to drive them' : ''}${sim.keyBinds.length && sim.hasKeyboard ? '. ' : ''}${sim.hasKeyboard ? 'Keyboard part: typed keys reach it while the circuit runs or with Type on' : ''}` }, keys.join(' ')));
       }
       if (sim.hasClock) bits.push(`${sim.cycles} cycles`);
-      if (sim.sim.kind === 'gate') bits.push(`t = ${sim.time}`);
-      if (sim.running && sim.mode === 'cycle' && sim.hasClock) bits.push(`${fmtHz(sim.achievedHz)}`);
+      // gate delays only count on the event-driven engine (the cycle engine has no time)
+      if (sim.engine === 'gate') bits.push(`t = ${sim.time}`);
+      if (sim.running && sim.mode === 'cycle' && sim.hasClock) {
+        // what the clock really ran at over the last second; the setting too when it falls short
+        const short = Number.isFinite(sim.hz) && sim.achievedHz < 0.9 * sim.hz;
+        bits.push(h('span', { title: 'Clock cycles simulated per second, measured over the last second' }, `${fmtHz(sim.achievedHz)}${short ? ` of ${fmtHz(sim.hz)}` : ''}`));
+      }
     }
     const key = bits.map((b) => (typeof b === 'string' ? b : b.outerHTML)).join('|');
     if (this.status.dataset.key === key) return;

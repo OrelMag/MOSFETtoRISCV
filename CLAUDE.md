@@ -72,7 +72,21 @@ src/sim/       simulation core (no DOM)
   gatesim.ts     event-driven 3-valued (0/1/X) simulator, unit NAND delay, transport delay,
                  relaxation for power-on and oscillation resolution; runUntil(t) for a
                  fixed-period clock (an edge does not wait for the logic to settle); onTrace +
-                 watch() report every change of watched nets at its exact time
+                 watch() report every change of watched nets at its exact time; hot loops on typed arrays
+                 (tests/ref/gatesim-ref.ts: the old object version, gatesim-fast.test.ts: same events, same times);
+                 adopt(src, changed, dirty): take over another engine's settled state of the same design
+  ffmacro.ts     FfTable.of(def): an `ff` definition (DFF, DFFE) as a state machine of settled net vectors, from
+                 unit-delay simulation of it alone; good(id) checks by simulation that it is exact from a state
+                 (data arriving 1 … K delays after an edge, pairs in any order, pulses; outputs never follow data
+                 with the clock steady); partner(id): the clock-toggle pair a flip-flop sits in while nothing changes
+  cyclesim.ts    CycleSim.build(design) (or a reason): flip-flops as FfTable lookups (stable ones skipped at edges,
+                 internals read from the table), the rest levelized (a `seq` behaviour ordered by its comb inputs);
+                 settle = phase 1 (flip-flops / behaviours reading a changed pin or poked, on pre-edge values) then
+                 one levelized sweep; false, nothing changed, for an X clock or a transition no table vouches for.
+                 Refused: a flip-flop or seq clock not a pin, a behaviour on a clock-derived signal, other loops
+  dualsim.ts     DualSim: GateSim + CycleSim behind one Sim (preferFast: the sandbox's cycle mode; prepare() builds
+                 the cycle engine outside a frame budget); GateSim for step / runUntil / onTrace, power-on and
+                 carry, a settle the cycle engine refuses; the state handed over both ways (tests/cyclesim.test.ts)
   switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes); `strength` levels:
                  rails/inputs > transistors (strength 4..2, ratioed logic) > resistors (prim 'res',
                  strength 1: pull-ups lose to any transistor; two opposing → X) > stored charge
@@ -227,7 +241,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  halt parts at any depth stop Run / runCycles after the step where they read 1; key / keyboard
                  leaves at any depth driven through Sim.poke (setKey: held keys survive rebuilds and resets; typeKey;
                  a keyboard drops its oldest key when `ack` reads 1 just before a rising edge, or once settled
-                 without a clock); pokeLeaf (a switch flipped, a console / screen cleared)
+                 without a clock); pokeLeaf (a switch flipped, a console / screen cleared); gate level is a DualSim
+                 (cycle mode on the cycle engine, `engine`: which runs)
   palette.ts     registerPaletteGroup + the palette panel (purist filter)
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
   challenges.ts  build challenges: BuildChallenge (ports, table / sequence check, allowed parts, par),
@@ -299,7 +314,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   dock.ts        the right-hand dock: drawers (Inspector, CPU, Screens, challenges) share it, tabs when several;
                  sets --dock-space on the overlay so look inside stops at its edge
   analysis.ts    plugin: probe mode (P) + LogicAnalyzer in slots.bottom, Timing props section with
-                 the critical path drawn on the chip, lint as a diag source, open-input marks
+                 the critical path drawn on the chip, lint as a diag source, open-input marks; records only while
+                 the panel is open (its trace listener puts DualSim on GateSim)
   cpuui.ts       plugin: the CPU panel (docked drawer: status, listing with the PC and pipeline stages, a
                  click marks the instruction's parts (insthw names) and colours its field wires
                  (instrMarks → wires by net), field breakdown (widgets/instrfields), pipeline diagram
@@ -493,7 +509,12 @@ keep the two in step when a panel gains a feature.
   polylines / hops / dots only for what moved, a transistor chip's derived model and flip-flop
   check are cached by a structural key (compile.ts), and the last four chips keep their
   simulation across tab switches. `npx vite-node scripts/sandbox-perf.ts` measures the
-  DOM-free costs on a CPU and a 64-bit Kogge–Stone adder opened in the sandbox.
+  DOM-free costs on a CPU and a 64-bit Kogge–Stone adder opened in the sandbox; `scripts/sim-perf.ts` the
+  cycles/s of the CPUs on GateSim and the cycle engine (`--ref`: against the old GateSim).
+- Run in cycle mode uses the cycle engine (DualSim): no gate time (the run bar hides `t`), the same values after
+  every settle; gate mode, probes / the open timing panel and stepping use GateSim. A new sequential part runs on it
+  if its flip-flops are `ff` library ones and its other storage a `seq` behaviour; anything else falls back to GateSim.
+  The CPU drawer redraws at most every 100 ms while the clock runs.
 - Probes and the timing panel are gate level only (the switch-level solver has no time); lanes
   name what was drawn and survive rebuilds (`LogicAnalyzer.rebind` keeps the recording).
 - Keys are handled on `document` while the page is mounted and ignored while typing in a field.
