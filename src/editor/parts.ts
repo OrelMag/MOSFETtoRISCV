@@ -11,6 +11,7 @@ import { TIE0, TIE1 } from '../lib/transistors';
 import type { ComponentDef, InstanceDef, NetDef } from '../sim/types';
 import type { DisplayKind, PartRef } from './model';
 import { ramWithInit, romImage } from './memory';
+import { ioRefDef } from './ioparts';
 
 export type PartResult = ComponentDef | { error: string };
 
@@ -61,6 +62,8 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
     return keyPart(ref.key);
   }
   if ('keyboard' in ref) return KEYBOARD;
+  const io = ioRefDef(ref);
+  if (io) return io;
   if ('ram' in ref) {
     const { k, w, init } = ref.ram;
     if (!Number.isInteger(k) || k < 1 || k > MAX_RAM_K) return { error: `RAM: 2^k words with k = 1–${MAX_RAM_K}` };

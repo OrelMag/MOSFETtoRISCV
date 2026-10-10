@@ -135,7 +135,7 @@ function moduleText(def: ComponentDef, nameOf: (d: ComponentDef) => string): str
       continue;
     }
     if (isExternal(c)) {
-      lines.push(`  // ${inst.name}: ${c.name} (an input from the sandbox, not hardware): its outputs are left undriven`);
+      lines.push(`  // ${inst.name}: ${c.name} (a sandbox part outside the circuit, not hardware): its outputs are left undriven`);
       continue;
     }
     let iname = ident(inst.name, 'u');
