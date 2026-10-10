@@ -116,6 +116,13 @@
 .sb-item small { white-space: nowrap; flex: none; }
 .sb-item.disabled { opacity: 0.45; cursor: not-allowed; }
 .sb-item.on { background: var(--accent-soft); color: var(--accent); }
+.sb-item > span:not([class]) { flex: 1; min-width: 0; }
+/* The favorite star: shown on hover (always on touch screens), always once pinned. */
+.sb-star { flex: none; width: 14px; text-align: center; font-size: 13px; line-height: 1; color: var(--muted); opacity: 0; cursor: pointer; transition: opacity 0.1s; }
+.sb-item:hover .sb-star, .sb-star.on { opacity: 1; }
+.sb-star:hover, .sb-star.on { color: var(--warn); }
+@media (hover: none) { .sb-star { opacity: 0.6; } }
+.sb-fav-key { flex: none; font: 600 10px var(--font-mono); color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; line-height: 15px; }
 .sb-empty { color: var(--muted); font-size: 13px; padding: 12px; }
 
 /* ---------- canvas ---------- */

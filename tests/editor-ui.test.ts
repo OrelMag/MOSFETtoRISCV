@@ -11,7 +11,7 @@ import {
 } from '../src/editor/geom';
 import { emptyWorkspace, type ChipDoc, type DefOf, type PartRef } from '../src/editor/model';
 import { addPart, addPin, addWire, moveSel } from '../src/editor/ops';
-import { paletteGroups, registerPaletteGroup, visibleItems, type PaletteCtx } from '../src/editor/palette';
+import { favoriteItems, paletteGroups, registerPaletteGroup, toggleFavorite, visibleItems, type PaletteCtx } from '../src/editor/palette';
 import { partDef } from '../src/editor/parts';
 import { EditorSim, FrameBudget, simKey } from '../src/editor/runtime';
 import { activeChip, closeChip, keepVolatile, newChip, openChip, setPinValue } from '../src/editor/session';
@@ -177,10 +177,12 @@ describe('session', () => {
     const ws2 = setPinValue(ws1, 'u_main', 'pin1', 1);
     expect(ws2.chips.u_main.pins[0].value).toBe(1);
     // undo back to ws1 (value absent) while the current state has value 1 and another tab
-    const cur = { ...ws2, open: ['u_main'], purist: true };
+    const cur = { ...ws2, open: ['u_main'], purist: true, favorites: ['lib/nand'] };
     const r = keepVolatile(ws1, cur);
     expect(r.chips.u_main.pins[0].value).toBe(1);
     expect(r.purist).toBe(true);
+    expect(r.favorites).toEqual(['lib/nand']);
+    expect(keepVolatile({ ...ws1, favorites: ['lib/nand'] }, ws2).favorites).toBeUndefined();
     // unchanged chips keep their identity
     expect(keepVolatile(ws2, ws2).chips.u_main).toBe(ws2.chips.u_main);
   });
@@ -207,6 +209,25 @@ describe('palette', () => {
         if ('part' in it.place) expect(defOf({ id: 'x', ref: it.place.part, at: [0, 0] }), `${g.id}/${it.id}`).toBeDefined();
       }
     }
+  });
+
+  it('favorites: saved order, purist and search applied, stale keys dropped, greyed out as in their group', () => {
+    const ws = { ...emptyWorkspace(), favorites: ['lib/xor', 'io/clock', 'lib/nand', 'lib/no_such_part', 'mine/u_gone'] };
+    const fctx: PaletteCtx = { ...ctx, ws };
+    expect(favoriteItems(fctx, false).map((f) => f.key)).toEqual(['lib/xor', 'io/clock', 'lib/nand']);
+    expect(favoriteItems(fctx, true).map((f) => f.key)).toEqual(['io/clock', 'lib/nand']);
+    expect(favoriteItems(fctx, false, 'nand').map((f) => f.key)).toEqual(['lib/nand']);
+    expect(favoriteItems(fctx, false).every((f) => f.item.section === undefined)).toBe(true);
+    expect(favoriteItems(ctx, false)).toEqual([]);
+    // a chip that would contain the one being edited stays greyed out among the favorites too
+    const mine = { ...emptyWorkspace(), chips: { ...emptyWorkspace().chips, u_top: { ...emptyWorkspace().chips.u_main, id: 'u_top', name: 'Top' } }, favorites: ['mine/u_top'] };
+    expect(favoriteItems({ ws: mine, chipId: 'u_main', canPlace: () => false }, false)[0].item.disabled).toMatch(/contains/);
+  });
+
+  it('toggleFavorite appends a new key and removes a pinned one', () => {
+    expect(toggleFavorite(undefined, 'lib/nand')).toEqual(['lib/nand']);
+    expect(toggleFavorite(['lib/nand', 'io/clock'], 'lib/xor')).toEqual(['lib/nand', 'io/clock', 'lib/xor']);
+    expect(toggleFavorite(['lib/nand', 'io/clock'], 'lib/nand')).toEqual(['io/clock']);
   });
 
   it('later phases register groups', () => {
