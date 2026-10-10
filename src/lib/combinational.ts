@@ -520,10 +520,12 @@ export const equal = memo((n: number): ComponentDef => {
     const A = andN(n);
     const ag = symbolGeom(A);
     const aIns = A.ports.filter((p) => p.dir === 'in').map((p) => p.name);
+    // One trunk per bit at x = 16 + i: the AND stands past the last one, or wires would reach it from behind.
+    const xA = Math.max(24, 16 + n + 2);
     const instances: InstanceDef[] = [
       { name: 'sa', def: splitter(ones(n), P), at: [4, 0] },
       { name: 'sb', def: splitter(ones(n), P), at: [7, 2] },
-      { name: 'all', def: A, at: [24, (P * n) / 2 - ag.h / 2 + 1] },
+      { name: 'all', def: A, at: [xA, (P * n) / 2 - ag.h / 2 + 1] },
     ];
     const nets: NetDef[] = [{ name: 'a', ends: ['a', 'sa.in'] }, { name: 'b', ends: ['b', 'sb.in'] }, { name: 'eq', ends: ['all.y', 'eq'] }];
     for (let i = 0; i < n; i++) {
@@ -537,7 +539,7 @@ export const equal = memo((n: number): ComponentDef => {
       ports: [{ name: 'a', width: n, dir: 'in' }, { name: 'b', width: n, dir: 'in' }, bit('eq', 'out')],
       symbol: { kind: 'box', label: '=' },
       spec: ([a, b]) => [a === b ? 1 : 0],
-      netlist: () => ({ pins: { a: [1, (P * n) / 2], b: [1, 2 + (P * n) / 2], eq: [24 + ag.w + 4, (P * n) / 2 + 1] }, instances, nets }),
+      netlist: () => ({ pins: { a: [1, (P * n) / 2], b: [1, 2 + (P * n) / 2], eq: [xA + ag.w + 4, (P * n) / 2 + 1] }, instances, nets }),
     });
   }
 });

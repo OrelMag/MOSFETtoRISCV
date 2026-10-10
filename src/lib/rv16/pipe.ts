@@ -271,13 +271,16 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
     redirect = b.name(b.op1(orN(3), [ldN, trap, mret], 'redirect'), 'redirect2', true);
     b.next();
   }
-  // A load in E (rwe and wb = 01), for the hazard unit.
-  const wbs = b.op(splitter([1, 1], 2), [wbE]);
-  const nwb1 = b.op1(NOT, [`${wbs}.o1`]);
-  b.next();
-  const ld0 = b.op1(AND, [`${wbs}.o0`, nwb1]);
-  b.next();
-  const loadE = b.name(b.op1(AND, [ld0, rweE], 'load in E'), 'loadE', true);
+  // A load in E (rwe and wb = 01), for the hazard unit (only a core that stalls has one).
+  let loadE = '';
+  if (o.stall) {
+    const wbs = b.op(splitter([1, 1], 2), [wbE]);
+    const nwb1 = b.op1(NOT, [`${wbs}.o1`]);
+    b.next();
+    const ld0 = b.op1(AND, [`${wbs}.o0`, nwb1]);
+    b.next();
+    loadE = b.name(b.op1(AND, [ld0, rweE], 'load in E'), 'loadE', true);
+  }
   // To M: rwe mwe wb[2] rd[3] + 9 spare.
   const cm = b.op1(merger([1, 1, 2, 3, 9], 2), [rweE, mweE, wbE, rdE, b.op1(constWord(9, 0), [])], 'control (to M)');
   b.next();
@@ -294,7 +297,7 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
   const cmS = b.op(splitter([1, 1, 2, 3, 9], 2), [cmM], 'control (M)');
   const rweM = b.name(`${cmS}.o0`, 'rweM', true), rdM = b.name(`${cmS}.o3`, 'rdM', true);
   // M's result for forwarding (a load's value is not ready: the hazard unit keeps its users away).
-  const resM = b.name(b.op1(muxTree(2, 16), [yM, yM, pc1M, immM, `${cmS}.o2`], 'result (M)'), 'resM', true);
+  const resM = o.fwd ? b.name(b.op1(muxTree(2, 16), [yM, yM, pc1M, immM, `${cmS}.o2`], 'result (M)'), 'resM', true) : '';
   const valM = b.op1(muxTree(2, 16), [yM, 'drdata', pc1M, immM, `${cmS}.o2`], 'value (M)');
   const cw2 = b.op1(merger([1, 3, 12], 2), [rweM, rdM, b.op1(constWord(12, 0), [])], 'control (to W)');
   b.wire(yM, 'daddr');

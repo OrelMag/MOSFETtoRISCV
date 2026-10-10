@@ -49,9 +49,10 @@ export const constWord = memo((w: number, v: number): ComponentDef => {
     spec: () => [v],
     netlist: () => ({
       pins: { y: [12, w / 2] },
+      // Only the ties some bit uses: an unused one would be a part driving nothing.
       instances: [
-        { name: 'z', def: TIE0, at: [0, 0] },
-        { name: 'o', def: TIE1, at: [0, 3] },
+        ...(zeros.length > 1 ? [{ name: 'z', def: TIE0, at: [0, 0] as [number, number] }] : []),
+        ...(onesE.length > 1 ? [{ name: 'o', def: TIE1, at: [0, 3] as [number, number] }] : []),
         { name: 'm', def: merger(ones(w), 1), at: [8, 0] },
       ],
       nets,
