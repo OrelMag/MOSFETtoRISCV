@@ -92,6 +92,7 @@ registerPaletteGroup({
     { id: 'out8', name: 'Output bus', tag: '8-bit', title: 'An N-bit output pin', place: { pin: { dir: 'out', width: 8 } } },
     { id: 'key', name: 'Key', tag: 'A', title: 'A keyboard key: 1 while it is held (pick the key in the properties). Listens from inside a placed chip too; costs nothing', place: { part: { key: 'a' } } },
     { id: 'keyboard', name: 'Keyboard', tag: '8-bit', title: 'Typed keys wait in order: code = the oldest (ASCII), ready = 1 while one waits, ack removes it. Keys reach it while the circuit runs or with Type on; costs nothing', place: { part: { keyboard: true } } },
+    { id: 'switches', name: 'Switches', tag: '8-bit', title: 'A bank of toggle switches (1–32 in the properties): click one to flip it, also while running. q = their positions; they stay put through Reset. Costs nothing', place: { part: { switches: 8 } } },
   ],
 });
 
@@ -149,6 +150,8 @@ registerPaletteGroup({
     { id: 'value', name: 'Value', tag: '8-bit', title: 'Shows a bus value in the chosen radix', place: { part: { display: 'value', width: 8 } } },
     { id: 'buzzer', name: 'Buzzer', title: 'Sounds while its input is 1 (A4, 440 Hz); give it a bus to play MIDI note v (60 = middle C)', place: { part: { display: 'buzzer' } } },
     { id: 'halt', name: 'Halt', title: 'Stops Run after the step where its input reads 1 (any bit of a bus); placed inside a chip, it still stops Run', place: { part: { display: 'halt' } } },
+    { id: 'console', name: 'Console', tag: 'ASCII', title: 'A terminal: prints the character on data at a rising clk edge with we = 1 (\\n new line, \\b backspace, \\f clears). Costs nothing', place: { part: { console: { cols: 32, rows: 8 } } } },
+    { id: 'screen', name: 'Screen', tag: '32×32', title: 'A pixel screen: write pixels by x, y and colour into its own frame buffer, latch rows from a bus, or one wire per pixel (mode, size and colours in the properties). Costs nothing', place: { part: { screen: { mode: 'write', size: 32, color: 'rgb332' } } } },
   ],
 });
 

@@ -157,6 +157,60 @@ export function wiredChip(id: string, name: string, kind: 'and' | 'or'): ChipDoc
   });
 }
 
+/** 'Hello, sandbox!' and a new line: 16 characters, one per ROM word. */
+const HELLO = 'Hello, sandbox!\n';
+const HELLO_SRC = `# ASCII, one character per word: "Hello, sandbox!\\n"
+${[...HELLO].map((c) => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ')}`;
+
+/**
+ * A console printing a message: a 4-bit counter walks a 16 × 8 ROM holding the text, and the
+ * console takes one character per clock edge (we tied to 1).
+ */
+export function consoleChip(id: string, name: string): ChipDoc {
+  return chip(id, name, {
+    notes: 'A counter walks a ROM holding a message; the console prints the character on data at every rising clock edge while we = 1. Run the clock and watch it type. Reset clears the console.',
+    pins: [pin('clk', 'in', [2, 16], 1, { kind: 'clock' })],
+    parts: [
+      part('one', { const: { width: 1, value: 1 } }, [3, 7]), part('cnt', { lib: 'counter4' }, [10, 6]),
+      part('text', { rom: { k: 4, w: 8, addr: 'word', lang: 'hex', src: HELLO_SRC } }, [24, 6], { label: 'message ROM' }),
+      part('write', { const: { width: 1, value: 1 } }, [38, 11]),
+      part('con', { console: { cols: 24, rows: 6 } }, [44, 4]),
+    ],
+    wires: [
+      wire('clk', 'pin:clk', 'cnt.clk'), wire('clk2', 'pin:clk', 'con.clk'),
+      wire('en', 'one.y', 'cnt.en'), wire('we', 'write.y', 'con.we', [[42, 12], [42, 8]]),
+      wire('q', 'cnt.q', 'text.addr'),
+      wire('ch', 'text.data', 'con.data', [[41, 8], [41, 6]]),
+    ],
+  });
+}
+
+/**
+ * A screen painted by a sweeping beam: an 8-bit counter is the address (x = its low 4 bits, y the
+ * high 4), the colour comes from four switches, and every clock edge writes one pixel.
+ */
+export function screenChip(id: string, name: string): ChipDoc {
+  return chip(id, name, {
+    notes: 'An 8-bit counter sweeps the 16 × 16 screen pixel by pixel (x = count[3:0], y = count[7:4]); each rising clock edge writes the colour set on the switches (the 16-colour palette: 0 black … 15 white). Run at a high rate and flip the switches while it paints.',
+    pins: [pin('clk', 'in', [2, 18], 1, { kind: 'clock' })],
+    parts: [
+      part('one', { const: { width: 1, value: 1 } }, [3, 7]), part('cnt', { lib: 'counter8' }, [10, 6]),
+      part('xy', { split: [4, 4] }, [30, 1]),
+      part('colour', { switches: 4 }, [18, 12]),
+      part('write', { const: { width: 1, value: 1 } }, [31, 9]),
+      part('scr', { screen: { mode: 'write', size: 16, color: 'pal16' } }, [36, 0]),
+    ],
+    wires: [
+      wire('clk', 'pin:clk', 'cnt.clk'), wire('clk2', 'pin:clk', 'scr.clk'),
+      wire('en', 'one.y', 'cnt.en'), wire('we', 'write.y', 'scr.we', [[34, 10], [34, 8]]),
+      wire('q', 'cnt.q', 'xy.in', [[24, 8], [24, 3]]),
+      wire('x', 'xy.o0', 'scr.x'), wire('y', 'xy.o1', 'scr.y'),
+      // the colour bus rises left of the write constant, so it never meets the we wire
+      wire('c', 'colour.q', 'scr.color', [[29, 14], [29, 6]]),
+    ],
+  });
+}
+
 export interface Example {
   id: string;
   name: string;
@@ -167,6 +221,8 @@ export interface Example {
 export const EXAMPLES: Example[] = [
   { id: 'fetch', name: 'Fetch loop', blurb: 'PC register, PC + 4 and a program ROM: the instruction fetch of a CPU.', build: (id, n) => fetchChip(id, n) },
   { id: 'counter7', name: '4-bit counter on a 7-segment display', blurb: 'A counter, a font ROM as the decoder, a 7-segment digit.', build: counterSeg7Chip },
+  { id: 'console', name: 'Console: hello', blurb: 'A counter walks a ROM holding a message; a console prints it, a character per clock edge.', build: consoleChip },
+  { id: 'screen', name: 'Screen: a sweeping beam', blurb: 'A counter sweeps a 16 × 16 screen pixel by pixel in the colour set on four switches.', build: screenChip },
   { id: 'sharedbus', name: 'Shared bus', blurb: 'Two tri-state drivers and a pull-down on one wire: a value, a held 0, or a fight (X).', build: sharedBusChip },
   { id: 'wiredand', name: 'Wired-AND', blurb: 'Open-drain NMOS stages and a pull-up: the wire is 1 only when every stage lets go.', build: (id, n) => wiredChip(id, n, 'and') },
   { id: 'wiredor', name: 'Wired-OR', blurb: 'Open-source PMOS stages and a pull-down: the wire is 1 when any stage pulls it up.', build: (id, n) => wiredChip(id, n, 'or') },

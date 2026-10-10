@@ -12,6 +12,7 @@ import { hasFeedback, logicDepth, stats } from '../sim/stats';
 import { SwitchSim } from '../sim/switchsim';
 import { analyzeTiming } from '../sim/timing';
 import { B0, B1, BZ, type Bit, type ComponentDef, isExternal, isSwitchPrim, netlistOf } from '../sim/types';
+import { ioInfo } from './ioparts';
 import type { Compiled } from './compile';
 import { type ChipDoc, emptyChip, type PartDoc, type PinDoc, type Workspace } from './model';
 import { openChip } from './session';
@@ -263,7 +264,7 @@ function checkPins(def: ComponentDef, want: PinSpec[]): string[] {
 /** Library parts allowed under every restriction: they cost nothing or are below the NAND. */
 function allowedLeaf(d: ComponentDef, allowed: Allowed): string | null {
   if (d.prim === 'alias') return null; // splitters, mergers, displays
-  if (isExternal(d)) return null; // keys and keyboards: zero cost, and a check reads them released (0)
+  if (isExternal(d) || ioInfo(d)) return null; // keys, keyboards, switches, consoles, screens: zero cost, and a check reads the sources released (0)
   const lib = typeof allowed === 'object' ? allowed : null;
   if (isSwitchPrim(d)) return null; // transistors, rails, resistors, capacitors (your own NAND stays usable)
   if (d.id === 'tie0' || d.id === 'tie1' || d.id.startsWith('sb_const') || /^const\d+_[0-9a-f]+$/.test(d.id)) return null;
