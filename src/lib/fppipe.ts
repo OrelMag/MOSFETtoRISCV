@@ -550,7 +550,7 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
   // hazards and stall logic
   place('hz', HAZARD6, [xFD + 40, T + PIPE_H + 4], 'hazard unit');
   place('fhz', FP_HAZARD, [xFD + 78, T + PIPE_H + 4], 'FP hazards');
-  place('stD', OR, [xFD + 106, T + PIPE_H + 4]); place('stAll', OR, [xFD + 118, T + PIPE_H + 5]); place('go', NOT, [xFD + 130, T + PIPE_H + 6]);
+  place('stD', OR, [xFD + 106, T + PIPE_H + 4]); place('stAll', OR, [xFD + 118, T + PIPE_H + 5]); place('go', NOT, [xFD + 130, T + PIPE_H + 6]); place('pcEn', OR, [xFD + 150, T + PIPE_H + 5]);
   place('ndv', NOT, [xFD + 112, T + PIPE_H + 24]); place('flD', OR, [xFD + 118, T + PIPE_H + 16]); place('flDg', AND, [xFD + 130, T + PIPE_H + 16]);
   place('en1', TIE1, [xEM - 8, T + PIPE_H - 5]); place('zero', TIE0, [xMX - 8, T + PIPE_H - 3]);
 
@@ -560,12 +560,14 @@ function buildFpPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks' }
   const nets: NetDef[] = [
     // F
     N('PCNext', ['pcmux.y', 'pc.d'], 'wire'),
-    N('enPC', ['go.y', 'pc.en', 'FD.en']),
+    // a taken branch in E redirects the PC even while D waits: the waiting instruction is on the wrong path
+    N('go', ['go.y', 'FD.en', 'pcEn.a'], ['FD.en']),
+    N('enPC', ['pcEn.y', 'pc.en']),
     { name: 'PCF', ends: ['pc.q', 'imem.addr', 'plus4.a', 'FD.pcF', 'pcF'], tags: ['pcF'], trunk: P('pc', 'q')[0] + 3 },
     N('PCPlus4F', ['plus4.y', 'FD.pcPlus4F', 'pcmux.d0', 'pcmux.d3'], ['pcmux.d0', 'pcmux.d3']),
     N('InstrF', ['imem.data', 'FD.instrF'], 'wire'),
     N('vF', ['vF.y', 'FD.validF'], 'wire'),
-    N('flushFD', ['hz.taken', 'FD.clr', 'flD.b']),
+    N('flushFD', ['hz.taken', 'FD.clr', 'flD.b', 'pcEn.b']),
     // D
     N('validD', ['FD.validD', 'DE.validD'], 'wire'),
     N('PCD', ['FD.pcD', 'DE.pcD'], 'wire'),
@@ -722,4 +724,5 @@ const FPPIPE_VERILOG = `// Pipelined RV32IF: F D E M X W. Integer instructions p
 //   M: fma_add      X: fma_round      W: write x or f register, accrue fflags, write fcsr
 // Hazards: forwarding to E from M, X, W (integer) and from W (FP); a load stalls a dependent
 // instruction one cycle; an FP result stalls a dependent instruction while it is in E or M;
-// fdiv / fsqrt hold F, D, E and send bubbles into M; a taken branch flushes F and D.`;
+// fdiv / fsqrt hold F, D, E and send bubbles into M; a taken branch flushes F and D and loads
+// the PC even while D waits.`;
