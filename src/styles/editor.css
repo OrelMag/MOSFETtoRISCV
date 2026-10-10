@@ -257,6 +257,22 @@
   padding: 2px 8px; font: 600 13px var(--font-mono); text-align: right; cursor: pointer;
 }
 .in-button .track { width: 16px; }
+/* a switch bank inside a placed chip (ionested.ts): its path, a row of small switches, its value */
+.sb-io-nested { gap: 8px; }
+.in-bank { padding: 2px 8px; gap: 8px; }
+.in-bank .bank-row { display: inline-flex; gap: 2px; }
+.in-bank .bank-sw {
+  position: relative; width: 12px; height: 20px; padding: 0; border: 0; border-radius: 4px; cursor: pointer;
+  background: var(--w0); transition: background 0.15s;
+}
+.in-bank .bank-sw .knob {
+  position: absolute; left: 2px; bottom: 2px; width: 8px; height: 8px; border-radius: 2px; background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 25%); transition: bottom 0.15s;
+}
+.in-bank .bank-sw.v1 { background: var(--w1); }
+.in-bank .bank-sw.v1 .knob { bottom: 10px; }
+.in-bank .bank-sw:hover, .in-bank .bank-sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.in-bank .bank-v { min-width: 40px; color: var(--text-2); text-align: right; }
 .in-button.v1 .knob { left: 2px; }
 .sb-inline {
   position: absolute; z-index: 6; font: 600 13px var(--font-mono); padding: 3px 7px; border-radius: 6px; border: 1px solid var(--accent);

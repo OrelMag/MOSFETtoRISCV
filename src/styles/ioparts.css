@@ -47,7 +47,11 @@
 .io-con-bg { fill: var(--con-bg); stroke: var(--sym-stroke); stroke-width: 0.08; }
 .io-con-text { font: 1px var(--font-mono); fill: var(--con-fg); white-space: pre; pointer-events: none; }
 .io-con-cursor { fill: var(--con-cursor); opacity: 0.8; animation: io-blink 1.1s steps(1) infinite; pointer-events: none; }
-.io-con.off .io-con-cursor { display: none; }
+.io-con.off .io-con-cursor, .io-con.scrolled .io-con-cursor { display: none; }
+.io-con-more { display: none; pointer-events: none; }
+.io-con.scrolled .io-con-more { display: inline; }
+.io-con-more-bg { fill: var(--con-cursor); opacity: 0.9; }
+.io-con-more-text { font: 600 0.7px var(--font-mono); fill: var(--con-bg); }
 @keyframes io-blink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .io-con-cursor { animation: none; } }
 
@@ -76,6 +80,11 @@
 }
 .sb-scr-item .sb-scr-meta { font-size: 11px; margin-top: 4px; display: flex; gap: 6px 8px; flex-wrap: wrap; align-items: center; }
 .sb-scr-item .sb-scr-meta > span { flex: 1 1 100%; opacity: 0.8; }
+.sb-scr-item .sb-scr-con { position: relative; }
+.sb-scr-item .sb-scr-more {
+  position: absolute; top: 4px; right: 14px; padding: 0 6px; border-radius: 4px; pointer-events: none;
+  font: 600 11px/1.5 var(--font-mono); background: var(--con-cursor); color: var(--con-bg);
+}
 .sb-scr-sw { display: flex; flex-wrap: wrap; gap: 4px; }
 .sb-scr-sw button {
   min-width: 26px; padding: 2px 4px; font: 11px var(--font-mono); border-radius: 4px; cursor: pointer;

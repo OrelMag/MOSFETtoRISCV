@@ -343,6 +343,11 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   a sun and a triangle in the switches' colour and halts (10 251 cycles: ~1.2 s in Node, ~1.6 s in the page), the CPU
   drawer in lock-step: the ISS's `mmio` mode (I/O without the system) and the monitor's reading of a placed core,
   console part, switch bank and LED bank. ROM samples: live switches, a bouncing ball
+- ✅ Computer polish: the memory side (decoder + RAM) and the devices (console, LEDs, switches) packaged as chips, the
+  top level ~60 × 64 units (2× the scale at fit with the CPU drawer); a console's wheel scrollback; nested switch
+  banks and keys on the I/O bar; Run's frame budget adapts to keep ~60 fps (headless Chrome, Run at max: the
+  computer ~110 → ~135 kHz, the single-cycle remix ~670 → ~770 kHz); every sample checked on the hardware against
+  the ISS (the bouncing ball and live switches pixel by pixel)
 
 **Programs on your own CPU** (the second half of Turing Complete)
 - ⏳ Custom ISA: define instruction fields, opcodes and mnemonics in a table, and get an assembler,

@@ -13,7 +13,7 @@ import { emptyWorkspace, type ChipDoc, type DefOf, type PartRef } from '../src/e
 import { addPart, addPin, addWire, moveSel } from '../src/editor/ops';
 import { paletteGroups, registerPaletteGroup, visibleItems, type PaletteCtx } from '../src/editor/palette';
 import { partDef } from '../src/editor/parts';
-import { EditorSim, simKey } from '../src/editor/runtime';
+import { EditorSim, FrameBudget, simKey } from '../src/editor/runtime';
 import { activeChip, closeChip, keepVolatile, newChip, openChip, setPinValue } from '../src/editor/session';
 import { symbolGeom } from '../src/sim/geometry';
 import { B1 } from '../src/sim/types';
@@ -266,6 +266,45 @@ describe('EditorSim', () => {
     expect(es.cycles).toBe(6);
     es.advance(1 / 12, Infinity);
     expect(es.time).toBe(t0 + 1);
+  });
+
+  it('the frame budget adapts to the frame rate; an explicit budget is fixed', () => {
+    const P = FrameBudget.PERIOD;
+    const b = new FrameBudget(2, 14, 8);
+    // frames on time that used their budget: it grows, quickly, up to the maximum
+    for (let i = 0; i < 4; i++) b.frame(P, b.ms);
+    expect(b.ms).toBe(10);
+    for (let i = 0; i < 40; i++) b.frame(P, b.ms);
+    expect(b.ms).toBe(14);
+    // one late frame is jitter: a trim; a second within eight frames backs off by a fifth
+    b.frame(2 * P, b.ms);
+    expect(b.ms).toBeCloseTo(13.3);
+    b.frame(P, b.ms);
+    b.frame(2 * P, b.ms);
+    expect(b.ms).toBeCloseTo(0.8 * 13.4);
+    // back on time: quickly (0.5 ms a frame) to 90 % of where it missed, then slowly (0.1)
+    b.frame(P, b.ms);
+    expect(b.ms).toBeCloseTo(0.8 * 13.4 + 0.5);
+    for (let i = 0; i < 4; i++) b.frame(P, b.ms);
+    const near = b.ms;
+    expect(near).toBeLessThan(13.4);
+    b.frame(P, b.ms);
+    expect(b.ms - near).toBeCloseTo(0.1);
+    // a frame that left its budget unused (a slow clock rate), a pause, a hidden tab: no change
+    const ms = b.ms;
+    b.frame(3 * P, 0.1);
+    b.frame(1000, b.ms);
+    b.frame(0, b.ms);
+    expect(b.ms).toBe(ms);
+    // a page that cannot keep up: down to the minimum, never below
+    for (let i = 0; i < 60; i++) b.frame(3 * P, b.ms);
+    expect(b.ms).toBe(2);
+    // EditorSim: adaptive by default (8 ms until frames come), fixed when the options set one
+    expect(new EditorSim().budgetMs).toBe(8);
+    expect(new EditorSim().frameBudget).not.toBeNull();
+    const fixed = new EditorSim({ budgetMs: 5 });
+    expect(fixed.frameBudget).toBeNull();
+    expect(fixed.budgetMs).toBe(5);
   });
 
   it('a rebuild is debounced and keys on connectivity and part definitions', () => {

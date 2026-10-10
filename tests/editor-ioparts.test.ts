@@ -7,7 +7,7 @@ import { compileChip } from '../src/editor/compile';
 import { deriveBehavior } from '../src/editor/derive';
 import { consoleChip, screenChip } from '../src/editor/examples';
 import {
-  clearedState, COLOR_BITS, COLOR_FORMATS, colorRgb, consoleAppend, consoleInit, consolePart, consoleRows, consoleText, type ConsoleState,
+  clearedState, COLOR_BITS, COLOR_FORMATS, colorRgb, consoleAppend, consoleInit, consolePart, consoleRowCount, consoleRows, ConsoleScroll, consoleText, type ConsoleState,
   flipSwitch, IO_MAX_BITS, ioNodes, ioState, MONO_ON, PAL16, paintScreen, pixelsOf, PX_OFF, PX_X, screenPart, screenProblem, type ScreenRef,
   type ScreenState, switchAt, switchBank, switchCell, type SwitchState,
 } from '../src/editor/ioparts';
@@ -116,6 +116,64 @@ describe('console part', () => {
     expect(consoleRows(st, 4, 10)).toEqual(['abcd', 'efgh', 'ij', 'xy', '', 'last']);
     expect(consoleRows(st, 4, 3)).toEqual(['xy', '', 'last']);
     expect(consoleRows(st, 4, 5)).toEqual(['efgh', 'ij', 'xy', '', 'last']);
+    expect(consoleRowCount(st, 4)).toBe(6);
+    // scrolled up: the rows that end `below` rows above the last one
+    expect(consoleRows(st, 4, 3, 1)).toEqual(['ij', 'xy', '']);
+    expect(consoleRows(st, 4, 3, 2)).toEqual(['efgh', 'ij', 'xy']);
+    expect(consoleRows(st, 4, 3, 3)).toEqual(['abcd', 'efgh', 'ij']);
+    expect(consoleRows(st, 4, 3, 9)).toEqual([]);
+  });
+
+  it('scrolls with the wheel: the view stays on its text while scrolled up, follows it at the bottom', () => {
+    const st = consoleInit();
+    const put = (t: string) => { for (const c of t) consoleAppend(st, c.charCodeAt(0)); };
+    const sc = new ConsoleScroll(8, 3);
+    put('one\ntwo');
+    sc.sync(st);
+    // nothing to scroll (the text fits): the wheel is left to the canvas
+    expect(sc.wheel(st, -100)).toBe(false);
+    put('\nthree\nfour\nfive\nsix');
+    expect(sc.max(st)).toBe(3);
+    // a mouse notch up (deltaY -100 px) is three rows; it stops at the top
+    expect(sc.wheel(st, -100)).toBe(true);
+    expect(sc.below).toBe(3);
+    expect(sc.label).toBe('↑ 3 lines');
+    expect(consoleRows(st, 8, 3, sc.below)).toEqual(['one', 'two', 'three']);
+    expect(sc.wheel(st, -100)).toBe(true);
+    expect(sc.below).toBe(3);
+    // lines (deltaMode 1): one down
+    sc.wheel(st, 1, 1);
+    expect(sc.below).toBe(2);
+    expect(sc.label).toBe('↑ 2 lines');
+    // new text while scrolled up: the view keeps showing the same rows
+    put('\nseven\neight');
+    sc.sync(st);
+    expect(sc.below).toBe(4);
+    expect(consoleRows(st, 8, 3, sc.below)).toEqual(['two', 'three', 'four']);
+    // a trackpad's small steps add up
+    for (let i = 0; i < 10; i++) sc.wheel(st, 3.3);
+    expect(sc.below).toBe(3);
+    // back to the bottom: following again
+    sc.wheel(st, 1000);
+    expect(sc.below).toBe(0);
+    expect(sc.label).toBe('');
+    put('\nnine');
+    sc.sync(st);
+    expect(sc.below).toBe(0);
+    expect(consoleRows(st, 8, 3, sc.below)).toEqual(['seven', 'eight', 'nine']);
+    // the scrollback dropping lines from the top keeps a scrolled view on its text
+    sc.wheel(st, -2, 1);
+    for (let i = 0; i < 600; i++) put('\nx');
+    sc.sync(st);
+    expect(st.d).toBeGreaterThan(0);
+    expect(sc.below).toBe(sc.max(st));
+    // a clear (\f) or a new state (Reset) follows the text again
+    sc.wheel(st, -2, 1);
+    put('\f');
+    sc.sync(st);
+    expect(sc.below).toBe(0);
+    sc.sync(consoleInit());
+    expect(sc.below).toBe(0);
   });
 
   it('keeps its text through a rebuild, a resize and Back; Reset clears it', () => {

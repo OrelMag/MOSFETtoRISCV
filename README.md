@@ -85,7 +85,7 @@ simulator, so whatever you build is a real component of the site. The full guide
 - 21 optional **build challenges**, from a CMOS inverter to an instruction fetch unit, with a test
   player that steps through the failing cases.
 
-![Examples ▸ Computer: an RV32I core, a memory map, RAM, a 64 × 64 screen and a console](docs/images/computer.png)
+![Examples ▸ Computer: an RV32I core, its program ROM, the memory side, a 64 × 64 screen and the devices, with the CPU panel](docs/images/computer.png)
 
 The sandbox now builds a **whole computer**. RAM and ROM parts go up to 64K words: one
 behavioural leaf at run time over a real hierarchy of banks you can open down to the latches.
@@ -94,7 +94,8 @@ console and a switch bank, so a CPU can memory-map them. A cycle engine runs Run
 structure (library flip-flops or ones drawn from NANDs, latches, resets), becomes verified tables and the rest is levelized, and every net equals the event-driven
 simulator's after every settle. The single-cycle RV32I runs at about 9 k cycles/s in Node and
 4–5 kHz in the browser. **Examples ▸ Computer** puts it all together: the RV32I core, a program
-ROM in assembly, a memory-map chip, 4K words of RAM, the screen, the console, LEDs and switches.
+ROM in assembly, a memory chip (the address decoder and 4K words of RAM), the screen, and a devices
+chip with the console, LEDs and switches (flipped from the I/O bar).
 It greets you, paints a picture in under two seconds and halts, with the golden model checking
 every instruction.
 
