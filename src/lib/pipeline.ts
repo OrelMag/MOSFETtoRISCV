@@ -600,7 +600,6 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   // F
   alignY('pcmux', M4, 2, 'y', row('pc') + 10);
   alignY('pc', PC, 12, 'd', row('pc') + 10);
-  place('one', TIE1, [6, P('pc', 'en')[1] + 2]);
   alignY('imem', IM, 24, 'addr', row('instr'));
   alignY('plus4', P4, 26, 'a', row('pcPlus4'));
   place('vF', TIE1, [xFD - 6, row('valid') - 1]);

@@ -62,7 +62,9 @@ before merging a change to the exporters or the dual-core.
 
 ```
 src/sim/       simulation core (no DOM)
-  types.ts       ComponentDef / PortDef / Netlist / NetDef: the single source of truth
+  types.ts       ComponentDef / PortDef / Netlist / NetDef: the single source of truth; Behavior: init(mode),
+                 seq (edge-triggered state: timing / logicDepth see storage), carry (heal on an edit), inside (seed
+                 an opened leaf's structure: InsideSeed.state / .bits); hdl.synth (vexport's body for a part)
   geometry.ts    symbol sizes and port positions (grid units) shared by authors, router, renderer
   flatten.ts     hierarchy → flat 1-bit nets + leaves, keeping a HierNode tree mapping every
                  level's ports/wires to flat nets (this is what makes every box transparent);
@@ -87,13 +89,16 @@ src/sim/       simulation core (no DOM)
   harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench;
                  reachesTransistors(def) (would a gate-level flatten hit a transistor?)
   stats.ts       transistor / NAND counts, logic depth
+  dead.ts        deadInstances(netlist, ports): parts no path leads from to an output (tested over every netlist
+                 and reference answer; the sandbox lint warns about them)
   settle.ts      outputSettle(def, vectors): simulated input-to-last-output-change delay (sees false paths)
-  timing.ts      static timing: register-to-register critical path, per-capture-stage periods
+  timing.ts      static timing: register-to-register critical path, per-capture-stage periods (a `seq` leaf:
+                 inputs captured, comb inputs → outputs launched at clk-to-q)
   verilog.ts     structural Verilog generated from any netlist (identifiers sanitized, alias
                  boxes from their bit map)
   svexport.ts    exportHdl(def, 'structure' | 'synth', testbench?): whole hierarchy in one file,
                  self-checking testbench from our simulation (checked against Yosys when installed)
-  vexport.ts     synthesizable Verilog-2005 (flip-flops as processes) for Yosys / OpenROAD
+  vexport.ts     synthesizable Verilog-2005 (flip-flops as processes, `hdl.synth` bodies) for Yosys / OpenROAD
   vcd.ts         toVcd(): Value Change Dump of recorded traces
 src/lib/       the component library (registered in `registry` via define())
   transistors.ts NMOS, PMOS, rails, CMOS inverter/NOR, NAND (prim + 4-transistor netlist), tie cells
@@ -109,6 +114,11 @@ src/lib/       the component library (registered in `registry` via define())
   storage.ts     romArray(preset), minimize() (Quine–McCluskey), pla(preset), fifo(k, w), stack(k, w), cam(k, w),
                  regfileMP(k, w, reads, writes)
   memory.ts      ram(k, w): decoder + registers + mux tree, user-scalable
+  bigmem.ts      large memories (2^7 … 2^16 words): bigRam(k, w) = one stateful behavioural leaf (RamState: words +
+                 X flags, sampled while clk is low, written at the rising edge) over a lazy hierarchy of ≤ 16 banks
+                 per level down to ramBank(w) (ram(6, w) as a lookup; opened, its latches are seeded), bankState;
+                 bigRamWithInit (initial words in the leaf's power-on state); romLevels (banks of 2^8-word ROMs,
+                 shared by content hash, wordsHash); ramLeafState / ramWords for readers; kWords labels
   alu.ts         constWord, zext, wiring boxes, bitwise, orN, isZero, barrel shifter, alu(n)
   regfile.ts     regfile(k, w) with x0 = 0, two read ports fed by one bundled word bus
   cpu.ts         single-cycle RV32I: rom (preferBehavior), dataMemory, IMM_GEN, OPCODE_DECODER,
@@ -184,7 +194,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   compile.ts     compileChip(doc) → ComponentDef + diags, netOfWire / netOfEnd / netOfLabel, connKey
   parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays (LED / LED bank, 7-segment,
                  hex, value, buzzer: buzzerHz; and the halt part), keys and the keyboard (external sources: behaviour-only
-                 leaves, isExternal; keyPart(bind), KEYBOARD, normalizeKey / keyLabel / keyCode / codeGlyph), ROM, RAM;
+                 leaves, isExternal; keyPart(bind), KEYBOARD, normalizeKey / keyLabel / keyCode / codeGlyph), ROM, RAM
+                 (both up to 2^16 words: wordRom → romTree ≤ 2^8, else romLevels; RAM > 2^6: bigRam);
                  audio.ts plays the buzzers
   library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip
   ops.ts         pure edits (add / move / delete / flip / set*, copy / paste, namePart: rename where the name is
@@ -199,8 +210,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  refused when an output can float: Z is not X on a shared bus)
   program.ts     ROM program text (asm / rv16 / hex) → words
   memory.ts      romImage (problems on source lines), romListing / romIndex (the row the circuit reads),
-                 asm ↔ hex conversion, ROM_SAMPLES; readRam (live words), ramWithInit (initial contents
-                 as dotted power-on hints into the flip-flops' latches)
+                 asm ↔ hex conversion, ROM_SAMPLES; readRam (live words; a large RAM's from its leaf state),
+                 ramWithInit (initial contents as dotted power-on hints into the flip-flops' latches; > 2^6 words:
+                 bigRamWithInit)
   examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, shared bus, wired-AND / OR),
                  addExample: new chip, opened
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
@@ -232,13 +244,15 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  cut at branch points; distance from the driver, sink or junction at the far end), for flowing bits
   probes.ts      ProbeTarget (wires / pin / pointer name) → flat nets of each new build (resolveProbe)
   sta.ts         chipTiming: static timing of a chip, critical path mapped to its parts / wires / pins
-  lint.ts        lintChip: two nets drawn on one line, pointers without a twin, inputs left open
+  lint.ts        lintChip: two nets drawn on one line, pointers without a twin, inputs left open (openInputs),
+                 parts driving nothing that reaches an output (deadParts)
   cpu.ts         ChipDoc.cpu (rom, pc / retire as NetRef: pin / pointer / wire / part port, regs, fregs,
                  dmem, pipeline, iss options); part fields are paths into user chips ('imem.rom', partAt,
                  nestedRoms: detection takes the workspace's chips); detectCpu (the chapters' instance and
                  pin names: imem, rf, dm, frf, fcsr, pcOut / pcF, retire, validW, switches / irq /
                  consoleData / consoleValid / leds), resolveCpu (settings over detection), readers
-                 (readRegs / readMem find w<i> registers via storageOf, banks, cache lines), pipelineSlots,
+                 (readRegs / readMem find w<i> registers via storageOf, banks, cache lines; memStoreOf also finds a
+                 large RAM's leaf state), pipelineSlots,
                  CpuMonitor: the ISS in lock-step on EditorSim.edgeHooks (registers, PC, fcsr, memory
                  after stores or at a pipeline's halt, console, LEDs), first mismatch, Run to halt
   cpu16.ts       detectRv16 (an RV16 ROM + a part with the core pins), Rv16Monitor: Iss16 in lock-step through the
@@ -259,7 +273,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   fileui.ts      File menu (export / import / share link / Verilog / images / chip manager), share banner,
                  drag-and-drop import, autosave indicator, backup notice; installFiles(ed) per page
   memui.ts       Memory palette group, ROM / RAM property sections (live listing, RAM grid, initial
-                 contents), the program editor dialog, Examples ▸; values polled per frame while shown
+                 contents), the program editor dialog, Examples ▸; values polled per frame while shown; long
+                 lists build only the rows in view (vlist.ts: virtualRows), a large RAM's grid has Go to
   package.ts     "Package as chip…" dialog (name, hue, notes, symbol preview, pin order; Save & new circuit)
   inside.ts      lookInside(ed, path): read-only live schematic over the canvas on EditorSim's simulator (ViewCtx)
   challengeui.ts "Challenges" list drawer (solved ticks via settings), the strip under the canvas while a
@@ -340,7 +355,8 @@ tests/verify/  CPU verification (docs/VERIFICATION.md): cpus.ts (every RV32 CPU 
 3. **Bit-level nets.** Buses are bundles of 1-bit flat nets. Splitters and mergers are
    `prim: 'alias'`: pure wiring, merged by union-find in the flattener, with zero cost.
 4. **Mixed-level simulation.** `preferBehavior: true` keeps a component (the instruction ROM) as a
-   behavioural leaf; opening it starts a lock-step sub-simulation of its structure. The
+   behavioural leaf; opening it starts a lock-step sub-simulation of its structure (a stateful
+   leaf, a large RAM, seeds that structure from its state: `Behavior.inside`, ViewCtx.sync). The
    flattener also accepts an `expand` policy for more cuts (needed for pipelined / multi-core
    designs). Tests must prove behaviour ≡ structure; the CPU is co-simulated against the ISS
    after every instruction (`tests/cpu.test.ts`).
