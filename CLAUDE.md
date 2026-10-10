@@ -195,8 +195,15 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays (LED / LED bank, 7-segment,
                  hex, value, buzzer: buzzerHz; and the halt part), keys and the keyboard (external sources: behaviour-only
                  leaves, isExternal; keyPart(bind), KEYBOARD, normalizeKey / keyLabel / keyCode / codeGlyph), ROM, RAM
-                 (both up to 2^16 words: wordRom → romTree ≤ 2^8, else romLevels; RAM > 2^6: bigRam);
-                 audio.ts plays the buzzers
+                 (both up to 2^16 words: wordRom → romTree ≤ 2^8, else romLevels; RAM > 2^6: bigRam),
+                 consoles / switch banks / screens (ioparts.ts); audio.ts plays the buzzers
+  ioparts.ts     console (data / we / clk: prints at rising edges, \n \b \f, 500 lines of scrollback in the leaf's state),
+                 switch bank (1–32 toggles: an external source; holdSwitches: positions survive Reset), screen (8–128 px
+                 square, mono / RGB111 / CGA 16 / RGB332 / RGB565; write: x / y / color / we into its own frame buffer;
+                 rows: row := data, the bus cut into ≤ 32-bit chunks for its picture leaf (packed behaviour inputs are
+                 exact to 53 bits only); pixels: a pure view of a px bus; optional vsync; X writes ignored and counted);
+                 most significant field first; visual settings in the def but not its id (a resize carries the state);
+                 ioNodes / ioState find them at any depth; colorRgb, pixelsOf, paintScreen (dots, grid, X pattern)
   library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip
   ops.ts         pure edits (add / move / delete / flip / set*, copy / paste, namePart: rename where the name is
                  drawn); wires stay orthogonal (a straight wire's breakpoints stay put); dragWire (a corner or
@@ -213,7 +220,7 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  asm ↔ hex conversion, ROM_SAMPLES; readRam (live words; a large RAM's from its leaf state),
                  ramWithInit (initial contents as dotted power-on hints into the flip-flops' latches; > 2^6 words:
                  bigRamWithInit)
-  examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, shared bus, wired-AND / OR),
+  examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, console, screen, shared bus, wired-AND / OR),
                  addExample: new chip, opened
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
@@ -222,7 +229,7 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  halt parts at any depth stop Run / runCycles after the step where they read 1; key / keyboard
                  leaves at any depth driven through Sim.poke (setKey: held keys survive rebuilds and resets; typeKey;
                  a keyboard drops its oldest key when `ack` reads 1 just before a rising edge, or once settled
-                 without a clock)
+                 without a clock); pokeLeaf (a switch flipped, a console / screen cleared)
   palette.ts     registerPaletteGroup + the palette panel (purist filter)
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
   challenges.ts  build challenges: BuildChallenge (ports, table / sequence check, allowed parts, par),
@@ -276,7 +283,13 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  contents), the program editor dialog, Examples ▸; values polled per frame while shown; long
                  lists build only the rows in view (vlist.ts: virtualRows), a large RAM's grid has Go to
   package.ts     "Package as chip…" dialog (name, hue, notes, symbol preview, pin order; Save & new circuit)
-  inside.ts      lookInside(ed, path): read-only live schematic over the canvas on EditorSim's simulator (ViewCtx)
+  inside.ts      lookInside(ed, path): read-only live schematic over the canvas on EditorSim's simulator (ViewCtx);
+                 consoles, screens and switch banks get their live faces there (ioface.ts decorateInside; switches flip)
+  ioface.ts      the I/O parts' SVG faces (canvas and look inside); ScreenCanvas: the picture as a canvas bitmap in a
+                 foreignObject, repainted when the frame buffer's version moves (image.ts exports it as an <image>)
+  ioui.ts        plugin: console / switch / screen property sections (live text, counters, Clear, Save PNG) and the
+                 Screens drawer: every console, screen and switch bank in the hierarchy by path, live; opens by itself
+                 for a nested console or screen (unless closed for that chip)
   challengeui.ts "Challenges" list drawer (solved ticks via settings), the strip under the canvas while a
                  challenge chip is open (brief, Check, Show answer, Do it for me), purist palette while restricted;
                  a failing Check opens the test player on the first failing case; a core level lists its
@@ -285,7 +298,7 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  jump between failures, a window of cases with the live row; an edit while paused replays the
                  case on the rebuilt circuit; Run / Step / a clock / Reset or an input set by hand ends it
   inspect.ts     the Inspector in a drawer for the chip or a part; chipprops.ts: chip / part property sections
-  dock.ts        the right-hand dock: drawers (Inspector, CPU, challenges) share it, tabs when several;
+  dock.ts        the right-hand dock: drawers (Inspector, CPU, Screens, challenges) share it, tabs when several;
                  sets --dock-space on the overlay so look inside stops at its edge
   analysis.ts    plugin: probe mode (P) + LogicAnalyzer in slots.bottom, Timing props section with
                  the critical path drawn on the chip, lint as a diag source, open-input marks
@@ -388,7 +401,8 @@ tests/verify/  CPU verification (docs/VERIFICATION.md): cpus.ts (every RV32 CPU 
   path that still collides around symbols (A*); `via` paths are never moved, so make sure
   your vias don't run along another net.
 - No symbol may sit on another, and no label may hide one (`tests/layout.test.ts`: `symbolOverlaps`,
-  `labelOverlaps` over every registered netlist and the CPU tops).
+  `labelOverlaps` over every registered netlist and the CPU tops; `boxTextOverlaps` over every registered box:
+  view/boxtext.ts places a box's port names and label, lifting the label clear of a bottom clock's name).
 - Prefer hierarchy (a box of boxes) over flat netlists: it is the whole point of the site.
 - Large top-level schematics: draw the main data path, and use **net labels** (`tags` on a
   NetDef) for control signals and long feedback paths, like a real schematic. Place

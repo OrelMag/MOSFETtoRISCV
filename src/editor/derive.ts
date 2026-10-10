@@ -54,7 +54,7 @@ export function deriveBehavior(def: ComponentDef): Derived {
   } catch (e) {
     return fail(`cannot be solved at switch level: ${e instanceof Error ? e.message : String(e)}`);
   }
-  if (design.leaves.some((l) => isExternal(l.def))) return fail('has a key or keyboard part (a behavioural source from outside): an input no truth table can capture: switch level only');
+  if (design.leaves.some((l) => isExternal(l.def))) return fail('has a key, keyboard, switch, console or screen part (a behavioural part outside the circuit), which no truth table can capture: switch level only');
   if (design.leaves.some((l) => l.kind === 'behavior')) return fail('contains a behavioural part (no transistors inside it to solve)');
   if (!design.leaves.some((l) => l.kind === 'nmos' || l.kind === 'pmos')) return fail('no transistors');
 

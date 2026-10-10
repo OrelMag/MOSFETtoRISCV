@@ -36,7 +36,7 @@ const eqv = (a: Vec, b: Vec) => a[0] === b[0] && a[1] === b[1];
 const ZERO: Vec = [0, 0];
 const eqPts = (a: Vec[], b: Vec[]) => a.length === b.length && a.every((p, i) => eqv(p, b[i]));
 
-/** Instance-name prefix per kind of part: g1 (library), u1 (user chip), s1/m1, k1, d1, halt1, key1, kbd1, rom1, ram1. */
+/** Instance-name prefix per kind of part: g1 (library), u1 (user chip), s1/m1, k1, d1, halt1, key1, kbd1, con1, sw1, scr1, rom1, ram1. */
 export function idPrefix(ref: PartRef): string {
   if ('lib' in ref) return 'g';
   if ('chip' in ref) return 'u';
@@ -46,6 +46,9 @@ export function idPrefix(ref: PartRef): string {
   if ('display' in ref) return ref.display === 'halt' ? 'halt' : 'd';
   if ('key' in ref) return 'key';
   if ('keyboard' in ref) return 'kbd';
+  if ('console' in ref) return 'con';
+  if ('switches' in ref) return 'sw';
+  if ('screen' in ref) return 'scr';
   return 'rom' in ref ? 'rom' : 'ram';
 }
 

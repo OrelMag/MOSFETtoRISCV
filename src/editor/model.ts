@@ -12,6 +12,7 @@
 import { instPort, type ExitDir, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
 import type { CpuDoc } from './cpu';
+import type { ScreenRef } from './ioparts';
 
 export type { Vec, ExitDir };
 
@@ -125,6 +126,12 @@ export type PartRef =
    * waits, `ack` removes it (sampled at rising clock edges, or continuously without a clock). Zero cost.
    */
   | { keyboard: true }
+  /** A terminal: prints data (ASCII) on a rising clk edge with we = 1; cols × rows on the canvas (ioparts.ts). Zero cost. */
+  | { console: { cols: number; rows: number } }
+  /** A bank of 1–32 toggle switches the learner clicks: q = their positions. An input from outside the circuit: zero cost. */
+  | { switches: number }
+  /** A pixel screen: a frame buffer written pixel by pixel, rows latched from a bus, or one wire per pixel (ioparts.ts). Zero cost. */
+  | { screen: ScreenRef }
   /** Read-only memory: 2^k words of w bits. 'rv32' addresses bytes like a PC (addr = 4·word). */
   | { rom: { k: number; w: 8 | 16 | 32; addr: 'word' | 'rv32'; lang: 'asm' | 'hex' | 'rv16'; src: string } }
   /** Read-write memory: 2^k words of w bits; `init`: the words it holds at power-on ('to 0' mode). */

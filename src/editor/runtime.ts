@@ -19,6 +19,8 @@
 // and resets, since the finger is still on the key). A keyboard queues typed codes (typeKey) and
 // drops the oldest when its `ack` input reads 1, sampled like a clocked peripheral would: just
 // before every rising clock edge, or, in a chip without a clock, whenever the logic has settled.
+// Switch banks, consoles and screens (ioparts.ts) keep their state in their leaves too: pokeLeaf
+// flips a switch; a reset puts the switches back where they were (the world outside).
 
 import { flatten } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
@@ -29,6 +31,7 @@ import { unpackBig } from '../sim/values';
 import type { HierNode } from '../sim/flatten';
 import { checkSimulatable, type Compiled, type Diag } from './compile';
 import { pinBig, type PinDoc, type PinValue } from './model';
+import { holdSwitches } from './ioparts';
 import { HALT_PREFIX, KEYBOARD_DEPTH, KEYBOARD_ID, keyBindOf, type KeyboardState, type KeyState } from './parts';
 
 export type RunMode = 'cycle' | 'gate';
@@ -300,6 +303,17 @@ export class EditorSim {
     this.afterInput(sim);
   }
 
+  /**
+   * Set the private state of an external source's leaf from outside (a switch flipped, a console
+   * or screen cleared): it takes effect like an input change.
+   */
+  pokeLeaf(li: number, state: unknown): void {
+    const sim = this.sim;
+    if (!sim || li < 0 || li >= sim.design.leaves.length) return;
+    sim.poke(li, state);
+    this.afterInput(sim);
+  }
+
   /** The keys waiting in a keyboard part placed in this chip (by part id), oldest first; null for any other part. */
   keyboardQueue(part: string): number[] | null {
     const sim = this.sim;
@@ -552,9 +566,11 @@ export class EditorSim {
     this.resets++;
     this.due = 0;
     this.applyPins(sim);
+    const switches = holdSwitches(sim);
     sim.reset(mode);
-    // keys still held stay pressed; the keyboards' queues went with the power
+    // keys still held stay pressed and switches where they were; the keyboards' queues, consoles' text and screens' pictures went with the power
     this.applyKeys(sim);
+    switches();
     this.quiet(sim);
     this.onChange();
   }

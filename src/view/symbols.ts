@@ -4,6 +4,7 @@
 import { symbolGeom } from '../sim/geometry';
 import type { Category, ComponentDef } from '../sim/types';
 import { s } from '../ui/dom';
+import { boxText } from './boxtext';
 import { type PinGeom, type Rect, textWidth } from './route';
 
 const BUBBLE = 0.3;
@@ -191,37 +192,25 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
       break;
     default: {
       inner.append(s('rect', { x: 0, y: 0, width: w, height: h, rx: 0.6, class: 'sym-body sym-box' }));
-      // Port names inside the box (not mirrored). Pure-wiring boxes are too small for them.
-      for (const p of def.prim === 'alias' || def.symbol.noPortLabels ? [] : def.ports) {
-        const pg = g.ports[p.name];
-        const side = p.side ?? (p.dir === 'out' ? 'right' : 'left');
-        let x = pg.pos[0], y = pg.pos[1] + 0.38;
-        let anchor = 'start';
-        if (side === 'left') x = 0.45;
-        else if (side === 'right') { x = w - 0.45; anchor = 'end'; }
-        else if (side === 'top') { y = 1.15; anchor = 'middle'; }
-        else { y = h - 0.5; anchor = 'middle'; }
-        if (flip && (side === 'left' || side === 'right')) {
-          x = w - x;
-          anchor = anchor === 'start' ? 'end' : 'start';
-        }
-        if (p.clock && (side === 'left' || side === 'bottom' || side === 'top')) {
+      // Port names inside the box (not mirrored) and the label, as boxText places them.
+      const t = boxText(def, flip);
+      for (const p of t.ports) {
+        if (p.clock) {
           // clock triangle marker
+          const pg = g.ports[p.name], side = p.side;
           const cx = side === 'left' ? (flip ? w : 0) : pg.pos[0];
           const cy = side === 'left' ? pg.pos[1] : side === 'top' ? 0 : h;
           const d = side === 'left'
             ? (flip ? `M${cx},${cy - 0.5} L${cx - 0.7},${cy} L${cx},${cy + 0.5}` : `M${cx},${cy - 0.5} L${cx + 0.7},${cy} L${cx},${cy + 0.5}`)
             : side === 'bottom' ? `M${cx - 0.5},${cy} L${cx},${cy - 0.7} L${cx + 0.5},${cy}` : `M${cx - 0.5},${cy} L${cx},${cy + 0.7} L${cx + 0.5},${cy}`;
           root.append(s('path', { d, class: 'sym-line' }));
-          if (side === 'left') x += flip ? -0.7 : 0.7;
-          else if (side === 'bottom') y -= 0.6;
         }
-        root.append(s('text', { x, y, class: 'sym-port', 'text-anchor': anchor }, portLabel(p.name)));
+        root.append(s('text', { x: p.x, y: p.y, class: 'sym-port', 'text-anchor': p.anchor }, portLabel(p.name)));
       }
       if (def.symbol.verticalLabel) {
         root.append(s('text', { x: w / 2, y: h / 2, class: 'sym-label', 'text-anchor': 'middle', transform: `rotate(-90 ${w / 2} ${h / 2})`, dy: 0.4 }, def.symbol.label ?? def.name));
-      } else {
-        root.append(s('text', { x: w / 2, y: h / 2 + 0.45, class: 'sym-label', 'text-anchor': 'middle' }, def.symbol.label ?? def.name));
+      } else if (t.label) {
+        root.append(s('text', { x: t.label.x, y: t.label.y, class: 'sym-label', 'text-anchor': 'middle' }, t.label.text));
       }
     }
   }
