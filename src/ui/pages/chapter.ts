@@ -78,7 +78,12 @@ export class ChapterPage implements Page {
 
   private renderBody(st: Step): void {
     const b = this.body;
-    b.replaceChildren(h('h2', { class: 'step-title' }, st.title), h('div', { class: 'prose', html: st.body }));
+    const prose = h('div', { class: 'prose', html: st.body });
+    b.replaceChildren(h('h2', { class: 'step-title' }, st.title), prose);
+    // Hover definitions from the codex: a chunk of its own, marked once it arrives (if the step is still shown).
+    if (settings.glossary) {
+      import('../../campaign/ui/glossaryui').then((m) => { if (prose.isConnected) m.markTerms(prose); }, () => {});
+    }
     if (st.actions?.length) {
       b.append(h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 8px' },
         st.actions.map((a) => h('button', { class: 'btn sm', onclick: () => a.run(this.stage) }, a.label))));

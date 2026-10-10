@@ -205,7 +205,7 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
   }
   try {
     const def = compiled.def;
-    res.score = score(def, compiled.mode, ch.check.kind !== 'table');
+    res.score = scoreOf(def, compiled.mode, ch.check.kind !== 'table');
     res.restrictionViolations = violations(def, ch.allowed);
     const pinProblems = checkPins(def, ch.ports);
     const errors = compiled.diags.filter((d) => d.level === 'error').map((d) => `error: ${d.msg}`);
@@ -230,7 +230,8 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
   return res;
 }
 
-function score(def: ComponentDef, mode: 'gate' | 'switch', clocked: boolean): Score {
+/** The score Check reports: NANDs, transistors, depth (gate level), period when clocked and sequential. */
+export function scoreOf(def: ComponentDef, mode: 'gate' | 'switch', clocked: boolean): Score {
   let s = { nands: 0, transistors: 0 };
   try { s = stats(def); } catch { /* a broken part: no score */ }
   let depth: number | null = null;
