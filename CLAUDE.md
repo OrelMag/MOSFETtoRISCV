@@ -85,6 +85,8 @@ src/sim/       simulation core (no DOM)
   harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench;
                  reachesTransistors(def) (would a gate-level flatten hit a transistor?)
   stats.ts       transistor / NAND counts, logic depth
+  dead.ts        deadInstances(netlist, ports): parts no path leads from to an output (tested over every netlist
+                 and reference answer; the sandbox lint warns about them)
   settle.ts      outputSettle(def, vectors): simulated input-to-last-output-change delay (sees false paths)
   timing.ts      static timing: register-to-register critical path, per-capture-stage periods
   verilog.ts     structural Verilog generated from any netlist (identifiers sanitized, alias
@@ -230,7 +232,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  cut at branch points; distance from the driver, sink or junction at the far end), for flowing bits
   probes.ts      ProbeTarget (wires / pin / pointer name) → flat nets of each new build (resolveProbe)
   sta.ts         chipTiming: static timing of a chip, critical path mapped to its parts / wires / pins
-  lint.ts        lintChip: two nets drawn on one line, pointers without a twin, inputs left open
+  lint.ts        lintChip: two nets drawn on one line, pointers without a twin, inputs left open (openInputs),
+                 parts driving nothing that reaches an output (deadParts)
   cpu.ts         ChipDoc.cpu (rom, pc / retire as NetRef: pin / pointer / wire / part port, regs, fregs,
                  dmem, pipeline, iss options); part fields are paths into user chips ('imem.rom', partAt,
                  nestedRoms: detection takes the workspace's chips); detectCpu (the chapters' instance and

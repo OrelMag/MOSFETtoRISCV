@@ -65,7 +65,15 @@ export class Builder {
   get height(): number { return Math.max(...this.instances.map((i) => (i.at![1] + symbolGeom(i.def).h))); }
   nets(): NetDef[] {
     const out: NetDef[] = [];
-    for (const [d, ss] of this.sinks) out.push({ name: this.names.get(d), ends: [d, ...ss], tags: ss.length > 1 || !d.includes('.') || this.tagged.has(d) ? true : undefined });
+    // A sink in the driver's column or left of it (feedback) can only be reached by a wire
+    // doubling back over a symbol: such a net is drawn as labels too.
+    const x = new Map(this.instances.map((i) => [i.name, i.at![0]]));
+    const xOf = (end: string) => (end.includes('.') ? x.get(end.slice(0, end.indexOf('.'))) : undefined);
+    const back = (d: string, s: string) => { const a = xOf(d), b = xOf(s); return a !== undefined && b !== undefined && b <= a; };
+    for (const [d, ss] of this.sinks) {
+      const tags = ss.length > 1 || !d.includes('.') || this.tagged.has(d) || back(d, ss[0]);
+      out.push({ name: this.names.get(d), ends: [d, ...ss], tags: tags ? true : undefined });
+    }
     return out;
   }
 }
