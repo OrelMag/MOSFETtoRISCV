@@ -440,8 +440,7 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
   the case); step, scrub, play at 1–30 per second or one per frame (stopping at a failing case), jump between
   the failures Check found, and edit while paused: the case plays again on the rebuilt circuit. A failing
   Check opens it on the first failure. Core levels list every program, each watchable on a bench.
-- ⏳ **Codex as a glossary**: hover definitions in the chapters, which closes the roadmap's
-  ⏳ Glossary.
+- ✅ **Codex as a glossary**: hover definitions in the chapters and on the level screen.
 - ⏳ **Achievements**: XOR in 4 NANDs, a full adder in 9, CPI < 1.2, a period below the
   reference's.
 - ⏳ **A share link for campaign progress** (stars only).
@@ -450,7 +449,7 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
 - ⏳ **Where your NANDs go**: a per-component breakdown of your CPU.
 - ⏳ **Boss level**: snake on an LED matrix, on your own pipelined core.
 - ⏳ **Custom ISA**: an instruction table that generates the assembler (reusing isa16's tables).
-- ⏳ **A level screen of its own**, **why we are building it**, a **step-by-step solution walkthrough** in every
+- ✅ **A level screen of its own**, **why we are building it**, a **step-by-step solution walkthrough** in every
   level and a **fuller codex**: details in the roadmap's Phase 12, Campaign.
 - ⏳ **Before the transistor**: an act with relay and tube bricks, a 3D view of the machine and punch-card
   programs (roadmap Phase 14).

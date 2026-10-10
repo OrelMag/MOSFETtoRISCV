@@ -353,26 +353,24 @@ transistor NAND to a pipelined 16-bit RISC-V-like CPU (RV16) with traps and inte
 graded build challenges, number and Boolean drills, assembly puzzles, a codex, skip with a reference
 solution, and Unlock all. Its soft locks apply to the campaign only; the chapters and the sandbox
 challenges stay open. Next:
-- ⏳ **A level screen of its own** (`#/campaign/play/<node>`; mockup first): today a level opens in the general
-  sandbox with a strip under the canvas. The level screen keeps the editor but drops the sandbox chrome (tabs, File
-  menu, the full palette): the brief and the *why* in a side panel, the anatomy diagram with this block lit, only
-  the level's unlocked parts, Check / stars / par / tips / Next built in, and a way out to the full sandbox
-- ⏳ **Why we are building it**: each level's `why` grows from a line into a short explanation: which problem in
-  the CPU this block solves (shown on the anatomy diagram), what breaks or slows down without it, what it costs
-  against the alternatives, and which later levels use it. Shown before the level and again, with the learner's
-  measured cost, after a pass
-- ⏳ **Step-by-step solution walkthrough**, in every level: the reference answer built on the level's canvas one
-  step at a time (a part, its wires, a sub-chip), each step narrated: why this part, which law or trick it applies
-  (codex links), the cost so far against par, and the truth-table rows or test cases it already satisfies.
-  Forward / back, and "I'll take it from here" at any step, which leaves the partial circuit to finish. Steps are
-  generated from the reference chip documents in dataflow order, with authored narration per level; core levels
-  go block by block. Complements "Show answer" (all at once) and "Do it for me" (no explanation)
-- ⏳ **A fuller codex**: entries are dense shorthand today. Each gains an explanation an engineer can learn from,
-  not only recall: the idea in a paragraph, a worked example (numbers, a K-map, a waveform), a diagram or a live
-  mini-scene, common mistakes, where it sits in the CPU, and links to the chapter steps and levels that use it.
-  The current one-liner stays as the summary (the glossary's hover text). Figures in every entry, generated, never
-  drawn by hand, so they cannot drift from the library: the component's schematic and symbol (the stage's SVG
-  export), its truth table or K-map, a waveform from the simulator, and a cost bar against its alternatives
+- ✅ **A level screen of its own** (`#/campaign/play/<node>`, ui/pages/level.ts): Play on the map opens it. The editor in
+  level mode (the level's chip and the chips it uses, the level's parts first, a short toolbar, properties over the
+  canvas while something is selected), the brief in tabs (Why, Task, Tips, Codex), Check, the score against par and
+  the test player under the canvas, stars / Skip / Next in the level bar, and "Open in sandbox" for the same chip
+- ✅ **Why we are building it** (campaign/cases*.ts): every build, core and program level has a case: the problem in
+  the CPU it solves (the anatomy diagram lights its block, or the block its part ends up in), what breaks without it,
+  what it costs against the alternatives (library parts, measured live), and the levels that use it. After a pass a
+  card shows the learner's measured cost against par and the alternatives, and the copies of the part in the finished
+  CPU (campaign/measure.ts: 64 full adders) times the NANDs saved
+- ✅ **Step-by-step solution walkthrough** (campaign/walk.ts, ui/pages/levelwalk.ts): "Walk me through it" (and Show
+  answer, at the last step) builds the reference answer step by step on a scratch chip, never the learner's: the
+  step list, the narration and codex links, cost and depth so far against par, the rows each output already gets
+  right. "I'll take it from here" copies the partial circuit into the level's chip (one undo step). Steps are
+  generated in dataflow order (like parts grouped in big references) or authored (walks*.ts, the main path)
+- ✅ **A fuller codex** (campaign/codexmore*.ts, ui/codexentry.ts): every entry has the idea, a worked example and
+  common mistakes, where it sits in the CPU and links to its levels and chapter steps, next to generated figures:
+  the library part simulated live (click an input), its datasheet with the truth table, and its cost against the
+  alternatives. The one-liner stays as the summary and the hover text
 
 **Not planned**: online leaderboards and score histograms (static site; share links take their place).
 
@@ -386,7 +384,8 @@ challenges stay open. Next:
   with a self-checking testbench; verified through Yosys
 - ✅ Click a program line: the hardware it uses (and its pipeline stage), or its word in the ROM
 - ✅ Search palette (`Ctrl/⌘ K` or `/`) over every chapter and step; chapter menu on the top bar
-- ⏳ Glossary with hover definitions
+- ✅ Hover definitions (campaign/glossary.ts): codex terms in the chapters' prose and on the level screen are underlined,
+  their summary shown in a card with a link to the entry; a switch in the view menu turns them off
 - ✅ Progress tracking (visited steps, solved challenges, in local storage) and "Reset progress"; the chapters
   stay open (soft locks exist only in the campaign, see `docs/CAMPAIGN.md`)
 - ✅ Reduced motion: CSS animations and transitions off, slow-motion fronts drawn as plain changes

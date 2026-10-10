@@ -51,7 +51,7 @@ before merging a change to the exporters or the dual-core.
 
 - Vite + TypeScript (strict, `verbatimModuleSyntax`: use `import type` for types). No UI
   framework: plain DOM + SVG with small helpers in `src/ui/dom.ts`. Keep the bundle small.
-- Hash routing (`#/c/<chapter>/<step>`, `#/workbench/<componentId>`, `#/workbench/stats`, `#/sandbox/<chipId>`, `#/campaign[/n/<node> | /intro | /codex[/<id>]]`,
+- Hash routing (`#/c/<chapter>/<step>`, `#/workbench/<componentId>`, `#/workbench/stats`, `#/sandbox/<chipId>`, `#/campaign[/n/<node> | /play/<node> | /intro | /codex[/<id>]]`,
   `#/sandbox/s/<payload>` for a share link) so the site works on
   any static host or sub-path.
 - Theme: CSS custom properties in `src/styles/`; `data-theme="light|dark"` on `<html>`, or
@@ -351,13 +351,29 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
   bench.ts       addBench: a failing core test as a computer chip around the learner's core (RV16 ROM, 64-word
                  RAM, LEDs, IRQ line), opened with the CPU drawer; failingTest names it from a failure line
   datasheet.ts   a codex component entry's datasheets: the unlocked library parts' pins, cost, depth, truth table
+                 (datasheetOf(id): one part)
+  cases.ts       level cases ("why we are building it": problem, without, cost, alternatives as library ids measured
+                 live, counts) in cases0.ts (acts 0–3) / cases1.ts (acts 4–8); measure.ts libCost, finalCpu (the last
+                 required core's reference, compiled once), copiesInFinal(node) for the after-pass card
+  codexmore.ts   the fuller codex (idea, example, mistakes, lib figure, compare, anatomy, chapters) in codexmore0.ts
+                 (components, laws, tools) / codexmore1.ts (tricks, concepts); loaded on demand by the codex page
+  glossary.ts    codex terms in prose (titles, parenthetical names, aliases, plurals; acronyms as written)
+  walk.ts        walkOf(node): the reference answer as steps (authored in walks.ts / walks1.ts / walks2.ts, else
+                 generated in dataflow order, like parts grouped), partialDoc(walk, k), stepMetrics (cost, depth,
+                 rows right per output)
   corecheck.ts   the CPU core bench (coreCheck carries its CoreSpec: coreSpecOf): instr / drdata served
                  combinationally, register-write and store traces
                  compared with iss16 in order, cycle budget, irq from stores to 0xFFF9, 32 BitSim lanes (GateSim
                  fallback), corePeriod (static timing with 8-delay memories); coretests.ts the programs by stage
-               DOM: ui/svgs.ts (map and anatomy SVG); the page is ui/pages/campaign.ts. Levels are played in the
-               sandbox: challengeui.ts recognizes u_ch_cp_* chips (breadcrumb, tips, stars, Next), records passes in
-               the campaign's progress, and fills the palette's "Unlocked parts" group from the level's rule
+               DOM: ui/svgs.ts (map and anatomy SVG), ui/levelinfo.ts (criteria, grading table), ui/codexentry.ts (a codex
+               entry in full, live schematic), ui/glossaryui.ts (markTerms: hover cards); the page is ui/pages/campaign.ts.
+               Levels are played on the level screen (ui/pages/level.ts, #/campaign/play/<node>, the editor's chunk): an
+               Editor in level mode (EditorOptions.level: the level's chip and its sub-chips as tabs, listed toolbar
+               actions, purist palette led by "Unlocked parts", properties over the canvas while selected or pinned) and
+               installChallenges(ed, LevelScreenHooks) (the strip shows Check, the result, the test player; the page
+               shows the after-pass card); ui/pages/levelwalk.ts the walkthrough on a scratch chip u_walk_<node>. The
+               sandbox still opens a level's chip u_ch_cp_<node> with the full strip (breadcrumb, tips, stars, Next,
+               Level screen); both record passes in the campaign's progress
 src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-free: every chapter / step as a
                searchable entry, searchNav ranking), quicknav.ts (chapter menu on the top bar and the chapter title,
                Ctrl/⌘ K or `/` search palette; `/` is left to the sandbox there)

@@ -52,8 +52,11 @@ instruction at a time), Back to undo, and a lock-step comparison with the golden
 A tree of levels in the spirit of *Turing Complete*, from a NAND made of transistors to a
 pipelined, interrupt-capable 16-bit RISC-V-like CPU (RV16). Each level is built only from parts
 earlier levels unlocked, checked by a full test set, graded against par (NANDs, transistors,
-depth, clock period), and has a reference solution you can take instead. Number and Boolean
-drills, assembly puzzles on the golden model and a codex sit alongside. Plan and status in
+depth, clock period), and has a reference solution you can take instead, or walk through step by
+step. Each level plays on a screen of its own: the brief, why the CPU needs the block (with its measured
+cost against the alternatives and its copies in the finished CPU), the level's parts only. Number and
+Boolean drills, assembly puzzles on the golden model and a codex (every entry with a live figure,
+also shown as hover definitions in the chapters) sit alongside. Plan and status in
 [docs/CAMPAIGN.md](docs/CAMPAIGN.md).
 
 ## Sandbox
