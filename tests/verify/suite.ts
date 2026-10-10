@@ -26,19 +26,20 @@ export function verifyCpus(ids: string[]): void {
       it('has at least 32 applicable riscv-tests', () => expect(batches.flatMap((b) => b.jobs).length).toBeGreaterThanOrEqual(32));
       for (const batch of batches) {
         const names = batch.jobs.map((j) => j.img.name);
-        it(`riscv-tests at gate level: ${names.length} programs, ${names[0]} … ${names[names.length - 1]}`, () => {
+        it(`riscv-tests at gate level: ${names.length} programs, ${names[0]} … ${names[names.length - 1]}`, async () => {
           const failed = batch.jobs.filter((j) => !j.golden.pass).map((j) => `${j.img.name} on the golden model: ${j.golden.text}`);
-          runLanes(cfg, batch.jobs, batch.imemK, batch.dmemK, probe).forEach((r, i) => { if (!r.pass) failed.push(`${names[i]}: ${r.text}`); });
+          (await runLanes(cfg, batch.jobs, batch.imemK, batch.dmemK, probe)).forEach((r, i) => { if (!r.pass) failed.push(`${names[i]}: ${r.text}`); });
           runs++;
           expect(failed).toEqual([]);
         }, 300_000);
       }
-      it('32 random programs end in the golden model\'s state', () => {
+      it('32 random programs end in the golden model\'s state', async () => {
         const cases = Array.from({ length: 32 }, (_, i) => fuzzCase(cfg, i + 1, 60, isa));
-        const failed = fuzzLanes(cfg, cases, probe).filter((r) => !r.ok).map((r) => {
+        const failed: string[] = [];
+        for (const r of (await fuzzLanes(cfg, cases, probe)).filter((x) => !x.ok)) {
           const c = cases.find((x) => x.seed === r.seed)!;
-          return `seed ${r.seed}: ${r.diff}\nfirst difference: ${firstDivergence(cfg, c)}\n${c.source}`;
-        });
+          failed.push(`seed ${r.seed}: ${r.diff}\nfirst difference: ${await firstDivergence(cfg, c)}\n${c.source}`);
+        }
         runs++;
         expect(failed).toEqual([]);
       }, 300_000);

@@ -69,12 +69,12 @@ describe('official riscv-tests on the golden model', () => {
 
 describe('bit-parallel runs agree with the event-driven simulator', () => {
   for (const [id, name] of [['sc', 'rv32ui-sw'], ['pipe-m', 'rv32um-div'], ['sys', 'rv32mi-scall']] as const) {
-    it(`${id}: ${name}`, () => {
+    it(`${id}: ${name}`, async () => {
       const cfg = CPUS.find((c) => c.id === id)!;
       const batch = cpuJobs(cfg, [image(cfg.env, name)])[0];
-      const lanes = runLanes(cfg, batch.jobs, batch.imemK, batch.dmemK)[0];
+      const lanes = (await runLanes(cfg, batch.jobs, batch.imemK, batch.dmemK))[0];
       const j = batch.jobs[0];
-      const gate = runOnCpu(cfg, j.img, { ...j.l, imemK: batch.imemK }, j.max);
+      const gate = await runOnCpu(cfg, j.img, { ...j.l, imemK: batch.imemK }, j.max);
       expect(lanes.pass).toBe(true);
       expect(gate.pass).toBe(true);
       expect(gate.count).toBe(lanes.count); // both look at tohost every 8 cycles

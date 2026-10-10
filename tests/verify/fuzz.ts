@@ -17,6 +17,7 @@ import type { Sim } from '../../src/sim/sim';
 import { type Bit, inPorts } from '../../src/sim/types';
 import type { IsaCoverage, LaneProbe } from './coverage';
 import { issOptions, type CpuConfig } from './cpus';
+import { pause } from './run';
 
 /** What a program leaves behind: registers per hart, FP registers and fcsr (F CPUs), data memory. */
 export interface ArchState { x: number[][]; f?: number[]; fcsr?: number; dmem: number[] }
@@ -94,7 +95,7 @@ const DRAIN = 64;
 const budget = (cfg: CpuConfig, c: FuzzCase) => Math.ceil(c.steps * cfg.cpi * 1.25) + 100;
 
 /** Up to 32 cases on one build of cfg (one per lane), final states compared with the golden model's. */
-export function fuzzLanes(cfg: CpuConfig, cases: FuzzCase[], probe?: (design: FlatDesign) => LaneProbe): FuzzResult[] {
+export async function fuzzLanes(cfg: CpuConfig, cases: FuzzCase[], probe?: (design: FlatDesign) => LaneProbe): Promise<FuzzResult[]> {
   if (cases.length > LANES) throw new Error('fuzzLanes: at most 32 cases');
   const imemK = Math.max(cfg.imemK ?? 6, ...cases.map((c) => log2up(c.words.length)));
   const design = flatten(cfg.build(cases[0].words, imemK, fuzzDmemK(cfg)));
@@ -117,6 +118,7 @@ export function fuzzLanes(cfg: CpuConfig, cases: FuzzCase[], probe?: (design: Fl
   const reached = cases.map(() => Infinity);
   let c = 0;
   for (; c < max && (!pcs.length || reached.some((r) => c < r + DRAIN)); c++) {
+    if ((c & 63) === 63) await pause();
     sim.cycle();
     let active = 0;
     cases.forEach((cs, l) => {
@@ -138,7 +140,7 @@ export function fuzzLanes(cfg: CpuConfig, cases: FuzzCase[], probe?: (design: Fl
  * and the registers are compared after every retirement. Describes the first difference (cycle, instruction,
  * registers), or the memory difference at the end. Single-core CPUs only.
  */
-export function firstDivergence(cfg: CpuConfig, c: FuzzCase): string {
+export async function firstDivergence(cfg: CpuConfig, c: FuzzCase): Promise<string> {
   if (cfg.isa.mp) return 'final state only (multi-core)';
   const imemK = Math.max(cfg.imemK ?? 6, log2up(c.words.length));
   const design = flatten(cfg.build(c.words, imemK, fuzzDmemK(cfg)));
@@ -148,6 +150,7 @@ export function firstDivergence(cfg: CpuConfig, c: FuzzCase): string {
   const iss = new ISS(c.words, { ...issOptions(cfg.isa), dmemWords: 2 ** fuzzDmemK(cfg), imemWords: 2 ** imemK });
   const f = !!cfg.isa.f, pcW = design.root.ports.pcW;
   for (let cyc = 1; cyc <= budget(cfg, c) && !iss.halted; cyc++) {
+    if ((cyc & 15) === 0) await pause();
     const ret = retiring(sim);
     // a pipeline says which instruction retires: it must be the golden model's next
     const at = ret && pcW ? sim.getBits(pcW).reduce<number>((a, b, i) => a + b * 2 ** i, 0) : iss.pc;

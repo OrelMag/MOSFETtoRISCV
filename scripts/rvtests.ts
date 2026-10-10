@@ -25,7 +25,7 @@ for (const cfg of cpus) {
   const t1 = performance.now();
   for (const batch of cpuJobs(cfg, imgs.filter((i) => !row.has(i.name)))) {
     for (const j of batch.jobs) if (!j.golden.pass) row.set(j.img.name, `golden model: ${j.golden.text}`);
-    const rs = runLanes(cfg, batch.jobs, batch.imemK, batch.dmemK);
+    const rs = await runLanes(cfg, batch.jobs, batch.imemK, batch.dmemK);
     batch.jobs.forEach((j, i) => { if (!row.has(j.img.name)) row.set(j.img.name, rs[i].pass ? 'pass' : rs[i].text); });
   }
   const fails = [...row].filter(([, v]) => v !== 'pass' && !v.startsWith('n/a'));

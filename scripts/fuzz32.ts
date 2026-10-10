@@ -17,12 +17,12 @@ for (const cfg of CPUS.filter((c) => !ids.length || ids.includes(c.id))) {
   let runs = 0, bad = 0;
   for (let s = from; s <= to; s += 32) {
     const cases = Array.from({ length: Math.min(32, to - s + 1) }, (_, i) => fuzzCase(cfg, s + i, n));
-    for (const r of fuzzLanes(cfg, cases)) {
+    for (const r of await fuzzLanes(cfg, cases)) {
       runs++;
       if (r.ok) continue;
       bad++;
       const c = cases.find((x) => x.seed === r.seed)!;
-      const first = firstDivergence(cfg, c);
+      const first = await firstDivergence(cfg, c);
       failures.push({ cpu: cfg.id, seed: r.seed, diff: r.diff, first, source: c.source });
       console.log(`  ${cfg.id} seed ${r.seed}: ${r.diff}\n    first difference: ${first}`);
     }

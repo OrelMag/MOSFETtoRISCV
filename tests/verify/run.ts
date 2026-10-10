@@ -69,7 +69,10 @@ export function cpuJobs(cfg: CpuConfig, imgs: RvImage[], cov?: IsaCoverage): Lan
  * instruction ROM is evaluated per lane (each lane its own program), every other leaf is a NAND.
  * All jobs share the CPU's memory sizes (imemK, dmemK). Returns one result per job.
  */
-export function runLanes(cfg: CpuConfig, jobs: LaneJob[], imemK: number, dmemK: number, probe?: (design: FlatDesign) => LaneProbe): RunResult[] {
+/** Let the event loop run (Vitest's worker RPC times out behind a long synchronous stretch). */
+export const pause = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+export async function runLanes(cfg: CpuConfig, jobs: LaneJob[], imemK: number, dmemK: number, probe?: (design: FlatDesign) => LaneProbe): Promise<RunResult[]> {
   if (jobs.length > LANES) throw new Error('runLanes: at most 32 jobs');
   const t0 = performance.now();
   const design = flatten(cfg.build(jobs[0].l.words, imemK, dmemK));
@@ -93,6 +96,7 @@ export function runLanes(cfg: CpuConfig, jobs: LaneJob[], imemK: number, dmemK: 
   const max = Math.max(...jobs.map((j) => j.max));
   let c = 0;
   while (c < max && out.some((r) => !r)) {
+    if ((c & 63) === 63) await pause();
     sim.cycle();
     c++;
     pr?.cycle(sim, out.reduce((m, r, l) => (r ? m : m | (1 << l)), 0));
@@ -108,7 +112,7 @@ export function runLanes(cfg: CpuConfig, jobs: LaneJob[], imemK: number, dmemK: 
 }
 
 /** Clock the CPU until tohost (data-memory word l.tohost) is written, or the budget runs out. */
-export function runOnCpu(cfg: CpuConfig, img: RvImage, l: Loadable, maxCycles: number): RunResult {
+export async function runOnCpu(cfg: CpuConfig, img: RvImage, l: Loadable, maxCycles: number): Promise<RunResult> {
   const t0 = performance.now();
   const design = flatten(cfg.build(l.words, l.imemK, l.dmemK));
   const sim = new GateSim(design);
@@ -118,6 +122,7 @@ export function runOnCpu(cfg: CpuConfig, img: RvImage, l: Loadable, maxCycles: n
   if (!dm) throw new Error(`${cfg.id}: no data memory 'dm'`);
   let tohost: number | undefined, c = 0;
   while (c < maxCycles) {
+    if ((c & 15) === 15) await pause();
     clockCycle(sim);
     c++;
     if ((c & 7) === 0 || c === maxCycles) {

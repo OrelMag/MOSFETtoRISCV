@@ -23,10 +23,10 @@ for (const cfg of cpus) {
   const t0 = performance.now();
   const isa = new IsaCoverage(), probes: HwCoverage[] = [];
   const probe = (d: FlatDesign) => { const p = new HwCoverage(d); probes.push(p); return p; };
-  for (const b of cpuJobs(cfg, images(cfg.env).filter((i) => !notApplicable(cfg, i.name, i.data.length)), isa)) runLanes(cfg, b.jobs, b.imemK, b.dmemK, probe);
+  for (const b of cpuJobs(cfg, images(cfg.env).filter((i) => !notApplicable(cfg, i.name, i.data.length)), isa)) await runLanes(cfg, b.jobs, b.imemK, b.dmemK, probe);
   for (let s = from; s <= to; s += 32) {
     const cases = Array.from({ length: Math.min(32, to - s + 1) }, (_, i) => fuzzCase(cfg, s + i, 60, isa));
-    fuzzLanes(cfg, cases, probe);
+    await fuzzLanes(cfg, cases, probe);
   }
   const hw = new Map<string, number>();
   for (const p of probes) for (const [k, v] of p.counts) hw.set(k, (hw.get(k) ?? 0) + v);
