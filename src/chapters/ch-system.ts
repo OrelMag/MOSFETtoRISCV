@@ -89,8 +89,9 @@ export const chTraps: Chapter = {
       body: `
         <p>A second, separate register space: <strong>CSRs</strong>, addressed by a 12-bit number and accessed only with
         <code>csrrw</code> (swap), <code>csrrs</code> (set bits) and <code>csrrc</code> (clear bits), plus immediate forms. This CPU implements the
-        machine-mode set an embedded core needs: mstatus, misa, mie, mtvec, mscratch, mepc, mcause, mtval, mip, mcycle/cycle and mhartid.</p>
-        <p>Open the CSR unit: twelve address comparators, a read multiplexer, the read-modify-write logic, and the registers,
+        machine-mode set an embedded core needs: mstatus, misa, mie, mtvec, mscratch, mepc, mcause, mtval, mip, mcycle/cycle and mhartid, plus the identity
+        registers every core must have (mvendorid, marchid, mimpid), which read 0.</p>
+        <p>Open the CSR unit: fifteen address comparators, a read multiplexer, the read-modify-write logic, and the registers,
         some of them written by hardware on a trap.</p>`,
       scene: () => ({ root: CSR_UNIT, inputs: { addr: 0x305, funct3: 1, rs1v: 0x40, csrWrite: 1, clk: 0 } }),
     },
