@@ -120,8 +120,35 @@ export interface Netlist {
  */
 export interface Behavior {
   delay?: number;
-  init?: () => unknown;
+  /** Fresh private state, for the power-on mode of the reset (omitted: 'zero'). */
+  init?: (mode?: 'x' | 'zero' | 'random') => unknown;
   eval: (inputs: number[], state: unknown) => number[];
+  /**
+   * Edge-triggered state (a large RAM): the state changes only at a rising edge of input `clk`,
+   * from the other inputs as they were just before it; the outputs follow the `comb` inputs
+   * combinationally, and the state. Static timing makes every other input but clk a capture
+   * point and `comb` → outputs a path launched at clk-to-q; logicDepth sees storage (null).
+   */
+  seq?: { clk: string; comb: string[] };
+  /**
+   * The state as a rebuilt design takes it over (Sim.carry): `known` asks to heal what is
+   * unknown back to its power-on value, as the nets of gate-level storage are. Default: a copy.
+   */
+  carry?: (prev: unknown, known: boolean) => unknown;
+  /**
+   * A stateful leaf opened onto its structure (a lock-step sub-simulation, view/context.ts): put
+   * `state` into the structure's own storage, so the inside shows what the leaf holds. Called
+   * on every sync, after the inputs are set and before the sub-simulation settles.
+   */
+  inside?: (state: unknown, seed: InsideSeed) => void;
+}
+
+/** Where Behavior.inside puts a leaf's state: paths are relative to the opened component. */
+export interface InsideSeed {
+  /** Replace the private state of the behavioural leaf at this instance path ('bank3'). */
+  state(path: string, s: unknown): void;
+  /** Force storage nets (a dotted net path, as in powerOn: 'w3.ff0.ff.slave.sr.q') to these bits. */
+  bits(path: string, bits: ArrayLike<number>): void;
 }
 
 export interface ComponentDef {
@@ -167,7 +194,14 @@ export interface ComponentDef {
    */
   ff?: { d: string; q: string; clk: string; en?: string };
 
-  hdl?: { verilog?: string; vhdl?: string };
+  hdl?: {
+    verilog?: string; vhdl?: string;
+    /**
+     * Synthesis export (vexport.ts): the module body (after the port declarations, ports by
+     * their own names) written instead of the structure, e.g. a large memory as `reg mem [..]`.
+     */
+    synth?: string[];
+  };
   /** Long-form notes for the inspector (HTML allowed). */
   notes?: string;
 }

@@ -91,7 +91,7 @@ function leafKind(def: ComponentDef, mode: FlattenMode): HierLeafKind | null {
  * initial contents). Undefined: no such net; null: the path ends inside a leaf of this
  * simulation (an unexpanded child), where there is nothing to seed.
  */
-function hintBits(node: HierNode, name: string): number[] | null | undefined {
+export function hintBits(node: HierNode, name: string): number[] | null | undefined {
   const path = name.split('.');
   const net = path.pop()!;
   let n = node;

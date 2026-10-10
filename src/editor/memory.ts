@@ -2,6 +2,7 @@
 // listing and which row the circuit is reading), language conversion, sample programs, and a
 // RAM's contents (read live from the simulation, seeded at power-on from `init`).
 
+import { BANK_K, bigRam, bigRamWithInit, ramLeafState, ramWords } from '../lib/bigmem';
 import { ram } from '../lib/memory';
 import { PROGRAMS } from '../riscv/programs';
 import { disasm16 } from '../riscv/rv16/isa16';
@@ -145,8 +146,13 @@ export function ramNode(sim: Sim, part: string): HierNode | null {
   return n?.expanded && n.children?.has('w0') ? n : null;
 }
 
-/** Every word of a placed RAM, from its registers (-1: unknown); null when it is not simulated. */
+/**
+ * Every word of a placed RAM (-1: unknown): a large one's from its leaf's state, a small one's
+ * from its registers; null when it is not simulated.
+ */
 export function readRam(sim: Sim, part: string): number[] | null {
+  const big = ramLeafState(sim, sim.design.root.children?.get(part));
+  if (big) return ramWords(big);
   const n = ramNode(sim, part);
   if (!n) return null;
   const out: number[] = [];
@@ -174,8 +180,10 @@ const ramCache = new Map<string, ComponentDef>();
  * Paths follow the library: word register w<i> → DFFE ff<j> → DFF ff → D latch → SR latch sr.
  */
 export function ramWithInit(k: number, w: number, init: number[] | undefined): ComponentDef {
-  const base = ram(k, w);
   const words = ramInit(k, w, init);
+  // Larger than the gates simulate: a lookup whose initial words are its leaf's power-on state.
+  if (k > BANK_K) return words.some((x) => x) ? bigRamWithInit(k, w, words) : bigRam(k, w);
+  const base = ram(k, w);
   if (!words.some((x) => x)) return base;
   const key = `${k}/${w}/${words.join(',')}`;
   const hit = ramCache.get(key);

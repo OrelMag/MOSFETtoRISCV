@@ -52,6 +52,9 @@ export function analyzeTiming(design: FlatDesign): TimingReport | null {
   const excluded = new Uint8Array(leaves.length);
   const qSource = new Map<number, string[]>(); // net -> launching dff path
   const captures: { net: number; dff: string[] }[] = [];
+  // Edge-triggered behaviours (a large RAM): their inputs but clk are captured like a flip-flop's
+  // d, and only their comb inputs reach the outputs, which launch at clk-to-q at the earliest.
+  const seqIn = new Map<number, number[]>();
 
   const walk = (n: HierNode, insideDff: boolean): void => {
     const ff = insideDff ? undefined : n.def.ff;
@@ -62,6 +65,11 @@ export function analyzeTiming(design: FlatDesign): TimingReport | null {
       if (ff.en) captures.push({ net: n.ports[ff.en][0], dff: n.path });
     }
     if (n.leafIndex !== undefined && (insideDff || isDff)) excluded[n.leafIndex] = 1;
+    const seq = n.def.behavior?.seq;
+    if (seq && n.leafIndex !== undefined && !insideDff && !isDff) {
+      for (const p of n.def.ports) if (p.dir === 'in' && p.name !== seq.clk) for (const net of n.ports[p.name]) captures.push({ net, dff: n.path });
+      seqIn.set(n.leafIndex, seq.comb.flatMap((c) => n.ports[c] ?? []));
+    }
     n.children?.forEach((c) => walk(c, insideDff || isDff));
   };
   walk(design.root, false);
@@ -86,14 +94,17 @@ export function analyzeTiming(design: FlatDesign): TimingReport | null {
       if (qSource.has(net)) { arrival[net] = CLK_TO_Q; stack.pop(); continue; }
       const d = driver[net];
       if (d < 0) { arrival[net] = 0; stack.pop(); continue; }
+      const ins = seqIn.get(d) ?? leaves[d].inputs;
+      const sq = ins !== leaves[d].inputs;
       if (state[net] === 0) {
         state[net] = 1;
-        for (const p of leaves[d].inputs) for (const i of p) if (arrival[i] < 0 && state[i] === 0) stack.push(i);
+        if (sq) { for (const i of ins as number[]) if (arrival[i] < 0 && state[i] === 0) stack.push(i); }
+        else for (const p of ins as number[][]) for (const i of p) if (arrival[i] < 0 && state[i] === 0) stack.push(i);
         continue;
       }
       // All inputs visited (or on the stack: a combinational loop, counted as 0).
-      let best = 0, bestNet = -1;
-      for (const p of leaves[d].inputs) for (const i of p) {
+      let best = sq ? CLK_TO_Q : 0, bestNet = -1;
+      for (const p of sq ? [ins as number[]] : ins as number[][]) for (const i of p) {
         const a = arrival[i] < 0 ? 0 : arrival[i];
         if (a >= best) { best = a; bestNet = i; }
       }
@@ -123,6 +134,7 @@ export function analyzeTiming(design: FlatDesign): TimingReport | null {
     const d = driver[net];
     if (d < 0) break;
     path.unshift({ node: leaves[d].node.path, arrival: arrival[net] });
+    if (via[net] < 0 && seqIn.has(d)) { launch = leaves[d].node.path; break; }
     net = via[net];
   }
   const stages: { inst: string; arrival: number }[] = [];
