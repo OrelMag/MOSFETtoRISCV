@@ -16,6 +16,7 @@ import { METRIC, measured } from '../../campaign/grade';
 import { dependents, isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { levelChallenge, levelChipId } from '../../campaign/levels';
 import { altCost, copiesInFinal, countedPart, finalCpu } from '../../campaign/measure';
+import { walkOf } from '../../campaign/walk';
 import { ACTS, nodeById } from '../../campaign/nodes';
 import { progress } from '../../campaign/progress';
 import type { CampaignNode, Metric } from '../../campaign/types';
@@ -31,8 +32,9 @@ import { resolveComponent } from '../../lib/resolve';
 import { h, icon } from '../dom';
 import { settings } from '../settings';
 import type { Page } from './chapter';
+import { WalkMode } from './levelwalk';
 
-type Tab = 'why' | 'task' | 'tips' | 'codex';
+type Tab = 'walk' | 'why' | 'task' | 'tips' | 'codex';
 
 const KIND_LABEL: Record<CampaignNode['kind'], string> = { lesson: 'LESSON', drill: 'DRILL', build: 'BUILD', program: 'PROGRAM', core: 'CPU CORE' };
 /** The level screen keeps the toolbar to what building and checking a level needs. */
@@ -62,6 +64,9 @@ export class LevelPage implements Page {
   private edWrap = h('div', { class: 'lv-ed' });
   private tab: Tab = 'why';
   private result: HTMLElement | null = null;
+  /** The walkthrough, while it is shown. */
+  private walk: WalkMode | null = null;
+  private chipId = '';
   private offs: (() => void)[] = [];
 
   constructor(nodeId: string) {
@@ -82,6 +87,7 @@ export class LevelPage implements Page {
     this.ch = ch;
     // The level's chip lives in the sandbox's workspace: create it (pins in place) on the first visit.
     const chipId = levelChipId(n);
+    this.chipId = chipId;
     let ws = loadWorkspace();
     if (!ws.chips[chipId]) {
       ws = startChallenge(ws, ch).ws;
@@ -95,9 +101,11 @@ export class LevelPage implements Page {
     const hide = ruleKind(ch.allowed) === 'transistors' ? [] : ['fets', 'switch'];
     this.editor = new Editor(chipId, { level: { chipId, actions: LEVEL_ACTIONS, hideGroups: hide } });
     if (this.editor.chipId !== chipId) this.editor.openChip(chipId);
+    const hasWalk = !!walkOf(n)?.steps.length;
     this.chal = installChallenges(this.editor, {
       checked: (r, g) => this.checked(r, g),
-      showAnswer: () => this.showAnswer(),
+      actions: () => (hasWalk ? [h('button', { class: 'btn sm', 'data-chal': 'walk', title: 'The reference answer built step by step, each step explained', onclick: () => this.startWalk(0) }, icon('play', 12), 'Walk me through it')] : []),
+      showAnswer: () => (hasWalk ? this.startWalk(Infinity) : this.showAnswer()),
     });
     this.edWrap.append(this.editor.el);
     this.el = h('div', { class: 'lv-page' }, this.bar, h('div', { class: 'lv-body' }, this.side, this.edWrap));
@@ -108,6 +116,8 @@ export class LevelPage implements Page {
 
   destroy(): void {
     hideGlossary();
+    this.walk?.leave();
+    this.walk = null;
     this.offs.forEach((f) => f());
     this.chal?.destroy();
     this.editor?.destroy();
@@ -127,6 +137,15 @@ export class LevelPage implements Page {
     const done = isDone(p.view(n.id));
     const next = done ? nextAvailable(p.view, p.unlockAll, n.id) : undefined;
     const par = n.par ?? {};
+    if (this.walk) {
+      this.bar.replaceChildren(
+        h('a', { class: 'lv-back', href: `#/campaign/n/${n.id}`, title: 'The campaign map' }, icon('chevL', 14), 'Map'),
+        h('span', { class: 'lv-crumb' }, `Act ${n.act} · ${ACTS[n.act]?.title ?? ''}`, h('span', { class: 'sep' }, '›'), h('b', null, n.title)),
+        h('span', { class: 'lv-badge acc' }, 'WALKTHROUGH'),
+        h('span', { class: 'lv-spacer' }),
+        h('button', { class: 'btn sm ghost', title: 'Back to your own circuit, as you left it', onclick: () => this.leaveWalk() }, 'Leave the walkthrough'));
+      return;
+    }
     const parText = (Object.keys(par) as Metric[]).map((k) => `${k === 'depth' || k === 'period' ? `${k} ` : ''}${par[k]!.toLocaleString()}${k === 'depth' || k === 'period' ? '' : ` ${METRIC[k].unit}`}`);
     this.bar.replaceChildren(...[
       h('a', { class: 'lv-back', href: `#/campaign/n/${n.id}`, title: 'The campaign map' }, icon('chevL', 14), 'Map'),
@@ -149,17 +168,21 @@ export class LevelPage implements Page {
   private renderSide(): void {
     const n = this.node!, p = progress();
     const shownTips = Math.min(p.get(n.id)?.tips ?? 0, n.tips.length);
-    const tabs: [Tab, string, string?][] = [['why', 'Why'], ['task', 'Task'], ['tips', 'Tips', n.tips.length ? `${shownTips}/${n.tips.length}` : undefined], ['codex', 'Codex', n.codex.length ? String(n.codex.length) : undefined]];
+    const tabs: [Tab, string, string?][] = this.walk ? [['walk', 'Walkthrough'], ['why', 'Why'], ['task', 'Task']]
+      : [['why', 'Why'], ['task', 'Task'], ['tips', 'Tips', n.tips.length ? `${shownTips}/${n.tips.length}` : undefined], ['codex', 'Codex', n.codex.length ? String(n.codex.length) : undefined]];
+    if (!tabs.some(([id]) => id === this.tab)) this.tab = tabs[0][0];
     const bar = h('div', { class: 'lv-tabs', role: 'tablist' }, tabs.map(([id, label, badge]) =>
       h('button', { class: this.tab === id ? 'on' : '', role: 'tab', 'aria-selected': String(this.tab === id), onclick: () => { this.tab = id; this.renderSide(); } },
         label, badge ? h('small', null, badge) : null)));
     const body = h('div', { class: 'lv-sidebody', role: 'tabpanel' });
-    if (this.tab === 'why') this.whyTab(body);
+    if (this.tab === 'walk' && this.walk) body.append(this.walk.panel(n.par ?? {}, () => this.leaveWalk(), () => this.takeWalk()));
+    else if (this.tab === 'why') this.whyTab(body);
     else if (this.tab === 'task') this.taskTab(body);
     else if (this.tab === 'tips') this.tipsTab(body);
     else this.codexTab(body);
     this.side.replaceChildren(bar, body);
     if (settings.glossary && this.tab !== 'codex') markTerms(body, 8);
+    body.classList.toggle('walking', this.tab === 'walk');
   }
 
   private whyTab(el: HTMLElement): void {
@@ -236,6 +259,36 @@ export class LevelPage implements Page {
   private checked(r: CheckResult, g?: { stars: 1 | 2 | 3; best: boolean; first: boolean }): void {
     this.renderBar();
     if (r.ok && g) this.showResult(r, g);
+  }
+
+  /** The walkthrough from step k (Infinity: the last, the whole answer). */
+  private startWalk(k: number): void {
+    if (this.walk) return void this.walk.go(k === Infinity ? this.walk.steps.length - 1 : k);
+    this.result?.remove();
+    this.result = null;
+    const w = walkOf(this.node!);
+    const at = k === Infinity ? (w?.steps.length ?? 1) - 1 : k;
+    this.walk = WalkMode.open(this.editor!, this.node!, this.ch!, at, this.chipId, () => this.renderSide()) ?? null;
+    if (!this.walk) return this.showAnswer();
+    this.tab = 'walk';
+    this.renderBar();
+    this.renderSide();
+  }
+
+  private leaveWalk(): void {
+    this.walk?.leave();
+    this.walk = null;
+    this.tab = 'why';
+    this.renderBar();
+    this.renderSide();
+  }
+
+  private takeWalk(): void {
+    this.walk?.takeOver();
+    this.walk = null;
+    this.tab = 'task';
+    this.renderBar();
+    this.renderSide();
   }
 
   private showAnswer(): void {

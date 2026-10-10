@@ -32,7 +32,7 @@
 .lv-tabs button:hover { color: var(--text); }
 .lv-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
 .lv-tabs small { font: 10.5px var(--font-mono); color: var(--muted); margin-left: 4px; }
-.lv-sidebody { overflow-y: auto; padding: 12px 16px 24px; display: grid; gap: 14px; align-content: start; font-size: 13.5px; color: var(--text-2); line-height: 1.55; }
+.lv-sidebody { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px 24px; display: grid; gap: 14px; align-content: start; font-size: 13.5px; color: var(--text-2); line-height: 1.55; }
 .lv-sidebody section { min-width: 0; }
 .lv-sidebody h4 { margin: 0 0 4px; font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .lv-sidebody p { margin: 0; }
@@ -62,7 +62,7 @@
   display: none; position: absolute; right: 0; top: 47px; bottom: 0; width: 290px; z-index: 6;
   box-shadow: var(--shadow-lg);
 }
-.sb-levelmode.props-on .sb-props, .sb-levelmode.props-sel .sb-props { display: block; }
+.sb-levelmode.props-on .sb-props, .sb-levelmode.props-sel:not(.walking) .sb-props { display: block; }
 
 /* The strip under the canvas on the level screen. */
 .sb-chal-screen .sb-chal-head { padding: 7px 10px; gap: 12px; }
@@ -133,3 +133,31 @@
 .lv-chip.acc { border-color: transparent; background: var(--accent-soft); color: var(--accent); }
 .cx-entry .lv-bars a { color: var(--text); text-decoration: none; font-size: 12px; }
 @media (max-width: 1000px) { .cx-cols { grid-template-columns: minmax(0, 1fr); } }
+
+/* The walkthrough (ui/pages/levelwalk.ts). */
+.lv-badge.acc { background: var(--accent-soft); color: var(--accent); }
+.lv-sidebody.walking { padding: 0; display: flex; flex-direction: column; }
+.lv-walk { display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 0; flex: 1 0 auto; }
+.lv-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.lv-steps button {
+  display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: center; width: 100%; text-align: left;
+  font: inherit; font-size: 13px; color: var(--muted); background: none; border: 0; padding: 3px 4px; border-radius: 6px; cursor: pointer;
+}
+.lv-steps button:hover { background: var(--surface-2); }
+.lv-steps .k { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font: 11px var(--font-mono); border: 1px solid var(--border-strong); color: var(--text-2); }
+.lv-steps .done button { color: var(--text-2); }
+.lv-steps .done .k { background: var(--good-soft); border-color: transparent; color: var(--good); }
+.lv-steps .cur button { color: var(--text); font-weight: 600; }
+.lv-steps .cur .k { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.lv-step { border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); padding: 10px 12px; display: grid; gap: 8px; }
+.lv-step h3 { margin: 0; font-size: 14px; color: var(--text); }
+.lv-step p { color: var(--text); }
+.lv-meters { display: grid; gap: 6px; font-size: 12.5px; }
+.lv-meter { display: grid; gap: 3px; }
+.lv-meter .track { height: 7px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+.lv-meter .track i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.lv-meter .track i.over { background: var(--warn); }
+.lv-rows b { font-family: var(--font-mono); font-weight: 600; }
+.lv-rows b.ok { color: var(--good); }
+.lv-gen { font-size: 12px; }
+.lv-walknav { display: flex; gap: 6px; align-items: center; padding: 10px 0 14px; margin-top: auto; border-top: 1px solid var(--border); position: sticky; bottom: 0; background: var(--surface); }
