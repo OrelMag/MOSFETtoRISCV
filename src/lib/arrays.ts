@@ -71,7 +71,7 @@ export const SENSE_AMP: ComponentDef = define({
   symbol: { kind: 'box', label: 'SENSE', w: 22, h: 6, portPos: { bl: 3, blb: 19 } },
   netlist: () => ({
     level: 'switch',
-    pins: { bl: [3, 0], blb: [33, 0], sae: [0, 30], q: [46, 14] },
+    pins: { bl: [3, 0], blb: [33, 0], sae: [-2, 30], q: [46, 14] },
     pinDirs: { bl: 'down', blb: 'down' },
     instances: [
       { name: 'i0', def: PMOS, at: [0, 2], label: 'pass' },
@@ -90,7 +90,7 @@ export const SENSE_AMP: ComponentDef = define({
     nets: [
       { name: 'bl', ends: ['bl', 'i0.s'] },
       { name: 'bl̄', ends: ['blb', 'i1.s'], via: { 'i1.s': [[33, 1], [29, 1]] } },
-      { name: 'sae', ends: ['sae', 'i0.g', 'i1.g', 'f0.g', 'f1.g', 'nsae.a'], via: { 'i0.g': [[2, 30], [2, 4]], 'i1.g': [[2, 30], [2, 35], [24, 35], [24, 4]] } },
+      { name: 'sae', ends: ['sae', 'i0.g', 'i1.g', 'f0.g', 'f1.g', 'nsae.a'], via: { 'i0.g': [[-1, 30], [-1, 4]], 'i1.g': [[2, 30], [2, 35], [24, 35], [24, 4]] } },
       { ends: ['v0.p', 'h0.s'] }, { ends: ['v1.p', 'h1.s'] },
       { ends: ['h0.d', 'p0.s'] }, { ends: ['h1.d', 'p1.s'] },
       { name: '¬sae', ends: ['nsae.y', 'h0.g', 'h1.g'], tags: true },

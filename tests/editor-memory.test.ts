@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { checkSimulatable } from '../src/editor/compile';
 import { addExample, counterSeg7Chip, EXAMPLES, FETCH_PROGRAM, fetchChip } from '../src/editor/examples';
 import { UserLibrary } from '../src/editor/library';
+import { deadParts, openInputs } from '../src/editor/lint';
 import {
   convertProgram, initText, kFor, parseInit, ramInit, ramWithInit, readRam, ROM_SAMPLES, romImage, romIndex, romListing, SEG7_FONT,
 } from '../src/editor/memory';
@@ -152,6 +153,8 @@ describe('examples', () => {
     const c = lib.compiled(id)!;
     expect(c.diags).toEqual([]);
     expect(checkSimulatable(c)).toEqual([]);
+    expect(deadParts(ws.chips[id], c)).toEqual([]);
+    expect(openInputs(c)).toEqual([]);
   });
 
   it('loading twice adds a second chip; nothing is overwritten', () => {

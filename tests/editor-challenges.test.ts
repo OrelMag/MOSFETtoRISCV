@@ -9,6 +9,7 @@ import {
 } from '../src/editor/challenges';
 import { checkSimulatable } from '../src/editor/compile';
 import { UserLibrary } from '../src/editor/library';
+import { deadParts, openInputs } from '../src/editor/lint';
 import { type ChipDoc, emptyWorkspace, type Workspace } from '../src/editor/model';
 import { chip, part, pin, wire, workspace } from './editorkit';
 
@@ -35,6 +36,9 @@ describe('the challenge set', () => {
     for (const d of chips) {
       expect(lib.compiled(d.id)!.diags, d.id).toEqual([]);
       expect(checkSimulatable(lib.compiled(d.id)!), d.id).toEqual([]);
+      // No orphans: every part reaches an output, every input is wired.
+      expect(deadParts(d, lib.compiled(d.id)!), d.id).toEqual([]);
+      expect(openInputs(lib.compiled(d.id)!), d.id).toEqual([]);
     }
     const r = checkChallenge(c, lib.compiled(main.id));
     expect(r.failures).toEqual([]);
