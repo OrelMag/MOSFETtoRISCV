@@ -3,15 +3,17 @@
 // is most of the work of simulating a CPU. Its settled response is a small state machine: given the
 // settled values of its nets and new input values, gate-level simulation of the flip-flop alone
 // (unit delays, exactly GateSim's semantics) gives the next settled values. FfTable tabulates that
-// over the states reachable from the ones it is given, so the cycle engine looks a transition up
+// over the states it meets, so the cycle engine looks a transition up
 // instead of evaluating gates, and still knows the value of every internal net.
 //
 // A table is only exact inside a whole circuit if the flip-flop does not care *when* its data
 // inputs change after a clock edge (they arrive at least one gate delay later: they come from the
 // edge itself, through other flip-flops and logic) nor about glitches on them, and if its outputs
-// never follow a data input while the clock is steady (it is edge-triggered). intern() checks all of
-// that by simulation for every reachable state (data changes 1 … K delays after the edge, pairs of
-// inputs arriving in any order, pulses of every short width) and refuses the state otherwise.
+// never follow a data input while the clock is steady (it is edge-triggered). good() checks all of
+// that by simulation, state by state as states are met (data changes 1 … K delays after the edge,
+// K past the settling time; pairs of inputs arriving in any order; pulses of every width up to K),
+// and the cycle engine hands a flip-flop in a refused state to GateSim. warm() checks ahead the
+// states 0 / 1 inputs reach, so a run meets no new state in its first frames.
 
 import { flatten, type FlatDesign } from './flatten';
 import { B0, B1, BX, type ComponentDef, inPorts, outPorts } from './types';

@@ -323,9 +323,11 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
 - ✅ Large memories: RAM and ROM parts up to 2^16 words (lib/bigmem.ts), one behavioural leaf at run time over a
   real hierarchy of banks of banks (≤ 16 per level, down to gate-level 64-word banks), opened live (banks seeded
   from the leaf down to the latches); state survives edits and Back; costs, timing and HDL from the hierarchy
-- ⏳ Measure, then speed up, large sandbox circuits: compiled or levelized evaluation of settled
-  combinational chips (DLS caches them), keeping the event-driven engine for anything timed or probed;
-  publish cycles/s next to the cross-cutting performance budget
+- ✅ Measure, then speed up, large sandbox circuits (scripts/sim-perf.ts): GateSim on typed arrays (same events at
+  the same times), and a cycle engine for Run in cycle mode: flip-flops as verified tables, the rest levelized, every
+  net equal to GateSim after every settle (DualSim hands over to GateSim for gate mode, probes, stepping, X clocks).
+  Single-cycle RV32I in the sandbox, cycles/s: Node 91 → 1 160 (GateSim) → ~9 000 (cycle engine); the page at max,
+  CPU drawer open and checking: 35 Hz → ~4–5 kHz at 60 fps (64K-word data memory ~3.3 kHz, system CPU ~2.4 kHz)
 
 **Programs on your own CPU** (the second half of Turing Complete)
 - ⏳ Custom ISA: define instruction fields, opcodes and mnemonics in a table, and get an assembler,
@@ -387,7 +389,8 @@ challenges stay open. Next:
 - ✅ Export the sandbox canvas as SVG / PNG (current theme), and the level on a chapter's or the workbench's stage (the
   stage bar's Image menu: the whole level with its live values, whatever the zoom, without probe flags)
 - VHDL view of every component
-- Performance budget: 60 fps rendering of ≤ 5 000 visible elements; ≥ 100 CPU cycles/s at gate level
+- Performance budget: 60 fps rendering of ≤ 5 000 visible elements; ≥ 100 CPU cycles/s at gate level (met: the sandbox's
+  single-cycle RV32I runs ~4–5 kHz in the page on the cycle engine, ~400 Hz on GateSim)
 - i18n-ready strings
 
 ### Phase 13 — Verification, precise claims, measurement ⏳
