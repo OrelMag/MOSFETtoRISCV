@@ -211,7 +211,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  leaves, isExternal; keyPart(bind), KEYBOARD, normalizeKey / keyLabel / keyCode / codeGlyph), ROM, RAM
                  (both up to 2^16 words: wordRom → romTree ≤ 2^8, else romLevels; RAM > 2^6: bigRam),
                  consoles / switch banks / screens (ioparts.ts); audio.ts plays the buzzers
-  ioparts.ts     console (data / we / clk: prints at rising edges, \n \b \f, 500 lines of scrollback in the leaf's state),
+  ioparts.ts     console (data / we / clk: prints at rising edges, \n \b \f, 500 lines of scrollback in the leaf's state;
+                 ConsoleScroll: a face scrolled by the wheel stays on its text, follows it again at the bottom),
                  switch bank (1–32 toggles: an external source; holdSwitches: positions survive Reset), screen (8–128 px
                  square, mono / RGB111 / CGA 16 / RGB332 / RGB565; write: x / y / color / we into its own frame buffer;
                  rows: row := data, the bus cut into ≤ 32-bit chunks for its picture leaf (packed behaviour inputs are
@@ -236,9 +237,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  bigRamWithInit)
   examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, console, screen, the computer, shared bus,
                  wired-AND / OR), addExample: new chip (and an example's `subchips`, fresh ids), opened. The computer
-                 (computerChip + memoryMapChip): rv32i_core (lib/resolve.ts pattern), a 1K ROM (riscv/ioprograms.ts),
-                 a Memory map user chip, 4K × 32 RAM, 64 × 64 RGB332 screen at 0xC000_0000 + 256·y + 4·x, console /
-                 LEDs / switches at the ISS's IO addresses, a halt part on `j .`; word accesses only (no lb / sb)
+                 (computerChip, ~60 × 64 units: readable at fit with the CPU drawer): rv32i_core (lib/resolve.ts
+                 pattern), a 1K ROM (riscv/ioprograms.ts), a Memory chip (memoryChip: decoder, 4K × 32 RAM, the
+                 devices' buses x / y / byte), a 64 × 64 RGB332 screen at 0xC000_0000 + 256·y + 4·x on the top level,
+                 a Devices chip (devicesChip: console / LEDs / switches at the ISS's IO addresses), a halt part on
+                 `j .`; word accesses only (no lb / sb)
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run;
@@ -247,7 +250,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  leaves at any depth driven through Sim.poke (setKey: held keys survive rebuilds and resets; typeKey;
                  a keyboard drops its oldest key when `ack` reads 1 just before a rising edge, or once settled
                  without a clock); pokeLeaf (a switch flipped, a console / screen cleared); gate level is a DualSim
-                 (cycle mode on the cycle engine, `engine`: which runs)
+                 (cycle mode on the cycle engine, `engine`: which runs); FrameBudget: Run's per-frame simulation
+                 time adapts to keep ~60 fps ([2, 14] ms; an explicit budgetMs is fixed; the CPU drawer's Run to halt too)
   palette.ts     registerPaletteGroup + the palette panel (purist filter)
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
   challenges.ts  build challenges: BuildChallenge (ports, table / sequence check, allowed parts, par),
@@ -277,13 +281,13 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  dmem, pipeline, iss options); part fields are paths into user chips ('imem.rom', partAt,
                  nestedRoms: detection takes the workspace's chips); detectCpu (the chapters' instance and
                  pin names: imem, rf, dm, frf, fcsr, pcOut / pcF, retire, validW, switches / irq /
-                 consoleData / consoleValid / leds; a placed port core (rv32i_core, *_core) → regs '<part>.rf'; a console
-                 or switch-bank part → iss.mmio), resolveCpu (settings over detection), readers
+                 consoleData / consoleValid / leds; a placed port core (rv32i_core, *_core) → regs '<part>.rf', its
+                 RAM may sit one chip down ('mem.ram'); a console or switch-bank part → iss.mmio), resolveCpu (settings over detection), readers
                  (readRegs / readMem find w<i> registers via storageOf, banks, cache lines; memStoreOf also finds a
                  large RAM's leaf state), pipelineSlots,
                  CpuMonitor: the ISS in lock-step on EditorSim.edgeHooks (registers, PC, fcsr, memory
                  after stores or at a pipeline's halt, console, LEDs; without the pins: a console part's text, a switch
-                 bank's positions, an LED bank named leds), first mismatch, Run to halt
+                 bank's positions, an LED bank named leds, here or one chip down), first mismatch, Run to halt
   cpu16.ts       detectRv16 (an RV16 ROM + a part with the core pins), Rv16Monitor: Iss16 in lock-step through the
                  core's write and store ports in program order (the campaign bench, live; RAM wrap, drain, next write)
   multicpu.ts    detectMulti (two or more placed CPU chips + a shared memory), MultiMonitor: MultiISS in
@@ -296,7 +300,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   ctxmenu.ts     plugin: the right-click menu (selection actions with their shortcuts, or the canvas's own);
                  pointerui.ts: its unravel / collapse actions and their dialogs
   iobar.ts       plugin: the chip's pins as a bar above the run bar (the workbench's switches and lamps, I/O toggle);
-                 each control acts as a click on the pin
+                 each control acts as a click on the pin; then the switch banks and keys inside placed chips, by path
+                 (ionested.ts, DOM-free: nestedControls once per simulation, flipBank; past 3 banks "+n more")
   keys.ts        plugin: document keys → key parts (a bound key is taken from the shortcuts while the chip is open)
                  and keyboard parts (while running, or with the Type toolbar toggle); released on blur
   props.ts       properties of the selection or the chip, diagnostics; registerPropsSection
@@ -308,11 +313,13 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   package.ts     "Package as chip…" dialog (name, hue, notes, symbol preview, pin order; Save & new circuit)
   inside.ts      lookInside(ed, path): read-only live schematic over the canvas on EditorSim's simulator (ViewCtx);
                  consoles, screens and switch banks get their live faces there (ioface.ts decorateInside; switches flip)
-  ioface.ts      the I/O parts' SVG faces (canvas and look inside); ScreenCanvas: the picture as a canvas bitmap in a
+  ioface.ts      the I/O parts' SVG faces (canvas and look inside; the wheel over a console with scrollback scrolls it,
+                 "↑ n lines" while up, Ctrl + wheel zooms); ScreenCanvas: the picture as a canvas bitmap in a
                  foreignObject, repainted when the frame buffer's version moves (image.ts exports it as an <image>)
   ioui.ts        plugin: console / switch / screen property sections (live text, counters, Clear, Save PNG) and the
                  Screens drawer: every console, screen and switch bank in the hierarchy by path, live; opens by itself
-                 for a nested console or screen (unless closed for that chip)
+                 for a nested console or screen (unless closed for that chip), behind a drawer already shown
+                 (dockPane's `front` false); its console scrolls natively and follows only at the bottom
   challengeui.ts "Challenges" list drawer (solved ticks via settings), the strip under the canvas while a
                  challenge chip is open (brief, Check, Show answer, Do it for me), purist palette while restricted;
                  a failing Check opens the test player on the first failing case; a core level lists its
