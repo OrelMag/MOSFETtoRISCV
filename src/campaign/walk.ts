@@ -369,12 +369,19 @@ function list(xs: string[], max = 4): string {
   return ys.length <= 1 ? ys.join('') : `${ys.slice(0, -1).join(', ')} and ${ys[ys.length - 1]}`;
 }
 
-/** A part's type: its key (to group like parts) and its name (library name, or the chip's name). */
-function typeOf(g: Graph, id: string): { key: string; name: string } {
+/**
+ * A part's type: its key (to group like parts), its name (library name, or the chip's name) and that
+ * name in running text (a chip's name is a proper name: its case is kept).
+ */
+function typeOf(g: Graph, id: string): { key: string; name: string; text: string } {
   const p = g.main.parts.find((q) => q.id === id)!;
   const d = g.defs.get(id);
-  if ('chip' in p.ref) return { key: `chip:${p.ref.chip}`, name: (d?.name ?? p.ref.chip).replace(/ ref$/, '') };
-  return { key: 'lib' in p.ref ? `lib:${p.ref.lib}` : JSON.stringify(p.ref), name: d?.name ?? id };
+  if ('chip' in p.ref) {
+    const name = (d?.name ?? p.ref.chip).replace(/ ref$/, '');
+    return { key: `chip:${p.ref.chip}`, name, text: name };
+  }
+  const name = d?.name ?? id;
+  return { key: 'lib' in p.ref ? `lib:${p.ref.lib}` : JSON.stringify(p.ref), name, text: inText(name) };
 }
 
 function describe(g: Graph, id: string): string {
@@ -387,8 +394,8 @@ function describe(g: Graph, id: string): string {
   else if (names.length) src = `${isGate ? ' of' : ' fed by'} ${list(names)}`;
   const drv = g.drives.get(id)!;
   const ch = g.channel.get(id);
-  if (ch) return `Adds ${id}, ${article(t.name)} ${inText(t.name)}: gate on ${list(ports[0] ?? []) || 'nothing yet'}, channel between ${ch.join(' and ')}.`;
-  return `Adds ${id}, ${article(t.name)} ${inText(t.name)}${src}${drv.length ? `; it drives ${list(drv)}` : ''}.`;
+  if (ch) return `Adds ${id}, ${article(t.name)} ${t.text}: gate on ${list(ports[0] ?? []) || 'nothing yet'}, channel between ${ch.join(' and ')}.`;
+  return `Adds ${id}, ${article(t.name)} ${t.text}${src}${drv.length ? `; it drives ${list(drv)}` : ''}.`;
 }
 
 function generate(g: Graph): { parts: string[]; title: string; text: string; codex: string[]; authored: boolean }[] {
@@ -442,10 +449,10 @@ function generate(g: Graph): { parts: string[]; title: string; text: string; cod
       const t = typeOf(g, parts[0]);
       return { parts, title: `${t.name} ${parts[0]}`, text: describe(g, parts[0]), codex: [], authored: false };
     }
-    const types = new Map<string, { name: string; ids: string[] }>();
+    const types = new Map<string, { name: string; text: string; ids: string[] }>();
     for (const p of parts) {
       const t = typeOf(g, p);
-      types.set(t.key, { name: t.name, ids: [...(types.get(t.key)?.ids ?? []), p] });
+      types.set(t.key, { name: t.name, text: t.text, ids: [...(types.get(t.key)?.ids ?? []), p] });
     }
     const ids = order(g.main, parts);
     const drv = [...new Set(parts.flatMap((p) => g.drives.get(p)!))];
@@ -453,9 +460,9 @@ function generate(g: Graph): { parts: string[]; title: string; text: string; cod
     if (types.size === 1) {
       const t = [...types.values()][0];
       const all = ofType.get(typeOf(g, parts[0]).key) === parts.length;
-      return { parts, title: `${parts.length} × ${t.name}`, text: `Places ${all ? 'the ' : ''}${count(parts.length)} ${plural(inText(t.name))}: ${list(ids, 6)}.${tail}`, codex: [], authored: false };
+      return { parts, title: `${parts.length} × ${t.name}`, text: `Places ${all ? 'the ' : ''}${count(parts.length)} ${plural(t.text)}: ${list(ids, 6)}.${tail}`, codex: [], authored: false };
     }
-    const mix = [...types.values()].map((t) => `${count(t.ids.length)} ${t.ids.length > 1 ? plural(inText(t.name)) : inText(t.name)}`);
+    const mix = [...types.values()].map((t) => `${count(t.ids.length)} ${t.ids.length > 1 ? plural(t.text) : t.text}`);
     return { parts, title: `${parts.length} parts`, text: `Places ${count(parts.length)} parts: ${list(mix, 5)}.${tail}`, codex: [], authored: false };
   });
 }
