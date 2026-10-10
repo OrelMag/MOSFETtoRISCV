@@ -12,7 +12,7 @@ import { type ComponentDef, netlistOf } from '../sim/types';
 import { formatBits } from '../sim/values';
 import { s } from '../ui/dom';
 import {
-  CON_CH, CON_LINE, consoleLayout, flipSwitch, consoleRows, type ConsoleState, type FaceLayout, ioInfo, type IoInfo, ioState, pixelsOf, paintScreen,
+  CON_CH, CON_LINE, consoleLayout, flipSwitch, consoleRows, ConsoleScroll, type ConsoleState, type FaceLayout, ioInfo, type IoInfo, ioState, pixelsOf, paintScreen,
   type ScreenRef, screenLayout, screenRes, type ScreenState, type ScreenTheme, SW_PITCH, switchCell, type SwitchState,
 } from './ioparts';
 
@@ -33,6 +33,11 @@ export function drawIoFace(def: ComponentDef, flip: boolean, toggle?: (bit: numb
 
 // ---- console ---------------------------------------------------------------------------------
 
+/**
+ * The terminal: its last rows, or older ones while the wheel has scrolled it up (ConsoleScroll; a
+ * wheel over it scrolls instead of zooming the canvas while there is scrollback; Ctrl + wheel, a
+ * pinch, still zooms), with "↑ n lines" in its corner until it is back at the bottom.
+ */
 function consoleFace(def: ComponentDef, info: Extract<IoInfo, { kind: 'console' }>, flip: boolean): IoFace {
   const L = consoleLayout(def, flip), f = L.face;
   const g = s('g', { class: 'io-con' });
@@ -40,23 +45,45 @@ function consoleFace(def: ComponentDef, info: Extract<IoInfo, { kind: 'console' 
   const rows = Array.from({ length: info.rows }, (_, i) => s('tspan', { x: f.x + 0.5, y: f.y + 0.5 + (i + 0.78) * CON_LINE }));
   text.append(...rows);
   const cursor = s('rect', { class: 'io-con-cursor', width: CON_CH, height: CON_LINE * 0.85, x: f.x + 0.5, y: f.y + 0.5 });
-  g.append(s('rect', { class: 'io-con-bg', x: f.x, y: f.y, width: f.w, height: f.h, rx: 0.3 }), text, cursor);
-  let last: unknown = null, lastN = -1;
+  const more = s('g', { class: 'io-con-more' });
+  const moreBg = s('rect', { class: 'io-con-more-bg', y: f.y + 0.15, height: 0.9, rx: 0.2 });
+  const moreText = s('text', { class: 'io-con-more-text', x: f.x + f.w - 0.35, y: f.y + 0.82, 'text-anchor': 'end' });
+  more.append(s('title', null, 'Scrolled up: the wheel down (to the bottom) follows the new text again'), moreBg, moreText);
+  g.append(s('rect', { class: 'io-con-bg', x: f.x, y: f.y, width: f.w, height: f.h, rx: 0.3 }), text, cursor, more);
+  const scroll = new ConsoleScroll(info.cols, info.rows);
+  let last: ConsoleState | undefined, lastN = -1, lastBelow = -1, painted = false;
+  const draw = (st: ConsoleState | undefined) => {
+    if (painted && st === last && (st?.n ?? -1) === lastN && scroll.below === lastBelow) return;
+    scroll.sync(st);
+    painted = true;
+    last = st;
+    lastN = st?.n ?? -1;
+    lastBelow = scroll.below;
+    const shown = st ? consoleRows(st, info.cols, info.rows, scroll.below) : [];
+    rows.forEach((t, i) => (t.textContent = shown[i] ?? ''));
+    const r = Math.max(0, shown.length - 1), c = shown[r]?.length ?? 0;
+    const full = c >= info.cols;
+    cursor.setAttribute('x', String(f.x + 0.5 + Math.min(c, info.cols - 1) * CON_CH));
+    cursor.setAttribute('y', String(f.y + 0.5 + r * CON_LINE + 0.1));
+    g.classList.toggle('off', !st);
+    g.classList.toggle('full', full);
+    g.classList.toggle('scrolled', scroll.below > 0);
+    moreText.textContent = scroll.label;
+    const w = scroll.label.length * 0.5 + 0.5;
+    moreBg.setAttribute('x', String(f.x + f.w - 0.1 - w));
+    moreBg.setAttribute('width', String(w));
+  };
+  g.addEventListener('wheel', (e) => {
+    if (e.ctrlKey || !scroll.wheel(last, e.deltaY, e.deltaMode)) return;
+    // the console's own: the canvas below must not zoom
+    e.preventDefault();
+    e.stopPropagation();
+    draw(last);
+  }, { passive: false });
   return {
     g,
     paint(sim, node) {
-      const st = sim && node ? (ioState(sim, node) as ConsoleState | undefined) : undefined;
-      if (st === last && (st?.n ?? -1) === lastN) return;
-      last = st;
-      lastN = st?.n ?? -1;
-      const shown = st ? consoleRows(st, info.cols, info.rows) : [];
-      rows.forEach((t, i) => (t.textContent = shown[i] ?? ''));
-      const r = Math.max(0, shown.length - 1), c = shown[r]?.length ?? 0;
-      const full = c >= info.cols;
-      cursor.setAttribute('x', String(f.x + 0.5 + Math.min(c, info.cols - 1) * CON_CH));
-      cursor.setAttribute('y', String(f.y + 0.5 + r * CON_LINE + 0.1));
-      g.classList.toggle('off', !st);
-      g.classList.toggle('full', full);
+      draw(sim && node ? (ioState(sim, node) as ConsoleState | undefined) : undefined);
     },
   };
 }

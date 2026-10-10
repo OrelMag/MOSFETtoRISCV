@@ -7,6 +7,10 @@
 // rendering in Node: the ceiling a page can reach), on the cycle engine (DualSim's default in
 // cycle mode) and on the event-driven GateSim (gate mode's engine). The 64-bit Kogge–Stone adder
 // has no clock: its inputs change and EditorSim settles it.
+// Then storage the cycle engine finds by its structure (sim/clusters.ts): the campaign's pipelined
+// RV16 core from its reference chips (register file at the falling edge) on its bench, an 8-bit
+// counter of D flip-flops drawn from NANDs in the sandbox (not marked as flip-flops), an 8-bit LFSR
+// and the ripple clock divider (which stays on GateSim: a ripple clock). --storage runs only those.
 // --ref also times the engine alone against the original object-based GateSim (tests/ref) on the
 // same flat design. --dump writes each CPU's workspace as JSON (localStorage
 // `mosfet2riscv:sandbox:v1`, the chip's id) to seed a browser measurement.
@@ -17,9 +21,22 @@
 //   pipelined RV32I                 61                    1 080                ~6 000
 //   system RV32I                    34                      660                ~4 700
 //   ks64, additions/s            2 270                   13 400               ~40 000
+//
+// Storage, 2026-10-11, EditorSim cycle mode at max, cycles/s. Before: origin/main, where only the
+// LFSR could leave GateSim; after: this engine (the divider still refused: a ripple clock):
+//                                                    before (engine)          after (engine)
+//   pipelined RV16 (campaign reference chips), bench   ~3 400 (GateSim)       ~16 000 (cycle)
+//   8-bit counter of D flip-flops drawn from NANDs     ~335 000 (GateSim)     ~950 000 (cycle)
+//   8-bit LFSR                                         ~2.4 M (cycle)         ~2.3 M (cycle)
+//   ÷16 ripple clock divider                           ~2.5 M (GateSim)       ~2.4 M (GateSim)
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import '../src/lib';
+import { addBench } from '../src/campaign/bench';
+import { levelChallenge } from '../src/campaign/levels';
+import { nodeById } from '../src/campaign/nodes';
+import { solveChallenge } from '../src/editor/challenges';
+import { CHALLENGES } from '../src/editor/challengeset';
 import { compileChip } from '../src/editor/compile';
 import { docFromDef } from '../src/editor/fromdef';
 import { UserLibrary } from '../src/editor/library';
@@ -30,6 +47,7 @@ import { EditorSim } from '../src/editor/runtime';
 import { singleCycleCpu } from '../src/lib/cpu';
 import { pipelinedCpu } from '../src/lib/pipeline';
 import { resolveComponent } from '../src/lib/resolve';
+import { clockDivider, lfsr } from '../src/lib/seqparts';
 import { systemCpu } from '../src/lib/system';
 import { assemble } from '../src/riscv/asm';
 import { DualSim } from '../src/sim/dualsim';
@@ -42,6 +60,7 @@ import { RefGateSim } from '../tests/ref/gatesim-ref';
 const args = process.argv.slice(2);
 const dump = args.includes('--dump') ? args[args.indexOf('--dump') + 1] : null;
 const withRef = args.includes('--ref');
+const onlyStorage = args.includes('--storage');
 
 /** Busy forever: ALU, a store and a load every pass, a taken branch (never `j .`, which halts). */
 const LOOP = assemble(`
@@ -111,7 +130,7 @@ function engineRate(sim: Sim, ms: number): number {
 }
 
 if (dump) mkdirSync(dump, { recursive: true });
-const CPUS: [string, ComponentDef, boolean][] = [
+const CPUS: [string, ComponentDef, boolean][] = onlyStorage ? [] : [
   ['single-cycle RV32I', singleCycleCpu(LOOP), false],
   ['single-cycle RV32I, 64K × 32 data memory', singleCycleCpu(LOOP), true],
   ['pipelined RV32I', pipelinedCpu(LOOP), false],
@@ -144,6 +163,74 @@ for (const [name, def, big] of CPUS) {
     row('  workspace', file);
   }
 }
+
+// ---- storage found by structure ------------------------------------------------------------------
+
+/** The campaign's pipelined core (its reference chips) on its bench, running a loop that never halts. */
+function campaignBench(): { ws: Workspace; id: string } {
+  const ch = levelChallenge(nodeById('pi_core3')!)!;
+  const coreDoc = ch.answer().at(-1)!;
+  const ws: Workspace = { ...emptyWorkspace(), chips: { [coreDoc.id]: coreDoc } };
+  const core = new UserLibrary(ws).compiled(coreDoc.id)!.def;
+  const src = `        li   a0, 0
+loop:   addi a0, a0, 1
+        sw   a0, 4(zero)
+        lw   a1, 4(zero)
+        add  a2, a2, a1
+        bne  a0, zero, loop
+        j    loop`;
+  const r = addBench(ws, core, coreDoc.id, { name: 'loop', src });
+  if ('error' in r) throw new Error(r.error);
+  return { ws: r.ws, id: r.id };
+}
+
+/** An 8-bit counter of the sandbox's drawn D flip-flop (nine NANDs, unmarked) and the library incrementer. */
+function drawnCounter(): { ws: Workspace; id: string } {
+  const solved = solveChallenge(emptyWorkspace(), CHALLENGES.find((c) => c.id === 's_dff')!);
+  const { ff: _ff, ...ff } = solved.ws.chips[solved.chipId];
+  const pin = (name: string, dir: 'in' | 'out', width = 1) => ({ id: name, name, dir, width, at: [0, 0] as [number, number] });
+  const end = (x: string) => (x.startsWith('pin:') ? { pin: x.slice(4) } : { part: x.split('.')[0], port: x.split('.')[1] });
+  const w: [string, string][] = [['mq.out', 'inc.a'], ['mq.out', 'pin:q'], ['inc.y', 'sd.in']];
+  for (let i = 0; i < 8; i++) w.push([`sd.o${i}`, `f${i}.d`], ['pin:clk', `f${i}.clk`], [`f${i}.q`, `mq.i${i}`]);
+  const doc: ChipDoc = {
+    id: 'u_drawn_counter', name: 'Drawn counter', labels: [],
+    pins: [{ ...pin('clk', 'in'), kind: 'clock' }, pin('q', 'out', 8)],
+    parts: [
+      { id: 'inc', ref: { lib: 'inc8' }, at: [40, 0] }, { id: 'sd', ref: { split: Array(8).fill(1) }, at: [4, 0] }, { id: 'mq', ref: { merge: Array(8).fill(1) }, at: [30, 0] },
+      ...Array.from({ length: 8 }, (_, i) => ({ id: `f${i}`, ref: { chip: solved.chipId }, at: [16, 6 * i] as [number, number] })),
+    ],
+    wires: w.map(([a, b], i) => ({ id: `w${i}`, a: end(a), b: end(b), pts: [] })),
+  };
+  return { ws: { ...solved.ws, chips: { ...solved.ws.chips, [solved.chipId]: ff, [doc.id]: doc } }, id: doc.id };
+}
+
+/** A library part as a sandbox chip. */
+function libChip(def: ComponentDef): { ws: Workspace; id: string } {
+  const doc = docFromDef(def) as ChipDoc;
+  return { ws: { ...emptyWorkspace(), chips: { [doc.id]: doc } }, id: doc.id };
+}
+
+const STORAGE: [string, () => { ws: Workspace; id: string }][] = [
+  ['pipelined RV16 (campaign reference chips) on its bench', campaignBench],
+  ['8-bit counter of D flip-flops drawn from NANDs', drawnCounter],
+  ['8-bit LFSR', () => libChip(lfsr(8))],
+  ['÷16 ripple clock divider', () => libChip(clockDivider(4))],
+];
+for (const [name, make] of STORAGE) {
+  const { ws, id } = make();
+  const es = new EditorSim({ debounceMs: 0 });
+  es.update(new UserLibrary(ws).compiled(id)!, ws.chips[id].pins);
+  const sim = es.sim as DualSim;
+  console.log(`
+${name}: ${sim.design.leaves.length} leaves`);
+  const g = runRate(es, false, 1500);
+  row('  EditorSim cycle mode, max: GateSim', `${g.hz.toFixed(0)} cycles/s`);
+  sim.preferFast = true;
+  sim.prepare();
+  const f = runRate(es, true, 1500);
+  row('  EditorSim cycle mode, max: cycle engine wanted', `${f.hz.toFixed(0)} cycles/s (${f.engine}${sim.whyNot ? ` — ${sim.whyNot}` : ''})`);
+}
+if (onlyStorage) process.exit(0);
 
 // The 64-bit Kogge–Stone adder: no clock, random operands, settled after each change.
 const ks = docFromDef(resolveComponent('ks64')!) as ChipDoc;

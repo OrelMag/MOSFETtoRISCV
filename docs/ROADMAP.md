@@ -331,6 +331,9 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
 - ✅ Measure, then speed up, large sandbox circuits (scripts/sim-perf.ts): GateSim on typed arrays (same events at
   the same times), and a cycle engine for Run in cycle mode: flip-flops as verified tables, the rest levelized, every
   net equal to GateSim after every settle (DualSim hands over to GateSim for gate mode, probes, stepping, X clocks).
+  Storage found by structure (sim/clusters.ts): flip-flops drawn from NANDs (marked or not), latches, async resets, T /
+  JK flip-flops, clocks through inverters (the campaign's pipelines write their register file at the falling edge:
+  their bench ~3 400 → ~16 000 cycles/s); gated and ripple clocks (clockDivider) stay on GateSim, with the reason.
   Single-cycle RV32I in the sandbox, cycles/s: Node 91 → 1 160 (GateSim) → ~9 000 (cycle engine); the page at max,
   CPU drawer open and checking: 35 Hz → ~4–5 kHz at 60 fps (64K-word data memory ~3.3 kHz, system CPU ~2.4 kHz)
 - ✅ Examples ▸ Computer: a whole RISC-V computer tying the three together: the multi-core's RV32I core (`rv32i_core`,
@@ -340,6 +343,11 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   a sun and a triangle in the switches' colour and halts (10 251 cycles: ~1.2 s in Node, ~1.6 s in the page), the CPU
   drawer in lock-step: the ISS's `mmio` mode (I/O without the system) and the monitor's reading of a placed core,
   console part, switch bank and LED bank. ROM samples: live switches, a bouncing ball
+- ✅ Computer polish: the memory side (decoder + RAM) and the devices (console, LEDs, switches) packaged as chips, the
+  top level ~60 × 64 units (2× the scale at fit with the CPU drawer); a console's wheel scrollback; nested switch
+  banks and keys on the I/O bar; Run's frame budget adapts to keep ~60 fps (headless Chrome, Run at max: the
+  computer ~110 → ~135 kHz, the single-cycle remix ~670 → ~770 kHz); every sample checked on the hardware against
+  the ISS (the bouncing ball and live switches pixel by pixel)
 
 **Programs on your own CPU** (the second half of Turing Complete)
 - ⏳ Custom ISA: define instruction fields, opcodes and mnemonics in a table, and get an assembler,

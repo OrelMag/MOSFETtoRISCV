@@ -90,8 +90,12 @@ const MAX_LINE = 2000;
 export const CON_CH = 0.6;
 export const CON_LINE = 1;
 
-/** Private state of a console leaf: the clock level last seen, the lines (the last one is being written), characters taken. */
-export interface ConsoleState { c: number; lines: string[]; n: number }
+/**
+ * Private state of a console leaf: the clock level last seen, the lines (the last one is being
+ * written), characters taken, and lines the scrollback has dropped from the top so far (`d`: a
+ * view scrolled up stays on its text).
+ */
+export interface ConsoleState { c: number; lines: string[]; n: number; d?: number }
 
 export const consoleInit = (): ConsoleState => ({ c: -1, lines: [''], n: 0 });
 
@@ -120,22 +124,88 @@ export function consoleAppend(st: ConsoleState, code: number): void {
     if (L[L.length - 1].length >= MAX_LINE) L.push('');
     L[L.length - 1] += consoleGlyph(code);
   }
-  if (st.lines.length > CONSOLE_SCROLLBACK) st.lines.splice(0, st.lines.length - CONSOLE_SCROLLBACK);
+  if (st.lines.length > CONSOLE_SCROLLBACK) {
+    const k = st.lines.length - CONSOLE_SCROLLBACK;
+    st.lines.splice(0, k);
+    st.d = (st.d ?? 0) + k;
+  }
 }
 
 /** The whole text (scrollback included). */
 export const consoleText = (st: ConsoleState): string => st.lines.join('\n');
 
-/** The last `rows` rows of the text wrapped at `cols` (fewer when there is less text). */
-export function consoleRows(st: ConsoleState, cols: number, rows: number): string[] {
+/** Rows the whole text takes wrapped at `cols` (an empty line is a row). */
+export const consoleRowCount = (st: ConsoleState, cols: number): number =>
+  st.lines.reduce((n, l) => n + Math.max(1, Math.ceil(l.length / cols)), 0);
+
+/** The `rows` rows of the text wrapped at `cols` that end `below` rows above its last one (fewer when there is less text). */
+export function consoleRows(st: ConsoleState, cols: number, rows: number, below = 0): string[] {
   const out: string[] = [];
+  let skip = below;
   for (let i = st.lines.length - 1; i >= 0 && out.length < rows; i--) {
     const l = st.lines[i];
     const parts: string[] = [];
     for (let k = 0; k < Math.max(1, l.length); k += cols) parts.push(l.slice(k, k + cols));
-    out.unshift(...parts.slice(Math.max(0, parts.length - (rows - out.length))));
+    const end = Math.max(0, parts.length - skip);
+    skip -= parts.length - end;
+    out.unshift(...parts.slice(Math.max(0, end - (rows - out.length)), end));
   }
   return out;
+}
+
+/** Wheel pixels per console row (a mouse notch, ~100 px, scrolls three rows). */
+const WHEEL_ROW_PX = 33;
+
+/**
+ * Where a console's face is scrolled to, DOM-free: `below` rows of text under the view (0: at the
+ * bottom, following new text). While scrolled up the view stays on its text as more arrives (and
+ * as the scrollback drops lines from the top); a clear, a reset or scrolling back down follows
+ * the text again.
+ */
+export class ConsoleScroll {
+  below = 0;
+  private acc = 0;
+  private seen: { st: ConsoleState; total: number; d: number } | null = null;
+
+  constructor(readonly cols: number, readonly rows: number) {}
+
+  /** Rows the view can go up (0: the text fits). */
+  max(st: ConsoleState | undefined): number {
+    return st ? Math.max(0, consoleRowCount(st, this.cols) - this.rows) : 0;
+  }
+
+  /** The text may have changed: keep the view on the same rows while scrolled up. */
+  sync(st: ConsoleState | undefined): void {
+    if (!st) { this.below = 0; this.seen = null; return; }
+    const total = consoleRowCount(st, this.cols), d = st.d ?? 0, s = this.seen;
+    if (s?.st !== st) this.below = 0;
+    else if (this.below > 0 && (total !== s.total || d !== s.d)) {
+      // new rows came in under the view; dropped lines (about a row each) left above it
+      this.below = Math.min(Math.max(0, this.below + total - s.total + (d - s.d)), Math.max(0, total - this.rows));
+    }
+    this.seen = { st, total, d };
+  }
+
+  /**
+   * A wheel turn over the face (deltaY and deltaMode as WheelEvent has them: pixels, lines or
+   * pages). Returns false when there is nothing to scroll (the canvas may zoom instead).
+   */
+  wheel(st: ConsoleState | undefined, deltaY: number, mode = 0): boolean {
+    this.sync(st);
+    const max = this.max(st);
+    if (max === 0) { this.below = this.acc = 0; return false; }
+    this.acc -= mode === 1 ? deltaY : mode === 2 ? deltaY * this.rows : deltaY / WHEEL_ROW_PX;
+    const steps = Math.trunc(this.acc + Math.sign(this.acc) * 1e-9); // 10 × 0.1 is a row
+    this.acc -= steps;
+    this.below = Math.min(max, Math.max(0, this.below + steps));
+    if (this.below === 0 || this.below === max) this.acc = 0;
+    return true;
+  }
+
+  /** The indicator while scrolled up ('' at the bottom). */
+  get label(): string {
+    return this.below > 0 ? `↑ ${this.below} line${this.below === 1 ? '' : 's'}` : '';
+  }
 }
 
 const consoleCache = new Map<string, ComponentDef>();

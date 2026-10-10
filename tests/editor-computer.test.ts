@@ -43,7 +43,7 @@ function reference(src: string, switches: number, steps = 100000) {
 /** The example in a workspace, compiled, on an EditorSim with the CPU drawer's monitor. */
 function open(src?: string): { ws: Workspace; id: string; es: EditorSim; mon: CpuMonitor; lib: UserLibrary } {
   let { ws, id } = addExample(emptyWorkspace(), EX);
-  if (src) ws = { ...ws, chips: { ...ws.chips, [id]: computerChip(id, ws.chips[id].name, `${id}_map`, src) } };
+  if (src) ws = { ...ws, chips: { ...ws.chips, [id]: computerChip(id, ws.chips[id].name, { mem: `${id}_mem`, dev: `${id}_dev` }, src) } };
   const lib = new UserLibrary(ws);
   const es = new EditorSim({ debounceMs: 0 });
   es.update(lib.compiled(id)!, ws.chips[id].pins);
@@ -56,6 +56,24 @@ const io = (es: EditorSim, kind: 'console' | 'screen') => {
   const n = ioNodes(es.sim!.design.root).find((x) => x.info.kind === kind)!;
   return ioState(es.sim!, n.node);
 };
+
+/** The picture the monitor's own golden model paints (its stores to the screen from now on), as the screen holds it. */
+function modelScreen(mon: CpuMonitor): Int32Array {
+  const px = new Int32Array(64 * 64), iss = mon.iss!;
+  const store = iss.store.bind(iss);
+  iss.store = (addr, f3, v) => {
+    if (addr >>> 0 >= SCREEN) px[(addr >>> 2) & 4095] = v & 0xff;
+    store(addr, f3, v);
+  };
+  return px;
+}
+
+/** The first pixel where the hardware's screen and the model's picture differ, as text (null: none). */
+function screenDiff(es: EditorSim, px: Int32Array): string | null {
+  const hw = (io(es, 'screen') as ScreenState).px;
+  const i = [...hw].findIndex((v, j) => v !== px[j]);
+  return i < 0 ? null : `pixel (${i % 64}, ${i >> 6}): hardware ${hw[i]}, model ${px[i]}`;
+}
 
 /** Clock until the monitor says done (or `cap` cycles), yielding to the worker now and then. */
 async function run(es: EditorSim, mon: CpuMonitor, cap: number, stop = () => mon.done): Promise<void> {
@@ -125,7 +143,7 @@ describe('the computer example', () => {
     const lib = new UserLibrary(ws);
     const lost = Object.values(ws.chips).flatMap((c) => c.parts).flatMap((p) => ('lib' in p.ref && !atLoad.has(p.ref.lib) && !regenerable(p.ref.lib) ? [p.ref.lib] : []));
     expect(lost).toEqual([]);
-    expect(Object.keys(ws.chips).filter((k) => k.startsWith(id))).toEqual([`${id}_map`, id]);
+    expect(Object.keys(ws.chips).filter((k) => k.startsWith(id))).toEqual([`${id}_mem`, `${id}_dev`, id]);
     for (const [cid, doc] of Object.entries(ws.chips)) {
       const c = lib.compiled(cid)!;
       expect(c.diags, cid).toEqual([]);
@@ -141,7 +159,7 @@ describe('the computer example', () => {
   it('the CPU drawer recognizes the core: its register file, the ROM, RAM and memory-mapped I/O', () => {
     const { ws, id } = addExample(emptyWorkspace(), EX);
     const d = resolveCpu(ws.chips[id], ws.chips)!;
-    expect(d).toMatchObject({ rom: 'imem', regs: 'cpu.rf', dmem: 'ram', pc: { part: 'imem', port: 'addr' }, iss: { mmio: true } });
+    expect(d).toMatchObject({ rom: 'imem', regs: 'cpu.rf', dmem: 'mem.ram', pc: { part: 'imem', port: 'addr' }, iss: { mmio: true } });
     expect(d.retire).toBeUndefined();
     expect(d.pipeline).toBeUndefined();
   });
@@ -149,7 +167,7 @@ describe('the computer example', () => {
   it('runs to its halt on the cycle engine in lock-step: the greeting, the LEDs and the picture', async () => {
     const SW = 0xe3;
     const { es, mon } = open();
-    es.pokeLeaf(leaf(es, 'sw'), { v: SW });
+    es.pokeLeaf(leaf(es, 'dev.sw'), { v: SW });
     expect(mon.checking).toBe(true);
     await run(es, mon, 12000);
     expect(es.engine).toBe('cycle');
@@ -172,22 +190,47 @@ describe('the computer example', () => {
   it('live switches: a flipped switch repaints the square, the model following the switch bank', async () => {
     const src = COMPUTER_PROGRAMS.find((p) => p.id === 'liveswitches')!.source;
     const { es, mon } = open(src);
+    const model = modelScreen(mon);
     await run(es, mon, 1500);
-    es.pokeLeaf(leaf(es, 'sw'), { v: 0x1c });
+    es.pokeLeaf(leaf(es, 'dev.sw'), { v: 0x1c });
     await run(es, mon, 3500);
     expect(mon.mismatch && mismatchText(mon.mismatch)).toBeNull();
+    expect(screenDiff(es, model)).toBeNull();
     expect(mon.leds).toBe(0x1c);
     const px = (io(es, 'screen') as ScreenState).px;
     expect(px[30 * 64 + 30]).toBe(0x1c);
     expect(px[10 * 64 + 10]).toBe(0);
   });
 
+  it('bouncing ball: the hardware paints what the model stores, frame after frame, the colour following the switches', async () => {
+    const src = COMPUTER_PROGRAMS.find((p) => p.id === 'bounce')!.source;
+    const { es, mon } = open(src);
+    const model = modelScreen(mon);
+    await run(es, mon, 4000);
+    expect(screenDiff(es, model)).toBeNull();
+    es.pokeLeaf(leaf(es, 'dev.sw'), { v: 0xe0 });
+    await run(es, mon, 9000);
+    expect(mon.mismatch && mismatchText(mon.mismatch)).toBeNull();
+    expect(mon.iss!.halted).toBe(false); // it never ends
+    expect(mon.console).toBe('Bounce!\n');
+    expect(mon.leds).toBe(0xe0);
+    expect(screenDiff(es, model)).toBeNull();
+    // ~30 frames: a dark blue trail behind a red ball (2 × 2), which has moved down and to the right
+    const px = (io(es, 'screen') as ScreenState).px;
+    const at = (v: number) => [...px].flatMap((c, i) => (c === v ? [[i % 64, i >> 6]] : []));
+    const ball = at(0xe0), trail = at(0x02);
+    expect(ball.length).toBe(4);
+    expect(trail.length).toBeGreaterThan(20);
+    expect(Math.min(...ball.map(([x]) => x))).toBeGreaterThan(5 + 10);
+    expect(Math.min(...ball.map(([, y]) => y))).toBeGreaterThan(20 + 10);
+  });
+
   it('a console that disagrees with the model is a mismatch', async () => {
-    // the hardware console drops a character the model prints: write enable cut
+    // the hardware console drops a character the model prints: its write enable cut (inside the devices)
     const { ws, id } = addExample(emptyWorkspace(), EX);
-    const doc = ws.chips[id];
-    const cut = { ...ws, chips: { ...ws.chips, [id]: { ...doc, wires: doc.wires.filter((w) => w.id !== 'conWe'), parts: [...doc.parts, { id: 'off', ref: { const: { width: 1, value: 0 } }, at: [90, 52] as [number, number] }] } } };
-    cut.chips[id].wires.push({ id: 'off', a: { part: 'off', port: 'y' }, b: { part: 'con', port: 'we' }, pts: [] });
+    const dev = ws.chips[`${id}_dev`];
+    const cut = { ...ws, chips: { ...ws.chips, [dev.id]: { ...dev, wires: dev.wires.filter((w) => w.id !== 'we'), parts: [...dev.parts, { id: 'off', ref: { const: { width: 1, value: 0 } }, at: [4, 8] as [number, number] }] } } };
+    cut.chips[dev.id].wires.push({ id: 'off', a: { part: 'off', port: 'y' }, b: { part: 'con', port: 'we' }, pts: [] });
     const lib = new UserLibrary(cut);
     const es = new EditorSim({ debounceMs: 0 });
     es.update(lib.compiled(id)!, cut.chips[id].pins);

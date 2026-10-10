@@ -35,7 +35,7 @@ import { detectMulti, type MultiDesc, MultiMonitor } from './multicpu';
 import { detectRv16, type Rv16Desc, Rv16Monitor } from './cpu16';
 import { disasm16, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { registerPropsSection } from './props';
-import type { EdgeHook, EditorSim } from './runtime';
+import { type EdgeHook, type EditorSim, FrameBudget } from './runtime';
 
 /** Cycles Run to halt gives a program before it stops on its own. */
 const RUN_CAP = 20000;
@@ -81,6 +81,8 @@ class CpuPanel {
   private shownFor = '';
   private running = 0;
   private runCap = 0;
+  /** Run to halt's per-frame simulation budget (kept across runs: it has learnt the page's frame cost). */
+  private runBudget = new FrameBudget(2, 14, 12);
   private slow: ReturnType<typeof setTimeout> | null = null;
   private slowRate = 2;
   /** While the clock runs fast, the panel redraws at most every RENDER_MS (a trailing redraw shows the last state). */
@@ -306,10 +308,16 @@ class CpuPanel {
     this.stopSlow();
     this.ed.sim.pause();
     this.runCap = this.ed.sim.cycles + RUN_CAP;
+    // as Run's loop (runtime.ts FrameBudget): as much simulating per frame as keeps the page at its frame rate
+    let last = performance.now(), work = 0;
     const tick = () => {
       const m = this.mon;
       if (!m || !this.running) return;
-      m.runToHalt(12, this.runCap);
+      const t = performance.now();
+      this.runBudget.frame(t - last, work);
+      last = t;
+      m.runToHalt(this.runBudget.ms, this.runCap);
+      work = performance.now() - t;
       if (m.done || this.ed.sim.cycles >= this.runCap) {
         if (!m.done) this.ed.toast(`Stopped after ${RUN_CAP.toLocaleString('en')} cycles without halting`);
         return this.stopRun();

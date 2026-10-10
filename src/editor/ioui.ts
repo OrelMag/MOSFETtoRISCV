@@ -287,7 +287,8 @@ class ScreensPanel {
     if (byUser && on) this.closed.delete(this.ed.chipId);
     if (on) {
       this.key = '';
-      dockPane(this.ed, { id: 'screens', label: 'Screens', icon: 'screen', el: this.el, width: 360 });
+      // opening by itself, it waits behind a drawer already shown (the CPU drawer of a computer)
+      dockPane(this.ed, { id: 'screens', label: 'Screens', icon: 'screen', el: this.el, width: 360 }, byUser);
       this.build(this.nodes());
     } else undockPane(this.ed, 'screens');
     this.ed.renderActions();
@@ -314,18 +315,29 @@ class ScreensPanel {
     const ed = this.ed, sim = () => ed.sim.sim;
     const head = h('h4', null, io.path.join(' › '), h('span', { class: 'kind' }, io.info.kind === 'screen' ? io.def.name : KIND[io.info.kind]));
     if (io.info.kind === 'console') {
+      // Scrolls natively (the whole scrollback); at the bottom it follows new text, scrolled up it stays put.
       const pre = h('pre', { class: 'io-con-pre' });
+      const more = h('span', { class: 'sb-scr-more', hidden: true });
+      const below = () => pre.scrollHeight - pre.scrollTop - pre.clientHeight;
+      const mark = () => {
+        const n = Math.round(below() / (parseFloat(getComputedStyle(pre).lineHeight) || 16));
+        more.hidden = n <= 0;
+        more.textContent = n > 0 ? `↑ ${n} line${n === 1 ? '' : 's'}` : '';
+      };
+      pre.addEventListener('scroll', mark);
       let last: unknown = null, lastN = -1;
       const info = io.info;
       return {
-        io, el: h('div', { class: 'sb-scr-item' }, head, pre, h('div', { class: 'sb-scr-meta' }, btn('Clear', 'Clear the text', () => clearIo(ed, io.node, info), 'close'))),
+        io, el: h('div', { class: 'sb-scr-item' }, head, h('div', { class: 'sb-scr-con' }, pre, more), h('div', { class: 'sb-scr-meta' }, btn('Clear', 'Clear the text', () => clearIo(ed, io.node, info), 'close'))),
         paint() {
           const s = sim(), st = s ? ioState(s, io.node) as ConsoleState | undefined : undefined;
           if (st === last && (st?.n ?? -1) === lastN) return;
+          const follow = st !== last || below() < 4;
           last = st;
           lastN = st?.n ?? -1;
           pre.textContent = st ? consoleText(st) || ' ' : '';
-          pre.scrollTop = pre.scrollHeight;
+          if (follow) pre.scrollTop = pre.scrollHeight;
+          mark();
         },
       };
     }

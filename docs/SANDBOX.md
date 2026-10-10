@@ -155,8 +155,10 @@ resistor over stored charge.
   counter on a 7-segment display, Console, Screen, Computer, Shared bus, Wired-AND, Wired-OR. Each
   loads as a new chip.
 - **Examples ▸ Computer**: a whole RISC-V computer. The RV32I core (the multi-core's, with a
-  memory port) fetches from a 1K-word ROM; a **Memory map** chip (double-click it) decodes the
-  address and multiplexes the read data:
+  memory port) fetches from a 1K-word ROM; its memory port runs into a **Memory** chip (double-click
+  it: the address decoder, the read multiplexer and 4K words of RAM), which hands the devices their
+  buses; the 64 × 64 screen sits on the top level, the console, LEDs and switches in a **Devices**
+  chip (their switches are on the I/O bar, the console in the CPU and Screens panels):
 
   | Address | Device |
   |---|---|
@@ -171,6 +173,14 @@ resistor over stored charge.
   switches' colour, and halts on `j .` (a halt part watches for it); the CPU panel checks every
   instruction, the console and the LEDs against the golden model. The ROM editor's samples include
   two more programs for it: live switches and a bouncing ball.
+- **Consoles** scroll: the wheel over a console (on the canvas, in look inside or in the Screens
+  panel) goes back through its 500 lines; "↑ n lines" shows while it is scrolled up, and back at the
+  bottom it follows new text again. Ctrl + wheel still zooms.
+- **I/O bar**: after the chip's own pins, the switch banks and keys inside the chips it places,
+  headed by their path (`dev › sw`): click a switch to flip it, hold a key. More than three banks
+  fold behind **+n more**.
+- **Run** spends as much of each frame simulating as keeps the page at about 60 frames a second
+  (2–14 ms, learnt as it runs); the status bar shows the clock rate actually reached.
 
 ## CPUs
 
