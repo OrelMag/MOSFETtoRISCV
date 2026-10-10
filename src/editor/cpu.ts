@@ -9,6 +9,7 @@
 // to; CpuMonitor runs the ISS in lock-step on the editor's rising edges and reports the first
 // difference: registers, PC, fcsr, data memory (after stores), console and LEDs.
 
+import { type RamState, ramLeafState, ramWords } from '../lib/bigmem';
 import { cacheLines } from '../riscv/cosim';
 import { ABI, FABI } from '../riscv/isa';
 import { ISS, type IssOptions } from '../riscv/iss';
@@ -255,6 +256,23 @@ export function storageOf(n: HierNode | undefined, depth = 3): Map<number, HierN
   return found.length === 1 ? found[0] : null;
 }
 
+/** Where a memory keeps its words: w<i> registers, or a large RAM's leaf state (lib/bigmem.ts). */
+export type MemStore = { regs: Map<number, HierNode> } | { ram: RamState };
+
+/** storageOf, also finding a large RAM simulated as a lookup (the node itself, its `ram`, or the one child that has one). */
+export function memStoreOf(sim: Sim, n: HierNode | undefined, depth = 3): MemStore | null {
+  const st = ramLeafState(sim, n);
+  if (st) return { ram: st };
+  if (!n?.expanded) return null;
+  const own = wordRegs(n);
+  if (own.size >= 2) return { regs: own };
+  if (depth <= 0) return null;
+  const ram = memStoreOf(sim, n.children?.get('ram'), depth - 1);
+  if (ram) return ram;
+  const found = [...(n.children?.values() ?? [])].map((c) => memStoreOf(sim, c, depth - 1)).filter((x) => x);
+  return found.length === 1 ? found[0] : null;
+}
+
 /** The simulation's node of a part path ('rf', 'imem.rom'). */
 export function partNode(sim: Sim, path: string | undefined): HierNode | undefined {
   if (!path) return undefined;
@@ -279,6 +297,8 @@ export function readRegs(sim: Sim, part: string | undefined): number[] | null {
  */
 export function readMem(sim: Sim, part: string | undefined): number[] | null {
   const n = partNode(sim, part);
+  const leaf = ramLeafState(sim, n);
+  if (leaf) return ramWords(leaf);
   if (!n?.expanded) return null;
   let words: number[] | null = null;
   const banks = [0, 1, 2, 3].map((i) => storageOf(n.children?.get(`b${i}`), 1));
@@ -291,10 +311,13 @@ export function readMem(sim: Sim, part: string | undefined): number[] | null {
       }
     }
   } else {
-    const st = storageOf(n);
+    const st = memStoreOf(sim, n);
     if (!st) return null;
-    words = [];
-    for (const [i, r] of st) words[i] = pack(sim.getBits(r.ports.q));
+    if ('ram' in st) words = ramWords(st.ram);
+    else {
+      words = [];
+      for (const [i, r] of st.regs) words[i] = pack(sim.getBits(r.ports.q));
+    }
   }
   if (n.children?.has('way0') || n.children?.has('tags')) {
     try {

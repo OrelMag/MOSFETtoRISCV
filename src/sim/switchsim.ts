@@ -125,8 +125,8 @@ export class SwitchSim implements Sim {
   busy(): boolean {
     return this.dirty;
   }
-  reset(_mode?: PowerOnMode): void {
-    this.state = this.design.leaves.map((l) => l.def.behavior?.init?.());
+  reset(mode?: PowerOnMode): void {
+    this.state = this.design.leaves.map((l) => l.def.behavior?.init?.(mode));
     this.dirty = true;
     this.settle();
   }
@@ -153,7 +153,9 @@ export class SwitchSim implements Sim {
     for (const li of this.behaviors) {
       const l = this.design.leaves[li];
       const o = findNode(prev.design.root, l.node.path);
-      if (o?.leafIndex !== undefined && o.def.id === l.def.id) this.state[li] = cloneState(prev.leafState(o.leafIndex));
+      if (o?.leafIndex === undefined || o.def.id !== l.def.id) continue;
+      const s = prev.leafState(o.leafIndex), c = l.def.behavior!.carry;
+      this.state[li] = c && s !== undefined ? c(s, !!opts.known) : cloneState(s);
     }
     this.dirty = true;
     this.settle();

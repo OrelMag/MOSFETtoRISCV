@@ -267,7 +267,9 @@ export class Stage {
     closePopover();
     this.scene = scene;
     const level = needsSwitchLevel(scene.root) ? 'switch' : 'gate';
-    const design = flatten(scene.root, { mode: level });
+    // The root is always its structure, even one simulated as a lookup elsewhere (a large RAM opened
+    // in the workbench); such parts below it stay leaves and open onto their own sub-simulation.
+    const design = flatten(scene.root, { mode: level, expand: (d, n) => n.parent === null || !d.preferBehavior });
     const sim: Sim = level === 'switch' ? new SwitchSim(design) : new GateSim(design);
     for (const [k, v] of Object.entries(scene.inputs ?? {})) sim.setInput(k, v);
     sim.reset(scene.powerOn ?? 'zero');

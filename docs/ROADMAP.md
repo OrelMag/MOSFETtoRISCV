@@ -323,8 +323,9 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   displays and memories) with the same sizes and port positions, so no layout or routing changes
 
 **Capacity and speed**
-- ⏳ Large memories: RAM well beyond 2^6 words and ROM beyond 2^8 (both games reach tens of KB),
-  behavioural at runtime with the structure still openable (as the CPU's ROM already is)
+- ✅ Large memories: RAM and ROM parts up to 2^16 words (lib/bigmem.ts), one behavioural leaf at run time over a
+  real hierarchy of banks of banks (≤ 16 per level, down to gate-level 64-word banks), opened live (banks seeded
+  from the leaf down to the latches); state survives edits and Back; costs, timing and HDL from the hierarchy
 - ⏳ Measure, then speed up, large sandbox circuits: compiled or levelized evaluation of settled
   combinational chips (DLS caches them), keeping the event-driven engine for anything timed or probed;
   publish cycles/s next to the cross-cutting performance budget
