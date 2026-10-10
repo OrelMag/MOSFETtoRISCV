@@ -3,8 +3,10 @@
 // are numbered from 1 in the prose, as the level screen shows them. Plain text, no HTML.
 
 import type { WalkScript } from './walk';
+import { WALKS1 } from './walks1';
+import { WALKS2 } from './walks2';
 
-export const WALKS: Record<string, WalkScript> = {
+const WALKS0: Record<string, WalkScript> = {
   g_not: [
     {
       title: 'One NAND, inputs tied',
@@ -154,3 +156,6 @@ export const WALKS: Record<string, WalkScript> = {
     },
   ],
 };
+
+/** Every authored walkthrough: the first levels here, acts 0–3 in walks1.ts, acts 5–7 in walks2.ts. */
+export const WALKS: Record<string, WalkScript> = { ...WALKS0, ...WALKS1, ...WALKS2 };
