@@ -6,6 +6,7 @@
 // Fields commit on 'change' (Enter or leaving the field), each one undo step. The panel is
 // rebuilt only when the selection or the selected objects change, never while typing.
 
+import { kWords } from '../lib/bigmem';
 import { familyOf } from '../lib/resolve';
 import type { Vec } from '../sim/geometry';
 import { logicDepth, stats } from '../sim/stats';
@@ -246,8 +247,7 @@ export class PropsPanel {
         h('div', { class: 'sb-btns' }, this.btn('Clear', 'Drop the waiting keys', () => ed.sim.clearKeyboards(), 'close')));
     } else if ('ram' in ref) {
       const { k, w } = ref.ram;
-      const words = (n: number) => (n >= 1024 ? `${n / 1024}K` : String(n));
-      out.append(this.row('Words', this.select(k, Array.from({ length: MAX_RAM_K }, (_, i): [number, string] => [i + 1, words(2 ** (i + 1))]), (v) => setR({ ram: { ...ref.ram, k: v } })),
+      out.append(this.row('Words', this.select(k, Array.from({ length: MAX_RAM_K }, (_, i): [number, string] => [i + 1, kWords(2 ** (i + 1))]), (v) => setR({ ram: { ...ref.ram, k: v } })),
         'Up to 64 words the gates are simulated; a larger RAM is simulated as a lookup, and its banks open down to the same gates'),
         this.row('Word width', this.select(w, [1, 2, 4, 8, 16, 32].map((v): [number, string] => [v, `${v} bits`]), (v) => setR({ ram: { ...ref.ram, w: v } }))));
     } // a ROM's size, addressing and program: memui.ts's section

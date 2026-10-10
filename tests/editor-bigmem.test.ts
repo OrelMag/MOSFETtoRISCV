@@ -10,7 +10,8 @@ import { type ChipDoc, emptyWorkspace, type Workspace } from '../src/editor/mode
 import { isError, MAX_RAM_K, MAX_ROM_K, partDef } from '../src/editor/parts';
 import { remixDef } from '../src/editor/remix';
 import { EditorSim } from '../src/editor/runtime';
-import { bigRam, isRamState, ramLeafState } from '../src/lib/bigmem';
+import { bigRam, isRamState, ramBank, ramLeafState } from '../src/lib/bigmem';
+import { resolveComponent } from '../src/lib/resolve';
 import { singleCycleCpu } from '../src/lib/cpu';
 import { ram } from '../src/lib/memory';
 import { assemble } from '../src/riscv/asm';
@@ -43,6 +44,10 @@ describe('RAM and ROM parts up to 2^16 words', () => {
     expect(d.id).toMatch(/^ram65536x32_i/);
     expect(d.ports.map((p) => `${p.name}:${p.width}`)).toEqual(['addr:16', 'din:32', 'we:1', 'clk:1', 'dout:32']);
     expect(isError(partDef({ ram: { k: 17, w: 8 } }, () => undefined))).toBe(true);
+    // stored references resolve from their names on a fresh load
+    expect(resolveComponent('ram65536x32')).toBe(bigRam(16, 32));
+    expect(resolveComponent('ram64x8_bank')).toBe(ramBank(8));
+    expect(resolveComponent('ram64x8')).toBe(ram(6, 8));
   });
 
   it('a 64K × 32 RAM compiles and simulates at once; readRam reads the leaf state', () => {

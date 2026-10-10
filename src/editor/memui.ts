@@ -5,7 +5,7 @@
 // element showing them is on the page.
 
 import '../styles/memui.css';
-import { BANK_K, ramLeafState, ramWord } from '../lib/bigmem';
+import { BANK_K, kWords, ramLeafState, ramWord } from '../lib/bigmem';
 import { B0, B1, BX } from '../sim/types';
 import { h, icon } from '../ui/dom';
 import { codeEditor } from '../widgets/codeedit';
@@ -84,9 +84,6 @@ const ids = new WeakMap<object, number>();
 let nextId = 0;
 const objectId = (o: object) => ids.get(o) ?? (ids.set(o, ++nextId), nextId);
 
-/** A memory size as the dropdowns show it: 64, 512, 4K, 64K. */
-const wordsLabel = (n: number) => (n >= 1024 ? `${n / 1024}K` : String(n));
-
 const row = (label: string, ctl: Node, hint?: string) => h('label', { class: 'sb-row', title: hint ?? null }, h('span', null, label), ctl);
 
 /**
@@ -156,7 +153,7 @@ registerPropsSection({
 
     const out = h('section', { class: 'sb-sec-props sb-rom' },
       h('h3', null, 'Program'),
-      row('Words', select(r.k, Array.from({ length: MAX_ROM_K }, (_, i): [number, string] => [i + 1, wordsLabel(2 ** (i + 1))]), (k) => set({ k }), 'Words'), '2^k words'),
+      row('Words', select(r.k, Array.from({ length: MAX_ROM_K }, (_, i): [number, string] => [i + 1, kWords(2 ** (i + 1))]), (k) => set({ k }), 'Words'), '2^k words'),
       row('Width', width, r.addr === 'rv32' ? 'Byte addressing reads 32-bit instructions' : 'Bits per word'),
       row('Address', select(r.addr, [['word', 'word index'], ['rv32', 'byte (RV32 PC)']], (addr) => set(addr === 'rv32' ? { addr, w: 32 } : { addr }), 'Addressing'),
         'word: addr is the word number (k bits). byte: a 32-bit address like a PC, word = addr / 4'),

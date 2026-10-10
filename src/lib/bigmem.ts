@@ -33,6 +33,9 @@ export const BIG_MAX_K = 16;
 /** At most 2^4 banks per level. */
 const FAN_K = 4;
 
+/** A word count as people say it: 512, 4K, 64K. */
+export const kWords = (n: number) => (n >= 1024 && n % 1024 === 0 ? `${n / 1024}K` : String(n));
+
 /** Bank size one level down. */
 const subK = (k: number) => Math.max(BANK_K, k - FAN_K);
 
@@ -236,7 +239,7 @@ export function bigRam(k: number, w: number): ComponentDef {
   const N = 2 ** k, ks = subK(k), b = k - ks, n = 2 ** b;
   const sub = () => (ks === BANK_K ? ramBank(w) : bigRam(ks, w));
   const d = define({
-    id: `ram${N}x${w}`, name: `${N}×${w} memory`, category: 'memory',
+    id: `ram${N}x${w}`, name: `${kWords(N)}×${w} memory`, category: 'memory',
     summary: `${N} words of ${w} bits (${N * w} bits): ${n} banks of ${2 ** ks} words. Writing: a decoder on the high address bits enables one bank. `
       + 'Reading: a multiplexer tree picks the addressed bank\'s word. Simulated as a lookup; its banks open down to flip-flops.',
     ports: [
@@ -246,7 +249,7 @@ export function bigRam(k: number, w: number): ComponentDef {
       { name: 'clk', width: 1, dir: 'in', side: 'bottom', clock: true },
       { name: 'dout', width: w, dir: 'out' },
     ],
-    symbol: { kind: 'box', label: `RAM ${N}×${w}` },
+    symbol: { kind: 'box', label: `RAM ${kWords(N)}×${w}` },
     behavior: ramBehavior(k, w, undefined, (st, seed) => {
       for (let i = 0; i < n; i++) seed.state(`bank${i}`, bankState(st as RamState, i, ks));
     }),
@@ -388,7 +391,7 @@ export function romLevels(k: number, w: number, rv: boolean, content: Uint32Arra
   const N = 2 ** k, ks = Math.max(ROM_LEAF_K, k - FAN_K), b = k - ks, n = 2 ** b;
   const idx = (a: number) => (rv ? Math.floor(a / 4) : a) % N;
   return {
-    id, name: `ROM ${N}×${w}`, category: 'memory',
+    id, name: `ROM ${kWords(N)}×${w}`, category: 'memory',
     summary: `${N} words of ${w} bits, read-only: ${n} ROMs of ${2 ** ks} words behind a ${n}:1 multiplexer tree.`
       + (rv ? ' Byte addressed like a PC: word = addr / 4.' : ' Word addressed.'),
     ports: [{ name: 'addr', width: rv ? 32 : k, dir: 'in' }, { name: 'data', width: w, dir: 'out' }],
