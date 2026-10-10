@@ -387,6 +387,10 @@ challenges stay open. Next:
   the library part simulated live (click an input), its datasheet with the truth table, and its cost against the
   alternatives. The one-liner stays as the summary and the hover text
 
+- ⏳ **Reference and par review**: several levels' references waste NANDs their par then counts (s_reg16 208 against
+  240, the pipeline cores' dead branch hardware, the trap-cause muxes, …), and two references have pins their
+  challenges lack. Found while measuring every part the level texts cite; the list is in docs/CAMPAIGN.md section 9
+
 **Not planned**: online leaderboards and score histograms (static site; share links take their place).
 
 ### Cross-cutting features 🚧
@@ -452,6 +456,8 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
 - ✅ `scripts/verify-export.ts all` (Yosys netlist simulated against our gate-level run, every multi-core program) as
   the `verify-hdl` CI job with `yowasp-yosys`: the deploy waits on it
 - ⏳ The same cross-check on the system CPU (RV32IM + Zicsr: its MMIO and interrupt pins need a testbench of their own)
+- ⏳ The campaign's RV16 cores against iss16: `mcycle` reads 0 in `rv16_csr` but counts steps in the ISS, and the
+  timer interrupt exists only in the ISS (docs/CAMPAIGN.md section 9)
 - ✅ GateSim refuses a behavioural delay of 64 or more (the event wheel) instead of clamping it silently
 
 **Measure more** (computed from the circuits, like every other number)

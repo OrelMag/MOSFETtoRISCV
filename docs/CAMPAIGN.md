@@ -457,3 +457,56 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
   (roadmap Phase 15).
 - ⏳ **Memory act**: sense amplifier, DRAM bank with refresh, row-buffer controller, a shared bus with DMA and a
   flash page store (roadmap Phase 16).
+
+---
+
+## 9. Reference and par review (found 2026-10-11, to tackle)
+
+While the level cases, the fuller codex and the walkthroughs were written, every part they cite was measured
+(`stats`, `logicDepth`, static timing). These findings were reported but not changed, because they change grading:
+a par lowered after learners have scored against it changes their stars. Fix them on one branch that re-measures
+each affected par from a tightened reference (`tests/campaign.test.ts` checks every reference meets its par).
+
+**Pars a learner beats easily** (the reference wastes NANDs the par then counts)
+- [ ] `s_reg16` par 240: the reference uses the library `dffe` (15 NANDs per bit, built on the 5-NAND `d_latch`);
+  the learner's own DFFE is 13 per bit (`s_reg4` par 52 = 4 × 13), so four of their 4-bit registers make 208, and
+  the level's tip points at exactly that. `s_pc` (448) and `m_rf` (2627) inherit the 240-NAND register.
+- [ ] `s_pc` par 448: the register's enable is tied to 1, so its 64 NANDs of enable muxes do nothing.
+- [ ] `g_mux8` par 64: one inverter on `s` shared by the 16 muxes gives 49 (3n + 1) at the same depth 3.
+- [ ] `a_slt` par 217: 45 NANDs are sum gates nobody reads; with `sub` tied to 1 the 16 XORs only invert `b`
+  (16 NOTs save 48).
+- [ ] `a_inc16` par 80 / depth 33: bit 0 as a NOT instead of a half adder with a constant 1 gives 76 / 31 (the tip
+  already says ¬a0).
+- [ ] `pi_core0`, `pi_core1`, `pi_core2`: the references carry the branch comparator and the next-PC block, but
+  only next PC's pc + 1 is used: about 695 NANDs of dead hardware in each par.
+- [ ] `y_trap`, `y_irq`, `y_final`: three 16-bit bus muxes on constants (192 NANDs) pick mcause; bit 1 is always 1,
+  bit 15 is `intr`, bits 0 and 3 need a gate each: about 10 NANDs.
+- [ ] `y_final`: the F/D valid bit is a whole 16-bit pipeline register holding 1 (307 NANDs) where a 1-bit
+  flip-flop with clear would do.
+- [ ] Traps cores: `ld·¬trap` feeding `ld·¬trap + trap + mret` equals `ld + trap + mret` (one AND, 2 NANDs).
+- [ ] `c_core3`: the next-PC block's pc + 1 repeats the PC block's incrementer (80 NANDs): `rv16_pc` has no output
+  for its sum.
+- [ ] `c_core1` and `c_core2` share one reference (`rv16Core(false)`) and par (4 973): Core I's answer already
+  wires the data memory and loads.
+
+**References with pins the challenge lacks** (Check ignores them, but "Do it for me" and the walkthrough's "I'll
+take it from here" copy them into the learner's chip)
+- [ ] `a_addsub16`: output `n`. `a_alu16`: outputs `neg`, `ovf`, `carry` (they also show in the walkthrough's
+  "Depth so far" before the result mux is placed).
+
+**Naming**: node titles differ from their build titles for `g_mux8` ("Bus multiplexers" / "Bus multiplexer"),
+`g_sop` ("A function from its table" / "Prime detector") and `a_slt` ("Set if less than" / "Less than"); check
+whether intended.
+
+**Hardware against the golden model**
+- [ ] `rv16_csr` reads `mcycle` as 0 while `iss16` returns its step count: a program reading it would make the
+  core and the golden model disagree (no test reads it today). Either count cycles in the CSR file or drop
+  `mcycle` from both (and from the `csr` codex summary).
+- [ ] Interrupts: the hardware cores take only the external line (`intr = MIE · MEIE · irq`); the timer exists
+  only in `iss16`. Decide whether the cores get the timer or the golden model loses it.
+
+**What the measurements say about the pipeline** (no fix needed, keep the texts honest): on the RV16 core tests
+the plain five-stage pipeline takes more total time than the single-cycle core (Pipeline IV: 1 495 cycles × 82 =
+122 590 against Core III's 1 236 × 98 = 121 128); only the predicting pipeline wins, on nested loops. The level
+cases and the codex say so. The guided chapters measure the RV32 cores, where the balanced pipeline does pay;
+re-read them if those numbers change.
