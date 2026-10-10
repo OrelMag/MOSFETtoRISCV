@@ -333,6 +333,13 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   net equal to GateSim after every settle (DualSim hands over to GateSim for gate mode, probes, stepping, X clocks).
   Single-cycle RV32I in the sandbox, cycles/s: Node 91 → 1 160 (GateSim) → ~9 000 (cycle engine); the page at max,
   CPU drawer open and checking: 35 Hz → ~4–5 kHz at 60 fps (64K-word data memory ~3.3 kHz, system CPU ~2.4 kHz)
+- ✅ Examples ▸ Computer: a whole RISC-V computer tying the three together: the multi-core's RV32I core (`rv32i_core`,
+  its data side a memory port), a 1K-word program ROM in assembly, a Memory map chip (decoder and read mux from
+  library parts), 4K words of RAM, a 64 × 64 RGB332 screen, a console, LEDs and switches (RAM 0x0000_0000, console /
+  LEDs / switches at the ISS's 0x8000_0000 / 4 / 8, screen 0xC000_0000 + 256·y + 4·x). It greets, paints a gradient,
+  a sun and a triangle in the switches' colour and halts (10 251 cycles: ~1.2 s in Node, ~1.6 s in the page), the CPU
+  drawer in lock-step: the ISS's `mmio` mode (I/O without the system) and the monitor's reading of a placed core,
+  console part, switch bank and LED bank. ROM samples: live switches, a bouncing ball
 
 **Programs on your own CPU** (the second half of Turing Complete)
 - ⏳ Custom ISA: define instruction fields, opcodes and mnemonics in a table, and get an assembler,

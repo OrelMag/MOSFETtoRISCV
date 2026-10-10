@@ -73,7 +73,7 @@ export class WalkMode {
     ed.volatile(next);
     const s = this.walk.steps[this.k];
     ed.select({ parts: [...s.parts], wires: [...s.wires], labels: [...s.labels] });
-    if (first) ed.view.fit(ed.defOf);
+    if (first) ed.fitView();
     this.changed();
   }
 

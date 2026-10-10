@@ -56,7 +56,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
       { label: 'Add a pointer here', key: 'L', run: () => t.placeAt({ id: 'pointer', name: 'Pointer', place: { pointer: true } }, at) },
       null,
       { label: 'Select all', key: 'Ctrl+A', run: () => ed.select({ parts: ed.doc.parts.map((p) => p.id), pins: ed.doc.pins.map((p) => p.id), wires: ed.doc.wires.map((w) => w.id), labels: ed.doc.labels.map((l) => l.id), ...(ed.doc.comments?.length ? { comments: ed.doc.comments.map((c) => c.id) } : {}) }), disabled: !ed.doc.parts.length && !ed.doc.pins.length && !ed.doc.wires.length && !ed.doc.labels.length && !ed.doc.comments?.length },
-      { label: 'Fit to view', run: () => ed.view.fit(ed.defOf) },
+      { label: 'Fit to view', run: () => ed.fitView() },
       { label: 'Undo', key: 'Ctrl+Z', run: () => ed.undo() },
     ];
   }

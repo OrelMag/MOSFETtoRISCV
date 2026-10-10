@@ -17,6 +17,12 @@ export interface IssOptions {
   imemWords?: number;
   /** Model I/O, CSRs, traps and interrupts. */
   system?: boolean;
+  /**
+   * Memory-mapped I/O without the rest of the system (no CSRs, traps or timer): the console, LEDs
+   * and switches at IO.CONSOLE / LEDS / SWITCHES, decoded exactly; any other address with bit 31 set
+   * is a device the model does not know (a screen): stores to it are dropped, loads read 0.
+   */
+  mmio?: boolean;
   /** Implement the M extension (otherwise its encodings are illegal in system mode). */
   m?: boolean;
   /** Implement the F subset (otherwise illegal in system mode). */
@@ -83,6 +89,8 @@ export class ISS {
   halted = false;
   steps = 0;
   readonly system: boolean;
+  /** I/O at 0x8000_0000 (system or mmio). */
+  readonly io: boolean;
   readonly m: boolean;
   readonly fext: boolean;
   /** Floating-point registers (raw float32 bits). */
@@ -126,6 +134,7 @@ export class ISS {
     this.dmem = new Uint32Array(opts.dmemWords ?? 32);
     this.imemWords = opts.imemWords ?? 64;
     this.system = !!opts.system;
+    this.io = this.system || !!opts.mmio;
     this.m = !!opts.m;
     this.fext = !!opts.f;
     this.hartid = opts.hartid ?? 0;
@@ -140,10 +149,20 @@ export class ISS {
   }
 
   private isIo(addr: number): boolean {
-    return this.system && addr >= 0x80000000;
+    return this.io && addr >= 0x80000000;
+  }
+
+  /** mmio without system: the device register at addr (0 console, 1 LEDs, 2 switches; -1 none). */
+  private mmioReg(addr: number): number {
+    const a = (addr & ~3) >>> 0;
+    return a === IO.CONSOLE ? 0 : a === IO.LEDS ? 1 : a === IO.SWITCHES ? 2 : -1;
   }
 
   private ioRead(addr: number): number {
+    if (!this.system) {
+      const r = this.mmioReg(addr);
+      return r === 1 ? this.leds : r === 2 ? this.switches : 0;
+    }
     switch ((addr >>> 2) & 7) {
       case 1: return this.leds;
       case 2: return this.switches;
@@ -178,7 +197,7 @@ export class ISS {
     if (this.isIo(addr)) {
       // The bus sees the lane-replicated store data, like the hardware's store-alignment unit.
       const wd = f3 === 0 ? ((v & 0xff) * 0x01010101) >>> 0 : f3 === 1 ? ((v & 0xffff) * 0x10001) >>> 0 : v >>> 0;
-      switch ((addr >>> 2) & 7) {
+      switch (this.system ? (addr >>> 2) & 7 : this.mmioReg(addr)) {
         case 0: this.console += String.fromCharCode(wd & 0xff); break;
         case 1: this.leds = wd & 0xff; break;
         case 5: this.mtimecmp = wd; break;

@@ -152,7 +152,25 @@ resistor over stored charge.
 - **RAM**: up to 2^6 words. The properties show its contents live, and can set **initial
   contents** applied at power-on (Apply & reset).
 - **Examples ▸**: Fetch loop (PC, PC + 4 and a ROM, joined by a pair of `pc` pointers), a 4-bit
-  counter on a 7-segment display, Shared bus, Wired-AND, Wired-OR. Each loads as a new chip.
+  counter on a 7-segment display, Console, Screen, Computer, Shared bus, Wired-AND, Wired-OR. Each
+  loads as a new chip.
+- **Examples ▸ Computer**: a whole RISC-V computer. The RV32I core (the multi-core's, with a
+  memory port) fetches from a 1K-word ROM; a **Memory map** chip (double-click it) decodes the
+  address and multiplexes the read data:
+
+  | Address | Device |
+  |---|---|
+  | `0x0000_0000` | RAM, 4K words (wraps every 16 KB) |
+  | `0x8000_0000` | console: a store prints the low byte |
+  | `0x8000_0004` | LEDs: a store sets them (a load reads them back) |
+  | `0x8000_0008` | switches: a load reads them |
+  | `0xC000_0000 + 256·y + 4·x` | screen, 64 × 64 RGB332: a store sets pixel (x, y) |
+
+  Word loads and stores only (the core has no `lb` / `sb`; text goes out four characters per
+  word). The program greets on the console, paints a gradient, a sun and a triangle in the
+  switches' colour, and halts on `j .` (a halt part watches for it); the CPU panel checks every
+  instruction, the console and the LEDs against the golden model. The ROM editor's samples include
+  two more programs for it: live switches and a bouncing ball.
 
 ## CPUs
 

@@ -906,9 +906,10 @@ export class EditorView {
     return { x: x0 - 3, y: y0 - 3, w: x1 - x0 + 6, h: y1 - y0 + 6 };
   }
 
-  fit(defOf: DefOf): void {
+  /** Show the whole chip in the canvas left of `insetRight` px (a docked drawer). */
+  fit(defOf: DefOf, insetRight = 0): void {
     const b = this.contentBox(defOf);
-    if (b) this.cam.fit(b, 0, 40);
+    if (b) this.cam.fit(b, insetRight, 40);
     else {
       this.cam.fit({ x: -4, y: -4, w: 60, h: 36 });
     }

@@ -8,8 +8,15 @@
 // an instruction cache). Readers take the editor's simulation and the compile its nets belong
 // to; CpuMonitor runs the ISS in lock-step on the editor's rising edges and reports the first
 // difference: registers, PC, fcsr, data memory (after stores), console and LEDs.
+//
+// A library core placed as a part (the multi-core's rv32i_core: no data memory, a memory port)
+// counts too: its register file is '<part>.rf'. A chip that also places a console or a switch bank
+// (the computer example) gets the ISS's memory-mapped I/O without the rest of the system (mmio):
+// the console part's text, a switch bank's positions and an LED bank named leds stand in for the
+// system CPU's consoleData / switches / leds pins.
 
 import { type RamState, ramLeafState, ramWords } from '../lib/bigmem';
+import { consoleAppend, consoleInit, type ConsoleState, consoleText, ioNodes, ioState, type SwitchState } from './ioparts';
 import { cacheLines } from '../riscv/cosim';
 import { ABI, FABI } from '../riscv/isa';
 import { ISS, type IssOptions } from '../riscv/iss';
@@ -27,6 +34,8 @@ export type NetRef = { pin: string } | { pointer: string } | { wire: string } | 
 /** What the golden model implements (the chapters' CPUs: system = Zicsr, traps, MMIO). */
 export interface CpuIss {
   system?: boolean;
+  /** Memory-mapped console, LEDs and switches only (riscv/iss.ts IssOptions.mmio). */
+  mmio?: boolean;
   m?: boolean;
   f?: boolean;
   /** Data memory words (default: as many as the data memory part holds, else 32). */
@@ -98,6 +107,15 @@ export function nestedRoms(doc: ChipDoc, chips: Chips | undefined, depth = 2): s
   return out;
 }
 
+/** Library cores with a memory port and no data memory (singleCycleCpu shared): their register file is '<part>.rf'. */
+const isPortCore = (lib: string) => lib === 'rv32i_core' || /_core$/.test(lib);
+
+/** Does the chip (or a user chip placed in it) hold a console or a switch bank? */
+function hasIoParts(doc: ChipDoc, chips: Chips | undefined, depth = 2): boolean {
+  return doc.parts.some((p) => 'console' in p.ref || 'switches' in p.ref
+    || (depth > 0 && 'chip' in p.ref && !!chips?.[p.ref.chip] && chips[p.ref.chip] !== doc && hasIoParts(chips[p.ref.chip], chips, depth - 1)));
+}
+
 const partNamed = (doc: ChipDoc, ...ids: string[]) => ids.map((id) => doc.parts.find((p) => p.id === id)).find((p) => p);
 export const pinNamed = (doc: ChipDoc, dir: 'in' | 'out', width: number, ...names: string[]) =>
   names.map((n) => doc.pins.find((p) => p.name === n && p.dir === dir && p.width === width)).find((p) => p);
@@ -120,7 +138,9 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   const pcPin = pinNamed(doc, 'out', 32, 'pcOut', 'pcF', 'pc');
   const pcReg = partNamed(doc, 'pc');
   const pc: NetRef = pcPin ? { pin: pcPin.id } : pcReg ? { part: pcReg.id, port: 'q' } : { part: rom.split('.')[0], port: 'addr' };
+  const core = doc.parts.find((p) => 'lib' in p.ref && isPortCore(p.ref.lib));
   const regs = partNamed(doc, 'rf', 'regs', 'regfile') ?? doc.parts.find((p) => 'lib' in p.ref && /^regfile/.test(p.ref.lib));
+  const regsPath = regs?.id ?? (core ? `${core.id}.rf` : undefined);
   const fregs = partNamed(doc, 'frf', 'fregs');
   const ram32 = doc.parts.filter((p) => 'ram' in p.ref && p.ref.ram.w === 32 && p !== regs);
   const dmem = partNamed(doc, 'dm', 'dmem') ?? (ram32.length === 1 ? ram32[0] : undefined);
@@ -129,9 +149,10 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   const pipeline = !!validW || (!!partNamed(doc, 'FD') && !!partNamed(doc, 'MW'));
   const system = !!partNamed(doc, 'csr') && !!partNamed(doc, 'trap');
   const fcsr = partNamed(doc, 'fcsr');
+  const mmio = !system && hasIoParts(doc, chips);
   return {
-    rom, pc, auto, iss: { ...(system ? { system } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}) },
-    ...(regs ? { regs: regs.id } : {}), ...(fregs ? { fregs: fregs.id } : {}), ...(dmem ? { dmem: dmem.id } : {}),
+    rom, pc, auto, iss: { ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}) },
+    ...(regsPath ? { regs: regsPath } : {}), ...(fregs ? { fregs: fregs.id } : {}), ...(dmem ? { dmem: dmem.id } : {}),
     ...(retire ? { retire: { pin: retire.id } } : {}), ...(pipeline ? { pipeline } : {}), ...(fcsr ? { fcsr: fcsr.id } : {}),
   };
 }
@@ -186,7 +207,7 @@ export function sanitizeCpu(c: unknown): CpuDoc | undefined {
   if (isObj(c.iss)) {
     const i = c.iss;
     const iss: CpuIss = {};
-    for (const k of ['system', 'm', 'f'] as const) if (typeof i[k] === 'boolean') iss[k] = i[k] as boolean;
+    for (const k of ['system', 'mmio', 'm', 'f'] as const) if (typeof i[k] === 'boolean') iss[k] = i[k] as boolean;
     if (Number.isInteger(i.dmemWords) && (i.dmemWords as number) >= 1 && (i.dmemWords as number) <= 1 << 16) iss.dmemWords = i.dmemWords as number;
     out.iss = iss;
   }
@@ -451,7 +472,7 @@ export class CpuMonitor {
   problem: string | null = null;
   /** The program the ISS runs (null: none). */
   prog: { words: number[]; k: number } | null = null;
-  /** What the hardware wrote to the console (consoleValid / consoleData pins) since the reset. */
+  /** What the hardware wrote to the console (consoleValid / consoleData pins, or a console part) since the reset. */
   console = '';
   private progKey = '';
   private cfgKey = '';
@@ -459,6 +480,15 @@ export class CpuMonitor {
   private lastChips: Chips | undefined;
   private resets = -1;
   private willRetire = false;
+  /** The console and switch-bank parts of the simulation they were found in (mmio without pins). */
+  private io: { sim: Sim; console?: HierNode; switches?: HierNode } | null = null;
+  /** Characters the console part had taken when `console` was last read from it (-1: not yet). */
+  private conN = -1;
+  /** The ISS's console text as a console part shows it (control codes applied), for the comparison. */
+  private issCon: ConsoleState = consoleInit();
+  private issConLen = 0;
+  /** What both consoles had printed when they were last compared. */
+  private compared = '';
   private hook = { before: () => this.before(), after: () => this.after() };
   private static readonly LOG = 64;
 
@@ -502,6 +532,10 @@ export class CpuMonitor {
     this.retired = 0;
     this.log.length = 0;
     this.console = '';
+    this.conN = -1;
+    this.issCon = consoleInit();
+    this.issConLen = 0;
+    this.compared = '';
     this.seq++;
     this.synced = this.es.cycles === 0;
     const d = this.desc;
@@ -526,9 +560,49 @@ export class CpuMonitor {
     return this.desc ? readCpu(this.es, this.doc(), this.desc) : null;
   }
 
-  /** The LEDs pin of a system CPU (null: none; -1: unknown). */
+  /** The LEDs pin of a system CPU, or an LED bank part named leds (null: none; -1: unknown). */
   get leds(): number | null {
-    return pinValue(this.es, this.doc(), 'leds', 'out', 8);
+    const doc = this.doc();
+    const pin = pinValue(this.es, doc, 'leds', 'out', 8);
+    if (pin !== null) return pin;
+    const p = doc.parts.find((q) => q.id === 'leds' && 'display' in q.ref && q.ref.display === 'led' && (q.ref.width ?? 1) <= 8);
+    return p ? refValue(this.es, doc, { part: p.id, port: 'a' }) : null;
+  }
+
+  /** The console and switch bank (I/O parts at any depth) standing in for the system CPU's pins. */
+  private ioParts(): { console?: HierNode; switches?: HierNode } {
+    const sim = this.es.sim;
+    if (!sim) return {};
+    if (this.io?.sim !== sim) {
+      const nodes = ioNodes(sim.design.root);
+      this.io = { sim, console: nodes.find((n) => n.info.kind === 'console')?.node, switches: nodes.find((n) => n.info.kind === 'switches')?.node };
+    }
+    return this.io;
+  }
+
+  /** Whether the chip shows a console, LEDs or switches the monitor follows (pins or parts). */
+  get hasIo(): boolean {
+    const doc = this.doc();
+    if (pinNamed(doc, 'out', 1, 'consoleValid') || pinNamed(doc, 'in', 8, 'switches')) return true;
+    const io = this.ioParts();
+    return !!io.console || !!io.switches || this.leds !== null;
+  }
+
+  /** The switch bank part the ISS reads (null: none): the simulation's leaf, as ioparts.ts keeps it. */
+  get switchBank(): HierNode | null {
+    return pinNamed(this.doc(), 'in', 8, 'switches') ? null : this.ioParts().switches ?? null;
+  }
+
+  /** A console part's text into `console` when it has taken a character since the last look. */
+  private readConsolePart(): boolean {
+    const sim = this.es.sim, node = this.ioParts().console;
+    if (!sim || !node || pinNamed(this.doc(), 'out', 1, 'consoleValid')) return false;
+    const st = ioState(sim, node) as ConsoleState | undefined;
+    if (st && st.n !== this.conN) {
+      this.conN = st.n;
+      this.console = consoleText(st);
+    }
+    return true;
   }
 
   private before(): void {
@@ -541,16 +615,19 @@ export class CpuMonitor {
     if (!iss || !this.synced) return;
     const r = d.retire && d.retire !== 'every' ? refValue(this.es, doc, d.retire) : 1;
     this.willRetire = r === 1;
-    if (iss.system) {
-      // The system CPU's inputs, sampled like the hardware samples them.
-      const irq = pinValue(this.es, doc, 'irq', 'in', 1), sw = pinValue(this.es, doc, 'switches', 'in', 8);
+    if (iss.io) {
+      // The system CPU's inputs, sampled like the hardware samples them (or a switch bank part).
+      const irq = iss.system ? pinValue(this.es, doc, 'irq', 'in', 1) : null;
       if (irq !== null) iss.irq = irq === 1;
+      const bank = this.switchBank, sim = this.es.sim;
+      const sw = bank && sim ? (ioState(sim, bank) as SwitchState | undefined)?.v ?? null : pinValue(this.es, doc, 'switches', 'in', 8);
       if (sw !== null) iss.switches = Math.max(0, sw);
     }
   }
 
   private after(): void {
     const iss = this.iss, d = this.desc;
+    const conPart = !!d && this.readConsolePart();
     if (!this.willRetire || !iss || !d || iss.halted) return;
     this.willRetire = false;
     if (!d.regs) {
@@ -587,17 +664,29 @@ export class CpuMonitor {
       const pc = refValue(this.es, doc, d.pc);
       if (pc !== null && pc !== iss.pc >>> 0) return void at('pc', 'PC', iss.pc, pc);
     }
-    if (d.dmem && (d.pipeline ? iss.halted : info.store)) {
+    // (a store to I/O leaves the data memory alone: no need to read it)
+    if (d.dmem && (d.pipeline ? iss.halted : info.store && !(iss.io && info.store.addr >= 0x80000000))) {
       const mem = readMem(sim, d.dmem);
       const m = mem && memDiff(mem, iss.dmem);
       if (m) return void at('mem', memName(m.i), m.model, m.hw);
     }
-    if (iss.system) {
-      if (this.console !== iss.console) {
-        const i = [...this.console].findIndex((c, k) => c !== iss.console[k]);
-        const k = i < 0 ? this.console.length : i;
-        return void at('console', 'console', iss.console.charCodeAt(k) || 0, this.console.charCodeAt(k) || 0, `console: expected ${quote(iss.console)}, got ${quote(this.console)}`);
+    if (iss.io) {
+      let model = iss.console;
+      if (conPart) {
+        // compare what the console part shows with the model's text put through the same terminal
+        if (iss.console.length !== this.issConLen) {
+          for (let k = this.issConLen; k < iss.console.length; k++) consoleAppend(this.issCon, iss.console.charCodeAt(k));
+          this.issConLen = iss.console.length;
+        }
+        model = consoleText(this.issCon);
       }
+      const key = `${this.conN}|${this.console.length}|${iss.console.length}`;
+      if (key !== this.compared && this.console !== model) {
+        const i = [...this.console].findIndex((c, k) => c !== model[k]);
+        const k = i < 0 ? this.console.length : i;
+        return void at('console', 'console', model.charCodeAt(k) || 0, this.console.charCodeAt(k) || 0, `console: expected ${quote(model)}, got ${quote(this.console)}`);
+      }
+      this.compared = key;
       const leds = this.leds;
       if (leds !== null && leds !== iss.leds) return void at('leds', 'LEDs', iss.leds, leds);
     }

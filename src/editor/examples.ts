@@ -6,6 +6,7 @@ import type { ChipDoc, EndRef, LabelDoc, PartDoc, PartRef, PinDoc, Vec, WireDoc,
 import { slug, uniqueName } from './model';
 import { SEG7_FONT } from './memory';
 import { openChip } from './session';
+import { PICTURE } from '../riscv/ioprograms';
 
 const pin = (id: string, dir: PinDoc['dir'], at: Vec, width = 1, extra: Partial<PinDoc> = {}): PinDoc => ({ id, name: id, dir, width, at, ...extra });
 const part = (id: string, ref: PartRef, at: Vec, extra: Partial<PartDoc> = {}): PartDoc => ({ id, ref, at, ...extra });
@@ -211,11 +212,123 @@ export function screenChip(id: string, name: string): ChipDoc {
   });
 }
 
+// ---- a whole computer -------------------------------------------------------------------------
+
+/**
+ * The computer's address decoder and read multiplexer: what the address of a load or store
+ * selects (ioprograms.ts has the map). Bit 31 clear: RAM. Bits 31:30 = 11: the screen. 10: the
+ * devices, told apart by bits 3:2 (console, LEDs, switches; partial decoding, so they repeat every
+ * 16 bytes). A store raises one write enable; a load reads RAM, or the LEDs / switches zero-extended.
+ */
+export function memoryMapChip(id: string, name: string): ChipDoc {
+  return chip(id, name, {
+    notes: 'Address decoding for the computer. RAM: addr[31] = 0. Screen: addr[31:30] = 11. Devices: addr[31:30] = 10, then addr[3:2] picks the console (00, write), the LEDs (01) or the switches (10, read). A store (we) raises the write enable of the one it selects; a load returns RAM or a device, zero-extended.',
+    hue: 200,
+    pins: [
+      pin('addr', 'in', [0, 8], 32), pin('we', 'in', [0, 17]), pin('ramData', 'in', [0, 28], 32), pin('leds', 'in', [0, 38], 8), pin('switches', 'in', [0, 40], 8),
+      pin('scrWe', 'out', [60, 10]), pin('conWe', 'out', [60, 14]), pin('ledWe', 'out', [60, 16]), pin('ramWe', 'out', [60, 24]), pin('rdata', 'out', [60, 39], 32),
+    ],
+    parts: [
+      part('sa', { split: [2, 1, 1, 26, 1, 1] }, [6, 2]), part('sel', { merge: [1, 1] }, [10, 4]),
+      part('n30', { lib: 'not' }, [14, 18]), part('n31', { lib: 'not' }, [18, 24]),
+      part('io', { lib: 'and' }, [24, 14], { label: 'I/O store' }), part('ram', { lib: 'and' }, [24, 22], { label: 'RAM store' }),
+      part('scr', { lib: 'and' }, [34, 10], { label: 'screen' }), part('dev', { lib: 'and' }, [34, 16], { label: 'device' }),
+      part('dec', { lib: 'dec2e' }, [44, 12], { label: 'device select' }),
+      part('z8', { const: { width: 8, value: 0 } }, [22, 35]), part('z24', { const: { width: 24, value: 0 } }, [30, 30]),
+      part('dm', { lib: 'mux4x8' }, [30, 34], { label: 'device read' }), part('zx', { merge: [8, 24] }, [38, 38]),
+      part('rm', { lib: 'mux2x32' }, [44, 36], { label: 'RAM / device' }),
+    ],
+    labels: [lbl('s1', 'sel', [14, 6], 'up'), lbl('s2', 'sel', [32, 44], 'down'), lbl('t1', 'a31', [6, 21], 'left'), lbl('t2', 'a31', [46, 42], 'down')],
+    wires: [
+      wire('addr', 'pin:addr', 'sa.in'),
+      wire('a2', 'sa.o1', 'sel.i0'), wire('a3', 'sa.o2', 'sel.i1'),
+      wire('a30', 'sa.o4', 'scr.a', [], { name: 'a30' }), wire('a30n', { wire: 'a30', at: [11, 11] }, 'n30.a', [[11, 19]]),
+      wire('a31', 'sa.o5', 'n31.a', [[9, 13], [9, 25]], { name: 'a31' }), wire('a31i', { wire: 'a31', at: [9, 15] }, 'io.a'),
+      wire('a31p', { wire: 'a31', at: [9, 21] }, 'lbl:t1'),
+      wire('we', 'pin:we', 'io.b'), wire('wer', { wire: 'we', at: [20, 17] }, 'ram.a', [[20, 23]]),
+      wire('nr', 'n31.y', 'ram.b'), wire('nd', 'n30.y', 'dev.b'),
+      wire('io', 'io.y', 'scr.b', [[31, 16], [31, 13]], { name: 'I/O store' }), wire('iod', { wire: 'io', at: [31, 16] }, 'dev.a', [[31, 17]]),
+      wire('den', 'dev.y', 'dec.en'),
+      wire('sel', 'sel.out', 'dec.a', [[40, 6], [40, 16]], { name: 'sel' }), wire('selp', { wire: 'sel', at: [14, 6] }, 'lbl:s1'),
+      wire('scrWe', 'scr.y', 'pin:scrWe', [[41, 12], [41, 10]]),
+      wire('conWe', 'dec.y0', 'pin:conWe'), wire('ledWe', 'dec.y1', 'pin:ledWe'), wire('ramWe', 'ram.y', 'pin:ramWe'),
+      wire('z0', 'z8.y', 'dm.d0'), wire('z3', { wire: 'z0', at: [29, 36] }, 'dm.d3', [[29, 42]]),
+      wire('leds', 'pin:leds', 'dm.d1'), wire('sw', 'pin:switches', 'dm.d2'), wire('dsel', 'lbl:s2', 'dm.s'),
+      wire('dv', 'dm.y', 'zx.i0'), wire('zh', 'z24.y', 'zx.i1', [[37, 31], [37, 41]]),
+      wire('dev32', 'zx.out', 'rm.b'), wire('rd', 'pin:ramData', 'rm.a', [[42, 28], [42, 38]]),
+      wire('rsel', 'lbl:t2', 'rm.s'), wire('rdata', 'rm.y', 'pin:rdata'),
+    ],
+  });
+}
+
+/**
+ * A RISC-V computer: the single-cycle RV32I core (its data side a memory port), a 1K-word program
+ * ROM, the memory map (`map`: a user chip of its own), 4K words of RAM, a 64 × 64 screen, a
+ * console, eight LEDs and eight switches. The core's buses reach the devices through pointers
+ * (addr, wdata, byte = wdata[7:0], rdata, clk); the write enables are wires from the memory map,
+ * so the decoding reads left to right. A halt part watches for `j .` (jal x0, 0: 0x0000006f), so
+ * Run stops when the program ends; the CPU drawer runs the golden model in lock-step.
+ */
+export function computerChip(id: string, name: string, mapChip: string, src = PICTURE): ChipDoc {
+  return chip(id, name, {
+    notes: 'A whole computer: the RV32I core fetches from the program ROM (Edit program… to change it) and reaches RAM, the screen, the console, the LEDs and the switches through the memory map (double-click it). RAM 0x0000_0000 (4K words), console 0x8000_0000, LEDs 0x8000_0004, switches 0x8000_0008, screen 0xC000_0000 + 256·y + 4·x (64 × 64, RGB332). Word loads and stores only: this core has no lb / sb. Run (or Run to halt in the CPU drawer); flip the switches, Reset and Run again.',
+    pins: [pin('clk', 'in', [2, 17], 1, { kind: 'clock' })],
+    parts: [
+      part('imem', { rom: { k: 10, w: 32, addr: 'rv32', lang: 'asm', src } }, [8, 10], { label: 'program' }),
+      part('cpu', { lib: 'rv32i_core' }, [24, 12], { label: 'RV32I core' }),
+      part('hart', { const: { width: 32, value: 0 } }, [12, 20], { label: 'hart 0' }), part('grant', { const: { width: 1, value: 1 } }, [22, 24]),
+      part('hj', { const: { width: 32, value: 0x6f } }, [12, 5], { label: 'j .' }), part('eq', { lib: 'eq32' }, [26, 2]), part('halt', { display: 'halt', width: 1 }, [34, 4]),
+      part('map', { chip: mapChip }, [56, 18], { label: 'memory map' }),
+      part('sw', { switches: 8 }, [40, 32], { label: 'switches' }),
+      part('bs', { split: [8, 24] }, [46, 40]),
+      part('xy', { split: [2, 6, 6, 18] }, [86, 11]),
+      part('scr', { screen: { mode: 'write', size: 64, color: 'rgb332' } }, [96, 12], { label: 'screen' }),
+      part('con', { console: { cols: 32, rows: 8 } }, [96, 46], { label: 'console' }),
+      part('ledr', { lib: 'reg8' }, [86, 62], { label: 'LED latch' }), part('leds', { display: 'led', width: 8 }, [98, 64]),
+      part('ra', { split: [2, 12, 18] }, [84, 70]),
+      part('ram', { ram: { k: 12, w: 32 } }, [90, 74], { label: 'RAM 4K × 32' }),
+    ],
+    labels: [
+      lbl('k0', 'clk', [5, 17], 'down'), lbl('k1', 'clk', [98, 40], 'down'), lbl('k2', 'clk', [98, 58], 'down'), lbl('k3', 'clk', [90, 68], 'down'), lbl('k4', 'clk', [97, 82], 'down'),
+      lbl('p0', 'pc', [8, 12], 'left'), lbl('p1', 'pc', [40, 14], 'right'),
+      lbl('r0', 'rdata', [24, 23], 'left'), lbl('r1', 'rdata', [74, 28], 'right'),
+      lbl('a0', 'addr', [46, 20], 'up'), lbl('a1', 'addr', [86, 15], 'left'), lbl('a2', 'addr', [84, 73], 'left'),
+      lbl('w0', 'wdata', [40, 22], 'right'), lbl('w1', 'wdata', [90, 78], 'left'), lbl('w2', 'wdata', [46, 42], 'left'),
+      lbl('b0', 'byte', [47, 41], 'right'), lbl('b1', 'byte', [96, 18], 'left'), lbl('b2', 'byte', [96, 48], 'left'), lbl('b3', 'byte', [86, 64], 'left'),
+      lbl('d0', 'ramData', [56, 24], 'left'), lbl('d1', 'ramData', [104, 78], 'right'),
+      lbl('l0', 'leds', [56, 26], 'left'), lbl('l1', 'leds', [96, 65], 'up'),
+    ],
+    wires: [
+      wire('clk', 'pin:clk', 'cpu.clk', [], { name: 'clk' }), wire('kp', { wire: 'clk', at: [5, 17] }, 'lbl:k0'),
+      wire('pcr', 'lbl:p0', 'imem.addr'), wire('pco', 'cpu.pcOut', 'lbl:p1'),
+      wire('instr', 'imem.data', 'cpu.instr', [[21, 12], [21, 19]], { name: 'instr' }),
+      wire('hx', { wire: 'instr', at: [20, 12] }, 'eq.a', [[20, 4]]), wire('hb', 'hj.y', 'eq.b'), wire('hh', 'eq.eq', 'halt.a'),
+      wire('hart', 'hart.y', 'cpu.hartid'), wire('gr', 'grant.y', 'cpu.grant'), wire('rd', 'lbl:r0', 'cpu.memRData'),
+      wire('addr', 'cpu.memAddr', 'map.addr', [], { name: 'addr' }), wire('ap', { wire: 'addr', at: [46, 20] }, 'lbl:a0'),
+      wire('wd', 'cpu.memWData', 'lbl:w0'), wire('we', 'cpu.memWE', 'map.we', [[48, 24], [48, 22]]),
+      wire('md', 'lbl:d0', 'map.ramData'), wire('ml', 'lbl:l0', 'map.leds'), wire('msw', 'sw.q', 'map.switches', [[54, 28]]),
+      wire('mr', 'map.rdata', 'lbl:r1'),
+      wire('scrWe', 'map.scrWe', 'scr.we'), wire('conWe', 'map.conWe', 'con.we', [[82, 22], [82, 50]]),
+      wire('ledWe', 'map.ledWe', 'ledr.en', [[80, 24], [80, 66]]), wire('ramWe', 'map.ramWe', 'ram.we', [[78, 26], [78, 80]]),
+      wire('xa', 'lbl:a1', 'xy.in'), wire('x', 'xy.o1', 'scr.x'), wire('y', 'xy.o2', 'scr.y'), wire('sc', 'lbl:b1', 'scr.color'), wire('sk', 'lbl:k1', 'scr.clk'),
+      wire('cd', 'lbl:b2', 'con.data'), wire('ck', 'lbl:k2', 'con.clk'),
+      wire('ld', 'lbl:b3', 'ledr.d'), wire('lk', 'lbl:k3', 'ledr.clk'),
+      wire('lq', 'ledr.q', 'leds.a', [], { name: 'leds' }), wire('lp', { wire: 'lq', at: [96, 65] }, 'lbl:l1'),
+      wire('ra', 'lbl:a2', 'ra.in'), wire('rw', 'ra.o1', 'ram.addr', [[88, 73], [88, 76]]), wire('rdin', 'lbl:w1', 'ram.din'),
+      wire('rdo', 'ram.dout', 'lbl:d1'), wire('rk', 'lbl:k4', 'ram.clk'),
+      wire('bi', 'lbl:w2', 'bs.in'), wire('bo', 'bs.o0', 'lbl:b0'),
+    ],
+  });
+}
+
 export interface Example {
   id: string;
   name: string;
   blurb: string;
-  build(id: string, name: string): ChipDoc;
+  /** The example's chip; `sub` holds the ids given to its sub-chips. */
+  build(id: string, name: string, sub: Record<string, string>): ChipDoc;
+  /** Chips the example places (its packaged blocks), added alongside it under fresh ids and names. */
+  subchips?: Record<string, { name: string; build(id: string, name: string): ChipDoc }>;
 }
 
 export const EXAMPLES: Example[] = [
@@ -223,15 +336,27 @@ export const EXAMPLES: Example[] = [
   { id: 'counter7', name: '4-bit counter on a 7-segment display', blurb: 'A counter, a font ROM as the decoder, a 7-segment digit.', build: counterSeg7Chip },
   { id: 'console', name: 'Console: hello', blurb: 'A counter walks a ROM holding a message; a console prints it, a character per clock edge.', build: consoleChip },
   { id: 'screen', name: 'Screen: a sweeping beam', blurb: 'A counter sweeps a 16 × 16 screen pixel by pixel in the colour set on four switches.', build: screenChip },
+  {
+    id: 'computer', name: 'Computer: RISC-V with a screen and a console',
+    blurb: 'An RV32I core, a program ROM, 4K words of RAM, a 64 × 64 screen, a console, LEDs and switches behind a memory map. Run: it greets, then paints.',
+    build: (id, n, sub) => computerChip(id, n, sub.map), subchips: { map: { name: 'Memory map', build: memoryMapChip } },
+  },
   { id: 'sharedbus', name: 'Shared bus', blurb: 'Two tri-state drivers and a pull-down on one wire: a value, a held 0, or a fight (X).', build: sharedBusChip },
   { id: 'wiredand', name: 'Wired-AND', blurb: 'Open-drain NMOS stages and a pull-up: the wire is 1 only when every stage lets go.', build: (id, n) => wiredChip(id, n, 'and') },
   { id: 'wiredor', name: 'Wired-OR', blurb: 'Open-source PMOS stages and a pull-down: the wire is 1 when any stage pulls it up.', build: (id, n) => wiredChip(id, n, 'or') },
 ];
 
-/** Add an example as a new chip (fresh id and name) and open it. */
+/** Add an example as a new chip (fresh id and name), with its sub-chips, and open it. */
 export function addExample(ws: Workspace, ex: Example): { ws: Workspace; id: string } {
   const id = uniqueName(`u_${slug(ex.id)}`, Object.keys(ws.chips));
   const name = uniqueName(ex.name, Object.values(ws.chips).map((c) => c.name));
-  const doc = ex.build(id, name);
-  return { ws: openChip({ ...ws, chips: { ...ws.chips, [id]: doc } }, id), id };
+  const chips = { ...ws.chips };
+  const sub: Record<string, string> = {};
+  for (const [k, c] of Object.entries(ex.subchips ?? {})) {
+    const sid = uniqueName(`${id}_${k}`, [...Object.keys(chips), id]);
+    chips[sid] = c.build(sid, uniqueName(c.name, Object.values(chips).map((x) => x.name)));
+    sub[k] = sid;
+  }
+  chips[id] = ex.build(id, name, sub);
+  return { ws: openChip({ ...ws, chips }, id), id };
 }
