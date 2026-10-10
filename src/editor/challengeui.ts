@@ -158,7 +158,9 @@ class ChallengeUi {
       const lib = ch && typeof ch.allowed === 'object' ? ch.allowed : null;
       if (lib !== activeRule) {
         activeRule = lib;
+        // The palette redraws only when its own key changes: the rule is not part of it.
         ed.refresh();
+        ed.palette.render();
       }
       if (this.level) progress().open(this.level.id, true);
       // The level screen's palette is locked to the rule already.
