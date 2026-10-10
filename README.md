@@ -90,8 +90,8 @@ simulator, so whatever you build is a real component of the site. The full guide
 The sandbox now builds a **whole computer**. RAM and ROM parts go up to 64K words: one
 behavioural leaf at run time over a real hierarchy of banks you can open down to the latches.
 The I/O parts are a pixel screen (write, rows or pixels mode, up to 128 × 128 in RGB565), a
-console and a switch bank, so a CPU can memory-map them. A cycle engine runs Run: flip-flops
-become verified tables and the rest is levelized, and every net equals the event-driven
+console and a switch bank, so a CPU can memory-map them. A cycle engine runs Run: storage, found by its
+structure (library flip-flops or ones drawn from NANDs, latches, resets), becomes verified tables and the rest is levelized, and every net equals the event-driven
 simulator's after every settle. The single-cycle RV32I runs at about 9 k cycles/s in Node and
 4–5 kHz in the browser. **Examples ▸ Computer** puts it all together: the RV32I core, a program
 ROM in assembly, a memory chip (the address decoder and 4K words of RAM), the screen, and a devices

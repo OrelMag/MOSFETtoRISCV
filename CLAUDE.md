@@ -75,18 +75,28 @@ src/sim/       simulation core (no DOM)
                  watch() report every change of watched nets at its exact time; hot loops on typed arrays
                  (tests/ref/gatesim-ref.ts: the old object version, gatesim-fast.test.ts: same events, same times);
                  adopt(src, changed, dirty): take over another engine's settled state of the same design
-  ffmacro.ts     FfTable.of(def): an `ff` definition (DFF, DFFE) as a state machine of settled net vectors, from
-                 unit-delay simulation of it alone; good(id) checks by simulation that it is exact from a state
-                 (data arriving 1 … K delays after an edge, pairs in any order, pulses; outputs never follow data
-                 with the clock steady); partner(id): the clock-toggle pair a flip-flop sits in while nothing changes
-  cyclesim.ts    CycleSim.build(design) (or a reason): flip-flops as FfTable lookups (stable ones skipped at edges,
-                 internals read from the table), the rest levelized (a `seq` behaviour ordered by its comb inputs);
-                 settle = phase 1 (flip-flops / behaviours reading a changed pin or poked, on pre-edge values) then
-                 one levelized sweep; false, nothing changed, for an X clock or a transition no table vouches for.
-                 Refused: a flip-flop or seq clock not a pin, a behaviour on a clock-derived signal, other loops
+  clusters.ts    findClusters(design): storage by structure, no `ff` mark needed (rounds: loops among free NANDs,
+                 gates on short loops (≤ 6) seed clusters, which take in private gates that follow a pin or add no
+                 input, latch pairs join, deepest instance first); chainRoot/Delay/Parity: nets that follow a pin
+                 through k inverters (a pin, its inverse)
+  ffmacro.ts     FfTable(spec): a cluster as a state machine of settled net vectors, from unit-delay simulation of
+                 it alone; Profile: timed inputs (groups following one pin, delay, parity; the clock's group),
+                 data inputs (change ≥ `early` delays after the pins), constants; good(id) / why(id) check by
+                 simulation that it is exact from a state (every pin change combination, data at every delay from
+                 early, pairs in any order, pulses; outputs never follow data with the pins steady); partner(id): the
+                 clock-toggle pair it sits in while nothing changes; FfTable.of(def): an `ff` def alone (tests)
+  cyclesim.ts    CycleSim.build(design) (or a reason): clusters as FfTable lookups (tables shared by structure and
+                 profile across builds; stable ones skipped at edges, internals read from the table), the rest
+                 levelized (a `seq` behaviour ordered by its comb inputs); settle = phase 1 (clusters following a
+                 changed pin, behaviours reading one or poked, on pre-edge values) then one levelized sweep; false,
+                 nothing changed, `refusal` says why, for an X clock, a transition no table vouches for, or a pin
+                 changing with an inverted clock on a path shorter than it (hazards). Refused at build: a clock
+                 port no pin drives (gated, ripple: clockDivider), a seq clock not a pin, a behaviour on a
+                 clock-derived signal, loops through behaviours, storage with > 5 inputs
   dualsim.ts     DualSim: GateSim + CycleSim behind one Sim (preferFast: the sandbox's cycle mode; prepare() builds
                  the cycle engine outside a frame budget); GateSim for step / runUntil / onTrace, power-on and
-                 carry, a settle the cycle engine refuses; the state handed over both ways (tests/cyclesim.test.ts)
+                 carry, a settle the cycle engine refuses; the state handed over both ways; whyNot: why it is not on
+                 the cycle engine now (tests/cyclesim*.test.ts, cyclekit.ts)
   switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes); `strength` levels:
                  rails/inputs > transistors (strength 4..2, ratioed logic) > resistors (prim 'res',
                  strength 1: pull-ups lose to any transistor; two opposing → X) > stored charge
@@ -536,8 +546,9 @@ keep the two in step when a panel gains a feature.
   DOM-free costs on a CPU and a 64-bit Kogge–Stone adder opened in the sandbox; `scripts/sim-perf.ts` the
   cycles/s of the CPUs on GateSim and the cycle engine (`--ref`: against the old GateSim).
 - Run in cycle mode uses the cycle engine (DualSim): no gate time (the run bar hides `t`), the same values after
-  every settle; gate mode, probes / the open timing panel and stepping use GateSim. A new sequential part runs on it
-  if its flip-flops are `ff` library ones and its other storage a `seq` behaviour; anything else falls back to GateSim.
+  every settle; gate mode, probes / the open timing panel and stepping use GateSim. Storage is found by its structure
+  (library flip-flops, ones drawn from NANDs, latches, async resets, clocks through inverters) and big memories are
+  `seq` behaviours; gated or ripple clocks fall back to GateSim (`DualSim.whyNot` says why).
   The CPU drawer redraws at most every 100 ms while the clock runs.
 - Probes and the timing panel are gate level only (the switch-level solver has no time); lanes
   name what was drawn and survive rebuilds (`LogicAnalyzer.rebind` keeps the recording).
