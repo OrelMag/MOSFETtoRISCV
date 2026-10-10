@@ -1,6 +1,6 @@
 // The official riscv-tests (prebuilt images, tests/verify/riscv-tests) on the golden model, and the bench
 // itself: the loader, the verdicts, and the bit-parallel runs agreeing with the event-driven simulator.
-// The CPUs run them in rvtests-*.test.ts.
+// The CPUs run them in verify-*.test.ts.
 
 import { describe, expect, it } from 'vitest';
 import { ISS } from '../src/riscv/iss';
