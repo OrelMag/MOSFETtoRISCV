@@ -8,23 +8,8 @@ import { Editor } from '../../editor/editor';
 import { SHARE_SEG, shareRoute } from '../../editor/files';
 import { installChallenges } from '../../editor/challengeui';
 import { installFiles, type FilesUi } from '../../editor/fileui';
-import '../../editor/memui';
-// Chip packaging, inspector, and their property sections (they register themselves).
-import '../../editor/package';
-import '../../editor/inspect';
-import '../../editor/chipprops';
-// The canvas's right-click menu.
-import '../../editor/ctxmenu';
-// The pins as a bar of switches and lamps above the run bar.
-import '../../editor/iobar';
-// Keyboard keys driving key and keyboard parts.
-import '../../editor/keys';
-// The analysis tools plug into every editor (probes, timing, lint).
-import '../../editor/analysis';
-// The CPU panel: program, registers, memory and the golden model for a chip that is a processor.
-import '../../editor/cpuui';
-// Consoles, switch banks and screens: their property sections and the Screens drawer.
-import '../../editor/ioui';
+// Every feature module (palette groups, property sections, toolbar actions, plugins).
+import '../../editor/features';
 import type { Page } from './chapter';
 
 export class SandboxPage implements Page {

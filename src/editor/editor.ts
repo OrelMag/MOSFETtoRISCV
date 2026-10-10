@@ -41,9 +41,21 @@ export interface ToolbarAction {
   enabled?(ed: Editor): boolean;
   /** A toggle that is on (drawn pressed). */
   active?(ed: Editor): boolean;
+  /** Only on a campaign level screen. */
+  levelOnly?: boolean;
 }
 
 const actions: ToolbarAction[] = [];
+
+export interface EditorOptions {
+  /**
+   * A campaign level screen around one chip: tabs only for it and the chips it uses (no other
+   * chips, no New chip), the toolbar actions listed in `actions`, the palette locked to purist
+   * (the level's rule) without the groups in `hideGroups`, and the properties panel shown over the
+   * canvas while something is selected or while pinned.
+   */
+  level?: { chipId: string; actions: readonly string[]; hideGroups?: readonly string[] };
+}
 
 /** Something that lives as long as an editor (an analysis panel, ...); returns its cleanup. */
 export type EditorPlugin = (ed: Editor) => (() => void) | void;
@@ -75,6 +87,7 @@ registerToolbarAction({ id: 'redo', title: 'Redo (Ctrl+Shift+Z)', icon: 'redo', 
 registerToolbarAction({ id: 'zout', title: 'Zoom out', icon: 'minus', order: 30, run: (ed) => ed.view.cam.zoom(1.25) });
 registerToolbarAction({ id: 'zin', title: 'Zoom in', icon: 'plus', order: 40, run: (ed) => ed.view.cam.zoom(0.8) });
 registerToolbarAction({ id: 'fit', title: 'Fit to screen', icon: 'fit', order: 50, run: (ed) => ed.fitView() });
+registerToolbarAction({ id: 'props', title: 'Properties of the selection or the chip', icon: 'sidebar', label: 'Properties', order: 85, levelOnly: true, run: (ed) => ed.toggleProps(), active: (ed) => ed.propsPinned });
 registerToolbarAction({ id: 'help', title: 'Keyboard shortcuts (?)', icon: 'info', order: 90, run: (ed) => ed.showHelp() });
 
 const withChip = (ws: Workspace, doc: ChipDoc): Workspace => ({ ...ws, chips: { ...ws.chips, [doc.id]: doc } });
@@ -138,7 +151,11 @@ export class Editor {
   private sims = new Map<string, EditorSim>();
   private simChip = '';
 
-  constructor(chipId?: string) {
+  /** A campaign level screen: see EditorOptions.level. */
+  readonly level: EditorOptions['level'];
+
+  constructor(chipId?: string, opts: EditorOptions = {}) {
+    this.level = opts.level;
     let ws = loadWorkspace();
     if (!ws.open.length) ws = { ...ws, open: [Object.keys(ws.chips)[0]] };
     if (chipId && ws.chips[chipId]) ws = openChip(ws, chipId);
@@ -161,8 +178,12 @@ export class Editor {
 
     this.palette = new PalettePanel(() => ({ ws: this.ws, chipId: this.chipId, canPlace: (c) => this.lib.canPlace(this.chipId, c) }), {
       pick: (item, e) => this.tools.pickFromPalette(item, e),
-      purist: () => !!this.ws.purist,
+      purist: () => !!this.level || !!this.ws.purist,
       setPurist: (v) => this.volatile({ ...this.ws, ...(v ? { purist: true } : { purist: undefined }) }),
+      locked: !!this.level,
+      hidden: (g) => !!this.level?.hideGroups?.includes(g),
+      first: this.level ? ['unlocked', 'lib', 'wiring', 'const', 'mine'] : undefined,
+      closed: this.level ? ['io', 'disp'] : undefined,
     });
     this.props = new PropsPanel(this);
 
@@ -171,7 +192,7 @@ export class Editor {
     this.status = h('div', { class: 'status' });
     this.controls = h('div', { class: 'controls sb-controls' });
     const center = h('section', { class: 'sb-center' }, this.canvas, this.slots.bottom, this.controls);
-    this.el = h('div', { class: 'sandbox' },
+    this.el = h('div', { class: this.level ? 'sandbox sb-levelmode' : 'sandbox' },
       h('div', { class: 'sb-top' }, this.tabs, this.slots.top, this.actionsEl), this.palette.el, center, this.props.el);
 
     this.tools = new Tools(this);
@@ -292,6 +313,15 @@ export class Editor {
     this.sel = sel;
     this.view.setSelection(sel);
     this.props.update();
+    if (this.level) this.el.classList.toggle('props-sel', this.selCount > 0);
+  }
+
+  /** Level screen: the properties panel pinned open (it also shows while something is selected). */
+  propsPinned = false;
+  toggleProps(): void {
+    this.propsPinned = !this.propsPinned;
+    this.el.classList.toggle('props-on', this.propsPinned);
+    this.renderActions();
   }
 
   get selCount(): number {
@@ -516,15 +546,17 @@ export class Editor {
       });
       this.tabs.append(crumbs);
     }
-    for (const id of ws.open) {
+    const shown = this.level ? this.levelTabs() : ws.open;
+    for (const id of shown) {
       const c = ws.chips[id];
       if (!c) continue;
       const on = id === this.chipId;
       const tab = h('div', { class: `sb-tab${on ? ' on' : ''}`, role: 'tab', 'aria-selected': String(on), title: c.name, 'data-chip': id },
         h('button', { class: 'sb-tab-name', onclick: () => this.openChip(id) }, icon('chip', 13), c.name));
-      if (ws.open.length > 1) tab.append(h('button', { class: 'sb-tab-x', title: `Close ${c.name}`, 'aria-label': `Close ${c.name}`, onclick: () => this.closeTab(id) }, icon('close', 12)));
+      if (shown.length > 1 && id !== this.level?.chipId) tab.append(h('button', { class: 'sb-tab-x', title: `Close ${c.name}`, 'aria-label': `Close ${c.name}`, onclick: () => this.closeTab(id) }, icon('close', 12)));
       this.tabs.append(tab);
     }
+    if (this.level) return;
     const others = Object.values(ws.chips).filter((c) => !ws.open.includes(c.id));
     if (others.length) {
       const sel = h('select', { class: 'sb-open', 'aria-label': 'Open a chip', title: 'Open another of your chips' },
@@ -535,10 +567,24 @@ export class Editor {
     this.tabs.append(h('button', { class: 'btn ghost sm sb-new', title: 'A new empty chip', onclick: () => this.newChip() }, icon('plus', 14), 'New chip'));
   }
 
+  /** Level screen: the level's chip first, then the open chips it places (directly or deeper). */
+  private levelTabs(): string[] {
+    const ws = this.ws;
+    const top = this.level!.chipId;
+    const uses = new Set<string>();
+    const walk = (id: string) => {
+      for (const d of ws.chips[id] ? chipDeps(ws.chips[id]) : []) if (!uses.has(d)) { uses.add(d); walk(d); }
+    };
+    walk(top);
+    return [top, ...ws.open.filter((id) => id !== top && uses.has(id))];
+  }
+
   /** Redraw the top bar's buttons (a toggle changed state). */
   renderActions(): void {
     this.actionsEl.replaceChildren();
+    const only = this.level?.actions;
     for (const a of actions) {
+      if (only ? !only.includes(a.id) : a.levelOnly) continue;
       const b = h('button', { class: `btn ghost ${a.label ? 'sm' : 'icon-only'}`, title: a.title, 'aria-label': a.title, 'data-action': a.id, onclick: () => a.run(this) },
         icon(a.icon, 16), a.label ? h('span', null, a.label) : null) as HTMLButtonElement;
       if (a.enabled && !a.enabled(this)) b.disabled = true;

@@ -200,6 +200,14 @@ export interface PaletteHooks {
   pick(item: PaletteItem, e: PointerEvent): void;
   purist(): boolean;
   setPurist(v: boolean): void;
+  /** The purist switch is fixed (a level screen: the level's rule decides), so it is not drawn. */
+  locked?: boolean;
+  /** Groups left out entirely. */
+  hidden?(groupId: string): boolean;
+  /** Groups listed first, in this order (a level screen: its own parts before pins and displays). */
+  first?: readonly string[];
+  /** Groups closed until the user opens them. */
+  closed?: readonly string[];
 }
 
 const OPEN_LIB = new Set(['Gates', 'Transistors']);
@@ -221,7 +229,7 @@ export class PalettePanel {
     const pur = h('label', { class: 'sb-purist', title: 'Only transistors, NAND, pins, constants, wiring, displays and your own chips: build everything else yourself' },
       this.purist, 'Purist');
     this.list = h('div', { class: 'sb-pal-list' });
-    this.el = h('aside', { class: 'sb-palette', 'aria-label': 'Parts' }, h('div', { class: 'sb-pal-head' }, this.search, pur), this.list);
+    this.el = h('aside', { class: 'sb-palette', 'aria-label': 'Parts' }, h('div', { class: 'sb-pal-head' }, this.search, hooks.locked ? null : pur), this.list);
   }
 
   render(): void {
@@ -230,11 +238,14 @@ export class PalettePanel {
     this.purist.checked = purist;
     const filter = this.search.value;
     this.list.replaceChildren();
-    for (const g of groups) {
+    const first = this.hooks.first ?? [];
+    const rank = (id: string) => (first.includes(id) ? first.indexOf(id) : first.length);
+    for (const g of [...groups].sort((a, b) => rank(a.id) - rank(b.id))) {
+      if (this.hooks.hidden?.(g.id)) continue;
       const items = visibleItems(g, ctx, purist, filter);
       if (!items.length) continue;
       const det = h('details', { class: 'sb-group', 'data-group': g.id }) as HTMLDetailsElement;
-      det.open = filter ? true : this.open.get(g.id) ?? !g.collapsed;
+      det.open = filter ? true : this.open.get(g.id) ?? (!g.collapsed && !this.hooks.closed?.includes(g.id));
       det.addEventListener('toggle', () => { if (!filter) this.open.set(g.id, det.open); });
       det.append(h('summary', null, g.title, h('small', null, items.length)));
       let sec: HTMLElement = det;

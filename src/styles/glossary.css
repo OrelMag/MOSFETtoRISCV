@@ -1,0 +1,13 @@
+/* Hover definitions (campaign/ui/glossaryui.ts): a dotted underline on a codex term, its summary in a card. */
+
+.gl { border-bottom: 1.5px dotted color-mix(in srgb, var(--accent) 70%, transparent); cursor: help; }
+.gl:hover, .gl:focus-visible { color: var(--accent); outline: none; }
+.gl-card {
+  position: fixed; z-index: 1000; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px;
+  box-shadow: var(--shadow-lg); padding: 10px 12px; font-size: 13px; line-height: 1.5; color: var(--text-2); display: grid; gap: 6px;
+}
+.gl-card[hidden] { display: none; }
+.gl-title { display: flex; align-items: center; gap: 8px; color: var(--text); }
+.gl-kind { font: 600 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 1px 6px; border-radius: 6px; background: var(--surface-2); }
+.gl-sum code { font: 0.92em var(--font-mono); }
+.gl-more { display: inline-flex; align-items: center; gap: 2px; color: var(--accent); font-weight: 600; font-size: 12.5px; text-decoration: none; }

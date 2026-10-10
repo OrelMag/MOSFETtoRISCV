@@ -29,6 +29,12 @@ export function datasheets(codexId: string): Datasheet[] {
   return ids.map(resolveComponent).filter((d): d is ComponentDef => !!d).slice(0, 3).map(sheet);
 }
 
+/** One library part's datasheet (undefined: unknown id). */
+export function datasheetOf(id: string): Datasheet | undefined {
+  const d = resolveComponent(id);
+  return d ? sheet(d) : undefined;
+}
+
 function sheet(d: ComponentDef): Datasheet {
   const st = stats(d);
   const ins = d.ports.filter((p) => p.dir === 'in'), outs = d.ports.filter((p) => p.dir === 'out');
