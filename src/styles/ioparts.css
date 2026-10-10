@@ -74,7 +74,8 @@
   margin: 0; padding: 6px 8px; max-height: 240px; overflow: auto; white-space: pre-wrap; word-break: break-all;
   font: 12px/1.35 var(--font-mono); background: var(--con-bg); color: var(--con-fg); border-radius: 6px;
 }
-.sb-scr-item .sb-scr-meta { font-size: 11px; opacity: 0.8; margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.sb-scr-item .sb-scr-meta { font-size: 11px; margin-top: 4px; display: flex; gap: 6px 8px; flex-wrap: wrap; align-items: center; }
+.sb-scr-item .sb-scr-meta > span { flex: 1 1 100%; opacity: 0.8; }
 .sb-scr-sw { display: flex; flex-wrap: wrap; gap: 4px; }
 .sb-scr-sw button {
   min-width: 26px; padding: 2px 4px; font: 11px var(--font-mono); border-radius: 4px; cursor: pointer;

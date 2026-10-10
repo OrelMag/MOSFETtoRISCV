@@ -380,7 +380,8 @@ tests/         Vitest: every component with a `spec` is checked exhaustively (â‰
   path that still collides around symbols (A*); `via` paths are never moved, so make sure
   your vias don't run along another net.
 - No symbol may sit on another, and no label may hide one (`tests/layout.test.ts`: `symbolOverlaps`,
-  `labelOverlaps` over every registered netlist and the CPU tops).
+  `labelOverlaps` over every registered netlist and the CPU tops; `boxTextOverlaps` over every registered box:
+  view/boxtext.ts places a box's port names and label, lifting the label clear of a bottom clock's name).
 - Prefer hierarchy (a box of boxes) over flat netlists: it is the whole point of the site.
 - Large top-level schematics: draw the main data path, and use **net labels** (`tags` on a
   NetDef) for control signals and long feedback paths, like a real schematic. Place

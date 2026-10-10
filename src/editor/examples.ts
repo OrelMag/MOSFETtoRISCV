@@ -195,17 +195,18 @@ export function screenChip(id: string, name: string): ChipDoc {
     pins: [pin('clk', 'in', [2, 18], 1, { kind: 'clock' })],
     parts: [
       part('one', { const: { width: 1, value: 1 } }, [3, 7]), part('cnt', { lib: 'counter8' }, [10, 6]),
-      part('xy', { split: [4, 4] }, [26, 1]),
-      part('colour', { switches: 4 }, [20, 12]),
-      part('write', { const: { width: 1, value: 1 } }, [31, 7]),
+      part('xy', { split: [4, 4] }, [30, 1]),
+      part('colour', { switches: 4 }, [18, 12]),
+      part('write', { const: { width: 1, value: 1 } }, [31, 9]),
       part('scr', { screen: { mode: 'write', size: 16, color: 'pal16' } }, [36, 0]),
     ],
     wires: [
       wire('clk', 'pin:clk', 'cnt.clk'), wire('clk2', 'pin:clk', 'scr.clk'),
-      wire('en', 'one.y', 'cnt.en'), wire('we', 'write.y', 'scr.we'),
-      wire('q', 'cnt.q', 'xy.in'),
+      wire('en', 'one.y', 'cnt.en'), wire('we', 'write.y', 'scr.we', [[34, 10], [34, 8]]),
+      wire('q', 'cnt.q', 'xy.in', [[24, 8], [24, 3]]),
       wire('x', 'xy.o0', 'scr.x'), wire('y', 'xy.o1', 'scr.y'),
-      wire('c', 'colour.q', 'scr.color', [[35, 14], [35, 6]]),
+      // the colour bus rises left of the write constant, so it never meets the we wire
+      wire('c', 'colour.q', 'scr.color', [[29, 14], [29, 6]]),
     ],
   });
 }
