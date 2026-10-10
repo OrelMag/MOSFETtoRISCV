@@ -3,6 +3,7 @@ import { cachedMemory, dualCore, multicycleCpu, pipelinedCpu, singleCycleCpu, sy
 import { registry } from '../src/lib/define';
 import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
+import { deadInstances } from '../src/sim/dead';
 import { netlistOf } from '../src/sim/types';
 import { labelOverlaps, symbolOverlaps } from '../src/view/route';
 import { families, initialParams } from '../src/lib/resolve';
@@ -31,5 +32,12 @@ describe('schematic labels', () => {
   });
   it.each(defs.map((d) => [d.id, d] as const))('%s: no symbol sits on another', (_, d) => {
     expect(symbolOverlaps(netlistOf(d)!)).toEqual([]);
+  });
+});
+
+describe('dead parts', () => {
+  const defs = [...new Set([...registry.values(), ...cpuTops()])].filter((d) => d.netlist);
+  it.each(defs.map((d) => [d.id, d] as const))('%s: every part reaches an output', (_, d) => {
+    expect(deadInstances(netlistOf(d)!, d.ports)).toEqual([]);
   });
 });
