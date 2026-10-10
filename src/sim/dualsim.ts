@@ -23,7 +23,10 @@ export class DualSim implements Sim {
   private prefer = false;
   private fast: CycleSim | null = null;
   private built = false;
-  /** Why there is no cycle engine for this design ('' if there is, or it was not tried yet). */
+  /**
+   * Why the cycle engine does not run this design ('' if it does, or was not tried yet): why it
+   * cannot be built, else why it last refused to take over or to do a settle.
+   */
   whyNot = '';
   private onFast = false;
   private settles = 0;
@@ -143,12 +146,14 @@ export class DualSim implements Sim {
       if (f.settle()) {
         // exact, but a flip-flop is now where its table cannot follow: GateSim from here
         if (f.tainted) {
+          this.whyNot = f.refusal;
           this.toGate();
           this.retryAt = this.settles + 64;
         }
         return;
       }
       // not exactly on the cycle engine: this one on GateSim, the cycle engine again after it
+      this.whyNot = f.refusal;
       this.toGate();
       this.gate.settle();
       this.retryAt = this.settles + 1;
@@ -204,7 +209,12 @@ export class DualSim implements Sim {
   private tryFast(): void {
     if (!this.prefer || this.onFast || this.trace || this.settles < this.retryAt) return;
     const g = this.gate;
-    if (g.busy() || g.unstable) return;
+    if (g.busy()) return;
+    if (g.unstable) {
+      if (this.built && !this.fast) return;
+      this.whyNot = 'the circuit does not settle (an oscillation, or a race GateSim resolved)';
+      return;
+    }
     if (!this.built) {
       this.built = true;
       const r = CycleSim.build(this.design);
@@ -214,8 +224,18 @@ export class DualSim implements Sim {
       } else this.whyNot = r.reason;
     }
     if (!this.fast) return;
-    if (this.fast.load(g)) this.onFast = true;
-    else this.retryAt = this.settles + 64;
+    // an X clock: the next settle may make it 0 / 1
+    if (!this.fast.clocksKnown(g)) {
+      this.whyNot = 'a clock pin is X';
+      return;
+    }
+    if (this.fast.load(g)) {
+      this.onFast = true;
+      this.whyNot = '';
+    } else {
+      this.whyNot = this.fast.refusal;
+      this.retryAt = this.settles + 64;
+    }
   }
 }
 
