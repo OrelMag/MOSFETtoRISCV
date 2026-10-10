@@ -490,6 +490,13 @@ with punch cards.
 - ⏳ A card reader part (sandbox and campaign) feeding a ROM or a word stream (like the keyboard part), and the
   program input of the relay / tube machine
 - ⏳ In the campaign: a Hollerith-code drill and a level where the program arrives on cards
+- ⏳ Cards for the RISC-V CPUs: any program (RV32 asm / hex in the ROM editor and the CPU panel, RV16 in the
+  campaign) exported as a deck, one instruction per card (its word punched in binary, the source line printed in
+  Hollerith along the top, a sequence number in columns 73–80 as on real decks so a dropped deck can be sorted),
+  and a deck loaded back into a ROM; drop a deck file on the canvas to load it
+- ⏳ A card-reader boot loader: a small sandbox example where the CPU starts from a boot ROM that reads cards from
+  the reader part, word by word, into RAM and jumps to it, as IBM's machines loaded from cards (the 1401's Load
+  key); the CPU drawer follows the loaded program like a ROM program, the golden model starting after the load
 
 ### Phase 15 — Journey and campaign track: GPU ⏳
 The same bricks arranged for throughput instead of latency: one instruction stream, many lanes, latency hidden by
