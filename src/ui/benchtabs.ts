@@ -5,10 +5,10 @@ import { h } from './dom';
 
 let last = 'rca4';
 
-/** The workbench opened this component (Components then returns to it). */
-export function benchOpened(id: string): void {
+/** The workbench opened this component (Components then returns to it); `root`: the page, before it is attached. */
+export function benchOpened(id: string, root: ParentNode = document): void {
   last = id;
-  for (const a of document.querySelectorAll<HTMLAnchorElement>('.bench-tab[data-tab="components"]')) a.href = `#/workbench/${id}`;
+  for (const a of root.querySelectorAll<HTMLAnchorElement>('.bench-tab[data-tab="components"]')) a.href = `#/workbench/${id}`;
 }
 
 export function benchTabs(active: 'components' | 'stats'): HTMLElement {

@@ -43,7 +43,7 @@ export class WorkbenchPage implements Page {
       return;
     }
     this.current = def.id;
-    benchOpened(def.id);
+    benchOpened(def.id, this.el);
     // Primitives and transistor-level parts are shown inside a test bench so they can be opened.
     const root: ComponentDef = def.prim === 'nand' || def.prim === 'nmos' || def.prim === 'pmos' || (!netlistOf(def) && !needsSwitchLevel(def))
       ? bench(def) : def;
