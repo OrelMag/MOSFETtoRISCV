@@ -209,8 +209,13 @@ export function migrate(raw: unknown): Workspace | { error: string } {
   const open = [...new Set(Array.isArray(raw.open) ? raw.open.filter((id): id is string => str(id) && !!chips[id]) : [])];
   const ws: Workspace = { schema: SCHEMA, chips, open: open.length ? open : [Object.keys(chips)[0]] };
   if (typeof raw.purist === 'boolean') ws.purist = raw.purist;
+  const favs = Array.isArray(raw.favorites) ? [...new Set(raw.favorites.filter((f): f is string => str(f) && f.length <= 200 && f.includes('/')))] : [];
+  if (favs.length) ws.favorites = favs.slice(0, MAX_FAVORITES);
   return ws;
 }
+
+/** Palette favorites kept at most (number keys reach the first nine). */
+export const MAX_FAVORITES = 40;
 
 // ---------------------------------------------------------------------------------------------
 // Browser storage
@@ -243,6 +248,55 @@ export function saveWorkspace(ws: Workspace, kv: KV | null = defaultKV()): { ok:
     const quota = e instanceof Error && /quota/i.test(`${e.name} ${e.message}`);
     return { ok: false, reason: quota ? 'browser storage is full: export your chips to a file' : `could not save: ${e instanceof Error ? e.message : String(e)}` };
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Local data: what the site keeps in this browser, and deleting it
+
+/** Every key the site stores starts with this (settings, campaign, sandbox). */
+export const SITE_PREFIX = 'mosfet2riscv:';
+/** The sandbox's own keys: the workspace, its unreadable backup, the I/O bar preference. */
+export const SANDBOX_PREFIX = `${SITE_PREFIX}sandbox`;
+
+/** A KV that can list its keys (localStorage; a Map-backed fake in the tests). */
+export interface ListKV extends KV {
+  readonly length: number;
+  key(i: number): string | null;
+}
+
+export type DataScope = 'sandbox' | 'all';
+
+function listKV(): ListKV | null {
+  try {
+    return (globalThis as { localStorage?: ListKV }).localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** The keys a scope covers, with their size in bytes (UTF-16, as browsers count the quota). */
+export function localData(scope: DataScope, kv: ListKV | null = listKV()): { key: string; bytes: number }[] {
+  if (!kv) return [];
+  const prefix = scope === 'all' ? SITE_PREFIX : SANDBOX_PREFIX;
+  const out: { key: string; bytes: number }[] = [];
+  try {
+    for (let i = 0; i < kv.length; i++) {
+      const k = kv.key(i);
+      if (k?.startsWith(prefix)) out.push({ key: k, bytes: 2 * (k.length + (kv.getItem(k)?.length ?? 0)) });
+    }
+  } catch {
+    // unreadable storage: report what was listed
+  }
+  return out;
+}
+
+/** Remove every key of a scope; returns how many went. Keys of other sites on the origin stay. */
+export function deleteLocalData(scope: DataScope, kv: ListKV | null = listKV()): number {
+  const keys = localData(scope, kv).map((d) => d.key);
+  for (const k of keys) {
+    try { kv!.removeItem(k); } catch { /* best effort */ }
+  }
+  return keys.length;
 }
 
 // ---------------------------------------------------------------------------------------------

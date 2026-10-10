@@ -4,6 +4,9 @@
 //
 // Purist mode keeps only what the journey builds from: transistors (and resistors, capacitors),
 // NAND, pins, constants, wiring, displays and the user's own chips.
+//
+// Favorites (Workspace.favorites, '<group>/<item>' keys) are pinned items repeated at the top, each
+// shown as its own group shows it here, so purist mode and greying out still apply.
 
 import { libraryItems } from '../lib/catalog';
 import { h } from '../ui/dom';
@@ -75,6 +78,33 @@ export function visibleItems(g: PaletteGroup, ctx: PaletteCtx, purist: boolean, 
   return g.items(ctx).filter((it) =>
     (!purist || g.purist === true || (typeof g.purist === 'function' && g.purist(it)))
     && (!f || it.name.toLowerCase().includes(f) || it.id.toLowerCase().includes(f) || (it.section ?? '').toLowerCase().includes(f)));
+}
+
+// ---- favorites ------------------------------------------------------------------------------
+
+/** A palette item's key: '<group>/<item>' (stored favorites, the armed item, `data-item`). */
+export const itemKey = (group: string, item: string) => `${group}/${item}`;
+
+/** The pinned items in their saved order, as their groups show them here (purist, search, greyed out); stale keys drop. */
+export function favoriteItems(ctx: PaletteCtx, purist: boolean, filter = ''): { key: string; item: PaletteItem }[] {
+  const favs = ctx.ws.favorites ?? [];
+  if (!favs.length) return [];
+  const want = new Set(favs);
+  const found = new Map<string, PaletteItem>();
+  for (const g of groups) {
+    if (!favs.some((f) => f.startsWith(`${g.id}/`))) continue;
+    for (const it of visibleItems(g, ctx, purist, filter)) {
+      const k = itemKey(g.id, it.id);
+      if (want.has(k)) found.set(k, { ...it, section: undefined, title: `${it.title ?? it.name} (${g.title})` });
+    }
+  }
+  return favs.flatMap((key) => (found.has(key) ? [{ key, item: found.get(key)! }] : []));
+}
+
+/** Favorites with `key` added at the end, or removed. */
+export function toggleFavorite(favs: readonly string[] | undefined, key: string): string[] {
+  const cur = favs ?? [];
+  return cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key];
 }
 
 // ---- built-in groups ------------------------------------------------------------------------
@@ -200,6 +230,8 @@ export interface PaletteHooks {
   pick(item: PaletteItem, e: PointerEvent): void;
   purist(): boolean;
   setPurist(v: boolean): void;
+  /** Pin an item at the top, or unpin it. */
+  toggleFavorite(key: string): void;
   /** The purist switch is fixed (a level screen: the level's rule decides), so it is not drawn. */
   locked?: boolean;
   /** Groups left out entirely. */
@@ -238,6 +270,18 @@ export class PalettePanel {
     this.purist.checked = purist;
     const filter = this.search.value;
     this.list.replaceChildren();
+    const favs = this.favorites(filter);
+    const pinned = new Set(ctx.ws.favorites);
+    if (favs.length) {
+      const det = h('details', { class: 'sb-group sb-favs', 'data-group': 'fav' }) as HTMLDetailsElement;
+      det.open = filter ? true : this.open.get('fav') ?? true;
+      det.addEventListener('toggle', () => { if (!filter) this.open.set('fav', det.open); });
+      det.append(h('summary', null, 'Favorites', h('small', null, favs.length)));
+      // Number keys arm the first nine (unfiltered: a search must not move them).
+      const nums = new Map(this.favorites().slice(0, 9).map((f, i) => [f.key, i + 1]));
+      for (const f of favs) det.append(this.itemButton(f.key, f.item, true, nums.get(f.key)));
+      this.list.append(det);
+    }
     const first = this.hooks.first ?? [];
     const rank = (id: string) => (first.includes(id) ? first.indexOf(id) : first.length);
     for (const g of [...groups].sort((a, b) => rank(a.id) - rank(b.id))) {
@@ -263,20 +307,46 @@ export class PalettePanel {
             sec = sd;
           } else sec = det;
         }
-        const b = h('button', {
-          class: `lib-item sb-item${it.disabled ? ' disabled' : ''}${this.armed === `${g.id}/${it.id}` ? ' on' : ''}`,
-          title: it.disabled ?? it.title ?? it.name, 'data-item': `${g.id}/${it.id}`, 'aria-disabled': it.disabled ? 'true' : null,
-        }, it.hue !== undefined ? h('i', { class: 'sb-swatch-dot', style: `--chip-h:${it.hue}` }) : null, h('span', null, it.name), it.tag ? h('small', null, it.tag) : null);
-        b.addEventListener('pointerdown', (e) => {
-          if (it.disabled || e.button !== 0) return;
-          e.preventDefault();
-          this.hooks.pick(it, e);
-        });
-        sec.append(b);
+        const key = itemKey(g.id, it.id);
+        sec.append(this.itemButton(key, it, pinned.has(key)));
       }
       this.list.append(det);
     }
     if (!this.list.childElementCount) this.list.append(h('p', { class: 'sb-empty' }, 'Nothing matches.'));
+  }
+
+  /** One item: drag or click to place; its star pins it to Favorites (number `n`: the key that arms it). */
+  private itemButton(key: string, it: PaletteItem, fav: boolean, n?: number): HTMLElement {
+    const star = h('span', { class: `sb-star${fav ? ' on' : ''}`, title: fav ? 'Remove from favorites' : 'Add to favorites', 'aria-hidden': 'true' }, fav ? '★' : '☆');
+    const b = h('button', {
+      class: `lib-item sb-item${it.disabled ? ' disabled' : ''}${this.armed === key ? ' on' : ''}`,
+      title: `${it.disabled ?? it.title ?? it.name}${n ? ` (key ${n})` : ''}`, 'data-item': key, 'aria-disabled': it.disabled ? 'true' : null,
+    }, it.hue !== undefined ? h('i', { class: 'sb-swatch-dot', style: `--chip-h:${it.hue}` }) : null, h('span', null, it.name),
+    it.tag ? h('small', null, it.tag) : null, n ? h('kbd', { class: 'sb-fav-key' }, n) : null, star);
+    b.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      if (e.target === star) {
+        e.preventDefault();
+        e.stopPropagation();
+        return this.hooks.toggleFavorite(key);
+      }
+      if (it.disabled) return;
+      e.preventDefault();
+      this.hooks.pick(it, e);
+    });
+    return b;
+  }
+
+  /** The n-th favorite (0-based) as number keys see it: purist applied, no search filter. */
+  favorite(n: number): { key: string; item: PaletteItem } | null {
+    return this.favorites()[n] ?? null;
+  }
+
+  /** The favorites shown here: those of hidden groups (a level screen) left out. */
+  private favorites(filter = ''): { key: string; item: PaletteItem }[] {
+    const hidden = this.hooks.hidden;
+    const all = favoriteItems(this.ctx(), this.hooks.purist(), filter);
+    return hidden ? all.filter((f) => !hidden(f.key.slice(0, f.key.indexOf('/')))) : all;
   }
 
   setArmed(key: string | null): void {

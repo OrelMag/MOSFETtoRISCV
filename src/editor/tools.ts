@@ -621,18 +621,20 @@ export class Tools {
 
   /** Arm the comment tool (key T). */
   armComment(): void {
-    this.cancel();
-    this.state = { k: 'place', item: { id: 'comment', name: 'Comment', place: { comment: true } }, drag: false, sx: 0, sy: 0, key: 'wiring/comment' };
-    this.ed.palette.setArmed('wiring/comment');
-    if (this.cursor) this.ghost(this.state.item, this.cursor);
+    this.arm({ id: 'comment', name: 'Comment', place: { comment: true } }, 'wiring/comment');
   }
 
   /** Arm the pointer tool (key L). */
   armPointer(): void {
+    this.arm({ id: 'pointer', name: 'Pointer', place: { pointer: true } }, 'wiring/pointer');
+  }
+
+  /** Arm a palette item (`key`: its palette key) for a click on the canvas, as a click on it would. */
+  arm(item: PaletteItem, key: string): void {
     this.cancel();
-    this.state = { k: 'place', item: { id: 'pointer', name: 'Pointer', place: { pointer: true } }, drag: false, sx: 0, sy: 0, key: 'wiring/pointer' };
-    this.ed.palette.setArmed('wiring/pointer');
-    if (this.cursor) this.ghost(this.state.item, this.cursor);
+    this.state = { k: 'place', item, drag: false, sx: 0, sy: 0, key };
+    this.ed.palette.setArmed(key);
+    if (this.cursor) this.ghost(item, this.cursor);
   }
 
   private ghost(item: PaletteItem, p: Vec): void {
@@ -766,6 +768,14 @@ export class Tools {
       case 'f': case 'F': done(); this.flip(); return;
       case 'l': case 'L': done(); this.armPointer(); return;
       case 't': case 'T': done(); this.armComment(); return;
+      case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': {
+        const f = ed.palette.favorite(+k - 1);
+        if (!f) return;
+        done();
+        if (f.item.disabled) return void ed.toast(f.item.disabled, 'err');
+        this.arm(f.item, f.key);
+        return;
+      }
       case 'F2': done(); this.renameSel(); return;
       case '?': done(); ed.showHelp(); return;
       case 'ArrowLeft': case 'ArrowRight': case 'ArrowUp': case 'ArrowDown': {

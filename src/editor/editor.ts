@@ -20,7 +20,7 @@ import { History } from './history';
 import { UserLibrary } from './library';
 import { chipDeps, type ChipDoc, type DefOf, type PartRef, type PinValue, type Workspace } from './model';
 import type { Sel } from './ops';
-import { PalettePanel } from './palette';
+import { PalettePanel, toggleFavorite } from './palette';
 import { isError, keyLabel, partDef } from './parts';
 import { PropsPanel } from './props';
 import { EditorSim, HZ_STEPS, type RunMode } from './runtime';
@@ -180,6 +180,10 @@ export class Editor {
       pick: (item, e) => this.tools.pickFromPalette(item, e),
       purist: () => !!this.level || !!this.ws.purist,
       setPurist: (v) => this.volatile({ ...this.ws, ...(v ? { purist: true } : { purist: undefined }) }),
+      toggleFavorite: (key) => {
+        const favorites = toggleFavorite(this.ws.favorites, key);
+        this.volatile({ ...this.ws, ...(favorites.length ? { favorites } : { favorites: undefined }) });
+      },
       locked: !!this.level,
       hidden: (g) => !!this.level?.hideGroups?.includes(g),
       first: this.level ? ['unlocked', 'lib', 'wiring', 'const', 'mine'] : undefined,
@@ -286,7 +290,7 @@ export class Editor {
     this.changed();
   }
 
-  /** Saved but never undone: open tabs, input values, the purist toggle. */
+  /** Saved but never undone: open tabs, input values, the purist toggle, palette favorites. */
   volatile(ws: Workspace): void {
     if (ws === this.ws) return;
     this.history.replace(ws);
@@ -456,7 +460,7 @@ export class Editor {
     this.repaint();
     this.renderTabs();
     this.renderActions();
-    const pk = JSON.stringify([id, !!ws.purist, Object.values(ws.chips).map((c) => [c.id, c.name, c.hue, chipDeps(c), c.pins.map((p) => p.dir)])]);
+    const pk = JSON.stringify([id, !!ws.purist, ws.favorites, Object.values(ws.chips).map((c) => [c.id, c.name, c.hue, chipDeps(c), c.pins.map((p) => p.dir)])]);
     if (pk !== this.paletteKey) {
       this.paletteKey = pk;
       this.palette.render();
@@ -515,9 +519,18 @@ export class Editor {
     this.saveWatchers.forEach((f) => f());
   }
 
+  /** Never save again (local data was just deleted: the page reloads, and its closing must not write the workspace back). */
+  stopSaving(): void {
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = null;
+    this.saving = false;
+  }
+  private saving = true;
+
   save(): void {
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = null;
+    if (!this.saving) return;
     const r = saveWorkspace(this.ws);
     if (!r.ok && r.reason !== this.saveError) this.toast(r.reason, 'err');
     this.saveError = r.ok ? '' : r.reason;
@@ -815,6 +828,8 @@ export class Editor {
       ['Double-click a corner', 'remove that bend'],
       ['Right-click a wire ▸ Add a bend here', 'a new corner on the cursor: move it, click to drop it'],
       ['Wire colours ▸ Simple connections', 'new wires run straight between the points you click'],
+      ['☆ on a palette item', 'pin it to Favorites at the top of the palette (★ unpins)'],
+      ['1 … 9', 'pick favorite 1 to 9: click the canvas to place it (Shift: place several)'],
       ['L', 'place a pointer (same name = same net)'],
       ['Click a selected pointer / double-click', 'jump to the next pointer with that name'],
       ['T', 'place a comment · double-click one to edit it'],
