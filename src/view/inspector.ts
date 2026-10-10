@@ -22,7 +22,7 @@ export interface InspectTarget {
 
 type Tab = 'info' | 'truth' | 'hdl';
 
-const CATEGORY: Record<Category, string> = {
+export const CATEGORY_LABEL: Record<Category, string> = {
   transistor: 'Transistor level', cell: 'CMOS cell', gate: 'Logic gate', plumbing: 'Wiring',
   arithmetic: 'Arithmetic', routing: 'Selection & routing', sequential: 'Sequential logic',
   memory: 'Memory', cpu: 'Processor', custom: 'User chip',
@@ -86,7 +86,7 @@ export class Inspector {
     const depth = d.prim === 'alias' ? null : logicDepthSafe(d);
     const b = this.body;
     b.append(
-      h('div', { class: 'insp-kicker' }, `${CATEGORY[d.category] ?? d.category}${t.instance ? ` · ${t.instance}` : ''}`),
+      h('div', { class: 'insp-kicker' }, `${CATEGORY_LABEL[d.category] ?? d.category}${t.instance ? ` · ${t.instance}` : ''}`),
       h('div', { class: 'insp-title' }, d.name),
     );
     if (d.summary) b.append(h('p', { class: 'insp-summary' }, d.summary));

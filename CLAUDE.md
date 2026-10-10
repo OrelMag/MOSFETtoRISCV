@@ -30,7 +30,7 @@ npm install          # once
 npm run dev          # Vite dev server
 npm test             # Vitest (simulation + library correctness), must stay green
 npm run typecheck    # tsc --noEmit (strict)
-npm run build        # typecheck + production build into dist/ (relative base, deploy anywhere)
+npm run build        # typecheck + hwstats.json (npm run stats, ~20 s) + production build into dist/ (relative base)
 npm run preview      # serve dist/
 npm run desktop      # build + desktop/ (Electron, own package): portable Windows .exe in desktop/release/
 ```
@@ -51,7 +51,7 @@ before merging a change to the exporters or the dual-core.
 
 - Vite + TypeScript (strict, `verbatimModuleSyntax`: use `import type` for types). No UI
   framework: plain DOM + SVG with small helpers in `src/ui/dom.ts`. Keep the bundle small.
-- Hash routing (`#/c/<chapter>/<step>`, `#/workbench/<componentId>`, `#/sandbox/<chipId>`, `#/campaign[/n/<node> | /intro | /codex[/<id>]]`,
+- Hash routing (`#/c/<chapter>/<step>`, `#/workbench/<componentId>`, `#/workbench/stats`, `#/sandbox/<chipId>`, `#/campaign[/n/<node> | /intro | /codex[/<id>]]`,
   `#/sandbox/s/<payload>` for a share link) so the site works on
   any static host or sub-path.
 - Theme: CSS custom properties in `src/styles/`; `data-theme="light|dark"` on `<html>`, or
@@ -117,6 +117,8 @@ src/lib/       the component library (registered in `registry` via define())
   wide.ts        bitwise(op, n), orN(n) (shared by alu.ts and fastadd.ts to avoid an import cycle)
   usage.ts       usedIn(def) (parents with instance counts, the chapters' CPUs included), copiesIn(top, def),
                  referenceCpus(): the inspector's "Where it is used"
+  hwstats.ts     hwTargets / measure / hwStats (scripts/hwstats.ts → public/hwstats.json at build), hwStatsLive:
+                 the workbench's Statistics tab (ui/pages/hwstats.ts, its own chunk; benchtabs.ts: the tabs)
   pipeline.ts    equal, nonZero, clearableRegister, pipeline registers (fields on fixed rows),
                  hazardUnit(lookAhead), BRANCH_CMP, BTB (16 × 62-bit), SAT_COUNTER, MISPREDICT,
                  pipelinedCpu(program, { adder, balanced, predictor, dcache, m }) (a cache miss in M freezes every stage;
@@ -498,14 +500,46 @@ get approval. Small fixes and additions inside an existing screen don't need one
   2. Run the full gate: `npm test`, `npm run typecheck`, `npm run build`. All must pass;
      report failures instead of merging.
   3. For visual changes, check `npm run dev` in light and dark themes.
-- **Merge with `--no-ff`** so every feature stays a visible merge commit:
-  `git checkout main && git pull && git merge --no-ff <branch>`, then push `main`.
+- **Merge with `--no-ff`** so every feature stays a visible merge commit, from the branch's worktree
+  (never the shared checkout): `git checkout --detach origin/main && git merge --no-ff <branch>`, then
+  `git push origin HEAD:main`. A rejected push means main moved: fetch, merge again, re-gate. `/ship`
+  (`.claude/skills/ship`) runs the whole sequence, deploy watch included.
+- If the user's approval is terse ("go ahead", "3"), restate in one line what you are about to do first.
 - **Never delete branches on GitHub (`origin`).** They are kept as history. Deleting the
   local copy after a successful merge and push is fine.
 - Never force-push `main`, never rewrite its history, never skip hooks (`--no-verify`).
+- `.claude/hooks/guard.mjs` enforces these (and the shared-checkout rules below) on every shell command;
+  `.claude/hooks/typecheck.mjs` typechecks the repos a turn edited before it ends. A command the user
+  explicitly asked for may end with `# user-approved` to pass the guard.
+
+### Parallel sessions
+
+Several Claude sessions (and their subagents) work in this repo at once.
+
+- The main checkout (`E:\MOSFET to RISCV`) is **shared**: never switch branches, reset, stash, clean,
+  rebase or commit there, and leave uncommitted changes you did not make alone (report them).
+- Every task gets its own worktree: `git worktree add -b <branch> E:/MOSFET-<topic> origin/main`, then
+  link `node_modules` as a junction (PowerShell `New-Item -ItemType Junction -Path <wt>\node_modules
+  -Target 'E:\MOSFET to RISCV\node_modules'`). To remove one, delete the junction first
+  (`cmd /c rmdir <wt>\node_modules`), never `rm -rf` it: that wipes the shared `node_modules`.
+- Each session serves on its own free port (check it first): prefer `vite preview --port <n> --strictPort`
+  of a build over `vite dev`, which writes to the shared `node_modules/.vite`.
+- Use ListAgents / SendMessage to coordinate with a session whose branch or worktree you would touch.
+
+### Windows environment
+
+- Git Bash mangles `/`-leading and `#` arguments: set `MSYS_NO_PATHCONV=1` for hash URLs (screenshots).
+- `node_modules` has no `.bin`, so `npm run typecheck` / `npx` fail from Git Bash: run
+  `node node_modules/typescript/bin/tsc --noEmit -p .`, `node node_modules/vitest/vitest.mjs run`,
+  `node node_modules/vite/bin/vite.js build | preview`, `node node_modules/vite-node/vite-node.mjs <script>`.
+- Python is not installed. Write multi-line content with the Write / Edit tools, not quoted heredocs.
+- `gh` is at `C:\Program Files\GitHub CLI` (add it to PATH in Git Bash).
 
 ## Testing expectations
 
 - `npm test` and `npm run typecheck` must pass before committing.
 - New component → spec or behaviour test. New simulator feature → unit test.
+- A reported bug → first a failing test that reproduces it (a truth table, a sequence, a layout /
+  overlap check in `tests/layout.test.ts` or `tests/route.test.ts`), then the fix; prefer fixing the
+  shared renderer / router over a per-component patch.
 - Visual changes: run `npm run dev` and look at it, in both light and dark themes.

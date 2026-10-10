@@ -454,3 +454,7 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
   level and a **fuller codex**: details in the roadmap's Phase 12, Campaign.
 - ⏳ **Before the transistor**: an act with relay and tube bricks, a 3D view of the machine and punch-card
   programs (roadmap Phase 14).
+- ⏳ **GPU act**: SIMD lanes, active masks, a warp scheduler, a coalescer and a rasterizer, with kernel puzzles
+  (roadmap Phase 15).
+- ⏳ **Memory act**: sense amplifier, DRAM bank with refresh, row-buffer controller, a shared bus with DMA and a
+  flash page store (roadmap Phase 16).
