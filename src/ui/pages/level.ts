@@ -353,8 +353,11 @@ export class LevelPage implements Page {
     const k = copiesInFinal(n), part = countedPart(n);
     if (k <= 0 || !part || yours === undefined) return el.remove();
     const parts: (string | Node)[] = [`The finished CPU holds `, h('b', null, k.toLocaleString()), ` × ${part.name}.`];
-    const worst = alts.filter((a) => a.cost.nand !== undefined && a.cost.nand > yours).sort((a, b) => b.cost.nand! - a.cost.nand!)[0];
-    if (worst) parts.push(' Over ', worst.name, `, your design saves `, h('b', null, ((worst.cost.nand! - yours) * k).toLocaleString()), ' NANDs there.');
+    // Against the first alternative the case lists (the textbook way), not the costliest: a later one may do more (a reset).
+    const base = alts[0];
+    if (base?.cost.nand !== undefined && base.cost.nand > yours) {
+      parts.push(` Compared with “${base.name}”, your design saves `, h('b', null, ((base.cost.nand - yours) * k).toLocaleString()), ' NANDs there.');
+    }
     if (par !== undefined && yours > par) parts.push(' At par it would be ', h('b', null, ((yours - par) * k).toLocaleString()), ' fewer.');
     el.replaceChildren(...parts);
   }
