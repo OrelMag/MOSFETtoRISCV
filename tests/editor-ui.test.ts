@@ -256,13 +256,15 @@ describe('EditorSim', () => {
     const doc = counterDoc();
     es.update(compile(doc), [{ ...doc.pins[0], value: 1 }, doc.pins[1], doc.pins[2]]);
     es.hz = 10;
-    expect(es.advance(0.5)).toBe(5);
+    // No work budget: on a loaded machine (CI) the cycle engine's first cycles can outlast a
+    // frame's, and this test is about the rate, not the budget.
+    expect(es.advance(0.5, Infinity)).toBe(5);
     expect(es.cycles).toBe(5);
     es.setMode('gate');
     const t0 = es.time;
-    es.advance(1 / 12); // one tick at 12 delays/s: the clock rises
+    es.advance(1 / 12, Infinity); // one tick at 12 delays/s: the clock rises
     expect(es.cycles).toBe(6);
-    es.advance(1 / 12);
+    es.advance(1 / 12, Infinity);
     expect(es.time).toBe(t0 + 1);
   });
 
