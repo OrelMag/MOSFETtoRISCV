@@ -19,9 +19,9 @@ import { NOT } from '../src/lib/gates';
 import { ram } from '../src/lib/memory';
 import { pipelinedCpu } from '../src/lib/pipeline';
 import { lfsr, shiftRegister, upDownCounter } from '../src/lib/seqparts';
-import { counter, D_LATCH, DFF, DFFE, register, SR_LATCH } from '../src/lib/sequential';
+import { counter, D_LATCH, DFF, DFFE, register } from '../src/lib/sequential';
 import { systemCpu } from '../src/lib/system';
-import { TIE1 } from '../src/lib/transistors';
+import { NAND, TIE1 } from '../src/lib/transistors';
 import { assemble } from '../src/riscv/asm';
 import { CycleSim } from '../src/sim/cyclesim';
 import { DualSim } from '../src/sim/dualsim';
@@ -351,18 +351,18 @@ describe('EditorSim on the cycle engine', () => {
 // ---- fall-backs ---------------------------------------------------------------------------------
 
 describe('fall-backs to GateSim', () => {
-  it('refuses loops that are not flip-flops, derived clocks, and behaviours on a derived clock', () => {
-    const latch = flatten(SR_LATCH);
-    expect((CycleSim.build(latch) as { reason: string }).reason).toMatch(/loop/);
+  it('refuses gated clocks and behaviours on a derived clock (more in cyclesim-storage.test.ts)', () => {
     const gated: ComponentDef = {
-      id: 't_gated', name: 'gated', category: 'custom', ports: [bit('clk', 'in'), bit('d', 'in'), bit('q', 'out')], symbol: { kind: 'box' },
-      netlist: () => ({ instances: [{ name: 'n', def: NOT }, { name: 'f', def: DFF }], nets: [{ ends: ['clk', 'n.a'] }, { ends: ['n.y', 'f.clk'] }, { ends: ['d', 'f.d'] }, { ends: ['f.q', 'q'] }] }),
+      id: 't_gated', name: 'gated', category: 'custom', ports: [bit('clk', 'in'), bit('en', 'in'), bit('d', 'in'), bit('q', 'out')], symbol: { kind: 'box' },
+      netlist: () => ({
+        instances: [{ name: 'n', def: NAND }, { name: 'f', def: DFF }],
+        nets: [{ ends: ['clk', 'n.a'] }, { ends: ['en', 'n.b'] }, { ends: ['n.y', 'f.clk'] }, { ends: ['d', 'f.d'] }, { ends: ['f.q', 'q'] }],
+      }),
     };
     expect((CycleSim.build(flatten(gated)) as { reason: string }).reason).toMatch(/clock/);
     expect((CycleSim.build(flatten(computer('inverted'))) as { reason: string }).reason).toMatch(/derived from a clock/);
-    // DualSim stays on GateSim for them, and is GateSim
+    // DualSim stays on GateSim for it, and is GateSim
     expect(lockstep(gated, 60, 31, ['zero'])).toBe(0);
-    expect(lockstep(SR_LATCH, 40, 32, ['zero'])).toBe(0);
   });
 
   it('an X clock: that settle runs on GateSim, the cycle engine takes over again after', () => {
