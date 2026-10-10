@@ -101,8 +101,12 @@ class Analysis {
   // ---- modes ---------------------------------------------------------------------------------
 
   setOpen(on: boolean): void {
+    const was = this.open;
     this.open = on;
     if (!on && this.probing) this.setProbing(false);
+    // opened: record from now on (on the event-driven engine); closed: stop recording
+    if (on && !was && this.chip) this.attach(this.save());
+    else this.pause();
     this.layout();
     this.ed.renderActions();
   }
@@ -114,7 +118,10 @@ class Analysis {
     }
     this.probing = on;
     this.ed.el.querySelector('.sb-canvas')?.classList.toggle('probing', on);
-    if (on && !this.open) this.open = true;
+    if (on && !this.open) {
+      this.open = true;
+      if (this.chip) this.attach(this.save());
+    }
     this.layout();
     this.ed.renderActions();
     if (on) this.ed.toast('Probe mode: click a wire or pointer to record it, again to remove it (P or Esc to leave)');
@@ -202,8 +209,18 @@ class Analysis {
     this.la.setLanes(lanes);
     this.la.lanes.forEach((l, i) => this.targets.set(l.id, ts[i]));
     if (sim) this.la.attach(sim);
+    this.pause();
     this.internal = false;
     this.flagsStale = true;
+  }
+
+  /**
+   * The analyzer records only while the timing panel is open: a trace listener keeps the
+   * simulation on the event-driven engine (every change at its gate delay), and without one the
+   * sandbox's cycle mode runs on the much faster cycle engine (sim/dualsim.ts).
+   */
+  private pause(): void {
+    if (!this.open && this.sim) this.sim.onTrace = undefined;
   }
 
   /** The simulator was rebuilt (connectivity changed): same lanes, new net numbers. */
@@ -221,6 +238,7 @@ class Analysis {
       if (l.probe) { l.label = r.label; l.title = this.title(r.label); }
       return r.nets;
     });
+    this.pause();
     this.internal = false;
     this.flagsStale = true;
   }
