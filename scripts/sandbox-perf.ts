@@ -2,7 +2,8 @@
 // Run: npx vite-node scripts/sandbox-perf.ts
 // A CPU opened in the sandbox (docFromDef), then: compile, library update after a move,
 // polylines + wire groups + hops (what EditorView recomputes), simulator rebuild and cycle rate;
-// and a transistor chip whose truth table is derived (compile after a move).
+// a transistor chip whose truth table is derived (compile after a move); large memories (a 64K × 32
+// RAM placed and compiled, opened level by level; a 64K-word ROM).
 
 import '../src/lib';
 import { compileChip } from '../src/editor/compile';
@@ -23,6 +24,10 @@ import { PROGRAMS } from '../src/riscv/programs';
 import { flatten } from '../src/sim/flatten';
 import type { Vec } from '../src/sim/geometry';
 import { analyzeTiming } from '../src/sim/timing';
+import { stats } from '../src/sim/stats';
+import { bigRam } from '../src/lib/bigmem';
+import { romImage } from '../src/editor/memory';
+import { ViewCtx } from '../src/view/context';
 import { hopPathData, type RoutedNet } from '../src/view/route';
 
 const time = (label: string, f: () => unknown, n = 5): number => {
@@ -110,3 +115,51 @@ const ksPolys = new Map(ks.wires.flatMap((w) => { const p = polyline(ks, w, defO
 time('lintChip (ks64)', () => lintChip(ks, ksC, ksPolys));
 const cpuDesign = flatten(c.def, { mode: 'gate' });
 time('analyzeTiming (CPU)', () => analyzeTiming(cpuDesign), 3);
+
+// Large memories (lib/bigmem.ts): a 64K × 32 RAM part, cold and warm, with 64K initial words; a
+// 64K-word ROM built from a 64K-line program; looking inside at each level (sub-simulation + sync).
+console.log('\nLarge memories');
+const ramDoc = (k: number, init?: number[]): ChipDoc => ({
+  id: 'u_ram', name: 'RAM', labels: [],
+  pins: [{ id: 'a', name: 'addr', dir: 'in', width: k, at: [0, 2] }, { id: 'd', name: 'din', dir: 'in', width: 32, at: [0, 4] },
+    { id: 'e', name: 'we', dir: 'in', width: 1, at: [0, 6] }, { id: 'c', name: 'clk', dir: 'in', width: 1, at: [0, 8] }, { id: 'q', name: 'dout', dir: 'out', width: 32, at: [40, 4] }],
+  parts: [{ id: 'mem', ref: { ram: { k, w: 32, ...(init ? { init } : {}) } }, at: [10, 0] }],
+  wires: [['a', 'addr'], ['d', 'din'], ['e', 'we'], ['c', 'clk']].map(([p, port], i) => ({ id: `w${i}`, a: { pin: p }, b: { part: 'mem', port }, pts: [] as Vec[] }))
+    .concat([{ id: 'wq', a: { part: 'mem', port: 'dout' } as never, b: { pin: 'q' } as never, pts: [] }]),
+});
+const once = (label: string, f: () => unknown): void => {
+  const t0 = performance.now();
+  f();
+  console.log(`${label.padEnd(44)} ${(performance.now() - t0).toFixed(2).padStart(9)} ms`);
+};
+const big = ramDoc(16);
+once('compileChip, 64K × 32 RAM (cold: first build)', () => compile(big));
+time('compileChip, 64K × 32 RAM (warm)', () => compile({ ...big, parts: big.parts.map((p) => ({ ...p })) }));
+const initWords = Array.from({ length: 65536 }, (_, i) => (i * 2654435761) >>> 0);
+const bigInit = ramDoc(16, initWords);
+time('compileChip, 64K × 32 RAM, 64K initial words', () => compile({ ...bigInit, parts: bigInit.parts.map((p) => ({ ...p, ref: { ram: { k: 16, w: 32, init: initWords } } })) }), 3);
+const bigC = compile(big);
+const bigSim = new EditorSim({ debounceMs: 0 });
+time('EditorSim rebuild, 64K × 32 RAM', () => { bigSim.update({ ...bigC, connKey: String(Math.random()) }, big.pins); bigSim.flush(); }, 3);
+const s0 = bigSim.sim!;
+s0.setInput('we', 1);
+const t1 = performance.now();
+let writes = 0;
+for (; performance.now() - t1 < 300; writes++) {
+  s0.setInput('addr', writes & 0xffff); s0.setInput('din', writes); s0.setInput('clk', 0); s0.settle(); s0.setInput('clk', 1); s0.settle();
+}
+console.log(`${'write cycles (set, settle, edge, settle)'.padEnd(44)} ${Math.round(writes / 0.3)} /s`);
+const prog = `${Array.from({ length: 65535 }, (_, i) => `addi x${1 + (i % 31)}, x0, ${i % 2048}`).join('\n')}\nhalt: j halt\n`;
+time('ROM 64K words: romImage of a 64K-line program', () => romImage({ k: 16, w: 32, lang: 'asm', src: prog }), 2);
+once('ROM 64K words: partDef (hash, levels)', () => partDef({ rom: { k: 16, w: 32, addr: 'rv32', lang: 'asm', src: prog } }, () => undefined));
+const root = new ViewCtx(s0, s0.design.root);
+let l1: ViewCtx | null = null;
+once('look inside the RAM (16 banks of 4K)', () => { l1 = root.child('mem'); });
+time('  sync per frame', () => l1!.sync(), 20);
+let l3: ViewCtx | null = null;
+once('  open two levels down (4 banks of 64)', () => { l3 = l1!.child('bank3')!.child('bank4'); });
+time('  sync per frame', () => l3!.sync(), 20);
+let l4: ViewCtx | null = null;
+once('  open a 64-word bank (gates: flip-flops)', () => { l4 = l3!.child('bank1'); });
+time('  sync per frame (latches seeded)', () => l4!.sync(), 20);
+once('stats of 64K × 32 (per level)', () => stats(bigRam(16, 32)));

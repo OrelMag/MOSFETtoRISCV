@@ -7,7 +7,7 @@ import { deadInstances } from '../src/sim/dead';
 import { netlistOf } from '../src/sim/types';
 import { backwardEnds, labelOverlaps, symbolOverlaps } from '../src/view/route';
 import { families, initialParams } from '../src/lib/resolve';
-import { cpuTops } from './tops';
+import { bigMemTops, cpuTops } from './tops';
 import { rv16Core } from '../src/lib/rv16/cpu';
 import { rv16Pipe } from '../src/lib/rv16/pipe';
 import { rv16SysCore } from '../src/lib/rv16/system';
@@ -34,7 +34,7 @@ for (const o of [{ fwd: false, stall: false, flush: false }, { fwd: true, stall:
 
 describe('schematic labels', () => {
   // the top-level CPUs are not registered (only their parts are): add them explicitly
-  const tops = cpuTops();
+  const tops = [...cpuTops(), ...bigMemTops()];
   const defs = [...new Set([...registry.values(), ...tops])].filter((d) => d.netlist);
   it.each(defs.map((d) => [d.id, d] as const))('%s: no label hides another', (_, d) => {
     expect(labelOverlaps(d, netlistOf(d)!)).toEqual([]);

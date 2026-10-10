@@ -5,7 +5,8 @@
 // element showing them is on the page.
 
 import '../styles/memui.css';
-import { B0, B1 } from '../sim/types';
+import { BANK_K, kWords, ramLeafState, ramWord } from '../lib/bigmem';
+import { B0, B1, BX } from '../sim/types';
 import { h, icon } from '../ui/dom';
 import { codeEditor } from '../widgets/codeedit';
 import { type Editor, registerToolbarAction } from './editor';
@@ -18,6 +19,7 @@ import { setRef } from './ops';
 import { registerPaletteGroup } from './palette';
 import { MAX_ROM_K } from './parts';
 import { registerPropsSection } from './props';
+import { virtualRows } from './vlist';
 
 // ---- palette -------------------------------------------------------------------------------
 
@@ -77,32 +79,40 @@ function select<T extends string | number>(value: T, options: [T, string][], com
   return s;
 }
 
+/** A small number per object (a RAM leaf's state: a new one after a reset, a rebuild or Back). */
+const ids = new WeakMap<object, number>();
+let nextId = 0;
+const objectId = (o: object) => ids.get(o) ?? (ids.set(o, ++nextId), nextId);
+
 const row = (label: string, ctl: Node, hint?: string) => h('label', { class: 'sb-row', title: hint ?? null }, h('span', null, label), ctl);
 
-/** A listing table (address · word · disassembly) whose current row can be set cheaply. */
+/**
+ * A listing table (address · word · disassembly) whose current row can be set cheaply. Only the
+ * rows in view are built (vlist.ts): a 64K-word program is one screenful of DOM rows.
+ */
 function listingTable(rows: ListingRow[], onRow?: (r: ListingRow) => void, errLines?: Set<number>): { el: HTMLElement; setCurrent(i: number | null): void } {
-  const trs = rows.map((r) => {
-    const tr = h('tr', { 'data-row': String(r.index), class: errLines?.has(r.srcLine) ? 'err' : null, title: r.srcLine ? `source line ${r.srcLine}` : '' },
+  let cur: number | null = null;
+  const make = (i: number) => {
+    const r = rows[i];
+    const cls = [errLines?.has(r.srcLine) ? 'err' : '', i === cur ? 'cur' : ''].join(' ').trim();
+    const tr = h('tr', { 'data-row': String(r.index), class: cls || null, title: r.srcLine ? `source line ${r.srcLine}` : '' },
       h('td', { class: 'a' }, r.addr), h('td', { class: 'w' }, r.word), h('td', { class: 'd' }, r.text));
     if (onRow) tr.addEventListener('click', () => onRow(r));
     return tr;
-  });
-  const el = h('div', { class: 'sb-rom-list' }, rows.length
-    ? h('table', { class: 'asm-table' }, h('tbody', null, trs))
-    : h('p', { class: 'sb-sum' }, 'Empty: every word reads as the fill value.'));
-  let cur: number | null = null;
+  };
+  const body = h('tbody');
+  const el = h('div', { class: 'sb-rom-list' }, rows.length ? h('table', { class: 'asm-table' }, body) : h('p', { class: 'sb-sum' }, 'Empty: every word reads as the fill value.'));
+  const list = rows.length ? virtualRows({ count: rows.length, el, body, row: make }) : null;
   return {
     el,
     setCurrent(i) {
-      if (i === cur) return;
-      if (cur !== null) trs[cur]?.classList.remove('cur');
+      if (i === cur || !list) return;
+      if (cur !== null) list.built.get(cur)?.classList.remove('cur');
       cur = i;
-      const tr = i === null ? undefined : trs[i];
-      if (!tr) return;
-      tr.classList.add('cur');
+      if (i === null) return;
+      list.built.get(i)?.classList.add('cur');
       // Keep the row in view inside the list only (scrollIntoView would scroll the page too).
-      const top = tr.offsetTop, bottom = top + tr.offsetHeight;
-      if (top < el.scrollTop || bottom > el.scrollTop + el.clientHeight) el.scrollTop = Math.max(0, top - el.clientHeight / 3);
+      list.reveal(i);
     },
   };
 }
@@ -143,7 +153,7 @@ registerPropsSection({
 
     const out = h('section', { class: 'sb-sec-props sb-rom' },
       h('h3', null, 'Program'),
-      row('Words', select(r.k, Array.from({ length: MAX_ROM_K }, (_, i): [number, string] => [i + 1, String(2 ** (i + 1))]), (k) => set({ k }), 'Words'), '2^k words'),
+      row('Words', select(r.k, Array.from({ length: MAX_ROM_K }, (_, i): [number, string] => [i + 1, kWords(2 ** (i + 1))]), (k) => set({ k }), 'Words'), '2^k words'),
       row('Width', width, r.addr === 'rv32' ? 'Byte addressing reads 32-bit instructions' : 'Bits per word'),
       row('Address', select(r.addr, [['word', 'word index'], ['rv32', 'byte (RV32 PC)']], (addr) => set(addr === 'rv32' ? { addr, w: 32 } : { addr }), 'Addressing'),
         'word: addr is the word number (k bits). byte: a 32-bit address like a PC, word = addr / 4'),
@@ -290,15 +300,31 @@ registerPropsSection({
     const N = 2 ** k;
     const digits = Math.max(1, Math.ceil(w / 4));
     const showBits = w <= 16;
-    const grid = h('div', { class: 'memgrid sb-ram-grid' });
-    const rowsEl: { row: HTMLElement; cells: HTMLElement[]; hex: HTMLElement }[] = [];
-    for (let i = 0; i < N; i++) {
-      const cells = showBits ? Array.from({ length: w }, () => h('span', { class: 'cell' })) : [];
-      const hex = h('span', { class: 'hex' });
-      const r = h('div', { class: 'row' }, h('span', { class: 'addr' }, `[${i}]`), showBits ? h('span', { class: 'cells' }, cells.slice().reverse()) : null, hex);
-      rowsEl.push({ row: r, cells, hex });
-      grid.append(r);
-    }
+    // Past 64 words the RAM is a lookup: its words come from the leaf's state (lib/bigmem.ts).
+    const big = k > BANK_K;
+    const at = (i: number) => (big ? `[${i.toString(16).toUpperCase().padStart(Math.ceil(k / 4), '0')}]` : `[${i}]`);
+    /** What the rows show (refreshed once per frame while the section is on the page). */
+    let snap: { word(i: number): number; bits(i: number): readonly number[] | null } | null = null;
+    let cur: number | null = null, writing = false;
+    const grid = h('div', { class: `memgrid sb-ram-grid${big ? ' big' : ''}` });
+    const makeRow = (i: number) => {
+      const v = snap ? snap.word(i) : -1;
+      const bits = showBits ? snap?.bits(i) ?? null : null;
+      const cells = showBits ? Array.from({ length: w }, (_, j) => h('span', { class: `cell${bits?.[j] === B1 ? ' one' : bits && bits[j] !== B0 ? ' x' : ''}` })).reverse() : [];
+      return h('div', { class: `row${i === cur ? (writing ? ' write' : ' read') : ''}` }, h('span', { class: 'addr' }, at(i)),
+        showBits ? h('span', { class: 'cells' }, cells) : null,
+        h('span', { class: 'hex' }, v < 0 ? 'x'.repeat(digits) : v.toString(16).toUpperCase().padStart(digits, '0')));
+    };
+    // Only the rows in view are built: a 64K-word RAM is one screenful of rows.
+    const rows = virtualRows({ count: N, el: grid, body: grid, row: makeRow, rowH: 17 });
+    const goto = big ? h('input', { type: 'text', class: 'sb-ram-goto', placeholder: 'go to word (hex)', 'aria-label': 'Go to word', spellcheck: 'false' }) as HTMLInputElement : null;
+    goto?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const t = goto.value.trim().replace(/^0x/i, '');
+      const i = /^[0-9a-f]+$/i.test(t) ? parseInt(t, 16) : NaN;
+      if (i >= 0 && i < N) rows.reveal(i);
+      else ed.toast(`Go to: a word index from 0 to ${(N - 1).toString(16).toUpperCase()} (hex)`, 'err');
+    });
     const note = h('p', { class: 'sb-sum' });
 
     const text = h('textarea', { rows: '3', spellcheck: 'false', class: 'sb-ram-init', placeholder: 'hex words, e.g. 01 02 ff (@n: word n)', 'aria-label': 'Initial contents' }, initText(init, w)) as HTMLTextAreaElement;
@@ -323,9 +349,11 @@ registerPropsSection({
 
     const out = h('section', { class: 'sb-sec-props sb-ram' },
       h('h3', null, 'Contents', h('small', null, ` ${N} × ${w} bits, live`)),
-      grid, note,
+      goto, grid, note,
       h('h3', null, 'Initial contents'),
-      h('p', { class: 'sb-sum' }, 'Held at power-on ("to 0" mode): seeded into the flip-flops, no extra gates.'),
+      h('p', { class: 'sb-sum' }, big
+        ? 'Held at power-on ("to 0" mode): the lookup starts with them, and its banks show them when opened. No extra gates.'
+        : 'Held at power-on ("to 0" mode): seeded into the flip-flops, no extra gates.'),
       text,
       h('div', { class: 'sb-btns' },
         h('button', { class: 'btn sm', title: 'Set these words and power-cycle the circuit', onclick: applyText }, 'Apply & reset'),
@@ -339,21 +367,24 @@ registerPropsSection({
     let key = '';
     live(out, () => {
       const sim = ed.sim.sim;
-      const words = sim ? readRam(sim, id) : null;
+      const node = sim?.design.root.children?.get(id);
+      const st = sim ? ramLeafState(sim, node) : null;
+      // A large RAM: its state object and write count say whether anything changed (no 64K-word join per frame).
+      const words = st || !sim ? null : readRam(sim, id);
       const a = addrValue(ed.sim.endBits(`p:${id}.addr`));
       const we = addrValue(ed.sim.endBits(`p:${id}.we`));
-      const k2 = `${words?.join(',')}|${a}|${we}`;
+      const k2 = `${st ? `${objectId(st)}:${st.writes}` : words?.join(',')}|${a}|${we}`;
       if (k2 === key) return;
       key = k2;
-      note.textContent = words ? (a === null || a < 0 ? 'Address unknown.' : `${we === 1 ? 'Writing' : 'Reading'} [${a}]${we === 1 ? ' at the next rising clock edge' : ''}.`) : 'Not simulated.';
-      rowsEl.forEach(({ row: r, cells, hex }, i) => {
-        const v = words?.[i] ?? -1;
-        r.className = `row${i === a ? (we === 1 ? ' write' : ' read') : ''}`;
-        hex.textContent = v < 0 ? 'x'.repeat(digits) : v.toString(16).toUpperCase().padStart(digits, '0');
-        if (!showBits) return;
-        const bits = sim && words ? sim.getBits(sim.design.root.children!.get(id)!.children!.get(`w${i}`)!.ports.q) : null;
-        cells.forEach((c, j) => { c.className = `cell${bits?.[j] === B1 ? ' one' : bits && bits[j] !== B0 ? ' x' : ''}`; });
-      });
+      const known = !!(st || words);
+      note.textContent = known ? (a === null || a < 0 ? 'Address unknown.' : `${we === 1 ? 'Writing' : 'Reading'} ${at(a)}${we === 1 ? ' at the next rising clock edge' : ''}.`) : 'Not simulated.';
+      cur = known && a !== null && a >= 0 ? a : null;
+      writing = we === 1;
+      const bitsOf = (v: number) => Array.from({ length: w }, (_, j) => (v < 0 ? BX : Math.floor(v / 2 ** j) % 2));
+      snap = st ? { word: (i) => ramWord(st, i), bits: (i) => bitsOf(ramWord(st, i)) }
+        : words && sim ? { word: (i) => words[i] ?? -1, bits: (i) => { const r = node?.children?.get(`w${i}`); return r ? sim.getBits(r.ports.q) : null; } }
+        : null;
+      rows.refresh();
     });
     return out;
   },

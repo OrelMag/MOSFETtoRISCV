@@ -68,7 +68,8 @@ export function logicDepth(def: ComponentDef): number | null {
     d.leaves.forEach((l, i) => l.outputs.forEach((p) => p.forEach((n) => (driverOf[n] = i))));
     const memo = new Int32Array(d.leaves.length).fill(-1);
     const state = new Uint8Array(d.leaves.length); // 0 new, 1 visiting, 2 done
-    let cyclic = false;
+    // an edge-triggered behaviour (a large RAM) is storage, like a loop of gates
+    let cyclic = d.leaves.some((l) => !!l.def.behavior?.seq);
     const leafDepth = (li: number): number => {
       if (state[li] === 2) return memo[li];
       if (state[li] === 1) {
@@ -110,7 +111,7 @@ export function hasFeedback(def: ComponentDef): boolean {
   const hit = fbCache.get(def);
   if (hit !== undefined) return hit;
   const d = flatten(def, { mode: 'switch' });
-  let result = d.caps.size > 0;
+  let result = d.caps.size > 0 || d.leaves.some((l) => !!l.def.behavior?.seq);
   if (!result) {
     const source = new Uint8Array(d.netCount);
     for (const l of d.leaves) if (l.kind === 'vdd' || l.kind === 'gnd') source[l.terminals![0]] = 1;
