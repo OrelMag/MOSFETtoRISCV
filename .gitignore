@@ -13,3 +13,7 @@ coverage/
 # the desktop program: staged site and built executables
 /desktop/app/
 /desktop/release/
+
+# Claude Code: per-user settings and agent worktrees (hooks, skills and settings.json are shared)
+.claude/settings.local.json
+.claude/worktrees/
