@@ -62,12 +62,22 @@ class Dock {
     this.render();
   }
 
+  /** A view still as fitted follows the room the dock leaves (a CPU drawer opening by itself). */
+  private refit(): void {
+    const space = this.ed.slots.overlay.style.getPropertyValue('--dock-space');
+    if (space !== this.space && this.ed.view.cam.fitted) this.ed.fitView();
+    this.space = space;
+  }
+
+  private space = '';
+
   private render(): void {
     const overlay = this.ed.slots.overlay;
     const cur = this.panes.find((p) => p.id === this.active);
     if (!cur) {
       this.host.remove();
       overlay.style.removeProperty('--dock-space');
+      this.refit();
       this.ed.renderActions();
       return;
     }
@@ -75,6 +85,7 @@ class Dock {
     const w = cur.width ?? 360;
     this.host.style.setProperty('--dock-w', `${w}px`);
     overlay.style.setProperty('--dock-space', `${w + 16}px`);
+    this.refit();
     for (const p of this.panes) p.el.hidden = p !== cur;
     this.tabs.hidden = this.panes.length < 2;
     this.tabs.replaceChildren(...this.panes.map((p) => h('button', {

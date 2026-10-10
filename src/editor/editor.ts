@@ -74,7 +74,7 @@ registerToolbarAction({ id: 'undo', title: 'Undo (Ctrl+Z)', icon: 'undo', order:
 registerToolbarAction({ id: 'redo', title: 'Redo (Ctrl+Shift+Z)', icon: 'redo', order: 20, run: (ed) => ed.redo(), enabled: (ed) => ed.history.canRedo });
 registerToolbarAction({ id: 'zout', title: 'Zoom out', icon: 'minus', order: 30, run: (ed) => ed.view.cam.zoom(1.25) });
 registerToolbarAction({ id: 'zin', title: 'Zoom in', icon: 'plus', order: 40, run: (ed) => ed.view.cam.zoom(0.8) });
-registerToolbarAction({ id: 'fit', title: 'Fit to screen', icon: 'fit', order: 50, run: (ed) => ed.view.fit(ed.defOf) });
+registerToolbarAction({ id: 'fit', title: 'Fit to screen', icon: 'fit', order: 50, run: (ed) => ed.fitView() });
 registerToolbarAction({ id: 'help', title: 'Keyboard shortcuts (?)', icon: 'info', order: 90, run: (ed) => ed.showHelp() });
 
 const withChip = (ws: Workspace, doc: ChipDoc): Workspace => ({ ...ws, chips: { ...ws.chips, [doc.id]: doc } });
@@ -183,7 +183,7 @@ export class Editor {
     this.resize = new ResizeObserver(() => {
       if (!this.fitted && this.canvas.clientWidth > 0) {
         this.fitted = true;
-        this.view.fit(this.defOf);
+        this.fitView();
       }
     });
     this.resize.observe(this.canvas);
@@ -390,7 +390,7 @@ export class Editor {
     }
     this.sel = prune(this.sel, doc);
     this.view.render(doc, this.defOf);
-    if (switched && this.fitted) this.view.fit(this.defOf);
+    if (switched && this.fitted) this.fitView();
     this.view.setSelection(this.sel);
     for (const [k, v] of this.sims) if (!ws.chips[k]) { v.destroy(); this.sims.delete(k); }
     if (switched && !this.simChip) this.simChip = id; // the first chip: the constructor's simulation
@@ -457,6 +457,11 @@ export class Editor {
   readonly paintHooks = new Set<() => void>();
 
   /** Values on screen from the simulation. */
+  /** Fit the chip into the canvas, beside the docked drawer when one is open. */
+  fitView(): void {
+    this.view.fit(this.defOf, parseFloat(this.slots.overlay.style.getPropertyValue('--dock-space')) || 0);
+  }
+
   repaint(): void {
     this.view.paint(this.sim.sim ? this.sim : null, this.sim.built);
     this.updateStatus();

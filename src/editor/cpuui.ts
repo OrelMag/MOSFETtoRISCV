@@ -27,6 +27,7 @@ import {
 } from './cpu';
 import { dockPane, paneShown, showPane, undockPane } from './dock';
 import { type Editor, registerEditorPlugin, registerToolbarAction } from './editor';
+import { ioInfo, ioLeaf, type SwitchState } from './ioparts';
 import { romImage } from './memory';
 import { openProgramEditor } from './memui';
 import type { ChipDoc } from './model';
@@ -472,7 +473,7 @@ class CpuPanel {
     else if (!d.regs || !r?.x) bits.push(h('span', { class: 'warn', title: 'Set the register file in the chip’s properties (CPU)' }, 'not checked'));
     else if (!mon.synced) bits.push(h('span', { class: 'warn', title: 'The golden model starts with the hardware at cycle 0' }, 'golden model joins at the next Reset'));
     else {
-      const what = ['registers', ...(r.f ? ['f registers'] : []), ...(r.fcsr !== null ? ['fcsr'] : []), ...(d.pipeline ? [] : ['the PC']), ...(d.dmem ? ['memory'] : []), ...(d.iss.system ? ['console', 'LEDs'] : [])];
+      const what = ['registers', ...(r.f ? ['f registers'] : []), ...(r.fcsr !== null ? ['fcsr'] : []), ...(d.pipeline ? [] : ['the PC']), ...(d.dmem ? ['memory'] : []), ...(d.iss.system || d.iss.mmio ? ['console', 'LEDs'] : [])];
       bits.push(h('span', { class: 'good', title: `After every retired instruction ${what.join(', ')} match the instruction-set simulator${d.pipeline && d.dmem ? ' (the memory at the halt: a pipeline’s stores run ahead)' : ''}` }, '✓ matches golden model'));
     }
     if (mon.iss?.halted) bits.push(h('span', { class: 'warn' }, 'halted'));
@@ -586,21 +587,33 @@ class CpuPanel {
     keyed(this.pipe, `${snaps[snaps.length - 1].cycle}|${snaps.length}|${this.listKey}`, () => pipeGridRows(snaps, (pc) => mon.wordAt(pc) ?? undefined, 7));
   }
 
-  /** The system CPU's I/O: what it printed, its LEDs, the switches and interrupt line it reads, its CSRs. */
+  /**
+   * The system CPU's I/O: what it printed, its LEDs, the switches and interrupt line it reads, its
+   * CSRs; or a chip's console, LED bank and switch-bank parts (memory-mapped I/O without the system).
+   */
   private renderIo(mon: CpuMonitor): void {
     const doc = this.ed.doc, sim = this.ed.sim.sim;
     const swPin = pinNamed(doc, 'in', 8, 'switches');
-    const has = !!(pinNamed(doc, 'out', 1, 'consoleValid') || pinNamed(doc, 'out', 8, 'leds') || swPin);
+    const has = !!(pinNamed(doc, 'out', 1, 'consoleValid') || pinNamed(doc, 'out', 8, 'leds') || swPin) || mon.hasIo;
     this.ioSec.hidden = this.io.hidden = !has;
     if (!has || !sim) return;
     keyed(this.con, mon.console, () => [mon.console || ' ']);
     this.con.scrollTop = this.con.scrollHeight;
     const ledv = mon.leds;
     keyed(this.leds, String(ledv), () => Array.from({ length: 8 }, (_, i) => h('span', { class: `led${ledv !== null && ledv >= 0 && (ledv >> (7 - i)) & 1 ? ' on' : ''}`, title: `LED ${7 - i}` })));
-    const swv = typeof swPin?.value === 'number' ? swPin.value : 0;
-    keyed(this.sw, `${swPin?.id}|${swv}`, () => Array.from({ length: 8 }, (_, i) => {
+    // a switch bank part (no switches pin): its leaf holds the positions, a click flips one there
+    const bank = mon.switchBank, li = bank ? ioLeaf(bank) : undefined;
+    const bankInfo = bank ? ioInfo(bank.def) : null;
+    const width = bankInfo?.kind === 'switches' ? bankInfo.width : 8;
+    const swv = swPin ? (typeof swPin.value === 'number' ? swPin.value : 0) : li !== undefined ? (sim.leafState(li) as SwitchState | undefined)?.v ?? 0 : 0;
+    const flip = (b: number) => {
+      if (swPin) this.ed.setPinValue(swPin.id, swv ^ (1 << b));
+      else if (li !== undefined) this.ed.sim.pokeLeaf(li, { v: swv ^ (1 << b) } satisfies SwitchState);
+    };
+    keyed(this.sw, `${swPin?.id}|${li}|${swv}`, () => Array.from({ length: 8 }, (_, i) => {
       const b = 7 - i, on = (swv >> b) & 1;
-      return h('button', { class: `sw${on ? ' on' : ''}`, title: `switch ${b} (the switches pin, bit ${b})`, disabled: !swPin, onclick: () => swPin && this.ed.setPinValue(swPin.id, swv ^ (1 << b)) }, String(b));
+      const where = swPin ? 'the switches pin' : bank ? `switch bank ${bank.path.join('.')}` : 'no switches';
+      return h('button', { class: `sw${on ? ' on' : ''}`, title: `switch ${b} (${where}, bit ${b})`, disabled: !swPin && (li === undefined || b >= width), onclick: () => flip(b) }, String(b));
     }));
     this.io.querySelector('.sb-cpu-irq')?.toggleAttribute('hidden', !pinNamed(doc, 'in', 1, 'irq'));
     const rows = csrRows(sim);
@@ -988,7 +1001,7 @@ registerPropsSection({
       return h('label', { class: 'sb-check', title: hint }, box, label);
     };
     const iss = d?.iss ?? {};
-    const setIss = (k: 'system' | 'm' | 'f', v: boolean) => setCpu(ed, { iss: { ...iss, [k]: v } });
+    const setIss = (k: 'system' | 'mmio' | 'm' | 'f', v: boolean) => setCpu(ed, { iss: { ...iss, [k]: v } });
     return h('section', { class: 'sb-sec-props sb-cpu-props' },
       h('h3', null, 'CPU'),
       h('p', { class: 'sb-sum' }, 'With a program ROM this chip can run as a processor: the CPU panel follows the PC through the program and, given the register file, checks every retired instruction against the golden model (an instruction-set simulator). ',
@@ -1002,6 +1015,7 @@ registerPropsSection({
       check('Pipeline: the PC runs ahead, compare registers only', !!d?.pipeline, (v) => setCpu(ed, { pipeline: v }), 'A pipeline fetches several instructions ahead of the one that retires; its memory is compared at the halt'),
       h('div', { class: 'sb-cpu-iss', title: 'What the golden model (the instruction-set simulator) implements' }, h('span', null, 'ISS'),
         check('system', !!iss.system, (v) => setIss('system', v), 'Zicsr, machine-mode traps and interrupts, memory-mapped I/O (the chapters’ complete machine): the console, LEDs, switches and irq pins'),
+        check('MMIO', !!iss.mmio, (v) => setIss('mmio', v), 'Memory-mapped I/O only (no CSRs, traps or timer): a store to 0x8000_0000 prints on the console, 0x8000_0004 sets the LEDs, a load from 0x8000_0008 reads the switches; other addresses with bit 31 set are left to the hardware (a screen). The console, switch-bank and LED-bank (named leds) parts are compared'),
         check('M', !!iss.m, (v) => setIss('m', v), 'Multiply / divide legal in system mode'),
         check('F', !!iss.f, (v) => setIss('f', v), 'Single-precision floating point legal in system mode')),
       h('div', { class: 'sb-btns' },
