@@ -4,6 +4,8 @@
 
 import { describe, expect, it } from 'vitest';
 import results from '../src/bench/results.json';
+import { RESULTS, chapterOf, familyOf, front, meanOf } from '../src/bench/summary';
+import { chapterById } from '../src/chapters';
 import { BENCHMARKS, crc32, xorshift32 } from '../src/riscv/benchprograms';
 import { BENCH_DMEM_K, BENCH_IMEM_K, benchCase, benchCases, benchLanes, measureCpu, programsHash, runsOn } from './verify/bench';
 import { CPUS } from './verify/cpus';
@@ -55,4 +57,23 @@ describe('saved benchmark results', () => {
     for (const r of runs) expect(r.diff, r.bench).toBe('');
     expect(runs.map(({ diff: _, ...r }) => r)).toEqual(row.runs);
   }, 120_000);
+});
+
+describe('benchmark summary (the Benchmarks tab)', () => {
+  it('opens every CPU in a chapter that builds it', () => {
+    for (const c of CPUS) {
+      const ch = chapterOf(c.id);
+      expect(ch && chapterById(ch), c.id).toBeTruthy();
+      expect(['single', 'multi', 'pipe']).toContain(familyOf(c.id));
+    }
+  });
+
+  it('draws the front through CPUs no other beats on both cost and time', () => {
+    const fr = front(RESULTS.cpus);
+    expect(fr.length).toBeGreaterThan(1);
+    for (const c of RESULTS.cpus) {
+      const beaten = RESULTS.cpus.some((d) => d !== c && d.nands <= c.nands && meanOf(d, 'time') < meanOf(c, 'time'));
+      expect(fr.includes(c), c.id).toBe(!beaten);
+    }
+  });
 });

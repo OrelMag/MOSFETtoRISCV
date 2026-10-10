@@ -134,6 +134,14 @@ export function startApp(root: HTMLElement): void {
       }, (e) => {
         if (seq === routeSeq) view.replaceChildren(h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'The statistics could not load'), h('p', { class: 'sub' }, String(e)))));
       });
+    } else if (key === 'workbench' && parts[1] === 'bench') {
+      // The Benchmarks tab: a chunk of its own (with the saved results).
+      if ((page as { kind?: string } | null)?.kind === 'benchmarks') return;
+      import('./pages/benchmarks').then((m) => {
+        if (seq === routeSeq) mount(new m.BenchmarksPage());
+      }, (e) => {
+        if (seq === routeSeq) view.replaceChildren(h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'The benchmarks could not load'), h('p', { class: 'sub' }, String(e)))));
+      });
     } else if (key === 'workbench') {
       if (page instanceof WorkbenchPage) {
         page.open(parts[1] ?? 'rca4');
