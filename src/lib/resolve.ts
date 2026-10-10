@@ -9,7 +9,8 @@ import { ram } from './memory';
 import { BANK_K, bigRam, ramBank } from './bigmem';
 import { alu, bitwise, isZero, orN, shifter, zext } from './alu';
 import { singleCycleCpu } from './cpu';
-import { addSubFast, koggeStone } from './fastadd';
+import { addSubFast, fanout, koggeStone } from './fastadd';
+import { csrUnit, sysDecode } from './system';
 import { regfile } from './regfile';
 import { assemble } from '../riscv/asm';
 import { PROGRAMS } from '../riscv/programs';
@@ -18,7 +19,7 @@ import { arrayDiv, arrayMul, condNegate, csa, divStep, seqDivider, treeMul } fro
 import { fpAdd, fpCompare, fpFromInt, fpMul, fpUnpack, incFast, lzc, normRound, shiftLeft, shiftRightSticky } from './fpu';
 import { cachedMemory, wayLookup2 } from './cache';
 import { bankedMemory } from './lsu';
-import { clearableRegister } from './pipeline';
+import { clearableRegister, hazardUnit } from './pipeline';
 import { boothMul, pipeMul, seqMul } from './multiply';
 import { bcdAdder, carrySelect, carrySkip } from './adders';
 import { cam, fifo, pla, regfileMP, romArray, stack } from './storage';
@@ -50,6 +51,11 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^ram64x(\d+)_bank$/, (m) => ramBank(+m[1])],
   [/^alu(\d+)(ks)?$/, (m) => alu(+m[1], m[2] ? 'ks' : 'rca')],
   [/^ks(\d+)$/, (m) => koggeStone(+m[1])],
+  // wiring and units only a CPU generator builds (a CPU opened in the sandbox places them by id)
+  [/^fan(\d+)$/, (m) => fanout(+m[1])],
+  [/^sysdec(_m)?$/, (m) => sysDecode(!!m[1])],
+  [/^csrunit(_m)?$/, (m) => csrUnit(!!m[1])],
+  [/^hazard_pre$/, () => hazardUnit(true)],
   [/^regfile(\d+)x(\d+)$/, (m) => regfile(log2(+m[1]), +m[2])],
   [/^cpu_(\w+)$/, (m) => singleCycleCpu(assemble(PROGRAMS.find((p) => p.id === m[1])?.source ?? '').words)],
   [/^shift(\d+)$/, (m) => shifter(+m[1])],
