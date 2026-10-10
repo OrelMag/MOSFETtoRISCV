@@ -85,4 +85,10 @@ describe('pipelined RV32IM CPU vs golden model', () => {
   for (const p of PIPE_M_PROGRAMS) it(p.id, () => { const r = cosim(p.source); console.log(`${p.id}: ${r.retired} instructions in ${r.cycles} cycles`); }, 300000);
   it('balanced, with branch prediction', () => { cosim(PIPE_M_PROGRAMS[1].source, { balanced: true, predictor: true }); }, 300000);
   it('plain RV32I programs still run', () => { cosim(PROGRAMS[0].source); }, 300000);
+  // riscv-tests rv32um div / rem, test 3: both operands come by forwarding, from producers that drain out of
+  // M and W while the divide stalls; the signs must be those of the operands at the start
+  it('divide with forwarded operands of changing sign', () => {
+    cosim(`li x1, 20\n li x2, 6\n div x14, x1, x2\n li x1, -20\n li x2, 6\n div x14, x1, x2\n li x1, -20\n li x2, 6\n rem x15, x1, x2
+      li x1, 20\n li x2, -6\n div x16, x1, x2\n li x2, 0\n div x17, x1, x2\nhalt: j halt`);
+  }, 300000);
 });

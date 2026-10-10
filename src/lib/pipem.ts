@@ -11,6 +11,7 @@ import { koggeStone } from './fastadd';
 import { AND, MUX2, NOT, OR, XOR } from './gates';
 import { boothTree } from './multiply';
 import { condNegate } from './muldiv';
+import { register } from './sequential';
 import { srt4Divider } from './srt4';
 import { TIE0 } from './transistors';
 
@@ -96,20 +97,29 @@ export const DIV_E: ComponentDef = (() => {
   b.next();
   const dv = b.op(srt4Divider(32), ['clk', '', ma, mb], 'radix-4 SRT divider');
   const busy = b.name(`${dv}.busy`, 'busy', true), done = b.name(`${dv}.done`, 'done', true);
-  b.wire(b.op1(AND, ['go', b.op1(NOT, [busy])], 'start'), `${dv}.start`);
-  b.next();
-  const qr = b.op1(busMux2(32), [`${dv}.q`, `${dv}.r`, `${sf}.o1`], 'q / r');
-  // the quotient is negative when the signs differ (unless b = 0); the remainder takes the dividend's sign
+  const start = b.name(b.op1(AND, ['go', b.op1(NOT, [busy])], 'start'), 'start', true);
+  b.wire(start, `${dv}.start`);
   const bnz = b.op1(NOT, [b.op1(isZero(32), ['b'], 'b = 0')]);
-  const negQ = b.op1(AND, [b.op1(XOR, [negA, negB]), bnz]);
-  const neg = b.op1(MUX2, [negQ, negA, `${sf}.o1`], 'negate?');
+  b.next();
+  // The signs are kept from the start, like the magnitudes: while the pipeline stalls, an operand forwarded
+  // from M or W drains away and E sees the stale value read in D (riscv-tests rv32um div, test 3).
+  const signs = b.op1(merger([1, 1, 1]), [negA, negB, bnz], 'signs');
+  b.next();
+  const kept = b.op1(register(3), [signs, start, 'clk'], 'signs at start');
+  b.next();
+  const sg = b.op(splitter([1, 1, 1]), [kept]);
+  const qr = b.op1(busMux2(32), [`${dv}.q`, `${dv}.r`, `${sf}.o1`], 'q / r');
+  b.next();
+  // the quotient is negative when the signs differ (unless b = 0); the remainder takes the dividend's sign
+  const negQ = b.op1(AND, [b.op1(XOR, [`${sg}.o0`, `${sg}.o1`]), `${sg}.o2`]);
+  const neg = b.op1(MUX2, [negQ, `${sg}.o0`, `${sf}.o1`], 'negate?');
   b.next();
   b.wire(b.op1(condNegate(32), [qr, neg], 'sign fix'), 'y');
   b.wire(b.op1(AND, ['go', b.op1(NOT, [done])], 'stall'), 'stall');
   const R = b.right;
   return define({
     id: 'dive', name: 'Divide unit (E stage)', category: 'cpu',
-    summary: 'div, divu, rem, remu: magnitudes into the radix-4 SRT divider (19 cycles), sign fixed on the way out; division by zero gives −1 and the dividend, −2³¹ / −1 gives −2³¹ and 0, both falling out of the hardware. stall holds the pipeline until done.',
+    summary: 'div, divu, rem, remu: magnitudes into the radix-4 SRT divider (19 cycles), signs kept from the start and fixed on the way out; division by zero gives −1 and the dividend, −2³¹ / −1 gives −2³¹ and 0, both falling out of the hardware. stall holds the pipeline until done.',
     ports: [bit('clk', 'in', 'bottom', true), bit('go', 'in'), bus('a', 32, 'in'), bus('b', 32, 'in'), bus('f', 2, 'in'), bus('y', 32, 'out'), bit('stall', 'out')],
     symbol: { kind: 'box', label: 'DIV (E)' },
     netlist: () => ({ pins: { clk: [0, 24], go: [0, 4], a: [0, 8], b: [0, 12], f: [0, 16], y: [R, 4], stall: [R, 8] }, instances: b.instances, nets: b.nets() }),
