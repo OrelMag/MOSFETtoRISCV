@@ -177,7 +177,7 @@ src/lib/       the component library (registered in `registry` via define())
                  outW) (Wallace + KS), MUL32, BOOTH_ENC, divStep, arrayDiv, seqDivider(n), condNegate, MDU
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
                instructions), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
-               interrupts; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts (samples), multi.ts (MultiISS: N harts, shared memory, same arbitration), mcprograms.ts, cosim.ts (CPU state;
+               interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), mcprograms.ts, cosim.ts (CPU state;
                `retiring()` = step the ISS this cycle?)
 src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over crossings),
                inspector (info with "Where it is used", truth table, Verilog + download), analyzer.ts (the Timing panel:
@@ -232,8 +232,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  asm ↔ hex conversion, ROM_SAMPLES; readRam (live words; a large RAM's from its leaf state),
                  ramWithInit (initial contents as dotted power-on hints into the flip-flops' latches; > 2^6 words:
                  bigRamWithInit)
-  examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, console, screen, shared bus, wired-AND / OR),
-                 addExample: new chip, opened
+  examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, console, screen, the computer, shared bus,
+                 wired-AND / OR), addExample: new chip (and an example's `subchips`, fresh ids), opened. The computer
+                 (computerChip + memoryMapChip): rv32i_core (lib/resolve.ts pattern), a 1K ROM (riscv/ioprograms.ts),
+                 a Memory map user chip, 4K × 32 RAM, 64 × 64 RGB332 screen at 0xC000_0000 + 256·y + 4·x, console /
+                 LEDs / switches at the ISS's IO addresses, a halt part on `j .`; word accesses only (no lb / sb)
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run;
@@ -272,11 +275,13 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  dmem, pipeline, iss options); part fields are paths into user chips ('imem.rom', partAt,
                  nestedRoms: detection takes the workspace's chips); detectCpu (the chapters' instance and
                  pin names: imem, rf, dm, frf, fcsr, pcOut / pcF, retire, validW, switches / irq /
-                 consoleData / consoleValid / leds), resolveCpu (settings over detection), readers
+                 consoleData / consoleValid / leds; a placed port core (rv32i_core, *_core) → regs '<part>.rf'; a console
+                 or switch-bank part → iss.mmio), resolveCpu (settings over detection), readers
                  (readRegs / readMem find w<i> registers via storageOf, banks, cache lines; memStoreOf also finds a
                  large RAM's leaf state), pipelineSlots,
                  CpuMonitor: the ISS in lock-step on EditorSim.edgeHooks (registers, PC, fcsr, memory
-                 after stores or at a pipeline's halt, console, LEDs), first mismatch, Run to halt
+                 after stores or at a pipeline's halt, console, LEDs; without the pins: a console part's text, a switch
+                 bank's positions, an LED bank named leds), first mismatch, Run to halt
   cpu16.ts       detectRv16 (an RV16 ROM + a part with the core pins), Rv16Monitor: Iss16 in lock-step through the
                  core's write and store ports in program order (the campaign bench, live; RAM wrap, drain, next write)
   multicpu.ts    detectMulti (two or more placed CPU chips + a shared memory), MultiMonitor: MultiISS in
@@ -315,7 +320,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  case on the rebuilt circuit; Run / Step / a clock / Reset or an input set by hand ends it
   inspect.ts     the Inspector in a drawer for the chip or a part; chipprops.ts: chip / part property sections
   dock.ts        the right-hand dock: drawers (Inspector, CPU, Screens, challenges) share it, tabs when several;
-                 sets --dock-space on the overlay so look inside stops at its edge
+                 sets --dock-space on the overlay so look inside stops at its edge and Fit (Editor.fitView) leaves room
+                 for it (a still-fitted view refits when a drawer opens or closes)
   analysis.ts    plugin: probe mode (P) + LogicAnalyzer in slots.bottom, Timing props section with
                  the critical path drawn on the chip, lint as a diag source, open-input marks; records only while
                  the panel is open (its trace listener puts DualSim on GateSim)

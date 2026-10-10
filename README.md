@@ -85,6 +85,19 @@ simulator, so whatever you build is a real component of the site. The full guide
 - 21 optional **build challenges**, from a CMOS inverter to an instruction fetch unit, with a test
   player that steps through the failing cases.
 
+![Examples ▸ Computer: an RV32I core, a memory map, RAM, a 64 × 64 screen and a console](docs/images/computer.png)
+
+The sandbox now builds a **whole computer**. RAM and ROM parts go up to 64K words: one
+behavioural leaf at run time over a real hierarchy of banks you can open down to the latches.
+The I/O parts are a pixel screen (write, rows or pixels mode, up to 128 × 128 in RGB565), a
+console and a switch bank, so a CPU can memory-map them. A cycle engine runs Run: flip-flops
+become verified tables and the rest is levelized, and every net equals the event-driven
+simulator's after every settle. The single-cycle RV32I runs at about 9 k cycles/s in Node and
+4–5 kHz in the browser. **Examples ▸ Computer** puts it all together: the RV32I core, a program
+ROM in assembly, a memory-map chip, 4K words of RAM, the screen, the console, LEDs and switches.
+It greets you, paints a picture in under two seconds and halts, with the golden model checking
+every instruction.
+
 ## Measured, not drawn
 
 Every number on screen comes from the circuit it describes:
@@ -159,9 +172,8 @@ The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next feat
 - **More measurements**: dynamic power (α C V² f, α from the simulator's toggle counts, glitches
   included), a benchmark page (instructions, cycles, CPI, period, energy on every CPU), a
   hardware-statistics table of the whole library, and "where is this used" in the inspector.
-- **Sandbox**: a pixel screen, console and switch-bank parts for hand-built CPUs, chip appearance
-  (pins on any side, displays on the chip's face), library folders, large memories, a custom-ISA
-  table that generates its own assembler, and program puzzles solved on a CPU you built.
+- **Sandbox**: chip appearance (pins on any side, displays on the chip's face), library folders,
+  a custom-ISA table that generates its own assembler, and program puzzles solved on a CPU you built.
 - **Architecture**: private caches with a coherent bus in the gate-level cores, `lr.w` / `sc.w`,
   more than two cores; the C and A extensions; a scoreboard / Tomasulo widget; the system CPU
   through the sky130 flow, its reports next to our own estimates.
