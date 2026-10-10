@@ -35,7 +35,7 @@ describe('halt part', () => {
 
   it('stops Run after the cycle where its input goes high, and again after each step while high', () => {
     const doc = counter();
-    const es = new EditorSim({ debounceMs: 0, budgetMs: 10_000 }); // a wide frame budget: Run must reach the halt however loaded the machine is;
+    const es = new EditorSim({ debounceMs: 0, budgetMs: 10_000 }); // a wide frame budget: Run must reach the halt however loaded the machine is
     es.update(compileLib(doc), doc.pins);
     expect(es.hasHalt).toBe(true);
     expect(es.halted).toBe(false);
