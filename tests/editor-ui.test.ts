@@ -252,7 +252,7 @@ describe('EditorSim', () => {
   });
 
   it('advance() runs cycles at the chosen rate; gate mode steps one delay at a time', () => {
-    const es = new EditorSim({ debounceMs: 0 });
+    const es = new EditorSim({ debounceMs: 0, budgetMs: 10_000 }); // the rate, not this machine's speed: a slow runner must not drop cycles
     const doc = counterDoc();
     es.update(compile(doc), [{ ...doc.pins[0], value: 1 }, doc.pins[1], doc.pins[2]]);
     es.hz = 10;
