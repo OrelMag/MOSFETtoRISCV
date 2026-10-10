@@ -110,7 +110,7 @@ export const BY_NAME = new Map(INSTRS.map((i) => [i.name, i]));
 /** Machine-mode CSRs implemented by the full system CPU. */
 export const CSRS: Record<string, number> = {
   mstatus: 0x300, misa: 0x301, mie: 0x304, mtvec: 0x305, mscratch: 0x340, mepc: 0x341, mcause: 0x342,
-  mtval: 0x343, mip: 0x344, mcycle: 0xb00, cycle: 0xc00, mhartid: 0xf14,
+  mtval: 0x343, mip: 0x344, mcycle: 0xb00, cycle: 0xc00, mvendorid: 0xf11, marchid: 0xf12, mimpid: 0xf13, mhartid: 0xf14,
   // F extension: accrued exception flags, dynamic rounding mode, and both together
   fflags: 0x001, frm: 0x002, fcsr: 0x003,
 };
@@ -220,7 +220,7 @@ export function decode(word: number): Decoded {
     if (s.fmt === 'R' && s.funct7 !== (s.opcode === OPCODES.AMO ? funct7 & 0x7c : funct7)) continue;
     if (s.fmt === 'R4' && (funct7 & 3) !== 0) continue; // only fmt = S (single precision)
     if (s.fp?.rs2fixed !== undefined && s.fp.rs2fixed !== rs2) continue;
-    if (s.opcode === OPCODES.OPIMM && (funct3 === 1 || funct3 === 5) && s.funct7 !== undefined && s.funct7 !== (funct7 & 0x7e)) continue;
+    if (s.opcode === OPCODES.OPIMM && (funct3 === 1 || funct3 === 5) && s.funct7 !== undefined && s.funct7 !== funct7) continue; // RV32: shamt[5] = instr[25] must be 0
     if (s.opcode === OPCODES.OPIMM && (funct3 === 1 || funct3 === 5) && s.funct7 === undefined) continue;
     if (s.opcode === OPCODES.SYSTEM && funct3 === 0) {
       const imm = w >>> 20;

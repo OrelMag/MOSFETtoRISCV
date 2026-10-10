@@ -206,7 +206,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   exhaustively, carry-save comparisons; n/2 + 3 cycles, 21 % faster than radix 2 at 32 bits
 - ✅ M extension in the pipelined CPU (chapter 20): multiplier split over E / M (a multiply is a load for hazards), radix-4 SRT
   divide stalling the front for 18 cycles; +45 % NANDs, period 93 → 93 (fast adders), 59 → 79 (balanced: divider sign fix, Booth tree)
-- ⏳ Passing the official `riscv-tests` on every RV32 CPU (see Phase 13, independent verification)
+- ✅ Passing the official `riscv-tests` on every RV32 CPU (see Phase 13 and `docs/VERIFICATION.md`)
 
 ### Phase 8 — Memory hierarchy 🚧
 - ✅ Switch level gains transistor strengths and capacitive (charge-holding) nets
@@ -419,18 +419,22 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
 - ✅ Repository description, homepage and topics on GitHub
 
 **Independent verification** (our ISS and our CPUs share one author: a misreading of the spec passes in both)
-- ⏳ Official `riscv-tests` (`rv32ui`, `rv32um`, `rv32uf`, `rv32mi`, `-p` environment): self-checking, so they need
-  no oracle. Prebuilt images (checked in, with their source revision) run on the ISS in `npm test` and on every RV32
-  CPU (single-cycle, multicycle, pipelined with and without prediction and caches, system, M, F, pipelined FPU)
-  within a cycle budget; `tohost` mapped to a store the harness watches. A pass / fail matrix per CPU in `docs/`
+- ✅ Official `riscv-tests` (`rv32ui`, `rv32um`, `rv32uf`, `rv32ua`, `rv32mi`): images built by
+  `scripts/riscv-tests/build.mjs` (GNU toolchain), checked in with their source revision; env `p` on the system
+  CPUs, our `bare` env (same tohost contract, no CSRs) on the rest, a loader for the Harvard data memory. In
+  `npm test` on the golden model and on all 22 CPU variants at gate level, 32 programs per BitSim run (one per lane);
+  the pass / fail matrix is in `docs/VERIFICATION.md`. Found: the golden model's RV32 shift decode, the missing id
+  CSRs (golden model and system CPU), the pipelined divider's sign with forwarded operands
 - ⏳ A second ISS as oracle for ours: Spike (or Sail) in a CI job, random programs, commit logs compared
   instruction by instruction
-- ⏳ RV32 random-program fuzzing (`randprog` exists for RV16 only): constrained generators for ALU, branches,
-  loads / stores of every width, hazard-dense sequences (back-to-back dependences, load-use, branch after load),
-  CSRs, traps and interrupts, M and F; each CPU co-simulated against the ISS; a failure keeps the seed, the program,
-  the cycle and the first differing state; a short run in `npm test`, a long one in a scheduled CI job
-- ⏳ Coverage of the CPU suites: opcodes executed, hazard events seen (M→E / W→E forwarding, load-use stall,
-  flush, misprediction), cache hit / miss / write-back, trap causes; reported as a table, gaps become directed tests
+- ✅ RV32 random-program fuzzing (`src/riscv/randprog32.ts`): ALU edge values, every branch, jal / jalr, loops,
+  loads / stores of every width, hazard-dense operand choice, CSRs, traps and a timer interrupt, M, F (special
+  values, every rounding mode), atomics on the dual-core; final state against the golden model on every CPU, a
+  mismatch replayed in lock-step for the first difference; seeds 1–32 in `npm test`, a new 2048-seed range nightly
+  (`.github/workflows/verify.yml`). Found: the six-stage FPU pipeline losing a taken branch while D waited
+- ✅ Coverage of the CPU suites (`scripts/coverage.ts`, tables in `docs/VERIFICATION.md`): instructions and trap
+  causes, forwarding paths, load-use / FP / divide stalls, flushes, mispredictions, cache hits / misses /
+  write-backs, interrupts, memory conflicts, multicycle states; `npm test` fails on any gap (there are none)
 - ✅ `scripts/verify-export.ts all` (Yosys netlist simulated against our gate-level run, every multi-core program) as
   the `verify-hdl` CI job with `yowasp-yosys`: the deploy waits on it
 - ⏳ The same cross-check on the system CPU (RV32IM + Zicsr: its MMIO and interrupt pins need a testbench of their own)

@@ -166,6 +166,8 @@ function mergeByDriver(nets: NetDef[]): NetDef[] {
 const CSR_ORDER: [string, number][] = [
   ['mstatus', CSRS.mstatus], ['misa', CSRS.misa], ['mie', CSRS.mie], ['mtvec', CSRS.mtvec], ['mscratch', CSRS.mscratch], ['mepc', CSRS.mepc],
   ['mcause', CSRS.mcause], ['mtval', CSRS.mtval], ['mip', CSRS.mip], ['mcycle', CSRS.mcycle], ['cycle', CSRS.cycle], ['mhartid', CSRS.mhartid],
+  // mandatory read-only ids, all zero ("not implemented" / non-commercial)
+  ['mvendorid', CSRS.mvendorid], ['marchid', CSRS.marchid], ['mimpid', CSRS.mimpid],
 ];
 
 export function csrUnit(m = false): ComponentDef {
@@ -179,9 +181,9 @@ export function csrUnit(m = false): ComponentDef {
   ins.push(['known', orN(CSR_ORDER.length)]);
   CSR_ORDER.forEach(([n], i) => net(undefined, sel[n], `known.i${i}`));
   // one-hot → index for the read multiplexer
-  ins.push(['enc0', orN(6)], ['enc1', orN(6)], ['enc2', orN(5)], ['enc3', orN(4)], ['idx', merger([1, 1, 1, 1])]);
   const encIns: string[][] = [[], [], [], []];
   CSR_ORDER.forEach(([n], i) => { for (let b = 0; b < 4; b++) if (i & (1 << b)) encIns[b].push(sel[n]); });
+  ins.push(...encIns.map((l, b): [string, ComponentDef] => [`enc${b}`, orN(l.length)]), ['idx', merger([1, 1, 1, 1])]);
   encIns.forEach((list, b) => list.forEach((s, j) => net(undefined, s, `enc${b}.i${j}`)));
   for (let b = 0; b < 4; b++) net(`idx${b}`, `enc${b}.y`, `idx.i${b}`);
   // registers
@@ -462,17 +464,20 @@ export interface SystemCpuOptions {
   adder?: 'rca' | 'ks';
   /** Add the M extension: a multiply/divide unit (divides stall the CPU). */
   m?: boolean;
+  /** Instruction ROM of 2^imemK words (default 7), data memory of 2^dmemK (default 5). */
+  imemK?: number;
+  dmemK?: number;
 }
 
 export function systemCpu(program: number[], opts: SystemCpuOptions = {}): ComponentDef {
-  const IM = rom(program, 7);
-  const adder = opts.adder ?? 'ks';
-  return memo(`sys_${IM.id}_${adder}${opts.m ? '_m' : ''}`, () => buildSystem(IM, adder, !!opts.m));
+  const IM = rom(program, opts.imemK ?? 7);
+  const adder = opts.adder ?? 'ks', dmemK = opts.dmemK ?? 5;
+  return memo(`sys_${IM.id}_${adder}${opts.m ? '_m' : ''}_${dmemK}`, () => buildSystem(IM, adder, !!opts.m, dmemK));
 }
 
-function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): ComponentDef {
+function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean, dmemK: number): ComponentDef {
   const SYSD = sysDecode(m), CSRU = csrUnit(m);
-  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = bankedMemory(5);
+  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = bankedMemory(dmemK);
   const M2 = busMux2(32), M4 = muxTree(2, 32), M8 = muxTree(3, 32), ADD = adder === 'ks' ? koggeStone(32) : rca(32);
   const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4;
   const SI = splitter([7, 5, 3, 5, 5, 7]), IMM12 = splitter([20, 12]);
@@ -684,7 +689,7 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
     pins.retire = [P('res', 'y')[0] + 20, yS + 6];
   }
   return {
-    id: `sys_${IM.id}${adder === 'ks' ? '' : '_rca'}${m ? '_m' : ''}`, name: `RV32I${m ? 'M' : ''} system (single-cycle, Zicsr, traps, I/O)`, category: 'cpu',
+    id: `sys_${IM.id}${adder === 'ks' ? '' : '_rca'}${m ? '_m' : ''}${dmemK === 5 ? '' : `_d${dmemK}`}`, name: `RV32I${m ? 'M' : ''} system (single-cycle, Zicsr, traps, I/O)`, category: 'cpu',
     summary: `The complete processor: every RV32I instruction including byte and halfword memory access, the Zicsr instructions, machine-mode exceptions and interrupts, and memory-mapped I/O (console, LEDs, switches, timer).${m ? ' Plus the M extension: one-cycle multiplies and 34-cycle divides that stall the processor (retire = 0 while they run).' : ''}`,
     ports: [bit('clk', 'in', 'left', true), bus('switches', 8, 'in'), bit('irq', 'in'), bus('pcOut', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out'), ...(m ? [bit('retire', 'out')] : [])],
     symbol: { kind: 'box', label: m ? 'RV32IM SYSTEM' : 'RV32I SYSTEM' },

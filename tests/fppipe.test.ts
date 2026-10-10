@@ -96,6 +96,21 @@ describe('pipelined RV32IF CPU: hazards and integer code', () => {
   it('integer programs (forwarding from M, X and W, load-use, flushes)', async () => {
     for (const id of ['primer', 'sort', 'gcd']) await cosimPipe(PROGRAMS.find((p) => p.id === id)!.source, 6000);
   }, 120000);
+  // found by the random-program fuzzer: an FP producer in M, a taken branch in E and its dependent in D (stalled
+  // on the FP interlock); the flush kills D, and the branch must still redirect the PC that the stall holds
+  it('a taken branch while D waits on an FP result', async () => {
+    await cosimPipe(`        li   t0, 3
+        fcvt.s.w ft0, t0
+        beq  zero, zero, next   # taken to the very next instruction
+next:   fadd.s ft1, ft0, ft0
+        fcvt.s.w ft2, t0
+        beq  zero, zero, far    # taken past the instruction in F
+        fadd.s ft3, ft2, ft2
+        li   a1, 7
+far:    fadd.s ft4, ft2, ft1
+        li   a0, 1
+halt:   j    halt`);
+  }, 120000);
   it('the event-driven simulator agrees (stress test)', async () => {
     await cosimPipe(STRESS, 4000, 'gate');
   }, 120000);

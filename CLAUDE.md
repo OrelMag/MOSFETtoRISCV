@@ -91,6 +91,8 @@ src/sim/       simulation core (no DOM)
                  rails/inputs > transistors (strength 4..2, ratioed logic) > resistors (prim 'res',
                  strength 1: pull-ups lose to any transistor; two opposing → X) > stored charge
                  (`cap` nets and prim 'cap' capacitors keep their value when undriven)
+  bitsim.ts      two-valued bit-parallel simulator for benches: 32 lanes per NAND word op; behaviours broadcast
+                 from lane 0 unless setLaneBehavior evaluates one per lane (each lane its own program ROM)
   fpref.ts       exact reference float arithmetic for any format (BigInt, RNE), float32 helpers
   coherence.ts   MSI / MESI snooping model (per block, no capacity)
   pnr.ts         problemOf(def), Layout (annealing placer), route / routeAll (two-layer Lee router)
@@ -178,7 +180,7 @@ src/lib/       the component library (registered in `registry` via define())
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
                instructions), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
                interrupts; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts (samples), multi.ts (MultiISS: N harts, shared memory, same arbitration), mcprograms.ts, cosim.ts (CPU state;
-               `retiring()` = step the ISS this cycle?)
+               `retiring()` = step the ISS this cycle?; dmemWords), randprog32.ts (seeded random RV32 programs per ISA)
 src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over crossings),
                inspector (info with "Where it is used", truth table, Verilog + download), analyzer.ts (the Timing panel:
                lanes from onTrace, cursors, VCD), stage.ts (probe mode, clock period, slow-motion
@@ -361,6 +363,12 @@ src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-
                Ctrl/⌘ K or `/` search palette; `/` is left to the sandbox there)
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
+tests/verify/  CPU verification (docs/VERIFICATION.md): cpus.ts (every RV32 CPU variant: build, ISA, env,
+               notApplicable), images.ts (official riscv-tests images in riscv-tests/*.json, built by
+               scripts/riscv-tests/build.mjs; the data loader; tohost verdicts), run.ts (golden model, lane
+               batches on BitSim), fuzz.ts (random programs, final state, lock-step replay of a failure),
+               coverage.ts (instructions, traps, hardware events per lane), suite.ts (verify-*.test.ts);
+               scripts/rvtests.ts (matrix), fuzz32.ts (any seed range), coverage.ts (tables; --write updates the doc)
 ```
 
 ### Key ideas (read before changing the core)
