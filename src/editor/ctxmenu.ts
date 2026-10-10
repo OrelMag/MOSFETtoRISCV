@@ -10,7 +10,9 @@ import { canLookInside, lookInside } from './inside';
 import { inspect } from './inspect';
 import { nextSameName } from './geom';
 import { clearBends, setPin, setStraight } from './ops';
+import { collapseAll, collapseDialog, unravel, unravelDialog } from './pointerui';
 import { canPaste } from './tools';
+import { canUnravel, pointersOf } from './unravel';
 
 interface Item { label: string; key?: string; run(): void; disabled?: boolean }
 type Entry = Item | null;
@@ -68,7 +70,18 @@ function entries(ed: Editor, at: Vec): Entry[] {
       : { label: n > 1 ? 'Square the wires' : 'Square it', run: () => ed.edit((d) => setStraight(d, wireIds, false, ed.defOf)) },
     { label: 'Remove all bends', run: () => ed.edit((d) => clearBends(d, wireIds, ed.defOf)), disabled: !wires.some((w) => w.pts.length) },
   ];
-  if (n > 1) return [flip, ...shape, null, ...edits];
+  // Pointers: those the selection touches unravel into wires (picked from a list), wires collapse into pointers.
+  const touching = pointersOf(ed.doc, s);
+  const pick: Entry[] = touching.length ? [{ label: 'Unravel pointers…', run: () => unravelDialog(ed, touching) }] : [];
+  if (n > 1) {
+    const named = [...new Set((s.labels ?? []).map((id) => ed.doc.labels.find((l) => l.id === id)?.name ?? ''))].filter((nm) => canUnravel(ed.doc, nm));
+    const ptrs: Entry[] = [
+      ...(named.length ? [{ label: 'Unravel selected', run: () => unravel(ed, named) }] : []),
+      ...(wires.length ? [{ label: 'Collapse selected', run: () => collapseAll(ed, wireIds) }] : []),
+      ...pick,
+    ];
+    return [flip, ...shape, ...(ptrs.length ? [null, ...ptrs] : []), null, ...edits];
+  }
   if (s.parts?.length) {
     const p = ed.doc.parts.find((q) => q.id === s.parts![0]);
     if (!p) return edits;
@@ -79,7 +92,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
         ? { label: 'Edit chip', key: 'double-click', run: () => ed.editChip(chip) }
         : { label: 'Look inside', key: 'double-click', run: () => lookInside(ed, [p.id]), disabled: !canLookInside(ed, p.id) },
       { label: 'Inspect', run: () => inspect(ed, p.id) },
-      flip, null, ...edits,
+      flip, ...(pick.length ? [null, ...pick] : []), null, ...edits,
     ];
   }
   if (s.pins?.length) {
@@ -99,9 +112,11 @@ function entries(ed: Editor, at: Vec): Entry[] {
   }
   if (s.labels?.length) {
     const id = s.labels[0];
+    const name = ed.doc.labels.find((l) => l.id === id)?.name ?? '';
     return [
       { label: 'Rename', key: 'F2', run: () => t.rename({ k: 'label', id }) },
       { label: 'Jump to the next one', key: 'click', run: () => t.jump(id), disabled: !nextSameName(ed.doc, id) },
+      { label: 'Unravel into wires', run: () => unravel(ed, [name]), disabled: !canUnravel(ed.doc, name) },
       flip, null, ...edits,
     ];
   }
@@ -115,7 +130,10 @@ function entries(ed: Editor, at: Vec): Entry[] {
     return [
       { label: 'Add a bend here', run: () => t.bendAt(id, at), disabled: j >= 0 },
       { label: 'Remove this bend', key: 'double-click', run: () => t.unbend(id, j), disabled: j < 0 },
-      ...shape, null, { label: 'Delete', key: 'Del', run: () => t.del() },
+      ...shape, null,
+      { label: 'Collapse to pointers…', run: () => collapseDialog(ed, id) },
+      ...pick,
+      null, { label: 'Delete', key: 'Del', run: () => t.del() },
     ];
   }
   return [{ label: 'Delete', key: 'Del', run: () => t.del() }];

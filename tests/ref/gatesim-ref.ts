@@ -1,33 +1,24 @@
+// A frozen copy of the original, object-based GateSim (before typed arrays), kept as the
+// reference that tests/gatesim-fast.test.ts compares src/sim/gatesim.ts with. Do not optimize.
+//
 // Event-driven gate-level simulator over 1-bit nets with three values (0, 1, X).
 // Every NAND has a delay of one time unit; behavioural leaves use their declared delay.
 // Transport delay is used, so glitches are visible when propagation is animated.
-//
-// The hot loops work on flat typed arrays (a NAND's two input nets and its output net, fan-out
-// lists, an event wheel of growable typed buffers, a FIFO ring of dirty leaves). The semantics are
-// those of the first, object-based version, kept as tests/ref/gatesim-ref.ts: tests/gatesim-fast
-// .test.ts checks that both report the same changes at the same times, the same power-on and the
-// same relaxation, on CPUs and on sequential parts.
 
-import { matchNets, sharedInputs } from './carry';
-import { findNode, type FlatDesign } from './flatten';
-import type { PowerOnMode, Sim, SimState } from './sim';
-import { B0, B1, BX, BZ, type Bit, outPorts } from './types';
-import { pack, unpack } from './values';
+import { matchNets, sharedInputs } from '../../src/sim/carry';
+import { findNode, type FlatDesign } from '../../src/sim/flatten';
+import type { PowerOnMode, Sim, SimState } from '../../src/sim/sim';
+import { B0, B1, BX, BZ, type Bit, outPorts } from '../../src/sim/types';
+import { pack, unpack } from '../../src/sim/values';
 
 const RING = 64; // event wheel size; must exceed the largest leaf delay
-
-/** NAND of two 3-valued inputs, indexed by (a << 2) | b (Z reads as X). */
-const NAND_T = new Uint8Array(16);
-for (let a = 0; a < 4; a++) {
-  for (let b = 0; b < 4; b++) NAND_T[(a << 2) | b] = a === B0 || b === B0 ? B1 : a === B1 && b === B1 ? B0 : BX;
-}
 
 export interface GateSimOptions {
   /** Maximum simulated time per settle() before the circuit is declared unstable. */
   settleLimit?: number;
 }
 
-export class GateSim implements Sim {
+export class RefGateSim implements Sim {
   readonly kind = 'gate' as const;
   readonly design: FlatDesign;
   time = 0;
@@ -38,57 +29,36 @@ export class GateSim implements Sim {
   private val: Uint8Array;
   private proj: Uint8Array;
   private watched: Uint8Array;
-  private anyWatched = false;
   private fanStart: Int32Array;
   private fanList: Int32Array;
   private delay: Int32Array;
-  /** A NAND leaf's input nets and output net; opA = −1 for a behavioural leaf. */
-  private opA: Int32Array;
-  private opB: Int32Array;
-  private opY: Int32Array;
-  /** Every leaf's output nets, all ports in order (CSR). */
-  private outStart: Int32Array;
-  private outList: Int32Array;
   private state: unknown[];
   /** Root input values: a number from setInput, bits from setInputBits (wide values stay exact). */
   private inputs = new Map<string, number | Bit[]>();
   private inputNets = new Map<string, number[]>();
 
-  /** Dirty leaves: a FIFO ring (each leaf at most once, dirtyMark), so its capacity is the leaf count. */
-  private dq: Int32Array;
-  private dHead = 0;
-  private dLen = 0;
+  private dirty: number[] = [];
   private dirtyMark: Uint8Array;
-  /** Event wheel: per slot, nets and values in the order scheduled, and how many. */
-  private wNets: Int32Array[] = Array.from({ length: RING }, () => new Int32Array(16));
-  private wVals: Uint8Array[] = Array.from({ length: RING }, () => new Uint8Array(16));
-  private wLen = new Int32Array(RING);
+  private wheelNets: number[][] = Array.from({ length: RING }, () => []);
+  private wheelVals: number[][] = Array.from({ length: RING }, () => []);
   private pendingEvents = 0;
   private settleLimit: number;
-  private out: Bit[] = [];
 
   constructor(design: FlatDesign, opts: GateSimOptions = {}) {
     this.design = design;
     this.settleLimit = opts.settleLimit ?? 4000;
     const n = design.netCount;
     const leaves = design.leaves;
-    const L = leaves.length;
     this.val = new Uint8Array(n).fill(BX);
     this.proj = new Uint8Array(n).fill(BX);
     this.watched = new Uint8Array(n);
-    this.dirtyMark = new Uint8Array(L);
-    this.dq = new Int32Array(Math.max(1, L));
-    this.delay = new Int32Array(L);
-    this.opA = new Int32Array(L).fill(-1);
-    this.opB = new Int32Array(L);
-    this.opY = new Int32Array(L);
-    this.outStart = new Int32Array(L + 1);
-    this.state = new Array(L);
+    this.dirtyMark = new Uint8Array(leaves.length);
+    this.delay = new Int32Array(leaves.length);
+    this.state = new Array(leaves.length);
 
     // Fan-out lists in CSR form, and a single-driver check.
     const counts = new Int32Array(n + 1);
     const driver = new Int32Array(n).fill(-1);
-    let outs = 0;
     leaves.forEach((l, li) => {
       for (const port of l.inputs) for (const net of port) counts[net + 1]++;
       for (const port of l.outputs) {
@@ -97,26 +67,13 @@ export class GateSim implements Sim {
             throw new Error(`net driven by both ${pathOf(leaves[driver[net]])} and ${pathOf(l)}`);
           }
           driver[net] = li;
-          outs++;
         }
       }
       const d = l.kind === 'nand' ? 1 : Math.max(1, l.def.behavior?.delay ?? 1);
       // A longer delay would wrap the event wheel and fire early: refuse it rather than clamp it.
       if (d >= RING) throw new Error(`${pathOf(l)}: delay ${d} exceeds the event wheel (max ${RING - 1})`);
       this.delay[li] = d;
-      if (l.kind === 'nand') {
-        this.opA[li] = l.inputs[0][0];
-        this.opB[li] = l.inputs[1][0];
-        this.opY[li] = l.outputs[0][0];
-      }
     });
-    this.outList = new Int32Array(outs);
-    let k = 0;
-    leaves.forEach((l, li) => {
-      this.outStart[li] = k;
-      for (const port of l.outputs) for (const net of port) this.outList[k++] = net;
-    });
-    this.outStart[L] = k;
     for (let i = 0; i < n; i++) counts[i + 1] += counts[i];
     this.fanStart = counts;
     this.fanList = new Int32Array(counts[n]);
@@ -139,10 +96,7 @@ export class GateSim implements Sim {
   }
 
   getBits(nets: readonly number[]): Bit[] {
-    const v = this.val;
-    const out: Bit[] = new Array(nets.length);
-    for (let i = 0; i < nets.length; i++) out[i] = v[nets[i]] as Bit;
-    return out;
+    return nets.map((n) => this.val[n] as Bit);
   }
 
   getInput(port: string): number {
@@ -177,7 +131,6 @@ export class GateSim implements Sim {
 
   watch(nets: readonly number[]): void {
     for (const n of nets) this.watched[n] = 1;
-    if (nets.length) this.anyWatched = true;
   }
 
   poke(leaf: number, state: unknown): void {
@@ -189,31 +142,20 @@ export class GateSim implements Sim {
     return this.state[leaf];
   }
 
-  /**
-   * Force nets to these bits now, as storage seeded from outside (a behavioural RAM's words put
-   * into the latches of its structure: Behavior.inside). The logic reading them reacts on the
-   * next step / settle; a net already at its bit is left alone.
-   */
-  forceNets(nets: readonly number[], bits: ArrayLike<number>): void {
-    nets.forEach((net, i) => {
-      const b = (bits[i] === B0 || bits[i] === B1 ? bits[i] : BX) as Bit;
-      if (this.val[net] !== b) this.force(net, b);
-    });
-  }
-
   busy(): boolean {
-    return this.pendingEvents > 0 || this.dLen > 0;
+    return this.pendingEvents > 0 || this.dirty.length > 0;
   }
 
   reset(mode: PowerOnMode = 'zero'): void {
     this.val.fill(BX);
     this.proj.fill(BX);
-    this.wLen.fill(0);
+    this.wheelNets.forEach((b) => (b.length = 0));
+    this.wheelVals.forEach((b) => (b.length = 0));
     this.pendingEvents = 0;
     this.time = 0;
     this.unstable = false;
     this.design.leaves.forEach((l, i) => {
-      this.state[i] = l.def.behavior?.init?.(mode);
+      this.state[i] = l.def.behavior?.init?.();
     });
     for (const [port, v] of this.inputs) {
       const nets = this.inputNets.get(port)!;
@@ -229,29 +171,22 @@ export class GateSim implements Sim {
         this.proj[net] = b;
       }
     }
-    this.clearDirty();
-    const L = this.design.leaves.length;
-    for (let i = 0; i < L; i++) this.markDirty(i);
+    this.dirty.length = 0;
+    this.dirtyMark.fill(0);
+    for (let i = 0; i < this.design.leaves.length; i++) this.markDirty(i);
     this.relax();
 
     // Any storage loop without a hint is still X: break the tie by forcing outputs, the way
     // real silicon settles to an arbitrary state, then let the circuit resolve itself.
     if (mode !== 'x') {
-      const { outStart, outList, val } = this;
       for (let round = 0; round < 4096; round++) {
-        // the first leaf with an X output: the owner of the first X in outList (sorted by leaf)
-        let k = 0;
-        while (k < outList.length && val[outList[k]] !== BX) k++;
-        if (k === outList.length) break;
-        let lo = 0, hi = L - 1;
-        while (lo < hi) {
-          const mid = (lo + hi + 1) >> 1;
-          if (outStart[mid] <= k) lo = mid;
-          else hi = mid - 1;
-        }
-        for (let q = outStart[lo]; q < outStart[lo + 1]; q++) {
-          const net = outList[q];
-          if (val[net] === BX) this.force(net, mode === 'random' && Math.random() < 0.5 ? B1 : B0);
+        const l = this.design.leaves.findIndex((leaf) =>
+          leaf.outputs.some((p) => p.some((net) => this.val[net] === BX)));
+        if (l < 0) break;
+        for (const p of this.design.leaves[l].outputs) {
+          for (const net of p) {
+            if (this.val[net] === BX) this.force(net, mode === 'random' && Math.random() < 0.5 ? B1 : B0);
+          }
         }
         this.relax();
       }
@@ -294,40 +229,17 @@ export class GateSim implements Sim {
       const o = findNode(prev.design.root, l.node.path);
       if (o?.leafIndex === undefined || o.def.id !== l.def.id) return;
       const s = prev.leafState(o.leafIndex);
-      const c = l.def.behavior.carry;
-      if (s !== undefined) this.state[li] = c ? c(s, !!opts.known) : cloneState(s);
+      if (s !== undefined) this.state[li] = cloneState(s);
     });
-    this.wLen.fill(0);
+    this.wheelNets.forEach((b) => (b.length = 0));
+    this.wheelVals.forEach((b) => (b.length = 0));
     this.pendingEvents = 0;
-    this.clearDirty();
+    this.dirty.length = 0;
+    this.dirtyMark.fill(0);
     for (let i = 0; i < d.leaves.length; i++) this.markDirty(i);
     this.unstable = false;
     this.relax();
     this.time = prev.time;
-  }
-
-  /**
-   * Take over a settled state of this same design from another engine (the cycle engine, see
-   * DualSim): every net's value, the behavioural states (shared, not copied: one engine runs at a
-   * time), the inputs and the time. Nothing is pending afterwards except the readers of the
-   * `changed` nets and the `dirty` leaves: input changes and pokes the other engine had not settled,
-   * which then propagate exactly as if they had been made here.
-   */
-  adopt(src: Sim, changed: readonly number[] = [], dirty: readonly number[] = []): void {
-    const d = this.design;
-    for (let net = 0; net < d.netCount; net++) {
-      const b = src.get(net);
-      this.val[net] = this.proj[net] = b === BZ ? BX : b;
-    }
-    d.leaves.forEach((l, li) => { if (l.kind === 'behavior') this.state[li] = src.leafState(li); });
-    for (const port of this.inputNets.keys()) this.inputs.set(port, src.getInputBits(port));
-    this.time = src.time;
-    this.unstable = false;
-    this.wLen.fill(0);
-    this.pendingEvents = 0;
-    this.clearDirty();
-    for (const net of changed) for (let i = this.fanStart[net]; i < this.fanStart[net + 1]; i++) this.markDirty(this.fanList[i]);
-    for (const li of dirty) this.markDirty(li);
   }
 
   saveState(): SimState {
@@ -335,9 +247,8 @@ export class GateSim implements Sim {
       val: this.val.slice(), proj: this.proj.slice(), state: this.state.map(cloneState),
       inputs: new Map([...this.inputs].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v])),
       time: this.time, unstable: this.unstable, evaluations: this.evaluations,
-      wheelNets: this.wNets.map((b, s) => b.slice(0, this.wLen[s])),
-      wheelVals: this.wVals.map((b, s) => b.slice(0, this.wLen[s])),
-      pending: this.pendingEvents, dirty: this.dirtyList(),
+      wheelNets: this.wheelNets.map((b) => b.slice()), wheelVals: this.wheelVals.map((b) => b.slice()),
+      pending: this.pendingEvents, dirty: this.dirty.slice(),
     };
     return st as unknown as SimState;
   }
@@ -352,18 +263,11 @@ export class GateSim implements Sim {
     this.time = s.time;
     this.unstable = s.unstable;
     this.evaluations = s.evaluations;
-    for (let slot = 0; slot < RING; slot++) {
-      const nets = s.wheelNets[slot], n = nets.length;
-      if (this.wNets[slot].length < n) {
-        this.wNets[slot] = new Int32Array(n);
-        this.wVals[slot] = new Uint8Array(n);
-      }
-      this.wNets[slot].set(nets);
-      this.wVals[slot].set(s.wheelVals[slot]);
-      this.wLen[slot] = n;
-    }
+    this.wheelNets = s.wheelNets.map((b) => b.slice());
+    this.wheelVals = s.wheelVals.map((b) => b.slice());
     this.pendingEvents = s.pending;
-    this.clearDirty();
+    this.dirtyMark.fill(0);
+    this.dirty = [];
     for (const li of s.dirty) this.markDirty(li);
   }
 
@@ -376,78 +280,55 @@ export class GateSim implements Sim {
    */
   relax(): void {
     // Drop any timed events; relaxation replaces them.
-    const { val, proj, opA, opB, opY, dq, dirtyMark, outStart, outList } = this;
     for (let s = 0; s < RING; s++) {
-      const nets = this.wNets[s];
-      for (let i = 0; i < this.wLen[s]; i++) proj[nets[i]] = val[nets[i]];
-      this.wLen[s] = 0;
+      for (let i = 0; i < this.wheelNets[s].length; i++) this.proj[this.wheelNets[s][i]] = this.val[this.wheelNets[s][i]];
+      this.wheelNets[s] = [];
+      this.wheelVals[s] = [];
     }
     this.pendingEvents = 0;
-    const cap = dq.length;
-    const budget = 64 * this.design.leaves.length + 1000;
+    const leaves = this.design.leaves;
+    const budget = 64 * leaves.length + 1000;
     let work = 0;
-    const out = this.out;
-    // the FIFO is the work queue: markDirty() appends to it while we walk it
-    while (this.dLen > 0) {
-      const li = dq[this.dHead];
-      if (++this.dHead === cap) this.dHead = 0;
-      this.dLen--;
-      dirtyMark[li] = 0;
+    const out: Bit[] = [];
+    const q = this.dirty; // work queue; markDirty() appends to it while we walk it
+    let head = 0;
+    while (head < q.length) {
+      const li = q[head++];
+      this.dirtyMark[li] = 0;
       if (++work > budget) {
         // Genuinely unstable (e.g. a ring oscillator): give up and mark its outputs X.
-        for (let q = outStart[li]; q < outStart[li + 1]; q++) this.force(outList[q], BX);
-        this.clearDirty();
+        for (const p of leaves[li].outputs) for (const net of p) this.force(net, BX);
+        for (let i = head; i < q.length; i++) this.dirtyMark[q[i]] = 0;
+        this.dirty = [];
         this.unstable = true;
         return;
       }
       this.evaluations++;
-      const a = opA[li];
-      if (a >= 0) {
-        const y = NAND_T[(val[a] << 2) | val[opB[li]]] as Bit;
-        const net = opY[li];
-        proj[net] = y;
-        if (val[net] !== y) this.apply(net, y);
-        continue;
+      this.evalLeaf(li, out);
+      let k = 0;
+      for (const p of leaves[li].outputs) for (const net of p) this.force(net, out[k++]);
+      if (head > 4096 && head * 2 > q.length) {
+        q.splice(0, head);
+        head = 0;
       }
-      this.evalBehavior(li, out);
-      for (let q = outStart[li], j = 0; q < outStart[li + 1]; q++) this.force(outList[q], out[j++]);
     }
+    this.dirty = [];
   }
 
   step(): boolean {
-    if (this.dLen) this.evalDirty();
+    if (this.dirty.length) this.evalDirty();
     if (this.pendingEvents === 0) return false;
     // Advance to the next time instant that holds events.
     let t = this.time + 1;
-    while (this.wLen[t % RING] === 0) t++;
+    while (this.wheelNets[t % RING].length === 0) t++;
     this.time = t;
     const slot = t % RING;
-    const nets = this.wNets[slot];
-    const vals = this.wVals[slot];
-    const n = this.wLen[slot];
-    this.wLen[slot] = 0;
-    this.pendingEvents -= n;
-    // nothing is scheduled into this slot before evalDirty (delays are 1 … RING − 1)
-    const { val, fanStart, fanList, dirtyMark, dq, watched } = this;
-    const cap = dq.length;
-    const trace = this.anyWatched ? this.onTrace : undefined;
-    let len = this.dLen, tail = this.dHead + len;
-    if (tail >= cap) tail -= cap;
-    for (let i = 0; i < n; i++) {
-      const net = nets[i], b = vals[i];
-      if (val[net] === b) continue;
-      val[net] = b;
-      if (trace && watched[net]) trace(net, b as Bit, t);
-      for (let f = fanStart[net], e = fanStart[net + 1]; f < e; f++) {
-        const li = fanList[f];
-        if (dirtyMark[li]) continue;
-        dirtyMark[li] = 1;
-        dq[tail] = li;
-        if (++tail === cap) tail = 0;
-        len++;
-      }
-    }
-    this.dLen = len;
+    const nets = this.wheelNets[slot];
+    const vals = this.wheelVals[slot];
+    this.wheelNets[slot] = [];
+    this.wheelVals[slot] = [];
+    this.pendingEvents -= nets.length;
+    for (let i = 0; i < nets.length; i++) this.apply(nets[i], vals[i] as Bit);
     this.evalDirty();
     return true;
   }
@@ -458,10 +339,10 @@ export class GateSim implements Sim {
    */
   runUntil(t: number): void {
     for (;;) {
-      if (this.dLen) this.evalDirty();
+      if (this.dirty.length) this.evalDirty();
       if (this.pendingEvents === 0) break;
       let n = this.time + 1;
-      while (this.wLen[n % RING] === 0) n++;
+      while (this.wheelNets[n % RING].length === 0) n++;
       if (n > t) break;
       this.step();
     }
@@ -498,105 +379,37 @@ export class GateSim implements Sim {
   }
 
   private markDirty(leaf: number): void {
-    if (this.dirtyMark[leaf]) return;
-    this.dirtyMark[leaf] = 1;
-    let at = this.dHead + this.dLen;
-    if (at >= this.dq.length) at -= this.dq.length;
-    this.dq[at] = leaf;
-    this.dLen++;
-  }
-
-  private clearDirty(): void {
-    this.dirtyMark.fill(0);
-    this.dHead = 0;
-    this.dLen = 0;
-  }
-
-  /** The dirty leaves in queue order. */
-  private dirtyList(): number[] {
-    const out: number[] = [];
-    for (let i = 0, h = this.dHead; i < this.dLen; i++) {
-      out.push(this.dq[h]);
-      if (++h === this.dq.length) h = 0;
+    if (!this.dirtyMark[leaf]) {
+      this.dirtyMark[leaf] = 1;
+      this.dirty.push(leaf);
     }
-    return out;
   }
 
   private evalDirty(): void {
-    const n = this.dLen;
-    const { val, proj, opA, opB, opY, dq, dirtyMark } = this;
-    const cap = dq.length;
-    let h = this.dHead;
-    this.dHead = h + n >= cap ? h + n - cap : h + n;
-    this.dLen = 0;
-    // NANDs fire one delay later; nothing marks a leaf dirty while we evaluate
-    const slot1 = (this.time + 1) % RING;
-    let nets1 = this.wNets[slot1], vals1 = this.wVals[slot1], len1 = this.wLen[slot1];
-    let scheduled = 0;
-    for (let k = 0; k < n; k++) {
-      const li = dq[h];
-      if (++h === cap) h = 0;
-      dirtyMark[li] = 0;
-      const a = opA[li];
-      if (a >= 0) {
-        const y = NAND_T[(val[a] << 2) | val[opB[li]]];
-        const net = opY[li];
-        if (proj[net] === y) continue;
-        proj[net] = y;
-        if (len1 === nets1.length) {
-          this.wLen[slot1] = len1;
-          this.grow(slot1);
-          nets1 = this.wNets[slot1];
-          vals1 = this.wVals[slot1];
-        }
-        nets1[len1] = net;
-        vals1[len1++] = y;
-        scheduled++;
-        continue;
-      }
-      this.wLen[slot1] = len1;
-      scheduled += this.evalBehaviorLeaf(li);
-      nets1 = this.wNets[slot1];
-      vals1 = this.wVals[slot1];
-      len1 = this.wLen[slot1];
+    const list = this.dirty;
+    this.dirty = [];
+    for (const li of list) this.dirtyMark[li] = 0;
+    const leaves = this.design.leaves;
+    const out: Bit[] = [];
+    for (const li of list) {
+      this.evaluations++;
+      const t = this.time + this.delay[li];
+      this.evalLeaf(li, out);
+      let k = 0;
+      for (const p of leaves[li].outputs) for (const net of p) this.schedule(net, out[k++], t);
     }
-    this.wLen[slot1] = len1;
-    this.evaluations += n;
-    this.pendingEvents += scheduled;
   }
 
-  /** Evaluate a behavioural leaf and schedule its changed outputs; returns how many. */
-  private evalBehaviorLeaf(li: number): number {
-    const out = this.out;
-    this.evalBehavior(li, out);
-    const slot = (this.time + this.delay[li]) % RING;
-    let scheduled = 0;
-    for (let q = this.outStart[li], j = 0; q < this.outStart[li + 1]; q++) {
-      const net = this.outList[q], b = out[j++];
-      if (this.proj[net] === b) continue;
-      this.proj[net] = b;
-      if (this.wLen[slot] === this.wNets[slot].length) this.grow(slot);
-      const i = this.wLen[slot]++;
-      this.wNets[slot][i] = net;
-      this.wVals[slot][i] = b;
-      scheduled++;
-    }
-    return scheduled;
-  }
-
-  private grow(slot: number): void {
-    const n = this.wNets[slot].length * 2;
-    const nets = new Int32Array(n), vals = new Uint8Array(n);
-    nets.set(this.wNets[slot]);
-    vals.set(this.wVals[slot]);
-    this.wNets[slot] = nets;
-    this.wVals[slot] = vals;
-  }
-
-  /** A behavioural leaf's output bits (flattened across its output ports) into `out`. */
-  private evalBehavior(li: number, out: Bit[]): void {
+  /** Compute a leaf's output bits (flattened across its output ports) into `out`. */
+  private evalLeaf(li: number, out: Bit[]): void {
     const leaf = this.design.leaves[li];
     const v = this.val;
+    if (leaf.kind === 'nand') {
+      const a = v[leaf.inputs[0][0]];
+      const b = v[leaf.inputs[1][0]];
+      out[0] = a === B0 || b === B0 ? B1 : a === B1 && b === B1 ? B0 : BX;
+      return;
+    }
     const ins = leaf.inputs.map((p) => pack(p.map((net) => v[net])));
     const outs = leaf.def.behavior!.eval(ins, this.state[li]);
     const ops = outPorts(leaf.def);
@@ -605,13 +418,22 @@ export class GateSim implements Sim {
       for (const b of unpack(outs[pi] ?? -1, p.width)) out[k++] = b;
     });
   }
+
+  private schedule(net: number, b: Bit, t: number): void {
+    if (this.proj[net] === b) return;
+    this.proj[net] = b;
+    const slot = t % RING;
+    this.wheelNets[slot].push(net);
+    this.wheelVals[slot].push(b);
+    this.pendingEvents++;
+  }
 }
 
 /**
  * Deep copy of plain data (objects, arrays, typed arrays, maps, sets), so the two simulations do
  * not share it. A class instance would lose its prototype in structuredClone: share it instead.
  */
-export function cloneState(s: unknown): unknown {
+function cloneState(s: unknown): unknown {
   if (s === null || typeof s !== 'object') return s;
   const proto = Object.getPrototypeOf(s);
   const plain = proto === Object.prototype || proto === null || Array.isArray(s) || ArrayBuffer.isView(s) || s instanceof Map || s instanceof Set;
@@ -626,7 +448,7 @@ export function cloneState(s: unknown): unknown {
 interface GateState {
   val: Uint8Array; proj: Uint8Array; state: unknown[]; inputs: Map<string, number | Bit[]>;
   time: number; unstable: boolean; evaluations: number;
-  wheelNets: Int32Array[]; wheelVals: Uint8Array[]; pending: number; dirty: number[];
+  wheelNets: number[][]; wheelVals: number[][]; pending: number; dirty: number[];
 }
 
 function pathOf(l: { node: { path: string[] } }): string {

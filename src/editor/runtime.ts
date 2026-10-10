@@ -22,8 +22,8 @@
 // Switch banks, consoles and screens (ioparts.ts) keep their state in their leaves too: pokeLeaf
 // flips a switch; a reset puts the switches back where they were (the world outside).
 
+import { DualSim } from '../sim/dualsim';
 import { flatten } from '../sim/flatten';
-import { GateSim } from '../sim/gatesim';
 import type { PowerOnMode, Sim } from '../sim/sim';
 import { SwitchSim } from '../sim/switchsim';
 import { B1, type Bit, BZ, type ComponentDef, netlistOf } from '../sim/types';
@@ -157,7 +157,9 @@ export class EditorSim {
     const key = simKey(c);
     try {
       const d = flatten(c.def, { mode: c.mode });
-      const sim: Sim = c.mode === 'gate' ? new GateSim(d) : new SwitchSim(d);
+      // gate level: GateSim, and the cycle engine while running in cycle mode (DualSim switches)
+      const sim: Sim = c.mode === 'gate' ? new DualSim(d) : new SwitchSim(d);
+      if (sim instanceof DualSim) sim.preferFast = this.mode === 'cycle';
       // Unknown values do not carry (unless X is the power-on mode): storage that went X while
       // half wired (a clock not connected yet) starts from its power-on value once it is.
       // Inputs first: a power-on resolves races (an SR latch released 1/1) with them in place.
@@ -371,6 +373,15 @@ export class EditorSim {
   get time(): number {
     return this.sim?.time ?? 0;
   }
+  /**
+   * The engine simulating now: 'gate' (event-driven, the time counts gate delays), 'cycle' (the
+   * cycle engine: settled values only, the time stands still) or 'switch' (transistors).
+   */
+  get engine(): 'gate' | 'cycle' | 'switch' | null {
+    const sim = this.sim;
+    if (!sim) return null;
+    return sim instanceof DualSim ? sim.engine : sim.kind;
+  }
 
   // ---- driving -----------------------------------------------------------------------------
 
@@ -478,6 +489,7 @@ export class EditorSim {
       sim.settle();
       this.clkHigh = false;
     }
+    if (this.mode === 'cycle' && sim instanceof DualSim) sim.prepare();
     const t0 = now();
     let k = 0;
     while (k < n && !stop?.()) {
@@ -518,6 +530,8 @@ export class EditorSim {
     const clks = this.clocks();
     const rate = this.mode === 'cycle' ? this.hz : this.gateRate();
     this.due = Math.min(this.due + dt * rate, Number.isFinite(rate) ? rate + 1 : Infinity);
+    // the cycle engine's one-time set-up is not part of a frame's work
+    if (this.mode === 'cycle' && sim instanceof DualSim && clks.length) sim.prepare();
     const t0 = now();
     let n = 0;
     this.haltHit = false;
@@ -578,6 +592,8 @@ export class EditorSim {
   setMode(m: RunMode): void {
     this.mode = m;
     this.due = 0;
+    // gate mode steps one delay at a time: the event-driven engine (the cycle engine takes over again in cycle mode)
+    if (this.sim instanceof DualSim) this.sim.preferFast = m === 'cycle';
     // Leaving gate mode: finish whatever was propagating, so cycle mode starts settled.
     if (m === 'cycle' && this.sim) {
       this.sim.settle();
