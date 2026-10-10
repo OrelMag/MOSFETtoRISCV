@@ -20,6 +20,8 @@ import { B0, B1, BX, type ComponentDef, inPorts, outPorts } from './types';
 const VALS = [B0, B1, BX];
 /** A table larger than this is not a small state machine. */
 const MAX_STATES = 4096;
+/** warm() explores at most this many states of one table. */
+const MAX_WARM = 256;
 /** An isolated settle longer than this is an oscillation: unsupported. */
 const LIMIT = 64;
 const NAND_T = new Uint8Array(16);
@@ -54,6 +56,7 @@ export class FfTable {
   readonly codes: number;
   /** Per state: 0 not checked yet, 1 exact from here, 2 not (see good()). */
   private status = new Uint8Array(0);
+  private readonly warmed = new Set<number>();
 
   private constructor(def: ComponentDef, flat: FlatDesign) {
     this.def = def;
@@ -127,6 +130,28 @@ export class FfTable {
   good(id: number): boolean {
     if (this.status[id] === 0) this.status[id] = this.verify(this.states[id]) ? 1 : 2;
     return this.status[id] === 1;
+  }
+
+  /**
+   * Check ahead of time every state reachable from these with 0 / 1 inputs (a cycle engine loading
+   * a design: the first frames of a run then meet no new state to check). Each state is explored
+   * once per table; unknown values are still checked when they come.
+   */
+  warm(ids: Iterable<number>): void {
+    const queue = [...ids].filter((id) => !this.warmed.has(id));
+    const n = this.inNets.length;
+    while (queue.length && this.warmed.size < MAX_WARM) {
+      const id = queue.pop()!;
+      if (this.warmed.has(id)) continue;
+      this.warmed.add(id);
+      if (!this.good(id)) continue;
+      for (let bits = 0; bits < 2 ** n; bits++) {
+        let code = 0;
+        for (let i = n - 1; i >= 0; i--) code = code * 3 + ((bits >> i) & 1);
+        const nx = this.step(id, code);
+        if (nx >= 0 && !this.warmed.has(nx)) queue.push(nx);
+      }
+    }
   }
 
   /** The state after the inputs change to `code` (−2: unsupported, e.g. it oscillates). */

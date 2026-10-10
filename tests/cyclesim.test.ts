@@ -5,6 +5,8 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../src/lib';
+import { bigRam } from '../src/lib/bigmem';
+import { incrementer } from '../src/lib/combinational';
 import { KEYBOARD, keyPart } from '../src/editor/parts';
 import { singleCycleCpu } from '../src/lib/cpu';
 import { splitter } from '../src/lib/define';
@@ -274,6 +276,42 @@ describe('behavioural leaves on the cycle engine', () => {
     // the RAM's state went through the same writes
     const ramLeaf = d.leaves.findIndex((l) => l.def === CLOCKED_RAM);
     expect((dual.leafState(ramLeaf) as { mem: Uint8Array }).mem).toEqual((ref.leafState(ramLeaf) as { mem: Uint8Array }).mem);
+  });
+});
+
+describe('a large RAM (Behavior.seq) on the cycle engine', () => {
+  it('counter-addressed 128 × 8 RAM writing dout + 1 back (a loop through its sampled inputs)', () => {
+    const top: ComponentDef = {
+      id: 't_bigmem_loop', name: 'bigmem loop', category: 'custom',
+      ports: [bit('clk', 'in'), bit('we', 'in'), bus('q', 8, 'out')], symbol: { kind: 'box' },
+      netlist: () => ({
+        instances: [
+          { name: 'one', def: TIE1 }, { name: 'c', def: counter(7) }, { name: 'm', def: bigRam(7, 8) },
+          { name: 'inc', def: incrementer(8) }, { name: 'r', def: register(8) },
+        ],
+        nets: [
+          { ends: ['one.y', 'c.en', 'r.en'] }, { ends: ['clk', 'c.clk', 'm.clk', 'r.clk'] }, { ends: ['we', 'm.we'] },
+          { ends: ['c.q', 'm.addr'] }, { ends: ['m.dout', 'inc.a', 'r.d'] }, { ends: ['inc.y', 'm.din'] }, { ends: ['r.q', 'q'] },
+        ],
+      }),
+    };
+    expect(CycleSim.build(flatten(top))).toBeInstanceOf(CycleSim);
+    for (const mode of ['zero', 'x', 'random'] as const) {
+      const { dual, ref } = pair(top, mode, 41);
+      const rnd = rng(42);
+      let fast = 0;
+      for (let c = 0; c < 300; c++) {
+        if (rnd() < 0.2) { const v = rnd() < 0.7 ? 1 : 0; for (const s of [dual, ref]) { s.setInput('we', v); s.settle(); } }
+        for (const v of [1, 0]) {
+          for (const s of [dual, ref]) { s.setInput('clk', v); s.settle(); }
+          if (dual.engine === 'cycle') fast++;
+          sameNets(dual, ref, `${mode} cycle ${c}`);
+        }
+      }
+      expect(fast, mode).toBe(600);
+      const li = dual.design.leaves.findIndex((l) => l.def === bigRam(7, 8));
+      expect(dual.leafState(li)).toEqual(ref.leafState(li));
+    }
   });
 });
 

@@ -23,7 +23,7 @@ import type { FlatDesign, HierNode } from './flatten';
 import { FfTable } from './ffmacro';
 import { cloneState, GateSim } from './gatesim';
 import type { PowerOnMode, Sim, SimState } from './sim';
-import { B0, B1, BX, BZ, type Bit, outPorts } from './types';
+import { B0, B1, BX, BZ, type Bit, inPorts, outPorts } from './types';
 import { pack, unpack } from './values';
 
 const NAND_T = new Uint8Array(16);
@@ -92,6 +92,9 @@ export class CycleSim implements Sim {
   private head: Int32Array;
   private link: Int32Array;
   private queued: Uint8Array;
+  /** Phase 2: the level being swept (−1 outside it), and the lowest level queued behind it. */
+  private at = -1;
+  private behind = Infinity;
   /** Phase 1: nodes to evaluate on the values of the instant (readers of changed root inputs, poked leaves, active flip-flops). */
   private snap: number[] = [];
   private snapMark: Uint8Array;
@@ -285,7 +288,24 @@ export class CycleSim implements Sim {
 
     // Levels over gates and behaviours; flip-flop outputs, root inputs and constants are sources.
     const G = gates.length, B = behaviors.length, M = macros.length, N = G + B + M;
-    const nodeIns = (k: number): number[] => (k < G ? leaves[gates[k]].inputs.flat() : k < G + B ? leaves[behaviors[k - G]].inputs.flat() : macros[k - G - B].ins.filter((_, i) => i !== macros[k - G - B].table.clk));
+    // A storage behaviour (Behavior.seq, a large RAM) is like a flip-flop: its outputs follow only
+    // its comb inputs (and its state), so only those order it; the others are sinks.
+    const seqClk = (li: number): number[] | null => {
+      const q = leaves[li].def.behavior?.seq;
+      if (!q) return null;
+      const ps = inPorts(leaves[li].def), i = ps.findIndex((p) => p.name === q.clk);
+      return i < 0 ? null : leaves[li].inputs[i];
+    };
+    const combIns = (li: number): number[] => {
+      const l = leaves[li], q = l.def.behavior?.seq;
+      if (!q) return l.inputs.flat();
+      return inPorts(l.def).flatMap((p, i) => (q.comb.includes(p.name) ? l.inputs[i] : []));
+    };
+    for (const li of behaviors) {
+      const c = seqClk(li);
+      if (c && !c.every((net) => rootIn[net])) return { reason: `${leaves[li].node.path.join('.')}: its clock is not a pin of the chip (a derived or gated clock)` };
+    }
+    const nodeIns = (k: number): number[] => (k < G ? leaves[gates[k]].inputs.flat() : k < G + B ? combIns(behaviors[k - G]) : macros[k - G - B].ins.filter((_, i) => i !== macros[k - G - B].table.clk));
     const nodeOuts = (k: number): number[] => (k < G ? leaves[gates[k]].outputs.flat() : k < G + B ? leaves[behaviors[k - G]].outputs.flat() : []);
     const driver = new Int32Array(n).fill(-1);
     for (let k = 0; k < G + B; k++) for (const net of nodeOuts(k)) driver[net] = k;
@@ -320,16 +340,19 @@ export class CycleSim implements Sim {
     // no behavioural leaf may read a signal the clock reaches through logic (it would see the edge late)
     const clocks = new Set(macros.map((m) => m.ins[m.table.clk]));
     const derived = new Uint8Array(n);
-    // in level order: a gate or behaviour is derived if any input is
+    // (clocks: the flip-flops', the storage behaviours' and the pins marked as clocks)
+    for (const li of behaviors) for (const net of seqClk(li) ?? []) clocks.add(net);
+    for (const p of design.root.def.ports) if (p.dir === 'in' && p.clock) for (const net of design.root.ports[p.name]) clocks.add(net);
+    // In level order: a gate or behaviour is derived if any input is (a storage behaviour: any comb
+    // input; its clock is a pin, its other inputs are sampled before an edge, as a flip-flop's d).
     for (const k of queue) {
       if (k >= G + B) continue;
-      const ins = k < G ? leaves[gates[k]].inputs.flat() : leaves[behaviors[k - G]].inputs.flat();
-      if (ins.some((net) => clocks.has(net) || derived[net])) {
-        if (k >= G && ins.some((net) => derived[net])) {
-          return { reason: `${leaves[behaviors[k - G]].node.path.join('.')} reads a signal derived from a clock` };
-        }
-        for (const net of nodeOuts(k)) derived[net] = 1;
+      const li = k < G ? -1 : behaviors[k - G];
+      const ins = k < G ? leaves[gates[k]].inputs.flat() : combIns(li);
+      if (li >= 0 && !seqClk(li) && ins.some((net) => derived[net])) {
+        return { reason: `${leaves[li].node.path.join('.')} reads a signal derived from a clock` };
       }
+      if (ins.some((net) => clocks.has(net) || derived[net])) for (const net of nodeOuts(k)) derived[net] = 1;
     }
     return new CycleSim(design, macros, gates, behaviors, level, maxLevel);
   }
@@ -357,6 +380,10 @@ export class CycleSim implements Sim {
       if (id < 0 || !m.table.good(id)) return false;
       this.mstate[mi] = id;
     }
+    // the states a run will meet, checked now rather than in its first frames
+    const byTab = this.tabs.map(() => new Set<number>());
+    for (let mi = 0; mi < this.macros.length; mi++) byTab[this.mTab[mi]].add(this.mstate[mi]);
+    this.tabs.forEach((t, i) => t.warm(byTab[i]));
     this.actLen.fill(0);
     this.actPos.fill(-1);
     for (let mi = 0; mi < this.macros.length; mi++) this.track(mi);
@@ -566,10 +593,19 @@ export class CycleSim implements Sim {
     this.snap = [];
     for (const cs of this.changedClocks) this.clockChanged[cs] = 0;
     this.changedClocks = [];
-    // Phase 2: level by level, each node at most once.
+    // Phase 2: level by level, each node once, except a storage behaviour whose sampled (non-comb)
+    // inputs change after its level was passed: it is evaluated again (its outputs cannot change).
     const { ga, gb, gy, head, link, queued } = this;
-    let evals = 0;
-    for (let lv = 0; lv <= this.maxLevel; lv++) {
+    let evals = 0, sweeps = 0;
+    this.behind = Infinity;
+    for (let lv = 0; ; lv++) {
+      if (lv > this.maxLevel) {
+        if (this.behind > this.maxLevel) break;
+        if (++sweeps > 1000) throw new Error('CycleSim: a storage behaviour keeps changing its outputs from inputs it samples');
+        lv = this.behind;
+        this.behind = Infinity;
+      }
+      this.at = lv;
       let k = head[lv];
       if (k < 0) continue;
       head[lv] = -1;
@@ -599,6 +635,7 @@ export class CycleSim implements Sim {
         k = nk;
       }
     }
+    this.at = -1;
     this.evaluations += evals;
     for (const mi of this.moved) if (!tabs[mTab[mi]].good(mstate[mi])) this.tainted = true;
     this.moved.length = 0;
@@ -636,6 +673,7 @@ export class CycleSim implements Sim {
     const lv = this.level[k];
     this.link[k] = this.head[lv];
     this.head[lv] = k;
+    if (lv <= this.at && lv < this.behind) this.behind = lv;
   }
 
   private evalBehavior(li: number): number[] {
