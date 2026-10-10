@@ -336,6 +336,11 @@ export class EditorSim {
     return true;
   }
 
+  /** Is key `bind` held (from the keyboard or the I/O bar)? */
+  keyHeld(bind: string): boolean {
+    return this.held.has(bind);
+  }
+
   /** Every held key let go (the window lost focus). */
   releaseKeys(): void {
     for (const b of [...this.held]) this.setKey(b, false);
