@@ -15,11 +15,19 @@ export function cpuState(sim: Pick<Sim, 'getBits' | 'design'>, root: HierNode = 
   const fc = root.children!.get('fcsr');
   const fcsr = fc ? pack(sim.getBits(fc.ports.fcsr)) : undefined;
   const dm = root.children!.get('dm');
+  const dmem = dm ? dmemWords(sim, dm) : [];
+  const pcPort = root.ports.pcOut ?? root.ports.pcF;
+  const pc = pcPort ? pack(sim.getBits(pcPort)) >>> 0 : 0;
+  return { pc, x, dmem, f, fcsr };
+}
+
+/** The words of a data memory `dm` (plain, byte-banked, or main memory behind a cache) as a program reads them. */
+export function dmemWords(sim: Pick<Sim, 'getBits'>, dm: HierNode): number[] {
   const dmem: number[] = [];
-  const ram = dm?.children!.get('ram');
+  const ram = dm.children!.get('ram');
   if (ram) {
     for (const [name, n] of ram.children!) if (/^w\d+$/.test(name)) dmem[Number(name.slice(1))] = pack(sim.getBits(n.ports.q)) >>> 0;
-  } else if (dm) {
+  } else {
     // byte-banked memory: word i = {b3[i], b2[i], b1[i], b0[i]}
     for (let lane = 0; lane < 4; lane++) {
       const bank = dm.children!.get(`b${lane}`)!;
@@ -31,10 +39,8 @@ export function cpuState(sim: Pick<Sim, 'getBits' | 'design'>, root: HierNode = 
     }
   }
   // A write-back cache holds the newest copy of its dirty lines: overlay them on main memory.
-  if (dm) for (const l of cacheLines(sim, dm)) if (l.valid && l.dirty) l.words.forEach((v, i) => (dmem[l.base + i] = v));
-  const pcPort = root.ports.pcOut ?? root.ports.pcF;
-  const pc = pcPort ? pack(sim.getBits(pcPort)) >>> 0 : 0;
-  return { pc, x, dmem, f, fcsr };
+  for (const l of cacheLines(sim, dm)) if (l.valid && l.dirty) l.words.forEach((v, i) => (dmem[l.base + i] = v));
+  return dmem;
 }
 
 /** One clock cycle: rising edge, settle, falling edge, settle. */
