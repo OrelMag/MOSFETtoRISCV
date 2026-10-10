@@ -74,10 +74,24 @@ registerPaletteGroup({
 
 const uis = new WeakMap<Editor, ChallengeUi>();
 
+/**
+ * The campaign's level screen: the strip shows only Check, the result and the test player (the
+ * screen's own bar and panel carry the title, pins, brief and tips), and the screen hears of
+ * every check.
+ */
+export interface LevelScreenHooks {
+  /** After Check: the result, and the grade when a campaign level passed. */
+  checked(r: CheckResult, grade?: { stars: 1 | 2 | 3; best: boolean; first: boolean }): void;
+  /** Buttons put before Show answer (the walkthrough). */
+  actions?(): HTMLElement[];
+  /** Replaces "Show answer" (which would import the answer as chips the screen does not show). */
+  showAnswer?(): void;
+}
+
 /** Install the challenge panel on an editor (once per page); returns its teardown. */
-export function installChallenges(ed: Editor): { destroy(): void } {
+export function installChallenges(ed: Editor, screen?: LevelScreenHooks): { destroy(): void; check(): void; refresh(): void } {
   let ui = uis.get(ed);
-  if (!ui) uis.set(ed, (ui = new ChallengeUi(ed)));
+  if (!ui) uis.set(ed, (ui = new ChallengeUi(ed, screen)));
   return ui;
 }
 
@@ -101,7 +115,8 @@ class ChallengeUi {
   private unsub: () => void;
   private unsubSim: () => void;
 
-  constructor(private ed: Editor) {
+  constructor(private ed: Editor, private screen?: LevelScreenHooks) {
+    if (screen) this.panel.classList.add('sb-chal-screen');
     ed.slots.bottom.append(this.panel);
     this.unsub = ed.onChange(() => this.sync());
     this.unsubSim = ed.onSimChange(() => this.player?.simChanged());
@@ -146,7 +161,8 @@ class ChallengeUi {
         ed.refresh();
       }
       if (this.level) progress().open(this.level.id, true);
-      const restricted = !!ch && ch.allowed !== 'any';
+      // The level screen's palette is locked to the rule already.
+      const restricted = !!ch && ch.allowed !== 'any' && !this.screen;
       if (restricted && !ed.ws.purist) {
         this.forcedPurist = true;
         ed.volatile({ ...ed.ws, purist: true });
@@ -177,6 +193,7 @@ class ChallengeUi {
     this.panel.hidden = !ch;
     this.panel.replaceChildren();
     if (!ch) return;
+    if (this.screen) return this.renderScreen(ch, res, stale);
     const solved = lv ? lp?.status === 'solved' : settings.isSolved(solvedKey(ch));
     const pinList = (dir: 'in' | 'out') => ch.ports.filter((p) => p.dir === dir).map((p) => h('code', null, p.width > 1 ? `${p.name}[${p.width - 1}:0]` : p.name));
     const actions = this.confirming
@@ -212,6 +229,55 @@ class ChallengeUi {
     if (res) body.append(this.resultEl(ch, res.r, stale));
     this.panel.append(body);
     if (this.player) this.panel.append(this.player.el);
+  }
+
+  /** Redraw (the screen's buttons changed state). */
+  refresh(): void {
+    this.version++;
+    this.render();
+  }
+
+  /** The level screen's strip: Check and its result, the walkthrough, Show answer, Do it for me. */
+  private renderScreen(ch: BuildChallenge, res: { r: CheckResult } | undefined, stale: boolean): void {
+    const sc = this.screen!;
+    const actions = this.confirming
+      ? [h('span', { class: 'sb-chal-ask' }, 'Replace your circuit with the answer?'),
+        h('button', { class: 'btn sm primary', 'data-chal': 'solve-yes', onclick: () => this.solve() }, 'Replace'),
+        h('button', { class: 'btn sm ghost', onclick: () => { this.confirming = false; this.render(); } }, 'Cancel')]
+      : [...(sc.actions?.() ?? []),
+        h('button', { class: 'btn sm ghost', 'data-chal': 'answer', title: 'The reference answer', onclick: () => (sc.showAnswer ? sc.showAnswer() : this.showAnswer()) }, 'Show answer'),
+        h('button', { class: 'btn sm ghost', 'data-chal': 'solve', title: 'Replace this chip\'s circuit with the reference answer (one undo step)', onclick: () => { this.confirming = true; this.render(); } }, 'Do it for me')];
+    this.panel.append(h('header', { class: 'sb-chal-head' },
+      h('button', { class: 'btn sm primary', 'data-chal': 'check', title: 'Run the chip against the specification', onclick: () => this.check() }, icon('check', 14), 'Check'),
+      res ? this.summaryEl(ch, res.r, stale) : h('span', { class: 'sb-chal-sum muted' }, 'Check runs every test and scores your circuit against par.'),
+      h('span', { class: 'sb-chal-actions' }, ...actions)));
+    if (res && (!res.r.ok || res.r.failures.length || res.r.restrictionViolations.length || coreSpecOf(ch.check))) {
+      this.panel.append(h('div', { class: 'sb-chal-body' }, this.resultEl(ch, res.r, stale)));
+    }
+    if (this.player) this.panel.append(this.player.el);
+  }
+
+  /** One line: pass or not, and the score against par. */
+  private summaryEl(ch: BuildChallenge, r: CheckResult, stale: boolean): HTMLElement {
+    const lim = ch.limits ?? {};
+    const item = (v: number | null | undefined, unit: string, par?: number, before = false) => {
+      if (v === null || v === undefined) return null;
+      const cls = par === undefined ? '' : v <= par ? 'par' : 'over';
+      return h('span', { class: cls, title: cls === 'par' ? 'At or under par' : cls ? 'Over par' : '' },
+        before ? `${unit} ` : null, h('b', null, v.toLocaleString()), before ? null : ` ${unit}`, par !== undefined ? h('small', null, ` par ${par}`) : null);
+    };
+    const lv = this.level;
+    const lp = lv ? progress().get(lv.id) : undefined;
+    const score = ch.allowed === 'transistors' ? [item(r.score.transistors, 'transistors', lim.maxTransistors)]
+      : [item(r.score.nand, 'NAND', lim.maxNand), item(r.score.depth, 'depth', lim.maxDepth, true), item(r.score.period, 'period', lim.maxPeriod, true), item(r.score.cycles, 'cycles', lim.maxCycles)];
+    return h('span', { class: `sb-chal-sum ${r.ok ? 'ok' : 'bad'}${stale ? ' stale' : ''}`, role: 'status' },
+      r.ok ? h('b', { class: 'v' }, icon('check', 13), 'Passes') : h('b', { class: 'v' }, icon('close', 13), 'Not yet'),
+      ...score,
+      r.ok && lp?.stars ? h('span', { class: 'sb-chal-stars', title: `Best: ${lp.stars} of 3 stars` }, '★'.repeat(lp.stars) + '☆'.repeat(3 - lp.stars)) : null,
+      stale ? h('span', { class: 'sb-chal-stale' }, 'edited since: check again') : null,
+      !this.player && r.ok && r.tested && ch.check.kind !== 'custom'
+        ? h('button', { class: 'btn sm ghost sb-chal-watch', 'data-chal': 'watch', title: 'Play the tests one by one on your circuit', onclick: () => this.openPlayer(ch, r, 0) }, icon('play', 12), 'Watch the tests')
+        : null);
   }
 
   // ---- the test player ------------------------------------------------------------------------
@@ -255,7 +321,8 @@ class ChallengeUi {
       h('div', { class: 'sb-chal-links' },
         shown < n.tips.length ? h('button', { class: 'btn sm ghost', 'data-chal': 'tip', onclick: () => { p.revealTip(n.id, n.tips.length); this.version++; this.render(); } }, icon('info', 13), shown ? 'Another tip' : 'A tip') : null,
         h('a', { class: 'btn sm ghost', href: `#/campaign/n/${n.id}` }, icon('chevL', 13), 'Campaign'),
-        next ? h('a', { class: 'btn sm', href: `#/campaign/n/${next.id}`, title: next.title }, `Next: ${next.title}`, icon('chevR', 13)) : null));
+        h('a', { class: 'btn sm ghost', href: `#/campaign/play/${n.id}`, title: 'This level on its own screen: the brief, the why, the walkthrough' }, 'Level screen'),
+        next ? h('a', { class: 'btn sm', href: levelChallenge(next) && !next.soon ? `#/campaign/play/${next.id}` : `#/campaign/n/${next.id}`, title: next.title }, `Next: ${next.title}`, icon('chevR', 13)) : null));
   }
 
   private resultEl(ch: BuildChallenge, r: CheckResult, stale: boolean): HTMLElement {
@@ -324,7 +391,7 @@ class ChallengeUi {
     return h('p', { class: 'sb-chal-score' }, ...parts);
   }
 
-  private check(): void {
+  check(): void {
     const ed = this.ed;
     const ch = this.challenge;
     if (!ch) return;
@@ -339,12 +406,14 @@ class ChallengeUi {
     if (r.ok && lv) {
       const g = progress().solve(lv.id, measured(r.score));
       const st = '★'.repeat(g.stars) + '☆'.repeat(3 - g.stars);
-      ed.toast(`${g.first ? 'Solved' : 'Passes'}: ${ch.title} ${st}${g.best && !g.first ? ' (new best)' : ''}`);
+      if (this.screen) this.screen.checked(r, g);
+      else ed.toast(`${g.first ? 'Solved' : 'Passes'}: ${ch.title} ${st}${g.best && !g.first ? ' (new best)' : ''}`);
     } else if (r.ok) {
       const first = !settings.isSolved(solvedKey(ch));
       settings.solve(solvedKey(ch));
       ed.toast(first ? `Solved: ${ch.title}` : `Still passes: ${ch.title}`);
     }
+    if (!r.ok) this.screen?.checked(r);
     // A failure opens the player on the first failing test: the circuit shows it.
     if (!r.ok && r.failed?.length && ch.check.kind !== 'custom') this.openPlayer(ch, r, r.failed[0]);
     else this.render();
@@ -361,7 +430,9 @@ class ChallengeUi {
       if ('error' in b) { err = b.error; return ws; }
       return b.ws;
     });
-    ed.toast(err ? `Cannot build the bench: ${err}` : `New chip “${ed.doc.name}”: Run to halt in the CPU panel (Ctrl+Z removes it)`);
+    // The level screen shows only the level's chips: the bench opens in the full sandbox.
+    if (!err && this.screen) location.hash = `#/sandbox/${ed.chipId}`;
+    else ed.toast(err ? `Cannot build the bench: ${err}` : `New chip “${ed.doc.name}”: Run to halt in the CPU panel (Ctrl+Z removes it)`);
   }
 
   private showAnswer(): void {

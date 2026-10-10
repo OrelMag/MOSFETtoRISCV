@@ -1,22 +1,23 @@
 // The Campaign page (#/campaign[/intro | /n/<node> | /codex[/<entry>]]): the map of levels, a
 // level's panel (why, the test set, tips, codex, Start / Skip / Show solution), the CPU anatomy
-// intro and the codex. Loaded on demand (app.ts imports it dynamically). Levels are played in
-// the sandbox: Start writes the level's chip into the saved workspace and opens #/sandbox/<chip>.
+// intro and the codex. Loaded on demand (app.ts imports it dynamically). Levels are played on the
+// level screen (pages/level.ts): Play writes the level's chip into the saved workspace and opens
+// #/campaign/play/<node>.
 
 import '../../styles/campaign.css';
 import { BLOCKS, blockNodes } from '../../campaign/anatomy';
 import { CODEX, CODEX_KINDS, codexById } from '../../campaign/codex';
 import { type Datasheet, datasheets } from '../../campaign/datasheet';
-import { METRIC } from '../../campaign/grade';
 import { ancestors, dependents, isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { LESSONS } from '../../campaign/lessons';
 import { levelChallenge, levelChipId, startCandidates, startFrom } from '../../campaign/levels';
 import { ACTS, NODES, nodeById } from '../../campaign/nodes';
 import { exportCampaign, importCampaign, progress } from '../../campaign/progress';
-import type { CampaignNode, Metric } from '../../campaign/types';
+import type { CampaignNode } from '../../campaign/types';
 import { PUZZLES } from '../../campaign/puzzles';
 import { drillCard } from '../../campaign/ui/drillui';
 import { puzzleCard } from '../../campaign/ui/puzzleui';
+import { criteria, gradeTable } from '../../campaign/ui/levelinfo';
 import { anatomySvg, mapSvg } from '../../campaign/ui/svgs';
 import { type BuildChallenge, importAnswer, startChallenge } from '../../editor/challenges';
 import { loadWorkspace, saveWorkspace } from '../../editor/store';
@@ -32,30 +33,6 @@ const html = (tag: 'div' | 'p' | 'span', cls: string, content: string) => {
 
 const KIND_LABEL: Record<CampaignNode['kind'], string> = { lesson: 'Lesson', drill: 'Drill', build: 'Build', program: 'Program', core: 'CPU core' };
 const STATUS_LABEL = { locked: 'Locked', available: 'Available', started: 'In progress', solved: 'Solved', skipped: 'Skipped' };
-
-/** What a challenge's test set is, in words (the level's success criteria). */
-export function criteria(ch: BuildChallenge): string[] {
-  const ins = ch.ports.filter((p) => p.dir === 'in' && !p.clock), outs = ch.ports.filter((p) => p.dir === 'out');
-  const pin = (p: { name: string; width: number }) => (p.width > 1 ? `${p.name}[${p.width - 1}:0]` : p.name);
-  const out = [`Pins: ${ins.map(pin).join(', ') || '—'}${ch.ports.some((p) => p.clock) ? ', clk' : ''} → ${outs.map(pin).join(', ')}.`];
-  if (ch.check.kind === 'table') {
-    const bits = ins.reduce((a, p) => a + p.width, 0);
-    const chosen = bits <= 16 ? 0 : ch.check.vectors?.().length ?? 0;
-    out.push(bits <= 16
-      ? `Every input combination: all ${2 ** bits} rows of the truth table must match.`
-      : `${chosen ? `${chosen} chosen edge cases, then ` : ''}4096 random input vectors (${bits} input bits) must match.`);
-    if (ch.check.care) out.push('Rows the brief leaves open are not checked (don\'t-cares).');
-    out.push('An output that is X (undriven, or a short) or Z counts as wrong; the circuit must settle (no oscillation).');
-  } else if (ch.check.kind === 'sequence') {
-    out.push(`A clocked sequence of ${ch.check.steps.length} steps from power-on: inputs change, the clock ticks, every expected output must match.`);
-  } else {
-    out.push(ch.check.describe);
-  }
-  out.push(typeof ch.allowed === 'string'
-    ? ch.allowed === 'transistors' ? 'Built from transistors, rails and wiring (and your own chips made of them).' : 'Built from NAND gates (and your chips made of them).'
-    : 'Built from NAND, wiring, constants, your own chips, and the parts unlocked below.');
-  return out;
-}
 
 export class CampaignPage implements Page {
   readonly kind = 'campaign';
@@ -229,12 +206,12 @@ export class CampaignPage implements Page {
       el.append(h('div', { class: 'cp-grade' }, h('h4', null, 'Grading'),
         h('p', { class: 'sub' }, `Passed after the required number of correct answers. ★★★ with at most ${n.par.mistakes} mistakes (a shown answer counts as one), ★★ with at most ${Math.floor(n.par.mistakes * 1.5)}.`)));
     }
-    if (pz) el.append(this.gradeTable(n));
+    if (pz) el.append(gradeTable(n));
     // Success criteria and grading.
     if (ch) {
       el.append(h('div', { class: 'cp-criteria' }, h('h4', null, 'Success criteria'),
         h('ul', null, criteria(ch).map((c) => h('li', null, c)))));
-      el.append(this.gradeTable(n));
+      el.append(gradeTable(n));
     }
 
     // What it builds on, what it unlocks.
@@ -273,19 +250,6 @@ export class CampaignPage implements Page {
     return el;
   }
 
-  private gradeTable(n: CampaignNode): HTMLElement {
-    const np = progress().get(n.id);
-    const par = n.par ?? {};
-    const keys = Object.keys(par) as Metric[];
-    return h('div', { class: 'cp-grade' }, h('h4', null, 'Grading'),
-      keys.length
-        ? h('table', null, h('tr', null, h('th', null, 'Metric'), h('th', null, 'Par'), h('th', null, 'Your best')),
-          keys.map((k) => h('tr', { title: METRIC[k].hint }, h('td', null, METRIC[k].label), h('td', null, String(par[k])),
-            h('td', { class: np?.best?.[k] !== undefined ? (np.best[k]! <= par[k]! ? 'par' : 'over') : '' }, np?.best?.[k] !== undefined ? String(np.best[k]) : '—'))))
-        : h('p', { class: 'sub' }, 'Passing earns all three stars: nothing to optimise here.'),
-      keys.length ? h('p', { class: 'sub' }, '★ passes · ★★ every metric within 1.5 × par · ★★★ every metric at or under par.') : null);
-  }
-
   private actions(n: CampaignNode, st: ReturnType<typeof statusOf>, ch: BuildChallenge | undefined): HTMLElement {
     const p = progress();
     const bar = h('div', { class: 'cp-node-actions' });
@@ -307,7 +271,8 @@ export class CampaignPage implements Page {
     } else if (ch) {
       const chip = levelChipId(n);
       const exists = !!loadWorkspace().chips[chip];
-      bar.append(h('button', { class: 'btn primary', onclick: () => this.start(n, ch) }, icon('play', 14), exists ? 'Continue in the sandbox' : 'Start in the sandbox'));
+      bar.append(h('button', { class: 'btn primary', onclick: () => this.start(n, ch) }, icon('play', 14), exists ? 'Continue' : 'Play'));
+      if (exists) bar.append(h('a', { class: 'btn ghost', href: `#/sandbox/${chip}`, title: 'The same chip in the full sandbox editor' }, 'Open in sandbox'));
       // A core level: start from a copy of the core you built for an earlier level.
       const from = exists ? undefined : startCandidates(n, loadWorkspace())[0];
       if (from) bar.append(h('button', { class: 'btn', title: `A copy of your “${from.title}” chip, with this level's pins added`, onclick: () => this.start(n, ch, levelChipId(from)) }, `Start from ${from.title}`));
@@ -328,7 +293,7 @@ export class CampaignPage implements Page {
     const saved = saveWorkspace(r.ws);
     if (!saved.ok) return this.say(saved.reason);
     progress().open(n.id, true);
-    location.hash = `#/sandbox/${r.chipId}`;
+    location.hash = `#/campaign/play/${n.id}`;
   }
 
   private solution(ch: BuildChallenge): void {

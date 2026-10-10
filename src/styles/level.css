@@ -1,0 +1,112 @@
+/* The campaign's level screen (ui/pages/level.ts): the level bar, the brief in tabs, the editor in
+   level mode (.sb-levelmode), the strip under the canvas (.sb-chal-screen) and the after-pass card.
+   Colours come from the theme tokens only. */
+
+.lv-page { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--bg); }
+.lv-notice { display: grid; place-items: start center; padding: 40px 16px; }
+.lv-notice .panel { max-width: 520px; }
+
+.lv-bar {
+  display: flex; align-items: center; gap: 10px; padding: 6px 12px; min-height: 46px; flex-wrap: wrap; row-gap: 4px;
+  background: var(--surface); border-bottom: 1px solid var(--border); font-size: 13.5px;
+}
+.lv-back { display: inline-flex; align-items: center; gap: 2px; color: var(--accent); font-weight: 600; text-decoration: none; }
+.lv-crumb { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.lv-crumb .sep { margin: 0 6px; color: var(--muted); }
+.lv-crumb b { color: var(--text); }
+.lv-badge { font: 600 10.5px var(--font-mono); letter-spacing: 0.06em; padding: 2px 7px; border-radius: 6px; background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
+.lv-badge.good { background: var(--good-soft); color: var(--good); }
+.lv-par { font-size: 12.5px; color: var(--text-2); padding: 2px 9px; border: 1px solid var(--border); border-radius: 8px; white-space: nowrap; }
+.lv-par b { font-family: var(--font-mono); font-weight: 600; color: var(--text); }
+.lv-stars { color: var(--warn); letter-spacing: 2px; white-space: nowrap; }
+.lv-stars .off, .lv-big .off { color: var(--border-strong); }
+.lv-spacer { flex: 1; }
+
+.lv-body { display: grid; grid-template-columns: 340px minmax(0, 1fr); min-height: 0; }
+.lv-side { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+.lv-tabs { display: flex; gap: 2px; padding: 6px 10px 0; border-bottom: 1px solid var(--border); flex: none; }
+.lv-tabs button {
+  font: inherit; font-size: 13px; padding: 6px 10px; border: 0; background: transparent; color: var(--text-2); cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.lv-tabs button:hover { color: var(--text); }
+.lv-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.lv-tabs small { font: 10.5px var(--font-mono); color: var(--muted); margin-left: 4px; }
+.lv-sidebody { overflow-y: auto; padding: 12px 16px 24px; display: grid; gap: 14px; align-content: start; font-size: 13.5px; color: var(--text-2); line-height: 1.55; }
+.lv-sidebody section { min-width: 0; }
+.lv-sidebody h4 { margin: 0 0 4px; font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lv-sidebody p { margin: 0; }
+.lv-sidebody b { color: var(--text); }
+.lv-sidebody code { font-family: var(--font-mono); font-size: 0.92em; }
+.lv-sidebody ul, .lv-sidebody ol { margin: 0; padding-left: 18px; }
+.lv-sidebody .cp-grade, .lv-sidebody .cp-deps, .lv-sidebody .cp-criteria { margin: 0; }
+.lv-anat { background: var(--surface-2); border-radius: 10px; padding: 6px; }
+.lv-anat svg { display: block; width: 100%; height: auto; }
+.lv-cost { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 12px; margin-top: 6px; font-size: 12.5px; }
+.lv-cost .v { font-family: var(--font-mono); color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+.lv-copies { margin-top: 6px !important; font-size: 12.5px; }
+.lv-copies:empty { display: none; }
+.lv-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.lv-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--text); text-decoration: none; background: var(--surface); }
+.lv-chip:hover { border-color: var(--accent); color: var(--accent); }
+.lv-tips li { margin: 4px 0; }
+.lv-cx h4 { text-transform: none; letter-spacing: 0; font-size: 13.5px; color: var(--text); }
+.lv-cx.locked h4 { color: var(--muted); }
+.lv-more { display: inline-flex; align-items: center; gap: 2px; margin-top: 4px; color: var(--accent); font-weight: 600; font-size: 12.5px; text-decoration: none; }
+
+/* The editor in level mode: no props column; properties float over the canvas while something is selected or pinned. */
+.lv-ed { position: relative; min-width: 0; min-height: 0; }
+.sandbox.sb-levelmode { grid-template-columns: 196px minmax(0, 1fr); grid-template-areas: 'top top' 'pal center'; position: relative; }
+.sb-levelmode .sb-tabs .sb-tab { max-width: 200px; }
+.sb-levelmode .sb-props {
+  display: none; position: absolute; right: 0; top: 47px; bottom: 0; width: 290px; z-index: 6;
+  box-shadow: var(--shadow-lg);
+}
+.sb-levelmode.props-on .sb-props, .sb-levelmode.props-sel .sb-props { display: block; }
+
+/* The strip under the canvas on the level screen. */
+.sb-chal-screen .sb-chal-head { padding: 7px 10px; gap: 12px; }
+.sb-chal-sum { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; font: 12.5px var(--font-mono); color: var(--text-2); min-width: 0; }
+.sb-chal-sum.muted { font-family: var(--font-ui); color: var(--muted); }
+.sb-chal-sum .v { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-ui); }
+.sb-chal-sum.ok .v { color: var(--good); }
+.sb-chal-sum.bad .v { color: var(--warn); }
+.sb-chal-sum b { color: var(--text); }
+.sb-chal-sum small { color: var(--muted); }
+.sb-chal-sum .par small { color: var(--good); }
+.sb-chal-sum .over small { color: var(--warn); }
+.sb-chal-sum.stale { opacity: 0.7; }
+
+/* The after-pass card. */
+.lv-veil { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(1.5px); }
+.lv-result {
+  width: min(580px, 100%); max-height: 100%; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-lg); padding: 20px 22px; display: grid; gap: 14px; font-size: 13.5px; color: var(--text-2);
+}
+.lv-result h3 { margin: 0; font-size: 20px; color: var(--text); display: flex; align-items: center; gap: 12px; }
+.lv-big { color: var(--warn); letter-spacing: 3px; font-size: 22px; }
+.lv-res-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+.lv-res-table th { text-align: left; font: 600 11px var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.lv-res-table td { padding: 5px 6px; border-bottom: 1px solid var(--border); font-family: var(--font-mono); color: var(--text); font-variant-numeric: tabular-nums; }
+.lv-res-table td:first-child { font-family: var(--font-ui); color: var(--text-2); }
+.lv-res-table td.par { color: var(--good); font-weight: 600; }
+.lv-res-table td.over { color: var(--warn); font-weight: 600; }
+.lv-bars { display: grid; grid-template-columns: minmax(0, 150px) 1fr auto; gap: 5px 10px; align-items: center; font-size: 12px; }
+.lv-bars .track { height: 12px; }
+.lv-bars .track i { display: block; height: 100%; border-radius: 3px; background: var(--border-strong); }
+.lv-bars .track i.you { background: var(--accent); }
+.lv-bars .v { font-family: var(--font-mono); color: var(--text); text-align: right; }
+.lv-callout { background: var(--accent-soft); color: var(--text); border-radius: 10px; padding: 10px 12px; }
+.lv-callout:empty { display: none; }
+.lv-callout b { color: var(--accent); }
+.lv-unl { margin: 0; }
+.lv-unl b { color: var(--text); }
+.lv-unl a { color: var(--accent); }
+.lv-res-act { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+@media (max-width: 900px) {
+  .lv-page { height: auto; }
+  .lv-body { grid-template-columns: 1fr; }
+  .lv-side { border-right: 0; border-bottom: 1px solid var(--border); max-height: 45vh; }
+  .lv-ed { height: 80vh; }
+}

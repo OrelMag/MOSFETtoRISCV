@@ -140,6 +140,15 @@ export function startApp(root: HTMLElement): void {
         return;
       }
       mount(new WorkbenchPage(parts[1] ?? 'rca4'));
+    } else if (key === 'campaign' && parts[1] === 'play') {
+      // A level on its own screen: the editor's chunk, like the sandbox.
+      const lv = page as (Page & { kind?: string; nodeId?: string }) | null;
+      if (lv?.kind === 'level' && lv.nodeId === parts[2]) return;
+      import('./pages/level').then((m) => {
+        if (seq === routeSeq) mount(new m.LevelPage(parts[2] ?? ''));
+      }, (e) => {
+        if (seq === routeSeq) view.replaceChildren(h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'The level could not load'), h('p', { class: 'sub' }, String(e)))));
+      });
     } else if (key === 'campaign') {
       const cp = page as (Page & { kind?: string; open?(parts: string[]): void }) | null;
       if (cp?.kind === 'campaign') {
