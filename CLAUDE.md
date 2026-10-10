@@ -30,7 +30,7 @@ npm install          # once
 npm run dev          # Vite dev server
 npm test             # Vitest (simulation + library correctness), must stay green
 npm run typecheck    # tsc --noEmit (strict)
-npm run build        # typecheck + production build into dist/ (relative base, deploy anywhere)
+npm run build        # typecheck + hwstats.json (npm run stats, ~20 s) + production build into dist/ (relative base)
 npm run preview      # serve dist/
 npm run desktop      # build + desktop/ (Electron, own package): portable Windows .exe in desktop/release/
 ```
@@ -51,7 +51,7 @@ before merging a change to the exporters or the dual-core.
 
 - Vite + TypeScript (strict, `verbatimModuleSyntax`: use `import type` for types). No UI
   framework: plain DOM + SVG with small helpers in `src/ui/dom.ts`. Keep the bundle small.
-- Hash routing (`#/c/<chapter>/<step>`, `#/workbench/<componentId>`, `#/sandbox/<chipId>`, `#/campaign[/n/<node> | /intro | /codex[/<id>]]`,
+- Hash routing (`#/c/<chapter>/<step>`, `#/workbench/<componentId>`, `#/workbench/stats`, `#/sandbox/<chipId>`, `#/campaign[/n/<node> | /intro | /codex[/<id>]]`,
   `#/sandbox/s/<payload>` for a share link) so the site works on
   any static host or sub-path.
 - Theme: CSS custom properties in `src/styles/`; `data-theme="light|dark"` on `<html>`, or
@@ -115,6 +115,8 @@ src/lib/       the component library (registered in `registry` via define())
   wide.ts        bitwise(op, n), orN(n) (shared by alu.ts and fastadd.ts to avoid an import cycle)
   usage.ts       usedIn(def) (parents with instance counts, the chapters' CPUs included), copiesIn(top, def),
                  referenceCpus(): the inspector's "Where it is used"
+  hwstats.ts     hwTargets / measure / hwStats (scripts/hwstats.ts → public/hwstats.json at build), hwStatsLive:
+                 the workbench's Statistics tab (ui/pages/hwstats.ts, its own chunk; benchtabs.ts: the tabs)
   pipeline.ts    equal, nonZero, clearableRegister, pipeline registers (fields on fixed rows),
                  hazardUnit(lookAhead), BRANCH_CMP, BTB (16 × 62-bit), SAT_COUNTER, MISPREDICT,
                  pipelinedCpu(program, { adder, balanced, predictor, dcache, m }) (a cache miss in M freezes every stage;

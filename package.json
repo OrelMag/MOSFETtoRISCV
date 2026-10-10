@@ -7,7 +7,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite-node scripts/hwstats.ts && vite build",
+    "stats": "vite-node scripts/hwstats.ts",
     "preview": "vite preview",
     "desktop": "npm run build && npm --prefix desktop install && npm --prefix desktop run dist",
     "layout:export": "vite-node scripts/export-layout.ts layout/design",
