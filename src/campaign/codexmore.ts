@@ -1,8 +1,8 @@
 // The fuller codex: what an entry says beyond its one-line summary (codex.ts `body`, which stays
 // the summary and the glossary's hover text). Prose is written here; figures are generated from
 // the library on the codex page (schematic, truth table, cost against the alternatives), so they
-// cannot drift. The texts live in codexmore0.ts (components) and codexmore1.ts (laws, tools,
-// tricks, concepts). Loaded on demand: the chapters' hover cards need only aliases (glossary.ts).
+// cannot drift. The texts live in codexmore0.ts (components, laws, tools) and codexmore1.ts
+// (tricks, concepts). Loaded on demand: the chapters' hover cards need only aliases (glossary.ts).
 // No DOM.
 
 import type { ChapterLink } from './types';
