@@ -232,7 +232,7 @@ export class ISS {
       case CSRS.mtval: return this.mtval;
       case CSRS.mip: return this.mip;
       case CSRS.mcycle: case CSRS.cycle: return this.mtime;
-      case CSRS.mhartid: return 0;
+      case CSRS.mhartid: case CSRS.mvendorid: case CSRS.marchid: case CSRS.mimpid: return 0;
       case CSRS.fflags: return this.fext ? this.fflags : null;
       case CSRS.frm: return this.fext ? this.frm : null;
       case CSRS.fcsr: return this.fext ? (this.frm << 5) | this.fflags : null;
@@ -253,7 +253,7 @@ export class ISS {
       case CSRS.fflags: this.fflags = v & 31; break;
       case CSRS.frm: this.frm = v & 7; break;
       case CSRS.fcsr: this.fflags = v & 31; this.frm = (v >>> 5) & 7; break;
-      default: break; // read-only (misa, mip, mcycle, cycle, mhartid): writes ignored
+      default: break; // read-only (misa, mip, mcycle, cycle, mhartid, ids): writes ignored
     }
   }
 

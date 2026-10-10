@@ -25,8 +25,10 @@ export class BitSim {
   readonly acyclic: boolean;
   sweeps = 0;
 
+  /** design.leaves index → index into behaviors. */
+  private readonly behaviorOf = new Map<number, number>();
   /** Behavioural leaves (e.g. an instruction ROM) in the evaluation order, with their state. */
-  private readonly behaviors: { leaf: FlatLeaf; state: unknown }[] = [];
+  private readonly behaviors: { leaf: FlatLeaf; state: unknown; lanes?: (ins: number[], lane: number) => number[] }[] = [];
 
   constructor(design: FlatDesign) {
     this.design = design;
@@ -94,6 +96,7 @@ export class BitSim {
       } else {
         this.ops[3 * i] = -1 - this.behaviors.length;
         this.behaviors.push({ leaf: l, state: l.def.behavior!.init?.() });
+        this.behaviorOf.set(nodes[k], this.behaviors.length - 1);
       }
     });
     for (const [net, b] of design.powerOn) this.v[net] = b ? -1 : 0;
@@ -105,7 +108,8 @@ export class BitSim {
    * with behaviours must be simulated with the same inputs in every lane. Returns: did an output change?
    */
   private evalBehavior(k: number): boolean {
-    const { leaf, state } = this.behaviors[k], v = this.v;
+    const { leaf, state, lanes } = this.behaviors[k], v = this.v;
+    if (lanes) return this.evalLanes(leaf, lanes);
     const ins = leaf.inputs.map((port) => port.reduce((acc, net, i) => acc + (v[net] & 1) * 2 ** i, 0));
     const outs = leaf.def.behavior!.eval(ins, state);
     let changed = false;
@@ -113,6 +117,29 @@ export class BitSim {
       const w = bitOf(outs[pi] ?? 0, i) ? -1 : 0;
       if (v[net] !== w) { v[net] = w; changed = true; }
     }));
+    return changed;
+  }
+
+  /**
+   * Evaluate behavioural leaf `leaf` (an index into design.leaves) in every lane on its own, with `fn`
+   * in place of its behaviour: a bench gives each lane a different program ROM this way.
+   */
+  setLaneBehavior(leaf: number, fn: (ins: number[], lane: number) => number[]): void {
+    const k = this.behaviorOf.get(leaf);
+    if (k === undefined) throw new Error(`BitSim: leaf ${leaf} is not a behaviour with inputs`);
+    this.behaviors[k].lanes = fn;
+    this.settle();
+  }
+
+  private evalLanes(leaf: FlatLeaf, fn: (ins: number[], lane: number) => number[]): boolean {
+    const v = this.v, words = leaf.outputs.map((port) => new Int32Array(port.length));
+    for (let l = 0; l < LANES; l++) {
+      const ins = leaf.inputs.map((port) => port.reduce((acc, net, i) => acc + ((v[net] >>> l) & 1) * 2 ** i, 0));
+      const outs = fn(ins, l);
+      words.forEach((w, pi) => { for (let i = 0; i < w.length; i++) if (bitOf(outs[pi] ?? 0, i)) w[i] |= 1 << l; });
+    }
+    let changed = false;
+    leaf.outputs.forEach((port, pi) => port.forEach((net, i) => { if (v[net] !== words[pi][i]) { v[net] = words[pi][i]; changed = true; } }));
     return changed;
   }
 

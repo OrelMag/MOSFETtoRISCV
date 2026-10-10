@@ -130,8 +130,12 @@ multicycle (hardwired and microcoded) and pipelined CPUs on clock period × CPI.
   (used to keep large designs fast) are proven equal to the structure they stand for.
 - **CPUs**: each one (single-cycle, multicycle, pipelined, with caches, system, M, F, dual-core) is
   co-simulated against the instruction-set simulator in `src/riscv/`, which steps in lock-step and
-  compares registers, PC and memory at every retirement. The campaign's RV16 cores are also fuzzed
-  with seeded random programs.
+  compares registers, PC and memory at every retirement. Independently of that model, every RV32 CPU
+  passes the official [riscv-tests](https://github.com/riscv-software-src/riscv-tests) its ISA covers
+  at gate level (rv32ui, rv32um, rv32uf, rv32ua, rv32mi), runs seeded random programs against the
+  golden model, and must reach every instruction and hardware event it has (forwarding paths, stalls,
+  mispredictions, cache misses, traps). Matrix, coverage and the bugs this found:
+  [docs/VERIFICATION.md](docs/VERIFICATION.md). The campaign's RV16 cores are fuzzed too.
 - **Drawings**: every registered schematic is checked for nets sharing a line, overlapping symbols
   and hidden labels.
 - **HDL**: generated SystemVerilog comes with a self-checking testbench drawn from our own
@@ -158,17 +162,15 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
   so a design can settle; real power-up depends on mismatch, noise and ramp.
 - **The CPUs are teaching microarchitectures**: in-order, a cache miss freezes the whole pipeline,
   and the dual-core's atomics are atomic because a round-robin arbiter serializes every access.
-- **The golden model is ours.** The CPUs are checked against an ISS written for this project, so a
-  misreading of the specification shared by both would pass; independent checks are next.
+- **The golden model is ours.** The lock-step checks and the random programs compare the CPUs with an
+  ISS written for this project. The official riscv-tests check both independently, but only for what
+  they cover; a second ISS (Spike or Sail) as oracle for the random programs is still to come.
 
 ## What's next
 
 The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next features:
 
-- **Independent verification**: the official `riscv-tests` on every RV32 CPU with a pass / fail
-  matrix, Spike or Sail as a second oracle for our ISS, RV32 random-program fuzzing with saved
-  seeds, coverage tables (opcodes, hazard events, cache outcomes, trap causes), and the Yosys
-  cross-check as a CI gate.
+- **A second oracle**: Spike or Sail comparing commit logs with our ISS on the random programs.
 - **More measurements**: dynamic power (α C V² f, α from the simulator's toggle counts, glitches
   included), a benchmark page (instructions, cycles, CPI, period, energy on every CPU), a
   hardware-statistics table of the whole library, and "where is this used" in the inspector.

@@ -19,10 +19,10 @@ export class MultiISS {
   /** What each hart executed in the last cycle (null: stalled). */
   last: (StepInfo | null)[] = [];
 
-  constructor(program: number[], n = 2, dmemWords = 32) {
+  constructor(program: number[], n = 2, dmemWords = 32, imemWords = 64) {
     this.dmem = new Uint32Array(dmemWords);
     this.harts = Array.from({ length: n }, (_, i) => {
-      const h = new ISS(program, { dmemWords, hartid: i });
+      const h = new ISS(program, { dmemWords, imemWords, hartid: i });
       h.dmem = this.dmem;
       return h;
     });
@@ -39,7 +39,7 @@ export class MultiISS {
   }
 
   private nextWord(h: ISS): number {
-    return h.imem[(h.pc >>> 2) % h.imem.length] ?? 0x13;
+    return h.fetch(h.pc);
   }
 
   /** Which harts want the memory port this cycle, and which one gets it (-1: none). */

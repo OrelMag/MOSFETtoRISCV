@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { counter, fpAdd, seqDivider } from '../src/lib';
+import { counter, fpAdd, rom, seqDivider } from '../src/lib';
 import { BitSim, evalMany } from '../src/sim/bitsim';
 import { flatten } from '../src/sim/flatten';
 import { evalOnce, simulate } from '../src/sim/harness';
@@ -43,5 +43,20 @@ describe('bit-parallel simulator agrees with GateSim', () => {
     expect(bs.get('done')).toEqual(new Array(32).fill(1));
     expect(bs.get('q')).toEqual(a.map((x, i) => Math.floor(x / b[i])));
     expect(bs.get('r')).toEqual(a.map((x, i) => x % b[i]));
+  });
+});
+
+describe('per-lane behaviours', () => {
+  it('a ROM evaluated in every lane on its own: each lane its own contents', () => {
+    const design = flatten(rom([10, 11, 12, 13], 2));
+    const leaf = design.leaves.findIndex((l) => l.kind === 'behavior' && l.inputs.length > 0);
+    const s = new BitSim(design);
+    // broadcast from lane 0: every lane reads lane 0's address
+    s.setInput('addr', Array.from({ length: 32 }, (_, l) => 4 * (l & 3)));
+    s.settle();
+    expect(s.get('data').slice(0, 4)).toEqual([10, 10, 10, 10]);
+    s.setLaneBehavior(leaf, ([a], lane) => [1000 * lane + (a >> 2)]);
+    expect(s.get('data').slice(0, 5)).toEqual([0, 1001, 2002, 3003, 4000]);
+    expect(() => s.setLaneBehavior(design.leaves.length + 5, () => [0])).toThrow(/not a behaviour/);
   });
 });
