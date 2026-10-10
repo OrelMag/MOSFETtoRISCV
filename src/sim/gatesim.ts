@@ -293,6 +293,30 @@ export class GateSim implements Sim {
     this.time = prev.time;
   }
 
+  /**
+   * Take over a settled state of this same design from another engine (the cycle engine, see
+   * DualSim): every net's value, the behavioural states (shared, not copied: one engine runs at a
+   * time), the inputs and the time. Nothing is pending afterwards except the readers of the
+   * `changed` nets and the `dirty` leaves: input changes and pokes the other engine had not settled,
+   * which then propagate exactly as if they had been made here.
+   */
+  adopt(src: Sim, changed: readonly number[] = [], dirty: readonly number[] = []): void {
+    const d = this.design;
+    for (let net = 0; net < d.netCount; net++) {
+      const b = src.get(net);
+      this.val[net] = this.proj[net] = b === BZ ? BX : b;
+    }
+    d.leaves.forEach((l, li) => { if (l.kind === 'behavior') this.state[li] = src.leafState(li); });
+    for (const port of this.inputNets.keys()) this.inputs.set(port, src.getInputBits(port));
+    this.time = src.time;
+    this.unstable = false;
+    this.wLen.fill(0);
+    this.pendingEvents = 0;
+    this.clearDirty();
+    for (const net of changed) for (let i = this.fanStart[net]; i < this.fanStart[net + 1]; i++) this.markDirty(this.fanList[i]);
+    for (const li of dirty) this.markDirty(li);
+  }
+
   saveState(): SimState {
     const st: GateState = {
       val: this.val.slice(), proj: this.proj.slice(), state: this.state.map(cloneState),
