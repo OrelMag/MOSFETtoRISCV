@@ -2,6 +2,7 @@
 // listing and which row the circuit is reading), language conversion, sample programs, and a
 // RAM's contents (read live from the simulation, seeded at power-on from `init`).
 
+import { BANK_K, bigRam, bigRamWithInit, ramLeafState, ramWords } from '../lib/bigmem';
 import { ram } from '../lib/memory';
 import { PROGRAMS } from '../riscv/programs';
 import { disasm16 } from '../riscv/rv16/isa16';
@@ -30,15 +31,18 @@ export function romImage(r: Pick<RomRef, 'k' | 'w' | 'lang' | 'src'>): RomImage 
   const capacity = 2 ** r.k;
   const problems: ProgramError[] = [...p.errors];
   let error = p.errors.length ? `ROM program: line ${p.errors[0].line}: ${p.errors[0].message}` : null;
-  const lineOf = (i: number) => p.lines.find((l) => l.addr === 4 * i)?.srcLine ?? 0;
+  // source line of word i (a map, built on the first problem: a 64K-word program has 64K lines)
+  let lines: Map<number, number> | null = null;
+  const lineOf = (i: number) => (lines ??= new Map(p.lines.map((l) => [l.addr, l.srcLine]))).get(4 * i) ?? 0;
   if (p.words.length > capacity) {
     const msg = `${p.words.length} words do not fit in 2^${r.k} = ${capacity} words`;
     problems.push({ line: lineOf(capacity), message: msg });
     error ??= `ROM program: ${msg}`;
   }
   if (r.w < 32) {
-    for (let i = 0; i < p.words.length; i++) {
+    for (let i = 0, n = 0; i < p.words.length && n < 100; i++) {
       if (p.words[i] >>> 0 < 2 ** r.w) continue;
+      n++;
       const line = lineOf(i);
       const msg = `word ${i} (0x${(p.words[i] >>> 0).toString(16)}) does not fit in ${r.w} bits`;
       problems.push({ line, message: msg });
@@ -145,8 +149,13 @@ export function ramNode(sim: Sim, part: string): HierNode | null {
   return n?.expanded && n.children?.has('w0') ? n : null;
 }
 
-/** Every word of a placed RAM, from its registers (-1: unknown); null when it is not simulated. */
+/**
+ * Every word of a placed RAM (-1: unknown): a large one's from its leaf's state, a small one's
+ * from its registers; null when it is not simulated.
+ */
 export function readRam(sim: Sim, part: string): number[] | null {
+  const big = ramLeafState(sim, sim.design.root.children?.get(part));
+  if (big) return ramWords(big);
   const n = ramNode(sim, part);
   if (!n) return null;
   const out: number[] = [];
@@ -174,8 +183,10 @@ const ramCache = new Map<string, ComponentDef>();
  * Paths follow the library: word register w<i> → DFFE ff<j> → DFF ff → D latch → SR latch sr.
  */
 export function ramWithInit(k: number, w: number, init: number[] | undefined): ComponentDef {
-  const base = ram(k, w);
   const words = ramInit(k, w, init);
+  // Larger than the gates simulate: a lookup whose initial words are its leaf's power-on state.
+  if (k > BANK_K) return words.some((x) => x) ? bigRamWithInit(k, w, words) : bigRam(k, w);
+  const base = ram(k, w);
   if (!words.some((x) => x)) return base;
   const key = `${k}/${w}/${words.join(',')}`;
   const hit = ramCache.get(key);

@@ -189,6 +189,18 @@ export class GateSim implements Sim {
     return this.state[leaf];
   }
 
+  /**
+   * Force nets to these bits now, as storage seeded from outside (a behavioural RAM's words put
+   * into the latches of its structure: Behavior.inside). The logic reading them reacts on the
+   * next step / settle; a net already at its bit is left alone.
+   */
+  forceNets(nets: readonly number[], bits: ArrayLike<number>): void {
+    nets.forEach((net, i) => {
+      const b = (bits[i] === B0 || bits[i] === B1 ? bits[i] : BX) as Bit;
+      if (this.val[net] !== b) this.force(net, b);
+    });
+  }
+
   busy(): boolean {
     return this.pendingEvents > 0 || this.dLen > 0;
   }
@@ -201,7 +213,7 @@ export class GateSim implements Sim {
     this.time = 0;
     this.unstable = false;
     this.design.leaves.forEach((l, i) => {
-      this.state[i] = l.def.behavior?.init?.();
+      this.state[i] = l.def.behavior?.init?.(mode);
     });
     for (const [port, v] of this.inputs) {
       const nets = this.inputNets.get(port)!;
@@ -282,7 +294,8 @@ export class GateSim implements Sim {
       const o = findNode(prev.design.root, l.node.path);
       if (o?.leafIndex === undefined || o.def.id !== l.def.id) return;
       const s = prev.leafState(o.leafIndex);
-      if (s !== undefined) this.state[li] = cloneState(s);
+      const c = l.def.behavior.carry;
+      if (s !== undefined) this.state[li] = c ? c(s, !!opts.known) : cloneState(s);
     });
     this.wLen.fill(0);
     this.pendingEvents = 0;

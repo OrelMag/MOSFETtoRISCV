@@ -1,7 +1,8 @@
 // Synthesizable Verilog for the whole hierarchy below a component, for real tools (Yosys, OpenROAD):
 // one module per ComponentDef, NAND as a continuous assignment, flip-flops (`ff`: the master–slave
 // DFF, a user chip ticked as one) as clocked processes (a synthesis tool cannot use cross-coupled
-// NAND loops as storage), constant ties as 1'b0 / 1'b1, splitters and mergers as bit slices. Plain
+// NAND loops as storage), constant ties as 1'b0 / 1'b1, splitters and mergers as bit slices, a part
+// with its own `hdl.synth` body (a large RAM / ROM: a `reg mem [..]` array) as that body. Plain
 // Verilog-2005 with identifiers sanitized, so any tool reads it.
 
 import { type ComponentDef, isExternal, isSwitchPrim, netlistOf, parseEnd, type PortDef } from './types';
@@ -33,6 +34,8 @@ function leafBody(def: ComponentDef): string[] | null {
     return [`  always @(posedge ${n(ff.clk)}) ${ff.en ? `if (${n(ff.en)}) ` : ''}${n(ff.q)} <= ${n(ff.d)};`];
   }
   if (def.id === 'tie0' || def.id === 'tie1') return [`  assign ${def.ports[0].name} = 1'b${def.id === 'tie1' ? 1 : 0};`];
+  // its own synthesizable body (a large memory as an array), the structure below it not exported
+  if (def.hdl?.synth) return def.hdl.synth;
   return null;
 }
 

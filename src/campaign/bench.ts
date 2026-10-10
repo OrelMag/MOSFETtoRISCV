@@ -8,7 +8,7 @@
 import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc, PartRef, Workspace } from '../editor/model';
 import { uniqueName } from '../editor/model';
-import { isError, MAX_RAM_K, MAX_ROM_K, partDef } from '../editor/parts';
+import { isError, MAX_ROM_K, partDef } from '../editor/parts';
 import { openChip } from '../editor/session';
 import { constWord } from '../lib/alu';
 import { Builder } from '../lib/builder';
@@ -40,6 +40,9 @@ function sourceOf(t: CoreTest): { src: string; words: number[]; data: Map<number
 
 export interface Bench { ws: Workspace; id: string }
 
+/** The bench's RAM: 64 words at gate level (the address decoding around it takes daddr[5:0]). */
+const BENCH_RAM_K = 6;
+
 /**
  * Add the bench chip for test `t` around the core chip `coreId` (compiled as `core`) and open it.
  * system: the core has an irq input, driven by stores to IRQ.
@@ -49,7 +52,7 @@ export function addBench(ws: Workspace, core: ComponentDef, coreId: string, t: C
   if ('error' in prog) return prog;
   const k = Math.max(2, Math.ceil(Math.log2(Math.max(2, prog.words.length))));
   if (k > MAX_ROM_K) return { error: `${prog.words.length} instructions do not fit in the sandbox's largest ROM (${2 ** MAX_ROM_K} words)` };
-  const ramK = MAX_RAM_K;
+  const ramK = BENCH_RAM_K;
   const init = new Array<number>(2 ** ramK).fill(0);
   for (const [a, v] of prog.data) if (a < 0xfff0) init[a % 2 ** ramK] = v & 0xffff;
   const romRef: PartRef = { rom: { k, w: 16, addr: 'word', lang: 'rv16', src: prog.src } };
