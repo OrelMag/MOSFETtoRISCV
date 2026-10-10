@@ -8,6 +8,7 @@
 import { sanitizeCpu } from './cpu';
 import { same } from './history';
 import { MAX_KEY_LENGTH } from './parts';
+import { sanitizeIoRef } from './ioparts';
 import {
   SCHEMA, chipDeps, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
   type ChipDoc, type CommentDoc, type DisplayKind, type EndRef, type ExitDir, type LabelDoc, type PartDoc, type PartRef,
@@ -68,6 +69,7 @@ function sanitizeRef(r: unknown): PartRef | null {
   if (DISPLAYS.includes(r.display as DisplayKind)) return compact({ display: r.display as DisplayKind, width: int(r.width, 1) ? r.width : undefined });
   if (str(r.key)) return r.key.length >= 1 && r.key.length <= MAX_KEY_LENGTH ? { key: r.key } : null;
   if ('keyboard' in r) return r.keyboard === true ? { keyboard: true } : null;
+  if ('console' in r || 'switches' in r || 'screen' in r) return sanitizeIoRef(r);
   if (isObj(r.rom)) {
     const { k, w, addr, lang, src } = r.rom;
     if (!int(k) || (w !== 8 && w !== 16 && w !== 32) || (addr !== 'word' && addr !== 'rv32') || (lang !== 'asm' && lang !== 'hex' && lang !== 'rv16') || !str(src)) return null;

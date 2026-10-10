@@ -33,6 +33,17 @@ export function svgImage(svg: SVGSVGElement, box: ViewBox, background: string): 
     if (cs.display === 'none') return void d.setAttribute('data-drop', '');
     d.setAttribute('style', PROPS.map((p) => `${p}:${cs.getPropertyValue(p)}`).join(';'));
   });
+  // A bitmap in a foreignObject (a sandbox screen's picture) does not survive serializing: an <image> of it does.
+  src.forEach((el, i) => {
+    const fo = dst[i].parentElement;
+    if (!(el instanceof HTMLCanvasElement) || fo?.localName !== 'foreignObject') return;
+    const img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+    for (const k of ['x', 'y', 'width', 'height']) img.setAttribute(k, fo.getAttribute(k) ?? '0');
+    img.setAttribute('href', el.toDataURL());
+    img.setAttribute('preserveAspectRatio', 'none');
+    img.setAttribute('style', 'image-rendering:pixelated');
+    fo.replaceWith(img);
+  });
   for (const el of clone.querySelectorAll(`${DROP}, [data-drop]`)) el.remove();
   for (const el of clone.querySelectorAll('[class]')) el.removeAttribute('class');
   clone.removeAttribute('class');

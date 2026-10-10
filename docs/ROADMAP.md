@@ -273,11 +273,14 @@ chip presentation, capacity and the program-solving half of Turing Complete.
   or with the Type toggle on. Both are *external sources*: behaviour-only leaves the editor drives through `Sim.poke`,
   at gate level (one delay, visible in gate mode) and at switch level (a key on a CMOS inverter); zero cost, a
   comment in Verilog, refused by the gate-level derivation of a transistor chip, released on every check
-- ⏳ Pixel screen: a dot-matrix / RGB display driven by a frame-buffer RAM or row/column/colour
-  pins (DLS dot display, TC screen); the 7-segment display already exists
+- ✅ Pixel screen (DLS dot display, TC screen): one part, three modes: write (x, y, colour and we into its own frame
+  buffer, optional vsync), rows (a row latched from a bus: scan-out from your own RAM) and pixels (one wire per pixel);
+  8–128 px, mono / RGB111 / 16-colour / RGB332 / RGB565, square pixels or dots, grid lines; Clear, Save PNG; a Screens
+  drawer shows every screen and console at any depth
 - ✅ LED bank: a wide LED shows one LED per bit (most significant first, rows of 8)
-- ⏳ Console and switch bank as parts, not only in the system CPU's I/O panel, so a hand-built CPU can
-  memory-map them
+- ✅ Console and switch bank as parts, so a hand-built CPU can memory-map them: a console prints data at rising clk
+  edges with we = 1 (\n, \b, \f clears, 500 lines of scrollback); a bank of 1–32 switches clicked on the canvas, in look
+  inside or in the Screens drawer, kept through Reset like a held key. Both zero cost, a comment in Verilog
 - ✅ Buzzer (DLS): A4 while its 1-bit input is high, or MIDI note v from a bus (Web Audio, square wave)
 - ✅ Halt part (TC): a zero-cost sink that stops Run (and the CPU panel's Run to halt) after the step where its input
   reads 1 (any bit of a bus), from any depth of the hierarchy, so a hand-built CPU can halt itself; level sensitive

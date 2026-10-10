@@ -6,6 +6,9 @@ import { PROGRAMS } from '../src/riscv/programs';
 import { deadInstances } from '../src/sim/dead';
 import { netlistOf } from '../src/sim/types';
 import { backwardEnds, labelOverlaps, symbolOverlaps } from '../src/view/route';
+import { boxText, boxTextOverlaps } from '../src/view/boxtext';
+import { counter } from '../src/lib/sequential';
+import { symbolGeom } from '../src/sim/geometry';
 import { families, initialParams } from '../src/lib/resolve';
 import { bigMemTops, cpuTops } from './tops';
 import { rv16Core } from '../src/lib/rv16/cpu';
@@ -51,5 +54,22 @@ describe('dead parts', () => {
   const defs = [...new Set([...registry.values(), ...cpuTops()])].filter((d) => d.netlist);
   it.each(defs.map((d) => [d.id, d] as const))('%s: every part reaches an output', (_, d) => {
     expect(deadInstances(netlistOf(d)!, d.ports)).toEqual([]);
+  });
+});
+
+describe('box symbol text', () => {
+  // every registered box (with a structure or not), and the sandbox's own displays and I/O parts
+  const boxes = [...registry.values()].filter((d) => d.symbol.kind === 'box');
+  it.each(boxes.map((d) => [d.id, d] as const))('%s: no port name or label hides another', (_, d) => {
+    expect(boxTextOverlaps(d)).toEqual([]);
+  });
+  it('a short box with a clock at the bottom lifts its label clear of the clock\'s name', () => {
+    const c = counter(8), t = boxText(c);
+    const clk = t.ports.find((p) => p.name === 'clk')!;
+    expect(t.label!.y).toBeLessThan(symbolGeom(c).h / 2 + 0.45);
+    expect(t.label!.y).toBeLessThan(clk.y - 0.8);
+  });
+  it('a constant prints no port name', () => {
+    expect(boxText(registry.get('tie1')!).ports).toEqual([]);
   });
 });

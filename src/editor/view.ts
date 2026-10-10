@@ -24,6 +24,9 @@ import {
 } from './model';
 import type { Sel } from './ops';
 import { buzzerHz, codeGlyph, keyLabel, LED_PITCH, ledGrid } from './parts';
+import { drawIoFace, type IoFace } from './ioface';
+import { ioInfo } from './ioparts';
+import type { Sim } from '../sim/sim';
 
 /** Live values, read through the compile the simulator was built from (runtime.ts). */
 export interface ViewValues {
@@ -34,12 +37,16 @@ export interface ViewValues {
   conducting(part: string): number | undefined;
   /** The keys waiting in a keyboard part of this chip (null: not one). */
   keyboardQueue(part: string): number[] | null;
+  /** The simulation itself (I/O part faces read their parts' state through it). */
+  readonly sim: Sim | null;
 }
 
 interface PartEls { doc: PartDoc; def: ComponentDef | undefined; g: SVGGElement; disp?: DisplayEls; cls: string }
 /** The live face of a display, a key part ('key') or a keyboard part ('keyboard'). */
 interface DisplayEls {
-  kind: DisplayKind | 'key' | 'keyboard'; width: number; segs: SVGElement[]; shown: string;
+  kind: DisplayKind | 'key' | 'keyboard' | 'io'; width: number; segs: SVGElement[]; shown: string;
+  /** A console, switch bank or screen (ioface.ts). */
+  face?: IoFace;
   led?: SVGCircleElement; text?: SVGTextElement; halt?: SVGGElement; buzz?: SVGGElement;
   /** An LED bank: one LED per bit (index = bit). */
   leds?: SVGCircleElement[];
@@ -444,7 +451,11 @@ export class EditorView {
     const geo = symbolGeom(def);
     g.append(s('rect', { class: 'hit', x: -0.4, y: -0.4, width: geo.w + 0.8, height: geo.h + 0.8, rx: 0.6 }));
     let disp: DisplayEls | undefined;
-    if ('display' in p.ref) disp = this.drawDisplay(g, p.ref.display, p.ref.width ?? 1, geo.w, geo.h, !!p.flip);
+    const io = ioInfo(def) ? drawIoFace(def, !!p.flip) : null;
+    if (io) {
+      g.append(drawSymbol(def, p.flip), io.g);
+      disp = { kind: 'io', width: 0, segs: [], shown: '', face: io };
+    } else if ('display' in p.ref) disp = this.drawDisplay(g, p.ref.display, p.ref.width ?? 1, geo.w, geo.h, !!p.flip);
     else if ('key' in p.ref) disp = this.drawKey(g, p.ref.key, geo.w, geo.h, !!p.flip);
     else if ('keyboard' in p.ref) disp = this.drawKeyboard(g, def, geo.w, geo.h, !!p.flip);
     else g.append(drawSymbol(def, p.flip));
@@ -670,7 +681,8 @@ export class EditorView {
       }
     }
     for (const [id, e] of this.parts) {
-      if (e.disp?.kind === 'key') this.paintKey(e.disp, v?.endBits(`p:${id}.q`) ?? null);
+      if (e.disp?.face) e.disp.face.paint(v?.sim ?? null, v?.sim?.design.root.children?.get(id) ?? null);
+      else if (e.disp?.kind === 'key') this.paintKey(e.disp, v?.endBits(`p:${id}.q`) ?? null);
       else if (e.disp?.kind === 'keyboard') this.paintKeyboard(e.disp, v?.endBits(`p:${id}.code`) ?? null, v?.endBits(`p:${id}.ready`) ?? null, v?.keyboardQueue(id) ?? null);
       else if (e.disp) this.paintDisplay(e.disp, v?.endBits(`p:${id}.a`) ?? null);
       const c = v?.conducting(id);
@@ -755,6 +767,7 @@ export class EditorView {
         for (const p of this.doc.parts) {
           if ('display' in p.ref && p.ref.display !== 'halt') shown.add(built.netOfEnd.get(`p:${p.id}.a`) ?? -1);
           else if ('keyboard' in p.ref) shown.add(built.netOfEnd.get(`p:${p.id}.code`) ?? -1);
+          else if ('screen' in p.ref && p.ref.screen.mode === 'pixels') shown.add(built.netOfEnd.get(`p:${p.id}.px`) ?? -1);
         }
         const best = new Map<number, { at: Vec; len: number; wire: string }>();
         for (const e of this.wires.values()) {
