@@ -161,7 +161,7 @@ export function consolePart(cols: number, rows: number): ComponentDef {
       + '\\f clears; other control codes show as their symbols). Keeps 500 lines of scrollback; Reset clears it. '
       + 'Outside the circuit: no gates, nothing in Verilog.',
     ports,
-    symbol: { kind: 'box', label: '', w: even(STRIP + fw + 1), h: even(Math.max(fh + 3, 6)), noPortLabels: true, portPos },
+    symbol: { kind: 'box', label: '', w: even(STRIP + fw + 1), h: even(Math.max(fh + 3, 6)), portPos },
     behavior: {
       init: consoleInit,
       eval: ([data, we, clk], s) => {
@@ -388,7 +388,7 @@ export function screenPart(r: ScreenRef): ComponentDef {
   } else ins = [{ name: 'px', width: n * n * c, dir: 'in', doc: `Every pixel, ${c} bit${c > 1 ? 's' : ''} each, row by row from the top-left one in the most significant bits` }];
   const clk = r.mode !== 'pixels';
   const { ports, portPos } = boxPorts(ins, clk, vs);
-  const symbol = { kind: 'box' as const, label: '', w: even(STRIP + f + (r.vsync ? 5 : 1)), h: even(Math.max(f + (clk ? 3 : 2), 2 * ins.length + 2)), noPortLabels: true, portPos };
+  const symbol = { kind: 'box' as const, label: '', w: even(STRIP + f + (r.vsync ? 5 : 1)), h: even(Math.max(f + (clk ? 3 : 2), 2 * ins.length + 2)), portPos };
   const base = { id: screenId(r), name: `Screen ${n}×${n}`, category: 'plumbing' as const, ports, symbol };
   const tail = ' Its picture is simulation state: kept through edits, cleared by Reset. Outside the circuit: no gates, nothing in Verilog.';
   if (r.mode === 'pixels') {
@@ -489,7 +489,7 @@ function rowsCore(r: ScreenRef, n: number, c: number, chunks: number[]): Compone
 }
 
 /** A pixels-mode screen's picture from the bits on its px bus (−1 where a pixel has an X or Z bit). */
-export function pixelsOf(bits: readonly Bit[], n: number, fmt: ColorFormat, out = new Int32Array(n * n)): Int32Array {
+export function pixelsOf(bits: readonly Bit[], n: number, fmt: ColorFormat, out: Int32Array = new Int32Array(n * n)): Int32Array {
   const c = COLOR_BITS[fmt], N = n * n;
   for (let p = 0; p < N; p++) {
     const f = N - 1 - p;

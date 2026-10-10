@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { compileChip } from '../src/editor/compile';
 import { deriveBehavior } from '../src/editor/derive';
+import { consoleChip, screenChip } from '../src/editor/examples';
 import {
   clearedState, COLOR_BITS, COLOR_FORMATS, colorRgb, consoleAppend, consoleInit, consolePart, consoleRows, consoleText, type ConsoleState,
   flipSwitch, IO_MAX_BITS, ioNodes, ioState, MONO_ON, PAL16, paintScreen, pixelsOf, PX_OFF, PX_X, screenPart, screenProblem, type ScreenRef,
@@ -120,7 +121,6 @@ describe('console part', () => {
     const doc = conChip();
     const es = sim(doc);
     type(es, doc, 'hi');
-    const saved = es.sim!.saveState();
     // an unrelated edit, then a resize: the same id, so the text carries over
     const edited = { ...doc, parts: [...doc.parts, part('d', { display: 'led' }, [30, 0])] };
     es.update(compileLib(edited), edited.pins);
@@ -140,7 +140,6 @@ describe('console part', () => {
     type(es2, doc, 'X');
     es2.sim!.restoreState(s2);
     expect(text(es2)).toBe('ab');
-    void saved;
     es.reset();
     expect(text(es)).toBe('');
   });
@@ -212,7 +211,6 @@ describe('switch bank part', () => {
     flip(es, 0);
     flip(es, 7);
     expect(pack(es.pinBits('q')!)).toBe(0x81);
-    const saved = es.sim!.saveState();
     const edited = { ...doc, parts: [...doc.parts, part('d', { display: 'led' }, [30, 0])] };
     es.update(compileLib(edited), edited.pins);
     expect(pack(es.pinBits('q')!)).toBe(0x81);
@@ -225,7 +223,6 @@ describe('switch bank part', () => {
     es2.sim!.restoreState(s);
     es2.sim!.settle();
     expect(pack(es2.pinBits('q')!)).toBe(8);
-    void saved;
     // a fresh simulation (a check) reads them all off
     const g = new GateSim(flatten(compileLib(doc).def));
     g.reset('zero');
@@ -336,11 +333,9 @@ describe('pixel screen part', () => {
     expect(picture(es).px[7]).toBe(0x1c);
     expect(picture(es).edges).toBe(3);
     // an unknown colour is stored as unknown; an unknown address writes nothing
-    const pc = pinOf(doc, 'color');
     es.sim!.setInputBits('color', [BX, 0, 0, 0, 0, 0, 0, 0]);
     es.stepOnce();
     expect(picture(es).px[7]).toBe(-1);
-    void pc;
     set('color', 1);
     es.sim!.setInputBits('x', [BX, 0, 0]);
     const before = picture(es).writes;
@@ -502,5 +497,25 @@ describe('I/O part documents', () => {
     const back = await decodeShare(await encodeShare([doc]));
     if ('error' in back) throw new Error(back.error);
     expect(back[0].parts.map((p) => p.ref)).toEqual(refs);
+  });
+});
+
+describe('I/O examples', () => {
+  it('the console example types its message, a character per edge', () => {
+    const doc = consoleChip('u_c', 'C');
+    const es = sim(doc);
+    es.runCycles(20);
+    expect(text(es, ['con'])).toBe('Hello, sandbox!\nHell');
+  });
+
+  it('the screen example paints in the switches\' colour', () => {
+    const doc = screenChip('u_s', 'S');
+    const es = sim(doc);
+    flip(es, 2, ['colour']);
+    flip(es, 0, ['colour']); // colour 5: magenta
+    es.runCycles(256);
+    const px = picture(es, ['scr']).px;
+    expect([...px].every((v) => v === 5)).toBe(true);
+    expect(picture(es, ['scr']).writes).toBe(256);
   });
 });
