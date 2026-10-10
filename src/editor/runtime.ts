@@ -54,8 +54,53 @@ export interface EditorSimOptions {
   debounceMs?: number;
   /** Gate delays per second in gate mode. */
   gateRate?: () => number;
-  /** Per-frame time budget in cycle mode (ms). */
+  /** Per-frame time budget in cycle mode (ms): fixed when given, else it adapts to the frame rate (FrameBudget). */
   budgetMs?: number;
+}
+
+/**
+ * How long a frame may simulate, adapting so the page keeps about 60 frames a second (DOM-free:
+ * fed the measured frame intervals). The rest of a frame is the browser's (paint, layout, the
+ * panels), and its cost varies with the circuit and the drawers open, so it is not guessed: the
+ * budget grows while frames come on time and backs off when frames that used it come late (more
+ * than 1.15 × 1/60 s: a missed refresh). One late frame in a while is jitter (a garbage
+ * collection, another tab) and only trims it; two in the last eight drop it by a fifth and set a
+ * `ceiling` there, below 90 % of which it grows quickly, above it slowly. The ceiling creeps up
+ * on frames on time, so headroom that appears later (a drawer closed) is found again. Frames
+ * that left budget unused (a slow clock rate) change nothing. Clamped to [min, max].
+ */
+export class FrameBudget {
+  /** The budget for the next frame (ms). */
+  ms: number;
+  private ceiling: number;
+  /** The last frames that used their budget: late or not. */
+  private late: boolean[] = [];
+  static readonly PERIOD = 1000 / 60;
+
+  constructor(readonly min = 2, readonly max = 14, init = 8) {
+    this.ms = init;
+    this.ceiling = max;
+  }
+
+  /** A frame began `interval` ms after the one before, which simulated for `work` ms. Returns the new budget. */
+  frame(interval: number, work: number): number {
+    // a background tab or a pause says nothing, nor does a frame that did not use its budget
+    if (!(interval > 0) || interval > 250 || work < 0.75 * this.ms) return this.ms;
+    const late = interval > 1.15 * FrameBudget.PERIOD;
+    this.late.push(late);
+    if (this.late.length > 8) this.late.shift();
+    if (late && this.late.filter((x) => x).length >= 2) {
+      this.ceiling = Math.max(this.min, Math.min(this.ceiling, this.ms));
+      this.ms = Math.max(this.min, this.ms * 0.8);
+      this.late = [];
+    } else if (late) {
+      this.ms = Math.max(this.min, this.ms * 0.95);
+    } else {
+      this.ceiling = Math.min(this.max, this.ceiling + 0.05);
+      this.ms = Math.min(this.max, this.ms + (this.ms < 0.9 * this.ceiling ? 0.5 : 0.1));
+    }
+    return this.ms;
+  }
 }
 
 const serials = new WeakMap<ComponentDef, number>();
@@ -100,6 +145,8 @@ export class EditorSim {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private raf = 0;
   private lastFrame = 0;
+  /** What the last frame spent simulating (ms). */
+  private lastWork = 0;
   private due = 0;
   private clkHigh = false;
   /** A rising edge whose `after` hooks have not run yet (gate mode: still propagating). */
@@ -116,12 +163,20 @@ export class EditorSim {
   private held = new Set<string>();
   private readonly debounceMs: number;
   private readonly gateRate: () => number;
-  private readonly budgetMs: number;
+  private readonly fixedBudget: number | undefined;
+  /** The run loop's per-frame simulation budget (null: fixed by the options). */
+  readonly frameBudget: FrameBudget | null;
 
   constructor(opts: EditorSimOptions = {}) {
     this.debounceMs = opts.debounceMs ?? 120;
     this.gateRate = opts.gateRate ?? (() => 12);
-    this.budgetMs = opts.budgetMs ?? 8;
+    this.fixedBudget = opts.budgetMs;
+    this.frameBudget = opts.budgetMs === undefined ? new FrameBudget() : null;
+  }
+
+  /** How long a frame of Run may simulate (ms). */
+  get budgetMs(): number {
+    return this.fixedBudget ?? this.frameBudget!.ms;
   }
 
   /** Take the latest compile of the chip (on every edit). */
@@ -609,13 +664,16 @@ export class EditorSim {
     if (this.running) return;
     this.running = true;
     this.lastFrame = now();
+    this.lastWork = 0;
     this.samples = [];
     const frame = () => {
       if (!this.running) return;
       const t = now();
       const dt = Math.min(0.25, (t - this.lastFrame) / 1000);
+      this.frameBudget?.frame(t - this.lastFrame, this.lastWork);
       this.lastFrame = t;
       this.advance(dt);
+      this.lastWork = now() - t;
       if (this.haltHit) {
         this.pause();
         this.onHalt();
