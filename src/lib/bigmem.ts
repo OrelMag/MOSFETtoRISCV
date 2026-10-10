@@ -371,10 +371,11 @@ export const ROM_LEAF_K = 8;
 /** Builds a word-addressed ROM of 2^k ≤ 2^ROM_LEAF_K words (the sandbox's mux tree of constants). */
 export type RomLeaf = (k: number, w: number, content: Uint32Array) => ComponentDef;
 
+/** Synthesis body of a ROM: a case table (the classic ROM style; tools read 64K entries of it in seconds). */
 const romSynth = (k: number, w: number, rv: boolean, content: Uint32Array): string[] => {
-  const lines = [`  reg ${range(w)}mem [0:${2 ** k - 1}];`, '  integer i;', '  initial begin', `    for (i = 0; i < ${2 ** k}; i = i + 1) mem[i] = ${w}'h0;`];
-  for (let i = 0; i < content.length; i++) if (content[i]) lines.push(`    mem[${i}] = ${hexLit(w, content[i])};`);
-  lines.push('  end', `  assign data = mem[${rv ? `addr[${k + 1}:2]` : 'addr'}];`);
+  const lines = [`  reg ${range(w)}q;`, `  assign data = q;`, `  always @* case (${rv ? `addr[${k + 1}:2]` : 'addr'})`];
+  for (let i = 0; i < content.length; i++) if (content[i]) lines.push(`    ${i}: q = ${hexLit(w, content[i])};`);
+  lines.push(`    default: q = ${w}'h0;`, '  endcase');
   return lines;
 };
 

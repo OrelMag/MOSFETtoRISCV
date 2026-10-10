@@ -9,6 +9,8 @@ import { decoder, muxTree, rca } from '../src/lib/combinational';
 import { koggeStone } from '../src/lib/fastadd';
 import { counter, DFF } from '../src/lib/sequential';
 import { singleCycleCpu } from '../src/lib/cpu';
+import { bigRam, bigRamWithInit } from '../src/lib/bigmem';
+import { wordRom } from '../src/editor/parts';
 import { evalOnce, forEachInput, simulate } from '../src/sim/harness';
 import { exportHdl, testableComb } from '../src/sim/svexport';
 import { inPorts, outPorts, type ComponentDef } from '../src/sim/types';
@@ -101,5 +103,13 @@ describe.skipIf(!haveYosys)('HDL export parses in Yosys', () => {
     const cpu = singleCycleCpu([0x00000013]);
     check(cpu, 'structure');
     check(cpu, 'synth');
+  }, 120000);
+  it('large memories: a reg array (synth) and banks of banks (structure)', () => {
+    check(bigRam(16, 32), 'synth');
+    check(bigRamWithInit(9, 8, [1, 2, 3]), 'synth');
+    check(bigRam(8, 4), 'structure');
+    const rom = wordRom(12, 32, 'rv32', [0x00500093, 0x0000006f]);
+    check(rom, 'synth');
+    check(wordRom(9, 8, 'word', [1, 2, 3]), 'structure');
   }, 120000);
 });

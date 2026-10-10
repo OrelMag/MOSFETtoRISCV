@@ -10,6 +10,7 @@
 // the shared memory. A properties section sets or overrides what detection found (cpu.ts).
 
 import '../styles/sbcpu.css';
+import { wordsHash } from '../lib/bigmem';
 import { ABI, decode, disasm, FABI } from '../riscv/isa';
 import { CAUSE } from '../riscv/iss';
 import { bitsToF32, flagNames, RM_NAMES } from '../sim/fpref';
@@ -22,7 +23,7 @@ import { instrMarks, instrUse, STAGE_UNITS, stageUse } from '../widgets/insthw';
 import { PipeHistory, pipeGridRows } from '../widgets/pipegrid';
 import {
   type CpuDesc, type CpuDoc, CpuMonitor, type CpuRead, cpuGaps, detectCpu, fmtWord, mismatchText, type NetRef, nestedRoms, partAt, partNode,
-  pinNamed, pipelineSlots, refValue, resolveCpu, romParts, storageOf,
+  memStoreOf, pinNamed, pipelineSlots, refValue, resolveCpu, romParts,
 } from './cpu';
 import { dockPane, paneShown, showPane, undockPane } from './dock';
 import { type Editor, registerEditorPlugin, registerToolbarAction } from './editor';
@@ -633,7 +634,8 @@ class CpuPanel {
     this.memSec.hidden = this.mem.hidden = !dm;
     if (!dm) return;
     keyed(this.memSec, `${label}|${dm}|${words?.length}`, () => [label, h('span', { class: 'cpu-sec-hint' }, `${dm}${words ? ` · ${words.length} words, non-zero shown` : ''}`)]);
-    keyed(this.mem, words ? words.join(',') : 'none', () => {
+    // a hash, not the words joined: a large data memory has 65 536 of them
+    keyed(this.mem, words ? `${words.length}:${wordsHash(words)}` : 'none', () => {
       if (!words) return [h('div', { class: 'm z' }, 'not readable (no word registers found)')];
       const nz = words.map((v, i) => [i, v] as const).filter(([, v]) => v !== 0);
       return [...(nz.length ? nz.slice(0, 64).map(([i, v]) => h('div', { class: 'm' },
@@ -885,7 +887,7 @@ registerToolbarAction({
 function storageParts(ed: Editor): string[] {
   const sim = ed.sim.sim;
   const kids = sim?.design.root.children;
-  return ed.doc.parts.filter((p) => !('rom' in p.ref) && (kids ? !!storageOf(kids.get(p.id)) : 'ram' in p.ref || 'chip' in p.ref)).map((p) => p.id);
+  return ed.doc.parts.filter((p) => !('rom' in p.ref) && (kids && sim ? !!memStoreOf(sim, kids.get(p.id)) : 'ram' in p.ref || 'chip' in p.ref)).map((p) => p.id);
 }
 
 function netOptions(ed: Editor, width: number): [string, string][] {

@@ -31,15 +31,18 @@ export function romImage(r: Pick<RomRef, 'k' | 'w' | 'lang' | 'src'>): RomImage 
   const capacity = 2 ** r.k;
   const problems: ProgramError[] = [...p.errors];
   let error = p.errors.length ? `ROM program: line ${p.errors[0].line}: ${p.errors[0].message}` : null;
-  const lineOf = (i: number) => p.lines.find((l) => l.addr === 4 * i)?.srcLine ?? 0;
+  // source line of word i (a map, built on the first problem: a 64K-word program has 64K lines)
+  let lines: Map<number, number> | null = null;
+  const lineOf = (i: number) => (lines ??= new Map(p.lines.map((l) => [l.addr, l.srcLine]))).get(4 * i) ?? 0;
   if (p.words.length > capacity) {
     const msg = `${p.words.length} words do not fit in 2^${r.k} = ${capacity} words`;
     problems.push({ line: lineOf(capacity), message: msg });
     error ??= `ROM program: ${msg}`;
   }
   if (r.w < 32) {
-    for (let i = 0; i < p.words.length; i++) {
+    for (let i = 0, n = 0; i < p.words.length && n < 100; i++) {
       if (p.words[i] >>> 0 < 2 ** r.w) continue;
+      n++;
       const line = lineOf(i);
       const msg = `word ${i} (0x${(p.words[i] >>> 0).toString(16)}) does not fit in ${r.w} bits`;
       problems.push({ line, message: msg });
