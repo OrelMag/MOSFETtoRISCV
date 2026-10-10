@@ -11,7 +11,8 @@ import {
   flipSwitch, IO_MAX_BITS, ioNodes, ioState, MONO_ON, PAL16, paintScreen, pixelsOf, PX_OFF, PX_X, screenPart, screenProblem, type ScreenRef,
   type ScreenState, switchAt, switchBank, switchCell, type SwitchState,
 } from '../src/editor/ioparts';
-import type { ChipDoc, PartRef } from '../src/editor/model';
+import { type ChipDoc, type PartRef, polyline } from '../src/editor/model';
+import { lintChip } from '../src/editor/lint';
 import { MAX_WIDTH, partDef } from '../src/editor/parts';
 import { EditorSim } from '../src/editor/runtime';
 import { decodeShare, encodeShare } from '../src/editor/share';
@@ -517,5 +518,14 @@ describe('I/O examples', () => {
     const px = picture(es, ['scr']).px;
     expect([...px].every((v) => v === 5)).toBe(true);
     expect(picture(es, ['scr']).writes).toBe(256);
+  });
+});
+
+describe('I/O examples are drawn cleanly', () => {
+  const defOf = (p: { ref: PartRef }) => { const d = partDef(p.ref, () => undefined); return 'error' in d ? undefined : d; };
+  it.each([['console', consoleChip], ['screen', screenChip]] as const)('%s: no lint warnings', (_n, build) => {
+    const doc = build('u_x', 'X');
+    const polys = new Map(doc.wires.flatMap((w) => { const p = polyline(doc, w, defOf); return p ? [[w.id, p] as const] : []; }));
+    expect(lintChip(doc, compileLib(doc), polys).diags).toEqual([]);
   });
 });

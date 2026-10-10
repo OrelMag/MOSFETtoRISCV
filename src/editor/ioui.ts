@@ -110,7 +110,7 @@ function consoleProps(ed: Editor, p: PartDoc, c: { cols: number; rows: number })
   const out = h('section', { class: 'sb-sec-props sb-io-props' }, h('h3', null, 'Console'),
     row('Columns', num(c.cols, CONSOLE_COLS.min, CONSOLE_COLS.max, (v) => setPartRef(ed, p.id, { console: { ...c, cols: v } }), 'Columns'), 'Characters per line on the canvas (longer lines wrap)'),
     row('Rows', num(c.rows, CONSOLE_ROWS.min, CONSOLE_ROWS.max, (v) => setPartRef(ed, p.id, { console: { ...c, rows: v } }), 'Rows'), 'Lines shown on the canvas (the scrollback keeps 500)'),
-    h('p', { class: 'sb-sum' }, 'Prints the character on data at each rising clk edge with we = 1: ASCII, \\n (10) new line, \\b (8) backspace, \\f (12) clears, \\t to the next multiple of 8; other codes as their symbols. Resizing keeps the text; Reset clears it.'),
+    h('p', { class: 'sb-sum' }, 'Codes: 10 new line, 8 backspace, 12 clears, 9 tab (to a multiple of 8), 13 ignored. Resizing keeps the text; Reset clears it.'),
     h('div', { class: 'sb-scr-item' }, text, h('div', { class: 'sb-scr-meta' }, count)),
     h('div', { class: 'sb-btns' },
       btn('Clear', 'Clear the text (the simulation\'s, not an undo step)', () => clearIo(ed, nodeOf(ed, p.id), info), 'close'),
@@ -141,7 +141,7 @@ function switchProps(ed: Editor, p: PartDoc, w: number): HTMLElement {
   const out = h('section', { class: 'sb-sec-props sb-io-props' }, h('h3', null, 'Switches'),
     row('Switches', num(w, 1, MAX_SWITCHES, (v) => setPartRef(ed, p.id, { switches: v }), 'Number of switches'), `1–${MAX_SWITCHES}: the width of q`),
     row('q', value),
-    h('p', { class: 'sb-sum' }, 'Click a switch on the canvas to flip it, also while the circuit runs (inside a placed chip: from look inside or the Screens panel). They are the world outside the circuit: Reset leaves them where they are, and a challenge check reads them all off.'),
+    h('p', { class: 'sb-sum' }, 'Not undone and not saved with the chip: switch positions are the world outside, like a held key. A challenge check reads them all off.'),
     h('div', { class: 'sb-btns' }, btn('All off', 'Every switch to 0', () => set(0)), btn('All on', 'Every switch to 1', () => set(2 ** w - 1))));
   live(out, () => {
     const node = nodeOf(ed, p.id), sim = ed.sim.sim;
@@ -233,9 +233,12 @@ class ScreensPanel {
   private list = h('div', { class: 'sb-scr-list' });
   private items: Item[] = [];
   private key = '';
+  private hadAny = false;
   private off: (() => void)[] = [];
 
   constructor(private ed: Editor) {
+    // Registered first: opening the drawer below redraws the toolbar, whose Screens toggle looks it up.
+    panels.set(ed, this);
     this.el = h('aside', { class: 'sb-drawer sb-screens', 'aria-label': 'Screens' },
       h('div', { class: 'sb-drawer-head' }, icon('screen', 15), h('h3', null, 'Screens & consoles'),
         h('button', { class: 'btn ghost icon-only', title: 'Close', 'aria-label': 'Close the Screens panel', onclick: () => this.setOpen(false, true) }, icon('close', 15))),
@@ -261,6 +264,8 @@ class ScreensPanel {
   private sync(): void {
     const nodes = this.nodes();
     const nested = nodes.some((n) => n.path.length > 1 && n.info.kind !== 'switches');
+    // the toolbar button is greyed without any: redraw it when the first one appears or the last goes
+    if (nodes.length > 0 !== this.hadAny) { this.hadAny = nodes.length > 0; this.ed.renderActions(); }
     if (!this.open && nested && !this.closed.has(this.ed.chipId)) {
       this.setOpen(true);
       this.auto = true;
@@ -374,7 +379,6 @@ const panels = new WeakMap<Editor, ScreensPanel>();
 
 registerEditorPlugin((ed) => {
   const p = new ScreensPanel(ed);
-  panels.set(ed, p);
   const paint = () => p.paint();
   ed.paintHooks.add(paint);
   return () => {

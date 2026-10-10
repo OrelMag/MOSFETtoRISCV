@@ -173,13 +173,14 @@ export function consoleChip(id: string, name: string): ChipDoc {
     parts: [
       part('one', { const: { width: 1, value: 1 } }, [3, 7]), part('cnt', { lib: 'counter4' }, [10, 6]),
       part('text', { rom: { k: 4, w: 8, addr: 'word', lang: 'hex', src: HELLO_SRC } }, [24, 6], { label: 'message ROM' }),
-      part('con', { console: { cols: 24, rows: 6 } }, [40, 4]),
+      part('write', { const: { width: 1, value: 1 } }, [38, 11]),
+      part('con', { console: { cols: 24, rows: 6 } }, [44, 4]),
     ],
     wires: [
-      wire('clk', 'pin:clk', 'cnt.clk'), wire('clk2', 'pin:clk', 'con.clk', [[44, 16]]),
-      wire('en', 'one.y', 'cnt.en'), wire('we', 'one.y', 'con.we', [[9, 2], [36, 2], [36, 8]]),
+      wire('clk', 'pin:clk', 'cnt.clk'), wire('clk2', 'pin:clk', 'con.clk'),
+      wire('en', 'one.y', 'cnt.en'), wire('we', 'write.y', 'con.we', [[42, 12], [42, 8]]),
       wire('q', 'cnt.q', 'text.addr'),
-      wire('ch', 'text.data', 'con.data'),
+      wire('ch', 'text.data', 'con.data', [[41, 8], [41, 6]]),
     ],
   });
 }
@@ -194,16 +195,17 @@ export function screenChip(id: string, name: string): ChipDoc {
     pins: [pin('clk', 'in', [2, 18], 1, { kind: 'clock' })],
     parts: [
       part('one', { const: { width: 1, value: 1 } }, [3, 7]), part('cnt', { lib: 'counter8' }, [10, 6]),
-      part('xy', { split: [4, 4] }, [26, 3]),
+      part('xy', { split: [4, 4] }, [26, 1]),
       part('colour', { switches: 4 }, [20, 12]),
+      part('write', { const: { width: 1, value: 1 } }, [31, 7]),
       part('scr', { screen: { mode: 'write', size: 16, color: 'pal16' } }, [36, 0]),
     ],
     wires: [
-      wire('clk', 'pin:clk', 'cnt.clk'), wire('clk2', 'pin:clk', 'scr.clk', [[38, 20]]),
-      wire('en', 'one.y', 'cnt.en'), wire('we', 'one.y', 'scr.we', [[9, 10]]),
+      wire('clk', 'pin:clk', 'cnt.clk'), wire('clk2', 'pin:clk', 'scr.clk'),
+      wire('en', 'one.y', 'cnt.en'), wire('we', 'write.y', 'scr.we'),
       wire('q', 'cnt.q', 'xy.in'),
       wire('x', 'xy.o0', 'scr.x'), wire('y', 'xy.o1', 'scr.y'),
-      wire('c', 'colour.q', 'scr.color'),
+      wire('c', 'colour.q', 'scr.color', [[35, 14], [35, 6]]),
     ],
   });
 }
