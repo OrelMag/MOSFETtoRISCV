@@ -8,6 +8,8 @@ export const OPCODES = {
   LOAD: 0b0000011, STORE: 0b0100011, OPIMM: 0b0010011, OP: 0b0110011, SYSTEM: 0b1110011, FENCE: 0b0001111,
   LOADFP: 0b0000111, STOREFP: 0b0100111, OPFP: 0b1010011, AMO: 0b0101111,
   FMADD: 0b1000011, FMSUB: 0b1000111, FNMSUB: 0b1001011, FNMADD: 0b1001111,
+  /** custom-0: the SIMT instructions of the lane cores (Vortex's encodings). */
+  SIMT: 0b0001011,
 } as const;
 
 /** Register roles of a floating-point instruction: which operands live in the f registers. */
@@ -23,6 +25,8 @@ export interface InstrSpec {
   hw: boolean;
   /** F extension: register files of the operands (absent: integer instruction). */
   fp?: FpRoles;
+  /** SIMT (lane cores): the register operands it takes, in assembly order. */
+  simt?: ('rs1' | 'rs2')[];
 }
 
 const FR = (name: string, f7: number, fp: FpRoles, f3?: number): InstrSpec => ({ name, fmt: 'R', opcode: OPCODES.OPFP, funct7: f7, funct3: fp.rm ? undefined : f3, hw: false, fp });
@@ -91,6 +95,9 @@ export const INSTRS: InstrSpec[] = [
   // A extension: the two atomic memory operations the multi-core chapter uses (aq / rl bits ignored)
   { name: 'amoswap.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x04, hw: false },
   { name: 'amoadd.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x00, hw: false },
+  // SIMT (the lane cores of the GPU chapters): warp control on custom-0, funct3 selects, as in Vortex
+  ...([['tmc', ['rs1']], ['wspawn', ['rs1', 'rs2']], ['split', ['rs1']], ['join', []], ['bar', ['rs1', 'rs2']], ['pred', ['rs1', 'rs2']]] as const).map(
+    ([name, simt], f3): InstrSpec => ({ name, fmt: 'R', opcode: OPCODES.SIMT, funct3: f3, funct7: 0, hw: false, simt: [...simt] })),
 ];
 
 export const FABI = [
@@ -113,6 +120,8 @@ export const CSRS: Record<string, number> = {
   mtval: 0x343, mip: 0x344, mcycle: 0xb00, cycle: 0xc00, mvendorid: 0xf11, marchid: 0xf12, mimpid: 0xf13, mhartid: 0xf14,
   // F extension: accrued exception flags, dynamic rounding mode, and both together
   fflags: 0x001, frm: 0x002, fcsr: 0x003,
+  // lane cores (read-only): lane in the warp, warp number, lanes per warp, thread id, active mask
+  lane: 0xcc0, warp: 0xcc1, nlanes: 0xcc2, tid: 0xcc3, tmask: 0xcc4,
 };
 
 /** Rounding-mode operand names (rm field); 7 = dyn (use frm). */
@@ -264,6 +273,7 @@ export function disasm(word: number, pc?: number): string {
     return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}, ${R(fp.rs2, d.rs2)}${rm}`;
   }
   if (d.opcode === OPCODES.AMO) return `${n} ${rn(d.rd)}, ${rn(d.rs2)}, (${rn(d.rs1)})`;
+  if (d.spec.simt) return [n, d.spec.simt.map((f) => rn(d[f])).join(', ')].filter(Boolean).join(' ');
   switch (d.fmt) {
     case 'R': case 'R4': return `${n} ${rn(d.rd)}, ${rn(d.rs1)}, ${rn(d.rs2)}`;
     case 'I':

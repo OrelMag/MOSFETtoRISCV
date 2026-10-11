@@ -12,19 +12,20 @@ a switch-level transistor solver. Transistor counts, gate counts and critical pa
 from the circuits themselves, every CPU is co-simulated against a RISC-V golden model, and the
 dual-core is exported as Verilog and taken through Yosys and OpenROAD to a sky130 layout.
 
-Four ways in: the **[journey](https://orelmag.github.io/MOSFETtoRISCV/#/c/map/0)** (26 chapters),
+Four ways in: the **[journey](https://orelmag.github.io/MOSFETtoRISCV/#/c/map/0)** (28 chapters),
 the **[campaign](https://orelmag.github.io/MOSFETtoRISCV/#/campaign)** (build it to unlock it),
 the **[workbench](https://orelmag.github.io/MOSFETtoRISCV/#/workbench/rca4)** (any component on
 its own) and the **[sandbox](https://orelmag.github.io/MOSFETtoRISCV/#/sandbox)** (your own circuits).
 
 ## The journey
 
-**26 chapters**, from the MOSFET, the CMOS inverter and NAND, through gates, binary numbers,
+**28 chapters**, from the MOSFET, the CMOS inverter and NAND, through gates, binary numbers,
 adders, multiplexers, latches, registers and memory arrays, to the ALU, the register file, RV32I
 assembly, a single-cycle CPU, faster adders, pipelining (hazards, forwarding, branch prediction),
 bytes and memory-mapped I/O, traps and interrupts, multiply / divide, caches, multicycle and
-microcoded control, floating point (RV32F), many cores (atomics, coherence), and finally place
-and route on silicon. Each chapter has optional challenges, each with a revealable answer.
+microcoded control, floating point (RV32F), many cores (atomics, coherence), place and route on
+silicon, and then the start of a GPU track: a lane core (one decoder, many ALUs) and SIMT warps
+(the active mask, divergence, split / join). Each chapter has optional challenges, each with a revealable answer.
 
 <table>
 <tr>

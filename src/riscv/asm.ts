@@ -307,6 +307,12 @@ function encode(st: Stmt, labels: Map<string, number>): number[] {
     if (m.off !== 0) throw new AsmError('atomic memory operations take no offset: (rs1)');
     return [encR(spec.opcode, reg(args[0]), 2, m.base, reg(args[1]), spec.funct7!)];
   }
+  if (spec.simt) {
+    need(spec.simt.length);
+    const r = { rs1: 0, rs2: 0 };
+    spec.simt.forEach((f, i) => (r[f] = reg(args[i])));
+    return [encR(spec.opcode, 0, spec.funct3!, r.rs1, r.rs2, 0)];
+  }
   const f3 = spec.funct3 ?? 0;
   switch (spec.fmt) {
     case 'R4': throw new AsmError('internal: R4 is floating-point only');

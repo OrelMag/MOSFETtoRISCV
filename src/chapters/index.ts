@@ -10,6 +10,7 @@ import { chMulticycle } from './ch-multicycle';
 import { chFloat } from './ch-float';
 import { chMulticore } from './ch-multicore';
 import { chSilicon } from './ch-silicon';
+import { chLanes, chSimt } from './ch-gpu';
 import { chBinary, chGates } from './ch-gates';
 import { chLatches, chMemory, chRegisters } from './ch-memory';
 import { chInverter, chMap, chMosfet, chNand } from './ch-transistors';
@@ -17,7 +18,7 @@ import type { Chapter, FutureChapter } from './types';
 
 export const chapters: Chapter[] = [
   chMap, chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
-  chAlu, chRegfile, chIsa, chSingleCycle, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chMulticycle, chFloat, chMulticore, chSilicon,
+  chAlu, chRegfile, chIsa, chSingleCycle, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chMulticycle, chFloat, chMulticore, chSilicon, chLanes, chSimt,
 ];
 
 export const future: FutureChapter[] = [

@@ -192,6 +192,10 @@ src/lib/       the component library (registered in `registry` via define())
   cpu4.ts        the 4-bit CPU (Examples ▸ 4-bit CPU): CPU4_PC (PC + 3-level stack), CPU4_DECODE (control4: the control
                  table, its spec), CPU4_REGS (16 × 4 in pairs), CPU4_ALU (alu4), CPU4_ACC, CPU4_IO (SRC + five ports), rom4(words)
                  (256 × 16, the sandbox ROM part's geometry), cpu4(words) (the computer; CPU4_STATE: paths of its registers)
+  lanes.ts       the GPU chapters' lane core: laneCore(program, n, { dmemK, imemK }) (2 / 4 / 8 lanes: the single-cycle front
+                 end, n laneUnit(n) boxes = registers + ALU + result mux, hand-placed in two bands), lowestOne(n) (the leader /
+                 the next lane to serve), onehotMux(n, w), simtDecode(n) (custom-0 ops, lane CSRs 0xCC0–0xCC4), simtControl(n)
+                 (inverted mask + 4-entry shift-register split / join stack, stackEntryWidth), memSequencer(n) (one lane per cycle)
   builder.ts     Builder: column-by-column netlist builder for blocks read by drilling in (fpu, fppipe, coding, divide)
   coding.ts      magComparator(n, signed), priorityEncoder(n), encoder(n), demux(k, w), popcount(n), absValue(n),
                  parity(n), hammingEnc/Dec(k) (SEC-DED, with TS reference models), eccChannel(k)
@@ -211,7 +215,9 @@ src/bench/     results.json (scripts/benchmarks.ts --write, checked in; each run
                tab (ui/pages/benchmarks.ts, its own chunk)
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
                instructions), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
-               interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), mcprograms.ts, cosim.ts (CPU state;
+               interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), simt.ts
+               (SimtISS: a warp of n lanes, one PC, leader, mask, split / join stack, one cycle per active lane for memory),
+               simtprograms.ts (the lane kernels, each with its result computed in TypeScript), mcprograms.ts, cosim.ts (CPU state;
                `retiring()` = step the ISS this cycle?; dmemWords), randprog32.ts (seeded random RV32 programs per ISA),
                benchprograms.ts (the benchmark set: fib, sort, matmul (+ mul), CRC-32, a float kernel; each with
                its result computed in TypeScript)
