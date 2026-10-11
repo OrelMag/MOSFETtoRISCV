@@ -291,8 +291,12 @@ chip presentation, capacity and the program-solving half of Turing Complete.
   from the power-on zero with no seed (4 / 8 / 16 bits) and a counter with its enable tied to 1 (8 / 16 / 32)
 
 **Chips and canvas**
-- ⏳ Chip appearance: resizable box, pins on any side and in any order, displays inside a chip
-  shown on the packaged chip's face (DLS)
+- ✅ Chip appearance (DLS): the Package dialog's face editor drags pins along an edge or onto another side (a
+  pin dropped on another swaps with it), resizes the box from its corner (never below its pins and displays), and
+  shows the chip's displays and I/O parts on its box, live, moved and scaled there: LED, LED bank, 7-segment, hex,
+  value, buzzer, console, screen, switch bank (clickable on the box), or what a placed chip shows on its own box, so
+  a display surfaces through any number of levels (look inside too). The name steps out of the displays' way or off
+  the box. Kept in the chip document as an optional face (by pin id: renames keep it); none = the automatic box
 - ✅ Free-text comments on the canvas (TC): T or the Wiring palette, multi-line, double-click to edit; selected, moved,
   copied and deleted with the rest, saved and shared, never compiled (writing one recompiles nothing)
 - ⏳ Library organization: collections / folders of chips, a starred bar for frequent parts,

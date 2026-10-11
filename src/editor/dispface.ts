@@ -128,12 +128,15 @@ export function drawFace(g: SVGGElement, def: ComponentDef, flip: boolean): Face
     g.append(sub);
     if (d.kind === 'console' || d.kind === 'screen' || d.kind === 'switches') {
       const io = drawIoFace(d.def, false)!;
-      if (d.kind === 'switches') sub.append(s('rect', { class: 'sym-body sym-box ed-disp-box', x: 0, y: 0, width: d.crop.w, height: d.crop.h, rx: 0.6 }));
+      if (d.kind === 'switches') sub.append(s('rect', { class: 'sym-body sym-box ed-disp-box', x: 0, y: 0, width: d.crop.w, height: d.crop.h, rx: 0.6, style: `stroke-width:${0.08 / d.scale}` }));
       sub.append(io.g);
       return { d, disp: { kind: 'io', width: 0, segs: [], shown: '', face: io } };
     }
     const geo = symbolGeom(d.def);
-    return { d, disp: drawDisplay(sub, d.kind, d.width, geo.w, geo.h, false, true) };
+    const disp = drawDisplay(sub, d.kind, d.width, geo.w, geo.h, false, true);
+    // A thin bezel at any scale: the chip's own outline stays the boldest line.
+    sub.querySelector<SVGElement>('.ed-disp-box')?.style.setProperty('stroke-width', String(0.08 / d.scale));
+    return { d, disp };
   });
 }
 
