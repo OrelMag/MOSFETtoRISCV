@@ -73,3 +73,6 @@
   .isa-body { grid-template-columns: 1fr; }
   .isa-side { border-right: 0; border-bottom: 1px solid var(--border); max-height: 30vh; }
 }
+.isa-op input:not([type]), .isa-op input[type='text'] { width: 100%; box-sizing: border-box; min-width: 0; }
+.isa-op select { min-width: 0; }
+.isa-op > * { min-width: 0; }

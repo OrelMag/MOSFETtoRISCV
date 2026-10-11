@@ -456,6 +456,7 @@ class CpuPanel {
       return;
     }
     this.renderButtons(mon);
+    this.regsSec.hidden = this.regs.hidden = false; // a custom table's view hides them
     if (mon instanceof MultiMonitor) return this.renderMulti(mon);
     if (mon instanceof Rv16Monitor) return this.renderRv16(mon);
     if (mon instanceof Cpu4Monitor) return this.renderCpu4(mon);
@@ -550,7 +551,7 @@ class CpuPanel {
       this.rowOf.clear();
       this.rows = (img?.lines ?? []).map((l) => {
         const row = h('div', { class: 'ln', 'data-pc': String(l.addr), title: 'Mark the parts this instruction uses' },
-          h('span', { class: 'a' }, (rr!.lang === 'rv16' || rr!.lang === 'cpu4' ? l.addr / 4 : l.addr).toString(16).padStart(rr!.lang === 'cpu4' ? 2 : 4, '0')), h('span', { class: 'w' }, rr!.w <= 16 ? hex4(l.word) : hex8(l.word)), h('span', { class: 't' }, l.text));
+          h('span', { class: 'a' }, (rr!.lang === 'rv16' || rr!.lang === 'cpu4' || rr!.lang === 'isa' ? l.addr / 4 : l.addr).toString(16).padStart(rr!.lang === 'cpu4' || rr!.lang === 'isa' ? 2 : 4, '0')), h('span', { class: 'w' }, rr!.w <= 16 ? hex4(l.word) : hex8(l.word)), h('span', { class: 't' }, l.text));
         row.addEventListener('click', () => this.select(l.addr));
         this.rowOf.set(l.addr, row);
         return row;
@@ -725,7 +726,7 @@ class CpuPanel {
   }
 
   private renderTrace(mon: Mon): void {
-    const show = mon instanceof CpuMonitor ? !!mon.desc?.regs : true;
+    const show = mon instanceof CpuMonitor ? !!mon.desc?.regs : mon instanceof Cpu4Monitor ? !mon.desc?.table : true;
     const rv16 = mon instanceof Rv16Monitor;
     keyed(this.traceSec, rv16 ? 'rv16' : 'cpu', () => (rv16 ? ['Checked writes', h('span', { class: 'cpu-sec-hint' }, 'register writes and stores, newest last')]
       : ['Retired', h('span', { class: 'cpu-sec-hint' }, 'by the golden model, newest last')]));
@@ -878,6 +879,8 @@ class CpuPanel {
     const chg = this.changed[0] ?? new Set<number>();
     this.regsSec.textContent = 'Registers';
     this.regs.classList.remove('sb-cpu-mregs');
+    // A custom table names no registers: nothing to show.
+    this.regsSec.hidden = this.regs.hidden = !!mon.desc?.table;
     if (!x) keyed(this.regs, 'none', () => [h('div', { class: 'sb-sum sb-cpu-span' }, 'Not found: the 4-bit CPU example keeps them at pcs.pc, acc.a, acc.cy, io.src, pcs.s1–s3, regs.r0–r15 and io.port0–4.')]);
     else {
       keyed(this.regs, `${x.join(',')}|${[...chg].join(',')}`, () => x.map((v, i) => h('div', { class: `r${chg.has(i) && es.cycles > 0 ? ' chg' : ''}${v ? '' : ' z'}`, title: `${names[i]} = ${v < 0 ? 'unknown' : v}` },
