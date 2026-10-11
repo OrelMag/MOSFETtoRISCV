@@ -122,6 +122,8 @@ registerPaletteGroup({
     { id: 'out8', name: 'Output bus', tag: '8-bit', title: 'An N-bit output pin', place: { pin: { dir: 'out', width: 8 } } },
     { id: 'key', name: 'Key', tag: 'A', title: 'A keyboard key: 1 while it is held (pick the key in the properties). Listens from inside a placed chip too; costs nothing', place: { part: { key: 'a' } } },
     { id: 'keyboard', name: 'Keyboard', tag: '8-bit', title: 'Typed keys wait in order: code = the oldest (ASCII), ready = 1 while one waits, ack removes it. Keys reach it while the circuit runs or with Type on; costs nothing', place: { part: { keyboard: true } } },
+    { id: 'pzin', name: 'Puzzle in', tag: '8-bit', title: 'The input of a program puzzle: data = the next word of the test, ready = 1 while one waits, read = 1 at a rising clk edge takes it. Costs nothing', place: { part: { puzzle: 'in', width: 8 } } },
+    { id: 'pzout', name: 'Puzzle out', tag: '8-bit', title: 'The output of a program puzzle: records data at a rising clk edge with we = 1; Check compares the words with the test. Costs nothing', place: { part: { puzzle: 'out', width: 8 } } },
     { id: 'switches', name: 'Switches', tag: '8-bit', title: 'A bank of toggle switches (1–32 in the properties): click one to flip it, also while running. q = their positions; they stay put through Reset. Costs nothing', place: { part: { switches: 8 } } },
   ],
 });

@@ -6,6 +6,7 @@
 // holds for single-cycle, multicycle and pipelined cores alike (their writes come in program order).
 
 import { disasm16, REG_NAMES16 } from '../riscv/rv16/isa16';
+import { PUZZLE_NO_GOLDEN, simHasPuzzlePorts } from './puzzleparts';
 import { Iss16, type Step16 } from '../riscv/rv16/iss16';
 import { pack } from '../sim/values';
 import type { Chips, Mismatch, MonitorSim, Retired } from './cpu';
@@ -150,10 +151,10 @@ export class Rv16Monitor {
     this.seq++;
     this.synced = this.es.cycles === 0;
     const d = this.desc;
-    this.problem = !d ? 'no RV16 ROM and core' : !this.prog ? `the program in ROM '${d.rom}' does not build` : null;
+    this.problem = !d ? 'no RV16 ROM and core' : !this.prog ? `the program in ROM '${d.rom}' does not build` : simHasPuzzlePorts(this.es.sim) ? PUZZLE_NO_GOLDEN : null;
     // A RAM decoded on its low bits: the model's memory wraps the same way and starts with its contents.
     const data = new Map((d?.ram?.init ?? []).map((v, i) => [i, v] as [number, number]));
-    this.iss = d && this.prog ? new Iss16(this.prog.words, { m: true, system: d.system, ...(d.ram ? { dmemWords: 2 ** d.ram.k, wrap: true } : {}) }, data) : null;
+    this.iss = d && this.prog && !this.problem ? new Iss16(this.prog.words, { m: true, system: d.system, ...(d.ram ? { dmemWords: 2 ** d.ram.k, wrap: true } : {}) }, data) : null;
     this.fill(this.regQ);
   }
 

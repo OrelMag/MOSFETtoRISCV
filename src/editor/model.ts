@@ -137,6 +137,11 @@ export type PartRef =
   | { switches: number }
   /** A pixel screen: a frame buffer written pixel by pixel, rows latched from a bus, or one wire per pixel (ioparts.ts). Zero cost. */
   | { screen: ScreenRef }
+  /**
+   * A program puzzle's port (editor/puzzleparts.ts): 'in' hands the circuit the test's words (data, ready; read takes one at a
+   * rising clk edge), 'out' records the words written (data at a rising clk edge with we = 1). Zero cost.
+   */
+  | { puzzle: 'in' | 'out'; width: number }
   /** Read-only memory: 2^k words of w bits. 'rv32' addresses bytes like a PC (addr = 4·word). */
   | { rom: { k: number; w: 8 | 16 | 32; addr: 'word' | 'rv32'; lang: 'asm' | 'hex' | 'rv16' | 'cpu4' | 'isa'; src: string;
       /** lang 'isa': the instruction set, a copy of the workspace's table (so the ROM builds on its own, in a share link too). */

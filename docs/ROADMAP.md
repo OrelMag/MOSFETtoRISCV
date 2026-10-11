@@ -372,9 +372,18 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   holds a copy of its own (it builds alone, in share links too), and an edit reaches every ROM that uses the table.
   Syntax only (the author's choice): a custom table has no golden model, so the drawer follows the PC, not checked.
   One Isa shape (src/isa/isa.ts: assemble, disasm, fields, words) wraps RV32, RV16, the 4-bit CPU and the tables
-- ⏳ Program puzzles: tasks with level inputs and expected outputs (a sequence over I/O pins, a
-  maze, sorting), solved by writing a program for a CPU you built, scored on cycles and on the
-  hardware's NANDs and depth; optional, each with a reference solution, as with the build challenges
+- ✅ Program puzzles (src/puzzles, editor/puzzleui.ts): 14 tasks given as word streams in 4 groups (streams, arithmetic,
+  text, memory), solved by a program on a CPU of your choice and run on its gates. The Puzzles drawer starts one on a
+  ready-wired computer (4-bit CPU, RV16, RV32I), a copy of your own chip with the two zero-cost ports (PUZZLE IN: data,
+  ready, read; PUZZLE OUT: data, we) placed for you to wire, or your single-cycle campaign core. Its ROM may be in any
+  language, a Custom ISA table included. Check plays every test from power-on until a halt part reads 1, and scores mean
+  cycles, NANDs (the program ROM left out) and program words. There are 40 reference programs (no 4-bit ones for the
+  memory puzzles), each measured on the gates (refdata.json). Stars come from the cost / speed front: ★★ no reference
+  is both cheaper and faster, ★★★ cycles × NANDs below all. A chart plots the references, their front and your point.
+  A click on a test plays it on the circuit, a cycle at a time, back and forth. Show answer gives the pseudocode and the
+  references; Do it for me loads the reference program
+- ⏳ After the puzzles: per-puzzle pins (a maze robot's sensors, a traffic light's lamps) as a third part kind; the
+  campaign's RV16 program levels run on your own core
 - ✅ Examples ▸ 4-bit CPU (4004-inspired; src/isa4, lib/cpu4.ts): the 4004's opcode map and mnemonics, one instruction
   per 16-bit ROM word and per clock (the 4004 byte high, its second byte low), 29 instructions (the 4004's set minus the
   4002 RAM-chip ones, FIN, KBP and DCL): 4-bit accumulator and carry, 16 × 4-bit index registers in 8 pairs, an 8-bit

@@ -134,9 +134,10 @@ export const settings = {
     state.visited = {};
     state.solved = {};
     save();
-    // The campaign keeps its own key (campaign/progress.ts CAMPAIGN_KEY); its page reloads it.
+    // The campaign and the puzzles keep their own keys (campaign/progress.ts CAMPAIGN_KEY, puzzles/grade.ts PUZZLES_KEY).
     try {
       localStorage.removeItem('mosfet2riscv:campaign:v1');
+      localStorage.removeItem('mosfet2riscv:sandbox:puzzles');
     } catch { /* ignore */ }
     listeners.forEach((f) => f());
   },

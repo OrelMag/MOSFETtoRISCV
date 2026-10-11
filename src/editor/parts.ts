@@ -12,6 +12,7 @@ import type { ComponentDef, InstanceDef, NetDef } from '../sim/types';
 import type { DisplayKind, PartRef } from './model';
 import { ramWithInit, romImage } from './memory';
 import { ioRefDef } from './ioparts';
+import { PUZZLE_MAX_WIDTH, puzzleIn, puzzleOut } from './puzzleparts';
 import { ROM_LEAF_K, romLevels, wordsHash } from '../lib/bigmem';
 
 export type PartResult = ComponentDef | { error: string };
@@ -66,6 +67,12 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
     return keyPart(ref.key);
   }
   if ('keyboard' in ref) return KEYBOARD;
+  if ('puzzle' in ref) {
+    if (!Number.isInteger(ref.width) || ref.width < 1 || ref.width > PUZZLE_MAX_WIDTH) return { error: `puzzle port: width must be 1–${PUZZLE_MAX_WIDTH}` };
+    if (ref.puzzle === 'in') return puzzleIn(ref.width);
+    if (ref.puzzle === 'out') return puzzleOut(ref.width);
+    return { error: 'puzzle port: in or out' };
+  }
   const io = ioRefDef(ref);
   if (io) return io;
   if ('ram' in ref) {

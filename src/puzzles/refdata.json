@@ -1,0 +1,270 @@
+{
+ "echo": [
+  {
+   "cpu": "cpu4",
+   "cycles": 29,
+   "words": 17,
+   "nands": 2885
+  },
+  {
+   "cpu": "rv16",
+   "cycles": 19,
+   "words": 5,
+   "nands": 25829
+  },
+  {
+   "cpu": "rv32",
+   "cycles": 20,
+   "words": 6,
+   "nands": 72147
+  }
+ ],
+ "countdown": [
+  {
+   "cpu": "cpu4",
+   "cycles": 62.4,
+   "words": 24,
+   "nands": 2885
+  },
+  {
+   "cpu": "rv16",
+   "cycles": 28.4,
+   "words": 6,
+   "nands": 25829
+  },
+  {
+   "cpu": "rv32",
+   "cycles": 29.4,
+   "words": 7,
+   "nands": 72147
+  }
+ ],
+ "add_pairs": [
+  {
+   "cpu": "cpu4",
+   "cycles": 61.3,
+   "words": 23,
+   "nands": 2885
+  },
+  {
+   "cpu": "rv16",
+   "cycles": 23,
+   "words": 9,
+   "nands": 25829
+  },
+  {
+   "cpu": "rv32",
+   "cycles": 24,
+   "words": 10,
+   "nands": 72147
+  }
+ ],
+ "stream_sum": [
+  {
+   "cpu": "cpu4",
+   "cycles": 56.4,
+   "words": 20,
+   "nands": 2885
+  },
+  {
+   "cpu": "rv16",
+   "cycles": 21.2,
+   "words": 6,
+   "nands": 25829
+  },
+  {
+   "cpu": "rv32",
+   "cycles": 22.2,
+   "words": 7,
+   "nands": 72147
+  }
+ ],
+ "running_max": [
+  {
+   "cpu": "cpu4",
+   "cycles": 62.6,
+   "words": 33,
+   "nands": 2885
+  },
+  {
+   "cpu": "rv16",
+   "cycles": 21.4,
+   "words": 9,
+   "nands": 25829
+  },
+  {
+   "cpu": "rv32",
+   "cycles": 22.4,
+   "words": 10,
+   "nands": 72147
+  }
+ ],
+ "odd_only": [
+  {
+   "cpu": "cpu4",
+   "cycles": 51,
+   "words": 16,
+   "nands": 2885
+  },
+  {
+   "cpu": "rv16",
+   "cycles": 24.6,
+   "words": 9,
+   "nands": 25829
+  },
+  {
+   "cpu": "rv32",
+   "cycles": 27,
+   "words": 8,
+   "nands": 72147
+  }
+ ],
+ "popcount": [
+  {
+   "cpu": "cpu4",
+   "cycles": 54.3,
+   "words": 46,
+   "nands": 2885
+  },
+  {
+   "cpu": "rv16",
+   "cycles": 46,
+   "words": 21,
+   "nands": 25829
+  },
+  {
+   "cpu": "rv32",
+   "cycles": 66,
+   "words": 11,
+   "nands": 72147
+  }
+ ],
+ "multiply": [
+  {
+   "cpu": "cpu4",
+   "cycles": 153.2,
+   "words": 45,
+   "nands": 2885
+  },
+  {
+   "cpu": "rv16",
+   "cycles": 30.5,
+   "words": 18,
+   "nands": 25829
+  },
+  {
+   "cpu": "rv32",
+   "cycles": 30.7,
+   "words": 19,
+   "nands": 72147
+  }
+ ],
+ "divide": [
+  {
+   "cpu": "cpu4",
+   "cycles": 182,
+   "words": 60,
+   "nands": 2885
+  },
+  {
+   "cpu": "rv16",
+   "cycles": 27,
+   "words": 17,
+   "nands": 25829
+  },
+  {
+   "cpu": "rv32",
+   "cycles": 43.7,
+   "words": 14,
+   "nands": 72147
+  }
+ ],
+ "gcd": [
+  {
+   "cpu": "cpu4",
+   "cycles": 142.7,
+   "words": 91,
+   "nands": 2885
+  },
+  {
+   "cpu": "rv16",
+   "cycles": 29.7,
+   "words": 29,
+   "nands": 25829
+  },
+  {
+   "cpu": "rv32",
+   "cycles": 100.3,
+   "words": 13,
+   "nands": 72147
+  }
+ ],
+ "fibonacci": [
+  {
+   "cpu": "cpu4",
+   "cycles": 56.5,
+   "words": 30,
+   "nands": 2885
+  },
+  {
+   "cpu": "rv16",
+   "cycles": 23.3,
+   "words": 12,
+   "nands": 25829
+  },
+  {
+   "cpu": "rv32",
+   "cycles": 30.3,
+   "words": 10,
+   "nands": 72147
+  }
+ ],
+ "decimal": [
+  {
+   "cpu": "cpu4",
+   "cycles": 49,
+   "words": 62,
+   "nands": 2885
+  },
+  {
+   "cpu": "rv16",
+   "cycles": 21.4,
+   "words": 23,
+   "nands": 25829
+  },
+  {
+   "cpu": "rv32",
+   "cycles": 25.7,
+   "words": 20,
+   "nands": 72147
+  }
+ ],
+ "reverse": [
+  {
+   "cpu": "rv16",
+   "cycles": 60,
+   "words": 11,
+   "nands": 25829
+  },
+  {
+   "cpu": "rv32",
+   "cycles": 62,
+   "words": 13,
+   "nands": 72147
+  }
+ ],
+ "sort": [
+  {
+   "cpu": "rv16",
+   "cycles": 167.6,
+   "words": 22,
+   "nands": 25829
+  },
+  {
+   "cpu": "rv32",
+   "cycles": 168.6,
+   "words": 23,
+   "nands": 72147
+  }
+ ]
+}

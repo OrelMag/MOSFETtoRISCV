@@ -16,6 +16,7 @@
 // system CPU's consoleData / switches / leds pins.
 
 import { type RamState, ramLeafState, ramWords } from '../lib/bigmem';
+import { PUZZLE_NO_GOLDEN, simHasPuzzlePorts } from './puzzleparts';
 import { consoleAppend, consoleInit, type ConsoleState, consoleText, ioNodes, ioState, type SwitchState } from './ioparts';
 import { cacheLines } from '../riscv/cosim';
 import { ABI, FABI } from '../riscv/isa';
@@ -557,8 +558,9 @@ export class CpuMonitor {
     const d = this.desc;
     this.problem = !d ? 'no program ROM (a ROM part with byte addresses and 32-bit words)'
       : !prog ? `the program in ROM '${d.rom}' does not build`
+      : simHasPuzzlePorts(this.es.sim) ? PUZZLE_NO_GOLDEN
       : null;
-    if (!d || !prog) { this.iss = null; return; }
+    if (!d || !prog || this.problem) { this.iss = null; return; }
     // The ISS's memory wraps like the hardware's: as many words as the data memory part holds.
     const sim = this.es.sim;
     const n = d.iss.dmemWords ?? (sim && d.dmem ? readMem(sim, d.dmem)?.length : undefined) ?? 32;

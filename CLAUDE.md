@@ -241,7 +241,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  hex, value, buzzer: buzzerHz; and the halt part), keys and the keyboard (external sources: behaviour-only
                  leaves, isExternal; keyPart(bind), KEYBOARD, normalizeKey / keyLabel / keyCode / codeGlyph), ROM, RAM
                  (both up to 2^16 words: wordRom → romTree ≤ 2^8, else romLevels; RAM > 2^6: bigRam),
-                 consoles / switch banks / screens (ioparts.ts); audio.ts plays the buzzers
+                 consoles / switch banks / screens (ioparts.ts), puzzle ports (puzzleparts.ts); audio.ts plays the buzzers
+  puzzleparts.ts PUZZLE IN (data / ready; read at a rising clk edge takes a word; reads past the end counted) and
+                 PUZZLE OUT (data at a rising clk edge with we = 1, with the edge): external parts like the console,
+                 their streams in the leaves' state; puzzleLeaves; on a puzzle chip the CPU drawer's monitors sit out
+                 (PUZZLE_NO_GOLDEN: no golden model has the input stream)
   ioparts.ts     console (data / we / clk: prints at rising edges, \n \b \f, 500 lines of scrollback in the leaf's state;
                  ConsoleScroll: a face scrolled by the wheel stays on its text, follows it again at the bottom),
                  switch bank (1–32 toggles: an external source; holdSwitches: positions survive Reset), screen (8–128 px
@@ -366,6 +370,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   testplayer.ts  the test player (Turing Complete style): step, scrub, play at a rate stopping at a failure,
                  jump between failures, a window of cases with the live row; an edit while paused replays the
                  case on the rebuilt circuit; Run / Step / a clock / Reset or an input set by hand ends it
+  puzzleui.ts    plugin: the Puzzles drawer, the start dialog (puzzles/start.ts candidates), and while a puzzle chip
+                 (u_pz_<id>) is open the strip: brief, tests (a click plays one: puzzles/replay.ts), Check, score
+                 against par, the cycles / NANDs chart, Show answer, Do it for me; PUZZLE IN gets the selected test's
+                 words whenever the circuit powers on (autoload)
   inspect.ts     the Inspector in a drawer for the chip or a part; chipprops.ts: chip / part property sections
   dock.ts        the right-hand dock: drawers (Inspector, CPU, Screens, challenges) share it, tabs when several;
                  sets --dock-space on the overlay so look inside stops at its edge and Fit (Editor.fitView) leaves room
@@ -426,6 +434,18 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                shows the after-pass card); ui/pages/levelwalk.ts the walkthrough on a scratch chip u_walk_<node>. The
                sandbox still opens a level's chip u_ch_cp_<node> with the full strip (breadcrumb, tips, stars, Next,
                Level screen); both record passes in the campaign's progress
+src/puzzles/   program puzzles (the sandbox's Puzzles drawer; roadmap Phase 12). DOM-free:
+  puzzles.ts     PUZZLES: tasks as word streams (tests, cycle limit, pseudocode), ISA-agnostic; inputOn / outputFrom: a
+                 word through a narrower port in pieces, most significant first
+  computers.ts   ready-wired puzzle computers (4-bit CPU, RV16, RV32I: ROM, RAM, halt detector, both ports; their I/O
+                 conventions) built with Builder and drawn by docFromDef; an RV16 one around a learner's campaign core;
+                 copyForPuzzle (a learner's chip with the ports placed, unwired)
+  run.ts         Check: every test on a fresh EditorSim (cycle engine) from power-on until a halt part reads 1;
+                 judge (words, reads past the end, the limit); hardwareNands (program ROMs left out), programWords
+  refs4/16/32.ts reference programs; refdata.json their measurements (scripts/puzzles.ts --write; tests/puzzles.test.ts
+                 checks both); measure.ts; grade.ts stars against the reference points (★★ none both cheaper and
+                 faster, ★★★ cycles × NANDs below all), PuzzleProgress (own key); start.ts the choices and the puzzle chip;
+                 replay.ts the player (a test on the editor's own simulation, checkpoints for stepping back)
 src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-free: every chapter / step as a
                searchable entry, searchNav ranking), quicknav.ts (chapter menu on the top bar and the chapter title,
                Ctrl/⌘ K or `/` search palette; `/` is left to the sandbox there)
