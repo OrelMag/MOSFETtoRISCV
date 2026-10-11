@@ -1,6 +1,7 @@
 // The saved benchmark results (results.json, written by scripts/benchmarks.ts --write) as the
-// workbench's Benchmarks tab reads them: times, means, the cost / speed front. DOM-free.
+// workbench's Benchmarks tab reads them: times, energies, means, the cost / speed front. DOM-free.
 
+import { energyFj, VDD } from '../sim/power';
 import data from './results.json';
 
 export interface BenchRun {
@@ -11,6 +12,9 @@ export interface BenchRun {
   dstall?: number;
   imiss?: number;
   istall?: number;
+  /** Σ C · toggles over the run (fF, sim/power.ts), glitches included, and over settled values only. */
+  switched?: number;
+  functional?: number;
 }
 
 export interface BenchCpu {
@@ -62,17 +66,21 @@ export const runUs = (cpu: BenchCpu, r: BenchRun, ps = RESULTS.psPerNand) => (r.
 
 export const runOf = (cpu: BenchCpu, bench: string) => cpu.runs.find((r) => r.bench === bench);
 
-export type Metric = 'time' | 'cycles' | 'cpi';
+/** A run's energy in nJ at v volts (an estimate: sim/power.ts). */
+export const runNj = (r: BenchRun, v = VDD) => energyFj(r.switched ?? NaN, v) / 1e6;
+
+export type Metric = 'time' | 'cycles' | 'cpi' | 'energy' | 'epi';
 export function metricOf(cpu: BenchCpu, r: BenchRun, m: Metric): number {
-  return m === 'time' ? runUs(cpu, r) : m === 'cycles' ? r.cycles : r.cycles / r.instructions;
+  return m === 'time' ? runUs(cpu, r) : m === 'cycles' ? r.cycles : m === 'cpi' ? r.cycles / r.instructions
+    : m === 'energy' ? runNj(r) : (runNj(r) * 1e3) / r.instructions;
 }
 
 /** The geometric mean of a metric over the common programs. */
 export const meanOf = (cpu: BenchCpu, m: Metric) => geoMean(COMMON.map((b) => metricOf(cpu, runOf(cpu, b)!, m)));
 
-/** The CPUs no other CPU beats on both cost (NANDs) and mean time, cheapest first. */
-export function front(cpus: BenchCpu[]): BenchCpu[] {
+/** The CPUs no other CPU beats on both x (default: cost in NANDs) and mean time, lowest x first. */
+export function front(cpus: BenchCpu[], x: (c: BenchCpu) => number = (c) => c.nands): BenchCpu[] {
   const t = new Map(cpus.map((c) => [c, meanOf(c, 'time')]));
-  return [...cpus].sort((a, b) => a.nands - b.nands || t.get(a)! - t.get(b)!)
+  return [...cpus].sort((a, b) => x(a) - x(b) || t.get(a)! - t.get(b)!)
     .filter((c, i, a) => a.slice(0, i).every((d) => t.get(d)! > t.get(c)!));
 }

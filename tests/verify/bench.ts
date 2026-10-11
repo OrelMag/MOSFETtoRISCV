@@ -11,6 +11,8 @@ import { ISS } from '../../src/riscv/iss';
 import { MultiISS } from '../../src/riscv/multi';
 import { BitSim, LANES } from '../../src/sim/bitsim';
 import { flatten } from '../../src/sim/flatten';
+import { GateSim } from '../../src/sim/gatesim';
+import { PowerMeter } from '../../src/sim/power';
 import { stats } from '../../src/sim/stats';
 import { analyzeTiming } from '../../src/sim/timing';
 import { type Bit, inPorts, type ComponentDef } from '../../src/sim/types';
@@ -143,3 +145,36 @@ export const programsHash = () => createHash('sha256').update(JSON.stringify(BEN
 
 /** The benchmarks cfg can run, as cases. */
 export const benchCases = (cfg: CpuConfig) => BENCHMARKS.filter((b) => runsOn(b, cfg)).map((b) => benchCase(b, cfg));
+
+export interface BenchEnergy {
+  /** Σ C · toggles (fF) over the whole run, glitches included, and over settled values only. */
+  switched: number;
+  functional: number;
+  /** Cycles run on GateSim (the same as BitSim's count). */
+  cycles: number;
+}
+
+/**
+ * One program on GateSim with its toggles counted (sim/power.ts): every half clock cycle settles, so the
+ * glitches of every cycle are in; the run stops where benchLanes' does, at the last retirement.
+ */
+export async function benchEnergy(cfg: CpuConfig, cs: BenchCase): Promise<BenchEnergy> {
+  const sim = new GateSim(flatten(cfg.build(cs.words, BENCH_IMEM_K, BENCH_DMEM_K)));
+  for (const p of inPorts(sim.design.root.def)) sim.setInput(p.name, 0);
+  sim.settle();
+  const ports = sim.design.root.ports;
+  const retire = (ports.validW ?? ports.retire ?? ports.retire0)?.[0];
+  const m = new PowerMeter(sim);
+  const max = Math.ceil(cs.instructions * cfg.cpi * 1.5) + 100;
+  let retired = 0, c = 0;
+  while (retired < cs.instructions) {
+    if (c >= max) throw new Error(`${cfg.id} ${cs.bench.id}: retired ${retired} of ${cs.instructions} in ${max} cycles`);
+    if ((c & 15) === 15) await pause();
+    if (retire === undefined || sim.get(retire) === 1) retired++;
+    sim.setInput('clk', 1); sim.settle(); m.mark();
+    sim.setInput('clk', 0); sim.settle(); m.mark();
+    c++;
+  }
+  const t = m.totals();
+  return { switched: Math.round(t.switched), functional: Math.round(t.functional), cycles: c };
+}
