@@ -140,3 +140,11 @@ end:    j     end`,
     expect: (n) => new Map(range(n).map((i) => [i, i >> 1])),
   },
 ];
+
+/**
+ * saxpy for the multi-core (chapter 24's cores, MultiISS): the same work split the same way, each core
+ * finding its index with csrr mhartid instead of tid. For the lanes-against-cores comparison.
+ */
+export const SAXPY_CORES = SIMT_PROGRAMS[0].source
+  .replace('csrr  t0, tid', 'csrr  t0, mhartid')
+  .replace('csrr  t1, nlanes', 'li    t1, 4');
