@@ -179,6 +179,9 @@ src/lib/       the component library (registered in `registry` via define())
                  singleCycleCpu(…, { fpu }) adds the f register file (regfile(5, 32, false))
   mpdecode.ts    MP_DECODE (atomics, csrr mhartid), ARBITER2 (round-robin)
   multicore.ts   dualCore(program): two singleCycleCpu(…, { shared }) cores + arbiter + shared memory
+  cpu4.ts        the 4-bit CPU (Examples ▸ 4-bit CPU): CPU4_PC (PC + 3-level stack), CPU4_DECODE (control4: the control
+                 table, its spec), CPU4_REGS (16 × 4 in pairs), CPU4_ALU (alu4), CPU4_ACC, CPU4_IO (SRC + five ports), rom4(words)
+                 (256 × 16, the sandbox ROM part's geometry), cpu4(words) (the computer; CPU4_STATE: paths of its registers)
   builder.ts     Builder: column-by-column netlist builder for blocks read by drilling in (fpu, fppipe, coding, divide)
   coding.ts      magComparator(n, signed), priorityEncoder(n), encoder(n), demux(k, w), popcount(n), absValue(n),
                  parity(n), hammingEnc/Dec(k) (SEC-DED, with TS reference models), eccChannel(k)
@@ -221,6 +224,8 @@ src/lib/rv16/  the campaign's RV16 hardware, every block built only from parts i
                rv16Pipe({ predict }) adds static prediction in F
 src/riscv/rv16/ isa16.ts (fields, encode / decode / disasm), asm16.ts, iss16.ts (golden model: MMIO, CSRs, traps,
                interrupts; halts on jal x0, 0), randprog.ts (seeded random programs for fuzzing cores)
+src/isa4/      the 4-bit CPU's ISA: isa4.ts (the 4004's opcode map in 16-bit words: decode4 / disasm4 / fields4; words the
+               table does not name run as NOP), asm4.ts, iss4.ts (golden model; halts on a JUN to itself), programs4.ts
 src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui/pages/sandbox.ts, its own chunk;
                #/sandbox/s/<payload> opens a share link: a banner, imported only on the user's click).
                DOM-free (tested in Node):
@@ -252,7 +257,7 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   files.ts       shareRoute / shareUrl, download names, import summaries, duplicateChip / deleteChip
   derive.ts      circuitMode, deriveBehavior (a combinational transistor chip → gate-level brick;
                  refused when an output can float: Z is not X on a shared bus)
-  program.ts     ROM program text (asm / rv16 / hex) → words
+  program.ts     ROM program text (asm / rv16 / cpu4 / hex) → words
   memory.ts      romImage (problems on source lines), romListing / romIndex (the row the circuit reads),
                  asm ↔ hex conversion, ROM_SAMPLES; readRam (live words; a large RAM's from its leaf state),
                  ramWithInit (initial contents as dotted power-on hints into the flip-flops' latches; > 2^6 words:
@@ -263,7 +268,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  pattern), a 1K ROM (riscv/ioprograms.ts), a Memory chip (memoryChip: decoder, 4K × 32 RAM, the
                  devices' buses x / y / byte), a 64 × 64 RGB332 screen at 0xC000_0000 + 256·y + 4·x on the top level,
                  a Devices chip (devicesChip: console / LEDs / switches at the ISS's IO addresses), a halt part on
-                 `j .`; word accesses only (no lb / sb)
+                 `j .`; word accesses only (no lb / sb). The 4-bit CPU (example4.ts): docFromDef's drawing of lib/cpu4's computer,
+                 each block a user chip, the ROM a cpu4 ROM part, the pins swapped for a TEST key, switches, hex digits, LEDs, halt
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run;
@@ -314,6 +320,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  bank's positions, an LED bank named leds, here or one chip down), first mismatch, Run to halt
   cpu16.ts       detectRv16 (an RV16 ROM + a part with the core pins), Rv16Monitor: Iss16 in lock-step through the
                  core's write and store ports in program order (the campaign bench, live; RAM wrap, drain, next write)
+  cpu4mon.ts     detectCpu4 (a ROM in 4-bit assembly), Cpu4Monitor: Iss4 stepped at every rising edge with the TEST / switch
+                 values the hardware sampled, every register compared (CPU4_STATE paths; elsewhere: followed, not checked);
+                 cpu4Use: the blocks an instruction uses (the drawer's marks)
   multicpu.ts    detectMulti (two or more placed CPU chips + a shared memory), MultiMonitor: MultiISS in
                  lock-step (which cores retired, each core's registers and PC, shared memory)
                DOM:

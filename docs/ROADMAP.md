@@ -366,13 +366,17 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
 - ⏳ Program puzzles: tasks with level inputs and expected outputs (a sequence over I/O pins, a
   maze, sorting), solved by writing a program for a CPU you built, scored on cycles and on the
   hardware's NANDs and depth; optional, each with a reference solution, as with the build challenges
-- ⏳ Examples ▸ 4-bit CPU (4004-inspired): a small accumulator machine drawn from library parts, readable in one
-  screen of chips: 4-bit data path (ALU, accumulator, carry flag), 16 × 4-bit index registers, an 8-bit PC
-  into a 256 × 8 program ROM, a short return stack. Its own ISA of about 16 instructions (LDM, LD, XCH, ADD, SUB,
-  INC, ISZ, JUN, JCN, JMS, BBL, WRR, …), with an assembler and a golden model so the CPU drawer runs it in lock-step
-  like the RV32 CPUs; sample programs on the LEDs and the 7-segment display (a counter, BCD addition as on the
-  4004's calculator). The cost against the RV32 single-cycle CPU shown next to it. Once Custom ISA exists, its
-  ISA becomes the first table there
+- ✅ Examples ▸ 4-bit CPU (4004-inspired; src/isa4, lib/cpu4.ts): the 4004's opcode map and mnemonics, one instruction
+  per 16-bit ROM word and per clock (the 4004 byte high, its second byte low), 29 instructions (the 4004's set minus the
+  4002 RAM-chip ones, FIN, KBP and DCL): 4-bit accumulator and carry, 16 × 4-bit index registers in 8 pairs, an 8-bit
+  PC with a three-level stack, SRC + WRR to five output ports (four hex digits, four LEDs), RDR from four switches, JCN
+  on the TEST key (Space), halt on a JUN to itself. Six blocks drawn as sandbox chips (PC & stack, Decode, Index
+  registers, ALU, Accumulator, I/O), 3 357 NANDs without the ROM against the single-cycle RV32I's 48k, period 66.
+  An assembler (a ROM language next to asm / rv16 / hex), a golden model and five samples (BCD addition 1234 + 5876,
+  a counter, the switches, a multiply subroutine, TEST presses); the CPU drawer checks PC, A, CY, R0–R15, the stack,
+  SRC and the ports every clock. Verified by lock-step on the samples and on 64 random ROMs (undefined words too)
+- ⏳ Next: the 4-bit ISA as the first table of Custom ISA (the drawer already takes an ISA's listing, fields,
+  registers and golden model through the 4-bit monitor's shape)
 
 **Campaign** (🚧, plan and status in [`docs/CAMPAIGN.md`](CAMPAIGN.md)): a tree of levels from a
 transistor NAND to a pipelined 16-bit RISC-V-like CPU (RV16) with traps and interrupts. It has
