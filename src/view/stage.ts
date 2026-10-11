@@ -2,10 +2,12 @@
 // that can drill into any instance, with input controls, clock, propagation animation and
 // the inspector. Chapters and the workbench are thin wrappers around it.
 
-import { flatten } from '../sim/flatten';
+import { flatten, type HierNode } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import { needsSwitchLevel } from '../sim/harness';
 import { completeEdge, type Edge, riseEdge, stepEdge } from '../sim/edge';
+import { PowerMeter } from '../sim/power';
+import { analyzeTiming } from '../sim/timing';
 import type { PowerOnMode, Sim, SimState } from '../sim/sim';
 import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, BZ, type Bit, type ComponentDef, inPorts, netlistOf, outPorts, type PortDef } from '../sim/types';
@@ -15,6 +17,7 @@ import { h, icon } from '../ui/dom';
 import { applyTheme, settings } from '../ui/settings';
 import { ViewCtx } from './context';
 import { Inspector } from './inspector';
+import type { LivePower } from './powerpanel';
 import { closePopover, editNumber } from './popover';
 import { SchematicView } from './schematic';
 
@@ -124,6 +127,10 @@ export class Stage {
   leafFactory: LeafWidgetFactory | null = null;
   /** Rising clock edges since the scene was loaded or reset. */
   cycles = 0;
+  /** Toggles of the scene's simulation, counted once the inspector's Power section asks (from cycle meterFrom). */
+  private meter: PowerMeter | null = null;
+  private meterFrom = 0;
+  private meterPeriod: number | null | undefined;
   /** Observers of every rising clock edge: before (inputs still old) and after it settled. */
   readonly edgeHooks = new Set<{ before?: () => void; after?: () => void }>();
   /** The rising edge in progress (slow mode plays it one gate delay at a time). */
@@ -277,6 +284,10 @@ export class Stage {
     this.sim = sim;
     this.edge = null;
     this.cycles = 0;
+    // toggles counted from the start (an increment per change), so the inspector's Power section has the whole run
+    this.meter = sim instanceof GateSim ? new PowerMeter(sim) : null;
+    this.meterFrom = 0;
+    this.meterPeriod = undefined;
     this.rootCtx = new ViewCtx(sim, design.root);
     this.lastSettle = null;
     this.period = null;
@@ -736,6 +747,7 @@ export class Stage {
     this.stopClock();
     sim.restoreState(c.sim);
     this.cycles = c.cycles;
+    this.restartMeter();
     this.edge = c.edge && { ...c.edge };
     this.edgePeriod = c.edgePeriod;
     this.nextEdge = c.nextEdge;
@@ -814,6 +826,7 @@ export class Stage {
     this.edge = null;
     this.cycles = 0;
     this.sim.reset(this.scene.powerOn ?? 'zero');
+    this.restartMeter();
     this.sim.settle();
     this.lastSettle = null;
     this.nextEdge = this.sim.time;
@@ -937,10 +950,32 @@ export class Stage {
         portBits: (p) => ctx.sim.getBits(child.ports[p]),
         canOpen: !this.leaf && (ctx.canOpen(sel!) || child.def.prim === 'nmos' || child.def.prim === 'pmos'),
         onOpen: () => this.open(sel!),
+        power: () => this.livePower(ctx, child),
       });
     } else {
-      this.inspector.show({ def: ctx.def, portBits: (p) => ctx.portBits(p), instance: ctx.path[ctx.path.length - 1] });
+      this.inspector.show({ def: ctx.def, portBits: (p) => ctx.portBits(p), instance: ctx.path[ctx.path.length - 1], power: () => this.livePower(ctx, ctx.node) });
     }
+  }
+
+  /** The scene's switching activity for a node of its own gate-level simulation (an opened NAND's or ROM's sub-simulation has none). */
+  private livePower(ctx: ViewCtx, node: HierNode): LivePower | null {
+    const sim = this.sim;
+    if (!(sim instanceof GateSim) || ctx.sim !== sim) return null;
+    if (!this.meter || this.meter.sim !== sim) {
+      this.meter = new PowerMeter(sim);
+      this.meterFrom = this.cycles;
+    }
+    if (this.meterPeriod === undefined) this.meterPeriod = this.clockPort() ? analyzeTiming(sim.design)?.period ?? null : null;
+    return {
+      meter: this.meter, node, cycles: this.cycles - this.meterFrom, ...(this.meterPeriod ? { period: this.meterPeriod } : {}),
+      restart: () => this.restartMeter(),
+    };
+  }
+
+  private restartMeter(): void {
+    if (!this.meter) return;
+    this.meter.reset();
+    this.meterFrom = this.cycles;
   }
 
   private renderCrumbs(): void {

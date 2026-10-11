@@ -431,6 +431,17 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .ports.used small { color: var(--muted); font-size: 11.5px; }
 .insp-used .btn { margin-top: 6px; }
 .insp-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
+.insp-power-v { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.insp-power-v input { width: 64px; font: 13px var(--font-mono); padding: 2px 4px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); }
+.insp-power-v .btn { margin-top: 0; }
+.insp-power-src, .insp-power-note { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+.insp-power .stats { margin: 8px 0 4px; }
+.insp-power .stat b { font-size: 15px; }
+.insp-power-t td:first-child { overflow-wrap: anywhere; }
+.insp-power-t td.val { white-space: nowrap; }
+.insp-power-bar { position: relative; width: 34%; }
+.insp-power-bar i { position: absolute; left: 6px; top: 50%; height: 6px; margin-top: -3px; max-width: calc(100% - 12px); border-radius: 3px; background: var(--accent-soft); }
+.insp-power-bar span { position: relative; display: block; text-align: right; font: 12px var(--font-mono); color: var(--text-2); }
 
 .truth { border-collapse: collapse; font: 12.5px var(--font-mono); width: 100%; }
 .truth th, .truth td { padding: 3px 6px; text-align: center; border-bottom: 1px solid var(--border); }
@@ -812,6 +823,8 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .bm-prog summary { cursor: pointer; color: var(--accent); font-size: 12.5px; margin-top: 4px; }
 .bm-prog pre { font: 11.5px/1.45 var(--font-mono); background: var(--surface-2); border-radius: 8px; padding: 8px 10px; overflow: auto; max-height: 280px; margin: 6px 0 0; }
 @media (max-width: 1000px) { .bm-progs { grid-template-columns: minmax(0, 1fr); } .bm-legend { margin-left: 0; } }
+.hw-tiles.bm-tiles { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.bm-legend .hw-chips { margin-right: 6px; }
 @media (max-width: 1000px) {
   .hw-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hw-switches { margin-left: 0; }
