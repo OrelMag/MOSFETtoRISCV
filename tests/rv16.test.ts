@@ -192,6 +192,24 @@ describe('the RV16 golden model', () => {
     expect(iss.csr[CSR16.mstatus] & 8).toBe(8);
   });
 
+  it('no timer and no cycle counter: CSR 7 reads 0, the reserved device addresses read 0', () => {
+    // As the hardware cores: only the external line interrupts, and CSR 7 has no register.
+    const iss = run(`
+      li t0, 0x88        # mie: bit 7 (a timer's enable) set, no external interrupt
+      csrw mie, t0
+      li t0, 8
+      csrs mstatus, t0
+      li t0, 5
+      csrrw a0, 7, t0    # a0 = old CSR 7, the write is ignored
+      csrr a1, 7
+      lw a2, -8(x0)
+      lw t1, -9(x0)
+      halt`, { system: true });
+    expect(iss.halted).toBe(true);
+    expect([iss.x[3], iss.x[4], iss.x[5], iss.x[7]]).toEqual([0, 0, 0, 0]);
+    expect(iss.csr[CSR16.mcause]).toBe(0);
+  });
+
   it('strictInit catches a read of an unwritten register', () => {
     expect(run('add a0, a1, a2\nhalt', { strictInit: true }).error).toMatch(/x4 read before/);
     expect(run('li a1, 1\nadd a0, a1, x0\nhalt', { strictInit: true }).error).toBeNull();

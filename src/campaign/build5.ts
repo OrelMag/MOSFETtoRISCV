@@ -71,7 +71,7 @@ export const BUILD5: Record<string, () => BuildChallenge> = {
     brief: CORE_BRIEF('Your first processor: add, sub, and, or, xor, the shifts and compares, addi, slli / srli / srai and lui, one instruction per clock. No branches yet: the PC just counts.'),
     ports: CORE_PINS,
     check: coreCheck({ tests: () => coreTests(1), budget: { cpi: 1, extra: 2 } }, `${coreTests(1).length} programs (arithmetic edge cases and random sequences) run against the golden model: every register write in order, one instruction per cycle.`),
-    answer: refOf('c_core1', () => rv16Core(false), 'Core I'),
+    answer: refOf('c_core1', () => rv16Core(false, false, '', true), 'Core I'),
   }),
   c_core2: () => ({
     id: 'c_core2', title: 'Core II: memory', level: 'cpu', allowed: 'nand',

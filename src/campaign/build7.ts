@@ -63,7 +63,7 @@ const SYS_PINS: PinSpec[] = [...CORE_PORTS.slice(0, 4), { name: 'irq', width: 1,
 export const BUILD7: Record<string, () => BuildChallenge> = {
   y_csr: () => ({
     id: 'y_csr', title: 'CSR file', level: 'cpu', allowed: 'nand',
-    brief: 'mstatus, mie, mtvec, mepc, mcause, mscratch: 16-bit registers read by number (<code>sel</code>: 0 mstatus, 1 mie, 2 mip, 3 mtvec, 4 mepc, 5 mcause, 6 mscratch, 7 mcycle). At the clock edge: if <code>trap</code>, mepc ← pc, mcause ← cause, MPIE ← MIE, MIE ← 0; else if <code>mret</code>, MIE ← MPIE, MPIE ← 1; else if <code>we</code>, csr[sel] ← wdata (mip and mcycle ignore writes). mip reads the interrupt line at bit 11 (MEIP); mcycle reads 0. <b>intr</b> = MIE · mie bit 11 · irq.',
+    brief: 'mstatus, mie, mtvec, mepc, mcause, mscratch: 16-bit registers read by number (<code>sel</code>: 0 mstatus, 1 mie, 2 mip, 3 mtvec, 4 mepc, 5 mcause, 6 mscratch; 7 has no register and reads 0). At the clock edge: if <code>trap</code>, mepc ← pc, mcause ← cause, MPIE ← MIE, MIE ← 0; else if <code>mret</code>, MIE ← MPIE, MPIE ← 1; else if <code>we</code>, csr[sel] ← wdata (mip and CSR 7 ignore writes). mip reads the interrupt line at bit 11 (MEIP). <b>intr</b> = MIE · mie bit 11 · irq.',
     ports: pins([['sel', 3], ['wdata', 16], ['we'], ['trap'], ['cause', 16], ['pc', 16], ['mret'], ['irq'], ['clk']], [['rdata', 16], ['mtvec', 16], ['mepc', 16], ['intr']], 'clk'),
     check: { kind: 'sequence', steps: csrSeq() },
     answer: refOf('y_csr', () => CSR16F, 'CSR file'),

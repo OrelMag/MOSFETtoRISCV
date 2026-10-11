@@ -7,7 +7,7 @@ import type { CodexMore } from './codexmore';
 export const MORE1: Record<string, CodexMore> = {
   // ---- the big picture
   cpu: {
-    idea: `A processor is a state machine whose next-state function is chosen by data: the word at <code>imem[pc]</code> selects which transformation of (PC, registers, memory) happens this step. The program is an input, so one fixed circuit runs any program. In RV16 the architectural state is the 16-bit PC, seven 16-bit registers (x0 is a constant) and 64 K words of data memory; the program sits in a separate ROM the CPU never writes.<br>Everything else (control unit, immediate generator, ALU, multiplexers) is combinational logic computing the next state. The single-cycle core <code>rv16_cpu</code> is 5,748 NANDs; the only state it holds itself is 128 flip-flops (16 for the PC, 112 for x1–x7). The memories are outside it.`,
+    idea: `A processor is a state machine whose next-state function is chosen by data: the word at <code>imem[pc]</code> selects which transformation of (PC, registers, memory) happens this step. The program is an input, so one fixed circuit runs any program. In RV16 the architectural state is the 16-bit PC, seven 16-bit registers (x0 is a constant) and 64 K words of data memory; the program sits in a separate ROM the CPU never writes.<br>Everything else (control unit, immediate generator, ALU, multiplexers) is combinational logic computing the next state. The single-cycle core <code>rv16_cpu</code> is 5,236 NANDs; the only state it holds itself is 128 flip-flops (16 for the PC, 112 for x1–x7). The memories are outside it.`,
     example: {
       title: 'Five instructions, thirteen steps',
       body: `<pre>pc  instruction            state change
@@ -60,8 +60,8 @@ XOR                          4 NANDs
 full adder                   9 NANDs
 16-bit adder               144 NANDs   (16 full adders)
 16-bit ALU               1,250 NANDs
-rv16_cpu                 5,748 NANDs   (22,992 transistors)
-RV16 pipeline           11,172 NANDs</pre>`,
+rv16_cpu                 5,236 NANDs   (20,944 transistors)
+RV16 pipeline           10,016 NANDs</pre>`,
     },
     mistakes: [
       'Treating a black box as free: a 16:1 multiplexer is one symbol and 15 two-input muxes per bit inside.',
@@ -133,7 +133,7 @@ RV16 pipeline           11,172 NANDs</pre>`,
   },
 
   bus: {
-    idea: `A bus is a name for a group of 1-bit wires carrying one value. Simulation, netlists and cost all work bit by bit: a 16-bit bus is 16 nets, and an operation on it is 16 copies of the 1-bit circuit (a 16-bit 2:1 multiplexer is 16 muxes, 64 NANDs, depth 3). Splitting a bus into fields or merging fields into a bus only renames wires and costs nothing, which is why RV16's decoder is mostly wiring: rd, rs1, rs2 and f3 are slices of the instruction bus, and the immediate generator, with all its shifting and sign extension, is 0 NANDs.<br>A bus with several sources needs a multiplexer in front of the reader, or tri-state drivers that let go (Z) when not selected; two drivers active at once fight (X).`,
+    idea: `A bus is a name for a group of 1-bit wires carrying one value. Simulation, netlists and cost all work bit by bit: a 16-bit bus is 16 nets, and an operation on it is 16 copies of the 1-bit circuit (a 16-bit 2:1 multiplexer is 16 muxes, 64 NANDs, depth 3, or 49 when they share one inverter on the select). Splitting a bus into fields or merging fields into a bus only renames wires and costs nothing, which is why RV16's decoder is mostly wiring: rd, rs1, rs2 and f3 are slices of the instruction bus, and the immediate generator, with all its shifting and sign extension, is 0 NANDs.<br>A bus with several sources needs a multiplexer in front of the reader, or tri-state drivers that let go (Z) when not selected; two drivers active at once fight (X).`,
     example: {
       title: 'The fields of one instruction bus',
       body: `<pre>add a0, a1, a2 = 0x1631
@@ -360,9 +360,9 @@ RV16: separate imem and dmem, so neither happens</pre>`,
       title: 'gcd(1071, 462): one program, four machines',
       body: `<pre>core                    cycles  period   time (NAND delays)
 single-cycle                50      98       4,900
-pipeline                    83      82       6,806
-pipeline + prediction       61      85       5,185
-multicycle                 150      78      11,700</pre>51 instructions; cycles counted to the last result, periods from static timing with 8-delay memories. Same register writes and stores on all four. The pipeline loses on this program: 15 taken branches and jumps cost 2 cycles each.`,
+pipeline                    83      78       6,474
+pipeline + prediction       61      80       4,880
+multicycle                 150      76      11,400</pre>51 instructions; cycles counted to the last result, periods from static timing with 8-delay memories. Same register writes and stores on all four. The plain pipeline loses on this program: 15 taken branches and jumps cost 2 cycles each. With prediction it only draws level.`,
     },
     mistakes: [
       'Relying on implementation timing: a program that expects a loaded value one cycle late works on one core and fails on another.',
@@ -373,7 +373,7 @@ multicycle                 150      78      11,700</pre>51 instructions; cycles 
   },
 
   rv16: {
-    idea: `RV16 is RISC-V's base integer ISA cut down to 16 bits so that the whole CPU can be built from NANDs and tested exhaustively: 16-bit data and instructions, eight registers with x0 = 0, word addressing (pc + 1), separate instruction and data memories, 4-bit opcodes, 6-bit immediates. Left out, with their replacements: andi / ori / xori (li + the register form), sltiu, bltu / bgeu (<code>sltu</code> + <code>bnez</code>), auipc, byte and halfword access. Optional: MD (multiply / divide, op 3) and SYSTEM (CSRs, ecall, ebreak, mret, wfi, traps and interrupts, op 0).<br>Memory-mapped devices occupy the top nine data addresses, 0xFFF7–0xFFFF, all reachable as a negative offset from x0. The golden model halts on <code>jal x0, 0</code> (0x000C); a branch to itself is a spin.`,
+    idea: `RV16 is RISC-V's base integer ISA cut down to 16 bits so that the whole CPU can be built from NANDs and tested exhaustively: 16-bit data and instructions, eight registers with x0 = 0, word addressing (pc + 1), separate instruction and data memories, 4-bit opcodes, 6-bit immediates. Left out, with their replacements: andi / ori / xori (li + the register form), sltiu, bltu / bgeu (<code>sltu</code> + <code>bnez</code>), auipc, byte and halfword access. Optional: MD (multiply / divide, op 3) and SYSTEM (CSRs, ecall, ebreak, mret, wfi, traps and interrupts, op 0).<br>Memory-mapped devices occupy the top seven data addresses, 0xFFF9–0xFFFF, all reachable as a negative offset from x0; 0xFFF7–0xFFF8 are reserved (they read 0 and drop stores). The golden model halts on <code>jal x0, 0</code> (0x000C); a branch to itself is a spin.`,
     example: {
       title: 'The opcode map',
       body: `<pre>op    name    fmt     op    name    fmt
@@ -453,7 +453,7 @@ bne:  imm[5:3]  rs2  rs1  imm[2:0]  op
   },
 
   loadstore: {
-    idea: `Only two instructions touch data memory: lw rd, imm(rs1) reads the word at rs1 + sext(imm6), and sw rs2, imm(rs1) writes rs2 there. Every other instruction reads and writes registers only. Each instruction thus makes at most one memory access, at a fixed point after the ALU has computed the address, which keeps the datapath a straight line and gives the pipeline a single M stage. The address comes from the same ALU adder as add.<br>Base + offset covers the common cases in one instruction: a local at sp + k, a structure field at p + k, a device at x0 + k (−1 … −9 reach 0xFFFF … 0xFFF7). Arrays are walked by adding 1 to the base register per word.`,
+    idea: `Only two instructions touch data memory: lw rd, imm(rs1) reads the word at rs1 + sext(imm6), and sw rs2, imm(rs1) writes rs2 there. Every other instruction reads and writes registers only. Each instruction thus makes at most one memory access, at a fixed point after the ALU has computed the address, which keeps the datapath a straight line and gives the pipeline a single M stage. The address comes from the same ALU adder as add.<br>Base + offset covers the common cases in one instruction: a local at sp + k, a structure field at p + k, a device at x0 + k (−1 … −7 reach 0xFFFF … 0xFFF9). Arrays are walked by adding 1 to the base register per word.`,
     example: {
       title: 'Summing four words',
       body: `<pre>        li   a0, 0x40        # a0 → the table
@@ -525,7 +525,7 @@ base:   ret</pre>59 instructions on the golden model; sp goes from 0x100 down to
   },
 
   mmio: {
-    idea: `Memory-mapped I/O puts device registers in the data address space, so lw and sw reach devices with no new instructions. An address decoder in front of the data memory sends each access to the RAM or to a device: in RV16 the top nine addresses, 0xFFF7–0xFFFF, are devices and everything below is RAM. A load from a device returns its state (the switches, the next input number, the timer); a store makes it act (set the LEDs, print a character, raise the interrupt line, stop the program).<br>Because offsets are sign-extended and x0 = 0, every device is one instruction away as <code>imm(x0)</code> with imm from −1 to −9. Device accesses have side effects, so they must reach the device every time: never cached, never merged or reordered.`,
+    idea: `Memory-mapped I/O puts device registers in the data address space, so lw and sw reach devices with no new instructions. An address decoder in front of the data memory sends each access to the RAM or to a device: in RV16 the top seven addresses, 0xFFF9–0xFFFF, are devices, the two below them are reserved, and everything below those is RAM. A load from a device returns its state (the switches, the LEDs, the next input number); a store makes it act (set the LEDs, print a character, raise the interrupt line, stop the program).<br>Because offsets are sign-extended and x0 = 0, every device is one instruction away as <code>imm(x0)</code> with imm from −1 to −7. Device accesses have side effects, so they must reach the device every time: never cached, never merged or reordered.`,
     example: {
       title: 'The device map, and an echo loop',
       body: `<pre>0xFFFF  -1(x0)  EXIT       store: stop, value = exit code
@@ -535,8 +535,7 @@ base:   ret</pre>59 instructions on the golden model; sp goes from 0x100 down to
 0xFFFB  -5(x0)  LEDS       store, load
 0xFFFA  -6(x0)  SWITCHES   load
 0xFFF9  -7(x0)  IRQ        store 1 / 0: raise / lower the interrupt line
-0xFFF8  -8(x0)  MTIME      load: the timer
-0xFFF7  -9(x0)  MTIMECMP   store, load: the timer's compare value
+0xFFF8, 0xFFF7           reserved: read 0, stores dropped
 
 echo:   lw   a0, -6(x0)    # 0xE836
         sw   a0, -5(x0)    # 0xEC3E
@@ -553,7 +552,7 @@ echo:   lw   a0, -6(x0)    # 0xE836
 
   // ---- the CPU
   datapath: {
-    idea: `The datapath is the part of the CPU that holds and moves data: PC, instruction memory, register file, immediate generator, ALU, branch comparator, data memory, and the multiplexers that choose each block's inputs. Every instruction uses the same blocks; only the mux selects and the write enables differ, and those come from the control unit. Designing a datapath means walking the instruction set one instruction at a time and adding a path, and a mux input, for whatever the existing paths cannot do.<br>Multiplexers are most of the cost. In <code>rv16_cpu</code> 721 two-input muxes make 2,884 of its 5,748 NANDs: 336 muxes in the register file's read ports and write enables, 208 in the ALU's operation select, and the rest in the result, immediate, operand and PC selects.`,
+    idea: `The datapath is the part of the CPU that holds and moves data: PC, instruction memory, register file, immediate generator, ALU, branch comparator, data memory, and the multiplexers that choose each block's inputs. Every instruction uses the same blocks; only the mux selects and the write enables differ, and those come from the control unit. Designing a datapath means walking the instruction set one instruction at a time and adding a path, and a mux input, for whatever the existing paths cannot do.<br>Multiplexers are most of the cost. In <code>rv16_cpu</code> 705 bits of two-input mux make 2,760 of its 5,236 NANDs: 336 in the register file's read ports and write enables, 208 in the ALU's operation select, and the rest in the result, immediate, operand and PC selects.`,
     example: {
       title: 'Settings per instruction (– = don\'t care)',
       body: `<pre>instr  rwe  ALU b  imm  result   mwe  next PC
@@ -577,12 +576,12 @@ lui     1   –      U    imm       0   pc + 1</pre>`,
   },
 
   singlecycle: {
-    idea: `A single-cycle CPU executes each instruction completely between two clock edges: fetch, decode, execute, memory and write back form one combinational path from the PC back to the PC and the register file. CPI is exactly 1, and control is a pure function of the instruction with no state machine, which makes it the simplest correct implementation and the reference the others are compared with. The price is the period: every instruction gets the time of the slowest one, a load, whose path passes through both memories and the ALU.<br><code>rv16_cpu</code> (5,748 NANDs) has a period of 98 NAND delays with 8-delay memories, and a jal, which needs neither the ALU nor the data memory, gets the same 98. Any long unit on the path stretches every cycle.`,
+    idea: `A single-cycle CPU executes each instruction completely between two clock edges: fetch, decode, execute, memory and write back form one combinational path from the PC back to the PC and the register file. CPI is exactly 1, and control is a pure function of the instruction with no state machine, which makes it the simplest correct implementation and the reference the others are compared with. The price is the period: every instruction gets the time of the slowest one, a load, whose path passes through both memories and the ALU.<br><code>rv16_cpu</code> (5,236 NANDs) has a period of 98 NAND delays with 8-delay memories, and a jal, which needs neither the ALU nor the data memory, gets the same 98. Any long unit on the path stretches every cycle.`,
     example: {
       title: 'One unit sets everyone\'s period',
-      body: `<pre>rv16_cpu                      5,748 NANDs   period  98
-  with Kogge–Stone adders     6,410 NANDs   period  81   (−17% time, +12% NANDs)
-  with the array multiplier   9,125 NANDs   period 191   (paid by every instruction)</pre>`,
+      body: `<pre>rv16_cpu                      5,236 NANDs   period  98
+  with Kogge–Stone adders     5,898 NANDs   period  76   (−22% time, +13% NANDs)
+  with the array multiplier   8,553 NANDs   period 191   (paid by every instruction)</pre>`,
     },
     mistakes: [
       'Timing the add path and calling it the clock: the period is set by the worst instruction, here a load.',
@@ -605,12 +604,15 @@ lui     1   –      U    imm       0   pc + 1</pre>`,
       body: `<pre>rv16_cpu, period 98:
   PC 3 → ROM 8 → control 13 → imm mux 5 → ALU-b mux 2
   → ALU 50 → RAM 8 → result mux 4 → register file 2 → setup 3
-Kogge–Stone adders, period 81, and the path moves:
-  PC 3 → ROM 8 → register read 7 → branch comparator 49
-  → next PC 4 → PC 7 → setup 3</pre>The comparator still subtracts with a ripple adder (<code>rv16_cmp16</code>, depth 44).`,
+Kogge–Stone adders, period 76: the load path still sets it
+  PC 3 → ROM 8 → control 13 → imm mux 5 → ALU-b mux 2
+  → ALU 28 → RAM 8 → result mux 4 → register file 2 → setup 3
+and the branch path is now two delays behind (74):
+  PC 3 → ROM 8 → register read 7 → branch comparator 44
+  → next PC 4 → PC muxes 5 → setup 3</pre>The comparator's less-than still waits for a ripple carry chain (<code>rv16_cmp16</code>, depth 39; 44 with the condition logic).`,
     },
     mistakes: [
-      'Optimising the block that looks slow in isolation: once the ALU had a fast adder, the branch comparator set the period.',
+      'Optimising the block that looks slow in isolation: once the ALU has a fast adder, the branch comparator is within two delays of setting the period, and speeding up the ALU further buys almost nothing.',
       'Measuring delay by simulation only: a test that never exercises the longest carry chain shows less delay than the chip must allow.',
       'Forgetting memories and register overhead: the ALU\'s 50 delays are about half of the 98.',
     ],
@@ -623,7 +625,7 @@ Kogge–Stone adders, period 81, and the path moves:
   },
 
   pipeline: {
-    idea: `Pipelining cuts the single-cycle path with registers so that each piece, a stage, takes one cycle and works on a different instruction: five are in flight, in F, D, E, M and W. Throughput rises to one instruction per (shorter) cycle; the latency of one instruction grows slightly, five cycles plus register overhead. The ideal period is the single-cycle path ÷ 5 + clk-to-q + setup, reached only if the stages are balanced and nothing stalls.<br>The RV16 pipeline shows both limits. Its period is 82 NAND delays against the single-cycle core's 98, because E holds the forwarding logic, the operand mux, the 16-bit ripple comparator and the PC redirect in one stage (13 + 3 + 49 + 11 delays). And each taken branch costs 2 cycles. Measured on the core tests, the plain pipeline is slower than the single-cycle core; with static branch prediction it is 7% faster on nested loops. The rest of the gain has to come from balancing E: a faster comparator, an earlier branch decision.`,
+    idea: `Pipelining cuts the single-cycle path with registers so that each piece, a stage, takes one cycle and works on a different instruction: five are in flight, in F, D, E, M and W. Throughput rises to one instruction per (shorter) cycle; the latency of one instruction grows slightly, five cycles plus register overhead. The ideal period is the single-cycle path ÷ 5 + clk-to-q + setup, reached only if the stages are balanced and nothing stalls.<br>The RV16 pipeline shows both limits. Its period is 78 NAND delays against the single-cycle core's 98, because E holds the forwarding logic, the operand muxes and the ripple ALU in one stage (13 + 3 + 2 + 50 delays), and the branch path through the ripple comparator and the PC redirect is only one delay shorter. And each taken branch costs 2 cycles. Measured on the core tests, the plain pipeline is only 4% faster than the single-cycle core (116,610 against 121,128 NAND delays): its CPI eats most of the 20% the period gained, and on the nested loops below it is slower. With static branch prediction it is 12% faster there. The rest of the gain has to come from balancing E: a faster ALU and comparator, an earlier branch decision.`,
     example: {
       title: 'Five in flight, and the measured cost',
       body: `<pre>cycle    1  2  3  4  5  6  7  8  9
@@ -635,12 +637,12 @@ sw                   F  D  E  M  W
 
 nested loops (334 instructions)   cycles  period    time
 single-cycle                        333      98    32,634
-pipeline                            534      82    43,788
-pipeline + static prediction        358      85    30,430</pre>534 = 333 + 3 (fill) + 2 × 99 taken branches.`,
+pipeline                            534      78    41,652
+pipeline + static prediction        358      80    28,640</pre>534 = 333 + 3 (fill) + 2 × 99 taken branches.`,
     },
     mistakes: [
       'Expecting 5× from 5 stages: unbalanced stages and register overhead (6 delays per stage here) eat most of it, and hazards add cycles.',
-      'Judging by the period alone: on nested loops the pipeline\'s CPI of 1.6 (534 / 333) more than cancels its 16% shorter period.',
+      'Judging by the period alone: on nested loops the pipeline\'s CPI of 1.6 (534 / 333) more than cancels its 20% shorter period.',
       'Forgetting what the stage registers carry: everything later stages need, so the RV16 pipeline has 368 flip-flops against the single-cycle core\'s 128.',
     ],
     anatomy: ['p1', 'p2', 'p3', 'p4'],
@@ -702,7 +704,7 @@ addi t0, t1, 1        F  F  D  E  M  W</pre>Measured on an 8-instruction program
 advance        1   0    d
 stall          0   0    q        hold
 bubble/flush   –   1    0        nothing happens in the next stage
-load-use stall: PC en = 0, F/D en = 0, D/E clr = 1</pre><code>rv16_preg</code> is 307 NANDs per 16 bits: the register with its enable muxes (240), the clear mux (64) and an OR of en and clr (3).`,
+load-use stall: PC en = 0, F/D en = 0, D/E clr = 1</pre><code>rv16_preg</code> is 260 NANDs per 16 bits: the register with its enable muxes (208), the clear mux (49) and an OR of en and clr (3).`,
     },
     mistakes: [
       'Clearing F/D on a stall: the instruction waiting in D is lost.',
@@ -734,7 +736,7 @@ target                   F  D  E  M  W</pre>gcd (51 instructions): 50 cycles sin
   },
 
   controlhazard: {
-    idea: `Fetch needs a new PC every cycle, but a branch's outcome and target are known only when it executes, so whatever the pipeline fetches meanwhile is a bet. Stalling fetch until every branch resolves loses cycles on all branches, taken or not. Predicting not taken and flushing when wrong costs 2 cycles per taken branch in RV16 and nothing otherwise (the baseline pipeline). Resolving in D with a dedicated comparator cuts the loss to 1 cycle, but lengthens D and needs operands forwarded into D. Predicting means guessing at fetch and computing the target there, paying only for wrong guesses.<br>RV16's static predictor guesses jal and backward branches (negative offset: loops) taken, with pc + imm computed in F by a second adder. It costs 663 NANDs and 3 delays of period (82 → 85).`,
+    idea: `Fetch needs a new PC every cycle, but a branch's outcome and target are known only when it executes, so whatever the pipeline fetches meanwhile is a bet. Stalling fetch until every branch resolves loses cycles on all branches, taken or not. Predicting not taken and flushing when wrong costs 2 cycles per taken branch in RV16 and nothing otherwise (the baseline pipeline). Resolving in D with a dedicated comparator cuts the loss to 1 cycle, but lengthens D and needs operands forwarded into D. Predicting means guessing at fetch and computing the target there, paying only for wrong guesses.<br>RV16's static predictor guesses jal and backward branches (negative offset: loops) taken, with pc + imm computed in F by a second adder. It costs 571 NANDs and 2 delays of period (78 → 80).`,
     example: {
       title: 'Nested loops: 99 of 110 branches taken',
       body: `<pre>inner bnez: taken 9 times in 10, 100 executions
@@ -759,7 +761,7 @@ predict backward taken: wrong at the 10 inner exits and the outer
 
   // ---- system
   traps: {
-    idea: `A trap transfers control to a handler without a branch in the program. On an exception (ecall, ebreak, an illegal instruction) or an interrupt the CPU saves the PC in mepc and the reason in mcause, copies mstatus.MIE into MPIE and clears MIE (so the handler is not interrupted), and jumps to mtvec. mret reverses it: pc ← mepc, MIE ← MPIE. The handler runs with the program's registers, so it saves what it uses; mscratch can hold a pointer to a save area.<br>For an exception mepc is the trapping instruction itself, so a handler that continues after an ecall adds 1 to mepc before mret. RV16's mcause values: 2 illegal instruction, 3 breakpoint, 11 ecall, 0x8007 timer, 0x800B external (bit 15 marks an interrupt). Adding traps to the single-cycle core (CSR file, illegal-instruction detector, system decode) takes it from 5,748 to 9,004 NANDs.`,
+    idea: `A trap transfers control to a handler without a branch in the program. On an exception (ecall, ebreak, an illegal instruction) or an interrupt the CPU saves the PC in mepc and the reason in mcause, copies mstatus.MIE into MPIE and clears MIE (so the handler is not interrupted), and jumps to mtvec. mret reverses it: pc ← mepc, MIE ← MPIE. The handler runs with the program's registers, so it saves what it uses; mscratch can hold a pointer to a save area.<br>For an exception mepc is the trapping instruction itself, so a handler that continues after an ecall adds 1 to mepc before mret. RV16's mcause values: 2 illegal instruction, 3 breakpoint, 11 ecall, 0x800B external (bit 15 marks an interrupt). Adding traps to the single-cycle core (CSR file, illegal-instruction detector, system decode) takes it from 5,236 to 7,972 NANDs.`,
     example: {
       title: 'An ecall at 0x0010, handled and resumed',
       body: `<pre>before: pc = 0x0010 (ecall), mstatus.MIE = 1, mtvec = h
@@ -785,7 +787,7 @@ h:      csrr t1, mepc
   },
 
   interrupts: {
-    idea: `An interrupt is a trap caused by the outside world: a device or a timer raises a line, and if interrupts are enabled the CPU traps between two instructions. Enabling has two levels: the source's bit in mie (MEIE, bit 11, for the external line; MTIE, bit 7, for the timer) and the global mstatus.MIE (bit 3). The trap clears MIE, so the handler runs uninterrupted until mret restores it.<br>mepc is the next instruction that has not run, so mret resumes it with no adjustment. The handler must clear the cause at the device before returning (in RV16, a store of 0 to IRQ at 0xFFF9), or the interrupt is still pending and is taken again immediately. The campaign's hardware cores take the external line (intr = MIE · MEIE · irq); the golden model also has the timer, pending while MTIME ≥ MTIMECMP, with MTIME counting instructions.`,
+    idea: `An interrupt is a trap caused by the outside world: a device raises a line, and if interrupts are enabled the CPU traps between two instructions. Enabling has two levels: the source's bit in mie (MEIE, bit 11, for the external line; full RISC-V adds MTIE and MSIE for timer and software interrupts) and the global mstatus.MIE (bit 3). The trap clears MIE, so the handler runs uninterrupted until mret restores it.<br>mepc is the next instruction that has not run, so mret resumes it with no adjustment. The handler must clear the cause at the device before returning (in RV16, a store of 0 to IRQ at 0xFFF9), or the interrupt is still pending and is taken again immediately. RV16 has that one source, the external line (intr = MIE · MEIE · irq), in the hardware cores and the golden model alike: no timer.`,
     example: {
       title: 'Enable, take, acknowledge',
       body: `<pre>        la   t0, handler
@@ -831,7 +833,7 @@ next:   pc ← mtvec, mepc ← pc of the illegal word, mcause ← 2</pre>`,
 
   // ---- side quests
   mext: {
-    idea: `M adds multiply and divide on the MD opcode (op 3), with f3 selecting the operation: 0 mul (low 16 bits), 1 mulh (high 16, signed × signed), 2 mulhsu (signed × unsigned), 3 mulhu (unsigned × unsigned), 4 div, 5 divu, 6 rem, 7 remu. Division truncates toward zero and the remainder takes the dividend's sign. Nothing traps: x ÷ 0 gives a quotient of all ones and a remainder of x; the one signed overflow, −32,768 ÷ −1, gives −32,768 with remainder 0.<br>A full 32-bit product takes two instructions, mulh (or mulhu) and mul on the same operands. In hardware the multiplier is combinational and the divider iterative: the 16 × 16 array multiplier with signed corrections is 3,302 NANDs, depth 166, which raises a single-cycle core's period from 98 to 191 for every instruction; the divider takes 18 cycles and holds the PC meanwhile.`,
+    idea: `M adds multiply and divide on the MD opcode (op 3), with f3 selecting the operation: 0 mul (low 16 bits), 1 mulh (high 16, signed × signed), 2 mulhsu (signed × unsigned), 3 mulhu (unsigned × unsigned), 4 div, 5 divu, 6 rem, 7 remu. Division truncates toward zero and the remainder takes the dividend's sign. Nothing traps: x ÷ 0 gives a quotient of all ones and a remainder of x; the one signed overflow, −32,768 ÷ −1, gives −32,768 with remainder 0.<br>A full 32-bit product takes two instructions, mulh (or mulhu) and mul on the same operands. In hardware the multiplier is combinational and the divider iterative: the 16 × 16 array multiplier with signed corrections is 3,257 NANDs, depth 166, which raises a single-cycle core's period from 98 to 191 for every instruction; the divider takes 18 cycles and holds the PC meanwhile.`,
     example: {
       title: 'Results from the golden model',
       body: `<pre>a = −1 (0xFFFF), b = 3:
@@ -929,19 +931,19 @@ largest subnormal 0x03FF = 1023 × 2^−24</pre>`,
   },
 
   multicycle: {
-    idea: `A multicycle CPU spends several short cycles per instruction, one per step, with registers between the steps (an instruction register, an ALU-output register) and a state machine sequencing them. The period shrinks to the slowest step, and CPI rises to the number of steps each instruction needs. It pays when steps share hardware (one memory for instructions and data, one ALU for pc + 1, addresses and arithmetic) and when instructions differ in length, so short ones finish early.<br><code>rv16_mc</code> takes 3 cycles per instruction (4 for lw and sw) under a one-hot state machine. It shares nothing (two memories, its own adders), and its E step still holds control, the immediate select and the ripple ALU, so the period only falls from 98 to 78 while CPI triples: 3 × 78 = 234 delays per instruction against 98. Microcode stores the state machine's table in a ROM instead: each word holds the control signals and the next state.`,
+    idea: `A multicycle CPU spends several short cycles per instruction, one per step, with registers between the steps (an instruction register, an ALU-output register) and a state machine sequencing them. The period shrinks to the slowest step, and CPI rises to the number of steps each instruction needs. It pays when steps share hardware (one memory for instructions and data, one ALU for pc + 1, addresses and arithmetic) and when instructions differ in length, so short ones finish early.<br><code>rv16_mc</code> takes 3 cycles per instruction (4 for lw and sw) under a one-hot state machine. It shares nothing (two memories, its own adders), and its E step still holds control, the immediate select and the ripple ALU, so the period only falls from 98 to 76 while CPI triples: 3 × 76 = 228 delays per instruction against 98. Microcode stores the state machine's table in a ROM instead: each word holds the control signals and the next state.`,
     example: {
       title: 'rv16_mc against rv16_cpu',
       body: `<pre>program                    cycles   CPI   period     time
-nested loops   multicycle     999   3.00     78    77,922
+nested loops   multicycle     999   3.00     76    75,924
                single-cycle   333   1.00     98    32,634
-bubble sort    multicycle     777   3.38     78    60,606
+bubble sort    multicycle     777   3.38     76    59,052
                single-cycle   230   1.00     98    22,540</pre>`,
     },
     mistakes: [
-      'Cutting the path where it is convenient: here E holds 72 of the 78 delays while F and M hold one memory read each; unbalanced steps waste the short ones.',
+      'Cutting the path where it is convenient: here E holds 70 of the 76 delays while F and M hold one memory read each; unbalanced steps waste the short ones.',
       'Expecting the period to shrink by the number of steps: register overhead (clk-to-q + setup = 6) is paid in every step.',
-      'Keeping separate memories and adders: without sharing, the multicycle core is bigger than the single-cycle one (6,223 against 5,748 NANDs) and slower.',
+      'Keeping separate memories and adders: without sharing, the multicycle core is bigger than the single-cycle one (5,719 against 5,236 NANDs) and slower.',
     ],
     lib: 'rv16_mc',
     chapters: [
@@ -1031,7 +1033,7 @@ carry out  0                      a &lt; b unsigned (a borrow)</pre>`,
   },
 
   flags: {
-    idea: `One subtraction, a + ¬b + 1, answers every comparison. Equal: the result is 0 (a 16-input zero detect). Unsigned a &lt; b: the subtraction borrows, so the carry out is 0. Signed a &lt; b: the true difference is negative; its sign is the result's top bit N unless the subtraction overflowed, which flips that bit, so lt = N ⊕ V with V = carry into the top bit ⊕ carry out. RISC-V keeps no flags: slt and sltu write the answer as 0 or 1 into rd, and branches compute theirs inside the instruction.<br>RV16's less-than unit gives the signed and unsigned answers from one subtractor (217 NANDs, depth 44). The branch comparator adds an equality test (16 XORs and a zero detect, depth 12), selects with op[1] and inverts with op[0] for bne and bge.`,
+    idea: `One subtraction, a + ¬b + 1, answers every comparison. Equal: the result is 0 (a 16-input zero detect). Unsigned a &lt; b: the subtraction borrows, so the carry out is 0. Signed a &lt; b: the true difference is negative; its sign is the result's top bit N unless the subtraction overflowed, which flips that bit, so lt = N ⊕ V with V = carry into the top bit ⊕ carry out. RISC-V keeps no flags: slt and sltu write the answer as 0 or 1 into rd, and branches compute theirs inside the instruction.<br>RV16's less-than unit needs neither N nor V: it reads only the carry of a + ¬b + 1 (16 NOTs invert b, no XOR row), and when the signs differ, a &lt; b exactly when a is negative; when they agree the difference cannot overflow and the unsigned answer holds. 169 NANDs, depth 39. The branch comparator adds an equality test (16 XORs and a zero detect, depth 12), selects with op[1] and inverts with op[0] for bne and bge.`,
     example: {
       title: 'a = 0x8000, b = 0x0001',
       body: `<pre>a + ¬b + 1 = 0x8000 + 0xFFFE + 1 = 0x7FFF, carry out 1
@@ -1110,7 +1112,7 @@ which would claim −1.5 &lt; −2.0</pre>`,
   },
 
   signedmul: {
-    idea: `An unsigned multiplier reads a negative 16-bit a as a + 2^16, so the product it forms is (a + 2^16)·b = a·b + b·2^16: the error lies entirely in the high half. The low 16 bits are the same for every signedness, so mul needs no correction, and the signed high half is the unsigned one minus b when a is negative and minus a when b is negative (both when both are; the 2^32 term falls outside the 32-bit product). One unsigned array multiplier and two conditional subtractors give mul, mulh, mulhsu and mulhu.<br>Cost in RV16: the unsigned 16 × 16 array is 2,672 NANDs, depth 150; with the corrections the MD multiplier is 3,302 NANDs, depth 166. Baugh–Wooley and Booth recoding fold the signs into the partial products instead of correcting afterwards.`,
+    idea: `An unsigned multiplier reads a negative 16-bit a as a + 2^16, so the product it forms is (a + 2^16)·b = a·b + b·2^16: the error lies entirely in the high half. The low 16 bits are the same for every signedness, so mul needs no correction, and the signed high half is the unsigned one minus b when a is negative and minus a when b is negative (both when both are; the 2^32 term falls outside the 32-bit product). One unsigned array multiplier and two conditional subtractors give mul, mulh, mulhsu and mulhu.<br>Cost in RV16: the unsigned 16 × 16 array is 2,672 NANDs, depth 150; with the corrections the MD multiplier is 3,257 NANDs, depth 166. Baugh–Wooley and Booth recoding fold the signs into the partial products instead of correcting afterwards.`,
     example: {
       title: '−1 × 3, and 0x8000 × 0x8000',
       body: `<pre>unsigned 0xFFFF × 3 = 196,605 = 0x0002_FFFD

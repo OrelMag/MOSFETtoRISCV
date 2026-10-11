@@ -13,7 +13,7 @@ import { splitter } from '../lib/define';
 import { AND, NOT } from '../lib/gates';
 import { ram } from '../lib/memory';
 import { RV16_CORE } from '../lib/rv16/cpu';
-import { register } from '../lib/sequential';
+import { RV16_REG16 } from '../lib/rv16/logic';
 import { assemble16 } from '../riscv/rv16/asm16';
 import { Iss16 } from '../riscv/rv16/iss16';
 import type { ComponentDef } from '../sim/types';
@@ -57,7 +57,7 @@ function computerDef(): ComponentDef {
   const ledWe = b.op1(AND, [`${core}.dwe`, io], 'LED write');
   b.next();
   const mem = b.op(ram(6, 16), [`${ds}.o0`, `${core}.dwdata`, ramWe, 'clk'], 'RAM');
-  const leds = b.op(register(16), [`${core}.dwdata`, ledWe, 'clk'], 'LEDs');
+  const leds = b.op(RV16_REG16, [`${core}.dwdata`, ledWe, 'clk'], 'LEDs');
   b.wire(`${rom}.data`, `${core}.instr`);
   b.wire(`${mem}.dout`, `${core}.drdata`);
   b.wire(`${leds}.q`, 'leds');

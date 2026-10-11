@@ -1,20 +1,19 @@
 // The campaign's act 7 blocks: the illegal-instruction detector, the CSR file with the trap and
 // mret updates, and the single-cycle RV16 core with exceptions (ecall, ebreak, illegal) and the
-// external interrupt, taken between instructions as the golden model does. Timer interrupts and
-// mcycle are left to the golden model: the tests never depend on them.
+// external interrupt, taken between instructions as the golden model does. RV16 has no timer and
+// no cycle counter (CSR 7 reads 0), in the hardware as in the golden model.
 
-import { CAUSE, CSR16, decode16, MIP_MEIP, MSTATUS_MIE, MSTATUS_MPIE } from '../../riscv/rv16/isa16';
+import { CSR16, CSR16_UNUSED, decode16, MIP_MEIP, MSTATUS_MIE, MSTATUS_MPIE } from '../../riscv/rv16/isa16';
 import type { ComponentDef, PortDef } from '../../sim/types';
 import { alu, bitwise, constWord } from '../alu';
 import { Builder } from '../builder';
 import { andN, busMux2, decoder, muxTree } from '../combinational';
 import { define, merger, splitter } from '../define';
 import { AND, NOT, OR } from '../gates';
-import { register } from '../sequential';
-import { TIE1 } from '../transistors';
+import { NAND, TIE0, TIE1 } from '../transistors';
 import { orN } from '../wide';
 import { BRANCH16, CORE_PORTS, CTL16, IMM16, NEXTPC16 } from './cpu';
-import { PC16, RF8 } from './logic';
+import { MUX16, RF8, RV16_DREG16, RV16_REG16 } from './logic';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -75,7 +74,7 @@ export class CsrModel {
   csr = new Uint16Array(8);
   read(sel: number, irq: number): number {
     if (sel === CSR16.mip) return irq ? MIP_MEIP : 0;
-    if (sel === CSR16.mcycle) return 0;
+    if (sel === CSR16_UNUSED) return 0;
     return this.csr[sel];
   }
   intr(irq: number): number {
@@ -89,7 +88,7 @@ export class CsrModel {
       this.csr[CSR16.mstatus] = (st & ~(MSTATUS_MIE | MSTATUS_MPIE)) | (st & MSTATUS_MIE ? MSTATUS_MPIE : 0);
     } else if (i.mret) {
       this.csr[CSR16.mstatus] = (st & ~MSTATUS_MIE) | (st & MSTATUS_MPIE ? MSTATUS_MIE : 0) | MSTATUS_MPIE;
-    } else if (i.we && i.sel !== CSR16.mip && i.sel !== CSR16.mcycle) this.csr[i.sel] = i.wdata & 0xffff;
+    } else if (i.we && i.sel !== CSR16.mip && i.sel !== CSR16_UNUSED) this.csr[i.sel] = i.wdata & 0xffff;
   }
 }
 
@@ -97,7 +96,6 @@ export class CsrModel {
 export const CSR16F: ComponentDef = (() => {
   const b = new Builder(18, 14, 6);
   b.pins('sel', 'wdata', 'we', 'trap', 'cause', 'pc', 'mret', 'irq', 'clk');
-  const one = b.op1(TIE1, []);
   const zero = b.op1(constWord(16, 0), [], '0');
   const nt = b.name(b.op1(NOT, ['trap']), 'ntrap', true);
   const nm = b.op1(NOT, ['mret']);
@@ -109,13 +107,13 @@ export const CSR16F: ComponentDef = (() => {
   const w0 = b.name(wr(CSR16.mstatus, 'mstatus'), 'wst', true);
   const w1 = wr(CSR16.mie, 'mie'), w3 = wr(CSR16.mtvec, 'mtvec'), w4 = wr(CSR16.mepc, 'mepc'), w5 = wr(CSR16.mcause, 'mcause'), w6 = wr(CSR16.mscratch, 'mscratch');
   b.next();
-  const reg = (d: string, en: string, label: string) => b.name(`${b.op(register(16), [d, en, 'clk'], label)}.q`, label, true);
+  const reg = (d: string, en: string, label: string) => b.name(`${b.op(RV16_REG16, [d, en, 'clk'], label)}.q`, label, true);
   const mie = reg('wdata', w1, 'mie');
   const tvec = reg('wdata', w3, 'mtvec');
   const scr = reg('wdata', w6, 'mscratch');
-  const epc = reg(b.op1(busMux2(16), ['wdata', 'pc', 'trap'], 'mepc next'), b.op1(OR, ['trap', w4]), 'mepc');
-  const cause = reg(b.op1(busMux2(16), ['wdata', 'cause', 'trap'], 'mcause next'), b.op1(OR, ['trap', w5]), 'mcause');
-  const mstR = b.op(register(16), ['', one, 'clk'], 'mstatus');
+  const epc = reg(b.op1(MUX16, ['wdata', 'pc', 'trap'], 'mepc next'), b.op1(OR, ['trap', w4]), 'mepc');
+  const cause = reg(b.op1(MUX16, ['wdata', 'cause', 'trap'], 'mcause next'), b.op1(OR, ['trap', w5]), 'mcause');
+  const mstR = b.op(RV16_DREG16, ['', 'clk'], 'mstatus');
   const mst = b.name(`${mstR}.q`, 'mstatus', true);
   b.next();
   // mstatus: MIE (bit 3) and MPIE (bit 7) follow trap / mret; every bit follows a plain write.
@@ -136,7 +134,7 @@ export const CSR16F: ComponentDef = (() => {
   const mpieT = b.op1(busMux2(1), [mpieR, `${ms}.o1`, 'trap'], 'MPIE');
   b.next();
   b.wire(b.op1(merger([3, 1, 3, 1, 8], 2), [lo, mieT, mid, mpieT, hi], 'mstatus next'), `${mstR}.d`);
-  // Read: mip shows the interrupt line at bit 11; mcycle reads 0.
+  // Read: mip shows the interrupt line at bit 11; CSR 7 reads 0.
   const mip = b.op1(merger([11, 1, 4], 2), [b.op1(constWord(11, 0), []), 'irq', b.op1(constWord(4, 0), [])], 'mip');
   b.next();
   b.wire(b.op1(muxTree(3, 16), [mst, mie, mip, tvec, epc, cause, scr, zero, 'sel'], 'read'), 'rdata');
@@ -148,13 +146,29 @@ export const CSR16F: ComponentDef = (() => {
   const R = b.right;
   return define({
     id: 'rv16_csr', name: 'CSR file (RV16)', category: 'cpu',
-    summary: 'mstatus, mie, mtvec, mepc, mcause, mscratch (mip shows the interrupt line, mcycle reads 0). A trap saves pc and cause and moves MIE into MPIE; mret moves it back; otherwise csrr* write the selected register. intr = MIE · MEIE · irq.',
+    summary: 'mstatus, mie, mtvec, mepc, mcause, mscratch (mip shows the interrupt line, CSR 7 reads 0). A trap saves pc and cause and moves MIE into MPIE; mret moves it back; otherwise csrr* write the selected register. intr = MIE · MEIE · irq.',
     ports: [bus('sel', 3, 'in'), bus('wdata', 16, 'in'), bit('we', 'in'), bit('trap', 'in'), bus('cause', 16, 'in'), bus('pc', 16, 'in'), bit('mret', 'in'), bit('irq', 'in'), { name: 'clk', width: 1, dir: 'in', clock: true },
       bus('rdata', 16, 'out'), bus('mtvec', 16, 'out'), bus('mepc', 16, 'out'), bit('intr', 'out')],
     symbol: { kind: 'box', label: 'CSRs' },
     netlist: () => ({ pins: { ...pinsAt(['sel', 'wdata', 'we', 'trap', 'cause', 'pc', 'mret', 'irq', 'clk'], 0), ...pinsAt(['rdata', 'mtvec', 'mepc', 'intr'], R) }, instances: b.instances, nets: b.nets() }),
   });
 })();
+
+/**
+ * mcause for a trap, as gates rather than muxes of constants (2 illegal, 11 ecall, 3 ebreak,
+ * 0x800B external, in that priority after the interrupt): bit 1 is always 1, bit 15 is intr,
+ * bit 0 = intr + ¬ill, bit 3 = intr + ¬ill · ecall. Five NANDs; returns the 16-bit cause.
+ */
+export function trapCause(b: Builder, ill: string, ecall: string, intr: string): string {
+  const ni = b.op1(NOT, [intr], '¬intr'), nill = b.op1(NOT, [ill], '¬ill');
+  b.next();
+  const b0 = b.op1(NAND, [ni, ill], 'bit 0');
+  const e = b.op1(NAND, [nill, ecall], '¬(¬ill·ecall)');
+  b.next();
+  const b3 = b.op1(NAND, [ni, e], 'bit 3');
+  b.next();
+  return b.op1(merger([1, 1, 1, 1, 11, 1], 2), [b0, b.op1(TIE1, []), b.op1(TIE0, []), b3, b.op1(constWord(11, 0), []), intr], 'cause');
+}
 
 /** System decode: what a SYSTEM word is, and the CSR write value (csrrw / csrrs / csrrc). */
 export const SYSDEC16: ComponentDef = (() => {
@@ -231,16 +245,12 @@ export function rv16SysCore(irq: boolean): ComponentDef {
   // illegal, ecall, ebreak. cause = 0x800b, 2, 11 or 3.
   const exc = b.op1(orN(3), [ill, `${sys}.ecall`, `${sys}.ebreak`], 'exception');
   const trap = b.name(b.op1(OR, [exc, `${csrf}.intr`], 'trap'), 'trap', true);
-  const c1 = b.op1(busMux2(16), [b.op1(constWord(16, CAUSE.breakpoint), []), b.op1(constWord(16, CAUSE.ecall), []), `${sys}.ecall`]);
-  b.next();
-  const c2 = b.op1(busMux2(16), [c1, b.op1(constWord(16, CAUSE.illegal), []), ill]);
-  b.next();
-  const cause = b.op1(busMux2(16), [c2, b.op1(constWord(16, CAUSE.external), []), `${csrf}.intr`], 'cause');
+  const cause = trapCause(b, ill, `${sys}.ecall`, `${csrf}.intr`);
   b.wire(trap, `${csrf}.trap`);
   b.wire(cause, `${csrf}.cause`);
   const ntrap = b.name(b.op1(NOT, [trap]), 'ntrap', true);
   b.next();
-  const bsrc = b.op1(busMux2(16), [r2, immv, `${ctl}.bimm`], 'ALU b');
+  const bsrc = b.op1(MUX16, [r2, immv, `${ctl}.bimm`], 'ALU b');
   const y = b.name(`${b.op(alu(16), [r1, bsrc, `${ctl}.alu`], 'ALU')}.y`, 'aluy', true);
   const take = b.op1(BRANCH16, [r1, r2, cond], 'branch?');
   b.next();
@@ -253,17 +263,21 @@ export function rv16SysCore(irq: boolean): ComponentDef {
   b.wire(rwe, `${rf}.we`);
   const res = b.op1(muxTree(2, 16), [y, 'drdata', `${np}.pc1`, immv, `${ctl}.wb`], 'result');
   b.next();
-  const wbv = b.name(b.op1(busMux2(16), [res, `${csrf}.rdata`, `${sys}.csr`], 'or a CSR'), 'wbv', true);
+  const wbv = b.name(b.op1(MUX16, [res, `${csrf}.rdata`, `${sys}.csr`], 'or a CSR'), 'wbv', true);
   b.wire(wbv, `${rf}.wd`);
   // Next PC: trap → mtvec, mret → mepc, else the usual.
-  const t1 = b.op1(busMux2(16), [`${np}.target`, `${csrf}.mepc`, `${sys}.mret`]);
-  const ldN = b.op1(AND, [`${np}.ld`, ntrap]);
+  const t1 = b.op1(MUX16, [`${np}.target`, `${csrf}.mepc`, `${sys}.mret`]);
   b.next();
-  const target = b.op1(busMux2(16), [t1, `${csrf}.mtvec`, trap], 'target');
-  const ld = b.op1(orN(3), [ldN, trap, `${sys}.mret`], 'jump');
+  const target = b.op1(MUX16, [t1, `${csrf}.mtvec`, trap], 'target');
+  // A trap wins in the target mux, so a branch's ld needs no ¬trap: ld·¬trap + trap = ld + trap.
+  const ld = b.op1(orN(3), [`${np}.ld`, trap, `${sys}.mret`], 'jump');
   b.next();
-  const pc = b.op(PC16, ['rst', ld, target, 'clk'], 'PC');
-  const pcq = b.name(`${pc}.pc`, 'pc', true);
+  // The PC register loads next PC's pc + 1 or the target: no second incrementer.
+  const m1 = b.op1(MUX16, [`${np}.pc1`, target, ld], 'load?');
+  b.next();
+  const m2 = b.op1(MUX16, [m1, b.op1(constWord(16, 0), []), 'rst'], 'reset?');
+  b.next();
+  const pcq = b.name(b.op1(RV16_DREG16, [m2, 'clk'], 'PC'), 'pc', true);
   b.wire(pcq, `${np}.pc`);
   b.wire(pcq, `${csrf}.pc`);
   b.wire(pcq, 'pc');
