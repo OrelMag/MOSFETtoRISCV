@@ -265,3 +265,16 @@ export function measurePower(def: ComponentDef, units = 256, seed = 1): PowerRep
     root: design.root,
   };
 }
+
+/** Switched capacitance per vector (fF·toggles) over a given sequence of packed input vectors, each applied once the last has settled. */
+export function vectorPower(def: ComponentDef, vectors: number[][]): { switched: number; functional: number } {
+  const sim = new GateSim(flatten(def, { mode: 'gate' }));
+  const ins = inPorts(def);
+  const apply = (v: number[]) => ins.forEach((p, i) => sim.setInput(p.name, v[i]));
+  apply(vectors[0]);
+  sim.settle();
+  const m = new PowerMeter(sim);
+  for (let i = 1; i < vectors.length; i++) { apply(vectors[i]); sim.settle(); m.mark(); }
+  const t = m.totals(), n = Math.max(1, vectors.length - 1);
+  return { switched: t.switched / n, functional: t.functional / n };
+}

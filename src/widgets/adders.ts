@@ -1,6 +1,8 @@
-// Chapter 15 widget: four adders, measured two ways (static depth and simulated delay).
+// Chapter 15 widget: four adders, measured two ways (static depth and simulated delay), and what an add costs in
+// energy (sim/power.ts: toggles on the same vectors, glitches included).
 
 import { carrySelect, carrySkip, koggeStone, rca } from '../lib';
+import { energyFj, fmtEnergy, POWER_NOTE, vectorPower, VDD } from '../sim/power';
 import { outputSettle } from '../sim/settle';
 import { logicDepth, stats } from '../sim/stats';
 import { h } from '../ui/dom';
@@ -26,9 +28,9 @@ export function adderVariants(): Widget {
   const rows: HTMLElement[] = [];
   let maxD = 1;
   const data = [16, 32].flatMap((n) => kinds.map((k) => {
-    const d = k.make(n), depth = logicDepth(d) ?? 0, dyn = outputSettle(d, carryVectors(n)).worst;
+    const d = k.make(n), vs = carryVectors(n), depth = logicDepth(d) ?? 0, dyn = outputSettle(d, vs).worst, e = vectorPower(d, vs);
     maxD = Math.max(maxD, depth);
-    return { n, k, nands: stats(d).nands, depth, dyn };
+    return { n, k, nands: stats(d).nands, depth, dyn, fj: energyFj(e.switched), glitch: 1 - e.functional / e.switched };
   }));
   data.forEach((d, i) => rows.push(h('tr', null,
     h('td', null, i % kinds.length === 0 ? `${d.n} bits` : ''),
@@ -36,6 +38,8 @@ export function adderVariants(): Widget {
     h('td', { class: 'num' }, String(d.nands)),
     h('td', { class: 'num' }, String(d.depth)),
     h('td', { class: 'num' }, String(d.dyn)),
+    h('td', { class: 'num', title: POWER_NOTE }, fmtEnergy(d.fj)),
+    h('td', { class: 'num' }, `${Math.round(100 * d.glitch)} %`),
     h('td', { class: 'barcell' },
       h('span', { class: 'cbar r', style: `width:${(d.depth / maxD) * 100}%;opacity:.35;display:block` }),
       h('span', { class: `cbar ${d.k.cls}`, style: `width:${(d.dyn / maxD) * 100}%;display:block;margin-top:2px` })))));
@@ -44,9 +48,11 @@ export function adderVariants(): Widget {
       h('h3', null, 'Four adders, measured two ways'),
       h('p', { class: 'sub' }, 'Static depth: the longest path in the netlist, any input to any output. Measured: the simulator applies 300 input changes (random, plus long-carry patterns) and records when the outputs last change, in NAND delays. A sample can miss the true worst case, so the measured column is a lower bound.'),
       h('table', { class: 'cmp' },
-        h('thead', null, h('tr', null, h('th', null, 'width'), h('th', null, 'adder'), h('th', null, 'NANDs'), h('th', null, 'static'), h('th', null, 'measured'), h('th', null, ''))),
+        h('thead', null, h('tr', null, h('th', null, 'width'), h('th', null, 'adder'), h('th', null, 'NANDs'), h('th', null, 'static'), h('th', null, 'measured'), h('th', { title: POWER_NOTE }, 'energy / add'), h('th', null, 'glitches'), h('th', null, ''))),
         h('tbody', null, rows)),
       h('p', { class: 'sub', style: 'margin-top:12px' },
-        'Carry-skip is the outlier: static analysis calls it slower than ripple carry, because the ripple path through every block is still in the netlist. That path is false: whenever a block would ripple all the way through, its multiplexer has already chosen the skip. Static timing tools must be told about false paths, or they overestimate. Carry-select is honest in both columns.'))),
+        'Carry-skip is the outlier: static analysis calls it slower than ripple carry, because the ripple path through every block is still in the netlist. That path is false: whenever a block would ripple all the way through, its multiplexer has already chosen the skip. Static timing tools must be told about false paths, or they overestimate. Carry-select is honest in both columns.'),
+      h('p', { class: 'sub', style: 'margin-top:8px' },
+        `Energy at ${VDD} V: every net that toggles costs ½ C V², C from its fan-out (an estimate, see the column’s tooltip). Glitches are the toggles beyond the settled change: a carry that flips and flips back while it ripples. Speed is bought with gates and wires, and they switch on every add.`))),
   };
 }
