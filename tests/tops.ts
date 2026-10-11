@@ -2,7 +2,7 @@
 // register the top level itself (only its parts), so the schematic tests list them explicitly.
 
 import {
-  dualCore, multiCore, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu,
+  dualCore, laneCore, multiCore, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu,
 } from '../src/lib';
 import { assemble } from '../src/riscv/asm';
 import { CACHE_CPU_PROGRAMS } from '../src/riscv/cprograms';
@@ -23,7 +23,7 @@ export function cpuTops(): ComponentDef[] {
     pipelinedCpu(w, { adder: 'ks', m: true }), pipelinedCpu(w, { adder: 'ks', balanced: true, predictor: true, m: true }),
     pipelinedFpCpu(w), systemCpu(w), systemCpu(w, { m: true }),
     multicycleCpu(w, { control: 'fsm' }), multicycleCpu(w, { control: 'micro' }), dualCore(w),
-    multiCore(w, 4), multiCore(w, 8, { dmemK: 10 }),
+    multiCore(w, 4), multiCore(w, 8, { dmemK: 10 }), laneCore(w, 4), laneCore(w, 8),
   ];
 }
 

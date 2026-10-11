@@ -16,6 +16,7 @@ import { assemble } from '../riscv/asm';
 import { PROGRAMS } from '../riscv/programs';
 import { counter, register } from './sequential';
 import { arbiterN } from './mpdecode';
+import { laneUnit, lowestOne, memSequencer, onehotMux, simtControl, simtDecode } from './lanes';
 import { arrayDiv, arrayMul, condNegate, csa, divStep, seqDivider, treeMul } from './muldiv';
 import { fpAdd, fpCompare, fpFromInt, fpMul, fpUnpack, incFast, lzc, normRound, shiftLeft, shiftRightSticky } from './fpu';
 import { cachedMemory, wayLookup2 } from './cache';
@@ -197,6 +198,11 @@ export const families: Family[] = [
   },
   nBit('zero', 'Zero detect', 'gate', [4, 8, 16, 32], 8, (n) => `zero${n}`, isZero),
   // routing
+  nBit('low1', 'Lowest set bit', 'routing', [2, 4, 8], 4, (n) => `low1_${n}`, lowestOne),
+  {
+    id: 'ohmux', name: 'One-hot multiplexer', category: 'routing', params: [count('inputs', [2, 4, 8], 4), bits([1, 4, 8, 32], 8)],
+    key: (p) => `ohmux${p.inputs}x${p.bits}`, make: (p) => onehotMux(p.inputs, p.bits),
+  },
   {
     id: 'dec', name: 'Decoder', category: 'routing',
     params: [bits([1, 2, 3, 4], 2), flag('enable', 'with enable', 'no enable')],
@@ -220,6 +226,9 @@ export const families: Family[] = [
   },
   nBit('eq', 'Equality comparator', 'routing', [2, 4, 8, 16, 32], 4, (n) => `eq${n}`, equal),
   // sequential
+  ...([['lane', 'Lane', (n: number) => `lane${n}`, laneUnit], ['simtdec', 'SIMT decoder', (n: number) => `simtdec${n}`, simtDecode],
+    ['simtctl', 'SIMT control (mask and stack)', (n: number) => `simtctl${n}_4`, (n: number) => simtControl(n)], ['memseq', 'Memory sequencer', (n: number) => `memseq${n}`, memSequencer]] as const)
+    .map(([id, name, key, make]): Family => ({ id, name, category: 'cpu', params: [count('lanes', [2, 4, 8], 4)], key: (p) => key(p.lanes), make: (p) => make(p.lanes) })),
   nBit('reg', 'Register', 'sequential', [1, 2, 4, 8, 16], 4, (n) => `reg${n}`, register),
   nBit('creg', 'Register with clear', 'sequential', [1, 4, 8, 16, 32], 4, (n) => `creg${n}`, clearableRegister),
   nBit('counter', 'Counter', 'sequential', [2, 3, 4, 8], 4, (n) => `counter${n}`, counter),
