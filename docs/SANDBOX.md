@@ -19,6 +19,7 @@ rebuilt in it from the level below (both are checked by tests, see [Guarantees](
 - [Analysis](#analysis)
 - [Files and sharing](#files-and-sharing)
 - [Challenges](#challenges)
+- [Puzzles](#puzzles)
 - [Open in Sandbox](#open-in-sandbox)
 - [Limits](#limits)
 - [Guarantees](#guarantees)
@@ -264,6 +265,60 @@ anything), lists failing rows, and scores NANDs, transistors and depth against p
 imports the reference chips; **Do it for me** fills the challenge chip. Solved challenges are
 remembered.
 
+## Puzzles
+
+**Puzzles** lists 14 optional program puzzles: write a program for a CPU that turns each test's
+input words into the expected output words. There are 4 groups: streams (echo, countdown, add
+pairs, stream sum, running maximum, odd ones out), arithmetic (count the ones, multiply, divide,
+GCD, Fibonacci), text (print decimal) and memory (reverse, sort). The words are 8 bits, and
+nothing depends on an ISA, so any CPU with a ROM can play.
+
+**Start** asks which CPU solves it. The puzzle gets a chip of its own, `u_pz_<puzzle>`:
+
+| Choice | What you get |
+|---|---|
+| A ready computer (4-bit CPU, RV16, RV32I) | the CPU, a 256-word program ROM, RAM (RV16 / RV32I: 64 words), a halt detector and the two puzzle ports, wired |
+| One of your chips with a program ROM | a copy of it, with PUZZLE IN, PUZZLE OUT and (if it has none) a halt part placed beside it, unwired |
+| Your single-cycle campaign core (Core III, A faster core, Exceptions, Interrupts, Multiply / Divide in the core) | the RV16 computer around it |
+
+How a program uses the ports on the ready computers:
+
+| Computer | Read IN | Write OUT | Halt |
+|---|---|---|---|
+| 4-bit CPU | `RDR` (a word comes as two nibbles, high first; TEST = a nibble waits) | `WRR` (two nibbles per word) | `JUN` to itself |
+| RV16 | `lw rd, -4(x0)` | `sw rs, -3(x0)` | `halt` |
+| RV32I | `lw rd, 0(s0)` after `lui s0, 0x80000` | `sw rs, 4(s0)` | `j .` |
+
+The two ports are zero-cost parts in the palette (Inputs & outputs), like the keyboard and the
+console. **PUZZLE IN** has `data` (the next word, 0 when none is left) and `ready` (1 while one
+waits); `read` = 1 at a rising clock edge takes a word. **PUZZLE OUT** records `data` at a rising
+clock edge with `we` = 1. A port narrower than the puzzle's words takes and gives each word in
+pieces, most significant first.
+
+**Check** plays every test on the gates, from power-on, until a halt part reads 1. PUZZLE OUT must
+then hold exactly the expected words. Reading past the end of the input fails, and so does running
+past the puzzle's cycle limit. A click on a test plays it on the circuit with the player: step a
+clock cycle forward or back, scrub, run to the halt, or jump to the cycle where the first wrong
+word was written. **Done** gives the circuit back as it was. Outside the player, PUZZLE IN holds
+the selected test's words whenever the circuit powers on, so Run plays that test too.
+
+A pass is scored on mean cycles, the hardware's NANDs (the program ROM is left out) and the
+program's size. Every puzzle has reference programs on the ready computers (none on the 4-bit CPU
+for the memory puzzles: it has no RAM), measured in `src/puzzles/refdata.json`. A NAND count can't
+have one par, because it depends on the CPU, so the grade is a trade-off against those
+references:
+
+- ★ every test passes;
+- ★★ no reference is both at least as cheap and at least as fast;
+- ★★★ cycles × NANDs below every reference's.
+
+Cycles and size are shown against the par of the reference with the same ISA. The chart plots
+cycles against NANDs: the references, their front and your point. **Show answer** gives the
+pseudocode and the reference programs. **Do it for me** puts the reference program in a ready
+computer's ROM; that marks the puzzle shown, not starred. A puzzle chip's CPU drawer shows the
+program and registers, but its golden model sits out, because the program reads PUZZLE IN, which
+the golden model doesn't have.
+
 ## Open in Sandbox
 
 Every schematic in the chapters and the workbench has an **Open in Sandbox** button. It turns the
@@ -303,6 +358,9 @@ The test suite checks, on every build:
 - **Every chapter scene**: all 156 circuit scenes of the chapters open in the sandbox, compile and
   simulate.
 - **Every challenge**: each reference answer passes its own check.
+- **Every puzzle**: each reference program passes every test on its computer's gates, with the
+  cycles, size and NANDs recorded in `refdata.json`. The cycle engine and the event-driven
+  simulator give the same words in the same cycles.
 
 ## For contributors
 

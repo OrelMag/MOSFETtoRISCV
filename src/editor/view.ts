@@ -5,6 +5,7 @@
 // same here as in the inside view of the chip it becomes.
 
 import { symbolGeom, type Vec } from '../sim/geometry';
+import type { PuzzleInState, PuzzleOutState } from './puzzleparts';
 import { B1, BX, BZ, type Bit, type ComponentDef, netlistOf } from '../sim/types';
 import { formatBits, pack, type Radix } from '../sim/values';
 import { s } from '../ui/dom';
@@ -449,6 +450,13 @@ export class EditorView {
     } else if ('display' in p.ref) disp = drawDisplay(g, p.ref.display, p.ref.width ?? 1, geo.w, geo.h, !!p.flip);
     else if ('key' in p.ref) disp = this.drawKey(g, p.ref.key, geo.w, geo.h, !!p.flip);
     else if ('keyboard' in p.ref) disp = this.drawKeyboard(g, def, geo.w, geo.h, !!p.flip);
+    else if ('puzzle' in p.ref) {
+      // a puzzle port: the box, and a line saying what its stream holds
+      g.append(drawSymbol(def, p.flip));
+      const text = s('text', { class: 'ed-pz-text', x: geo.w / 2, y: geo.h - 1.5, 'text-anchor': 'middle' }, '');
+      g.append(text);
+      disp = { kind: 'puzzle', width: 0, segs: [], shown: '', text };
+    }
     else g.append(drawSymbol(def, p.flip));
     const faces = drawFace(g, def, !!p.flip);
     const nameAt = instNameAt(def);
@@ -634,6 +642,7 @@ export class EditorView {
     for (const [id, e] of this.parts) {
       if (e.disp?.face) e.disp.face.paint(v?.sim ?? null, v?.sim?.design.root.children?.get(id) ?? null);
       else if (e.disp?.kind === 'key') this.paintKey(e.disp, v?.endBits(`p:${id}.q`) ?? null);
+      else if (e.disp?.kind === 'puzzle') this.paintPuzzle(e.disp, e.doc.ref, v?.sim ?? null, v?.sim?.design.root.children?.get(id)?.leafIndex);
       else if (e.disp?.kind === 'keyboard') this.paintKeyboard(e.disp, v?.endBits(`p:${id}.code`) ?? null, v?.endBits(`p:${id}.ready`) ?? null, v?.keyboardQueue(id) ?? null);
       else if (e.disp) paintDisplay(e.disp, v?.endBits(`p:${id}.a`) ?? null, this.radix);
       if (e.faces) paintFace(e.faces, v?.sim ?? null, v?.sim?.design.root.children?.get(id) ?? null, this.radix);
@@ -665,6 +674,19 @@ export class EditorView {
     d.shown = key;
     const b = bits?.[0];
     d.key!.setAttribute('class', `ed-key${b === B1 ? ' on' : b === BX || b === BZ ? ' vx' : ''}`);
+  }
+
+  /** A puzzle port's line: IN the next word and how many are left, OUT the last words written. */
+  private paintPuzzle(d: DisplayEls, ref: PartDoc['ref'], sim: Sim | null, li: number | undefined): void {
+    const st = sim && li !== undefined ? sim.leafState(li) as Partial<PuzzleInState & PuzzleOutState> | undefined : undefined;
+    let t = '';
+    if (st && 'puzzle' in ref && ref.puzzle === 'in' && st.q) {
+      const left = st.q.length - (st.i ?? 0);
+      t = left > 0 ? `next ${st.q[st.i ?? 0]} · ${left} left` : st.q.length ? 'all taken' : 'empty';
+    } else if (st && st.out) t = st.out.length ? `got ${st.out.slice(-3).map((x) => (x < 0 ? 'X' : String(x))).join(' ')}${st.out.length > 3 ? ' …' : ''}` : 'nothing yet';
+    if (t === d.shown) return;
+    d.shown = t;
+    d.text!.textContent = t;
   }
 
   private paintKeyboard(d: DisplayEls, code: Bit[] | null, ready: Bit[] | null, queue: number[] | null): void {

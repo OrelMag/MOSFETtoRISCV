@@ -11,6 +11,7 @@ import { same } from './history';
 import { MAX_KEY_LENGTH } from './parts';
 import { sanitizeIoRef } from './ioparts';
 import { FACE_MAX, isEmptyFace, SCALE_MAX, SCALE_MIN, SIDES } from './face';
+import { PUZZLE_MAX_WIDTH } from './puzzleparts';
 import {
   SCHEMA, chipDeps, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
   type ChipDoc, type CommentDoc, type FaceDisplayDoc, type FaceDoc, type FacePinDoc, type FaceSide, type DisplayKind, type EndRef, type ExitDir, type LabelDoc, type NetHue, type PartDoc, type PartRef,
@@ -72,6 +73,7 @@ function sanitizeRef(r: unknown): PartRef | null {
   if (str(r.key)) return r.key.length >= 1 && r.key.length <= MAX_KEY_LENGTH ? { key: r.key } : null;
   if ('keyboard' in r) return r.keyboard === true ? { keyboard: true } : null;
   if ('console' in r || 'switches' in r || 'screen' in r) return sanitizeIoRef(r);
+  if ('puzzle' in r) return (r.puzzle === 'in' || r.puzzle === 'out') && int(r.width, 1) && r.width <= PUZZLE_MAX_WIDTH ? { puzzle: r.puzzle, width: r.width } : null;
   if (isObj(r.rom)) {
     const { k, w, addr, lang, src } = r.rom;
     if (!int(k) || (w !== 8 && w !== 16 && w !== 32) || (addr !== 'word' && addr !== 'rv32') || (lang !== 'asm' && lang !== 'hex' && lang !== 'rv16' && lang !== 'cpu4' && lang !== 'isa') || !str(src)) return null;
