@@ -27,7 +27,15 @@ type Bit = number | '0' | '1' | 'x';
 interface YCell { type: string; connections: Record<string, Bit[]> }
 interface YPort { direction: 'input' | 'output' | 'inout'; bits: Bit[] }
 type Values = Record<string, number>;
-interface Check { design: string; id: string; top: () => ComponentDef; cycles: number; inputs: (c: number) => Values }
+/** flow: 'synth' (Yosys's full synthesis, ABC included) or 'map' (processes, flattening, generic gates, a quick opt) */
+interface Check { design: string; id: string; top: () => ComponentDef; cycles: number; inputs: (c: number) => Values; flow: 'synth' | 'map' }
+
+// Both flows have Yosys read and elaborate the Verilog on its own; ABC on the M unit's multiplier and divider takes
+// ~10 min a program, against ~20 s for the mapping alone.
+const FLOWS = {
+  synth: 'read_verilog dut.v; hierarchy -top dut; synth -flatten -top dut; write_json dut.json',
+  map: 'read_verilog dut.v; hierarchy -top dut; proc; flatten -noscopeinfo; opt_clean; techmap; opt -fast; opt_clean -purge; write_json dut.json',
+};
 
 const words = (list: { id: string; source: string }[], id: string) => assemble(list.find((p) => p.id === id)!.source).words;
 // the switches change every 50 cycles, so a program reading them sees new values
@@ -38,17 +46,17 @@ const sysCycles = (id: string) => (id === 'timer' ? 260 : id === 'irq' ? 120 : 1
 const sysIrq = (id: string) => (id === 'irq' ? [60, 90] : []);
 
 const CHECKS: Check[] = [
-  ...MC_PROGRAMS.map((p): Check => ({ design: 'multi', id: p.id, top: () => dualCore(words(MC_PROGRAMS, p.id)), cycles: 300, inputs: () => ({}) })),
+  ...MC_PROGRAMS.map((p): Check => ({ design: 'multi', id: p.id, top: () => dualCore(words(MC_PROGRAMS, p.id)), cycles: 300, inputs: () => ({}), flow: 'synth' })),
   ...SYSTEM_PROGRAMS.map((p): Check => ({
-    design: 'sys', id: p.id, top: () => systemCpu(words(SYSTEM_PROGRAMS, p.id)), cycles: sysCycles(p.id), inputs: sysInputs(sysIrq(p.id)),
+    design: 'sys', id: p.id, top: () => systemCpu(words(SYSTEM_PROGRAMS, p.id)), cycles: sysCycles(p.id), inputs: sysInputs(sysIrq(p.id)), flow: 'synth',
   })),
-  { design: 'sys', id: 'gcd', top: () => systemCpu(words(PROGRAMS, 'gcd')), cycles: 120, inputs: sysInputs([]) },
+  { design: 'sys', id: 'gcd', top: () => systemCpu(words(PROGRAMS, 'gcd')), cycles: 120, inputs: sysInputs([]), flow: 'synth' },
   ...M_PROGRAMS.map((p): Check => ({
-    design: 'sys-m', id: p.id, top: () => systemCpu(words(M_PROGRAMS, p.id), { m: true }), cycles: p.id === 'mcorner' ? 600 : 700, inputs: sysInputs([]),
+    design: 'sys-m', id: p.id, top: () => systemCpu(words(M_PROGRAMS, p.id), { m: true }), cycles: p.id === 'mcorner' ? 600 : 700, inputs: sysInputs([]), flow: 'map',
   })),
   // interrupts on the M CPU too: its retire output and the divider's stall are in the comparison
   ...['timer', 'irq'].map((id): Check => ({
-    design: 'sys-m', id, top: () => systemCpu(words(SYSTEM_PROGRAMS, id), { m: true }), cycles: sysCycles(id), inputs: sysInputs(sysIrq(id)),
+    design: 'sys-m', id, top: () => systemCpu(words(SYSTEM_PROGRAMS, id), { m: true }), cycles: sysCycles(id), inputs: sysInputs(sysIrq(id)), flow: 'map',
   })),
 ];
 
@@ -70,19 +78,25 @@ function verify(check: Check): boolean {
   const cycles = cyclesArg ?? check.cycles;
   const dir = 'layout/verify';
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'dut.v'), synthVerilog(top, 'dut').verilog);
-  execFileSync(yosys, ['-q', '-p', 'read_verilog dut.v; hierarchy -top dut; synth -flatten -top dut; write_json dut.json'], { cwd: dir, stdio: 'inherit' });
+  // flip-flops start at 0 on both sides: a register the program never writes (x3 read as rs2 by an addi) is otherwise
+  // undefined in Verilog, and Yosys may fold it to any constant
+  writeFileSync(join(dir, 'dut.v'), synthVerilog(top, 'dut', { powerOnZero: true }).verilog);
+  execFileSync(yosys, ['-q', '-p', FLOWS[check.flow]], { cwd: dir, stdio: 'inherit' });
 
   const mod = JSON.parse(readFileSync(join(dir, 'dut.json'), 'utf8')).modules.dut as { ports: Record<string, YPort>; cells: Record<string, YCell> };
   const val = new Map<number, number>();
   const get = (b: Bit) => (b === '1' ? 1 : b === '0' || b === 'x' ? 0 : val.get(b) ?? 0);
   const cells = Object.values(mod.cells);
-  // rising-edge flip-flops, with or without an enable of either polarity: anything else (a falling edge,
-  // a set / reset) would be simulated wrongly below, so it is refused
-  const seq = cells.filter((c) => c.type.startsWith('$_DFF'));
-  const oddFf = [...new Set(seq.map((c) => c.type))].filter((t) => !['$_DFF_P_', '$_DFFE_PP_', '$_DFFE_PN_'].includes(t));
-  if (oddFf.length) throw new Error(`unsupported flip-flops: ${oddFf}`);
-  const comb = cells.filter((c) => !c.type.startsWith('$_DFF') && c.type !== '$scopeinfo'); // $scopeinfo only records hierarchy
+  // rising-edge flip-flops: plain, with an enable, with a synchronous reset (over the enable: SDFFE, under it:
+  // SDFFCE), each of either polarity. Anything else (a falling edge, an asynchronous set / reset) is refused
+  const isFf = (c: YCell) => /^\$_S?DFF/.test(c.type);
+  const seq = cells.filter(isFf).map((c) => {
+    const m = /^\$_(?:DFF_P|DFFE_P([NP])|SDFF_P([NP])([01])|SDFF(C?)E_P([NP])([01])([NP]))_$/.exec(c.type);
+    if (!m) throw new Error(`unsupported flip-flop: ${c.type}`);
+    const enPol = m[1] ?? m[7], rPol = m[2] ?? m[5];
+    return { c, enPol, rPol, rVal: Number(m[3] ?? m[6] ?? 0), enFirst: m[4] === 'C' };
+  });
+  const comb = cells.filter((c) => !isFf(c) && c.type !== '$scopeinfo'); // $scopeinfo only records hierarchy
   const known = ['$_AND_', '$_NAND_', '$_OR_', '$_NOR_', '$_XOR_', '$_XNOR_', '$_ANDNOT_', '$_ORNOT_', '$_NOT_', '$_BUF_', '$_MUX_'];
   const odd = [...new Set(comb.map((c) => c.type))].filter((t) => !known.includes(t));
   if (odd.length) throw new Error(`unsupported cells: ${odd}`);
@@ -137,12 +151,15 @@ function verify(check: Check): boolean {
     for (const name of inputs) mod.ports[name].bits.forEach((b, i) => { if (typeof b === 'number') val.set(b, Math.floor(v[name] / 2 ** i) % 2); });
     evalComb();
     theirs.push(Object.fromEntries(outputs.map((s) => [s, portVal(s)])));
-    const next = seq.map((f) => {
-      const en = f.connections.E ? get(f.connections.E[0]) : 1;
-      const active = f.type.startsWith('$_DFFE_PN') ? en === 0 : en === 1;
-      return active ? get(f.connections.D[0]) : get(f.connections.Q[0]);
+    const next = seq.map(({ c: f, enPol, rPol, rVal, enFirst }) => {
+      const q = get(f.connections.Q[0]);
+      const en = !enPol || get(f.connections.E[0]) === (enPol === 'P' ? 1 : 0);
+      const reset = !!rPol && get(f.connections.R[0]) === (rPol === 'P' ? 1 : 0);
+      if (enFirst && !en) return q;
+      if (reset) return rVal;
+      return en ? get(f.connections.D[0]) : q;
     });
-    seq.forEach((f, k) => val.set(f.connections.Q[0] as number, next[k]));
+    seq.forEach(({ c: f }, k) => val.set(f.connections.Q[0] as number, next[k]));
   }
 
   // our model under the same inputs, sampled at the same point (just before each rising edge)
