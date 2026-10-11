@@ -5,6 +5,7 @@
 // Loading never throws and never loses data silently: anything it cannot read (corrupt JSON, a
 // newer schema) is copied to BACKUP_KEY before the empty workspace replaces it.
 
+import { sanitizeIsa } from '../isa/table';
 import { sanitizeCpu } from './cpu';
 import { same } from './history';
 import { MAX_KEY_LENGTH } from './parts';
@@ -72,7 +73,11 @@ function sanitizeRef(r: unknown): PartRef | null {
   if ('console' in r || 'switches' in r || 'screen' in r) return sanitizeIoRef(r);
   if (isObj(r.rom)) {
     const { k, w, addr, lang, src } = r.rom;
-    if (!int(k) || (w !== 8 && w !== 16 && w !== 32) || (addr !== 'word' && addr !== 'rv32') || (lang !== 'asm' && lang !== 'hex' && lang !== 'rv16' && lang !== 'cpu4') || !str(src)) return null;
+    if (!int(k) || (w !== 8 && w !== 16 && w !== 32) || (addr !== 'word' && addr !== 'rv32') || (lang !== 'asm' && lang !== 'hex' && lang !== 'rv16' && lang !== 'cpu4' && lang !== 'isa') || !str(src)) return null;
+    if (lang === 'isa') {
+      const isa = sanitizeIsa(r.rom.isa);
+      return isa ? { rom: { k, w, addr, lang, src, isa } } : null;
+    }
     return { rom: { k, w, addr, lang, src } };
   }
   if (isObj(r.ram)) {
@@ -215,6 +220,10 @@ export function migrate(raw: unknown): Workspace | { error: string } {
   if (typeof raw.purist === 'boolean') ws.purist = raw.purist;
   const favs = Array.isArray(raw.favorites) ? [...new Set(raw.favorites.filter((f): f is string => str(f) && f.length <= 200 && f.includes('/')))] : [];
   if (favs.length) ws.favorites = favs.slice(0, MAX_FAVORITES);
+  if (isObj(raw.isas)) {
+    const isas = Object.fromEntries(Object.values(raw.isas).flatMap((x) => { const d = sanitizeIsa(x); return d ? [[d.id, d]] : []; }));
+    if (Object.keys(isas).length) ws.isas = isas;
+  }
   return ws;
 }
 

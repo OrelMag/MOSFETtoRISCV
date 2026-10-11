@@ -38,7 +38,6 @@ import { detectMulti, type MultiDesc, MultiMonitor } from './multicpu';
 import { detectRv16, type Rv16Desc, Rv16Monitor } from './cpu16';
 import { disasm16, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { type Cpu4Desc, Cpu4Monitor, cpu4Use, detectCpu4 } from './cpu4mon';
-import { decode4, disasm4, fields4 } from '../isa4/isa4';
 import { registerPropsSection } from './props';
 import { type EdgeHook, type EditorSim, FrameBudget } from './runtime';
 
@@ -829,9 +828,10 @@ class CpuPanel {
 
   private renderCpu4(mon: Cpu4Monitor): void {
     const es = this.ed.sim;
-    const pc = mon.pc, r = mon.read();
-    const bits: HTMLElement[] = [h('span', null, `cycle ${es.cycles}`), h('span', null, `retired ${mon.retired}`)];
+    const pc = mon.pc, r = mon.read(), isa = mon.isa;
+    const bits: HTMLElement[] = [h('span', null, `cycle ${es.cycles}`), ...(mon.iss ? [h('span', null, `retired ${mon.retired}`)] : [])];
     if (mon.mismatch) bits.push(h('span', { class: 'bad', title: 'The first difference between the hardware and the 4-bit golden model; the check stops there' }, `✗ ${mismatchText(mon.mismatch)}`));
+    else if (mon.desc?.table) bits.push(h('span', { class: 'warn', title: mon.problem ?? '' }, 'not checked: no golden model for a custom instruction set'));
     else if (mon.problem) bits.push(h('span', { class: 'warn' }, `no golden model: ${mon.problem}`));
     else if (mon.unchecked) bits.push(h('span', { class: 'warn', title: mon.unchecked }, 'not checked'));
     else if (!mon.synced) bits.push(h('span', { class: 'warn', title: 'The golden model starts with the hardware at cycle 0' }, 'golden model joins at the next Reset'));
@@ -844,7 +844,7 @@ class CpuPanel {
     const hx2 = (v: number) => v.toString(16).toUpperCase().padStart(2, '0');
     keyed(this.now, `${pc}|${w}`, () => (w === null
       ? [h('span', { class: 'fmt' }, 'PC'), h('code', null, pc === null ? 'not found' : 'unknown (X)')]
-      : [h('span', { class: 'fmt' }, '4-bit'), h('code', null, disasm4(w)), h('span', { class: 'hexw' }, `0x${hx2(pc!)}`)]));
+      : [h('span', { class: 'fmt' }, mon.desc?.table ? mon.desc.table.name : '4-bit'), h('code', null, isa.disasm(w, pc!)), h('span', { class: 'hexw' }, `0x${hx2(pc!)}`)]));
     // The field breakdown of the selected instruction, else the current one (frozen while running fast).
     const fpc = this.sel !== null ? this.sel / 4 : pc !== null && pc >= 0 ? pc : null;
     const fw = fpc !== null && !this.running ? mon.wordAt(fpc) : null;
@@ -853,7 +853,7 @@ class CpuPanel {
     keyed(this.fields, fw === null ? 'none' : `${fpc}:${fw}:${this.sel !== null}`, () => {
       if (fw === null) return [];
       let hi = 15;
-      const boxes = fields4(fw).map((f) => {
+      const boxes = isa.fields(fw).map((f) => {
         const top = hi;
         hi -= f.bits;
         return h('div', { class: ROLE[f.kind], style: `--w:${f.bits}`, title: `${f.name}, bits ${top}:${top - f.bits + 1} = ${f.value}` },
@@ -861,11 +861,11 @@ class CpuPanel {
           h('div', { class: 'fbits' }, Array.from({ length: f.bits }, (_, i) => h('span', { class: 'bit' }, String((fw >> (top - i)) & 1)))));
       });
       return [
-        h('div', { class: 'cpu-fields-head' }, h('code', null, disasm4(fw)), h('span', null, this.sel !== null ? 'selected' : 'current')),
+        h('div', { class: 'cpu-fields-head' }, h('code', null, isa.disasm(fw, fpc!)), h('span', null, this.sel !== null ? 'selected' : 'current')),
         h('div', { class: 'ibd' }, h('div', { class: 'fields' }, boxes)),
         // A selected line's path is in the box under the listing already.
-        ...(decode4(fw).undef ? [h('div', { class: 'sb-sum' }, 'No instruction has this code: it runs as NOP.')]
-          : this.sel === null ? [h('div', { class: 'sb-sum' }, cpu4Use(fw).path)] : []),
+        ...(isa.disasm(fw).startsWith('.word') ? [h('div', { class: 'sb-sum' }, mon.desc?.table ? 'No instruction of the table has this code.' : 'No instruction has this code: it runs as NOP.')]
+          : this.sel === null && mon.describe(fw) ? [h('div', { class: 'sb-sum' }, mon.describe(fw)!)] : []),
       ];
     });
     this.pipeSec.hidden = this.pipe.hidden = this.ioSec.hidden = this.io.hidden = true;
@@ -897,13 +897,14 @@ class CpuPanel {
     this.markKey = key;
     this.markBuilt = built;
     const w = pc !== null && pc >= 0 ? mon.wordAt(pc) : null;
-    const u = w !== null ? cpu4Use(w) : null;
+    const u = w !== null && !mon.desc?.table ? cpu4Use(w) : null;
     const have = new Set(ed.doc.parts.map((p) => p.id));
     this.marked = u ? u.units.filter((n) => have.has(n)) : [];
     this.wireMarks = new Map();
     this.useKey = '';
     this.applyMarks();
-    if (this.sel !== null && w !== null && u && this.open) keyed(this.use, `${this.sel}|${w}|${this.marked.length}`, () => [h('code', null, disasm4(w)), h('div', null, u.path)]);
+    const what = w !== null ? mon.describe(w) : null;
+    if (this.sel !== null && w !== null && what && this.open) keyed(this.use, `${this.sel}|${w}|${this.marked.length}`, () => [h('code', null, mon.isa.disasm(w, pc!)), h('div', null, what)]);
     else keyed(this.use, '', () => []);
   }
 

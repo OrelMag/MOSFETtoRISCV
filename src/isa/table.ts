@@ -323,3 +323,48 @@ export function tableOf(doc: IsaDoc): IsaTable {
   if (!t) tables.set(doc, (t = new IsaTable(doc)));
   return t;
 }
+
+/** Limits a stored or imported table is held to. */
+export const ISA_LIMITS = { instrs: 512, names: 256, text: 200 } as const;
+
+const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
+const str = (x: unknown, max: number = ISA_LIMITS.text): x is string => typeof x === 'string' && x.length <= max;
+
+function sanitizeOperand(x: unknown): OperandDef | null {
+  if (!isObj(x)) return null;
+  if (x.kind === 'reg') {
+    if (!Array.isArray(x.names) || x.names.length > ISA_LIMITS.names || !x.names.every((n) => str(n, 40))) return null;
+    return { kind: 'reg', names: x.names as string[] };
+  }
+  if (x.kind === 'enum') {
+    if (!isObj(x.names)) return null;
+    const e = Object.entries(x.names);
+    if (e.length > ISA_LIMITS.names || !e.every(([k, v]) => str(k, 40) && Number.isInteger(v) && (v as number) >= 0)) return null;
+    return { kind: 'enum', names: Object.fromEntries(e) as Record<string, number>, ...(x.number === true ? { number: true } : {}) };
+  }
+  if (x.kind === 'imm') return { kind: 'imm', ...(x.signed === true ? { signed: true } : {}), ...(x.hex === true ? { hex: true } : {}) };
+  if (x.kind === 'addr') {
+    const scale = Number.isInteger(x.scale) && (x.scale as number) >= 1 && (x.scale as number) <= 16 ? (x.scale as number) : undefined;
+    return { kind: 'addr', ...(x.rel === true ? { rel: true } : {}), ...(scale && scale !== 1 ? { scale } : {}) };
+  }
+  return null;
+}
+
+/** A table from stored or imported JSON (null: not one). Problems inside a valid shape are kept: the editor shows them. */
+export function sanitizeIsa(x: unknown): IsaDoc | null {
+  if (!isObj(x) || !str(x.id, 60) || !/^[\w-]+$/.test(x.id) || !str(x.name)) return null;
+  if (x.wordBits !== 8 && x.wordBits !== 16 && x.wordBits !== 32) return null;
+  if (!isObj(x.operands) || !Array.isArray(x.instrs) || x.instrs.length > ISA_LIMITS.instrs) return null;
+  const operands: Record<string, OperandDef> = {};
+  for (const [k, v] of Object.entries(x.operands)) {
+    const d = sanitizeOperand(v);
+    if (!/^[a-z]$/i.test(k) || !d) return null;
+    operands[k] = d;
+  }
+  const instrs: InstrDef[] = [];
+  for (const i of x.instrs) {
+    if (!isObj(i) || !str(i.mnemonic, 40) || !str(i.pattern, 80) || !Array.isArray(i.operands) || !i.operands.every((o) => str(o, 1))) return null;
+    instrs.push({ mnemonic: i.mnemonic, operands: i.operands as string[], pattern: i.pattern, ...(str(i.summary) && i.summary ? { summary: i.summary } : {}) });
+  }
+  return { id: x.id, name: x.name, wordBits: x.wordBits, operands, instrs, ...(str(x.notes, 2000) && x.notes ? { notes: x.notes } : {}) };
+}

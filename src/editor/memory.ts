@@ -2,6 +2,7 @@
 // listing and which row the circuit is reading), language conversion, sample programs, and a
 // RAM's contents (read live from the simulation, seeded at power-on from `init`).
 
+import { type IsaDoc, tableOf } from '../isa/table';
 import { BANK_K, bigRam, bigRamWithInit, ramLeafState, ramWords } from '../lib/bigmem';
 import { ram } from '../lib/memory';
 import { PROGRAMS } from '../riscv/programs';
@@ -29,8 +30,8 @@ export interface RomImage extends BuiltProgram {
 }
 
 /** Build a ROM's program and check it against the ROM's size and word width. */
-export function romImage(r: Pick<RomRef, 'k' | 'w' | 'lang' | 'src'>): RomImage {
-  const p = buildProgram(r.lang, r.src);
+export function romImage(r: Pick<RomRef, 'k' | 'w' | 'lang' | 'src' | 'isa'>): RomImage {
+  const p = buildProgram(r.lang, r.src, r.isa);
   const capacity = 2 ** r.k;
   const problems: ProgramError[] = [...p.errors];
   let error = p.errors.length ? `ROM program: line ${p.errors[0].line}: ${p.errors[0].message}` : null;
@@ -74,7 +75,7 @@ export interface ListingRow {
 
 /** One row per word of the program (the fill past its end is not listed). */
 export function romListing(r: Pick<RomRef, 'w' | 'addr'> & { lang?: ProgramLang }, img: BuiltProgram): ListingRow[] {
-  const dis = r.w === 32 || r.lang === 'cpu4';
+  const dis = r.w === 32 || r.lang === 'cpu4' || r.lang === 'isa';
   const digits = r.w / 4;
   return img.lines.map((l, i) => ({
     index: i,
@@ -92,17 +93,17 @@ export const addrValue = (bits: Bit[] | null): number | null => (bits ? pack(bit
  * A program in the other language: assembly → hex words (each with its disassembly as a
  * comment); hex → `.word` lines. Null when the source does not build (nothing to convert).
  */
-export function convertProgram(src: string, to: ProgramLang, from: ProgramLang = to === 'hex' ? 'asm' : 'hex'): string | null {
+export function convertProgram(src: string, to: ProgramLang, from: ProgramLang = to === 'hex' ? 'asm' : 'hex', isa?: IsaDoc): string | null {
   if (from === to) return src;
   if (to !== 'hex' && from !== 'hex') return null; // assembly ↔ assembly of another ISA: no
-  const p = buildProgram(from, src);
+  const p = buildProgram(from, src, isa);
   if (p.errors.length) return null;
   if (!src.trim()) return '';
   const narrow = (l: ProgramLang) => l === 'rv16' || l === 'cpu4';
-  const d = narrow(to) || narrow(from) ? 4 : 8;
+  const d = (to === 'isa' || from === 'isa') && isa ? isa.wordBits / 4 : narrow(to) || narrow(from) ? 4 : 8;
   return p.lines.map((l, i) => {
     const w = `0x${(l.word >>> 0).toString(16).padStart(d, '0')}`;
-    const text = to === 'rv16' ? disasm16(l.word, i) : to === 'cpu4' ? disasm4(l.word) : l.text;
+    const text = to === 'rv16' ? disasm16(l.word, i) : to === 'cpu4' ? disasm4(l.word) : to === 'isa' && isa ? tableOf(isa).disasm(l.word, i) : l.text;
     return to === 'hex' ? `${w}  # ${l.text}` : `        .word ${w}   # ${text}`;
   }).join('\n');
 }
