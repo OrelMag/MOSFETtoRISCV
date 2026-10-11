@@ -17,6 +17,7 @@ import type { Diag } from './compile';
 import type { Editor } from './editor';
 import { pinKnob, pointerGeom } from './geom';
 import { renamePin } from './chips';
+import { folderOf, newFolderName } from './folders';
 import { removeChip } from './library';
 import { allOnes, type ChipDoc, type CommentDoc, type DisplayKind, type ExitDir, type LabelDoc, type PartDoc, type PartRef, pinBig, type PinDoc, pinValue, type WireDoc } from './model';
 import { deleteSel, flipParts, setComment, setLabel, setPart, setPin, setRef, setWire } from './ops';
@@ -86,7 +87,7 @@ export class PropsPanel {
       ...(s.comments ?? []).map((id) => doc.comments?.find((p) => p.id === id)),
     ];
     const none = !objs.length;
-    const key = JSON.stringify([ed.chipId, s, objs.map(ser), none ? [doc.name, doc.hue, doc.notes, ser(doc.pins), ser(ed.compiled?.def), Object.keys(ed.ws.chips).length] : 0,
+    const key = JSON.stringify([ed.chipId, s, objs.map(ser), none ? [doc.name, doc.hue, doc.notes, ser(doc.pins), ser(ed.compiled?.def), Object.keys(ed.ws.chips).length, ed.ws.folders] : 0,
       s.labels?.length ? doc.labels.map((l) => l.name) : 0]);
     if (key !== this.key && (force || !this.body.contains(document.activeElement))) {
       this.key = key;
@@ -349,6 +350,25 @@ export class PropsPanel {
 
   // ---- the chip ----------------------------------------------------------------------------
 
+  /** Which folder of My chips the chip is filed in (folders.ts); the last choice makes a new one. */
+  private folderSelect(doc: ChipDoc): HTMLElement {
+    const ed = this.ed;
+    const cur = folderOf(ed.ws, doc.id) ?? '';
+    const NEW = '\u0000new';
+    const sel = h('select', { 'aria-label': 'Folder', title: 'Where the chip is listed in My chips (only for finding it: nothing else changes)' },
+      h('option', { value: '' }, '— none —'),
+      (ed.ws.folders ?? []).map((f) => h('option', { value: f.name }, f.name)),
+      h('option', { value: NEW }, 'New folder…')) as HTMLSelectElement;
+    sel.value = cur;
+    sel.addEventListener('change', () => {
+      if (sel.value !== NEW) return ed.fileChip(doc.id, sel.value || null);
+      const name = newFolderName(ed.ws);
+      ed.palette.renameSoon(name);
+      ed.fileChip(doc.id, name);
+    });
+    return sel;
+  }
+
   private chip(doc: ChipDoc): HTMLElement {
     const ed = this.ed;
     const c = ed.compiled;
@@ -368,6 +388,7 @@ export class PropsPanel {
       this.row('Name', this.text(doc.name, (v) => v.trim() && editDoc({ name: v.trim() }))),
       this.row('Colour', h('span', { class: 'sb-hue-row' }, swatch, hue)),
       this.row('Notes', notes),
+      ed.level ? null : this.row('Folder', this.folderSelect(doc)),
       h('div', { class: 'sb-badges' },
         h('span', { class: `sb-level ${c?.mode ?? 'gate'}` }, c?.mode === 'switch' ? 'switch level' : 'gate level'),
         c?.mode === 'switch' && c.derived ? h('span', { class: `sb-derived${c.derived.ok ? ' ok' : ''}`, title: c.derived.ok ? 'Its truth table is used as a gate-level model, so it can be a brick of gate-level chips' : c.derived.reason },

@@ -6,6 +6,7 @@
 
 import type { ComponentDef } from '../sim/types';
 import { compileChip, type Compiled, hash } from './compile';
+import { pruneFolders } from './folders';
 import { chipDeps, type ChipDoc, type EndRef, SCHEMA, type Workspace } from './model';
 import { partDef } from './parts';
 
@@ -190,5 +191,5 @@ export function removeChip(ws: Workspace, id: string): { ws: Workspace } | { err
   if (users.length) return { error: `'${ws.chips[id]?.name ?? id}' is used by ${users.map((u) => ws.chips[u].name).join(', ')}`, usedBy: users };
   const chips = { ...ws.chips };
   delete chips[id];
-  return { ws: { ...ws, chips, open: ws.open.filter((o) => o !== id) } };
+  return { ws: pruneFolders({ ...ws, chips, open: ws.open.filter((o) => o !== id) }) };
 }

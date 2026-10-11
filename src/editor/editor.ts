@@ -16,12 +16,14 @@ import { h, icon } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { closePopover } from '../view/popover';
 import type { Compiled, Diag } from './compile';
+import { addFolder, findFolder, folderGroups, moveToFolder, newFolderName, renameFolder } from './folders';
 import { History } from './history';
 import { UserLibrary } from './library';
 import { chipDeps, type ChipDoc, type DefOf, type PartRef, type PinValue, type Workspace } from './model';
 import type { Sel } from './ops';
 import { PalettePanel, toggleFavorite } from './palette';
 import { isError, keyLabel, partDef } from './parts';
+import { MAIN_PROJECT, projectKey, readProjects, touchProject } from './projects';
 import { PropsPanel } from './props';
 import { EditorSim, HZ_STEPS, type RunMode } from './runtime';
 import { activeChip, closeChip, keepVolatile, newChip, openChip, setPinValue } from './session';
@@ -55,6 +57,8 @@ export interface EditorOptions {
    * canvas while something is selected or while pinned.
    */
   level?: { chipId: string; actions: readonly string[]; hideGroups?: readonly string[] };
+  /** The project whose workspace is loaded and saved (projects.ts); default: the current one, the first for a level. */
+  project?: string;
 }
 
 /** Something that lives as long as an editor (an analysis panel, ...); returns its cleanup. */
@@ -153,10 +157,13 @@ export class Editor {
 
   /** A campaign level screen: see EditorOptions.level. */
   readonly level: EditorOptions['level'];
+  /** The project this editor loads and saves. */
+  readonly project: string;
 
   constructor(chipId?: string, opts: EditorOptions = {}) {
     this.level = opts.level;
-    let ws = loadWorkspace();
+    this.project = opts.project ?? (opts.level ? MAIN_PROJECT : readProjects().current);
+    let ws = loadWorkspace(undefined, projectKey(this.project));
     if (!ws.open.length) ws = { ...ws, open: [Object.keys(ws.chips)[0]] };
     if (chipId && ws.chips[chipId]) ws = openChip(ws, chipId);
     this.history = new History(ws);
@@ -185,6 +192,8 @@ export class Editor {
         this.volatile({ ...this.ws, ...(favorites.length ? { favorites } : { favorites: undefined }) });
       },
       locked: !!this.level,
+      newFolder: this.level ? undefined : () => void this.newFolder(),
+      renameFolder: this.level ? undefined : (from, to) => this.renameFolder(from, to),
       hidden: (g) => !!this.level?.hideGroups?.includes(g),
       first: this.level ? ['unlocked', 'lib', 'wiring', 'const', 'mine'] : undefined,
       closed: this.level ? ['io', 'disp'] : undefined,
@@ -275,6 +284,35 @@ export class Editor {
     if (next === this.ws) return;
     this.history.push(next);
     this.changed();
+  }
+
+  /** File a chip in a folder of My chips (made if missing; before `before` in it), or take it out (null): one undo step. */
+  fileChip(id: string, folder: string | null, before?: string): void {
+    const ws = this.ws;
+    this.editWs((w) => moveToFolder(w, id, folder, before));
+    if (this.ws === ws || before) return;
+    const name = ws.chips[id]?.name ?? id;
+    this.toast(folder === null ? `${name} is in no folder now` : `${name} is in ${findFolder(this.ws, folder)?.name ?? folder}`);
+  }
+
+  /** A new folder of My chips, its name ready to type over in the palette. */
+  newFolder(): string | null {
+    const r = addFolder(this.ws, newFolderName(this.ws));
+    if ('error' in r) {
+      this.toast(`Cannot add a folder: ${r.error}`, 'err');
+      return null;
+    }
+    this.palette.renameSoon(r.name);
+    this.editWs(() => r.ws);
+    return r.name;
+  }
+
+  /** Rename a folder: one undo step. Returns why the name cannot be used, or null. */
+  renameFolder(from: string, to: string): string | null {
+    const r = renameFolder(this.ws, from, to);
+    if ('error' in r) return r.error;
+    this.editWs(() => r.ws);
+    return null;
   }
 
   /** A drag: begin(), edit() on every move, commit() (or cancel()). */
@@ -460,7 +498,7 @@ export class Editor {
     this.repaint();
     this.renderTabs();
     this.renderActions();
-    const pk = JSON.stringify([id, !!ws.purist, ws.favorites, Object.values(ws.chips).map((c) => [c.id, c.name, c.hue, chipDeps(c), c.pins.map((p) => p.dir)])]);
+    const pk = JSON.stringify([id, !!ws.purist, ws.favorites, ws.folders, Object.values(ws.chips).map((c) => [c.id, c.name, c.hue, chipDeps(c), c.pins.map((p) => p.dir)])]);
     if (pk !== this.paletteKey) {
       this.paletteKey = pk;
       this.palette.render();
@@ -531,7 +569,8 @@ export class Editor {
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = null;
     if (!this.saving) return;
-    const r = saveWorkspace(this.ws);
+    const r = saveWorkspace(this.ws, undefined, projectKey(this.project));
+    if (r.ok) touchProject(this.project, this.ws);
     if (!r.ok && r.reason !== this.saveError) this.toast(r.reason, 'err');
     this.saveError = r.ok ? '' : r.reason;
     this.setSaveState(r.ok ? { state: 'saved' } : { state: 'error', reason: r.reason });
@@ -542,7 +581,7 @@ export class Editor {
   private renderTabs(): void {
     const ws = this.ws;
     if (this.trail.length && (this.trail[this.trail.length - 1] !== this.chipId || this.trail.some((t) => !ws.chips[t]))) this.trail = [];
-    const key = JSON.stringify([ws.open, this.chipId, ws.open.map((o) => ws.chips[o]?.name), this.trail, this.trail.map((t) => ws.chips[t]?.name)]);
+    const key = JSON.stringify([ws.open, this.chipId, ws.open.map((o) => ws.chips[o]?.name), this.trail, this.trail.map((t) => ws.chips[t]?.name), ws.folders, Object.keys(ws.chips).length]);
     if (key === this.tabsKey) return;
     this.tabsKey = key;
     this.tabs.replaceChildren();
@@ -572,8 +611,10 @@ export class Editor {
     if (this.level) return;
     const others = Object.values(ws.chips).filter((c) => !ws.open.includes(c.id));
     if (others.length) {
+      const opt = (c: ChipDoc) => h('option', { value: c.id }, c.name);
       const sel = h('select', { class: 'sb-open', 'aria-label': 'Open a chip', title: 'Open another of your chips' },
-        h('option', { value: '' }, `Open… (${others.length})`), others.map((c) => h('option', { value: c.id }, c.name))) as HTMLSelectElement;
+        h('option', { value: '' }, `Open… (${others.length})`),
+        folderGroups(ws, (c) => !ws.open.includes(c.id)).flatMap((g) => (!g.chips.length ? [] : g.name === null ? g.chips.map(opt) : [h('optgroup', { label: g.name }, g.chips.map(opt))]))) as HTMLSelectElement;
       sel.addEventListener('change', () => sel.value && this.openChip(sel.value));
       this.tabs.append(sel);
     }

@@ -2,6 +2,7 @@
 // import summaries, and the chip-management steps (duplicate, delete) of the "Manage chips"
 // dialog. fileui.ts puts them on screen.
 
+import { fileCopy, pruneFolders } from './folders';
 import { usedBy } from './library';
 import { slug, uniqueName, type ChipDoc, type Workspace } from './model';
 import { openChip } from './session';
@@ -37,10 +38,10 @@ export function fileBase(name: string, fallback = 'chip'): string {
 
 export const chipFileName = (doc: Pick<ChipDoc, 'name'>) => `${fileBase(doc.name)}.chip.json`;
 
-/** sandbox-chips-2026-10-06.json (local date: what the user sees on their calendar). */
-export function workspaceFileName(d = new Date()): string {
+/** sandbox-chips-2026-10-06.json, or with a project's name sandbox-CPU-build-2026-10-06.json (local date: what the user sees on their calendar). */
+export function workspaceFileName(d = new Date(), project?: string): string {
   const p = (n: number) => String(n).padStart(2, '0');
-  return `sandbox-chips-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.json`;
+  return `sandbox-${project ? fileBase(project, 'chips') : 'chips'}-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.json`;
 }
 
 export interface ImportSummary {
@@ -101,7 +102,7 @@ export function duplicateChip(ws: Workspace, id: string): { ws: Workspace; id: s
     chips[k] = v;
     if (k === id) chips[nid] = copy;
   }
-  return { ws: { ...ws, chips }, id: nid };
+  return { ws: fileCopy({ ...ws, chips }, id, nid), id: nid };
 }
 
 /**
@@ -114,9 +115,9 @@ export function deleteChip(ws: Workspace, id: string): { ws: Workspace } | { err
   const chips = { ...ws.chips };
   delete chips[id];
   if (!Object.keys(chips).length) {
-    return { ws: { ...ws, chips: { u_main: { id: 'u_main', name: 'Main', pins: [], parts: [], wires: [], labels: [] } }, open: ['u_main'] } };
+    return { ws: pruneFolders({ ...ws, chips: { u_main: { id: 'u_main', name: 'Main', pins: [], parts: [], wires: [], labels: [] } }, open: ['u_main'] }) };
   }
   const open = ws.open.filter((o) => o !== id && chips[o]);
-  const next: Workspace = { ...ws, chips, open };
+  const next: Workspace = pruneFolders({ ...ws, chips, open });
   return { ws: open.length ? next : openChip(next, Object.keys(chips)[0]) };
 }

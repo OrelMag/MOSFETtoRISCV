@@ -124,6 +124,30 @@
 .sb-item:hover .sb-star, .sb-star.on { opacity: 1; }
 .sb-star:hover, .sb-star.on { color: var(--warn); }
 @media (hover: none) { .sb-star { opacity: 0.6; } }
+/* Folders of My chips (editor/folders.ts): sections with a name you can rename in place, drop targets for a dragged chip. */
+.sb-addfolder { flex: none; display: inline-flex; padding: 2px 4px; margin-right: -2px; border: 0; border-radius: 6px; background: transparent; color: var(--text-2); cursor: pointer; }
+.sb-addfolder:hover, .sb-addfolder:focus-visible { background: var(--surface-2); color: var(--accent); outline: none; }
+.sb-folder > summary { color: var(--text-2); }
+.sb-folder > summary > svg { flex: none; color: var(--muted); }
+.sb-folder > summary > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-folder > summary small { margin-left: auto; font-weight: 500; opacity: 0.7; }
+.sb-folder:not(:has(.sb-item)) > summary::before { opacity: 0.35; }
+.sb-folder-name {
+  flex: 1; min-width: 0; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--accent); background: var(--surface);
+  color: var(--text); font: 12px var(--font-mono);
+}
+.sb-group.sb-drop, .sb-folder.sb-drop { outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 8px; background: var(--accent-soft); }
+/* The project switcher above the search box (editor/projectui.ts). */
+.sb-pal-top:empty { display: none; }
+.sb-pal-top { padding: 8px 10px 0; }
+.sb-proj {
+  width: 100%; display: flex; align-items: center; gap: 7px; padding: 6px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: 600 13px var(--font-ui); text-align: left;
+}
+.sb-proj:hover, .sb-proj:focus-visible, .sb-proj[aria-expanded=true] { border-color: var(--border-strong); outline: none; }
+.sb-proj > svg { flex: none; color: var(--text-2); }
+.sb-proj b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.sb-proj small { margin-left: auto; flex: none; color: var(--muted); font-weight: 500; font-size: 11.5px; }
 .sb-fav-key { flex: none; font: 600 10px var(--font-mono); color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; line-height: 15px; }
 .sb-empty { color: var(--muted); font-size: 13px; padding: 12px; }
 

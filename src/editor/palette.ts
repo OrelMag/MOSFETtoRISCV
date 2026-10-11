@@ -9,7 +9,8 @@
 // shown as its own group shows it here, so purist mode and greying out still apply.
 
 import { libraryItems } from '../lib/catalog';
-import { h } from '../ui/dom';
+import { h, icon } from '../ui/dom';
+import { folderGroups } from './folders';
 import type { PartRef, Workspace } from './model';
 
 export type PinKind = 'toggle' | 'button' | 'clock';
@@ -55,6 +56,11 @@ export interface PaletteGroup {
   /** Start collapsed. */
   collapsed?: boolean;
   items(ctx: PaletteCtx): PaletteItem[];
+  /**
+   * The group's sections are folders (My chips): listed in this order even when empty, open by
+   * default, drop targets for a chip dragged from the palette. Items name theirs in `section`.
+   */
+  folders?(ctx: PaletteCtx): string[];
 }
 
 const groups: PaletteGroup[] = [];
@@ -215,14 +221,15 @@ registerPaletteGroup({
 
 registerPaletteGroup({
   id: 'mine', title: 'My chips', order: 70, purist: true,
-  items: (ctx) => Object.values(ctx.ws.chips).filter((c) => c.id !== ctx.chipId).map((c): PaletteItem => {
+  items: (ctx) => folderGroups(ctx.ws, (c) => c.id !== ctx.chipId).flatMap((g) => g.chips.map((c): PaletteItem => {
     const ins = c.pins.filter((p) => p.dir !== 'out').length, outs = c.pins.length - ins;
     return {
-      id: c.id, name: c.name, place: { part: { chip: c.id } }, hue: c.hue ?? 250, tag: `${ins}→${outs}`,
+      id: c.id, name: c.name, place: { part: { chip: c.id } }, hue: c.hue ?? 250, tag: `${ins}→${outs}`, section: g.name ?? undefined,
       title: `${c.name}: ${ins} input${ins === 1 ? '' : 's'}, ${outs} output${outs === 1 ? '' : 's'}${c.notes ? `. ${c.notes}` : ''}`,
       disabled: ctx.canPlace(c.id) ? undefined : `${c.name} contains this chip: placing it would make a chip contain itself`,
     };
-  }),
+  })),
+  folders: (ctx) => (ctx.ws.folders ?? []).map((f) => f.name),
 });
 
 // ---- the panel ------------------------------------------------------------------------------
@@ -242,12 +249,18 @@ export interface PaletteHooks {
   first?: readonly string[];
   /** Groups closed until the user opens them. */
   closed?: readonly string[];
+  /** A "New folder" button on a folder group's header (My chips). */
+  newFolder?(): void;
+  /** Double-click a folder's name to rename it; returns why the name cannot be used, or null. */
+  renameFolder?(from: string, to: string): string | null;
 }
 
 const OPEN_LIB = new Set(['Gates', 'Transistors']);
 
 export class PalettePanel {
   readonly el: HTMLElement;
+  /** Above the search box: the project switcher (projectui.ts). */
+  readonly top: HTMLElement;
   private list: HTMLElement;
   private search: HTMLInputElement;
   private purist: HTMLInputElement;
@@ -263,7 +276,8 @@ export class PalettePanel {
     const pur = h('label', { class: 'sb-purist', title: 'Only transistors, NAND, pins, constants, wiring, displays and your own chips: build everything else yourself' },
       this.purist, 'Purist');
     this.list = h('div', { class: 'sb-pal-list' });
-    this.el = h('aside', { class: 'sb-palette', 'aria-label': 'Parts' }, h('div', { class: 'sb-pal-head' }, this.search, hooks.locked ? null : pur), this.list);
+    this.top = h('div', { class: 'sb-pal-top' });
+    this.el = h('aside', { class: 'sb-palette', 'aria-label': 'Parts' }, this.top, h('div', { class: 'sb-pal-head' }, this.search, hooks.locked ? null : pur), this.list);
   }
 
   render(): void {
@@ -289,11 +303,42 @@ export class PalettePanel {
     for (const g of [...groups].sort((a, b) => rank(a.id) - rank(b.id))) {
       if (this.hooks.hidden?.(g.id)) continue;
       const items = visibleItems(g, ctx, purist, filter);
-      if (!items.length) continue;
+      const folders = g.folders && (!purist || g.purist) ? g.folders(ctx) : null;
+      if (!items.length && (filter || !folders?.length)) continue;
       const det = h('details', { class: 'sb-group', 'data-group': g.id }) as HTMLDetailsElement;
       det.open = filter ? true : this.open.get(g.id) ?? (!g.collapsed && !this.hooks.closed?.includes(g.id));
       det.addEventListener('toggle', () => { if (!filter) this.open.set(g.id, det.open); });
-      det.append(h('summary', null, g.title, h('small', null, items.length)));
+      const add = folders && this.hooks.newFolder ? h('button', { class: 'sb-addfolder', title: 'New folder', 'aria-label': 'New folder', onclick: (e: Event) => { e.preventDefault(); e.stopPropagation(); this.hooks.newFolder!(); } }, icon('folderPlus', 14)) : null;
+      det.append(h('summary', null, g.title, h('small', null, items.length), add));
+      let queue: HTMLElement | null = null;
+      if (folders) {
+        // Folders in their own order (empty ones too, unless searching), then the unfiled items.
+        det.dataset.folder = '';
+        const by = new Map<string, PaletteItem[]>();
+        for (const it of items) if (it.section) by.set(it.section, [...(by.get(it.section) ?? []), it]);
+        for (const name of filter ? folders.filter((f) => by.has(f)) : folders) {
+          const key = `${g.id}/${name}`;
+          const its = by.get(name) ?? [];
+          const sd = h('details', { class: 'sb-sec sb-folder', 'data-folder': name }) as HTMLDetailsElement;
+          sd.open = filter ? true : this.open.get(key) ?? true;
+          sd.addEventListener('toggle', () => { if (!filter) this.open.set(key, sd.open); });
+          const sum = h('summary', { title: this.hooks.renameFolder ? 'Double-click to rename; drag a chip here to file it' : null }, icon('folder', 13), h('span', null, name), h('small', null, its.length));
+          if (this.hooks.renameFolder) sum.addEventListener('dblclick', (e) => { e.preventDefault(); this.editFolder(sum, name); });
+          sd.append(sum);
+          if (this.pendingRename === name) queue = sum;
+          for (const it of its) sd.append(this.itemButton(itemKey(g.id, it.id), it, pinned.has(itemKey(g.id, it.id))));
+          det.append(sd);
+        }
+        for (const it of items) if (!it.section) det.append(this.itemButton(itemKey(g.id, it.id), it, pinned.has(itemKey(g.id, it.id))));
+        this.list.append(det);
+        if (queue) {
+          const q = queue;
+          this.pendingRename = null;
+          det.open = true;
+          this.editFolder(q, q.querySelector('span')!.textContent!);
+        }
+        continue;
+      }
       let sec: HTMLElement = det;
       let cur: string | undefined;
       for (const it of items) {
@@ -349,6 +394,57 @@ export class PalettePanel {
     const hidden = this.hooks.hidden;
     const all = favoriteItems(this.ctx(), this.hooks.purist(), filter);
     return hidden ? all.filter((f) => !hidden(f.key.slice(0, f.key.indexOf('/')))) : all;
+  }
+
+  private pendingRename: string | null = null;
+
+  /** Put this folder's name in an edit box at the next render (a folder just made). */
+  renameSoon(name: string): void {
+    this.pendingRename = name;
+  }
+
+  /** The folder's name as an edit box in its header: Enter or leaving keeps it, Esc puts the old one back. */
+  private editFolder(sum: HTMLElement, name: string): void {
+    const label = sum.querySelector('span');
+    if (!label || sum.querySelector('input')) return;
+    const input = h('input', { class: 'sb-folder-name', value: name, 'aria-label': 'Folder name', maxlength: '40' }) as HTMLInputElement;
+    let done = false;
+    const finish = (keep: boolean) => {
+      if (done) return;
+      done = true;
+      const to = input.value;
+      input.replaceWith(label);
+      if (keep && to.trim() !== name) {
+        const why = this.hooks.renameFolder?.(name, to);
+        if (why) {
+          label.textContent = name;
+          sum.title = `Not renamed: ${why}`;
+        }
+      }
+    };
+    // Inside a <summary>: clicks and Space would fold the folder.
+    input.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener('keyup', (e) => { e.preventDefault(); e.stopPropagation(); });
+    input.addEventListener('blur', () => finish(true));
+    label.replaceWith(input);
+    input.focus();
+    input.select();
+  }
+
+  /** The folder under a point while a chip is dragged: its name, '' for My chips itself (unfiled), null elsewhere. */
+  folderAt(x: number, y: number): string | null {
+    const el = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-folder]');
+    return el && this.list.contains(el) ? el.dataset.folder ?? null : null;
+  }
+
+  /** Outline the drop target (null: none). */
+  markDrop(folder: string | null): void {
+    for (const el of this.list.querySelectorAll<HTMLElement>('[data-folder]')) el.classList.toggle('sb-drop', el.dataset.folder === folder);
   }
 
   setArmed(key: string | null): void {
