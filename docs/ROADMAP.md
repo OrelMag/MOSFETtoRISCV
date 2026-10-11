@@ -612,6 +612,14 @@ requiring the finale; explicit split / join divergence (Vortex's scheme) with pr
 CSR 7 = tid, a 32 × 32 RGB565 screen at 0xF000–0xF3FF, one pixel per word. Order: lane core + chapters 26–27, then
 the campaign's first levels, then warps and memory (28–29), graphics last (30–31).
 
+**Work in phases** (each merged and deployed on its own)
+- ✅ 1. RV32 lane core, its golden model and chapters 26–27: deployed 2026-10-11 (913fec6). Groundwork before it:
+  multiCore(n) with arbiterN (e3c6b2a), the 4-core baseline the lanes are measured against
+- ⏳ 2. Campaign act 9, first levels (below), with the RV16 encodings, a 4-lane RV16 golden model and a lane bench
+- ⏳ 3. Warps and memory: wspawn / bar, a warp scheduler, coalescing, banked shared memory, atomics in the lanes;
+  chapters 28–29 and the act's coalescer and two-warp levels
+- ⏳ 4. Graphics: framebuffer, rasterizer, the graphics pipeline; chapters 30–31 and the act's raster levels
+
 **Compute**
 - ✅ Lanes (chapter 26): laneCore(program, n) (lib/lanes.ts): the single-cycle front end feeding n lanes (registers,
   ALU, result mux each); the leader (lowest active lane) steers branches through one-hot muxes; a memory sequencer
@@ -637,9 +645,17 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   second at gate level and the cost of each stage of the graphics pipeline
 
 **Campaign**
-- ⏳ An act: lanes (a 4-lane RV16 SIMD unit), the active mask, a warp scheduler, a coalescer, the rasterizer's edge
-  test and tile walk, a frame on the pixel screen; graded build levels as the others, plus kernel puzzles scored on
-  cycles and lane utilization
+- ⏳ Act 9 "Throughput: a GPU" (RV16, 4 lanes × 16 bits), after the side quests, requiring only the finale (y_final);
+  levels unlock their parts at the learner's cost, as the rest of the campaign. Planned levels (mockup's map):
+  - phase 2: k_lesson (lesson: latency or throughput), k_lanes (build: four lanes), k_vrf (build: lane register file),
+    k_mask (build: active mask), k_simd (core: SIMD core), k_stack (build: reconvergence stack), k_simt (core: SIMT
+    core); kernel puzzles p_saxpy and p_reduce, scored on cycles and lane utilization
+  - phase 3: k_coal (build: coalescer), k_warps (core: two warps); puzzle p_hist
+  - phase 4: k_edge (build: edge stepper, adders only), k_tile (build: tile walk), k_raster (build: rasterizer),
+    k_frame (core: a frame on the 32 × 32 screen)
+- ⏳ RV16 groundwork: split / join / tmc / bar in SYSTEM funct3 4–7 (illegal today, so the trap cores already reject
+  them), CSR 7 = tid (warp · 4 + lane; reads 0 on every scalar core, as now), the assembler, a 4-lane golden model on
+  iss16, and a core bench comparing every lane's register writes in lock-step
 
 ### Phase 16 — Journey and campaign track: Memory ⏳
 Memory in depth, past today's arrays (chapter 10), cells and caches (Phase 8): how a DRAM chip really answers, what
