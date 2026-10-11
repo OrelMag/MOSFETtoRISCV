@@ -14,6 +14,7 @@ import { wordRom } from '../src/editor/parts';
 import { evalOnce, forEachInput, simulate } from '../src/sim/harness';
 import { exportHdl, testableComb } from '../src/sim/svexport';
 import { inPorts, outPorts, type ComponentDef } from '../src/sim/types';
+import { synthVerilog } from '../src/sim/vexport';
 
 describe('HDL export', () => {
   it('writes every module once, children first, with a testbench for combinational parts', () => {
@@ -31,6 +32,13 @@ describe('HDL export', () => {
     expect(testableComb(rca(4))).toBe(true);
     expect(testableComb(DFF)).toBe(false);
     expect(testableComb(counter(4))).toBe(false);
+  });
+
+  it('gives flip-flops a power-on 0 only when asked (cross-checks, not real flows)', () => {
+    const plain = synthVerilog(counter(4)).verilog, zero = synthVerilog(counter(4), undefined, { powerOnZero: true }).verilog;
+    expect(plain).not.toContain('initial');
+    const ffs = zero.match(/always @\(posedge/g)!.length;
+    expect(zero.match(/^ {2}initial \w+ = 0;$/gm)!.length).toBe(ffs);
   });
 
   it('exports a whole CPU (structure and synthesizable)', () => {
