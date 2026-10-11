@@ -401,6 +401,10 @@ challenges stay open. Next:
   enable muxes (448 → 318), the non-branching pipelines their branch hardware (10 290 → 7 676), the trap cores their
   cause muxes, the finale its 16-bit valid register (15 050 → 13 035); Core I gets its own reference. Pipeline IV now
   beats Core III on time (116 610 against 121 128 NAND delays). docs/CAMPAIGN.md section 9
+- ⏳ **After the par review** (docs/CAMPAIGN.md section 9, open items): the 4:1 and 8:1 bus muxes as campaign parts
+  built from the 49-NAND mux (m_rf and a_alu16 pars are beatable by 210 and 105 today); the pipeline's own bench and
+  Core III's count 1 495 and 1 460 cycles on the same programs; whether stars earned against the old pars are
+  re-graded; c_computer's given ROM id; Pipelines I–III's 4:1 muxes with an idle input
 
 **Not planned**: online leaderboards and score histograms (static site; share links take their place).
 
