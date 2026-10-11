@@ -7,6 +7,7 @@ import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc } from '../editor/model';
 import { fpAdd, fpMul } from '../lib/fpu';
 import { arrayMul, seqDivider } from '../lib/muldiv';
+import { RV16_MUX2 } from '../lib/rv16/logic';
 import { seqMul } from '../lib/multiply';
 import { F16, fpAddX, fpMulX } from '../sim/fpref';
 import { type ComponentDef, netlistOf } from '../sim/types';
@@ -69,7 +70,7 @@ export const BUILD8: Record<string, () => BuildChallenge> = {
     brief: 'Restoring division, one quotient bit per clock: start loads a and b; after the 17th edge, <b>done</b> = 1 with <b>q</b> = a ÷ b and <b>r</b> = a mod b (unsigned; b = 0 gives q = 0xFFFF, r = a, as RISC-V does). The division step and the counter parts are given.',
     ports: pins([['clk'], ['start'], ['a', 16], ['b', 16]], [['q', 16], ['r', 16], ['done']], 'clk'),
     check: { kind: 'sequence', init: { start: 0 }, steps: iterSeq(16, pairs16(9, 6), (a, b) => (b ? { q: Math.floor(a / b), r: a % b } : { q: 0xffff, r: a })) },
-    answer: refOf('o_div', () => seqDivider(16), 'Divider'),
+    answer: refOf('o_div', () => seqDivider(16, RV16_MUX2), 'Divider'),
   }),
   o_fpadd: () => ({
     id: 'o_fpadd', title: 'binary16 adder', level: 'arithmetic', allowed: 'nand',
@@ -80,7 +81,7 @@ export const BUILD8: Record<string, () => BuildChallenge> = {
       vectors: () => FP_EDGE.flatMap((a) => FP_EDGE.flatMap((b) => [0, 1, 2, 3, 4].map((rm) => [a, b, 0, rm]))),
       care: ([, , , rm]) => [rm > 4 ? 0 : 0xffff],
     },
-    answer: refOf('o_fpadd', () => fpAdd(F16), 'binary16 adder'),
+    answer: refOf('o_fpadd', () => fpAdd(F16, RV16_MUX2), 'binary16 adder'),
   }),
   o_fpmul: () => ({
     id: 'o_fpmul', title: 'binary16 multiplier', level: 'arithmetic', allowed: 'nand',
@@ -91,6 +92,6 @@ export const BUILD8: Record<string, () => BuildChallenge> = {
       vectors: () => FP_EDGE.flatMap((a) => FP_EDGE.flatMap((b) => [0, 1, 2, 3, 4].map((rm) => [a, b, rm]))),
       care: ([, , rm]) => [rm > 4 ? 0 : 0xffff],
     },
-    answer: refOf('o_fpmul', () => fpMul(F16), 'binary16 multiplier'),
+    answer: refOf('o_fpmul', () => fpMul(F16, RV16_MUX2), 'binary16 multiplier'),
   }),
 };

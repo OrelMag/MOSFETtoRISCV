@@ -9,6 +9,7 @@ import type { BuildChallenge, PinSpec } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc, PartRef } from '../editor/model';
 import { fpCompare, fpFromInt, fpUnpack, lzc, normRound, ROUND_DECIDE, shiftRightSticky } from '../lib/fpu';
+import { RV16_MUX2 } from '../lib/rv16/logic';
 import { bias, F16, fpCmpX, fpFromIntX, overflowToInf, roundToX, roundUp } from '../sim/fpref';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { rng } from './drills';
@@ -28,7 +29,7 @@ export const FP_REF = {
   lzc: () => lzc(16),
   norm: () => normRound(F16, 15),
   cmp: () => fpCompare(F16),
-  cvt: () => fpFromInt(F16, 16),
+  cvt: () => fpFromInt(F16, 16, RV16_MUX2),
 };
 /** The leading-zero counter's halves, drawn as chips: lzc8 → lzc4 → lzc2. */
 const lzcSubs = () => [lzc(8), lzc(4), lzc(2)];

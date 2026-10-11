@@ -126,8 +126,6 @@ describe('every playable level', () => {
   // unlocked, no reference holds the library's 64-NAND one or a tree of them, at any depth (memories aside: given).
   it('hold no library 16-bit bus mux where the 49-NAND one is unlocked', () => {
     const LIB16 = /^(mux2x16|mux2tree16|mux\d+x16(_p\d+)?)$/, MEMORY = /^(ram|sb_rom)/;
-    // Open items: fpu.ts builds its muxes in every width; o_dcore places o_div's divider, built where the part is locked.
-    const OPEN = ['o_dcore', 'o_fpadd', 'o_fpcvt', 'o_fpmul'];
     const found = new Set<string>();
     for (const n of playable) {
       if (!libAllowed(ruleFor(n.id), 'rv16_mux16')) continue;
@@ -143,7 +141,7 @@ describe('every playable level', () => {
       };
       walk(top);
     }
-    expect([...found].sort()).toEqual(OPEN);
+    expect([...found].sort()).toEqual([]);
   });
 });
 

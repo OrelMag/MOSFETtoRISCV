@@ -5,7 +5,7 @@
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../../sim/types';
 import { Builder } from '../builder';
 import { aluOf, constWord, shifterOf } from '../alu';
-import { andN, HALF_ADDER, muxTreeOf, rca } from '../combinational';
+import { andN, busMux2, HALF_ADDER, muxTreeOf, rca, type Mux2Kind } from '../combinational';
 import { define, merger, splitter } from '../define';
 import type { FsmInputs, FsmSpec } from '../fsm';
 import { AND, MUX2, NOT, OR, XOR } from '../gates';
@@ -123,6 +123,9 @@ export const MUX16: ComponentDef = (() => {
     netlist: () => ({ pins: { a: [0, 16], b: [0, 50], s: [0, 84], y: [R, 34] }, instances: b.instances, nets: b.nets() }),
   });
 })();
+
+/** The library generators' 2:1 mux choice for campaign references: MUX16 for 16-bit words, the library's otherwise. */
+export const RV16_MUX2: Mux2Kind = { tag: '_rv16', of: (w) => (w === 16 ? MUX16 : busMux2(w)) };
 
 const trees = new Map<string, ComponentDef>();
 /**

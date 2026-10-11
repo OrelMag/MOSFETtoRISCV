@@ -8,7 +8,7 @@
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
-import { andN, busMux2, equal, incrementer, muxTree } from './combinational';
+import { LIB_MUX2, andN, busMux2, equal, incrementer, muxTree, type Mux2Kind } from './combinational';
 import { define, merger, ones, splitter } from './define';
 import { addSubFast, fanout, koggeStone } from './fastadd';
 import { AND, MUX2, NOT, OR, XNOR, XOR } from './gates';
@@ -97,8 +97,8 @@ export function lzc(n: number): ComponentDef {
 }
 
 /** Logarithmic left shifter (zero fill). */
-export function shiftLeft(w: number, k: number): ComponentDef {
-  return memo(`shl${w}_${k}`, () => {
+export function shiftLeft(w: number, k: number, mux: Mux2Kind = LIB_MUX2): ComponentDef {
+  return memo(`shl${w}_${k}${mux.tag}`, () => {
     const b = new Builder();
     const s = b.op(splitter(ones(k)), ['s']);
     let cur = 'x';
@@ -110,11 +110,11 @@ export function shiftLeft(w: number, k: number): ComponentDef {
         const sp = b.op(splitter([w - d, d]), [cur]);
         shifted = b.op1(merger([d, w - d]), [b.op1(K(d, 0), []), `${sp}.o0`]);
       } else shifted = b.op1(K(w, 0), []);
-      cur = b.op1(busMux2(w), [cur, shifted, `${s}.o${j}`], `<< ${d}`);
+      cur = b.op1(mux.of(w), [cur, shifted, `${s}.o${j}`], `<< ${d}`);
     }
     b.wire(cur, 'y');
     return define({
-      id: `shl${w}_${k}`, name: `${w}-bit left shifter`, category: 'arithmetic',
+      id: `shl${w}_${k}${mux.tag}`, name: `${w}-bit left shifter${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: `${k} stages; stage j shifts by 2^j when amount bit j is 1. Zeros enter from the right.`,
       ports: [bus('x', w, 'in'), bus('s', k, 'in'), bus('y', w, 'out')],
       symbol: { kind: 'box', label: '<<' },
@@ -125,8 +125,8 @@ export function shiftLeft(w: number, k: number): ComponentDef {
 }
 
 /** Logarithmic right shifter that ORs every bit shifted out into a sticky bit. */
-export function shiftRightSticky(w: number, k: number): ComponentDef {
-  return memo(`shrs${w}_${k}`, () => {
+export function shiftRightSticky(w: number, k: number, mux: Mux2Kind = LIB_MUX2): ComponentDef {
+  return memo(`shrs${w}_${k}${mux.tag}`, () => {
     const b = new Builder();
     const s = b.op(splitter(ones(k)), ['s']);
     let cur = 'x';
@@ -144,13 +144,13 @@ export function shiftRightSticky(w: number, k: number): ComponentDef {
         lost = b.op1(NOT, [b.op1(isZero(w), [cur])]);
       }
       st.push(b.op1(AND, [`${s}.o${j}`, lost]));
-      cur = b.op1(busMux2(w), [cur, shifted, `${s}.o${j}`], `>> ${d}`);
+      cur = b.op1(mux.of(w), [cur, shifted, `${s}.o${j}`], `>> ${d}`);
     }
     b.next();
     b.wire(cur, 'y');
     b.wire(st.length === 1 ? st[0] : b.op1(st.length === 2 ? OR : orN(st.length), st, 'sticky'), 'sticky');
     return define({
-      id: `shrs${w}_${k}`, name: `${w}-bit right shifter with sticky bit`, category: 'arithmetic',
+      id: `shrs${w}_${k}${mux.tag}`, name: `${w}-bit right shifter with sticky bit${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: 'Shifts right in log stages; any 1 that falls off the right end sets sticky, so rounding still knows the discarded part was not zero.',
       ports: [bus('x', w, 'in'), bus('s', k, 'in'), bus('y', w, 'out'), bit('sticky', 'out')],
       symbol: { kind: 'box', label: '>> sticky' },
@@ -298,9 +298,9 @@ endmodule`,
  * instead (a subnormal). Tininess is detected after rounding: the result is tiny if, rounded to
  * M + 1 bits with an unbounded exponent, it would still be below 2^emin.
  */
-export function normRound(f: FpFormat, w: number): ComponentDef {
+export function normRound(f: FpFormat, w: number, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   const { E, M } = f;
-  return memo(`fpnr${E}_${M}_${w}`, () => {
+  return memo(`fpnr${E}_${M}_${w}${mux.tag}`, () => {
     const XE = xeOf(f), P = pow2ceil(w + 1), k = Math.log2(P);
     if (w < M + 3) throw new Error('normRound: the significand needs a guard bit and a sticky bit below it');
     const b = new Builder();
@@ -332,9 +332,9 @@ export function normRound(f: FpFormat, w: number): ComponentDef {
     const atTop = b.name(b.op1(equal(XE), [eAfter, b.op1(K(XE, 2 ** E - 2), [])], 'e = max − 1?'), 'e=max−1');
     b.next();
     // 2. shift
-    const sh1 = b.op1(shiftLeft(w, k), ['mant', L], 'normalize');
+    const sh1 = b.op1(shiftLeft(w, k, mux), ['mant', L], 'normalize');
     b.next();
-    const sh2 = b.op(shiftRightSticky(w, k), [sh1, R], 'subnormal');
+    const sh2 = b.op(shiftRightSticky(w, k, mux), [sh1, R], 'subnormal');
     b.next();
     // 3. round: G = first dropped bit, Rb = the next one, S2 = OR of everything below Rb
     const parts = b.op(splitter([w - M - 2, 1, M + 1]), [`${sh2}.y`]);
@@ -382,7 +382,7 @@ export function normRound(f: FpFormat, w: number): ComponentDef {
     b.wire(b.op1(merger([M, 1, E - 1, 1]), [fracOut, e0, `${expOr}.o1`, 'sign']), 'y');
     b.wire(flagWord(b, { of: inf, uf: b.op1(AND, [tiny, nx0], 'UF'), nx: b.op1(OR, [nx0, inf], 'NX') }), 'flags');
     return define({
-      id: `fpnr${E}_${M}_${w}`, name: `Normalize & round (${w}-bit significand)`, category: 'arithmetic',
+      id: `fpnr${E}_${M}_${w}${mux.tag}`, name: `Normalize & round (${w}-bit significand)${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: 'Counts leading zeros, shifts them out (or shifts right for a subnormal result), then rounds in mode rm using the guard bit G and the sticky bit S (round to nearest even: up if G and (S or the last kept bit)). A carry out of the rounding bumps the exponent; an exponent past the top becomes ∞ or the largest finite number, depending on the mode. Flags: NX if G or S, OF on overflow, UF if inexact and tiny after rounding.',
       ports: [bit('sign', 'in'), bus('exp', XE, 'in'), bus('mant', w, 'in'), bit('stin', 'in'), bus('rm', 3, 'in'), bus('y', 1 + E + M, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'NORMALIZE & ROUND' },
@@ -411,18 +411,18 @@ const isMode = (b: Builder, rm: string, m: number, label?: string) => b.op1(equa
  * of sign `infSign` if `anyInf`, else the rounded result; the flags are the rounding flags unless
  * the result is special, in which case only NV (`invalid`) can be raised.
  */
-function specials(b: Builder, f: FpFormat, nr: string, nrFlags: string, nan: string, anyInf: string, infSign: string, invalid: string, dz?: string): void {
+function specials(b: Builder, f: FpFormat, nr: string, nrFlags: string, nan: string, anyInf: string, infSign: string, invalid: string, dz?: string, mux: Mux2Kind = LIB_MUX2): void {
   const N = 1 + f.E + f.M;
-  const y1 = b.op1(busMux2(N), [nr, infValue(b, f, infSign), anyInf], 'infinity');
-  b.wire(b.op1(busMux2(N), [y1, nanValue(b, f), nan], 'NaN'), 'y');
+  const y1 = b.op1(mux.of(N), [nr, infValue(b, f, infSign), anyInf], 'infinity');
+  b.wire(b.op1(mux.of(N), [y1, nanValue(b, f), nan], 'NaN'), 'y');
   const special = b.op1(OR, [nan, anyInf]);
   b.wire(b.op1(busMux2(5), [nrFlags, flagWord(b, { nv: invalid, dz }), special], 'flags'), 'flags');
 }
 
 /** a ± b: swap so |big| ≥ |small|, align small by the exponent difference, add or subtract, normalize & round. */
-export function fpAdd(f: FpFormat): ComponentDef {
+export function fpAdd(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   const { E, M } = f;
-  return memo(`fpadd${E}_${M}`, () => {
+  return memo(`fpadd${E}_${M}${mux.tag}`, () => {
     const XE = xeOf(f), WA = M + 3, kA = log2c(WA + 1), WS = M + 4, N = 1 + E + M;
     const b = new Builder();
     const ua = b.op(fpUnpack(f), ['a'], 'unpack a'), ub = b.op(fpUnpack(f), ['b'], 'unpack b');
@@ -466,9 +466,9 @@ export function fpAdd(f: FpFormat): ComponentDef {
     const anyInf = b.op1(OR, [`${ua}.inf`, `${ub}.inf`]);
     const infS = b.op1(MUX2, [sbEff, `${ua}.sign`, `${ua}.inf`]);
     b.next();
-    specials(b, f, `${nr}.y`, `${nr}.flags`, nan, anyInf, infS, invalid);
+    specials(b, f, `${nr}.y`, `${nr}.flags`, nan, anyInf, infS, invalid, undefined, mux);
     return define({
-      id: `fpadd${E}_${M}`, name: `${fmtName(f)} adder / subtractor`, category: 'arithmetic',
+      id: `fpadd${E}_${M}${mux.tag}`, name: `${fmtName(f)} adder / subtractor${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: 'Compare magnitudes and swap; shift the smaller significand right by the exponent difference (guard, round and sticky bits keep track of what falls off); add or subtract; normalize and round in mode rm. Then the special cases: NaN in or ∞ − ∞ gives NaN (NV for ∞ − ∞ or a signaling NaN), an infinite operand gives infinity.',
       ports: [bus('a', N, 'in'), bus('b', N, 'in'), bit('sub', 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'FADD' },
@@ -480,9 +480,9 @@ export function fpAdd(f: FpFormat): ComponentDef {
 }
 
 /** a × b: multiply significands (a tree multiplier), add exponents, normalize & round. */
-export function fpMul(f: FpFormat): ComponentDef {
+export function fpMul(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   const { E, M } = f;
-  return memo(`fpmul${E}_${M}`, () => {
+  return memo(`fpmul${E}_${M}${mux.tag}`, () => {
     const XE = xeOf(f), N = 1 + E + M, W = 2 * M + 2, B = fbias(f);
     const b = new Builder();
     const ua = b.op(fpUnpack(f), ['a'], 'unpack a'), ub = b.op(fpUnpack(f), ['b'], 'unpack b');
@@ -501,9 +501,9 @@ export function fpMul(f: FpFormat): ComponentDef {
     const nan = b.op1(orN(3), [`${ua}.nan`, `${ub}.nan`, invalid], 'NaN?');
     const anyInf = b.op1(OR, [`${ua}.inf`, `${ub}.inf`]);
     b.next();
-    specials(b, f, `${nr}.y`, `${nr}.flags`, nan, anyInf, sign, invalid);
+    specials(b, f, `${nr}.y`, `${nr}.flags`, nan, anyInf, sign, invalid, undefined, mux);
     return define({
-      id: `fpmul${E}_${M}`, name: `${fmtName(f)} multiplier`, category: 'arithmetic',
+      id: `fpmul${E}_${M}${mux.tag}`, name: `${fmtName(f)} multiplier${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: `Sign = XOR, exponent = ea + eb − bias, significand = a ${M + 1}×${M + 1} tree multiplier (chapter 20), then the shared normalize & round unit. ∞ × 0 is NaN (NV).`,
       ports: [bus('a', N, 'in'), bus('b', N, 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'FMUL' },
@@ -515,9 +515,9 @@ export function fpMul(f: FpFormat): ComponentDef {
 }
 
 /** Integer → float (fcvt.s.w / fcvt.s.wu): take the magnitude and let normalize & round do the rest. */
-export function fpFromInt(f: FpFormat, w = 32): ComponentDef {
+export function fpFromInt(f: FpFormat, w = 32, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   const { E, M } = f;
-  return memo(`fpcvt${E}_${M}_${w}`, () => {
+  return memo(`fpcvt${E}_${M}_${w}${mux.tag}`, () => {
     const XE = xeOf(f), N = 1 + E + M;
     const b = new Builder();
     const sp = b.op(splitter([w - 1, 1]), ['x']);
@@ -525,11 +525,11 @@ export function fpFromInt(f: FpFormat, w = 32): ComponentDef {
     b.next();
     const mag = b.op1(condNegate(w), ['x', neg], '|x|');
     b.next();
-    const nr = b.op(normRound(f, w), [neg, b.op1(K(XE, w - 1 + fbias(f)), []), mag, b.op1(TIE0, []), 'rm'], 'normalize & round');
+    const nr = b.op(normRound(f, w, mux), [neg, b.op1(K(XE, w - 1 + fbias(f)), []), mag, b.op1(TIE0, []), 'rm'], 'normalize & round');
     b.wire(`${nr}.y`, 'y');
     b.wire(`${nr}.flags`, 'flags');
     return define({
-      id: `fpcvt${E}_${M}_${w}`, name: `int${w} → ${fmtName(f)}`, category: 'arithmetic',
+      id: `fpcvt${E}_${M}_${w}${mux.tag}`, name: `int${w} → ${fmtName(f)}${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: `The magnitude of the integer is a significand whose top bit has weight 2^${w - 1}. Normalize & round shifts out the leading zeros; integers above 2^${M + 1} lose low bits and are rounded in mode rm (NX).`,
       ports: [bus('x', w, 'in'), bit('signed', 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'INT→FLOAT' },
