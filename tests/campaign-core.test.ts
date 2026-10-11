@@ -44,6 +44,15 @@ describe('the core bench', () => {
     expect(r.failures.join('\n')).toMatch(/budget|only/);
   });
 
+  it('counts a slow core\'s cycles to the end: the same on a bench whose budget it misses', async () => {
+    const { RV16_PIPE } = await import('../src/lib/rv16/pipe');
+    const own = runCore(RV16_PIPE, 'gate', { tests: () => coreTests(3), budget: { cpi: 2.5, extra: 8 } });
+    const strict = runCore(RV16_PIPE, 'gate', tests(3));
+    expect(own.failures).toEqual([]);
+    expect(strict.failures.join('\n')).toMatch(/correct, but \d+ cycles/);
+    expect(strict.cycles).toBe(own.cycles);
+  });
+
   it('the event-driven bench agrees with the bit-parallel one', () => {
     const spec = { tests: () => coreTests(3).slice(0, 4), budget: { cpi: 1, extra: 2 } };
     const a = runCore(rv16Core(true), 'gate', spec), b = runCore(rv16Core(true), 'gate', spec, 'gate');
