@@ -36,7 +36,7 @@ export const BLOCKS: Block[] = [
   { id: 'br', label: 'Branch', x: 458, y: 270, w: 92, h: 40, why: 'Compares rs1 and rs2 for beq / bne / blt / bge: taken or not.' },
   { id: 'p3', label: 'E/M', x: 570, y: 60, w: 16, h: 300, kind: 'preg', why: 'Pipeline register between execute and memory: the ALU result, the store data, control.' },
   { id: 'dmem', label: 'Data RAM', x: 604, y: 126, w: 104, h: 96, why: 'The data memory: lw reads it, sw writes it.' },
-  { id: 'mmio', label: 'I/O', x: 604, y: 240, w: 104, h: 40, kind: 'sys', why: 'Memory-mapped devices: LEDs, switches, console, timer, at the top of the address space.' },
+  { id: 'mmio', label: 'I/O', x: 604, y: 240, w: 104, h: 40, kind: 'sys', why: 'Memory-mapped devices: console, input and output words, LEDs, switches and the interrupt line, at the top of the address space.' },
   { id: 'csr', label: 'CSRs + traps', x: 604, y: 300, w: 104, h: 44, kind: 'sys', why: 'mstatus, mtvec, mepc, mcause: saves the PC and the cause on a trap or interrupt, restores them on mret.' },
   { id: 'p4', label: 'M/W', x: 726, y: 60, w: 16, h: 300, kind: 'preg', why: 'Pipeline register between memory and write back.' },
   { id: 'wb', label: 'Result', x: 760, y: 150, w: 74, h: 80, why: 'Selects what is written to rd: the ALU result, a loaded word, pc + 1 (jal) or a CSR value.' },

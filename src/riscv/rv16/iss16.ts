@@ -5,7 +5,7 @@
 // to EXIT.
 
 import {
-  CAUSE, CSR16, decode16, MIP_MEIP, MIP_MTIP, MMIO16, MMIO_BASE, MSTATUS_MIE, MSTATUS_MPIE, sext,
+  CAUSE, CSR16, decode16, MIP_MEIP, CSR16_UNUSED, MMIO16, MMIO_BASE, MSTATUS_MIE, MSTATUS_MPIE, sext,
 } from './isa16';
 
 export interface Iss16Options {
@@ -54,8 +54,6 @@ export class Iss16 {
   switches = 0;
   /** External interrupt line (also set by a store of 1 to IRQ). */
   irq = 0;
-  mtime = 0;
-  mtimecmp = 0xffff;
   written = 0b1;
   readonly opts: Required<Iss16Options>;
 
@@ -87,8 +85,6 @@ export class Iss16 {
         case MMIO16.LEDS: return this.leds;
         case MMIO16.SWITCHES: return this.switches & M16;
         case MMIO16.IRQ: return this.irq;
-        case MMIO16.MTIME: return this.mtime & M16;
-        case MMIO16.MTIMECMP: return this.mtimecmp;
         default: return 0;
       }
     }
@@ -107,7 +103,6 @@ export class Iss16 {
         case MMIO16.OUT: this.out.push(v); break;
         case MMIO16.LEDS: this.leds = v; break;
         case MMIO16.IRQ: this.irq = v & 1; break;
-        case MMIO16.MTIMECMP: this.mtimecmp = v; break;
       }
       return;
     }
@@ -118,14 +113,12 @@ export class Iss16 {
   /** Pending interrupt cause, if any is enabled. */
   private pendingIrq(): number | null {
     if (!this.opts.system) return null;
-    let mip = this.csr[CSR16.mip] & ~(MIP_MTIP | MIP_MEIP);
-    if (this.mtime >= this.mtimecmp) mip |= MIP_MTIP;
+    let mip = this.csr[CSR16.mip] & ~MIP_MEIP;
     if (this.irq) mip |= MIP_MEIP;
     this.csr[CSR16.mip] = mip;
     if (!(this.csr[CSR16.mstatus] & MSTATUS_MIE)) return null;
     const p = mip & this.csr[CSR16.mie];
     if (p & MIP_MEIP) return CAUSE.external;
-    if (p & MIP_MTIP) return CAUSE.timer;
     return null;
   }
 
@@ -210,11 +203,11 @@ export class Iss16 {
           }
           case 'wfi': break;
           case 'csrrw': case 'csrrs': case 'csrrc': {
-            const old = d.csr === CSR16.mcycle ? this.steps & M16 : d.csr === CSR16.mip ? (this.pendingIrq(), this.csr[CSR16.mip]) : this.csr[d.csr];
+            const old = d.csr === CSR16_UNUSED ? 0 : d.csr === CSR16.mip ? (this.pendingIrq(), this.csr[CSR16.mip]) : this.csr[d.csr];
             const src = this.rd(d.rs1);
             const val = s.name === 'csrrw' ? src : s.name === 'csrrs' ? old | src : old & ~src;
-            // csrrs / csrrc with rs1 = x0 do not write; mcycle and mip's interrupt bits are read-only.
-            if ((s.name === 'csrrw' || d.rs1 !== 0) && d.csr !== CSR16.mcycle) this.csr[d.csr] = d.csr === CSR16.mip ? old : val & M16;
+            // csrrs / csrrc with rs1 = x0 do not write; CSR 7 (none) and mip's interrupt bits are read-only.
+            if ((s.name === 'csrrw' || d.rs1 !== 0) && d.csr !== CSR16_UNUSED) this.csr[d.csr] = d.csr === CSR16.mip ? old : val & M16;
             this.wr(d.rd, old, info);
             break;
           }
@@ -232,7 +225,6 @@ export class Iss16 {
     if (s?.name === 'jal' && d.imm === 0 && !info.trap) this.halted = true;
     this.pc = next;
     this.steps++;
-    this.mtime = (this.mtime + 1) & M16;
     return info;
   }
 
@@ -247,7 +239,7 @@ export class Iss16 {
     return {
       pc: this.pc, x: this.x.slice(), dmem: this.dmem.slice(), csr: this.csr.slice(), steps: this.steps, halted: this.halted, error: this.error,
       exitCode: this.exitCode, console: this.console, out: [...this.out], input: [...this.input], leds: this.leds, switches: this.switches,
-      irq: this.irq, mtime: this.mtime, mtimecmp: this.mtimecmp, written: this.written,
+      irq: this.irq, written: this.written,
     };
   }
 
@@ -259,5 +251,5 @@ export class Iss16 {
 export interface Iss16State {
   pc: number; x: Uint16Array; dmem: Uint16Array; csr: Uint16Array; steps: number; halted: boolean; error: string | null;
   exitCode: number | null; console: string; out: number[]; input: number[]; leds: number; switches: number;
-  irq: number; mtime: number; mtimecmp: number; written: number;
+  irq: number; written: number;
 }

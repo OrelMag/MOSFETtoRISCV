@@ -174,8 +174,10 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ CPU panel: listing, registers, memory, live golden-model check, run to halt, program editor
 - ✅ Per-instruction settle time in gate delays (dynamic critical path)
 - ✅ Static critical-path analysis → maximum clock frequency (highlighted on the schematic)
-- ⏳ Animated active path per instruction
-- ⏳ Memory-mapped I/O: LEDs, 7-segment display, a text console, a small pixel screen
+- ✅ Active path per instruction: a listing line marks the hardware the instruction uses (insthw), and Slow mode moves
+  the marks with execution (gate, cycle or instruction steps)
+- ✅ Memory-mapped I/O: console, LEDs and switches on the system CPU (Phase 7); the sandbox computer adds a pixel
+  screen; the 7-segment display is a sandbox part
 
 ### Phase 5 — Multicycle & microcode ✅
 - ✅ Gate-level multicycle RV32I (one ALU, one memory port; IR, OldPC, A, B, Data, ALUOut), co-simulated per retirement
@@ -387,9 +389,12 @@ challenges stay open. Next:
   the library part simulated live (click an input), its datasheet with the truth table, and its cost against the
   alternatives. The one-liner stays as the summary and the hover text
 
-- ⏳ **Reference and par review**: several levels' references waste NANDs their par then counts (s_reg16 208 against
-  240, the pipeline cores' dead branch hardware, the trap-cause muxes, …), and two references have pins their
-  challenges lack. Found while measuring every part the level texts cite; the list is in docs/CAMPAIGN.md section 9
+- ✅ **Reference and par review**: references that wasted NANDs their pars counted were tightened and every par
+  re-measured (scripts/campaign-pars.ts). The levels unlock storage cells at the learner's cost (D latch 4, flip-flop 9,
+  enable flip-flop 13, 16-bit register 208 instead of the library's 240) and a 49-NAND bus mux; the PC drops its dead
+  enable muxes (448 → 318), the non-branching pipelines their branch hardware (10 290 → 7 676), the trap cores their
+  cause muxes, the finale its 16-bit valid register (15 050 → 13 035); Core I gets its own reference. Pipeline IV now
+  beats Core III on time (116 610 against 121 128 NAND delays). docs/CAMPAIGN.md section 9
 
 **Not planned**: online leaderboards and score histograms (static site; share links take their place).
 
@@ -456,8 +461,8 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
 - ✅ `scripts/verify-export.ts all` (Yosys netlist simulated against our gate-level run, every multi-core program) as
   the `verify-hdl` CI job with `yowasp-yosys`: the deploy waits on it
 - ⏳ The same cross-check on the system CPU (RV32IM + Zicsr: its MMIO and interrupt pins need a testbench of their own)
-- ⏳ The campaign's RV16 cores against iss16: `mcycle` reads 0 in `rv16_csr` but counts steps in the ISS, and the
-  timer interrupt exists only in the ISS (docs/CAMPAIGN.md section 9)
+- ✅ The campaign's RV16 cores against iss16: the golden model drops what the cores lack: CSR 7 (was mcycle) reads 0
+  in both, and the timer is gone (a cycle counter would count cycles in the hardware, instructions in the model)
 - ✅ GateSim refuses a behavioural delay of 64 or more (the event wheel) instead of clamping it silently
 
 **Measure more** (computed from the circuits, like every other number)

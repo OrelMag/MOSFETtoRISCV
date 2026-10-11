@@ -164,8 +164,9 @@ The best result is kept. Par is a target and is never required.
   - `csrr`, `csrw`, `csrs`, `csrc`
   - `push`, `pop`, `halt`, `exit`
   - directives `.word`, `.data`, `.text`
-- **CSRs** (3-bit index): 0 mstatus (MIE bit 3, MPIE bit 7), 1 mie (MTIE 7, MEIE 11), 2 mip,
-  3 mtvec, 4 mepc, 5 mcause (bit 15 = interrupt), 6 mscratch, 7 mcycle (read only).
+- **CSRs** (3-bit index): 0 mstatus (MIE bit 3, MPIE bit 7), 1 mie (MEIE bit 11), 2 mip,
+  3 mtvec, 4 mepc, 5 mcause (bit 15 = interrupt), 6 mscratch; 7 has no register (reads 0, ignores
+  writes). No cycle counter: one would count cycles in the hardware and instructions in the golden model.
 - **MMIO**: the top of data memory, reachable as `imm(x0)` with a negative imm.
 
   | Address | Register | Notes |
@@ -177,8 +178,7 @@ The best result is kept. Par is a target and is never required.
   | 0xFFFB | LEDS | |
   | 0xFFFA | SWITCHES | |
   | 0xFFF9 | IRQ | software-raised external interrupt |
-  | 0xFFF8 | MTIME | |
-  | 0xFFF7 | MTIMECMP | |
+  | 0xFFF7–0xFFF8 | reserved | read 0, stores dropped (no timer: the cores take only the external line) |
 
 Software lives in `src/riscv/rv16/`: `isa16` (tables, encode, decode, disasm), `asm16` (with
 `.data` sections: data labels are data-memory addresses), `iss16` (the golden model: every step
@@ -460,53 +460,59 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
 
 ---
 
-## 9. Reference and par review (found 2026-10-11, to tackle)
+## 9. Reference and par review (found and done 2026-10-11)
 
 While the level cases, the fuller codex and the walkthroughs were written, every part they cite was measured
-(`stats`, `logicDepth`, static timing). These findings were reported but not changed, because they change grading:
-a par lowered after learners have scored against it changes their stars. Fix them on one branch that re-measures
-each affected par from a tightened reference (`tests/campaign.test.ts` checks every reference meets its par).
+(`stats`, `logicDepth`, static timing), and several references turned out to waste NANDs their pars then counted.
+All were fixed on one branch (`fix/campaign-pars`); every par was then re-measured from its tightened reference.
+`scripts/campaign-pars.ts` prints each level's reference against its par (`--write` sets the pars); the
+`tests/campaign.test.ts` check that every reference meets its par is unchanged. Pars fell, so earlier stars were
+earned against looser pars: progress keeps them (stars are stored, not re-graded).
 
-**Pars a learner beats easily** (the reference wastes NANDs the par then counts)
-- [ ] `s_reg16` par 240: the reference uses the library `dffe` (15 NANDs per bit, built on the 5-NAND `d_latch`);
-  the learner's own DFFE is 13 per bit (`s_reg4` par 52 = 4 × 13), so four of their 4-bit registers make 208, and
-  the level's tip points at exactly that. `s_pc` (448) and `m_rf` (2627) inherit the 240-NAND register.
-- [ ] `s_pc` par 448: the register's enable is tied to 1, so its 64 NANDs of enable muxes do nothing.
-- [ ] `g_mux8` par 64: one inverter on `s` shared by the 16 muxes gives 49 (3n + 1) at the same depth 3.
-- [ ] `a_slt` par 217: 45 NANDs are sum gates nobody reads; with `sub` tied to 1 the 16 XORs only invert `b`
-  (16 NOTs save 48).
-- [ ] `a_inc16` par 80 / depth 33: bit 0 as a NOT instead of a half adder with a constant 1 gives 76 / 31 (the tip
-  already says ¬a0).
-- [ ] `pi_core0`, `pi_core1`, `pi_core2`: the references carry the branch comparator and the next-PC block, but
-  only next PC's pc + 1 is used: about 695 NANDs of dead hardware in each par.
-- [ ] `y_trap`, `y_irq`, `y_final`: three 16-bit bus muxes on constants (192 NANDs) pick mcause; bit 1 is always 1,
-  bit 15 is `intr`, bits 0 and 3 need a gate each: about 10 NANDs.
-- [ ] `y_final`: the F/D valid bit is a whole 16-bit pipeline register holding 1 (307 NANDs) where a 1-bit
-  flip-flop with clear would do.
-- [ ] Traps cores: `ld·¬trap` feeding `ld·¬trap + trap + mret` equals `ld + trap + mret` (one AND, 2 NANDs).
-- [ ] `c_core3`: the next-PC block's pc + 1 repeats the PC block's incrementer (80 NANDs): `rv16_pc` has no output
-  for its sum.
-- [ ] `c_core1` and `c_core2` share one reference (`rv16Core(false)`) and par (4 973): Core I's answer already
-  wires the data memory and loads.
+**The principle**: a part a level unlocks costs what that level's reference (and par) counts, so a learner who
+places unlocked parts lands on par downstream, and every later reference is built from the same parts.
 
-**References with pins the challenge lacks** (Check ignores them, but "Do it for me" and the walkthrough's "I'll
-take it from here" copy them into the learner's chip)
-- [ ] `a_addsub16`: output `n`. `a_alu16`: outputs `neg`, `ovf`, `carry` (they also show in the walkthrough's
-  "Depth so far" before the result mux is placed).
+**Storage at the learner's cost** (src/lib/rv16/logic.ts). The library's D latch has an inverter on d (5 NANDs: 11
+per flip-flop, 15 per enable flip-flop). The levels now unlock campaign cells at the pars the learner built:
+`rv16_dlatch` 4, `rv16_dff` 9, `rv16_dffe` 13, `rv16_reg4` 52, `rv16_reg16` 208 (four `rv16_reg4`) and `rv16_dreg16`
+144 (sixteen flip-flops without an enable), and every rv16 block uses them. `s_reg16` 240 → 208; `m_rf` 2 627 →
+2 403; `s_fsm` 32 → 28.
 
-**Naming**: node titles differ from their build titles for `g_mux8` ("Bus multiplexers" / "Bus multiplexer"),
-`g_sop` ("A function from its table" / "Prime detector") and `a_slt` ("Set if less than" / "Less than"); check
-whether intended.
+**Per level** (old → new par)
+- [x] `g_mux8` 64 → 49: `rv16_mux16`, one inverter on s for all sixteen bits (3n + 1); unlocked by g_mux8, used for
+  every 16-bit 2:1 mux in the rv16 blocks (the library's wider mux trees stay).
+- [x] `a_inc16` 80 / 33 → 76 / 31: bit 0 is ¬a0 (`rv16_inc16`, unlocked instead of the library's).
+- [x] `a_slt` 217 / 44 → 169 / 39: 16 inverters (not XORs) for ¬b, an adder whose carry alone is read, and
+  lt = signs differ ? a15 : ¬cout. A carry-only chain drawn from NANDs would drop the adder's 48 sum gates too.
+- [x] `s_pc` 448 / 45 → 318 / 41: flip-flops without an enable (the PC loads every cycle), the cheaper incrementer and muxes.
+- [x] `pi_core0` 10 290 → 7 676, `pi_core1` 10 976 → 8 362, `pi_core2` 11 105 → 8 476: no branch comparator, next PC,
+  pc pipeline registers or E/M pc + 1 in pipelines that do not branch.
+- [x] `y_trap`, `y_irq` 9 004 → 7 972, `y_final` 15 050 / 88 → 13 035 / 81: mcause from five NANDs (bit 1 = 1,
+  bit 15 = intr, bit 0 = intr + ¬ill, bit 3 = intr + ¬ill · ecall) instead of three muxes of constants; the F/D
+  valid bit is one flip-flop with clear; ld · ¬trap + trap + mret is ld + trap + mret.
+- [x] `c_core3` 5 748 → 5 236 (and the trap cores): the PC register loads next PC's pc + 1, no second incrementer.
+- [x] `c_core1` 4 973 / 98 → 4 318 / 84: its own reference (`rv16_cpu_alu`) without the load path (result = ALU or
+  lui's immediate) and with a 2:1 immediate mux; `c_core2` 4 604.
+- [x] References with pins their challenges lack: `a_addsub16` (n) and `a_alu16` (neg, ovf, carry) are drawn without them.
+- [x] Titles: g_mux8's node title is now singular like its build title; a_slt's build title is the node's
+  ("Set if less than"). g_sop keeps both on purpose: the map names the technique, the level its instance.
+- Downstream, from the cheaper parts alone: `c_br` 287, `c_npc` 421, `c_fast` period 76, `c_computer` 27 599,
+  `pi_reg` 260, `pi_core3` 10 016 / 78, `o_bpred` 10 587 / 80, `y_csr` 1 870 / 17, `o_mcore` 8 553, `o_dcore` 11 107,
+  `o_cache` 3 497, `o_mc` 5 719 / 76.
 
-**Hardware against the golden model**
-- [ ] `rv16_csr` reads `mcycle` as 0 while `iss16` returns its step count: a program reading it would make the
-  core and the golden model disagree (no test reads it today). Either count cycles in the CSR file or drop
-  `mcycle` from both (and from the `csr` codex summary).
-- [ ] Interrupts: the hardware cores take only the external line (`intr = MIE · MEIE · irq`); the timer exists
-  only in `iss16`. Decide whether the cores get the timer or the golden model loses it.
+**Hardware against the golden model** (both lose what the cores did not have)
+- [x] `mcycle`: dropped from both. CSR 7 has no register and no name; it reads 0 and ignores writes in `rv16_csr` and
+  in `iss16`. A real counter would count cycles in the hardware and instructions in the golden model, which differ
+  on a pipeline.
+- [x] The timer: dropped from `iss16` (MTIME, MTIMECMP, MTIP, cause 0x8007). 0xFFF7–0xFFF8 are reserved: they read 0
+  and drop stores, as the test bench already did. RV16 interrupts are the external line only.
 
-**What the measurements say about the pipeline** (no fix needed, keep the texts honest): on the RV16 core tests
-the plain five-stage pipeline takes more total time than the single-cycle core (Pipeline IV: 1 495 cycles × 82 =
-122 590 against Core III's 1 236 × 98 = 121 128); only the predicting pipeline wins, on nested loops. The level
-cases and the codex say so. The guided chapters measure the RV32 cores, where the balanced pipeline does pay;
-re-read them if those numbers change.
+**Left as it is** (a follow-up if wanted): the wider muxes are still the library's trees of 64-NAND 2:1 muxes,
+unlocked by g_mux8 at that cost (`mux*`). A tree of `rv16_mux16` is cheaper at the same depth (8:1: 343 against
+448; 4:1: 147 against 192), so a learner who builds one beats the pars of `m_rf` (by 210), `a_alu16` (by 105) and
+the references that use 4:1 or 8:1 bus muxes. Making them campaign parts too would follow the same principle.
+
+**What the measurements say about the pipeline**: with the tightened parts, Pipeline IV takes 1 495 cycles × 78 =
+116 610 NAND delays against Core III's 1 236 × 98 = 121 128: about 4 % faster (before, at period 82, it was 1 %
+slower). Its CPI of 1.2 still eats most of the period's 20 % gain; prediction (its own test set) and earlier branch
+resolution are what make it pay more. The guided chapters measure the RV32 cores and are unaffected.

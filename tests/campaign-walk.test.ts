@@ -76,8 +76,10 @@ describe('walkthroughs', () => {
       if (WALKS[n.id]) continue;
       expect(w.steps.length, n.id).toBeLessThanOrEqual(12);
     }
-    // Sixteen multiplexers side by side: four steps of four, not one.
-    expect(walkOf(nodeById('g_mux8')!)!.steps.map((s) => s.parts.filter((p) => /^m\d/.test(p)).length)).toEqual([4, 4, 4, 4]);
+    // Sixteen XORs side by side and one zero detect: the wide group is halved until there are four steps, not two.
+    const eq = makeWalk(nodeById('g_eq16')!, null)!;
+    const xors = new Set(eq.main.parts.filter((p) => 'lib' in p.ref && p.ref.lib === 'xor').map((p) => p.id));
+    expect(eq.steps.map((s) => s.parts.filter((p) => xors.has(p)).length)).toEqual([4, 4, 8, 0]);
     expect(walkOf(nodeById('a_fa')!)!.steps.map((s) => s.parts)).toEqual([['g1'], ['g2', 'g3', 'g4'], ['g5', 'g9'], ['g6', 'g7', 'g8']]);
   });
 

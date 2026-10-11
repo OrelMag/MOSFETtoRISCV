@@ -2,13 +2,13 @@
 // and the parts unlocked by the levels below it, so its sandbox drawing is the level's reference
 // solution (campaign/levels.ts: docFromDef). Drawn with the Builder; long or shared nets are labels.
 
-import type { ComponentDef, PortDef } from '../../sim/types';
+import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../../sim/types';
 import { Builder } from '../builder';
 import { constWord } from '../alu';
-import { addSub, andN, busMux2, incrementer, muxTree, rca } from '../combinational';
+import { andN, HALF_ADDER, muxTree, rca } from '../combinational';
 import { define, merger, splitter } from '../define';
-import { AND, NOT, OR, XOR } from '../gates';
-import { DFF, register } from '../sequential';
+import { AND, MUX2, NOT, OR, XOR } from '../gates';
+import { SR_LATCH } from '../sequential';
 import { NAND, TIE1 } from '../transistors';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
@@ -99,6 +99,30 @@ export const DEC3: ComponentDef = (() => {
   });
 })();
 
+/** 16-bit 2:1 bus multiplexer, y = s ? b : a, with one inverter on s shared by every bit: 3n + 1 NANDs. */
+export const MUX16: ComponentDef = (() => {
+  const b = new Builder(8, 10, 2);
+  b.pins('a', 'b', 's');
+  const sa = b.op(splitter(Array(16).fill(1), 2), ['a'], undefined, 'sa');
+  const sb = b.op(splitter(Array(16).fill(1), 2), ['b'], undefined, 'sb');
+  const ns = b.name(b.op1(NOT, ['s'], '¬s', 'inv'), 'ns', true);
+  b.next();
+  const t = Array.from({ length: 16 }, (_, i) => [b.op1(NAND, [`${sa}.o${i}`, ns], undefined, `ta${i}`), b.op1(NAND, [`${sb}.o${i}`, 's'], undefined, `tb${i}`)]);
+  b.next();
+  const ys = t.map(([ta, tb], i) => b.op1(NAND, [ta, tb], `y${i}`, `y${i}`));
+  b.next();
+  b.wire(b.op1(merger(Array(16).fill(1), 2), ys, undefined, 'my'), 'y');
+  const R = b.right;
+  return define({
+    id: 'rv16_mux16', name: '16-bit 2:1 multiplexer (shared inverter)', category: 'routing',
+    summary: 'y = s ? b : a on 16-bit buses: per bit ¬(¬(a·¬s) · ¬(b·s)), three NANDs, and one inverter on s for all sixteen (49 NANDs, not 64).',
+    ports: [bus('a', 16, 'in'), bus('b', 16, 'in'), { name: 's', width: 1, dir: 'in', side: 'bottom' }, bus('y', 16, 'out')],
+    symbol: { kind: 'mux' },
+    spec: ([a, b, s]) => [s ? b : a],
+    netlist: () => ({ pins: { a: [0, 16], b: [0, 50], s: [0, 84], y: [R, 34] }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
 /** 16-bit equality: XOR per bit, then a zero detect. */
 export const EQ16: ComponentDef = (() => {
   const b = new Builder(8, 10, 2);
@@ -153,20 +177,62 @@ export const ADD16: ComponentDef = (() => {
   });
 })();
 
-/** Signed and unsigned less-than from one subtraction. */
+/** 16-bit incrementer: bit 0 is ¬a0 and carries a0 on; half adders do the other fifteen bits. */
+export const INC16: ComponentDef = (() => {
+  const P = 8, X = 10, Y0 = 4, n = 16;
+  const instances: InstanceDef[] = [
+    { name: 'sa', def: splitter(Array(n).fill(1), P), at: [5, Y0 + 2 - P / 2] },
+    { name: 'my', def: merger(Array(n).fill(1), P), at: [20, Y0 + 2 - P / 2] },
+    { name: 'n0', def: NOT, at: [X, Y0 + 1], label: '¬a0' },
+  ];
+  const nets: NetDef[] = [
+    { name: 'a', ends: ['a', 'sa.in'] },
+    { name: 'y', ends: ['my.out', 'y'] },
+    { name: 'a0', ends: ['sa.o0', 'n0.a', 'ha1.b'], via: { 'ha1.b': [[X - 2, Y0 + 2], [X - 2, Y0 + 5], [X + 3, Y0 + 5]] } },
+    { name: 'y0', ends: ['n0.y', 'my.i0'] },
+  ];
+  for (let i = 1; i < n; i++) {
+    instances.push({ name: `ha${i}`, def: HALF_ADDER, at: [X, Y0 + P * i] });
+    nets.push({ name: `a${i}`, ends: [`sa.o${i}`, `ha${i}.a`] });
+    nets.push({ name: `y${i}`, ends: [`ha${i}.s`, `my.i${i}`] });
+    nets.push({ name: `c${i + 1}`, ends: [`ha${i}.c`, i < n - 1 ? `ha${i + 1}.b` : 'cout'] });
+  }
+  const mid = Y0 + 2 - P / 2 + (P * n) / 2;
+  return define({
+    id: 'rv16_inc16', name: '16-bit incrementer (RV16)', category: 'arithmetic',
+    summary: '{cout, y} = a + 1. Bit 0 of a + 1 is ¬a0 and its carry is a0 itself, so one inverter replaces the first half adder (76 NANDs, depth 31).',
+    ports: [bus('a', 16, 'in'), bus('y', 16, 'out'), bit('cout', 'out')],
+    symbol: { kind: 'box', label: '+1' },
+    spec: ([a]) => [(a + 1) & 0xffff, a === 0xffff ? 1 : 0],
+    netlist: () => ({ pins: { a: [1, mid], y: [25, mid], cout: [X + 3, Y0 + P * n + 1] }, pinDirs: { cout: 'up' }, instances, nets }),
+  });
+})();
+
+/** Signed and unsigned less-than from one subtraction, a + ¬b + 1, of which only the carry is read. */
 export const CMP16: ComponentDef = (() => {
-  const b = new Builder(8, 12, 4);
+  const b = new Builder(8, 12, 2);
   b.pins('a', 'b');
   const one = b.op1(TIE1, []);
+  const sb = b.op(splitter(Array(16).fill(1), 2), ['b']);
   b.next();
-  const d = b.op(addSub(16), ['a', 'b', one], 'a − b');
+  const nb = Array.from({ length: 16 }, (_, i) => b.op1(NOT, [`${sb}.o${i}`]));
   b.next();
-  b.wire(b.op1(XOR, [`${d}.n`, `${d}.v`], 'N ⊕ V'), 'lt');
-  b.wire(b.op1(NOT, [`${d}.cout`], 'no carry'), 'ltu');
+  const d = b.op(ADD16, ['a', b.op1(merger(Array(16).fill(1), 2), nb, '¬b'), one], 'a + ¬b + 1');
+  const sa = b.op(splitter([15, 1], 2), ['a'], 'sign of a');
+  const sbs = b.op(splitter([15, 1], 2), ['b'], 'sign of b');
+  b.next();
+  const ltu = b.name(b.op1(NOT, [`${d}.cout`], 'no carry'), 'ltu', true);
+  const differ = b.name(b.op1(XOR, [`${sa}.o1`, `${sbs}.o1`], 'signs differ'), 'differ', true);
+  b.next();
+  // lt = differ ? a15 : ltu, as NANDs (the mux part is not unlocked yet at this level).
+  const t1 = b.op1(NAND, [differ, `${sa}.o1`]), t2 = b.op1(NAND, [b.op1(NOT, [differ]), ltu]);
+  b.next();
+  b.wire(b.op1(NAND, [t1, t2], 'lt'), 'lt');
+  b.wire(ltu, 'ltu');
   const R = b.right;
   return define({
     id: 'rv16_cmp16', name: 'Less-than (16-bit, signed and unsigned)', category: 'arithmetic',
-    summary: 'From a + ¬b + 1: unsigned a < b ⇔ no carry out; signed a < b ⇔ the sign of the difference, corrected for overflow (N ⊕ V).',
+    summary: 'From a + ¬b + 1: unsigned a < b ⇔ no carry out. Signed: if the signs differ, a < b ⇔ a is negative; if they agree the difference cannot overflow and the unsigned answer holds. Only the carry is read, so ¬b needs inverters, not XORs.',
     ports: [bus('a', 16, 'in'), bus('b', 16, 'in'), bit('lt', 'out'), bit('ltu', 'out')],
     symbol: { kind: 'box', label: 'A < B' },
     spec: ([a, b]) => [((a << 16) >> 16) < ((b << 16) >> 16) ? 1 : 0, a < b ? 1 : 0],
@@ -174,28 +240,143 @@ export const CMP16: ComponentDef = (() => {
   });
 })();
 
+// ---- storage at the learner's cost: what s_dlatch … s_reg16 build, so the parts they unlock
+// (and every later reference) cost what the levels' pars count. The library's D latch has an
+// explicit inverter on d (5 NANDs, so 11 per flip-flop and 15 per enable flip-flop).
+
+const clkIn = (name = 'clk'): PortDef => ({ name, width: 1, dir: 'in', clock: true });
+
+/** D latch from 4 NANDs: the second gate takes the first one's output in place of ¬d. */
+export const RV16_DLATCH: ComponentDef = define({
+  id: 'rv16_dlatch', name: 'D latch (4 NANDs)', category: 'sequential',
+  summary: 'Transparent while e = 1, holding while e = 0. s_n = ¬(d·e) sets the SR latch; r_n = ¬(s_n·e) resets it, since with e = 1 s_n is ¬d: no inverter needed.',
+  ports: [bit('d', 'in'), bit('e', 'in'), bit('q', 'out')],
+  symbol: { kind: 'box', label: 'D latch' },
+  netlist: () => ({
+    pins: { d: [1, 3], e: [1, 12], q: [32, 4] },
+    instances: [
+      { name: 'g1', def: NAND, at: [8, 2] },
+      { name: 'g2', def: NAND, at: [8, 8] },
+      { name: 'sr', def: SR_LATCH, at: [16, 2] },
+    ],
+    nets: [
+      { name: 'd', ends: ['d', 'g1.a'] },
+      { name: 'e', ends: ['e', 'g1.b', 'g2.b'], trunk: 7 },
+      { name: 's_n', ends: ['g1.y', 'sr.s_n', 'g2.a'], via: { 'g2.a': [[13, 4], [13, 7], [6, 7], [6, 9]] } },
+      { name: 'r_n', ends: ['g2.y', 'sr.r_n'], trunk: 14.5 },
+      { name: 'q', ends: ['sr.q', 'q'] },
+    ],
+  }),
+});
+
+/** Positive-edge master–slave D flip-flop: 9 NANDs. */
+export const RV16_DFF: ComponentDef = define({
+  id: 'rv16_dff', name: 'D flip-flop (9 NANDs)', category: 'sequential',
+  summary: 'Samples d at the rising edge of clk: the master latch is open while clk = 0, the slave while clk = 1, never both. Two 4-NAND latches and an inverter.',
+  ports: [bit('d', 'in'), clkIn(), bit('q', 'out')],
+  symbol: { kind: 'box', label: 'DFF' },
+  ff: { d: 'd', q: 'q', clk: 'clk' },
+  netlist: () => ({
+    pins: { d: [1, 4], clk: [1, 12], q: [37, 6] },
+    instances: [
+      { name: 'inv', def: NOT, at: [3, 11] },
+      { name: 'master', def: RV16_DLATCH, at: [9, 2] },
+      { name: 'slave', def: RV16_DLATCH, at: [23, 3] },
+    ],
+    nets: [
+      { name: 'd', ends: ['d', 'master.d'] },
+      { name: 'clk', ends: ['clk', 'inv.a', 'slave.e'], via: { 'slave.e': [[2, 12], [2, 14], [21, 14], [21, 7]] } },
+      { name: 'clk_n', ends: ['inv.y', 'master.e'], trunk: 7.5 },
+      { name: 'm', ends: ['master.q', 'slave.d'] },
+      { name: 'q', ends: ['slave.q', 'q'] },
+    ],
+  }),
+});
+
+/** D flip-flop with enable: a mux feeds q back while en = 0 (13 NANDs). */
+export const RV16_DFFE: ComponentDef = define({
+  id: 'rv16_dffe', name: 'D flip-flop with enable (13 NANDs)', category: 'sequential',
+  summary: 'Loads d at the rising edge only when en = 1; otherwise the mux feeds q back. The clock itself is never gated.',
+  ports: [bit('d', 'in'), bit('en', 'in'), clkIn(), bit('q', 'out')],
+  symbol: { kind: 'box', label: 'DFFE' },
+  ff: { d: 'd', q: 'q', clk: 'clk', en: 'en' },
+  netlist: () => ({
+    pins: { d: [1, 5], en: [1, 9], clk: [1, 11], q: [27, 5] },
+    instances: [
+      { name: 'mux', def: MUX2, at: [5, 1] },
+      { name: 'ff', def: RV16_DFF, at: [13, 2] },
+    ],
+    nets: [
+      { name: 'd', ends: ['d', 'mux.b'] },
+      { name: 'en', ends: ['en', 'mux.s'], via: { 'mux.s': [[7, 9]] } },
+      { name: 'clk', ends: ['clk', 'ff.clk'], via: { 'ff.clk': [[11, 11], [11, 6]] } },
+      { name: 'next', ends: ['mux.y', 'ff.d'] },
+      { name: 'q', ends: ['ff.q', 'q', 'mux.a'], via: { 'mux.a': [[23, 5], [23, 0], [3, 0], [3, 3]] } },
+    ],
+  }),
+});
+
+/** n cells (enable flip-flops, or registers cw bits wide) side by side on one bus, sharing en and clk. */
+function regOf(n: number, cell: ComponentDef, cw: number, id: string, name: string, summary: string): ComponentDef {
+  const b = new Builder(8, 10, 2);
+  b.pins('d', 'en', 'clk');
+  const s = b.op(splitter(Array(n).fill(cw), 2), ['d']);
+  b.next();
+  const qs = Array.from({ length: n }, (_, i) => b.op1(cell, [`${s}.o${i}`, 'en', 'clk'], cw === 1 ? `bit ${i}` : `bits ${cw * i + cw - 1}…${cw * i}`));
+  b.next();
+  b.wire(b.op1(merger(Array(n).fill(cw), 2), qs), 'q');
+  const R = b.right, w = n * cw;
+  return define({
+    id, name, category: 'sequential', summary,
+    ports: [bus('d', w, 'in'), bit('en', 'in'), clkIn(), bus('q', w, 'out')],
+    symbol: { kind: 'box', label: `REG${w}` },
+    netlist: () => ({ pins: { d: [0, 6], en: [0, 10], clk: [0, 14], q: [R, 8] }, instances: b.instances, nets: b.nets() }),
+  });
+}
+
+export const RV16_REG4 = regOf(4, RV16_DFFE, 1, 'rv16_reg4', '4-bit register (52 NANDs)', 'Four enable flip-flops sharing en and clk: q ← d at the rising edge when en = 1, else hold.');
+export const RV16_REG16 = regOf(4, RV16_REG4, 4, 'rv16_reg16', '16-bit register (208 NANDs)', 'Four 4-bit registers sharing en and clk: q ← d at the rising edge when en = 1, else hold.');
+
+/** 16 flip-flops without an enable: a register that loads at every edge (144 NANDs). */
+export const RV16_DREG16: ComponentDef = (() => {
+  const b = new Builder(8, 10, 2);
+  b.pins('d', 'clk');
+  const s = b.op(splitter(Array(16).fill(1), 2), ['d']);
+  b.next();
+  const qs = Array.from({ length: 16 }, (_, i) => b.op1(RV16_DFF, [`${s}.o${i}`, 'clk'], `bit ${i}`));
+  b.next();
+  b.wire(b.op1(merger(Array(16).fill(1), 2), qs), 'q');
+  const R = b.right;
+  return define({
+    id: 'rv16_dreg16', name: '16-bit register, no enable (144 NANDs)', category: 'sequential',
+    summary: 'Sixteen flip-flops on one clock: q ← d at every rising edge. For a register whose next value is always chosen in front of it (the PC), enable muxes would do nothing.',
+    ports: [bus('d', 16, 'in'), clkIn(), bus('q', 16, 'out')],
+    symbol: { kind: 'box', label: 'REG16' },
+    netlist: () => ({ pins: { d: [0, 6], clk: [0, 10], q: [R, 8] }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
 /** The program counter: 0 on reset, d on load, else pc + 1. */
 export const PC16: ComponentDef = (() => {
   const b = new Builder(8, 12, 4);
   b.pins('rst', 'ld', 'd', 'clk');
-  const one = b.op1(TIE1, []);
   const zero = b.op1(constWord(16, 0), []);
   b.next();
-  const inc = b.op(incrementer(16), [''], 'pc + 1');
+  const inc = b.op(INC16, [''], 'pc + 1');
   b.next();
-  const m1 = b.op1(busMux2(16), [`${inc}.y`, 'd', 'ld'], 'load?');
+  const m1 = b.op1(MUX16, [`${inc}.y`, 'd', 'ld'], 'load?');
   b.next();
-  const m2 = b.op1(busMux2(16), [m1, zero, 'rst'], 'reset?');
+  const m2 = b.op1(MUX16, [m1, zero, 'rst'], 'reset?');
   b.next();
-  const r = b.op(register(16), [m2, one, 'clk'], 'PC');
+  const r = b.op(RV16_DREG16, [m2, 'clk'], 'PC');
   const pc = b.name(`${r}.q`, 'pc', true);
   b.wire(pc, `${inc}.a`);
   b.wire(pc, 'pc');
   const R = b.right;
   return define({
     id: 'rv16_pc', name: 'Program counter (16-bit)', category: 'sequential',
-    summary: 'pc ← rst ? 0 : ld ? d : pc + 1 at every rising edge: a register, an incrementer and two bus multiplexers.',
-    ports: [bit('rst', 'in'), bit('ld', 'in'), bus('d', 16, 'in'), { name: 'clk', width: 1, dir: 'in', clock: true }, bus('pc', 16, 'out')],
+    summary: 'pc ← rst ? 0 : ld ? d : pc + 1 at every rising edge: sixteen flip-flops (the PC loads every cycle, so no enable), an incrementer and two bus multiplexers.',
+    ports: [bit('rst', 'in'), bit('ld', 'in'), bus('d', 16, 'in'), clkIn(), bus('pc', 16, 'out')],
     symbol: { kind: 'box', label: 'PC' },
     netlist: () => ({ pins: { ...pinsAt(['rst', 'ld', 'd', 'clk'], 0), pc: [R, 8] }, instances: b.instances, nets: b.nets() }),
   });
@@ -211,7 +392,7 @@ export const RF8: ComponentDef = (() => {
   const en = b.op(splitter(Array(8).fill(1), 2), [dec]);
   b.next();
   const qs = [zero];
-  for (let i = 1; i < 8; i++) qs.push(b.name(`${b.op(register(16), ['wd', `${en}.o${i}`, 'clk'], `x${i}`)}.q`, `x${i}`, true));
+  for (let i = 1; i < 8; i++) qs.push(b.name(`${b.op(RV16_REG16, ['wd', `${en}.o${i}`, 'clk'], `x${i}`)}.q`, `x${i}`, true));
   b.next();
   const mux = muxTree(3, 16);
   b.wire(b.op1(mux, [...qs, 'ra1'], 'read rs1'), 'rd1');
@@ -244,8 +425,8 @@ export const DET101: ComponentDef = (() => {
   b.next();
   const n1 = b.op1(NOT, [k1], 'n1');
   b.next();
-  const f0 = b.op(DFF, [n0, 'clk'], 's0');
-  const f1 = b.op(DFF, [n1, 'clk'], 's1');
+  const f0 = b.op(RV16_DFF, [n0, 'clk'], 's0');
+  const f1 = b.op(RV16_DFF, [n1, 'clk'], 's1');
   const s0 = b.name(`${f0}.q`, 's0', true), s1 = b.name(`${f1}.q`, 's1', true);
   b.wire(s0, `${k1.split('.')[0]}.b`);
   b.next();

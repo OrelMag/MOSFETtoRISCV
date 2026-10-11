@@ -110,24 +110,29 @@ export const WALKS1: Record<string, WalkScript> = {
   ],
   g_mux8: [
     {
+      title: 'One inverter on s',
+      text: 'The splitters cut a and b into bits for free. inv = ¬s, once for all sixteen bits: your 1-bit mux inverts s for itself, and sixteen copies of it would spend 16 NANDs on the same signal.',
+      parts: ['sa', 'sb', 'inv'], codex: ['mux', 'bus'],
+    },
+    {
       title: 'Bits 0 to 3',
-      text: 'The splitters cut a and b into bits for free. Mux k takes a[k], b[k] and s: 4 NANDs, depth 3 from s and 2 from the data inputs.',
-      parts: ['sa', 'sb', 'm0', 'm1', 'm2', 'm3'], codex: ['mux', 'bus'],
+      text: 'Per bit, ta = ¬(a[k]·¬s), tb = ¬(b[k]·s) and y = ¬(ta·tb) = a[k]·¬s + b[k]·s: your 2:1 mux without its inverter, 3 NANDs. Depth 3 from s (through inv), 2 from the data.',
+      parts: ['ta0', 'tb0', 'y0', 'ta1', 'tb1', 'y1', 'ta2', 'tb2', 'y2', 'ta3', 'tb3', 'y3'],
     },
     {
       title: 'One select for every bit',
-      text: 's fans out to every mux, so all bits switch together: y is either all of a or all of b, never a mix. Operations on buses are one gate per bit sharing their control.',
-      parts: ['m4', 'm5', 'm6', 'm7'], codex: ['fanin'],
+      text: 's and ¬s fan out to every bit, so all bits switch together: y is either all of a or all of b, never a mix. Operations on buses are one gate per bit sharing their control.',
+      parts: ['ta4', 'tb4', 'y4', 'ta5', 'tb5', 'y5', 'ta6', 'tb6', 'y6', 'ta7', 'tb7', 'y7'], codex: ['fanin'],
     },
     {
-      title: 'Sixteen inverters on s',
-      text: 'Each 1-bit mux inverts s for itself. One shared NOT could feed all sixteen: 3 × 16 + 1 = 49 NANDs at the same depth 3. Real cells pay for a fan-out of 16 with delay, which the unit-delay model here ignores.',
-      parts: ['m8', 'm9', 'm10', 'm11'],
+      title: 'Bits 8 to 11',
+      text: 'inv now drives sixteen gates. Real cells pay for that fan-out with delay (or a buffer), which the unit-delay model here ignores.',
+      parts: ['ta8', 'tb8', 'y8', 'ta9', 'tb9', 'y9', 'ta10', 'tb10', 'y10', 'ta11', 'tb11', 'y11'],
     },
     {
       title: 'Merge the result',
-      text: 'm12 to m15 complete the row and the merger joins the sixteen outputs into y. 64 NANDs, depth 3: par, as sixteen copies of your 2:1 mux.',
-      parts: ['m12', 'm13', 'm14', 'm15', 'my'],
+      text: 'Bits 12 to 15 complete the row and the merger joins the sixteen outputs into y. 3 × 16 + 1 = 49 NANDs, depth 3: par. Sixteen copies of your 2:1 mux (the library\'s mux2x16) cost 64 at the same depth.',
+      parts: ['ta12', 'tb12', 'y12', 'ta13', 'tb13', 'y13', 'ta14', 'tb14', 'y14', 'ta15', 'tb15', 'y15', 'my'],
     },
   ],
   g_eq16: [
@@ -193,23 +198,23 @@ export const WALKS1: Record<string, WalkScript> = {
   ],
   a_inc16: [
     {
-      title: 'Bit 0: add the 1',
-      text: 'With b = 0 and cin = 1, bit k of a + 1 is a half adder of a[k] and the carry in. ha0 adds a[0] and the constant 1: s = ¬a0, c = a0. A NOT and a wire would do the same for 1 NAND instead of 5.',
-      parts: ['one', 'sa', 'ha0'], codex: ['incrementer', 'halfadder'],
+      title: 'Bit 0: a NOT and a wire',
+      text: 'With b = 0 and cin = 1, bit k of a + 1 is a half adder of a[k] and the carry in. For bit 0 the carry in is the constant 1: the sum is ¬a0 and the carry out is a0 itself. n0 = ¬a0 costs 1 NAND, where a half adder on a constant 1 costs 5.',
+      parts: ['sa', 'n0'], codex: ['incrementer'],
     },
     {
       title: 'Bit 1',
-      text: 'ha1 adds a[1] and ha0\'s carry. Its carry a0·a1 is the AND that ends a half adder: the carry into bit k is a0·…·a(k−1).',
-      parts: ['ha1'],
+      text: 'ha1 adds a[1] and a0, taken straight from the splitter. Its carry a0·a1 is the AND that ends a half adder: the carry into bit k is a0·…·a(k−1).',
+      parts: ['ha1'], codex: ['halfadder'],
     },
     {
       title: 'The carry chain',
-      text: 'ha2 to ha14 repeat it. Each carry costs 2 NAND delays (NAND, then NOT), so the carry into bit 15 settles at depth 30.',
+      text: 'ha2 to ha14 repeat it. Each carry costs 2 NAND delays (NAND, then NOT) from depth 0 at a0, so the carry into bit 15 settles at depth 28.',
       parts: ['ha2', 'ha3', 'ha4', 'ha5', 'ha6', 'ha7', 'ha8', 'ha9', 'ha10', 'ha11', 'ha12', 'ha13', 'ha14'], codex: ['ripple'],
     },
     {
       title: 'Bit 15 and cout',
-      text: 'ha15 makes y[15] (depth 33) and cout, 1 only for a = 0xFFFF; the merger gathers y. 80 NANDs, depth 33: par, less than half a 144-NAND adder. Replacing ha0 by a NOT gives 76 NANDs and depth 31.',
+      text: 'ha15 makes y[15] (depth 31) and cout (30), 1 only for a = 0xFFFF; the merger gathers y. 1 + 15 × 5 = 76 NANDs, depth 31: par, about half a 144-NAND adder. The library\'s inc16 keeps a half adder on the constant 1 for bit 0: 80 NANDs, depth 33.',
       parts: ['ha15', 'my'],
     },
   ],
@@ -242,19 +247,29 @@ export const WALKS1: Record<string, WalkScript> = {
   ],
   a_slt: [
     {
-      title: 'One subtraction',
-      text: 'Your adder/subtractor with sub tied to 1 computes a + ¬b + 1 = a − b. Both comparisons are read off its flags.',
-      parts: ['u0', 'u1'], codex: ['subtract', 'flags'],
+      title: 'Invert b',
+      text: 'Both answers come from a − b = a + ¬b + 1, and here b is always inverted. u2 to u17 are sixteen NOTs: 16 NANDs, where your subtractor\'s XORs, which invert only on demand, cost 64. The splitter and the merger are free.',
+      parts: ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'u11', 'u12', 'u13', 'u14', 'u15', 'u16', 'u17', 'u18'], codex: ['subtract', 'not'],
     },
     {
-      title: 'Signed: N ⊕ V',
-      text: 'lt = n ⊕ v. Without overflow the sign of a − b is the answer; when the subtraction overflows the sign bit is wrong, and v flips it back. Depth 44: v settles at 41, then one XOR.',
-      parts: ['u2'], codex: ['overflow'],
+      title: 'Add, keep the carry',
+      text: 'u19, your 16-bit adder, computes a + ¬b + 1 with its carry in tied to 1 (u0). Only cout is read: the 48 NANDs that form the sixteen sum bits compute values nobody uses. A carry-only chain drawn from NANDs would drop them; the adder part cannot.',
+      parts: ['u0', 'u19'], codex: ['twos'],
     },
     {
       title: 'Unsigned: no carry',
-      text: 'ltu = ¬cout: a + ¬b + 1 carries out of bit 15 exactly when a ≥ b unsigned. 217 NANDs: par for the library block, which wastes gates here. The sums s[14:0] are computed and never read (45 NANDs), and with sub fixed at 1 each XOR is only an inverter (16 NOTs would replace 64 NANDs).',
-      parts: ['u3'],
+      text: 'ltu = ¬cout (u22): a + ¬b + 1 carries out of bit 15 exactly when a ≥ b as unsigned numbers. cout settles at depth 36 (a NOT, then the 35-deep carry chain), ltu at 37.',
+      parts: ['u22'], codex: ['flags'],
+    },
+    {
+      title: 'Do the signs differ?',
+      text: 'The [15, 1] splitters take the sign bits and u23 = a15 ⊕ b15. When the signs agree, a and b lie in the same half of the range, a − b cannot overflow, and signed order is unsigned order: lt = ltu.',
+      parts: ['u20', 'u21', 'u23'], codex: ['overflow'],
+    },
+    {
+      title: 'Choose',
+      text: 'When the signs differ the negative one is smaller: lt = a15. lt = differ ? a15 : ltu is a 2:1 mux drawn as 4 NANDs (u24 to u27; the mux part is not unlocked here). 169 NANDs, depth 39: par. The textbook N ⊕ V needs the sum\'s sign and the overflow flag, so your whole subtractor: 217 NANDs, depth 44.',
+      parts: ['u24', 'u25', 'u26', 'u27'], codex: ['mux'],
     },
   ],
   a_shift16: [
@@ -302,7 +317,7 @@ export const WALKS1: Record<string, WalkScript> = {
     },
     {
       title: 'Comparisons from the adder',
-      text: 'slt = n ⊕ v and sltu = ¬cout, as in your less-than unit; zslt and zsltu zero-extend each bit to 16 for free. 5 NANDs buy two instructions.',
+      text: 'The adder already subtracts for slt and sltu, so its flags answer both: slt = n ⊕ v, sltu = ¬cout. zslt and zsltu zero-extend each bit to 16 for free. 5 NANDs buy two instructions; your 169-NAND less-than unit pays for its own adder.',
       parts: ['slt', 'zslt', 'sltu', 'zsltu'], codex: ['flags'],
     },
     {
@@ -357,46 +372,46 @@ export const WALKS1: Record<string, WalkScript> = {
   ],
   s_reg16: [
     {
-      title: 'Bits 0 to 3',
-      text: 'One flip-flop with enable per bit, all sharing en and clk. The library DFFE drawn here costs 15 NANDs: its D latches have 5 NANDs (an inverter on d) where yours have 4.',
-      parts: ['sd', 'ff0', 'ff1', 'ff2', 'ff3'], codex: ['register'],
+      title: 'Bits 3 to 0',
+      text: 'The splitter cuts d into four nibbles for free. u1 is your 4-bit register on the low nibble: four enable flip-flops sharing en and clk, 52 NANDs.',
+      parts: ['u0', 'u1'], codex: ['register'],
     },
     {
-      title: 'Bits 4 to 7',
-      text: 'The same cell again. The enable mux, not a gated clock, decides whether a bit reloads d or its own q.',
-      parts: ['ff4', 'ff5', 'ff6', 'ff7'], codex: ['clockgating'],
+      title: 'Bits 7 to 4',
+      text: 'u2 takes the next nibble and the same en and clk, so every bit loads or holds on the same edge. The enable mux, not a gated clock, decides whether a bit reloads d or its own q.',
+      parts: ['u2'], codex: ['clockgating'],
     },
     {
-      title: 'Bits 8 to 11',
-      text: 'Each bit is independent: the only thing the bits share is en and clk.',
-      parts: ['ff8', 'ff9', 'ff10', 'ff11'],
+      title: 'Bits 11 to 8',
+      text: 'u3: the bits share nothing but en and clk, so a register of registers is the same sixteen cells, wired by a splitter and a merger that cost nothing.',
+      parts: ['u3'],
     },
     {
-      title: 'Bits 12 to 15',
-      text: 'The merger gathers q. 16 × 15 = 240 NANDs: par; four of your 4-bit registers cost 208. Period 8: clk-to-q (3), the enable mux on the q → d loop (2), setup (3).',
-      parts: ['ff12', 'ff13', 'ff14', 'ff15', 'mq'], codex: ['setuphold'],
+      title: 'Bits 15 to 12',
+      text: 'u4 completes the word and the merger gathers q. 4 × 52 = 208 NANDs: par. The library\'s reg16 costs 240: its D latches have 5 NANDs (an inverter on d) where yours have 4. Period 8: clk-to-q (3), the enable mux on the q → d loop (2), setup (3).',
+      parts: ['u4', 'u5'], codex: ['setuphold'],
     },
   ],
   s_pc: [
     {
       title: 'The register',
-      text: 'u5 holds pc, with en tied to 1: the PC loads at every edge, and its next value is chosen in front of it. 240 NANDs, more than half the total.',
-      parts: ['u0', 'u5'], codex: ['pc', 'register'],
+      text: 'u4 holds pc: sixteen of your flip-flops, 144 NANDs, with no enable. The PC loads at every edge and its next value is chosen in front of it, so enable muxes would always pick d: your 16-bit register would cost 64 NANDs more.',
+      parts: ['u4'], codex: ['pc', 'register'],
     },
     {
       title: 'pc + 1',
-      text: 'u2, your incrementer, computes pc + 1 from the register\'s output. It wraps from 0xFFFF to 0 by itself: its cout is left open.',
-      parts: ['u2'], codex: ['incrementer'],
+      text: 'u1, your incrementer (76 NANDs, depth 31), computes pc + 1 from the register\'s output. It wraps from 0xFFFF to 0 by itself: its cout is left open.',
+      parts: ['u1'], codex: ['incrementer'],
     },
     {
       title: 'Load a jump',
-      text: 'u3 selects d instead of pc + 1 when ld = 1.',
-      parts: ['u3'], codex: ['mux'],
+      text: 'u2, your bus multiplexer (49 NANDs), selects d instead of pc + 1 when ld = 1.',
+      parts: ['u2'], codex: ['mux'],
     },
     {
       title: 'Reset wins',
-      text: 'u4 selects the constant 0 when rst = 1. It is the mux nearest the register, so rst overrides ld. 448 NANDs: par. Period 45: clk-to-q (3), incrementer (33), three muxes (2 each, the register\'s enable mux included), setup (3). With en always 1, plain flip-flops would save the 64 NANDs of enable muxes.',
-      parts: ['u1', 'u4'], codex: ['criticalpath'],
+      text: 'u3 selects the constant 0 when rst = 1. It is the mux nearest the register, so rst overrides ld. 144 + 76 + 2 × 49 = 318 NANDs: par. Period 41: clk-to-q (3), incrementer (31), two muxes (2 each on the data), setup (3).',
+      parts: ['u0', 'u3'], codex: ['criticalpath'],
     },
   ],
   m_rf: [
@@ -407,22 +422,22 @@ export const WALKS1: Record<string, WalkScript> = {
     },
     {
       title: 'Register x1',
-      text: 'u3 is a 16-bit register on wd, its enable on decoder output 1. The decoder drives enables, never the clock: every register sees the same clk.',
+      text: 'u3, your 16-bit register (208 NANDs), loads wd with its enable on decoder output 1. The decoder drives enables, never the clock: every register sees the same clk.',
       parts: ['u2', 'u3'], codex: ['register', 'clockgating'],
     },
     {
       title: 'Registers x2 to x7',
-      text: 'u4 to u9 take decoder outputs 2 to 7. Output 0 drives nothing: a write to x0 reaches no register, so it is ignored. The seven registers cost 1680 NANDs, 64% of the file.',
+      text: 'u4 to u9 take decoder outputs 2 to 7. Output 0 drives nothing: a write to x0 reaches no register, so it is ignored. The seven registers cost 1456 NANDs, 61% of the file.',
       parts: ['u4', 'u5', 'u6', 'u7', 'u8', 'u9'],
     },
     {
       title: 'Read port 1',
-      text: 'u10, an 8:1 tree of 16-bit muxes (448 NANDs, depth 7), selects x[ra1]. Input 0 is the constant 0: x0 always reads 0 and costs no register, which saves 240 NANDs.',
+      text: 'u10, the library\'s 8:1 tree of seven 16-bit muxes (448 NANDs, depth 7), selects x[ra1]. Input 0 is the constant 0: x0 always reads 0 and costs no register, which saves 208 NANDs. Seven of your 49-NAND bus muxes make the same tree for 343.',
       parts: ['u1', 'u10'], codex: ['regfile', 'mux'],
     },
     {
       title: 'Read port 2',
-      text: 'u11 is a second tree on the same eight words, selected by ra2. Reads are combinational and independent, so an instruction reads rs1 and rs2 in the same cycle. 2627 NANDs: par. Period 11: wa through the decoder (5) and an enable mux (3), plus setup (3).',
+      text: 'u11 is a second tree on the same eight words, selected by ra2. Reads are combinational and independent, so an instruction reads rs1 and rs2 in the same cycle. 2403 NANDs: par. Period 11: wa through the decoder (5) and an enable mux (3), plus setup (3).',
       parts: ['u11'],
     },
   ],

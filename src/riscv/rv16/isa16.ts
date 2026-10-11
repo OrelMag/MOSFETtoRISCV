@@ -54,15 +54,23 @@ export function reg16(s: string): number | null {
   return i >= 0 ? i : null;
 }
 
-export const CSRS16 = ['mstatus', 'mie', 'mip', 'mtvec', 'mepc', 'mcause', 'mscratch', 'mcycle'];
-export const CSR16 = { mstatus: 0, mie: 1, mip: 2, mtvec: 3, mepc: 4, mcause: 5, mscratch: 6, mcycle: 7 } as const;
+export const CSRS16 = ['mstatus', 'mie', 'mip', 'mtvec', 'mepc', 'mcause', 'mscratch'];
+export const CSR16 = { mstatus: 0, mie: 1, mip: 2, mtvec: 3, mepc: 4, mcause: 5, mscratch: 6 } as const;
+/**
+ * CSR 7 has no register: it reads 0 and ignores writes, in the hardware and the golden model. (A
+ * cycle counter would disagree with the golden model on a pipeline, which counts instructions.)
+ */
+export const CSR16_UNUSED = 7;
 /** mstatus bits, mie / mip bits, mcause values. */
 export const MSTATUS_MIE = 1 << 3, MSTATUS_MPIE = 1 << 7;
-export const MIP_MTIP = 1 << 7, MIP_MEIP = 1 << 11;
-export const CAUSE = { illegal: 2, breakpoint: 3, ecall: 11, timer: 0x8007, external: 0x800b } as const;
+export const MIP_MEIP = 1 << 11;
+export const CAUSE = { illegal: 2, breakpoint: 3, ecall: 11, external: 0x800b } as const;
 
-/** Memory-mapped I/O: the top of the data address space, reachable as imm(x0). */
-export const MMIO16 = { EXIT: 0xffff, CONSOLE: 0xfffe, OUT: 0xfffd, IN: 0xfffc, LEDS: 0xfffb, SWITCHES: 0xfffa, IRQ: 0xfff9, MTIME: 0xfff8, MTIMECMP: 0xfff7 } as const;
+/**
+ * Memory-mapped I/O: the top of the data address space, reachable as imm(x0). 0xFFF7 and 0xFFF8 are
+ * reserved (no timer: the cores take only the external interrupt): they read 0, stores are dropped.
+ */
+export const MMIO16 = { EXIT: 0xffff, CONSOLE: 0xfffe, OUT: 0xfffd, IN: 0xfffc, LEDS: 0xfffb, SWITCHES: 0xfffa, IRQ: 0xfff9 } as const;
 export const MMIO_BASE = 0xfff7;
 
 export const sext = (v: number, bits: number) => {
@@ -133,7 +141,7 @@ export function disasm16(w: number, pc?: number): string {
     case 'J': return d.rd === 0 && d.imm === 0 ? 'halt' : `jal ${rn(d.rd)}, ${tgt(d.imm)}`;
     case 'S': return `sw ${rn(d.rs2)}, ${d.imm}(${rn(d.rs1)})`;
     case 'SYS': return s.name;
-    case 'CSR': return `${s.name} ${rn(d.rd)}, ${CSRS16[d.csr]}, ${rn(d.rs1)}`;
+    case 'CSR': return `${s.name} ${rn(d.rd)}, ${CSRS16[d.csr] ?? d.csr}, ${rn(d.rs1)}`;
     default:
       if (s.name === 'lw' || s.name === 'jalr') return `${s.name} ${rn(d.rd)}, ${d.imm}(${rn(d.rs1)})`;
       if (s.name === 'addi' && d.rd === 0 && d.rs1 === 0 && d.imm === 0) return 'nop';
