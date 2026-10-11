@@ -30,6 +30,17 @@ export interface Workspace {
   favorites?: string[];
   /** Custom instruction sets (the ISA editor) by id; ROMs that use one hold a copy of it. */
   isas?: Record<string, IsaDoc>;
+  /**
+   * Folders of "My chips", in order (folders.ts): one level, a chip in at most one. Kept out of the
+   * chip documents so filing a chip recompiles nothing and changes no export, link or import match.
+   */
+  folders?: FolderDoc[];
+}
+
+export interface FolderDoc {
+  name: string;
+  /** Chip ids in the order the palette lists them. */
+  chips: string[];
 }
 
 export interface ChipDoc {

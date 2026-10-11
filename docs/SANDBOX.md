@@ -231,12 +231,26 @@ and the ISS options.
 - **Warnings** (click to locate): two nets drawn on one line, pointers without a twin or connected
   to nothing, inputs left open, outputs that fight over a net, width mismatches, two drivers.
 
+## Folders and projects
+
+- **Folders** sort *My chips*: the folder button on the group's header adds one (type its name), a
+  double-click on a folder's name renames it, and dragging a chip from the palette onto a folder files
+  it there (onto *My chips* itself: out of any folder). A chip's properties and **Manage chips…** have
+  a Folder field too; the manager also renames and deletes folders (their chips stay). Folders only
+  help you find chips: ids, share links and Verilog are unchanged. One level, no folders inside folders.
+- **Projects** are separate sets of chips, each with its own folders, favorites and open tabs. The
+  switcher at the top of the palette lists them and makes, duplicates, renames, exports, imports
+  (a file as a new project, instead of merging it into this one) and deletes them. The first project,
+  *My chips* unless renamed, holds the campaign's level chips: opening one switches to it, and it
+  cannot be deleted.
+
 ## Files and sharing
 
 - Everything is saved in the browser automatically. The top bar shows *Saved*, *Saving…* or
   *Storage full*. If saved data cannot be read, it is kept, and a banner offers to download it.
 - **File ▸**:
   - **Export this chip…** (`<name>.chip.json`, with every chip inside it) or **Export all chips…**
+    (the whole project, with its folders and favorites). Both name the folders of the chips they hold.
   - **Import…**, or drop a `.json` file on the canvas. Import never overwrites: a chip with the
     same id and different contents is renamed, and an identical one is skipped.
   - **Share link…**: the chip and its sub-chips compressed into the URL (`#/sandbox/s/…`).
@@ -244,7 +258,7 @@ and the ISS options.
     32 KB may break in some apps; export a file instead.
   - **Export Verilog** (structural SystemVerilog of the whole hierarchy), **Export image** (SVG or
     PNG, in the current theme).
-  - **Manage chips…**: size, users, open, duplicate, delete.
+  - **Manage chips…**: size, users, folder, open, duplicate, delete; folders renamed and deleted.
 
 ## Challenges
 

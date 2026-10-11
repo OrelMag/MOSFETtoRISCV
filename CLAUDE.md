@@ -276,8 +276,15 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  segment grabbed: geom.ts grabOn; or a new corner: `{ bend }`, carried by the cursor after the right-click menu's
                  "Add a bend here"), removeBend, setStraight, clearBends
   history.ts     History<T>: undo / redo, transactions (a drag = one step), replace (not undone)
-  store.ts       localStorage, sanitizer, JSON export / import (importChips: never overwrites, renames on
-                 conflict, recognizes its own earlier renames); share.ts: share-link encoding
+  store.ts       localStorage (loadWorkspace / saveWorkspace take a project's key), sanitizer, JSON export / import
+                 (importChips: never overwrites, renames on conflict, recognizes its own earlier renames; a file names
+                 its chips' folders, a whole project's also favorites and ISAs: readExport, workspaceFromExport);
+                 share.ts: share-link encoding
+  folders.ts     Workspace.folders: one level of folders for My chips (a chip in at most one; kept out of the chip
+                 documents, so filing recompiles nothing); move / rename / remove, folderGroups, mergeFolders on import
+  projects.ts    separate workspaces: the index (KEY:projects: names, chip counts, save times), the first project
+                 'main' on the old KEY (the campaign keeps its level chips there), others on KEY:p:<id>; keys the
+                 index lost are listed again
   files.ts       shareRoute / shareUrl, download names, import summaries, duplicateChip / deleteChip
   derive.ts      circuitMode, deriveBehavior (a combinational transistor chip → gate-level brick;
                  refused when an output can float: Z is not X on a shared bus)
@@ -304,7 +311,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  without a clock); pokeLeaf (a switch flipped, a console / screen cleared); gate level is a DualSim
                  (cycle mode on the cycle engine, `engine`: which runs); FrameBudget: Run's per-frame simulation
                  time adapts to keep ~60 fps ([2, 14] ms; an explicit budgetMs is fixed; the CPU drawer's Run to halt too)
-  palette.ts     registerPaletteGroup + the palette panel (purist filter)
+  palette.ts     registerPaletteGroup + the palette panel (purist filter); a group's `folders` (My chips): sections
+                 in folder order, empty ones too, renamed in place (double-click), drop targets for a dragged chip
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
   challenges.ts  build challenges: BuildChallenge (ports, table / sequence check, allowed parts, par),
                  startChallenge (u_ch_<id> with the pins placed), checkChallenge (BitSim / GateSim / SwitchSim;
@@ -364,8 +372,12 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   keys.ts        plugin: document keys → key parts (a bound key is taken from the shortcuts while the chip is open)
                  and keyboard parts (while running, or with the Type toolbar toggle); released on blur
   props.ts       properties of the selection or the chip, diagnostics; registerPropsSection
-  fileui.ts      File menu (export / import / share link / Verilog / images / chip manager), share banner,
-                 drag-and-drop import, autosave indicator, backup notice; installFiles(ed) per page
+  fileui.ts      File menu (export / import / share link / Verilog / images / chip manager: grouped by folder,
+                 rows dragged onto folders), share banner, drag-and-drop import, autosave indicator, backup notice;
+                 installFiles(ed) per page
+  projectui.ts   the project switcher above the palette's search (New, Duplicate, Rename, Export, Import a file as a
+                 new project, Delete); the page (ui/pages/sandbox.ts) rebuilds the editor on another project, and a
+                 campaign level's chip (u_ch_cp_*) always opens in the first project
   memui.ts       Memory palette group, ROM / RAM property sections (live listing, RAM grid, initial
                  contents), the program editor dialog, Examples ▸; values polled per frame while shown; long
                  lists build only the rows in view (vlist.ts: virtualRows), a large RAM's grid has Go to

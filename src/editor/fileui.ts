@@ -8,6 +8,9 @@ import { exportHdl } from '../sim/svexport';
 import { h, icon, s } from '../ui/dom';
 import { registerToolbarAction, type Editor } from './editor';
 import { openIsaEditor } from './isaui';
+import { addFolder, folderGroups, newFolderName, removeFolder } from './folders';
+import type { ChipDoc } from './model';
+import { projectNameOf, readProjects } from './projects';
 import {
   chipFileName, chipInfo, deleteChip, duplicateChip, fileBase, SHARE_WARN, shareUrl, summarize, summaryLine,
   workspaceFileName, type ImportSummary,
@@ -27,8 +30,10 @@ const GLYPHS: Record<string, string> = {
   file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   stack: '<rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/>',
+  copy: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16V5a2 2 0 0 1 2-2h11"/>',
+  pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
 };
-function glyph(name: string, size = 16): SVGSVGElement {
+export function glyph(name: string, size = 16): SVGSVGElement {
   if (!GLYPHS[name]) return icon(name, size);
   const el = s('svg', { viewBox: '0 0 24 24', width: size, height: size, fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
   el.innerHTML = GLYPHS[name];
@@ -39,7 +44,7 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const kb = (n: number) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`);
 
 /** A modal dialog over the editor (Esc or a click outside closes it). */
-function dialog(ed: Editor, title: string, body: (Node | string | null)[], foot: HTMLElement[] = [], cls = ''): { el: HTMLElement; body: HTMLElement; close: () => void } {
+export function dialog(ed: Editor, title: string, body: (Node | string | null)[], foot: HTMLElement[] = [], cls = ''): { el: HTMLElement; body: HTMLElement; close: () => void } {
   closeMenu();
   const close = () => {
     ov.remove();
@@ -80,7 +85,7 @@ function closeMenu(): void {
 interface MenuItem { icon: string; label: string; hint: string; run(ed: Editor): void }
 const MENU: (MenuItem | null)[] = [
   { icon: 'download', label: 'Export this chip…', hint: 'the chip and every chip inside it, as a .json file', run: (ed) => exportChip(ed) },
-  { icon: 'download', label: 'Export all chips…', hint: 'the whole sandbox, as a .json file', run: (ed) => exportAll(ed) },
+  { icon: 'download', label: 'Export all chips…', hint: 'this project, its folders and favorites, as a .json file', run: (ed) => exportAll(ed) },
   { icon: 'upload', label: 'Import…', hint: 'chips from an exported file (or drop it on the canvas)', run: (ed) => pickImport(ed) },
   null,
   { icon: 'link', label: 'Share link…', hint: 'the circuit packed into a URL: nothing is uploaded', run: (ed) => void shareDialog(ed) },
@@ -125,7 +130,8 @@ function exportChip(ed: Editor): void {
 }
 
 function exportAll(ed: Editor): void {
-  saveFile(workspaceFileName(), exportJson(ed.ws, Object.keys(ed.ws.chips)));
+  const project = projectNameOf(ed.project);
+  saveFile(workspaceFileName(new Date(), project), exportJson(ed.ws, Object.keys(ed.ws.chips), project));
   ed.toast(`Exported ${plural(Object.keys(ed.ws.chips).length, 'chip')}`);
 }
 
@@ -141,7 +147,7 @@ function pickImport(ed: Editor): void {
 }
 
 /** Exports are small; a huge file is not one (and would freeze the tab while parsing). */
-const MAX_FILE = 32 << 20;
+export const MAX_FILE = 32 << 20;
 
 async function importFile(ed: Editor, f: File): Promise<void> {
   if (f.size > MAX_FILE) return void ed.toast(`${f.name}: too large for a sandbox export (${kb(f.size)})`, 'err');
@@ -267,10 +273,66 @@ function manageDialog(ed: Editor): void {
     msg.textContent = text;
     msg.className = `sb-dlg-msg${err ? ' err' : text ? ' ok' : ''}`;
   };
+  /** A folder whose name is being typed (a new one, or Rename). */
+  let editing: string | null = null;
+  /** The chip being dragged by its handle. */
+  let dragged: string | null = null;
+  const NEW = '\u0000new';
+
+  const dropTarget = (row: HTMLElement, folder: string | null) => {
+    row.addEventListener('dragover', (e) => {
+      if (!dragged) return;
+      e.preventDefault();
+      row.classList.add('sb-drop');
+    });
+    row.addEventListener('dragleave', () => row.classList.remove('sb-drop'));
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      row.classList.remove('sb-drop');
+      if (dragged) ed.fileChip(dragged, folder);
+      dragged = null;
+    });
+  };
+
+  const folderRow = (name: string, n: number) => {
+    const cells: (HTMLElement | string)[] = [];
+    if (editing === name) {
+      const input = h('input', { type: 'text', class: 'sb-name-field sm', value: name, maxlength: '40', 'aria-label': 'Folder name' }) as HTMLInputElement;
+      let done = false;
+      const finish = (keep: boolean) => {
+        if (done) return;
+        done = true;
+        editing = null;
+        const why = keep && input.value.trim() !== name ? ed.renameFolder(name, input.value) : null;
+        if (why) say(`Not renamed: ${why}.`, true);
+        render();
+      };
+      input.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') finish(true);
+        else if (e.key === 'Escape') finish(false);
+      });
+      input.addEventListener('blur', () => finish(true));
+      queueMicrotask(() => { input.focus(); input.select(); });
+      cells.push(input);
+    } else cells.push(h('span', null, name));
+    const row = h('tr', { class: 'sb-folder-row', 'data-folder': name },
+      h('td', { colspan: '4' }, icon('folder', 14), ...cells, h('small', null, ` ${n} ${n === 1 ? 'chip' : 'chips'}`)),
+      h('td', { class: 'acts' },
+        h('button', { class: 'btn ghost sm', onclick: () => { editing = name; render(); } }, 'Rename'),
+        h('button', { class: 'btn ghost sm', title: 'The folder goes; its chips stay, in no folder (Ctrl+Z brings it back)', onclick: () => {
+          ed.editWs((ws) => removeFolder(ws, name));
+          say(`Deleted the folder ${name}${n ? `: its ${n === 1 ? 'chip is' : `${n} chips are`} in no folder now` : ''}.`);
+        } }, 'Delete folder')));
+    dropTarget(row, name);
+    return row;
+  };
+
   const render = () => {
     const ws = ed.ws;
     const name = (id: string) => ws.chips[id]?.name ?? id;
-    const rows = Object.values(ws.chips).map((c) => {
+    const folders = ws.folders ?? [];
+    const chipRow = (c: ChipDoc, folder: string | null) => {
       const info = chipInfo(ws, c.id);
       const del = h('button', { class: 'btn ghost sm', title: info.usedBy.length ? `Used by ${info.usedBy.map(name).join(', ')}` : 'Delete (Ctrl+Z brings it back)', onclick: () => {
         const r = deleteChip(ed.ws, c.id);
@@ -279,24 +341,58 @@ function manageDialog(ed: Editor): void {
         say(`Deleted ${c.name} (Ctrl+Z brings it back).`);
       } }, 'Delete');
       if (info.usedBy.length) del.classList.add('sb-blocked');
-      return h('tr', { class: c.id === ed.chipId ? 'on' : '', 'data-chip': c.id },
-        h('td', null, h('b', null, c.name), h('code', null, c.id)),
+      const sel = h('select', { 'aria-label': `Folder of ${c.name}` },
+        h('option', { value: '' }, '— none —'), folders.map((f) => h('option', { value: f.name }, f.name)), h('option', { value: NEW }, 'New folder…')) as HTMLSelectElement;
+      sel.value = folder ?? '';
+      sel.addEventListener('change', () => {
+        if (sel.value !== NEW) return ed.fileChip(c.id, sel.value || null);
+        editing = newFolderName(ed.ws);
+        ed.fileChip(c.id, editing);
+      });
+      const grip = h('span', { class: 'sb-grip', draggable: 'true', title: 'Drag onto a folder', 'aria-hidden': 'true' }, '⠿');
+      grip.addEventListener('dragstart', (e) => {
+        dragged = c.id;
+        e.dataTransfer?.setData('text/plain', c.name);
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+      });
+      grip.addEventListener('dragend', () => { dragged = null; });
+      return h('tr', { class: `${c.id === ed.chipId ? 'on' : ''}${folders.length ? ' sb-in-folder' : ''}`, 'data-chip': c.id },
+        h('td', null, h('b', null, folders.length ? grip : null, c.name), h('code', null, c.id)),
         h('td', { class: 'num' }, `${info.parts}`, h('small', null, info.parts === 1 ? ' part' : ' parts'), h('br'), `${info.wires}`, h('small', null, info.wires === 1 ? ' wire' : ' wires')),
         h('td', { class: 'sb-users' }, info.usedBy.length ? info.usedBy.map(name).join(', ') : h('span', { class: 'sb-none' }, '—')),
+        h('td', null, sel),
         h('td', { class: 'acts' },
           h('button', { class: 'btn ghost sm', disabled: c.id === ed.chipId, onclick: () => { ed.openChip(c.id); d.close(); } }, 'Open'),
-          h('button', { class: 'btn ghost sm', title: 'A copy under a new id and name', onclick: () => {
+          h('button', { class: 'btn ghost sm', title: 'A copy under a new id and name, in the same folder', onclick: () => {
             const r = duplicateChip(ed.ws, c.id);
             if (!r) return;
             ed.editWs(() => r.ws);
             say(`Added ${r.ws.chips[r.id].name}.`);
           } }, 'Duplicate'),
           del));
-    });
-    table.replaceChildren(h('thead', null, h('tr', null, h('th', null, 'Chip'), h('th', null, 'Size'), h('th', null, 'Used by'), h('th'))), h('tbody', null, rows));
+    };
+    const rows: HTMLElement[] = [];
+    for (const g of folderGroups(ws)) {
+      if (g.name !== null) rows.push(folderRow(g.name, g.chips.length));
+      else if (folders.length) {
+        const row = h('tr', { class: 'sb-folder-row sb-unfiled' }, h('td', { colspan: '5' }, h('span', null, 'Not in a folder'), h('small', null, ` ${g.chips.length} ${g.chips.length === 1 ? 'chip' : 'chips'}`)));
+        dropTarget(row, null);
+        rows.push(row);
+      }
+      for (const c of g.chips) rows.push(chipRow(c, g.name));
+    }
+    table.replaceChildren(h('thead', null, h('tr', null, h('th', null, 'Chip'), h('th', null, 'Size'), h('th', null, 'Used by'), h('th', null, 'Folder'), h('th'))), h('tbody', null, rows));
   };
   render();
-  const d = dialog(ed, `Your chips (${Object.keys(ed.ws.chips).length})`, [h('div', { class: 'sb-chips-wrap' }, table), msg], [
+  const lead = h('p', { class: 'sb-dlg-lead sb-manage-lead' }, 'Project ', h('b', null, projectNameOf(ed.project)),
+    ' · drag a chip onto a folder, or pick one in its row: folders only help you find chips, they change no ids or links.');
+  const d = dialog(ed, `Your chips (${Object.keys(ed.ws.chips).length})`, [lead, h('div', { class: 'sb-chips-wrap' }, table), msg], [
+    h('button', { class: 'btn ghost sm', onclick: () => {
+      const r = addFolder(ed.ws, newFolderName(ed.ws));
+      if ('error' in r) return say(`Cannot add a folder: ${r.error}.`, true);
+      editing = r.name;
+      ed.editWs(() => r.ws);
+    } }, icon('folderPlus', 14), 'New folder'),
     h('button', { class: 'btn ghost sm', onclick: () => exportAll(ed) }, glyph('download', 14), 'Export all'),
     h('button', { class: 'btn primary sm', onclick: () => d.close() }, 'Done'),
   ], 'sb-manage');
@@ -321,11 +417,12 @@ function deleteDataDialog(ed: Editor): void {
     return h('label', { class: 'sb-del-opt' }, r, h('span', null, h('b', null, title), h('small', null, `${hint} · ${kb(bytes(sc))}`)));
   };
   const n = Object.keys(ed.ws.chips).length;
+  const projects = readProjects().list.length;
   const d = dialog(ed, 'Delete local data', [
     h('p', { class: 'sb-dlg-lead' }, 'Everything you make here lives only in this browser: nothing is kept on a server. ',
       h('b', null, 'Deleting cannot be undone'), ' (Ctrl+Z will not bring it back): export your chips first to keep a copy.'),
     h('div', { class: 'sb-del-opts', role: 'radiogroup', 'aria-label': 'What to delete' },
-      opt('sandbox', 'Sandbox', `your ${plural(n, 'chip')}, palette favorites and the sandbox's preferences`),
+      opt('sandbox', 'Sandbox', projects > 1 ? `all ${projects} projects (${plural(n, 'chip')} in this one), palette favorites and the sandbox's preferences` : `your ${plural(n, 'chip')}, palette favorites and the sandbox's preferences`),
       opt('all', 'Everything', 'the sandbox, chapter and campaign progress, and every setting (theme, wire colours, speeds)')),
   ], [
     h('button', { class: 'btn ghost sm', onclick: () => exportAll(ed) }, glyph('download', 14), 'Export all chips'),

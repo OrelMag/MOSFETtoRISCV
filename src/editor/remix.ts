@@ -19,6 +19,7 @@ import { same } from './history';
 import { type ChipDoc, type PartRef, slug, uniqueName, type Workspace } from './model';
 import { MAX_ROM_K } from './parts';
 import { openChip } from './session';
+import { projectKey, readProjects } from './projects';
 import { type KV, loadWorkspace, saveWorkspace } from './store';
 
 /** True for a user chip of `ws` (a def compiled by the sandbox, id `u_…`). */
@@ -103,11 +104,12 @@ export function remixDef(ws: Workspace, def: ComponentDef): { ws: Workspace; id:
   return { ws: openChip({ ...ws, chips: { ...ws.chips, ...chips } }, id), id, added: Object.keys(chips) };
 }
 
-/** remixDef on the saved workspace, saved back. Returns the new chip's id (for #/sandbox/<id>). */
+/** remixDef on the saved workspace of the project the sandbox opens, saved back. Returns the new chip's id (for #/sandbox/<id>). */
 export function remixIntoStorage(def: ComponentDef, kv?: KV | null): { id: string; added: string[] } | { error: string } {
-  const ws = kv === undefined ? loadWorkspace() : loadWorkspace(kv);
+  const key = projectKey(readProjects(kv).current);
+  const ws = loadWorkspace(kv, key);
   const r = remixDef(ws, def);
   if ('error' in r) return r;
-  const saved = kv === undefined ? saveWorkspace(r.ws) : saveWorkspace(r.ws, kv);
+  const saved = saveWorkspace(r.ws, kv, key);
   return saved.ok ? { id: r.id, added: r.added } : { error: saved.reason };
 }

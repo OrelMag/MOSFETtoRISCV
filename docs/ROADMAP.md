@@ -299,8 +299,12 @@ chip presentation, capacity and the program-solving half of Turing Complete.
   the box. Kept in the chip document as an optional face (by pin id: renames keep it); none = the automatic box
 - ✅ Free-text comments on the canvas (TC): T or the Wiring palette, multi-line, double-click to edit; selected, moved,
   copied and deleted with the rest, saved and shared, never compiled (writing one recompiles nothing)
-- ⏳ Library organization: collections / folders of chips, a starred bar for frequent parts,
-  several projects (separate workspaces) (DLS)
+- ✅ Library organization (DLS): folders of My chips (one level: a header button adds one, named in place; a chip
+  dragged onto a folder is filed there; a Folder field in the chip's properties; the chip manager grouped by folder,
+  rows dragged onto folders, folders renamed and deleted); the starred bar (palette favorites, keys 1–9); projects:
+  separate workspaces switched at the top of the palette (New, Duplicate, Rename, Export, Import a file as a new
+  project, Delete), the first one on the original storage key with the campaign's level chips. Folders live in the
+  workspace, not the chip documents: filing a chip recompiles nothing and changes no id, link or Verilog
 - ✅ Waypoints from the right-click menu: "Add a bend here" on a wire puts a new corner on the cursor, which carries
   it until a click drops it (Esc cancels; one undo step). On a simple connection it is a breakpoint; on a square wire
   the segment detours through it (a corner on the segment's own line would be simplified away)

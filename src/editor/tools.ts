@@ -610,17 +610,29 @@ export class Tools {
       const r = svg.getBoundingClientRect();
       return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
     };
+    // A user chip dragged onto a folder of My chips (or the group itself: out of its folder) is filed there.
+    const chip = 'part' in item.place && 'chip' in item.place.part ? item.place.part.chip : null;
+    const moved = (ev: PointerEvent) => Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) >= DRAG_PX;
+    const folder = (ev: PointerEvent) => (chip && !ed.level && moved(ev) ? ed.palette.folderAt(ev.clientX, ev.clientY) : null);
     const mv = (ev: PointerEvent) => {
       if (this.state.k !== 'place') return;
       if (over(ev)) this.ghost(item, this.world(ev));
       else ed.view.showGhost(null);
+      ed.palette.markDrop(folder(ev));
     };
     const upH = (ev: PointerEvent) => {
       document.removeEventListener('pointermove', mv);
       document.removeEventListener('pointerup', upH);
+      ed.palette.markDrop(null);
       const st = this.state;
       if (st.k !== 'place') return;
-      if (over(ev)) {
+      const into = folder(ev);
+      if (chip && into !== null) {
+        this.cancel();
+        const at = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('.sb-item')?.dataset.item;
+        const before = at?.startsWith('mine/') && at !== `mine/${chip}` ? at.slice(5) : undefined;
+        ed.fileChip(chip, into || null, into ? before : undefined);
+      } else if (over(ev)) {
         this.place(item, this.world(ev), ev.shiftKey);
       } else if (Math.hypot(ev.clientX - st.sx, ev.clientY - st.sy) < DRAG_PX) {
         st.drag = false; // a click: armed until a click on the canvas (Esc cancels)

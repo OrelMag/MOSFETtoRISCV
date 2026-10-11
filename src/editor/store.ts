@@ -7,6 +7,7 @@
 
 import { sanitizeIsa } from '../isa/table';
 import { sanitizeCpu } from './cpu';
+import { mergeFolders, sanitizeFolders } from './folders';
 import { same } from './history';
 import { MAX_KEY_LENGTH } from './parts';
 import { sanitizeIoRef } from './ioparts';
@@ -14,7 +15,7 @@ import { FACE_MAX, isEmptyFace, SCALE_MAX, SCALE_MIN, SIDES } from './face';
 import { PUZZLE_MAX_WIDTH } from './puzzleparts';
 import {
   SCHEMA, chipDeps, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
-  type ChipDoc, type CommentDoc, type FaceDisplayDoc, type FaceDoc, type FacePinDoc, type FaceSide, type DisplayKind, type EndRef, type ExitDir, type LabelDoc, type NetHue, type PartDoc, type PartRef,
+  type ChipDoc, type CommentDoc, type FaceDisplayDoc, type FaceDoc, type FacePinDoc, type FaceSide, type DisplayKind, type EndRef, type ExitDir, type FolderDoc, type LabelDoc, type NetHue, type PartDoc, type PartRef,
   type PinDoc, type PinValue, type Vec, type WireDoc, type Workspace,
 } from './model';
 
@@ -254,6 +255,8 @@ export function migrate(raw: unknown): Workspace | { error: string } {
     const isas = Object.fromEntries(Object.values(raw.isas).flatMap((x) => { const d = sanitizeIsa(x); return d ? [[d.id, d]] : []; }));
     if (Object.keys(isas).length) ws.isas = isas;
   }
+  const folders = sanitizeFolders(raw.folders, chips);
+  if (folders.length) ws.folders = folders;
   return ws;
 }
 
@@ -263,11 +266,12 @@ export const MAX_FAVORITES = 40;
 // ---------------------------------------------------------------------------------------------
 // Browser storage
 
-export function loadWorkspace(kv: KV | null = defaultKV()): Workspace {
+/** A workspace from storage: `key` is a project's (projects.ts); KEY, the default, the first project's (the campaign keeps its levels there). */
+export function loadWorkspace(kv: KV | null = defaultKV(), key = KEY): Workspace {
   if (!kv) return emptyWorkspace();
   let text: string | null = null;
   try {
-    text = kv.getItem(KEY);
+    text = kv.getItem(key);
     if (text === null) return emptyWorkspace();
     const r = migrate(JSON.parse(text));
     if (!('error' in r)) return r;
@@ -282,10 +286,10 @@ export function loadWorkspace(kv: KV | null = defaultKV()): Workspace {
   return emptyWorkspace();
 }
 
-export function saveWorkspace(ws: Workspace, kv: KV | null = defaultKV()): { ok: true } | { ok: false; reason: string } {
+export function saveWorkspace(ws: Workspace, kv: KV | null = defaultKV(), key = KEY): { ok: true } | { ok: false; reason: string } {
   if (!kv) return { ok: false, reason: 'browser storage is not available' };
   try {
-    kv.setItem(KEY, JSON.stringify(ws));
+    kv.setItem(key, JSON.stringify(ws));
     return { ok: true };
   } catch (e) {
     const quota = e instanceof Error && /quota/i.test(`${e.name} ${e.message}`);
@@ -360,8 +364,21 @@ export function closure(ws: Workspace, ids: string[]): ChipDoc[] {
   return out;
 }
 
-export function exportJson(ws: Workspace, ids: string[]): string {
-  return JSON.stringify({ format: FORMAT, schema: SCHEMA, chips: closure(ws, ids) }, null, 2);
+/**
+ * The chips and their dependencies as a file, with the folders they are filed in. `project` (a
+ * whole project: every chip) adds its name, empty folders, palette favorites and instruction sets,
+ * so "Import as a new project" gives the same project back.
+ */
+export function exportJson(ws: Workspace, ids: string[], project?: string): string {
+  const chips = closure(ws, ids);
+  const inFile = new Set(chips.map((c) => c.id));
+  const folders = (ws.folders ?? []).map((f) => ({ name: f.name, chips: f.chips.filter((c) => inFile.has(c)) })).filter((f) => project !== undefined || f.chips.length);
+  return JSON.stringify(compact({
+    format: FORMAT, schema: SCHEMA, project, chips,
+    folders: folders.length ? folders : undefined,
+    favorites: project !== undefined && ws.favorites?.length ? ws.favorites : undefined,
+    isas: project !== undefined && ws.isas && Object.keys(ws.isas).length ? ws.isas : undefined,
+  }), null, 2);
 }
 
 /** `order`: the id every incoming chip ended up as (added or already there), dependencies first. */
@@ -426,7 +443,16 @@ export function importChips(chips: ChipDoc[], ws: Workspace): Imported {
   return { ws: added.length ? { ...ws, chips: all } : ws, added, renamed, skipped, order };
 }
 
-export function importJson(text: string, ws: Workspace): Imported | { error: string } {
+/** An export file read and sanitized: its chips, folders, and what a whole project's file adds. */
+export interface ExportFile {
+  chips: ChipDoc[];
+  folders: FolderDoc[];
+  project?: string;
+  favorites?: string[];
+  isas?: Workspace['isas'];
+}
+
+export function readExport(text: string): ExportFile | { error: string } {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -439,5 +465,33 @@ export function importJson(text: string, ws: Workspace): Imported | { error: str
   if (!Array.isArray(raw.chips)) return { error: 'the file holds no chips' };
   const chips = raw.chips.map(sanitizeChip).filter((c): c is ChipDoc => !!c);
   if (!chips.length) return { error: 'the file holds no readable chips' };
-  return importChips(chips, ws);
+  // Whatever else it holds goes through the workspace sanitizer, as if it were saved.
+  const ws = migrate({ schema: SCHEMA, chips: Object.fromEntries(chips.map((c) => [c.id, c])), folders: raw.folders, favorites: raw.favorites, isas: raw.isas });
+  const w = 'error' in ws ? undefined : ws;
+  return compact<ExportFile>({
+    chips, folders: w?.folders ?? [],
+    project: str(raw.project) && raw.project.trim() ? raw.project.trim().slice(0, MAX_PROJECT_NAME) : undefined,
+    favorites: w?.favorites, isas: w?.isas,
+  });
 }
+
+export function importJson(text: string, ws: Workspace): Imported | { error: string } {
+  const f = readExport(text);
+  if ('error' in f) return f;
+  const r = importChips(f.chips, ws);
+  return f.folders.length ? { ...r, ws: mergeFolders(r.ws, f.folders, (id) => r.renamed[id] ?? id, r.added) } : r;
+}
+
+/** A whole workspace from an export file ("Import as a new project"): its chips, folders, favorites and instruction sets. */
+export function workspaceFromExport(f: ExportFile): Workspace {
+  const r = importChips(f.chips, { schema: SCHEMA, chips: {}, open: [] });
+  const top = r.order[r.order.length - 1];
+  let ws: Workspace = { ...r.ws, open: top ? [top] : [] };
+  if (f.folders.length) ws = mergeFolders(ws, f.folders, (id) => id, r.added);
+  if (f.favorites?.length) ws.favorites = f.favorites;
+  if (f.isas) ws.isas = f.isas;
+  return ws;
+}
+
+/** Project names are cut to this length. */
+export const MAX_PROJECT_NAME = 60;
