@@ -106,9 +106,16 @@ rebuilds nothing.
 
 ## Chips
 
-- **Package** opens a dialog: name, colour, notes, and a preview of the box as it will look when
-  placed. Pin order follows the pins' positions: inputs, then bidirectional pins, then outputs,
-  each top to bottom. Move a pin to reorder.
+- **Package** opens a dialog: name, colour, notes, and the box as it will look when placed. Until
+  you shape it, pins follow their positions in the circuit: inputs, then bidirectional pins on the
+  left, outputs on the right, each top to bottom (move a pin to reorder). The face editor shapes it:
+  drag a pin along an edge or onto another side (on a pin already there, the two swap; Left / Top /
+  Right / Bottom and the arrow keys do it too), drag the corner to resize (never below what the box
+  holds), and tick **Displays on the box** to show the chip's LEDs, digits, value boxes, buzzers,
+  consoles, screens and switch banks on it, live (or those a chip placed inside shows on its own
+  box). Drag a display to move it, its corner or the slider to scale it. Switches on a box flip with
+  a click on the canvas. The name moves out of the displays' way (or leaves the box; **Show the
+  name on the box** turns it off). **Auto layout** gives the automatic pins and size back.
 - **Edit chip**: double-click a placed chip of yours. It opens in a tab with a breadcrumb and Back.
   Every chip that uses it is rebuilt. Renaming a pin keeps the parents' wires connected.
 - **Look inside**: double-click a library part, or use Look inside on any part. It shows a

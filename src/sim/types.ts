@@ -56,6 +56,8 @@ export interface SymbolSpec {
   verticalLabel?: boolean;
   /** Hue (0–359) tinting a user chip's box; lightness comes from the theme. */
   color?: number;
+  /** Areas of a box (its own units) the label keeps clear of, or leaves the box when it cannot: a user chip's face displays. */
+  keepOut?: { x: number; y: number; w: number; h: number }[];
 }
 
 export interface InstanceDef {

@@ -63,9 +63,16 @@ export function boxText(def: ComponentDef, flip = false): BoxText {
   const mid = h / 2 + 0.45;
   // The middle, unless a port name is in the way: then a little up or down, whichever is clear.
   const rects = ports.map(portTextRect);
+  const keep = def.symbol.keepOut ?? [];
+  rects.push(...keep);
   const clear = (y: number) => !rects.some((r) => hit(r, labelRect({ text, x: w / 2, y })));
-  const y = [mid, mid - 0.7, mid + 0.7, mid - 1.1, mid + 1.1].find((c) => c - 0.8 >= 0 && c + 0.2 <= h && clear(c)) ?? mid;
-  return { ports, label: { text, x: w / 2, y } };
+  const near = [mid, mid - 0.7, mid + 0.7, mid - 1.1, mid + 1.1];
+  // Displays on a chip's face: any clear row of the box, the nearest the middle; none clear, no label.
+  const rows = keep.length ? [...near, ...Array.from({ length: Math.max(0, Math.floor((h - 1) * 2)) }, (_, i) => 0.8 + i / 2).sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid))] : near;
+  const fits = (c: number) => c - 0.8 >= 0 && c + 0.2 <= h && (!keep.length || labelRect({ text, x: w / 2, y: c }).w <= w - 0.4);
+  const y = rows.find((c) => fits(c) && clear(c));
+  if (y === undefined && keep.length) return { ports, label: null };
+  return { ports, label: { text, x: w / 2, y: y ?? mid } };
 }
 
 /** Port names and the label of a box that hide one another (for the layout tests). */

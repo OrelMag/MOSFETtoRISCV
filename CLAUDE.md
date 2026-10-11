@@ -254,6 +254,12 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  exact to 53 bits only); pixels: a pure view of a px bus; optional vsync; X writes ignored and counted);
                  most significant field first; visual settings in the def but not its id (a resize carries the state);
                  ioNodes / ioState find them at any depth; colorRgb, pixelsOf, paintScreen (dots, grid, X pattern)
+  face.ts        a packaged chip's appearance (ChipDoc.face: box size, pins by id on any side at any offset, displays by
+                 part path, at / scale): resolveFace (automatic size and pins for what is left out, the box grown to hold
+                 everything), applyFace (as PortDef.side, symbol w / h / portPos, keepOut: the label avoids displays),
+                 faceItems (the chip's displays / I/O parts and what its placed chips show), faceOf(def) (the shown
+                 displays, a WeakMap set by compile.ts), the face editor's edits (movePin swaps, pinToSide, resizeFace,
+                 toggleDisplay, placeDisplay, autoLayout), faceHit / nodeAt / shownNets for a placed chip
   library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip
   ops.ts         pure edits (add / move / delete / flip / set*, copy / paste, namePart: rename where the name is
                  drawn); wires stay orthogonal (a straight wire's breakpoints stay put); dragWire (a corner or
@@ -353,7 +359,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   memui.ts       Memory palette group, ROM / RAM property sections (live listing, RAM grid, initial
                  contents), the program editor dialog, Examples ▸; values polled per frame while shown; long
                  lists build only the rows in view (vlist.ts: virtualRows), a large RAM's grid has Go to
-  package.ts     "Package as chip…" dialog (name, hue, notes, symbol preview, pin order; Save & new circuit)
+  package.ts     "Package as chip…" dialog (name, hue, notes; the face editor: pins dragged along / across edges, corner
+                 resize, displays ticked, moved and scaled, live; Save & new circuit)
+  dispface.ts    the displays' SVG faces (drawDisplay / paintDisplay) and a placed chip's face displays (drawFace /
+                 paintFace: from below its node), for the canvas, the face editor and look inside
   inside.ts      lookInside(ed, path): read-only live schematic over the canvas on EditorSim's simulator (ViewCtx);
                  consoles, screens and switch banks get their live faces there (ioface.ts decorateInside; switches flip)
   ioface.ts      the I/O parts' SVG faces (canvas and look inside; the wheel over a console with scrollback scrolls it,

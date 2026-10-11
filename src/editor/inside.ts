@@ -10,12 +10,14 @@
 
 import type { Sim } from '../sim/sim';
 import { netlistOf } from '../sim/types';
-import { h, icon } from '../ui/dom';
+import { h, icon, s } from '../ui/dom';
 import { ViewCtx } from '../view/context';
 import { SchematicView } from '../view/schematic';
 import type { Widget } from '../view/stage';
 import { transistorLeaf } from '../widgets/mosfet';
 import type { Editor } from './editor';
+import { drawFace, type FaceEls, paintFace } from './dispface';
+import { faceOf } from './face';
 import { decorateInside, toggleSwitch } from './ioface';
 
 const views = new WeakMap<Editor, InsideView>();
@@ -126,13 +128,31 @@ class InsideView {
     if (ctx === this.root && !leaf) return this.close();
     this.ctx = ctx;
     this.view.show(ctx, false, keepView);
-    this.ioPaint = decorateInside(this.view.el, ctx, ctx.isSubSim ? null : (node, bit) => toggleSwitch(this.ed.sim, node, bit));
+    const io = decorateInside(this.view.el, ctx, ctx.isSubSim ? null : (node, bit) => toggleSwitch(this.ed.sim, node, bit));
+    const faces = this.decorateFaces(ctx);
+    this.ioPaint = io || faces ? () => { io?.(); faces?.(); } : null;
     // The panel may still be settling into its size on the first frame.
     if (!keepView) requestAnimationFrame(() => this.view.fit());
     if (leaf) this.openLeaf(leaf);
     this.renderCrumbs();
     this.tick();
     if (!this.el.contains(document.activeElement)) this.el.focus({ preventScroll: true });
+  }
+
+  /** The displays placed user chips show on their boxes (face.ts), live from below their nodes. */
+  private decorateFaces(ctx: ViewCtx): (() => void) | null {
+    const all: { els: FaceEls[]; name: string }[] = [];
+    for (const inst of netlistOf(ctx.def)?.instances ?? []) {
+      const g = faceOf(inst.def) && this.view.el.querySelector(`[data-inst="${CSS.escape(inst.name)}"]`);
+      if (!g) continue;
+      const fg = s('g', null);
+      const els = drawFace(fg, inst.def, !!inst.flip);
+      if (!els) continue;
+      g.append(fg);
+      all.push({ els, name: inst.name });
+    }
+    if (!all.length) return null;
+    return () => { for (const f of all) paintFace(f.els, ctx.sim, ctx.node.children?.get(f.name) ?? null, this.ed.view.radix); };
   }
 
   private get path(): string[] {

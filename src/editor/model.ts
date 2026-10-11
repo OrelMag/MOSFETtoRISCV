@@ -39,6 +39,8 @@ export interface ChipDoc {
   /** Box tint (0–359), shown when the chip is placed. */
   hue?: number;
   notes?: string;
+  /** How the chip looks when placed (absent: inputs left, outputs right, sized to fit; face.ts). */
+  face?: FaceDoc;
   /**
    * "This chip is a flip-flop": pin names of d, q, clk (and en). Compiled into ComponentDef.ff
    * once a short clocked test confirms it (static timing then stops at it; synthesis export
@@ -105,6 +107,32 @@ export interface PartDoc {
   /** Caption (defaults to the id). */
   label?: string;
 }
+
+/**
+ * A packaged chip's appearance (the Package dialog's face editor), all optional: a box size, pins
+ * placed by hand, displays shown on the box. Size and pins left out are automatic (inputs left,
+ * outputs right, in canvas order), and the box always grows to fit what is on it (face.ts resolveFace).
+ */
+export interface FaceDoc {
+  /** Box size in grid units. */
+  w?: number;
+  h?: number;
+  /** Pin id → side and offset along it (y on the left / right, x on the top / bottom); a pin left out goes to its default side. */
+  pins?: Record<string, FacePinDoc>;
+  /** Displays inside the chip drawn on its box, live. */
+  displays?: FaceDisplayDoc[];
+  /** Leave the chip's name off the box. */
+  noLabel?: boolean;
+}
+
+export type FaceSide = 'left' | 'right' | 'top' | 'bottom';
+export interface FacePinDoc { side: FaceSide; at: number }
+
+/**
+ * A display on the face: the path of part ids down to it (a display or I/O part of this chip, or one
+ * a placed chip shows on its own face), the top-left of what it shows and a scale.
+ */
+export interface FaceDisplayDoc { path: string[]; at: Vec; scale?: number }
 
 export type DisplayKind = 'led' | 'seg7' | 'hex' | 'value' | 'halt' | 'buzzer';
 

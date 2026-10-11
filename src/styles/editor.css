@@ -189,6 +189,8 @@
 .ed-note-text { font: 1.1px var(--font-mono); fill: var(--ed-note-text); white-space: pre; }
 .ed-note.ed-sel .ed-note-bg { stroke: var(--ed-sel); stroke-width: 0.14; }
 .ed-disp-box { fill: var(--sym-fill); }
+/* A display on a chip's face (dispface.ts): no port of its own there. */
+.ed-face-disp .ed-disp-port { display: none; }
 .ed-disp-port { fill: var(--sym-stroke); }
 .ed-led { fill: var(--ed-led-off); stroke: var(--sym-stroke); stroke-width: 0.12; transition: fill 0.1s; }
 .ed-led.on { fill: var(--w1); filter: drop-shadow(0 0 0.5px var(--w1)) drop-shadow(0 0 0.4px var(--w1)); }

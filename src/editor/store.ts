@@ -10,10 +10,11 @@ import { sanitizeCpu } from './cpu';
 import { same } from './history';
 import { MAX_KEY_LENGTH } from './parts';
 import { sanitizeIoRef } from './ioparts';
+import { FACE_MAX, isEmptyFace, SCALE_MAX, SCALE_MIN, SIDES } from './face';
 import { PUZZLE_MAX_WIDTH } from './puzzleparts';
 import {
   SCHEMA, chipDeps, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
-  type ChipDoc, type CommentDoc, type DisplayKind, type EndRef, type ExitDir, type LabelDoc, type NetHue, type PartDoc, type PartRef,
+  type ChipDoc, type CommentDoc, type FaceDisplayDoc, type FaceDoc, type FacePinDoc, type FaceSide, type DisplayKind, type EndRef, type ExitDir, type LabelDoc, type NetHue, type PartDoc, type PartRef,
   type PinDoc, type PinValue, type Vec, type WireDoc, type Workspace,
 } from './model';
 
@@ -171,6 +172,32 @@ function list<T extends { id: string }>(x: unknown, f: (v: unknown) => T | null)
   return out;
 }
 
+/** A chip's face: sizes and offsets whole numbers in range, known sides, pins the chip has, displays by part path. */
+function sanitizeFace(x: unknown, pinIds: Set<string>): FaceDoc | undefined {
+  if (!isObj(x)) return undefined;
+  const size = (v: unknown) => (int(v, 2) && v <= FACE_MAX ? v : undefined);
+  const pins: Record<string, FacePinDoc> = {};
+  if (isObj(x.pins)) {
+    for (const [id, p] of Object.entries(x.pins)) {
+      if (pinIds.has(id) && isObj(p) && SIDES.includes(p.side as FaceSide) && int(p.at, 1) && p.at < FACE_MAX) pins[id] = { side: p.side as FaceSide, at: p.at };
+    }
+  }
+  const displays: FaceDisplayDoc[] = [];
+  for (const d of Array.isArray(x.displays) ? x.displays : []) {
+    const at = isObj(d) ? vec(d.at) : null;
+    if (!isObj(d) || !at || !Array.isArray(d.path) || !d.path.length || !d.path.every((q) => str(q) && isIdent(q))) continue;
+    const scale = num(d.scale) && d.scale >= SCALE_MIN && d.scale <= SCALE_MAX ? d.scale : undefined;
+    displays.push(compact<FaceDisplayDoc>({ path: (d.path as string[]).slice(), at: [Math.max(0, Math.min(FACE_MAX, at[0])), Math.max(0, Math.min(FACE_MAX, at[1]))], scale }));
+  }
+  const f = compact<FaceDoc>({
+    w: size(x.w), h: size(x.h),
+    pins: Object.keys(pins).length ? pins : undefined,
+    displays: displays.length ? displays : undefined,
+    noLabel: x.noLabel === true ? true : undefined,
+  });
+  return isEmptyFace(f) ? undefined : f;
+}
+
 /** A clean ChipDoc from untrusted JSON, or null if it lacks an id. */
 export function sanitizeChip(c: unknown): ChipDoc | null {
   if (!isObj(c) || !str(c.id) || !isIdent(c.id)) return null;
@@ -195,6 +222,7 @@ export function sanitizeChip(c: unknown): ChipDoc | null {
     name: str(c.name) && c.name.trim() ? c.name : c.id,
     hue: num(c.hue) ? ((Math.round(c.hue) % 360) + 360) % 360 : undefined,
     notes: str(c.notes) ? c.notes : undefined,
+    face: sanitizeFace(c.face, new Set(uniquePins.map((p) => p.id))),
     ff: sanitizeFf(c.ff),
     cpu: sanitizeCpu(c.cpu),
     pins: uniquePins, parts, wires, labels,
