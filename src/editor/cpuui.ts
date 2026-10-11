@@ -863,7 +863,9 @@ class CpuPanel {
       return [
         h('div', { class: 'cpu-fields-head' }, h('code', null, disasm4(fw)), h('span', null, this.sel !== null ? 'selected' : 'current')),
         h('div', { class: 'ibd' }, h('div', { class: 'fields' }, boxes)),
-        h('div', { class: 'sb-sum' }, decode4(fw).undef ? 'No instruction has this code: it runs as NOP.' : cpu4Use(fw).path),
+        // A selected line's path is in the box under the listing already.
+        ...(decode4(fw).undef ? [h('div', { class: 'sb-sum' }, 'No instruction has this code: it runs as NOP.')]
+          : this.sel === null ? [h('div', { class: 'sb-sum' }, cpu4Use(fw).path)] : []),
       ];
     });
     this.pipeSec.hidden = this.pipe.hidden = this.ioSec.hidden = this.io.hidden = true;

@@ -438,23 +438,28 @@ export function cpu4(words: ArrayLike<number>): ComponentDef {
   const R0 = rom4(words);
   let d = cpus.get(R0.id);
   if (d) return d;
-  const b = new Builder(10, 14, 6);
+  const b = new Builder(10, 12, 6);
   b.pins('clk', 'test', 'sw');
+  // Four columns: the ROM and its fields (with the halt detector), Decode over the index registers,
+  // the ALU over the accumulator, the PC & stack over the I/O ports (which run straight out).
   const rom = b.op(R0, [''], 'program', 'rom');
   const instr = b.name(`${rom}.data`, 'instr', true);
-  b.next();
   const fl = b.op(splitter([8, 4, 4], 4), [instr], 'fields');
   const lo = b.name(`${fl}.o0`, 'lo', true), opa = b.name(`${fl}.o1`, 'opa', true);
+  // Halt: the word is JUN (0x40) to its own address.
+  const hi = b.op1(merger([4, 4], 2), [opa, b.name(`${fl}.o2`, 'opr', true)], 'OPR:OPA');
+  const isJun = b.op1(equal(8), [hi, b.op1(constWord(8, 0x40), [], 'JUN')], 'JUN?');
+  const self = b.op(equal(8), [lo, ''], 'to itself?');
   b.next();
   const dec = b.op(CPU4_DECODE, [instr, '', '', 'test', ''], 'Decode', 'dec');
   const c = (n: string) => b.name(`${dec}.${n}`, n, true);
   const regs = b.op(CPU4_REGS, [opa, '', lo, c('rwe'), c('winc'), c('pwe'), 'clk'], 'Index regs', 'regs');
   const r = b.name(`${regs}.r`, 'r', true), pair = b.name(`${regs}.pair`, 'pair', true);
-  b.wire(`${regs}.rz`, `${dec}.rz`);
+  b.wire(b.name(`${regs}.rz`, 'rz', true), `${dec}.rz`);
+  b.wire(b.name(b.op1(AND, [isJun, `${self}.eq`], 'halt'), 'halts', true), 'halt');
   b.next();
   const alu = b.op(CPU4_ALU, ['', r, '', c('xa'), c('inv'), c('bk'), c('k'), c('cin'), c('f'), c('csel'), c('orcy'), c('cconst')], 'ALU 4', 'alu');
-  b.next();
-  const acc = b.op(CPU4_ACC, [`${alu}.y`, r, opa, 'sw', c('asel'), c('awe'), `${alu}.cout`, c('cwe'), 'clk'], 'Acc & carry', 'acc');
+  const acc = b.op(CPU4_ACC, [b.name(`${alu}.y`, 'result', true), r, opa, 'sw', c('asel'), c('awe'), b.name(`${alu}.cout`, 'cyn', true), c('cwe'), 'clk'], 'Acc & carry', 'acc');
   const a = b.name(`${acc}.a`, 'a', true), cy = b.name(`${acc}.cy`, 'cy', true);
   for (const s of [`${dec}.acc`, `${regs}.a`, `${alu}.a`]) b.wire(a, s);
   for (const s of [`${dec}.cy`, `${alu}.cy`]) b.wire(cy, s);
@@ -462,15 +467,7 @@ export function cpu4(words: ArrayLike<number>): ComponentDef {
   const pcs = b.op(CPU4_PC, [c('pcsel'), lo, pair, c('push'), c('pop'), 'clk'], 'PC & stack', 'pcs');
   const pc = b.name(`${pcs}.pc`, 'pc', true);
   b.wire(pc, `${rom}.addr`);
-  b.next();
-  // Halt: the word is JUN (0x40) to its own address.
-  const hi = b.op1(merger([4, 4], 2), [opa, b.name(`${fl}.o2`, 'opr', true)], 'OPR:OPA');
-  const isJun = b.op1(equal(8), [hi, b.op1(constWord(8, 0x40), [], 'JUN')], 'JUN?');
-  const self = b.op1(equal(8), [lo, pc], 'to itself?');
-  b.next();
-  b.wire(b.name(b.op1(AND, [isJun, self], 'halt'), 'halts', true), 'halt');
-  b.next();
-  // I/O last: its ports run straight out to the digits and the LEDs.
+  b.wire(pc, `${self}.b`);
   const io = b.op(CPU4_IO, [pair, c('srcwe'), a, c('wrr'), 'clk'], 'I/O', 'io');
   IO4_OUTS.forEach((n) => b.wire(`${io}.${n}`, n));
   const R = b.right;
