@@ -125,7 +125,7 @@ export const chRegisters: Chapter = {
         its input. Every clock edge, it loads its own value plus one: a <strong>counter</strong>.</p>
         <p>This loop of register → logic → register is the shape of every synchronous circuit, including a
         processor: the program counter is exactly this, plus the ability to jump.</p>
-        <div class="try">Press <strong>Run</strong> to clock it continuously, and watch the <strong>Timing</strong> panel.</div>`,
+        <div class="try">The clock runs by itself (with the automatic clock off, press <strong>Run</strong>): watch the count climb in the <strong>Timing</strong> panel. <strong>Pulse</strong> pauses it for one edge at a time.</div>`,
       scene: () => ({ root: counter(4), inputs: { en: 1, clk: 0 } }),
       challenge: {
         kind: 'reach', goal: 'Stop the counter at exactly 9.',
@@ -198,7 +198,7 @@ export const chRegisters: Chapter = {
         non-zero value, 2ⁿ − 1 of them, in an order that looks random. Here 4 bits and taps 4, 3: 15 states from one XOR gate.</p>
         <p>Linear-feedback shift registers generate test patterns for chips (built-in self-test), scramble serial links so the signal has
         enough transitions, compute CRCs, and make noise. They are not secure random numbers: 2n consecutive outputs reveal the taps.</p>
-        <div class="try">Load the seed, then Run: the sequence repeats after 15 clocks. Try loading 0: it never leaves.</div>`,
+        <div class="try">While load = 1 every edge loads the seed. Set load = 0 and let the clock run: the sequence repeats after 15 clocks. Try loading 0: it never leaves.</div>`,
       scene: () => ({ root: lfsr(4), inputs: { load: 1, seed: 1, clk: 0 } }),
     },
     {
@@ -218,7 +218,7 @@ export const chRegisters: Chapter = {
         <p>As a counter it is a poor one. Each stage switches one flip-flop delay after the previous, so after an edge the bits change one
         after another and the value is briefly wrong (watch the Timing panel). That is why the counters on this page share a single clock
         (synchronous), and why a ripple divider's outputs should not be used as clocks for logic that also sees the original one.</p>
-        <div class="try">Release rst_n, then Run with the Timing panel open.</div>`,
+        <div class="try">Release rst_n and let the clock run: the Timing panel shows each stage at half the rate of the one before.</div>`,
       scene: () => ({ root: clockDivider(3), inputs: { clk: 0, rst_n: 0 }, analyzer: true }),
     },
     {

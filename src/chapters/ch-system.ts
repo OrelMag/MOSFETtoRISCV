@@ -74,7 +74,7 @@ export const chIO: Chapter = {
       body: `
         <p>Inputs work the same way: a load from 0x8000_0008 returns the switches, a store to 0x8000_0004 latches the LEDs.
         This program copies one to the other in a loop.</p>
-        <div class="try">Press Run on the clock, then flip switches in the I/O panel.</div>`,
+        <div class="try">Let the clock run (or press Run), then flip switches in the I/O panel.</div>`,
       scene: () => cpuScene({ source: sys('leds'), system: true }),
     },
   ],
@@ -131,7 +131,7 @@ export const chTraps: Chapter = {
         interrupts are globally on (mstatus.MIE).</p>
         <p>The handler prints a dot and moves mtimecmp 40 cycles ahead. The main loop never knows it was interrupted: that is
         the foundation of every multitasking operating system's scheduler tick.</p>
-        <div class="try">Run the clock and watch the dots, mepc (where the loop was interrupted) and s1 (tick count).</div>`,
+        <div class="try">Let the clock run and watch the dots, mepc (where the loop was interrupted) and s1 (tick count).</div>`,
       scene: () => cpuScene({ source: sys('timer'), system: true, highlight: ['io', 'csr'] }),
       challenge: {
         kind: 'reach', goal: 'Let the timer interrupt fire five times (s1 = 5).',
