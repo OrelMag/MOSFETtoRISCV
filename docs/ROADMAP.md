@@ -461,10 +461,18 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
 - ✅ GateSim refuses a behavioural delay of 64 or more (the event wheel) instead of clamping it silently
 
 **Measure more** (computed from the circuits, like every other number)
-- ⏳ Dynamic power, P ≈ α C V² f: α from the gate simulator's toggle counts over a program or a vector set
-  (glitches included: the ripple adder pays for its glitches), C from fan-out (NAND inputs driven, plus a wire
-  estimate), V set by the learner, f from static timing. Per-block breakdown in the inspector, an energy column in
-  the adder and CPU comparisons, energy per instruction in the CPU panel; labelled an estimate
+- ✅ Dynamic power, P ≈ α C V² f (sim/power.ts): GateSim counts every net's 0 ↔ 1 transitions, glitches included; C per
+  net from its fan-out (0.5 fF per NAND input, 0.5 fF for the driver, 0.3 fF of wire per branch: illustrative 28 nm-class,
+  like the 25 ps / NAND), ½ C V² per toggle, V set by the learner, f from static timing. The inspector's Power section
+  (energy per cycle or operation, power, glitch share, α, split by the block driving each net, the clock net its own
+  row: live on a chapter or workbench scene, else on seeded random inputs); energy per add and glitch share in chapter
+  15's adders, energy per instruction in chapter 17's table, in the CPU panel and the sandbox's CPU drawer (gate mode);
+  energy, energy per instruction, glitches and power on the Benchmarks tab (every run again on GateSim, its cycle count
+  equal to BitSim's) with a speed-against-energy chart. Labelled an estimate: no leakage, no clock buffers. Found: the
+  pipeline spends what the single-cycle CPU does per instruction (46 pJ) although it runs 50 % more cycles: its
+  registers cut the glitches from 48 % to 10 % of the energy; the multicycle CPUs spend twice as much (every state
+  clocks every register), microcode a little less than the hardwired FSM; an instruction cache doubles the energy per
+  instruction; the single-cycle CPU's 64-word data memory and its clock net take half of its energy
 - ✅ Benchmarks: the workbench's Benchmarks tab (`#/workbench/bench`). Six programs (recursive Fibonacci, insertion sort,
   4 × 4 matrix multiply in software and with mul, bitwise CRC-32, a float kernel with fdiv / fmadd / fsqrt), each with its
   result also computed in TypeScript, on all 22 gate-level CPUs: instructions, cycles (to the golden model's instruction

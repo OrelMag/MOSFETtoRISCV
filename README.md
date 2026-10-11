@@ -118,7 +118,11 @@ Every number on screen comes from the circuit it describes:
 The chapters compare implementations on these numbers: ripple, carry-lookahead, Kogge–Stone,
 carry-select and carry-skip adders (static depth against simulated delay, false paths included);
 array, Wallace-tree and Booth multipliers; restoring, non-restoring and SRT dividers; single-cycle,
-multicycle (hardwired and microcoded) and pipelined CPUs on clock period × CPI.
+multicycle (hardwired and microcoded) and pipelined CPUs on clock period × CPI. The workbench's
+Benchmarks tab runs one program set on all 22 gate-level CPUs (cycles, period, time, NANDs, misses,
+energy), and dynamic power is estimated from the circuit too: the gate simulator counts every net's
+toggles, glitches included, so the inspector splits a part's energy among its blocks and the CPU
+panel shows the energy per instruction as the program runs.
 
 <table>
 <tr>
@@ -162,6 +166,10 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
   no slew, load, wire RC, skew or corners. The sky130 run's own reports are the real numbers.
 - **Two kinds of place and route.** The placer (simulated annealing) and router (two-layer Lee) in
   `src/sim/pnr.ts` are teaching models run on small netlists; the full layout comes from OpenROAD.
+- **Power is an estimate.** Dynamic energy is ½ C V² per toggle, with the toggles counted by the
+  gate simulator (glitches included) and C from each net's fan-out: illustrative 28 nm-class values
+  per NAND input, driver and wire branch, not extracted from a layout. No leakage, no short-circuit
+  current, no clock buffers; behavioural memories count only at their outputs.
 - **Power-on is a model.** Storage loops are resolved to a deterministic (or chosen random) state
   so a design can settle; real power-up depends on mismatch, noise and ramp.
 - **The CPUs are teaching microarchitectures**: in-order, a cache miss freezes the whole pipeline,
@@ -175,9 +183,6 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
 The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next features:
 
 - **A second oracle**: Spike or Sail comparing commit logs with our ISS on the random programs.
-- **More measurements**: dynamic power (α C V² f, α from the simulator's toggle counts, glitches
-  included), a benchmark page (instructions, cycles, CPI, period, energy on every CPU), a
-  hardware-statistics table of the whole library, and "where is this used" in the inspector.
 - **Sandbox**: chip appearance (pins on any side, displays on the chip's face), library folders,
   a custom-ISA table that generates its own assembler, and program puzzles solved on a CPU you built.
 - **Architecture**: private caches with a coherent bus in the gate-level cores, `lr.w` / `sc.w`,

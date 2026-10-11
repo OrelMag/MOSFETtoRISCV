@@ -74,7 +74,8 @@ src/sim/       simulation core (no DOM)
                  fixed-period clock (an edge does not wait for the logic to settle); onTrace +
                  watch() report every change of watched nets at its exact time; hot loops on typed arrays
                  (tests/ref/gatesim-ref.ts: the old object version, gatesim-fast.test.ts: same events, same times);
-                 adopt(src, changed, dirty): take over another engine's settled state of the same design
+                 adopt(src, changed, dirty): take over another engine's settled state of the same design;
+                 countToggles(): per-net 0 ↔ 1 transitions in `toggles` (glitches included), for power.ts
   clusters.ts    findClusters(design): storage by structure, no `ff` mark needed (rounds: loops among free NANDs,
                  gates on short loops (≤ 6) seed clusters, which take in private gates that follow a pin or add no
                  input, latch pairs join, deepest instance first); chainRoot/Delay/Parity: nets that follow a pin
@@ -116,6 +117,10 @@ src/sim/       simulation core (no DOM)
   dead.ts        deadInstances(netlist, ports): parts no path leads from to an output (tested over every netlist
                  and reference answer; the sandbox lint warns about them)
   settle.ts      outputSettle(def, vectors): simulated input-to-last-output-change delay (sees false paths)
+  power.ts       dynamic power estimate: netCaps (C per net from fan-out: FF_INPUT / FF_DRIVER / FF_WIRE, illustrative
+                 28 nm-class), ½ C V² per toggle, PowerMeter over a GateSim (reset / mark after settles: settled vs glitch
+                 toggles; breakdown(node): switched C by the child driving each net, the clock and inputs at the root),
+                 measurePower(def) on seeded random vectors / clock cycles, vectorPower, fmtEnergy / fmtPower, POWER_NOTE
   timing.ts      static timing: register-to-register critical path, per-capture-stage periods (a `seq` leaf:
                  inputs captured, comb inputs → outputs launched at clk-to-q)
   verilog.ts     structural Verilog generated from any netlist (identifiers sanitized, alias
@@ -187,7 +192,8 @@ src/lib/       the component library (registered in `registry` via define())
   adders.ts      carrySelect(n, k), carrySkip(n, k), BCD_DIGIT, bcdAdder(d)
   muldiv.ts      ppRow, arrayMul(n), compressor()/csa(n) (3:2 rows with word offsets), treeMul(n, signed,
                  outW) (Wallace + KS), MUL32, BOOTH_ENC, divStep, arrayDiv, seqDivider(n), condNegate, MDU
-src/bench/     results.json (scripts/benchmarks.ts --write, checked in), summary.ts (DOM-free: times, geometric means over
+src/bench/     results.json (scripts/benchmarks.ts --write, checked in; each run's switched C from a GateSim rerun:
+               tests/verify/bench.ts benchEnergy), summary.ts (DOM-free: times, energies, geometric means over
                the four RV32I programs, the cost / speed front, each CPU's family and chapter): the workbench's Benchmarks
                tab (ui/pages/benchmarks.ts, its own chunk)
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
@@ -197,7 +203,8 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                benchprograms.ts (the benchmark set: fib, sort, matmul (+ mul), CRC-32, a float kernel; each with
                its result computed in TypeScript)
 src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over crossings),
-               inspector (info with "Where it is used", truth table, Verilog + download), analyzer.ts (the Timing panel:
+               inspector (info with "Where it is used" and "Power": powerpanel.ts, live from the stage's PowerMeter or
+               measurePower on random inputs; truth table, Verilog + download), analyzer.ts (the Timing panel:
                lanes from onTrace, cursors, VCD), stage.ts (probe mode, clock period, slow-motion
                fronts, the Image menu), image.ts (a drawn circuit as a standalone SVG: computed styles
                inlined, current theme; PNG at 2×; saveFile; exportSchematic for a stage's level, loaded on
@@ -499,7 +506,8 @@ whole simulation (values, inputs, time, pending events), and a panel with its ow
 `rewind`s to the restored time. History is cleared on load and Reset.
 The pipeline diagram reads `pipeSnap` (riscv/cosim.ts) and draws with `widgets/pipegrid.ts`, shared with
 the sandbox's CPU drawer (editor/cpuui.ts), which mirrors these panels for any CPU opened in the sandbox:
-keep the two in step when a panel gains a feature.
+keep the two in step when a panel gains a feature. Both show the energy per instruction (a PowerMeter on the GateSim,
+restarted on Reset and Back; the sandbox only in gate mode, the cycle engine counts no toggles).
 
 ### Viewing aids (all derived, none stored in the netlists)
 
