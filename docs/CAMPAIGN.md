@@ -507,10 +507,29 @@ per flip-flop, 15 per enable flip-flop). The levels now unlock campaign cells at
 - [x] The timer: dropped from `iss16` (MTIME, MTIMECMP, MTIP, cause 0x8007). 0xFFF7–0xFFF8 are reserved: they read 0
   and drop stores, as the test bench already did. RV16 interrupts are the external line only.
 
-**Left as it is** (a follow-up if wanted): the wider muxes are still the library's trees of 64-NAND 2:1 muxes,
-unlocked by g_mux8 at that cost (`mux*`). A tree of `rv16_mux16` is cheaper at the same depth (8:1: 343 against
-448; 4:1: 147 against 192), so a learner who builds one beats the pars of `m_rf` (by 210), `a_alu16` (by 105) and
-the references that use 4:1 or 8:1 bus muxes. Making them campaign parts too would follow the same principle.
+**Open items** (found during the review, not yet done)
+- [ ] **Wider bus muxes as campaign parts.** The 4:1 and 8:1 bus muxes are still the library's trees of 64-NAND 2:1
+  muxes, unlocked by g_mux8 at that cost (`mux*`). A tree of `rv16_mux16` is cheaper at the same depth (8:1: 343
+  against 448; 4:1: 147 against 192), so a learner who builds one beats the pars of `m_rf` (by 210: 2 403 → 2 193),
+  `a_alu16` (by 105: 1 250 → 1 145) and of every reference with a 4:1 or 8:1 bus mux (the cores' immediate and result
+  muxes, the forwarding muxes, the CSR read mux). Fix: `rv16_mux4x16` / `rv16_mux8x16` built from `rv16_mux16`,
+  unlocked by g_mux8, used in the rv16 blocks; then `scripts/campaign-pars.ts --write` and the texts that quote the
+  changed numbers (walkthroughs, cases, codex), as for the review above.
+- [ ] **Two benches count different cycles for one pipeline.** Pipeline IV on its own level's check (`pi_core3`,
+  `pipeTests(3)`) takes 1 495 cycles, its par; the same core run through Core III's check (`coreTests(3)`, which
+  `pipeTests(3)` equals) takes 1 460. Same programs, so the benches count differently (where counting starts or
+  stops, draining the pipeline after the halt, the per-test budget). Find which is right, make the two agree, and
+  re-check the texts' 1 495 × 78 = 116 610 comparison with Core III (at 1 460 it is 113 880, 6 % faster).
+- [ ] **Stars earned against the old pars.** Progress stores each level's stars and best result and does not re-grade,
+  so a learner who solved a level before the review keeps stars earned against a looser par (the old par was up to 34 % above the new one:
+  `pi_core0`). Decide whether to re-grade from the stored best result on load (it holds the measured metrics), or
+  leave them.
+- [ ] **c_computer's given ROM.** The challenge gives a ROM part with id `rom`, but the reference's ROM is `u3`, so
+  the walkthrough places the ROM in a step instead of treating it as given (as before the review). Name the
+  reference's ROM `rom` so the given part and the reference's are one.
+- [ ] **Pipelines I–III's 4:1 muxes with an idle input.** Without branches, the M-stage value and result muxes
+  keep their pc + 1 input tied to 0 (and the result mux takes the ALU on two inputs): a 3:1 choice paid as 4:1. Cheap
+  to leave (4:1 is the unlocked part); a learner may beat those pars by a 2:1 mux's worth.
 
 **What the measurements say about the pipeline**: with the tightened parts, Pipeline IV takes 1 495 cycles × 78 =
 116 610 NAND delays against Core III's 1 236 × 98 = 121 128: about 4 % faster (before, at period 82, it was 1 %
