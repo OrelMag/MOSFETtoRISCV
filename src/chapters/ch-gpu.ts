@@ -108,7 +108,7 @@ export const chSimt: Chapter = {
         <p>The <code>join</code> at the end of the if is reached twice. The first time the entry is pending: the else lanes become the mask and the PC jumps back to
         just after the split, where their branch goes the other way. The second time it is not: the original mask comes back and the entry is popped. This is
         the scheme of Vortex, the open-source RISC-V GPU. A split on which the lanes agree pushes an entry with nothing pending, so its join just pops.</p>
-        <div class="try">Step through the joins and watch the stack and the mask grid: odd lanes, then even lanes, then all four.</div>`,
+        <div class="try">Watch the stack and the mask grid as the clock passes each join: odd lanes, then even lanes, then all four. <strong>Pulse</strong> pauses the clock for one edge at a time.</div>`,
       scene: () => laneCoreScene('diverge'),
     },
     {
