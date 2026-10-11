@@ -93,6 +93,7 @@ export class Stage {
   ctx: ViewCtx | null = null;
   private view: SchematicView;
   private crumbs: HTMLElement;
+  private bar: HTMLElement;
   private controls: HTMLElement;
   private canvas: HTMLElement;
   /** Bottom-left stack for panels with `data-dock="left"` (see layoutDock). */
@@ -175,7 +176,7 @@ export class Stage {
       applyTheme();
     } }, icon('sidebar', 16)) as HTMLButtonElement;
     this.syncPanesBtn();
-    const bar = h('div', { class: 'stage-bar' },
+    const bar = this.bar = h('div', { class: 'stage-bar' },
       this.crumbs, remix, h('div', { class: 'pal-wrap' }, imgBtn, imgMenu), this.probeBtn, this.timingBtn,
       btn('up', 'Up one level (Esc)', () => this.up()),
       btn('minus', 'Zoom out', () => this.view.zoom(1.25)),
@@ -227,6 +228,7 @@ export class Stage {
       this.view.insetRight = this.rightInset();
       this.view.resized();
       this.layoutDock();
+      this.fitBar();
     }).observe(this.canvas);
   }
 
@@ -998,7 +1000,22 @@ export class Stage {
       const last = i === chain.length - 1;
       c.append(h('button', { class: last ? 'cur' : '', onclick: () => (last ? null : this.goTo(item.path)) },
         item.label, item.kind ? h('span', { class: 'kind' }, item.kind) : null));
+      // The name may be cut with an ellipsis (app.css): the tooltip keeps it whole.
+      (c.lastChild as HTMLElement).title = item.kind ? `${item.label} (${item.kind})` : item.label;
     });
+    this.fitBar();
+  }
+
+  /** Drop the bar's button labels (icons and tooltips remain) when the hierarchy would otherwise
+   *  be cut or wrap; measured with the labels shown, so it comes back once there is room. */
+  private fitBar(): void {
+    const bar = this.bar;
+    bar.classList.remove('compact');
+    const items = [...this.crumbs.querySelectorAll('button')];
+    if (!items.length) return;
+    const cut = items.some((b) => b.scrollWidth > b.clientWidth + 1);
+    const wrapped = items[items.length - 1].offsetTop > items[0].offsetTop + 2;
+    if (cut || wrapped) bar.classList.add('compact');
   }
 
   /** Open `path` and highlight (and bring into view) the instance `name` inside it. */
