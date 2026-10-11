@@ -15,6 +15,7 @@ import { regfile } from './regfile';
 import { assemble } from '../riscv/asm';
 import { PROGRAMS } from '../riscv/programs';
 import { counter, register } from './sequential';
+import { arbiterN } from './mpdecode';
 import { arrayDiv, arrayMul, condNegate, csa, divStep, seqDivider, treeMul } from './muldiv';
 import { fpAdd, fpCompare, fpFromInt, fpMul, fpUnpack, incFast, lzc, normRound, shiftLeft, shiftRightSticky } from './fpu';
 import { cachedMemory, wayLookup2 } from './cache';
@@ -231,6 +232,7 @@ export const families: Family[] = [
   nBit('cycles', 'Cycle counter', 'sequential', [8, 16, 32], 16, (n) => `cycles${n}`, cycleCounter),
   nBit('ring', 'Ring counter', 'sequential', [3, 4, 8], 4, (n) => `ring${n}`, (n) => ringCounter(n)),
   nBit('johnson', 'Johnson counter', 'sequential', [3, 4, 8], 4, (n) => `johnson${n}`, (n) => ringCounter(n, true)),
+  { id: 'arbrr', name: 'Round-robin arbiter', category: 'sequential', params: [count('ways', [2, 3, 4, 8], 4)], key: (p) => `arbrr${p.ways}`, make: (p) => arbiterN(p.ways) },
   { id: 'clkdiv', name: 'Ripple clock divider', category: 'sequential', params: [count('stages', [1, 2, 3, 4, 8], 3)], key: (p) => `clkdiv${p.stages}`, make: (p) => clockDivider(p.stages) },
   nBit('sdiv', 'Iterative divider', 'sequential', [4, 8, 16, 32], 8, (n) => `sdiv${n}`, seqDivider),
   nBit('nrsdiv', 'Iterative non-restoring divider', 'sequential', [4, 8, 16, 32], 8, (n) => `nrsdiv${n}`, nrSeqDivider),
