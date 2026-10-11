@@ -42,7 +42,7 @@ made in the program point at the public site (editor/files.ts `SITE_URL`). `.git
 (manual or `v*` tag) publishes the release `desktop-latest`.
 
 CI (`.github/workflows/deploy.yml`) runs tests + build and deploys `dist/` to GitHub Pages
-on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-export.ts all`
+on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-export.ts <design>`, one parallel job per design (multi, sys, sys-m)
 (Yosys synthesizes the exported dual-core and the RV32I / RV32IM system CPUs, each netlist is simulated against ours,
 every output every cycle, on their programs with irq pulses and switch changes). Run it locally (`npx vite-node scripts/verify-export.ts all`, needs `pip install yowasp-yosys`)
 before merging a change to the exporters, the dual-core or the system CPU (one design: `verify-export.ts sys-m`).
