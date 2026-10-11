@@ -141,3 +141,13 @@ a.sb-chal-flag:hover { filter: brightness(1.1); text-decoration: underline; }
 .sb-tp-prog.bad { color: var(--text); border-color: color-mix(in srgb, var(--ed-err) 50%, var(--border)); }
 .sb-tp-prog.bad .icon { color: var(--ed-err); }
 .sb-tp-prog:hover { background: var(--surface-2); }
+
+/* state-machine read-back drawer (editor/fsmui.ts) */
+.sb-fsm { flex: 1; min-height: 0; padding: 10px 12px; overflow: auto; font-size: 12.5px; color: var(--text-2); }
+.sb-fsm-verdict { margin: 0 0 8px; font-weight: 600; color: var(--text); }
+.sb-fsm-verdict.ok { color: var(--good); }
+.sb-fsm-verdict.bad { color: var(--ed-err); }
+.sb-fsm-dg { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); padding: 4px; }
+.sb-fsm-list { margin: 8px 0; padding-left: 18px; }
+.sb-fsm-list li { margin: 2px 0; }
+.sb-fsm-how, .sb-fsm-msg { color: var(--muted); font-size: 11.5px; margin: 8px 0 0; }

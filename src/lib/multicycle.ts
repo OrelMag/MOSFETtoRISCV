@@ -9,6 +9,7 @@ import { alu, constWord, isZero } from './alu';
 import { busMux2, decoder, muxTree } from './combinational';
 import { CLEAR_BIT0, CONTROL, IMM_GEN, NEXT_PC, OPCODE_DECODER, dataMemory, rom } from './cpu';
 import { define, merger, splitter } from './define';
+import type { FsmArc, FsmSpec } from './fsm';
 import { AND, OR } from './gates';
 import { regfile } from './regfile';
 import { register } from './sequential';
@@ -59,6 +60,74 @@ const OPCODES5: Record<string, number> = { R: 0b01100, I: 0b00100, LOAD: 0b00000
 /** Memory dispatch: load → MemRead, store → MemWrite. */
 export const MC_DISPATCH2: [string, number][] = [['LOAD', 3], ['STORE', 5]];
 
+/** The opcode class of a 7-bit opcode (the dispatch tables' names), or null. */
+export function mcOpClass(op: number): string | null {
+  const o5 = (op >> 2) & 31;
+  return Object.keys(OPCODES5).find((c) => OPCODES5[c] === o5) ?? null;
+}
+
+/**
+ * The hardwired controller's transitions: [source, opcode class or null, target], returns to Fetch left out
+ * (state 0 is the code no next-state OR drives). Transition k with a class is AND gate t<k> of MC_FSM.
+ */
+export function mcTransitions(): [number, string | null, number][] {
+  const trans: [number, string | null, number][] = [];
+  MC_STATES.forEach((s, i) => {
+    if (typeof s.next === 'number') { if (s.next !== 0) trans.push([i, null, s.next]); }
+    else for (const [cls, t] of s.next === 'decode' ? MC_DISPATCH : MC_DISPATCH2) trans.push([i, cls, t]);
+  });
+  return trans;
+}
+
+/** Diagram positions (units of the 770 × 400 drawing) and the short labels of the dispatch arcs. */
+const MC_AT: Record<string, [number, number]> = {
+  Fetch: [340, 30], Decode: [340, 92], MemAdr: [56, 168], ExecuteR: [150, 168], ExecuteI: [246, 168], JAL: [440, 168], JALR: [530, 168],
+  Branch: [620, 168], LUI: [706, 168], MemRead: [56, 248], MemWrite: [150, 248], MemWB: [56, 328], ALUWB: [340, 328],
+};
+const MC_ARC: Record<string, Partial<FsmArc>> = {
+  'Decode>MemAdr': { label: 'lw/sw', t: 0.62, bend: 18 }, 'Decode>ExecuteR': { label: 'R', t: 0.7, bend: 10 }, 'Decode>ExecuteI': { label: 'I', t: 0.72 },
+  'Decode>JAL': { label: 'jal', t: 0.72 }, 'Decode>JALR': { label: 'jalr', t: 0.72, bend: -8 }, 'Decode>Branch': { label: 'branch', t: 0.7, bend: -14 },
+  'Decode>LUI': { label: 'lui', t: 0.74, bend: -20 }, 'Decode>ALUWB': { label: 'auipc' },
+  'MemAdr>MemRead': { label: 'lw', dx: -14 }, 'MemAdr>MemWrite': { label: 'sw', dx: 10, dy: -6 },
+};
+
+/**
+ * The multicycle controller as a state machine, from MC_STATES and the dispatch tables: what both controllers
+ * (hardwired and microcode) implement. Arc parts are MC_FSM's AND gate for the transition and the
+ * next-state ORs its target's bits feed.
+ */
+export const MC_FSM_SPEC: FsmSpec = (() => {
+  const trans = mcTransitions();
+  const ors = [0, 1, 2, 3].filter((b) => trans.filter((t) => (t[2] >> b) & 1).length > 1);
+  const arcs: FsmArc[] = [];
+  const add = (from: number, to: number, classes: string[] | null) => {
+    const name = `${MC_STATES[from].name}>${MC_STATES[to].name}`;
+    const ks = trans.flatMap(([s, c, t], k) => (s === from && t === to && c ? [k] : []));
+    arcs.push({
+      from, to, ...MC_ARC[name],
+      when: classes ? (inp) => classes.includes(mcOpClass(inp.op) ?? '') : undefined,
+      parts: [...ks.map((k) => `t${k}`), ...ors.filter((b) => (to >> b) & 1).map((b) => `n${b}`)],
+      rail: to === 0 || undefined,
+    });
+  };
+  MC_STATES.forEach((s, i) => {
+    if (typeof s.next === 'number') return add(i, s.next, null);
+    const table = s.next === 'decode' ? MC_DISPATCH : MC_DISPATCH2;
+    for (const t of [...new Set(table.map(([, t]) => t))]) add(i, t, table.filter(([, x]) => x === t).map(([c]) => c));
+  });
+  const fields = MC_FIELDS.map(([f]) => f);
+  return {
+    title: 'Multicycle controller', shape: 'pill', size: [770, 400],
+    states: MC_STATES.map((s, i) => ({
+      name: s.name, code: i, does: s.does, at: MC_AT[s.name],
+      out: { ...Object.fromEntries(fields.map((f) => [f, s.sig[f] ?? 0])), state: i },
+    })),
+    arcs, reset: 0, inputs: ['op'], domain: { op: Object.values(OPCODES5).map((o) => (o << 2) | 3) },
+    outputs: [...fields, 'state'], stateBits: ['state'], codeBits: 4,
+    rail: { to: 0, x: 752, y: 372, label: 'retire → Fetch', labelX: 600 },
+  };
+})();
+
 const SEQ = { next: 0, decode: 1, mem: 2 } as const;
 
 /** The microword of a state: control fields, then the next-address field (4 bits) and the sequencing mode (2 bits). */
@@ -108,12 +177,7 @@ export const MC_FSM: ComponentDef = (() => {
   );
   nets.push({ ends: ['one.y', 'st.en'] }, { name: 'state', ends: ['st.q', 'dec.a', 'state'], tags: ['state'] }, { name: 'op', ends: ['op', 'opd.op'] }, { name: 'clk', ends: ['clk', 'st.clk'] });
   const S = (i: number) => `dec.y${i}`;
-  // transitions: [source state, condition (class output) or null, target]
-  const trans: [number, string | null, number][] = [];
-  MC_STATES.forEach((s, i) => {
-    if (typeof s.next === 'number') { if (s.next !== 0) trans.push([i, null, s.next]); }
-    else for (const [cls, t] of s.next === 'decode' ? MC_DISPATCH : MC_DISPATCH2) trans.push([i, `opd.${cls}`, t]);
-  });
+  const trans = mcTransitions().map(([s, cls, t]): [number, string | null, number] => [s, cls && `opd.${cls}`, t]);
   const xT = Math.ceil(xD + dg.w + stateTag + Math.max(stateTag, condTag) + 1);
   let yT = 2, nT = 0;
   const termOf = trans.map(([s, cond], k) => {

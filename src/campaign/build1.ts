@@ -232,6 +232,7 @@ export const BUILD1: Record<string, () => BuildChallenge> = {
     brief: 'A bit arrives on <code>x</code> each clock. <b>y = 1</b> (before the edge) when x = 1 completes the pattern 1, 0, 1 (patterns may overlap: 10101 gives two). <code>rst</code> (synchronous) forgets everything.',
     ports: pins([['x'], ['rst'], ['clk']], [['y']], 'clk'), check: { kind: 'sequence', steps: fsmSeq() },
     answer: refOf('s_fsm', () => DET101, '"101" detector'),
+    fsm: 'rv16_det101',
   }),
   m_rf: () => ({
     id: 'm_rf', title: 'Register file', level: 'memory', allowed: 'nand',

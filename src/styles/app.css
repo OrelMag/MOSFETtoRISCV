@@ -1055,6 +1055,74 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .mc-big td { font-size: 12px; padding: 3px 5px; }
 .mc-panel.compact { width: 230px; }
 .mc-panel.compact .mc-row { grid-template-columns: 18px 70px 0 auto; }
+.mc-panel.diagram { width: 640px; }
+.mc-panel.compact.diagram { width: 520px; }
+.mc-seg { margin-left: auto; padding: 1px; }
+.mc-seg button { padding: 1px 8px; font: 600 11px var(--font-ui); }
+
+/* state diagrams (view/fsmdiagram.ts) */
+.fsm-dg { display: block; width: 100%; height: auto; --fsm-bad: light-dark(#d63b3b, #ff6b6b); }
+.fsm-dg text { font-family: var(--font-ui); }
+.fsm-arc { fill: none; stroke: var(--muted); stroke-width: 1.4; }
+.fsm-arc.out { stroke: var(--good); stroke-width: 2; }
+.fsm-arc.last, .fsm-arc.hov { stroke: var(--accent); stroke-width: 2.6; }
+.fsm-arc.next { stroke: var(--accent); stroke-width: 2.6; stroke-dasharray: 7 5; animation: fsm-march 0.9s linear infinite; }
+.fsm-arc.bad { stroke: var(--fsm-bad); stroke-width: 2.6; }
+.fsm-arc.spec { stroke: var(--muted); stroke-dasharray: 5 4; }
+@keyframes fsm-march { to { stroke-dashoffset: -24; } }
+@media (prefers-reduced-motion: reduce) { .fsm-arc.next { animation: none; } }
+.fsm-hit { fill: none; stroke: transparent; stroke-width: 10; pointer-events: stroke; cursor: default; }
+.fsm-mk path { fill: var(--muted); }
+.fsm-mk.acc path { fill: var(--accent); }
+.fsm-mk.good path { fill: var(--good); }
+.fsm-mk.bad path { fill: var(--fsm-bad); }
+.fsm-dot { fill: var(--muted); }
+.fsm-al {
+  font: 11px var(--font-mono); fill: var(--text-2); text-anchor: middle; dominant-baseline: central;
+  paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; pointer-events: none;
+}
+.fsm-al.out { fill: var(--good); font-weight: 700; }
+.fsm-al.acc { fill: var(--accent); font-weight: 700; }
+.fsm-al.bad { fill: var(--fsm-bad); font-weight: 700; }
+.fsm-st rect, .fsm-st circle { fill: var(--surface); stroke: var(--box-stroke); stroke-width: 1.4; }
+.fsm-st text { text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.fsm-st text.n { font-size: 12.5px; font-weight: 650; fill: var(--text); }
+.fsm-st text.c { font: 10.5px var(--font-mono); fill: var(--muted); }
+.fsm-st.trail rect, .fsm-st.trail circle { stroke: var(--accent); stroke-width: 2; }
+.fsm-st.target rect, .fsm-st.target circle { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 3; }
+.fsm-st.hover rect, .fsm-st.hover circle { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.fsm-st.cur rect, .fsm-st.cur circle { fill: var(--accent); stroke: var(--accent); }
+.fsm-st.cur text.n { fill: var(--accent-text); }
+.fsm-st.cur text.c { fill: color-mix(in srgb, var(--accent-text) 80%, transparent); }
+.fsm-st.unknown rect, .fsm-st.unknown circle { stroke: var(--fsm-bad); stroke-width: 2; }
+.fsm-st.ghost rect, .fsm-st.ghost circle { fill: none; stroke: var(--muted); stroke-dasharray: 4 3; }
+.fsm-st.ghost text.n { fill: var(--muted); }
+.fsm-badge circle { fill: var(--accent); }
+.fsm-badge text { fill: var(--accent-text); font: 700 10px var(--font-ui); text-anchor: middle; dominant-baseline: central; }
+.fsm-view { position: relative; }
+.fsm-card {
+  position: absolute; right: 6px; top: 6px; max-width: 260px; padding: 7px 9px; font-size: 11.5px; color: var(--text-2);
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); box-shadow: var(--shadow);
+}
+.fsm-card b { color: var(--text); font-size: 12.5px; }
+.fsm-card .sub { color: var(--muted); font: 10.5px var(--font-mono); }
+.fsm-sig { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; }
+.fsm-sig code { font: 10.5px var(--font-mono); padding: 0 5px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); }
+.fsm-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 11px; color: var(--muted); align-items: center; }
+.fsm-legend i { display: inline-block; vertical-align: middle; width: 18px; margin-right: 4px; border-top: 2.5px solid var(--accent); }
+.fsm-legend i.cur { width: 12px; height: 9px; border: 0; border-radius: 5px; background: var(--accent); }
+.fsm-legend i.next { border-top-style: dashed; }
+.fsm-legend i.out { border-top-color: var(--good); }
+.fsm-legend i.bad { border-top-color: light-dark(#d63b3b, #ff6b6b); }
+.fsm-legend i.spec { border-top: 2px dashed var(--muted); }
+.fsm-badge-k { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-right: 4px; border-radius: 50%; background: var(--accent); color: var(--accent-text); font-size: 9.5px; }
+.fsm-panel { width: 400px; }
+.fsm-ribbon { display: grid; margin-top: 4px; font: 11px var(--font-mono); border-top: 1px solid var(--border); }
+.fsm-ribbon span { padding: 2px 0; text-align: center; border-bottom: 1px solid var(--border); color: var(--text-2); }
+.fsm-ribbon span.k { text-align: left; padding-right: 8px; color: var(--muted); }
+.fsm-ribbon span.now { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.fsm-ribbon span.one { color: var(--good); font-weight: 700; }
+.cx-fig .fsm-dg { max-width: 420px; margin: 0 auto; }
 
 /* chapter 23: float explorer */
 .fx-bits { display: flex; flex-wrap: wrap; gap: 2px; margin: 10px 0; }

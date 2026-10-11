@@ -12,7 +12,9 @@ import { pack } from '../../sim/values';
 import { h, icon } from '../../ui/dom';
 import { ViewCtx } from '../../view/context';
 import { SchematicView } from '../../view/schematic';
+import { fsmOf } from '../../lib/fsms';
 import { resolveComponent } from '../../lib/resolve';
+import { fsmDiagram } from '../../view/fsmdiagram';
 import { CODEX_KINDS, codexById, type CodexEntry } from '../codex';
 import type { CodexMore } from '../codexmore';
 import { libCost } from '../measure';
@@ -81,11 +83,14 @@ export function codexEntryEl(e: CodexEntry, more: CodexMore | undefined, view: P
     more.mistakes?.length ? h('section', null, h('h4', null, 'Common mistakes'), h('ul', { class: 'cx-mist' }, more.mistakes.map((m) => rich('li', m)))) : null,
     more.anatomy?.length ? h('section', null, h('h4', null, 'Where it sits'), h('div', { class: 'lv-anat cx-anat' }, anatomySvg(view, more.anatomy[0], () => {}))) : null);
   const fig = more.lib ? liveSchematic(more.lib) : null;
+  const fsm = fsmOf(more.lib);
   const compare = [more.lib, ...(more.compare ?? [])].filter((x): x is string => !!x).map((id) => ({ id, name: resolveComponent(id)?.name ?? id, c: libCost(id) }));
   const max = Math.max(1, ...compare.map((x) => x.c?.nand ?? 0));
   const right = h('div', { class: 'cx-col' },
     fig ? h('figure', { class: 'cx-fig' }, fig,
       h('figcaption', null, 'The library part, simulated: click an input to flip it. ', h('a', { href: `#/workbench/${more.lib}` }, 'Open it on the workbench'), ' to drill down to transistors.')) : null,
+    fsm ? h('figure', { class: 'cx-fig' }, fsmDiagram(fsm).el,
+      h('figcaption', null, 'Its state diagram, drawn from the same table as the circuit (a test reads the circuit back into it). Arcs read input / output.')) : null,
     ...sheets,
     compare.length > 1 ? h('section', null, h('h4', null, 'Cost against the alternatives'),
       h('div', { class: 'lv-bars' }, compare.flatMap((x, i) => [

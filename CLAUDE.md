@@ -129,6 +129,9 @@ src/sim/       simulation core (no DOM)
                  self-checking testbench from our simulation (checked against Yosys when installed)
   vexport.ts     synthesizable Verilog-2005 (flip-flops as processes, `hdl.synth` bodies) for Yosys / OpenROAD
   vcd.ts         toVcd(): Value Change Dump of recorded traces
+  fsmread.ts     readFsm(sim, spec): a circuit explored from reset (every input combination, breadth first; a state =
+                 every net's value, so nothing needs naming), its states paired with the spec's; readbackSpec draws it
+                 over the target (wrong arcs red, expected dashed); fsmStateOf / fsmInputsOf for the live panels
 src/lib/       the component library (registered in `registry` via define())
   transistors.ts NMOS, PMOS, rails, CMOS inverter/NOR, NAND (prim + 4-transistor netlist), tie cells
   switchparts.ts RES, CAP (prims), PULLUP / PULLDOWN (resistor + rail), TGATE (transmission gate),
@@ -173,7 +176,11 @@ src/lib/       the component library (registered in `registry` via define())
   cache2.ts      cacheWay(ib, t), MISS_CTRL, wbCache(k, ib, ways) (write-back, write-allocate, LRU), iCache(rom, ib);
                  singleCycleCpu(…, { dcache: 'wb' | 'wb2', icache }); riscv/cosim.ts cacheLines() + coherent cpuState().dmem
   multicycle.ts  MC_STATES (the state table), MC_FSM (hardwired), MC_MICRO (microcode), microword(),
-                 multicycleCpu(program, { control: 'fsm' | 'micro' }) with `retire`, `fetch`, `state` outputs
+                 multicycleCpu(program, { control: 'fsm' | 'micro' }) with `retire`, `fetch`, `state` outputs;
+                 mcTransitions (MC_FSM's AND gates t<k>), MC_FSM_SPEC (the controller as a state machine)
+  fsm.ts         FsmSpec: states (code, at, Moore out), arcs (when, Mealy out, parts lit on hover, drawing hints),
+                 fsmNext / fsmOut / fsmArc; fsms.ts: library id → spec (mc_fsm, mc_micro, rv16_det101: DET101_FSM);
+                 tests/fsm.test.ts reads every one back from its circuit (the picture cannot drift)
   fpu.ts         parametric IEEE 754 units (format {E, M}): lzc, shiftLeft, shiftRightSticky, fpUnpack,
                  normRound (shared RNE rounding), fpAdd, fpMul, fpFromInt, fpCompare, FPU32, FP_DECODE;
                  singleCycleCpu(…, { fpu }) adds the f register file (regfile(5, 32, false))
@@ -213,7 +220,10 @@ src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over 
                inlined, current theme; PNG at 2×; saveFile; exportSchematic for a stage's level, loaded on
                demand; the sandbox's File menu uses it too)
 src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...);
-               insthw.ts maps an instruction to the units it uses (and pipeline stage units)
+               insthw.ts maps an instruction to the units it uses (and pipeline stage units); fsmpanel.ts: a live state
+               diagram (view/fsmdiagram.ts) over a scene (current state, last / next arc, trail, ribbon; arc hover lights
+               its gates), used by controllerPanel's Diagram view and chapter 9's state machine; the codex draws fsmOf(lib)
+               and the campaign's state-machine level reads the learner's circuit back (editor/fsmui.ts, BuildChallenge.fsm)
 src/chapters/  narrative content: chapters → steps → scene / widget / challenge
 src/lib/rv16/  the campaign's RV16 hardware, every block built only from parts its level's requirements unlock:
                logic.ts (acts 1–3), cpu.ts (immediates, control, branch, next PC, single-cycle cores),
