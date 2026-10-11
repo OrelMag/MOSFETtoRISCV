@@ -15,8 +15,10 @@ import { favoriteItems, paletteGroups, registerPaletteGroup, toggleFavorite, vis
 import { partDef } from '../src/editor/parts';
 import { EditorSim, FrameBudget, simKey } from '../src/editor/runtime';
 import { activeChip, closeChip, keepVolatile, newChip, openChip, setPinValue } from '../src/editor/session';
+import { docFromDef } from '../src/editor/fromdef';
+import { RF8 } from '../src/lib/rv16/logic';
 import { symbolGeom } from '../src/sim/geometry';
-import { B1 } from '../src/sim/types';
+import { B1, netlistOf } from '../src/sim/types';
 import { chip, end, halfAdder, lbl, part, pin, wire } from './editorkit';
 
 const defOf: DefOf = (p) => {
@@ -270,6 +272,26 @@ describe('EditorSim', () => {
     // values through the compile: the q wire carries 6
     expect(es.wireBits('w3')).toEqual([0, 1, 1, 0]);
     expect(es.endBits('pin:en')).toEqual([B1]);
+  });
+
+  it('wires read their own nets after the same circuit is redrawn in another order', () => {
+    // The register file's reference answer, its wires drawn again in reverse: connectivity is
+    // unchanged, but the compile numbers its nets in drawing order. The clk wire once read the
+    // old simulator's net of its new index, a 16-bit bus.
+    const doc = docFromDef(RF8, { id: 'u_rf', name: 'RF' });
+    if ('error' in doc) throw new Error(doc.error);
+    const es = new EditorSim({ debounceMs: 0 });
+    es.update(compile(doc), doc.pins);
+    const redrawn = { ...doc, wires: [...doc.wires].reverse() };
+    const c = compile(redrawn);
+    es.update(c, redrawn.pins);
+    const nl = netlistOf(c.def)!;
+    const widthOf = (end: string) => {
+      const [inst, port] = end.includes('.') ? end.split('.') : [null, end];
+      const d = inst ? nl.instances.find((i) => i.name === inst)!.def : c.def;
+      return d.ports.find((p) => p.name === port)!.width;
+    };
+    for (const w of redrawn.wires) expect([w.id, es.wireBits(w.id)?.length]).toEqual([w.id, widthOf(nl.nets[c.netOfWire.get(w.id)!].ends[0])]);
   });
 
   it('advance() runs cycles at the chosen rate; gate mode steps one delay at a time', () => {

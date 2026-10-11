@@ -393,10 +393,11 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
     if (r.displays.length) shown = { displays: r.displays };
   }
 
+  const netKeys = nets.map((n) => JSON.stringify([[...n.ends].sort(), !!n.cap]));
   const conn = [
     [...parts.values()].map(({ doc: p }) => [p.id, p.ref]).sort((a, b) => (a[0] < b[0] ? -1 : 1)),
     ports.map((p) => [p.name, p.width, p.dir, !!p.clock, !!p.tri]),
-    nets.map((n) => JSON.stringify([[...n.ends].sort(), !!n.cap])).sort(),
+    [...netKeys].sort(),
     Object.entries(powerOn).sort(),
   ];
   // The circuit without its drawing, down to the leaves: what the derived model and the
@@ -428,7 +429,10 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
   }
   structKeys.set(def, hash(`${struct}|${JSON.stringify(def.ff ?? null)}`));
 
-  const connKey = hash(JSON.stringify([...conn, def.ff ?? null]));
+  // Unlike `struct`, the nets in drawing order: a simulator (or design) is reused while the key
+  // holds and read through this compile's net indices, so a wire deleted and redrawn (same
+  // circuit, nets numbered differently) must change it.
+  const connKey = hash(JSON.stringify([conn[0], conn[1], netKeys, conn[3], def.ff ?? null]));
 
   if (shown) setFaceOf(def, shown);
   return { def, diags, netOfWire, netOfEnd, netOfLabel, connKey, mode, ...(derived ? { derived } : {}) };
