@@ -21,6 +21,7 @@ import { removeChip } from './library';
 import { allOnes, type ChipDoc, type CommentDoc, type DisplayKind, type ExitDir, type LabelDoc, type PartDoc, type PartRef, pinBig, type PinDoc, pinValue, type WireDoc } from './model';
 import { deleteSel, flipParts, setComment, setLabel, setPart, setPin, setRef, setWire } from './ops';
 import { keyLabel, MAX_RAM_K, MAX_WIDTH, normalizeKey } from './parts';
+import { PUZZLE_MAX_WIDTH } from './puzzleparts';
 import { openChip } from './session';
 import { hueSwatches } from './hueswatch';
 import { colourNets, hueOfNets } from './wirehue';
@@ -247,6 +248,10 @@ export class PropsPanel {
     } else if ('keyboard' in ref) {
       out.append(h('p', { class: 'sb-sum' }, 'Type while the circuit runs, or turn on Type in the top bar, and the keys queue up here. Codes: ASCII; Enter 10, Backspace 8, Tab 9, Delete 127, arrows ↑ 128 ↓ 129 ← 130 → 131.'),
         h('div', { class: 'sb-btns' }, this.btn('Clear', 'Drop the waiting keys', () => ed.sim.clearKeyboards(), 'close')));
+    } else if ('puzzle' in ref) {
+      out.append(this.row('Width', this.num(ref.width, 1, PUZZLE_MAX_WIDTH, (w) => setR({ puzzle: ref.puzzle, width: w })),
+        'Bits per word: a puzzle word wider than this arrives (and must leave) in pieces, most significant first'),
+      h('p', { class: 'sb-sum' }, 'Puzzles (top bar) fill it with the words of each test and check the words written.'));
     } else if ('ram' in ref) {
       const { k, w } = ref.ram;
       out.append(this.row('Words', this.select(k, Array.from({ length: MAX_RAM_K }, (_, i): [number, string] => [i + 1, kWords(2 ** (i + 1))]), (v) => setR({ ram: { ...ref.ram, k: v } })),
