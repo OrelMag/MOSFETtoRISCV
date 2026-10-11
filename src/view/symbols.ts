@@ -69,10 +69,25 @@ function gateBody(kind: string, w: number, h: number, flip = false): SVGElement[
     const rx = Math.min(h / 2, bw * 0.55);
     els.push(s('path', { d: `M0.5,0.55 H${Math.max(0.9, bw - rx)}`, class: 'sym-gloss' }));
   } else if (kind !== 'not' && kind !== 'buf') {
-    const x0 = kind.startsWith('x') ? 0.45 : 0;
-    els.push(s('path', { d: `M${x0 + 0.75},0.62 Q${x0 + (bw - x0) * 0.45},0.45 ${x0 + (bw - x0) * 0.72},0.95`, class: 'sym-gloss' }));
+    const pts = orGloss(kind.startsWith('x') ? 0.45 : 0, bw, h);
+    els.push(s('path', { d: 'M' + pts.map(([x, y]) => `${+x.toFixed(3)},${+y.toFixed(3)}`).join(' L'), class: 'sym-gloss' }));
   }
   return els;
+}
+
+/** The OR family's gloss: a stretch of the body's top curve moved inward along its normal, so it stays inside
+ *  the body at any height (a fixed curve left a 4-input gate, whose top edge is steeper). */
+export function orGloss(x0: number, bw: number, h: number): [number, number][] {
+  const L = bw - x0, inset = 0.6;
+  const pts: [number, number][] = [];
+  for (let i = 0; i <= 8; i++) {
+    const t = 0.25 + 0.045 * i;
+    // The top edge Q (x0,0) (x0+0.6L,0) (bw,h/2) at t, and its tangent.
+    const x = x0 + L * (1.2 * t - 0.2 * t * t), y = t * t * h / 2;
+    const dx = L * (1.2 - 0.4 * t), dy = t * h, n = Math.hypot(dx, dy);
+    pts.push([x - dy / n * inset, y + dx / n * inset]);
+  }
+  return pts;
 }
 
 function transistor(def: ComponentDef): SVGElement[] {
