@@ -14,6 +14,7 @@ import { BUILDH } from './buildh';
 import { fpAdd, fpMul, lzc, ROUND_DECIDE } from '../lib/fpu';
 import { arrayMul, seqDivider } from '../lib/muldiv';
 import { seqMul } from '../lib/multiply';
+import { RV16_MUX2 } from '../lib/rv16/logic';
 import { F16 } from '../sim/fpref';
 import type { BuildChallenge } from '../editor/challenges';
 import type { Act, CampaignNode } from './types';
@@ -491,13 +492,13 @@ export const NODES: CampaignNode[] = [
     codex: ['mext', 'signedmul', 'arraymul'], unlocks: ['rv16_mul'], chapters: [{ chapter: 'muldiv', label: 'Multiply & divide' }],
   },
   {
-    id: 'o_div', act: 8, title: 'Divider', kind: 'build', optional: true, requires: ['a_addsub16', 's_fsm'], base: BUILD8.o_div, givesOf: partsOf(() => seqDivider(16)), par: { nand: 1490, period: 31 }, unlocks: ['sdiv16'],
+    id: 'o_div', act: 8, title: 'Divider', kind: 'build', optional: true, requires: ['a_addsub16', 's_fsm'], base: BUILD8.o_div, givesOf: partsOf(() => seqDivider(16, RV16_MUX2)), par: { nand: 1445, period: 31 }, unlocks: ['sdiv16_rv16'],
     why: 'Long division in binary: one subtract-and-compare per quotient bit, run by a small state machine. Division is slow everywhere: even fast CPUs take tens of cycles.',
     tips: ['Shift the remainder left, bring in the next dividend bit, subtract the divisor: if the result is not negative keep it and set the quotient bit.'],
     codex: ['division'],
   },
   {
-    id: 'o_dcore', act: 8, title: 'Divide in the core', kind: 'core', optional: true, requires: ['o_mcore', 'o_div'], base: BUILD9.o_dcore, par: { nand: 10612, period: 193, cycles: 1859 },
+    id: 'o_dcore', act: 8, title: 'Divide in the core', kind: 'core', optional: true, requires: ['o_mcore', 'o_div'], base: BUILD9.o_dcore, par: { nand: 10567, period: 193, cycles: 1859 },
     why: 'A divider takes many cycles, so the core must wait for it: the first instruction that does not finish in one cycle. Holding the PC is the single-cycle core\'s version of a stall.',
     tips: ['start = (a divide); hold = start and not done. Hold the PC by loading it with itself: ld = ld | hold, target = hold ? pc : target.', 'Write nothing while holding: rwe for MD = MD and not hold.', 'Signs: an adder / subtractor with a = 0 negates when sub = 1. Negate the quotient only when b ≠ 0.'],
     codex: ['mext', 'division', 'stall'], unlocks: ['rv16_div'],
@@ -532,19 +533,19 @@ export const NODES: CampaignNode[] = [
     codex: ['lzc'],
   },
   {
-    id: 'o_fpnorm', act: 8, title: 'Normalize & round', kind: 'build', optional: true, requires: ['o_fpround', 'o_fpsticky', 'o_fplzc'], base: BUILDFP.o_fpnorm, givesOf: fpGives(FP_REF.norm), par: { nand: 2058, depth: 86 }, unlocks: ['fpnr5_10_15', 'fpnr5_10_16', 'fpnr5_10_22'],
+    id: 'o_fpnorm', act: 8, title: 'Normalize & round', kind: 'build', optional: true, requires: ['o_fpround', 'o_fpsticky', 'o_fplzc'], base: BUILDFP.o_fpnorm, givesOf: fpGives(FP_REF.norm), par: { nand: 2058, depth: 86 }, unlocks: ['fpnr5_10_15', 'fpnr5_10_16_rv16', 'fpnr5_10_22'],
     why: 'Add, multiply and convert all end the same way: a raw significand and exponent become a correctly rounded encoding. Build it once, carefully, and every unit after it is mostly wiring.',
     tips: ['Left shift by min(leading zeros, exp − 1): never below exponent 1. If exp < 1, shift right by 1 − exp instead (sticky shifter).', 'After the shift the kept bits are the top 11; then the guard bit; everything below it, and stin, is the sticky bit.', 'Rounding up 1.111…1 carries into a new top bit: the exponent goes up by one and the fraction is 0.', 'Overflow: a final field of 31 or more. Then toInf picks ∞ or 0x7BFF.'],
     codex: ['normalize', 'rounding', 'subnormal'],
   },
   {
-    id: 'o_fpadd', act: 8, title: 'FP adder', kind: 'build', optional: true, requires: ['o_fpunpack', 'o_fpnorm'], base: BUILD8.o_fpadd, givesOf: fpGives(() => fpAdd(F16)), par: { nand: 3785, depth: 163 },
+    id: 'o_fpadd', act: 8, title: 'FP adder', kind: 'build', optional: true, requires: ['o_fpunpack', 'o_fpnorm'], base: BUILD8.o_fpadd, givesOf: fpGives(() => fpAdd(F16, RV16_MUX2)), par: { nand: 3755, depth: 163 },
     why: 'Adding floats means aligning their binary points first, then adding, normalising and rounding: the hardest of the four operations to get exactly right. Every block it needs is one you have built.',
     tips: ['Swap so that |a| ≥ |b|, shift b right by the exponent difference (keep a sticky bit), add or subtract the significands.', 'Leave room: put the significands at bits 13..3 of a 15-bit word (a carry above, guard and sticky below), and hand normalize & round exponent + 1.', 'x − x is +0 (−0 in RDN). NaN in, or ∞ − ∞, gives the canonical NaN 0x7E00.'],
     codex: ['ieee754', 'rounding'],
   },
   {
-    id: 'o_fpmul', act: 8, title: 'FP multiplier', kind: 'build', optional: true, requires: ['o_fpadd', 'o_mularr'], base: BUILD8.o_fpmul, givesOf: fpGives(() => fpMul(F16)), par: { nand: 4965, depth: 150 },
+    id: 'o_fpmul', act: 8, title: 'FP multiplier', kind: 'build', optional: true, requires: ['o_fpadd', 'o_mularr'], base: BUILD8.o_fpmul, givesOf: fpGives(() => fpMul(F16, RV16_MUX2)), par: { nand: 4935, depth: 150 },
     why: 'Multiplying floats is simpler than adding them: multiply the significands, add the exponents, XOR the signs, then normalise and round.',
     tips: ['11 × 11 bits gives a 22-bit product; its top bit decides whether to shift by one.'], codex: ['ieee754'],
   },
@@ -555,7 +556,7 @@ export const NODES: CampaignNode[] = [
     codex: ['fpcompare'],
   },
   {
-    id: 'o_fpcvt', act: 8, title: 'Integer to float', kind: 'build', optional: true, requires: ['o_fpnorm'], base: BUILDFP.o_fpcvt, givesOf: fpGives(FP_REF.cvt), par: { nand: 2840, depth: 109 },
+    id: 'o_fpcvt', act: 8, title: 'Integer to float', kind: 'build', optional: true, requires: ['o_fpnorm'], base: BUILDFP.o_fpcvt, givesOf: fpGives(FP_REF.cvt), par: { nand: 2690, depth: 109 },
     why: 'fcvt.h.w: an integer is already a significand, with its binary point at the right. Take the magnitude, and normalize & round finds the leading 1 and rounds what does not fit in 11 bits.',
     tips: ['|x| = signed and x < 0 ? −x : x (a conditional negate).', 'The integer\'s top bit weighs 2^15: the exponent you hand normalize & round is 15 + bias.'],
     codex: ['normalize'],

@@ -9,7 +9,7 @@ import { addSub } from '../combinational';
 import { define, splitter } from '../define';
 import { AND, NOT, OR, XOR } from '../gates';
 import { arrayMul, seqDivider } from '../muldiv';
-import { MUX16 } from './logic';
+import { MUX16, RV16_MUX2 } from './logic';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -94,7 +94,7 @@ export const DIV16: ComponentDef = (() => {
   const ub = b.op(addSub(16), [z, 'b', nb], '|b|');
   const nq0 = b.op1(XOR, [na, nb]);
   b.next();
-  const dv = b.op(seqDivider(16), ['clk', 'start', `${ua}.s`, `${ub}.s`], 'unsigned divider');
+  const dv = b.op(seqDivider(16, RV16_MUX2), ['clk', 'start', `${ua}.s`, `${ub}.s`], 'unsigned divider');
   const nq = b.op1(AND, [nq0, b.op1(NOT, [bz])], 'negate q?');
   b.next();
   const q = b.op(addSub(16), [z, `${dv}.q`, nq], '± q');

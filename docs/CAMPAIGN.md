@@ -535,12 +535,15 @@ per flip-flop, 15 per enable flip-flop). The levels now unlock campaign cells at
 - [x] **c_computer's given ROM**: the reference's ROM instance is `rom`, the given part's id, so the walkthrough
   treats it as given.
 
-**Open items**
-- [ ] **16-bit 2:1 muxes in the side quests.** `o_fpadd` (2), `o_fpmul` (2) and `o_fpcvt` (10, in its shifters
-  `shl16_5` / `shrs16_5`) unlock `rv16_mux16` but their references use the library's 64-NAND `mux2x16` (from `fpu.ts`,
-  whose muxes come in every width): beatable by 30, 30 and 150. `o_dcore` places `o_div`'s divider (`sdiv16`, three
-  of them, 45), built at a level that does not unlock the 49-NAND part, as `o_mulseq` and `o_div` themselves are. A
-  shared-inverter bus mux for the FP and divider blocks would close all of it; `tests/campaign.test.ts` lists them.
+- [x] **16-bit 2:1 muxes in the side quests** (`fix/sidequest-muxes`). The FP adder and multiplier's result muxes,
+  int → float's 16-bit shifters (inside `fpnr5_10_16`) and the 16-bit divider (`sdiv16`, its step) held the library's
+  64-NAND `mux2x16` where `rv16_mux16` is unlocked (the divider through `o_dcore`). The generators (`seqDivider`,
+  `divStep`, `shiftLeft`, `shiftRightSticky`, `normRound`, `fpAdd`, `fpMul`, `fpFromInt`) take a `Mux2Kind`: the
+  library's by default (ids and counts unchanged), `RV16_MUX2` (MUX16 for 16-bit words, id suffix `_rv16`) in the
+  campaign. `o_div` gives and unlocks `sdiv16_rv16`, `o_fpnorm` unlocks `fpnr5_10_16_rv16`. Pars: `o_div` 1 490 →
+  1 445, `o_dcore` 10 612 → 10 567, `o_fpadd` 3 785 → 3 755, `o_fpmul` 4 965 → 4 935, `o_fpcvt` 2 840 → 2 690.
+  `tests/campaign.test.ts` now allows no exception. `o_mulseq` keeps the library mux: its level gives it and does not
+  unlock the 49-NAND one, and nothing downstream places its multiplier.
 
 **What the measurements say about the pipeline**: with the tightened parts, Pipeline IV takes 1 495 cycles × 78 =
 116 610 NAND delays against Core III's 1 236 × 98 = 121 128: about 4 % faster (before, at period 82, it was 1 %

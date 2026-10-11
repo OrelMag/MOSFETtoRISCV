@@ -441,6 +441,16 @@ export const busMux2 = memo((w: number): ComponentDef => {
 });
 
 /**
+ * Which 2:1 word multiplexer a generator places (ports a, b, s, y): the library's (busMux2), or another
+ * family whose `tag` the generator appends to its memo key and id (the campaign's shared-inverter mux).
+ */
+export interface Mux2Kind {
+  tag: string;
+  of(w: number): ComponentDef;
+}
+export const LIB_MUX2: Mux2Kind = { tag: '', of: (w) => busMux2(w) };
+
+/**
  * 2^k : 1 multiplexer of W-bit words, as a binary tree of 2:1 multiplexers.
  * Select bit 0 drives the first column, bit k-1 the last.
  */
