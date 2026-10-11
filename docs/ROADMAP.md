@@ -247,7 +247,11 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ amoswap.w / amoadd.w; race (20 of 40 updates survive), atomic add and spin-lock demos
 - ✅ Multi-hart golden model with identical arbitration; both cores co-simulated every cycle
 - ✅ MSI / MESI snooping coherence explorer (false sharing, private data, ping-pong); memory-ordering discussion
-- ⏳ Private caches in the gate-level cores with a coherent bus; lr.w / sc.w; more than two cores
+- ✅ More than two cores: `multiCore(program, n)` (n = 2, 4, 8) on an n-way round-robin arbiter (`arbiterN`: a one-hot
+  pointer, masked and unmasked priority chains, n − 1 flip-flops; on the workbench) and up to 64K words of shared memory;
+  co-simulated every cycle against MultiISS with n harts. The 4-core runs ~4 500 cycles/s on the cycle engine in Node
+  (scripts/sim-perf.ts). Not yet shown in the chapter, which keeps the dual-core
+- ⏳ Private caches in the gate-level cores with a coherent bus; lr.w / sc.w
 
 ### Phase 11 — From netlist to silicon ✅ (chapter 25)
 - ✅ INV / NAND2 / NOR2 standard cells in layout (layers, live conduction), λ dimensions, sky130 reference
