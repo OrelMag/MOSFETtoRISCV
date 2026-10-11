@@ -11,7 +11,7 @@ lock-step test. The checks below do not rely on that model alone.
 | **Official riscv-tests** (rv32ui, rv32um, rv32uf, rv32ua, rv32mi) | the tests themselves (self-checking) | `tests/verify-*.test.ts`, `scripts/rvtests.ts` | all of them, every CPU |
 | **Random programs** | our golden model, final state | `tests/verify-*.test.ts`, `scripts/fuzz32.ts` | seeds 1–32 per CPU |
 | **Coverage** of the two above | — | `tests/verify-*.test.ts`, `scripts/coverage.ts` | no gaps allowed |
-| Exported Verilog, synthesized by Yosys | our gate-level simulation | `scripts/verify-export.ts` | CI gate before deploy |
+| Exported Verilog (dual-core, system CPUs), synthesized by Yosys | our gate-level simulation | `scripts/verify-export.ts` | CI gate before deploy |
 
 The riscv-tests come from another author, so they check the golden model too: it runs every image,
 with each CPU's ISA, before the CPU does.
