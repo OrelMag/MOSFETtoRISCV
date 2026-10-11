@@ -441,8 +441,8 @@ challenges stay open. Next:
   `rv16_alu16` 1 055), three-way choices on two 2:1 muxes instead of a 4:1 with an idle input, 19 pars re-measured
   (the single-cycle core 5 236 → 4 741, the finale 13 035 → 12 059); a core's cycles counted to the end on any bench
   (1 495 on both for Pipeline IV); c_computer's ROM is the given part; earlier stars kept as earned
-- ⏳ The side quests' 16-bit 2:1 muxes (`o_fpadd`, `o_fpmul`, `o_fpcvt`, `o_dcore`: beatable by 30 to 150 with the unlocked
-  49-NAND mux; docs/CAMPAIGN.md section 9)
+- ✅ The side quests' 16-bit 2:1 muxes: the FP adder, multiplier and int → float and the 16-bit divider take the 49-NAND
+  mux in the campaign (a `Mux2Kind` option on the library generators); five pars re-measured (docs/CAMPAIGN.md section 9)
 
 **Not planned**: online leaderboards and score histograms (static site; share links take their place).
 
