@@ -68,6 +68,12 @@ export function startApp(root: HTMLElement): void {
     applyTheme();
   } }, h('span', { class: 'pal-board-sw' }, h('i')),
   h('span', null, h('b', null, 'Dark board'), h('small', null, 'Vivid look: the circuit on a dark board in the light theme too')));
+  const cartoonItem = h('button', { role: 'menuitemcheckbox', class: 'pal-cartoon', onclick: () => {
+    settings.set('cartoon', !settings.cartoon);
+    applyTheme();
+  } }, h('span', { class: 'pal-cartoon-sw' }, s('svg', { viewBox: '0 0 46 18', 'aria-hidden': 'true' },
+    s('path', { class: 'sh', d: 'M15,3 H24 A7,7 0 0 1 24,17 H15 Z' }), s('path', { class: 'bd', d: 'M13,1.5 H22 A7,7 0 0 1 22,15.5 H13 Z' }), s('path', { class: 'gl', d: 'M15.5,4.5 H21' }))),
+  h('span', null, h('b', null, 'Cartoon parts'), h('small', null, 'Vivid look: chunky parts with shadows, gloss and small icons')));
   // Module colours: library boxes tinted by kind (view/symbols.ts CATEGORY_HUE).
   const modItem = h('button', { role: 'menuitemcheckbox', class: 'pal-mod', onclick: () => {
     settings.set('modules', !settings.modules);
@@ -95,8 +101,8 @@ export function startApp(root: HTMLElement): void {
   const glossItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('glossary', !settings.glossary) },
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Hover definitions'), h('small', null, 'Chapters: codex terms underlined, their summary on hover (from the next step on)')));
-  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), vividItem, boardItem, modItem, flowItem, netItem, simpleItem, glossItem);
-  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire and module colours, vivid look, flowing bits, colour per net, simple connections', 'aria-label': 'Wire and module colours, vivid look, flowing bits, colour per net, simple connections', 'aria-haspopup': 'menu' }, swatch());
+  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), vividItem, boardItem, cartoonItem, modItem, flowItem, netItem, simpleItem, glossItem);
+  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections', 'aria-label': 'Wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections', 'aria-haspopup': 'menu' }, swatch());
   palBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     palMenu.classList.toggle('open');
@@ -111,6 +117,8 @@ export function startApp(root: HTMLElement): void {
     vividItem.setAttribute('aria-checked', String(settings.vivid));
     boardItem.setAttribute('aria-checked', String(settings.board));
     boardItem.disabled = !settings.vivid;
+    cartoonItem.setAttribute('aria-checked', String(settings.cartoon));
+    cartoonItem.disabled = !settings.vivid;
     modItem.setAttribute('aria-checked', String(settings.modules));
     flowItem.setAttribute('aria-checked', String(settings.wireFlow));
     netItem.setAttribute('aria-checked', String(settings.netColors));

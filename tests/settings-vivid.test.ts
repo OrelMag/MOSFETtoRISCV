@@ -16,4 +16,11 @@ describe('vivid look setting', () => {
     expect(settings.netColors).toBe(true);
     settings.set('netColors', false);
   });
+
+  it('cartoon parts are off until asked for', () => {
+    expect(settings.cartoon).toBe(false);
+    settings.set('cartoon', true);
+    expect(settings.cartoon).toBe(true);
+    settings.set('cartoon', false);
+  });
 });

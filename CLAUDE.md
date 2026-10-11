@@ -525,6 +525,8 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
 - Vivid look (settings.vivid, `data-look="vivid"`, styles/vivid.css): filled bright bodies, wires scaled by `--wire-k`
   (use `calc(var(--wire-w1) * var(--wire-k, 1))` for a new wire width). Its dark board (`data-board="dark"`) adds
   `svg.schematic` to the dark token blocks (theme.css, editor.css, ioparts.css): a new dark token block needs it too.
+  Cartoon parts (settings.cartoon, `data-parts="cartoon"`, with vivid): drawSymbol always adds `.sym-shadow`,
+  `.sym-gloss` and a box's `.sym-icon` (boxtext.ts iconSpot: a corner no text covers), hidden unless cartoon.
 - Module colours: library boxes and muxes are tinted by `CATEGORY_HUE[def.category]` (view/symbols.ts,
   class `.sym.cat`, the same `--chip-h` styling as a user chip's hue); `data-modules="plain"` on
   `<html>` (settings.modules) turns it off. `data-wide` (settings.wide, the stage bar's panes button)

@@ -60,3 +60,29 @@
 .pal-menu .pal-board[aria-checked='false'] .pal-board-sw i { background: radial-gradient(circle, var(--grid) 0.8px, transparent 1.2px) 0 0 / 5px 5px, var(--canvas); }
 .pal-menu button:disabled { opacity: 0.5; cursor: default; }
 .pal-menu button:disabled:hover { background: transparent; }
+
+/* Cartoon parts (settings.cartoon: data-parts="cartoon", with the vivid look): the shadow, gloss and icon
+   symbols.ts draws always come out, outlines get thick and round, boxes rounder, lettering rounded. */
+.sym-shadow, .sym-gloss, .sym-icon { display: none; }
+:root[data-parts='cartoon'] .sym-shadow { display: inline; fill: hsl(var(--chip-h, 222) 50% 12%); opacity: 0.42; stroke: none; }
+:root[data-parts='cartoon'] .sym-gloss { display: inline; fill: none; stroke: #fff; stroke-opacity: 0.5; stroke-width: 0.26; stroke-linecap: round; }
+:root[data-parts='cartoon'] .sym-icon { display: inline; }
+.sym-icon-line { fill: none; stroke: #fff; stroke-width: 0.17; stroke-linecap: round; stroke-linejoin: round; }
+.sym-icon-fill { fill: #fff; opacity: 0.95; }
+.sym-icon-fill.dim { opacity: 0.55; }
+:root[data-parts='cartoon'] :is(.sym-body, .sym-box) { stroke-width: 0.3; stroke-linejoin: round; }
+:root[data-parts='cartoon'] :is(.kind-xor, .kind-xnor) .sym-line { stroke-width: 0.3; }
+:root[data-parts='cartoon'] :is(rect.sym-box, rect.sym-box-shadow) { rx: 1px; ry: 1px; }
+:root[data-parts='cartoon'] :is(.sym-label, .sym-port, .sym-tiny, .inst-name) { font-family: 'Fredoka', var(--font-ui); }
+:root[data-parts='cartoon'] .sym-label { font-weight: 700; letter-spacing: 0.01px; }
+:root[data-parts='cartoon'] .sym-port { font-weight: 600; }
+:root[data-parts='cartoon'] .inst-name { font-weight: 600; }
+:root[data-parts='cartoon'] .pin-knob { stroke-width: 0.22; }
+:root[data-parts='cartoon'] .pin-box { stroke-width: 0.2; }
+
+.pal-cartoon-sw { width: 46px; height: 18px; flex: none; display: grid; }
+.pal-cartoon-sw svg { width: 46px; height: 18px; overflow: visible; }
+.pal-cartoon-sw .sh { fill: hsl(222 50% 12%); opacity: 0.4; }
+.pal-cartoon-sw .bd { fill: hsl(222 68% 57%); stroke: hsl(222 58% 25%); stroke-width: 1.6; stroke-linejoin: round; }
+.pal-cartoon-sw .gl { stroke: #fff; stroke-opacity: 0.6; stroke-width: 1.4; stroke-linecap: round; fill: none; }
+.pal-menu .pal-cartoon[aria-checked='false'] .pal-cartoon-sw svg { filter: saturate(0.25); opacity: 0.7; }

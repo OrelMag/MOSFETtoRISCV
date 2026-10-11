@@ -78,3 +78,32 @@ export function boxTextOverlaps(def: ComponentDef): string[] {
   rs.forEach((a, i) => rs.slice(i + 1).forEach((b) => { if (hit(a.r, b.r)) out.push(`${a.what} × ${b.what}`); }));
   return out;
 }
+
+/** Side of the cartoon look's category icon (styles/vivid.css), in grid units. */
+export const ICON = 1.3;
+
+/**
+ * Where a box's category icon goes in the cartoon look: the first inner corner (bottom right, top
+ * right, bottom left, top left) that no port name, label or clock marker covers; null when the box
+ * is too small or every corner is taken. `t` is the box's text as drawn (boxText with the same flip).
+ */
+export function iconSpot(def: ComponentDef, t: BoxText): { x: number; y: number } | null {
+  if (def.symbol.kind !== 'box' || def.prim === 'alias' || def.symbol.verticalLabel) return null;
+  const g = symbolGeom(def), { w, h } = g;
+  if (w < 4 || h < 3) return null;
+  const rs: Rect[] = t.ports.map(portTextRect);
+  if (t.label) rs.push(labelRect(t.label));
+  // Clock markers: a triangle 0.7 deep at the pin, on the side the text sits.
+  for (const p of t.ports) if (p.clock) {
+    const pos = g.ports[p.name]?.pos;
+    if (!pos) continue;
+    if (p.side === 'left') rs.push({ x: p.x < w / 2 ? 0 : w - 0.8, y: pos[1] - 0.6, w: 0.8, h: 1.2 });
+    else rs.push({ x: pos[0] - 0.6, y: p.side === 'top' ? 0 : h - 0.8, w: 1.2, h: 0.8 });
+  }
+  const m = 0.35, pad = 0.15;
+  for (const [x, y] of [[w - m - ICON, h - m - ICON], [w - m - ICON, m], [m, h - m - ICON], [m, m]]) {
+    const r = { x: x - pad, y: y - pad, w: ICON + 2 * pad, h: ICON + 2 * pad };
+    if (!rs.some((q) => hit(q, r))) return { x, y };
+  }
+  return null;
+}

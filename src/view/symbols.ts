@@ -4,7 +4,7 @@
 import { symbolGeom } from '../sim/geometry';
 import type { Category, ComponentDef } from '../sim/types';
 import { s } from '../ui/dom';
-import { boxText } from './boxtext';
+import { boxText, ICON, iconSpot } from './boxtext';
 import { type PinGeom, type Rect, textWidth } from './route';
 
 const BUBBLE = 0.3;
@@ -15,7 +15,39 @@ export function portLabel(name: string): SVGTSpanElement[] | string {
   return name;
 }
 
-function gateBody(kind: string, w: number, h: number): SVGElement[] {
+// The cartoon look (styles/vivid.css, data-parts="cartoon") adds a drop shadow under a body, a gloss
+// highlight along its top and a category icon in a free corner of a box. They are drawn always and
+// hidden by CSS otherwise, so the switch needs no redraw; sizes and port positions do not change.
+const SHADOW: [number, number] = [0.18, 0.26];
+
+/** A body's drop shadow (the same outline, offset down and right on screen even when mirrored). */
+function shadow(d: string, flip: boolean): SVGElement {
+  return s('path', { d, class: 'sym-shadow', transform: `translate(${flip ? -SHADOW[0] : SHADOW[0]},${SHADOW[1]})` });
+}
+
+/** A category's icon, in an ICON-sized square at (x, y). */
+function categoryIcon(category: string, x: number, y: number): SVGElement | null {
+  const k = ICON / 1.3; // drawn on a 1.3 square
+  const g = (...els: SVGElement[]) => s('g', { class: `sym-icon icon-${category}`, transform: `translate(${x},${y}) scale(${k})` }, ...els);
+  const line = (d: string) => s('path', { d, class: 'sym-icon-line' });
+  switch (category) {
+    case 'memory': {
+      const cells: SVGElement[] = [];
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+        cells.push(s('rect', { x: 0.08 + i * 0.42, y: 0.08 + j * 0.42, width: 0.32, height: 0.32, rx: 0.07, class: (i + j) % 2 ? 'sym-icon-fill' : 'sym-icon-fill dim' }));
+      }
+      return g(...cells);
+    }
+    case 'sequential': return g(line('M0.05,1.05 H0.4 V0.25 H0.9 V1.05 H1.25'));
+    case 'arithmetic': return g(line('M0.65,0.2 V1.1 M0.2,0.65 H1.1'));
+    case 'routing': return g(line('M0.1,0.65 H0.55 L1.15,0.2 M0.55,0.65 L1.15,1.1'));
+    case 'cpu': return g(s('rect', { x: 0.35, y: 0.35, width: 0.6, height: 0.6, rx: 0.1, class: 'sym-icon-fill' }),
+      line('M0.5,0.1 V0.3 M0.8,0.1 V0.3 M0.5,1 V1.2 M0.8,1 V1.2 M0.1,0.5 H0.3 M0.1,0.8 H0.3 M1,0.5 H1.2 M1,0.8 H1.2'));
+  }
+  return null;
+}
+
+function gateBody(kind: string, w: number, h: number, flip = false): SVGElement[] {
   const inv = kind === 'nand' || kind === 'nor' || kind === 'xnor' || kind === 'not';
   const bw = w - (inv ? 2 * BUBBLE : 0);
   const els: SVGElement[] = [];
@@ -31,8 +63,15 @@ function gateBody(kind: string, w: number, h: number): SVGElement[] {
     // not / buf triangle
     d = `M0,0 L${bw},${h / 2} L0,${h} Z`;
   }
-  els.unshift(s('path', { d, class: 'sym-body' }));
+  els.unshift(shadow(d, flip), s('path', { d, class: 'sym-body' }));
   if (inv) els.push(s('circle', { cx: bw + BUBBLE, cy: h / 2, r: BUBBLE, class: 'sym-body' }));
+  if (kind === 'and' || kind === 'nand') {
+    const rx = Math.min(h / 2, bw * 0.55);
+    els.push(s('path', { d: `M0.5,0.55 H${Math.max(0.9, bw - rx)}`, class: 'sym-gloss' }));
+  } else if (kind !== 'not' && kind !== 'buf') {
+    const x0 = kind.startsWith('x') ? 0.45 : 0;
+    els.push(s('path', { d: `M${x0 + 0.75},0.62 Q${x0 + (bw - x0) * 0.45},0.45 ${x0 + (bw - x0) * 0.72},0.95`, class: 'sym-gloss' }));
+  }
   return els;
 }
 
@@ -135,7 +174,7 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
 
   switch (k) {
     case 'nand': case 'and': case 'or': case 'nor': case 'xor': case 'xnor': case 'not': case 'buf': {
-      inner.append(...gateBody(k, w, h));
+      inner.append(...gateBody(k, w, h, flip));
       // input stubs into curved backs
       if (k.includes('or')) {
         for (const p of def.ports.filter((q) => q.dir === 'in')) {
@@ -149,7 +188,9 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
       break;
     }
     case 'mux': {
-      inner.append(s('path', { d: `M0,0 L${w},1 L${w},${h - 1} L0,${h} Z`, class: 'sym-body' }));
+      const md = `M0,0 L${w},1 L${w},${h - 1} L0,${h} Z`;
+      inner.append(shadow(md, flip), s('path', { d: md, class: 'sym-body' }),
+        s('path', { d: `M0.45,${0.6 + 0.45 / w} L${w - 0.5},${0.6 + (w - 0.5) / w}`, class: 'sym-gloss' }));
       const data = def.ports.filter((p) => p.dir === 'in' && (p.side ?? 'left') === 'left');
       data.forEach((p, i) => {
         const y = g.ports[p.name].pos[1];
@@ -191,9 +232,14 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
       inner.append(s('path', { d: 'M1,0 V0.55 M0.2,0.55 H1.8 M0.5,0.95 H1.5 M0.8,1.35 H1.2', class: 'sym-line thick' }));
       break;
     default: {
-      inner.append(s('rect', { x: 0, y: 0, width: w, height: h, rx: 0.6, class: 'sym-body sym-box' }));
+      inner.append(s('rect', { x: 0, y: 0, width: w, height: h, rx: 0.6, class: 'sym-shadow sym-box-shadow', transform: `translate(${flip ? -SHADOW[0] : SHADOW[0]},${SHADOW[1]})` }),
+        s('rect', { x: 0, y: 0, width: w, height: h, rx: 0.6, class: 'sym-body sym-box' }));
       // Port names inside the box (not mirrored) and the label, as boxText places them.
       const t = boxText(def, flip);
+      if (w > 2.5 && def.prim !== 'alias' && !t.ports.some((p) => p.side === 'top')) inner.append(s('path', { d: `M0.9,0.42 H${w - 0.9}`, class: 'sym-gloss' }));
+      const spot = iconSpot(def, t);
+      const icon = spot && categoryIcon(def.category, spot.x, spot.y);
+      if (icon) root.append(icon);
       for (const p of t.ports) {
         if (p.clock) {
           // clock triangle marker

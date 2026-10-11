@@ -6,7 +6,7 @@ import { PROGRAMS } from '../src/riscv/programs';
 import { deadInstances } from '../src/sim/dead';
 import { netlistOf } from '../src/sim/types';
 import { backwardEnds, labelOverlaps, symbolOverlaps } from '../src/view/route';
-import { boxText, boxTextOverlaps } from '../src/view/boxtext';
+import { boxText, boxTextOverlaps, ICON, iconSpot, labelRect, portTextRect } from '../src/view/boxtext';
 import { counter } from '../src/lib/sequential';
 import { symbolGeom } from '../src/sim/geometry';
 import { families, initialParams } from '../src/lib/resolve';
@@ -68,6 +68,21 @@ describe('box symbol text', () => {
     const clk = t.ports.find((p) => p.name === 'clk')!;
     expect(t.label!.y).toBeLessThan(symbolGeom(c).h / 2 + 0.45);
     expect(t.label!.y).toBeLessThan(clk.y - 0.8);
+  });
+  it('the cartoon icon sits inside the box, clear of every port name and the label, mirrored or not', () => {
+    const hit = (a: { x: number; y: number; w: number; h: number }, b: typeof a) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    let placed = 0;
+    for (const d of boxes) for (const flip of [false, true]) {
+      const t = boxText(d, flip), spot = iconSpot(d, t);
+      if (!spot) continue;
+      placed++;
+      const { w, h } = symbolGeom(d);
+      const r = { x: spot.x, y: spot.y, w: ICON, h: ICON };
+      expect(r.x >= 0 && r.y >= 0 && r.x + r.w <= w && r.y + r.h <= h, d.id).toBe(true);
+      for (const q of [...t.ports.map(portTextRect), ...(t.label ? [labelRect(t.label)] : [])]) expect(hit(q, r), d.id).toBe(false);
+    }
+    expect(placed).toBeGreaterThan(boxes.length / 3);
+    for (const id of ['regfile']) if (registry.get(id)) expect(iconSpot(registry.get(id)!, boxText(registry.get(id)!)), id).not.toBeNull();
   });
   it('a constant prints no port name', () => {
     expect(boxText(registry.get('tie1')!).ports).toEqual([]);
