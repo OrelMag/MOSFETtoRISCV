@@ -21,6 +21,8 @@ import { PuzzleReplay } from '../src/puzzles/replay';
 import { runPuzzle } from '../src/puzzles/run';
 import { startCandidates, startPuzzle, withProgram } from '../src/puzzles/start';
 import { ISA4_PRESET } from '../src/isa/presets';
+import { docFromDef } from '../src/editor/fromdef';
+import { RV16_CORE } from '../src/lib/rv16/cpu';
 
 const echo = PUZZLE_BY_ID.get('echo')!;
 
@@ -225,5 +227,22 @@ describe('a custom instruction set', () => {
     expect(run.cycles).toBe(refPoints(p.id).find((r) => r.cpu === 'cpu4')!.cycles);
     const cand = startCandidates(ws, (id) => lib.defOf(id)).find((x) => x.tag === 'your chip')!;
     expect(cand.langLabel).toBe(ISA4_PRESET.name);
+  });
+});
+
+describe('your own core', () => {
+  it('the RV16 puzzle computer around a user chip with the core pins runs the references', () => {
+    const core = docFromDef(RV16_CORE, { id: 'u_core', name: 'My core' });
+    if ('error' in core) throw new Error(core.error);
+    const ws0 = { ...emptyWorkspace(), chips: { u_core: core } };
+    const def = new UserLibrary(ws0).defOf('u_core')!;
+    const p = PUZZLE_BY_ID.get('gcd')!;
+    const doc = computerChip('rv16', 'u_pz_gcd', 'gcd', REFS.rv16.gcd, { def, chip: 'u_core' });
+    expect(doc.parts.find((q) => q.id === 'cpu')?.ref).toEqual({ chip: 'u_core' });
+    const ws = { ...ws0, chips: { ...ws0.chips, u_pz_gcd: doc } };
+    const { c } = compile(ws, 'u_pz_gcd');
+    const run = runPuzzle(p, c, doc.pins);
+    expect(run.ok).toBe(true);
+    expect(run.cycles).toBe(refPoints(p.id).find((r) => r.cpu === 'rv16')!.cycles);
   });
 });
