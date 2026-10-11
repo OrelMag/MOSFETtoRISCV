@@ -2,7 +2,8 @@
 // Run: npx vite-node scripts/sim-perf.ts [--ref] [--dump <dir>]
 //
 // Each CPU of the chapters is opened in the sandbox (remixDef, as "Open in Sandbox" does) running a
-// program that never halts, plus the single-cycle CPU with a 64K × 32 data memory (lib/bigmem.ts).
+// program that never halts, plus the single-cycle CPU with a 64K × 32 data memory (lib/bigmem.ts)
+// and the multi-core with 2 and 4 cores (every core storing and loading: the arbiter stalls some).
 // EditorSim runs each in cycle mode at "max" for two seconds of wall time with no frame budget (no
 // rendering in Node: the ceiling a page can reach), on the cycle engine (DualSim's default in
 // cycle mode) and on the event-driven GateSim (gate mode's engine). The 64-bit Kogge–Stone adder
@@ -29,6 +30,13 @@
 //   8-bit counter of D flip-flops drawn from NANDs     ~335 000 (GateSim)     ~950 000 (cycle)
 //   8-bit LFSR                                         ~2.4 M (cycle)         ~2.3 M (cycle)
 //   ÷16 ripple clock divider                           ~2.5 M (GateSim)       ~2.4 M (GateSim)
+//
+// Multi-core, 2026-10-11, EditorSim cycle mode at max, cycles/s (in the same run the single-cycle
+// RV32I made 1 690 on GateSim and ~13 100 on the cycle engine): the rate falls with the leaf count,
+// the budget a GPU's lanes will spend.
+//                         leaves      GateSim     cycle engine
+//   dual-core RV32I       84 438       1 120        ~8 000
+//   4-core RV32I         149 557         700        ~4 500
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import '../src/lib';
@@ -45,6 +53,7 @@ import { partDef } from '../src/editor/parts';
 import { remixDef } from '../src/editor/remix';
 import { EditorSim } from '../src/editor/runtime';
 import { singleCycleCpu } from '../src/lib/cpu';
+import { dualCore, multiCore } from '../src/lib/multicore';
 import { pipelinedCpu } from '../src/lib/pipeline';
 import { resolveComponent } from '../src/lib/resolve';
 import { clockDivider, lfsr } from '../src/lib/seqparts';
@@ -135,6 +144,8 @@ const CPUS: [string, ComponentDef, boolean][] = onlyStorage ? [] : [
   ['single-cycle RV32I, 64K × 32 data memory', singleCycleCpu(LOOP), true],
   ['pipelined RV32I', pipelinedCpu(LOOP), false],
   ['system RV32I (traps, MMIO)', systemCpu(LOOP), false],
+  ['dual-core RV32I', dualCore(LOOP), false],
+  ['4-core RV32I', multiCore(LOOP, 4), false],
 ];
 for (const [name, def, big] of CPUS) {
   const { ws, id } = open(def, big);
