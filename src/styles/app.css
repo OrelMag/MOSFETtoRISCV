@@ -257,6 +257,13 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .crumbs button.cur { color: var(--text); font-weight: 650; }
 .crumbs .sep { color: var(--muted); font-size: 12px; }
 .crumbs .kind { color: var(--muted); font-weight: 400; margin-left: 3px; }
+/* The bar's buttons keep their size; the hierarchy takes what is left. A name longer than that is
+   cut with an ellipsis (the full name is the button's title) instead of running under the buttons,
+   as a nowrap button in a shrunk .crumbs used to. Stage.fitBar first drops the button labels
+   (.compact) to give the name room. */
+.stage-bar > :not(.crumbs) { flex-shrink: 0; }
+.stage-bar .crumbs button { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.stage-bar.compact .btn .lbl { display: none; }
 .canvas { flex: 1; position: relative; min-height: 0; overflow: hidden; }
 .canvas > svg.schematic { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 .canvas > svg.schematic:active { cursor: grabbing; }
