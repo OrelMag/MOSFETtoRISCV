@@ -361,8 +361,17 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   the ISS (the bouncing ball and live switches pixel by pixel)
 
 **Programs on your own CPU** (the second half of Turing Complete)
-- ⏳ Custom ISA: define instruction fields, opcodes and mnemonics in a table, and get an assembler,
-  a disassembler and the ROM listing from it (TC's assembly editor); RV32 stays the built-in ISA
+- ✅ Custom ISA (src/isa, editor/isaui.ts): an instruction set as a table: per instruction a mnemonic, operand letters
+  and a bit pattern (0 / 1 fixed, - ignored, letters: the operand's bits, most significant first, splittable); each
+  letter a register list, a name list (or a number), an immediate (signed, hex) or an address (a label; absolute or
+  PC-relative with a scale). From it: an assembler (labels, .word, .org), a disassembler (the most specific pattern
+  wins), the fields of a word, the highlighter, the ROM listing and the CPU drawer's breakdown; a check (incomplete
+  patterns, unknown letters, two patterns that encode one word) and a line tried live. The ISA editor (File ▸
+  Instruction sets…, a ROM's Language): presets read-only (the 4-bit CPU's ISA, equal to its assembler and
+  disassembler on all 65 536 words), copies to edit, import / export as .json. The workspace keeps the tables; a ROM
+  holds a copy of its own (it builds alone, in share links too), and an edit reaches every ROM that uses the table.
+  Syntax only (the author's choice): a custom table has no golden model, so the drawer follows the PC, not checked.
+  One Isa shape (src/isa/isa.ts: assemble, disasm, fields, words) wraps RV32, RV16, the 4-bit CPU and the tables
 - ⏳ Program puzzles: tasks with level inputs and expected outputs (a sequence over I/O pins, a
   maze, sorting), solved by writing a program for a CPU you built, scored on cycles and on the
   hardware's NANDs and depth; optional, each with a reference solution, as with the build challenges
@@ -375,8 +384,6 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   An assembler (a ROM language next to asm / rv16 / hex), a golden model and five samples (BCD addition 1234 + 5876,
   a counter, the switches, a multiply subroutine, TEST presses); the CPU drawer checks PC, A, CY, R0–R15, the stack,
   SRC and the ports every clock. Verified by lock-step on the samples and on 64 random ROMs (undefined words too)
-- ⏳ Next: the 4-bit ISA as the first table of Custom ISA (the drawer already takes an ISA's listing, fields,
-  registers and golden model through the 4-bit monitor's shape)
 
 **Campaign** (🚧, plan and status in [`docs/CAMPAIGN.md`](CAMPAIGN.md)): a tree of levels from a
 transistor NAND to a pipelined 16-bit RISC-V-like CPU (RV16) with traps and interrupts. It has
