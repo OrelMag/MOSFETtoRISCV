@@ -184,13 +184,13 @@ export const CASES1: Record<string, LevelCase> = {
   o_div: {
     problem: 'Long division in binary, one quotient bit per clock: shift the remainder left, bring in the next dividend bit, subtract the divisor; if the difference is not negative keep it and set the quotient bit, else keep the old remainder. An iteration counter runs the 16 steps: start loads a and b, done rises 18 cycles later. RISC-V\'s rule for b = 0 falls out of the hardware: every subtraction succeeds, so q = 0xFFFF and r = a.',
     without: 'Division in software: the same 16 steps as a loop, several instructions each.',
-    cost: '1 490 NANDs, period 31, 18 cycles: 558 delays per division. Unrolled into an array divider the 16 steps cost 4 464 NANDs and a 613-deep path, each subtraction waiting on the previous one\'s borrow. Non-restoring division replaces the restore with an add-or-subtract and a final correction (1 878 NANDs, same cycles); radix-2 SRT keeps the remainder in carry-save form so the period no longer grows with the width (4 698, period 29); radix 4 retires two bits per cycle (6 815 NANDs, period 44, 11 cycles).',
+    cost: '1 445 NANDs, period 31, 18 cycles: 558 delays per division. Unrolled into an array divider the 16 steps cost 4 464 NANDs and a 613-deep path, each subtraction waiting on the previous one\'s borrow. Non-restoring division replaces the restore with an add-or-subtract and a final correction (1 878 NANDs, same cycles); radix-2 SRT keeps the remainder in carry-save form so the period no longer grows with the width (4 698, period 29); radix 4 retires two bits per cycle (6 815 NANDs, period 44, 11 cycles).',
     alts: [{ name: 'Array divider', lib: 'adiv16' }, { name: 'Non-restoring iterative divider', lib: 'nrsdiv16' }, { name: 'Radix-2 SRT divider', lib: 'srtdiv16' }, { name: 'Radix-4 SRT divider', lib: 'srt4div16' }],
   },
   o_dcore: {
     problem: 'A divide does not finish in one cycle. The core starts the divider when the instruction is a divide, then holds the PC on that instruction and writes nothing until done, 18 cycles later, when the result is written and the PC moves on: the single-cycle core\'s version of a stall. <code>div</code>, <code>divu</code>, <code>rem</code> and <code>remu</code> (f3 4–7) share one unsigned divider: |a| and |b| go in, the quotient takes the sign a XOR b (unless b = 0), the remainder the sign of a.',
     without: 'The core would write a quotient that is not ready, or stretch its clock to an array divider\'s 613-deep path.',
-    cost: '10 612 NANDs (+2 554: the MD divider is 2 445, the unsigned divider 1 490 of it plus four 16-bit add / subtractors that take the signs off and put them back), period 193. The 23 test programs take 1 859 cycles for 959 instructions, each divide holding the core 18 cycles. A radix-4 SRT divider would take 11, for 6 815 NANDs.',
+    cost: '10 567 NANDs (+2 509: the MD divider is 2 400, the unsigned divider 1 445 of it plus four 16-bit add / subtractors that take the signs off and put them back), period 193. The 23 test programs take 1 859 cycles for 959 instructions, each divide holding the core 18 cycles. A radix-4 SRT divider would take 11, for 6 815 NANDs.',
     alts: [{ name: 'Radix-4 SRT divider (11 cycles)', lib: 'srt4div16' }],
   },
   o_fpunpack: {
@@ -218,17 +218,17 @@ export const CASES1: Record<string, LevelCase> = {
   o_fpnorm: {
     problem: 'Add, multiply and int → float all end with a raw significand and exponent that must become a correctly rounded binary16 word. Normalize &amp; round shifts out the leading zeros as far as the exponent allows (stopping at a subnormal), or shifts right with sticky when the exponent is below 1; rounds on guard and sticky with the rounding decision; bumps the exponent when rounding carries out of 1.11…1; and turns a field past 30 into ∞ or the largest finite. It also raises the overflow, underflow and inexact flags.',
     without: 'Each unit carries its own normalizer and rounder, each copy another place to get a corner case wrong.',
-    cost: '2 058 NANDs, depth 86 for the adder\'s 15-bit significand (2 666, depth 90 for the multiplier\'s 22 bits): more than half of the binary16 adder (3 785). Once it exists, the adder, the multiplier and the converter are mostly wiring around it.',
+    cost: '2 058 NANDs, depth 86 for the adder\'s 15-bit significand (2 666, depth 90 for the multiplier\'s 22 bits): more than half of the binary16 adder (3 755). Once it exists, the adder, the multiplier and the converter are mostly wiring around it.',
   },
   o_fpadd: {
     problem: 'a + b in binary16: unpack both, swap so that |a| ≥ |b|, shift b right by the exponent difference keeping a sticky bit, add or subtract the significands (<code>sub</code> flips b\'s sign), then normalize &amp; round. The special cases wrap around it: a NaN in, or ∞ − ∞, gives the canonical NaN 0x7E00, and x − x is +0, except −0 when rounding down.',
     without: 'Floating-point addition in software: field extraction, shifts, compares and adds, dozens of integer instructions per operation.',
-    cost: '3 785 NANDs, depth 163, normalize &amp; round 2 058 of them. The same design in binary32 (8-bit exponent, 23-bit fraction) is 8 218 NANDs, depth 181: area roughly doubles, depth grows by 18.',
+    cost: '3 755 NANDs, depth 163, normalize &amp; round 2 058 of them. The same design in binary32 (8-bit exponent, 23-bit fraction) is 8 218 NANDs, depth 181: area roughly doubles, depth grows by 18.',
     alts: [{ name: 'binary32 adder', lib: 'fpadd8_23' }],
   },
   o_fpmul: {
     problem: 'Multiplying floats needs no alignment: XOR the signs, add the exponents (less one bias), multiply the 11-bit significands into a 22-bit product, then normalize &amp; round. Two significands in [1, 2) give a product in [1, 4), so its top bit decides a shift by one place.',
-    cost: '4 965 NANDs, depth 150: the 11 × 11 Wallace multiplier is 1 696 and the 22-bit normalize &amp; round 2 666. Shallower than the adder (163), which must align before it adds. An 11 × 11 array multiplier is smaller (1 232) but 100 deep against 48; binary32 takes 14 913 NANDs, the significand multiplier growing with the square of the width.',
+    cost: '4 935 NANDs, depth 150: the 11 × 11 Wallace multiplier is 1 696 and the 22-bit normalize &amp; round 2 666. Shallower than the adder (163), which must align before it adds. An 11 × 11 array multiplier is smaller (1 232) but 100 deep against 48; binary32 takes 14 913 NANDs, the significand multiplier growing with the square of the width.',
     alts: [{ name: 'binary32 multiplier', lib: 'fpmul8_23' }],
   },
   o_fpcmp: {
@@ -238,7 +238,7 @@ export const CASES1: Record<string, LevelCase> = {
   },
   o_fpcvt: {
     problem: '<code>fcvt</code> from a 16-bit integer: an integer is already a significand, its top bit worth 2<sup>15</sup>. Take the magnitude (a conditional negate when signed and negative), hand it to normalize &amp; round with exponent 15 + bias, and the leading-zero shift and the rounding do the rest. Integers above 2048 lose low bits (inexact); unsigned 65 535 lies past 65 504, the largest finite, and rounds to ∞ in some modes (overflow).',
-    cost: '2 840 NANDs, depth 109: the 16-bit normalize &amp; round and a 16-bit conditional negate. No new arithmetic: the level is wiring around blocks already built.',
+    cost: '2 690 NANDs, depth 109: the 16-bit normalize &amp; round and a 16-bit conditional negate. No new arithmetic: the level is wiring around blocks already built.',
   },
   o_cache: {
     problem: 'Main memory is far slower than the core, and programs reuse the same words (locality). A cache keeps recent ones close: here eight one-word lines, index = addr[2:0], each holding its word, a 5-bit tag (addr[7:3]) and a valid bit. hit = valid and tag match; a read hit answers from the line, a miss from main memory, filling the line at the clock edge; a write fills the line and goes through to memory.',

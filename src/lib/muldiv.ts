@@ -6,7 +6,7 @@ import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { mask } from '../sim/values';
 import { constWord, isZero } from './alu';
-import { FULL_ADDER, HALF_ADDER, addSub, andN, busMux2, incrementer, rca } from './combinational';
+import { FULL_ADDER, HALF_ADDER, LIB_MUX2, addSub, andN, busMux2, incrementer, rca, type Mux2Kind } from './combinational';
 import { define, merger, ones, splitter } from './define';
 import { addSubFast, fanout, koggeStone } from './fastadd';
 import { AND, MUX2, NOT, OR, XOR } from './gates';
@@ -500,13 +500,13 @@ assign neg = b1 & ~(b0 & bm);               // 100, 101, 110: negative (111 is 0
  * subtract the divisor, and keep the difference only if it did not go negative. The quotient bit is
  * "it fitted".
  */
-export function divStep(n: number, fast = n >= 16): ComponentDef {
-  return memo(`divstep${n}${fast ? 'f' : ''}`, () => {
-    const SUB = fast ? addSubFast(n) : addSub(n), MX = busMux2(n);
+export function divStep(n: number, fast = n >= 16, mux: Mux2Kind = LIB_MUX2): ComponentDef {
+  return memo(`divstep${n}${fast ? 'f' : ''}${mux.tag}`, () => {
+    const SUB = fast ? addSubFast(n) : addSub(n), MX = mux.of(n);
     const sg = symbolGeom(SUB), mg = symbolGeom(MX);
     const xs = 24, xm = xs + sg.w + 12;
     return define({
-      id: `divstep${n}${fast ? 'f' : ''}`, name: `${n}-bit restoring division step`, category: 'arithmetic',
+      id: `divstep${n}${fast ? 'f' : ''}${mux.tag}`, name: `${n}-bit restoring division step${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: 'r2 = (r << 1) | next dividend bit; try r2 − d. If it does not borrow (or r2 overflowed n bits) the divisor fits: keep the difference and emit quotient bit 1. Otherwise restore r2 and emit 0.',
       ports: [bus('r', n, 'in'), bit('qin', 'in'), bus('d', n, 'in'), bus('rout', n, 'out'), bit('q', 'out')],
       symbol: { kind: 'box', label: 'DIV STEP' },
@@ -602,10 +602,10 @@ end`,
  * Iterative unsigned divider: the same restoring step reused once per clock. start (while idle)
  * loads the operands; n steps later done = 1 for one cycle with q and r valid. n + 2 cycles in all.
  */
-export function seqDivider(n: number): ComponentDef {
-  return memo(`sdiv${n}`, () => {
+export function seqDivider(n: number, mux: Mux2Kind = LIB_MUX2): ComponentDef {
+  return memo(`sdiv${n}${mux.tag}`, () => {
     const k = Math.round(Math.log2(n)), cw = k + 1;
-    const REG = register(n), CNT = register(cw), ST = divStep(n), MX = busMux2(n), MC = busMux2(cw), INC = incrementer(cw);
+    const REG = register(n), CNT = register(cw), ST = divStep(n, n >= 16, mux), MX = mux.of(n), MC = mux.of(cw), INC = incrementer(cw);
     const rg = symbolGeom(REG), sg = symbolGeom(ST), mg = symbolGeom(MX);
     const x1 = 12, x2 = x1 + mg.w + 8, x3 = x2 + rg.w + 12, x4 = x3 + sg.w + 14;
     const yR = 4, yQ = yR + rg.h + 10, yD = yQ + rg.h + 10, yC = yD + rg.h + 10, yCtl = yC + symbolGeom(CNT).h + 10;
@@ -665,7 +665,7 @@ export function seqDivider(n: number): ComponentDef {
     ];
     const right = x4 + 12;
     return define({
-      id: `sdiv${n}`, name: `${n}-bit iterative divider`, category: 'sequential',
+      id: `sdiv${n}${mux.tag}`, name: `${n}-bit iterative divider${mux.tag ? ' (RV16)' : ''}`, category: 'sequential',
       summary: `One restoring step reused every clock: start loads the dividend into the quotient register (its bits shift out the top into the remainder as quotient bits shift in at the bottom); after ${n} steps done rises for one cycle. ${n + 2} cycles per division, a fraction of the array divider's area.`,
       ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bus('a', n, 'in'), bus('b', n, 'in'), bus('q', n, 'out'), bus('r', n, 'out'), bit('done', 'out'), bit('busy', 'out')],
       symbol: { kind: 'box', label: `DIV${n} (iterative)` },

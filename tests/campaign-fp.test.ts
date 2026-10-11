@@ -30,7 +30,7 @@ describe('the FP ladder', () => {
     }
     for (const b of ['fpun5_10', 'shrs13_4', 'fpnr5_10_15']) expect(libAllowed(ruleFor('o_fpadd'), b)).toBe(true);
     expect(libAllowed(ruleFor('o_fpmul'), 'fpnr5_10_22')).toBe(true);
-    expect(libAllowed(ruleFor('o_fpcvt'), 'fpnr5_10_16')).toBe(true);
+    expect(libAllowed(ruleFor('o_fpcvt'), 'fpnr5_10_16_rv16')).toBe(true);
   });
 
   it('the leading-zero counter is built recursively: its halves are chips of the answer', () => {
