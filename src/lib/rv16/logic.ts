@@ -4,8 +4,8 @@
 
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../../sim/types';
 import { Builder } from '../builder';
-import { constWord } from '../alu';
-import { andN, HALF_ADDER, muxTree, rca } from '../combinational';
+import { aluOf, constWord, shifterOf } from '../alu';
+import { andN, HALF_ADDER, muxTreeOf, rca } from '../combinational';
 import { define, merger, splitter } from '../define';
 import type { FsmInputs, FsmSpec } from '../fsm';
 import { AND, MUX2, NOT, OR, XOR } from '../gates';
@@ -123,6 +123,63 @@ export const MUX16: ComponentDef = (() => {
     netlist: () => ({ pins: { a: [0, 16], b: [0, 50], s: [0, 84], y: [R, 34] }, instances: b.instances, nets: b.nets() }),
   });
 })();
+
+const trees = new Map<string, ComponentDef>();
+/**
+ * 4:1 and 8:1 16-bit bus multiplexers as trees of MUX16 (49 NANDs a node): 147 and 343 NANDs, against the
+ * library trees' 192 and 448, at the same depth. Unlocked by g_mux8 with the 2:1, so the parts a learner
+ * places cost what they would build. pitch: the data inputs' spacing (the ALU lines its units up at 16).
+ */
+export function rv16Mux(k: 2 | 3, pitch = 2): ComponentDef {
+  const N = 2 ** k, key = `${N}x16${pitch !== 2 ? `_p${pitch}` : ''}`;
+  let d = trees.get(key);
+  if (!d) {
+    d = muxTreeOf(k, pitch, MUX16, `rv16_mux${key}`, `Selects one of ${N} 16-bit inputs: a tree of ${N - 1} shared-inverter 2:1 multiplexers, ${k} levels deep (${49 * (N - 1)} NANDs).`);
+    trees.set(key, d);
+  }
+  return d;
+}
+export const RV16_MUX4 = rv16Mux(2), RV16_MUX8 = rv16Mux(3);
+
+/**
+ * A choice among four 16-bit words by a 2-bit select, built as a learner would: RV16_MUX4 when all four are used,
+ * else 2:1 muxes for those that are (null: never selected, or a copy of another input whose select it shares):
+ * three inputs on two MUX16 (98 NANDs, not 147), two on one. Inputs '' are wired later through sinks[i]. The select
+ * splitter and the first mux are named, so the output mux takes the one numbered id a single mux would (walks name it).
+ */
+export function choose4(b: Builder, d: (string | null)[], sel: string, label?: string): { y: string; sinks: string[] } {
+  const used = [0, 1, 2, 3].filter((i) => d[i] !== null);
+  const sinks = ['', '', '', ''];
+  if (used.length === 4) {
+    const m = b.op(RV16_MUX4, [...(d as string[]), sel], label);
+    used.forEach((i) => (sinks[i] = `${m}.d${i}`));
+    return { y: `${m}.y`, sinks };
+  }
+  const k = b.instances.length;
+  const s = b.op(splitter([1, 1], 2), [sel], undefined, `sel${k}`);
+  if (used.length === 2) {
+    const [i, j] = used, bit = (i ^ j) === 1 ? 0 : (i ^ j) === 2 ? 1 : -1;
+    if (bit < 0) throw new Error(`choose4: inputs ${i} and ${j} differ in both select bits`);
+    const m = b.op(MUX16, [d[i]!, d[j]!, `${s}.o${bit}`], label);
+    sinks[i] = `${m}.a`; sinks[j] = `${m}.b`;
+    return { y: `${m}.y`, sinks };
+  }
+  // Three: the pair without the idle input is told apart by bit 0; bit 1 then picks it or the idle one's partner.
+  if (used.length !== 3) throw new Error('choose4: no input used');
+  const idle = [0, 1, 2, 3].find((i) => d[i] === null)!, lone = idle ^ 1, [p, q] = idle < 2 ? [2, 3] : [0, 1];
+  const m1 = b.op(MUX16, [d[p]!, d[q]!, `${s}.o0`], undefined, `pick${k}`);
+  sinks[p] = `${m1}.a`; sinks[q] = `${m1}.b`;
+  const m2 = b.op(MUX16, lone < 2 ? [d[lone]!, `${m1}.y`, `${s}.o1`] : [`${m1}.y`, d[lone]!, `${s}.o1`], label);
+  sinks[lone] = `${m2}.${lone < 2 ? 'a' : 'b'}`;
+  return { y: `${m2}.y`, sinks };
+}
+
+/** The 16-bit barrel shifter on MUX16 (shifter(16) otherwise): six 2:1 muxes at 49 NANDs, not 64. */
+export const RV16_SHIFT16 = shifterOf(MUX16, 'rv16_shift16', '16-bit barrel shifter (RV16)');
+
+/** The 16-bit ALU with RV16_SHIFT16 and its result picked by RV16_MUX8's tree (alu(16) otherwise). */
+export const RV16_ALU16 = aluOf(16, 'rca', rv16Mux(3, 16), RV16_SHIFT16, 'rv16_alu16', '16-bit ALU (RV16)');
+export const RV16_ALU16KS = aluOf(16, 'ks', rv16Mux(3, 16), RV16_SHIFT16, 'rv16_alu16ks', '16-bit ALU (RV16, Kogge–Stone)');
 
 /** 16-bit equality: XOR per bit, then a zero detect. */
 export const EQ16: ComponentDef = (() => {
@@ -395,7 +452,7 @@ export const RF8: ComponentDef = (() => {
   const qs = [zero];
   for (let i = 1; i < 8; i++) qs.push(b.name(`${b.op(RV16_REG16, ['wd', `${en}.o${i}`, 'clk'], `x${i}`)}.q`, `x${i}`, true));
   b.next();
-  const mux = muxTree(3, 16);
+  const mux = RV16_MUX8;
   b.wire(b.op1(mux, [...qs, 'ra1'], 'read rs1'), 'rd1');
   b.wire(b.op1(mux, [...qs, 'ra2'], 'read rs2'), 'rd2');
   const R = b.right;

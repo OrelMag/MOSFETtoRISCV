@@ -295,7 +295,7 @@ export const WALKS1: Record<string, WalkScript> = {
     },
     {
       title: 'Reverse back',
-      text: 'rout reverses the result again and mo selects it when left = 1. 6 × 64 + 5 = 389 NANDs. Depth 14: a[15] through f1 and f2 (4), then five mux data inputs at 2 each. Par.',
+      text: 'rout reverses the result again and mo selects it when left = 1. 6 × 49 + 5 = 299 NANDs. Depth 14: a[15] through f1 and f2 (4), then five mux data inputs at 2 each. Par.',
       parts: ['rout', 'mo'],
     },
   ],
@@ -322,17 +322,17 @@ export const WALKS1: Record<string, WalkScript> = {
     },
     {
       title: 'The shifter',
-      text: 'shift shifts a by b[3:0] (the split keeps the low four bits), left on ¬f2, arithmetic on ctl[3]. 389 NANDs, almost twice the adder.',
+      text: 'shift shifts a by b[3:0] (the split keeps the low four bits), left on ¬f2, arithmetic on ctl[3]. 299 NANDs, 40% more than the adder.',
       parts: ['sb', 'shift'], codex: ['shifter'],
     },
     {
       title: 'Select by f3',
-      text: 'The 8:1 multiplexer picks a result by f3 alone: 0 add/sub, 1 and 5 the shifter, 2 slt, 3 sltu, 4 xor, 6 or, 7 and. OPX only modifies an operation, so it never reaches the mux. Seven 16-bit muxes, 448 NANDs: the biggest block.',
+      text: 'The 8:1 multiplexer picks a result by f3 alone: 0 add/sub, 1 and 5 the shifter, 2 slt, 3 sltu, 4 xor, 6 or, 7 and. OPX only modifies an operation, so it never reaches the mux. Seven 16-bit muxes, 343 NANDs: the biggest block.',
       parts: ['mux'], codex: ['mux'],
     },
     {
       title: 'The zero flag',
-      text: 'zero detects y = 0: 46 NANDs, 9 delays. 1250 NANDs, depth 64: par. The critical path is ctl → sub (5) → adder → v (46) → slt (49) → mux (55) → zero (64).',
+      text: 'zero detects y = 0: 46 NANDs, 9 delays. 1055 NANDs, depth 64: par. The critical path is ctl → sub (5) → adder → v (46) → slt (49) → mux (55) → zero (64).',
       parts: ['zero'], codex: ['criticalpath'],
     },
   ],
@@ -432,12 +432,12 @@ export const WALKS1: Record<string, WalkScript> = {
     },
     {
       title: 'Read port 1',
-      text: 'u10, the library\'s 8:1 tree of seven 16-bit muxes (448 NANDs, depth 7), selects x[ra1]. Input 0 is the constant 0: x0 always reads 0 and costs no register, which saves 208 NANDs. Seven of your 49-NAND bus muxes make the same tree for 343.',
+      text: 'u10, an 8:1 tree of seven of your 49-NAND bus muxes (343 NANDs, depth 7), selects x[ra1]; the library\'s tree of 64-NAND muxes would be 448. Input 0 is the constant 0: x0 always reads 0 and costs no register, which saves 208 NANDs.',
       parts: ['u1', 'u10'], codex: ['regfile', 'mux'],
     },
     {
       title: 'Read port 2',
-      text: 'u11 is a second tree on the same eight words, selected by ra2. Reads are combinational and independent, so an instruction reads rs1 and rs2 in the same cycle. 2403 NANDs: par. Period 11: wa through the decoder (5) and an enable mux (3), plus setup (3).',
+      text: 'u11 is a second tree on the same eight words, selected by ra2. Reads are combinational and independent, so an instruction reads rs1 and rs2 in the same cycle. 2193 NANDs: par. Period 11: wa through the decoder (5) and an enable mux (3), plus setup (3).',
       parts: ['u11'],
     },
   ],

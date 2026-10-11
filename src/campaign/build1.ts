@@ -5,10 +5,10 @@
 import { type BuildChallenge, type PinSpec, type SeqStep } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc } from '../editor/model';
-import { aluSpec, alu, shifter } from '../lib/alu';
+import { aluSpec } from '../lib/alu';
 import { addSub } from '../lib/combinational';
 import { koggeStone } from '../lib/fastadd';
-import { ADD16, CMP16, DEC3, DET101, EQ16, INC16, MUX16, PC16, PRIME4, PRIMES4, RF8, RV16_REG16, WIDE16 } from '../lib/rv16/logic';
+import { ADD16, CMP16, DEC3, DET101, EQ16, INC16, MUX16, PC16, PRIME4, PRIMES4, RF8, RV16_ALU16, RV16_REG16, RV16_SHIFT16, WIDE16 } from '../lib/rv16/logic';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { rng } from './drills';
 
@@ -199,14 +199,14 @@ export const BUILD1: Record<string, () => BuildChallenge> = {
       kind: 'table', spec: ([a, sh, left, arith]) => [left ? (a << sh) & 0xffff : arith ? (s16(a) >> sh) & 0xffff : a >>> sh],
       vectors: () => EDGE16.flatMap((a) => Array.from({ length: 64 }, (_, k) => [a, k & 15, (k >> 4) & 1, k >> 5])),
     },
-    answer: refOf('a_shift16', () => shifter(16), 'Barrel shifter'),
+    answer: refOf('a_shift16', () => RV16_SHIFT16, 'Barrel shifter'),
   }),
   a_alu16: () => ({
     id: 'a_alu16', title: 'The ALU', level: 'arithmetic', allowed: 'nand',
     brief: '<b>y</b> = a op b with op = <code>ctl</code> = {OPX, f3}: 0 add, 8 sub, 1 sll, 2 slt, 3 sltu, 4 xor, 5 srl, 13 sra, 6 or, 7 and (shifts by b mod 16); <b>zero</b> = (y = 0).',
     ports: pins([['a', 16], ['b', 16], ['ctl', 4]], [['y', 16], ['zero']]),
     check: { kind: 'table', spec: (v) => aluSpec(16)(v).slice(0, 2), vectors: () => pairs16().flatMap(([a, b]) => ALU_OPS.map((c) => [a, b, c])) },
-    answer: refOf('a_alu16', () => withoutPorts(alu(16), ['neg', 'ovf', 'carry']), 'ALU'),
+    answer: refOf('a_alu16', () => withoutPorts(RV16_ALU16, ['neg', 'ovf', 'carry']), 'ALU'),
   }),
   o_fastadd: () => ({
     id: 'o_fastadd', title: 'Fast adder', level: 'arithmetic', allowed: 'nand',

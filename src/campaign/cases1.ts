@@ -44,7 +44,7 @@ export const CASES1: Record<string, LevelCase> = {
   c_imm: {
     problem: 'Constants travel inside instructions, in four formats: <b>I</b> = instr[15:10] (<code>addi</code>, <code>lw</code>, <code>jalr</code>), <b>S/B</b> = {instr[15:13], instr[6:4]}, in the f3 and rd positions (<code>sw</code> and the branch offsets), <b>J</b> = instr[15:7] (<code>jal</code>), <b>U</b> = {instr[15:7], instr[3]} &lt;&lt; 6 (<code>lui</code>). The generator delivers all four, sign-extended to 16 bits, and the core\'s 4:1 bus mux, steered by the control unit\'s <code>isel</code>, picks one. The sign bit is instr[15] in every format, so sign extension is a fan-out.',
     without: 'No instruction can carry a constant: no <code>addi</code>, no load or store offset, no branch or jump target.',
-    cost: 'Zero NANDs, depth 0: splitters, mergers and the sign bit fanned out. Four formats do cost something, in the core: the 4:1 16-bit format mux, 192 NANDs. RV32\'s generator is also wiring per format, but picks among five 32-bit formats: 896 NANDs with its mux.',
+    cost: 'Zero NANDs, depth 0: splitters, mergers and the sign bit fanned out. Four formats do cost something, in the core: the 4:1 16-bit format mux, 147 NANDs. RV32\'s generator is also wiring per format, but picks among five 32-bit formats: 896 NANDs with its mux.',
     alts: [{ name: 'RV32 immediate generator (with its format mux)', lib: 'immgen' }],
   },
   c_ctl: {
@@ -66,29 +66,29 @@ export const CASES1: Record<string, LevelCase> = {
   },
   c_core1: {
     problem: 'The first loop that runs by itself. The PC addresses the instruction memory; the control unit and the immediate generator decode the word; the register file reads rs1 = instr[9:7] and rs2 = instr[12:10]; the ALU computes on rs1 and rs2 or the immediate; the result mux writes rd = instr[6:4] at the clock edge. One instruction per cycle: R-type, <code>addi</code>, the immediate shifts and <code>lui</code>. No branches yet, so the PC only counts.',
-    cost: '4 318 NANDs: the register file is 2 403 of them (56%), the ALU 1 250, the PC 318, control 200, and the three 2:1 bus muxes (immediate I or U, ALU b, result: the ALU\'s or lui\'s immediate) 147. Period 84 NAND delays with the bench\'s 8-delay memories: in one cycle the path runs PC → instruction memory → control → ALU → result mux → register file, and every instruction pays for the longest one.',
+    cost: '3 913 NANDs: the register file is 2 193 of them (56%), the ALU 1 055, the PC 318, control 200, and the three 2:1 bus muxes (immediate I or U, ALU b, result: the ALU\'s or lui\'s immediate) 147. Period 84 NAND delays with the bench\'s 8-delay memories: in one cycle the path runs PC → instruction memory → control → ALU → result mux → register file, and every instruction pays for the longest one.',
   },
   c_core2: {
     problem: '<code>lw</code> and <code>sw</code> reach the data memory. The ALU adds rs1 and the 6-bit offset (bimm = 1, operation add); a load writes <code>drdata</code> back through the result mux\'s second input, a store puts rs2 on <code>dwdata</code> and raises <code>dwe</code> for one clock edge. Addresses count 16-bit words, and the top seven (0xFFF9–0xFFFF) are devices, reached as negative offsets from x0.',
     without: 'Eight registers are all the data a program has: no arrays, no stack, no I/O.',
-    cost: '+286 NANDs over Core I (4 604): the address is the ALU\'s add, but stores bring the S/B immediate format and loads the memory\'s word, so the immediate and result muxes grow from 2:1 (49 NANDs) to 4:1 (192). The price is mostly time: the data memory read sits behind the ALU in the same cycle (period 98 against 84), and fetch and load both read memory in that cycle, which is why a single-cycle core has separate instruction and data memories (Harvard).',
+    cost: '+98 NANDs over Core I (4 011): the address is the ALU\'s add, but stores bring the S/B immediate format and loads the memory\'s word, so the immediate and the result each choose among three and gain a second 2:1 mux (49 NANDs; 4:1 bus muxes come with jumps). The price is mostly time: the data memory read sits behind the ALU in the same cycle (period 98 against 84), and fetch and load both read memory in that cycle, which is why a single-cycle core has separate instruction and data memories (Harvard).',
   },
   c_core3: {
     problem: 'Branches and jumps complete RV16I. The branch comparator reads rs1 and rs2, the next-PC logic loads the PC with pc + imm (a taken branch, <code>jal</code>) or rs1 + imm (<code>jalr</code>), and <code>jal</code> / <code>jalr</code> write pc + 1 to rd through the result mux\'s third input. Loops, calls and the stack of Act 4 now run on hardware built from NANDs, one instruction per cycle.',
     without: 'Straight-line code: each instruction runs once, and a loop of n iterations has to be written out n times.',
-    cost: '+632 NANDs over Core II: the branch comparator (287) and next PC (421), less the PC\'s own incrementer (76), since next PC\'s pc + 1 now feeds the PC. 5 236 in all, period unchanged at 98 (the load path stays the longest). The 28 test programs take 1 236 cycles, 121 128 NAND delays. The five-stage pipeline of Act 6 runs them in 1 495 cycles at period 78 (116 610), the multicycle core in 3 865 at period 76 (293 740).',
+    cost: '+730 NANDs over Core II: the branch comparator (287) and next PC (421), less the PC\'s own incrementer (76), since next PC\'s pc + 1 now feeds the PC, and the J format and pc + 1 make the immediate and result muxes 4:1 (+98). 4 741 in all, period unchanged at 98 (the load path stays the longest). The 28 test programs take 1 236 cycles, 121 128 NAND delays. The five-stage pipeline of Act 6 runs them in 1 495 cycles at period 78 (116 610), the multicycle core in 3 865 at period 76 (293 740).',
     alts: [{ name: 'Single-cycle, Kogge–Stone adders', lib: 'rv16_cpu_ks' }, { name: 'Multicycle core', lib: 'rv16_mc' }, { name: 'Five-stage pipeline', lib: 'rv16_pipe_111' }],
   },
   c_computer: {
     problem: 'The core\'s pins expect memories that answer in the same cycle; so far the bench has provided them. Here they become parts: a 32-word ROM on pc[4:0] holds the program, a 64-word RAM on daddr[5:0] the data, and a 16-bit LED register is the output device. daddr[15] alone tells I/O from RAM (partial decoding): a store with bit 15 set writes the LEDs and leaves the RAM alone.',
     without: 'The core runs only on a test bench that serves its memory from outside.',
-    cost: '27 599 NANDs, of which the 64-word RAM is 20 166 (73%): about 79 transistors per stored bit, decoder and read mux included, against 6 in an SRAM cell. Partial decoding costs a NOT and two ANDs, and every address with bit 15 set aliases the LED register. Period 110, against 98 on the core bench\'s 8-delay memories.',
+    cost: '27 104 NANDs, of which the 64-word RAM is 20 166 (74%): about 79 transistors per stored bit, decoder and read mux included, against 6 in an SRAM cell. Partial decoding costs a NOT and two ANDs, and every address with bit 15 set aliases the LED register. Period 110, against 98 on the core bench\'s 8-delay memories.',
   },
   c_fast: {
     problem: 'Every instruction pays Core III\'s slowest path: PC → instruction memory → control → ALU → data memory → result mux → register file, 98 delays, of which the ripple ALU is 50. Static timing names the path; Kogge–Stone adders, carries in logarithmic depth instead of a chain, shorten it without changing a single instruction or cycle.',
     without: 'The same 1 236 cycles at period 98.',
-    cost: 'The reference swaps the ALU and both next-PC adders: 5 898 NANDs (+662, +13%) for period 76 (−22%), so the 28 programs take 93 936 NAND delays instead of 121 128. The load path stays the longest, now with the branch two delays behind it: instruction memory → register file → comparator (44 deep: its less-than waits for the carry chain) → next PC → PC, 74.',
-    alts: [{ name: 'Kogge–Stone ALU', lib: 'alu16ks' }, { name: 'Ripple ALU', lib: 'alu16' }],
+    cost: 'The reference swaps the ALU and both next-PC adders: 5 403 NANDs (+662, +14%) for period 76 (−22%), so the 28 programs take 93 936 NAND delays instead of 121 128. The load path stays the longest, now with the branch two delays behind it: instruction memory → register file → comparator (44 deep: its less-than waits for the carry chain) → next PC → PC, 74.',
+    alts: [{ name: 'Kogge–Stone ALU', lib: 'rv16_alu16ks' }, { name: 'Ripple ALU', lib: 'rv16_alu16' }],
   },
 
   // ---- Act 6: the pipeline --------------------------------------------------------------------
@@ -101,7 +101,7 @@ export const CASES1: Record<string, LevelCase> = {
   pi_core0: {
     problem: 'Cut the datapath in five: F fetches, D decodes and reads registers, E computes, M reaches memory, W writes back. Each stage works on a different instruction, so the period is set by the slowest stage instead of the whole path. These programs keep every producer two instructions from its user and have no branches, and the register file writes at the falling edge, so an instruction three behind its producer reads the new value: no stage needs to know about another.',
     without: 'One instruction per 98-delay cycle, as in Core II.',
-    cost: '7 676 NANDs, two thirds more than Core II, for period 65 instead of 98; the 12 pipeline registers are 3 120 of it. These pipelines do not branch, so they carry no pc past F and have no comparator or next PC yet. The stages are unbalanced: E needs 65 (the ripple ALU is 55 of it), the PC loop 39, every other stage 28 or less. The hazard-free code pays in nops: the 19 programs take 2 508 cycles with two after every instruction, where Core II runs them unpadded in 824. 163 020 NAND delays against 80 752.',
+    cost: '7 083 NANDs, three quarters more than Core II, for period 65 instead of 98; the 12 pipeline registers are 3 120 of it. These pipelines do not branch, so they carry no pc past F and have no comparator or next PC yet. The stages are unbalanced: E needs 65 (the ripple ALU is 55 of it), the PC loop 39, every other stage 28 or less. The hazard-free code pays in nops: the 19 programs take 2 508 cycles with two after every instruction, where Core II runs them unpadded in 824. 163 020 NAND delays against 80 752.',
   },
   pi_fwd: {
     problem: 'An ALU result exists at the end of E but reaches the register file only from W, two cycles later. When the instruction in E reads a register that the one in M or W is about to write (rwe set, rd ≠ x0), the forwarding unit selects that value instead of the stale one read in D: <code>fa</code> / <code>fb</code> = 1 from M, 2 from W, 0 from the register file. M wins over W because it holds the newer write.',
@@ -111,7 +111,7 @@ export const CASES1: Record<string, LevelCase> = {
   pi_core1: {
     problem: 'Now an instruction may use the result of the one just before it. Two 3:1 bus muxes in front of E pick each operand from the register file, from M (the result before memory: ALU, pc + 1 or immediate) or from W (the value being written back), steered by the forwarding unit. rs2 is forwarded too: stores write it and branches compare it.',
     without: 'Two nops after every instruction: 2 508 cycles on these programs instead of 970.',
-    cost: '+686 NANDs (8 362) and the period rises from 65 to 78, but the 19 programs fall from 2 508 cycles to 970: 75 660 NAND delays, against 163 020 for Pipeline I and 80 752 for Core II. The pipeline now beats the single-cycle core, by 6%.',
+    cost: '+355 NANDs (7 438) and the period rises from 65 to 78, but the 19 programs fall from 2 508 cycles to 970: 75 660 NAND delays, against 163 020 for Pipeline I and 80 752 for Core II. The pipeline now beats the single-cycle core, by 6%.',
   },
   pi_haz: {
     problem: 'A load\'s word comes out of memory at the end of M. If the very next instruction reads it, that instruction is already in E when the word appears, one cycle too early for forwarding. The hazard unit, in D, compares rs1 and rs2 with the rd of a load in E (rwe and wb = memory, rd ≠ x0) and raises <code>stall</code>: the PC and F/D hold, D/E takes a bubble, and a cycle later W forwards the loaded word.',
@@ -121,17 +121,17 @@ export const CASES1: Record<string, LevelCase> = {
   pi_core2: {
     problem: 'Loads used at once. On a stall the PC and F/D keep their values, D/E clears to a bubble and the load moves on to M; the next cycle it is in W and the forwarding unit hands its word to the instruction waiting in E. One lost cycle per load-use pair, none for any other dependence.',
     without: 'A nop after every load instead: 970 cycles on these programs, against 917 with the stall.',
-    cost: '+114 NANDs (8 476), period unchanged at 78. The stall is paid only when the next instruction reads the loaded register, where a nop is paid after every load. The 19 programs take 71 526 NAND delays, 11% less than on Core II.',
+    cost: '+114 NANDs (7 552), period unchanged at 78. The stall is paid only when the next instruction reads the loaded register, where a nop is paid after every load. The 19 programs take 71 526 NAND delays, 11% less than on Core II.',
   },
   pi_core3: {
     problem: 'A branch or jump resolves in E, where the comparator and the next-PC logic run on forwarded operands. By then F and D hold the next two words, fetched on the guess that the branch falls through. On a taken branch or any jump, E loads the PC with the target and clears F/D and D/E, so the two wrong-path instructions never write anything.',
     without: 'The two instructions after a taken branch execute anyway: wrong-path code changes registers and memory.',
-    cost: '+1 540 NANDs (10 016): the branch comparator (287), next PC (421), a redirect mux on the PC and three pipeline registers carrying pc and pc + 1 (780). Period unchanged at 78: forwarding → comparator → next PC → flush reaches F/D at 77, one delay inside the ALU path. Every taken branch and jump costs two cycles: the 28 Core III programs take 1 495 cycles against 1 236, and at period 78 against 98 the pipeline ends 4% faster than Core III (116 610 against 121 128 NAND delays). The flushes eat most of the 20% the shorter period gained; branch prediction and earlier resolution win it back.',
+    cost: '+1 687 NANDs (9 239): the branch comparator (287), next PC (421), a redirect mux on the PC, three pipeline registers carrying pc and pc + 1 (780), and the J format and pc + 1 widening the immediate, value and result muxes (+147). Period unchanged at 78: forwarding → comparator → next PC → flush reaches F/D at 77, one delay inside the ALU path. Every taken branch and jump costs two cycles: the 28 Core III programs take 1 495 cycles against 1 236, and at period 78 against 98 the pipeline ends 4% faster than Core III (116 610 against 121 128 NAND delays). The flushes eat most of the 20% the shorter period gained; branch prediction and earlier resolution win it back.',
   },
   o_bpred: {
     problem: 'Loops take their closing branch almost every time, and Pipeline IV flushes two instructions for each one. Guessing in F avoids most of that: decode the fetched word (the immediate generator is wiring), and if it is <code>jal</code> or a branch with a negative offset (instr[15] = 1), fetch from pc + imm at once. E compares the guess with the outcome and redirects only on a miss: to the target, or back to pc + 1 when a predicted branch falls through.',
     without: 'Two flushed cycles per taken branch or jump: 2 653 cycles on the prediction programs.',
-    cost: '+571 NANDs (10 587) for an adder and a decoder in F and the guess carried to E, period 80 (+2). Cycles fall 13% over the 31 programs (2 653 → 2 303) and 25% on the three loop programs (1 158 → 872). A dynamic predictor also learns forward branches, from per-branch history; its logic is small (a 2-bit counter\'s next state is 28 NANDs), its storage is not: RV32\'s 16-entry branch target buffer is 22 849 NANDs, twice this whole pipeline.',
+    cost: '+571 NANDs (9 810) for an adder and a decoder in F and the guess carried to E, period 80 (+2). Cycles fall 13% over the 31 programs (2 653 → 2 303) and 25% on the three loop programs (1 158 → 872). A dynamic predictor also learns forward branches, from per-branch history; its logic is small (a 2-bit counter\'s next state is 28 NANDs), its storage is not: RV32\'s 16-entry branch target buffer is 22 849 NANDs, more than twice this whole pipeline.',
     alts: [{ name: '2-bit saturating counter, next-state logic', lib: 'satctr' }, { name: '16-entry branch target buffer (RV32)', lib: 'btb16' }],
   },
 
@@ -139,17 +139,17 @@ export const CASES1: Record<string, LevelCase> = {
   y_csr: {
     problem: 'The trap machinery keeps its state in control and status registers, read and written by <code>csrrw</code> / <code>csrrs</code> / <code>csrrc</code> with the CSR number in the rs2 field: mstatus (MIE bit 3, MPIE bit 7), mie (MEIE bit 11), mtvec (the handler\'s address), mepc (where the trap happened), mcause, mscratch; mip shows the interrupt line, and CSR 7 has no register: it reads 0 and ignores writes. A trap writes three of them on one edge (mepc ← pc, mcause ← cause, MPIE ← MIE, MIE ← 0), and <code>mret</code> moves MPIE back into MIE.',
     without: 'Nowhere to keep the return address and the cause: a trap would destroy the state needed to resume, so neither exceptions nor interrupts can exist.',
-    cost: '1 870 NANDs, period 17: five 16-bit registers with enable (1 040), mstatus (16 flip-flops, 144: its next value is computed every cycle, so it needs no enable) and the 8:1 read mux (448) are most of it. mepc and mcause each add a 2:1 mux (the written value or the trap\'s pc and cause); mstatus has its own next-value logic for MIE and MPIE. RISC-V addresses 4 096 CSRs with 12 bits; RV16\'s 3-bit field keeps eight.',
+    cost: '1 765 NANDs, period 17: five 16-bit registers with enable (1 040), mstatus (16 flip-flops, 144: its next value is computed every cycle, so it needs no enable) and the 8:1 read mux (343) are most of it. mepc and mcause each add a 2:1 mux (the written value or the trap\'s pc and cause); mstatus has its own next-value logic for MIE and MPIE. RISC-V addresses 4 096 CSRs with 12 bits; RV16\'s 3-bit field keeps eight.',
   },
   y_trap: {
     problem: 'Three events stop an instruction from running: <code>ecall</code> (a request to the system, cause 11), <code>ebreak</code> (a breakpoint, 3) and an illegal word (2): a SYSTEM, OPX or shift variant RV16 does not define, or any MD instruction without the M extension. The core then writes no register and stores nothing, saves pc in mepc and the cause in mcause, and loads mtvec into the PC; <code>mret</code> jumps back to mepc. The CSR instructions write the old value to rd as they update the CSR.',
     without: 'An undefined word executes as whatever its bits happen to select, and a program has no way to call the system or stop for a debugger.',
-    cost: '7 972 NANDs, +2 736 over Core III: the CSR file 1 870, system decode 533 (it also computes the CSR write value: rs1, old | rs1 or old &amp; ¬rs1), the illegal detector 158, and the muxes for the target and the CSR result. The cause needs no mux of constants: bit 1 is always 1, bit 15 is intr, bits 0 and 3 are five NANDs of intr, ill and ecall. Period 100 (+2): the CSR read joins the result mux.',
+    cost: '7 278 NANDs, +2 537 over Core III: the CSR file 1 765, system decode 439 (it also computes the CSR write value: rs1, old | rs1 or old &amp; ¬rs1), the illegal detector 158, and the muxes for the target and the CSR result. The cause needs no mux of constants: bit 1 is always 1, bit 15 is intr, bits 0 and 3 are five NANDs of intr, ill and ecall. Period 100 (+2): the CSR read joins the result mux.',
   },
   y_irq: {
     problem: 'A device raises <code>irq</code> between two instructions of a program that does not expect it. When intr = MIE · MEIE · irq is 1, the instruction at pc does not run: mepc ← pc, mcause ← 0x800B (bit 15: an interrupt; 11: external), pc ← mtvec, and MIE drops to 0 so the handler is not interrupted in turn. <code>mret</code> restores MIE and re-runs the instruction at mepc.',
     without: 'The program polls the device in a loop, spending cycles and missing anything that happens between two polls.',
-    cost: 'Zero NANDs over Exceptions: the CSR file already computes intr and the cause logic already has its term; the core only wires the pin in (7 972 NANDs, period 100). Checking before the instruction is simple in a single-cycle core; the pipeline takes the interrupt in E, on a valid instruction, like an exception.',
+    cost: 'Zero NANDs over Exceptions: the CSR file already computes intr and the cause logic already has its term; the core only wires the pin in (7 278 NANDs, period 100). Checking before the instruction is simple in a single-cycle core; the pipeline takes the interrupt in E, on a valid instruction, like an exception.',
   },
   p_handler: {
     problem: 'An interrupt can land between any two instructions of main, so the handler must leave every register as it found it: push what it uses, read the device\'s word from IN, write it doubled to OUT, acknowledge the device (a store of 0 to IRQ, 0xFFF9), pop, <code>mret</code>. Main enables in order: mtvec, then mie bit 11 (MEIE), then mstatus bit 3 (MIE) last, so no interrupt arrives before there is a handler to take it.',
@@ -159,7 +159,7 @@ export const CASES1: Record<string, LevelCase> = {
   y_final: {
     problem: 'The pipeline with precise traps: when an instruction traps, every older instruction completes and no younger one has changed anything. Traps are taken in E, where the instruction has written nothing yet: M and W finish, F/D and D/E are flushed, the PC loads mtvec. A valid bit travels with every instruction, because a bubble\'s all-zero word is an illegal SYSTEM encoding; a CSR instruction reads and writes in E, and its old value travels down as the result.',
     without: 'An imprecise trap: mepc points near the culprit, a younger instruction may already have written a register, and the handler cannot resume the program.',
-    cost: '13 035 NANDs, +3 019 over Pipeline IV: the CSR file, system decode, illegal detector, one more pipeline register (D/E instr) and the F/D valid bit, one flip-flop that clears (15 NANDs). Period 81 (+3): trap and <code>mret</code> join the redirect path to the PC. The 45 programs take 2 399 cycles, 194 319 NAND delays, against 197 600 on the single-cycle core with traps (1 976 cycles at period 100): with a ripple ALU and the branch comparator in E, a period of 81 against 100 only just covers the extra cycles (2% faster).',
+    cost: '12 059 NANDs, +2 820 over Pipeline IV: the CSR file, system decode, illegal detector, one more pipeline register (D/E instr) and the F/D valid bit, one flip-flop that clears (15 NANDs). Period 81 (+3): trap and <code>mret</code> join the redirect path to the PC. The 45 programs take 2 399 cycles, 194 319 NAND delays, against 197 600 on the single-cycle core with traps (1 976 cycles at period 100): with a ripple ALU and the branch comparator in E, a period of 81 against 100 only just covers the extra cycles (2% faster).',
   },
 
   // ---- Act 8: side quests ---------------------------------------------------------------------
@@ -178,7 +178,7 @@ export const CASES1: Record<string, LevelCase> = {
   o_mcore: {
     problem: 'The MD opcode (0011) multiplies in one instruction: <code>mul</code> (low half), <code>mulh</code> (high half, both signed), <code>mulhsu</code>, <code>mulhu</code>, chosen by f3. One unsigned 16 × 16 array serves all four: a negative a is worth a − 2<sup>16</sup>, so the signed high half is the unsigned one minus b when a &lt; 0, and minus a when b &lt; 0. The result joins write back through one more mux, and MD\'s write is ORed into rwe.',
     without: 'Shift and add in software: 28 to 134 instructions per product.',
-    cost: '8 553 NANDs (+3 317: the MD multiplier is 3 257, its array 2 672) and period 191 against 98: the multiplier\'s 166-deep path now runs register file → multiplier → register file within one cycle, and every instruction, <code>add</code> included, pays for it. Code without a multiply runs 1.95 times slower. Real cores give the multiplier pipeline stages of its own (the pipelined Booth multiplier: period 41, four cycles of latency) or a shallower tree.',
+    cost: '8 058 NANDs (+3 317: the MD multiplier is 3 257, its array 2 672) and period 191 against 98: the multiplier\'s 166-deep path now runs register file → multiplier → register file within one cycle, and every instruction, <code>add</code> included, pays for it. Code without a multiply runs 1.95 times slower. Real cores give the multiplier pipeline stages of its own (the pipelined Booth multiplier: period 41, four cycles of latency) or a shallower tree.',
     alts: [{ name: 'Wallace-tree multiplier', lib: 'wmul16' }, { name: 'Booth radix-4 multiplier (signed)', lib: 'bmul16' }, { name: 'Pipelined Booth multiplier', lib: 'pmul16' }],
   },
   o_div: {
@@ -190,7 +190,7 @@ export const CASES1: Record<string, LevelCase> = {
   o_dcore: {
     problem: 'A divide does not finish in one cycle. The core starts the divider when the instruction is a divide, then holds the PC on that instruction and writes nothing until done, 18 cycles later, when the result is written and the PC moves on: the single-cycle core\'s version of a stall. <code>div</code>, <code>divu</code>, <code>rem</code> and <code>remu</code> (f3 4–7) share one unsigned divider: |a| and |b| go in, the quotient takes the sign a XOR b (unless b = 0), the remainder the sign of a.',
     without: 'The core would write a quotient that is not ready, or stretch its clock to an array divider\'s 613-deep path.',
-    cost: '11 107 NANDs (+2 554: the MD divider is 2 445, the unsigned divider 1 490 of it plus four 16-bit add / subtractors that take the signs off and put them back), period 193. The 23 test programs take 1 859 cycles for 959 instructions, each divide holding the core 18 cycles. A radix-4 SRT divider would take 11, for 6 815 NANDs.',
+    cost: '10 612 NANDs (+2 554: the MD divider is 2 445, the unsigned divider 1 490 of it plus four 16-bit add / subtractors that take the signs off and put them back), period 193. The 23 test programs take 1 859 cycles for 959 instructions, each divide holding the core 18 cycles. A radix-4 SRT divider would take 11, for 6 815 NANDs.',
     alts: [{ name: 'Radix-4 SRT divider (11 cycles)', lib: 'srt4div16' }],
   },
   o_fpunpack: {
@@ -206,8 +206,8 @@ export const CASES1: Record<string, LevelCase> = {
   o_fpsticky: {
     problem: 'Before two floats are added, the one with the smaller exponent is shifted right by the exponent difference so their binary points line up. The bits shifted out cannot just be dropped: rounding needs to know whether any of them was 1. The sticky shifter is a right barrel shifter (level k shifts by 2<sup>k</sup>) whose levels also OR the bits they drop into one sticky bit.',
     without: 'A plain shifter forgets the dropped bits: a sum just above a halfway point looks like a tie, rounds to even, and lands one unit in the last place off.',
-    cost: '264 NANDs, depth 21, for 13 bits and four levels: the adder places this one, and normalize &amp; round a 15-bit one (296) for results below the smallest normal. The ALU\'s 16-bit barrel shifter, without sticky logic but shifting both ways, is 389 NANDs, depth 14.',
-    alts: [{ name: '16-bit barrel shifter (no sticky)', lib: 'shift16' }],
+    cost: '264 NANDs, depth 21, for 13 bits and four levels: the adder places this one, and normalize &amp; round a 15-bit one (296) for results below the smallest normal. The ALU\'s 16-bit barrel shifter, without sticky logic but shifting both ways, is 299 NANDs, depth 14.',
+    alts: [{ name: '16-bit barrel shifter (no sticky)', lib: 'rv16_shift16' }],
   },
   o_fplzc: {
     problem: 'Subtracting two close numbers cancels their leading bits: 1.0001 − 1.0000 leaves 0.0001, and the result must be shifted left until its first 1 is back in the hidden-bit place. The shift is the number of leading zeros. A 16-bit counter is two 8-bit ones: the upper count when the upper half has a 1, else 8 plus the lower count, and so on down to 2 bits.',
@@ -248,7 +248,7 @@ export const CASES1: Record<string, LevelCase> = {
   o_mc: {
     problem: 'Before pipelines, processors ran each instruction as several short steps under a state machine. A one-hot FSM steps F → E → (M) → W: F loads an instruction register, E registers the ALU result, M (loads and stores only) uses memory, W writes the register file and the PC. Two registers cut the single-cycle path, and the data memory gets a step of its own.',
     without: 'The single-cycle core: one instruction per 98-delay cycle.',
-    cost: '5 719 NANDs (+483 over Core III), period 76 against 98, but 3 or 4 cycles per instruction: Core III\'s programs take 3 865 cycles instead of 1 236, 2.4 times slower overall (293 740 against 121 128 NAND delays). The period falls only 22% because E still holds the whole ripple ALU. Multicycle designs paid by sharing one ALU and one memory between the steps; this one shares nothing, keeping the separate memories and the next-PC adders.',
+    cost: '5 224 NANDs (+483 over Core III), period 76 against 98, but 3 or 4 cycles per instruction: Core III\'s programs take 3 865 cycles instead of 1 236, 2.4 times slower overall (293 740 against 121 128 NAND delays). The period falls only 22% because E still holds the whole ripple ALU. Multicycle designs paid by sharing one ALU and one memory between the steps; this one shares nothing, keeping the separate memories and the next-PC adders.',
     alts: [{ name: 'Single-cycle core', lib: 'rv16_cpu' }],
   },
 };

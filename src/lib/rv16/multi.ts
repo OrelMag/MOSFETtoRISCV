@@ -4,14 +4,14 @@
 // sits between an address and a main memory the bench serves: eight one-word lines, write-through.
 
 import type { ComponentDef, PortDef } from '../../sim/types';
-import { alu, constWord } from '../alu';
+import { constWord } from '../alu';
 import { Builder } from '../builder';
-import { equal, muxTree } from '../combinational';
+import { equal } from '../combinational';
 import { define, merger, splitter } from '../define';
 import { AND, NOT, OR } from '../gates';
 import { ram } from '../memory';
 import { BRANCH16, CORE_PORTS, CTL16, IMM16, NEXTPC16 } from './cpu';
-import { MUX16, RF8, RV16_DFF, RV16_DREG16, RV16_REG16 } from './logic';
+import { MUX16, RF8, RV16_ALU16, RV16_DFF, RV16_DREG16, RV16_MUX4, RV16_REG16 } from './logic';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -36,7 +36,7 @@ export const RV16_MULTI: ComponentDef = (() => {
   const ctl = b.op(CTL16, [ir], 'control');
   const imm = b.op(IMM16, [ir], 'immediates');
   b.next();
-  const immv = b.name(b.op1(muxTree(2, 16), [`${imm}.i`, `${imm}.sb`, `${imm}.j`, `${imm}.u`, `${ctl}.isel`], 'imm'), 'imm', true);
+  const immv = b.name(b.op1(RV16_MUX4, [`${imm}.i`, `${imm}.sb`, `${imm}.j`, `${imm}.u`, `${ctl}.isel`], 'imm'), 'imm', true);
   const rwe = b.name(b.op1(AND, [`${ctl}.rwe`, W], 'write in W'), 'rwe', true);
   const rf = b.op(RF8, [rd, rwe, '', `${f}.o3`, `${f}.o4`, 'clk'], 'registers');
   const r1 = b.name(`${rf}.rd1`, 'r1', true), r2 = b.name(`${rf}.rd2`, 'r2', true);
@@ -44,7 +44,7 @@ export const RV16_MULTI: ComponentDef = (() => {
   const bsrc = b.op1(MUX16, [r2, immv, `${ctl}.bimm`], 'ALU b');
   const take = b.op1(BRANCH16, [r1, r2, cond], 'branch?');
   b.next();
-  const y = b.op1(alu(16), [r1, bsrc, `${ctl}.alu`], 'ALU');
+  const y = b.op1(RV16_ALU16, [r1, bsrc, `${ctl}.alu`], 'ALU');
   const np = b.op(NEXTPC16, ['', immv, r1, `${ctl}.br`, take, `${ctl}.jal`, `${ctl}.jalr`], 'next PC');
   b.next();
   const yq = b.name(`${b.op(RV16_DREG16, [y, 'clk'], 'ALU register')}.q`, 'aluq', true);
@@ -59,7 +59,7 @@ export const RV16_MULTI: ComponentDef = (() => {
   const pc = b.name(`${b.op(RV16_REG16, [pcd, b.op1(OR, [W, 'rst'], 'pc en'), 'clk'], 'PC')}.q`, 'pc', true);
   b.wire(pc, `${np}.pc`);
   b.next();
-  const wbv = b.name(b.op1(muxTree(2, 16), [yq, 'drdata', `${np}.pc1`, immv, `${ctl}.wb`], 'result'), 'wbv', true);
+  const wbv = b.name(b.op1(RV16_MUX4, [yq, 'drdata', `${np}.pc1`, immv, `${ctl}.wb`], 'result'), 'wbv', true);
   b.wire(wbv, `${rf}.wd`);
   // The state machine, one-hot: F → E → (M →) W → F; reset → F.
   const nrst = b.op1(NOT, ['rst']);
