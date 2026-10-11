@@ -4,15 +4,15 @@
 // the levels below it unlock, so each is that level's reference solution.
 
 import type { ComponentDef, PortDef } from '../../sim/types';
-import { alu, constWord } from '../alu';
+import { constWord } from '../alu';
 import { koggeStone } from '../fastadd';
 import { Builder } from '../builder';
-import { decoder, muxTree } from '../combinational';
+import { decoder } from '../combinational';
 import { define, merger, splitter } from '../define';
 import { AND, MUX2, NOT, OR, XOR } from '../gates';
 import { orN } from '../wide';
 import { TIE0 } from '../transistors';
-import { ADD16, CMP16, EQ16, INC16, MUX16, PC16, RF8, RV16_DREG16 } from './logic';
+import { ADD16, choose4, CMP16, EQ16, INC16, MUX16, PC16, RF8, RV16_ALU16, RV16_ALU16KS, RV16_DREG16 } from './logic';
 import { DIV16, MUL16 } from './md';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
@@ -231,17 +231,17 @@ export function rv16Core(full: boolean, fast = false, md: CoreMd = '', arith = f
   const ctl = b.op(CTL16, ['instr'], 'control');
   const imm = b.op(IMM16, ['instr'], 'immediates');
   b.next();
-  // Core I uses two immediates (I, U): isel bit 1 tells them apart.
+  // Core I uses two immediates (I, U): isel bit 1 tells them apart. Without jumps, J is never selected.
   const isel = arith ? b.op(splitter([1, 1], 2), [`${ctl}.isel`]) : '';
   const immv = b.name(arith ? b.op1(MUX16, [`${imm}.i`, `${imm}.u`, `${isel}.o1`], 'imm')
-    : b.op1(muxTree(2, 16), [`${imm}.i`, `${imm}.sb`, `${imm}.j`, `${imm}.u`, `${ctl}.isel`], 'imm'), 'imm', true);
+    : choose4(b, [`${imm}.i`, `${imm}.sb`, full ? `${imm}.j` : null, `${imm}.u`], `${ctl}.isel`, 'imm').y, 'imm', true);
   let rwe = b.name(`${ctl}.rwe`, 'rwe', true);
   const rf = b.op(RF8, [rd, md ? '' : rwe, '', rs1, rs2, 'clk'], 'registers');
   const r1 = b.name(`${rf}.rd1`, 'r1', true), r2 = b.name(`${rf}.rd2`, 'r2', true);
   b.next();
   const bsrc = b.op1(MUX16, [r2, immv, `${ctl}.bimm`], 'ALU b');
   b.next();
-  const y = b.name(`${b.op(alu(16, fast ? 'ks' : 'rca'), [r1, bsrc, `${ctl}.alu`], 'ALU')}.y`, 'aluy', true);
+  const y = b.name(`${b.op(fast ? RV16_ALU16KS : RV16_ALU16, [r1, bsrc, `${ctl}.alu`], 'ALU')}.y`, 'aluy', true);
   let ld: string, target: string, pc1: string;
   let np = '';
   if (full) {
@@ -254,13 +254,13 @@ export function rv16Core(full: boolean, fast = false, md: CoreMd = '', arith = f
   } else {
     ld = b.op1(TIE0, []);
     target = b.op1(constWord(16, 0), []);
-    pc1 = arith ? '' : b.op1(constWord(16, 0), [], 'no jumps');
+    pc1 = '';
   }
   b.next();
-  // Core I writes the ALU's result or lui's immediate (wb = 0 or 3: bit 0 tells them apart).
+  // Core I writes the ALU's result or lui's immediate (wb = 0 or 3: bit 0 tells them apart). Without jumps, no pc + 1.
   const wbs = arith ? b.op(splitter([1, 1], 2), [`${ctl}.wb`]) : '';
   let wbv = b.name(arith ? b.op1(MUX16, [y, immv, `${wbs}.o0`], 'result')
-    : b.op1(muxTree(2, 16), [y, 'drdata', pc1, immv, `${ctl}.wb`], 'result'), 'wbv', true);
+    : choose4(b, [y, 'drdata', full ? pc1 : null, immv], `${ctl}.wb`, 'result').y, 'wbv', true);
   let hold = '';
   if (md) {
     // MD = opcode 0011; f3[2] picks a divide, f3[1:0] the variant.

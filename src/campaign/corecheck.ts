@@ -176,13 +176,16 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
     serve();
     edge();
     b.set('rst', fill(() => 0));
-    const limit = Math.max(...lanes.map((l) => Math.ceil(spec.budget.cpi * l.g.steps + spec.budget.extra)));
+    // A lane runs on past its budget (to twice it) so a slow core's cycles are counted to the end: the score
+    // is the same whichever bench runs the core, and the failure says how many cycles it took.
+    const budgetOf = (l: Lane) => Math.ceil(spec.budget.cpi * l.g.steps + spec.budget.extra);
+    const limit = Math.max(...lanes.map((l) => 2 * budgetOf(l)));
     for (let cyc = 1; cyc <= limit + drain; cyc++) {
       if (hasIrq) b.set('irq', fill((l) => l.irq));
       serve();
       const dwe = b.get('dwe'), daddr = b.get('daddr'), dwd = b.get('dwdata'), rwe = b.get('rwe'), rwa = b.get('rwa'), rwd = b.get('rwd'), pc = b.get('pc');
       lanes.forEach((l, k) => {
-        if (l.fail || (l.doneAt >= 0 && cyc > l.doneAt + drain)) return;
+        if (l.fail || (l.doneAt >= 0 && cyc > l.doneAt + drain) || (l.doneAt < 0 && cyc > 2 * budgetOf(l))) return;
         l.cycles = cyc;
         const at = `cycle ${cyc} (pc ${Number.isNaN(pc[k]) ? 'X' : hex(pc[k])})`;
         const where = (e: Event) => `"${disasm16(e.instr, e.pc)}" @ ${hex(e.pc)}`;
@@ -212,12 +215,12 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
         if (!l.fail && l.doneAt < 0 && l.ri === l.g.regs.length && l.si === l.g.stores.length) l.doneAt = cyc;
       });
       edge();
-      if (lanes.every((l) => l.fail || (l.doneAt >= 0 && cyc >= l.doneAt + drain))) break;
+      if (lanes.every((l) => l.fail || (l.doneAt >= 0 ? cyc >= l.doneAt + drain : cyc >= 2 * budgetOf(l)))) break;
     }
     for (const l of lanes) {
-      const budget = Math.ceil(spec.budget.cpi * l.g.steps + spec.budget.extra);
+      const budget = budgetOf(l);
       if (!l.fail && l.doneAt < 0) {
-        l.fail = `${l.g.name}: after ${budget} cycles only ${l.ri} of ${l.g.regs.length} register writes and ${l.si} of ${l.g.stores.length} stores happened`
+        l.fail = `${l.g.name}: after ${l.cycles} cycles (budget ${budget}) only ${l.ri} of ${l.g.regs.length} register writes and ${l.si} of ${l.g.stores.length} stores happened`
           + (l.g.regs[l.ri] ? `; next expected: ${rname(l.g.regs[l.ri].rd!)} ← ${hex(l.g.regs[l.ri].value)} from "${disasm16(l.g.regs[l.ri].instr, l.g.regs[l.ri].pc)}"` : '');
       } else if (!l.fail && l.doneAt > budget) l.fail = `${l.g.name}: correct, but ${l.doneAt} cycles for ${l.g.steps} instructions (budget ${budget})`;
       if (l.fail) {

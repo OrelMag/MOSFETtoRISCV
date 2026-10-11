@@ -10,7 +10,7 @@
    "cpu": "rv16",
    "cycles": 19,
    "words": 5,
-   "nands": 25829
+   "nands": 25334
   },
   {
    "cpu": "rv32",
@@ -30,7 +30,7 @@
    "cpu": "rv16",
    "cycles": 28.4,
    "words": 6,
-   "nands": 25829
+   "nands": 25334
   },
   {
    "cpu": "rv32",
@@ -50,7 +50,7 @@
    "cpu": "rv16",
    "cycles": 23,
    "words": 9,
-   "nands": 25829
+   "nands": 25334
   },
   {
    "cpu": "rv32",
@@ -70,7 +70,7 @@
    "cpu": "rv16",
    "cycles": 21.2,
    "words": 6,
-   "nands": 25829
+   "nands": 25334
   },
   {
    "cpu": "rv32",
@@ -90,7 +90,7 @@
    "cpu": "rv16",
    "cycles": 21.4,
    "words": 9,
-   "nands": 25829
+   "nands": 25334
   },
   {
    "cpu": "rv32",
@@ -110,7 +110,7 @@
    "cpu": "rv16",
    "cycles": 24.6,
    "words": 9,
-   "nands": 25829
+   "nands": 25334
   },
   {
    "cpu": "rv32",
@@ -130,7 +130,7 @@
    "cpu": "rv16",
    "cycles": 46,
    "words": 21,
-   "nands": 25829
+   "nands": 25334
   },
   {
    "cpu": "rv32",
@@ -150,7 +150,7 @@
    "cpu": "rv16",
    "cycles": 30.5,
    "words": 18,
-   "nands": 25829
+   "nands": 25334
   },
   {
    "cpu": "rv32",
@@ -170,7 +170,7 @@
    "cpu": "rv16",
    "cycles": 27,
    "words": 17,
-   "nands": 25829
+   "nands": 25334
   },
   {
    "cpu": "rv32",
@@ -190,7 +190,7 @@
    "cpu": "rv16",
    "cycles": 29.7,
    "words": 29,
-   "nands": 25829
+   "nands": 25334
   },
   {
    "cpu": "rv32",
@@ -210,7 +210,7 @@
    "cpu": "rv16",
    "cycles": 23.3,
    "words": 12,
-   "nands": 25829
+   "nands": 25334
   },
   {
    "cpu": "rv32",
@@ -230,7 +230,7 @@
    "cpu": "rv16",
    "cycles": 21.4,
    "words": 23,
-   "nands": 25829
+   "nands": 25334
   },
   {
    "cpu": "rv32",
@@ -244,7 +244,7 @@
    "cpu": "rv16",
    "cycles": 60,
    "words": 11,
-   "nands": 25829
+   "nands": 25334
   },
   {
    "cpu": "rv32",
@@ -258,7 +258,7 @@
    "cpu": "rv16",
    "cycles": 167.6,
    "words": 22,
-   "nands": 25829
+   "nands": 25334
   },
   {
    "cpu": "rv32",

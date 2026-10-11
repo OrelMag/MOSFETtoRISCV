@@ -5,15 +5,15 @@
 
 import { CSR16, CSR16_UNUSED, decode16, MIP_MEIP, MSTATUS_MIE, MSTATUS_MPIE } from '../../riscv/rv16/isa16';
 import type { ComponentDef, PortDef } from '../../sim/types';
-import { alu, bitwise, constWord } from '../alu';
+import { bitwise, constWord } from '../alu';
 import { Builder } from '../builder';
-import { andN, busMux2, decoder, muxTree } from '../combinational';
+import { andN, busMux2, decoder } from '../combinational';
 import { define, merger, splitter } from '../define';
 import { AND, NOT, OR } from '../gates';
 import { NAND, TIE0, TIE1 } from '../transistors';
 import { orN } from '../wide';
 import { BRANCH16, CORE_PORTS, CTL16, IMM16, NEXTPC16 } from './cpu';
-import { MUX16, RF8, RV16_DREG16, RV16_REG16 } from './logic';
+import { choose4, MUX16, RF8, RV16_ALU16, RV16_DREG16, RV16_MUX4, RV16_MUX8, RV16_REG16 } from './logic';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -137,7 +137,7 @@ export const CSR16F: ComponentDef = (() => {
   // Read: mip shows the interrupt line at bit 11; CSR 7 reads 0.
   const mip = b.op1(merger([11, 1, 4], 2), [b.op1(constWord(11, 0), []), 'irq', b.op1(constWord(4, 0), [])], 'mip');
   b.next();
-  b.wire(b.op1(muxTree(3, 16), [mst, mie, mip, tvec, epc, cause, scr, zero, 'sel'], 'read'), 'rdata');
+  b.wire(b.op1(RV16_MUX8, [mst, mie, mip, tvec, epc, cause, scr, zero, 'sel'], 'read'), 'rdata');
   b.wire(tvec, 'mtvec');
   b.wire(epc, 'mepc');
   const mieS = b.op(splitter([11, 1, 4], 2), [mie]);
@@ -200,7 +200,8 @@ export const SYSDEC16: ComponentDef = (() => {
   b.next();
   const andn = b.op1(bitwise('and', 16), ['old', nrs1], 'clear');
   b.next();
-  b.wire(b.op1(muxTree(2, 16), ['rs1v', 'rs1v', orv, andn, `${f3s}.o0`], 'new value'), 'wdata');
+  // f3 = 1 (csrrw) and 0 (not a CSR op) both write rs1: f3[1] picks it or f3[0]'s set / clear.
+  b.wire(choose4(b, ['rs1v', null, orv, andn], `${f3s}.o0`, 'new value').y, 'wdata');
   const R = b.right;
   return define({
     id: 'rv16_sysdec', name: 'System decode (RV16)', category: 'cpu',
@@ -233,7 +234,7 @@ export function rv16SysCore(irq: boolean): ComponentDef {
   const imm = b.op(IMM16, ['instr'], 'immediates');
   const ill = b.name(b.op1(ILL16, ['instr'], 'illegal?'), 'ill', true);
   b.next();
-  const immv = b.name(b.op1(muxTree(2, 16), [`${imm}.i`, `${imm}.sb`, `${imm}.j`, `${imm}.u`, `${ctl}.isel`], 'imm'), 'imm', true);
+  const immv = b.name(b.op1(RV16_MUX4, [`${imm}.i`, `${imm}.sb`, `${imm}.j`, `${imm}.u`, `${ctl}.isel`], 'imm'), 'imm', true);
   const rf = b.op(RF8, [rd, '', '', rs1, rs2, 'clk'], 'registers');
   const r1 = b.name(`${rf}.rd1`, 'r1', true), r2 = b.name(`${rf}.rd2`, 'r2', true);
   b.next();
@@ -251,7 +252,7 @@ export function rv16SysCore(irq: boolean): ComponentDef {
   const ntrap = b.name(b.op1(NOT, [trap]), 'ntrap', true);
   b.next();
   const bsrc = b.op1(MUX16, [r2, immv, `${ctl}.bimm`], 'ALU b');
-  const y = b.name(`${b.op(alu(16), [r1, bsrc, `${ctl}.alu`], 'ALU')}.y`, 'aluy', true);
+  const y = b.name(`${b.op(RV16_ALU16, [r1, bsrc, `${ctl}.alu`], 'ALU')}.y`, 'aluy', true);
   const take = b.op1(BRANCH16, [r1, r2, cond], 'branch?');
   b.next();
   const np = b.op(NEXTPC16, ['', immv, r1, `${ctl}.br`, take, `${ctl}.jal`, `${ctl}.jalr`], 'next PC');
@@ -261,7 +262,7 @@ export function rv16SysCore(irq: boolean): ComponentDef {
   const rwe = b.name(b.op1(AND, [rweAny, ntrap], 'rwe'), 'rwe', true);
   const mwe = b.op1(AND, [`${ctl}.mwe`, ntrap], 'mwe');
   b.wire(rwe, `${rf}.we`);
-  const res = b.op1(muxTree(2, 16), [y, 'drdata', `${np}.pc1`, immv, `${ctl}.wb`], 'result');
+  const res = b.op1(RV16_MUX4, [y, 'drdata', `${np}.pc1`, immv, `${ctl}.wb`], 'result');
   b.next();
   const wbv = b.name(b.op1(MUX16, [res, `${csrf}.rdata`, `${sys}.csr`], 'or a CSR'), 'wbv', true);
   b.wire(wbv, `${rf}.wd`);

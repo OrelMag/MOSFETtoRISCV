@@ -4,15 +4,15 @@
 // flush one at a time, as the levels do.
 
 import type { ComponentDef, PortDef } from '../../sim/types';
-import { alu, constWord, isZero } from '../alu';
+import { constWord, isZero } from '../alu';
 import { Builder } from '../builder';
-import { equal, muxTree } from '../combinational';
+import { equal } from '../combinational';
 import { define, merger, splitter } from '../define';
 import { orN } from '../wide';
 import { AND, NOT, OR, XOR } from '../gates';
 import { TIE0, TIE1 } from '../transistors';
 import { BRANCH16, CTL16, IMM16, NEXTPC16 } from './cpu';
-import { ADD16, INC16, MUX16, RF8, RV16_DFF, RV16_DREG16, RV16_REG16 } from './logic';
+import { ADD16, choose4, INC16, MUX16, RF8, RV16_ALU16, RV16_DFF, RV16_DREG16, RV16_REG16 } from './logic';
 import { CSR16F, ILL16, SYSDEC16, trapCause } from './system';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
@@ -194,7 +194,8 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
   const ctl = b.op(CTL16, [instrD], 'control');
   const imm = b.op(IMM16, [instrD], 'immediates');
   b.next();
-  const immD = b.op1(muxTree(2, 16), [`${imm}.i`, `${imm}.sb`, `${imm}.j`, `${imm}.u`, `${ctl}.isel`], 'imm');
+  // Without flushes there are no jumps: the J immediate is never selected.
+  const immD = choose4(b, [`${imm}.i`, `${imm}.sb`, o.flush ? `${imm}.j` : null, `${imm}.u`], `${ctl}.isel`, 'imm').y;
   const rf = b.op(RF8, ['', '', '', rs1D, rs2D, nclk], 'registers (written at the falling edge)');
   // Control word: rwe bimm alu[4] mwe wb[2] br jal jalr cond[2] valid + 1 spare = 16 bits.
   const cw = b.op1(merger([1, 1, 4, 1, 2, 1, 1, 1, 2, 1, 1], 2), [`${ctl}.rwe`, `${ctl}.bimm`, `${ctl}.alu`, `${ctl}.mwe`, `${ctl}.wb`, `${ctl}.br`, `${ctl}.jal`, `${ctl}.jalr`, `${f}.o0`, validD, predD], 'control word');
@@ -220,20 +221,19 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
   const bimmE = `${ce}.o1`, aluE = `${ce}.o2`, wbE = `${ce}.o4`, brE = `${ce}.o5`, jalE = `${ce}.o6`, jalrE = `${ce}.o7`, condE = `${ce}.o8`;
   const rdE = b.name(`${re}.o0`, 'rdE', true);
   b.next();
-  let a = r1E, bReg = r2E, fw = '', ma = '', mb = '';
+  let a = r1E, bReg = r2E, fw = '', fa: string[] = [], fb: string[] = [];
   if (o.fwd) {
     fw = b.op(FWD16, [`${re}.o1`, `${re}.o2`, '', '', '', ''], 'forwarding');
     b.next();
-    a = b.op1(muxTree(2, 16), [r1E, '', '', zero16, `${fw}.fa`], 'rs1 value');
-    bReg = b.op1(muxTree(2, 16), [r2E, '', '', zero16, `${fw}.fb`], 'rs2 value');
-    ma = inst(a);
-    mb = inst(bReg);
+    // fa / fb: 0 the register, 1 M's result, 2 W's value (never 3): three inputs on two 2:1 muxes.
+    ({ y: a, sinks: fa } = choose4(b, [r1E, '', '', null], `${fw}.fa`, 'rs1 value'));
+    ({ y: bReg, sinks: fb } = choose4(b, [r2E, '', '', null], `${fw}.fb`, 'rs2 value'));
     b.next();
   }
   const aE = b.name(a, 'aE', true), bE = b.name(bReg, 'bE', true);
   const bsrc = b.op1(MUX16, [bE, immE, bimmE], 'ALU b');
   b.next();
-  let yE = b.name(`${b.op(alu(16), [aE, bsrc, aluE], 'ALU')}.y`, 'yE', true);
+  let yE = b.name(`${b.op(RV16_ALU16, [aE, bsrc, aluE], 'ALU')}.y`, 'yE', true);
   // Without flushes the pipeline does not branch (its programs have no branches or jumps): no
   // comparator, no next PC, and no pc + 1 to write back for jal / jalr.
   let np = '', redirect = '', target = '';
@@ -295,7 +295,7 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
   // ---- E/M ----
   const yM = b.name(P(yE, one, 'rst', 'E/M ALU'), 'yM', true);
   const sdM = P(bE, one, 'rst', 'E/M store data');
-  const pc1M = np ? P(`${np}.pc1`, one, 'rst', 'E/M pc + 1') : zero16;
+  const pc1M = np ? P(`${np}.pc1`, one, 'rst', 'E/M pc + 1') : null;
   const immM = P(immE, one, 'rst', 'E/M imm');
   const cmM = P(cm, one, 'rst', 'E/M control');
   b.next();
@@ -304,8 +304,9 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
   const cmS = b.op(splitter([1, 1, 2, 3, 9], 2), [cmM], 'control (M)');
   const rweM = b.name(`${cmS}.o0`, 'rweM', true), rdM = b.name(`${cmS}.o3`, 'rdM', true);
   // M's result for forwarding (a load's value is not ready: the hazard unit keeps its users away).
-  const resM = o.fwd ? b.name(b.op1(muxTree(2, 16), [yM, yM, pc1M, immM, `${cmS}.o2`], 'result (M)'), 'resM', true) : '';
-  const valM = b.op1(muxTree(2, 16), [yM, 'drdata', pc1M, immM, `${cmS}.o2`], 'value (M)');
+  // Without jumps wb is never 2 (pc + 1); a load (wb = 1) forwards the ALU's value, which nothing reads.
+  const resM = o.fwd ? b.name(choose4(b, pc1M ? [yM, null, pc1M, immM] : [null, yM, null, immM], `${cmS}.o2`, 'result (M)').y, 'resM', true) : '';
+  const valM = choose4(b, [yM, 'drdata', pc1M, immM], `${cmS}.o2`, 'value (M)').y;
   const cw2 = b.op1(merger([1, 3, 12], 2), [rweM, rdM, b.op1(constWord(12, 0), [])], 'control (to W)');
   b.wire(yM, 'daddr');
   b.wire(sdM, 'dwdata');
@@ -331,10 +332,10 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
     b.wire(rweM, `${fw}.rweM`);
     b.wire(rdW, `${fw}.rdW`);
     b.wire(rweW, `${fw}.rweW`);
-    b.wire(resM, `${ma}.d1`);
-    b.wire(valW, `${ma}.d2`);
-    b.wire(resM, `${mb}.d1`);
-    b.wire(valW, `${mb}.d2`);
+    b.wire(resM, fa[1]);
+    b.wire(valW, fa[2]);
+    b.wire(resM, fb[1]);
+    b.wire(valW, fb[2]);
   }
   if (o.stall) {
     b.next();

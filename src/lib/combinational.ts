@@ -448,7 +448,17 @@ export const muxTree = memo((k: number, w: number, pitch: number = 2): Component
   // A one-level tree is just a bus multiplexer (ports a, b, s); keep d0/d1 naming via a tree only for k ≥ 2.
   if (k === 1 && pitch === 2) return muxTree1(w);
   const N = 2 ** k;
-  const m2 = busMux2(w);
+  return muxTreeOf(k, pitch, busMux2(w), `mux${N}x${w}${pitch !== 2 ? `_p${pitch}` : ''}`,
+    `Selects one of ${N} ${w}-bit inputs. A tree of ${N - 1} two-input multiplexers, ${k} levels deep.`);
+});
+
+/**
+ * A 2^k : 1 tree of a given 2:1 word multiplexer `m2` (ports a, b, s, y): muxTree with another cell (the
+ * campaign's shared-inverter mux). Not memoized: callers keep one object per parameter set.
+ */
+export function muxTreeOf(k: number, pitch: number, m2: ComponentDef, id: string, summary: string): ComponentDef {
+  const N = 2 ** k;
+  const w = m2.ports.find((p) => p.name === 'y')!.width;
   const mh = symbolGeom(m2).h;
   const rowP = Math.max(mh + 2, 8);
   const instances: InstanceDef[] = [{ name: 'ss', def: splitter(ones(k)), at: [2, N * rowP + 4] }];
@@ -477,8 +487,7 @@ export const muxTree = memo((k: number, w: number, pitch: number = 2): Component
   const pins: Record<string, [number, number]> = { s: [0, N * rowP + 4 + k] , y: [8 + k * 12 + 2, prev[0].y] };
   for (let j = 0; j < N; j++) pins[`d${j}`] = [1, yIn(j)];
   return define({
-    id: `mux${N}x${w}${pitch !== 2 ? `_p${pitch}` : ''}`, name: `${N}:1 multiplexer (${w}-bit)`, category: 'routing',
-    summary: `Selects one of ${N} ${w}-bit inputs. A tree of ${N - 1} two-input multiplexers, ${k} levels deep.`,
+    id, name: `${N}:1 multiplexer (${w}-bit)`, category: 'routing', summary,
     ports: [
       ...Array.from({ length: N }, (_, j): PortDef => ({ name: `d${j}`, width: w, dir: 'in' })),
       { name: 's', width: k, dir: 'in', side: 'bottom' },
@@ -488,7 +497,7 @@ export const muxTree = memo((k: number, w: number, pitch: number = 2): Component
     spec: (v) => [v[v[N]]],
     netlist: () => ({ pins, instances, nets }),
   });
-});
+}
 
 /** 2:1 word multiplexer with tree-style port names (d0, d1, s, y). */
 const muxTree1 = memo((w: number): ComponentDef => {

@@ -121,6 +121,30 @@ describe('every playable level', () => {
     expect(r.ok).toBe(true);
     expect(stars(measured(r.score), n.par)).toBe(3);
   });
+
+  // A part a level unlocks costs what its reference counts (docs/CAMPAIGN.md section 9): where the 49-NAND bus mux is
+  // unlocked, no reference holds the library's 64-NAND one or a tree of them, at any depth (memories aside: given).
+  it('hold no library 16-bit bus mux where the 49-NAND one is unlocked', () => {
+    const LIB16 = /^(mux2x16|mux2tree16|mux\d+x16(_p\d+)?)$/, MEMORY = /^(ram|sb_rom)/;
+    // Open items: fpu.ts builds its muxes in every width; o_dcore places o_div's divider, built where the part is locked.
+    const OPEN = ['o_dcore', 'o_fpadd', 'o_fpcvt', 'o_fpmul'];
+    const found = new Set<string>();
+    for (const n of playable) {
+      if (!libAllowed(ruleFor(n.id), 'rv16_mux16')) continue;
+      const chips = levelChallenge(n)!.answer();
+      const main = chips[chips.length - 1];
+      const top = new UserLibrary(workspace(main, ...chips.slice(0, -1))).compiled(main.id)!.def;
+      const seen = new Set<ComponentDef>();
+      const walk = (d: ComponentDef): void => {
+        if (seen.has(d) || MEMORY.test(d.id)) return;
+        seen.add(d);
+        if (LIB16.test(d.id)) found.add(n.id);
+        else if (d.netlist && !d.prim) for (const i of d.netlist().instances) walk(i.def);
+      };
+      walk(top);
+    }
+    expect([...found].sort()).toEqual(OPEN);
+  });
 });
 
 describe('the campaign rule in a check', () => {
