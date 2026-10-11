@@ -15,8 +15,8 @@ Merging deploys the site. Work from the branch's own worktree, never from the sh
    - `node node_modules/vitest/vitest.mjs run`
    - `node node_modules/typescript/bin/tsc --noEmit -p .`
    - `node node_modules/vite/bin/vite.js build`
-   - if `src/sim/svexport.ts`, `src/sim/vexport.ts`, `src/sim/verilog.ts`, `src/lib/multicore.ts` or
-     `src/lib/mpdecode.ts` changed: `node node_modules/vite-node/vite-node.mjs scripts/verify-export.ts all`
+   - if `src/sim/svexport.ts`, `src/sim/vexport.ts`, `src/sim/verilog.ts`, `src/lib/multicore.ts`,
+     `src/lib/mpdecode.ts` or `src/lib/system.ts` changed: `node node_modules/vite-node/vite-node.mjs scripts/verify-export.ts all`
      (needs `pip install yowasp-yosys`; say so if unavailable)
    - visual change: a light and a dark screenshot from `vite preview --port <free port> --strictPort`.
 4. **Push the branch** (`git push origin <branch>`).
