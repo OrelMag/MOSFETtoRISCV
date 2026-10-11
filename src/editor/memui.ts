@@ -21,6 +21,9 @@ import { registerPaletteGroup } from './palette';
 import { MAX_ROM_K } from './parts';
 import { registerPropsSection } from './props';
 import type { ProgramLang } from './program';
+import { ISA4_PRESET } from '../isa/presets';
+import { copyIsa, isaById, isaList } from './isaops';
+import { openIsaEditor } from './isaui';
 import { virtualRows } from './vlist';
 
 /** Each program language: its name, the code editor's highlighter, and the ROM shape it needs (RV16 and the
@@ -30,7 +33,12 @@ const LANGS: Record<ProgramLang, { name: string; code: CodeLang; shape: Partial<
   rv16: { name: 'RV16 assembly', code: 'rv16asm', shape: { w: 16, addr: 'word' } },
   cpu4: { name: '4-bit CPU assembly', code: 'cpu4asm', shape: { w: 16, addr: 'word' } },
   hex: { name: 'hex words', code: 'hex', shape: {} },
+  isa: { name: 'custom instruction set', code: 'hex', shape: { addr: 'word' } },
 };
+
+/** A ROM's highlighter and language name: a custom instruction set's from its table. */
+const codeOf = (r: Pick<RomRef, 'lang' | 'isa'>): CodeLang => (r.lang === 'isa' && r.isa ? { table: r.isa } : LANGS[r.lang].code);
+const langName = (r: Pick<RomRef, 'lang' | 'isa'>) => (r.lang === 'isa' && r.isa ? r.isa.name : LANGS[r.lang].name);
 
 // ---- palette -------------------------------------------------------------------------------
 
@@ -168,11 +176,7 @@ registerPropsSection({
       row('Width', width, r.addr === 'rv32' ? 'Byte addressing reads 32-bit instructions' : 'Bits per word'),
       row('Address', select(r.addr, [['word', 'word index'], ['rv32', 'byte (RV32 PC)']], (addr) => set(addr === 'rv32' ? { addr, w: 32 } : { addr }), 'Addressing'),
         'word: addr is the word number (k bits). byte: a 32-bit address like a PC, word = addr / 4'),
-      row('Language', select(r.lang, (['asm', 'rv16', 'cpu4', 'hex'] as const).map((l): [ProgramLang, string] => [l, LANGS[l].name]), (lang) => {
-        const src = convertProgram(r.src, lang, r.lang);
-        const shape = lang === 'asm' ? {} : LANGS[lang].shape;
-        set(src === null ? { lang, ...shape } : { lang, src, ...shape });
-      }, 'Language'), 'Switching converts the program when it builds (RV16, 4-bit CPU: 16-bit words, word addressed)'),
+      row('Language', languageSelect(ed, id, r, set), 'Switching converts the program when it builds (RV16, 4-bit CPU: 16-bit words, word addressed; a custom instruction set: its word width)'),
       row('Sample', sample),
       status,
       h('div', { class: 'sb-btns' }, h('button', { class: 'btn sm primary', title: 'Edit the program with a live listing', onclick: () => openProgramEditor(ed, id) }, icon('code', 14), 'Edit program…')),
@@ -189,11 +193,54 @@ registerPropsSection({
       now.replaceChildren(i === null
         ? h('span', null, 'Address unknown (not connected or X)')
         : h('span', null, 'Reading ', h('b', null, r.addr === 'rv32' ? `0x${(4 * i).toString(16).padStart(4, '0')}` : `[${i}]`), ' → ',
-          h('code', null, !l ? (r.addr === 'rv32' ? 'nop (fill)' : '0 (fill)') : r.w === 32 || r.lang === 'cpu4' ? l.text : `0x${(l.word >>> 0).toString(16).padStart(r.w / 4, '0')}`)));
+          h('code', null, !l ? (r.addr === 'rv32' ? 'nop (fill)' : '0 (fill)') : r.w === 32 || r.lang === 'cpu4' || r.lang === 'isa' ? l.text : `0x${(l.word >>> 0).toString(16).padStart(r.w / 4, '0')}`)));
     });
     return out;
   },
 });
+
+/** A ROM's Language: the built-in languages, the workspace's instruction sets, and the ISA editor. */
+function languageSelect(ed: Editor, partId: string, r: RomRef, set: (patch: Partial<RomRef>) => void): HTMLSelectElement {
+  const cur = r.lang === 'isa' && r.isa ? `isa:${r.isa.id}` : r.lang;
+  const isas = isaList(ed.ws);
+  const sel = h('select', { 'aria-label': 'Language' },
+    (['asm', 'rv16', 'cpu4', 'hex'] as const).map((l) => h('option', { value: l, selected: cur === l }, LANGS[l].name)),
+    isas.length ? h('optgroup', { label: 'Instruction sets' }, isas.map((d) => h('option', { value: `isa:${d.id}`, selected: cur === `isa:${d.id}` }, d.name))) : null,
+    h('optgroup', { label: 'Custom ISA' },
+      r.lang === 'isa' && r.isa ? h('option', { value: '__edit' }, `Edit ${r.isa.name}…`) : null,
+      h('option', { value: '__new' }, 'New instruction set…'))) as HTMLSelectElement;
+  sel.addEventListener('change', () => {
+    const v = sel.value;
+    sel.value = cur;
+    if (v === '__edit' && r.isa) return openIsaEditor(ed, r.isa.id);
+    if (v === '__new') {
+      // A copy of the 4-bit preset, used by this ROM at once, opened for editing.
+      const from = r.lang === 'isa' && r.isa ? r.isa : ISA4_PRESET;
+      let made = '';
+      ed.editWs((ws) => {
+        const c = copyIsa(ws, from, r.lang === 'isa' ? undefined : 'My instruction set');
+        made = c.id;
+        const doc = c.ws.isas![c.id];
+        const chip = c.ws.chips[ed.chipId];
+        const parts = chip.parts.map((p) => (p.id === partId && 'rom' in p.ref ? { ...p, ref: { rom: { ...p.ref.rom, lang: 'isa' as const, isa: doc, w: doc.wordBits, addr: 'word' as const } } } : p));
+        return { ...c.ws, chips: { ...c.ws.chips, [ed.chipId]: { ...chip, parts } } };
+      });
+      return openIsaEditor(ed, made);
+    }
+    if (v.startsWith('isa:')) {
+      const doc = isaById(ed.ws, v.slice(4));
+      if (!doc) return;
+      const src = r.lang === 'hex' || r.lang === 'isa' ? convertProgram(r.src, 'isa', r.lang, r.lang === 'hex' ? doc : r.isa) : null;
+      // From another table, the text stays: the same mnemonics may still assemble.
+      return set({ lang: 'isa', isa: doc, w: doc.wordBits, addr: 'word', ...(src !== null && r.lang === 'hex' ? { src } : {}) });
+    }
+    const lang = v as ProgramLang;
+    const src = convertProgram(r.src, lang, r.lang, r.lang === 'isa' ? r.isa : undefined);
+    const shape = lang === 'asm' ? {} : LANGS[lang].shape;
+    set(src === null ? { lang, ...shape, isa: undefined } : { lang, src, ...shape, isa: undefined });
+  });
+  return sel;
+}
 
 // ---- the program editor --------------------------------------------------------------------
 
@@ -213,7 +260,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
   let img = romImage(applied);
   /** Row shown as current (undefined: redraw on the next frame). */
   let cur: number | null | undefined;
-  const ce = codeEditor({ value: applied.src, lang: LANGS[applied.lang].code, rows: 24, onChange: () => schedule() });
+  const ce = codeEditor({ value: applied.src, lang: codeOf(applied), rows: 24, onChange: () => schedule() });
 
   const rebuild = () => {
     img = romImage({ ...applied, src: ce.value });
@@ -266,7 +313,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
   };
 
   const title = h('h3', null, icon('code', 16), `Program · ${partId}`,
-    h('small', null, `${2 ** applied.k} × ${applied.w} bits · ${applied.addr === 'rv32' ? 'byte addressed' : 'word addressed'} · ${LANGS[applied.lang].name}`));
+    h('small', null, `${2 ** applied.k} × ${applied.w} bits · ${applied.addr === 'rv32' ? 'byte addressed' : 'word addressed'} · ${langName(applied)}`));
   const ov = h('div', { class: 'sb-help sb-rom-dlg', role: 'dialog', 'aria-label': `Program of ${partId}` },
     h('div', { class: 'panel' },
       h('div', { class: 'sb-help-head' }, title, h('button', { class: 'btn ghost icon-only', 'aria-label': 'Cancel', title: 'Cancel (Esc)', onclick: cancel }, icon('close', 16))),
