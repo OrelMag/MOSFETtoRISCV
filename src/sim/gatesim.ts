@@ -34,6 +34,11 @@ export class GateSim implements Sim {
   unstable = false;
   evaluations = 0;
   onTrace?: (net: number, value: Bit, time: number) => void;
+  /**
+   * Per net, its 0 ↔ 1 transitions since countToggles() (glitches included; changes to or from X are
+   * not counted): the switching activity a power estimate needs (sim/power.ts). Null while not counting.
+   */
+  toggles: Uint32Array | null = null;
 
   private val: Uint8Array;
   private proj: Uint8Array;
@@ -173,6 +178,11 @@ export class GateSim implements Sim {
     const b = nets.map((_, i) => (bits[i] === B0 || bits[i] === B1 ? bits[i] : BX) as Bit);
     this.inputs.set(port, b);
     nets.forEach((net, i) => this.force(net, b[i]));
+  }
+
+  /** Start counting toggles from zero (or stop: false). */
+  countToggles(on = true): void {
+    this.toggles = on ? new Uint32Array(this.design.netCount) : null;
   }
 
   watch(nets: readonly number[]): void {
@@ -431,12 +441,15 @@ export class GateSim implements Sim {
     const { val, fanStart, fanList, dirtyMark, dq, watched } = this;
     const cap = dq.length;
     const trace = this.anyWatched ? this.onTrace : undefined;
+    const tog = this.toggles;
     let len = this.dLen, tail = this.dHead + len;
     if (tail >= cap) tail -= cap;
     for (let i = 0; i < n; i++) {
       const net = nets[i], b = vals[i];
-      if (val[net] === b) continue;
+      const old = val[net];
+      if (old === b) continue;
       val[net] = b;
+      if (tog !== null && (old | b) === 1) tog[net]++;
       if (trace && watched[net]) trace(net, b as Bit, t);
       for (let f = fanStart[net], e = fanStart[net + 1]; f < e; f++) {
         const li = fanList[f];
@@ -491,8 +504,10 @@ export class GateSim implements Sim {
   }
 
   private apply(net: number, b: Bit): void {
-    if (this.val[net] === b) return;
+    const old = this.val[net];
+    if (old === b) return;
     this.val[net] = b;
+    if (this.toggles !== null && (old | b) === 1) this.toggles[net]++;
     if (this.watched[net] && this.onTrace) this.onTrace(net, b, this.time);
     for (let i = this.fanStart[net]; i < this.fanStart[net + 1]; i++) this.markDirty(this.fanList[i]);
   }
