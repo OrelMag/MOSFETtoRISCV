@@ -150,3 +150,12 @@ export function hasPuzzlePorts(root: HierNode): boolean {
   for (const c of root.children?.values() ?? []) if (puzzlePortOf(c.def) || hasPuzzlePorts(c)) return true;
   return false;
 }
+
+/**
+ * Why a CPU drawer's golden model sits out on a puzzle chip: the program reads PUZZLE IN, which no golden
+ * model has, so the puzzle's tests check it instead (Check, the test player).
+ */
+export const PUZZLE_NO_GOLDEN = 'a puzzle chip reads PUZZLE IN, which the golden model does not have: Check and the test player check it';
+
+/** Does a simulation hold a puzzle port (the monitors' golden models sit out)? */
+export const simHasPuzzlePorts = (sim: Sim | null): boolean => !!sim && hasPuzzlePorts(sim.design.root);

@@ -80,6 +80,7 @@ const ICONS: Record<string, string> = {
   redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/>',
   sidebar: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
   flag: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
+  puzzle: '<path d="M4 7h4V5.5a2 2 0 1 1 4 0V7h4v4h1.5a2 2 0 1 1 0 4H16v4h-4v-1.5a2 2 0 1 0-4 0V19H4z"/>',
   keyboard: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/>',
 };
 

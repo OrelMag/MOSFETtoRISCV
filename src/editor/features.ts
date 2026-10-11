@@ -19,3 +19,5 @@ import './analysis';
 import './cpuui';
 // Consoles, switch banks and screens: their property sections and the Screens drawer.
 import './ioui';
+// Program puzzles: the Puzzles drawer, the start dialog and the strip while a puzzle chip is open.
+import './puzzleui';

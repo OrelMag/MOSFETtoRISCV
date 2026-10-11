@@ -4,6 +4,7 @@
 // TEST pin and the switches the hardware sampled, and every register is compared after it.
 
 import { decode4, disasm4 } from '../isa4/isa4';
+import { PUZZLE_NO_GOLDEN, simHasPuzzlePorts } from './puzzleparts';
 import { Iss4 } from '../isa4/iss4';
 import { CPU4_STATE } from '../lib/cpu4';
 import type { HierNode } from '../sim/flatten';
@@ -123,8 +124,8 @@ export class Cpu4Monitor {
     this.log.length = 0;
     this.seq++;
     this.synced = this.es.cycles === 0;
-    this.iss = this.desc && this.prog ? new Iss4(this.prog) : null;
-    this.problem = !this.desc ? 'no ROM in 4-bit assembly' : !this.prog ? `the program in ROM '${this.desc.rom}' does not build` : null;
+    this.problem = !this.desc ? 'no ROM in 4-bit assembly' : !this.prog ? `the program in ROM '${this.desc.rom}' does not build` : simHasPuzzlePorts(this.es.sim) ? PUZZLE_NO_GOLDEN : null;
+    this.iss = this.desc && this.prog && !this.problem ? new Iss4(this.prog) : null;
   }
 
   /** A node of the hierarchy by dotted path (cached per build). */

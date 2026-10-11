@@ -221,6 +221,7 @@
 .ed-kbd-char { font: 700 1.05px var(--font-mono); fill: var(--bus-label-text); }
 .ed-kbd-char.dim { fill: var(--sym-stroke); opacity: 0.45; }
 .ed-kbd-n { font: 600 0.62px var(--font-mono); fill: var(--sym-stroke); }
+.ed-pz-text { font: 600 0.7px var(--font-mono); fill: var(--sym-stroke); opacity: 0.8; }
 .sb-keys { font: 600 11px var(--font-mono); color: var(--text-2); }
 .sb-keyfield { cursor: pointer; }
 .sb-keyfield:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }

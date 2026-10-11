@@ -129,14 +129,14 @@ export const PUZZLES: Puzzle[] = [
   },
   {
     id: 'divide', title: 'Divide', group: 'arithmetic', short: 'quotient and remainder',
-    brief: 'Read <i>a</i> (0 … 255) and <i>b</i> (1 … 255) and write <i>a</i> / <i>b</i> (rounded down), then <i>a</i> mod <i>b</i>.',
+    brief: 'Read <i>a</i> (0 … 255) and <i>b</i> (1 … 255) and write <i>a</i> / <i>b</i> (rounded down), then <i>a</i> mod <i>b</i>. Repeated subtraction works but takes up to 255 rounds; long division (shift and subtract, one quotient bit per round) takes 8.',
     bits: 8, maxCycles: 20000,
     tests: () => [[7, 2], [0, 5], [255, 1], [255, 255], [100, 7], [9, 10]].map(([a, b]) => ({ name: `${a} / ${b}`, input: [a, b], expect: [Math.floor(a / b), a % b] })),
     pseudo: 'a ← IN; b ← IN\nq ← 0\nwhile a ≥ b:\n  a ← a − b\n  q ← q + 1\nOUT ← q\nOUT ← a\nhalt',
   },
   {
     id: 'gcd', title: 'GCD', group: 'arithmetic', short: 'greatest common divisor',
-    brief: 'Read <i>a</i> and <i>b</i> (1 … 255) and write their greatest common divisor. Euclid\'s way needs no division: subtract the smaller from the larger until they are equal.',
+    brief: 'Read <i>a</i> and <i>b</i> (1 … 255) and write their greatest common divisor. Euclid\'s way needs no division: subtract the smaller from the larger until they are equal. That is slow when one is much smaller than the other (gcd(255, 1) takes 254 rounds); the references use faster ways (remainders, or Stein\'s binary GCD).',
     bits: 8, maxCycles: 20000,
     tests: () => [[12, 18], [7, 5], [100, 75], [255, 1], [36, 36], [233, 144]].map(([a, b]) => ({ name: `gcd(${a}, ${b})`, input: [a, b], expect: [gcd(a, b)] })),
     pseudo: 'a ← IN; b ← IN\nwhile a ≠ b:\n  if a > b: a ← a − b\n  else: b ← b − a\nOUT ← a\nhalt',
@@ -154,7 +154,7 @@ export const PUZZLES: Puzzle[] = [
   },
   {
     id: 'decimal', title: 'Print decimal', group: 'text', short: 'a number as ASCII digits',
-    brief: 'Read <i>n</i> (0 … 255) and write its decimal digits to OUT as ASCII characters (\'0\' is 48), without leading zeros: 7 → "7", 205 → "205". No divide instruction needed: subtract 100s, then 10s.',
+    brief: 'Read <i>n</i> (0 … 255) and write its decimal digits to OUT as ASCII characters (\'0\' is 48), without leading zeros: 7 → "7", 205 → "205". No divide instruction needed: subtract 100s, then 10s (or something faster).',
     bits: 8, maxCycles: 8000,
     tests: () => [0, 7, 10, 99, 100, 205, 255].map((n) => ({ name: `n = ${n}`, input: [n], expect: [...String(n)].map((c) => c.charCodeAt(0)) })),
     pseudo: 'n ← IN\nh ← 0; while n ≥ 100: n ← n − 100; h ← h + 1\nt ← 0; while n ≥ 10: n ← n − 10; t ← t + 1\nif h ≠ 0: OUT ← 48 + h\nif h ≠ 0 or t ≠ 0: OUT ← 48 + t\nOUT ← 48 + n\nhalt',

@@ -81,7 +81,7 @@ const RAM32_REF: PartRef = { ram: { k: 6, w: 32 } };
 const CLK: PortDef = { name: 'clk', width: 1, dir: 'in', clock: true };
 
 /** The netlist of a puzzle computer around `rom` (the ROM part's own def). */
-function computerDef(cpu: RefCpu, rom: ComponentDef): ComponentDef {
+function computerDef(cpu: RefCpu, rom: ComponentDef, core16?: ComponentDef): ComponentDef {
   const halt = must(partDef(HALT_REF, () => undefined));
   const b = new Builder(10, 12, 6);
   b.pins('clk');
@@ -119,7 +119,11 @@ function computerDef(cpu: RefCpu, rom: ComponentDef): ComponentDef {
     b.op(puzzleOut(4), [a, c('wrr'), 'clk'], 'puzzle out', 'pzout');
   } else if (cpu === 'rv16') {
     const ram = must(partDef(RAM16_REF, () => undefined));
-    const core = b.op(RV16_CORE, ['clk', b.op1(TIE0, [], 'no reset'), '', ''], 'RV16 core', 'cpu');
+    // By port name: a learner's core (campaign) may order its pins its own way, and a system core has irq.
+    const core = b.add(core16 ?? RV16_CORE, core16 ? 'your core' : 'RV16 core', 'cpu');
+    b.wire('clk', `${core}.clk`);
+    b.wire(b.op1(TIE0, [], 'no reset'), `${core}.rst`);
+    if ((core16 ?? RV16_CORE).ports.some((p) => p.name === 'irq' && p.dir === 'in')) b.wire(b.op1(TIE0, [], 'no interrupt'), `${core}.irq`);
     const daddr = b.name(`${core}.daddr`, 'daddr', true), dw = b.name(`${core}.dwdata`, 'dwdata', true), dwe = b.name(`${core}.dwe`, 'dwe', true);
     b.next();
     const ps = b.op(splitter([PUZZLE_ROM_K, 16 - PUZZLE_ROM_K], 4), [`${core}.pc`], 'pc');
@@ -179,17 +183,21 @@ function computerDef(cpu: RefCpu, rom: ComponentDef): ComponentDef {
   };
 }
 
-/** A ready-wired puzzle computer as a chip document, its ROM holding `src`. */
-export function computerChip(cpu: RefCpu, id: string, name: string, src: string): ChipDoc {
+/**
+ * A ready-wired puzzle computer as a chip document, its ROM holding `src`. RV16: `core` puts a learner's
+ * single-cycle core (a campaign level's chip, compiled as `def`) in place of the library's.
+ */
+export function computerChip(cpu: RefCpu, id: string, name: string, src: string, core?: { def: ComponentDef; chip: string }): ChipDoc {
   const romRef = romRefOf(cpu, src);
   const rom = must(partDef(romRef, () => undefined));
   const halt = must(partDef(HALT_REF, () => undefined));
   const ram16 = must(partDef(RAM16_REF, () => undefined)), ram32 = must(partDef(RAM32_REF, () => undefined));
-  const def = computerDef(cpu, rom);
+  const def = computerDef(cpu, rom, cpu === 'rv16' ? core?.def : undefined);
   const doc = must(docFromDef(def, {
     id, name,
     refOf: (d) => {
       if (d === rom) return romRef;
+      if (core && d === core.def) return { chip: core.chip };
       if (d === halt) return HALT_REF;
       if (d === ram16) return RAM16_REF;
       if (d === ram32) return RAM32_REF;
