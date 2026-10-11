@@ -25,7 +25,7 @@ import { PalettePanel, toggleFavorite } from './palette';
 import { isError, keyLabel, partDef } from './parts';
 import { MAIN_PROJECT, projectKey, readProjects, touchProject } from './projects';
 import { PropsPanel } from './props';
-import { EditorSim, HZ_STEPS, type RunMode } from './runtime';
+import { AUTO_HZ, EditorSim, HZ_STEPS, type RunMode } from './runtime';
 import { activeChip, closeChip, keepVolatile, newChip, openChip, setPinValue } from './session';
 import { loadWorkspace, saveWorkspace } from './store';
 import { Tools } from './tools';
@@ -521,8 +521,19 @@ export class Editor {
       this.view.setDiags(this.diags);
       this.props.update(true);
     }
+    this.autoClock();
     this.repaint();
     this.simListeners.forEach((f) => f());
+  }
+
+  /** A rate picked in the run bar: the automatic clock starts at it rather than AUTO_HZ. */
+  private rateChosen = false;
+
+  /** settings.autoClock: a clocked chip starts running the first time it is simulated (EditorSim.autoStart). */
+  private autoClock(): void {
+    const sim = this.sim;
+    if (!settings.autoClock || sim.autoTried || !sim.autoStart(this.rateChosen ? sim.hz : AUTO_HZ)) return;
+    if (this.rateSel && sim.mode === 'cycle') this.rateSel.value = String(sim.hz);
   }
 
   /** Called after every repaint (live views over the simulation: look inside, inspector). */
@@ -668,7 +679,7 @@ export class Editor {
     if (sim.mode === 'cycle') {
       this.rateSel = h('select', { 'aria-label': 'Clock rate', title: 'Clock rate' },
         HZ_STEPS.map((hz) => h('option', { value: String(hz), selected: hz === sim.hz }, Number.isFinite(hz) ? `${hz >= 1000 ? `${hz / 1000} k` : hz} Hz` : 'max'))) as HTMLSelectElement;
-      this.rateSel.addEventListener('change', () => { sim.hz = Number(this.rateSel.value); });
+      this.rateSel.addEventListener('change', () => { sim.hz = Number(this.rateSel.value); this.rateChosen = true; });
     } else {
       this.rateSel = h('select', { 'aria-label': 'Gate delays per second', title: 'Gate delays per second' },
         [1, 2, 4, 8, 12, 25, 50, 100].map((v) => h('option', { value: String(v), selected: v === settings.speed }, `${v} delays/s`))) as HTMLSelectElement;

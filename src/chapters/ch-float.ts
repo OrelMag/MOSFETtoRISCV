@@ -153,7 +153,7 @@ export const chFloat: Chapter = {
         2 bits per clock with no carry chain in the loop, at the price of a quotient-digit table. float32: 27 steps, <strong>29 cycles</strong>,
         10 300 NANDs (6 100 of them normalize &amp; round, 2 300 the two prenormalizers); the step loop is 58 NAND delays.</p>
         <div class="try">1.0 / 3.0 in the 8-bit format: start = 1. Pulse the clock 8 times: q fills from the right, then done = 1 and y = 0x2B (1.011₂ × 2<sup>−2</sup> = 0.34375, rounded up: NX). Try b = 0 (1 / 0 = ∞, DZ).</div>`,
-      scene: () => ({ root: fpDiv(E4M3), inputs: { a: 0x38, b: 0x44, rm: 0, start: 1, clk: 0 } }),
+      scene: () => ({ root: fpDiv(E4M3), inputs: { a: 0x38, b: 0x44, rm: 0, start: 1, clk: 0 }, autoClock: false }),
       challenge: {
         kind: 'reach', goal: 'Clock the divider until done = 1 with y = 0x2B (1 / 3, rounded to nearest).',
         check: (st) => st.value('done') === 1 && st.value('y') === 0x2b,
@@ -172,7 +172,7 @@ export const chFloat: Chapter = {
         always agree. float32: 26 steps, <strong>28 cycles</strong>, 9 200 NANDs. Real FPUs share one SRT unit between division and square root;
         here they are two transparent boxes.</p>
         <div class="try">a = 0x40 (2.0): pulse the clock 7 times. y = 0x3B (1.011₂ = 1.375, with NX): √2 = 1.0110101…₂ rounds down. Try rm = 3 (RUP): 0x3C.</div>`,
-      scene: () => ({ root: fpSqrt(E4M3), inputs: { a: 0x40, rm: 0, start: 1, clk: 0 } }),
+      scene: () => ({ root: fpSqrt(E4M3), inputs: { a: 0x40, rm: 0, start: 1, clk: 0 }, autoClock: false }),
       challenge: {
         kind: 'quiz', question: 'Why can a correctly rounded square root never be an exact tie?',
         options: [

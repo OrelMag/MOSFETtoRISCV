@@ -107,6 +107,7 @@ export class TestReplay {
     const es = this.es;
     es.flush();
     if (es.running) es.pause();
+    es.autoTried = true; // the automatic clock must not start under the player
     this.saved = es.sim ? { sim: es.sim, state: es.sim.saveState() } : null;
     this.on = null;
   }

@@ -39,7 +39,7 @@ export const chMulDiv: Chapter = {
         <p>8 bits: 633 NANDs and 10 cycles (load, 8 steps, done), against 1 cycle for an array of about the same size (632 NANDs) at 8 bits; the array grows as n², the sequential unit as n. It is the multiply of
         microcontrollers without a hardware multiplier, done in software with the same loop.</p>
         <div class="try">start = 1 is set. Pulse the clock and watch p fill from the top as b drains out of the bottom.</div>`,
-      scene: () => ({ root: seqMul(8), inputs: { a: 13, b: 11, start: 1, clk: 0 } }),
+      scene: () => ({ root: seqMul(8), inputs: { a: 13, b: 11, start: 1, clk: 0 }, autoClock: false }),
       challenge: {
         kind: 'reach', goal: 'Clock the multiplier until done = 1, with p = 143 (13 × 11).',
         check: (st) => st.value('done') === 1 && st.value('p') === 143,
@@ -172,7 +172,7 @@ export const chMulDiv: Chapter = {
         <p>The tree is the slowest stage. A deeper pipeline would cut it in the middle; real cores use 3 to 5 multiplier stages and keep the
         integer pipeline busy with other instructions meanwhile.</p>
         <div class="try">Pulse the clock with new a and b each time: p shows the product of the operands from four edges earlier.</div>`,
-      scene: () => ({ root: pipeMul(8), inputs: { a: 12, b: 11, clk: 0 } }),
+      scene: () => ({ root: pipeMul(8), inputs: { a: 12, b: 11, clk: 0 }, autoClock: false }),
     },
     {
       title: 'Four ways to multiply',
@@ -217,7 +217,7 @@ export const chMulDiv: Chapter = {
         dividend: its top bit feeds the step, and the new quotient bit enters at the bottom. A counter stops after n steps.
         An 8-bit division takes 10 cycles: load, 8 steps, done.</p>
         <div class="try">start = 1 is already set. Pulse the clock and watch q fill up from the right, one bit per cycle.</div>`,
-      scene: () => ({ root: seqDivider(8), inputs: { a: 200, b: 7, start: 1, clk: 0 } }),
+      scene: () => ({ root: seqDivider(8), inputs: { a: 200, b: 7, start: 1, clk: 0 }, autoClock: false }),
       challenge: {
         kind: 'reach', goal: 'Clock the divider until done = 1, with q = 28 and r = 4 (200 / 7).',
         check: (st) => st.value('done') === 1 && st.value('q') === 28 && st.value('r') === 4,
@@ -261,7 +261,7 @@ export const chMulDiv: Chapter = {
         shifted. The quotient comes out as two words, the +1 digits and the −1 digits, and their difference is the answer. One carry-propagate
         addition at the end resolves the remainder; if it is negative, the usual correction applies; the remainder is shifted back.</p>
         <div class="try">start = 1 is set. Pulse the clock and watch the +1 and −1 digit registers fill (open the divider), then compare q and r.</div>`,
-      scene: () => ({ root: srtDivider(8), inputs: { a: 200, b: 7, start: 1, clk: 0 } }),
+      scene: () => ({ root: srtDivider(8), inputs: { a: 200, b: 7, start: 1, clk: 0 }, autoClock: false }),
       challenge: {
         kind: 'reach', goal: 'Clock the SRT divider until done = 1, with q = 28 and r = 4 (200 / 7).',
         check: (st) => st.value('done') === 1 && st.value('q') === 28 && st.value('r') === 4,
@@ -299,7 +299,7 @@ export const chMulDiv: Chapter = {
         <p>Each comparison stays in carry-save form: one 3:2 row computes s + c − m and an 8-bit adder gives its sign. A 32-bit division takes
         19 cycles of 44 NAND delays (836) against radix 2's 34 of 31 (1 054).</p>
         <div class="try">start = 1 is set. Pulse the clock: the quotient fills two bits at a time.</div>`,
-      scene: () => ({ root: srt4Divider(8), inputs: { a: 200, b: 7, start: 1, clk: 0 } }),
+      scene: () => ({ root: srt4Divider(8), inputs: { a: 200, b: 7, start: 1, clk: 0 }, autoClock: false }),
       challenge: {
         kind: 'reach', goal: 'Clock the radix-4 divider until done = 1, with q = 28 and r = 4.',
         check: (st) => st.value('done') === 1 && st.value('q') === 28 && st.value('r') === 4,
@@ -332,7 +332,7 @@ export const chMulDiv: Chapter = {
         iterative divider, and put the sign back: the quotient is negative if the signs differ (unless b = 0), and the remainder takes the dividend's sign.
         While a divide runs, <code>stall</code> holds the CPU for 33 extra cycles.</p>
         <div class="try">Set funct3 = 4 (div) and pulse until stall drops: −7 / 3 = −2 (0xFFFFFFFE).</div>`,
-      scene: () => ({ root: MDU, inputs: { a: 0xfffffff9, b: 3, funct3: 0, isM: 1, noTrap: 1, clk: 0 } }),
+      scene: () => ({ root: MDU, inputs: { a: 0xfffffff9, b: 3, funct3: 0, isM: 1, noTrap: 1, clk: 0 }, autoClock: false }),
     },
     {
       title: 'RV32IM',

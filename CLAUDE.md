@@ -313,7 +313,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  a keyboard drops its oldest key when `ack` reads 1 just before a rising edge, or once settled
                  without a clock); pokeLeaf (a switch flipped, a console / screen cleared); gate level is a DualSim
                  (cycle mode on the cycle engine, `engine`: which runs); FrameBudget: Run's per-frame simulation
-                 time adapts to keep ~60 fps ([2, 14] ms; an explicit budgetMs is fixed; the CPU drawer's Run to halt too)
+                 time adapts to keep ~60 fps ([2, 14] ms; an explicit budgetMs is fixed; the CPU drawer's Run to halt too);
+                 autoStart: settings.autoClock starts a clocked chip at AUTO_HZ (2) once, unless Run / Pause / Step / a
+                 clock click / a mode change came first (autoTried); never with a keyboard part (it would take the shortcuts)
   palette.ts     registerPaletteGroup + the palette panel (purist filter); a group's `folders` (My chips): sections
                  in folder order, empty ones too, renamed in place (double-click), drop targets for a dragged chip
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
@@ -669,7 +671,9 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
 A chapter is a list of steps. Each step has narrative HTML and either a `scene` (a root
 component, initial inputs, optional drill path, highlights, probes) or a `widget`, plus an
 optional `challenge`. Keep the prose short, concrete and honest. Introduce a component
-as a black box only after its inside has been shown. Say what each thing *costs*.
+as a black box only after its inside has been shown. A clocked scene starts running on load (settings.autoClock,
+2 Hz; Pulse / Step / Back / a hand-clocked edge pause it): give it `autoClock: false` when its exercise counts Pulses
+from the first state. Say what each thing *costs*.
 
 ## Major changes: mockup first
 
