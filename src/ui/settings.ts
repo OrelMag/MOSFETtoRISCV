@@ -29,6 +29,12 @@ interface State {
   wireFlow: boolean;
   /** Every net drawn in a hue of its own (brightness still shows the value); off by default. */
   netColors: boolean;
+  /** Vivid look (Turing Complete style, styles/vivid.css): filled bright parts, thicker wires. */
+  vivid: boolean;
+  /** With the vivid look: the circuit on a dark board in either theme (off: the theme's canvas). */
+  board: boolean;
+  /** The vivid look switched colour per net on (so switching it off turns that off again). */
+  vividNets: boolean;
   /** Codex terms in the chapters' prose are marked, their summary shown on hover. */
   glossary: boolean;
   /** Sandbox: new wires are simple connections, straight from point to point at any angle (off: horizontal and vertical legs). */
@@ -47,7 +53,7 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: false, glossary: true, simpleWires: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: false, vivid: false, board: true, vividNets: false, glossary: true, simpleWires: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {} };
 
 function load(): State {
   try {
@@ -75,14 +81,28 @@ export const settings = {
   get wide() { return state.wide; },
   get wireFlow() { return state.wireFlow; },
   get netColors() { return state.netColors; },
+  get vivid() { return state.vivid; },
+  get board() { return state.board; },
   get glossary() { return state.glossary; },
   get simpleWires() { return state.simpleWires; },
   get analyzer() { return state.analyzer; },
   get speed() { return state.speed; },
   get traceLevel() { return state.traceLevel; },
   get traceRate() { return state.traceRate; },
-  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'glossary' | 'simpleWires' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
+  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'glossary' | 'simpleWires' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
     state[k] = v;
+    // Colour per net set by hand: the vivid look no longer owns it.
+    if (k === 'netColors') state.vividNets = false;
+    save();
+    listeners.forEach((f) => f());
+  },
+  /** The vivid look on or off; on, it turns colour per net on too, and off again when it goes (unless set since). */
+  setVivid(on: boolean): void {
+    if (on === state.vivid) return;
+    state.vivid = on;
+    if (on && !state.netColors) { state.netColors = true; state.vividNets = true; }
+    else if (!on && state.vividNets) state.netColors = false;
+    if (!on) state.vividNets = false;
     save();
     listeners.forEach((f) => f());
   },
@@ -132,4 +152,8 @@ export function applyTheme(): void {
   else root.setAttribute('data-wireflow', 'off');
   if (state.netColors) root.setAttribute('data-netcolors', 'on');
   else root.removeAttribute('data-netcolors');
+  if (state.vivid) root.setAttribute('data-look', 'vivid');
+  else root.removeAttribute('data-look');
+  if (state.vivid && state.board) root.setAttribute('data-board', 'dark');
+  else root.removeAttribute('data-board');
 }

@@ -475,17 +475,17 @@ pre.code .num { color: var(--w1); }
 svg.schematic { font-family: var(--font-ui); user-select: none; }
 .grid-bg { pointer-events: all; }
 .grid-dot { fill: var(--grid); }
-.wire { fill: none; stroke: var(--w0); stroke-width: var(--wire-w0); stroke-dasharray: var(--wire-dash0); stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.12s; }
+.wire { fill: none; stroke: var(--w0); stroke-width: calc(var(--wire-w0) * var(--wire-k, 1)); stroke-dasharray: var(--wire-dash0); stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.12s; }
 .flow-front { pointer-events: none; }
 .flow-front.v1 { filter: drop-shadow(0 0 0.5px var(--w1)); }
-.wire.v1 { stroke: var(--w1); stroke-width: var(--wire-w1); stroke-dasharray: none; filter: var(--wire-glow); }
+.wire.v1 { stroke: var(--w1); stroke-width: calc(var(--wire-w1) * var(--wire-k, 1)); stroke-dasharray: none; filter: var(--wire-glow); }
 .wire.vx { stroke: var(--wx); stroke-dasharray: var(--wire-dash-x); }
 .wire.vz { stroke: var(--wz); stroke-dasharray: 0.25 0.35; }
-.wire.bus { stroke-width: var(--wire-bus); stroke: var(--bus); opacity: var(--bus0-opacity); stroke-dasharray: none; }
+.wire.bus { stroke-width: calc(var(--wire-bus) * var(--wire-k, 1)); stroke: var(--bus); opacity: var(--bus0-opacity); stroke-dasharray: none; }
 .wire.bus.bus1 { stroke: var(--bus1); opacity: 1; }
 .wire.bus.vx { stroke: var(--wx); opacity: 1; }
 /* Flowing bits (view/flow.ts): pellets on a 1-bit wire, an overlay per path; a bus's value rides it as tags (view/flowtokens.ts). */
-.wire-flow { fill: none; pointer-events: none; stroke: var(--flow1); stroke-width: calc(var(--wire-w1) * 0.5); stroke-linecap: butt; }
+.wire-flow { fill: none; pointer-events: none; stroke: var(--flow1); stroke-width: calc(var(--wire-w1) * var(--wire-k, 1) * 0.5); stroke-linecap: butt; }
 .flow-tokens { pointer-events: none; }
 .flow-token rect { fill: var(--bus1); stroke: var(--flow-token-edge); stroke-width: 0.07; }
 .flow-token text { font: 600 0.78px var(--font-mono); fill: var(--flow-token-text); }
@@ -559,7 +559,7 @@ svg.schematic.focus .inst.hl .hit { animation: none; fill: color-mix(in srgb, va
 .wire.net-hover { stroke-width: 0.5 !important; opacity: 1 !important; }
 .net-tag.net-hover rect { stroke-width: 0.25; stroke: var(--hl); }
 .wire-hit { fill: none; stroke: transparent; stroke-width: 0.9; pointer-events: stroke; cursor: pointer; }
-.wire.net-sel { stroke-width: calc(var(--wire-w1) + 0.22) !important; opacity: 1 !important; filter: drop-shadow(0 0 0.35px var(--sel)); }
+.wire.net-sel { stroke-width: calc(var(--wire-w1) * var(--wire-k, 1) + 0.22) !important; opacity: 1 !important; filter: drop-shadow(0 0 0.35px var(--sel)); }
 .net-tag.net-sel rect { stroke: var(--sel); stroke-width: 0.26; }
 .net-tag.net-sel text { fill: var(--text); }
 .net-tag.net-ping rect { animation: ping 0.3s ease-in-out 3; }
@@ -580,7 +580,7 @@ svg.schematic.focus .inst.hl .hit { animation: none; fill: color-mix(in srgb, va
 .fld-rs, .f-rs { --fc: var(--fld-rs); }
 .fld-fn, .f-fn { --fc: var(--fld-fn); }
 .fld-imm, .f-imm { --fc: var(--fld-imm); }
-svg.schematic .wire.fld { stroke: var(--fc); opacity: 1; stroke-dasharray: none; stroke-width: calc(var(--wire-bus) + 0.12); filter: drop-shadow(0 0 0.3px var(--fc)); }
+svg.schematic .wire.fld { stroke: var(--fc); opacity: 1; stroke-dasharray: none; stroke-width: calc(var(--wire-bus) * var(--wire-k, 1) + 0.12); filter: drop-shadow(0 0 0.3px var(--fc)); }
 svg.schematic .wire.fld.fld-off { stroke-dasharray: 0.5 0.35; opacity: 0.6; filter: none; }
 svg.schematic .dot.fld { fill: var(--fc); }
 .tap-label.fld rect { stroke: var(--fc); stroke-width: 0.1; fill: color-mix(in srgb, var(--fc) 16%, var(--surface)); }
