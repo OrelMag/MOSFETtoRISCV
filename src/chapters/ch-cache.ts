@@ -152,7 +152,7 @@ export const chCache: Chapter = {
         the line one word per cycle and writes the tag on the last one. Stores are <em>write-through</em> (memory is always current)
         with <em>no write-allocate</em> (a store miss does not fetch the line).</p>
         <div class="try">Address 0x24 is a load (re = 1) and misses. Pulse the clock 8 times and watch the counter, the line fill and hit rise.</div>`,
-      scene: () => ({ root: cachedMemory(6), inputs: { addr: 0x24, re: 1, we: 0, wd: 0, clk: 0 } }),
+      scene: () => ({ root: cachedMemory(6), inputs: { addr: 0x24, re: 1, we: 0, wd: 0, clk: 0 }, autoClock: false }),
       challenge: {
         kind: 'reach', goal: 'Get a hit for the load at 0x24, then a hit at 0x2C without any further clock pulse.',
         check: (st) => st.value('hit') === 1 && st.getInput('addr') === 0x2c && st.getInput('re') === 1,

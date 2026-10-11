@@ -21,6 +21,10 @@
 // before every rising clock edge, or, in a chip without a clock, whenever the logic has settled.
 // Switch banks, consoles and screens (ioparts.ts) keep their state in their leaves too: pokeLeaf
 // flips a switch; a reset puts the switches back where they were (the world outside).
+//
+// Automatic clock (settings.autoClock): a chip with a connected clock starts running at AUTO_HZ
+// the first time it is simulated (autoStart), unless the user already ran, stepped, paused or
+// clocked it by hand (autoTried), so a pause sticks across rebuilds and tab switches.
 
 import { DualSim } from '../sim/dualsim';
 import { flatten } from '../sim/flatten';
@@ -48,6 +52,9 @@ export interface EdgeHook {
 
 /** Clock rates offered in cycle mode (Infinity: as fast as the frame budget allows). */
 export const HZ_STEPS = [1, 2, 5, 10, 20, 50, 100, 1000, 10000, Infinity];
+
+/** The automatic clock's rate: slow enough to follow every edge. */
+export const AUTO_HZ = 2;
 
 export interface EditorSimOptions {
   /** Delay before a structural edit rebuilds the simulator (ms). */
@@ -130,6 +137,8 @@ export class EditorSim {
   cycles = 0;
   /** Power cycles so far: time restarts at 0 (a recording of the old time must start over). */
   resets = 0;
+  /** The automatic clock had its chance: started it, or the user ran, stepped, paused or clocked by hand first. */
+  autoTried = false;
   /** Clock rate actually achieved over the last second (cycle mode, running). */
   achievedHz = 0;
   /** Called whenever values on screen may have changed. */
@@ -483,6 +492,8 @@ export class EditorSim {
 
   /** A click on a clock pin: the next clock half period, by hand. */
   toggleClocks(): void {
+    if (this.running) this.pause();
+    this.autoTried = true;
     const sim = this.sim;
     const clks = this.clocks();
     if (!sim || !clks.length) return;
@@ -538,6 +549,7 @@ export class EditorSim {
    * Returns the cycles run.
    */
   runCycles(n: number, stop?: () => boolean, budgetMs = Infinity): number {
+    this.autoTried = true;
     this.flush();
     const sim = this.sim;
     const clks = this.clocks();
@@ -615,8 +627,10 @@ export class EditorSim {
     return this.haltHit;
   }
 
-  /** Step: one cycle (cycle mode) or one gate delay (gate mode). */
+  /** Step: one cycle (cycle mode) or one gate delay (gate mode); a running clock pauses first. */
   stepOnce(): void {
+    if (this.running) this.pause();
+    this.autoTried = true;
     this.flush();
     const sim = this.sim;
     if (!sim) return;
@@ -650,6 +664,7 @@ export class EditorSim {
   }
 
   setMode(m: RunMode): void {
+    this.autoTried = true;
     this.mode = m;
     this.due = 0;
     // gate mode steps one delay at a time: the event-driven engine (the cycle engine takes over again in cycle mode)
@@ -665,7 +680,20 @@ export class EditorSim {
     this.onChange();
   }
 
+  /**
+   * The automatic clock: start running at `hz` if this is the first chance (see autoTried) and the
+   * chip is simulated in cycle mode with a clock. Not while a halt part reads 1 (Run would stop at
+   * once), nor with a keyboard part (while running it takes the plain keys the editor's shortcuts use).
+   */
+  autoStart(hz = AUTO_HZ): boolean {
+    if (this.autoTried || this.running || !this.sim || this.mode !== 'cycle' || !this.hasClock || this.halted || this.hasKeyboard) return false;
+    this.hz = hz;
+    this.start();
+    return true;
+  }
+
   start(): void {
+    this.autoTried = true;
     if (this.running) return;
     this.running = true;
     this.lastFrame = now();
@@ -696,6 +724,7 @@ export class EditorSim {
   }
 
   pause(): void {
+    this.autoTried = true;
     this.running = false;
     cancelAnimationFrame(this.raf);
     this.achievedHz = 0;

@@ -78,7 +78,7 @@ export const chLatches: Chapter = {
         and the slave opens (showing it). This is the <strong>edge-triggered D flip-flop</strong>.</p>
         <div class="try">Change d while the clock is low: q does not move. Press <strong>Pulse</strong>: q
         takes d's value at the rising edge. Open the <strong>Timing</strong> panel to see it over time.</div>`,
-      scene: () => ({ root: DFF, inputs: { d: 1, clk: 0 } }),
+      scene: () => ({ root: DFF, inputs: { d: 1, clk: 0 }, autoClock: false }),
     },
     {
       title: 'Load enable',
@@ -102,7 +102,7 @@ export const chRegisters: Chapter = {
         <strong>register</strong>: a word of memory. A processor keeps its working values in registers (RISC-V has 32
         of them).</p>
         <div class="try">Type a value into d, set en = 1, then Pulse. Change d again with en = 0 and Pulse: q keeps the old word.</div>`,
-      scene: () => ({ root: register(4), inputs: { d: 0x5, en: 1, clk: 0 } }),
+      scene: () => ({ root: register(4), inputs: { d: 0x5, en: 1, clk: 0 }, autoClock: false }),
       challenge: {
         kind: 'reach', goal: 'Store 0xA in the register, then change d to something else.',
         check: (st) => st.value('q') === 0xa && st.getInput('d') !== 0xa,
@@ -143,7 +143,7 @@ export const chRegisters: Chapter = {
         <p>"Asynchronous" is the catch: releasing reset is itself an input change that can land right next to a clock edge. Real designs
         assert reset asynchronously but release it through a small synchronizer.</p>
         <div class="try">Clock a 1 in (d = 1, pulse), then pull rst_n low: q clears immediately, without a clock edge.</div>`,
-      scene: () => ({ root: DFF_R, inputs: { d: 1, clk: 0, rst_n: 1 } }),
+      scene: () => ({ root: DFF_R, inputs: { d: 1, clk: 0, rst_n: 1 }, autoClock: false }),
       challenge: {
         kind: 'reach', goal: 'Get q = 1 into the flip-flop, then clear it without touching the clock.',
         check: (st) => st.getInput('rst_n') === 0 && st.value('q') === 0 && st.getInput('d') === 1,
@@ -167,7 +167,7 @@ export const chRegisters: Chapter = {
         <p>Replace the incrementer with an adder/subtractor adding the constant 1, its <code>sub</code> input driven by NOT up, and add a
         multiplexer for a parallel load. Now the counter counts up or down, and can be preset: the shape of a timer that counts down to zero
         from a loaded value.</p>`,
-      scene: () => ({ root: upDownCounter(4), inputs: { up: 0, en: 1, load: 0, d: 5, clk: 0 } }),
+      scene: () => ({ root: upDownCounter(4), inputs: { up: 0, en: 1, load: 0, d: 5, clk: 0 }, autoClock: false }),
       challenge: {
         kind: 'reach', goal: 'Load 5, then count down to 2 and stop.',
         check: (st) => st.value('q') === 2 && st.getInput('en') === 0 && st.getInput('load') === 0,
@@ -183,7 +183,7 @@ export const chRegisters: Chapter = {
         stream into a parallel word; loaded in parallel and shifted, it does the reverse. That is the heart of every serial link: UART, SPI,
         PCIe lanes, the iterative multiplier and divider of chapter 20.</p>
         <div class="try">mode = 1 (shift right) with sr = 1: pulse four times and watch the ones march in from the top.</div>`,
-      scene: () => ({ root: shiftRegister(4), inputs: { mode: 1, sr: 1, sl: 0, d: 0, clk: 0 } }),
+      scene: () => ({ root: shiftRegister(4), inputs: { mode: 1, sr: 1, sl: 0, d: 0, clk: 0 }, autoClock: false }),
       challenge: {
         kind: 'reach', goal: 'Send the serial bits 1, 0, 1, 1 (first bit first) in at sr so that q = 0b1101 at the end.',
         check: (st) => st.value('q') === 0b1101 && st.getInput('mode') === 1,
@@ -242,7 +242,7 @@ export const chRegisters: Chapter = {
         the gates that make that transition.</p>
         <div class="try">Set x and pulse: 1, 0, 1. Watch the dashed arc move when you flip x before the edge.</div>`,
       scene: () => ({
-        root: DET101, inputs: { x: 1, rst: 0, clk: 0 },
+        root: DET101, inputs: { x: 1, rst: 0, clk: 0 }, autoClock: false,
         panels: [fsmPanel(DET101_FSM, { parts: true, ribbon: [{ label: 'x', path: 'x' }, { label: 'state', path: 'state' }, { label: 'y', path: 'y' }] })],
       }),
       challenge: {
@@ -349,7 +349,7 @@ export const chMemory: Chapter = {
         <p>The trick is one extra pointer bit. Equal pointers mean empty; same slot but different extra bit means the writer is a full lap ahead:
         full. Without it, full and empty would look the same.</p>
         <div class="try">push = 1: pulse with din = 0x11, 0x22, 0x33. Then push = 0, pop = 1: dout shows 0x11 first.</div>`,
-      scene: () => ({ root: fifo(2, 8), inputs: { push: 1, pop: 0, din: 0x11, clk: 0 } }),
+      scene: () => ({ root: fifo(2, 8), inputs: { push: 1, pop: 0, din: 0x11, clk: 0 }, autoClock: false }),
       challenge: {
         kind: 'reach', goal: 'Fill the FIFO until full = 1.',
         check: (st) => st.value('full') === 1,
@@ -363,7 +363,7 @@ export const chMemory: Chapter = {
         <p>Swap the queue's discipline for <strong>last-in first-out</strong> and one pointer is enough: the stack pointer counts the words held.
         Push writes at slot sp and increments it; pop decrements it; the top is slot sp − 1. Return-address predictors in CPUs are small stacks
         like this one; the program's call stack is the same idea kept in memory, with sp in a register (x2 in RISC-V).</p>`,
-      scene: () => ({ root: stack(2, 8), inputs: { push: 1, pop: 0, din: 0x0a, clk: 0 } }),
+      scene: () => ({ root: stack(2, 8), inputs: { push: 1, pop: 0, din: 0x0a, clk: 0 }, autoClock: false }),
       challenge: {
         kind: 'reach', goal: 'Push 0x0A then 0x0B, then pop once: the top should be 0x0A again.',
         check: (st) => st.value('top') === 0x0a && st.value('empty') === 0 && st.getInput('pop') === 1 && st.getInput('push') === 0,

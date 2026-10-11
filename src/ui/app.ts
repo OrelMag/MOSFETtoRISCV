@@ -101,8 +101,12 @@ export function startApp(root: HTMLElement): void {
   const glossItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('glossary', !settings.glossary) },
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Hover definitions'), h('small', null, 'Chapters: codex terms underlined, their summary on hover (from the next step on)')));
-  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), vividItem, boardItem, cartoonItem, modItem, flowItem, netItem, simpleItem, glossItem);
-  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections', 'aria-label': 'Wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections', 'aria-haspopup': 'menu' }, swatch());
+  // Automatic clock: chapter scenes, sandbox chips and campaign levels with a clock start running when opened.
+  const clockItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('autoClock', !settings.autoClock) },
+    h('span', { class: 'pal-flow-sw' }, h('i')),
+    h('span', null, h('b', null, 'Automatic clock'), h('small', null, 'A circuit with a clock starts running (2 Hz) when opened; Pulse, Step or Back pauses it')));
+  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), vividItem, boardItem, cartoonItem, modItem, flowItem, netItem, simpleItem, glossItem, clockItem);
+  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections, automatic clock', 'aria-label': 'Wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections, automatic clock', 'aria-haspopup': 'menu' }, swatch());
   palBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     palMenu.classList.toggle('open');
@@ -124,6 +128,7 @@ export function startApp(root: HTMLElement): void {
     netItem.setAttribute('aria-checked', String(settings.netColors));
     simpleItem.setAttribute('aria-checked', String(settings.simpleWires));
     glossItem.setAttribute('aria-checked', String(settings.glossary));
+    clockItem.setAttribute('aria-checked', String(settings.autoClock));
     for (const b of radix.querySelectorAll<HTMLButtonElement>('button')) b.classList.toggle('on', b.dataset.r === settings.radix);
     animate.classList.toggle('on', settings.animate);
     themeBtn.replaceChildren(icon(settings.theme === 'light' ? 'sun' : settings.theme === 'dark' ? 'moon' : 'auto', 18));

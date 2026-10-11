@@ -38,6 +38,8 @@ export interface Scene {
   animate?: boolean;
   /** Open the timing panel (logic analyzer) on load. */
   analyzer?: boolean;
+  /** false: the clock stays still on load whatever settings.autoClock says (an exercise counted in Pulses from the start). */
+  autoClock?: boolean;
 }
 
 export interface Widget {
@@ -59,6 +61,8 @@ const LEVEL_NAME: Record<string, string> = {
 
 /** Steps Back can undo (each a full copy of the simulation's state). */
 const HISTORY_MAX = 100;
+/** The stage's Run: one clock cycle every RUN_MS (2 Hz, slow enough to follow every edge). */
+const RUN_MS = 500;
 
 /** Panel state that Back restores together with the simulation (a golden model, a trace log). */
 export interface HistoryHook {
@@ -306,6 +310,7 @@ export class Stage {
     this.layoutDock();
     this.view.fit();
     this.refresh();
+    if (settings.autoClock && scene.autoClock !== false) this.startClock();
   }
 
   /** Navigate to a path of instance names from the root. */
@@ -442,7 +447,10 @@ export class Stage {
   toggleInput(port: string): void {
     this.checkpoint();
     const v = this.getInput(port) ? 0 : 1;
-    if (port === this.clockPort()) this.finishEdge(false);
+    if (port === this.clockPort()) {
+      this.stopClock();
+      this.finishEdge(false);
+    }
     const edge = v === 1 && port === this.clockPort();
     if (edge) {
       this.beforeEdge();
@@ -532,6 +540,7 @@ export class Stage {
   startEdge(): boolean {
     const clk = this.clockPort();
     if (!clk || !this.sim) return false;
+    this.stopClock();
     this.checkpoint();
     this.finishEdge(false);
     this.stopAnim();
@@ -558,8 +567,14 @@ export class Stage {
     if (refresh) this.refresh();
   }
 
-  /** One full clock cycle, then refresh (changed wires show a travelling front for flowMs). */
+  /** One full clock cycle by hand (a running clock pauses), then refresh (changed wires show a travelling front for flowMs). */
   pulse(flowMs = 0): void {
+    this.stopClock();
+    this.tick(flowMs);
+  }
+
+  /** One full clock cycle (the Run loop's, which keeps running). */
+  private tick(flowMs = 0): void {
     const clk = this.clockPort();
     if (!clk || !this.sim) return;
     this.checkpoint();
@@ -573,6 +588,7 @@ export class Stage {
   runCycles(n: number, stop?: () => boolean, flowMs = 0): number {
     const clk = this.clockPort();
     if (!clk || !this.sim) return 0;
+    this.stopClock();
     this.finishEdge(false);
     this.stopAnim();
     let i = 0;
@@ -700,14 +716,35 @@ export class Stage {
 
   /** Stop the stage's own Run (the CPU panel's slow mode takes over the clock). */
   stopClock(): void {
-    this.runBtn?.classList.remove('on');
     if (this.runClock) clearInterval(this.runClock);
     this.runClock = null;
+    this.syncRunBtn();
+  }
+
+  /** The stage's own Run: a full clock cycle every RUN_MS (the automatic clock starts it on load). */
+  startClock(): void {
+    if (this.runClock || !this.clockPort() || !this.sim || this.widget) return;
+    this.runClock = setInterval(() => this.tick(), RUN_MS);
+    this.syncRunBtn();
+  }
+
+  get clockRunning(): boolean {
+    return this.runClock !== null;
+  }
+
+  private syncRunBtn(): void {
+    const b = this.runBtn;
+    if (!b) return;
+    const on = !!this.runClock;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
+    b.replaceChildren(icon(on ? 'pause' : 'play', 14), on ? 'Pause' : 'Run');
   }
 
   /** Step one gate delay (works whether or not animation is on). */
   stepOnce(): void {
     if (!this.sim) return;
+    this.stopClock();
     this.checkpoint();
     this.stopAnim();
     if (!this.sim.step()) this.lastSettle = this.sim.time - this.changeStart;
@@ -773,6 +810,7 @@ export class Stage {
   private buildControls(): void {
     const c = this.controls;
     c.replaceChildren();
+    this.runBtn = null;
     const root = this.scene!.root;
     const ins = inPorts(root).filter((p) => !(this.scene!.hiddenInputs ?? []).includes(p.name));
     const clk = this.clockPort();
@@ -790,17 +828,10 @@ export class Stage {
     if (clk) {
       c.append(h('span', { class: 'label', style: 'margin-left:6px' }, 'Clock'));
       c.append(this.bitToggle(root.ports.find((q) => q.name === clk)!));
-      c.append(h('button', { class: 'btn sm', title: 'One full clock cycle', onclick: () => this.pulse() }, icon('clock', 14), 'Pulse'));
-      const run = this.runBtn = h('button', { class: 'btn sm toggle', title: 'Run the clock' }, icon('play', 14), 'Run');
-      run.addEventListener('click', () => {
-        if (this.runClock) {
-          this.stopClock();
-        } else {
-          this.runClock = setInterval(() => this.pulse(), 500);
-          run.classList.add('on');
-        }
-      });
-      c.append(run);
+      c.append(h('button', { class: 'btn sm', title: 'One full clock cycle (pauses a running clock)', onclick: () => this.pulse() }, icon('clock', 14), 'Pulse'));
+      this.runBtn = h('button', { class: 'btn sm toggle', title: `Run the clock (${1000 / RUN_MS} cycles per second) / pause it`, onclick: () => (this.runClock ? this.stopClock() : this.startClock()) }) as HTMLButtonElement;
+      this.syncRunBtn();
+      c.append(this.runBtn);
       if (this.sim?.runUntil) {
         const per = h('input', { type: 'text', inputmode: 'numeric', placeholder: 'settle', 'aria-label': 'Clock period in gate delays', value: this.period ?? '' }) as HTMLInputElement;
         per.addEventListener('change', () => {
