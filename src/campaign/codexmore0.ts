@@ -498,7 +498,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Choosing the encoding before writing the transitions: one-hot, or adjacent codes for frequent transitions, falls out of the table.',
     ],
     lib: 'rv16_det101',
-    chapters: [{ chapter: 'multicycle', step: 1, label: 'The state table' }, { chapter: 'multicycle', step: 2, label: 'Hardwired control' }],
+    chapters: [{ chapter: 'registers', step: 10, label: 'State machines' }, { chapter: 'multicycle', step: 1, label: 'The state table' }, { chapter: 'multicycle', step: 2, label: 'Hardwired control' }],
   },
   assembly: {
     idea: 'Assembly is machine code with names: one line per instruction, mnemonics for opcodes, ABI names for registers (a0, sp, ra), labels for addresses, and pseudo-instructions that expand to real ones (li, mv, j, call, ret, beqz). The assembler needs two passes because a branch may name a label further down. Pass 1 walks the source counting words to give every label an address, so each pseudo-instruction\'s size must be decided before its operands are known: li is one word when the value fits a 6-bit immediate or has its low 6 bits zero, else two. Pass 2 encodes each instruction, computing branch and jump offsets as target − pc and checking that they fit.<br>RV16 branch offsets are 6 bits (−32…31 words) and jal\'s 9 bits (−256…255): a loop longer than that closes with an inverted branch around a jump.',

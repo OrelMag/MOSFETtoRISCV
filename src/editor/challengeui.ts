@@ -30,6 +30,8 @@ import {
   ruleKind, solveChallenge, solvedKey, startChallenge,
 } from './challenges';
 import { dockPane, paneShown, showPane, undockPane } from './dock';
+import { fsmOf } from '../lib/fsms';
+import { readbackEl } from './fsmui';
 import { type Editor, registerToolbarAction } from './editor';
 import { type PaletteItem, registerPaletteGroup } from './palette';
 import { TestPlayer } from './testplayer';
@@ -337,7 +339,8 @@ class ChallengeUi {
       !this.player && r.tested && ch.check.kind !== 'custom'
         ? h('button', { class: 'btn sm ghost sb-chal-watch', 'data-chal': 'watch', title: 'Play the tests one by one on your circuit: step, scrub, jump to failures',
           onclick: () => this.openPlayer(ch, r, r.failed?.[0] ?? 0) }, icon('play', 12), r.ok ? 'Watch the tests' : 'Watch the failing test')
-        : null));
+        : null,
+      fsmOf(ch.fsm) ? h('button', { class: 'btn sm ghost', 'data-chal': 'states', title: 'Your circuit read back as a state machine, over the target diagram', onclick: () => this.showStates(ch) }, 'State diagram') : null));
     if (r.failures.length || r.restrictionViolations.length || !r.ok) el.append(this.problems(r, ch));
     const progs = this.programsEl(ch, r);
     if (progs) el.append(progs);
@@ -416,6 +419,7 @@ class ChallengeUi {
       ed.toast(first ? `Solved: ${ch.title}` : `Still passes: ${ch.title}`);
     }
     if (!r.ok) this.screen?.checked(r);
+    if (paneShown(ed, 'fsm-states')) this.showStates(ch);
     // A failure opens the player on the first failing test: the circuit shows it.
     if (!r.ok && r.failed?.length && ch.check.kind !== 'custom') this.openPlayer(ch, r, r.failed[0]);
     else this.render();
@@ -478,6 +482,19 @@ class ChallengeUi {
     dockPane(this.ed, { id: 'challenges', label: 'Challenges', icon: 'flag', el: this.drawer, width: 380 });
     this.renderList();
     this.drawer.querySelector<HTMLElement>('.sb-chal-item')?.focus();
+  }
+
+  /** The state-machine read-back drawer (a state-machine challenge): opened from the result, redrawn by Check. */
+  private showStates(ch: BuildChallenge): void {
+    const spec = fsmOf(ch.fsm);
+    if (!spec) return;
+    const close = () => undockPane(this.ed, 'fsm-states');
+    const c = this.ed.compiled;
+    const el = h('aside', { class: 'sb-drawer sb-fsm-drawer', 'aria-label': 'State diagram' },
+      h('div', { class: 'sb-drawer-head' }, icon('flag', 15), h('h3', null, `${spec.title}: your circuit`),
+        h('button', { class: 'btn ghost icon-only', title: 'Close', 'aria-label': 'Close the state diagram', onclick: close }, icon('close', 15))),
+      readbackEl(spec, c?.def, c?.mode === 'switch' ? 'switch' : 'gate'));
+    dockPane(this.ed, { id: 'fsm-states', label: 'States', icon: 'flag', el, width: 460 });
   }
 
   private closeList(): void {

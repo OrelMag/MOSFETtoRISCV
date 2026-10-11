@@ -1034,7 +1034,8 @@ export class Stage {
 
   /** Bottom-left panels sit beside the right dock: side by side when they fit, else stacked, each
    *  shrinking and scrolling. Several scenes combine two of them (I/O or pipeline + static timing). */
-  private layoutDock(): void {
+  /** Lay the bottom-left panels out again (a panel that changes size calls it). */
+  layoutDock(): void {
     const panels = [...this.dock.children] as HTMLElement[];
     if (!panels.length) return;
     const inset = this.view.insetRight;

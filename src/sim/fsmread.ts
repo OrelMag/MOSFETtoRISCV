@@ -164,6 +164,11 @@ export function readbackSpec(spec: FsmSpec, r: FsmReadback): FsmSpec {
       add(a.from, a.to, sa?.label ?? label(a.inp, a.out), undefined, like(a.from, a.to));
       continue;
     }
+    // Right state, wrong output: one red arc saying both (an expected arc would lie on top of it).
+    if (a.specTo >= 0 && r.states[a.to].spec === a.specTo) {
+      add(a.from, a.to, `${label(a.inp, a.out)} (want ${label(a.inp, a.specOut)})`, 'bad', like(a.from, a.to));
+      continue;
+    }
     add(a.from, a.to, label(a.inp, a.out), 'bad', like(a.from, a.to));
     if (a.specTo >= 0) {
       const t = target(a.specTo), sa = spec.arcs[fsmArc(spec, r.states[a.from].spec, a.inp)];

@@ -80,4 +80,12 @@ describe('state machine specs', () => {
     expect(d.arcs.filter((a) => a.cls === 'bad').map((a) => [a.from, a.to, a.label])).toEqual([[2, 2, '0/0']]);
     expect(d.arcs.filter((a) => a.cls === 'spec').map((a) => [a.from, a.to, a.label])).toEqual([[2, 0, '0/0']]);
   });
+
+  it('a wrong output on the right transition is one red arc naming both', () => {
+    const d = readbackSpec(DET101_FSM, {
+      states: [{ spec: 0, name: 'S0' }], truncated: false,
+      arcs: [{ from: 0, to: 0, inp: { x: 0, rst: 0 }, out: { y: -1 }, specTo: 0, specOut: { y: 0 }, ok: false }],
+    });
+    expect(d.arcs.map((a) => [a.from, a.to, a.cls, a.label])).toEqual([[0, 0, 'bad', '0/X (want 0/0)']]);
+  });
 });

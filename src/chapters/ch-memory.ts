@@ -1,5 +1,7 @@
 import { cam, fifo, pla, romArray, stack, clockDivider, counter, DFF, DFF_R, DFFE, D_LATCH, JKFF, lfsr, ram, register, ringCounter, shiftRegister, SR_LATCH, upDownCounter } from '../lib';
+import { DET101, DET101_FSM } from '../lib';
 import { pack } from '../sim/values';
+import { fsmPanel } from '../widgets/fsmpanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { memSizePanel } from '../widgets/memsize';
 import { portCost } from '../widgets/storage';
@@ -218,6 +220,40 @@ export const chRegisters: Chapter = {
         (synchronous), and why a ripple divider's outputs should not be used as clocks for logic that also sees the original one.</p>
         <div class="try">Release rst_n, then Run with the Timing panel open.</div>`,
       scene: () => ({ root: clockDivider(3), inputs: { clk: 0, rst_n: 0 }, analyzer: true }),
+    },
+    {
+      title: 'State machines',
+      body: `
+        <p>A counter is a register whose next value is a fixed function of its value. Let that function read inputs too and you have a
+        <strong>finite-state machine</strong>: a state register, next-state logic, output logic. It is how hardware runs a sequence (a divider's
+        iterations, a cache refill, the steps of a multicycle CPU in chapter 22).</p>
+        <p>The design is mechanical. Recognise 1, 0, 1 on a serial input x, overlaps included: S0 has seen nothing useful, S1 a 1, S2 a 1 then
+        a 0. Draw the transitions, encode the states in two flip-flops (s1 s0 = 00, 01, 10), write the table:</p>
+        <table class="cmp fsm-tt"><thead><tr><th>s1 s0</th><th>x</th><th>n1 n0</th><th>y</th></tr></thead><tbody>
+          <tr><td>00</td><td>0</td><td>00</td><td>0</td></tr><tr><td>00</td><td>1</td><td>01</td><td>0</td></tr>
+          <tr><td>01</td><td>0</td><td>10</td><td>0</td></tr><tr><td>01</td><td>1</td><td>01</td><td>0</td></tr>
+          <tr><td>10</td><td>0</td><td>00</td><td>0</td></tr><tr><td>10</td><td>1</td><td>01</td><td>1</td></tr></tbody></table>
+        <p>Code 11 never occurs, so it is a don't care: <code>n0 = x</code>, <code>n1 = ¬x·s0</code>, and the output <code>y = x·s1</code>, each next
+        bit ANDed with ¬rst for a synchronous reset. Two 9-NAND flip-flops and 10 NANDs of logic.</p>
+        <p>y reads x directly: a <strong>Mealy</strong> output. A <strong>Moore</strong> output depends on the state alone: add S3 "saw 101" with
+        y = 1 there (it still fits in two flip-flops, 11 is free) and the detection comes a cycle later, but clean. The Mealy y follows x, glitches
+        included, so whatever reads it must sample it at the clock edge.</p>
+        <p>The diagram is drawn from the same table as the circuit, and a test reads the circuit back into it state by state. Hover an arc to light
+        the gates that make that transition.</p>
+        <div class="try">Set x and pulse: 1, 0, 1. Watch the dashed arc move when you flip x before the edge.</div>`,
+      scene: () => ({
+        root: DET101, inputs: { x: 1, rst: 0, clk: 0 },
+        panels: [fsmPanel(DET101_FSM, { parts: true, ribbon: [{ label: 'x', path: 'x' }, { label: 'state', path: 'state' }, { label: 'y', path: 'y' }] })],
+      }),
+      challenge: {
+        kind: 'reach', goal: 'From reset, make the detector report the pattern (y = 1).',
+        check: (st) => st.value('y') === 1,
+        answer: 'Two edges: x = 1 (S0 → S1), x = 0 (S1 → S2), then set x = 1: y = x·s1 is 1 before the third edge.',
+        solve: (st) => {
+          for (const x of [1, 0]) { st.setInputs({ x }); st.runCycles(1); }
+          st.setInputs({ x: 1 });
+        },
+      },
     },
   ],
 };

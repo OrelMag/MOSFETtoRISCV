@@ -118,6 +118,8 @@ export interface BuildChallenge {
   given?: PartDoc[];
   /** Reference solution: the chips it needs first, the answer itself last. */
   answer: () => ChipDoc[];
+  /** Library id of the state machine it should be (lib/fsms.ts): after Check, the circuit can be read back as a diagram. */
+  fsm?: string;
 }
 
 export interface Score {

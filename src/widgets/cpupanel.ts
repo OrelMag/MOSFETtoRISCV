@@ -6,7 +6,8 @@ import { GateSim } from '../sim/gatesim';
 import { energyFj, fmtEnergy, fmtPower, POWER_NOTE, PowerMeter, powerW } from '../sim/power';
 import type { Sim } from '../sim/sim';
 import { analyzeTiming } from '../sim/timing';
-import { MC_FIELDS, MC_STATES, microword, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu } from '../lib';
+import { MC_FIELDS, MC_FSM_SPEC, MC_STATES, microword, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu } from '../lib';
+import { fsmView } from './fsmpanel';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { cacheLines, cpuState, retiring } from '../riscv/cosim';
 import { ABI, decode, disasm } from '../riscv/isa';
@@ -659,13 +660,34 @@ const ioPanel: ScenePanel = (stage: Stage): Widget => {
   return { el, update };
 };
 
-/** The controller's state table, the current state highlighted (and, for microcode, the microwords). */
+/** The view each controller panel opens in (kept while the page lives): the diagram where the controller is the scene. */
+const controllerView = { full: 'diagram', compact: 'table' };
+
+/**
+ * The controller as a state diagram (lib/fsm.ts MC_FSM_SPEC, live) or as its state table, the current state
+ * highlighted (and, for microcode, the microwords).
+ */
 export function controllerPanel(control: 'fsm' | 'micro', compact = false): ScenePanel {
   return (stage: Stage): Widget => {
     const body = h('div', { class: 'mc-table' });
-    const title = h('h4', null, control === 'fsm' ? 'Controller: state machine' : 'Controller: microcode ROM', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
-    const el = h('div', { class: `mem-panel mc-panel${compact ? ' compact' : ''}`, 'data-dock': 'left' }, title, body);
+    const key = compact ? 'compact' : 'full';
+    // Inside a CPU the controller is instance ctrl; on its own it is the scene, whose AND gates an arc can light.
+    const diagram = fsmView(stage, MC_FSM_SPEC, compact ? { inputs: { op: 'ctrl.op' } } : { parts: control === 'fsm' });
+    const seg = h('span', { class: 'seg mc-seg', onclick: (e: Event) => e.stopPropagation() });
+    const title = h('h4', null, h('span', null, compact ? 'Controller' : control === 'fsm' ? 'Controller: state machine' : 'Controller: microcode ROM'), seg, compact ? null : h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+    const legend = h('div', { class: 'fsm-legend' }, h('span', null, h('i', { class: 'cur' }), 'current'), h('span', null, h('i', { class: 'last' }), 'last edge'),
+      h('span', null, h('i', { class: 'next' }), 'next edge (by op)'), h('span', null, h('b', { class: 'fsm-badge-k' }, '2'), 'cycle of this instruction'));
+    const el = h('div', { class: `mem-panel mc-panel${compact ? ' compact' : ''}`, 'data-dock': 'left' }, title, body, diagram.el, legend);
     title.addEventListener('click', () => el.classList.toggle('collapsed'));
+    const show = (v: string) => {
+      controllerView[key] = v;
+      el.classList.toggle('diagram', v === 'diagram');
+      body.hidden = v === 'diagram';
+      diagram.el.hidden = legend.hidden = v !== 'diagram';
+      seg.replaceChildren(...['diagram', 'table'].map((x) => h('button', { class: x === v ? 'on' : '', onclick: () => show(x) }, x === 'diagram' ? 'Diagram' : 'Table')));
+      stage.layoutDock();
+    };
+    show(controllerView[key]);
     const ctrlBits = MC_FIELDS.reduce((a, [, n]) => a + n, 0);
     const nextText = (n: (typeof MC_STATES)[number]['next']) => (typeof n === 'number' ? MC_STATES[n].name : n === 'decode' ? (compact ? 'by opcode' : 'dispatch (opcode)') : (compact ? 'ld / st' : 'dispatch (load / store)'));
     const rows = MC_STATES.map((st, i) => {
@@ -684,9 +706,10 @@ export function controllerPanel(control: 'fsm' | 'micro', compact = false): Scen
       if (!sim) return;
       const cur = pack(sim.getBits(sim.design.root.ports.state));
       rows.forEach((r, i) => r.classList.toggle('cur', i === cur));
+      diagram.update?.();
     };
     update();
-    return { el, update };
+    return { el, update, destroy: diagram.destroy };
   };
 }
 
