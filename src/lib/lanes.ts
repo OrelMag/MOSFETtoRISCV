@@ -11,7 +11,8 @@
 //
 // The program ROM, immediates, control unit and next-PC logic are the single-cycle CPU's.
 
-import type { ComponentDef, PortDef } from '../sim/types';
+import { symbolGeom } from '../sim/geometry';
+import type { ComponentDef, NetDef, PortDef } from '../sim/types';
 import { alu, constWord, isZero, orN } from './alu';
 import { Builder } from './builder';
 import { andN, busMux2, decoder, equal, muxTree } from './combinational';
@@ -453,13 +454,75 @@ export function laneCore(program: number[], n = 4, opts: LaneCoreOptions = {}): 
     b.name(`${dm}.rd`, 'ReadData', true);
     lanes.forEach((l) => b.wire(`${dm}.rd`, `${l}.readData`));
     b.wire(`${pc}.q`, 'pcOut'); b.wire(nst, 'retire'); b.wire(mask, 'maskOut');
-    const pins: Record<string, [number, number]> = { clk: [0, 2], pcOut: [b.right, 2], retire: [b.right, 5], maskOut: [b.right, 8] };
+    const { at, right } = laneCoreLayout(n);
+    for (const i of b.instances) {
+      const p = at.get(i.name);
+      if (!p) throw new Error(`laneCore: no place for ${i.name}`);
+      i.at = p;
+    }
+    const pins: Record<string, [number, number]> = { clk: [2, 50], pcOut: [right, 2], retire: [right, 5], maskOut: [right, 8] };
+    const nets = laneCoreNets(b);
     return {
       id: `lanecore${n}_${IM.id}_d${dmemK}`, name: `Lane core (${n} lanes)`, category: 'cpu',
       summary: `One fetch, decode and control unit for ${n} lanes. Each lane has its own registers and ALU; the active mask says which lanes write. The leader (lowest active lane) steers branches; loads and stores take one cycle per active lane; split / join run the two sides of an if one after the other.`,
       ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bit('retire', 'out'), bus('maskOut', n, 'out')],
       symbol: { kind: 'box', label: `${n}-LANE CORE` },
-      netlist: () => ({ pins, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins, instances: b.instances, nets }),
     } satisfies ComponentDef;
+  });
+}
+
+/**
+ * The lane core drawn in two bands. Top: fetch → decode → write enables, the sequencer, SIMT
+ * control and the leader → next PC. Bottom: the lanes side by side, then the leader's and the
+ * memory's one-hot multiplexers, then the memory. Grid units; the lanes' inputs arrive as labels.
+ */
+function laneCoreLayout(n: number): { at: Map<string, [number, number]>; right: number } {
+  const at = new Map<string, [number, number]>();
+  const put = (name: string, x: number, y: number) => at.set(name, [x, y]);
+  // fetch: the next-PC mux, the join mux, the PC and the ROM on one row, so their wires are straight
+  put('pcmux', 14, 6); put('jmux', 30, 9); put('pc', 42, 10); put('imem', 60, 11); put('plus4', 60, 18);
+  put('si', 82, 7); put('csrA', 94, 15);
+  // decode
+  put('ctl', 110, 0); put('imm', 110, 26); put('sdec', 110, 34);
+  put('rs', 142, 10); put('nr1', 146, 12); put('isLoad', 152, 10); put('isMemG', 166, 11); put('rw', 162, 1);
+  // sequencer, SIMT control, leader
+  put('mseq', 180, 2); put('simt', 180, 18); put('lead', 180, 42);
+  // write enables, PC enable
+  put('wsel', 216, 2); put('wf', 216, 12); put('weg', 226, 3); put('we', 240, 2);
+  put('nst', 216, 20); put('pcen', 224, 19);
+  // next PC
+  put('npc', 262, 2); put('target', 262, 26); put('gndT', 258, 35); put('clr0', 262, 40); put('gndJ', 270, 43);
+  // the lanes, their thread ids underneath
+  const lx = (i: number) => 24 + 36 * i, y0 = 60;
+  for (let i = 0; i < n; i++) { put(`lane${i}`, lx(i), y0); put(`tid${i}`, lx(i) + 4, y0 + 40); }
+  // the one-hot multiplexers, stacked by their height
+  const oh = symbolGeom(onehotMux(n, 32)).h, of = symbolGeom(onehotMux(n, 4)).h, gap = 8;
+  const mx = lx(n) + 2, wx = mx + 34, dx = wx + 30;
+  put('lAlu', mx, y0); put('lA', mx, y0 + oh + gap); put('lB', mx, y0 + 2 * (oh + gap)); put('lF', mx, y0 + 3 * (oh + gap));
+  put('fs', mx + 20, y0 + 3 * (oh + gap) + of / 2 - 4);
+  put('mAd', wx, y0); put('mWd', wx, y0 + oh + gap); put('pm', wx + 6, y0 + 2 * (oh + gap) + 2);
+  put('dwe', dx, y0 + 12); put('dm', dx + 10, y0 + 2);
+  return { at, right: Math.max(dx + 34, 290) };
+}
+
+/** Pairs drawn as wires (driver > sink); every other connection is a pair of labels. */
+const WIRED = new Set([
+  'pcmux.y>jmux.a', 'jmux.y>pc.d', 'pc.q>imem.addr', 'imem.data>si.in', 'si.o4>csrA.i0', 'si.o5>csrA.i1',
+  'ctl.resultSrc>rs.in', 'rs.o0>isLoad.a', 'rs.o1>nr1.a', 'nr1.y>isLoad.b', 'isLoad.y>isMemG.a', 'ctl.regWrite>rw.a',
+  'wsel.y>weg.a', 'wf.out>weg.b', 'weg.y>we.in', 'nst.y>pcen.a', 'gndT.y>target.cin', 'gndJ.y>clr0.zero',
+  'lF.y>fs.in', 'dwe.y>dm.we', 'mAd.y>dm.addr', 'mWd.y>dm.wd',
+]);
+/** Blocks whose outputs are named by their port (control signals); others by instance. */
+const BY_PORT = new Set(['ctl', 'sdec', 'mseq', 'simt', 'npc', 'lead', 'target']);
+
+function laneCoreNets(b: Builder): NetDef[] {
+  return b.nets().map((nt) => {
+    const drv = nt.ends[0];
+    const [inst, port] = drv.includes('.') ? drv.split('.') : [drv, ''];
+    const name = nt.name ?? (!port ? inst : BY_PORT.has(inst) ? port : /^lane\d+$/.test(inst) ? `${inst}.${port}` : inst);
+    const wired = nt.ends.slice(1).filter((s) => WIRED.has(`${drv}>${s}`));
+    const tags = wired.length ? nt.ends.slice(1).filter((e) => !wired.includes(e)) : true;
+    return { name, ends: nt.ends, ...(tags === true || tags.length ? { tags } : {}) };
   });
 }

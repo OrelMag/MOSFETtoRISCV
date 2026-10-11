@@ -24,7 +24,7 @@ export const chLanes: Chapter = {
     {
       title: 'One decoder, four ALUs',
       body: `
-        <p>On the left, the single-cycle CPU's front end: PC, program ROM, control unit, immediate generator, next-PC logic. Further right, four <strong>LANE</strong>
+        <p>Along the top, the single-cycle CPU's front end: PC, program ROM, control unit, immediate generator, next-PC logic. Below, four <strong>LANE</strong>
         boxes. Open one: a 31 × 32-bit register file, the SrcA / SrcB multiplexers, an ALU and the result multiplexer, exactly the single-cycle datapath. Every lane
         receives the same rs1, rs2 and rd fields, the same control signals and the same immediate; only its registers differ.</p>
         <p>A lane learns which thread it is with <code>csrr t0, tid</code>: a constant wired into each lane (0, 1, 2, 3) answers. Here every lane takes the elements

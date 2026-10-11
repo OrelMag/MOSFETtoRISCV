@@ -599,24 +599,35 @@ with punch cards.
   the reader part, word by word, into RAM and jumps to it, as IBM's machines loaded from cards (the 1401's Load
   key); the CPU drawer follows the loaded program like a ROM program, the golden model starting after the load
 
-### Phase 15 — Journey and campaign track: GPU ⏳
+### Phase 15 — Journey and campaign track: GPU 🚧
 The same bricks arranged for throughput instead of latency: one instruction stream, many lanes, latency hidden by
-other threads rather than by forwarding and caches. In the journey, a track of chapters after multi-core (chapter 24),
-ending with a triangle on the pixel screen drawn by hardware the learner can open down to NANDs; in the campaign, an
-act of its own after act 7. Mockup first for the chapter structure and the act. Every unit is measured like the
-CPUs (NANDs, depth, period) and co-simulated against a golden model.
+other threads rather than by forwarding and caches. Every unit is measured like the CPUs (NANDs, depth, period) and
+co-simulated against a golden model.
+
+**Decided** (mockup approved 2026-10-11): journey chapters 26–31 after silicon (Lanes, Threads in lock-step, Hiding
+latency, Feeding the lanes, Pixels and triangles, The graphics pipeline); campaign act 9 after the side quests,
+requiring the finale; explicit split / join divergence (Vortex's scheme) with pred for comparison, on custom-0
+(funct3: tmc 0, wspawn 1, split 2, join 3, bar 4, pred 5) and read-only CSRs lane / warp / nlanes / tid / tmask
+(0xCC0–0xCC4); a lane-count generator (2 / 4 / 8), 4 shown; RV16: SYSTEM funct3 4–7 (split, join, tmc, bar) and
+CSR 7 = tid, a 32 × 32 RGB565 screen at 0xF000–0xF3FF, one pixel per word. Order: lane core + chapters 26–27, then
+the campaign's first levels, then warps and memory (28–29), graphics last (30–31).
 
 **Compute**
-- ⏳ SIMD: one fetch and decode feeding N copies of the ALU, a vector register file (lanes × words); throughput and
-  cost against N cores, which pay for N fetch / decode / control units
-- ⏳ SIMT: a warp of threads sharing one PC, an active mask, divergence on branches handled by a reconvergence stack
-  (and predication as the alternative); the cost of divergence measured on a sample kernel
+- ✅ Lanes (chapter 26): laneCore(program, n) (lib/lanes.ts): the single-cycle front end feeding n lanes (registers,
+  ALU, result mux each); the leader (lowest active lane) steers branches through one-hot muxes; a memory sequencer
+  serves one active lane per cycle. Measured against multiCore(4): 149 043 NANDs against 181 713 (a lane is mostly its
+  23 141-NAND register file), but 134 cycles against 96 on saxpy (a load stops every lane)
+- ✅ SIMT (chapter 27): the active mask (inverted flip-flops: all lanes at power-on), tmc, split / join with a 4-entry
+  shift-register stack (mask, else mask, resume PC, pending), pred; lane utilization per kernel (45–100 %). Golden
+  model riscv/simt.ts, co-simulated every cycle (PC, mask, every lane's registers, the stack) on 2, 4 and 8 lanes; the
+  Warp panel (widgets/lanes.ts) runs it in lock-step
 - ⏳ Warp scheduler and scoreboard: several warps resident, one ready warp issued per cycle, a load's latency hidden
   by switching warps (compared with the pipeline chapters' forwarding and stalls); occupancy against register-file size
 - ⏳ Shared memory (banked, bank conflicts measured) and global-memory coalescing (a warp's addresses merged into lines)
-- ⏳ ISA: a small RV32-based SIMT extension (thread / lane id CSRs, a barrier, mask instructions), its assembler,
-  a multi-lane ISS as golden model and lock-step co-simulation as for the CPUs; sample kernels (saxpy, reduction,
-  matrix multiply, histogram), each shown with lane utilization and cycles
+- 🚧 ISA: the SIMT extension above, assembler and disassembler, the multi-lane golden model; kernels so far saxpy,
+  divergence, nested ifs, pred loops, tmc, a forgotten split. Still to come: wspawn and bar (several warps), reduction,
+  matrix multiply, histogram (atomics in the lanes)
+- ⏳ The lane core's listing marks (insthw) and Slow mode, as the CPU panel has
 
 **Graphics**
 - ⏳ Framebuffer and scan-out to the pixel screen (Phase 12), double buffering, a vsync interrupt
