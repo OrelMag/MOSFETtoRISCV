@@ -9,6 +9,7 @@ import { exportHdl, testableComb, type HdlFlavor } from '../sim/svexport';
 import { structuralVerilog } from '../sim/verilog';
 import { h, icon } from '../ui/dom';
 import { copiesIn, referenceCpus, usedIn, type Parent } from '../lib/usage';
+import { powerBody, type LivePower } from './powerpanel';
 
 export interface InspectTarget {
   def: ComponentDef;
@@ -18,6 +19,8 @@ export interface InspectTarget {
   instance?: string;
   canOpen?: boolean;
   onOpen?: () => void;
+  /** The running scene's switching activity for this part (null: not on the scene's own gate-level simulation). */
+  power?: () => LivePower | null;
 }
 
 type Tab = 'info' | 'truth' | 'hdl';
@@ -37,6 +40,8 @@ export class Inspector {
   radix: Radix = 'hex';
   /** "Where it is used" is open (kept across parts and re-renders); a list shown in full, per part. */
   private usedOpen = false;
+  /** "Power" is open (kept across parts and re-renders, like "Where it is used"). */
+  private powerOpen = false;
   private usedAll = new WeakSet<ComponentDef>();
   private usage = new WeakMap<ComponentDef, { parents: Parent[]; cpus: { label: string; n: number }[] }>();
 
@@ -119,8 +124,24 @@ export class Inspector {
     });
     if (rows.length) b.append(h('table', { class: 'ports' }, h('tbody', null, rows)));
     if (d.notes) b.append(h('div', { class: 'insp-notes', html: d.notes }));
+    if (!d.prim || (d.prim === 'nand' && t.power)) b.append(this.powerSection(t));
     // Library parts only: a user chip has the sandbox's own "used by" (editor/chips.ts).
     if (d.prim !== 'alias' && d.prim !== 'vdd' && d.prim !== 'gnd' && d.category !== 'custom') b.append(this.usedSection(d));
+  }
+
+  /** What the part spends switching: live on the running scene, else on random inputs (measured on first open). */
+  private powerSection(t: InspectTarget): HTMLElement {
+    const det = h('details', { class: 'insp-used' }, h('summary', null, 'Power (estimate)'));
+    const fill = () => det.append(powerBody(t.def, t.power?.() ?? null, () => this.render()));
+    if (this.powerOpen) {
+      det.open = true;
+      fill();
+    }
+    det.addEventListener('toggle', () => {
+      this.powerOpen = det.open;
+      if (det.open && det.childElementCount === 1) fill();
+    });
+    return det;
   }
 
   /** The components that place this part, and its copies in each of the chapters' CPUs (lib/usage.ts, on first open). */

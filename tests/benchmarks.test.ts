@@ -1,13 +1,13 @@
 // The benchmark set: each program's result on the golden model against the one computed in TypeScript, the
 // saved results (src/bench/results.json, from scripts/benchmarks.ts --write) fresh and complete, and one CPU
-// measured again against its saved row.
+// measured again against its saved row (its energy on one program).
 
 import { describe, expect, it } from 'vitest';
 import results from '../src/bench/results.json';
 import { RESULTS, chapterOf, familyOf, front, meanOf } from '../src/bench/summary';
 import { chapterById } from '../src/chapters';
 import { BENCHMARKS, crc32, xorshift32 } from '../src/riscv/benchprograms';
-import { BENCH_DMEM_K, BENCH_IMEM_K, benchCase, benchCases, benchLanes, measureCpu, programsHash, runsOn } from './verify/bench';
+import { BENCH_DMEM_K, BENCH_IMEM_K, benchCase, benchCases, benchEnergy, benchLanes, measureCpu, programsHash, runsOn } from './verify/bench';
 import { CPUS } from './verify/cpus';
 
 describe('benchmark programs', () => {
@@ -43,19 +43,28 @@ describe('saved benchmark results', () => {
     expect(results.dmemWords).toBe(2 ** BENCH_DMEM_K);
     expect(results.cpus.map((c) => c.id)).toEqual(CPUS.map((c) => c.id));
     for (const cfg of CPUS) {
-      const row = results.cpus.find((c) => c.id === cfg.id)!;
+      const row = RESULTS.cpus.find((c) => c.id === cfg.id)!;
       expect(row.runs.map((r) => r.bench), cfg.id).toEqual(BENCHMARKS.filter((b) => runsOn(b, cfg)).map((b) => b.id));
+      for (const r of row.runs) {
+        expect(r.switched, `${cfg.id} ${r.bench}: energy`).toBeGreaterThan(0);
+        expect(r.functional!, `${cfg.id} ${r.bench}: glitch-free part`).toBeLessThanOrEqual(r.switched!);
+      }
     }
   });
 
   it('are what the single-cycle CPU measures today', async () => {
     const cfg = CPUS.find((c) => c.id === 'sc')!;
     const cases = benchCases(cfg);
-    const row = results.cpus.find((c) => c.id === 'sc')!;
+    const row = RESULTS.cpus.find((c) => c.id === 'sc')!;
     expect(measureCpu(cfg.build(cases[0].words, BENCH_IMEM_K, BENCH_DMEM_K))).toEqual({ nands: row.nands, period: row.period });
     const runs = await benchLanes(cfg, cases);
     for (const r of runs) expect(r.diff, r.bench).toBe('');
-    expect(runs.map(({ diff: _, ...r }) => r)).toEqual(row.runs);
+    expect(runs.map(({ diff: _, ...r }) => r)).toEqual(row.runs.map(({ switched: _s, functional: _f, ...r }) => r));
+    // the energy of the shortest program, on GateSim
+    const i = cases.findIndex((c) => c.bench.id === 'sort');
+    const e = await benchEnergy(cfg, cases[i]);
+    expect(e.cycles).toBe(row.runs[i].cycles);
+    expect({ switched: e.switched, functional: e.functional }).toEqual({ switched: row.runs[i].switched, functional: row.runs[i].functional });
   }, 120_000);
 });
 
