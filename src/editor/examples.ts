@@ -7,6 +7,7 @@ import { slug, uniqueName } from './model';
 import { SEG7_FONT } from './memory';
 import { openChip } from './session';
 import { PICTURE } from '../riscv/ioprograms';
+import { CPU4_SUBCHIPS, cpu4Chip } from './example4';
 
 const pin = (id: string, dir: PinDoc['dir'], at: Vec, width = 1, extra: Partial<PinDoc> = {}): PinDoc => ({ id, name: id, dir, width, at, ...extra });
 const part = (id: string, ref: PartRef, at: Vec, extra: Partial<PartDoc> = {}): PartDoc => ({ id, ref, at, ...extra });
@@ -377,6 +378,12 @@ export const EXAMPLES: Example[] = [
     blurb: 'An RV32I core, a program ROM, 4K words of RAM, a 64 × 64 screen, a console, LEDs and switches behind a memory map. Run: it greets, then paints.',
     build: (id, n, sub) => computerChip(id, n, { mem: sub.mem, dev: sub.dev }),
     subchips: { mem: { name: 'Memory', build: memoryChip }, dev: { name: 'Devices', build: devicesChip } },
+  },
+  {
+    id: 'cpu4', name: '4-bit CPU (4004-inspired)',
+    blurb: 'An accumulator machine with the 4004\'s instructions in six blocks you can open down to NANDs, a ROM in 4-bit assembly, four digits, LEDs, switches and a TEST key. Run: 1234 + 5876 in BCD.',
+    build: (id, n, sub) => cpu4Chip(id, n, sub),
+    subchips: CPU4_SUBCHIPS,
   },
   { id: 'sharedbus', name: 'Shared bus', blurb: 'Two tri-state drivers and a pull-down on one wire: a value, a held 0, or a fight (X).', build: sharedBusChip },
   { id: 'wiredand', name: 'Wired-AND', blurb: 'Open-drain NMOS stages and a pull-up: the wire is 1 only when every stage lets go.', build: (id, n) => wiredChip(id, n, 'and') },

@@ -78,6 +78,7 @@ export const CPU4_DECODE: ComponentDef = (() => {
   const sc = b.op(splitter([1, 1, 1, 1], 2), [opa], 'OPA bits');
   const [c0, c1, c2, c3] = [0, 1, 2, 3].map((i) => b.name(`${sc}.o${i}`, `c${i}`, true));
   const sa = b.op(splitter([1, 1, 1, 1], 2), ['acc'], 'A bits');
+  for (const i of [1, 2, 3]) b.name(`${sa}.o${i}`, `a${i}`, true);
   b.next();
   // OPR → one line per opcode; the accumulator group (OPR = 15) → one line per OPA.
   const od = b.op(decoder(4), [`${fl}.o2`], 'OPR');
@@ -95,11 +96,11 @@ export const CPU4_DECODE: ComponentDef = (() => {
   const take = b.op1(AND, [O[1], b.op1(XOR, [t, c3], 'invert?')], 'JCN taken');
   const isz = b.op1(AND, [O[7], b.op1(NOT, ['rz'])], 'ISZ taken');
   const jin = b.op1(AND, [O[3], c0], 'JIN');
-  const src = b.op1(AND, [O[2], c0], 'SRC');
-  const fim = b.op1(AND, [O[2], nc0], 'FIM');
+  const src = b.name(b.op1(AND, [O[2], c0], 'SRC'), 'src', true);
+  const fim = b.name(b.op1(AND, [O[2], nc0], 'FIM'), 'fim', true);
   // I/O group: OPA = 0010 (WRR) or 1010 (RDR).
   const m = b.op1(andN(4), [O[14], b.op1(NOT, [c2]), c1, nc0], 'x010');
-  const wrr = b.op1(AND, [m, b.op1(NOT, [c3])], 'WRR');
+  const wrr = b.name(b.op1(AND, [m, b.op1(NOT, [c3])], 'WRR'), 'wrr', true);
   const rdr = b.name(b.op1(AND, [m, c3], 'RDR'), 'rdr', true);
   b.next();
   const jt = b.op1(orN(4), [take, O[4], O[5], isz], 'jump');
@@ -189,13 +190,15 @@ export const CPU4_ALU: ComponentDef = (() => {
   b.next();
   const x = b.op1(bitwise('and', 4), ['a', xs], 'A or 0');
   const rr = b.op1(bitwise('xor', 4), ['r', is], 'r or ¬r');
-  const na = b.op1(bitwise('xor', 4), ['a', b.op1(constWord(4, 15), [])], '¬A');
+  const na = b.name(b.op1(bitwise('xor', 4), ['a', b.op1(constWord(4, 15), [])], '¬A'), 'na', true);
   b.next();
   const bb = b.op1(busMux2(4), [rr, 'k', 'bk'], 'b');
-  const ral = b.op1(merger([1, 1, 1, 1], 2), ['cy', a0, a1, a2], 'RAL');
-  const rar = b.op1(merger([1, 1, 1, 1], 2), [a1, a2, a3, 'cy'], 'RAR');
+  const ral = b.name(b.op1(merger([1, 1, 1, 1], 2), ['cy', a0, a1, a2], 'RAL'), 'ral', true);
+  const rar = b.name(b.op1(merger([1, 1, 1, 1], 2), [a1, a2, a3, 'cy'], 'RAR'), 'rar', true);
   b.next();
   const add = b.op(rca(4), [x, bb, 'cin'], 'adder');
+  b.name(`${add}.s`, 'sum', true);
+  b.name(`${add}.cout`, 'co', true);
   b.next();
   b.wire(b.op1(muxTree(2, 4), [`${add}.s`, na, ral, rar, 'f'], 'result'), 'y');
   const co = b.op1(OR, [`${add}.cout`, b.op1(AND, ['orcy', 'cy'], 'DAA keeps CY')]);
@@ -230,6 +233,8 @@ export const CPU4_REGS: ComponentDef = (() => {
   const sr = b.op(splitter([1, 3], 2), ['ra'], 'register');
   const odd = b.name(`${sr}.o0`, 'odd', true), rp = b.name(`${sr}.o1`, 'psel', true);
   const lo = b.op(splitter([4, 4], 2), ['lo'], 'data');
+  b.name(`${lo}.o0`, 'lo4', true);
+  b.name(`${lo}.o1`, 'hi4', true);
   b.next();
   const pd = b.op(decoder(3), [rp], 'pair');
   const wE = b.name(b.op1(OR, ['pwe', b.op1(AND, ['we', b.op1(NOT, [odd])])], 'write even'), 'wE', true);
@@ -242,7 +247,7 @@ export const CPU4_REGS: ComponentDef = (() => {
   const en: string[] = [];
   for (let p = 0; p < 8; p++) {
     const sel = b.name(`${pd}.y${p}`, `p${p}`, true);
-    en.push(b.op1(AND, [sel, wE]), b.op1(AND, [sel, wO]));
+    en.push(b.name(b.op1(AND, [sel, wE]), `en${2 * p}`, true), b.name(b.op1(AND, [sel, wO]), `en${2 * p + 1}`, true));
   }
   const q: string[] = [];
   for (let i = 0; i < 16; i++) {
@@ -312,13 +317,13 @@ export const CPU4_PC: ComponentDef = (() => {
   b.pins('sel', 'target', 'pair', 'push', 'pop', 'clk');
   const inc = b.op(incrementer(8), [''], 'PC + 1');
   const pc1 = b.name(`${inc}.y`, 'pc1', true);
-  const one = b.op1(TIE1, []);
   const any = b.name(b.op1(OR, ['push', 'pop'], 'call or return'), 'move', true);
   b.next();
   const next = b.op(muxTree(2, 8), [pc1, 'target', 'pair', '', 'sel'], 'next PC');
   const d1 = b.op(busMux2(8), ['', pc1, 'push'], 'S1 ← S2 or PC + 1');
   const d2 = b.op(busMux2(8), ['', '', 'push'], 'S2 ← S3 or S1');
   b.next();
+  const one = b.op1(TIE1, []);
   const pc = b.name(b.op1(register(8), [`${next}.y`, one, 'clk'], 'PC', 'pc'), 'pcv', true);
   const s1 = b.name(b.op1(register(8), [`${d1}.y`, any, 'clk'], 'S1', 's1'), 's1v', true);
   const s2 = b.name(b.op1(register(8), [`${d2}.y`, any, 'clk'], 'S2', 's2'), 's2v', true);
@@ -457,14 +462,16 @@ export function cpu4(words: ArrayLike<number>): ComponentDef {
   const pcs = b.op(CPU4_PC, [c('pcsel'), lo, pair, c('push'), c('pop'), 'clk'], 'PC & stack', 'pcs');
   const pc = b.name(`${pcs}.pc`, 'pc', true);
   b.wire(pc, `${rom}.addr`);
-  const io = b.op(CPU4_IO, [pair, c('srcwe'), a, c('wrr'), 'clk'], 'I/O', 'io');
   b.next();
   // Halt: the word is JUN (0x40) to its own address.
-  const hi = b.op1(merger([4, 4], 2), [opa, `${fl}.o2`], 'OPR:OPA');
+  const hi = b.op1(merger([4, 4], 2), [opa, b.name(`${fl}.o2`, 'opr', true)], 'OPR:OPA');
   const isJun = b.op1(equal(8), [hi, b.op1(constWord(8, 0x40), [], 'JUN')], 'JUN?');
   const self = b.op1(equal(8), [lo, pc], 'to itself?');
   b.next();
-  b.wire(b.op1(AND, [isJun, self], 'halt'), 'halt');
+  b.wire(b.name(b.op1(AND, [isJun, self], 'halt'), 'halts', true), 'halt');
+  b.next();
+  // I/O last: its ports run straight out to the digits and the LEDs.
+  const io = b.op(CPU4_IO, [pair, c('srcwe'), a, c('wrr'), 'clk'], 'I/O', 'io');
   IO4_OUTS.forEach((n) => b.wire(`${io}.${n}`, n));
   const R = b.right;
   d = define({
@@ -472,7 +479,7 @@ export function cpu4(words: ArrayLike<number>): ComponentDef {
     summary: 'A 4-bit accumulator machine with the 4004\'s instructions, one per 16-bit ROM word and per clock: PC & stack, a 256-word program ROM, Decode, sixteen 4-bit index registers, a 4-bit ALU, the accumulator and carry, and SRC / WRR output ports for four digits and four LEDs.',
     ports: CPU4_PORTS,
     symbol: { kind: 'box', label: 'CPU 4' },
-    netlist: () => ({ pins: { ...pinsAt(ins(CPU4_PORTS), 0, 4), ...pinsAt(outs(CPU4_PORTS), R, 4) }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { ...pinsAt(ins(CPU4_PORTS), 0, 6), ...pinsAt(outs(CPU4_PORTS), R, 6) }, instances: b.instances, nets: b.nets() }),
   });
   cpus.set(R0.id, d);
   return d;
