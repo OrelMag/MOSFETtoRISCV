@@ -2,7 +2,10 @@
 // register file, data memory, and a live check against the golden model (the ISS runs in
 // lock-step and every register is compared after each clock edge).
 
+import { GateSim } from '../sim/gatesim';
+import { energyFj, fmtEnergy, fmtPower, POWER_NOTE, PowerMeter, powerW } from '../sim/power';
 import type { Sim } from '../sim/sim';
+import { analyzeTiming } from '../sim/timing';
 import { MC_FIELDS, MC_STATES, microword, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu } from '../lib';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { cacheLines, cpuState, retiring } from '../riscv/cosim';
@@ -106,6 +109,19 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     const dlines = h('div', { class: 'cpu-mem dcache-lines' });
     const fregs = h('div', { class: 'cpu-mem' });
     let loads = 0, misses = 0, prevStall = false, stallRun = 0;
+    /** Energy (sim/power.ts): toggles counted from reset, or from the last Back (a restored state's toggles are not known). */
+    let meter: PowerMeter | null = null, meterSteps = 0, meterCycles = 0, period: number | null | undefined;
+    const restartMeter = () => { meter?.reset(); meterSteps = iss.steps; meterCycles = stage.cycles; };
+    const energy = (sim: Sim): HTMLElement[] => {
+      if (!(sim instanceof GateSim)) return [];
+      if (!meter || meter.sim !== sim) { meter = new PowerMeter(sim); meterSteps = iss.steps; meterCycles = stage.cycles; }
+      const steps = iss.steps - meterSteps, cycles = stage.cycles - meterCycles;
+      if (steps <= 0 || cycles <= 0 || stage.inEdge) return [];
+      if (period === undefined) period = analyzeTiming(sim.design)?.period ?? null;
+      const fj = energyFj(meter.totals().switched);
+      return [h('span', { title: `${POWER_NOTE} Over the last ${steps} instructions (from reset or the last Back); power at the clock static timing allows.` },
+        `≈ ${fmtEnergy(fj / steps)} / instr${period ? ` · ${fmtPower(powerW(fj / cycles, period))}` : ''}`)];
+    };
     const wb = opts.dcache === 'wb' || opts.dcache === 'wb2';
     const sel = h('select', { 'aria-label': 'program' }) as HTMLSelectElement;
     const progs = opts.fpu ? [...F_PROGRAMS, ...PROGRAMS] : opts.dcache ? [...CACHE_CPU_PROGRAMS, ...PROGRAMS] : opts.pipeline && opts.m ? [...PIPE_M_PROGRAMS, ...PROGRAMS] : opts.m ? [...M_PROGRAMS, ...SYSTEM_PROGRAMS, ...PROGRAMS] : opts.system ? [...SYSTEM_PROGRAMS, ...PROGRAMS] : PROGRAMS;
@@ -336,6 +352,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         trace.replaceChildren();
         logShown = logSeq - log.length;
         if (!log.length) logShown = logSeq;
+        restartMeter();
       },
     });
     const update = () => {
@@ -352,6 +369,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         loads = misses = 0;
         prevStall = false;
         stallRun = 0;
+        restartMeter();
       }
       const st = cpuState(sim);
       changed = new Set();
@@ -369,6 +387,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         ...(opts.fpu && !opts.pipeline && !retiring(sim) ? [h('span', { class: 'warn', title: 'An iterative unit (fdiv.s / fsqrt.s) is working; the PC and register writes are stalled' }, 'fdiv / fsqrt… stalled')] : []),
         ...(opts.dcache ? [h('span', null, `${wb ? 'accesses' : 'loads'} ${loads} · misses ${misses}${loads ? ` · hit rate ${(100 * (loads - misses) / loads).toFixed(0)} %` : ''}`)] : []),
         ...((opts.dcache || opts.icache) && cacheStall(sim) ? [h('span', { class: 'warn', title: 'A cache missed: the PC and register write wait while the line is moved' }, `miss: waiting for memory (cycle ${stallRun + 1})`)] : []),
+        ...energy(sim),
         mismatch ? h('span', { class: 'bad' }, `✗ ${mismatch}`) : h('span', { class: 'good', title: 'Every register and the PC match the instruction-set simulator after every cycle' }, '✓ matches golden model'),
       ];
       if (halted) parts.push(h('span', { class: 'warn' }, 'halted'));

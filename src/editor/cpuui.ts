@@ -14,7 +14,10 @@ import { wordsHash } from '../lib/bigmem';
 import { ABI, decode, disasm, FABI } from '../riscv/isa';
 import { CAUSE } from '../riscv/iss';
 import { bitsToF32, flagNames, RM_NAMES } from '../sim/fpref';
+import { DualSim } from '../sim/dualsim';
+import { energyFj, fmtEnergy, fmtPower, POWER_NOTE, PowerMeter, powerW } from '../sim/power';
 import type { Sim } from '../sim/sim';
+import { analyzeTiming } from '../sim/timing';
 import { pack } from '../sim/values';
 import { h, icon } from '../ui/dom';
 import type { FieldKey } from '../riscv/fields';
@@ -92,6 +95,11 @@ class CpuPanel {
   private fieldPin: FieldKey | null = null;
   private fieldHover: FieldKey | null = null;
   private syncing = false;
+  /** Energy per instruction (gate mode only: the cycle engine counts no toggles), from where the meter started. */
+  private meter: PowerMeter | null = null;
+  private meterRetired = 0;
+  private meterCycles = 0;
+  private periods = new WeakMap<object, number | null>();
   private descDoc: ChipDoc | null = null;
   private descChips: unknown = null;
   private desc: CpuDesc | null = null;
@@ -470,6 +478,28 @@ class CpuPanel {
     this.rateSel.title = multi ? 'Cycles per second' : 'Instructions per second';
   }
 
+  /**
+   * Energy per instruction and power on GateSim (sim/power.ts), as the chapters' CPU panel shows it. Counted while
+   * the gate engine runs: a stretch on the cycle engine, a Reset or a step back starts the count again.
+   */
+  private energy(mon: CpuMonitor): HTMLElement[] {
+    const es = this.ed.sim, sim = es.sim;
+    if (!(sim instanceof DualSim) || sim.engine !== 'gate' || es.mode !== 'gate') { this.meter = null; return []; }
+    if (!this.meter || this.meter.sim !== sim.gate || es.cycles < this.meterCycles || mon.retired < this.meterRetired) {
+      this.meter = this.meter?.sim === sim.gate ? this.meter : new PowerMeter(sim.gate);
+      this.meter.reset();
+      this.meterRetired = mon.retired;
+      this.meterCycles = es.cycles;
+    }
+    const steps = mon.retired - this.meterRetired, cycles = es.cycles - this.meterCycles;
+    if (steps <= 0 || cycles <= 0) return [];
+    let period = this.periods.get(sim.design);
+    if (period === undefined) this.periods.set(sim.design, (period = analyzeTiming(sim.design)?.period ?? null));
+    const fj = energyFj(this.meter.totals().switched);
+    return [h('span', { title: `${POWER_NOTE} Over the last ${steps} instructions run in gate mode (from a Reset, a step back or the switch to gate mode); power at the clock static timing allows.` },
+      `≈ ${fmtEnergy(fj / steps)} / instr${period ? ` · ${fmtPower(powerW(fj / cycles, period))}` : ''}`)];
+  }
+
   private renderStatus(mon: CpuMonitor, d: CpuDesc, r: CpuRead | null): void {
     const es = this.ed.sim;
     const bits: (HTMLElement | string)[] = [h('span', null, `cycle ${es.cycles}`)];
@@ -485,6 +515,7 @@ class CpuPanel {
       bits.push(h('span', { class: 'good', title: `After every retired instruction ${what.join(', ')} match the instruction-set simulator${d.pipeline && d.dmem ? ' (the memory at the halt: a pipeline’s stores run ahead)' : ''}` }, '✓ matches golden model'));
     }
     if (mon.iss?.halted) bits.push(h('span', { class: 'warn' }, 'halted'));
+    bits.push(...this.energy(mon));
     const key = bits.map((b) => (typeof b === 'string' ? b : b.outerHTML)).join('');
     keyed(this.status, key, () => bits);
     const gaps = cpuGaps(d, r);
