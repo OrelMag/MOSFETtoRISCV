@@ -7,6 +7,8 @@ import { ram } from '../lib/memory';
 import { PROGRAMS } from '../riscv/programs';
 import { COMPUTER_PROGRAMS } from '../riscv/ioprograms';
 import { disasm16 } from '../riscv/rv16/isa16';
+import { disasm4 } from '../isa4/isa4';
+import { PROGRAMS4 } from '../isa4/programs4';
 import type { HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
 import type { Bit, ComponentDef } from '../sim/types';
@@ -65,19 +67,20 @@ export interface ListingRow {
   /** As the circuit addresses it: a byte address (rv32) or a word index. */
   addr: string;
   word: string;
-  /** Disassembly for 32-bit words, empty otherwise. */
+  /** Disassembly for 32-bit words and 4-bit CPU programs, empty otherwise. */
   text: string;
   srcLine: number;
 }
 
 /** One row per word of the program (the fill past its end is not listed). */
-export function romListing(r: Pick<RomRef, 'w' | 'addr'>, img: BuiltProgram): ListingRow[] {
+export function romListing(r: Pick<RomRef, 'w' | 'addr'> & { lang?: ProgramLang }, img: BuiltProgram): ListingRow[] {
+  const dis = r.w === 32 || r.lang === 'cpu4';
   const digits = r.w / 4;
   return img.lines.map((l, i) => ({
     index: i,
     addr: r.addr === 'rv32' ? `0x${l.addr.toString(16).padStart(4, '0')}` : `[${i}]`,
     word: (l.word >>> 0).toString(16).padStart(digits, '0'),
-    text: r.w === 32 ? l.text : '',
+    text: dis ? l.text : '',
     srcLine: l.srcLine,
   }));
 }
@@ -95,10 +98,11 @@ export function convertProgram(src: string, to: ProgramLang, from: ProgramLang =
   const p = buildProgram(from, src);
   if (p.errors.length) return null;
   if (!src.trim()) return '';
-  const d = to === 'rv16' || from === 'rv16' ? 4 : 8;
+  const narrow = (l: ProgramLang) => l === 'rv16' || l === 'cpu4';
+  const d = narrow(to) || narrow(from) ? 4 : 8;
   return p.lines.map((l, i) => {
     const w = `0x${(l.word >>> 0).toString(16).padStart(d, '0')}`;
-    const text = to === 'rv16' ? disasm16(l.word, i) : l.text;
+    const text = to === 'rv16' ? disasm16(l.word, i) : to === 'cpu4' ? disasm4(l.word) : l.text;
     return to === 'hex' ? `${w}  # ${l.text}` : `        .word ${w}   # ${text}`;
   }).join('\n');
 }
@@ -130,7 +134,7 @@ export const SEG7_FONT = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 
 
 const hexDigits = (ws: number[], d = 2) => ws.map((x) => x.toString(16).padStart(d, '0')).join(' ');
 
-/** Programs to start from: the CPU chapters' samples (RV32I) and a few data tables. */
+/** Programs to start from: the CPU chapters' samples (RV32I), a few data tables, RV16 and the 4-bit CPU. */
 export const ROM_SAMPLES: RomSample[] = [
   ...PROGRAMS.map((p): RomSample => ({ id: p.id, name: p.name, lang: 'asm', src: p.source })),
   ...COMPUTER_PROGRAMS.map((p): RomSample => ({ id: p.id, name: p.name, lang: 'asm', src: p.source })),
@@ -138,6 +142,7 @@ export const ROM_SAMPLES: RomSample[] = [
   { id: 'squares', name: 'Squares 0–15', lang: 'hex', src: `# n * n for n = 0..15\n${hexDigits(Array.from({ length: 16 }, (_, i) => i * i))}` },
   { id: 'hello', name: 'ASCII "Hello, RISC-V"', lang: 'hex', src: `# one character per word\n${hexDigits([...'Hello, RISC-V'].map((c) => c.charCodeAt(0)))} 00` },
   { id: 'rv16leds', name: 'RV16: Fibonacci on the LEDs', lang: 'rv16', src: RV16_LEDS },
+  ...PROGRAMS4.map((p): RomSample => ({ id: p.id, name: p.name, lang: 'cpu4', src: p.src })),
 ];
 
 /** Smallest k whose 2^k words hold n words (at least 1). */

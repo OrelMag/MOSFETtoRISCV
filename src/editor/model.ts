@@ -135,7 +135,7 @@ export type PartRef =
   /** A pixel screen: a frame buffer written pixel by pixel, rows latched from a bus, or one wire per pixel (ioparts.ts). Zero cost. */
   | { screen: ScreenRef }
   /** Read-only memory: 2^k words of w bits. 'rv32' addresses bytes like a PC (addr = 4·word). */
-  | { rom: { k: number; w: 8 | 16 | 32; addr: 'word' | 'rv32'; lang: 'asm' | 'hex' | 'rv16'; src: string } }
+  | { rom: { k: number; w: 8 | 16 | 32; addr: 'word' | 'rv32'; lang: 'asm' | 'hex' | 'rv16' | 'cpu4'; src: string } }
   /** Read-write memory: 2^k words of w bits; `init`: the words it holds at power-on ('to 0' mode). */
   | { ram: { k: number; w: number; init?: number[] } };
 
