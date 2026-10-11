@@ -52,6 +52,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .pal-menu {
   display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 320px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 6px;
+  /* A short window: the list scrolls rather than running off the bottom of the screen. */
+  max-height: calc(100dvh - var(--topbar-h) - 12px); overflow-y: auto; overscroll-behavior: contain;
 }
 .pal-menu.open { display: grid; gap: 2px; }
 .pal-menu button {
