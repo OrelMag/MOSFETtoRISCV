@@ -6,14 +6,12 @@
 import type { ComponentDef, PortDef } from '../../sim/types';
 import { alu, constWord } from '../alu';
 import { Builder } from '../builder';
-import { busMux2, equal, muxTree } from '../combinational';
+import { equal, muxTree } from '../combinational';
 import { define, merger, splitter } from '../define';
 import { AND, NOT, OR } from '../gates';
 import { ram } from '../memory';
-import { DFF, register } from '../sequential';
-import { TIE1 } from '../transistors';
 import { BRANCH16, CORE_PORTS, CTL16, IMM16, NEXTPC16 } from './cpu';
-import { RF8 } from './logic';
+import { MUX16, RF8, RV16_DFF, RV16_DREG16, RV16_REG16 } from './logic';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -25,14 +23,13 @@ const pinsAt = (names: string[], x: number, step = 4, y0 = 4): Record<string, [n
  * F and W is combinational from the instruction register and the (unchanged) registers.
  */
 export const RV16_MULTI: ComponentDef = (() => {
-  const b = new Builder(10, 16, 6);
+  const b = new Builder(14, 16, 6);
   b.pins('clk', 'rst', 'instr', 'drdata');
-  const one = b.op1(TIE1, []);
-  const sF = b.op(DFF, ['', 'clk'], 'fetch'), sE = b.op(DFF, ['', 'clk'], 'execute');
-  const sM = b.op(DFF, ['', 'clk'], 'memory'), sW = b.op(DFF, ['', 'clk'], 'write back');
+  const sF = b.op(RV16_DFF, ['', 'clk'], 'fetch'), sE = b.op(RV16_DFF, ['', 'clk'], 'execute');
+  const sM = b.op(RV16_DFF, ['', 'clk'], 'memory'), sW = b.op(RV16_DFF, ['', 'clk'], 'write back');
   const F = b.name(`${sF}.q`, 'F', true), E = b.name(`${sE}.q`, 'E', true), M = b.name(`${sM}.q`, 'M', true), W = b.name(`${sW}.q`, 'W', true);
   b.next();
-  const ir = b.name(`${b.op(register(16), ['instr', F, 'clk'], 'instruction register')}.q`, 'ir', true);
+  const ir = b.name(`${b.op(RV16_REG16, ['instr', F, 'clk'], 'instruction register')}.q`, 'ir', true);
   b.next();
   const f = b.op(splitter([2, 2, 3, 3, 3, 3], 4), [ir], 'fields');
   const cond = b.name(`${f}.o0`, 'cond', true), rd = b.name(`${f}.o2`, 'rd', true);
@@ -44,22 +41,22 @@ export const RV16_MULTI: ComponentDef = (() => {
   const rf = b.op(RF8, [rd, rwe, '', `${f}.o3`, `${f}.o4`, 'clk'], 'registers');
   const r1 = b.name(`${rf}.rd1`, 'r1', true), r2 = b.name(`${rf}.rd2`, 'r2', true);
   b.next();
-  const bsrc = b.op1(busMux2(16), [r2, immv, `${ctl}.bimm`], 'ALU b');
+  const bsrc = b.op1(MUX16, [r2, immv, `${ctl}.bimm`], 'ALU b');
   const take = b.op1(BRANCH16, [r1, r2, cond], 'branch?');
   b.next();
   const y = b.op1(alu(16), [r1, bsrc, `${ctl}.alu`], 'ALU');
   const np = b.op(NEXTPC16, ['', immv, r1, `${ctl}.br`, take, `${ctl}.jal`, `${ctl}.jalr`], 'next PC');
   b.next();
-  const yq = b.name(`${b.op(register(16), [y, one, 'clk'], 'ALU register')}.q`, 'aluq', true);
-  const nx = b.op1(busMux2(16), [`${np}.pc1`, `${np}.target`, `${np}.ld`], 'next');
+  const yq = b.name(`${b.op(RV16_DREG16, [y, 'clk'], 'ALU register')}.q`, 'aluq', true);
+  const nx = b.op1(MUX16, [`${np}.pc1`, `${np}.target`, `${np}.ld`], 'next');
   // Loads and stores visit M: wb = 01 or mwe.
   const wbs = b.op(splitter([1, 1], 2), [`${ctl}.wb`]);
   b.next();
   const isLoad = b.op1(AND, [`${wbs}.o0`, b.op1(NOT, [`${wbs}.o1`])], 'load?');
-  const pcd = b.op1(busMux2(16), [nx, b.op1(constWord(16, 0), []), 'rst'], 'reset');
+  const pcd = b.op1(MUX16, [nx, b.op1(constWord(16, 0), []), 'rst'], 'reset');
   b.next();
   const isMem = b.name(b.op1(OR, [isLoad, `${ctl}.mwe`], 'memory?'), 'mem', true);
-  const pc = b.name(`${b.op(register(16), [pcd, b.op1(OR, [W, 'rst'], 'pc en'), 'clk'], 'PC')}.q`, 'pc', true);
+  const pc = b.name(`${b.op(RV16_REG16, [pcd, b.op1(OR, [W, 'rst'], 'pc en'), 'clk'], 'PC')}.q`, 'pc', true);
   b.wire(pc, `${np}.pc`);
   b.next();
   const wbv = b.name(b.op1(muxTree(2, 16), [yq, 'drdata', `${np}.pc1`, immv, `${ctl}.wb`], 'result'), 'wbv', true);
@@ -118,10 +115,10 @@ export const RV16_CACHE: ComponentDef = (() => {
   const hit = b.name(b.op1(AND, [`${eq}.eq`, `${ts}.o1`], 'hit'), 'hit', true);
   b.next();
   const fill = b.op1(AND, ['rd', b.op1(NOT, [hit])], 'read miss');
-  b.wire(b.op1(busMux2(16), ['mdata', `${data}.dout`, hit], 'line or memory'), 'rdata');
+  b.wire(b.op1(MUX16, ['mdata', `${data}.dout`, hit], 'line or memory'), 'rdata');
   b.next();
   const we = b.op1(OR, ['wr', fill], 'fill');
-  b.wire(b.op1(busMux2(16), ['mdata', 'wdata', 'wr'], 'line in'), `${data}.din`);
+  b.wire(b.op1(MUX16, ['mdata', 'wdata', 'wr'], 'line in'), `${data}.din`);
   b.wire(we, `${tags}.we`);
   b.wire(we, `${data}.we`);
   b.wire(hit, 'hit');

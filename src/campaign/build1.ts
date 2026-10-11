@@ -6,11 +6,10 @@ import { type BuildChallenge, type PinSpec, type SeqStep } from '../editor/chall
 import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc } from '../editor/model';
 import { aluSpec, alu, shifter } from '../lib/alu';
-import { addSub, busMux2, incrementer } from '../lib/combinational';
+import { addSub } from '../lib/combinational';
 import { koggeStone } from '../lib/fastadd';
-import { ADD16, CMP16, DEC3, DET101, EQ16, PC16, PRIME4, PRIMES4, RF8, WIDE16 } from '../lib/rv16/logic';
-import { register } from '../lib/sequential';
-import type { ComponentDef } from '../sim/types';
+import { ADD16, CMP16, DEC3, DET101, EQ16, INC16, MUX16, PC16, PRIME4, PRIMES4, RF8, RV16_REG16, WIDE16 } from '../lib/rv16/logic';
+import { type ComponentDef, netlistOf } from '../sim/types';
 import { rng } from './drills';
 
 const pins = (ins: [string, number?][], outs: [string, number?][], clock?: string): PinSpec[] => [
@@ -29,6 +28,18 @@ const refOf = (id: string, def: () => ComponentDef, name: string) => (): ChipDoc
   }
   return a;
 };
+
+/**
+ * A library block drawn without some of its outputs: the pins a level does not ask for (Check
+ * ignores them, but "Do it for me" and the walkthrough would copy them into the learner's chip).
+ * Only for outputs whose nets also feed something inside, so no gate is left driving nothing.
+ */
+function withoutPorts(def: ComponentDef, drop: string[]): ComponentDef {
+  const nl = netlistOf(def)!, gone = new Set(drop);
+  const keep = <T>(r: Record<string, T> | undefined) => r && Object.fromEntries(Object.entries(r).filter(([k]) => !gone.has(k)));
+  const nets = nl.nets.map((n) => ({ ...n, ends: n.ends.filter((e) => !gone.has(e)), via: keep(n.via) }));
+  return { ...def, ports: def.ports.filter((p) => !gone.has(p.name)), spec: undefined, netlist: () => ({ ...nl, nets, pins: keep(nl.pins), pinDirs: keep(nl.pinDirs) }) };
+}
 
 const s16 = (v: number) => (v & 0x8000 ? v - 0x10000 : v);
 
@@ -135,9 +146,9 @@ export const BUILD1: Record<string, () => BuildChallenge> = {
   }),
   g_mux8: () => ({
     id: 'g_mux8', title: 'Bus multiplexer', level: 'gates', allowed: 'nand',
-    brief: '<b>y = s ? b : a</b> on 16-bit buses. One 1-bit mux per bit, all sharing <code>s</code>. (With it, the library\'s wider muxes unlock: an 8:1 mux is a tree of three levels of these.)',
+    brief: '<b>y = s ? b : a</b> on 16-bit buses. One 1-bit mux per bit, all sharing <code>s</code> (and one inverter on it). (With it, the library\'s wider muxes unlock: an 8:1 mux is a tree of three levels of these.)',
     ports: pins([['a', 16], ['b', 16], ['s']], [['y', 16]]), check: { kind: 'table', spec: ([a, b, s]) => [s ? b : a] },
-    answer: refOf('g_mux8', () => busMux2(16), 'Bus multiplexer'),
+    answer: refOf('g_mux8', () => MUX16, 'Bus multiplexer'),
   }),
   g_eq16: () => ({
     id: 'g_eq16', title: 'Equality', level: 'gates', allowed: 'nand',
@@ -157,7 +168,7 @@ export const BUILD1: Record<string, () => BuildChallenge> = {
     id: 'a_inc16', title: '16-bit incrementer', level: 'arithmetic', allowed: 'nand',
     brief: '<b>{cout, y} = a + 1</b>. The PC does this every cycle. With b = 0 and cin = 1, a full adder per bit is a waste: half adders suffice.',
     ports: pins([['a', 16]], [['y', 16], ['cout']]), check: { kind: 'table', spec: ([a]) => [(a + 1) & 0xffff, a === 0xffff ? 1 : 0] },
-    answer: refOf('a_inc16', () => incrementer(16), '16-bit incrementer'),
+    answer: refOf('a_inc16', () => INC16, '16-bit incrementer'),
   }),
   a_addsub16: () => ({
     id: 'a_addsub16', title: 'Adder / subtractor', level: 'arithmetic', allowed: 'nand',
@@ -171,10 +182,10 @@ export const BUILD1: Record<string, () => BuildChallenge> = {
       },
       vectors: () => withBit(pairs16()),
     },
-    answer: refOf('a_addsub16', () => addSub(16), 'Adder / subtractor'),
+    answer: refOf('a_addsub16', () => withoutPorts(addSub(16), ['n']), 'Adder / subtractor'),
   }),
   a_slt: () => ({
-    id: 'a_slt', title: 'Less than', level: 'arithmetic', allowed: 'nand',
+    id: 'a_slt', title: 'Set if less than', level: 'arithmetic', allowed: 'nand',
     brief: '<b>lt</b> = (a &lt; b) as signed numbers, <b>ltu</b> = (a &lt; b) as unsigned, for slt / sltu and blt / bge. Both from one subtraction.',
     ports: pins([['a', 16], ['b', 16]], [['lt'], ['ltu']]),
     check: { kind: 'table', spec: ([a, b]) => [s16(a) < s16(b) ? 1 : 0, a < b ? 1 : 0], vectors: () => pairs16() },
@@ -195,7 +206,7 @@ export const BUILD1: Record<string, () => BuildChallenge> = {
     brief: '<b>y</b> = a op b with op = <code>ctl</code> = {OPX, f3}: 0 add, 8 sub, 1 sll, 2 slt, 3 sltu, 4 xor, 5 srl, 13 sra, 6 or, 7 and (shifts by b mod 16); <b>zero</b> = (y = 0).',
     ports: pins([['a', 16], ['b', 16], ['ctl', 4]], [['y', 16], ['zero']]),
     check: { kind: 'table', spec: (v) => aluSpec(16)(v).slice(0, 2), vectors: () => pairs16().flatMap(([a, b]) => ALU_OPS.map((c) => [a, b, c])) },
-    answer: refOf('a_alu16', () => alu(16), 'ALU'),
+    answer: refOf('a_alu16', () => withoutPorts(alu(16), ['neg', 'ovf', 'carry']), 'ALU'),
   }),
   o_fastadd: () => ({
     id: 'o_fastadd', title: 'Fast adder', level: 'arithmetic', allowed: 'nand',
@@ -208,7 +219,7 @@ export const BUILD1: Record<string, () => BuildChallenge> = {
     id: 's_reg16', title: '16-bit register', level: 'sequential', allowed: 'nand',
     brief: 'At a rising edge of <code>clk</code>: <b>q ← d</b> if <code>en</code>, else hold. Tested over 50 random cycles.',
     ports: pins([['d', 16], ['en'], ['clk']], [['q', 16]], 'clk'), check: { kind: 'sequence', steps: regSeq() },
-    answer: refOf('s_reg16', () => register(16), '16-bit register'),
+    answer: refOf('s_reg16', () => RV16_REG16, '16-bit register'),
   }),
   s_pc: () => ({
     id: 's_pc', title: 'Program counter', level: 'sequential', allowed: 'nand',

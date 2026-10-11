@@ -5,10 +5,11 @@
 import type { ComponentDef, PortDef } from '../../sim/types';
 import { constWord, isZero } from '../alu';
 import { Builder } from '../builder';
-import { addSub, busMux2 } from '../combinational';
+import { addSub } from '../combinational';
 import { define, splitter } from '../define';
 import { AND, NOT, OR, XOR } from '../gates';
 import { arrayMul, seqDivider } from '../muldiv';
+import { MUX16 } from './logic';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -50,15 +51,15 @@ export const MUL16: ComponentDef = (() => {
   const signedB = b.op1(AND, [`${f}.o0`, nf1], 'b signed? (mulh)');
   b.next();
   const corrB = b.op1(AND, [`${sb}.o1`, signedB], 'b < 0');
-  const mb = b.op1(busMux2(16), [z, 'b', corrA], 'b or 0');
+  const mb = b.op1(MUX16, [z, 'b', corrA], 'b or 0');
   b.next();
-  const ma = b.op1(busMux2(16), [z, 'a', corrB], 'a or 0');
+  const ma = b.op1(MUX16, [z, 'a', corrB], 'a or 0');
   const h1 = b.op(addSub(16), [`${ph}.o1`, mb, b.op1(constWord(1, 1), [])], 'hi − b');
   b.next();
   const h2 = b.op(addSub(16), [`${h1}.s`, ma, b.op1(constWord(1, 1), [])], '− a');
   const high = b.op1(OR, [`${f}.o0`, `${f}.o1`], 'high half?');
   b.next();
-  b.wire(b.op1(busMux2(16), [`${ph}.o0`, `${h2}.s`, high], 'result'), 'y');
+  b.wire(b.op1(MUX16, [`${ph}.o0`, `${h2}.s`, high], 'result'), 'y');
   const R = b.right;
   return define({
     id: 'rv16_mul', name: 'MD multiplier (RV16)', category: 'arithmetic',
@@ -99,7 +100,7 @@ export const DIV16: ComponentDef = (() => {
   const q = b.op(addSub(16), [z, `${dv}.q`, nq], '± q');
   const r = b.op(addSub(16), [z, `${dv}.r`, na], '± r');
   b.next();
-  b.wire(b.op1(busMux2(16), [`${q}.s`, `${r}.s`, `${f}.o1`], 'q or r'), 'y');
+  b.wire(b.op1(MUX16, [`${q}.s`, `${r}.s`, `${f}.o1`], 'q or r'), 'y');
   b.wire(`${dv}.done`, 'done');
   const R = b.right;
   return define({

@@ -76,7 +76,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Signed less-than',
-      text: 'a < b from a + ¬b + 1: the sign of the difference, corrected for overflow (N ⊕ V). 217 NANDs, depth 44: the subtraction\'s carry chain sets the comparator\'s depth. blt and bge use it.',
+      text: 'a < b from a + ¬b + 1: 16 NOTs and a 16-bit adder of which only the carry is read, ltu = ¬cout; when the signs differ, a\'s sign alone decides lt. 169 NANDs, depth 39: the adder\'s carry chain sets the comparator\'s depth. blt and bge use it.',
       parts: ['u2'], codex: ['flags'],
     },
     {
@@ -86,7 +86,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Invert by cond[0]',
-      text: 'take = pick ⊕ cond[0]: bne = ¬(a = b) and bge = ¬(a < b) share one XOR. The opcode table puts the condition in op[1:0], so it needs no decoding. Depth 49: 44 for the less-than, 2 through the mux, 3 through the XOR.',
+      text: 'take = pick ⊕ cond[0]: bne = ¬(a = b) and bge = ¬(a < b) share one XOR. The opcode table puts the condition in op[1:0], so it needs no decoding. 287 NANDs, depth 44: 39 for the less-than, 2 through the mux, 3 through the XOR.',
       parts: ['u4'], codex: ['branches'],
     },
   ],
@@ -94,7 +94,7 @@ export const WALKS2: Record<string, WalkScript> = {
   c_npc: [
     {
       title: 'pc + 1',
-      text: 'The incrementer, a chain of half adders: 80 NANDs, depth 33. Its sum is pc1, the link value that jal and jalr write to rd.',
+      text: 'The incrementer: a NOT for bit 0, half adders for bits 1 to 15, 76 NANDs, depth 31. Its sum is pc1, the link value that jal and jalr write to rd; in the core it is also the PC\'s next value.',
       parts: ['u1'], codex: ['incrementer'],
     },
     {
@@ -109,12 +109,12 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Choose the target',
-      text: 'A 16-bit 2:1 mux on jalr: rs1 + imm for jalr, pc + imm for everything else. This output sets the block\'s depth, 38: adder 36, mux 2.',
+      text: 'A 16-bit 2:1 mux on jalr (49 NANDs): rs1 + imm for jalr, pc + imm for everything else. This output sets the block\'s depth, 38: adder 36, mux 2.',
       parts: ['u7'],
     },
     {
       title: 'Load the PC?',
-      text: 'ld = jal + jalr + br·take. br masks take, because for any other instruction the comparator compares whatever the rs1 and rs2 fields happen to name. When ld = 0 the PC counts.',
+      text: 'ld = jal + jalr + br·take. br masks take, because for any other instruction the comparator compares whatever the rs1 and rs2 fields happen to name. When ld = 0 the PC counts. 421 NANDs in all.',
       parts: ['u4', 'u5', 'u6'], codex: ['pc', 'branches'],
     },
   ],
@@ -122,8 +122,8 @@ export const WALKS2: Record<string, WalkScript> = {
   c_core1: [
     {
       title: 'The program counter',
-      text: 'The PC block (register, incrementer, two bus muxes: 448 NANDs) does pc ← rst ? 0 : pc + 1; its load input is tied to 0 and its target to a constant. pc goes out to the bench, which answers instr = imem[pc] in the same cycle.',
-      parts: ['u7', 'u8', 'u11'], codex: ['pc', 'singlecycle'],
+      text: 'The PC block (register, incrementer, two bus muxes: 318 NANDs) does pc ← rst ? 0 : pc + 1; its load input is tied to 0 and its target to a constant. pc goes out to the bench, which answers instr = imem[pc] in the same cycle.',
+      parts: ['u12', 'u8', 'u9'], codex: ['pc', 'singlecycle'],
     },
     {
       title: 'Control',
@@ -132,28 +132,28 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'The immediate',
-      text: 'The generator is wiring; the 4:1 bus mux on isel (192 NANDs) picks I for addi and the shifts, U for lui. The selected value feeds the ALU\'s b mux and the result mux.',
-      parts: ['u2', 'u3'], codex: ['immediates'],
+      text: 'The generator is wiring. Core I uses two formats, I for addi and the shifts and U for lui, and isel bit 1 tells them apart: one 16-bit 2:1 mux, 49 NANDs. The selected value feeds the ALU\'s b mux and the result mux.',
+      parts: ['u2', 'u3', 'u4'], codex: ['immediates'],
     },
     {
       title: 'Register file',
-      text: 'The splitter takes rd = instr[6:4], rs1 = instr[9:7] and rs2 = instr[12:10] straight to the register file: with fixed field positions the reads start without waiting for control. 2 627 NANDs, 53% of the core: seven 16-bit registers (x0 is wired to 0), a write decoder, two 8:1 read muxes. Reads are combinational; x[rd] is written at the rising edge when rwe.',
-      parts: ['u0', 'u4'], codex: ['regfile'],
+      text: 'The splitter takes rd = instr[6:4], rs1 = instr[9:7] and rs2 = instr[12:10] straight to the register file: with fixed field positions the reads start without waiting for control. 2 403 NANDs, 56% of the core: seven 16-bit registers (x0 is wired to 0), a write decoder, two 8:1 read muxes. Reads are combinational; x[rd] is written at the rising edge when rwe.',
+      parts: ['u0', 'u5'], codex: ['regfile'],
     },
     {
       title: 'ALU operand b',
-      text: 'A 16-bit 2:1 mux on bimm: rs2 for R-type, the immediate for addi, the shifts, lw and sw. 64 NANDs.',
-      parts: ['u5'],
+      text: 'A 16-bit 2:1 mux on bimm: rs2 for R-type, the immediate for addi and the shifts. 49 NANDs.',
+      parts: ['u6'],
     },
     {
       title: 'The ALU',
-      text: 'rs1 op b, with the operation from control: 1 250 NANDs on a ripple adder. Its result also drives daddr, and rs2 drives dwdata: the reference wires the data port already, so the same chip passes Core II.',
-      parts: ['u6'], codex: ['alu', 'datapath'],
+      text: 'rs1 op b, with the operation from control: 1 250 NANDs on a ripple adder. Its result also drives daddr, and rs2 drives dwdata: the data port is wired, though Core I\'s programs never load or store.',
+      parts: ['u7'], codex: ['alu', 'datapath'],
     },
     {
       title: 'Write back',
-      text: 'A 4:1 bus mux on wb picks what rd receives: the ALU, drdata, pc + 1 (a constant here: no jumps) or the immediate, which lets lui skip the ALU. Period 98 with the bench\'s 8-delay memories: PC → instruction memory → control → immediate mux → ALU → data memory → result mux → register file, and every instruction pays for that path.',
-      parts: ['u9', 'u10'], codex: ['criticalpath'],
+      text: 'wb is 0 (the ALU) or 3 (the immediate, so lui skips the ALU), and bit 0 tells them apart: one more 2:1 bus mux picks what rd receives. 4 318 NANDs, period 84 with the bench\'s 8-delay memories: PC → instruction memory → control → ALU → result mux → register file, and every instruction pays for that path.',
+      parts: ['u10', 'u11'], codex: ['criticalpath'],
     },
   ],
 
@@ -165,7 +165,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Decode a load or a store',
-      text: 'lw: rwe, bimm, isel = 0 (offset instr[15:10]), add, wb = 1. sw: mwe, bimm, isel = 1, add, no rwe; it has no rd, so its offset {instr[15:13], instr[6:4]} uses the rd field\'s bits.',
+      text: 'lw: rwe, bimm, isel = 0 (offset instr[15:10]), add, wb = 1. sw: mwe, bimm, isel = 1, add, no rwe; it has no rd, so its offset {instr[15:13], instr[6:4]} uses the rd field\'s bits. A third format, so the immediate mux becomes a 4:1 bus mux, 192 NANDs.',
       parts: ['u1', 'u2', 'u3'], codex: ['loadstore'],
     },
     {
@@ -175,12 +175,12 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'The address',
-      text: 'The ALU adds the base and the offset: daddr = rs1 + imm, counted in 16-bit words. The top nine addresses (0xFFF7–0xFFFF) are devices, reached as negative offsets from x0: lw a0, -4(x0) reads IN at 0xFFFC.',
+      text: 'The ALU adds the base and the offset: daddr = rs1 + imm, counted in 16-bit words. The top seven addresses (0xFFF9–0xFFFF) are devices, reached as negative offsets from x0: lw a0, -4(x0) reads IN at 0xFFFC.',
       parts: ['u5', 'u6'], codex: ['mmio'],
     },
     {
       title: 'Load write-back',
-      text: 'wb = 1 selects drdata, which the memory returns in the same cycle. No new NANDs over Core I (4 973); the cost is time: the data memory sits behind the ALU, and that path sets the period at 98.',
+      text: 'wb = 1 selects drdata, which the memory returns in the same cycle: the result mux becomes 4:1 too. 4 604 NANDs, 286 over Core I for the two wider muxes; the bigger cost is time: the data memory sits behind the ALU, and that path sets the period at 98 instead of 84.',
       parts: ['u9', 'u10'], codex: ['criticalpath'],
     },
   ],
@@ -188,8 +188,8 @@ export const WALKS2: Record<string, WalkScript> = {
   c_core3: [
     {
       title: 'The PC, now loadable',
-      text: 'The same 448-NAND PC block, with its load and target inputs driven this time: pc ← ld ? target : pc + 1. The next-PC logic placed below decides both.',
-      parts: ['u10'], codex: ['pc'],
+      text: 'pc ← rst ? 0 : ld ? target : pc + 1. The next-PC logic placed below decides ld and target and already computes pc + 1, so the PC is a plain 16-bit register (144 NANDs, no enable: it loads every cycle) behind two 2:1 bus muxes. The 318-NAND PC block would repeat that incrementer.',
+      parts: ['u10', 'u11', 'u12', 'u13'], codex: ['pc'],
     },
     {
       title: 'Decode',
@@ -208,17 +208,17 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Branch comparator',
-      text: 'take from rs1, rs2 and op[1:0], in parallel with the ALU: 335 NANDs, depth 49. It reads rd2 directly, since a branch\'s immediate goes to the target adder.',
+      text: 'take from rs1, rs2 and op[1:0], in parallel with the ALU: 287 NANDs, depth 44. It reads rd2 directly, since a branch\'s immediate goes to the target adder.',
       parts: ['u7'], codex: ['branches', 'comparator'],
     },
     {
       title: 'Next PC',
-      text: 'ld = jal + jalr + br·take, and target = pc + imm or rs1 + imm, with the immediate the core already selected: 440 NANDs. Its pc1 duplicates the PC block\'s own incrementer, which has no output for its sum.',
+      text: 'ld = jal + jalr + br·take, and target = pc + imm or rs1 + imm, with the immediate the core already selected: 421 NANDs. Its pc1 is the PC\'s next value when ld = 0.',
       parts: ['u8'],
     },
     {
       title: 'Write the link',
-      text: 'The result mux\'s third input is now pc1: jal and jalr write the return address. 5 748 NANDs, period still 98: the load path stays longer than the branch path through the comparator and next PC.',
+      text: 'The result mux\'s third input is now pc1: jal and jalr write the return address. 5 236 NANDs, period still 98: the load path stays longer than the branch path through the comparator and next PC.',
       parts: ['u9'], codex: ['cpi'],
     },
   ],
@@ -226,7 +226,7 @@ export const WALKS2: Record<string, WalkScript> = {
   c_computer: [
     {
       title: 'The core',
-      text: 'Core III as one part, 5 748 NANDs. Its instr and drdata pins expect answers in the same cycle; here parts give them instead of the bench.',
+      text: 'Core III as one part, 5 236 NANDs. Its instr and drdata pins expect answers in the same cycle; here parts give them instead of the bench.',
       parts: ['u0'], codex: ['cpu'],
     },
     {
@@ -236,7 +236,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Data RAM',
-      text: 'A 64-word RAM on daddr[5:0], written with dwdata at the clock edge and read combinationally into drdata. 20 166 NANDs, 72% of the computer: about 79 transistors per stored bit with the decoder and read mux, against 6 in an SRAM cell.',
+      text: 'A 64-word RAM on daddr[5:0], written with dwdata at the clock edge and read combinationally into drdata. 20 166 NANDs, 73% of the computer: about 79 transistors per stored bit with the decoder and read mux, against 6 in an SRAM cell.',
       parts: ['u2', 'u7'], codex: ['ram'],
     },
     {
@@ -246,7 +246,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'LED register',
-      text: 'A 16-bit register loaded at the edge when its write is 1: the program\'s sw t0, -5(x0) writes 0xFFFB. Nothing reads it back, so a load from an I/O address returns RAM data. Period 110: the RAM\'s decoder and read mux are slower than the bench\'s 8-delay memory.',
+      text: 'A 16-bit register (208 NANDs) loaded at the edge when its write is 1: the program\'s sw t0, -5(x0) writes 0xFFFB. Nothing reads it back, so a load from an I/O address returns RAM data. 27 599 NANDs, period 110: the RAM\'s decoder and read mux are slower than the bench\'s 8-delay memory.',
       parts: ['u8'], codex: ['register'],
     },
   ],
@@ -255,7 +255,7 @@ export const WALKS2: Record<string, WalkScript> = {
   pi_reg: [
     {
       title: 'The bubble mux',
-      text: 'A 16-bit 2:1 mux in front of the register picks d or 0 on clr: 64 NANDs. Zero is a bubble because an all-zero control word has rwe = mwe = br = jal = jalr = 0: an instruction that changes nothing.',
+      text: 'A 16-bit 2:1 mux in front of the register picks d or 0 on clr: 49 NANDs. Zero is a bubble because an all-zero control word has rwe = mwe = br = jal = jalr = 0: an instruction that changes nothing.',
       parts: ['u0', 'u1'], codex: ['flush'],
     },
     {
@@ -265,7 +265,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'The register',
-      text: 'A 16-bit register with enable, 240 NANDs: q ← clr ? 0 : en ? d : q at the rising edge. 307 NANDs in all, period 8. The finished RV16 has 17 of them, 5 219 NANDs, 35% of the chip.',
+      text: 'A 16-bit register with enable, 208 NANDs: q ← clr ? 0 : en ? d : q at the rising edge. 260 NANDs in all, period 8. The finished RV16 has 16 of them, 4 160 NANDs, 32% of the chip.',
       parts: ['u3'], codex: ['register'],
     },
   ],
@@ -273,48 +273,48 @@ export const WALKS2: Record<string, WalkScript> = {
   pi_core0: [
     {
       title: 'F: the PC',
-      text: 'A plain 16-bit register, always enabled, loading pc + 1 (an 80-NAND incrementer), or 0 on rst through the reset mux. These programs have no branches, so nothing else ever loads it.',
-      parts: ['u0', 'u2', 'u4', 'u5', 'u6'], codex: ['pipeline'],
+      text: 'A plain 16-bit register (144 NANDs, no enable), loading pc + 1 from a 76-NAND incrementer, or 0 on rst through the reset mux. These programs have no branches, so nothing else ever loads it.',
+      parts: ['u2', 'u4', 'u5', 'u6'], codex: ['pipeline'],
     },
     {
       title: 'F/D',
-      text: 'Two pipeline registers hold the fetched word and its pc for D. clr = rst, and en = 1: nothing stalls yet.',
-      parts: ['u7', 'u8'],
+      text: 'One pipeline register holds the fetched word for D. clr = rst, and en = 1: nothing stalls yet. The pc stays in F: without branches or jumps, no later stage needs it.',
+      parts: ['u7'],
     },
     {
       title: 'D: decode',
       text: 'Control, the immediate generator and the format mux work on F/D\'s word, as in the single-cycle core.',
-      parts: ['u9', 'u10', 'u11', 'u12'], codex: ['control'],
+      parts: ['u8', 'u9', 'u10', 'u11'], codex: ['control'],
     },
     {
       title: 'D: registers, falling edge',
       text: 'The register file is clocked by ¬clk: W writes at mid-cycle and D reads the new value in the second half. An instruction three behind its producer therefore sees the result without forwarding.',
-      parts: ['u3', 'u13'], codex: ['regfile'],
+      parts: ['u3', 'u12'], codex: ['regfile'],
     },
     {
       title: 'D/E',
-      text: 'Six registers carry the rs1 and rs2 values, the immediate, pc, a control word (rwe, bimm, alu, mwe, wb, br, jal, jalr, cond, packed into 16 bits) and the register numbers. 1 842 NANDs: packing signals into 16-bit words reuses one register type, and the spare bits cost flip-flops all the same.',
-      parts: ['u14', 'u16', 'u17', 'u18', 'u19', 'u20', 'u21', 'u22'],
+      text: 'Five registers carry the rs1 and rs2 values, the immediate, a control word (rwe, bimm, alu, mwe, wb, br, jal, jalr, cond, packed into 16 bits) and the register numbers: 1 300 NANDs. br, jal, jalr and cond ride along unused; packing signals into 16-bit words reuses one register type, and the spare bits cost flip-flops all the same.',
+      parts: ['u13', 'u15', 'u16', 'u17', 'u18', 'u19', 'u20'],
     },
     {
       title: 'E: execute',
-      text: 'The b mux and the ALU compute. The comparator and the next-PC logic are already here, but only next PC\'s pc + 1 (the link value) is used: their other 695 NANDs wait for Pipeline IV. E is the slowest stage at 65 delays, the ripple ALU 55 of them.',
-      parts: ['u23', 'u24', 'u25', 'u26', 'u27', 'u28'], codex: ['criticalpath'],
+      text: 'The b mux and the ALU compute, and nothing else happens in E. It is the slowest stage at 65 delays, the ripple ALU 55 of them.',
+      parts: ['u21', 'u22', 'u23', 'u24'], codex: ['criticalpath'],
     },
     {
       title: 'E/M',
-      text: 'The ALU result, the store data (rs2\'s value), pc + 1, the immediate, and a control word with rwe, mwe, wb and rd. Every value W might write travels separately until wb chooses, in M.',
-      parts: ['u29', 'u30', 'u31', 'u32', 'u33', 'u34', 'u35'],
+      text: 'The ALU result, the store data (rs2\'s value), the immediate, and a control word with rwe, mwe, wb and rd. Every value W might write travels separately until wb chooses, in M.',
+      parts: ['u26', 'u27', 'u28', 'u29', 'u30'],
     },
     {
       title: 'M: memory',
-      text: 'daddr = E/M\'s ALU result, dwdata = its store data, dwe = mwe: stores are reported from M. The value mux picks ALU, drdata, pc + 1 or the immediate by wb here, so M/W carries one value instead of four.',
-      parts: ['u36', 'u37'], codex: ['loadstore'],
+      text: 'daddr = E/M\'s ALU result, dwdata = its store data, dwe = mwe: stores are reported from M. The value mux picks the ALU, drdata or the immediate by wb (its pc + 1 input is 0: no jumps), so M/W carries one value instead of three.',
+      parts: ['u31', 'u32'], codex: ['loadstore'],
     },
     {
       title: 'M/W and write-back',
-      text: 'The value, rwe and rd reach the register file\'s write port and the rwe / rwa / rwd pins. 10 290 NANDs, period 65 instead of 98; but with two nops after every instruction the programs take 2 508 cycles, against 824 unpadded on Core II.',
-      parts: ['u38', 'u39', 'u40', 'u41', 'u42'], codex: ['cpi'],
+      text: 'The value, rwe and rd reach the register file\'s write port and the rwe / rwa / rwd pins. 7 676 NANDs, period 65 instead of 98; but with two nops after every instruction the programs take 2 508 cycles, against 824 unpadded on Core II.',
+      parts: ['u34', 'u35', 'u36', 'u37'], codex: ['cpi'],
     },
   ],
 
@@ -349,38 +349,38 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'D/E',
-      text: 'The same six registers. The rs1 and rs2 numbers it carries, unused in Pipeline I, are what E compares now.',
-      parts: ['u14', 'u16', 'u17', 'u18', 'u19', 'u20', 'u21', 'u22'],
+      text: 'The same five registers. The rs1 and rs2 numbers it carries, unused in Pipeline I, are what E compares now.',
+      parts: ['u15', 'u16', 'u17', 'u18', 'u19', 'u20'],
     },
     {
       title: 'Forwarding unit',
       text: 'E\'s rs1 and rs2 against rdM / rweM and rdW / rweW, which come back from the M and W control splitters placed below. 110 NANDs, depth 13.',
-      parts: ['u25'], codex: ['forwarding'],
+      parts: ['u22', 'u23'], codex: ['forwarding'],
     },
     {
       title: 'Operand muxes',
-      text: 'One 3:1 mux per operand (a 4:1 bus mux with input 3 tied to 0): 0 the register file, 1 M\'s result, 2 W\'s value. rs2 is forwarded too, because sw stores it and branches compare it. 192 NANDs each.',
-      parts: ['u26', 'u27'], codex: ['mux'],
+      text: 'One 3:1 mux per operand (a 4:1 bus mux with input 3 tied to 0): 0 the register file, 1 M\'s result, 2 W\'s value. rs2 is forwarded too, because sw stores it (and, from Pipeline IV, branches compare it). 192 NANDs each.',
+      parts: ['u24', 'u25'], codex: ['mux'],
     },
     {
       title: 'Execute',
-      text: 'The forwarded operands feed the b mux, the ALU, the comparator and next PC. Forwarding and its mux now sit in front of the ALU, and the period goes from 65 to 78.',
-      parts: ['u23', 'u28', 'u29', 'u30', 'u31'], codex: ['criticalpath'],
+      text: 'The forwarded operands feed the b mux and the ALU. Forwarding and its mux now sit in front of the ALU, and the period goes from 65 to 78.',
+      parts: ['u21', 'u26', 'u27'], codex: ['criticalpath'],
     },
     {
       title: 'E/M',
-      text: 'Unchanged: ALU result, store data, pc + 1, immediate, control.',
-      parts: ['u33', 'u34', 'u35', 'u36', 'u37', 'u38'],
+      text: 'Unchanged: ALU result, store data, immediate, control.',
+      parts: ['u29', 'u30', 'u31', 'u32', 'u33'],
     },
     {
       title: 'M: a result to forward',
       text: 'A second 4:1 mux gives M\'s result, with the ALU in drdata\'s place: a load\'s word exists only at the end of M, and these programs leave a nop after every load. The value mux still feeds W.',
-      parts: ['u39', 'u40', 'u41'],
+      parts: ['u34', 'u35', 'u36'],
     },
     {
       title: 'M/W',
-      text: 'W\'s value is written back and forwarded at distance 2; distance 3 is covered by the falling-edge write. +686 NANDs over Pipeline I: 970 cycles instead of 2 508, and 6% fewer NAND delays than Core II.',
-      parts: ['u43', 'u44', 'u45', 'u46'], codex: ['cpi'],
+      text: 'W\'s value is written back and forwarded at distance 2; distance 3 is covered by the falling-edge write. 8 362 NANDs, +686 over Pipeline I: 970 cycles instead of 2 508, and 6% fewer NAND delays than Core II.',
+      parts: ['u38', 'u39', 'u40', 'u41'], codex: ['cpi'],
     },
   ],
 
@@ -411,18 +411,18 @@ export const WALKS2: Record<string, WalkScript> = {
     {
       title: 'E, M and W, as before',
       text: 'D/E, forwarding, execute, E/M, the two M muxes and M/W, as in Pipeline II.',
-      parts: ['u16', 'u18', 'u20', 'u21', 'u22', 'u23', 'u24', 'u25', 'u28', 'u29', 'u30', 'u31', 'u32', 'u33', 'u34', 'u40', 'u41', 'u42', 'u43', 'u44', 'u45', 'u47', 'u48', 'u50', 'u51', 'u52'],
+      parts: ['u17', 'u19', 'u20', 'u21', 'u22', 'u23', 'u24', 'u25', 'u26', 'u27', 'u28', 'u29', 'u30', 'u36', 'u37', 'u38', 'u39', 'u40', 'u41', 'u42', 'u43', 'u45', 'u46', 'u47', 'u48'],
       codex: ['forwarding'],
     },
     {
       title: 'A load in E',
       text: 'loadE = rwe·(wb = 01), read from E\'s control word: no new pipeline bits.',
-      parts: ['u35', 'u36', 'u37', 'u38'],
+      parts: ['u31', 'u32', 'u33', 'u34'],
     },
     {
       title: 'Hazard unit',
       text: 'In D: the instruction being decoded reads the rd of a load in E. That word comes out of memory at the end of M, one cycle too late for E.',
-      parts: ['u54'], codex: ['loaduse'],
+      parts: ['u49'], codex: ['loaduse'],
     },
     {
       title: 'Hold the front',
@@ -431,26 +431,36 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Bubble into E',
-      text: 'D/E clr = rst + stall, plus a third input tied to 0 that Pipeline IV gives to the flush. The load moves on to M, and a cycle later W forwards its word. +129 NANDs, period unchanged at 78: 917 cycles instead of 970, one lost cycle per load-use pair.',
-      parts: ['u19'], codex: ['cpi'],
+      text: 'D/E clr = rst + stall, plus a third input tied to 0 that Pipeline IV gives to the flush. The load moves on to M, and a cycle later W forwards its word. 8 476 NANDs, +114, period unchanged at 78: 917 cycles instead of 970, one lost cycle per load-use pair.',
+      parts: ['u18'], codex: ['cpi'],
     },
   ],
 
   pi_core3: [
     {
       title: 'F and D, as before',
-      text: 'The PC with its stall hold, F/D with en = ¬stall, control, immediates, the falling-edge register file and the bubble OR.',
-      parts: ['u3', 'u4', 'u5', 'u7', 'u8', 'u9', 'u11', 'u12', 'u13', 'u14', 'u15', 'u16', 'u17', 'u21'], codex: ['pipeline'],
+      text: 'The PC with its stall hold, F/D instr with en = ¬stall, control, immediates, the falling-edge register file and the bubble OR.',
+      parts: ['u3', 'u4', 'u5', 'u7', 'u8', 'u9', 'u11', 'u13', 'u14', 'u15', 'u16', 'u17', 'u18', 'u20', 'u21'], codex: ['pipeline'],
     },
     {
       title: 'E, M and W, as before',
       text: 'D/E, forwarding, execute, the load detector, E/M, M, M/W and the hazard unit, unchanged.',
-      parts: ['u18', 'u20', 'u22', 'u23', 'u24', 'u25', 'u26', 'u27', 'u30', 'u31', 'u32', 'u33', 'u34', 'u38', 'u39', 'u40', 'u42', 'u43', 'u44', 'u45', 'u46', 'u47', 'u49', 'u50', 'u52', 'u53', 'u54', 'u56'],
+      parts: ['u22', 'u23', 'u24', 'u26', 'u27', 'u28', 'u29', 'u30', 'u31', 'u32', 'u33', 'u34', 'u37', 'u38', 'u39', 'u40', 'u42', 'u43', 'u44', 'u46', 'u47', 'u48', 'u49', 'u50', 'u52', 'u53', 'u54', 'u55', 'u56'],
+    },
+    {
+      title: 'The pc travels',
+      text: 'F/D pc and D/E pc carry each instruction\'s address to E, 520 NANDs: a branch\'s target is its own pc + imm, and by the time it reaches E the PC is two instructions further on.',
+      parts: ['u12', 'u25'],
     },
     {
       title: 'Resolve in E',
-      text: 'The comparator works on forwarded operands; next PC gives redirect = jal + jalr + br·take and the target. Both have sat in E since Pipeline I; now their outputs go back to F.',
+      text: 'The comparator works on forwarded operands; next PC gives redirect = jal + jalr + br·take, the target and pc + 1. 287 + 421 NANDs.',
       parts: ['u35', 'u36'], codex: ['branches'],
+    },
+    {
+      title: 'Write the link',
+      text: 'E/M pc + 1 takes next PC\'s pc1 to M, where the result and value muxes pick it for jal and jalr. Pipelines I to III fed those inputs a constant 0.',
+      parts: ['u45'],
     },
     {
       title: 'Redirect the PC',
@@ -459,7 +469,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Flush the wrong path',
-      text: 'F/D clr = rst + redirect, and redirect is the bubble OR\'s third input: the two younger instructions, fetched as if the branch fell through, become bubbles. +67 NANDs, period 82: forwarding → comparator → next PC → PC is now the critical path. Two cycles per taken branch or jump: 1 495 cycles against Core III\'s 1 236, 1% slower overall.',
+      text: 'F/D clr = rst + redirect, and redirect is the bubble OR\'s third input: the two younger instructions, fetched as if the branch fell through, become bubbles. 10 016 NANDs, +1 540; period still 78: forwarding → comparator → next PC → F/D clear takes 77. Two cycles per taken branch or jump: 1 495 cycles against Core III\'s 1 236, but 116 610 NAND delays against 121 128, about 4% faster.',
       parts: ['u10'], codex: ['flush'],
     },
   ],
@@ -469,50 +479,50 @@ export const WALKS2: Record<string, WalkScript> = {
     {
       title: 'A plain write',
       text: 'plain = we·¬trap·¬mret: a csrr* write lands only in a cycle with no trap and no mret. The priority is trap, then mret, then the write.',
-      parts: ['u2', 'u3', 'u4'], codex: ['csr'],
+      parts: ['u1', 'u2', 'u3'], codex: ['csr'],
     },
     {
       title: 'Which CSR',
-      text: 'A 3→8 decoder on sel, each line ANDed with plain: one write enable each for mstatus, mie, mtvec, mepc, mcause and mscratch. mip (2) and mcycle (7) have no register, so writes to them vanish.',
-      parts: ['u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'u11'], codex: ['decoder'],
+      text: 'A 3→8 decoder on sel, each line ANDed with plain: one write enable each for mstatus, mie, mtvec, mepc, mcause and mscratch. mip (2) and CSR 7 have no register, so writes to them vanish.',
+      parts: ['u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10'], codex: ['decoder'],
     },
     {
       title: 'mie, mtvec, mscratch',
-      text: 'Three 16-bit registers that load wdata when written, 240 NANDs each. mtvec is also an output: the handler\'s address, which the PC loads on a trap.',
-      parts: ['u12', 'u13', 'u14'], codex: ['register'],
+      text: 'Three 16-bit registers that load wdata when written, 208 NANDs each. mtvec is also an output: the handler\'s address, which the PC loads on a trap.',
+      parts: ['u11', 'u12', 'u13'], codex: ['register'],
     },
     {
       title: 'mepc and mcause',
-      text: 'A trap loads pc and cause, a write loads wdata: a 2:1 bus mux on trap and en = trap + write, 67 NANDs over a plain register. mepc is an output too: mret\'s target.',
-      parts: ['u15', 'u16', 'u17', 'u18', 'u19', 'u20'], codex: ['traps'],
+      text: 'A trap loads pc and cause, a write loads wdata: a 2:1 bus mux on trap and en = trap + write, 52 NANDs over a plain register. mepc is an output too: mret\'s target.',
+      parts: ['u14', 'u15', 'u16', 'u17', 'u18', 'u19'], codex: ['traps'],
     },
     {
       title: 'mstatus, written',
-      text: 'Always enabled, split into bits 2:0, 3 (MIE), 6:4, 7 (MPIE) and 15:8. A mux per field takes the written bits when mstatus is written and keeps the old ones otherwise; only bits 3 and 7 have more to do.',
-      parts: ['u21', 'u22', 'u23', 'u24', 'u25', 'u26', 'u27', 'u28'],
+      text: 'A 16-bit register with no enable (144 NANDs): its next value is computed every cycle. It is split into bits 2:0, 3 (MIE), 6:4, 7 (MPIE) and 15:8; a mux per field takes the written bits when mstatus is written and keeps the old ones otherwise. Only bits 3 and 7 have more to do.',
+      parts: ['u20', 'u21', 'u22', 'u23', 'u24', 'u25', 'u26', 'u27'],
     },
     {
       title: 'MIE and MPIE',
       text: 'MIE\' = trap ? 0 : mret ? MPIE : written; MPIE\' = trap ? MIE : mret ? 1 : written. A trap turns interrupts off and remembers the old enable in MPIE; mret puts it back.',
-      parts: ['u29', 'u30', 'u31', 'u32'], codex: ['interrupts'],
+      parts: ['u28', 'u29', 'u30', 'u31', 'u32'], codex: ['interrupts'],
     },
     {
       title: 'Read port',
-      text: 'An 8:1 bus mux on sel, 448 NANDs. mip is irq at bit 11 (MEIP), and mcycle reads 0. The whole file runs at period 19.',
-      parts: ['u1', 'u34', 'u35', 'u36', 'u37'], codex: ['mux'],
+      text: 'An 8:1 bus mux on sel, 448 NANDs. mip is irq at bit 11 (MEIP), and CSR 7 reads a constant 0. The whole file: 1 870 NANDs, period 17.',
+      parts: ['u0', 'u33', 'u34', 'u35', 'u36'], codex: ['mux'],
     },
     {
       title: 'Interrupt request',
       text: 'intr = MIE·mie[11]·irq, one 3-input AND. The core takes the interrupt whenever it is 1.',
-      parts: ['u38', 'u39'], codex: ['interrupts'],
+      parts: ['u37', 'u38'], codex: ['interrupts'],
     },
   ],
 
   y_trap: [
     {
       title: 'Core III, as before',
-      text: 'Control, immediates, register file, ALU, comparator, next PC, result mux and PC are Core III\'s.',
-      parts: ['u0', 'u1', 'u2', 'u4', 'u5', 'u19', 'u20', 'u21', 'u22', 'u26', 'u32'], codex: ['singlecycle'],
+      text: 'Control, immediates, register file, ALU, comparator, next PC, result mux, and the PC register with its load and reset muxes are Core III\'s.',
+      parts: ['u0', 'u1', 'u2', 'u4', 'u5', 'u21', 'u22', 'u23', 'u24', 'u28', 'u33', 'u34', 'u35', 'u36'], codex: ['singlecycle'],
     },
     {
       title: 'Illegal-instruction detector',
@@ -526,28 +536,28 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'CSR file',
-      text: 'sel is the rs2 field, wdata and we come from system decode, and the old value goes back to it. The irq input is tied to 0 here. 2 156 NANDs, the biggest addition.',
+      text: 'sel is the rs2 field, wdata and we come from system decode, and the old value goes back to it. The irq input is tied to 0 here. 1 870 NANDs, the biggest addition.',
       parts: ['u7', 'u8'], codex: ['csr'],
     },
     {
       title: 'Trap and cause',
-      text: 'trap = ill + ecall + ebreak (+ intr, always 0 here). Three bus muxes on constants pick mcause: ebreak 3, ecall 11, illegal 2, interrupt 0x800B. Bit by bit the cause is mostly constant (bit 1 is always 1, bit 15 is intr), so a few gates could replace these 192 NANDs.',
-      parts: ['u9', 'u10', 'u11', 'u12', 'u13', 'u14', 'u15', 'u16', 'u17'], codex: ['traps'],
+      text: 'trap = ill + ecall + ebreak (+ intr, always 0 here). mcause is mostly constant bit by bit: bit 1 = 1, bit 15 = intr, bit 0 = intr + ¬ill, bit 3 = intr + ¬ill·ecall, the rest 0. That gives ebreak 3, ecall 11, illegal 2, interrupt 0x800B in 5 NANDs.',
+      parts: ['u9', 'u10', 'u11', 'u12', 'u13', 'u14', 'u15', 'u16', 'u17', 'u18', 'u19'], codex: ['traps'],
     },
     {
       title: 'The instruction does not run',
       text: 'rwe = (rwe + csr)·¬trap and mwe = mwe·¬trap: a trapping instruction writes no register and stores nothing. The csr term lets csrr* write rd.',
-      parts: ['u18', 'u23', 'u24', 'u25'],
+      parts: ['u20', 'u25', 'u26', 'u27'],
     },
     {
       title: 'The CSR result',
       text: 'A 2:1 bus mux after the result mux: a CSR instruction writes the old CSR value to rd. The CSR read joins the result path, and the period rises from 98 to 100.',
-      parts: ['u27'], codex: ['criticalpath'],
+      parts: ['u29'], codex: ['criticalpath'],
     },
     {
       title: 'mtvec and mepc',
-      text: 'target = trap ? mtvec : mret ? mepc : next PC\'s target, and the PC loads on ld·¬trap + trap + mret. At the same edge the CSR file saves pc in mepc, so ecall\'s handler must add 1 to mepc before mret to skip it.',
-      parts: ['u28', 'u29', 'u30', 'u31'], codex: ['pc'],
+      text: 'target = trap ? mtvec : mret ? mepc : next PC\'s target, and the PC loads on ld + trap + mret: a trap wins in the target mux, so ld needs no ¬trap. At the same edge the CSR file saves pc in mepc, so ecall\'s handler must add 1 to mepc before mret to skip it. 7 972 NANDs, period 100.',
+      parts: ['u30', 'u31', 'u32'], codex: ['pc'],
     },
   ],
 
@@ -555,7 +565,7 @@ export const WALKS2: Record<string, WalkScript> = {
     {
       title: 'Core III, as before',
       text: 'Control, immediates, register file, ALU, comparator, next PC, result mux and PC.',
-      parts: ['u0', 'u1', 'u2', 'u4', 'u5', 'u18', 'u19', 'u20', 'u21', 'u25', 'u31'], codex: ['singlecycle'],
+      parts: ['u0', 'u1', 'u2', 'u4', 'u5', 'u20', 'u21', 'u22', 'u23', 'u27', 'u32', 'u33', 'u34', 'u35'], codex: ['singlecycle'],
     },
     {
       title: 'Exception decoders',
@@ -574,66 +584,66 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Cause 0x800B',
-      text: 'intr steers the last mux of the cause chain, so an interrupt wins over an exception of the same instruction. Bit 15 marks an interrupt; 11 is machine external.',
-      parts: ['u10', 'u11', 'u12', 'u13', 'u14', 'u15', 'u16'],
+      text: 'intr sets bit 15 and, through the NANDs on ¬intr, forces bits 0 and 3 to 1, whatever ill and ecall say: an interrupt wins over an exception of the same instruction. Bit 15 marks an interrupt; 11 is machine external.',
+      parts: ['u10', 'u11', 'u12', 'u13', 'u14', 'u15', 'u16', 'u17', 'u18'],
     },
     {
       title: 'Nothing runs',
       text: '¬trap cancels the register write and the store. mepc ← pc, so after mret the interrupted instruction runs from the start.',
-      parts: ['u17', 'u22', 'u23', 'u24', 'u26'],
+      parts: ['u19', 'u24', 'u25', 'u26', 'u28'],
     },
     {
       title: 'To the handler',
-      text: 'The PC loads mtvec, and MIE drops to 0 so the handler is not interrupted in turn. Zero NANDs over Exceptions: 9 004, period 100.',
-      parts: ['u27', 'u28', 'u29', 'u30'], codex: ['traps'],
+      text: 'The PC loads mtvec, and MIE drops to 0 so the handler is not interrupted in turn. Zero NANDs over Exceptions: 7 972, period 100.',
+      parts: ['u29', 'u30', 'u31'], codex: ['traps'],
     },
   ],
 
   y_final: [
     {
       title: 'Pipeline IV\'s front end',
-      text: 'The PC with the stall hold and the redirect mux; F/D with en = ¬stall and clr = rst + redirect.',
+      text: 'The PC with the stall hold and the redirect mux; F/D instr and F/D pc with en = ¬stall and clr = rst + redirect.',
       parts: ['u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'u11', 'u12'], codex: ['pipeline'],
     },
     {
       title: 'A valid bit',
-      text: 'F/D valid loads a constant 1 and clears to 0 with the rest of F/D. A bubble\'s all-zero word is opcode 0, f3 0, rs2 field 0, an illegal SYSTEM encoding: without this bit every bubble would trap. It spends a 307-NAND pipeline register on one bit, where a flip-flop with clear would do.',
-      parts: ['u13', 'u14', 'u15'], codex: ['precise'],
+      text: 'One flip-flop with clear: valid ← ¬clr·(en + valid), so it loads 1 with F/D and clears with it. An OR, a NOT, an AND and a 9-NAND flip-flop: 15 NANDs. A bubble\'s all-zero word is opcode 0, f3 0, rs2 field 0, an illegal SYSTEM encoding: without this bit every bubble would trap.',
+      parts: ['u13', 'u14', 'u15', 'u16'], codex: ['precise'],
     },
     {
       title: 'D: decode, registers',
       text: 'Control, immediates and the falling-edge register file. The valid bit rides in the control word, in the slot the earlier pipelines filled with 0.',
-      parts: ['u3', 'u16', 'u17', 'u18', 'u19', 'u20', 'u21', 'u23'],
+      parts: ['u3', 'u17', 'u18', 'u19', 'u20', 'u21', 'u22', 'u24'],
     },
     {
       title: 'D/E, with the word',
       text: 'Pipeline IV\'s six registers plus D/E instr, because the illegal detector and system decode read the word in E. The bubble OR as before.',
-      parts: ['u24', 'u25', 'u26', 'u27', 'u28', 'u29', 'u30', 'u31'],
+      parts: ['u25', 'u26', 'u27', 'u28', 'u29', 'u30', 'u31', 'u32'],
     },
     {
       title: 'E: forward and compute',
       text: 'Forwarding, the operand muxes, the ALU, the comparator and next PC, as in Pipeline IV.',
-      parts: ['u34', 'u35', 'u36', 'u37', 'u38', 'u39', 'u40'], codex: ['forwarding'],
+      parts: ['u33', 'u34', 'u35', 'u36', 'u37', 'u38', 'u39', 'u40', 'u41'], codex: ['forwarding'],
     },
     {
       title: 'E: CSRs',
       text: 'The detectors and the CSR file work in E, on pcE, with irq from the pin. A CSR instruction reads and writes there, its write gated by valid; the old value travels down as its result.',
-      parts: ['u41', 'u42', 'u43', 'u48'], codex: ['csr'],
+      parts: ['u42', 'u43', 'u44', 'u49'], codex: ['csr'],
     },
     {
       title: 'A precise trap',
-      text: 'exception = (ill + ecall + ebreak)·valid, interrupt = intr·valid, mret·valid; trap = exception + interrupt, with the single-cycle core\'s cause chain. The instruction in E has written nothing yet; the older ones in M and W complete, the younger ones in F and D are flushed.',
-      parts: ['u44', 'u45', 'u46', 'u47', 'u49', 'u50', 'u51', 'u52', 'u53', 'u54', 'u56', 'u57'], codex: ['precise', 'traps'],
+      text: 'exception = (ill + ecall + ebreak)·valid, interrupt = intr·valid, mret·valid; trap = exception + interrupt, with the single-cycle core\'s five cause NANDs. The instruction in E has written nothing yet; the older ones in M and W complete, the younger ones in F and D are flushed.',
+      parts: ['u45', 'u46', 'u47', 'u48', 'u50', 'u52', 'u53', 'u54', 'u55', 'u56', 'u60'], codex: ['precise', 'traps'],
     },
     {
       title: 'Cancel and redirect',
-      text: '¬trap gates rwe and mwe in E, and a CSR instruction\'s old value replaces the ALU result. target = mtvec on a trap, mepc on mret; redirect = ld·¬trap + trap + mret loads the PC and flushes F/D and D/E. Trap and mret join the redirect path: period 88 (+6).',
-      parts: ['u55', 'u58', 'u59', 'u60', 'u61', 'u62', 'u63', 'u64', 'u65'], codex: ['flush'],
+      text: '¬trap gates rwe and mwe in E, and a CSR instruction\'s old value replaces the ALU result. target = mtvec on a trap, mepc on mret; redirect = ld + trap + mret loads the PC and flushes F/D and D/E. The 3-input OR lengthens the flush path: period 81 (+3).',
+      parts: ['u51', 'u61', 'u62', 'u63', 'u64', 'u65', 'u66', 'u67'], codex: ['flush'],
     },
     {
       title: 'Load-use, M and W',
-      text: 'As in Pipeline IV, except that loadE uses rwe after the ¬trap gate, so a load interrupted in E raises no stall. 15 050 NANDs; the 45 programs take 2 399 cycles, 211 112 NAND delays, against 197 600 on the single-cycle core with traps.',
-      parts: ['u67', 'u68', 'u69', 'u72', 'u73', 'u74', 'u75', 'u76', 'u78', 'u79', 'u82', 'u83', 'u85'], codex: ['loaduse'],
+      text: 'As in Pipeline IV, except that loadE uses rwe after the ¬trap gate, so a load interrupted in E raises no stall. 13 035 NANDs; the 45 programs take 2 399 cycles, 194 319 NAND delays, against 197 600 on the single-cycle core with traps (1 976 cycles at period 100).',
+      parts: ['u68', 'u69', 'u70', 'u71', 'u73', 'u74', 'u75', 'u76', 'u77', 'u78', 'u79', 'u80', 'u81', 'u83', 'u84', 'u85', 'u86', 'u87'], codex: ['loaduse'],
     },
   ],
 };
