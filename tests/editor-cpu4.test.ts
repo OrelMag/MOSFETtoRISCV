@@ -1,33 +1,43 @@
 // The sandbox's 4-bit CPU example: it resolves on a fresh page load, draws without lint warnings,
-// and runs on EditorSim (cycle engine) to its halt with the result on the digits, every register
-// equal to the golden model's.
+// runs on EditorSim (cycle engine) to its halt with the result on the digits, and the CPU drawer's
+// monitor checks every register against the golden model, following the switches and the TEST key.
 
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
+import { Cpu4Monitor, cpu4Use, detectCpu4 } from '../src/editor/cpu4mon';
+import { cpu4Chip } from '../src/editor/example4';
 import { addExample, EXAMPLES } from '../src/editor/examples';
 import { UserLibrary } from '../src/editor/library';
 import { lintChip } from '../src/editor/lint';
 import { emptyWorkspace, type PartRef, polyline } from '../src/editor/model';
 import { partDef } from '../src/editor/parts';
 import { EditorSim } from '../src/editor/runtime';
-import { registry } from '../src/lib/define';
-import { regenerable } from '../src/lib/resolve';
-import { CPU4_STATE } from '../src/lib/cpu4';
 import { assemble4 } from '../src/isa4/asm4';
 import { Iss4 } from '../src/isa4/iss4';
-import { BCD4 } from '../src/isa4/programs4';
+import { BCD4, SWITCHES4, TEST4 } from '../src/isa4/programs4';
+import { CPU4_STATE } from '../src/lib/cpu4';
+import { registry } from '../src/lib/define';
+import { regenerable } from '../src/lib/resolve';
 import { findNode } from '../src/sim/flatten';
 
 const atLoad = new Set(registry.keys());
 const EX = EXAMPLES.find((e) => e.id === 'cpu4')!;
 
-function open() {
-  const { ws, id } = addExample(emptyWorkspace(), EX);
+/** The example (with another program, if given) on an EditorSim, the CPU drawer's monitor on it. */
+function open(src?: string) {
+  let { ws, id } = addExample(emptyWorkspace(), EX);
+  if (src) {
+    const sub = Object.fromEntries(['pcs', 'dec', 'regs', 'alu', 'acc', 'io'].map((k) => [k, `${id}_${k}`]));
+    ws = { ...ws, chips: { ...ws.chips, [id]: cpu4Chip(id, ws.chips[id].name, sub, src) } };
+  }
   const lib = new UserLibrary(ws);
   const es = new EditorSim({ debounceMs: 0 });
   es.update(lib.compiled(id)!, ws.chips[id].pins);
-  return { ws, id, lib, es };
+  const mon = new Cpu4Monitor(es, () => ws.chips[id], () => ws.chips);
+  return { ws, id, lib, es, mon };
 }
+
+const leaf = (es: EditorSim, path: string) => es.sim!.design.leaves.findIndex((l) => l.node.path.join('.') === path);
 
 /** A register's value through the example's hierarchy (a dotted path to a part with a q port). */
 function reg(es: EditorSim, path: string): number {
@@ -71,5 +81,51 @@ describe('the 4-bit CPU example', () => {
     expect([reg(es, S.pc), reg(es, S.a), reg(es, S.cy), reg(es, S.src)]).toEqual([iss.pc, iss.a, iss.cy, iss.src]);
     // Run stops once the halt part reads 1: the JUN to itself is fetched, not yet executed.
     expect(es.cycles).toBe(iss.steps - 1);
+  });
+
+  it('the CPU drawer\'s monitor: detected, checking, every register equal to the model through Run to halt', () => {
+    const { ws, id, es, mon } = open();
+    expect(detectCpu4(ws.chips[id])).toEqual({ rom: 'rom' });
+    expect(mon.checking).toBe(true);
+    // As the drawer's Run to halt: frame after frame (the halt part stops each run one step at a time).
+    for (let i = 0; i < 10 && !mon.done; i++) mon.runToHalt(1e9);
+    expect(mon.mismatch).toBeNull();
+    expect(mon.iss!.halted).toBe(true);
+    expect(mon.retired).toBe(38);
+    expect(es.cycles).toBe(38);
+    expect(mon.read()!.ports.slice(0, 4)).toEqual([7, 1, 1, 0]);
+    expect(mon.log.at(-1)).toMatchObject({ text: 'JUN  0x25', effect: 'PC → 25' });
+    expect(mon.log.find((l) => l.text === 'DAA')!.effect).toBe('A ← 0, CY ← 1');
+  });
+
+  it('follows the switches and the TEST key the hardware reads', () => {
+    let o = open(SWITCHES4);
+    o.es.pokeLeaf(leaf(o.es, 'io_sw'), { v: 6 });
+    o.es.runCycles(40);
+    expect(o.mon.mismatch).toBeNull();
+    expect(o.mon.read()!.ports[4]).toBe(7);
+    o = open(TEST4);
+    o.es.runCycles(10);
+    o.es.setKey(' ', true);
+    o.es.runCycles(10);
+    o.es.setKey(' ', false);
+    o.es.runCycles(10);
+    expect(o.mon.mismatch).toBeNull();
+    expect(o.mon.read()!.ports[3]).toBe(1);
+  });
+
+  it('a hardware state the model disagrees with is a mismatch, named', () => {
+    const { es, mon } = open();
+    es.runCycles(6);
+    mon.iss!.a = 9; // the model now believes A = 9 before ADD R11
+    es.runCycles(1);
+    expect(mon.mismatch).toMatchObject({ what: 'a', name: 'A', after: 'ADD  R11' });
+    expect(mon.done).toBe(true);
+  });
+
+  it('marks the blocks an instruction uses', () => {
+    expect(cpu4Use(0x8b00).units).toEqual(['rom', 'dec', 'pcs', 'regs', 'alu', 'acc']);
+    expect(cpu4Use(0xe200).units).toContain('io');
+    expect(cpu4Use(0xea00).units).toContain('io_sw');
   });
 });
