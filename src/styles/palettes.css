@@ -106,8 +106,9 @@
 /* Colour per net (settings.netColors): each drawn net carries its hue as --nh (view/nethue.ts) and
    the value tokens are rebuilt from it, so colour says which net and brightness says its value
    (0 a dim tint, 1 bright with its glow). X and Z keep the palette's colours and dashes. On top of
-   any palette; light-dark() follows the theme. */
-:root[data-netcolors='on'] [style*='--nh'] {
+   any palette; light-dark() follows the theme. A colour the user picked for a net (sandbox) marks it
+   --net-user and shows with the switch off too. */
+:root[data-netcolors='on'] [style*='--nh'], :root [style*='--net-user'] {
   --w0: light-dark(oklch(0.78 0.08 var(--nh)), oklch(0.50 0.09 var(--nh)));
   --w1: light-dark(oklch(0.57 0.19 var(--nh)), oklch(0.80 0.16 var(--nh)));
   --w1-glow: light-dark(oklch(0.57 0.19 var(--nh) / 22%), oklch(0.80 0.16 var(--nh) / 30%));

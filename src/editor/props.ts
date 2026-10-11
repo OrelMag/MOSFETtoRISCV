@@ -22,6 +22,8 @@ import { allOnes, type ChipDoc, type CommentDoc, type DisplayKind, type ExitDir,
 import { deleteSel, flipParts, setComment, setLabel, setPart, setPin, setRef, setWire } from './ops';
 import { keyLabel, MAX_RAM_K, MAX_WIDTH, normalizeKey } from './parts';
 import { openChip } from './session';
+import { hueSwatches } from './hueswatch';
+import { colourNets, hueOfNets } from './wirehue';
 
 export interface PropsSection {
   id: string;
@@ -305,12 +307,21 @@ export class PropsPanel {
     const out = this.section('Pointer',
       h('p', { class: 'sb-sum' }, 'Every pointer with the same name is the same net: no wire needed between them.'),
       this.row('Name', nameIn), h('datalist', { id: 'sb-ptr-names' }, names.map((n) => h('option', { value: n }))),
-      this.row('Faces', this.select(l.face ?? 'right', FACES.map((f): [ExitDir, string] => [f, f]), (f) => this.apply((d) => setLabel(d, l.id, { face: f }, ed.defOf)))));
+      this.row('Faces', this.select(l.face ?? 'right', FACES.map((f): [ExitDir, string] => [f, f]), (f) => this.apply((d) => setLabel(d, l.id, { face: f }, ed.defOf)))),
+      this.netColour([], [l.id]));
     out.append(h('div', { class: 'sb-same' }, h('b', null, `${same.length} named “${l.name}”`),
       same.map((q) => h('button', { class: `sb-chip-btn${q.id === l.id ? ' on' : ''}`, title: 'Go to this pointer', onclick: () => this.goto({ labels: [q.id] }, pointerGeom(q).tip) }, `${q.id} (${q.at[0]}, ${q.at[1]})`))));
     if (same.length > 1) out.append(h('div', { class: 'sb-btns' }, this.btn('Next', 'Jump to the next pointer with this name (click it again, or double-click)', () => ed.tools.jump(l.id))));
     out.append(h('div', { class: 'sb-btns' }, this.btn('Delete', 'Delete (Del)', () => { ed.edit((d) => deleteSel(d, { labels: [l.id] })); ed.select({}); })));
     return out;
+  }
+
+  /** The colour of the nets of these wires / pointers (wirehue.ts): the whole net takes it. */
+  private netColour(wires: string[], labels: string[]): HTMLElement {
+    const ed = this.ed;
+    return h('div', { class: 'sb-row sb-row-hues', title: 'Colour of the whole net (its other wires and pointers too); brightness still shows the value' },
+      h('span', null, 'Colour'),
+      hueSwatches(hueOfNets(ed.doc, ed.compiled, wires, labels), (hue) => this.apply((d) => ({ doc: colourNets(d, ed.compiled, wires, labels, hue) }))));
   }
 
   private wire(w: WireDoc): HTMLElement {
@@ -320,6 +331,7 @@ export class PropsPanel {
     return this.section('Wire',
       h('p', { class: 'sb-sum' }, net >= 0 ? `On net ${netlistOf(ed.compiled.def)?.nets[net]?.name ?? `#${net}`}.` : 'Not part of a working net (see the diagnostics).'),
       this.row('Net name', this.text(w.name ?? '', (v) => set({ name: v.trim() || undefined }), { placeholder: 'optional' }), 'Shown in the inside view and in Verilog'),
+      this.netColour([w.id], []),
       this.row('Capacitive', (() => {
         const c = h('input', { type: 'checkbox', checked: !!w.cap }) as HTMLInputElement;
         c.addEventListener('change', () => set({ cap: c.checked || undefined }));

@@ -482,6 +482,9 @@ export function unravelPointer(doc: ChipDoc, name: string, defOf: DefOf): Edited
     if (wh.cap || w2.cap) merged.cap = true;
     const init = wh.init ?? w2.init;
     if (init !== undefined) merged.init = init;
+    // The net's colour outlives its pointers.
+    const hue = wh.hue ?? w2.hue ?? hub.hue ?? second.hue;
+    if (hue !== undefined) merged.hue = hue;
     cur = { ...cur, wires: cur.wires.filter((w) => w.id !== w2.id).map((w) => (w.id === wh.id ? merged : w)) };
     mapEnds((e) => ('wire' in e && e.wire === w2.id ? { wire: wh.id, at: e.at }
       : onLabel(e, hub.id) ? { wire: wh.id, at: hub.at }
@@ -615,6 +618,8 @@ export function collapseWire(doc: ChipDoc, id: string, name: string, defOf: DefO
   const labels = [...doc.labels];
   const newLabels: string[] = [], newWires: string[] = [];
   const lids = new Set(labels.map((l) => l.id)), wids = new Set(doc.wires.map((w) => w.id));
+  // The net's colour (wirehue.ts) goes on to its pointers and stubs.
+  const hue = old.find((q) => q.hue !== undefined)?.hue ?? doc.labels.find((l) => l.name === nm && l.hue !== undefined)?.hue;
   for (const e of real) {
     const g = endGeom(doc, e, defOf);
     if (!g) return { doc, reason: `${endKey(e)} does not resolve` };
@@ -633,12 +638,12 @@ export function collapseWire(doc: ChipDoc, id: string, name: string, defOf: DefO
     const at = (spots.find((s) => !s.along && !s.clash) ?? spots.find((s) => !s.along) ?? spots[0]).p;
     const lid = nextId('l', lids);
     lids.add(lid);
-    const l: LabelDoc = { id: lid, name: nm, at, face };
+    const l: LabelDoc = { id: lid, name: nm, at, face, ...(hue !== undefined ? { hue } : {}) };
     labels.push(l);
     boxes.push(pointerGeom(l).rect);
     const wid = nextId('w', wids);
     wids.add(wid);
-    const w: WireDoc = { id: wid, a: e, b: { label: lid }, pts: [] };
+    const w: WireDoc = { id: wid, a: e, b: { label: lid }, pts: [], ...(hue !== undefined ? { hue } : {}) };
     // A stored charge or power-on value belongs to the net: the first stub carries it.
     if (!newWires.length) {
       if (old.some((q) => q.cap)) w.cap = true;

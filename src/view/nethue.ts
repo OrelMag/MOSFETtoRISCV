@@ -99,7 +99,16 @@ export function spreadHues(nets: readonly HueNet[]): number[] {
   return hues;
 }
 
+/**
+ * A hue the user picked for a net (the sandbox's net colours, editor/wirehue.ts) travels as
+ * USER_HUE + hue, so it passes through every place a net hue goes as one number; setNetHue then
+ * also marks the element (`--net-user`) so it shows whether or not colour per net is on.
+ */
+export const USER_HUE = 1000;
+
 export function setNetHue(el: SVGElement, hue: number | undefined): void {
   if (hue === undefined) el.style.removeProperty('--nh');
-  else el.style.setProperty('--nh', String(hue));
+  else el.style.setProperty('--nh', String(hue >= USER_HUE ? hue - USER_HUE : hue));
+  if (hue !== undefined && hue >= USER_HUE) el.style.setProperty('--net-user', '1');
+  else el.style.removeProperty('--net-user');
 }
