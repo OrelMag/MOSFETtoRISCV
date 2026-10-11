@@ -64,6 +64,13 @@ shows exactly the drawing you made.
 is the same net, with no wire between them. A pointer carries a bus as well as a single bit. In the
 inside view of a chip, pointers sit where you put them.
 
+**Net colours.** Right-click a wire or a pointer (or look in its properties) to pick a colour for its
+whole net: its other wires and pointers show it too, and so do wires you join to it later. Brightness
+still gives the value (dim 0, bright 1, X and Z keep their red and violet dashes). *Auto* uses the
+net's colour-per-net hue; the crossed swatch removes the colour. Colours are saved and shared with the
+chip and never recompile it. The **Vivid look** (wire-colour menu) fills parts with bright colours
+and puts the circuit on a dark board.
+
 ## Parts
 
 The palette is searchable. **Purist** limits it to transistors, NAND, IO, constants, wiring,

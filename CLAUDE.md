@@ -293,6 +293,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   unravel.ts     unravelPointer(s) (a pointer name → wires from the driver: square shapes, else A* on the half grid;
                  never on another net), collapseWire(s) (a wire tree → one pointer per end), pointersOf(sel), suggestName
   hops.ts        HopCache: wire hops recomputed for the moved wires and those crossing them only
+  wirehue.ts     net colours: `hue` on wires and pointers, userHues (the colour most of a net's pieces carry),
+                 colourNets (a whole net), hueOfNets, WIRE_HUES; hueswatch.ts: the swatch row (menu, properties)
   flowdir.ts     wireFlows: which way each drawn wire carries its signal (from part outputs / chip inputs,
                  cut at branch points; distance from the driver, sink or junction at the far end), for flowing bits
   probes.ts      ProbeTarget (wires / pin / pointer name) → flat nets of each new build (resolveProbe)
@@ -518,7 +520,11 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
   `netKey` (its name, else its sorted ends), then `spreadHues` moves those within 60° of a net drawn next to them (from
   the routed paths in SchematicView, the wires' polylines in EditorView: recomputed per build and wire shape); drawn elements carry it as inline `--nh` (value classes are rewritten on
   every repaint) and palettes.css rebuilds `--w0 --w1 --bus --bus1 …` from it. A new per-net element must get
-  `setNetHue` too.
+  `setNetHue` too. A colour the user picked for a net (sandbox, editor/wirehue.ts) travels as `USER_HUE + hue`
+  through the same paths; setNetHue then also sets `--net-user`, which shows it with the switch off.
+- Vivid look (settings.vivid, `data-look="vivid"`, styles/vivid.css): filled bright bodies, wires scaled by `--wire-k`
+  (use `calc(var(--wire-w1) * var(--wire-k, 1))` for a new wire width). Its dark board (`data-board="dark"`) adds
+  `svg.schematic` to the dark token blocks (theme.css, editor.css, ioparts.css): a new dark token block needs it too.
 - Module colours: library boxes and muxes are tinted by `CATEGORY_HUE[def.category]` (view/symbols.ts,
   class `.sym.cat`, the same `--chip-h` styling as a user chip's hue); `data-modules="plain"` on
   `<html>` (settings.modules) turns it off. `data-wide` (settings.wide, the stage bar's panes button)
