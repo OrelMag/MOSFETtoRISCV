@@ -49,7 +49,7 @@ function computerDef(): ComponentDef {
   const pcs = b.op(splitter([5, 11], 4), [`${core}.pc`]);
   const ds = b.op(splitter([6, 9, 1], 4), [`${core}.daddr`], 'address');
   b.next();
-  const rom = b.op(romDef, [`${pcs}.o0`], 'program');
+  const rom = b.op(romDef, [`${pcs}.o0`], 'program', ROM_PART.id); // the given part: one id in the learner's chip and here
   const io = b.name(`${ds}.o2`, 'io', true);
   const nio = b.op1(NOT, [io]);
   b.next();

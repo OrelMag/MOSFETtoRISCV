@@ -184,8 +184,11 @@ src/lib/       the component library (registered in `registry` via define())
   fpu.ts         parametric IEEE 754 units (format {E, M}): lzc, shiftLeft, shiftRightSticky, fpUnpack,
                  normRound (shared RNE rounding), fpAdd, fpMul, fpFromInt, fpCompare, FPU32, FP_DECODE;
                  singleCycleCpu(…, { fpu }) adds the f register file (regfile(5, 32, false))
-  mpdecode.ts    MP_DECODE (atomics, csrr mhartid), ARBITER2 (round-robin)
-  multicore.ts   dualCore(program): two singleCycleCpu(…, { shared }) cores + arbiter + shared memory
+  mpdecode.ts    MP_DECODE (atomics, csrr mhartid), ARBITER2 (round-robin), arbiterN(n) (2–8 ways, the same policy:
+                 one-hot pointer, masked + unmasked priority chains)
+  multicore.ts   dualCore(program): two singleCycleCpu(…, { shared }) cores + arbiter + shared memory (the chapter's,
+                 the Yosys / OpenROAD flow's); multiCore(program, n, { dmemK, imemK }): 2, 4 or 8 cores, arbiterN,
+                 encoder + mux trees on the port; sharedMemory(k): dataMemory up to 2^6 words, else a bigRam
   cpu4.ts        the 4-bit CPU (Examples ▸ 4-bit CPU): CPU4_PC (PC + 3-level stack), CPU4_DECODE (control4: the control
                  table, its spec), CPU4_REGS (16 × 4 in pairs), CPU4_ALU (alu4), CPU4_ACC, CPU4_IO (SRC + five ports), rom4(words)
                  (256 × 16, the sandbox ROM part's geometry), cpu4(words) (the computer; CPU4_STATE: paths of its registers)

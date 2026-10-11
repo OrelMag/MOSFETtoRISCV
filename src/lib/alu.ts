@@ -133,9 +133,12 @@ export const isZero = memo((n: number): ComponentDef => {
  * Left shifts reverse the word on the way in and out. Arithmetic right shifts fill with the
  * sign bit.
  */
-export const shifter = memo((n: number): ComponentDef => {
+export const shifter = memo((n: number): ComponentDef => shifterOf(busMux2(n), `shift${n}`, `${n}-bit barrel shifter`));
+
+/** shifter(n) on a given 2:1 word multiplexer `m2` (ports a, b, s, y; n = its width). Not memoized. */
+export function shifterOf(m2: ComponentDef, id: string, name: string): ComponentDef {
+  const n = m2.ports.find((p) => p.name === 'y')!.width;
   const k = log2(n);
-  const m2 = busMux2(n);
   const X = (c: number) => 6 + 16 * c;
   const yL = 22 + 2 * k, yA = yL + 4, yF = yL + 4;
   const last = k + 1;
@@ -183,7 +186,7 @@ export const shifter = memo((n: number): ComponentDef => {
   nets.push({ name: 'fill', ends: fillEnds, via: fillVia });
   const M = mask(n);
   return define({
-    id: `shift${n}`, name: `${n}-bit barrel shifter`, category: 'arithmetic',
+    id, name, category: 'arithmetic',
     summary: `Shifts by 0–${n - 1} places in ${k} stages of multiplexers (stage j shifts by 2^j). Left shifts reverse the word; arithmetic shifts copy the sign bit in.`,
     ports: [bus('a', n, 'in'), bus('sh', k, 'in'), bit('left', 'in'), bit('arith', 'in'), bus('y', n, 'out')],
     symbol: { kind: 'box', label: 'SHIFT' },
@@ -207,7 +210,7 @@ export const shifter = memo((n: number): ComponentDef => {
 endmodule`,
     },
   });
-});
+}
 
 // ---- the ALU -----------------------------------------------------------------------------
 
@@ -238,10 +241,16 @@ export function aluSpec(n: number): (v: number[]) => number[] {
   };
 }
 
-export const alu = memo((n: number, adder: 'rca' | 'ks' = 'rca'): ComponentDef => {
+export const alu = memo((n: number, adder: 'rca' | 'ks' = 'rca'): ComponentDef =>
+  aluOf(n, adder, muxTree(3, n, 16), shifter(n), `alu${n}${adder === 'ks' ? 'ks' : ''}`, `${n}-bit ALU${adder === 'ks' ? ' (Kogge–Stone)' : ''}`));
+
+/**
+ * alu(n) with a given 8:1 result multiplexer `MX` (ports d0…d7 at pitch 16, s, y) and shifter `SH`: the
+ * campaign's ALU builds both from its cheaper 2:1 mux. Not memoized: callers keep one object per id.
+ */
+export function aluOf(n: number, adder: 'rca' | 'ks', MX: ComponentDef, SH: ComponentDef, id: string, name: string): ComponentDef {
   const k = log2(n);
-  const P = 16;
-  const AS = adder === 'ks' ? addSubFast(n) : addSub(n), SH = shifter(n), MX = muxTree(3, n, P), ZD = isZero(n), ZX = zext(n);
+  const AS = adder === 'ks' ? addSubFast(n) : addSub(n), ZD = isZero(n), ZX = zext(n);
   const asg = symbolGeom(AS), shg = symbolGeom(SH), mxg = symbolGeom(MX), zdg = symbolGeom(ZD);
   const ux = 14; // unit column
   const mxAt: [number, number] = [50, 4];
@@ -312,7 +321,7 @@ export const alu = memo((n: number, adder: 'rca' | 'ks' = 'rca'): ComponentDef =
   void asN; void asV; void asC;
   const spec = aluSpec(n);
   return define({
-    id: `alu${n}${adder === 'ks' ? 'ks' : ''}`, name: `${n}-bit ALU${adder === 'ks' ? ' (Kogge–Stone)' : ''}`, category: 'arithmetic',
+    id, name, category: 'arithmetic',
     summary: 'Every RV32I integer operation in one block: add, subtract, shifts, set-less-than, XOR, OR, AND. All units compute in parallel; a multiplexer picks one result.',
     ports: [bus('a', n, 'in'), bus('b', n, 'in'), bus('ctl', 4, 'in', 'bottom'), bus('y', n, 'out'), bit('zero', 'out'), bit('neg', 'out'), bit('ovf', 'out'), bit('carry', 'out')],
     symbol: { kind: 'box', label: 'ALU' },
@@ -359,4 +368,4 @@ export const alu = memo((n: number, adder: 'rca' | 'ks' = 'rca'): ComponentDef =
 endmodule`,
     },
   });
-});
+}

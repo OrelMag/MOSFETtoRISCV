@@ -30,7 +30,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'U: the upper ten bits',
-      text: '{instr[15:7], instr[3]} in bits 15:6 above a 6-bit constant 0, not sign-extended. instr[3] is an immediate bit, so lui owns opcodes 7 and 15; lui then addi builds any 16-bit constant in two instructions. Zero NANDs here: four formats are paid for in the core, by its 4:1 16-bit format mux (192 NANDs).',
+      text: '{instr[15:7], instr[3]} in bits 15:6 above a 6-bit constant 0, not sign-extended. instr[3] is an immediate bit, so lui owns opcodes 7 and 15; lui then addi builds any 16-bit constant in two instructions. Zero NANDs here: four formats are paid for in the core, by its 16-bit format mux (a 4:1 bus mux, 147 NANDs, once jumps need the J format).',
       parts: ['u1', 'u5'],
     },
   ],
@@ -137,7 +137,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Register file',
-      text: 'The splitter takes rd = instr[6:4], rs1 = instr[9:7] and rs2 = instr[12:10] straight to the register file: with fixed field positions the reads start without waiting for control. 2 403 NANDs, 56% of the core: seven 16-bit registers (x0 is wired to 0), a write decoder, two 8:1 read muxes. Reads are combinational; x[rd] is written at the rising edge when rwe.',
+      text: 'The splitter takes rd = instr[6:4], rs1 = instr[9:7] and rs2 = instr[12:10] straight to the register file: with fixed field positions the reads start without waiting for control. 2 193 NANDs, 56% of the core: seven 16-bit registers (x0 is wired to 0), a write decoder, two 8:1 read muxes. Reads are combinational; x[rd] is written at the rising edge when rwe.',
       parts: ['u0', 'u5'], codex: ['regfile'],
     },
     {
@@ -147,12 +147,12 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'The ALU',
-      text: 'rs1 op b, with the operation from control: 1 250 NANDs on a ripple adder. Its result also drives daddr, and rs2 drives dwdata: the data port is wired, though Core I\'s programs never load or store.',
+      text: 'rs1 op b, with the operation from control: 1 055 NANDs on a ripple adder. Its result also drives daddr, and rs2 drives dwdata: the data port is wired, though Core I\'s programs never load or store.',
       parts: ['u7'], codex: ['alu', 'datapath'],
     },
     {
       title: 'Write back',
-      text: 'wb is 0 (the ALU) or 3 (the immediate, so lui skips the ALU), and bit 0 tells them apart: one more 2:1 bus mux picks what rd receives. 4 318 NANDs, period 84 with the bench\'s 8-delay memories: PC → instruction memory → control → ALU → result mux → register file, and every instruction pays for that path.',
+      text: 'wb is 0 (the ALU) or 3 (the immediate, so lui skips the ALU), and bit 0 tells them apart: one more 2:1 bus mux picks what rd receives. 3 913 NANDs, period 84 with the bench\'s 8-delay memories: PC → instruction memory → control → ALU → result mux → register file, and every instruction pays for that path.',
       parts: ['u10', 'u11'], codex: ['criticalpath'],
     },
   ],
@@ -161,12 +161,12 @@ export const WALKS2: Record<string, WalkScript> = {
     {
       title: 'Fetch, as in Core I',
       text: 'The same counting PC. The bench serves instructions and data on separate ports in the same cycle: one memory could not fetch and load at once, so a single-cycle core is Harvard.',
-      parts: ['u7', 'u8', 'u11'], codex: ['harvard'],
+      parts: ['u7', 'u8', 'u10'], codex: ['harvard'],
     },
     {
       title: 'Decode a load or a store',
-      text: 'lw: rwe, bimm, isel = 0 (offset instr[15:10]), add, wb = 1. sw: mwe, bimm, isel = 1, add, no rwe; it has no rd, so its offset {instr[15:13], instr[6:4]} uses the rd field\'s bits. A third format, so the immediate mux becomes a 4:1 bus mux, 192 NANDs.',
-      parts: ['u1', 'u2', 'u3'], codex: ['loadstore'],
+      text: 'lw: rwe, bimm, isel = 0 (offset instr[15:10]), add, wb = 1. sw: mwe, bimm, isel = 1, add, no rwe; it has no rd, so its offset {instr[15:13], instr[6:4]} uses the rd field\'s bits. A third format, so the immediate gets a second 2:1 mux: isel[0] picks I or S/B, isel[1] that or U (without jumps J is never picked): 98 NANDs.',
+      parts: ['u1', 'u2', 'pick3', 'u3'], codex: ['loadstore'],
     },
     {
       title: 'Base and data',
@@ -180,8 +180,8 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Load write-back',
-      text: 'wb = 1 selects drdata, which the memory returns in the same cycle: the result mux becomes 4:1 too. 4 604 NANDs, 286 over Core I for the two wider muxes; the bigger cost is time: the data memory sits behind the ALU, and that path sets the period at 98 instead of 84.',
-      parts: ['u9', 'u10'], codex: ['criticalpath'],
+      text: 'wb = 1 selects drdata, which the memory returns in the same cycle: the result gets a second 2:1 mux too (wb is 0, 1 or 3: no pc + 1 without jumps). 4 011 NANDs, 98 over Core I for the two extra muxes; the bigger cost is time: the data memory sits behind the ALU, and that path sets the period at 98 instead of 84.',
+      parts: ['pick11', 'u9'], codex: ['criticalpath'],
     },
   ],
 
@@ -193,7 +193,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Decode',
-      text: 'Control and the immediate mux as in Core II. br, jal and jalr now matter, and isel picks B for branches, J for jal, I for jalr.',
+      text: 'Control as in Core II. br, jal and jalr now matter, and isel picks B for branches, J for jal, I for jalr: a fourth format, so the immediate mux becomes a 4:1 bus mux (147 NANDs).',
       parts: ['u1', 'u2', 'u3'], codex: ['control'],
     },
     {
@@ -218,7 +218,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Write the link',
-      text: 'The result mux\'s third input is now pc1: jal and jalr write the return address. 5 236 NANDs, period still 98: the load path stays longer than the branch path through the comparator and next PC.',
+      text: 'The result mux becomes a 4:1 bus mux, its third input pc1: jal and jalr write the return address. 4 741 NANDs, period still 98: the load path stays longer than the branch path through the comparator and next PC.',
       parts: ['u9'], codex: ['cpi'],
     },
   ],
@@ -226,28 +226,28 @@ export const WALKS2: Record<string, WalkScript> = {
   c_computer: [
     {
       title: 'The core',
-      text: 'Core III as one part, 5 236 NANDs. Its instr and drdata pins expect answers in the same cycle; here parts give them instead of the bench.',
+      text: 'Core III as one part, 4 741 NANDs. Its instr and drdata pins expect answers in the same cycle; here parts give them instead of the bench.',
       parts: ['u0'], codex: ['cpu'],
     },
     {
       title: 'Program ROM',
-      text: 'A 32-word ROM on pc[4:0], combinational: the word arrives in the cycle its address does. Past 31 the PC wraps onto the same 32 words. It holds the Fibonacci program; Edit program… replaces it with your own RV16 assembly.',
-      parts: ['u1', 'u3'], codex: ['rom'],
+      text: 'The given 32-word ROM, on pc[4:0] (a splitter takes the low five bits), combinational: the word arrives in the cycle its address does. Past 31 the PC wraps onto the same 32 words. It holds the Fibonacci program; Edit program… replaces it with your own RV16 assembly.',
+      parts: ['u1'], codex: ['rom'],
     },
     {
       title: 'Data RAM',
-      text: 'A 64-word RAM on daddr[5:0], written with dwdata at the clock edge and read combinationally into drdata. 20 166 NANDs, 73% of the computer: about 79 transistors per stored bit with the decoder and read mux, against 6 in an SRAM cell.',
-      parts: ['u2', 'u7'], codex: ['ram'],
+      text: 'A 64-word RAM on daddr[5:0], written with dwdata at the clock edge and read combinationally into drdata. 20 166 NANDs, 74% of the computer: about 79 transistors per stored bit with the decoder and read mux, against 6 in an SRAM cell.',
+      parts: ['u2', 'u6'], codex: ['ram'],
     },
     {
       title: 'Decode the address',
       text: 'Partial decoding on daddr[15] alone: RAM write = dwe·¬daddr[15], LED write = dwe·daddr[15]. A NOT and two ANDs, 5 NANDs; the price is aliasing: every address from 0x8000 up is the LED register, and the RAM repeats 512 times below it.',
-      parts: ['u4', 'u5', 'u6'], codex: ['mmio'],
+      parts: ['u3', 'u4', 'u5'], codex: ['mmio'],
     },
     {
       title: 'LED register',
-      text: 'A 16-bit register (208 NANDs) loaded at the edge when its write is 1: the program\'s sw t0, -5(x0) writes 0xFFFB. Nothing reads it back, so a load from an I/O address returns RAM data. 27 599 NANDs, period 110: the RAM\'s decoder and read mux are slower than the bench\'s 8-delay memory.',
-      parts: ['u8'], codex: ['register'],
+      text: 'A 16-bit register (208 NANDs) loaded at the edge when its write is 1: the program\'s sw t0, -5(x0) writes 0xFFFB. Nothing reads it back, so a load from an I/O address returns RAM data. 27 104 NANDs, period 110: the RAM\'s decoder and read mux are slower than the bench\'s 8-delay memory.',
+      parts: ['u7'], codex: ['register'],
     },
   ],
 
@@ -284,7 +284,7 @@ export const WALKS2: Record<string, WalkScript> = {
     {
       title: 'D: decode',
       text: 'Control, the immediate generator and the format mux work on F/D\'s word, as in the single-cycle core.',
-      parts: ['u8', 'u9', 'u10', 'u11'], codex: ['control'],
+      parts: ['u8', 'u9', 'u10', 'pick11', 'u11'], codex: ['control'],
     },
     {
       title: 'D: registers, falling edge',
@@ -308,12 +308,12 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'M: memory',
-      text: 'daddr = E/M\'s ALU result, dwdata = its store data, dwe = mwe: stores are reported from M. The value mux picks the ALU, drdata or the immediate by wb (its pc + 1 input is 0: no jumps), so M/W carries one value instead of three.',
-      parts: ['u31', 'u32'], codex: ['loadstore'],
+      text: 'daddr = E/M\'s ALU result, dwdata = its store data, dwe = mwe: stores are reported from M. The value mux picks the ALU, drdata or the immediate by wb (no jumps, so no pc + 1: two 2:1 bus muxes), so M/W carries one value instead of three.',
+      parts: ['u31', 'pick34', 'u32'], codex: ['loadstore'],
     },
     {
       title: 'M/W and write-back',
-      text: 'The value, rwe and rd reach the register file\'s write port and the rwe / rwa / rwd pins. 7 676 NANDs, period 65 instead of 98; but with two nops after every instruction the programs take 2 508 cycles, against 824 unpadded on Core II.',
+      text: 'The value, rwe and rd reach the register file\'s write port and the rwe / rwa / rwd pins. 7 083 NANDs, period 65 instead of 98; but with two nops after every instruction the programs take 2 508 cycles, against 824 unpadded on Core II.',
       parts: ['u34', 'u35', 'u36', 'u37'], codex: ['cpi'],
     },
   ],
@@ -345,7 +345,7 @@ export const WALKS2: Record<string, WalkScript> = {
     {
       title: 'F and D, as before',
       text: 'PC, F/D, control, immediates and the falling-edge register file are Pipeline I\'s.',
-      parts: ['u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'u11', 'u12', 'u13'], codex: ['pipeline'],
+      parts: ['u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'pick11', 'u11', 'u12', 'u13'], codex: ['pipeline'],
     },
     {
       title: 'D/E',
@@ -359,8 +359,8 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Operand muxes',
-      text: 'One 3:1 mux per operand (a 4:1 bus mux with input 3 tied to 0): 0 the register file, 1 M\'s result, 2 W\'s value. rs2 is forwarded too, because sw stores it (and, from Pipeline IV, branches compare it). 192 NANDs each.',
-      parts: ['u24', 'u25'], codex: ['mux'],
+      text: 'One 3:1 choice per operand, fa = 0 the register file, 1 M\'s result, 2 W\'s value (never 3): two 2:1 bus muxes, fa[0] picking M\'s result over the register, fa[1] W\'s value over that, 98 NANDs. rs2 is forwarded too, because sw stores it (and, from Pipeline IV, branches compare it).',
+      parts: ['pick26', 'u24', 'pick29', 'u25'], codex: ['mux'],
     },
     {
       title: 'Execute',
@@ -374,12 +374,12 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'M: a result to forward',
-      text: 'A second 4:1 mux gives M\'s result, with the ALU in drdata\'s place: a load\'s word exists only at the end of M, and these programs leave a nop after every load. The value mux still feeds W.',
-      parts: ['u34', 'u35', 'u36'],
+      text: 'A 2:1 mux on wb[1] gives M\'s result, the ALU or the immediate: a load\'s word exists only at the end of M (these programs leave a nop after every load), and without jumps there is no pc + 1. The value mux still feeds W.',
+      parts: ['u34', 'u35', 'pick43', 'u36'],
     },
     {
       title: 'M/W',
-      text: 'W\'s value is written back and forwarded at distance 2; distance 3 is covered by the falling-edge write. 8 362 NANDs, +686 over Pipeline I: 970 cycles instead of 2 508, and 6% fewer NAND delays than Core II.',
+      text: 'W\'s value is written back and forwarded at distance 2; distance 3 is covered by the falling-edge write. 7 438 NANDs, +355 over Pipeline I: 970 cycles instead of 2 508, and 6% fewer NAND delays than Core II.',
       parts: ['u38', 'u39', 'u40', 'u41'], codex: ['cpi'],
     },
   ],
@@ -406,12 +406,12 @@ export const WALKS2: Record<string, WalkScript> = {
     {
       title: 'F and D, as before',
       text: 'PC, F/D, control, immediates and the falling-edge register file, as in Pipeline II.',
-      parts: ['u3', 'u4', 'u6', 'u7', 'u9', 'u10', 'u11', 'u12', 'u13', 'u14', 'u15'], codex: ['pipeline'],
+      parts: ['u3', 'u4', 'u6', 'u7', 'u9', 'u10', 'u11', 'u12', 'pick13', 'u13', 'u14', 'u15'], codex: ['pipeline'],
     },
     {
       title: 'E, M and W, as before',
       text: 'D/E, forwarding, execute, E/M, the two M muxes and M/W, as in Pipeline II.',
-      parts: ['u17', 'u19', 'u20', 'u21', 'u22', 'u23', 'u24', 'u25', 'u26', 'u27', 'u28', 'u29', 'u30', 'u36', 'u37', 'u38', 'u39', 'u40', 'u41', 'u42', 'u43', 'u45', 'u46', 'u47', 'u48'],
+      parts: ['u17', 'u19', 'u20', 'u21', 'u22', 'u23', 'u24', 'u25', 'u26', 'pick29', 'u27', 'pick32', 'u28', 'u29', 'u30', 'u36', 'u37', 'u38', 'u39', 'u40', 'u41', 'u42', 'pick50', 'u43', 'u45', 'u46', 'u47', 'u48'],
       codex: ['forwarding'],
     },
     {
@@ -431,7 +431,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Bubble into E',
-      text: 'D/E clr = rst + stall, plus a third input tied to 0 that Pipeline IV gives to the flush. The load moves on to M, and a cycle later W forwards its word. 8 476 NANDs, +114, period unchanged at 78: 917 cycles instead of 970, one lost cycle per load-use pair.',
+      text: 'D/E clr = rst + stall, plus a third input tied to 0 that Pipeline IV gives to the flush. The load moves on to M, and a cycle later W forwards its word. 7 552 NANDs, +114, period unchanged at 78: 917 cycles instead of 970, one lost cycle per load-use pair.',
       parts: ['u18'], codex: ['cpi'],
     },
   ],
@@ -445,7 +445,7 @@ export const WALKS2: Record<string, WalkScript> = {
     {
       title: 'E, M and W, as before',
       text: 'D/E, forwarding, execute, the load detector, E/M, M, M/W and the hazard unit, unchanged.',
-      parts: ['u22', 'u23', 'u24', 'u26', 'u27', 'u28', 'u29', 'u30', 'u31', 'u32', 'u33', 'u34', 'u37', 'u38', 'u39', 'u40', 'u42', 'u43', 'u44', 'u46', 'u47', 'u48', 'u49', 'u50', 'u52', 'u53', 'u54', 'u55', 'u56'],
+      parts: ['u22', 'u23', 'u24', 'u26', 'u27', 'u28', 'u29', 'u30', 'pick31', 'u31', 'pick34', 'u32', 'u33', 'u34', 'u37', 'u38', 'u39', 'u40', 'u42', 'u43', 'u44', 'u46', 'u47', 'u48', 'pick53', 'u49', 'u50', 'u52', 'u53', 'u54', 'u55', 'u56'],
     },
     {
       title: 'The pc travels',
@@ -459,7 +459,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Write the link',
-      text: 'E/M pc + 1 takes next PC\'s pc1 to M, where the result and value muxes pick it for jal and jalr. Pipelines I to III fed those inputs a constant 0.',
+      text: 'E/M pc + 1 takes next PC\'s pc1 to M, where the result and value muxes pick it for jal and jalr: the value mux becomes a 4:1 bus mux, the result two 2:1 muxes (a load forwards nothing). Pipelines I to III had no such input.',
       parts: ['u45'],
     },
     {
@@ -469,7 +469,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Flush the wrong path',
-      text: 'F/D clr = rst + redirect, and redirect is the bubble OR\'s third input: the two younger instructions, fetched as if the branch fell through, become bubbles. 10 016 NANDs, +1 540; period still 78: forwarding → comparator → next PC → F/D clear takes 77. Two cycles per taken branch or jump: 1 495 cycles against Core III\'s 1 236, but 116 610 NAND delays against 121 128, about 4% faster.',
+      text: 'F/D clr = rst + redirect, and redirect is the bubble OR\'s third input: the two younger instructions, fetched as if the branch fell through, become bubbles. 9 239 NANDs, +1 687; period still 78: forwarding → comparator → next PC → F/D clear takes 77. Two cycles per taken branch or jump: 1 495 cycles against Core III\'s 1 236, but 116 610 NAND delays against 121 128, about 4% faster.',
       parts: ['u10'], codex: ['flush'],
     },
   ],
@@ -508,7 +508,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Read port',
-      text: 'An 8:1 bus mux on sel, 448 NANDs. mip is irq at bit 11 (MEIP), and CSR 7 reads a constant 0. The whole file: 1 870 NANDs, period 17.',
+      text: 'An 8:1 bus mux on sel, 343 NANDs. mip is irq at bit 11 (MEIP), and CSR 7 reads a constant 0. The whole file: 1 765 NANDs, period 17.',
       parts: ['u0', 'u33', 'u34', 'u35', 'u36'], codex: ['mux'],
     },
     {
@@ -536,7 +536,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'CSR file',
-      text: 'sel is the rs2 field, wdata and we come from system decode, and the old value goes back to it. The irq input is tied to 0 here. 1 870 NANDs, the biggest addition.',
+      text: 'sel is the rs2 field, wdata and we come from system decode, and the old value goes back to it. The irq input is tied to 0 here. 1 765 NANDs, the biggest addition.',
       parts: ['u7', 'u8'], codex: ['csr'],
     },
     {
@@ -556,7 +556,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'mtvec and mepc',
-      text: 'target = trap ? mtvec : mret ? mepc : next PC\'s target, and the PC loads on ld + trap + mret: a trap wins in the target mux, so ld needs no ¬trap. At the same edge the CSR file saves pc in mepc, so ecall\'s handler must add 1 to mepc before mret to skip it. 7 972 NANDs, period 100.',
+      text: 'target = trap ? mtvec : mret ? mepc : next PC\'s target, and the PC loads on ld + trap + mret: a trap wins in the target mux, so ld needs no ¬trap. At the same edge the CSR file saves pc in mepc, so ecall\'s handler must add 1 to mepc before mret to skip it. 7 278 NANDs, period 100.',
       parts: ['u30', 'u31', 'u32'], codex: ['pc'],
     },
   ],
@@ -594,7 +594,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'To the handler',
-      text: 'The PC loads mtvec, and MIE drops to 0 so the handler is not interrupted in turn. Zero NANDs over Exceptions: 7 972, period 100.',
+      text: 'The PC loads mtvec, and MIE drops to 0 so the handler is not interrupted in turn. Zero NANDs over Exceptions: 7 278, period 100.',
       parts: ['u29', 'u30', 'u31'], codex: ['traps'],
     },
   ],
@@ -623,7 +623,7 @@ export const WALKS2: Record<string, WalkScript> = {
     {
       title: 'E: forward and compute',
       text: 'Forwarding, the operand muxes, the ALU, the comparator and next PC, as in Pipeline IV.',
-      parts: ['u33', 'u34', 'u35', 'u36', 'u37', 'u38', 'u39', 'u40', 'u41'], codex: ['forwarding'],
+      parts: ['u33', 'u34', 'u35', 'pick36', 'u36', 'pick39', 'u37', 'u38', 'u39', 'u40', 'u41'], codex: ['forwarding'],
     },
     {
       title: 'E: CSRs',
@@ -642,8 +642,8 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Load-use, M and W',
-      text: 'As in Pipeline IV, except that loadE uses rwe after the ¬trap gate, so a load interrupted in E raises no stall. 13 035 NANDs; the 45 programs take 2 399 cycles, 194 319 NAND delays, against 197 600 on the single-cycle core with traps (1 976 cycles at period 100).',
-      parts: ['u68', 'u69', 'u70', 'u71', 'u73', 'u74', 'u75', 'u76', 'u77', 'u78', 'u79', 'u80', 'u81', 'u83', 'u84', 'u85', 'u86', 'u87'], codex: ['loaduse'],
+      text: 'As in Pipeline IV, except that loadE uses rwe after the ¬trap gate, so a load interrupted in E raises no stall. 12 059 NANDs; the 45 programs take 2 399 cycles, 194 319 NAND delays, against 197 600 on the single-cycle core with traps (1 976 cycles at period 100).',
+      parts: ['u68', 'u69', 'u70', 'u71', 'u73', 'u74', 'u75', 'u76', 'u77', 'u78', 'u79', 'pick84', 'u80', 'u81', 'u83', 'u84', 'u85', 'u86', 'u87'], codex: ['loaduse'],
     },
   ],
 };

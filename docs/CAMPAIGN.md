@@ -480,7 +480,7 @@ per flip-flop, 15 per enable flip-flop). The levels now unlock campaign cells at
 
 **Per level** (old → new par)
 - [x] `g_mux8` 64 → 49: `rv16_mux16`, one inverter on s for all sixteen bits (3n + 1); unlocked by g_mux8, used for
-  every 16-bit 2:1 mux in the rv16 blocks (the library's wider mux trees stay).
+  every 16-bit 2:1 mux in the rv16 blocks (the 4:1 and 8:1 trees followed: see After the review).
 - [x] `a_inc16` 80 / 33 → 76 / 31: bit 0 is ¬a0 (`rv16_inc16`, unlocked instead of the library's).
 - [x] `a_slt` 217 / 44 → 169 / 39: 16 inverters (not XORs) for ¬b, an adder whose carry alone is read, and
   lt = signs differ ? a15 : ¬cout. A carry-only chain drawn from NANDs would drop the adder's 48 sum gates too.
@@ -507,29 +507,40 @@ per flip-flop, 15 per enable flip-flop). The levels now unlock campaign cells at
 - [x] The timer: dropped from `iss16` (MTIME, MTIMECMP, MTIP, cause 0x8007). 0xFFF7–0xFFF8 are reserved: they read 0
   and drop stores, as the test bench already did. RV16 interrupts are the external line only.
 
-**Open items** (found during the review, not yet done)
-- [ ] **Wider bus muxes as campaign parts.** The 4:1 and 8:1 bus muxes are still the library's trees of 64-NAND 2:1
-  muxes, unlocked by g_mux8 at that cost (`mux*`). A tree of `rv16_mux16` is cheaper at the same depth (8:1: 343
-  against 448; 4:1: 147 against 192), so a learner who builds one beats the pars of `m_rf` (by 210: 2 403 → 2 193),
-  `a_alu16` (by 105: 1 250 → 1 145) and of every reference with a 4:1 or 8:1 bus mux (the cores' immediate and result
-  muxes, the forwarding muxes, the CSR read mux). Fix: `rv16_mux4x16` / `rv16_mux8x16` built from `rv16_mux16`,
-  unlocked by g_mux8, used in the rv16 blocks; then `scripts/campaign-pars.ts --write` and the texts that quote the
-  changed numbers (walkthroughs, cases, codex), as for the review above.
-- [ ] **Two benches count different cycles for one pipeline.** Pipeline IV on its own level's check (`pi_core3`,
-  `pipeTests(3)`) takes 1 495 cycles, its par; the same core run through Core III's check (`coreTests(3)`, which
-  `pipeTests(3)` equals) takes 1 460. Same programs, so the benches count differently (where counting starts or
-  stops, draining the pipeline after the halt, the per-test budget). Find which is right, make the two agree, and
-  re-check the texts' 1 495 × 78 = 116 610 comparison with Core III (at 1 460 it is 113 880, 6 % faster).
-- [ ] **Stars earned against the old pars.** Progress stores each level's stars and best result and does not re-grade,
-  so a learner who solved a level before the review keeps stars earned against a looser par (the old par was up to 34 % above the new one:
-  `pi_core0`). Decide whether to re-grade from the stored best result on load (it holds the measured metrics), or
-  leave them.
-- [ ] **c_computer's given ROM.** The challenge gives a ROM part with id `rom`, but the reference's ROM is `u3`, so
-  the walkthrough places the ROM in a step instead of treating it as given (as before the review). Name the
-  reference's ROM `rom` so the given part and the reference's are one.
-- [ ] **Pipelines I–III's 4:1 muxes with an idle input.** Without branches, the M-stage value and result muxes
-  keep their pc + 1 input tied to 0 (and the result mux takes the ALU on two inputs): a 3:1 choice paid as 4:1. Cheap
-  to leave (4:1 is the unlocked part); a learner may beat those pars by a 2:1 mux's worth.
+**After the review** (done on `fix/campaign-muxes`, 2026-10-11)
+- [x] **Wider bus muxes and the shifter as campaign parts.** The 4:1 and 8:1 bus muxes and the barrel shifter were
+  the library's, built from 64-NAND 2:1 muxes, so a learner placing `rv16_mux16` beat every par that held one. Now
+  `rv16Mux(k)` (`rv16_mux4x16` 147, `rv16_mux8x16` 343: `muxTreeOf` on `rv16_mux16`) and `rv16_shift16` (299:
+  `shifterOf`) are unlocked by g_mux8 and a_shift16, and `rv16_alu16` / `rv16_alu16ks` (`aluOf` with both: 1 055 /
+  1 273) by a_alu16 and o_fastadd, replacing `alu16`, `alu16ks` and `shift16` in the unlocks and in every rv16 block.
+- [x] **Muxes with an idle input.** A 4:1 bus mux paid for a three-way choice wherever one input is never selected:
+  Core II's and Pipelines I–III's immediate (no J format without jumps), result and M-stage muxes (no pc + 1), the
+  forwarding muxes in every pipeline (fa is never 3), Pipeline IV's M result (a load forwards nothing) and system
+  decode's CSR write value (csrrw and a non-CSR op both write rs1). `choose4(b, inputs, sel)` builds each as a learner
+  would: `rv16_mux4x16` when all four inputs are used, two `rv16_mux16` (98) for three, one for two; its select
+  splitter and first mux are named (`sel<k>`, `pick<k>`), so the authored walkthroughs keep their part ids.
+- [x] Every par re-measured (`scripts/campaign-pars.ts --write`, periods and cycles unchanged): `a_shift16` 389 → 299,
+  `a_alu16` 1 250 → 1 055, `m_rf` 2 403 → 2 193, `c_core1` 4 318 → 3 913, `c_core2` 4 604 → 4 011, `c_core3` 5 236 →
+  4 741, `c_computer` 27 599 → 27 104, `pi_core0` 7 676 → 7 083, `pi_core1` 8 362 → 7 438, `pi_core2` 8 476 → 7 552,
+  `pi_core3` 10 016 → 9 239, `o_bpred` 10 587 → 9 810, `y_csr` 1 870 → 1 765, `y_trap` / `y_irq` 7 972 → 7 278,
+  `y_final` 13 035 → 12 059, `o_mcore` 8 553 → 8 058, `o_dcore` 11 107 → 10 612, `o_mc` 5 719 → 5 224; the texts that
+  quote them (walkthroughs, cases, codex), the live alternatives and codex figures (RV16 parts), and the puzzles'
+  RV16 computer (25 829 → 25 334 NANDs, src/puzzles/refdata.json).
+- [x] **Two benches, one count.** Core III's check failed Pipeline IV (CPI 1.2 against its budget of 1) and stopped
+  each lane at that tighter budget, so the 1 460 counted unfinished runs. `runCore` now runs a lane on to twice its
+  budget: a slow core's cycles are counted to the end (1 495 on both benches) and its failure says how many it took.
+  1 495 × 78 = 116 610 stands.
+- [x] **Stars earned against the old pars**: left as earned (the author's choice). The level screen shows the stored
+  best against the current par.
+- [x] **c_computer's given ROM**: the reference's ROM instance is `rom`, the given part's id, so the walkthrough
+  treats it as given.
+
+**Open items**
+- [ ] **16-bit 2:1 muxes in the side quests.** `o_fpadd` (2), `o_fpmul` (2) and `o_fpcvt` (10, in its shifters
+  `shl16_5` / `shrs16_5`) unlock `rv16_mux16` but their references use the library's 64-NAND `mux2x16` (from `fpu.ts`,
+  whose muxes come in every width): beatable by 30, 30 and 150. `o_dcore` places `o_div`'s divider (`sdiv16`, three
+  of them, 45), built at a level that does not unlock the 49-NAND part, as `o_mulseq` and `o_div` themselves are. A
+  shared-inverter bus mux for the FP and divider blocks would close all of it; `tests/campaign.test.ts` lists them.
 
 **What the measurements say about the pipeline**: with the tightened parts, Pipeline IV takes 1 495 cycles × 78 =
 116 610 NAND delays against Core III's 1 236 × 98 = 121 128: about 4 % faster (before, at period 82, it was 1 %
