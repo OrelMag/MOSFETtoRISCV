@@ -20,11 +20,13 @@ import { type WireFlow, wireFlows } from './flowdir';
 import { partBox, pinBody, pinKnob, pointerGeom, wireGroups } from './geom';
 import { HopCache } from './hops';
 import {
-  type ChipDoc, COMMENT_LINE, type CommentDoc, commentBox, type DefOf, defaultFace, type DisplayKind, type LabelDoc, type PartDoc, type PinDoc, pinBig, polyline, type WireDoc,
+  type ChipDoc, COMMENT_LINE, type CommentDoc, commentBox, type DefOf, defaultFace, type LabelDoc, type PartDoc, type PinDoc, pinBig, polyline, type WireDoc,
 } from './model';
 import type { Sel } from './ops';
-import { buzzerHz, codeGlyph, keyLabel, LED_PITCH, ledGrid } from './parts';
-import { drawIoFace, type IoFace } from './ioface';
+import { codeGlyph, keyLabel } from './parts';
+import { drawIoFace } from './ioface';
+import { pathKey } from './face';
+import { type DisplayEls, drawDisplay, drawFace, type FaceEls, paintDisplay, paintFace } from './dispface';
 import { ioInfo } from './ioparts';
 import type { Sim } from '../sim/sim';
 import { userHues } from './wirehue';
@@ -42,20 +44,7 @@ export interface ViewValues {
   readonly sim: Sim | null;
 }
 
-interface PartEls { doc: PartDoc; def: ComponentDef | undefined; g: SVGGElement; disp?: DisplayEls; cls: string }
-/** The live face of a display, a key part ('key') or a keyboard part ('keyboard'). */
-interface DisplayEls {
-  kind: DisplayKind | 'key' | 'keyboard' | 'io'; width: number; segs: SVGElement[]; shown: string;
-  /** A console, switch bank or screen (ioface.ts). */
-  face?: IoFace;
-  led?: SVGCircleElement; text?: SVGTextElement; halt?: SVGGElement; buzz?: SVGGElement;
-  /** An LED bank: one LED per bit (index = bit). */
-  leds?: SVGCircleElement[];
-  /** A buzzer's tone now (Hz, 0 silent). */
-  hz?: number;
-  /** A key part's keycap; a keyboard's code cell (lit while a key waits), its glyph and the "more waiting" count. */
-  key?: SVGGElement; kbdCell?: SVGRectElement; kbdChar?: SVGTextElement; kbdMore?: SVGTextElement;
-}
+interface PartEls { doc: PartDoc; def: ComponentDef | undefined; g: SVGGElement; disp?: DisplayEls; faces?: FaceEls[]; cls: string }
 interface WireEls {
   doc: WireDoc; poly: Vec[] | null; key: string; ver: number; path: SVGPathElement; hit: SVGPathElement; width: number; cls: string;
   /** Flowing bits: which way the signal runs (null: no driver reaches it) as lanes, the pellet overlays of a
@@ -182,10 +171,10 @@ export class EditorView {
         e.doc = p;
         continue;
       }
-      const { g, disp } = this.drawPart(p, def);
+      const { g, disp, faces } = this.drawPart(p, def);
       if (e) e.g.replaceWith(g);
       else this.gParts.append(g);
-      this.parts.set(p.id, { doc: p, def, g, cls: '', disp });
+      this.parts.set(p.id, { doc: p, def, g, cls: '', disp, faces });
     }
     for (const [id, e] of this.parts) if (!seenParts.has(id)) { e.g.remove(); this.parts.delete(id); dirty.add(`p:${id}`); }
 
@@ -439,7 +428,7 @@ export class EditorView {
     return 1;
   }
 
-  private drawPart(p: PartDoc, def: ComponentDef | undefined): { g: SVGGElement; disp?: DisplayEls } {
+  private drawPart(p: PartDoc, def: ComponentDef | undefined): { g: SVGGElement; disp?: DisplayEls; faces?: FaceEls[] } {
     const g = s('g', { class: 'inst ed-part', transform: `translate(${p.at[0]},${p.at[1]})`, 'data-part': p.id });
     if (!def) {
       const name = 'lib' in p.ref ? p.ref.lib : 'chip' in p.ref ? p.ref.chip : Object.keys(p.ref)[0];
@@ -457,14 +446,16 @@ export class EditorView {
     if (io) {
       g.append(drawSymbol(def, p.flip), io.g);
       disp = { kind: 'io', width: 0, segs: [], shown: '', face: io };
-    } else if ('display' in p.ref) disp = this.drawDisplay(g, p.ref.display, p.ref.width ?? 1, geo.w, geo.h, !!p.flip);
+    } else if ('display' in p.ref) disp = drawDisplay(g, p.ref.display, p.ref.width ?? 1, geo.w, geo.h, !!p.flip);
     else if ('key' in p.ref) disp = this.drawKey(g, p.ref.key, geo.w, geo.h, !!p.flip);
     else if ('keyboard' in p.ref) disp = this.drawKeyboard(g, def, geo.w, geo.h, !!p.flip);
     else g.append(drawSymbol(def, p.flip));
+    const faces = drawFace(g, def, !!p.flip);
     const nameAt = instNameAt(def);
     if (nameAt) g.append(s('text', { class: 'inst-name', x: nameAt.x, y: nameAt.y, 'text-anchor': nameAt.anchor }, p.label ?? p.id));
-    return { g, disp };
+    return { g, disp, faces };
   }
+
 
   /** A key part: a keycap with the key's name, lit while the key is held; its output on the right. */
   private drawKey(g: SVGGElement, bind: string, w: number, h: number, flip: boolean): DisplayEls {
@@ -492,62 +483,6 @@ export class EditorView {
     return { kind: 'keyboard', width: 8, segs: [], shown: '', kbdCell, kbdChar, kbdMore };
   }
 
-  /** A display: LED, 7-segment digit (bit i = segment a…g, bit 7 = dp), hex digit, value box or halt plate. */
-  private drawDisplay(g: SVGGElement, kind: DisplayKind, width: number, w: number, h: number, flip: boolean): DisplayEls {
-    g.append(s('rect', { class: 'sym-body sym-box ed-disp-box', x: 0, y: 0, width: w, height: h, rx: 0.6 }));
-    const port = flip ? w : 0;
-    g.append(s('circle', { class: 'ed-disp-port', cx: port, cy: h / 2, r: 0.16 }));
-    const d: DisplayEls = { kind, width, segs: [], shown: '' };
-    if (kind === 'led' && width > 1) {
-      // Most significant bit first, rows of 8, as a binary number reads.
-      const gr = ledGrid(width), x0 = (w - gr.cols * LED_PITCH) / 2, y0 = (h - gr.rows * LED_PITCH) / 2;
-      d.leds = Array.from({ length: width }, (_, b) => {
-        const i = width - 1 - b, r = Math.floor(i / gr.cols), c = i % gr.cols;
-        return s('circle', { class: 'ed-led', cx: x0 + LED_PITCH * (c + 0.5), cy: y0 + LED_PITCH * (r + 0.5), r: LED_PITCH / 2 - 0.15 });
-      });
-      g.append(...d.leds);
-    } else if (kind === 'led') {
-      d.led = s('circle', { class: 'ed-led', cx: w / 2, cy: h / 2, r: Math.min(w, h) / 2 - 0.25 });
-      g.append(d.led);
-    } else if (kind === 'buzzer') {
-      // A speaker cone and two sound waves (lit while it sounds).
-      const cx = w / 2 - 0.5, cy = h / 2;
-      d.buzz = s('g', { class: 'ed-buzz' },
-        s('path', { class: 'ed-buzz-cone', d: `M${cx - 0.9},${cy - 0.35} h0.5 l0.7,-0.5 v1.7 l-0.7,-0.5 h-0.5 Z` }),
-        s('path', { class: 'ed-buzz-wave', d: `M${cx + 0.65},${cy - 0.4} q0.35,0.4 0,0.8` }),
-        s('path', { class: 'ed-buzz-wave', d: `M${cx + 1.05},${cy - 0.7} q0.6,0.7 0,1.4` }));
-      g.append(d.buzz);
-    } else if (kind === 'halt') {
-      d.halt = s('g', { class: 'ed-halt' },
-        s('rect', { class: 'ed-halt-plate', x: 0.45, y: 0.35, width: w - 0.9, height: h - 0.7, rx: 0.3 }),
-        s('text', { class: 'ed-halt-text', x: w / 2, y: h / 2 + 0.32, 'text-anchor': 'middle' }, 'HALT'));
-      g.append(d.halt);
-    } else if (kind === 'value') {
-      d.text = s('text', { class: 'ed-disp-value', x: w / 2, y: h / 2 + 0.4, 'text-anchor': 'middle' });
-      g.append(d.text);
-    } else {
-      // A slanted-free digit, height h - 1, centred.
-      const dh = h - 1.1, dw = dh * 0.55, x0 = w / 2 - dw / 2, y0 = 0.55, m = dh / 2;
-      const seg = (x1: number, y1: number, x2: number, y2: number) => s('path', { class: 'ed-seg', d: `M${x1},${y1} L${x2},${y2}` });
-      const i = 0.32; // gaps between segments, as on a real display
-      d.segs = [
-        seg(x0 + i, y0, x0 + dw - i, y0), // a
-        seg(x0 + dw, y0 + i, x0 + dw, y0 + m - i), // b
-        seg(x0 + dw, y0 + m + i, x0 + dw, y0 + dh - i), // c
-        seg(x0 + i, y0 + dh, x0 + dw - i, y0 + dh), // d
-        seg(x0, y0 + m + i, x0, y0 + dh - i), // e
-        seg(x0, y0 + i, x0, y0 + m - i), // f
-        seg(x0 + i, y0 + m, x0 + dw - i, y0 + m), // g
-      ];
-      g.append(...d.segs);
-      if (kind === 'seg7' && width >= 8) {
-        const dp = s('circle', { class: 'ed-seg ed-dp', cx: x0 + dw + 0.45, cy: y0 + dh, r: 0.16 });
-        d.segs.push(dp);
-        g.append(dp);
-      }
-    }
-    return d;
-  }
 
   // ---- classes: selection, diagnostics, values ---------------------------------------------
 
@@ -700,7 +635,8 @@ export class EditorView {
       if (e.disp?.face) e.disp.face.paint(v?.sim ?? null, v?.sim?.design.root.children?.get(id) ?? null);
       else if (e.disp?.kind === 'key') this.paintKey(e.disp, v?.endBits(`p:${id}.q`) ?? null);
       else if (e.disp?.kind === 'keyboard') this.paintKeyboard(e.disp, v?.endBits(`p:${id}.code`) ?? null, v?.endBits(`p:${id}.ready`) ?? null, v?.keyboardQueue(id) ?? null);
-      else if (e.disp) this.paintDisplay(e.disp, v?.endBits(`p:${id}.a`) ?? null);
+      else if (e.disp) paintDisplay(e.disp, v?.endBits(`p:${id}.a`) ?? null, this.radix);
+      if (e.faces) paintFace(e.faces, v?.sim ?? null, v?.sim?.design.root.children?.get(id) ?? null, this.radix);
       const c = v?.conducting(id);
       e.g.classList.toggle('conducting', c === 1);
       e.g.classList.toggle('maybe', c === 2);
@@ -713,7 +649,10 @@ export class EditorView {
   private paintTones(live: boolean): void {
     if (!this.sound) return;
     const tones = new Map<string, number>();
-    if (live) for (const [id, e] of this.parts) if (e.disp?.hz) tones.set(id, e.disp.hz);
+    if (live) for (const [id, e] of this.parts) {
+      if (e.disp?.hz) tones.set(id, e.disp.hz);
+      for (const f of e.faces ?? []) if (f.disp.hz) tones.set(`${id}.${pathKey(f.d.path)}`, f.disp.hz);
+    }
     const key = [...tones].join(';');
     if (key === this.toneKey) return;
     this.toneKey = key;
@@ -740,36 +679,6 @@ export class EditorView {
     d.kbdMore!.textContent = queue && queue.length > 1 ? `+${queue.length - 1}` : '';
   }
 
-  private paintDisplay(d: DisplayEls, bits: Bit[] | null): void {
-    const x = !bits || bits.some((b) => b === BX || b === BZ);
-    // segments read the low byte only (pack is exact there at any width)
-    const v = bits && !x ? pack(bits.slice(0, 8)) : -1;
-    const key = bits ? bits.join('') + this.radix : '';
-    if (key === d.shown) return;
-    d.shown = key;
-    if (d.leds) {
-      d.leds.forEach((el, i) => {
-        const b = bits?.[i];
-        el.setAttribute('class', `ed-led${b === B1 ? ' on' : b === BX || b === BZ ? ' vx' : ''}`);
-      });
-    } else if (d.buzz) {
-      // A bus wider than 7 bits with a high bit set is past note 127: the top note.
-      d.hz = !bits || x ? 0 : buzzerHz(d.width, bits.slice(7).includes(B1) ? 127 : pack(bits.slice(0, 7)));
-      d.buzz.setAttribute('class', `ed-buzz${d.hz ? ' on' : x && bits ? ' vx' : ''}`);
-    } else if (d.halt) {
-      const on = !!bits && bits.includes(B1);
-      d.halt.setAttribute('class', `ed-halt${on ? ' ed-halt-on' : x && bits ? ' ed-halt-vx' : ''}`);
-    } else if (d.led) {
-      d.led.setAttribute('class', `ed-led${bits && bits.some((b) => b === B1) && !x ? ' on' : x && bits ? ' vx' : ''}`);
-    } else if (d.text) {
-      d.text.textContent = bits ? formatBits(bits, this.radix) : '–';
-    } else {
-      let on: number;
-      if (d.kind === 'hex') on = v < 0 ? 0 : HEX_SEGS[v % 16];
-      else on = v < 0 ? 0 : v;
-      d.segs.forEach((el, i) => el.setAttribute('class', `ed-seg${i === 7 ? ' ed-dp' : ''}${(Math.floor(on / 2 ** i) % 2) ? ' on' : ''}${x && bits ? ' vx' : ''}`));
-    }
-  }
 
   /** One value label per bus net, on its longest horizontal segment (not where a pin or display shows it). */
   private paintBusLabels(v: ViewValues | null, built: Compiled | null): void {
@@ -942,5 +851,3 @@ export function drawComment(c: CommentDoc): SVGGElement {
   return g;
 }
 
-/** Segments a…g lit for each hex digit (bit 0 = a). */
-const HEX_SEGS = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f, 0x77, 0x7c, 0x39, 0x5e, 0x79, 0x71];

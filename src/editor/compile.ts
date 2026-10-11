@@ -34,6 +34,7 @@ import {
   type ChipDoc, defaultFace, type EndRef, endKey, isIdent, onPolyline, orthogonal, type PartDoc, type PartRef,
   type PinDoc, polyline, uniqueName, type WireDoc,
 } from './model';
+import { applyFace, type ChipFace, faceItems, resolveFace, setFaceOf } from './face';
 import { MAX_WIDTH, type PartResult } from './parts';
 
 export interface Diag {
@@ -375,13 +376,22 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
     pins: Object.fromEntries(ordered.map((p) => [p.name, [p.at[0], p.at[1]]])),
     pinDirs: Object.fromEntries(ordered.map((p) => [p.name, defaultFace(p)])),
   };
-  const base: ComponentDef = {
+  let base: ComponentDef = {
     id: doc.id, name: doc.name, category: 'custom', ports,
     symbol: { kind: 'box', label: doc.name, ...(doc.hue !== undefined ? { color: doc.hue } : {}) },
     ...(doc.notes ? { notes: doc.notes } : {}),
     netlist: () => nl,
     ...(Object.keys(powerOn).length ? { powerOn } : {}),
   };
+  // ---- face: the box as the learner shaped it (face.ts), its displays drawn on it ----
+  let shown: ChipFace | null = null;
+  if (doc.face) {
+    const items = faceItems(parts.values(), (id) => netOfEnd.get(`p:${id}.a`) ?? -1);
+    const r = resolveFace(doc.face, ordered, doc.name, items);
+    for (const k of r.missing) warn(`face: no display '${k}' any more (left off the box)`);
+    base = applyFace(base, ordered, r);
+    if (r.displays.length) shown = { displays: r.displays };
+  }
 
   const conn = [
     [...parts.values()].map(({ doc: p }) => [p.id, p.ref]).sort((a, b) => (a[0] < b[0] ? -1 : 1)),
@@ -420,6 +430,7 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
 
   const connKey = hash(JSON.stringify([...conn, def.ff ?? null]));
 
+  if (shown) setFaceOf(def, shown);
   return { def, diags, netOfWire, netOfEnd, netOfLabel, connKey, mode, ...(derived ? { derived } : {}) };
 }
 

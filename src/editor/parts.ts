@@ -149,6 +149,10 @@ export function buzzerHz(width: number, v: number): number {
   return 440 * 2 ** ((Math.min(v, 127) - 69) / 12);
 }
 const dispCache = new Map<string, ComponentDef>();
+const dispInfo = new WeakMap<ComponentDef, { kind: DisplayKind; width: number }>();
+
+/** The kind and width of a display part's def (null for any other part). */
+export const displayOf = (d: ComponentDef | undefined): { kind: DisplayKind; width: number } | null => (d && dispInfo.get(d)) ?? null;
 
 const DISPLAY_SUMMARY: Partial<Record<DisplayKind, string>> = {
   halt: 'Stops Run after the step where its input reads non-zero (any bit 1). Pure view: no gates, no delay.',
@@ -177,6 +181,7 @@ function display(kind: DisplayKind, w: number): ComponentDef {
     prim: 'alias', alias: [],
   };
   dispCache.set(id, d);
+  dispInfo.set(d, { kind, width: w });
   return d;
 }
 

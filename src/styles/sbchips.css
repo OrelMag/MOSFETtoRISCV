@@ -18,9 +18,9 @@
 .sb-item .sb-swatch-dot + span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- package dialog ---------- */
-.sb-pack .panel { width: min(760px, 94vw); }
+.sb-pack .panel { width: min(980px, 96vw); }
 .sb-pack .sb-sum { margin: 6px 0 12px; }
-.sb-pack-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.sb-pack-grid { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 20px; align-items: start; }
 .sb-pack-form .sb-row { grid-template-columns: 64px minmax(0, 1fr); margin: 8px 0; }
 .sb-pack-form input[type=text], .sb-pack-form textarea {
   width: 100%; min-width: 0; font: 13px var(--font-ui); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-strong);
@@ -38,10 +38,34 @@
 .sb-pack-preview { display: grid; place-items: center; min-height: 150px; max-height: 260px; background: var(--canvas); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; }
 .sb-pack-svg { width: 100%; max-height: 236px; overflow: visible; }
 .sb-pack-stub { stroke: var(--w0); }
-.sb-pack-pins { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; font-size: 12.5px; }
-.sb-pack-col b { font-size: 12px; color: var(--text-2); }
-.sb-pack-col ol { margin: 4px 0 0; padding-left: 20px; font-family: var(--font-mono); font-size: 12px; }
-.sb-pack-col .sb-sum { margin: 4px 0; }
+/* the face editor (package.ts): the box with draggable pins, corner and displays */
+.sb-face { background: var(--canvas); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.sb-face-bar { display: flex; gap: 8px; align-items: center; padding: 5px 8px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-2); background: var(--surface); }
+.sb-face-bar .sp { flex: 1; }
+.sb-face-size { font-family: var(--font-mono); color: var(--text); }
+.sb-face-svg { display: block; width: 100%; height: min(380px, 46vh); touch-action: none; outline: none; }
+.sb-face-svg:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.sb-face-pin { fill: color-mix(in srgb, var(--accent) 16%, transparent); stroke: var(--accent); stroke-width: 0.08; cursor: grab; }
+.sb-face-pin:hover { fill: color-mix(in srgb, var(--accent) 45%, transparent); }
+.sb-face-pin.on { fill: var(--accent); }
+.sb-face-disp { fill: transparent; stroke: transparent; stroke-width: 0.1; stroke-dasharray: 0.3 0.2; cursor: move; }
+.sb-face-disp:hover { stroke: color-mix(in srgb, var(--accent) 60%, transparent); }
+.sb-face-disp.on { stroke: var(--accent); }
+.sb-face-handle { fill: var(--surface); stroke: var(--accent); stroke-width: 0.1; cursor: nwse-resize; }
+.sb-face-slots circle { fill: var(--accent); opacity: 0.55; pointer-events: none; }
+.sb-face-check { display: flex; gap: 6px; align-items: center; font-size: 12.5px; margin: 10px 0 0; cursor: pointer; }
+.sb-face-sec { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 8px; font-size: 12.5px; }
+.sb-face-sec > b, .sb-face-sel > b { font-size: 12px; color: var(--text-2); }
+.sb-face-sec .sb-sum { margin: 6px 0 0; }
+.sb-face-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; max-height: 168px; overflow: auto; }
+.sb-face-item { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.sb-face-item code { font-size: 11.5px; }
+.sb-face-item small { margin-left: auto; color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+.sb-face-sides { display: flex; gap: 4px; flex-wrap: wrap; margin: 6px 0 0; }
+.sb-face-sides .btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.sb-face-scale { display: grid; grid-template-columns: auto minmax(0, 1fr) 3.4em; gap: 8px; align-items: center; margin: 6px 0; }
+.sb-face-scale input { accent-color: var(--accent); }
+.sb-face-pct { font-family: var(--font-mono); font-size: 12px; text-align: right; }
 .sb-pack-side > .sb-sum { margin: 8px 0 0; }
 .sb-pack-warn p { margin: 10px 0 0; padding: 6px 10px; border-radius: 6px; font-size: 12.5px; background: var(--warn-soft); color: var(--warn); }
 .sb-pack-btns { justify-content: flex-end; margin-top: 16px; }

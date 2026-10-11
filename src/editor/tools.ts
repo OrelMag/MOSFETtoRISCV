@@ -19,6 +19,8 @@ import { nextDrive } from './chips';
 import type { Editor } from './editor';
 import { lookInside } from './inside';
 import { flipSwitch, ioInfo, switchAt, type SwitchState } from './ioparts';
+import { faceHit, nodeAt } from './face';
+import { toggleSwitch } from './ioface';
 import { branchPoint, drives, grabOn, type Hit, hitTest, hitWire, nextSameName, partAnchor, pointerGeom, snapPt, WireDraft } from './geom';
 import { renamePin } from './chips';
 import { type ChipDoc, commentBox, endGeom, endKey, type EndRef, type ExitDir as Face, type PinDoc, pinBig, pinValue } from './model';
@@ -311,8 +313,17 @@ export class Tools {
     const p = ed.doc.parts.find((q) => q.id === id);
     const def = p && ed.defOf(p);
     const info = ioInfo(def);
-    if (!p || !def || info?.kind !== 'switches') return false;
+    if (!p || !def) return false;
     const x = at[0] - p.at[0], y = at[1] - p.at[1];
+    // A switch bank shown on a placed chip's face flips too (face.ts).
+    const hit = info ? null : faceHit(def, !!p.flip, x, y);
+    if (hit?.d.kind === 'switches') {
+      const bit = switchAt(hit.d.width, hit.lx, hit.ly);
+      const node = nodeAt(ed.sim.sim?.design.root.children?.get(id), hit.d.path);
+      if (bit !== null && node) toggleSwitch(ed.sim, node, bit);
+      return bit !== null;
+    }
+    if (info?.kind !== 'switches') return false;
     const bit = switchAt(info.width, x, y); // the face is not mirrored (only its port moves)
     const sim = ed.sim.sim, li = sim?.design.root.children?.get(id)?.leafIndex;
     if (bit === null || !sim || li === undefined) return bit !== null;
