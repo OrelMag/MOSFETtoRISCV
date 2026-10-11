@@ -11,13 +11,13 @@ export const CASES0: Record<string, LevelCase> = {
   t_inv: {
     problem: 'A computer is switches driving the gates of other switches. Every CMOS gate is two networks on one output: PMOS pulling it to VDD, NMOS pulling it to GND, driven by the same inputs. The inverter is the smallest case, one transistor in each, and sets the rule every later cell obeys: for any input exactly one network conducts, so the output is always driven and no static current flows.',
     without: 'With a resistor in place of the PMOS (pseudo-NMOS) the output still inverts with one transistor, but current flows from VDD to GND for as long as a = 1, and the rising edge is only as fast as the resistor charges the load.',
-    cost: 'Two transistors. The campaign keeps a single brick, so its NOT is a NAND with tied inputs (4 transistors): the single-cycle core\'s 397 NOTs cost 1588 transistors where CMOS inverters would need 794.',
+    cost: 'Two transistors. The campaign keeps a single brick, so its NOT is a NAND with tied inputs (4 transistors): the single-cycle core\'s 163 NOTs cost 652 transistors where CMOS inverters would need 326.',
     alts: [{ name: 'Pseudo-NMOS inverter (pull-up resistor + NMOS)', lib: 'inv_pseudo' }],
   },
   t_nand: {
     problem: 'NAND is functionally complete: NOT, AND, OR, the multiplexers, the adders, the flip-flops, all of RV16 down to its last register bit is NANDs. Two NMOS in series pull the output low only when a = b = 1; two PMOS in parallel pull it high when either input is 0. From the next level on this cell is the only primitive, and every cost in the campaign is counted in it: NANDs for area, NAND delays for depth and clock period.',
     without: 'A single CMOS stage can only invert: AND and OR each need a second stage (6 transistors). Without an inverting gate that is complete on its own (NAND or NOR) the brick would be bigger and slower.',
-    cost: 'Four transistors, one delay. The single-cycle core is 5748 NANDs (22992 transistors), the pipeline with traps 15050 (60200). Cell libraries also offer inverters, AOI cells and 3- and 4-input NANDs; counting in 2-input NANDs keeps one unit for area and time.',
+    cost: 'Four transistors, one delay. The single-cycle core is 5236 NANDs (20944 transistors), the pipeline with traps 13035 (52140). Cell libraries also offer inverters, AOI cells and 3- and 4-input NANDs; counting in 2-input NANDs keeps one unit for area and time.',
     alts: [{ name: 'CMOS NOR (the dual)', lib: 'nor_cmos' }],
   },
   t_nor: {
@@ -44,7 +44,7 @@ export const CASES0: Record<string, LevelCase> = {
     alts: [{ name: 'NOR, then NOT', nand: 5, depth: 4, note: 'The four-NAND NOR (depth 3) followed by a NOT.' }],
   },
   g_xor: {
-    problem: 'XOR is the sum bit of an adder without its carry. It is also a controlled inverter: the adder / subtractor feeds b ⊕ sub to its adder, so one adder also subtracts. And it is a difference detector: the equality comparator behind beq and bne is 16 XORs and a zero detect. The ALU\'s <code>xor</code> is 16 more, and signed less-than is N ⊕ V.',
+    problem: 'XOR is the sum bit of an adder without its carry. It is also a controlled inverter: the adder / subtractor feeds b ⊕ sub to its adder, so one adder also subtracts. And it is a difference detector: the equality comparator behind beq and bne is 16 XORs and a zero detect. The ALU\'s <code>xor</code> is 16 more, and its signed less-than is N ⊕ V.',
     without: 'No subtraction through the adder and no cheap equality test: each would need its own sum-of-products circuit per bit.',
     cost: 'Par shares the first NAND, n = ¬(a·b), between both halves: ¬(¬(a·n) · ¬(b·n)), 4 NANDs, depth 3. The plain sum of products ¬a·b + a·¬b needs two inverters and three NANDs: 5, also depth 3.',
     alts: [
@@ -54,7 +54,7 @@ export const CASES0: Record<string, LevelCase> = {
   },
   g_mux: {
     problem: 'Wherever two values can reach one input there is a multiplexer, y = s ? b : a. The ALU\'s b operand is rs2 or the immediate; the PC loads pc + 1 or a jump target; the register file is written the ALU result, a loaded word, pc + 1 or the immediate. Enables, read ports, the shifter and the ALU\'s result select are trees of the same cell: about half the NANDs of both RV16 cores are in 2:1 muxes.',
-    without: 'An AND–OR mux from the gates so far is 8 NANDs and depth 5 per bit. The single-cycle core has 721 muxes: that would be about 2900 more NANDs.',
+    without: 'An AND–OR mux from the gates so far is 8 NANDs and depth 5 per bit. The single-cycle core has 705 bits of 2:1 mux: that would be about 2900 more NANDs.',
     cost: 'NAND–NAND form ¬(¬(s·b) · ¬(¬s·a)): 4 NANDs, depth 3, one of them the inverter on s, which a bus mux can share across its bits. In CMOS two transmission gates and an inverter make a mux of 6 transistors against these 16, at the price of a path that does not restore the signal level.',
     alts: [{ name: 'AND–OR with a NOT', nand: 8, depth: 5, note: 'NOT s (1), two ANDs (2 each), OR (3); the path is NOT, AND, OR.' }],
   },
@@ -79,23 +79,22 @@ export const CASES0: Record<string, LevelCase> = {
   g_mux8: {
     problem: 'Data moves 16 bits at a time, so every mux of the datapath is sixteen copies of the 1-bit cell sharing one select. This bus mux picks the ALU\'s b operand (rs2 or the immediate) and the PC\'s next value; trees of it are the 4:1 immediate and result selects and the register file\'s two 8:1 read ports.',
     without: 'No datapath: every unit could feed only one destination, and an instruction could not choose between a register and an immediate.',
-    cost: 'Sixteen 4-NAND muxes: 64 NANDs, depth 3. They all invert the same s, so one shared inverter saves 15: 49 NANDs, same depth. An 8:1 tree is seven of these, 448 NANDs, depth 7, and the register file has two.',
-    alts: [{ name: 'One inverter on s for all bits', nand: 49, depth: 3, note: '3 NANDs per bit, plus one NAND for ¬s shared by all sixteen.' }],
-    counts: 'mux2x16',
+    cost: 'Sixteen 4-NAND muxes would be 64 NANDs, depth 3. They all invert the same s, so one shared inverter saves 15: 49 NANDs, same depth, the reference and par (3 NANDs per bit, one ¬s for all sixteen). The library\'s 8:1 tree is seven 64-NAND bus muxes, 448 NANDs, depth 7, and the register file has two.',
+    alts: [{ name: 'Sixteen 4-NAND muxes (library)', lib: 'mux2x16' }],
   },
   g_eq16: {
     problem: 'beq and bne branch on rs1 = rs2. Two words are equal when no bit differs, that is when a ⊕ b is zero: 16 XORs feeding the zero detect. The branch comparator uses this one; the pipeline\'s forwarding and hazard units use 3-bit versions to compare register numbers.',
-    without: 'beq would zero-detect the a − b the branch comparator already computes for blt: 46 more NANDs, but the answer would wait for the carry chain (depth 48 instead of 12).',
+    without: 'beq would zero-detect the a + ¬b + 1 the branch comparator already computes for blt: 46 more NANDs, but the answer would wait for the carry chain (depth 46 instead of 12).',
     cost: '16 XORs (64) and the zero detect (46): 110 NANDs, depth 12, par equal to the reference. XNOR per bit and a 16-input AND come to the same 110 NANDs and depth 12.',
     alts: [
-      { name: 'Zero detect on the subtractor\'s a − b (NANDs added)', nand: 46, depth: 48, note: 'Reuses the branch comparator\'s adder / subtractor (sum bits at depth 39) and adds a 16-bit zero detect (46 NANDs, depth 9).' },
+      { name: 'Zero detect on the comparator\'s a + ¬b + 1 (NANDs added)', nand: 46, depth: 46, note: 'Reuses the branch comparator\'s adder (its sum bits, unused there, at depth 37) and adds a 16-bit zero detect (46 NANDs, depth 9).' },
       { name: 'XNOR per bit and a 16-input AND', nand: 110, depth: 12, note: '16 XNORs (5 NANDs, depth 4) and and16 (30 NANDs, depth 8).' },
     ],
   },
 
   // ---- Act 2 ----------------------------------------------------------------------------------
   a_ha: {
-    problem: 'One column of binary addition: two bits in, a sum and a carry out; the sum is a ⊕ b, the carry a·b. Adding a constant 1 needs nothing more than a chain of them, and the PC adds 1 every cycle: both incrementers of the RV16 core (pc + 1 in the PC, and the link value of jal / jalr in the next-PC logic) are sixteen half adders each.',
+    problem: 'One column of binary addition: two bits in, a sum and a carry out; the sum is a ⊕ b, the carry a·b. Adding a constant 1 needs nothing more than a chain of them, and the PC adds 1 every cycle: the RV16 core\'s incrementer (pc + 1, in the next-PC logic: the PC\'s next value and the link value of jal / jalr) is fifteen half adders and a NOT.',
     without: 'Every incrementer bit would be a full adder with b = 0: 9 NANDs instead of 5.',
     cost: 'The XOR\'s first NAND already computes ¬(a·b); one more NAND inverts it into the carry: 5 NANDs, depth 3, the carry at depth 2. A separate XOR and AND cost 6.',
     alts: [{ name: 'Separate XOR and AND', nand: 6, depth: 3, note: 'XOR (4 NANDs, depth 3) and AND (2, depth 2) side by side, sharing nothing.' }],
@@ -113,19 +112,19 @@ export const CASES0: Record<string, LevelCase> = {
     alts: [{ name: '4-bit carry-lookahead', lib: 'cla4' }, { name: '4-bit Kogge–Stone', lib: 'ks4' }],
   },
   a_add16: {
-    problem: 'RV16 words are 16 bits. Four 4-bit adders, the carry out of each into the next, add them. The next-PC logic has two: pc + imm for taken branches and jal, rs1 + imm for jalr. The ALU and the branch comparator carry the same chain inside their adder / subtractors.',
+    problem: 'RV16 words are 16 bits. Four 4-bit adders, the carry out of each into the next, add them. The next-PC logic has two: pc + imm for taken branches and jal, rs1 + imm for jalr. The ALU\'s adder / subtractor and the branch comparator\'s less-than carry the same chain.',
     without: 'No branch or jump targets and no 16-bit arithmetic: the ALU, the comparator and the next-PC logic all start from this adder.',
     cost: '144 NANDs, depth 36: the carry crosses every bit, and the single-cycle core\'s critical path runs through such chains. A 16-bit Kogge–Stone adder (the side quest of this act) is 366 NANDs, depth 16; a carry-select adder 312 NANDs, depth 20.',
     alts: [{ name: 'Kogge–Stone (parallel prefix)', lib: 'ks16' }, { name: 'Carry-select, 4-bit blocks', lib: 'csel16_4' }],
   },
   a_inc16: {
-    problem: 'The PC advances by one word every cycle, and jal / jalr save pc + 1 as the return address. Adding the constant 1 needs no b input: bit 0 is ¬a0 and the carry into bit k is a0·…·a(k−1), so a chain of half adders does it. The RV16 core has two of them: in the PC, and in the next-PC logic for the link value.',
+    problem: 'The PC advances by one word every cycle, and jal / jalr save pc + 1 as the return address. Adding the constant 1 needs no b input: bit 0 is ¬a0 and the carry into bit k is a0·…·a(k−1), so a chain of half adders does it. The PC level builds one into its loop; in the complete core the next-PC logic\'s pc + 1 feeds both the PC and the link value, so one incrementer serves both.',
     without: 'A 16-bit adder with b = 0 and cin = 1 does the same work for 144 NANDs, depth 36.',
-    cost: 'Sixteen half adders: 80 NANDs, depth 33 (an AND per bit on the carry). A prefix incrementer is 159 NANDs, depth 11: a PC built on it clocks at 23 delays instead of 45, which the single-cycle core does not need, since its own critical path takes 79.',
-    alts: [{ name: 'Ripple adder with b = 0, cin = 1', lib: 'rca16' }, { name: 'Prefix incrementer', lib: 'incf16' }],
+    cost: 'Bit 0 is a NOT (its carry out is a0 itself) and bits 1–15 are half adders: 76 NANDs, depth 31. Sixteen half adders, as the library builds it, are 80 NANDs, depth 33. A prefix incrementer is 159 NANDs, depth 11: a PC built on it clocks at 21 delays instead of 41, which the single-cycle core does not need, since its own critical path takes 79.',
+    alts: [{ name: 'Sixteen half adders (library)', lib: 'inc16' }, { name: 'Ripple adder with b = 0, cin = 1', lib: 'rca16' }, { name: 'Prefix incrementer', lib: 'incf16' }],
   },
   a_addsub16: {
-    problem: 'sub, slt / sltu and blt / bge all subtract. In two\'s complement a − b = a + ¬b + 1, so one adder does both: an XOR per bit inverts b when sub = 1, and sub is also the carry in. The ALU subtracts this way for sub, slt and sltu, the branch comparator for blt and bge; the v output flags signed overflow.',
+    problem: 'sub, slt / sltu and blt / bge all subtract. In two\'s complement a − b = a + ¬b + 1, so one adder does both: an XOR per bit inverts b when sub = 1, and sub is also the carry in. The ALU subtracts this way for sub, slt and sltu; the v output flags signed overflow. The branch comparator, which only needs the carry, inverts b with plain NOTs.',
     without: 'A separate subtractor (16 inverters and a second adder) and a bus mux to choose: 368 NANDs against 212.',
     cost: '144 for the adder, 64 for the 16 XORs, 4 for the overflow XOR: 212 NANDs, depth 41. The XORs put 3 delays in front of the carry chain. With a Kogge–Stone adder inside: 430 NANDs, depth 19.',
     alts: [
@@ -134,10 +133,10 @@ export const CASES0: Record<string, LevelCase> = {
     ],
   },
   a_slt: {
-    problem: 'slt / sltu write 1 when rs1 < rs2, and blt / bge branch on it. Both orders come from one subtraction a + ¬b + 1: unsigned, a < b exactly when there is no carry out; signed, when the difference is negative unless the subtraction overflowed, which flips the sign: N ⊕ V. The ALU derives both from its own adder; the branch comparator holds this block for blt / bge.',
+    problem: 'slt / sltu write 1 when rs1 < rs2, and blt / bge branch on it. Both orders come from one subtraction a + ¬b + 1: unsigned, a < b exactly when there is no carry out. Signed, when the signs differ a < b exactly when a is negative; when they agree the difference cannot overflow and the unsigned answer holds. The ALU derives both from its own adder / subtractor (signed as N ⊕ V); the branch comparator holds this block for blt / bge.',
     without: 'The sign bit alone fails on overflow: 0x7FFF < 0x8000 is false as signed numbers, yet 0x7FFF − 0x8000 = 0xFFFF reads negative.',
-    cost: 'An XOR and a NOT on top of the adder / subtractor: 217 NANDs, depth 44. A tree magnitude comparator computes one of the two orders in 237 NANDs, depth 23: faster, larger, and with no subtractor to share.',
-    alts: [{ name: 'Tree magnitude comparator (signed only)', lib: 'cmp16s' }],
+    cost: 'Only the carry out is read, so 16 NOTs invert b in place of the subtractor\'s XORs; ltu = ¬cout, an XOR compares the signs and three NANDs and a NOT pick a15 or ltu: 169 NANDs, depth 39. The adder\'s sum gates are still there, unused; only a carry-only chain would drop them. On the adder / subtractor, N ⊕ V costs 217 NANDs, depth 44. A tree magnitude comparator computes one of the two orders in 237 NANDs, depth 23: faster, larger, and with no adder to share.',
+    alts: [{ name: 'Adder / subtractor, then N ⊕ V and ¬cout', nand: 217, depth: 44, note: 'addsub16 (212, depth 41) with sub = 1, an XOR (4) for N ⊕ V and a NOT (1) on the carry.' }, { name: 'Tree magnitude comparator (signed only)', lib: 'cmp16s' }],
   },
   a_shift16: {
     problem: 'sll, srl, sra and their immediate forms shift by 0 to 15 places in one cycle. Each of the four shift-amount bits controls a level of muxes shifting by 1, 2, 4 or 8; a level that is off passes the word through. The ALU has one right shifter for all three: a left shift reverses the bits before and after it, and sra fills with the sign bit instead of 0.',
@@ -157,7 +156,7 @@ export const CASES0: Record<string, LevelCase> = {
   o_fastadd: {
     problem: 'In a ripple adder the carry crosses every bit at 2 delays each, and that chain is on the single-cycle core\'s critical path: the ALU, the branch comparator and the next-PC adders all ripple. A parallel-prefix adder computes every carry from generate / propagate pairs (g = a·b, p = a ⊕ b), combined in log2(16) = 4 levels, so the carry into bit k no longer waits for bit k − 1.',
     without: 'Depth doubles with the width: 36 for a 16-bit ripple adder, 68 for 32 bits.',
-    cost: 'Kogge–Stone: 366 NANDs, depth 16, against the ripple adder\'s 144 and 36; carry-select sits between them (312, depth 20). In the core, the fast ALU and next-PC adders make it 6410 NANDs instead of 5748, and the core level\'s clock period falls from 98 to 81 delays.',
+    cost: 'Kogge–Stone: 366 NANDs, depth 16, against the ripple adder\'s 144 and 36; carry-select sits between them (312, depth 20). In the core, the fast ALU and next-PC adders make it 5898 NANDs instead of 5236, and the core level\'s clock period falls from 98 to 76 delays.',
     alts: [{ name: 'Ripple carry', lib: 'rca16' }, { name: 'Carry-select, 4-bit blocks', lib: 'csel16_4' }],
   },
 
@@ -191,7 +190,7 @@ export const CASES0: Record<string, LevelCase> = {
   },
   s_reg16: {
     problem: '16-bit registers hold all of RV16\'s state: the PC, x1–x7, the CSRs, and in the pipeline the instructions, operands and results passed between stages. Four 4-bit registers sharing clk and en make one.',
-    cost: 'Four par 4-bit registers make 208 NANDs; the reference, from library flip-flops, is 240. Clock period 8: clk-to-q 3, the enable mux 2, setup 3. Where a register loads every cycle (the PC) the enable muxes do no work, and 16 bare flip-flops are 144 NANDs.',
+    cost: 'Four par 4-bit registers make 208 NANDs, the reference; the library\'s, from 11-NAND flip-flops, is 240. Clock period 8: clk-to-q 3, the enable mux 2, setup 3. Where a register loads every cycle (the PC, mstatus) the enable muxes would do no work: 16 bare flip-flops are 144 NANDs, and this level unlocks that register too.',
     alts: [
       { name: 'Library register', lib: 'reg16' },
       { name: 'Sixteen flip-flops, no enable', nand: 144, note: '16 × 9 NANDs; only for a register that loads at every edge.' },
@@ -203,14 +202,14 @@ export const CASES0: Record<string, LevelCase> = {
     alts: [{ name: 'Library counter (no reset)', lib: 'counter4' }],
   },
   s_pc: {
-    problem: 'The PC holds the address of the instruction being fetched: the instruction ROM reads the word at pc every cycle. At each rising edge it becomes pc + 1, or the target when the next-PC logic asserts ld (a taken branch, jal, jalr), or 0 while rst is held, reset winning over load. A 16-bit register, an incrementer and two bus muxes.',
+    problem: 'The PC holds the address of the instruction being fetched: the instruction ROM reads the word at pc every cycle. At each rising edge it becomes pc + 1, or the target when the next-PC logic asserts ld (a taken branch, jal, jalr), or 0 while rst is held, reset winning over load. Sixteen flip-flops, an incrementer and two bus muxes.',
     without: 'No sequencing: the CPU could only ever execute the instruction at one fixed address.',
-    cost: 'Register 240, incrementer 80, two bus muxes 128: 448 NANDs, clock period 45, the incrementer\'s 33 delays inside the loop. The register loads at every edge (en = 1), so its 16 enable muxes (64 NANDs) do no work. A prefix incrementer brings the period to 23 for 527 NANDs; the single-cycle core does not need it, its own period being 79.',
-    alts: [{ name: 'With a prefix incrementer', nand: 527, note: 'incf16 (159 NANDs, depth 11) in place of the ripple incrementer: clock period 23 instead of 45 (static timing).' }],
+    cost: 'The PC loads at every edge, so it needs no enable: 16 flip-flops 144, incrementer 76, two bus muxes 98: 318 NANDs, clock period 41, the incrementer\'s 31 delays inside the loop. A 16-bit register with enable would add 64 NANDs that do no work. A prefix incrementer brings the period to 21 for 401 NANDs; the single-cycle core does not need it, its own period being 79.',
+    alts: [{ name: 'With a prefix incrementer', nand: 401, note: 'incf16 (159 NANDs, depth 11) in place of the ripple incrementer: clock period 21 instead of 41 (static timing).' }, { name: 'With an enabled register, en tied to 1', nand: 382, note: 'A 16-bit register with enable (208) in place of the 16 bare flip-flops (144).' }],
   },
   s_fsm: {
     problem: 'Some units take several cycles and must remember where they are: the iterative divider keeps a busy flag and a step count, the multicycle core walks fetch → execute → memory → write back. A finite-state machine is a state register plus next-state logic read from a table. This one recognises 1, 0, 1 on a serial input: three states in two flip-flops, with a Mealy output.',
-    cost: 'Binary encoding (S0 = 00, S1 = 01, S2 = 10): two flip-flops (22 NANDs) and 10 NANDs of next-state and output logic, 32 in all, clock period 8. One-hot encoding spends a flip-flop per state to make each next-state equation a short OR of ANDs; the RV16 multicycle core uses it.',
+    cost: 'Binary encoding (S0 = 00, S1 = 01, S2 = 10): two flip-flops (18 NANDs) and 10 NANDs of next-state and output logic, 28 in all, clock period 8. One-hot encoding spends a flip-flop per state to make each next-state equation a short OR of ANDs; the RV16 multicycle core uses it.',
   },
   m_ram: {
     problem: 'Memory is registers plus addressing. A decoder on addr, ANDed with we, enables the one word that loads at the clock edge; a mux tree on addr reads the addressed word combinationally. The register file is this circuit with two read ports, and the 64-word RAM the core levels\' bench provides is the same circuit, larger.',
@@ -220,16 +219,16 @@ export const CASES0: Record<string, LevelCase> = {
   },
   m_rf: {
     problem: 'An R-type instruction reads two registers and writes a third in the same cycle, so the register file has two read ports (rs1 = instr[9:7], rs2 = instr[12:10]) and one write port (rd = instr[6:4]). Writes: the 3→8 decoder on rd, enabled by rwe, loads one of x1–x7 at the clock edge. Reads: two 8:1 bus muxes, combinational. x0 always reads 0: a constant, with no register behind it.',
-    without: 'With one read port an R-type instruction would take two cycles; a real x0 would spend 240 NANDs storing a value no write may change.',
-    cost: 'Seven 16-bit registers (1680), two 8:1 read muxes (448 each) and the decoder (51): 2627 NANDs, nearly half the single-cycle core. Each extra read port is another 448. The pipeline writes the file at the falling edge, so an instruction three behind its producer reads the new value with no third port and no forwarding.',
-    alts: [{ name: 'x0 as a real register', nand: 2867, note: 'Eight 16-bit registers instead of seven (+240 NANDs), x0\'s never enabled.' }],
+    without: 'With one read port an R-type instruction would take two cycles; a real x0 would spend 208 NANDs storing a value no write may change.',
+    cost: 'Seven 16-bit registers (1456), two 8:1 read muxes (448 each) and the decoder (51): 2403 NANDs, nearly half the single-cycle core. Each extra read port is another 448. The pipeline writes the file at the falling edge, so an instruction three behind its producer reads the new value with no third port and no forwarding.',
+    alts: [{ name: 'x0 as a real register', nand: 2611, note: 'Eight 16-bit registers instead of seven (+208 NANDs), x0\'s never enabled.' }],
   },
 
   // ---- Lessons and drills whose case adds to the why --------------------------------------------
   n_twos: {
-    problem: 'RV16 is two\'s complement throughout. The 6-bit immediates of addi, lw, sw and the branches are sign-extended by wiring alone: instr[15] fans out to every upper bit, so the immediate generator has no gates. The same adder adds signed and unsigned words; only the comparisons differ (slt and blt use N ⊕ V, sltu the carry out), and sra fills with the sign bit.',
+    problem: 'RV16 is two\'s complement throughout. The 6-bit immediates of addi, lw, sw and the branches are sign-extended by wiring alone: instr[15] fans out to every upper bit, so the immediate generator has no gates. The same adder adds signed and unsigned words; only the comparisons differ (signed less-than looks at the signs or N ⊕ V, unsigned at the carry out), and sra fills with the sign bit.',
   },
   m_mem: {
-    problem: 'Programs live in ROM, data in RAM. Built like the register file, a 64-word RAM is 20166 NANDs (80664 transistors, about 79 per bit), three and a half times the single-cycle core. Real memories are dense arrays: an SRAM bit is 6 transistors, a DRAM bit one transistor and a capacitor. From here on memories are given; the core levels\' bench serves the instruction and data words in the same cycle.',
+    problem: 'Programs live in ROM, data in RAM. Built like the register file, a 64-word RAM is 20166 NANDs (80664 transistors, about 79 per bit), nearly four times the single-cycle core. Real memories are dense arrays: an SRAM bit is 6 transistors, a DRAM bit one transistor and a capacitor. From here on memories are given; the core levels\' bench serves the instruction and data words in the same cycle.',
   },
 };

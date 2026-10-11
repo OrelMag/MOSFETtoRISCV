@@ -121,11 +121,11 @@ with five instructions in flight.</p>
 has not written back yet. <b>Forwarding</b> takes the value from the E/M or M/W register instead.
 A load's value only exists after M, so a dependent instruction right behind it must <b>stall</b> one
 cycle. A <b>control hazard</b>: by the time a branch is resolved in E, two younger instructions were
-fetched from the wrong path: <b>flush</b> them. CPI rises above 1; the shorter period more than pays.</p>`,
+fetched from the wrong path: <b>flush</b> them. CPI rises above 1, and the shorter period has to pay for it: in RV16's plain pipeline it only just does (4% faster than the single-cycle core).</p>`,
 
   traps: `
 <p>Programs make mistakes (an illegal instruction), ask for help (<code>ecall</code>), and the world
-interrupts them (a timer, a device). In each case the CPU must stop what it is doing <b>between two
+interrupts them (a device raises a line). In each case the CPU must stop what it is doing <b>between two
 instructions</b>, remember where it was, and run a <b>handler</b>.</p>
 <p>The trap machinery is a handful of <b>CSRs</b>: <code>mtvec</code> (the handler's address),
 <code>mepc</code> (where to come back), <code>mcause</code> (why; bit 15 = interrupt),
