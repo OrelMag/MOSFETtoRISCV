@@ -14,7 +14,7 @@ import { type Puzzle, PUZZLE_GROUPS, puzzleChipId, puzzleOfChip, PUZZLES, type P
 import { refPoints, refProgram, type RefPoint } from '../puzzles/refs';
 import { PuzzleReplay } from '../puzzles/replay';
 import { findPorts, hardwareNands, programRoms, programWords, type PuzzleRun, runPuzzle } from '../puzzles/run';
-import { type Candidate, chipLang, langName, startCandidates, startPuzzle, type StartChoice, withProgram } from '../puzzles/start';
+import { type Candidate, chipLang, startCandidates, startPuzzle, type StartChoice, withProgram } from '../puzzles/start';
 import { inputOn } from '../puzzles/puzzles';
 import { dockPane, paneShown, showPane, undockPane } from './dock';
 import { type Editor, registerEditorPlugin, registerToolbarAction } from './editor';
@@ -136,7 +136,8 @@ class PuzzleUi {
     this.panel.hidden = !p;
     this.panel.replaceChildren();
     if (!p) return;
-    const lang = chipLang(ed.doc, ed.ws.chips);
+    const isa = chipLang(ed.doc, ed.ws.chips);
+    const lang = isa?.lang ?? null;
     const cpu = parFor(lang, refPoints(p.id))?.cpu ?? (lang === 'cpu4' ? 'cpu4' : lang === 'rv16' ? 'rv16' : lang === 'asm' ? 'rv32' : null);
     const refSrc = cpu ? refProgram(cpu, p.id) : undefined;
     const topRom = ed.doc.parts.filter((q) => 'rom' in q.ref).length === 1;
@@ -156,7 +157,7 @@ class PuzzleUi {
       h('span', { class: `sb-chal-flag${rec ? ' solved' : ''}` }, icon(rec ? 'check' : 'puzzle', 13), `Puzzle · ${group}`),
       h('h3', null, p.title),
       rec && !rec.shown ? h('span', { class: 'sb-chal-stars', title: `Best: ${rec.stars} of 3 stars` }, starText(rec.stars)) : null,
-      lang ? h('span', { class: 'sb-chal-rule', title: 'The language of the program ROM' }, langName(lang)) : null,
+      isa ? h('span', { class: 'sb-chal-rule', title: 'The language of the program ROM' }, isa.label) : null,
       h('span', { class: 'sb-chal-actions' }, ...actions)));
     if (this.collapsed) {
       if (this.replay) this.panel.append(this.playerEl());
@@ -396,7 +397,7 @@ class PuzzleUi {
     const opt = (c: Candidate) => {
       const el = h('label', { class: `sb-pz-opt${c === pick ? ' on' : ''}` },
         h('input', { type: 'radio', name: 'sb-pz-cpu', checked: c === pick }),
-        h('span', null, h('b', null, c.name), h('span', { class: 'sb-pz-tag' }, c.tag), h('span', { class: 'sb-pz-tag isa' }, langName(c.lang)), h('small', null, c.detail)));
+        h('span', null, h('b', null, c.name), h('span', { class: 'sb-pz-tag' }, c.tag), h('span', { class: 'sb-pz-tag isa' }, c.langLabel), h('small', null, c.detail)));
       el.querySelector('input')!.addEventListener('change', () => {
         pick = c;
         list.querySelectorAll('.sb-pz-opt').forEach((o) => o.classList.toggle('on', o === el));

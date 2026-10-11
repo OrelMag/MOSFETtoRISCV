@@ -10,9 +10,10 @@ import { DIRECTIVES16, PSEUDO16 } from '../riscv/rv16/asm16';
 import { BY_NAME16, CSRS16, reg16 } from '../riscv/rv16/isa16';
 import { DIRECTIVES4 } from '../isa4/asm4';
 import { BY_NAME4, JCN_NAMES, pair4, reg4 } from '../isa4/isa4';
+import { type IsaDoc, tableOf } from '../isa/table';
 
 /** rvasm: RV32 assembly; rv16asm: the campaign's RV16; cpu4asm: the 4-bit CPU's; hex: words. */
-export type CodeLang = 'rvasm' | 'rv16asm' | 'cpu4asm' | 'hex';
+export type CodeLang = 'rvasm' | 'rv16asm' | 'cpu4asm' | 'hex' | { table: IsaDoc };
 
 /** Token classes (CSS: .tk-<cls>); '' is plain text / whitespace.
  *  com comment · lbl label · op instruction · ps pseudo-instruction · dir directive · reg register
@@ -77,6 +78,22 @@ const CPU4: AsmWords = {
     return 'sym';
   },
 };
+
+// A Custom ISA table: its mnemonics, register names and list names, in any case.
+const TABLE_DIRS = new Set(['.word', '.org']);
+const tableCache = new WeakMap<IsaDoc, AsmWords>();
+function tableWords(doc: IsaDoc): AsmWords {
+  let w = tableCache.get(doc);
+  if (w) return w;
+  const t = tableOf(doc).words();
+  const ops = new Set(t.mnemonics.map((m) => m.toLowerCase())), regs = new Set(t.registers.map((r) => r.toLowerCase())), kws = new Set(t.keywords.map((k) => k.toLowerCase()));
+  w = {
+    mnemonic: (s) => (s.startsWith('.') ? (TABLE_DIRS.has(s.toLowerCase()) ? 'dir' : 'bad') : ops.has(s.toLowerCase()) ? 'op' : 'bad'),
+    operand: (s) => (regs.has(s.toLowerCase()) ? 'reg' : kws.has(s.toLowerCase()) ? 'kw' : 'sym'),
+  };
+  tableCache.set(doc, w);
+  return w;
+}
 
 function rvasm(line: string, isa: AsmWords): Tok[] {
   const { mnemonic, operand } = isa;
@@ -144,5 +161,6 @@ function hex(line: string): Tok[] {
 
 /** Split one line into classified tokens; their texts concatenate to `line`. */
 export function tokenize(line: string, lang: CodeLang): Tok[] {
+  if (typeof lang === 'object') return rvasm(line, tableWords(lang.table));
   return lang === 'hex' ? hex(line) : rvasm(line, lang === 'rv16asm' ? RV16 : lang === 'cpu4asm' ? CPU4 : RV32);
 }

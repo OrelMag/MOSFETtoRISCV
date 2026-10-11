@@ -361,11 +361,29 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   the ISS (the bouncing ball and live switches pixel by pixel)
 
 **Programs on your own CPU** (the second half of Turing Complete)
-- ⏳ Custom ISA: define instruction fields, opcodes and mnemonics in a table, and get an assembler,
-  a disassembler and the ROM listing from it (TC's assembly editor); RV32 stays the built-in ISA
-- ⏳ Program puzzles: tasks with level inputs and expected outputs (a sequence over I/O pins, a
-  maze, sorting), solved by writing a program for a CPU you built, scored on cycles and on the
-  hardware's NANDs and depth; optional, each with a reference solution, as with the build challenges
+- ✅ Custom ISA (src/isa, editor/isaui.ts): an instruction set as a table: per instruction a mnemonic, operand letters
+  and a bit pattern (0 / 1 fixed, - ignored, letters: the operand's bits, most significant first, splittable); each
+  letter a register list, a name list (or a number), an immediate (signed, hex) or an address (a label; absolute or
+  PC-relative with a scale). From it: an assembler (labels, .word, .org), a disassembler (the most specific pattern
+  wins), the fields of a word, the highlighter, the ROM listing and the CPU drawer's breakdown; a check (incomplete
+  patterns, unknown letters, two patterns that encode one word) and a line tried live. The ISA editor (File ▸
+  Instruction sets…, a ROM's Language): presets read-only (the 4-bit CPU's ISA, equal to its assembler and
+  disassembler on all 65 536 words), copies to edit, import / export as .json. The workspace keeps the tables; a ROM
+  holds a copy of its own (it builds alone, in share links too), and an edit reaches every ROM that uses the table.
+  Syntax only (the author's choice): a custom table has no golden model, so the drawer follows the PC, not checked.
+  One Isa shape (src/isa/isa.ts: assemble, disasm, fields, words) wraps RV32, RV16, the 4-bit CPU and the tables
+- ✅ Program puzzles (src/puzzles, editor/puzzleui.ts): 14 tasks given as word streams in 4 groups (streams, arithmetic,
+  text, memory), solved by a program on a CPU of your choice and run on its gates. The Puzzles drawer starts one on a
+  ready-wired computer (4-bit CPU, RV16, RV32I), a copy of your own chip with the two zero-cost ports (PUZZLE IN: data,
+  ready, read; PUZZLE OUT: data, we) placed for you to wire, or your single-cycle campaign core. Its ROM may be in any
+  language, a Custom ISA table included. Check plays every test from power-on until a halt part reads 1, and scores mean
+  cycles, NANDs (the program ROM left out) and program words. There are 40 reference programs (no 4-bit ones for the
+  memory puzzles), each measured on the gates (refdata.json). Stars come from the cost / speed front: ★★ no reference
+  is both cheaper and faster, ★★★ cycles × NANDs below all. A chart plots the references, their front and your point.
+  A click on a test plays it on the circuit, a cycle at a time, back and forth. Show answer gives the pseudocode and the
+  references; Do it for me loads the reference program
+- ⏳ After the puzzles: per-puzzle pins (a maze robot's sensors, a traffic light's lamps) as a third part kind; the
+  campaign's RV16 program levels run on your own core
 - ✅ Examples ▸ 4-bit CPU (4004-inspired; src/isa4, lib/cpu4.ts): the 4004's opcode map and mnemonics, one instruction
   per 16-bit ROM word and per clock (the 4004 byte high, its second byte low), 29 instructions (the 4004's set minus the
   4002 RAM-chip ones, FIN, KBP and DCL): 4-bit accumulator and carry, 16 × 4-bit index registers in 8 pairs, an 8-bit
@@ -375,8 +393,6 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   An assembler (a ROM language next to asm / rv16 / hex), a golden model and five samples (BCD addition 1234 + 5876,
   a counter, the switches, a multiply subroutine, TEST presses); the CPU drawer checks PC, A, CY, R0–R15, the stack,
   SRC and the ports every clock. Verified by lock-step on the samples and on 64 random ROMs (undefined words too)
-- ⏳ Next: the 4-bit ISA as the first table of Custom ISA (the drawer already takes an ISA's listing, fields,
-  registers and golden model through the 4-bit monitor's shape)
 
 **Campaign** (🚧, plan and status in [`docs/CAMPAIGN.md`](CAMPAIGN.md)): a tree of levels from a
 transistor NAND to a pipelined 16-bit RISC-V-like CPU (RV16) with traps and interrupts. It has

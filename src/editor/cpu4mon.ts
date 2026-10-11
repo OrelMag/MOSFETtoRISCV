@@ -1,4 +1,5 @@
 // A 4-bit CPU in the sandbox, DOM-free: a chip with a ROM in 4-bit assembly (lang 'cpu4') whose
+// (or in a Custom ISA: lang 'isa', followed only: a table has no golden model)
 // hierarchy holds the example's architectural registers (lib/cpu4.ts CPU4_STATE: pcs.pc, acc.a,
 // regs.r0 …). One instruction per clock, so the golden model steps at every rising edge with the
 // TEST pin and the switches the hardware sampled, and every register is compared after it.
@@ -7,6 +8,8 @@ import { decode4, disasm4 } from '../isa4/isa4';
 import { PUZZLE_NO_GOLDEN, simHasPuzzlePorts } from './puzzleparts';
 import { Iss4 } from '../isa4/iss4';
 import { CPU4_STATE } from '../lib/cpu4';
+import { type Isa, isaOf } from '../isa/isa';
+import { type IsaDoc, tableOf } from '../isa/table';
 import type { HierNode } from '../sim/flatten';
 import { pack } from '../sim/values';
 import type { Chips, Mismatch, MonitorSim, Retired } from './cpu';
@@ -17,16 +20,19 @@ import type { ChipDoc, PartDoc } from './model';
 export interface Cpu4Desc {
   /** The program ROM (a part of the chip). */
   rom: string;
+  /** A Custom ISA's table (lang 'isa'): listed and followed, never checked. */
+  table?: IsaDoc;
 }
 
 type Cpu4RomPart = PartDoc & { ref: { rom: RomRef } };
-const isCpu4Rom = (p: PartDoc): p is Cpu4RomPart => 'rom' in p.ref && p.ref.rom.lang === 'cpu4';
+const isCpu4Rom = (p: PartDoc): p is Cpu4RomPart => 'rom' in p.ref && (p.ref.rom.lang === 'cpu4' || (p.ref.rom.lang === 'isa' && !!p.ref.rom.isa));
 
 /** A ROM in 4-bit assembly on the chip (the one called rom or imem first), or null. */
 export function detectCpu4(doc: ChipDoc, _chips?: Chips): Cpu4Desc | null {
   const roms = doc.parts.filter(isCpu4Rom);
   if (!roms.length) return null;
-  return { rom: (roms.find((p) => p.id === 'rom' || p.id === 'imem') ?? roms[0]).id };
+  const rom = roms.find((p) => p.id === 'rom' || p.id === 'imem') ?? roms[0];
+  return rom.ref.rom.lang === 'isa' ? { rom: rom.id, table: rom.ref.rom.isa } : { rom: rom.id };
 }
 
 /** The 256 words the ROM holds (the PC is 8 bits: a smaller ROM repeats). */
@@ -124,7 +130,10 @@ export class Cpu4Monitor {
     this.log.length = 0;
     this.seq++;
     this.synced = this.es.cycles === 0;
-    this.problem = !this.desc ? 'no ROM in 4-bit assembly' : !this.prog ? `the program in ROM '${this.desc.rom}' does not build` : simHasPuzzlePorts(this.es.sim) ? PUZZLE_NO_GOLDEN : null;
+    const table = this.desc?.table;
+    this.problem = !this.desc ? 'no ROM in 4-bit assembly' : !this.prog ? `the program in ROM '${this.desc.rom}' does not build`
+      : table ? `${table.name} is a custom instruction set: its table says how instructions are written, not what they do`
+      : simHasPuzzlePorts(this.es.sim) ? PUZZLE_NO_GOLDEN : null;
     this.iss = this.desc && this.prog && !this.problem ? new Iss4(this.prog) : null;
   }
 
@@ -144,6 +153,7 @@ export class Cpu4Monitor {
 
   /** The hierarchy has the example's registers (a CPU drawn otherwise is followed, not checked). */
   get hasState(): boolean {
+    if (this.desc?.table) return false;
     const S = CPU4_STATE;
     return [S.pc, S.a, S.cy, S.src, ...S.stack, ...S.regs, ...S.ports].every((p) => !!this.node(p)?.ports.q);
   }
@@ -174,6 +184,18 @@ export class Cpu4Monitor {
     if (v !== null) return v;
     const d = this.desc;
     return d ? refValue(this.es, this.doc(), { part: d.rom, port: 'addr' }) : null;
+  }
+
+  /** The ROM's instruction set (the 4-bit CPU's, or the ROM's table). */
+  get isa(): Isa {
+    return isaOf(this.desc?.table ? 'isa' : 'cpu4', this.desc?.table)!;
+  }
+
+  /** What a word does, in words: the blocks it goes through (the 4-bit CPU), or its table row's summary. */
+  describe(w: number): string | null {
+    const t = this.desc?.table;
+    if (!t) return decode4(w).undef ? null : cpu4Use(w).path;
+    return tableOf(t).match(w)?.def.summary ?? null;
   }
 
   wordAt(pc: number): number | null {

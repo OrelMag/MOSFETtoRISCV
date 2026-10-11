@@ -26,8 +26,9 @@ export interface Candidate {
   name: string;
   /** What kind of thing it is (for the tag). */
   tag: 'ready' | 'your chip' | 'campaign core';
-  /** ISA of its ROM: an editor ROM language ('asm', 'rv16', 'cpu4', 'hex', …). */
+  /** ISA of its ROM: an editor ROM language ('asm', 'rv16', 'cpu4', 'hex', 'isa' for a custom table), and its name. */
   lang: string;
+  langLabel: string;
   /** One line under the name. */
   detail: string;
   nands?: number;
@@ -35,6 +36,9 @@ export interface Candidate {
 
 const LANG_NAMES: Record<string, string> = { asm: 'RV32', rv16: 'RV16', cpu4: '4-bit (4004)', hex: 'hex words' };
 export const langName = (lang: string) => LANG_NAMES[lang] ?? lang;
+
+/** What a ROM's program is written in, for a tag: a built-in language, or a custom table's name. */
+export const romLangName = (rom: { lang: string; isa?: { name: string } }) => (rom.lang === 'isa' && rom.isa ? rom.isa.name : langName(rom.lang));
 
 /** Does a chip place a halt part (at any depth)? */
 function hasHalt(doc: ChipDoc, chips: Readonly<Record<string, ChipDoc>>, depth = 3): boolean {
@@ -50,7 +54,7 @@ function isCore16(def: ComponentDef | undefined): boolean {
 /** Every CPU the puzzle can start on: the ready-wired computers, the learner's chips with a program ROM, their single-cycle campaign cores. */
 export function startCandidates(ws: Workspace, defOf: (chip: string) => ComponentDef | undefined): Candidate[] {
   const out: Candidate[] = REF_COMPUTERS.map((c) => ({
-    choice: { kind: 'ref', cpu: c.id }, name: c.name, tag: 'ready', lang: c.lang,
+    choice: { kind: 'ref', cpu: c.id }, name: c.name, tag: 'ready', lang: c.lang, langLabel: langName(c.lang),
     detail: `${c.width}-bit puzzle ports, wired`,
   }));
   for (const [id, doc] of Object.entries(ws.chips)) {
@@ -58,16 +62,16 @@ export function startCandidates(ws: Workspace, defOf: (chip: string) => Componen
     const node = nodeOfChip(id);
     if (node && SINGLE_CYCLE_CORES.has(node.id) && isCore16(defOf(id))) {
       const def = defOf(id)!;
-      out.push({ choice: { kind: 'core', chip: id }, name: doc.name, tag: 'campaign core', lang: 'rv16', detail: `your ${node.title} in the RV16 puzzle computer · core ${hardwareNands(def).toLocaleString('en')} NANDs`, nands: hardwareNands(def) });
+      out.push({ choice: { kind: 'core', chip: id }, name: doc.name, tag: 'campaign core', lang: 'rv16', langLabel: langName('rv16'), detail: `your ${node.title} in the RV16 puzzle computer · core ${hardwareNands(def).toLocaleString('en')} NANDs`, nands: hardwareNands(def) });
       continue;
     }
     const roms = programRoms(doc, ws.chips);
     if (roms.length !== 1) continue;
-    const r = (roms[0].part.ref as { rom: { k: number; w: number; lang: string } }).rom;
+    const r = (roms[0].part.ref as { rom: { k: number; w: number; lang: string; isa?: { name: string } } }).rom;
     const def = defOf(id);
     const n = def ? hardwareNands(def) : undefined;
     out.push({
-      choice: { kind: 'chip', chip: id }, name: doc.name, tag: 'your chip', lang: r.lang,
+      choice: { kind: 'chip', chip: id }, name: doc.name, tag: 'your chip', lang: r.lang, langLabel: romLangName(r),
       detail: `ROM ${(2 ** r.k).toLocaleString('en')} × ${r.w} at ${roms[0].path}${n !== undefined ? ` · ${n.toLocaleString('en')} NANDs` : ''} · you wire the ports`, nands: n,
     });
   }
@@ -116,9 +120,11 @@ export function withProgram(doc: ChipDoc, src: string): ChipDoc | null {
   return { ...doc, parts };
 }
 
-/** The ROM language of a puzzle chip's program (null: none, or several). */
-export function chipLang(doc: ChipDoc, chips: Readonly<Record<string, ChipDoc>>): string | null {
+/** The ROM language of a puzzle chip's program and its name (null: no ROM, or several). */
+export function chipLang(doc: ChipDoc, chips: Readonly<Record<string, ChipDoc>>): { lang: string; label: string } | null {
   const roms = programRoms(doc, chips);
-  return roms.length === 1 ? (roms[0].part.ref as { rom: { lang: string } }).rom.lang : null;
+  if (roms.length !== 1) return null;
+  const r = (roms[0].part.ref as { rom: { lang: string; isa?: { name: string } } }).rom;
+  return { lang: r.lang, label: romLangName(r) };
 }
 

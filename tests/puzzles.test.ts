@@ -20,6 +20,7 @@ import { REF_DATA, REFS, refPoints } from '../src/puzzles/refs';
 import { PuzzleReplay } from '../src/puzzles/replay';
 import { runPuzzle } from '../src/puzzles/run';
 import { startCandidates, startPuzzle, withProgram } from '../src/puzzles/start';
+import { ISA4_PRESET } from '../src/isa/presets';
 
 const echo = PUZZLE_BY_ID.get('echo')!;
 
@@ -209,5 +210,20 @@ describe('the CPU drawer on a puzzle chip', () => {
     const mon = new Rv16Monitor(es, () => doc, () => ws.chips);
     expect(mon.problem).toBe(PUZZLE_NO_GOLDEN);
     expect(mon.checking).toBe(false);
+  });
+});
+
+describe('a custom instruction set', () => {
+  it('a ROM on a table plays like the built-in language, and the start dialog names the table', () => {
+    const p = PUZZLE_BY_ID.get('fibonacci')!;
+    const base = computerChip('cpu4', 'u_mine4', 'Mine', REFS.cpu4[p.id]);
+    const doc = { ...base, parts: base.parts.map((q) => ('rom' in q.ref ? { ...q, ref: { rom: { ...q.ref.rom, lang: 'isa' as const, isa: ISA4_PRESET } } } : q)) };
+    const ws = { ...emptyWorkspace(), chips: { u_mine4: doc } };
+    const { lib, c } = compile(ws, 'u_mine4');
+    const run = runPuzzle(p, c, doc.pins);
+    expect(run.ok).toBe(true);
+    expect(run.cycles).toBe(refPoints(p.id).find((r) => r.cpu === 'cpu4')!.cycles);
+    const cand = startCandidates(ws, (id) => lib.defOf(id)).find((x) => x.tag === 'your chip')!;
+    expect(cand.langLabel).toBe(ISA4_PRESET.name);
   });
 });

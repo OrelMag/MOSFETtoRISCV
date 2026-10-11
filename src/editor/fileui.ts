@@ -7,6 +7,7 @@ import '../styles/editor-files.css';
 import { exportHdl } from '../sim/svexport';
 import { h, icon, s } from '../ui/dom';
 import { registerToolbarAction, type Editor } from './editor';
+import { openIsaEditor } from './isaui';
 import {
   chipFileName, chipInfo, deleteChip, duplicateChip, fileBase, SHARE_WARN, shareUrl, summarize, summaryLine,
   workspaceFileName, type ImportSummary,
@@ -88,6 +89,7 @@ const MENU: (MenuItem | null)[] = [
   { icon: 'image', label: 'Export image (SVG)', hint: 'the canvas as drawn, in the current theme', run: (ed) => exportImage(ed, 'svg') },
   { icon: 'image', label: 'Export image (PNG)', hint: 'the same at 2× resolution', run: (ed) => void exportImage(ed, 'png') },
   null,
+  { icon: 'code', label: 'Instruction sets…', hint: 'custom ISAs: an assembler and a listing for your CPU from a table', run: (ed) => openIsaEditor(ed) },
   { icon: 'stack', label: 'Manage chips…', hint: 'sizes, who uses what; open, duplicate, delete', run: (ed) => manageDialog(ed) },
   { icon: 'trash', label: 'Delete local data…', hint: 'erase what this site keeps in this browser', run: (ed) => deleteDataDialog(ed) },
 ];
