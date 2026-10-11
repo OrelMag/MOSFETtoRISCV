@@ -20,6 +20,7 @@ cpSync(dist, app, { recursive: true, filter: (src) => !src.endsWith('.map') });
 const FONTS = [
   ['inter', [400, 500, 600, 700, 800]],
   ['jetbrains-mono', [400, 500, 600, 700]],
+  ['fredoka', [500, 600, 700]],
 ];
 const fontsDir = join(app, 'fonts');
 mkdirSync(fontsDir, { recursive: true });

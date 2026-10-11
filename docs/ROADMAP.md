@@ -329,8 +329,11 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   turns colour per net on (and off again with it, unless set since). A Dark board switch (on by default) puts every
   schematic on a dark board in the light theme too: the SVG alone takes the dark theme's tokens, the chrome and
   panels keep the theme. Sandbox, chapters, workbench, codex figures and exported images
-- ⏳ (later, after the two above) Optional cartoonish components: a playful symbol set (rounded, chunky bodies, bold outlines, small icons for
-  displays and memories) with the same sizes and port positions, so no layout or routing changes
+- ✅ Cartoon parts (a switch under the vivid look, `data-parts="cartoon"`): every body gets a drop shadow and a gloss
+  highlight, outlines turn thick and round, boxes rounder, lettering rounded (Fredoka, bundled for the desktop
+  program), and a box shows its category's icon (memory cells, a clock edge, ±, a fork, a chip) in an inner corner no
+  text covers (view/boxtext.ts iconSpot, checked over every registered box). Same sizes and port positions; the extras
+  are always drawn and hidden by CSS, so the switch is instant everywhere, image export included
 
 **Capacity and speed**
 - ✅ Large memories: RAM and ROM parts up to 2^16 words (lib/bigmem.ts), one behavioural leaf at run time over a
