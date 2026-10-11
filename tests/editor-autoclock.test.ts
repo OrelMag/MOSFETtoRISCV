@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type ChipDoc, type PartRef } from '../src/editor/model';
 import { AUTO_HZ, EditorSim } from '../src/editor/runtime';
+import { B0, B1 } from '../src/sim/types';
+import { pack } from '../src/sim/values';
 import { chip, compileLib, part, pin, wire } from './editorkit';
 
 // The run loop only needs requestAnimationFrame to exist: these tests never let a frame run.
@@ -40,14 +42,35 @@ describe('automatic clock', () => {
     es.destroy();
   });
 
-  it('waits for a clock pin', () => {
+  it('waits for a clock pin, and starts one added later even after Run / Step / Pause', () => {
     const doc = counter(false);
     const es = simOf(doc);
     expect(es.hasClock).toBe(false);
     expect(es.autoStart()).toBe(false);
+    es.stepOnce();
+    es.start();
+    es.pause(); // the user has had the run bar: no auto start for this chip any more…
+    expect(es.autoStart()).toBe(false);
     const wired = counter(true);
     es.update(compileLib(wired), wired.pins);
+    expect(es.autoStart()).toBe(true); // …until a clock appears
+    es.pause();
+    es.update(compileLib(wired), wired.pins); // an edit keeping the clock: the pause sticks
+    expect(es.autoStart()).toBe(false);
+    es.update(compileLib(doc), doc.pins); // the clock deleted, then placed again
+    es.update(compileLib(wired), wired.pins);
     expect(es.autoStart()).toBe(true);
+    es.destroy();
+  });
+
+  it('a clock pin placed alone ticks on the board', () => {
+    const lone = chip('u_k', 'K', { pins: [{ ...pin('clk', 'in', [0, 10]), kind: 'clock' }] });
+    const es = simOf(lone);
+    expect(es.autoStart()).toBe(true);
+    es.advance(0.25, Infinity);
+    expect(es.pinBits('clk')).toEqual([B1]);
+    es.advance(0.25, Infinity);
+    expect(es.pinBits('clk')).toEqual([B0]);
     es.destroy();
   });
 
@@ -75,6 +98,28 @@ describe('automatic clock', () => {
       expect(es.running).toBe(false);
       es.destroy();
     }
+  });
+
+  it('Run shows the clock high for the first half of each period; Pause completes the cycle', () => {
+    const es = simOf(counter());
+    es.hz = 2;
+    const clk = () => es.pinBits('clk')![0];
+    const q = () => pack(es.pinBits('q')!);
+    expect(es.advance(0.25, Infinity)).toBe(1); // the rising edge
+    expect(clk()).toBe(B1);
+    expect([es.cycles, q()]).toEqual([1, 1]);
+    es.advance(0.25, Infinity); // the fall: no new edge
+    expect(clk()).toBe(B0);
+    expect([es.cycles, q()]).toEqual([1, 1]);
+    es.advance(0.25, Infinity);
+    expect(clk()).toBe(B1);
+    es.start();
+    es.pause();
+    expect(clk()).toBe(B0);
+    expect([es.cycles, q()]).toEqual([2, 2]);
+    es.stepOnce(); // a whole cycle from low
+    expect([clk(), es.cycles, q()]).toEqual([B0, 3, 3]);
+    es.destroy();
   });
 
   it('stays off in gate mode and with a keyboard part', () => {

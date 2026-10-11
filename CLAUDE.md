@@ -321,7 +321,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  (cycle mode on the cycle engine, `engine`: which runs); FrameBudget: Run's per-frame simulation
                  time adapts to keep ~60 fps ([2, 14] ms; an explicit budgetMs is fixed; the CPU drawer's Run to halt too);
                  autoStart: settings.autoClock starts a clocked chip at AUTO_HZ (2) once, unless Run / Pause / Step / a
-                 clock click / a mode change came first (autoTried); never with a keyboard part (it would take the shortcuts)
+                 clock click / a mode change came first (autoTried; a clock added to a chip that had none resets it); never
+                 with a keyboard part (it would take the shortcuts). Cycle-mode Run steps half periods: the clock is seen high
+                 for the first half of each (Pause completes the cycle)
   palette.ts     registerPaletteGroup + the palette panel (purist filter); a group's `folders` (My chips): sections
                  in folder order, empty ones too, renamed in place (double-click), drop targets for a dragged chip
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)

@@ -61,7 +61,7 @@ const LEVEL_NAME: Record<string, string> = {
 
 /** Steps Back can undo (each a full copy of the simulation's state). */
 const HISTORY_MAX = 100;
-/** The stage's Run: one clock cycle every RUN_MS (2 Hz, slow enough to follow every edge). */
+/** The stage's Run: one clock cycle every RUN_MS (2 Hz, slow enough to follow every edge), high for the first half. */
 const RUN_MS = 500;
 
 /** Panel state that Back restores together with the simulation (a golden model, a trace log). */
@@ -573,7 +573,23 @@ export class Stage {
     this.tick(flowMs);
   }
 
-  /** One full clock cycle (the Run loop's, which keeps running). */
+  /** Run: half a clock period, the rising edge (settled) or the fall, so the clock is seen high for half of it. */
+  private halfTick(): void {
+    const clk = this.clockPort();
+    if (!clk || !this.sim) return;
+    this.stopAnim();
+    if (this.edge) {
+      this.fall();
+      this.refresh();
+      return;
+    }
+    this.checkpoint();
+    this.rise(clk);
+    completeEdge(this.sim, this.edge!);
+    this.refresh();
+  }
+
+  /** One full clock cycle. */
   private tick(flowMs = 0): void {
     const clk = this.clockPort();
     if (!clk || !this.sim) return;
@@ -716,15 +732,19 @@ export class Stage {
 
   /** Stop the stage's own Run (the CPU panel's slow mode takes over the clock). */
   stopClock(): void {
-    if (this.runClock) clearInterval(this.runClock);
-    this.runClock = null;
+    if (this.runClock) {
+      clearInterval(this.runClock);
+      this.runClock = null;
+      // a run stopped while the clock is high: finish that cycle
+      this.finishEdge();
+    }
     this.syncRunBtn();
   }
 
   /** The stage's own Run: a full clock cycle every RUN_MS (the automatic clock starts it on load). */
   startClock(): void {
     if (this.runClock || !this.clockPort() || !this.sim || this.widget) return;
-    this.runClock = setInterval(() => this.tick(), RUN_MS);
+    this.runClock = setInterval(() => this.halfTick(), RUN_MS / 2);
     this.syncRunBtn();
   }
 

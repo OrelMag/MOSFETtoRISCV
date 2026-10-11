@@ -5,7 +5,8 @@
 // count and a latch its bit while the user adds parts around them.
 //
 // Two run modes: 'cycle' toggles the clock pins at a rate in Hz, each half period settled
-// (a per-frame time budget keeps the page responsive and reports the rate achieved); 'gate'
+// and one run-loop step (so the clock is seen high for half of it at a slow rate; a per-frame
+// time budget keeps the page responsive and reports the rate achieved); 'gate'
 // advances one gate delay per tick so propagation can be watched, toggling the clock only once
 // the logic is quiet. advance() holds the stepping logic and needs no DOM; the rAF loop lives in
 // start()/pause().
@@ -24,7 +25,8 @@
 //
 // Automatic clock (settings.autoClock): a chip with a connected clock starts running at AUTO_HZ
 // the first time it is simulated (autoStart), unless the user already ran, stepped, paused or
-// clocked it by hand (autoTried), so a pause sticks across rebuilds and tab switches.
+// clocked it by hand (autoTried), so a pause sticks across rebuilds and tab switches. A clock
+// added to a chip that had none is a new chance: it starts ticking whatever happened before.
 
 import { DualSim } from '../sim/dualsim';
 import { flatten } from '../sim/flatten';
@@ -139,6 +141,8 @@ export class EditorSim {
   resets = 0;
   /** The automatic clock had its chance: started it, or the user ran, stepped, paused or clocked by hand first. */
   autoTried = false;
+  /** The last build had a clock (autoTried resets when one appears). */
+  private clocked = false;
   /** Clock rate actually achieved over the last second (cycle mode, running). */
   achievedHz = 0;
   /** Called whenever values on screen may have changed. */
@@ -234,6 +238,10 @@ export class EditorSim {
       this.scanSources(sim);
       this.applyKeys(sim);
       this.quiet(sim);
+      // a clock pin placed on a chip without one: the automatic clock gets a new chance
+      const clocked = this.clocksOf(sim).length > 0;
+      if (clocked && !this.clocked) this.autoTried = false;
+      this.clocked = clocked;
       this.sim = sim;
       this.haltNets = haltNets(sim.design.root);
       this.diags = [];
@@ -534,9 +542,15 @@ export class EditorSim {
 
   /** One full clock cycle: every clock pin high, settle, low, settle. */
   private cycle(sim: Sim, clks: string[]): void {
+    if (this.clkHigh) this.fall(sim, clks);
     this.rise(sim, clks);
     sim.settle();
     this.endEdge();
+    this.fall(sim, clks);
+  }
+
+  /** The falling half of a cycle (the rising edge has settled). */
+  private fall(sim: Sim, clks: string[]): void {
     for (const c of clks) sim.setInput(c, 0);
     sim.settle();
     this.clkHigh = false;
@@ -600,7 +614,8 @@ export class EditorSim {
     const sim = this.sim;
     if (!sim) return 0;
     const clks = this.clocks();
-    const rate = this.mode === 'cycle' ? this.hz : this.gateRate();
+    // cycle mode steps half periods: the rising edge, then the fall
+    const rate = this.mode === 'cycle' ? 2 * this.hz : this.gateRate();
     this.due = Math.min(this.due + dt * rate, Number.isFinite(rate) ? rate + 1 : Infinity);
     // the cycle engine's one-time set-up is not part of a frame's work
     if (this.mode === 'cycle' && sim instanceof DualSim && clks.length) sim.prepare();
@@ -610,11 +625,17 @@ export class EditorSim {
     while (this.due >= 1 || !Number.isFinite(this.due)) {
       if (this.mode === 'cycle') {
         if (!clks.length) { this.quiet(sim); this.due = 0; break; }
-        this.cycle(sim, clks);
-      } else if (!this.gateTick(sim, clks)) { this.due = 0; break; }
-      n++;
+        if (this.clkHigh) this.fall(sim, clks);
+        else {
+          this.rise(sim, clks);
+          sim.settle();
+          this.endEdge();
+          n++;
+        }
+      } else if (!this.gateTick(sim, clks)) { this.due = 0; break; } else n++;
       if (Number.isFinite(this.due)) this.due--;
-      if (this.halted) { this.haltHit = true; this.due = 0; break; }
+      // a halt stops Run once its cycle is complete (cycle mode: after the fall)
+      if (this.halted && !(this.mode === 'cycle' && this.clkHigh)) { this.haltHit = true; this.due = 0; break; }
       if (now() - t0 > budgetMs) break;
     }
     // Behind schedule: drop the backlog rather than spiral (the achieved rate shows it).
@@ -725,6 +746,8 @@ export class EditorSim {
 
   pause(): void {
     this.autoTried = true;
+    // cycle mode: finish the period (a clock left high would be a rising edge nobody completes)
+    if (this.running && this.mode === 'cycle' && this.clkHigh && this.sim) this.fall(this.sim, this.clocks());
     this.running = false;
     cancelAnimationFrame(this.raf);
     this.achievedHz = 0;
