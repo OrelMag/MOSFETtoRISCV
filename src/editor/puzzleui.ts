@@ -461,7 +461,7 @@ function sv(tag: string, attrs: Record<string, string | number>, text?: string):
 }
 
 function chart(refs: RefPoint[], you: PuzzleScore | null): SVGElement {
-  const W = 290, H = 150, L = 36, R = 10, T = 10, B = 26;
+  const W = 290, H = 156, L = 36, R = 10, T = 14, B = 32;
   const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, class: 'sb-pz-chart', role: 'img', 'aria-label': 'Cycles against NANDs' });
   const pts = [...refs.map((r) => ({ n: r.nands, c: r.cycles })), ...(you ? [{ n: you.nands, c: you.cycles }] : [])];
   if (!pts.length) return svg;
@@ -473,7 +473,7 @@ function chart(refs: RefPoint[], you: PuzzleScore | null): SVGElement {
   const X = (n: number) => L + ((lx(n) - x0) / (x1 - x0)) * (W - L - R);
   const Y = (c: number) => T + (1 - c / y1) * (H - T - B);
   svg.append(sv('line', { x1: L, y1: H - B, x2: W - R, y2: H - B, class: 'ax' }), sv('line', { x1: L, y1: T, x2: L, y2: H - B, class: 'ax' }),
-    sv('text', { x: (L + W - R) / 2, y: H - 6, 'text-anchor': 'middle', class: 'lbl' }, 'NANDs (log) →'),
+    sv('text', { x: (L + W - R) / 2, y: H - 3, 'text-anchor': 'middle', class: 'lbl' }, 'NANDs (log) →'),
     sv('text', { x: 10, y: (T + H - B) / 2, 'text-anchor': 'middle', class: 'lbl', transform: `rotate(-90 10 ${(T + H - B) / 2})` }, 'cycles'));
   for (const d of [1e3, 1e4, 1e5]) {
     if (lx(d) < x0 || lx(d) > x1) continue;
@@ -481,11 +481,16 @@ function chart(refs: RefPoint[], you: PuzzleScore | null): SVGElement {
   }
   const front = refFront(refs);
   if (front.length > 1) svg.append(sv('polyline', { points: front.map((r) => `${X(r.nands)},${Y(r.cycles)}`).join(' '), class: 'front' }));
-  refs.forEach((r) => {
+  // labels above their points, below when the one to the left would run into them
+  let lastX = -Infinity, lastBelow = true;
+  [...refs].sort((a, b) => a.nands - b.nands).forEach((r) => {
+    const below = X(r.nands) - lastX < 90 && !lastBelow;
+    lastX = X(r.nands);
+    lastBelow = below;
     const g = sv('g', { class: `ref ${r.cpu}` });
     g.append(sv('circle', { cx: X(r.nands), cy: Y(r.cycles), r: 4.5 }), sv('title', {}, `${REF_BY_ID.get(r.cpu)!.name}: ${fmtN(r.nands)} NANDs, ${fmtN(r.cycles)} cycles, ${r.words} words`));
     const right = X(r.nands) < W - 80;
-    g.append(sv('text', { x: X(r.nands) + (right ? 7 : -7), y: Y(r.cycles) - 6, 'text-anchor': right ? 'start' : 'end', class: 'name' }, CPU_LABEL[r.cpu]));
+    g.append(sv('text', { x: X(r.nands) + (right ? 7 : -7), y: Y(r.cycles) + (below ? 13 : -6), 'text-anchor': right ? 'start' : 'end', class: 'name' }, CPU_LABEL[r.cpu]));
     svg.append(g);
   });
   if (you) {
