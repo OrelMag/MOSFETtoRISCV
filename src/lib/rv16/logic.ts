@@ -7,6 +7,7 @@ import { Builder } from '../builder';
 import { constWord } from '../alu';
 import { andN, HALF_ADDER, muxTree, rca } from '../combinational';
 import { define, merger, splitter } from '../define';
+import type { FsmInputs, FsmSpec } from '../fsm';
 import { AND, MUX2, NOT, OR, XOR } from '../gates';
 import { SR_LATCH } from '../sequential';
 import { NAND, TIE1 } from '../transistors';
@@ -411,28 +412,29 @@ export const RF8: ComponentDef = (() => {
 export const DET101: ComponentDef = (() => {
   const b = new Builder(8, 10, 4);
   b.pins('x', 'rst', 'clk');
-  const nx = b.name(b.op1(NOT, ['x'], '¬x'), 'nx', true);
-  const nr = b.name(b.op1(NOT, ['rst'], '¬rst'), 'nrst', true);
+  // Instances are named: DET101_FSM's arcs light them (n0 for the arcs into S1, n1 for S1 → S2, yg for the output).
+  const nx = b.name(b.op1(NOT, ['x'], '¬x', 'inv_x'), 'nx', true);
+  const nr = b.name(b.op1(NOT, ['rst'], '¬rst', 'inv_rst'), 'nrst', true);
   b.next();
   // States: S0 = 00, S1 (saw 1) = 01, S2 (saw 10) = 10. n0 = x·¬rst; n1 = ¬x·s0·¬rst; y = x·s1.
-  const g0 = b.op1(NAND, ['x', nr]);
-  const g1 = b.op1(NAND, [nx, nr]);
+  const g0 = b.op1(NAND, ['x', nr], undefined, 'g0');
+  const g1 = b.op1(NAND, [nx, nr], undefined, 'g1');
   b.next();
-  const n0 = b.op1(NOT, [g0], 'n0');
-  const h1 = b.op1(NOT, [g1]);
+  const n0 = b.op1(NOT, [g0], 'n0', 'n0');
+  const h1 = b.op1(NOT, [g1], undefined, 'h1');
   b.next();
-  const k1 = b.op1(NAND, [h1, '']);
+  const k1 = b.op1(NAND, [h1, ''], undefined, 'k1');
   b.next();
-  const n1 = b.op1(NOT, [k1], 'n1');
+  const n1 = b.op1(NOT, [k1], 'n1', 'n1');
   b.next();
-  const f0 = b.op(RV16_DFF, [n0, 'clk'], 's0');
-  const f1 = b.op(RV16_DFF, [n1, 'clk'], 's1');
+  const f0 = b.op(RV16_DFF, [n0, 'clk'], 's0', 's0');
+  const f1 = b.op(RV16_DFF, [n1, 'clk'], 's1', 's1');
   const s0 = b.name(`${f0}.q`, 's0', true), s1 = b.name(`${f1}.q`, 's1', true);
   b.wire(s0, `${k1.split('.')[0]}.b`);
   b.next();
-  const yn = b.op1(NAND, ['x', s1]);
+  const yn = b.op1(NAND, ['x', s1], undefined, 'yn');
   b.next();
-  b.wire(b.op1(NOT, [yn], 'x·s1'), 'y');
+  b.wire(b.op1(NOT, [yn], 'x·s1', 'yg'), 'y');
   const R = b.right;
   return define({
     id: 'rv16_det101', name: '"101" detector (state machine)', category: 'sequential',
@@ -441,4 +443,29 @@ export const DET101: ComponentDef = (() => {
     symbol: { kind: 'box', label: '101?' },
     netlist: () => ({ pins: { ...pinsAt(['x', 'rst', 'clk'], 0), y: [R, 8] }, instances: b.instances, nets: b.nets() }),
   });
+})();
+
+/** DET101 as a state machine (Mealy: arc labels x / y), drawn 400 × 200. */
+export const DET101_FSM: FsmSpec = (() => {
+  const x0 = 90, dx = 120, y = 108;
+  const x = (v: number) => (inp: FsmInputs) => inp.x === v;
+  const into1 = ['g0', 'n0'], to2 = ['g1', 'h1', 'k1', 'n1'];
+  return {
+    title: '"101" detector', shape: 'circle', size: [400, 200],
+    states: [
+      { name: 'S0', code: 0, does: 'Nothing useful seen yet.', at: [x0, y] },
+      { name: 'S1', code: 1, does: 'The last input was 1.', at: [x0 + dx, y] },
+      { name: 'S2', code: 2, does: 'The last two inputs were 1, 0: a 1 now completes the pattern.', at: [x0 + 2 * dx, y] },
+    ],
+    arcs: [
+      { from: 0, to: 0, when: x(0), label: '0/0', loop: -90 },
+      { from: 0, to: 1, when: x(1), label: '1/0', bend: 22, parts: into1 },
+      { from: 1, to: 1, when: x(1), label: '1/0', loop: -90, parts: into1 },
+      { from: 1, to: 2, when: x(0), label: '0/0', bend: 22, parts: to2 },
+      { from: 2, to: 1, when: x(1), label: '1/1', bend: 22, out: { y: 1 }, parts: [...into1, 'yn', 'yg'] },
+      { from: 2, to: 0, when: x(0), label: '0/0', bend: -70 },
+    ],
+    reset: 0, inputs: ['x', 'rst'], outputs: ['y'], resetIn: { rst: 1 },
+    stateBits: ['s0.q', 's1.q'], codeBits: 2, entry: [x0 - 72, y],
+  };
 })();
