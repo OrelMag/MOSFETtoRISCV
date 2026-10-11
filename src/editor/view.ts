@@ -11,7 +11,7 @@ import { s } from '../ui/dom';
 import { Camera, type ViewBox } from '../view/camera';
 import { applyFlow, flowDash, flowKey, flowText } from '../view/flow';
 import { FlowTokens, type Lane } from '../view/flowtokens';
-import { netKey, setNetHue, spreadHues } from '../view/nethue';
+import { netKey, setNetHue, spreadHues, USER_HUE } from '../view/nethue';
 import { junctions, type PinGeom, textWidth } from '../view/route';
 import { bitClass, busClass } from '../view/schematic';
 import { drawPinGlyph, drawSymbol, instNameAt, type PinGlyph, placePinValue } from '../view/symbols';
@@ -27,6 +27,7 @@ import { buzzerHz, codeGlyph, keyLabel, LED_PITCH, ledGrid } from './parts';
 import { drawIoFace, type IoFace } from './ioface';
 import { ioInfo } from './ioparts';
 import type { Sim } from '../sim/sim';
+import { userHues } from './wirehue';
 
 /** Live values, read through the compile the simulator was built from (runtime.ts). */
 export interface ViewValues {
@@ -106,6 +107,7 @@ export class EditorView {
   private busLayout: { built: Compiled | null; version: number } = { built: null, version: -1 };
   private version = 0;
   private hueMemo: { built: Compiled | null; version: number; hues: number[] } = { built: null, version: -1, hues: [] };
+  private userMemo: { spread: number[] | null; wires: WireDoc[] | null; labels: LabelDoc[] | null; hues: number[] } = { spread: null, wires: null, labels: null, hues: [] };
   private doc: ChipDoc | null = null;
   private sel: Sel = {};
   private diagCls = new Map<string, string>();
@@ -611,10 +613,24 @@ export class EditorView {
   }
 
   /**
-   * Each built net's hue (colour per net), by net index: spread apart where nets are drawn side by
-   * side, so recomputed when the build or a wire's shape changes (never during a drag: no repaint).
+   * Each built net's hue by net index: a colour the user picked (wirehue.ts, as USER_HUE + hue), else
+   * its colour-per-net hue, spread apart where nets are drawn side by side, so recomputed when the
+   * build or a wire's shape changes (never during a drag: no repaint).
    */
   private huesOf(built: Compiled | null): number[] {
+    const spread = this.spreadOf(built);
+    const u = this.userMemo, doc = this.doc;
+    if (!doc || (u.spread === spread && u.wires === doc.wires && u.labels === doc.labels)) return doc ? u.hues : spread;
+    const picked = userHues(doc, built, spread.length);
+    const hues = picked.some((x) => x !== undefined) ? spread.map((h, i) => {
+      const p = picked[i];
+      return p === undefined ? h : USER_HUE + (p === 'auto' ? h : p);
+    }) : spread;
+    this.userMemo = { spread, wires: doc.wires, labels: doc.labels, hues };
+    return hues;
+  }
+
+  private spreadOf(built: Compiled | null): number[] {
     const m = this.hueMemo;
     if (m.built === built && m.version === this.version) return m.hues;
     const nets = (built && netlistOf(built.def)?.nets) || [];

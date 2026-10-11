@@ -57,6 +57,17 @@ export function startApp(root: HTMLElement): void {
     h('span', null, h('b', null, p.name), h('small', null, p.blurb)));
     palMenu.append(item);
   }
+  // Vivid look (styles/vivid.css): bright filled parts and thick wires, by default on a dark board; turns colour per net on.
+  const vividItem = h('button', { role: 'menuitemcheckbox', class: 'pal-vivid', onclick: () => {
+    settings.setVivid(!settings.vivid);
+    applyTheme();
+  } }, h('span', { class: 'pal-sw pal-vivid-sw' }, h('i', { class: 'm0' }), h('i', { class: 'm1' }), h('i', { class: 'm2' }), h('i', { class: 'm3' })),
+  h('span', null, h('b', null, 'Vivid look'), h('small', null, 'Bright filled parts, thick wires, a colour per net (Turing Complete style)')));
+  const boardItem = h('button', { role: 'menuitemcheckbox', class: 'pal-board', onclick: () => {
+    settings.set('board', !settings.board);
+    applyTheme();
+  } }, h('span', { class: 'pal-board-sw' }, h('i')),
+  h('span', null, h('b', null, 'Dark board'), h('small', null, 'Vivid look: the circuit on a dark board in the light theme too')));
   // Module colours: library boxes tinted by kind (view/symbols.ts CATEGORY_HUE).
   const modItem = h('button', { role: 'menuitemcheckbox', class: 'pal-mod', onclick: () => {
     settings.set('modules', !settings.modules);
@@ -84,8 +95,8 @@ export function startApp(root: HTMLElement): void {
   const glossItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('glossary', !settings.glossary) },
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Hover definitions'), h('small', null, 'Chapters: codex terms underlined, their summary on hover (from the next step on)')));
-  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), modItem, flowItem, netItem, simpleItem, glossItem);
-  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire and module colours, flowing bits, colour per net, simple connections', 'aria-label': 'Wire and module colours, flowing bits, colour per net, simple connections', 'aria-haspopup': 'menu' }, swatch());
+  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), vividItem, boardItem, modItem, flowItem, netItem, simpleItem, glossItem);
+  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire and module colours, vivid look, flowing bits, colour per net, simple connections', 'aria-label': 'Wire and module colours, vivid look, flowing bits, colour per net, simple connections', 'aria-haspopup': 'menu' }, swatch());
   palBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     palMenu.classList.toggle('open');
@@ -97,6 +108,9 @@ export function startApp(root: HTMLElement): void {
 
   const syncTools = () => {
     for (const b of palMenu.querySelectorAll<HTMLButtonElement>('button[data-p]')) b.setAttribute('aria-checked', String(b.dataset.p === settings.palette));
+    vividItem.setAttribute('aria-checked', String(settings.vivid));
+    boardItem.setAttribute('aria-checked', String(settings.board));
+    boardItem.disabled = !settings.vivid;
     modItem.setAttribute('aria-checked', String(settings.modules));
     flowItem.setAttribute('aria-checked', String(settings.wireFlow));
     netItem.setAttribute('aria-checked', String(settings.netColors));

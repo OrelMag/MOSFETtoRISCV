@@ -43,7 +43,9 @@
   }
 }
 
-:root[data-theme='dark'] {
+:root[data-theme='dark'],
+/* The vivid look's dark board (vivid.css): a schematic takes the dark tokens in either theme. */
+:root[data-look='vivid'][data-board='dark'] svg.schematic {
   --ed-sel: #a397ff;
   --ed-err: #f87171;
   --ed-warn: #f5a524;
@@ -172,7 +174,7 @@
 @keyframes ed-ping { 50% { stroke: var(--ed-sel); stroke-width: 0.5; } }
 
 /* wires */
-.wire.ed-sel { stroke-width: calc(var(--wire-w1) + 0.2) !important; opacity: 1 !important; filter: drop-shadow(0 0 0.3px var(--ed-sel)) drop-shadow(0 0 0.3px var(--ed-sel)); }
+.wire.ed-sel { stroke-width: calc(var(--wire-w1) * var(--wire-k, 1) + 0.2) !important; opacity: 1 !important; filter: drop-shadow(0 0 0.3px var(--ed-sel)) drop-shadow(0 0 0.3px var(--ed-sel)); }
 .wire.ed-err { filter: drop-shadow(0 0 0.25px var(--ed-err)) drop-shadow(0 0 0.25px var(--ed-err)); }
 .wire.ed-warn { filter: drop-shadow(0 0 0.25px var(--ed-warn)); }
 .wire.ed-dead { stroke-dasharray: 0.45 0.3; }
@@ -372,3 +374,24 @@
 .sb-tm-caps { font-size: 12px; color: var(--text-2); margin: 4px 0; }
 .sb-tm-caps ol { margin: 4px 0 0; padding-left: 20px; font: 11.5px var(--font-mono); }
 .sb-tm-caps li span { display: inline-block; min-width: 90px; }
+
+/* Net colour swatches (hueswatch.ts): the right-click menu and the wire / pointer properties. The colour is
+   drawn by ::before, so the menu's hover background on its buttons cannot paint over it. */
+.sb-hues { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.sb-hues .sb-hue-sw, .sb-ctx .sb-hues .sb-hue-sw {
+  position: relative; width: 18px; height: 18px; padding: 0; flex: none; border-radius: 50%; cursor: pointer;
+  border: 0; background: var(--surface); box-shadow: 0 0 0 1px var(--border-strong);
+}
+.sb-hue-sw::before {
+  content: ''; position: absolute; inset: 2px; border-radius: 50%;
+  background: light-dark(oklch(0.62 0.17 var(--sw-h)), oklch(0.74 0.15 var(--sw-h)));
+}
+.sb-hue-sw.auto::before { background: conic-gradient(oklch(0.7 0.15 45), oklch(0.7 0.15 120), oklch(0.7 0.15 185), oklch(0.7 0.15 255), oklch(0.7 0.15 320), oklch(0.7 0.15 45)); }
+.sb-hue-sw.none::before { background: linear-gradient(135deg, transparent 43%, var(--muted) 44% 56%, transparent 57%); }
+.sb-hues .sb-hue-sw:hover { box-shadow: 0 0 0 1px var(--text-2); }
+.sb-hues .sb-hue-sw[aria-checked='true'] { box-shadow: 0 0 0 2px var(--accent); }
+.sb-hues .sb-hue-sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sb-ctx-hues { display: grid; gap: 6px; padding: 5px 9px 4px; }
+.sb-ctx-hues > span { font: 600 11px var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.sb-row-hues { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+

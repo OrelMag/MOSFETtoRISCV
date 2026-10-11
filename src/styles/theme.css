@@ -114,7 +114,9 @@
   }
 }
 
-:root[data-theme='dark'] {
+:root[data-theme='dark'],
+/* The vivid look's dark board (vivid.css): a schematic takes the dark tokens in either theme. */
+:root[data-look='vivid'][data-board='dark'] svg.schematic {
   color-scheme: dark;
   --bg: #0a0c12;
   --surface: #11141c;

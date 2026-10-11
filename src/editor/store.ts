@@ -11,7 +11,7 @@ import { MAX_KEY_LENGTH } from './parts';
 import { sanitizeIoRef } from './ioparts';
 import {
   SCHEMA, chipDeps, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
-  type ChipDoc, type CommentDoc, type DisplayKind, type EndRef, type ExitDir, type LabelDoc, type PartDoc, type PartRef,
+  type ChipDoc, type CommentDoc, type DisplayKind, type EndRef, type ExitDir, type LabelDoc, type NetHue, type PartDoc, type PartRef,
   type PinDoc, type PinValue, type Vec, type WireDoc, type Workspace,
 } from './model';
 
@@ -121,6 +121,9 @@ function sanitizePart(p: unknown): PartDoc | null {
   return compact({ id: p.id, ref, at, flip: p.flip === true ? true : undefined, label: str(p.label) ? p.label : undefined });
 }
 
+/** A net colour: a whole hue in [0, 360) or 'auto'. */
+const netHue = (x: unknown): NetHue | undefined => (x === 'auto' ? 'auto' : num(x) ? ((Math.round(x) % 360) + 360) % 360 : undefined);
+
 function sanitizeWire(w: unknown): WireDoc | null {
   if (!isObj(w) || !str(w.id)) return null;
   const [a, b] = [sanitizeEnd(w.a), sanitizeEnd(w.b)];
@@ -132,13 +135,14 @@ function sanitizeWire(w: unknown): WireDoc | null {
     cap: w.cap === true ? true : undefined,
     init: w.init === 0 ? 0 : w.init === 1 ? 1 : undefined,
     straight: w.straight === true ? true : undefined,
+    hue: netHue(w.hue),
   });
 }
 
 function sanitizeLabel(l: unknown): LabelDoc | null {
   const at = isObj(l) ? vec(l.at) : null;
   if (!isObj(l) || !str(l.id) || !str(l.name) || !l.name.trim() || !at) return null;
-  return compact({ id: l.id, name: l.name, at, face: face(l.face) });
+  return compact({ id: l.id, name: l.name, at, face: face(l.face), hue: netHue(l.hue) });
 }
 
 /** Comments longer than this are cut (a pasted essay would make a huge box). */

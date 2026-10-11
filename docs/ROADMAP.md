@@ -311,8 +311,11 @@ chip presentation, capacity and the program-solving half of Turing Complete.
 
 **Colourful mode** (Turing Complete style; mockup first). Colour says *which* signal, brightness and the
 flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every combination); light and dark themes
-- ⏳ User-coloured wires: pick a colour for a wire or a whole net (right-click menu, properties, a swatch row);
-  saved in the chip document, shared with it, inherited by the net's other drawn wires
+- ✅ User-coloured wires (sandbox, editor/wirehue.ts): a swatch row at the top of a wire's or pointer's right-click
+  menu and in its properties colours its whole net: no colour, Auto (its colour-per-net hue, even with that switch off)
+  or 9 hues clear of the X red; brightness still gives the value. Stored as `hue` on the wires and pointers, so a net
+  shows the colour most of its coloured pieces carry (wires joined later take it, two coloured nets joined keep the
+  larger group's); saved and shared, kept through collapse / unravel, never in the compile key (one undo step)
 - ✅ Colour per net: a switch in the wire-colour menu (off by default) gives every net a hue of its own, from its name
   or else its ends (stable across rebuilds, edits and reloads; a circuit opened in the sandbox keeps its chapter
   colours, bar the few nets its new drawing puts next to others); brightness still says the value (0 a dim tint, 1 bright with its glow), X and Z keep their colours and
@@ -321,9 +324,12 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   60° of a neighbour's (running within a few units, or crossing it) moves to the nearest hue clear of them, the most
   crowded nets first, two refining passes; the rest keep their own. Across the 632 library schematics, neighbouring
   pairs closer than 20° drop from 8 338 to 3 058 (none left on the CPU tops); 40 ms on the 64-bit Kogge–Stone
-- ⏳ Vivid look: a dark grid, filled bright part bodies tinted by category or chip hue, thicker wires; a setting
-  like `data-palette`, applied to the sandbox, the chapters' schematics and the workbench
-- ⏳ Optional cartoonish components: a playful symbol set (rounded, chunky bodies, bold outlines, small icons for
+- ✅ Vivid look (styles/vivid.css, `data-look="vivid"`): library boxes and muxes filled with their category hue,
+  user chips with their own, gates blue, white bold labels, wires and dots 1.6× thicker (`--wire-k`); switching it on
+  turns colour per net on (and off again with it, unless set since). A Dark board switch (on by default) puts every
+  schematic on a dark board in the light theme too: the SVG alone takes the dark theme's tokens, the chrome and
+  panels keep the theme. Sandbox, chapters, workbench, codex figures and exported images
+- ⏳ (later, after the two above) Optional cartoonish components: a playful symbol set (rounded, chunky bodies, bold outlines, small icons for
   displays and memories) with the same sizes and port positions, so no layout or routing changes
 
 **Capacity and speed**

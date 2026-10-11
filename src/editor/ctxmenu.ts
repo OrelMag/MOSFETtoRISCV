@@ -13,6 +13,8 @@ import { clearBends, setPin, setStraight } from './ops';
 import { collapseAll, collapseDialog, unravel, unravelDialog } from './pointerui';
 import { canPaste } from './tools';
 import { canUnravel, pointersOf } from './unravel';
+import { hueSwatches } from './hueswatch';
+import { colourNets, hueOfNets } from './wirehue';
 
 interface Item { label: string; key?: string; run(): void; disabled?: boolean }
 type Entry = Item | null;
@@ -143,6 +145,16 @@ function entries(ed: Editor, at: Vec): Entry[] {
 export function openContextMenu(ed: Editor, x: number, y: number, at: Vec): void {
   closeContextMenu();
   const m = h('div', { class: 'sb-ctx', role: 'menu', 'aria-label': 'Actions' });
+  // Wires and pointers: their nets' colour first (wirehue.ts), one undo step.
+  const wires = ed.sel.wires ?? [], labels = ed.sel.labels ?? [];
+  if (wires.length || labels.length) {
+    const cur = hueOfNets(ed.doc, ed.compiled, wires, labels);
+    m.append(h('div', { class: 'sb-ctx-hues' }, h('span', null, 'Net colour'),
+      hueSwatches(cur, (hue) => {
+        closeContextMenu();
+        ed.edit((d) => colourNets(d, ed.compiled, wires, labels, hue));
+      }, 'menuitemradio')), h('hr'));
+  }
   for (const it of entries(ed, at)) {
     if (!it) { if (m.lastElementChild && m.lastElementChild.tagName !== 'HR') m.append(h('hr')); continue; }
     m.append(h('button', {
@@ -158,7 +170,7 @@ export function openContextMenu(ed: Editor, x: number, y: number, at: Vec): void
   m.style.top = `${Math.max(8, y + hh > innerHeight - 8 ? y - hh : y)}px`;
   document.addEventListener('pointerdown', onOutside, true);
   document.addEventListener('keydown', onKey, true);
-  m.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+  m.querySelector<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)')?.focus();
 }
 
 registerEditorPlugin((ed) => {

@@ -146,6 +146,9 @@ export type EndRef =
   | { label: string }
   | { wire: string; at: Vec };
 
+/** A net's chosen colour (editor/wirehue.ts): an OKLCH hue, or 'auto' for its colour-per-net hue. */
+export type NetHue = number | 'auto';
+
 export interface WireDoc {
   id: string;
   a: EndRef;
@@ -160,6 +163,8 @@ export interface WireDoc {
   cap?: boolean;
   /** Power-on value of the net in 'zero' reset mode (a latch's stored bit). */
   init?: 0 | 1;
+  /** Colour of its net (the whole net shows the colour most of its wires and pointers carry). */
+  hue?: NetHue;
 }
 
 /**
@@ -172,6 +177,8 @@ export interface LabelDoc {
   name: string;
   at: Vec;
   face?: ExitDir;
+  /** Colour of its net, as on a wire. */
+  hue?: NetHue;
 }
 
 /** A comment on the canvas, as in Turing Complete: `at` is its top-left corner, `text` may span lines. */

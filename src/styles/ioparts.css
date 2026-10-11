@@ -30,7 +30,9 @@
   }
 }
 
-:root[data-theme='dark'] {
+:root[data-theme='dark'],
+/* The vivid look's dark board (vivid.css): a schematic takes the dark tokens in either theme. */
+:root[data-look='vivid'][data-board='dark'] svg.schematic {
   --con-bg: #07090d;
   --con-fg: #c9f2d4;
   --con-cursor: #3ddc84;
