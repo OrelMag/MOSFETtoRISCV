@@ -484,7 +484,8 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
   write-backs, interrupts, memory conflicts, multicycle states; `npm test` fails on any gap (there are none)
 - ✅ `scripts/verify-export.ts all` (Yosys netlist simulated against our gate-level run, every multi-core program) as
   the `verify-hdl` CI job with `yowasp-yosys`: the deploy waits on it
-- ⏳ The same cross-check on the system CPU (RV32IM + Zicsr: its MMIO and interrupt pins need a testbench of their own)
+- ✅ The same cross-check on the system CPUs (RV32I and RV32IM + Zicsr): every system, M and two user programs, irq
+  pulses and switch changes driven into both netlists, every output port (PC, console, LEDs, retire) compared per cycle
 - ✅ The campaign's RV16 cores against iss16: the golden model drops what the cores lack: CSR 7 (was mcycle) reads 0
   in both, and the timer is gone (a cycle counter would count cycles in the hardware, instructions in the model)
 - ✅ GateSim refuses a behavioural delay of 64 or more (the event wheel) instead of clamping it silently

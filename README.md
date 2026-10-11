@@ -147,8 +147,9 @@ panel shows the energy per instruction as the program runs.
 - **Drawings**: every registered schematic is checked for nets sharing a line, overlapping symbols
   and hidden labels.
 - **HDL**: generated SystemVerilog comes with a self-checking testbench drawn from our own
-  simulation; `scripts/verify-export.ts` synthesizes the dual-core with Yosys, simulates the gate
-  netlist and compares it cycle by cycle with the site's simulation.
+  simulation; `scripts/verify-export.ts` synthesizes the dual-core and the system CPUs (RV32I and
+  RV32IM with Zicsr, MMIO and interrupts) with Yosys, simulates each gate netlist and compares every
+  output cycle by cycle with the site's simulation under the same inputs (irq pulses, switches).
 - **Silicon**: `.github/workflows/layout.yml` runs the exported dual-core through
   OpenROAD-flow-scripts on SkyWater 130 nm (synthesis, floorplan, placement, clock tree, routing)
   and the GDS, tiles and reports are published into the site (chapter 25).
