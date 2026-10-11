@@ -6,6 +6,7 @@ import { PROGRAMS } from '../src/riscv/programs';
 import { deadInstances } from '../src/sim/dead';
 import { netlistOf } from '../src/sim/types';
 import { backwardEnds, labelOverlaps, symbolOverlaps } from '../src/view/route';
+import { orGloss } from '../src/view/symbols';
 import { boxText, boxTextOverlaps, ICON, iconSpot, labelRect, portTextRect } from '../src/view/boxtext';
 import { counter } from '../src/lib/sequential';
 import { symbolGeom } from '../src/sim/geometry';
@@ -54,6 +55,28 @@ describe('dead parts', () => {
   const defs = [...new Set([...registry.values(), ...cpuTops()])].filter((d) => d.netlist);
   it.each(defs.map((d) => [d.id, d] as const))('%s: every part reaches an output', (_, d) => {
     expect(deadInstances(netlistOf(d)!, d.ports)).toEqual([]);
+  });
+});
+
+describe('cartoon gloss', () => {
+  it('stays inside an OR-family body at every height', () => {
+    const half = 0.13 + 0.15; // half the gloss stroke + the body outline (cartoon widths)
+    for (const [x0, bw] of [[0, 4], [0, 3.4], [0.45, 4], [0.45, 3.4]]) for (let n = 2; n <= 8; n++) {
+      const h = Math.max(4, 2 * n), L = bw - x0;
+      // The body's three edges, sampled: top Q (x0,0) (x0+0.6L,0) (bw,h/2), its mirror, the back Q through (x0+0.55,h/2).
+      const edge: [number, number][] = [];
+      for (let i = 0; i <= 400; i++) {
+        const t = i / 400, x = x0 + L * (1.2 * t - 0.2 * t * t), y = t * t * h / 2;
+        edge.push([x, y], [x, h - y], [x0 + 1.1 * t * (1 - t), h * t]);
+      }
+      for (const [x, y] of orGloss(x0, bw, h)) {
+        const at = `x0 ${x0} bw ${bw} h ${h}: (${x.toFixed(2)}, ${y.toFixed(2)})`;
+        const top = edge.filter((_, i) => i % 3 === 0).reduce((a, p) => (Math.abs(p[0] - x) < Math.abs(a[0] - x) ? p : a));
+        expect(y, at).toBeGreaterThan(top[1]); // below the top edge, not above it
+        expect(x, at).toBeGreaterThan(x0);
+        expect(Math.min(...edge.map(([ex, ey]) => Math.hypot(ex - x, ey - y))), at).toBeGreaterThan(half);
+      }
+    }
   });
 });
 

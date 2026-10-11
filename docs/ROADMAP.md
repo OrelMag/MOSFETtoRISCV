@@ -361,18 +361,29 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   the ISS (the bouncing ball and live switches pixel by pixel)
 
 **Programs on your own CPU** (the second half of Turing Complete)
-- ⏳ Custom ISA: define instruction fields, opcodes and mnemonics in a table, and get an assembler,
-  a disassembler and the ROM listing from it (TC's assembly editor); RV32 stays the built-in ISA
+- ✅ Custom ISA (src/isa, editor/isaui.ts): an instruction set as a table: per instruction a mnemonic, operand letters
+  and a bit pattern (0 / 1 fixed, - ignored, letters: the operand's bits, most significant first, splittable); each
+  letter a register list, a name list (or a number), an immediate (signed, hex) or an address (a label; absolute or
+  PC-relative with a scale). From it: an assembler (labels, .word, .org), a disassembler (the most specific pattern
+  wins), the fields of a word, the highlighter, the ROM listing and the CPU drawer's breakdown; a check (incomplete
+  patterns, unknown letters, two patterns that encode one word) and a line tried live. The ISA editor (File ▸
+  Instruction sets…, a ROM's Language): presets read-only (the 4-bit CPU's ISA, equal to its assembler and
+  disassembler on all 65 536 words), copies to edit, import / export as .json. The workspace keeps the tables; a ROM
+  holds a copy of its own (it builds alone, in share links too), and an edit reaches every ROM that uses the table.
+  Syntax only (the author's choice): a custom table has no golden model, so the drawer follows the PC, not checked.
+  One Isa shape (src/isa/isa.ts: assemble, disasm, fields, words) wraps RV32, RV16, the 4-bit CPU and the tables
 - ⏳ Program puzzles: tasks with level inputs and expected outputs (a sequence over I/O pins, a
   maze, sorting), solved by writing a program for a CPU you built, scored on cycles and on the
   hardware's NANDs and depth; optional, each with a reference solution, as with the build challenges
-- ⏳ Examples ▸ 4-bit CPU (4004-inspired): a small accumulator machine drawn from library parts, readable in one
-  screen of chips: 4-bit data path (ALU, accumulator, carry flag), 16 × 4-bit index registers, an 8-bit PC
-  into a 256 × 8 program ROM, a short return stack. Its own ISA of about 16 instructions (LDM, LD, XCH, ADD, SUB,
-  INC, ISZ, JUN, JCN, JMS, BBL, WRR, …), with an assembler and a golden model so the CPU drawer runs it in lock-step
-  like the RV32 CPUs; sample programs on the LEDs and the 7-segment display (a counter, BCD addition as on the
-  4004's calculator). The cost against the RV32 single-cycle CPU shown next to it. Once Custom ISA exists, its
-  ISA becomes the first table there
+- ✅ Examples ▸ 4-bit CPU (4004-inspired; src/isa4, lib/cpu4.ts): the 4004's opcode map and mnemonics, one instruction
+  per 16-bit ROM word and per clock (the 4004 byte high, its second byte low), 29 instructions (the 4004's set minus the
+  4002 RAM-chip ones, FIN, KBP and DCL): 4-bit accumulator and carry, 16 × 4-bit index registers in 8 pairs, an 8-bit
+  PC with a three-level stack, SRC + WRR to five output ports (four hex digits, four LEDs), RDR from four switches, JCN
+  on the TEST key (Space), halt on a JUN to itself. Six blocks drawn as sandbox chips (PC & stack, Decode, Index
+  registers, ALU, Accumulator, I/O), 3 357 NANDs without the ROM against the single-cycle RV32I's 48k, period 66.
+  An assembler (a ROM language next to asm / rv16 / hex), a golden model and five samples (BCD addition 1234 + 5876,
+  a counter, the switches, a multiply subroutine, TEST presses); the CPU drawer checks PC, A, CY, R0–R15, the stack,
+  SRC and the ports every clock. Verified by lock-step on the samples and on 64 random ROMs (undefined words too)
 
 **Campaign** (🚧, plan and status in [`docs/CAMPAIGN.md`](CAMPAIGN.md)): a tree of levels from a
 transistor NAND to a pipelined 16-bit RISC-V-like CPU (RV16) with traps and interrupts. It has

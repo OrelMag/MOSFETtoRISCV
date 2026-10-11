@@ -5,9 +5,13 @@ import { assemble } from '../riscv/asm';
 import { disasm } from '../riscv/isa';
 import { assemble16 } from '../riscv/rv16/asm16';
 import { disasm16 } from '../riscv/rv16/isa16';
+import { assemble4 } from '../isa4/asm4';
+import { disasm4 } from '../isa4/isa4';
+import { type IsaDoc, tableOf } from '../isa/table';
 
-/** asm: RV32 assembly; rv16: the campaign's RV16 assembly (16-bit, word addressed); hex: words. */
-export type ProgramLang = 'asm' | 'hex' | 'rv16';
+/** asm: RV32 assembly; rv16: the campaign's RV16 assembly (16-bit, word addressed); cpu4: the 4-bit
+ *  CPU's assembly (16-bit words, word addressed); hex: words. */
+export type ProgramLang = 'asm' | 'hex' | 'rv16' | 'cpu4' | 'isa';
 
 export interface ProgramLine {
   /** Byte address of the word. */
@@ -101,13 +105,23 @@ function buildHex(src: string): BuiltProgram {
   return { words, errors, lines };
 }
 
-/** Build a program image. asm: the two-pass assembler; hex: one 32-bit word per token. */
-export function buildProgram(lang: ProgramLang, src: string): BuiltProgram {
+/** Build a program image. asm / rv16 / cpu4: that ISA's assembler; hex: one 32-bit word per token. */
+export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc): BuiltProgram {
   if (lang === 'hex') return buildHex(src);
+  if (lang === 'isa') {
+    // A custom instruction set (the ROM's own copy of the table): word addressed like RV16.
+    if (!isa) return { words: [], errors: [{ line: 0, message: 'no instruction set: pick one in the ROM\'s Language' }], lines: [] };
+    const t = tableOf(isa), r = t.assemble(src);
+    return { words: r.words, errors: r.errors, lines: r.lines.map((l) => ({ addr: 4 * l.addr, word: l.word, text: t.disasm(l.word, l.addr), srcLine: l.srcLine })) };
+  }
   if (lang === 'rv16') {
     // Word addressed: line addr stays 4 × the word index, like the other languages' listings.
     const r = assemble16(src);
     return { words: r.words, errors: r.errors, lines: r.lines.map((l) => ({ addr: 4 * l.addr, word: l.word, text: disasm16(l.word, l.addr), srcLine: l.srcLine })) };
+  }
+  if (lang === 'cpu4') {
+    const r = assemble4(src);
+    return { words: r.words, errors: r.errors, lines: r.lines.map((l) => ({ addr: 4 * l.addr, word: l.word, text: disasm4(l.word), srcLine: l.srcLine })) };
   }
   const r = assemble(src);
   return {

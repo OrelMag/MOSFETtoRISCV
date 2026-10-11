@@ -9,6 +9,7 @@
 // (left by a move) with an L, horizontal first. A `straight` wire (a simple connection, as in
 // Turing Complete) instead joins its breakpoints with straight segments at any angle.
 
+import type { IsaDoc } from '../isa/table';
 import { instPort, type ExitDir, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
 import type { CpuDoc } from './cpu';
@@ -27,6 +28,8 @@ export interface Workspace {
   purist?: boolean;
   /** Palette items pinned at the top, in order: '<group>/<item>' keys (palette.ts). Number keys 1–9 arm the first nine. */
   favorites?: string[];
+  /** Custom instruction sets (the ISA editor) by id; ROMs that use one hold a copy of it. */
+  isas?: Record<string, IsaDoc>;
 }
 
 export interface ChipDoc {
@@ -135,7 +138,9 @@ export type PartRef =
   /** A pixel screen: a frame buffer written pixel by pixel, rows latched from a bus, or one wire per pixel (ioparts.ts). Zero cost. */
   | { screen: ScreenRef }
   /** Read-only memory: 2^k words of w bits. 'rv32' addresses bytes like a PC (addr = 4·word). */
-  | { rom: { k: number; w: 8 | 16 | 32; addr: 'word' | 'rv32'; lang: 'asm' | 'hex' | 'rv16'; src: string } }
+  | { rom: { k: number; w: 8 | 16 | 32; addr: 'word' | 'rv32'; lang: 'asm' | 'hex' | 'rv16' | 'cpu4' | 'isa'; src: string;
+      /** lang 'isa': the instruction set, a copy of the workspace's table (so the ROM builds on its own, in a share link too). */
+      isa?: IsaDoc } }
   /** Read-write memory: 2^k words of w bits; `init`: the words it holds at power-on ('to 0' mode). */
   | { ram: { k: number; w: number; init?: number[] } };
 
