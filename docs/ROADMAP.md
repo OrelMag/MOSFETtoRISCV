@@ -12,8 +12,8 @@ narrative: why each step exists, what problem it solves, and what it costs.
 Inspirations: *Turing Complete* (progression, "build it to unlock it"), Sebastian Lague's
 *Digital Logic Sim* (clean visuals, packaging a circuit into a chip), *nand2tetris*, Harris &
 Harris *Digital Design and Computer Architecture: RISC-V Edition*, and the companion primer
-in `References/` (NAND → pipelined RV32I, with SystemVerilog sources). What the two games
-have and this site still lacks is Phase 12.
+in `References/` (NAND → pipelined RV32I, with SystemVerilog sources). Phase 12 brought the
+sandbox level with the two games (I/O parts, chip faces, capacity, programs on your own CPU).
 
 ---
 
@@ -44,7 +44,7 @@ have and this site still lacks is Phase 12.
 | `src/sim/` | 3-valued (0/1/X) bit-level event-driven simulator with gate delays; hierarchy flattener; switch-level (MOSFET) solver with Z; stats (transistors, NANDs, depth); Verilog generator |
 | `src/lib/` | The component library, defined as netlists of lower-level components, plus parametric generators (n-bit adders, decoders, N×W memories) |
 | `src/view/` | SVG schematic renderer (ANSI gate symbols, transistor symbols, orthogonal wire routing), pan/zoom, drill-down, truth tables, waveforms, HDL panel |
-| `src/widgets/` | Bespoke interactive explainers that are not schematics (MOSFET cross-section, number wheel, memory grid, later: pipeline diagram, layout viewer) |
+| `src/widgets/` | Bespoke interactive explainers that are not schematics (MOSFET cross-section, number wheel, memory grid, pipeline diagram, cache and coherence explorers, layout viewer, warp panel) |
 | `src/chapters/` | Narrative content: steps, scenes, highlights, challenges |
 | `src/ui/` | App shell, router (hash-based deep links), theme (light / dark / auto), settings, progress |
 
@@ -71,7 +71,9 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Inspector: info and measured cost, live truth table, hand-written + generated Verilog, waveforms
 - ✅ App shell: chapters, progress, light / dark / auto theme, HEX/BIN/DEC, deep links, mobile layout
 - ✅ Propagation: "slow motion" animation and single-step, settle time in gate delays
-- ⏳ Mixed-level simulation (behavioural leaves + lock-step sub-simulation) for CPU-scale designs
+- ✅ Mixed-level simulation for CPU-scale designs: behavioural leaves (`preferBehavior`: the program ROM, large
+  memories; the flattener's `expand` policy decides where to cut), opened as a lock-step sub-simulation of their structure driven by the
+  parent's ports (a stateful leaf seeds it: `Behavior.inside`); tests prove every behaviour equal to its structure
 
 ### Phase 1 — The early chapters ✅
 | # | Chapter | Content |
@@ -85,10 +87,10 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 | 6 | Adders | Half adder, 9-NAND full adder, ripple-carry (watch the carry ripple), adder/subtractor |
 | 7 | Choosing & routing | Decoders 2→4 / 3→8, multiplexers 4:1 / 8:1, bus multiplexers |
 | 8 | Memory from feedback | SR latch, gated D latch, master–slave D flip-flop, waveforms, setup/hold intuition |
-| 9 | Registers & counters | n-bit register with enable, counter, clocks; async reset, T/JK, up/down counter, universal shift register, LFSR, ring / Johnson counters, ripple clock divider |
+| 9 | Registers & counters | n-bit register with enable, counter, clocks; async reset, T/JK, up/down counter, universal shift register, LFSR, ring / Johnson counters, ripple clock divider; a state machine (101 detector) with its live diagram |
 | 10 | Memory arrays | N words × W bits (user-scalable: 4×4 … 64×16), write path (decoder), read path (mux tree), cell grid view, timing; ROM (decoder + OR plane), PLA (Quine–McCluskey terms), FIFO, stack, CAM, multi-ported register file |
 
-### Phase 2 — Computing 🚧
+### Phase 2 — Computing ✅
 - ✅ ALU (add, sub, and, or, xor, shifts, slt/sltu) and flags; barrel shifter
 - ✅ Carry-lookahead and Kogge–Stone adders with depth comparison (optimization intro)
 - ✅ Carry-select and carry-skip adders, static depth against simulated delay (carry-skip's false path); BCD adder
@@ -109,7 +111,8 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
     with an added / renamed / skipped summary, drag and drop onto the canvas), share links
     (`#/sandbox/s/…`, the circuit compressed into the URL, imported only on a click, never
     overwriting), structural Verilog and SVG / PNG images of the canvas, a chip manager (sizes,
-    users, duplicate, delete refused while used), autosave indicator, recovery of unreadable data
+    users, duplicate, delete refused while used), autosave indicator, recovery of unreadable data, Delete local data
+    (the sandbox's storage, or every key the site keeps)
   - ✅ Memories: Memory palette group (program ROM, word ROM, RAM); ROM properties (size, byte /
     word addressing, asm / hex with conversion, sample programs) and a program editor (code editor,
     live re-assembly, gutter diagnostics, listing, Apply = one undo step); the listing and the editor
@@ -168,7 +171,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Reference ISA simulator (golden model) used to check every CPU
 - ✅ Program editor with sample programs (sum, Fibonacci, multiply, sort, GCD, primer test)
 
-### Phase 4 — Single-cycle CPU 🚧
+### Phase 4 — Single-cycle CPU ✅
 - ✅ Datapath from Phase 1–3 parts; control unit (opcode decoder + ALU decoder), next-PC logic
 - ✅ Gate-level (48k NAND) RV32I minus byte/half memory & system; co-simulated vs the ISS every cycle
 - ✅ CPU panel: listing, registers, memory, live golden-model check, run to halt, program editor
@@ -192,7 +195,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Balanced stages: look-ahead forwarding, dedicated branch comparator and jalr adder (145/93 → 103/59)
 - ✅ Branch prediction: 16-entry BTB + 2-bit counters, parallel target check; measured CPI and time/instruction
 
-### Phase 7 — Full RV32I + Zicsr + machine mode 🚧
+### Phase 7 — Full RV32I + Zicsr + machine mode ✅
 - ✅ Complete RV32I incl. byte/halfword loads & stores (load/store unit, byte-banked memory)
 - ✅ Memory-mapped I/O: console, LEDs, switches, mtime / mtimecmp timer
 - ✅ Zicsr + machine mode: 12 CSRs, traps (illegal, ecall, ebreak, misaligned fetch/load/store), mret
@@ -223,7 +226,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Data cache (write-through, write-back, 2-way) in the pipelined CPU: a miss freezes every stage, co-simulated at every retirement
 - ⏳ Bus / interconnect basics (see Phase 16, Interconnect); DRAM and flash in depth: Phase 16
 
-### Phase 9 — Performance & optimization ⏳
+### Phase 9 — Performance & optimization 🚧
 - ✅ Floating point (chapter 23): IEEE 754 explorer and number line; parametric gate-level FPU (unpack, align with sticky,
   add/sub, tree multiply, shared normalize & round with RNE and subnormals, compare, int→float), exhaustively tested on
   small formats and against host float32; single-cycle RV32IF CPU (subset) co-simulated with both register files
@@ -250,7 +253,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ More than two cores: `multiCore(program, n)` (n = 2, 4, 8) on an n-way round-robin arbiter (`arbiterN`: a one-hot
   pointer, masked and unmasked priority chains, n − 1 flip-flops; on the workbench) and up to 64K words of shared memory;
   co-simulated every cycle against MultiISS with n harts. The 4-core runs ~4 500 cycles/s on the cycle engine in Node
-  (scripts/sim-perf.ts). Not yet shown in the chapter, which keeps the dual-core
+  (scripts/sim-perf.ts). Chapter 24 keeps the dual-core; chapter 26 measures the lane core against `multiCore(4)`
 - ⏳ Private caches in the gate-level cores with a coherent bus; lr.w / sc.w
 
 ### Phase 11 — From netlist to silicon ✅ (chapter 25)
@@ -262,14 +265,16 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ The real flow: the dual-core exported as Verilog, synthesized by Yosys to the sky130 cell library and placed,
   clock-tree-built and routed by OpenROAD into a GDS (`.github/workflows/layout.yml`, published into the site); the
   export first cross-checked cycle by cycle against our gate-level simulation (`scripts/verify-export.ts`)
-- ⏳ The same flow for the system CPU (RV32IM + Zicsr); the flow's timing and area reports shown next to our own
-  static timing and NAND-count floorplan, so the learner sees how far the unit-delay estimate is from sky130
+- ⏳ The same flow for the system CPU (RV32IM + Zicsr; its export already passes the Yosys cross-check, Phase 13); the
+  flow's timing and area reports shown next to our own static timing and NAND-count floorplan, so the learner sees how
+  far the unit-delay estimate is from sky130
 
-### Phase 12 — Parity with Turing Complete and Digital Logic Sim ⏳
-The simulator already goes further than both games: transistors and Z, gate delays (glitches,
+### Phase 12 — Parity with Turing Complete and Digital Logic Sim 🚧
+The simulator already went further than both games: transistors and Z, gate delays (glitches,
 metastability), X, static timing, VCD, Verilog with a Yosys-checked testbench, wide pins, golden-model
-CPUs, and every library part opens down to a MOSFET. What they have and the sandbox lacks is I/O,
-chip presentation, capacity and the program-solving half of Turing Complete.
+CPUs, and every library part opens down to a MOSFET. What they had and the sandbox lacked was I/O,
+chip presentation, capacity and the program-solving half of Turing Complete; all four are now in, bar
+per-puzzle pins and the campaign's program levels on your own core.
 
 **I/O parts** (placeable, zero-cost like the displays, absent from Verilog)
 - ✅ Key input (DLS Key, TC Keyboard): a Key part bound to a keyboard key (rebind it in the properties), 1 while the
@@ -410,7 +415,7 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
 transistor NAND to a pipelined 16-bit RISC-V-like CPU (RV16) with traps and interrupts. It has
 graded build challenges, number and Boolean drills, assembly puzzles, a codex, skip with a reference
 solution, and Unlock all. Its soft locks apply to the campaign only; the chapters and the sandbox
-challenges stay open. Next:
+challenges stay open. Added since:
 - ✅ **A level screen of its own** (`#/campaign/play/<node>`, ui/pages/level.ts): Play on the map opens it. The editor in
   level mode (the level's chip and the chips it uses, the level's parts first, a short toolbar, properties over the
   canvas while something is selected), the brief in tabs (Why, Task, Tips, Codex), Check, the score against par and
@@ -461,6 +466,17 @@ challenges stay open. Next:
 - ✅ Progress tracking (visited steps, solved challenges, in local storage) and "Reset progress"; the chapters
   stay open (soft locks exist only in the campaign, see `docs/CAMPAIGN.md`)
 - ✅ Reduced motion: CSS animations and transitions off, slow-motion fronts drawn as plain changes
+- ✅ Live state diagrams (state machines as data, `FsmSpec`): the multicycle controller panel's Diagram | Table (an arc
+  hovered lights its AND gate and ORs), a chapter 9 step designing the 101 detector from its table, a second codex
+  figure for a library part with a spec, and the campaign's `s_fsm` level reading the learner's circuit back over the
+  target (wrong arcs red, the expected one dashed); tests prove both controllers and the detector equal to their diagrams
+- ✅ Automatic clock (a setting, on by default): a clocked chip opened in the sandbox or a level, or a clocked scene in a
+  chapter or the workbench, starts running at 2 Hz; Pulse, Step, Back, a hand-clocked edge and the test player pause
+  it. Run steps half periods, so the clock is seen high
+- ✅ Flowing bits: pellets along a 1-bit wire carrying 1, a bus's non-zero value riding along it as tags (a switch in
+  the wire-colour menu), in the chapters, the workbench and the sandbox
+- ✅ Offline desktop program: `npm run desktop` builds a portable Windows `.exe` (the built site in Electron, fonts
+  bundled, data next to the `.exe`), published by the *Desktop program* workflow as the release `desktop-latest`
 - ⏳ Keyboard navigation beyond the shortcuts (search palette, sandbox keys)
 - ✅ Export the sandbox canvas as SVG / PNG (current theme), and the level on a chapter's or the workbench's stage (the
   stage bar's Image menu: the whole level with its live values, whatever the zoom, without probe flags)
@@ -469,7 +485,7 @@ challenges stay open. Next:
   single-cycle RV32I runs ~4–5 kHz in the page on the cycle engine, ~400 Hz on GateSim)
 - i18n-ready strings
 
-### Phase 13 — Verification, precise claims, measurement ⏳
+### Phase 13 — Verification, precise claims, measurement 🚧
 From an external review (2026-10). The project's depth is ahead of how it presents and proves itself: the CPUs are
 checked only against our own golden model, the README both oversells (gate delays) and undersells (the sky130 flow),
 and some measurements the simulator could make (power, benchmarks) are not made. Ideas the review raised that are
