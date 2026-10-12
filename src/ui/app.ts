@@ -14,7 +14,7 @@ export function startApp(root: HTMLElement): void {
   const view = h('main', { id: 'view' });
   const nav = h('nav', { class: 'nav' });
   const navLink = (href: string, ic: string, label: string, key: string) =>
-    h('a', { href, 'data-key': key }, icon(ic, 16), h('span', null, label));
+    h('a', { href, 'data-key': key, title: label, 'aria-label': label }, icon(ic, 16), h('span', null, label));
   // "Chapters" opens the chapter menu rather than the first chapter (still a link: new tab works).
   const chLink = navLink('#/c/map/0', 'book', 'Chapters', 'c');
   chLink.append(icon('chevD', 14));
@@ -138,7 +138,7 @@ export function startApp(root: HTMLElement): void {
   syncTools();
 
   const topbar = h('header', { class: 'topbar' },
-    h('a', { class: 'brand', href: '#/' }, h('span', { class: 'brand-mark' }, icon('chip', 18)), 'MOSFET → RISC-V', h('small', null, 'a journey through abstraction')),
+    h('a', { class: 'brand', href: '#/', 'aria-label': 'MOSFET → RISC-V: home' }, h('span', { class: 'brand-mark' }, icon('chip', 18)), h('span', { class: 'brand-name' }, 'MOSFET → RISC-V'), h('small', null, 'a journey through abstraction')),
     nav, h('div', { class: 'spacer' }), h('div', { class: 'tools' }, searchBtn, radix, animate, palWrap, themeBtn));
   root.append(topbar, view);
 
