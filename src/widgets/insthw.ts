@@ -3,7 +3,10 @@
 // simply ignored by the caller. The pipelined CPU also has a stage → units map, so a selected
 // instruction can be followed through the pipeline.
 
-import { OPCODES } from '../riscv/isa';
+import { CLASSES } from '../lib/cpu';
+import { fieldAt, fieldRole, fieldsOf, SLICES, type FieldKey, type FieldRole } from '../riscv/fields';
+import { decode, OPCODES } from '../riscv/isa';
+import { netlistOf, type ComponentDef } from '../sim/types';
 
 export interface InstrUse {
   /** Top-level instances (union over all CPUs; filter by what exists). */
@@ -20,7 +23,8 @@ export function instrUse(word: number): InstrUse {
   const u = (extra: string[], path: string): InstrUse => ({ units: [...FETCH, ...extra], path });
   switch (op) {
     case OPCODES.OP:
-      if (funct7 === 1) return u(['rf', 'md', 'mres', 'res'], 'rs1, rs2 → multiply / divide unit → result mux → rd');
+      // pipelined RV32IM: a multiply is split across E (mule) and M (mulm); a divide stays in E (dive)
+      if (funct7 === 1) return u(['rf', 'md', 'mres', 'res', ...((word >>> 14) & 1 ? ['dive', 'mdE'] : ['mule', 'msM', 'mcM', 'mulm', 'rdm'])], 'rs1, rs2 → multiply / divide unit → result mux → rd');
       return u(['rf', 'srcA', 'srcB', 'alu', 'res'], 'rs1, rs2 → ALU → result mux → rd');
     case OPCODES.OPIMM: return u(['rf', 'imm', 'srcA', 'srcB', 'alu', 'res'], 'rs1, immediate → ALU → result mux → rd');
     case OPCODES.LOAD: return u([...ADDR, 'dm', 'ld', 'ldsel', 'res'], 'rs1 + immediate (ALU) → data memory → load extract → result mux → rd');
@@ -41,10 +45,10 @@ export function instrUse(word: number): InstrUse {
 
 /** Five-stage pipeline: which units belong to which stage (pipeline registers lead each stage). */
 export const STAGE_UNITS: Record<'F' | 'D' | 'E' | 'M' | 'W', string[]> = {
-  F: ['pc', 'pcmux', 'imem', 'plus4', 'btb', 'fsel', 'corr', 'mis', 'mspc', 'vF', 'one'],
+  F: ['pc', 'pcmux', 'imem', 'plus4', 'btb', 'fsel', 'corr', 'mis', 'mspc', 'vF'],
   D: ['FD', 'si', 'rf', 'ctl', 'imm', 'hz', 'byA', 'byB'],
-  E: ['DE', 'fwdA', 'fwdB', 'srcA', 'srcB', 'alu', 'target', 'clr0', 'clr0E', 'bcmp', 'jtgt', 'npc'],
-  M: ['EM', 'dm', 'fwdM'],
+  E: ['DE', 'fwdA', 'fwdB', 'srcA', 'srcB', 'alu', 'target', 'clr0', 'clr0E', 'bcmp', 'jtgt', 'npc', 'mule', 'dive', 'mdE'],
+  M: ['EM', 'dm', 'fwdM', 'msM', 'mcM', 'mulm', 'rdm'],
   W: ['MW', 'res', 'rf'],
 };
 
@@ -53,4 +57,87 @@ export function stageUse(stage: keyof typeof STAGE_UNITS, use: InstrUse): string
   const reg = { F: 'pc', D: 'FD', E: 'DE', M: 'EM', W: 'MW' }[stage];
   const own = STAGE_UNITS[stage].filter((n) => stage === 'F' || use.units.includes(n));
   return own.includes(reg) ? own : [reg, ...own];
+}
+
+export interface InstrMarks {
+  /** Net index (in netlistOf(def)) → CSS classes for the wire: `fld fld-<role>` [+ `fld-off`]. */
+  nets: Map<number, string>;
+  /** Instances to highlight at this level. */
+  units: string[];
+  note?: string;
+}
+
+const cls = (role: FieldRole, used = true) => `fld fld-${role}${used ? '' : ' fld-off'}`;
+const IMM_KEYS: FieldKey[] = ['imm', 'shamt'];
+
+/**
+ * Which wires of `def`'s schematic carry which field of `word`, and what to highlight. Nets are found
+ * by their endpoints (the instruction splitter `si`, the immediate generator's output, ...), not by
+ * name, so every CPU variant works. Knows the CPU top level, IMM_GEN, CONTROL and OPCODE_DECODER;
+ * null elsewhere. With `focus`, only that field's wires (and the parts on them).
+ */
+export function instrMarks(def: ComponentDef, word: number, focus: FieldKey | null = null): InstrMarks | null {
+  const nl = netlistOf(def);
+  if (!nl) return null;
+  const fields = fieldsOf(word);
+  const nets = new Map<number, string>();
+  const at = (end: string) => nl.nets.findIndex((n) => n.ends.includes(end));
+  const named = (name: string) => nl.nets.findIndex((n) => n.name === name);
+  const mark = (idx: number, c: string) => { if (idx >= 0) nets.set(idx, c); };
+  const want = (k: FieldKey) => !focus || focus === k;
+  const has = (k: FieldKey) => fields.find((f) => f.key === k && f.used);
+  const hasImm = IMM_KEYS.some(has);
+  // Parts on the coloured wires (wires whose bits this instruction ignores do not count).
+  const onNets = () => [...new Set([...nets].filter(([, c]) => !c.includes('fld-off'))
+    .flatMap(([i]) => nl.nets[i].ends.filter((e) => e.includes('.')).map((e) => e.slice(0, e.indexOf('.')))))];
+  const cls5 = ((word & 0x7f) >> 2);
+  const klass = (word & 3) === 3 ? CLASSES.find(([, c]) => c === cls5)?.[0] : undefined;
+
+  if (nl.instances.some((i) => i.name === 'si')) {
+    SLICES.forEach((sl, k) => {
+      // A slice can hold two fields (R4: rs3 and fmt share 31:25); the top one names its colour.
+      const inSlice = fields.filter((f) => f.lo <= sl.hi && sl.lo <= f.hi);
+      const f = fieldAt(fields, sl.hi);
+      if (!focus || inSlice.some((g) => g.key === focus)) mark(at(`si.o${k}`), cls(fieldRole(f.key), f.used));
+    });
+    if (hasImm && (!focus || IMM_KEYS.includes(focus))) {
+      mark(at('imm.imm'), cls('imm'));
+      if (focus) mark(at('imm.instr'), cls('imm'));
+    }
+    if (has('csr') && want('csr')) mark(at('imm12.o1'), cls('imm'));
+    if (has('funct12') && want('funct12')) mark(at('imm12.o1'), cls('fn'));
+    return { nets, units: onNets() };
+  }
+  if (def.id === 'immgen') {
+    const d = decode(word);
+    if (d.fmt === 'R' || d.fmt === 'R4') return { nets, units: [], note: `${d.fmt}-type: no immediate; ImmSrc is a don't-care and the mux output is ignored.` };
+    if (focus && !IMM_KEYS.includes(focus)) return { nets, units: [] };
+    const box = { I: 'i', S: 's', B: 'b', U: 'u', J: 'j' }[d.fmt];
+    mark(named(`imm_${box}`), cls('imm', hasImm));
+    mark(named('imm'), cls('imm', hasImm));
+    return { nets, units: [box, 'mux'], note: hasImm ? undefined : 'This instruction has no immediate operand; the value is computed and ignored.' };
+  }
+  if (def.id === 'control') {
+    if (want('opcode')) {
+      mark(named('op'), cls('op'));
+      if (klass) mark(named(klass), cls('op'));
+    }
+    // funct3 / funct7 only reach the ALU decoder, which aluOp (R, I classes) enables.
+    const alu = klass === 'R' || klass === 'I';
+    if (want('funct3')) for (const n of ['f3', 'f3_0', 'f3_1', 'f3_2']) mark(named(n), cls('fn', alu));
+    if (want('funct7')) for (const n of ['f7', 'f7b5']) mark(named(n), cls('fn', alu && has('funct7') !== undefined));
+    return { nets, units: onNets(), note: klass ? undefined : 'Not one of the nine base classes: every class output stays 0.' };
+  }
+  if (def.id === 'opdec') {
+    if (!want('opcode')) return { nets, units: [] };
+    mark(named('op'), cls('op'));
+    if (!klass) return { nets, units: ['sa'], note: 'No AND gate matches this opcode.' };
+    // Each rail fans out to every gate that wants that bit value, so colouring rails would
+    // flood the view: the focus highlight picks out the matching gate and its inverters instead.
+    const units = ['sa', `is_${klass}`];
+    for (let i = 0; i < 5; i++) if (!((cls5 >> i) & 1)) units.push(`inv${i}`);
+    mark(named(klass), cls('op'));
+    return { nets, units };
+  }
+  return null;
 }

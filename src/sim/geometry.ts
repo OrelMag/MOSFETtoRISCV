@@ -83,6 +83,38 @@ export function symbolGeom(def: ComponentDef): SymbolGeom {
     ports[gp.name] = { pos: [0, 2], exit: 'left' };
     ports[top.name] = { pos: [3, 0], exit: 'up' };
     ports[bot.name] = { pos: [3, 4], exit: 'down' };
+  } else if (k === 'res') {
+    // vertical, like a transistor's channel: first port on top, second at the bottom
+    g = { w: 2, h: 4, ports };
+    ports[def.ports[0].name] = { pos: [1, 0], exit: 'up' };
+    ports[def.ports[1].name] = { pos: [1, 4], exit: 'down' };
+  } else if (k === 'pullup') {
+    // a rail on top, the resistor below it, the node at the bottom
+    g = { w: 2, h: 4, ports };
+    ports[def.ports[0].name] = { pos: [1, 4], exit: 'down' };
+  } else if (k === 'pulldown') {
+    g = { w: 2, h: 4.5, ports };
+    ports[def.ports[0].name] = { pos: [1, 0], exit: 'up' };
+  } else if (k === 'cap') {
+    // the node on top, the other plate on GND
+    g = { w: 2, h: 3.5, ports };
+    ports[def.ports[0].name] = { pos: [1, 0], exit: 'up' };
+  } else if (k === 'tgate') {
+    // ports in order: a (left), b (right), en (top), en_n (bottom)
+    const [a, b, en, enb] = def.ports;
+    g = { w: 4, h: 4, ports };
+    ports[a.name] = { pos: [0, 2], exit: 'left' };
+    ports[b.name] = { pos: [4, 2], exit: 'right' };
+    ports[en.name] = { pos: [2, 0], exit: 'up' };
+    ports[enb.name] = { pos: [2, 4], exit: 'down' };
+  } else if (k === 'tribuf' || k === 'triinv') {
+    // a buffer / inverter triangle with its enable on top
+    const en = ins.find((p) => p.name === 'en') ?? ins[1];
+    const a = ins.find((p) => p !== en)!;
+    g = { w: 4, h: 4, ports };
+    ports[a.name] = { pos: [0, 2], exit: 'left' };
+    ports[en.name] = { pos: [2, 0], exit: 'up' };
+    ports[outs[0].name] = { pos: [4, 2], exit: 'right' };
   } else if (k === 'vdd') {
     g = { w: 2, h: 1, ports };
     ports[def.ports[0].name] = { pos: [1, 1], exit: 'down' };

@@ -1,12 +1,14 @@
 // Small pieces for the multi-core processor (kept free of cpu.ts imports to avoid a module cycle):
 // the decoder for atomics and csrr mhartid, and the round-robin memory arbiter.
 
+import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, PortDef } from '../sim/types';
-import { constWord, isZero } from './alu';
+import { constWord, isZero, orN } from './alu';
+import { Builder } from './builder';
 import { andN, busMux2, equal } from './combinational';
 import { define, merger, splitter } from './define';
-import { AND, NOT, XOR } from './gates';
-import { DFF } from './sequential';
+import { AND, NOT, OR, XOR } from './gates';
+import { DFF, DFFE } from './sequential';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -84,3 +86,88 @@ export const ARBITER2: ComponentDef = define({
     ],
   }),
 });
+
+const arbiters = new Map<number, ComponentDef>();
+
+/**
+ * n-way round-robin arbiter (n = 2 … 8), the policy of ARBITER2 and of the golden model
+ * (riscv/multi.ts): a one-hot pointer names the requester holding priority, and the first requester
+ * at or after it wins. Two fixed-priority chains (lowest index first) search: one over the requests
+ * at or after the pointer (masked by its thermometer code), one over all of them, used when the
+ * masked set is empty (the search wraps around). On a conflict (two or more requests) the pointer
+ * moves to the one after the winner. Pointer bit 0 is stored inverted, so power-on (every flip-flop
+ * 0) gives requester 0 the priority, and bit n - 1 is not stored at all: the mask never reads it
+ * (at or after n - 1 means n - 1 alone, which the unmasked chain also finds), so n - 1 flip-flops.
+ */
+export function arbiterN(n: number): ComponentDef {
+  if (!Number.isInteger(n) || n < 2 || n > 8) throw new Error('arbiterN: 2–8 ways');
+  let d = arbiters.get(n);
+  if (d) return d;
+  const I = Array.from({ length: n }, (_, i) => i);
+  const r = I.map((i) => `r${i}`);
+  const b = new Builder(20); // room for the input pins' labels left of the pointer's
+  b.pins(...r, 'clk');
+  // the pointer register (n - 1 bits): its inputs come back from the last column
+  const ff = I.slice(0, n - 1).map((i) => b.add(DFFE, `ptr ${i}`, `ff${i}`));
+  ff.forEach((f) => b.wire('clk', `${f}.clk`));
+  b.next();
+  const p = [b.name(b.op1(NOT, [`${ff[0]}.q`], undefined, 'np0'), 'p0', true), ...I.slice(1, n - 1).map((i) => b.name(`${ff[i]}.q`, `p${i}`, true))];
+  b.next();
+  // thermometer mask: m_i = p_0 + … + p_i (at or after the pointer); m_(n-1) is always 1
+  const m = [p[0]];
+  for (let i = 1; i < n - 1; i++) m.push(b.op1(OR, [m[i - 1], p[i]], undefined, `m${i}`));
+  b.next();
+  const hi = I.map((i) => (i === n - 1 ? r[i] : b.op1(AND, [r[i], m[i]], undefined, `hi${i}`)));
+  b.next();
+  // below[i] = some request with a lower index (in the masked set / in all of them)
+  const prefix = (xs: string[], tag: string) => {
+    const a = ['', xs[0]];
+    for (let i = 2; i < n; i++) a.push(b.op1(OR, [a[i - 1], xs[i - 1]], undefined, `${tag}${i}`));
+    return a;
+  };
+  const bh = prefix(hi, 'bh'), br = prefix(r, 'br');
+  const anyHi = b.op1(OR, [bh[n - 1], hi[n - 1]], 'any at or after', 'anyHi');
+  b.next();
+  const nbh = I.map((i) => (i ? b.op1(NOT, [bh[i]], undefined, `nbh${i}`) : ''));
+  const nbr = I.map((i) => (i ? b.op1(NOT, [br[i]], undefined, `nbr${i}`) : ''));
+  const nAny = b.op1(NOT, [anyHi], undefined, 'nAny');
+  b.next();
+  const gh = I.map((i) => (i ? b.op1(AND, [hi[i], nbh[i]], undefined, `gh${i}`) : hi[0]));
+  const gl = I.map((i) => (i ? b.op1(AND, [r[i], nbr[i]], undefined, `gl${i}`) : r[0]));
+  const two = I.slice(1).map((i) => b.op1(AND, [r[i], br[i]], undefined, `two${i}`));
+  b.next();
+  const wrap = I.map((i) => b.op1(AND, [gl[i], nAny], undefined, `wrap${i}`));
+  const conflict = b.name(two.length === 1 ? two[0] : b.op1(orN(two.length), two, 'two or more', 'conflict'), 'conflict', true);
+  b.next();
+  const g = I.map((i) => b.name(b.op1(OR, [gh[i], wrap[i]], undefined, `gor${i}`), `g${i}`));
+  // the next pointer: the one after the winner, loaded on a conflict
+  const ng = b.name(b.op1(NOT, [g[n - 1]], undefined, 'ng'), `¬g${n - 1}`);
+  ff.forEach((f, i) => { b.wire(i ? g[i - 1] : ng, `${f}.d`); b.wire(conflict, `${f}.en`); });
+  g.forEach((x, i) => b.wire(x, `g${i}`));
+  const yOut = symbolGeom(OR).ports.y.pos[1];
+  const at = new Map(b.instances.map((x) => [x.name, x.at!]));
+  const pins: Record<string, [number, number]> = { clk: [0, 2 * n + 4] };
+  I.forEach((i) => { pins[`r${i}`] = [0, 2 + 2 * i]; pins[`g${i}`] = [b.right, at.get(`gor${i}`)![1] + yOut]; });
+  d = define({
+    id: `arbrr${n}`, name: `${n}-way round-robin arbiter`, category: 'sequential',
+    summary: `${n} requesters, one grant per cycle. A one-hot pointer holds the priority; the first requester at or after it wins (a masked priority chain, then an unmasked one when nobody at or after the pointer asks). On a conflict the pointer moves past the winner, so every requester is served within ${n} conflicts.`,
+    ports: [...r.map((x) => bit(x, 'in')), { name: 'clk', width: 1, dir: 'in', side: 'bottom', clock: true }, ...I.map((i) => bit(`g${i}`, 'out'))],
+    symbol: { kind: 'box', label: 'ARBITER' },
+    netlist: () => ({ pins, instances: b.instances, nets: b.nets() }),
+    hdl: {
+      verilog: `module arbiter_rr #(parameter int N = ${n}) (input logic clk, input logic [N-1:0] r, output logic [N-1:0] g);
+  logic [N-1:0] ptr = 1;                     // one-hot: who has priority
+  always_comb begin
+    g = '0;
+    for (int k = 0; k < N; k++) begin        // first requester at or after ptr
+      int i = ($clog2(ptr) + k) % N;
+      if (r[i] && g == '0) g[i] = 1;
+    end
+  end
+  always_ff @(posedge clk) if ($countones(r) > 1) ptr <= {g[N-2:0], g[N-1]};
+endmodule`,
+    },
+  });
+  arbiters.set(n, d);
+  return d;
+}

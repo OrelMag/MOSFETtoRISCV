@@ -441,6 +441,16 @@ export const busMux2 = memo((w: number): ComponentDef => {
 });
 
 /**
+ * Which 2:1 word multiplexer a generator places (ports a, b, s, y): the library's (busMux2), or another
+ * family whose `tag` the generator appends to its memo key and id (the campaign's shared-inverter mux).
+ */
+export interface Mux2Kind {
+  tag: string;
+  of(w: number): ComponentDef;
+}
+export const LIB_MUX2: Mux2Kind = { tag: '', of: (w) => busMux2(w) };
+
+/**
  * 2^k : 1 multiplexer of W-bit words, as a binary tree of 2:1 multiplexers.
  * Select bit 0 drives the first column, bit k-1 the last.
  */
@@ -448,7 +458,17 @@ export const muxTree = memo((k: number, w: number, pitch: number = 2): Component
   // A one-level tree is just a bus multiplexer (ports a, b, s); keep d0/d1 naming via a tree only for k ≥ 2.
   if (k === 1 && pitch === 2) return muxTree1(w);
   const N = 2 ** k;
-  const m2 = busMux2(w);
+  return muxTreeOf(k, pitch, busMux2(w), `mux${N}x${w}${pitch !== 2 ? `_p${pitch}` : ''}`,
+    `Selects one of ${N} ${w}-bit inputs. A tree of ${N - 1} two-input multiplexers, ${k} levels deep.`);
+});
+
+/**
+ * A 2^k : 1 tree of a given 2:1 word multiplexer `m2` (ports a, b, s, y): muxTree with another cell (the
+ * campaign's shared-inverter mux). Not memoized: callers keep one object per parameter set.
+ */
+export function muxTreeOf(k: number, pitch: number, m2: ComponentDef, id: string, summary: string): ComponentDef {
+  const N = 2 ** k;
+  const w = m2.ports.find((p) => p.name === 'y')!.width;
   const mh = symbolGeom(m2).h;
   const rowP = Math.max(mh + 2, 8);
   const instances: InstanceDef[] = [{ name: 'ss', def: splitter(ones(k)), at: [2, N * rowP + 4] }];
@@ -477,8 +497,7 @@ export const muxTree = memo((k: number, w: number, pitch: number = 2): Component
   const pins: Record<string, [number, number]> = { s: [0, N * rowP + 4 + k] , y: [8 + k * 12 + 2, prev[0].y] };
   for (let j = 0; j < N; j++) pins[`d${j}`] = [1, yIn(j)];
   return define({
-    id: `mux${N}x${w}${pitch !== 2 ? `_p${pitch}` : ''}`, name: `${N}:1 multiplexer (${w}-bit)`, category: 'routing',
-    summary: `Selects one of ${N} ${w}-bit inputs. A tree of ${N - 1} two-input multiplexers, ${k} levels deep.`,
+    id, name: `${N}:1 multiplexer (${w}-bit)`, category: 'routing', summary,
     ports: [
       ...Array.from({ length: N }, (_, j): PortDef => ({ name: `d${j}`, width: w, dir: 'in' })),
       { name: 's', width: k, dir: 'in', side: 'bottom' },
@@ -488,7 +507,7 @@ export const muxTree = memo((k: number, w: number, pitch: number = 2): Component
     spec: (v) => [v[v[N]]],
     netlist: () => ({ pins, instances, nets }),
   });
-});
+}
 
 /** 2:1 word multiplexer with tree-style port names (d0, d1, s, y). */
 const muxTree1 = memo((w: number): ComponentDef => {
@@ -520,10 +539,12 @@ export const equal = memo((n: number): ComponentDef => {
     const A = andN(n);
     const ag = symbolGeom(A);
     const aIns = A.ports.filter((p) => p.dir === 'in').map((p) => p.name);
+    // One trunk per bit at x = 16 + i: the AND stands past the last one, or wires would reach it from behind.
+    const xA = Math.max(24, 16 + n + 2);
     const instances: InstanceDef[] = [
       { name: 'sa', def: splitter(ones(n), P), at: [4, 0] },
       { name: 'sb', def: splitter(ones(n), P), at: [7, 2] },
-      { name: 'all', def: A, at: [24, (P * n) / 2 - ag.h / 2 + 1] },
+      { name: 'all', def: A, at: [xA, (P * n) / 2 - ag.h / 2 + 1] },
     ];
     const nets: NetDef[] = [{ name: 'a', ends: ['a', 'sa.in'] }, { name: 'b', ends: ['b', 'sb.in'] }, { name: 'eq', ends: ['all.y', 'eq'] }];
     for (let i = 0; i < n; i++) {
@@ -537,7 +558,7 @@ export const equal = memo((n: number): ComponentDef => {
       ports: [{ name: 'a', width: n, dir: 'in' }, { name: 'b', width: n, dir: 'in' }, bit('eq', 'out')],
       symbol: { kind: 'box', label: '=' },
       spec: ([a, b]) => [a === b ? 1 : 0],
-      netlist: () => ({ pins: { a: [1, (P * n) / 2], b: [1, 2 + (P * n) / 2], eq: [24 + ag.w + 4, (P * n) / 2 + 1] }, instances, nets }),
+      netlist: () => ({ pins: { a: [1, (P * n) / 2], b: [1, 2 + (P * n) / 2], eq: [xA + ag.w + 4, (P * n) / 2 + 1] }, instances, nets }),
     });
   }
 });

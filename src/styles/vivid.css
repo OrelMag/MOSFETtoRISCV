@@ -1,0 +1,88 @@
+/* Vivid look (settings.vivid: data-look="vivid" on <html>), Turing Complete style: bright filled part
+   bodies (library boxes and muxes by category, user chips by their own hue, gates blue), white bold
+   labels, thicker wires. With data-board="dark" the circuit sits on a dark board in either theme:
+   theme.css / editor.css / ioparts.css give every schematic SVG the dark theme's tokens there
+   (color-scheme dark, so the palettes' light-dark() pick their dark side), and only the SVG: the
+   chrome, the dock and the panels keep the theme. Symbol sizes and port positions are unchanged. */
+
+:root[data-look='vivid'] {
+  --wire-k: 1.6;
+  --bus0-opacity: 0.8;
+}
+
+/* The board: a little lighter than the dark theme's canvas, as a circuit board under bright parts. */
+:root[data-look='vivid'][data-board='dark'] svg.schematic {
+  --canvas: #1b1f2a;
+  --grid: #363e52;
+  background: var(--canvas);
+}
+:root[data-look='vivid'][data-board='dark'] svg.schematic.ed-svg { --ed-grid-major: #4b5571; }
+
+/* Bodies: boxes without a category (or with module colours off) slate; then category and chip hues. */
+:root[data-look='vivid'] .sym-box {
+  fill: hsl(228 16% 44%);
+  stroke: hsl(228 24% 22%);
+  stroke-width: 0.24;
+}
+:root[data-look='vivid']:not([data-modules='plain']) .sym.cat .sym-body,
+:root[data-look='vivid'] .sym.chip .sym-box {
+  fill: hsl(var(--chip-h) 62% 50%);
+  stroke: hsl(var(--chip-h) 55% 24%);
+  stroke-width: 0.24;
+}
+:root[data-look='vivid'] :is(.kind-nand, .kind-and, .kind-or, .kind-nor, .kind-xor, .kind-xnor, .kind-not, .kind-buf) .sym-body {
+  fill: hsl(222 68% 57%);
+  stroke: hsl(222 58% 25%);
+  stroke-width: 0.24;
+}
+:root[data-look='vivid'] :is(.kind-xor, .kind-xnor) .sym-line { stroke: hsl(222 58% 25%); stroke-width: 0.24; }
+:root[data-look='vivid'] :is(.kind-box, .sym.cat, .sym.chip) .sym-label {
+  fill: #fff; font-weight: 800;
+  paint-order: stroke; stroke: rgb(0 0 0 / 28%); stroke-width: 0.12px;
+}
+:root[data-look='vivid'] :is(.kind-box, .sym.cat, .sym.chip) .sym-port { fill: rgb(255 255 255 / 90%); font-weight: 600; }
+:root[data-look='vivid'] :is(.sym.cat, .sym.chip) .sym-tiny { fill: rgb(255 255 255 / 85%); }
+:root[data-look='vivid'] .kind-box .sym-line { stroke: #fff; }
+
+/* Junction dots grow with the wires. */
+:root[data-look='vivid'] .dot { r: 0.36px; }
+:root[data-look='vivid'] .dot.bus { r: 0.5px; }
+
+/* The palette menu's switches. */
+.pal-vivid-sw i { border: 1px solid hsl(var(--chip-h) 55% 24%); background: hsl(var(--chip-h) 62% 50%); }
+.pal-vivid-sw .m0 { --chip-h: 145; } .pal-vivid-sw .m1 { --chip-h: 45; } .pal-vivid-sw .m2 { --chip-h: 222; } .pal-vivid-sw .m3 { --chip-h: 330; }
+.pal-menu .pal-vivid[aria-checked='false'] .pal-vivid-sw i { filter: saturate(0.25); opacity: 0.7; }
+.pal-board-sw { width: 46px; height: 18px; flex: none; display: grid; }
+.pal-board-sw i {
+  display: block; border-radius: 4px; border: 1px solid var(--border-strong);
+  background: radial-gradient(circle, #4b5571 0.8px, transparent 1.2px) 0 0 / 5px 5px, #1b1f2a;
+}
+.pal-menu .pal-board[aria-checked='false'] .pal-board-sw i { background: radial-gradient(circle, var(--grid) 0.8px, transparent 1.2px) 0 0 / 5px 5px, var(--canvas); }
+.pal-menu button:disabled { opacity: 0.5; cursor: default; }
+.pal-menu button:disabled:hover { background: transparent; }
+
+/* Cartoon parts (settings.cartoon: data-parts="cartoon", with the vivid look): the shadow, gloss and icon
+   symbols.ts draws always come out, outlines get thick and round, boxes rounder, lettering rounded. */
+.sym-shadow, .sym-gloss, .sym-icon { display: none; }
+:root[data-parts='cartoon'] .sym-shadow { display: inline; fill: hsl(var(--chip-h, 222) 50% 12%); opacity: 0.42; stroke: none; }
+:root[data-parts='cartoon'] .sym-gloss { display: inline; fill: none; stroke: #fff; stroke-opacity: 0.5; stroke-width: 0.26; stroke-linecap: round; }
+:root[data-parts='cartoon'] .sym-icon { display: inline; }
+.sym-icon-line { fill: none; stroke: #fff; stroke-width: 0.17; stroke-linecap: round; stroke-linejoin: round; }
+.sym-icon-fill { fill: #fff; opacity: 0.95; }
+.sym-icon-fill.dim { opacity: 0.55; }
+:root[data-parts='cartoon'] :is(.sym-body, .sym-box) { stroke-width: 0.3; stroke-linejoin: round; }
+:root[data-parts='cartoon'] :is(.kind-xor, .kind-xnor) .sym-line { stroke-width: 0.3; }
+:root[data-parts='cartoon'] :is(rect.sym-box, rect.sym-box-shadow) { rx: 1px; ry: 1px; }
+:root[data-parts='cartoon'] :is(.sym-label, .sym-port, .sym-tiny, .inst-name) { font-family: 'Fredoka', var(--font-ui); }
+:root[data-parts='cartoon'] .sym-label { font-weight: 700; letter-spacing: 0.01px; }
+:root[data-parts='cartoon'] .sym-port { font-weight: 600; }
+:root[data-parts='cartoon'] .inst-name { font-weight: 600; }
+:root[data-parts='cartoon'] .pin-knob { stroke-width: 0.22; }
+:root[data-parts='cartoon'] .pin-box { stroke-width: 0.2; }
+
+.pal-cartoon-sw { width: 46px; height: 18px; flex: none; display: grid; }
+.pal-cartoon-sw svg { width: 46px; height: 18px; overflow: visible; }
+.pal-cartoon-sw .sh { fill: hsl(222 50% 12%); opacity: 0.4; }
+.pal-cartoon-sw .bd { fill: hsl(222 68% 57%); stroke: hsl(222 58% 25%); stroke-width: 1.6; stroke-linejoin: round; }
+.pal-cartoon-sw .gl { stroke: #fff; stroke-opacity: 0.6; stroke-width: 1.4; stroke-linecap: round; fill: none; }
+.pal-menu .pal-cartoon[aria-checked='false'] .pal-cartoon-sw svg { filter: saturate(0.25); opacity: 0.7; }

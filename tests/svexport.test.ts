@@ -9,9 +9,12 @@ import { decoder, muxTree, rca } from '../src/lib/combinational';
 import { koggeStone } from '../src/lib/fastadd';
 import { counter, DFF } from '../src/lib/sequential';
 import { singleCycleCpu } from '../src/lib/cpu';
+import { bigRam, bigRamWithInit } from '../src/lib/bigmem';
+import { wordRom } from '../src/editor/parts';
 import { evalOnce, forEachInput, simulate } from '../src/sim/harness';
 import { exportHdl, testableComb } from '../src/sim/svexport';
 import { inPorts, outPorts, type ComponentDef } from '../src/sim/types';
+import { synthVerilog } from '../src/sim/vexport';
 
 describe('HDL export', () => {
   it('writes every module once, children first, with a testbench for combinational parts', () => {
@@ -29,6 +32,13 @@ describe('HDL export', () => {
     expect(testableComb(rca(4))).toBe(true);
     expect(testableComb(DFF)).toBe(false);
     expect(testableComb(counter(4))).toBe(false);
+  });
+
+  it('gives flip-flops a power-on 0 only when asked (cross-checks, not real flows)', () => {
+    const plain = synthVerilog(counter(4)).verilog, zero = synthVerilog(counter(4), undefined, { powerOnZero: true }).verilog;
+    expect(plain).not.toContain('initial');
+    const ffs = zero.match(/always @\(posedge/g)!.length;
+    expect(zero.match(/^ {2}initial \w+ = 0;$/gm)!.length).toBe(ffs);
   });
 
   it('exports a whole CPU (structure and synthesizable)', () => {
@@ -101,5 +111,13 @@ describe.skipIf(!haveYosys)('HDL export parses in Yosys', () => {
     const cpu = singleCycleCpu([0x00000013]);
     check(cpu, 'structure');
     check(cpu, 'synth');
+  }, 120000);
+  it('large memories: a reg array (synth) and banks of banks (structure)', () => {
+    check(bigRam(16, 32), 'synth');
+    check(bigRamWithInit(9, 8, [1, 2, 3]), 'synth');
+    check(bigRam(8, 4), 'structure');
+    const rom = wordRom(12, 32, 'rv32', [0x00500093, 0x0000006f]);
+    check(rom, 'synth');
+    check(wordRom(9, 8, 'word', [1, 2, 3]), 'structure');
   }, 120000);
 });

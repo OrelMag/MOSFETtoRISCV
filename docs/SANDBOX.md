@@ -1,0 +1,401 @@
+# The Sandbox
+
+`#/sandbox` is a circuit editor in the spirit of Sebastian Lague's *Digital Logic Sim*, built on the
+site's own simulator. Whatever you draw compiles to a real `ComponentDef`. It then simulates, opens
+down to transistors, counts its NANDs and transistors, times its critical path and exports Verilog,
+like any library component.
+
+Every circuit in the chapters can be opened in the sandbox, and every level of the journey can be
+rebuilt in it from the level below (both are checked by tests, see [Guarantees](#guarantees)).
+
+- [Quick start](#quick-start)
+- [Drawing](#drawing)
+- [Parts](#parts)
+- [Simulation](#simulation)
+- [Chips](#chips)
+- [Switch level](#switch-level)
+- [Memories and programs](#memories-and-programs)
+- [CPUs](#cpus)
+- [Analysis](#analysis)
+- [Files and sharing](#files-and-sharing)
+- [Challenges](#challenges)
+- [Puzzles](#puzzles)
+- [Open in Sandbox](#open-in-sandbox)
+- [Limits](#limits)
+- [Guarantees](#guarantees)
+- [For contributors](#for-contributors)
+
+## Quick start
+
+1. Open **Sandbox** in the top bar. The palette is on the left, the canvas in the middle,
+   properties on the right.
+2. Drag two **Input** pins, a **NAND** (Library ▸ Gates) and an **Output** pin onto the canvas.
+3. Drag from an input pin to a NAND input to draw a wire. Click empty canvas to add corners; click
+   the target port to finish.
+4. Click the input pins to toggle them. Wire colours and the output follow at once.
+5. **Package** (toolbar) turns the circuit into a chip; it then appears under **My chips** and can
+   be placed in other circuits.
+
+## Drawing
+
+| Action | How |
+|---|---|
+| Wire | Drag from a pin or port; click empty canvas for each corner; click a pin, port, pointer or wire to finish (on a wire: a branch) |
+| Flip the wire's L | Space or `/` while drawing |
+| Remove the last corner | Backspace while drawing |
+| Branch from a wire | Ctrl/Alt + drag the wire |
+| Pointer (named net label) | `L`, or Wiring ▸ Pointer |
+| Jump to the twin pointer | Click a selected pointer, or double-click it |
+| Select | Click; Shift + click to add or remove; drag empty canvas for a rubber band (Shift: add) |
+| Move | Drag the selection; arrows nudge (Shift: ×5) |
+| Flip left–right | `F` (there is no rotation, as in DLS) |
+| Copy · cut · paste · duplicate · select all | Ctrl+C · X · V · D · A |
+| Delete | Delete / Backspace (wires attached to deleted parts go too) |
+| Undo · redo | Ctrl+Z · Ctrl+Shift+Z / Ctrl+Y (a drag is one step) |
+| Pan · zoom | Space + drag or middle drag · wheel |
+| Run / pause | Ctrl+Enter |
+| Cancel | Esc |
+| All shortcuts | `?` |
+
+Wires are orthogonal and stored as the corners you drew. When you move a part, the wires attached
+to it keep their shape: the nearest corner slides, or an L is added. A packaged chip's inside view
+shows exactly the drawing you made.
+
+**Pointers** are the net labels of the chapters' large schematics: every pointer with the same name
+is the same net, with no wire between them. A pointer carries a bus as well as a single bit. In the
+inside view of a chip, pointers sit where you put them.
+
+**Net colours.** Right-click a wire or a pointer (or look in its properties) to pick a colour for its
+whole net: its other wires and pointers show it too, and so do wires you join to it later. Brightness
+still gives the value (dim 0, bright 1, X and Z keep their red and violet dashes). *Auto* uses the
+net's colour-per-net hue; the crossed swatch removes the colour. Colours are saved and shared with the
+chip and never recompile it. The **Vivid look** (wire-colour menu) fills parts with bright colours
+and puts the circuit on a dark board; **Cartoon parts** under it adds shadows, gloss and small icons.
+
+## Parts
+
+The palette is searchable. **Purist** limits it to transistors, NAND, IO, constants, wiring,
+displays and your own chips.
+
+| Group | Parts |
+|---|---|
+| Inputs & outputs | Input (toggle), Button (momentary), Clock (driven by Run / Step), Input bus, Output, Output bus. A pin can also be bidirectional (switch level). **Key**: 1 while a keyboard key is held (pick the key in the properties; letters ignore Shift; while the chip is open that key is no longer a shortcut). **Keyboard**: typed keys wait in order, 16 at most: `code` is the oldest (ASCII; Enter 10, Backspace 8, Tab 9, Delete 127, arrows 128–131; 0 when none), `ready` is 1 while one waits, `ack` = 1 drops it, read at every rising clock edge or, without a clock, whenever the logic has settled. Keys reach a keyboard while the circuit runs or with **Type** on (top bar; Esc leaves). Both listen from inside placed chips, cost nothing and are a comment in Verilog. |
+| Transistors | NMOS, PMOS, VDD, GND, strong NMOS, weak PMOS |
+| Switch level | Resistor, Pull-up, Pull-down, Capacitor, Transmission gate, Tri-state buffer, Tri-state inverter |
+| Constants | 0, 1, N-bit |
+| Displays | LED, 7-segment (bit 0 = a … bit 6 = g, bit 7 = dot), Hex digit, Value. Displays cost nothing and do not appear in Verilog. |
+| Wiring | Pointer, splitters and mergers (any widths, in the properties) |
+| Memory | Program ROM (RV32), ROM (words), RAM |
+| Library | Every library component and parametric family (widths and options in the properties) |
+| My chips | Your chips, with their colour and pin count. Greyed when placing one would make a chip contain itself. |
+
+## Simulation
+
+The circuit is simulated live while you edit. After a change to its connections it is rebuilt,
+and the state carries over: a counter keeps its count when you add an unrelated part. Moving things
+rebuilds nothing.
+
+- **Cycle** mode toggles the clock pins at a chosen rate (1 Hz up to "max") and shows the rate
+  achieved. **Gate delay** mode advances one gate delay per tick, so you can watch a value ripple.
+- **Step** runs one cycle (or one gate delay). **Reset** powers the circuit on again: to 0 (latches
+  start at their power-on values), to X (unknown), or random (as real silicon).
+- Values: 0, 1, X (unknown or contested) and, at switch level, Z (floating). An input left open
+  reads X, and the view marks it.
+- The badge in the run bar says whether the circuit runs at **gate level** (NANDs, unit delay) or
+  **switch level** (transistors solved as switches).
+
+## Chips
+
+- **Package** opens a dialog: name, colour, notes, and the box as it will look when placed. Until
+  you shape it, pins follow their positions in the circuit: inputs, then bidirectional pins on the
+  left, outputs on the right, each top to bottom (move a pin to reorder). The face editor shapes it:
+  drag a pin along an edge or onto another side (on a pin already there, the two swap; Left / Top /
+  Right / Bottom and the arrow keys do it too), drag the corner to resize (never below what the box
+  holds), and tick **Displays on the box** to show the chip's LEDs, digits, value boxes, buzzers,
+  consoles, screens and switch banks on it, live (or those a chip placed inside shows on its own
+  box). Drag a display to move it, its corner or the slider to scale it. Switches on a box flip with
+  a click on the canvas. The name moves out of the displays' way (or leaves the box; **Show the
+  name on the box** turns it off). **Auto layout** gives the automatic pins and size back.
+- **Edit chip**: double-click a placed chip of yours. It opens in a tab with a breadcrumb and Back.
+  Every chip that uses it is rebuilt. Renaming a pin keeps the parents' wires connected.
+- **Look inside**: double-click a library part, or use Look inside on any part. It shows a
+  read-only schematic of its inside, with live values from your running circuit, and you can keep
+  opening parts down to the transistors (and a single MOSFET).
+- **Inspect** shows the Inspector for the chip or a part: what it is and costs, its truth table,
+  and its Verilog.
+- **This chip is an edge-triggered flip-flop**: tick it and choose d, q, clk (and en). The compiler
+  checks it with a short clocked test. A confirmed flip-flop is a register boundary for static
+  timing and is written as a clocked process in the synthesis export.
+- Properties also list **Used by** and **Uses**. A chip in use cannot be deleted; the message names
+  its users.
+
+## Switch level
+
+A circuit runs at switch level when it contains transistors (or parts whose outputs can float).
+Transistors are switches with strengths: rails and driven inputs win over transistors, a strong
+transistor over a weak one (ratioed logic, SRAM writes), any transistor over a resistor, and a
+resistor over stored charge.
+
+| Part | Behaviour |
+|---|---|
+| Resistor | Always conducts, more weakly than any transistor. Two resistors pulling opposite ways give X. |
+| Pull-up / Pull-down | A resistor to VDD / GND: the node is 1 / 0 unless a transistor path overrides it |
+| Capacitor | The node keeps its last value while nothing drives it (the same as ticking *keeps charge* on a wire) |
+| Transmission gate | NMOS and PMOS in parallel: a bidirectional switch |
+| Tri-state buffer / inverter | Output is Z while en = 0 |
+
+- **Shared buses**: several tri-state drivers may share a net. One enabled gives its value, none
+  gives Z (or the pulled value), two that disagree give X. Two outputs that always drive get a
+  warning.
+- **Wire properties**: *keeps charge* (DRAM nodes, bit lines) and a *power-on value* (a latch's
+  stored bit).
+- **Bidirectional pins** let a chip bring out a transistor terminal (an SRAM cell's bit lines).
+  Clicking one cycles Z → 0 → 1.
+- **Transistor chips as bricks**: a combinational chip built from transistors, with at most 12
+  input bits and no output that can float, gets a gate-level model from its exhaustive truth table.
+  Your own CMOS NAND can then be the only brick of everything above it, as the library NAND is.
+  A chip with state (SRAM, DRAM), a floating output or more inputs stays switch level; the
+  properties say why.
+
+## Memories and programs
+
+- **Program ROM (RV32)**: addressed in bytes like a PC. Its contents are RISC-V assembly or hex
+  words, written in **Edit program…**: a code editor with highlighting, errors in the gutter as
+  you type, and a listing (address · word · disassembly). Apply is one undo step. While the
+  circuit runs, the listing and the editor follow the address the ROM is reading.
+- **ROM (words)**: 2^k words of 8, 16 or 32 bits, addressed by word.
+- **RAM**: up to 2^6 words. The properties show its contents live, and can set **initial
+  contents** applied at power-on (Apply & reset).
+- **Examples ▸**: Fetch loop (PC, PC + 4 and a ROM, joined by a pair of `pc` pointers), a 4-bit
+  counter on a 7-segment display, Console, Screen, Computer, Shared bus, Wired-AND, Wired-OR. Each
+  loads as a new chip.
+- **Examples ▸ Computer**: a whole RISC-V computer. The RV32I core (the multi-core's, with a
+  memory port) fetches from a 1K-word ROM; its memory port runs into a **Memory** chip (double-click
+  it: the address decoder, the read multiplexer and 4K words of RAM), which hands the devices their
+  buses; the 64 × 64 screen sits on the top level, the console, LEDs and switches in a **Devices**
+  chip (their switches are on the I/O bar, the console in the CPU and Screens panels):
+
+  | Address | Device |
+  |---|---|
+  | `0x0000_0000` | RAM, 4K words (wraps every 16 KB) |
+  | `0x8000_0000` | console: a store prints the low byte |
+  | `0x8000_0004` | LEDs: a store sets them (a load reads them back) |
+  | `0x8000_0008` | switches: a load reads them |
+  | `0xC000_0000 + 256·y + 4·x` | screen, 64 × 64 RGB332: a store sets pixel (x, y) |
+
+  Word loads and stores only (the core has no `lb` / `sb`; text goes out four characters per
+  word). The program greets on the console, paints a gradient, a sun and a triangle in the
+  switches' colour, and halts on `j .` (a halt part watches for it); the CPU panel checks every
+  instruction, the console and the LEDs against the golden model. The ROM editor's samples include
+  two more programs for it: live switches and a bouncing ball.
+- **Consoles** scroll: the wheel over a console (on the canvas, in look inside or in the Screens
+  panel) goes back through its 500 lines; "↑ n lines" shows while it is scrolled up, and back at the
+  bottom it follows new text again. Ctrl + wheel still zooms.
+- **I/O bar**: after the chip's own pins, the switch banks and keys inside the chips it places,
+  headed by their path (`dev › sw`): click a switch to flip it, hold a key. More than three banks
+  fold behind **+n more**.
+- **Run** spends as much of each frame simulating as keeps the page at about 60 frames a second
+  (2–14 ms, learnt as it runs); the status bar shows the clock rate actually reached.
+
+## CPUs
+
+When a chip is a RISC-V CPU, the **CPU** panel opens in the right-hand dock:
+
+- status: cycle, retired instructions, CPI, and the golden-model check (✓, or the first mismatch:
+  which register, expected and actual value, after which instruction);
+- Run to halt, Step instruction, Reset, Slow mode (one instruction per tick, with the hardware the
+  instruction uses marked on the canvas);
+- the program listing with the current PC (pipelines: a tag per stage), and the selected
+  instruction's fields, with the wires that carry each field coloured;
+- registers (and FP registers), data memory, a log of retired instructions;
+- for pipelines, the stage × cycle diagram; for the system CPU, the I/O panel (console, LEDs,
+  switches, an IRQ button, the machine-mode CSRs); for the dual-core CPU, both cores side by side.
+
+The golden model is the site's instruction-set simulator, stepped whenever the CPU retires an
+instruction. It compares registers, FP registers, `fcsr`, the PC, data memory and the console. The
+panel configures itself for every CPU of the chapters (single-cycle with or without caches and
+FPU, multicycle, pipelined, system, dual-core). For a CPU you build yourself, point it at your
+parts in the **CPU** properties section: program ROM, PC, register file, data memory, retire signal,
+and the ISS options.
+
+## Analysis
+
+- **Probe** (`P`): click wires or pointers to add lanes to a timing diagram docked under the canvas.
+  The chip's pins get lanes of their own. Lanes follow the drawing across rebuilds; the recording
+  downloads as VCD. Gate level only.
+- **Timing**: static timing of the chip. It reports the period in NAND delays, the maximum clock
+  (at about 25 ps per NAND) and the period each capturing flip-flop needs. **Show critical path**
+  draws the path on the chip. It needs flip-flops: library ones, or your own chip marked as a
+  flip-flop.
+- **Cost**: NANDs, transistors, resistors, capacitors and logic depth, in the chip's properties.
+- **Warnings** (click to locate): two nets drawn on one line, pointers without a twin or connected
+  to nothing, inputs left open, outputs that fight over a net, width mismatches, two drivers.
+
+## Folders and projects
+
+- **Folders** sort *My chips*: the folder button on the group's header adds one (type its name), a
+  double-click on a folder's name renames it, and dragging a chip from the palette onto a folder files
+  it there (onto *My chips* itself: out of any folder). A chip's properties and **Manage chips…** have
+  a Folder field too; the manager also renames and deletes folders (their chips stay). Folders only
+  help you find chips: ids, share links and Verilog are unchanged. One level, no folders inside folders.
+- **Projects** are separate sets of chips, each with its own folders, favorites and open tabs. The
+  switcher at the top of the palette lists them and makes, duplicates, renames, exports, imports
+  (a file as a new project, instead of merging it into this one) and deletes them. The first project,
+  *My chips* unless renamed, holds the campaign's level chips: opening one switches to it, and it
+  cannot be deleted.
+
+## Files and sharing
+
+- Everything is saved in the browser automatically. The top bar shows *Saved*, *Saving…* or
+  *Storage full*. If saved data cannot be read, it is kept, and a banner offers to download it.
+- **File ▸**:
+  - **Export this chip…** (`<name>.chip.json`, with every chip inside it) or **Export all chips…**
+    (the whole project, with its folders and favorites). Both name the folders of the chips they hold.
+  - **Import…**, or drop a `.json` file on the canvas. Import never overwrites: a chip with the
+    same id and different contents is renamed, and an identical one is skipped.
+  - **Share link…**: the chip and its sub-chips compressed into the URL (`#/sandbox/s/…`).
+    Opening the link shows a banner; nothing is imported until you click Import. Links over about
+    32 KB may break in some apps; export a file instead.
+  - **Export Verilog** (structural SystemVerilog of the whole hierarchy), **Export image** (SVG or
+    PNG, in the current theme).
+  - **Manage chips…**: size, users, folder, open, duplicate, delete; folders renamed and deleted.
+
+## Challenges
+
+**Challenges** lists 21 optional build challenges, one or more per level:
+
+| Level | Challenges |
+|---|---|
+| Transistors | CMOS inverter, CMOS NAND, CMOS NOR |
+| Gates (NAND only) | NOT, AND, OR, XOR, 2:1 multiplexer |
+| Arithmetic | Half adder, full adder, 4-bit ripple adder, 4-bit incrementer, 2-bit comparator |
+| Sequential | SR latch, D latch, edge-triggered D flip-flop, 4-bit register with enable, 4-bit counter |
+| Memory | 4 × 4 RAM |
+| Processor | 4-bit ALU, instruction fetch |
+
+Start creates a chip with the required pins. **Check** runs the full truth table (up to 16 input
+bits) or a clocked test sequence, enforces the allowed parts (transistors only, NAND only, or
+anything), lists failing rows, and scores NANDs, transistors and depth against par. **Show answer**
+imports the reference chips; **Do it for me** fills the challenge chip. Solved challenges are
+remembered.
+
+## Puzzles
+
+**Puzzles** lists 14 optional program puzzles: write a program for a CPU that turns each test's
+input words into the expected output words. There are 4 groups: streams (echo, countdown, add
+pairs, stream sum, running maximum, odd ones out), arithmetic (count the ones, multiply, divide,
+GCD, Fibonacci), text (print decimal) and memory (reverse, sort). The words are 8 bits, and
+nothing depends on an ISA, so any CPU with a ROM can play.
+
+**Start** asks which CPU solves it. The puzzle gets a chip of its own, `u_pz_<puzzle>`:
+
+| Choice | What you get |
+|---|---|
+| A ready computer (4-bit CPU, RV16, RV32I) | the CPU, a 256-word program ROM, RAM (RV16 / RV32I: 64 words), a halt detector and the two puzzle ports, wired |
+| One of your chips with a program ROM | a copy of it, with PUZZLE IN, PUZZLE OUT and (if it has none) a halt part placed beside it, unwired |
+| Your single-cycle campaign core (Core III, A faster core, Exceptions, Interrupts, Multiply / Divide in the core) | the RV16 computer around it |
+
+How a program uses the ports on the ready computers:
+
+| Computer | Read IN | Write OUT | Halt |
+|---|---|---|---|
+| 4-bit CPU | `RDR` (a word comes as two nibbles, high first; TEST = a nibble waits) | `WRR` (two nibbles per word) | `JUN` to itself |
+| RV16 | `lw rd, -4(x0)` | `sw rs, -3(x0)` | `halt` |
+| RV32I | `lw rd, 0(s0)` after `lui s0, 0x80000` | `sw rs, 4(s0)` | `j .` |
+
+The two ports are zero-cost parts in the palette (Inputs & outputs), like the keyboard and the
+console. **PUZZLE IN** has `data` (the next word, 0 when none is left) and `ready` (1 while one
+waits); `read` = 1 at a rising clock edge takes a word. **PUZZLE OUT** records `data` at a rising
+clock edge with `we` = 1. A port narrower than the puzzle's words takes and gives each word in
+pieces, most significant first.
+
+**Check** plays every test on the gates, from power-on, until a halt part reads 1. PUZZLE OUT must
+then hold exactly the expected words. Reading past the end of the input fails, and so does running
+past the puzzle's cycle limit. A click on a test plays it on the circuit with the player: step a
+clock cycle forward or back, scrub, run to the halt, or jump to the cycle where the first wrong
+word was written. **Done** gives the circuit back as it was. Outside the player, PUZZLE IN holds
+the selected test's words whenever the circuit powers on, so Run plays that test too.
+
+A pass is scored on mean cycles, the hardware's NANDs (the program ROM is left out) and the
+program's size. Every puzzle has reference programs on the ready computers (none on the 4-bit CPU
+for the memory puzzles: it has no RAM), measured in `src/puzzles/refdata.json`. A NAND count can't
+have one par, because it depends on the CPU, so the grade is a trade-off against those
+references:
+
+- ★ every test passes;
+- ★★ no reference is both at least as cheap and at least as fast;
+- ★★★ cycles × NANDs below every reference's.
+
+Cycles and size are shown against the par of the reference with the same ISA. The chart plots
+cycles against NANDs: the references, their front and your point. **Show answer** gives the
+pseudocode and the reference programs. **Do it for me** puts the reference program in a ready
+computer's ROM; that marks the puzzle shown, not starred. A puzzle chip's CPU drawer shows the
+program and registers, but its golden model sits out, because the program reads PUZZLE IN, which
+the golden model doesn't have.
+
+## Open in Sandbox
+
+Every schematic in the chapters and the workbench has an **Open in Sandbox** button. It turns the
+circuit on screen into a new editable chip, with its pointers. Parts a fresh page could not rebuild
+by id come along as sandbox parts or chips: a CPU's program ROM becomes a Program ROM (hex, with
+disassembly comments), its data memory a chip of its own.
+
+## Limits
+
+| Limit | Value |
+|---|---|
+| Pin width | 1024 bits (values exact at any width) |
+| Constants | 53 bits |
+| RAM | 2^6 words of up to 32 bits |
+| ROM | 2^8 words |
+| Gate-level model of a transistor chip | at most 12 input bits, no output that can float or is wider than 53 bits |
+| Challenge truth tables | exhaustive up to 16 input bits |
+
+The switch-level model has no threshold drop: an NMOS passes a full 1. Probes and the timing
+diagram are gate level only. The chapters' cache-line view is not in the CPU panel.
+
+## Guarantees
+
+The test suite checks, on every build:
+
+- **Round trip**: every component reachable from the library (722 of them), converted into a
+  sandbox chip and compiled back, gives the same circuit (an isomorphic netlist) and, where it has
+  a spec, the same outputs.
+- **Every CPU opens**: each top-level CPU of the chapters opens in the sandbox and compiles without
+  errors; the single-cycle CPU runs cycle for cycle like the original, and the CPU panel runs
+  every variant to halt against the golden model.
+- **The ladder**: every level is rebuilt by hand, each from the one below, and compared with the
+  library part: CMOS inverter, NAND and NOR from transistors; NOT, AND, OR and XOR from the
+  user's own transistor NAND; full adder and 4-bit adder; SR latch, D latch, flip-flop, register
+  and counter; SRAM and DRAM cells; a 4 × 4 RAM; a 4-bit ALU; a fetch datapath joined by
+  pointers.
+- **Every chapter scene**: all 156 circuit scenes of the chapters open in the sandbox, compile and
+  simulate.
+- **Every challenge**: each reference answer passes its own check.
+- **Every puzzle**: each reference program passes every test on its computer's gates, with the
+  cycles, size and NANDs recorded in `refdata.json`. The cycle engine and the event-driven
+  simulator give the same words in the same cycles.
+
+## For contributors
+
+The sandbox lives in `src/editor/` (file map in `CLAUDE.md`) and is loaded as its own chunk from
+`src/ui/pages/sandbox.ts`. The model, compiler, library, edit operations, history, storage and
+sharing are DOM-free and tested in Node; the view, tools and panels are DOM.
+
+- **Document model** (`model.ts`): a workspace of chips; a chip has pins, parts, wires (interior
+  corners only) and pointers. Plain JSON, schema-versioned (`store.ts` migrates and sanitizes).
+- **Compiler** (`compile.ts`): a chip → `ComponentDef`. Union-find over pins, ports, wires,
+  branches and same-name pointers; width and driver checks; `ends[0]` = the driver; each sink's
+  `via` = the drawn path, so the router draws exactly what the user drew; pointers become
+  `tags` / `tagAt`. Diagnostics instead of exceptions.
+- **User library** (`library.ts`): compiled chips are cached by a hash of the chip and its
+  dependencies, so an unchanged chip keeps its def object (the simulator's caches are keyed by it).
+  User chips are never put in the global registry; `setUserResolver` makes `u_*` ids resolvable.
+- **Runtime** (`runtime.ts`): rebuilds the simulator only when connectivity changes and carries
+  state across (`Sim.carry`).
+- **Plugins**: features register themselves through `registerPaletteGroup`,
+  `registerPropsSection`, `registerToolbarAction`, `registerEditorPlugin`, `registerDiagSource`,
+  `Editor.slots`, `paintHooks` and the right-hand dock (`dock.ts`), and are imported by the page.
+
+Storage key: `mosfet2riscv:sandbox:v1`. File format: `{ format: 'mosfet2riscv-sandbox', schema, chips }`.
+Share links: `1z` + base64url(deflate-raw(JSON)), or `1j` + base64url(JSON).

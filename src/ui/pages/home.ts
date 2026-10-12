@@ -1,6 +1,7 @@
 import { chapters, future } from '../../chapters';
 import { ladder } from '../../widgets/journey';
 import { h, icon } from '../dom';
+import { reportLink } from '../errors';
 import { settings } from '../settings';
 import type { Page } from './chapter';
 
@@ -34,7 +35,9 @@ export function homePage(): Page {
         h('p', { class: 'lead' }, 'Build a computer one level at a time. Start with a transistor, make a gate, then adders, memory, and a processor. Every box on screen is transparent: open it and keep going down until you reach silicon.'),
         h('div', { class: 'cta' },
           h('a', { class: 'btn primary', href: resume ? `#/c/${resume.id}/0` : '#/c/map/0' }, resume ? `Continue: ${resume.title}` : 'Start the journey', icon('chevR', 16)),
-          h('a', { class: 'btn', href: '#/workbench/rca4' }, icon('bench', 16), 'Open the workbench'))),
+          h('a', { class: 'btn', href: '#/campaign' }, icon('flag', 16), 'Play the campaign'),
+          h('a', { class: 'btn', href: '#/workbench/rca4' }, icon('bench', 16), 'Open the workbench'),
+          h('a', { class: 'btn', href: '#/sandbox' }, icon('chip', 16), 'Open the sandbox'))),
       ladder()),
     h('h2', { class: 'section-title', id: 'chapters' }, 'Chapters'),
     h('p', { class: 'section-sub' }, 'Each chapter uses only what the previous ones built.'),
@@ -42,12 +45,17 @@ export function homePage(): Page {
     h('h2', { class: 'section-title' }, 'How it works'),
     h('div', { class: 'features' },
       feature('layers', 'Transparent boxes', 'Double-click any part to open it. Breadcrumbs show the way back. It goes all the way down to transistors.'),
-      feature('chip', 'Real simulation', 'Every wire value is computed: a gate-level simulator with real delays, and a switch-level solver for transistors.'),
+      feature('chip', 'Real simulation', 'Every wire value is computed: a gate-level simulator in which every NAND takes one delay unit, and a switch-level solver for transistors.'),
       feature('code', 'Real hardware description', 'Every component comes with SystemVerilog, including Verilog generated from the very schematic on screen.'),
       feature('info', 'Cost is visible', 'Transistor counts, gate counts and worst-case delays are measured from the circuit, so you can feel every trade-off.')),
     h('div', { class: 'footer' },
       'Inspired by Turing Complete, Sebastian Lague\'s Digital Logic Sim, nand2tetris, and Harris & Harris. ',
       h('a', { href: 'https://github.com/OrelMag/MOSFETtoRISCV' }, 'Source on GitHub'), ' · ',
-      h('a', { href: '#/', onclick: (e: Event) => { e.preventDefault(); if (confirm('Reset your progress?')) settings.resetProgress(); } }, 'Reset progress'))));
+      reportLink(undefined, 'Report a problem'), ' · ',
+      h('a', { href: '#/', onclick: (e: Event) => { e.preventDefault(); if (confirm('Reset your progress?')) settings.resetProgress(); } }, 'Reset progress'),
+      h('div', { class: 'footer-meta' },
+        h('span', { title: `build ${__APP_COMMIT__}, ${__APP_DATE__}` }, `Version ${__APP_VERSION__}`), ' · ',
+        `© ${__APP_DATE__.slice(0, 4)} OrelMag`, ' · ',
+        h('a', { href: 'mailto:orelmac@gmail.com' }, 'orelmac@gmail.com')))));
   return { el, destroy() {} };
 }

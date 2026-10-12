@@ -74,7 +74,7 @@ export const chIO: Chapter = {
       body: `
         <p>Inputs work the same way: a load from 0x8000_0008 returns the switches, a store to 0x8000_0004 latches the LEDs.
         This program copies one to the other in a loop.</p>
-        <div class="try">Press Run on the clock, then flip switches in the I/O panel.</div>`,
+        <div class="try">Let the clock run (or press Run), then flip switches in the I/O panel.</div>`,
       scene: () => cpuScene({ source: sys('leds'), system: true }),
     },
   ],
@@ -89,8 +89,9 @@ export const chTraps: Chapter = {
       body: `
         <p>A second, separate register space: <strong>CSRs</strong>, addressed by a 12-bit number and accessed only with
         <code>csrrw</code> (swap), <code>csrrs</code> (set bits) and <code>csrrc</code> (clear bits), plus immediate forms. This CPU implements the
-        machine-mode set an embedded core needs: mstatus, misa, mie, mtvec, mscratch, mepc, mcause, mtval, mip, mcycle/cycle and mhartid.</p>
-        <p>Open the CSR unit: twelve address comparators, a read multiplexer, the read-modify-write logic, and the registers,
+        machine-mode set an embedded core needs: mstatus, misa, mie, mtvec, mscratch, mepc, mcause, mtval, mip, mcycle/cycle and mhartid, plus the identity
+        registers every core must have (mvendorid, marchid, mimpid), which read 0.</p>
+        <p>Open the CSR unit: fifteen address comparators, a read multiplexer, the read-modify-write logic, and the registers,
         some of them written by hardware on a trap.</p>`,
       scene: () => ({ root: CSR_UNIT, inputs: { addr: 0x305, funct3: 1, rs1v: 0x40, csrWrite: 1, clk: 0 } }),
     },
@@ -130,7 +131,7 @@ export const chTraps: Chapter = {
         interrupts are globally on (mstatus.MIE).</p>
         <p>The handler prints a dot and moves mtimecmp 40 cycles ahead. The main loop never knows it was interrupted: that is
         the foundation of every multitasking operating system's scheduler tick.</p>
-        <div class="try">Run the clock and watch the dots, mepc (where the loop was interrupted) and s1 (tick count).</div>`,
+        <div class="try">Let the clock run and watch the dots, mepc (where the loop was interrupted) and s1 (tick count).</div>`,
       scene: () => cpuScene({ source: sys('timer'), system: true, highlight: ['io', 'csr'] }),
       challenge: {
         kind: 'reach', goal: 'Let the timer interrupt fire five times (s1 = 5).',

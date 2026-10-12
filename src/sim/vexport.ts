@@ -1,10 +1,11 @@
 // Synthesizable Verilog for the whole hierarchy below a component, for real tools (Yosys, OpenROAD):
-// one module per ComponentDef, NAND as a continuous assignment, the master–slave flip-flops as
-// clocked processes (a synthesis tool cannot use cross-coupled NAND loops as storage), constant
-// ties as 1'b0 / 1'b1, splitters and mergers as bit slices. Plain Verilog-2005 with identifiers
-// sanitized, so any tool reads it.
+// one module per ComponentDef, NAND as a continuous assignment, flip-flops (`ff`: the master–slave
+// DFF, a user chip ticked as one) as clocked processes (a synthesis tool cannot use cross-coupled
+// NAND loops as storage), constant ties as 1'b0 / 1'b1, splitters and mergers as bit slices, a part
+// with its own `hdl.synth` body (a large RAM / ROM: a `reg mem [..]` array) as that body. Plain
+// Verilog-2005 with identifiers sanitized, so any tool reads it.
 
-import { type ComponentDef, netlistOf, parseEnd, type PortDef } from './types';
+import { type ComponentDef, isExternal, isSwitchPrim, netlistOf, parseEnd, type PortDef } from './types';
 
 const KEYWORDS = new Set(('always and assign automatic begin buf bufif0 bufif1 case casex casez cell cmos config deassign default defparam design disable edge else end endcase endconfig endfunction endgenerate endmodule endprimitive endspecify endtable endtask event for force forever fork function generate genvar highz0 highz1 if ifnone incdir include initial inout input instance integer join large liblist library localparam macromodule medium module nand negedge nmos nor noshowcancelled not notif0 notif1 or output parameter pmos posedge primitive pull0 pull1 pulldown pullup pulsestyle_onevent pulsestyle_ondetect rcmos real realtime reg release repeat rnmos rpmos rtran rtranif0 rtranif1 scalared showcancelled signed small specify specparam strong0 strong1 supply0 supply1 table task time tran tranif0 tranif1 tri tri0 tri1 triand trior trireg unsigned use uwire vectored wait wand weak0 weak1 while wire wor xnor xor logic bit byte int priority unique final do')
   .split(' '));
@@ -18,21 +19,36 @@ export function ident(s: string, fallback: string): string {
 
 const range = (w: number) => (w > 1 ? `[${w - 1}:0] ` : '');
 
+/** A flip-flop (`ff`) whose only ports are d, q, clk (and en): exported as a process. */
+const ffLeaf = (def: ComponentDef) => {
+  const ff = def.ff;
+  return ff && def.ports.every((p) => [ff.d, ff.q, ff.clk, ff.en].includes(p.name)) ? ff : undefined;
+};
+
 /** Leaves of the exported hierarchy: written as behaviour, not expanded. */
-function leafBody(def: ComponentDef): string[] | null {
-  switch (def.id) {
-    case 'nand': return ['  assign y = ~(a & b);'];
-    case 'dff': return ['  always @(posedge clk) q <= d;'];
-    case 'dffe': return ['  always @(posedge clk) if (en) q <= d;'];
-    default: break;
+function leafBody(def: ComponentDef, opts: ExportOptions = {}): string[] | null {
+  if (def.id === 'nand') return ['  assign y = ~(a & b);'];
+  const ff = ffLeaf(def);
+  if (ff) {
+    const n = (port: string) => portNameOf(def, port);
+    const body = [`  always @(posedge ${n(ff.clk)}) ${ff.en ? `if (${n(ff.en)}) ` : ''}${n(ff.q)} <= ${n(ff.d)};`];
+    return opts.powerOnZero ? [`  initial ${n(ff.q)} = 0;`, ...body] : body;
   }
   if (def.id === 'tie0' || def.id === 'tie1') return [`  assign ${def.ports[0].name} = 1'b${def.id === 'tie1' ? 1 : 0};`];
+  // its own synthesizable body (a large memory as an array), the structure below it not exported
+  if (def.hdl?.synth) return def.hdl.synth;
   return null;
 }
 
 export interface ExportResult { verilog: string; modules: number; top: string }
+/**
+ * powerOnZero: every flip-flop starts at 0, as our reset('zero') does. Without it a flip-flop that is never written
+ * holds an undefined value a synthesis tool may replace by any constant, so a cross-check against our simulation would
+ * compare a value Verilog leaves open. Off for real flows (an ASIC flip-flop has no initial value).
+ */
+export interface ExportOptions { powerOnZero?: boolean }
 
-export function synthVerilog(root: ComponentDef, topName?: string): ExportResult {
+export function synthVerilog(root: ComponentDef, topName?: string, opts: ExportOptions = {}): ExportResult {
   const names = new Map<ComponentDef, string>();
   const used = new Set<string>();
   const order: ComponentDef[] = [];
@@ -50,21 +66,24 @@ export function synthVerilog(root: ComponentDef, topName?: string): ExportResult
   const visit = (d: ComponentDef) => {
     if (names.has(d) && order.includes(d)) return;
     nameOf(d);
-    if (!leafBody(d)) {
+    if (!leafBody(d, opts)) {
+      if (isSwitchPrim(d)) {
+        throw new Error(`${d.name}: transistors, rails, resistors and capacitors are not synthesizable (export the exact structure instead)`);
+      }
       const nl = netlistOf(d);
       if (!nl) throw new Error(`${d.id}: no netlist and no behaviour for export`);
-      for (const i of nl.instances) if (i.def.prim !== 'alias') visit(i.def);
+      for (const i of nl.instances) if (i.def.prim !== 'alias' && !isExternal(i.def)) visit(i.def);
     }
     if (!order.includes(d)) order.push(d);
   };
   visit(root);
 
   const out: string[] = [`// Generated by MOSFET → RISC-V from the schematics. Top: ${nameOf(root)}`, ''];
-  for (const d of order) out.push(moduleText(d, nameOf), '');
+  for (const d of order) out.push(moduleText(d, nameOf, opts), '');
   return { verilog: out.join('\n'), modules: order.length, top: nameOf(root) };
 }
 
-function moduleText(def: ComponentDef, nameOf: (d: ComponentDef) => string): string {
+function moduleText(def: ComponentDef, nameOf: (d: ComponentDef) => string, opts: ExportOptions): string {
   const portName = new Map<string, string>();
   const used = new Set<string>();
   for (const p of def.ports) {
@@ -73,8 +92,8 @@ function moduleText(def: ComponentDef, nameOf: (d: ComponentDef) => string): str
     used.add(n);
     portName.set(p.name, n);
   }
-  const leaf = leafBody(def);
-  const isReg = (p: PortDef) => !!leaf && p.dir === 'out' && (def.id === 'dff' || def.id === 'dffe');
+  const leaf = leafBody(def, opts);
+  const isReg = (p: PortDef) => !!leaf && p.name === ffLeaf(def)?.q;
   const lines: string[] = [];
   lines.push(`module ${nameOf(def)} (${def.ports.map((p) => portName.get(p.name)).join(', ')});`);
   for (const p of def.ports) lines.push(`  ${p.dir === 'in' ? 'input' : p.dir === 'out' ? 'output' : 'inout'} ${isReg(p) ? 'reg ' : ''}${range(p.width)}${portName.get(p.name)};`);
@@ -123,6 +142,10 @@ function moduleText(def: ComponentDef, nameOf: (d: ComponentDef) => string): str
         const from = bitOf(src, sb), to = bitOf(dst, db);
         if (from && to) assigns.push(`  assign ${to} = ${from};`);
       }
+      continue;
+    }
+    if (isExternal(c)) {
+      lines.push(`  // ${inst.name}: ${c.name} (a sandbox part outside the circuit, not hardware): its outputs are left undriven`);
       continue;
     }
     let iname = ident(inst.name, 'u');

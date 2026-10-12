@@ -2,18 +2,22 @@
 // that can drill into any instance, with input controls, clock, propagation animation and
 // the inspector. Chapters and the workbench are thin wrappers around it.
 
-import { flatten } from '../sim/flatten';
+import { flatten, type HierNode } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import { needsSwitchLevel } from '../sim/harness';
-import type { PowerOnMode, Sim } from '../sim/sim';
+import { completeEdge, type Edge, riseEdge, stepEdge } from '../sim/edge';
+import { PowerMeter } from '../sim/power';
+import { analyzeTiming } from '../sim/timing';
+import type { PowerOnMode, Sim, SimState } from '../sim/sim';
 import { SwitchSim } from '../sim/switchsim';
-import { B0, B1, type Bit, type ComponentDef, inPorts, netlistOf, outPorts, type PortDef } from '../sim/types';
-import { formatBits, formatNumber, mask, pack, type Radix } from '../sim/values';
+import { B0, B1, BZ, type Bit, type ComponentDef, inPorts, netlistOf, outPorts, type PortDef } from '../sim/types';
+import { formatBits, formatNumber, mask, pack, packBig, type Radix, unpackBig } from '../sim/values';
 import { LogicAnalyzer, netKey } from './analyzer';
 import { h, icon } from '../ui/dom';
-import { settings } from '../ui/settings';
+import { applyTheme, settings } from '../ui/settings';
 import { ViewCtx } from './context';
 import { Inspector } from './inspector';
+import type { LivePower } from './powerpanel';
 import { closePopover, editNumber } from './popover';
 import { SchematicView } from './schematic';
 
@@ -34,6 +38,8 @@ export interface Scene {
   animate?: boolean;
   /** Open the timing panel (logic analyzer) on load. */
   analyzer?: boolean;
+  /** false: the clock stays still on load whatever settings.autoClock says (an exercise counted in Pulses from the start). */
+  autoClock?: boolean;
 }
 
 export interface Widget {
@@ -53,6 +59,38 @@ const LEVEL_NAME: Record<string, string> = {
   routing: 'gates & blocks', sequential: 'latches & flip-flops', memory: 'memory', plumbing: 'wiring', cpu: 'processor',
 };
 
+/** Steps Back can undo (each a full copy of the simulation's state). */
+const HISTORY_MAX = 100;
+/** The stage's Run: one clock cycle every RUN_MS (2 Hz, slow enough to follow every edge), high for the first half. */
+const RUN_MS = 500;
+
+/** Panel state that Back restores together with the simulation (a golden model, a trace log). */
+export interface HistoryHook {
+  save(): unknown;
+  restore(s: unknown): void;
+}
+
+interface Checkpoint {
+  sim: SimState;
+  /** time · evaluations · cycles: what the state looked like (an unchanged one is not saved twice) */
+  key: string;
+  cycles: number;
+  edge: StageEdge | null;
+  edgePeriod: number;
+  nextEdge: number;
+  lateEvents: number;
+  lateCount: number;
+  lastSettle: number | null;
+  changeStart: number;
+  panels: [HistoryHook, unknown][];
+}
+
+/** A rising edge; `held`: Run's high half, settled and its after hooks run, waiting for the fall. */
+type StageEdge = Edge & { held?: boolean };
+
+/** The direction mark of the bottom bar: before an input's name (into the circuit), after an output (out of it). */
+const DIR = () => h('span', { class: 'dir', 'aria-hidden': 'true' }, '▸');
+
 export class Stage {
   readonly el: HTMLElement;
   readonly inspector: Inspector;
@@ -62,8 +100,11 @@ export class Stage {
   ctx: ViewCtx | null = null;
   private view: SchematicView;
   private crumbs: HTMLElement;
+  private bar: HTMLElement;
   private controls: HTMLElement;
   private canvas: HTMLElement;
+  /** Bottom-left stack for panels with `data-dock="left"` (see layoutDock). */
+  private dock: HTMLElement;
   private levelBadge: HTMLElement;
   private status: HTMLElement;
   private leaf: { name: string; widget: Widget } | null = null;
@@ -71,6 +112,7 @@ export class Stage {
   private panels: Widget[] = [];
   private anim: ReturnType<typeof setInterval> | null = null;
   private runClock: ReturnType<typeof setInterval> | null = null;
+  private runBtn: HTMLElement | null = null;
   private changeStart = 0;
   private lastSettle: number | null = null;
   private listeners = new Set<() => void>();
@@ -79,6 +121,7 @@ export class Stage {
   private probeMode = false;
   private probeBtn: HTMLButtonElement;
   private timingBtn: HTMLButtonElement;
+  private panesBtn: HTMLButtonElement;
   /** Fixed clock period in gate delays (null: every edge waits for the logic to settle). */
   private period: number | null = null;
   private nextEdge = 0;
@@ -92,8 +135,19 @@ export class Stage {
   leafFactory: LeafWidgetFactory | null = null;
   /** Rising clock edges since the scene was loaded or reset. */
   cycles = 0;
+  /** Toggles of the scene's simulation, counted once the inspector's Power section asks (from cycle meterFrom). */
+  private meter: PowerMeter | null = null;
+  private meterFrom = 0;
+  private meterPeriod: number | null | undefined;
   /** Observers of every rising clock edge: before (inputs still old) and after it settled. */
   readonly edgeHooks = new Set<{ before?: () => void; after?: () => void }>();
+  /** The rising edge in progress (slow mode plays it one gate delay at a time). */
+  private edge: StageEdge | null = null;
+  private edgePeriod = 0;
+  /** Panels' own state saved with every checkpoint and put back by back(). */
+  readonly historyHooks = new Set<HistoryHook>();
+  private history: Checkpoint[] = [];
+  private backBtn: HTMLButtonElement | null = null;
   private beforeEdge(): void { this.edgeHooks.forEach((h) => h.before?.()); }
   private afterEdge(): void { this.edgeHooks.forEach((h) => h.after?.()); }
 
@@ -106,15 +160,40 @@ export class Stage {
       icon('probe', 15), h('span', { class: 'lbl' }, 'Probe')) as HTMLButtonElement;
     this.timingBtn = h('button', { class: 'btn ghost sm toggle', title: 'Timing diagram: probed nets and ports over time', onclick: () => this.showAnalyzer(!this.el.classList.contains('with-analyzer')) },
       icon('wave', 15), h('span', { class: 'lbl' }, 'Timing')) as HTMLButtonElement;
-    const bar = h('div', { class: 'stage-bar' },
-      this.crumbs, this.probeBtn, this.timingBtn,
+    const remix = h('button', { class: 'btn ghost sm remix-btn', title: 'Open in Sandbox: an editable copy of the circuit on screen, as one of your own chips', onclick: () => this.remix() },
+      icon('chip', 15), h('span', { class: 'lbl' }, 'Open in Sandbox'));
+    // The level on screen as an image file (view/image.ts, loaded on first use).
+    const imgMenu = h('div', { class: 'pal-menu img-menu', role: 'menu' });
+    const imgItem = (kind: 'svg' | 'png', label: string, hint: string) => h('button', { role: 'menuitem', onclick: () => {
+      imgMenu.classList.remove('open');
+      this.exportImage(kind);
+    } }, h('span', null, h('b', null, label), h('small', null, hint)));
+    imgMenu.append(imgItem('svg', 'SVG', 'This level, whole, as drawn in the current theme'), imgItem('png', 'PNG', 'The same at 2× resolution'));
+    const imgBtn = h('button', { class: 'btn ghost sm', title: 'Export this level as an image (SVG or PNG)', 'aria-haspopup': 'menu', onclick: (e: Event) => {
+      e.stopPropagation();
+      imgMenu.classList.toggle('open');
+    } }, icon('image', 15), h('span', { class: 'lbl' }, 'Image'));
+    document.addEventListener('pointerdown', (e) => {
+      if (!imgMenu.contains(e.target as Node) && !imgBtn.contains(e.target as Node)) imgMenu.classList.remove('open');
+    });
+    // The side panes (narrative or library, inspector) fold away for a full-width circuit; the
+    // choice is a setting (data-wide on <html>), so it holds across steps and pages.
+    this.panesBtn = h('button', { class: 'btn ghost icon-only toggle panes-btn', onclick: () => {
+      settings.set('wide', !settings.wide);
+      applyTheme();
+    } }, icon('sidebar', 16)) as HTMLButtonElement;
+    this.syncPanesBtn();
+    const bar = this.bar = h('div', { class: 'stage-bar' },
+      this.crumbs, remix, h('div', { class: 'pal-wrap' }, imgBtn, imgMenu), this.probeBtn, this.timingBtn,
       btn('up', 'Up one level (Esc)', () => this.up()),
       btn('minus', 'Zoom out', () => this.view.zoom(1.25)),
       btn('plus', 'Zoom in', () => this.view.zoom(0.8)),
-      btn('fit', 'Fit to screen', () => this.view.fit()));
+      btn('fit', 'Fit to screen', () => this.view.fit()),
+      this.panesBtn);
     this.canvas = h('div', { class: 'canvas' });
     this.levelBadge = h('div', { class: 'level-badge' });
-    this.canvas.append(this.levelBadge, h('div', { class: 'hint-badge' }, 'double-click a part to open it · drag to pan · wheel to zoom'));
+    this.dock = h('div', { class: 'panel-dock' });
+    this.canvas.append(this.levelBadge, h('div', { class: 'hint-badge' }, 'double-click a part to open it · drag to pan · wheel or pinch to zoom'), this.dock);
     this.controls = h('div', { class: 'controls' });
     this.status = h('div', { class: 'status' });
     this.el = h('section', { class: 'stage' }, bar, this.canvas, this.analyzer.el, this.controls);
@@ -142,6 +221,7 @@ export class Stage {
       }
     });
     settings.onChange(() => {
+      this.syncPanesBtn();
       this.analyzer.radix = settings.radix;
       this.view.radix = settings.radix;
       this.inspector.radix = settings.radix;
@@ -149,7 +229,22 @@ export class Stage {
     });
     this.view.radix = settings.radix;
     this.inspector.radix = settings.radix;
-    new ResizeObserver(() => this.view.fit()).observe(this.canvas);
+    // The canvas also changes size during a run (the bottom bar rewraps as values and the status
+    // change): a view the learner zoomed into must survive that.
+    new ResizeObserver(() => {
+      this.view.insetRight = this.rightInset();
+      this.view.resized();
+      this.layoutDock();
+      this.fitBar();
+    }).observe(this.canvas);
+  }
+
+  private syncPanesBtn(): void {
+    const t = settings.wide ? 'Show the side panes' : 'Hide the side panes: the circuit full width';
+    this.panesBtn.classList.toggle('on', settings.wide);
+    this.panesBtn.title = t;
+    this.panesBtn.setAttribute('aria-label', t);
+    this.panesBtn.setAttribute('aria-pressed', String(settings.wide));
   }
 
   onChange(f: () => void): () => void {
@@ -180,19 +275,28 @@ export class Stage {
 
   load(scene: Scene): void {
     this.edgeHooks.clear();
+    this.historyHooks.clear();
+    this.history = [];
     this.showWidget(null);
     this.stopAnim();
     this.stopClock();
     closePopover();
     this.scene = scene;
     const level = needsSwitchLevel(scene.root) ? 'switch' : 'gate';
-    const design = flatten(scene.root, { mode: level });
+    // The root is always its structure, even one simulated as a lookup elsewhere (a large RAM opened
+    // in the workbench); such parts below it stay leaves and open onto their own sub-simulation.
+    const design = flatten(scene.root, { mode: level, expand: (d, n) => n.parent === null || !d.preferBehavior });
     const sim: Sim = level === 'switch' ? new SwitchSim(design) : new GateSim(design);
     for (const [k, v] of Object.entries(scene.inputs ?? {})) sim.setInput(k, v);
     sim.reset(scene.powerOn ?? 'zero');
     sim.settle();
     this.sim = sim;
+    this.edge = null;
     this.cycles = 0;
+    // toggles counted from the start (an increment per change), so the inspector's Power section has the whole run
+    this.meter = sim instanceof GateSim ? new PowerMeter(sim) : null;
+    this.meterFrom = 0;
+    this.meterPeriod = undefined;
     this.rootCtx = new ViewCtx(sim, design.root);
     this.lastSettle = null;
     this.period = null;
@@ -204,11 +308,12 @@ export class Stage {
     this.panels.forEach((p) => { p.destroy?.(); p.el.remove(); });
     this.view.highlight(scene.highlight ?? []);
     this.panels = (scene.panels ?? []).map((f) => f(this));
-    for (const p of this.panels) this.canvas.append(p.el);
-    const docked = this.panels.filter((p) => p.el.dataset.dock === 'right');
-    this.view.insetRight = docked.length ? Math.max(...docked.map((p) => p.el.getBoundingClientRect().width)) + 24 : 0;
+    for (const p of this.panels) (p.el.dataset.dock === 'left' ? this.dock : this.canvas).append(p.el);
+    this.view.insetRight = this.rightInset();
+    this.layoutDock();
     this.view.fit();
     this.refresh();
+    if (settings.autoClock && scene.autoClock !== false) this.startClock();
   }
 
   /** Navigate to a path of instance names from the root. */
@@ -266,6 +371,24 @@ export class Stage {
     if (this.ctx?.parent) this.goTo(this.ctx.parent.path);
   }
 
+  /** The level on screen as a new sandbox chip (remix.ts is loaded on demand), then go there. */
+  private remix(): void {
+    const def = this.ctx?.def;
+    if (!def) return;
+    import('../editor/remix').then((m) => {
+      const r = m.remixIntoStorage(def);
+      if ('error' in r) this.status.replaceChildren(h('span', { class: 'pulse warn' }), `Cannot open in the sandbox: ${r.error}`);
+      else location.hash = `#/sandbox/${r.id}`;
+    }, (e) => this.status.replaceChildren(h('span', { class: 'pulse warn' }), `The sandbox could not load: ${String(e)}`));
+  }
+
+  private exportImage(kind: 'svg' | 'png'): void {
+    const def = this.ctx?.def;
+    if (!def) return;
+    const fail = (e: unknown) => this.status.replaceChildren(h('span', { class: 'pulse warn' }), `Cannot export the image: ${e instanceof Error ? e.message : String(e)}`);
+    import('./image').then((m) => m.exportSchematic(this.view, def.name, kind)).catch(fail);
+  }
+
   select(child: string | null): void {
     this.selected = child;
     this.showInspector();
@@ -302,12 +425,14 @@ export class Stage {
 
   setInput(port: string, value: number): void {
     if (!this.sim) return;
+    this.checkpoint();
     this.sim.setInput(port, value);
     this.propagate();
   }
 
   setInputs(values: Record<string, number>): void {
     if (!this.sim) return;
+    this.checkpoint();
     for (const [k, v] of Object.entries(values)) this.sim.setInput(k, v);
     this.propagate();
   }
@@ -323,7 +448,12 @@ export class Stage {
   }
 
   toggleInput(port: string): void {
+    this.checkpoint();
     const v = this.getInput(port) ? 0 : 1;
+    if (port === this.clockPort()) {
+      this.stopClock();
+      this.finishEdge(false);
+    }
     const edge = v === 1 && port === this.clockPort();
     if (edge) {
       this.beforeEdge();
@@ -340,7 +470,14 @@ export class Stage {
 
   private editInput(port: string, anchor: DOMRect): void {
     const p = this.scene!.root.ports.find((q) => q.name === port)!;
-    editNumber(anchor, port, p.width, this.getInput(port), (v) => this.setInput(port, v));
+    // bit by bit: a wide port (a pipeline register's 97-bit word) stays exact
+    const bits = this.sim?.getInputBits(port);
+    editNumber(anchor, port, p.width, (bits && packBig(bits)) ?? 0n, (v) => {
+      if (!this.sim) return;
+      this.checkpoint();
+      this.sim.setInputBits(port, unpackBig(v, p.width));
+      this.propagate();
+    });
   }
 
   /**
@@ -349,7 +486,15 @@ export class Stage {
    * the logic is done (which is how real hardware fails when overclocked).
    */
   private cycle(clk: string): void {
+    this.rise(clk);
+    completeEdge(this.sim!, this.edge!);
+    this.fall();
+  }
+
+  /** Raise the clock (the edge hooks' `before` runs first); the logic has not moved yet. */
+  private rise(clk: string): void {
     const sim = this.sim!;
+    let end: number | null = null;
     if (this.period && sim.runUntil) {
       const P = this.period;
       const E = Math.max(sim.time, this.nextEdge);
@@ -359,47 +504,122 @@ export class Stage {
         this.lateCount++;
         this.analyzer.markLate(E);
       }
-      this.beforeEdge();
-      sim.setInput(clk, 1);
-      this.cycles++;
-      sim.runUntil(E + Math.ceil(P / 2));
-      this.afterEdge();
-      sim.setInput(clk, 0);
-      sim.runUntil(E + P);
-      this.nextEdge = E + P;
+      end = E + Math.ceil(P / 2);
+      this.edgePeriod = P;
+    }
+    this.beforeEdge();
+    this.edge = riseEdge(sim, clk, end);
+    this.changeStart = this.edge.start;
+    this.cycles++;
+  }
+
+  /** End of the high phase: the edge hooks' `after`, then the falling half of the cycle. */
+  private fall(): void {
+    const sim = this.sim!;
+    const e = this.edge!;
+    this.edge = null;
+    if (!e.held) this.afterEdge();
+    if (e.end !== null) {
+      // e.start is the edge time E; the next one comes at E + P (the period the edge started with).
+      const P = this.edgePeriod;
+      sim.setInput(e.clk, 0);
+      sim.runUntil!(e.start + P);
+      this.nextEdge = e.start + P;
       this.lastSettle = null;
       return;
     }
     // Measure the rising edge: that is when the flip-flops launch new values through the logic.
-    const t0 = sim.time;
-    this.beforeEdge();
-    sim.setInput(clk, 1);
-    this.cycles++;
-    sim.settle();
-    this.afterEdge();
-    this.lastSettle = sim.time - t0;
-    sim.setInput(clk, 0);
+    this.lastSettle = sim.time - e.start;
+    sim.setInput(e.clk, 0);
     sim.settle();
   }
 
-  /** One full clock cycle, then refresh. */
-  pulse(): void {
+  /** A rising edge is being played one gate delay at a time (Run's settled high half is not one). */
+  get inEdge(): boolean {
+    return !!this.edge && !this.edge.held;
+  }
+
+  /** Slow mode: raise the clock and show the instant of the edge; edgeStep() plays the rest. */
+  startEdge(): boolean {
+    const clk = this.clockPort();
+    if (!clk || !this.sim) return false;
+    this.stopClock();
+    this.checkpoint();
+    this.finishEdge(false);
+    this.stopAnim();
+    this.rise(clk);
+    this.refresh();
+    return true;
+  }
+
+  /** Slow mode: one gate delay of the edge in progress. Returns true while it is still propagating. */
+  edgeStep(flowMs: number): boolean {
+    if (!this.edge || !this.sim) return false;
+    this.checkpoint();
+    const more = stepEdge(this.sim, this.edge);
+    if (!more) this.fall();
+    this.refreshFlowing(flowMs);
+    return more;
+  }
+
+  /** Complete a slow-mode edge at once (before anything else touches the clock). */
+  finishEdge(refresh = true): void {
+    if (!this.edge || !this.sim) return;
+    completeEdge(this.sim, this.edge);
+    this.fall();
+    if (refresh) this.refresh();
+  }
+
+  /** One full clock cycle by hand (a running clock pauses), then refresh (changed wires show a travelling front for flowMs). */
+  pulse(flowMs = 0): void {
+    this.stopClock();
+    this.tick(flowMs);
+  }
+
+  /** Run: half a clock period, the rising edge (settled) or the fall, so the clock is seen high for half of it. */
+  private halfTick(): void {
     const clk = this.clockPort();
     if (!clk || !this.sim) return;
     this.stopAnim();
-    this.cycle(clk);
+    if (this.edge) {
+      this.fall();
+      this.refresh();
+      return;
+    }
+    this.checkpoint();
+    this.rise(clk);
+    const e = this.edge!;
+    completeEdge(this.sim, e);
+    // The edge is over: panels (golden model, trace, energy) take it now, so the fall changes nothing they
+    // show; holding them until the fall made them flip between two layouts every half period.
+    e.held = true;
+    if (e.end === null) this.lastSettle = this.sim.time - e.start;
+    this.afterEdge();
     this.refresh();
   }
 
+  /** One full clock cycle. */
+  private tick(flowMs = 0): void {
+    const clk = this.clockPort();
+    if (!clk || !this.sim) return;
+    this.checkpoint();
+    this.finishEdge(false);
+    this.stopAnim();
+    this.cycle(clk);
+    this.refreshFlowing(flowMs);
+  }
+
   /** Run n clock cycles as fast as possible, refreshing the view once at the end. */
-  runCycles(n: number, stop?: () => boolean): number {
+  runCycles(n: number, stop?: () => boolean, flowMs = 0): number {
     const clk = this.clockPort();
     if (!clk || !this.sim) return 0;
+    this.stopClock();
+    this.finishEdge(false);
     this.stopAnim();
     let i = 0;
     for (; i < n && !(stop && stop()); i++) this.cycle(clk);
     this.lastSettle = null;
-    this.refresh();
+    this.refreshFlowing(flowMs);
     return i;
   }
 
@@ -519,17 +739,94 @@ export class Stage {
     this.anim = null;
   }
 
-  private stopClock(): void {
-    if (this.runClock) clearInterval(this.runClock);
-    this.runClock = null;
+  /** Stop the stage's own Run (the CPU panel's slow mode takes over the clock). */
+  stopClock(): void {
+    if (this.runClock) {
+      clearInterval(this.runClock);
+      this.runClock = null;
+      // a run stopped while the clock is high: finish that cycle
+      this.finishEdge();
+    }
+    this.syncRunBtn();
+  }
+
+  /** The stage's own Run: a full clock cycle every RUN_MS (the automatic clock starts it on load). */
+  startClock(): void {
+    if (this.runClock || !this.clockPort() || !this.sim || this.widget) return;
+    this.runClock = setInterval(() => this.halfTick(), RUN_MS / 2);
+    this.syncRunBtn();
+  }
+
+  get clockRunning(): boolean {
+    return this.runClock !== null;
+  }
+
+  private syncRunBtn(): void {
+    const b = this.runBtn;
+    if (!b) return;
+    const on = !!this.runClock;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
+    b.replaceChildren(icon(on ? 'pause' : 'play', 14), on ? 'Pause' : 'Run');
   }
 
   /** Step one gate delay (works whether or not animation is on). */
   stepOnce(): void {
     if (!this.sim) return;
+    this.stopClock();
+    this.checkpoint();
     this.stopAnim();
     if (!this.sim.step()) this.lastSettle = this.sim.time - this.changeStart;
     this.refreshFlowing(Math.max(350, 950 / settings.speed));
+  }
+
+  private stateKey(): string {
+    const sim = this.sim!;
+    return `${sim.time}·${sim.evaluations}·${this.cycles}`;
+  }
+
+  /**
+   * Remember the state before a step, an edge or an input change, for back(). The stage's own
+   * controls take one before acting; a panel that drives several of them as one step (Run to
+   * halt, an instruction) takes one first, and the ones inside it then find nothing changed.
+   */
+  checkpoint(): void {
+    if (!this.sim) return;
+    const key = this.stateKey();
+    if (this.history[this.history.length - 1]?.key === key) return;
+    this.history.push({
+      sim: this.sim.saveState(), key, cycles: this.cycles, edge: this.edge && { ...this.edge }, edgePeriod: this.edgePeriod,
+      nextEdge: this.nextEdge, lateEvents: this.lateEvents, lateCount: this.lateCount, lastSettle: this.lastSettle,
+      changeStart: this.changeStart, panels: [...this.historyHooks].map((h) => [h, h.save()]),
+    });
+    if (this.history.length > HISTORY_MAX) this.history.shift();
+  }
+
+  get canBack(): boolean {
+    return this.history.length > 0;
+  }
+
+  /** Undo the last step, clock edge or input change (and whatever a panel saved with it). */
+  back(): boolean {
+    const c = this.history.pop();
+    const sim = this.sim;
+    if (!c || !sim) return false;
+    this.stopAnim();
+    this.stopClock();
+    sim.restoreState(c.sim);
+    this.cycles = c.cycles;
+    this.restartMeter();
+    this.edge = c.edge && { ...c.edge };
+    this.edgePeriod = c.edgePeriod;
+    this.nextEdge = c.nextEdge;
+    this.lateEvents = c.lateEvents;
+    this.lateCount = c.lateCount;
+    this.lastSettle = c.lastSettle;
+    this.changeStart = c.changeStart;
+    for (const [h, st] of c.panels) if (this.historyHooks.has(h)) h.restore(st);
+    this.analyzer.rewind(sim.time);
+    this.refresh();
+    return true;
   }
 
   /** Refresh after one gate delay: changed wires show the new value travelling as a front. */
@@ -542,35 +839,28 @@ export class Stage {
   private buildControls(): void {
     const c = this.controls;
     c.replaceChildren();
+    this.runBtn = null;
     const root = this.scene!.root;
     const ins = inPorts(root).filter((p) => !(this.scene!.hiddenInputs ?? []).includes(p.name));
     const clk = this.clockPort();
-    if (ins.length) c.append(h('span', { class: 'label' }, 'Inputs'));
+    if (ins.some((p) => p.name !== clk)) c.append(h('span', { class: 'label' }, 'Inputs'));
     for (const p of ins) {
       if (p.name === clk) continue;
       c.append(p.width === 1 ? this.bitToggle(p) : this.numInput(p));
     }
     const outs = outPorts(root);
     if (outs.length) {
-      // One group, so the label wraps together with its chips.
-      c.append(h('span', { class: 'ctl-group' }, h('span', { class: 'label', style: 'margin-left:6px' }, 'Outputs'),
+      // One sunken strip, so the label wraps together with its readouts.
+      c.append(h('span', { class: 'ctl-group out-strip' }, h('span', { class: 'label' }, 'Outputs'),
         outs.map((p) => (p.width === 1 ? this.bitLamp(p) : this.numOutput(p)))));
     }
     if (clk) {
       c.append(h('span', { class: 'label', style: 'margin-left:6px' }, 'Clock'));
       c.append(this.bitToggle(root.ports.find((q) => q.name === clk)!));
-      c.append(h('button', { class: 'btn sm', title: 'One full clock cycle', onclick: () => this.pulse() }, icon('clock', 14), 'Pulse'));
-      const run = h('button', { class: 'btn sm toggle', title: 'Run the clock' }, icon('play', 14), 'Run');
-      run.addEventListener('click', () => {
-        if (this.runClock) {
-          this.stopClock();
-          run.classList.remove('on');
-        } else {
-          this.runClock = setInterval(() => this.pulse(), 500);
-          run.classList.add('on');
-        }
-      });
-      c.append(run);
+      c.append(h('button', { class: 'btn sm', title: 'One full clock cycle (pauses a running clock)', onclick: () => this.pulse() }, icon('clock', 14), 'Pulse'));
+      this.runBtn = h('button', { class: 'btn sm toggle', title: `Run the clock (${1000 / RUN_MS} cycles per second) / pause it`, onclick: () => (this.runClock ? this.stopClock() : this.startClock()) }) as HTMLButtonElement;
+      this.syncRunBtn();
+      c.append(this.runBtn);
       if (this.sim?.runUntil) {
         const per = h('input', { type: 'text', inputmode: 'numeric', placeholder: 'settle', 'aria-label': 'Clock period in gate delays', value: this.period ?? '' }) as HTMLInputElement;
         per.addEventListener('change', () => {
@@ -581,6 +871,9 @@ export class Stage {
         c.append(h('label', { class: 'period', title: 'Clock period in gate delays. Empty: each edge waits until the logic has settled. A number: edges come on time, settled or not.' }, 'period', per));
       }
     }
+    this.backBtn = h('button', { class: 'btn sm ghost', title: 'Step back: undo the last step, clock cycle or input change', onclick: () => this.back() },
+      icon('stepBack', 14), 'Back') as HTMLButtonElement;
+    c.append(this.backBtn);
     if (this.sim?.kind === 'gate') {
       c.append(h('button', { class: 'btn sm ghost', title: 'Advance one gate delay', onclick: () => this.stepOnce() }, icon('step', 14), 'Step'));
     }
@@ -592,20 +885,23 @@ export class Stage {
     if (!this.sim || !this.scene) return;
     this.stopAnim();
     this.stopClock();
+    this.edge = null;
     this.cycles = 0;
     this.sim.reset(this.scene.powerOn ?? 'zero');
+    this.restartMeter();
     this.sim.settle();
     this.lastSettle = null;
     this.nextEdge = this.sim.time;
     this.lateEvents = 0;
     this.analyzer.attach(this.sim);
+    this.history = [];
     this.refresh();
   }
 
   private bitToggle(p: PortDef): HTMLElement {
-    const el = h('button', { class: 'in-toggle', 'data-port': p.name, title: `Toggle ${p.name}`, onclick: () => this.toggleInput(p.name) },
-      h('span', { class: 'knob' }), p.name);
-    return el;
+    // A switch: the knob slides along its track (1 to the right).
+    return h('button', { class: 'in-toggle', role: 'switch', 'aria-checked': 'false', 'data-port': p.name, title: `Toggle ${p.name} (input)`, onclick: () => this.toggleInput(p.name) },
+      DIR(), h('span', { class: 'track' }, h('span', { class: 'knob' })), p.name);
   }
 
   private numInput(p: PortDef): HTMLElement {
@@ -616,14 +912,14 @@ export class Stage {
       if (!Number.isNaN(n)) this.setInput(p.name, ((n % (mask(p.width) + 1)) + mask(p.width) + 1) % (mask(p.width) + 1));
     });
     const bump = (d: number) => this.setInput(p.name, (this.getInput(p.name) + d + mask(p.width) + 1) % (mask(p.width) + 1));
-    return h('span', { class: 'in-num' }, p.name,
+    return h('span', { class: 'in-num', title: `${p.name} (input)` }, DIR(), p.name,
       h('button', { title: '−1', onclick: () => bump(-1) }, '−'), inp, h('button', { title: '+1', onclick: () => bump(1) }, '+'),
       h('button', { title: 'Edit bits', onclick: (e: Event) => this.editInput(p.name, (e.currentTarget as HTMLElement).getBoundingClientRect()) }, '⋯'));
   }
 
-  /** A 1-bit output: a lamp, like an input toggle but not clickable. */
+  /** A 1-bit output: a lamp (inputs are switches: what you set and what you read look different). */
   private bitLamp(p: PortDef): HTMLElement {
-    return h('span', { class: 'out-lamp', 'data-out': p.name, title: `${p.name} (output)` }, h('span', { class: 'knob' }), p.name);
+    return h('span', { class: 'out-lamp', 'data-out': p.name, title: `${p.name} (output)` }, h('span', { class: 'knob' }), p.name, DIR());
   }
 
   /** A bus output: its value; click to cycle hex → bin → dec → signed for this output. */
@@ -634,7 +930,7 @@ export class Stage {
       this.outRadix.set(p.name, order[(order.indexOf(this.outRadixOf(p)) + 1) % order.length]);
       this.updateControls();
     });
-    return h('span', { class: 'out-num', 'data-out': p.name }, p.name, val);
+    return h('span', { class: 'out-num', 'data-out': p.name, title: `${p.name} (output)` }, p.name, val, DIR());
   }
 
   private outRadixOf(p: PortDef): Radix {
@@ -647,19 +943,23 @@ export class Stage {
     for (const el of this.controls.querySelectorAll<HTMLElement>('[data-out]')) {
       const p = this.scene!.root.ports.find((q) => q.name === el.dataset.out)!;
       const bits = this.sim.getBits(root.ports[p.name]);
-      const x = bits.some((b) => b !== B0 && b !== B1);
+      // floating (every bit Z: a tri-state output let go) is not unknown
+      const z = bits.every((b) => b === BZ), x = !z && bits.some((b) => b !== B0 && b !== B1);
       el.classList.toggle('vx', x);
+      el.classList.toggle('vz', z);
       if (p.width === 1) el.classList.toggle('v1', bits[0] === B1);
       else el.querySelector('.v')!.textContent = formatBits(bits, this.outRadixOf(p));
     }
     for (const el of this.controls.querySelectorAll<HTMLElement>('.in-toggle')) {
       const v = this.getInput(el.dataset.port!);
       el.classList.toggle('v1', v === 1);
+      el.setAttribute('aria-checked', String(v === 1));
     }
     for (const el of this.controls.querySelectorAll<HTMLInputElement>('.in-num input')) {
       const p = this.scene!.root.ports.find((q) => q.name === el.dataset.port)!;
       if (document.activeElement !== el) el.value = formatNumber(this.getInput(p.name), p.width, settings.radix === 'bin' && p.width > 8 ? 'hex' : settings.radix);
     }
+    if (this.backBtn) this.backBtn.disabled = !this.history.length;
     const sim = this.sim;
     const busy = sim.busy();
     let msg: string;
@@ -712,10 +1012,32 @@ export class Stage {
         portBits: (p) => ctx.sim.getBits(child.ports[p]),
         canOpen: !this.leaf && (ctx.canOpen(sel!) || child.def.prim === 'nmos' || child.def.prim === 'pmos'),
         onOpen: () => this.open(sel!),
+        power: () => this.livePower(ctx, child),
       });
     } else {
-      this.inspector.show({ def: ctx.def, portBits: (p) => ctx.portBits(p), instance: ctx.path[ctx.path.length - 1] });
+      this.inspector.show({ def: ctx.def, portBits: (p) => ctx.portBits(p), instance: ctx.path[ctx.path.length - 1], power: () => this.livePower(ctx, ctx.node) });
     }
+  }
+
+  /** The scene's switching activity for a node of its own gate-level simulation (an opened NAND's or ROM's sub-simulation has none). */
+  private livePower(ctx: ViewCtx, node: HierNode): LivePower | null {
+    const sim = this.sim;
+    if (!(sim instanceof GateSim) || ctx.sim !== sim) return null;
+    if (!this.meter || this.meter.sim !== sim) {
+      this.meter = new PowerMeter(sim);
+      this.meterFrom = this.cycles;
+    }
+    if (this.meterPeriod === undefined) this.meterPeriod = this.clockPort() ? analyzeTiming(sim.design)?.period ?? null : null;
+    return {
+      meter: this.meter, node, cycles: this.cycles - this.meterFrom, ...(this.meterPeriod ? { period: this.meterPeriod } : {}),
+      restart: () => this.restartMeter(),
+    };
+  }
+
+  private restartMeter(): void {
+    if (!this.meter) return;
+    this.meter.reset();
+    this.meterFrom = this.cycles;
   }
 
   private renderCrumbs(): void {
@@ -738,7 +1060,22 @@ export class Stage {
       const last = i === chain.length - 1;
       c.append(h('button', { class: last ? 'cur' : '', onclick: () => (last ? null : this.goTo(item.path)) },
         item.label, item.kind ? h('span', { class: 'kind' }, item.kind) : null));
+      // The name may be cut with an ellipsis (app.css): the tooltip keeps it whole.
+      (c.lastChild as HTMLElement).title = item.kind ? `${item.label} (${item.kind})` : item.label;
     });
+    this.fitBar();
+  }
+
+  /** Drop the bar's button labels (icons and tooltips remain) when the hierarchy would otherwise
+   *  be cut or wrap; measured with the labels shown, so it comes back once there is room. */
+  private fitBar(): void {
+    const bar = this.bar;
+    bar.classList.remove('compact');
+    const items = [...this.crumbs.querySelectorAll('button')];
+    if (!items.length) return;
+    const cut = items.some((b) => b.scrollWidth > b.clientWidth + 1);
+    const wrapped = items[items.length - 1].offsetTop > items[0].offsetTop + 2;
+    if (cut || wrapped) bar.classList.add('compact');
   }
 
   /** Open `path` and highlight (and bring into view) the instance `name` inside it. */
@@ -753,10 +1090,37 @@ export class Stage {
     this.view.highlight(names, focus);
   }
 
+  /** Colour nets of the current view (index in its netlist → classes); cleared on navigation. */
+  markNets(marks: Map<number, string>): void {
+    this.view.markNets(marks);
+  }
+
   /** Reserve screen space on the right for a docked panel and refit. */
   setInset(px: number): void {
     this.view.insetRight = px;
     this.view.fit();
+    this.layoutDock();
+  }
+
+  /** Screen space the expanded right-docked panels need. Measured live: a scene's panels are built
+   *  before the stage is laid out, when they are 0 px wide. */
+  private rightInset(): number {
+    const docked = this.panels.filter((p) => p.el.dataset.dock === 'right' && !p.el.classList.contains('collapsed'));
+    return docked.length ? Math.max(...docked.map((p) => p.el.offsetWidth)) + 24 : 0;
+  }
+
+  /** Bottom-left panels sit beside the right dock: side by side when they fit, else stacked, each
+   *  shrinking and scrolling. Several scenes combine two of them (I/O or pipeline + static timing). */
+  /** Lay the bottom-left panels out again (a panel that changes size calls it). */
+  layoutDock(): void {
+    const panels = [...this.dock.children] as HTMLElement[];
+    if (!panels.length) return;
+    const inset = this.view.insetRight;
+    // Too narrow beside the right dock: overlap it rather than squeeze the panels to nothing.
+    this.dock.style.right = `${inset && this.canvas.clientWidth - inset - 12 >= 260 ? inset : 12}px`;
+    this.dock.classList.remove('row');
+    const need = panels.reduce((a, p) => a + p.offsetWidth, 0) + 8 * (panels.length - 1);
+    this.dock.classList.toggle('row', need <= this.dock.clientWidth);
   }
 
   /** Bits of a root port as 0/1 booleans (helper for challenges). */

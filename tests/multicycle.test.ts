@@ -56,12 +56,13 @@ function cosim(source: string, control: 'fsm' | 'micro', cycles = 4000) {
 }
 
 describe('multicycle CPU (gate level) vs golden model', () => {
+  // one test per program: each stays well below Vitest's 60 s worker-RPC window on slow runners
   for (const control of ['fsm', 'micro'] as const) {
-    it(`${control}: all sample programs`, () => {
-      for (const p of PROGRAMS) {
+    for (const p of PROGRAMS) {
+      it(`${control}: ${p.id}`, () => {
         const r = cosim(p.source, control);
         console.log(`${control} ${p.id}: ${r.steps} instructions in ${r.cycles} cycles, CPI ${(r.cycles / r.steps).toFixed(2)}, ${r.leaves} leaves`);
-      }
-    }, 600000);
+      }, 600000);
+    }
   }
 });

@@ -19,8 +19,17 @@
   --accent-text: #ffffff;
   --good: #0f9f6e;
   --good-soft: #e3f7ef;
+  /* chart series (benchmarks: single-cycle, multicycle, pipelined), checked for colour-blind separation */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
   --warn: #c2700c;
   --warn-soft: #fff4e0;
+  /* an uncaught error (ui/errors.ts banner) */
+  --bad: #d92d20;
+  --bad-soft: #fdecea;
   --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 4px 16px rgb(16 24 40 / 6%);
   --shadow-lg: 0 8px 40px rgb(16 24 40 / 14%);
 
@@ -31,9 +40,20 @@
   --sym-fill: #ffffff;
   --box-fill: #f4f4ff;
   --box-stroke: #4a5170;
+  /* user chips: hsl(var(--chip-h) …) with these saturations / lightnesses */
+  --chip-fill-s: 70%;
+  --chip-fill-l: 94%;
+  --chip-stroke-s: 45%;
+  --chip-stroke-l: 38%;
   --plumb: #6b7390;
   --hl: #5b4cf0;
   --sel: #5b4cf0;
+  /* instruction fields (strip and wires) */
+  --fld-op: #c026d3;
+  --fld-rd: #059669;
+  --fld-rs: #2563eb;
+  --fld-fn: #d97706;
+  --fld-imm: #dc2626;
 
   /* wire shape (palettes may override; see palettes.css) */
   --wire-w0: 0.16;
@@ -43,6 +63,10 @@
   --wire-dash-x: 0.5 0.3;
   --wire-glow: drop-shadow(0 0 0.25px var(--w1));
   --bus0-opacity: 0.55;
+  /* flowing bits (view/flow.ts): pale pellets on a wire's own colour, value tags in the bus colour, any palette */
+  --flow1: color-mix(in srgb, var(--w1) 22%, #fff);
+  --flow-token-text: light-dark(#ffffff, #0b1020);
+  --flow-token-edge: light-dark(rgb(255 255 255 / 70%), rgb(0 0 0 / 45%));
 
   --radius: 12px;
   --radius-sm: 8px;
@@ -66,8 +90,18 @@
     --accent-text: #0a0c12;
     --good: #34d399;
     --good-soft: #0f2a22;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+    --series-4: #c98500;
+    --series-5: #d55181;
     --warn: #f5a524;
     --warn-soft: #2d2210;
+    /* an uncaught error (ui/errors.ts banner) */
+    --bad: #f87171;
+    --bad-soft: #2e1416;
     --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 25%);
     --shadow-lg: 0 8px 40px rgb(0 0 0 / 50%);
 
@@ -77,13 +111,24 @@
     --sym-fill: #141824;
     --box-fill: #171b2a;
     --box-stroke: #8d95b3;
+    --chip-fill-s: 35%;
+    --chip-fill-l: 16%;
+    --chip-stroke-s: 55%;
+    --chip-stroke-l: 68%;
     --plumb: #8891ab;
     --hl: #a397ff;
     --sel: #a397ff;
+    --fld-op: #e879f9;
+    --fld-rd: #34d399;
+    --fld-rs: #60a5fa;
+    --fld-fn: #fbbf24;
+    --fld-imm: #f87171;
   }
 }
 
-:root[data-theme='dark'] {
+:root[data-theme='dark'],
+/* The vivid look's dark board (vivid.css): a schematic takes the dark tokens in either theme. */
+:root[data-look='vivid'][data-board='dark'] svg.schematic {
   color-scheme: dark;
   --bg: #0a0c12;
   --surface: #11141c;
@@ -99,8 +144,14 @@
   --accent-text: #0a0c12;
   --good: #34d399;
   --good-soft: #0f2a22;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
   --warn: #f5a524;
   --warn-soft: #2d2210;
+  /* an uncaught error (ui/errors.ts banner) */
+  --bad: #f87171;
+  --bad-soft: #2e1416;
   --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 25%);
   --shadow-lg: 0 8px 40px rgb(0 0 0 / 50%);
 
@@ -110,7 +161,16 @@
   --sym-fill: #141824;
   --box-fill: #171b2a;
   --box-stroke: #8d95b3;
+  --chip-fill-s: 35%;
+  --chip-fill-l: 16%;
+  --chip-stroke-s: 55%;
+  --chip-stroke-l: 68%;
   --plumb: #8891ab;
   --hl: #a397ff;
   --sel: #a397ff;
+  --fld-op: #e879f9;
+  --fld-rd: #34d399;
+  --fld-rs: #60a5fa;
+  --fld-fn: #fbbf24;
+  --fld-imm: #f87171;
 }

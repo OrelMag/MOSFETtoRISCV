@@ -10,7 +10,8 @@ const prog = assemble('addi t0, zero, 1\nadd t1, t0, t0\nlw t2, 0(zero)\nsw t2, 
 
 describe('instruction → hardware map', () => {
   it('every pipeline stage unit exists in the pipelined CPU', () => {
-    const have = names(pipelinedCpu(prog, {}));
+    // the M units exist only in the RV32IM variant
+    const have = new Set([...names(pipelinedCpu(prog, {})), ...names(pipelinedCpu(prog, { adder: 'ks', m: true }))]);
     for (const [stage, units] of Object.entries(STAGE_UNITS)) {
       const missing = units.filter((u) => !have.has(u) && !['btb', 'fsel', 'corr', 'mis', 'mspc', 'vF', 'bcmp', 'jtgt', 'clr0E'].includes(u));
       expect(missing, stage).toEqual([]);

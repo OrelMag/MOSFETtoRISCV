@@ -4,7 +4,7 @@
 // single simulation. That is what makes every box transparent at no extra cost.
 
 import {
-  type ComponentDef, type HierLeafKind, inPorts, netlistOf, outPorts, parseEnd,
+  type ComponentDef, type HierLeafKind, inPorts, isSwitchPrim, netlistOf, outPorts, parseEnd,
 } from './types';
 
 export interface HierNode {
@@ -30,7 +30,10 @@ export interface FlatLeaf {
   node: HierNode;
   inputs: number[][];
   outputs: number[][];
-  /** For switch-level primitives: the three terminals g, a, b (or the rail node). */
+  /**
+   * For switch-level primitives: the nets of its ports in port order (a transistor's g, a, b; a
+   * resistor's two ends; the node of a rail or a capacitor).
+   */
   terminals?: number[];
 }
 
@@ -39,7 +42,7 @@ export interface FlatDesign {
   netCount: number;
   leaves: FlatLeaf[];
   powerOn: Map<number, 0 | 1>;
-  /** Nets marked `cap` (switch level): they hold their charge when undriven. */
+  /** Nets marked `cap`, or with a capacitor on them (switch level): they hold their charge when undriven. */
   caps: Set<number>;
 }
 
@@ -76,15 +79,33 @@ class UnionFind {
 function leafKind(def: ComponentDef, mode: FlattenMode): HierLeafKind | null {
   if (mode === 'gate') {
     if (def.prim === 'nand') return 'nand';
-    if (def.prim === 'nmos' || def.prim === 'pmos' || def.prim === 'vdd' || def.prim === 'gnd') {
-      throw new Error(`${def.id}: transistors can only be simulated at switch level`);
-    }
+    if (isSwitchPrim(def)) throw new Error(`${def.id}: ${def.prim === 'res' || def.prim === 'cap' ? 'resistors and capacitors' : 'transistors'} can only be simulated at switch level`);
     return null;
   }
-  if (def.prim === 'nmos' || def.prim === 'pmos' || def.prim === 'vdd' || def.prim === 'gnd') {
-    return def.prim;
+  return isSwitchPrim(def) ? def.prim as HierLeafKind : null;
+}
+
+/**
+ * Raw bits of a power-on hint: a net or port of `node`, or a dotted path through its instances
+ * ('w3.ff0.ff.slave.sr.q'), so a component can seed storage deep inside its children (a RAM's
+ * initial contents). Undefined: no such net; null: the path ends inside a leaf of this
+ * simulation (an unexpanded child), where there is nothing to seed.
+ */
+export function hintBits(node: HierNode, name: string): number[] | null | undefined {
+  const path = name.split('.');
+  const net = path.pop()!;
+  let n = node;
+  for (const seg of path) {
+    if (!n.expanded) return null;
+    const c = n.children?.get(seg);
+    if (!c) return undefined;
+    n = c;
   }
-  return null;
+  if (n.expanded) {
+    const ni = netlistOf(n.def)!.nets.findIndex((q) => q.name === net);
+    if (ni >= 0) return n.nets![ni];
+  }
+  return n.ports[net] ?? (n.expanded || n === node ? undefined : null);
 }
 
 export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatDesign {
@@ -187,10 +208,9 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
 
     if (def.powerOn) {
       for (const [name, v] of Object.entries(def.powerOn)) {
-        const ni = netlist.nets.findIndex((n) => n.name === name);
-        const bits = ni >= 0 ? node.nets[ni] : node.ports[name];
-        if (!bits) throw new Error(`${def.id}: powerOn hint for unknown net '${name}'`);
-        for (const b of bits) hints.push([b, v]);
+        const bits = hintBits(node, name);
+        if (bits === undefined) throw new Error(`${def.id}: powerOn hint for unknown net '${name}'`);
+        if (bits) for (const b of bits) hints.push([b, v]);
       }
     }
   };
@@ -220,7 +240,10 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
   const powerOn = new Map<number, 0 | 1>();
   for (const [raw, v] of hints) powerOn.set(id(raw), v);
 
-  return { root, netCount: dense.size, leaves, powerOn, caps: new Set(capsRaw.map(id)) };
+  const caps = new Set(capsRaw.map(id));
+  // a capacitor part marks its node, exactly like a `cap` net
+  for (const l of leaves) if (l.kind === 'cap') caps.add(l.terminals![0]);
+  return { root, netCount: dense.size, leaves, powerOn, caps };
 }
 
 export function findNode(root: HierNode, path: readonly string[]): HierNode | null {

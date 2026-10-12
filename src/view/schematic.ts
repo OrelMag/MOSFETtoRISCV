@@ -1,15 +1,19 @@
 // The schematic: one component's internal netlist drawn as SVG, with live wire values.
 // Rendering builds the DOM once; update() only touches classes and labels.
 
-import { instPort, symbolGeom, type Vec } from '../sim/geometry';
+import { symbolGeom, type Vec } from '../sim/geometry';
 import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, netlistOf } from '../sim/types';
-import { formatBits, type Radix } from '../sim/values';
+import { describeBits, formatBits, type Radix } from '../sim/values';
 import { icon, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
+import { Camera, installPanZoom, type ViewBox } from './camera';
+import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
+import { FlowTokens, type Lane } from './flowtokens';
 import type { ViewCtx } from './context';
-import { hopPathData, routeNetlist, splitterBars, type PinGeom, type RoutedNet } from './route';
-import { drawSymbol, portLabel } from './symbols';
+import { hopPathData, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type RoutedNet, type TapLabel } from './route';
+import { netKey, setNetHue, spreadHues } from './nethue';
+import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
 
 export interface SchematicEvents {
   open(child: string): void;
@@ -29,11 +33,17 @@ interface WireEls {
   dots: SVGCircleElement[];
   /** Bit-range labels where this net leaves a splitter tap or enters a merger tap. */
   taps: SVGGElement[];
+  /** Colour per net: the hue its elements carry (nethue.ts). */
+  hue?: number;
   /** Value class on screen, the one a front in flight is drawing, and that front. */
   shown?: string;
   target?: string;
   flow?: Animation[];
   flowEls?: SVGPathElement[];
+  /** Flowing bits: pellets on a 1-bit wire (one overlay per path, made on first use), what they show; a bus's lanes for its riding value. */
+  ants?: SVGPathElement[];
+  antsKey?: string;
+  lanes?: Lane[];
   label?: SVGGElement;
   labelText?: SVGTextElement;
   labelBg?: SVGRectElement;
@@ -42,7 +52,7 @@ interface WireEls {
 interface PinEls {
   pin: PinGeom;
   g: SVGGElement;
-  name?: SVGTextElement;
+  name: SVGTextElement;
   value?: SVGTextElement;
   valueBg?: SVGRectElement;
   /** The wire inside that ends on this pin. */
@@ -53,13 +63,11 @@ export function bitClass(b: Bit | undefined): string {
   return b === B1 ? 'v1' : b === B0 ? 'v0' : b === BZ ? 'vz' : 'vx';
 }
 
-function busClass(bits: Bit[]): string {
+export function busClass(bits: Bit[]): string {
   if (bits.some((b) => b === BX)) return 'bus vx';
   if (bits.every((b) => b === BZ)) return 'bus vz';
   return bits.some((b) => b === B1) ? 'bus bus1' : 'bus bus0';
 }
-
-const textWidth = (t: string, size: number) => t.length * size * 0.62 + 0.8;
 
 export class SchematicView {
   readonly el: SVGSVGElement;
@@ -68,14 +76,19 @@ export class SchematicView {
   private pins: PinEls[] = [];
   private insts = new Map<string, SVGGElement>();
   private bbox = { x: 0, y: 0, w: 10, h: 10 };
-  private vb = { x: 0, y: 0, w: 10, h: 10 };
+  private cam: Camera;
   private radixOverride = new Map<number, Radix>();
   private interactive = false;
   private selected: string | null = null;
   private selectedNet = -1;
   /** Nets faded by a focus highlight. */
   private faded = new Set<number>();
+  /** Extra classes per net (instruction fields); marked nets never fade. */
+  private netMarks = new Map<number, string>();
+  private lastHl: { names: string[]; focus: boolean } = { names: [], focus: false };
   private probeG: SVGGElement | null = null;
+  private flowG: SVGGElement | null = null;
+  private tokens: FlowTokens | null = null;
   radix: Radix = 'hex';
   /** When > 0, value changes travel along the wires as fronts lasting this many ms. */
   flowMs = 0;
@@ -88,7 +101,21 @@ export class SchematicView {
     this.tooltip = document.createElement('div');
     this.tooltip.className = 'wire-tip';
     host.append(this.el, this.tooltip);
-    this.installPanZoom();
+    this.cam = new Camera(this.el, host);
+    installPanZoom(this.el, this.cam, {
+      canStart: (e) => !(e.target as Element).closest('.inst, .pin.clickable, .bus-label'),
+      onTap: (target) => {
+        const n = target.closest('[data-net]');
+        if (n) this.clickNet(Number(n.getAttribute('data-net')), target);
+        else {
+          this.select(null);
+          this.events.select(null);
+          this.selectNet(-1);
+        }
+      },
+      onHover: (e) => this.hoverTip(e),
+      onLeave: () => (this.tooltip.style.opacity = '0'),
+    });
   }
 
   /** Draw the inside of ctx. `interactive` makes the root input pins clickable. */
@@ -99,6 +126,7 @@ export class SchematicView {
     this.selected = null;
     this.selectedNet = -1;
     this.faded.clear();
+    this.netMarks = new Map();
     const nl = netlistOf(ctx.def);
     this.el.replaceChildren();
     this.wires = [];
@@ -107,7 +135,8 @@ export class SchematicView {
     if (!nl) return;
     const { nets, pins } = routeNetlist(ctx.def, nl);
     const pathData = hopPathData(nets, splitterBars(nl));
-    const tapsOf = splitterTaps(nl);
+    const tapsOf = new Map<number, TapLabel[]>();
+    for (const t of tapLabels(nl)) tapsOf.set(t.net, [...tapsOf.get(t.net) ?? [], t]);
 
     const defs = s('defs');
     defs.innerHTML = `<pattern id="grid" width="1" height="1" patternUnits="userSpaceOnUse">
@@ -115,12 +144,15 @@ export class SchematicView {
     this.el.append(defs);
     const gridRect = s('rect', { class: 'grid-bg', x: -500, y: -500, width: 1000, height: 1000, fill: 'url(#grid)' });
     const wiresG = s('g', { class: 'wires' });
+    this.flowG = s('g', { class: 'wire-flows' });
+    const tokG = s('g', { class: 'flow-tokens-layer' });
+    this.tokens = new FlowTokens(tokG);
     const hitG = s('g', { class: 'wire-hits' });
     const instG = s('g', { class: 'insts' });
     const pinG = s('g', { class: 'pins' });
     const labelG = s('g', { class: 'labels' });
     this.probeG = s('g', { class: 'probes' });
-    this.el.append(gridRect, wiresG, hitG, instG, pinG, labelG, this.probeG);
+    this.el.append(gridRect, wiresG, this.flowG, tokG, hitG, instG, pinG, labelG, this.probeG);
 
     // Bounding box of everything drawn.
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -129,19 +161,19 @@ export class SchematicView {
     };
 
     // Wires
-    for (const net of nets) {
+    const hues = spreadHues(nets.map((n) => ({ key: netKey(nl.nets[n.index]), polys: n.paths })));
+    for (const [ni, net] of nets.entries()) {
       const cls = net.width > 1 ? 'wire bus' : 'wire';
       const w: WireEls = { net, paths: [], dots: [], tags: [], taps: [] };
       const name = nl.nets[net.index].name ?? `n${net.index}`;
+      const hue = hues[ni];
+      w.hue = hue;
       for (const t of net.tags) {
-        const D: Record<string, [number, number]> = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
-        const d = D[t.dir];
-        const E: Vec = [t.pos[0] + d[0] * 1.4, t.pos[1] + d[1] * 1.4];
-        const tw = textWidth(name, 0.8) + 0.6, th = 1.35;
-        const rx = t.dir === 'right' ? E[0] : t.dir === 'left' ? E[0] - tw : E[0] - tw / 2;
-        const ry = t.dir === 'down' ? E[1] : t.dir === 'up' ? E[1] - th : E[1] - th / 2;
+        const { stub: sp, rect: { x: rx, y: ry, w: tw, h: th } } = tagGeom(t, name);
         const g = s('g', { class: 'net-tag', 'data-net': net.index });
-        const stub = s('path', { d: `M${t.pos[0]},${t.pos[1]} L${E[0]},${E[1]}`, class: cls });
+        setNetHue(g, hue);
+        // A hand-placed tag's stub is one of the net's paths (drawn below with the wires).
+        const stub = s('path', { d: sp.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join(' '), class: cls });
         g.append(stub, s('rect', { x: rx, y: ry, width: tw, height: th, rx: 0.35 }),
           s('text', { x: rx + tw / 2, y: ry + th / 2 + 0.3, 'text-anchor': 'middle' }, name));
         w.tags.push(g);
@@ -152,6 +184,7 @@ export class SchematicView {
       net.paths.forEach((p, pi) => {
         p.forEach(([x, y]) => grow(x, y));
         const path = s('path', { d: pathData[net.index][pi], class: cls, 'data-net': net.index });
+        setNetHue(path, hue);
         w.paths.push(path);
         wiresG.append(path);
       });
@@ -162,9 +195,8 @@ export class SchematicView {
       }
       for (const t of tapsOf.get(net.index) ?? []) {
         const g = s('g', { class: 'tap-label' });
-        const tw = textWidth(t.text, t.size) + 0.1, th = t.size * 1.3;
-        const x = t.right ? t.pos[0] + 0.12 : t.pos[0] - 0.12 - tw;
-        const y = t.pos[1] - th - 0.1;
+        setNetHue(g, hue);
+        const { x, y, w: tw, h: th } = t.rect;
         g.append(s('rect', { x, y, width: tw, height: th, rx: th / 2 }),
           s('text', { x: x + tw / 2, y: y + th * 0.76, 'text-anchor': 'middle', style: `font-size:${t.size}px` }, t.text));
         w.taps.push(g);
@@ -172,12 +204,14 @@ export class SchematicView {
       }
       for (const [x, y] of net.dots) {
         const c = s('circle', { cx: x, cy: y, r: net.width > 1 ? 0.32 : 0.24, class: 'dot' });
+        setNetHue(c, hue);
         w.dots.push(c);
         wiresG.append(c);
       }
       const touchesPin = nl.nets[net.index].ends.some((e) => !e.includes('.'));
       if (net.label && !touchesPin && nl.nets[net.index].showValue !== false) {
         const g = s('g', { class: 'bus-label', 'data-net': net.index });
+        setNetHue(g, hue);
         const bg = s('rect', { rx: 0.45, height: 1.3, y: net.label[1] - 0.65 - 0.9 });
         const t = s('text', { x: net.label[0], y: net.label[1] - 0.9 + 0.38, 'text-anchor': 'middle' });
         g.append(bg, t);
@@ -209,14 +243,8 @@ export class SchematicView {
       });
       g.append(s('rect', { class: 'hit', x: -0.4, y: -0.4, width: geo.w + 0.8, height: geo.h + 0.8, rx: 0.6 }));
       g.append(drawSymbol(inst.def, inst.flip));
-      if (inst.def.prim !== 'alias' && inst.def.prim !== 'vdd' && inst.def.prim !== 'gnd') {
-        const isBox = inst.def.symbol.kind === 'box';
-        const isFet = inst.def.symbol.kind === 'nmos' || inst.def.symbol.kind === 'pmos';
-        g.append(s('text', {
-          class: 'inst-name', x: isFet ? 3.4 : isBox ? 0.1 : geo.w / 2, y: isFet ? 1.45 : isBox ? -0.45 : -0.35,
-          'text-anchor': isFet || isBox ? 'start' : 'middle',
-        }, inst.label ?? inst.name));
-      }
+      const nameAt = instNameAt(inst.def);
+      if (nameAt) g.append(s('text', { class: 'inst-name', x: nameAt.x, y: nameAt.y, 'text-anchor': nameAt.anchor }, inst.label ?? inst.name));
       if (openable) {
         const badge = s('g', { class: 'open-badge', transform: `translate(${geo.w - 0.2},${-0.9})` });
         badge.append(s('circle', { r: 0.62, cx: 0.5, cy: 0.5 }));
@@ -245,34 +273,11 @@ export class SchematicView {
 
     // The component's own pins
     for (const pin of pins.values()) {
-      const [px, py] = pin.pos;
-      const back = pin.exit === 'right' ? -1 : pin.exit === 'left' ? 1 : 0;
-      const vert = pin.exit === 'down' ? -1 : pin.exit === 'up' ? 1 : 0;
-      const cx = px + back * 0.9, cy = py + vert * 0.9;
-      const isIn = pin.dir !== 'out';
-      const clickable = isIn && interactive;
-      const g = s('g', { class: `pin ${isIn ? 'pin-in' : 'pin-out'}${clickable ? ' clickable' : ''}`, 'data-pin': pin.name });
-      g.append(s('path', { d: `M${cx},${cy} L${px},${py}`, class: pin.width > 1 ? 'wire bus pin-stub' : 'wire pin-stub' }));
-      const els: PinEls = { pin, g };
-      if (pin.width === 1) {
-        g.append(s('circle', { cx, cy, r: 0.8, class: 'pin-knob' }));
-      } else {
-        const bg = s('rect', { class: 'pin-box', rx: 0.5, height: 1.6, y: cy - 0.8 });
-        const t = s('text', { class: 'pin-value', y: cy + 0.42, 'text-anchor': 'middle' });
-        g.append(bg, t);
-        els.value = t;
-        els.valueBg = bg;
-      }
-      // Name label, away from the circuit (beyond the value box for buses; placed in update()).
-      const ax = back !== 0 ? cx + back * 1.3 : cx;
-      const ay = vert !== 0 ? cy + vert * 1.6 + (vert > 0 ? 0.4 : 0) : cy + 0.42;
-      const anchor = back > 0 ? 'start' : back < 0 ? 'end' : 'middle';
-      const name = s('text', { class: 'pin-name', x: ax, y: ay, 'text-anchor': anchor }, portLabel(pin.name));
-      g.append(name);
-      els.name = name;
-      const extra = textWidth(pin.name, 1.1) + 3 + (pin.width > 1 ? textWidth('0x'.padEnd(2 + Math.ceil(pin.width / 4), '0'), 1.05) : 0);
-      grow(cx - 2 - (back < 0 ? extra : 0), cy - 2);
-      grow(cx + 2 + (back > 0 ? extra : 0), cy + 2);
+      const clickable = pin.dir !== 'out' && interactive;
+      const { g, name, value, valueBg, bounds: b } = drawPinGlyph(pin, clickable);
+      const els: PinEls = { pin, g, name, value, valueBg };
+      grow(b.x, b.y);
+      grow(b.x + b.w, b.y + b.h);
       if (clickable) {
         g.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -288,7 +293,7 @@ export class SchematicView {
     const m = 3;
     this.bbox = { x: x0 - m, y: y0 - m - 1, w: x1 - x0 + 2 * m, h: y1 - y0 + 2 * m + 1 };
     if (!keepView) this.fit();
-    else this.applyViewBox();
+    else this.cam.apply();
     this.drawProbes();
     this.update();
   }
@@ -306,13 +311,18 @@ export class SchematicView {
         if (flow && w.shown !== undefined && w.paths.length) this.flowWire(w, vcls);
         else this.paintWire(w, vcls);
       }
+      if (!w.flow) this.paintFlow(w, bits);
       if (w.labelText && w.labelBg && w.net.label) {
         const txt = formatBits(bits, this.radixOverride.get(w.net.index) ?? this.radix);
         w.labelText.textContent = txt;
         const tw = textWidth(txt, 0.95);
         w.labelBg.setAttribute('x', String(w.net.label[0] - tw / 2));
         w.labelBg.setAttribute('width', String(tw));
-        w.label!.setAttribute('class', `bus-label ${busClass(bits)}${this.marks(w.net.index)}`);
+        // Too wide for its segment (a 64-bit value on a short hop): it would cover the ports at
+        // either end. The value is still in the hover tooltip, and a narrower radix may fit.
+        w.label!.setAttribute('display', tw > w.net.labelRoom - 0.4 ? 'none' : 'inline');
+        // While its value rides the wire (flowing bits), the fixed label steps aside.
+        w.label!.setAttribute('class', `bus-label ${busClass(bits)}${flowText(bits, 'hex') ? ' riding' : ''}${this.marks(w.net.index)}`);
       }
     }
     this.updatePins();
@@ -341,16 +351,7 @@ export class SchematicView {
         p.g.setAttribute('class', `${base} ${bitClass(bits[0])}`);
       } else {
         p.g.setAttribute('class', `${base} ${busClass(bits)}`);
-        const txt = formatBits(bits, this.radix);
-        p.value!.textContent = txt;
-        const tw = Math.max(3, textWidth(txt, 1.05));
-        const back = p.pin.exit === 'right' ? -1 : p.pin.exit === 'left' ? 1 : 0;
-        const cx = p.pin.pos[0] + back * 0.9;
-        const bx = back < 0 ? cx - tw + 0.6 : back > 0 ? cx - 0.6 : cx - tw / 2;
-        p.valueBg!.setAttribute('x', String(bx));
-        p.valueBg!.setAttribute('width', String(tw));
-        p.value!.setAttribute('x', String(bx + tw / 2));
-        if (back !== 0) p.name?.setAttribute('x', String(back < 0 ? bx - 0.4 : bx + tw + 0.4));
+        placePinValue(p.pin, p, formatBits(bits, this.radix));
         const stub = p.g.querySelector('.pin-stub');
         stub?.setAttribute('class', `wire ${busClass(bits)} pin-stub`);
       }
@@ -377,8 +378,10 @@ export class SchematicView {
       if (!best) continue;
       const tw = textWidth(p.label, 0.78) + 0.7;
       const [x, y] = best;
-      const f = s('g', { class: `probe-flag p${p.color}`, transform: `translate(${x},${y})` });
-      f.append(s('circle', { r: 0.42, class: 'probe-tip' }),
+      // data-net: a click on the flag acts as a click on its wire (in probe mode: remove the probe).
+      const f = s('g', { class: `probe-flag p${p.color}`, transform: `translate(${x},${y})`, 'data-net': String(w.net.index) });
+      f.append(s('title', null, `${p.label}: click to remove the probe`),
+        s('circle', { r: 0.42, class: 'probe-tip' }),
         s('path', { d: 'M0,0 L0.9,-1.6', class: 'probe-pole' }),
         s('rect', { x: 0.9, y: -2.65, width: tw, height: 1.2, rx: 0.3 }),
         s('text', { x: 0.9 + tw / 2, y: -1.8, 'text-anchor': 'middle' }, p.label));
@@ -388,7 +391,17 @@ export class SchematicView {
 
   /** Selection / hover classes a net's elements keep across repaints. */
   private marks(idx: number): string {
-    return `${idx === this.selectedNet ? ' net-sel' : ''}${idx === this.hovered ? ' net-hover' : ''}${this.faded.has(idx) ? ' faded' : ''}`;
+    const mark = this.netMarks.get(idx);
+    return `${idx === this.selectedNet ? ' net-sel' : ''}${idx === this.hovered ? ' net-hover' : ''}${this.faded.has(idx) ? ' faded' : ''}${mark ? ` ${mark}` : ''}`;
+  }
+
+  /** Colour nets by role (net index → classes, e.g. `fld fld-rd`); replaces the previous marks. */
+  markNets(marks: Map<number, string>): void {
+    const same = marks.size === this.netMarks.size && [...marks].every(([k, v]) => this.netMarks.get(k) === v);
+    if (same) return;
+    this.netMarks = marks;
+    for (const w of this.wires) if (w.shown !== undefined && !w.flow) this.paintWire(w, w.shown);
+    this.highlight(this.lastHl.names, this.lastHl.focus);
   }
 
   /** Give every element of a wire the value class vcls (finishing any front in flight). */
@@ -405,8 +418,28 @@ export class SchematicView {
       t.setAttribute('class', `net-tag ${vcls}${m}`);
       t.firstElementChild!.setAttribute('class', cls);
     }
-    for (const d of w.dots) d.setAttribute('class', `dot ${vcls}`);
-    for (const t of w.taps) t.setAttribute('class', `tap-label ${vcls}`);
+    for (const d of w.dots) d.setAttribute('class', `dot ${vcls}${m}`);
+    for (const t of w.taps) t.setAttribute('class', `tap-label ${vcls}${m}`);
+  }
+
+  /** Bits flowing from the driver along every path of the net (null: none); a bus carries its value. */
+  private paintFlow(w: WireEls, bits: Bit[] | null): void {
+    if (w.net.width > 1) {
+      const text = bits && flowText(bits, this.radixOverride.get(w.net.index) ?? this.radix);
+      this.tokens?.set(w.net.index, text ? (w.lanes ??= laneTails(w.net.paths)) : null, text, w.hue);
+      return;
+    }
+    const f = bits && flowDash(bits);
+    const key = flowKey(f, 0, 0, false);
+    if (key === (w.antsKey ?? '')) return;
+    w.antsKey = key;
+    if (f && !w.ants) {
+      const cls = `wire-flow${this.faded.has(w.net.index) ? ' faded' : ''}`;
+      w.ants = w.paths.map((p) => s('path', { d: p.getAttribute('d')!, class: cls }));
+      for (const a of w.ants) setNetHue(a, w.hue);
+      this.flowG?.append(...w.ants);
+    }
+    for (const a of w.ants ?? []) applyFlow(a, f);
   }
 
   /**
@@ -417,6 +450,7 @@ export class SchematicView {
   private flowWire(w: WireEls, vcls: string): void {
     if (w.flow) this.paintWire(w, w.target!);
     w.target = vcls;
+    this.paintFlow(w, null);
     const cls = `wire ${vcls} flow-front`;
     const els: SVGPathElement[] = [];
     const anims: Animation[] = [];
@@ -440,6 +474,7 @@ export class SchematicView {
     anims[0].finished.then(() => {
       if (w.flow !== anims) return;
       this.paintWire(w, vcls);
+      this.paintFlow(w, this.ctx?.netBits(w.net.index) ?? null);
       this.updatePins();
     }, () => {});
   }
@@ -449,6 +484,7 @@ export class SchematicView {
    * not join two highlighted parts (or a highlighted part and a pin): the data path stands out.
    */
   highlight(names: string[], focus = false): void {
+    this.lastHl = { names, focus };
     const on = new Set(names);
     for (const [name, g] of this.insts) g.classList.toggle('hl', on.has(name));
     for (const p of this.pins) p.g.classList.toggle('hl', on.has(`pin:${p.pin.name}`));
@@ -459,12 +495,15 @@ export class SchematicView {
       if (focus && nl) {
         const ends = nl.nets[w.net.index].ends;
         const hit = ends.filter((e) => !e.includes('.') || on.has(e.slice(0, e.indexOf('.')))).length;
-        live = hit >= 2 && ends.some((e) => e.includes('.') && on.has(e.slice(0, e.indexOf('.'))));
+        live = this.netMarks.has(w.net.index) || (hit >= 2 && ends.some((e) => e.includes('.') && on.has(e.slice(0, e.indexOf('.')))));
       }
       if (live) this.faded.delete(w.net.index);
       else this.faded.add(w.net.index);
       for (const p of w.paths) p.classList.toggle('faded', !live);
+      for (const a of w.ants ?? []) a.classList.toggle('faded', !live);
+      this.tokens?.fade(w.net.index, !live);
       for (const t of w.tags) t.classList.toggle('faded', !live);
+      for (const t of w.taps) t.classList.toggle('faded', !live);
       w.label?.classList.toggle('faded', !live);
     }
   }
@@ -511,17 +550,14 @@ export class SchematicView {
     const usable = Math.max(200, r.width - this.insetRight);
     const h = span * (r.height / usable || 0.6);
     const w = span * (r.width / usable || 1);
-    this.vb = { x: Number(m[1]) - span / 2 + 6, y: Number(m[2]) - h / 2, w, h };
-    this.applyViewBox();
+    this.cam.vb = { x: Number(m[1]) - span / 2 + 6, y: Number(m[2]) - h / 2, w, h };
+    this.cam.fitted = false;
+    this.cam.apply();
   }
 
   /** Pan (without zooming) so that a point is centred, unless it is already well inside the view. */
   centerOn(p: Vec): void {
-    const v = this.vb;
-    const mx = v.w * 0.15, my = v.h * 0.15;
-    if (p[0] > v.x + mx && p[0] < v.x + v.w - mx && p[1] > v.y + my && p[1] < v.y + v.h - my) return;
-    this.vb = { ...v, x: p[0] - v.w / 2, y: p[1] - v.h / 2 };
-    this.applyViewBox();
+    this.cam.centerOn(p);
   }
 
   get selection(): string | null {
@@ -530,87 +566,22 @@ export class SchematicView {
 
   // ---- pan & zoom ---------------------------------------------------------------------
 
+  /** Everything drawn at this level, in grid units (what fit() frames, and what an image exports). */
+  contentBox(): ViewBox {
+    return { ...this.bbox };
+  }
+
   fit(): void {
-    const r = this.host.getBoundingClientRect();
-    const usable = Math.max(200, r.width - this.insetRight);
-    const aspect = usable > 0 && r.height > 0 ? usable / r.height : 16 / 10;
-    let { x, y, w, h } = this.bbox;
-    // Never zoom in so far that a tiny circuit looks cartoonish.
-    const minW = 34;
-    if (w < minW) { x -= (minW - w) / 2; w = minW; }
-    if (w / h > aspect) {
-      const nh = w / aspect; y -= (nh - h) / 2; h = nh;
-    } else {
-      const nw = h * aspect; x -= (nw - w) / 2; w = nw;
-    }
-    // Extend the view to the right so the circuit sits in the uncovered part.
-    if (this.insetRight > 0 && r.width > 0) w = w * (r.width / usable);
-    this.vb = { x, y, w, h };
-    this.applyViewBox();
+    this.cam.fit(this.bbox, this.insetRight);
+  }
+
+  /** The canvas changed size: refit only a view the learner has not zoomed or panned. */
+  resized(): void {
+    if (!this.cam.resized()) this.fit();
   }
 
   zoom(factor: number, cx?: number, cy?: number): void {
-    const v = this.vb;
-    const px = cx ?? v.x + v.w / 2, py = cy ?? v.y + v.h / 2;
-    const nw = Math.min(Math.max(v.w * factor, 8), 4000);
-    const k = nw / v.w;
-    this.vb = { x: px - (px - v.x) * k, y: py - (py - v.y) * k, w: v.w * k, h: v.h * k };
-    this.applyViewBox();
-  }
-
-  private applyViewBox(): void {
-    const { x, y, w, h } = this.vb;
-    this.el.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
-  }
-
-  private toWorld(clientX: number, clientY: number): Vec {
-    const m = this.el.getScreenCTM();
-    if (!m) return [0, 0];
-    const p = new DOMPoint(clientX, clientY).matrixTransform(m.inverse());
-    return [p.x, p.y];
-  }
-
-  private installPanZoom(): void {
-    let drag: { x: number; y: number; vx: number; vy: number; moved: boolean; target: Element } | null = null;
-    this.el.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      const [wx, wy] = this.toWorld(e.clientX, e.clientY);
-      this.zoom(Math.exp(e.deltaY * 0.0015), wx, wy);
-    }, { passive: false });
-    this.el.addEventListener('pointerdown', (e) => {
-      if ((e.target as Element).closest('.inst, .pin.clickable, .bus-label')) return;
-      drag = { x: e.clientX, y: e.clientY, vx: this.vb.x, vy: this.vb.y, moved: false, target: e.target as Element };
-      this.el.setPointerCapture(e.pointerId);
-    });
-    this.el.addEventListener('pointermove', (e) => {
-      if (drag) {
-        const r = this.el.getBoundingClientRect();
-        const k = Math.max(this.vb.w / r.width, this.vb.h / r.height);
-        const dx = (e.clientX - drag.x) * k, dy = (e.clientY - drag.y) * k;
-        if (Math.abs(dx) + Math.abs(dy) > 0.2) drag.moved = true;
-        this.vb.x = drag.vx - dx;
-        this.vb.y = drag.vy - dy;
-        this.applyViewBox();
-        return;
-      }
-      this.hoverTip(e);
-    });
-    const end = (e: PointerEvent) => {
-      if (drag && !drag.moved) {
-        const n = drag.target.closest('[data-net]');
-        if (n) this.clickNet(Number(n.getAttribute('data-net')), drag.target);
-        else {
-          this.select(null);
-          this.events.select(null);
-          this.selectNet(-1);
-        }
-      }
-      drag = null;
-      if (this.el.hasPointerCapture(e.pointerId)) this.el.releasePointerCapture(e.pointerId);
-    };
-    this.el.addEventListener('pointerup', end);
-    this.el.addEventListener('pointercancel', end);
-    this.el.addEventListener('pointerleave', () => (this.tooltip.style.opacity = '0'));
+    this.cam.zoom(factor, cx, cy);
   }
 
   private hovered = -1;
@@ -634,40 +605,11 @@ export class SchematicView {
     const net = nl.nets[idx];
     const bits = this.ctx.netBits(idx);
     const name = net.name ?? net.ends[0];
-    const val = bits.length === 1
-      ? formatBits(bits, 'bin')
-      : `${formatBits(bits, 'hex')} · ${formatBits(bits, 'bin')} · ${formatBits(bits, 'dec')}`;
+    const val = describeBits(bits);
     this.tooltip.textContent = `${name}${bits.length > 1 ? `[${bits.length - 1}:0]` : ''} = ${val}`;
     const r = this.host.getBoundingClientRect();
     this.tooltip.style.left = `${e.clientX - r.left + 14}px`;
     this.tooltip.style.top = `${e.clientY - r.top + 14}px`;
     this.tooltip.style.opacity = '1';
   }
-}
-
-interface TapLabel { pos: Vec; right: boolean; text: string; size: number }
-
-/** Bit ranges carried by each splitter output / merger input, keyed by the net on the tap. */
-function splitterTaps(nl: NonNullable<ReturnType<typeof netlistOf>>): Map<number, TapLabel[]> {
-  const netOf = new Map<string, number>();
-  nl.nets.forEach((n, i) => n.ends.forEach((e) => netOf.set(e, i)));
-  const out = new Map<number, TapLabel[]>();
-  for (const inst of nl.instances) {
-    const k = inst.def.symbol.kind;
-    if (k !== 'split' && k !== 'merge') continue;
-    const size = Math.min(0.72, (inst.def.symbol.pitch ?? 2) * 0.4);
-    let bit = 0;
-    for (const p of inst.def.ports) {
-      if ((k === 'split') !== (p.dir === 'out')) continue;
-      const text = p.width === 1 ? `${bit}` : `${bit + p.width - 1}:${bit}`;
-      bit += p.width;
-      const net = netOf.get(`${inst.name}.${p.name}`);
-      if (net === undefined) continue;
-      const g = instPort(inst.def, inst.at ?? [0, 0], inst.flip, p.name);
-      const list = out.get(net) ?? [];
-      list.push({ pos: g.pos, right: g.exit === 'right', text, size });
-      out.set(net, list);
-    }
-  }
-  return out;
 }

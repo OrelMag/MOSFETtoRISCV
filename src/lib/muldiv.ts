@@ -6,7 +6,7 @@ import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { mask } from '../sim/values';
 import { constWord, isZero } from './alu';
-import { FULL_ADDER, HALF_ADDER, addSub, andN, busMux2, incrementer, rca } from './combinational';
+import { FULL_ADDER, HALF_ADDER, LIB_MUX2, addSub, andN, busMux2, incrementer, rca, type Mux2Kind } from './combinational';
 import { define, merger, ones, splitter } from './define';
 import { addSubFast, fanout, koggeStone } from './fastadd';
 import { AND, MUX2, NOT, OR, XOR } from './gates';
@@ -91,6 +91,7 @@ export function arrayMul(n: number): ComponentDef {
     const instances: InstanceDef[] = [];
     const nets: NetDef[] = [];
     const rowH = Math.max(pg.h, ag.h) + 6, dx = 6;
+    const gap = n >= 10 ? 13 : 11; // splitter → merger: room for the product-bit tag and the merger's tap label
     const aEnds = ['a'];
     instances.push({ name: 'sb', def: splitter(ones(n), rowH), at: [2, 2 + pg.ports.b.pos[1] - rowH / 2] });
     nets.push({ name: 'b', ends: ['b', 'sb.in'] });
@@ -104,8 +105,8 @@ export function arrayMul(n: number): ComponentDef {
       if (i === 0) {
         instances.push({ name: 'sp0', def: SPL, at: [x + pg.w + 3, y + pg.ports.pp.pos[1] - 2], label: undefined });
         nets.push({ name: 'pp0', ends: ['pp0.pp', 'sp0.in'] });
-        instances.push({ name: 'w0', def: MRG, at: [x + pg.w + 7, y + pg.ports.pp.pos[1] - 1] });
-        instances.push({ name: 'z0', def: TIE0, at: [x + pg.w + 4, y + pg.ports.pp.pos[1] + 2] });
+        instances.push({ name: 'w0', def: MRG, at: [x + pg.w + gap, y + pg.ports.pp.pos[1] - 1] });
+        instances.push({ name: 'z0', def: TIE0, at: [x + pg.w + gap - 3, y + pg.ports.pp.pos[1] + 2] });
         nets.push({ name: 'u0', ends: ['sp0.o1', 'w0.i0'] }, { ends: ['z0.y', 'w0.i1'] });
         prodBits.push('sp0.o0');
         prev = 'w0.out';
@@ -120,7 +121,7 @@ export function arrayMul(n: number): ComponentDef {
         { ends: [`gc${i}.y`, `add${i}.cin`] },
       );
       instances.push({ name: `sp${i}`, def: SPL, at: [ax + ag.w + 3, y + ag.ports.s.pos[1] - 2] });
-      instances.push({ name: `w${i}`, def: MRG, at: [ax + ag.w + 7, y + ag.ports.s.pos[1] - 1] });
+      instances.push({ name: `w${i}`, def: MRG, at: [ax + ag.w + gap, y + ag.ports.s.pos[1] - 1] });
       nets.push(
         { name: `S${i}`, ends: [`add${i}.s`, `sp${i}.in`] },
         { name: `u${i}`, ends: [`sp${i}.o1`, `w${i}.i0`] },
@@ -130,7 +131,7 @@ export function arrayMul(n: number): ComponentDef {
       prev = `w${i}.out`;
     }
     nets.push({ name: 'a', ends: aEnds, trunk: 7 });
-    const right = 10 + dx * (n - 1) + pg.w + 6 + ag.w + 16;
+    const right = 10 + dx * (n - 1) + pg.w + 6 + ag.w + gap + 9;
     const PM = merger([...ones(n), n]);
     instances.push({ name: 'mp', def: PM, at: [right, 2] });
     prodBits.forEach((d, i) => nets.push({ name: `p${i}`, ends: [d, `mp.i${i}`], tags: true }));
@@ -243,14 +244,16 @@ export function compressor(x: Word, y: Word, z: Word, maxW = Infinity): { def: C
       ports: [bus('x', x.w, 'in'), bus('y', y.w, 'in'), bus('z', z.w, 'in'), bus('s', s.w, 'out'), ...(c ? [bus('c', c.w, 'out')] : [])],
       symbol: { kind: 'box', label: '3:2' },
       spec,
-      netlist: () => ({
-        pins: {
-          x: [0, Y0 + 2], y: [0, Y0 + 4], z: [0, Y0 + 6],
-          s: [carAt + 6, Y0 + fg.ports.s.pos[1] + (P * s.w) / 2 - P / 2],
-          ...(c ? { c: [carAt + 6, Y0 + P * (c.lo - 1 - L) + fg.ports.cout.pos[1] + (P * c.w) / 2 - P / 2 + 2] as [number, number] } : {}),
-        },
-        instances, nets,
-      }),
+      netlist: () => {
+        const sy = Y0 + fg.ports.s.pos[1] + (P * s.w) / 2 - P / 2;
+        const pins: Record<string, [number, number]> = { x: [0, Y0 + 2], y: [0, Y0 + 4], z: [0, Y0 + 6], s: [carAt + 6, sy] };
+        if (c) {
+          // The c pin sits a step below mc's output, unless s is already there.
+          const cOut = Y0 + P * (c.lo - 1 - L) + fg.ports.cout.pos[1] + (P * c.w) / 2 - P / 2;
+          pins.c = [carAt + 6, cOut + 2 === sy ? cOut : cOut + 2];
+        }
+        return { pins, instances, nets };
+      },
       hdl: {
         verilog: `// carry-save: every column independent
 assign s = x ^ y ^ z;
@@ -372,7 +375,7 @@ export function treeMul(n: number, signed = false, outW = 2 * n): ComponentDef {
     };
     const sa = pad(words[0], 0);
     const sbw = words[1] ? pad(words[1], 1) : null;
-    x += 10;
+    x += 18; // room for the 'sum' / 'carry' tags between the pads and the adder
     instances.push({ name: 'cpa', def: ADD, at: [x, yA], label: 'final adder' });
     instances.push({ name: 'gnd', def: TIE0, at: [x - 4, yA - 4] });
     nets.push({ name: 'sum', ends: [sa, 'cpa.a'], tags: true });
@@ -497,13 +500,13 @@ assign neg = b1 & ~(b0 & bm);               // 100, 101, 110: negative (111 is 0
  * subtract the divisor, and keep the difference only if it did not go negative. The quotient bit is
  * "it fitted".
  */
-export function divStep(n: number, fast = n >= 16): ComponentDef {
-  return memo(`divstep${n}${fast ? 'f' : ''}`, () => {
-    const SUB = fast ? addSubFast(n) : addSub(n), MX = busMux2(n);
+export function divStep(n: number, fast = n >= 16, mux: Mux2Kind = LIB_MUX2): ComponentDef {
+  return memo(`divstep${n}${fast ? 'f' : ''}${mux.tag}`, () => {
+    const SUB = fast ? addSubFast(n) : addSub(n), MX = mux.of(n);
     const sg = symbolGeom(SUB), mg = symbolGeom(MX);
     const xs = 24, xm = xs + sg.w + 12;
     return define({
-      id: `divstep${n}${fast ? 'f' : ''}`, name: `${n}-bit restoring division step`, category: 'arithmetic',
+      id: `divstep${n}${fast ? 'f' : ''}${mux.tag}`, name: `${n}-bit restoring division step${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: 'r2 = (r << 1) | next dividend bit; try r2 − d. If it does not borrow (or r2 overflowed n bits) the divisor fits: keep the difference and emit quotient bit 1. Otherwise restore r2 and emit 0.',
       ports: [bus('r', n, 'in'), bit('qin', 'in'), bus('d', n, 'in'), bus('rout', n, 'out'), bit('q', 'out')],
       symbol: { kind: 'box', label: 'DIV STEP' },
@@ -515,7 +518,7 @@ export function divStep(n: number, fast = n >= 16): ComponentDef {
         pins: { r: [0, 4], qin: [0, 10], d: [0, 4 + sg.ports.b.pos[1]], rout: [xm + mg.w + 8, 4 + mg.ports.y.pos[1]], q: [xm + mg.w + 8, 4 + mg.h + 8] },
         instances: [
           { name: 'sr', def: splitter([n - 1, 1]), at: [4, 3] },
-          { name: 'r2', def: merger([1, n - 1]), at: [10, 5] },
+          { name: 'r2', def: merger([1, n - 1]), at: [13, 5] },
           { name: 'one', def: TIE1, at: [xs - 6, 4 + sg.ports.sub.pos[1] - 1] },
           { name: 'sub', def: SUB, at: [xs, 4], label: 'r2 − d' },
           { name: 'ge', def: OR, at: [xs + sg.w + 4, 4 + mg.h + 6] },
@@ -599,10 +602,10 @@ end`,
  * Iterative unsigned divider: the same restoring step reused once per clock. start (while idle)
  * loads the operands; n steps later done = 1 for one cycle with q and r valid. n + 2 cycles in all.
  */
-export function seqDivider(n: number): ComponentDef {
-  return memo(`sdiv${n}`, () => {
+export function seqDivider(n: number, mux: Mux2Kind = LIB_MUX2): ComponentDef {
+  return memo(`sdiv${n}${mux.tag}`, () => {
     const k = Math.round(Math.log2(n)), cw = k + 1;
-    const REG = register(n), CNT = register(cw), ST = divStep(n), MX = busMux2(n), MC = busMux2(cw), INC = incrementer(cw);
+    const REG = register(n), CNT = register(cw), ST = divStep(n, n >= 16, mux), MX = mux.of(n), MC = mux.of(cw), INC = incrementer(cw);
     const rg = symbolGeom(REG), sg = symbolGeom(ST), mg = symbolGeom(MX);
     const x1 = 12, x2 = x1 + mg.w + 8, x3 = x2 + rg.w + 12, x4 = x3 + sg.w + 14;
     const yR = 4, yQ = yR + rg.h + 10, yD = yQ + rg.h + 10, yC = yD + rg.h + 10, yCtl = yC + symbolGeom(CNT).h + 10;
@@ -621,19 +624,19 @@ export function seqDivider(n: number): ComponentDef {
       { name: 'z', def: constWord(n, 0), at: [2, yR - 2] },
       { name: 'zc', def: constWord(cw, 0), at: [2, yC - 2] },
       { name: 'sc', def: splitter([k, 1]), at: [x2 + rg.w + 4, yC + 6] },
-      { name: 'run', def: DFF, at: [x3 + 10, yCtl], label: 'busy' },
+      { name: 'run', def: DFF, at: [x3 + 16, yCtl], label: 'busy' },
       { name: 'nbusy', def: NOT, at: [2, yCtl] },
       { name: 'load', def: AND, at: [6, yCtl + 4] },
       { name: 'en', def: OR, at: [x1 + 6, yCtl + 6] },
       { name: 'dn', def: AND, at: [x3, yCtl + 8] },
       { name: 'ndn', def: NOT, at: [x3, yCtl + 14] },
       { name: 'keep', def: AND, at: [x3 + 5, yCtl + 12] },
-      { name: 'nrun', def: OR, at: [x3 + 5, yCtl + 2] },
+      { name: 'nrun', def: OR, at: [x3 + 5, yCtl] },
     ];
     const nets: NetDef[] = [
       { name: 'start', ends: ['start', 'load.a'] },
       { name: '¬busy', ends: ['nbusy.y', 'load.b'], tags: true },
-      { name: 'load', ends: ['load.y', 'mr.s', 'mq.s', 'mcnt.s', 'rd.en', 'en.a', 'nrun.a'], tags: true },
+      { name: 'load', ends: ['load.y', 'mr.s', 'mq.s', 'mcnt.s', 'rd.en', 'en.a', 'nrun.a'], tags: ['mr.s', 'mq.s', 'mcnt.s', 'rd.en', 'nrun.a'] },
       { name: 'busy', ends: ['run.q', 'nbusy.a', 'en.b', 'dn.a', 'keep.a', 'busy'], tags: true },
       { name: 'step', ends: ['en.y', 'rr.en', 'rq.en', 'cnt.en'], tags: true },
       { name: 'zero', ends: ['z.y', 'mr.b'] },
@@ -655,14 +658,14 @@ export function seqDivider(n: number): ComponentDef {
       { name: 'cntD', ends: ['mcnt.y', 'cnt.d'] },
       { name: `count[${k}]`, ends: ['sc.o1', 'dn.b'], tags: true },
       { name: 'done', ends: ['dn.y', 'ndn.a', 'done'], tags: true },
-      { name: '¬done', ends: ['ndn.y', 'keep.b'], tags: true },
+      { name: '¬done', ends: ['ndn.y', 'keep.b'] },
       { name: 'stay', ends: ['keep.y', 'nrun.b'], tags: true },
-      { name: 'busyNext', ends: ['nrun.y', 'run.d'], tags: true },
+      { name: 'busyNext', ends: ['nrun.y', 'run.d'] },
       { name: 'clk', ends: ['clk', 'rr.clk', 'rq.clk', 'rd.clk', 'cnt.clk', 'run.clk'], tags: ['rr.clk', 'rq.clk', 'rd.clk', 'cnt.clk', 'run.clk'] },
     ];
     const right = x4 + 12;
     return define({
-      id: `sdiv${n}`, name: `${n}-bit iterative divider`, category: 'sequential',
+      id: `sdiv${n}${mux.tag}`, name: `${n}-bit iterative divider${mux.tag ? ' (RV16)' : ''}`, category: 'sequential',
       summary: `One restoring step reused every clock: start loads the dividend into the quotient register (its bits shift out the top into the remainder as quotient bits shift in at the bottom); after ${n} steps done rises for one cycle. ${n + 2} cycles per division, a fraction of the array divider's area.`,
       ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bus('a', n, 'in'), bus('b', n, 'in'), bus('q', n, 'out'), bus('r', n, 'out'), bit('done', 'out'), bit('busy', 'out')],
       symbol: { kind: 'box', label: `DIV${n} (iterative)` },
@@ -705,11 +708,12 @@ export function condNegate(n: number): ComponentDef {
       symbol: { kind: 'box', label: '±' },
       spec: ([x, neg]) => [neg ? (2 ** n - x) % 2 ** n : x],
       netlist: () => ({
-        pins: { x: [0, 4], neg: [0, xg.h + 8], y: [xk + kg.w + 8, 2 + kg.ports.s.pos[1]] },
+        pins: { x: [0, 3], neg: [0, xg.h + 8], y: [xk + kg.w + 8, 2 + kg.ports.s.pos[1]] },
         instances: [
           { name: 'f', def: F, at: [10, xg.h + 6] },
-          { name: 'x', def: X, at: [20, 2] },
-          { name: 'z', def: Z, at: [xk - 14, 2 + kg.ports.b.pos[1] - 1] },
+          // x's output on k.a's row, the zero word in the gap between them (not on x)
+          { name: 'x', def: X, at: [20, 2 + kg.ports.a.pos[1] - xg.ports.y.pos[1]] },
+          { name: 'z', def: Z, at: [xk - 8, 2 + kg.ports.b.pos[1] - 1] },
           { name: 'k', def: K, at: [xk, 2] },
         ],
         nets: [
@@ -753,20 +757,21 @@ export const MDU: ComponentDef = (() => {
     { name: 'out', def: M2, at: [xE, yM + 6], label: 'mul / div' },
     { name: 'bz', def: isZero(W), at: [xC, yG + 12], label: 'b = 0?' },
     // control
-    { name: 'msa', def: XOR, at: [xA - 6, yG] }, { name: 'n1', def: NOT, at: [xA - 6, yG + 6] }, { name: 'msb', def: AND, at: [xA, yG + 5] },
-    { name: 'mh', def: OR, at: [xA + 6, yG] },
+    { name: 'msa', def: XOR, at: [xA - 6, yG] }, { name: 'n1', def: NOT, at: [xA - 6, yG + 6] }, { name: 'msb', def: AND, at: [xA + 2, yG + 6] },
+    { name: 'mh', def: OR, at: [xA + 10, yG] },
     { name: 'dsg', def: NOT, at: [xA - 6, yG + 12] }, { name: 'na', def: AND, at: [xA, yG + 12] }, { name: 'nb', def: AND, at: [xA, yG + 18] },
-    { name: 'isDiv', def: AND, at: [xA + 8, yG + 24] }, { name: 'start', def: AND, at: [xA + 16, yG + 24] },
-    { name: 'sx', def: XOR, at: [xC, yG] }, { name: 'nbz', def: NOT, at: [xC + 6, yG + 14] }, { name: 'qneg', def: AND, at: [xC + 10, yG + 2] },
-    { name: 'oneg', def: MUX2, at: [xD, yG], label: 'negate?' },
-    { name: 'ndone', def: NOT, at: [xB + 6, yG + 24] }, { name: 'stall', def: andN(3), at: [xB + 12, yG + 24] },
+    // isDiv.y → start.a, b = 0 → nbz, sx → qneg → oneg and ndone → stall.i2 share rows: short straight wires
+    { name: 'isDiv', def: AND, at: [xA + 8, yG + 24] }, { name: 'start', def: AND, at: [xA + 20, yG + 25] },
+    { name: 'sx', def: XOR, at: [xC, yG] }, { name: 'nbz', def: NOT, at: [xC + 9, yG + 13] }, { name: 'qneg', def: AND, at: [xC + 10, yG + 1] },
+    { name: 'oneg', def: MUX2, at: [xD + 6, yG + 1], label: 'negate?' },
+    { name: 'ndone', def: NOT, at: [xB + 8, yG + 28] }, { name: 'stall', def: andN(3), at: [xB + 16, yG + 24] },
   ];
   const nets: NetDef[] = [
     { name: 'a', ends: ['a', 'mul.a', 'nga.x', 'sa.in'] },
     { name: 'b', ends: ['b', 'mul.b', 'ngb.x', 'sb.in', 'bz.a'], tags: ['bz.a'] },
     { name: 'funct3', ends: ['funct3', 'f3.in'] },
-    { name: 'f0', ends: ['f3.o0', 'msa.a', 'msb.b', 'mh.a', 'dsg.a'], tags: true },
-    { name: 'f1', ends: ['f3.o1', 'msa.b', 'n1.a', 'mh.b', 'qr.s', 'oneg.s'], tags: true },
+    { name: 'f0', ends: ['f3.o0', 'msa.a', 'msb.b', 'mh.a', 'dsg.a'], tags: ['msb.b', 'mh.a', 'dsg.a'] },
+    { name: 'f1', ends: ['f3.o1', 'msa.b', 'n1.a', 'mh.b', 'qr.s', 'oneg.s'], tags: ['n1.a', 'mh.b', 'qr.s', 'oneg.s'] },
     { name: 'f2', ends: ['f3.o2', 'isDiv.b', 'out.s'], tags: true },
     { name: '¬f1', ends: ['n1.y', 'msb.a'] },
     { name: 'signedA', ends: ['msa.y', 'mul.sa'], tags: true },
@@ -774,27 +779,27 @@ export const MDU: ComponentDef = (() => {
     { name: 'high', ends: ['mh.y', 'mhi.s'], tags: true },
     { name: 'lo', ends: ['mul.lo', 'mhi.a'] }, { name: 'hi', ends: ['mul.hi', 'mhi.b'] },
     { name: 'mulOut', ends: ['mhi.y', 'out.a'] },
-    { name: 'divSigned', ends: ['dsg.y', 'na.a', 'nb.a'], tags: true },
+    { name: 'divSigned', ends: ['dsg.y', 'na.a', 'nb.a'], tags: ['nb.a'] },
     { name: 'a31', ends: ['sa.o1', 'na.b'], tags: true }, { name: 'b31', ends: ['sb.o1', 'nb.b'], tags: true },
     { name: 'negA', ends: ['na.y', 'nga.neg', 'sx.a', 'oneg.b'], tags: true },
     { name: 'negB', ends: ['nb.y', 'ngb.neg', 'sx.b'], tags: true },
     { name: '|a|', ends: ['nga.y', 'div.a'] }, { name: '|b|', ends: ['ngb.y', 'div.b'] },
     { name: 'isM', ends: ['isM', 'isDiv.a'] },
-    { name: 'isDiv', ends: ['isDiv.y', 'start.a', 'stall.i0'], tags: true },
+    { name: 'isDiv', ends: ['isDiv.y', 'start.a', 'stall.i0'], tags: ['stall.i0'] },
     { name: 'noTrap', ends: ['noTrap', 'start.b', 'stall.i1'], tags: ['start.b', 'stall.i1'] },
     { name: 'start', ends: ['start.y', 'div.start'], tags: true },
     { name: 'clk', ends: ['clk', 'div.clk'] },
     { name: 'q', ends: ['div.q', 'qr.a'] }, { name: 'r', ends: ['div.r', 'qr.b'] },
-    { name: 'signs differ', ends: ['sx.y', 'qneg.a'], tags: true },
+    { name: 'signs differ', ends: ['sx.y', 'qneg.a'] },
     { name: 'b≠0', ends: ['nbz.y', 'qneg.b'], tags: true },
-    { name: 'b=0', ends: ['bz.z', 'nbz.a'], tags: true },
-    { name: 'negQ', ends: ['qneg.y', 'oneg.a'], tags: true },
+    { name: 'b=0', ends: ['bz.z', 'nbz.a'] },
+    { name: 'negQ', ends: ['qneg.y', 'oneg.a'] },
     { name: 'negOut', ends: ['oneg.y', 'ngo.neg'], tags: true },
     { name: 'qrSel', ends: ['qr.y', 'ngo.x'] },
     { name: 'divOut', ends: ['ngo.y', 'out.b'] },
     { name: 'y', ends: ['out.y', 'y'] },
     { name: 'done', ends: ['div.done', 'ndone.a'], tags: true },
-    { name: '¬done', ends: ['ndone.y', 'stall.i2'], tags: true },
+    { name: '¬done', ends: ['ndone.y', 'stall.i2'] },
     { name: 'stall', ends: ['stall.y', 'stall'], tags: true },
     { name: 'busy', ends: ['div.busy', 'busy'], tags: true },
   ];
@@ -805,7 +810,7 @@ export const MDU: ComponentDef = (() => {
       bus('y', W, 'out'), bit('stall', 'out'), bit('busy', 'out')],
     symbol: { kind: 'box', label: 'M UNIT' },
     netlist: () => ({
-      pins: { a: [0, yM + 2], b: [0, yM + 8], funct3: [0, yG + 2], isM: [0, yG + 26], noTrap: [0, yG + 30], clk: [0, yG + 34], y: [xF + 4, yM + 10], stall: [xF + 4, yG + 26], busy: [xF + 4, yG + 30] },
+      pins: { a: [0, yM + 2], b: [0, yM + 8], funct3: [0, yG + 2], isM: [0, yG + 25], noTrap: [0, yG + 30], clk: [0, yG + 34], y: [xF + 4, yM + 10], stall: [xF + 4, yG + 26], busy: [xF + 4, yG + 30] },
       instances, nets,
     }),
     hdl: {

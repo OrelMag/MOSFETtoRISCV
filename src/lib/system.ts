@@ -30,7 +30,11 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
   return d;
 }
 
-/** Place instances in columns (top to bottom), returning positioned InstanceDefs. */
+/**
+ * Place instances in columns (top to bottom), returning positioned InstanceDefs. A symbol with a
+ * bottom port (mux select, clock) gets 4 units below it, so the net label hanging from that port
+ * clears the next symbol and the name drawn above it.
+ */
 function columns(cols: [string, ComponentDef, string?][][], x0: number, y0: number, gapX = 10, gapY = 3): InstanceDef[] {
   const out: InstanceDef[] = [];
   let x = x0;
@@ -39,7 +43,7 @@ function columns(cols: [string, ComponentDef, string?][][], x0: number, y0: numb
     for (const [name, def, label] of col) {
       const g = symbolGeom(def);
       out.push({ name, def, at: [x, y], label });
-      y += g.h + gapY;
+      y += g.h + (Object.values(g.ports).some((p) => p.exit === 'down') ? Math.max(gapY, 4) : gapY);
       w = Math.max(w, g.w);
     }
     x += w + gapX;
@@ -117,7 +121,8 @@ export function sysDecode(m = false): ComponentDef {
   const merged = mergeByDriver(nets);
   const pins: Record<string, [number, number]> = { op: [0, 2], funct3: [0, 6], funct7: [0, 10], imm12: [0, 14], rs1: [0, 18], csrKnown: [0, 22] };
   const instances = columns(chunk(ins, 14), 12, 0, 12, 2);
-  const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 8;
+  // room for the last column's output labels and the output pins' labels side by side
+  const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 14;
   ['illegal', 'ecall', 'ebreak', 'mret', 'csrOp', 'csrWrite', ...(m ? ['isM'] : [])].forEach((n, i) => (pins[n] = [right, 2 + 4 * i]));
   return define({
     id: `sysdec${m ? '_m' : ''}`, name: 'System & illegal-instruction decoder', category: 'cpu',
@@ -161,6 +166,8 @@ function mergeByDriver(nets: NetDef[]): NetDef[] {
 const CSR_ORDER: [string, number][] = [
   ['mstatus', CSRS.mstatus], ['misa', CSRS.misa], ['mie', CSRS.mie], ['mtvec', CSRS.mtvec], ['mscratch', CSRS.mscratch], ['mepc', CSRS.mepc],
   ['mcause', CSRS.mcause], ['mtval', CSRS.mtval], ['mip', CSRS.mip], ['mcycle', CSRS.mcycle], ['cycle', CSRS.cycle], ['mhartid', CSRS.mhartid],
+  // mandatory read-only ids, all zero ("not implemented" / non-commercial)
+  ['mvendorid', CSRS.mvendorid], ['marchid', CSRS.marchid], ['mimpid', CSRS.mimpid],
 ];
 
 export function csrUnit(m = false): ComponentDef {
@@ -174,9 +181,9 @@ export function csrUnit(m = false): ComponentDef {
   ins.push(['known', orN(CSR_ORDER.length)]);
   CSR_ORDER.forEach(([n], i) => net(undefined, sel[n], `known.i${i}`));
   // one-hot → index for the read multiplexer
-  ins.push(['enc0', orN(6)], ['enc1', orN(6)], ['enc2', orN(5)], ['enc3', orN(4)], ['idx', merger([1, 1, 1, 1])]);
   const encIns: string[][] = [[], [], [], []];
   CSR_ORDER.forEach(([n], i) => { for (let b = 0; b < 4; b++) if (i & (1 << b)) encIns[b].push(sel[n]); });
+  ins.push(...encIns.map((l, b): [string, ComponentDef] => [`enc${b}`, orN(l.length)]), ['idx', merger([1, 1, 1, 1])]);
   encIns.forEach((list, b) => list.forEach((s, j) => net(undefined, s, `enc${b}.i${j}`)));
   for (let b = 0; b < 4; b++) net(`idx${b}`, `enc${b}.y`, `idx.i${b}`);
   // registers
@@ -298,8 +305,9 @@ export function csrUnit(m = false): ComponentDef {
   net('mtvec', 'vTvec.out', 'mtvecOut');
   net('mepc', 'vEpc.out', 'mepcOut');
   const merged = mergeByDriver(nets);
-  const instances = columns(chunk(ins, 12), 14, 0, 12, 2);
-  const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 8;
+  // 14 between columns: an output label pointing right and an input label pointing left share the gap
+  const instances = columns(chunk(ins, 12), 14, 0, 14, 2);
+  const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 11;
   const inNames = ['addr', 'funct3', 'rs1v', 'zimm5', 'csrWrite', 'trap', 'trapCause', 'trapPC', 'trapVal', 'mret', 'mtime', 'mtip', 'meip', 'clk'];
   const outNames = ['rdata', 'known', 'mtvecOut', 'mepcOut', 'irqTake', 'irqCause'];
   const pins: Record<string, [number, number]> = {};
@@ -324,34 +332,44 @@ export const CSR_UNIT = csrUnit();
 // ---- trap selection --------------------------------------------------------------------------------------------
 
 export const TRAP_UNIT: ComponentDef = (() => {
-  const ins: [string, ComponentDef, string?][] = [];
+  const instances: InstanceDef[] = [];
   const nets: NetDef[] = [];
   const net = (name: string | undefined, drv: string, ...s: string[]) => nets.push({ name, ends: [drv, ...s], tags: true });
   // priority chain, lowest first: storeMis (6, addr), loadMis (4, addr), fetchMis (0, target), ecall (11), ebreak (3), illegal (2), interrupt
   const chain: [string, number | null, string][] = [['storeMis', 6, 'addr'], ['loadMis', 4, 'addr'], ['fetchMis', 0, 'target'], ['ecall', 11, 'z'], ['ebreak', 3, 'z'], ['illegal', 2, 'z'], ['irq', null, 'z']];
-  ins.push(['z', constWord(32, 0)]);
+  // One column per stage: the cause mux on top, the value mux below, each stage a row lower so
+  // the chain wires (y of one stage → a of the next) run straight; the cause constant sits left.
+  const X = (i: number) => 20 + 14 * i, CY = (i: number) => 8 + i, VY = (i: number) => 22 + i;
+  const M2 = busMux2(32);
+  instances.push({ name: 'z', def: constWord(32, 0), at: [12, 2] });
   let c = 'z.y', v = 'z.y';
   chain.forEach(([src, cause, val], i) => {
-    ins.push([`c${i}`, busMux2(32)], [`v${i}`, busMux2(32)]);
-    net(undefined, c, `c${i}.a`);
-    net(undefined, v, `v${i}.a`);
+    instances.push({ name: `c${i}`, def: M2, at: [X(i), CY(i)] }, { name: `v${i}`, def: M2, at: [X(i), VY(i)] });
+    // the constant zero feeding stage 0 is labelled (it also feeds later value inputs); the chain is drawn
+    const t = i === 0 ? { tags: true as const } : {};
+    nets.push({ ends: [c, `c${i}.a`], ...t }, { ends: [v, `v${i}.a`], ...t });
     if (cause === null) net('irqCause', 'irqCause', `c${i}.b`);
-    else { ins.push([`k${i}`, constWord(32, cause)]); net(undefined, `k${i}.y`, `c${i}.b`); }
+    else {
+      instances.push({ name: `k${i}`, def: constWord(32, cause), at: [X(i) - 8, CY(i) + 4] });
+      nets.push({ ends: [`k${i}.y`, `c${i}.b`] });
+    }
     net(val === 'z' ? 'zero' : val, val === 'z' ? 'z.y' : val, `v${i}.b`);
     net(src, src, `c${i}.s`, `v${i}.s`, `any.i${i}`);
     c = `c${i}.y`;
     v = `v${i}.y`;
   });
-  ins.push(['any', orN(chain.length)]);
-  net('cause', c, 'cause');
-  net('tval', v, 'tval');
-  net('trap', 'any.y', 'trap');
+  const last = chain.length - 1;
+  instances.push({ name: 'any', def: orN(chain.length), at: [X(last), VY(last) + 12] });
+  nets.push({ name: 'cause', ends: [c, 'cause'] }, { name: 'tval', ends: [v, 'tval'] }, { name: 'trap', ends: ['any.y', 'trap'] });
   const merged = mergeByDriver(nets);
-  const instances = columns(chunk(ins, 8), 14, 0, 10, 2);
-  const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 8;
+  const right = X(last) + 12;
   const pins: Record<string, [number, number]> = {};
   ['irq', 'irqCause', 'illegal', 'ebreak', 'ecall', 'fetchMis', 'loadMis', 'storeMis', 'addr', 'target'].forEach((n, i) => (pins[n] = [0, 2 + 3 * i]));
-  ['trap', 'cause', 'tval'].forEach((n, i) => (pins[n] = [right, 2 + 4 * i]));
+  // outputs level with their drivers
+  const yOf = (inst: string, port: string) => instances.find((i) => i.name === inst)!.at![1] + symbolGeom(instances.find((i) => i.name === inst)!.def).ports[port].pos[1];
+  pins.cause = [right, yOf(`c${last}`, 'y')];
+  pins.tval = [right, yOf(`v${last}`, 'y')];
+  pins.trap = [right, yOf('any', 'y')];
   return define({
     id: 'trapunit', name: 'Trap unit', category: 'cpu',
     summary: 'Any interrupt or exception becomes a trap. A priority chain of multiplexers picks the cause (interrupts first, then illegal instruction, ebreak, ecall, misaligned fetch / load / store) and the value for mtval (the faulting address or target).',
@@ -397,13 +415,16 @@ export const IO_UNIT: ComponentDef = (() => {
   net(undefined, 'zLed.out', 'rsel.d1');
   net(undefined, 'zSw.out', 'rsel.d2');
   net(undefined, 'z32.y', 'rsel.d0', 'rsel.d3', 'rsel.d6', 'rsel.d7');
-  net('rdata', 'rsel.y', 'rdata');
+  nets.push({ name: 'rdata', ends: ['rsel.y', 'rdata'] });
   net('clk', 'clk', 'rLed.clk', 'rCmp.clk', 'mtime.clk');
   const merged = mergeByDriver(nets);
   const instances = columns(chunk(ins, 6), 14, 0, 12, 3);
   const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 8;
   const pins: Record<string, [number, number]> = { addr: [0, 2], wdata: [0, 6], we: [0, 10], switches: [0, 14], clk: [0, 18] };
-  ['rdata', 'consoleData', 'consoleValid', 'leds', 'mtimeOut', 'mtip'].forEach((n, i) => (pins[n] = [right, 2 + 4 * i]));
+  // rdata straight out of the read multiplexer; the other outputs below its select label
+  const rs = instances.find((i) => i.name === 'rsel')!, rg = symbolGeom(rs.def);
+  pins.rdata = [right, rs.at![1] + rg.ports.y.pos[1]];
+  ['consoleData', 'consoleValid', 'leds', 'mtimeOut', 'mtip'].forEach((n, i) => (pins[n] = [right, rs.at![1] + rg.h + 4 + 4 * i]));
   return define({
     id: 'iounit', name: 'I/O devices', category: 'cpu',
     summary: 'Memory-mapped devices: a console (store a byte to 0x8000_0000), LEDs (0x04), switches (0x08), a free-running cycle counter mtime (0x10) and its compare register mtimecmp (0x14). The timer interrupt is pending while mtime ≥ mtimecmp.',
@@ -425,7 +446,7 @@ function incrementerCounter32(): ComponentDef {
       symbol: { kind: 'box', label: 'COUNT' },
       netlist: () => ({
         pins: { clk: [0, 20], q: [40, 4] },
-        instances: [{ name: 'r', def: R, at: [8, 2] }, { name: 'inc', def: I, at: [8, 14], flip: true }, { name: 'en', def: TIE1, at: [2, 3] }],
+        instances: [{ name: 'r', def: R, at: [8, 2] }, { name: 'inc', def: I, at: [8, 14], flip: true }, { name: 'en', def: TIE1, at: [2, 5] }],
         nets: [
           { name: 'q', ends: ['r.q', 'q', 'inc.a'], tags: ['inc.a'] },
           { name: 'next', ends: ['inc.y', 'r.d'], tags: true },
@@ -443,17 +464,20 @@ export interface SystemCpuOptions {
   adder?: 'rca' | 'ks';
   /** Add the M extension: a multiply/divide unit (divides stall the CPU). */
   m?: boolean;
+  /** Instruction ROM of 2^imemK words (default 7), data memory of 2^dmemK (default 5). */
+  imemK?: number;
+  dmemK?: number;
 }
 
 export function systemCpu(program: number[], opts: SystemCpuOptions = {}): ComponentDef {
-  const IM = rom(program, 7);
-  const adder = opts.adder ?? 'ks';
-  return memo(`sys_${IM.id}_${adder}${opts.m ? '_m' : ''}`, () => buildSystem(IM, adder, !!opts.m));
+  const IM = rom(program, opts.imemK ?? 7);
+  const adder = opts.adder ?? 'ks', dmemK = opts.dmemK ?? 5;
+  return memo(`sys_${IM.id}_${adder}${opts.m ? '_m' : ''}_${dmemK}`, () => buildSystem(IM, adder, !!opts.m, dmemK));
 }
 
-function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): ComponentDef {
+function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean, dmemK: number): ComponentDef {
   const SYSD = sysDecode(m), CSRU = csrUnit(m);
-  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = bankedMemory(5);
+  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = bankedMemory(dmemK);
   const M2 = busMux2(32), M4 = muxTree(2, 32), M8 = muxTree(3, 32), ADD = adder === 'ks' ? koggeStone(32) : rca(32);
   const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4;
   const SI = splitter([7, 5, 3, 5, 5, 7]), IMM12 = splitter([20, 12]);
@@ -468,13 +492,13 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
   const alignY = (inst: string, def: ComponentDef, x: number, port: string, y: number) => place(inst, def, [x, y - g(def).ports[port].pos[1]]);
 
   const Y = 36;
-  alignY('pcmux', M4, 4, 'y', Y);
-  alignY('trapmux', M4, 12, 'd0', Y);
+  alignY('pcmux', M4, 0, 'y', Y);
+  alignY('trapmux', M4, 10, 'd0', Y);
   alignY('pc', PC, 22, 'd', P('trapmux', 'y')[1]);
   place('one', TIE1, [17, P('pc', 'en')[1] - 1]);
   alignY('imem', IM, 36, 'addr', P('pc', 'q')[1]);
   alignY('si', SI, 56, 'in', P('imem', 'data')[1]);
-  alignY('rf', RF, 70, 'wa', P('si', 'o1')[1]);
+  alignY('rf', RF, 74, 'wa', P('si', 'o1')[1]);
   alignY('imm', IMM_GEN, 70, 'instr', Y + 22);
   const rfR = at.get('rf')![0] + g(RF).w;
   alignY('srcA', M2, rfR + 8, 'a', P('rf', 'rd1')[1]);
@@ -485,11 +509,11 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
   alignY('dm', DM, aluR + 30, 'addr', P('alu', 'y')[1]);
   alignY('io', IO_UNIT, aluR + 30, 'addr', Y + 70);
   alignY('ldsel', M2, aluR + 30 + g(DM).w + 8, 'a', P('dm', 'rdata')[1]);
-  alignY('ld', LOAD_EXTRACT, P('ldsel', 'y')[0] + 6, 'rdata', P('ldsel', 'y')[1]);
+  alignY('ld', LOAD_EXTRACT, P('ldsel', 'y')[0] + 10, 'rdata', P('ldsel', 'y')[1]);
   alignY('res', M8, P('ld', 'value')[0] + 8, 'd1', P('ld', 'value')[1]);
   place('plus4', P4, [36, Y - 10]);
   alignY('target', ADD, rfR + 18, 'a', Y + 26);
-  place('gndT', TIE0, [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 3]);
+  place('gndT', TIE0, [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 5]);
   alignY('clr0', CLEAR_BIT0, aluR + 12, 'in', Y + 40);
   place('gndJ', TIE0, [P('clr0', 'zero')[0] - 6, P('clr0', 'zero')[1] + 1]);
   place('ctl', CONTROL, [26, 0]);
@@ -498,8 +522,9 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
   const yS = Y + 60;
   place('imm12', IMM12, [52, yS - 6]);
   place('sys', SYSD, [4, yS + 4]);
-  place('csr', CSRU, [4 + g(SYSD).w + 10, yS + 4]);
-  place('trap', TRAP_UNIT, [4 + g(SYSD).w + 10 + g(CSRU).w + 10, yS + 4]);
+  // 24 units between the blocks: both facing sides carry labels
+  place('csr', CSRU, [4 + g(SYSD).w + 24, yS + 4]);
+  place('trap', TRAP_UNIT, [4 + g(SYSD).w + 24 + g(CSRU).w + 24, yS + 4]);
   // glue logic
   const glue: [string, ComponentDef][] = [
     ['ntrap', NOT], ['rw', OR], ['rwq', AND], ['isIO', splitter([31, 1])], ['nio', NOT], ['memWq', andN(3)], ['ioWq', andN(3)],
@@ -507,12 +532,11 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
     ['ldMis', AND], ['stMis', AND], ['isLoad', AND], ['nres1', NOT], ['taken', OR], ['tgt1', splitter([1, 1, 30])], ['fMis', AND],
     ['psplit', splitter([1, 1])], ['rssplit', splitter([1, 1])], ['z32', constWord(32, 0)],
   ];
-  let gy = yS - 30;
-  for (const [n, d] of glue) {
-    place(n, d, [aluR - 10, gy]);
-    gy += g(d).h + 2;
-  }
-  void gy;
+  // glue gates on a grid right of the trap unit, clear of the datapath (later additions continue it)
+  const gridX0 = 4 + g(SYSD).w + 24 + g(CSRU).w + 24, gridY0 = yS + 4 + Math.max(g(CSRU).h, g(SYSD).h, g(IO_UNIT).h) + 14;
+  let gi = 0;
+  const gridAt = (): [number, number] => { const i = gi++; return [gridX0 + 24 * (i % 4), gridY0 + 14 * Math.floor(i / 4)]; };
+  for (const [n, d] of glue) place(n, d, gridAt());
 
   const labels: Record<string, string> = { pcmux: 'next PC', trapmux: 'trap / mret', pc: 'PC', srcA: 'SrcA', srcB: 'SrcB', res: 'result', target: 'PC + imm', ldsel: 'mem / I/O', sys: 'system decode', csr: 'CSRs', trap: 'trap unit', io: 'I/O' };
   const instances: InstanceDef[] = [...at.keys()].map((name) => ({ name, def: defs.get(name)!, at: at.get(name), label: labels[name] }));
@@ -619,7 +643,7 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
   ];
   // CSR writes happen only if the instruction does not trap
   nets.splice(nets.findIndex((n) => n.name === 'csrWriteRaw'), 1);
-  instances.push({ name: 'csrWq', def: AND, at: [aluR - 20, yS - 30] });
+  instances.push({ name: 'csrWq', def: AND, at: gridAt() });
   defs.set('csrWq', AND);
   nets.push({ name: 'csrWriteRaw', ends: ['sys.csrWrite', 'csrWq.a'], tags: true });
   nets.find((n) => n.name === 'NoTrap')!.ends.push('csrWq.b');
@@ -633,12 +657,12 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
     // ---- M extension: the multiply/divide unit, a result multiplexer, and the stall it causes
     const xM = P('res', 'y')[0] + 8, yM = yS + Math.max(g(CSRU).h, g(SYSD).h) + 16;
     const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => { instances.push({ name, def, at: xy, label }); defs.set(name, def); at.set(name, xy); };
-    add('md', MDU, [4 + g(SYSD).w + 10, yM], 'M unit');
+    add('md', MDU, [4 + g(SYSD).w + 24, yM], 'M unit');
     add('mres', M2, [xM, P('res', 'y')[1] - g(M2).ports.a.pos[1]], 'ALU / M');
-    add('nstall', NOT, [17, P('pc', 'en')[1] - 1]);
-    add('rwm', AND, [aluR - 20, yS - 24]);
-    add('nbusy', NOT, [aluR - 20, yS - 18]);
-    add('irqg', AND, [aluR - 20, yS - 14]);
+    add('nstall', NOT, gridAt());
+    add('rwm', AND, gridAt());
+    add('nbusy', NOT, gridAt());
+    add('irqg', AND, gridAt());
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
     const net = (name: string) => nets.find((n) => n.name === name)!;
     nets.splice(nets.indexOf(net('en')), 1);
@@ -656,7 +680,7 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
       { name: 'MResult', ends: ['md.y', 'mres.b'], tags: true },
       { name: 'WriteBack', ends: ['mres.y', 'rf.wd'], tags: true },
       { name: 'stall', ends: ['md.stall', 'nstall.a'], tags: true },
-      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwm.b', 'retire'], tags: ['rwm.b', 'retire'] },
+      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwm.b', 'retire'], tags: ['pc.en', 'rwm.b', 'retire'] },
       { name: 'RegWriteQ', ends: ['rwm.y', 'rf.we'], tags: true },
       { name: 'divBusy', ends: ['md.busy', 'nbusy.a'], tags: true },
       { name: '¬divBusy', ends: ['nbusy.y', 'irqg.b'], tags: true },
@@ -665,7 +689,7 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean): Compone
     pins.retire = [P('res', 'y')[0] + 20, yS + 6];
   }
   return {
-    id: `sys_${IM.id}${adder === 'ks' ? '' : '_rca'}${m ? '_m' : ''}`, name: `RV32I${m ? 'M' : ''} system (single-cycle, Zicsr, traps, I/O)`, category: 'cpu',
+    id: `sys_${IM.id}${adder === 'ks' ? '' : '_rca'}${m ? '_m' : ''}${dmemK === 5 ? '' : `_d${dmemK}`}`, name: `RV32I${m ? 'M' : ''} system (single-cycle, Zicsr, traps, I/O)`, category: 'cpu',
     summary: `The complete processor: every RV32I instruction including byte and halfword memory access, the Zicsr instructions, machine-mode exceptions and interrupts, and memory-mapped I/O (console, LEDs, switches, timer).${m ? ' Plus the M extension: one-cycle multiplies and 34-cycle divides that stall the processor (retire = 0 while they run).' : ''}`,
     ports: [bit('clk', 'in', 'left', true), bus('switches', 8, 'in'), bit('irq', 'in'), bus('pcOut', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out'), ...(m ? [bit('retire', 'out')] : [])],
     symbol: { kind: 'box', label: m ? 'RV32IM SYSTEM' : 'RV32I SYSTEM' },

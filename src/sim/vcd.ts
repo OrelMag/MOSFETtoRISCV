@@ -2,12 +2,15 @@
 // One time unit is one NAND delay; we declare it as 1 ns, which is roughly right for a
 // NAND2 with a fan-out of a few in an old process and keeps viewers' rulers sensible.
 
-/** A recorded signal: value v[i] holds from time t[i] (−1 = unknown / floating). */
+/**
+ * A recorded signal: value v[i] holds from time t[i] (−1 = unknown / floating). A BigInt value
+ * is exact at any width (signals past 53 bits).
+ */
 export interface TraceSignal {
   name: string;
   width: number;
   t: number[];
-  v: number[];
+  v: (number | bigint)[];
 }
 
 /** VCD identifier codes: printable ASCII from '!' to '~', base 94. */
@@ -20,8 +23,8 @@ function code(i: number): string {
   return s;
 }
 
-function valueText(v: number, width: number, id: string): string {
-  if (width === 1) return `${v < 0 ? 'x' : v & 1}${id}`;
+function valueText(v: number | bigint, width: number, id: string): string {
+  if (width === 1) return `${v < 0 ? 'x' : Number(v) & 1}${id}`;
   return `b${v < 0 ? 'x' : v.toString(2)} ${id}`;
 }
 
@@ -39,7 +42,7 @@ export function toVcd(signals: TraceSignal[], opts: { date?: string; scope?: str
   });
   out.push('$upscope $end', '$enddefinitions $end');
   // Merge all changes in time order (stable within one instant: signal order).
-  const ev: [number, number, number][] = [];
+  const ev: [number, number, number | bigint][] = [];
   signals.forEach((sg, i) => sg.t.forEach((t, k) => ev.push([t, i, sg.v[k]])));
   ev.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   // The first instant holds the initial values ($dumpvars), later ones the changes.

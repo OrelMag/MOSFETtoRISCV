@@ -7,7 +7,7 @@
 // memory-mapped I/O, CSRs, exceptions and interrupts (one step = one clock cycle; a cycle in
 // which an interrupt is taken executes no instruction).
 
-import { bitsToF32, f32ToBits } from '../sim/fpref';
+import { F32, fpAddX, fpClass, fpCmpX, fpDivX, fpFmaX, fpFromIntX, fpMinMaxX, fpMulX, fpSqrtX, fpToIntX, type FpResult } from '../sim/fpref';
 import { CSRS, decode, disasm, OPCODES } from './isa';
 
 export interface IssOptions {
@@ -17,6 +17,12 @@ export interface IssOptions {
   imemWords?: number;
   /** Model I/O, CSRs, traps and interrupts. */
   system?: boolean;
+  /**
+   * Memory-mapped I/O without the rest of the system (no CSRs, traps or timer): the console, LEDs
+   * and switches at IO.CONSOLE / LEDS / SWITCHES, decoded exactly; any other address with bit 31 set
+   * is a device the model does not know (a screen): stores to it are dropped, loads read 0.
+   */
+  mmio?: boolean;
   /** Implement the M extension (otherwise its encodings are illegal in system mode). */
   m?: boolean;
   /** Implement the F subset (otherwise illegal in system mode). */
@@ -27,6 +33,8 @@ export interface IssOptions {
 
 /** Cycles a div / divu / rem / remu occupies on the iterative divider (1 load + 32 steps + 1 write). */
 export const DIV_CYCLES = 34;
+/** Cycles fdiv.s and fsqrt.s occupy on the iterative units of the single-cycle FPU (1 load + 27 or 26 steps + 1 write). */
+export const FDIV_CYCLES = 29, FSQRT_CYCLES = 28;
 
 /** RV32M arithmetic, exactly as specified (including division by zero and overflow). */
 export function mExec(f3: number, a: number, b: number): number {
@@ -53,6 +61,8 @@ export interface StepInfo {
   rd: number;
   value?: number;
   store?: { addr: number; value: number };
+  /** Floating-point register written (RV32F). */
+  fwrite?: { rd: number; value: number };
   trap?: { cause: number; interrupt: boolean };
   halted: boolean;
 }
@@ -79,10 +89,15 @@ export class ISS {
   halted = false;
   steps = 0;
   readonly system: boolean;
+  /** I/O at 0x8000_0000 (system or mmio). */
+  readonly io: boolean;
   readonly m: boolean;
   readonly fext: boolean;
   /** Floating-point registers (raw float32 bits). */
   readonly f = new Uint32Array(32);
+  /** fcsr: accrued exception flags (NV DZ OF UF NX) and the dynamic rounding mode. */
+  fflags = 0;
+  frm = 0;
   private readonly imemWords: number;
 
   // machine-mode state
@@ -105,11 +120,21 @@ export class ISS {
   /** Instructions retired (excludes trap-entry cycles and trapping instructions). */
   retired = 0;
 
+  /** Every field, for stepping back (see restore). */
+  save(): ModelState {
+    return saveFields(this);
+  }
+
+  restore(s: ModelState): void {
+    restoreFields(this, s);
+  }
+
   constructor(program: number[], opts: IssOptions = {}) {
     this.imem = program.slice();
     this.dmem = new Uint32Array(opts.dmemWords ?? 32);
     this.imemWords = opts.imemWords ?? 64;
     this.system = !!opts.system;
+    this.io = this.system || !!opts.mmio;
     this.m = !!opts.m;
     this.fext = !!opts.f;
     this.hartid = opts.hartid ?? 0;
@@ -124,10 +149,20 @@ export class ISS {
   }
 
   private isIo(addr: number): boolean {
-    return this.system && addr >= 0x80000000;
+    return this.io && addr >= 0x80000000;
+  }
+
+  /** mmio without system: the device register at addr (0 console, 1 LEDs, 2 switches; -1 none). */
+  private mmioReg(addr: number): number {
+    const a = (addr & ~3) >>> 0;
+    return a === IO.CONSOLE ? 0 : a === IO.LEDS ? 1 : a === IO.SWITCHES ? 2 : -1;
   }
 
   private ioRead(addr: number): number {
+    if (!this.system) {
+      const r = this.mmioReg(addr);
+      return r === 1 ? this.leds : r === 2 ? this.switches : 0;
+    }
     switch ((addr >>> 2) & 7) {
       case 1: return this.leds;
       case 2: return this.switches;
@@ -162,7 +197,7 @@ export class ISS {
     if (this.isIo(addr)) {
       // The bus sees the lane-replicated store data, like the hardware's store-alignment unit.
       const wd = f3 === 0 ? ((v & 0xff) * 0x01010101) >>> 0 : f3 === 1 ? ((v & 0xffff) * 0x10001) >>> 0 : v >>> 0;
-      switch ((addr >>> 2) & 7) {
+      switch (this.system ? (addr >>> 2) & 7 : this.mmioReg(addr)) {
         case 0: this.console += String.fromCharCode(wd & 0xff); break;
         case 1: this.leds = wd & 0xff; break;
         case 5: this.mtimecmp = wd; break;
@@ -197,7 +232,10 @@ export class ISS {
       case CSRS.mtval: return this.mtval;
       case CSRS.mip: return this.mip;
       case CSRS.mcycle: case CSRS.cycle: return this.mtime;
-      case CSRS.mhartid: return 0;
+      case CSRS.mhartid: case CSRS.mvendorid: case CSRS.marchid: case CSRS.mimpid: return 0;
+      case CSRS.fflags: return this.fext ? this.fflags : null;
+      case CSRS.frm: return this.fext ? this.frm : null;
+      case CSRS.fcsr: return this.fext ? (this.frm << 5) | this.fflags : null;
       default: return null;
     }
   }
@@ -212,7 +250,10 @@ export class ISS {
       case CSRS.mepc: this.mepc = (v & ~3) >>> 0; break;
       case CSRS.mcause: this.mcause = v; break;
       case CSRS.mtval: this.mtval = v; break;
-      default: break; // read-only (misa, mip, mcycle, cycle, mhartid): writes ignored
+      case CSRS.fflags: this.fflags = v & 31; break;
+      case CSRS.frm: this.frm = v & 7; break;
+      case CSRS.fcsr: this.fflags = v & 31; this.frm = (v >>> 5) & 7; break;
+      default: break; // read-only (misa, mip, mcycle, cycle, mhartid, ids): writes ignored
     }
   }
 
@@ -262,22 +303,36 @@ export class ISS {
     if (this.system && (!d.spec || (isM && !this.m) || (isF && !this.fext))) trap = new Trap(CAUSE.ILLEGAL);
     else if (isF) {
       const fa = this.f[d.rs1], fb = this.f[d.rs2];
-      const A = bitsToF32(fa), B = bitsToF32(fb);
+      // rounding mode: the instruction's rm field, or frm when rm = 7 (dynamic)
+      const rm = d.funct3 === 7 ? this.frm : d.funct3;
+      const fr = (r: FpResult) => { this.fflags |= r.fl; return r.y >>> 0; };
       switch (d.name) {
         case 'flw': fWrite = this.load((a + d.imm) >>> 0, 2) >>> 0; break;
         case 'fsw': { const addr = (a + d.imm) >>> 0; this.store(addr, 2, fb); store = { addr, value: fb }; break; }
-        case 'fadd.s': fWrite = f32ToBits(Math.fround(A + B)); break;
-        case 'fsub.s': fWrite = f32ToBits(Math.fround(A - B)); break;
-        case 'fmul.s': fWrite = f32ToBits(Math.fround(A * B)); break;
+        case 'fadd.s': fWrite = fr(fpAddX(fa, fb, false, F32, rm)); break;
+        case 'fsub.s': fWrite = fr(fpAddX(fa, fb, true, F32, rm)); break;
+        case 'fmul.s': fWrite = fr(fpMulX(fa, fb, F32, rm)); break;
+        case 'fdiv.s': fWrite = fr(fpDivX(fa, fb, F32, rm)); break;
+        case 'fsqrt.s': fWrite = fr(fpSqrtX(fa, F32, rm)); break;
+        case 'fmadd.s': case 'fmsub.s': case 'fnmsub.s': case 'fnmadd.s': {
+          const neg = (d.opcode >> 2) & 3; // fmadd 0, fmsub 1, fnmsub 2, fnmadd 3: bit 0 negates c, bit 1 the product
+          fWrite = fr(fpFmaX(fa, fb, this.f[d.rs3], !!(neg & 2), !!(neg & 1), F32, rm));
+          break;
+        }
         case 'fsgnj.s': fWrite = ((fa & 0x7fffffff) | (fb & 0x80000000)) >>> 0; break;
         case 'fsgnjn.s': fWrite = ((fa & 0x7fffffff) | (~fb & 0x80000000)) >>> 0; break;
         case 'fsgnjx.s': fWrite = (fa ^ (fb & 0x80000000)) >>> 0; break;
-        case 'feq.s': write(A === B ? 1 : 0); break;
-        case 'flt.s': write(A < B ? 1 : 0); break;
-        case 'fle.s': write(A <= B ? 1 : 0); break;
+        case 'fmin.s': fWrite = fr(fpMinMaxX(fa, fb, false, F32)); break;
+        case 'fmax.s': fWrite = fr(fpMinMaxX(fa, fb, true, F32)); break;
+        case 'feq.s': write(fr(fpCmpX(fa, fb, 'eq', F32))); break;
+        case 'flt.s': write(fr(fpCmpX(fa, fb, 'lt', F32))); break;
+        case 'fle.s': write(fr(fpCmpX(fa, fb, 'le', F32))); break;
+        case 'fcvt.w.s': write(fr(fpToIntX(fa, true, F32, rm))); break;
+        case 'fcvt.wu.s': write(fr(fpToIntX(fa, false, F32, rm))); break;
         case 'fmv.x.w': write(fa); break;
-        case 'fcvt.s.w': fWrite = f32ToBits(Math.fround(a)); break;
-        case 'fcvt.s.wu': fWrite = f32ToBits(Math.fround(ua >>> 0)); break;
+        case 'fclass.s': write(fpClass(fa, F32)); break;
+        case 'fcvt.s.w': fWrite = fr(fpFromIntX(ua, true, F32, rm)); break;
+        case 'fcvt.s.wu': fWrite = fr(fpFromIntX(ua, false, F32, rm)); break;
         case 'fmv.w.x': fWrite = ua >>> 0; break;
         default: break;
       }
@@ -343,8 +398,20 @@ export class ISS {
       }
       case OPCODES.SYSTEM: {
         if (!this.system) {
-          // user-level programs on the multi-core: only csrr rd, mhartid
-          if (d.funct3 === 2 && ((word >>> 20) & 0xfff) === 0xf14 && d.rs1 === 0) write(this.hartid);
+          // user-level programs: csrr rd, mhartid (multi-core) and the F CSRs fflags, frm, fcsr
+          const csrA = (word >>> 20) & 0xfff;
+          if (d.funct3 === 2 && csrA === 0xf14 && d.rs1 === 0) write(this.hartid);
+          else if (d.funct3 & 3 && csrA >= 1 && csrA <= 3) {
+            const old = csrA === 1 ? this.fflags : csrA === 2 ? this.frm : (this.frm << 5) | this.fflags;
+            const src = d.funct3 & 4 ? d.rs1 : ua, op = d.funct3 & 3;
+            if (op === 1 || d.rs1 !== 0) {
+              const v = op === 1 ? src : op === 2 ? old | src : old & ~src;
+              if (csrA !== 2) this.fflags = v & 31;
+              if (csrA === 2) this.frm = v & 7;
+              if (csrA === 3) this.frm = (v >>> 5) & 7;
+            }
+            write(old);
+          }
           break;
         }
         if (d.name === 'ecall') trap = new Trap(CAUSE.ECALL);
@@ -380,7 +447,8 @@ export class ISS {
     if (this.system) this.mtime = (this.mtime + 1 + extraCycles) >>> 0;
     this.steps++;
     const t = trap as Trap | null;
-    return { pc, word, text: disasm(word, pc), rd, value, store, trap: t ? { cause: t.cause, interrupt: false } : undefined, halted: this.halted };
+    const fwrite = !t && fWrite !== undefined ? { rd: d.rd, value: fWrite >>> 0 } : undefined;
+    return { pc, word, text: disasm(word, pc), rd, value, store, fwrite, trap: t ? { cause: t.cause, interrupt: false } : undefined, halted: this.halted };
   }
 
   run(maxSteps = 10000): number {
@@ -390,5 +458,25 @@ export class ISS {
       n++;
     }
     return n;
+  }
+}
+
+/** A model's fields, arrays copied (ISS.save, MultiISS.save). */
+export type ModelState = Record<string, unknown>;
+
+export function saveFields(o: object): ModelState {
+  const s: ModelState = {};
+  for (const [k, v] of Object.entries(o)) s[k] = ArrayBuffer.isView(v) ? (v as Uint32Array).slice() : Array.isArray(v) ? v.slice() : v;
+  return s;
+}
+
+/** Put saved fields back. Arrays are refilled in place: the harts of a multi-core model share one memory. */
+export function restoreFields(o: object, s: ModelState): void {
+  const t = o as Record<string, unknown>;
+  for (const [k, v] of Object.entries(s)) {
+    const cur = t[k];
+    if (ArrayBuffer.isView(cur)) (cur as Uint32Array).set(v as Uint32Array);
+    else if (Array.isArray(cur)) cur.splice(0, cur.length, ...(v as unknown[]));
+    else t[k] = v;
   }
 }

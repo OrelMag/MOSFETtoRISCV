@@ -3,9 +3,10 @@
 // at the exact instant it happened. Docked under the schematic.
 
 import type { Sim } from '../sim/sim';
-import { formatNumber, pack, type Radix } from '../sim/values';
+import { formatNumber, pack, packBig, type Radix } from '../sim/values';
 import { toVcd, type TraceSignal } from '../sim/vcd';
 import { h, icon, s } from '../ui/dom';
+import { installPinch } from './pinch';
 
 export interface Lane {
   id: number;
@@ -23,9 +24,12 @@ export interface Lane {
   key: string;
 }
 
+/** A lane's value: packed (−1 = X / Z); a BigInt past 53 bits, so wide lanes stay exact. */
+type Val = number | bigint;
+
 interface Trace {
   t: number[];
-  v: number[];
+  v: Val[];
 }
 
 const LANE_H = 24;
@@ -70,11 +74,12 @@ export class LogicAnalyzer {
       this.render();
     }, 'Live') as HTMLButtonElement;
     const head = h('div', { class: 'la-head' },
-      h('b', null, 'Timing'), h('span', { class: 'la-hint' }, 'gate delays · click: cursor A · shift-click: B · wheel: zoom · drag: pan'),
+      h('b', null, 'Timing'), h('span', { class: 'la-hint' }, 'gate delays · click: cursor A · shift-click: B · wheel or pinch: zoom · drag: pan'),
       h('span', { class: 'spacer' }), this.readout,
       this.followBtn,
       btn('fit', 'Fit everything recorded', () => this.fit()),
       btn('reset', 'Clear the recording (keep the lanes)', () => this.clear()),
+      btn('probe', 'Remove every probe (keep the port lanes)', () => this.removeProbes(), 'Clear probes'),
       btn('code', 'Download as VCD (GTKWave, Surfer)', () => this.downloadVcd(), 'VCD'),
       btn('close', 'Close the timing panel', () => this.onClose()));
     this.names = h('div', { class: 'la-names' });
@@ -103,6 +108,38 @@ export class LogicAnalyzer {
     this.follow = true;
     this.span = 60;
     this.render();
+  }
+
+  /**
+   * Follow a rebuilt simulation of the same circuit (an editor rebuilds on every connectivity
+   * change; time carries over): every lane gets its nets in the new numbering (null drops it)
+   * and keeps what it recorded.
+   */
+  rebind(sim: Sim, nets: (l: Lane) => number[] | null): void {
+    const keep: Lane[] = [];
+    for (const l of this.lanes) {
+      const n = nets(l);
+      if (!n) { this.traces.delete(l.id); continue; }
+      l.nets = n;
+      l.key = netKey(n);
+      l.width = n.length;
+      keep.push(l);
+    }
+    this.lanes = keep;
+    this.byNet.clear();
+    for (const l of keep) for (const n of l.nets) this.byNet.set(n, [...(this.byNet.get(n) ?? []), l]);
+    this.sim = sim;
+    sim.onTrace = (net) => this.record(net);
+    for (const l of keep) {
+      sim.watch(l.nets);
+      const tr = this.traces.get(l.id) ?? { t: [], v: [] };
+      this.traces.set(l.id, tr);
+      const v = this.valueOf(l), n = tr.t.length - 1;
+      if (n >= 0 && tr.t[n] >= sim.time) tr.v[n] = v;
+      else if (n < 0 || tr.v[n] !== v) { tr.t.push(sim.time); tr.v.push(v); }
+    }
+    this.onLanesChange();
+    this.update();
   }
 
   setLanes(lanes: Omit<Lane, 'id' | 'key'>[]): void {
@@ -143,6 +180,20 @@ export class LogicAnalyzer {
     this.render();
   }
 
+  /** Remove every lane added by probing a wire. */
+  removeProbes(): void {
+    const ids = this.lanes.filter((l) => l.probe).map((l) => l.id);
+    if (!ids.length) return;
+    for (const id of ids) {
+      const lane = this.lanes.find((l) => l.id === id)!;
+      for (const n of lane.nets) this.byNet.set(n, (this.byNet.get(n) ?? []).filter((l) => l !== lane));
+      this.traces.delete(id);
+    }
+    this.lanes = this.lanes.filter((l) => !l.probe);
+    this.onLanesChange();
+    this.render();
+  }
+
   probeFor(key: string): Lane | undefined {
     return this.lanes.find((l) => l.probe && l.key === key);
   }
@@ -170,8 +221,9 @@ export class LogicAnalyzer {
 
   // ---- recording --------------------------------------------------------------------------
 
-  private valueOf(l: Lane): number {
-    return pack(this.sim!.getBits(l.nets));
+  private valueOf(l: Lane): Val {
+    const bits = this.sim!.getBits(l.nets);
+    return bits.length <= 53 ? pack(bits) : (packBig(bits) ?? -1);
   }
 
   private record(net: number): void {
@@ -201,6 +253,27 @@ export class LogicAnalyzer {
     if (this.sim) this.attach(this.sim);
   }
 
+  /** The simulation went back to time t (a step undone): forget what was recorded after it. */
+  rewind(t: number): void {
+    for (const l of this.lanes) {
+      const tr = this.traces.get(l.id);
+      if (!tr) continue;
+      let n = tr.t.length;
+      while (n > 1 && tr.t[n - 1] > t) n--;
+      tr.t.length = tr.v.length = n;
+      if (this.sim) {
+        const v = this.valueOf(l);
+        if (tr.t[n - 1] === t) tr.v[n - 1] = v;
+        else if (tr.v[n - 1] !== v) { tr.t.push(t); tr.v.push(v); }
+      }
+    }
+    this.edges = this.edges.filter((e) => e <= t);
+    this.late = this.late.filter((e) => e <= t);
+    if (this.cursorA !== null && this.cursorA > t) this.cursorA = null;
+    if (this.cursorB !== null && this.cursorB > t) this.cursorB = null;
+    this.update();
+  }
+
   private now(): number {
     return this.sim?.time ?? 0;
   }
@@ -214,7 +287,7 @@ export class LogicAnalyzer {
     this.render();
   }
 
-  private valueAt(tr: Trace, t: number): number {
+  private valueAt(tr: Trace, t: number): Val {
     let lo = 0, hi = tr.t.length - 1;
     if (hi < 0 || t < tr.t[0]) return NaN;
     while (lo < hi) {
@@ -224,7 +297,7 @@ export class LogicAnalyzer {
     return tr.v[lo];
   }
 
-  private fmt(v: number, w: number): string {
+  private fmt(v: Val, w: number): string {
     if (Number.isNaN(v)) return '';
     if (v < 0) return 'X';
     return w === 1 ? String(v) : formatNumber(v, w, this.radix);
@@ -335,6 +408,18 @@ export class LogicAnalyzer {
       this.span = span;
       this.render();
     }, { passive: false });
+    // Two fingers stretch time around their midpoint and slide it with them.
+    installPinch(this.plot, {
+      start: () => { drag = null; },
+      move: (k, mid, prev) => {
+        const t = tAt(prev[0]);
+        const span = Math.min(Math.max(this.span / k, 4), 1e8);
+        this.t0 = t - (t - this.t0) * (span / this.span) - ((mid[0] - prev[0]) / this.plot.clientWidth) * span;
+        this.span = span;
+        this.follow = false;
+        this.render();
+      },
+    });
     this.plot.addEventListener('pointerdown', (e) => {
       drag = { x: e.clientX, t0: this.t0, moved: false };
       this.plot.setPointerCapture(e.pointerId);

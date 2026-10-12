@@ -1,6 +1,6 @@
 // Structural SystemVerilog generated from a netlist: exactly the circuit on screen.
 
-import { type ComponentDef, netlistOf, parseEnd, type PortDef } from './types';
+import { type ComponentDef, isExternal, netlistOf, parseEnd, type PortDef } from './types';
 import { ident } from './vexport';
 
 const MODULE_NAME: Record<string, string> = { nand: 'nand2' };
@@ -19,7 +19,19 @@ export function structuralVerilog(def: ComponentDef): string | null {
   if (!nl) return null;
   const sw = nl.level === 'switch';
   const lines: string[] = [];
-  const portDecl = (p: PortDef) => `  ${p.dir === 'in' ? 'input ' : p.dir === 'out' ? 'output' : 'inout '} logic ${range(p.width)}${id(p.name)}`;
+  // Switch level: nets, not variables (several switches drive one node, a bus has several
+  // drivers); a net with a capacitor or marked `cap` is a trireg (it keeps its charge).
+  const capNets = new Set<number>();
+  nl.nets.forEach((net, i) => {
+    if (net.cap || net.ends.some((e) => {
+      const { inst } = parseEnd(e);
+      return inst !== null && nl.instances.find((x) => x.name === inst)?.def.prim === 'cap';
+    })) capNets.add(i);
+  });
+  const portCap = new Set<string>();
+  capNets.forEach((i) => nl.nets[i].ends.forEach((e) => { const pe = parseEnd(e); if (pe.inst === null) portCap.add(pe.port); }));
+  const kind = sw ? 'wire' : 'logic';
+  const portDecl = (p: PortDef) => `  ${p.dir === 'in' ? 'input ' : p.dir === 'out' ? 'output' : 'inout '} ${portCap.has(p.name) && p.dir !== 'in' ? 'trireg' : kind} ${range(p.width)}${id(p.name)}`;
   lines.push(`// ${def.name}: generated from the schematic`);
   lines.push(`module ${moduleName(def)} (`);
   lines.push(def.ports.map(portDecl).join(',\n'));
@@ -46,7 +58,7 @@ export function structuralVerilog(def: ComponentDef): string | null {
       name = net.name && !used.has(id(net.name)) ? id(net.name) : `n${i}`;
       while (used.has(name)) name += '_';
       used.add(name);
-      decls.push(`  logic ${range(widthOf(net.ends[0]))}${name};`);
+      decls.push(`  ${capNets.has(i) ? 'trireg' : kind} ${range(widthOf(net.ends[0]))}${name};`);
     }
     netName.push(name);
   });
@@ -95,6 +107,22 @@ export function structuralVerilog(def: ComponentDef): string | null {
     }
     if (c.prim === 'nmos' || c.prim === 'pmos') {
       lines.push(`  ${c.prim} ${instName(inst.name)} (${conn('d') || '/*nc*/'}, ${conn('s') || '/*nc*/'}, ${conn('g') || '/*nc*/'});`);
+      continue;
+    }
+    if (c.prim === 'res') {
+      // a resistive bidirectional switch: what passes through it is reduced to a pull strength,
+      // so any transistor (strong) overrides it, like the solver's weaker-than-any-transistor rule
+      lines.push(`  rtran ${instName(inst.name)} (${c.ports.map((p) => conn(p.name) || '/*nc*/').join(', ')});`);
+      continue;
+    }
+    if (c.prim === 'cap') {
+      lines.push(`  // ${inst.name}: capacitor on ${conn(c.ports[0].name) || '(unconnected)'} (declared trireg: it keeps its charge)`);
+      continue;
+    }
+    if (isExternal(c)) {
+      // a key, keyboard, switch bank, console or screen: the world outside the circuit, so no module; its outputs are left undriven
+      const outs = c.ports.filter((p) => p.dir === 'out').map((p) => conn(p.name)).filter(Boolean);
+      lines.push(`  // ${inst.name}: ${c.name} (a sandbox part outside the circuit, not hardware)${outs.length ? `: ${outs.join(', ')} left undriven` : ''}`);
       continue;
     }
     const args = c.ports.map((p) => `.${id(p.name)}(${conn(p.name)})`);

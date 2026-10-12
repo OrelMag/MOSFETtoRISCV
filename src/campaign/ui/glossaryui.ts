@@ -1,0 +1,86 @@
+// Hover definitions: marks the first mention of each codex term in a block of prose (outside links,
+// code and headings) and shows the entry's summary in a card on hover or focus, with a link to the
+// codex. Loaded on demand by the chapter page and the level screen.
+
+import '../../styles/glossary.css';
+import { h, icon } from '../../ui/dom';
+import { codexById } from '../codex';
+import { Glossary } from '../glossary';
+
+let gloss: Glossary | null = null;
+let card: HTMLElement | null = null;
+let hideTimer: ReturnType<typeof setTimeout> | null = null;
+
+const SKIP = 'a, code, pre, h1, h2, h3, h4, button, .gl, svg, kbd, .no-gloss';
+
+/** Mark the first mention of each term in `root` (at most `max` marks); `skip` ids are not marked. */
+export function markTerms(root: HTMLElement, max = 10, skip: ReadonlySet<string> = new Set()): void {
+  gloss ??= new Glossary();
+  const seen = new Set(skip);
+  let n = 0;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (t) => (t.parentElement?.closest(SKIP) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+  });
+  const texts: Text[] = [];
+  for (let t = walker.nextNode(); t; t = walker.nextNode()) texts.push(t as Text);
+  for (const t of texts) {
+    if (n >= max) break;
+    const s = t.data;
+    const ms = gloss.find(s).filter((m) => {
+      if (seen.has(m.id) || n >= max) return false;
+      seen.add(m.id);
+      n++;
+      return true;
+    });
+    if (!ms.length) continue;
+    const frag = document.createDocumentFragment();
+    let at = 0;
+    for (const m of ms) {
+      frag.append(s.slice(at, m.start));
+      const el = h('span', { class: 'gl', tabindex: '0', 'data-cx': m.id }, s.slice(m.start, m.end));
+      el.addEventListener('mouseenter', () => show(el));
+      el.addEventListener('focus', () => show(el));
+      el.addEventListener('mouseleave', hideSoon);
+      el.addEventListener('blur', hideSoon);
+      frag.append(el);
+      at = m.end;
+    }
+    frag.append(s.slice(at));
+    t.replaceWith(frag);
+  }
+}
+
+function show(el: HTMLElement): void {
+  const e = codexById(el.dataset.cx ?? '');
+  if (!e) return;
+  if (hideTimer) clearTimeout(hideTimer);
+  if (!card) {
+    card = h('div', { class: 'gl-card', role: 'tooltip' });
+    card.addEventListener('mouseenter', () => { if (hideTimer) clearTimeout(hideTimer); });
+    card.addEventListener('mouseleave', hideSoon);
+    document.body.append(card);
+  }
+  const sum = h('div', { class: 'gl-sum' });
+  sum.innerHTML = e.body;
+  card.replaceChildren(h('div', { class: 'gl-title' }, h('b', null, e.title), h('span', { class: 'gl-kind' }, e.kind)), sum,
+    h('a', { class: 'gl-more', href: `#/campaign/codex/${e.id}` }, 'Open in the codex', icon('chevR', 12)));
+  card.hidden = false;
+  const r = el.getBoundingClientRect();
+  const w = Math.min(380, window.innerWidth - 24);
+  card.style.width = `${w}px`;
+  card.style.left = `${Math.max(12, Math.min(r.left, window.innerWidth - w - 12))}px`;
+  const below = r.bottom + 8;
+  card.style.top = '0px';
+  const ch = card.offsetHeight;
+  card.style.top = `${below + ch < window.innerHeight - 8 ? below : Math.max(8, r.top - ch - 8)}px`;
+}
+
+function hideSoon(): void {
+  if (hideTimer) clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => { if (card) card.hidden = true; }, 180);
+}
+
+/** Hide the card (a page change). */
+export function hideGlossary(): void {
+  if (card) card.hidden = true;
+}

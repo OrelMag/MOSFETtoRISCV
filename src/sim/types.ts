@@ -22,13 +22,22 @@ export interface PortDef {
   clock?: boolean;
   /** Human description for tooltips / the inspector. */
   doc?: string;
+  /**
+   * Switch level: an output that can let go of its net (Z, or only a weak pull): a tri-state
+   * driver, an open-drain stage, a pull-up. Several such outputs may share one net (a bus); the
+   * sandbox warns only when outputs that always drive share one. Purely descriptive: the
+   * switch-level solver needs no flag to resolve a shared net.
+   */
+  tri?: boolean;
 }
 
 /** Visual kinds. Gate shapes follow ANSI/IEEE 91 distinctive shapes. */
 export type SymbolKind =
   | 'nand' | 'and' | 'or' | 'nor' | 'xor' | 'xnor' | 'not' | 'buf'
   | 'mux' | 'box' | 'split' | 'merge'
-  | 'nmos' | 'pmos' | 'vdd' | 'gnd';
+  | 'nmos' | 'pmos' | 'vdd' | 'gnd'
+  /** Switch-level parts: resistor, pull-up / pull-down, capacitor, transmission gate, tri-states. */
+  | 'res' | 'pullup' | 'pulldown' | 'cap' | 'tgate' | 'tribuf' | 'triinv';
 
 export interface SymbolSpec {
   kind: SymbolKind;
@@ -45,6 +54,10 @@ export interface SymbolSpec {
   noPortLabels?: boolean;
   /** Draw the label vertically (narrow boxes). */
   verticalLabel?: boolean;
+  /** Hue (0–359) tinting a user chip's box; lightness comes from the theme. */
+  color?: number;
+  /** Areas of a box (its own units) the label keeps clear of, or leaves the box when it cannot: a user chip's face displays. */
+  keepOut?: { x: number; y: number; w: number; h: number }[];
 }
 
 export interface InstanceDef {
@@ -77,6 +90,12 @@ export interface NetDef {
    */
   tags?: string[] | true;
   /**
+   * Hand-placed tags: the tag of that endpoint is drawn at this point, joined to the endpoint
+   * by an orthogonal stub (leaving the pin in its exit direction, then turning once). Used by
+   * the sandbox, so a packaged chip shows its pointers where the user put them.
+   */
+  tagAt?: { [end: string]: [number, number] | undefined };
+  /**
    * Switch level: the net has significant capacitance (a bit line, a DRAM storage node). When
    * nothing drives it, it keeps its last value as stored charge instead of floating to Z.
    */
@@ -103,8 +122,35 @@ export interface Netlist {
  */
 export interface Behavior {
   delay?: number;
-  init?: () => unknown;
+  /** Fresh private state, for the power-on mode of the reset (omitted: 'zero'). */
+  init?: (mode?: 'x' | 'zero' | 'random') => unknown;
   eval: (inputs: number[], state: unknown) => number[];
+  /**
+   * Edge-triggered state (a large RAM): the state changes only at a rising edge of input `clk`,
+   * from the other inputs as they were just before it; the outputs follow the `comb` inputs
+   * combinationally, and the state. Static timing makes every other input but clk a capture
+   * point and `comb` → outputs a path launched at clk-to-q; logicDepth sees storage (null).
+   */
+  seq?: { clk: string; comb: string[] };
+  /**
+   * The state as a rebuilt design takes it over (Sim.carry): `known` asks to heal what is
+   * unknown back to its power-on value, as the nets of gate-level storage are. Default: a copy.
+   */
+  carry?: (prev: unknown, known: boolean) => unknown;
+  /**
+   * A stateful leaf opened onto its structure (a lock-step sub-simulation, view/context.ts): put
+   * `state` into the structure's own storage, so the inside shows what the leaf holds. Called
+   * on every sync, after the inputs are set and before the sub-simulation settles.
+   */
+  inside?: (state: unknown, seed: InsideSeed) => void;
+}
+
+/** Where Behavior.inside puts a leaf's state: paths are relative to the opened component. */
+export interface InsideSeed {
+  /** Replace the private state of the behavioural leaf at this instance path ('bank3'). */
+  state(path: string, s: unknown): void;
+  /** Force storage nets (a dotted net path, as in powerOn: 'w3.ff0.ff.slave.sr.q') to these bits. */
+  bits(path: string, bits: ArrayLike<number>): void;
 }
 
 export interface ComponentDef {
@@ -117,10 +163,12 @@ export interface ComponentDef {
   symbol: SymbolSpec;
 
   /** Built-in primitive handled directly by the simulators. */
-  prim?: 'nand' | 'nmos' | 'pmos' | 'vdd' | 'gnd' | 'alias';
+  prim?: 'nand' | 'nmos' | 'pmos' | 'vdd' | 'gnd' | 'res' | 'cap' | 'alias';
   /**
-   * Switch level: drive strength of a transistor, 2 (weak) … 4 (strong); default 3. Where paths of
-   * different strength fight, the stronger one decides the node (ratioed logic, SRAM writes).
+   * Switch level: drive strength of a conducting element, 1 … 4. Transistors are 2 (weak) … 4
+   * (strong), default 3; a resistor (prim 'res') is 1 by default, weaker than any transistor. Where
+   * paths of different strength fight, the stronger one decides the node (ratioed logic, SRAM
+   * writes, pull-ups).
    */
   strength?: number;
   /**
@@ -139,15 +187,32 @@ export interface ComponentDef {
   spec?: (inputs: number[]) => number[];
   /** Power-on hints for 'zero' mode: internal net name → value. */
   powerOn?: Record<string, 0 | 1>;
+  /**
+   * Marks an edge-triggered flip-flop (port names, all 1 bit): q takes d at the rising edge of
+   * clk (when en = 1, if there is an en). Static timing (timing.ts) makes it a register boundary
+   * and synthesis export (vexport.ts) writes it as a process instead of its gates. Set on the
+   * library DFF / DFFE, and by the sandbox when the user ticks "this chip is a flip-flop" (after
+   * checking that it behaves like one).
+   */
+  ff?: { d: string; q: string; clk: string; en?: string };
 
-  hdl?: { verilog?: string; vhdl?: string };
+  hdl?: {
+    verilog?: string; vhdl?: string;
+    /**
+     * Synthesis export (vexport.ts): the module body (after the port declarations, ports by
+     * their own names) written instead of the structure, e.g. a large memory as `reg mem [..]`.
+     */
+    synth?: string[];
+  };
   /** Long-form notes for the inspector (HTML allowed). */
   notes?: string;
 }
 
 export type Category =
   | 'transistor' | 'cell' | 'gate' | 'plumbing' | 'arithmetic'
-  | 'routing' | 'sequential' | 'memory' | 'cpu';
+  | 'routing' | 'sequential' | 'memory' | 'cpu'
+  /** User chips made in the sandbox. */
+  | 'custom';
 
 export function inPorts(d: ComponentDef): PortDef[] {
   return d.ports.filter((p) => p.dir === 'in');
@@ -179,4 +244,23 @@ export function parseEnd(end: string): { inst: string | null; port: string } {
   return i < 0 ? { inst: null, port: end } : { inst: end.slice(0, i), port: end.slice(i + 1) };
 }
 
-export type HierLeafKind = 'nand' | 'nmos' | 'pmos' | 'vdd' | 'gnd' | 'behavior';
+export type HierLeafKind = 'nand' | 'nmos' | 'pmos' | 'vdd' | 'gnd' | 'res' | 'cap' | 'behavior';
+
+/**
+ * Primitives of the switch-level solver: transistors, rails, resistors (always-on weak paths) and
+ * capacitors (mark their net as charge-keeping). A gate-level flatten cannot simulate them.
+ */
+export function isSwitchPrim(d: ComponentDef): boolean {
+  const p = d.prim;
+  return p === 'nmos' || p === 'pmos' || p === 'vdd' || p === 'gnd' || p === 'res' || p === 'cap';
+}
+
+/**
+ * An external source: a behaviour with no structure and no primitive (the sandbox's key and
+ * keyboard parts). It is a leaf of every simulation, driven from outside through Sim.poke (its
+ * private state holds the value), costs nothing and has no Verilog: it stands for the world
+ * around the circuit, not for hardware in it.
+ */
+export function isExternal(d: ComponentDef): boolean {
+  return !d.prim && !d.netlist && !!d.behavior;
+}

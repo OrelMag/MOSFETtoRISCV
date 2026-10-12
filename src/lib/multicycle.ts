@@ -9,6 +9,7 @@ import { alu, constWord, isZero } from './alu';
 import { busMux2, decoder, muxTree } from './combinational';
 import { CLEAR_BIT0, CONTROL, IMM_GEN, NEXT_PC, OPCODE_DECODER, dataMemory, rom } from './cpu';
 import { define, merger, splitter } from './define';
+import type { FsmArc, FsmSpec } from './fsm';
 import { AND, OR } from './gates';
 import { regfile } from './regfile';
 import { register } from './sequential';
@@ -59,6 +60,74 @@ const OPCODES5: Record<string, number> = { R: 0b01100, I: 0b00100, LOAD: 0b00000
 /** Memory dispatch: load → MemRead, store → MemWrite. */
 export const MC_DISPATCH2: [string, number][] = [['LOAD', 3], ['STORE', 5]];
 
+/** The opcode class of a 7-bit opcode (the dispatch tables' names), or null. */
+export function mcOpClass(op: number): string | null {
+  const o5 = (op >> 2) & 31;
+  return Object.keys(OPCODES5).find((c) => OPCODES5[c] === o5) ?? null;
+}
+
+/**
+ * The hardwired controller's transitions: [source, opcode class or null, target], returns to Fetch left out
+ * (state 0 is the code no next-state OR drives). Transition k with a class is AND gate t<k> of MC_FSM.
+ */
+export function mcTransitions(): [number, string | null, number][] {
+  const trans: [number, string | null, number][] = [];
+  MC_STATES.forEach((s, i) => {
+    if (typeof s.next === 'number') { if (s.next !== 0) trans.push([i, null, s.next]); }
+    else for (const [cls, t] of s.next === 'decode' ? MC_DISPATCH : MC_DISPATCH2) trans.push([i, cls, t]);
+  });
+  return trans;
+}
+
+/** Diagram positions (units of the 770 × 400 drawing) and the short labels of the dispatch arcs. */
+const MC_AT: Record<string, [number, number]> = {
+  Fetch: [340, 30], Decode: [340, 92], MemAdr: [56, 168], ExecuteR: [150, 168], ExecuteI: [246, 168], JAL: [440, 168], JALR: [530, 168],
+  Branch: [620, 168], LUI: [706, 168], MemRead: [56, 248], MemWrite: [150, 248], MemWB: [56, 328], ALUWB: [340, 328],
+};
+const MC_ARC: Record<string, Partial<FsmArc>> = {
+  'Decode>MemAdr': { label: 'lw/sw', t: 0.62, bend: 18 }, 'Decode>ExecuteR': { label: 'R', t: 0.7, bend: 10 }, 'Decode>ExecuteI': { label: 'I', t: 0.72 },
+  'Decode>JAL': { label: 'jal', t: 0.72 }, 'Decode>JALR': { label: 'jalr', t: 0.72, bend: -8 }, 'Decode>Branch': { label: 'branch', t: 0.7, bend: -14 },
+  'Decode>LUI': { label: 'lui', t: 0.74, bend: -20 }, 'Decode>ALUWB': { label: 'auipc' },
+  'MemAdr>MemRead': { label: 'lw', dx: -14 }, 'MemAdr>MemWrite': { label: 'sw', dx: 10, dy: -6 },
+};
+
+/**
+ * The multicycle controller as a state machine, from MC_STATES and the dispatch tables: what both controllers
+ * (hardwired and microcode) implement. Arc parts are MC_FSM's AND gate for the transition and the
+ * next-state ORs its target's bits feed.
+ */
+export const MC_FSM_SPEC: FsmSpec = (() => {
+  const trans = mcTransitions();
+  const ors = [0, 1, 2, 3].filter((b) => trans.filter((t) => (t[2] >> b) & 1).length > 1);
+  const arcs: FsmArc[] = [];
+  const add = (from: number, to: number, classes: string[] | null) => {
+    const name = `${MC_STATES[from].name}>${MC_STATES[to].name}`;
+    const ks = trans.flatMap(([s, c, t], k) => (s === from && t === to && c ? [k] : []));
+    arcs.push({
+      from, to, ...MC_ARC[name],
+      when: classes ? (inp) => classes.includes(mcOpClass(inp.op) ?? '') : undefined,
+      parts: [...ks.map((k) => `t${k}`), ...ors.filter((b) => (to >> b) & 1).map((b) => `n${b}`)],
+      rail: to === 0 || undefined,
+    });
+  };
+  MC_STATES.forEach((s, i) => {
+    if (typeof s.next === 'number') return add(i, s.next, null);
+    const table = s.next === 'decode' ? MC_DISPATCH : MC_DISPATCH2;
+    for (const t of [...new Set(table.map(([, t]) => t))]) add(i, t, table.filter(([, x]) => x === t).map(([c]) => c));
+  });
+  const fields = MC_FIELDS.map(([f]) => f);
+  return {
+    title: 'Multicycle controller', shape: 'pill', size: [770, 400],
+    states: MC_STATES.map((s, i) => ({
+      name: s.name, code: i, does: s.does, at: MC_AT[s.name],
+      out: { ...Object.fromEntries(fields.map((f) => [f, s.sig[f] ?? 0])), state: i },
+    })),
+    arcs, reset: 0, inputs: ['op'], domain: { op: Object.values(OPCODES5).map((o) => (o << 2) | 3) },
+    outputs: [...fields, 'state'], stateBits: ['state'], codeBits: 4,
+    rail: { to: 0, x: 752, y: 372, label: 'retire → Fetch', labelX: 600 },
+  };
+})();
+
 const SEQ = { next: 0, decode: 1, mem: 2 } as const;
 
 /** The microword of a state: control fields, then the next-address field (4 bits) and the sequencing mode (2 bits). */
@@ -94,80 +163,96 @@ export const MC_FSM: ComponentDef = (() => {
   const nets: NetDef[] = [];
   const ends = new Map<string, string[]>();
   const sink = (drv: string, s: string) => { if (!ends.has(drv)) ends.set(drv, []); ends.get(drv)!.push(s); };
-  const xR = 8, xD = xR + rg.w + 8, xO = 8, yO = rg.h + 14;
+  // Columns: state register and opcode decoder | state decoder | AND terms | next-state ORs | output ORs.
+  // Each gap leaves room for a tag pointing right out of one column and one pointing left into the next.
+  const tagLen = (s: string) => 2.8 + 0.5 * s.length;
+  const longest = (xs: string[]) => Math.max(...xs.map(tagLen));
+  const stateTag = longest(MC_STATES.map((s) => s.name)), condTag = longest(MC_DISPATCH.map(([c]) => `is${c}`));
+  const xR = 8, xO = 8, xD = Math.ceil(xO + og.w + condTag + 1), yO = rg.h + 14;
   instances.push(
     { name: 'st', def: REG, at: [xR, 2], label: 'state' },
-    { name: 'one', def: TIE1, at: [xR - 6, rg.ports.en.pos[1]] },
+    { name: 'one', def: TIE1, at: [xR - 8, 2 + rg.ports.en.pos[1] - 1] },
     { name: 'dec', def: DEC, at: [xD, 2], label: 'one wire per state' },
     { name: 'opd', def: OPD, at: [xO, yO] },
   );
   nets.push({ ends: ['one.y', 'st.en'] }, { name: 'state', ends: ['st.q', 'dec.a', 'state'], tags: ['state'] }, { name: 'op', ends: ['op', 'opd.op'] }, { name: 'clk', ends: ['clk', 'st.clk'] });
   const S = (i: number) => `dec.y${i}`;
-  // transitions: [source state, condition (class output) or null, target]
-  const trans: [number, string | null, number][] = [];
-  MC_STATES.forEach((s, i) => {
-    if (typeof s.next === 'number') { if (s.next !== 0) trans.push([i, null, s.next]); }
-    else for (const [cls, t] of s.next === 'decode' ? MC_DISPATCH : MC_DISPATCH2) trans.push([i, `opd.${cls}`, t]);
-  });
-  const xT = xD + dg.w + 14;
-  let yT = 2;
+  const trans = mcTransitions().map(([s, cls, t]): [number, string | null, number] => [s, cls && `opd.${cls}`, t]);
+  const xT = Math.ceil(xD + dg.w + stateTag + Math.max(stateTag, condTag) + 1);
+  let yT = 2, nT = 0;
   const termOf = trans.map(([s, cond], k) => {
     if (!cond) return S(s);
     const nm = `t${k}`;
     instances.push({ name: nm, def: AND, at: [xT, yT] });
     yT += 5;
+    nT = Math.max(nT, nm.length);
     sink(S(s), `${nm}.a`);
     sink(cond, `${nm}.b`);
     return `${nm}.y`;
   });
-  const xN = xT + 10;
-  instances.push({ name: 'nx', def: merger([1, 1, 1, 1]), at: [xN + 10, 6] });
+  const xN = Math.ceil(xT + 4 + tagLen('t'.repeat(nT)) + stateTag + 1);
+  // The next-state ORs stacked; n0 wired straight into the merger, the others by tag.
+  let yN = 2, yNx = 0;
   for (let b = 0; b < 4; b++) {
     const terms = trans.map((t, k) => ((t[2] >> b) & 1 ? termOf[k] : null)).filter((x): x is string => !!x);
     const nm = `n${b}`;
     if (terms.length === 1) sink(terms[0], `nx.i${b}`);
     else {
-      instances.push({ name: nm, def: orN(terms.length), at: [xN, 2 + 14 * b] });
+      const d = orN(terms.length), h = symbolGeom(d).h;
+      instances.push({ name: nm, def: d, at: [xN, yN] });
+      if (b === 0) yNx = yN + h / 2 - 1;
+      yN += h + 2;
       terms.forEach((t, i) => sink(t, `${nm}.i${i}`));
-      nets.push({ name: `next${b}`, ends: [`${nm}.y`, `nx.i${b}`], tags: true });
+      nets.push({ name: `next${b}`, ends: [`${nm}.y`, `nx.i${b}`], tags: b === 0 ? undefined : true });
     }
   }
+  instances.push({ name: 'nx', def: merger([1, 1, 1, 1]), at: [xN + 10, yNx] });
   nets.push({ name: 'next', ends: ['nx.out', 'st.d'], tags: true });
-  // outputs: per field bit, the OR of the states asserting it
-  const xC = xN + 22;
-  let yC = 2, ties = 0;
+  // outputs: per field bit, the OR of the states asserting it. Each output's pin sits on its
+  // driver's row so the wire is straight; a field's bits are spaced to match its merger's pitch.
+  const xC = Math.ceil(xN + 11 + tagLen('next') + stateTag + 1), xP = xC + 20;
+  // floor: bottom of the last field's merger. A tall merger (wide pitch) reaches below its
+  // field's gates, so the next field starts below it: neither its merger nor its pin wire may cross it.
+  let yC = 2, ties = 0, floor = -Infinity;
   const pins: Record<string, [number, number]> = { clk: [0, rg.h + 4], op: [0, yO + og.ports.op.pos[1]] };
-  MC_FIELDS.forEach(([f, n], fi) => {
-    const bitsDrv: string[] = [];
-    for (let b = 0; b < n; b++) {
-      const states = MC_STATES.map((s, i) => (((s.sig[f] ?? 0) >> b) & 1 ? i : -1)).filter((i) => i >= 0);
+  MC_FIELDS.forEach(([f, n]) => {
+    const bits = Array.from({ length: n }, (_, b) => MC_STATES.map((s, i) => (((s.sig[f] ?? 0) >> b) & 1 ? i : -1)).filter((i) => i >= 0));
+    const defOf = (states: number[]) => (states.length < 2 ? null : states.length === 2 ? OR : orN(states.length));
+    const hOf = (states: number[]) => { const d = defOf(states); return d ? symbolGeom(d).h : 2; };
+    const hs = bits.map(hOf);
+    let pitch = 2;
+    for (let b = 1; b < n; b++) pitch = Math.max(pitch, 2 * Math.ceil((hs[b - 1] / 2 + hs[b] / 2 + 2) / 2));
+    const y0 = Math.max(yC + hs[0] / 2, floor + 2 + (n > 1 ? pitch / 2 : 0));
+    const bitsDrv = bits.map((states, b) => {
+      const yo = y0 + pitch * b, d = defOf(states);
+      yC = yo + hs[b] / 2 + 2;
       if (states.length === 0) {
-        instances.push({ name: `z${ties}`, def: TIE0, at: [xC, yC] });
-        bitsDrv.push(`z${ties++}.y`);
-        yC += 3;
-      } else if (states.length === 1) bitsDrv.push(S(states[0]));
-      else {
-        const nm = `o_${f}${b}`;
-        const d = states.length === 2 ? OR : orN(states.length);
-        instances.push({ name: nm, def: d, at: [xC, yC], label: n > 1 ? `${f}[${b}]` : f });
-        const ins = d.ports.filter((p) => p.dir === 'in').map((p) => p.name);
-        states.forEach((s, i) => sink(S(s), `${nm}.${ins[i]}`));
-        bitsDrv.push(`${nm}.y`);
-        yC += symbolGeom(d).h + 2;
+        instances.push({ name: `z${ties}`, def: TIE0, at: [xC, yo - 1] });
+        return `z${ties++}.y`;
       }
-    }
-    if (n === 1) sink(bitsDrv[0], f);
+      if (!d) return S(states[0]);
+      const nm = `o_${f}${b}`;
+      instances.push({ name: nm, def: d, at: [xC, yo - hs[b] / 2], label: n > 1 ? `${f}[${b}]` : f });
+      const ins = d.ports.filter((p) => p.dir === 'in').map((p) => p.name);
+      states.forEach((s, i) => sink(S(s), `${nm}.${ins[i]}`));
+      return `${nm}.y`;
+    });
+    if (n === 1) { sink(bitsDrv[0], f); pins[f] = [xP, y0]; }
     else {
-      instances.push({ name: `m_${f}`, def: merger([1, 1]), at: [xC + 12, yC - 6] });
+      instances.push({ name: `m_${f}`, def: merger(Array(n).fill(1), pitch), at: [xC + 12, y0 - pitch / 2] });
       bitsDrv.forEach((d, b) => sink(d, `m_${f}.i${b}`));
-      nets.push({ name: f, ends: [`m_${f}.out`, f], tags: true });
+      nets.push({ name: f, ends: [`m_${f}.out`, f] });
+      pins[f] = [xP, y0 + (pitch * (n - 1)) / 2];
+      floor = y0 - pitch / 2 + pitch * n;
     }
-    pins[f] = [xC + 20, 2 + 4 * fi];
   });
-  pins.state = [xC + 20, 2 + 4 * MC_FIELDS.length];
+  pins.state = [xP, yC + 1];
+  const cls = new Map(MC_DISPATCH.map(([c]) => [`opd.${c}`, `is${c}`]));
   for (const [drv, ss] of ends) {
-    const si = /^dec\.y(\d+)$/.exec(drv);
-    nets.push({ name: si ? MC_STATES[Number(si[1])]?.name ?? `S${si[1]}` : undefined, ends: [drv, ...ss], tags: true });
+    const si = /^dec\.y(\d+)$/.exec(drv), gate = /^(o_\w+|t\d+|z\d+)\.y$/.exec(drv);
+    const name = si ? MC_STATES[Number(si[1])]?.name ?? `S${si[1]}` : cls.get(drv) ?? (gate ? instances.find((i) => i.name === gate[1])?.label ?? gate[1] : undefined);
+    // State and condition wires fan out across the sheet by tag; an output OR is wired to its pin.
+    nets.push({ name, ends: [drv, ...ss], tags: /^(o_|z)/.test(drv) ? undefined : true });
   }
   return define({
     id: 'mc_fsm', name: 'Hardwired multicycle controller', category: 'cpu',
@@ -203,7 +288,7 @@ export const MC_MICRO: ComponentDef = (() => {
     { name: 'urom', def: UROM, at: [xU, 14], label: 'microcode ROM' },
     { name: 'sw', def: SW, at: [xS, 4] },
     { name: 'op', def: splitter([2, 3, 1, 1]), at: [4, 60] },
-    { name: 'opx', def: merger([3, 1, 1]), at: [8, 60] },
+    { name: 'opx', def: merger([3, 1, 1]), at: [10, 60] },
     { name: 'd1a', def: merger([2, 5, 25]), at: [14, 58] },
     { name: 'd2a', def: merger([2, 1, 29]), at: [14, 70] },
     { name: 'd1', def: D1, at: [xU, 52], label: 'decode dispatch' },
@@ -273,16 +358,19 @@ endmodule`;
 export interface MulticycleOptions {
   control?: 'fsm' | 'micro';
   adder?: 'rca' | 'ks';
+  /** Instruction ROM of 2^imemK words (default 6), data memory of 2^dmemK (default 5). */
+  imemK?: number;
+  dmemK?: number;
 }
 
 export function multicycleCpu(program: number[], opts: MulticycleOptions = {}): ComponentDef {
-  const IM = rom(program);
-  const control = opts.control ?? 'fsm', adder = opts.adder ?? 'ks';
-  return memo(`mc_${IM.id}_${control}_${adder}`, () => buildMulticycle(IM, control, adder));
+  const IM = rom(program, opts.imemK ?? 6);
+  const control = opts.control ?? 'fsm', adder = opts.adder ?? 'ks', dmemK = opts.dmemK ?? 5;
+  return memo(`mc_${IM.id}_${control}_${adder}_${dmemK}`, () => buildMulticycle(IM, control, adder, dmemK));
 }
 
-function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca' | 'ks'): ComponentDef {
-  const R32 = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dataMemory(5);
+function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca' | 'ks', dmemK: number): ComponentDef {
+  const R32 = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dataMemory(dmemK);
   const M2 = busMux2(32), M4 = muxTree(2, 32), CTRL = control === 'fsm' ? MC_FSM : MC_MICRO;
   const SI = splitter([7, 5, 3, 5, 5, 7]);
   const g = (d: ComponentDef) => symbolGeom(d);
@@ -306,12 +394,13 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
   alignY('data', R32, right('memsel') + 10, 'd', P('memsel', 'y')[1] + 24);
   alignY('oldpc', R32, right('memsel') + 10, 'd', P('ir', 'd')[1] - 26);
   alignY('si', SI, right('ir') + 8, 'in', P('ir', 'q')[1]);
-  alignY('rf', RF, right('si') + 10, 'wa', P('si', 'o1')[1]);
+  alignY('rf', RF, right('si') + 16, 'wa', P('si', 'o1')[1]);
   alignY('imm', IMM_GEN, right('si') + 10, 'instr', P('rf', 'rd2')[1] + 22);
   alignY('ra', R32, right('rf') + 8, 'd', P('rf', 'rd1')[1]);
-  alignY('rb', R32, right('rf') + 8, 'd', P('rf', 'rd2')[1] + 4);
-  alignY('srcA', M4, right('ra') + 10, 'd2', P('ra', 'q')[1]);
-  alignY('srcB', M4, right('ra') + 10, 'd0', P('rb', 'q')[1] + 6);
+  alignY('rb', R32, right('rf') + 8, 'd', P('rf', 'rd2')[1] + 8);
+  // 16 units after A / B: the constant inputs of the source multiplexers sit in between
+  alignY('srcA', M4, right('ra') + 16, 'd2', P('ra', 'q')[1]);
+  alignY('srcB', M4, right('ra') + 16, 'd0', P('rb', 'q')[1] + 6);
   alignY('alu', ALU, right('srcA') + 10, 'a', P('srcA', 'y')[1]);
   alignY('aluout', R32, right('alu') + 10, 'd', P('alu', 'y')[1]);
   alignY('res', M4, right('aluout') + 10, 'd0', P('aluout', 'q')[1]);
@@ -320,7 +409,7 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
   place('c4', constWord(32, 4), [P('srcB', 'd2')[0] - 14, P('srcB', 'd2')[1] - 1]);
   place('z32', constWord(32, 0), [P('srcA', 'd3')[0] - 14, P('srcA', 'd3')[1] - 1]);
   place('z32b', constWord(32, 0), [P('srcB', 'd3')[0] - 14, P('srcB', 'd3')[1] + 2]);
-  place('actl', busMux2(4), [P('alu', 'ctl')[0] - 10, at.get('alu')![1] + g(ALU).h + 6]);
+  place('actl', busMux2(4), [P('alu', 'ctl')[0] - 10, at.get('alu')![1] + g(ALU).h + 20]);
   place('z4', constWord(4, 0), [P('actl', 'a')[0] - 14, P('actl', 'a')[1] - 1]);
   place('ctl', CONTROL, [right('si') + 10, 2]);
   place('npc', NEXT_PC, [right('alu') + 6, 2]);
@@ -328,8 +417,8 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
   place('one', TIE1, [right('ra') + 2, P('ra', 'en')[1] + 6]);
   place('gnd', TIE0, [P('npc', 'jump')[0] - 6, P('npc', 'jump')[1] + 4]);
   place('ps', splitter([1, 1]), [right('npc') + 4, P('npc', 'pcSrc')[1] - 2]);
-  place('pcw', OR, [2, P('pc', 'en')[1] - 3]);
-  place('fz', isZero(4), [right('ctrl') + 4, 2 + g(CTRL).h - 8]);
+  place('pcw', OR, [4, P('pc', 'en')[1] + 4]);
+  place('fz', isZero(4), [right('ctrl') + 14, 2 + g(CTRL).h - 8]);
 
   const labels: Record<string, string> = {
     pc: 'PC', adr: 'Adr', memsel: 'one memory port', ir: 'IR', data: 'Data', oldpc: 'OldPC', ra: 'A', rb: 'B', srcA: 'SrcA', srcB: 'SrcB',
@@ -394,7 +483,7 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
   ];
   const resY = P('res', 'y');
   return {
-    id: `mc_${IM.id.replace(/^rom_/, '')}_${control}${adder === 'ks' ? '' : '_rca'}`,
+    id: `mc_${IM.id.replace(/^rom_/, '')}_${control}${adder === 'ks' ? '' : '_rca'}${dmemK === 5 ? '' : `_d${dmemK}`}`,
     name: `Multicycle RV32I CPU (${control === 'fsm' ? 'hardwired' : 'microprogrammed'} control)`, category: 'cpu',
     summary: 'One ALU and one memory port, reused over 3 to 5 short cycles per instruction. IR, OldPC, A, B, Data and ALUOut hold values from one cycle to the next; the controller steps through the state table.',
     ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bit('retire', 'out'), bit('fetch', 'out'), bus('state', 4, 'out')],

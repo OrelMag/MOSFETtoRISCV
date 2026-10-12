@@ -3,7 +3,7 @@
 // except harts that need memory and lose arbitration: they stall and retry.
 
 import { decode, OPCODES } from './isa';
-import { ISS } from './iss';
+import { ISS, type ModelState, restoreFields, saveFields, type StepInfo } from './iss';
 
 export const isMemOp = (word: number) => {
   const op = decode(word).opcode;
@@ -16,18 +16,30 @@ export class MultiISS {
   /** Round-robin priority: on a conflict, the hart with priority wins and priority moves on. */
   priority = 0;
   cycles = 0;
+  /** What each hart executed in the last cycle (null: stalled). */
+  last: (StepInfo | null)[] = [];
 
-  constructor(program: number[], n = 2, dmemWords = 32) {
+  constructor(program: number[], n = 2, dmemWords = 32, imemWords = 64) {
     this.dmem = new Uint32Array(dmemWords);
     this.harts = Array.from({ length: n }, (_, i) => {
-      const h = new ISS(program, { dmemWords, hartid: i });
+      const h = new ISS(program, { dmemWords, imemWords, hartid: i });
       h.dmem = this.dmem;
       return h;
     });
   }
 
+  /** Every hart and the shared state, for stepping back. */
+  save(): { self: ModelState; harts: ModelState[] } {
+    return { self: saveFields(this), harts: this.harts.map((h) => h.save()) };
+  }
+
+  restore(s: { self: ModelState; harts: ModelState[] }): void {
+    restoreFields(this, s.self);
+    this.harts.forEach((h, i) => h.restore(s.harts[i]));
+  }
+
   private nextWord(h: ISS): number {
-    return h.imem[(h.pc >>> 2) % h.imem.length] ?? 0x13;
+    return h.fetch(h.pc);
   }
 
   /** Which harts want the memory port this cycle, and which one gets it (-1: none). */
@@ -45,11 +57,8 @@ export class MultiISS {
   /** One clock cycle. Returns which harts retired an instruction. */
   step(): boolean[] {
     const { wants, grant } = this.arbitrate();
-    const retired = this.harts.map((h, i) => {
-      if (wants[i] && i !== grant) return false;
-      h.step();
-      return true;
-    });
+    this.last = this.harts.map((h, i) => (wants[i] && i !== grant ? null : h.step()));
+    const retired = this.last.map((x) => x !== null);
     if (wants.filter(Boolean).length > 1) this.priority = (grant + 1) % this.harts.length;
     this.cycles++;
     return retired;

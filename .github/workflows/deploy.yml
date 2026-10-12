@@ -15,7 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  # The unit tests (~8 min) run beside the build and its smoke test (~1 + ~8 min), not before them.
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,6 +26,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the full history: the build number in the version is the commit count
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - run: npm run build
       - name: Add the chip layout (published by the layout workflow, if any)
         env:
@@ -36,11 +48,35 @@ jobs:
           else
             echo "no layout published yet"
           fi
+      # Every route of the built site in headless Chrome (preinstalled on the runner): a runtime error,
+      # a failed request or a page wider than the window does not deploy.
+      - name: Smoke test
+        run: npm run smoke
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+  # The exported Verilog, synthesized by Yosys and simulated, must match our own simulation of the
+  # dual-core and the system CPUs on their programs: a change that breaks the exported hardware does not
+  # deploy. One job per design, in parallel (each 4-9 min), so the deploy waits no longer than the build.
+  verify-hdl:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        design: [multi, sys, sys-m]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: pip install yowasp-yosys
+      - run: npx vite-node scripts/verify-export.ts ${{ matrix.design }}
   deploy:
-    needs: build
+    needs: [test, build, verify-hdl]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

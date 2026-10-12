@@ -2,12 +2,14 @@
 // what does it look like in Verilog.
 
 import { evalOnce, forEachInput, inputBits, simulate } from '../sim/harness';
-import { logicDepth, stats } from '../sim/stats';
-import { type Bit, type ComponentDef, inPorts, netlistOf, outPorts } from '../sim/types';
+import { hasFeedback, logicDepth, stats } from '../sim/stats';
+import { type Bit, BZ, type Category, type ComponentDef, inPorts, netlistOf, outPorts } from '../sim/types';
 import { formatBits, formatNumber, pack, type Radix } from '../sim/values';
 import { exportHdl, testableComb, type HdlFlavor } from '../sim/svexport';
 import { structuralVerilog } from '../sim/verilog';
 import { h, icon } from '../ui/dom';
+import { copiesIn, referenceCpus, usedIn, type Parent } from '../lib/usage';
+import { powerBody, type LivePower } from './powerpanel';
 
 export interface InspectTarget {
   def: ComponentDef;
@@ -17,14 +19,16 @@ export interface InspectTarget {
   instance?: string;
   canOpen?: boolean;
   onOpen?: () => void;
+  /** The running scene's switching activity for this part (null: not on the scene's own gate-level simulation). */
+  power?: () => LivePower | null;
 }
 
 type Tab = 'info' | 'truth' | 'hdl';
 
-const CATEGORY: Record<string, string> = {
+export const CATEGORY_LABEL: Record<Category, string> = {
   transistor: 'Transistor level', cell: 'CMOS cell', gate: 'Logic gate', plumbing: 'Wiring',
   arithmetic: 'Arithmetic', routing: 'Selection & routing', sequential: 'Sequential logic',
-  memory: 'Memory', cpu: 'Processor',
+  memory: 'Memory', cpu: 'Processor', custom: 'User chip',
 };
 
 export class Inspector {
@@ -34,6 +38,12 @@ export class Inspector {
   private tab: Tab = 'info';
   private target: InspectTarget | null = null;
   radix: Radix = 'hex';
+  /** "Where it is used" is open (kept across parts and re-renders); a list shown in full, per part. */
+  private usedOpen = false;
+  /** "Power" is open (kept across parts and re-renders, like "Where it is used"). */
+  private powerOpen = false;
+  private usedAll = new WeakSet<ComponentDef>();
+  private usage = new WeakMap<ComponentDef, { parents: Parent[]; cpus: { label: string; n: number }[] }>();
 
   constructor() {
     this.body = h('div', { class: 'tab-body' });
@@ -81,7 +91,7 @@ export class Inspector {
     const depth = d.prim === 'alias' ? null : logicDepthSafe(d);
     const b = this.body;
     b.append(
-      h('div', { class: 'insp-kicker' }, `${CATEGORY[d.category] ?? d.category}${t.instance ? ` · ${t.instance}` : ''}`),
+      h('div', { class: 'insp-kicker' }, `${CATEGORY_LABEL[d.category] ?? d.category}${t.instance ? ` · ${t.instance}` : ''}`),
       h('div', { class: 'insp-title' }, d.name),
     );
     if (d.summary) b.append(h('p', { class: 'insp-summary' }, d.summary));
@@ -92,8 +102,12 @@ export class Inspector {
 
     const cells: [string, string][] = [];
     if (d.prim === 'nmos' || d.prim === 'pmos') cells.push(['1', 'transistor']);
+    else if (d.prim === 'res') cells.push(['1', 'resistor']);
+    else if (d.prim === 'cap') cells.push(['1', 'capacitor']);
     else if (d.prim !== 'alias' && d.prim !== 'vdd' && d.prim !== 'gnd') {
       cells.push([st.transistors.toLocaleString(), 'transistors']);
+      if (st.resistors) cells.push([st.resistors.toLocaleString(), `resistor${st.resistors > 1 ? 's' : ''}`]);
+      if (st.capacitors) cells.push([st.capacitors.toLocaleString(), `capacitor${st.capacitors > 1 ? 's' : ''}`]);
       cells.push([st.nands.toLocaleString(), 'NAND gates']);
       if (depth !== null && depth > 0) cells.push([String(depth), 'gate delays (worst path)']);
       else if (st.nands > 0 && depth === null) cells.push(['∞', 'has feedback: it remembers']);
@@ -110,6 +124,60 @@ export class Inspector {
     });
     if (rows.length) b.append(h('table', { class: 'ports' }, h('tbody', null, rows)));
     if (d.notes) b.append(h('div', { class: 'insp-notes', html: d.notes }));
+    if (!d.prim || (d.prim === 'nand' && t.power)) b.append(this.powerSection(t));
+    // Library parts only: a user chip has the sandbox's own "used by" (editor/chips.ts).
+    if (d.prim !== 'alias' && d.prim !== 'vdd' && d.prim !== 'gnd' && d.category !== 'custom') b.append(this.usedSection(d));
+  }
+
+  /** What the part spends switching: live on the running scene, else on random inputs (measured on first open). */
+  private powerSection(t: InspectTarget): HTMLElement {
+    const det = h('details', { class: 'insp-used' }, h('summary', null, 'Power (estimate)'));
+    const fill = () => det.append(powerBody(t.def, t.power?.() ?? null, () => this.render()));
+    if (this.powerOpen) {
+      det.open = true;
+      fill();
+    }
+    det.addEventListener('toggle', () => {
+      this.powerOpen = det.open;
+      if (det.open && det.childElementCount === 1) fill();
+    });
+    return det;
+  }
+
+  /** The components that place this part, and its copies in each of the chapters' CPUs (lib/usage.ts, on first open). */
+  private usedSection(d: ComponentDef): HTMLElement {
+    const det = h('details', { class: 'insp-used' }, h('summary', null, 'Where it is used'));
+    const fill = () => {
+      let u = this.usage.get(d);
+      if (!u) this.usage.set(d, (u = { parents: usedIn(d), cpus: referenceCpus().map((c) => ({ label: c.label, n: copiesIn(c.def, d) })) }));
+      // Sizes of one generator share a name (twelve "3:2 compressor row"s): one row each, with the range.
+      const groups = new Map<string, Parent[]>();
+      for (const p of u.parents) groups.get(p.def.name)?.push(p) ?? groups.set(p.def.name, [p]);
+      const list = [...groups.values()];
+      const SHOW = 8;
+      const all = this.usedAll.has(d) || list.length <= SHOW + 2;
+      const rows = (all ? list : list.slice(0, SHOW)).map((g) => {
+        const p = g[0], lo = g[g.length - 1].count;
+        return h('tr', null,
+          h('td', { title: g.map((x) => x.def.id).join(', ') }, g.length === 1 && p.openable ? h('a', { href: `#/workbench/${p.def.id}` }, p.def.name) : p.def.name,
+            g.length > 1 ? h('small', null, ` ${g.length} sizes`) : null),
+          h('td', { class: 'val' }, `× ${lo === p.count ? p.count : `${lo}–${p.count}`}`));
+      });
+      det.append(h('div', { class: 'insp-used-h' }, u.parents.length ? `Placed directly in ${u.parents.length} component${u.parents.length > 1 ? 's' : ''}` : 'Not placed in any library component'));
+      if (rows.length) det.append(h('table', { class: 'ports used' }, h('tbody', null, rows)));
+      if (!all) det.append(h('button', { class: 'btn ghost sm', onclick: () => { this.usedAll.add(d); this.render(); } }, `Show all ${list.length}`));
+      det.append(h('div', { class: 'insp-used-h' }, 'Copies in the chapters’ CPUs, flattened'),
+        h('table', { class: 'ports used' }, h('tbody', null, u.cpus.map((c) => h('tr', null, h('td', null, c.label), h('td', { class: 'val' }, c.n ? c.n.toLocaleString() : '—'))))));
+    };
+    if (this.usedOpen) {
+      det.open = true;
+      fill();
+    }
+    det.addEventListener('toggle', () => {
+      this.usedOpen = det.open;
+      if (det.open && det.childElementCount === 1) fill();
+    });
+    return det;
   }
 
   private renderTruth(t: InspectTarget): void {
@@ -123,8 +191,18 @@ export class Inspector {
       this.body.append(h('p', { class: 'empty' }, `A switch: ${d.prim === 'nmos' ? 'gate = 1 → conducts, gate = 0 → open' : 'gate = 0 → conducts, gate = 1 → open'}.`));
       return;
     }
-    if (logicDepthSafe(d) === null && netlistOf(d)) {
+    if (d.prim === 'res' || d.prim === 'cap') {
+      this.body.append(h('p', { class: 'empty' }, d.prim === 'res'
+        ? 'Always conducts, more weakly than any transistor: a node it alone reaches follows it; any transistor path overrides it.'
+        : 'Keeps the last value of its node while nothing drives it (stored charge).'));
+      return;
+    }
+    if (netlistOf(d) && hasFeedbackSafe(d)) {
       this.body.append(h('p', { class: 'empty' }, 'This component has feedback, so its outputs depend on its history, not only on its inputs. A truth table cannot describe it. Open the Timing panel to see it over time.'));
+      return;
+    }
+    if (!outPorts(d).length && d.ports.some((p) => p.dir === 'inout')) {
+      this.body.append(h('p', { class: 'empty' }, 'Its signal ports are bidirectional (a switch between two nodes): there is no input → output function to tabulate. Drive one side and watch the other.'));
       return;
     }
     if (n > 8) {
@@ -134,7 +212,7 @@ export class Inspector {
     const table = truthTable(d);
     const ins = inPorts(d), outs = outPorts(d);
     const cur = t.portBits ? ins.map((p) => pack(t.portBits!(p.name))) : null;
-    const fmt = (v: number, w: number) => (w === 1 ? String(v) : v < 0 ? 'x' : formatNumber(v, w, w <= 4 ? 'bin' : this.radix));
+    const fmt = (v: number, w: number) => (v === -2 ? 'Z' : v < 0 ? 'X' : w === 1 ? String(v) : formatNumber(v, w, w <= 4 ? 'bin' : this.radix));
     const head = h('tr', null, ins.map((p) => h('th', null, p.name)), outs.map((p) => h('th', { class: 'out' }, p.name)));
     const body = table.map(({ ins: iv, outs: ov }) => {
       const isCur = cur !== null && cur.every((v, i) => v === iv[i]);
@@ -203,18 +281,31 @@ function logicDepthSafe(d: ComponentDef): number | null {
   }
 }
 
+function hasFeedbackSafe(d: ComponentDef): boolean {
+  try {
+    return hasFeedback(d);
+  } catch {
+    return true;
+  }
+}
+
 const ttCache = new WeakMap<ComponentDef, { ins: number[]; outs: number[] }[]>();
 export function truthTable(d: ComponentDef): { ins: number[]; outs: number[] }[] {
   const hit = ttCache.get(d);
   if (hit) return hit;
   const sim = simulate(d);
   const rows: { ins: number[]; outs: number[] }[] = [];
-  forEachInput(d, (ins) => rows.push({ ins, outs: evalOnce(sim, ins) }));
+  // -1: unknown (X somewhere); -2: floating (every bit Z, a tri-state output let go)
+  const floating = (p: string) => sim.getBits(sim.design.root.ports[p]).every((b) => b === BZ);
+  forEachInput(d, (ins) => {
+    const outs = evalOnce(sim, ins);
+    rows.push({ ins, outs: outs.map((v, i) => (v < 0 && floating(outPorts(d)[i].name) ? -2 : v)) });
+  });
   ttCache.set(d, rows);
   return rows;
 }
 
-const KW = /\b(module|endmodule|input|output|inout|logic|wire|assign|always_ff|always_comb|always|posedge|negedge|if|else|case|endcase|begin|end|for|genvar|parameter|int|supply0|supply1|nmos|pmos|default)\b/g;
+const KW = /\b(module|endmodule|input|output|inout|logic|wire|assign|always_ff|always_comb|always|posedge|negedge|if|else|case|endcase|begin|end|for|genvar|parameter|int|supply0|supply1|nmos|pmos|rtran|tran|trireg|pullup|pulldown|default)\b/g;
 function highlight(code: string): string {
   const esc = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return esc.split('\n').map((line) => {

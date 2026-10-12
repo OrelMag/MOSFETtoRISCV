@@ -3,18 +3,16 @@
 import { koggeStone, rca, CLA4 } from '../lib';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
-import { analyzeTiming, CLK_TO_Q, SETUP, type TimingReport } from '../sim/timing';
+import { analyzeTiming, CLK_TO_Q, PS_NOTE, PS_PER_NAND, SETUP, type TimingReport } from '../sim/timing';
 import { h } from '../ui/dom';
 import type { ScenePanel, Stage, Widget } from '../view/stage';
-
-const PS_PER_NAND = 25; // a 28 nm-class process, loaded NAND2
 
 const reports = new WeakMap<object, TimingReport | null>();
 
 export const timingPanel: ScenePanel = (stage: Stage): Widget => {
   const body = h('div');
   const title = h('h4', null, 'Critical path', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'static timing'));
-  const el = h('div', { class: 'mem-panel', style: 'left:12px;right:auto;bottom:12px;width:300px' }, title, body);
+  const el = h('div', { class: 'mem-panel', 'data-dock': 'left', style: 'width:300px' }, title, body);
   title.addEventListener('click', () => el.classList.toggle('collapsed'));
   const design = stage.sim!.design;
   let rep = reports.get(design);
@@ -41,7 +39,7 @@ export const timingPanel: ScenePanel = (stage: Stage): Widget => {
   body.append(
     h('div', { class: 'readout', style: 'margin-top:0' },
       h('div', null, h('b', null, String(r.period)), h('span', null, 'NAND delays per cycle')),
-      h('div', null, h('b', null, `${mhz.toFixed(0)} MHz`), h('span', null, `at ~${PS_PER_NAND} ps / NAND`))),
+      h('div', { title: PS_NOTE }, h('b', null, `${mhz.toFixed(0)} MHz`), h('span', null, `at an illustrative ${PS_PER_NAND} ps / NAND`))),
     h('p', { class: 'sub', style: 'margin:8px 0 6px;font-size:12.5px' }, `clk→q ${CLK_TO_Q} + logic ${r.logic} + setup ${SETUP}. Launch: ${r.launch.join('.')}, capture: ${r.capture.slice(0, 2).join('.')}…`),
     h('div', { class: 'tstages' }, r.stages.map((s) => {
       const w = Math.max(2, ((s.arrival - prev) / maxA) * 100);

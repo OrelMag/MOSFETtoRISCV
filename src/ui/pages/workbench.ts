@@ -1,9 +1,9 @@
 // The workbench: open any component from the library on its own, drive its inputs freely,
-// and drill into it. (The full wiring sandbox comes in a later phase.)
+// and drill into it; "Open in Sandbox" (stage bar) copies it into the editor as a chip.
 
 import { bench } from '../../chapters/types';
-import { registry } from '../../lib';
-import { families, type Family, resolveComponent } from '../../lib/resolve';
+import { libraryItems } from '../../lib/catalog';
+import { familyOf, resolveComponent } from '../../lib/resolve';
 import { needsSwitchLevel } from '../../sim/harness';
 import type { ComponentDef } from '../../sim/types';
 import { netlistOf } from '../../sim/types';
@@ -11,13 +11,9 @@ import { Inspector } from '../../view/inspector';
 import { Stage } from '../../view/stage';
 import { memGridPanel } from '../../widgets/memgrid';
 import { transistorLeaf } from '../../widgets/mosfet';
+import { benchOpened, benchTabs } from '../benchtabs';
 import { h } from '../dom';
 import type { Page } from './chapter';
-
-const CATS: [string, string][] = [
-  ['transistor', 'Transistors'], ['cell', 'CMOS cells'], ['gate', 'Gates'], ['arithmetic', 'Arithmetic'],
-  ['routing', 'Selection & routing'], ['sequential', 'Sequential'], ['memory', 'Memory'],
-];
 
 export class WorkbenchPage implements Page {
   readonly el: HTMLElement;
@@ -35,7 +31,7 @@ export class WorkbenchPage implements Page {
     search.addEventListener('input', () => { this.filter = search.value.toLowerCase(); this.renderList(); });
     this.list = h('div', { class: 'lib-list' });
     this.params = h('div', { class: 'param-row', style: 'padding:0 12px 10px' });
-    const lib = h('aside', { class: 'library' }, search, this.params, this.list);
+    const lib = h('aside', { class: 'library' }, benchTabs('components'), search, this.params, this.list);
     this.el = h('div', { class: 'bench' }, lib, this.stage.el, inspector.el);
     this.open(id || 'rca4');
   }
@@ -47,10 +43,11 @@ export class WorkbenchPage implements Page {
       return;
     }
     this.current = def.id;
+    benchOpened(def.id, this.el);
     // Primitives and transistor-level parts are shown inside a test bench so they can be opened.
     const root: ComponentDef = def.prim === 'nand' || def.prim === 'nmos' || def.prim === 'pmos' || (!netlistOf(def) && !needsSwitchLevel(def))
       ? bench(def) : def;
-    const panels = def.category === 'memory' ? [memGridPanel] : [];
+    const panels = /^ram\d/.test(def.id) ? [memGridPanel] : [];
     this.stage.load({ root, panels });
     const want = `#/workbench/${def.id}`;
     if (location.hash !== want) history.replaceState(null, '', want);
@@ -58,17 +55,9 @@ export class WorkbenchPage implements Page {
     this.renderList();
   }
 
-  private familyOf(id: string): { fam: Family; values: Record<string, number> } | null {
-    if (!familyIndex) {
-      familyIndex = new Map();
-      for (const fam of families) for (const combo of combos(fam)) familyIndex.set(fam.make(combo).id, { fam, values: combo });
-    }
-    return familyIndex.get(id) ?? null;
-  }
-
   private renderParams(): void {
     this.params.replaceChildren();
-    const f = this.familyOf(this.current);
+    const f = familyOf(this.current);
     if (!f) return;
     for (const p of f.fam.params) {
       const sel = h('select', { 'aria-label': p.name }) as HTMLSelectElement;
@@ -84,21 +73,14 @@ export class WorkbenchPage implements Page {
   private renderList(): void {
     const l = this.list;
     l.replaceChildren();
-    const statics = [...registry.values()].filter((d) => d.prim !== 'alias' && !/\d/.test(d.id.replace(/^(full_adder|half_adder)/, '')) || ['nmos', 'pmos'].includes(d.id));
-    for (const [cat, title] of CATS) {
-      const items: { id: string; name: string; tag?: string }[] = [];
-      for (const d of statics) if (d.category === cat && !d.id.startsWith('bench_')) items.push({ id: d.id, name: d.name });
-      for (const f of families) if (f.category === cat) {
-        const initial = Object.fromEntries(f.params.map((p) => [p.name, p.initial]));
-        items.push({ id: f.make(initial).id, name: f.name, tag: 'n-bit' });
-      }
+    for (const { title, items } of libraryItems()) {
       const shown = items.filter((i) => !this.filter || i.name.toLowerCase().includes(this.filter) || i.id.includes(this.filter));
       if (!shown.length) continue;
       l.append(h('div', { class: 'lib-cat' }, title));
-      const fam = this.familyOf(this.current)?.fam;
+      const fam = familyOf(this.current)?.fam;
       for (const it of shown) {
-        const on = it.id === this.current || (fam && it.tag && families.find((f) => f.name === it.name) === fam);
-        l.append(h('button', { class: `lib-item${on ? ' on' : ''}`, onclick: () => this.open(it.id) }, it.name, it.tag ? h('small', null, it.tag) : null));
+        const on = it.id === this.current || (!!it.family && familyOf(it.id)?.fam === fam);
+        l.append(h('button', { class: `lib-item${on ? ' on' : ''}`, onclick: () => this.open(it.id) }, it.name, it.family ? h('small', null, 'n-bit') : null));
       }
     }
   }
@@ -108,10 +90,3 @@ export class WorkbenchPage implements Page {
   }
 }
 
-let familyIndex: Map<string, { fam: Family; values: Record<string, number> }> | null = null;
-
-function combos(f: Family): Record<string, number>[] {
-  let out: Record<string, number>[] = [{}];
-  for (const p of f.params) out = out.flatMap((o) => p.values.map((v) => ({ ...o, [p.name]: v })));
-  return out;
-}
