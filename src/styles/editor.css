@@ -370,10 +370,6 @@
 }
 @media (max-width: 760px) {
   .sandbox { display: flex; flex-direction: column; height: auto; }
-  /* The toolbar wraps under the tabs instead of widening the page past a phone's screen. */
-  .sb-top { flex-wrap: wrap; }
-  .sb-tabs { flex-basis: 100%; }
-  .sb-actions { flex: 1 1 100%; flex-wrap: wrap; }
   .sb-palette { max-height: 34vh; border-right: 0; border-bottom: 1px solid var(--border); }
   .sb-center { height: 70vh; }
   .sb-props { border-left: 0; border-top: 1px solid var(--border); }
