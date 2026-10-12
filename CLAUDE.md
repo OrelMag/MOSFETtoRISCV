@@ -604,7 +604,7 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
 - Wire palettes: `data-palette` on `<html>` (styles/palettes.css, `light-dark()` tokens). Use
   `--w0 --w1 --wx --wz --bus --bus1` and the shape tokens (`--wire-w0` …), never raw colours.
   Probe colours are `--probe-0..7` (class `p0..p7` sets `--pc`).
-- Colour per net (settings.netColors, `data-netcolors="on"`, off by default): view/nethue.ts gives each net a hue from
+- Colour per net (settings.netColors, `data-netcolors="on"`; on by default with the vivid look): view/nethue.ts gives each net a hue from
   `netKey` (its name, else its sorted ends), then `spreadHues` moves those within 60° of a net drawn next to them (from
   the routed paths in SchematicView, the wires' polylines in EditorView: recomputed per build and wire shape); drawn elements carry it as inline `--nh` (value classes are rewritten on
   every repaint) and palettes.css rebuilds `--w0 --w1 --bus --bus1 …` from it. A new per-net element must get
