@@ -10,6 +10,7 @@
     "build": "tsc --noEmit && vite-node scripts/hwstats.ts && vite build",
     "stats": "vite-node scripts/hwstats.ts",
     "preview": "vite preview",
+    "smoke": "vite-node scripts/smoke.ts",
     "desktop": "npm run build && npm --prefix desktop install && npm --prefix desktop run dist",
     "layout:export": "vite-node scripts/export-layout.ts layout/design",
     "layout:verify": "vite-node scripts/verify-export.ts",

@@ -38,6 +38,10 @@ jobs:
           else
             echo "no layout published yet"
           fi
+      # Every route of the built site in headless Chrome (preinstalled on the runner): a runtime error,
+      # a failed request or a page wider than the window does not deploy.
+      - name: Smoke test
+        run: npm run smoke
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

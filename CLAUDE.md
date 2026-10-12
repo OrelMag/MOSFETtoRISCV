@@ -32,6 +32,7 @@ npm test             # Vitest (simulation + library correctness), must stay gree
 npm run typecheck    # tsc --noEmit (strict)
 npm run build        # typecheck + hwstats.json (npm run stats, ~20 s) + production build into dist/ (relative base)
 npm run preview      # serve dist/
+npm run smoke        # every route of dist/ in headless Chrome, fails on any runtime error (~3 min)
 npm run desktop      # build + desktop/ (Electron, own package): portable Windows .exe in desktop/release/
 ```
 
@@ -41,7 +42,15 @@ fuses off (runAsNode: VS Code sets ELECTRON_RUN_AS_NODE, so run `electron .` the
 made in the program point at the public site (editor/files.ts `SITE_URL`). `.github/workflows/desktop.yml`
 (manual or `v*` tag) publishes the release `desktop-latest`.
 
-CI (`.github/workflows/deploy.yml`) runs tests + build and deploys `dist/` to GitHub Pages
+`scripts/smoke.ts` (no dependency: launches Chrome itself, `CHROME` env else the usual paths, and speaks the DevTools
+Protocol over Node's WebSocket) serves dist/ with `vite preview` (or `--url <site>`) and opens every route generated
+from the code (chapter steps in both themes, each workbench family's default, campaign map / intro / codex / every
+level, sandbox and its examples seeded in localStorage) as a fresh load in parallel tabs (`--tabs n`), each in its own
+browser context; it fails on exceptions, console / browser errors, failed requests (`OPTIONAL`: layout/ and Google Fonts),
+"could not load" panels, editor error toasts / diagnostics, an empty main view, and horizontal overflow at 1280 px and on
+a 390 px phone (a few pages). `--only <substring>`, `--headful`, `--dwell <ms>` (wait after settling, default 600).
+
+CI (`.github/workflows/deploy.yml`) runs tests + build + smoke and deploys `dist/` to GitHub Pages
 on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-export.ts <design>`, one parallel job per design (multi, sys, sys-m)
 (Yosys synthesizes the exported dual-core and the RV32I / RV32IM system CPUs, each netlist is simulated against ours,
 every output every cycle, on their programs with irq pulses and switch changes). Run it locally (`npx vite-node scripts/verify-export.ts all`, needs `pip install yowasp-yosys`)
