@@ -368,6 +368,12 @@
   .sandbox { grid-template-columns: 200px minmax(0, 1fr) 240px; }
   .sb-hint { display: none; }
 }
+/* The actions take ~840 px with their labels: below that they wrap under the tabs instead of widening the page
+   (wrapped, not scrolled, so their drop-down menus are not clipped). */
+@media (max-width: 1000px) {
+  .sb-top { flex-wrap: wrap; }
+  .sb-actions { flex: 1 1 100%; flex-wrap: wrap; }
+}
 @media (max-width: 760px) {
   .sandbox { display: flex; flex-direction: column; height: auto; }
   .sb-palette { max-height: 34vh; border-right: 0; border-bottom: 1px solid var(--border); }
