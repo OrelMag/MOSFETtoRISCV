@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { carrierVelocity, channelCharge, current, depletionDepth, K, pinchPoint, tween, VT } from '../src/widgets/mosphys';
+import { carrierVelocity, channelCharge, current, depletionDepth, discharge, K, LAMBDA, loadOf, pinchPoint, tween, VDD, VT } from '../src/widgets/mosphys';
 
 // The cross-section animates these functions, so they must agree with the square-law current.
 describe('MOSFET channel physics', () => {
@@ -33,16 +33,52 @@ describe('MOSFET channel physics', () => {
   it('Q·dV/dx equals I/K along the channel (current continuity, linear region)', () => {
     const vov = 1.2, vds = 0.5, id = current(vov, vds).id, dx = 1e-6;
     for (const x of [0.1, 0.4, 0.8]) {
-      // V(x) = Vov − Q(x)
+      // V(x) = Vov − Q(x); the charge model has no channel-length modulation, so divide it out.
       const dv = (channelCharge(vov, vds, x) - channelCharge(vov, vds, x + dx)) / dx;
-      expect(channelCharge(vov, vds, x) * dv).toBeCloseTo(id / K, 5);
+      expect(channelCharge(vov, vds, x) * dv).toBeCloseTo(id / K / (1 + LAMBDA * vds), 5);
     }
   });
 
-  it('current is (nearly) continuous where linear meets saturation', () => {
-    const vov = 0.8;
-    const lin = current(vov, vov - 1e-9).id, sat = current(vov, vov).id;
-    expect(Math.abs(sat - lin) / lin).toBeLessThan(0.05);
+  it('current is continuous where linear meets saturation, for every gate drive', () => {
+    for (const vov of [0.15, 0.45, 0.8, 1.35]) {
+      const lin = current(vov, vov - 1e-9), sat = current(vov, vov);
+      expect(lin.kind).toBe('lin');
+      expect(sat.kind).toBe('sat');
+      expect(Math.abs(sat.id - lin.id) / sat.id).toBeLessThan(1e-6);
+    }
+  });
+
+  it('current never falls as Vds or Vgs rises', () => {
+    for (const vov of [0.1, 0.6, 1.35]) {
+      let last = -1;
+      for (let vds = 0; vds <= VDD; vds += 0.01) { const { id } = current(vov, vds); expect(id).toBeGreaterThanOrEqual(last); last = id; }
+    }
+    for (const vds of [0.1, 0.9, 1.8]) {
+      let last = -1;
+      for (let vov = -0.4; vov <= VDD - VT; vov += 0.01) { const { id } = current(vov, vds); expect(id).toBeGreaterThanOrEqual(last); last = id; }
+    }
+  });
+
+  it('discharging a load: falls monotonically, and t50 is about C·ΔV / I_on', () => {
+    const c = loadOf(2), ion = current(VDD - VT, VDD).id;
+    expect(c).toBe(5);
+    const { t, v, t50 } = discharge(1, c);
+    expect(t[0]).toBe(0);
+    expect(v[0]).toBe(VDD);
+    for (let i = 1; i < v.length; i++) expect(v[i]).toBeLessThanOrEqual(v[i - 1]);
+    // Saturation from VDD down to Vov, then the weaker linear region: a little slower than C·(VDD/2)/I_on.
+    const est = ((c * (VDD / 2)) / ion) * 1e3;
+    expect(t50).toBeGreaterThan(est);
+    expect(t50).toBeLessThan(est * 1.2);
+    expect(t50).toBeGreaterThan(15);
+    expect(t50).toBeLessThan(30);
+  });
+
+  it('a wider transistor or a smaller load switches faster, in proportion', () => {
+    const base = discharge(1, loadOf(2)).t50;
+    expect(discharge(2, loadOf(2)).t50).toBeCloseTo(base / 2, 1);
+    expect(discharge(1, loadOf(4)).t50).toBeGreaterThan(base);
+    expect(discharge(1, 2 * loadOf(2)).t50).toBeCloseTo(base * 2, 1);
   });
 
   it('carriers move faster where the channel is thinner, at constant current', () => {

@@ -8,10 +8,37 @@ export const VT = 0.45;
 export const K = 220; // µA/V² (k'·W/L), a plausible small device
 export const LAMBDA = 0.05; // channel-length modulation, 1/V
 
-export function current(vov: number, vds: number): { id: number; region: string } {
-  if (vov <= 0) return { id: 0, region: 'cut-off: no channel, no current' };
-  if (vds < vov) return { id: K * (vov * vds - (vds * vds) / 2), region: 'linear: the channel acts like a resistor' };
-  return { id: (K / 2) * vov * vov * (1 + LAMBDA * vds), region: 'saturation: the channel pinches off near the drain' };
+export type Region = 'cut' | 'lin' | 'sat';
+
+export function current(vov: number, vds: number): { id: number; region: string; kind: Region } {
+  if (vov <= 0) return { id: 0, kind: 'cut', region: 'cut-off: no channel, no current' };
+  // (1 + λ·Vds) in both regions, as SPICE's level-1 model does: applied to saturation alone, the
+  // current would jump by λ·Vds where the two regions meet.
+  const clm = 1 + LAMBDA * vds;
+  if (vds < vov) return { id: K * (vov * vds - (vds * vds) / 2) * clm, kind: 'lin', region: 'linear: the channel acts like a resistor' };
+  return { id: (K / 2) * vov * vov * clm, kind: 'sat', region: 'saturation: the channel pinches off near the drain' };
+}
+
+/** Illustrative capacitances for "what one switch costs": the gate of a unit-width transistor, and the
+ *  wire to the loads. In fF; µA / fF = 1 V/ns, and fF · V² = fJ. */
+export const C_GATE = 1;
+export const C_WIRE = 1;
+
+/** The load on an output driving `fanout` CMOS inputs (an NMOS and a PMOS gate each) plus its wire. */
+export const loadOf = (fanout: number): number => fanout * 2 * C_GATE + C_WIRE;
+
+/** An NMOS of width `w` (unit transistors in parallel) discharging `cLoad` fF from VDD, its gate at VDD
+ *  from t = 0: dV/dt = −w·I(Vov, V) / C. Samples every `every` ps up to `tMax`; t50 is the time to VDD / 2. */
+export function discharge(w: number, cLoad: number, tMax = 120, every = 1): { t: number[]; v: number[]; t50: number } {
+  const dt = 0.01, vov = VDD - VT, t = [0], v = [VDD];
+  let vo = VDD, t50 = Infinity;
+  for (let i = 1; i * dt <= tMax + 1e-9; i++) {
+    const next = Math.max(0, vo - ((w * current(vov, vo).id) / cLoad) * 1e-3 * dt);
+    if (t50 === Infinity && next <= VDD / 2) t50 = (i - 1 + (vo - VDD / 2) / (vo - next)) * dt;
+    vo = next;
+    if (Math.abs((i * dt) / every - Math.round((i * dt) / every)) < 1e-6) { t.push(i * dt); v.push(vo); }
+  }
+  return { t, v, t50 };
 }
 
 /** Where the inversion layer ends. In saturation the pinch-off point moves toward the source as
