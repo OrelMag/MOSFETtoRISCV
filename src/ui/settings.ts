@@ -27,7 +27,7 @@ interface State {
   wide: boolean;
   /** Bits flow along the wires that carry them (off: wires are only coloured). */
   wireFlow: boolean;
-  /** Every net drawn in a hue of its own (brightness still shows the value); off by default. */
+  /** Every net drawn in a hue of its own (brightness still shows the value); on by default with the vivid look. */
   netColors: boolean;
   /** Vivid look (Turing Complete style, styles/vivid.css): filled bright parts, thicker wires. */
   vivid: boolean;
@@ -37,6 +37,8 @@ interface State {
   cartoon: boolean;
   /** The vivid look switched colour per net on (so switching it off turns that off again). */
   vividNets: boolean;
+  /** Defaults revision the stored settings were last brought up to (1: the vivid look and cartoon parts on). */
+  looks: number;
   /** Codex terms in the chapters' prose are marked, their summary shown on hover. */
   glossary: boolean;
   /** Sandbox: new wires are simple connections, straight from point to point at any angle (off: horizontal and vertical legs). */
@@ -57,12 +59,21 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: false, vivid: false, board: true, cartoon: false, vividNets: false, glossary: true, simpleWires: false, autoClock: true, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {} };
 
 function load(): State {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...defaults, ...JSON.parse(raw) };
+    if (raw) {
+      const st: State = { ...defaults, looks: 0, ...JSON.parse(raw) };
+      // Settings saved before the vivid look and cartoon parts became the default get them once; turned off since, they stay off.
+      if (st.looks < 1) {
+        if (!st.vivid && !st.netColors) st.vividNets = true;
+        if (!st.vivid) st.netColors = true;
+        st.vivid = true; st.cartoon = true; st.looks = 1;
+      }
+      return st;
+    }
   } catch { /* private mode, blocked storage, ... */ }
   return { ...defaults };
 }

@@ -333,7 +333,7 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   or 9 hues clear of the X red; brightness still gives the value. Stored as `hue` on the wires and pointers, so a net
   shows the colour most of its coloured pieces carry (wires joined later take it, two coloured nets joined keep the
   larger group's); saved and shared, kept through collapse / unravel, never in the compile key (one undo step)
-- ✅ Colour per net: a switch in the wire-colour menu (off by default) gives every net a hue of its own, from its name
+- ✅ Colour per net: a switch in the wire-colour menu (on with the vivid look, so on by default) gives every net a hue of its own, from its name
   or else its ends (stable across rebuilds, edits and reloads; a circuit opened in the sandbox keeps its chapter
   colours, bar the few nets its new drawing puts next to others); brightness still says the value (0 a dim tint, 1 bright with its glow), X and Z keep their colours and
   dashes, hues avoid the X red. Wires, dots, pointers, tap labels, bus labels, riding values and slow-motion fronts,
@@ -341,7 +341,7 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   60° of a neighbour's (running within a few units, or crossing it) moves to the nearest hue clear of them, the most
   crowded nets first, two refining passes; the rest keep their own. Across the 632 library schematics, neighbouring
   pairs closer than 20° drop from 8 338 to 3 058 (none left on the CPU tops); 40 ms on the 64-bit Kogge–Stone
-- ✅ Vivid look (styles/vivid.css, `data-look="vivid"`): library boxes and muxes filled with their category hue,
+- ✅ Vivid look (styles/vivid.css, `data-look="vivid"`, on by default with cartoon parts since 2026-10-12; saved settings get both once): library boxes and muxes filled with their category hue,
   user chips with their own, gates blue, white bold labels, wires and dots 1.6× thicker (`--wire-k`); switching it on
   turns colour per net on (and off again with it, unless set since). A Dark board switch (on by default) puts every
   schematic on a dark board in the light theme too: the SVG alone takes the dark theme's tokens, the chrome and

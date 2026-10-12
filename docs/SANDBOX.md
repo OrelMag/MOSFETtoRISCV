@@ -69,8 +69,8 @@ inside view of a chip, pointers sit where you put them.
 whole net: its other wires and pointers show it too, and so do wires you join to it later. Brightness
 still gives the value (dim 0, bright 1, X and Z keep their red and violet dashes). *Auto* uses the
 net's colour-per-net hue; the crossed swatch removes the colour. Colours are saved and shared with the
-chip and never recompile it. The **Vivid look** (wire-colour menu) fills parts with bright colours
-and puts the circuit on a dark board; **Cartoon parts** under it adds shadows, gloss and small icons.
+chip and never recompile it. The **Vivid look** (wire-colour menu, on by default) fills parts with bright colours
+and puts the circuit on a dark board; **Cartoon parts** under it (also on by default) adds shadows, gloss and small icons.
 
 ## Parts
 
