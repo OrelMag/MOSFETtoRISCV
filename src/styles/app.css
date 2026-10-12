@@ -33,15 +33,29 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   background: linear-gradient(135deg, var(--accent), #e8590c); color: #fff;
 }
 .brand small { color: var(--muted); font-weight: 500; }
-.nav { display: flex; gap: 2px; margin-left: 12px; }
+.nav { display: flex; gap: 2px; margin-left: 12px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.nav::-webkit-scrollbar { display: none; }
 .nav a {
-  display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px;
+  flex: none; display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px;
   color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 14px;
 }
 .nav a:hover { background: var(--surface-2); color: var(--text); }
 .nav a.active { background: var(--accent-soft); color: var(--accent); }
 .spacer { flex: 1; }
+.brand, .tools { flex: none; }
 .tools { display: flex; align-items: center; gap: 8px; }
+/* With every label the bar needs ~1 360 px: it sheds the tagline, then Slow motion's label, then the nav's labels
+   (each link keeps its name as a tooltip). Past that the nav shrinks and scrolls, so the page never scrolls sideways. */
+@media (max-width: 1440px) { .brand small { display: none; } }
+@media (max-width: 1220px) { .tools .lbl { display: none; } }
+@media (max-width: 1140px) { .nav a span { display: none; } }
+@media (max-width: 580px) { .brand-name { display: none; } }
+@media (max-width: 480px) {
+  .nav { margin-left: 0; }
+  .nav a { padding: 6px 7px; }
+  .nav a .icon:last-child:not(:first-child) { display: none; }
+  .topbar .tools { gap: 4px; }
+}
 
 /* palette menu */
 .pal-wrap { position: relative; }
