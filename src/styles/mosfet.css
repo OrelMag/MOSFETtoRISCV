@@ -1,0 +1,82 @@
+/* ---------- MOSFET widgets (src/widgets/mosfet.ts, mosregions.ts, moscost.ts, mosxsec.ts, mosparts.ts) ---------- */
+.mos {
+  --mos-elec: light-dark(#2563eb, #60a5fa); --mos-elec-flow: light-dark(#1e3a8a, #dbeafe);
+  --mos-hole: light-dark(#db2777, #f472b6); --mos-hole-flow: light-dark(#831843, #fce7f3);
+  --mos-sub-p: light-dark(#fdeaf3, #35192a); --mos-sub-n: light-dark(#e6effd, #152844);
+  --mos-well-n: light-dark(#bfd3fb, #1f3a68); --mos-well-p: light-dark(#f8c6dc, #5a2140);
+  --mos-chan-n: light-dark(#3b82f6, #60a5fa); --mos-chan-p: light-dark(#ec4899, #f472b6);
+  --mos-gate: light-dark(#3d4354, #9aa1b4); --mos-oxide: light-dark(#c9cdd8, #4a5061);
+  --mos-depl: light-dark(rgb(255 255 255 / 55%), rgb(10 12 18 / 50%));
+  container-type: inline-size; display: grid; gap: 12px;
+}
+.mos svg { display: block; width: 100%; height: auto; }
+.mos .panel { padding: 12px 14px; min-width: 0; }
+.mos-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 4px; }
+.mos-xpanel .sub { margin: 0 0 6px; }
+
+/* the cross-section */
+.mos-x .sub-p { fill: var(--mos-sub-p); } .mos-x .sub-n { fill: var(--mos-sub-n); }
+.mos-x .well-n { fill: var(--mos-well-n); } .mos-x .well-p { fill: var(--mos-well-p); }
+.mos-x .chan-n { fill: var(--mos-chan-n); } .mos-x .chan-p { fill: var(--mos-chan-p); }
+.mos-x .gate { fill: var(--mos-gate); } .mos-x .oxide { fill: var(--mos-oxide); }
+.mos-x .depl { fill: var(--mos-depl); stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.mos-x .e { fill: var(--mos-elec); } .mos-x .h { fill: none; stroke: var(--mos-hole); stroke-width: 1.6; }
+.mos-x .fl.e { fill: var(--mos-elec-flow); } .mos-x .fl.h { fill: none; stroke: var(--mos-hole-flow); stroke-width: 1.8; }
+.mos-x .field { stroke: var(--text-2); stroke-width: 1.3; fill: none; }
+.mos-x .lead { stroke: var(--text-2); stroke-width: 3; fill: none; }
+.mos-x .pinch { stroke: var(--good); stroke-width: 1.2; stroke-dasharray: 3 2; }
+.mos-x .term { font: 700 17px var(--font-mono); fill: var(--text); }
+.mos-x .volt { font: 600 12px var(--font-mono); fill: var(--text-2); }
+.mos-x .lbl { font: 500 12px var(--font-ui); fill: var(--text-2); }
+.mos-x .lbl-s { font: 500 11px var(--font-ui); fill: var(--muted); }
+.mos-x .lbl-p { font: 600 11px var(--font-ui); fill: var(--good); }
+.mos-x .gq { font: 700 14px var(--font-mono); fill: var(--surface); }
+.mos-x .gl { font: 600 12px var(--font-ui); fill: var(--surface); }
+/* The whole device stays short enough to leave the charts in view; the drawing keeps its proportions. */
+.mos-x-device { max-height: 380px; }
+/* The close-up is drawn ~3.5× larger: smaller type keeps the labels in proportion. */
+.mos-x-channel { max-height: 260px; }
+.mos-x-channel .lbl-s, .mos-x-channel .lbl-p { font-size: 4.6px; }
+.mos-x-channel .gq { font-size: 6px; }
+.mos-x-channel .field { stroke-width: 0.8; }
+.mos-x-channel .h { stroke-width: 1.1; }
+.mos-x-channel .depl { stroke-width: 0.6; }
+.mos-x-channel .pinch { stroke-width: 0.8; }
+
+/* controls and readouts */
+.mos-ctl .sub { margin: 0 0 6px; }
+.mos-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; }
+.mos-sl { display: flex; align-items: center; gap: 10px; flex: 1 1 240px; min-width: 0; font-size: 13.5px; }
+.mos-sl span { width: 56px; flex: none; color: var(--text-2); }
+.mos-sl input { flex: 1; min-width: 80px; accent-color: var(--accent); }
+.mos-sl output { width: 62px; flex: none; text-align: right; font: 600 13px var(--font-mono); font-variant-numeric: tabular-nums; }
+.mos-note { margin: 8px 0 0 !important; }
+.mos-chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.mos-chips > div { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; min-width: 0; }
+.mos-chips b { display: block; font: 700 15px var(--font-mono); font-variant-numeric: tabular-nums; }
+.mos-chips span { font-size: 11.5px; color: var(--muted); }
+.mos-pill { display: inline-block; margin-top: 2px; padding: 0 8px; border-radius: 999px; font: 600 11.5px var(--font-ui); }
+.mos-pill.cut { background: var(--surface); color: var(--muted); border: 1px solid var(--border-strong); }
+.mos-pill.lin { background: var(--accent-soft); color: var(--accent); }
+.mos-pill.sat { background: var(--good-soft); color: var(--good); }
+.mos-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+/* Side by side, a chart needs ~340 px to keep its ticks legible (the schematic's leaf view is ~600 px wide). */
+@container (max-width: 700px) { .mos-charts { grid-template-columns: minmax(0, 1fr); } }
+@container (max-width: 520px) { .mos-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* the charts */
+.mos-plot .grid { stroke: var(--border); stroke-width: 1; }
+.mos-plot .ax { stroke: var(--border-strong); stroke-width: 1; }
+.mos-plot .tick { font: 10.5px var(--font-mono); fill: var(--muted); }
+.mos-plot .axl { font: 600 11px var(--font-ui); fill: var(--text-2); }
+.mos-plot .vt { stroke: var(--muted); stroke-dasharray: 3 3; }
+.mos-plot .fam { fill: none; stroke: var(--border-strong); stroke-width: 1.4; }
+.mos-plot .cur { fill: none; stroke: var(--accent); stroke-width: 2.4; }
+.mos-plot .bound { fill: none; stroke: var(--good); stroke-width: 1.4; stroke-dasharray: 5 4; }
+.mos-plot .op { fill: var(--w1); stroke: var(--surface); stroke-width: 2; }
+.mos-plot .rg-lin { fill: color-mix(in srgb, var(--accent) 7%, transparent); }
+.mos-plot .rg-sat { fill: color-mix(in srgb, var(--good) 8%, transparent); }
+.mos-plot .rl { font: 600 11px var(--font-ui); }
+.mos-plot .rl.lin { fill: var(--accent); } .mos-plot .rl.sat { fill: var(--good); }
+.mos-plot .t50 { stroke: var(--warn); stroke-width: 1.4; stroke-dasharray: 3 3; }
+.mos-plot .rl.t50l { fill: var(--warn); }

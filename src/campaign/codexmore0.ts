@@ -13,7 +13,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Forgetting that a node whose paths are all off keeps its last value as charge for a while: DRAM relies on it on purpose, a floating input in a design does it by accident.',
     ],
     lib: 'nmos_switch',
-    chapters: [{ chapter: 'mosfet', step: 0, label: 'A switch made of silicon' }, { chapter: 'mosfet', step: 1, label: 'NMOS and PMOS' }, { chapter: 'mosfet', step: 2, label: 'One switch is not enough' }],
+    chapters: [{ chapter: 'mosfet', step: 0, label: 'A switch made of silicon' }, { chapter: 'mosfet', step: 1, label: 'Three regions' }, { chapter: 'mosfet', step: 2, label: 'NMOS and PMOS' }, { chapter: 'mosfet', step: 3, label: 'What one switch costs' }, { chapter: 'mosfet', step: 4, label: 'One switch is not enough' }],
   },
   inverter: {
     idea: 'The CMOS inverter is one PMOS from V<sub>DD</sub> to the output and one NMOS from the output to ground, gates tied together. a = 0: the PMOS conducts, the NMOS is off, y = 1; a = 1: the reverse. In either steady state one transistor is off, so no current flows from rail to rail, and power is spent only charging and discharging the output when it switches (dynamic power ∝ C·V²·f). The output is always driven by a rail, so the inverter restores a degraded input: a chain of inverters regenerates logic levels.<br>It is 2 transistors. NOT built from a NAND with both inputs tied is 4, which is why cell libraries keep the real inverter, and use chains of growing inverters as buffers to drive large loads.',

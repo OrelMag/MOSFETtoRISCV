@@ -96,6 +96,18 @@ describe('MOSFET channel physics', () => {
     expect(depletionDepth(1.8)).toBe(1);
   });
 
+  it("the numbers chapter 1's text quotes", () => {
+    // "What one switch costs": fan-out 2 → 5 fF, about 21 ps, 16 fJ a swing; fan-out 4 → 9 fF, 1.8× the delay.
+    expect(loadOf(2)).toBe(5);
+    expect(Math.round(discharge(1, loadOf(2)).t50)).toBe(21);
+    expect(Math.round(loadOf(2) * VDD * VDD)).toBe(16);
+    expect(loadOf(4)).toBe(9);
+    expect(discharge(1, loadOf(4)).t50 / discharge(1, loadOf(2)).t50).toBeCloseTo(1.8, 3);
+    // "Three regions" quiz: Vgs 1.2 V, Vds 0.3 V is linear.
+    expect(current(1.2 - VT, 0.3).kind).toBe('lin');
+    expect(current(1.2 - VT, 0.8).kind).toBe('sat');
+  });
+
   it('tweens start at from, end at to, and move monotonically', () => {
     const f = tween(0, 1.8, 100, 600);
     expect(f(100)).toEqual({ v: 0, done: false });
