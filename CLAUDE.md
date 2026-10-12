@@ -50,7 +50,7 @@ browser context; it fails on exceptions, console / browser errors, failed reques
 "could not load" panels, editor error toasts / diagnostics, an empty main view, and horizontal overflow at 1280 px and on
 a 390 px phone (a few pages). `--only <substring>`, `--headful`, `--dwell <ms>` (wait after settling, default 600).
 
-CI (`.github/workflows/deploy.yml`) runs tests + build + smoke and deploys `dist/` to GitHub Pages
+CI (`.github/workflows/deploy.yml`) runs tests beside build + smoke (one job) and deploys `dist/` to GitHub Pages
 on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-export.ts <design>`, one parallel job per design (multi, sys, sys-m)
 (Yosys synthesizes the exported dual-core and the RV32I / RV32IM system CPUs, each netlist is simulated against ours,
 every output every cycle, on their programs with irq pulses and switch changes). Run it locally (`npx vite-node scripts/verify-export.ts all`, needs `pip install yowasp-yosys`)

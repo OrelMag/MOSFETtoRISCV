@@ -15,6 +15,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The unit tests (~8 min) run beside the build and its smoke test (~1 + ~8 min), not before them.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
   build:
     runs-on: ubuntu-latest
     steps:
@@ -26,7 +37,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm test
       - run: npm run build
       - name: Add the chip layout (published by the layout workflow, if any)
         env:
@@ -66,7 +76,7 @@ jobs:
       - run: pip install yowasp-yosys
       - run: npx vite-node scripts/verify-export.ts ${{ matrix.design }}
   deploy:
-    needs: [build, verify-hdl]
+    needs: [test, build, verify-hdl]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
