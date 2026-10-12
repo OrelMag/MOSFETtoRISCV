@@ -60,6 +60,7 @@ describe('the campaign graph', () => {
         const ch = chapterById(l.chapter);
         expect(ch, `${n.id}: chapter ${l.chapter}`).toBeDefined();
         expect(l.step ?? 0).toBeLessThan(ch!.steps.length);
+        if (l.step !== undefined) expect(l.label, `${n.id}: ${l.chapter} step ${l.step}`).toBe(ch!.steps[l.step].title);
       }
       for (const u of n.unlocks ?? []) if (!u.endsWith('*')) expect(resolveComponent(u), `${n.id} unlocks ${u}`).toBeDefined();
     }

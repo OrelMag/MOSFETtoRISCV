@@ -1,6 +1,8 @@
 import { FULL_ADDER, INV_CMOS, INV_PSEUDO, NAND, NMOS_SWITCH, NOR_CMOS, PMOS_SWITCH, rca } from '../lib';
 import { journeyWidget } from '../widgets/journey';
+import { mosCostWidget } from '../widgets/moscost';
 import { mosfetWidget } from '../widgets/mosfet';
+import { mosRegionsWidget } from '../widgets/mosregions';
 import { bench, type Chapter } from './types';
 
 export const chMap: Chapter = {
@@ -57,7 +59,7 @@ export const chMap: Chapter = {
 
 export const chMosfet: Chapter = {
   id: 'mosfet', num: 1, title: 'The MOSFET', level: 'Transistors',
-  blurb: 'A switch with no moving parts, controlled by a voltage.',
+  blurb: 'A switch with no moving parts, controlled by a voltage: its three regions, and what one switch costs in time and energy.',
   steps: [
     {
       title: 'A switch made of silicon',
@@ -66,12 +68,43 @@ export const chMosfet: Chapter = {
         <em>n-type</em> silicon, with spare electrons, or <em>p-type</em>, with "holes" where electrons are missing.</p>
         <p>An <strong>NMOS transistor</strong> is two n-type islands, the <em>source</em> and the <em>drain</em>,
         in a p-type substrate. Above the gap between them sits the <em>gate</em>, insulated by a layer of oxide
-        only a few atoms thick.</p>
-        <p>Raise the gate voltage and its electric field pulls electrons up against the oxide. Past a
-        <strong>threshold voltage</strong> they form a thin <em>channel</em>, and current can flow from drain
-        to source. Lower the gate and the channel disappears.</p>
-        <div class="try">Drag the gate voltage slowly past the threshold (0.45 V) and watch the channel form.</div>`,
+        a few nanometres thick.</p>
+        <p>Raise the gate voltage and its field first pushes holes away from the oxide, leaving a
+        <em>depletion</em> layer. Past the <strong>threshold voltage</strong> Vt the depletion stops growing:
+        extra gate charge pulls electrons up into a thin <em>channel</em> instead, and current can flow from
+        drain to source. Lower the gate and the channel disappears.</p>
+        <p>Everything on the right is computed from the classic square-law model: once the channel exists,
+        Id = k·(Vgs − Vt)²/2 in saturation, with k = 220 µA/V² and Vt = 0.45 V, a plausible small device at
+        1.8 V. The channel's thickness is its charge, and each carrier moves at the local field.</p>
+        <div class="try">Press <strong>Sweep</strong>, or drag the gate past 0.45 V: the depletion layer grows
+        then stops, electrons (filled dots; holes are rings) rise into a channel, and the current leaves zero.
+        Then raise the drain and watch the channel taper toward it.</div>`,
       widget: () => mosfetWidget({ type: 'n', allowTypeSwitch: false }),
+    },
+    {
+      title: 'Three regions',
+      body: `
+        <p>The channel holds Vgs − Vt of charge at the source but only Vgs − Vt − Vds at the drain, so it
+        tapers. Hold the gate and raise the drain:</p>
+        <ul><li><strong>Linear</strong> (Vds &lt; Vgs − Vt): the current grows with Vds, Id = k·((Vgs − Vt)·Vds − Vds²/2).
+        The channel is a resistor.</li>
+        <li><strong>Saturation</strong> (Vds ≥ Vgs − Vt): the drain end <strong>pinches off</strong>, and the
+        current hardly grows: Id = k·(Vgs − Vt)²/2. A current source set by the gate alone. The same current
+        through a thinner channel means faster carriers, and they race across the pinched-off gap.</li>
+        <li><strong>Cut-off</strong> (Vgs &lt; Vt): no channel, no current.</li></ul>
+        <p>Both formulas carry a factor (1 + λ·Vds), λ = 0.05/V: the pinch-off point creeps toward the source
+        as Vds rises, shortening the channel. Applying it in both regions keeps the current continuous at the
+        boundary.</p>
+        <p>Digital logic lives at the ends: off is cut-off. A gate pulling its output from 1.8 V to 0 V passes
+        through saturation first, then linear, so the saturation current decides how fast it switches.</p>
+        <div class="try">Press <strong>Sweep drain</strong>: the dot runs along one curve and crosses the dashed
+        boundary as the channel pinches off.</div>`,
+      widget: () => mosRegionsWidget(),
+      challenge: {
+        kind: 'quiz', question: 'An NMOS has Vgs = 1.2 V and Vds = 0.3 V (Vt = 0.45 V). Which region is it in?',
+        options: ['Linear', 'Saturation', 'Cut-off'], answer: 0,
+        explain: 'Vgs − Vt = 0.75 V, and Vds = 0.3 V is below it, so the channel reaches the drain without pinching off: linear. Raise Vds past 0.75 V and it saturates.',
+      },
     },
     {
       title: 'NMOS and PMOS',
@@ -92,6 +125,29 @@ export const chMosfet: Chapter = {
       },
     },
     {
+      title: 'What one switch costs',
+      body: `
+        <p>A transistor never drives a bare wire. Its output carries the gates of the next transistors, each a
+        small capacitor (gate over oxide over channel). Switching means moving that charge: the output falls at
+        <strong>dV/dt = −I / C</strong>.</p>
+        <p>So the delay is about <strong>C·ΔV / I</strong>, and every full swing, 0 → 1 → 0, draws
+        <strong>C·V²</strong> from the supply: half of it lost in the pull-up, half in the pull-down. A wider
+        transistor (more of them in parallel) carries more current and switches faster, but its own gate is
+        that much more load for the stage before it.</p>
+        <p>With 1 fF per unit gate (illustrative, the order of a small device), one output driving two inputs
+        carries 5 fF and falls to half in about 21 ps, for 16 fJ a swing. The site counts time in gate delays
+        and converts them at an illustrative 25 ps each: this is where that order of magnitude comes from.
+        Multiply the energy by how often a node switches and by the clock frequency and you have dynamic power,
+        P ≈ α·C·V²·f, which the power estimates later in the journey count from the simulation.</p>
+        <div class="try">Change the width and the fan-out. Delay follows C / I; energy follows C alone.</div>`,
+      widget: () => mosCostWidget(),
+      challenge: {
+        kind: 'quiz', question: 'An output drives 2 inputs (5 fF: 2 × 2 gates + 1 fF of wire). It is rewired to drive 4. Its delay becomes about:',
+        options: ['The same: the transistor did not change', '1.8 times longer', 'Twice as long'], answer: 1,
+        explain: 'The load grows from 5 fF to 9 fF (the wire stays 1 fF) and the current is unchanged, so the delay, C·ΔV / I, grows by 9 / 5 = 1.8.',
+      },
+    },
+    {
       title: 'One switch is not enough',
       body: `
         <p>Here is an NMOS between an output wire and ground. Toggle the gate <code>g</code>.</p>
@@ -99,7 +155,7 @@ export const chMosfet: Chapter = {
         With <code>g = 0</code> it lets go, and <code>out</code> is connected to <em>nothing</em>. It is
         <strong>floating</strong>, shown as <strong>Z</strong> (dashed purple). A floating wire is not 0. It
         is "whatever charge happened to be left there".</p>
-        <div class="try">Double-click the transistor to see it in cross-section, switching live.</div>`,
+        <div class="try">Double-click the transistor to see it in cross-section, switching live (the gate ramps as the bit flips).</div>`,
       scene: () => ({ root: NMOS_SWITCH, inputs: { g: 0 } }),
       challenge: {
         kind: 'quiz', question: 'With g = 0, what value does "out" have?',

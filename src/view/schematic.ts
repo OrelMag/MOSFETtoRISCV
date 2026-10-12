@@ -6,6 +6,7 @@ import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, netlistOf } from '../sim/types';
 import { describeBits, formatBits, type Radix } from '../sim/values';
 import { icon, s } from '../ui/dom';
+import { reducedMotion } from '../ui/motion';
 import { Camera, installPanZoom, type ViewBox } from './camera';
 import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
 import { FlowTokens, type Lane } from './flowtokens';
@@ -612,6 +613,3 @@ export class SchematicView {
     this.tooltip.style.opacity = '1';
   }
 }
-
-const motionQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
-const reducedMotion = () => !!motionQuery?.matches;
