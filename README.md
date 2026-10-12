@@ -50,7 +50,7 @@ instruction at a time), Back to undo, and a lock-step comparison with the golden
 
 ![The campaign map](docs/images/campaign.png)
 
-A tree of levels in the spirit of *Turing Complete*, from a NAND made of transistors to a
+A tree of 90 levels in nine acts, in the spirit of *Turing Complete*, from a NAND made of transistors to a
 pipelined, interrupt-capable 16-bit RISC-V-like CPU (RV16). Each level is built only from parts
 earlier levels unlocked, checked by a full test set, graded against par (NANDs, transistors,
 depth, clock period), and has a reference solution you can take instead, or walk through step by
@@ -73,7 +73,9 @@ simulator, so whatever you build is a real component of the site. The full guide
 - Watch values live, per clock cycle or one gate delay at a time; probe wires into a timing
   diagram (VCD export), and read a chip's static timing with its critical path drawn on it.
 - **Package** a circuit as a chip (name, colour, pin order), use it in other circuits, nest chips
-  to any depth and edit them later: every user of the chip is rebuilt.
+  to any depth and edit them later: every user of the chip is rebuilt. A face editor puts pins on
+  any side and the chip's displays, screens and switches on its box; chips go in folders, circuits
+  in separate projects, favourites on keys 1–9.
 - **Look inside** any placed part, live, down to the transistors; **Open in Sandbox** turns any
   schematic from the chapters or the workbench, CPUs included, into an editable copy.
 - Switch-level parts beyond the MOSFET: resistors, pull-ups / pull-downs, capacitors, transmission
@@ -84,7 +86,10 @@ simulator, so whatever you build is a real component of the site. The full guide
 - I/O: LEDs and LED banks, 7-segment and hex displays, a buzzer, keys bound to your keyboard, a
   keyboard with a key queue, a halt part, random sources and cycle counters; comments on the canvas.
 - The **CPU panel** for any chip that is a processor, yours included, with the golden model in
-  lock-step (single core or the dual-core).
+  lock-step (single core or several cores).
+- **Programs on your own CPU**: a custom instruction set written as a table gives its own
+  assembler and disassembler; 14 program puzzles run on the gates of a ready-made CPU or your own,
+  scored on cycles, NANDs and program size; Examples ▸ 4-bit CPU (4004-inspired, 3 357 NANDs).
 - Wide pins up to 1024 bits, exact; autosave, chip files, share links, Verilog and image export.
 - 21 optional **build challenges**, from a CMOS inverter to an instruction fetch unit, with a test
   player that steps through the failing cases.
@@ -113,8 +118,8 @@ Every number on screen comes from the circuit it describes:
 | Full adder (9-NAND) | 9 | 36 | 6 gate delays |
 | 8-bit ripple-carry adder | 72 | 288 | 20 gate delays |
 | Single-cycle RV32I | 56,498 | 225,992 | critical path 155 delays (a branch) |
-| Five-stage pipelined RV32I | 68,957 | 275,828 | forwarding, hazards, prediction |
-| Dual-core with shared memory | 84,388 | | 0.71 × 0.71 mm in sky130 |
+| Five-stage pipelined RV32I | 68,957 | 275,828 | forwarding, load-use stall, branch flush; period 145 |
+| Dual-core with shared memory (ROMs as instruction ports) | 84,388 | | 0.71 × 0.71 mm in sky130 |
 
 The chapters compare implementations on these numbers: ripple, carry-lookahead, Kogge–Stone,
 carry-select and carry-skip adders (static depth against simulated delay, false paths included);
@@ -184,12 +189,17 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
 
 The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next features:
 
+- **GPU track**: the campaign's act 9 (four RV16 lanes, the active mask, a reconvergence stack, a
+  SIMT core, kernel puzzles), then warps and memory (a warp scheduler, coalescing, banked shared
+  memory; chapters 28–29), then graphics (a rasterizer and the graphics pipeline; chapters 30–31).
 - **A second oracle**: Spike or Sail comparing commit logs with our ISS on the random programs.
-- **Sandbox**: chip appearance (pins on any side, displays on the chip's face), library folders,
-  a custom-ISA table that generates its own assembler, and program puzzles solved on a CPU you built.
-- **Architecture**: private caches with a coherent bus in the gate-level cores, `lr.w` / `sc.w`,
-  more than two cores; the C and A extensions; a scoreboard / Tomasulo widget; the system CPU
-  through the sky130 flow, its reports next to our own estimates.
+- **Architecture**: private caches with a coherent bus in the gate-level cores, `lr.w` / `sc.w`;
+  the C extension and the rest of A; a scoreboard / Tomasulo widget; the system CPU through the
+  sky130 flow, its reports next to our own estimates.
+- **Memory track**: DRAM at switch level and a DDR-style controller, flash with its controller, a
+  shared bus with DMA.
+- **Before the transistor**: the same adder in relays and vacuum tubes, a 3D view of the machine it
+  becomes, and programs on punch cards.
 
 ## Run it
 
@@ -223,6 +233,8 @@ Vite + TypeScript, no UI framework: plain DOM and SVG.
 - `src/view/`: SVG schematics with drill-down, inspector (info, truth table, Verilog), timing panel
 - `src/editor/`: the sandbox (document model, compiler to components, user-chip library, editor UI)
 - `src/campaign/`: the campaign (levels, grading, drills, puzzles, codex)
+- `src/isa/`, `src/isa4/`, `src/puzzles/`: instruction sets as tables, the 4-bit CPU's ISA, the sandbox's
+  program puzzles
 - `src/chapters/`: the narrative
 - `CLAUDE.md`: architecture and conventions in detail; `docs/ROADMAP.md`: plan and status
 

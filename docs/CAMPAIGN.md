@@ -50,9 +50,9 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 ## 2. Design
 
 ### Levels are build challenges
-A campaign build level is a `BuildChallenge` (`src/editor/challenges.ts`). It is played in the
-sandbox like the 21 existing challenges: Start creates `u_ch_<id>` with its pins, and Check runs
-the tests. The engine gains the following:
+A campaign build level is a `BuildChallenge` (`src/editor/challenges.ts`). It is played on its own
+level screen (`#/campaign/play/<node>`; the same chip also opens in the sandbox) like the 21 existing
+challenges: Start creates `u_ch_<id>` with its pins, and Check runs the tests. The engine gains the following:
 
 - **`Allowed = { lib: globs }`**: NAND, wiring, constants, displays and any of your own chips, plus
   the library parts unlocked by the level's *requirements* (the transitive closure of `requires`,
@@ -428,6 +428,10 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
 - **Measured** (phase D): the reference single-cycle core is 5 748 NANDs, clock period 98 NAND delays with
   8-delay memories in the path (81 with Kogge–Stone adders). The bench runs 28 programs (≈1 240 cycles in
   all) in 0.2–0.6 s on 32 bit-parallel lanes; the event-driven fallback gives identical results.
+- **Today's pars** (the figures above are as first measured; §9's review tightened the references): Core III 4 741
+  NANDs, period 98; Pipelines I–IV 7 083 / 7 438 / 7 552 / 9 239, period 65–78; the trap cores 7 278, period 100; the
+  finale 12 059, period 81; prediction 9 810, period 80; multiply core 8 058, period 191; divide core 10 567, period
+  193; multicycle 5 224, period 76; the cache 3 497, period 36.
 
 ---
 
@@ -448,13 +452,16 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
 - ⏳ **A timing level**: fix a setup violation, or overclock until it breaks.
 - ⏳ **Where your NANDs go**: a per-component breakdown of your CPU.
 - ⏳ **Boss level**: snake on an LED matrix, on your own pipelined core.
-- ⏳ **Custom ISA**: an instruction table that generates the assembler (reusing isa16's tables).
+- ✅ **Custom ISA**: done in the sandbox (roadmap Phase 12; `src/isa`, File ▸ Instruction sets…): a table of mnemonics,
+  operands and bit patterns gives an assembler, disassembler, field view and ROM listing. Not from isa16's tables: the
+  tables are their own format (the one preset is the 4-bit CPU's ISA), and RV16 sits beside them behind one Isa shape.
+  Syntax only: a table has no golden model, so the campaign does not use it.
 - ✅ **A level screen of its own**, **why we are building it**, a **step-by-step solution walkthrough** in every
   level and a **fuller codex**: details in the roadmap's Phase 12, Campaign.
 - ⏳ **Before the transistor**: an act with relay and tube bricks, a 3D view of the machine and punch-card
   programs (roadmap Phase 14).
 - ⏳ **GPU act**: SIMD lanes, active masks, a warp scheduler, a coalescer and a rasterizer, with kernel puzzles
-  (roadmap Phase 15).
+  (roadmap Phase 15: act 9's levels are planned there; the journey's chapters 26–27 and the RV32 lane core are live).
 - ⏳ **Memory act**: sense amplifier, DRAM bank with refresh, row-buffer controller, a shared bus with DMA and a
   flash page store (roadmap Phase 16).
 
