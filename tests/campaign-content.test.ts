@@ -46,7 +46,12 @@ describe('the fuller codex', () => {
       for (const l of m.chapters ?? []) {
         const ch = chapterById(l.chapter);
         expect(ch, `${id}: chapter ${l.chapter}`).toBeDefined();
-        if (l.step !== undefined) expect(l.step, `${id}: ${l.chapter} step`).toBeLessThan(ch!.steps.length);
+        if (l.step !== undefined) {
+          expect(l.step, `${id}: ${l.chapter} step`).toBeLessThan(ch!.steps.length);
+          // The label is the step's title, so a step inserted earlier in the chapter fails here instead of
+          // silently pointing the link at its neighbour.
+          expect(l.label, `${id}: ${l.chapter} step ${l.step}`).toBe(ch!.steps[l.step].title);
+        }
       }
     }
   });

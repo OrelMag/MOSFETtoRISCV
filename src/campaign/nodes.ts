@@ -65,7 +65,7 @@ export const NODES: CampaignNode[] = [
     why: 'The dual of NAND, also complete. Why do cell libraries and this campaign prefer NAND? Series PMOS are slow (holes are about 2–3× less mobile than electrons), and NOR puts them in series.',
     tips: ['Swap series and parallel relative to the NAND.'],
     codex: ['nor', 'duality'], unlocks: ['nor_cmos'], par: { transistors: 4 },
-    chapters: [{ chapter: 'nand', step: 2, label: 'NOR' }],
+    chapters: [{ chapter: 'nand', step: 1, label: 'NOR, for comparison' }],
   },
 
   // ---- Act 1 --------------------------------------------------------------------------------
@@ -146,7 +146,7 @@ export const NODES: CampaignNode[] = [
     id: 'n_twos', act: 2, title: "Two's complement", kind: 'drill', requires: ['n_bin'], drill: 'twos', par: { mistakes: 2 },
     why: 'Negative numbers without a sign bit circuit: in two\'s complement the top bit weighs −2^(n−1), so the same adder adds signed and unsigned numbers. Only comparison and overflow differ.',
     tips: ['−x = ¬x + 1.', 'Overflow: both operands have the same sign and the result has the other.'],
-    codex: ['twos', 'overflow', 'signext'], chapters: [{ chapter: 'binary', step: 1, label: "Two's complement" }],
+    codex: ['twos', 'overflow', 'signext'], chapters: [{ chapter: 'binary', step: 1, label: "Negative numbers: two's complement" }],
   },
   {
     id: 'a_ha', act: 2, title: 'Half adder', kind: 'build', requires: ['g_xor', 'n_bin'], base: sandbox('a_ha'),

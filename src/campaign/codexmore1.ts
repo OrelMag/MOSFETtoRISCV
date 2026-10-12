@@ -392,7 +392,7 @@ x0 zero · x1 ra · x2 sp · x3–x5 a0–a2 · x6–x7 t0–t1</pre>`,
       'Expecting 12-bit immediates: addi, lw, sw and branches take −32 … 31, so <code>li</code> of anything else is usually two words, and a branch reaches ±32 words (jal: −256 … 255).',
       'Writing <code>bltu</code> or <code>bgeu</code>: RV16\'s branches are equality and signed only; unsigned needs sltu then bnez / beqz.',
     ],
-    chapters: [{ chapter: 'isa', step: 0, label: 'RV32I\'s six formats, for comparison' }],
+    chapters: [{ chapter: 'isa', step: 0, label: 'Six formats, fixed register fields' }],
   },
 
   formats: {
@@ -521,7 +521,7 @@ base:   ret</pre>59 instructions on the golden model; sp goes from 0x100 down to
       'Returning with sp unbalanced: every caller up the chain then finds its frame shifted.',
     ],
     anatomy: ['dmem', 'rf'],
-    chapters: [{ chapter: 'memory', step: 7, label: 'A hardware stack: the same LIFO as a circuit' }],
+    chapters: [{ chapter: 'memory', step: 7, label: 'Stack' }],
   },
 
   mmio: {
