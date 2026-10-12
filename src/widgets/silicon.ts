@@ -11,6 +11,7 @@ import { techMap } from '../sim/techmap';
 import type { ComponentDef } from '../sim/types';
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
+import { boxesSvg, disjoint, projector, type Box3, type View3 } from './cell3d';
 
 const svgNS = 'http://www.w3.org/2000/svg';
 const svgEl = (w: number, hgt: number, cls: string) => {
@@ -73,15 +74,58 @@ const CELLS: Cell[] = [
   },
 ];
 
-/** A CMOS cell drawn layer by layer; inputs switch the transistors and colour the nodes. */
+/** Heights of the 3D view (layout units, not to scale): diffusion at the surface, poly over the gate oxide, contacts up
+ *  to metal 1. `spread` (0 … 1) pulls the layers apart to show what lies under the poly and the metal. */
+function levels(spread: number) {
+  const diff = 0.6, poly0 = diff + 0.3 + 3 * spread, poly1 = poly0 + 1, metal0 = poly1 + 1.6 + 4 * spread;
+  return { sub: -2.5, diff, poly0, poly1, metal0, metal1: metal0 + 0.8 };
+}
+
+/** A cell's shapes as solids: well and substrate, diffusion with its channels, poly, contacts, metal. */
+function cellBoxes(cell: Cell, show: Record<Layer, boolean>, ins: Record<string, number>, spread: number): Box3[] {
+  const v = cell.eval(ins), z = levels(spread);
+  const val = (n?: string) => (n === undefined ? undefined : n in ins ? ins[n] : v[n]);
+  const vc = (n?: string) => { const nv = val(n); return nv === 1 ? ' v1' : nv === 0 ? ' v0' : nv === 'z' ? ' vz' : ''; };
+  const out: Box3[] = [];
+  const put = (r: [number, number, number, number], z0: number, z1: number, cls: string, title: string) =>
+    out.push({ x0: r[0], x1: r[0] + r[2], y0: r[1], y1: r[1] + r[3], z0, z1, cls, title });
+  put([0, 22, cell.w, 22], z.sub, 0, 'L-psub', 'p-type substrate (NMOS body)');
+  if (show.nwell) put([0, 0, cell.w, 22], z.sub, 0, 'L-nwell', 'n-well (PMOS body)');
+  // One shape may be drawn as overlapping rectangles (a rail and the strap leaving it): solids of their union.
+  const groups = new Map<string, { layer: Layer; node?: string; rs: [number, number, number, number][] }>();
+  for (const sh of cell.shapes) {
+    if (sh.gate || sh.layer === 'nwell' || !show[sh.layer]) continue;
+    const k = `${sh.layer}:${sh.node ?? ''}`;
+    if (!groups.has(k)) groups.set(k, { layer: sh.layer, node: sh.node, rs: [] });
+    groups.get(k)!.rs.push(sh.r);
+  }
+  for (const g of groups.values()) {
+    const [z0, z1] = g.layer === 'poly' ? [z.poly0, z.poly1] : g.layer === 'metal' ? [z.metal0, z.metal1] : g.layer === 'contact' ? [z.diff, z.metal0] : [0, z.diff];
+    const title = `${g.layer}${g.node ? ` · ${g.node} = ${val(g.node)}` : ''}`;
+    for (const r of g.layer === 'contact' ? g.rs : disjoint(g.rs)) put(r, z0, z1, `L-${g.layer}${g.layer === 'contact' ? '' : vc(g.node)}`, title);
+  }
+  for (const sh of cell.shapes) {
+    if (!sh.gate || !show[sh.layer]) continue;
+    const on = sh.gate[1] === 'n' ? ins[sh.gate[0]] === 1 : ins[sh.gate[0]] === 0;
+    put(sh.r, 0, z.diff, `chan${on ? ' on' : ''}`, `${sh.gate[1] === 'n' ? 'NMOS' : 'PMOS'} channel under gate ${sh.gate[0]}: ${on ? 'conducting' : 'off'}`);
+  }
+  return out;
+}
+
+/** A CMOS cell drawn layer by layer, flat or in 3D; inputs switch the transistors and colour the nodes. */
 export function layoutWidget(): Widget {
-  let cell = CELLS[1];
+  let cell = CELLS[1], mode: '2d' | '3d' = '2d', spread = 0.35;
+  const view: View3 = { yaw: -32, pitch: 48 };
   const ins: Record<string, number> = { A: 1, B: 1 };
   const show: Record<Layer, boolean> = { nwell: true, pdiff: true, ndiff: true, poly: true, metal: true, contact: true };
   const box = h('div', { class: 'lay-box' });
   const info = h('div', { class: 'sub' });
   const ctl = h('div', { class: 'param-row' });
-  const render = () => {
+  const ctl3 = h('div', { class: 'param-row lay-3d-row' });
+  const svg3 = svgEl(10, 10, 'lay-svg lay-3d');
+  svg3.setAttribute('tabindex', '0');
+  svg3.setAttribute('aria-label', 'The cell in 3D: drag or use the arrow keys to turn it');
+  const draw2d = () => {
     const v = cell.eval(ins);
     const val = (n?: string) => (n === undefined ? undefined : n in ins ? ins[n] : v[n]);
     const svg = svgEl(cell.w + 8, 52, 'lay-svg');
@@ -108,15 +152,61 @@ export function layoutWidget(): Widget {
     s += `<text x="${4 + cell.w - 6}" y="${2 + 26.5}" class="lbl">y = ${v.y}</text>`;
     svg.innerHTML = s;
     box.replaceChildren(svg);
+  };
+  const draw3d = () => {
+    const v = cell.eval(ins), z = levels(spread), P = projector(view).at;
+    // A fixed frame for the cell (any angle, the layers fully spread), so turning it never rescales the picture.
+    const top = levels(1).metal1, R = Math.hypot(cell.w / 2, 22), hz = (top - z.sub) / 2;
+    const [cx, cy] = P(cell.w / 2, 22, (top + z.sub) / 2), hw = R + 7, hh = Math.hypot(R, hz) + 3;
+    svg3.setAttribute('viewBox', `${(cx - hw).toFixed(2)} ${(cy - hh).toFixed(2)} ${(2 * hw).toFixed(2)} ${(2 * hh).toFixed(2)}`);
+    const lbl = (x: number, y: number, zz: number, t: string, anchor = 'middle') => { const [sx, sy] = P(x, y, zz); return `<text x="${sx.toFixed(2)}" y="${sy.toFixed(2)}" text-anchor="${anchor}" class="lbl">${t}</text>`; };
+    let s = boxesSvg(cellBoxes(cell, show, ins, spread), view);
+    s += lbl(-1, 2, z.metal1, 'VDD', 'end') + lbl(-1, 42, z.metal1, 'GND', 'end');
+    for (const n of cell.inputs) {
+      const p = cell.shapes.find((sh) => sh.layer === 'poly' && sh.node === n && sh.r[3] > sh.r[2]);
+      if (p) s += lbl(p.r[0] + p.r[2] / 2, p.r[1] + p.r[3] + 3, z.poly1, `${n} = ${ins[n]}`);
+    }
+    s += lbl(cell.w + 1, 23.5, z.metal1, `y = ${v.y}`, 'start');
+    svg3.innerHTML = s;
+    if (box.firstChild !== svg3) box.replaceChildren(svg3);
+  };
+  const draw = () => {
+    if (mode === '2d') draw2d(); else draw3d();
     info.textContent = `${cell.name}: ${cell.transistors} transistors, ${cell.w}λ × 44λ = ${cell.w * 44} λ². In SkyWater's 130 nm open process a NAND2 cell (sky130_fd_sc_hd__nand2_1) is 1.38 µm × 2.72 µm = 3.75 µm².`;
+  };
+  const range = h('input', { type: 'range', min: '0', max: '100', value: String(spread * 100), 'aria-label': 'Spread the layers apart' }) as HTMLInputElement;
+  range.addEventListener('input', () => { spread = +range.value / 100; draw(); });
+  ctl3.append(h('label', { class: 'lay-chk' }, 'stacked', range, 'spread'), h('span', { class: 'lay-hint' }, 'Drag to turn it; heights not to scale.'));
+  const render = () => {
+    draw();
+    ctl3.hidden = mode === '2d';
     ctl.replaceChildren(
       ...CELLS.map((c) => h('button', { class: `btn sm${c === cell ? ' primary' : ''}`, onclick: () => { cell = c; render(); } }, c.name)),
+      h('span', { class: 'seg' }, ...(['2d', '3d'] as const).map((m) => h('button', { class: m === mode ? 'on' : '', 'aria-pressed': String(m === mode), onclick: () => { mode = m; render(); } }, m.toUpperCase()))),
       ...cell.inputs.map((n) => h('button', { class: 'btn sm', onclick: () => { ins[n] ^= 1; render(); } }, `toggle ${n}`)),
       ...(['nwell', 'pdiff', 'ndiff', 'poly', 'metal', 'contact'] as Layer[]).map((L) => h('label', { class: 'lay-chk' },
         h('input', { type: 'checkbox', checked: show[L] ? '' : undefined, onchange: (e: Event) => { show[L] = (e.target as HTMLInputElement).checked; render(); } }), L)));
   };
+  // Orbit: drag across turns the cell, up and down tilts it (straight down at 90°: the 2D layout).
+  let drag: { x: number; y: number; yaw: number; pitch: number } | null = null, frame = 0;
+  const turn = (yaw: number, pitch: number) => {
+    view.yaw = ((yaw % 360) + 540) % 360 - 180; view.pitch = Math.max(10, Math.min(90, pitch));
+    if (!frame) frame = requestAnimationFrame(() => { frame = 0; draw(); });
+  };
+  svg3.addEventListener('pointerdown', (e) => { svg3.classList.add('by-mouse'); drag = { x: e.clientX, y: e.clientY, yaw: view.yaw, pitch: view.pitch }; svg3.setPointerCapture(e.pointerId); });
+  svg3.addEventListener('pointermove', (e) => { if (drag) turn(drag.yaw + (e.clientX - drag.x) * 0.5, drag.pitch - (e.clientY - drag.y) * 0.4); });
+  const end = () => { drag = null; };
+  svg3.addEventListener('pointerup', end);
+  svg3.addEventListener('pointercancel', end);
+  svg3.addEventListener('keydown', (e) => {
+    svg3.classList.remove('by-mouse');
+    const d = { ArrowLeft: [-10, 0], ArrowRight: [10, 0], ArrowUp: [0, 6], ArrowDown: [0, -6] }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    turn(view.yaw + d[0], view.pitch + d[1]);
+  });
   render();
-  return { el: panel('A standard cell, drawn in silicon', 'Layers, bottom to top: n-well (where the PMOS live), p and n diffusion, polysilicon (where poly crosses diffusion there is a transistor), metal 1, and contacts joining metal to what is below. Bright = 1, dark = 0, hatched = floating. Green outline on a gate: the transistor conducts.', ctl, box, info) };
+  return { el: panel('A standard cell, drawn in silicon', 'Layers, bottom to top: n-well (where the PMOS live), p and n diffusion, polysilicon (where poly crosses diffusion there is a transistor), metal 1, and contacts joining metal to what is below. Bright = 1, dark = 0, hatched = floating. Green outline on a gate: the transistor conducts. 3D stacks the same layers: spread them apart to see the channels under the poly.', ctl, ctl3, box, info) };
 }
 
 // ---- fabrication -------------------------------------------------------------------------------------

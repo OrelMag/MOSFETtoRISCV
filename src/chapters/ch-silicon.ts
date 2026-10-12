@@ -15,7 +15,7 @@ export const chSilicon: Chapter = {
         PMOS transistors in the n-well above, NMOS below, metal connecting them.</p>
         <p>Compare NAND2 and NOR2: in the NAND the NMOS are in series (no contact between the two gates) and the PMOS in parallel; the NOR is the mirror image.
         Since holes are slower than electrons, series PMOS (the NOR) must be drawn wider to be as fast, which is one reason NAND is the preferred universal gate.</p>
-        <div class="try">Toggle A and B and watch which channels conduct. Hide layers to see what is underneath.</div>`,
+        <div class="try">Toggle A and B and watch which channels conduct. Hide layers to see what is underneath, or switch to 3D, turn the cell and spread its layers apart.</div>`,
       widget: layoutWidget,
     },
     {

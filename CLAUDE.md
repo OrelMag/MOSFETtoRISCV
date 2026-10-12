@@ -237,7 +237,8 @@ src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over 
                fronts, the Image menu), image.ts (a drawn circuit as a standalone SVG: computed styles
                inlined, current theme; PNG at 2×; saveFile; exportSchematic for a stage's level, loaded on
                demand; the sandbox's File menu uses it too)
-src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...);
+src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...); cell3d.ts: chapter 25's
+               standard cells in 3D (orbit camera, painter's order over boxes);
                insthw.ts maps an instruction to the units it uses (and pipeline stage units); fsmpanel.ts: a live state
                diagram (view/fsmdiagram.ts) over a scene (current state, last / next arc, trail, ribbon; arc hover lights
                its gates), used by controllerPanel's Diagram view and chapter 9's state machine; the codex draws fsmOf(lib)
