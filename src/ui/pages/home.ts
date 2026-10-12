@@ -1,6 +1,7 @@
 import { chapters, future } from '../../chapters';
 import { ladder } from '../../widgets/journey';
 import { h, icon } from '../dom';
+import { reportLink } from '../errors';
 import { settings } from '../settings';
 import type { Page } from './chapter';
 
@@ -50,6 +51,7 @@ export function homePage(): Page {
     h('div', { class: 'footer' },
       'Inspired by Turing Complete, Sebastian Lague\'s Digital Logic Sim, nand2tetris, and Harris & Harris. ',
       h('a', { href: 'https://github.com/OrelMag/MOSFETtoRISCV' }, 'Source on GitHub'), ' · ',
+      reportLink(undefined, 'Report a problem'), ' · ',
       h('a', { href: '#/', onclick: (e: Event) => { e.preventDefault(); if (confirm('Reset your progress?')) settings.resetProgress(); } }, 'Reset progress'),
       h('div', { class: 'footer-meta' },
         h('span', { title: `build ${__APP_COMMIT__}, ${__APP_DATE__}` }, `Version ${__APP_VERSION__}`), ' · ',
