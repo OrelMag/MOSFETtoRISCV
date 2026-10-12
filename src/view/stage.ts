@@ -75,7 +75,7 @@ interface Checkpoint {
   /** time · evaluations · cycles: what the state looked like (an unchanged one is not saved twice) */
   key: string;
   cycles: number;
-  edge: Edge | null;
+  edge: StageEdge | null;
   edgePeriod: number;
   nextEdge: number;
   lateEvents: number;
@@ -84,6 +84,9 @@ interface Checkpoint {
   changeStart: number;
   panels: [HistoryHook, unknown][];
 }
+
+/** A rising edge; `held`: Run's high half, settled and its after hooks run, waiting for the fall. */
+type StageEdge = Edge & { held?: boolean };
 
 /** The direction mark of the bottom bar: before an input's name (into the circuit), after an output (out of it). */
 const DIR = () => h('span', { class: 'dir', 'aria-hidden': 'true' }, '▸');
@@ -139,7 +142,7 @@ export class Stage {
   /** Observers of every rising clock edge: before (inputs still old) and after it settled. */
   readonly edgeHooks = new Set<{ before?: () => void; after?: () => void }>();
   /** The rising edge in progress (slow mode plays it one gate delay at a time). */
-  private edge: Edge | null = null;
+  private edge: StageEdge | null = null;
   private edgePeriod = 0;
   /** Panels' own state saved with every checkpoint and put back by back(). */
   readonly historyHooks = new Set<HistoryHook>();
@@ -515,7 +518,7 @@ export class Stage {
     const sim = this.sim!;
     const e = this.edge!;
     this.edge = null;
-    this.afterEdge();
+    if (!e.held) this.afterEdge();
     if (e.end !== null) {
       // e.start is the edge time E; the next one comes at E + P (the period the edge started with).
       const P = this.edgePeriod;
@@ -531,9 +534,9 @@ export class Stage {
     sim.settle();
   }
 
-  /** A rising edge is being played one gate delay at a time. */
+  /** A rising edge is being played one gate delay at a time (Run's settled high half is not one). */
   get inEdge(): boolean {
-    return !!this.edge;
+    return !!this.edge && !this.edge.held;
   }
 
   /** Slow mode: raise the clock and show the instant of the edge; edgeStep() plays the rest. */
@@ -585,7 +588,13 @@ export class Stage {
     }
     this.checkpoint();
     this.rise(clk);
-    completeEdge(this.sim, this.edge!);
+    const e = this.edge!;
+    completeEdge(this.sim, e);
+    // The edge is over: panels (golden model, trace, energy) take it now, so the fall changes nothing they
+    // show; holding them until the fall made them flip between two layouts every half period.
+    e.held = true;
+    if (e.end === null) this.lastSettle = this.sim.time - e.start;
+    this.afterEdge();
     this.refresh();
   }
 
