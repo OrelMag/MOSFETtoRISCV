@@ -2,6 +2,7 @@
 
 import { chapterById, chapters } from '../chapters';
 import { h, icon, s } from './dom';
+import { installErrorReporting, loadFailed } from './errors';
 import { ChapterPage, type Page } from './pages/chapter';
 import { homePage } from './pages/home';
 import { WorkbenchPage } from './pages/workbench';
@@ -10,6 +11,7 @@ import { applyTheme, PALETTES, settings, type Theme } from './settings';
 import type { Radix } from '../sim/values';
 
 export function startApp(root: HTMLElement): void {
+  installErrorReporting();
   applyTheme();
   const view = h('main', { id: 'view' });
   const nav = h('nav', { class: 'nav' });
@@ -164,7 +166,7 @@ export function startApp(root: HTMLElement): void {
       import('./pages/hwstats').then((m) => {
         if (seq === routeSeq) mount(new m.HwStatsPage());
       }, (e) => {
-        if (seq === routeSeq) view.replaceChildren(h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'The statistics could not load'), h('p', { class: 'sub' }, String(e)))));
+        if (seq === routeSeq) view.replaceChildren(loadFailed('statistics', e));
       });
     } else if (key === 'workbench' && parts[1] === 'bench') {
       // The Benchmarks tab: a chunk of its own (with the saved results).
@@ -172,7 +174,7 @@ export function startApp(root: HTMLElement): void {
       import('./pages/benchmarks').then((m) => {
         if (seq === routeSeq) mount(new m.BenchmarksPage());
       }, (e) => {
-        if (seq === routeSeq) view.replaceChildren(h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'The benchmarks could not load'), h('p', { class: 'sub' }, String(e)))));
+        if (seq === routeSeq) view.replaceChildren(loadFailed('benchmarks', e));
       });
     } else if (key === 'workbench') {
       if (page instanceof WorkbenchPage) {
@@ -187,7 +189,7 @@ export function startApp(root: HTMLElement): void {
       import('./pages/level').then((m) => {
         if (seq === routeSeq) mount(new m.LevelPage(parts[2] ?? ''));
       }, (e) => {
-        if (seq === routeSeq) view.replaceChildren(h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'The level could not load'), h('p', { class: 'sub' }, String(e)))));
+        if (seq === routeSeq) view.replaceChildren(loadFailed('level', e));
       });
     } else if (key === 'campaign') {
       const cp = page as (Page & { kind?: string; open?(parts: string[]): void }) | null;
@@ -199,7 +201,7 @@ export function startApp(root: HTMLElement): void {
       import('./pages/campaign').then((m) => {
         if (seq === routeSeq) mount(new m.CampaignPage(parts.slice(1)));
       }, (e) => {
-        if (seq === routeSeq) view.replaceChildren(h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'The campaign could not load'), h('p', { class: 'sub' }, String(e)))));
+        if (seq === routeSeq) view.replaceChildren(loadFailed('campaign', e));
       });
     } else if (key === 'sandbox') {
       const sb = page as (Page & { kind?: string; open?(id?: string): void }) | null;
@@ -211,7 +213,7 @@ export function startApp(root: HTMLElement): void {
       import('./pages/sandbox').then((m) => {
         if (seq === routeSeq) mount(new m.SandboxPage(parts[1]));
       }, (e) => {
-        if (seq === routeSeq) view.replaceChildren(h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'The sandbox could not load'), h('p', { class: 'sub' }, String(e)))));
+        if (seq === routeSeq) view.replaceChildren(loadFailed('sandbox', e));
       });
     } else {
       mount(homePage());

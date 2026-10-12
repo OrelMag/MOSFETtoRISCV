@@ -1249,3 +1249,29 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .lvc-table th:first-child, .lvc-table td:first-child { text-align: left; }
 .lvc-table th { color: var(--muted); font-weight: 600; font-size: 11px; }
 .lvc-table td { font-family: var(--font-mono); }
+
+/* ---------- uncaught errors (ui/errors.ts): one quiet banner, bottom right ---------- */
+.err-banner {
+  position: fixed; right: 16px; bottom: 16px; z-index: 1001; width: min(460px, calc(100vw - 32px)); box-sizing: border-box;
+  display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; padding: 10px 10px 10px 12px; border-radius: 10px;
+  background: color-mix(in srgb, var(--bad-soft) 55%, var(--surface)); color: var(--text); font-size: 13.5px; line-height: 1.45;
+  border: 1px solid var(--border-strong); border-left: 4px solid var(--bad); box-shadow: var(--shadow-lg);
+  animation: err-in 0.18s ease-out;
+}
+@keyframes err-in { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { .err-banner { animation: none; } }
+.err-icon {
+  width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; margin-top: 1px;
+  background: var(--bad); color: var(--surface); font: 700 13px var(--font-ui);
+}
+.err-text { min-width: 0; padding-right: 28px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; }
+.err-count { color: var(--muted); font-size: 12.5px; }
+.err-msg { flex-basis: 100%; min-width: 0; font: 12.5px var(--font-mono); color: var(--text-2); overflow-wrap: anywhere; }
+.err-note { flex-basis: 100%; color: var(--muted); font-size: 12.5px; }
+.err-btns { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; margin-top: 4px; }
+.err-btns .btn.primary { background: var(--bad); border-color: var(--bad); color: var(--surface); }
+.err-close { position: absolute; top: 6px; right: 6px; }
+.err-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 560px) {
+  .err-banner { right: 8px; left: 8px; bottom: 8px; width: auto; }
+}
