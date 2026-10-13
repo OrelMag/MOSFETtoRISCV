@@ -346,7 +346,22 @@ adding levels to it never reopens a finished campaign. Its finale (finalCpu of t
   the returning loads; `bar` ← k_simt, k_coal
 - ✅ kernel puzzle `p_hist` ← k_warps: 16 bins, 8 threads on two warps, no atomics (private counters, a bar, a combine);
   each test also runs with warp 1 ahead, so a kernel missing its bar fails
-- ⏳ phase 4: `k_edge`, `k_tile`, `k_raster`, `k_frame` (on the map as coming soon)
+- ✅ `k_edge` ← k_simd: one edge function stepped with one adder (E and the band start R; load, right, skip, down, up,
+  band, double), 984 NANDs; a sequence against `Edge16`
+- ✅ `k_tile` ← k_edge: the tile walk over 4 × 4 tiles in bands, a TEST cycle per tile, a column serpentine, the
+  steppers' commands, 479 NANDs; a sequence against `Walk16`
+- ✅ `k_raster` ← k_tile: set-up by adders (A, B, the top-left bias, the box in tiles, the tile offsets), each E at the
+  first tile by shift-and-add on its own stepper (17 cycles, no multiplier), the cull from the sum of the three E, the
+  tile test; 9 232 NANDs, period 145. Its bench (`rastercheck.ts`) runs 64 triangles and compares every pixel write in
+  the walk's order; the set-up's length is the learner's, graded as cycles (7 439 for the reference)
+- ✅ `k_frame` ← k_raster, k_warps: the two-warp core with the rasterizer as a device (lane 0's stores to 0xFFF0 … 0xFFF6,
+  the screen at 0xF000 + 32·y + x, RGB565), a warp's turn held while the rasterizer is busy if it would store to it or
+  load from the screen; 41 231 NANDs, period 147. The two-warp bench with `raster`: the golden model (`Warps16` with
+  `raster`) draws at once, the core's pixel writes must match it in order
+- ✅ program puzzle `p_spin` ← k_frame: a square turned by Minsky's rule in 8.8 fixed point, cleared and drawn as two
+  triangles each frame, on two warps (reference: 1 432 cycles, 8 % idle lanes; it also runs on the frame core's bench)
+- Follow-up: a failing `k_frame` (like `k_warps`) cannot open a sandbox bench chip yet: that needs the lane-core bench
+  chip (a four-port memory chip and a lane-aware CPU drawer)
 
 The lane cores' bench (`lanecheck.ts`) is the core bench with a memory port and a register write port per lane
 (`daddr<i>`, `dwdata<i>`, `drdata<i>`, `dwe` bit i; `rwe` bit i, `rwd<i>`, a shared `rwa`): each lane's
