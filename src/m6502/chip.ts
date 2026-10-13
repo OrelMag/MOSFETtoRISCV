@@ -18,9 +18,10 @@ export class Chip6502 {
   cycles = 0;
   irq = false; nmi = false;
 
-  constructor(readonly bus: Bus6502, design?: FlatDesign) {
-    this.design = design ?? flatten(m6502(), { mode: 'switch' });
-    this.sim = new NmosSim(this.design);
+  /** On a fresh simulation of the chip, or on `sim` (a stage's, already built for it). */
+  constructor(readonly bus: Bus6502, sim?: NmosSim) {
+    this.design = sim?.design ?? flatten(m6502(), { mode: 'switch' });
+    this.sim = sim ?? new NmosSim(this.design);
     const P = this.design.root.ports;
     this.aNets = P.a; this.dNets = P.d; this.rwNet = P.rw[0]; this.syncNet = P.sync[0];
     this.sim.setInput('irqb', 1);
@@ -86,18 +87,27 @@ export class Chip6502 {
     return this.sim.get(netNamed(node, name)!);
   }
 
+  private tNets?: number[];
+  /** The T state of the cycle about to run (1 … 7; 0 if none: power-on). */
+  tstate(): number {
+    const node = findNode(this.design.root, ['ctrl', 'timing'])!;
+    this.tNets ??= Array.from({ length: 7 }, (_, k) => netNamed(node, `nt[${k}]`)!);
+    const k = this.tNets.findIndex((n) => this.sim.get(n) === 0);
+    return k + 1;
+  }
+
   /** The registers, read from the storage nodes (for comparing with the RTL model). */
   regs(): { a: number; x: number; y: number; s: number; p: number; pc: number; ir: number } {
     const reg = (blk: string) => {
       let v = 0;
-      for (let i = 0; i < 8; i++) v |= this.bit([blk, `b${i}`], 'q') << i;
+      for (let i = 0; i < 8; i++) v |= this.bit(['dp', blk, `b${i}`], 'q') << i;
       return v;
     };
-    const f = (n: string) => this.bit(['flags'], `f${n}`);
+    const f = (n: string) => this.bit(['dp', 'flags'], `f${n}`);
     return {
       a: reg('rega'), x: reg('regx'), y: reg('regy'), s: reg('regs'),
       p: (f('n') << 7) | (f('v') << 6) | 0x20 | (f('d') << 3) | (f('i') << 2) | (f('z') << 1) | f('c'),
-      pc: this.read(['pc'], 'pc', 16), ir: this.read(['ir'], 'ir'),
+      pc: this.read(['dp', 'pc'], 'pc', 16), ir: this.read(['ctrl', 'ir'], 'ir'),
     };
   }
 }

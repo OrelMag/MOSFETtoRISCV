@@ -1,6 +1,7 @@
 // Quick navigation UI: the chapter menu (top bar, chapter title) and the Ctrl/⌘ K search palette.
 
 import { chapters } from '../chapters';
+import { chapterNo } from '../chapters/types';
 import { navEntries, searchNav, snippet, type NavEntry } from './chapternav';
 import { h, icon } from './dom';
 import { settings } from './settings';
@@ -60,8 +61,8 @@ export function toggleChapterMenu(anchor: HTMLElement): void {
   const cur = here();
   const rows = chapters.map((c) => {
     const isCur = c.id === cur?.chapter;
-    return h('a', { class: 'qn-row', href: `#/c/${c.id}/0`, role: 'menuitem', 'aria-current': isCur ? 'page' : null },
-      h('span', { class: 'qn-num' }, String(c.num).padStart(2, '0')),
+    return h('a', { class: `qn-row${c.appendix ? ' appendix' : ''}`, href: `#/c/${c.id}/0`, role: 'menuitem', 'aria-current': isCur ? 'page' : null },
+      h('span', { class: 'qn-num' }, chapterNo(c)),
       h('span', { class: 'qn-main' }, h('b', null, c.title), h('small', null, `${c.level} · ${c.steps.length} steps`)),
       progressBar(seen(c.id, c.steps.length)));
   });
@@ -70,7 +71,10 @@ export function toggleChapterMenu(anchor: HTMLElement): void {
     closeChapterMenu();
     openQuickNav();
   });
-  const el = h('div', { class: 'ch-menu', role: 'menu', 'aria-label': 'Chapters' }, search, h('div', { class: 'qn-list' }, rows));
+  // the appendix after the journey, under its own heading
+  const firstA = chapters.findIndex((c) => c.appendix);
+  const listed = firstA < 0 ? rows : [...rows.slice(0, firstA), h('div', { class: 'qn-group', role: 'presentation' }, 'Appendix'), ...rows.slice(firstA)];
+  const el = h('div', { class: 'ch-menu', role: 'menu', 'aria-label': 'Chapters' }, search, h('div', { class: 'qn-list' }, listed));
   const r = anchor.getBoundingClientRect();
   el.style.top = `${Math.round(r.bottom + 6)}px`;
   el.style.left = `${Math.round(Math.max(8, Math.min(r.left, innerWidth - 400)))}px`;
@@ -147,7 +151,7 @@ export function openQuickNav(): void {
     const titleHit = !q || q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => e.lt.includes(w) || e.chTitle.toLowerCase().includes(w) || /^\d+$/.test(w));
     const a = h('a', { class: `qn-row${ch ? '' : ' step'}`, href: e.href, id: `qn-r${i}`, role: 'option',
       'aria-current': cur?.chapter === e.chapter && (ch || cur.step === e.step) ? 'page' : null },
-      h('span', { class: 'qn-num' }, String(e.num).padStart(2, '0')),
+      h('span', { class: 'qn-num' }, e.no),
       h('span', { class: 'qn-main' },
         h('b', null, e.title),
         h('small', null, ch ? `${e.level} · ${n} steps` : `${e.chTitle} · step ${e.step + 1} of ${n}`),

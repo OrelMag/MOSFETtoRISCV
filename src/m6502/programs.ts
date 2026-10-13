@@ -154,8 +154,9 @@ irq:${VECTORS}
   {
     name: 'irq',
     title: 'Interrupts',
-    description: 'Counts interrupts at $10: the IRQ handler increments the count and acknowledges the device ($F002); the main loop stops after 5.',
-    source: `COUNT = $10
+    description: 'Counts interrupts at $10: the IRQ handler increments the count, prints a star and acknowledges the device ($F002); the main loop stops after 5.',
+    source: `OUT   = $F001
+COUNT = $10
 ACK   = $F002
 *= $0200
 start:  ldx #$FF
@@ -168,8 +169,12 @@ main:   lda COUNT
         bne main
         sei
 halt:   jmp halt
-irq:    inc COUNT
+irq:    pha             ; the handler keeps A: main may be between its LDA and CMP
+        inc COUNT
+        lda #'*'
+        sta OUT         ; a star per interrupt
         sta ACK         ; the device releases IRQ
+        pla
         rti
 ${VECTORS}
 `,

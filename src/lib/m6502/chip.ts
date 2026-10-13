@@ -15,7 +15,9 @@
 
 import { plaRows } from '../../m6502/pla';
 import { SIGNALS, type Sig } from '../../m6502/ucode';
+import { symbolGeom } from '../../sim/geometry';
 import type { ComponentDef, PortDef } from '../../sim/types';
+import { define } from '../define';
 import { Logic } from './logic';
 
 const bit = (name: string, dir: PortDef['dir'] = 'in'): PortDef => ({ name, width: 1, dir });
@@ -510,35 +512,94 @@ export function busesBlock(): ComponentDef {
 
 // ---- the chip --------------------------------------------------------------------------------------
 
+/** Control lines, from the control unit to the datapath (one bus outside, named lines inside). */
+export const CTL_LINES = [...PHI1.map(c), ...HELD.map(h), 'h_PC_INC', 'h_WRITE', ...RAW.slice(0, 15).map(r),
+  'hold_pcl', 'hold_pch', 'c_ZO_ADH', 'c_VEC', 'p1', 'p2', 'np2', 'intg', 'resetting', 'vfa'];
+/** Status, from the datapath to the control unit: the flags a branch or an interrupt reads, the ALU's carries. */
+export const STATUS = ['fn', 'fv', 'fc', 'fz', 'ni', 'carry', 'acr'];
+
+/** The two units' width, and where their buses leave the control unit's bottom and enter the datapath's top. */
+const UNIT_W = 30;
+const BUS_X: Record<string, number> = { ctl: 6, st: 12, db: 18, din: 24 };
+
+const wire = (L: Logic, name: string, def: ComponentDef, map: Record<string, string> = {}) =>
+  L.add(name, def, Object.fromEntries(def.ports.map((p) => [p.name, map[p.name] ?? p.name])));
+
+/** The control unit: clock, IR, timing, decode PLA, interrupts, control lines. */
+export function controlUnit(): ComponentDef {
+  const L = new Logic();
+  wire(L, 'clock', clockBlock());
+  wire(L, 'ir', irBlock());
+  wire(L, 'timing', timingBlock());
+  wire(L, 'decode', decodeBlock());
+  wire(L, 'intr', intrBlock());
+  wire(L, 'control', controlBlock());
+  return L.build({
+    id: 'm65_ctrl', name: '6502 control unit',
+    summary: 'Clock, instruction register, T-state timing, the decode PLA, interrupts, and the control lines they drive into the datapath.',
+    ports: [bit('phi0'), bit('resb'), bit('irqb'), bit('nmib'), { ...bus('st', STATUS.length, 'in'), side: 'bottom' }, { ...bus('db', 8, 'in'), side: 'bottom' },
+      { ...bus('din', 8, 'in'), side: 'bottom' }, { ...bus('ctl', CTL_LINES.length, 'out'), side: 'bottom' },
+      bit('rw', 'out'), bit('sync', 'out'), bit('p1', 'out'), bit('p2', 'out')],
+    bits: { st: STATUS, ctl: CTL_LINES },
+    symbol: { kind: 'box', label: 'CONTROL UNIT', w: UNIT_W, h: 12, portPos: BUS_X }, rows: 3,
+  });
+}
+
+/** The datapath: registers, ALU, PC, address and data latches, flags, the four buses. */
+export function datapath(): ComponentDef {
+  const L = new Logic();
+  wire(L, 'rega', regBlock('A', ['sb', 'db']), { ld: 'c_SB_A', rd_sb: 'c_A_SB', rd_db: 'c_A_DB', v: 'va' });
+  wire(L, 'regx', regBlock('X', ['sb']), { ld: 'c_SB_X', rd_sb: 'c_X_SB', v: 'vx' });
+  wire(L, 'regy', regBlock('Y', ['sb']), { ld: 'c_SB_Y', rd_sb: 'c_Y_SB', v: 'vy' });
+  wire(L, 'regs', regBlock('S', ['sb', 'adl']), { ld: 'c_SB_S', rd_sb: 'c_S_SB', rd_adl: 'c_S_ADL', v: 'vs' });
+  wire(L, 'alu', aluBlock());
+  wire(L, 'flags', flagsBlock());
+  wire(L, 'pc', pcBlock());
+  wire(L, 'addr', addrBlock());
+  wire(L, 'data', dataBlock());
+  wire(L, 'buses', busesBlock());
+  return L.build({
+    id: 'm65_dp', name: '6502 datapath',
+    summary: 'A, X, Y, S, the ALU, the status register, the PC, the address register and the data latches, on four precharged buses: DB, SB, ADL, ADH.',
+    ports: [{ ...bus('ctl', CTL_LINES.length, 'in'), side: 'top' }, bus('d'), bus('a', 16, 'out'), { ...bus('st', STATUS.length, 'out'), side: 'top' },
+      { ...bus('db', 8, 'out'), side: 'top' }, { ...bus('din', 8, 'out'), side: 'top' }],
+    bits: { st: STATUS, ctl: CTL_LINES },
+    symbol: { kind: 'box', label: 'DATAPATH', w: UNIT_W, h: 8, portPos: BUS_X }, rows: 4,
+  });
+}
+
 let chip: ComponentDef | undefined;
 
-/** Our 6502 at transistor level: the top level wires the blocks by name. */
+/**
+ * Our 6502 at transistor level, drawn as the die is laid out: the control unit above, the datapath
+ * below, the control lines going down between them and the status coming back up.
+ */
 export function m6502(): ComponentDef {
   if (chip) return chip;
-  const L = new Logic();
-  const blk = (name: string, def: ComponentDef, map: Record<string, string> = {}) =>
-    L.add(name, def, Object.fromEntries(def.ports.map((p) => [p.name, map[p.name] ?? p.name])));
-  blk('clock', clockBlock());
-  blk('decode', decodeBlock());
-  blk('control', controlBlock());
-  blk('timing', timingBlock());
-  blk('intr', intrBlock());
-  blk('ir', irBlock());
-  blk('rega', regBlock('A', ['sb', 'db']), { ld: 'c_SB_A', rd_sb: 'c_A_SB', rd_db: 'c_A_DB', v: 'va' });
-  blk('regx', regBlock('X', ['sb']), { ld: 'c_SB_X', rd_sb: 'c_X_SB', v: 'vx' });
-  blk('regy', regBlock('Y', ['sb']), { ld: 'c_SB_Y', rd_sb: 'c_Y_SB', v: 'vy' });
-  blk('regs', regBlock('S', ['sb', 'adl']), { ld: 'c_SB_S', rd_sb: 'c_S_SB', rd_adl: 'c_S_ADL', v: 'vs' });
-  blk('alu', aluBlock());
-  blk('pc', pcBlock());
-  blk('addr', addrBlock());
-  blk('data', dataBlock());
-  blk('flags', flagsBlock());
-  blk('buses', busesBlock());
-  chip = L.build({
-    id: 'm6502', name: 'MOS 6502 (our transistor-level design)',
+  const ctrl = controlUnit(), dp = datapath();
+  const X = 20, YC = 4, YD = 26;
+  const pc = (port: string) => symbolGeom(ctrl).ports[port].pos, pd = (port: string) => symbolGeom(dp).ports[port].pos;
+  const left = (y: number): [number, number] => [X - 12, y], right = (y: number): [number, number] => [X + UNIT_W + 12, y];
+  chip = define({
+    id: 'm6502', name: 'MOS 6502 (our transistor-level design)', category: 'cpu',
     summary: 'The 6502 at transistor level: NMOS depletion-load gates, a two-phase clock, precharged buses, a decode PLA. Every block opens down to its transistors.',
     ports: [bit('phi0'), bit('resb'), bit('irqb'), bit('nmib'), bus('d'), bus('a', 16, 'out'), bit('rw', 'out'), bit('sync', 'out'), bit('p1', 'out'), bit('p2', 'out')],
-    symbol: { kind: 'box', label: '6502' }, rows: 4,
+    symbol: { kind: 'box', label: '6502' },
+    netlist: () => ({
+      level: 'switch',
+      pins: {
+        ...Object.fromEntries(['phi0', 'resb', 'irqb', 'nmib'].map((p) => [p, left(YC + pc(p)[1])])),
+        ...Object.fromEntries(['rw', 'sync', 'p1', 'p2'].map((p) => [p, right(YC + pc(p)[1])])),
+        d: left(YD + pd('d')[1]), a: right(YD + pd('a')[1]),
+      },
+      instances: [{ name: 'ctrl', def: ctrl, at: [X, YC] }, { name: 'dp', def: dp, at: [X, YD] }],
+      nets: [
+        ...['phi0', 'resb', 'irqb', 'nmib', 'rw', 'sync', 'p1', 'p2'].map((p) => ({ name: p, ends: [p, `ctrl.${p}`] })),
+        { name: 'ctl', ends: ['ctrl.ctl', 'dp.ctl'] },
+        ...['st', 'db', 'din'].map((b) => ({ name: b, ends: [`dp.${b}`, `ctrl.${b}`] })),
+        { name: 'd', ends: ['d', 'dp.d'] }, { name: 'a', ends: ['dp.a', 'a'] },
+      ],
+    }),
   });
   return chip;
 }

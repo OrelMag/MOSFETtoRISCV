@@ -20,6 +20,8 @@ export interface BlockSpec {
   notes?: string;
   /** Instances per column (default: a square-ish grid). */
   rows?: number;
+  /** Names of the bits of a bus pin (default name[i]): a bundle of named lines, drawn as one bus outside. */
+  bits?: Record<string, string[]>;
 }
 
 export class Ckt {
@@ -58,6 +60,7 @@ function layout(spec: BlockSpec, insts: { name: string; def: ComponentDef; conns
     l.push(e);
   };
   const portW = new Map(spec.ports.map((p) => [p.name, p.width]));
+  const bitName = (port: string, i: number) => spec.bits?.[port]?.[i] ?? `${port}[${i}]`;
   const placed: { name: string; def: ComponentDef; label?: string }[] = [];
   const ones = (w: number) => Array(w).fill(1);
   // multi-bit pins of the block: a splitter for an input (its outputs are the bits `name[i]`), a
@@ -66,14 +69,17 @@ function layout(spec: BlockSpec, insts: { name: string; def: ComponentDef; conns
     if (p.width === 1) { end(p.name, p.name); continue; }
     const name = `${p.name}_bits`;
     end(`__${p.name}`, p.name);
+    // a bus the blocks inside share whole (an internal bus brought out) needs no splitter
+    const used = !!spec.bits?.[p.name] || insts.some((it) => Object.values(it.conns).some((c) => (Array.isArray(c) ? c : [c]).some((n) => n.startsWith(`${p.name}[`))));
+    if (!used) continue;
     if (p.dir === 'in') {
       placed.push({ name, def: splitter(ones(p.width)) });
       end(`__${p.name}`, `${name}.in`);
-      for (let i = 0; i < p.width; i++) end(`${p.name}[${i}]`, `${name}.o${i}`);
+      for (let i = 0; i < p.width; i++) end(bitName(p.name, i), `${name}.o${i}`);
     } else {
       placed.push({ name, def: merger(ones(p.width)) });
       end(`__${p.name}`, `${name}.out`);
-      for (let i = 0; i < p.width; i++) end(`${p.name}[${i}]`, `${name}.i${i}`);
+      for (let i = 0; i < p.width; i++) end(bitName(p.name, i), `${name}.i${i}`);
     }
   }
   for (const it of insts) {

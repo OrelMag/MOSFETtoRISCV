@@ -2,6 +2,7 @@
 // Rendering builds the DOM once; update() only touches classes and labels.
 
 import { symbolGeom, type Vec } from '../sim/geometry';
+import { NmosSim } from '../sim/nmossim';
 import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, netlistOf } from '../sim/types';
 import { describeBits, formatBits, type Radix } from '../sim/values';
@@ -338,7 +339,7 @@ export class SchematicView {
     }
     this.updatePins();
     // Transistors: show which ones conduct.
-    if (ctx.sim instanceof SwitchSim) {
+    if (ctx.sim instanceof SwitchSim || ctx.sim instanceof NmosSim) {
       for (const [name, g] of this.insts) {
         const li = ctx.childLeaf(name);
         if (li === undefined) continue;

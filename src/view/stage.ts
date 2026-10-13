@@ -10,6 +10,7 @@ import { completeEdge, type Edge, riseEdge, stepEdge } from '../sim/edge';
 import { PowerMeter } from '../sim/power';
 import { analyzeTiming } from '../sim/timing';
 import type { PowerOnMode, Sim, SimState } from '../sim/sim';
+import { NmosSim } from '../sim/nmossim';
 import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, BZ, type Bit, type ComponentDef, inPorts, netlistOf, outPorts, type PortDef } from '../sim/types';
 import { formatBits, formatNumber, mask, pack, packBig, type Radix, unpackBig } from '../sim/values';
@@ -46,8 +47,10 @@ export interface Scene {
    * 'cycle': settle on the cycle engine (DualSim, sim/dualsim.ts): the same values after every clock edge, many times
    * faster on a design of hundreds of thousands of gates, but no gate-delay time, so no probes or timing diagram.
    * Stepping and slow-motion edges still run on GateSim.
+   * 'nmos': a transistor-level design too large for SwitchSim (Appendix A's 6502) on NmosSim, the
+   * event-driven switch-level engine.
    */
-  engine?: 'cycle';
+  engine?: 'cycle' | 'nmos';
 }
 
 export interface Widget {
@@ -306,7 +309,8 @@ export class Stage {
     // The root is always its structure, even one simulated as a lookup elsewhere (a large RAM opened
     // in the workbench); such parts below it stay leaves and open onto their own sub-simulation.
     const design = flatten(scene.root, { mode: level, expand: (d, n) => n.parent === null || !d.preferBehavior });
-    const sim: Sim = level === 'switch' ? new SwitchSim(design) : scene.engine === 'cycle' ? new DualSim(design) : new GateSim(design);
+    const sim: Sim = level === 'switch' ? (scene.engine === 'nmos' ? new NmosSim(design) : new SwitchSim(design))
+      : scene.engine === 'cycle' ? new DualSim(design) : new GateSim(design);
     if (sim instanceof DualSim) sim.preferFast = true;
     for (const [k, v] of Object.entries(scene.inputs ?? {})) sim.setInput(k, v);
     sim.reset(scene.powerOn ?? 'zero');

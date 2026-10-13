@@ -38,7 +38,10 @@ export interface Step {
 
 export interface Chapter {
   id: string;
+  /** Order on the map; an appendix chapter continues the count but is shown by its letter. */
   num: number;
+  /** The letter of an appendix chapter (shown instead of the number, after the main journey). */
+  appendix?: string;
   title: string;
   /** One line for cards. */
   blurb: string;
@@ -46,6 +49,9 @@ export interface Chapter {
   level: string;
   steps: Step[];
 }
+
+/** How a chapter is numbered on screen: 07, or A for an appendix. */
+export const chapterNo = (c: { num: number; appendix?: string }): string => c.appendix ?? String(c.num).padStart(2, '0');
 
 /** Planned chapters, shown greyed out on the map. */
 export interface FutureChapter {
