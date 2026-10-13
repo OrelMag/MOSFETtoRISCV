@@ -7,6 +7,7 @@
 // rebuilt only when the selection or the selected objects change, never while typing.
 
 import { kWords } from '../lib/bigmem';
+import { PORT_MAX_K } from '../lib/portmem';
 import { familyOf } from '../lib/resolve';
 import type { Vec } from '../sim/geometry';
 import { logicDepth, stats } from '../sim/stats';
@@ -254,10 +255,15 @@ export class PropsPanel {
         'Bits per word: a puzzle word wider than this arrives (and must leave) in pieces, most significant first'),
       h('p', { class: 'sb-sum' }, 'Puzzles (top bar) fill it with the words of each test and check the words written.'));
     } else if ('ram' in ref) {
-      const { k, w } = ref.ram;
-      out.append(this.row('Words', this.select(k, Array.from({ length: MAX_RAM_K }, (_, i): [number, string] => [i + 1, kWords(2 ** (i + 1))]), (v) => setR({ ram: { ...ref.ram, k: v } })),
+      const { k, w, ports = 1 } = ref.ram;
+      const maxK = ports > 1 ? PORT_MAX_K : MAX_RAM_K;
+      out.append(this.row('Words', this.select(k, Array.from({ length: maxK }, (_, i): [number, string] => [i + 1, kWords(2 ** (i + 1))]), (v) => setR({ ram: { ...ref.ram, k: v } })),
         'Up to 64 words the gates are simulated; a larger RAM is simulated as a lookup, and its banks open down to the same gates'),
-        this.row('Word width', this.select(w, [1, 2, 4, 8, 16, 32].map((v): [number, string] => [v, `${v} bits`]), (v) => setR({ ram: { ...ref.ram, w: v } }))));
+        this.row('Word width', this.select(w, [1, 2, 4, 8, 16, 32].map((v): [number, string] => [v, `${v} bits`]), (v) => setR({ ram: { ...ref.ram, w: v } }))),
+        this.row('Ports', this.select(ports, [1, 2, 4, 8].map((v): [number, string] => [v, v === 1 ? 'one' : `${v}: one per lane`]), (v) => {
+          const { ports: _p, ...rest } = ref.ram;
+          setR({ ram: v > 1 ? { ...rest, k: Math.min(k, PORT_MAX_K), ports: v } : rest });
+        }), `A read and a write port per lane (addr<i>, wd<i>, a we bit each → rd<i>): every lane loads and stores in the same cycle; the highest port wins a word several write. Up to ${2 ** PORT_MAX_K} words`));
     } // a ROM's size, addressing and program: memui.ts's section
     if (def) out.append(costLine(def));
     out.append(h('div', { class: 'sb-btns' },
