@@ -283,7 +283,7 @@ export class SwitchSim implements Sim {
     const fets: { li: number; g: number; a: number; b: number; nmos: boolean; s: number }[] = [];
     const ress: { a: number; b: number; s: number }[] = [];
     leaves.forEach((l, li) => {
-      if (l.kind === 'res') {
+      if (l.kind === 'res' || l.kind === 'dep') {
         const [a, b] = l.terminals!;
         ress.push({ a: term(a), b: term(b), s: level(l.def.strength ?? 1) });
         this.conducting[li] = 1;

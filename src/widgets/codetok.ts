@@ -11,9 +11,10 @@ import { BY_NAME16, CSRS16, reg16 } from '../riscv/rv16/isa16';
 import { DIRECTIVES4 } from '../isa4/asm4';
 import { BY_NAME4, JCN_NAMES, pair4, reg4 } from '../isa4/isa4';
 import { type IsaDoc, tableOf } from '../isa/table';
+import { MNEMONICS as M65 } from '../m6502/isa';
 
-/** rvasm: RV32 assembly; rv16asm: the campaign's RV16; cpu4asm: the 4-bit CPU's; hex: words. */
-export type CodeLang = 'rvasm' | 'rv16asm' | 'cpu4asm' | 'hex' | { table: IsaDoc };
+/** rvasm: RV32 assembly; rv16asm: the campaign's RV16; cpu4asm: the 4-bit CPU's; m6502asm: the 6502's (Appendix A); hex: words. */
+export type CodeLang = 'rvasm' | 'rv16asm' | 'cpu4asm' | 'm6502asm' | 'hex' | { table: IsaDoc };
 
 /** Token classes (CSS: .tk-<cls>); '' is plain text / whitespace.
  *  com comment · lbl label · op instruction · ps pseudo-instruction · dir directive · reg register
@@ -145,6 +146,42 @@ function rvasm(line: string, isa: AsmWords): Tok[] {
   return out;
 }
 
+// The 6502's assembly (m6502/asm.ts): ';' comments, $hex %binary decimal 'c' numbers, #, A X Y.
+const OPS_65 = new Set(M65.map((m) => m.toLowerCase()));
+const DIRS_65 = new Set(['.org', '.byte', '.word', '.text', '.fill']);
+function m6502asm(line: string): Tok[] {
+  const out: Tok[] = [];
+  const push = (text: string, cls: TokClass) => {
+    if (!text) return;
+    const last = out[out.length - 1];
+    if (last && last.cls === cls) last.text += text;
+    else out.push({ text, cls });
+  };
+  let i = 0, expectOp = true;
+  while (i < line.length) {
+    const rest = line.slice(i);
+    let m: RegExpMatchArray | null;
+    if ((m = rest.match(/^\s+/))) { push(m[0], ''); i += m[0].length; continue; }
+    // strings and characters first: a ';' inside them is not a comment
+    if ((m = rest.match(/^"(?:[^"\\]|\\.)*"?/)) || (m = rest.match(/^'(?:[^'\\]|\\.)'/))) { push(m[0], 'num'); i += m[0].length; expectOp = false; continue; }
+    if (rest[0] === ';') { push(rest, 'com'); break; }
+    if (expectOp && (m = rest.match(/^([A-Za-z_]\w*)(\s*)(:)/))) { push(m[1], 'lbl'); push(m[2], ''); push(m[3], 'lbl'); i += m[0].length; continue; }
+    if (expectOp && rest.startsWith('*=')) { push('*=', 'dir'); i += 2; expectOp = false; continue; }
+    if ((m = rest.match(/^(?:\$[0-9a-f]+|%[01]+|\d+)(?!\w)/i))) { push(m[0], 'num'); i += m[0].length; expectOp = false; continue; }
+    if ((m = rest.match(/^\.?[A-Za-z_]\w*/))) {
+      const w = m[0], t = w.toLowerCase();
+      // the first word is a mnemonic or directive (or a constant's name, before its '=')
+      push(w, expectOp ? (t.startsWith('.') ? (DIRS_65.has(t) ? 'dir' : 'bad') : OPS_65.has(t) ? 'op' : 'sym') : /^[axy]$/.test(t) ? 'reg' : 'sym');
+      i += w.length;
+      expectOp = false;
+      continue;
+    }
+    push(rest[0], /[,()#+\-*/<>=]/.test(rest[0]) ? 'pun' : 'bad');
+    i++;
+  }
+  return out;
+}
+
 const HEX_CLS = { word: 'num', addr: 'addr', sep: 'pun', comment: 'com', bad: 'bad' } as const;
 
 function hex(line: string): Tok[] {
@@ -162,5 +199,6 @@ function hex(line: string): Tok[] {
 /** Split one line into classified tokens; their texts concatenate to `line`. */
 export function tokenize(line: string, lang: CodeLang): Tok[] {
   if (typeof lang === 'object') return rvasm(line, tableWords(lang.table));
+  if (lang === 'm6502asm') return m6502asm(line);
   return lang === 'hex' ? hex(line) : rvasm(line, lang === 'rv16asm' ? RV16 : lang === 'cpu4asm' ? CPU4 : RV32);
 }

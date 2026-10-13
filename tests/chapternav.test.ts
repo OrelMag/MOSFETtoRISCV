@@ -31,6 +31,16 @@ describe('chapter navigation', () => {
     expect(navEntries(chapters)).toBe(es);
   });
 
+  it('numbers an appendix by its letter, and finds it by that letter', () => {
+    const withA: NavChapter[] = [...book, { id: 'app', num: 3, appendix: 'A', title: '1975: the 6502', blurb: 'NMOS.', level: 'NMOS', steps: [{ title: 'NMOS', body: '<p>Loads.</p>' }] }];
+    const es = navEntries(withA);
+    expect(es.filter((e) => e.chapter === 'app').map((e) => e.no)).toEqual(['A', 'A']);
+    expect(es.find((e) => e.chapter !== 'app')!.no).toMatch(/^[0-9]{2}$/);
+    expect(searchNav(es, 'a')[0]).toMatchObject({ chapter: 'app', step: -1 });
+    // a chapter number does not find the appendix that continues the count
+    expect(searchNav(es, '3').some((e) => e.chapter === 'app')).toBe(false);
+  });
+
   it('strips markup and entities', () => {
     expect(plainText('<p>Four NANDs &amp; a <b>trick</b> &#x2192; x&lt;y</p>')).toBe('Four NANDs & a trick → x<y');
   });
@@ -67,7 +77,8 @@ describe('the journey ladder', () => {
     const nums = LADDER.map((r) => r.num);
     expect(nums).toEqual([...nums].sort((a, b) => b - a));
     // The top rung opens the last track (the chapters sharing the last chapter's level): the ladder reaches the end.
-    const last = chapters[chapters.length - 1];
+    // Appendices come after the journey and are not on it.
+    const last = chapters.filter((c) => !c.appendix).at(-1)!;
     expect(LADDER[0].num).toBe(chapters.find((c) => c.level === last.level)?.num);
   });
 });

@@ -19,3 +19,6 @@ coverage/
 # Claude Code: per-user settings and agent worktrees (hooks, skills and settings.json are shared)
 .claude/settings.local.json
 .claude/worktrees/
+
+# scripts/m6502/fetch-tests.mjs: SingleStepTests 6502 and Klaus Dormann's functional test (GPL: never checked in)
+/tests/m6502/.cache/

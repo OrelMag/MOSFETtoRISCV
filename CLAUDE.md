@@ -113,6 +113,11 @@ src/sim/       simulation core (no DOM)
                  rails/inputs > transistors (strength 4..2, ratioed logic) > resistors (prim 'res',
                  strength 1: pull-ups lose to any transistor; two opposing → X) > stored charge
                  (`cap` nets and prim 'cap' capacitors keep their value when undriven)
+  nmossim.ts     NmosSim: event-driven switch-level engine for large NMOS circuits (Appendix A's 6502): a change
+                 recomputes the channel-connected groups it reaches (rails and driven inputs end a group); GND / an
+                 input 0 beats VDD / 1 (a short is counted), any of those beats a pull-up (prim 'dep' or 'res' to a
+                 rail), else the charge of the largest-capacitance node (NetDef.cap: a number = relative capacitance);
+                 two-valued; an oscillation leaves its nodes pending for the next settle (stuck, unstable)
   bitsim.ts      two-valued bit-parallel simulator for benches: 32 lanes per NAND word op; behaviours broadcast
                  from lane 0 unless setLaneBehavior evaluates one per lane (each lane its own program ROM)
   fpref.ts       exact reference float arithmetic for any format (BigInt, RNE), float32 helpers
@@ -337,6 +342,25 @@ src/isa/       Custom ISA: table.ts (IsaDoc: instructions as mnemonic + operand 
                / imm / addr; IsaTable: assemble, disasm (most specific pattern), fields, words, problems; sanitizeIsa),
                presets.ts (ISA4_PRESET: the 4-bit ISA as a table, equal to asm4 / disasm4 on every word), isa.ts (Isa:
                one shape over RV32, RV16, cpu4 and tables; isaOf(lang, table); used by program puzzles too)
+src/m6502/     Appendix A's 6502 (DOM-free): isa.ts (151 documented opcodes, modes, disasm), asm.ts (two-pass
+               assembler, ';' comments, $hex %bin, *= .org .byte .word .text .fill), iss.ts (Cpu6502: cycle-exact, every
+               bus cycle incl. dummy accesses, IRQ / NMI / RESET as the NMOS chip; save / restore), programs.ts (samples;
+               IO6502: output port $F001, IRQ acknowledge $F002), ucode.ts (our microarchitecture: per opcode and cycle the
+               control signals; t = 1 is the next fetch, finishing the previous instruction), rtl.ts (Rtl6502: the
+               register-transfer model of our design, phase by phase), pla.ts (the decode PLA minimized from the table,
+               undocumented opcodes as don't-cares), chip.ts (Chip6502: the transistor-level chip on NmosSim with a memory
+               on its pins, cycle by cycle; registers read by name), verify.ts (lockstep with the ISS; StepRunner: a
+               SingleStepTests case set up by a loader program). Tests: tests/m6502-*.test.ts (the SingleStepTests sample
+               is checked in: tests/m6502/; scripts/m6502/fetch-tests.mjs caches the full suite and Klaus's binary, used
+               when present); scripts/m6502/soak.ts (every sample case, interrupts, Klaus for N cycles, on the transistors)
+src/lib/m6502/ the chip at transistor level (lib/nmos.ts: DEP, NINV, nnor(n), nnand(n)): cells.ts (naoi(expr) complex
+               gates, PULL2 bus driver, DLAT dynamic latch, SCELL refreshed storage), ckt.ts / logic.ts (blocks written
+               as logic, laid out on a grid with every net a label; bus pins as named bits), chip.ts (the blocks:
+               clock, decode PLA, control lines, timing, interrupts, IR, registers, ALU, PC, address / data latches,
+               flags, buses; controlUnit() above datapath() on m6502()'s hand-drawn top level). Its rules: a storage node
+               loads in one phase and refreshes in the other, whatever φ2 needs from the PLA is latched in φ1, a pass
+               transistor only takes a driven node (never a stored charge), state across cycles is master–slave with
+               its next value computed in φ1. demo.ts: MS_BIT, BUS_LINE (the chapter's first steps)
 src/isa4/      the 4-bit CPU's ISA: isa4.ts (the 4004's opcode map in 16-bit words: decode4 / disasm4 / fields4; words the
                table does not name run as NOP), asm4.ts, iss4.ts (golden model; halts on a JUN to itself), programs4.ts
 src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui/pages/sandbox.ts, its own chunk;
@@ -745,6 +769,10 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
   delay (`SchematicView.flowMs`); the simulation's timing is unchanged.
 - The Timing panel only records nets of the scene's own simulation (`ctx.sim === stage.sim`);
   sub-simulations (an opened NAND, the ROM) cannot be probed. `Scene.analyzer` opens it.
+- `Scene.engine: 'nmos'` runs a transistor-level scene on NmosSim (Appendix A's 6502; widgets/m6502.ts: the scene and
+  its panel, which is the memory on the chip's pins and checks every bus cycle against the ISS; m6502isa.ts the opcode
+  matrix, m6502ledger.ts the transistor ledger). A chapter with `appendix: 'A'` is shown by its letter after the
+  journey (map divider, menu group, header; chapterNo()).
 - `Scene.engine: 'cycle'` runs a scene on DualSim with the cycle engine preferred (chapter 31: 413 501 leaves): settled
   values only, so the timing and probe buttons are hidden (the analyzer's trace listener would pin it to GateSim) and
   the inspector has no power estimate; stepping and slow-motion edges still go through GateSim. Chapters 26–29's lane and

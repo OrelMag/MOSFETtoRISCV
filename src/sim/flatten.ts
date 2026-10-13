@@ -44,6 +44,8 @@ export interface FlatDesign {
   powerOn: Map<number, 0 | 1>;
   /** Nets marked `cap`, or with a capacitor on them (switch level): they hold their charge when undriven. */
   caps: Set<number>;
+  /** Relative capacitance of nets given a numeric `cap` (largest per net); others weigh 1 if in caps. */
+  capWeight?: Map<number, number>;
 }
 
 /**
@@ -131,6 +133,7 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
   const leaves: FlatLeaf[] = [];
   const hints: [number, 0 | 1][] = [];
   const capsRaw: number[] = [];
+  const capW: [number, number][] = [];
 
   const alloc = (w: number): number[] => Array.from({ length: w }, () => uf.make());
 
@@ -197,7 +200,10 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
       });
       const bits = alloc(width);
       node.nets!.push(bits);
-      if (net.cap) capsRaw.push(...bits);
+      if (net.cap) {
+        capsRaw.push(...bits);
+        if (typeof net.cap === 'number') for (const b of bits) capW.push([b, net.cap]);
+      }
       for (const { inst, port } of resolved) {
         if (inst === null) {
           bits.forEach((b, i) => uf.union(b, node.ports[port][i]));
@@ -263,7 +269,9 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
   const caps = new Set(capsRaw.map(id));
   // a capacitor part marks its node, exactly like a `cap` net
   for (const l of leaves) if (l.kind === 'cap') caps.add(l.terminals![0]);
-  return { root, netCount: dense.size, leaves, powerOn, caps };
+  const capWeight = new Map<number, number>();
+  for (const [raw, w] of capW) capWeight.set(id(raw), Math.max(w, capWeight.get(id(raw)) ?? 0));
+  return { root, netCount: dense.size, leaves, powerOn, caps, capWeight };
 }
 
 export function findNode(root: HierNode, path: readonly string[]): HierNode | null {

@@ -11,6 +11,8 @@ export interface Stats {
   /** Resistors (pull-ups, pull-downs) and capacitors: switch-level parts, not transistors. */
   resistors: number;
   capacitors: number;
+  /** Of the transistors, depletion-mode loads (NMOS logic's pull-ups). */
+  depletion: number;
   /** Number of instances one level down. */
   parts: number;
   /** Total number of components in the hierarchy below (all levels). */
@@ -25,9 +27,10 @@ export function stats(def: ComponentDef): Stats {
   const hit = cache.get(def);
   if (hit) return hit;
   let s: Stats;
-  const zero = { nands: 0, transistors: 0, resistors: 0, capacitors: 0, parts: 0, descendants: 0, levels: 0 };
+  const zero = { nands: 0, transistors: 0, resistors: 0, capacitors: 0, depletion: 0, parts: 0, descendants: 0, levels: 0 };
   if (def.prim === 'nand') s = { ...zero, nands: 1, transistors: 4, parts: 4, descendants: 4, levels: 1 };
   else if (def.prim === 'nmos' || def.prim === 'pmos') s = { ...zero, transistors: 1 };
+  else if (def.prim === 'dep') s = { ...zero, transistors: 1, depletion: 1 };
   else if (def.prim === 'res') s = { ...zero, resistors: 1 };
   else if (def.prim === 'cap') s = { ...zero, capacitors: 1 };
   else if (def.prim) s = zero;
@@ -41,6 +44,7 @@ export function stats(def: ComponentDef): Stats {
         s.transistors += c.transistors;
         s.resistors += c.resistors;
         s.capacitors += c.capacitors;
+        s.depletion += c.depletion;
         if (inst.def.prim !== 'alias') {
           s.parts++;
           s.descendants += 1 + c.descendants;
@@ -123,7 +127,7 @@ export function hasFeedback(def: ComponentDef): boolean {
     // a resistor joins its ends into one channel-connected group too (it has no gate to feed)
     for (const l of d.leaves) {
       const [a, b] = l.terminals ?? [];
-      if (l.kind === 'res' && !source[a] && !source[b]) parent[find(a)] = find(b);
+      if ((l.kind === 'res' || l.kind === 'dep') && !source[a] && !source[b]) parent[find(a)] = find(b);
     }
     const edges = new Map<number, Set<number>>();
     const edge = (from: number, to: number) => {

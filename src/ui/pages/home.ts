@@ -1,4 +1,5 @@
 import { chapters, future } from '../../chapters';
+import { chapterNo } from '../../chapters/types';
 import { ladder } from '../../widgets/journey';
 import { h, icon } from '../dom';
 import { reportLink } from '../errors';
@@ -10,14 +11,16 @@ export function homePage(): Page {
   const started = chapters.filter((c) => settings.visited(c.id).length > 0);
   const resume = started.length ? started[started.length - 1] : null;
 
-  const cards = chapters.map((c) => {
+  const cards = chapters.flatMap((c, i) => {
     const p = progress(c.id, c.steps.length);
-    return h('a', { class: 'card', href: `#/c/${c.id}/0` },
+    // the appendix after the journey, behind a divider
+    const divider = c.appendix && !chapters[i - 1]?.appendix ? [h('div', { class: 'cards-divider' }, 'Appendix')] : [];
+    return [...divider, h('a', { class: `card${c.appendix ? ' appendix' : ''}`, href: `#/c/${c.id}/0` },
       p >= 1 ? h('span', { class: 'done-badge', title: 'All steps visited' }, icon('check', 16)) : null,
-      h('span', { class: 'num' }, `${String(c.num).padStart(2, '0')} · ${c.level}`),
+      h('span', { class: 'num' }, `${chapterNo(c)} · ${c.level}`),
       h('h3', null, c.title),
       h('p', null, c.blurb),
-      h('div', { class: 'meta' }, h('span', null, `${c.steps.length} steps`), h('span', null, p > 0 ? `${Math.round(p * 100)}% seen` : '')));
+      h('div', { class: 'meta' }, h('span', null, `${c.steps.length} steps`), h('span', null, p > 0 ? `${Math.round(p * 100)}% seen` : '')))];
   });
   const soon = future.map((c) =>
     h('div', { class: 'card soon' },

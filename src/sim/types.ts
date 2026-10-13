@@ -35,7 +35,7 @@ export interface PortDef {
 export type SymbolKind =
   | 'nand' | 'and' | 'or' | 'nor' | 'xor' | 'xnor' | 'not' | 'buf'
   | 'mux' | 'box' | 'split' | 'merge'
-  | 'nmos' | 'pmos' | 'vdd' | 'gnd'
+  | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd'
   /** Switch-level parts: resistor, pull-up / pull-down, capacitor, transmission gate, tri-states. */
   | 'res' | 'pullup' | 'pulldown' | 'cap' | 'tgate' | 'tribuf' | 'triinv';
 
@@ -97,9 +97,11 @@ export interface NetDef {
   tagAt?: { [end: string]: [number, number] | undefined };
   /**
    * Switch level: the net has significant capacitance (a bit line, a DRAM storage node). When
-   * nothing drives it, it keeps its last value as stored charge instead of floating to Z.
+   * nothing drives it, it keeps its last value as stored charge instead of floating to Z. A number
+   * is its relative capacitance (true = 1): where floating nets meet through a switch, the largest
+   * decides (a precharged bus keeps its 1 when a small storage node joins it). NmosSim reads it.
    */
-  cap?: boolean;
+  cap?: boolean | number;
 }
 
 export interface Netlist {
@@ -163,7 +165,7 @@ export interface ComponentDef {
   symbol: SymbolSpec;
 
   /** Built-in primitive handled directly by the simulators. */
-  prim?: 'nand' | 'nmos' | 'pmos' | 'vdd' | 'gnd' | 'res' | 'cap' | 'alias';
+  prim?: 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'res' | 'cap' | 'alias';
   /**
    * Switch level: drive strength of a conducting element, 1 … 4. Transistors are 2 (weak) … 4
    * (strong), default 3; a resistor (prim 'res') is 1 by default, weaker than any transistor. Where
@@ -244,7 +246,7 @@ export function parseEnd(end: string): { inst: string | null; port: string } {
   return i < 0 ? { inst: null, port: end } : { inst: end.slice(0, i), port: end.slice(i + 1) };
 }
 
-export type HierLeafKind = 'nand' | 'nmos' | 'pmos' | 'vdd' | 'gnd' | 'res' | 'cap' | 'behavior';
+export type HierLeafKind = 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'res' | 'cap' | 'behavior';
 
 /**
  * Primitives of the switch-level solver: transistors, rails, resistors (always-on weak paths) and
@@ -252,7 +254,7 @@ export type HierLeafKind = 'nand' | 'nmos' | 'pmos' | 'vdd' | 'gnd' | 'res' | 'c
  */
 export function isSwitchPrim(d: ComponentDef): boolean {
   const p = d.prim;
-  return p === 'nmos' || p === 'pmos' || p === 'vdd' || p === 'gnd' || p === 'res' || p === 'cap';
+  return p === 'nmos' || p === 'pmos' || p === 'dep' || p === 'vdd' || p === 'gnd' || p === 'res' || p === 'cap';
 }
 
 /**

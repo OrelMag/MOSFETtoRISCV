@@ -109,6 +109,11 @@ export function structuralVerilog(def: ComponentDef): string | null {
       lines.push(`  ${c.prim} ${instName(inst.name)} (${conn('d') || '/*nc*/'}, ${conn('s') || '/*nc*/'}, ${conn('g') || '/*nc*/'});`);
       continue;
     }
+    if (c.prim === 'dep') {
+      // a depletion load: always on and weak, so the same resistive switch as a resistor
+      lines.push(`  rtran ${instName(inst.name)} (${c.ports.map((p) => conn(p.name) || '/*nc*/').join(', ')});  // depletion load`);
+      continue;
+    }
     if (c.prim === 'res') {
       // a resistive bidirectional switch: what passes through it is reduced to a pull strength,
       // so any transistor (strong) overrides it, like the solver's weaker-than-any-transistor rule

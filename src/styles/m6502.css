@@ -1,0 +1,122 @@
+/* Appendix A (the 6502): the appendix's place on the map and in the menu, the 6502 panel, the
+   instruction-set widget and the transistor ledger. Colours from theme tokens (--vintage: theme.css)
+   or light-dark() pairs, so both themes are covered. */
+
+:root {
+  --m65-s6: light-dark(#8a63d2, #9a7be0);
+  --m65-s7: light-dark(#5b84b8, #6f97c8);
+  --m65-s8: light-dark(#8a93a8, #6d7488);
+}
+
+/* ---- the appendix on the map, in the chapter menu, in a chapter's header ---- */
+.cards-divider {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; margin-top: 6px;
+  font: 600 11px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--vintage);
+}
+.cards-divider::before, .cards-divider::after { content: ''; flex: 1; height: 1px; background: var(--vintage); opacity: 0.45; }
+.card.appendix { border-color: var(--vintage); background: linear-gradient(135deg, var(--vintage-soft), var(--surface) 70%); }
+.card.appendix .num { color: var(--vintage); }
+.qn-group { padding: 8px 12px 2px; font: 600 10.5px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vintage); }
+.qn-row.appendix .qn-num { color: var(--vintage); }
+.chapter-kicker.appendix { color: var(--vintage); }
+
+/* ---- the 6502 panel ---- */
+.m65-panel { width: 360px; }
+.m65-panel .param-row { flex-wrap: wrap; gap: 4px; }
+.m65-listing .ln { cursor: default; }
+.m65-listing .w { min-width: 6.5em; }
+.m65-regs { grid-template-columns: repeat(3, 1fr); }
+.m65-flags { display: flex; gap: 3px; align-items: center; margin: 5px 0 2px; }
+.m65-flags .f { font: 600 11px var(--font-mono); width: 20px; text-align: center; border-radius: 4px; padding: 1px 0; background: var(--surface-2); color: var(--muted); }
+.m65-flags .f.on { background: var(--good); color: var(--accent-text); }
+.m65-flags .m65-p { margin-left: 8px; font: 11px var(--font-mono); color: var(--muted); }
+.m65-trace { border-collapse: collapse; width: 100%; font: 11px var(--font-mono); }
+.m65-trace th { text-align: left; color: var(--muted); font-weight: 500; font-size: 10px; padding: 1px 4px; }
+.m65-trace td { padding: 1px 4px; border-top: 1px solid var(--border); white-space: nowrap; }
+.m65-trace tr.sync td { background: color-mix(in srgb, var(--w1) 14%, transparent); }
+.m65-trace td.w { color: var(--warn); font-weight: 700; }
+.m65-trace td.note { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+.m65-out {
+  min-height: 1.6em; padding: 5px 8px; border-radius: 6px; white-space: pre-wrap; word-break: break-all;
+  font: 13px var(--font-mono); background: light-dark(#0f1a12, #070b08); color: light-dark(#7dff8a, #6cf07a);
+}
+
+/* ---- the instruction set ---- */
+.m65-isa { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; height: 100%; overflow: auto; padding: 14px; box-sizing: border-box; }
+.m65-isa-main { min-width: 0; overflow: auto; }
+.m65-isa-bar { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.m65-op { border-collapse: separate; border-spacing: 2px; font: 10px var(--font-mono); }
+.m65-op th { color: var(--muted); font-weight: 600; font-size: 10px; padding: 1px 2px; }
+.m65-op td {
+  width: 52px; height: 32px; border-radius: 5px; text-align: center; vertical-align: middle; line-height: 1.15; cursor: pointer;
+  color: var(--text); background: color-mix(in srgb, var(--c) 26%, var(--surface)); border-left: 3px solid var(--c);
+}
+.m65-op td b { display: block; font-size: 11px; }
+.m65-op td span { font-size: 9px; color: var(--text-2); }
+.m65-op td.x { background: transparent; border: 1px dashed var(--border); cursor: default; }
+.m65-op td.sel { outline: 2.5px solid var(--text); outline-offset: -1px; }
+.m65-op td:hover:not(.x) { filter: brightness(1.08); }
+.m65-isa .s1 { --c: var(--series-1); } .m65-isa .s2 { --c: var(--series-2); } .m65-isa .s3 { --c: var(--series-3); } .m65-isa .s4 { --c: var(--series-4); }
+.m65-isa .s5 { --c: var(--series-5); } .m65-isa .s6 { --c: var(--m65-s6); } .m65-isa .s7 { --c: var(--m65-s7); } .m65-isa .s8 { --c: var(--m65-s8); }
+.m65-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; font-size: 11.5px; color: var(--text-2); }
+.m65-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; background: var(--c); }
+.m65-detail { font-size: 12.5px; }
+.m65-k { font: 600 10.5px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 10px 0 4px; }
+.m65-k label { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--text-2); margin-left: 8px; }
+.m65-big { font: 700 22px var(--font-mono); }
+.m65-big span { font-weight: 500; color: var(--text-2); }
+.m65-enc { display: flex; gap: 2px; margin: 6px 0 0; }
+.m65-enc span { flex: 1; text-align: center; font: 600 14px var(--font-mono); padding: 4px 0; border-radius: 5px; }
+.m65-enc .aaa { background: color-mix(in srgb, var(--series-2) 24%, var(--surface)); }
+.m65-enc .bbb { background: color-mix(in srgb, var(--series-1) 24%, var(--surface)); }
+.m65-enc .cc { background: color-mix(in srgb, var(--series-3) 24%, var(--surface)); }
+.m65-enc.l span { font: 500 10.5px var(--font-ui); color: var(--muted); padding: 0; background: none; }
+.m65-kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin-top: 8px; }
+.m65-kv span:nth-child(odd) { color: var(--text-2); }
+.m65-kv span:nth-child(even) { font-family: var(--font-mono); }
+.m65-note { color: var(--text-2); font-size: 12px; margin: 8px 0 0; }
+
+/* ---- the ledger ---- */
+.m65-ledger { height: 100%; overflow: auto; padding: 14px 18px; box-sizing: border-box; font-size: 12.5px; }
+.m65-ledger-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.m65-ledger h5 { font: 600 11px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 12px 0 6px; }
+.m65-bar { display: grid; grid-template-columns: 150px 1fr 70px; gap: 8px; align-items: center; margin: 3px 0; }
+.m65-bar .t { height: 13px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.m65-bar .t i { display: block; height: 100%; border-radius: 4px; }
+.m65-bar .t i.rv { background: var(--accent); }
+.m65-bar .t i.us { background: var(--vintage); }
+.m65-bar .r { text-align: right; font-family: var(--font-mono); font-size: 11.5px; }
+.m65-cmp { border-collapse: collapse; width: 100%; font-size: 12px; }
+.m65-cmp th { text-align: right; font-weight: 500; color: var(--muted); font-size: 11px; padding: 3px 6px; }
+.m65-cmp th:first-child, .m65-cmp td:first-child { text-align: left; }
+.m65-cmp td { text-align: right; padding: 3px 6px; border-top: 1px solid var(--border); font-family: var(--font-mono); }
+.m65-cmp td:first-child { font-family: var(--font-ui); }
+.m65-cmp td:last-child { color: var(--vintage); font-weight: 700; }
+.m65-hist { display: flex; align-items: flex-end; gap: 6px; height: 190px; border-bottom: 1px solid var(--border-strong); padding-top: 14px; }
+.m65-hist > div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; font-size: 10px; color: var(--text-2); min-width: 0; }
+.m65-hist i { width: 100%; border-radius: 4px 4px 0 0; background: var(--series-1); }
+.m65-hist .us i { background: var(--vintage); }
+.m65-hist .rv i { background: var(--accent); }
+.m65-hist b { font: 600 10px var(--font-mono); margin-bottom: 2px; }
+.m65-hist span { height: 2.6em; margin-top: 3px; text-align: center; line-height: 1.2; overflow: hidden; }
+@media (max-width: 900px) {
+  .m65-isa, .m65-ledger-cols { grid-template-columns: 1fr; }
+}
+.m65-pages { display: inline-flex; gap: 3px; margin-left: 6px; text-transform: none; letter-spacing: 0; }
+.m65-pages .btn { padding: 0 5px; font: 600 10px var(--font-mono); }
+.m65-mem { font: 10px var(--font-mono); line-height: 1.45; }
+.m65-mem .row { display: flex; gap: 3px; }
+.m65-mem .a { color: var(--muted); width: 3.2em; }
+.m65-mem .z { color: var(--muted); opacity: 0.6; }
+.m65-mem .w { background: color-mix(in srgb, var(--warn) 30%, transparent); border-radius: 2px; }
+
+/* chapter A.2: the two clock phases */
+.m65-phases { display: block; width: 100%; max-width: 320px; margin: 4px 0 10px; }
+.m65-phases path { fill: none; stroke-width: 2; }
+.m65-phases .p1 path { stroke: var(--series-1); }
+.m65-phases .p2 path { stroke: var(--series-2); }
+.m65-phases text { font: 600 11px var(--font-mono); fill: var(--text-2); }
+.m65-modes { border-collapse: collapse; font-size: 11.5px; margin-top: 2px; }
+.m65-modes th { text-align: left; font-weight: 500; color: var(--muted); font-size: 10.5px; padding: 2px 10px 2px 0; }
+.m65-modes td { padding: 1px 10px 1px 0; border-top: 1px solid var(--border); }
+.m65-modes td:nth-child(n+2) { font-family: var(--font-mono); }

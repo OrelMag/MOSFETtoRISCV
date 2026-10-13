@@ -532,6 +532,7 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .sym-line.thick { stroke-width: 0.2; }
 .sym-arrow { fill: none; stroke: var(--sym-stroke); stroke-width: 0.13; stroke-linejoin: round; }
 .sym-channel { stroke: var(--sym-stroke); stroke-width: 0.22; stroke-dasharray: 0.55 0.3; transition: stroke 0.15s; }
+.sym-dep { stroke: var(--dep-load); stroke-width: 0.34; }
 .conducting .sym-channel { stroke: var(--channel-on); stroke-dasharray: none; stroke-width: 0.3; filter: drop-shadow(0 0 0.3px var(--channel-on)); }
 .maybe .sym-channel { stroke: var(--wx); }
 .sym-bus { stroke: var(--plumb); stroke-width: 0.42; stroke-linecap: round; }

@@ -198,7 +198,8 @@ describe('connectivity never changes', () => {
     .filter((d): d is ChipDoc => !('error' in d) && d.labels.length > 0);
   it('covers library components with pointers', () => expect(docs.length).toBeGreaterThan(20));
   // The chapters' CPUs, opened in the sandbox: the biggest documents with the most pointers.
-  it.each(cpuTops().map((d) => [d.id, d] as const))('CPU: %s', (_, def) => {
+  // (those drawn with net labels: the 6502's top level is all wires)
+  it.each(cpuTops().filter((d) => netlistOf(d)!.nets.some((n) => n.tags)).map((d) => [d.id, d] as const))('CPU: %s', (_, def) => {
     const r = remixDef(emptyWorkspace(), def);
     if ('error' in r) throw new Error(r.error);
     const { names } = roundTrip(r.ws, r.id, 12);

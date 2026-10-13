@@ -62,7 +62,7 @@ export class ChapterPage implements Page {
     const c = this.chapter;
     const visited = settings.visited(c.id);
     this.head.replaceChildren(
-      h('div', { class: 'chapter-kicker' }, `Chapter ${c.num} · ${c.level}`),
+      h('div', { class: `chapter-kicker${c.appendix ? ' appendix' : ''}` }, `${c.appendix ? `Appendix ${c.appendix}` : `Chapter ${c.num}`} · ${c.level}`),
       h('h1', { class: 'chapter-title' }, h('button', {
         class: 'chapter-switch', title: 'Switch chapter', 'aria-haspopup': 'menu', 'aria-expanded': 'false',
         onclick: (e: Event) => toggleChapterMenu(e.currentTarget as HTMLElement),
