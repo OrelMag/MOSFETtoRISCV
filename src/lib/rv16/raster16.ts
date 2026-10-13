@@ -166,68 +166,153 @@ function addNib(b: Builder, x: string, y: string, cin: string, nib: number, labe
   return { s: sum ? b.op1(merger(W, 2), s, label) : '', cout: c };
 }
 
-/** Busy cycles of the set-up chain, in order: load, the two sign steps, 14 shift-and-add steps, the bias, the cull. */
-const CHAIN = ['load', 'upX', 'upY', 'pairs', 'bias', 'cull'] as const;
+/** The sign bit of a 16-bit value. */
+function top16(b: Builder, v: string): string {
+  return `${b.op(splitter([15, 1], 2), [v])}.o1`;
+}
 
-export const RASTER16: ComponentDef = (() => {
-  const b = new Builder(10, 12, 4);
-  const VP = ['v0x', 'v0y', 'v1x', 'v1y', 'v2x', 'v2y'];
-  const ins = [...VP, 'col', 'go', 'clk', 'rst'];
-  b.pins(...ins);
-  const one = b.op1(constWord(1, 1), []), zero = b.op1(constWord(1, 0), []);
-  const nrst = b.op1(NOT, ['rst'], 'not reset');
-  const z8 = (v: string) => b.op1(merger([7, 1], 2), [v, zero]);
-  const X = E3.map((i) => z8(`v${i}x`)), Y = E3.map((i) => z8(`v${i}y`));
+const VP = ['v0x', 'v0y', 'v1x', 'v1y', 'v2x', 'v2y'];
+
+/** a − b on 8 bits: a + NOT b + 1 on two 4-bit adders. */
+export const RSUB8: ComponentDef = (() => {
+  const b = new Builder(8, 10, 4);
+  b.pins('a', 'b');
+  const inv = b.op1(bitwise('xor', 8), ['b', b.op1(constWord(8, 0xff), [])], 'NOT b');
   b.next();
-  // set-up, per edge: A = y_i − y_{i+1}, B = x_{i+1} − x_i (8 bits, signed); the top-left bias
-  const inv = (v: string, w: number) => b.op1(bitwise('xor', w), [v, b.op1(constWord(w, 2 ** w - 1), [])]);
-  const sub8 = (x: string, y: string, label: string) => addNib(b, x, inv(y, 8), one, 2, label).s;
-  const top = (v: string) => `${b.op(splitter([7, 1], 2), [v])}.o1`;
-  const sx16 = (v: string) => b.op1(merger([8, 8], 2), [v, b.op1(fanout(8), [top(v)])]);
-  const A = E3.map((i) => b.name(sub8(Y[i], Y[(i + 1) % 3], `A${i}`), `A${i}`, true));
-  const B = E3.map((i) => b.name(sub8(X[(i + 1) % 3], X[i], `B${i}`), `B${i}`, true));
-  b.next();
-  const pos = (v: string) => b.op1(AND, [b.op1(NOT, [top(v)]), b.op1(NOT, [b.op1(isZero(8), [v])])]);
-  const bias = E3.map((i) => {
-    const flat = b.op1(AND, [b.op1(isZero(8), [A[i]]), pos(B[i])], `top edge ${i}?`);
-    return b.name(b.op1(NOT, [b.op1(OR, [pos(A[i]), flat], `left or top ${i}`)], `bias ${i}`), `bias${i}`, true);
+  b.wire(addNib(b, 'a', inv, b.op1(constWord(1, 1), []), 2, 'a + NOT b + 1').s, 'd');
+  const R = b.right;
+  return define({
+    id: 'rv16_sub8', name: '8-bit subtractor (RV16)', category: 'arithmetic',
+    summary: 'd = a − b in two\'s complement: a + NOT b + 1, two 4-bit ripple adders with a carry in of 1.',
+    ports: [bus('a', 8, 'in'), bus('b', 8, 'in'), bus('d', 8, 'out')],
+    symbol: { kind: 'box', label: 'a − b' },
+    spec: ([a, c]) => [(a - c) & 0xff],
+    netlist: () => ({ pins: { a: [0, 4], b: [0, 10], d: [R, 7] }, instances: b.instances, nets: b.nets() }),
   });
-  // the box in tiles: first tile (min + 1) >> 4, last max(max − 2, 0) >> 4, over the three vertices
-  const firstT = (v: string) => `${b.op(splitter([4, 4], 2), [addNib(b, v, b.op1(constWord(8, 0), []), one, 2, '+1').s])}.o1`;
-  const lastT = (v: string) => {
-    const d = b.op(splitter([4, 3, 1], 2), [addNib(b, v, b.op1(constWord(8, 0xfe), []), zero, 2, '−2').s]);
+})();
+
+/** The box along one axis, in tiles: first = the smallest (p + 1) >> 4, last = the largest max(p − 2, 0) >> 4. */
+export const RTILES: ComponentDef = (() => {
+  const b = new Builder(18, 12, 4);
+  b.pins('p0', 'p1', 'p2');
+  const one = b.op1(constWord(1, 1), []), zero = b.op1(constWord(1, 0), []);
+  const z8 = (v: string) => b.op1(merger([7, 1], 2), [v, zero]);
+  const first = (v: string) => `${b.op(splitter([4, 4], 2), [addNib(b, z8(v), b.op1(constWord(8, 0), []), one, 2, '+1').s])}.o1`;
+  const last = (v: string) => {
+    const d = b.op(splitter([4, 3, 1], 2), [addNib(b, z8(v), b.op1(constWord(8, 0xfe), []), zero, 2, '−2').s]);
     return b.op1(bitwise('and', 3), [`${d}.o1`, b.op1(fanout(3), [b.op1(NOT, [`${d}.o2`])])], 'clamped at 0');
   };
-  const ge4 = (x: string, y: string) => addNib(b, x, inv(y, 4), one, 1, '≥?', false).cout;
+  const inv4 = (v: string) => b.op1(bitwise('xor', 4), [v, b.op1(constWord(4, 15), [])]);
+  const ge4 = (x: string, y: string) => addNib(b, x, inv4(y), one, 1, '≥?', false).cout;
   const min4 = (x: string, y: string) => b.op1(busMux2(4), [x, y, ge4(x, y)], 'min');
   const z4 = (v: string) => b.op1(merger([3, 1], 2), [v, zero]);
   const max3 = (x: string, y: string) => b.op1(busMux2(3), [y, x, ge4(z4(x), z4(y))], 'max');
+  const f = ['p0', 'p1', 'p2'].map(first), l = ['p0', 'p1', 'p2'].map(last);
   b.next();
-  const tx0 = b.name(min4(min4(firstT(X[0]), firstT(X[1])), firstT(X[2])), 'tx0', true);
-  const ty0 = b.name(min4(min4(firstT(Y[0]), firstT(Y[1])), firstT(Y[2])), 'ty0', true);
-  const tx1 = b.name(max3(max3(lastT(X[0]), lastT(X[1])), lastT(X[2])), 'tx1', true);
-  const ty1 = b.name(max3(max3(lastT(Y[0]), lastT(Y[1])), lastT(Y[2])), 'ty1', true);
+  b.wire(min4(min4(f[0], f[1]), f[2]), 'first');
+  b.wire(max3(max3(l[0], l[1]), l[2]), 'last');
+  const R = b.right;
+  return define({
+    id: 'rv16_rtiles', name: 'Tile range (RV16)', category: 'arithmetic',
+    summary: 'Along one axis, from three 7-bit coordinates in quarter pixels: first, the smallest (p + 1) >> 4 (the tile of the first pixel centre at or after the smallest p, 4 bits: 8 only when all three are 127), and last, the largest max(p − 2, 0) >> 4. A comparison is the carry of a + NOT b + 1.',
+    ports: [bus('p0', 7, 'in'), bus('p1', 7, 'in'), bus('p2', 7, 'in'), bus('first', 4, 'out'), bus('last', 3, 'out')],
+    symbol: { kind: 'box', label: 'TILES' },
+    spec: ([p0, p1, p2]) => [Math.min((p0 + 1) >> 4, (p1 + 1) >> 4, (p2 + 1) >> 4), Math.max(Math.max(p0 - 2, 0) >> 4, Math.max(p1 - 2, 0) >> 4, Math.max(p2 - 2, 0) >> 4)],
+    netlist: () => ({ pins: { p0: [0, 4], p1: [0, 10], p2: [0, 16], first: [R, 6], last: [R, 14] }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** The tile test's offset: 12·(A⁺ + B⁺), A⁺ = A when positive, else 0. */
+export const ROFF: ComponentDef = (() => {
+  const b = new Builder(8, 10, 4);
+  b.pins('a', 'b');
+  const zero = b.op1(constWord(1, 0), []);
+  const top = (v: string) => `${b.op(splitter([7, 1], 2), [v])}.o1`;
+  const plus = (v: string) => b.op1(bitwise('and', 8), [v, b.op1(fanout(8), [b.op1(NOT, [top(v)])])], `${v}⁺`);
+  const s = addNib(b, plus('a'), plus('b'), zero, 2, 'A⁺ + B⁺');
   b.next();
-  // the first tile's top-left pixel centre (16·t + 2) and each vertex's offset from it, 8 bits signed
+  const v = b.op1(merger([8, 1], 2), [s.s, s.cout]);
+  const twelve = addNib(b, b.op1(merger([3, 9], 2), [b.op1(constWord(3, 0), []), v], '×8'), b.op1(merger([2, 9, 1], 2), [b.op1(constWord(2, 0), []), v, zero], '×4'), zero, 3, '×12').s;
+  b.next();
+  b.wire(b.op1(merger([12, 4], 2), [twelve, b.op1(constWord(4, 0), [])]), 'off');
+  const R = b.right;
+  const pos = (x: number) => (x & 0x80 ? 0 : x);
+  return define({
+    id: 'rv16_roff', name: 'Tile test offset (RV16)', category: 'arithmetic',
+    summary: '12·(A⁺ + B⁺), A⁺ = A when positive, else 0: how much larger E is at a tile\'s best corner than at its top-left pixel (three pixels right where A > 0, three down where B > 0). ×12 = ×8 + ×4, wired shifts and one adder.',
+    ports: [bus('a', 8, 'in'), bus('b', 8, 'in'), bus('off', 16, 'out')],
+    symbol: { kind: 'box', label: '12·(A⁺ + B⁺)' },
+    spec: ([a, c]) => [12 * (pos(a) + pos(c))],
+    netlist: () => ({ pins: { a: [0, 4], b: [0, 10], off: [R, 7] }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/**
+ * Set-up, all combinational, from the vertices: per edge A = y_i − y_{i+1}, B = x_{i+1} − x_i (8 bits signed), the
+ * top-left bias, the offsets Δx = ox − x_i, Δy = oy − y_i from the first tile's top-left pixel centre (ox, oy) =
+ * (16·tx0 + 2, 16·ty0 + 2), the tile test's offset 12·(A⁺ + B⁺); the box in tiles. Adders only.
+ */
+export const RSETUP16: ComponentDef = (() => {
+  const b = new Builder(10, 12, 4);
+  b.pins(...VP);
+  const zero = b.op1(constWord(1, 0), []);
+  const z8 = (v: string) => b.op1(merger([7, 1], 2), [v, zero]);
+  const X = E3.map((i) => z8(`v${i}x`)), Y = E3.map((i) => z8(`v${i}y`));
+  const tx = b.op(RTILES, ['v0x', 'v1x', 'v2x'], 'tiles across', 'tilesX');
+  const ty = b.op(RTILES, ['v0y', 'v1y', 'v2y'], 'tiles down', 'tilesY');
+  b.next();
+  const A = E3.map((i) => b.name(b.op1(RSUB8, [Y[i], Y[(i + 1) % 3]], `A${i}`), `A${i}`, true));
+  const B = E3.map((i) => b.name(b.op1(RSUB8, [X[(i + 1) % 3], X[i]], `B${i}`), `B${i}`, true));
   const two = b.op1(constWord(4, 2), []);
-  const ox = b.op1(merger([4, 4], 2), [two, tx0], '16·tx0 + 2'), oy = b.op1(merger([4, 4], 2), [two, ty0], '16·ty0 + 2');
-  const dX = E3.map((i) => b.name(sub8(ox, X[i], `Δx${i}`), `dx${i}`, true)), dY = E3.map((i) => b.name(sub8(oy, Y[i], `Δy${i}`), `dy${i}`, true));
-  // the tile test's offset: 12·(A⁺ + B⁺), A⁺ = A when positive, else 0
-  const plus = (v: string) => b.op1(bitwise('and', 8), [v, b.op1(fanout(8), [b.op1(NOT, [top(v)])])]);
-  const off = E3.map((i) => {
-    const s = addNib(b, plus(A[i]), plus(B[i]), zero, 2, `A⁺ + B⁺ ${i}`);
-    const v = b.op1(merger([8, 1], 2), [s.s, s.cout]);
-    const twelve = addNib(b, b.op1(merger([3, 9], 2), [b.op1(constWord(3, 0), []), v]), b.op1(merger([2, 9, 1], 2), [b.op1(constWord(2, 0), []), v, zero]), zero, 3, `×12 ${i}`).s;
-    return b.op1(merger([12, 4], 2), [twelve, b.op1(constWord(4, 0), [])], `offset ${i}`);
+  const ox = b.op1(merger([4, 4], 2), [two, `${tx}.first`], '16·tx0 + 2'), oy = b.op1(merger([4, 4], 2), [two, `${ty}.first`], '16·ty0 + 2');
+  b.next();
+  const dX = E3.map((i) => b.op1(RSUB8, [ox, X[i]], `Δx${i}`)), dY = E3.map((i) => b.op1(RSUB8, [oy, Y[i]], `Δy${i}`));
+  const off = E3.map((i) => b.op1(ROFF, [A[i], B[i]], `offset ${i}`));
+  b.next();
+  const top = (v: string) => `${b.op(splitter([7, 1], 2), [v])}.o1`;
+  const pos = (v: string) => b.op1(AND, [b.op1(NOT, [top(v)]), b.op1(NOT, [b.op1(isZero(8), [v])])]);
+  const bias = E3.map((i) => {
+    const flat = b.op1(AND, [b.op1(isZero(8), [A[i]]), pos(B[i])], `top edge ${i}?`);
+    return b.op1(NOT, [b.op1(OR, [pos(A[i]), flat], `left or top ${i}`)], `bias ${i}`);
   });
   b.next();
-  // the set-up sequence: a flip-flop a step, a counter for the shift-and-add pairs
+  const lo3 = (v: string) => `${b.op(splitter([3, 1], 2), [v])}.o0`;
+  E3.forEach((i) => {
+    b.wire(A[i], `a${i}`); b.wire(B[i], `b${i}`); b.wire(bias[i], `bias${i}`);
+    b.wire(dX[i], `dx${i}`); b.wire(dY[i], `dy${i}`); b.wire(off[i], `off${i}`);
+  });
+  b.wire(lo3(`${tx}.first`), 'tx0'); b.wire(`${tx}.last`, 'tx1'); b.wire(lo3(`${ty}.first`), 'ty0'); b.wire(`${ty}.last`, 'ty1');
+  const outs = [...E3.flatMap((i) => [`a${i}`, `b${i}`, `bias${i}`, `dx${i}`, `dy${i}`, `off${i}`]), 'tx0', 'tx1', 'ty0', 'ty1'];
+  const R = b.right;
+  return define({
+    id: 'rv16_rsetup', name: 'Triangle set-up (RV16)', category: 'arithmetic',
+    summary: 'From the three vertices (7-bit quarter pixels): per edge A and B (8 bits signed), the top-left bias, the offsets Δx, Δy from the first tile\'s top-left pixel centre, and the tile test\'s offset 12·(A⁺ + B⁺); the box in tiles. Subtractors and adders only.',
+    ports: [...VP.map((p) => bus(p, 7, 'in')), ...E3.flatMap((i) => [bus(`a${i}`, 8, 'out'), bus(`b${i}`, 8, 'out'), bit(`bias${i}`, 'out'), bus(`dx${i}`, 8, 'out'), bus(`dy${i}`, 8, 'out'), bus(`off${i}`, 16, 'out')]),
+      bus('tx0', 3, 'out'), bus('tx1', 3, 'out'), bus('ty0', 3, 'out'), bus('ty1', 3, 'out')],
+    symbol: { kind: 'box', label: 'SET-UP' },
+    netlist: () => ({ pins: { ...pinsAt(VP, 0, 8), ...pinsAt(outs, R, 4) }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** The set-up's steps, a flip-flop each, in order: load, the two sign steps, 14 shift-and-add steps, the bias, the cull. */
+const CHAIN = ['load', 'upX', 'upY', 'pairs', 'bias', 'cull'] as const;
+
+/**
+ * The set-up's sequence: go while idle (walk included) starts load → upX → upY → 14 pairs (t = 0 … 13; j = t >> 1
+ * picks bit 6 − j of Δ, h = t mod 2: double and add A, or add B) → bias → cull. cmd: the steppers' command for
+ * the step (load 1, up 5, double 7, right 2; cull loads E into itself, so R starts at the first tile too).
+ */
+export const RSEQ16: ComponentDef = (() => {
+  const b = new Builder(18, 12, 4);
+  const ins = ['go', 'walking', 'clk', 'rst'];
+  b.pins(...ins);
+  const one = b.op1(constWord(1, 1), []);
+  const nrst = b.op1(NOT, ['rst'], 'not reset');
   const ch = Object.fromEntries(CHAIN.map((k) => [k, b.add(RV16_DFF, k, `s_${k}`)])) as Record<typeof CHAIN[number], string>;
   const tr = b.add(RV16_REG4, 'pair step t', 't');
   for (const r of [...Object.values(ch), tr]) b.wire('clk', `${r}.clk`);
   const q = (k: typeof CHAIN[number]) => b.name(`${ch[k]}.q`, k, true);
-  const walk = b.add(TILE16, 'tile walk', 'walk');
-  const busy = b.name(b.op1(OR, [b.op1(orN(4), [q('load'), q('upX'), q('upY'), q('pairs')]), b.op1(orN(3), [q('bias'), q('cull'), `${walk}.busy`])], 'busy'), 'busyAll', true);
+  const busy = b.name(b.op1(OR, [b.op1(orN(4), [q('load'), q('upX'), q('upY'), q('pairs')]), b.op1(orN(3), [q('bias'), q('cull'), 'walking'])], 'busy'), 'busyAll', true);
   const start = b.op1(andN(3), ['go', b.op1(NOT, [busy]), nrst], 'start');
   const tb = b.op(splitter(ones(4), 2), [`${tr}.q`], 't bits');
   const t13 = b.op1(equal(4), [`${tr}.q`, b.op1(constWord(4, 13), [])], 'last pair');
@@ -241,57 +326,129 @@ export const RASTER16: ComponentDef = (() => {
   b.wire(gate(q('bias')), `${ch.cull}.d`);
   b.wire(b.op1(busMux2(4), [b.op1(constWord(4, 0), []), addNib(b, `${tr}.q`, b.op1(constWord(4, 0), []), one, 1, 't + 1').s, q('pairs')], 't next'), `${tr}.d`);
   b.wire(one, `${tr}.en`);
-  // pair j = t >> 1 uses bit 6 − j of Δ; t even: double and add A, odd: add B
-  const j = b.op1(merger([1, 1, 1], 2), [`${tb}.o1`, `${tb}.o2`, `${tb}.o3`], 'j');
-  const h = `${tb}.o0`, nh = b.op1(NOT, [h]);
+  const h = `${tb}.o0`;
   const ups = b.op1(OR, [q('upX'), q('upY')], 'sign steps');
-  const dbl = b.op1(AND, [q('pairs'), nh], 'double');
+  const dbl = b.op1(AND, [q('pairs'), b.op1(NOT, [h])], 'double');
   b.next();
-  const bitOf = (d: string) => {
-    const s = b.op(splitter(ones(8), 2), [d]);
-    return b.op1(muxTree(3, 1), [...[6, 5, 4, 3, 2, 1, 0].map((k) => `${s}.o${k}`), zero, j], 'Δ bit 6 − j');
-  };
-  const signOf = (d: string) => top(d);
-  const useB = b.op1(OR, [q('upY'), b.op1(AND, [q('pairs'), h])], 'B side?');
-  // the cull cycle loads each E into itself, so the band start R holds the first tile's E too
   const c0 = b.op1(OR, [b.op1(orN(4), [q('load'), ups, q('bias'), dbl]), q('cull')], 'cmd bit 0');
   const c2 = b.op1(orN(3), [ups, q('bias'), dbl], 'cmd bit 2');
-  const setupCmd = b.op1(merger(ones(3), 2), [c0, q('pairs'), c2], 'set-up command');
+  b.wire(b.op1(merger(ones(3), 2), [c0, q('pairs'), c2], 'cmd'), 'cmd');
+  b.wire(b.op1(merger([1, 1, 1], 2), [`${tb}.o1`, `${tb}.o2`, `${tb}.o3`], 'j = t >> 1'), 'j');
+  b.wire(h, 'h');
+  for (const k of CHAIN) if (k !== 'load') b.wire(q(k), k);
+  b.wire(busy, 'busy');
+  const outs = ['cmd', 'j', 'h', 'upX', 'upY', 'pairs', 'bias', 'cull', 'busy'];
+  const R = b.right;
+  return define({
+    id: 'rv16_rseq', name: 'Set-up sequencer (RV16)', category: 'sequential',
+    summary: 'A flip-flop per set-up step: go while idle starts load, then the two sign steps (Δx₇, Δy₇ weigh −128), 14 shift-and-add pairs counted by t (j = t >> 1 picks the bit, h = t mod 2 the operand), the bias, the cull. cmd is the steppers\' command for the step; busy covers the set-up and the walk.',
+    ports: [bit('go', 'in'), bit('walking', 'in'), clkIn(), bit('rst', 'in'), bus('cmd', 3, 'out'), bus('j', 3, 'out'), bit('h', 'out'),
+      ...CHAIN.filter((k) => k !== 'load').map((k) => bit(k, 'out')), bit('busy', 'out')],
+    symbol: { kind: 'box', label: 'SET-UP STEPS' },
+    netlist: () => ({ pins: { ...pinsAt(ins, 0, 6), ...pinsAt(outs, R, 4) }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/**
+ * One stepper's operands: during the walk a = 4A, b = 4B (a pixel); during the set-up the shift-and-add's: the
+ * sign steps subtract A·Δx₇ and B·Δy₇ (b), the pairs add A or B when bit 6 − j of Δx or Δy is set (a), the bias
+ * step subtracts the bias (b). e0 is 0, or E itself in the cull step.
+ */
+export const ROPER16: ComponentDef = (() => {
+  const b = new Builder(18, 12, 4);
+  const ins = ['a', 'b', 'dx', 'dy', 'bias', 'j', 'h', 'upX', 'upY', 'pairs', 'biasStep', 'cull', 'e'];
+  b.pins(...ins);
+  const zero = b.op1(constWord(1, 0), []);
+  const top = (v: string) => `${b.op(splitter([7, 1], 2), [v])}.o1`;
+  const sx16 = (v: string) => b.op1(merger([8, 8], 2), [v, b.op1(fanout(8), [top(v)])], 'sign-extended');
+  const A16 = sx16('a'), B16 = sx16('b');
+  const bitOf = (d: string) => {
+    const s = b.op(splitter(ones(8), 2), [d]);
+    return b.op1(muxTree(3, 1), [...[6, 5, 4, 3, 2, 1, 0].map((k) => `${s}.o${k}`), zero, 'j'], 'bit 6 − j');
+  };
   b.next();
-  const bias16 = E3.map((i) => b.op1(merger([1, 15], 2), [bias[i], b.op1(constWord(15, 0), [])]));
-  const zero16 = b.op1(constWord(16, 0), []);
-  const cmd = b.op1(bitwise('or', 3), [setupCmd, `${walk}.cmd`], 'cmd');
+  const ups = b.op1(OR, ['upX', 'upY'], 'sign steps');
+  const useB = b.op1(OR, ['upY', b.op1(AND, ['pairs', 'h'])], 'B side?');
+  const pb = b.op1(busMux2(1), [bitOf('dx'), bitOf('dy'), 'h']);
+  const ub = b.op1(busMux2(1), [top('dx'), top('dy'), 'upY']);
+  const bitv = b.op1(busMux2(1), [pb, ub, ups], 'the bit');
+  b.next();
+  const mop = b.op1(bitwise('and', 16), [b.op1(MUX16, [A16, B16, useB]), b.op1(fanout(16), [bitv])], 'A or B, or 0');
+  b.next();
+  b.wire(b.op1(MUX16, [shl16(b, A16, 2), mop, 'pairs'], 'a'), 'ao');
+  const bias16 = b.op1(merger([1, 15], 2), ['bias', b.op1(constWord(15, 0), [])]);
+  b.wire(b.op1(MUX16, [b.op1(MUX16, [shl16(b, B16, 2), mop, ups]), bias16, 'biasStep'], 'b'), 'bo');
+  b.wire(b.op1(MUX16, [b.op1(constWord(16, 0), []), 'e', 'cull'], '0, or E'), 'e0');
+  const R = b.right;
+  return define({
+    id: 'rv16_roper', name: 'Stepper operands (RV16)', category: 'routing',
+    summary: 'Feeds one edge stepper: 4A and 4B while the walk runs; during the set-up the shift-and-add\'s operand, A or B when the chosen bit of Δx or Δy is set, else 0 (the sign steps subtract it, the pairs add it), then the bias; e0 is 0 at the start, the stepper\'s own E in the cull step.',
+    ports: [bus('a', 8, 'in'), bus('b', 8, 'in'), bus('dx', 8, 'in'), bus('dy', 8, 'in'), bit('bias', 'in'), bus('j', 3, 'in'), bit('h', 'in'), bit('upX', 'in'), bit('upY', 'in'),
+      bit('pairs', 'in'), bit('biasStep', 'in'), bit('cull', 'in'), bus('e', 16, 'in'), bus('ao', 16, 'out'), bus('bo', 16, 'out'), bus('e0', 16, 'out')],
+    symbol: { kind: 'box', label: 'OPERANDS' },
+    netlist: () => ({ pins: { ...pinsAt(ins, 0, 4), ...pinsAt(['ao', 'bo', 'e0'], R, 8) }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** The cull (twice the area = E0 + E1 + E2 + the biases, > 0 for a front face) and the tile test (E + offset ≥ 0 for every edge). */
+export const RTEST16: ComponentDef = (() => {
+  const b = new Builder(18, 12, 4);
+  const ins = [...E3.map((i) => `e${i}`), ...E3.map((i) => `off${i}`), ...E3.map((i) => `bias${i}`)];
+  b.pins(...ins);
+  const zero = b.op1(constWord(1, 0), []);
+  const s1 = b.op(ADD16, ['e0', 'e1', zero]);
+  const fa3 = b.op(FULL_ADDER, ['bias0', 'bias1', 'bias2'], 'biases');
+  b.next();
+  const s2 = b.op(ADD16, [`${s1}.s`, 'e2', zero]);
+  b.next();
+  const area = b.op(ADD16, [`${s2}.s`, b.op1(merger([1, 1, 14], 2), [`${fa3}.s`, `${fa3}.cout`, b.op1(constWord(14, 0), [])]), zero], 'twice the area');
+  const tneg = E3.map((i) => top16(b, `${b.op(ADD16, [`e${i}`, `off${i}`, zero], `tile test ${i}`)}.s`));
+  b.next();
+  b.wire(b.op1(AND, [b.op1(NOT, [top16(b, `${area}.s`)]), b.op1(NOT, [b.op1(isZero(16), [`${area}.s`])])], 'front face'), 'front');
+  b.wire(b.op1(NOT, [b.op1(orN(3), tneg)], 'tile may hold pixels'), 'ok');
+  const R = b.right;
+  return define({
+    id: 'rv16_rtest', name: 'Cull and tile test (RV16)', category: 'arithmetic',
+    summary: 'front: E0 + E1 + E2 plus the three biases (twice the signed area, the same at every point) is > 0. ok: E + 12·(A⁺ + B⁺), each edge at the tile\'s best corner, is ≥ 0 for all three: the tile may hold pixels.',
+    ports: [...E3.map((i) => bus(`e${i}`, 16, 'in')), ...E3.map((i) => bus(`off${i}`, 16, 'in')), ...E3.map((i) => bit(`bias${i}`, 'in')), bit('front', 'out'), bit('ok', 'out')],
+    symbol: { kind: 'box', label: 'CULL · TILE TEST' },
+    netlist: () => ({ pins: { ...pinsAt(ins, 0, 6), ...pinsAt(['front', 'ok'], R, 8) }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+export const RASTER16: ComponentDef = (() => {
+  const b = new Builder(10, 14, 4);
+  const ins = [...VP, 'col', 'go', 'clk', 'rst'];
+  b.pins(...ins);
+  const su = b.op(RSETUP16, VP, 'set-up', 'setup');
+  const seq = b.add(RSEQ16, 'set-up steps', 'seq');
+  for (const p of ['go', 'clk', 'rst']) b.wire(p, `${seq}.${p}`);
+  b.next();
   const st = E3.map((i) => {
-    const A16 = sx16(A[i]), B16 = sx16(B[i]);
-    const pb = b.op1(busMux2(1), [bitOf(dX[i]), bitOf(dY[i]), h]);
-    const ub = b.op1(busMux2(1), [signOf(dX[i]), signOf(dY[i]), q('upY')]);
-    const bitv = b.op1(busMux2(1), [pb, ub, ups], `bit ${i}`);
-    const mop = b.op1(bitwise('and', 16), [b.op1(MUX16, [A16, B16, useB]), b.op1(fanout(16), [bitv])], `A or B, or 0 (${i})`);
-    const aIn = b.op1(MUX16, [shl16(b, A16, 2), mop, q('pairs')], `a ${i}`);
-    const bIn = b.op1(MUX16, [b.op1(MUX16, [shl16(b, B16, 2), mop, ups]), bias16[i], q('bias')], `b ${i}`);
-    const ed = b.op(EDGE16, [aIn, bIn, '', cmd, 'clk'], `edge ${i}`, `edge${i}`);
-    b.wire(b.op1(MUX16, [zero16, `${ed}.e`, q('cull')], `0, or E (${i})`), `${ed}.e0`);
-    return ed;
+    const op = b.add(ROPER16, `operands ${i}`, `op${i}`);
+    for (const [d, p] of [[`${su}.a${i}`, 'a'], [`${su}.b${i}`, 'b'], [`${su}.dx${i}`, 'dx'], [`${su}.dy${i}`, 'dy'], [`${su}.bias${i}`, 'bias'],
+      [`${seq}.j`, 'j'], [`${seq}.h`, 'h'], [`${seq}.upX`, 'upX'], [`${seq}.upY`, 'upY'], [`${seq}.pairs`, 'pairs'], [`${seq}.bias`, 'biasStep'], [`${seq}.cull`, 'cull']]) b.wire(d, `${op}.${p}`);
+    return op;
   });
   b.next();
-  // the cull: E0 + E1 + E2 + the biases is twice the area, at any point
-  const s1 = b.op(ADD16, [`${st[0]}.e`, `${st[1]}.e`, zero]);
-  const s2 = b.op(ADD16, [`${s1}.s`, `${st[2]}.e`, zero]);
-  const fa3 = b.op(FULL_ADDER, [bias[0], bias[1], bias[2]], 'biases');
-  const area = b.op(ADD16, [`${s2}.s`, b.op1(merger([1, 1, 14], 2), [`${fa3}.s`, `${fa3}.cout`, b.op1(constWord(14, 0), [])]), zero], 'twice the area');
-  const front = b.name(b.op1(AND, [b.op1(NOT, [top16(b, `${area}.s`)]), b.op1(NOT, [b.op1(isZero(16), [`${area}.s`])])], 'front face'), 'front', true);
-  // the tile test: E + offset < 0 for some edge rejects the tile
-  const tneg = E3.map((i) => top16(b, `${b.op(ADD16, [`${st[i]}.e`, off[i], zero], `tile test ${i}`)}.s`));
-  const ok = b.name(b.op1(NOT, [b.op1(orN(3), tneg)], 'tile may hold pixels'), 'ok', true);
+  const walk = b.add(TILE16, 'tile walk', 'walk');
+  const cmd = b.op1(bitwise('or', 3), [`${seq}.cmd`, `${walk}.cmd`], 'cmd');
+  const ed = E3.map((i) => {
+    const e = b.op(EDGE16, [`${st[i]}.ao`, `${st[i]}.bo`, `${st[i]}.e0`, cmd, 'clk'], `edge ${i}`, `edge${i}`);
+    b.wire(`${e}.e`, `${st[i]}.e`);
+    return e;
+  });
   b.next();
-  const lo3 = (v: string) => `${b.op(splitter([3, 1], 2), [v])}.o0`;
-  for (const [d, p] of [[lo3(tx0), 'tx0'], [tx1, 'tx1'], [lo3(ty0), 'ty0'], [ty1, 'ty1'], [b.op1(AND, [q('cull'), front], 'walk'), 'go'], [ok, 'ok'], ['clk', 'clk'], ['rst', 'rst']]) b.wire(d, `${walk}.${p}`);
-  const inside = b.op1(andN(3), E3.map((i) => `${st[i]}.inside`), 'inside');
+  const t = b.op(RTEST16, [...ed.map((e) => `${e}.e`), ...E3.map((i) => `${su}.off${i}`), ...E3.map((i) => `${su}.bias${i}`)], 'cull, tile test', 'test');
+  b.next();
+  for (const [d, p] of [[`${su}.tx0`, 'tx0'], [`${su}.tx1`, 'tx1'], [`${su}.ty0`, 'ty0'], [`${su}.ty1`, 'ty1'], [b.op1(AND, [`${seq}.cull`, `${t}.front`], 'walk'), 'go'], [`${t}.ok`, 'ok'], ['clk', 'clk'], ['rst', 'rst']]) b.wire(d, `${walk}.${p}`);
+  b.wire(`${walk}.busy`, `${seq}.walking`);
+  const inside = b.op1(andN(3), ed.map((e) => `${e}.inside`), 'inside');
   b.next();
   b.wire(b.op1(AND, [`${walk}.pix`, inside], 'write'), 'fwe');
   b.wire(b.op1(merger([5, 5], 2), [`${walk}.x`, `${walk}.y`], '32·y + x'), 'fa');
   b.wire('col', 'fd');
-  b.wire(busy, 'busy');
+  b.wire(`${seq}.busy`, 'busy');
   const R = b.right;
   return define({
     id: 'rv16_raster', name: 'Rasterizer (RV16)', category: 'cpu',
@@ -301,8 +458,3 @@ export const RASTER16: ComponentDef = (() => {
     netlist: () => ({ pins: { ...pinsAt(ins, 0, 6), ...pinsAt(['fa', 'fd', 'fwe', 'busy'], R, 8) }, instances: b.instances, nets: b.nets() }),
   });
 })();
-
-/** The sign bit of a 16-bit value. */
-function top16(b: Builder, v: string): string {
-  return `${b.op(splitter([15, 1], 2), [v])}.o1`;
-}

@@ -5,10 +5,10 @@
 
 import type { BuildChallenge, PinSpec, SeqStep } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
-import type { ChipDoc } from '../editor/model';
+import type { ChipDoc, PartRef } from '../editor/model';
 import { LANE_PORTS, LANES16, leaderOf, MASK16, NL, rv16Lanes, STACK16, StackModel, VRF16 } from '../lib/rv16/lanes16';
 import { COAL16, FRAME_PORTS, RV16_FRAME, RV16_WARPS, WARP_PORTS } from '../lib/rv16/warps16';
-import { EDGE16, RASTER16, TILE16 } from '../lib/rv16/raster16';
+import { EDGE16, RASTER16, ROFF, ROPER16, RSEQ16, RSETUP16, RSUB8, RTEST16, RTILES, TILE16 } from '../lib/rv16/raster16';
 import { CMD16, Edge16, w16, Walk16 } from '../gfx/raster16';
 import { runRaster } from './rastercheck';
 import type { ComponentDef } from '../sim/types';
@@ -24,13 +24,21 @@ const pins = (ins: [string, number?][], outs: [string, number?][], clock?: strin
 const each = (p: string, w = 16): [string, number][] => Array.from({ length: NL }, (_, i) => [`${p}${i}`, w]);
 
 const answers = new Map<string, ChipDoc[]>();
-const refOf = (id: string, def: () => ComponentDef, name: string) => (): ChipDoc[] => {
+/** A reference answer: the top def drawn as a chip, and `subs` (def → chip name) drawn as chips it places. */
+const refOf = (id: string, def: () => ComponentDef, name: string, subs: () => [ComponentDef, string][] = () => []) => (): ChipDoc[] => {
   let a = answers.get(id);
-  if (!a) {
-    const doc = docFromDef(def(), { id: `u_ref_cp_${id}`, name: `${name} ref` });
-    if ('error' in doc) throw new Error(`reference ${id}: ${doc.error}`);
-    answers.set(id, (a = [{ ...doc, notes: `Reference answer. ${def().summary ?? ''}`.trim() }]));
+  if (a) return a;
+  const chips = new Map(subs().map(([d, n], i) => [d, { id: `u_ref_cp_${id}_${i}`, name: `${n} ref` }]));
+  const refOfDef = (d: ComponentDef): PartRef | undefined => (chips.has(d) ? { chip: chips.get(d)!.id } : undefined);
+  const docs: ChipDoc[] = [];
+  for (const [d, c] of chips) {
+    const doc = docFromDef(d, { ...c, refOf: refOfDef });
+    if ('error' in doc) throw new Error(`reference ${id} (${d.id}): ${doc.error}`);
+    docs.push({ ...doc, notes: `Part of the reference answer. ${d.summary ?? ''}`.trim() });
   }
+  const top = docFromDef(def(), { id: `u_ref_cp_${id}`, name: `${name} ref`, refOf: refOfDef });
+  if ('error' in top) throw new Error(`reference ${id}: ${top.error}`);
+  answers.set(id, (a = [...docs, { ...top, notes: `Reference answer. ${def().summary ?? ''}`.trim() }]));
   return a;
 };
 
@@ -228,7 +236,7 @@ export const BUILDK: Record<string, () => BuildChallenge> = {
       + 'Walk the box of tiles (first tile (min + 1) &gt;&gt; 4, last max(max − 2, 0) &gt;&gt; 4, in quarter pixels) with your tile walk; a tile whose E + 12·(A⁺ + B⁺) &lt; 0 for some edge (A⁺: A if positive, else 0) is skipped. For each pixel inside: <b>fwe</b> = 1, <b>fa</b> = 32·y + x, <b>fd</b> = col, in the walk\'s order. No multiplier: E at the first tile by shift-and-add on each stepper (double).',
     ports: pins([['v0x', 7], ['v0y', 7], ['v1x', 7], ['v1y', 7], ['v2x', 7], ['v2y', 7], ['col', 16], ['go'], ['clk'], ['rst']], [['fa', 10], ['fd', 16], ['fwe'], ['busy']], 'clk'),
     check: { kind: 'custom', describe: '64 triangles, 32 at once (back faces, slivers, shared edges, the screen\'s corners among them): every pixel write in the walk\'s order; cycles from go until busy falls.', run: runRaster },
-    answer: refOf('k_raster', () => RASTER16, 'Rasterizer'),
+    answer: refOf('k_raster', () => RASTER16, 'Rasterizer', () => [[RSUB8, 'Subtractor'], [RTILES, 'Tile range'], [ROFF, 'Tile test offset'], [RSETUP16, 'Set-up'], [RSEQ16, 'Set-up steps'], [ROPER16, 'Stepper operands'], [RTEST16, 'Cull and tile test']]),
   }),
   k_frame: () => ({
     id: 'k_frame', title: 'A frame', level: 'cpu', allowed: 'nand',

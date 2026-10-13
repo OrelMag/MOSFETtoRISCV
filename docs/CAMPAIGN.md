@@ -352,11 +352,11 @@ adding levels to it never reopens a finished campaign. Its finale (finalCpu of t
   steppers' commands, 479 NANDs; a sequence against `Walk16`
 - ✅ `k_raster` ← k_tile: set-up by adders (A, B, the top-left bias, the box in tiles, the tile offsets), each E at the
   first tile by shift-and-add on its own stepper (17 cycles, no multiplier), the cull from the sum of the three E, the
-  tile test; 9 232 NANDs, period 145. Its bench (`rastercheck.ts`) runs 64 triangles and compares every pixel write in
+  tile test; 9 251 NANDs, period 145. Its bench (`rastercheck.ts`) runs 64 triangles and compares every pixel write in
   the walk's order; the set-up's length is the learner's, graded as cycles (7 439 for the reference)
 - ✅ `k_frame` ← k_raster, k_warps: the two-warp core with the rasterizer as a device (lane 0's stores to 0xFFF0 … 0xFFF6,
   the screen at 0xF000 + 32·y + x, RGB565), a warp's turn held while the rasterizer is busy if it would store to it or
-  load from the screen; 41 231 NANDs, period 147. The two-warp bench with `raster`: the golden model (`Warps16` with
+  load from the screen; 41 250 NANDs, period 147. The two-warp bench with `raster`: the golden model (`Warps16` with
   `raster`) draws at once, the core's pixel writes must match it in order
 - ✅ program puzzle `p_spin` ← k_frame: a square turned by Minsky's rule in 8.8 fixed point, cleared and drawn as two
   triangles each frame, on two warps (reference: 1 432 cycles, 8 % idle lanes; it also runs on the frame core's bench)

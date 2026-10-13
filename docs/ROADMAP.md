@@ -699,8 +699,8 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   - ✅ phase 3: k_coal (build: coalescer, 467 NANDs), k_warps (core: two warps taking turns over a memory one cycle
     late, 30 163 NANDs, period 95); puzzle p_hist (private counters and a bar, checked under two issue orders)
   - ✅ phase 4: k_edge (build: edge stepper, 984 NANDs), k_tile (build: tile walk, 479), k_raster (build: rasterizer
-    with shift-and-add set-up, 9 232, period 145), k_frame (core: the two-warp core with the rasterizer as a device,
-    41 231, period 147); puzzle p_spin (Minsky's rotation, two triangles a frame)
+    with shift-and-add set-up, 9 251, period 145), k_frame (core: the two-warp core with the rasterizer as a device,
+    41 250, period 147); puzzle p_spin (Minsky's rotation, two triangles a frame)
 - ✅ RV16 groundwork: split / join / tmc / bar in SYSTEM funct3 4–7 (illegal on every scalar core, so the trap cores
   reject them), CSR 7 = tid (warp · 4 + lane; reads 0 on every scalar core, as before), the assembler, the lane golden
   model (riscv/rv16/simt16.ts: four Iss16 lanes over one memory), and the lane bench (campaign/lanecheck.ts: every
