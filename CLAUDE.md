@@ -250,9 +250,13 @@ src/lib/rv16/  the campaign's RV16 hardware, every block built only from parts i
                system.ts (illegal detector, CSR file, system decode, cores with traps and interrupts),
                md.ts (MUL16: unsigned array + sign corrections, DIV16: signs around the iterative divider; rv16Core(…, md)),
                multi.ts (RV16_MULTI: one-hot F/E/M/W multicycle core, RV16_CACHE: direct-mapped, write-through);
-               rv16Pipe({ predict }) adds static prediction in F
+               rv16Pipe({ predict }) adds static prediction in F; lanes16.ts (act 9: LANES16 four ALUs, VRF16 four register
+               files, MASK16 active mask + leader + write enables, LANEDEC16, STACK16 split / join stack and StackModel,
+               rv16Lanes(simt): the 4-lane SIMD / SIMT cores, LANE_PORTS: a memory port and a write port per lane)
 src/riscv/rv16/ isa16.ts (fields, encode / decode / disasm), asm16.ts, iss16.ts (golden model: MMIO, CSRs, traps,
-               interrupts; halts on jal x0, 0), randprog.ts (seeded random programs for fuzzing cores)
+               interrupts; halts on jal x0, 0; SIMT words are illegal), simt16.ts (Simt16: a warp of RV16 lanes over one
+               memory: mask, leader, split / join stack, tmc, csrr rd, tid; utilization / idle), randprog.ts (seeded random
+               programs for fuzzing cores)
 src/isa/       Custom ISA: table.ts (IsaDoc: instructions as mnemonic + operand letters + bit pattern, operand kinds reg / enum
                / imm / addr; IsaTable: assemble, disasm (most specific pattern), fields, words, problems; sanitizeIsa),
                presets.ts (ISA4_PRESET: the 4-bit ISA as a table, equal to asm4 / disasm4 on every word), isa.ts (Isa:
@@ -478,7 +482,9 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
   corecheck.ts   the CPU core bench (coreCheck carries its CoreSpec: coreSpecOf): instr / drdata served
                  combinationally, register-write and store traces
                  compared with iss16 in order, cycle budget, irq from stores to 0xFFF9, 32 BitSim lanes (GateSim
-                 fallback), corePeriod (static timing with 8-delay memories); coretests.ts the programs by stage
+                 fallback), corePeriod (static timing with 8-delay memories); coretests.ts the programs by stage;
+                 lanecheck.ts the lane bench (CoreSpec.lanes: four memory ports, each lane's writes and stores against
+                 Simt16, lanes in order within a cycle; lanePeriod), lanetests.ts its programs; buildk.ts act 9's levels
                DOM: ui/svgs.ts (map and anatomy SVG), ui/levelinfo.ts (criteria, grading table), ui/codexentry.ts (a codex
                entry in full, live schematic), ui/glossaryui.ts (markTerms: hover cards); the page is ui/pages/campaign.ts.
                Levels are played on the level screen (ui/pages/level.ts, #/campaign/play/<node>, the editor's chunk): an
