@@ -26,6 +26,10 @@
   --series-4: #eda100;
   --series-5: #e87ba4;
   --warn: #c2700c;
+  /* depletion loads and the appendix (1975) accent */
+  --dep-load: #c2700c;
+  --vintage: #a8551c;
+  --vintage-soft: #fbeee3;
   --warn-soft: #fff4e0;
   /* an uncaught error (ui/errors.ts banner) */
   --bad: #d92d20;
@@ -98,6 +102,9 @@
     --series-4: #c98500;
     --series-5: #d55181;
     --warn: #f5a524;
+    --dep-load: #f0a13a;
+    --vintage: #e39a62;
+    --vintage-soft: #2c1c10;
     --warn-soft: #2d2210;
     /* an uncaught error (ui/errors.ts banner) */
     --bad: #f87171;
@@ -150,6 +157,9 @@
   --series-2: #d95926;
   --series-3: #199e70;
   --warn: #f5a524;
+  --dep-load: #f0a13a;
+  --vintage: #e39a62;
+  --vintage-soft: #2c1c10;
   --warn-soft: #2d2210;
   /* an uncaught error (ui/errors.ts banner) */
   --bad: #f87171;

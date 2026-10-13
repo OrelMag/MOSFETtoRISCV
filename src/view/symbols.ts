@@ -161,7 +161,7 @@ function switchPart(k: string): SVGElement[] {
 export function instNameAt(def: ComponentDef): { x: number; y: number; anchor: 'start' | 'middle' } | null {
   if (def.prim === 'alias' || def.prim === 'vdd' || def.prim === 'gnd') return null;
   const k = def.symbol.kind, g = symbolGeom(def);
-  if (k === 'nmos' || k === 'pmos') return { x: 3.4, y: 1.45, anchor: 'start' };
+  if (k === 'nmos' || k === 'pmos' || k === 'dep') return { x: 3.4, y: 1.45, anchor: 'start' };
   if (k === 'box') return { x: 0.1, y: -0.45, anchor: 'start' };
   if (k === 'res' || k === 'pullup' || k === 'pulldown' || k === 'cap') return { x: 1.75, y: g.h / 2 + 0.3, anchor: 'start' };
   if (k === 'tgate' || k === 'tribuf' || k === 'triinv') return { x: 2.4, y: 0.95, anchor: 'start' };
@@ -231,6 +231,18 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
       inner.append(...transistor(def));
       // the type letter stays readable when the symbol is mirrored
       root.append(s('text', { x: flip ? w - 3.35 : 3.35, y: 2.35, class: 'sym-tiny', 'text-anchor': flip ? 'end' : 'start' }, k === 'pmos' ? 'P' : 'N'));
+      break;
+    case 'dep':
+      // a depletion-mode NMOS: the channel exists with no gate voltage (a solid bar), and the gate
+      // is tied to the bottom terminal, so it always conducts: a load, not a switch
+      inner.append(
+        s('path', { d: 'M1.25,1 V3', class: 'sym-line thick' }),
+        s('path', { d: 'M1.65,0.7 V3.3', class: 'sym-line thick sym-dep' }),
+        s('path', { d: 'M1.65,1 H3 V0', class: 'sym-line' }),
+        s('path', { d: 'M1.65,3 H3 V4', class: 'sym-line' }),
+        s('path', { d: 'M1.25,2 H0.55 V3.6 H3', class: 'sym-line' }),
+      );
+      root.append(s('text', { x: flip ? w - 3.35 : 3.35, y: 2.35, class: 'sym-tiny', 'text-anchor': flip ? 'end' : 'start' }, 'D'));
       break;
     case 'res': case 'pulldown': case 'cap': case 'tgate': case 'tribuf': case 'triinv':
       inner.append(...switchPart(k));

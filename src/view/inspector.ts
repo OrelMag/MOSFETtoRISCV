@@ -108,6 +108,7 @@ export class Inspector {
     const cells: [string, string][] = [];
     if (d.prim === 'nmos' || d.prim === 'pmos') cells.push(['1', 'transistor']);
     else if (d.prim === 'res') cells.push(['1', 'resistor']);
+    else if (d.prim === 'dep') cells.push(['1', 'depletion transistor']);
     else if (d.prim === 'cap') cells.push(['1', 'capacitor']);
     else if (d.prim !== 'alias' && d.prim !== 'vdd' && d.prim !== 'gnd') {
       cells.push([st.transistors.toLocaleString(), 'transistors']);
@@ -194,6 +195,10 @@ export class Inspector {
     }
     if (d.prim === 'nmos' || d.prim === 'pmos') {
       this.body.append(h('p', { class: 'empty' }, `A switch: ${d.prim === 'nmos' ? 'gate = 1 → conducts, gate = 0 → open' : 'gate = 0 → conducts, gate = 1 → open'}.`));
+      return;
+    }
+    if (d.prim === 'dep') {
+      this.body.append(h('p', { class: 'empty' }, 'A depletion-mode NMOS with its gate tied to its source: always on, weaker than any switching transistor. The pull-up of an NMOS gate.'));
       return;
     }
     if (d.prim === 'res' || d.prim === 'cap') {

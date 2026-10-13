@@ -83,6 +83,11 @@ export function symbolGeom(def: ComponentDef): SymbolGeom {
     ports[gp.name] = { pos: [0, 2], exit: 'left' };
     ports[top.name] = { pos: [3, 0], exit: 'up' };
     ports[bot.name] = { pos: [3, 4], exit: 'down' };
+  } else if (k === 'dep') {
+    // a depletion load: the channel's two ends (gate tied to the bottom one, drawn inside)
+    g = { w: 3, h: 4, ports };
+    ports[def.ports[0].name] = { pos: [3, 0], exit: 'up' };
+    ports[def.ports[1].name] = { pos: [3, 4], exit: 'down' };
   } else if (k === 'res') {
     // vertical, like a transistor's channel: first port on top, second at the bottom
     g = { w: 2, h: 4, ports };
