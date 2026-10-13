@@ -13,7 +13,7 @@
 //                 that warp sits out the cycle (one write port per bank)
 
 import { symbolGeom } from '../sim/geometry';
-import type { ComponentDef, PortDef } from '../sim/types';
+import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { alu, constWord, isZero } from './alu';
 import { Builder } from './builder';
 import { magComparator, popcount } from './coding';
@@ -756,12 +756,308 @@ export function warpCore(program: number[], opts: WarpCoreOptions = {}): Compone
     if (lsu) { b.wire(issue, 'issued'); b.wire(served, 'served'); b.wire(shared, 'sharedOut'); b.wire(`${atBar}.q`, 'atBar'); }
     const outs: [string, number][] = [['pcOut', 32], ['retire', 1], ['warpOut', wb], ['maskOut', n], ['halted', 1], ...(lsu ? [['issued', 1], ['served', n], ['sharedOut', 1], ['atBar', W]] as [string, number][] : []),
       ...(host ? [['xq', 32]] as [string, number][] : [])];
+    const { pins, nets } = warpCoreDrawing(b, { W, n, lsu, host }, outs.map(([p]) => p));
     return {
       id, name: `Warp core (${W} warp${W > 1 ? 's' : ''} × ${n} lanes)`, category: 'cpu',
       summary: `${W} warp${W > 1 ? 's' : ''} of ${n} lanes share one fetch, decode and control. Every cycle the scheduler issues one ready warp: started, not finished, and its next instruction uses no register still waiting for a load (the scoreboard). Loads take ${L} cycles; while one warp waits, the others run.${lsu ? ' A memory instruction takes one cycle per access (a line of global memory, a set of shared-memory banks, a lane of amoadd.w) and holds the issue port until its last; bar holds a warp until the others arrive.' : ''}`,
       ports: [bit('clk', 'in', true), ...(host ? [bit('launch', 'in'), bus('xa', dk, 'in')] : []), ...outs.map(([p, w]) => w === 1 ? bit(p, 'out') : bus(p, w, 'out'))],
       symbol: { kind: 'box', label: `${W}-WARP CORE` },
-      netlist: () => ({ pins: { clk: [0, 2], ...(host ? { launch: [0, 5] as [number, number], xa: [0, 8] as [number, number] } : {}), ...Object.fromEntries(outs.map(([p], i) => [p, [b.right, 2 + 3 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins, instances: b.instances, nets }),
     } satisfies ComponentDef;
   });
+}
+
+// ---- the core's drawing ---------------------------------------------------------------------------
+
+type At = [number, number];
+const range = (k: number) => Array.from({ length: k }, (_, i) => i);
+
+/** Places a built netlist's instances by name; names a variant lacks are skipped, so one plan serves every variant. */
+class Placer {
+  readonly at = new Map<string, At>();
+  readonly group = new Map<string, string>();
+  private readonly defs: Map<string, ComponentDef>;
+  constructor(insts: InstanceDef[]) { this.defs = new Map(insts.map((i) => [i.name, i.def])); }
+  has(nm: string): boolean { return this.defs.has(nm); }
+  private geom(nm: string) { return symbolGeom(this.defs.get(nm)!); }
+  w(nm: string): number { return this.has(nm) ? this.geom(nm).w : 0; }
+  h(nm: string): number { return this.has(nm) ? this.geom(nm).h : 0; }
+  private port(nm: string, port: string | number): string {
+    return typeof port === 'string' ? port : this.defs.get(nm)!.ports.filter((p) => p.dir !== 'out')[port].name;
+  }
+  /** The first output's name. */
+  out(nm: string): string { return this.defs.get(nm)!.ports.find((p) => p.dir === 'out')!.name; }
+  put(grp: string, nm: string, x: number, y: number): void {
+    if (!this.has(nm)) return;
+    this.at.set(nm, [x, y]);
+    this.group.set(nm, grp);
+  }
+  /** Put nm at x with a port (by name, or the k-th input) on row y. */
+  row(grp: string, nm: string, port: string | number, x: number, y: number): void {
+    if (this.has(nm)) this.put(grp, nm, x, y - this.geom(nm).ports[this.port(nm, port)].pos[1]);
+  }
+  /** Where a placed port is (by name, or the k-th input). */
+  pin(nm: string, port: string | number): At {
+    // a part or port this variant lacks: so does the part placed by it
+    const g = this.at.has(nm) ? this.geom(nm).ports[this.port(nm, port)] : undefined;
+    if (!g) return [NaN, NaN];
+    const [x, y] = this.at.get(nm)!;
+    return [x + g.pos[0], y + g.pos[1]];
+  }
+  x(nm: string): number { return this.at.get(nm)?.[0] ?? NaN; }
+  y(nm: string): number { return this.at.get(nm)?.[1] ?? NaN; }
+  right(nm: string): number { return this.at.has(nm) ? this.x(nm) + this.w(nm) : -Infinity; }
+  bottom(nm: string): number { return this.at.has(nm) ? this.y(nm) + this.h(nm) : -Infinity; }
+  /** Columns from (x, y), gap apart, their parts vgap apart. Returns the right edge and the bottom. */
+  cols(grp: string, x: number, y: number, columns: string[][], gap = 12, vgap = 4): { right: number; bottom: number } {
+    let cx = x, right = x, bottom = y;
+    for (const c of columns) {
+      const names = c.filter((nm) => this.has(nm));
+      if (!names.length) continue;
+      let cy = y, cw = 0;
+      for (const nm of names) { this.put(grp, nm, cx, cy); cy += this.h(nm) + vgap; cw = Math.max(cw, this.w(nm)); }
+      bottom = Math.max(bottom, cy - vgap);
+      right = cx + cw;
+      cx += cw + gap;
+    }
+    return { right, bottom };
+  }
+  /** The rightmost and lowest edges of the parts placed in some groups. */
+  extent(...groups: string[]): { right: number; bottom: number } {
+    let right = 0, bottom = 0;
+    for (const [nm, g] of this.group) if (groups.includes(g)) { right = Math.max(right, this.right(nm)); bottom = Math.max(bottom, this.bottom(nm)); }
+    return { right, bottom };
+  }
+}
+
+/** Nets named after the port that drives them: control signals. */
+const BY_PORT = new Set(['ctl', 'sdec', 'xdec', 'npc', 'lead', 'mem', 'acc', 'barCmp']);
+/** Names for nets the core's code leaves unnamed (driver end → name). */
+function netNames(W: number, n: number, lsu: boolean): Record<string, string> {
+  const nm: Record<string, string> = {
+    'lead.y': 'leader', 'lAlu.y': 'leadALU', 'lA.y': 'leadA', 'lB.y': 'leadB', 'lF.y': 'leadFlags', 'pm.out': 'pred', 'pcmux.y': 'nextPC', 'target.s': 'PC+imm', 'clr0.out': 'jalrPC',
+    'csrA.out': 'csr', 'wNow.y': 'writeNow', 'stIss.y': 'storeIssue', 'amoIss.y': 'amoIssue', 'spGo.y': 'spawnGo', 'hiNz.y': 'rs1Hi', 'sp0.y': 'spawn0',
+    'haltedG.y': 'halted', 'retireG.y': 'retired', 'atBar.q': 'atBarQ', 'heldW.q': 'heldW', 'left.q': 'left',
+    'barN.y': 'atBarNext', 'heldN.y': 'heldNext', 'rest.y': 'rest', 'todo.y': 'todo', 'wait.y': 'wait', 'go.y': 'go',
+    ...(lsu ? { 'imm.imm': 'imm0', 'immA.y': 'imm' } : { 'imm.imm': 'imm' }),
+  };
+  for (const w of range(W)) Object.assign(nm, {
+    [`warp${w}.pc`]: `pc${w}`, [`warp${w}.mask`]: `mask${w}`, [`warp${w}.run`]: `run${w}`, [`warp${w}.pending`]: `pending${w}`,
+    [`rw.o${w}`]: `retW${w}`, [`ab.o${w}`]: `bar${w}`, [`hw.o${w}`]: `held${w}`, [`sp${w}.y`]: `spawn${w}`,
+    [`se${w}.y`]: `setEn${w}`, [`cl${w}.y`]: `clrEn${w}`, [`iss${w}.y`]: `issue${w}`,
+  });
+  for (const j of range(W)) nm[`ldec.y${j}`] = `rs1lo=${j}`;
+  for (const i of range(n)) Object.assign(nm, { [`weS.o${i}`]: `we${i}`, [`rm.o${i}`]: `retEn${i}`, [`tid${i}.out`]: `tid${i}` });
+  return nm;
+}
+
+/**
+ * The warp core drawn in four bands, top to bottom as an instruction goes: the warps (a row each: its
+ * slot, its next instruction from the ROM, the scoreboard check, ready), the scheduler and the issuing
+ * warp's PC, instruction and mask; decode and control, wspawn; the lanes side by side, the leader's
+ * values and the next PC; the memory system and the returning loads. Wires inside a block, labels
+ * between blocks, as on a real schematic. Only positions and labels: instances and connections are the
+ * Builder's.
+ */
+function warpCoreDrawing(b: Builder, { W, n, lsu, host }: { W: number; n: number; lsu: boolean; host: boolean }, outs: string[]): { pins: Record<string, At>; nets: NetDef[] } {
+  const P = new Placer(b.instances), raw = b.nets();
+  const Ws = range(W), Ls = range(n), wb = Math.max(1, log2(W));
+  /** The unnamed splitter of anyOf() feeding this OR. */
+  const feeding = (target: string) => raw.find((nt) => /^u\d+\.o0$/.test(nt.ends[0]) && nt.ends.slice(1).some((e) => e.startsWith(`${target}.`)))?.ends[0].split('.')[0] ?? '';
+  const wired = new Set<string>(), labelled = new Set<string>(), trunks = new Map<string, number>();
+  const wire = (d: string, s: string) => wired.add(`${d}>${s}`);
+
+  // ---- band A: a row per warp, the scheduler, the issuing warp ----
+  const RP = 40, rowY = (w: number) => 4 + RP * w, SX = 28, sw = P.w('warp0');
+  const imX = SX + sw + 6, hzX = imX + P.w('im0') + 4, hzR = hzX + P.w('hz0');
+  for (const w of Ws) {
+    const y = rowY(w), s = `warp${w}`;
+    P.row('row', `iss${w}`, 'y', 14, y + 2);
+    P.row('row', `se${w}`, 'y', 14, y + 28);
+    P.row('row', `cl${w}`, 'y', 14, y + 32);
+    if (w === 0) P.row('row', 'pc0', 'y', 20, y + 6);
+    P.put('row', s, SX, y);
+    P.row('row', `im${w}`, 'addr', imX, P.pin(s, 'pc')[1]);
+    P.row('row', `hz${w}`, 'instr', hzX, P.pin(s, 'pc')[1]);
+    wire(`${s}.pc`, `im${w}.addr`); wire(`im${w}.data`, `hz${w}.instr`);
+    P.row('row', `bz${w}`, 0, hzR + 6, P.pin(`hz${w}`, 'hazard')[1]);
+    const bo = P.pin(`bz${w}`, P.out(`bz${w}`))[1];
+    P.row('row', `nb${w}`, 'a', hzR + 13, bo);
+    P.row('row', `rdy${w}`, 'b', hzR + 19, bo);
+    P.row('row', `rq${w}`, 'a', hzR + 29, P.pin(`rdy${w}`, 'y')[1]);
+  }
+  const req = (w: number) => (P.has(`rq${w}`) ? `rq${w}` : `rdy${w}`);
+  const rowsR = P.right(req(0));
+  let schedR: number;
+  if (W > 1) {
+    const mid = (rowY(0) + rowY(W - 1)) / 2 + 16;
+    P.put('sched', 'sched', rowsR + 10, Math.round(mid - P.h('sched') / 2));
+    for (const w of Ws) { wire(`${req(w)}.y`, `sched.r${w}`); wire(`sched.g${w}`, `G.i${w}`); }
+    P.row('sched', 'G', 'i0', P.right('sched') + 4, P.pin('sched', 'g0')[1]);
+    const u = feeding('issueG');
+    P.row('sched', u, 'in', P.right('G') + 4, P.pin('G', 'out')[1]);
+    wire('G.out', `${u}.in`);
+    P.row('sched', 'issueG', 'i0', P.right(u) + 3, P.pin(u, 'o0')[1]);
+    const wis = range(wb).map((j) => (P.has(`wi${j}`) ? `wi${j}` : `wi0_${j}`));
+    P.cols('sched', P.x('sched'), P.bottom('sched') + 8, [wis, ['wid']], 6);
+    schedR = P.right('issueG');
+  } else {
+    P.row('sched', 'G', 'i0', rowsR + 6, P.pin(req(0), 'y')[1]);
+    wire(`${req(0)}.y`, 'G.i0');
+    P.put('sched', 'wi0_0', rowsR + 4, P.bottom('G') + 6);
+    schedR = P.right('G');
+  }
+  const IX = schedR + 14;
+  P.put('issue', 'pcSel', IX, 4); P.put('issue', 'imSel', IX, P.bottom('pcSel') + 4); P.put('issue', 'maskSel', IX, P.bottom('imSel') + 4);
+  if (W > 1) { P.row('issue', 'plus4', 'a', IX + 20, P.pin('pcSel', 'y')[1]); wire('pcSel.y', 'plus4.a'); }
+  else P.put('issue', 'plus4', IX + 4, 7);
+
+  // ---- band B: decode and control, wspawn ----
+  const YB = Math.max(rowY(W), P.extent('row', 'sched', 'issue').bottom + 12);
+  const DX = 18;
+  P.row('dec', 'si', 'in', DX, YB + 21);
+  P.row('dec', 'csrA', 'i0', DX + 4, P.pin('si', 'o4')[1]);
+  wire('si.o4', 'csrA.i0'); wire('si.o5', 'csrA.i1');
+  const CX = P.has('xdec') ? DX + 42 : DX + 16;
+  P.put('dec', 'ctl', CX, YB);
+  P.row('dec', 'xdec', 'opInt', DX + 14, P.pin('ctl', 'op')[1]);
+  P.put('dec', 'imm', CX, YB + 26);
+  P.row('dec', 'immA', 'a', CX + 26, P.pin('imm', 'imm')[1]);
+  P.row('dec', 'fA', 'out', CX + 18, P.pin('immA', 'b')[1]);
+  P.row('dec', 'nAmo', 'y', CX + 12, YB + 34);
+  P.put('dec', 'sdec', CX, YB + 38);
+  // a load, the lanes that write now, the leader
+  const GX = CX + 32;
+  P.row('dec', 'rs', 'in', GX, P.pin('ctl', 'resultSrc')[1]);
+  wire('ctl.resultSrc', 'rs.in');
+  P.row('dec', 'nr1', 'a', GX + 4, P.pin('rs', 'o1')[1]);
+  P.row('dec', 'isLoad', 'a', GX + 10, P.pin('rs', 'o0')[1]);
+  P.row('dec', 'rwx', 'a', GX + 10, P.pin('ctl', 'regWrite')[1]);
+  P.row('dec', 'nld', 'a', GX + 18, P.pin('isLoad', 'y')[1]);
+  wire('isLoad.y', 'nld.a');
+  P.row('dec', 'wn', 'a', GX + 25, P.pin('rwx', 'y')[1]);
+  P.row('dec', 'wNow', 'a', GX + 35, P.pin('wn', 'y')[1]);
+  P.put('dec', 'rdz', GX + 4, YB + 20);
+  P.row('dec', 'rdNz', 'a', GX + 14, P.pin('rdz', 'z')[1]);
+  P.put('dec', 'li1', GX + 22, YB + 16);
+  P.row('dec', 'ldIss', 'a', GX + 30, P.pin('li1', 'y')[1]);
+  P.put('dec', 'weN', GX + 52, YB + 8);
+  P.row('dec', 'fw', 'out', GX + 44, P.pin('weN', 'b')[1]);
+  P.row('dec', 'weS', 'in', GX + 64, P.pin('weN', 'y')[1]);
+  P.put('dec', 'lead', GX + 50, YB + 30);
+  const decR = Math.max(P.right('weS') + 10, P.right('lead') + 10, P.right('sdec') + 10);
+  // wspawn starts warp w when rs1 > w (warp 0: never, or the host's launch)
+  const SPX = decR + 4, uHi = feeding('hiNz');
+  P.put('spawn', 'ldec', SPX + 4, YB);
+  P.put('spawn', uHi, SPX + 8, P.bottom('ldec') + 6);
+  P.row('spawn', 'la', 'o1', SPX, P.pin(uHi, 'in')[1]);
+  wire('la.o0', 'ldec.a');
+  P.row('spawn', 'hiNz', 'i0', P.right(uHi) + 4, P.pin(uHi, 'o0')[1]);
+  // per warp: rs1 > w (the high bits, or a low-bits value above w), and wspawn issues
+  const G1 = P.right('ldec') + 20;
+  P.put('spawn', 'spGo', G1, YB);
+  P.put('spawn', 'sp0', G1 + 1, P.bottom('spGo') + 6);
+  labelled.add('sp0.y');
+  let gy = Math.max(P.bottom('spGo'), P.bottom('sp0')) + 6;
+  for (const w of Ws.slice(1)) {
+    P.put('spawn', `gt${w}`, G1, gy);
+    P.row('spawn', `nz${w}`, 'y', G1 - 10, P.pin(`gt${w}`, 1)[1]);
+    P.row('spawn', `sp${w}`, 'b', G1 + 16, P.pin(`gt${w}`, P.out(`gt${w}`))[1]);
+    gy = Math.max(P.bottom(`gt${w}`), P.bottom(`sp${w}`)) + 6;
+  }
+  const uRun = feeding('anyRun');
+  P.cols('out', G1 - 10, gy + 6, [['runs'], [uRun], ['anyRun'], ['haltedG', 'retireG']], 10);
+
+  // ---- band C: the lanes, the leader, the next PC ----
+  const YC = P.extent('dec', 'spawn', 'out').bottom + 12;
+  const LP = 36, laneX = (i: number) => 22 + LP * i, laneH = P.h('lane0');
+  for (const i of Ls) {
+    const x = laneX(i), ty = YC + laneH + 6;
+    P.put('lanes', `lane${i}`, x, YC);
+    P.put('lanes', `tid${i}`, x - 4, ty);
+    P.row('lanes', `ln${i}`, 'y', x - 14, P.pin(`tid${i}`, 'i0')[1]);
+    P.row('lanes', `tz${i}`, 'y', x - 14, P.pin(`tid${i}`, 'i2')[1]);
+    labelled.add(`tid${i}.out`); // a wire up to the lane's tid would cross its labels
+  }
+  const MX = laneX(n) - 4, NX = MX + 24;
+  // the leader's flags feed the next-PC logic beside them; its ALU result (jalr) the clear-bit-0 under it
+  P.put('lead', 'lF', MX, YC);
+  const fOut = P.pin('lF', 'y')[1];
+  P.row('lead', 'fs', 'in', NX - 6, fOut);
+  P.row('lead', 'npc', 'zero', NX, P.pin('fs', 'o0')[1]);
+  P.put('lead', 'lAlu', MX, Math.max(P.bottom('lF') + 6, P.bottom('npc') + 3 - P.h('lAlu') / 2));
+  let my = P.bottom('lAlu') + 6;
+  for (const m of ['lA', 'lB']) { P.put('lead', m, MX, my); my += P.h(m) + 6; }
+  P.put('lead', 'pm', MX + 6, my);
+  P.row('lead', 'clr0', 'in', NX, P.pin('lAlu', 'y')[1]);
+  P.put('lead', 'gndJ', NX + 8, P.y('clr0') + 3);
+  wire('gndJ.y', 'clr0.zero');
+  P.put('lead', 'target', NX + 24, P.y('clr0') - 1);
+  P.row('lead', 'gndT', 'y', NX + 17, P.pin('target', 'cin')[1]);
+  P.put('pcmux', 'pcmux', NX + 28, P.bottom('target') + 6);
+
+  // ---- band D: the memory system, the returning loads ----
+  const YD = P.extent('lanes', 'lead', 'pcmux').bottom + 12;
+  /** A register enabled for good: its tie-high left of en. */
+  const tie = (grp: string, r: string) => P.row(grp, `${r}On`, 'y', P.x(r) - 10, P.pin(r, 'en')[1]);
+  let mx = 30;
+  if (lsu) {
+    // a memory instruction's accesses: which lanes now (the access unit, unless it must wait), what is left, done, holding the port
+    const a = P.cols('acc', 22, YD, [['todo', 'mo'], ['acc', 'memop'], ['nShA', 'wS', 'wG'], ['wait'], ['nWait'], ['go'], ['fGo'], ['srv']], 16);
+    const uHeld = feeding('heldG');
+    const d = P.cols('done', 22, a.bottom + 10, [['allN', 'nMo'], ['nSrv'], ['rest'], ['restZ'], ['doneG'], ['nDone'], ['hold'], ['fH'], ['heldN'], ['heldW'], ['hw'], [uHeld]], 12);
+    P.row('done', 'heldG', 'i0', P.right(uHeld) + 3, P.pin(uHeld, 'o0')[1]);
+    P.put('done', 'left', P.x('restZ'), P.bottom('restZ') + 8);
+    tie('done', 'left'); tie('done', 'heldW');
+    // bar: how many warps have arrived against rs2, release; the warps waiting
+    const top = Math.max(d.bottom, P.bottom('left'), P.bottom('heldG')) + 10;
+    const r1 = P.cols('bar', 22, top, [['nWait2', 'arr1'], ['arr', 'arrZ'], ['arrW'], ['barCmp'], ['enough'], ['release']], 12);
+    const r2 = P.cols('bar', 22, r1.bottom + 10, [['barGo'], ['fB'], ['arrives', 'nRel'], ['barOr', 'fR'], ['barN'], ['atBar'], ['ab'], ['amoIss']], 12);
+    tie('bar', 'atBar');
+    mx = Math.max(a.right, d.right, P.right('heldG'), r1.right, r2.right) + 24;
+    labelled.add('amoIss.y');
+  }
+  P.put('mem', 'mem', mx, YD);
+  P.row('mem', 'stIss', 'y', mx - 12, P.pin('mem', 'st')[1]);
+  const RX = P.right('mem') + 14;
+  P.row('mem', 'rw', 'in', RX, P.pin('mem', 'retWarp')[1]);
+  wire('mem.retWarp', 'rw.in');
+  P.row('mem', 'rm', 'in', RX, Math.max(P.pin('mem', 'retMask')[1], P.bottom('rw') + 2 + n));
+  trunks.set('mem.retMask', P.right('mem') + 9);
+  Ws.forEach((w) => labelled.add(`rw.o${w}`));
+  P.cols('ret', RX + 16, YD, [Ws.map((w) => `rh${w}`)], 10, 4);
+
+  for (const i of b.instances) {
+    const p = P.at.get(i.name);
+    if (!p || p.some(Number.isNaN)) throw new Error(`warpCore: no place for ${i.name}`);
+    i.at = p;
+  }
+  const right = Math.max(...b.instances.map((i) => P.right(i.name))) + 16;
+  const pins: Record<string, At> = { clk: [0, 2], ...(host ? { launch: [0, 6] as At, xa: [0, 10] as At } : {}) };
+  outs.forEach((p, i) => (pins[p] = [right, 2 + 3 * i]));
+
+  // nets: a wire inside a block (one sink, to the right), or one asked for; labels otherwise
+  const names = netNames(W, n, lsu), used = new Set<string>();
+  for (const nt of raw) if (nt.name) used.add(nt.name);
+  const instOf = (e: string) => (e.includes('.') ? e.slice(0, e.indexOf('.')) : '');
+  const nets = raw.map((nt): NetDef => {
+    const drv = nt.ends[0], sinks = nt.ends.slice(1), di = instOf(drv);
+    let name = nt.name;
+    if (!name && di) {
+      const port = drv.slice(di.length + 1);
+      const want = names[drv] ?? (BY_PORT.has(di) ? port : /^lane\d+$/.test(di) ? drv : P.out(di) === port ? di : drv);
+      name = used.has(want) ? drv : want;
+      used.add(name);
+    }
+    const asWire = (s: string) => {
+      const si = instOf(s);
+      if (!di || !si || labelled.has(drv)) return false;
+      if (wired.has(`${drv}>${s}`)) return true;
+      return sinks.length === 1 && P.group.get(di) === P.group.get(si) && P.x(si) >= P.right(di);
+    };
+    const tags = sinks.filter((s) => !asWire(s));
+    const trunk = trunks.get(drv);
+    return { name, ends: nt.ends, ...(tags.length === sinks.length ? { tags: true as const } : tags.length ? { tags } : {}), ...(trunk !== undefined ? { trunk } : {}) };
+  });
+  return { pins, nets };
 }
