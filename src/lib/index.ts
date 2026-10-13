@@ -38,3 +38,4 @@ export * from './rv16';
 export * from './cpu4';
 export * from './fsm';
 export * from './fsms';
+export * from './raster';
