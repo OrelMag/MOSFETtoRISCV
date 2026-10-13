@@ -625,8 +625,8 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'p_reduce', act: 9, title: 'Reduction', kind: 'program', requires: ['k_simt'], par: { cycles: 35, idle: 19 },
-    why: 'Summing an array is the opposite of saxpy: four partial sums must become one. Every step of the final combine has fewer useful lanes: the cost of a reduction is the idle lanes at its end.',
-    tips: ['First each lane sums its strided share, all lanes busy.', 'Then combine through memory: lanes store their partial sums, fewer lanes add pairs.'],
+    why: 'Summing an array is the opposite of saxpy: four partial sums must become one. Every step of the final combine has fewer useful lanes: the cost of a reduction is the lanes left with nothing to do at its end.',
+    tips: ['First each lane sums its strided share, all lanes busy.', 'Then combine through memory: lanes store their partial sums, fewer lanes add pairs.', 'Idle counts masked lanes, not useless ones: every lane can repeat the whole combine and none is ever masked. Busy, but three of the four compute a sum nobody needs.'],
     codex: ['reduction'], chapters: [{ chapter: 'simt', label: 'Threads in lock-step' }],
   },
   // Phases 3 and 4 of the GPU track: on the map, not playable yet.
