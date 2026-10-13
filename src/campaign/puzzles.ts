@@ -10,6 +10,8 @@ import { Iss16 } from '../riscv/rv16/iss16';
 import { Simt16 } from '../riscv/rv16/simt16';
 import { Warps16 } from '../riscv/rv16/warps16';
 import { rng } from './drills';
+import { draw16, FB16, SCREEN16 } from '../gfx/raster16';
+import type { Vtx } from '../gfx/raster';
 
 export interface PuzzleTest {
   name: string;
@@ -37,6 +39,8 @@ export interface ProgramPuzzle {
   lanes?: number;
   /** A kernel on this many warps taking turns (Warps16): cycles are issue slots. */
   warps?: number;
+  /** Warps with k_frame's rasterizer as a device (lane 0's stores to 0xFFF0 … 0xFFF6 draw into the screen at 0xF000). */
+  raster?: boolean;
 }
 
 export interface PuzzleRun {
@@ -55,7 +59,7 @@ export function puzzleMachine(p: ProgramPuzzle, words: number[], asmData: Map<nu
   const data = new Map(asmData);
   for (const [k, v] of Object.entries(t.mem ?? {})) data.set(Number(k), v);
   if (p.lanes && p.warps) {
-    const m = new Warps16(words, { lanes: p.lanes, warps: p.warps }, data);
+    const m = new Warps16(words, { lanes: p.lanes, warps: p.warps, raster: p.raster }, data);
     for (const w of m.warps) for (const l of w.lanes) l.input = [...(t.input ?? [])];
     return m;
   }
@@ -386,4 +390,127 @@ bin:    lw   a1, 0(a0)
     },
     maxSteps: 2000, lanes: 4, warps: 2,
   },
+  p_spin: {
+    brief: '<b>Spin</b> a square for <i>n</i> frames (1 … 4, at 0x0FF). Its four corners are at 0x100 … 0x107 as (x, y) pairs in <b>8.8 fixed point</b>, quarter pixels around the screen\'s centre, clockwise on the screen. Each frame: turn every corner by <b>Minsky\'s rule</b>, x ← x − (y &gt;&gt; 3), then y ← y + (x &gt;&gt; 3) with the new x (arithmetic shifts; about 7° a frame, no multiplier and no sine table), '
+      + 'clear the screen (0xF000 … 0xF3FF) to 0 and draw the square in the colour at 0x0FE as two triangles, corners 0, 1, 2 and 0, 2, 3, each vertex at 64 + (x &gt;&gt; 8), 64 + (y &gt;&gt; 8). Leave the turned corners in place. '
+      + 'The rasterizer listens to lane 0: its stores to 0xFFF0 … 0xFFF5 set v0x … v2y, to 0xFFF6 the colour, which draws. Here it draws at once; on the hardware it takes a while, and a load from the screen waits until it is done: load a pixel before clearing. '
+      + '<b>Two warps</b> of four lanes run your program (tid 0 … 7): warp 0\'s lanes can turn a corner each while everyone clears; <code>bar</code> between the phases. Graded on cycles and idle lanes.',
+    starter: `# corners at 0x100 + 2·i (x, y), 8.8 fixed point; frames at 0x0FF; colour at 0x0FE
+        csrr t0, tid
+        li   a0, 0xff
+        lw   ra, 0(a0)        # frames
+frame:
+        # clear: every thread a share of the 1 024 words
+
+        # warp 0, lane i: turn corner i, and store its screen position
+
+        bar                   # cleared and turned
+        # lane 0 draws: 0xFFF0 … 0xFFF5, then the colour to 0xFFF6, twice
+
+        bar                   # drawn before the next clear
+        addi ra, ra, -1
+        beqz ra, done
+        j    frame
+done:   halt
+`,
+    ref: `        csrr t0, tid
+        li   a0, 0xff
+        lw   ra, 0(a0)        # frames
+frame:  li   sp, 0xf000
+        add  sp, sp, t0       # word tid, tid + 8, …
+        lw   a1, 0(sp)        # on the hardware: waits until the rasterizer is done
+        li   a0, 32           # passes of four words
+        li   a2, 32
+clear:  sw   x0, 0(sp)
+        sw   x0, 8(sp)
+        sw   x0, 16(sp)
+        sw   x0, 24(sp)
+        add  sp, sp, a2
+        addi a0, a0, -1
+        bnez a0, clear
+        srli t1, t0, 2
+        bnez t1, wait         # warp 1: only clears
+        li   a2, 0x100
+        slli t1, t0, 1
+        add  a2, a2, t1       # corner tid
+        lw   a0, 0(a2)
+        lw   a1, 1(a2)
+        srai t1, a1, 3
+        sub  a0, a0, t1       # x ← x − (y >> 3)
+        srai t1, a0, 3
+        add  a1, a1, t1       # y ← y + (x >> 3)
+        sw   a0, 0(a2)
+        sw   a1, 1(a2)
+        li   t1, 64
+        srai a0, a0, 8
+        add  a0, a0, t1
+        srai a1, a1, 8
+        add  a1, a1, t1
+        sw   a0, 16(a2)       # its screen position, at 0x110 + 2·tid
+        sw   a1, 17(a2)
+wait:   bar                   # cleared and turned
+        srli t1, t0, 2
+        bnez t1, next
+        li   a2, 0x110
+        lw   a0, 0(a2)
+        sw   a0, -16(x0)
+        lw   a0, 1(a2)
+        sw   a0, -15(x0)
+        lw   a0, 2(a2)
+        sw   a0, -14(x0)
+        lw   a0, 3(a2)
+        sw   a0, -13(x0)
+        lw   a0, 4(a2)
+        sw   a0, -12(x0)
+        lw   a0, 5(a2)
+        sw   a0, -11(x0)
+        li   a1, 0xfe
+        lw   a1, 0(a1)
+        sw   a1, -10(x0)      # corners 0, 1, 2
+        lw   a0, 4(a2)
+        sw   a0, -14(x0)
+        lw   a0, 5(a2)
+        sw   a0, -13(x0)
+        lw   a0, 6(a2)
+        sw   a0, -12(x0)
+        lw   a0, 7(a2)
+        sw   a0, -11(x0)
+        sw   a1, -10(x0)      # corners 0, 2, 3
+next:   bar                   # drawn before the next clear
+        addi ra, ra, -1
+        beqz ra, done
+        j    frame
+done:   halt
+`,
+    tests: () => [
+      { n: 1, r: 28, turn: 0, col: 0xf800 }, { n: 4, r: 28, turn: 0, col: 0x07e0 },
+      { n: 3, r: 36, turn: 7, col: 0xffe0 }, { n: 2, r: 14, turn: 20, col: 0x001f },
+    ].map((t) => {
+      let c = spinCorners(t.r);
+      for (let k = 0; k < t.turn; k++) c = c.map(minsky);
+      const mem: Record<number, number> = { 0xff: t.n, 0xfe: t.col };
+      c.forEach(([x, y], i) => { mem[0x100 + 2 * i] = x & 0xffff; mem[0x101 + 2 * i] = y & 0xffff; });
+      for (let k = 0; k < t.n; k++) c = c.map(minsky);
+      const screen = new Uint16Array(SCREEN16 * SCREEN16);
+      const at = c.map(([x, y]) => [64 + (x >> 8), 64 + (y >> 8)] as Vtx);
+      draw16(screen, [at[0], at[1], at[2]], t.col);
+      draw16(screen, [at[0], at[2], at[3]], t.col);
+      const want: Record<number, number> = {};
+      c.forEach(([x, y], i) => { want[0x100 + 2 * i] = x & 0xffff; want[0x101 + 2 * i] = y & 0xffff; });
+      screen.forEach((v, i) => { want[FB16 + i] = v; });
+      return { name: `${t.n} frame${t.n > 1 ? 's' : ''}, radius ${t.r}${t.turn ? `, turned ${t.turn} steps` : ''}`, mem, expect: { mem: want } };
+    }),
+    maxSteps: 30000, lanes: 4, warps: 2, raster: true,
+  },
 };
+
+/** A square of half-side r quarter pixels around the centre, in 8.8: corners clockwise on the screen (y down). */
+export function spinCorners(r: number): [number, number][] {
+  return [[-r, -r], [r, -r], [r, r], [-r, r]].map(([x, y]) => [x * 256, y * 256] as [number, number]);
+}
+
+/** One step of Minsky's rotation on 16-bit 8.8 values: x ← x − (y >> 3), then y ← y + (x >> 3) with the new x. */
+export function minsky([x, y]: [number, number]): [number, number] {
+  const nx = s16(x - (y >> 3));
+  return [nx, s16(y + (nx >> 3))];
+}

@@ -5,6 +5,8 @@
 
 import { randomProgram } from '../riscv/rv16/randprog';
 import type { CoreTest } from './corecheck';
+import { assemble16 } from '../riscv/rv16/asm16';
+import { PUZZLES } from './puzzles';
 
 const TID_ALU = `# every lane computes with its own thread number
         csrr t0, tid
@@ -432,6 +434,14 @@ export function frameTests(): CoreTest[] {
   return [
     ...warpTests(),
     { name: 'a triangle', src: F_ONE }, { name: 'two triangles on one edge, read back', src: F_SHARED },
-    { name: 'draw, bar, read', src: F_BAR }, { name: 'clear, bar, draw', src: F_CLEAR },
+    { name: 'draw, bar, read', src: F_BAR }, { name: 'clear, bar, draw', src: F_CLEAR }, spinTest(),
   ];
+}
+
+/** p_spin's reference on two frames: clears, a turned square, the fence load before each clear. */
+function spinTest(): CoreTest {
+  const p = PUZZLES.p_spin, a = assemble16(p.ref), t = p.tests()[3];
+  const data = new Map(a.data);
+  for (const [k, v] of Object.entries(t.mem ?? {})) data.set(Number(k), v);
+  return { name: 'a spinning square (the reference of p_spin, two frames)', words: a.words, data };
 }

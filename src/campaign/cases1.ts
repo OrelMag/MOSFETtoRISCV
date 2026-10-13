@@ -303,4 +303,28 @@ export const CASES1: Record<string, LevelCase> = {
     cost: '30 163 NANDs, period 95: +12 326 over the SIMT core, 8 772 of them the second set of lane registers and 1 995 the second stack; 16-bit 2:1 muxes pick the issuing warp\'s operands and feed each register file its warp\'s results or the returning word. The two lane register files are 58% of the core: a warp costs its registers, which is why a GPU\'s register file is its largest structure and why the registers a thread uses limit how many warps fit. The period falls from 100 to 95: the memory\'s read now ends at the clock edge (8 delays off the longest path), and the warp-select muxes put 3 back.',
     alts: [{ name: 'SIMT core (one warp, memory at once)', lib: 'rv16_simt' }],
   },
+  k_edge: {
+    problem: 'Deciding whether a pixel is inside a triangle takes three edge functions, E = A·(x − xᵢ) + B·(y − yᵢ), each a sum of two products. The rasterizer evaluates them for every pixel it visits, one a cycle. Because E is linear, the next pixel to the right is E + 4A and the one below E + 4B (quarter-pixel units): after the first pixel, every value is one addition away. The stepper keeps E and the start of the band, R, so that a new row of tiles can begin from R + 4B.',
+    without: 'Evaluating E from scratch costs two 8 × 8 multiplications per edge per pixel: six multipliers of the side quest\'s kind (about 500 NANDs each) to keep one pixel a cycle, against three adders.',
+    cost: '984 NANDs, period 58: the two 16-bit registers are 416, the five 16-bit muxes that choose the base (E, R or 2E) and the operand (a, 4a, b or 4b) 294, the adder / subtractor 212, the command decoder 51. Chapter 30\'s stepper is the same idea at 18 bits with the tile test built in; here the test is the rasterizer\'s.',
+    alts: [{ name: 'Chapter 30\'s edge stepper (18 bits, with the tile test)', lib: 'edge_step' }],
+  },
+  k_tile: {
+    problem: 'The rasterizer must visit every pixel that may be inside, one a cycle, and should visit as few others as possible. The tile walk covers the bounding box in 4 × 4-pixel tiles, band by band. One TEST cycle at a tile\'s top-left pixel decides the whole tile (the rasterizer checks each edge at the tile\'s best corner); an accepted tile\'s 16 pixels follow in a column serpentine, so each step is one pixel up, down or right and the edge steppers only ever add.',
+    without: 'A plain scan of the bounding box spends a cycle on every pixel of the box, inside or not: about twice the triangle\'s area for a typical triangle, far more for a thin diagonal one. Chapter 30 measured 1 914 cycles against 3 368 for its large triangle and 888 against 3 848 for a sliver.',
+    cost: '479 NANDs, period 26: twelve flip-flops of state (busy, TEST, the pixel counter, the tile x and y, 156 in registers), three 4-bit incrementers (108), two 3-bit comparators for the last tile, and the logic that turns the position into the steppers\' commands. One extra register per edge (the band start R) is the stepper\'s share of the scheme.',
+    alts: [{ name: 'Chapter 30\'s tile walk (64 × 64, with the set-up phases)', lib: 'rast_walk' }],
+  },
+  k_raster: {
+    problem: 'A triangle has to become pixel writes. Set-up turns the three vertices into what the walk needs: each edge\'s A and B, the top-left bias that keeps shared edges from being drawn twice, the box in tiles, the tile test\'s offsets, and each E at the first tile. That last value is a product, and act 9 has no multiplier: each stepper computes its own E by shift-and-add, a doubling per bit of Δx and Δy, on the adder it already has, in 17 cycles. Twice the area comes free as the sum of the three E, and culls back faces.',
+    without: 'With a multiplier the set-up is faster (chapter 30\'s takes 8 cycles on one 10 × 10 Booth multiplier of 1 601 NANDs), but act 9 would then depend on the side quest that builds it. Per triangle the difference is 11 cycles; the walk itself is the same.',
+    cost: '9 232 NANDs, period 145: the three steppers 2 952, the tile walk 479; the rest is set-up and testing, nearly all of it adders: 72 four-bit adders (2 592) for A, B, Δx, Δy, the box and the offsets, six 16-bit adders (864) for the tile tests and the cull, and the 16-bit muxes (735) that feed the steppers their set-up operands. The set-up path sets the period. 7 439 cycles for the bench\'s 64 triangles, 19 of them set-up per triangle.',
+    alts: [{ name: 'Chapter 30\'s rasterizer (64 × 64, Booth set-up)', lib: 'rasterizer' }],
+  },
+  k_frame: {
+    problem: 'Programmable lanes and fixed-function hardware have to work together. The two-warp core computes where the vertices go and hands each triangle to the rasterizer by storing to its registers; the rasterizer writes the screen, which is ordinary memory the lanes can also read and write. While it draws, an instruction that would change its registers or read the screen must wait, or it would see a half-drawn picture: the core holds that warp\'s turn.',
+    without: 'Without the hold, a program has to wait for the rasterizer by itself (poll a status word, or count cycles), and every program that forgets reads stale pixels. The hold makes a load from the screen a fence: correct by construction, at the price of the turns it waits.',
+    cost: '41 231 NANDs, period 147: the two-warp core\'s 30 163, the rasterizer\'s 9 232, and 1 836 for the device: seven registers, the address decoders on lane 0\'s port and every lane\'s, and the hold. The period is the rasterizer\'s set-up path. On the bench\'s 36 programs, 7 635 cycles.',
+    alts: [{ name: 'Two warps, no device', lib: 'rv16_warps' }],
+  },
 };

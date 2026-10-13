@@ -612,4 +612,15 @@ export const MORE0: Record<string, CodexMore> = {
     lib: 'rv16_coal4',
     chapters: [{ chapter: 'feed', step: 0, label: 'One port, a line wide' }, { chapter: 'feed', step: 1, label: 'Coalescing' }],
   },
+  edgefn: {
+    idea: 'Every edge of a triangle splits the plane in two. For the edge from vertex i to vertex i + 1, E(x, y) = A·(x − xᵢ) + B·(y − yᵢ) with A = yᵢ − yᵢ₊₁ and B = xᵢ₊₁ − xᵢ is the cross product of the edge with the vector to (x, y): zero on the line, positive on one side, negative on the other. A pixel is inside when all three edge functions are ≥ 0 at its centre. Wound the other way, all three flip sign: the triangle shows its back, and a renderer that draws only front faces skips it.<br>Two properties make it the rasterizer\'s tool. It is linear, so moving one pixel right adds 4A and one down adds 4B (vertices in quarter pixels): a pixel a cycle needs one adder per edge, never a multiplier. And the three E add up to the same number everywhere, twice the triangle\'s signed area: their ratios to it are the barycentric weights, what depth and colour are interpolated with. A centre exactly on an edge shared by two triangles must go to one of them: the top-left rule subtracts 1 from every edge that is neither left (A &gt; 0) nor top (A = 0, B &gt; 0).',
+    example: { title: 'One pixel, three edges', body: '<pre>vertices (10, 10) (120, 30) (40, 120), quarter pixels\nedge 0: A = 10 − 30 = −20   B = 120 − 10 = 110\nedge 1: A = 30 − 120 = −90  B = 40 − 120 = −80\nedge 2: A = 120 − 10 = 110  B = 10 − 40 = −30\npixel (12, 12): centre (50, 50)\nE0 = −20·40 + 110·40 = 3 600 − 1 (bias) = 3 599\nE1 = −90·(−70) − 80·20 = 4 700 − 1 = 4 699\nE2 = 110·10 − 30·(−70) = 3 200\nall ≥ 0: inside. E0 + E1 + E2 + 2 = 11 500 = twice the area.</pre>' },
+    mistakes: [
+      'Testing the pixel\'s corner instead of its centre: triangles grow by half a pixel on two sides and shrink on the others.',
+      'Using &gt; 0 on every edge: a pixel centred on a shared edge is drawn by neither triangle, a crack; ≥ 0 everywhere draws it twice. The top-left bias picks one.',
+      'Too few bits: with 7-bit quarter-pixel vertices |E| reaches 2·127², 32 258: 16 bits signed, with nothing to spare.',
+    ],
+    lib: 'rv16_edge',
+    chapters: [{ chapter: 'pixels', step: 1, label: 'Inside a triangle' }],
+  },
 };

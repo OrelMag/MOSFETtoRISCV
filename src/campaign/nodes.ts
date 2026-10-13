@@ -629,7 +629,7 @@ export const NODES: CampaignNode[] = [
     tips: ['First each lane sums its strided share, all lanes busy.', 'Then combine through memory: lanes store their partial sums, fewer lanes add pairs.', 'Idle counts masked lanes, not useless ones: every lane can repeat the whole combine and none is ever masked. Busy, but three of the four compute a sum nobody needs.'],
     codex: ['reduction'], chapters: [{ chapter: 'simt', label: 'Threads in lock-step' }],
   },
-  // Phases 3 and 4 of the GPU track: on the map, not playable yet.
+  // Phases 3 and 4 of the GPU track: warps and memory, then graphics.
   {
     id: 'k_coal', act: 9, title: 'Coalescer', kind: 'build', optional: true, requires: ['k_simd'], base: BUILDK.k_coal, par: { nand: 467, depth: 27 },
     why: 'Four memory ports cost four memories. One port as wide as a line costs one: when neighbouring threads touch neighbouring words, one access serves them all. The coalescer finds which lanes the next access serves.',
@@ -649,20 +649,34 @@ export const NODES: CampaignNode[] = [
     codex: ['privatization', 'barrier'], chapters: [{ chapter: 'feed', label: 'Feeding the lanes' }],
   },
   {
-    id: 'k_edge', act: 9, title: 'Edge stepper', kind: 'build', optional: true, requires: ['k_simd'], soon: true,
-    why: 'Is a pixel inside a triangle? Three edge functions, stepped with adders only.', tips: [], codex: [],
+    id: 'k_edge', act: 9, title: 'Edge stepper', kind: 'build', optional: true, requires: ['k_simd'], base: BUILDK.k_edge, par: { nand: 984, period: 58 },
+    why: 'Is a pixel inside a triangle? Each edge splits the plane: E = A·(x − x\u1d62) + B·(y − y\u1d62) is positive on one side, negative on the other, and inside means all three are ≥ 0. E is linear, so the pixel to the right has E + 4A and the one below E + 4B: one adder per edge replaces every multiplication of the walk.',
+    tips: ['Two 16-bit registers: E, and R, where the current band started (a band is four rows of pixels).', 'One adder / subtractor: its first operand is E, R (band) or 2E (double, a wired shift); its second a, 4a, b or 4b (wired shifts too); subtract only for up.', 'Load and band write R as well as E; hold writes neither.', 'inside: NOT of E\'s bit 15.'],
+    codex: ['edgefn'], unlocks: ['rv16_edge'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }],
   },
   {
-    id: 'k_tile', act: 9, title: 'Tile walk', kind: 'build', optional: true, requires: ['k_edge'], soon: true,
-    why: 'Walk the triangle’s bounding box tile by tile, skipping tiles it does not touch.', tips: [], codex: [],
+    id: 'k_tile', act: 9, title: 'Tile walk', kind: 'build', optional: true, requires: ['k_edge'], base: BUILDK.k_tile, par: { nand: 479, period: 26 },
+    why: 'Visiting the whole bounding box wastes cycles on pixels no edge can reach. In 4 × 4 tiles, one test at a tile\'s best corner rules the whole tile in or out; inside an accepted tile a serpentine path makes every step one pixel, so the edge steppers never need a multiplier and the tile ends one step from the next.',
+    tips: ['State: busy, a TEST flag, the pixel counter k (0 … 15) and the tile (tx, ty).', 'Column = k ÷ 4, row = k mod 4, reversed in odd columns: an XOR of k\'s low bits with bit 2.', 'A tile is done when its TEST fails or its last pixel (k = 15) is out; then: the next tile if tx ≠ tx1, the next band if ty ≠ ty1, else idle.', 'Every command is 0 while idle: gate them with busy.'],
+    codex: ['tilewalk'], unlocks: ['rv16_tile'], chapters: [{ chapter: 'pixels', step: 2, label: 'Walking tiles' }],
   },
   {
-    id: 'k_raster', act: 9, title: 'Rasterizer', kind: 'build', optional: true, requires: ['k_tile'], soon: true,
-    why: 'Edge stepper and tile walk together: a triangle in, the covered pixels out.', tips: [], codex: [],
+    id: 'k_raster', act: 9, title: 'Rasterizer', kind: 'build', optional: true, requires: ['k_tile'], base: BUILDK.k_raster, par: { nand: 9232, period: 145, cycles: 7439 },
+    why: 'The edge steppers and the tile walk, plus the set-up that starts them: each edge\'s A and B, the top-left bias, the box in tiles, and E at the first tile. That last one is a product, and there is no multiplier here: each stepper computes its own by shift-and-add, a doubling per bit, on the adder it already has.',
+    tips: ['A, B, Δx = ox − xᵢ, Δy = oy − yᵢ: 8-bit subtractions (two 4-bit adders, the subtrahend inverted, carry in 1). ox = 16·tx0 + 2.', 'The first tile is the smallest (v + 1) >> 4 of the three vertices; the last the largest (v − 2) >> 4, 0 if negative. A comparison is an adder\'s carry.', 'E = A·Δx + B·Δy − bias, MSB first: E ← 0; E ← E − A·Δx₇ (the sign bit weighs −128); E ← E − B·Δy₇; then for bits 6 … 0: E ← 2E + (Δxₖ ? A : 0), E ← E + (Δyₖ ? B : 0); last E ← E − bias. Then load E into itself, so R starts there too.', 'The sum of the three E plus the three biases is twice the area: ≤ 0 is a back face, done.', 'The tile test: a second adder per edge, E + 12·(A⁺ + B⁺), its sign.'],
+    codex: ['horner'], unlocks: ['rv16_raster'], chapters: [{ chapter: 'pixels', step: 1, label: 'Inside a triangle' }],
   },
   {
-    id: 'k_frame', act: 9, title: 'A frame', kind: 'core', optional: true, requires: ['k_raster', 'k_warps'], soon: true,
-    why: 'Vertices transformed by a kernel on the lanes, rasterized in hardware: a triangle on the 32 × 32 screen.', tips: [], codex: [],
+    id: 'k_frame', act: 9, title: 'A frame', kind: 'core', optional: true, requires: ['k_raster', 'k_warps'], base: BUILDK.k_frame, par: { nand: 41231, period: 147, cycles: 7635 },
+    why: 'A GPU in miniature: programmable lanes compute where the vertices go, a fixed-function rasterizer turns triangles into pixels, the screen is memory both write. The core talks to the rasterizer through addresses, as to any device, and must not touch the screen or the device while it draws.',
+    tips: ['Start from your two-warp core; add the rasterizer, six 7-bit vertex registers and a 16-bit colour register, written from lane 0\'s port when its address is 0xFFF0 … 0xFFF6.', 'A store to 0xFFF6 sets a flip-flop that is the rasterizer\'s go in the next cycle; busy for the core is that flip-flop OR the rasterizer\'s busy.', 'Hold: busy AND (lane 0 is active, the instruction stores, address in 0xFFF0 … 0xFFF6, OR it loads and an active lane\'s address is in 0xF000 … 0xF3FF). AND its inverse into the warp\'s go: nothing of that instruction happens, and its next turn tries again.', 'Use the instruction\'s own signals for the hold, not the write enables it gates: those depend on go.'],
+    codex: ['device'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }],
+  },
+  {
+    id: 'p_spin', act: 9, title: 'Spin', kind: 'program', optional: true, requires: ['k_frame'], par: { cycles: 1432, idle: 8 },
+    why: 'A spinning square, a few frames of it, on the device you built: warp 0 turns the corners, both warps clear the screen, lane 0 hands two triangles to the rasterizer. No multiplier and no sine table: Minsky\'s rule turns a point with two shifts and two adds.',
+    tips: ['Clearing is most of the work: give all eight threads a share, several stores per pass.', 'Lane i of warp 0 turns corner i; store each corner\'s screen position (64 + (x >> 8)) where lane 0 can load it.', 'Two bars per frame: after clearing and turning (lane 0 needs the corners and a clean screen), and after drawing (nobody clears a frame still being drawn).', 'On the hardware a load from the screen waits for the rasterizer: one before the clear makes the program right there too.'],
+    codex: ['minsky'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }],
   },
 ];
 

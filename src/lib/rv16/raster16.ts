@@ -152,8 +152,8 @@ export const TILE16: ComponentDef = (() => {
 
 // ---- the rasterizer --------------------------------------------------------------------------------------
 
-/** x + y + cin on 4·nib bits, from 4-bit ripple adders; the sum and the last carry. */
-function addNib(b: Builder, x: string, y: string, cin: string, nib: number, label: string): { s: string; cout: string } {
+/** x + y + cin on 4·nib bits, from 4-bit ripple adders; the sum (unless only the carry is wanted) and the last carry. */
+function addNib(b: Builder, x: string, y: string, cin: string, nib: number, label: string, sum = true): { s: string; cout: string } {
   const W = Array<number>(nib).fill(4);
   const sx = b.op(splitter(W, 2), [x]), sy = b.op(splitter(W, 2), [y]);
   let c = cin;
@@ -163,7 +163,7 @@ function addNib(b: Builder, x: string, y: string, cin: string, nib: number, labe
     s.push(`${u}.s`);
     c = `${u}.cout`;
   }
-  return { s: b.op1(merger(W, 2), s, label), cout: c };
+  return { s: sum ? b.op1(merger(W, 2), s, label) : '', cout: c };
 }
 
 /** Busy cycles of the set-up chain, in order: load, the two sign steps, 14 shift-and-add steps, the bias, the cull. */
@@ -198,7 +198,7 @@ export const RASTER16: ComponentDef = (() => {
     const d = b.op(splitter([4, 3, 1], 2), [addNib(b, v, b.op1(constWord(8, 0xfe), []), zero, 2, '−2').s]);
     return b.op1(bitwise('and', 3), [`${d}.o1`, b.op1(fanout(3), [b.op1(NOT, [`${d}.o2`])])], 'clamped at 0');
   };
-  const ge4 = (x: string, y: string) => addNib(b, x, inv(y, 4), one, 1, '≥?').cout;
+  const ge4 = (x: string, y: string) => addNib(b, x, inv(y, 4), one, 1, '≥?', false).cout;
   const min4 = (x: string, y: string) => b.op1(busMux2(4), [x, y, ge4(x, y)], 'min');
   const z4 = (v: string) => b.op1(merger([3, 1], 2), [v, zero]);
   const max3 = (x: string, y: string) => b.op1(busMux2(3), [y, x, ge4(z4(x), z4(y))], 'max');
