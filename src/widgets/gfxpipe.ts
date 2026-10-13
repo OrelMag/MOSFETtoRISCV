@@ -74,7 +74,7 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
     const frameBtn = h('button', { class: 'btn sm', title: 'run until the next frame is drawn and the scan-out has sent it to the screen' }, 'One frame');
     const stop = () => { if (running) cancelAnimationFrame(running); running = null; runBtn.textContent = 'Run'; };
     const cap = new ScanCapture(stage, stop);
-    const rec = new FrameRecorder();
+    let rec = new FrameRecorder();
     // the vertex kernel's golden model, launched with the hardware's warp, stepped when it issues
     const fresh = () => new WarpISS(words, { warps: 1, lanes: 4, dmemWords: 2 ** 7, data: meshData(mesh), mul: true });
     let m = fresh();
@@ -131,6 +131,11 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
         shownAt = [];
       },
     });
+    // Reset (the stage's or this panel's): the kernel's model and the frame count start again with the hardware
+    stage.resetHooks.add(() => {
+      m = fresh(); rec = new FrameRecorder();
+      mismatch = null; checked = null; vbufOk = null; shownAt = [];
+    });
 
     const runFor = (until: () => boolean) => {
       if (running) return stop();
@@ -158,6 +163,15 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
         return sent >= 0 && cap.frames > sent;
       });
     });
+    const resetSel = h('select', { class: 'gfx-reset', 'aria-label': 'reset', title: 'reset options' }, h('option', { value: '' }, 'Reset…'),
+      h('option', { value: 'power' }, 'Power-cycle: start again from frame 0'),
+      h('option', { value: 'forget' }, 'Forget what the screen showed')) as HTMLSelectElement;
+    resetSel.addEventListener('change', () => {
+      const k = resetSel.value;
+      resetSel.value = '';
+      if (k === 'power') stage.powerCycle();
+      else if (k === 'forget') { cap.forget(); paint(); }
+    });
     const meshSel = h('select', { 'aria-label': 'mesh' }, ...MESHES.map((x) => h('option', { value: x.id }, x.title))) as HTMLSelectElement;
     meshSel.value = meshId;
     meshSel.addEventListener('change', () => stage.load(pipelineScene(meshSel.value as Mesh['id'], opts)));
@@ -171,6 +185,7 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
       if (!sim) return;
       cap.paint(cv);
       cap.beam(cv);
+      if (cap.blank()) cap.note(cv, rec.frames ? ['The next frame is on its way:', 'the scan-out sends it after the swap.'] : ['Nothing drawn yet.', 'Run, or One frame.']);
       const span = shownAt.length > 1 ? (shownAt[shownAt.length - 1] - shownAt[0]) / 1000 : 0;
       const fps = running && span > 0 ? (shownAt.length - 1) / span : 0;
       const engine = 'engine' in sim ? (sim as unknown as { engine: string }).engine : 'gate';
@@ -190,7 +205,7 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
       h('div', { class: 'cpu-body' },
         h('div', { class: 'param-row', style: 'margin-bottom:6px' }, meshSel),
         h('div', { class: 'gfx-screen-wrap' }, cv),
-        h('div', { class: 'param-row', style: 'margin-top:6px' }, runBtn, frameBtn), status, checks, tl,
+        h('div', { class: 'param-row', style: 'margin-top:6px' }, runBtn, frameBtn, resetSel), status, checks, tl,
         h('p', { class: 'cpu-sec-hint' }, `The screen shows what the scan-out sends, ${FB_W} × ${FB_W}. Run simulates every gate of the pipeline on the cycle engine; probes and the timing diagram need gate delays, so they are off here.`)));
     title.addEventListener('click', () => { el.classList.toggle('collapsed'); stage.setInset(el.classList.contains('collapsed') ? 0 : el.getBoundingClientRect().width + 24); });
     paint();

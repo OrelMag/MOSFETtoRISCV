@@ -1364,6 +1364,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 
 /* chapter 30: the screen panel and the edge-function explorer */
 .gfx-panel { width: 300px; }
+.gfx-panel select.gfx-reset { width: 6.5em; }
 .gfx-screen-wrap { background: #000; border-radius: var(--radius-sm); padding: 4px; line-height: 0; }
 .gfx-screen { width: 100%; height: auto; aspect-ratio: 1; image-rendering: pixelated; }
 .gfx-check { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--text-2); }

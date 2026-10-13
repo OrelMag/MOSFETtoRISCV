@@ -153,6 +153,8 @@ export class Stage {
   private edgePeriod = 0;
   /** Panels' own state saved with every checkpoint and put back by back(). */
   readonly historyHooks = new Set<HistoryHook>();
+  /** Panels' own state put back to its start by powerCycle() (Reset). */
+  readonly resetHooks = new Set<() => void>();
   private history: Checkpoint[] = [];
   private backBtn: HTMLButtonElement | null = null;
   private beforeEdge(): void { this.edgeHooks.forEach((h) => h.before?.()); }
@@ -283,6 +285,7 @@ export class Stage {
   load(scene: Scene): void {
     this.edgeHooks.clear();
     this.historyHooks.clear();
+    this.resetHooks.clear();
     this.history = [];
     this.showWidget(null);
     this.stopAnim();
@@ -904,6 +907,7 @@ export class Stage {
     this.lateEvents = 0;
     this.analyzer.attach(this.sim);
     this.history = [];
+    this.resetHooks.forEach((r) => r());
     this.refresh();
   }
 

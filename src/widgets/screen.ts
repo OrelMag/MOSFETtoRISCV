@@ -139,6 +139,23 @@ export class ScanCapture {
         this.shown = v.shown.slice(); this.seen = v.seen.slice(); this.frames = v.frames;
       },
     });
+    stage.resetHooks.add(() => { onRestore?.(); this.forget(); this.frames = 0; });
+  }
+
+  /** Forget what was sent (the screen goes grey until the scan-out sends it again). */
+  forget(): void { this.shown.fill(0); this.seen.fill(0); }
+
+  /** Nothing but black (or nothing at all) has reached the screen. */
+  blank(): boolean { return this.shown.every((v) => v === 0); }
+
+  /** A note over the picture, centred (the screen is blank: say why and what to do). */
+  note(cv: HTMLCanvasElement, lines: string[]): void {
+    const c = cv.getContext('2d')!, lh = 17, y0 = cv.height / 2 - ((lines.length - 1) * lh) / 2;
+    c.font = '13px system-ui, sans-serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillStyle = 'rgba(255,255,255,0.75)';
+    lines.forEach((t, i) => c.fillText(t, cv.width / 2, y0 + i * lh));
   }
 
   /** The word the scan-out reads now. */
@@ -222,6 +239,7 @@ function screenPanel(opts: PanelOpts): ScenePanel {
       }
     };
     const pending = () => (queue.length > 0 || swapAfter) && !busyNow();
+    stage.resetHooks.add(() => { queue = []; swapAfter = false; });
     const runFor = (until: () => boolean) => {
       if (running) return stop();
       stage.checkpoint();
@@ -260,10 +278,32 @@ function screenPanel(opts: PanelOpts): ScenePanel {
       stage.runCycles(1);
       stage.setInput(port, 0);
     };
-    const swapBtn = h('button', { class: 'btn sm', title: 'ask the scan-out to show the other frame' }, 'Swap');
-    swapBtn.addEventListener('click', () => pulse('swap'));
+    const front = () => { const sim = stage.sim; return sim ? val(sim, node(sim, 'scan')!.ports.front) : 0; };
+    const swapBtn = h('button', { class: 'btn sm', title: 'ask the scan-out to show the other frame (paused: run until it has sent it)' }, 'Swap');
+    swapBtn.addEventListener('click', () => {
+      const f0 = front();
+      pulse('swap');
+      if (running) return;
+      // paused: run until the flip (at vsync when waiting for it) and one whole frame of the other picture sent
+      let sent = front() !== f0 ? cap0.frames : -1;
+      runFor(() => {
+        if (sent < 0 && front() !== f0) sent = cap0.frames;
+        return sent >= 0 && cap0.frames > sent;
+      });
+    });
+    const resetSel = h('select', { class: 'gfx-reset', 'aria-label': 'reset', title: 'reset options' }, h('option', { value: '' }, 'Reset…'),
+      h('option', { value: 'power' }, opts.gpu ? 'Power-cycle: both frames blank' : 'Power-cycle: back to the first frame'),
+      h('option', { value: 'forget' }, 'Forget what the screen showed'),
+      ...(opts.scripts ? [h('option', { value: 'clear' }, 'Clear the back frame')] : [])) as HTMLSelectElement;
+    resetSel.addEventListener('change', () => {
+      const k = resetSel.value;
+      resetSel.value = '';
+      if (k === 'power') stage.powerCycle();
+      else if (k === 'forget') { cap0.forget(); paint(); }
+      else if (k === 'clear') { queue = [CLEAR]; swapAfter = false; if (!running) runFor(() => !queue.length && !busyNow()); }
+    });
 
-    const controls: HTMLElement[] = [runBtn, frameBtn, swapBtn, h('label', { class: 'gfx-check', title: 'flip only at vsync, between two frames' }, sync, 'wait for vsync')];
+    const controls: HTMLElement[] = [runBtn, frameBtn, swapBtn, resetSel, h('label', { class: 'gfx-check', title: 'flip only at vsync, between two frames' }, sync, 'wait for vsync')];
     let triSel: HTMLSelectElement | null = null;
     if (opts.scripts) {
       const scripts = opts.scripts;
@@ -277,7 +317,11 @@ function screenPanel(opts: PanelOpts): ScenePanel {
       controls.splice(2, 1, playBtn);
     } else if (opts.gpu) {
       const drawBtn = h('button', { class: 'btn sm', title: 'start the rasterizer on the triangle at its inputs' }, 'Draw');
-      drawBtn.addEventListener('click', () => pulse('go'));
+      drawBtn.addEventListener('click', () => {
+        pulse('go');
+        // paused: run until the rasterizer is done (a back face stops after its set-up)
+        if (!running) runFor(() => !busyNow());
+      });
       triSel = h('select', { 'aria-label': 'triangle' }, ...TRIANGLES.map((t) => h('option', { value: t.id }, t.title))) as HTMLSelectElement;
       triSel.addEventListener('change', () => stage.setInputs(presetInputs(TRIANGLES.find((t) => t.id === triSel!.value)!)));
       controls.splice(2, 0, drawBtn);
@@ -302,6 +346,15 @@ function screenPanel(opts: PanelOpts): ScenePanel {
       const fr = val(sim, node(sim, 'scan')!.ports.front);
       const rb = node(sim, 'rast', 'walk');
       const busy = rb ? val(sim, rb.ports.busy) === 1 : false;
+      // a black screen looks broken: say what it is and what to do
+      if (opts.gpu) {
+        const back = backFrame(sim), backBlank = !back || back.every((v) => v === 0);
+        if (view === 'screen' && cap0.blank()) {
+          cap0.note(cv, busy || queue.length ? ['The front frame is blank.', 'The rasterizer is drawing', 'into the back frame.']
+            : !backBlank ? ['The front frame is blank.', 'The back frame holds a picture:', 'Swap to show it.']
+            : opts.scripts ? ['The front frame is blank.', 'Draw these: the triangles, then a swap.'] : ['The front frame is blank.', 'Draw, then Swap.']);
+        } else if (view === 'back' && backBlank && !busy) cap0.note(cv, ['The back frame is blank.', opts.scripts ? 'Draw these to fill it.' : 'Draw to fill it.']);
+      }
       status.replaceChildren(
         h('span', null, `cycle ${stage.cycles}`),
         h('span', { title: 'vsync pulses so far: the scan-out sends a frame every ' + FB_WORDS + ' cycles' }, `${cap0.frames} frame${cap0.frames === 1 ? '' : 's'} sent`),
