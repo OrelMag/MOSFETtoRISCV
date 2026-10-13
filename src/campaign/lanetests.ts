@@ -358,3 +358,80 @@ export function simtTests(): CoreTest[] {
     { name: 'split in a loop', src: SPLIT_LOOP }, { name: 'tmc in a split', src: SPLIT_TMC },
   ];
 }
+
+// ---- k_frame: the rasterizer as a device ----------------------------------------------------------------
+
+/** Lane 0's stores to 0xFFF0 … 0xFFF6 (−16 … −10 from x0): the vertices, then the colour, which draws. */
+const tri = (v: number[], col: number) => `${v.map((c, k) => `        li   a0, ${c}\n        sw   a0, ${k - 16}(x0)`).join('\n')}
+        li   a0, ${col}
+        sw   a0, -10(x0)      # the colour: draw`;
+
+const F_ONE = `# warp 0 draws a triangle; warp 1 ends at once
+        csrr t0, tid
+        srli t1, t0, 2
+        beqz t1, draw
+        tmc  x0
+draw:
+${tri([12, 8, 100, 30, 40, 110], 0xf800)}
+        halt
+`;
+
+const F_SHARED = `# two triangles on one edge, then a read of the screen: the load waits for the rasterizer
+        csrr t0, tid
+        srli t1, t0, 2
+        beqz t1, draw
+        tmc  x0
+draw:
+${tri([8, 8, 120, 8, 8, 120], 0x07e0)}
+${tri([120, 8, 120, 120, 8, 120], 0x001f)}
+        li   a2, 0xf000
+        add  a2, a2, t0
+        addi a2, a2, 31       # pixels 31 … 34 of row 0 … 1, one a lane
+        lw   a1, 0(a2)
+        sw   a1, 20(t0)
+        halt
+`;
+
+const F_BAR = `# warp 0 draws, then bar; warp 1 waits at bar, then reads four pixels of the triangle and stores them
+        csrr t0, tid
+        srli t1, t0, 2
+        beqz t1, writer
+        bar                   # warp 1
+        li   a2, 0xf000
+        slli a1, t0, 5
+        add  a2, a2, a1       # row tid (4 … 7), column 4
+        lw   a1, 4(a2)
+        sw   a1, 0(t0)
+        halt
+writer:
+${tri([4, 4, 60, 10, 20, 60], 0xffe0)}
+        bar
+${tri([70, 70, 124, 90, 90, 124], 0xf81f)}
+        halt
+`;
+
+const F_CLEAR = `# all eight threads clear the screen, bar, then warp 0 draws over it
+        csrr t0, tid
+        li   a2, 0xf000
+        add  a2, a2, t0
+        li   a1, 0x2104       # a dark grey
+        li   a0, 128
+clear:  sw   a1, 0(a2)
+        addi a2, a2, 8
+        addi a0, a0, -1
+        bnez a0, clear
+        bar
+        srli t1, t0, 2
+        bnez t1, done
+${tri([16, 16, 110, 60, 50, 120], 0xfd20)}
+done:   halt
+`;
+
+/** k_frame's programs: the two-warp core's, and the rasterizer driven by lane 0. */
+export function frameTests(): CoreTest[] {
+  return [
+    ...warpTests(),
+    { name: 'a triangle', src: F_ONE }, { name: 'two triangles on one edge, read back', src: F_SHARED },
+    { name: 'draw, bar, read', src: F_BAR }, { name: 'clear, bar, draw', src: F_CLEAR },
+  ];
+}

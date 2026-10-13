@@ -36,6 +36,8 @@ export interface CoreSpec {
   lanes?: number;
   /** Warps taking turns (warpcheck.ts: a data memory one cycle late, a second write port for loads). */
   warps?: number;
+  /** k_frame: the core has the rasterizer as a device and writes the screen through fa / fd / fwe. */
+  raster?: boolean;
 }
 
 interface Event { pc: number; instr: number; rd?: number; addr?: number; value: number }

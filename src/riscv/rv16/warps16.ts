@@ -11,16 +11,28 @@
 //         lanes still on (halt, jal x0, 0) never arrives: a warp waiting for it is a deadlock, an
 //         error here (the hardware would wait forever).
 //
+// k_frame adds a rasterizer as a device (raster: true): lane 0's stores to RAST16 … RAST16 + 5 set v0x … v2y (7-bit
+// quarter pixels), its store to RAST16 + 6 sets the colour and draws the triangle at once into the screen, the
+// words FB16 + 32·y + x (gfx/raster16.ts). The hardware draws one pixel a cycle and holds the warps that would
+// touch the rasterizer or read the screen meanwhile; the picture is the same.
+//
 // Warps share data only across a bar: a kernel that also gives the same memory under another issue
 // order is correct on any scheduler (tests/warps16.test.ts checks the campaign's kernels that way).
 
+import { FB16, RAST16, rasterize16, SCREEN16 } from '../../gfx/raster16';
+import type { Vtx } from '../../gfx/raster';
 import { decode16, MMIO16 } from './isa16';
 import { popcount16, Simt16, type Simt16Options, type Warp16Step } from './simt16';
 
 export interface Warps16Options extends Omit<Simt16Options, 'warp' | 'dmem'> {
   /** Warps (default 2, as the hardware). */
   warps?: number;
+  /** The rasterizer device of k_frame. */
+  raster?: boolean;
 }
+
+/** A triangle the device drew: its vertices, colour, pixels (in the hardware's order) and the rasterizer's busy cycles. */
+export interface Draw16 { v: Vtx[]; col: number; pixels: { x: number; y: number }[]; cycles: number }
 
 export interface Warps16Slot {
   warp: number;
@@ -44,9 +56,15 @@ export class Warps16 {
   /** Words stored to OUT, in issue order. */
   out: number[] = [];
   error: string | null = null;
+  readonly raster: boolean;
+  /** The device's registers: v0x, v0y, v1x, v1y, v2x, v2y. */
+  rv = [0, 0, 0, 0, 0, 0];
+  /** The triangles drawn so far. */
+  draws: Draw16[] = [];
 
   constructor(program: ArrayLike<number>, opts: Warps16Options = {}, data?: Map<number, number>) {
     this.W = opts.warps ?? 2;
+    this.raster = !!opts.raster;
     this.n = opts.lanes ?? 4;
     this.dmem = new Uint16Array(opts.dmemWords ?? 65536);
     for (const [a, v] of data ?? []) if (a < this.dmem.length) this.dmem[a] = v & 0xffff;
@@ -109,10 +127,21 @@ export class Warps16 {
     const s = m.step();
     if (m.error) this.error = `warp ${w}: ${m.error}`;
     for (const l of s.lanes) if (l?.store?.addr === MMIO16.OUT) this.out.push(l.store.value);
+    const st0 = s.lanes[0]?.store;
+    if (this.raster && st0 && st0.addr >= RAST16 && st0.addr <= RAST16 + 6) this.device(st0.addr - RAST16, st0.value);
     this.activeLaneSteps += popcount16(s.mask);
     if (bar && !m.error) this.waiting[w] = true;
     this.release();
     return s;
+  }
+
+  /** Lane 0's store to the rasterizer: a vertex coordinate, or the colour, which draws. */
+  private device(k: number, value: number): void {
+    if (k < 6) { this.rv[k] = value & 0x7f; return; }
+    const v: Vtx[] = [[this.rv[0], this.rv[1]], [this.rv[2], this.rv[3]], [this.rv[4], this.rv[5]]];
+    const r = rasterize16(v), col = value & 0xffff;
+    for (const w of r.writes) this.dmem[FB16 + SCREEN16 * w.y + w.x] = col;
+    this.draws.push({ v, col, pixels: r.writes.map((w) => ({ x: w.x, y: w.y })), cycles: r.cycles });
   }
 
   /** Free the warps at the barrier once every warp waits there or has ended; else spot a deadlock. */
