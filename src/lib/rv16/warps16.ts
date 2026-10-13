@@ -3,20 +3,26 @@
 //
 //   COAL16     four word addresses and the mask in: the line of the lowest active lane (a line is four
 //              RV16 words, address bits 15 … 2), the active lanes in it (served now), the rest (left)
+//   RV16_WARPS two warps of four lanes taking turns every cycle (a barrel) over a data memory that
+//              answers one cycle late: a load's word comes back while the other warp issues and is
+//              written through a second register write port, so no warp ever waits for it
 //
 // The serving rule is chapter 29's (lib/warpmem.ts serveLanes, 16-byte lines of RV32 bytes): the leader
-// picks the line, every active lane in it rides along.
+// picks the line, every active lane in it rides along. The warp core's golden model is
+// riscv/rv16/warps16.ts.
 
 import type { ComponentDef, PortDef } from '../../sim/types';
 import { constWord } from '../alu';
 import { Builder } from '../builder';
-import { equal } from '../combinational';
+import { busMux2, equal } from '../combinational';
 import { define, merger, ones, splitter } from '../define';
 import { AND, NOT, OR } from '../gates';
-import { bitwise } from '../wide';
-import { NL } from './lanes16';
-import { RV16_MUX4 } from './logic';
+import { bitwise, orN } from '../wide';
+import { BRANCH16, CTL16, IMM16, NEXTPC16 } from './cpu';
+import { LANE_PORTS, LANEDEC16, LANES16, MASK16, NL, STACK16, VRF16 } from './lanes16';
+import { choose4, MUX16, RV16_DFF, RV16_MUX4, RV16_REG16, RV16_REG4 } from './logic';
 
+const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
 const pinsAt = (names: string[], x: number, step = 4, y0 = 4): Record<string, [number, number]> => Object.fromEntries(names.map((n, i) => [n, [x, y0 + step * i]]));
 const L = [0, 1, 2, 3];
@@ -83,3 +89,163 @@ export const COAL16: ComponentDef = (() => {
   });
 })();
 
+
+// ---- two warps -----------------------------------------------------------------------------------------
+
+/**
+ * The two-warp core's pins: the lane core's, plus the warp issuing this cycle and a second register write
+ * port (lwe, lwa, lwd<i>) for the loads coming back, which belong to the warp that issued last cycle.
+ * rwe / rwa / rwd<i> carry every other register write, of the warp issuing now.
+ */
+export const WARP_PORTS: PortDef[] = (() => {
+  const k = LANE_PORTS.findIndex((p) => p.name === 'pc') + 1;
+  return [...LANE_PORTS.slice(0, k), bit('warp', 'out'), ...LANE_PORTS.slice(k), bus('lwe', NL, 'out'), bus('lwa', 3, 'out'), ...each('lwd').map((p) => bus(p, 16, 'out'))];
+})();
+
+/**
+ * Two warps of the SIMT core, alternating every cycle (warp 0 first after reset). Shared: fetch,
+ * decode, control, the four lanes, branch and next-PC logic. Per warp: everything that is state. A
+ * load writes nothing when it issues; its lanes and rd wait one cycle in a register, and the word the
+ * memory returns then is written to the other warp's registers while this cycle's warp writes its own.
+ * bar: the first warp to arrive sets its waiting bit and issues nothing more while the other still has
+ * lanes; the other's arrival clears it. A warp with no lane left (tmc x0) has ended and issues nothing.
+ */
+export const RV16_WARPS: ComponentDef = (() => {
+  const b = new Builder(10, 16, 6);
+  b.pins('clk', 'rst', 'instr', ...each('drdata'));
+  const nrst = b.op1(NOT, ['rst'], 'not reset');
+  // the warp issuing now: 0 after reset, then 1, 0, 1, …
+  const wff = b.add(RV16_DFF, 'warp');
+  b.wire('clk', `${wff}.clk`);
+  const wq = b.name(`${wff}.q`, 'warp', true);
+  const w0 = b.name(b.op1(NOT, [wq], 'warp 0 issues'), 'sel0', true);
+  b.wire(b.op1(AND, [w0, nrst], 'next: the other'), `${wff}.d`);
+  const sel = [w0, wq];
+  const f = b.op(splitter([2, 2, 3, 3, 3, 3], 4), ['instr'], 'fields');
+  const cond = `${f}.o0`, rd = b.name(`${f}.o2`, 'rd', true);
+  const rs1 = b.name(`${f}.o3`, 'rs1f', true), rs2 = b.name(`${f}.o4`, 'rs2f', true);
+  b.next();
+  const ctl = b.op(CTL16, ['instr'], 'control');
+  const imm = b.op(IMM16, ['instr'], 'immediates');
+  const ld = b.op(LANEDEC16, ['instr'], 'lane decode');
+  // bar: SYSTEM (op 0) with funct3 7
+  const opb = b.op(splitter(ones(4), 2), [b.op1(merger([2, 2], 2), [`${f}.o0`, `${f}.o1`])], 'op');
+  const f3b = b.op(splitter(ones(3), 2), [`${f}.o5`], 'funct3');
+  b.next();
+  const immv = b.name(choose4(b, [`${imm}.i`, `${imm}.sb`, `${imm}.j`, `${imm}.u`], `${ctl}.isel`, 'imm').y, 'imm', true);
+  const sys = b.op1(NOT, [b.op1(orN(4), L.map((i) => `${opb}.o${i}`), 'op ≠ 0')], 'SYSTEM?');
+  const f37 = b.op1(AND, [b.op1(AND, [`${f3b}.o0`, `${f3b}.o1`]), `${f3b}.o2`], 'funct3 = 7');
+  const wbs = b.op(splitter([1, 1], 2), [`${ctl}.wb`], 'wb');
+  b.next();
+  const bar = b.op1(AND, [sys, f37], 'bar');
+  const isLoad = b.name(b.op1(AND, [`${ctl}.rwe`, b.op1(AND, [`${wbs}.o0`, b.op1(NOT, [`${wbs}.o1`])], 'wb = memory')], 'load'), 'isLoad', true);
+  const rwe = b.op1(OR, [`${ctl}.rwe`, `${ld}.tid`], 'writes a register');
+  b.next();
+  // the per-warp state; the waiting bits decide whether this warp may issue at all
+  const st = [0, 1].map((w) => {
+    const r = { pc: b.add(RV16_REG16, `warp ${w} PC`), mask: b.add(MASK16, `warp ${w} mask`), stack: b.add(STACK16, `warp ${w} stack`), vrf: b.add(VRF16, `warp ${w} registers`), wait: b.add(RV16_DFF, `warp ${w} at bar`) };
+    for (const x of Object.values(r)) b.wire('clk', `${x}.clk`);
+    return r;
+  });
+  const wait = st.map((s, w) => b.name(`${s.wait}.q`, `wait${w}`, true));
+  const any = st.map((s, w) => b.name(`${s.mask}.any`, `any${w}`, true));
+  b.next();
+  // go: the instruction counts. Not when this warp waits at bar while the other still has lanes, nor
+  // when it has no lane left (it has ended: a later tmc must not bring it back)
+  const waitW = b.op1(busMux2(1), [wait[0], wait[1], wq], 'this warp waits?');
+  const otherAny = b.op1(busMux2(1), [any[1], any[0], wq], 'the other has lanes?');
+  const anyW = b.op1(busMux2(1), [any[0], any[1], wq], 'this warp has lanes?');
+  b.next();
+  const go = b.name(b.op1(AND, [b.op1(NOT, [b.op1(AND, [waitW, otherAny], 'blocked')]), anyW], 'go'), 'go', true);
+  b.next();
+  const gs = [0, 1].map((w) => b.name(b.op1(AND, [sel[w], go], `warp ${w} goes`), `go${w}`, true));
+  b.next();
+  // operands: both warps' registers, read with the same numbers; the issuing warp's go to the lanes
+  const a = L.map((i) => b.name(b.op1(MUX16, [`${st[0].vrf}.a${i}`, `${st[1].vrf}.a${i}`, wq], `rs1, lane ${i}`), `r1_${i}`, true));
+  const r2 = L.map((i) => b.name(b.op1(MUX16, [`${st[0].vrf}.b${i}`, `${st[1].vrf}.b${i}`, wq], `rs2, lane ${i}`), `r2_${i}`, true));
+  const leadW = b.op1(busMux2(2), [`${st[0].mask}.lead`, `${st[1].mask}.lead`, wq], 'leader');
+  const pcW = b.name(b.op1(MUX16, [`${st[0].pc}.q`, `${st[1].pc}.q`, wq], 'pc'), 'pc', true);
+  b.next();
+  const ln = b.op(LANES16, [...a, ...r2, immv, `${ctl}.bimm`, `${ctl}.alu`], 'lanes');
+  const la = b.name(b.op1(RV16_MUX4, [...a, leadW], 'leader rs1'), 'leadA', true);
+  const lb = b.op1(RV16_MUX4, [...r2, leadW], 'leader rs2');
+  b.next();
+  const take = b.op1(BRANCH16, [la, lb, cond], 'branch?');
+  const tm = b.op(splitter([NL, 16 - NL], 2), [la], 'tmc mask');
+  const np = b.op(NEXTPC16, [pcW, immv, la, `${ctl}.br`, take, `${ctl}.jal`, `${ctl}.jalr`], 'next PC');
+  const pc1 = b.name(`${np}.pc1`, 'pc1', true);
+  b.next();
+  // results of the issuing warp (a load's comes back next cycle): ALU, pc + 1, the immediate, or tid
+  const shared = b.op1(MUX16, [pc1, immv, `${wbs}.o0`], 'pc + 1 / imm');
+  b.next();
+  const res = L.map((i) => b.op1(MUX16, [`${ln}.y${i}`, shared, `${wbs}.o1`], `result ${i}`));
+  b.next();
+  const tid = L.map((i) => b.op1(merger([2, 1, 13], 2), [b.op1(constWord(2, i), []), wq, b.op1(constWord(13, 0), [])], `tid ${i}`));
+  b.next();
+  const wd = L.map((i) => b.name(b.op1(MUX16, [res[i], tid[i], `${ld}.tid`], `or tid ${i}`), `wd${i}`, true));
+  b.next();
+  // the loads in flight: their lanes and rd, for one cycle
+  const lp = b.add(RV16_REG4, 'load lanes');
+  const lr = b.add(RV16_REG4, 'load rd');
+  const one = b.op1(constWord(1, 1), []);
+  for (const x of [lp, lr]) { b.wire('clk', `${x}.clk`); b.wire(one, `${x}.en`); }
+  b.wire(b.op1(merger([3, 1], 2), [rd, b.op1(constWord(1, 0), [])], 'rd'), `${lr}.d`);
+  const lrd = b.name(`${b.op(splitter([3, 1], 2), [`${lr}.q`])}.o0`, 'lrd', true);
+  const lwe = b.name(`${lp}.q`, 'lwe', true);
+  b.next();
+  // per warp: the mask, the stack, the PC, the registers (written by this cycle's results or by the load)
+  const nLoad = b.op1(NOT, [isLoad], 'not a load');
+  const four = (x: string) => b.op1(merger(ones(NL), 2), L.map(() => x));
+  const loadLanes: string[] = [], issueWe: string[] = [], dwe: string[] = [];
+  st.forEach((s, w) => {
+    const gw = gs[w];
+    for (const [p, v] of [['rst', 'rst'], ['rwe', b.op1(AND, [rwe, gw])], ['mwe', b.op1(AND, [`${ctl}.mwe`, gw])]]) b.wire(v, `${s.mask}.${p}`);
+    const sp = b.op1(AND, [`${ld}.split`, gw], `split ${w}`), jn = b.op1(AND, [`${ld}.join`, gw], `join ${w}`);
+    for (const [p, v] of [['rst', 'rst'], ['split', sp], ['join', jn], ['mask', `${s.mask}.mask`], ['p', `${ln}.nz`], ['pc1', pc1]]) b.wire(v, `${s.stack}.${p}`);
+    const tmcW = b.op1(AND, [`${ld}.tmc`, gw], `tmc ${w}`);
+    b.wire(b.op1(OR, [tmcW, `${s.stack}.ld`], `mask ${w} loads`), `${s.mask}.ld`);
+    b.wire(b.op1(busMux2(NL), [`${s.stack}.nmask`, `${tm}.o0`, `${ld}.tmc`], `next mask ${w}`), `${s.mask}.d`);
+    issueWe.push(b.op1(bitwise('and', NL), [`${s.mask}.we`, four(nLoad)], `warp ${w} writes`));
+    loadLanes.push(b.op1(bitwise('and', NL), [`${s.mask}.we`, four(isLoad)], `warp ${w} loads`));
+    dwe.push(`${s.mask}.dwe`);
+    // registers: this warp's results while it issues, else the returning load (the other warp's slot)
+    b.wire(b.op1(busMux2(3), [lrd, rd, sel[w]], `rd ${w}`), `${s.vrf}.wa`);
+    b.wire(b.op1(bitwise('or', NL), [issueWe[w], b.op1(bitwise('and', NL), [lwe, four(sel[1 - w])])], `we ${w}`), `${s.vrf}.we`);
+    L.forEach((i) => b.wire(b.op1(MUX16, [`drdata${i}`, wd[i], sel[w]], `wd ${w}.${i}`), `${s.vrf}.wd${i}`));
+    b.wire(rs1, `${s.vrf}.ra1`);
+    b.wire(rs2, `${s.vrf}.ra2`);
+    // the PC: next PC (or a join's jump), 0 at reset; it moves only when its warp goes
+    let nx = b.op1(MUX16, [pc1, `${np}.target`, `${np}.ld`], `load? ${w}`);
+    nx = b.op1(MUX16, [nx, `${s.stack}.jpc`, `${s.stack}.jump`], `join jump? ${w}`);
+    b.wire(b.op1(MUX16, [nx, b.op1(constWord(16, 0), []), 'rst'], `reset? ${w}`), `${s.pc}.d`);
+    b.wire(b.op1(OR, [gw, 'rst'], `PC ${w} moves`), `${s.pc}.en`);
+    // bar: arriving first sets this warp's bit; the other's arrival clears it
+    const barGo = b.op1(AND, [bar, gw], `bar ${w}`);
+    const barOther = b.op1(AND, [bar, gs[1 - w]], `bar ${1 - w}`);
+    const set = b.op1(AND, [barGo, b.op1(NOT, [wait[1 - w]])], `${w} waits`);
+    const keep = b.op1(AND, [wait[w], b.op1(NOT, [barOther])], `${w} still waits`);
+    b.wire(b.op1(AND, [b.op1(OR, [set, keep]), nrst]), `${s.wait}.d`);
+  });
+  b.next();
+  b.wire(b.op1(bitwise('and', NL), [b.op1(bitwise('or', NL), loadLanes, 'loads'), four(nrst)], 'none at reset'), `${lp}.d`);
+  b.wire(b.op1(bitwise('or', NL), issueWe, 'rwe'), 'rwe');
+  b.wire(b.op1(bitwise('or', NL), dwe, 'dwe'), 'dwe');
+  b.wire(pcW, 'pc');
+  b.wire(wq, 'warp');
+  b.wire(rd, 'rwa');
+  wd.forEach((x, i) => b.wire(x, `rwd${i}`));
+  L.forEach((i) => { b.wire(`${ln}.y${i}`, `daddr${i}`); b.wire(r2[i], `dwdata${i}`); b.wire(`drdata${i}`, `lwd${i}`); });
+  b.wire(lwe, 'lwe');
+  b.wire(lrd, 'lwa');
+  const R = b.right;
+  return define({
+    id: 'rv16_warps', name: 'RV16 two-warp core (2 × 4 lanes)', category: 'cpu',
+    summary: 'Two warps of the SIMT core take turns every cycle: one fetch, decode, control and set of lanes; per warp a PC, a mask, a split / join stack, lane registers and a waiting bit for bar. The data memory answers one cycle late: a load\'s lanes and rd wait a cycle in a register, and the word is written to its warp\'s registers (lwe, lwa, lwd) while the other warp issues, so neither ever waits for memory.',
+    ports: WARP_PORTS,
+    symbol: { kind: 'box', label: 'RV16 × 2 WARPS' },
+    netlist: () => ({
+      pins: { ...pinsAt(['clk', 'rst', 'instr', ...each('drdata')], 0, 4), ...pinsAt(['pc', 'warp', ...each('daddr'), ...each('dwdata'), 'dwe', 'rwe', 'rwa', ...each('rwd'), 'lwe', 'lwa', ...each('lwd')], R, 4) },
+      instances: b.instances, nets: b.nets(),
+    }),
+  });
+})();

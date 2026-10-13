@@ -34,6 +34,8 @@ export interface CoreSpec {
   system?: boolean;
   /** A lane core (act 9): this many lanes, each with its memory and register ports (lanecheck.ts). */
   lanes?: number;
+  /** Warps taking turns (warpcheck.ts: a data memory one cycle late, a second write port for loads). */
+  warps?: number;
 }
 
 interface Event { pc: number; instr: number; rd?: number; addr?: number; value: number }

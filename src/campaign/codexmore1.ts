@@ -1200,7 +1200,7 @@ beq  t0, a1, l2       a1 = 1: lane 1 branches, so all do</pre>The golden model c
   },
 
   warp: {
-    idea: `A warp is the set of threads that share one PC: one thread per lane, all executing the same instruction in the same cycle. The program is written for one thread. The threads differ in their data and, at the start, in one number: <code>csrr rd, tid</code> writes warp · lanes + lane into each lane's rd (CSR 7; a scalar RV16 core reads 0 there). The usual pattern is a strided loop: thread i takes elements i, i + 4, i + 8, …, so four threads cover the array once and each runs the same number of iterations.<br>Nvidia's warps are 32 threads, AMD's wavefronts 32 or 64, the campaign's 4. A GPU core keeps many warps and issues from one whose operands are ready while others wait for memory; the campaign's lane cores hold one, so <code>bar</code> (wait for every warp) does nothing.`,
+    idea: `A warp is the set of threads that share one PC: one thread per lane, all executing the same instruction in the same cycle. The program is written for one thread. The threads differ in their data and, at the start, in one number: <code>csrr rd, tid</code> writes warp · lanes + lane into each lane's rd (CSR 7; a scalar RV16 core reads 0 there). The usual pattern is a strided loop: thread i takes elements i, i + 4, i + 8, …, so four threads cover the array once and each runs the same number of iterations.<br>Nvidia's warps are 32 threads, AMD's wavefronts 32 or 64, the campaign's 4. A GPU core keeps many warps and issues from one whose operands are ready while others wait for memory; the campaign's SIMD and SIMT cores hold one, so <code>bar</code> (wait for every warp) does nothing there, and its two-warp core holds two, taking turns.`,
     example: {
       title: '3·x + y, strided',
       body: `<pre>        csrr t0, tid          # 0, 1, 2, 3
@@ -1315,6 +1315,25 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
       'Expecting a parallel float sum to equal the sequential one: the pairing reorders the additions.',
     ],
     chapters: [{ chapter: 'simt', step: 0, label: 'The active mask' }, { chapter: 'simt', step: 5, label: 'What divergence costs' }],
+  },
+
+  barrel: {
+    idea: `Barrel scheduling (fine-grained multithreading) gives the issue slots to the warps in a fixed rotation, one instruction each. A warp's consecutive instructions are then W cycles apart, so any latency up to W − 1 cycles between them is invisible: no forwarding, no stall, no scoreboard. The CDC 6600's peripheral processors (1964) shared one datapath this way among ten threads; Sun's Niagara and today's GPUs keep the idea and add a scheduler that picks a ready warp instead of the next one.<br>The campaign's two-warp core rotates two warps over a memory one cycle late: a load's word comes back during the other warp's turn and is written then, through a second register write port. The cost is the state: a PC, mask, stack and lane register file per warp, +12 326 NANDs over the SIMT core (30 163 against 17 837), more than half of it registers. A fixed rotation also wastes the turns of a warp that cannot use them (waiting at a barrier, or finished): 59 of the 2 160 turns in the level's 31 programs.`,
+    example: {
+      title: 'A load, in turns',
+      body: `<pre>cycle  issues               the memory, at the edge   register writes
+  1    w0: lw a1, 0(a0)     reads w0's word
+  2    w1: lw a1, 0(a0)     reads w1's word           w0's a1 ← its word (load port)
+  3    w0: add a1, a1, t0                             w1's a1 ← its word (load port)
+  4    w1: add a1, a1, t0                             w0's a1 ← the sum (rwe)</pre>Each add reads a1 a cycle after it was written: nobody waited.`,
+    },
+    mistakes: [
+      'Writing a load\'s word when it issues: a synchronous memory has not read it yet.',
+      'Writing the returning word into the registers of the warp issuing now: it belongs to the warp that issued last cycle.',
+      'Letting a warp that waits at a barrier, or has ended, move its PC or write anything in its turn.',
+    ],
+    lib: 'rv16_warps', compare: ['rv16_simt'],
+    chapters: [{ chapter: 'warps', step: 2, label: 'Many warps resident' }, { chapter: 'warps', step: 3, label: 'Picking a ready warp' }],
   },
 
   barrier: {

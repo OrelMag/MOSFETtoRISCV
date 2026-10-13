@@ -6,11 +6,12 @@ import type { BuildChallenge, PinSpec, SeqStep } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc } from '../editor/model';
 import { LANE_PORTS, LANES16, leaderOf, MASK16, NL, rv16Lanes, STACK16, StackModel, VRF16 } from '../lib/rv16/lanes16';
-import { COAL16 } from '../lib/rv16/warps16';
+import { COAL16, RV16_WARPS, WARP_PORTS } from '../lib/rv16/warps16';
 import type { ComponentDef } from '../sim/types';
 import { rng } from './drills';
 import { laneCheck } from './lanecheck';
-import { simdTests, simtTests } from './lanetests';
+import { simdTests, simtTests, warpTests } from './lanetests';
+import { warpCheck } from './warpcheck';
 
 const pins = (ins: [string, number?][], outs: [string, number?][], clock?: string): PinSpec[] => [
   ...ins.map(([name, width = 1]): PinSpec => ({ name, dir: 'in', width, ...(name === clock ? { clock: true } : {}) })),
@@ -143,7 +144,8 @@ function stackSeq(): SeqStep[] {
   return st;
 }
 
-const LANE_PINS: PinSpec[] = LANE_PORTS.map((p) => ({ name: p.name, dir: p.dir === 'out' ? 'out' : 'in', width: p.width, ...(p.name === 'clk' ? { clock: true } : {}) }));
+const pinsOf = (ports: typeof LANE_PORTS): PinSpec[] => ports.map((p) => ({ name: p.name, dir: p.dir === 'out' ? 'out' : 'in', width: p.width, ...(p.name === 'clk' ? { clock: true } : {}) }));
+const LANE_PINS = pinsOf(LANE_PORTS);
 
 const CORE_BRIEF = 'Pins: one instruction stream (<code>pc</code>, <code>instr</code>) and, per lane <i>i</i>, a memory port (<code>daddr<i>i</i></code>, <code>dwdata<i>i</i></code>, <code>drdata<i>i</i></code>, bit <i>i</i> of <code>dwe</code>) and a register write port (bit <i>i</i> of <code>rwe</code>, <code>rwd<i>i</i></code>; <code>rwa</code> is shared). The bench serves every port in the same cycle, so one instruction per cycle is possible.';
 
@@ -175,6 +177,16 @@ export const BUILDK: Record<string, () => BuildChallenge> = {
     ports: LANE_PINS,
     check: laneCheck({ tests: simdTests, budget: { cpi: 1, extra: 4 } }, `${simdTests().length} programs on every lane against the lane golden model, one instruction per cycle.`),
     answer: refOf('k_simd', () => rv16Lanes(false), 'SIMD core'),
+  }),
+  k_warps: () => ({
+    id: 'k_warps', title: 'Two warps', level: 'cpu', allowed: 'nand',
+    brief: 'Two warps of your SIMT core take turns: warp 0 issues in the first cycle after reset, then warp 1, then warp 0, …. Each warp has its own PC (both start at 0), mask, stack and lane registers; fetch, decode, control and the four lanes are shared. <code>csrr rd, tid</code> gives warp · 4 + lane. '
+      + 'The data memory now answers <b>one cycle late</b>: <code>drdata<i>i</i></code> is the word at the address lane <i>i</i> gave in the previous cycle (stores land at the end of their cycle). So a load writes nothing when it issues: keep its lanes and rd for a cycle and write the word through the second port, <code>lwe</code> (a bit per lane), <code>lwa</code>, <code>lwd<i>i</i></code>, during the other warp’s turn. '
+      + '<code>rwe</code>, <code>rwa</code>, <code>rwd<i>i</i></code> carry every other register write, of the warp issuing now; <code>warp</code> says which warp that is. '
+      + '<b>bar</b>: the first warp to arrive issues nothing in its turns until the other arrives too, or has ended. A warp with no active lane (after <code>tmc x0</code>) has ended: it issues nothing more.',
+    ports: pinsOf(WARP_PORTS),
+    check: warpCheck({ tests: warpTests, budget: { cpi: 1, extra: 4 } }, `${warpTests().length} programs on two warps of four lanes against the two-warp golden model, the warps taking turns every cycle.`),
+    answer: refOf('k_warps', () => RV16_WARPS, 'Two warps'),
   }),
   k_coal: () => ({
     id: 'k_coal', title: 'Coalescer', level: 'cpu', allowed: 'nand',

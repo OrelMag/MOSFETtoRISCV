@@ -204,6 +204,133 @@ jn:     join
         halt
 `;
 
+// ---- two warps (k_warps): every program runs on both, warp 0 first, taking turns ----
+
+const W_TID = `# eight threads: tid = warp · 4 + lane
+        csrr t0, tid
+        srli t1, t0, 2        # the warp
+        slli a0, t0, 4
+        add  a0, a0, t1
+        sw   a0, 8(t0)        # words 8 … 15, one per thread
+        lw   a1, 8(t0)
+        add  a2, a1, a1
+        halt
+`;
+
+const W_LOADS = `# loads used by their warp's next instruction: the word comes back in the other warp's turn
+        csrr t0, tid
+        la   a0, tab
+        add  a0, a0, t0
+        lw   a1, 0(a0)        # tab[tid]
+        add  a1, a1, t0       # used at once
+        lw   a2, 0(a0)
+        lw   ra, 1(a0)        # two loads in a row
+        add  a2, a2, ra
+        sw   a2, 24(t0)
+        lw   sp, 24(t0)       # the word just stored
+        xor  sp, sp, a1
+        lw   t1, 0(a0)
+        lw   t1, 2(a0)        # one register loaded twice: the second wins
+        or   t1, t1, sp
+        li   a2, 3
+loop:   lw   a1, 3(a0)        # a load every other instruction, in both warps
+        add  sp, sp, a1
+        lw   a1, 4(a0)
+        sub  sp, sp, a1
+        addi a2, a2, -1
+        bnez a2, loop
+        lw   x0, 0(a0)        # a load into x0 writes nothing
+        halt
+        .data
+tab:    .word 3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8
+`;
+
+const W_BAR = `# warp 1 waits at bar while warp 0 works; then it reads what warp 0 wrote
+        csrr t0, tid
+        srli t1, t0, 2
+        bnez t1, early
+        li   a0, 12
+spin:   addi a0, a0, -1       # warp 0: a loop first
+        bnez a0, spin
+        slli a1, t0, 2
+        addi a1, a1, 7
+        sw   a1, 24(t0)       # words 24 … 27
+        bar
+        addi a0, a0, 1
+        halt
+early:  bar                   # warp 1: here at once
+        lw   a2, 20(t0)       # tid 4 … 7 read words 24 … 27
+        addi a2, a2, 1
+        sw   a2, 28(t0)       # words 32 … 35
+        halt
+`;
+
+const W_ROUNDS = `# two rounds of: write my word, bar, read my partner's (the same lane of the other warp), bar
+        csrr t0, tid
+        srli t1, t0, 2        # the warp
+        slli a0, t1, 3
+        sub  a0, t0, a0
+        addi a0, a0, 4        # the partner: tid + 4 in warp 0, tid − 4 in warp 1
+        li   a2, 2
+round:  slli a1, t0, 3
+        add  a1, a1, a2
+        sw   a1, 0(t0)        # my word
+        bar
+        lw   ra, 0(a0)        # my partner's
+        add  sp, ra, a2
+        bar                   # every read done before the next round's writes
+        addi a2, a2, -1
+        bnez a2, round
+        sw   sp, 8(t0)
+        halt
+`;
+
+const W_END = `# warp 1 ends at once (tmc x0); what follows must not bring it back, and bar does not wait for it
+        csrr t0, tid
+        li   t1, 15
+        addi a1, t0, 30
+        srli a0, t0, 2
+        beqz a0, run
+        tmc  x0               # warp 1 ends here
+run:    li   t1, 3
+        tmc  t1               # warp 0: lanes 0, 1 (a warp with no lanes does nothing)
+        bar                   # warp 0 alone: warp 1 has ended
+        addi a1, a1, 1        # lanes 0, 1 only
+        li   t1, 15
+        tmc  t1
+        sw   a1, 0(t0)
+        halt
+`;
+
+const W_DIVERGE = `# the warps take different sides of an if, and diverge inside it
+        csrr t0, tid
+        srli t1, t0, 2
+        split t1              # warp 1: then; warp 0: else
+        beqz t1, w0
+        slli a0, t0, 15       # warp 1 splits again on odd lanes
+        split a0
+        beqz a0, even
+        addi a1, t0, 10
+        j    j1
+even:   addi a1, t0, 20
+j1:     join
+        j    done
+w0:     lw   a1, 2(t0)
+        addi a1, a1, 30
+done:   join
+        sw   a1, 16(t0)
+        halt
+`;
+
+/** The two-warp core's programs: the SIMT core's, now on two warps, and the warp ones. */
+export function warpTests(): CoreTest[] {
+  return [
+    ...simtTests(),
+    { name: 'two warps: tid', src: W_TID }, { name: 'two warps: loads', src: W_LOADS }, { name: 'two warps: bar waits', src: W_BAR },
+    { name: 'two warps: rounds', src: W_ROUNDS }, { name: 'two warps: an ended warp', src: W_END }, { name: 'two warps: divergence', src: W_DIVERGE },
+  ];
+}
+
 /** Random scalar programs with tid mixed into their registers: the lanes compute different values. */
 function laneRandom(count: number, from: number): CoreTest[] {
   return Array.from({ length: count }, (_, i) => {

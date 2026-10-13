@@ -637,8 +637,10 @@ export const NODES: CampaignNode[] = [
     codex: ['coalescing'], unlocks: ['rv16_coal4'], chapters: [{ chapter: 'feed', label: 'Feeding the lanes' }],
   },
   {
-    id: 'k_warps', act: 9, title: 'Two warps', kind: 'core', requires: ['k_simt', 'k_coal'], soon: true,
-    why: 'While one warp waits for memory, issue the other: latency hidden by switching threads instead of by forwarding.', tips: [], codex: [],
+    id: 'k_warps', act: 9, title: 'Two warps', kind: 'core', requires: ['k_simt', 'k_coal'], base: BUILDK.k_warps, par: { nand: 30163, period: 95, cycles: 2093 },
+    why: 'Real memory answers late. While one warp waits for its word, let the other issue: latency hidden by switching threads instead of by forwarding or stalling. With a memory one cycle late and two warps taking turns, every load is back before its warp issues again.',
+    tips: ['Start from your SIMT core: fetch, decode, control and the lanes stay shared. Duplicate what is state: PC, mask, stack, lane registers.', 'The warp bit is a flip-flop that toggles every cycle (0 after reset); 2:1 muxes pick the issuing warp’s PC, register reads and mask.', 'A load: hold its lanes (mask · rwe) and rd for one cycle, then write drdata into the other warp’s registers. In any cycle each register file has one writer: its warp’s results, or the returning load.', 'bar: a waiting bit per warp. Arriving first sets yours, arriving second clears the other’s. A warp goes only if it is not held at bar (or the other has no lanes) and has lanes of its own; a PC moves only when its warp goes.'],
+    codex: ['barrel', 'barrier'], chapters: [{ chapter: 'warps', label: 'Hiding latency' }],
   },
   {
     id: 'p_hist', act: 9, title: 'Histogram', kind: 'program', requires: ['k_warps'], par: { cycles: 176, idle: 0 },
