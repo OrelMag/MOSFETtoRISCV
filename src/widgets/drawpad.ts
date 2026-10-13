@@ -288,7 +288,7 @@ function drawPanel(link: DrawLink): ScenePanel {
       sendBtn.toggleAttribute('disabled', sending || !link.play);
     };
 
-    const title = h('h4', null, 'Your drawing', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+    const title = h('h4', null, 'Your drawing', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel cpu-panel gfx-panel gfx-draw-panel', 'data-dock': 'left' }, title,
       h('div', { class: 'cpu-body' },
         toolRow, swatches,

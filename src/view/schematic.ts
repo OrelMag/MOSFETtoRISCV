@@ -7,7 +7,7 @@ import { B0, B1, BX, BZ, type Bit, netlistOf } from '../sim/types';
 import { describeBits, formatBits, type Radix } from '../sim/values';
 import { icon, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
-import { Camera, installPanZoom, type ViewBox } from './camera';
+import { Camera, installPanZoom, usableWidth, type ViewBox } from './camera';
 import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
 import { FlowTokens, type Lane } from './flowtokens';
 import type { ViewCtx } from './context';
@@ -558,7 +558,7 @@ export class SchematicView {
     const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(g.getAttribute('transform') ?? '');
     if (!m) return;
     const r = this.host.getBoundingClientRect();
-    const usable = Math.max(200, r.width - this.insetRight);
+    const usable = usableWidth(r.width, this.insetRight);
     const h = span * (r.height / usable || 0.6);
     const w = span * (r.width / usable || 1);
     this.cam.vb = { x: Number(m[1]) - span / 2 + 6, y: Number(m[2]) - h / 2, w, h };
@@ -584,6 +584,11 @@ export class SchematicView {
 
   fit(): void {
     this.cam.fit(this.bbox, this.insetRight);
+  }
+
+  /** Still showing what the last fit() chose (the learner has not zoomed or panned since). */
+  get fitted(): boolean {
+    return this.cam.fitted;
   }
 
   /** The canvas changed size: refit only a view the learner has not zoomed or panned. */
