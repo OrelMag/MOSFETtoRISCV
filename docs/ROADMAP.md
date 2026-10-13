@@ -686,7 +686,8 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
 - ✅ ISA: the SIMT extension above, assembler and disassembler, the multi-lane golden model; kernels saxpy, divergence,
   nested ifs, pred loops, tmc, a forgotten split; wspawn and nwarps (CSR 0xCC5) with the warps; bar, amoadd.w in the
   lanes, mul; reduction, histogram, plain and tiled matrix multiply
-- ⏳ The lane core's listing marks (insthw) and Slow mode, as the CPU panel has
+- ✅ The lane and warp cores' listing marks (insthw laneUse) and Slow mode, as the CPU panel has; chapters 26–29 on the
+  cycle engine (Run to halt several times faster in the page)
 - ✅ The campaign's lane cores on a sandbox bench (a failing program of k_simd, k_simt, k_warps or k_frame opens around the
   learner's core, a memory port per lane, the CPU drawer checking every thread live); the sandbox RAM gained ports
 

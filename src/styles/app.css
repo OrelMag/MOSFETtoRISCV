@@ -1324,6 +1324,9 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .warp-slots .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
 .cpu-listing .warp-at { display: inline-flex; gap: 2px; margin-left: 6px; }
 .cpu-listing .warp-at i { font: 600 9.5px var(--font-mono); font-style: normal; color: #fff; border-radius: 3px; padding: 0 3px; }
+/* the instruction the scheduler issues this cycle, and its warp's badge */
+.cpu-listing .ln.issue { box-shadow: inset 3px 0 0 var(--hl); }
+.cpu-listing .warp-at i.now { outline: 1.5px solid var(--text); outline-offset: 1px; }
 .warp-occ-chart { max-width: 560px; }
 .warp-occ .lvc-bars .tot { font: 600 11.5px var(--font-mono); fill: var(--text); }
 

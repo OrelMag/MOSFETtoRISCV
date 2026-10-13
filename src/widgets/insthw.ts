@@ -141,3 +141,91 @@ export function instrMarks(def: ComponentDef, word: number, focus: FieldKey | nu
   }
   return null;
 }
+
+// ---- the lane and warp cores (chapters 26–29) -------------------------------------------------
+
+/** Which core: lib/lanes.ts laneCore(…, n), or lib/warps.ts warpCore with W warps. */
+export interface LaneCoreShape {
+  /** Lanes. */
+  n: number;
+  /** The warp core: its warps (absent: the lane core). */
+  W?: number;
+  /** Chapter 29's warp core (access unit, barrier, amoadd.w). */
+  lsu?: boolean;
+  /** Multipliers in the lanes (the warp core's mul). */
+  mul?: boolean;
+}
+
+/** Where an instruction runs now: its lanes (absent: every lane) and, on the warp core, its warp. */
+export interface LaneAt {
+  lanes?: number[];
+  warp?: number;
+}
+
+const upTo = (k: number) => Array.from({ length: k }, (_, i) => i);
+
+/**
+ * The hardware an instruction uses on a lane or warp core, as top-level instance names that core has
+ * (tests/insthw.test.ts checks every one exists). Fetch, decode and control are shared by the lanes;
+ * the lanes listed are those `at` names (the active mask, or the lanes the memory serves this cycle);
+ * on the warp core also the issuing warp's slot, its program read, scoreboard check and request.
+ */
+export function laneUse(word: number, core: LaneCoreShape, at: LaneAt = {}): InstrUse {
+  const op = word & 0x7f, f3 = (word >>> 12) & 7, f7 = word >>> 25;
+  const warp = core.W !== undefined, W = core.W ?? 1, lsu = warp && !!core.lsu;
+  const lanes = (at.lanes ?? upTo(core.n)).map((i) => `lane${i}`);
+  const ws = warp && at.warp !== undefined ? [at.warp] : [];
+  // the warp core's scheduler picks the warp whose PC, instruction and mask go on to one decoder
+  const fetch = warp
+    ? ['G', 'plus4', 'si', 'ctl', 'sdec', 'npc', 'pcmux', ...(W > 1 ? ['sched', 'issueG', 'pcSel', 'imSel', 'maskSel'] : []),
+      ...ws.flatMap((w) => [`warp${w}`, `im${w}`, `hz${w}`, `bz${w}`, `nb${w}`, `rdy${w}`, ...(lsu ? [`rq${w}`, `iss${w}`] : [])])]
+    : ['pc', 'pcmux', 'jmux', 'imem', 'plus4', 'si', 'ctl', 'sdec', 'npc', 'nst', 'pcen', 'lead'];
+  // a register write: the mask (on the lane core during a load, the served lane) gates each lane's write enable
+  const write = warp ? ['rwx', 'nld', 'wn', 'wNow', 'fw', 'weN', 'weS'] : ['rw', 'wsel', 'wf', 'weg', 'we'];
+  const imm = lsu ? ['imm', 'immA'] : ['imm'];
+  // the lane core's sequencer serves one lane a cycle; chapter 29's access unit a line (or a row per bank) a cycle
+  const access = warp
+    ? (lsu ? ['memop', 'mo', 'todo', 'acc', 'wait', 'go', 'srv', 'rest', 'doneG', 'heldN', 'heldW', 'left', ...(W > 1 ? ['heldG'] : [])] : [])
+    : ['rs', 'nr1', 'isLoad', 'isMemG', 'mseq', 'mAd'];
+  // a load's word comes back later: its rd is marked on the warp's scoreboard
+  const later = ['li1', 'rdz', 'rdNz', 'ldIss', 'mem', ...ws.map((w) => `se${w}`)];
+  const u = (extra: string[], path: string): InstrUse => ({ units: [...new Set([...fetch, ...extra])], path });
+  const each = 'each active lane';
+  switch (op) {
+    case OPCODES.OP:
+      if (f7 === 1 && warp && core.mul) return u([...lanes, 'xdec', ...write], `${each}: rs1 × rs2 (its multiplier) → rd`);
+      return u([...lanes, ...write], `${each}: rs1, rs2 → its ALU → rd (the mask gates the write)`);
+    case OPCODES.OPIMM: return u([...imm, ...lanes, ...write], `${each}: rs1, immediate → its ALU → rd`);
+    case OPCODES.LUI: return u([...imm, ...lanes, ...write], `${each}: immediate → rd`);
+    case OPCODES.AUIPC: return u([...imm, ...lanes, ...write], `${each}: PC + immediate (its ALU) → rd`);
+    case OPCODES.LOAD:
+      if (!warp) return u([...imm, ...lanes, ...access, 'dm', ...write], `${each}: rs1 + immediate (its ALU) → the memory sequencer, one lane a cycle → data memory → that lane's rd`);
+      return u([...imm, ...lanes, 'rs', 'nr1', 'isLoad', ...later, ...access],
+        `${each}: rs1 + immediate → ${lsu ? 'access unit (a line, or a row per bank, a cycle) → ' : ''}memory pipeline; the words come back later, rd waits on the scoreboard`);
+    case OPCODES.STORE:
+      if (!warp) return u([...imm, ...lanes, ...access, 'mWd', 'dm', 'dwe'], `${each}: rs1 + immediate (its ALU) → address, rs2 → data, one lane a cycle through the memory sequencer`);
+      return u([...imm, ...lanes, 'stIss', 'mem', ...access], `${each}: rs1 + immediate → ${lsu ? 'access unit → ' : ''}memory pipeline, rs2 → the word`);
+    case OPCODES.AMO:
+      return u(['xdec', ...imm, 'nAmo', 'fA', ...lanes, 'amoIss', ...later, ...access], `${each}: rs1 → access unit, one lane at a time → the memory adds rs2; the old word comes back to rd`);
+    case OPCODES.BRANCH: return u([...imm, ...lanes, 'lead', 'lF', 'fs', 'target', 'gndT'], 'every lane compares; the leader\'s flags (lowest active lane) → next-PC logic; PC + immediate → next PC');
+    case OPCODES.JAL: return u([...imm, 'target', 'gndT', ...lanes, ...write], 'PC + immediate → next PC; PC + 4 → each active lane\'s rd');
+    case OPCODES.JALR: return u([...imm, ...lanes, 'lead', 'lAlu', 'clr0', 'gndJ', ...write], 'the leader\'s rs1 + immediate, bit 0 cleared → next PC; PC + 4 → rd');
+    case OPCODES.SYSTEM: return u(['csrA', ...lanes, ...write], `${each}: its own CSR (thread, lane${warp ? ', warp' : ''} id) → rd`);
+    case OPCODES.SIMT: {
+      // the lane core's SIMT control (mask, split / join stack) is one block; the warp core keeps one in each warp's slot
+      const simt = warp ? [] : ['simt'];
+      switch (f3) {
+        case 0: return u(['lead', 'lA', ...simt], 'tmc: the leader\'s rs1 → the active mask');
+        case 1: return u(['lead', 'lA', 'lB', 'la', 'hiNz', 'ldec', 'spGo', ...upTo(W).slice(1).flatMap((w) => [`gt${w}`, `sp${w}`, `warp${w}`])],
+          'wspawn: warps 1 … rs1 − 1 start at the leader\'s rs2');
+        case 2: return u([...lanes, 'pm', 'lead', 'lA', ...simt], 'split: each lane\'s rs1 ≠ 0 → the lanes that go first; the others wait on the split / join stack');
+        case 3: return u(simt, 'join: the waiting lanes run next, or the stack restores the mask and pops');
+        case 4: return u(lsu ? ['xdec', 'barGo', ...(W > 1 ? ['arr', 'nWait2'] : ['arr1']), 'barCmp', 'arrW', 'release', 'barOr', 'barN', 'atBar', 'ab', 'lead', 'lB'] : [],
+          'bar: this warp waits until rs2 warps have arrived; the last one releases them all');
+        case 5: return u([...lanes, 'pm', 'lead', 'lB', ...simt], 'pred: lanes whose rs1 = 0 stop (if none would remain, the leader\'s rs2 is the mask)');
+        default: return u([], 'not a SIMT instruction');
+      }
+    }
+    default: return u([], 'no data path work');
+  }
+}

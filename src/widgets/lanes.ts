@@ -12,13 +12,13 @@ import type { HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
 import { stats } from '../sim/stats';
 import type { ComponentDef } from '../sim/types';
-import { pack } from '../sim/values';
 import { h } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
+import { laneUse } from './insthw';
+import { frameRun, showInstrUse, slowControls } from './slowctl';
 
 const hex = (v: number, d = 8) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(d, '0');
 const bits = (m: number, n: number) => Array.from({ length: n }, (_, i) => (m >> i) & 1);
-const u = (sim: Sim, node: HierNode, port: string) => pack(sim.getBits(node.ports[port])) >>> 0;
 const kid = (n: HierNode, ...p: string[]) => p.reduce((x, k) => x.children!.get(k)!, n);
 /** Registers the kernels use, shown per lane. */
 const SHOWN = [5, 6, 7, 28, 10, 8];
@@ -28,14 +28,48 @@ export interface LaneSceneOptions {
   highlight?: string[];
   /** Programs offered in the panel's menu (default: all). */
   programs?: string[];
+  /** 'gate': GateSim only (probes, the timing diagram and the power estimate; a few hundred cycles a second). Default: the cycle engine. */
+  engine?: 'gate' | 'cycle';
 }
 
 export function laneCoreScene(id: string, opts: LaneSceneOptions = {}): Scene {
   const p = SIMT_PROGRAMS.find((x) => x.id === id)!;
   const asm = assemble(p.source);
   const n = opts.lanes ?? 4;
-  return { root: laneCore(asm.words, n), inputs: { clk: 0 }, highlight: opts.highlight ?? ['simt'], panels: [warpPanel(p, asm, n, opts)] };
+  return {
+    root: laneCore(asm.words, n), inputs: { clk: 0 }, highlight: opts.highlight ?? ['simt'], panels: [warpPanel(p, asm, n, opts)],
+    ...(opts.engine === 'gate' ? {} : { engine: 'cycle' as const }),
+  };
 }
+
+/** A word read from fixed nets without allocating (the panels compare every register at every instruction); -1 if a bit is X / Z. */
+export function wordReader(sim: Sim, nets: readonly number[]): () => number {
+  return () => {
+    let v = 0;
+    for (let i = 0; i < nets.length; i++) {
+      const b = sim.get(nets[i]);
+      if (b === 1) v |= 1 << i;
+      else if (b !== 0) return -1;
+    }
+    return v >>> 0;
+  };
+}
+
+/** x0 … x31 of a register file (w1 … w31), readers made once per simulation. */
+export function regsReader(sim: Sim, rf: HierNode): () => number[] {
+  const rd = Array.from({ length: 31 }, (_, r) => wordReader(sim, rf.children!.get(`w${r + 1}`)!.ports.q));
+  return () => [0, ...rd.map((f) => f())];
+}
+
+/** Keep a listing's current line in view (a line the learner selected stays where it is). */
+export function scrollTo(listing: HTMLElement, line: HTMLElement | undefined): void {
+  if (!line) return;
+  const top = line.offsetTop - listing.offsetTop, ht = listing.clientHeight;
+  if (top < listing.scrollTop || top > listing.scrollTop + ht - 20) listing.scrollTop = Math.max(0, top - 40);
+}
+
+/** The lanes an instruction runs on (lane numbers of a mask). */
+export const lanesIn = (m: number, n: number) => Array.from({ length: n }, (_, i) => i).filter((i) => (m >> i) & 1);
 
 /** The row of a step in the mask grid. */
 interface Trace { pc: number; text: string; mask: number }
@@ -45,9 +79,15 @@ function warpPanel(p: SimtProgram, asm: AsmResult, n: number, opts: LaneSceneOpt
     let m = new SimtISS(asm.words, { lanes: n });
     let mismatch: string | null = null;
     let trace: Trace[] = [];
-    let running: number | null = null;
+    let stopRun: (() => void) | null = null;
+    /** The listing line the learner clicked: its hardware stays lit. */
+    let selPc: number | null = null;
+    /** Where the instruction of the edge in progress runs (Slow mode at gate level: the view moves under it). */
+    let edgeAt: { pc: number; mask: number; served: number } | null = null;
+    let willRetire = false;
     const status = h('div', { class: 'cpu-status' });
     const listing = h('div', { class: 'cpu-listing' });
+    const usePath = h('div', { class: 'cpu-use' });
     const grid = h('div', { class: 'warp-grid' });
     const stack = h('div', { class: 'warp-stack' });
     const regs = h('div', { class: 'warp-regs' });
@@ -56,54 +96,70 @@ function warpPanel(p: SimtProgram, asm: AsmResult, n: number, opts: LaneSceneOpt
     for (const q of SIMT_PROGRAMS.filter((x) => !opts.programs || opts.programs.includes(x.id))) sel.append(h('option', { value: q.id }, q.title));
     sel.value = p.id;
     sel.addEventListener('change', () => stage.load(laneCoreScene(sel.value, opts)));
-    const runBtn = h('button', { class: 'btn sm primary' }, 'Run to halt');
-    const stop = () => { if (running) cancelAnimationFrame(running); running = null; runBtn.textContent = 'Run to halt'; };
+    const finished = () => m.halted || !!mismatch || stage.cycles > 5000;
+    const runBtn = h('button', { class: 'btn sm primary', title: 'Run until the program halts' }, 'Run to halt');
+    const stop = () => stopRun?.();
     runBtn.addEventListener('click', () => {
-      if (running) return stop();
+      if (stopRun) return stop();
+      slow.stop();
+      slow.tracing = false;
       stage.checkpoint();
       runBtn.textContent = 'Stop';
-      const tick = () => {
-        stage.runCycles(4, () => m.halted);
-        if (m.halted || mismatch || stage.cycles > 5000) return stop();
-        running = requestAnimationFrame(tick);
-      };
-      running = requestAnimationFrame(tick);
+      stopRun = frameRun(stage, finished, () => { stopRun = null; runBtn.textContent = 'Run to halt'; });
     });
+    const slow = slowControls(stage, { multiCycle: true, finished, onStart: stop });
     const lines = asm.words.map((w, i) => {
-      const el = h('div', { class: 'ln' }, h('span', { class: 'a' }, hex(i * 4, 2)), h('span', null, disasm(w, i * 4)));
+      const el = h('div', { class: 'ln', title: 'Show the hardware this instruction uses' }, h('span', { class: 'a' }, hex(i * 4, 2)), h('span', null, disasm(w, i * 4)));
+      el.addEventListener('click', () => { selPc = selPc === i * 4 ? null : i * 4; update(); });
       listing.append(el);
       return el;
     });
     const title = h('h4', null, `Warp: ${n} lanes, one PC`, h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
     const el = h('div', { class: 'mem-panel cpu-panel warp-panel', 'data-dock': 'right' }, title,
-      h('div', { class: 'cpu-body' }, h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, runBtn), status,
-        h('div', { class: 'cpu-sec' }, 'Program'), listing,
+      h('div', { class: 'cpu-body' }, h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, runBtn), slow.el, status,
+        h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its hardware')), listing, usePath,
         h('div', { class: 'cpu-sec' }, 'Active mask, instruction by instruction', h('span', { class: 'cpu-sec-hint' }, 'filled: the lane ran it')), grid,
         h('div', { class: 'cpu-sec' }, 'split / join stack', h('span', { class: 'cpu-sec-hint' }, 'top first')), stack,
         h('div', { class: 'cpu-sec' }, 'Registers, per lane'), regs,
         h('div', { class: 'cpu-sec' }, 'Memory (non-zero words)'), mem));
     title.addEventListener('click', () => { el.classList.toggle('collapsed'); stage.setInset(el.classList.contains('collapsed') ? 0 : el.getBoundingClientRect().width + 24); });
-    const laneRegs = (sim: Sim, i: number) => {
-      const rf = kid(sim.design.root, `lane${i}`, 'rf');
-      return [0, ...Array.from({ length: 31 }, (_, r) => u(sim, kid(rf, `w${r + 1}`), 'q'))];
+    // readers over the current simulation (a Reset keeps it; a new scene makes a new panel)
+    let readers: { sim: Sim; pc: () => number; mask: () => number; retire: () => number; served: () => number; lanes: (() => number[])[]; ram: (() => number)[] } | null = null;
+    const rd = () => {
+      const sim = stage.sim!;
+      if (readers?.sim !== sim) {
+        const root = sim.design.root;
+        readers = {
+          sim, pc: wordReader(sim, root.ports.pcOut), mask: wordReader(sim, root.ports.maskOut), retire: wordReader(sim, root.ports.retire),
+          // the sequencer's served lane counts only while a load or store holds it
+          served: ((sv, mem) => () => (mem() === 1 ? sv() : 0))(wordReader(sim, kid(root, 'mseq').ports.served), wordReader(sim, kid(root, 'mseq').ports.isMem)),
+          lanes: Array.from({ length: n }, (_, i) => regsReader(sim, kid(root, `lane${i}`, 'rf'))),
+          ram: Array.from({ length: 32 }, (_, i) => wordReader(sim, kid(root, 'dm', 'ram', `w${i}`).ports.q)),
+        };
+      }
+      return readers;
     };
     stage.edgeHooks.add({
       before: () => {
-        const sim = stage.sim;
-        if (!sim || m.halted) return;
-        if (u(sim, sim.design.root, 'retire') !== 1) return;
+        if (!stage.sim) return;
+        const r = rd();
+        edgeAt = { pc: r.pc(), mask: r.mask(), served: r.served() };
+        willRetire = !m.halted && r.retire() === 1;
+        if (!willRetire) return;
         const s = m.step();
         trace.push({ pc: s.pc, text: s.text, mask: s.mask });
         if (trace.length > 400) trace = trace.slice(-200);
       },
       after: () => {
-        const sim = stage.sim;
-        if (!sim || mismatch) return;
-        const root = sim.design.root;
-        if (u(sim, root, 'pcOut') !== m.pc) mismatch = 'PC differs from the model';
-        else if (u(sim, root, 'maskOut') !== m.mask) mismatch = 'mask differs from the model';
-        else for (let i = 0; i < n && !mismatch; i++) {
-          const x = laneRegs(sim, i), d = x.findIndex((v, k) => v !== m.lanes[i].x[k]);
+        edgeAt = null;
+        if (willRetire) slow.retired();
+        if (!stage.sim || mismatch) return;
+        const r = rd();
+        if (r.pc() !== m.pc) mismatch = 'PC differs from the model';
+        else if (r.mask() !== m.mask) mismatch = 'mask differs from the model';
+        // a load writes one lane a cycle: the registers match the model once it retires
+        else if (willRetire) for (let i = 0; i < n && !mismatch; i++) {
+          const x = r.lanes[i](), d = x.findIndex((v, k) => v !== m.lanes[i].x[k]);
           if (d >= 0) mismatch = `lane ${i}: ${ABI[d]} differs from the model`;
         }
       },
@@ -113,17 +169,30 @@ function warpPanel(p: SimtProgram, asm: AsmResult, n: number, opts: LaneSceneOpt
       restore: (v) => {
         const st = v as { m: ReturnType<SimtISS['save']>; mismatch: string | null; trace: Trace[] };
         stop();
+        slow.stop();
         m.restore(st.m);
         mismatch = st.mismatch;
         trace = st.trace.slice();
+        edgeAt = null;
       },
     });
+    /** Light the selected instruction, or in Slow mode the current one on the lanes it runs on now. */
+    const showUse = (pc: number, mask: number, served: number) => {
+      const at = selPc ?? (slow.tracing ? pc : null);
+      if (at === null) return showInstrUse(stage, usePath, null);
+      const word = asm.words[at >>> 2] ?? 0x13, now = at === pc;
+      const memNow = now && served !== 0;
+      const lanes = now ? lanesIn(memNow ? served : mask, n) : undefined;
+      showInstrUse(stage, usePath, { pc: at, word, use: laneUse(word, { n }, { lanes }),
+        where: !now ? 'not the current instruction; lit: everything it uses' : memNow ? `memory serves lane ${lanes!.join(', ')} this cycle` : `lanes ${lanes!.join(', ') || 'none'} active` });
+    };
     const update = () => {
       const sim = stage.sim;
       if (!sim) return;
-      if (stage.cycles === 0 && m.cycles > 0) { m = new SimtISS(asm.words, { lanes: n }); mismatch = null; trace = []; }
-      const root = sim.design.root;
-      const pc = u(sim, root, 'pcOut');
+      slow.update();
+      if (stage.cycles === 0 && m.cycles > 0) { m = new SimtISS(asm.words, { lanes: n }); mismatch = null; trace = []; slow.tracing = false; }
+      const r = rd();
+      const pc = edgeAt?.pc ?? r.pc();
       status.replaceChildren(
         h('span', null, `cycle ${stage.cycles}`),
         h('span', null, `${m.retired} instructions`),
@@ -131,7 +200,9 @@ function warpPanel(p: SimtProgram, asm: AsmResult, n: number, opts: LaneSceneOpt
         ...(m.divergences ? [h('span', { class: 'warn' }, `${m.divergences} divergent branch${m.divergences > 1 ? 'es' : ''}: the leader decided`)] : []),
         mismatch ? h('span', { class: 'bad' }, `✗ ${mismatch}`) : h('span', { class: 'good' }, '✓ matches the SIMT golden model'),
         ...(m.halted ? [h('span', { class: 'warn' }, 'halted')] : []));
-      lines.forEach((l, i) => l.classList.toggle('cur', i * 4 === pc));
+      lines.forEach((l, i) => { l.classList.toggle('cur', i * 4 === pc); l.classList.toggle('sel', i * 4 === selPc); });
+      if (selPc === null) scrollTo(listing, lines[pc >>> 2]);
+      showUse(pc, edgeAt?.mask ?? r.mask(), edgeAt?.served ?? r.served());
       const shown = trace.slice(-16);
       grid.replaceChildren(h('table', null,
         h('tr', null, h('th'), ...shown.map((_, i) => h('th', null, String(trace.length - shown.length + i + 1)))),
@@ -141,17 +212,25 @@ function warpPanel(p: SimtProgram, asm: AsmResult, n: number, opts: LaneSceneOpt
         h('span', null, 'mask'), maskEl(e.mask, n), h('span', null, 'else'), maskEl(e.elseMask, n),
         h('span', null, e.pending ? `resume at ${hex(e.pc, 2)}` : 'restore, pop'));
       stack.replaceChildren(...(m.stack.length ? [...m.stack].reverse().map(row) : [h('div', { class: 'empty' }, `empty · mask ${m.mask.toString(2).padStart(n, '0').split('').reverse().join('')} (lane 0 first)`)]));
-      const xs = Array.from({ length: n }, (_, i) => laneRegs(sim, i));
+      const xs = r.lanes.map((f) => f());
       regs.replaceChildren(h('table', null,
         h('tr', null, h('th'), ...Array.from({ length: n }, (_, i) => h('th', null, `lane ${i}`))),
-        ...SHOWN.map((r) => h('tr', null, h('td', { class: 'lbl' }, ABI[r]), ...xs.map((x) => h('td', { class: x[r] ? '' : 'z' }, String(x[r] | 0)))))));
-      const ram = kid(root, 'dm', 'ram');
-      const words = Array.from({ length: 32 }, (_, i) => u(sim, kid(ram, `w${i}`), 'q'));
-      const nz = words.map((v, i) => [i, v] as const).filter(([, v]) => v);
+        ...SHOWN.map((k) => h('tr', null, h('td', { class: 'lbl' }, ABI[k]), ...xs.map((x) => h('td', { class: x[k] ? '' : 'z' }, String(x[k] | 0)))))));
+      const nz = r.ram.map((f, i) => [i, f()] as const).filter(([, v]) => v);
       mem.replaceChildren(...(nz.length ? nz.map(([i, v]) => h('div', { class: 'm' }, h('span', { class: 'n' }, `[${hex(i * 4, 2)}]`), h('span', { class: 'v' }, hex(v)), h('span', { class: 'd' }, String(v | 0)))) : [h('div', { class: 'm z' }, 'all zero')]));
     };
+    // opening the immediate generator or the control unit keeps the instruction's colours
+    const unNav = stage.onNavigate(() => update());
     update();
-    return { el, update, destroy: stop };
+    return {
+      el, update, destroy: () => {
+        stop();
+        slow.stop();
+        unNav();
+        stage.markNets(new Map());
+        if (stage.path.length === 0) stage.highlight(stage.scene?.highlight ?? []);
+      },
+    };
   };
 }
 
