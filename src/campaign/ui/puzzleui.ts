@@ -2,7 +2,8 @@
 // (a table of every test with why it failed), and a stepper over one test on the golden model
 // (registers, the current line, outputs). A pass records size and cycles. A kernel puzzle (lanes)
 // steps the warp instead: every lane's registers in a column, the active mask, the stack depth and
-// the lane utilization so far; its pass records idle lanes too.
+// the lane utilization so far; its pass records idle lanes too. Two warps: both side by side, each
+// with its PC, mask, stack and whether it waits at the barrier.
 
 import { h, icon } from '../../ui/dom';
 import { codeEditor } from '../../widgets/codeedit';
@@ -10,6 +11,7 @@ import { assemble16, type AsmResult16 } from '../../riscv/rv16/asm16';
 import { REG_NAMES16 } from '../../riscv/rv16/isa16';
 import { Iss16 } from '../../riscv/rv16/iss16';
 import type { Simt16 } from '../../riscv/rv16/simt16';
+import { Warps16 } from '../../riscv/rv16/warps16';
 import { progress } from '../progress';
 import { PUZZLES, puzzleMachine, runPuzzle } from '../puzzles';
 import type { CampaignNode } from '../types';
@@ -67,7 +69,7 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
   // ---- the stepper ----
   const tests = p.tests();
   const sel = h('select', { 'aria-label': 'Test to step through' }, tests.map((t, i) => h('option', { value: String(i) }, t.name))) as HTMLSelectElement;
-  let mc: Iss16 | Simt16 | null = null;
+  let mc: Iss16 | Simt16 | Warps16 | null = null;
   let irqs = new Set<number>();
   const reset = () => {
     diagnose();
@@ -98,7 +100,7 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
     const pc = mc.pc;
     ed.setActiveLine(mc.halted ? null : asm.lines.find((l) => l.addr === pc)?.srcLine ?? null);
     const t = tests[Number(sel.value)];
-    const what = mc instanceof Iss16 ? 'instructions' : 'warp instructions';
+    const what = mc instanceof Iss16 ? 'instructions' : mc instanceof Warps16 ? 'cycles' : 'warp instructions';
     const status = h('p', { class: 'sub' }, mc.error ? `Stopped: ${mc.error}` : mc.halted ? `Halted after ${mc.steps} ${what}.` : `pc = ${hex(mc.pc)} · ${mc.steps} ${what} so far`);
     const io = h('p', { class: 'cp-pz-io' }, h('b', null, 'OUT '), mc.out.join(', ') || '—',
       mc instanceof Iss16 && mc.console ? [h('b', null, ' · console '), `"${mc.console}"`] : null,
@@ -111,20 +113,28 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
       return;
     }
     // The warp: a column per lane; a masked-off lane is dimmed (its registers keep their values).
-    const w = mc;
-    const on = (i: number) => ((w.mask >>> i) & 1) === 1;
-    const ids = w.lanes.map((_, i) => i);
-    const waiting = w.stack.filter((e) => e.pending).length;
-    dbg.replaceChildren(status,
-      h('p', { class: 'cp-pz-io' },
+    // Two warps: their lanes side by side, headed by thread number.
+    const ws: Simt16[] = mc instanceof Warps16 ? mc.warps : [mc];
+    const many = mc instanceof Warps16 ? mc : null;
+    const on = (w: Simt16, i: number) => ((w.mask >>> i) & 1) === 1;
+    const cols = ws.flatMap((w) => w.lanes.map((_, i) => ({ w, i })));
+    const info = ws.map((w, k) => {
+      const parked = w.stack.filter((e) => e.pending).length;
+      const state = !many ? null : w.halted ? (w.mask ? 'halted' : 'ended') : many.waiting[k] ? 'waits at bar' : many.next === k ? 'issues next' : null;
+      return h('p', { class: 'cp-pz-io' },
+        many ? [h('b', null, `warp ${k} `), `pc ${hex(w.pc)}${state ? ` (${state})` : ''} · `] : null,
         h('b', null, 'mask '), w.mask.toString(2).padStart(w.n, '0'),
-        h('b', null, ' · stack '), `${w.stack.length} of ${w.depth}${waiting ? ` (${waiting} waiting)` : ''}`,
-        h('b', null, ' · lanes busy '), `${Math.round(100 * w.utilization)} %`,
-        w.divergences ? [h('b', null, ' · divergent branches '), String(w.divergences)] : null),
+        h('b', null, ' · stack '), `${w.stack.length} of ${w.depth}${parked ? ` (${parked} waiting)` : ''}`,
+        many ? null : [h('b', null, ' · lanes busy '), `${Math.round(100 * w.utilization)} %`],
+        w.divergences ? [h('b', null, ' · divergent branches '), String(w.divergences)] : null);
+    });
+    dbg.replaceChildren(status, ...info,
+      ...(many ? [h('p', { class: 'cp-pz-io' }, h('b', null, 'lanes busy '), `${Math.round(100 * many.utilization)} % of the issue slots’ lanes`)] : []),
       h('div', { class: 'cp-pz-lanes-wrap' }, h('table', { class: 'cp-pz-lanes' },
-        h('tr', null, h('th'), ids.map((i) => h('th', { class: on(i) ? 'on' : 'off', title: on(i) ? 'Active' : 'Masked off' }, `lane ${i}`))),
+        h('tr', null, h('th'), cols.map(({ w, i }) => h('th', { class: on(w, i) ? 'on' : 'off', title: `${many ? `warp ${w.warp}, lane ${i}: ` : ''}${on(w, i) ? 'active' : 'masked off'}` },
+          many ? `tid ${w.warp * w.n + i}` : `lane ${i}`))),
         REG_NAMES16.slice(1).map((r, k) => h('tr', null, h('th', null, r),
-          ids.map((i) => { const v = w.lanes[i].x[k + 1]; return h('td', { class: on(i) ? null : 'off', title: signed(v) }, hex(v)); }))))),
+          cols.map(({ w, i }) => { const v = w.lanes[i].x[k + 1]; return h('td', { class: on(w, i) ? null : 'off', title: signed(v) }, hex(v)); }))))),
       io);
   };
   sel.addEventListener('change', reset);
@@ -146,7 +156,7 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
         diagnose();
       } }, 'Show solution')),
     result,
-    h('details', { class: 'cp-pz-step' }, h('summary', null, p.lanes ? 'Step through a test (the warp)' : 'Step through a test'),
+    h('details', { class: 'cp-pz-step' }, h('summary', null, p.warps ? 'Step through a test (the warps)' : p.lanes ? 'Step through a test (the warp)' : 'Step through a test'),
       h('div', { class: 'cp-pz-bar' }, sel,
         h('button', { class: 'btn sm', onclick: () => reset() }, icon('reset', 13), 'Restart'),
         h('button', { class: 'btn sm', onclick: () => step(1) }, icon('step', 13), 'Step'),

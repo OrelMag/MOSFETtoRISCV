@@ -291,4 +291,10 @@ export const CASES1: Record<string, LevelCase> = {
     cost: '17 837 NANDs, +2 063 over the SIMD core: the stack 1 995, the PC mux 49, a 4-bit mask mux 16, an OR. Period unchanged at 100: the stack sits beside the load path, not on it. The 25 programs take 919 cycles. Divergence now costs time instead of correctness: the if / else test runs 14 instructions at 71% lane utilization, two lanes on each side; the nested ifs 19 at 59%.',
     alts: [{ name: 'SIMD core (no split / join)', lib: 'rv16_simd' }],
   },
+  k_coal: {
+    problem: 'The lane cores give every lane a memory port: four memories, or one memory with four ports, which real SRAM does not have. One port as wide as a line (four RV16 words) serves several lanes at once when their words share the line. The coalescer decides each access: the leader (lowest active lane) picks the line, every active lane whose address has the same bits 15 … 2 rides along, and the lanes left over wait for the next access.',
+    without: 'One port serves one lane per cycle: a load with four active lanes takes four cycles, which is what chapter 26\'s RV32 lane core does. With neighbouring threads on neighbouring words (thread i on element i, the usual layout), the coalescer makes it one.',
+    cost: '467 NANDs, depth 27: a 4:1 bus mux for the leader\'s line (147), three 14-bit equality comparators (96 each: lane 0, when active, is the leader and needs none), the leader logic, an AND per lane and a 4-bit XOR for the lanes left. Its outputs drive a sequencer that loops over lines (one access, then mask := left) instead of over lanes. Chapter 29\'s RV32 access unit does the same over 16-byte lines, plus the bank picking of shared memory and the byte lanes of every word.',
+    alts: [{ name: 'Chapter 29\'s access unit (RV32)', nand: 5870, depth: 58, note: 'accessUnit(4) in lib/warpmem.ts, measured: 30-bit byte addresses, the bank picker of shared memory, a word select per lane.' }],
+  },
 };

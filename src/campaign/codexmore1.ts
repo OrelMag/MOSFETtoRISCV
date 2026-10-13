@@ -1316,4 +1316,35 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
     ],
     chapters: [{ chapter: 'simt', step: 0, label: 'The active mask' }, { chapter: 'simt', step: 5, label: 'What divergence costs' }],
   },
+
+  barrier: {
+    idea: `Warps run in an order the program does not control: the campaign's two-warp core gives them turns, chapter 28's core issues whichever warp is ready, a real GPU interleaves dozens. So when one warp stores a word and another loads it, nothing says which happens first, unless something orders them. <code>bar</code> does: a warp that reaches it issues nothing more until every other warp has reached it too, or has ended; the last to arrive releases them all. After a bar, every store made before it by any warp is visible to every load after it.<br>RV16's bar has no operands (SYSTEM funct3 7) and waits for the other warp; a warp that ends with <code>tmc x0</code> (an empty mask) counts as arrived, one that spins on <code>halt</code> with lanes on never arrives. Chapter 29's RV32 bar names a barrier and a warp count, so a subset of warps can synchronise.`,
+    example: {
+      title: 'The histogram without its bar',
+      body: `Taking turns, the two warps of the histogram kernel stay within an instruction of each other: when warp 1 adds up the counters, warp 0 has written them, and every bin comes out right without the bar. Run warp 1 ahead instead (a scheduler may) and it adds up warp 0's counters before they are counted: in the 64-value test, bin 8 comes out 1 instead of 2. The kernel was right by luck of the order; the puzzle's grader runs both orders.`,
+    },
+    mistakes: [
+      'Relying on the issue order: turn-taking is the hardware\'s choice, not a promise; a different scheduler or a cache miss reorders the warps.',
+      'Letting a warp halt without reaching the barrier while lanes are on: the other waits for ever. A warp with no work ends with tmc x0.',
+      'Expecting bar to order the lanes of one warp: they are in lock-step already, and within an instruction lower lanes store first. bar orders warps.',
+    ],
+    chapters: [{ chapter: 'feed', step: 3, label: 'A barrier' }],
+  },
+
+  privatization: {
+    idea: `Counting is a read-modify-write: load the counter, add 1, store it. Two threads doing it to one counter at once both load the old value, and one increment is lost. On lanes it happens inside a single instruction: two lanes of a warp that meet the same value load the same count in the same cycle. The fixes are an atomic add (chapter 29's <code>amoadd.w</code>, which the RV32 lanes perform one lane after another) or not sharing: each thread counts into private copies, and after a barrier the copies are added up, in parallel.<br>The campaign's histogram has 8 threads and 16 bins: 128 private counters. Laid out bin-major (the counter for value v of thread t at 8·v + t), each bin's eight counters are consecutive, so after the bar every thread adds up two bins with plain loads and every lane stays busy: 176 cycles on the tests' mean, 0% idle lanes. One warp doing the whole job with the other ended is 550 cycles at 77% idle.`,
+    example: {
+      title: 'A lost update in one instruction',
+      body: `<pre>                               # lanes 0 and 1 both met value 5 (a1 = 5)
+        lw   a2, 0(a1)         # both read the count, 0
+        addi a2, a2, 1         # both compute 1
+        sw   a2, 0(a1)         # both store 1: the count is 1, not 2</pre>With private counters at 8·v + tid, lane 0 writes word 40 and lane 1 word 41.`,
+    },
+    mistakes: [
+      'Keeping one shared counter per bin "because collisions are rare": a warp\'s four lanes meet the same value often, and every collision loses a count silently.',
+      'Adding up the copies before every thread has counted: the combine needs a barrier.',
+      'Assuming scratch memory starts at 0: the puzzle\'s does; in general, clear the counters first (and bar after clearing).',
+    ],
+    chapters: [{ chapter: 'feed', step: 4, label: 'Atomics' }],
+  },
 };

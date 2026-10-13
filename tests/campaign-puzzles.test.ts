@@ -93,6 +93,60 @@ skip:   join
     expect(all.idle).toBe(0);
   });
 
+  it('histogram: without the bar it is right only while the warps take turns', () => {
+    const p = PUZZLES.p_hist;
+    const noBar = p.ref.replace(/^\s*bar\b.*\n/m, '');
+    expect(noBar).not.toMatch(/\bbar\b/);
+    const r = runPuzzle(p, noBar);
+    expect(r.ok).toBe(false);
+    const bad = r.results.filter((t) => !t.ok);
+    expect(bad.length).toBeGreaterThan(2);
+    for (const t of bad) expect(t.why).toMatch(/right when the warps take turns, but when warp 1 runs ahead: memory\[0x00e.\].*across a bar/);
+  });
+
+  it('histogram: one warp doing all the work passes, at three times the cycles and most lanes idle', () => {
+    const one = runPuzzle(PUZZLES.p_hist, `        csrr t0, tid
+        srli t1, t0, 2
+        beqz t1, go
+        tmc  x0               # warp 1: nothing to do
+go:     li   sp, 0x100
+        lw   ra, -1(sp)
+        add  a0, sp, t0
+        add  ra, ra, sp
+count:  lw   a1, 0(a0)
+        slli a1, a1, 3
+        add  a1, a1, t0
+        lw   a2, 0(a1)
+        addi a2, a2, 1
+        sw   a2, 0(a1)
+        addi a0, a0, 4
+        blt  a0, ra, count
+        li   t1, 1
+        tmc  t1               # lane 0 adds the four lanes' counters of every bin
+        li   a0, 0
+        li   sp, 0xe0
+        li   ra, 16
+bin:    lw   a1, 0(a0)
+        lw   a2, 1(a0)
+        add  a1, a1, a2
+        lw   a2, 2(a0)
+        add  a1, a1, a2
+        lw   a2, 3(a0)
+        add  a1, a1, a2
+        sw   a1, 0(sp)
+        addi a0, a0, 8
+        addi sp, sp, 1
+        addi ra, ra, -1
+        bnez ra, bin
+        halt
+`);
+    const ref = runPuzzle(PUZZLES.p_hist, PUZZLES.p_hist.ref);
+    expect(one.results.filter((t) => !t.ok)).toEqual([]);
+    expect(one.cycles).toBeGreaterThan(3 * ref.cycles);
+    expect(one.idle).toBeGreaterThan(70);
+    expect(ref.idle).toBe(0);
+  });
+
   it('a lane error and a runaway warp are reported per test', () => {
     const p = PUZZLES.p_reduce;
     expect(runPuzzle(p, 'csrw mstatus, x0\nhalt').results[0].why).toMatch(/no CSRs/);

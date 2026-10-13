@@ -8,7 +8,7 @@
 //               address after the split, pending). A split the active lanes agree on parks nobody.
 //   join        the first sends the waiting lanes to that address, the second restores the mask
 //   tmc rs1     the mask := the leader's rs1 (its low n bits); 0 ends the warp
-//   bar         waits for every warp: with one warp, nothing to wait for
+//   bar         waits for every warp: with one warp, nothing to wait for (warps16.ts: two warps)
 //   csrr rd, tid   each lane reads its thread number, warp · n + lane (CSR 7; 0 on a scalar core)
 //
 // Lanes have no CSR file and take no traps: any other SYSTEM instruction stops the model with an
@@ -39,6 +39,8 @@ export interface Simt16Options {
   strictInit?: boolean;
   /** Warp number (tid = warp · lanes + lane); one warp until the scheduler. */
   warp?: number;
+  /** A data memory shared with other warps (warps16.ts); else one of its own. */
+  dmem?: Uint16Array;
 }
 
 export interface Warp16Step {
@@ -82,9 +84,9 @@ export class Simt16 {
     this.full = 2 ** this.n - 1;
     this.mask = this.full;
     this.lanes = Array.from({ length: this.n }, () => new Iss16(program, { dmemWords: opts.dmemWords ?? 65536, strictInit: !!opts.strictInit }));
-    this.dmem = this.lanes[0].dmem;
+    this.dmem = opts.dmem ?? this.lanes[0].dmem;
     for (const l of this.lanes) l.dmem = this.dmem;
-    for (const [a, v] of data ?? []) if (a < this.dmem.length) this.dmem[a] = v & 0xffff;
+    if (!opts.dmem) for (const [a, v] of data ?? []) if (a < this.dmem.length) this.dmem[a] = v & 0xffff;
   }
 
   /** The lowest active lane (-1: none). */

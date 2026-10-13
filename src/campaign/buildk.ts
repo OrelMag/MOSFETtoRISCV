@@ -1,10 +1,12 @@
 // Act 9's build levels (a GPU, roadmap Phase 15): four lanes, the lane register file, the active
-// mask and the reconvergence stack, then the SIMD and SIMT cores on the lane bench. No DOM.
+// mask and the reconvergence stack, then the SIMD and SIMT cores on the lane bench; the coalescer and
+// the two-warp core. No DOM.
 
 import type { BuildChallenge, PinSpec, SeqStep } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc } from '../editor/model';
 import { LANE_PORTS, LANES16, leaderOf, MASK16, NL, rv16Lanes, STACK16, StackModel, VRF16 } from '../lib/rv16/lanes16';
+import { COAL16 } from '../lib/rv16/warps16';
 import type { ComponentDef } from '../sim/types';
 import { rng } from './drills';
 import { laneCheck } from './lanecheck';
@@ -39,6 +41,29 @@ function lanesVectors(): number[][] {
   rows.push(Array(11).fill(0));
   return rows;
 }
+
+/** Address patterns over every mask: one line, four lines, pairs, lines one bit apart, a masked lane in the leader's line. */
+function coalVectors(): number[][] {
+  const r = rng(95);
+  const w = () => Math.floor(r() * 0x10000);
+  const rows: number[][] = [];
+  for (let mask = 0; mask < 16; mask++) {
+    const base = w() & 0xfffc;
+    const pats = [
+      [base, base + 1, base + 2, base + 3], // neighbouring threads, neighbouring words: one line
+      [base + 3, base + 2, base + 1, base], // the same line, any order
+      L4.map((i) => (base + 4 * i) & 0xffff), // a stride of four words: four lines
+      [base, base + 2, base ^ 0x40, (base ^ 0x40) + 1], // two pairs
+      [base, base ^ 4, base ^ 0x8000, base ^ 0x8004], // lines that differ in bit 2 or bit 15 only
+      [w(), base + 1, base + 2, base], // lane 0 alone in its line
+      [base, base, base, base], // one word
+      [w(), w(), w(), w()],
+    ];
+    for (const p of pats) rows.push([...p, mask]);
+  }
+  return rows;
+}
+const L4 = [0, 1, 2, 3];
 
 function vrfSeq(): SeqStep[] {
   const r = rng(92);
@@ -150,6 +175,15 @@ export const BUILDK: Record<string, () => BuildChallenge> = {
     ports: LANE_PINS,
     check: laneCheck({ tests: simdTests, budget: { cpi: 1, extra: 4 } }, `${simdTests().length} programs on every lane against the lane golden model, one instruction per cycle.`),
     answer: refOf('k_simd', () => rv16Lanes(false), 'SIMD core'),
+  }),
+  k_coal: () => ({
+    id: 'k_coal', title: 'Coalescer', level: 'cpu', allowed: 'nand',
+    brief: 'One memory port for four lanes: serve at once every active lane whose word is in the same <b>line</b>. RV16 is word-addressed with 16-bit words, so a line is four words: the address with bits 1 … 0 dropped, <b>a<i>i</i>[15:2]</b>. '
+      + 'The lowest active lane (the leader, as in your mask) picks the line: <b>line</b> = its a[15:2]; <b>served</b> bit <i>i</i> = 1 when lane <i>i</i> is active and its a<i>i</i>[15:2] equals line; <b>left</b> = the active lanes not served, for the next access. '
+      + 'With no lane active, served and left are 0 and line is anything.',
+    ports: pins([...each('a'), ['mask', NL]], [['line', 14], ['served', NL], ['left', NL]]),
+    check: { kind: 'table', spec: COAL16.spec!, vectors: coalVectors, care: (v) => [v[4] ? 0x3fff : 0, 15, 15] },
+    answer: refOf('k_coal', () => COAL16, 'Coalescer'),
   }),
   k_stack: () => ({
     id: 'k_stack', title: 'Reconvergence stack', level: 'cpu', allowed: 'nand',

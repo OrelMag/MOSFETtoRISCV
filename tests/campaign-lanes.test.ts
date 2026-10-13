@@ -90,3 +90,44 @@ describe('the models behind the build levels', () => {
     expect(m.entries).toEqual([]);
   });
 });
+
+describe('the coalescer (k_coal)', () => {
+  it('serves the leader\'s line: the codex example\'s four rows', async () => {
+    const { coalesce16 } = await import('../src/lib/rv16/warps16');
+    expect(coalesce16([0x100, 0x101, 0x102, 0x103], 0b1111)).toEqual({ line: 0x40, served: 0b1111, left: 0 });
+    expect(coalesce16([0x102, 0x103, 0x104, 0x105], 0b1111)).toEqual({ line: 0x40, served: 0b0011, left: 0b1100 });
+    expect(coalesce16([0x100, 0x104, 0x108, 0x10c], 0b1111)).toEqual({ line: 0x40, served: 0b0001, left: 0b1110 });
+    expect(coalesce16([0x7f3, 0x100, 0x101, 0x102], 0b1110)).toEqual({ line: 0x40, served: 0b1110, left: 0 });
+    expect(coalesce16([1, 2, 3, 4], 0)).toMatchObject({ served: 0, left: 0 });
+  });
+
+  it('a sequencer looping on left serves every lane once, in as many accesses as lines', async () => {
+    const { coalesce16, lineOf16 } = await import('../src/lib/rv16/warps16');
+    const { rng } = await import('../src/campaign/drills');
+    const r = rng(7);
+    for (let k = 0; k < 200; k++) {
+      const base = Math.floor(r() * 0x10000);
+      const addrs = [0, 1, 2, 3].map(() => (base + Math.floor(r() * 12)) & 0xffff);
+      const mask = Math.floor(r() * 16);
+      let left = mask, accesses = 0, seen = 0;
+      while (left) {
+        const s = coalesce16(addrs, left);
+        expect(s.served & seen).toBe(0);
+        seen |= s.served;
+        left = s.left;
+        accesses++;
+      }
+      expect(seen).toBe(mask);
+      const lines = new Set([0, 1, 2, 3].filter((i) => (mask >> i) & 1).map((i) => lineOf16(addrs[i])));
+      expect(accesses).toBe(lines.size);
+    }
+  });
+
+  it('the numbers its case quotes: 467 NANDs, depth 27; chapter 29\'s access unit 5 870, depth 58', async () => {
+    const { COAL16 } = await import('../src/lib/rv16/warps16');
+    const { accessUnit } = await import('../src/lib/warpmem');
+    const { logicDepth, stats } = await import('../src/sim/stats');
+    expect([stats(COAL16).nands, logicDepth(COAL16)]).toEqual([467, 27]);
+    expect([stats(accessUnit(4)).nands, logicDepth(accessUnit(4))]).toEqual([5870, 58]);
+  });
+});

@@ -631,16 +631,20 @@ export const NODES: CampaignNode[] = [
   },
   // Phases 3 and 4 of the GPU track: on the map, not playable yet.
   {
-    id: 'k_coal', act: 9, title: 'Coalescer', kind: 'build', requires: ['k_simd'], soon: true,
-    why: 'Four memory ports cost four memories. One port, with the lanes’ neighbouring addresses merged into one wide access, costs one.', tips: [], codex: [],
+    id: 'k_coal', act: 9, title: 'Coalescer', kind: 'build', requires: ['k_simd'], base: BUILDK.k_coal, par: { nand: 467, depth: 27 },
+    why: 'Four memory ports cost four memories. One port as wide as a line costs one: when neighbouring threads touch neighbouring words, one access serves them all. The coalescer finds which lanes the next access serves.',
+    tips: ['Drop each address’s two low bits: what is left (14 bits) names its line.', 'The leader is the lowest active lane, exactly as in your mask; a 4:1 bus mux picks its line.', 'Lane 0, when active, is the leader: it needs no comparator. Lanes 1–3: an equality comparator each, ANDed with their mask bit.', 'left = mask XOR served: served never contains an inactive lane.'],
+    codex: ['coalescing'], unlocks: ['rv16_coal4'], chapters: [{ chapter: 'feed', label: 'Feeding the lanes' }],
   },
   {
     id: 'k_warps', act: 9, title: 'Two warps', kind: 'core', requires: ['k_simt', 'k_coal'], soon: true,
     why: 'While one warp waits for memory, issue the other: latency hidden by switching threads instead of by forwarding.', tips: [], codex: [],
   },
   {
-    id: 'p_hist', act: 9, title: 'Histogram', kind: 'program', requires: ['k_coal'], soon: true,
-    why: 'Lanes that update the same counter at once: atomics.', tips: [], codex: [],
+    id: 'p_hist', act: 9, title: 'Histogram', kind: 'program', requires: ['k_warps'], par: { cycles: 176, idle: 0 },
+    why: 'Eight threads count values into sixteen bins. Two threads that meet the same value would update one counter at once, and RV16 has no atomic add: one of the two counts would be lost. Count into private counters, wait at a barrier until both warps have counted, then add the counters up with every thread.',
+    tips: ['Thread t counts value v in the word 8·v + t: then bin b’s eight counters sit in a row, at 8·b.', 'Thread t takes elements t, t + 8, …: n is a multiple of 8, so every lane has the same number.', 'After bar, every thread adds up two bins: their sixteen counters are the words 16·tid … 16·tid + 15.', 'The warps take turns, so a kernel without bar can look right. The grader also lets warp 1 run ahead of warp 0.'],
+    codex: ['privatization', 'barrier'], chapters: [{ chapter: 'feed', label: 'Feeding the lanes' }],
   },
   {
     id: 'k_edge', act: 9, title: 'Edge stepper', kind: 'build', requires: ['k_simd'], soon: true,

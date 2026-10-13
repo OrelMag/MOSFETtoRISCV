@@ -2,12 +2,13 @@
 // Run on the golden model (iss16); graded on size (instruction words) and cycles (instructions
 // executed, mean over the tests). Kernel puzzles (act 9, `lanes`) run on the lane golden model
 // (simt16): cycles are warp instructions, and idle (the share of lane-steps with the lane masked
-// off) is graded too. Every puzzle has a reference solution that passes and meets par
+// off) is graded too. A kernel on two warps (warps16) counts issue slots: the warps take turns. Every puzzle has a reference solution that passes and meets par
 // (tests/campaign-puzzles.test.ts). No DOM.
 
 import { assemble16 } from '../riscv/rv16/asm16';
 import { Iss16 } from '../riscv/rv16/iss16';
 import { Simt16 } from '../riscv/rv16/simt16';
+import { Warps16 } from '../riscv/rv16/warps16';
 import { rng } from './drills';
 
 export interface PuzzleTest {
@@ -34,6 +35,8 @@ export interface ProgramPuzzle {
   system?: boolean;
   /** A kernel: every test runs on a warp of this many lanes (Simt16), graded on idle lanes too. */
   lanes?: number;
+  /** A kernel on this many warps taking turns (Warps16): cycles are issue slots. */
+  warps?: number;
 }
 
 export interface PuzzleRun {
@@ -48,9 +51,14 @@ export interface PuzzleRun {
 }
 
 /** A test's machine for the stepper and runPuzzle: the scalar golden model, or a warp of lanes. */
-export function puzzleMachine(p: ProgramPuzzle, words: number[], asmData: Map<number, number>, t: PuzzleTest): Iss16 | Simt16 {
+export function puzzleMachine(p: ProgramPuzzle, words: number[], asmData: Map<number, number>, t: PuzzleTest): Iss16 | Simt16 | Warps16 {
   const data = new Map(asmData);
   for (const [k, v] of Object.entries(t.mem ?? {})) data.set(Number(k), v);
+  if (p.lanes && p.warps) {
+    const m = new Warps16(words, { lanes: p.lanes, warps: p.warps }, data);
+    for (const w of m.warps) for (const l of w.lanes) l.input = [...(t.input ?? [])];
+    return m;
+  }
   if (p.lanes) {
     const w = new Simt16(words, { lanes: p.lanes }, data);
     for (const l of w.lanes) l.input = [...(t.input ?? [])];
@@ -65,12 +73,27 @@ export function puzzleMachine(p: ProgramPuzzle, words: number[], asmData: Map<nu
 const hex = (v: number) => `0x${v.toString(16).padStart(4, '0')}`;
 const list = (vs: number[]) => (vs.length ? vs.map((v) => String(v)).join(', ') : 'nothing');
 
+/** What a halted machine got wrong against a test's expectations, or null. */
+function mismatch(t: PuzzleTest, mc: Iss16 | Simt16 | Warps16): string | null {
+  const e = t.expect;
+  if (e.out && (e.out.length !== mc.out.length || e.out.some((v, i) => (v & 0xffff) !== mc.out[i]))) {
+    return `output ${list(mc.out)}, expected ${list(e.out.map((v) => v & 0xffff))}`;
+  }
+  const printed = mc instanceof Iss16 ? mc.console : '';
+  if (e.console !== undefined && e.console !== printed) return `printed "${printed}", expected "${e.console}"`;
+  for (const [k, v] of Object.entries(e.mem ?? {})) {
+    const got = mc.dmem[Number(k)];
+    if (got !== (v & 0xffff)) return `memory[${hex(Number(k))}] = ${hex(got)}, expected ${hex(v & 0xffff)}`;
+  }
+  return null;
+}
+
 /** Run every test of a puzzle on a source. Never throws. */
 export function runPuzzle(p: ProgramPuzzle, src: string): PuzzleRun {
   const a = assemble16(src);
   const size = a.words.length;
   if (a.errors.length) return { ok: false, errors: a.errors, results: [], size, cycles: 0, ...(p.lanes ? { idle: 0 } : {}) };
-  const what = p.lanes ? 'warp instructions' : 'instructions';
+  const what = p.warps ? 'cycles' : p.lanes ? 'warp instructions' : 'instructions';
   const results = p.tests().map((t) => {
     const mc = puzzleMachine(p, a.words, a.data, t);
     const irqs = new Set(t.irqAt ?? []);
@@ -79,19 +102,23 @@ export function runPuzzle(p: ProgramPuzzle, src: string): PuzzleRun {
       mc.step();
     }
     const steps = mc.steps;
-    const idle = mc instanceof Simt16 ? { idle: mc.idle } : {};
+    const idle = mc instanceof Iss16 ? {} : { idle: mc.idle };
     const fail = (why: string) => ({ name: t.name, ok: false, why, steps, ...idle });
     if (mc.error) return fail(mc.error);
     if (!mc.halted) return fail(`still running after ${p.maxSteps} ${what} (missing halt?)`);
-    const e = t.expect;
-    if (e.out && (e.out.length !== mc.out.length || e.out.some((v, i) => (v & 0xffff) !== mc.out[i]))) {
-      return fail(`output ${list(mc.out)}, expected ${list(e.out.map((v) => v & 0xffff))}`);
-    }
-    const printed = mc instanceof Iss16 ? mc.console : '';
-    if (e.console !== undefined && e.console !== printed) return fail(`printed "${printed}", expected "${e.console}"`);
-    for (const [k, v] of Object.entries(e.mem ?? {})) {
-      const got = mc.dmem[Number(k)];
-      if (got !== (v & 0xffff)) return fail(`memory[${hex(Number(k))}] = ${hex(got)}, expected ${hex(v & 0xffff)}`);
+    const wrong = mismatch(t, mc);
+    if (wrong) return fail(wrong);
+    // Warps: any scheduler may issue them in any order. Run warp W − 1 ahead (as long as it can issue)
+    // too: a kernel that shares data without a bar works only by luck of the turn-taking.
+    if (mc instanceof Warps16) {
+      const ahead = puzzleMachine(p, a.words, a.data, t) as Warps16;
+      for (let k = 0; !ahead.halted && k < p.maxSteps; k++) {
+        const w = [...ahead.warps.keys()].reverse().find((v) => ahead.runnable(v));
+        if (w === undefined) break;
+        ahead.stepWarp(w);
+      }
+      const why = ahead.error ?? (ahead.halted ? mismatch(t, ahead) : 'it does not finish');
+      if (why) return fail(`right when the warps take turns, but when warp ${ahead.W - 1} runs ahead: ${why}. A scheduler may issue warps in any order: share data between them only across a bar`);
     }
     return { name: t.name, ok: true, steps, ...idle };
   });
@@ -282,5 +309,81 @@ loop:   lw   a2, 0(a0)
       });
     },
     maxSteps: 2000, lanes: 4,
+  },
+  p_hist: {
+    brief: '<b>Histogram</b>: count how many of the <i>n</i> values at 0x100 fall in each of 16 bins (a value is 0 … 15: its own bin) and write the 16 counts to 0x0E0 … 0x0EF. '
+      + '<i>n</i> (8 … 64, a multiple of 8) is at 0x0FF; words 0x000 … 0x0DF start at 0 and are free for scratch. '
+      + '<b>Two warps</b> of four lanes run your program, taking turns every cycle: <code>csrr rd, tid</code> gives each thread its number, 0 … 7 (warp · 4 + lane). '
+      + 'RV16 has no atomic add: two threads that load, add 1 and store the same counter at once lose a count. Give every thread counters of its own; '
+      + '<code>bar</code> waits until the other warp has arrived too (or has ended, with <code>tmc x0</code>), and after it every thread’s counts are in memory. '
+      + 'Graded on cycles (both warps’ turns) and idle lanes.',
+    starter: `# thread tid (0 … 7) takes elements tid, tid + 8, tid + 16, …
+        csrr t0, tid
+        li   sp, 0x100
+        lw   ra, -1(sp)       # n
+        
+        bar                   # every thread's counts are in memory
+        
+        halt
+`,
+    // Private counters, bin-major (bin b, thread t at 8·b + t), so that after the bar thread t adds up
+    // bins 2t and 2t + 1: sixteen counters in a row, at 16·t. Every lane busy throughout.
+    ref: `        csrr t0, tid
+        li   sp, 0x100
+        lw   ra, -1(sp)       # n
+        add  a0, sp, t0       # this thread's first element
+        add  ra, ra, sp       # one past the last
+count:  lw   a1, 0(a0)        # v
+        slli a1, a1, 3
+        add  a1, a1, t0       # its counter: 8·v + tid
+        lw   a2, 0(a1)
+        addi a2, a2, 1
+        sw   a2, 0(a1)
+        addi a0, a0, 8
+        blt  a0, ra, count
+        bar                   # every thread's counts are in memory
+        slli a0, t0, 4        # bin 2·tid's eight counters, then bin 2·tid + 1's
+        li   sp, 0xe0
+        slli t1, t0, 1
+        add  sp, sp, t1       # where bin 2·tid goes
+        li   ra, 2
+bin:    lw   a1, 0(a0)
+        lw   a2, 1(a0)
+        add  a1, a1, a2
+        lw   a2, 2(a0)
+        add  a1, a1, a2
+        lw   a2, 3(a0)
+        add  a1, a1, a2
+        lw   a2, 4(a0)
+        add  a1, a1, a2
+        lw   a2, 5(a0)
+        add  a1, a1, a2
+        lw   a2, 6(a0)
+        add  a1, a1, a2
+        lw   a2, 7(a0)
+        add  a1, a1, a2
+        sw   a1, 0(sp)
+        addi a0, a0, 8
+        addi sp, sp, 1
+        addi ra, ra, -1
+        bnez ra, bin
+        halt
+`,
+    tests: () => {
+      const r = rng(29);
+      const sets: number[][] = [
+        Array.from({ length: 8 }, (_, i) => i),
+        Array(16).fill(7),
+        ...[64, 24, 40, 56].map((n) => Array.from({ length: n }, () => Math.floor(r() * 16))),
+      ];
+      return sets.map((v, i) => {
+        const mem: Record<number, number> = { 0xff: v.length };
+        v.forEach((x, k) => (mem[0x100 + k] = x));
+        const bins = Array(16).fill(0);
+        for (const x of v) bins[x]++;
+        return { name: i === 1 ? '16 values, one bin' : `${v.length} values`, mem, expect: { mem: Object.fromEntries(bins.map((c, b) => [0xe0 + b, c])) } };
+      });
+    },
+    maxSteps: 2000, lanes: 4, warps: 2,
   },
 };

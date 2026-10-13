@@ -601,4 +601,15 @@ export const MORE0: Record<string, CodexMore> = {
     lib: 'rv16_stack4', compare: ['simtctl4_4'],
     chapters: [{ chapter: 'simt', step: 2, label: 'split and join' }, { chapter: 'simt', step: 3, label: 'An if inside an if' }],
   },
+  coalescing: {
+    idea: 'A memory port as wide as a line reads or writes several neighbouring words at once. Lanes whose words share a line can all be served by one access; the coalescer works out which. The leader (lowest active lane) picks the line; every active lane whose address agrees with it above the word-in-line bits is served; the others are left for the next access, which a sequencer issues with the mask set to the lanes left, until none is.<br>RV16 is word-addressed with 16-bit words, so a four-word line is the address with bits 1 … 0 dropped. The coalescer is 467 NANDs, depth 27: the leader logic, a 4:1 mux for the leader\'s line, three 14-bit equality comparators (lane 0, when active, is the leader) and the served / left bits. How many accesses a load takes depends only on the addresses: neighbouring threads on neighbouring words is one, a stride of four words is four. GPU programmers lay out data for the first case (a structure of arrays rather than an array of structures).',
+    example: { title: 'Four lanes, four patterns', body: '<pre>addresses (lanes 0–3)        mask  line   served  left   accesses\n0x100 0x101 0x102 0x103       1111  0x040  1111    0000   1\n0x102 0x103 0x104 0x105       1111  0x040  0011    1100   2\n0x100 0x104 0x108 0x10C       1111  0x040  0001    1110   4\n0x7F3 0x100 0x101 0x102       1110  0x040  1110    0000   1  (lane 0 off: lane 1 leads)</pre>The second row is the same four neighbours, two words off the line boundary: aligning arrays to a line matters.' },
+    mistakes: [
+      'Comparing whole addresses: equal words are only a special case; a line holds four.',
+      'Taking lane 0\'s line instead of the leader\'s: with lane 0 masked off its stale address picks a line that may serve nobody, and a sequencer looping until left = 0 never ends.',
+      'Leaving inactive lanes in left (or in served): the sequencer would issue accesses for lanes that do nothing.',
+    ],
+    lib: 'rv16_coal4',
+    chapters: [{ chapter: 'feed', step: 0, label: 'One port, a line wide' }, { chapter: 'feed', step: 1, label: 'Coalescing' }],
+  },
 };
