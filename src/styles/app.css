@@ -1375,6 +1375,18 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .gfx-edge-info .v { font: 600 12.5px var(--font-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .gfx-edge-info .v.good { color: var(--good); }
 .gfx-edge-info .v.bad { color: var(--bad); }
+/* chapter 30's drawing pad (widgets/drawpad.ts): the drawing's own colours are data, the chrome follows the theme */
+.gfx-draw-panel .cpu-body > * + * { margin-top: 6px; }
+.gfx-tools .btn.on { background: var(--accent-soft); border-color: var(--accent); }
+.gfx-draw-panel { overflow-y: auto; }
+.gfx-panel.narrow { width: 240px; }
+.gfx-swatches { display: grid; grid-template-columns: repeat(16, 1fr); gap: 2px; }
+.gfx-swatch { height: 18px; min-width: 0; padding: 0; border: 1px solid var(--border); border-radius: 3px; cursor: pointer; }
+.gfx-swatch.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.gfx-pad-wrap { line-height: 0; }
+/* the pad gives way on a short window, so the controls below it stay in view */
+.gfx-pad { display: block; margin: 0 auto; width: 100%; max-width: max(180px, calc(100vh - 590px)); height: auto; aspect-ratio: 1; border-radius: var(--radius-sm); touch-action: none; cursor: crosshair; }
+.gfx-pad:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* chapter 31: the pipeline panel's timeline, the cost tables */
 .gfx-tl-wrap { margin-top: 6px; }
 .gfx-timeline { display: block; width: 100%; height: auto; margin: 2px 0 4px; }

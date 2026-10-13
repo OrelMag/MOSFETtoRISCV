@@ -280,7 +280,11 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                and the tiling chart (plain against tiled matmul over globalEvery);
                screen.ts: chapter 30 (the screen panel: what the gate-level scan-out sent, or the back frame from the memory
                leaves with the walk's tile; Run on a 12 ms frame budget or a cycles/s cap, Draw, Swap, vsync wait, draw scripts;
-               the edge-function explorer; ScanCapture: what the scan-out sent, backFrame); gfxpipe.ts: chapter 31 (pipelineScene:
+               the edge-function explorer; ScanCapture: what the scan-out sent, backFrame; draws fed from inside the cycle loop, one
+               starting the cycle busy falls; DrawLink: another panel plays draws and gets the frame shown); drawpad.ts: chapter 30's
+               last step (GPU30Z on the cycle engine, its pins hidden; the drawing pad: triangle / polygon / brush, 16 RGB332
+               colours, opacity, undo, kept in localStorage; Send through DrawLink, the screen checked against drawingPicture; both
+               panels slim to 240 px on a narrow stage); gfxpipe.ts: chapter 31 (pipelineScene:
                gpu31 on the cycle engine; the panel: screen, frames per second, the last frame's timeline from FrameRecorder, the
                vertex kernel in lock-step with WarpISS (launch()), every frame against framePicture; costWidget: PIPE_COSTS);
                insthw.ts maps an instruction to the units it uses (and pipeline stage units); fsmpanel.ts: a live state
@@ -501,7 +505,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
 src/gfx/       raster16.ts: the campaign's (7-bit vertices, 32 × 32, RGB565; Edge16 / Walk16 models, rasterize16 with the
                19-cycle set-up, draw16, rgb565); raster.ts: the rasterizer's reference model (setup, rasterize: pixel writes
                with their cycles, zPlane / zAt / zStore, blend332, RefFrame: a framebuffer and depth buffer drawn as the
-               hardware does; Z_WALK_START, CLEAR_CYCLES);
+               hardware does; Z_WALK_START, CLEAR_CYCLES); tessellate.ts: chapter 30's drawing pad as triangles (polygonTriangles: ear
+               clipping, a fan when it crosses itself; strokeTriangles: RDP-thinned path, mitred strip, square caps; frontFace),
+               drawingOps (a clear, then each shape one depth plane nearer than the last, depth test on: a shape blends once where its
+               own triangles overlap), drawingCost (cycles from the reference: clear, triangles, set-up), drawingPicture;
                pipeline.ts: chapter 31's reference (frameOps / framePicture: frame f of a mesh), FrameRecorder (a frame's spans per
                unit and its cycles by phase, from one sample a cycle), PIPE_COSTS (measured, pinned by tests/gfxpipe.test.ts).
                The kernels and meshes are riscv/gfxprograms.ts (16.16 rotation with mul, vertex buffers f mod 2, the memory map;
