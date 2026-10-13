@@ -465,7 +465,8 @@ export interface WarpCoreOptions {
 export function warpCore(program: number[], opts: WarpCoreOptions = {}): ComponentDef {
   const W = opts.warps ?? 4, n = opts.lanes ?? 4, L = opts.latency ?? 8, dk = opts.dmemK ?? 6, ik = opts.imemK ?? 6;
   checkWarps(W);
-  if (L < 1) throw new Error('latency: at least 1');
+  // L = 1 would return a load in the cycle it issues: the write-back would feed the scheduler that issued it (a loop)
+  if (L < 2) throw new Error('latency: at least 2');
   const IM = rom(program, ik);
   const MP = memPipe(n, W, L, dk, opts.data);
   return memo(`warpcore${W}x${n}_${MP.id}_${IM.id}`, () => {

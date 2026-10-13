@@ -4,6 +4,7 @@ import { assemble } from '../src/riscv/asm';
 import { clockCycle } from '../src/riscv/cosim';
 import { WARP_DMEM_K, WARP_PROGRAMS, type WarpProgram } from '../src/riscv/warpprograms';
 import { WarpISS } from '../src/riscv/warps';
+import { warpTiming } from '../src/riscv/warptiming';
 import { flatten, type HierNode } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { evalOnce, simulate } from '../src/sim/harness';
@@ -50,6 +51,9 @@ export function cosimWarps(p: WarpProgram, W: number, n: number, L: number, maxC
   expect(Array.from({ length: 2 ** WARP_DMEM_K }, (_, i) => u(sim, child(mem, `w${i}`), 'q'))).toEqual([...m.dmem]);
   for (const [i, v] of p.expect()) expect(m.dmem[i], `word ${i}`).toBe(v >>> 0);
   expect(m.halted).toBe(true);
+  // the timing model predicts the same cycles
+  const t = warpTiming(words, { warps: W, lanes: n, latency: L, dmemWords: 2 ** WARP_DMEM_K, data: p.data() });
+  expect([t.cycles, t.issued], 'timing model').toEqual([c, issued]);
   return { cycles: c, issued, leaves: design.leaves.length };
 }
 
