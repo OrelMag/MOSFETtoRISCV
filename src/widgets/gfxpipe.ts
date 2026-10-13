@@ -5,7 +5,7 @@
 
 import { FB_W } from '../gfx/raster';
 import { FrameRecorder, type FrameRecord, framePicture, PIPE_COSTS, type SpanKind } from '../gfx/pipeline';
-import { cuState, gpu31 } from '../lib/gfxpipe';
+import { type CuState, cuState, gpu31 } from '../lib/gfxpipe';
 import { assemble } from '../riscv/asm';
 import { GFX, meshById, meshData, MESHES, type Mesh, vertexKernel } from '../riscv/gfxprograms';
 import { WarpISS } from '../riscv/warps';
@@ -14,6 +14,7 @@ import type { Sim } from '../sim/sim';
 import { pack } from '../sim/values';
 import { h, s } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
+import { FrameMemory } from './framemem';
 import { backFrame, ScanCapture } from './screen';
 
 const kid = (n: HierNode, ...p: string[]) => p.reduce((x, k) => x.children!.get(k)!, n);
@@ -29,6 +30,22 @@ export function pipelineScene(mesh: Mesh['id'], opts: PipeSceneOptions = {}): Sc
     panels: [pipelinePanel(mesh, opts)],
   };
 }
+
+/** What the command unit is doing in each state (p: the vertex buffer this frame reads). */
+const CU_TEXT: Record<CuState, (p: number) => string> = {
+  start: () => 'waits for the kernel\'s first run',
+  launch: () => 'launch: the kernel on the next frame, and the clear',
+  clear: () => 'waits for the clear',
+  count: () => 'reads the triangle count',
+  tri: () => 'reads a triangle: three indices, a colour',
+  v0: (p) => `reads vertex 0 from buffer ${p}`,
+  v1: (p) => `reads vertex 1 from buffer ${p}`,
+  v2: (p) => `reads vertex 2 from buffer ${p}`,
+  go: () => 'go: the rasterizer starts',
+  draw: () => 'waits for the rasterizer',
+  swap: () => 'swap',
+  flip: () => 'waits for the flip at vsync and the kernel',
+};
 
 /** Colours of the timeline's kinds (categorical, fixed order) and their names. */
 const KIND: Record<SpanKind, { c: string; name: string }> = {
@@ -74,6 +91,17 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
     const frameBtn = h('button', { class: 'btn sm', title: 'run until the next frame is drawn and the scan-out has sent it to the screen' }, 'One frame');
     const stop = () => { if (running) cancelAnimationFrame(running); running = null; runBtn.textContent = 'Run'; };
     const cap = new ScanCapture(stage, stop);
+    const mem = new FrameMemory(stage, cap, {
+      gpu: true, depth: true,
+      rows: (sim) => {
+        const st = cuState(u(sim, node(sim, 'cmd'), 'state')), running = u(sim, node(sim, 'core'), 'halted') === 0;
+        return [
+          { unit: 'Command unit', hue: 'wait', text: CU_TEXT[st](rec.frames & 1) },
+          { unit: 'Warp core', hue: 'kernel', text: running ? `vertex kernel: frame ${rec.frames + 1} into buffer ${(rec.frames + 1) & 1}` : 'halted: the kernel is done' },
+        ];
+      },
+    }, () => paint());
+    const memLabel = h('span', { class: 'gfx-mem-label' });
     let rec = new FrameRecorder();
     // the vertex kernel's golden model, launched with the hardware's warp, stepped when it issues
     const fresh = () => new WarpISS(words, { warps: 1, lanes: 4, dmemWords: 2 ** 7, data: meshData(mesh), mul: true });
@@ -180,12 +208,33 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
     const status = h('div', { class: 'cpu-status' });
     const checks = h('div', { class: 'cpu-status' });
     const tl = h('div', { class: 'gfx-tl-wrap' });
+    // the two vertex buffers in the core's memory, packed X | Y << 8 | Z << 16: the kernel writes the next frame's while
+    // the command unit reads this frame's
+    const vbuf = h('div', { class: 'gfx-vbuf' });
+    const paintVbuf = (sim: Sim) => {
+      const st = cuState(u(sim, node(sim, 'cmd'), 'state')), running = u(sim, node(sim, 'core'), 'halted') === 0;
+      const reading = ['count', 'tri', 'v0', 'v1', 'v2', 'go', 'draw'].includes(st) ? rec.frames & 1 : -1;
+      const writing = running ? (rec.frames + 1) & 1 : -1;
+      vbuf.replaceChildren(...[0, 1].map((p) => h('div', { class: `gfx-vbuf-box${p === writing ? ' writing' : p === reading ? ' reading' : ''}` },
+        h('div', { class: 'gfx-vbuf-cap' }, h('span', null, `buffer ${p}`), h('span', null, p === writing ? 'the kernel writes' : p === reading ? 'the command unit reads' : '')),
+        h('table', null, h('tr', null, ...['word', 'packed', 'X', 'Y', 'Z'].map((t) => h('th', null, t))),
+          ...mesh.verts.map((_, i) => {
+            const a = GFX.vbuf + 8 * p + i, w = u(sim, node(sim, 'core', 'mem', 'mem', `w${a}`), 'q');
+            return h('tr', null, h('td', null, String(a)), h('td', null, w.toString(16).padStart(6, '0')),
+              h('td', null, String(w & 255)), h('td', null, String((w >> 8) & 255)), h('td', null, String((w >> 16) & 255)));
+          })))));
+    };
     const paint = () => {
       const sim = stage.sim;
       if (!sim) return;
-      cap.paint(cv);
-      cap.beam(cv);
-      if (cap.blank()) cap.note(cv, rec.frames ? ['The next frame is on its way:', 'the scan-out sends it after the swap.'] : ['Nothing drawn yet.', 'Run, or One frame.']);
+      if (mem.sel === 'screen') {
+        cap.paint(cv);
+        cap.beam(cv);
+        memLabel.textContent = 'Screen: what the scan-out sent';
+        if (cap.blank()) cap.note(cv, rec.frames ? ['The next frame is on its way:', 'the scan-out sends it after the swap.'] : ['Nothing drawn yet.', 'Run, or One frame.']);
+      } else memLabel.textContent = mem.paintLarge(cv);
+      mem.update();
+      paintVbuf(sim);
       const span = shownAt.length > 1 ? (shownAt[shownAt.length - 1] - shownAt[0]) / 1000 : 0;
       const fps = running && span > 0 ? (shownAt.length - 1) / span : 0;
       const engine = 'engine' in sim ? (sim as unknown as { engine: string }).engine : 'gate';
@@ -204,8 +253,9 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
     const el = h('div', { class: 'mem-panel cpu-panel gfx-panel', 'data-dock': 'right' }, title,
       h('div', { class: 'cpu-body' },
         h('div', { class: 'param-row', style: 'margin-bottom:6px' }, meshSel),
-        h('div', { class: 'gfx-screen-wrap' }, cv),
-        h('div', { class: 'param-row', style: 'margin-top:6px' }, runBtn, frameBtn, resetSel), status, checks, tl,
+        h('div', { class: 'gfx-screen-wrap' }, cv, memLabel),
+        h('div', { class: 'param-row', style: 'margin-top:6px' }, runBtn, frameBtn, resetSel), status, checks, mem.el,
+        h('details', { class: 'gfx-mem-fold', open: true }, h('summary', null, `Vertex buffers · word ${GFX.vbuf} on`), vbuf), tl,
         h('p', { class: 'cpu-sec-hint' }, `The screen shows what the scan-out sends, ${FB_W} × ${FB_W}. Run simulates every gate of the pipeline on the cycle engine; probes and the timing diagram need gate delays, so they are off here.`)));
     title.addEventListener('click', () => { el.classList.toggle('collapsed'); stage.setInset(el.classList.contains('collapsed') ? 0 : el.getBoundingClientRect().width + 24); });
     paint();

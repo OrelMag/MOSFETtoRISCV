@@ -9,7 +9,8 @@ import {
 import { GPU30Z, VERTEX_PINS } from '../lib/raster';
 import { h } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
-import { CLEAR, type DrawLink, opInputs, rgb332, screenPanel } from './screen';
+import { rgb332 } from '../gfx/raster';
+import { CLEAR, type DrawLink, opInputs, screenPanel } from './screen';
 
 /** The pad's colours (RGB332): greys, then a wheel, then earth and sky. */
 export const PAD_COLOURS = [0x00, 0x49, 0x92, 0xff, 0xe0, 0xf0, 0xfc, 0x1c, 0x34, 0x1f, 0x57, 0x03, 0x63, 0xe3, 0x64, 0xd1];

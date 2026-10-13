@@ -223,3 +223,8 @@ export class RefFrame {
     }
   }
 }
+
+/** RGB332 → 8-bit red, green, blue (a channel's top code is full brightness). */
+export function rgb332(v: number): [number, number, number] {
+  return [Math.round(((v >> 5) & 7) * 255 / 7), Math.round(((v >> 2) & 7) * 255 / 7), Math.round((v & 3) * 255 / 3)];
+}
