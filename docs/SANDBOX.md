@@ -165,7 +165,9 @@ resistor over stored charge.
   circuit runs, the listing and the editor follow the address the ROM is reading.
 - **ROM (words)**: 2^k words of 8, 16 or 32 bits, addressed by word.
 - **RAM**: up to 2^6 words. The properties show its contents live, and can set **initial
-  contents** applied at power-on (Apply & reset).
+  contents** applied at power-on (Apply & reset). **Ports** (2, 4 or 8, up to 1K words): a read and a write
+  port per lane (`addr<i>`, `wd<i>`, a `we` bit each → `rd<i>`); every port reads in the same cycle and the
+  highest port wins a word several write. The lane cores' benches use it.
 - **Examples ▸**: Fetch loop (PC, PC + 4 and a ROM, joined by a pair of `pc` pointers), a 4-bit
   counter on a 7-segment display, Console, Screen, Computer, Shared bus, Wired-AND, Wired-OR. Each
   loads as a new chip.
