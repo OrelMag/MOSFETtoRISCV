@@ -30,6 +30,11 @@ export interface SimtOptions {
   imemWords?: number;
   /** Stack entries (nested splits). */
   depth?: number;
+  /** This warp's number (tid = warp · lanes + lane) and how many warps the core holds (CSR nwarps). */
+  warp?: number;
+  warps?: number;
+  /** A data memory shared with other warps (warps.ts); else one of dmemWords. */
+  dmem?: Uint32Array;
 }
 
 export interface WarpStep {
@@ -47,7 +52,7 @@ export interface WarpStep {
   halted: boolean;
 }
 
-const SIMT_CSR = new Set([CSRS.lane, CSRS.warp, CSRS.nlanes, CSRS.tid, CSRS.tmask]);
+const SIMT_CSR = new Set([CSRS.lane, CSRS.warp, CSRS.nlanes, CSRS.tid, CSRS.tmask, CSRS.nwarps]);
 
 export const popcount = (m: number) => { let c = 0; for (; m; m &= m - 1) c++; return c; };
 
@@ -56,8 +61,9 @@ export class SimtISS {
   readonly lanes: ISS[];
   readonly dmem: Uint32Array;
   readonly depth: number;
-  /** Warp number (one warp until the scheduler chapter). */
-  readonly warp = 0;
+  /** Warp number, and the warps the core holds. */
+  readonly warp: number;
+  readonly warps: number;
   pc = 0;
   mask: number;
   stack: SimtEntry[] = [];
@@ -75,8 +81,10 @@ export class SimtISS {
     this.depth = opts.depth ?? 4;
     this.full = 2 ** this.n - 1;
     this.mask = this.full;
-    const dmemWords = opts.dmemWords ?? 32;
-    this.dmem = new Uint32Array(dmemWords);
+    this.warp = opts.warp ?? 0;
+    this.warps = opts.warps ?? 1;
+    const dmemWords = opts.dmem?.length ?? opts.dmemWords ?? 32;
+    this.dmem = opts.dmem ?? new Uint32Array(dmemWords);
     this.lanes = Array.from({ length: this.n }, () => {
       const l = new ISS(program, { dmemWords, imemWords: opts.imemWords ?? 64 });
       l.dmem = this.dmem;
@@ -150,12 +158,12 @@ export class SimtISS {
           this.mask = p || (lead < 0 ? 0 : reg(lead, d.rs2) & this.full);
           break;
         }
-        default: break; // wspawn, bar: one warp has nobody to start or wait for
+        default: break; // wspawn, bar: one warp has nobody to start or wait for (warps.ts runs them)
       }
     } else if (d.opcode === OPCODES.SYSTEM && d.funct3 === 2 && d.rs1 === 0 && SIMT_CSR.has(csrA)) {
       for (let i = 0; i < this.n; i++) {
         if (!this.on(i)) continue;
-        const v = csrA === CSRS.lane ? i : csrA === CSRS.warp ? this.warp : csrA === CSRS.nlanes ? this.n : csrA === CSRS.tid ? this.warp * this.n + i : mask;
+        const v = csrA === CSRS.lane ? i : csrA === CSRS.warp ? this.warp : csrA === CSRS.nlanes ? this.n : csrA === CSRS.tid ? this.warp * this.n + i : csrA === CSRS.nwarps ? this.warps : mask;
         if (d.rd !== 0) this.lanes[i].x[d.rd] = v >>> 0;
         lanes[i] = { pc, word, text: disasm(word, pc), rd: d.rd, value: v >>> 0, halted: false };
       }
