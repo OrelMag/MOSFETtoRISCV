@@ -39,3 +39,4 @@ export * from './cpu4';
 export * from './fsm';
 export * from './fsms';
 export * from './raster';
+export * from './gfxpipe';

@@ -1,0 +1,227 @@
+// Chapter 31 widgets: the pipeline scene (the vertex kernel's warp core, the command unit, chapter 30's GPU) with
+// its panel (the screen, frames per second measured in the page, what each unit did in the last frame, the vertex
+// kernel in lock-step with its golden model and every frame checked against the reference picture), and the cost
+// widget (NANDs per stage, cycles per frame by phase, the same frame drawn in software on the lanes).
+
+import { FB_W } from '../gfx/raster';
+import { FrameRecorder, type FrameRecord, framePicture, PIPE_COSTS, type SpanKind } from '../gfx/pipeline';
+import { cuState, gpu31 } from '../lib/gfxpipe';
+import { assemble } from '../riscv/asm';
+import { GFX, meshById, meshData, MESHES, type Mesh, vertexKernel } from '../riscv/gfxprograms';
+import { WarpISS } from '../riscv/warps';
+import type { HierNode } from '../sim/flatten';
+import type { Sim } from '../sim/sim';
+import { pack } from '../sim/values';
+import { h, s } from '../ui/dom';
+import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
+import { backFrame, ScanCapture } from './screen';
+
+const kid = (n: HierNode, ...p: string[]) => p.reduce((x, k) => x.children!.get(k)!, n);
+const u = (sim: Sim, node: HierNode, port: string) => pack(sim.getBits(node.ports[port])) >>> 0;
+const fmt = (n: number) => n.toLocaleString('en').replace(/,/g, ' ');
+
+export interface PipeSceneOptions { highlight?: string[]; path?: string[] }
+
+/** The whole pipeline drawing a mesh, on the cycle engine (hundreds of thousands of gates). */
+export function pipelineScene(mesh: Mesh['id'], opts: PipeSceneOptions = {}): Scene {
+  return {
+    root: gpu31(meshById(mesh)), inputs: { clk: 0 }, path: opts.path, highlight: opts.highlight ?? ['cmd'], autoClock: false, engine: 'cycle',
+    panels: [pipelinePanel(mesh, opts)],
+  };
+}
+
+/** Colours of the timeline's kinds (categorical, fixed order) and their names. */
+const KIND: Record<SpanKind, { c: string; name: string }> = {
+  clear: { c: 'var(--series-1)', name: 'clear' },
+  draw: { c: 'var(--series-2)', name: 'triangles' },
+  wait: { c: 'var(--series-3)', name: 'waiting for vsync' },
+  kernel: { c: 'var(--series-4)', name: 'vertex kernel' },
+  read: { c: 'var(--muted)', name: 'reads' },
+};
+
+/** The last frame as three lanes over its cycles. */
+function timeline(f: FrameRecord | null): SVGElement | HTMLElement {
+  if (!f) return h('p', { class: 'cpu-sec-hint' }, 'Run a frame to see who works when.');
+  const W = 270, LH = 14, X0 = 0, lanes: [string, keyof FrameRecord['lanes']][] = [['warp core', 'kernel'], ['rasterizer', 'raster'], ['command unit', 'cmd']];
+  const sx = (t: number) => X0 + (t / f.cycles) * W;
+  const svg = s('svg', { class: 'gfx-timeline', viewBox: `0 0 ${W} ${lanes.length * (LH + 16)}`, role: 'img',
+    'aria-label': `The last frame: ${f.cycles} cycles. Clear ${f.totals.clear}, triangles ${f.totals.draw}, waiting for vsync ${f.totals.wait}; the vertex kernel ran ${f.totals.kernel}.` });
+  lanes.forEach(([name, key], i) => {
+    const y = i * (LH + 16);
+    svg.append(s('text', { x: 0, y: y + 10, class: 'gfx-tl-name' }, name));
+    svg.append(s('rect', { x: X0, y: y + 13, width: W, height: LH, rx: 3, class: 'gfx-tl-bg' }));
+    for (const sp of f.lanes[key]) {
+      const r = s('rect', { x: sx(sp.from), y: y + 13, width: Math.max(1.5, sx(sp.to) - sx(sp.from)), height: LH, rx: 2, fill: KIND[sp.kind].c });
+      r.append(s('title', null, `${KIND[sp.kind].name}: cycles ${fmt(sp.from)} – ${fmt(sp.to - 1)} (${fmt(sp.to - sp.from)})`));
+      svg.append(r);
+    }
+  });
+  return svg;
+}
+
+function legend(f: FrameRecord | null): HTMLElement {
+  const t = f?.totals;
+  return h('div', { class: 'gfx-legend' }, ...(['clear', 'draw', 'wait', 'kernel'] as SpanKind[]).map((k) =>
+    h('span', null, h('i', { style: `background:${KIND[k].c}` }), KIND[k].name, t ? h('b', null, fmt(t[k as keyof typeof t])) : '')));
+}
+
+function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
+  const mesh = meshById(meshId);
+  const words = assemble(vertexKernel(mesh)).words;
+  return (stage: Stage): Widget => {
+    let running: number | null = null, rate = 0;
+    const runBtn = h('button', { class: 'btn sm primary' }, 'Run');
+    const frameBtn = h('button', { class: 'btn sm', title: 'run until the next frame is drawn and the scan-out has sent it to the screen' }, 'One frame');
+    const stop = () => { if (running) cancelAnimationFrame(running); running = null; runBtn.textContent = 'Run'; };
+    const cap = new ScanCapture(stage, stop);
+    const rec = new FrameRecorder();
+    // the vertex kernel's golden model, launched with the hardware's warp, stepped when it issues
+    const fresh = () => new WarpISS(words, { warps: 1, lanes: 4, dmemWords: 2 ** 7, data: meshData(mesh), mul: true });
+    let m = fresh();
+    let mismatch: string | null = null, stepped = false;
+    let checked = null as { frame: number; bad: number } | null, vbufOk = null as boolean | null;
+    /** Wall-clock times of the frames shown, for frames per second. */
+    let shownAt: number[] = [];
+    const node = (sim: Sim, ...p: string[]) => kid(sim.design.root, ...p);
+
+    stage.edgeHooks.add({
+      before: () => {
+        const sim = stage.sim;
+        if (!sim) return;
+        const cmd = node(sim, 'cmd'), core = node(sim, 'core');
+        const st = cuState(u(sim, cmd, 'state')), busy = u(sim, core, 'halted') === 0;
+        stepped = false;
+        if (u(sim, cmd, 'launch')) m.launch();
+        else if (u(sim, core, 'retire') && !mismatch) {
+          try { m.step(0); stepped = true; } catch (e) { mismatch = (e as Error).message; }
+        }
+        // the command unit starts reading this frame's vertex buffer (the kernel's stores landed long ago): the model's
+        if (st === 'count' && !mismatch) {
+          const p = rec.frames & 1;
+          vbufOk = mesh.verts.every((_, i) => u(sim, node(sim, 'core', 'mem', 'mem', `w${GFX.vbuf + 8 * p + i}`), 'q') === m.dmem[GFX.vbuf + 8 * p + i]);
+          if (!vbufOk) mismatch = 'the vertex buffer differs from the golden model';
+        }
+        // the frame is drawn: the back frame against the reference picture
+        if (st === 'swap') {
+          const pic = backFrame(sim), want = framePicture(mesh, rec.frames);
+          let bad = 0;
+          if (pic) for (let i = 0; i < pic.length; i++) if (pic[i] !== want[i]) bad++;
+          checked = { frame: rec.frames, bad };
+        }
+        if (rec.sample(stage.cycles, st, busy, u(sim, node(sim, 'rast'), 'busy') === 1)) {
+          shownAt.push(performance.now());
+          if (shownAt.length > 6) shownAt = shownAt.slice(-6);
+        }
+      },
+      after: () => {
+        const sim = stage.sim;
+        if (!sim || !stepped || mismatch) return;
+        if (u(sim, node(sim, 'core', 'warp0'), 'pc') !== m.warps[0].pc) mismatch = 'the warp\'s PC differs from the golden model';
+      },
+    });
+    type Saved = { w: ReturnType<WarpISS['warps'][number]['save']>; active: boolean[]; dmem: Uint32Array; rec: unknown; mismatch: string | null; checked: typeof checked; vbufOk: boolean | null };
+    stage.historyHooks.add({
+      save: (): Saved => ({ w: m.warps[0].save(), active: m.active.slice(), dmem: m.dmem.slice(), rec: rec.save(), mismatch, checked, vbufOk }),
+      restore: (v) => {
+        const st = v as Saved;
+        stop();
+        m.warps[0].restore(st.w); m.active = st.active.slice(); m.dmem.set(st.dmem);
+        rec.restore(st.rec);
+        mismatch = st.mismatch; checked = st.checked; vbufOk = st.vbufOk;
+        shownAt = [];
+      },
+    });
+
+    const runFor = (until: () => boolean) => {
+      if (running) return stop();
+      stage.checkpoint();
+      runBtn.textContent = 'Pause';
+      // cycles for ~12 ms of each animation frame, then one redraw
+      const tick = () => {
+        const t0 = performance.now(), deadline = t0 + 12;
+        const n = stage.runCycles(1e7, () => until() || performance.now() > deadline);
+        const dt = performance.now() - t0;
+        if (n > 0 && dt > 0) rate = Math.round((n * 1000) / Math.max(dt, 16.7));
+        if (until() || mismatch) return stop();
+        running = requestAnimationFrame(tick);
+      };
+      running = requestAnimationFrame(tick);
+    };
+    runBtn.addEventListener('click', () => runFor(() => false));
+    frameBtn.addEventListener('click', () => {
+      stop();
+      // the frame is drawn at the flip; the screen has it a scan-out later (the next vsync)
+      const f = rec.frames;
+      let sent = -1;
+      runFor(() => {
+        if (sent < 0 && rec.frames > f) sent = cap.frames;
+        return sent >= 0 && cap.frames > sent;
+      });
+    });
+    const meshSel = h('select', { 'aria-label': 'mesh' }, ...MESHES.map((x) => h('option', { value: x.id }, x.title))) as HTMLSelectElement;
+    meshSel.value = meshId;
+    meshSel.addEventListener('change', () => stage.load(pipelineScene(meshSel.value as Mesh['id'], opts)));
+
+    const cv = h('canvas', { class: 'gfx-screen', width: 256, height: 256, 'aria-label': 'the screen' }) as HTMLCanvasElement;
+    const status = h('div', { class: 'cpu-status' });
+    const checks = h('div', { class: 'cpu-status' });
+    const tl = h('div', { class: 'gfx-tl-wrap' });
+    const paint = () => {
+      const sim = stage.sim;
+      if (!sim) return;
+      cap.paint(cv);
+      cap.beam(cv);
+      const span = shownAt.length > 1 ? (shownAt[shownAt.length - 1] - shownAt[0]) / 1000 : 0;
+      const fps = running && span > 0 ? (shownAt.length - 1) / span : 0;
+      const engine = 'engine' in sim ? (sim as unknown as { engine: string }).engine : 'gate';
+      status.replaceChildren(
+        h('span', null, `cycle ${fmt(stage.cycles)}`),
+        h('span', { title: 'frames the command unit has finished (each one swapped to the screen at vsync)' }, `${rec.frames} frame${rec.frames === 1 ? '' : 's'} drawn`),
+        ...(running && rate ? [h('span', { title: `gate level in this page, on the ${engine === 'cycle' ? 'cycle engine (settled values at every edge)' : 'event-driven simulator'}` }, `${fmt(rate)} cycles/s`)] : []),
+        ...(fps ? [h('span', { title: 'frames drawn per second of wall-clock time, measured here' }, `${fps.toFixed(fps < 10 ? 2 : 1)} frames/s`)] : []));
+      checks.replaceChildren(
+        mismatch ? h('span', { class: 'bad' }, `Vertex kernel: ${mismatch}`)
+          : h('span', { class: vbufOk ? 'good' : '' }, vbufOk ? 'Vertex kernel: in step with its golden model' : 'Vertex kernel: lock-step with its golden model'),
+        ...(checked ? [h('span', { class: checked.bad ? 'bad' : 'good' }, checked.bad ? `Frame ${checked.frame}: ${checked.bad} pixels differ from the reference` : `Frame ${checked.frame}: the reference picture, pixel for pixel`)] : []));
+      tl.replaceChildren(h('div', { class: 'cpu-sec' }, rec.last ? `The last frame: ${fmt(rec.last.cycles)} cycles` : 'The last frame'), timeline(rec.last), legend(rec.last));
+    };
+    const title = h('h4', null, 'Screen 64 × 64 · the pipeline', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+    const el = h('div', { class: 'mem-panel cpu-panel gfx-panel', 'data-dock': 'right' }, title,
+      h('div', { class: 'cpu-body' },
+        h('div', { class: 'param-row', style: 'margin-bottom:6px' }, meshSel),
+        h('div', { class: 'gfx-screen-wrap' }, cv),
+        h('div', { class: 'param-row', style: 'margin-top:6px' }, runBtn, frameBtn), status, checks, tl,
+        h('p', { class: 'cpu-sec-hint' }, `The screen shows what the scan-out sends, ${FB_W} × ${FB_W}. Run simulates every gate of the pipeline on the cycle engine; probes and the timing diagram need gate delays, so they are off here.`)));
+    title.addEventListener('click', () => { el.classList.toggle('collapsed'); stage.setInset(el.classList.contains('collapsed') ? 0 : el.getBoundingClientRect().width + 24); });
+    paint();
+    return { el, update: paint, destroy: stop };
+  };
+}
+
+// ---- where the gates go ---------------------------------------------------------------------------------
+
+/** NANDs per stage and cycles per frame by phase, measured (tests/gfxpipe.test.ts checks every number). */
+export function costWidget(): Widget {
+  const C = PIPE_COSTS;
+  const maxN = Math.max(...C.stages.map((x) => x.nands));
+  const gates = h('table', { class: 'gfx-cost' },
+    h('thead', null, h('tr', null, h('th', null, 'Stage'), h('th', { class: 'n' }, 'NANDs of logic'), h('th', null, ''), h('th', null, 'Memory'))),
+    h('tbody', null, ...C.stages.map((x) => h('tr', null, h('td', null, x.name), h('td', { class: 'n' }, fmt(x.nands)),
+      h('td', { class: 'bar' }, h('i', { style: `width:${Math.max(0.5, (100 * x.nands) / maxN)}%` })), h('td', { class: 'mem' }, x.memory)))));
+  const maxC = Math.max(...C.frames.map((f) => f.clear + f.draw + f.wait));
+  const kinds: ['clear' | 'draw' | 'wait', SpanKind][] = [['clear', 'clear'], ['draw', 'draw'], ['wait', 'wait']];
+  const frames = h('table', { class: 'gfx-cost' },
+    h('thead', null, h('tr', null, h('th', null, 'One frame'), h('th', { class: 'n' }, 'Cycles'), h('th', null, ''), h('th', null, 'Of which'))),
+    h('tbody', null, ...C.frames.map((f) => {
+      const tot = f.clear + f.draw + f.wait;
+      return h('tr', null, h('td', null, f.name), h('td', { class: 'n' }, fmt(tot)),
+        h('td', { class: 'bar' }, h('div', { class: 'stack' }, ...kinds.filter(([k]) => f[k] > 0).map(([k, sk]) => h('i', { style: `width:${(100 * f[k]) / maxC}%;background:${KIND[sk].c}`, title: `${KIND[sk].name}: ${fmt(f[k])}` })))),
+        h('td', { class: 'mem' }, kinds.filter(([k]) => f[k] > 0).map(([k, sk]) => `${KIND[sk].name} ${fmt(f[k])}`).join(' · ') + (f.kernel ? ` · vertex kernel ${fmt(f.kernel)}, during the clear` : '')));
+    })));
+  const el = h('div', { class: 'widget gfx-costs' },
+    h('div', { class: 'lvc-title' }, 'Gates per stage'), gates,
+    h('p', { class: 'cpu-sec-hint' }, 'Memories as flip-flops would be millions of NANDs (the two frames alone 1.35 million); real ones are SRAM or DRAM, so they are counted in bits.'),
+    h('div', { class: 'lvc-title', style: 'margin-top:14px' }, 'Cycles in a frame'), frames,
+    h('div', { class: 'gfx-legend' }, ...kinds.map(([, k]) => h('span', null, h('i', { style: `background:${KIND[k].c}` }), KIND[k].name))));
+  return { el };
+}

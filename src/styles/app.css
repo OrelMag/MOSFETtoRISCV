@@ -1374,3 +1374,23 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .gfx-edge-info .v { font: 600 12.5px var(--font-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .gfx-edge-info .v.good { color: var(--good); }
 .gfx-edge-info .v.bad { color: var(--bad); }
+/* chapter 31: the pipeline panel's timeline, the cost tables */
+.gfx-tl-wrap { margin-top: 6px; }
+.gfx-timeline { display: block; width: 100%; height: auto; margin: 2px 0 4px; }
+.gfx-tl-name { font-size: 9.5px; fill: var(--text-2); }
+.gfx-tl-bg { fill: var(--surface-3); }
+.gfx-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--text-2); }
+.gfx-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.gfx-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.gfx-legend b { font: 600 11px var(--font-mono); color: var(--text); }
+.gfx-cost { width: 100%; border-collapse: collapse; font-size: 13px; }
+.gfx-cost th { text-align: left; font-weight: 500; color: var(--muted); padding: 3px 8px 3px 0; border-bottom: 1px solid var(--border); }
+.gfx-cost td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.gfx-cost .n { text-align: right; font: 600 12.5px var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gfx-cost .bar { width: 34%; min-width: 90px; }
+.gfx-cost .bar i { display: inline-block; height: 10px; border-radius: 0 3px 3px 0; background: var(--series-1); vertical-align: middle; }
+.gfx-cost .stack { display: flex; gap: 2px; }
+.gfx-cost .stack i { border-radius: 0; }
+.gfx-cost .stack i:last-child { border-radius: 0 3px 3px 0; }
+.gfx-cost .mem { color: var(--text-2); font-size: 12px; }
+@media (max-width: 700px) { .gfx-cost .mem { display: none; } }

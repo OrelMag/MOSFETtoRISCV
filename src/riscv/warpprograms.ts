@@ -3,6 +3,8 @@
 // memory from the start (`data`); `expect` gives result words computed here, independently of the
 // models and the hardware.
 
+import { GFX, type Mesh, MESHES, meshData, packVertex, transformed, vertexKernel } from './gfxprograms';
+
 export interface WarpProgram {
   id: string;
   title: string;
@@ -207,7 +209,20 @@ end:    j     end`,
     data: matData,
     expect: matExpect,
   },
+  ...MESHES.map(vertexProgram),
 ];
+
+/** Chapter 31's vertex kernel for one mesh, frame 0: one warp of four lanes, the vertex buffer as its result. */
+function vertexProgram(m: Mesh): WarpProgram {
+  return {
+    id: m.id === 'cube' ? 'vertexCube' : 'vertexTri',
+    title: m.id === 'cube' ? 'Vertex kernel: the cube, frame 0' : 'Vertex kernel: the triangle, frame 0',
+    mul: true, threads: 4,
+    source: () => vertexKernel(m),
+    data: () => meshData(m),
+    expect: () => new Map([...transformed(m, 0).map((v, i) => [GFX.vbuf + i, packVertex(v)] as [number, number]), [GFX.frame, 1]]),
+  };
+}
 
 /** 64 values in 0 … 15, some bins much fuller than others. */
 const HIST = range(64).map((i) => ((i * i * 7 + i * 3) >> 2) % 16);

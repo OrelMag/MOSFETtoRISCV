@@ -107,11 +107,87 @@ export function depthScene(kind: 'depth' | 'blend'): Scene {
 
 interface PanelOpts { gpu: boolean; scripts?: DrawScript[] }
 
+/**
+ * What the screen shows: the last frame the scan-out sent (RGB332) and which pixels it has sent at all, sampled at
+ * every rising edge from the root's `pixels` at the scan-out's word address; vsync pulses counted. Back restores it.
+ */
+export class ScanCapture {
+  shown = new Uint8Array(W * W);
+  seen = new Uint8Array(W * W);
+  frames = 0;
+  constructor(private stage: Stage, onRestore?: () => void) {
+    stage.edgeHooks.add({
+      before: () => {
+        const sim = stage.sim;
+        if (!sim) return;
+        const root = sim.design.root, a = this.addr();
+        const bits = sim.getBits(root.ports.pixels);
+        for (let j = 0; j < 4; j++) {
+          let v = 0, known = true;
+          for (let i = 0; i < 8; i++) { const b = bits[8 * j + i]; if (b === 1) v |= 1 << i; else if (b !== 0) known = false; }
+          this.shown[4 * a + j] = v;
+          this.seen[4 * a + j] = known ? 1 : 0;
+        }
+        if (val(sim, root.ports.vsync)) this.frames++;
+      },
+    });
+    stage.historyHooks.add({
+      save: () => ({ shown: this.shown.slice(), seen: this.seen.slice(), frames: this.frames }),
+      restore: (st) => {
+        const v = st as { shown: Uint8Array; seen: Uint8Array; frames: number };
+        onRestore?.();
+        this.shown = v.shown.slice(); this.seen = v.seen.slice(); this.frames = v.frames;
+      },
+    });
+  }
+
+  /** The word the scan-out reads now. */
+  addr(): number {
+    const sim = this.stage.sim, sc = sim && kid(sim.design.root, 'scan');
+    return sim && sc ? val(sim, sc.ports.ra) : 0;
+  }
+
+  /** Draw a 64 × 64 picture (src, else what was sent) into cv, scaled up without smoothing; pixels never sent are grey. */
+  paint(cv: HTMLCanvasElement, src?: Uint8Array | null): void {
+    const off = document.createElement('canvas');
+    off.width = off.height = W;
+    const ctx = off.getContext('2d')!, im = ctx.createImageData(W, W);
+    const p = src ?? this.shown;
+    for (let i = 0; i < W * W; i++) {
+      const [r, g, b] = src || this.seen[i] ? rgb332(p[i]) : [40, 44, 56];
+      im.data.set([r, g, b, 255], 4 * i);
+    }
+    ctx.putImageData(im, 0, 0);
+    const c = cv.getContext('2d')!;
+    c.imageSmoothingEnabled = false;
+    c.drawImage(off, 0, 0, cv.width, cv.height);
+  }
+
+  /** The beam: the row the scan-out reads now, and its word. */
+  beam(cv: HTMLCanvasElement): void {
+    const c = cv.getContext('2d')!, S = cv.width / W, a = this.addr(), y = Math.floor((4 * a) / W), x = (4 * a) % W;
+    c.fillStyle = 'rgba(255,255,255,0.18)';
+    c.fillRect(0, y * S, cv.width, S);
+    c.strokeStyle = 'rgba(255,255,255,0.9)';
+    c.strokeRect(x * S + 0.5, y * S + 0.5, 4 * S - 1, S - 1);
+  }
+}
+
+/** The back frame's pixels, from the memory leaves (null when the frame is not simulated as a lookup). */
+export function backFrame(sim: Sim): Uint8Array | null {
+  const front = val(sim, kid(sim.design.root, 'scan')!.ports.front), fb = kid(sim.design.root, 'fb', `fb${front ? 0 : 1}`);
+  const out = new Uint8Array(W * W);
+  for (let j = 0; j < 4; j++) {
+    const st = ramLeafState(sim, kid(fb!, `bank${j}`));
+    if (!st) return null;
+    for (let a = 0; a < FB_WORDS; a++) out[4 * a + j] = st.x[a] ? 0 : st.mem[a];
+  }
+  return out;
+}
+
 function screenPanel(opts: PanelOpts): ScenePanel {
   return (stage: Stage): Widget => {
-    /** What the screen shows: the last frame the scan-out sent (RGB332), and which pixels it has sent at all. */
-    let shown = new Uint8Array(W * W), seen = new Uint8Array(W * W);
-    let frames = 0, view: 'screen' | 'back' = 'screen';
+    let view: 'screen' | 'back' = 'screen';
     let running: number | null = null, rate = 0;
     /** Cycles a second (0: as fast as the simulation goes). */
     let cap = opts.gpu ? 0 : 1024;
@@ -120,8 +196,6 @@ function screenPanel(opts: PanelOpts): ScenePanel {
     speed.value = String(cap);
     speed.addEventListener('change', () => { cap = Number(speed.value); });
     const cv = h('canvas', { class: 'gfx-screen', width: 256, height: 256, 'aria-label': 'the screen' }) as HTMLCanvasElement;
-    const off = document.createElement('canvas');
-    off.width = off.height = W;
     const status = h('div', { class: 'cpu-status' });
     const runBtn = h('button', { class: 'btn sm primary' }, 'Run');
     const frameBtn = h('button', { class: 'btn sm', title: 'run until the scan-out has sent one whole frame' }, 'One frame');
@@ -131,6 +205,7 @@ function screenPanel(opts: PanelOpts): ScenePanel {
     const node = (sim: Sim, ...p: string[]) => kid(sim.design.root, ...p);
 
     const stop = () => { if (running) cancelAnimationFrame(running); running = null; runBtn.textContent = 'Run'; };
+    const cap0 = new ScanCapture(stage, stop);
     /** Draws still to start, and a swap after them. */
     let queue: DrawOp[] = [], swapAfter = false;
     const busyNow = () => { const sim = stage.sim; return !!sim && sim.design.root.ports.busy !== undefined && val(sim, sim.design.root.ports.busy) === 1; };
@@ -175,8 +250,8 @@ function screenPanel(opts: PanelOpts): ScenePanel {
     runBtn.addEventListener('click', () => runFor(() => false));
     frameBtn.addEventListener('click', () => {
       stop();
-      const f = frames;
-      runFor(() => frames > f);
+      const f = cap0.frames;
+      runFor(() => cap0.frames > f);
     });
     viewSel.addEventListener('change', () => { view = viewSel.value as typeof view; paint(); });
     sync.addEventListener('change', () => stage.setInput('sync', sync.checked ? 1 : 0));
@@ -208,64 +283,13 @@ function screenPanel(opts: PanelOpts): ScenePanel {
       controls.splice(2, 0, drawBtn);
     }
 
-    const scanAddr = () => {
-      const sim = stage.sim, sc = sim && node(sim, 'scan');
-      return sim && sc ? val(sim, sc.ports.ra) : 0;
-    };
-    stage.edgeHooks.add({
-      before: () => {
-        const sim = stage.sim;
-        if (!sim) return;
-        const root = sim.design.root, a = scanAddr();
-        const bits = sim.getBits(root.ports.pixels);
-        for (let j = 0; j < 4; j++) {
-          let v = 0, known = true;
-          for (let i = 0; i < 8; i++) { const b = bits[8 * j + i]; if (b === 1) v |= 1 << i; else if (b !== 0) known = false; }
-          shown[4 * a + j] = v;
-          seen[4 * a + j] = known ? 1 : 0;
-        }
-        if (val(sim, root.ports.vsync)) frames++;
-      },
-    });
-    stage.historyHooks.add({
-      save: () => ({ shown: shown.slice(), seen: seen.slice(), frames }),
-      restore: (s) => { const v = s as { shown: Uint8Array; seen: Uint8Array; frames: number }; stop(); shown = v.shown.slice(); seen = v.seen.slice(); frames = v.frames; },
-    });
-
-    /** The back frame's pixels, from the memory leaves (null when the frame is not simulated as a lookup). */
-    const backFrame = (sim: Sim): Uint8Array | null => {
-      const front = val(sim, node(sim, 'scan')!.ports.front), fb = node(sim, 'fb', `fb${front ? 0 : 1}`);
-      const out = new Uint8Array(W * W);
-      for (let j = 0; j < 4; j++) {
-        const st = ramLeafState(sim, kid(fb!, `bank${j}`));
-        if (!st) return null;
-        for (let a = 0; a < FB_WORDS; a++) out[4 * a + j] = st.x[a] ? 0 : st.mem[a];
-      }
-      return out;
-    };
-
     const paint = () => {
       const sim = stage.sim;
       if (!sim) return;
-      const ctx = off.getContext('2d')!, im = ctx.createImageData(W, W);
-      const back = view === 'back' && opts.gpu ? backFrame(sim) : null;
-      const src = back ?? shown;
-      for (let i = 0; i < W * W; i++) {
-        const [r, g, b] = back || seen[i] ? rgb332(src[i]) : [40, 44, 56];
-        im.data.set([r, g, b, 255], 4 * i);
-      }
-      ctx.putImageData(im, 0, 0);
+      cap0.paint(cv, view === 'back' && opts.gpu ? backFrame(sim) : null);
       const c = cv.getContext('2d')!, S = cv.width / W;
-      c.imageSmoothingEnabled = false;
-      c.drawImage(off, 0, 0, cv.width, cv.height);
-      if (view === 'screen' || !opts.gpu) {
-        // the beam: the row the scan-out reads now
-        const a = scanAddr(), y = Math.floor((4 * a) / W), x = (4 * a) % W;
-        c.fillStyle = 'rgba(255,255,255,0.18)';
-        c.fillRect(0, y * S, cv.width, S);
-        c.strokeStyle = 'rgba(255,255,255,0.9)';
-        c.strokeRect(x * S + 0.5, y * S + 0.5, 4 * S - 1, S - 1);
-      } else {
+      if (view === 'screen' || !opts.gpu) cap0.beam(cv);
+      else {
         // where the rasterizer is: its tile and pixel
         const wk = node(sim, 'rast', 'walk');
         if (wk && val(sim, wk.ports.busy)) {
@@ -280,7 +304,7 @@ function screenPanel(opts: PanelOpts): ScenePanel {
       const busy = rb ? val(sim, rb.ports.busy) === 1 : false;
       status.replaceChildren(
         h('span', null, `cycle ${stage.cycles}`),
-        h('span', { title: 'vsync pulses so far: the scan-out sends a frame every ' + FB_WORDS + ' cycles' }, `${frames} frame${frames === 1 ? '' : 's'} sent`),
+        h('span', { title: 'vsync pulses so far: the scan-out sends a frame every ' + FB_WORDS + ' cycles' }, `${cap0.frames} frame${cap0.frames === 1 ? '' : 's'} sent`),
         h('span', null, `front: frame ${fr}`),
         ...(opts.gpu ? [h('span', { class: busy ? 'warn' : '' }, busy ? 'rasterizer busy' : 'rasterizer idle')] : []),
         ...(queue.length ? [h('span', null, `${queue.length} draw${queue.length > 1 ? 's' : ''} to go`)] : []),

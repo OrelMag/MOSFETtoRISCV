@@ -637,7 +637,7 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   two-warp and histogram levels
 - 🚧 4. Graphics (mockup approved 2026-10-13: quarter-pixel vertices, 18-bit edges, 4 × 4 tiles walked as bands, depth with
   chapter 20's divider, a scan-out feeding a screen panel), in three parts: ✅ 4a the rasterizer, framebuffer, scan-out,
-  depth and blending, chapter 30; ⏳ 4b the vertex kernel, command unit and chapter 31; ⏳ 4c the RV16 raster device,
+  depth and blending, chapter 30; ✅ 4b the vertex kernel, command unit and chapter 31; ⏳ 4c the RV16 raster device,
   bench, k_edge / k_tile / k_raster / k_frame and p_spin
 
 **Graphics**
@@ -647,6 +647,13 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   (the large preset 1 914 cycles against 3 368 for its box); with depth, a depth set-up (Booth, 30-bit divider, Horner;
   12 032 NANDs, +76 cycles) and a 32-bit stepper, and a ROP with a 64 × 64 × 16-bit depth buffer and alpha blending.
   Checked against gfx/raster.ts pixel for pixel and cycle for cycle (tests/raster.test.ts)
+- ✅ The graphics pipeline (chapter 31): a vertex kernel (16.16 rotation with mul, one thread a vertex) on a one-warp
+  core with a host port, a command unit (1 997 NANDs) that launches it a frame ahead, clears, reads the triangles and
+  their vertices from a double-buffered vertex buffer and feeds chapter 30's rasterizer with depth; a spinning
+  triangle (6 144 cycles a frame) and a cube (7 168–8 192) at gate level on the cycle engine, about three and two frames
+  a second in the page, every frame checked against the reference. Where the gates go: the warp core 182 214 NANDs busy
+  1 % of the frame, the clear 72 % of it (software on 16 threads clears in 804 cycles), the triangle in software 6 825
+  cycles against 1 268
 
 **Compute**
 - ✅ Lanes (chapter 26): laneCore(program, n) (lib/lanes.ts): the single-cycle front end feeding n lanes (registers,
@@ -681,10 +688,10 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
 - ⏳ The lane core's listing marks (insthw) and Slow mode, as the CPU panel has
 
 **Graphics**
-- ⏳ Framebuffer and scan-out to the pixel screen (Phase 12), double buffering, a vsync interrupt
-- ⏳ Fixed-function blocks that open to gates: edge functions and a rasterizer (bounding box, half-plane tests, a
+- ✅ Framebuffer and scan-out to a pixel screen, double buffering, flips at vsync (chapter 30)
+- ✅ Fixed-function blocks that open to gates (chapter 30): edge functions and a rasterizer (bounding box, half-plane tests, a
   tile walk), barycentric interpolation, a z-buffer test, a blend unit; fixed point first, then the FPU
-- ⏳ Vertex transform as a kernel on the compute cores; a spinning triangle (then a small mesh) with frames per
+- ✅ Vertex transform as a kernel on the compute cores (chapter 31); a spinning triangle (then a small mesh) with frames per
   second at gate level and the cost of each stage of the graphics pipeline
 
 **Campaign**
