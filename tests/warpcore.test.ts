@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { SB_CHECK, hazardSpec, warpCore, warpDecode, warpDecodeSpec } from '../src/lib';
+import { SB_CHECK, hazardSpec, regfile, rom, warpCore, warpSlot, warpDecode, warpDecodeSpec } from '../src/lib';
+import { stats } from '../src/sim/stats';
 import { assemble } from '../src/riscv/asm';
 import { clockCycle } from '../src/riscv/cosim';
 import { WARP_DMEM_K, WARP_PROGRAMS, type WarpProgram } from '../src/riscv/warpprograms';
@@ -82,4 +83,17 @@ describe('warp core (gate level) vs the warp golden model', () => {
   it('saxpy: 2 warps, 8-cycle loads', () => { cosimWarps(saxpy, 2, 4, 8); }, 600000);
   it('saxpy: 4 warps, 2 lanes, 3-cycle loads', () => { cosimWarps(saxpy, 4, 2, 3); }, 600000);
   it('sum4: 4 warps, 8-cycle loads', () => { cosimWarps(sum4, 4, 4, 8); }, 600000);
+});
+
+describe('the numbers chapter 28 quotes', () => {
+  it('saxpy cycles and instructions on 1, 2 and 4 warps with 8-cycle loads; what a warp costs', () => {
+    const p = WARP_PROGRAMS.find((x) => x.id === 'saxpy64')!;
+    const words = assemble(p.source(4)).words;
+    const run = (W: number) => warpTiming(words, { warps: W, lanes: 4, latency: 8, dmemWords: 2 ** WARP_DMEM_K, data: p.data() });
+    expect([1, 2, 4].map((W) => [run(W).cycles, run(W).issued])).toEqual([[266, 154], [192, 160], [172, 172]]);
+    const nands = (W: number) => stats(warpCore(words, { warps: W, lanes: 4, latency: 8, dmemK: WARP_DMEM_K, data: p.data() })).nands;
+    expect(4 * stats(regfile(5, 32)).nands).toBe(92564);
+    expect(nands(2) - nands(1)).toBe(110622);
+    expect([stats(rom(words, 6)).nands, stats(warpSlot(4, false)).nands, stats(SB_CHECK).nands]).toEqual([8064, 6203, 736]);
+  });
 });

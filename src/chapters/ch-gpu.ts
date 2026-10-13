@@ -1,4 +1,5 @@
 import { divergenceWidget, laneCoreScene, lanesVsCoresWidget } from '../widgets/lanes';
+import { occupancyWidget, warpCoreScene } from '../widgets/warps';
 import type { Chapter } from './types';
 
 export const chLanes: Chapter = {
@@ -141,6 +142,84 @@ export const chSimt: Chapter = {
         options: ['100 %', '75 %', '50 %', '25 %'], answer: 2,
         explain: 'The warp runs 20 instructions × 4 lanes = 80 lane-steps. Useful: 3 lanes × 10 + 1 lane × 10 = 40. So 50 %; without divergence it would be 100 %.',
       },
+    },
+  ],
+};
+
+export const chWarps: Chapter = {
+  id: 'warps', num: 28, title: 'Hiding latency', level: 'Throughput',
+  blurb: 'A memory that answers 8 cycles later: a scoreboard, several warps resident, a scheduler picking a ready one each cycle, and what each warp costs.',
+  steps: [
+    {
+      title: 'A memory that makes you wait',
+      body: `
+        <p>Until now the data memory answered in the cycle it was asked. Real memory does not: a DRAM access takes on the order of 100 ns, hundreds of cycles, and a
+        CPU hides that with caches because one thread keeps reusing a little data. A GPU streams through data it touches once, so caches help it much less.</p>
+        <p>Here the memory sits behind a <strong>pipeline of 8 cycles</strong>: a load or store enters with its warp, destination register, active lanes,
+        addresses and data, and reaches the memory 7 pipeline registers later. A load issued in cycle t is written back at the end of cycle t + 7, so an
+        instruction that needs it can issue in cycle t + 8. One request enters every cycle: the memory is slow, not busy. (Each lane still has a port of its own
+        into the memory; chapter 29 replaces them with one port and a coalescer.)</p>
+        <p>One warp runs saxpy over 64 elements already in memory: 154 instructions in 266 cycles. 112 issue slots, 42 %, pass with nothing to issue.</p>
+        <div class="try">Run to halt and read the issue timeline: after each pair of <code>lw</code>s, the warp sits striped (a load in flight) and the idle row fills.</div>`,
+      scene: () => warpCoreScene('saxpy64', { warps: 1, highlight: ['mem'] }),
+    },
+    {
+      title: 'A scoreboard',
+      body: `
+        <p>The warp need not stop at the load itself, only at the first instruction that needs its value. Each warp keeps a <strong>scoreboard</strong>: one
+        pending bit per register, set when a load to that register issues, cleared in the cycle its word is written back. Before an instruction issues, the
+        scoreboard check reads the pending bits of the registers it uses: rs1 and rs2 if its opcode reads them, rd if it writes one (a load must not overwrite
+        a register another load is about to fill). Any pending bit set: not ready.</p>
+        <p>In saxpy the two loads issue back to back, both in flight at once, and the warp stops only at <code>slli a0, t5, 1</code>, the first use of x[i].
+        A load costs the warp 8 − 1 = 7 cycles at most, less when independent work follows it: moving loads up is the compiler's job on a real GPU.</p>`,
+      scene: () => warpCoreScene('saxpy64', { warps: 1, highlight: ['hz0', 'warp0'] }),
+      challenge: {
+        kind: 'quiz', question: 'lw t5, 0(t4) issues in cycle 10 with 8-cycle loads. lw a1, 256(t4) follows. In which cycle can add a0, a0, a1 issue at the earliest?',
+        options: ['Cycle 11', 'Cycle 18', 'Cycle 19', 'Cycle 26'], answer: 2,
+        explain: 'The second load issues in cycle 11 (it does not depend on the first), so a1 is written back at the end of cycle 18 and an instruction reading it can issue in cycle 19. Waiting for each load in turn would push it to cycle 26.',
+      },
+    },
+    {
+      title: 'Many warps resident',
+      body: `
+        <p>While one warp waits, another could issue, if the core holds several. Each <strong>warp slot</strong> keeps one warp's PC, its active mask and
+        split / join stack, a running bit and its scoreboard; each lane keeps one register bank per warp, and the warp number picks the bank. Nothing else is
+        copied: the program ROM, the decoder, the ALUs and the memory are shared.</p>
+        <p>Warp 0 runs from reset and starts the others: <code>wspawn t0, t1</code> starts warps 1 to t0 − 1 at the address in t1, every lane active. A thread
+        learns who it is with <code>csrr t0, tid</code>, now warp · 4 + lane, and how many threads there are from <code>nwarps</code>: thread tid takes
+        elements tid, tid + 16, tid + 32 and tid + 48.</p>
+        <p>A returning load writes its word into its own warp's bank, through the bank's one write port. That warp sits out the cycle, so the issuing warp
+        and the load never write the same bank at once.</p>`,
+      scene: () => warpCoreScene('saxpy64', { warps: 4, highlight: ['warp0', 'warp1', 'warp2', 'warp3'] }),
+    },
+    {
+      title: 'Picking a ready warp',
+      body: `
+        <p>A warp is <strong>ready</strong> when it runs, its next instruction passes the scoreboard check, and none of its loads is being written back. The
+        <strong>scheduler</strong> is chapter 24's round-robin arbiter over the ready warps: the first at or after its pointer issues, and when two or more were
+        ready, the pointer moves past the winner. One warp issues per cycle; its PC, mask and stack move, the others' stay.</p>
+        <p>Four warps run the same 64 elements in 172 cycles for 172 instructions: not one issue slot is empty, and the 8-cycle latency is hidden entirely. Two
+        warps take 192 cycles (83 % of the slots), one warp 266.</p>
+        <div class="try">Switch between 1, 2 and 4 warps in the panel and compare the timelines: the colours interleave, and the idle row empties.</div>`,
+      scene: () => warpCoreScene('saxpy64', { warps: 4, highlight: ['sched'] }),
+      challenge: {
+        kind: 'quiz', question: 'Four warps issue 172 instructions; one warp alone issues 154 for the same 64 elements. Where do the 18 extra instructions come from?',
+        options: ['Stalls counted as instructions', 'Each extra warp runs the prologue (tid, nwarps, the stride, the loop counters) and its final jump', 'The scheduler issues bubbles', 'wspawn runs once per warp'], answer: 1,
+        explain: 'Every warp runs the 5-instruction prologue and its own j end: 6 instructions for each of the 3 extra warps. The work per element is the same; this per-warp overhead is why a kernel needs enough elements per thread.',
+      },
+    },
+    {
+      title: 'Occupancy',
+      body: `
+        <p>A warp is cheap to switch to but not cheap to keep. The second warp adds 110 622 NANDs to the core: its registers, 31 × 32 bits in each of 4 lanes
+        (92 564), a read of the program ROM for its next instruction (8 064), its slot of PC, mask, stack and scoreboard (6 203), its scoreboard check (736),
+        and wider multiplexers. Each resident warp buys issue slots only while some are still empty: past that, it only adds gates.</p>
+        <p>A real GPU turns the question around. Its register file is fixed (65 536 32-bit registers per streaming multiprocessor on recent NVIDIA parts), and a
+        kernel's register count decides how many threads fit: at 32 registers a thread, 2 048 threads (64 warps of 32); at 64 registers, half as many. That
+        fraction of the maximum is the <strong>occupancy</strong>. Fewer registers per thread, more warps, more latency hidden; too few registers, and the
+        compiler spills to slow memory instead.</p>
+        <p>The widget sweeps the warps and the load latency with the timing model, which the tests check against the gate-level core cycle for cycle.</p>`,
+      widget: occupancyWidget,
     },
   ],
 };
