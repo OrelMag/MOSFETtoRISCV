@@ -918,6 +918,7 @@ function warpCoreDrawing(b: Builder, { W, n, lsu, host }: { W: number; n: number
   P.row('dec', 'si', 'in', DX, YB + 21);
   P.row('dec', 'csrA', 'i0', DX + 4, P.pin('si', 'o4')[1]);
   wire('si.o4', 'csrA.i0'); wire('si.o5', 'csrA.i1');
+  labelled.add('csrA.out'); // down to the warp decoder: a label, not a wire around the immediate
   const CX = P.has('xdec') ? DX + 42 : DX + 16;
   P.put('dec', 'ctl', CX, YB);
   P.row('dec', 'xdec', 'opInt', DX + 14, P.pin('ctl', 'op')[1]);
