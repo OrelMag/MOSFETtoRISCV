@@ -217,8 +217,8 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
     clearSel.value = opts.clear ?? 'pixel';
     clearSel.addEventListener('change', () => stage.load(pipelineScene(meshId, { ...opts, clear: clearSel.value as 'pixel' | 'word' })));
     // step 5: this mesh's frame both ways, measured (PIPE_COSTS, pinned by tests/gfxpipe.test.ts)
-    const compare = opts.clearSwitch ? h('div', null, h('div', { class: 'cpu-sec' }, 'Frame 1, both clears'),
-      framesTable(PIPE_COSTS.frames.filter((x) => x.id === meshId || x.id === `${meshId}_w`), opts.clear === 'word' ? `${meshId}_w` : meshId)) : null;
+    const compare = opts.clearSwitch ? h('div', null, h('div', { class: 'cpu-sec' }, 'Frame 1, cleared', h('span', { class: 'cpu-sec-hint' }, 'hover a bar for its cycles')),
+      framesTable(PIPE_COSTS.frames.filter((x) => x.id === meshId || x.id === `${meshId}_w`), opts.clear === 'word' ? `${meshId}_w` : meshId, (x) => (x.id.endsWith('_w') ? 'a word a cycle' : 'a pixel a cycle'))) : null;
 
     const cv = h('canvas', { class: 'gfx-screen', width: 256, height: 256, 'aria-label': 'the screen' }) as HTMLCanvasElement;
     const status = h('div', { class: 'cpu-status' });
@@ -300,15 +300,15 @@ export function costWidget(): Widget {
 
 const KINDS: ['clear' | 'draw' | 'wait', SpanKind][] = [['clear', 'clear'], ['draw', 'draw'], ['wait', 'wait']];
 
-/** Frames as stacked bars to one scale (cycles by phase); `mark`: the row of the scene shown. */
-function framesTable(rows: FrameCost[], mark?: string): HTMLElement {
+/** Frames as stacked bars to one scale (cycles by phase); `mark`: the row of the scene shown; `label`: a short name (the panel: no phase column). */
+function framesTable(rows: FrameCost[], mark?: string, label?: (f: FrameCost) => string): HTMLElement {
   const maxC = Math.max(...rows.map((f) => f.clear + f.draw + f.wait));
   return h('table', { class: 'gfx-cost' },
-    h('thead', null, h('tr', null, h('th', null, 'One frame'), h('th', { class: 'n' }, 'Cycles'), h('th', null, ''), h('th', null, 'Of which'))),
+    h('thead', null, h('tr', null, h('th', null, 'One frame'), h('th', { class: 'n' }, 'Cycles'), h('th', null, ''), label ? null : h('th', null, 'Of which'))),
     h('tbody', null, ...rows.map((f) => {
       const tot = f.clear + f.draw + f.wait;
-      return h('tr', f.id === mark ? { class: 'on' } : null, h('td', null, f.name), h('td', { class: 'n' }, fmt(tot)),
+      return h('tr', f.id === mark ? { class: 'on' } : null, h('td', null, label ? label(f) : f.name), h('td', { class: 'n' }, fmt(tot)),
         h('td', { class: 'bar' }, h('div', { class: 'stack' }, ...KINDS.filter(([k]) => f[k] > 0).map(([k, sk]) => h('i', { style: `width:${(100 * f[k]) / maxC}%;background:${KIND[sk].c}`, title: `${KIND[sk].name}: ${fmt(f[k])}` })))),
-        h('td', { class: 'mem' }, KINDS.filter(([k]) => f[k] > 0).map(([k, sk]) => `${KIND[sk].name} ${fmt(f[k])}`).join(' · ') + (f.kernel ? ` · vertex kernel ${fmt(f.kernel)}, during the clear` : '')));
+        label ? null : h('td', { class: 'mem' }, KINDS.filter(([k]) => f[k] > 0).map(([k, sk]) => `${KIND[sk].name} ${fmt(f[k])}`).join(' · ') + (f.kernel ? ` · vertex kernel ${fmt(f.kernel)}, during the clear` : '')));
     })));
 }
