@@ -12,7 +12,7 @@
 // "Unlocked parts" group.
 
 import '../styles/sbchallenges.css';
-import { addBench, failingTest } from '../campaign/bench';
+import { addBench, addLaneBench, failingTest } from '../campaign/bench';
 import { coreSpecOf } from '../campaign/corecheck';
 import { measured } from '../campaign/grade';
 import { isDone, nextAvailable } from '../campaign/graph';
@@ -355,13 +355,9 @@ class ChallengeUi {
     const bad = new Set(r.failed);
     const tests = spec.tests().map((t, i) => ({ t, bad: bad.has(i) }));
     tests.sort((a, b) => Number(b.bad) - Number(a.bad));
-    // A lane core has no computer bench yet (it needs four memory ports): the list says which programs fail.
-    if (spec.lanes) {
-      return h('div', { class: 'sb-tp-progs' }, h('span', { class: 'sb-tp-progs-h' }, 'Programs:'),
-        tests.map(({ t, bad: b }) => h('span', { class: `sb-tp-prog${b ? ' bad' : ''}`, title: b ? 'Fails: the message above names the lane and the instruction' : 'Passes' }, icon(b ? 'close' : 'check', 11), t.name)));
-    }
+    const what = spec.lanes ? `a data memory with a port per lane${spec.raster ? ', the screen' : ''}` : 'a RAM and LEDs';
     return h('div', { class: 'sb-tp-progs' },
-      h('span', { class: 'sb-tp-progs-h', title: 'Each opens a new chip: the program in a ROM, your core, a RAM and LEDs, with the CPU panel running it against the golden model' }, 'Watch a program run:'),
+      h('span', { class: 'sb-tp-progs-h', title: `Each opens a new chip: the program in a ROM, your core, ${what}, with the CPU panel running it against the golden model` }, 'Watch a program run:'),
       tests.map(({ t, bad: b }) => h('button', { class: `sb-tp-prog${b ? ' bad' : ''}`, 'data-chal': 'program', title: `${b ? 'Fails' : 'Passes'}: open “${t.name}” on a bench around your core`, onclick: () => this.debug(t) },
         icon(b ? 'close' : 'check', 11), t.name)));
   }
@@ -371,9 +367,9 @@ class ChallengeUi {
     if (r.failures.length) box.append(h('ul', { class: 'sb-chal-fails' }, r.failures.map((f) => h('li', null, f))));
     // A core level: open the first failing program as a computer around this core, with the CPU panel.
     const spec = coreSpecOf(ch.check);
-    const t = spec && !spec.lanes && r.failures.length ? failingTest(spec, r.failures[0]) : null;
+    const t = spec && r.failures.length ? failingTest(spec, r.failures[0]) : null;
     if (t) {
-      box.append(h('button', { class: 'sb-chal-apply', 'data-chal': 'bench', title: 'A new chip: this program in a ROM, your core, a RAM and LEDs; the CPU panel runs it against the golden model and stops at the first wrong write', onclick: () => this.debug(t) },
+      box.append(h('button', { class: 'sb-chal-apply', 'data-chal': 'bench', title: `A new chip: this program in a ROM, your core, ${spec?.lanes ? 'a data memory with a port per lane' : 'a RAM and LEDs'}; the CPU panel runs it against the golden model and stops at the first wrong write`, onclick: () => this.debug(t) },
         icon('code', 13), `Debug “${t.name}” in the sandbox`));
     }
     if (r.restrictionViolations.length) {
@@ -434,10 +430,11 @@ class ChallengeUi {
   private debug(t: NonNullable<ReturnType<typeof failingTest>>): void {
     const ed = this.ed;
     const core = ed.compiled?.def, coreId = ed.chipId;
+    const spec = this.challenge ? coreSpecOf(this.challenge.check) : null;
     if (!core) return;
     let err = '';
     ed.editWs((ws) => {
-      const b = addBench(ws, core, coreId, t);
+      const b = spec?.lanes ? addLaneBench(ws, core, coreId, t, spec) : addBench(ws, core, coreId, t);
       if ('error' in b) { err = b.error; return ws; }
       return b.ws;
     });

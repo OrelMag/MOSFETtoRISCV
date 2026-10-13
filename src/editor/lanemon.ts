@@ -277,12 +277,12 @@ export class LaneMonitor {
     const d = this.desc!, n = d.lanes, cycle = this.es.cycles;
     const v = (p: string) => s[p] ?? -1;
     const where = (e: Expect) => `“${disasm16(e.instr, e.pc)}” @ ${hex4(e.pc)}`;
-    const fail = (t: number, what: string, name: string, e: Expect | undefined, got: number, detail: string) =>
-      (this.mismatch = { what, name, expected: e?.value ?? 0, got, after: e ? disasm16(e.instr, e.pc) : this.log.at(-1)?.text ?? 'the reset', cycle, detail, ...(t >= 0 ? { hart: t } : {}) });
-    const done = (pc: number, text: string, effect: string, t: number) => {
+    const fail = (_t: number, what: string, name: string, e: Expect | undefined, got: number, detail: string) =>
+      (this.mismatch = { what, name, expected: e?.value ?? 0, got, after: e ? disasm16(e.instr, e.pc) : this.log.at(-1)?.text ?? 'the reset', cycle, detail });
+    const done = (pc: number, text: string, effect: string, _t: number) => {
       this.retired++;
       this.seq++;
-      this.log.push({ cycle, pc, text, effect, ...(t >= 0 ? { hart: t } : {}) });
+      this.log.push({ cycle, pc, text, effect });
       if (this.log.length > LaneMonitor.LOG) this.log.shift();
     };
     const x = ['rwe', 'dwe', ...(d.warps === 2 ? ['warp', 'lwe'] : []), ...(d.raster ? ['fwe'] : [])].find((p) => v(p) < 0);
