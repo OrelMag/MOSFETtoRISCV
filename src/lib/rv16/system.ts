@@ -19,10 +19,10 @@ const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
 const pinsAt = (names: string[], x: number, step = 4, y0 = 4): Record<string, [number, number]> => Object.fromEntries(names.map((n, i) => [n, [x, y0 + step * i]]));
 
-/** Illegal in RV16I + Zicsr (no M): what the golden model traps on. */
+/** Illegal in RV16I + Zicsr (no M, no SIMT: those are the lane cores'): what the golden model traps on. */
 export const isIllegal = (w: number): number => {
   const s = decode16(w).spec;
-  return !s || s.ext === 'm' ? 1 : 0;
+  return !s || s.ext === 'm' || s.ext === 'simt' ? 1 : 0;
 };
 
 /** Illegal-instruction detector: an unknown SYSTEM, OPX or SHI variant, or any MD instruction. */

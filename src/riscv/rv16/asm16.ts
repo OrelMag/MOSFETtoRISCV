@@ -4,7 +4,7 @@
 
 import { AsmError, commentStart, parseImm, splitArgs } from '../asm';
 import {
-  BY_NAME16, CSRS16, encCSR, encI, encJ, encR, encSB, encSH, encSYS, encU, hiLo, OP16, reg16,
+  BY_NAME16, CSRS16, encCSR, encI, encSIMT, encJ, encR, encSB, encSH, encSYS, encU, hiLo, OP16, reg16, SIMT_RS1,
 } from './isa16';
 
 export interface AsmLine16 {
@@ -238,6 +238,11 @@ function encode16(st: Stmt, labels: Map<string, number>): number[] {
     case 'S': { need(2); const m = mem(args[1]); return [encSB(OP16.SW, m.base, reg(args[0]), m.off)]; }
     case 'SYS': need(0); return [encSYS(spec.sub!)];
     case 'CSR': need(3); return [encCSR(spec.f3!, reg(args[0]), csr(args[1]), reg(args[2]))];
+    case 'SIMT': {
+      const r = SIMT_RS1.has(op);
+      need(r ? 1 : 0);
+      return [encSIMT(spec.f3!, r ? reg(args[0]) : 0)];
+    }
     case 'I': {
       if (op === 'lw' || (op === 'jalr' && args.length === 2 && args[1].includes('('))) {
         need(2);
