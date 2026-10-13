@@ -632,8 +632,9 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
 - ✅ 1. RV32 lane core, its golden model and chapters 26–27: deployed 2026-10-11 (913fec6). Groundwork before it:
   multiCore(n) with arbiterN (e3c6b2a), the 4-core baseline the lanes are measured against
 - ✅ 2. Campaign act 9, first levels (below), with the RV16 encodings, a 4-lane RV16 golden model and a lane bench
-- ⏳ 3. Warps and memory: wspawn / bar, a warp scheduler, coalescing, banked shared memory, atomics in the lanes;
-  chapters 28–29 and the act's coalescer and two-warp levels
+- 🚧 3. Warps and memory (mockup approved 2026-10-13), in three parts: ✅ 3a warps, scoreboard, an 8-cycle memory and
+  chapter 28; ⏳ 3b coalescing, banked shared memory, bar, amoadd.w in the lanes and chapter 29; ⏳ 3c the act's coalescer,
+  two-warp and histogram levels
 - ⏳ 4. Graphics: framebuffer, rasterizer, the graphics pipeline; chapters 30–31 and the act's raster levels
 
 **Compute**
@@ -645,12 +646,18 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   shift-register stack (mask, else mask, resume PC, pending), pred; lane utilization per kernel (45–100 %). Golden
   model riscv/simt.ts, co-simulated every cycle (PC, mask, every lane's registers, the stack) on 2, 4 and 8 lanes; the
   Warp panel (widgets/lanes.ts) runs it in lock-step
-- ⏳ Warp scheduler and scoreboard: several warps resident, one ready warp issued per cycle, a load's latency hidden
-  by switching warps (compared with the pipeline chapters' forwarding and stalls); occupancy against register-file size
+- ✅ Warps (chapter 28, Hiding latency): warpCore(program, { warps, lanes, latency }) (lib/warps.ts): warp slots (PC,
+  mask and stack, run bit, a scoreboard of pending bits), the scoreboard check, chapter 24's round-robin arbiter over the
+  ready warps, a register bank per warp in every lane, and a data memory with a port per lane behind an L-cycle pipeline
+  (initial contents as power-on hints). Co-simulated against riscv/warps.ts (WarpISS: the warp the scheduler issued
+  steps) after every issue; riscv/warptiming.ts predicts its cycles exactly (tested). Measured, saxpy on 64 elements,
+  8-cycle loads: 266 / 192 / 172 cycles on 1 / 2 / 4 warps (58 / 83 / 100 % of the issue slots); a warp costs 110 622
+  NANDs (its registers 92 564). The Warp panel (widgets/warps.ts) draws the issue timeline and the scoreboards; the
+  occupancy widget sweeps warps and latency
 - ⏳ Shared memory (banked, bank conflicts measured) and global-memory coalescing (a warp's addresses merged into lines)
 - 🚧 ISA: the SIMT extension above, assembler and disassembler, the multi-lane golden model; kernels so far saxpy,
-  divergence, nested ifs, pred loops, tmc, a forgotten split. Still to come: wspawn and bar (several warps), reduction,
-  matrix multiply, histogram (atomics in the lanes)
+  divergence, nested ifs, pred loops, tmc, a forgotten split; wspawn and nwarps (CSR 0xCC5) with the warps. Still to
+  come: bar, reduction, matrix multiply, histogram (atomics in the lanes)
 - ⏳ The lane core's listing marks (insthw) and Slow mode, as the CPU panel has
 
 **Graphics**

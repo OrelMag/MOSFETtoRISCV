@@ -121,7 +121,7 @@ export const CSRS: Record<string, number> = {
   // F extension: accrued exception flags, dynamic rounding mode, and both together
   fflags: 0x001, frm: 0x002, fcsr: 0x003,
   // lane cores (read-only): lane in the warp, warp number, lanes per warp, thread id, active mask
-  lane: 0xcc0, warp: 0xcc1, nlanes: 0xcc2, tid: 0xcc3, tmask: 0xcc4,
+  lane: 0xcc0, warp: 0xcc1, nlanes: 0xcc2, tid: 0xcc3, tmask: 0xcc4, nwarps: 0xcc5,
 };
 
 /** Rounding-mode operand names (rm field); 7 = dyn (use frm). */

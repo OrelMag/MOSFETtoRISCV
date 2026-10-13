@@ -205,6 +205,11 @@ src/lib/       the component library (registered in `registry` via define())
                  end, n laneUnit(n) boxes = registers + ALU + result mux, hand-placed in two bands), lowestOne(n) (the leader /
                  the next lane to serve), onehotMux(n, w), simtDecode(n) (custom-0 ops, lane CSRs 0xCC0–0xCC4), simtControl(n)
                  (inverted mask + 4-entry shift-register split / join stack, stackEntryWidth), memSequencer(n) (one lane per cycle)
+  warps.ts       chapter 28's warp core: warpCore(program, { warps, lanes, latency, dmemK, data }): warpSlot (PC, simtControl, run
+                 bit, SCOREBOARD: a pending bit per register), SB_CHECK (hazardSpec: the next instruction uses a pending register),
+                 arbiterN over the ready warps, warpLane (a register bank per warp; a returning load writes its warp's bank, so
+                 that warp sits out the cycle), memPipe (L − 1 request registers before lanePortMemory: a port per lane, initial
+                 words as power-on hints), warpDecode (wspawn, CSRs warp / nwarps)
   builder.ts     Builder: column-by-column netlist builder for blocks read by drilling in (fpu, fppipe, coding, divide)
   coding.ts      magComparator(n, signed), priorityEncoder(n), encoder(n), demux(k, w), popcount(n), absValue(n),
                  parity(n), hammingEnc/Dec(k) (SEC-DED, with TS reference models), eccChannel(k)
@@ -226,7 +231,9 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                instructions), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
                interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), simt.ts
                (SimtISS: a warp of n lanes, one PC, leader, mask, split / join stack, one cycle per active lane for memory),
-               simtprograms.ts (the lane kernels, each with its result computed in TypeScript), mcprograms.ts, cosim.ts (CPU state;
+               simtprograms.ts (the lane kernels, each with its result computed in TypeScript), warps.ts (WarpISS: W SimtISS warps over one
+               memory, wspawn; steps the warp the hardware issued), warptiming.ts (the warp core's cycles from the golden model and the
+               scheduler's rules, checked against the gates), warpprograms.ts (kernels with their input in memory), mcprograms.ts, cosim.ts (CPU state;
                `retiring()` = step the ISS this cycle?; dmemWords), randprog32.ts (seeded random RV32 programs per ISA),
                benchprograms.ts (the benchmark set: fib, sort, matmul (+ mul), CRC-32, a float kernel; each with
                its result computed in TypeScript)
@@ -239,6 +246,8 @@ src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over 
                demand; the sandbox's File menu uses it too)
 src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...); cell3d.ts: chapter 25's
                standard cells in 3D (orbit camera, painter's order over boxes);
+               lanes.ts / warps.ts: chapters 26–28 (the Warp panels: mask grid, stack, issue timeline, scoreboards; lanes
+               against cores; the occupancy widget, from riscv/warptiming.ts);
                insthw.ts maps an instruction to the units it uses (and pipeline stage units); fsmpanel.ts: a live state
                diagram (view/fsmdiagram.ts) over a scene (current state, last / next arc, trail, ribbon; arc hover lights
                its gates), used by controllerPanel's Diagram view and chapter 9's state machine; the codex draws fsmOf(lib)
