@@ -654,6 +654,10 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   a second in the page, every frame checked against the reference. Where the gates go: the warp core 182 214 NANDs busy
   1 % of the frame, the clear 72 % of it (software on 16 threads clears in 804 cycles), the triangle in software 6 825
   cycles against 1 268
+- ✅ A faster clear (chapter 31, step 5): a clear unit (278 NANDs, a word counter) writes four pixels and four depths a
+  cycle into the frame's byte banks and a depth buffer split into four banks: the clear 1 026 cycles instead of 4 438,
+  the triangle's frame 3 072 (was 6 144), the cube's 4 096 or 5 120 (was 7 168–8 192), about 580 NANDs in all; the
+  scene switches between the two clears, every frame checked against the reference
 
 **Compute**
 - ✅ Lanes (chapter 26): laneCore(program, n) (lib/lanes.ts): the single-cycle front end feeding n lanes (registers,

@@ -239,7 +239,10 @@ src/lib/       the component library (registered in `registry` via define())
   gfxpipe.ts     chapter 31: CMD_UNIT (one flip-flop a state, CU_STATES / cuState: launch the kernel on the next frame and
                  clear, read the count, per triangle its word and three vertices on the core's spare port, go, wait; swap, wait
                  for the flip and the kernel, the other vertex buffer), gpu31(mesh) (one-warp core with mul and host port,
-                 the command unit, rasterizer(true), ROP, frameBuffers, SCAN_OUT; same instance names as GPU30Z)
+                 the command unit, rasterizer(true), ROP, frameBuffers, SCAN_OUT; same instance names as GPU30Z). Step 5:
+                 gpu31(mesh, { clear: 'word' }): CLEAR_UNIT (a 10-bit word counter, instance 'clear'), cmdUnit(true) (cstart /
+                 cbusy, the rasterizer only draws), ROP_W (raster.ts: depth in four banks zbuf0…3, cwe writes a word: wall),
+                 frameBuffers(…, wide) (an `all` input per frame); ch 30's parts and ids unchanged; PIPE_COSTS.word / *_w frames
   builder.ts     Builder: column-by-column netlist builder for blocks read by drilling in (fpu, fppipe, coding, divide)
   coding.ts      magComparator(n, signed), priorityEncoder(n), encoder(n), demux(k, w), popcount(n), absValue(n),
                  parity(n), hammingEnc/Dec(k) (SEC-DED, with TS reference models), eccChannel(k)
