@@ -417,7 +417,7 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
       mem.update();
     };
 
-    const title = h('h4', null, 'Screen 64 × 64, RGB332', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+    const title = h('h4', null, 'Screen 64 × 64, RGB332', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel cpu-panel gfx-panel', 'data-dock': 'right' }, title,
       h('div', { class: 'cpu-body' },
         h('div', { class: 'param-row', style: 'margin-bottom:6px' }, ...(triSel ? [triSel] : []), speed),
@@ -430,7 +430,6 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
           : opts.gpu
           ? 'Draw starts the rasterizer on the triangle at its inputs; it writes into the back frame (click the back frame under the screen to watch). Swap shows it.'
           : 'The scan-out reads four pixels a cycle; the bright row is where it reads now. Swap asks for the other frame.')));
-    title.addEventListener('click', () => { el.classList.toggle('collapsed'); stage.setInset(el.classList.contains('collapsed') ? 0 : el.getBoundingClientRect().width + 24); });
     paint();
     return { el, update: paint, destroy: stop };
   };

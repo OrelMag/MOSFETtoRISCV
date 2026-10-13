@@ -22,6 +22,7 @@ import { PUZZLES } from '../../campaign/puzzles';
 import { drillCard } from '../../campaign/ui/drillui';
 import { puzzleCard } from '../../campaign/ui/puzzleui';
 import { criteria, gradeTable } from '../../campaign/ui/levelinfo';
+import { mapColsFor } from '../../campaign/layout';
 import { anatomySvg, mapSvg } from '../../campaign/ui/svgs';
 import { type BuildChallenge, importAnswer, startChallenge } from '../../editor/challenges';
 import { loadWorkspace, saveWorkspace } from '../../editor/store';
@@ -49,6 +50,9 @@ export class CampaignPage implements Page {
   private parts: string[] = [];
   private unsub: () => void;
   private mapScroll: { left: number; top: number } | null = null;
+  /** Columns the map was last drawn with: as many as its pane holds (wider acts wrap), redrawn when that changes. */
+  private mapCols = Infinity;
+  private mapFit: ResizeObserver | null = null;
   /** Drill and puzzle cards keep their state (question, count, code) while the page redraws around them. */
   private cards = new Map<string, HTMLElement>();
 
@@ -65,6 +69,7 @@ export class CampaignPage implements Page {
   }
 
   destroy(): void {
+    this.mapFit?.disconnect();
     this.unsub();
   }
 
@@ -146,13 +151,22 @@ export class CampaignPage implements Page {
   private mapView(selected: string | undefined): HTMLElement {
     const p = progress();
     const sel = selected ? nodeById(selected) : undefined;
-    const svg = mapSvg(p.view, p.unlockAll, sel?.id, (id) => { location.hash = `#/campaign/n/${id}`; });
+    const draw = (cols: number) => mapSvg(p.view, p.unlockAll, sel?.id, (id) => { location.hash = `#/campaign/n/${id}`; }, cols);
     const legend = h('div', { class: 'cp-legend' },
       h('span', { class: 'l available' }, 'available'), h('span', { class: 'l solved' }, 'solved'), h('span', { class: 'l skipped' }, 'skipped'),
       h('span', { class: 'l locked' }, 'locked'), h('span', { class: 'l opt' }, 'optional'), NODES.some((n) => n.soon) ? h('span', { class: 'l soon' }, 'coming soon') : null,
       h('span', { class: 'l port', title: 'Lines between acts are drawn for the level you point at or select' }, 'builds on earlier acts (point at it)'));
+    const scroll = h('div', { class: 'cp-map-scroll' }, draw(this.mapCols));
+    this.mapFit?.disconnect();
+    this.mapFit = new ResizeObserver(() => {
+      const cols = mapColsFor(scroll.clientWidth);
+      if (scroll.clientWidth <= 0 || cols === this.mapCols) return;
+      this.mapCols = cols;
+      scroll.replaceChildren(draw(cols));
+    });
+    this.mapFit.observe(scroll);
     return h('div', { class: 'cp-split' },
-      h('section', { class: 'cp-map-pane' }, legend, h('div', { class: 'cp-map-scroll' }, svg)),
+      h('section', { class: 'cp-map-pane' }, legend, scroll),
       h('aside', { class: 'cp-panel' }, sel ? this.nodePanel(sel) : this.welcome()));
   }
 

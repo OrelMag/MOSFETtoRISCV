@@ -114,15 +114,14 @@ function warpPanel(p: SimtProgram, asm: AsmResult, n: number, opts: LaneSceneOpt
       listing.append(el);
       return el;
     });
-    const title = h('h4', null, `Warp: ${n} lanes, one PC`, h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
-    const el = h('div', { class: 'mem-panel cpu-panel warp-panel', 'data-dock': 'right' }, title,
+    const title = h('h4', null, `Warp: ${n} lanes, one PC`, h('span', { class: 'fold-hint' }));
+    const el = h('div', { class: 'mem-panel cpu-panel warp-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title,
       h('div', { class: 'cpu-body' }, h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, runBtn), slow.el, status,
         h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its hardware')), listing, usePath,
         h('div', { class: 'cpu-sec' }, 'Active mask, instruction by instruction', h('span', { class: 'cpu-sec-hint' }, 'filled: the lane ran it')), grid,
         h('div', { class: 'cpu-sec' }, 'split / join stack', h('span', { class: 'cpu-sec-hint' }, 'top first')), stack,
         h('div', { class: 'cpu-sec' }, 'Registers, per lane'), regs,
         h('div', { class: 'cpu-sec' }, 'Memory (non-zero words)'), mem));
-    title.addEventListener('click', () => { el.classList.toggle('collapsed'); stage.setInset(el.classList.contains('collapsed') ? 0 : el.getBoundingClientRect().width + 24); });
     // readers over the current simulation (a Reset keeps it; a new scene makes a new panel)
     let readers: { sim: Sim; pc: () => number; mask: () => number; retire: () => number; served: () => number; lanes: (() => number[])[]; ram: (() => number)[] } | null = null;
     const rd = () => {

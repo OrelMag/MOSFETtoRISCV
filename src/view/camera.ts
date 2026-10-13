@@ -7,6 +7,46 @@ import { installPinch } from './pinch';
 
 export interface ViewBox { x: number; y: number; w: number; h: number }
 
+/** Below this many pixels beside an overlay there is no point fitting the drawing there: it is
+ *  fitted to the whole width and the overlay covers it (a phone; the learner folds the panel). */
+export const MIN_FIT_PX = 120;
+
+/** Screen pixels left of an overlay `insetRight` px wide, or the whole width when that is too
+ *  little to draw in (see MIN_FIT_PX). */
+export function usableWidth(width: number, insetRight: number): number {
+  const u = width - insetRight;
+  return insetRight > 0 && u >= MIN_FIT_PX ? u : width;
+}
+
+/** Below this many pixels left beside it, a foldable right-docked stage panel starts folded (Stage.foldable). */
+export const FOLD_BESIDE_PX = 300;
+
+/** Does a foldable panel `panelW` px wide (12 px from the edge, 12 px clear of the drawing) start folded on a
+ *  canvas `canvasW` px wide? */
+export function startFolded(canvasW: number, panelW: number): boolean {
+  return canvasW - (panelW + 24) < FOLD_BESIDE_PX;
+}
+
+/**
+ * The view box showing `bbox` whole in a host of `width` × `height` px, centred in the part not
+ * covered by `insetRight` px on the right (never under it, see usableWidth), at least `minW`
+ * grid units wide. The box has the host's aspect ratio, so the svg scales it uniformly.
+ */
+export function fitBox(bbox: ViewBox, width: number, height: number, insetRight = 0, minW = 34): ViewBox {
+  const usable = usableWidth(width, insetRight);
+  const aspect = usable > 0 && height > 0 ? usable / height : 16 / 10;
+  let { x, y, w, h } = bbox;
+  if (w < minW) { x -= (minW - w) / 2; w = minW; }
+  if (w / h > aspect) {
+    const nh = w / aspect; y -= (nh - h) / 2; h = nh;
+  } else {
+    const nw = h * aspect; x -= (nw - w) / 2; w = nw;
+  }
+  // Extend the view to the right so the drawing sits in the uncovered part.
+  if (usable < width && width > 0) w = w * (width / usable);
+  return { x, y, w, h };
+}
+
 export class Camera {
   vb: ViewBox = { x: 0, y: 0, w: 10, h: 10 };
   /** Showing what the last fit() chose: the learner has not zoomed or panned since. */
@@ -29,18 +69,7 @@ export class Camera {
    */
   fit(bbox: ViewBox, insetRight = 0, minW = 34): void {
     const r = this.host.getBoundingClientRect();
-    const usable = Math.max(200, r.width - insetRight);
-    const aspect = usable > 0 && r.height > 0 ? usable / r.height : 16 / 10;
-    let { x, y, w, h } = bbox;
-    if (w < minW) { x -= (minW - w) / 2; w = minW; }
-    if (w / h > aspect) {
-      const nh = w / aspect; y -= (nh - h) / 2; h = nh;
-    } else {
-      const nw = h * aspect; x -= (nw - w) / 2; w = nw;
-    }
-    // Extend the view to the right so the drawing sits in the uncovered part.
-    if (insetRight > 0 && r.width > 0) w = w * (r.width / usable);
-    this.vb = { x, y, w, h };
+    this.vb = fitBox(bbox, r.width, r.height, insetRight, minW);
     this.fitted = true;
     this.size = r.width > 0 && r.height > 0 ? { w: r.width, h: r.height } : null;
     this.apply();

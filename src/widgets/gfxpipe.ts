@@ -265,7 +265,7 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
         ...(checked ? [h('span', { class: checked.bad ? 'bad' : 'good' }, checked.bad ? `Frame ${checked.frame}: ${checked.bad} pixels differ from the reference` : `Frame ${checked.frame}: the reference picture, pixel for pixel`)] : []));
       tl.replaceChildren(h('div', { class: 'cpu-sec' }, rec.last ? `The last frame: ${fmt(rec.last.cycles)} cycles` : 'The last frame'), timeline(rec.last), legend(rec.last));
     };
-    const title = h('h4', null, 'Screen 64 × 64 · the pipeline', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+    const title = h('h4', null, 'Screen 64 × 64 · the pipeline', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel cpu-panel gfx-panel', 'data-dock': 'right' }, title,
       h('div', { class: 'cpu-body' },
         h('div', { class: 'param-row', style: 'margin-bottom:6px' }, meshSel, ...(opts.clearSwitch ? [clearSel] : [])),
@@ -273,7 +273,6 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
         h('div', { class: 'param-row', style: 'margin-top:6px' }, runBtn, frameBtn, resetSel), status, checks, mem.el,
         h('details', { class: 'gfx-mem-fold', open: true }, h('summary', null, `Vertex buffers · word ${GFX.vbuf} on`), vbuf), tl, compare,
         h('p', { class: 'cpu-sec-hint' }, `The screen shows what the scan-out sends, ${FB_W} × ${FB_W}. Run simulates every gate of the pipeline on the cycle engine; probes and the timing diagram need gate delays, so they are off here.`)));
-    title.addEventListener('click', () => { el.classList.toggle('collapsed'); stage.setInset(el.classList.contains('collapsed') ? 0 : el.getBoundingClientRect().width + 24); });
     paint();
     return { el, update: paint, destroy: stop };
   };

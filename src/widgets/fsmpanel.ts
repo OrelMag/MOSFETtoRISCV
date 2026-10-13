@@ -124,7 +124,7 @@ export function fsmView(stage: Stage, spec: FsmSpec, bind: FsmBind = {}): Widget
 export function fsmPanel(spec: FsmSpec, bind: FsmBind = {}, title = 'State machine'): ScenePanel {
   return (stage: Stage): Widget => {
     const view = fsmView(stage, spec, bind);
-    const head = h('h4', null, title, h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+    const head = h('h4', null, title, h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel fsm-panel' }, head, view.el,
       h('div', { class: 'fsm-legend' },
         h('span', null, h('i', { class: 'cur' }), 'current'), h('span', null, h('i', { class: 'next' }), 'next edge'),

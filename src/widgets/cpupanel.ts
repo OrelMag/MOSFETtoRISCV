@@ -190,12 +190,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       ...(opts.fpu ? [h('div', { class: 'cpu-sec' }, 'Floating-point registers (non-zero)'), fregs] : []),
       ...(opts.dcache ? [h('div', { class: 'cpu-sec' }, opts.dcache === 'wb2' ? 'Data cache (2 sets × 2 ways × 4 words, write-back)' : opts.dcache === 'wb' ? 'Data cache (4 lines × 4 words, write-back)' : 'Data cache (4 lines × 4 words)'), dlines] : []),
       h('div', { class: 'cpu-sec' }, wb ? 'Memory as the program sees it (dirty lines included)' : opts.dcache ? 'Main memory (non-zero words)' : 'Data memory (non-zero words)'), mem);
-    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.pipeline ? (opts.m ? 'RV32IM pipeline' : 'RV32I pipeline') : 'RV32I CPU', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
-    const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right' }, title, body);
-    title.addEventListener('click', () => {
-      el.classList.toggle('collapsed');
-      stage.setInset(el.classList.contains('collapsed') ? 0 : el.getBoundingClientRect().width + 24);
-    });
+    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.pipeline ? (opts.m ? 'RV32IM pipeline' : 'RV32I pipeline') : 'RV32I CPU', h('span', { class: 'fold-hint' }));
+    const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title, body);
 
     // Golden model in lock-step: it executes one instruction whenever the hardware retires one
     // (every cycle for the single-cycle CPU; when a valid instruction leaves W for the pipeline).
@@ -556,7 +552,7 @@ export function controllerPanel(control: 'fsm' | 'micro', compact = false): Scen
     // Inside a CPU the controller is instance ctrl; on its own it is the scene, whose AND gates an arc can light.
     const diagram = fsmView(stage, MC_FSM_SPEC, compact ? { inputs: { op: 'ctrl.op' } } : { parts: control === 'fsm' });
     const seg = h('span', { class: 'seg mc-seg', onclick: (e: Event) => e.stopPropagation() });
-    const title = h('h4', null, h('span', null, compact ? 'Controller' : control === 'fsm' ? 'Controller: state machine' : 'Controller: microcode ROM'), seg, compact ? null : h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+    const title = h('h4', null, h('span', null, compact ? 'Controller' : control === 'fsm' ? 'Controller: state machine' : 'Controller: microcode ROM'), seg, compact ? null : h('span', { class: 'fold-hint' }));
     const legend = h('div', { class: 'fsm-legend' }, h('span', null, h('i', { class: 'cur' }), 'current'), h('span', null, h('i', { class: 'last' }), 'last edge'),
       h('span', null, h('i', { class: 'next' }), 'next edge (by op)'), h('span', null, h('b', { class: 'fsm-badge-k' }, '2'), 'cycle of this instruction'));
     const el = h('div', { class: `mem-panel mc-panel${compact ? ' compact' : ''}`, 'data-dock': 'left' }, title, body, diagram.el, legend);

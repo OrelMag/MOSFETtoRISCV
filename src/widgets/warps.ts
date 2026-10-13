@@ -114,17 +114,16 @@ function warpsPanel(p: WarpProgram, words: number[], W: number, L: number, opts:
       return el;
     });
     const title = h('h4', null, lsu ? `Warps: ${W} × ${LANES} lanes, global ${L} cycles, shared ${Ls}` : `Warps: ${W} × ${LANES} lanes, loads take ${L} cycles`,
-      h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
+      h('span', { class: 'fold-hint' }));
     const hint = lsu ? 'a letter: the warp issued (L load, S store, A amoadd.w, B bar) · faded: a further access · striped: a load in flight · barred: at the barrier'
       : 'a letter: the warp issued · striped: a load of it in flight';
-    const el = h('div', { class: 'mem-panel cpu-panel warp-panel', 'data-dock': 'right' }, title,
+    const el = h('div', { class: 'mem-panel cpu-panel warp-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title,
       h('div', { class: 'cpu-body' }, h('div', { class: 'param-row', style: 'margin-bottom:6px' }, ...(opts.programs ? [progSel] : []), sel, runBtn), slow.el, status,
         h('div', { class: 'cpu-sec' }, 'Issue timeline', h('span', { class: 'cpu-sec-hint' }, hint)), timeline,
         h('div', { class: 'cpu-sec' }, 'Warps', h('span', { class: 'cpu-sec-hint' }, 'scoreboard: registers waiting for a load')), slots,
         ...(lsu && p.shared ? [h('div', { class: 'cpu-sec' }, 'Shared memory', h('span', { class: 'cpu-sec-hint' }, 'word w in bank w mod 4; the last shared access in colour')), memory] : []),
         h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'each warp at its PC · click a line: its hardware')), listing, usePath,
         h('div', { class: 'cpu-sec' }, 'Registers of the last warp to issue, per lane'), regs));
-    title.addEventListener('click', () => { el.classList.toggle('collapsed'); stage.setInset(el.classList.contains('collapsed') ? 0 : el.getBoundingClientRect().width + 24); });
     // readers over the current simulation, made once (the hooks read them at every edge)
     type Readers = {
       sim: Sim; issued: () => number; retire: () => number; warp: () => number; pc: () => number; mask: () => number; halted: () => number;

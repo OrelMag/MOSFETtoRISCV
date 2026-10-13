@@ -47,11 +47,10 @@ function dualPanel(source: string, asm: AsmResult): ScenePanel {
       };
       running = requestAnimationFrame(tick);
     });
-    const title = h('h4', null, 'Two cores, one memory', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
-    const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right' }, title,
+    const title = h('h4', null, 'Two cores, one memory', h('span', { class: 'fold-hint' }));
+    const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title,
       h('div', { class: 'cpu-body' }, h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, runBtn), status, cols,
         h('div', { class: 'cpu-sec' }, 'Shared memory (non-zero words; counter at 0x40, lock at 0x44)'), mem));
-    title.addEventListener('click', () => { el.classList.toggle('collapsed'); stage.setInset(el.classList.contains('collapsed') ? 0 : el.getBoundingClientRect().width + 24); });
     stage.edgeHooks.add({
       before: () => {
         const sim = stage.sim;

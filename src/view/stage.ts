@@ -20,6 +20,7 @@ import { ViewCtx } from './context';
 import { Inspector } from './inspector';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber } from './popover';
+import { startFolded } from './camera';
 import { SchematicView } from './schematic';
 
 export interface Scene {
@@ -98,6 +99,9 @@ type StageEdge = Edge & { held?: boolean };
 /** The direction mark of the bottom bar: before an input's name (into the circuit), after an output (out of it). */
 const DIR = () => h('span', { class: 'dir', 'aria-hidden': 'true' }, '▸');
 
+/** The learner's last fold or unfold of a foldable panel (see Stage.foldable): later scenes follow it. */
+let foldChoice: boolean | null = null;
+
 export class Stage {
   readonly el: HTMLElement;
   readonly inspector: Inspector;
@@ -117,6 +121,10 @@ export class Stage {
   private leaf: { name: string; widget: Widget } | null = null;
   private widget: { w: Widget; host: HTMLElement } | null = null;
   private panels: Widget[] = [];
+  /** Watches the right-docked panels: folded, unfolded or resized, the fit makes room (syncInset). */
+  private panelSize = new ResizeObserver(() => this.syncInset());
+  /** The scene's foldable panels still wait for their first layout to decide whether they start folded. */
+  private foldPending = false;
   private anim: ReturnType<typeof setInterval> | null = null;
   private runClock: ReturnType<typeof setInterval> | null = null;
   private runBtn: HTMLElement | null = null;
@@ -241,6 +249,7 @@ export class Stage {
     // The canvas also changes size during a run (the bottom bar rewraps as values and the status
     // change): a view the learner zoomed into must survive that.
     new ResizeObserver(() => {
+      this.autoFold();
       this.view.insetRight = this.rightInset();
       this.view.resized();
       this.layoutDock();
@@ -320,6 +329,9 @@ export class Stage {
     this.view.highlight(scene.highlight ?? []);
     this.panels = (scene.panels ?? []).map((f) => f(this));
     for (const p of this.panels) (p.el.dataset.dock === 'left' ? this.dock : this.canvas).append(p.el);
+    for (const p of this.panels) if (p.el.dataset.dock === 'right') this.foldable(p.el);
+    this.foldPending = true;
+    this.autoFold();
     this.view.insetRight = this.rightInset();
     this.layoutDock();
     this.view.fit();
@@ -332,6 +344,7 @@ export class Stage {
    * (each about half a gigabyte) are more than some browsers allow a tab, and the tab died.
    */
   private release(): void {
+    this.panelSize.disconnect();
     this.panels.forEach((p) => { p.destroy?.(); p.el.remove(); });
     this.panels = [];
     this.closeLeaf();
@@ -1127,18 +1140,48 @@ export class Stage {
     this.view.markNets(marks);
   }
 
-  /** Reserve screen space on the right for a docked panel and refit. */
-  setInset(px: number): void {
-    this.view.insetRight = px;
-    this.view.fit();
+  /**
+   * A right-docked panel (`data-dock="right"`) floats over the canvas's right edge; the stage owns its
+   * folding: a click on its title folds it to that title or unfolds it, and the fit leaves room for it
+   * while it is unfolded (syncInset). With `data-fold="narrow"` it starts folded when unfolded it would
+   * leave the circuit less than FOLD_BESIDE_PX (a laptop between the side panes, a phone), unless the
+   * learner already folded or unfolded one by hand (foldChoice, kept for the page's life).
+   */
+  private foldable(el: HTMLElement): void {
+    const title = el.querySelector(':scope > h4');
+    title?.addEventListener('click', () => {
+      el.classList.toggle('collapsed');
+      if (el.dataset.fold) foldChoice = el.classList.contains('collapsed');
+    });
+    this.panelSize.observe(el);
+  }
+
+  /** Decide, once the canvas and the scene's panels have a size, which foldable panels start folded. */
+  private autoFold(): void {
+    if (!this.foldPending) return;
+    const w = this.canvas.clientWidth;
+    const fold = this.panels.filter((p) => p.el.dataset.dock === 'right' && p.el.dataset.fold === 'narrow');
+    if (w <= 0 || fold.some((p) => p.el.offsetWidth <= 0)) return;
+    this.foldPending = false;
+    for (const p of fold) p.el.classList.toggle('collapsed', foldChoice ?? startFolded(w, p.el.offsetWidth));
+  }
+
+  /** A right-docked panel changed size (folded, unfolded): make room for it, refitting a still-fitted view. */
+  private syncInset(): void {
+    this.autoFold();
+    const inset = this.rightInset();
+    if (inset === this.view.insetRight) return;
+    this.view.insetRight = inset;
+    if (this.view.fitted) this.view.fit();
     this.layoutDock();
   }
 
-  /** Screen space the expanded right-docked panels need. Measured live: a scene's panels are built
-   *  before the stage is laid out, when they are 0 px wide. */
+  /** Screen space the unfolded right-docked panels cover (with their 12 px margin and a 12 px gap).
+   *  Measured live: a scene's panels are built before the stage is laid out, when they are 0 px wide. */
   private rightInset(): number {
-    const docked = this.panels.filter((p) => p.el.dataset.dock === 'right' && !p.el.classList.contains('collapsed'));
-    return docked.length ? Math.max(...docked.map((p) => p.el.offsetWidth)) + 24 : 0;
+    const widths = this.panels.filter((p) => p.el.dataset.dock === 'right' && !p.el.classList.contains('collapsed'))
+      .map((p) => p.el.offsetWidth).filter((w) => w > 0);
+    return widths.length ? Math.max(...widths) + 24 : 0;
   }
 
   /** Bottom-left panels sit beside the right dock: side by side when they fit, else stacked, each

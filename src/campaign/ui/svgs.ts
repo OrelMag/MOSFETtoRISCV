@@ -4,7 +4,7 @@
 import { s } from '../../ui/dom';
 import { BLOCKS, blockNodes, LINKS, VIEW } from '../anatomy';
 import { ancestors, isDone, statusOf, type ProgressView } from '../graph';
-import { BAND_GAP, COL_GAP, mapLayout, NODE_H, NODE_W, ROW_GAP } from '../layout';
+import { BAND_GAP, COL_GAP, LINE_GAP, mapLayout, NODE_H, NODE_W, ROW_GAP } from '../layout';
 import { ACTS } from '../nodes';
 import type { CampaignNode } from '../types';
 
@@ -35,8 +35,9 @@ export function drawnRequires(n: CampaignNode): string[] {
   return n.requires.filter((r) => r !== 'intro' && !n.requires.some((o) => o !== r && ancOf(o).has(r)));
 }
 
-export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string | undefined, go: (id: string) => void): SVGSVGElement {
-  const L = mapLayout();
+/** The map, its acts wrapped to at most `maxCols` columns a line (layout.ts mapColsFor). */
+export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string | undefined, go: (id: string) => void, maxCols = Infinity): SVGSVGElement {
+  const L = mapLayout(maxCols);
   const svg = s('svg', { class: 'cp-map', viewBox: `0 0 ${L.w} ${L.h}`, width: L.w, height: L.h, role: 'img', 'aria-label': 'The campaign map' });
   for (const b of L.bands) {
     const act = ACTS.find((a) => a.num === b.act)!;
@@ -57,13 +58,14 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
       const hot = selected !== undefined && (r === selected || p.node.id === selected);
       const x1 = q.x + NODE_W, y1 = q.y + NODE_H / 2, x2 = p.x, y2 = p.y + NODE_H / 2;
       // The gaps between boxes are the channels: the column gap after the requirement, the one before
-      // the node, and a row gap (same act) or the gap above the node's act (another act) between them.
+      // the node, and a row gap (same act) or the gap above the node's act (another act) between them. An edge onto
+      // the act's next line runs down the channel after the requirement and back left along the gap above that line.
       const xa = x1 + COL_GAP / 2, xb = Math.max(8, x2 - COL_GAP / 2);
       let d: string;
-      if (!cross && x2 - x1 <= COL_GAP + 1) d = `M${x1},${y1} C${x1 + 24},${y1} ${x2 - 24},${y2} ${x2},${y2}`;
+      if (!cross && q.line === p.line && x2 - x1 <= COL_GAP + 1) d = `M${x1},${y1} C${x1 + 24},${y1} ${x2 - 24},${y2} ${x2},${y2}`;
       else {
         const band = L.bands.find((b) => b.act === p.node.act)!;
-        const yc = cross ? band.y - BAND_GAP / 2 : p.y - ROW_GAP / 2;
+        const yc = cross ? band.y - BAND_GAP / 2 : q.line !== p.line ? p.lineY - LINE_GAP / 2 : p.y - ROW_GAP / 2;
         d = rounded([[x1, y1], [xa, y1], [xa, yc], [xb, yc], [xb, y2], [x2, y2]]);
       }
       const done = isDone(view(r));
