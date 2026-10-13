@@ -3,7 +3,7 @@
 // measured cost. What the screen can compute is not written here: the levels that build on this one
 // (graph), the copies of the unlocked part in the finished CPU (lib/usage.ts copiesIn), the learner's
 // score and par. Alternatives name library parts where they exist, so their cost is measured too.
-// The texts live in cases0.ts (acts 0–3) and cases1.ts (acts 4–8). No DOM.
+// The texts live in cases0.ts (acts 0–3) and cases1.ts (acts 4–9). No DOM.
 
 import { CASES0 } from './cases0';
 import { CASES1 } from './cases1';

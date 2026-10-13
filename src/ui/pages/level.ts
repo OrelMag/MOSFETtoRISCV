@@ -209,7 +209,7 @@ export class LevelPage implements Page {
       // Compiling the finished CPU takes a moment: after the panel is on screen.
       setTimeout(() => {
         const k = copiesInFinal(n), part = countedPart(n);
-        if (k > 0 && part) copies.replaceChildren(h('b', null, k.toLocaleString()), ` × ${part.name} in the finished CPU (${finalCpu()?.node.title ?? ''}).`);
+        if (k > 0 && part) copies.replaceChildren(h('b', null, k.toLocaleString()), ` × ${part.name} in the finished CPU (${finalCpu(n)?.node.title ?? ''}).`);
       }, 0);
       el.append(sec);
     }

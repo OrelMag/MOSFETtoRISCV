@@ -20,4 +20,16 @@ describe('level screen measurements', () => {
     // The finished CPU's own level counts nothing (it is the CPU).
     expect(copiesInFinal(cpu!.node)).toBe(0);
   });
+
+  it('counts the scalar acts in the scalar finale and act 9 in the SIMT core', () => {
+    expect(finalCpu()?.node.id).toBe('y_final');
+    expect(finalCpu(nodeById('a_fa'))?.node.id).toBe('y_final');
+    const k = nodeById('k_vrf')!;
+    expect(finalCpu(k)?.node.id).toBe('k_simt');
+    // One lane register file, one set of four lanes, one stack in the SIMT core.
+    expect(copiesInFinal(k)).toBe(1);
+    expect(copiesInFinal(nodeById('k_lanes')!)).toBe(1);
+    expect(copiesInFinal(nodeById('k_stack')!)).toBe(1);
+    expect(copiesInFinal(nodeById('k_simt')!)).toBe(0);
+  });
 });

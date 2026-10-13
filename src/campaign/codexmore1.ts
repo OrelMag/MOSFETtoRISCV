@@ -1133,4 +1133,187 @@ check:     −3 = 0xFFFF_FFFD
     anatomy: ['alu', 'wb'],
     chapters: [{ chapter: 'muldiv', step: 7, label: 'Signed products: Baugh–Wooley' }, { chapter: 'muldiv', step: 21, label: 'The M unit' }],
   },
+
+  // ---- act 9: throughput (lane figures from the RV16 lane golden model, riscv/rv16/simt16.ts)
+  throughput: {
+    idea: `Latency is how long one result takes; throughput is how many results arrive per unit of time. For one chain of dependent instructions only latency matters, and Acts 5–7 spent gates on it: forwarding, prediction, a shorter period. For n independent copies of one small computation (pixels, array elements) the latency of any one copy hardly matters; what counts is results per second, and per gate. Throughput is bought by overlap (a pipeline) or by replication (cores, lanes), and the two compose.<br>Replication keeps each result's latency: on the 4-lane SIMD core an element of 3·x + y still takes one 9-instruction loop iteration, at a period of 100 against the scalar core's 98, but four elements finish per iteration. Over 16 words that is 43 instructions against 151: 4,300 NAND delays against 14,798, 3.4× the throughput for 3.3× the NANDs.`,
+    example: {
+      title: 'Four results per cycle, two ways',
+      body: `<pre>                       NANDs   period   results / cycle
+single-cycle core      4,741     98       1
+four cores            18,964     98       4
+SIMD core, 4 lanes    15,774    100       4
+
+3·x + y, 16 words      instructions   NAND delays
+one lane                   151          14,798
+four lanes                  43           4,300</pre>Four cores also need four instruction memories; the lanes share one.`,
+    },
+    mistakes: [
+      'Judging a throughput machine by its latency: the SIMD core\'s period is 2 delays longer than the scalar core\'s, and it finishes the array 3.4× sooner.',
+      'Expecting n lanes to give n×: the setup code runs at full length on every lane (151 → 43 is 3.5×, not 4×), and masked lanes, divergence and reductions take more.',
+      'Replicating for dependent work: a chain in which each step needs the previous result gives the other lanes nothing to do.',
+    ],
+    chapters: [{ chapter: 'lanes', step: 0, label: 'Latency or throughput' }, { chapter: 'lanes', step: 4, label: 'Lanes against cores' }, { chapter: 'pipeline', step: 0, label: 'Overlap the work' }],
+  },
+
+  simd: {
+    idea: `Single instruction, multiple data: one instruction stream drives several datapaths. What depends only on the instruction is built once: PC, instruction memory and fetch, decode and control, the immediate, the next-PC logic. What depends on the data is built per lane: registers, ALU, memory port, result path. The cost model follows: shared logic is paid once, lane logic n times, so SIMD saves as much as the shared part weighs in a core.<br>In RV16 it weighs little: of the SIMD core's 15,774 NANDs, 1,818 are shared and 3,489 belong to each lane, and four single-cycle cores would be 18,964. The larger saving is outside the NAND count: one instruction memory and one fetch per four results instead of four. SIMD appears as vector extensions (one instruction over a vector register: SSE, AVX, RISC-V V) and as GPUs, whose SIMT model hides the lanes from the programmer.`,
+    example: {
+      title: 'The SIMD core\'s bill',
+      body: `<pre>shared, once                                  1,818
+  next PC 421, branch 287, control 200, PC 144
+  4:1 muxes (leader rs1, rs2; immediate) 441
+  mask 102, lane decoder 73, PC muxes 147, OR 3
+per lane, × 4                                 3,489
+  registers 2,193, ALU + mux + nz 1,149
+  result muxes 147
+total                                        15,774</pre>The register files alone are 8,772: 56% of the core.`,
+    },
+    mistakes: [
+      'Assuming every instruction does n times the work: setup code, masked lanes and the tail of a reduction do less.',
+      'Sharing the memory port as if it were free: the RV32 lane core\'s single port takes one cycle per active lane for every load and store.',
+      'Calling a lane a core: it cannot branch on its own. Without a mask and a stack, lanes that disagree follow the leader.',
+    ],
+    lib: 'rv16_simd',
+    compare: ['rv16_cpu', 'rv16_simt'],
+    chapters: [{ chapter: 'lanes', step: 1, label: 'One decoder, four ALUs' }, { chapter: 'lanes', step: 3, label: 'One memory port' }, { chapter: 'lanes', step: 4, label: 'Lanes against cores' }],
+  },
+
+  leader: {
+    idea: `Some values exist once per warp: the next PC, the jalr target, tmc's new mask. Every active lane computes its own candidate and the hardware listens to one, the leader, the lowest active lane. RV16 encodes it in two bits from the mask (lane 0 if m0, else 1 if m1, else 2 if m2, else 3: bit 1 = ¬m0·¬m1, bit 0 = ¬m0·(m1 + ¬m2), 10 NANDs) and selects the leader's rs1 and rs2 through two 16-bit 4:1 muxes (147 NANDs each) feeding the branch comparator, the next-PC logic and tmc. The RV32 lane core of chapter 26 makes the leader a one-hot word (lowest set bit, 18 NANDs) and selects with one-hot muxes.<br>The rule only has to be fixed and to pick an active lane: a masked lane's registers are stale. When the active lanes agree, the leader's choice is everyone's; when they disagree, the branch diverges, and without split the others follow the leader down a path that is wrong for them.`,
+    example: {
+      title: 'Who decides',
+      body: `<pre>csrr t0, tid          t0 = 0, 1, 2, 3
+bnez t0, l1           lanes 1–3 want l1; leader 0 falls through: all do
+...
+tmc  t1  (1110)       leader: lane 1
+beq  t0, a1, l2       a1 = 1: lane 1 branches, so all do</pre>The golden model counts 2 divergent branches in the test's 14 instructions; the hardware just follows the leader.`,
+    },
+    mistakes: [
+      'Taking lane 0 instead of the lowest active lane: after tmc turns lane 0 off its registers are stale, and the warp follows a lane that is not running.',
+      'Reading the leader where every lane\'s value is needed: only per-warp things (the next PC, the mask) come from it; register writes stay per lane.',
+      'Using a binary leader to drive one-hot muxes, or the reverse: a 4:1 mux wants the 2-bit index, a one-hot mux the lowest-set-bit word.',
+    ],
+    lib: 'rv16_mask4',
+    compare: ['low1_4', 'prienc4'],
+    chapters: [{ chapter: 'lanes', step: 2, label: 'The leader' }, { chapter: 'simt', step: 1, label: 'When lanes disagree' }],
+  },
+
+  warp: {
+    idea: `A warp is the set of threads that share one PC: one thread per lane, all executing the same instruction in the same cycle. The program is written for one thread. The threads differ in their data and, at the start, in one number: <code>csrr rd, tid</code> writes warp · lanes + lane into each lane's rd (CSR 7; a scalar RV16 core reads 0 there). The usual pattern is a strided loop: thread i takes elements i, i + 4, i + 8, …, so four threads cover the array once and each runs the same number of iterations.<br>Nvidia's warps are 32 threads, AMD's wavefronts 32 or 64, the campaign's 4. A GPU core keeps many warps and issues from one whose operands are ready while others wait for memory; the campaign's lane cores hold one, so <code>bar</code> (wait for every warp) does nothing.`,
+    example: {
+      title: '3·x + y, strided',
+      body: `<pre>        csrr t0, tid          # 0, 1, 2, 3
+        li   t1, 4            # stride: the lane count
+        la   a0, x
+        add  a0, a0, t0       # address of x[tid]
+        li   a1, 4            # 16 / 4 iterations
+loop:   lw   a2, 0(a0)        # x[i]
+        lw   ra, 16(a0)       # y[i]
+        slli sp, a2, 1
+        add  a2, a2, sp       # 3·x
+        add  a2, a2, ra
+        sw   a2, 16(a0)       # y[i] ← 3·x + y
+        add  a0, a0, t1
+        addi a1, a1, -1
+        bnez a1, loop
+        halt</pre>43 warp instructions; lane 1 handles elements 1, 5, 9, 13. With stride 1 and 16 iterations, one lane needs 151.`,
+    },
+    mistakes: [
+      'Assuming the threads of a warp run in some order: they run in lock-step, and when two lanes store to one word in the same instruction, the higher lane\'s store lands last here.',
+      'Giving lanes different trip counts by accident (n not a multiple of the lane count, a bound computed from tid): the loop branch diverges.',
+      'Treating tid as a hart id: harts are cores with PCs of their own (<code>csrr mhartid</code>, chapter 24); the threads of a warp share one PC.',
+    ],
+    lib: 'rv16_lanedec',
+    chapters: [{ chapter: 'lanes', step: 0, label: 'Latency or throughput' }, { chapter: 'lanes', step: 1, label: 'One decoder, four ALUs' }],
+  },
+
+  divergence: {
+    idea: `A branch diverges when the active lanes of a warp disagree on it. One PC cannot go both ways. Without help the warp follows its leader and the lanes that disagree execute the wrong path: a wrong result, not a slow one. With split and join (or predication) the warp runs both paths one after the other, each with only the lanes that took it, and the lanes reconverge after the if. Correctness is restored, time is not: the warp pays for the then path plus the else path, and every lane idles through the path it did not take.<br>Divergence is a property of the data, not of prediction: a branch that is never mispredicted still costs both sides when its outcome differs between lanes. Branches on uniform values (a loop count shared by all lanes, a kernel parameter) never diverge; branches on tid or on loaded data may.`,
+    example: {
+      title: 'One if / else, with and without split',
+      body: `<pre>odd lanes: a0 = 3·tid; even lanes: a0 = tid / 2
+
+no split   6 instructions    stored 0, 0, 1, 1   (lanes 1, 3 wrong)
+split      14 instructions   stored 0, 3, 1, 9
+           then side: 5 instructions on lanes 1, 3
+           else side: 3 instructions on lanes 0, 2</pre>Without split the leader (lane 0, even) takes every lane down the even path. With split the test runs both sides: 71% of its lane-steps do work.`,
+    },
+    mistakes: [
+      'Assuming a divergent branch is only slow: without split the result is wrong.',
+      'Counting the cost of an if / else as its longer side: the warp runs both, so the cost is the sum.',
+      'Splitting on a condition the lanes always agree on and expecting it to cost a side: nothing is parked, and the price is the split and the join.',
+    ],
+    chapters: [{ chapter: 'simt', step: 1, label: 'When lanes disagree' }, { chapter: 'simt', step: 5, label: 'What divergence costs' }],
+  },
+
+  simt: {
+    idea: `Single instruction, multiple threads: SIMD hardware with the programming model of independent threads. Each thread is an ordinary scalar program over its own registers, with its own ifs and loops; the hardware runs a warp of them on one PC and keeps the illusion with the active mask (which lanes write) and the reconvergence stack (which lanes are still owed the other side of an if). A correct program needs no knowledge of the lanes; a fast one does, because divergence and the tail of a reduction leave lanes idle.<br>The cost over SIMD is small: RV16's SIMT core is the SIMD core plus the stack, a PC mux and a mask mux, 17,837 NANDs against 15,774 (+13%), at the same period of 100. Its 25 test programs, the split ones among them, take 919 cycles. Nvidia named the model; Vortex, the open-source RISC-V GPU, adds split, join and tmc to RV32 as the campaign adds them to RV16.`,
+    example: {
+      title: 'Nested ifs, four threads',
+      body: `<pre>a0 = 0
+if (tid &amp; 2) {             lanes 2, 3
+  a0 += 10
+  if (tid &amp; 1) a0 += 1     lane 3
+  a0 += 30
+}
+store a0                   0, 0, 40, 41
+
+masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre>Each thread reads like scalar code; the warp ran 19 instructions, 59% of its lane-steps doing work.`,
+    },
+    mistakes: [
+      'Treating the threads of a warp as independent in time: a thread spinning on a flag that another thread of its warp will set never finishes, because the waiting side runs while the other is masked off.',
+      'Forgetting a join: the else lanes never run, and the mask never comes back.',
+      'Measuring a kernel by the instructions of one thread: the warp pays for every path any of its threads takes.',
+    ],
+    lib: 'rv16_simt',
+    compare: ['rv16_simd'],
+    chapters: [{ chapter: 'lanes', step: 0, label: 'Latency or throughput' }, { chapter: 'simt', step: 2, label: 'split and join' }, { chapter: 'simt', step: 3, label: 'An if inside an if' }],
+  },
+
+  utilization: {
+    idea: `Lane utilization = Σ active lanes / (instructions × lanes): the share of lane-steps that did work. It is to a lane core what CPI is to a pipeline: the warp issues an instruction every cycle regardless, and utilization says how much of each was used. It falls wherever the mask has zeros: the tail of an array, both sides of a divergent if, lanes that leave a loop early, the combine at the end of a reduction. Throughput is lanes × utilization results per cycle.<br>Measured on the golden model: a uniform strided kernel (3·x + y over 16 words) 100%; the tmc test 75%; the if / else test 71%; nested ifs 59%; a 16-word sum 87%, a 64-word sum 95%. The kernel puzzles grade the complement, idle lane-steps in percent.`,
+    example: {
+      title: 'Counting the if / else',
+      body: `<pre>instructions   mask    lane-steps
+3              1111    12
+5              1010    10      then side
+3              0101     6      else side
+3              1111    12
+14                     40 of 56 = 71%</pre>`,
+    },
+    mistakes: [
+      'Quoting utilization without its region: setup code and the common tail run at full width and lift the figure for a whole program above that of its if.',
+      'Treating masked lanes as free: they occupy the cycle; the warp takes as long as all its paths together.',
+      'Optimizing utilization instead of time: busy lanes doing useless work raise the figure and not the throughput.',
+    ],
+    chapters: [{ chapter: 'simt', step: 0, label: 'The active mask' }, { chapter: 'simt', step: 5, label: 'What divergence costs' }],
+  },
+
+  reduction: {
+    idea: `A reduction combines n values into one with an associative operator: a sum, a maximum, an AND. On lanes it runs in two phases. First each lane reduces its own share, strided like any kernel, with every lane busy. Then the lane partials combine in log₂(lanes) rounds: in each, half of the remaining lanes add a partner's partial (through memory here, since a lane cannot read another lane's registers) and the other half are masked off. The second phase has a fixed length, so its idle lanes weigh less the more elements each lane sums first.<br>Integer addition is associative, so the order changes nothing. Floating-point addition is not: a parallel sum can differ from the sequential one in its last bits.`,
+    example: {
+      title: 'Sixteen words on four lanes',
+      body: `<pre>        # each lane sums x[tid], x[tid+4], …: 32 instructions, 4 lanes
+        la   sp, part
+        add  sp, sp, t0
+        sw   a2, 0(sp)        # part[tid]
+        li   t1, 3
+        tmc  t1               # lanes 0, 1
+        lw   ra, 2(sp)        # part[tid + 2]
+        add  a2, a2, ra
+        sw   a2, 0(sp)
+        li   t1, 1
+        tmc  t1               # lane 0
+        lw   ra, 1(sp)
+        add  a2, a2, ra       # 136 = 1 + 2 + … + 16
+        sw   a2, -3(x0)       # OUT</pre>41 instructions: 32 with four lanes, 5 with two, 4 with one: 142 of 164 lane-steps, 87%. With 64 words, 101 instructions and 95%: the tail is the same 9.`,
+    },
+    mistakes: [
+      'Reading another lane\'s register: lanes share no registers, so partials pass through memory (real GPUs add shuffle instructions for this).',
+      'Combining serially: lane 0 adding the other three partials takes three load-and-add rounds, pairing takes log₂ 4 = 2.',
+      'Expecting a parallel float sum to equal the sequential one: the pairing reorders the additions.',
+    ],
+    chapters: [{ chapter: 'simt', step: 0, label: 'The active mask' }, { chapter: 'simt', step: 5, label: 'What divergence costs' }],
+  },
 };
