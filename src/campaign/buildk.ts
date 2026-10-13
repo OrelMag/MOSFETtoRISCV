@@ -180,7 +180,7 @@ export const BUILDK: Record<string, () => BuildChallenge> = {
   }),
   k_warps: () => ({
     id: 'k_warps', title: 'Two warps', level: 'cpu', allowed: 'nand',
-    brief: 'Two warps of your SIMT core take turns: warp 0 issues in the first cycle after reset, then warp 1, then warp 0, …. Each warp has its own PC (both start at 0), mask, stack and lane registers; fetch, decode, control and the four lanes are shared. <code>csrr rd, tid</code> gives warp · 4 + lane. '
+    brief: 'Two warps of your SIMT core take turns: warp 0 issues in the first cycle after reset, then warp 1, then warp 0 again, and so on. Each warp has its own PC (both start at 0), mask, stack and lane registers; fetch, decode, control and the four lanes are shared. <code>csrr rd, tid</code> gives warp · 4 + lane. '
       + 'The data memory now answers <b>one cycle late</b>: <code>drdata<i>i</i></code> is the word at the address lane <i>i</i> gave in the previous cycle (stores land at the end of their cycle). So a load writes nothing when it issues: keep its lanes and rd for a cycle and write the word through the second port, <code>lwe</code> (a bit per lane), <code>lwa</code>, <code>lwd<i>i</i></code>, during the other warp’s turn. '
       + '<code>rwe</code>, <code>rwa</code>, <code>rwd<i>i</i></code> carry every other register write, of the warp issuing now; <code>warp</code> says which warp that is. '
       + '<b>bar</b>: the first warp to arrive issues nothing in its turns until the other arrives too, or has ended. A warp with no active lane (after <code>tmc x0</code>) has ended: it issues nothing more.',
