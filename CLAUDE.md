@@ -209,7 +209,15 @@ src/lib/       the component library (registered in `registry` via define())
                  bit, SCOREBOARD: a pending bit per register), SB_CHECK (hazardSpec: the next instruction uses a pending register),
                  arbiterN over the ready warps, warpLane (a register bank per warp; a returning load writes its warp's bank, so
                  that warp sits out the cycle), memPipe (L − 1 request registers before lanePortMemory: a port per lane, initial
-                 words as power-on hints), warpDecode (wspawn, CSRs warp / nwarps)
+                 words as power-on hints), warpDecode (wspawn, CSRs warp / nwarps). Chapter 29: warpCore(…, { lsu, smemK,
+                 sharedLatency, globalEvery, mul }): a memory instruction holds the issue port one cycle per access (registers
+                 heldW / left; its warp moves on after the last), atBar (bar: popcount of the waiting bits + 1 against rs2),
+                 EXT_DECODE (amoadd.w shown to CONTROL as lw, its immediate zeroed; bar; mul), sbCheck(amo), warpLane(…, mul)
+  warpmem.ts     chapter 29's memory: serveLanes / accessesOf (the access rule, also the timing model's), accessUnit(n)
+                 (leader's 16-byte line; per bank the lowest lane picks the row; amoadd.w the leader alone), quadMemory(k,
+                 banked) (4 columns: one row = a line, or a row per bank), lsuMemory (the pipeline: shared accesses enter
+                 Ls − 1 stages from the end, slotBusy; globalBusy: a global access in the last B − 1 stages; old + data for
+                 amoadd.w; the highest served lane wins a word)
   builder.ts     Builder: column-by-column netlist builder for blocks read by drilling in (fpu, fppipe, coding, divide)
   coding.ts      magComparator(n, signed), priorityEncoder(n), encoder(n), demux(k, w), popcount(n), absValue(n),
                  parity(n), hammingEnc/Dec(k) (SEC-DED, with TS reference models), eccChannel(k)
@@ -232,8 +240,10 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), simt.ts
                (SimtISS: a warp of n lanes, one PC, leader, mask, split / join stack, one cycle per active lane for memory),
                simtprograms.ts (the lane kernels, each with its result computed in TypeScript), warps.ts (WarpISS: W SimtISS warps over one
-               memory, wspawn; steps the warp the hardware issued), warptiming.ts (the warp core's cycles from the golden model and the
-               scheduler's rules, checked against the gates), warpprograms.ts (kernels with their input in memory), mcprograms.ts, cosim.ts (CPU state;
+               memory, wspawn, bar (one barrier), shared memory at 0x1000 (simt.ts LaneISS), mul only with multipliers; steps the warp the
+               hardware issued), warptiming.ts (the warp core's cycles from the golden model and the scheduler's rules, lsu: accesses per
+               line / bank, the held issue port, shared slots, globalEvery; checked against the gates), warpprograms.ts (kernels with their
+               input in memory; lsu / shared / mul / threads flags), mcprograms.ts, cosim.ts (CPU state;
                `retiring()` = step the ISS this cycle?; dmemWords), randprog32.ts (seeded random RV32 programs per ISA),
                benchprograms.ts (the benchmark set: fib, sort, matmul (+ mul), CRC-32, a float kernel; each with
                its result computed in TypeScript)
@@ -246,8 +256,10 @@ src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over 
                demand; the sandbox's File menu uses it too)
 src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...); cell3d.ts: chapter 25's
                standard cells in 3D (orbit camera, painter's order over boxes);
-               lanes.ts / warps.ts: chapters 26–28 (the Warp panels: mask grid, stack, issue timeline, scoreboards; lanes
-               against cores; the occupancy widget, from riscv/warptiming.ts);
+               lanes.ts / warps.ts: chapters 26–29 (the Warp panels: mask grid, stack, issue timeline, scoreboards; on chapter 29's
+               core each access, the barrier, shared memory by bank, a kernel switcher; lanes against cores; the occupancy widget,
+               from riscv/warptiming.ts); feed.ts: chapter 29's access widget (the gate-level access unit on a stride / offset)
+               and the tiling chart (plain against tiled matmul over globalEvery);
                insthw.ts maps an instruction to the units it uses (and pipeline stage units); fsmpanel.ts: a live state
                diagram (view/fsmdiagram.ts) over a scene (current state, last / next arc, trail, ribbon; arc hover lights
                its gates), used by controllerPanel's Diagram view and chapter 9's state machine; the codex draws fsmOf(lib)

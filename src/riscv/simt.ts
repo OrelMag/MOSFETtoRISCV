@@ -9,9 +9,37 @@
 // instruction after the split), and whether they are still to run. The first join sends them
 // there; the second restores the mask and pops. A split on which the active lanes agree pushes an
 // entry with nothing pending, so its join just pops.
+//
+// The warp cores of chapter 29 add a shared memory (smem): addresses with bit 12 set
+// (SHARED_BASE = 0x1000) go to it, the rest to the data memory, each wrapping at its size as the
+// hardware's decoders do. With `mul`, the lanes have multipliers: mul runs; any other M
+// instruction (and mul without them) is an error, since the lanes' ALU would compute something else.
 
 import { CSRS, decode, disasm, OPCODES } from './isa';
-import { ISS, type ModelState, restoreFields, saveFields, type StepInfo } from './iss';
+import { ISS, type IssOptions, type ModelState, restoreFields, saveFields, type StepInfo } from './iss';
+
+/** Shared memory's base address: bit 12 picks it (chapter 29's warp cores). */
+export const SHARED_BASE = 0x1000;
+export const isShared = (addr: number) => (addr & SHARED_BASE) !== 0;
+
+/** A lane: an ISS whose addresses with bit 12 set go to the warp core's shared memory (words only). */
+class LaneISS extends ISS {
+  constructor(program: number[], opts: IssOptions, readonly smem: Uint32Array | null) {
+    super(program, opts);
+  }
+
+  override load(addr: number, f3: number): number {
+    if (!this.smem || !isShared(addr)) return super.load(addr, f3);
+    if (f3 !== 2) throw new Error(`shared memory: word accesses only (address 0x${(addr >>> 0).toString(16)})`);
+    return this.smem[(addr >>> 2) & (this.smem.length - 1)] | 0;
+  }
+
+  override store(addr: number, f3: number, v: number): void {
+    if (!this.smem || !isShared(addr)) return super.store(addr, f3, v);
+    if (f3 !== 2) throw new Error(`shared memory: word accesses only (address 0x${(addr >>> 0).toString(16)})`);
+    this.smem[(addr >>> 2) & (this.smem.length - 1)] = v >>> 0;
+  }
+}
 
 export interface SimtEntry {
   /** Active mask before the split (restored by the last join). */
@@ -35,6 +63,10 @@ export interface SimtOptions {
   warps?: number;
   /** A data memory shared with other warps (warps.ts); else one of dmemWords. */
   dmem?: Uint32Array;
+  /** Shared memory at SHARED_BASE (chapter 29's warp cores; none: addresses wrap into dmem). */
+  smem?: Uint32Array;
+  /** The lanes multiply (mul only). */
+  mul?: boolean;
 }
 
 export interface WarpStep {
@@ -60,6 +92,8 @@ export class SimtISS {
   readonly n: number;
   readonly lanes: ISS[];
   readonly dmem: Uint32Array;
+  readonly smem: Uint32Array | null;
+  readonly mul: boolean;
   readonly depth: number;
   /** Warp number, and the warps the core holds. */
   readonly warp: number;
@@ -88,8 +122,10 @@ export class SimtISS {
     this.csrs = opts.warps === undefined ? SIMT_CSR : new Set([...SIMT_CSR, CSRS.nwarps]);
     const dmemWords = opts.dmem?.length ?? opts.dmemWords ?? 32;
     this.dmem = opts.dmem ?? new Uint32Array(dmemWords);
+    this.smem = opts.smem ?? null;
+    this.mul = !!opts.mul;
     this.lanes = Array.from({ length: this.n }, () => {
-      const l = new ISS(program, { dmemWords, imemWords: opts.imemWords ?? 64 });
+      const l = new LaneISS(program, { dmemWords, imemWords: opts.imemWords ?? 64 }, this.smem);
       l.dmem = this.dmem;
       return l;
     });
@@ -171,6 +207,9 @@ export class SimtISS {
         lanes[i] = { pc, word, text: disasm(word, pc), rd: d.rd, value: v >>> 0, halted: false };
       }
     } else {
+      if (d.opcode === OPCODES.OP && d.funct7 === 1 && (!this.mul || d.funct3 !== 0)) {
+        throw new Error(`${disasm(word, pc)} at 0x${pc.toString(16)}: ${this.mul ? 'the lanes multiply (mul) but do not divide or keep the high half' : 'the lanes have no multiplier'}`);
+      }
       for (let i = 0; i < this.n; i++) {
         if (!this.on(i)) continue;
         this.lanes[i].pc = pc;
