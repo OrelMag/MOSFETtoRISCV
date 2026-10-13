@@ -33,5 +33,7 @@ describe('level screen measurements', () => {
     expect(copiesInFinal(nodeById('k_lanes')!)).toBe(1);
     expect(copiesInFinal(nodeById('k_simt')!)).toBe(0);
     expect(copiesInFinal(nodeById('k_coal')!)).toBe(0);
+    // act 9 is optional as a whole: its finale is still found
+    expect(['k_lesson', 'k_lanes', 'k_simt', 'k_coal', 'k_warps', 'p_hist', 'k_frame'].every((id) => nodeById(id)!.optional)).toBe(true);
   });
 });

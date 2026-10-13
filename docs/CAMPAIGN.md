@@ -330,6 +330,8 @@ Legend: `id` ← requires · *opt* optional · (ex) an existing sandbox challeng
 - ✅ **`y_final`**: the pipelined RV16 with precise traps and interrupts ← pi_core3, y_irq
 
 ### Act 9 — Throughput: a GPU (roadmap Phase 15)
+Optional as a whole (decided 2026-10-13): it goes past the campaign's goal, a pipelined RV16, like the side quests, and
+adding levels to it never reopens a finished campaign. Its finale (finalCpu of the act 9 track) is still its last core.
 - ✅ `k_lesson`: latency or throughput ← y_final
 - ✅ `k_lanes`: four ALUs and their operand muxes, one control (a table on random and directed vectors) ← k_lesson
 - ✅ `k_vrf`: four register files, one write enable per lane ← k_lesson
