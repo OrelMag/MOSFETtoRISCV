@@ -209,6 +209,41 @@ export function backFrame(sim: Sim): Uint8Array | null {
   return out;
 }
 
+/** The panel's controls explained, for the variant shown (display alone, one triangle, scripts, or the drawing pad). */
+function controlsHelp(opts: PanelOpts): HTMLElement {
+  const item = (k: string, v: string) => [h('dt', null, k), h('dd', null, v)];
+  const words = String(FB_WORDS).replace(/\B(?=(\d{3})+$)/g, ' ');
+  const rows = [
+    ...item('Run / Pause', 'Clocks the circuit without stopping, at the speed chosen above. Run itself draws nothing: the scan-out keeps sending '
+      + `the front frame, a word (four pixels) a cycle, ${words} cycles a frame${opts.gpu ? ', and the rasterizer works only when told to' : ''}.`),
+    ...item('One frame', 'Runs until the next vsync: the scan-out finishes the frame it is sending (at most '
+      + `${words} cycles) and the clock stops. The screen then holds everything sent since the last flip.`),
+    ...(opts.link
+      ? item('Send to the GPU', 'On the drawing pad: clears the back frame and depth buffer, then starts each of your triangles in the cycle '
+        + 'the rasterizer goes idle, then asks for a swap, and runs until one whole frame of the picture has reached the screen.')
+      : opts.scripts
+      ? item('Draw these', 'Plays the chosen list: clears the back frame and depth buffer (one pass over every tile of the screen), then starts '
+        + 'each triangle as soon as the rasterizer is idle, then asks for a swap. The clock keeps running after it; Pause stops it.')
+      : opts.gpu
+      ? item('Draw', 'Pulses go for one cycle: the rasterizer reads the triangle chosen above at its inputs and writes it into the back frame, '
+        + 'pixel by pixel. Paused, it runs until the rasterizer is idle again. Nothing reaches the screen yet, and nothing is cleared: '
+        + 'triangles pile up in the back frame.')
+      : []),
+    ...item('Swap', 'Pulses swap for one cycle. With "wait for vsync" the flip happens after the last word of the frame being sent; without, '
+      + 'at once, mid-frame (a tear: the top of one picture over the bottom of the other). Paused, it runs until the flip and one whole frame '
+      + `of the new front.${opts.gpu ? ' The old front becomes the back frame: the next Draw lands on it.' : ''}`),
+    ...item('Reset…', (opts.gpu ? 'Power-cycle: every flip-flop to its power-on value, both frames blank, counters at 0 (the stage\'s Reset). '
+      : 'Power-cycle: every flip-flop to its power-on value, frame 0 in front, counters at 0 (the stage\'s Reset). ')
+      + 'Forget: the panel\'s copy of the screen turns grey, the memory is untouched; it refills as the scan-out sends it again, which shows '
+      + `that the screen is only what was sent.${opts.scripts || opts.link ? ' Clear the back frame: the clear pass alone, no triangles, no swap.' : ''}`),
+  ];
+  const det = h('details', { class: 'gfx-help' }, h('summary', null, 'What the controls do'), h('dl', null, ...rows)) as HTMLDetailsElement;
+  // open until the reader closes it once
+  try { det.open = localStorage.getItem('gfx-help-closed') !== '1'; } catch { det.open = true; }
+  det.addEventListener('toggle', () => { try { localStorage.setItem('gfx-help-closed', det.open ? '0' : '1'); } catch { /* storage blocked */ } });
+  return det;
+}
+
 export function screenPanel(opts: PanelOpts): ScenePanel {
   return (stage: Stage): Widget => {
     let view: 'screen' | 'back' = 'screen';
@@ -221,8 +256,8 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
     speed.addEventListener('change', () => { cap = Number(speed.value); });
     const cv = h('canvas', { class: 'gfx-screen', width: 256, height: 256, 'aria-label': 'the screen' }) as HTMLCanvasElement;
     const status = h('div', { class: 'cpu-status' });
-    const runBtn = h('button', { class: 'btn sm primary' }, 'Run');
-    const frameBtn = h('button', { class: 'btn sm', title: 'run until the scan-out has sent one whole frame' }, 'One frame');
+    const runBtn = h('button', { class: 'btn sm primary', title: 'clock the circuit continuously at the chosen speed (Pause stops it)' }, 'Run');
+    const frameBtn = h('button', { class: 'btn sm', title: 'run to the next vsync: the scan-out finishes the frame it is sending, then the clock stops' }, 'One frame');
     const viewSel = h('select', { 'aria-label': 'view' }, h('option', { value: 'screen' }, 'Screen: what the scan-out sent'),
       h('option', { value: 'back' }, 'Back frame: being drawn')) as HTMLSelectElement;
     const sync = h('input', { type: 'checkbox', checked: true }) as HTMLInputElement;
@@ -304,7 +339,7 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
       stage.setInput(port, 0);
     };
     const front = () => { const sim = stage.sim; return sim ? val(sim, node(sim, 'scan')!.ports.front) : 0; };
-    const swapBtn = h('button', { class: 'btn sm', title: 'ask the scan-out to show the other frame (paused: run until it has sent it)' }, 'Swap');
+    const swapBtn = h('button', { class: 'btn sm', title: 'exchange front and back frames (at vsync when waiting for it); paused: run until the new front has been sent once' }, 'Swap');
     swapBtn.addEventListener('click', () => {
       const f0 = front();
       pulse('swap');
@@ -316,7 +351,7 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
         return sent >= 0 && cap0.frames > sent;
       });
     });
-    const resetSel = h('select', { class: 'gfx-reset', 'aria-label': 'reset', title: 'reset options' }, h('option', { value: '' }, 'Reset…'),
+    const resetSel = h('select', { class: 'gfx-reset', 'aria-label': 'reset', title: 'power-cycle the circuit, or only forget what the screen showed' }, h('option', { value: '' }, 'Reset…'),
       h('option', { value: 'power' }, opts.gpu ? 'Power-cycle: both frames blank' : 'Power-cycle: back to the first frame'),
       h('option', { value: 'forget' }, 'Forget what the screen showed'),
       ...(opts.scripts || opts.link ? [h('option', { value: 'clear' }, 'Clear the back frame')] : [])) as HTMLSelectElement;
@@ -342,7 +377,7 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
     if (opts.scripts) {
       const scripts = opts.scripts;
       triSel = h('select', { 'aria-label': 'draws' }, ...scripts.map((t) => h('option', { value: t.id }, t.title))) as HTMLSelectElement;
-      const playBtn = h('button', { class: 'btn sm', title: 'draw these triangles one after the other into the back frame, then swap' }, 'Draw these');
+      const playBtn = h('button', { class: 'btn sm', title: 'clear the back frame, draw these triangles one after the other, then swap' }, 'Draw these');
       playBtn.addEventListener('click', () => {
         queue = [...scripts.find((t) => t.id === triSel!.value)!.ops];
         swapAfter = true;
@@ -350,7 +385,7 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
       });
       controls.splice(2, 1, playBtn);
     } else if (opts.gpu && !opts.link) {
-      const drawBtn = h('button', { class: 'btn sm', title: 'start the rasterizer on the triangle at its inputs' }, 'Draw');
+      const drawBtn = h('button', { class: 'btn sm', title: 'start the rasterizer on the chosen triangle: it draws into the back frame (Swap to show it)' }, 'Draw');
       drawBtn.addEventListener('click', () => {
         pulse('go');
         // paused: run until the rasterizer is done (a back face stops after its set-up)
@@ -404,7 +439,7 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
       h('div', { class: 'cpu-body' },
         h('div', { class: 'param-row', style: 'margin-bottom:6px' }, ...(triSel ? [triSel] : []), ...(opts.gpu ? [viewSel] : []), speed),
         h('div', { class: 'gfx-screen-wrap' }, cv),
-        h('div', { class: 'param-row', style: 'margin-top:6px' }, ...controls), status,
+        h('div', { class: 'param-row', style: 'margin-top:6px' }, ...controls), status, controlsHelp(opts),
         h('p', { class: 'cpu-sec-hint' }, opts.link
           ? 'Send to the GPU clears the back frame, draws your triangles in turn, each starting the cycle the last one ends, then swaps. Choose "Back frame" to watch them land.'
           : opts.scripts
