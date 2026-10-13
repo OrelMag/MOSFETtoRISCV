@@ -741,9 +741,10 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 
 /* ---------- workbench: Components / Statistics tabs, the statistics page ---------- */
 .bench-tabs { display: flex; gap: 2px; padding: 8px 12px 0; border-bottom: 1px solid var(--border); }
-.bench-tab { padding: 6px 10px; color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 13.5px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.bench-tab { padding: 6px 8px; white-space: nowrap; color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 13.5px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .bench-tab:hover { color: var(--text); }
 .bench-tab.on { color: var(--accent); border-color: var(--accent); }
+.widget .suggest { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .hw-page { height: 100%; overflow: auto; background: var(--bg); }
 .hw-inner { max-width: 1280px; margin: 0 auto; padding: 4px 20px 40px; }
 .hw-inner > .bench-tabs { padding: 8px 0 0; margin-bottom: 16px; }

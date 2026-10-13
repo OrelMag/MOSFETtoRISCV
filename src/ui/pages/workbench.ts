@@ -2,7 +2,7 @@
 // and drill into it; "Open in Sandbox" (stage bar) copies it into the editor as a chip.
 
 import { bench } from '../../chapters/types';
-import { libraryItems } from '../../lib/catalog';
+import { libraryItems, suggestItems } from '../../lib/catalog';
 import { familyOf, resolveComponent } from '../../lib/resolve';
 import { needsSwitchLevel } from '../../sim/harness';
 import type { ComponentDef } from '../../sim/types';
@@ -39,7 +39,15 @@ export class WorkbenchPage implements Page {
   open(id: string): void {
     const def = resolveComponent(id);
     if (!def) {
-      this.stage.showWidget({ el: h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'Unknown component'), h('p', { class: 'sub' }, `No component called "${id}".`))) });
+      // A stale or mistyped link: say so, offer the closest parts, and keep the library list to pick from.
+      const near = suggestItems(id);
+      this.current = '';
+      this.stage.showWidget({ el: h('div', { class: 'widget' }, h('div', { class: 'panel' },
+        h('h3', null, 'Unknown component'),
+        h('p', { class: 'sub' }, `No component called "${id}". ${near.length ? 'Did you mean:' : 'Pick one from the list on the left, or search it.'}`),
+        near.length ? h('div', { class: 'suggest' }, near.map((it) => h('button', { class: 'btn', onclick: () => this.open(it.id) }, it.name))) : null)) });
+      this.renderParams();
+      this.renderList();
       return;
     }
     this.current = def.id;
