@@ -1,9 +1,9 @@
-import { displayScene, edgeWidget, gpuScene } from '../widgets/screen';
+import { depthScene, displayScene, edgeWidget, gpuScene } from '../widgets/screen';
 import type { Chapter } from './types';
 
 export const chPixels: Chapter = {
   id: 'pixels', num: 30, title: 'Pixels and triangles', level: 'Throughput',
-  blurb: 'A framebuffer scanned out to the screen, double buffering and vsync; edge functions in fixed point and a rasterizer that walks a triangle in tiles, one pixel a cycle.',
+  blurb: 'A framebuffer scanned out to the screen, double buffering and vsync; edge functions in fixed point, a rasterizer that walks a triangle in tiles, one pixel a cycle; a depth buffer and blending.',
   steps: [
     {
       title: 'A frame in memory',
@@ -70,6 +70,47 @@ export const chPixels: Chapter = {
         kind: 'quiz', question: 'The walk tests a tile and skips it. What is certain?',
         options: ['No pixel centre in the tile is inside the triangle', 'The tile is outside the bounding box', 'All three edges are negative at the tile\'s corners', 'The triangle is a back face'], answer: 0,
         explain: 'One edge is negative even at the tile\'s best corner, so it is negative at every pixel of the tile: none can be inside. The tile may well be inside the bounding box, and the other two edges can be positive.',
+      },
+    },
+    {
+      title: 'Depth',
+      body: `
+        <p>Draw two triangles that cross in depth and no order is right: each is in front of the other somewhere. The fix is per pixel. Every vertex gets a
+        depth z (8 bits, 0 nearest), and a <strong>depth buffer</strong> keeps, for each pixel, the depth of what was drawn there. A pixel is written only
+        if it is nearer than that, and then its depth is written too. The order of the triangles no longer matters.</p>
+        <p>z is linear across the triangle, a plane like the edges: z = z<sub>0</sub> + Z<sub>x</sub>·Δx + Z<sub>y</sub>·Δy with
+        Z<sub>x</sub> = (A<sub>0</sub>·(z<sub>2</sub> − z<sub>0</sub>) + A<sub>2</sub>·(z<sub>1</sub> − z<sub>0</sub>)) / 2·area (the barycentric weights,
+        differentiated), Z<sub>y</sub> the same with B. So a fourth stepper walks it with the edges. Its <strong>depth set-up</strong> needs a division: four
+        products on its own Booth multiplier, two divisions on chapter 20's non-restoring divider (30 bits, 32 cycles each) and ten shift-and-add steps for
+        z at the first tile. That is 76 more cycles per triangle and 12 025 NANDs, more than the rest of the rasterizer; real GPUs share one set-up unit
+        among many pixel pipelines.</p>
+        <p>z has 12 fraction bits and the arithmetic is 32 bits that wrap: a thin sliver has a huge slope, and its z overflows far outside the triangle, but
+        it is right at every pixel inside, to about a tenth of a z unit. The buffer keeps 16 bits a pixel. The ROP reads it at the pixel's address,
+        compares and writes in the same cycle; clearing it walks every tile of the screen, 4 436 cycles, longer than drawing both triangles.</p>
+        <div class="try">Draw these in both orders: the same picture, with the crossing line where the two depths are equal. Then with the depth test off: the
+        last triangle covers the other.</div>`,
+      scene: () => depthScene('depth'),
+      challenge: {
+        kind: 'quiz', question: 'The depth test is on. A pixel arrives with exactly the depth the buffer holds there. What happens?',
+        options: ['It is written: it is not farther', 'It is not written: only nearer pixels pass', 'The colours are averaged', 'The rasterizer stalls'], answer: 1,
+        explain: 'The comparator\'s output is "less than": equal does not pass, so the first triangle drawn at that depth keeps the pixel. Real APIs let the program choose the comparison (less, less-or-equal, …).',
+      },
+    },
+    {
+      title: 'Blending',
+      body: `
+        <p>Glass, smoke, a fading sprite: the new colour is mixed with the one already in the frame, out = src·α + dst·(1 − α), channel by channel. Here α
+        comes in eighths: (s·(a + 1) + d·(7 − a)) / 8, six 4 × 4 array multipliers and three adders (1 074 NANDs); the division by 8 is wiring. The
+        destination is the back frame's pixel at the same address, read and rewritten in one cycle.</p>
+        <p>Unlike the depth test, blending is not commutative: red under a blue at 3/8 is a dark purple, the same blue under red is red. Renderers therefore
+        draw the opaque surfaces first, with the depth test, then the translucent ones sorted back to front. And here the top-left rule pays: a pixel on
+        an edge shared by two translucent triangles is blended once, not twice.</p>
+        <div class="try">Draw these in both orders and compare the overlap.</div>`,
+      scene: () => depthScene('blend'),
+      challenge: {
+        kind: 'quiz', question: 'Why are translucent surfaces drawn after the opaque ones, back to front?',
+        options: ['Blending needs the depth buffer cleared', 'Each blend mixes with what is already in the frame, so what is behind must be there first', 'Translucent pixels are faster to draw', 'The top-left rule requires it'], answer: 1,
+        explain: 'out = src·α + dst·(1 − α) reads dst: the surface behind must already be in the frame. Drawn the other way round, the far surface would be mixed over the near one.',
       },
     },
   ],

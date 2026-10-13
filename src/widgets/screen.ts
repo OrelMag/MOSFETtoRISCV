@@ -2,8 +2,8 @@
 // rasterizer's position), the scenes it sits in (the display alone, the rasterizer drawing into it) and the
 // edge-function explorer.
 
-import { FB_W, rasterize, type Vtx } from '../gfx/raster';
-import { displayTop, FB_WORDS, GPU30, VERTEX_PINS } from '../lib/raster';
+import { type DrawOp, FB_W, rasterize, type Vtx } from '../gfx/raster';
+import { displayTop, FB_WORDS, GPU30, GPU30Z, VERTEX_PINS } from '../lib/raster';
 import { ramLeafState } from '../lib/bigmem';
 import type { HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
@@ -69,14 +69,50 @@ export function gpuScene(preset = 'large', highlight: string[] = ['rast']): Scen
   };
 }
 
-interface PanelOpts { gpu: boolean }
+/** A sequence of draws the panel plays (each waits for the rasterizer), then a swap. */
+export interface DrawScript { id: string; title: string; ops: DrawOp[] }
+
+const CLEAR: DrawOp = { clr: true, v: [[0, 0], [0, 0], [0, 0]], col: 0x25 };
+/** Two triangles that cross in depth: red is near at the top, far at the bottom; green the other way round. */
+const RED: DrawOp = { v: [[20, 20], [240, 60], [40, 230]], z: [20, 20, 220], col: 0xe0, zt: true };
+const GREEN: DrawOp = { v: [[230, 20], [200, 240], [10, 120]], z: [220, 60, 30], col: 0x1c, zt: true };
+/** Opaque red, and a blue at three eighths over it. */
+const BLUE: DrawOp = { v: [[100, 4], [250, 250], [4, 180]], z: [0, 0, 0], col: 0x03, a: 2, zt: false };
+const OPAQUE_RED: DrawOp = { ...RED, zt: false };
+
+export const DEPTH_SCRIPTS: DrawScript[] = [
+  { id: 'rg', title: 'Clear, red, then green', ops: [CLEAR, RED, GREEN] },
+  { id: 'gr', title: 'Clear, green, then red', ops: [CLEAR, GREEN, RED] },
+  { id: 'off', title: 'Depth test off: green, then red', ops: [CLEAR, { ...GREEN, zt: false }, { ...RED, zt: false }] },
+];
+export const BLEND_SCRIPTS: DrawScript[] = [
+  { id: 'rb', title: 'Clear, red, then blue at 3/8', ops: [CLEAR, OPAQUE_RED, BLUE] },
+  { id: 'br', title: 'Clear, blue at 3/8, then red', ops: [CLEAR, BLUE, OPAQUE_RED] },
+];
+
+const opInputs = (op: DrawOp): Record<string, number> => Object.fromEntries([
+  ...VERTEX_PINS.map((p, k) => [p, op.v[k >> 1][k & 1]]), ['col', op.col],
+  ['z0', op.z?.[0] ?? 0], ['z1', op.z?.[1] ?? 0], ['z2', op.z?.[2] ?? 0], ['a', op.a ?? 7], ['zt', op.zt ? 1 : 0], ['clr', op.clr ? 1 : 0]]);
+
+/** Steps 4–5: the rasterizer with depth and the ROP; the panel plays the scripts. */
+export function depthScene(kind: 'depth' | 'blend'): Scene {
+  const scripts = kind === 'depth' ? DEPTH_SCRIPTS : BLEND_SCRIPTS;
+  return {
+    root: GPU30Z,
+    inputs: { ...opInputs(scripts[0].ops[1]), go: 0, swap: 0, sync: 1, clk: 0 },
+    highlight: kind === 'depth' ? ['rop', 'rast'] : ['rop'], autoClock: false,
+    panels: [screenPanel({ gpu: true, scripts })],
+  };
+}
+
+interface PanelOpts { gpu: boolean; scripts?: DrawScript[] }
 
 function screenPanel(opts: PanelOpts): ScenePanel {
   return (stage: Stage): Widget => {
     /** What the screen shows: the last frame the scan-out sent (RGB332), and which pixels it has sent at all. */
     let shown = new Uint8Array(W * W), seen = new Uint8Array(W * W);
     let frames = 0, view: 'screen' | 'back' = 'screen';
-    let running: number | null = null, chunk = 16, rate = 0;
+    let running: number | null = null, rate = 0;
     /** Cycles a second (0: as fast as the simulation goes). */
     let cap = opts.gpu ? 0 : 1024;
     const speed = h('select', { 'aria-label': 'speed' }, ...[[0, 'As fast as it goes'], [4096, '4 frames a second'], [1024, '1 frame a second'], [128, '1 frame in 8 s']]
@@ -95,27 +131,42 @@ function screenPanel(opts: PanelOpts): ScenePanel {
     const node = (sim: Sim, ...p: string[]) => kid(sim.design.root, ...p);
 
     const stop = () => { if (running) cancelAnimationFrame(running); running = null; runBtn.textContent = 'Run'; };
+    /** Draws still to start, and a swap after them. */
+    let queue: DrawOp[] = [], swapAfter = false;
+    const busyNow = () => { const sim = stage.sim; return !!sim && sim.design.root.ports.busy !== undefined && val(sim, sim.design.root.ports.busy) === 1; };
+    const pump = () => {
+      if (busyNow()) return;
+      const op = queue.shift();
+      if (op) {
+        stage.setInputs({ ...opInputs(op), go: 1 });
+        stage.runCycles(1);
+        stage.setInput('go', 0);
+      } else if (swapAfter) {
+        swapAfter = false;
+        pulse('swap');
+      }
+    };
+    const pending = () => (queue.length > 0 || swapAfter) && !busyNow();
     const runFor = (until: () => boolean) => {
       if (running) return stop();
       stage.checkpoint();
       runBtn.textContent = 'Pause';
       let last = performance.now(), owed = 0;
+      // as fast as it goes: cycles for ~12 ms of each frame, then one redraw (a redraw costs as much as many cycles)
       const tick = () => {
-        const t0 = performance.now();
-        let want = chunk;
+        const t0 = performance.now(), deadline = t0 + 12;
+        let want = 1e7;
         if (cap) {
           owed += (cap * (t0 - last)) / 1000;
           want = Math.min(Math.floor(owed), 8192);
           owed -= want;
         }
         last = t0;
-        const n = want > 0 ? stage.runCycles(want, until) : 0;
+        if (queue.length || swapAfter) pump();
+        const n = want > 0 ? stage.runCycles(want, () => until() || pending() || performance.now() > deadline) : 0;
         const dt = performance.now() - t0;
         if (cap) rate = cap;
-        else if (n > 0 && dt > 0) {
-          rate = Math.round((n * 1000) / dt);
-          chunk = Math.max(4, Math.min(4096, Math.round(chunk * Math.min(2, Math.max(0.5, 14 / dt)))));
-        }
+        else if (n > 0 && dt > 0) rate = Math.round((n * 1000) / Math.max(dt, 16.7));
         if (until()) return stop();
         running = requestAnimationFrame(tick);
       };
@@ -139,7 +190,17 @@ function screenPanel(opts: PanelOpts): ScenePanel {
 
     const controls: HTMLElement[] = [runBtn, frameBtn, swapBtn, h('label', { class: 'gfx-check', title: 'flip only at vsync, between two frames' }, sync, 'wait for vsync')];
     let triSel: HTMLSelectElement | null = null;
-    if (opts.gpu) {
+    if (opts.scripts) {
+      const scripts = opts.scripts;
+      triSel = h('select', { 'aria-label': 'draws' }, ...scripts.map((t) => h('option', { value: t.id }, t.title))) as HTMLSelectElement;
+      const playBtn = h('button', { class: 'btn sm', title: 'draw these triangles one after the other into the back frame, then swap' }, 'Draw these');
+      playBtn.addEventListener('click', () => {
+        queue = [...scripts.find((t) => t.id === triSel!.value)!.ops];
+        swapAfter = true;
+        if (!running) runFor(() => false);
+      });
+      controls.splice(2, 1, playBtn);
+    } else if (opts.gpu) {
       const drawBtn = h('button', { class: 'btn sm', title: 'start the rasterizer on the triangle at its inputs' }, 'Draw');
       drawBtn.addEventListener('click', () => pulse('go'));
       triSel = h('select', { 'aria-label': 'triangle' }, ...TRIANGLES.map((t) => h('option', { value: t.id }, t.title))) as HTMLSelectElement;
@@ -222,6 +283,7 @@ function screenPanel(opts: PanelOpts): ScenePanel {
         h('span', { title: 'vsync pulses so far: the scan-out sends a frame every ' + FB_WORDS + ' cycles' }, `${frames} frame${frames === 1 ? '' : 's'} sent`),
         h('span', null, `front: frame ${fr}`),
         ...(opts.gpu ? [h('span', { class: busy ? 'warn' : '' }, busy ? 'rasterizer busy' : 'rasterizer idle')] : []),
+        ...(queue.length ? [h('span', null, `${queue.length} draw${queue.length > 1 ? 's' : ''} to go`)] : []),
         ...(running && rate ? [h('span', { title: 'gate-level simulation in this page' }, `${rate.toLocaleString('en')} cycles/s`)] : []));
     };
 
@@ -231,7 +293,9 @@ function screenPanel(opts: PanelOpts): ScenePanel {
         h('div', { class: 'param-row', style: 'margin-bottom:6px' }, ...(triSel ? [triSel] : []), ...(opts.gpu ? [viewSel] : []), speed),
         h('div', { class: 'gfx-screen-wrap' }, cv),
         h('div', { class: 'param-row', style: 'margin-top:6px' }, ...controls), status,
-        h('p', { class: 'cpu-sec-hint' }, opts.gpu
+        h('p', { class: 'cpu-sec-hint' }, opts.scripts
+          ? 'Draw these clears the back frame and draws the triangles in turn, each waiting for the rasterizer, then swaps. Choose "Back frame" to watch them land.'
+          : opts.gpu
           ? 'Draw starts the rasterizer on the triangle at its inputs; it writes into the back frame (choose "Back frame" to watch). Swap shows it.'
           : 'The scan-out reads four pixels a cycle; the bright row is where it reads now. Swap asks for the other frame.')));
     title.addEventListener('click', () => { el.classList.toggle('collapsed'); stage.setInset(el.classList.contains('collapsed') ? 0 : el.getBoundingClientRect().width + 24); });

@@ -278,8 +278,9 @@ export const RAST_SETUP: ComponentDef = (() => {
   // twice the area, written in S2 (s = 2: 0010)
   const dec = b.op(decoder(4), ['s'], 'phase');
   const area = b.op(register(N), [`${sum}.s`, `${dec}.y2`, 'clk'], '2 × area', 'area');
-  // S8 may last (the depth set-up): acc holds, so edge 2's value stays put
-  b.wire(b.op1(NOT, [`${dec}.y8`], 'hold in S8'), `${acc}.en`);
+  // acc moves in S1 … S7 only: S8 may last (the depth set-up waits) and edge 2's value must stay put; idle and during
+  // the walk nothing downstream switches
+  b.wire(b.op1(orN(7), [1, 2, 3, 4, 5, 6, 7].map((i) => `${dec}.y${i}`), 'S1 … S7'), `${acc}.en`);
   b.next();
   const sAr = topBit(b, `${area}.q`, N, 'sign of area');
   const front = b.op1(AND, [b.op1(NOT, [sAr]), b.op1(NOT, [b.op1(isZero(N), [`${area}.q`], 'area = 0')])], 'area > 0: front face');
@@ -413,7 +414,7 @@ export const Z_SETUP: ComponentDef = (() => {
   const b = new Builder(14, 12, 4);
   b.pins('start', 'v0x', 'v0y', 'z0', 'z1', 'z2', 'a0', 'a2', 'b0', 'b2', 'area', 'tx0', 'ty0', 'clk');
   const stR = b.op(register(3), ['', '', 'clk'], 'state', 'state');
-  const kR = b.op(register(4), ['', b.op1(constWord(1, 1), []), 'clk'], 'cycle in state', 'kreg');
+  const kR = b.op(register(4), ['', '', 'clk'], 'cycle in state', 'kreg');
   const st = b.name(`${stR}.q`, 'st', true), k = b.name(`${kR}.q`, 'k', true);
   const z2b = b.op1(constWord(DB - CB, 0), []), one = b.op1(constWord(1, 1), []);
   b.next();
@@ -440,6 +441,8 @@ export const Z_SETUP: ComponentDef = (() => {
   b.wire(b.op1(busMux2(3), [`${sinc}.y`, b.op1(constWord(3, 1), []), 'start'], 'start: MUL'), `${stR}.d`);
   const kinc = b.op(incrementer(4), [k]);
   b.wire(b.op1(AND4W, [`${kinc}.y`, b.op1(fanout(4), [b.op1(NOT, [change])])], 'k + 1, or 0'), `${kR}.d`);
+  // idle and ready, k stands still: nothing downstream of it switches between triangles
+  b.wire(b.op1(OR, [change, b.op1(NOT, [b.op1(OR, [ph(0), ph(7)])])], 'counting'), `${kR}.en`);
   b.next();
   // products: (A0, Δz2), (A2, Δz1), (B0, Δz2), (B2, Δz1)
   const mX = b.op1(muxTree(2, DB), ['a0', 'a2', 'b0', 'b2', b.op1(merger([1, 1]), [`${ks}.o0`, `${ks}.o1`])], 'A or B');
