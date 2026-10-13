@@ -1,4 +1,4 @@
-// The abstraction ladder: every level of the journey and what it is built from.
+// The abstraction ladder: every level of the journey, what it is built from, and the chapter that builds it.
 
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
@@ -6,31 +6,34 @@ import type { Widget } from '../view/stage';
 export interface Rung {
   title: string;
   madeOf: string;
-  ready: boolean;
+  /** The chapter that builds this level (its id and number). */
+  chapter: string;
+  num: number;
 }
 
 export const LADDER: Rung[] = [
-  { title: 'A chip on a wafer', madeOf: 'standard cells, placement, routing, masks', ready: true },
-  { title: 'Multi-core processor', madeOf: 'cores, arbiter, atomics, coherence', ready: true },
-  { title: 'Floating point & caches', madeOf: 'FPU, SRAM, tag arrays, a slow memory', ready: true },
-  { title: 'Complete RV32IM system', madeOf: 'CSRs, traps, interrupts, I/O, multiply / divide', ready: true },
-  { title: 'Pipelined RISC-V core', madeOf: 'pipeline registers, hazard unit, branch predictor', ready: true },
-  { title: 'Single-cycle RISC-V CPU', madeOf: 'register file, ALU, control, memories', ready: true },
-  { title: 'Instruction set & assembly', madeOf: 'bits with agreed meanings', ready: true },
-  { title: 'ALU & register file', madeOf: 'adders, muxes, registers', ready: true },
-  { title: 'Memory arrays', madeOf: 'decoders, registers, mux trees', ready: true },
-  { title: 'Registers & counters', madeOf: 'flip-flops', ready: true },
-  { title: 'Latches & flip-flops', madeOf: 'gates with feedback', ready: true },
-  { title: 'Adders, decoders, muxes', madeOf: 'gates', ready: true },
-  { title: 'Logic gates', madeOf: 'NAND', ready: true },
-  { title: 'NAND gate', madeOf: '4 transistors', ready: true },
-  { title: 'MOSFET', madeOf: 'doped silicon', ready: true },
+  { title: 'A GPU', madeOf: 'lanes, warps, a rasterizer, frame buffers', chapter: 'lanes', num: 26 },
+  { title: 'A chip on a wafer', madeOf: 'standard cells, placement, routing, masks', chapter: 'silicon', num: 25 },
+  { title: 'Multi-core processor', madeOf: 'cores, arbiter, atomics, coherence', chapter: 'multicore', num: 24 },
+  { title: 'Floating point & caches', madeOf: 'FPU, SRAM, tag arrays, a slow memory', chapter: 'cache', num: 21 },
+  { title: 'Complete RV32IM system', madeOf: 'CSRs, traps, interrupts, I/O, multiply / divide', chapter: 'io', num: 18 },
+  { title: 'Pipelined RISC-V core', madeOf: 'pipeline registers, hazard unit, branch predictor', chapter: 'pipeline', num: 16 },
+  { title: 'Single-cycle RISC-V CPU', madeOf: 'register file, ALU, control, memories', chapter: 'cpu', num: 14 },
+  { title: 'Instruction set & assembly', madeOf: 'bits with agreed meanings', chapter: 'isa', num: 13 },
+  { title: 'ALU & register file', madeOf: 'adders, muxes, registers', chapter: 'alu', num: 11 },
+  { title: 'Memory arrays', madeOf: 'decoders, registers, mux trees', chapter: 'memory', num: 10 },
+  { title: 'Registers & counters', madeOf: 'flip-flops', chapter: 'registers', num: 9 },
+  { title: 'Latches & flip-flops', madeOf: 'gates with feedback', chapter: 'latches', num: 8 },
+  { title: 'Adders, decoders, muxes', madeOf: 'gates', chapter: 'adders', num: 6 },
+  { title: 'Logic gates', madeOf: 'NAND', chapter: 'gates', num: 4 },
+  { title: 'NAND gate', madeOf: '4 transistors', chapter: 'nand', num: 3 },
+  { title: 'MOSFET', madeOf: 'doped silicon', chapter: 'mosfet', num: 1 },
 ];
 
 export function ladder(): HTMLElement {
-  return h('div', { class: 'ladder' }, LADDER.map((r, i) =>
-    h('div', { class: `rung ${r.ready ? 'done' : 'soon'}` },
-      h('span', { class: 'n' }, String(LADDER.length - 1 - i).padStart(2, '0')),
+  return h('nav', { class: 'ladder', 'aria-label': 'The journey, level by level' }, LADDER.map((r) =>
+    h('a', { class: 'rung', href: `#/c/${r.chapter}/0`, title: `Chapter ${r.num}` },
+      h('span', { class: 'n' }, String(r.num).padStart(2, '0')),
       h('span', { class: 't' }, r.title),
       h('span', { class: 'c' }, r.madeOf))));
 }
@@ -40,7 +43,7 @@ export function journeyWidget(): Widget {
     el: h('div', { class: 'widget' },
       h('div', { class: 'panel' },
         h('h3', null, 'The ladder of abstraction'),
-        h('p', { class: 'sub' }, 'Each level uses only the level below it. Solid rungs are ready to explore; dashed ones are being built.'),
+        h('p', { class: 'sub' }, 'Each level uses only the level below it. A rung opens the chapter that builds it.'),
         ladder())),
   };
 }

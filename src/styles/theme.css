@@ -127,8 +127,10 @@
 }
 
 :root[data-theme='dark'],
-/* The vivid look's dark board (vivid.css): a schematic takes the dark tokens in either theme. */
-:root[data-look='vivid'][data-board='dark'] svg.schematic {
+/* The vivid look's dark board (vivid.css): a schematic takes the dark tokens in either theme, and so
+   does the sandbox's empty-chip card drawn over it. */
+:root[data-look='vivid'][data-board='dark'] svg.schematic,
+:root[data-look='vivid'][data-board='dark'] .sb-empty-chip {
   color-scheme: dark;
   --bg: #0a0c12;
   --surface: #11141c;
