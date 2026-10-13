@@ -1445,6 +1445,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .gfx-cost .stack i { border-radius: 0; }
 .gfx-cost .stack i:last-child { border-radius: 0 3px 3px 0; }
 .gfx-cost .mem { color: var(--text-2); font-size: 12px; }
+.gfx-cost tr.on td { color: var(--text); font-weight: 600; }
 @media (max-width: 700px) { .gfx-cost .mem { display: none; } }
 .gfx-help { margin: 8px 0 4px; font-size: 12.5px; color: var(--text-2); }
 .gfx-help summary { cursor: pointer; font-weight: 600; color: var(--text); }

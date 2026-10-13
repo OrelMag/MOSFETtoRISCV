@@ -234,7 +234,30 @@ export const chGfxPipeline: Chapter = {
       challenge: {
         kind: 'quiz', question: 'Which change halves the triangle\'s frame time?',
         options: ['A second warp core', 'Clearing four pixels a cycle', 'A faster vertex kernel', 'Flipping without waiting for vsync'], answer: 1,
-        explain: 'The clear falls from 4 438 cycles to about 1 400, so the frame is about 2 700 cycles and snaps to three scan-outs: 3 072 cycles instead of 6 144. The kernel is hidden in the clear already; flipping without vsync saves at most one scan-out, and tears.',
+        explain: 'The clear falls from 4 438 cycles to 1 026 (the next step builds it), so the frame snaps to three scan-outs: 3 072 cycles instead of 6 144. The kernel is hidden in the clear already; flipping without vsync saves at most one scan-out, and tears.',
+      },
+    },
+    {
+      title: 'A faster clear',
+      body: `
+        <p>The clear writes the same colour into every pixel and the same far depth into every depth entry: it needs no edge functions, no tile walk,
+        no depth test. Chapter 30 let the rasterizer do it because the rasterizer was there, a pixel a cycle: 4 438 of the triangle's 6 144 cycles.</p>
+        <p>The <strong>clear unit</strong> is a 10-bit word counter, 278 NANDs. The command unit starts it at launch, instead of the rasterizer, and it drives one
+        word address a cycle with a write enable that reaches all four byte banks of the back frame: four RGB332 pixels a cycle, 1 024 cycles a frame. The
+        depth buffer takes the frame's shape, four banks of 1 024 × 16 (pixel x mod 4), so four depths clear in the same cycle. Drawing still writes one
+        pixel and one bank, picked by x mod 4. The banks cost the depth test 307 NANDs of multiplexers (1 728 against 1 421), and the command unit no longer
+        steers the background colour into the rasterizer (1 963 against 1 997): about 580 NANDs in all.</p>
+        <p>The triangle's frame: the clear 1 026 cycles, the triangle 1 268, waiting for vsync 778, so 3 072 cycles, three scan-outs instead of six. The cube's is
+        4 096 or 5 120, four or five scan-outs (it was 7 168 to 8 192). The triangle's frame rate doubles, and the rasterizer's pixel a cycle now bounds the frame.</p>
+        <p>Real GPUs go further: a clear only marks tiles as cleared, a bit each, and the colour is supplied when a tile is first read or written, so a clear
+        costs a few cycles whatever the screen size. The price is that flag, checked by the depth test and the scan-out on every access.</p>
+        <div class="try">Switch the clear and run a few frames each way: the timeline gains a clear unit lane, and the triangle's frames per second double. Click the BACK
+        frame under the screen: the clear now sweeps it four pixels at a time. Open the clear unit and watch its word count.</div>`,
+      scene: () => pipelineScene('triangle', { clear: 'word', clearSwitch: true, highlight: ['clear', 'rop'] }),
+      challenge: {
+        kind: 'quiz', question: 'With the clear a word a cycle, what bounds the cube\'s frame?',
+        options: ['The clear', 'The rasterizer: one pixel a cycle', 'The vertex kernel', 'The scan-out\'s word a cycle'], answer: 1,
+        explain: 'The clear is 1 026 cycles; drawing the cube\'s two or three faces takes the rest, and the frame snaps to the next scan-out: 4 096 cycles, or 5 120 when the faces cover more of the screen. Drawing faster takes more pixels a cycle: several rasterizers, each on its own tiles, as real GPUs have.',
       },
     },
   ],

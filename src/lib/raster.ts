@@ -708,6 +708,50 @@ export const ROP: ComponentDef = (() => {
   });
 })();
 
+/**
+ * Chapter 31's faster clear: the ROP with its depth buffer in four banks of 1 024 × 16 (bank j: pixels with x mod 4 = j,
+ * as the frame's byte banks), so the clear unit writes a whole word a cycle: with cwe, every depth bank takes 0xFFFF and
+ * the frame word ca takes the colour cd in all four bytes (wall). Otherwise as ROP, without fclr: the rasterizer no
+ * longer clears.
+ */
+export const ROP_W: ComponentDef = (() => {
+  const b = new Builder(12, 12, 4);
+  b.pins('fa', 'fd', 'fz', 'fwe', 'zt', 'a', 'wq', 'ca', 'cd', 'cwe', 'clk');
+  const fs = b.op(splitter([2, 10]), ['fa'], 'pixel → word, lane', 'fs');
+  const far = new Uint32Array((FB_W * FB_W) / 4).fill(0xffff);
+  const za = b.op1(busMux2(10), [`${fs}.o1`, 'ca', 'cwe'], 'word: the pixel\'s, or the clear\'s', 'za');
+  b.next();
+  const banks = [0, 1, 2, 3].map((j) => b.add(bigRamWithInit(10, 16, far), `depth, x mod 4 = ${j}`, `zbuf${j}`));
+  b.next();
+  const zq = b.op1(muxTree(2, 16), [...banks.map((z) => `${z}.dout`), `${fs}.o0`], 'this pixel\'s depth', 'zq');
+  const nearer = `${b.op(magComparator(16), ['fz', zq], 'nearer?', 'cmp')}.lt`;
+  const pass = b.op1(OR, [b.op1(NOT, ['zt'], undefined, 'nzt'), nearer], 'passes', 'pass');
+  const we = b.name(b.op1(AND, ['fwe', pass], 'write', 'wr'), 'we', true);
+  const dec = b.op(decoder(2, true), [`${fs}.o0`, b.op1(AND, [we, 'zt'], 'write depth', 'zwr')], 'which depth bank', 'zdec');
+  const zd = b.op1(busMux2(16), ['fz', b.op1(constWord(16, 0xffff), [], undefined, 'farZ'), 'cwe'], 'clear: far', 'zd');
+  b.next();
+  banks.forEach((z, j) => {
+    b.wire(za, `${z}.addr`); b.wire(zd, `${z}.din`); b.wire('clk', `${z}.clk`);
+    b.wire(b.op1(OR, [`${dec}.y${j}`, 'cwe'], j ? undefined : 'or every bank', `zen${j}`), `${z}.we`);
+  });
+  const mix = b.op1(BLEND332, ['fd', 'wq', 'a'], 'blend', 'mix');
+  b.next();
+  b.wire(b.op1(busMux2(8), [mix, 'cd', 'cwe'], 'clear: the colour', 'wdM'), 'wd');
+  b.wire(b.op1(busMux2(12), ['fa', b.op1(merger([2, 10]), [b.op1(constWord(2, 0), [], undefined, 'lane0'), 'ca'], undefined, 'caw'), 'cwe'], 'the clear\'s word', 'waM'), 'wa');
+  b.wire(b.op1(OR, [we, 'cwe'], 'write', 'weO'), 'we');
+  b.wire('cwe', 'wall');
+  const R = b.right;
+  return define({
+    id: 'rop_w', name: 'Depth test and blend (banked depth)', category: 'memory',
+    summary: 'As the depth test and blend, with the depth buffer in four banks (x mod 4), like the frame\'s bytes: the clear unit writes the far depth into all four '
+      + 'and the clear colour into the frame\'s four bytes at one word address, four pixels a cycle (cwe). A pixel still reads and writes one bank.',
+    ports: [bus('fa', 12, 'in'), bus('fd', 8, 'in'), bus('fz', 16, 'in'), bit('fwe', 'in'), bit('zt', 'in'), bus('a', 3, 'in'), bus('wq', 8, 'in'),
+      bus('ca', 10, 'in'), bus('cd', 8, 'in'), bit('cwe', 'in'), bit('clk', 'in', 'bottom', true), bus('wa', 12, 'out'), bus('wd', 8, 'out'), bit('we', 'out'), bit('wall', 'out')],
+    symbol: { kind: 'box', label: 'DEPTH · BLEND' },
+    netlist: () => ({ pins: { ...pinsAt(['fa', 'fd', 'fz', 'fwe', 'zt', 'a', 'wq', 'ca', 'cd', 'cwe', 'clk'], 0, 6), ...pinsAt(['wa', 'wd', 'we', 'wall'], R, 6) }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
 // ---- framebuffer and scan-out ------------------------------------------------------------------------
 
 /** Words of one frame: four pixels each. */
@@ -719,10 +763,11 @@ const bufCache = new Map<string, ComponentDef>();
 /**
  * One 64 × 64 frame of RGB332 bytes: four byte banks (pixel x mod 4), so a word address reads four neighbours at
  * once (q, pixel 4a in its low byte) while a write goes to one bank (lane = x mod 4). q8: the byte at a, lane.
- * `init`: the frame's pixels at power-on (index y·64 + x).
+ * `init`: the frame's pixels at power-on (index y·64 + x). wide (chapter 31's faster clear): `all` writes d into every
+ * bank at word a, four pixels in one cycle.
  */
-export function pixelBuffer(init?: ArrayLike<number>): ComponentDef {
-  const key = init ? hashBytes(init) : '';
+export function pixelBuffer(init?: ArrayLike<number>, wide = false): ComponentDef {
+  const key = `${init ? hashBytes(init) : ''}${wide ? '/w' : ''}`;
   const hit = bufCache.get(key);
   if (hit) return hit;
   const banks = [0, 1, 2, 3].map((j) => {
@@ -732,21 +777,24 @@ export function pixelBuffer(init?: ArrayLike<number>): ComponentDef {
     return bigRamWithInit(WK, 8, words);
   });
   const b = new Builder(12, 12, 4);
-  b.pins('a', 'lane', 'd', 'we', 'clk');
+  b.pins('a', 'lane', 'd', 'we', ...(wide ? ['all'] : []), 'clk');
   const dec = b.op(decoder(2, true), ['lane', 'we'], 'which bank');
+  if (wide) b.next();
+  const en = [0, 1, 2, 3].map((j) => (wide ? b.op1(OR, [`${dec}.y${j}`, 'all'], j ? undefined : 'or every bank', `en${j}`) : `${dec}.y${j}`));
   b.next();
-  const qs = banks.map((B, j) => b.op(B, ['a', 'd', `${dec}.y${j}`, 'clk'], `bank ${j}: x mod 4 = ${j}`, `bank${j}`));
+  const qs = banks.map((B, j) => b.op(B, ['a', 'd', en[j], 'clk'], `bank ${j}: x mod 4 = ${j}`, `bank${j}`));
   b.next();
   b.wire(b.op1(merger([8, 8, 8, 8]), qs.map((q) => `${q}.dout`), 'four pixels'), 'q');
   b.wire(b.op1(muxTree(2, 8), [...qs.map((q) => `${q}.dout`), 'lane'], 'this pixel'), 'q8');
   const R = b.right;
   const d = define({
-    id: init ? `pixbuf_${hashBytes(init)}` : 'pixbuf', name: init ? 'Frame (with a picture)' : 'Frame', category: 'memory',
+    id: `${init ? `pixbuf_${hashBytes(init)}` : 'pixbuf'}${wide ? '_w' : ''}`, name: init ? 'Frame (with a picture)' : 'Frame', category: 'memory',
     summary: `${FB_W} × ${FB_W} pixels of one byte (RGB332), in four banks of ${FB_WORDS} bytes: bank j holds the pixels whose x mod 4 = j, `
-      + 'so one word address reads four neighbouring pixels (the scan-out\'s word) and a write enables one bank (the rasterizer\'s pixel).',
-    ports: [bus('a', WK, 'in'), bus('lane', 2, 'in'), bus('d', 8, 'in'), bit('we', 'in'), bit('clk', 'in', 'bottom', true), bus('q', 32, 'out'), bus('q8', 8, 'out')],
+      + 'so one word address reads four neighbouring pixels (the scan-out\'s word) and a write enables one bank (the rasterizer\'s pixel).'
+      + (wide ? ' all writes every bank: four pixels a cycle, the clear unit\'s word.' : ''),
+    ports: [bus('a', WK, 'in'), bus('lane', 2, 'in'), bus('d', 8, 'in'), bit('we', 'in'), ...(wide ? [bit('all', 'in')] : []), bit('clk', 'in', 'bottom', true), bus('q', 32, 'out'), bus('q8', 8, 'out')],
     symbol: { kind: 'box', label: 'FRAME 64×64' },
-    netlist: () => ({ pins: { ...pinsAt(['a', 'lane', 'd', 'we', 'clk'], 0, 6), ...pinsAt(['q', 'q8'], R, 8) }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { ...pinsAt(['a', 'lane', 'd', 'we', ...(wide ? ['all'] : []), 'clk'], 0, 6), ...pinsAt(['q', 'q8'], R, 8) }, instances: b.instances, nets: b.nets() }),
   });
   bufCache.set(key, d);
   return d;
@@ -762,24 +810,26 @@ const fbCache = new Map<string, ComponentDef>();
 
 /**
  * Two frames. front = 0: frame 0 is read by the scan-out (ra: a word), frame 1 written by the rasterizer (wa: a
- * pixel); front = 1 the other way round. rq: the four front pixels at ra; wq: the back frame's pixel at wa.
+ * pixel); front = 1 the other way round. rq: the four front pixels at ra; wq: the back frame's pixel at wa. wide: wall
+ * writes the back frame's whole word at wa (four pixels: chapter 31's clear unit).
  */
-export function frameBuffers(init0?: ArrayLike<number>, init1?: ArrayLike<number>): ComponentDef {
-  const F0 = pixelBuffer(init0), F1 = pixelBuffer(init1);
+export function frameBuffers(init0?: ArrayLike<number>, init1?: ArrayLike<number>, wide = false): ComponentDef {
+  const F0 = pixelBuffer(init0, wide), F1 = pixelBuffer(init1, wide);
   const key = `${F0.id}/${F1.id}`;
   const hit = fbCache.get(key);
   if (hit) return hit;
   const b = new Builder(12, 12, 4);
-  b.pins('ra', 'wa', 'wd', 'we', 'front', 'clk');
+  b.pins('ra', 'wa', 'wd', 'we', ...(wide ? ['wall'] : []), 'front', 'clk');
   const ws = b.op(splitter([2, WK]), ['wa'], 'pixel → word, lane');
   const nf = b.op1(NOT, ['front'], 'back is frame 0');
   b.next();
   const we0 = b.op1(AND, ['we', 'front'], 'write frame 0'), we1 = b.op1(AND, ['we', nf], 'write frame 1');
+  const all0 = wide ? b.op1(AND, ['wall', 'front'], 'clear frame 0', 'all0') : '', all1 = wide ? b.op1(AND, ['wall', nf], 'clear frame 1', 'all1') : '';
   const a0 = b.op1(busMux2(WK), [`${ws}.o1`, 'ra', nf], 'frame 0: front → scan-out');
   const a1 = b.op1(busMux2(WK), [`${ws}.o1`, 'ra', 'front'], 'frame 1: front → scan-out');
   b.next();
-  const f0 = b.op(F0, [a0, `${ws}.o0`, 'wd', we0, 'clk'], 'frame 0', 'fb0');
-  const f1 = b.op(F1, [a1, `${ws}.o0`, 'wd', we1, 'clk'], 'frame 1', 'fb1');
+  const f0 = b.op(F0, [a0, `${ws}.o0`, 'wd', we0, ...(wide ? [all0] : []), 'clk'], 'frame 0', 'fb0');
+  const f1 = b.op(F1, [a1, `${ws}.o0`, 'wd', we1, ...(wide ? [all1] : []), 'clk'], 'frame 1', 'fb1');
   b.next();
   b.wire(b.op1(busMux2(32), [`${f0}.q`, `${f1}.q`, 'front'], 'front frame'), 'rq');
   b.wire(b.op1(busMux2(8), [`${f1}.q8`, `${f0}.q8`, 'front'], 'back frame'), 'wq');
@@ -788,10 +838,10 @@ export function frameBuffers(init0?: ArrayLike<number>, init1?: ArrayLike<number
     id: `fb2_${F0.id}_${F1.id}`, name: 'Double framebuffer', category: 'memory',
     summary: 'Two frames: the front one is read by the scan-out while the rasterizer draws into the back one, so the screen never shows a half-drawn picture. '
       + 'Flipping front swaps which frame each side\'s address reaches (two address multiplexers), nothing is copied.',
-    ports: [bus('ra', WK, 'in'), bus('wa', 12, 'in'), bus('wd', 8, 'in'), bit('we', 'in'), bit('front', 'in'), bit('clk', 'in', 'bottom', true),
+    ports: [bus('ra', WK, 'in'), bus('wa', 12, 'in'), bus('wd', 8, 'in'), bit('we', 'in'), ...(wide ? [bit('wall', 'in')] : []), bit('front', 'in'), bit('clk', 'in', 'bottom', true),
       bus('rq', 32, 'out'), bus('wq', 8, 'out')],
     symbol: { kind: 'box', label: 'FRAMEBUFFER ×2' },
-    netlist: () => ({ pins: { ...pinsAt(['ra', 'wa', 'wd', 'we', 'front', 'clk'], 0, 6), ...pinsAt(['rq', 'wq'], R, 8) }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { ...pinsAt(['ra', 'wa', 'wd', 'we', ...(wide ? ['wall'] : []), 'front', 'clk'], 0, 6), ...pinsAt(['rq', 'wq'], R, 8) }, instances: b.instances, nets: b.nets() }),
   });
   fbCache.set(key, d);
   return d;
