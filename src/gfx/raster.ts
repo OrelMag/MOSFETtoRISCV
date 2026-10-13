@@ -92,13 +92,14 @@ export interface RasterRun {
   walked: number;
 }
 
-/** The pixels a triangle covers, in the order the hardware writes them, and its cycle count. */
-export function rasterize(v: Vtx[]): RasterRun {
+/** The pixels a triangle covers, in the order the hardware writes them, and its cycle count (depth: the rasterizer
+ * with the depth set-up, whose walk starts later). */
+export function rasterize(v: Vtx[], depth = false): RasterRun {
   const s = setup(v);
   const writes: PixelWrite[] = [];
   // go is seen in cycle 0; S1 … S8 are cycles 1 … 8; a back face stops after S3.
   if (!s.front) return { setup: s, cycles: 3, writes, tiles: 0, walked: 0 };
-  let cycle = 9, tiles = 0, walked = 0;
+  let cycle = depth ? Z_WALK_START : 9, tiles = 0, walked = 0;
   const E = (i: number, x: number, y: number) => s.A[i] * (4 * x + 2 - v[i][0]) + s.B[i] * (4 * y + 2 - v[i][1]) - s.bias[i];
   for (let ty = s.ty0; ty <= s.ty1; ty++) {
     for (let tx = s.tx0; tx <= s.tx1; tx++) {
@@ -132,3 +133,93 @@ export function drawInto(fb: Uint8Array, v: Vtx[], col: number): RasterRun {
 }
 
 export { MOD as EDGE_MOD };
+
+// ---- depth and blending (chapter 30, steps 4–5) ---------------------------------------------------------
+//
+// z is given per vertex (8 bits, 0 near … 255 far) and is linear across the triangle, a plane like the edges:
+//   z(p) = z0 + Zx·(p.x − x0) + Zy·(p.y − y0)   (per quarter pixel, Z_FRAC fraction bits)
+//   Zx = (A0·(z2 − z0) + A2·(z1 − z0)) / area2,  Zy = (B0·(z2 − z0) + B2·(z1 − z0)) / area2
+// (the barycentric weights E1, E2, E0 / area2 of v0, v1, v2, differentiated). Set-up computes both slopes with a
+// divider (quotient truncated toward zero), and z at the first tile by shift-and-add; the walk steps it like an
+// edge. All of it is 32-bit two's complement, wrapping: the value at a pixel inside the triangle is right even
+// when a thin triangle's slope is huge. The depth buffer keeps z >> 4 as 16 bits (8.8), clamped to 0 … 0xFFFF.
+// A pixel passes the depth test when its z is less than the buffer's (nearer); clear writes 0xFFFF.
+
+export const Z_FRAC = 12;
+const wrap32 = (v: number) => wrap(v, 32);
+
+export interface ZPlane { nx: number; ny: number; zx: number; zy: number; zOrg: number }
+
+export function zPlane(v: Vtx[], z: number[]): ZPlane {
+  const s = setup(v);
+  const d1 = z[1] - z[0], d2 = z[2] - z[0];
+  const nx = s.A[0] * d2 + s.A[2] * d1, ny = s.B[0] * d2 + s.B[2] * d1;
+  const div = (n: number) => wrap32(Math.sign(n) * Math.floor((Math.abs(n) * 2 ** Z_FRAC) / s.area2));
+  const zx = div(nx), zy = div(ny);
+  // z at the first tile's top-left pixel centre: products in 32 bits, wrapping
+  const mul = (a: number, b: number) => wrap32(Number((BigInt(a) * BigInt(b)) % 2n ** 32n));
+  const zOrg = wrap32(z[0] * 2 ** Z_FRAC + mul(zx, s.ox - v[0][0]) + mul(zy, s.oy - v[0][1]));
+  return { nx, ny, zx, zy, zOrg };
+}
+
+/** z at pixel (x, y), 32-bit, as the stepper holds it. */
+export function zAt(v: Vtx[], z: number[], x: number, y: number): number {
+  const s = setup(v), p = zPlane(v, z);
+  const mul = (a: number, b: number) => wrap32(Number((BigInt(a) * BigInt(b)) % 2n ** 32n));
+  return wrap32(p.zOrg + mul(p.zx, 4 * x + 2 - s.ox) + mul(p.zy, 4 * y + 2 - s.oy));
+}
+
+/** The depth buffer's 16-bit form of a 32-bit z: z >> 4, 0 when negative, 0xFFFF when too large. */
+export function zStore(z32: number): number {
+  if (z32 < 0) return 0;
+  const q = Math.floor(z32 / 16);
+  return q > 0xffff ? 0xffff : q;
+}
+
+/** With the depth set-up (about 80 cycles: four products, two 30-bit divisions, ten shift-and-add steps), the walk's
+ * first TEST is in this cycle, counted from go, instead of 9. */
+export const Z_WALK_START = 85;
+
+/** Clear (go with clr): every tile of the screen, every pixel, in the walk's order; its cycle count. */
+export const CLEAR_CYCLES = Z_WALK_START - 1 + (FB_W / 4) ** 2 * 17;
+
+/** Alpha blending in RGB332, alpha a in eighths minus one (7: opaque): each channel (s·(a + 1) + d·(7 − a)) >> 3. */
+export function blend332(s: number, d: number, a: number): number {
+  const ch = (sh: number, w: number) => {
+    const m = (1 << w) - 1, sc = (s >> sh) & m, dc = (d >> sh) & m;
+    return (((sc * (a + 1) + dc * (7 - a)) >> 3) & m) << sh;
+  };
+  return ch(5, 3) | ch(2, 3) | ch(0, 2);
+}
+
+export interface DrawOp {
+  v: Vtx[];
+  col: number;
+  z?: number[];
+  /** Alpha, 0 … 7 (7: opaque). */
+  a?: number;
+  /** Depth test on. */
+  zt?: boolean;
+  /** Clear: every pixel ← col, depth ← 0xFFFF. */
+  clr?: boolean;
+}
+
+/** The reference framebuffer and depth buffer, drawn into as the hardware does. */
+export class RefFrame {
+  fb = new Uint8Array(FB_W * FB_W);
+  zb = new Uint16Array(FB_W * FB_W).fill(0xffff);
+  draw(op: DrawOp): void {
+    if (op.clr) {
+      this.fb.fill(op.col & 255);
+      this.zb.fill(0xffff);
+      return;
+    }
+    const z = op.z ?? [0, 0, 0], a = op.a ?? 7;
+    for (const w of rasterize(op.v).writes) {
+      const i = w.y * FB_W + w.x, zs = zStore(zAt(op.v, z, w.x, w.y));
+      if (op.zt && !(zs < this.zb[i])) continue;
+      this.fb[i] = blend332(op.col, this.fb[i], a);
+      if (op.zt) this.zb[i] = zs;
+    }
+  }
+}

@@ -15,17 +15,20 @@
 //               (at vsync when sync = 1, at once otherwise: tearing).
 
 import type { ComponentDef, PortDef } from '../sim/types';
-import { CMD, EDGE_BITS, FB_W } from '../gfx/raster';
+import { CMD, EDGE_BITS, FB_W, Z_FRAC } from '../gfx/raster';
 import { constWord, isZero } from './alu';
 import { bigRam, bigRamWithInit } from './bigmem';
 import { Builder } from './builder';
 import { addSub, andN, busMux2, decoder, equal, incrementer, muxTree, rca } from './combinational';
-import { magComparator } from './coding';
+import { absValue, magComparator } from './coding';
 import { define, merger, ones, splitter } from './define';
 import { fanout } from './fastadd';
+import { orN } from './wide';
 import { AND, NOT, OR, XOR } from './gates';
 import { boothMul } from './multiply';
-import { DFF, register } from './sequential';
+import { arrayMul, condNegate } from './muldiv';
+import { nrSeqDivider } from './divide';
+import { DFF, DFFE, register } from './sequential';
 import { TIE0 } from './transistors';
 
 const N = EDGE_BITS;
@@ -51,9 +54,16 @@ function topBit(b: Builder, drv: string, w: number, label?: string): string {
  * 4 down (E += dy), 5 up (E −= dy), 6 band (E, R ← R + 4dy). neg: E < 0 (the pixel is outside this edge);
  * tneg: E + off < 0 (no pixel of the tile whose top-left pixel E is at can be inside).
  */
-export const EDGE_STEP: ComponentDef = (() => {
+const stepCache = new Map<string, ComponentDef>();
+
+/** An n-bit stepper; tile = false drops the tile test (off, tneg): the depth stepper. */
+export function edgeStep(n: number, tile = true): ComponentDef {
+  const key = `${n}${tile ? '' : 'z'}`;
+  const hit = stepCache.get(key);
+  if (hit) return hit;
+  const N = n;
   const b = new Builder(12, 12, 4);
-  b.pins('dx', 'dy', 'off', 'e0', 'cmd', 'clk');
+  b.pins('dx', 'dy', ...(tile ? ['off'] : []), 'e0', 'cmd', 'clk');
   const cs = b.op(splitter(ones(3)), ['cmd'], 'cmd');
   const [c0, c1, c2] = [0, 1, 2].map((i) => `${cs}.o${i}`);
   const z2 = b.op1(constWord(2, 0), []);
@@ -88,23 +98,24 @@ export const EDGE_STEP: ComponentDef = (() => {
   b.wire(`${eR}.q`, `${x.split('.')[0]}.a`);
   b.wire(`${rR}.q`, `${x.split('.')[0]}.b`);
   b.next();
-  const t = b.op(rca(N), [`${eR}.q`, 'off', b.op1(TIE0, [])], 'E + off: best corner');
+  const t = tile ? b.op(rca(N), [`${eR}.q`, 'off', b.op1(TIE0, [])], 'E + off: best corner') : '';
   const neg = topBit(b, `${eR}.q`, N, 'sign of E');
   b.next();
-  const tneg = topBit(b, `${t}.s`, N, 'sign of E + off');
   b.wire(`${eR}.q`, 'e');
   b.wire(neg, 'neg');
-  b.wire(tneg, 'tneg');
+  if (tile) b.wire(topBit(b, `${t}.s`, N, 'sign of E + off'), 'tneg');
   const R = b.right;
-  return define({
-    id: 'edge_step', name: 'Edge stepper', category: 'arithmetic',
-    summary: `One edge function E = A·x + B·y + C (${N}-bit), never multiplied: moving one pixel adds dx = 4A (right) or dy = 4B (down; up subtracts it), `
-      + 'skipping a 4-pixel tile adds 4dx (a wired shift), and the next band of tiles starts from R, the band\'s first tile, plus 4dy. '
-      + 'neg: E < 0, the pixel is outside this edge. tneg: E + off < 0, so the whole tile is outside (off moves E to the tile\'s best corner).',
-    ports: [bus('dx', N, 'in'), bus('dy', N, 'in'), bus('off', N, 'in'), bus('e0', N, 'in'), bus('cmd', 3, 'in'), bit('clk', 'in', 'bottom', true),
-      bus('e', N, 'out'), bit('neg', 'out'), bit('tneg', 'out')],
-    symbol: { kind: 'box', label: 'EDGE STEPPER' },
-    netlist: () => ({ pins: { ...pinsAt(['dx', 'dy', 'off', 'e0', 'cmd', 'clk'], 0, 6), ...pinsAt(['e', 'neg', 'tneg'], R, 6) }, instances: b.instances, nets: b.nets() }),
+  const def = define({
+    id: tile ? (n === EDGE_BITS ? 'edge_step' : `edge_step${n}`) : `z_step${n}`, name: tile ? 'Edge stepper' : 'Depth stepper', category: 'arithmetic',
+    summary: tile
+      ? `One edge function E = A·x + B·y + C (${N}-bit), never multiplied: moving one pixel adds dx = 4A (right) or dy = 4B (down; up subtracts it), `
+        + 'skipping a 4-pixel tile adds 4dx (a wired shift), and the next band of tiles starts from R, the band\'s first tile, plus 4dy. '
+        + 'neg: E < 0, the pixel is outside this edge. tneg: E + off < 0, so the whole tile is outside (off moves E to the tile\'s best corner).'
+      : `The edge stepper without the tile test, ${N} bits wide: z is a plane too, stepped by its slopes along the same walk.`,
+    ports: [bus('dx', N, 'in'), bus('dy', N, 'in'), ...(tile ? [bus('off', N, 'in')] : []), bus('e0', N, 'in'), bus('cmd', 3, 'in'), bit('clk', 'in', 'bottom', true),
+      bus('e', N, 'out'), bit('neg', 'out'), ...(tile ? [bit('tneg', 'out')] : [])],
+    symbol: { kind: 'box', label: tile ? 'EDGE STEPPER' : 'DEPTH STEPPER' },
+    netlist: () => ({ pins: { ...pinsAt(['dx', 'dy', ...(tile ? ['off'] : []), 'e0', 'cmd', 'clk'], 0, 6), ...pinsAt(['e', 'neg', ...(tile ? ['tneg'] : [])], R, 6) }, instances: b.instances, nets: b.nets() }),
     hdl: {
       verilog: `wire [${N - 1}:0] step = cmd == 3'd3 ? dx << 2 : cmd == 3'd6 ? dy << 2 : cmd[2] ? dy : dx;
 wire [${N - 1}:0] next = cmd == 3'd1 ? e0 : (cmd == 3'd6 ? r : e) + (cmd == 3'd5 ? -step : step);
@@ -112,11 +123,15 @@ always_ff @(posedge clk) begin
   if (cmd != 3'd0) e <= next;
   if (cmd == 3'd1 || cmd == 3'd6) r <= next;
 end
-assign neg = e[${N - 1}];
-assign tneg = (e + off) >> ${N - 1};`,
+assign neg = e[${N - 1}];${tile ? `
+assign tneg = (e + off) >> ${N - 1};` : ''}`,
     },
   });
-})();
+  stepCache.set(key, def);
+  return def;
+}
+
+export const EDGE_STEP = edgeStep(EDGE_BITS);
 
 // ---- small parts ---------------------------------------------------------------------------------------
 
@@ -253,7 +268,7 @@ export const RAST_SETUP: ComponentDef = (() => {
   // second operand: s odd → −bias of the edge (s = 1: 0), s even → acc
   const bsel = b.op1(muxTree(2, 1), [b.op1(TIE0, []), bias[0], bias[1], bias[2], b.op1(merger([1, 1]), [`${sb}.o1`, `${sb}.o2`])], 'bias of the edge');
   b.next();
-  const acc = b.op(register(N), ['', b.op1(constWord(1, 1), []), 'clk'], 'acc', 'acc');
+  const acc = b.op(register(N), ['', '', 'clk'], 'acc', 'acc');
   const y2 = b.op1(busMux2(N), [`${acc}.q`, b.op1(fanout(N), [bsel]), `${sb}.o0`], 'acc, or −bias');
   b.next();
   const sum = b.op(rca(N), [p18, y2, b.op1(TIE0, [])], 'product + acc');
@@ -261,8 +276,10 @@ export const RAST_SETUP: ComponentDef = (() => {
   b.wire(`${sum}.s`, `${acc}.d`);
   b.next();
   // twice the area, written in S2 (s = 2: 0010)
-  const dec = b.op(decoder(4), ['s'], 'phase = 2');
+  const dec = b.op(decoder(4), ['s'], 'phase');
   const area = b.op(register(N), [`${sum}.s`, `${dec}.y2`, 'clk'], '2 × area', 'area');
+  // S8 may last (the depth set-up): acc holds, so edge 2's value stays put
+  b.wire(b.op1(NOT, [`${dec}.y8`], 'hold in S8'), `${acc}.en`);
   b.next();
   const sAr = topBit(b, `${area}.q`, N, 'sign of area');
   const front = b.op1(AND, [b.op1(NOT, [sAr]), b.op1(NOT, [b.op1(isZero(N), [`${area}.q`], 'area = 0')])], 'area > 0: front face');
@@ -270,16 +287,17 @@ export const RAST_SETUP: ComponentDef = (() => {
   for (const i of E3) { b.wire(dx[i], `dx${i}`); b.wire(dy[i], `dy${i}`); b.wire(off[i], `off${i}`); }
   b.wire(`${sum}.s`, 'e0');
   b.wire(front, 'front');
+  b.wire(`${area}.q`, 'area');
   b.wire(tx0, 'tx0'); b.wire(tx1, 'tx1'); b.wire(ty0, 'ty0'); b.wire(ty1, 'ty1');
   const R = b.right;
-  const outs = [...E3.flatMap((i) => [`dx${i}`, `dy${i}`, `off${i}`]), 'e0', 'front', 'tx0', 'tx1', 'ty0', 'ty1'];
+  const outs = [...E3.flatMap((i) => [`dx${i}`, `dy${i}`, `off${i}`]), 'e0', 'front', 'area', 'tx0', 'tx1', 'ty0', 'ty1'];
   return define({
     id: 'rast_setup', name: 'Triangle set-up', category: 'arithmetic',
     summary: 'Everything the walk needs, from the three vertices: per edge A and B (subtractors), the top-left bias, the steps 4A and 4B (wiring), '
       + 'the tile test\'s offset 12·(A⁺ + B⁺); the bounding box in tiles (comparators). One 10 × 10 Booth multiplier and an accumulator then make a product a cycle '
       + 'for eight cycles: twice the area (its sign culls back faces) and each edge\'s value at the first tile\'s top-left pixel.',
     ports: [...VERTEX_PINS.map((p) => bus(p, CB, 'in')), bus('s', 4, 'in'), bit('clk', 'in', 'bottom', true),
-      ...E3.flatMap((i) => [bus(`dx${i}`, N, 'out'), bus(`dy${i}`, N, 'out'), bus(`off${i}`, N, 'out')]), bus('e0', N, 'out'), bit('front', 'out'),
+      ...E3.flatMap((i) => [bus(`dx${i}`, N, 'out'), bus(`dy${i}`, N, 'out'), bus(`off${i}`, N, 'out')]), bus('e0', N, 'out'), bit('front', 'out'), bus('area', N, 'out'),
       bus('tx0', 4, 'out'), bus('tx1', 4, 'out'), bus('ty0', 4, 'out'), bus('ty1', 4, 'out')],
     symbol: { kind: 'box', label: 'SET-UP' },
     netlist: () => ({ pins: { ...pinsAt([...VERTEX_PINS, 's', 'clk'], 0, 6), ...pinsAt(outs, R, 4) }, instances: b.instances, nets: b.nets() }),
@@ -296,7 +314,7 @@ export const RAST_SETUP: ComponentDef = (() => {
  */
 export const RAST_WALK: ComponentDef = (() => {
   const b = new Builder(14, 12, 4);
-  b.pins('go', 'front', 'ok', 'tx0', 'tx1', 'ty0', 'ty1', 'clk');
+  b.pins('go', 'front', 'ok', 'ready', 'tx0', 'tx1', 'ty0', 'ty1', 'clk');
   const sR = b.op(register(4), ['', '', 'clk'], 'phase s', 'phase');
   const kR = b.op(register(4), ['', b.op1(constWord(1, 1), []), 'clk'], 'pixel k', 'kreg');
   const txR = b.op(register(4), ['', '', 'clk'], 'tile x', 'txreg');
@@ -326,7 +344,7 @@ export const RAST_WALK: ComponentDef = (() => {
   b.next();
   const n1 = b.op1(busMux2(4), [`${inc}.y`, b.op1(constWord(4, 9), []), toTest], 'TEST');
   const n2 = b.op1(busMux2(4), [n1, b.op1(constWord(4, 0), []), stop], 'idle');
-  const hold = b.op1(AND, [ph(10), b.op1(NOT, [k15])], 'inside a tile');
+  const hold = b.op1(OR, [b.op1(AND, [ph(10), b.op1(NOT, [k15])], 'inside a tile'), b.op1(AND, [ph(8), b.op1(NOT, ['ready'])], 'set-up not done')], 'stay');
   b.wire(n2, `${sR}.d`);
   b.wire(b.op1(NOT, [hold]), `${sR}.en`);
   // k: counts in phase 10, 0 otherwise
@@ -371,54 +389,319 @@ export const RAST_WALK: ComponentDef = (() => {
     summary: 'The rasterizer\'s state machine: eight set-up cycles (a back face stops after the third), then the bounding box in 4 × 4-pixel tiles, '
       + 'bands of tiles left to right. Each tile: one TEST cycle (does any edge rule it out?), then its 16 pixels, column by column (down, up, down, up), '
       + 'ending at its top-right pixel, one step from the next tile. It sends the three edge steppers one command a cycle.',
-    ports: [bit('go', 'in'), bit('front', 'in'), bit('ok', 'in'), bus('tx0', 4, 'in'), bus('tx1', 4, 'in'), bus('ty0', 4, 'in'), bus('ty1', 4, 'in'),
+    ports: [bit('go', 'in'), bit('front', 'in'), bit('ok', 'in'), bit('ready', 'in'), bus('tx0', 4, 'in'), bus('tx1', 4, 'in'), bus('ty0', 4, 'in'), bus('ty1', 4, 'in'),
       bit('clk', 'in', 'bottom', true), bus('s', 4, 'out'), bus('cmd0', 3, 'out'), bus('cmd1', 3, 'out'), bus('cmd2', 3, 'out'),
       bus('x', 6, 'out'), bus('y', 6, 'out'), bit('pix', 'out'), bit('busy', 'out')],
     symbol: { kind: 'box', label: 'TILE WALK' },
-    netlist: () => ({ pins: { ...pinsAt(['go', 'front', 'ok', 'tx0', 'tx1', 'ty0', 'ty1', 'clk'], 0, 6), ...pinsAt(['s', 'cmd0', 'cmd1', 'cmd2', 'x', 'y', 'pix', 'busy'], R, 6) }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { ...pinsAt(['go', 'front', 'ok', 'ready', 'tx0', 'tx1', 'ty0', 'ty1', 'clk'], 0, 6), ...pinsAt(['s', 'cmd0', 'cmd1', 'cmd2', 'x', 'y', 'pix', 'busy'], R, 6) }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+// ---- depth set-up ---------------------------------------------------------------------------------------
+
+/** z: 32-bit two's complement with Z_FRAC fraction bits; quotients of the divider: 30 bits. */
+const ZW = 32, QW = 30;
+
+/**
+ * The depth plane's set-up, started in the rasterizer's set-up phase 3 (when twice the area is known). States:
+ * MUL (4 cycles on its own Booth multiplier: Nx = A0·Δz2 + A2·Δz1, Ny = B0·Δz2 + B2·Δz1), DIVX and DIVY (one
+ * iterative divider: Zx = ±(|Nx|·2^12 / area), truncated, likewise Zy), SUM (Zx + Zy), HORN (ten cycles of
+ * shift-and-add over the bits of the first tile's offset from vertex 0: acc = Zx·Δx + Zy·Δy), FINAL (+ z0·2^12),
+ * READY. Everything wraps at 32 bits: only z at pixels inside the triangle has to come out right.
+ */
+export const Z_SETUP: ComponentDef = (() => {
+  const b = new Builder(14, 12, 4);
+  b.pins('start', 'v0x', 'v0y', 'z0', 'z1', 'z2', 'a0', 'a2', 'b0', 'b2', 'area', 'tx0', 'ty0', 'clk');
+  const stR = b.op(register(3), ['', '', 'clk'], 'state', 'state');
+  const kR = b.op(register(4), ['', b.op1(constWord(1, 1), []), 'clk'], 'cycle in state', 'kreg');
+  const st = b.name(`${stR}.q`, 'st', true), k = b.name(`${kR}.q`, 'k', true);
+  const z2b = b.op1(constWord(DB - CB, 0), []), one = b.op1(constWord(1, 1), []);
+  b.next();
+  const p = b.op(decoder(3), [st], 'state');
+  const ph = (i: number) => `${p}.y${i}`;
+  const kd = b.op(decoder(4), [k], 'k');
+  const kk = (i: number) => `${kd}.y${i}`;
+  const ks = b.op(splitter(ones(4)), [k]);
+  // Δz1 = z1 − z0, Δz2 = z2 − z0; Δx, Δy: the first tile's top-left pixel centre minus vertex 0
+  const z0e = z10(b, 'z0', z2b);
+  const dz1 = b.op(addSub(DB), [z10(b, 'z1', z2b), z0e, one], 'Δz1');
+  const dz2 = b.op(addSub(DB), [z10(b, 'z2', z2b), z0e, one], 'Δz2');
+  const c2 = b.op1(constWord(4, 2), []);
+  const dX = b.op(addSub(DB), [z10(b, b.op1(merger([4, 4]), [c2, 'tx0']), z2b), z10(b, 'v0x', z2b), one], 'Δx = ox − x0');
+  const dY = b.op(addSub(DB), [z10(b, b.op1(merger([4, 4]), [c2, 'ty0']), z2b), z10(b, 'v0y', z2b), one], 'Δy = oy − y0');
+  b.next();
+  // the state machine: every transition is to the next state; k counts cycles within a state
+  const div = b.op(nrSeqDivider(QW), ['clk', '', '', ''], 'divider', 'div');
+  const done = `${div}.done`;
+  const adv = b.op1(orN(6), [b.op1(AND, [ph(1), kk(3)]), b.op1(AND, [ph(2), done]), b.op1(AND, [ph(3), done]), ph(4), b.op1(AND, [ph(5), kk(9)]), ph(6)], 'next state');
+  const change = b.op1(OR, ['start', adv], 'state changes');
+  b.wire(change, `${stR}.en`);
+  const sinc = b.op(incrementer(3), [st]);
+  b.wire(b.op1(busMux2(3), [`${sinc}.y`, b.op1(constWord(3, 1), []), 'start'], 'start: MUL'), `${stR}.d`);
+  const kinc = b.op(incrementer(4), [k]);
+  b.wire(b.op1(AND4W, [`${kinc}.y`, b.op1(fanout(4), [b.op1(NOT, [change])])], 'k + 1, or 0'), `${kR}.d`);
+  b.next();
+  // products: (A0, Δz2), (A2, Δz1), (B0, Δz2), (B2, Δz1)
+  const mX = b.op1(muxTree(2, DB), ['a0', 'a2', 'b0', 'b2', b.op1(merger([1, 1]), [`${ks}.o0`, `${ks}.o1`])], 'A or B');
+  const mY = b.op1(busMux2(DB), [`${dz2}.s`, `${dz1}.s`, `${ks}.o0`], 'Δz');
+  b.next();
+  const prod = b.op1(boothMul(DB), [mX, mY], 'product');
+  const ps = b.op(splitter([2 * DB - 1, 1]), [prod]);
+  const p32 = b.op1(merger([2 * DB - 1, ZW - 2 * DB + 1]), [`${ps}.o0`, b.op1(fanout(ZW - 2 * DB + 1), [`${ps}.o1`])], 'product, 32-bit');
+  b.next();
+  // the registers: acc, Nx, Ny (18-bit), Zx, Zy, S
+  const acc = b.op(register(ZW), ['', b.op1(orN(3), [ph(1), ph(5), ph(6)]), 'clk'], 'acc', 'acc');
+  const nx = b.op(register(N), ['', b.op1(AND, [ph(1), kk(1)]), 'clk'], 'Nx', 'nx');
+  const ny = b.op(register(N), ['', b.op1(AND, [ph(1), kk(3)]), 'clk'], 'Ny', 'ny');
+  const zx = b.op(register(ZW), ['', b.op1(AND, [ph(2), done]), 'clk'], 'Zx', 'zx');
+  const zy = b.op(register(ZW), ['', b.op1(AND, [ph(3), done]), 'clk'], 'Zy', 'zy');
+  const sR = b.op(register(ZW), ['', ph(4), 'clk'], 'Zx + Zy', 'sxy');
+  b.name(`${acc}.q`, 'acc', true); b.name(`${zx}.q`, 'Zx', true); b.name(`${zy}.q`, 'Zy', true);
+  b.next();
+  // the divider: |N|·2^12 / area, N = Nx in DIVX, Ny in DIVY; started in each one's first cycle
+  const nSel = b.op1(busMux2(N), [`${nx}.q`, `${ny}.q`, ph(3)], 'Nx or Ny');
+  const nSign = topBit(b, nSel, N, 'its sign');
+  const mag = b.op1(absValue(N), [nSel], '|N|');
+  b.wire(b.op1(merger([Z_FRAC, N]), [b.op1(constWord(Z_FRAC, 0), []), mag], '|N|·2^12'), `${div}.a`);
+  b.wire(b.op1(merger([N, QW - N]), ['area', b.op1(constWord(QW - N, 0), [])], 'area'), `${div}.b`);
+  b.wire(b.op1(AND, [b.op1(OR, [ph(2), ph(3)]), kk(0)], 'start a division'), `${div}.start`);
+  const q = b.op1(condNegate(ZW), [b.op1(merger([QW, ZW - QW]), [`${div}.q`, b.op1(constWord(ZW - QW, 0), [])]), nSign], 'signed quotient');
+  b.wire(q, `${zx}.d`); b.wire(q, `${zy}.d`);
+  b.next();
+  // Horner: bit j = 9 − k of Δx and Δy picks 0, Zx, Zy or Zx + Zy
+  const bitOf = (w: string, l: string) => {
+    const sp = b.op(splitter(ones(DB)), [w]);
+    const z = b.op1(TIE0, []);
+    return b.op1(muxTree(4, 1), [...Array.from({ length: 16 }, (_, i) => (i < DB ? `${sp}.o${DB - 1 - i}` : z)), k], l);
+  };
+  const bx = bitOf(`${dX}.s`, 'bit of Δx'), by = bitOf(`${dY}.s`, 'bit of Δy');
+  const op = b.op1(muxTree(2, ZW), [b.op1(constWord(ZW, 0), []), `${zx}.q`, `${zy}.q`, `${sR}.q`, b.op1(merger([1, 1]), [bx, by])], 'Horner operand');
+  b.next();
+  // the adder's operands by state: MUL (k odd ? acc : 0) + P; SUM Zx + Zy; HORN (k = 0 ? 0 : 2·acc) ± op; FINAL acc + z0·2^12
+  const acc2 = b.op1(merger([1, ZW - 1]), [b.op1(TIE0, []), `${b.op(splitter([ZW - 1, 1]), [`${acc}.q`])}.o0`], '2·acc');
+  const horn = b.op1(AND, [ph(5), b.op1(NOT, [kk(0)])], 'Horner, not first');
+  // first operand select: 0: 0, 1: acc, 2: Zx, 3: 2·acc
+  const x0 = b.op1(orN(3), [b.op1(AND, [ph(1), `${ks}.o0`]), ph(6), horn], 'acc or 2·acc');
+  const x1 = b.op1(OR, [ph(4), horn], 'Zx or 2·acc');
+  const xop = b.op1(muxTree(2, ZW), [b.op1(constWord(ZW, 0), []), `${acc}.q`, `${zx}.q`, acc2, b.op1(merger([1, 1]), [x0, x1])], 'first operand');
+  const zs = b.op1(merger([Z_FRAC, CB, ZW - Z_FRAC - CB]), [b.op1(constWord(Z_FRAC, 0), []), 'z0', b.op1(constWord(ZW - Z_FRAC - CB, 0), [])], 'z0·2^12');
+  // second operand select: 0: P (MUL), 1: Zy (SUM), 2: op (HORN), 3: z0·2^12 (FINAL)
+  const ysel = b.op1(merger([1, 1]), [b.op1(OR, [ph(4), ph(6)]), b.op1(OR, [ph(5), ph(6)])]);
+  const yop = b.op1(muxTree(2, ZW), [p32, `${zy}.q`, op, zs, ysel], 'second operand');
+  b.next();
+  const sum = b.op(addSub(ZW), [xop, yop, b.op1(AND, [ph(5), kk(0)], 'sign bit: subtract')], 'the adder');
+  b.name(`${sum}.s`, 'sum', true);
+  for (const r of [acc, sR]) b.wire(`${sum}.s`, `${r}.d`);
+  const s18 = `${b.op(splitter([N, ZW - N]), [`${sum}.s`])}.o0`;
+  b.wire(s18, `${nx}.d`); b.wire(s18, `${ny}.d`);
+  b.next();
+  const x4 = (r: string, l: string) => b.op1(merger([2, ZW - 2]), [b.op1(constWord(2, 0), []), `${b.op(splitter([ZW - 2, 2]), [r])}.o0`], l);
+  b.wire(x4(`${zx}.q`, '4·Zx'), 'zdx');
+  b.wire(x4(`${zy}.q`, '4·Zy'), 'zdy');
+  b.wire(`${acc}.q`, 'ze0');
+  b.wire(ph(7), 'ready');
+  const R = b.right;
+  const ins = ['start', 'v0x', 'v0y', 'z0', 'z1', 'z2', 'a0', 'a2', 'b0', 'b2', 'area', 'tx0', 'ty0', 'clk'];
+  return define({
+    id: 'z_setup', name: 'Depth set-up', category: 'arithmetic',
+    summary: 'The slopes of z across the triangle and its value at the first tile: four products (its own Booth multiplier), two divisions by twice the area '
+      + `(one ${QW}-bit iterative divider, quotients truncated), and ten cycles of shift-and-add. About 80 cycles a triangle; the walk waits for ready.`,
+    ports: [bit('start', 'in'), bus('v0x', CB, 'in'), bus('v0y', CB, 'in'), bus('z0', CB, 'in'), bus('z1', CB, 'in'), bus('z2', CB, 'in'),
+      bus('a0', DB, 'in'), bus('a2', DB, 'in'), bus('b0', DB, 'in'), bus('b2', DB, 'in'), bus('area', N, 'in'), bus('tx0', 4, 'in'), bus('ty0', 4, 'in'),
+      bit('clk', 'in', 'bottom', true), bus('zdx', ZW, 'out'), bus('zdy', ZW, 'out'), bus('ze0', ZW, 'out'), bit('ready', 'out')],
+    symbol: { kind: 'box', label: 'DEPTH SET-UP' },
+    netlist: () => ({ pins: { ...pinsAt(ins, 0, 6), ...pinsAt(['zdx', 'zdy', 'ze0', 'ready'], R, 6) }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** z (32-bit) → the depth buffer's 16 bits: z >> 4, 0 when negative, 0xFFFF past 2^20. */
+export const Z_CLAMP: ComponentDef = (() => {
+  const b = new Builder(10, 12, 4);
+  b.pins('z');
+  const sp = b.op(splitter([4, 16, 11, 1]), ['z'], 'z');
+  b.next();
+  const hs = b.op(splitter(ones(11)), [`${sp}.o2`]);
+  const ovf = b.op1(orN(11), Array.from({ length: 11 }, (_, i) => `${hs}.o${i}`), 'z ≥ 2^20');
+  b.next();
+  const hi = b.op1(busMux2(16), [`${sp}.o1`, b.op1(constWord(16, 0xffff), []), ovf], 'too far: 0xFFFF');
+  b.next();
+  b.wire(b.op1(busMux2(16), [hi, b.op1(constWord(16, 0), []), `${sp}.o3`], 'negative: 0'), 'zs');
+  const R = b.right;
+  return define({
+    id: 'z_clamp', name: 'Depth clamp', category: 'arithmetic',
+    summary: 'The depth buffer keeps 16 bits of z: bits 19…4 (8.8), 0 when z is negative, 0xFFFF when it does not fit.',
+    ports: [bus('z', ZW, 'in'), bus('zs', 16, 'out')],
+    symbol: { kind: 'box', label: 'CLAMP' },
+    spec: ([z]) => [z >= 2 ** 31 ? 0 : z >= 2 ** 20 ? 0xffff : Math.floor(z / 16)],
+    netlist: () => ({ pins: { z: [0, 4], zs: [R, 4] }, instances: b.instances, nets: b.nets() }),
   });
 })();
 
 // ---- the rasterizer ----------------------------------------------------------------------------------
 
+const rastCache = new Map<boolean, ComponentDef>();
+
 /**
  * A triangle in (three vertices in quarter pixels, a colour, go for one cycle while idle), pixel writes out:
  * fa = y·64 + x, fd = the colour, fwe for each covered pixel. busy from the cycle after go until the last tile.
+ * depth: z per vertex in, z per pixel out (fz, the depth buffer's 16 bits), and clr: go with clr = 1 walks every
+ * tile of the screen and writes every pixel (fclr: the ROP clears).
  */
-export const RASTERIZER: ComponentDef = (() => {
+export function rasterizer(depth = false): ComponentDef {
+  const hit = rastCache.get(depth);
+  if (hit) return hit;
   const b = new Builder(14, 14, 4);
-  b.pins(...VERTEX_PINS, 'col', 'go', 'clk');
+  const zp = depth ? ['z0', 'z1', 'z2'] : [];
+  b.pins(...VERTEX_PINS, ...zp, 'col', ...(depth ? ['clr'] : []), 'go', 'clk');
   // the triangle is latched while idle (the cycle that sees go latches it)
-  const lat = [...VERTEX_PINS, 'col'].map((p) => b.op(register(CB), [p, '', 'clk'], p === 'col' ? 'colour' : p, `r_${p}`));
+  const lat = [...VERTEX_PINS, 'col', ...zp].map((p) => b.op(register(CB), [p, '', 'clk'], p === 'col' ? 'colour' : p, `r_${p}`));
+  const clr = depth ? b.op(DFFE, ['clr', '', 'clk'], 'clear', 'r_clr') : '';
   b.next();
   const setup = b.op(RAST_SETUP, [...lat.slice(0, 6).map((r) => `${r}.q`), '', 'clk'], 'set-up', 'setup');
   b.next();
-  const walk = b.op(RAST_WALK, ['go', `${setup}.front`, '', `${setup}.tx0`, `${setup}.tx1`, `${setup}.ty0`, `${setup}.ty1`, 'clk'], 'tile walk', 'walk');
+  const walk = b.op(RAST_WALK, ['go', '', '', depth ? '' : b.op1(constWord(1, 1), []), '', '', '', '', 'clk'], 'tile walk', 'walk');
   b.name(`${walk}.s`, 'phase', true);
   b.wire(`${walk}.s`, `${setup}.s`);
   const idle = b.op1(NOT, [`${walk}.busy`], 'idle');
   for (const r of lat) b.wire(idle, `${r}.en`);
+  if (depth) b.wire(idle, `${clr}.en`);
+  // clear: the whole screen (tiles 0 … 15), every tile and pixel accepted, never culled
+  const cq = depth ? `${clr}.q` : '';
+  const bound = (port: string, v: number) => (depth ? b.op1(busMux2(4), [`${setup}.${port}`, b.op1(constWord(4, v), []), cq]) : `${setup}.${port}`);
+  b.wire(bound('tx0', 0), `${walk}.tx0`); b.wire(bound('tx1', 15), `${walk}.tx1`);
+  b.wire(bound('ty0', 0), `${walk}.ty0`); b.wire(bound('ty1', 15), `${walk}.ty1`);
+  b.wire(depth ? b.op1(OR, [`${setup}.front`, cq]) : `${setup}.front`, `${walk}.front`);
   b.next();
   const st = E3.map((i) => b.op(EDGE_STEP, [`${setup}.dx${i}`, `${setup}.dy${i}`, `${setup}.off${i}`, `${setup}.e0`, `${walk}.cmd${i}`, 'clk'], `edge ${i}`, `edge${i}`));
+  let fz = '';
+  if (depth) {
+    // A0, A2, B0, B2 are the steps' bits 11…2
+    const ab = (port: string) => `${b.op(splitter([2, DB, N - DB - 2]), [`${setup}.${port}`])}.o1`;
+    const ss = b.op(splitter(ones(4)), [`${walk}.s`]);
+    const sb = (i: number) => `${ss}.o${i}`;
+    const ph3 = b.op1(andN(4), [sb(0), sb(1), b.op1(NOT, [sb(2)]), b.op1(NOT, [sb(3)])], 'phase 3');
+    const ph8 = b.op1(andN(4), [b.op1(NOT, [sb(0)]), b.op1(NOT, [sb(1)]), b.op1(NOT, [sb(2)]), sb(3)], 'phase 8');
+    const zs = b.op(Z_SETUP, [ph3, `${lat[0]}.q`, `${lat[1]}.q`, `${lat[7]}.q`, `${lat[8]}.q`, `${lat[9]}.q`, ab('dx0'), ab('dx2'), ab('dy0'), ab('dy2'),
+      `${setup}.area`, `${setup}.tx0`, `${setup}.ty0`, 'clk'], 'depth set-up', 'zsetup');
+    b.wire(`${zs}.ready`, `${walk}.ready`);
+    b.next();
+    const zcmd = b.op1(busMux2(3), [`${walk}.cmd0`, b.op1(constWord(3, CMD.load), []), b.op1(AND, [ph8, `${zs}.ready`])], 'load z when set-up is done');
+    const zst = b.op(edgeStep(ZW, false), [`${zs}.zdx`, `${zs}.zdy`, `${zs}.ze0`, zcmd, 'clk'], 'depth', 'zstep');
+    fz = b.op1(Z_CLAMP, [`${zst}.e`], 'depth buffer form');
+  }
   b.next();
-  const inside = b.op1(NOT, [b.op1(OR, [b.op1(OR, [`${st[0]}.neg`, `${st[1]}.neg`]), `${st[2]}.neg`])], 'inside: no edge negative');
-  const ok = b.op1(NOT, [b.op1(OR, [b.op1(OR, [`${st[0]}.tneg`, `${st[1]}.tneg`]), `${st[2]}.tneg`])], 'tile may hold pixels');
-  b.wire(ok, `${walk}.ok`);
+  const inside0 = b.op1(NOT, [b.op1(OR, [b.op1(OR, [`${st[0]}.neg`, `${st[1]}.neg`]), `${st[2]}.neg`])], 'inside: no edge negative');
+  const ok0 = b.op1(NOT, [b.op1(OR, [b.op1(OR, [`${st[0]}.tneg`, `${st[1]}.tneg`]), `${st[2]}.tneg`])], 'tile may hold pixels');
+  const inside = depth ? b.op1(OR, [inside0, cq]) : inside0;
+  b.wire(depth ? b.op1(OR, [ok0, cq]) : ok0, `${walk}.ok`);
   b.next();
   b.wire(b.op1(AND, [`${walk}.pix`, inside], 'write'), 'fwe');
   b.wire(b.op1(merger([6, 6]), [`${walk}.x`, `${walk}.y`], 'y·64 + x'), 'fa');
   b.wire(`${lat[6]}.q`, 'fd');
+  if (depth) { b.wire(fz, 'fz'); b.wire(cq, 'fclr'); }
   b.wire(`${walk}.busy`, 'busy');
   const R = b.right;
-  return define({
-    id: 'rasterizer', name: 'Rasterizer', category: 'cpu',
+  const ins = [...VERTEX_PINS, ...zp, 'col', ...(depth ? ['clr'] : []), 'go', 'clk'], outs = ['fa', 'fd', ...(depth ? ['fz', 'fclr'] : []), 'fwe', 'busy'];
+  const d = define({
+    id: depth ? 'rasterizer_z' : 'rasterizer', name: depth ? 'Rasterizer with depth' : 'Rasterizer', category: 'cpu',
     summary: 'Three vertices in, the covered pixels out, one a cycle. Set-up finds each edge function (eight cycles on one multiplier), '
       + 'the tile walk visits the bounding box in 4 × 4 tiles and skips those an edge rules out, and three edge steppers keep E current with adders only. '
-      + 'A pixel is written when all three edges are ≥ 0 (with the top-left rule, a pixel on a shared edge goes to one triangle).',
-    ports: [...VERTEX_PINS.map((p) => bus(p, CB, 'in')), bus('col', CB, 'in'), bit('go', 'in'), bit('clk', 'in', 'bottom', true),
-      bus('fa', 12, 'out'), bus('fd', CB, 'out'), bit('fwe', 'out'), bit('busy', 'out')],
-    symbol: { kind: 'box', label: 'RASTERIZER' },
-    netlist: () => ({ pins: { ...pinsAt([...VERTEX_PINS, 'col', 'go', 'clk'], 0, 6), ...pinsAt(['fa', 'fd', 'fwe', 'busy'], R, 6) }, instances: b.instances, nets: b.nets() }),
+      + 'A pixel is written when all three edges are ≥ 0 (with the top-left rule, a pixel on a shared edge goes to one triangle).'
+      + (depth ? ' With depth: z per vertex, its plane set up with a divider and stepped like an edge; z out with every pixel. go with clr walks the whole screen.' : ''),
+    ports: [...VERTEX_PINS.map((p) => bus(p, CB, 'in')), ...zp.map((p) => bus(p, CB, 'in')), bus('col', CB, 'in'), ...(depth ? [bit('clr', 'in')] : []), bit('go', 'in'), bit('clk', 'in', 'bottom', true),
+      bus('fa', 12, 'out'), bus('fd', CB, 'out'), ...(depth ? [bus('fz', 16, 'out'), bit('fclr', 'out')] : []), bit('fwe', 'out'), bit('busy', 'out')],
+    symbol: { kind: 'box', label: depth ? 'RASTERIZER + Z' : 'RASTERIZER' },
+    netlist: () => ({ pins: { ...pinsAt(ins, 0, 6), ...pinsAt(outs, R, 6) }, instances: b.instances, nets: b.nets() }),
+  });
+  rastCache.set(depth, d);
+  return d;
+}
+
+export const RASTERIZER = rasterizer(false);
+
+// ---- blend and depth test -------------------------------------------------------------------------------
+
+const NOT3: ComponentDef = (() => {
+  const b = new Builder(8, 10, 2);
+  b.pins('a');
+  const sp = b.op(splitter(ones(3)), ['a']);
+  b.next();
+  const n = [0, 1, 2].map((i) => b.op1(NOT, [`${sp}.o${i}`]));
+  b.next();
+  b.wire(b.op1(merger(ones(3)), n), 'y');
+  const R = b.right;
+  return define({
+    id: 'not3', name: '3-bit NOT', category: 'gate', summary: 'Three inverters: 7 − a for a 3-bit a.',
+    ports: [bus('a', 3, 'in'), bus('y', 3, 'out')], symbol: { kind: 'box', label: 'NOT' },
+    spec: ([a]) => [7 - a],
+    netlist: () => ({ pins: { a: [0, 4], y: [R, 4] }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** Alpha blending of a source and a destination RGB332 pixel, alpha in eighths (a + 1, a = 7: the source). */
+export const BLEND332: ComponentDef = (() => {
+  const b = new Builder(10, 12, 4);
+  b.pins('s', 'd', 'a');
+  const ss = b.op(splitter([2, 3, 3]), ['s'], 'source'), ds = b.op(splitter([2, 3, 3]), ['d'], 'destination');
+  const inc = b.op(incrementer(3), ['a'], 'a + 1');
+  const a1 = b.op1(merger([3, 1]), [`${inc}.y`, `${inc}.cout`]);
+  const na = b.op1(merger([3, 1]), [b.op1(NOT3, ['a'], '7 − a'), b.op1(TIE0, [])]);
+  b.next();
+  // one channel of `bits` bits: (s·(a + 1) + d·(7 − a)) >> 3
+  const channel = (sc: string, dc: string, l: string, bits: number) => {
+    const z = (x: string) => (bits === 4 ? x : b.op1(merger([bits, 4 - bits]), [x, b.op1(constWord(4 - bits, 0), [])]));
+    const ps = b.op1(arrayMul(4), [z(sc), a1], `${l}: s·(a + 1)`);
+    const pd = b.op1(arrayMul(4), [z(dc), na], `${l}: d·(7 − a)`);
+    const sum = b.op(rca(8), [ps, pd, b.op1(TIE0, [])], `${l}: sum`);
+    return `${b.op(splitter([3, bits, 8 - 3 - bits]), [`${sum}.s`])}.o1`;
+  };
+  const ch = [0, 1, 2].map((i) => channel(`${ss}.o${i}`, `${ds}.o${i}`, ['blue', 'green', 'red'][i], i === 0 ? 2 : 3));
+  b.next();
+  b.wire(b.op1(merger([2, 3, 3]), ch, 'mixed'), 'y');
+  const R = b.right;
+  return define({
+    id: 'blend332', name: 'Alpha blend (RGB332)', category: 'arithmetic',
+    summary: 'Each channel becomes (s·(a + 1) + d·(7 − a)) / 8: the source weighs a + 1 eighths, the destination the rest. Six 4 × 4 array multipliers and three adders; the division by 8 is wiring.',
+    ports: [bus('s', 8, 'in'), bus('d', 8, 'in'), bus('a', 3, 'in'), bus('y', 8, 'out')],
+    symbol: { kind: 'box', label: 'BLEND' },
+    spec: ([s, d, a]) => {
+      const c = (sh: number, w: number) => { const m = (1 << w) - 1; return ((((s >> sh) & m) * (a + 1) + ((d >> sh) & m) * (7 - a)) >> 3) << sh; };
+      return [c(5, 3) | c(2, 3) | c(0, 2)];
+    },
+    netlist: () => ({ pins: { ...pinsAt(['s', 'd', 'a'], 0, 6), y: [R, 6] }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/**
+ * The render output unit between the rasterizer and the framebuffer: the depth test against its own 64 × 64 × 16-bit
+ * depth buffer (zt: on), alpha blending with the pixel already there (a: 7 is opaque), and clearing (fclr: colour and
+ * depth 0xFFFF everywhere). Reads and writes in the same cycle: the buffers read combinationally, write at the edge.
+ */
+export const ROP: ComponentDef = (() => {
+  const b = new Builder(12, 12, 4);
+  b.pins('fa', 'fd', 'fz', 'fclr', 'fwe', 'zt', 'a', 'wq', 'clk');
+  const far = new Uint32Array(FB_W * FB_W).fill(0xffff);
+  const zb = b.op(bigRamWithInit(12, 16, far), ['fa', '', '', 'clk'], 'depth buffer', 'zbuf');
+  b.next();
+  const nearer = `${b.op(magComparator(16), ['fz', `${zb}.dout`], 'nearer?')}.lt`;
+  const pass = b.op1(OR, [b.op1(OR, ['fclr', b.op1(NOT, ['zt'])]), nearer], 'passes');
+  const we = b.name(b.op1(AND, ['fwe', pass], 'write'), 'we', true);
+  b.wire(b.op1(AND, [we, b.op1(OR, ['zt', 'fclr'])], 'write depth'), `${zb}.we`);
+  b.wire(b.op1(busMux2(16), ['fz', b.op1(constWord(16, 0xffff), []), 'fclr'], 'clear: far'), `${zb}.din`);
+  const mix = b.op1(BLEND332, ['fd', 'wq', 'a'], 'blend');
+  b.next();
+  b.wire(b.op1(busMux2(8), [mix, 'fd', 'fclr'], 'clear: the colour'), 'wd');
+  b.wire('fa', 'wa');
+  b.wire(we, 'we');
+  const R = b.right;
+  return define({
+    id: 'rop', name: 'Depth test and blend', category: 'memory',
+    summary: 'Between the rasterizer and the framebuffer: a pixel is written only if it is nearer than what the depth buffer holds there (when the test is on), '
+      + 'and its colour is mixed with the pixel already in the frame by alpha. Clear writes the colour and the farthest depth everywhere.',
+    ports: [bus('fa', 12, 'in'), bus('fd', 8, 'in'), bus('fz', 16, 'in'), bit('fclr', 'in'), bit('fwe', 'in'), bit('zt', 'in'), bus('a', 3, 'in'), bus('wq', 8, 'in'),
+      bit('clk', 'in', 'bottom', true), bus('wa', 12, 'out'), bus('wd', 8, 'out'), bit('we', 'out')],
+    symbol: { kind: 'box', label: 'DEPTH · BLEND' },
+    netlist: () => ({ pins: { ...pinsAt(['fa', 'fd', 'fz', 'fclr', 'fwe', 'zt', 'a', 'wq', 'clk'], 0, 6), ...pinsAt(['wa', 'wd', 'we'], R, 6) }, instances: b.instances, nets: b.nets() }),
   });
 })();
 
@@ -597,5 +880,34 @@ export const GPU30: ComponentDef = (() => {
       bus('pixels', 32, 'out'), bit('vsync', 'out'), bit('busy', 'out')],
     symbol: { kind: 'box', label: 'GPU' },
     netlist: () => ({ pins: { ...pinsAt([...VERTEX_PINS, 'col', 'go', 'swap', 'sync', 'clk'], 0, 6), ...pinsAt(['pixels', 'vsync', 'busy'], R, 8) }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** Chapter 30, steps 4–5: the rasterizer with depth, the depth test and blending, the double framebuffer, the scan-out. */
+export const GPU30Z: ComponentDef = (() => {
+  const RZ = rasterizer(true);
+  const b = new Builder(10, 14, 4);
+  const ins = [...VERTEX_PINS, 'z0', 'z1', 'z2', 'col', 'a', 'zt', 'clr', 'go', 'swap', 'sync', 'clk'];
+  b.pins(...ins);
+  const r = b.op(RZ, [...VERTEX_PINS, 'z0', 'z1', 'z2', 'col', 'clr', 'go', 'clk'], 'rasterizer', 'rast');
+  const sc = b.op(SCAN_OUT, ['swap', 'sync', 'clk'], 'scan-out', 'scan');
+  b.next();
+  const rop = b.op(ROP, [`${r}.fa`, `${r}.fd`, `${r}.fz`, `${r}.fclr`, `${r}.fwe`, 'zt', 'a', '', 'clk'], 'depth test, blend', 'rop');
+  b.next();
+  const fb = b.op(frameBuffers(), [`${sc}.ra`, `${rop}.wa`, `${rop}.wd`, `${rop}.we`, `${sc}.front`, 'clk'], 'framebuffer', 'fb');
+  b.wire(`${fb}.wq`, `${rop}.wq`);
+  b.next();
+  b.wire(`${fb}.rq`, 'pixels');
+  b.wire(`${sc}.vsync`, 'vsync');
+  b.wire(`${r}.busy`, 'busy');
+  const R = b.right;
+  return define({
+    id: 'gpu30z', name: 'Rasterizer, depth, blend, framebuffer', category: 'cpu',
+    summary: 'The rasterizer with depth, the depth test and blending between it and the back frame, the scan-out sending the front frame to the screen.',
+    ports: [...VERTEX_PINS.map((p) => bus(p, CB, 'in')), bus('z0', CB, 'in'), bus('z1', CB, 'in'), bus('z2', CB, 'in'), bus('col', CB, 'in'), bus('a', 3, 'in'),
+      bit('zt', 'in'), bit('clr', 'in'), bit('go', 'in'), bit('swap', 'in'), bit('sync', 'in'), bit('clk', 'in', 'bottom', true),
+      bus('pixels', 32, 'out'), bit('vsync', 'out'), bit('busy', 'out')],
+    symbol: { kind: 'box', label: 'GPU' },
+    netlist: () => ({ pins: { ...pinsAt(ins, 0, 6), ...pinsAt(['pixels', 'vsync', 'busy'], R, 8) }, instances: b.instances, nets: b.nets() }),
   });
 })();

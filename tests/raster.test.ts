@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { EDGE_BITS, FB_W, rasterize, setup, tilePixel, type Vtx } from '../src/gfx/raster';
-import { EDGE_STEP, GPU30, RASTERIZER, RAST_SETUP, RAST_WALK, SCAN_OUT, VERTEX_PINS, FB_WORDS } from '../src/lib/raster';
+import { blend332, CLEAR_CYCLES, type DrawOp, EDGE_BITS, FB_W, rasterize, RefFrame, setup, tilePixel, type Vtx, Z_FRAC, zAt, zStore } from '../src/gfx/raster';
+import { EDGE_STEP, FB_WORDS, GPU30, GPU30Z, RASTERIZER, RAST_SETUP, RAST_WALK, rasterizer, SCAN_OUT, VERTEX_PINS } from '../src/lib/raster';
 import { BitSim } from '../src/sim/bitsim';
 import { flatten } from '../src/sim/flatten';
 import { stats } from '../src/sim/stats';
@@ -138,5 +138,80 @@ describe('gate-level rasterizer', () => {
     }
     expect(Array.from(got)).toEqual(Array.from(want));
     expect(setup(v).front).toBe(true);
+  });
+});
+
+describe('depth and blending', () => {
+  it('the rasterizer with depth: the same pixels, z per pixel as the reference, the walk later (32 lanes)', () => {
+    const r = lcg(21);
+    const tris = Array.from({ length: 32 }, (_, l) => (l === 0 ? [[10, 10], [200, 40], [60, 230]] as Vtx[] : tri(r)));
+    const zs = tris.map((_, l) => (l === 1 ? [0, 255, 128] : [r(256), r(256), r(256)]));
+    const sim = new BitSim(flatten(rasterizer(true)));
+    VERTEX_PINS.forEach((p, k) => sim.setInput(p, tris.map((v) => v[k >> 1][k & 1])));
+    ['z0', 'z1', 'z2'].forEach((p, k) => sim.setInput(p, zs.map((z) => z[k])));
+    sim.setInput('col', 5); sim.setInput('clr', 0);
+    const runs = tris.map((v) => rasterize(v, true));
+    const got: string[][] = tris.map(() => []);
+    const T = Math.max(...runs.map((x) => x.cycles)) + 3;
+    for (let t = 0; t < T; t++) {
+      sim.setInput('go', t === 0 ? 1 : 0);
+      sim.settle();
+      const we = sim.get('fwe'), fa = sim.get('fa'), fz = sim.get('fz');
+      for (let l = 0; l < 32; l++) if (we[l]) got[l].push(`${t}:${fa[l] & 63},${fa[l] >> 6}:${fz[l]}`);
+      sim.cycle();
+    }
+    for (let l = 0; l < 32; l++) {
+      const want = runs[l].writes.map((w) => `${w.cycle}:${w.x},${w.y}:${zStore(zAt(tris[l], zs[l], w.x, w.y))}`);
+      expect(got[l], `lane ${l}: ${tris[l]} z ${zs[l]}`).toEqual(want);
+    }
+  });
+
+  it('z at the pixels inside stays between the vertices\' z (to rounding)', () => {
+    const r = lcg(5);
+    for (let t = 0; t < 200; t++) {
+      const v = tri(r), z = [r(256), r(256), r(256)];
+      for (const w of rasterize(v).writes.slice(0, 50)) {
+        const q = zAt(v, z, w.x, w.y) / 2 ** Z_FRAC;
+        expect(q).toBeGreaterThan(Math.min(...z) - 1);
+        expect(q).toBeLessThan(Math.max(...z) + 1);
+      }
+    }
+  });
+
+  it('GPU30Z: clear, two crossing triangles with the depth test, a blended one: the frame the reference draws', () => {
+    const ops: DrawOp[] = [
+      { clr: true, v: [[0, 0], [0, 0], [0, 0]], col: 0x25 },
+      { v: [[20, 20], [240, 60], [40, 230]], z: [20, 20, 220], col: 0xe0, zt: true },
+      { v: [[230, 20], [200, 240], [10, 120]], z: [220, 60, 30], col: 0x1c, zt: true },
+      { v: [[100, 4], [250, 250], [4, 180]], z: [0, 0, 0], col: 0x03, a: 3, zt: false },
+    ];
+    const ref = new RefFrame();
+    for (const op of ops) ref.draw(op);
+    const sim = new BitSim(flatten(GPU30Z));
+    sim.setInput('swap', 0); sim.setInput('sync', 1);
+    for (const op of ops) {
+      VERTEX_PINS.forEach((p, k) => sim.setInput(p, op.v[k >> 1][k & 1]));
+      ['z0', 'z1', 'z2'].forEach((p, k) => sim.setInput(p, op.z?.[k] ?? 0));
+      sim.setInput('col', op.col); sim.setInput('a', op.a ?? 7); sim.setInput('zt', op.zt ? 1 : 0); sim.setInput('clr', op.clr ? 1 : 0);
+      sim.setInput('go', 1); sim.cycle(); sim.setInput('go', 0);
+      let n = 0;
+      for (sim.settle(); sim.get('busy', 1)[0]; sim.settle()) { sim.cycle(); expect(++n).toBeLessThan(CLEAR_CYCLES + 10); }
+      if (op.clr) expect(n, "busy cycles of a clear").toBe(CLEAR_CYCLES);
+    }
+    sim.setInput('swap', 1); sim.cycle(); sim.setInput('swap', 0);
+    for (sim.settle(); !sim.get('vsync', 1)[0]; sim.settle()) sim.cycle();
+    sim.cycle();
+    const got = new Uint8Array(FB_W * FB_W);
+    for (let a = 0; a < FB_WORDS; a++) {
+      sim.settle();
+      const q = sim.get('pixels', 1)[0];
+      for (let j = 0; j < 4; j++) got[4 * a + j] = Math.floor(q / 2 ** (8 * j)) & 255;
+      sim.cycle();
+    }
+    let diff = 0;
+    for (let i = 0; i < got.length; i++) if (got[i] !== ref.fb[i]) diff++;
+    expect(diff).toBe(0);
+    // the depth test decided something: both colours are on the screen, crossing
+    expect(ref.fb.includes(0xe0) || [...ref.fb].some((c) => c === blend332(0x03, 0xe0, 3))).toBe(true);
   });
 });
