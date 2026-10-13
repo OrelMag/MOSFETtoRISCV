@@ -25,4 +25,10 @@ describe('the glossary', () => {
     expect(ids('An OR of two ANDs')).toEqual(['or', 'and']);
     expect(ids('nandgate halfadders')).toEqual([]);
   });
+
+  it('finds the GPU act\'s terms', () => {
+    expect(ids('Four lanes form a warp; the leader decides a divergent branch.')).toEqual(['lane', 'warp', 'leader', 'divergence']);
+    expect(ids('SIMT keeps lane utilization up with a reconvergence stack and the active mask.')).toEqual(['simt', 'utilization', 'reconvergence', 'activemask']);
+    expect(ids('A lane register file per lane: SIMD trades latency for throughput.')).toEqual(['vrf', 'lane', 'simd', 'throughput']);
+  });
 });

@@ -1,8 +1,9 @@
-// Level cases, acts 4–8 (the instruction set, the single-cycle core, the pipeline, the system, side
-// quests): every build, core and program level, the optional ones included. The numbers are measured
-// on the reference designs: NANDs and depth (sim/stats), clock periods by static timing (cores with
-// the bench's 8-delay memories, corecheck corePeriod), cycles on the core bench's programs
-// (coretests) and instructions on the puzzles' reference solutions. See cases.ts.
+// Level cases, acts 4–9 (the instruction set, the single-cycle core, the pipeline, the system, side
+// quests, the lanes): every build, core and program level, the optional ones included. The numbers are
+// measured on the reference designs: NANDs and depth (sim/stats), clock periods by static timing (cores
+// with the bench's 8-delay memories, corecheck corePeriod / lanecheck lanePeriod), cycles on the core
+// bench's programs (coretests, lanetests), instructions on the puzzles' reference solutions and lane
+// utilization on the lane golden model (riscv/rv16/simt16.ts). See cases.ts.
 
 import type { LevelCase } from './cases';
 
@@ -250,5 +251,42 @@ export const CASES1: Record<string, LevelCase> = {
     without: 'The single-cycle core: one instruction per 98-delay cycle.',
     cost: '5 224 NANDs (+483 over Core III), period 76 against 98, but 3 or 4 cycles per instruction: Core III\'s programs take 3 865 cycles instead of 1 236, 2.4 times slower overall (293 740 against 121 128 NAND delays). The period falls only 22% because E still holds the whole ripple ALU. Multicycle designs paid by sharing one ALU and one memory between the steps; this one shares nothing, keeping the separate memories and the next-PC adders.',
     alts: [{ name: 'Single-cycle core', lib: 'rv16_cpu' }],
+  },
+
+  // ---- Act 9: throughput ----------------------------------------------------------------------
+  k_lanes: {
+    problem: 'One instruction, four results. A lane is the single-cycle core\'s execute step for one thread: the operand-b mux (its own rs2 or the shared immediate) and an ALU. All four lanes take the same <code>alu</code> operation, <code>bimm</code> and immediate from the one control unit; only their operands differ. <b>nz</b> has a bit per lane, rs1 ≠ 0: the predicate <code>split</code> will test, computed by every lane on its own register.',
+    without: 'One result per instruction: a loop over n elements runs n iterations, where four lanes run n / 4.',
+    cost: '4 596 NANDs, depth 55: per lane a 1 055-NAND ripple ALU, a 49-NAND bus mux and a 16-input OR for nz (45), 1 149 in all. Nothing inside the block is shared; the sharing is around it, where one control unit, one immediate generator and one PC feed all four. Kogge–Stone ALUs (1 273 NANDs each) would make the four lanes 5 468 NANDs.',
+    alts: [{ name: 'Four lanes with Kogge–Stone ALUs', nand: 5468, note: '4 × (1 273 + 49 + 45): the measured rv16_alu16ks, bus mux and OR tree' }, { name: 'One lane\'s ripple ALU', lib: 'rv16_alu16' }],
+  },
+  k_vrf: {
+    problem: 'Each lane runs the same instruction on its own thread\'s data, so each needs its own x1–x7. The four files share every address: <code>ra1</code>, <code>ra2</code> and <code>wa</code> are the instruction\'s rs1, rs2 and rd, the same for all lanes in the same cycle. Only the write enable is per lane: bit <i>i</i> of <code>we</code>, which the active mask will drive, decides whether lane <i>i</i> keeps its result.',
+    without: 'Four lanes reading one register file read the same operands and compute the same results: single instruction, single data, four times.',
+    cost: '8 772 NANDs, period 11: four 2 193-NAND register files, each 1 456 of flip-flops, 686 of read muxes and a 51-NAND write decoder. 56% of the SIMD core, its largest block: lanes share control, never storage. 448 stored bits in 35 088 transistors is 78 per bit, against 6 in an SRAM cell, which is why GPU register files are banked SRAM, and still the largest structure on the chip. The four write decoders all decode the same wa: one decoder, ANDed with each lane\'s enable, would decode it once.',
+    alts: [{ name: 'One register file (8 × 16)', lib: 'rv16_rf' }],
+  },
+  k_mask: {
+    problem: 'A lane with nothing to do must not write: the tail of an array whose length is not a multiple of four, one side of an if. The mask has a bit per lane, all ones after reset, loaded by <code>tmc</code> (and later by split and join), and it gates the write enables: we = mask when rwe, dwe = mask when mwe. A masked lane still reads, computes and drives its address; it only changes nothing. The mask also names the <b>leader</b>, the lowest active lane, whose registers speak for the warp where it needs one value.',
+    without: 'Every lane writes every result: four lanes looping over 10 elements store 12, two past the end of the array, and no lane can sit out an instruction.',
+    cost: '102 NANDs, period 8: the 4-bit register with enable (52), the reset ORs (15), the leader (10: bit 1 = ¬m0·¬m1, bit 0 = ¬m0·(m1 + ¬m2)), <i>any</i> (9) and the eight ANDs of we and dwe (16). In the core the binary leader steers a 16-bit 4:1 mux (147 NANDs) per operand; the RV32 lane core of chapter 26 makes it a one-hot word instead (18 NANDs, depth 7) for one-hot muxes.',
+    alts: [{ name: 'Leader as a one-hot word (RV32 lane core)', lib: 'low1_4' }, { name: 'Priority encoder (highest lane, binary)', lib: 'prienc4' }],
+  },
+  k_simd: {
+    problem: 'One fetch, one decode, four lanes. The single-cycle core\'s control unit, immediate generator, branch comparator, next-PC logic and PC stay single; its register file and ALU become the lane register file and the four lanes, and each lane gets its own memory port and result muxes. Where the warp needs one value the leader supplies it: two 16-bit 4:1 muxes pick the leader\'s rs1 and rs2 for the branch comparator, the <code>jalr</code> target and <code>tmc</code>\'s mask. The lane decoder adds <code>tmc</code> and <code>csrr rd, tid</code>, which writes each lane\'s own number.',
+    without: 'Four cores: four fetches, four control units, four PCs and four instruction memories, for four instruction streams that are identical.',
+    cost: '15 774 NANDs, period 100 (the load path, 2 delays longer than Core III\'s). Per lane 3 489 (registers 2 193, ALU, mux and nz 1 149, three result muxes 147); shared 1 818 (next PC 421, branch 287, control 200, PC 144, the leader and immediate 4:1 muxes 441, mask 102, lane decoder 73, the PC and pc + 1 / immediate muxes 147, an OR). Four single-cycle cores are 18 964 NANDs: the lane core saves 3 190 (17%), little, because RV16\'s front end is small. On 3·x + y over 16 words one lane runs 151 instructions, four lanes 43: 4 300 NAND delays against 14 798, 3.4× faster for 3.3× the NANDs of one core. The saving that grows with the lane count is the instruction stream: one instruction memory and one fetch for four results. The 20 test programs take 810 cycles.',
+    alts: [{ name: 'Four single-cycle cores', nand: 18964, note: '4 × 4 741: the measured rv16_cpu' }, { name: 'One single-cycle core', lib: 'rv16_cpu' }, { name: 'One shared memory port: the RV32 lane core\'s sequencer', lib: 'memseq4' }],
+  },
+  k_stack: {
+    problem: 'When the active lanes disagree on an if, one PC has to run both sides, one after the other, and then bring the lanes back together. <code>split rs1</code> divides the active lanes into <i>then</i> (rs1 ≠ 0) and <i>else</i> and pushes an entry: the mask before the split, the else lanes, the address after the split and <i>pending</i> (both sides have lanes). The first <code>join</code> on a pending entry switches the mask to the else lanes and jumps back; the second restores the saved mask and pops. Nested ifs push nested entries: a stack.',
+    without: 'The SIMD core follows the leader: lanes that disagree with it run the wrong side of the if and write wrong results. Data-dependent control flow takes hand-written mask juggling with <code>tmc</code>.',
+    cost: '1 995 NANDs, period 19. Four entries of 26 bits (mask 4, else 4, resume pc 16, pending, valid), each bit an enable flip-flop (104 × 13 = 1 352), with a 26-bit 2:1 mux in front of each entry that shifts down on a push and up on a pop; the then / else split and the join logic are the rest. As a shift register the top entry has a fixed place, so join reads it without a pointer or a read mux. Four entries are four nested ifs: a fifth split drops the bottom entry (the golden model stops with an error). The RV32 lane core\'s mask and stack together, with 32-bit resume addresses and its <code>pred</code> instruction, are 3 630 NANDs.',
+  },
+  k_simt: {
+    problem: 'The SIMD core with the stack. split\'s predicate is the lanes\' nz (each lane\'s rs1 ≠ 0), its resume address the next-PC logic\'s pc + 1; the mask loads when <code>tmc</code> runs or the stack changes it, tmc winning; one more 16-bit mux sends the PC to jpc when a join jumps. Each lane can now run a scalar program with its own control flow: the lanes are threads, and only the time shows that they share a PC.',
+    without: 'The SIMD core: correct only on programs whose branches every active lane agrees on.',
+    cost: '17 837 NANDs, +2 063 over the SIMD core: the stack 1 995, the PC mux 49, a 4-bit mask mux 16, an OR. Period unchanged at 100: the stack sits beside the load path, not on it. The 25 programs take 919 cycles. Divergence now costs time instead of correctness: the if / else test runs 14 instructions at 71% lane utilization, two lanes on each side; the nested ifs 19 at 59%.',
+    alts: [{ name: 'SIMD core (no split / join)', lib: 'rv16_simd' }],
   },
 };
