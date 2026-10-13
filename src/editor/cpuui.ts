@@ -38,6 +38,7 @@ import { detectMulti, type MultiDesc, MultiMonitor } from './multicpu';
 import { detectRv16, type Rv16Desc, Rv16Monitor } from './cpu16';
 import { disasm16, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { type Cpu4Desc, Cpu4Monitor, cpu4Use, detectCpu4 } from './cpu4mon';
+import { detectLanes16, type LaneDesc, LaneMonitor } from './lanemon';
 import { registerPropsSection } from './props';
 import { type EdgeHook, type EditorSim, FrameBudget } from './runtime';
 
@@ -63,10 +64,10 @@ const CAUSE_NAMES: Record<number, string> = {
   [CAUSE.TIMER_IRQ]: 'timer interrupt', [CAUSE.EXTERNAL_IRQ]: 'external interrupt',
 };
 
-type Mon = CpuMonitor | MultiMonitor | Rv16Monitor | Cpu4Monitor;
-const monKind = (m: Mon) => (m instanceof MultiMonitor ? 'multi' : m instanceof Rv16Monitor ? 'rv16' : m instanceof Cpu4Monitor ? 'cpu4' : 'cpu');
+type Mon = CpuMonitor | MultiMonitor | Rv16Monitor | LaneMonitor | Cpu4Monitor;
+const monKind = (m: Mon) => (m instanceof MultiMonitor ? 'multi' : m instanceof Rv16Monitor ? 'rv16' : m instanceof LaneMonitor ? 'lanes' : m instanceof Cpu4Monitor ? 'cpu4' : 'cpu');
 /** Monitors whose ROM listing is word addressed (rows keyed 4 × the word index, like the RV32 listings). */
-const wordListed = (m: Mon): m is Rv16Monitor | Cpu4Monitor => m instanceof Rv16Monitor || m instanceof Cpu4Monitor;
+const wordListed = (m: Mon): m is Rv16Monitor | LaneMonitor | Cpu4Monitor => m instanceof Rv16Monitor || m instanceof LaneMonitor || m instanceof Cpu4Monitor;
 interface Entry { chip: string; mon: Mon; pipe: PipeHistory; hook: EdgeHook }
 
 /** Children replaced only when `key` changed (the panel redraws on every simulation change). */
@@ -109,6 +110,7 @@ class CpuPanel {
   private multi: MultiDesc | null = null;
   /** An RV16 computer (an RV16 ROM and a placed core): checked through the core's write ports. */
   private rv16: Rv16Desc | null = null;
+  private lanes: LaneDesc | null = null;
   /** A 4-bit CPU (a ROM in 4-bit assembly): the example's registers checked every clock. */
   private cpu4: Cpu4Desc | null = null;
   private width = 0;
@@ -268,18 +270,19 @@ class CpuPanel {
         this.multi = detectMulti(ed.doc, chips);
         this.desc = this.multi ? null : resolveCpu(ed.doc, chips);
         this.rv16 = this.multi || this.desc ? null : detectRv16(ed.doc, chips);
-        this.cpu4 = this.multi || this.desc || this.rv16 ? null : detectCpu4(ed.doc, chips);
+        this.lanes = this.multi || this.desc || this.rv16 ? null : detectLanes16(ed.doc, chips);
+        this.cpu4 = this.multi || this.desc || this.rv16 || this.lanes ? null : detectCpu4(ed.doc, chips);
       }
-      const want = this.multi ? 'multi' : this.rv16 ? 'rv16' : this.cpu4 ? 'cpu4' : 'cpu';
+      const want = this.multi ? 'multi' : this.rv16 ? 'rv16' : this.lanes ? 'lanes' : this.cpu4 ? 'cpu4' : 'cpu';
       // Monitors of chips that are gone, replaced by another simulation, or of another kind now.
       for (const [k, v] of this.monitors) {
         const kind = v.chip === chip && monKind(v.mon) !== want;
         if (!ed.ws.open.includes(v.chip) || (v.chip === chip && k !== es) || kind) { this.drop(k, v); this.monitors.delete(k); }
       }
       let entry = this.monitors.get(es);
-      if ((this.desc || this.multi || this.rv16 || this.cpu4) && !entry) {
+      if ((this.desc || this.multi || this.rv16 || this.lanes || this.cpu4) && !entry) {
         const doc = () => ed.ws.chips[chip] ?? ed.doc, ws = () => ed.ws.chips;
-        const mon: Mon = this.multi ? new MultiMonitor(es, doc, ws) : this.rv16 ? new Rv16Monitor(es, doc, ws) : this.cpu4 ? new Cpu4Monitor(es, doc, ws) : new CpuMonitor(es, doc, ws);
+        const mon: Mon = this.multi ? new MultiMonitor(es, doc, ws) : this.rv16 ? new Rv16Monitor(es, doc, ws) : this.lanes ? new LaneMonitor(es, doc, ws) : this.cpu4 ? new Cpu4Monitor(es, doc, ws) : new CpuMonitor(es, doc, ws);
         const pipe = new PipeHistory();
         const hook: EdgeHook = { after: () => { if (es.sim) pipe.record(es.sim, es.sim.design.root, es.cycles); } };
         es.edgeHooks.add(hook);
@@ -302,8 +305,8 @@ class CpuPanel {
         this.stopSlow();
         // A complete CPU opens its panel by itself (unless closed there); a chip without a program
         // ROM closes it; a bare datapath (a ROM and a PC) leaves it as it was.
-        if ((this.desc?.regs || this.multi || this.rv16 || this.cpu4) && !this.closed.has(chip)) this.setOpen(true);
-        else if (!this.desc && !this.multi && !this.rv16 && !this.cpu4) this.setOpen(false);
+        if ((this.desc?.regs || this.multi || this.rv16 || this.lanes || this.cpu4) && !this.closed.has(chip)) this.setOpen(true);
+        else if (!this.desc && !this.multi && !this.rv16 && !this.lanes && !this.cpu4) this.setOpen(false);
       }
       this.redock();
       if (this.open) this.renderThrottled();
@@ -349,7 +352,7 @@ class CpuPanel {
   }
 
   private halted(mon: Mon): boolean {
-    return mon instanceof MultiMonitor ? !!mon.m?.halted : !!mon.iss?.halted;
+    return mon instanceof MultiMonitor ? !!mon.m?.halted : mon instanceof LaneMonitor ? mon.halted && mon.done : !!mon.iss?.halted;
   }
 
   private stepInstr(): void {
@@ -459,6 +462,7 @@ class CpuPanel {
     this.regsSec.hidden = this.regs.hidden = false; // a custom table's view hides them
     if (mon instanceof MultiMonitor) return this.renderMulti(mon);
     if (mon instanceof Rv16Monitor) return this.renderRv16(mon);
+    if (mon instanceof LaneMonitor) return this.renderLanes(mon);
     if (mon instanceof Cpu4Monitor) return this.renderCpu4(mon);
     const d = mon.desc!;
     const r = mon.read();
@@ -480,7 +484,7 @@ class CpuPanel {
     this.runBtn.title = mon.checking ? `Clock until the program halts (the golden model says when), a mismatch, or ${RUN_CAP.toLocaleString('en')} cycles`
       : 'Needs the golden model (a register file to check, a program that builds, a Reset) to know when the program halts';
     this.stepBtn.title = multi ? 'One clock cycle: every core that is not stalled retires an instruction'
-      : mon instanceof Rv16Monitor ? 'Clock until the core’s next register write or store' : mon instanceof Cpu4Monitor ? 'One clock: one instruction' : 'Clock until the next instruction retires';
+      : mon instanceof Rv16Monitor ? 'Clock until the core’s next register write or store' : mon instanceof LaneMonitor ? 'Clock until the core’s next checked write (a register write, a store or a pixel of any lane)' : mon instanceof Cpu4Monitor ? 'One clock: one instruction' : 'Clock until the next instruction retires';
     keyed(this.slowBtn, `${!!this.slow}`, () => [icon(this.slow ? 'pause' : 'play', 14), this.slow ? 'Pause' : 'Slow']);
     this.slowBtn.classList.toggle('on', !!this.slow);
     this.slowBtn.title = `Run ${multi ? 'one cycle' : 'one instruction'} at a time at the rate beside it: the current instruction and the parts it uses stay marked`;
@@ -727,7 +731,7 @@ class CpuPanel {
 
   private renderTrace(mon: Mon): void {
     const show = mon instanceof CpuMonitor ? !!mon.desc?.regs : mon instanceof Cpu4Monitor ? !mon.desc?.table : true;
-    const rv16 = mon instanceof Rv16Monitor;
+    const rv16 = mon instanceof Rv16Monitor || mon instanceof LaneMonitor;
     keyed(this.traceSec, rv16 ? 'rv16' : 'cpu', () => (rv16 ? ['Checked writes', h('span', { class: 'cpu-sec-hint' }, 'register writes and stores, newest last')]
       : ['Retired', h('span', { class: 'cpu-sec-hint' }, 'by the golden model, newest last')]));
     // An RV16 listing's rows are keyed like the others' (4 × the word index).
@@ -816,11 +820,58 @@ class CpuPanel {
     const x = [...mon.hw];
     this.regsSec.textContent = 'Registers (as the core wrote them)';
     this.regs.classList.remove('sb-cpu-mregs');
+    this.regs.style.removeProperty('--n');
     const model = mon.iss ? [...mon.iss.x] : null;
     keyed(this.regs, `${x.join(',')}|${mon.lastWrite}|${es.cycles > 0}`, () => x.map((v, i) => h('div', {
       class: `r${i === mon.lastWrite && es.cycles > 0 ? ' chg' : ''}${v ? '' : ' z'}`,
       title: `x${i} = ${v} (${(v << 16) >> 16} signed)${model && model[i] !== v ? `; the golden model has run ahead to 0x${hex4(model[i])}` : ''}`,
     }, h('span', { class: 'n' }, REG_NAMES16[i]), h('span', { class: 'v' }, `0x${hex4(v).toUpperCase()}`))));
+    this.renderTrace(mon);
+    this.computeMarks();
+  }
+
+  // ---- an RV16 lane core (act 9) ----------------------------------------------------------
+
+  private renderLanes(mon: LaneMonitor): void {
+    const es = this.ed.sim, d = mon.desc!;
+    const pc = mon.pc, warp = mon.warp;
+    const bits: HTMLElement[] = [h('span', null, `cycle ${es.cycles}`), h('span', { title: 'Register writes, stores and pixel writes the core made, each matched with the golden model' }, `writes ${mon.retired}`)];
+    if (d.raster) bits.push(h('span', { title: 'Pixel writes of the rasterizer (fa, fd, fwe), matched with the triangles the golden model drew' }, `pixels ${mon.pixels}`));
+    if (mon.mismatch) bits.push(h('span', { class: 'bad', title: 'The first difference between the core and the lane golden model; the check stops there' }, `✗ ${mismatchText(mon.mismatch)}`));
+    else if (mon.problem) bits.push(h('span', { class: 'warn' }, `no golden model: ${mon.problem}`));
+    else if (mon.error) bits.push(h('span', { class: 'warn', title: 'The golden model stopped: the program does something the lanes cannot (the hardware does whatever its gates do)' }, `golden model stopped: ${mon.error}`));
+    else if (!mon.synced) bits.push(h('span', { class: 'warn', title: 'The golden model starts with the hardware at cycle 0' }, 'golden model joins at the next Reset'));
+    else {
+      const ports = d.warps === 2 ? 'its write port (rwe, rwa, rwd<i>), the load port (lwe, lwa, lwd<i>: the previous cycle’s warp)' : 'the write port (rwe, rwa, rwd<i>)';
+      bits.push(h('span', { class: 'good', title: `Every lane’s register writes on ${ports} and stores (dwe, daddr<i>, dwdata<i>)${d.raster ? ', and every pixel the rasterizer writes,' : ''} match the ${d.warps === 2 ? 'two-warp' : 'lane'} golden model, in order: the level’s bench, live` }, `✓ matches the ${d.warps === 2 ? 'two-warp' : 'lane'} golden model`));
+    }
+    if (mon.halted && mon.done) bits.push(h('span', { class: 'warn' }, 'halted'));
+    const next = mon.next;
+    if (next) bits.push(h('span', { class: 'sb-cpu-next', title: 'The oldest write the golden model expects from the core' }, `next: ${next}`));
+    keyed(this.status, bits.map((b) => b.outerHTML).join(''), () => bits);
+    keyed(this.gaps, '', () => []);
+    const at = pc !== null && pc >= 0 ? 4 * pc : pc;
+    this.renderListing(mon, at, warp !== null && warp >= 0 && at !== null && at >= 0 ? [{ tag: `W${warp}`, pc: at, title: `warp ${warp} issues this` }] : null, '');
+    const w = pc !== null && pc >= 0 ? mon.wordAt(pc) : null;
+    keyed(this.now, `${pc}|${w}|${warp}`, () => (w === null
+      ? [h('span', { class: 'fmt' }, 'PC'), h('code', null, pc === null ? 'not found' : 'unknown (X)')]
+      : [h('span', { class: 'fmt' }, warp !== null && warp >= 0 ? `warp ${warp}` : 'RV16'), h('code', null, disasm16(w, pc!)), h('span', { class: 'hexw' }, `0x${hex4(pc!)}`)]));
+    this.fieldsSec.hidden = this.fields.hidden = this.pipeSec.hidden = this.pipe.hidden = this.ioSec.hidden = this.io.hidden = true;
+    this.fregsSec.hidden = this.fregs.hidden = this.memSec.hidden = this.mem.hidden = true;
+    keyed(this.use, '', () => []);
+    // every thread's registers side by side, as its write ports set them
+    const T = mon.threads, n = d.lanes;
+    const head = (t: number) => (d.warps === 2 ? `w${Math.floor(t / n)} l${t % n}` : `lane ${t}`);
+    this.regsSec.textContent = 'Registers (as the core wrote them)';
+    this.regs.classList.add('sb-cpu-mregs');
+    this.regs.style.setProperty('--n', String(T));
+    keyed(this.regs, `${mon.hw.map((x) => x.join(',')).join('|')}|${mon.lastWrite.join(',')}|${es.cycles > 0}`, () => [
+      h('span', { class: 'hd' }, ''), ...Array.from({ length: T }, (_, t) => h('span', { class: 'hd', title: `thread ${t} (tid)` }, head(t))),
+      ...Array.from({ length: 8 }, (_, r) => [h('span', { class: 'n' }, REG_NAMES16[r]), ...mon.hw.map((x, t) => {
+        const v = x[r];
+        return h('span', { class: `v${mon.lastWrite[t] === r && es.cycles > 0 ? ' chg' : ''}${v ? '' : ' z'}`, title: `${head(t)}: x${r} = ${v} (${(v << 16) >> 16} signed)` }, hex4(v).toUpperCase());
+      })]).flat(),
+    ]);
     this.renderTrace(mon);
     this.computeMarks();
   }
@@ -928,7 +979,7 @@ class CpuPanel {
   private computeMarks(): void {
     const mon = this.mon, ed = this.ed;
     if (mon instanceof Cpu4Monitor) return this.computeMarks4(mon);
-    if (mon instanceof Rv16Monitor) {
+    if (mon instanceof Rv16Monitor || mon instanceof LaneMonitor) {
       // The parts an instruction uses are named after the chapters' RV32 CPUs: nothing to mark here.
       if (this.marked.length || this.wireMarks.size) this.clearMarks();
       return;

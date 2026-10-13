@@ -157,6 +157,9 @@ src/lib/       the component library (registered in `registry` via define())
   storage.ts     romArray(preset), minimize() (Quine–McCluskey), pla(preset), fifo(k, w), stack(k, w), cam(k, w),
                  regfileMP(k, w, reads, writes)
   memory.ts      ram(k, w): decoder + registers + mux tree, user-scalable
+  portmem.ts     portMemory(k, w, n, init): a read and a write port per lane (highest port wins a word), ≤ 2^6 words
+                 lanePortMemory (gates, any width), up to 2^10 bigPortMemory: one leaf (PortRamState, a RamState + what
+                 each port sampled) over banks of portBank (lanePortMemory(6, …) as a lookup, seeded latches when opened)
   bigmem.ts      large memories (2^7 … 2^16 words): bigRam(k, w) = one stateful behavioural leaf (RamState: words +
                  X flags, sampled while clk is low, written at the rising edge) over a lazy hierarchy of ≤ 16 banks
                  per level down to ramBank(w) (ram(6, w) as a lookup; opened, its latches are seeded), bankState;
@@ -336,7 +339,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays (LED / LED bank, 7-segment,
                  hex, value, buzzer: buzzerHz; and the halt part), keys and the keyboard (external sources: behaviour-only
                  leaves, isExternal; keyPart(bind), KEYBOARD, normalizeKey / keyLabel / keyCode / codeGlyph), ROM, RAM
-                 (both up to 2^16 words: wordRom → romTree ≤ 2^8, else romLevels; RAM > 2^6: bigRam),
+                 (both up to 2^16 words: wordRom → romTree ≤ 2^8, else romLevels; RAM > 2^6: bigRam; RAM ports 2–8:
+                 portMemory, ≤ 2^10 words),
                  consoles / switch banks / screens (ioparts.ts), puzzle ports (puzzleparts.ts); audio.ts plays the buzzers
   puzzleparts.ts PUZZLE IN (data / ready; read at a rising clk edge takes a word; reads past the end counted) and
                  PUZZLE OUT (data at a rising clk edge with we = 1, with the edge): external parts like the console,
@@ -442,6 +446,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  bank's positions, an LED bank named leds, here or one chip down), first mismatch, Run to halt
   cpu16.ts       detectRv16 (an RV16 ROM + a part with the core pins), Rv16Monitor: Iss16 in lock-step through the
                  core's write and store ports in program order (the campaign bench, live; RAM wrap, drain, next write)
+  lanemon.ts     detectLanes16 (an RV16 ROM + a lane core: 2 / 4 / 8 lanes, warp + load port, fa / fd / fwe), LaneMonitor:
+                 Simt16 / Warps16 in lock-step as lanecheck / warpcheck check (per-thread queues, the load port as the
+                 previous cycle's warp's, pixel writes in draw order; the model runs ahead to the next write); the CPU
+                 drawer's lane view (every thread's registers, the issuing warp on the listing)
   isaops.ts      custom ISAs in a workspace: ws.isas the tables, each ROM on one holds a copy (romRef.isa); isaList, copyIsa,
                  putIsa (an edit reaches every ROM that holds it), deleteIsa; isaui.ts the ISA editor dialog (File ▸ Instruction sets…)
   cpu4mon.ts     detectCpu4 (a ROM in 4-bit assembly, or on a custom table: followed, not checked), Cpu4Monitor: Iss4 stepped at every rising edge with the TEST / switch
@@ -541,7 +549,11 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  decision, sticky shifter, leading-zero counter, normalize & round, compare, int → float), whose blocks
                  (FP_BLOCK) are never given, only unlocked by the rung that built them (fpGives)
   bench.ts       addBench: a failing core test as a computer chip around the learner's core (RV16 ROM, 64-word
-                 RAM, LEDs, IRQ line), opened with the CPU drawer; failingTest names it from a failure line
+                 RAM, LEDs, IRQ line), opened with the CPU drawer; failingTest names it from a failure line;
+                 addLaneBench: the same for a lane core (act 9): a power-on reset for the first cycle, a lane address chip
+                 per lane (data 0x000–0x3FF; raster: the screen 0xF000), a RAM part with a port per lane (ports: n),
+                 warps: a register after each read (a cycle late), raster: the screen memory with a fifth port for fa / fd /
+                 fwe and a 32 × 32 RGB565 screen of the rasterizer's writes
   datasheet.ts   a codex component entry's datasheets: the unlocked library parts' pins, cost, depth, truth table
                  (datasheetOf(id): one part)
   cases.ts       level cases ("why we are building it": problem, without, cost, alternatives as library ids measured

@@ -157,7 +157,7 @@ function latches(w: number): string[][] {
 }
 
 /** The bank's words into the latches of its flip-flops (an unknown word: X in both). */
-function seedLatches(w: number): Behavior['inside'] {
+export function seedLatches(w: number): Behavior['inside'] {
   const one = [B1], zero = [B0], x = [BX];
   return (st, seed) => {
     const s = st as RamState;

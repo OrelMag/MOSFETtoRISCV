@@ -85,10 +85,11 @@ function sanitizeRef(r: unknown): PartRef | null {
     return { rom: { k, w, addr, lang, src } };
   }
   if (isObj(r.ram)) {
-    const { k, w, init } = r.ram;
+    const { k, w, init, ports } = r.ram;
     if (!int(k) || !int(w, 1)) return null;
     const words = Array.isArray(init) && init.length <= 1 << 16 && init.every((x) => int(x)) ? (init as number[]).slice() : undefined;
-    return { ram: words?.some((x) => x) ? { k, w, init: words } : { k, w } };
+    const p = int(ports, 2) && (ports as number) <= 8 /* PORT_MAX_N (lib/portmem.ts, not imported: it pulls in the warp cores) */ ? { ports: ports as number } : {};
+    return { ram: words?.some((x) => x) ? { k, w, init: words, ...p } : { k, w, ...p } };
   }
   return null;
 }

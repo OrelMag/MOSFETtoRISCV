@@ -360,8 +360,12 @@ adding levels to it never reopens a finished campaign. Its finale (finalCpu of t
   `raster`) draws at once, the core's pixel writes must match it in order
 - ✅ program puzzle `p_spin` ← k_frame: a square turned by Minsky's rule in 8.8 fixed point, cleared and drawn as two
   triangles each frame, on two warps (reference: 1 432 cycles, 8 % idle lanes; it also runs on the frame core's bench)
-- Follow-up: a failing `k_frame` (like `k_warps`) cannot open a sandbox bench chip yet: that needs the lane-core bench
-  chip (a four-port memory chip and a lane-aware CPU drawer)
+- ✅ A lane core's program (`k_simd`, `k_simt`, `k_warps`, `k_frame`) opens on a sandbox bench chip like the scalar
+  cores' (`addLaneBench`): the core held in reset for its first cycle, a data memory with a port per lane (words
+  0x000–0x3FF), each read a cycle late for the warp cores, and for `k_frame` the screen memory at 0xF000 (a fifth port for
+  the rasterizer's writes) and a 32 × 32 screen. The CPU drawer checks it live against `Simt16` / `Warps16` as the level's
+  bench does (editor/lanemon.ts); every program of the four levels runs to its end on the reference cores
+  (tests/editor-lanebench.test.ts)
 
 The lane cores' bench (`lanecheck.ts`) is the core bench with a memory port and a register write port per lane
 (`daddr<i>`, `dwdata<i>`, `drdata<i>`, `dwe` bit i; `rwe` bit i, `rwd<i>`, a shared `rwa`): each lane's

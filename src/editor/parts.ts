@@ -10,7 +10,8 @@ import { defIndex, resolveComponent } from '../lib/resolve';
 import { TIE0, TIE1 } from '../lib/transistors';
 import type { ComponentDef, InstanceDef, NetDef } from '../sim/types';
 import type { DisplayKind, PartRef } from './model';
-import { ramWithInit, romImage } from './memory';
+import { ramInit, ramWithInit, romImage } from './memory';
+import { PORT_MAX_K, PORT_MAX_N, portMemory } from '../lib/portmem';
 import { ioRefDef } from './ioparts';
 import { PUZZLE_MAX_WIDTH, puzzleIn, puzzleOut } from './puzzleparts';
 import { ROM_LEAF_K, romLevels, wordsHash } from '../lib/bigmem';
@@ -76,9 +77,14 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
   const io = ioRefDef(ref);
   if (io) return io;
   if ('ram' in ref) {
-    const { k, w, init } = ref.ram;
+    const { k, w, init, ports } = ref.ram;
     if (!Number.isInteger(k) || k < 1 || k > MAX_RAM_K) return { error: `RAM: 2^k words with k = 1–${MAX_RAM_K}` };
     if (!okWidth(w) || w > 32) return { error: 'RAM: word width must be 1–32' };
+    if (ports !== undefined && ports > 1) {
+      if (!Number.isInteger(ports) || ports > PORT_MAX_N) return { error: `RAM: 1–${PORT_MAX_N} ports` };
+      if (k > PORT_MAX_K) return { error: `RAM: a memory with several ports has at most ${2 ** PORT_MAX_K} words` };
+      return portMemory(k, w, ports, ramInit(k, w, init));
+    }
     return ramWithInit(k, w, init);
   }
   if ('rom' in ref) return romPart(ref.rom);

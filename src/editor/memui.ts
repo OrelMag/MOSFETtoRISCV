@@ -355,6 +355,7 @@ registerPropsSection({
     if (!p || !('ram' in p.ref)) return null;
     const id = p.id;
     const { k, w, init } = p.ref.ram;
+    const multi = (p.ref.ram.ports ?? 1) > 1;
     const N = 2 ** k;
     const digits = Math.max(1, Math.ceil(w / 4));
     const showBits = w <= 16;
@@ -429,13 +430,15 @@ registerPropsSection({
       const st = sim ? ramLeafState(sim, node) : null;
       // A large RAM: its state object and write count say whether anything changed (no 64K-word join per frame).
       const words = st || !sim ? null : readRam(sim, id);
-      const a = addrValue(ed.sim.endBits(`p:${id}.addr`));
-      const we = addrValue(ed.sim.endBits(`p:${id}.we`));
+      // a memory with ports: port 0's address and write enable
+      const a = addrValue(ed.sim.endBits(`p:${id}.${multi ? 'addr0' : 'addr'}`));
+      const we0 = addrValue(ed.sim.endBits(`p:${id}.we`));
+      const we = multi && we0 !== null && we0 >= 0 ? we0 & 1 : we0;
       const k2 = `${st ? `${objectId(st)}:${st.writes}` : words?.join(',')}|${a}|${we}`;
       if (k2 === key) return;
       key = k2;
       const known = !!(st || words);
-      note.textContent = known ? (a === null || a < 0 ? 'Address unknown.' : `${we === 1 ? 'Writing' : 'Reading'} ${at(a)}${we === 1 ? ' at the next rising clock edge' : ''}.`) : 'Not simulated.';
+      note.textContent = known ? (a === null || a < 0 ? 'Address unknown.' : `${multi ? 'Port 0: ' : ''}${we === 1 ? 'Writing' : 'Reading'} ${at(a)}${we === 1 ? ' at the next rising clock edge' : ''}.`) : 'Not simulated.';
       cur = known && a !== null && a >= 0 ? a : null;
       writing = we === 1;
       const bitsOf = (v: number) => Array.from({ length: w }, (_, j) => (v < 0 ? BX : Math.floor(v / 2 ** j) % 2));

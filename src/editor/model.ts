@@ -186,7 +186,8 @@ export type PartRef =
       /** lang 'isa': the instruction set, a copy of the workspace's table (so the ROM builds on its own, in a share link too). */
       isa?: IsaDoc } }
   /** Read-write memory: 2^k words of w bits; `init`: the words it holds at power-on ('to 0' mode). */
-  | { ram: { k: number; w: number; init?: number[] } };
+  /** ports: a read and a write port per lane (2 … 8; lib/portmem.ts: addr<i>, wd<i>, we, clk → rd<i>), up to 1K words. */
+  | { ram: { k: number; w: number; init?: number[]; ports?: number } };
 
 /** Where a wire ends. A branch ends on another wire at a point of its polyline. */
 export type EndRef =

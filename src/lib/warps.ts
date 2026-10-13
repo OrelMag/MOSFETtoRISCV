@@ -342,13 +342,13 @@ export function warpLane(n: number, W: number, mul = false): ComponentDef {
  * A data memory of 2^k words with a read and a write port per lane. Reads are combinational; at the
  * clock edge every lane with we writes its word, and when several write one word the highest lane
  * wins (the golden model stores lowest lane first). xport: one more read port (xa → xq) for a reader outside
- * the core (chapter 31's command unit).
+ * the core (chapter 31's command unit). w: the word width (the campaign's lane benches use 16).
  */
-export function lanePortMemory(k: number, n: number, init?: ArrayLike<number>, xport = false): ComponentDef {
-  if (init && Array.from(init).some((v) => v)) return withInit(lanePortMemory(k, n, undefined, xport), init);
-  const mid = `lpmem${k}_${n}${xport ? 'x' : ''}`;
+export function lanePortMemory(k: number, n: number, init?: ArrayLike<number>, xport = false, w = 32): ComponentDef {
+  if (init && Array.from(init).some((v) => v)) return withInit(lanePortMemory(k, n, undefined, xport, w), init, w);
+  const mid = `lpmem${k}_${n}${xport ? 'x' : ''}${w === 32 ? '' : `_w${w}`}`;
   return memo(mid, () => {
-    const N = 2 ** k, R = register(32), M2 = busMux2(32);
+    const N = 2 ** k, R = register(w), M2 = busMux2(w);
     const L = Array.from({ length: n }, (_, i) => i);
     const ins = [...L.map((i) => `addr${i}`), ...L.map((i) => `wd${i}`), 'we', ...(xport ? ['xa'] : []), 'clk'];
     // Hand-placed: decoders side by side, then the words in columns of up to 32 rows (a row: the word's
@@ -384,7 +384,7 @@ export function lanePortMemory(k: number, n: number, init?: ArrayLike<number>, x
       b.wire(d, `${r}.d`); b.wire(en, `${r}.en`); b.wire('clk', `${r}.clk`);
       return b.name(`${r}.q`, `q${w}`);
     });
-    const tree = muxTree(k, 32), tw = symbolGeom(tree).w + 14, xTree = x0 + Math.ceil(N / rows) * colW, outs: string[] = [];
+    const tree = muxTree(k, w), tw = symbolGeom(tree).w + 14, xTree = x0 + Math.ceil(N / rows) * colW, outs: string[] = [];
     const reader = (nm: string, label: string, s: string, y: string) => {
       const m = b.add(tree, label, nm);
       at(m, xTree + outs.length * tw, 2);
@@ -398,9 +398,9 @@ export function lanePortMemory(k: number, n: number, init?: ArrayLike<number>, x
     const xOut = xTree + outs.length * tw + 4;
     return define({
       id: mid, name: `Data memory, a port per lane (${N} words${xport ? ', one more read port' : ''})`, category: 'memory',
-      summary: `${N} words of 32 bits, one read and one write port per lane: every lane reads its own word in the same cycle, and a store writes all of them at once (the highest lane wins a word several write). Real memories do not have ${n} ports; chapter 29 gives them one port and a coalescer.${xport ? ' xa / xq: a read port for a unit outside the core.' : ''}`,
-      ports: [...L.map((i) => bus(`addr${i}`, k, 'in')), ...L.map((i) => bus(`wd${i}`, 32, 'in')), bus('we', n, 'in'), ...(xport ? [bus('xa', k, 'in')] : []), clkPort(),
-        ...outs.map((o) => bus(o, 32, 'out'))],
+      summary: `${N} words of ${w} bits, one read and one write port per lane: every lane reads its own word in the same cycle, and a store writes all of them at once (the highest lane wins a word several write). Real memories do not have ${n} ports; chapter 29 gives them one port and a coalescer.${xport ? ' xa / xq: a read port for a unit outside the core.' : ''}`,
+      ports: [...L.map((i) => bus(`addr${i}`, k, 'in')), ...L.map((i) => bus(`wd${i}`, w, 'in')), bus('we', n, 'in'), ...(xport ? [bus('xa', k, 'in')] : []), clkPort(),
+        ...outs.map((o) => bus(o, w, 'out'))],
       symbol: { kind: 'box', label: 'DATA MEM' },
       netlist: () => ({ pins: { ...edgePins(b, ins, [], 4), ...Object.fromEntries(outs.map((o, i) => [o, [xOut, 2 + 4 * i]])) }, instances: b.instances, nets: b.nets() }),
     });
@@ -408,14 +408,14 @@ export function lanePortMemory(k: number, n: number, init?: ArrayLike<number>, x
 }
 
 /** A memory that starts with these words: power-on hints into its words' flip-flops (as editor/memory.ts ramWithInit). */
-function withInit(base: ComponentDef, init: ArrayLike<number>): ComponentDef {
+function withInit(base: ComponentDef, init: ArrayLike<number>, w = 32): ComponentDef {
   const words = Array.from(init, (v) => v >>> 0);
   let h = 2166136261;
   for (const x of words) { h ^= x; h = Math.imul(h, 16777619) >>> 0; }
   return memo(`${base.id}_i${h.toString(16)}`, () => {
     const powerOn: Record<string, 0 | 1> = {};
     words.forEach((v, i) => {
-      for (let j = 0; j < 32; j++) {
+      for (let j = 0; j < w; j++) {
         if (!((v >>> j) & 1)) continue;
         for (const l of ['master', 'slave']) {
           powerOn[`w${i}.ff${j}.ff.${l}.sr.q`] = 1;
