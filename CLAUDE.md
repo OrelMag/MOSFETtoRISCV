@@ -222,7 +222,10 @@ src/lib/       the component library (registered in `registry` via define())
                  into the data memory (xa → xq; lanePortMemory / memPipe xport). A one-warp core keeps its unused wspawn decode
                  (chapter 28 quotes a warp as nands(2) − nands(1)). lanePortMemory is hand-placed (decoders, words in columns of
                  32 rows, read trees; labels between): the registry-wide schematic tests never build one, tests/route-bigmem.test.ts
-                 checks the chapters' sizes
+                 checks the chapters' sizes. The top level is hand-placed (warpCoreDrawing: four bands, a row per warp / decode
+                 and wspawn / lanes, leader and next PC / memory, lsu's access, done and barrier rows; Placer places by name and
+                 skips parts a variant lacks; wires within a block, labels between, unique net names); tests/warplayout.test.ts
+                 checks its variants (the registry-wide schematic tests never build the warp core's top level)
   warpmem.ts     chapter 29's memory: serveLanes / accessesOf (the access rule, also the timing model's), accessUnit(n)
                  (leader's 16-byte line; per bank the lowest lane picks the row; amoadd.w the leader alone), quadMemory(k,
                  banked) (4 columns: one row = a line, or a row per bank), lsuMemory (the pipeline: shared accesses enter

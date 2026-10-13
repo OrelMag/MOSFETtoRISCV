@@ -686,6 +686,8 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   nested ifs, pred loops, tmc, a forgotten split; wspawn and nwarps (CSR 0xCC5) with the warps; bar, amoadd.w in the
   lanes, mul; reduction, histogram, plain and tiled matrix multiply
 - ⏳ The lane core's listing marks (insthw) and Slow mode, as the CPU panel has
+- ✅ The warp core's top level drawn by hand in four bands (warps, decode, lanes, memory): about twice as large at fit in
+  chapters 28, 29 and 31, routed in milliseconds
 - ✅ The campaign's lane cores on a sandbox bench (a failing program of k_simd, k_simt, k_warps or k_frame opens around the
   learner's core, a memory port per lane, the CPU drawer checking every thread live); the sandbox RAM gained ports
 
