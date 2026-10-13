@@ -165,7 +165,7 @@ export const chGfxPipeline: Chapter = {
         <p>and the thread packs X | Y &lt;&lt; 8 | Z &lt;&lt; 16 into one word of the <strong>vertex buffer</strong>, buffer f mod 2 for frame f. The triangle has a
         fourth, unused vertex so that every lane runs the loop the same number of times: a uniform branch needs no split. One frame is 44 instructions,
         60 cycles. The cube (eight vertices, a spin then a fixed tilt toward the viewer: eight multiplies a vertex) is 86 instructions, 109 cycles.</p>
-        <p>Cost: each lane is 35 255 NANDs, multiplier included; the core is 182 214 without its memories.</p>
+        <p>Cost: each lane is 35 255 NANDs, multiplier included; the core is 182 121 without its memories.</p>
         <div class="try">Run to halt, then switch to the cube's kernel. The vertex buffer is at word 96: one packed word a vertex.</div>`,
       scene: () => warpCoreScene('vertexTri', { warps: 1, highlight: ['lane0', 'lane1', 'lane2', 'lane3'], programs: ['vertexTri', 'vertexCube'] }),
       challenge: {
@@ -201,7 +201,7 @@ export const chGfxPipeline: Chapter = {
     {
       title: 'A spinning triangle',
       body: `
-        <p>Run: every gate of the pipeline is simulated, 413 594 leaves (gates and memory blocks). This scene runs on the <strong>cycle engine</strong>: the
+        <p>Run: every gate of the pipeline is simulated, 413 501 leaves (gates and memory blocks). This scene runs on the <strong>cycle engine</strong>: the
         same settled values after every clock edge as the event-driven simulator, flip-flops as tables, several times faster; it has no gate delays, so
         probes and the timing diagram are off here. The panel measures frames per second in this page: a few (about three for the triangle on the machine
         this was written on), for a frame that a 1 GHz chip would draw in 6 µs.</p>
@@ -221,7 +221,7 @@ export const chGfxPipeline: Chapter = {
     {
       title: 'Where the gates go',
       body: `
-        <p>The programmable part is the largest and the idlest: 182 214 NANDs of warp core, busy 1 % of the frame. The rasterizer, a seventh of its
+        <p>The programmable part is the largest and the idlest: 182 121 NANDs of warp core, busy 1 % of the frame. The rasterizer, a seventh of its
         size, is busy most of it. Real GPUs answer with <strong>unified shaders</strong>: vertex and pixel work run on the same lanes, so the lanes never
         wait for a kind of work that is not there; edge stepping, the depth test and blending stay fixed-function, because per pixel they are a handful
         of adders.</p>

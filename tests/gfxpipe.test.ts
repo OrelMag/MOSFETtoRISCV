@@ -180,8 +180,7 @@ describe('chapter 31 schematics', () => {
       expect(labelOverlaps(d, nl)).toEqual([]);
       expect(symbolOverlaps(nl)).toEqual([]);
       expect(backwardEnds(d, nl)).toEqual([]);
-      // a one-warp core keeps the wspawn decode it never uses (chapter 28 quotes the cost of a warp as nands(2) − nands(1))
-      if (d !== core) expect(deadInstances(nl, d.ports)).toEqual([]);
+      expect(deadInstances(nl, d.ports)).toEqual([]);
     }, 60000);
   }
 });
@@ -216,8 +215,8 @@ describe('chapter 31 quotes these numbers', () => {
     expect(text).toContain(`${tri.kernel} cycles`);
     expect(text).toContain(`${cube.kernel} cycles`);
     expect(Math.round((100 * tri.clear) / (tri.clear + tri.draw + tri.wait))).toBe(72);
-    expect(flatten(gpu31(meshById('triangle'))).leaves.length).toBe(413594);
-    expect(text).toContain('413 594');
+    expect(flatten(gpu31(meshById('triangle'))).leaves.length).toBe(413501);
+    expect(text).toContain('413 501');
   });
 
   it("step 5's prose", () => {

@@ -239,7 +239,7 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
     return d;
   };
   // In place, each array once: a net's array is also its sinks' port arrays and a leaf's inputs, and
-  // copies of them were most of a large design's memory (chapter 31: 413 594 leaves).
+  // copies of them were most of a large design's memory (chapter 31: 413 501 leaves).
   const done = new Set<number[]>();
   const remap = (a: number[]): void => {
     if (done.has(a)) return;

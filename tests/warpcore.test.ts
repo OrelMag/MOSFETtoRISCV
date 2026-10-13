@@ -106,7 +106,7 @@ describe('the numbers chapter 28 quotes', () => {
     expect([1, 2, 4].map((W) => [run(W).cycles, run(W).issued])).toEqual([[266, 154], [192, 160], [172, 172]]);
     const nands = (W: number) => stats(warpCore(words, { warps: W, lanes: 4, latency: 8, dmemK: WARP_DMEM_K, data: p.data() })).nands;
     expect(4 * stats(regfile(5, 32)).nands).toBe(92564);
-    expect(nands(2) - nands(1)).toBe(110622);
+    expect(nands(2) - nands(1)).toBe(110715);
     expect([stats(rom(words, 6)).nands, stats(warpSlot(4, false)).nands, stats(SB_CHECK).nands]).toEqual([8064, 6203, 736]);
   });
 });
