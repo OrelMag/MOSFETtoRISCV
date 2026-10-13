@@ -118,6 +118,17 @@ export class SchematicView {
     });
   }
 
+  /** Drop the drawing and its context (which holds the simulation), until the next show(). */
+  clear(): void {
+    this.ctx = null;
+    this.selected = null;
+    this.selectedNet = -1;
+    this.el.replaceChildren();
+    this.wires = [];
+    this.pins = [];
+    this.insts.clear();
+  }
+
   /** Draw the inside of ctx. `interactive` makes the root input pins clickable. */
   show(ctx: ViewCtx, interactive: boolean, keepView = false): void {
     this.ctx = ctx;

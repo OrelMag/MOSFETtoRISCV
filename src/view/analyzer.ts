@@ -92,6 +92,15 @@ export class LogicAnalyzer {
     new ResizeObserver(() => this.render()).observe(this.plot);
   }
 
+  /** Stop recording and let go of the simulation (a scene the analyzer does not record replaced it). */
+  detach(): void {
+    if (this.sim) this.sim.onTrace = undefined;
+    this.sim = null;
+    this.traces.clear();
+    this.edges = [];
+    this.late = [];
+  }
+
   /** Start recording a simulation (a fresh scene, or after a reset). */
   attach(sim: Sim): void {
     this.sim = sim;
