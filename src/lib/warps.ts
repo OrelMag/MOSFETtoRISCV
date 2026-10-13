@@ -15,16 +15,19 @@
 import type { ComponentDef, PortDef } from '../sim/types';
 import { alu, constWord, isZero } from './alu';
 import { Builder } from './builder';
-import { busMux2, decoder, equal, muxTree } from './combinational';
+import { magComparator, popcount } from './coding';
+import { busMux2, decoder, equal, incrementer, muxTree } from './combinational';
 import { CLEAR_BIT0, CONTROL, IMM_GEN, NEXT_PC, PLUS4_FAST, rom } from './cpu';
 import { define, merger, ones, splitter } from './define';
 import { fanout, koggeStone } from './fastadd';
+import { treeMul } from './muldiv';
 import { AND, NOT, OR } from './gates';
 import { lowestOne, onehotMux, simtControl } from './lanes';
 import { arbiterN } from './mpdecode';
 import { regfile } from './regfile';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
+import { accessUnit, lsuMemory } from './warpmem';
 import { bitwise, orN } from './wide';
 
 const bit = (name: string, dir: 'in' | 'out', clock?: boolean): PortDef => ({ name, width: 1, dir, ...(clock ? { clock } : {}) });
@@ -118,50 +121,56 @@ export function warpDecode(n: number, W: number): ComponentDef {
 
 // ---- scoreboard and hazard -----------------------------------------------------------------------
 
-/** Which registers an instruction reads (rs1, rs2) and writes (rd), by its opcode. */
-export function regUse(instr: number): { rs1: boolean; rs2: boolean; rd: boolean } {
+/** Which registers an instruction reads (rs1, rs2) and writes (rd), by its opcode; amo: amoadd.w exists (it reads rs2). */
+export function regUse(instr: number, amo = false): { rs1: boolean; rs2: boolean; rd: boolean } {
   const op = instr & 0x7f;
-  const LUI = 0x37, AUIPC = 0x17, JAL = 0x6f, BR = 0x63, ST = 0x23, OP = 0x33, SIMT = 0x0b;
-  return { rs1: op !== LUI && op !== AUIPC && op !== JAL, rs2: op === BR || op === ST || op === OP || op === SIMT, rd: op !== BR && op !== ST && op !== SIMT };
+  const LUI = 0x37, AUIPC = 0x17, JAL = 0x6f, BR = 0x63, ST = 0x23, OP = 0x33, SIMT = 0x0b, AMO = 0x2f;
+  return { rs1: op !== LUI && op !== AUIPC && op !== JAL, rs2: op === BR || op === ST || op === OP || op === SIMT || (amo && op === AMO), rd: op !== BR && op !== ST && op !== SIMT };
 }
 
 /** The hazard a warp's next instruction has with its scoreboard: it uses a register still pending. */
-export function hazardSpec(instr: number, pending: number): number {
-  const u = regUse(instr), p = (r: number) => (pending >>> r) & 1;
+export function hazardSpec(instr: number, pending: number, amo = false): number {
+  const u = regUse(instr, amo), p = (r: number) => (pending >>> r) & 1;
   return (u.rs1 && p((instr >>> 15) & 31)) || (u.rs2 && p((instr >>> 20) & 31)) || (u.rd && p((instr >>> 7) & 31)) ? 1 : 0;
 }
 
-export const SB_CHECK: ComponentDef = (() => {
-  const b = new Builder(16);
-  b.pins('instr', 'pending');
-  const f = b.op(splitter([7, 5, 3, 5, 5, 7]), ['instr'], 'fields', 'f');
-  const pb = b.op(splitter(ones(32)), ['pending'], 'pending bits', 'pb');
-  b.next();
-  const is = (code: number, name: string) => b.op1(equal(7), [`${f}.o0`, b.op1(constWord(7, code), [], undefined, `k${name}`)], `${name}?`, `e${name}`);
-  const lui = is(0x37, 'lui'), auipc = is(0x17, 'auipc'), jal = is(0x6f, 'jal'), br = is(0x63, 'branch'), st = is(0x23, 'store'), op = is(0x33, 'op'), simt = is(0x0b, 'simt');
-  const read = (fld: string, name: string) => {
-    const m = b.add(muxTree(5, 1), `pending[${name}]`, `p${name}`);
-    for (let i = 0; i < 32; i++) b.wire(`${pb}.o${i}`, `${m}.d${i}`);
-    b.wire(fld, `${m}.s`);
-    return `${m}.y`;
-  };
-  const p1 = read(`${f}.o3`, 'rs1'), p2 = read(`${f}.o4`, 'rs2'), pd = read(`${f}.o1`, 'rd');
-  b.next();
-  const u1 = b.op1(NOT, [b.op1(orN(3), [lui, auipc, jal], undefined, 'nr1')], 'reads rs1', 'u1');
-  const u2 = b.op1(orN(4), [br, st, op, simt], 'reads rs2', 'u2');
-  const ud = b.op1(NOT, [b.op1(orN(3), [br, st, simt], undefined, 'nrd')], 'writes rd', 'ud');
-  b.next();
-  const h = b.op1(orN(3), [b.op1(AND, [u1, p1], undefined, 'h1'), b.op1(AND, [u2, p2], undefined, 'h2'), b.op1(AND, [ud, pd], undefined, 'h3')], 'hazard', 'hz');
-  b.wire(h, 'hazard');
-  return define({
-    id: 'warphazard', name: 'Scoreboard check', category: 'cpu',
-    summary: 'Is the next instruction safe to issue? Its opcode says whether it reads rs1 and rs2 and writes rd; a 32:1 multiplexer per field reads that register\'s pending bit. Any pending register in use: the warp waits (a value still on its way from memory, or a register a load is about to overwrite).',
-    ports: [bus('instr', 32, 'in'), bus('pending', 32, 'in'), bit('hazard', 'out')],
-    symbol: { kind: 'box', label: 'SCOREBOARD CHECK' },
-    spec: ([instr, pending]) => [hazardSpec(instr, pending)],
-    netlist: () => ({ pins: edgePins(b, ['instr', 'pending'], ['hazard'], 4), instances: b.instances, nets: b.nets() }),
+/** The scoreboard check; amo: chapter 29's, where amoadd.w reads rs2 too. */
+export function sbCheck(amo: boolean): ComponentDef {
+  return memo(`warphazard${amo ? '_a' : ''}`, () => {
+    const b = new Builder(16);
+    b.pins('instr', 'pending');
+    const f = b.op(splitter([7, 5, 3, 5, 5, 7]), ['instr'], 'fields', 'f');
+    const pb = b.op(splitter(ones(32)), ['pending'], 'pending bits', 'pb');
+    b.next();
+    const is = (code: number, name: string) => b.op1(equal(7), [`${f}.o0`, b.op1(constWord(7, code), [], undefined, `k${name}`)], `${name}?`, `e${name}`);
+    const lui = is(0x37, 'lui'), auipc = is(0x17, 'auipc'), jal = is(0x6f, 'jal'), br = is(0x63, 'branch'), st = is(0x23, 'store'), op = is(0x33, 'op'), simt = is(0x0b, 'simt');
+    const r2 = [br, st, op, simt, ...(amo ? [is(0x2f, 'amo')] : [])];
+    const read = (fld: string, name: string) => {
+      const m = b.add(muxTree(5, 1), `pending[${name}]`, `p${name}`);
+      for (let i = 0; i < 32; i++) b.wire(`${pb}.o${i}`, `${m}.d${i}`);
+      b.wire(fld, `${m}.s`);
+      return `${m}.y`;
+    };
+    const p1 = read(`${f}.o3`, 'rs1'), p2 = read(`${f}.o4`, 'rs2'), pd = read(`${f}.o1`, 'rd');
+    b.next();
+    const u1 = b.op1(NOT, [b.op1(orN(3), [lui, auipc, jal], undefined, 'nr1')], 'reads rs1', 'u1');
+    const u2 = b.op1(orN(r2.length), r2, 'reads rs2', 'u2');
+    const ud = b.op1(NOT, [b.op1(orN(3), [br, st, simt], undefined, 'nrd')], 'writes rd', 'ud');
+    b.next();
+    const h = b.op1(orN(3), [b.op1(AND, [u1, p1], undefined, 'h1'), b.op1(AND, [u2, p2], undefined, 'h2'), b.op1(AND, [ud, pd], undefined, 'h3')], 'hazard', 'hz');
+    b.wire(h, 'hazard');
+    return define({
+      id: `warphazard${amo ? '_a' : ''}`, name: 'Scoreboard check', category: 'cpu',
+      summary: 'Is the next instruction safe to issue? Its opcode says whether it reads rs1 and rs2 and writes rd; a 32:1 multiplexer per field reads that register\'s pending bit. Any pending register in use: the warp waits (a value still on its way from memory, or a register a load is about to overwrite).',
+      ports: [bus('instr', 32, 'in'), bus('pending', 32, 'in'), bit('hazard', 'out')],
+      symbol: { kind: 'box', label: 'SCOREBOARD CHECK' },
+      spec: ([instr, pending]) => [hazardSpec(instr, pending, amo)],
+      netlist: () => ({ pins: edgePins(b, ['instr', 'pending'], ['hazard'], 4), instances: b.instances, nets: b.nets() }),
+    });
   });
-})();
+}
+
+export const SB_CHECK = sbCheck(false);
 
 /** A pending bit per register: set rd when a load issues, clear it when the load comes back (set wins). */
 export const SCOREBOARD: ComponentDef = (() => {
@@ -255,12 +264,13 @@ export function warpSlot(n: number, first: boolean): ComponentDef {
  * warp's bank is read and written (we); a returning load writes its warp's bank (retEn, retWarp,
  * retRd, retData), never the same bank in the same cycle (the scheduler skips that warp).
  */
-export function warpLane(n: number, W: number): ComponentDef {
+export function warpLane(n: number, W: number, mul = false): ComponentDef {
   checkWarps(W);
-  return memo(`warplane${n}_${W}`, () => {
+  const id = `warplane${n}_${W}${mul ? '_m' : ''}`;
+  return memo(id, () => {
     const RF = regfile(5, 32), M2 = busMux2(32), M4 = muxTree(2, 32), ALU = alu(32, 'ks');
     const k = log2(n);
-    const ins = ['rs1', 'rs2', 'rd', 'warp', 'we', 'pc', 'imm', 'pcPlus4', 'aluSrcA', 'aluSrcB', 'aluCtl', 'resultSrc', 'isCsr', 'csrSel', 'csrS', 'tid', 'retEn', 'retWarp', 'retRd', 'retData', 'clk'];
+    const ins = ['rs1', 'rs2', 'rd', 'warp', 'we', 'pc', 'imm', 'pcPlus4', 'aluSrcA', 'aluSrcB', 'aluCtl', 'resultSrc', 'isCsr', 'csrSel', 'csrS', 'tid', 'retEn', 'retWarp', 'retRd', 'retData', ...(mul ? ['isMul'] : []), 'clk'];
     const outs = ['rd1', 'rd2', 'aluY', 'flags', 'nz'];
     const b = new Builder(22, 20);
     b.pins(...ins);
@@ -299,23 +309,25 @@ export function warpLane(n: number, W: number): ComponentDef {
     b.wire(srcA, `${a}.a`); b.wire(srcB, `${a}.b`); b.wire('aluCtl', `${a}.ctl`);
     const nz = b.op1(NOT, [z], undefined, 'nzg');
     const lane = b.op1(merger([k, 32 - k]), [`${lid}.o0`, b.op1(constWord(32 - k, 0), [], undefined, 'zhi')], undefined, 'lanev');
+    // mul: the low 32 bits of rs1 · rs2 (the same for signed and unsigned operands)
+    const y = mul ? b.op1(M2, [`${a}.y`, b.op1(treeMul(32, false, 32), [r1, r2], 'multiplier', 'mul'), 'isMul'], 'ALU / product', 'ym') : `${a}.y`;
     b.next();
     // a load writes nothing now: its word comes back later (retData)
     const gnd = b.op1(constWord(32, 0), [], undefined, 'gnd');
-    const res = b.op1(M4, [`${a}.y`, gnd, 'pcPlus4', 'imm', 'resultSrc'], 'result', 'res');
+    const res = b.op1(M4, [y, gnd, 'pcPlus4', 'imm', 'resultSrc'], 'result', 'res');
     const csr = b.op1(M4, ['csrS', lane, 'tid', gnd, 'csrSel'], 'CSR', 'csr');
     const fl = b.op1(merger([1, 1, 1, 1]), [`${a}.zero`, `${a}.neg`, `${a}.ovf`, `${a}.carry`], undefined, 'fl');
     b.next();
     const x = b.op1(M2, [res, csr, 'isCsr'], 'result / CSR', 'xres');
     b.next();
     banks.forEach(({ hit }, w) => b.wire(b.op1(M2, [x, 'retData', hit], undefined, `wd${w}`), `${rf[w]}.wd`));
-    b.wire(r1, 'rd1'); b.wire(r2, 'rd2'); b.wire(`${a}.y`, 'aluY'); b.wire(fl, 'flags'); b.wire(nz, 'nz');
+    b.wire(r1, 'rd1'); b.wire(r2, 'rd2'); b.wire(y, 'aluY'); b.wire(fl, 'flags'); b.wire(nz, 'nz');
     return define({
-      id: `warplane${n}_${W}`, name: 'Lane (warps)', category: 'cpu',
-      summary: `One lane of the warp core: ${W} register file${W > 1 ? 's' : ''} of 31 × 32 bits, one per warp (the issuing warp's is read and written), the operand multiplexers, an ALU and the result multiplexer. A returning load writes its own warp's bank in the same cycle.`,
+      id, name: 'Lane (warps)', category: 'cpu',
+      summary: `One lane of the warp core: ${W} register file${W > 1 ? 's' : ''} of 31 × 32 bits, one per warp (the issuing warp's is read and written), the operand multiplexers, an ALU${mul ? ', a multiplier (mul: the low 32 bits of a Wallace tree)' : ''} and the result multiplexer. A returning load writes its own warp's bank in the same cycle.`,
       ports: [bus('rs1', 5, 'in'), bus('rs2', 5, 'in'), bus('rd', 5, 'in'), bus('warp', W, 'in'), bit('we', 'in'), bus('pc', 32, 'in'), bus('imm', 32, 'in'), bus('pcPlus4', 32, 'in'),
         bit('aluSrcA', 'in'), bit('aluSrcB', 'in'), bus('aluCtl', 4, 'in'), bus('resultSrc', 2, 'in'), bit('isCsr', 'in'), bus('csrSel', 2, 'in'), bus('csrS', 32, 'in'), bus('tid', 32, 'in'),
-        bit('retEn', 'in'), bus('retWarp', W, 'in'), bus('retRd', 5, 'in'), bus('retData', 32, 'in'), clkPort(),
+        bit('retEn', 'in'), bus('retWarp', W, 'in'), bus('retRd', 5, 'in'), bus('retData', 32, 'in'), ...(mul ? [bit('isMul', 'in')] : []), clkPort(),
         bus('rd1', 32, 'out'), bus('rd2', 32, 'out'), bus('aluY', 32, 'out'), bus('flags', 4, 'out'), bit('nz', 'out')],
       symbol: { kind: 'box', label: 'LANE' },
       netlist: () => ({ pins: edgePins(b, ins, outs), instances: b.instances, nets: b.nets() }),
@@ -447,6 +459,44 @@ export function memPipe(n: number, W: number, L: number, k: number, init?: Array
   });
 }
 
+// ---- chapter 29: amoadd.w, bar, mul -------------------------------------------------------------------
+
+/** [isAmo, isBar, isMul, opInt] for [op, funct3, funct7]: amoadd.w only (funct5 = 0); opInt shows it to CONTROL as lw. */
+export function extDecodeSpec([op, f3, f7]: number[]): number[] {
+  const amo = op === 0b0101111 && f3 === 2 && f7 >> 2 === 0;
+  return [+amo, +(op === 0b0001011 && f3 === 4), +(op === 0b0110011 && f7 === 1), amo ? 0b0000011 : op];
+}
+
+export const EXT_DECODE: ComponentDef = (() => {
+  const b = new Builder(16);
+  b.pins('op', 'funct3', 'funct7');
+  const k = (v: number, w: number, nm: string) => b.op1(constWord(w, v), [], undefined, nm);
+  const eA = b.op1(equal(7), ['op', k(0b0101111, 7, 'kA')], 'AMO?', 'eA');
+  const eS = b.op1(equal(7), ['op', k(0b0001011, 7, 'kS')], 'custom-0?', 'eS');
+  const eO = b.op1(equal(7), ['op', k(0b0110011, 7, 'kO')], 'OP?', 'eO');
+  const e2 = b.op1(equal(3), ['funct3', k(2, 3, 'k2')], '.w?', 'e2');
+  const e4 = b.op1(equal(3), ['funct3', k(4, 3, 'k4')], 'bar?', 'e4');
+  const f5 = b.op(splitter([2, 5]), ['funct7'], undefined, 'f5');
+  b.next();
+  const z5 = b.op1(isZero(5), [`${f5}.o1`], 'funct5 = 0 (add)', 'z5');
+  const m1 = b.op1(equal(7), ['funct7', k(1, 7, 'k1')], 'M?', 'm1');
+  b.next();
+  const amo = b.op1(AND, [b.op1(AND, [eA, e2], undefined, 'a1'), z5], 'amoadd.w', 'amo');
+  const bar = b.op1(AND, [eS, e4], 'bar', 'bar');
+  const mul = b.op1(AND, [eO, m1], 'mul', 'mul');
+  b.next();
+  const opInt = b.op1(busMux2(7), ['op', k(0b0000011, 7, 'kL'), amo], 'as lw', 'om');
+  for (const [d, p] of [[amo, 'isAmo'], [bar, 'isBar'], [mul, 'isMul'], [opInt, 'opInt']]) b.wire(d, p);
+  return define({
+    id: 'warpext', name: 'amoadd.w / bar / mul decoder', category: 'cpu',
+    summary: 'amoadd.w: opcode 0101111, funct3 = 2, funct5 = 0; it goes to the control unit disguised as lw (it reads memory and writes rd), its address is rs1 (the core zeroes the immediate). bar: custom-0 with funct3 = 4. mul: OP with funct7 = 1 (the lanes keep only the low product, so no other M instruction).',
+    ports: [bus('op', 7, 'in'), bus('funct3', 3, 'in'), bus('funct7', 7, 'in'), bit('isAmo', 'out'), bit('isBar', 'out'), bit('isMul', 'out'), bus('opInt', 7, 'out')],
+    symbol: { kind: 'box', label: 'AMO / BAR / MUL' },
+    spec: extDecodeSpec,
+    netlist: () => ({ pins: edgePins(b, ['op', 'funct3', 'funct7'], ['isAmo', 'isBar', 'isMul', 'opInt'], 4), instances: b.instances, nets: b.nets() }),
+  });
+})();
+
 // ---- the core ------------------------------------------------------------------------------------
 
 export interface WarpCoreOptions {
@@ -459,17 +509,34 @@ export interface WarpCoreOptions {
   imemK?: number;
   /** The data memory's initial words (the kernel's input). */
   data?: ArrayLike<number>;
+  /**
+   * Chapter 29's memory system: one port behind an access unit (lines of global memory, banks of
+   * shared memory, one lane per amoadd.w), the issue port held until a memory instruction's last
+   * access; bar and amoadd.w.
+   */
+  lsu?: boolean;
+  /** lsu: shared memory of 2^smemK words (default 6) and its latency (default 2). */
+  smemK?: number;
+  sharedLatency?: number;
+  /** lsu: a global access at most every this many cycles (default 1). */
+  globalEvery?: number;
+  /** Multipliers in the lanes (mul). */
+  mul?: boolean;
 }
 
 /** W warps of n lanes behind one fetch, decode and control; the golden model is WarpISS. */
 export function warpCore(program: number[], opts: WarpCoreOptions = {}): ComponentDef {
   const W = opts.warps ?? 4, n = opts.lanes ?? 4, L = opts.latency ?? 8, dk = opts.dmemK ?? 6, ik = opts.imemK ?? 6;
+  const lsu = !!opts.lsu, mul = !!opts.mul;
   checkWarps(W);
   // L = 1 would return a load in the cycle it issues: the write-back would feed the scheduler that issued it (a loop)
   if (L < 2) throw new Error('latency: at least 2');
   const IM = rom(program, ik);
-  const MP = memPipe(n, W, L, dk, opts.data);
-  return memo(`warpcore${W}x${n}_${MP.id}_${IM.id}`, () => {
+  const MP = lsu
+    ? lsuMemory({ lanes: n, warps: W, latency: L, sharedLatency: opts.sharedLatency ?? 2, globalEvery: opts.globalEvery ?? 1, k: dk, ks: opts.smemK ?? 6, init: opts.data })
+    : memPipe(n, W, L, dk, opts.data);
+  const id = `warpcore${W}x${n}${mul ? 'm' : ''}_${MP.id}_${IM.id}`;
+  return memo(id, () => {
     const wb = wbits(W), k = log2(n);
     const Ws = Array.from({ length: W }, (_, w) => w), Ls = Array.from({ length: n }, (_, i) => i);
     const b = new Builder(14, 20);
@@ -477,22 +544,35 @@ export function warpCore(program: number[], opts: WarpCoreOptions = {}): Compone
     // the warps, their next instructions, and which may issue
     const slots = Ws.map((w) => b.add(warpSlot(n, w === 0), `warp ${w}`, `warp${w}`));
     for (const s of slots) b.wire('clk', `${s}.clk`);
+    // lsu: the warps waiting at the barrier, the memory instruction holding the issue port (its warp, its lanes left)
+    const atBar = lsu ? b.add(register(W), 'at the barrier', 'atBar') : '';
+    const heldW = lsu ? b.add(register(W), 'holding the port', 'heldW') : '';
+    const left = lsu ? b.add(register(n), 'lanes left', 'left') : '';
+    for (const r of [atBar, heldW, left].filter(Boolean)) { b.wire('clk', `${r}.clk`); b.wire(b.op1(TIE1, [], undefined, `${r}On`), `${r}.en`); }
     b.next();
     const ims = Ws.map((w) => b.name(b.op1(IM, [`${slots[w]}.pc`], `program (warp ${w})`, `im${w}`), `instr${w}`, true));
     b.next();
-    const hz = Ws.map((w) => b.op1(SB_CHECK, [ims[w], `${slots[w]}.pending`], `scoreboard check ${w}`, `hz${w}`));
+    const hz = Ws.map((w) => b.op1(sbCheck(lsu), [ims[w], `${slots[w]}.pending`], `scoreboard check ${w}`, `hz${w}`));
     const mp = b.add(MP, 'data memory', 'mem');
     b.wire('clk', `${mp}.clk`);
     const rw = b.op(splitter(ones(W)), [`${mp}.retWarp`], undefined, 'rw');
+    const ab = lsu ? b.op(splitter(ones(W)), [`${atBar}.q`], undefined, 'ab') : '';
+    const hw = lsu ? b.op(splitter(ones(W)), [`${heldW}.q`], undefined, 'hw') : '';
+    const held = lsu ? b.name(anyOf(b, `${heldW}.q`, W, 'a memory instruction holds the port', 'heldG'), 'held', true) : '';
     b.next();
     const retHit = Ws.map((w) => b.name(b.op1(AND, [`${mp}.retValid`, `${rw}.o${w}`], undefined, `rh${w}`), `ret${w}`, true));
-    const ready = Ws.map((w) => b.name(b.op1(AND, [`${slots[w]}.run`, b.op1(NOT, [b.op1(OR, [hz[w], retHit[w]], undefined, `bz${w}`)], undefined, `nb${w}`)], `warp ${w} ready`, `rdy${w}`), `ready${w}`, true));
+    const ready = Ws.map((w) => {
+      const busy = b.op1(lsu ? orN(3) : OR, [hz[w], retHit[w], ...(lsu ? [`${ab}.o${w}`] : [])], undefined, `bz${w}`);
+      return b.name(b.op1(AND, [`${slots[w]}.run`, b.op1(NOT, [busy], undefined, `nb${w}`)], `warp ${w} ready`, `rdy${w}`), `ready${w}`, true);
+    });
     b.next();
+    // while a memory instruction holds the port, only its warp asks
+    const req = lsu ? Ws.map((w) => b.op1(busMux2(1), [ready[w], `${hw}.o${w}`, held], undefined, `rq${w}`)) : ready;
     let grants: string[];
-    if (W === 1) grants = [ready[0]];
+    if (W === 1) grants = [req[0]];
     else {
       const arb = b.add(arbiterN(W), 'scheduler', 'sched');
-      ready.forEach((r, w) => b.wire(r, `${arb}.r${w}`));
+      req.forEach((r, w) => b.wire(r, `${arb}.r${w}`));
       b.wire('clk', `${arb}.clk`);
       grants = Ws.map((w) => `${arb}.g${w}`);
     }
@@ -521,11 +601,14 @@ export function warpCore(program: number[], opts: WarpCoreOptions = {}): Compone
     const si = b.op(splitter([7, 5, 3, 5, 5, 7]), [im], undefined, 'si');
     for (const [o, nm] of [['o0', 'op'], ['o1', 'rd'], ['o2', 'funct3'], ['o3', 'rs1'], ['o4', 'rs2'], ['o5', 'funct7']]) b.name(`${si}.${o}`, nm, true);
     const csrA = b.op1(merger([5, 7]), [`${si}.o4`, `${si}.o5`], 'CSR address', 'csrA');
+    const xd = lsu || mul ? b.op(EXT_DECODE, [`${si}.o0`, `${si}.o2`, `${si}.o5`], 'amoadd.w / bar / mul', 'xdec') : '';
     b.next();
-    const ctl = b.op(CONTROL, [`${si}.o0`, `${si}.o2`, `${si}.o5`], 'control', 'ctl');
-    const imm = b.op(IMM_GEN, [im, `${ctl}.immSrc`], 'immediate', 'imm');
+    const ctl = b.op(CONTROL, [lsu ? `${xd}.opInt` : `${si}.o0`, `${si}.o2`, `${si}.o5`], 'control', 'ctl');
+    const imm0 = b.op(IMM_GEN, [im, `${ctl}.immSrc`], 'immediate', 'imm');
     const sd = b.op(warpDecode(n, W), [`${si}.o0`, `${si}.o2`, `${si}.o3`, csrA, mask, wid], 'warp decode', 'sdec');
     const rs = b.op(splitter([1, 1]), [`${ctl}.resultSrc`], undefined, 'rs');
+    // amoadd.w's address is rs1: no offset
+    const imm = lsu ? b.op1(bitwise('and', 32), [`${imm0}.imm`, b.op1(fanout(32), [b.op1(NOT, [`${xd}.isAmo`], undefined, 'nAmo')], undefined, 'fA')], 'no offset for amoadd.w', 'immA') : `${imm0}.imm`;
     b.next();
     const isLoad = b.name(b.op1(AND, [`${rs}.o0`, b.op1(NOT, [`${rs}.o1`], undefined, 'nr1')], 'load?', 'isLoad'), 'isLoad', true);
     const rwx = b.op1(OR, [`${ctl}.regWrite`, `${sd}.isCsr`], undefined, 'rwx');
@@ -538,15 +621,16 @@ export function warpCore(program: number[], opts: WarpCoreOptions = {}): Compone
     const lead = b.op(lowestOne(n), [mask], 'leader', 'lead');
     b.next();
     // the lanes
-    const lanes = Ls.map((i) => b.add(warpLane(n, W), `lane ${i}`, `lane${i}`));
+    const lanes = Ls.map((i) => b.add(warpLane(n, W, mul), `lane ${i}`, `lane${i}`));
     const rm = b.op(splitter(ones(n)), [`${mp}.retMask`], undefined, 'rm');
     lanes.forEach((l, i) => {
       const tid = b.op1(merger([k, wb, 32 - k - wb]), [b.op1(constWord(k, i), [], undefined, `ln${i}`), wid, b.op1(constWord(32 - k - wb, 0), [], undefined, `tz${i}`)], `tid ${i}`, `tid${i}`);
       const w: [string, string][] = [
-        [`${si}.o3`, 'rs1'], [`${si}.o4`, 'rs2'], [`${si}.o1`, 'rd'], [G, 'warp'], [`${weS}.o${i}`, 'we'], [pc, 'pc'], [`${imm}.imm`, 'imm'], [p4, 'pcPlus4'],
+        [`${si}.o3`, 'rs1'], [`${si}.o4`, 'rs2'], [`${si}.o1`, 'rd'], [G, 'warp'], [`${weS}.o${i}`, 'we'], [pc, 'pc'], [imm, 'imm'], [p4, 'pcPlus4'],
         [`${ctl}.aluSrcA`, 'aluSrcA'], [`${ctl}.aluSrcB`, 'aluSrcB'], [`${ctl}.aluCtl`, 'aluCtl'], [`${ctl}.resultSrc`, 'resultSrc'],
         [`${sd}.isCsr`, 'isCsr'], [`${sd}.csrSel`, 'csrSel'], [`${sd}.csrS`, 'csrS'], [tid, 'tid'],
         [`${rm}.o${i}`, 'retEn'], [`${mp}.retWarp`, 'retWarp'], [`${mp}.retRd`, 'retRd'], [`${mp}.retData${i}`, 'retData'], ['clk', 'clk'],
+        ...(mul ? [[`${xd}.isMul`, 'isMul'] as [string, string]] : []),
       ];
       for (const [d, p] of w) b.wire(d, `${l}.${p}`);
     });
@@ -561,13 +645,42 @@ export function warpCore(program: number[], opts: WarpCoreOptions = {}): Compone
     };
     const lAlu = lsel('leader ALU', 'lAlu', OH, 'aluY'), lA = lsel('leader rs1', 'lA', OH, 'rd1'), lB = lsel('leader rs2', 'lB', OH, 'rd2'), lF = lsel('leader flags', 'lF', OF, 'flags');
     const pm = b.op1(merger(ones(n)), lanes.map((l) => `${l}.nz`), 'rs1 ≠ 0', 'pm');
+    // lsu: the memory instruction's accesses. The lanes left (all active ones at first) go to the access unit; an access
+    // that must wait (shared: its slot is taken; global: one started too recently) serves none
+    let done = '', served = '', shared = '';
+    if (lsu) {
+      const memop = b.name(b.op1(AND, [b.op1(OR, [isLoad, `${ctl}.memWrite`], undefined, 'mo'), issue], 'a memory instruction', 'memop'), 'memop', true);
+      const todo = b.op1(busMux2(n), [mask, `${left}.q`, held], 'lanes to serve', 'todo');
+      const acc = b.op(accessUnit(n), [todo, `${xd}.isAmo`, ...lanes.map((l) => `${l}.aluY`)], 'access unit', 'acc');
+      b.next();
+      shared = b.name(`${acc}.shared`, 'sharedAcc', true);
+      const wait = b.op1(OR, [b.op1(AND, [shared, `${mp}.slotBusy`], undefined, 'wS'), b.op1(AND, [b.op1(NOT, [shared], undefined, 'nShA'), `${mp}.globalBusy`], undefined, 'wG')], 'must wait', 'wait');
+      const go = b.op1(AND, [memop, b.op1(NOT, [wait], undefined, 'nWait')], 'access now', 'go');
+      b.next();
+      served = b.name(b.op1(bitwise('and', n), [`${acc}.serve`, b.op1(fanout(n), [go], undefined, 'fGo')], 'served', 'srv'), 'served', true);
+      const rest = b.op1(bitwise('and', n), [todo, b.op1(bitwise('xor', n), [served, b.op1(constWord(n, 2 ** n - 1), [], undefined, 'allN')], undefined, 'nSrv')], 'still to serve', 'rest');
+      b.next();
+      done = b.name(b.op1(OR, [b.op1(NOT, [memop], undefined, 'nMo'), b.op1(isZero(n), [rest], undefined, 'restZ')], 'instruction done', 'doneG'), 'done', true);
+      b.wire(rest, `${left}.d`);
+      b.wire(b.op1(bitwise('and', W), [G, b.op1(fanout(W), [b.op1(AND, [memop, b.op1(NOT, [done], undefined, 'nDone')], undefined, 'hold')], undefined, 'fH')], 'held next', 'heldN'), `${heldW}.d`);
+      // bar: wait until rs2 warps have arrived (this one included); the last arrival releases them all
+      const barGo = b.op1(AND, [`${xd}.isBar`, issue], 'bar issues', 'barGo');
+      const arrived = W === 1 ? b.op1(constWord(2, 1), [], undefined, 'arr1')
+        : b.op1(incrementer(wb + 1), [b.op1(popcount(W), [`${atBar}.q`], 'waiting', 'nWait2')], 'arrived', 'arr');
+      b.next();
+      const more = b.op(magComparator(32), [lB, b.op1(merger([wb + 1, 31 - wb]), [arrived, b.op1(constWord(31 - wb, 0), [], undefined, 'arrZ')], undefined, 'arrW')], 'rs2 > arrived?', 'barCmp');
+      const release = b.name(b.op1(AND, [barGo, b.op1(NOT, [`${more}.gt`], undefined, 'enough')], 'release', 'release'), 'release', true);
+      b.next();
+      const joinB = b.op1(bitwise('or', W), [`${atBar}.q`, b.op1(bitwise('and', W), [G, b.op1(fanout(W), [barGo], undefined, 'fB')], undefined, 'arrives')], undefined, 'barOr');
+      b.wire(b.op1(bitwise('and', W), [joinB, b.op1(fanout(W), [b.op1(NOT, [release], undefined, 'nRel')], undefined, 'fR')], 'at the barrier next', 'barN'), `${atBar}.d`);
+    }
     b.next();
     // next PC from the leader, shared by the warps (only the issuing one loads it)
     const fs = b.op(splitter([1, 1, 1, 1]), [lF], undefined, 'fs');
     const npc = b.add(NEXT_PC, 'next PC logic', 'npc');
     for (const [p, d] of [['zero', `${fs}.o0`], ['neg', `${fs}.o1`], ['ovf', `${fs}.o2`], ['carry', `${fs}.o3`], ['funct3', `${si}.o2`], ['branch', `${ctl}.branch`], ['jump', `${ctl}.jump`], ['jalr', `${ctl}.jalr`]]) b.wire(d, `${npc}.${p}`);
     const tgt = b.add(koggeStone(32), 'PC + imm', 'target');
-    b.wire(pc, `${tgt}.a`); b.wire(`${imm}.imm`, `${tgt}.b`); b.wire(b.op1(TIE0, [], undefined, 'gndT'), `${tgt}.cin`);
+    b.wire(pc, `${tgt}.a`); b.wire(imm, `${tgt}.b`); b.wire(b.op1(TIE0, [], undefined, 'gndT'), `${tgt}.cin`);
     const c0 = b.add(CLEAR_BIT0, 'jalr target', 'clr0');
     b.wire(lAlu, `${c0}.in`); b.wire(b.op1(TIE0, [], undefined, 'gndJ'), `${c0}.zero`);
     const pcmux = b.add(muxTree(2, 32), 'next PC', 'pcmux');
@@ -585,28 +698,36 @@ export function warpCore(program: number[], opts: WarpCoreOptions = {}): Compone
       const gt = b.op1(above.length ? orN(above.length + 1) : OR, [hiNz, ...(above.length ? above : [b.op1(TIE0, [], undefined, `nz${w}`)])], `rs1 > ${w}`, `gt${w}`);
       return b.op1(AND, [spawnGo, gt], `spawn ${w}`, `sp${w}`);
     });
-    // every warp's inputs
+    // every warp's inputs; lsu: a warp moves on only when its instruction is done, and its scoreboard clears on a load's last access
+    const rl = lsu ? `${mp}.retLast` : '';
     slots.forEach((s, w) => {
       const wires: [string, string][] = [
-        [grants[w], 'issue'], [spawn[w], 'spawn'], [lB, 'spawnPc'], [`${pcmux}.y`, 'nextPc'], [`${sd}.isTmc`, 'isTmc'], [`${sd}.isSplit`, 'isSplit'], [`${sd}.isJoin`, 'isJoin'],
+        [lsu ? b.op1(AND, [grants[w], done], undefined, `iss${w}`) : grants[w], 'issue'], [spawn[w], 'spawn'], [lB, 'spawnPc'], [`${pcmux}.y`, 'nextPc'], [`${sd}.isTmc`, 'isTmc'], [`${sd}.isSplit`, 'isSplit'], [`${sd}.isJoin`, 'isJoin'],
         [`${sd}.isPred`, 'isPred'], [pm, 'pred'], [lA, 'leadA'], [lB, 'leadB'], [p4, 'pcPlus4'], [`${si}.o1`, 'setRd'], [b.op1(AND, [ldIss, grants[w]], undefined, `se${w}`), 'setEn'],
-        [`${mp}.retRd`, 'clrRd'], [retHit[w], 'clrEn'],
+        [`${mp}.retRd`, 'clrRd'], [lsu ? b.op1(AND, [retHit[w], rl], undefined, `cl${w}`) : retHit[w], 'clrEn'],
       ];
       for (const [d, p] of wires) b.wire(d, `${s}.${p}`);
     });
-    // the memory request: a load or a store, every lane's address and data
+    // the memory request
     const st = b.op1(AND, [`${ctl}.memWrite`, issue], 'a store issues', 'stIss');
-    for (const [d, p] of [[ldIss, 'ld'], [st, 'st'], [G, 'warp'], [`${si}.o1`, 'rd'], [mask, 'mask']] as const) b.wire(d, `${mp}.${p}`);
+    if (lsu) {
+      const amo = b.op1(AND, [`${xd}.isAmo`, issue], 'amoadd.w issues', 'amoIss');
+      for (const [d, p] of [[ldIss, 'ret'], [st, 'st'], [amo, 'amo'], [shared, 'shared'], [done, 'last'], [G, 'warp'], [`${si}.o1`, 'rd'], [served, 'serve']] as const) b.wire(d, `${mp}.${p}`);
+    } else {
+      for (const [d, p] of [[ldIss, 'ld'], [st, 'st'], [G, 'warp'], [`${si}.o1`, 'rd'], [mask, 'mask']] as const) b.wire(d, `${mp}.${p}`);
+    }
     lanes.forEach((l, i) => { b.wire(`${l}.aluY`, `${mp}.addr${i}`); b.wire(`${l}.rd2`, `${mp}.wd${i}`); });
     b.next();
     const halted = b.op1(NOT, [anyOf(b, b.op1(merger(ones(W)), slots.map((s) => `${s}.run`), undefined, 'runs'), W, 'some warp runs', 'anyRun')], 'every warp done', 'haltedG');
-    b.wire(pc, 'pcOut'); b.wire(issue, 'retire'); b.wire(wid, 'warpOut'); b.wire(mask, 'maskOut'); b.wire(halted, 'halted');
+    b.wire(pc, 'pcOut'); b.wire(lsu ? b.op1(AND, [issue, done], undefined, 'retireG') : issue, 'retire'); b.wire(wid, 'warpOut'); b.wire(mask, 'maskOut'); b.wire(halted, 'halted');
+    if (lsu) { b.wire(issue, 'issued'); b.wire(served, 'served'); b.wire(shared, 'sharedOut'); b.wire(`${atBar}.q`, 'atBar'); }
+    const outs: [string, number][] = [['pcOut', 32], ['retire', 1], ['warpOut', wb], ['maskOut', n], ['halted', 1], ...(lsu ? [['issued', 1], ['served', n], ['sharedOut', 1], ['atBar', W]] as [string, number][] : [])];
     return {
-      id: `warpcore${W}x${n}_${MP.id}_${IM.id}`, name: `Warp core (${W} warp${W > 1 ? 's' : ''} × ${n} lanes)`, category: 'cpu',
-      summary: `${W} warp${W > 1 ? 's' : ''} of ${n} lanes share one fetch, decode and control. Every cycle the scheduler issues one ready warp: started, not finished, and its next instruction uses no register still waiting for a load (the scoreboard). Loads take ${L} cycles; while one warp waits, the others run.`,
-      ports: [bit('clk', 'in', true), bus('pcOut', 32, 'out'), bit('retire', 'out'), bus('warpOut', wb, 'out'), bus('maskOut', n, 'out'), bit('halted', 'out')],
+      id, name: `Warp core (${W} warp${W > 1 ? 's' : ''} × ${n} lanes)`, category: 'cpu',
+      summary: `${W} warp${W > 1 ? 's' : ''} of ${n} lanes share one fetch, decode and control. Every cycle the scheduler issues one ready warp: started, not finished, and its next instruction uses no register still waiting for a load (the scoreboard). Loads take ${L} cycles; while one warp waits, the others run.${lsu ? ' A memory instruction takes one cycle per access (a line of global memory, a set of shared-memory banks, a lane of amoadd.w) and holds the issue port until its last; bar holds a warp until the others arrive.' : ''}`,
+      ports: [bit('clk', 'in', true), ...outs.map(([p, w]) => w === 1 ? bit(p, 'out') : bus(p, w, 'out'))],
       symbol: { kind: 'box', label: `${W}-WARP CORE` },
-      netlist: () => ({ pins: { clk: [0, 2], pcOut: [b.right, 2], retire: [b.right, 5], warpOut: [b.right, 8], maskOut: [b.right, 11], halted: [b.right, 14] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { clk: [0, 2], ...Object.fromEntries(outs.map(([p], i) => [p, [b.right, 2 + 3 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
     } satisfies ComponentDef;
   });
 }

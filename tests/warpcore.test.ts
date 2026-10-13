@@ -3,7 +3,7 @@ import { SB_CHECK, hazardSpec, regfile, rom, warpCore, warpSlot, warpDecode, war
 import { stats } from '../src/sim/stats';
 import { assemble } from '../src/riscv/asm';
 import { clockCycle } from '../src/riscv/cosim';
-import { WARP_DMEM_K, WARP_PROGRAMS, type WarpProgram } from '../src/riscv/warpprograms';
+import { WARP_DMEM_K, WARP_PROGRAMS, WARP_SMEM_K, type WarpProgram } from '../src/riscv/warpprograms';
 import { WarpISS } from '../src/riscv/warps';
 import { warpTiming } from '../src/riscv/warptiming';
 import { flatten, type HierNode } from '../src/sim/flatten';
@@ -14,15 +14,26 @@ import { pack } from '../src/sim/values';
 const u = (sim: GateSim, node: HierNode, port: string) => pack(sim.getBits(node.ports[port])) >>> 0;
 const child = (n: HierNode, ...path: string[]) => path.reduce((x, p) => x.children!.get(p)!, n);
 
-/** Run the warp core against the golden model; after every issue compare the issuing warp. */
-export function cosimWarps(p: WarpProgram, W: number, n: number, L: number, maxCycles = 4000) {
+export interface CosimOptions {
+  /** Chapter 29's core (shared memory, bar, amoadd.w, accesses per line or bank). */
+  lsu?: boolean;
+  sharedLatency?: number;
+  globalEvery?: number;
+  maxCycles?: number;
+}
+
+/** Run the warp core against the golden model; after every instruction that completes, compare its warp. */
+export function cosimWarps(p: WarpProgram, W: number, n: number, L: number, o: CosimOptions = {}) {
   const words = assemble(p.source(n)).words;
-  const design = flatten(warpCore(words, { warps: W, lanes: n, latency: L, dmemK: WARP_DMEM_K, data: p.data() }));
+  const lsu = !!o.lsu, mul = !!p.mul;
+  const design = flatten(warpCore(words, { warps: W, lanes: n, latency: L, dmemK: WARP_DMEM_K, data: p.data(), lsu, mul, smemK: WARP_SMEM_K, sharedLatency: o.sharedLatency, globalEvery: o.globalEvery }));
   const sim = new GateSim(design);
   sim.reset('zero');
   sim.setInput('clk', 0);
   sim.settle();
-  const m = new WarpISS(words, { warps: W, lanes: n, dmemWords: 2 ** WARP_DMEM_K, data: p.data() });
+  const mopts = { warps: W, lanes: n, dmemWords: 2 ** WARP_DMEM_K, data: p.data(), smemWords: lsu ? 2 ** WARP_SMEM_K : 0, mul };
+  const m = new WarpISS(words, mopts);
+  const maxCycles = o.maxCycles ?? 4000;
   const root = design.root;
   const regs = (w: number, i: number) => {
     const rf = child(root, `lane${i}`, `rf${w}`);
@@ -48,12 +59,13 @@ export function cosimWarps(p: WarpProgram, W: number, n: number, L: number, maxC
   // drained: every register of every warp, and the memory
   for (let k = 0; k < L; k++) clockCycle(sim);
   for (let w = 0; w < W; w++) for (let i = 0; i < n; i++) expect(regs(w, i), `end: warp ${w} lane ${i}`).toEqual([...m.warps[w].lanes[i].x]);
-  const mem = child(root, 'mem', 'mem');
-  expect(Array.from({ length: 2 ** WARP_DMEM_K }, (_, i) => u(sim, child(mem, `w${i}`), 'q'))).toEqual([...m.dmem]);
+  const words_ = (node: HierNode, N: number) => Array.from({ length: N }, (_, i) => u(sim, child(node, `w${i}`), 'q'));
+  expect(words_(child(root, 'mem', lsu ? 'gmem' : 'mem'), 2 ** WARP_DMEM_K)).toEqual([...m.dmem]);
+  if (lsu) expect(words_(child(root, 'mem', 'smem'), 2 ** WARP_SMEM_K), 'shared memory').toEqual([...m.smem]);
   for (const [i, v] of p.expect()) expect(m.dmem[i], `word ${i}`).toBe(v >>> 0);
   expect(m.halted).toBe(true);
   // the timing model predicts the same cycles
-  const t = warpTiming(words, { warps: W, lanes: n, latency: L, dmemWords: 2 ** WARP_DMEM_K, data: p.data() });
+  const t = warpTiming(words, { ...mopts, latency: L, lsu, sharedLatency: o.sharedLatency, globalEvery: o.globalEvery });
   expect([t.cycles, t.issued], 'timing model').toEqual([c, issued]);
   return { cycles: c, issued, leaves: design.leaves.length };
 }
@@ -96,4 +108,17 @@ describe('the numbers chapter 28 quotes', () => {
     expect(nands(2) - nands(1)).toBe(110622);
     expect([stats(rom(words, 6)).nands, stats(warpSlot(4, false)).nands, stats(SB_CHECK).nands]).toEqual([8064, 6203, 736]);
   });
+});
+
+describe('chapter 29 core (gate level): access unit, shared memory, bar, amoadd.w, mul', () => {
+  const P = (id: string) => WARP_PROGRAMS.find((p) => p.id === id)!;
+  it('cols: coalesced, one line per load', () => { cosimWarps(P('cols'), 4, 4, 8, { lsu: true }); }, 600000);
+  it('rows: a line per lane', () => { cosimWarps(P('rows'), 4, 4, 8, { lsu: true }); }, 600000);
+  it('reduceSeq: bar, shared memory without conflicts', () => { cosimWarps(P('reduceSeq'), 4, 4, 8, { lsu: true }); }, 600000);
+  it('reduceInt: bank conflicts; shared as slow as global', () => { cosimWarps(P('reduceInt'), 4, 4, 8, { lsu: true, sharedLatency: 8 }); }, 600000);
+  it('hist: amoadd.w one lane at a time, 2 warps × 2 lanes', () => { cosimWarps(P('hist'), 2, 2, 4, { lsu: true }); }, 600000);
+  it('hist: 4 warps', () => { cosimWarps(P('hist'), 4, 4, 8, { lsu: true }); }, 600000);
+  it('matmul: mul in the lanes, a global line every 3 cycles', () => { cosimWarps(P('matmul'), 4, 4, 8, { lsu: true, globalEvery: 3 }); }, 600000);
+  it('matmulTiled: tiles in shared memory, bar, slots taken by global requests', () => { cosimWarps(P('matmulTiled'), 4, 4, 8, { lsu: true, globalEvery: 2 }); }, 600000);
+  it('saxpy: as chapter 28 (every load one line)', () => { expect(cosimWarps(P('saxpy64'), 4, 4, 8, { lsu: true }).cycles).toBe(172); }, 600000);
 });
