@@ -602,8 +602,8 @@ export function warpCore(program: number[], opts: WarpCoreOptions = {}): Compone
     const halted = b.op1(NOT, [anyOf(b, b.op1(merger(ones(W)), slots.map((s) => `${s}.run`), undefined, 'runs'), W, 'some warp runs', 'anyRun')], 'every warp done', 'haltedG');
     b.wire(pc, 'pcOut'); b.wire(issue, 'retire'); b.wire(wid, 'warpOut'); b.wire(mask, 'maskOut'); b.wire(halted, 'halted');
     return {
-      id: `warpcore${W}x${n}_${MP.id}_${IM.id}`, name: `Warp core (${W} warps × ${n} lanes)`, category: 'cpu',
-      summary: `${W} warps of ${n} lanes share one fetch, decode and control. Every cycle the scheduler issues one ready warp: started, not finished, and its next instruction uses no register still waiting for a load (the scoreboard). Loads take ${L} cycles; while one warp waits, the others run.`,
+      id: `warpcore${W}x${n}_${MP.id}_${IM.id}`, name: `Warp core (${W} warp${W > 1 ? 's' : ''} × ${n} lanes)`, category: 'cpu',
+      summary: `${W} warp${W > 1 ? 's' : ''} of ${n} lanes share one fetch, decode and control. Every cycle the scheduler issues one ready warp: started, not finished, and its next instruction uses no register still waiting for a load (the scoreboard). Loads take ${L} cycles; while one warp waits, the others run.`,
       ports: [bit('clk', 'in', true), bus('pcOut', 32, 'out'), bit('retire', 'out'), bus('warpOut', wb, 'out'), bus('maskOut', n, 'out'), bit('halted', 'out')],
       symbol: { kind: 'box', label: `${W}-WARP CORE` },
       netlist: () => ({ pins: { clk: [0, 2], pcOut: [b.right, 2], retire: [b.right, 5], warpOut: [b.right, 8], maskOut: [b.right, 11], halted: [b.right, 14] }, instances: b.instances, nets: b.nets() }),
