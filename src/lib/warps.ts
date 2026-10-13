@@ -12,6 +12,7 @@
 //                 that into one port and a coalescer); a returning load writes its warp's bank, so
 //                 that warp sits out the cycle (one write port per bank)
 
+import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { alu, constWord, isZero } from './alu';
 import { Builder } from './builder';
@@ -350,46 +351,58 @@ export function lanePortMemory(k: number, n: number, init?: ArrayLike<number>, x
     const N = 2 ** k, R = register(32), M2 = busMux2(32);
     const L = Array.from({ length: n }, (_, i) => i);
     const ins = [...L.map((i) => `addr${i}`), ...L.map((i) => `wd${i}`), 'we', ...(xport ? ['xa'] : []), 'clk'];
+    // Hand-placed: decoders side by side, then the words in columns of up to 32 rows (a row: the word's
+    // write muxes, their OR, its register, so d and en are short wires), then the read trees side by side.
+    // Everything between the blocks is a label. (Builder's columns ran 2 · 2^k long wires from a tall
+    // column to a short one; rerouting them took minutes, half an hour for 128 words.)
     const b = new Builder(18, 16, 2);
     b.pins(...ins);
+    const at = (nm: string, x: number, y: number) => { b.instances.find((u) => u.name === nm)!.at = [x, y]; };
     const wes = b.op(splitter(ones(n)), ['we'], undefined, 'wes');
-    b.next();
-    const dec = L.map((i) => b.op(decoder(k, true), [`addr${i}`, `${wes}.o${i}`], `lane ${i} writes`, `dec${i}`));
-    b.next();
-    const words = Array.from({ length: N }, (_, w) => {
-      const sel = L.map((i) => `${dec[i]}.y${w}`);
+    const D = decoder(k, true), dw = symbolGeom(D).w + 16;
+    const dec = L.map((i) => {
+      const d = b.op(D, [`addr${i}`, b.name(`${wes}.o${i}`, `we${i}`, true)], `lane ${i} writes`, `dec${i}`);
+      at(d, 36 + i * dw, 2);
+      return d;
+    });
+    const mw = symbolGeom(M2).w, ORn = orN(n), og = symbolGeom(ORn);
+    const xOr = (n - 1) * (mw + 6) + (n > 1 ? 2 : 0), xReg = xOr + og.w + 4, pitch = og.h + 7;
+    const rows = Math.min(N, 32), colW = xReg + symbolGeom(R).w + 16, x0 = 36 + n * dw;
+    const regs = Array.from({ length: N }, (_, w) => {
+      const x = x0 + Math.floor(w / rows) * colW, y = 2 + (w % rows) * pitch;
+      // Every select is a label: dec0's (into the OR alone) would otherwise cross the whole memory.
+      const sel = L.map((i) => b.name(`${dec[i]}.y${w}`, `s${w}_${i}`, true));
       let d = `wd0`;
-      for (let i = 1; i < n; i++) d = b.op1(M2, [d, `wd${i}`, sel[i]], undefined, `p${w}_${i}`);
-      const en = b.op1(orN(n), sel, undefined, `en${w}`);
-      return { d, en };
-    });
-    b.next();
-    const regs = words.map(({ d, en }, w) => {
+      for (let i = 1; i < n; i++) {
+        d = b.op1(M2, [d, `wd${i}`, sel[i]], undefined, `p${w}_${i}`);
+        at(`p${w}_${i}`, x + (i - 1) * (mw + 6), y);
+      }
+      const en = b.op1(ORn, sel, undefined, `en${w}`);
+      at(`en${w}`, x + xOr, y + 4);
       const r = b.add(R, `word ${w}`, `w${w}`);
+      at(r, x + xReg, y + 1);
       b.wire(d, `${r}.d`); b.wire(en, `${r}.en`); b.wire('clk', `${r}.clk`);
-      return `${r}.q`;
+      return b.name(`${r}.q`, `q${w}`);
     });
-    b.next();
-    L.forEach((i) => {
-      const m = b.add(muxTree(k, 32), `lane ${i} reads`, `rd${i}m`);
+    const tree = muxTree(k, 32), tw = symbolGeom(tree).w + 14, xTree = x0 + Math.ceil(N / rows) * colW, outs: string[] = [];
+    const reader = (nm: string, label: string, s: string, y: string) => {
+      const m = b.add(tree, label, nm);
+      at(m, xTree + outs.length * tw, 2);
       regs.forEach((q, w) => b.wire(q, `${m}.d${w}`));
-      b.wire(`addr${i}`, `${m}.s`);
-      b.wire(`${m}.y`, `rd${i}`);
-    });
-    if (xport) {
-      const m = b.add(muxTree(k, 32), 'the outside reader', 'xqm');
-      regs.forEach((q, w) => b.wire(q, `${m}.d${w}`));
-      b.wire('xa', `${m}.s`);
-      b.wire(`${m}.y`, 'xq');
-    }
-    const outs = [...L.map((i) => `rd${i}`), ...(xport ? ['xq'] : [])];
+      b.wire(s, `${m}.s`);
+      b.wire(b.name(`${m}.y`, y, true), y);
+      outs.push(y);
+    };
+    L.forEach((i) => reader(`rd${i}m`, `lane ${i} reads`, `addr${i}`, `rd${i}`));
+    if (xport) reader('xqm', 'the outside reader', 'xa', 'xq');
+    const xOut = xTree + outs.length * tw + 4;
     return define({
       id: mid, name: `Data memory, a port per lane (${N} words${xport ? ', one more read port' : ''})`, category: 'memory',
       summary: `${N} words of 32 bits, one read and one write port per lane: every lane reads its own word in the same cycle, and a store writes all of them at once (the highest lane wins a word several write). Real memories do not have ${n} ports; chapter 29 gives them one port and a coalescer.${xport ? ' xa / xq: a read port for a unit outside the core.' : ''}`,
       ports: [...L.map((i) => bus(`addr${i}`, k, 'in')), ...L.map((i) => bus(`wd${i}`, 32, 'in')), bus('we', n, 'in'), ...(xport ? [bus('xa', k, 'in')] : []), clkPort(),
         ...outs.map((o) => bus(o, 32, 'out'))],
       symbol: { kind: 'box', label: 'DATA MEM' },
-      netlist: () => ({ pins: edgePins(b, ins, outs, 4), instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { ...edgePins(b, ins, [], 4), ...Object.fromEntries(outs.map((o, i) => [o, [xOut, 2 + 4 * i]])) }, instances: b.instances, nets: b.nets() }),
     });
   });
 }
