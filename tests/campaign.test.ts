@@ -8,7 +8,7 @@ import { BLOCKS, blockNodes, LINKS } from '../src/campaign/anatomy';
 import { CODEX, codexById } from '../src/campaign/codex';
 import { measured, stars } from '../src/campaign/grade';
 import { ancestors, nextAvailable, ruleFor, statusOf, topo } from '../src/campaign/graph';
-import { mapLayout, NODE_H, NODE_W } from '../src/campaign/layout';
+import { MAP_MIN_SCALE, MAP_MIN_W, mapColsFor, mapLayout, NODE_H, NODE_W } from '../src/campaign/layout';
 import { LESSONS } from '../src/campaign/lessons';
 import { levelChallenge, levelChipId, nodeOfChip, startCandidates, startFrom } from '../src/campaign/levels';
 import { ACTS, NODES, nodeById } from '../src/campaign/nodes';
@@ -164,15 +164,41 @@ describe('the campaign rule in a check', () => {
 });
 
 describe('the map and the anatomy', () => {
-  it('places every level without overlaps', () => {
-    const L = mapLayout();
-    expect(L.nodes.size).toBe(NODES.length);
-    const ps = [...L.nodes.values()];
-    for (let i = 0; i < ps.length; i++) {
-      for (let j = i + 1; j < ps.length; j++) {
-        const a = ps[i], b = ps[j];
-        const apart = a.x + NODE_W <= b.x || b.x + NODE_W <= a.x || a.y + NODE_H <= b.y || b.y + NODE_H <= a.y;
-        expect(apart, `${a.node.id} / ${b.node.id}`).toBe(true);
+  it('places every level without overlaps, inside its act band, however many columns a line holds', () => {
+    for (const cols of [Infinity, 6, 5, 4, 3, 2, 1]) {
+      const L = mapLayout(cols);
+      expect(L.nodes.size).toBe(NODES.length);
+      expect(L.cols).toBeLessThanOrEqual(cols);
+      const ps = [...L.nodes.values()];
+      for (let i = 0; i < ps.length; i++) {
+        const a = ps[i];
+        const band = L.bands.find((b) => b.act === a.node.act)!;
+        expect(a.y >= band.y && a.y + NODE_H <= band.y + band.h && a.x + NODE_W <= L.w, `${cols}: ${a.node.id}`).toBe(true);
+        for (let j = i + 1; j < ps.length; j++) {
+          const b = ps[j];
+          const apart = a.x + NODE_W <= b.x || b.x + NODE_W <= a.x || a.y + NODE_H <= b.y || b.y + NODE_H <= a.y;
+          expect(apart, `${cols}: ${a.node.id} / ${b.node.id}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('fits its pane at desktop and phone widths, shrunk by at most MAP_MIN_SCALE', () => {
+    // the map pane beside the level panel at 1280 / 1366 / 1440 / 1920 px, and on a 390 px phone
+    for (const pane of [836, 922, 994, 1036, 340]) {
+      const L = mapLayout(mapColsFor(pane));
+      expect(Math.min(1, pane / L.w), String(pane)).toBeGreaterThanOrEqual(MAP_MIN_SCALE);
+    }
+    expect(mapLayout(1).w).toBe(MAP_MIN_W);
+    // balanced wrapping: no act leaves a column alone on its last line when its lines could share them
+    for (const cols of [2, 3, 4, 5]) {
+      const L = mapLayout(cols);
+      for (const b of L.bands) {
+        const ps = [...L.nodes.values()].filter((p) => p.node.act === b.act);
+        const perLine = new Map<number, Set<number>>();
+        for (const p of ps) perLine.set(p.line, (perLine.get(p.line) ?? new Set()).add(p.x));
+        const counts = [...perLine.values()].map((s) => s.size);
+        expect(Math.max(...counts) - Math.min(...counts), `${cols}: act ${b.act}`).toBeLessThanOrEqual(1);
       }
     }
   });
