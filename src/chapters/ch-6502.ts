@@ -160,8 +160,8 @@ ${PHASES}
         6502's register file in memory: 3 cycles to read it, 4 for an absolute address.</p>
         <p>Every cycle is a bus access, the dummy ones included: a read of the next byte after an implied
         instruction, the old value written back by a read-modify-write, a read at the wrong page while an index's
-        carry is fixed. Our chip makes exactly these, cycle by cycle: it is checked against a reference model on the
-        1.5 million cases of Tom Harte's SingleStepTests and on Klaus Dormann's functional test.</p>`,
+        carry is fixed. Our transistors make exactly these: on all 1.5 million cases of Tom Harte's SingleStepTests and
+        all 96 million cycles of Klaus Dormann's functional test, every bus cycle matches a reference model.</p>`,
       widget: () => opcodeMatrix(),
     },
     {

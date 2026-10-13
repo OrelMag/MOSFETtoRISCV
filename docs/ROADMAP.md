@@ -766,7 +766,8 @@ our RV32I is fifty times bigger. Mockup approved 2026-10-13 (lettered section af
   ISS (SingleStepTests, Klaus, lock-step with random IRQ / NMI), a decode PLA computed from the table (245 rows,
   undocumented opcodes as don't-cares)
 - ✅ The chip at transistor level: 4,513 transistors (1,031 loads; the real one 3,510 + 1,018), every bus cycle in
-  lock-step with the ISS from reset (programs, interrupts, SingleStepTests cases, Klaus's test), schematics that
+  lock-step with the ISS from reset (programs, random interrupts), on all 1.51 M SingleStepTests cases and all 96 M
+  cycles of Klaus's test (scripts/m6502/chip-full.ts, in parallel slices), schematics that
   pass the layout rules; the chapter (8 steps), the running panel, the opcode matrix, the transistor ledger
 - ⏳ The 6502 as a sandbox part (with the CPU drawer); undocumented opcodes in the ISS
 
