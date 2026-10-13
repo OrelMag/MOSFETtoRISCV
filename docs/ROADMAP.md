@@ -615,7 +615,7 @@ with punch cards.
   the reader part, word by word, into RAM and jumps to it, as IBM's machines loaded from cards (the 1401's Load
   key); the CPU drawer follows the loaded program like a ROM program, the golden model starting after the load
 
-### Phase 15 — Journey and campaign track: GPU 🚧
+### Phase 15 — Journey and campaign track: GPU ✅
 The same bricks arranged for throughput instead of latency: one instruction stream, many lanes, latency hidden by
 other threads rather than by forwarding and caches. Every unit is measured like the CPUs (NANDs, depth, period) and
 co-simulated against a golden model.
