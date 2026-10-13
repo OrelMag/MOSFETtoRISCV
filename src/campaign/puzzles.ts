@@ -1,10 +1,13 @@
 // Program puzzles: write RV16 assembly that turns each test's inputs into the expected outputs.
 // Run on the golden model (iss16); graded on size (instruction words) and cycles (instructions
-// executed, mean over the tests). Every puzzle has a reference solution that passes and meets
-// par (tests/campaign-puzzles.test.ts). No DOM.
+// executed, mean over the tests). Kernel puzzles (act 9, `lanes`) run on the lane golden model
+// (simt16): cycles are warp instructions, and idle (the share of lane-steps with the lane masked
+// off) is graded too. Every puzzle has a reference solution that passes and meets par
+// (tests/campaign-puzzles.test.ts). No DOM.
 
 import { assemble16 } from '../riscv/rv16/asm16';
 import { Iss16 } from '../riscv/rv16/iss16';
+import { Simt16 } from '../riscv/rv16/simt16';
 import { rng } from './drills';
 
 export interface PuzzleTest {
@@ -29,15 +32,34 @@ export interface ProgramPuzzle {
   maxSteps: number;
   m?: boolean;
   system?: boolean;
+  /** A kernel: every test runs on a warp of this many lanes (Simt16), graded on idle lanes too. */
+  lanes?: number;
 }
 
 export interface PuzzleRun {
   ok: boolean;
   errors: { line: number; message: string }[];
-  results: { name: string; ok: boolean; why?: string; steps: number }[];
+  results: { name: string; ok: boolean; why?: string; steps: number; idle?: number }[];
   size: number;
   /** Mean steps over the tests (rounded up). */
   cycles: number;
+  /** Kernels: mean over the tests of each one's idle lane-steps, in % (rounded). */
+  idle?: number;
+}
+
+/** A test's machine for the stepper and runPuzzle: the scalar golden model, or a warp of lanes. */
+export function puzzleMachine(p: ProgramPuzzle, words: number[], asmData: Map<number, number>, t: PuzzleTest): Iss16 | Simt16 {
+  const data = new Map(asmData);
+  for (const [k, v] of Object.entries(t.mem ?? {})) data.set(Number(k), v);
+  if (p.lanes) {
+    const w = new Simt16(words, { lanes: p.lanes }, data);
+    for (const l of w.lanes) l.input = [...(t.input ?? [])];
+    return w;
+  }
+  const iss = new Iss16(words, { m: p.m, system: p.system }, data);
+  iss.input = [...(t.input ?? [])];
+  iss.switches = t.switches ?? 0;
+  return iss;
 }
 
 const hex = (v: number) => `0x${v.toString(16).padStart(4, '0')}`;
@@ -47,41 +69,42 @@ const list = (vs: number[]) => (vs.length ? vs.map((v) => String(v)).join(', ') 
 export function runPuzzle(p: ProgramPuzzle, src: string): PuzzleRun {
   const a = assemble16(src);
   const size = a.words.length;
-  if (a.errors.length) return { ok: false, errors: a.errors, results: [], size, cycles: 0 };
+  if (a.errors.length) return { ok: false, errors: a.errors, results: [], size, cycles: 0, ...(p.lanes ? { idle: 0 } : {}) };
+  const what = p.lanes ? 'warp instructions' : 'instructions';
   const results = p.tests().map((t) => {
-    const data = new Map(a.data);
-    for (const [k, v] of Object.entries(t.mem ?? {})) data.set(Number(k), v);
-    const iss = new Iss16(a.words, { m: p.m, system: p.system }, data);
-    iss.input = [...(t.input ?? [])];
-    iss.switches = t.switches ?? 0;
+    const mc = puzzleMachine(p, a.words, a.data, t);
     const irqs = new Set(t.irqAt ?? []);
-    while (!iss.halted && iss.steps < p.maxSteps) {
-      if (irqs.has(iss.steps)) iss.irq = 1;
-      iss.step();
+    while (!mc.halted && mc.steps < p.maxSteps) {
+      if (mc instanceof Iss16 && irqs.has(mc.steps)) mc.irq = 1;
+      mc.step();
     }
-    const steps = iss.steps;
-    const fail = (why: string) => ({ name: t.name, ok: false, why, steps });
-    if (iss.error) return fail(iss.error);
-    if (!iss.halted) return fail(`still running after ${p.maxSteps} instructions (missing halt?)`);
+    const steps = mc.steps;
+    const idle = mc instanceof Simt16 ? { idle: mc.idle } : {};
+    const fail = (why: string) => ({ name: t.name, ok: false, why, steps, ...idle });
+    if (mc.error) return fail(mc.error);
+    if (!mc.halted) return fail(`still running after ${p.maxSteps} ${what} (missing halt?)`);
     const e = t.expect;
-    if (e.out && (e.out.length !== iss.out.length || e.out.some((v, i) => (v & 0xffff) !== iss.out[i]))) {
-      return fail(`output ${list(iss.out)}, expected ${list(e.out.map((v) => v & 0xffff))}`);
+    if (e.out && (e.out.length !== mc.out.length || e.out.some((v, i) => (v & 0xffff) !== mc.out[i]))) {
+      return fail(`output ${list(mc.out)}, expected ${list(e.out.map((v) => v & 0xffff))}`);
     }
-    if (e.console !== undefined && e.console !== iss.console) return fail(`printed "${iss.console}", expected "${e.console}"`);
+    const printed = mc instanceof Iss16 ? mc.console : '';
+    if (e.console !== undefined && e.console !== printed) return fail(`printed "${printed}", expected "${e.console}"`);
     for (const [k, v] of Object.entries(e.mem ?? {})) {
-      const got = iss.dmem[Number(k)];
+      const got = mc.dmem[Number(k)];
       if (got !== (v & 0xffff)) return fail(`memory[${hex(Number(k))}] = ${hex(got)}, expected ${hex(v & 0xffff)}`);
     }
-    return { name: t.name, ok: true, steps };
+    return { name: t.name, ok: true, steps, ...idle };
   });
   const ok = results.every((r) => r.ok);
-  const cycles = Math.ceil(results.reduce((s, r) => s + r.steps, 0) / Math.max(1, results.length));
-  return { ok, errors: [], results, size, cycles };
+  const mean = (f: (r: (typeof results)[number]) => number) => results.reduce((s, r) => s + f(r), 0) / Math.max(1, results.length);
+  const cycles = Math.ceil(mean((r) => r.steps));
+  return { ok, errors: [], results, size, cycles, ...(p.lanes ? { idle: Math.round(mean((r) => r.idle ?? 0)) } : {}) };
 }
 
 const u16 = (v: number) => v & 0xffff;
 const s16 = (v: number) => ((v & 0xffff) ^ 0x8000) - 0x8000;
 
+const KERNEL_HELP = 'Four lanes run your program in lock-step, one shared memory: <code>csrr rd, tid</code> gives each its number (0 … 3); lane <i>t</i> takes elements <i>t</i>, <i>t</i> + 4, <i>t</i> + 8, …. Graded on cycles (warp instructions) and idle lanes.';
 const IO_HELP = 'Read a word with <code>lw rd, -4(x0)</code> (IN), write one with <code>sw rs, -3(x0)</code> (OUT), stop with <code>halt</code>.';
 
 export const PUZZLES: Record<string, ProgramPuzzle> = {
@@ -159,5 +182,105 @@ export const PUZZLES: Record<string, ProgramPuzzle> = {
     ref: `        li   sp, 0x1000\n        la   t0, handler\n        csrw mtvec, t0\n        li   t0, 0x800\n        csrw mie, t0\n        li   a2, 0           # interrupts handled\n        li   t0, 8\n        csrs mstatus, t0\n        li   t1, 3\nwait:   blt  a2, t1, wait\n        halt\n\nhandler:\n        push t0\n        lw   t0, -4(x0)\n        add  t0, t0, t0\n        sw   t0, -3(x0)\n        sw   x0, -7(x0)      # acknowledge\n        addi a2, a2, 1\n        pop  t0\n        mret\n`,
     tests: () => [[20, 60, 100], [30, 45, 60], [50, 200, 400]].map((at, i) => ({ name: `interrupts at ${at.join(', ')}`, input: [5 + i, 1000, 0x7fff], irqAt: at, expect: { out: [u16(2 * (5 + i)), 2000, 0xfffe] } })),
     maxSteps: 3000, system: true,
+  },
+
+  // ---- Act 9: kernels, on four lanes ----
+  p_saxpy: {
+    brief: `<b>saxpy</b>: y[<i>i</i>] ← <i>a</i>·x[<i>i</i>] + y[<i>i</i>] (mod 2<sup>16</sup>) for every <i>i</i> &lt; <i>n</i>, checked in memory. ${KERNEL_HELP} `
+      + '<i>n</i> (4 … 32, a multiple of 4) is at 0x0FF, <i>a</i> (0 … 15) at 0x0FE, x at 0x100, y at 0x120. There is no multiply: '
+      + 'shift and add over the bits of <i>a</i>, which every lane has the same, so every lane takes the same branches.',
+    starter: `# lane tid handles i = tid, tid + 4, tid + 8, … < n
+        csrr t0, tid
+        li   a0, 0x100
+        lw   a1, -2(a0)       # a
+        lw   ra, -1(a0)       # n
+        
+        halt
+`,
+    // For each set bit k of a (the same in every lane), one pass over the lane's elements: y += x << k.
+    ref: `        csrr t0, tid
+        li   a0, 0x100
+        lw   a1, -2(a0)       # a
+        lw   ra, -1(a0)       # n
+        addi a0, a0, 16       # between x and y: x[i] at -16, y[i] at +16
+        add  a0, a0, t0       # this lane's first element
+        add  ra, ra, a0       # one past its last (n is a multiple of 4)
+        li   sp, 0            # k: the bit of a
+bit:    beqz a1, done         # no set bits left
+        slli t0, a1, 15       # bit k alone
+        beqz t0, next
+        mv   t0, a0
+elem:   lw   a2, -16(t0)      # x[i]
+        sll  a2, a2, sp
+        lw   t1, 16(t0)       # y[i]
+        add  t1, t1, a2
+        sw   t1, 16(t0)
+        addi t0, t0, 4
+        bne  t0, ra, elem
+next:   srli a1, a1, 1
+        addi sp, sp, 1
+        j    bit
+done:   halt
+`,
+    tests: () => {
+      const r = rng(17);
+      const w = () => Math.floor(r() * 65536);
+      return [[4, 5], [8, 1], [32, 15], [16, 0], [12, 10], [24, 6]].map(([n, a]) => {
+        const x = Array.from({ length: n }, w), y = Array.from({ length: n }, w);
+        const mem: Record<number, number> = { 0xfe: a, 0xff: n };
+        x.forEach((v, i) => (mem[0x100 + i] = v));
+        y.forEach((v, i) => (mem[0x120 + i] = v));
+        const expect: Record<number, number> = Object.fromEntries(y.map((v, i) => [0x120 + i, u16(a * x[i] + v)]));
+        if (n < 32) expect[0x120 + n] = mem[0x120 + n] = 0x5a5a; // past the end: untouched
+        return { name: `n = ${n}, a = ${a}`, mem, expect: { mem: expect } };
+      });
+    },
+    maxSteps: 2000, lanes: 4,
+  },
+  p_reduce: {
+    brief: `Sum the <i>n</i> words at 0x100 (mod 2<sup>16</sup>) into the word at 0x0FE. <i>n</i> (4 … 32, a multiple of 4) is at 0x0FF; `
+      + `words 0x000 … 0x0FD are free for scratch. ${KERNEL_HELP} `
+      + 'Each lane sums its share; then the four partial sums must become one, through memory, with fewer lanes: '
+      + '<code>tmc rs1</code> sets the mask to the leader’s rs1 (<code>li t1, 1</code>, <code>tmc t1</code>: lane 0 alone), or <code>split</code> / <code>join</code>.',
+    starter: `# lane tid sums words tid, tid + 4, … ; then combine the four sums
+        csrr t0, tid
+        li   sp, 0x100
+        lw   ra, -1(sp)       # n
+        
+        halt
+`,
+    // Strided partial sums, all lanes busy; then lane 0 alone adds the other three (a tree is a cycle longer on 4 lanes).
+    ref: `        csrr t0, tid
+        li   sp, 0x100
+        lw   ra, -1(sp)       # n
+        add  a0, sp, t0       # this lane's first word
+        add  ra, ra, a0       # one past its last
+        li   a1, 0            # partial sum
+loop:   lw   a2, 0(a0)
+        add  a1, a1, a2
+        addi a0, a0, 4
+        bne  a0, ra, loop
+        sw   a1, 0(t0)        # partial sums at 0 … 3
+        li   t1, 1
+        tmc  t1               # lane 0 alone
+        lw   a2, 1(x0)
+        add  a1, a1, a2
+        lw   a2, 2(x0)
+        add  a1, a1, a2
+        lw   a2, 3(x0)
+        add  a1, a1, a2
+        sw   a1, -2(sp)
+        halt
+`,
+    tests: () => {
+      const r = rng(23);
+      return [4, 8, 32, 12, 20, 28].map((n, i) => {
+        const v = Array.from({ length: n }, () => Math.floor(r() * 65536));
+        const mem: Record<number, number> = { 0xff: n };
+        v.forEach((x, k) => (mem[0x100 + k] = x));
+        return { name: `array ${i + 1} (${n} words)`, mem, expect: { mem: { 0xfe: u16(v.reduce((s, x) => s + x, 0)) } } };
+      });
+    },
+    maxSteps: 2000, lanes: 4,
   },
 };

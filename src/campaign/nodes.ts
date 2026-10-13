@@ -618,13 +618,13 @@ export const NODES: CampaignNode[] = [
     codex: ['simt'], chapters: [{ chapter: 'simt', label: 'Threads in lock-step' }],
   },
   {
-    id: 'p_saxpy', act: 9, title: 'saxpy', kind: 'program', requires: ['k_simd'], par: { cycles: 80, idle: 0 },
+    id: 'p_saxpy', act: 9, title: 'saxpy', kind: 'program', requires: ['k_simd'], par: { cycles: 90, idle: 0 },
     why: 'The classic kernel: y ← a·x + y over an array. Each lane takes every fourth element; nobody waits for anybody.',
     tips: ['Thread i handles elements i, i + 4, i + 8, …: start at tid, step by 4.', 'n is a multiple of 4, so every lane runs the loop the same number of times: no lane idles.'],
     codex: ['utilization'], chapters: [{ chapter: 'lanes', label: 'Lanes' }],
   },
   {
-    id: 'p_reduce', act: 9, title: 'Reduction', kind: 'program', requires: ['k_simt'], par: { cycles: 60, idle: 20 },
+    id: 'p_reduce', act: 9, title: 'Reduction', kind: 'program', requires: ['k_simt'], par: { cycles: 35, idle: 19 },
     why: 'Summing an array is the opposite of saxpy: four partial sums must become one. Every step of the final combine has fewer useful lanes: the cost of a reduction is the idle lanes at its end.',
     tips: ['First each lane sums its strided share, all lanes busy.', 'Then combine through memory: lanes store their partial sums, fewer lanes add pairs.'],
     codex: ['reduction'], chapters: [{ chapter: 'simt', label: 'Threads in lock-step' }],
