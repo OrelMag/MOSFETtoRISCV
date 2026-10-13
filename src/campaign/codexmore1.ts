@@ -1396,7 +1396,7 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
       'Building the hold from the write enables it gates: the hold changes go, go changes the enables, a combinational loop.',
       'Assuming the golden model\'s timing: it draws at once, so a program that races the rasterizer looks right there and fails on the hardware.',
     ],
-    chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }],
+    chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 1, label: 'The pipeline' }],
   },
   minsky: {
     idea: 'Rotating a point by a small angle ε exactly takes cos ε and sin ε: four multiplications. Approximating, x ← x − ε·y; y ← y + ε·x, is cheap but wrong in a way that grows: the matrix [[1, −ε], [ε, 1]] has determinant 1 + ε², so every step pushes the point outward, and after a few hundred steps the circle is a spiral. Minsky\'s version uses the new x in the second line. Its matrix, [[1, −ε], [ε, 1 − ε²]], has determinant exactly 1: the point moves on a closed ellipse, very close to a circle for small ε.<br>With ε = 1/8 both multiplications are arithmetic shifts by 3. In 8.8 fixed point (8 fraction bits) a square\'s corners stay within about 6 % of their radius over 2 000 frames; in whole quarter pixels the rounding errors build up to about 20 %. Marvin Minsky found it drawing circles on the PDP-1 display (HAKMEM, item 149).',
@@ -1406,6 +1406,6 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
       'Logical shifts: a negative coordinate turns into a large positive one.',
       'Rounding to whole pixels every step: the errors accumulate; keep the fraction and round only when drawing.',
     ],
-    chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }],
+    chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 2, label: 'A spinning triangle' }],
   },
 };
