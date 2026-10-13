@@ -31,7 +31,9 @@ export const chLanes: Chapter = {
         receives the same rs1, rs2 and rd fields, the same control signals and the same immediate; only its registers differ.</p>
         <p>A lane learns which thread it is with <code>csrr t0, tid</code>: a constant wired into each lane (0, 1, 2, 3) answers. Here every lane takes the elements
         i = tid, tid + 4, tid + 8, tid + 12 of y = 3·x + y. <code>nlanes</code> reads 4, <code>lane</code> the lane number, <code>tmask</code> the active mask.</p>
-        <p>The Warp panel runs the SIMT golden model (riscv/simt.ts) in lock-step and compares the PC, the mask and every lane's registers after each instruction.</p>
+        <p>The Warp panel runs the SIMT golden model (riscv/simt.ts) in lock-step and compares the PC, the mask and every lane's registers after each instruction. Click a line of its listing to light the hardware that instruction
+        uses; <strong>Slow</strong> runs the kernel at a pace you set (a gate delay, a cycle or an instruction at a time), the highlight following each
+        instruction onto the lanes it runs on.</p>
         <div class="try">Run to halt, then open a lane and its register file: four different sets of values from one instruction stream.</div>`,
       scene: () => laneCoreScene('saxpy', { highlight: ['lane0', 'lane1', 'lane2', 'lane3'] }),
     },
@@ -201,7 +203,8 @@ export const chWarps: Chapter = {
         ready, the pointer moves past the winner. One warp issues per cycle; its PC, mask and stack move, the others' stay.</p>
         <p>Four warps run the same 64 elements in 172 cycles for 172 instructions: not one issue slot is empty, and the 8-cycle latency is hidden entirely. Two
         warps take 192 cycles (83 % of the slots), one warp 266.</p>
-        <div class="try">Switch between 1, 2 and 4 warps in the panel and compare the timelines: the colours interleave, and the idle row empties.</div>`,
+        <div class="try">Switch between 1, 2 and 4 warps in the panel and compare the timelines: the colours interleave, and the idle row empties. Then press
+        <strong>Slow</strong> at the issue level: each step is one issue, and the highlight follows the warp the scheduler picked through the shared front end.</div>`,
       scene: () => warpCoreScene('saxpy64', { warps: 4, highlight: ['sched'] }),
       challenge: {
         kind: 'quiz', question: 'Four warps issue 172 instructions; one warp alone issues 154 for the same 64 elements. Where do the 18 extra instructions come from?',
