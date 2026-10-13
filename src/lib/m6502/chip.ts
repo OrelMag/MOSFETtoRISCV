@@ -306,7 +306,7 @@ export function aluBlock(): ComponentDef {
   let c4bin = '', c8 = '';
   for (const i of R8) {
     s[i] = L.xor(p[i], np[i], cy, ncy);
-    ns[i] = L.inv(s[i]);
+    if (i === 7) ns[i] = L.inv(s[i]);
     const nNext = L.aoi([[a[i], b[i]], [a[i], cy], [b[i], cy]]);
     let next = L.inv(nNext), nNextC = nNext;
     if (i === 3) {
@@ -388,7 +388,7 @@ export function pcBlock(): ComponentDef {
     // the incrementer: half adders in a ripple
     const ncy = L.inv(cy);
     const sum = L.xor(pcs, npcs, cy, ncy);
-    cy = L.inv(L.nand([pcs, cy]));
+    if (i < 15) cy = L.inv(L.nand([pcs, cy]));
     // the PC (φ2)
     L.pass('p2', sum, pc);
     const npc = L.inv(pc);

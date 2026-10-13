@@ -48,7 +48,7 @@ export function naoi(expr: string): ComponentDef {
     },
     netlist: () => ({
       level: 'switch',
-      pins: { ...Object.fromEntries(names.map((n, i) => [n, [1, 9 + 2 * i] as [number, number]])), y: [xs[xs.length - 1] + 8, 8] },
+      pins: { ...Object.fromEntries(names.map((n, i) => [n, [-4, 9 + 2 * i] as [number, number]])), y: [xs[xs.length - 1] + 8, 8] },
       instances, nets,
     }),
   });
