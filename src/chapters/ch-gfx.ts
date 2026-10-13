@@ -130,7 +130,7 @@ export const chGfxPipeline: Chapter = {
         <p>Fixed point, <strong>16.16</strong>: sin θ comes from a table of 64 entries (a turn in 64 frames), cos θ is the same table a quarter turn on.
         Model coordinates are quarter pixels around the centre (|x| ≤ 100), so x·cos θ stays below 2<sup>24</sup>: <code>mul</code>'s low word is the whole
         product and <code>srai 16</code> drops the fraction. Then</p>
-        <p class="eq">X = 128 + (x cos θ − y sin θ) &gt;&gt; 16, &nbsp; Y = 128 + (x sin θ + y cos θ) &gt;&gt; 16</p>
+        <p class="eq">X = 128 + (x cos θ − y sin θ) &gt;&gt; 16<br>Y = 128 + (x sin θ + y cos θ) &gt;&gt; 16</p>
         <p>and the thread packs X | Y &lt;&lt; 8 | Z &lt;&lt; 16 into one word of the <strong>vertex buffer</strong>, buffer f mod 2 for frame f. The triangle has a
         fourth, unused vertex so that every lane runs the loop the same number of times: a uniform branch needs no split. One frame is 44 instructions,
         60 cycles. The cube (eight vertices, a spin then a fixed tilt toward the viewer: eight multiplies a vertex) is 86 instructions, 109 cycles.</p>
@@ -172,8 +172,8 @@ export const chGfxPipeline: Chapter = {
       body: `
         <p>Run: every gate of the pipeline is simulated, 413 594 leaves (gates and memory blocks). This scene runs on the <strong>cycle engine</strong>: the
         same settled values after every clock edge as the event-driven simulator, flip-flops as tables, several times faster; it has no gate delays, so
-        probes and the timing diagram are off here. The panel measures frames per second in this page: about one, for a frame that a 1 GHz chip would
-        draw in 6 µs.</p>
+        probes and the timing diagram are off here. The panel measures frames per second in this page: a few (about three for the triangle on the machine
+        this was written on), for a frame that a 1 GHz chip would draw in 6 µs.</p>
         <p>Nothing is taken on trust. The vertex kernel runs in lock-step with its golden model, its vertex buffer is compared when the command unit starts
         reading it, and every frame is compared, pixel for pixel, with the reference rasterizer's picture of the same vertices.</p>
         <p>Then the cube: twelve triangles, a colour a face. Half of them face away, so set-up culls them after three cycles (twice their area is negative).

@@ -71,7 +71,7 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
   return (stage: Stage): Widget => {
     let running: number | null = null, rate = 0;
     const runBtn = h('button', { class: 'btn sm primary' }, 'Run');
-    const frameBtn = h('button', { class: 'btn sm', title: 'run until the command unit starts the next frame' }, 'One frame');
+    const frameBtn = h('button', { class: 'btn sm', title: 'run until the next frame is drawn and the scan-out has sent it to the screen' }, 'One frame');
     const stop = () => { if (running) cancelAnimationFrame(running); running = null; runBtn.textContent = 'Run'; };
     const cap = new ScanCapture(stage, stop);
     const rec = new FrameRecorder();
@@ -150,8 +150,13 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
     runBtn.addEventListener('click', () => runFor(() => false));
     frameBtn.addEventListener('click', () => {
       stop();
+      // the frame is drawn at the flip; the screen has it a scan-out later (the next vsync)
       const f = rec.frames;
-      runFor(() => rec.frames > f);
+      let sent = -1;
+      runFor(() => {
+        if (sent < 0 && rec.frames > f) sent = cap.frames;
+        return sent >= 0 && cap.frames > sent;
+      });
     });
     const meshSel = h('select', { 'aria-label': 'mesh' }, ...MESHES.map((x) => h('option', { value: x.id }, x.title))) as HTMLSelectElement;
     meshSel.value = meshId;
