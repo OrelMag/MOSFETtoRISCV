@@ -1,4 +1,6 @@
+import { costWidget, pipelineScene } from '../widgets/gfxpipe';
 import { depthScene, displayScene, edgeWidget, gpuScene } from '../widgets/screen';
+import { warpCoreScene } from '../widgets/warps';
 import type { Chapter } from './types';
 
 export const chPixels: Chapter = {
@@ -111,6 +113,97 @@ export const chPixels: Chapter = {
         kind: 'quiz', question: 'Why are translucent surfaces drawn after the opaque ones, back to front?',
         options: ['Blending needs the depth buffer cleared', 'Each blend mixes with what is already in the frame, so what is behind must be there first', 'Translucent pixels are faster to draw', 'The top-left rule requires it'], answer: 1,
         explain: 'out = src·α + dst·(1 − α) reads dst: the surface behind must already be in the frame. Drawn the other way round, the far surface would be mixed over the near one.',
+      },
+    },
+  ],
+};
+
+export const chGfxPipeline: Chapter = {
+  id: 'graphics', num: 31, title: 'The graphics pipeline', level: 'Throughput',
+  blurb: 'A vertex kernel on the warp core, a command unit feeding the rasterizer, the frames double-buffered: a spinning triangle and a cube at gate level, and where the gates and cycles go.',
+  steps: [
+    {
+      title: 'Vertices are a kernel',
+      body: `
+        <p>Every vertex of a mesh goes through the same arithmetic, independently of the others: rotate it, place it on the screen. That is a
+        <strong>kernel</strong>, one thread a vertex, on chapter 28's warp core: here one warp of four lanes with chapter 29's multipliers.</p>
+        <p>Fixed point, <strong>16.16</strong>: sin θ comes from a table of 64 entries (a turn in 64 frames), cos θ is the same table a quarter turn on.
+        Model coordinates are quarter pixels around the centre (|x| ≤ 100), so x·cos θ stays below 2<sup>24</sup>: <code>mul</code>'s low word is the whole
+        product and <code>srai 16</code> drops the fraction. Then</p>
+        <p class="eq">X = 128 + (x cos θ − y sin θ) &gt;&gt; 16<br>Y = 128 + (x sin θ + y cos θ) &gt;&gt; 16</p>
+        <p>and the thread packs X | Y &lt;&lt; 8 | Z &lt;&lt; 16 into one word of the <strong>vertex buffer</strong>, buffer f mod 2 for frame f. The triangle has a
+        fourth, unused vertex so that every lane runs the loop the same number of times: a uniform branch needs no split. One frame is 44 instructions,
+        60 cycles. The cube (eight vertices, a spin then a fixed tilt toward the viewer: eight multiplies a vertex) is 86 instructions, 109 cycles.</p>
+        <p>Cost: each lane is 35 255 NANDs, multiplier included; the core is 182 214 without its memories.</p>
+        <div class="try">Run to halt, then switch to the cube's kernel. The vertex buffer is at word 96: one packed word a vertex.</div>`,
+      scene: () => warpCoreScene('vertexTri', { warps: 1, highlight: ['lane0', 'lane1', 'lane2', 'lane3'], programs: ['vertexTri', 'vertexCube'] }),
+      challenge: {
+        kind: 'quiz', question: 'Why does the triangle carry a fourth vertex that no triangle uses?',
+        options: ['The rasterizer needs four vertices', 'So that all four lanes loop the same number of times: the loop\'s branch stays uniform', 'To keep the vertex buffer aligned to 16 bytes', 'The multipliers work in pairs'], answer: 1,
+        explain: 'With three vertices on four lanes, lane 3 would leave the loop while the others stay: a divergent branch, which needs split and join. Padding to a multiple of the lane count keeps every branch uniform, at the cost of one wasted lane-pass.',
+      },
+    },
+    {
+      title: 'The pipeline',
+      body: `
+        <p>Six blocks, the first one programmable: the warp core running the vertex kernel, the <strong>command unit</strong>, chapter 30's rasterizer with its
+        depth set-up, the depth test and blend, the two frames and the scan-out. The command unit (1 997 NANDs, one flip-flop a state) runs every frame:</p>
+        <ul>
+          <li><strong>launch</strong>: start the kernel on the <em>next</em> frame (warp 0 back to PC 0, every lane on) and, in the same cycle, start the
+          clear of the back frame;</li>
+          <li>read the triangle count, then per triangle its word (three vertex indices, a colour) and its three vertices from this frame's vertex buffer:
+          four reads on a spare read port of the core's memory, then <strong>go</strong>, and wait while the rasterizer is busy;</li>
+          <li><strong>swap</strong>, then wait for the flip at vsync and for the kernel; the next frame reads the other vertex buffer.</li>
+        </ul>
+        <p>The vertex buffer is double-buffered like the framebuffer, so the kernel computes frame f + 1 while frame f is drawn. A real command processor
+        does the same over the memory system: it reads command buffers, launches kernels and waits on fences.</p>
+        <p>The triangle's frame is 6 144 cycles: the clear 4 438, the triangle 1 268, waiting for vsync 438; the kernel's 60 cycles hide inside the clear.
+        A frame ends at a flip, and flips happen only at vsync, every 1 024 cycles: the frame time snaps to six scan-outs.</p>
+        <div class="try">One frame, then read the timeline: who works when. Open the command unit and watch its state register.</div>`,
+      scene: () => pipelineScene('triangle', { highlight: ['cmd'] }),
+      challenge: {
+        kind: 'quiz', question: 'The vertex kernel is busy 60 cycles of a 6 144-cycle frame. What would a second warp core gain?',
+        options: ['Twice the frame rate', 'Nothing: the frame is spent clearing and rasterizing', 'Half the vsync wait', 'Room for the depth test'], answer: 1,
+        explain: 'The kernel already finishes during the clear, a frame ahead of its use. The frame is bound by the clear (4 438 cycles) and the rasterizer (one pixel a cycle); more vertex throughput changes nothing until the mesh is far larger.',
+      },
+    },
+    {
+      title: 'A spinning triangle',
+      body: `
+        <p>Run: every gate of the pipeline is simulated, 413 594 leaves (gates and memory blocks). This scene runs on the <strong>cycle engine</strong>: the
+        same settled values after every clock edge as the event-driven simulator, flip-flops as tables, several times faster; it has no gate delays, so
+        probes and the timing diagram are off here. The panel measures frames per second in this page: a few (about three for the triangle on the machine
+        this was written on), for a frame that a 1 GHz chip would draw in 6 µs.</p>
+        <p>Nothing is taken on trust. The vertex kernel runs in lock-step with its golden model, its vertex buffer is compared when the command unit starts
+        reading it, and every frame is compared, pixel for pixel, with the reference rasterizer's picture of the same vertices.</p>
+        <p>Then the cube: twelve triangles, a colour a face. Half of them face away, so set-up culls them after three cycles (twice their area is negative).
+        For a single convex solid that alone hides everything behind; depth is on all the same, and earns its 76 set-up cycles per triangle only where
+        solids overlap. Its frames take 7 168 to 8 192 cycles: two or three faces, 2 300 to 3 000 cycles of drawing.</p>
+        <div class="try">Run for a few frames, then pick the cube. Pause and open the rasterizer: its tile walk is wherever the timeline says.</div>`,
+      scene: () => pipelineScene('triangle', { highlight: ['core', 'rast'] }),
+      challenge: {
+        kind: 'quiz', question: 'A cube is convex. Which triangles would be drawn wrongly with the depth test off?',
+        options: ['None: back-face culling already removes every hidden face', 'The faces seen at a grazing angle', 'Every triangle drawn after the first', 'Pixels on shared edges'], answer: 0,
+        explain: 'On a convex solid every face that points away is hidden and every face that points toward the viewer is fully visible, so culling alone gives the right picture. Two solids, or a concave one, need the depth test.',
+      },
+    },
+    {
+      title: 'Where the gates go',
+      body: `
+        <p>The programmable part is the largest and the idlest: 182 214 NANDs of warp core, busy 1 % of the frame. The rasterizer, a seventh of its
+        size, is busy most of it. Real GPUs answer with <strong>unified shaders</strong>: vertex and pixel work run on the same lanes, so the lanes never
+        wait for a kind of work that is not there; edge stepping, the depth test and blending stay fixed-function, because per pixel they are a handful
+        of adders.</p>
+        <p>The surprise is the clear: 72 % of the triangle's frame, one pixel a cycle. The same 16 threads clear the frame in software in 804 cycles,
+        four pixels per store. Real GPUs never clear pixel by pixel: they mark tiles as cleared (fast clear) and supply the colour when a tile is first
+        read. Drawing goes the other way: the software kernel takes 6 825 cycles for the triangle the rasterizer draws in 1 268, on chapter 28's four-warp core, whose logic alone is 488 609 NANDs: matching the rasterizer in software would take five or six of them,
+        against 26 708.</p>
+        <p>Scaled to 1920 × 1080, this design would spend two million cycles a frame on the clear alone.</p>`,
+      widget: costWidget,
+      challenge: {
+        kind: 'quiz', question: 'Which change halves the triangle\'s frame time?',
+        options: ['A second warp core', 'Clearing four pixels a cycle', 'A faster vertex kernel', 'Flipping without waiting for vsync'], answer: 1,
+        explain: 'The clear falls from 4 438 cycles to about 1 400, so the frame is about 2 700 cycles and snaps to three scan-outs: 3 072 cycles instead of 6 144. The kernel is hidden in the clear already; flipping without vsync saves at most one scan-out, and tears.',
       },
     },
   ],

@@ -340,14 +340,16 @@ export function warpLane(n: number, W: number, mul = false): ComponentDef {
 /**
  * A data memory of 2^k words with a read and a write port per lane. Reads are combinational; at the
  * clock edge every lane with we writes its word, and when several write one word the highest lane
- * wins (the golden model stores lowest lane first).
+ * wins (the golden model stores lowest lane first). xport: one more read port (xa → xq) for a reader outside
+ * the core (chapter 31's command unit).
  */
-export function lanePortMemory(k: number, n: number, init?: ArrayLike<number>): ComponentDef {
-  if (init && Array.from(init).some((v) => v)) return withInit(lanePortMemory(k, n), init);
-  return memo(`lpmem${k}_${n}`, () => {
+export function lanePortMemory(k: number, n: number, init?: ArrayLike<number>, xport = false): ComponentDef {
+  if (init && Array.from(init).some((v) => v)) return withInit(lanePortMemory(k, n, undefined, xport), init);
+  const mid = `lpmem${k}_${n}${xport ? 'x' : ''}`;
+  return memo(mid, () => {
     const N = 2 ** k, R = register(32), M2 = busMux2(32);
     const L = Array.from({ length: n }, (_, i) => i);
-    const ins = [...L.map((i) => `addr${i}`), ...L.map((i) => `wd${i}`), 'we', 'clk'];
+    const ins = [...L.map((i) => `addr${i}`), ...L.map((i) => `wd${i}`), 'we', ...(xport ? ['xa'] : []), 'clk'];
     const b = new Builder(18, 16, 2);
     b.pins(...ins);
     const wes = b.op(splitter(ones(n)), ['we'], undefined, 'wes');
@@ -374,12 +376,20 @@ export function lanePortMemory(k: number, n: number, init?: ArrayLike<number>): 
       b.wire(`addr${i}`, `${m}.s`);
       b.wire(`${m}.y`, `rd${i}`);
     });
+    if (xport) {
+      const m = b.add(muxTree(k, 32), 'the outside reader', 'xqm');
+      regs.forEach((q, w) => b.wire(q, `${m}.d${w}`));
+      b.wire('xa', `${m}.s`);
+      b.wire(`${m}.y`, 'xq');
+    }
+    const outs = [...L.map((i) => `rd${i}`), ...(xport ? ['xq'] : [])];
     return define({
-      id: `lpmem${k}_${n}`, name: `Data memory, a port per lane (${N} words)`, category: 'memory',
-      summary: `${N} words of 32 bits, one read and one write port per lane: every lane reads its own word in the same cycle, and a store writes all of them at once (the highest lane wins a word several write). Real memories do not have ${n} ports; chapter 29 gives them one port and a coalescer.`,
-      ports: [...L.map((i) => bus(`addr${i}`, k, 'in')), ...L.map((i) => bus(`wd${i}`, 32, 'in')), bus('we', n, 'in'), clkPort(), ...L.map((i) => bus(`rd${i}`, 32, 'out'))],
+      id: mid, name: `Data memory, a port per lane (${N} words${xport ? ', one more read port' : ''})`, category: 'memory',
+      summary: `${N} words of 32 bits, one read and one write port per lane: every lane reads its own word in the same cycle, and a store writes all of them at once (the highest lane wins a word several write). Real memories do not have ${n} ports; chapter 29 gives them one port and a coalescer.${xport ? ' xa / xq: a read port for a unit outside the core.' : ''}`,
+      ports: [...L.map((i) => bus(`addr${i}`, k, 'in')), ...L.map((i) => bus(`wd${i}`, 32, 'in')), bus('we', n, 'in'), ...(xport ? [bus('xa', k, 'in')] : []), clkPort(),
+        ...outs.map((o) => bus(o, 32, 'out'))],
       symbol: { kind: 'box', label: 'DATA MEM' },
-      netlist: () => ({ pins: edgePins(b, ins, L.map((i) => `rd${i}`), 4), instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: edgePins(b, ins, outs, 4), instances: b.instances, nets: b.nets() }),
     });
   });
 }
@@ -411,15 +421,16 @@ const reqFields = (n: number, W: number) => [1, 1, W, 5, n, ...Array(n).fill(32)
  * The data memory behind an L-cycle pipeline: a request (a warp's load or store, every lane's address
  * and data) enters at issue and reaches the memory L − 1 cycles later, where loads read and stores
  * write; the loaded words go back to the lanes that same cycle (ret*), written at the edge. A warp's
- * own requests stay in order, so its store before a load is seen by the load.
+ * own requests stay in order, so its store before a load is seen by the load. xport: the memory's extra read port
+ * (xa, a word address → xq), outside the pipeline.
  */
-export function memPipe(n: number, W: number, L: number, k: number, init?: ArrayLike<number>): ComponentDef {
+export function memPipe(n: number, W: number, L: number, k: number, init?: ArrayLike<number>, xport = false): ComponentDef {
   checkWarps(W);
-  const MEM = lanePortMemory(k, n, init);
+  const MEM = lanePortMemory(k, n, init, xport);
   return memo(`mempipe${n}_${W}_${L}_${MEM.id}`, () => {
     const F = reqFields(n, W), P = F.reduce((a, c) => a + c, 0);
     const lanes = Array.from({ length: n }, (_, i) => i);
-    const ins = ['ld', 'st', 'warp', 'rd', 'mask', ...lanes.map((i) => `addr${i}`), ...lanes.map((i) => `wd${i}`), 'clk'];
+    const ins = ['ld', 'st', 'warp', 'rd', 'mask', ...lanes.map((i) => `addr${i}`), ...lanes.map((i) => `wd${i}`), ...(xport ? ['xa'] : []), 'clk'];
     const b = new Builder(18, 14);
     b.pins(...ins);
     let req = b.op1(merger(F), ['ld', 'st', 'warp', 'rd', 'mask', ...lanes.map((i) => `addr${i}`), ...lanes.map((i) => `wd${i}`)], 'request', 'req');
@@ -441,18 +452,19 @@ export function memPipe(n: number, W: number, L: number, k: number, init?: Array
     });
     b.wire(b.op1(bitwise('and', n), [fld(4), b.op1(fanout(n), [fld(1)], undefined, 'fst')], 'store lanes', 'swe'), `${mem}.we`);
     b.wire('clk', `${mem}.clk`);
+    if (xport) { b.wire('xa', `${mem}.xa`); b.wire(`${mem}.xq`, 'xq'); }
     b.next();
     b.wire(fld(0), 'retValid');
     b.wire(fld(2), 'retWarp');
     b.wire(fld(3), 'retRd');
     b.wire(b.op1(bitwise('and', n), [fld(4), b.op1(fanout(n), [fld(0)], undefined, 'fld')], 'load lanes', 'rmask'), 'retMask');
     lanes.forEach((i) => b.wire(`${mem}.rd${i}`, `retData${i}`));
-    const outs = ['retValid', 'retWarp', 'retRd', 'retMask', ...lanes.map((i) => `retData${i}`)];
+    const outs = ['retValid', 'retWarp', 'retRd', 'retMask', ...lanes.map((i) => `retData${i}`), ...(xport ? ['xq'] : [])];
     return define({
       id: `mempipe${n}_${W}_${L}_${MEM.id}`, name: `Memory, ${L}-cycle pipeline`, category: 'memory',
       summary: `A load or store enters with its warp, destination register, active lanes, addresses and data, and travels ${L - 1} pipeline registers to the memory: a load issued in cycle t is written back at the end of cycle t + ${L - 1}, so an instruction that needs it can issue in cycle t + ${L}. One request enters per cycle; nothing waits for it.`,
-      ports: [bit('ld', 'in'), bit('st', 'in'), bus('warp', W, 'in'), bus('rd', 5, 'in'), bus('mask', n, 'in'), ...lanes.map((i) => bus(`addr${i}`, 32, 'in')), ...lanes.map((i) => bus(`wd${i}`, 32, 'in')), clkPort(),
-        bit('retValid', 'out'), bus('retWarp', W, 'out'), bus('retRd', 5, 'out'), bus('retMask', n, 'out'), ...lanes.map((i) => bus(`retData${i}`, 32, 'out'))],
+      ports: [bit('ld', 'in'), bit('st', 'in'), bus('warp', W, 'in'), bus('rd', 5, 'in'), bus('mask', n, 'in'), ...lanes.map((i) => bus(`addr${i}`, 32, 'in')), ...lanes.map((i) => bus(`wd${i}`, 32, 'in')), ...(xport ? [bus('xa', k, 'in')] : []), clkPort(),
+        bit('retValid', 'out'), bus('retWarp', W, 'out'), bus('retRd', 5, 'out'), bus('retMask', n, 'out'), ...lanes.map((i) => bus(`retData${i}`, 32, 'out')), ...(xport ? [bus('xq', 32, 'out')] : [])],
       symbol: { kind: 'box', label: `MEMORY (${L} CYCLES)` },
       netlist: () => ({ pins: edgePins(b, ins, outs), instances: b.instances, nets: b.nets() }),
     });
@@ -522,25 +534,32 @@ export interface WarpCoreOptions {
   globalEvery?: number;
   /** Multipliers in the lanes (mul). */
   mul?: boolean;
+  /**
+   * A port for a unit outside the core (chapter 31's command unit): launch (one cycle, while every warp is done)
+   * starts warp 0 again at PC 0 with every lane active, as a dispatch does; xa (a word address) reads the data
+   * memory on xq. Not with lsu.
+   */
+  host?: boolean;
 }
 
 /** W warps of n lanes behind one fetch, decode and control; the golden model is WarpISS. */
 export function warpCore(program: number[], opts: WarpCoreOptions = {}): ComponentDef {
   const W = opts.warps ?? 4, n = opts.lanes ?? 4, L = opts.latency ?? 8, dk = opts.dmemK ?? 6, ik = opts.imemK ?? 6;
-  const lsu = !!opts.lsu, mul = !!opts.mul;
+  const lsu = !!opts.lsu, mul = !!opts.mul, host = !!opts.host;
   checkWarps(W);
+  if (host && lsu) throw new Error('host: not with lsu');
   // L = 1 would return a load in the cycle it issues: the write-back would feed the scheduler that issued it (a loop)
   if (L < 2) throw new Error('latency: at least 2');
   const IM = rom(program, ik);
   const MP = lsu
     ? lsuMemory({ lanes: n, warps: W, latency: L, sharedLatency: opts.sharedLatency ?? 2, globalEvery: opts.globalEvery ?? 1, k: dk, ks: opts.smemK ?? 6, init: opts.data })
-    : memPipe(n, W, L, dk, opts.data);
-  const id = `warpcore${W}x${n}${mul ? 'm' : ''}_${MP.id}_${IM.id}`;
+    : memPipe(n, W, L, dk, opts.data, host);
+  const id = `warpcore${W}x${n}${mul ? 'm' : ''}${host ? 'h' : ''}_${MP.id}_${IM.id}`;
   return memo(id, () => {
     const wb = wbits(W), k = log2(n);
     const Ws = Array.from({ length: W }, (_, w) => w), Ls = Array.from({ length: n }, (_, i) => i);
     const b = new Builder(14, 20);
-    b.pins('clk');
+    b.pins('clk', ...(host ? ['launch', 'xa'] : []));
     // the warps, their next instructions, and which may issue
     const slots = Ws.map((w) => b.add(warpSlot(n, w === 0), `warp ${w}`, `warp${w}`));
     for (const s of slots) b.wire('clk', `${s}.clk`);
@@ -693,7 +712,7 @@ export function warpCore(program: number[], opts: WarpCoreOptions = {}): Compone
     const spawnGo = b.op1(AND, [`${sd}.isWspawn`, issue], 'wspawn issues', 'spGo');
     b.next();
     const spawn = Ws.map((w) => {
-      if (w === 0) return b.op1(TIE0, [], undefined, 'sp0');
+      if (w === 0) return host ? 'launch' : b.op1(TIE0, [], undefined, 'sp0');
       const above = Ws.filter((j) => j > w).map((j) => `${ld}.y${j}`);
       const gt = b.op1(above.length ? orN(above.length + 1) : OR, [hiNz, ...(above.length ? above : [b.op1(TIE0, [], undefined, `nz${w}`)])], `rs1 > ${w}`, `gt${w}`);
       return b.op1(AND, [spawnGo, gt], `spawn ${w}`, `sp${w}`);
@@ -702,7 +721,7 @@ export function warpCore(program: number[], opts: WarpCoreOptions = {}): Compone
     const rl = lsu ? `${mp}.retLast` : '';
     slots.forEach((s, w) => {
       const wires: [string, string][] = [
-        [lsu ? b.op1(AND, [grants[w], done], undefined, `iss${w}`) : grants[w], 'issue'], [spawn[w], 'spawn'], [lB, 'spawnPc'], [`${pcmux}.y`, 'nextPc'], [`${sd}.isTmc`, 'isTmc'], [`${sd}.isSplit`, 'isSplit'], [`${sd}.isJoin`, 'isJoin'],
+        [lsu ? b.op1(AND, [grants[w], done], undefined, `iss${w}`) : grants[w], 'issue'], [spawn[w], 'spawn'], [host && w === 0 ? b.op1(constWord(32, 0), [], undefined, 'pc0') : lB, 'spawnPc'], [`${pcmux}.y`, 'nextPc'], [`${sd}.isTmc`, 'isTmc'], [`${sd}.isSplit`, 'isSplit'], [`${sd}.isJoin`, 'isJoin'],
         [`${sd}.isPred`, 'isPred'], [pm, 'pred'], [lA, 'leadA'], [lB, 'leadB'], [p4, 'pcPlus4'], [`${si}.o1`, 'setRd'], [b.op1(AND, [ldIss, grants[w]], undefined, `se${w}`), 'setEn'],
         [`${mp}.retRd`, 'clrRd'], [lsu ? b.op1(AND, [retHit[w], rl], undefined, `cl${w}`) : retHit[w], 'clrEn'],
       ];
@@ -715,19 +734,21 @@ export function warpCore(program: number[], opts: WarpCoreOptions = {}): Compone
       for (const [d, p] of [[ldIss, 'ret'], [st, 'st'], [amo, 'amo'], [shared, 'shared'], [done, 'last'], [G, 'warp'], [`${si}.o1`, 'rd'], [served, 'serve']] as const) b.wire(d, `${mp}.${p}`);
     } else {
       for (const [d, p] of [[ldIss, 'ld'], [st, 'st'], [G, 'warp'], [`${si}.o1`, 'rd'], [mask, 'mask']] as const) b.wire(d, `${mp}.${p}`);
+      if (host) { b.wire('xa', `${mp}.xa`); b.wire(`${mp}.xq`, 'xq'); }
     }
     lanes.forEach((l, i) => { b.wire(`${l}.aluY`, `${mp}.addr${i}`); b.wire(`${l}.rd2`, `${mp}.wd${i}`); });
     b.next();
     const halted = b.op1(NOT, [anyOf(b, b.op1(merger(ones(W)), slots.map((s) => `${s}.run`), undefined, 'runs'), W, 'some warp runs', 'anyRun')], 'every warp done', 'haltedG');
     b.wire(pc, 'pcOut'); b.wire(lsu ? b.op1(AND, [issue, done], undefined, 'retireG') : issue, 'retire'); b.wire(wid, 'warpOut'); b.wire(mask, 'maskOut'); b.wire(halted, 'halted');
     if (lsu) { b.wire(issue, 'issued'); b.wire(served, 'served'); b.wire(shared, 'sharedOut'); b.wire(`${atBar}.q`, 'atBar'); }
-    const outs: [string, number][] = [['pcOut', 32], ['retire', 1], ['warpOut', wb], ['maskOut', n], ['halted', 1], ...(lsu ? [['issued', 1], ['served', n], ['sharedOut', 1], ['atBar', W]] as [string, number][] : [])];
+    const outs: [string, number][] = [['pcOut', 32], ['retire', 1], ['warpOut', wb], ['maskOut', n], ['halted', 1], ...(lsu ? [['issued', 1], ['served', n], ['sharedOut', 1], ['atBar', W]] as [string, number][] : []),
+      ...(host ? [['xq', 32]] as [string, number][] : [])];
     return {
       id, name: `Warp core (${W} warp${W > 1 ? 's' : ''} × ${n} lanes)`, category: 'cpu',
       summary: `${W} warp${W > 1 ? 's' : ''} of ${n} lanes share one fetch, decode and control. Every cycle the scheduler issues one ready warp: started, not finished, and its next instruction uses no register still waiting for a load (the scoreboard). Loads take ${L} cycles; while one warp waits, the others run.${lsu ? ' A memory instruction takes one cycle per access (a line of global memory, a set of shared-memory banks, a lane of amoadd.w) and holds the issue port until its last; bar holds a warp until the others arrive.' : ''}`,
-      ports: [bit('clk', 'in', true), ...outs.map(([p, w]) => w === 1 ? bit(p, 'out') : bus(p, w, 'out'))],
+      ports: [bit('clk', 'in', true), ...(host ? [bit('launch', 'in'), bus('xa', dk, 'in')] : []), ...outs.map(([p, w]) => w === 1 ? bit(p, 'out') : bus(p, w, 'out'))],
       symbol: { kind: 'box', label: `${W}-WARP CORE` },
-      netlist: () => ({ pins: { clk: [0, 2], ...Object.fromEntries(outs.map(([p], i) => [p, [b.right, 2 + 3 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { clk: [0, 2], ...(host ? { launch: [0, 5] as [number, number], xa: [0, 8] as [number, number] } : {}), ...Object.fromEntries(outs.map(([p], i) => [p, [b.right, 2 + 3 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
     } satisfies ComponentDef;
   });
 }

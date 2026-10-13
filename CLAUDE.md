@@ -212,7 +212,11 @@ src/lib/       the component library (registered in `registry` via define())
                  words as power-on hints), warpDecode (wspawn, CSRs warp / nwarps). Chapter 29: warpCore(…, { lsu, smemK,
                  sharedLatency, globalEvery, mul }): a memory instruction holds the issue port one cycle per access (registers
                  heldW / left; its warp moves on after the last), atBar (bar: popcount of the waiting bits + 1 against rs2),
-                 EXT_DECODE (amoadd.w shown to CONTROL as lw, its immediate zeroed; bar; mul), sbCheck(amo), warpLane(…, mul)
+                 EXT_DECODE (amoadd.w shown to CONTROL as lw, its immediate zeroed; bar; mul), sbCheck(amo), warpLane(…, mul).
+                 Chapter 31: warpCore(…, { host }): launch (warp 0 again at PC 0, every lane on: a dispatch) and a spare read port
+                 into the data memory (xa → xq; lanePortMemory / memPipe xport). A one-warp core keeps its unused wspawn decode
+                 (chapter 28 quotes a warp as nands(2) − nands(1)). The router takes minutes on lanePortMemory(≥ 6, …): the
+                 registry-wide schematic tests never build one (tests/gfxpipe.test.ts checks chapter 31's levels above it)
   warpmem.ts     chapter 29's memory: serveLanes / accessesOf (the access rule, also the timing model's), accessUnit(n)
                  (leader's 16-byte line; per bank the lowest lane picks the row; amoadd.w the leader alone), quadMemory(k,
                  banked) (4 columns: one row = a line, or a row per bank), lsuMemory (the pipeline: shared accesses enter
@@ -226,6 +230,10 @@ src/lib/       the component library (registered in `registry` via define())
                  screen), BLEND332, ROP (depth buffer, test, blend, clear), pixelBuffer (4 byte banks of bigRam), frameBuffers
                  (front / back by address muxes), SCAN_OUT (a word a cycle, vsync, flip at vsync or at once), displayTop, GPU30,
                  GPU30Z (the scenes' tops)
+  gfxpipe.ts     chapter 31: CMD_UNIT (one flip-flop a state, CU_STATES / cuState: launch the kernel on the next frame and
+                 clear, read the count, per triangle its word and three vertices on the core's spare port, go, wait; swap, wait
+                 for the flip and the kernel, the other vertex buffer), gpu31(mesh) (one-warp core with mul and host port,
+                 the command unit, rasterizer(true), ROP, frameBuffers, SCAN_OUT; same instance names as GPU30Z)
   builder.ts     Builder: column-by-column netlist builder for blocks read by drilling in (fpu, fppipe, coding, divide)
   coding.ts      magComparator(n, signed), priorityEncoder(n), encoder(n), demux(k, w), popcount(n), absValue(n),
                  parity(n), hammingEnc/Dec(k) (SEC-DED, with TS reference models), eccChannel(k)
@@ -270,7 +278,9 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                and the tiling chart (plain against tiled matmul over globalEvery);
                screen.ts: chapter 30 (the screen panel: what the gate-level scan-out sent, or the back frame from the memory
                leaves with the walk's tile; Run on a 12 ms frame budget or a cycles/s cap, Draw, Swap, vsync wait, draw scripts;
-               the edge-function explorer);
+               the edge-function explorer; ScanCapture: what the scan-out sent, backFrame); gfxpipe.ts: chapter 31 (pipelineScene:
+               gpu31 on the cycle engine; the panel: screen, frames per second, the last frame's timeline from FrameRecorder, the
+               vertex kernel in lock-step with WarpISS (launch()), every frame against framePicture; costWidget: PIPE_COSTS);
                insthw.ts maps an instruction to the units it uses (and pipeline stage units); fsmpanel.ts: a live state
                diagram (view/fsmdiagram.ts) over a scene (current state, last / next arc, trail, ribbon; arc hover lights
                its gates), used by controllerPanel's Diagram view and chapter 9's state machine; the codex draws fsmOf(lib)
@@ -487,8 +497,13 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  Step, Slow (instructions per second), Reset, Edit program; the multi-core view),
                  opened by itself for a complete CPU; CPU props section
 src/gfx/       raster16.ts: the campaign's (7-bit vertices, 32 × 32, RGB565; Edge16 / Walk16 models, rasterize16 with the
-               19-cycle set-up, draw16, rgb565); raster.ts: the rasterizer's reference model (setup, rasterize: pixel writes with their cycles, zPlane / zAt /
-               zStore, blend332, RefFrame: a framebuffer and depth buffer drawn as the hardware does; Z_WALK_START, CLEAR_CYCLES)
+               19-cycle set-up, draw16, rgb565); raster.ts: the rasterizer's reference model (setup, rasterize: pixel writes
+               with their cycles, zPlane / zAt / zStore, blend332, RefFrame: a framebuffer and depth buffer drawn as the
+               hardware does; Z_WALK_START, CLEAR_CYCLES);
+               pipeline.ts: chapter 31's reference (frameOps / framePicture: frame f of a mesh), FrameRecorder (a frame's spans per
+               unit and its cycles by phase, from one sample a cycle), PIPE_COSTS (measured, pinned by tests/gfxpipe.test.ts).
+               The kernels and meshes are riscv/gfxprograms.ts (16.16 rotation with mul, vertex buffers f mod 2, the memory map;
+               SOFT_CLEAR / SOFT_TRIANGLE: the same frame in software on four warps)
 src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/CAMPAIGN.md). DOM-free:
   types.ts       CampaignNode (act, kind lesson / drill / build / program / core, requires, why, tips, codex,
                  unlocks: library ids or `prefix*` later levels may place, anatomy blocks, base challenge, par, soon)
@@ -691,6 +706,9 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
   delay (`SchematicView.flowMs`); the simulation's timing is unchanged.
 - The Timing panel only records nets of the scene's own simulation (`ctx.sim === stage.sim`);
   sub-simulations (an opened NAND, the ROM) cannot be probed. `Scene.analyzer` opens it.
+- `Scene.engine: 'cycle'` runs a scene on DualSim with the cycle engine preferred (chapter 31: 413 594 leaves): settled
+  values only, so the timing and probe buttons are hidden (the analyzer's trace listener would pin it to GateSim) and
+  the inspector has no power estimate; stepping and slow-motion edges still go through GateSim.
 
 ### Sandbox editor
 

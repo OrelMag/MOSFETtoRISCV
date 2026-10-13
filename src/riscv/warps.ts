@@ -55,6 +55,16 @@ export class WarpISS {
     this.waiting = this.warps.map(() => false);
   }
 
+  /** A dispatch (chapter 31's command unit, every warp done): warp 0 starts again at PC 0 with every lane active. */
+  launch(): void {
+    const w = this.warps[0];
+    w.pc = 0;
+    w.mask = 2 ** this.n - 1;
+    w.stack = [];
+    w.halted = false;
+    this.active[0] = true;
+  }
+
   /** Started and not finished (it may be waiting at the barrier). */
   alive(w: number): boolean {
     return this.active[w] && !this.warps[w].halted;

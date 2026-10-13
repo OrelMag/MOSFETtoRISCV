@@ -2,6 +2,7 @@
 // that can drill into any instance, with input controls, clock, propagation animation and
 // the inspector. Chapters and the workbench are thin wrappers around it.
 
+import { DualSim } from '../sim/dualsim';
 import { flatten, type HierNode } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import { needsSwitchLevel } from '../sim/harness';
@@ -40,6 +41,12 @@ export interface Scene {
   analyzer?: boolean;
   /** false: the clock stays still on load whatever settings.autoClock says (an exercise counted in Pulses from the start). */
   autoClock?: boolean;
+  /**
+   * 'cycle': settle on the cycle engine (DualSim, sim/dualsim.ts): the same values after every clock edge, many times
+   * faster on a design of hundreds of thousands of gates, but no gate-delay time, so no probes or timing diagram.
+   * Stepping and slow-motion edges still run on GateSim.
+   */
+  engine?: 'cycle';
 }
 
 export interface Widget {
@@ -286,7 +293,8 @@ export class Stage {
     // The root is always its structure, even one simulated as a lookup elsewhere (a large RAM opened
     // in the workbench); such parts below it stay leaves and open onto their own sub-simulation.
     const design = flatten(scene.root, { mode: level, expand: (d, n) => n.parent === null || !d.preferBehavior });
-    const sim: Sim = level === 'switch' ? new SwitchSim(design) : new GateSim(design);
+    const sim: Sim = level === 'switch' ? new SwitchSim(design) : scene.engine === 'cycle' ? new DualSim(design) : new GateSim(design);
+    if (sim instanceof DualSim) sim.preferFast = true;
     for (const [k, v] of Object.entries(scene.inputs ?? {})) sim.setInput(k, v);
     sim.reset(scene.powerOn ?? 'zero');
     sim.settle();
@@ -636,7 +644,8 @@ export class Stage {
 
   private initAnalyzer(): void {
     const sim = this.sim!;
-    const gate = sim.kind === 'gate';
+    // the analyzer listens to every change with its time: on a DualSim that would keep it on GateSim
+    const gate = sim.kind === 'gate' && !(sim instanceof DualSim);
     this.timingBtn.hidden = !gate;
     this.probeBtn.hidden = !gate;
     if (!gate) {
@@ -663,7 +672,7 @@ export class Stage {
   }
 
   private setProbeMode(on: boolean): void {
-    if (on && this.sim?.kind !== 'gate') return;
+    if (on && (this.sim?.kind !== 'gate' || this.sim instanceof DualSim)) return;
     this.probeMode = on;
     this.probeBtn.classList.toggle('on', on);
     this.canvas.classList.toggle('probing', on);
