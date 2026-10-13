@@ -1,11 +1,12 @@
 import { costWidget, pipelineScene } from '../widgets/gfxpipe';
+import { drawScene } from '../widgets/drawpad';
 import { depthScene, displayScene, edgeWidget, gpuScene } from '../widgets/screen';
 import { warpCoreScene } from '../widgets/warps';
 import type { Chapter } from './types';
 
 export const chPixels: Chapter = {
   id: 'pixels', num: 30, title: 'Pixels and triangles', level: 'Throughput',
-  blurb: 'A framebuffer scanned out to the screen, double buffering and vsync; edge functions in fixed point, a rasterizer that walks a triangle in tiles, one pixel a cycle; a depth buffer and blending.',
+  blurb: 'A framebuffer scanned out to the screen, double buffering and vsync; edge functions in fixed point, a rasterizer that walks a triangle in tiles, one pixel a cycle; a depth buffer and blending; your own drawing, cut into triangles.',
   steps: [
     {
       title: 'A frame in memory',
@@ -113,6 +114,36 @@ export const chPixels: Chapter = {
         kind: 'quiz', question: 'Why are translucent surfaces drawn after the opaque ones, back to front?',
         options: ['Blending needs the depth buffer cleared', 'Each blend mixes with what is already in the frame, so what is behind must be there first', 'Translucent pixels are faster to draw', 'The top-left rule requires it'], answer: 1,
         explain: 'out = src·α + dst·(1 − α) reads dst: the surface behind must already be in the frame. Drawn the other way round, the far surface would be mixed over the near one.',
+      },
+    },
+    {
+      title: 'Your own picture',
+      body: `
+        <p>The rasterizer draws triangles and nothing else, so everything else is cut into triangles before it reaches the GPU, by the driver or a
+        tessellation stage. The pad does it in TypeScript, the way a driver would:</p>
+        <ul>
+          <li><strong>Polygon</strong>: <strong>ear clipping</strong>. A convex corner whose triangle holds no other corner is an ear; cut it off and
+          repeat. n corners give n − 2 triangles, O(n²) work. An outline that crosses itself runs out of ears, and the rest is fanned.</li>
+          <li><strong>Brush</strong>: the path is thinned (Ramer–Douglas–Peucker, half a pixel), then each point is pushed out both ways along its
+          <strong>mitre</strong>, the bisector of its two segments' normals. Neighbouring segments share their edges: a triangle strip, two triangles a
+          segment.</li>
+          <li><strong>Triangle</strong>: sent as it is. Clicked counter-clockwise it is a back face, so the pad turns it round, unless you tick "keep my
+          winding".</li>
+        </ul>
+        <p>Each shape gets a depth of its own, nearer than every shape before it, and the depth test is on. Shapes cover each other in the order they were
+        drawn. Where two triangles of one shape overlap (a stroke crossing itself, a fanned outline), the second fails "nearer", so the pixel is blended
+        once: a translucent stroke has no darker knots where it crosses itself.</p>
+        <p>Cost: the house is 7 shapes, 25 triangles and 2 136 pixel writes, 6 453 cycles after the 4 437-cycle clear. Every triangle spends 85 cycles before
+        its first tile, mostly on depth's division: 2 125 of the 6 453 here. A scribble of short segments is almost all set-up. That is why a GPU has
+        several set-up units, and why meshes are not cut finer than the pixels need. The scene runs on the cycle engine, and the screen is compared
+        pixel for pixel with the reference rasterizer's picture of the same triangles.</p>
+        <div class="try">Draw something, then Send to the GPU; choose "Back frame" in the screen panel to watch the triangles land. Tick "show triangles"
+        to see what was sent. Then tick "keep my winding" and click a triangle counter-clockwise.</div>`,
+      scene: drawScene,
+      challenge: {
+        kind: 'quiz', question: 'You draw a polygon with 12 corners. How many triangles does the rasterizer receive, and what does each one cost before its first pixel?',
+        options: ['12 triangles, nothing: set-up is shared', '10 triangles, 85 cycles each', '10 triangles, 8 cycles each', '1 polygon, 85 cycles'], answer: 1,
+        explain: 'Ear clipping turns n corners into n − 2 triangles, and each is a separate draw for the rasterizer: its own set-up, here 85 cycles with the depth division, before the first tile test.',
       },
     },
   ],

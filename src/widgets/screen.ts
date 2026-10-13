@@ -72,7 +72,7 @@ export function gpuScene(preset = 'large', highlight: string[] = ['rast']): Scen
 /** A sequence of draws the panel plays (each waits for the rasterizer), then a swap. */
 export interface DrawScript { id: string; title: string; ops: DrawOp[] }
 
-const CLEAR: DrawOp = { clr: true, v: [[0, 0], [0, 0], [0, 0]], col: 0x25 };
+export const CLEAR: DrawOp = { clr: true, v: [[0, 0], [0, 0], [0, 0]], col: 0x25 };
 /** Two triangles that cross in depth: red is near at the top, far at the bottom; green the other way round. */
 const RED: DrawOp = { v: [[20, 20], [240, 60], [40, 230]], z: [20, 20, 220], col: 0xe0, zt: true };
 const GREEN: DrawOp = { v: [[230, 20], [200, 240], [10, 120]], z: [220, 60, 30], col: 0x1c, zt: true };
@@ -90,7 +90,7 @@ export const BLEND_SCRIPTS: DrawScript[] = [
   { id: 'br', title: 'Clear, blue at 3/8, then red', ops: [CLEAR, BLUE, OPAQUE_RED] },
 ];
 
-const opInputs = (op: DrawOp): Record<string, number> => Object.fromEntries([
+export const opInputs = (op: DrawOp): Record<string, number> => Object.fromEntries([
   ...VERTEX_PINS.map((p, k) => [p, op.v[k >> 1][k & 1]]), ['col', op.col],
   ['z0', op.z?.[0] ?? 0], ['z1', op.z?.[1] ?? 0], ['z2', op.z?.[2] ?? 0], ['a', op.a ?? 7], ['zt', op.zt ? 1 : 0], ['clr', op.clr ? 1 : 0]]);
 
@@ -105,7 +105,14 @@ export function depthScene(kind: 'depth' | 'blend'): Scene {
   };
 }
 
-interface PanelOpts { gpu: boolean; scripts?: DrawScript[] }
+/** How another panel (the drawing pad) hands the screen panel its draws. */
+export interface DrawLink {
+  /** Set by the screen panel: draw these one after the other into the back frame, swap, and run until a whole frame
+   * of the picture has been sent; then `done` gets what the screen showed and the cycles from the first go to the swap. */
+  play?: (ops: DrawOp[], done?: (shown: Uint8Array, cycles: number) => void) => void;
+}
+
+export interface PanelOpts { gpu: boolean; scripts?: DrawScript[]; link?: DrawLink }
 
 /**
  * What the screen shows: the last frame the scan-out sent (RGB332) and which pixels it has sent at all, sampled at
@@ -202,7 +209,7 @@ export function backFrame(sim: Sim): Uint8Array | null {
   return out;
 }
 
-function screenPanel(opts: PanelOpts): ScenePanel {
+export function screenPanel(opts: PanelOpts): ScenePanel {
   return (stage: Stage): Widget => {
     let view: 'screen' | 'back' = 'screen';
     let running: number | null = null, rate = 0;
@@ -226,20 +233,39 @@ function screenPanel(opts: PanelOpts): ScenePanel {
     /** Draws still to start, and a swap after them. */
     let queue: DrawOp[] = [], swapAfter = false;
     const busyNow = () => { const sim = stage.sim; return !!sim && sim.design.root.ports.busy !== undefined && val(sim, sim.design.root.ports.busy) === 1; };
-    const pump = () => {
+    /** Ports raised for one cycle by feed, lowered before the next. */
+    let pulsed: string[] = [];
+    /** A play from the link: when it started, its draw cycles once swapped, the flip and the frame sent after it. */
+    let job: { start: number; drawn?: number; f0: number; sent: number; done?: (shown: Uint8Array, cycles: number) => void } | null = null;
+    /**
+     * Before every cycle of a run: start the next draw when the rasterizer is idle, the swap after the last. Straight on
+     * the simulation, so a draw costs no checkpoint and no repaint and the next one starts in the cycle busy falls.
+     */
+    const feed = () => {
+      const sim = stage.sim;
+      if (!sim) return;
+      if (pulsed.length) { for (const p of pulsed) sim.setInput(p, 0); pulsed = []; sim.settle(); }
       if (busyNow()) return;
       const op = queue.shift();
       if (op) {
-        stage.setInputs({ ...opInputs(op), go: 1 });
-        stage.runCycles(1);
-        stage.setInput('go', 0);
+        for (const [k, v] of Object.entries({ ...opInputs(op), go: 1 })) sim.setInput(k, v);
+        pulsed = ['go'];
       } else if (swapAfter) {
         swapAfter = false;
-        pulse('swap');
-      }
+        if (job) job.drawn = stage.cycles - job.start;
+        sim.setInput('swap', 1);
+        pulsed = ['swap'];
+      } else return;
+      sim.settle();
     };
-    const pending = () => (queue.length > 0 || swapAfter) && !busyNow();
-    stage.resetHooks.add(() => { queue = []; swapAfter = false; });
+    const drawing = () => queue.length > 0 || swapAfter || pulsed.length > 0 || busyNow();
+    /** The job's picture is on the screen: hand it over. */
+    const checkJob = () => {
+      if (!job || job.drawn === undefined) return;
+      if (job.sent < 0 && front() !== job.f0) job.sent = cap0.frames;
+      if (job.sent >= 0 && cap0.frames > job.sent) { const j = job; job = null; j.done?.(cap0.shown.slice(), j.drawn!); }
+    };
+    stage.resetHooks.add(() => { queue = []; swapAfter = false; pulsed = []; job = null; });
     const runFor = (until: () => boolean) => {
       if (running) return stop();
       stage.checkpoint();
@@ -255,8 +281,7 @@ function screenPanel(opts: PanelOpts): ScenePanel {
           owed -= want;
         }
         last = t0;
-        if (queue.length || swapAfter) pump();
-        const n = want > 0 ? stage.runCycles(want, () => until() || pending() || performance.now() > deadline) : 0;
+        const n = want > 0 ? stage.runCycles(want, () => { feed(); checkJob(); return until() || performance.now() > deadline; }) : 0;
         const dt = performance.now() - t0;
         if (cap) rate = cap;
         else if (n > 0 && dt > 0) rate = Math.round((n * 1000) / Math.max(dt, 16.7));
@@ -294,14 +319,23 @@ function screenPanel(opts: PanelOpts): ScenePanel {
     const resetSel = h('select', { class: 'gfx-reset', 'aria-label': 'reset', title: 'reset options' }, h('option', { value: '' }, 'Reset…'),
       h('option', { value: 'power' }, opts.gpu ? 'Power-cycle: both frames blank' : 'Power-cycle: back to the first frame'),
       h('option', { value: 'forget' }, 'Forget what the screen showed'),
-      ...(opts.scripts ? [h('option', { value: 'clear' }, 'Clear the back frame')] : [])) as HTMLSelectElement;
+      ...(opts.scripts || opts.link ? [h('option', { value: 'clear' }, 'Clear the back frame')] : [])) as HTMLSelectElement;
     resetSel.addEventListener('change', () => {
       const k = resetSel.value;
       resetSel.value = '';
       if (k === 'power') stage.powerCycle();
       else if (k === 'forget') { cap0.forget(); paint(); }
-      else if (k === 'clear') { queue = [CLEAR]; swapAfter = false; if (!running) runFor(() => !queue.length && !busyNow()); }
+      else if (k === 'clear') { queue = [CLEAR]; swapAfter = false; job = null; if (!running) runFor(() => !drawing()); }
     });
+    if (opts.link) {
+      opts.link.play = (ops, done) => {
+        stop();
+        queue = [...ops];
+        swapAfter = true;
+        job = { start: stage.cycles, f0: front(), sent: -1, done };
+        runFor(() => job === null);
+      };
+    }
 
     const controls: HTMLElement[] = [runBtn, frameBtn, swapBtn, resetSel, h('label', { class: 'gfx-check', title: 'flip only at vsync, between two frames' }, sync, 'wait for vsync')];
     let triSel: HTMLSelectElement | null = null;
@@ -315,7 +349,7 @@ function screenPanel(opts: PanelOpts): ScenePanel {
         if (!running) runFor(() => false);
       });
       controls.splice(2, 1, playBtn);
-    } else if (opts.gpu) {
+    } else if (opts.gpu && !opts.link) {
       const drawBtn = h('button', { class: 'btn sm', title: 'start the rasterizer on the triangle at its inputs' }, 'Draw');
       drawBtn.addEventListener('click', () => {
         pulse('go');
@@ -352,8 +386,9 @@ function screenPanel(opts: PanelOpts): ScenePanel {
         if (view === 'screen' && cap0.blank()) {
           cap0.note(cv, busy || queue.length ? ['The front frame is blank.', 'The rasterizer is drawing', 'into the back frame.']
             : !backBlank ? ['The front frame is blank.', 'The back frame holds a picture:', 'Swap to show it.']
+            : opts.link ? ['The front frame is blank.', 'Draw on the pad, then', 'Send to the GPU.']
             : opts.scripts ? ['The front frame is blank.', 'Draw these: the triangles, then a swap.'] : ['The front frame is blank.', 'Draw, then Swap.']);
-        } else if (view === 'back' && backBlank && !busy) cap0.note(cv, ['The back frame is blank.', opts.scripts ? 'Draw these to fill it.' : 'Draw to fill it.']);
+        } else if (view === 'back' && backBlank && !busy) cap0.note(cv, ['The back frame is blank.', opts.link ? 'Send a drawing to fill it.' : opts.scripts ? 'Draw these to fill it.' : 'Draw to fill it.']);
       }
       status.replaceChildren(
         h('span', null, `cycle ${stage.cycles}`),
@@ -370,7 +405,9 @@ function screenPanel(opts: PanelOpts): ScenePanel {
         h('div', { class: 'param-row', style: 'margin-bottom:6px' }, ...(triSel ? [triSel] : []), ...(opts.gpu ? [viewSel] : []), speed),
         h('div', { class: 'gfx-screen-wrap' }, cv),
         h('div', { class: 'param-row', style: 'margin-top:6px' }, ...controls), status,
-        h('p', { class: 'cpu-sec-hint' }, opts.scripts
+        h('p', { class: 'cpu-sec-hint' }, opts.link
+          ? 'Send to the GPU clears the back frame, draws your triangles in turn, each starting the cycle the last one ends, then swaps. Choose "Back frame" to watch them land.'
+          : opts.scripts
           ? 'Draw these clears the back frame and draws the triangles in turn, each waiting for the rasterizer, then swaps. Choose "Back frame" to watch them land.'
           : opts.gpu
           ? 'Draw starts the rasterizer on the triangle at its inputs; it writes into the back frame (choose "Back frame" to watch). Swap shows it.'
