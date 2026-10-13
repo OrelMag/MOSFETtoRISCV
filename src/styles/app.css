@@ -648,8 +648,9 @@ svg.schematic .dot.fld { fill: var(--fc); }
 .rung .n { font: 700 12px var(--font-mono); color: var(--muted); width: 22px; }
 .rung .t { font-weight: 600; flex: 1; }
 .rung .c { font: 12px var(--font-mono); color: var(--muted); }
-.rung.done { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
-.rung.soon { opacity: 0.55; border-style: dashed; }
+a.rung { color: inherit; text-decoration: none; border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); transition: border-color 0.12s, background 0.12s; }
+a.rung:hover, a.rung:focus-visible { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+a.rung:hover .n, a.rung:focus-visible .n { color: var(--accent); }
 .section-title { font-size: 22px; font-weight: 750; letter-spacing: -0.02em; margin: 0 0 6px; }
 .section-sub { color: var(--text-2); margin: 0 0 20px; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; margin-bottom: 44px; }
@@ -740,9 +741,10 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 
 /* ---------- workbench: Components / Statistics tabs, the statistics page ---------- */
 .bench-tabs { display: flex; gap: 2px; padding: 8px 12px 0; border-bottom: 1px solid var(--border); }
-.bench-tab { padding: 6px 10px; color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 13.5px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.bench-tab { padding: 6px 8px; white-space: nowrap; color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 13.5px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .bench-tab:hover { color: var(--text); }
 .bench-tab.on { color: var(--accent); border-color: var(--accent); }
+.widget .suggest { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .hw-page { height: 100%; overflow: auto; background: var(--bg); }
 .hw-inner { max-width: 1280px; margin: 0 auto; padding: 4px 20px 40px; }
 .hw-inner > .bench-tabs { padding: 8px 0 0; margin-bottom: 16px; }

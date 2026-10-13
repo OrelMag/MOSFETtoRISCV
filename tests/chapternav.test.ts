@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { chapterById, chapters } from '../src/chapters';
+import { LADDER } from '../src/widgets/journey';
 import { navEntries, plainText, searchNav, snippet, type NavChapter } from '../src/ui/chapternav';
 
 const book: NavChapter[] = [
@@ -57,5 +58,16 @@ describe('chapter navigation', () => {
   it('cuts a snippet around a body match', () => {
     const e = navEntries(book).find((x) => x.title === 'Write-back')!;
     expect(snippet(e, 'eviction')).toContain('eviction');
+  });
+});
+
+describe('the journey ladder', () => {
+  it('links every rung to a real chapter, numbered as that chapter, in descending order', () => {
+    for (const r of LADDER) expect(chapterById(r.chapter)?.num, r.title).toBe(r.num);
+    const nums = LADDER.map((r) => r.num);
+    expect(nums).toEqual([...nums].sort((a, b) => b - a));
+    // The top rung opens the last track (the chapters sharing the last chapter's level): the ladder reaches the end.
+    const last = chapters[chapters.length - 1];
+    expect(LADDER[0].num).toBe(chapters.find((c) => c.level === last.level)?.num);
   });
 });
