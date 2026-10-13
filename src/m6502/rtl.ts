@@ -53,7 +53,8 @@ export class Rtl6502 {
 
   /** Begin the reset sequence: as if RES was held low and released before the next cycle. */
   reset(): void {
-    this.t = 1; this.ir = 0; this.intg = true; this.resetting = true; this.vec = 0xfc;
+    // while RES is low the chip runs fetch cycles with a NOP in IR and PC held; this is its release
+    this.t = 1; this.ir = 0xea; this.intg = true; this.resetting = true; this.vec = 0xfc;
     this.wpend = 0; this.br = BR_NONE; this.pending = false; this.nmiSig = false; this.irqSig = false;
   }
 
@@ -67,16 +68,13 @@ export class Rtl6502 {
 
     // ---- random logic: the cases the table leaves open ------------------------------------------
     let pcInc = on(S.PC_INC), addAdl = on(S.ADD_ADL), pchAdh = on(S.PCH_ADH), pclAdl = on(S.PCL_ADL);
-    let addSb = on(S.ADD_SB), sbAdh = on(S.SB_ADH), adlPcl = on(S.ADL_PCL), adhPch = on(S.ADH_PCH);
-    let ablLd = on(S.ADL_ABL), abhLd = on(S.ADH_ABH), dlAdh = on(S.DL_ADH), sbAi = on(S.SB_AI), zeroAi = on(S.ZERO_AI), cin1 = on(S.CIN_1);
+    let addSb = on(S.ADD_SB), sbAdh = on(S.SB_ADH);
+    const adlPcl = on(S.ADL_PCL), adhPch = on(S.ADH_PCH);
+    const ablLd = on(S.ADL_ABL), abhLd = on(S.ADH_ABH);
+    let dlAdh = on(S.DL_ADH), sbAi = on(S.SB_AI), zeroAi = on(S.ZERO_AI), cin1 = on(S.CIN_1);
     if (on(S.BR_T1)) {
       // the fetch after a branch: at the target computed in ADD (and its fixed high byte)
       if (this.br === BR_SAME) { addAdl = true; pchAdh = true; } else if (this.br === BR_CROSS) { pclAdl = true; addSb = true; sbAdh = true; } else { pclAdl = true; pchAdh = true; }
-      adlPcl = adhPch = pcInc = ablLd = abhLd = true;
-    }
-    if (t === 1 && this.resetting) {
-      // a reset's first cycle reads at PC, whatever the last instruction was
-      addAdl = dlAdh = addSb = sbAdh = false; pclAdl = pchAdh = true;
     }
     if (on(S.BR_FIX)) {
       // PCH ± 1: a negative offset adds SB's precharged $FF, a positive one adds 0 with carry
@@ -160,7 +158,7 @@ export class Rtl6502 {
     }
     if (on(S.END_NOCROSS_BR)) this.brNeg = db >> 7;
     const crossBr = on(S.END_NOCROSS_BR) && (carry ^ this.brNeg) === 1;
-    const end = on(S.END) || (on(S.END_NOCROSS) && !this.acr) || (on(S.END_NOTTAKEN) && !taken) ||
+    const end = on(S.END) || on(S.END_INT) || (on(S.END_NOCROSS) && !this.acr) || (on(S.END_NOTTAKEN) && !taken) ||
       (on(S.END_NOCROSS_BR) && !crossBr);
     // the branch's next fetch
     let br = this.br;
@@ -168,9 +166,9 @@ export class Rtl6502 {
     if (on(S.END_NOCROSS_BR)) br = crossBr ? BR_CROSS : BR_SAME;
     // polling: in an instruction's last cycle (a taken branch within the page keeps its earlier poll;
     // the interrupt sequence's own last cycle does not poll), with the signals sampled a cycle ago
-    const poll = (on(S.END) && !(this.ir === 0 && t === 7)) || on(S.END_NOCROSS) || on(S.END_NOTTAKEN) || on(S.BR_FIX);
+    const poll = on(S.END) || on(S.END_NOCROSS) || on(S.END_NOTTAKEN) || on(S.BR_FIX);
     const pending = poll ? this.nmiSig || (this.irqSig && fI === 0) : this.pending;
-    if (on(S.P_DB) && this.ir === 0 && !this.resetting) {
+    if (on(S.VEC_SEL) && !this.resetting) {
       // the P push picks the vector: an NMI sampled by now takes over (a BRK's or an IRQ's too)
       this.vec = this.nmiSig ? 0xfa : 0xfe;
       this.nmiSig = false;
@@ -203,7 +201,7 @@ export class Rtl6502 {
     this.pending = pending;
     if (end) {
       // the next cycle fetches; an interrupt sequence replaces the instruction
-      if (this.ir === 0 && t === 7) { this.intg = false; this.resetting = false; }
+      if (on(S.END_INT)) { this.intg = false; this.resetting = false; }
       if (pending) { this.intg = true; this.pending = false; }
       this.t = 1;
     } else this.t = t + 1 > MAX_T ? 1 : t + 1;

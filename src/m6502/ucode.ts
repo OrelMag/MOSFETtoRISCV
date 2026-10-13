@@ -40,6 +40,8 @@ export const SIGNALS = [
   'W_A', 'W_X', 'W_Y',
   // sequencing: last cycle, conditional last cycles, the branch's fetch
   'END', 'END_NOCROSS', 'END_NOTTAKEN', 'END_NOCROSS_BR', 'BR_T1', 'BR_FIX',
+  // the interrupt sequence: the P push picks the vector, the last cycle ends it without polling
+  'VEC_SEL', 'END_INT',
 ] as const;
 
 export type Sig = (typeof SIGNALS)[number];
@@ -155,9 +157,9 @@ function body(o: OpInfo): Sig[][] {
         return [pcRead(true),
           [...STACK('S_ADL'), 'PCH_DB', 'DB_DOR', 'WRITE', ...DEC_ADL],
           [...STACK('ADD_ADL'), 'PCL_DB', 'DB_DOR', 'WRITE', ...DEC_ADL],
-          [...STACK('ADD_ADL'), 'P_DB', 'DB_DOR', 'WRITE', ...DEC_ADL],
+          [...STACK('ADD_ADL'), 'P_DB', 'DB_DOR', 'WRITE', ...DEC_ADL, 'VEC_SEL'],
           ['VEC_LO', ...AB, 'ADD_SB', 'SB_S', 'I1'],
-          ['VEC_HI', ...AB, ...SAVE_DL, 'END']];
+          ['VEC_HI', ...AB, ...SAVE_DL, 'END_INT']];
       }
       if (m === 'RTI') {
         return [pcRead(false),
@@ -236,7 +238,7 @@ function rowsOf(o: OpInfo): Sig[][] {
   const m = o.mnemonic;
   let t1: Sig[];
   if (m === 'JMP' || m === 'JSR' || m === 'RTI' || m === 'BRK') t1 = [...JUMP];
-  else if (o.mode === 'rel') t1 = ['BR_T1'];
+  else if (o.mode === 'rel') t1 = ['BR_T1', ...AB, 'ADL_PCL', 'ADH_PCH', 'PC_INC'];
   else t1 = [...pcRead(true), 'ADL_PCL', 'ADH_PCH'];
   t1.push(...(o.mode === 'acc' ? accTail(m) : tail(m)));
   return [t1, ...body(o)];
