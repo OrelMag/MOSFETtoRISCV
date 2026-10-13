@@ -137,6 +137,8 @@ export class Editor {
   private status: HTMLElement;
   private toastEl: HTMLElement;
   private tipEl: HTMLElement;
+  /** Shown over a chip with nothing on it: where to start. */
+  private emptyEl: HTMLElement;
   private lastWs: Workspace | null = null;
   /** The view shows a drag in progress (a cancelled drag must be redrawn). */
   private dragDrawn = false;
@@ -175,7 +177,14 @@ export class Editor {
     this.toastEl = h('div', { class: 'sb-toast', role: 'status', 'aria-live': 'polite' });
     this.tipEl = h('div', { class: 'wire-tip' });
     const overlay = h('div', { class: 'sb-overlay' });
-    this.canvas.append(overlay, this.toastEl, this.tipEl,
+    // A toolbar action, shown when one is registered (the page imports the plugins after the editor).
+    const act = (id: string, label: string, ic: string) => h('button', { class: 'btn sm', 'data-for': id,
+      onclick: () => this.actionsEl.querySelector<HTMLElement>(`[data-action=${id}]`)?.click() }, icon(ic, 14), label);
+    this.emptyEl = h('div', { class: 'sb-empty-chip', hidden: true },
+      h('h3', null, 'An empty chip'),
+      h('p', null, 'Drag a part from the palette: an Input, a NAND and an Output make a first circuit. Wire them by dragging from pin to pin.'),
+      h('div', { class: 'row' }, act('examples', 'Examples', 'book'), act('challenges', 'Challenges', 'flag'), act('puzzles', 'Puzzles', 'puzzle')));
+    this.canvas.append(overlay, this.emptyEl, this.toastEl, this.tipEl,
       h('div', { class: 'hint-badge sb-hint' }, 'drag from a pin to wire · L pointer · wheel zoom · Space+drag pan · ? shortcuts'));
     this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }), top: h('div', { class: 'sb-top-slot' }) };
 
@@ -462,6 +471,8 @@ export class Editor {
     }
     this.sel = prune(this.sel, doc);
     this.view.render(doc, this.defOf);
+    this.emptyEl.hidden = !!this.level || !!(doc.pins.length || doc.parts.length || doc.wires.length || doc.labels.length || doc.comments?.length);
+    if (!this.emptyEl.hidden) for (const b of this.emptyEl.querySelectorAll<HTMLElement>('[data-for]')) b.hidden = !actions.some((a) => a.id === b.dataset.for);
     if (switched && this.fitted) this.fitView();
     this.view.setSelection(this.sel);
     for (const [k, v] of this.sims) if (!ws.chips[k]) { v.destroy(); this.sims.delete(k); }

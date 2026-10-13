@@ -158,6 +158,18 @@
 .sb-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 .sb-overlay > * { pointer-events: auto; }
 .sb-hint { left: 12px; bottom: 8px; }
+/* An empty chip: where to start, centred; the canvas under it still takes drops and clicks. */
+.sb-empty-chip {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; pointer-events: none;
+  width: min(380px, calc(100% - 32px)); text-align: center; color: var(--text-2);
+  padding: 20px 22px; border-radius: 14px; border: 1px dashed var(--border-strong, var(--border));
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+.sb-empty-chip[hidden] { display: none; }
+.sb-empty-chip h3 { margin: 0 0 6px; font-size: 16px; color: var(--text); }
+.sb-empty-chip p { margin: 0 0 14px; font-size: 13.5px; line-height: 1.5; }
+.sb-empty-chip .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.sb-empty-chip button { pointer-events: auto; }
 .ed-grid-major { fill: var(--ed-grid-major); }
 .sb-controls { gap: 8px; }
 .sb-controls .seg button { padding: 3px 9px; }
