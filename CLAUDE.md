@@ -296,7 +296,11 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                panels slim to 240 px on a narrow stage); gfxpipe.ts: chapter 31 (pipelineScene:
                gpu31 on the cycle engine; the panel: screen, frames per second, the last frame's timeline from FrameRecorder, the
                vertex kernel in lock-step with WarpISS (launch()), every frame against framePicture; costWidget: PIPE_COSTS);
-               insthw.ts maps an instruction to the units it uses (and pipeline stage units); fsmpanel.ts: a live state
+               insthw.ts maps an instruction to the units it uses (and pipeline stage units; laneUse(word, core, at): the lane /
+               warp cores' instances, tests/insthw.test.ts: every kernel instruction, every warp count); slowctl.ts: what the CPU
+               panel and the Warp panels share: slowControls (Slow / Back / Step, gate · cycle · instr levels, the rate; `retired()`
+               from an edge hook ends an instr step), markInstr / clearInstr / showInstrUse (the units lit, the field wires
+               coloured), frameRun (a Run to halt in a 12 ms frame budget, the cycle engine prepared first); fsmpanel.ts: a live state
                diagram (view/fsmdiagram.ts) over a scene (current state, last / next arc, trail, ribbon; arc hover lights
                its gates), used by controllerPanel's Diagram view and chapter 9's state machine; the codex draws fsmOf(lib)
                and the campaign's state-machine level reads the learner's circuit back (editor/fsmui.ts, BuildChallenge.fsm)
@@ -686,6 +690,8 @@ three levels: `gate` (`stage.startEdge()` / `edgeStep()`: a rising edge one gate
 `src/sim/edge.ts`, which `Stage.cycle` also uses), `cycle` (`pulse(flowMs)`) or `instr` (run to the next
 retirement). The highlight then follows execution, and the trace logs `stepEffect(iss.step())` (riscv/trace.ts).
 While `stage.inEdge`, panels must not compare the hardware with the golden model (it steps after the edge).
+The Warp panels (widgets/lanes.ts, warps.ts) have the same listing marks (laneUse) and Slow mode; on the warp core the
+instr level is an issue, and the highlight follows the issuing warp onto its active (or served) lanes.
 **Back** (CPU panel and the stage's bottom bar) undoes a step, a clock cycle, an input change or a whole Run to
 halt: the stage's controls call `stage.checkpoint()` before acting (an unchanged state is not saved twice), panels
 call it before an action made of several (a run, an instruction); `Sim.saveState()` / `restoreState()` copy the
@@ -735,7 +741,8 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
   sub-simulations (an opened NAND, the ROM) cannot be probed. `Scene.analyzer` opens it.
 - `Scene.engine: 'cycle'` runs a scene on DualSim with the cycle engine preferred (chapter 31: 413 594 leaves): settled
   values only, so the timing and probe buttons are hidden (the analyzer's trace listener would pin it to GateSim) and
-  the inspector has no power estimate; stepping and slow-motion edges still go through GateSim.
+  the inspector has no power estimate; stepping and slow-motion edges still go through GateSim. Chapters 26–29's lane and
+  warp core scenes too (laneCoreScene / warpCoreScene; `engine: 'gate'` keeps GateSim; tests/gpu-cycle.test.ts).
 
 ### Sandbox editor
 
