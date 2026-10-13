@@ -31,6 +31,7 @@ export * from './fpu';
 export * from './mpdecode';
 export * from './multicore';
 export * from './lanes';
+export * from './warps';
 export * from './fppipe';
 export * from './rv16';
 export * from './cpu4';

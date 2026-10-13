@@ -16,6 +16,8 @@ export interface WarpsOptions {
   lanes?: number;
   dmemWords?: number;
   imemWords?: number;
+  /** Initial data memory (the kernel's input). */
+  data?: ArrayLike<number>;
 }
 
 export class WarpISS {
@@ -32,6 +34,7 @@ export class WarpISS {
     this.W = opts.warps ?? 4;
     this.n = opts.lanes ?? 4;
     this.dmem = new Uint32Array(opts.dmemWords ?? 64);
+    if (opts.data) this.dmem.set(Array.from(opts.data, (v) => v >>> 0).slice(0, this.dmem.length));
     this.warps = Array.from({ length: this.W }, (_, w) => new SimtISS(program, { lanes: this.n, warp: w, warps: this.W, dmem: this.dmem, imemWords: opts.imemWords }));
     this.active = this.warps.map((_, w) => w === 0);
   }

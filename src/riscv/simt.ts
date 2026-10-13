@@ -52,7 +52,7 @@ export interface WarpStep {
   halted: boolean;
 }
 
-const SIMT_CSR = new Set([CSRS.lane, CSRS.warp, CSRS.nlanes, CSRS.tid, CSRS.tmask, CSRS.nwarps]);
+const SIMT_CSR = new Set([CSRS.lane, CSRS.warp, CSRS.nlanes, CSRS.tid, CSRS.tmask]);
 
 export const popcount = (m: number) => { let c = 0; for (; m; m &= m - 1) c++; return c; };
 
@@ -64,6 +64,8 @@ export class SimtISS {
   /** Warp number, and the warps the core holds. */
   readonly warp: number;
   readonly warps: number;
+  /** nwarps exists on the warp cores only (the lane core of chapters 26–27 does not decode it). */
+  private readonly csrs: Set<number>;
   pc = 0;
   mask: number;
   stack: SimtEntry[] = [];
@@ -83,6 +85,7 @@ export class SimtISS {
     this.mask = this.full;
     this.warp = opts.warp ?? 0;
     this.warps = opts.warps ?? 1;
+    this.csrs = opts.warps === undefined ? SIMT_CSR : new Set([...SIMT_CSR, CSRS.nwarps]);
     const dmemWords = opts.dmem?.length ?? opts.dmemWords ?? 32;
     this.dmem = opts.dmem ?? new Uint32Array(dmemWords);
     this.lanes = Array.from({ length: this.n }, () => {
@@ -160,7 +163,7 @@ export class SimtISS {
         }
         default: break; // wspawn, bar: one warp has nobody to start or wait for (warps.ts runs them)
       }
-    } else if (d.opcode === OPCODES.SYSTEM && d.funct3 === 2 && d.rs1 === 0 && SIMT_CSR.has(csrA)) {
+    } else if (d.opcode === OPCODES.SYSTEM && d.funct3 === 2 && d.rs1 === 0 && this.csrs.has(csrA)) {
       for (let i = 0; i < this.n; i++) {
         if (!this.on(i)) continue;
         const v = csrA === CSRS.lane ? i : csrA === CSRS.warp ? this.warp : csrA === CSRS.nlanes ? this.n : csrA === CSRS.tid ? this.warp * this.n + i : csrA === CSRS.nwarps ? this.warps : mask;
