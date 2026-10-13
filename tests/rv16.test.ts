@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { assemble16, PSEUDO16 } from '../src/riscv/rv16/asm16';
-import { CAUSE, CSR16, decode16, disasm16, hiLo, immU, INSTRS16, MMIO16, sext } from '../src/riscv/rv16/isa16';
+import { CAUSE, CSR16, decode16, disasm16, hiLo, immU, INSTRS16, MMIO16, sext, SIMT_RS1 } from '../src/riscv/rv16/isa16';
 import { Iss16 } from '../src/riscv/rv16/iss16';
 
 const asm = (src: string) => {
@@ -39,7 +39,8 @@ describe('RV16 encoding', () => {
       // Fields the instruction ignores (rd of a store, rs2 of an I-type, …) may differ: compare decodings.
       const d2 = decode16(back.words[0]);
       expect([d2.spec?.name, d2.rd, d2.rs1, d2.rs2, d2.imm, d2.csr].join(), `${w.toString(16)}: ${text}`).toEqual(
-        [d.spec.name, ['S', 'B', 'SYS'].includes(d.spec.fmt) ? d2.rd : d.rd, ['U', 'J', 'SYS'].includes(d.spec.fmt) ? d2.rs1 : d.rs1,
+        [d.spec.name, ['S', 'B', 'SYS', 'SIMT'].includes(d.spec.fmt) ? d2.rd : d.rd,
+          ['U', 'J', 'SYS'].includes(d.spec.fmt) || (d.spec.fmt === 'SIMT' && !SIMT_RS1.has(d.spec.name)) ? d2.rs1 : d.rs1,
           ['R', 'S', 'B', 'CSR'].includes(d.spec.fmt) ? d.rs2 : d2.rs2, d.imm, ['CSR'].includes(d.spec.fmt) ? d.csr : d2.csr].join());
     }
     expect(legal).toBeGreaterThan(40000);
@@ -58,7 +59,7 @@ describe('RV16 encoding', () => {
 
   it('every instruction of the table assembles', () => {
     for (const i of INSTRS16) {
-      const ops = { R: 'x1, x2, x3', SH: 'x1, x2, 3', U: 'x1, 5', B: 'x1, x2, 0', J: 'x1, 0', S: 'x1, 2(x2)', SYS: '', CSR: 'x1, mtvec, x2', I: i.name === 'addi' ? 'x1, x2, -3' : 'x1, 2(x2)' }[i.fmt];
+      const ops = { R: 'x1, x2, x3', SH: 'x1, x2, 3', U: 'x1, 5', B: 'x1, x2, 0', J: 'x1, 0', S: 'x1, 2(x2)', SYS: '', CSR: 'x1, mtvec, x2', SIMT: i.name === 'split' || i.name === 'tmc' ? 'x1' : '', I: i.name === 'addi' ? 'x1, x2, -3' : 'x1, 2(x2)' }[i.fmt];
       const r = assemble16(`${i.name} ${ops}`);
       expect(r.errors, i.name).toEqual([]);
       expect(decode16(r.words[0]).spec?.name, i.name).toBe(i.name);

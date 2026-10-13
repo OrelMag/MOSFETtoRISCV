@@ -36,11 +36,13 @@ export function gradeTable(n: CampaignNode): HTMLElement {
   const np = progress().get(n.id);
   const par = n.par ?? {};
   const keys = Object.keys(par) as Metric[];
+  // A percentage (idle lanes) carries its unit; counts read fine bare, the label names them.
+  const fmt = (k: Metric, v: number) => (METRIC[k].unit === '%' ? `${v} %` : String(v));
   return h('div', { class: 'cp-grade' }, h('h4', null, 'Grading'),
     keys.length
       ? h('table', null, h('tr', null, h('th', null, 'Metric'), h('th', null, 'Par'), h('th', null, 'Your best')),
-        keys.map((k) => h('tr', { title: METRIC[k].hint }, h('td', null, METRIC[k].label), h('td', null, String(par[k])),
-          h('td', { class: np?.best?.[k] !== undefined ? (np.best[k]! <= par[k]! ? 'par' : 'over') : '' }, np?.best?.[k] !== undefined ? String(np.best[k]) : '—'))))
+        keys.map((k) => h('tr', { title: METRIC[k].hint }, h('td', null, METRIC[k].label), h('td', null, fmt(k, par[k]!)),
+          h('td', { class: np?.best?.[k] !== undefined ? (np.best[k]! <= par[k]! ? 'par' : 'over') : '' }, np?.best?.[k] !== undefined ? fmt(k, np.best[k]!) : '—'))))
       : h('p', { class: 'sub' }, 'Passing earns all three stars: nothing to optimise here.'),
     keys.length ? h('p', { class: 'sub' }, '★ passes · ★★ every metric within 1.5 × par · ★★★ every metric at or under par.') : null);
 }

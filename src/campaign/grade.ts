@@ -15,6 +15,7 @@ export const METRIC: Record<Metric, { label: string; unit: string; hint: string 
   cycles: { label: 'Cycles', unit: 'cycles', hint: 'Clock cycles to run the tests' },
   size: { label: 'Size', unit: 'words', hint: 'Program size in instruction words' },
   mistakes: { label: 'Mistakes', unit: 'mistakes', hint: 'Wrong answers and answers shown, before the drill was complete' },
+  idle: { label: 'Idle lanes', unit: '%', hint: 'Lane-steps with the lane switched off, as a share of all lane-steps (100 % − lane utilization), mean over the tests' },
 };
 
 /** A challenge score as measured metrics. */

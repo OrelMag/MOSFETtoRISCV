@@ -288,6 +288,11 @@ describe('continue from your previous core', () => {
     ws = { ...ws, chips: { ...ws.chips, [c3]: { ...core3, id: c3, name: 'Core III' } } };
     expect(startCandidates(yIrq, ws).map((n) => n.id)).toEqual(['c_core3']);
     expect(startCandidates(nodeById('g_and')!, ws)).toEqual([]);
+    // a lane core never starts from a scalar core (other pins); the SIMT core starts from the SIMD core
+    const fin = levelChipId(nodeById('y_final')!), simd = levelChipId(nodeById('k_simd')!);
+    const ws2 = { ...ws, chips: { ...ws.chips, [fin]: { ...core3, id: fin }, [simd]: { ...core3, id: simd } } };
+    expect(startCandidates(nodeById('k_simd')!, ws2)).toEqual([]);
+    expect(startCandidates(nodeById('k_simt')!, ws2).map((n) => n.id)).toEqual(['k_simd']);
     const r = startFrom(ws, levelChallenge(yIrq)!, c3);
     const doc = r.ws.chips[r.chipId];
     expect(r.created).toBe(true);

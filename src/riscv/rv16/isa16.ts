@@ -9,7 +9,7 @@ export const OP16 = {
   BEQ: 8, BNE: 9, BLT: 10, BGE: 11, JAL: 12, JALR: 13, SW: 14, /* 15: LUI (op[3] is an immediate bit) */
 } as const;
 
-export type Fmt16 = 'R' | 'I' | 'SH' | 'U' | 'B' | 'J' | 'S' | 'SYS' | 'CSR';
+export type Fmt16 = 'R' | 'I' | 'SH' | 'U' | 'B' | 'J' | 'S' | 'SYS' | 'CSR' | 'SIMT';
 
 export interface Instr16 {
   name: string;
@@ -18,8 +18,8 @@ export interface Instr16 {
   f3?: number;
   /** SHI: the shift type in imm[5:4]; SYS: the rs2 field. */
   sub?: number;
-  /** In the optional M extension (MD opcode) or the system (CSR / trap) part. */
-  ext?: 'm' | 'system';
+  /** In the optional M extension (MD opcode), the system (CSR / trap) part, or the lane cores' SIMT part. */
+  ext?: 'm' | 'system' | 'simt';
 }
 
 const R = (name: string, op: number, f3: number, ext?: 'm'): Instr16 => ({ name, fmt: 'R', op, f3, ...(ext ? { ext } : {}) });
@@ -39,7 +39,13 @@ export const INSTRS16: Instr16[] = [
   { name: 'mret', fmt: 'SYS', op: 0, f3: 0, sub: 3, ext: 'system' }, { name: 'wfi', fmt: 'SYS', op: 0, f3: 0, sub: 4, ext: 'system' },
   { name: 'csrrw', fmt: 'CSR', op: 0, f3: 1, ext: 'system' }, { name: 'csrrs', fmt: 'CSR', op: 0, f3: 2, ext: 'system' },
   { name: 'csrrc', fmt: 'CSR', op: 0, f3: 3, ext: 'system' },
+  // The lane cores (act 9): SYSTEM's free funct3 values. split and tmc read rs1; every other field is ignored.
+  { name: 'split', fmt: 'SIMT', op: 0, f3: 4, ext: 'simt' }, { name: 'join', fmt: 'SIMT', op: 0, f3: 5, ext: 'simt' },
+  { name: 'tmc', fmt: 'SIMT', op: 0, f3: 6, ext: 'simt' }, { name: 'bar', fmt: 'SIMT', op: 0, f3: 7, ext: 'simt' },
 ];
+
+/** The SIMT instructions that read rs1. */
+export const SIMT_RS1 = new Set(['split', 'tmc']);
 
 export const BY_NAME16 = new Map(INSTRS16.map((i) => [i.name, i]));
 
@@ -54,11 +60,12 @@ export function reg16(s: string): number | null {
   return i >= 0 ? i : null;
 }
 
-export const CSRS16 = ['mstatus', 'mie', 'mip', 'mtvec', 'mepc', 'mcause', 'mscratch'];
-export const CSR16 = { mstatus: 0, mie: 1, mip: 2, mtvec: 3, mepc: 4, mcause: 5, mscratch: 6 } as const;
+export const CSRS16 = ['mstatus', 'mie', 'mip', 'mtvec', 'mepc', 'mcause', 'mscratch', 'tid'];
+export const CSR16 = { mstatus: 0, mie: 1, mip: 2, mtvec: 3, mepc: 4, mcause: 5, mscratch: 6, tid: 7 } as const;
 /**
  * CSR 7 has no register: it reads 0 and ignores writes, in the hardware and the golden model. (A
- * cycle counter would disagree with the golden model on a pipeline, which counts instructions.)
+ * cycle counter would disagree with the golden model on a pipeline, which counts instructions.) On
+ * a lane core it is tid, the thread's number (warp · 4 + lane), so a scalar core is a one-lane warp.
  */
 export const CSR16_UNUSED = 7;
 /** mstatus bits, mie / mip bits, mcause values. */
@@ -109,7 +116,7 @@ export function decode16(w: number): Decoded16 {
   let spec: Instr16 | undefined;
   switch (op) {
     case 0:
-      spec = f.f3 === 0 ? INSTRS16.find((i) => i.fmt === 'SYS' && i.sub === f.rs2) : INSTRS16.find((i) => i.fmt === 'CSR' && i.f3 === f.f3);
+      spec = f.f3 === 0 ? INSTRS16.find((i) => i.fmt === 'SYS' && i.sub === f.rs2) : INSTRS16.find((i) => (i.fmt === 'CSR' || i.fmt === 'SIMT') && i.f3 === f.f3);
       break;
     case 1: case 2: case 3:
       spec = INSTRS16.find((i) => i.fmt === 'R' && i.op === op && i.f3 === f.f3);
@@ -141,6 +148,7 @@ export function disasm16(w: number, pc?: number): string {
     case 'J': return d.rd === 0 && d.imm === 0 ? 'halt' : `jal ${rn(d.rd)}, ${tgt(d.imm)}`;
     case 'S': return `sw ${rn(d.rs2)}, ${d.imm}(${rn(d.rs1)})`;
     case 'SYS': return s.name;
+    case 'SIMT': return SIMT_RS1.has(s.name) ? `${s.name} ${rn(d.rs1)}` : s.name;
     case 'CSR': return `${s.name} ${rn(d.rd)}, ${CSRS16[d.csr] ?? d.csr}, ${rn(d.rs1)}`;
     default:
       if (s.name === 'lw' || s.name === 'jalr') return `${s.name} ${rn(d.rd)}, ${d.imm}(${rn(d.rs1)})`;
@@ -170,6 +178,7 @@ export const encU = (rd: number, imm10: number) => {
 };
 export const encSH = (type: number, rd: number, rs1: number, sh: number) => (type << 14) | (chk(sh, 0, 15, 'shift amount') << 10) | (rs1 << 7) | (rd << 4) | OP16.SHI;
 export const encSYS = (sub: number) => (sub << 10) | OP16.SYSTEM;
+export const encSIMT = (f3: number, rs1: number) => (f3 << 13) | (rs1 << 7) | OP16.SYSTEM;
 export const encCSR = (f3: number, rd: number, csr: number, rs1: number) => (f3 << 13) | (csr << 10) | (rs1 << 7) | (rd << 4) | OP16.SYSTEM;
 
 /** %hi / %lo for li: value = (hi << 6) + sext6(lo). */

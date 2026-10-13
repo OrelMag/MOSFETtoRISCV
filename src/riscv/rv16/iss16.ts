@@ -158,7 +158,8 @@ export class Iss16 {
       } else this.fail(`illegal instruction 0x${instr.toString(16).padStart(4, '0')} at 0x${pc.toString(16)}`);
     };
     try {
-      if (!s || (s.ext === 'm' && !this.opts.m) || (s.ext === 'system' && !this.opts.system)) illegal();
+      // SIMT instructions are the lane cores' (simt16.ts runs them): on a scalar core they are illegal.
+      if (!s || (s.ext === 'm' && !this.opts.m) || (s.ext === 'system' && !this.opts.system) || s.ext === 'simt') illegal();
       else {
         const a = () => this.rd(d.rs1), b = () => this.rd(d.rs2);
         switch (s.name) {

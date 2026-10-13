@@ -199,3 +199,12 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 .cp-pz-regs i { font-style: normal; color: var(--muted); min-width: 30px; }
 .cp-pz-regs small { color: var(--muted); margin-left: auto; }
 .cp-pz-io { font: 12.5px var(--font-mono); margin: 6px 0; }
+/* the warp (kernel puzzles): a column per lane, masked-off lanes dimmed */
+.cp-pz-lanes-wrap { overflow-x: auto; }
+.cp-pz-lanes { border-collapse: separate; border-spacing: 3px; font: 12px var(--font-mono); }
+.cp-pz-lanes th { font-weight: 600; color: var(--muted); text-align: left; padding: 1px 6px; }
+.cp-pz-lanes tr:first-child th { text-align: center; }
+.cp-pz-lanes th.on { background: var(--accent-soft); color: var(--accent); border-radius: 5px; }
+.cp-pz-lanes th.off { text-decoration: line-through; }
+.cp-pz-lanes td { background: var(--surface-2); border-radius: 5px; padding: 2px 8px; }
+.cp-pz-lanes td.off { opacity: 0.45; }

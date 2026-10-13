@@ -96,6 +96,7 @@ Each level has a **par** per metric:
 | Sequential | NANDs, clock period (static timing) |
 | CPU cores | NANDs, period, cycles; time = period × Σ cycles |
 | Program puzzles | size (words), cycles |
+| Kernel puzzles (act 9) | cycles (warp instructions), idle lanes (%) |
 
 - ★ passes
 - ★★ every metric ≤ 1.5 × par
@@ -137,7 +138,7 @@ The best result is kept. Par is a target and is never required.
 
 | op | name | fmt | semantics |
 |---|---|---|---|
-| 0000 | SYSTEM | SYS | f3 = 0, by rs2 field: 000 **illegal** (an all-zero word traps), 001 ecall, 010 ebreak, 011 mret, 100 wfi. f3 = 1/2/3: csrrw / csrrs / csrrc rd, csr, rs1 |
+| 0000 | SYSTEM | SYS | f3 = 0, by rs2 field: 000 **illegal** (an all-zero word traps), 001 ecall, 010 ebreak, 011 mret, 100 wfi. f3 = 1/2/3: csrrw / csrrs / csrrc rd, csr, rs1. f3 = 4/5/6/7: split rs1, join, tmc rs1, bar on the lane cores (act 9), illegal on every scalar core |
 | 0001 | OP | R | f3: add, sll, slt, sltu, xor, srl, or, and (RISC-V funct3 order) |
 | 0010 | OPX | R | f3 = 0 sub, f3 = 5 sra; other f3 values are illegal |
 | 0011 | MD | R | mul, mulh, mulhsu, mulhu, div, divu, rem, remu (optional M; illegal without it) |
@@ -166,7 +167,8 @@ The best result is kept. Par is a target and is never required.
   - directives `.word`, `.data`, `.text`
 - **CSRs** (3-bit index): 0 mstatus (MIE bit 3, MPIE bit 7), 1 mie (MEIE bit 11), 2 mip,
   3 mtvec, 4 mepc, 5 mcause (bit 15 = interrupt), 6 mscratch; 7 has no register (reads 0, ignores
-  writes). No cycle counter: one would count cycles in the hardware and instructions in the golden model.
+  writes). No cycle counter: one would count cycles in the hardware and instructions in the golden model. On a lane
+  core CSR 7 is `tid`, the thread number (warp · 4 + lane): a scalar core is a one-lane warp.
 - **MMIO**: the top of data memory, reachable as `imm(x0)` with a negative imm.
 
   | Address | Register | Notes |
@@ -182,7 +184,8 @@ The best result is kept. Par is a target and is never required.
 
 Software lives in `src/riscv/rv16/`: `isa16` (tables, encode, decode, disasm), `asm16` (with
 `.data` sections: data labels are data-memory addresses), `iss16` (the golden model: every step
-reports its register write, store or trap; `strictInit` flags reads of unwritten registers). The code
+reports its register write, store or trap; `strictInit` flags reads of unwritten registers), `simt16` (the lane
+  cores' golden model: four Iss16 lanes over one memory, the active mask, the leader, the split / join stack). The code
 editor highlights RV16 (`rv16asm`) from the same tables. ✅ A random-program generator for fuzzing
 (`randprog.ts`: every core level runs seeded random programs, with MD instructions for the side quests).
 
@@ -326,6 +329,23 @@ Legend: `id` ← requires · *opt* optional · (ex) an existing sandbox challeng
 - ✅ `p_handler`: an interrupt-driven program ← y_lesson, p_call
 - ✅ **`y_final`**: the pipelined RV16 with precise traps and interrupts ← pi_core3, y_irq
 
+### Act 9 — Throughput: a GPU (roadmap Phase 15)
+- ✅ `k_lesson`: latency or throughput ← y_final
+- ✅ `k_lanes`: four ALUs and their operand muxes, one control (a table on random and directed vectors) ← k_lesson
+- ✅ `k_vrf`: four register files, one write enable per lane ← k_lesson
+- ✅ `k_mask`: the active mask (all on at reset), the leader, the masked write enables ← k_lesson
+- ✅ `k_simd`: the 4-lane SIMD core: tid, tmc, branches by the leader (the lane decoder is given) ← k_lanes, k_vrf, k_mask
+- ✅ `k_stack`: the reconvergence stack (four entries; a sequence against `StackModel`) ← k_simd
+- ✅ `k_simt`: the SIMT core: split / join ← k_simd, k_stack
+- ✅ kernel puzzles `p_saxpy` ← k_simd and `p_reduce` ← k_simt, on the lane golden model, graded on cycles and idle
+  lanes (100 % − lane utilization)
+- ⏳ phase 3: `k_coal` (coalescer), `k_warps` (two warps), `p_hist`; phase 4: `k_edge`, `k_tile`, `k_raster`,
+  `k_frame` (on the map as coming soon)
+
+The lane cores' bench (`lanecheck.ts`) is the core bench with a memory port and a register write port per lane
+(`daddr<i>`, `dwdata<i>`, `drdata<i>`, `dwe` bit i; `rwe` bit i, `rwd<i>`, a shared `rwa`): each lane's
+writes and stores are compared in order with the lane golden model; stores of one cycle land lowest lane first.
+
 ### Act 8 — Side quests (all optional)
 - ✅ `o_mulseq`: shift-and-add multiplier ← a_add16, s_reg16
 - ✅ `o_mularr`: 8 × 8 array multiplier ← a_add16
@@ -460,8 +480,8 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
   level and a **fuller codex**: details in the roadmap's Phase 12, Campaign.
 - ⏳ **Before the transistor**: an act with relay and tube bricks, a 3D view of the machine and punch-card
   programs (roadmap Phase 14).
-- ⏳ **GPU act**: SIMD lanes, active masks, a warp scheduler, a coalescer and a rasterizer, with kernel puzzles
-  (roadmap Phase 15: act 9's levels are planned there; the journey's chapters 26–27 and the RV32 lane core are live).
+- 🚧 **GPU act**: act 9's first levels are playable (lanes, lane register file, mask, SIMD core, reconvergence
+  stack, SIMT core, saxpy and reduction kernels); the coalescer, warps and the rasterizer follow (roadmap Phase 15).
 - ⏳ **Memory act**: sense amplifier, DRAM bank with refresh, row-buffer controller, a shared bus with DMA and a
   flash page store (roadmap Phase 16).
 

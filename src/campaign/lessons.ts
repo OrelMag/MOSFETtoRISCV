@@ -135,4 +135,27 @@ MPIE ← MIE, MIE ← 0, pc ← mtvec. <code>mret</code> undoes it: pc ← mepc,
 <p>An exception's mepc is the faulting instruction (the handler adds 1 to skip it); an interrupt's
 is the next instruction to run. In a pipeline, traps must be <b>precise</b>: everything older
 completes, nothing younger leaves a trace.</p>`,
+
+  gpu: `
+<p>Your pipeline is built for <b>latency</b>: one program, each instruction done as soon as
+possible. Forwarding, stalls, flushes and prediction all serve that one instruction stream. But
+much of computing is the <b>same short program over many data</b>: every pixel of a frame, every
+element of an array. There the useful number is <b>throughput</b>, results per second, and the
+instructions of different data do not depend on each other at all.</p>
+<p>So share what is the same and replicate what is not. One PC, one instruction memory, one control
+unit; four <b>lanes</b>, each with its own registers, ALU and memory port. Every lane runs every
+instruction on its own operands: four results per cycle for one fetch and one decode.
+<code>csrr rd, tid</code> gives each lane its <b>thread number</b>, the only thing that tells them
+apart at the start.</p>
+<h4>What it costs</h4>
+<p>The control is cheap: the SIMD core you will build adds about 11 000 NANDs to your single-cycle
+core for three extra lanes. Most of that is <b>registers</b>: four register files are 8 772 NANDs.
+A real GPU is the same, with its register file the largest structure on the chip.</p>
+<h4>The hard part</h4>
+<p>One PC cannot go two ways. When the lanes disagree on a branch, something has to give: an
+<b>active mask</b> turns lanes off (they compute, but write nothing), and a <b>stack</b> remembers
+the lanes waiting for the other side of an if. Each side then runs with some lanes idle:
+<b>lane utilization</b>, not the clock, becomes the number to watch.</p>
+<p>This act builds the lanes, their register file, the mask, then a SIMD core; then the
+reconvergence stack and the SIMT core, on which every lane runs like a thread of its own.</p>`,
 };

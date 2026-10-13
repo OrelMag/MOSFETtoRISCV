@@ -19,6 +19,8 @@ const ALIASES: Record<string, string[]> = {
   loaduse: ['load-use'], bpred: ['branch predictor'], csr: ['CSR', 'control and status register'],
   arraymul: ['array multiplier'], sticky: ['sticky bit'], lzc: ['leading-zero count'], microcode: ['microprogram'],
   multicycle: ['multicycle'], latch: ['SR latch'], dontcare: ['don’t-care'], depth: ['logic depth'],
+  throughput: ['throughput'], warp: ['warp', 'thread number'], leader: ['leader'], divergence: ['divergent branch'],
+  reconvergence: ['reconvergence'], utilization: ['utilization'],
 };
 
 /** Entries never marked automatically: their names are everyday words in the prose. */

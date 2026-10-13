@@ -554,4 +554,51 @@ export const MORE0: Record<string, CodexMore> = {
     lib: 'divstep4',
     chapters: [{ chapter: 'muldiv', step: 13, label: 'Division: one restoring step' }, { chapter: 'muldiv', step: 15, label: 'The iterative divider' }, { chapter: 'muldiv', step: 20, label: 'Dividers compared' }],
   },
+
+  // ---- act 9: lanes
+  lane: {
+    idea: 'A lane is the part of a datapath that one data element needs: in the RV16 lane cores, the operand-b mux (rs2 or the shared immediate) and the ALU, plus, outside the lanes block, the lane\'s own register file, memory port and result muxes. Every lane receives the same decoded instruction in the same cycle: the ALU operation, bimm, the immediate, the register numbers. What differs is the contents of its registers, so one <code>add</code> makes a different sum in each lane.<br>A lane has no PC, no instruction memory and no control unit: those are what SIMD shares. One RV16 lane costs 3 489 NANDs (registers 2 193, ALU, mux and nz 1 149, result muxes 147), 74% of the single-cycle core\'s 4 741, so four lanes behind one front end are only 17% smaller than four cores. The ratio favours GPUs more than it does here, because the cores they compete with spend far more on their front ends (prediction, out-of-order issue, caches).',
+    example: { title: 'One addi, four lanes', body: '<pre>csrr t0, tid       lanes:  0   1   2   3\n                   t0  =   0   1   2   3\naddi a0, t0, 1     a0  =   1   2   3   4</pre>The control unit decodes the addi once: bimm = 1, ALU = add, imm = 1, rd = a0. Each ALU adds 1 to its own t0, and each register file writes its own a0 at the same edge.' },
+    mistakes: [
+      'Giving a lane its own control signals: the instruction is decoded once, and a lane that needs a different operation needs a different instruction, which one PC cannot fetch in the same cycle.',
+      'Counting a lane as an ALU: its register file is twice the ALU (2 193 against 1 055 NANDs), and its memory port costs more than either once memory is real.',
+      'Expecting a masked-off lane to stop: it still reads, computes and drives its address; the mask only blocks its writes.',
+    ],
+    lib: 'rv16_lanes4', compare: ['rv16_alu16'],
+    chapters: [{ chapter: 'lanes', step: 1, label: 'One decoder, four ALUs' }, { chapter: 'lanes', step: 4, label: 'Lanes against cores' }],
+  },
+  vrf: {
+    idea: 'Each thread needs its own architectural registers, so a 4-lane core holds four copies of x1–x7. The copies share every address: the instruction names rs1, rs2 and rd once, and all four files are read and written at those numbers in the same cycle. The only per-lane input besides the data is the write enable, driven by the active mask: a masked-off lane keeps its registers.<br>Storage is the one part of a lane nothing can share, so it dominates. The RV16 lane register file is four 2 193-NAND files, 8 772 NANDs, 56% of the SIMD core; built from flip-flops and mux trees it spends about 78 transistors per stored bit, against 6 in an SRAM cell. Real GPUs keep it in banked SRAM (65 536 32-bit registers per streaming multiprocessor on recent Nvidia parts), and it is still the largest structure on the chip; its size also bounds how many warps a core can hold at once.',
+    example: { title: 'A masked write', body: 'mask = 0101, <code>addi a0, t0, 10</code> with t0 = 0, 1, 2, 3:<br>wa = a0 (x3), wd = 10, 11, 12, 13, we = mask = 0101.<br>Lanes 0 and 2 write 10 and 12; lanes 1 and 3 keep their old a0. At the next instruction ra1 = x3 reads (10, old, 12, old).' },
+    mistakes: [
+      'Giving lanes different register numbers: the instruction carries one rs1, so a lane that needs another register needs another instruction.',
+      'Gating the register write but not the store: the mask must gate both, or a masked lane changes memory.',
+      'Forgetting x0 in each lane: every one of the four files must read 0 for register 0 and ignore writes to it.',
+    ],
+    lib: 'rv16_vrf4', compare: ['rv16_rf'],
+    chapters: [{ chapter: 'lanes', step: 1, label: 'One decoder, four ALUs' }, { chapter: 'lanes', step: 4, label: 'Lanes against cores' }],
+  },
+  activemask: {
+    idea: 'The active mask has one bit per lane and answers one question: may this lane change state? A lane whose bit is 0 still sees every instruction, reads its registers and computes, but its register and store enables are forced to 0. That is how a warp of lanes in lock-step does less than all of its work: the tail of an array whose length is not a multiple of the lane count, one side of an if, a lane that has finished its loop.<br>Three things load it: <code>tmc rs1</code> (the leader\'s rs1, low four bits), and split and join through the reconvergence stack; reset sets all ones, and an empty mask ends the warp. RV16\'s is 102 NANDs: a 4-bit register with enable, the reset ORs, the leader, <i>any</i> and the eight ANDs on rwe and mwe. The RV32 lane core of chapter 27 stores it inverted, so that flip-flops powering up at 0 mean every lane active.',
+    example: { title: 'tmc, three times', body: '<pre>                  mask   leader\nli  t1, 3         1111   0\ntmc t1            0011   0       lanes 0, 1 only\nli  t1, 12        0011   0\ntmc t1            1100   2       lane 0 turned itself off\nli  t1, 15        1100   2       only lanes 2, 3 load 15\ntmc t1            1111   0</pre>The whole test program runs 16 instructions; 75% of its lane-steps do work.' },
+    mistakes: [
+      'Gating only the register write: a masked lane\'s store still reaches memory.',
+      'Forgetting that the leader moves with the mask: after tmc 1100 the leader is lane 2, and lane 0\'s registers no longer decide anything.',
+      'Expecting a masked lane to save time: the warp issues the instruction anyway; only the lane utilization drops.',
+    ],
+    lib: 'rv16_mask4', compare: ['low1_4'],
+    chapters: [{ chapter: 'simt', step: 0, label: 'The active mask' }, { chapter: 'simt', step: 4, label: 'Loops of different lengths' }],
+  },
+  reconvergence: {
+    idea: 'Divergence needs two things the mask alone cannot give: a record of the lanes still owed the other side of an if, and a point where all of them come back. The stack gives both. <code>split rs1</code> divides the active lanes into then (rs1 ≠ 0) and else, pushes (the mask before the split, the else lanes, the address after the split, pending = both sides non-empty) and runs the then lanes. The <code>join</code> at the end of the if is reached twice: on a pending entry it switches the mask to the else lanes, clears pending and jumps back to just after the split, where their branch now goes the other way; on a non-pending one it restores the saved mask and pops. A split the lanes agree on pushes an entry with nothing pending, so its join only pops.<br>RV16\'s stack is a shift register of four 26-bit entries (mask, else, pc, pending, valid), 1 995 NANDs, period 19, with the top entry always in the same place. Four entries allow four nested ifs. It is Vortex\'s scheme, and the idea of Nvidia\'s SSY / SYNC; since Volta, Nvidia keeps a PC per thread instead and lets the scheduler regroup them.',
+    example: { title: 'An if / else on four lanes', body: '<pre>pc  mask  instruction       stack top (mask, else, pc, pending)\n 2  1111  split t1          push (1111, 0101, 3, 1): mask ← 1010\n 3  1010  beqz t1, even     odd lanes fall through\n 4  1010  slli, add, j done\n 8  1010  join              pending: mask ← 0101, pc ← 3\n 3  0101  beqz t1, even     even lanes branch\n 7  0101  srli a0, t0, 1\n 8  0101  join              not pending: mask ← 1111, pop\n 9  1111  sw a0, 16(t0)</pre>14 instructions on the golden model, every lane right, 71% of the lane-steps doing work.' },
+    mistakes: [
+      'Jumping to the else code at the first join: the entry holds the address after the split, so the else lanes run the branch again, and it now goes their way. The branch needs no change.',
+      'Popping at the first join: the else lanes never run.',
+      'Marking an entry pending when one side is empty: its first join would load an empty mask and end the warp.',
+      'Nesting deeper than the stack: a fifth split drops the bottom entry, and its lanes never get their mask back.',
+    ],
+    lib: 'rv16_stack4', compare: ['simtctl4_4'],
+    chapters: [{ chapter: 'simt', step: 2, label: 'split and join' }, { chapter: 'simt', step: 3, label: 'An if inside an if' }],
+  },
 };

@@ -32,6 +32,8 @@ export interface CoreSpec {
   drain?: number;
   m?: boolean;
   system?: boolean;
+  /** A lane core (act 9): this many lanes, each with its memory and register ports (lanecheck.ts). */
+  lanes?: number;
 }
 
 interface Event { pc: number; instr: number; rd?: number; addr?: number; value: number }
@@ -68,14 +70,14 @@ export function golden(t: CoreTest, spec: Pick<CoreSpec, 'm' | 'system'>, maxSte
 }
 
 /** The two engines behind one face: per-lane inputs and outputs. */
-interface Bench {
+export interface Bench {
   lanes: number;
   set(port: string, values: number[]): void;
   get(port: string): number[];
   settle(): void;
 }
 
-function bitBench(def: ComponentDef): Bench | null {
+export function bitBench(def: ComponentDef): Bench | null {
   const design = flatten(def, { mode: 'gate' });
   // Behaviours are evaluated on lane 0 only: such a design gets the event-driven bench.
   if (!design.leaves.every((l) => l.kind === 'nand' || (l.kind === 'behavior' && !l.inputs.length))) return null;
@@ -83,7 +85,7 @@ function bitBench(def: ComponentDef): Bench | null {
   return { lanes: LANES, set: (p, v) => sim.setInput(p, v), get: (p) => sim.get(p), settle: () => sim.settle() };
 }
 
-function gateBench(def: ComponentDef): Bench {
+export function gateBench(def: ComponentDef): Bench {
   const design = flatten(def, { mode: 'gate' });
   const sim = new GateSim(design);
   sim.reset('zero');
@@ -236,7 +238,7 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
 /** Read delay of the bench's memories, in NAND delays (an asynchronous SRAM / ROM read). */
 export const MEM_DELAY = 8;
 
-const memLeaf = (id: string, name: string): ComponentDef => ({
+export const memLeaf = (id: string, name: string): ComponentDef => ({
   id, name, category: 'memory', ports: [{ name: 'addr', width: 16, dir: 'in' }, { name: 'data', width: 16, dir: 'out' }],
   symbol: { kind: 'box', label: name }, behavior: { eval: () => [0], delay: MEM_DELAY },
 });
