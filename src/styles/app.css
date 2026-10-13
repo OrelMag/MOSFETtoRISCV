@@ -1365,7 +1365,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 /* chapter 30: the screen panel and the edge-function explorer */
 .gfx-panel { width: 300px; }
 .gfx-panel select.gfx-reset { width: 6.5em; }
-.gfx-screen-wrap { background: #000; border-radius: var(--radius-sm); padding: 4px; line-height: 0; }
+.gfx-screen-wrap { position: relative; background: #000; border-radius: var(--radius-sm); padding: 4px; line-height: 0; }
 .gfx-screen { width: 100%; height: auto; aspect-ratio: 1; image-rendering: pixelated; }
 .gfx-check { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--text-2); }
 .gfx-edge-grid { display: grid; grid-template-columns: minmax(0, 512px) minmax(0, 1fr); gap: 18px; align-items: start; }
@@ -1387,6 +1387,45 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 /* the pad gives way on a short window, so the controls below it stay in view */
 .gfx-pad { display: block; margin: 0 auto; width: 100%; max-width: max(180px, calc(100vh - 590px)); height: auto; aspect-ratio: 1; border-radius: var(--radius-sm); touch-action: none; cursor: crosshair; }
 .gfx-pad:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* chapters 30–31: every memory beside the screen (widgets/framemem.ts); pixels are data, the chrome follows the theme */
+.gfx-mem-label { position: absolute; left: 10px; top: 10px; font: 600 10.5px/1.5 var(--font-mono); color: #fff; background: rgba(0,0,0,0.55); padding: 1px 6px; border-radius: 4px; pointer-events: none; }
+.gfx-mem { display: grid; gap: 6px; margin: 6px 0; }
+.gfx-mem .cpu-sec { margin: 0; }
+.gfx-mem-strip { display: grid; gap: 5px; }
+.gfx-mem-thumb { position: relative; display: grid; gap: 2px; min-width: 0; padding: 3px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.gfx-mem-thumb:hover { border-color: var(--border-strong); }
+.gfx-mem-thumb.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.gfx-mem-thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.gfx-mem-thumb canvas { width: 100%; height: auto; aspect-ratio: 1; image-rendering: pixelated; border-radius: 4px; background: #000; display: block; }
+.gfx-mem-name { display: flex; justify-content: space-between; gap: 3px; font: 600 10px var(--font-mono); color: var(--text-2); min-width: 0; }
+.gfx-mem-badge { position: absolute; top: 6px; right: 6px; font: 600 9px/1.6 var(--font-mono); padding: 0 4px; border-radius: 3px; background: var(--surface-3); color: var(--text-2); letter-spacing: 0.03em; white-space: nowrap; }
+.gfx-mem-badge.front { background: var(--good-soft); color: var(--good); }
+.gfx-mem-badge.back { background: var(--accent-soft); color: var(--accent); }
+.gfx-mem-who { font: 9.5px var(--font-mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gfx-mem-writer { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; padding: 6px 8px; border-radius: 7px; background: var(--surface-2); font: 11px var(--font-mono); }
+.gfx-mem-writer .k { color: var(--muted); white-space: nowrap; }
+.gfx-mem-writer .v { color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+.gfx-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; background: var(--muted); }
+.gfx-dot.draw { background: var(--series-2); }
+.gfx-dot.wait { background: var(--series-3); }
+.gfx-dot.kernel { background: var(--series-4); }
+.gfx-mem-fold { margin: 2px 0; }
+.gfx-mem-fold summary { cursor: pointer; font: 600 11px var(--font-mono); letter-spacing: 0.04em; color: var(--muted); }
+.gfx-film-wrap { overflow-x: auto; margin-top: 4px; }
+.gfx-film { display: flex; gap: 5px; padding-bottom: 2px; }
+.gfx-film figure { margin: 0; flex: 0 0 52px; display: grid; gap: 1px; }
+.gfx-film canvas { width: 52px; height: 52px; image-rendering: pixelated; border-radius: 3px; background: #000; }
+.gfx-film figcaption { font: 9px/1.25 var(--font-mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gfx-film-empty { font-size: 11.5px; color: var(--muted); }
+.gfx-vbuf { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin-top: 4px; }
+.gfx-vbuf-box { min-width: 0; padding: 3px 5px; border: 1px solid var(--border); border-radius: 7px; }
+.gfx-vbuf-box.reading { border-color: var(--series-3); }
+.gfx-vbuf-box.writing { border-color: var(--series-4); }
+.gfx-vbuf-cap { display: flex; justify-content: space-between; gap: 4px; font: 600 9.5px var(--font-mono); color: var(--text-2); }
+.gfx-vbuf-cap span + span { color: var(--muted); font-weight: 500; text-align: right; }
+.gfx-vbuf table { width: 100%; border-collapse: collapse; font: 9.5px var(--font-mono); font-variant-numeric: tabular-nums; }
+.gfx-vbuf th { font-weight: 600; color: var(--muted); text-align: left; padding: 0 2px; }
+.gfx-vbuf td { padding: 0 2px; color: var(--text-2); }
 /* chapter 31: the pipeline panel's timeline, the cost tables */
 .gfx-tl-wrap { margin-top: 6px; }
 .gfx-timeline { display: block; width: 100%; height: auto; margin: 2px 0 4px; }
