@@ -718,11 +718,15 @@ export function warpCore(program: number[], opts: WarpCoreOptions = {}): Compone
     const pcmux = b.add(muxTree(2, 32), 'next PC', 'pcmux');
     b.wire(`${npc}.pcSrc`, `${pcmux}.s`);
     for (const [d, i] of [[p4, 0], [`${tgt}.s`, 1], [`${c0}.out`, 2], [p4, 3]] as const) b.wire(d, `${pcmux}.d${i}`);
-    // wspawn starts warps 1 … rs1 − 1: warp w when rs1 > w (rs1's bits above the warp number, or its low bits above w)
-    const la = b.op(splitter([wb, 32 - wb]), [lA], undefined, 'la');
-    const hiNz = anyOf(b, `${la}.o1`, 32 - wb, 'rs1 ≥ 2^b', 'hiNz');
-    const ld = b.op(decoder(wb), [`${la}.o0`], 'rs1, low bits', 'ldec');
-    const spawnGo = b.op1(AND, [`${sd}.isWspawn`, issue], 'wspawn issues', 'spGo');
+    // wspawn starts warps 1 … rs1 − 1: warp w when rs1 > w (rs1's bits above the warp number, or its low bits above w).
+    // A one-warp core has nothing to start, so it has no compare (its decoder's isWspawn goes nowhere)
+    let hiNz = '', ld = '', spawnGo = '';
+    if (W > 1) {
+      const la = b.op(splitter([wb, 32 - wb]), [lA], undefined, 'la');
+      hiNz = anyOf(b, `${la}.o1`, 32 - wb, 'rs1 ≥ 2^b', 'hiNz');
+      ld = b.op(decoder(wb), [`${la}.o0`], 'rs1, low bits', 'ldec');
+      spawnGo = b.op1(AND, [`${sd}.isWspawn`, issue], 'wspawn issues', 'spGo');
+    }
     b.next();
     const spawn = Ws.map((w) => {
       if (w === 0) return host ? 'launch' : b.op1(TIE0, [], undefined, 'sp0');
@@ -955,9 +959,10 @@ function warpCoreDrawing(b: Builder, { W, n, lsu, host }: { W: number; n: number
   wire('la.o0', 'ldec.a');
   P.row('spawn', 'hiNz', 'i0', P.right(uHi) + 4, P.pin(uHi, 'o0')[1]);
   // per warp: rs1 > w (the high bits, or a low-bits value above w), and wspawn issues
-  const G1 = P.right('ldec') + 20;
+  // (a one-warp core has no compare: warp 0's spawn alone)
+  const G1 = P.has('ldec') ? P.right('ldec') + 20 : SPX + 10;
   P.put('spawn', 'spGo', G1, YB);
-  P.put('spawn', 'sp0', G1 + 1, P.bottom('spGo') + 6);
+  P.put('spawn', 'sp0', G1 + 1, P.has('spGo') ? P.bottom('spGo') + 6 : YB);
   labelled.add('sp0.y');
   let gy = Math.max(P.bottom('spGo'), P.bottom('sp0')) + 6;
   for (const w of Ws.slice(1)) {

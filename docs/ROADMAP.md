@@ -651,7 +651,7 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   core with a host port, a command unit (1 997 NANDs) that launches it a frame ahead, clears, reads the triangles and
   their vertices from a double-buffered vertex buffer and feeds chapter 30's rasterizer with depth; a spinning
   triangle (6 144 cycles a frame) and a cube (7 168–8 192) at gate level on the cycle engine, about three and two frames
-  a second in the page, every frame checked against the reference. Where the gates go: the warp core 182 214 NANDs busy
+  a second in the page, every frame checked against the reference. Where the gates go: the warp core 182 121 NANDs busy
   1 % of the frame, the clear 72 % of it (software on 16 threads clears in 804 cycles), the triangle in software 6 825
   cycles against 1 268
 - ✅ A faster clear (chapter 31, step 5): a clear unit (278 NANDs, a word counter) writes four pixels and four depths a

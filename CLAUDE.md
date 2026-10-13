@@ -79,7 +79,7 @@ src/sim/       simulation core (no DOM)
                  level's ports/wires to flat nets (this is what makes every box transparent);
                  powerOn hints may be dotted paths into children ('w3.ff0.ff.slave.sr.q'); one array per net, shared by the ports
                  on it and the leaves reading it (never mutate one), HierNode.path computed from the parents (memory: ch 31's
-                 413 594 leaves)
+                 413 501 leaves)
   gatesim.ts     event-driven 3-valued (0/1/X) simulator, unit NAND delay, transport delay,
                  relaxation for power-on and oscillation resolution; runUntil(t) for a
                  fixed-period clock (an edge does not wait for the logic to settle); onTrace +
@@ -745,7 +745,7 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
   delay (`SchematicView.flowMs`); the simulation's timing is unchanged.
 - The Timing panel only records nets of the scene's own simulation (`ctx.sim === stage.sim`);
   sub-simulations (an opened NAND, the ROM) cannot be probed. `Scene.analyzer` opens it.
-- `Scene.engine: 'cycle'` runs a scene on DualSim with the cycle engine preferred (chapter 31: 413 594 leaves): settled
+- `Scene.engine: 'cycle'` runs a scene on DualSim with the cycle engine preferred (chapter 31: 413 501 leaves): settled
   values only, so the timing and probe buttons are hidden (the analyzer's trace listener would pin it to GateSim) and
   the inspector has no power estimate; stepping and slow-motion edges still go through GateSim. Chapters 26–29's lane and
   warp core scenes too (laneCoreScene / warpCoreScene; `engine: 'gate'` keeps GateSim; tests/gpu-cycle.test.ts).

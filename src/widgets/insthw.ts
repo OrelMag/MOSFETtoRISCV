@@ -216,8 +216,8 @@ export function laneUse(word: number, core: LaneCoreShape, at: LaneAt = {}): Ins
       const simt = warp ? [] : ['simt'];
       switch (f3) {
         case 0: return u(['lead', 'lA', ...simt], 'tmc: the leader\'s rs1 → the active mask');
-        case 1: return u(['lead', 'lA', 'lB', 'la', 'hiNz', 'ldec', 'spGo', ...upTo(W).slice(1).flatMap((w) => [`gt${w}`, `sp${w}`, `warp${w}`])],
-          'wspawn: warps 1 … rs1 − 1 start at the leader\'s rs2');
+        case 1: return W > 1 ? u(['lead', 'lA', 'lB', 'la', 'hiNz', 'ldec', 'spGo', ...upTo(W).slice(1).flatMap((w) => [`gt${w}`, `sp${w}`, `warp${w}`])],
+          'wspawn: warps 1 … rs1 − 1 start at the leader\'s rs2') : u([], 'wspawn: a one-warp core has no other warp to start');
         case 2: return u([...lanes, 'pm', 'lead', 'lA', ...simt], 'split: each lane\'s rs1 ≠ 0 → the lanes that go first; the others wait on the split / join stack');
         case 3: return u(simt, 'join: the waiting lanes run next, or the stack restores the mask and pops');
         case 4: return u(lsu ? ['xdec', 'barGo', ...(W > 1 ? ['arr', 'nWait2'] : ['arr1']), 'barCmp', 'arrW', 'release', 'barOr', 'barN', 'atBar', 'ab', 'lead', 'lB'] : [],

@@ -93,7 +93,7 @@ export const PIPE_COSTS: { stages: StageCost[]; frames: FrameCost[]; softCore: n
   /** The software kernels' core: four warps of four lanes with multipliers, logic without its memories. */
   softCore: 488609,
   stages: [
-    { id: 'core', name: 'Vertex kernel: a warp core, 4 lanes with multipliers', nands: 182214, memory: '128 data words (4 Kbit), 64 program words' },
+    { id: 'core', name: 'Vertex kernel: a warp core, 4 lanes with multipliers', nands: 182121, memory: '128 data words (4 Kbit), 64 program words' },
     { id: 'cmd', name: 'Command unit', nands: 1997, memory: '' },
     { id: 'rast', name: 'Rasterizer with depth set-up', nands: 26708, memory: '' },
     { id: 'rop', name: 'Depth test and blend', nands: 1421, memory: 'depth buffer, 64 Kbit' },
