@@ -215,8 +215,9 @@ src/lib/       the component library (registered in `registry` via define())
                  EXT_DECODE (amoadd.w shown to CONTROL as lw, its immediate zeroed; bar; mul), sbCheck(amo), warpLane(…, mul).
                  Chapter 31: warpCore(…, { host }): launch (warp 0 again at PC 0, every lane on: a dispatch) and a spare read port
                  into the data memory (xa → xq; lanePortMemory / memPipe xport). A one-warp core keeps its unused wspawn decode
-                 (chapter 28 quotes a warp as nands(2) − nands(1)). The router takes minutes on lanePortMemory(≥ 6, …): the
-                 registry-wide schematic tests never build one (tests/gfxpipe.test.ts checks chapter 31's levels above it)
+                 (chapter 28 quotes a warp as nands(2) − nands(1)). lanePortMemory is hand-placed (decoders, words in columns of
+                 32 rows, read trees; labels between): the registry-wide schematic tests never build one, tests/route-bigmem.test.ts
+                 checks the chapters' sizes
   warpmem.ts     chapter 29's memory: serveLanes / accessesOf (the access rule, also the timing model's), accessUnit(n)
                  (leader's 16-byte line; per bank the lowest lane picks the row; amoadd.w the leader alone), quadMemory(k,
                  banked) (4 columns: one row = a line, or a row per bank), lsuMemory (the pipeline: shared accesses enter
@@ -263,7 +264,8 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                `retiring()` = step the ISS this cycle?; dmemWords), randprog32.ts (seeded random RV32 programs per ISA),
                benchprograms.ts (the benchmark set: fib, sort, matmul (+ mul), CRC-32, a float kernel; each with
                its result computed in TypeScript)
-src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over crossings),
+src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over crossings; untangle's A* reroutes stop after
+               UNTANGLE_POPS states per schematic, leaving overlaps rather than freezing the page: scripts/route-perf.ts times one),
                inspector (info with "Where it is used" and "Power": powerpanel.ts, live from the stage's PowerMeter or
                measurePower on random inputs; truth table, Verilog + download), analyzer.ts (the Timing panel:
                lanes from onTrace, cursors, VCD), stage.ts (probe mode, clock period, slow-motion
