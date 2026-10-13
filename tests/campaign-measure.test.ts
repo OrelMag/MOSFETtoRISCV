@@ -21,15 +21,19 @@ describe('level screen measurements', () => {
     expect(copiesInFinal(cpu!.node)).toBe(0);
   });
 
-  it('counts the scalar acts in the scalar finale and act 9 in the SIMT core', () => {
+  it('counts the scalar acts in the scalar finale and act 9 in the two-warp core', () => {
     expect(finalCpu()?.node.id).toBe('y_final');
     expect(finalCpu(nodeById('a_fa'))?.node.id).toBe('y_final');
     const k = nodeById('k_vrf')!;
-    expect(finalCpu(k)?.node.id).toBe('k_simt');
-    // One lane register file, one set of four lanes, one stack in the SIMT core.
-    expect(copiesInFinal(k)).toBe(1);
+    expect(finalCpu(k)?.node.id).toBe('k_warps');
+    // Per warp a lane register file, a mask and a stack; one set of four lanes, shared.
+    expect(copiesInFinal(k)).toBe(2);
+    expect(copiesInFinal(nodeById('k_mask')!)).toBe(2);
+    expect(copiesInFinal(nodeById('k_stack')!)).toBe(2);
     expect(copiesInFinal(nodeById('k_lanes')!)).toBe(1);
-    expect(copiesInFinal(nodeById('k_stack')!)).toBe(1);
     expect(copiesInFinal(nodeById('k_simt')!)).toBe(0);
+    expect(copiesInFinal(nodeById('k_coal')!)).toBe(0);
+    // act 9 is optional as a whole: its finale is still found
+    expect(['k_lesson', 'k_lanes', 'k_simt', 'k_coal', 'k_warps', 'p_hist', 'k_frame'].every((id) => nodeById(id)!.optional)).toBe(true);
   });
 });

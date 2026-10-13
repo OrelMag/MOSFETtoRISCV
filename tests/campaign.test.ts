@@ -293,6 +293,10 @@ describe('continue from your previous core', () => {
     const ws2 = { ...ws, chips: { ...ws.chips, [fin]: { ...core3, id: fin }, [simd]: { ...core3, id: simd } } };
     expect(startCandidates(nodeById('k_simd')!, ws2)).toEqual([]);
     expect(startCandidates(nodeById('k_simt')!, ws2).map((n) => n.id)).toEqual(['k_simd']);
+    // the two-warp core adds pins (warp, the load port) to the lane core's: it starts from either
+    const simt = levelChipId(nodeById('k_simt')!);
+    const ws3 = { ...ws2, chips: { ...ws2.chips, [simt]: { ...core3, id: simt } } };
+    expect(startCandidates(nodeById('k_warps')!, ws3).map((n) => n.id)).toEqual(['k_simt', 'k_simd']);
     const r = startFrom(ws, levelChallenge(yIrq)!, c3);
     const doc = r.ws.chips[r.chipId];
     expect(r.created).toBe(true);

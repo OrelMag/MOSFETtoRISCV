@@ -273,10 +273,14 @@ src/lib/rv16/  the campaign's RV16 hardware, every block built only from parts i
                multi.ts (RV16_MULTI: one-hot F/E/M/W multicycle core, RV16_CACHE: direct-mapped, write-through);
                rv16Pipe({ predict }) adds static prediction in F; lanes16.ts (act 9: LANES16 four ALUs, VRF16 four register
                files, MASK16 active mask + leader + write enables, LANEDEC16, STACK16 split / join stack and StackModel,
-               rv16Lanes(simt): the 4-lane SIMD / SIMT cores, LANE_PORTS: a memory port and a write port per lane)
+               rv16Lanes(simt): the 4-lane SIMD / SIMT cores, LANE_PORTS: a memory port and a write port per lane);
+               warps16.ts (COAL16 coalescer + coalesce16; RV16_WARPS: two warps taking turns over a memory one cycle late,
+               WARP_PORTS: + warp and a load write port lwe / lwa / lwd<i>; a warp with no lanes issues nothing)
 src/riscv/rv16/ isa16.ts (fields, encode / decode / disasm), asm16.ts, iss16.ts (golden model: MMIO, CSRs, traps,
                interrupts; halts on jal x0, 0; SIMT words are illegal), simt16.ts (Simt16: a warp of RV16 lanes over one
-               memory: mask, leader, split / join stack, tmc, csrr rd, tid; utilization / idle), randprog.ts (seeded random
+               memory: mask, leader, split / join stack, tmc, csrr rd, tid; utilization / idle), warps16.ts (Warps16: W warps over
+               one memory taking turns, warp 0 first, wasted turns counted; bar waits for the other warp or its end (mask 0);
+               stepWarp(w) for other issue orders), randprog.ts (seeded random
                programs for fuzzing cores)
 src/isa/       Custom ISA: table.ts (IsaDoc: instructions as mnemonic + operand letters + bit pattern, operand kinds reg / enum
                / imm / addr; IsaTable: assemble, disasm (most specific pattern), fields, words, problems; sanitizeIsa),
@@ -505,7 +509,10 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  compared with iss16 in order, cycle budget, irq from stores to 0xFFF9, 32 BitSim lanes (GateSim
                  fallback), corePeriod (static timing with 8-delay memories); coretests.ts the programs by stage;
                  lanecheck.ts the lane bench (CoreSpec.lanes: four memory ports, each lane's writes and stores against
-                 Simt16, lanes in order within a cycle; lanePeriod), lanetests.ts its programs; buildk.ts act 9's levels
+                 Simt16, lanes in order within a cycle; lanePeriod), lanetests.ts its programs (warpTests: + two-warp ones);
+                 warpcheck.ts the two-warp bench (drdata from the previous cycle's address, issue port = this warp, load
+                 port = last cycle's, against Warps16; warpPeriod: synchronous data memories); buildk.ts act 9's levels;
+                 puzzles.ts kernels on two warps (`warps`) also run with warp 1 ahead (a missing bar fails)
                DOM: ui/svgs.ts (map and anatomy SVG), ui/levelinfo.ts (criteria, grading table), ui/codexentry.ts (a codex
                entry in full, live schematic), ui/glossaryui.ts (markTerms: hover cards); the page is ui/pages/campaign.ts.
                Levels are played on the level screen (ui/pages/level.ts, #/campaign/play/<node>, the editor's chunk): an

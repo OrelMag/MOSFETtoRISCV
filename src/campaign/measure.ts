@@ -49,7 +49,8 @@ export function finalCpu(of?: CampaignNode): { node: CampaignNode; def: Componen
   const known = finals.get(track);
   if (known !== undefined) return known;
   finals.set(track, null);
-  const cores = topo().filter((n) => n.kind === 'core' && !n.optional && !n.soon && trackOf(n.act) === track);
+  // The scalar track's optional cores (the multicycle side quest) are detours; act 9 is optional as a whole.
+  const cores = topo().filter((n) => n.kind === 'core' && (!n.optional || track !== 0) && !n.soon && trackOf(n.act) === track);
   const node = cores[cores.length - 1];
   const ch = node && levelChallenge(node);
   if (!ch) return null;

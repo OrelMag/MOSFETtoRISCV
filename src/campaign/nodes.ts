@@ -36,7 +36,7 @@ export const ACTS: Act[] = [
   { num: 6, title: 'Pipelining', blurb: 'Five instructions in flight at once: a shorter clock period, and the hazards that come with it. Forwarding, stalls and flushes keep it correct.' },
   { num: 7, title: 'The system: traps and interrupts', blurb: 'A real processor reacts to the outside world and to its own mistakes. CSRs, exceptions and interrupts, precise even in the pipeline: the finale.' },
   { num: 8, title: 'Side quests', blurb: 'Optional: faster adders, multipliers and dividers, floating point, caches, microcode. Each one is a trade of area for time.' },
-  { num: 9, title: 'Throughput: a GPU', blurb: 'The same bricks arranged for throughput instead of latency: one instruction stream, four lanes, each with its own registers. Then the hard part: what the lanes do when they disagree.' },
+  { num: 9, title: 'Throughput: a GPU', blurb: 'Optional, after the finale: the same bricks arranged for throughput instead of latency: one instruction stream, four lanes, each with its own registers. Then the hard part: what the lanes do when they disagree.' },
 ];
 
 export const NODES: CampaignNode[] = [
@@ -577,85 +577,91 @@ export const NODES: CampaignNode[] = [
   },
   // ---- Act 9 --------------------------------------------------------------------------------
   {
-    id: 'k_lesson', act: 9, title: 'Latency or throughput', kind: 'lesson', requires: ['y_final'], body: 'gpu',
+    id: 'k_lesson', act: 9, title: 'Latency or throughput', kind: 'lesson', optional: true, requires: ['y_final'], body: 'gpu',
     why: 'Your pipeline makes one program fast. Many workloads are the same small program over thousands of data: pixels, vertices, array elements. For them the useful number is results per second, and one control unit can feed several datapaths.',
     tips: [], codex: ['throughput', 'simd'], chapters: [{ chapter: 'lanes', label: 'Lanes' }],
   },
   {
-    id: 'k_lanes', act: 9, title: 'Four lanes', kind: 'build', requires: ['k_lesson'], base: BUILDK.k_lanes, par: { nand: 4596, depth: 55 },
+    id: 'k_lanes', act: 9, title: 'Four lanes', kind: 'build', optional: true, requires: ['k_lesson'], base: BUILDK.k_lanes, par: { nand: 4596, depth: 55 },
     why: 'The datapath, four times: four ALUs fed by one set of control signals and one immediate. Every lane computes the same operation on its own operands.',
     tips: ['Your ALU and the 49-NAND bus mux are unlocked: one mux and one ALU per lane.', 'nz: OR the 16 bits of each a<i>i</i>, then merge the four bits.'],
     codex: ['lane'], unlocks: ['rv16_lanes4'], chapters: [{ chapter: 'lanes', label: 'Lanes' }],
   },
   {
-    id: 'k_vrf', act: 9, title: 'Lane register file', kind: 'build', requires: ['k_lesson'], base: BUILDK.k_vrf, par: { nand: 8772, period: 11 },
+    id: 'k_vrf', act: 9, title: 'Lane register file', kind: 'build', optional: true, requires: ['k_lesson'], base: BUILDK.k_vrf, par: { nand: 8772, period: 11 },
     why: 'Every lane needs registers of its own: the same register numbers, different values. Four register files, written lane by lane: storage is what a lane costs.',
     tips: ['Your register file is unlocked: one per lane, sharing wa, ra1 and ra2.', 'Split we into four bits: one write enable per lane.'],
     codex: ['vrf'], unlocks: ['rv16_vrf4'], chapters: [{ chapter: 'lanes', label: 'Lanes' }],
   },
   {
-    id: 'k_mask', act: 9, title: 'Active mask', kind: 'build', requires: ['k_lesson'], base: BUILDK.k_mask, par: { nand: 102, period: 8 },
+    id: 'k_mask', act: 9, title: 'Active mask', kind: 'build', optional: true, requires: ['k_lesson'], base: BUILDK.k_mask, par: { nand: 102, period: 8 },
     why: 'Not every lane always has work: an array whose length is not a multiple of four, or one side of an if. The mask switches lanes off: they still compute, but write nothing. The lowest active lane, the leader, speaks for the warp.',
     tips: ['A 4-bit register; at reset its input is forced to 1111 (OR each bit with rst) and it loads.', 'lead: lane 0 if m0; else 1 if m1; else 2 if m2; else 3. Bit 1 = ¬m0·¬m1, bit 0 = ¬m0·(m1 + ¬m2).', 'we and dwe: AND the mask with rwe and mwe, copied to four bits.'],
     codex: ['activemask', 'leader'], unlocks: ['rv16_mask4'], chapters: [{ chapter: 'simt', label: 'Threads in lock-step' }],
   },
   {
-    id: 'k_simd', act: 9, title: 'SIMD core', kind: 'core', requires: ['k_lanes', 'k_vrf', 'k_mask'], base: BUILDK.k_simd, par: { nand: 15774, period: 100, cycles: 810 },
+    id: 'k_simd', act: 9, title: 'SIMD core', kind: 'core', optional: true, requires: ['k_lanes', 'k_vrf', 'k_mask'], base: BUILDK.k_simd, par: { nand: 15774, period: 100, cycles: 810 },
     why: 'One fetch, one decode, one control unit; four lanes. Every lane runs every instruction on its own registers and memory port; tid tells them apart and the mask turns them off. A branch has one PC to steer: the leader decides it.',
     tips: ['Start from your single-cycle core: the control unit, immediates, branch and next-PC logic stay as they are.', 'The lane decoder is given: tmc, tid, split and join (the last two can wait for the SIMT core).', 'Leader operands: two 4:1 bus muxes on the lanes’ rs1 and rs2, selected by lead. They feed the branch unit, jalr and tmc.', 'Results: per lane, ALU or memory; pc + 1 and the immediate are the same for every lane; tid replaces them all when the decoder says so.'],
     codex: ['warp'], gives: ['rv16_lanedec'], unlocks: ['rv16_lanedec'], chapters: [{ chapter: 'lanes', label: 'Lanes' }],
   },
   {
-    id: 'k_stack', act: 9, title: 'Reconvergence stack', kind: 'build', requires: ['k_simd'], base: BUILDK.k_stack, par: { nand: 1995, period: 19 },
+    id: 'k_stack', act: 9, title: 'Reconvergence stack', kind: 'build', optional: true, requires: ['k_simd'], base: BUILDK.k_stack, par: { nand: 1995, period: 19 },
     why: 'When the lanes disagree on an if, the SIMD core follows the leader and the others compute the wrong side. Instead: run the lanes that take one side, park the others with the address to resume, run them next, then reconverge. A stack, because ifs nest.',
     tips: ['An entry is 26 bits: mask, else lanes, pc, pending, valid. Registers with enable, a 2:1 mux in front of each: a push shifts down, a pop shifts up.', 'The top entry decides join: pending → run the else lanes (jump); not pending → restore and pop.', 'Reset clears only the valid bits; the rest may hold anything.'],
     codex: ['reconvergence', 'divergence'], unlocks: ['rv16_stack4'], chapters: [{ chapter: 'simt', label: 'Threads in lock-step' }],
   },
   {
-    id: 'k_simt', act: 9, title: 'SIMT core', kind: 'core', requires: ['k_simd', 'k_stack'], base: BUILDK.k_simt, par: { nand: 17837, period: 100, cycles: 919 },
+    id: 'k_simt', act: 9, title: 'SIMT core', kind: 'core', optional: true, requires: ['k_simd', 'k_stack'], base: BUILDK.k_simt, par: { nand: 17837, period: 100, cycles: 919 },
     why: 'The SIMD core with the stack: split and join make each lane behave like a thread of its own, a scalar program per lane, while one control unit still drives all four.',
     tips: ['The stack’s p is the lanes’ nz (rs1 ≠ 0); its pc1 is the next-PC logic’s pc + 1.', 'Mask: load when tmc runs or the stack says so; tmc’s value wins.', 'The PC: a 2:1 mux after the next-PC choice, to jpc when the stack jumps.'],
     codex: ['simt'], chapters: [{ chapter: 'simt', label: 'Threads in lock-step' }],
   },
   {
-    id: 'p_saxpy', act: 9, title: 'saxpy', kind: 'program', requires: ['k_simd'], par: { cycles: 90, idle: 0 },
+    id: 'p_saxpy', act: 9, title: 'saxpy', kind: 'program', optional: true, requires: ['k_simd'], par: { cycles: 90, idle: 0 },
     why: 'The classic kernel: y ← a·x + y over an array. Each lane takes every fourth element; nobody waits for anybody.',
     tips: ['Thread i handles elements i, i + 4, i + 8, …: start at tid, step by 4.', 'n is a multiple of 4, so every lane runs the loop the same number of times: no lane idles.'],
     codex: ['utilization'], chapters: [{ chapter: 'lanes', label: 'Lanes' }],
   },
   {
-    id: 'p_reduce', act: 9, title: 'Reduction', kind: 'program', requires: ['k_simt'], par: { cycles: 35, idle: 19 },
+    id: 'p_reduce', act: 9, title: 'Reduction', kind: 'program', optional: true, requires: ['k_simt'], par: { cycles: 35, idle: 19 },
     why: 'Summing an array is the opposite of saxpy: four partial sums must become one. Every step of the final combine has fewer useful lanes: the cost of a reduction is the lanes left with nothing to do at its end.',
     tips: ['First each lane sums its strided share, all lanes busy.', 'Then combine through memory: lanes store their partial sums, fewer lanes add pairs.', 'Idle counts masked lanes, not useless ones: every lane can repeat the whole combine and none is ever masked. Busy, but three of the four compute a sum nobody needs.'],
     codex: ['reduction'], chapters: [{ chapter: 'simt', label: 'Threads in lock-step' }],
   },
   // Phases 3 and 4 of the GPU track: on the map, not playable yet.
   {
-    id: 'k_coal', act: 9, title: 'Coalescer', kind: 'build', requires: ['k_simd'], soon: true,
-    why: 'Four memory ports cost four memories. One port, with the lanes’ neighbouring addresses merged into one wide access, costs one.', tips: [], codex: [],
+    id: 'k_coal', act: 9, title: 'Coalescer', kind: 'build', optional: true, requires: ['k_simd'], base: BUILDK.k_coal, par: { nand: 467, depth: 27 },
+    why: 'Four memory ports cost four memories. One port as wide as a line costs one: when neighbouring threads touch neighbouring words, one access serves them all. The coalescer finds which lanes the next access serves.',
+    tips: ['Drop each address’s two low bits: what is left (14 bits) names its line.', 'The leader is the lowest active lane, exactly as in your mask; a 4:1 bus mux picks its line.', 'Lane 0, when active, is the leader: it needs no comparator. Lanes 1–3: an equality comparator each, ANDed with their mask bit.', 'left = mask XOR served: served never contains an inactive lane.'],
+    codex: ['coalescing'], unlocks: ['rv16_coal4'], chapters: [{ chapter: 'feed', label: 'Feeding the lanes' }],
   },
   {
-    id: 'k_warps', act: 9, title: 'Two warps', kind: 'core', requires: ['k_simt', 'k_coal'], soon: true,
-    why: 'While one warp waits for memory, issue the other: latency hidden by switching threads instead of by forwarding.', tips: [], codex: [],
+    id: 'k_warps', act: 9, title: 'Two warps', kind: 'core', optional: true, requires: ['k_simt', 'k_coal'], base: BUILDK.k_warps, par: { nand: 30163, period: 95, cycles: 2093 },
+    why: 'Real memory answers late. While one warp waits for its word, let the other issue: latency hidden by switching threads instead of by forwarding or stalling. With a memory one cycle late and two warps taking turns, every load is back before its warp issues again.',
+    tips: ['Start from your SIMT core: fetch, decode, control and the lanes stay shared. Duplicate what is state: PC, mask, stack, lane registers.', 'The warp bit is a flip-flop that toggles every cycle (0 after reset); 2:1 muxes pick the issuing warp’s PC, register reads and mask.', 'A load: hold its lanes (mask · rwe) and rd for one cycle, then write drdata into the other warp’s registers. In any cycle each register file has one writer: its warp’s results, or the returning load.', 'bar: a waiting bit per warp. Arriving first sets yours, arriving second clears the other’s. A warp goes only if it is not held at bar (or the other has no lanes) and has lanes of its own; a PC moves only when its warp goes.'],
+    codex: ['barrel', 'barrier'], chapters: [{ chapter: 'warps', label: 'Hiding latency' }],
   },
   {
-    id: 'p_hist', act: 9, title: 'Histogram', kind: 'program', requires: ['k_coal'], soon: true,
-    why: 'Lanes that update the same counter at once: atomics.', tips: [], codex: [],
+    id: 'p_hist', act: 9, title: 'Histogram', kind: 'program', optional: true, requires: ['k_warps'], par: { cycles: 176, idle: 0 },
+    why: 'Eight threads count values into sixteen bins. Two threads that meet the same value would update one counter at once, and RV16 has no atomic add: one of the two counts would be lost. Count into private counters, wait at a barrier until both warps have counted, then add the counters up with every thread.',
+    tips: ['Thread t counts value v in the word 8·v + t: then bin b’s eight counters sit in a row, at 8·b.', 'Thread t takes elements t, t + 8, …: n is a multiple of 8, so every lane has the same number.', 'After bar, every thread adds up two bins: their sixteen counters are the words 16·tid … 16·tid + 15.', 'The warps take turns, so a kernel without bar can look right. The grader also lets warp 1 run ahead of warp 0.'],
+    codex: ['privatization', 'barrier'], chapters: [{ chapter: 'feed', label: 'Feeding the lanes' }],
   },
   {
-    id: 'k_edge', act: 9, title: 'Edge stepper', kind: 'build', requires: ['k_simd'], soon: true,
+    id: 'k_edge', act: 9, title: 'Edge stepper', kind: 'build', optional: true, requires: ['k_simd'], soon: true,
     why: 'Is a pixel inside a triangle? Three edge functions, stepped with adders only.', tips: [], codex: [],
   },
   {
-    id: 'k_tile', act: 9, title: 'Tile walk', kind: 'build', requires: ['k_edge'], soon: true,
+    id: 'k_tile', act: 9, title: 'Tile walk', kind: 'build', optional: true, requires: ['k_edge'], soon: true,
     why: 'Walk the triangle’s bounding box tile by tile, skipping tiles it does not touch.', tips: [], codex: [],
   },
   {
-    id: 'k_raster', act: 9, title: 'Rasterizer', kind: 'build', requires: ['k_tile'], soon: true,
+    id: 'k_raster', act: 9, title: 'Rasterizer', kind: 'build', optional: true, requires: ['k_tile'], soon: true,
     why: 'Edge stepper and tile walk together: a triangle in, the covered pixels out.', tips: [], codex: [],
   },
   {
-    id: 'k_frame', act: 9, title: 'A frame', kind: 'core', requires: ['k_raster', 'k_warps'], soon: true,
+    id: 'k_frame', act: 9, title: 'A frame', kind: 'core', optional: true, requires: ['k_raster', 'k_warps'], soon: true,
     why: 'Vertices transformed by a kernel on the lanes, rasterized in hardware: a triangle on the 32 × 32 screen.', tips: [], codex: [],
   },
 ];

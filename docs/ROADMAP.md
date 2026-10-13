@@ -633,7 +633,7 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   multiCore(n) with arbiterN (e3c6b2a), the 4-core baseline the lanes are measured against
 - ✅ 2. Campaign act 9, first levels (below), with the RV16 encodings, a 4-lane RV16 golden model and a lane bench
 - 🚧 3. Warps and memory (mockup approved 2026-10-13), in three parts: ✅ 3a warps, scoreboard, an 8-cycle memory and
-  chapter 28; ✅ 3b coalescing, banked shared memory, bar, amoadd.w in the lanes and chapter 29; ⏳ 3c the act's coalescer,
+  chapter 28; ✅ 3b coalescing, banked shared memory, bar, amoadd.w in the lanes and chapter 29; ✅ 3c the act's coalescer,
   two-warp and histogram levels
 - ⏳ 4. Graphics: framebuffer, rasterizer, the graphics pipeline; chapters 30–31 and the act's raster levels
 
@@ -685,7 +685,8 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   - ✅ phase 2: k_lesson (lesson: latency or throughput), k_lanes (build: four lanes), k_vrf (build: lane register file),
     k_mask (build: active mask), k_simd (core: SIMD core), k_stack (build: reconvergence stack), k_simt (core: SIMT
     core); kernel puzzles p_saxpy and p_reduce, scored on cycles and lane utilization
-  - phase 3: k_coal (build: coalescer), k_warps (core: two warps); puzzle p_hist
+  - ✅ phase 3: k_coal (build: coalescer, 467 NANDs), k_warps (core: two warps taking turns over a memory one cycle
+    late, 30 163 NANDs, period 95); puzzle p_hist (private counters and a bar, checked under two issue orders)
   - phase 4: k_edge (build: edge stepper, adders only), k_tile (build: tile walk), k_raster (build: rasterizer),
     k_frame (core: a frame on the 32 × 32 screen)
 - ✅ RV16 groundwork: split / join / tmc / bar in SYSTEM funct3 4–7 (illegal on every scalar core, so the trap cores

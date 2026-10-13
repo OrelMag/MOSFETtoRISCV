@@ -90,3 +90,124 @@ describe('the models behind the build levels', () => {
     expect(m.entries).toEqual([]);
   });
 });
+
+describe('the coalescer (k_coal)', () => {
+  it('serves the leader\'s line: the codex example\'s four rows', async () => {
+    const { coalesce16 } = await import('../src/lib/rv16/warps16');
+    expect(coalesce16([0x100, 0x101, 0x102, 0x103], 0b1111)).toEqual({ line: 0x40, served: 0b1111, left: 0 });
+    expect(coalesce16([0x102, 0x103, 0x104, 0x105], 0b1111)).toEqual({ line: 0x40, served: 0b0011, left: 0b1100 });
+    expect(coalesce16([0x100, 0x104, 0x108, 0x10c], 0b1111)).toEqual({ line: 0x40, served: 0b0001, left: 0b1110 });
+    expect(coalesce16([0x7f3, 0x100, 0x101, 0x102], 0b1110)).toEqual({ line: 0x40, served: 0b1110, left: 0 });
+    expect(coalesce16([1, 2, 3, 4], 0)).toMatchObject({ served: 0, left: 0 });
+  });
+
+  it('a sequencer looping on left serves every lane once, in as many accesses as lines', async () => {
+    const { coalesce16, lineOf16 } = await import('../src/lib/rv16/warps16');
+    const { rng } = await import('../src/campaign/drills');
+    const r = rng(7);
+    for (let k = 0; k < 200; k++) {
+      const base = Math.floor(r() * 0x10000);
+      const addrs = [0, 1, 2, 3].map(() => (base + Math.floor(r() * 12)) & 0xffff);
+      const mask = Math.floor(r() * 16);
+      let left = mask, accesses = 0, seen = 0;
+      while (left) {
+        const s = coalesce16(addrs, left);
+        expect(s.served & seen).toBe(0);
+        seen |= s.served;
+        left = s.left;
+        accesses++;
+      }
+      expect(seen).toBe(mask);
+      const lines = new Set([0, 1, 2, 3].filter((i) => (mask >> i) & 1).map((i) => lineOf16(addrs[i])));
+      expect(accesses).toBe(lines.size);
+    }
+  });
+
+  it('the numbers its case quotes: 467 NANDs, depth 27; chapter 29\'s access unit 5 870, depth 58', async () => {
+    const { COAL16 } = await import('../src/lib/rv16/warps16');
+    const { accessUnit } = await import('../src/lib/warpmem');
+    const { logicDepth, stats } = await import('../src/sim/stats');
+    expect([stats(COAL16).nands, logicDepth(COAL16)]).toEqual([467, 27]);
+    expect([stats(accessUnit(4)).nands, logicDepth(accessUnit(4))]).toEqual([5870, 58]);
+  });
+});
+
+describe('the two-warp bench (k_warps)', async () => {
+  const { runWarps, warpGolden, warpPeriod } = await import('../src/campaign/warpcheck');
+  const { warpTests } = await import('../src/campaign/lanetests');
+  const { RV16_WARPS, WARP_PORTS } = await import('../src/lib/rv16/warps16');
+  const wspec = (tests: CoreSpec['tests']): CoreSpec => ({ tests, budget: { cpi: 1, extra: 4 }, lanes: 4, warps: 2 });
+  const only = (...names: string[]) => () => warpTests().filter((t) => names.includes(t.name));
+  /** The reference core with one output replaced by a constant. */
+  const forced = (port: string, value: number): ComponentDef => ({
+    id: `forced_${port}`, name: 'forced', category: 'cpu', symbol: { kind: 'box' }, ports: WARP_PORTS,
+    netlist: () => {
+      const w = WARP_PORTS.find((p) => p.name === port)!.width;
+      const nets = WARP_PORTS.filter((p) => p.name !== port).map((p) => ({ ends: p.dir === 'in' ? [p.name, `c.${p.name}`] : [`c.${p.name}`, p.name] }));
+      return {
+        instances: [{ name: 'c', def: RV16_WARPS }, { name: 'k', def: { id: `k${w}_${value}`, name: String(value), category: 'routing', symbol: { kind: 'box' }, ports: [{ name: 'y', width: w, dir: 'out' }], behavior: { eval: () => [value] } } as ComponentDef }],
+        nets: [...nets, { ends: ['k.y', port] }],
+      };
+    },
+  });
+
+  it('the reference core passes every program at one instruction per turn', () => {
+    const r = runWarps(RV16_WARPS, 'gate', wspec(warpTests));
+    expect(r.failures).toEqual([]);
+    expect(r.tested).toBe(31);
+    expect(r.cycles).toBe(2093);
+  });
+
+  it('a lane core without the warp pins is told which are missing', () => {
+    expect(runWarps(rv16Lanes(true), 'gate', wspec(warpTests)).failures[0]).toMatch(/missing pins: warp, lwe, lwa, lwd0/);
+  });
+
+  it('a core that never writes the returning loads fails at the first load, naming warp, lane and instruction', () => {
+    const r = runWarps(forced('lwe', 0), 'gate', wspec(only('two warps: loads')));
+    expect(r.failures[0]).toMatch(/two warps: loads: warp 0, lane \d \(tid \d\)'s register write #5 is a1 \(x4\) ← .* on rwe at cycle \d+ .* expected a1 \(x4\) ← .* from "lw a1, 0\(a0\)"/);
+  });
+
+  it('a core that reports the wrong warp fails on the other warp\'s first write', () => {
+    const r = runWarps(forced('warp', 0), 'gate', wspec(only('two warps: tid')));
+    expect(r.failures[0]).toMatch(/warp 0, lane 0 \(tid 0\)'s register write #2 is t0 \(x6\) ← 0x0004/);
+  });
+
+  it('"bar waits" tells a working barrier from none: without it warp 1 reads before warp 0 writes', () => {
+    const t = warpTests().find((x) => x.name === 'two warps: bar waits')!;
+    const g = warpGolden(t), nop = warpGolden({ name: 'nop', src: t.src!.replace(/^(\w+:)?\s+bar\b/gm, (_, l) => `${l ?? ''}        addi x0, x0, 0`) });
+    expect(nop.regs.slice(4)).not.toEqual(g.regs.slice(4));
+    expect(g.regs[4].at(-1)!.value).toBe(8); // tid 4 read lane 0's 7, plus 1
+    expect(nop.regs[4].at(-1)!.value).toBe(1);
+  });
+
+  it('the event-driven bench agrees with the bit-parallel one', () => {
+    const tests = only('two warps: loads', 'two warps: bar waits', 'two warps: an ended warp');
+    const a = runWarps(RV16_WARPS, 'gate', wspec(tests)), b = runWarps(RV16_WARPS, 'gate', wspec(tests), 'gate');
+    expect(b.failures).toEqual(a.failures);
+    expect(b.cycles).toBe(a.cycles);
+  }, 120000);
+
+  it('the numbers the level quotes: 30 163 NANDs (17 544 of lane registers), period 95, 2 160 turns, 59 idle', async () => {
+    const { stats } = await import('../src/sim/stats');
+    const { VRF16 } = await import('../src/lib/rv16/lanes16');
+    const { assemble16 } = await import('../src/riscv/rv16/asm16');
+    const { Warps16 } = await import('../src/riscv/rv16/warps16');
+    const { decode16 } = await import('../src/riscv/rv16/isa16');
+    expect(stats(RV16_WARPS).nands).toBe(30163);
+    expect(stats(RV16_WARPS).nands - stats(rv16Lanes(true)).nands).toBe(12326);
+    expect(2 * stats(VRF16).nands).toBe(17544);
+    expect(warpPeriod(RV16_WARPS)).toBe(95);
+    let turns = 0, alone = 0, idle = 0;
+    for (const t of warpTests()) {
+      const a = assemble16(t.src!);
+      const m = new Warps16(a.words, {}, a.data);
+      while (!m.halted) {
+        const s = m.step();
+        if (!s.step) idle++;
+        else alone += decode16(s.step.instr).spec?.name === 'lw' ? 2 : 1; // one warp alone: a stall per load
+      }
+      turns += m.steps;
+    }
+    expect([turns, alone, idle]).toEqual([2160, 2229, 59]);
+  });
+});
