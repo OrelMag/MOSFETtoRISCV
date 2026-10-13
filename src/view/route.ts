@@ -396,6 +396,9 @@ export function backwards(p: Vec[], [P, P1, S1, S]: Quad): boolean {
   return behind(P, P1, p[1]) || behind(S, S1, p[p.length - 2]);
 }
 
+/** The total work untangle() may do on one schematic, in popped search states. */
+export const UNTANGLE_POPS = 12_000_000;
+
 /**
  * Fallback for paths still lying on another net after trunk placement, where the overlap is
  * on a fixed row (a long run into a sink, a driver's own row), and for paths reaching a pin from
@@ -406,6 +409,10 @@ export function backwards(p: Vec[], [P, P1, S1, S]: Quad): boolean {
  */
 function untangle(plans: NetPlan[], all: Vec[][][], boxes: Rect[]) {
   const G = 0.5, MARGIN = 4, BEND = 1.5, CROSS = 1, CHEAP = 0.3, eps = 1e-6;
+  // States popped by all the searches together. Past the budget the remaining overlaps are drawn
+  // rather than freezing the page (the registry's worst schematic needs about 5 million).
+  let budgetPops = UNTANGLE_POPS;
+  let hKey = new Float64Array(1024), hVal = new Int32Array(1024);
   const DX = [1, 0, -1, 0], DY = [0, 1, 0, -1];
   const heading = (a: Vec, b: Vec) => (b[0] > a[0] ? 0 : b[1] > a[1] ? 1 : b[0] < a[0] ? 2 : 3);
   const onGrid = (v: number) => Math.abs(v / G - Math.round(v / G)) < eps;
@@ -438,6 +445,7 @@ function untangle(plans: NetPlan[], all: Vec[][][], boxes: Rect[]) {
     const mine = new Uint8Array(N);
     const dist = new Float64Array(N * 4), prev = new Int32Array(N * 4);
     for (const [net, pi] of todo) {
+      if (budgetPops <= 0) return;
       const n = plans[net];
       const [P, P1, S1, S] = freeOf(n, pi)!;
       if (![P1, S1].every((v) => onGrid(v[0]) && onGrid(v[1]))) continue;
@@ -477,31 +485,40 @@ function untangle(plans: NetPlan[], all: Vec[][][], boxes: Rect[]) {
       const start = cell(P1), goal = cell(S1), d0 = heading(P, P1), dIn = heading(S1, S);
       dist.fill(Infinity);
       prev.fill(-1);
-      const heap: [number, number][] = [];
+      // A binary heap of (key, state) in typed arrays: these searches pop millions of states.
+      let len = 0;
       const up = (d: number, s: number) => {
-        heap.push([d, s]);
-        for (let i = heap.length - 1; i > 0;) {
+        if (len === hKey.length) {
+          const k = new Float64Array(len * 2), v = new Int32Array(len * 2);
+          k.set(hKey); v.set(hVal);
+          hKey = k; hVal = v;
+        }
+        let i = len++;
+        for (; i > 0;) {
           const p = (i - 1) >> 1;
-          if (heap[p][0] <= heap[i][0]) break;
-          [heap[p], heap[i]] = [heap[i], heap[p]];
+          if (hKey[p] <= d) break;
+          hKey[i] = hKey[p]; hVal[i] = hVal[p];
           i = p;
         }
+        hKey[i] = d; hVal[i] = s;
       };
+      // Pops the top into topKey / topVal.
+      let topKey = 0, topVal = 0;
       const down = () => {
-        const top = heap[0], last = heap.pop()!;
-        if (heap.length) {
-          heap[0] = last;
-          for (let i = 0; ;) {
-            const l = 2 * i + 1, r = l + 1;
-            let m = i;
-            if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
-            if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
-            if (m === i) break;
-            [heap[m], heap[i]] = [heap[i], heap[m]];
-            i = m;
-          }
+        topKey = hKey[0]; topVal = hVal[0];
+        const lk = hKey[--len], lv = hVal[len];
+        if (!len) return;
+        let i = 0;
+        for (;;) {
+          const l = 2 * i + 1, r = l + 1;
+          let m = -1, mk = lk;
+          if (l < len && hKey[l] < mk) { m = l; mk = hKey[l]; }
+          if (r < len && hKey[r] < mk) { m = r; mk = hKey[r]; }
+          if (m < 0) break;
+          hKey[i] = mk; hVal[i] = hVal[m];
+          i = m;
         }
-        return top;
+        hKey[i] = lk; hVal[i] = lv;
       };
       // A*: the heap is keyed on cost so far plus the Manhattan distance left at the cheapest
       // step cost (a lower bound).
@@ -512,8 +529,10 @@ function untangle(plans: NetPlan[], all: Vec[][][], boxes: Rect[]) {
       // A detour much longer than the direct route is worse than the overlap it avoids.
       const budget = 2 * (Math.abs(S1[0] - P1[0]) + Math.abs(S1[1] - P1[1])) + 20;
       let end = -1;
-      while (heap.length) {
-        const [f, s] = down();
+      while (len) {
+        if (budgetPops-- <= 0) break;
+        down();
+        const f = topKey, s = topVal;
         if (f > budget) break;
         const c = s >> 2, h = s & 3, d = dist[s];
         if (f > d + rest(c) + eps) continue;
