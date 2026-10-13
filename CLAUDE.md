@@ -77,7 +77,9 @@ src/sim/       simulation core (no DOM)
   geometry.ts    symbol sizes and port positions (grid units) shared by authors, router, renderer
   flatten.ts     hierarchy → flat 1-bit nets + leaves, keeping a HierNode tree mapping every
                  level's ports/wires to flat nets (this is what makes every box transparent);
-                 powerOn hints may be dotted paths into children ('w3.ff0.ff.slave.sr.q')
+                 powerOn hints may be dotted paths into children ('w3.ff0.ff.slave.sr.q'); one array per net, shared by the ports
+                 on it and the leaves reading it (never mutate one), HierNode.path computed from the parents (memory: ch 31's
+                 413 594 leaves)
   gatesim.ts     event-driven 3-valued (0/1/X) simulator, unit NAND delay, transport delay,
                  relaxation for power-on and oscillation resolution; runUntil(t) for a
                  fixed-period clock (an edge does not wait for the logic to settle); onTrace +
