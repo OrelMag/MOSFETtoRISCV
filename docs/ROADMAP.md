@@ -671,7 +671,8 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   steps) after every issue; riscv/warptiming.ts predicts its cycles exactly (tested). Measured, saxpy on 64 elements,
   8-cycle loads: 266 / 192 / 172 cycles on 1 / 2 / 4 warps (58 / 83 / 100 % of the issue slots); a warp costs 110 622
   NANDs (its registers 92 564). The Warp panel (widgets/warps.ts) draws the issue timeline and the scoreboards; the
-  occupancy widget sweeps warps and latency
+  occupancy widget sweeps warps and latency; the top level drawn by hand in four bands (warps, decode, lanes, memory),
+  about twice as large at fit in chapters 28, 29 and 31
 - ✅ Feeding the lanes (chapter 29): warpCore(…, { lsu: true, mul }) (lib/warpmem.ts): one memory port behind an access
   unit (a global access serves the lanes in the leader's 16-byte line; a 4-bank shared memory at 0x1000 serves each lane
   whose bank row is its word, broadcasts included; amoadd.w one lane per access); a memory instruction holds the issue
