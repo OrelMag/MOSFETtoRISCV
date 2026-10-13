@@ -17,8 +17,8 @@ export const chMap: Chapter = {
         a few gates make an adder, adders and registers make a processor.</p>
         <p>This journey climbs those levels one at a time. Every level is built <em>only</em> from the
         level below it, and nothing is hidden: every box you see is a <strong>transparent box</strong>.</p>
-        <div class="note">The ladder on the right is the whole journey. The first rungs are ready; the
-        rest are coming. Each rung lists what it is made of.</div>`,
+        <div class="note">The ladder on the right is the whole journey. Each rung lists what it is made of;
+        a click opens the chapter that builds it.</div>`,
       widget: () => journeyWidget(),
     },
     {

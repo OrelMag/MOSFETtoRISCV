@@ -100,7 +100,9 @@ export const chSilicon: Chapter = {
         <p>That is the whole path: a voltage-controlled switch, a NAND, gates, adders, latches, memories, an ALU, a single-cycle RISC-V, a pipeline, interrupts,
         multiplication, caches, microcode, floating point, two cores, and geometry on a wafer. Every value on every wire along the way was computed, not drawn, and every box can still be opened all the way down to
         the four transistors of a NAND.</p>
-        <p>Where to go next: build it for real on an FPGA from the Verilog tabs; read Harris &amp; Harris, Patterson &amp; Hennessy, or Weste &amp; Harris for CMOS VLSI; or tape out
+        <p>The journey goes on with the same bricks arranged for throughput: chapters 26–31 build a GPU, from lanes sharing
+        one instruction stream to a rasterizer drawing into a frame buffer.</p>
+        <p>Or go further on your own: build it for real on an FPGA from the Verilog tabs; read Harris &amp; Harris, Patterson &amp; Hennessy, or Weste &amp; Harris for CMOS VLSI; or tape out
         a design on an open-source shuttle.</p>`,
       widget: journeyWidget,
       challenge: {
