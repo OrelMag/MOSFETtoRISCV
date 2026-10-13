@@ -339,12 +339,20 @@ Legend: `id` ← requires · *opt* optional · (ex) an existing sandbox challeng
 - ✅ `k_simt`: the SIMT core: split / join ← k_simd, k_stack
 - ✅ kernel puzzles `p_saxpy` ← k_simd and `p_reduce` ← k_simt, on the lane golden model, graded on cycles and idle
   lanes (100 % − lane utilization)
-- ⏳ phase 3: `k_coal` (coalescer), `k_warps` (two warps), `p_hist`; phase 4: `k_edge`, `k_tile`, `k_raster`,
-  `k_frame` (on the map as coming soon)
+- ✅ `k_coal`: the coalescer: the leader's line (address bits 15 … 2), the lanes served, the lanes left (a table) ← k_simd
+- ✅ `k_warps`: two warps taking turns every cycle over a data memory one cycle late; a second register write port for
+  the returning loads; `bar` ← k_simt, k_coal
+- ✅ kernel puzzle `p_hist` ← k_warps: 16 bins, 8 threads on two warps, no atomics (private counters, a bar, a combine);
+  each test also runs with warp 1 ahead, so a kernel missing its bar fails
+- ⏳ phase 4: `k_edge`, `k_tile`, `k_raster`, `k_frame` (on the map as coming soon)
 
 The lane cores' bench (`lanecheck.ts`) is the core bench with a memory port and a register write port per lane
 (`daddr<i>`, `dwdata<i>`, `drdata<i>`, `dwe` bit i; `rwe` bit i, `rwd<i>`, a shared `rwa`): each lane's
 writes and stores are compared in order with the lane golden model; stores of one cycle land lowest lane first.
+The two-warp bench (`warpcheck.ts`) serves `drdata<i>` from the address of the cycle before (each lane's memory reads
+at the clock edge, before that edge's stores) and adds `warp` and a load write port (`lwe`, `lwa`, `lwd<i>`): issue-port
+writes and stores belong to the warp issuing now, load-port writes to the warp that issued the cycle before; each
+thread's events are compared in order with `Warps16` (riscv/rv16/warps16.ts: the warps taking turns, warp 0 first).
 
 ### Act 8 — Side quests (all optional)
 - ✅ `o_mulseq`: shift-and-add multiplier ← a_add16, s_reg16
@@ -480,8 +488,9 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
   level and a **fuller codex**: details in the roadmap's Phase 12, Campaign.
 - ⏳ **Before the transistor**: an act with relay and tube bricks, a 3D view of the machine and punch-card
   programs (roadmap Phase 14).
-- 🚧 **GPU act**: act 9's first levels are playable (lanes, lane register file, mask, SIMD core, reconvergence
-  stack, SIMT core, saxpy and reduction kernels); the coalescer, warps and the rasterizer follow (roadmap Phase 15).
+- 🚧 **GPU act**: act 9's compute levels are playable (lanes, lane register file, mask, SIMD core, reconvergence
+  stack, SIMT core, coalescer, two warps; saxpy, reduction and histogram kernels); the rasterizer follows (roadmap
+  Phase 15).
 - ⏳ **Memory act**: sense amplifier, DRAM bank with refresh, row-buffer controller, a shared bus with DMA and a
   flash page store (roadmap Phase 16).
 
