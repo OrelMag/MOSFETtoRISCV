@@ -2,9 +2,9 @@
 // rasterizer's position), the scenes it sits in (the display alone, the rasterizer drawing into it) and the
 // edge-function explorer.
 
-import { type DrawOp, FB_W, rasterize, type Vtx } from '../gfx/raster';
+import { type DrawOp, FB_W, rasterize, rgb332, type Vtx } from '../gfx/raster';
 import { displayTop, FB_WORDS, GPU30, GPU30Z, VERTEX_PINS } from '../lib/raster';
-import { ramLeafState } from '../lib/bigmem';
+import { FrameMemory, frameOf } from './framemem';
 import type { HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
 import type { Bit } from '../sim/types';
@@ -16,10 +16,6 @@ const kid = (n: HierNode, ...p: string[]) => p.reduce<HierNode | undefined>((x, 
 /** A port's value, X bits read as 0. */
 const val = (sim: Sim, nets: number[]) => sim.getBits(nets).reduce((v: number, b: Bit, i) => v + (b === 1 ? 2 ** i : 0), 0);
 
-/** RGB332 → CSS rgb components. */
-export function rgb332(v: number): [number, number, number] {
-  return [Math.round(((v >> 5) & 7) * 255 / 7), Math.round(((v >> 2) & 7) * 255 / 7), Math.round((v & 3) * 255 / 3)];
-}
 const grey332 = (k: number) => (k << 5) | (k << 2) | (k >> 1);
 
 /** Frame 0 of the first scene: colour bars over a grey ramp. */
@@ -199,14 +195,7 @@ export class ScanCapture {
 
 /** The back frame's pixels, from the memory leaves (null when the frame is not simulated as a lookup). */
 export function backFrame(sim: Sim): Uint8Array | null {
-  const front = val(sim, kid(sim.design.root, 'scan')!.ports.front), fb = kid(sim.design.root, 'fb', `fb${front ? 0 : 1}`);
-  const out = new Uint8Array(W * W);
-  for (let j = 0; j < 4; j++) {
-    const st = ramLeafState(sim, kid(fb!, `bank${j}`));
-    if (!st) return null;
-    for (let a = 0; a < FB_WORDS; a++) out[4 * a + j] = st.x[a] ? 0 : st.mem[a];
-  }
-  return out;
+  return frameOf(sim, val(sim, kid(sim.design.root, 'scan')!.ports.front) ? 0 : 1);
 }
 
 /** The panel's controls explained, for the variant shown (display alone, one triangle, scripts, or the drawing pad). */
@@ -246,7 +235,6 @@ function controlsHelp(opts: PanelOpts): HTMLElement {
 
 export function screenPanel(opts: PanelOpts): ScenePanel {
   return (stage: Stage): Widget => {
-    let view: 'screen' | 'back' = 'screen';
     let running: number | null = null, rate = 0;
     /** Cycles a second (0: as fast as the simulation goes). */
     let cap = opts.gpu ? 0 : 1024;
@@ -258,13 +246,14 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
     const status = h('div', { class: 'cpu-status' });
     const runBtn = h('button', { class: 'btn sm primary', title: 'clock the circuit continuously at the chosen speed (Pause stops it)' }, 'Run');
     const frameBtn = h('button', { class: 'btn sm', title: 'run to the next vsync: the scan-out finishes the frame it is sending, then the clock stops' }, 'One frame');
-    const viewSel = h('select', { 'aria-label': 'view' }, h('option', { value: 'screen' }, 'Screen: what the scan-out sent'),
-      h('option', { value: 'back' }, 'Back frame: being drawn')) as HTMLSelectElement;
     const sync = h('input', { type: 'checkbox', checked: true }) as HTMLInputElement;
     const node = (sim: Sim, ...p: string[]) => kid(sim.design.root, ...p);
 
     const stop = () => { if (running) cancelAnimationFrame(running); running = null; runBtn.textContent = 'Run'; };
     const cap0 = new ScanCapture(stage, stop);
+    // the scenes with a depth buffer are the ones that clear: the scripts and the drawing pad
+    const mem = new FrameMemory(stage, cap0, { gpu: opts.gpu, depth: !!(opts.scripts || opts.link) }, () => paint());
+    const memLabel = h('span', { class: 'gfx-mem-label' });
     /** Draws still to start, and a swap after them. */
     let queue: DrawOp[] = [], swapAfter = false;
     const busyNow = () => { const sim = stage.sim; return !!sim && sim.design.root.ports.busy !== undefined && val(sim, sim.design.root.ports.busy) === 1; };
@@ -331,7 +320,6 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
       const f = cap0.frames;
       runFor(() => cap0.frames > f);
     });
-    viewSel.addEventListener('change', () => { view = viewSel.value as typeof view; paint(); });
     sync.addEventListener('change', () => stage.setInput('sync', sync.checked ? 1 : 0));
     const pulse = (port: string) => {
       stage.setInput(port, 1);
@@ -399,31 +387,25 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
     const paint = () => {
       const sim = stage.sim;
       if (!sim) return;
-      cap0.paint(cv, view === 'back' && opts.gpu ? backFrame(sim) : null);
-      const c = cv.getContext('2d')!, S = cv.width / W;
-      if (view === 'screen' || !opts.gpu) cap0.beam(cv);
-      else {
-        // where the rasterizer is: its tile and pixel
-        const wk = node(sim, 'rast', 'walk');
-        if (wk && val(sim, wk.ports.busy)) {
-          const x = val(sim, wk.ports.x), y = val(sim, wk.ports.y), s = val(sim, wk.ports.s);
-          c.strokeStyle = 'rgba(255,255,255,0.9)';
-          c.strokeRect((x & ~3) * S + 0.5, (y & ~3) * S + 0.5, 4 * S - 1, 4 * S - 1);
-          if (s === 10) { c.fillStyle = 'rgba(255,255,255,0.7)'; c.fillRect(x * S, y * S, S, S); }
-        }
-      }
       const fr = val(sim, node(sim, 'scan')!.ports.front);
+      // the large picture: what the scan-out sent, or the memory chosen below it
+      if (mem.sel === 'screen') {
+        cap0.paint(cv);
+        cap0.beam(cv);
+        memLabel.textContent = 'Screen: what the scan-out sent';
+      } else memLabel.textContent = mem.paintLarge(cv);
+      const showsBack = mem.sel === `f${1 - fr}`;
       const rb = node(sim, 'rast', 'walk');
       const busy = rb ? val(sim, rb.ports.busy) === 1 : false;
       // a black screen looks broken: say what it is and what to do
       if (opts.gpu) {
         const back = backFrame(sim), backBlank = !back || back.every((v) => v === 0);
-        if (view === 'screen' && cap0.blank()) {
+        if (mem.sel === 'screen' && cap0.blank()) {
           cap0.note(cv, busy || queue.length ? ['The front frame is blank.', 'The rasterizer is drawing', 'into the back frame.']
             : !backBlank ? ['The front frame is blank.', 'The back frame holds a picture:', 'Swap to show it.']
             : opts.link ? ['The front frame is blank.', 'Draw on the pad, then', 'Send to the GPU.']
             : opts.scripts ? ['The front frame is blank.', 'Draw these: the triangles, then a swap.'] : ['The front frame is blank.', 'Draw, then Swap.']);
-        } else if (view === 'back' && backBlank && !busy) cap0.note(cv, ['The back frame is blank.', opts.link ? 'Send a drawing to fill it.' : opts.scripts ? 'Draw these to fill it.' : 'Draw to fill it.']);
+        } else if (showsBack && backBlank && !busy) cap0.note(cv, ['The back frame is blank.', opts.link ? 'Send a drawing to fill it.' : opts.scripts ? 'Draw these to fill it.' : 'Draw to fill it.']);
       }
       status.replaceChildren(
         h('span', null, `cycle ${stage.cycles}`),
@@ -432,20 +414,21 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
         ...(opts.gpu ? [h('span', { class: busy ? 'warn' : '' }, busy ? 'rasterizer busy' : 'rasterizer idle')] : []),
         ...(queue.length ? [h('span', null, `${queue.length} draw${queue.length > 1 ? 's' : ''} to go`)] : []),
         ...(running && rate ? [h('span', { title: 'gate-level simulation in this page' }, `${rate.toLocaleString('en')} cycles/s`)] : []));
+      mem.update();
     };
 
     const title = h('h4', null, 'Screen 64 × 64, RGB332', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
     const el = h('div', { class: 'mem-panel cpu-panel gfx-panel', 'data-dock': 'right' }, title,
       h('div', { class: 'cpu-body' },
-        h('div', { class: 'param-row', style: 'margin-bottom:6px' }, ...(triSel ? [triSel] : []), ...(opts.gpu ? [viewSel] : []), speed),
-        h('div', { class: 'gfx-screen-wrap' }, cv),
-        h('div', { class: 'param-row', style: 'margin-top:6px' }, ...controls), status, controlsHelp(opts),
+        h('div', { class: 'param-row', style: 'margin-bottom:6px' }, ...(triSel ? [triSel] : []), speed),
+        h('div', { class: 'gfx-screen-wrap' }, cv, memLabel),
+        h('div', { class: 'param-row', style: 'margin-top:6px' }, ...controls), status, mem.el, controlsHelp(opts),
         h('p', { class: 'cpu-sec-hint' }, opts.link
-          ? 'Send to the GPU clears the back frame, draws your triangles in turn, each starting the cycle the last one ends, then swaps. Choose "Back frame" to watch them land.'
+          ? 'Send to the GPU clears the back frame, draws your triangles in turn, each starting the cycle the last one ends, then swaps. Click the back frame under the screen to watch them land.'
           : opts.scripts
-          ? 'Draw these clears the back frame and draws the triangles in turn, each waiting for the rasterizer, then swaps. Choose "Back frame" to watch them land.'
+          ? 'Draw these clears the back frame and draws the triangles in turn, each waiting for the rasterizer, then swaps. Click the back frame under the screen to watch them land.'
           : opts.gpu
-          ? 'Draw starts the rasterizer on the triangle at its inputs; it writes into the back frame (choose "Back frame" to watch). Swap shows it.'
+          ? 'Draw starts the rasterizer on the triangle at its inputs; it writes into the back frame (click the back frame under the screen to watch). Swap shows it.'
           : 'The scan-out reads four pixels a cycle; the bright row is where it reads now. Swap asks for the other frame.')));
     title.addEventListener('click', () => { el.classList.toggle('collapsed'); stage.setInset(el.classList.contains('collapsed') ? 0 : el.getBoundingClientRect().width + 24); });
     paint();

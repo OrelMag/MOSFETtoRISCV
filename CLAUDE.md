@@ -280,7 +280,11 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                core each access, the barrier, shared memory by bank, a kernel switcher; lanes against cores; the occupancy widget,
                from riscv/warptiming.ts); feed.ts: chapter 29's access widget (the gate-level access unit on a stride / offset)
                and the tiling chart (plain against tiled matmul over globalEvery);
-               screen.ts: chapter 30 (the screen panel: what the gate-level scan-out sent, or the back frame from the memory
+               framemem.ts: chapters 30–31's memory view inside the screen panels (FrameMemory: thumbnails of the screen, both frames
+               with FRONT / BACK, the depth buffer, one shown large; the back frame's pixels not written since the flip dimmed, fresh
+               draws glowing, from the write port fb.we / fb.wa watched at every edge; who writes it now: rasterizer phase and
+               tile, ROP counts, extra rows (ch 31: command unit, warp core), scan-out row; filmstrip of the frame rebuilt;
+               frameOf / depthOf read the memory leaves); screen.ts: chapter 30 (the screen panel: what the gate-level scan-out sent, or the back frame from the memory
                leaves with the walk's tile; Run on a 12 ms frame budget or a cycles/s cap, Draw, Swap, vsync wait, draw scripts;
                the edge-function explorer; ScanCapture: what the scan-out sent, backFrame; draws fed from inside the cycle loop, one
                starting the cycle busy falls; DrawLink: another panel plays draws and gets the frame shown); drawpad.ts: chapter 30's

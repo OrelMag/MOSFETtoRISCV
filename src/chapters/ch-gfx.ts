@@ -66,7 +66,7 @@ export const chPixels: Chapter = {
         <p>The large triangle: 1 369 pixels, 210 tiles tested, 106 walked, 1 914 cycles. Visiting its box pixel by pixel would take 3 368. A thin sliver gains
         more: 888 cycles against 3 848. A real GPU tests whole tiles of pixels in parallel and writes dozens a cycle; this one writes at most one, 11 989 NANDs
         in all.</p>
-        <div class="try">Draw, and watch the back frame fill (choose "Back frame" in the panel). Swap to put it on the screen. Then try the sliver, and the
+        <div class="try">Draw, and watch the back frame fill (click the BACK frame under the screen: what it held before stays dimmed until something writes it). Swap to put it on the screen. Then try the sliver, and the
         back face: it stops after three set-up cycles.</div>`,
       scene: () => gpuScene('large'),
       challenge: {
@@ -137,7 +137,7 @@ export const chPixels: Chapter = {
         its first tile, mostly on depth's division: 2 125 of the 6 453 here. A scribble of short segments is almost all set-up. That is why a GPU has
         several set-up units, and why meshes are not cut finer than the pixels need. The scene runs on the cycle engine, and the screen is compared
         pixel for pixel with the reference rasterizer's picture of the same triangles.</p>
-        <div class="try">Draw something, then Send to the GPU; choose "Back frame" in the screen panel to watch the triangles land. Tick "show triangles"
+        <div class="try">Draw something, then Send to the GPU; click the BACK frame under the screen to watch the clear sweep it and the triangles land. Tick "show triangles"
         to see what was sent. Then tick "keep my winding" and click a triangle counter-clockwise.</div>`,
       scene: drawScene,
       challenge: {
@@ -190,7 +190,7 @@ export const chGfxPipeline: Chapter = {
         does the same over the memory system: it reads command buffers, launches kernels and waits on fences.</p>
         <p>The triangle's frame is 6 144 cycles: the clear 4 438, the triangle 1 268, waiting for vsync 438; the kernel's 60 cycles hide inside the clear.
         A frame ends at a flip, and flips happen only at vsync, every 1 024 cycles: the frame time snaps to six scan-outs.</p>
-        <div class="try">One frame, then read the timeline: who works when. Open the command unit and watch its state register.</div>`,
+        <div class="try">One frame, then read the timeline: who works when. Click the BACK frame under the screen and step through a frame: the clear sweeps away the picture from two frames ago, then each triangle lands, and the two vertex buffers trade roles. Open the command unit and watch its state register.</div>`,
       scene: () => pipelineScene('triangle', { highlight: ['cmd'] }),
       challenge: {
         kind: 'quiz', question: 'The vertex kernel is busy 60 cycles of a 6 144-cycle frame. What would a second warp core gain?',
