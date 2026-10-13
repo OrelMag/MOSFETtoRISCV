@@ -109,3 +109,14 @@
 .m65-mem .a { color: var(--muted); width: 3.2em; }
 .m65-mem .z { color: var(--muted); opacity: 0.6; }
 .m65-mem .w { background: color-mix(in srgb, var(--warn) 30%, transparent); border-radius: 2px; }
+
+/* chapter A.2: the two clock phases */
+.m65-phases { display: block; width: 100%; max-width: 320px; margin: 4px 0 10px; }
+.m65-phases path { fill: none; stroke-width: 2; }
+.m65-phases .p1 path { stroke: var(--series-1); }
+.m65-phases .p2 path { stroke: var(--series-2); }
+.m65-phases text { font: 600 11px var(--font-mono); fill: var(--text-2); }
+.m65-modes { border-collapse: collapse; font-size: 11.5px; margin-top: 2px; }
+.m65-modes th { text-align: left; font-weight: 500; color: var(--muted); font-size: 10.5px; padding: 2px 10px 2px 0; }
+.m65-modes td { padding: 1px 10px 1px 0; border-top: 1px solid var(--border); }
+.m65-modes td:nth-child(n+2) { font-family: var(--font-mono); }

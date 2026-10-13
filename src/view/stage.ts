@@ -3,7 +3,7 @@
 // the inspector. Chapters and the workbench are thin wrappers around it.
 
 import { DualSim } from '../sim/dualsim';
-import { flatten, type HierNode } from '../sim/flatten';
+import { flatten, type FlatDesign, type HierNode } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import { needsSwitchLevel } from '../sim/harness';
 import { completeEdge, type Edge, riseEdge, stepEdge } from '../sim/edge';
@@ -69,6 +69,23 @@ const LEVEL_NAME: Record<string, string> = {
   transistor: 'transistors', cell: 'transistors', gate: 'gates', arithmetic: 'gates & blocks',
   routing: 'gates & blocks', sequential: 'latches & flip-flops', memory: 'memory', plumbing: 'wiring', cpu: 'processor',
 };
+
+/**
+ * A switch-level simulation: SwitchSim (three-valued, X and Z shown) for the small circuits of the early
+ * chapters, NmosSim when asked or when the circuit is large (one of the 6502's blocks in the workbench:
+ * SwitchSim re-solves everything on each change), unless the circuit has parts NmosSim cannot take.
+ */
+function switchSim(design: FlatDesign, nmos: boolean): Sim {
+  // auto: an NMOS design (depletion loads) of some size
+  if (nmos || (design.leaves.length > 600 && design.leaves.some((l) => l.kind === 'dep'))) {
+    try {
+      return new NmosSim(design);
+    } catch {
+      // a behavioural leaf, or a resistor between two signal nodes: SwitchSim's
+    }
+  }
+  return new SwitchSim(design);
+}
 
 /** Steps Back can undo (each a full copy of the simulation's state). */
 const HISTORY_MAX = 100;
@@ -309,7 +326,7 @@ export class Stage {
     // The root is always its structure, even one simulated as a lookup elsewhere (a large RAM opened
     // in the workbench); such parts below it stay leaves and open onto their own sub-simulation.
     const design = flatten(scene.root, { mode: level, expand: (d, n) => n.parent === null || !d.preferBehavior });
-    const sim: Sim = level === 'switch' ? (scene.engine === 'nmos' ? new NmosSim(design) : new SwitchSim(design))
+    const sim: Sim = level === 'switch' ? switchSim(design, scene.engine === 'nmos')
       : scene.engine === 'cycle' ? new DualSim(design) : new GateSim(design);
     if (sim instanceof DualSim) sim.preferFast = true;
     for (const [k, v] of Object.entries(scene.inputs ?? {})) sim.setInput(k, v);

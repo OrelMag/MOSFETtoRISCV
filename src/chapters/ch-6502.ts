@@ -24,6 +24,21 @@ function leak(stage: Stage): void {
   stage.refresh();
 }
 
+/** φ1 and φ2 over three cycles: never high together, a gap at every edge (drawn: the switch-level solver has no time axis). */
+const PHASES = (() => {
+  const wave = (y: number, first: boolean) => {
+    let d = `M0,${y + 14}`;
+    for (let k = 0; k < 6; k++) {
+      const x = k * 40, hi = (k % 2 === 0) === first;
+      d += hi ? ` H${x + 4} V${y} H${x + 36} V${y + 14}` : ` H${x + 40}`;
+    }
+    return `<path d="${d}" />`;
+  };
+  return `<svg class="m65-phases" viewBox="-28 -4 276 52" role="img" aria-label="φ1 and φ2: never high at the same time">
+    <text x="-26" y="12">φ1</text><text x="-26" y="40">φ2</text>
+    <g class="p1">${wave(0, true)}</g><g class="p2">${wave(28, false)}</g></svg>`;
+})();
+
 const DATAPATH = ['rega', 'regx', 'regy', 'regs', 'alu', 'pc', 'addr', 'data', 'flags', 'buses'];
 const CONTROL = ['clock', 'decode', 'control', 'timing', 'intr', 'ir'];
 
@@ -57,6 +72,7 @@ export const chAppendix6502: Chapter = {
       body: `
         <p>The 6502 runs on two clocks that are never high together, <strong>φ1</strong> and <strong>φ2</strong>.
         It makes them itself from one input, φ0, so that each starts only after the other has fallen.</p>
+${PHASES}
         <p>With two such phases, a latch is a single pass transistor feeding an inverter's gate. While its phase is
         high it copies its input; when the phase falls, the charge left on the gate <em>is</em> the bit. Two of them
         on opposite phases make a master–slave bit from <strong>6 transistors</strong> (4 + 2 loads), never transparent

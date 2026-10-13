@@ -119,8 +119,18 @@ export function opcodeMatrix(): Widget {
           h('td', { class: c.write ? 'w' : '' }, c.write ? 'W' : 'R'), h('td', { class: 'note' }, c.role)))),
       h('p', { class: 'm65-note' }, 'Every cycle is a bus access, the dummy ones included: a 6502 cannot leave the bus idle. Computed by running the reference model on this opcode.'));
   };
+  // the 13 addressing modes, each with the cycles of LDA (or the instruction that has it) in that mode
+  const example = (m: Mode) => ['LDA', 'LDX', 'NOP', 'ASL', 'JMP', 'BNE'].map((mn) => OPCODES.find((o) => o && o.mode === m && o.mnemonic === mn)).find(Boolean)
+    ?? OPCODES.find((o) => o && o.mode === m)!;
+  const modes = h('table', { class: 'm65-modes' },
+    h('tr', null, ...['mode', 'syntax', 'bytes', 'example', 'cycles'].map((x) => h('th', null, x))),
+    ...(Object.keys(MODES) as Mode[]).map((m) => {
+      const o = example(m)!;
+      return h('tr', null, h('td', null, MODES[m].title), h('td', null, MODES[m].syntax || '—'), h('td', null, String(MODES[m].bytes)),
+        h('td', null, `${o.mnemonic} ${MODES[m].syntax}`.trim()), h('td', null, `${o.cycles}${o.pageCross || o.branch ? '+' : ''}`));
+    }));
   const el = h('div', { class: 'm65-isa' },
-    h('div', { class: 'm65-isa-main' }, h('div', { class: 'm65-isa-bar' }, colourBtn), grid, legend),
+    h('div', { class: 'm65-isa-main' }, h('div', { class: 'm65-isa-bar' }, colourBtn), grid, legend, h('div', { class: 'm65-k' }, 'Addressing modes'), modes),
     detail);
   render();
   return { el };

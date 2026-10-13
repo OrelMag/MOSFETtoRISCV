@@ -83,6 +83,8 @@ export class NmosSim implements Sim {
       else if (l.kind === 'gnd') this.rail[l.terminals![0]] |= 1;
       else if (l.kind === 'nmos' || l.kind === 'pmos') fets.push(li);
       else if (l.kind === 'behavior') throw new Error(`NmosSim: behavioural leaf ${l.node.path.join('.')} (use SwitchSim)`);
+      // one strength rule only: transistors drawn stronger or weaker (an SRAM cell's write) need SwitchSim
+      if (l.def.strength !== undefined && l.kind !== 'res') throw new Error(`NmosSim: ${l.node.path.join('.')} has a drive strength (use SwitchSim)`);
     }
     for (let i = 0; i < n; i++) if (this.rail[i] === 3) throw new Error('NmosSim: a net is both VDD and GND');
     // loads and resistors: pull-ups / pull-downs on the node they reach from a rail
