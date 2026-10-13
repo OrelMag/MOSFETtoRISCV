@@ -1,0 +1,110 @@
+// Running our transistor-level 6502: NmosSim on the flattened chip, a memory on its pins, one clock
+// cycle at a time (φ1: φ0 low; φ2: φ0 high). The bus cycle each cycle makes (address, data, R/W,
+// SYNC) is what the tests compare with the ISS; internal registers are read by name for debugging.
+
+import { m6502 } from '../lib/m6502/chip';
+import { findNode, flatten, type FlatDesign, type HierNode } from '../sim/flatten';
+import { NmosSim } from '../sim/nmossim';
+import { netlistOf } from '../sim/types';
+import type { Bus6502 } from './iss';
+
+export class Chip6502 {
+  readonly design: FlatDesign;
+  readonly sim: NmosSim;
+  private aNets: number[]; private dNets: number[];
+  private rwNet: number; private syncNet: number;
+  /** This cycle's bus (valid after cycle()). */
+  addr = 0; data = 0; write = false; sync = 0;
+  cycles = 0;
+  irq = false; nmi = false;
+
+  constructor(readonly bus: Bus6502, design?: FlatDesign) {
+    this.design = design ?? flatten(m6502(), { mode: 'switch' });
+    this.sim = new NmosSim(this.design);
+    const P = this.design.root.ports;
+    this.aNets = P.a; this.dNets = P.d; this.rwNet = P.rw[0]; this.syncNet = P.sync[0];
+    this.sim.setInput('irqb', 1);
+    this.sim.setInput('nmib', 1);
+    this.sim.setInput('resb', 1);
+    this.sim.setInput('phi0', 1);
+    this.sim.settle();
+  }
+
+  /** RES as the next cycle() drives it (true = held low). */
+  res = false;
+
+  /** Hold RES low for `n` cycles, then release it: the next cycle begins the reset sequence. */
+  reset(n = 2): void {
+    this.res = true;
+    for (let i = 0; i < n; i++) this.cycle();
+    this.res = false;
+  }
+
+  /** One clock cycle: φ1 (address out), then φ2 (memory read into the chip, or the chip's write). */
+  cycle(): void {
+    const s = this.sim;
+    s.setInput('phi0', 0);
+    s.settle();
+    // the lines change inside φ1, never on a clock edge (the chip samples them in φ2)
+    s.setInput('irqb', this.irq ? 0 : 1);
+    s.setInput('nmib', this.nmi ? 0 : 1);
+    s.setInput('resb', this.res ? 0 : 1);
+    s.settle();
+    let a = 0;
+    for (let i = 0; i < 16; i++) a |= s.get(this.aNets[i]) << i;
+    this.addr = a;
+    this.write = s.get(this.rwNet) === 0;
+    this.sync = s.get(this.syncNet);
+    // the memory drives the data pins on a read (from φ1 on: the address is stable), lets go on a write
+    if (this.write) for (const n of this.dNets) s.drive(n, 255);
+    else {
+      const v = this.bus.read(a) & 0xff;
+      this.data = v;
+      this.dNets.forEach((n, i) => s.drive(n, (v >> i) & 1));
+    }
+    s.setInput('phi0', 1);
+    s.settle();
+    if (this.write) {
+      let v = 0;
+      for (let i = 0; i < 8; i++) v |= s.get(this.dNets[i]) << i;
+      this.data = v;
+      this.bus.write(a, v);
+    }
+    this.cycles++;
+  }
+
+  /** An 8- or 16-bit value from nets named `<prefix><i>` (or `<prefix>[i]`) inside a block. */
+  read(path: string[], prefix: string, width = 8): number {
+    const node = findNode(this.design.root, path);
+    if (!node) throw new Error(`no block ${path.join('.')}`);
+    let v = 0;
+    for (let i = 0; i < width; i++) v |= this.sim.get(netNamed(node, `${prefix}${i}`) ?? netNamed(node, `${prefix}[${i}]`)!) << i;
+    return v;
+  }
+  bit(path: string[], name: string): number {
+    const node = findNode(this.design.root, path)!;
+    return this.sim.get(netNamed(node, name)!);
+  }
+
+  /** The registers, read from the storage nodes (for comparing with the RTL model). */
+  regs(): { a: number; x: number; y: number; s: number; p: number; pc: number; ir: number } {
+    const reg = (blk: string) => {
+      let v = 0;
+      for (let i = 0; i < 8; i++) v |= this.bit([blk, `b${i}`], 'q') << i;
+      return v;
+    };
+    const f = (n: string) => this.bit(['flags'], `f${n}`);
+    return {
+      a: reg('rega'), x: reg('regx'), y: reg('regy'), s: reg('regs'),
+      p: (f('n') << 7) | (f('v') << 6) | 0x20 | (f('d') << 3) | (f('i') << 2) | (f('z') << 1) | f('c'),
+      pc: this.read(['pc'], 'pc', 16), ir: this.read(['ir'], 'ir'),
+    };
+  }
+}
+
+function netNamed(node: HierNode, name: string): number | undefined {
+  const nl = netlistOf(node.def);
+  if (!nl || !node.nets) return node.ports[name]?.[0];
+  const k = nl.nets.findIndex((n) => n.name === name);
+  return k >= 0 ? node.nets[k][0] : node.ports[name]?.[0];
+}

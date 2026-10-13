@@ -46,7 +46,8 @@ export const NINV: ComponentDef = define({
   hdl: { verilog: 'module ninv (input a, output y);\n  supply0 gnd; supply1 vdd;\n  rtran ld (vdd, y);   // depletion load\n  nmos n1 (y, gnd, a);\nendmodule' },
 });
 
-const ins = (n: number) => Array.from({ length: n }, (_, i) => String.fromCharCode(97 + i));
+/** Input names a, b, … (never y, the output); i0, i1, … for wide gates. */
+const ins = (n: number) => Array.from({ length: n }, (_, i) => (n <= 24 ? String.fromCharCode(97 + i) : `i${i}`));
 const norCache = new Map<number, ComponentDef>();
 const nandCache = new Map<number, ComponentDef>();
 

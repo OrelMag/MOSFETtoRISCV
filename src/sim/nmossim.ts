@@ -36,6 +36,8 @@ export class NmosSim implements Sim {
   shorts = 0;
   /** Groups resolved by charge between equal capacitances holding different values. */
   sharing = 0;
+  /** The nodes still changing when a settle gave up (unstable). */
+  stuck: number[] = [];
   onTrace?: (net: number, value: Bit, time: number) => void;
 
   /** Node values (0 / 1). */
@@ -191,7 +193,12 @@ export class NmosSim implements Sim {
     let cur = list;
     while (cur.length) {
       if (++waves > MAX_WAVES) {
+        // an oscillation (a ring of inverters, or an undocumented opcode joining a bus to its own
+        // inverse): give up for now, but keep what is still moving pending, so that the next settle
+        // recomputes it once the cause is gone instead of leaving half-propagated values behind
         this.unstable = true;
+        this.stuck = cur.slice();
+        for (const n of cur) this.dirtyNodes.push(n);
         return;
       }
       const next: number[] = [];
@@ -279,6 +286,13 @@ export class NmosSim implements Sim {
       this.on[t] = this.tp[t] ? g ^ 1 : g;
       this.conducting[this.tLeaf[t]] = this.on[t];
     }
+  }
+
+  /** Recompute every group from the present values (a check that incremental updates missed nothing). */
+  recomputeAll(): void {
+    const all: number[] = [];
+    for (let i = 0; i < this.design.netCount; i++) all.push(i);
+    this.run(all);
   }
 
   resetCounters(): void {
