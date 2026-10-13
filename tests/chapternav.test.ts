@@ -67,7 +67,8 @@ describe('the journey ladder', () => {
     const nums = LADDER.map((r) => r.num);
     expect(nums).toEqual([...nums].sort((a, b) => b - a));
     // The top rung opens the last track (the chapters sharing the last chapter's level): the ladder reaches the end.
-    const last = chapters[chapters.length - 1];
+    // Appendices come after the journey and are not on it.
+    const last = chapters.filter((c) => !c.appendix).at(-1)!;
     expect(LADDER[0].num).toBe(chapters.find((c) => c.level === last.level)?.num);
   });
 });

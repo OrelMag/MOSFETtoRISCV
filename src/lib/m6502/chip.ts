@@ -457,7 +457,7 @@ export function dataBlock(): ComponentDef {
 export function flagsBlock(): ComponentDef {
   const L = new Logic();
   const R = (s: Sig) => r(s);
-  const dbz = L.nor(R8.map((i) => `db[${i}]`));
+  const dbz = 'dbz';
   const flag = (name: string, terms: string[][], loads: string[]) => {
     const keep = L.nor(loads);
     const next = L.inv(L.aoi([...terms, [keep, `f${name}`]]));
@@ -478,7 +478,7 @@ export function flagsBlock(): ComponentDef {
   return L.build({
     id: 'm65_flags', name: '6502 status register',
     summary: 'N V D I Z C, each a master–slave pair whose next value is chosen in φ1: from DB (a load, PLP / RTI), from the ALU, set or cleared, else kept. P is pushed onto DB with B = 0 in an interrupt.',
-    ports: [...RAW.slice(0, 15).map((s) => bit(r(s))), bit('c_P_DB'), bit('intg'), bit('out7'), bit('zout'), bit('vout'), bit('carry'), bit('p1'), bit('p2'),
+    ports: [...RAW.slice(0, 15).map((s) => bit(r(s))), bit('c_P_DB'), bit('intg'), bit('out7'), bit('zout'), bit('vout'), bit('carry'), bit('dbz'), bit('p1'), bit('p2'),
       bus('db'), ...flags.map((f) => bit(`f${f}`, 'out')), bit('ni', 'out')],
     symbol: { kind: 'box', label: 'P' }, rows: 16,
   });
@@ -498,6 +498,8 @@ export function busesBlock(): ComponentDef {
     L.pulldown(i ? 'c_ZO_ADH' : 'c_ZERO_ADH', `adh[${i}]`);
   }
   // vectors on ADL: $FA / $FC / $FE (+1 for the high byte): bit 0 low for the low byte, bit 1 for RESET, bit 2 for NMI
+  // DB = 0? (for N Z after a load: Z), read where the bus lives
+  L.nor(R8.map((i) => `db[${i}]`), 'dbz');
   L.pulldown('c_VEC_LO', 'adl[0]');
   L.drive('c_VEC', 'resetting', 'adl[1]');
   L.drive('c_VEC', 'vfa', 'adl[2]');
@@ -505,7 +507,7 @@ export function busesBlock(): ComponentDef {
     id: 'm65_buses', name: '6502 internal buses',
     summary: 'DB, SB, ADL and ADH, each bit precharged to 1 in φ2 so that sources in φ1 only pull bits low; the pass transistors joining SB to DB and to ADH; the constants $00 / $01 on ADH and the interrupt vectors on ADL.',
     ports: [bit('p2'), bit('c_SB_DB'), bit('c_SB_ADH'), bit('c_ZERO_ADH'), bit('c_ZO_ADH'), bit('c_VEC_LO'), bit('c_VEC'), bit('resetting'), bit('vfa'),
-      ...busPorts('db', 'sb', 'adl', 'adh')],
+      ...busPorts('db', 'sb', 'adl', 'adh'), bit('dbz', 'out')],
     symbol: { kind: 'box', label: 'BUSES' }, rows: 24,
   });
 }

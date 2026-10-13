@@ -753,6 +753,23 @@ structure and the act.
 - ⏳ An act: a sense amplifier, a DRAM bank with refresh, a row-buffer controller, a bus with two masters and an
   arbiter, a DMA engine, a flash page store with a mapping table; graded build levels as the others
 
+### Appendix A — An 8-bit CPU of 1975: the MOS 6502 ✅
+After the journey, a lettered appendix: the real 6502 rebuilt the way 1975 built it, at transistor level, and why
+our RV32I is fifty times bigger. Mockup approved 2026-10-13 (lettered section after chapter 31, the "vintage" accent).
+- ✅ NMOS depletion-load logic: prim `dep` (a weak always-on load), NMOS gates (n + 1 transistors), complex AOI gates
+- ✅ NmosSim: an event-driven switch-level engine (channel-connected groups, as visual6502) for a chip of 4,500
+  transistors; capacitance-weighted charge sharing (precharged buses), pending nodes kept after an oscillation
+- ✅ A cycle-exact ISS (every bus cycle; all 1.51 M SingleStepTests and Klaus Dormann's functional test pass), a
+  two-pass assembler, sample programs
+- ✅ Our own microarchitecture after the real one (four precharged buses, one ALU, two-phase clock, the previous
+  instruction finishing during the opcode fetch): a control table, a register-transfer model checked against the
+  ISS (SingleStepTests, Klaus, lock-step with random IRQ / NMI), a decode PLA computed from the table (245 rows,
+  undocumented opcodes as don't-cares)
+- ✅ The chip at transistor level: 4,513 transistors (1,031 loads; the real one 3,510 + 1,018), every bus cycle in
+  lock-step with the ISS from reset (programs, interrupts, SingleStepTests cases, Klaus's test), schematics that
+  pass the layout rules; the chapter (8 steps), the running panel, the opcode matrix, the transistor ledger
+- ⏳ The 6502 as a sandbox part (with the CPU drawer); undocumented opcodes in the ISS
+
 ---
 
 ## Open questions for the author

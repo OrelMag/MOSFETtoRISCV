@@ -2,7 +2,7 @@
 // cycle at a time (φ1: φ0 low; φ2: φ0 high). The bus cycle each cycle makes (address, data, R/W,
 // SYNC) is what the tests compare with the ISS; internal registers are read by name for debugging.
 
-import { m6502 } from '../lib/m6502/chip';
+import { CTL_LINES, m6502 } from '../lib/m6502/chip';
 import { findNode, flatten, type FlatDesign, type HierNode } from '../sim/flatten';
 import { NmosSim } from '../sim/nmossim';
 import { netlistOf } from '../sim/types';
@@ -41,8 +41,18 @@ export class Chip6502 {
     this.res = false;
   }
 
-  /** One clock cycle: φ1 (address out), then φ2 (memory read into the chip, or the chip's write). */
+  /** Which phase the chip stands in: 2 between cycles, 1 after phase1(). */
+  phase: 1 | 2 = 2;
+
+  /** One clock cycle: φ1 (address out), then φ2 (memory read into the chip, or the chip's write). After phase1(), its φ2. */
   cycle(): void {
+    if (this.phase === 1) return this.phase2();
+    this.phase1();
+    this.phase2();
+  }
+
+  /** φ1: the address and R/W go out, buses carry their transfers; the memory puts a read's byte on the pins. */
+  phase1(): void {
     const s = this.sim;
     s.setInput('phi0', 0);
     s.settle();
@@ -63,6 +73,12 @@ export class Chip6502 {
       this.data = v;
       this.dNets.forEach((n, i) => s.drive(n, (v >> i) & 1));
     }
+    this.phase = 1;
+  }
+
+  /** φ2: DL and IR latch a read (or the chip drives a write onto the pins), the T state advances. */
+  phase2(): void {
+    const s = this.sim, a = this.addr;
     s.setInput('phi0', 1);
     s.settle();
     if (this.write) {
@@ -71,7 +87,16 @@ export class Chip6502 {
       this.data = v;
       this.bus.write(a, v);
     }
+    this.phase = 2;
     this.cycles++;
+  }
+
+  private lineNets?: [string, number][];
+  /** The φ1-qualified control lines that are on now (in φ1: this cycle's bus transfers and loads). */
+  activeLines(): string[] {
+    const node = findNode(this.design.root, ['ctrl'])!;
+    this.lineNets ??= CTL_LINES.filter((n) => n.startsWith('c_')).map((n) => [n.slice(2), netNamed(node, n)!] as [string, number]);
+    return this.lineNets.filter(([, net]) => this.sim.get(net) === 1).map(([n]) => n);
   }
 
   /** An 8- or 16-bit value from nets named `<prefix><i>` (or `<prefix>[i]`) inside a block. */

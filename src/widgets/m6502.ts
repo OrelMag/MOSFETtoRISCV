@@ -37,6 +37,16 @@ export function m6502Scene(opts: M6502SceneOptions = {}): Scene {
   };
 }
 
+/** The datapath block each φ1 control line acts in. */
+const BLOCK_OF: Record<string, string[]> = {
+  A_SB: ['rega'], A_DB: ['rega'], SB_A: ['rega'], X_SB: ['regx'], SB_X: ['regx'], Y_SB: ['regy'], SB_Y: ['regy'],
+  S_SB: ['regs'], S_ADL: ['regs'], SB_S: ['regs'],
+  SB_AI: ['alu'], ZERO_AI: ['alu'], DB_BI: ['alu'], NDB_BI: ['alu'], ADL_BI: ['alu'], ADD_SB: ['alu'], ADD_ADL: ['alu'],
+  PCL_ADL: ['pc'], PCH_ADH: ['pc'], ADL_PCL: ['pc'], ADH_PCH: ['pc'], PCL_DB: ['pc'], PCH_DB: ['pc'],
+  ADL_ABL: ['addr'], ADH_ABH: ['addr'], DL_DB: ['data'], DL_ADL: ['data'], DL_ADH: ['data'], DB_DOR: ['data'],
+  P_DB: ['flags'], SB_DB: ['buses'], SB_ADH: ['buses'], ZERO_ADH: ['buses'], VEC_LO: ['buses'],
+};
+
 interface BusRow { cycle: number; t: number; addr: number; data: number; write: boolean; sync: number }
 
 /** Run budget per animation frame (ms of simulation). */
@@ -60,14 +70,23 @@ function m6502Panel(opts: M6502SceneOptions): ScenePanel {
     let curPc = -1;
     let running: number | null = null;
 
-    /** One clock cycle on the chip and the ISS, compared; the I/O devices act on the bus. */
-    const cycle = () => {
+    /** The datapath blocks this cycle's φ1 transfers used (lit while the datapath is open). */
+    let lit: string[] = [];
+    let curT = 0;
+    /** φ1 of a cycle: the interrupt lines for it, the chip's address out, the memory's byte on the pins. */
+    const begin = () => {
       chip.irq = iss.irq = irqHeld;
-      const nmi = nmiLeft > 0;
-      chip.nmi = iss.nmi = nmi;
+      chip.nmi = iss.nmi = nmiLeft > 0;
       if (nmiLeft > 0) nmiLeft--;
-      const t = chip.tstate();
-      chip.cycle();
+      curT = chip.tstate();
+      chip.phase1();
+      const on = new Set(chip.activeLines().flatMap((l) => BLOCK_OF[l] ?? []));
+      lit = [...on];
+    };
+    /** φ2, then the ISS's cycle and the comparison; the I/O devices act on the bus. */
+    const finish = () => {
+      const t = curT;
+      chip.phase2();
       iss.tick();
       cycles++;
       stage.cycles++;
@@ -78,7 +97,12 @@ function m6502Panel(opts: M6502SceneOptions): ScenePanel {
       if (chip.write && chip.addr === IO6502.OUT) out += String.fromCharCode(chip.data);
       if (chip.write && chip.addr === IO6502.IRQ_ACK) irqHeld = false;
       if (!mismatch && (iss.busAddr !== chip.addr || iss.busData !== chip.data || iss.busWrite !== chip.write || iss.busSync !== chip.sync))
-        mismatch = `cycle ${cycles}: the chip ${chip.write ? 'wrote' : 'read'} $${hex(chip.data)} at $${hex(chip.addr, 4)}, the model ${iss.busWrite ? 'wrote' : 'read'} $${hex(iss.busData)} at $${hex(iss.busAddr, 4)}`;
+        mismatch = `cycle ${cycles}: the chip ${chip.write ? 'wrote' : 'read'} ${hex(chip.data)} at ${hex(chip.addr, 4)}, the model ${iss.busWrite ? 'wrote' : 'read'} ${hex(iss.busData)} at ${hex(iss.busAddr, 4)}`;
+    };
+    /** One clock cycle (or the rest of one, after a φ step). */
+    const cycle = () => {
+      if (chip.phase === 2) begin();
+      finish();
     };
     /** A program is done when it jumps to itself (JMP *). */
     const halted = () => {
@@ -89,7 +113,7 @@ function m6502Panel(opts: M6502SceneOptions): ScenePanel {
     const powerUp = () => {
       mem.mem.set(image);
       issMem.mem.set(image);
-      out = ''; cycles = 0; instrs = 0; mismatch = null; lastWrite = -1; trace.length = 0; curPc = -1; irqHeld = false; nmiLeft = 0;
+      out = ''; cycles = 0; instrs = 0; mismatch = null; lastWrite = -1; lit = []; trace.length = 0; curPc = -1; irqHeld = false; nmiLeft = 0;
       chip.res = true;
       chip.cycle(); chip.cycle();
       chip.res = false;
@@ -125,6 +149,7 @@ function m6502Panel(opts: M6502SceneOptions): ScenePanel {
       };
       running = requestAnimationFrame(tick);
     });
+    const phaseBtn = h('button', { class: 'btn sm', title: 'Half a cycle: φ1 (address out, buses driven, the ALU computes), then φ2 (memory, latches, the next T state)', onclick: act(() => (chip.phase === 2 ? begin() : finish())) }, 'φ');
     const stepBtn = h('button', { class: 'btn sm', title: 'One clock cycle (φ1 and φ2)', onclick: act(cycle) }, 'Cycle');
     const instrBtn = h('button', {
       class: 'btn sm', title: 'Run to the next opcode fetch',
@@ -174,7 +199,7 @@ function m6502Panel(opts: M6502SceneOptions): ScenePanel {
     }, `${hex(p)}`)));
     const body = h('div', { class: 'cpu-body' },
       h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, editBtn),
-      h('div', { class: 'param-row', style: 'margin-bottom:6px' }, resetBtn, stepBtn, instrBtn, runBtn, irqBtn, nmiBtn),
+      h('div', { class: 'param-row', style: 'margin-bottom:6px' }, resetBtn, phaseBtn, stepBtn, instrBtn, runBtn, irqBtn, nmiBtn),
       editWrap, status,
       h('div', { class: 'cpu-sec' }, 'Program'), listing,
       h('div', { class: 'cpu-sec' }, 'Registers'), regs, flags,
@@ -185,13 +210,15 @@ function m6502Panel(opts: M6502SceneOptions): ScenePanel {
       h('h4', null, 'MOS 6502, transistor level', h('span', { class: 'fold-hint' })), body);
 
     stage.historyHooks.add({
-      save: () => ({ iss: iss.save(), mem: mem.mem.slice(), issMem: issMem.mem.slice(), out, cycles, instrs, mismatch, trace: trace.slice(), curPc, irqHeld, nmiLeft }),
+      save: () => ({ iss: iss.save(), mem: mem.mem.slice(), issMem: issMem.mem.slice(), out, cycles, instrs, mismatch, trace: trace.slice(), curPc, irqHeld, nmiLeft, phase: chip.phase, addr: chip.addr, data: chip.data, write: chip.write, sync: chip.sync, curT, lit }),
       restore: (v) => {
-        const s = v as { iss: Cpu6502State; mem: Uint8Array; issMem: Uint8Array; out: string; cycles: number; instrs: number; mismatch: string | null; trace: BusRow[]; curPc: number; irqHeld: boolean; nmiLeft: number };
+        const s = v as { iss: Cpu6502State; mem: Uint8Array; issMem: Uint8Array; out: string; cycles: number; instrs: number; mismatch: string | null; trace: BusRow[]; curPc: number; irqHeld: boolean; nmiLeft: number;
+          phase: 1 | 2; addr: number; data: number; write: boolean; sync: number; curT: number; lit: string[] };
         stopRun();
         iss.restore(s.iss);
         mem.mem.set(s.mem); issMem.mem.set(s.issMem);
-        ({ out, cycles, instrs, mismatch, curPc, irqHeld, nmiLeft } = s);
+        ({ out, cycles, instrs, mismatch, curPc, irqHeld, nmiLeft, curT, lit } = s);
+        Object.assign(chip, { phase: s.phase, addr: s.addr, data: s.data, write: s.write, sync: s.sync });
         trace.splice(0, trace.length, ...s.trace);
       },
     });
@@ -199,7 +226,7 @@ function m6502Panel(opts: M6502SceneOptions): ScenePanel {
 
     const update = () => {
       status.replaceChildren(
-        h('span', null, `cycle ${cycles}`), h('span', null, `${instrs} opcode fetches`),
+        h('span', null, `cycle ${cycles}${chip.phase === 1 ? ' · in φ1' : ''}`), h('span', null, `${instrs} opcode fetches`),
         mismatch ? h('span', { class: 'bad' }, `✗ ${mismatch}`)
           : h('span', { class: 'good', title: 'Every bus cycle (address, data, R/W, SYNC) matches the instruction-set simulator' }, '✓ bus matches the reference model'),
         ...(halted() ? [h('span', { class: 'warn' }, 'halted (JMP to itself)')] : []),
@@ -226,6 +253,8 @@ function m6502Panel(opts: M6502SceneOptions): ScenePanel {
           h('td', { class: b.write ? 'w' : '' }, b.write ? 'W' : 'R'), h('td', null, String(b.sync)),
           h('td', { class: 'note' }, b.sync ? disasmAt((a) => mem.mem[a], b.addr).text : b.write ? 'write' : ''))));
       console_.textContent = out || ' ';
+      // the datapath open: light what this cycle moved (not while running: it changes every cycle)
+      if (!running && lit.length && stage.path.join('.') === 'dp') stage.highlight(lit);
       pages.querySelectorAll('button').forEach((b) => b.classList.toggle('primary', b.dataset.page === String(page)));
       memGrid.replaceChildren(...Array.from({ length: 16 }, (_, r) => h('div', { class: 'row' },
         h('span', { class: 'a' }, hex(page * 256 + r * 16, 4)),
