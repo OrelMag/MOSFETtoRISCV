@@ -635,7 +635,18 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
 - 🚧 3. Warps and memory (mockup approved 2026-10-13), in three parts: ✅ 3a warps, scoreboard, an 8-cycle memory and
   chapter 28; ✅ 3b coalescing, banked shared memory, bar, amoadd.w in the lanes and chapter 29; ✅ 3c the act's coalescer,
   two-warp and histogram levels
-- ⏳ 4. Graphics: framebuffer, rasterizer, the graphics pipeline; chapters 30–31 and the act's raster levels
+- 🚧 4. Graphics (mockup approved 2026-10-13: quarter-pixel vertices, 18-bit edges, 4 × 4 tiles walked as bands, depth with
+  chapter 20's divider, a scan-out feeding a screen panel), in three parts: ✅ 4a the rasterizer, framebuffer, scan-out,
+  depth and blending, chapter 30; ⏳ 4b the vertex kernel, command unit and chapter 31; ⏳ 4c the RV16 raster device,
+  bench, k_edge / k_tile / k_raster / k_frame and p_spin
+
+**Graphics**
+- ✅ Pixels and triangles (chapter 30): a 64 × 64 RGB332 framebuffer in four byte banks, double buffered, a gate-level
+  scan-out (a word a cycle, vsync, flip at vsync or at once: tearing); the rasterizer (lib/raster.ts, 11 989 NANDs, one
+  pixel a cycle): set-up on one Booth multiplier, three edge steppers, a tile walk that skips tiles an edge rules out
+  (the large preset 1 914 cycles against 3 368 for its box); with depth, a depth set-up (Booth, 30-bit divider, Horner;
+  12 032 NANDs, +76 cycles) and a 32-bit stepper, and a ROP with a 64 × 64 × 16-bit depth buffer and alpha blending.
+  Checked against gfx/raster.ts pixel for pixel and cycle for cycle (tests/raster.test.ts)
 
 **Compute**
 - ✅ Lanes (chapter 26): laneCore(program, n) (lib/lanes.ts): the single-cycle front end feeding n lanes (registers,

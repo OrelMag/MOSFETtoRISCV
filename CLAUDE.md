@@ -218,6 +218,14 @@ src/lib/       the component library (registered in `registry` via define())
                  banked) (4 columns: one row = a line, or a row per bank), lsuMemory (the pipeline: shared accesses enter
                  Ls − 1 stages from the end, slotBusy; globalBusy: a global access in the last B − 1 stages; old + data for
                  amoadd.w; the highest served lane wins a word)
+  raster.ts      chapter 30's graphics hardware (reference: gfx/raster.ts, cycle for cycle): edgeStep(n, tile) (E and the band
+                 start R, one add/sub; tile test E + off), RAST_SETUP (A, B, bias, steps, tile offsets, bounding box in tiles;
+                 eight products on one 10 × 10 Booth multiplier: area, then each edge at the first tile), RAST_WALK (phase s:
+                 idle, S1–S8, TEST, 16 pixels; bands of 4 × 4 tiles, column serpentine; waits in S8 for `ready`),
+                 rasterizer(depth) (+ Z_SETUP: Booth, 30-bit divider, Horner; a 32-bit depth stepper, Z_CLAMP; clr walks the
+                 screen), BLEND332, ROP (depth buffer, test, blend, clear), pixelBuffer (4 byte banks of bigRam), frameBuffers
+                 (front / back by address muxes), SCAN_OUT (a word a cycle, vsync, flip at vsync or at once), displayTop, GPU30,
+                 GPU30Z (the scenes' tops)
   builder.ts     Builder: column-by-column netlist builder for blocks read by drilling in (fpu, fppipe, coding, divide)
   coding.ts      magComparator(n, signed), priorityEncoder(n), encoder(n), demux(k, w), popcount(n), absValue(n),
                  parity(n), hammingEnc/Dec(k) (SEC-DED, with TS reference models), eccChannel(k)
@@ -260,6 +268,9 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                core each access, the barrier, shared memory by bank, a kernel switcher; lanes against cores; the occupancy widget,
                from riscv/warptiming.ts); feed.ts: chapter 29's access widget (the gate-level access unit on a stride / offset)
                and the tiling chart (plain against tiled matmul over globalEvery);
+               screen.ts: chapter 30 (the screen panel: what the gate-level scan-out sent, or the back frame from the memory
+               leaves with the walk's tile; Run on a 12 ms frame budget or a cycles/s cap, Draw, Swap, vsync wait, draw scripts;
+               the edge-function explorer);
                insthw.ts maps an instruction to the units it uses (and pipeline stage units); fsmpanel.ts: a live state
                diagram (view/fsmdiagram.ts) over a scene (current state, last / next arc, trail, ribbon; arc hover lights
                its gates), used by controllerPanel's Diagram view and chapter 9's state machine; the codex draws fsmOf(lib)
@@ -470,6 +481,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  (widgets/pipegrid), the system CPU's I/O, registers, fcsr, memory, retired; Run to halt,
                  Step, Slow (instructions per second), Reset, Edit program; the multi-core view),
                  opened by itself for a complete CPU; CPU props section
+src/gfx/       raster.ts: the rasterizer's reference model (setup, rasterize: pixel writes with their cycles, zPlane / zAt /
+               zStore, blend332, RefFrame: a framebuffer and depth buffer drawn as the hardware does; Z_WALK_START, CLEAR_CYCLES)
 src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/CAMPAIGN.md). DOM-free:
   types.ts       CampaignNode (act, kind lesson / drill / build / program / core, requires, why, tips, codex,
                  unlocks: library ids or `prefix*` later levels may place, anatomy blocks, base challenge, par, soon)

@@ -51,17 +51,17 @@ export const chPixels: Chapter = {
       body: `
         <p>The <strong>rasterizer</strong> turns a triangle into pixel writes, one a cycle. Open it:</p>
         <ul>
-          <li><strong>Set-up</strong> (6 371 NANDs): A and B by subtraction, the top-left bias, the bounding box by comparators, and eight products on one
+          <li><strong>Set-up</strong> (6 389 NANDs): A and B by subtraction, the top-left bias, the bounding box by comparators, and eight products on one
           10 × 10 Booth multiplier (chapter 20, 1 601 NANDs) in eight cycles: twice the area (its sign culls), then each edge's value at the first tile.</li>
           <li>Three <strong>edge steppers</strong> (1 330 NANDs each): E, a register R for the start of the current band, one adder / subtractor whose operand
           is dx = 4A, dy = 4B or four times either (a wired shift), and a second adder for the tile test.</li>
-          <li>The <strong>tile walk</strong> (747 NANDs): a state machine over the box in 4 × 4-pixel tiles.</li>
+          <li>The <strong>tile walk</strong> (753 NANDs): a state machine over the box in 4 × 4-pixel tiles.</li>
         </ul>
         <p>Each tile starts with one TEST cycle. Its best corner for edge i is E + 12·(A⁺ + B⁺), where A⁺ is A when positive, else 0; if any edge is negative
         there, no pixel of the tile can be inside and the walk jumps on (E += 4dx). Otherwise its 16 pixels follow, column by column, down, up, down, up,
         so the tile ends at its top-right pixel and the next tile is one step right. A row of tiles is a <strong>band</strong>; the next band starts from R.</p>
         <p>The large triangle: 1 369 pixels, 210 tiles tested, 106 walked, 1 914 cycles. Visiting its box pixel by pixel would take 3 368. A thin sliver gains
-        more: 888 cycles against 3 848. A real GPU tests whole tiles of pixels in parallel and writes dozens a cycle; this one writes at most one, 11 965 NANDs
+        more: 888 cycles against 3 848. A real GPU tests whole tiles of pixels in parallel and writes dozens a cycle; this one writes at most one, 11 989 NANDs
         in all.</p>
         <div class="try">Draw, and watch the back frame fill (choose "Back frame" in the panel). Swap to put it on the screen. Then try the sliver, and the
         back face: it stops after three set-up cycles.</div>`,
@@ -82,7 +82,7 @@ export const chPixels: Chapter = {
         Z<sub>x</sub> = (A<sub>0</sub>·(z<sub>2</sub> − z<sub>0</sub>) + A<sub>2</sub>·(z<sub>1</sub> − z<sub>0</sub>)) / 2·area (the barycentric weights,
         differentiated), Z<sub>y</sub> the same with B. So a fourth stepper walks it with the edges. Its <strong>depth set-up</strong> needs a division: four
         products on its own Booth multiplier, two divisions on chapter 20's non-restoring divider (30 bits, 32 cycles each) and ten shift-and-add steps for
-        z at the first tile. That is 76 more cycles per triangle and 12 025 NANDs, more than the rest of the rasterizer; real GPUs share one set-up unit
+        z at the first tile. That is 76 more cycles per triangle and 12 032 NANDs, more than the rest of the rasterizer; real GPUs share one set-up unit
         among many pixel pipelines.</p>
         <p>z has 12 fraction bits and the arithmetic is 32 bits that wrap: a thin sliver has a huge slope, and its z overflows far outside the triangle, but
         it is right at every pixel inside, to about a tenth of a z unit. The buffer keeps 16 bits a pixel. The ROP reads it at the pixel's address,

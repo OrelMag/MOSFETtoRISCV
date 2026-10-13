@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { blend332, CLEAR_CYCLES, type DrawOp, EDGE_BITS, FB_W, rasterize, RefFrame, setup, tilePixel, type Vtx, Z_FRAC, zAt, zStore } from '../src/gfx/raster';
-import { EDGE_STEP, FB_WORDS, GPU30, GPU30Z, RASTERIZER, RAST_SETUP, RAST_WALK, rasterizer, SCAN_OUT, VERTEX_PINS } from '../src/lib/raster';
+import { blend332, CLEAR_CYCLES, Z_WALK_START, type DrawOp, EDGE_BITS, FB_W, rasterize, RefFrame, setup, tilePixel, type Vtx, Z_FRAC, zAt, zStore } from '../src/gfx/raster';
+import { BLEND332, EDGE_STEP, FB_WORDS, GPU30, GPU30Z, RASTERIZER, RAST_SETUP, RAST_WALK, rasterizer, SCAN_OUT, VERTEX_PINS, Z_SETUP } from '../src/lib/raster';
+import { boothMul } from '../src/lib/multiply';
+import { TRIANGLES } from '../src/widgets/screen';
 import { BitSim } from '../src/sim/bitsim';
 import { flatten } from '../src/sim/flatten';
 import { stats } from '../src/sim/stats';
@@ -213,5 +215,19 @@ describe('depth and blending', () => {
     expect(diff).toBe(0);
     // the depth test decided something: both colours are on the screen, crossing
     expect(ref.fb.includes(0xe0) || [...ref.fb].some((c) => c === blend332(0x03, 0xe0, 3))).toBe(true);
+  });
+});
+
+describe('chapter 30 quotes these numbers', () => {
+  it('costs and cycles in the prose', () => {
+    const n = (d: Parameters<typeof stats>[0]) => stats(d).nands;
+    expect([n(SCAN_OUT), n(RAST_SETUP), n(boothMul(10)), n(EDGE_STEP), n(RAST_WALK), n(RASTERIZER), n(Z_SETUP), n(BLEND332)])
+      .toEqual([256, 6389, 1601, 1330, 753, 11989, 12032, 1074]);
+    const large = rasterize(TRIANGLES.find((t) => t.id === 'large')!.v), sliver = rasterize(TRIANGLES.find((t) => t.id === 'sliver')!.v);
+    const boxScan = (r: typeof large) => 8 + (r.setup.tx1 - r.setup.tx0 + 1) * (r.setup.ty1 - r.setup.ty0 + 1) * 16;
+    expect([large.writes.length, large.tiles, large.walked, large.cycles, boxScan(large)]).toEqual([1369, 210, 106, 1914, 3368]);
+    expect([sliver.cycles, boxScan(sliver)]).toEqual([888, 3848]);
+    expect([CLEAR_CYCLES, Z_WALK_START - 9]).toEqual([4436, 76]);
+    expect(rasterize(TRIANGLES.find((t) => t.id === 'back')!.v).cycles).toBe(3);
   });
 });
