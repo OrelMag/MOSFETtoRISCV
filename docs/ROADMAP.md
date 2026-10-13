@@ -633,7 +633,7 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   multiCore(n) with arbiterN (e3c6b2a), the 4-core baseline the lanes are measured against
 - ✅ 2. Campaign act 9, first levels (below), with the RV16 encodings, a 4-lane RV16 golden model and a lane bench
 - 🚧 3. Warps and memory (mockup approved 2026-10-13), in three parts: ✅ 3a warps, scoreboard, an 8-cycle memory and
-  chapter 28; ⏳ 3b coalescing, banked shared memory, bar, amoadd.w in the lanes and chapter 29; ⏳ 3c the act's coalescer,
+  chapter 28; ✅ 3b coalescing, banked shared memory, bar, amoadd.w in the lanes and chapter 29; ⏳ 3c the act's coalescer,
   two-warp and histogram levels
 - ⏳ 4. Graphics: framebuffer, rasterizer, the graphics pipeline; chapters 30–31 and the act's raster levels
 
@@ -654,10 +654,19 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   8-cycle loads: 266 / 192 / 172 cycles on 1 / 2 / 4 warps (58 / 83 / 100 % of the issue slots); a warp costs 110 622
   NANDs (its registers 92 564). The Warp panel (widgets/warps.ts) draws the issue timeline and the scoreboards; the
   occupancy widget sweeps warps and latency
-- ⏳ Shared memory (banked, bank conflicts measured) and global-memory coalescing (a warp's addresses merged into lines)
-- 🚧 ISA: the SIMT extension above, assembler and disassembler, the multi-lane golden model; kernels so far saxpy,
-  divergence, nested ifs, pred loops, tmc, a forgotten split; wspawn and nwarps (CSR 0xCC5) with the warps. Still to
-  come: bar, reduction, matrix multiply, histogram (atomics in the lanes)
+- ✅ Feeding the lanes (chapter 29): warpCore(…, { lsu: true, mul }) (lib/warpmem.ts): one memory port behind an access
+  unit (a global access serves the lanes in the leader's 16-byte line; a 4-bank shared memory at 0x1000 serves each lane
+  whose bank row is its word, broadcasts included; amoadd.w one lane per access); a memory instruction holds the issue
+  port one cycle per access. Shared accesses enter the pipeline Ls − 1 stages from the end (2 cycles against 8) when
+  that slot is free; globalEvery = B limits global accesses to one every B cycles. bar: a waiting bit per warp, released
+  when rs2 warps have arrived (one barrier). mul in the lanes (the low product). Golden model and timing model extended;
+  co-simulated cycle for cycle on six new kernels. Measured: sums stored by rows 124 cycles (68 accesses) against 76 by
+  columns (20); tree reduction 298 cycles (strided pairs, bank conflicts: 330); histogram 197; matmul 396 cycles plain
+  against 592 tiled at a line per cycle, tiled ahead from a line every 3 cycles (622 against 668). The one-port core is
+  cheaper than chapter 28's: 625 016 NANDs against 674 490 (four ports cost 183 964, a line memory 77 829)
+- ✅ ISA: the SIMT extension above, assembler and disassembler, the multi-lane golden model; kernels saxpy, divergence,
+  nested ifs, pred loops, tmc, a forgotten split; wspawn and nwarps (CSR 0xCC5) with the warps; bar, amoadd.w in the
+  lanes, mul; reduction, histogram, plain and tiled matrix multiply
 - ⏳ The lane core's listing marks (insthw) and Slow mode, as the CPU panel has
 
 **Graphics**

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { SB_CHECK, hazardSpec, regfile, rom, warpCore, warpSlot, warpDecode, warpDecodeSpec } from '../src/lib';
+import { SB_CHECK, accessUnit, accessesOf, hazardSpec, koggeStone, lanePortMemory, quadMemory, regfile, rom, treeMul, warpCore, warpSlot, warpDecode, warpDecodeSpec } from '../src/lib';
+import { tilingRuns } from '../src/widgets/feed';
 import { stats } from '../src/sim/stats';
 import { assemble } from '../src/riscv/asm';
 import { clockCycle } from '../src/riscv/cosim';
@@ -121,4 +122,40 @@ describe('chapter 29 core (gate level): access unit, shared memory, bar, amoadd.
   it('matmul: mul in the lanes, a global line every 3 cycles', () => { cosimWarps(P('matmul'), 4, 4, 8, { lsu: true, globalEvery: 3 }); }, 600000);
   it('matmulTiled: tiles in shared memory, bar, slots taken by global requests', () => { cosimWarps(P('matmulTiled'), 4, 4, 8, { lsu: true, globalEvery: 2 }); }, 600000);
   it('saxpy: as chapter 28 (every load one line)', () => { expect(cosimWarps(P('saxpy64'), 4, 4, 8, { lsu: true }).cycles).toBe(172); }, 600000);
+});
+
+describe('the numbers chapter 29 quotes', () => {
+  const P = (id: string) => WARP_PROGRAMS.find((p) => p.id === id)!;
+  const run = (id: string) => {
+    const p = P(id);
+    const t = warpTiming(assemble(p.source(4)).words, { warps: 4, lanes: 4, latency: 8, lsu: true, mul: true, dmemWords: 2 ** WARP_DMEM_K, smemWords: 2 ** WARP_SMEM_K, data: p.data() });
+    return [t.cycles, t.issued, t.globalAccesses, t.sharedAccesses, t.heldCycles];
+  };
+  it('cycles, instructions, accesses and cycles holding the port', () => {
+    expect(run('rows')).toEqual([124, 76, 68, 0, 48]);
+    expect(run('cols')).toEqual([76, 76, 20, 0, 0]);
+    expect(run('reduceSeq')).toEqual([298, 292, 17, 20, 0]);
+    expect(run('reduceInt')).toEqual([330, 308, 17, 38, 18]);
+    expect(run('hist')).toEqual([197, 144, 80, 0, 48]);
+    expect(run('matmul').slice(0, 3)).toEqual([396, 396, 144]);
+    expect(run('matmulTiled').slice(0, 3)).toEqual([592, 560, 40]);
+  });
+
+  it('tiling pays from a line every three cycles', () => {
+    const { plain, tiled } = tilingRuns();
+    expect([plain[0].cycles, tiled[0].cycles, plain[2].cycles, tiled[2].cycles, plain[7].cycles, tiled[7].cycles]).toEqual([396, 592, 668, 622, 1348, 770]);
+    expect(plain.findIndex((r, i) => tiled[i].cycles < r.cycles)).toBe(2);
+  });
+
+  it('what the memories and the new units cost', () => {
+    expect([stats(lanePortMemory(7, 4)).nands, stats(quadMemory(7, false)).nands]).toEqual([183964, 77829]);
+    expect([stats(quadMemory(6, true)).nands, stats(quadMemory(6, false)).nands]).toEqual([38928, 38628]);
+    expect([stats(accessUnit(4)).nands, stats(treeMul(32, false, 32)).nands, stats(koggeStone(32)).nands]).toEqual([5870, 7388, 878]);
+  });
+
+  it('the quizzes: accesses the access unit takes', () => {
+    expect(accessesOf(15, [24, 28, 32, 36])).toEqual([0b0011, 0b1100]);
+    expect(accessesOf(15, [0x1000, 0x1008, 0x1010, 0x1018])).toEqual([0b0011, 0b1100]);
+    expect(accessesOf(15, [12, 12, 28, 12], true)).toEqual([1, 2, 4, 8]);
+  });
 });

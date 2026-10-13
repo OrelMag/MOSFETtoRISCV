@@ -14,6 +14,8 @@ export interface WarpProgram {
   expect: () => Map<number, number>;
   /** Chapter 29's core only: it uses shared memory, bar or amoadd.w. */
   lsu?: boolean;
+  /** It uses shared memory. */
+  shared?: boolean;
   /** It multiplies (the lanes need multipliers). */
   mul?: boolean;
   /** It is written for exactly this many threads (warps × lanes). */
@@ -149,7 +151,7 @@ end:    j     end`,
   {
     id: 'matmulTiled',
     title: 'C = A · B through shared memory, a 4 × 4 tile at a time',
-    lsu: true, mul: true, threads: 16,
+    lsu: true, mul: true, shared: true, threads: 16,
     source: (n) => `# The same product. Thread tid = 4 r + c copies one element of an A tile and one of a B tile into shared
 # memory, bar, computes C's element (r, c) of the output tile from the tiles, bar. A tile (4 rows of A) serves
 # two output tiles, so A is read from global memory once, B twice: 96 words instead of 512.
@@ -273,7 +275,7 @@ function reduce(kind: 'seq' | 'int'): WarpProgram {
   return {
     id: `reduce${seq ? 'Seq' : 'Int'}`,
     title: seq ? 'A sum of 64 words: a tree in shared memory, neighbours adding' : 'A sum of 64 words: a tree in shared memory, strided pairs',
-    lsu: true, threads: 16,
+    lsu: true, shared: true, threads: 16,
     source: (n) => `# 16 threads: s[tid] = x[tid] + x[tid + 16] + x[tid + 32] + x[tid + 48], then s[i] += s[i + s], ${seq ? 'i = tid < s, s = 8, 4, 2, 1' : 'i = 2 s tid < 16, s = 1, 2, 4, 8'}
 ${start(n)}
         li    s0, 0x1000        # shared memory

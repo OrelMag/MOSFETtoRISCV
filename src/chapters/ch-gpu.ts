@@ -1,4 +1,5 @@
 import { divergenceWidget, laneCoreScene, lanesVsCoresWidget } from '../widgets/lanes';
+import { accessWidget, tilingWidget } from '../widgets/feed';
 import { occupancyWidget, warpCoreScene } from '../widgets/warps';
 import type { Chapter } from './types';
 
@@ -220,6 +221,114 @@ export const chWarps: Chapter = {
         compiler spills to slow memory instead.</p>
         <p>The widget sweeps the warps and the load latency with the timing model, which the tests check against the gate-level core cycle for cycle.</p>`,
       widget: occupancyWidget,
+    },
+  ],
+};
+
+export const chFeed: Chapter = {
+  id: 'feed', num: 29, title: 'Feeding the lanes', level: 'Throughput',
+  blurb: 'One memory port a line wide: coalescing, a banked shared memory and bank conflicts, a barrier, atomics; a reduction, a histogram and a tiled matrix multiply.',
+  steps: [
+    {
+      title: 'One port, a line wide',
+      body: `
+        <p>Chapter 28's memory gave every lane a read and a write port of its own: four address decoders and four 128-way multiplexers of 32 bits, 183 964 NANDs for
+        128 words. No real memory is built that way. A DRAM moves a <em>burst</em> of neighbouring bytes per access, and a cache a whole line; here the memory reads
+        and writes a <strong>16-byte line</strong>, four words side by side, through one port: 77 829 NANDs for the same 128 words.</p>
+        <p>Four lanes now share that port. The <strong>access unit</strong> decides which of them one access serves: the lowest lane still to serve leads, and every
+        lane whose address bits 31 … 4 match the leader's (the same line) goes along. The others wait for the next access. A memory instruction holds the issue
+        port for one cycle per access, and its warp moves on only after the last: chapter 26's sequencer, looping over lines instead of lanes. Each access's words
+        go back to the lanes it served; the scoreboard clears with the last.</p>
+        <p>The widget evaluates the gate-level access unit (5 870 NANDs) on four addresses, then again on the lanes it left, until none is left.</p>
+        <div class="try">Try stride 1 with offsets 0 and 1, then stride 3: when does a misaligned access cost a second cycle?</div>`,
+      widget: () => accessWidget('global'),
+      challenge: {
+        kind: 'quiz', question: 'Lanes 0–3 load words 6, 7, 8 and 9. How many accesses does the instruction take, and which lanes does the first one serve?',
+        options: ['1: all four', '2: lanes 0 and 1', '2: lanes 0, 1 and 2', '4: one lane each'], answer: 1,
+        explain: 'Words 6 and 7 sit in line 1 (words 4–7), words 8 and 9 in line 2. The leader is lane 0 (word 6): lanes 0 and 1 go in the first access, lanes 2 and 3 in the second.',
+      },
+    },
+    {
+      title: 'Coalescing',
+      body: `
+        <p>Sixteen threads each add up four values and store the sum. Stored <strong>by rows</strong>, thread g's values are words 4g … 4g + 3, so at each load the
+        four lanes' addresses are 16 bytes apart: a line each, four accesses. Stored <strong>by columns</strong>, value j of thread g is word 16 j + g, the lanes'
+        addresses are neighbours, and every load is one access. The program is the same 76 instructions either way.</p>
+        <p>By rows: 68 accesses, 48 cycles holding the issue port, 124 cycles. By columns: 20 accesses and 76 cycles, every issue slot used. The data layout alone
+        decides it. GPU programmers call the good case <em>coalesced</em> and arrange arrays so that neighbouring threads touch neighbouring words: a structure of
+        arrays rather than an array of structures.</p>
+        <div class="try">Run to halt by rows, then switch the kernel to columns: the faded cells in the timeline are the extra accesses, and they are gone.</div>`,
+      scene: () => warpCoreScene('rows', { warps: 4, programs: ['rows', 'cols'], highlight: ['acc', 'mem'] }),
+    },
+    {
+      title: 'Banks',
+      body: `
+        <p>Next to the lanes sits a <strong>shared memory</strong>: 64 words at address 0x1000 (bit 12 of an address picks it), a scratchpad the threads read and
+        write explicitly. It is on the chip, close to the lanes: an access enters the memory pipeline one register before the end, so a load takes 2 cycles instead
+        of 8. Only one access reaches the memories per cycle, so a shared access waits a cycle when a global one issued 6 cycles earlier would arrive with it.</p>
+        <p>It is built from four <strong>banks</strong>: word w lives in bank w mod 4, row w / 4, and each bank has its own row decoder (38 928 NANDs, 300 more than
+        a line memory of the same size). One access then serves any four words in different banks, not just one line. Lanes asking for the same word share it (a
+        broadcast). Two different words in one bank are a <strong>bank conflict</strong>: per bank the lowest lane picks the row, and a lane wanting another row
+        waits for the next access.</p>
+        <p>A column of a 4-wide array (stride 4) puts all four lanes in one bank: four accesses. Padding each row to 5 words spreads the column over the four
+        banks.</p>`,
+      widget: () => accessWidget('shared'),
+      challenge: {
+        kind: 'quiz', question: 'Four lanes read shared-memory words 0, 2, 4 and 6. How many accesses?',
+        options: ['1', '2', '3', '4'], answer: 1,
+        explain: 'Words 0 and 4 are both in bank 0 (rows 0 and 1), words 2 and 6 both in bank 2. The first access serves lanes 0 and 1 (bank 0 row 0, bank 2 row 0), the second lanes 2 and 3.',
+      },
+    },
+    {
+      title: 'A barrier',
+      body: `
+        <p>The sum of 64 words: each of the 16 threads adds four (coalesced) and writes its sum s[tid] into shared memory; then a tree halves the partial sums,
+        s[i] += s[i + s] for s = 8, 4, 2, 1. At each level a thread reads a sum that a thread of <em>another warp</em> wrote, and the warps run in whatever order
+        the scheduler picks. Something has to make the readers wait for the writers.</p>
+        <p><code>bar rs1, rs2</code> is that: the warp waits at barrier rs1 until rs2 warps have arrived, itself included; the last to arrive releases them all.
+        The hardware is a waiting bit per warp (a waiting warp is not ready) and, when a bar issues, a population count of those bits plus one, compared with
+        rs2. Enough: every bit clears. This core has one barrier, so the warps must agree on rs1.</p>
+        <p>With a bar between levels, a warp never reads shared data that another wrote without a barrier in between: the programming model. The golden model
+        then gives the same memory whatever order the warps run in, and the tests check every kernel under two orders. 298 cycles, many of them spent waiting at
+        the barriers (barred cells): at the last levels one thread works and fifteen wait.</p>
+        <div class="try">Switch to the strided version (s[2 s t] += s[2 s t + s]): the lanes' words are 2 s apart, so they fall into the same banks. 38 shared accesses
+        instead of 20, 18 cycles holding the port, 330 cycles.</div>`,
+      scene: () => warpCoreScene('reduceSeq', { warps: 4, programs: ['reduceSeq', 'reduceInt'], highlight: ['atBar', 'sched'] }),
+    },
+    {
+      title: 'Atomics',
+      body: `
+        <p>A histogram: 64 values from 0 to 15, one count per value. Each thread adds 1 to the bin of each of its values, and two threads (two lanes of one warp,
+        even) may hit the same bin at once. With <code>lw</code>, <code>addi</code>, <code>sw</code> they would all read the same count, add one, and store: four
+        lanes on one bin count once.</p>
+        <p><code>amoadd.w rd, rs2, (rs1)</code> reads the word at rs1, writes it back plus rs2 and returns the old value, all in one memory access, so nothing
+        comes in between. In the lanes it is served <strong>one lane per access</strong>, lowest first: the access unit sends the leader alone, and an adder at
+        the memory (a 32-bit Kogge–Stone, 878 NANDs) makes the new word. Lanes on one bin then all count, one after the other.</p>
+        <p>16 loads and 64 atomic adds: 80 accesses, 48 cycles holding the port, 197 cycles. The decoder hands amoadd.w to the control unit disguised as
+        <code>lw</code> (it reads memory and writes rd) and zeroes its immediate: the address is rs1.</p>`,
+      scene: () => warpCoreScene('hist', { warps: 4, highlight: ['acc', 'xdec'] }),
+      challenge: {
+        kind: 'quiz', question: 'Lanes 0–3 of one warp run amoadd.w on bins 3, 3, 7, 3. How many accesses does it take, and what does bin 3 gain?',
+        options: ['2 accesses, +3', '4 accesses, +3', '4 accesses, +1', '1 access, +3'], answer: 1,
+        explain: 'amoadd.w serves one lane per access, so four accesses whatever the addresses; the three lanes on bin 3 each add 1. A plain load / add / store would leave bin 3 one higher, not three.',
+      },
+    },
+    {
+      title: 'Tiles',
+      body: `
+        <p>A matrix multiply, C = A · B with A 8 × 4 and B 4 × 8, needs a multiplier in each lane: a Wallace tree keeping the low 32 bits of the product
+        (<code>mul</code>, 7 388 NANDs a lane). The plain kernel computes C[i][j] from row i of A and column j of B straight from global memory: 8 loads per
+        element, each one access (a warp's four threads share a row of A, one word for all, and read neighbouring columns of B).</p>
+        <p>The tiled kernel uses shared memory as a staging area. Each thread copies one element of a 4 × 4 tile of A and one of B into shared memory,
+        <code>bar</code>, computes its element of C from the tiles (a row of the A tile is one word for the whole warp, a column of the B tile spans the four
+        banks), <code>bar</code>, next tile. Each tile element is loaded from global memory once and used by four threads: 40 global accesses instead of 144.</p>
+        <p>It also runs 560 instructions instead of 396, and here that decides it. This memory takes a line every cycle, so a global access costs the issue port
+        no more than a shared one, and four warps hide the 8-cycle latency: the plain kernel wins, 396 cycles to 592. Tiling trades instructions for memory traffic,
+        which pays only when the memory is the bottleneck: in the chart, from one line every three cycles.</p>
+        <p>On a real GPU it is. An H100 SXM moves 3.35 TB/s from its HBM3 to 132 SMs at up to 1.98 GHz: under 13 bytes per SM per cycle, against 128 bytes per cycle
+        from each SM's shared memory. Scaled to this core, whose shared memory moves 16 bytes a cycle, that is a line every ten cycles, past the right edge of the
+        chart. Caches narrow the gap, and kernels that reuse data (matrix multiply above all) are written in tiles for exactly this reason.</p>`,
+      widget: tilingWidget,
     },
   ],
 };
