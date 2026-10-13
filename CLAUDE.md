@@ -296,12 +296,17 @@ src/lib/rv16/  the campaign's RV16 hardware, every block built only from parts i
                files, MASK16 active mask + leader + write enables, LANEDEC16, STACK16 split / join stack and StackModel,
                rv16Lanes(simt): the 4-lane SIMD / SIMT cores, LANE_PORTS: a memory port and a write port per lane);
                warps16.ts (COAL16 coalescer + coalesce16; RV16_WARPS: two warps taking turns over a memory one cycle late,
-               WARP_PORTS: + warp and a load write port lwe / lwa / lwd<i>; a warp with no lanes issues nothing)
+               WARP_PORTS: + warp and a load write port lwe / lwa / lwd<i>; a warp with no lanes issues nothing; rv16Warps(raster):
+               RV16_FRAME, the same core with the rasterizer as a device (registers at 0xFFF0 … 0xFFF6 on lane 0's port, a hold
+               while it is busy for a device store or a screen load), FRAME_PORTS: + fa / fd / fwe); raster16.ts (act 9 graphics,
+               reference gfx/raster16.ts: EDGE16 stepper with a double command, TILE16 walk, RASTER16: set-up by adders and
+               shift-and-add on the steppers, cull from the E sum)
 src/riscv/rv16/ isa16.ts (fields, encode / decode / disasm), asm16.ts, iss16.ts (golden model: MMIO, CSRs, traps,
                interrupts; halts on jal x0, 0; SIMT words are illegal), simt16.ts (Simt16: a warp of RV16 lanes over one
                memory: mask, leader, split / join stack, tmc, csrr rd, tid; utilization / idle), warps16.ts (Warps16: W warps over
                one memory taking turns, warp 0 first, wasted turns counted; bar waits for the other warp or its end (mask 0);
-               stepWarp(w) for other issue orders), randprog.ts (seeded random
+               stepWarp(w) for other issue orders; raster: lane 0's stores to 0xFFF0 … 0xFFF6 draw at once into 0xF000, draws
+               listed), randprog.ts (seeded random
                programs for fuzzing cores)
 src/isa/       Custom ISA: table.ts (IsaDoc: instructions as mnemonic + operand letters + bit pattern, operand kinds reg / enum
                / imm / addr; IsaTable: assemble, disasm (most specific pattern), fields, words, problems; sanitizeIsa),
@@ -491,8 +496,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  (widgets/pipegrid), the system CPU's I/O, registers, fcsr, memory, retired; Run to halt,
                  Step, Slow (instructions per second), Reset, Edit program; the multi-core view),
                  opened by itself for a complete CPU; CPU props section
-src/gfx/       raster.ts: the rasterizer's reference model (setup, rasterize: pixel writes with their cycles, zPlane / zAt /
-               zStore, blend332, RefFrame: a framebuffer and depth buffer drawn as the hardware does; Z_WALK_START, CLEAR_CYCLES);
+src/gfx/       raster16.ts: the campaign's (7-bit vertices, 32 × 32, RGB565; Edge16 / Walk16 models, rasterize16 with the
+               19-cycle set-up, draw16, rgb565); raster.ts: the rasterizer's reference model (setup, rasterize: pixel writes
+               with their cycles, zPlane / zAt / zStore, blend332, RefFrame: a framebuffer and depth buffer drawn as the
+               hardware does; Z_WALK_START, CLEAR_CYCLES);
                pipeline.ts: chapter 31's reference (frameOps / framePicture: frame f of a mesh), FrameRecorder (a frame's spans per
                unit and its cycles by phase, from one sample a cycle), PIPE_COSTS (measured, pinned by tests/gfxpipe.test.ts).
                The kernels and meshes are riscv/gfxprograms.ts (16.16 rotation with mul, vertex buffers f mod 2, the memory map;
@@ -538,7 +545,9 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  lanecheck.ts the lane bench (CoreSpec.lanes: four memory ports, each lane's writes and stores against
                  Simt16, lanes in order within a cycle; lanePeriod), lanetests.ts its programs (warpTests: + two-warp ones);
                  warpcheck.ts the two-warp bench (drdata from the previous cycle's address, issue port = this warp, load
-                 port = last cycle's, against Warps16; warpPeriod: synchronous data memories); buildk.ts act 9's levels;
+                 port = last cycle's, against Warps16; warpPeriod: synchronous data memories; CoreSpec.raster: pixel writes
+                 fa / fd / fwe in order against the golden model's draws, applied to the screen); rastercheck.ts k_raster's
+                 bench (64 triangles on BitSim lanes, writes in walk order, cycles graded); buildk.ts act 9's levels;
                  puzzles.ts kernels on two warps (`warps`) also run with warp 1 ahead (a missing bar fails)
                DOM: ui/svgs.ts (map and anatomy SVG), ui/levelinfo.ts (criteria, grading table), ui/codexentry.ts (a codex
                entry in full, live schematic), ui/glossaryui.ts (markTerms: hover cards); the page is ui/pages/campaign.ts.

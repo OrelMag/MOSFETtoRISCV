@@ -1366,4 +1366,46 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
     ],
     chapters: [{ chapter: 'feed', step: 4, label: 'Atomics' }],
   },
+  tilewalk: {
+    idea: 'A rasterizer that visits every pixel of a triangle\'s bounding box spends most of its cycles outside a thin or diagonal triangle. Group the pixels into tiles (4 × 4 here) and test each tile once: if some edge is negative even at the tile\'s best corner, the corner where that edge is largest, no pixel of the tile can be inside, and the walk moves on. The best corner of edge i is at its top-left pixel plus 12·A⁺ in x and 12·B⁺ in y (A⁺ = A when positive, else 0): one more adder per edge.<br>The walk goes in bands, rows of tiles left to right. Inside an accepted tile it runs down the first column, up the second, down, up: every step is one pixel, so E changes by one constant, and the last pixel, the top-right one, is one step left of the next tile\'s top-left. A band starts again from R, the stepper\'s copy of E at the band\'s first tile: R + 4·(4B) is the next band.',
+    example: { title: 'A sliver across the screen', body: '<pre>triangle (4, 8) (124, 112) (116, 124), quarter pixels\nbox: tiles 0 … 7 × 0 … 7, 64 tiles, 1 024 pixels\ntiles accepted: 19, rejected: 45; pixels drawn: 70\ncycles: 64 TEST + 19 × 16 = 368 (+ 19 set-up)\na scan of the box: 1 024 (+ set-up)</pre>The thinner the triangle, the more the TEST cycles save.' },
+    mistakes: [
+      'Testing a tile at its top-left pixel only: a tile whose top-left is outside can still hold pixels inside.',
+      'A row-by-row path inside the tile: the jump back to the left edge is −3·4A, a step the stepper does not have.',
+      'Forgetting to return to the band\'s start: after the last tile of a band, E is far to the right; only R knows where the band began.',
+    ],
+    lib: 'rv16_tile',
+    chapters: [{ chapter: 'pixels', step: 2, label: 'Walking tiles' }],
+  },
+  horner: {
+    idea: 'Multiplying a by an n-bit b needs no multiplier if time is cheaper than gates: Horner\'s rule, b = (…((b₇)·2 + b₆)·2 + …)·2 + b₀, turns a·b into n steps of acc ← 2·acc + (bₖ ? a : 0), most significant bit first. The doubling is wiring; the addition is the adder that is already there. A two\'s complement b weighs its top bit −2ⁿ⁻¹: that one step subtracts.<br>The rasterizer\'s set-up needs E = A·Δx + B·Δy − bias for each edge at the first tile, and each edge stepper already has an adder and a register. Interleaving the two products bit by bit, double-and-add A for bit k of Δx, then add B for bit k of Δy, computes both in one pass: E ← 0, two subtracting steps for the sign bits, fourteen steps for bits 6 … 0, one for the bias. The three edges run at once, 17 cycles a triangle, with nothing added but the muxes that feed the steppers.',
+    example: { title: '−20 · 40 + 110 · 40, MSB first', body: '<pre>Δx = Δy = 40 = 0010 1000 (bits 7 … 0)\nE = 0\nbit 7: E − 0·A − 0·B          = 0\nbit 6: 2E + 0, + 0             = 0\nbit 5: 2E + A (−20), + B (110) = 90\nbit 4: 2E, + 0                 = 180\nbit 3: 2E + A, + B             = 450\nbit 2 … 0: doublings           = 3 600\nminus the bias 1               = 3 599</pre>' },
+    mistakes: [
+      'Least significant bit first with a fixed accumulator: then the operand must shift left each step, a second register.',
+      'Treating Δ as unsigned: the sign bit weighs −128, so it subtracts.',
+      'Doubling between the A and B steps of one bit: both products share the doubling, once per bit.',
+    ],
+    lib: 'rv16_raster',
+    chapters: [{ chapter: 'pixels', step: 1, label: 'Inside a triangle' }],
+  },
+  device: {
+    idea: 'A processor drives other hardware through addresses: the device decodes the address bus, and a store to one of its registers configures it, another starts it. The rasterizer of k_frame listens to lane 0\'s memory port: six stores set the vertices, a seventh sets the colour and starts it. Its output is memory too: it writes the screen, words the lanes can also load and store.<br>A device that runs on its own for hundreds of cycles needs a rule for when the processor may touch it again. Software can poll a status word or wait for an interrupt; k_frame\'s core instead holds an instruction that would interfere, a store to the device or a load from the screen, until the rasterizer is done. A load from the screen then works as a fence: after it, the picture is complete. Stores to the screen are not held, so a program that clears the screen must fence first, or it races the drawing.',
+    example: { title: 'Drawing, then reading back', body: '<pre>        sw   a0, -16(x0)     # 0xFFF0: v0x (lane 0)\n        …                    # v0y … v2y\n        sw   a1, -10(x0)     # 0xFFF6: the colour; the rasterizer starts\n        lw   a2, 0(t0)       # t0 in 0xF000 …: waits until it is done\n        sw   x0, 0(t0)       # safe: the triangle is finished</pre>Without the load, the store could land before the rasterizer reaches that pixel, and be painted over.' },
+    mistakes: [
+      'Holding only the stores to the device: a load from the screen would then read a half-drawn picture.',
+      'Building the hold from the write enables it gates: the hold changes go, go changes the enables, a combinational loop.',
+      'Assuming the golden model\'s timing: it draws at once, so a program that races the rasterizer looks right there and fails on the hardware.',
+    ],
+    chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }],
+  },
+  minsky: {
+    idea: 'Rotating a point by a small angle ε exactly takes cos ε and sin ε: four multiplications. Approximating, x ← x − ε·y; y ← y + ε·x, is cheap but wrong in a way that grows: the matrix [[1, −ε], [ε, 1]] has determinant 1 + ε², so every step pushes the point outward, and after a few hundred steps the circle is a spiral. Minsky\'s version uses the new x in the second line. Its matrix, [[1, −ε], [ε, 1 − ε²]], has determinant exactly 1: the point moves on a closed ellipse, very close to a circle for small ε.<br>With ε = 1/8 both multiplications are arithmetic shifts by 3. In 8.8 fixed point (8 fraction bits) a square\'s corners stay within about 6 % of their radius over 2 000 frames; in whole quarter pixels the rounding errors build up to about 20 %. Marvin Minsky found it drawing circles on the PDP-1 display (HAKMEM, item 149).',
+    example: { title: 'One step of a corner, ε = 1/8', body: '<pre>x = −28·256 = −7 168, y = −7 168   (8.8: −28 quarter pixels)\nx ← x − (y &gt;&gt; 3) = −7 168 + 896 = −6 272\ny ← y + (x &gt;&gt; 3) = −7 168 − 784 = −7 952\nscreen: 64 + (x &gt;&gt; 8) = 64 − 25 = 39, 64 + (y &gt;&gt; 8) = 64 − 32 = 32</pre>' },
+    mistakes: [
+      'Updating y from the old x: the two lines then form the spiral, not the ellipse.',
+      'Logical shifts: a negative coordinate turns into a large positive one.',
+      'Rounding to whole pixels every step: the errors accumulate; keep the fraction and round only when drawing.',
+    ],
+    chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }],
+  },
 };

@@ -3,7 +3,8 @@
 // (registers, the current line, outputs). A pass records size and cycles. A kernel puzzle (lanes)
 // steps the warp instead: every lane's registers in a column, the active mask, the stack depth and
 // the lane utilization so far; its pass records idle lanes too. Two warps: both side by side, each
-// with its PC, mask, stack and whether it waits at the barrier.
+// with its PC, mask, stack and whether it waits at the barrier. With the rasterizer (p_spin): the 32 × 32
+// screen, as the golden model left it, and the triangles drawn so far.
 
 import { h, icon } from '../../ui/dom';
 import { codeEditor } from '../../widgets/codeedit';
@@ -13,6 +14,7 @@ import { Iss16 } from '../../riscv/rv16/iss16';
 import type { Simt16 } from '../../riscv/rv16/simt16';
 import { Warps16 } from '../../riscv/rv16/warps16';
 import { progress } from '../progress';
+import { FB16, rgb565, SCREEN16 } from '../../gfx/raster16';
 import { PUZZLES, puzzleMachine, runPuzzle } from '../puzzles';
 import type { CampaignNode } from '../types';
 
@@ -128,7 +130,7 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
         many ? null : [h('b', null, ' · lanes busy '), `${Math.round(100 * w.utilization)} %`],
         w.divergences ? [h('b', null, ' · divergent branches '), String(w.divergences)] : null);
     });
-    dbg.replaceChildren(status, ...info,
+    dbg.replaceChildren(status, ...info, ...(many && p.raster ? [screenOf(many)] : []),
       ...(many ? [h('p', { class: 'cp-pz-io' }, h('b', null, 'lanes busy '), `${Math.round(100 * many.utilization)} % of the issue slots’ lanes`)] : []),
       h('div', { class: 'cp-pz-lanes-wrap' }, h('table', { class: 'cp-pz-lanes' },
         h('tr', null, h('th'), cols.map(({ w, i }) => h('th', { class: on(w, i) ? 'on' : 'off', title: `${many ? `warp ${w.warp}, lane ${i}: ` : ''}${on(w, i) ? 'active' : 'masked off'}` },
@@ -163,4 +165,16 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
         h('button', { class: 'btn sm', onclick: () => step(p.maxSteps) }, icon('play', 13), 'Run')),
       dbg));
   return card;
+}
+
+/** The screen in the golden model's memory (0xF000 + 32·y + x, RGB565), and the triangles drawn so far. */
+function screenOf(m: Warps16): HTMLElement {
+  const cv = h('canvas', { class: 'cp-pz-screen', width: SCREEN16, height: SCREEN16, 'aria-label': 'the 32 by 32 screen' }) as HTMLCanvasElement;
+  const ctx = cv.getContext('2d');
+  if (ctx) {
+    const im = ctx.createImageData(SCREEN16, SCREEN16);
+    for (let i = 0; i < SCREEN16 * SCREEN16; i++) im.data.set([...rgb565(m.dmem[FB16 + i]), 255], 4 * i);
+    ctx.putImageData(im, 0, 0);
+  }
+  return h('div', { class: 'cp-pz-screen-wrap' }, cv, h('p', { class: 'cp-pz-io' }, h('b', null, 'screen '), `0xF000 … 0xF3FF · ${m.draws.length} triangle${m.draws.length === 1 ? '' : 's'} drawn`));
 }

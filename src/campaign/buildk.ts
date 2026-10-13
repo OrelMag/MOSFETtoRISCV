@@ -1,16 +1,20 @@
 // Act 9's build levels (a GPU, roadmap Phase 15): four lanes, the lane register file, the active
 // mask and the reconvergence stack, then the SIMD and SIMT cores on the lane bench; the coalescer and
-// the two-warp core. No DOM.
+// the two-warp core; the graphics levels: edge stepper, tile walk, rasterizer, and the two-warp core with the
+// rasterizer as a device. No DOM.
 
 import type { BuildChallenge, PinSpec, SeqStep } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
-import type { ChipDoc } from '../editor/model';
+import type { ChipDoc, PartRef } from '../editor/model';
 import { LANE_PORTS, LANES16, leaderOf, MASK16, NL, rv16Lanes, STACK16, StackModel, VRF16 } from '../lib/rv16/lanes16';
-import { COAL16, RV16_WARPS, WARP_PORTS } from '../lib/rv16/warps16';
+import { COAL16, FRAME_PORTS, RV16_FRAME, RV16_WARPS, WARP_PORTS } from '../lib/rv16/warps16';
+import { EDGE16, RASTER16, ROFF, ROPER16, RSEQ16, RSETUP16, RSUB8, RTEST16, RTILES, TILE16 } from '../lib/rv16/raster16';
+import { CMD16, Edge16, w16, Walk16 } from '../gfx/raster16';
+import { runRaster } from './rastercheck';
 import type { ComponentDef } from '../sim/types';
 import { rng } from './drills';
 import { laneCheck } from './lanecheck';
-import { simdTests, simtTests, warpTests } from './lanetests';
+import { frameTests, simdTests, simtTests, warpTests } from './lanetests';
 import { warpCheck } from './warpcheck';
 
 const pins = (ins: [string, number?][], outs: [string, number?][], clock?: string): PinSpec[] => [
@@ -20,13 +24,21 @@ const pins = (ins: [string, number?][], outs: [string, number?][], clock?: strin
 const each = (p: string, w = 16): [string, number][] => Array.from({ length: NL }, (_, i) => [`${p}${i}`, w]);
 
 const answers = new Map<string, ChipDoc[]>();
-const refOf = (id: string, def: () => ComponentDef, name: string) => (): ChipDoc[] => {
+/** A reference answer: the top def drawn as a chip, and `subs` (def → chip name) drawn as chips it places. */
+const refOf = (id: string, def: () => ComponentDef, name: string, subs: () => [ComponentDef, string][] = () => []) => (): ChipDoc[] => {
   let a = answers.get(id);
-  if (!a) {
-    const doc = docFromDef(def(), { id: `u_ref_cp_${id}`, name: `${name} ref` });
-    if ('error' in doc) throw new Error(`reference ${id}: ${doc.error}`);
-    answers.set(id, (a = [{ ...doc, notes: `Reference answer. ${def().summary ?? ''}`.trim() }]));
+  if (a) return a;
+  const chips = new Map(subs().map(([d, n], i) => [d, { id: `u_ref_cp_${id}_${i}`, name: `${n} ref` }]));
+  const refOfDef = (d: ComponentDef): PartRef | undefined => (chips.has(d) ? { chip: chips.get(d)!.id } : undefined);
+  const docs: ChipDoc[] = [];
+  for (const [d, c] of chips) {
+    const doc = docFromDef(d, { ...c, refOf: refOfDef });
+    if ('error' in doc) throw new Error(`reference ${id} (${d.id}): ${doc.error}`);
+    docs.push({ ...doc, notes: `Part of the reference answer. ${d.summary ?? ''}`.trim() });
   }
+  const top = docFromDef(def(), { id: `u_ref_cp_${id}`, name: `${name} ref`, refOf: refOfDef });
+  if ('error' in top) throw new Error(`reference ${id}: ${top.error}`);
+  answers.set(id, (a = [...docs, { ...top, notes: `Reference answer. ${def().summary ?? ''}`.trim() }]));
   return a;
 };
 
@@ -144,12 +156,96 @@ function stackSeq(): SeqStep[] {
   return st;
 }
 
+/** The edge stepper: every command, with steps of both signs, against the model. */
+function edgeSeq(): SeqStep[] {
+  const r = rng(96);
+  const m = new Edge16();
+  const st: SeqStep[] = [];
+  const small = () => Math.floor(r() * 1024) - 512;
+  const step = (cmd: number, a: number, b: number, e0: number) => {
+    m.step(cmd, a, b, e0);
+    st.push({ set: { cmd, a: w16(a), b: w16(b), e0: w16(e0) }, tick: true, expect: { e: w16(m.e), inside: m.inside } });
+  };
+  step(CMD16.load, 12, -40, -300);
+  for (const c of [CMD16.right, CMD16.right, CMD16.skip, CMD16.down, CMD16.up, CMD16.down, CMD16.band, CMD16.hold, CMD16.right, CMD16.band, CMD16.skip]) step(c, 12, -40, 0);
+  // the set-up's shift-and-add: E = 0, then double and add over the bits of 0b1011 (11 · 37 = 407)
+  step(CMD16.load, 0, 0, 0);
+  for (const bitv of [1, 0, 1, 1]) step(CMD16.double, bitv ? 37 : 0, 0, 0);
+  for (let i = 0; i < 80; i++) step(Math.floor(r() * 8), small(), small(), Math.floor(r() * 0x10000) - 0x8000);
+  return st;
+}
+
+/** The tile walk: boxes of every shape, tiles accepted and rejected, a reset in the middle. */
+function tileSeq(): SeqStep[] {
+  const r = rng(97);
+  const m = new Walk16();
+  const st: SeqStep[] = [];
+  let box = { tx0: 0, tx1: 0, ty0: 0, ty1: 0 };
+  const step = (go: number, ok: number, rst = 0) => {
+    const o = m.out(box, ok);
+    const expect: Record<string, number> = { busy: o.busy, test: o.test, pix: o.pix, cmd: o.cmd };
+    if (o.busy) { expect.x = o.x; expect.y = o.y; }
+    const set = { ...box, go, ok, rst };
+    st.push({ set, expect });
+    st.push({ set, tick: true, expect: {} });
+    m.edge(box, go, ok, rst);
+  };
+  step(0, 0, 1);
+  const boxes = [{ tx0: 1, tx1: 1, ty0: 2, ty1: 2 }, { tx0: 0, tx1: 2, ty0: 0, ty1: 1 }, { tx0: 5, tx1: 7, ty0: 6, ty1: 7 }, { tx0: 3, tx1: 3, ty0: 0, ty1: 3 }];
+  boxes.forEach((b, k) => {
+    box = b;
+    step(1, 1);
+    for (let i = 0; m.busy && i < 400; i++) step(0, k === 0 ? 1 : r() < 0.55 ? 1 : 0);
+    step(0, 1);
+  });
+  // a reset while walking
+  box = { tx0: 0, tx1: 7, ty0: 0, ty1: 7 };
+  step(1, 1);
+  for (let i = 0; i < 9; i++) step(0, 1);
+  step(0, 1, 1);
+  step(0, 1);
+  return st;
+}
+
 const pinsOf = (ports: typeof LANE_PORTS): PinSpec[] => ports.map((p) => ({ name: p.name, dir: p.dir === 'out' ? 'out' : 'in', width: p.width, ...(p.name === 'clk' ? { clock: true } : {}) }));
 const LANE_PINS = pinsOf(LANE_PORTS);
 
 const CORE_BRIEF = 'Pins: one instruction stream (<code>pc</code>, <code>instr</code>) and, per lane <i>i</i>, a memory port (<code>daddr<i>i</i></code>, <code>dwdata<i>i</i></code>, <code>drdata<i>i</i></code>, bit <i>i</i> of <code>dwe</code>) and a register write port (bit <i>i</i> of <code>rwe</code>, <code>rwd<i>i</i></code>; <code>rwa</code> is shared). The bench serves every port in the same cycle, so one instruction per cycle is possible.';
 
 export const BUILDK: Record<string, () => BuildChallenge> = {
+  k_edge: () => ({
+    id: 'k_edge', title: 'Edge stepper', level: 'cpu', allowed: 'nand',
+    brief: 'One edge function E (16 bits, two\'s complement), stepped with adders only, and R, the start of the current band. At each clock edge, by <code>cmd</code>: 0 hold; 1 load: E, R ← <code>e0</code>; 2 right: E ← E + <code>a</code>; 3 skip a tile: E ← E + 4a; 4 down: E ← E + <code>b</code>; 5 up: E ← E − b; 6 next band: E, R ← R + 4b; 7 double: E ← 2E + a (the set-up multiplies with it). Outputs: <b>e</b> = E and <b>inside</b> = E ≥ 0, the sign bit inverted.',
+    ports: pins([['a', 16], ['b', 16], ['e0', 16], ['cmd', 3], ['clk']], [['e', 16], ['inside']], 'clk'),
+    check: { kind: 'sequence', steps: edgeSeq() },
+    answer: refOf('k_edge', () => EDGE16, 'Edge stepper'),
+  }),
+  k_tile: () => ({
+    id: 'k_tile', title: 'Tile walk', level: 'cpu', allowed: 'nand',
+    brief: 'Walk a box of tiles (4 × 4 pixels each; tiles <code>tx0</code> … <code>tx1</code> across, <code>ty0</code> … <code>ty1</code> down, 0 … 7, held while busy) in <b>bands</b>: a band is a row of tiles, left to right. <code>go</code> while idle starts at the first tile; <b>busy</b> = 1 from the next cycle until the last tile is done; <code>rst</code> stops at once. '
+      + 'Each tile begins with one <b>TEST</b> cycle (<b>test</b> = 1) at its top-left pixel. If <code>ok</code> = 0, the tile is skipped: <b>cmd</b> = 3 (skip) to the next tile, or 6 (band) to the next band\'s first tile, or 0 after the last. If ok = 1, its 16 pixels follow (<b>pix</b> = 1), column by column: down the first (cmd 4), up the second (cmd 5), down, up; <b>cmd</b> = 2 (right) at the end of each column; the last pixel, the tile\'s top-right, moves right to the next tile, or bands (6), or 0 after the last tile. The TEST before them holds (cmd 0). '
+      + '<b>x</b>, <b>y</b>: the pixel where the walk is (4·tile + column, 4·tile + row); test, pix and cmd are 0 while idle.',
+    ports: pins([['tx0', 3], ['tx1', 3], ['ty0', 3], ['ty1', 3], ['go'], ['ok'], ['clk'], ['rst']], [['x', 5], ['y', 5], ['cmd', 3], ['test'], ['pix'], ['busy']], 'clk'),
+    check: { kind: 'sequence', steps: tileSeq() },
+    answer: refOf('k_tile', () => TILE16, 'Tile walk'),
+  }),
+  k_raster: () => ({
+    id: 'k_raster', title: 'Rasterizer', level: 'cpu', allowed: 'nand',
+    brief: 'A triangle in, its pixels out, one a cycle, on a 32 × 32 screen. Vertices <code>v0x</code> … <code>v2y</code> are 7-bit quarter pixels (pixel (x, y)\'s centre is (4x + 2, 4y + 2)); with <code>col</code> they are held from <code>go</code> until busy falls. <b>busy</b> = 1 from the cycle after go until the last pixel. '
+      + 'Edge i runs from vertex i to i + 1: A = y<sub>i</sub> − y<sub>i+1</sub>, B = x<sub>i+1</sub> − x<sub>i</sub>, E<sub>i</sub>(p) = A·(p.x − x<sub>i</sub>) + B·(p.y − y<sub>i</sub>), minus 1 unless the edge is left (A &gt; 0) or top (A = 0, B &gt; 0). A pixel is inside when its three E ≥ 0. A triangle whose E sum (twice its area, biases added back) is ≤ 0 is a back face: nothing is drawn. '
+      + 'Walk the box of tiles (first tile (min + 1) &gt;&gt; 4, last max(max − 2, 0) &gt;&gt; 4, in quarter pixels) with your tile walk; a tile whose E + 12·(A⁺ + B⁺) &lt; 0 for some edge (A⁺: A if positive, else 0) is skipped. For each pixel inside: <b>fwe</b> = 1, <b>fa</b> = 32·y + x, <b>fd</b> = col, in the walk\'s order. No multiplier: E at the first tile by shift-and-add on each stepper (double).',
+    ports: pins([['v0x', 7], ['v0y', 7], ['v1x', 7], ['v1y', 7], ['v2x', 7], ['v2y', 7], ['col', 16], ['go'], ['clk'], ['rst']], [['fa', 10], ['fd', 16], ['fwe'], ['busy']], 'clk'),
+    check: { kind: 'custom', describe: '64 triangles, 32 at once (back faces, slivers, shared edges, the screen\'s corners among them): every pixel write in the walk\'s order; cycles from go until busy falls.', run: runRaster },
+    answer: refOf('k_raster', () => RASTER16, 'Rasterizer', () => [[RSUB8, 'Subtractor'], [RTILES, 'Tile range'], [ROFF, 'Tile test offset'], [RSETUP16, 'Set-up'], [RSEQ16, 'Set-up steps'], [ROPER16, 'Stepper operands'], [RTEST16, 'Cull and tile test']]),
+  }),
+  k_frame: () => ({
+    id: 'k_frame', title: 'A frame', level: 'cpu', allowed: 'nand',
+    brief: 'Your two-warp core with your rasterizer as a device. Lane 0\'s stores to <b>0xFFF0 … 0xFFF5</b> set v0x … v2y (the low 7 bits), its store to <b>0xFFF6</b> sets the colour and starts the triangle in the next cycle; the other lanes\' stores there do nothing special. The rasterizer writes the screen, the words <b>0xF000 + 32·y + x</b> (RGB565), through <code>fa</code>, <code>fd</code>, <code>fwe</code>. '
+      + 'While it is busy (or about to start), a warp whose instruction would store to it from lane 0, or load from the screen with any active lane, does not issue: its turn passes, and it tries again at its next turn. Everything else is the two-warp core: the same pins, the memory one cycle late. The golden model draws at once, so the picture and every load agree.',
+    ports: pinsOf(FRAME_PORTS),
+    check: warpCheck({ tests: frameTests, budget: { cpi: 1, extra: 4 }, raster: true }, `${frameTests().length} programs on two warps against the golden model with its rasterizer: register writes, stores and every pixel write in order.`),
+    answer: refOf('k_frame', () => RV16_FRAME, 'A frame'),
+  }),
   k_lanes: () => ({
     id: 'k_lanes', title: 'Four lanes', level: 'cpu', allowed: 'nand',
     brief: 'Four datapaths, one control: lane <i>i</i> computes <b>y<i>i</i> = ALU(a<i>i</i>, bimm ? imm : b<i>i</i>)</b> with the ALU operation <code>alu</code> (the same for every lane, as your ALU encodes it), and <b>nz</b> bit <i>i</i> = 1 when a<i>i</i> ≠ 0 (split will test it).',

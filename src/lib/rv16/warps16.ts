@@ -14,7 +14,10 @@
 import type { ComponentDef, PortDef } from '../../sim/types';
 import { constWord } from '../alu';
 import { Builder } from '../builder';
-import { busMux2, equal } from '../combinational';
+import { andN, busMux2, equal } from '../combinational';
+import { DEC3 } from './logic';
+import { RASTER16 } from './raster16';
+import { FB16, RAST16 } from '../../gfx/raster16';
 import { define, merger, ones, splitter } from '../define';
 import { AND, NOT, OR } from '../gates';
 import { bitwise, orN } from '../wide';
@@ -110,7 +113,7 @@ export const WARP_PORTS: PortDef[] = (() => {
  * bar: the first warp to arrive sets its waiting bit and issues nothing more while the other still has
  * lanes; the other's arrival clears it. A warp with no lane left (tmc x0) has ended and issues nothing.
  */
-export const RV16_WARPS: ComponentDef = (() => {
+function rv16Warps(raster: boolean): ComponentDef {
   const b = new Builder(10, 16, 6);
   b.pins('clk', 'rst', 'instr', ...each('drdata'));
   const nrst = b.op1(NOT, ['rst'], 'not reset');
@@ -156,7 +159,10 @@ export const RV16_WARPS: ComponentDef = (() => {
   const otherAny = b.op1(busMux2(1), [any[1], any[0], wq], 'the other has lanes?');
   const anyW = b.op1(busMux2(1), [any[0], any[1], wq], 'this warp has lanes?');
   b.next();
-  const go = b.name(b.op1(AND, [b.op1(NOT, [b.op1(AND, [waitW, otherAny], 'blocked')]), anyW], 'go'), 'go', true);
+  // k_frame: held while the rasterizer is busy, if lane 0 would store to it or a lane would read the screen
+  const holdN = raster ? b.add(NOT, 'not held', 'holdN') : '';
+  const go0 = b.op1(AND, [b.op1(NOT, [b.op1(AND, [waitW, otherAny], 'blocked')]), anyW], raster ? 'may go' : 'go');
+  const go = b.name(raster ? b.op1(AND, [go0, `${holdN}.y`], 'go') : go0, 'go', true);
   b.next();
   const gs = [0, 1].map((w) => b.name(b.op1(AND, [sel[w], go], `warp ${w} goes`), `go${w}`, true));
   b.next();
@@ -237,7 +243,55 @@ export const RV16_WARPS: ComponentDef = (() => {
   L.forEach((i) => { b.wire(`${ln}.y${i}`, `daddr${i}`); b.wire(r2[i], `dwdata${i}`); b.wire(`drdata${i}`, `lwd${i}`); });
   b.wire(lwe, 'lwe');
   b.wire(lrd, 'lwa');
+  if (raster) {
+    b.next();
+    const all3 = (v: string) => { const t3 = b.op(splitter(ones(3), 2), [v]); return b.op1(andN(3), [0, 1, 2].map((i) => `${t3}.o${i}`)); };
+    // the device: lane 0's stores to RAST16 … RAST16 + 6; the colour's store starts the triangle next cycle
+    const a0 = b.op(splitter([3, 13], 2), [`${ln}.y0`], 'lane 0 address');
+    const inDev = b.op1(AND, [b.op1(equal(13), [`${a0}.o1`, b.op1(constWord(13, RAST16 >> 3), [])], '0xFFF0 … 0xFFF7?'),
+      b.op1(NOT, [all3(`${a0}.o0`)], 'not 0xFFF7')], 'a rasterizer register');
+    const maskW = b.op1(busMux2(NL), [`${st[0].mask}.mask`, `${st[1].mask}.mask`, wq], 'this warp\'s lanes');
+    const mk = b.op(splitter(ones(NL), 2), [maskW]);
+    const devStore = b.op1(andN(3), [`${ctl}.mwe`, `${mk}.o0`, inDev], 'lane 0 stores to it');
+    // a load from the screen, FB16 … FB16 + 1023: address bits 15 … 10 = 111100
+    const fb = L.map((i) => b.op1(AND, [`${mk}.o${i}`, b.op1(equal(6), [`${b.op(splitter([10, 6], 2), [`${ln}.y${i}`])}.o1`, b.op1(constWord(6, FB16 >> 10), [])])]));
+    const fbLoad = b.op1(AND, [isLoad, b.op1(orN(4), fb)], 'a lane reads the screen');
+    b.next();
+    const rs = b.add(RASTER16, 'rasterizer', 'rast');
+    const goF = b.add(RV16_DFF, 'start next cycle', 'startF');
+    b.wire('clk', `${goF}.clk`);
+    const devBusy = b.name(b.op1(OR, [`${rs}.busy`, `${goF}.q`], 'rasterizer busy'), 'rbusy', true);
+    b.wire(b.op1(AND, [devBusy, b.op1(OR, [devStore, fbLoad])], 'held'), `${holdN}.a`);
+    // the registers, written when lane 0's store goes (dwe bit 0)
+    const dw = b.op(splitter(ones(NL), 2), [b.op1(bitwise('or', NL), dwe)]);
+    const wr = b.op1(AND, [`${dw}.o0`, inDev], 'device write');
+    const dec = b.op(splitter(ones(8), 2), [b.op1(DEC3, [`${a0}.o0`, wr], 'which register')]);
+    const v7 = `${b.op(splitter([7, 9], 2), [r2[0]])}.o0`;
+    const VP = ['v0x', 'v0y', 'v1x', 'v1y', 'v2x', 'v2y'];
+    VP.forEach((p, k) => {
+      const r = b.add(RV16_REG16, p, `r_${p}`);
+      b.wire(b.op1(merger([7, 9], 2), [v7, b.op1(constWord(9, 0), [])]), `${r}.d`); b.wire(`${dec}.o${k}`, `${r}.en`); b.wire('clk', `${r}.clk`);
+      b.wire(`${b.op(splitter([7, 9], 2), [`${r}.q`])}.o0`, `${rs}.${p}`);
+    });
+    const cr = b.add(RV16_REG16, 'colour', 'r_col');
+    b.wire(r2[0], `${cr}.d`); b.wire(`${dec}.o6`, `${cr}.en`); b.wire('clk', `${cr}.clk`);
+    b.wire(`${dec}.o6`, `${goF}.d`);
+    for (const [d, p] of [[`${cr}.q`, 'col'], [`${goF}.q`, 'go'], ['clk', 'clk'], ['rst', 'rst']]) b.wire(d, `${rs}.${p}`);
+    b.wire(`${rs}.fa`, 'fa'); b.wire(`${rs}.fd`, 'fd'); b.wire(`${rs}.fwe`, 'fwe');
+  }
   const R = b.right;
+  if (raster) {
+    return define({
+      id: 'rv16_frame', name: 'RV16 two-warp core with a rasterizer', category: 'cpu',
+      summary: 'The two-warp core with the rasterizer as a device: lane 0\'s stores to 0xFFF0 … 0xFFF5 set the vertices, its store to 0xFFF6 the colour, and the rasterizer starts in the next cycle, writing the screen through fa / fd / fwe. While it is busy, a warp whose instruction would store to it (lane 0) or load from the screen (0xF000 … 0xF3FF) does not issue: its turn passes.',
+      ports: FRAME_PORTS,
+      symbol: { kind: 'box', label: 'RV16 × 2 WARPS + RASTER' },
+      netlist: () => ({
+        pins: { ...pinsAt(['clk', 'rst', 'instr', ...each('drdata')], 0, 4), ...pinsAt(['pc', 'warp', ...each('daddr'), ...each('dwdata'), 'dwe', 'rwe', 'rwa', ...each('rwd'), 'lwe', 'lwa', ...each('lwd'), 'fa', 'fd', 'fwe'], R, 4) },
+        instances: b.instances, nets: b.nets(),
+      }),
+    });
+  }
   return define({
     id: 'rv16_warps', name: 'RV16 two-warp core (2 × 4 lanes)', category: 'cpu',
     summary: 'Two warps of the SIMT core take turns every cycle: one fetch, decode, control and set of lanes; per warp a PC, a mask, a split / join stack, lane registers and a waiting bit for bar. The data memory answers one cycle late: a load\'s lanes and rd wait a cycle in a register, and the word is written to its warp\'s registers (lwe, lwa, lwd) while the other warp issues, so neither ever waits for memory.',
@@ -248,4 +302,11 @@ export const RV16_WARPS: ComponentDef = (() => {
       instances: b.instances, nets: b.nets(),
     }),
   });
-})();
+}
+
+/** k_frame's core: the two-warp core's pins, plus the rasterizer's pixel writes. */
+export const FRAME_PORTS: PortDef[] = [...WARP_PORTS, bus('fa', 10, 'out'), bus('fd', 16, 'out'), bit('fwe', 'out')];
+
+export const RV16_WARPS: ComponentDef = rv16Warps(false);
+export const RV16_FRAME: ComponentDef = rv16Warps(true);
+

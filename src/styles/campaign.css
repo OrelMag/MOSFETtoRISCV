@@ -201,6 +201,8 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 .cp-pz-io { font: 12.5px var(--font-mono); margin: 6px 0; }
 /* the warp (kernel puzzles): a column per lane, masked-off lanes dimmed */
 .cp-pz-lanes-wrap { overflow-x: auto; }
+.cp-pz-screen-wrap { display: flex; align-items: flex-end; gap: 10px; margin: 6px 0; }
+.cp-pz-screen { width: 160px; height: 160px; image-rendering: pixelated; border-radius: var(--radius-sm); border: 1px solid var(--border); background: #000; }
 .cp-pz-lanes { border-collapse: separate; border-spacing: 3px; font: 12px var(--font-mono); }
 .cp-pz-lanes th { font-weight: 600; color: var(--muted); text-align: left; padding: 1px 6px; }
 .cp-pz-lanes tr:first-child th { text-align: center; }
