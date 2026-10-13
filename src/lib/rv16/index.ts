@@ -7,3 +7,4 @@ export * from './pipe';
 export * from './md';
 export * from './multi';
 export * from './lanes16';
+export * from './raster16';
