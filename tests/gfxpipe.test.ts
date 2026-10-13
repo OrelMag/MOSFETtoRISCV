@@ -7,9 +7,9 @@ import '../src/lib';
 import { chGfxPipeline } from '../src/chapters/ch-gfx';
 import { FrameRecorder, framePicture, frameOps, PIPE_COSTS } from '../src/gfx/pipeline';
 import { rasterize, type Vtx } from '../src/gfx/raster';
-import { CMD_UNIT, cuState, gpu31 } from '../src/lib/gfxpipe';
+import { CLEAR_UNIT, CMD_UNIT, cmdUnit, cuState, gpu31 } from '../src/lib/gfxpipe';
 import { ramLeafState } from '../src/lib/bigmem';
-import { frameBuffers, rasterizer, ROP, SCAN_OUT } from '../src/lib/raster';
+import { frameBuffers, rasterizer, ROP, ROP_W, SCAN_OUT } from '../src/lib/raster';
 import { warpCore } from '../src/lib/warps';
 import { assemble } from '../src/riscv/asm';
 import {
@@ -99,8 +99,8 @@ describe('frame recorder', () => {
 });
 
 /** Run the pipeline for `frames` frames on the cycle engine; each frame's picture when the command unit swaps. */
-function runPipeline(m: Mesh, frames: number) {
-  const d = flatten(gpu31(m));
+function runPipeline(m: Mesh, frames: number, clear: 'pixel' | 'word' = 'pixel') {
+  const d = flatten(gpu31(m, { clear }));
   const sim = new DualSim(d);
   sim.preferFast = true;
   sim.reset('zero');
@@ -119,7 +119,8 @@ function runPipeline(m: Mesh, frames: number) {
       for (let j = 0; j < 4; j++) { const s = ramLeafState(sim, kid(fb, `bank${j}`))!; for (let a = 0; a < 1024; a++) pic[4 * a + j] = s.mem[a]; }
       pictures.push(pic);
     }
-    if (rec.sample(c, st, u(sim, kid(root, 'core'), 'halted') === 0, u(sim, kid(root, 'rast'), 'busy') === 1)) records.push(rec.last!);
+    const cl = root.children!.get('clear');
+    if (rec.sample(c, st, u(sim, kid(root, 'core'), 'halted') === 0, u(sim, kid(root, 'rast'), 'busy') === 1, !!cl && u(sim, cl, 'busy') === 1)) records.push(rec.last!);
     last = st;
     sim.setInput('clk', 1); sim.settle(); sim.setInput('clk', 0); sim.settle();
   }
@@ -147,11 +148,32 @@ describe('the pipeline at gate level', () => {
   }
 });
 
+describe('step 5: the clear a word a cycle', () => {
+  for (const m of MESHES) {
+    it(`${m.id}: the same pictures, the clear unit's frame (four pixels and four depths a cycle)`, () => {
+      const { sim, pictures, records } = runPipeline(m, 3, 'word');
+      expect(sim.engine).toBe('cycle');
+      pictures.forEach((p, f) => expect(Buffer.from(p).equals(Buffer.from(framePicture(m, f))), `frame ${f}`).toBe(true));
+      const want = PIPE_COSTS.frames.find((x) => x.id === `${m.id}_w`)!;
+      expect(records[1].totals).toEqual({ clear: want.clear, draw: want.draw, wait: want.wait, kernel: want.kernel });
+      // the clear unit: started at launch, 1 024 words, then the command unit reads the count
+      expect(records[1].lanes.clear).toEqual([{ kind: 'clear', from: 1, to: 1025 }]);
+      expect(records[1].lanes.raster.every((sp) => sp.kind === 'draw')).toBe(true);
+      expect(records.slice(1).map((r) => r.cycles)).toEqual(records.slice(1).map(() => (m.id === 'triangle' ? 3072 : 4096)));
+    }, 120000);
+  }
+
+  it('chapter 30 and steps 1–4 keep their parts', () => {
+    expect([ROP.id, CMD_UNIT.id, frameBuffers().id, gpu31(meshById('triangle')).id]).toEqual(['rop', 'cmd_unit', 'fb2_pixbuf_pixbuf', 'gpu31_triangle']);
+    expect(gpu31(meshById('triangle'), { clear: 'word' }).id).toBe('gpu31_triangle_w');
+  });
+});
+
 // The registry-wide schematic tests (route.test.ts, layout.test.ts) never build gpu31: below it, the core's 128-word
 // lane memory takes the router minutes. Its own levels are checked here: the top, the core with its host port.
 describe('chapter 31 schematics', () => {
   const g = gpu31(meshById('cube')), core = inst(g, 'core');
-  for (const d of [g, core, inst(core, 'mem'), CMD_UNIT]) {
+  for (const d of [g, core, inst(core, 'mem'), CMD_UNIT, gpu31(meshById('cube'), { clear: 'word' }), cmdUnit(true), CLEAR_UNIT, ROP_W]) {
     it(`${d.id}: no two nets on one line, no overlaps, every part reaches an output`, () => {
       const nl = netlistOf(d)!;
       expect(wireOverlaps(routeNetlist(d, nl).nets)).toEqual([]);
@@ -176,6 +198,12 @@ describe('chapter 31 quotes these numbers', () => {
     const soft = warpCore(assemble(SOFT_TRIANGLE).words, { warps: 4, lanes: 4, mul: true, dmemK: 11, imemK: 8 });
     const roms = netlistOf(soft)!.instances.filter((i) => /^im\d/.test(i.name)).reduce((a, i) => a + nands(i.def), 0);
     expect(nands(soft) - nands(inst(inst(soft, 'mem'), 'mem')) - roms).toBe(PIPE_COSTS.softCore);
+    // step 5's parts, logic only
+    const fw = frameBuffers(undefined, undefined, true);
+    expect(PIPE_COSTS.word).toEqual({
+      unit: nands(CLEAR_UNIT), cmd: nands(cmdUnit(true)), rop: nands(ROP_W) - [0, 1, 2, 3].reduce((a, j) => a + nands(inst(ROP_W, `zbuf${j}`)), 0),
+      fb: nands(fw) - 2 * nands(inst(fw, 'fb0')),
+    });
   }, 120000);
 
   it('the prose', () => {
@@ -190,5 +218,19 @@ describe('chapter 31 quotes these numbers', () => {
     expect(Math.round((100 * tri.clear) / (tri.clear + tri.draw + tri.wait))).toBe(72);
     expect(flatten(gpu31(meshById('triangle'))).leaves.length).toBe(413594);
     expect(text).toContain('413 594');
+  });
+
+  it("step 5's prose", () => {
+    const body = chGfxPipeline.steps.find((x) => x.title === 'A faster clear')!.body;
+    const W = PIPE_COSTS.word, stage = (id: string) => PIPE_COSTS.stages.find((x) => x.id === id)!.nands;
+    const [tw, cw] = ['triangle_w', 'cube_w'].map((id) => PIPE_COSTS.frames.find((x) => x.id === id)!);
+    for (const v of [W.unit, W.rop, stage('rop'), W.rop - stage('rop'), W.cmd, stage('cmd'), tw.clear, tw.draw, tw.wait, tw.clear + tw.draw + tw.wait, cw.clear + cw.draw + cw.wait]) {
+      expect(body, String(v)).toContain(fmt(v));
+    }
+    // about 580 NANDs: the unit, the banks' multiplexers, the frames' wider enables, less the command unit's colour multiplexer
+    const fbBank = (wide: boolean) => nands(inst(frameBuffers(undefined, undefined, wide), 'fb0')) - 4 * nands(inst(inst(frameBuffers(undefined, undefined, wide), 'fb0'), 'bank0'));
+    const extra = W.unit + (W.rop - stage('rop')) + (W.cmd - stage('cmd')) + (W.fb - stage('fb')) + 2 * (fbBank(true) - fbBank(false));
+    expect(Math.round(extra / 10) * 10).toBe(580);
+    expect(body).toContain('about 580 NANDs');
   });
 });

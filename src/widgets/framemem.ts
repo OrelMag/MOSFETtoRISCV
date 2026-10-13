@@ -6,7 +6,8 @@
 // Writes are watched where they happen: the framebuffer's write port (fb.we / fb.wa) at every rising edge, the
 // rasterizer's pixel output before the depth test (rast.fwe) and its clear flag (rast.fclr, held for the whole job).
 // The pictures are read from the memory leaves (fb.fb<k>.bank<j>, rop.zbuf). Every scene with a screen uses these
-// instance names: displayTop, GPU30, GPU30Z, gpu31.
+// instance names: displayTop, GPU30, GPU30Z, gpu31. gpu31's faster clear (step 5) clears with its clear unit (clear.busy,
+// clear.ca), a word a write (fb.wall: four pixels), into a depth buffer in four banks (rop.zbuf0 … zbuf3).
 
 import { FB_W, rgb332 } from '../gfx/raster';
 import { FB_WORDS } from '../lib/raster';
@@ -38,13 +39,26 @@ export function frameOf(sim: Sim, k: number): Uint8Array | null {
   return out;
 }
 
-/** The depth buffer (16 bits a pixel), or null without one. */
+/** The depth buffer (16 bits a pixel), or null without one: one memory, or four banks (pixel x mod 4). */
 export function depthOf(sim: Sim): Uint16Array | null {
-  const st = ramLeafState(sim, kid(sim.design.root, 'rop', 'zbuf'));
-  if (!st) return null;
   const out = new Uint16Array(N);
-  for (let i = 0; i < N; i++) out[i] = st.x[i] ? 0xffff : st.mem[i];
+  const st = ramLeafState(sim, kid(sim.design.root, 'rop', 'zbuf'));
+  if (st) {
+    for (let i = 0; i < N; i++) out[i] = st.x[i] ? 0xffff : st.mem[i];
+    return out;
+  }
+  for (let j = 0; j < 4; j++) {
+    const b = ramLeafState(sim, kid(sim.design.root, 'rop', `zbuf${j}`));
+    if (!b) return null;
+    for (let a = 0; a < FB_WORDS; a++) out[4 * a + j] = b.x[a] ? 0xffff : b.mem[a];
+  }
   return out;
+}
+
+/** gpu31's clear unit at work: the word it clears (null: no clear unit, or idle). */
+function clearWord(sim: Sim): number | null {
+  const c = kid(sim.design.root, 'clear');
+  return c && sim.getBits(c.ports.busy)[0] === 1 ? val(sim, c.ports.ca) : null;
 }
 
 export type MemId = 'screen' | 'f0' | 'f1' | 'z';
@@ -167,12 +181,15 @@ export class FrameMemory {
     if (front !== t.front) this.flip(sim, front);
     if (!this.opts.gpu) return;
     const fb = kid(root, 'fb')!, rast = kid(root, 'rast')!;
-    const busy = sim.getBits(rast.ports.busy)[0] === 1;
-    const clr = this.opts.depth && sim.getBits(rast.ports.fclr)[0] === 1;
+    const wordClear = clearWord(sim) !== null;
+    const busy = sim.getBits(rast.ports.busy)[0] === 1 || wordClear;
+    const clr = wordClear || (this.opts.depth && sim.getBits(rast.ports.fclr)[0] === 1);
     if (busy && !t.busy) { t.jobStart = now; t.jobClear = clr; if (!clr) t.tris++; }
     if (sim.getBits(fb.ports.we)[0] === 1) {
       const a = val(sim, fb.ports.wa);
-      t.fresh[1 - front][a] = 1;
+      // the clear unit's write is a whole word: four pixels
+      const n = fb.ports.wall && sim.getBits(fb.ports.wall)[0] === 1 ? 4 : 1;
+      for (let i = 0; i < n; i++) t.fresh[1 - front][a + i] = 1;
       if (!t.jobClear) { t.glowAt[a] = now; t.written++; }
     } else if (sim.getBits(rast.ports.fwe)[0] === 1) t.failed++;
     if (!busy && t.busy) {
@@ -259,8 +276,9 @@ export class FrameMemory {
     const t = this.t, root = sim.design.root, front = Math.max(0, t.front);
     const row = Math.floor((4 * this.cap.addr()) / W);
     const wk = this.opts.gpu ? kid(root, 'rast', 'walk') : undefined;
+    const cw = this.opts.gpu ? clearWord(sim) : null;
     const busy = !!wk && val(sim, wk.ports.busy) === 1;
-    const clr = busy && this.opts.depth && sim.getBits(kid(root, 'rast')!.ports.fclr)[0] === 1;
+    const clr = cw !== null || (busy && this.opts.depth && sim.getBits(kid(root, 'rast')!.ports.fclr)[0] === 1);
     for (const [id, th] of this.thumbs) {
       th.btn.classList.toggle('on', id === this.sel);
       if (id === 'screen') {
@@ -282,7 +300,7 @@ export class FrameMemory {
       } else {
         th.badge.className = 'gfx-mem-badge back';
         th.badge.textContent = 'BACK';
-        th.who.textContent = !this.opts.gpu ? 'waits for a swap' : clr ? 'rasterizer: clear' : busy ? 'rasterizer: drawing' : 'idle';
+        th.who.textContent = !this.opts.gpu ? 'waits for a swap' : cw !== null ? `clear unit: word ${cw}` : clr ? 'rasterizer: clear' : busy ? 'rasterizer: drawing' : 'idle';
       }
     }
 
@@ -290,6 +308,9 @@ export class FrameMemory {
     if (this.opts.gpu && wk) {
       const s = val(sim, wk.ports.s), x = val(sim, wk.ports.x), y = val(sim, wk.ports.y);
       const what = clr ? 'clear' : `triangle ${t.tris}`;
+      if (kid(root, 'clear')) {
+        rows.push({ unit: 'Clear unit', hue: 'draw', text: cw === null ? 'idle' : `word ${cw} of ${FB_WORDS}: pixels ${4 * cw} – ${4 * cw + 3} and their depths, at once` });
+      }
       rows.push({
         unit: 'Rasterizer', hue: 'draw',
         text: !busy ? 'idle'

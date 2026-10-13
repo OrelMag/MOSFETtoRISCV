@@ -33,8 +33,8 @@ export interface Span { kind: SpanKind; from: number; to: number }
 export interface FrameRecord {
   start: number;
   cycles: number;
-  /** Per lane, runs of cycles relative to the start: the warp core, the rasterizer, the command unit (reads, waits). */
-  lanes: { kernel: Span[]; raster: Span[]; cmd: Span[] };
+  /** Per lane, runs of cycles relative to the start: the warp core, the rasterizer, the clear unit (step 5), the command unit (reads, waits). */
+  lanes: { kernel: Span[]; raster: Span[]; clear: Span[]; cmd: Span[] };
   /** Cycles by what the command unit was doing (clear + draw + wait = cycles), and the kernel's busy cycles. */
   totals: { clear: number; draw: number; wait: number; kernel: number };
 }
@@ -48,12 +48,12 @@ export class FrameRecorder {
   /** Frames completed. */
   frames = 0;
 
-  /** Cycle c's sample; true when it closed a frame (c is a launch). */
-  sample(c: number, st: CuPhase, kernelBusy: boolean, rastBusy: boolean): boolean {
+  /** Cycle c's sample (clearBusy: the clear unit of step 5); true when it closed a frame (c is a launch). */
+  sample(c: number, st: CuPhase, kernelBusy: boolean, rastBusy: boolean, clearBusy = false): boolean {
     let closed = false;
     if (st === 'launch') {
       if (this.cur) { this.cur.cycles = c - this.cur.start; this.last = this.cur; this.frames++; closed = true; }
-      this.cur = { start: c, cycles: 0, lanes: { kernel: [], raster: [], cmd: [] }, totals: { clear: 0, draw: 0, wait: 0, kernel: 0 } };
+      this.cur = { start: c, cycles: 0, lanes: { kernel: [], raster: [], clear: [], cmd: [] }, totals: { clear: 0, draw: 0, wait: 0, kernel: 0 } };
     }
     const f = this.cur;
     if (!f) return closed;
@@ -67,6 +67,7 @@ export class FrameRecorder {
     const clearing = st === 'launch' || st === 'clear';
     put(f.lanes.kernel, kernelBusy ? 'kernel' : null);
     put(f.lanes.raster, rastBusy ? (clearing ? 'clear' : 'draw') : null);
+    put(f.lanes.clear, clearBusy ? 'clear' : null);
     put(f.lanes.cmd, READS.has(st) ? 'read' : st === 'swap' || st === 'flip' ? 'wait' : null);
     f.totals[clearing ? 'clear' : st === 'swap' || st === 'flip' ? 'wait' : 'draw']++;
     if (kernelBusy) f.totals.kernel++;
@@ -88,7 +89,7 @@ export class FrameRecorder {
 export interface StageCost { id: string; name: string; nands: number; memory: string }
 export interface FrameCost { id: string; name: string; clear: number; draw: number; wait: number; kernel: number }
 
-export const PIPE_COSTS: { stages: StageCost[]; frames: FrameCost[]; softCore: number } = {
+export const PIPE_COSTS: { stages: StageCost[]; frames: FrameCost[]; softCore: number; word: { unit: number; cmd: number; rop: number; fb: number } } = {
   /** The software kernels' core: four warps of four lanes with multipliers, logic without its memories. */
   softCore: 488609,
   stages: [
@@ -103,5 +104,10 @@ export const PIPE_COSTS: { stages: StageCost[]; frames: FrameCost[]; softCore: n
     { id: 'triangle', name: 'Triangle, the pipeline (frame 1)', clear: 4438, draw: 1268, wait: 438, kernel: 60 },
     { id: 'cube', name: 'Cube with depth, the pipeline (frame 1)', clear: 4438, draw: 2509, wait: 221, kernel: 109 },
     { id: 'soft', name: 'Triangle in software, 16 threads (frame 1)', clear: 804, draw: 6825, wait: 0, kernel: 0 },
+    // step 5: the clear unit, a word (four pixels) a cycle
+    { id: 'triangle_w', name: 'Triangle, the clear a word a cycle (frame 1)', clear: 1026, draw: 1268, wait: 778, kernel: 60 },
+    { id: 'cube_w', name: 'Cube, the clear a word a cycle (frame 1)', clear: 1026, draw: 2509, wait: 561, kernel: 109 },
   ],
+  /** Step 5's parts, logic only: the clear unit, the command unit that starts it, the ROP with banked depth, the two frames. */
+  word: { unit: 278, cmd: 1963, rop: 1728, fb: 249 },
 };

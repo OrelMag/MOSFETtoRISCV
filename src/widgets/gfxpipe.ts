@@ -4,7 +4,7 @@
 // widget (NANDs per stage, cycles per frame by phase, the same frame drawn in software on the lanes).
 
 import { FB_W } from '../gfx/raster';
-import { FrameRecorder, type FrameRecord, framePicture, PIPE_COSTS, type SpanKind } from '../gfx/pipeline';
+import { type FrameCost, FrameRecorder, type FrameRecord, framePicture, PIPE_COSTS, type SpanKind } from '../gfx/pipeline';
 import { type CuState, cuState, gpu31 } from '../lib/gfxpipe';
 import { assemble } from '../riscv/asm';
 import { GFX, meshById, meshData, MESHES, type Mesh, vertexKernel } from '../riscv/gfxprograms';
@@ -21,12 +21,19 @@ const kid = (n: HierNode, ...p: string[]) => p.reduce((x, k) => x.children!.get(
 const u = (sim: Sim, node: HierNode, port: string) => pack(sim.getBits(node.ports[port])) >>> 0;
 const fmt = (n: number) => n.toLocaleString('en').replace(/,/g, ' ');
 
-export interface PipeSceneOptions { highlight?: string[]; path?: string[] }
+export interface PipeSceneOptions {
+  highlight?: string[];
+  path?: string[];
+  /** How the back frame is cleared: chapter 30's rasterizer (default), or step 5's clear unit, a word a cycle. */
+  clear?: 'pixel' | 'word';
+  /** Step 5: a switch between the two clears, and their frames compared. */
+  clearSwitch?: boolean;
+}
 
 /** The whole pipeline drawing a mesh, on the cycle engine (hundreds of thousands of gates). */
 export function pipelineScene(mesh: Mesh['id'], opts: PipeSceneOptions = {}): Scene {
   return {
-    root: gpu31(meshById(mesh)), inputs: { clk: 0 }, path: opts.path, highlight: opts.highlight ?? ['cmd'], autoClock: false, engine: 'cycle',
+    root: gpu31(meshById(mesh), { clear: opts.clear }), inputs: { clk: 0 }, path: opts.path, highlight: opts.highlight ?? ['cmd'], autoClock: false, engine: 'cycle',
     panels: [pipelinePanel(mesh, opts)],
   };
 }
@@ -59,7 +66,8 @@ const KIND: Record<SpanKind, { c: string; name: string }> = {
 /** The last frame as three lanes over its cycles. */
 function timeline(f: FrameRecord | null): SVGElement | HTMLElement {
   if (!f) return h('p', { class: 'cpu-sec-hint' }, 'Run a frame to see who works when.');
-  const W = 270, LH = 14, X0 = 0, lanes: [string, keyof FrameRecord['lanes']][] = [['warp core', 'kernel'], ['rasterizer', 'raster'], ['command unit', 'cmd']];
+  const W = 270, LH = 14, X0 = 0, lanes: [string, keyof FrameRecord['lanes']][] = [['warp core', 'kernel'], ['rasterizer', 'raster'],
+    ...(f.lanes.clear.length ? [['clear unit', 'clear'] as [string, keyof FrameRecord['lanes']]] : []), ['command unit', 'cmd']];
   const sx = (t: number) => X0 + (t / f.cycles) * W;
   const svg = s('svg', { class: 'gfx-timeline', viewBox: `0 0 ${W} ${lanes.length * (LH + 16)}`, role: 'img',
     'aria-label': `The last frame: ${f.cycles} cycles. Clear ${f.totals.clear}, triangles ${f.totals.draw}, waiting for vsync ${f.totals.wait}; the vertex kernel ran ${f.totals.kernel}.` });
@@ -136,7 +144,8 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
           if (pic) for (let i = 0; i < pic.length; i++) if (pic[i] !== want[i]) bad++;
           checked = { frame: rec.frames, bad };
         }
-        if (rec.sample(stage.cycles, st, busy, u(sim, node(sim, 'rast'), 'busy') === 1)) {
+        const clr = sim.design.root.children?.get('clear');
+        if (rec.sample(stage.cycles, st, busy, u(sim, node(sim, 'rast'), 'busy') === 1, !!clr && u(sim, clr, 'busy') === 1)) {
           shownAt.push(performance.now());
           if (shownAt.length > 6) shownAt = shownAt.slice(-6);
         }
@@ -203,6 +212,13 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
     const meshSel = h('select', { 'aria-label': 'mesh' }, ...MESHES.map((x) => h('option', { value: x.id }, x.title))) as HTMLSelectElement;
     meshSel.value = meshId;
     meshSel.addEventListener('change', () => stage.load(pipelineScene(meshSel.value as Mesh['id'], opts)));
+    const clearSel = h('select', { 'aria-label': 'clear', title: 'how the command unit clears the back frame: the scene rebuilds' },
+      h('option', { value: 'pixel' }, 'Clear: a pixel a cycle'), h('option', { value: 'word' }, 'Clear: a word a cycle')) as HTMLSelectElement;
+    clearSel.value = opts.clear ?? 'pixel';
+    clearSel.addEventListener('change', () => stage.load(pipelineScene(meshId, { ...opts, clear: clearSel.value as 'pixel' | 'word' })));
+    // step 5: this mesh's frame both ways, measured (PIPE_COSTS, pinned by tests/gfxpipe.test.ts)
+    const compare = opts.clearSwitch ? h('div', null, h('div', { class: 'cpu-sec' }, 'Frame 1, cleared', h('span', { class: 'cpu-sec-hint' }, 'hover a bar for its cycles')),
+      framesTable(PIPE_COSTS.frames.filter((x) => x.id === meshId || x.id === `${meshId}_w`), opts.clear === 'word' ? `${meshId}_w` : meshId, (x) => (x.id.endsWith('_w') ? 'a word a cycle' : 'a pixel a cycle'))) : null;
 
     const cv = h('canvas', { class: 'gfx-screen', width: 256, height: 256, 'aria-label': 'the screen' }) as HTMLCanvasElement;
     const status = h('div', { class: 'cpu-status' });
@@ -252,10 +268,10 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
     const title = h('h4', null, 'Screen 64 × 64 · the pipeline', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'click to collapse'));
     const el = h('div', { class: 'mem-panel cpu-panel gfx-panel', 'data-dock': 'right' }, title,
       h('div', { class: 'cpu-body' },
-        h('div', { class: 'param-row', style: 'margin-bottom:6px' }, meshSel),
+        h('div', { class: 'param-row', style: 'margin-bottom:6px' }, meshSel, ...(opts.clearSwitch ? [clearSel] : [])),
         h('div', { class: 'gfx-screen-wrap' }, cv, memLabel),
         h('div', { class: 'param-row', style: 'margin-top:6px' }, runBtn, frameBtn, resetSel), status, checks, mem.el,
-        h('details', { class: 'gfx-mem-fold', open: true }, h('summary', null, `Vertex buffers · word ${GFX.vbuf} on`), vbuf), tl,
+        h('details', { class: 'gfx-mem-fold', open: true }, h('summary', null, `Vertex buffers · word ${GFX.vbuf} on`), vbuf), tl, compare,
         h('p', { class: 'cpu-sec-hint' }, `The screen shows what the scan-out sends, ${FB_W} × ${FB_W}. Run simulates every gate of the pipeline on the cycle engine; probes and the timing diagram need gate delays, so they are off here.`)));
     title.addEventListener('click', () => { el.classList.toggle('collapsed'); stage.setInset(el.classList.contains('collapsed') ? 0 : el.getBoundingClientRect().width + 24); });
     paint();
@@ -273,20 +289,26 @@ export function costWidget(): Widget {
     h('thead', null, h('tr', null, h('th', null, 'Stage'), h('th', { class: 'n' }, 'NANDs of logic'), h('th', null, ''), h('th', null, 'Memory'))),
     h('tbody', null, ...C.stages.map((x) => h('tr', null, h('td', null, x.name), h('td', { class: 'n' }, fmt(x.nands)),
       h('td', { class: 'bar' }, h('i', { style: `width:${Math.max(0.5, (100 * x.nands) / maxN)}%` })), h('td', { class: 'mem' }, x.memory)))));
-  const maxC = Math.max(...C.frames.map((f) => f.clear + f.draw + f.wait));
-  const kinds: ['clear' | 'draw' | 'wait', SpanKind][] = [['clear', 'clear'], ['draw', 'draw'], ['wait', 'wait']];
-  const frames = h('table', { class: 'gfx-cost' },
-    h('thead', null, h('tr', null, h('th', null, 'One frame'), h('th', { class: 'n' }, 'Cycles'), h('th', null, ''), h('th', null, 'Of which'))),
-    h('tbody', null, ...C.frames.map((f) => {
-      const tot = f.clear + f.draw + f.wait;
-      return h('tr', null, h('td', null, f.name), h('td', { class: 'n' }, fmt(tot)),
-        h('td', { class: 'bar' }, h('div', { class: 'stack' }, ...kinds.filter(([k]) => f[k] > 0).map(([k, sk]) => h('i', { style: `width:${(100 * f[k]) / maxC}%;background:${KIND[sk].c}`, title: `${KIND[sk].name}: ${fmt(f[k])}` })))),
-        h('td', { class: 'mem' }, kinds.filter(([k]) => f[k] > 0).map(([k, sk]) => `${KIND[sk].name} ${fmt(f[k])}`).join(' · ') + (f.kernel ? ` · vertex kernel ${fmt(f.kernel)}, during the clear` : '')));
-    })));
+  const frames = framesTable(C.frames.filter((f) => !f.id.endsWith('_w')));
   const el = h('div', { class: 'widget gfx-costs' },
     h('div', { class: 'lvc-title' }, 'Gates per stage'), gates,
     h('p', { class: 'cpu-sec-hint' }, 'Memories as flip-flops would be millions of NANDs (the two frames alone 1.35 million); real ones are SRAM or DRAM, so they are counted in bits.'),
     h('div', { class: 'lvc-title', style: 'margin-top:14px' }, 'Cycles in a frame'), frames,
-    h('div', { class: 'gfx-legend' }, ...kinds.map(([, k]) => h('span', null, h('i', { style: `background:${KIND[k].c}` }), KIND[k].name))));
+    h('div', { class: 'gfx-legend' }, ...KINDS.map(([, k]) => h('span', null, h('i', { style: `background:${KIND[k].c}` }), KIND[k].name))));
   return { el };
+}
+
+const KINDS: ['clear' | 'draw' | 'wait', SpanKind][] = [['clear', 'clear'], ['draw', 'draw'], ['wait', 'wait']];
+
+/** Frames as stacked bars to one scale (cycles by phase); `mark`: the row of the scene shown; `label`: a short name (the panel: no phase column). */
+function framesTable(rows: FrameCost[], mark?: string, label?: (f: FrameCost) => string): HTMLElement {
+  const maxC = Math.max(...rows.map((f) => f.clear + f.draw + f.wait));
+  return h('table', { class: 'gfx-cost' },
+    h('thead', null, h('tr', null, h('th', null, 'One frame'), h('th', { class: 'n' }, 'Cycles'), h('th', null, ''), label ? null : h('th', null, 'Of which'))),
+    h('tbody', null, ...rows.map((f) => {
+      const tot = f.clear + f.draw + f.wait;
+      return h('tr', f.id === mark ? { class: 'on' } : null, h('td', null, label ? label(f) : f.name), h('td', { class: 'n' }, fmt(tot)),
+        h('td', { class: 'bar' }, h('div', { class: 'stack' }, ...KINDS.filter(([k]) => f[k] > 0).map(([k, sk]) => h('i', { style: `width:${(100 * f[k]) / maxC}%;background:${KIND[sk].c}`, title: `${KIND[sk].name}: ${fmt(f[k])}` })))),
+        label ? null : h('td', { class: 'mem' }, KINDS.filter(([k]) => f[k] > 0).map(([k, sk]) => `${KIND[sk].name} ${fmt(f[k])}`).join(' · ') + (f.kernel ? ` · vertex kernel ${fmt(f.kernel)}, during the clear` : '')));
+    })));
 }
