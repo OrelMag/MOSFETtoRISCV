@@ -4,7 +4,7 @@
 
 import { FULL_ADDER } from '../lib/combinational';
 import { singleCycleCpu } from '../lib/cpu';
-import { m6502 } from '../lib/m6502/chip';
+import { controlUnit, datapath, m6502 } from '../lib/m6502/chip';
 import { naoi } from '../lib/m6502/cells';
 import { MS_BIT } from '../lib/m6502/demo';
 import { NINV, NNAND2 } from '../lib/nmos';
@@ -41,14 +41,16 @@ export function ledger(): Widget {
     const rvTotal = T(rv);
     const rvMem = rvB.filter((b) => /register file|memory|ROM/.test(b.name)).reduce((s, b) => s + b.n, 0);
     const chip = m6502();
-    const cpuB = blocks(chip, { decode: 'decode PLA', control: 'control lines', timing: 'timing', intr: 'interrupts', ir: 'IR', rega: 'A', regx: 'X', regy: 'Y', regs: 'S',
-      alu: 'ALU', pc: 'PC', addr: 'address register', data: 'data latches', flags: 'P (flags)', buses: 'buses, precharge', clock: 'clock' });
+    const names6502 = { decode: 'decode PLA', control: 'control lines', timing: 'timing', intr: 'interrupts', ir: 'IR', rega: 'A', regx: 'X', regy: 'Y', regs: 'S',
+      alu: 'ALU', pc: 'PC', addr: 'address register', data: 'data latches', flags: 'P (flags)', buses: 'buses, precharge', clock: 'clock' };
+    // the blocks of both units (the chip's top level is the control unit and the datapath)
+    const cpuB = [...blocks(controlUnit(), names6502), ...blocks(datapath(), names6502)].sort((a, b) => b.n - a.n);
     const st = stats(chip);
     const max = Math.max(rvB[0].n, cpuB[0].n);
     const bar = (name: string, n: number, cls: string, note = '') => h('div', { class: 'm65-bar' },
       h('span', null, name), h('span', { class: 't' }, h('i', { class: cls, style: `width:${Math.max(0.4, (100 * n) / max)}%` })), h('span', { class: 'r' }, `${fmt(n)}${note}`));
     // one function in each technology: our CMOS NAND-only parts against the 6502's NMOS cells
-    const regBit = netlistOf(chip)!.instances.find((i) => i.name === 'rega')!.def;
+    const regBit = netlistOf(datapath())!.instances.find((i) => i.name === 'rega')!.def;
     const adder6502 = 2 * T(naoi('ab|cd')) + T(naoi('ab|ac|bc')) + 2 * T(NINV);
     const rfBit = rvB.find((b) => /register file/.test(b.name))!.n / 1024;
     const rows: [string, number, number, string][] = [
