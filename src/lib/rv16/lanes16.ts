@@ -41,7 +41,7 @@ function anyOf(b: Builder, d: string, n: number, label?: string): string {
 
 /** Four ALUs and their operand muxes; nz says which lanes' rs1 is not zero (split's predicate). */
 export const LANES16: ComponentDef = (() => {
-  const b = new Builder(8, 14, 6);
+  const b = new Builder(16, 14, 6);
   b.pins(...each('a'), ...each('b'), 'imm', 'bimm', 'alu');
   const src = L.map((i) => b.op1(MUX16, [`b${i}`, 'imm', 'bimm'], `operand b ${i}`));
   b.next();
@@ -102,9 +102,9 @@ export function leaderOf(m: number): { lead: number; any: number } {
  * the lowest active lane (its operands steer branches); we / dwe are rwe / mwe for the active lanes.
  */
 export const MASK16: ComponentDef = (() => {
-  const b = new Builder(8, 12, 4);
+  const b = new Builder(16, 12, 4);
   b.pins('rst', 'ld', 'd', 'rwe', 'mwe', 'clk');
-  const rst4 = b.op1(merger(ones(NL), 1), L.map(() => 'rst'), 'rst ×4');
+  const rst4 = b.op1(merger(ones(NL), 2), L.map(() => 'rst'), 'rst ×4');
   const en = b.op1(OR, ['ld', 'rst'], 'load or reset');
   b.next();
   const d = b.op1(bitwise('or', NL), ['d', rst4], 'all on at reset');
@@ -120,8 +120,8 @@ export const MASK16: ComponentDef = (() => {
   // lead = 0 if m0, 1 if m1, 2 if m2, 3 otherwise: bit 1 = no lane below 2; bit 0 = ¬m0 · (m1 + ¬m2)
   const hi = b.op1(AND, [n0, n1], 'lead bit 1');
   const lo = b.op1(AND, [n0, b.op1(OR, [mb(1), n2])], 'lead bit 0');
-  const rwe4 = b.op1(merger(ones(NL), 1), L.map(() => 'rwe'), 'rwe ×4');
-  const mwe4 = b.op1(merger(ones(NL), 1), L.map(() => 'mwe'), 'mwe ×4');
+  const rwe4 = b.op1(merger(ones(NL), 2), L.map(() => 'rwe'), 'rwe ×4');
+  const mwe4 = b.op1(merger(ones(NL), 2), L.map(() => 'mwe'), 'mwe ×4');
   b.next();
   b.wire(b.op1(merger([1, 1], 2), [lo, hi], 'leader'), 'lead');
   b.wire(any, 'any');
@@ -195,7 +195,7 @@ const EW = ENTRY.reduce((a, c) => a + c, 0);
  * mask's next value. rst empties it.
  */
 export const STACK16: ComponentDef = (() => {
-  const b = new Builder(8, 12, 4);
+  const b = new Builder(16, 12, 4);
   b.pins('rst', 'split', 'join', 'mask', 'p', 'pc1', 'clk');
   // the entries: registers whose inputs come back from the right
   const regs = L.map((k) => {

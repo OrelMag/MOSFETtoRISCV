@@ -48,7 +48,11 @@ export function levelChallenges(): BuildChallenge[] {
 export function startCandidates(n: CampaignNode, ws: Workspace): CampaignNode[] {
   if (n.kind !== 'core') return [];
   const order = new Map(topo().map((m, i) => [m.id, i]));
-  return [...ancestors(n.id)].map(nodeById).filter((m): m is CampaignNode => !!m && m.kind === 'core' && !!ws.chips[levelChipId(m)])
+  // startFrom adds pins, never removes them: a lane core does not start from a scalar one.
+  const pinsOf = (m: CampaignNode) => new Set(m.base?.().ports.map((p) => p.name));
+  const mine = pinsOf(n);
+  const fits = (m: CampaignNode) => [...pinsOf(m)].every((p) => mine.has(p));
+  return [...ancestors(n.id)].map(nodeById).filter((m): m is CampaignNode => !!m && m.kind === 'core' && !!ws.chips[levelChipId(m)] && fits(m))
     .sort((a, b) => order.get(b.id)! - order.get(a.id)!);
 }
 
