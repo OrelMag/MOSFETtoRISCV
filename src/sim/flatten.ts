@@ -8,8 +8,8 @@ import {
 } from './types';
 
 export interface HierNode {
-  /** Instance names from the root ('' for the root itself). */
-  path: string[];
+  /** Instance names from the root (empty for the root itself); computed, a new array per read. */
+  readonly path: string[];
   name: string;
   def: ComponentDef;
   parent: HierNode | null;
@@ -44,6 +44,23 @@ export interface FlatDesign {
   powerOn: Map<number, 0 | 1>;
   /** Nets marked `cap`, or with a capacitor on them (switch level): they hold their charge when undriven. */
   caps: Set<number>;
+}
+
+/**
+ * flatten's nodes: every field declared up front (one shape for all), and the path computed from the
+ * parents rather than stored, which on a large design (chapter 31: 600 000 nodes) is real memory.
+ */
+class Node implements HierNode {
+  expanded = false;
+  nets?: number[][] = undefined;
+  children?: Map<string, HierNode> = undefined;
+  leafIndex?: number = undefined;
+  constructor(public name: string, public def: ComponentDef, public parent: HierNode | null, public ports: Record<string, number[]>) {}
+  get path(): string[] {
+    const p: string[] = [];
+    for (let n: HierNode = this; n.parent; n = n.parent) p.push(n.name);
+    return p.reverse();
+  }
 }
 
 export type FlattenMode = 'gate' | 'switch';
@@ -117,9 +134,7 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
 
   const alloc = (w: number): number[] => Array.from({ length: w }, () => uf.make());
 
-  const root: HierNode = {
-    path: [], name: '', def: rootDef, parent: null, ports: {}, expanded: false,
-  };
+  const root: HierNode = new Node('', rootDef, null, {});
   for (const p of rootDef.ports) root.ports[p.name] = alloc(p.width);
 
   const visit = (node: HierNode): void => {
@@ -199,9 +214,7 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
       const cp = childPorts.get(inst.name) ?? {};
       const ports: Record<string, number[]> = {};
       for (const p of inst.def.ports) ports[p.name] = cp[p.name] ?? alloc(p.width);
-      const child: HierNode = {
-        path: [...node.path, inst.name], name: inst.name, def: inst.def, parent: node, ports, expanded: false,
-      };
+      const child: HierNode = new Node(inst.name, inst.def, node, ports);
       node.children.set(inst.name, child);
       visit(child);
     }
@@ -225,17 +238,24 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
     if (d === undefined) dense.set(r, (d = dense.size));
     return d;
   };
-  const remap = (a: number[]): number[] => a.map(id);
+  // In place, each array once: a net's array is also its sinks' port arrays and a leaf's inputs, and
+  // copies of them were most of a large design's memory (chapter 31: 413 594 leaves).
+  const done = new Set<number[]>();
+  const remap = (a: number[]): void => {
+    if (done.has(a)) return;
+    done.add(a);
+    for (let i = 0; i < a.length; i++) a[i] = id(a[i]);
+  };
   const walk = (n: HierNode): void => {
-    for (const k of Object.keys(n.ports)) n.ports[k] = remap(n.ports[k]);
-    if (n.nets) n.nets = n.nets.map(remap);
+    for (const k in n.ports) remap(n.ports[k]);
+    n.nets?.forEach(remap);
     n.children?.forEach(walk);
   };
   walk(root);
   for (const l of leaves) {
-    l.inputs = l.inputs.map(remap);
-    l.outputs = l.outputs.map(remap);
-    if (l.terminals) l.terminals = remap(l.terminals);
+    l.inputs.forEach(remap);
+    l.outputs.forEach(remap);
+    if (l.terminals) remap(l.terminals);
   }
   const powerOn = new Map<number, 0 | 1>();
   for (const [raw, v] of hints) powerOn.set(id(raw), v);

@@ -291,6 +291,7 @@ export class Stage {
     this.stopAnim();
     this.stopClock();
     closePopover();
+    this.release();
     this.scene = scene;
     const level = needsSwitchLevel(scene.root) ? 'switch' : 'gate';
     // The root is always its structure, even one simulated as a lookup elsewhere (a large RAM opened
@@ -316,7 +317,6 @@ export class Stage {
     this.initAnalyzer();
     this.goTo(scene.path ?? [], false);
     this.buildControls();
-    this.panels.forEach((p) => { p.destroy?.(); p.el.remove(); });
     this.view.highlight(scene.highlight ?? []);
     this.panels = (scene.panels ?? []).map((f) => f(this));
     for (const p of this.panels) (p.el.dataset.dock === 'left' ? this.dock : this.canvas).append(p.el);
@@ -325,6 +325,24 @@ export class Stage {
     this.view.fit();
     this.refresh();
     if (settings.autoClock && scene.autoClock !== false) this.startClock();
+  }
+
+  /**
+   * Let go of the last scene before the next one is built: two designs of chapter 31's size at once
+   * (each about half a gigabyte) are more than some browsers allow a tab, and the tab died.
+   */
+  private release(): void {
+    this.panels.forEach((p) => { p.destroy?.(); p.el.remove(); });
+    this.panels = [];
+    this.closeLeaf();
+    this.view.clear();
+    this.inspector.clear();
+    this.analyzer.detach();
+    this.sim = null;
+    this.rootCtx = null;
+    this.ctx = null;
+    this.meter = null;
+    this.edge = null;
   }
 
   /** Navigate to a path of instance names from the root. */
@@ -652,6 +670,7 @@ export class Stage {
     this.timingBtn.hidden = !gate;
     this.probeBtn.hidden = !gate;
     if (!gate) {
+      this.analyzer.detach();
       this.showAnalyzer(false, false);
       return;
     }

@@ -71,6 +71,11 @@ export class Inspector {
     this.render();
   }
 
+  /** Forget the target (its closures hold a simulation), without redrawing. */
+  clear(): void {
+    this.target = null;
+  }
+
   /** Cheap refresh of live values (called on every simulation change). */
   update(): void {
     if (this.tab === 'info' || this.tab === 'truth') this.render();
