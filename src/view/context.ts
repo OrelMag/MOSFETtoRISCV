@@ -6,9 +6,28 @@
 import { findNode, flatten, hintBits, type HierNode } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import type { Sim } from '../sim/sim';
+import { NmosSim } from '../sim/nmossim';
 import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, type Bit, type ComponentDef, type InsideSeed, netlistOf } from '../sim/types';
 import { pack } from '../sim/values';
+import type { FlatDesign } from '../sim/flatten';
+
+/**
+ * A switch-level simulation: SwitchSim (three-valued, X and Z shown) for the small circuits of the early
+ * chapters, NmosSim when asked or when the circuit is large (the 6502, or one of its blocks: SwitchSim
+ * re-solves everything on each change), unless the circuit has parts NmosSim cannot take.
+ */
+export function switchSim(design: FlatDesign, nmos = false): Sim {
+  // auto: an NMOS design (depletion loads) of some size
+  if (nmos || (design.leaves.length > 600 && design.leaves.some((l) => l.kind === 'dep'))) {
+    try {
+      return new NmosSim(design);
+    } catch {
+      // a behavioural leaf, or a resistor between two signal nodes: SwitchSim's
+    }
+  }
+  return new SwitchSim(design);
+}
 
 export class ViewCtx {
   readonly sim: Sim;
@@ -61,7 +80,7 @@ export class ViewCtx {
       // behaviour (the ROM), else the drawing has no simulated nets and nothing to open.
       // Such parts deeper down stay leaves and open onto their own sub-simulation.
       const design = flatten(c.def, { mode, expand: (d, n) => n.parent === null || !d.preferBehavior });
-      const sub = mode === 'switch' ? new SwitchSim(design) : new GateSim(design);
+      const sub = mode === 'switch' ? switchSim(design) : new GateSim(design);
       ctx = new ViewCtx(sub, design.root, this, c, name);
     }
     this.children.set(name, ctx);
@@ -94,6 +113,7 @@ export class ViewCtx {
     const sim = this.sim, root = this.node;
     const leaves = new Map<string, number | undefined>(), nets = new Map<string, number[] | null>();
     return {
+      sim,
       state(path, s) {
         let li = leaves.get(path);
         if (!leaves.has(path)) leaves.set(path, (li = findNode(root, path.split('.'))?.leafIndex));

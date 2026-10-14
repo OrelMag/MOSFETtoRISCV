@@ -3,21 +3,19 @@
 // the inspector. Chapters and the workbench are thin wrappers around it.
 
 import { DualSim } from '../sim/dualsim';
-import { flatten, type FlatDesign, type HierNode } from '../sim/flatten';
+import { flatten, type HierNode } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import { needsSwitchLevel } from '../sim/harness';
 import { completeEdge, type Edge, riseEdge, stepEdge } from '../sim/edge';
 import { PowerMeter } from '../sim/power';
 import { analyzeTiming } from '../sim/timing';
 import type { PowerOnMode, Sim, SimState } from '../sim/sim';
-import { NmosSim } from '../sim/nmossim';
-import { SwitchSim } from '../sim/switchsim';
 import { B0, B1, BZ, type Bit, type ComponentDef, inPorts, netlistOf, outPorts, type PortDef } from '../sim/types';
 import { formatBits, formatNumber, mask, pack, packBig, type Radix, unpackBig } from '../sim/values';
 import { LogicAnalyzer, netKey } from './analyzer';
 import { h, icon } from '../ui/dom';
 import { applyTheme, settings } from '../ui/settings';
-import { ViewCtx } from './context';
+import { switchSim, ViewCtx } from './context';
 import { Inspector } from './inspector';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber } from './popover';
@@ -69,23 +67,6 @@ const LEVEL_NAME: Record<string, string> = {
   transistor: 'transistors', cell: 'transistors', gate: 'gates', arithmetic: 'gates & blocks',
   routing: 'gates & blocks', sequential: 'latches & flip-flops', memory: 'memory', plumbing: 'wiring', cpu: 'processor',
 };
-
-/**
- * A switch-level simulation: SwitchSim (three-valued, X and Z shown) for the small circuits of the early
- * chapters, NmosSim when asked or when the circuit is large (one of the 6502's blocks in the workbench:
- * SwitchSim re-solves everything on each change), unless the circuit has parts NmosSim cannot take.
- */
-function switchSim(design: FlatDesign, nmos: boolean): Sim {
-  // auto: an NMOS design (depletion loads) of some size
-  if (nmos || (design.leaves.length > 600 && design.leaves.some((l) => l.kind === 'dep'))) {
-    try {
-      return new NmosSim(design);
-    } catch {
-      // a behavioural leaf, or a resistor between two signal nodes: SwitchSim's
-    }
-  }
-  return new SwitchSim(design);
-}
 
 /** Steps Back can undo (each a full copy of the simulation's state). */
 const HISTORY_MAX = 100;

@@ -2,6 +2,8 @@
 // schematic, statistics and the generated Verilog. Keep it plain data so it can later be
 // serialized (sandbox save/share).
 
+import type { Sim } from './sim';
+
 /** A single bit on a wire: 0, 1, X (unknown / contention) or Z (floating, switch level only). */
 export const B0 = 0;
 export const B1 = 1;
@@ -153,6 +155,8 @@ export interface InsideSeed {
   state(path: string, s: unknown): void;
   /** Force storage nets (a dotted net path, as in powerOn: 'w3.ff0.ff.slave.sr.q') to these bits. */
   bits(path: string, bits: ArrayLike<number>): void;
+  /** The sub-simulation itself, for a leaf that drives its structure through its own history (the 6502 replays its bus cycles). */
+  readonly sim?: Sim;
 }
 
 export interface ComponentDef {
