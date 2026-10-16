@@ -6,7 +6,9 @@
 // cycle's address, R/W and SYNC out (and, on a write, the byte); at the next rising edge it takes din
 // (a read) and IRQ / NMI / RES as they were just before it, the way the RAM parts take their inputs.
 // So a ROM or RAM read combinationally from `a` feeds `din`, and a RAM written at the rising edge with
-// we = NOT rw stores `dout`. Inside, clk high is φ1 (φ0 = NOT clk) and clk low φ2, as on the die.
+// we = NOT rw stores `dout`. dout is the byte of the last write cycle, held through reads (no output
+// follows din: the memory map that makes din from `a` is no loop through the part, and the cycle
+// engine levelizes it). Inside, clk high is φ1 (φ0 = NOT clk) and clk low φ2, as on the die.
 //
 // Opened, the part is the transistor-level chip on NmosSim, showing what the ISS is doing: the
 // behaviour keeps a checkpoint (the registers at the last instruction boundary, or at a reset) and
@@ -46,8 +48,8 @@ export interface Core6502State {
   clk: number;
   /** The inputs as they were while clk was low (taken at the rising edge). */
   din: number; res: boolean; irq: boolean; nmi: boolean;
-  /** This cycle's bus, as the CPU puts it out. */
-  addr: number; write: boolean; wdata: number; sync: number;
+  /** This cycle's bus, as the CPU puts it out; dout: the byte of the last write cycle (this one's on a write). */
+  addr: number; write: boolean; wdata: number; sync: number; dout: number;
   /** Rising edges since power-on, the hash of the history. */
   n: number; h: number;
   chk: Checkpoint6502 | null;
@@ -73,6 +75,7 @@ function probe(s: Core6502State): void {
   bus.v = 0;
   const c = cpu.cycle();
   s.addr = c.addr; s.write = c.rw === 'w'; s.wdata = c.rw === 'w' ? c.data : 0; s.sync = c.sync;
+  if (s.write) s.dout = c.data;
 }
 
 function checkpoint(s: Core6502State, reset: boolean): void {
@@ -87,7 +90,7 @@ function freshState(mode?: 'x' | 'zero' | 'random'): Core6502State {
   c.reset();
   const s: Core6502State = {
     cpu: c.save(), x: false, clk: -1, din: 0, res: false, irq: false, nmi: false,
-    addr: 0, write: false, wdata: 0, sync: 0, n: 0, h: 0, chk: null, log: [],
+    addr: 0, write: false, wdata: 0, sync: 0, dout: 0, n: 0, h: 0, chk: null, log: [],
   };
   checkpoint(s, true);
   probe(s);
@@ -131,7 +134,8 @@ const isCore = (s: unknown): s is Core6502State => !!s && typeof s === 'object' 
 export const core6502Behavior: Behavior = {
   delay: 4,
   init: freshState,
-  seq: { clk: 'clk', comb: ['din'] },
+  // din is sampled, never passed through: no comb inputs
+  seq: { clk: 'clk', comb: [] },
   eval: ([clk, resb, irqb, nmib, din], st) => {
     const s = st as Core6502State;
     const c = clk < 0 ? 2 : clk;
@@ -145,7 +149,7 @@ export const core6502Behavior: Behavior = {
     if (p === 0 && c === 1) edge(s);
     else if (p >= 0 && p !== 1 && c !== 0 && p !== c) s.x = true; // an X clock: an edge or not
     if (s.x) return [-1, -1, -1, -1];
-    return [s.addr, s.write ? s.wdata : din < 0 ? -1 : din, s.write ? 0 : 1, s.sync];
+    return [s.addr, s.dout, s.write ? 0 : 1, s.sync];
   },
   inside: (st, seed) => {
     if (isCore(st) && seed.sim) replayInside(st, seed.sim);
@@ -235,14 +239,16 @@ export function pinsBlock(): ComponentDef {
   if (pins) return pins;
   const L = new Logic();
   L.inv('clk', 'phi0');
+  L.nor(['clk', 'rw'], 'wr2'); // φ2 of a write cycle
   for (const i of R8) {
-    // a read: din onto the pins (the memory drives the bus while R/W is high)
+    // a read: din onto the pins (the memory drives the bus while R/W is high); a write: the pins
+    // into a dynamic latch in φ2 (the chip drives them then), held through the reads after it
     L.pass('rw', `din[${i}]`, `d[${i}]`);
-    L.inv(L.inv(`d[${i}]`), `dout[${i}]`);
+    L.inv(L.dlat(`d[${i}]`, 'wr2').nq, `dout[${i}]`);
   }
   pins = L.build({
     id: 'm65_pins', name: '6502 bus interface',
-    summary: 'clk → φ0 (inverted: clk high is φ1), din onto the data pins while R/W is high (a read), dout = the data pins, buffered.',
+    summary: "clk → φ0 (inverted: clk high is φ1), din onto the data pins while R/W is high (a read), dout = the data pins as the last write cycle's φ2 left them (a dynamic latch).",
     ports: [bit('clk'), bit('rw'), { name: 'din', width: 8, dir: 'in' }, { name: 'd', width: 8, dir: 'inout' }, bit('phi0', 'out'), { name: 'dout', width: 8, dir: 'out' }],
     symbol: { kind: 'box', label: 'PINS' }, rows: 9,
   });
@@ -256,7 +262,7 @@ const PORTS: PortDef[] = [
   bit('nmib', 'in', 'NMI, active low, a falling edge (open: high)'),
   { name: 'din', width: 8, dir: 'in', doc: 'the byte read, taken at the rising edge that ends a read cycle' },
   { name: 'a', width: 16, dir: 'out', doc: 'the address of this cycle' },
-  { name: 'dout', width: 8, dir: 'out', doc: 'the data bus: the byte written on a write cycle, din on a read' },
+  { name: 'dout', width: 8, dir: 'out', doc: 'the byte written: this cycle’s on a write, held through the reads after it' },
   bit('rw', 'out', 'R/W: 1 read, 0 write (a RAM\'s we = NOT rw)'),
   bit('sync', 'out', '1 on an opcode fetch'),
 ];

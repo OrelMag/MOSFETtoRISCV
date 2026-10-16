@@ -109,7 +109,7 @@ export function nestedRoms(doc: ChipDoc, chips: Chips | undefined, depth = 2): s
 }
 
 /** Library cores with a memory port and no data memory (singleCycleCpu shared): their register file is '<part>.rf'. */
-const isPortCore = (lib: string) => lib === 'rv32i_core' || /_core$/.test(lib);
+const isPortCore = (lib: string) => lib === 'rv32i_core' || (/_core$/.test(lib) && lib !== 'm6502_core');
 
 /** Does the chip (or a user chip placed in it) hold a console or a switch bank? */
 function hasIoParts(doc: ChipDoc, chips: Chips | undefined, depth = 2): boolean {

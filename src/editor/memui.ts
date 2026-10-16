@@ -13,7 +13,7 @@ import type { CodeLang } from '../widgets/codetok';
 import { type Editor, registerToolbarAction } from './editor';
 import { addExample, EXAMPLES } from './examples';
 import {
-  addrValue, convertProgram, initText, kFor, type ListingRow, parseInit, readRam, ROM_SAMPLES, romImage, romIndex, romListing, type RomRef,
+  addrValue, convertProgram, initText, type ListingRow, parseInit, readRam, ROM_SAMPLES, romImage, romIndex, romListing, type RomRef, sampleK,
 } from './memory';
 import type { PartDoc } from './model';
 import { setRef } from './ops';
@@ -32,6 +32,7 @@ const LANGS: Record<ProgramLang, { name: string; code: CodeLang; shape: Partial<
   asm: { name: 'RISC-V assembly', code: 'rvasm', shape: { w: 32 } },
   rv16: { name: 'RV16 assembly', code: 'rv16asm', shape: { w: 16, addr: 'word' } },
   cpu4: { name: '4-bit CPU assembly', code: 'cpu4asm', shape: { w: 16, addr: 'word' } },
+  '6502': { name: '6502 assembly', code: 'm6502asm', shape: { w: 8, addr: 'word' } },
   hex: { name: 'hex words', code: 'hex', shape: {} },
   isa: { name: 'custom instruction set', code: 'hex', shape: { addr: 'word' } },
 };
@@ -156,9 +157,8 @@ registerPropsSection({
     sample.addEventListener('change', () => {
       const s = ROM_SAMPLES.find((x) => x.id === sample.value);
       if (!s) return;
-      const n = romImage({ k: MAX_ROM_K, w: LANGS[s.lang].shape.w ?? 32, lang: s.lang, src: s.src }).words.length;
       // RV32 assembly needs 32-bit words, RV16 and the 4-bit CPU 16-bit word-addressed ones; the ROM grows to hold the sample (never shrinks).
-      set({ lang: s.lang, src: s.src, k: Math.min(MAX_ROM_K, Math.max(r.k, kFor(n))), ...LANGS[s.lang].shape });
+      set({ lang: s.lang, src: s.src, k: Math.max(r.k, sampleK(s.lang, s.src)), ...LANGS[s.lang].shape });
     });
 
     const width = select(r.w, [[8, '8 bits'], [16, '16 bits'], [32, '32 bits']], (w) => set({ w }), 'Word width');
@@ -192,8 +192,8 @@ registerPropsSection({
       const l = i === null ? undefined : img.lines[i];
       now.replaceChildren(i === null
         ? h('span', null, 'Address unknown (not connected or X)')
-        : h('span', null, 'Reading ', h('b', null, r.addr === 'rv32' ? `0x${(4 * i).toString(16).padStart(4, '0')}` : `[${i}]`), ' → ',
-          h('code', null, !l ? (r.addr === 'rv32' ? 'nop (fill)' : '0 (fill)') : r.w === 32 || r.lang === 'cpu4' || r.lang === 'isa' ? l.text : `0x${(l.word >>> 0).toString(16).padStart(r.w / 4, '0')}`)));
+        : h('span', null, 'Reading ', h('b', null, r.addr === 'rv32' ? `0x${(4 * i).toString(16).padStart(4, '0')}` : rows[i]?.addr ?? `[${i}]`), ' → ',
+          h('code', null, !l ? (r.addr === 'rv32' ? 'nop (fill)' : '0 (fill)') : r.w === 32 || r.lang === 'cpu4' || r.lang === 'isa' || (r.lang === '6502' && l.text) ? l.text : `0x${(l.word >>> 0).toString(16).padStart(r.w / 4, '0')}`)));
     });
     return out;
   },
@@ -204,7 +204,7 @@ function languageSelect(ed: Editor, partId: string, r: RomRef, set: (patch: Part
   const cur = r.lang === 'isa' && r.isa ? `isa:${r.isa.id}` : r.lang;
   const isas = isaList(ed.ws);
   const sel = h('select', { 'aria-label': 'Language' },
-    (['asm', 'rv16', 'cpu4', 'hex'] as const).map((l) => h('option', { value: l, selected: cur === l }, LANGS[l].name)),
+    (['asm', 'rv16', 'cpu4', '6502', 'hex'] as const).map((l) => h('option', { value: l, selected: cur === l }, LANGS[l].name)),
     isas.length ? h('optgroup', { label: 'Instruction sets' }, isas.map((d) => h('option', { value: `isa:${d.id}`, selected: cur === `isa:${d.id}` }, d.name))) : null,
     h('optgroup', { label: 'Custom ISA' },
       r.lang === 'isa' && r.isa ? h('option', { value: '__edit' }, `Edit ${r.isa.name}…`) : null,
@@ -235,7 +235,7 @@ function languageSelect(ed: Editor, partId: string, r: RomRef, set: (patch: Part
       return set({ lang: 'isa', isa: doc, w: doc.wordBits, addr: 'word', ...(src !== null && r.lang === 'hex' ? { src } : {}) });
     }
     const lang = v as ProgramLang;
-    const src = convertProgram(r.src, lang, r.lang, r.lang === 'isa' ? r.isa : undefined);
+    const src = convertProgram(r.src, lang, r.lang, r.lang === 'isa' ? r.isa : undefined, r.k);
     const shape = lang === 'asm' ? {} : LANGS[lang].shape;
     set(src === null ? { lang, ...shape, isa: undefined } : { lang, src, ...shape, isa: undefined });
   });
