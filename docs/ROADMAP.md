@@ -570,15 +570,17 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
 - A configurable-depth pipeline lab (3 / 5 / 7 stages): large; the adder swap, predictor, cache and multicycle
   comparisons already show the trade-offs
 
-### Phase 14 — Before the transistor: relays, vacuum tubes, punch cards ⏳
+### Phase 14 — Before the transistor: relays, vacuum tubes, punch cards 🚧
 Why the MOSFET won is best felt, not told: build the same adder from relays and from tubes and *see* the machine
 it becomes. Mockup first for the 3D view, the technology setting and the new act. In the journey, a prologue act
 before the MOSFET chapter; in the campaign, an act of its own (or a side branch) ending in a machine programmed
 with punch cards.
 
 **Relay and tube bricks** (switch level, like the MOSFET)
-- ⏳ Relay: a coil driving changeover contacts (normally open / normally closed), contacts conducting both ways (a
-  pass switch), milliseconds per operation, a latching (self-holding) relay as memory
+- ✅ Relay: a coil driving changeover contacts (normally open / normally closed), contacts conducting both ways (a
+  pass switch), milliseconds per operation, a latching (self-holding) relay as memory. prim 'relay' in SwitchSim
+  (relay steps, an open line reads 0 through the next coil), lib/relays.ts (NOT, NAND, XOR, a full adder with the
+  carry through contacts on two rails, an n-bit adder settling in one step, latch, buzzer), prologue chapter P1
 - ⏳ Triode: the grid controls the plate current, one way only, with a plate resistor as the pull-up (ratioed
   logic, which `switchsim.ts` already models with its resistor strength); tube inverter and NOR, cathode follower,
   the Eccles–Jordan flip-flop; microseconds per operation, watts per tube

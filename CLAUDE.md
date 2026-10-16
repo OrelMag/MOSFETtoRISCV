@@ -120,7 +120,13 @@ src/sim/       simulation core (no DOM)
                  opened as the root, a sense prim flattens to the transistors it is drawn with; prim 'fgmos' (g, d, s, vp,
                  pgm, ers: flash) an NMOS whose threshold is stored charge (fgCharge / setFgCharge): conducts at g = 1 while
                  the charge is below FG_READ, always at vp = 1 (pass voltage); a rising pgm with g = 1 and the drain at 0
-                 adds FG_STEP, a rising ers empties it (settle applies the edges, then settles again)
+                 adds FG_STEP, a rising ers empties it (settle applies the edges, then settles again); prim 'relay' (a, b
+                 the coil, then c / no / nc per pole: prologue P1): the coil a resistor between its ends (an undriven line it
+                 feeds reads 0), the contacts strength-4 switches on the armature (relayOp: B0 released, B1 operated, BX);
+                 armatures move only at a relay step (relayStep: every relay takes its coil's state at once), so time counts
+                 relay steps, step() takes one, settle() takes them until quiet (RELAY_SETTLE_MAX, then unstable: an
+                 oscillator); relayState / relayEnergized for the view; kept by saveState, carry; the stage plays relay
+                 steps like gate delays (relayTime: Step, animate, "settled in n relay steps")
   nmossim.ts     NmosSim: event-driven switch-level engine for large NMOS circuits (Appendix A's 6502): a change
                  recomputes the channel-connected groups it reaches (rails and driven inputs end a group); GND / an
                  input 0 beats VDD / 1 (a short is counted), any of those beats a pull-up (prim 'dep' or 'res' to a
@@ -221,6 +227,10 @@ src/lib/       the component library (registered in `registry` via define())
                  (instance kbd); DMA irq → CPU irq; socDevices(o): BusModel's devices), chapterComputer / CHAPTER_COMPUTER
                  (bus/programs.ts: a boot ROM that DMA-copies a program from flash to RAM 0x400 and jumps), SYSTEM_COMPUTER
                  (every slave; SYSTEM_SOURCE: keys to the console, a line in DRAM, blocks on the screen)
+  relays.ts      prologue P1's relays at switch level: relay(n) (1–6 poles, ids relay, relay2 …), RELAY_NOT / NAND / XOR,
+                 RELAY_FA (the carry through contacts on two rails, ci / nci: a contact cannot invert), relayAdder(n) (one
+                 relay step for any width), RELAY_LATCH (self-holding), RELAY_BUZZER (a coil through its own break contact);
+                 outputs end on a load (a pull-down standing for the next coil) so a part alone reads 0, not Z
   flash.ts       chapter 34's flash at switch level: FG_CELL (prim 'fgmos'), vtOf / V_READ, norArray(R, C) (cells between
                  bit lines and a source line held high while programming), nandBlock(S, N) (strings with string / ground
                  selects, the other rows at the pass voltage); per column a pull-up, an output inverter and a NOR-gated
@@ -381,7 +391,9 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                diagram (view/fsmdiagram.ts) over a scene (current state, last / next arc, trail, ribbon; arc hover lights
                its gates), used by controllerPanel's Diagram view and chapter 9's state machine; the codex draws fsmOf(lib)
                and the campaign's state-machine level reads the learner's circuit back (editor/fsmui.ts, BuildChallenge.fsm)
-src/chapters/  narrative content: chapters → steps → scene / widget / challenge
+src/chapters/  narrative content: chapters → steps → scene / widget / challenge; a prologue chapter (num 0, `prologue: 'P1'`,
+               between the map and chapter 1, in brass: styles/prologue.css) and an appendix chapter (`appendix: 'A'`) show
+               their label instead of a number (chapterNo)
 src/lib/rv16/  the campaign's RV16 hardware, every block built only from parts its level's requirements unlock:
                logic.ts (acts 1–3), cpu.ts (immediates, control, branch, next PC, single-cycle cores),
                pipe.ts (pipeline register, forwarding, hazard, rv16Pipe with fwd / stall / flush / sys),
