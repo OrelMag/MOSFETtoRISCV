@@ -9,6 +9,7 @@ import { EditorSim } from '../src/editor/runtime';
 import { deviceIn } from '../src/dram/controller';
 import type { HierNode } from '../src/sim/flatten';
 import { pack } from '../src/sim/values';
+import { DualSim } from '../src/sim/dualsim';
 import { breathe } from './setup';
 
 // Examples ▸ System on a bus: compiled from its document, booted from the flash's ROM part by DMA, then
@@ -43,6 +44,9 @@ describe('Examples ▸ System on a bus', () => {
     const con = () => consoleText(ioState(es.sim!, ioNodes(es.sim!.design.root).find((x) => x.info.kind === 'console')!.node) as ConsoleState);
     await run(es, 3000, () => con().includes('>'));
     expect(con()).toBe('>');
+    // the cycle engine runs it (a loop through the keyboard part's ack would keep it on GateSim)
+    expect((es.sim as DualSim).whyNot).toBe('');
+    expect((es.sim as DualSim).engine).toBe('cycle');
     for (const c of 'hi\n') es.typeKey(c.charCodeAt(0));
     await run(es, 8000, () => con().endsWith('ih\n>'));
     expect(con()).toBe('>hi\nih\n>');

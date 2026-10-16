@@ -707,7 +707,10 @@ function axiReadPort(id: string, name: string, label: string, summary: string, c
   const which = cb ? b.op(decoder(cb, false), [ch], 'channel') : '';
   const words = chans.map(([data, ready, ack], i) => {
     const sel = cb ? `${which}.y${i}` : '';
-    b.wire(b.name(g.and(rdHs, g.not(status), ready, ...(sel ? [sel] : [])), `take ${data}`, true), ack);
+    // ack from a flip-flop: the item goes at the edge after the read (the slave is busy answering meanwhile), and
+    // a keyboard part with no clock of its own sees no path from its outputs back to its ack (the cycle engine)
+    const ackq = b.op(DFF, [b.name(g.and(rdHs, g.not(status), ready, ...(sel ? [sel] : [])), `take ${data}`, true), 'clk'], `${ack} next cycle`, `${ack}q`);
+    b.wire(`${ackq}.q`, ack);
     return g.mux(32, g.merge([data, g.konst(24, 0)], [8, 24]), g.merge([ready, g.konst(31, 0)], [1, 31]), status, `${data} or status`);
   });
   const word = n === 1 ? words[0] : b.op1(muxTree(cb, 32), [...words, ...(2 ** cb > n ? Array(2 ** cb - n).fill(g.konst(32, 0)) : []), ch], 'channel');

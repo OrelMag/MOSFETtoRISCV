@@ -15,7 +15,7 @@ export const NOTES_BUS = 'Chapter 35\'s computer on one bus. Masters: the RV32I 
   + '2 the DRAM (chapter 33\'s controller), 4 the DMA\'s registers, 5 the screen (pixel (x, y) at 0x5000_0000 + 256·y + 4·x, colour the low byte), '
   + '6 the I/O port: the keyboard (+0 the oldest key, taken when read; +4 status) and the timer (+8 its count, reading it acknowledges; +12 its irq); anything else the default slave. '
   + 'Console, LEDs, switches and mtime are inside the core at 0x8000_0000. At power-on the boot ROM has the DMA copy the flash to RAM 0x400 and jumps there. '
-  + 'Run, then type (the keyboard takes keys while running): each key is echoed, kept in DRAM and drawn; Enter prints the line back; the LEDs count the timer\'s interrupts. '
+  + 'Set the clock rate to max (the menu by Step), Run, then type (the keyboard takes keys while running): each key is echoed, kept in DRAM and drawn; Enter prints the line back; the LEDs count the timer\'s interrupts. '
   + 'Every link is two buses: the request (the master\'s nine signals, 105 bits) and the response (six signals, 37 bits); double-click a part to see them unpacked. The CPU drawer does not follow this core (its memory and interrupts are behind the bus): watch the console, the screen and the LEDs, or look inside.';
 
 const SLAVES: [string, keyof typeof SANDBOX_PARTS, string][] = [
@@ -65,11 +65,19 @@ export function busSystemChip(id: string, name: string): ChipDoc {
     y += h + GAP;
   }
   const x5 = x4 + wMax + 18;
-  s.part('from', { rom: { k: 8, w: 32, addr: 'word', lang: 'asm', src: SANDBOX_SOURCE } }, [x5, at.get('flash')!], { label: 'flash contents' });
-  s.part('scr', { screen: { mode: 'write', size: 64, color: 'rgb332' } }, [x5, at.get('pixel')!], { label: 'screen' });
-  s.part('kbd', { keyboard: true }, [x5, at.get('io')!], { label: 'keyboard' });
-  s.part('tmr', { lib: 'timer1000' }, [x5, at.get('io')! + 8], { label: 'timer' });
-  s.part('cnt', { split: [8, 2] }, [x5 + 16, at.get('io')! + 10]);
+  // each device beside its slave, or below the one above it when that is taller
+  let y5 = 0;
+  const device = (id: string, ref: PartRef, slave: string, label: string) => {
+    const y0 = Math.max(at.get(slave)!, y5);
+    s.part(id, ref, [x5, y0], { label });
+    y5 = y0 + size(ref)[1] + GAP;
+    return y0;
+  };
+  device('from', { rom: { k: 8, w: 32, addr: 'word', lang: 'asm', src: SANDBOX_SOURCE } }, 'flash', 'flash contents');
+  device('scr', { screen: { mode: 'write', size: 64, color: 'rgb332' } }, 'pixel', 'screen');
+  device('kbd', { keyboard: true }, 'io', 'keyboard');
+  const yt = device('tmr', { lib: 'timer1000' }, 'io', 'timer');
+  s.part('cnt', { split: [8, 2] }, [x5 + 16, yt + 2]);
 
   // the links: request and response of every master and slave
   s.tap('cpu.req', 'cpu_req'); s.tap('bus.m0_req', 'cpu_req');
