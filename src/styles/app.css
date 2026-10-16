@@ -1583,3 +1583,21 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .wear-bar i { width: 100%; background: var(--probe-0); border-radius: 3px 3px 0 0; min-height: 1px; }
 .wear-bar.bad i { background: var(--wx); }
 .wear-bar em { font: normal 10px var(--font-mono); color: var(--muted); margin-top: 2px; }
+/* chapter 35: the bus panels (widgets/bus.ts) */
+.bus-panel { width: 372px; }
+.bus-wave { display: flex; flex-direction: column; gap: 2px; font: 600 9px var(--font-mono); overflow-x: auto; }
+.bus-row { display: flex; gap: 1px; align-items: center; }
+.bus-row .lbl { flex: 0 0 38px; color: var(--muted); font-weight: 500; }
+.bus-c { flex: 0 0 7px; height: 14px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; background: var(--surface-2); color: #fff; font-size: 7px; overflow: hidden; }
+.bus-c.r { background: var(--probe-0); } .bus-c.w { background: var(--probe-1); } .bus-c.ok { background: var(--good); }
+.bus-c.gc { background: var(--probe-0); opacity: 0.7; } .bus-c.gd { background: var(--probe-3); opacity: 0.7; }
+.bus-c.sl { background: var(--probe-2); }
+.bus-ram { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 8px; font-size: 11px; }
+.bus-console { margin: 0; padding: 6px 8px; min-height: 2.4em; max-height: 120px; overflow: auto; background: var(--surface-2); border-radius: 6px; font: 12px var(--font-mono); white-space: pre-wrap; }
+.bus-leds { display: flex; gap: 6px; }
+.bus-led { width: 14px; height: 14px; border-radius: 50%; background: var(--surface-3); border: 1px solid var(--border); }
+.bus-led.on { background: var(--wx); box-shadow: 0 0 6px var(--wx); }
+.bus-map { display: flex; flex-direction: column; font-size: 11.5px; }
+.bus-map div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; padding: 2px 0; border-bottom: 1px solid var(--border); }
+.bus-map span:first-child { font-family: var(--font-mono); color: var(--text); }
+.bus-map span:last-child { color: var(--text-2); }

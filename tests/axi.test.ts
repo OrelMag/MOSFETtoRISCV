@@ -33,18 +33,18 @@ function bench(wait = 0) {
 describe('the bus (gate level)', () => {
   it('stores and loads the RAM in two cycles each, with byte enables', () => {
     const b = bench();
-    expect(b.access(true, 0x2000_0010, 0xdeadbeef).cycles).toBe(2);
-    const r = b.access(false, 0x2000_0010);
+    expect(b.access(true, 0x0000_0010, 0xdeadbeef).cycles).toBe(2);
+    const r = b.access(false, 0x0000_0010);
     expect(r.data).toBe(0xdeadbeef);
     expect(r.cycles).toBe(2);
-    b.access(true, 0x2000_0010, 0x5a5a5a5a, 0b0100); // a byte store: the lane-replicated byte, one strobe
-    expect(b.access(false, 0x2000_0010).data).toBe(0xde5abeef);
+    b.access(true, 0x0000_0010, 0x5a5a5a5a, 0b0100); // a byte store: the lane-replicated byte, one strobe
+    expect(b.access(false, 0x0000_0010).data).toBe(0xde5abeef);
   });
 
   it('adds the wait states of a slow slave', () => {
     const b = bench(3);
-    expect(b.access(true, 0x2000_0004, 7).cycles).toBe(5);
-    expect(b.access(false, 0x2000_0004)).toEqual({ data: 7, cycles: 5 });
+    expect(b.access(true, 0x0000_0004, 7).cycles).toBe(5);
+    expect(b.access(false, 0x0000_0004)).toEqual({ data: 7, cycles: 5 });
   });
 
   it('reads the flash through its page buffer, and the default slave answers the rest', () => {
@@ -60,19 +60,19 @@ describe('the bus (gate level)', () => {
   it('copies flash to RAM by DMA, raises irq at the end, and shares the bus with the CPU meanwhile', () => {
     const b = bench();
     b.access(true, 0x4000_0000, 0x1000_0000);
-    b.access(true, 0x4000_0004, 0x2000_0100);
+    b.access(true, 0x4000_0004, 0x0000_0100);
     b.access(true, 0x4000_0008, 32);
     expect(b.access(false, 0x4000_0008).data).toBe(32);
     b.access(true, 0x4000_000c, 1); // go
     expect(b.access(false, 0x4000_000c).data & 1).toBe(1); // busy
     // the CPU keeps using the RAM while the copy runs
-    b.access(true, 0x2000_0000, 0x1234);
-    expect(b.access(false, 0x2000_0000).data).toBe(0x1234);
+    b.access(true, 0x0000_0000, 0x1234);
+    expect(b.access(false, 0x0000_0000).data).toBe(0x1234);
     let n = 0;
     while (b.out('irq') !== 1 && n++ < 5000) b.idle(1);
     expect(b.out('irq')).toBe(1);
     expect(b.access(false, 0x4000_000c).data).toBe(0b10); // done, not busy
-    for (let i = 0; i < 32; i++) expect(b.access(false, 0x2000_0100 + 4 * i).data, `word ${i}`).toBe(IMAGE[i]);
+    for (let i = 0; i < 32; i++) expect(b.access(false, 0x0000_0100 + 4 * i).data, `word ${i}`).toBe(IMAGE[i]);
     b.access(true, 0x4000_000c, 2); // clear done
     expect(b.out('irq')).toBe(0);
   });

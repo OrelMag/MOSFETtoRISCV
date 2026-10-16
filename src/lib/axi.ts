@@ -5,6 +5,7 @@
 // to a slave, and holds both until the response completes. Slaves answer the cycle after the address at
 // the earliest, so a transfer takes at least two cycles; a slow slave adds wait states.
 
+import { MAP } from '../bus/model';
 import { FlashDevice, FLASH_TIMES, type FlashGeometry } from '../flash/model';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
@@ -381,14 +382,11 @@ function hashWords(a: ArrayLike<number>): string {
   return h.toString(16);
 }
 
-/** The memory map of the bus systems: top address nibble of each slave (the last one is the default slave). */
-export const BUS_MAP = { flash: 0x1, ram: 0x2, dma: 0x4 } as const;
-
 /**
  * A bus bench (chapter 35's scenes, the tests): a request port standing in for the CPU (req, we, addr,
  * wdata, be → done, rdata), the DMA engine, the interconnect, a flash holding `image`, a RAM of 2^k
- * words with `wait` wait states, and the default slave. Map: 0x1000_0000 flash, 0x2000_0000 RAM,
- * 0x4000_0000 DMA registers.
+ * words with `wait` wait states, and the default slave. The computer's map (bus/model.ts MAP): RAM from
+ * 0, flash at 0x1000_0000, the DMA's registers at 0x4000_0000.
  */
 export function busBench(image: ArrayLike<number>, k = 10, wait = 0): ComponentDef {
   const FL = axiFlash(image);
@@ -399,10 +397,10 @@ export function busBench(image: ArrayLike<number>, k = 10, wait = 0): ComponentD
     const cpu = b.op(AXI_PORT, ['req', 'we', 'addr', 'wdata', 'be', 'clk'], 'CPU port', 'cpu');
     const dma = b.op(DMA_ENGINE, [], 'DMA', 'dma');
     b.next();
-    const BUS = axiBus(2, [BUS_MAP.flash, BUS_MAP.ram, BUS_MAP.dma, 0]);
+    const BUS = axiBus(2, [MAP.ram, MAP.flash, MAP.dma, 0xf]);
     const bx = b.op(BUS, [], 'interconnect', 'bus');
     b.next();
-    const slaves = [b.op(FL, [], 'flash', 'flash'), b.op(axiRam(k, wait), [], 'RAM', 'ram'), 'dma', b.op(AXI_DEFAULT, [], 'default', 'def')];
+    const slaves = [b.op(axiRam(k, wait), [], 'RAM', 'ram'), b.op(FL, [], 'flash', 'flash'), 'dma', b.op(AXI_DEFAULT, [], 'default', 'def')];
     // masters: 0 the CPU port, 1 the DMA's master side
     for (const s of M_OUT) { b.wire(`${cpu}.${s}`, `${bx}.m0_${s}`); b.wire(`${dma}.m_${s}`, `${bx}.m1_${s}`); }
     for (const s of M_IN) { b.wire(`${bx}.m0_${s}`, `${cpu}.${s}`); b.wire(`${bx}.m1_${s}`, `${dma}.m_${s}`); }
@@ -415,7 +413,7 @@ export function busBench(image: ArrayLike<number>, k = 10, wait = 0): ComponentD
     const R = b.right;
     return define({
       id, name: 'Bus bench (a requester, DMA, flash, RAM)', category: 'memory',
-      summary: 'A request port standing in for the CPU and the DMA engine share one bus to a flash (0x1000_0000), a RAM (0x2000_0000) and the DMA\'s registers (0x4000_0000).',
+      summary: 'A request port standing in for the CPU and the DMA engine share one bus to a RAM (from 0), a flash (0x1000_0000) and the DMA\'s registers (0x4000_0000).',
       ports: [bit('req', 'in'), bit('we', 'in'), bus('addr', 32, 'in'), bus('wdata', 32, 'in'), bus('be', 4, 'in'), bit('clk', 'in', 'bottom', true), bit('done', 'out'), bus('rdata', 32, 'out'), bit('irq', 'out')],
       symbol: { kind: 'box', label: 'BUS BENCH' },
       netlist: () => ({ pins: { req: [0, 4], we: [0, 8], addr: [0, 12], wdata: [0, 16], be: [0, 20], clk: [0, 26], done: [R, 4], rdata: [R, 8], irq: [R, 12] }, instances: b.instances, nets: b.nets() }),
