@@ -2,10 +2,13 @@
 // checked in. Downloads the pinned release zip, checks its sha256, and extracts freedoom1.wad and
 // COPYING.txt into .cache/doom/ at the repo root. Node built-ins only (the zip is read here).
 //
-//   node scripts/doom/fetch-wad.mjs
+//   node scripts/doom/fetch-wad.mjs [--public]
+//
+// --public also copies them into public/doom/ (gitignored) as freedoom1.wad and freedoom-COPYING.txt,
+// so the dev server and a build serve them: the deploy and the desktop build run it before building.
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inflateRawSync } from 'node:zlib';
@@ -60,6 +63,17 @@ function crc32(b) {
 }
 
 async function main() {
+  await fetchWad();
+  if (process.argv.includes('--public')) {
+    const pub = join(root, 'public/doom');
+    mkdirSync(pub, { recursive: true });
+    copyFileSync(join(cache, FREEDOOM.wad.name), join(pub, FREEDOOM.wad.name));
+    copyFileSync(join(cache, FREEDOOM.license), join(pub, 'freedoom-COPYING.txt'));
+    console.log(`copied into ${pub}`);
+  }
+}
+
+async function fetchWad() {
   const wadPath = join(cache, FREEDOOM.wad.name);
   if (existsSync(wadPath) && sha256(readFileSync(wadPath)) === FREEDOOM.wad.sha256 && existsSync(join(cache, FREEDOOM.license))) {
     console.log(`${wadPath} is already there`);

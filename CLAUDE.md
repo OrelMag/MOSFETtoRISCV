@@ -629,7 +629,13 @@ src/doom/      Appendix B's Doom computer (DOM-free): machine.ts (the memory map
                (pinned xPack riscv-none-elf-gcc, rv32im; checked in: public/doom/doom.img + doom.syms.json, so npm test needs
                no compiler); Freedoom (BSD) is never checked in: scripts/doom/fetch-wad.mjs (pinned URL + sha256) into .cache/doom/;
                scripts/doom/run-raw.mjs a strict stand-alone runner (NULL-page / WAD stores, PNG frames), scripts/doom/bench.ts
-               cycles per frame (tests/doom.test.ts: boot to the title, 1.5 M instructions against the golden model)
+               cycles per frame (tests/doom.test.ts: boot to the title, 1.5 M instructions against the golden model);
+               player.ts (DoomPlayer: advance(wallMs, budgetMs) toward wall-clock time at CLOCK_KHZ in SAMPLE-instruction chunks,
+               the PC after each a sample: profile by function, instruction mix; recent PCs; paused: step / stepN / toNextPixel /
+               toFrameEnd (FastISS.yieldNow from FastDoom.yieldOnPixel / yieldOnFlip), back(): a journal per step, snapshots for
+               larger operations), keys.ts (KeyboardEvent.code → doomkeys.h). widgets/doom.ts: Appendix B's Play step (chapters/
+               ch-doom.ts): fetches doom.img + syms on open, the WAD only on Play (public/doom/freedoom1.wad: fetch-wad.mjs --public,
+               run by the deploy / desktop builds; or the learner's own file); keys only while the screen has focus
 src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/CAMPAIGN.md). DOM-free:
   types.ts       CampaignNode (act, kind lesson / drill / build / program / core, requires, why, tips, codex,
                  unlocks: library ids or `prefix*` later levels may place, anatomy blocks, base challenge, par, soon)
