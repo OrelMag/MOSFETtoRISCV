@@ -730,7 +730,7 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean, dmemK: n
     const xB = P('res', 'y')[0] + 20;
     [...M_OUT, ...M_IN].forEach((sg, i) => {
       pins[sg] = [xB + (i < M_OUT.length ? 0 : -1) * 0, yS + 10 + 2 * i];
-      nets.push(M_OUT.includes(sg as never) ? { name: sg, ends: [`dm.${sg}`, sg], tags: [`dm.${sg}`] } : { name: sg, ends: [sg, `dm.${sg}`], tags: [`dm.${sg}`] });
+      nets.push(M_OUT.includes(sg as never) ? { name: sg, ends: [`dm.bus_${sg}`, sg], tags: [`dm.bus_${sg}`] } : { name: sg, ends: [sg, `dm.bus_${sg}`], tags: [`dm.bus_${sg}`] });
     });
   }
   const busPorts: PortDef[] = busK ? [bit('retire', 'out'), ...M_OUT.map((sg) => (sg.endsWith('addr') || sg === 'wdata' ? bus(sg, 32, 'out') : sg === 'wstrb' ? bus(sg, 4, 'out') : bit(sg, 'out'))),

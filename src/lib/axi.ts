@@ -71,7 +71,7 @@ function sidePins(ports: PortDef[], right: number): Record<string, [number, numb
 export const AXI_PORT: ComponentDef = (() => {
   const b = new Builder(14, 14);
   const g = kit(b);
-  b.pins('req', 'we', 'addr', 'wdata', 'be', 'clk', 'awready', 'wready', 'bvalid', 'arready', 'rvalid', 'rdata');
+  b.pins('req', 'we', 'addr', 'data', 'be', 'clk', 'awready', 'wready', 'bvalid', 'arready', 'rvalid', 'rdata');
   const sent = b.op(DFF, ['', 'clk'], 'address taken', 'sent');
   const want = b.name(g.and('req', g.not(`${sent}.q`)), 'issue', true);
   const wr = b.name(g.and(want, 'we'), 'write', true);
@@ -81,12 +81,12 @@ export const AXI_PORT: ComponentDef = (() => {
   const done = b.name(g.and(`${sent}.q`, g.mux(1, 'rvalid', 'bvalid', 'we')), 'done', true);
   b.wire(g.and('req', g.not(done), g.or(`${sent}.q`, taken)), `${sent}.d`);
   b.next();
-  b.wire(wr, 'awvalid'); b.wire('addr', 'awaddr'); b.wire(wr, 'wvalid'); b.wire('wdata', 'wdata'); b.wire('be', 'wstrb');
+  b.wire(wr, 'awvalid'); b.wire('addr', 'awaddr'); b.wire(wr, 'wvalid'); b.wire('data', 'wdata'); b.wire('be', 'wstrb');
   b.wire(rd, 'arvalid'); b.wire('addr', 'araddr');
   const one = g.konst(1, 1);
   b.wire(one, 'bready'); b.wire(one, 'rready');
   b.wire(done, 'done'); b.wire('rdata', 'rdataOut');
-  const ports: PortDef[] = [bit('req', 'in'), bit('we', 'in'), bus('addr', 32, 'in'), bus('wdata', 32, 'in'), bus('be', 4, 'in'), bit('clk', 'in', 'bottom', true),
+  const ports: PortDef[] = [bit('req', 'in'), bit('we', 'in'), bus('addr', 32, 'in'), bus('data', 32, 'in'), bus('be', 4, 'in'), bit('clk', 'in', 'bottom', true),
     ...M_IN.map((s) => ({ name: s, width: wOf(s), dir: 'in' as const })), bit('done', 'out'), bus('rdataOut', 32, 'out'), ...M_OUT.map((s) => ({ name: s, width: wOf(s), dir: 'out' as const }))];
   return define({
     id: 'axiport', name: 'Bus master port', category: 'memory',
@@ -418,7 +418,7 @@ export function busBench(image: ArrayLike<number>, k = 10, wait = 0): ComponentD
       summary: 'A request port standing in for the CPU and the DMA engine share one bus to a flash (0x1000_0000), a RAM (0x2000_0000) and the DMA\'s registers (0x4000_0000).',
       ports: [bit('req', 'in'), bit('we', 'in'), bus('addr', 32, 'in'), bus('wdata', 32, 'in'), bus('be', 4, 'in'), bit('clk', 'in', 'bottom', true), bit('done', 'out'), bus('rdata', 32, 'out'), bit('irq', 'out')],
       symbol: { kind: 'box', label: 'BUS BENCH' },
-      netlist: () => ({ pins: { req: [0, 4], we: [0, 7], addr: [0, 10], wdata: [0, 13], be: [0, 16], clk: [0, 22], done: [R, 4], rdata: [R, 7], irq: [R, 10] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { req: [0, 4], we: [0, 8], addr: [0, 12], wdata: [0, 16], be: [0, 20], clk: [0, 26], done: [R, 4], rdata: [R, 8], irq: [R, 12] }, instances: b.instances, nets: b.nets() }),
     });
   });
 }
@@ -457,11 +457,11 @@ export function busMemUnit(imemK: number): ComponentDef {
     b.wire(`${port}.rdataOut`, 'rdata');
     b.wire(stall, 'stall');
     b.wire(g.not(g.or(fetch, dataReq)), 'irqOk');
-    for (const s of M_IN) b.wire(s, `${port}.${s}`);
-    for (const s of M_OUT) b.wire(`${port}.${s}`, s);
+    for (const s of M_IN) b.wire(`bus_${s}`, `${port}.${s}`);
+    for (const s of M_OUT) b.wire(`${port}.${s}`, `bus_${s}`);
     const ports: PortDef[] = [bus('addr', 32, 'in'), bus('wdata', 32, 'in'), bus('be', 4, 'in'), bit('we', 'in'), bit('clk', 'in', 'bottom', true), bit('re', 'in'), bus('pc', 32, 'in'), bus('romData', 32, 'in'),
-      ...M_IN.map((s) => ({ name: s, width: wOf(s), dir: 'in' as const })),
-      bus('rdata', 32, 'out'), bus('instr', 32, 'out'), bit('stall', 'out'), bit('irqOk', 'out'), ...M_OUT.map((s) => ({ name: s, width: wOf(s), dir: 'out' as const }))];
+      ...M_IN.map((s) => ({ name: `bus_${s}`, width: wOf(s), dir: 'in' as const })),
+      bus('rdata', 32, 'out'), bus('instr', 32, 'out'), bit('stall', 'out'), bit('irqOk', 'out'), ...M_OUT.map((s) => ({ name: `bus_${s}`, width: wOf(s), dir: 'out' as const }))];
     return define({
       id: `busmem${imemK}`, name: 'Memory over the bus', category: 'memory',
       summary: `The CPU's memory side on a bus: instructions below ${4 * 2 ** imemK} bytes from the boot ROM, any other fetched over the bus into an instruction register (a NOP meanwhile); loads and stores over the bus. stall holds the CPU until both are done.`,
@@ -470,3 +470,6 @@ export function busMemUnit(imemK: number): ComponentDef {
     });
   });
 }
+
+/** One of each generated part, registered for the library-wide checks (and the workbench). */
+export const BUS_PARTS = [axiBus(2, [0x0, 0x1, 0x4, 0xf]), axiRam(10), axiRam(10, 3), busMemUnit(7), busBench([1, 2, 3, 4])];

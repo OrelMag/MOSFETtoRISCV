@@ -4,8 +4,11 @@
 // external interrupt. Console, LEDs, switches and the timer stay inside the CPU at 0x8000_0000.
 
 import { MAP } from '../bus/model';
+import { BOOT_SOURCE, PAYLOAD_SOURCE } from '../bus/programs';
+import { assemble } from '../riscv/asm';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { AXI_DEFAULT, axiBus, axiFlash, axiRam, DMA_ENGINE, M_IN, M_OUT } from './axi';
+import { symbolGeom } from '../sim/geometry';
 import { Builder } from './builder';
 import { define } from './define';
 import { systemCpu } from './system';
@@ -49,14 +52,22 @@ export function busComputer(program: number[], flashImage: ArrayLike<number> = [
   b.wire(`${dma}.irq`, `${cpu}.irq`);
   for (const p of ['pcOut', 'consoleData', 'consoleValid', 'leds', 'retire']) b.wire(`${cpu}.${p}`, p);
   b.wire(`${dma}.busy`, 'dmaBusy');
-  const R = b.right;
+  const R = b.right, cg = symbolGeom(CPU), cpuY = b.instances.find((i) => i.name === cpu)!.at![1];
   d = define({
     id, name: 'Computer on a bus (CPU, DMA, RAM, flash)', category: 'cpu',
     summary: `The system CPU and a DMA engine share one bus to a ${4 * 2 ** ramK}-byte RAM at 0, a flash at 0x1000_0000 and the DMA's registers at 0x4000_0000. The boot ROM (${4 * 2 ** imemK} bytes) holds the first instructions; everything else is fetched over the bus. The DMA's done interrupt is the CPU's external interrupt.`,
     ports: [bit('clk', 'in', 'left', true), bus('switches', 8, 'in'), bus('pcOut', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out'), bit('retire', 'out'), bit('dmaBusy', 'out')],
     symbol: { kind: 'box', label: 'COMPUTER' },
-    netlist: () => ({ pins: { clk: [0, 4], switches: [0, 8], pcOut: [R, 4], consoleData: [R, 7], consoleValid: [R, 10], leds: [R, 13], retire: [R, 16], dmaBusy: [R, 19] }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { clk: [0, cpuY + cg.ports.clk.pos[1]], switches: [0, cpuY + cg.ports.switches.pos[1]], pcOut: [R, 4], consoleData: [R, 7], consoleValid: [R, 10], leds: [R, 13], retire: [R, 16], dmaBusy: [R, 19] }, instances: b.instances, nets: b.nets() }),
   });
   cache.set(id, d);
   return d;
 }
+
+/** Chapter 35's computer: the boot ROM and the flash holding the program it loads (bus/programs.ts). */
+export function chapterComputer(): ComponentDef {
+  const words = (src: string) => { const a = assemble(src); if (a.errors.length) throw new Error(a.errors[0].message); return a.words; };
+  return busComputer(words(BOOT_SOURCE), words(PAYLOAD_SOURCE));
+}
+
+export const CHAPTER_COMPUTER = chapterComputer();
