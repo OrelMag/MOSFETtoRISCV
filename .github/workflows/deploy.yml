@@ -25,6 +25,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Cache Freedoom (scripts/doom/fetch-wad.mjs: pinned sha256)
+        uses: actions/cache@v4
+        with:
+          path: .cache/doom
+          key: freedoom-0.13.0
+      - run: node scripts/doom/fetch-wad.mjs
       - run: npm test
   build:
     runs-on: ubuntu-latest
@@ -37,6 +43,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Cache Freedoom (scripts/doom/fetch-wad.mjs: pinned sha256)
+        uses: actions/cache@v4
+        with:
+          path: .cache/doom
+          key: freedoom-0.13.0
+      - name: Add Freedoom (Appendix B's game data, BSD licence; public/doom/, never checked in)
+        run: node scripts/doom/fetch-wad.mjs --public
       - run: npm run build
       - name: Add the chip layout (published by the layout workflow, if any)
         env:

@@ -36,6 +36,8 @@ export class DoomDevices {
   readonly keys: number[] = [];
   /** FLIP stores so far. */
   flips = 0;
+  /** Byte offset of the last store into the picture (-1: none yet). */
+  lastPixel = -1;
   /** The last completed frame (palette indices) and its palette, copied at FLIP. */
   readonly shown = new Uint8Array(SCREEN_W * SCREEN_H);
   readonly shownPalette = new Uint32Array(256);
@@ -68,6 +70,7 @@ export class DoomDevices {
     if (addr >>> 28 === 1) return true;
     if (addr >= FB_BASE) {
       const o = addr & 0x1ffff;
+      if (o < SCREEN_W * SCREEN_H) this.lastPixel = o;
       if (f3 === 0) this.fb[o] = v; else if (f3 === 2) this.fb32[o >>> 2] = v; else this.fb16[o >>> 1] = v;
       return true;
     }
@@ -97,7 +100,8 @@ export class DoomDevices {
     const pal = live ? this.fb32.subarray(PALETTE_BASE - FB_BASE >>> 2) : this.shownPalette;
     for (let i = 0, o = 0; i < SCREEN_W * SCREEN_H; i++, o += 4) {
       const c = pal[px[i]];
-      out[o] = c >>> 16; out[o + 1] = c >>> 8; out[o + 2] = c; out[o + 3] = 255;
+      // a clamped array saturates (300 → 255) instead of wrapping: mask each channel
+      out[o] = (c >>> 16) & 0xff; out[o + 1] = (c >>> 8) & 0xff; out[o + 2] = c & 0xff; out[o + 3] = 255;
     }
     return out;
   }

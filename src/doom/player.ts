@@ -40,6 +40,7 @@ interface Journal {
   x: Uint32Array;
   consoleLen: number;
   cycles: number;
+  lastPixel: number;
   /** The word the instruction may store to (RAM index or frame-buffer address) and its old value. */
   ram?: [number, number];
   fb?: [number, number];
@@ -55,6 +56,7 @@ interface Snapshot {
   x: Uint32Array;
   console: string;
   cycles: number;
+  lastPixel: number;
   dmem: Uint32Array;
   fb: Uint8Array;
   keys: number[];
@@ -215,7 +217,7 @@ export class DoomPlayer {
   private snapshot(): void {
     const d = this.dev;
     this.push({
-      kind: 'snap', s: this.scalars(), x: this.cpu.x.slice(), console: this.cpu.console, cycles: this.cycles,
+      kind: 'snap', s: this.scalars(), x: this.cpu.x.slice(), console: this.cpu.console, cycles: this.cycles, lastPixel: d.lastPixel,
       dmem: this.cpu.dmem.slice(), fb: d.fb.slice(), keys: d.keys.slice(), flips: d.flips, shown: d.shown.slice(), shownPalette: d.shownPalette.slice(),
     });
   }
@@ -223,7 +225,7 @@ export class DoomPlayer {
   /** One instruction, undoable. */
   step(): void {
     const cpu = this.cpu, d = this.dev, i = (cpu.pc >>> 2) & (cpu.imemWords - 1), k = cpu.kind[i];
-    const j: Journal = { kind: 'step', s: this.scalars(), x: cpu.x.slice(), consoleLen: cpu.console.length, cycles: this.cycles };
+    const j: Journal = { kind: 'step', s: this.scalars(), x: cpu.x.slice(), consoleLen: cpu.console.length, cycles: this.cycles, lastPixel: d.lastPixel };
     const isStore = (k >= K.SB && k <= K.SW) || k === K.AMOADD || k === K.AMOSWAP;
     const isLoad = k >= K.LB && k <= K.LHU;
     if (isStore || isLoad) {
@@ -304,6 +306,7 @@ export class DoomPlayer {
       d.shown.set(e.shown);
       d.shownPalette.set(e.shownPalette);
     }
+    d.lastPixel = e.lastPixel; // after the frame-buffer write above, which moves it
     this.target = this.cycles;
     return true;
   }

@@ -82,6 +82,19 @@ describe('DoomPlayer', () => {
     expect(p.dev.fb).toEqual(fb0);
   }, 120_000);
 
+  it('turns the shown frame into RGBA through its palette, every channel exact', () => {
+    const p = player();
+    boot(p, 3);
+    const rgba = p.dev.rgba();
+    let mixed = 0;
+    for (let i = 0; i < SCREEN_W * SCREEN_H; i++) {
+      const c = p.dev.shownPalette[p.dev.shown[i]];
+      expect([rgba[4 * i], rgba[4 * i + 1], rgba[4 * i + 2], rgba[4 * i + 3]]).toEqual([(c >>> 16) & 0xff, (c >>> 8) & 0xff, c & 0xff, 255]);
+      if (c >>> 16 && c & 0xffff) mixed++;
+    }
+    expect(mixed).toBeGreaterThan(1000); // the title uses colours with red and green / blue together
+  }, 120_000);
+
   it('runs to the end of the frame: the next FLIP, exactly', () => {
     const p = player();
     boot(p, 3);
