@@ -11,6 +11,8 @@ export interface Stats {
   /** Resistors (pull-ups, pull-downs) and capacitors: switch-level parts, not transistors. */
   resistors: number;
   capacitors: number;
+  /** Relays (prologue P1): a coil and its contacts each. */
+  relays: number;
   /** Of the transistors, depletion-mode loads (NMOS logic's pull-ups). */
   depletion: number;
   /** Number of instances one level down. */
@@ -27,12 +29,13 @@ export function stats(def: ComponentDef): Stats {
   const hit = cache.get(def);
   if (hit) return hit;
   let s: Stats;
-  const zero = { nands: 0, transistors: 0, resistors: 0, capacitors: 0, depletion: 0, parts: 0, descendants: 0, levels: 0 };
+  const zero = { nands: 0, transistors: 0, resistors: 0, capacitors: 0, relays: 0, depletion: 0, parts: 0, descendants: 0, levels: 0 };
   if (def.prim === 'nand') s = { ...zero, nands: 1, transistors: 4, parts: 4, descendants: 4, levels: 1 };
   else if (def.prim === 'nmos' || def.prim === 'pmos' || def.prim === 'fgmos') s = { ...zero, transistors: 1 };
   else if (def.prim === 'dep') s = { ...zero, transistors: 1, depletion: 1 };
   else if (def.prim === 'res') s = { ...zero, resistors: 1 };
   else if (def.prim === 'cap') s = { ...zero, capacitors: 1 };
+  else if (def.prim === 'relay') s = { ...zero, relays: 1 };
   else if (def.prim && def.prim !== 'sense') s = zero; // a sense amplifier counts the transistors it is drawn with
   else if (def.statsOf) s = def.statsOf();
   else {
@@ -45,6 +48,7 @@ export function stats(def: ComponentDef): Stats {
         s.transistors += c.transistors;
         s.resistors += c.resistors;
         s.capacitors += c.capacitors;
+        s.relays += c.relays;
         s.depletion += c.depletion;
         if (inst.def.prim !== 'alias') {
           s.parts++;
@@ -125,10 +129,15 @@ export function hasFeedback(def: ComponentDef): boolean {
     const find = (x: number): number => (parent[x] === x ? x : (parent[x] = find(parent[x])));
     const fets = d.leaves.filter((l) => l.kind === 'nmos' || l.kind === 'pmos').map((l) => l.terminals!);
     for (const [, a, b] of fets) if (!source[a] && !source[b]) parent[find(a)] = find(b);
+    // a relay's contacts are channels too (c–no, c–nc), and its coil (between terminals 0 and 1) is their gate
+    const relays = d.leaves.filter((l) => l.kind === 'relay').map((l) => l.terminals!);
+    for (const t of relays) for (let p = 2; p + 2 < t.length; p += 3) for (const o of [t[p + 1], t[p + 2]]) {
+      if (!source[t[p]] && !source[o]) parent[find(t[p])] = find(o);
+    }
     // a resistor joins its ends into one channel-connected group too (it has no gate to feed)
     for (const l of d.leaves) {
       const [a, b] = l.terminals ?? [];
-      if ((l.kind === 'res' || l.kind === 'dep') && !source[a] && !source[b]) parent[find(a)] = find(b);
+      if ((l.kind === 'res' || l.kind === 'dep' || l.kind === 'relay') && !source[a] && !source[b]) parent[find(a)] = find(b);
     }
     const edges = new Map<number, Set<number>>();
     const edge = (from: number, to: number) => {
@@ -138,6 +147,10 @@ export function hasFeedback(def: ComponentDef): boolean {
       edges.get(f)!.add(find(to));
     };
     for (const [g, a, b] of fets) edge(g, source[a] ? b : a);
+    for (const t of relays) for (let p = 2; p + 2 < t.length; p += 3) {
+      const c = source[t[p]] ? (source[t[p + 1]] ? t[p + 2] : t[p + 1]) : t[p];
+      for (const coil of [t[0], t[1]]) edge(coil, c);
+    }
     // behavioural leaves inside a switch-level design: every input may affect every output
     for (const l of d.leaves) if (!l.terminals) for (const i of l.inputs.flat()) for (const o of l.outputs.flat()) edge(i, o);
     const state = new Uint8Array(d.netCount); // 0 new, 1 visiting, 2 done

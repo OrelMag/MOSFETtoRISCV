@@ -1,7 +1,7 @@
 // SVG drawings of every symbol kind, in grid units. Each returns a <g> whose origin is the
 // symbol's top-left corner. Port positions match geometry.ts exactly.
 
-import { symbolGeom } from '../sim/geometry';
+import { poleX, symbolGeom } from '../sim/geometry';
 import type { Category, ComponentDef } from '../sim/types';
 import { s } from '../ui/dom';
 import { boxText, ICON, iconSpot } from './boxtext';
@@ -157,6 +157,32 @@ function switchPart(k: string): SVGElement[] {
   return [];
 }
 
+/**
+ * A relay: the coil (filled while current flows: class energized), a dashed link to the blades, and per pole the
+ * common contact on top with its blade drawn twice: to the break contact (released) and to the make contact
+ * (operated); the view's classes (conducting = operated, maybe) show one, or both dashed.
+ */
+function relay(poles: number): SVGElement[] {
+  const line = (d: string, cls = 'sym-line') => s('path', { d, class: cls });
+  const last = poleX(poles - 1);
+  const els: SVGElement[] = [
+    line('M0,1 H1 V1.3 M1,2.7 V4'),
+    s('rect', { x: 0.45, y: 1.3, width: 1.1, height: 1.4, rx: 0.1, class: 'sym-body relay-coil' }),
+    line('M0.45,2.7 L1.55,1.3'),
+    line(`M1.55,2 H${last}`, 'sym-line relay-link'),
+  ];
+  for (let i = 0; i < poles; i++) {
+    const x = poleX(i);
+    els.push(
+      line(`M${x},0 V0.6 M${x - 1},4 V3.25 H${x - 0.55} M${x + 1},4 V3.25 H${x + 0.55}`),
+      s('circle', { cx: x, cy: 0.6, r: 0.17, class: 'sym-body' }),
+      line(`M${x},0.6 L${x - 0.62},3.12`, 'relay-blade relay-rel'),
+      line(`M${x},0.6 L${x + 0.62},3.12`, 'relay-blade relay-op'),
+    );
+  }
+  return els;
+}
+
 /** Where an instance's name goes, relative to its symbol (null: rails and wiring are not named). */
 export function instNameAt(def: ComponentDef): { x: number; y: number; anchor: 'start' | 'middle' } | null {
   if (def.prim === 'alias' || def.prim === 'vdd' || def.prim === 'vhalf' || def.prim === 'gnd') return null;
@@ -165,6 +191,7 @@ export function instNameAt(def: ComponentDef): { x: number; y: number; anchor: '
   if (k === 'box') return { x: 0.1, y: -0.45, anchor: 'start' };
   if (k === 'res' || k === 'pullup' || k === 'pulldown' || k === 'cap') return { x: 1.75, y: g.h / 2 + 0.3, anchor: 'start' };
   if (k === 'tgate' || k === 'tribuf' || k === 'triinv') return { x: 2.4, y: 0.95, anchor: 'start' };
+  if (k === 'relay') return { x: 0.1, y: -0.45, anchor: 'start' };
   return { x: g.w / 2, y: -0.35, anchor: 'middle' };
 }
 
@@ -246,6 +273,9 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
       break;
     case 'res': case 'pulldown': case 'cap': case 'tgate': case 'tribuf': case 'triinv':
       inner.append(...switchPart(k));
+      break;
+    case 'relay':
+      inner.append(...relay((def.ports.length - 2) / 3));
       break;
     case 'pullup':
       inner.append(...switchPart(k));

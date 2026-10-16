@@ -360,10 +360,12 @@ export class SchematicView {
         const li = ctx.childLeaf(name);
         if (li === undefined) continue;
         const k = ctx.sim.design.leaves[li].kind;
-        if (k !== 'nmos' && k !== 'pmos') continue;
+        if (k !== 'nmos' && k !== 'pmos' && k !== 'relay') continue;
+        // a relay: conducting while operated (its make contacts closed), maybe while unknown
         const c = ctx.sim.conducting[li];
         g.classList.toggle('conducting', c === 1);
         g.classList.toggle('maybe', c === 2);
+        if (k === 'relay' && ctx.sim instanceof SwitchSim) g.classList.toggle('energized', ctx.sim.relayEnergized(li) === 1);
       }
     }
   }

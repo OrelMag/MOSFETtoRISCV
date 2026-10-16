@@ -5,6 +5,7 @@
 import { DualSim } from '../sim/dualsim';
 import { flatten, type HierNode } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
+import { SwitchSim } from '../sim/switchsim';
 import { needsSwitchLevel } from '../sim/harness';
 import { completeEdge, type Edge, riseEdge, stepEdge } from '../sim/edge';
 import { PowerMeter } from '../sim/power';
@@ -758,10 +759,15 @@ export class Stage {
     return true;
   }
 
+  /** A switch-level design with relays: its time is relay steps, played like gate delays. */
+  private get relayTime(): boolean {
+    return this.sim instanceof SwitchSim && this.sim.hasRelays;
+  }
+
   private propagate(): void {
     if (!this.sim) return;
     this.changeStart = this.sim.time;
-    if ((settings.animate || this.scene?.animate) && this.sim.kind === 'gate') {
+    if ((settings.animate || this.scene?.animate) && (this.sim.kind === 'gate' || this.relayTime)) {
       this.startAnim();
     } else {
       this.sim.settle();
@@ -924,8 +930,8 @@ export class Stage {
     this.backBtn = h('button', { class: 'btn sm ghost', title: 'Step back: undo the last step, clock cycle or input change', onclick: () => this.back() },
       icon('stepBack', 14), 'Back') as HTMLButtonElement;
     c.append(this.backBtn);
-    if (this.sim?.kind === 'gate') {
-      c.append(h('button', { class: 'btn sm ghost', title: 'Advance one gate delay', onclick: () => this.stepOnce() }, icon('step', 14), 'Step'));
+    if (this.sim?.kind === 'gate' || this.relayTime) {
+      c.append(h('button', { class: 'btn sm ghost', title: this.relayTime ? 'Advance one relay step (every armature follows its coil)' : 'Advance one gate delay', onclick: () => this.stepOnce() }, icon('step', 14), 'Step'));
     }
     c.append(h('button', { class: 'btn sm ghost', title: 'Power-cycle the circuit', onclick: () => this.powerCycle() }, icon('reset', 14), 'Reset'));
     c.append(this.status);
@@ -1021,8 +1027,11 @@ export class Stage {
       msg = this.lateCount
         ? `period ${this.period}: ${this.lateCount} edge${this.lateCount > 1 ? 's' : ''} came while the logic was still switching`
         : `period ${this.period}: logic settled before every edge`;
-    } else if (sim.unstable) msg = 'race detected: resolved (metastability)';
+    } else if (sim.unstable && this.relayTime) msg = 'oscillating: the relays never settle';
+    else if (sim.unstable) msg = 'race detected: resolved (metastability)';
+    else if (busy && this.relayTime) msg = `switching… relay step ${sim.time - this.changeStart}`;
     else if (busy) msg = `propagating… t = ${sim.time - this.changeStart}`;
+    else if (this.lastSettle !== null && this.relayTime) msg = `settled in ${this.lastSettle} relay step${this.lastSettle === 1 ? '' : 's'}`;
     else if (this.lastSettle !== null && sim.kind === 'gate') msg = `${this.clockPort() && this.cycles ? 'clock edge ' : ''}settled in ${this.lastSettle} gate delay${this.lastSettle === 1 ? '' : 's'}`;
     else msg = sim.kind === 'switch' ? 'switch level: solved instantly' : 'settled';
     const warn = sim.unstable || (!!this.period && this.lateCount > 0);

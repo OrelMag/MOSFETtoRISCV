@@ -42,6 +42,16 @@
 // conducts only while the charge is below FG_READ; at the pass voltage (vp = 1) it always conducts
 // (NAND strings). A rising pgm with g = 1 and the drain at 0 adds FG_STEP of charge (one program
 // pulse: programming is program, verify, repeat); a rising ers removes it all (erase).
+//
+// Relays (prologue P1). prim 'relay' (terminals: the coil's ends a, b, then per pole c, no, nc) is a coil and
+// changeover contacts. The coil is a resistor between its ends (strength 1), so a line that only a coil reaches is
+// pulled to 0 through it: relay logic's "an open line is 0". Its contacts are switches at the strongest transistor
+// strength (metal on metal), conducting both ways, driven not by a net but by the armature: no–c closes while it
+// is operated, nc–c while it is released. The armature moves only at a relay step (one operate time, about 8 ms):
+// every relay takes the state its coil had (current flowing: its ends at different values) at once, then the
+// contacts are solved again. So a carry running through contacts settles within a step, and a coil fed through its
+// own break contact oscillates with a period of two steps. time counts relay steps; step() takes one, settle()
+// takes them until no coil disagrees with its armature (an oscillator stops after RELAY_SETTLE_MAX and is unstable).
 
 import { matchNets, sharedInputs } from './carry';
 import { findNode, type FlatDesign } from './flatten';
@@ -53,7 +63,8 @@ import { pack, unpack } from './values';
 export class SwitchSim implements Sim {
   readonly kind = 'switch' as const;
   readonly design: FlatDesign;
-  readonly time = 0;
+  /** Relay steps taken (see the header); 0 for a design without relays. */
+  time = 0;
   unstable = false;
   evaluations = 0;
   onTrace?: (net: number, value: Bit, time: number) => void;
@@ -85,6 +96,10 @@ export class SwitchSim implements Sim {
   private readonly fgs: number[];
   private fgQ: Float64Array;
   private fgPrev: Uint8Array;
+  /** Relay leaves, their index by leaf, and each one's armature: B0 released, B1 operated, BX unknown. */
+  private readonly relays: number[];
+  private readonly relayOf = new Map<number, number>();
+  private relayOp: Uint8Array;
 
   constructor(design: FlatDesign) {
     this.design = design;
@@ -98,6 +113,9 @@ export class SwitchSim implements Sim {
     this.fgQ = new Float64Array(this.fgs.length);
     this.fgPrev = new Uint8Array(this.fgs.length);
     this.behaviors = design.leaves.flatMap((l, li) => (l.kind === 'behavior' ? [li] : []));
+    this.relays = design.leaves.flatMap((l, li) => (l.kind === 'relay' ? [li] : []));
+    this.relays.forEach((li, k) => this.relayOf.set(li, k));
+    this.relayOp = new Uint8Array(this.relays.length).fill(B0);
     this.state = design.leaves.map((l) => l.def.behavior?.init?.());
     for (const p of design.root.def.ports) {
       if (p.dir === 'in') {
@@ -138,6 +156,48 @@ export class SwitchSim implements Sim {
     if (k < 0) return;
     this.fgQ[k] = Math.min(1, Math.max(0, q));
     this.dirty = true;
+  }
+
+  /** Does the design have relays (then time counts relay steps)? */
+  get hasRelays(): boolean {
+    return this.relays.length > 0;
+  }
+  /** A relay leaf's armature (B0 released, B1 operated, BX unknown), or undefined if the leaf is not a relay. */
+  relayState(leaf: number): Bit | undefined {
+    const k = this.relayOf.get(leaf);
+    return k === undefined ? undefined : (this.relayOp[k] as Bit);
+  }
+  /** Current through a relay's coil now (B1 yes, B0 no, BX unknown): its armature follows at the next relay step. */
+  relayEnergized(leaf: number): Bit | undefined {
+    const k = this.relayOf.get(leaf);
+    return k === undefined ? undefined : this.energized(k);
+  }
+  private energized(k: number): Bit {
+    const [a, b] = this.design.leaves[this.relays[k]].terminals!;
+    const va = this.val[a], vb = this.val[b];
+    if ((va === B0 || va === B1) && (vb === B0 || vb === B1)) return va !== vb ? B1 : B0;
+    return va === BX || vb === BX ? BX : B0;
+  }
+  /** Is some armature about to move (its coil disagrees with it)? */
+  private relayPending(): boolean {
+    for (let k = 0; k < this.relays.length; k++) if (this.energized(k) !== this.relayOp[k]) return true;
+    return false;
+  }
+  /** One relay step: every armature takes its coil's state at once, then the contacts are solved again. False if none moved. */
+  relayStep(): boolean {
+    let moved = false;
+    for (let k = 0; k < this.relays.length; k++) {
+      const e = this.energized(k);
+      if (e !== this.relayOp[k]) {
+        this.relayOp[k] = e;
+        moved = true;
+      }
+    }
+    if (!moved) return false;
+    this.time++;
+    this.dirty = true;
+    this.settleNow();
+    return true;
   }
 
   /**
@@ -191,10 +251,12 @@ export class SwitchSim implements Sim {
     return this.state[leaf];
   }
   busy(): boolean {
-    return this.dirty;
+    return this.dirty || (this.relays.length > 0 && this.relayPending());
   }
   reset(mode?: PowerOnMode): void {
     this.state = this.design.leaves.map((l) => l.def.behavior?.init?.(mode));
+    // springs hold every armature released while the power is off, whatever the mode
+    this.relayOp.fill(B0);
     this.dirty = true;
     this.settle();
   }
@@ -228,6 +290,12 @@ export class SwitchSim implements Sim {
       const s = prev.leafState(o.leafIndex), c = l.def.behavior!.carry;
       this.state[li] = c && s !== undefined ? c(s, !!opts.known) : cloneState(s);
     }
+    // relays at the same path keep their armature
+    if (prev instanceof SwitchSim) this.relays.forEach((li, k) => {
+      const o = findNode(prev.design.root, this.design.leaves[li].node.path);
+      const pk = o?.leafIndex === undefined ? undefined : prev.relayOf.get(o.leafIndex);
+      if (pk !== undefined) this.relayOp[k] = prev.relayOp[pk];
+    });
     this.dirty = true;
     this.settle();
   }
@@ -236,6 +304,7 @@ export class SwitchSim implements Sim {
     const st: SwitchState = {
       val: this.val.slice(), conducting: this.conducting.slice(), shorted: this.shorted.slice(),
       lv: this.lv.slice(), senseDec: this.senseDec.slice(), fgQ: this.fgQ.slice(), fgPrev: this.fgPrev.slice(),
+      relayOp: this.relayOp.slice(), time: this.time,
       inputs: new Map([...this.inputs].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v])),
       state: this.state.map(cloneState),
       unstable: this.unstable, evaluations: this.evaluations, dirty: this.dirty,
@@ -252,6 +321,8 @@ export class SwitchSim implements Sim {
     this.senseDec.set(s.senseDec);
     this.fgQ.set(s.fgQ);
     this.fgPrev.set(s.fgPrev);
+    this.relayOp.set(s.relayOp);
+    this.time = s.time;
     this.inputs = new Map([...s.inputs].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v]));
     this.state = s.state.map(cloneState);
     this.unstable = s.unstable;
@@ -276,13 +347,26 @@ export class SwitchSim implements Sim {
     this.dirty = true;
   }
 
+  /** Solve after a change; then each call is one relay step. True while an armature is still to move. */
   step(): boolean {
-    if (!this.dirty) return false;
-    this.settle();
-    return false;
+    if (this.dirty) {
+      this.settleNow();
+      return this.relays.length > 0 && this.relayPending();
+    }
+    return this.relays.length > 0 && this.relayStep() && this.relayPending();
   }
 
+  /** Solve, then take relay steps until every armature agrees with its coil (see the header). */
   settle(): void {
+    this.settleNow();
+    if (!this.relays.length) return;
+    for (let n = 0; n < RELAY_SETTLE_MAX && this.relayStep(); n++);
+    // still moving: it oscillates (a coil fed through its own break contact)
+    if (this.relayPending()) this.unstable = true;
+  }
+
+  /** Solve the node values for the inputs and armatures now (no relay moves). */
+  private settleNow(): void {
     this.settleOnce();
     // a program or erase pulse changes a threshold: settle again with it
     for (let i = 0; i < 4 && this.fgPulses(); i++) {
@@ -391,13 +475,27 @@ export class SwitchSim implements Sim {
       return srcLv.length - 1;
     };
     // Conducting elements: transistors (switched by their gate) and resistors (always on).
-    const fets: { li: number; g: number; a: number; b: number; nmos: boolean; s: number; fg?: number; vp?: number }[] = [];
+    const fets: { li: number; g: number; a: number; b: number; nmos: boolean; s: number; fg?: number; vp?: number; relay?: number; when?: number }[] = [];
     const ress: { a: number; b: number; s: number }[] = [];
     leaves.forEach((l, li) => {
       if (l.kind === 'res' || l.kind === 'dep') {
         const [a, b] = l.terminals!;
         ress.push({ a: term(a), b: term(b), s: level(l.def.strength ?? 1) });
         this.conducting[li] = 1;
+        return;
+      }
+      if (l.kind === 'relay') {
+        const t = l.terminals!, k = this.relayOf.get(li)!;
+        // the coil: a resistor between its ends, the load that pulls an undriven line to 0
+        ress.push({ a: term(t[0]), b: term(t[1]), s: level(1) });
+        // each pole: c–no closes while operated, c–nc while released
+        const s = level(l.def.strength ?? 4);
+        for (let p = 2; p + 2 < t.length; p += 3) {
+          fets.push({ li, g: -1, a: term(t[p]), b: term(t[p + 1]), nmos: true, s, relay: k, when: B1 });
+          fets.push({ li, g: -1, a: term(t[p]), b: term(t[p + 2]), nmos: true, s, relay: k, when: B0 });
+        }
+        const o = this.relayOp[k];
+        this.conducting[li] = o === B1 ? 1 : o === B0 ? 0 : 2;
         return;
       }
       if (l.kind === 'fgmos') {
@@ -430,6 +528,12 @@ export class SwitchSim implements Sim {
       // conduction state from the current gate values
       const on = new Uint8Array(fets.length), maybeOn = new Uint8Array(fets.length);
       fets.forEach((f, k) => {
+        if (f.relay !== undefined) {
+          const o = this.relayOp[f.relay];
+          on[k] = o === f.when ? 1 : 0;
+          maybeOn[k] = o === f.when || o === BX ? 1 : 0;
+          return;
+        }
         const gv = val[f.g];
         let o = f.nmos ? gv === B1 : gv === B0, off = f.nmos ? gv === B0 : gv === B1;
         if (f.fg !== undefined) {
@@ -576,6 +680,8 @@ function decide(a: number, b: number, offset: number): number {
 
 /** Solver levels (see the header): sources, the weakest transistor, stored charge. */
 const LV_SOURCE = 6, LV_FET = 3, LV_CHARGE = 1;
+/** Relay steps settle() takes at most: a relay circuit still moving after them oscillates. */
+export const RELAY_SETTLE_MAX = 64;
 /** Charge a program pulse adds to a floating gate, and the charge above which it no longer conducts at the read voltage. */
 export const FG_STEP = 0.2, FG_READ = 0.3;
 /** A source of level ½ (the VDD/2 rail): an X as a bit. */
@@ -613,5 +719,6 @@ class UF {
 
 interface SwitchState {
   val: Uint8Array; conducting: Uint8Array; shorted: Uint8Array; lv: Float64Array; senseDec: Int8Array; fgQ: Float64Array; fgPrev: Uint8Array; inputs: Map<string, number | Bit[]>; state: unknown[];
+  relayOp: Uint8Array; time: number;
   unstable: boolean; evaluations: number; dirty: boolean;
 }

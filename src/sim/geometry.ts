@@ -120,6 +120,20 @@ export function symbolGeom(def: ComponentDef): SymbolGeom {
     ports[a.name] = { pos: [0, 2], exit: 'left' };
     ports[en.name] = { pos: [2, 0], exit: 'up' };
     ports[outs[0].name] = { pos: [4, 2], exit: 'right' };
+  } else if (k === 'relay') {
+    // ports in order: the coil's ends a (left), b (down, usually to GND); then per pole c (up), no, nc (down): the coil
+    // on the left, each pole a column to its right, the break contact (nc) left of the make contact (no) under it
+    const [a, b, ...poles] = def.ports;
+    const n = poles.length / 3;
+    g = { w: 3 * n + 2, h: 4, ports };
+    ports[a.name] = { pos: [0, 1], exit: 'left' };
+    ports[b.name] = { pos: [1, 4], exit: 'down' };
+    for (let i = 0; i < n; i++) {
+      const x = poleX(i);
+      ports[poles[3 * i].name] = { pos: [x, 0], exit: 'up' };
+      ports[poles[3 * i + 1].name] = { pos: [x + 1, 4], exit: 'down' };
+      ports[poles[3 * i + 2].name] = { pos: [x - 1, 4], exit: 'down' };
+    }
   } else if (k === 'vdd') {
     g = { w: 2, h: 1, ports };
     ports[def.ports[0].name] = { pos: [1, 1], exit: 'down' };
@@ -146,6 +160,9 @@ export function symbolGeom(def: ComponentDef): SymbolGeom {
   cache.set(def, g);
   return g;
 }
+
+/** x of a relay symbol's pole i: its common contact on top, nc one unit left and no one unit right below it. */
+export const poleX = (i: number) => 4 + 3 * i;
 
 const MIRROR: Record<ExitDir, ExitDir> = { left: 'right', right: 'left', up: 'up', down: 'down' };
 
