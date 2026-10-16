@@ -9,6 +9,7 @@ import { SwitchSim } from '../sim/switchsim';
 import { needsSwitchLevel } from '../sim/harness';
 import { completeEdge, type Edge, riseEdge, stepEdge } from '../sim/edge';
 import { PowerMeter } from '../sim/power';
+import { RELAY_STEP_MS } from '../phys/relay';
 import { stats } from '../sim/stats';
 import { analyzeTiming } from '../sim/timing';
 import type { PowerOnMode, Sim, SimState } from '../sim/sim';
@@ -1032,7 +1033,7 @@ export class Stage {
     else if (sim.unstable) msg = 'race detected: resolved (metastability)';
     else if (busy && this.relayTime) msg = `switching… relay step ${sim.time - this.changeStart}`;
     else if (busy) msg = `propagating… t = ${sim.time - this.changeStart}`;
-    else if (this.lastSettle !== null && this.relayTime) msg = `settled in ${this.lastSettle} relay step${this.lastSettle === 1 ? '' : 's'}`;
+    else if (this.lastSettle !== null && this.relayTime) msg = `settled in ${this.lastSettle} relay step${this.lastSettle === 1 ? '' : 's'} (${(this.lastSettle * RELAY_STEP_MS).toFixed(1)} ms)`;
     else if (this.lastSettle !== null && sim.kind === 'gate') msg = `${this.clockPort() && this.cycles ? 'clock edge ' : ''}settled in ${this.lastSettle} gate delay${this.lastSettle === 1 ? '' : 's'}`;
     else msg = this.relayTime ? 'relays at rest' : sim.kind === 'switch' ? 'switch level: solved instantly' : 'settled';
     const warn = sim.unstable || (!!this.period && this.lateCount > 0);

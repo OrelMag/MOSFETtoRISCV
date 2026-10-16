@@ -584,7 +584,7 @@ with punch cards.
 - ⏳ Triode: the grid controls the plate current, one way only, with a plate resistor as the pull-up (ratioed
   logic, which `switchsim.ts` already models with its resistor strength); tube inverter and NOR, cathode follower,
   the Eccles–Jordan flip-flop; microseconds per operation, watts per tube
-- ⏳ Each device up close in 3D, live, on lumped physics (as chapter 1's cross-section opens the MOSFET; chapter 25's
+- 🚧 Each device up close in 3D, live, on lumped physics (relay ✅: src/phys/relay.ts, src/gl renderer, P1 step 1; triode next) (as chapter 1's cross-section opens the MOSFET; chapter 25's
   renderer, cylinders and glow added). Relay: coil current rising with L / R (and the flyback spike at turn-off), pull
   ∝ (N·I)² / gap² against the return spring, the armature a mass on a spring, so pull-in time, pull-in / drop-out
   hysteresis and contact bounce come out of the model. Triode: a heated cathode (Richardson emission, seconds of

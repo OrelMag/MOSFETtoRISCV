@@ -643,6 +643,15 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  (widgets/pipegrid), the system CPU's I/O, registers, fcsr, memory, retired; Run to halt,
                  Step, Slow (instructions per second), Reset, Edit program; the multi-core view),
                  opened by itself for a complete CPU; CPU props section
+src/phys/      lumped physics models behind the prologue's close-ups (DOM-free): relay.ts (a 24 V telephone relay: saturating
+               flux, gap-dependent reluctance, armature and blade with a compliant, bouncing contact, quench resistor; relaySim,
+               relayStatic (pull-in / drop-out), relaySummary; RELAY_STEP_MS: the settled time, the relay step's length
+               (tests/phys-relay.test.ts holds it to the model), RELAY_COIL_POWER)
+src/gl/        the hand-written WebGL2 renderer (its own lazy chunk, no library): instanced meshes (boxMesh, cylinderMesh; 18
+               floats per instance: position, scale, quaternion, RGBA, emissive + specular), transparent batches, frames
+               on demand, OrbitCamera + orbit controls, context loss recovery; createRenderer returns null without WebGL2.
+               widgets/relay3d.ts (relayCloseup: a placeholder, then imports relay3dview.ts: the relay in 3D on
+               phys/relay.ts, sliders, plots, an SVG fallback without WebGL2)
 src/gfx/       raster16.ts: the campaign's (7-bit vertices, 32 × 32, RGB565; Edge16 / Walk16 models, rasterize16 with the
                19-cycle set-up, draw16, rgb565); raster.ts: the rasterizer's reference model (setup, rasterize: pixel writes
                with their cycles, zPlane / zAt / zStore, blend332, RefFrame: a framebuffer and depth buffer drawn as the

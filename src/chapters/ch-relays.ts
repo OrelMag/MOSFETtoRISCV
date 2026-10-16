@@ -1,8 +1,12 @@
 import { RELAY_BUZZER, RELAY_LATCH, RELAY_NAND, RELAY_NOT, RELAY_XOR, relayAdder, rca } from '../lib';
+import { RELAY_COIL_POWER, RELAY_STEP_MS, relayStatic } from '../phys/relay';
 import { logicDepth, stats } from '../sim/stats';
+import { relayCloseup } from '../widgets/relay3d';
 import type { Chapter } from './types';
 
 const ADD4 = relayAdder(4);
+const PULL = relayStatic();
+const ms = (x: number) => x.toFixed(1);
 
 export const chRelays: Chapter = {
   id: 'relays', num: 0, prologue: 'P1', title: 'Relays', level: 'Electromechanical',
@@ -13,13 +17,34 @@ export const chRelays: Chapter = {
       body: `
         <p>Before transistors, the switch was a <strong>relay</strong>: a coil around an iron core, and a hinged iron
         <strong>armature</strong> held off the core by a spring. Current through the coil magnetizes the core, the
-        armature is pulled in, and the springs it carries move: each <strong>changeover contact</strong> leaves its
-        <em>break</em> contact (nc, normally closed) and touches its <em>make</em> contact (no, normally open). Switch
-        the current off and the spring pulls everything back.</p>
-        <p>Below, one relay drawn as a schematic symbol: the coil on the left, its contact on the right. The blade sits
-        on nc; drive <code>a</code> to 1 and it moves to no. It does not move at once: the coil lights up first, and the
-        blade follows one <strong>relay step</strong> later, the few milliseconds the armature takes to travel.</p>
-        <div class="try">Toggle <code>a</code>. Step shows the coil carrying current a whole step before the contact moves.</div>`,
+        armature is pulled in, and the stud it carries moves the contact springs: the <strong>common</strong> leaves
+        its <em>break</em> contact (NC, normally closed) and touches its <em>make</em> contact (NO, normally open).
+        Switch the current off and the spring pulls everything back.</p>
+        <p>This is a telephone relay on 24 V, on a lumped model: the coil's current rises with L / R and L grows as
+        the gap closes (the dip in the current is the armature moving); the pull goes as (N·I)² / gap² against a
+        preloaded spring; the contact blade is a mass that strikes and bounces. It closes at
+        ${ms(PULL.pull ?? 0)} V and opens only below ${ms(PULL.drop ?? 0)} V, and it is closed for good
+        ${ms(RELAY_STEP_MS)} ms after the current is switched on, bounces included. That time is the
+        <strong>relay step</strong> the rest of this chapter counts in.</p>
+        <div class="try">Drag the supply below the pull-in voltage, and play the switch-off: the coil's current has to
+        go somewhere.</div>`,
+      widget: () => relayCloseup(),
+      challenge: {
+        kind: 'quiz', question: 'Why does a relay machine\'s clock wait for the settled time and not for the first touch?',
+        options: ['The contact bounces: until it stops, the line it switches flickers between 0 and 1', 'The coil keeps heating up', 'The first touch has too little current'],
+        answer: 0,
+        explain: 'The blade strikes the fixed contact and bounces off three times before it stays. Anything reading that line during the bounce sees a burst of pulses; a relay counter would count them all.',
+      },
+    },
+    {
+      title: 'The relay as a symbol',
+      body: `
+        <p>In a schematic a relay is its coil (left) and its contacts (right), joined by a dashed line for the
+        armature. The blade rests on NC; drive <code>a</code> to 1 and it moves to NO. Not at once: the coil lights up
+        first, and the blade follows one relay step later.</p>
+        <p>Here the relay's break contact connects VDD to <code>y</code>: an inverter. Every relay circuit in this
+        chapter moves in relay steps, all relays together, and the status line counts them.</p>
+        <div class="try">Toggle <code>a</code>, then use Step: the coil carries current a whole step before the contact moves.</div>`,
       scene: () => ({ root: RELAY_NOT, inputs: { a: 0 }, animate: true }),
     },
     {
@@ -111,7 +136,7 @@ export const chRelays: Chapter = {
         <div class="try">Switch <code>en</code> on and watch it run. The status line says it never settles.</div>`,
       scene: () => ({ root: RELAY_BUZZER, inputs: { en: 0 }, animate: true }),
       challenge: {
-        kind: 'quiz', question: 'A relay step takes about 8 ms. At what frequency does the buzzer run?',
+        kind: 'quiz', question: `A relay step takes ${ms(RELAY_STEP_MS)} ms. At what frequency does the buzzer run?`,
         options: ['About 60 Hz', 'About 120 Hz', 'About 8 Hz'], answer: 0,
         explain: 'Two steps per period: 16 ms, about 60 Hz. You hear it as a hum. A CMOS ring oscillator of three inverters runs at gigahertz.',
       },
@@ -119,8 +144,8 @@ export const chRelays: Chapter = {
     {
       title: 'What it costs',
       body: `
-        <p>One relay here (a telephone relay on 24 V) draws <strong>1.44 W</strong> while its coil is on and takes about
-        <strong>8 ms</strong> to move and stop bouncing. It weighs grams and fills a fist. A CMOS NAND switches in about
+        <p>One relay here (a telephone relay on 24 V) draws <strong>${RELAY_COIL_POWER.toFixed(2)} W</strong> while its
+        coil is on and takes <strong>${ms(RELAY_STEP_MS)} ms</strong> to move and stop bouncing. It weighs grams and fills a fist. A CMOS NAND switches in about
         25 ps on femtojoules and is a few square micrometres of silicon.</p>
         <p>The Z3: 2 600 relays, about 4 kW, about a tonne, 5 additions a second, its program read from punched film.
         The relay adder above beats the CMOS ripple adder in <em>steps</em> (1 against ${logicDepth(rca(32))} at 32 bits),
