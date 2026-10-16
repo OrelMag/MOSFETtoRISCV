@@ -28,6 +28,8 @@ export * from './storage';
 export * from './cells';
 export * from './dram';
 export * from './flash';
+export * from './axi';
+export * from './soc';
 export * from './cache';
 export * from './multicycle';
 export * from './fpu';

@@ -20,12 +20,13 @@ import { chAppendixDoom } from './ch-doom';
 import { chDram } from './ch-dram';
 import { chMemCtrl } from './ch-memctrl';
 import { chFlash } from './ch-flash';
+import { chBus } from './ch-bus';
 import type { Chapter, FutureChapter } from './types';
 
 export const chapters: Chapter[] = [
   chMap, chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
   chAlu, chRegfile, chIsa, chSingleCycle, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chMulticycle, chFloat, chMulticore, chSilicon, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
-  chDram, chMemCtrl, chFlash,
+  chDram, chMemCtrl, chFlash, chBus,
   // the appendix: after the journey, lettered
   chAppendix6502, chAppendixDoom,
 ];

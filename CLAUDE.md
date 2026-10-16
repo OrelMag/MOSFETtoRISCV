@@ -195,7 +195,8 @@ src/lib/       the component library (registered in `registry` via define())
   lsu.ts         STORE_ALIGN, LOAD_EXTRACT, bankedMemory(k) (byte / halfword access)
   system.ts      SYS_DECODE (illegal-instruction detection), CSR_UNIT, TRAP_UNIT, IO_UNIT,
                  systemCpu(program, { m }): the complete RV32I(M) + Zicsr + M-mode traps / interrupts + MMIO;
-                 with m the CPU gains a `retire` output (low while a divide stalls it)
+                 with m the CPU gains a `retire` output (low while a divide stalls it); { bus } (not with m): busMemUnit
+                 in place of the data memory, the AXI master ports at the CPU's pins, retire
   cells.ts       NMOS_STRONG / PMOS_WEAK, SRAM_CELL (6T), SRAM_COLUMN, DRAM_CELL (switch level)
   arrays.ts      WRITE_DRIVER, SENSE_AMP (latch type), sramColumn(R), sramArray(R, C): switch-level SRAM with periphery
   dramctrl.ts    chapter 33: dramCtrl(cfg) (CtrlModel in gates, tests/dramctrl.test.ts compares every output every cycle),
@@ -204,6 +205,16 @@ src/lib/       the component library (registered in `registry` via define())
                  request, then fill, until done); singleCycleCpu / pipelinedCpu({ dram }); CPUs sc-wb2-dram, sc-wb2-dramc,
                  pipe-wb2-dram (tests/verify/cpus.ts; BitSim lanes give a seq leaf a state each: run.ts laneLeaves; their
                  benchmark rows are offChip: kept out of the cost comparisons)
+  axi.ts         chapter 35's bus (AXI-lite-shaped: AW + W together, B, AR, R; valid / ready; one transaction at a time):
+                 AXI_PORT (a load / store → a transaction, done), axiBus(M, codes) (arbiterN round robin, decode on the top
+                 nibble, the last slave the default; grant and slave held to the response), axiRam(k, wait) (four bigRam byte
+                 lanes, wait states), AXI_DEFAULT, DMA_ENGINE (registers src / dst / len / ctrl as a slave, a copying master,
+                 irq), axiFlash(image) (a FlashDevice leaf: page buffer, a page read on a miss), busBench(image, k, wait),
+                 busMemUnit(imemK) (the system CPU's memory over the bus: boot ROM below 4·2^imemK, the rest fetched into an
+                 instruction register, NOP meanwhile; stall; irqOk between accesses; bus side bus_*); BUS_PARTS registered
+  soc.ts         busComputer(program, flashImage, { imemK, ramK, ramWait }) (systemCpu({ bus }) and DMA_ENGINE as masters;
+                 RAM at 0, flash 0x1000_0000, DMA 0x4000_0000; DMA irq → CPU irq), chapterComputer / CHAPTER_COMPUTER
+                 (bus/programs.ts: a boot ROM that DMA-copies a program from flash to RAM 0x400 and jumps)
   flash.ts       chapter 34's flash at switch level: FG_CELL (prim 'fgmos'), vtOf / V_READ, norArray(R, C) (cells between
                  bit lines and a source line held high while programming), nandBlock(S, N) (strings with string / ground
                  selects, the other rows at the pass voltage); per column a pull-up, an output inverter and a NOR-gated
@@ -321,11 +332,16 @@ src/dram/      timing.ts: DDR4-3200 in our cycles (CLOCK_NS = the single-cycle C
                open / closed page, XOR bank hash; transfer / idle drive both); workload.ts: a program's line requests through
                the CPUs' 2-way write-back cache model, price() on the models (equal to the gate-level CPUs to the cycle);
                schedule.ts: FCFS against FR-FCFS over a queue (chapter 33's last step)
+src/bus/       model.ts: BusMemory / BusModel (the computer's map for the golden model: RAM, flash, DMA registers whose
+               copy is instant; ISS({ bus }) fetches beyond its ROM and loads / stores through it); programs.ts: chapter
+               35's boot ROM and payload
 src/flash/     model.ts: FlashDevice (program 1 → 0 once per erase, block erase, FLASH_TIMES 64 / 512 / 4096 cycles, wear-out
                after `endurance` erases, factory bad blocks) and Ftl (page map, writes out of place, greedy garbage collection
                when free blocks are down to the reserve, dynamic wear levelling, bad blocks skipped, write amplification);
                randomWrites (seeded, optional hot set)
-src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...); flash.ts: chapter 34's flash panel
+src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...); bus.ts: chapter 35's panels
+               (busBenchScene: reads / writes / a DMA copy on the bus bench, a per-cycle trace of handshakes and grants;
+               busComputerScene: the computer booting from flash, console, LEDs, memory map); flash.ts: chapter 34's flash panel
                (flashScene: the NOR / NAND array read, programmed pulse by pulse with verify, erased; thresholds per cell and
                an Id–Vg plot), ftlWidget (4 blocks × 4 pages), wearWidget (write amplification, erase counts, wear-out); dram.ts: chapter 32's DRAM panel
                (dramScene: the 4 × 4 array driven through its protocol, every cell's charge, bit-line ΔV, the latched row,
