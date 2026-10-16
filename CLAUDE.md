@@ -352,7 +352,8 @@ src/m6502/     Appendix A's 6502 (DOM-free): isa.ts (151 documented opcodes, mod
                on its pins, cycle by cycle; registers read by name), verify.ts (lockstep with the ISS; StepRunner: a
                SingleStepTests case set up by a loader program). Tests: tests/m6502-*.test.ts (the SingleStepTests sample
                is checked in: tests/m6502/; scripts/m6502/fetch-tests.mjs caches the full suite and Klaus's binary, used
-               when present); scripts/m6502/soak.ts (every sample case, interrupts, Klaus for N cycles, on the transistors)
+               when present); scripts/m6502/soak.ts (every sample case, interrupts, Klaus for N cycles, on the transistors);
+               sbprograms.ts (the sandbox 6502 computer's map MAP6502 and its ROM samples)
 src/lib/m6502/ the chip at transistor level (lib/nmos.ts: DEP, NINV, nnor(n), nnand(n)): cells.ts (naoi(expr) complex
                gates, PULL2 bus driver, DLAT dynamic latch, SCELL refreshed storage), ckt.ts / logic.ts (blocks written
                as logic, laid out on a grid with every net a label; bus pins as named bits), chip.ts (the blocks:
@@ -360,7 +361,12 @@ src/lib/m6502/ the chip at transistor level (lib/nmos.ts: DEP, NINV, nnor(n), nn
                flags, buses; controlUnit() above datapath() on m6502()'s hand-drawn top level). Its rules: a storage node
                loads in one phase and refreshes in the other, whatever φ2 needs from the PLA is latched in φ1, a pass
                transistor only takes a driven node (never a stored charge), state across cycles is master–slave with
-               its next value computed in φ1. demo.ts: MS_BIT, BUS_LINE (the chapter's first steps)
+               its next value computed in φ1. demo.ts: MS_BIT, BUS_LINE (the chapter's first steps). core.ts: the sandbox's
+               part m6502_core: the ISS behind synchronous pins (a bus cycle per clock: a / rw / sync / dout just after a
+               rising edge, din / resb / irqb / nmib taken just before the next; dout = the last byte written, held, so no
+               output follows din and a memory map around it is no loop: the cycle engine runs it), its structure the
+               chip behind pin glue (pinsBlock); opened, the chip is set up at the last instruction boundary by a loader
+               program and replays the cycles since (InsideSeed.sim)
 src/isa4/      the 4-bit CPU's ISA: isa4.ts (the 4004's opcode map in 16-bit words: decode4 / disasm4 / fields4; words the
                table does not name run as NOP), asm4.ts, iss4.ts (golden model; halts on a JUN to itself), programs4.ts
 src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui/pages/sandbox.ts, its own chunk;
@@ -412,7 +418,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   files.ts       shareRoute / shareUrl, download names, import summaries, duplicateChip / deleteChip
   derive.ts      circuitMode, deriveBehavior (a combinational transistor chip → gate-level brick;
                  refused when an output can float: Z is not X on a shared bus)
-  program.ts     ROM program text (asm / rv16 / cpu4 / hex, or 'isa' with the ROM's own table) → words
+  program.ts     ROM program text (asm / rv16 / cpu4 / 6502 / hex, or 'isa' with the ROM's own table) → words; 6502:
+                 bytes folded into the ROM's 2^k (byte A → word A mod 2^k; a collision is an error), lines with `at` (the CPU
+                 address) and `op` (an instruction's first byte)
   memory.ts      romImage (problems on source lines), romListing / romIndex (the row the circuit reads),
                  asm ↔ hex conversion, ROM_SAMPLES; readRam (live words; a large RAM's from its leaf state),
                  ramWithInit (initial contents as dotted power-on hints into the flip-flops' latches; > 2^6 words:
@@ -424,7 +432,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  devices' buses x / y / byte), a 64 × 64 RGB332 screen at 0xC000_0000 + 256·y + 4·x on the top level,
                  a Devices chip (devicesChip: console / LEDs / switches at the ISS's IO addresses), a halt part on
                  `j .`; word accesses only (no lb / sb). The 4-bit CPU (example4.ts): docFromDef's drawing of lib/cpu4's computer,
-                 each block a user chip, the ROM a cpu4 ROM part, the pins swapped for a TEST key, switches, hex digits, LEDs, halt
+                 each block a user chip, the ROM a cpu4 ROM part, the pins swapped for a TEST key, switches, hex digits, LEDs, halt.
+                 The 6502 computer (example6502.ts): the part, a 4K ROM in 6502 assembly, memory6502Chip (decoder, 2K RAM,
+                 read muxes), the Devices chip, a halt detector (the last SYNC address = this one); drawn with Sheet (pointer
+                 taps two units out from a port; a user chip's box as compile.ts makes it: Example.build gets the sub-chips)
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run;
@@ -486,6 +497,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  drawer's lane view (every thread's registers, the issuing warp on the listing)
   isaops.ts      custom ISAs in a workspace: ws.isas the tables, each ROM on one holds a copy (romRef.isa); isaList, copyIsa,
                  putIsa (an edit reaches every ROM that holds it), deleteIsa; isaui.ts the ISA editor dialog (File ▸ Instruction sets…)
+  m6502mon.ts    detect6502 (a placed m6502_core, a ROM in 6502 assembly, a RAM of bytes, here or one chip down),
+                 M6502Monitor: follows the part (it is the cycle-exact model: nothing compared): the bus read before each
+                 edge, an instruction from one SYNC to the next (its bytes, stores, cycles; IRQ / NMI sequences), halted on
+                 a jump to itself; the CPU drawer's 6502 view (listing at CPU addresses, A X Y S P PC, the bus, the RAM)
   cpu4mon.ts     detectCpu4 (a ROM in 4-bit assembly, or on a custom table: followed, not checked), Cpu4Monitor: Iss4 stepped at every rising edge with the TEST / switch
                  values the hardware sampled, every register compared (CPU4_STATE paths; elsewhere: followed, not checked);
                  cpu4Use: the blocks an instruction uses (the drawer's marks)

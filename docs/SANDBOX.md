@@ -163,14 +163,17 @@ resistor over stored charge.
   words, written in **Edit program…**: a code editor with highlighting, errors in the gutter as
   you type, and a listing (address · word · disassembly). Apply is one undo step. While the
   circuit runs, the listing and the editor follow the address the ROM is reading.
-- **ROM (words)**: 2^k words of 8, 16 or 32 bits, addressed by word.
+- **ROM (words)**: 2^k words of 8, 16 or 32 bits, addressed by word. Its Language can also be RV16, the 4-bit
+  CPU's assembly or **6502 assembly** (8-bit words): a 6502 program folds into the ROM's 2^k bytes, byte A going to
+  word A mod 2^k (a ROM decodes only its low address bits and repeats), so code at `$F000` and the vectors at
+  `$FFFA` fit a 4K ROM; two bytes on one word are an error on their line, and the listing shows the CPU addresses.
 - **RAM**: up to 2^6 words. The properties show its contents live, and can set **initial
   contents** applied at power-on (Apply & reset). **Ports** (2, 4 or 8, up to 1K words): a read and a write
   port per lane (`addr<i>`, `wd<i>`, a `we` bit each → `rd<i>`); every port reads in the same cycle and the
   highest port wins a word several write. The lane cores' benches use it.
 - **Examples ▸**: Fetch loop (PC, PC + 4 and a ROM, joined by a pair of `pc` pointers), a 4-bit
-  counter on a 7-segment display, Console, Screen, Computer, Shared bus, Wired-AND, Wired-OR. Each
-  loads as a new chip.
+  counter on a 7-segment display, Console, Screen, Computer, 4-bit CPU, 6502 computer, Shared bus, Wired-AND,
+  Wired-OR. Each loads as a new chip.
 - **Examples ▸ Computer**: a whole RISC-V computer. The RV32I core (the multi-core's, with a
   memory port) fetches from a 1K-word ROM; its memory port runs into a **Memory** chip (double-click
   it: the address decoder, the read multiplexer and 4K words of RAM), which hands the devices their
@@ -190,6 +193,27 @@ resistor over stored charge.
   switches' colour, and halts on `j .` (a halt part watches for it); the CPU panel checks every
   instruction, the console and the LEDs against the golden model. The ROM editor's samples include
   two more programs for it: live switches and a bouncing ball.
+- **Examples ▸ 6502 computer**: the **6502** part (Library ▸ Processor parts: the cycle-exact model of Appendix A
+  behind synchronous pins, one bus cycle per clock; double-click it for the transistor-level chip, which replays
+  what the model did), a 4K ROM in 6502 assembly, a **Memory map** chip (double-click: the decoder, 2K of RAM, the
+  read multiplexers) and the computer's **Devices** chip:
+
+  | Address | Device |
+  |---|---|
+  | `$0000–$3FFF` | RAM, 2K (repeats): the zero page, the stack in page 1 |
+  | `$4000` | console: a store prints the byte |
+  | `$4001` | LEDs: a store sets them |
+  | `$4002` | switches: a load reads them (the devices repeat every 4 bytes) |
+  | `$8000–$FFFF` | ROM, 4K (repeats): the program at `$F000`, the vectors at `$FFFA` |
+
+  A halt detector latches the address of each opcode fetch (SYNC) and stops Run when the next one is the same: a
+  JMP to itself. The program prints the Fibonacci numbers below 10 000 in decimal; the ROM's samples add hello, a
+  BCD count on the LEDs (decimal mode) and the switches to the LEDs. The part's pins: `a`, `rw`, `sync` and `dout`
+  (the byte written, held through reads) change just after a rising edge; `din`, `resb`, `irqb` and `nmib` are taken
+  just before the next one (open control lines read as inactive). The CPU panel follows it instruction by
+  instruction: the listing at the CPU addresses, A X Y S P (with the flags) and PC, the last bus cycle and which
+  cycle of the instruction it was, the RAM's non-zero bytes, and what each instruction did (registers, stores,
+  cycles). Nothing is compared: the part is the model (the transistor chip's equality with it is a test).
 - **Consoles** scroll: the wheel over a console (on the canvas, in look inside or in the Screens
   panel) goes back through its 500 lines; "↑ n lines" shows while it is scrolled up, and back at the
   bottom it follows new text again. Ctrl + wheel still zooms.

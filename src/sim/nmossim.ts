@@ -115,6 +115,8 @@ export class NmosSim implements Sim {
       const nets = design.root.ports[p.name];
       this.inputNets.set(p.name, nets);
       this.inputs.set(p.name, nets.map(() => (p.dir === 'in' ? B0 : BZ)) as Bit[]);
+      // an input starts driven at the 0 it reads as (setInput skips an unchanged bit: left at 0, it floated)
+      if (p.dir === 'in') for (const net of nets) this.src[net] = 0;
     }
     this.reset('zero');
   }

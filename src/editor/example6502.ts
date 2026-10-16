@@ -11,7 +11,7 @@ import { isError, partDef } from './parts';
 
 const NOTES_MAP = 'RAM $0000–$3FFF (2K, repeating: zero page, the stack in page 1), console $4000 (a store prints), LEDs $4001 (a store lights them), switches $4002 (a load reads them; the devices repeat every 4 bytes), ROM $8000–$FFFF (4K, repeating: the program at $F000, the vectors at $FFFA).';
 
-export const NOTES_6502 = 'A computer of 1975: the MOS 6502 (one bus cycle per clock, every cycle as the chip makes it; double-click it for its 3 510 transistors, replaying what it did), '
+export const NOTES_6502 = 'A computer of 1975: the MOS 6502 (one bus cycle per clock, every cycle as the chip makes it; double-click it for its 4 513 transistors, replaying what it did), '
   + 'a 4K program ROM in 6502 assembly (Edit program…; samples: hello, Fibonacci in decimal, a BCD count, the switches), the memory map (double-click: the decoder, 2K of RAM, the read multiplexers) and the devices. '
   + `${NOTES_MAP} The halt detector latches each opcode fetch's address (SYNC) and stops Run when the next one is the same: a JMP to itself. Run, or Run to halt in the CPU drawer.`;
 
@@ -48,13 +48,18 @@ class Sheet {
     return id;
   }
 
+  /** A pointer named `name` at `at` (its flag pointing `face`): its end, 'lbl:<id>'. */
+  label(name: string, at: Vec, face: LabelDoc['face']): string {
+    const id = `l${this.n++}`;
+    this.labels.push({ id, name, at, face });
+    return `lbl:${id}`;
+  }
+
   /** A pointer named `name` two units out from a part's port (or a pin), joined to it. */
   tap(e: string, name: string): void {
     const at = this.endAt(e);
     const d = { left: [-2, 0], right: [2, 0], up: [0, -2], down: [0, 2] }[at.exit] as Vec;
-    const id = `l${this.n++}`;
-    this.labels.push({ id, name, at: [at.pos[0] + d[0], at.pos[1] + d[1]], face: at.exit });
-    this.wire(e, `lbl:${id}`);
+    this.wire(e, this.label(name, [at.pos[0] + d[0], at.pos[1] + d[1]], at.exit));
   }
 
   private endAt(e: string): { pos: Vec; exit: 'left' | 'right' | 'up' | 'down' } {
@@ -97,17 +102,17 @@ export function memory6502Chip(id: string, name: string): ChipDoc {
   const s = new Sheet();
   s.pin('a', 'in', [0, 6], 16); s.pin('rw', 'in', [0, 17]); s.pin('dout', 'in', [0, 26], 8); s.pin('clk', 'in', [0, 34], 1, { kind: 'clock' });
   s.pin('rom', 'in', [0, 38], 8); s.pin('sw', 'in', [0, 40], 8);
-  s.pin('conWe', 'out', [56, 8]); s.pin('ledWe', 'out', [56, 10]); s.pin('din', 'out', [56, 28], 8);
+  s.pin('conWe', 'out', [60, 9]); s.pin('ledWe', 'out', [60, 11]); s.pin('din', 'out', [60, 28], 8);
 
   s.part('sa', { split: [11, 3, 1, 1] }, [8, 2]);
   s.part('sd', { split: [2, 14] }, [8, 12]);
   s.part('ramsel', { lib: 'nor' }, [24, 3], { label: 'RAM' });
-  s.part('n15', { lib: 'not' }, [16, 9]);
-  s.part('iosel', { lib: 'and' }, [24, 9], { label: 'I/O' });
+  s.part('n15', { lib: 'not' }, [16, 10]);
+  s.part('iosel', { lib: 'and' }, [24, 10], { label: 'I/O' });
   s.part('nw', { lib: 'not' }, [16, 16], { label: 'write' });
-  s.part('ramst', { lib: 'and' }, [32, 2], { label: 'RAM store' });
-  s.part('iost', { lib: 'and' }, [32, 10], { label: 'I/O store' });
-  s.part('dec', { lib: 'dec2e' }, [40, 6], { label: 'device' });
+  s.part('ramst', { lib: 'and' }, [34, 2], { label: 'RAM store' });
+  s.part('iost', { lib: 'and' }, [30, 11], { label: 'I/O store' });
+  s.part('dec', { lib: 'dec2e' }, [44, 7], { label: 'device' });
   s.part('ram', { ram: { k: 11, w: 8 } }, [14, 22], { label: 'RAM 2K × 8' });
   s.part('m1', { lib: 'mux2x8' }, [34, 24], { label: 'RAM / I/O' });
   s.part('m2', { lib: 'mux2x8' }, [44, 25], { label: 'ROM' });
@@ -121,9 +126,11 @@ export function memory6502Chip(id: string, name: string): ChipDoc {
   s.tap('ramsel.a', 'a14'); s.tap('ramsel.b', 'a15');
   s.tap('n15.a', 'a15'); s.wire('n15.y', 'iosel.a'); s.tap('iosel.b', 'a14');
   // a store: R/W low
-  s.wire('pin:rw', 'nw.a'); s.tap('nw.y', 'we');
+  s.wire('pin:rw', 'nw.a');
+  const we = s.wire('nw.y', 'iost.b', [[29, 17], [29, 14]], { name: 'we' });
+  s.wire({ wire: we, at: [22, 17] }, s.label('we', [22, 19], 'down'));
   s.tap('ramst.a', 'we'); s.wire('ramsel.y', 'ramst.b'); s.tap('ramst.y', 'ramWe'); s.tap('ram.we', 'ramWe');
-  s.wire('iosel.y', 'iost.a'); s.tap('iost.b', 'we'); s.wire('iost.y', 'dec.en');
+  s.wire('iosel.y', 'iost.a'); s.wire('iost.y', 'dec.en');
   s.wire('dec.y0', 'pin:conWe'); s.wire('dec.y1', 'pin:ledWe');
   // the RAM, and what a load reads
   s.wire('pin:dout', 'ram.din'); s.wire('pin:clk', 'ram.clk');
