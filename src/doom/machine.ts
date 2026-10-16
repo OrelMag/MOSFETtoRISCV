@@ -3,7 +3,8 @@
 // the program's side of the same map.
 //
 //   0x0000_0000  RAM, 8 MiB (data space; the instruction ROM is separate, as on all our CPUs)
-//   0x1000_0000  WAD, read only: the file's bytes (length: WADLEN)
+//   0x1000_0000  WAD, read only: the file's bytes (length: WADLEN), repeating every 32 MiB (the
+//                gate-level ROM of 2^23 words decodes no more address bits); zeros after the file
 //   0x8000_0000  the system CPU's I/O registers, (addr >>> 2) & 7: 0 CONSOLE, 1 LEDS, 2 SWITCHES,
 //                3 WADLEN, 4 MTIME, 5 MTIMECMP, 6 KEY (a read pops one event), 7 FLIP (a frame is done)
 //   0xC000_0000  frame buffer: 320 × 200 bytes, a palette index each, row-major
@@ -19,15 +20,17 @@ import type { DoomImage } from './image';
 export const SCREEN_W = 320, SCREEN_H = 200;
 export const RAM_WORDS = 1 << 21;
 export const WAD_BASE = 0x10000000, FB_BASE = 0xc0000000, PALETTE_BASE = 0xc0010000;
+/** The WAD region's span: a larger file does not fit. */
+export const WAD_SPAN = 1 << 25;
 export const REG = { WADLEN: 3, KEY: 6, FLIP: 7 } as const;
 /** Nominal clock: game milliseconds = cycles / CLOCK_KHZ (the port extends mtime to 64 bits). */
 export const CLOCK_KHZ = 40_000;
 
 export class DoomDevices {
-  /** The WAD, padded to whole words. */
+  /** The WAD over its whole region (32 MiB, zeros after the file), as bytes and as words (the gate-level WAD ROM's contents). */
   readonly wad: Uint8Array;
   readonly wadLength: number;
-  private readonly wad32: Uint32Array;
+  readonly wadWords: Uint32Array;
   /** Frame buffer (64 000 bytes from 0) and palette (from 0x10000), 128 KiB. */
   readonly fb = new Uint8Array(0x20000);
   private readonly fb16 = new Uint16Array(this.fb.buffer);
@@ -44,10 +47,11 @@ export class DoomDevices {
   onFlip: (() => void) | null = null;
 
   constructor(wad: Uint8Array) {
+    if (wad.length > WAD_SPAN) throw new Error(`the WAD is ${wad.length} bytes; the Doom computer maps at most ${WAD_SPAN} (32 MiB)`);
     this.wadLength = wad.length;
-    this.wad = new Uint8Array((wad.length + 3) & ~3);
+    this.wad = new Uint8Array(WAD_SPAN);
     this.wad.set(wad);
-    this.wad32 = new Uint32Array(this.wad.buffer);
+    this.wadWords = new Uint32Array(this.wad.buffer);
   }
 
   /** Press (true) or release a key: Doom reads it at its next tic. */
@@ -58,8 +62,7 @@ export class DoomDevices {
   /** The 32-bit word at a WAD or frame-buffer address (undefined: not ours). */
   readWord(addr: number): number | undefined {
     if (addr >>> 28 === 1) {
-      const o = addr - WAD_BASE;
-      return o < this.wad.length ? this.wad32[o >>> 2] : 0;
+      return this.wadWords[((addr - WAD_BASE) & (WAD_SPAN - 1)) >>> 2];
     }
     if (addr >= FB_BASE) return this.fb32[(addr & 0x1ffff) >>> 2];
     return undefined;

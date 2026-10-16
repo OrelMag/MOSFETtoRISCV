@@ -311,6 +311,16 @@ export class DoomPlayer {
     return true;
   }
 
+  /**
+   * The interpreter was stepped from outside (the gate window, in lock step with the gates): bring
+   * the cycle count up to date, and forget the steps Back could undo (they are no longer the last).
+   */
+  steppedOutside(): void {
+    this.tick();
+    this.history.length = 0;
+    this.target = this.cycles;
+  }
+
   get canGoBack(): boolean {
     return this.history.length > 0;
   }
