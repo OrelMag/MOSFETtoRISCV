@@ -12,6 +12,7 @@ export interface Rung {
 }
 
 export const LADDER: Rung[] = [
+  { title: 'Memory in depth', madeOf: 'capacitors, sense amplifiers, row buffers', chapter: 'dram', num: 32 },
   { title: 'A GPU', madeOf: 'lanes, warps, a rasterizer, frame buffers', chapter: 'lanes', num: 26 },
   { title: 'A chip on a wafer', madeOf: 'standard cells, placement, routing, masks', chapter: 'silicon', num: 25 },
   { title: 'Multi-core processor', madeOf: 'cores, arbiter, atomics, coherence', chapter: 'multicore', num: 24 },

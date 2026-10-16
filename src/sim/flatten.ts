@@ -151,7 +151,8 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
       return;
     }
 
-    const kind = leafKind(def, mode);
+    // A sense amplifier is a primitive inside a circuit, but opened (the root) it is the transistors it is drawn with.
+    const kind = node.parent === null && def.prim === 'sense' ? null : leafKind(def, mode);
     const nl = netlistOf(def);
     const canExpand = !!nl && (mode === 'switch' || nl.level !== 'switch');
     const wantExpand = canExpand && (kind === null) && (!def.behavior || (opts.expand ? opts.expand(def, node) : !def.preferBehavior));

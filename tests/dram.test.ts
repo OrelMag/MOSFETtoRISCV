@@ -4,6 +4,8 @@ import { BITLINE_C, dramArray, DRAM_SA, VHALF } from '../src/lib/dram';
 import { NMOS } from '../src/lib/transistors';
 import { flatten } from '../src/sim/flatten';
 import { SENSE_OFFSET, SwitchSim } from '../src/sim/switchsim';
+import { accessCycles, bankRow, PS_PER_NAND, RowBuffers, SC_PERIOD_NANDS, TIMING } from '../src/dram/timing';
+import { requestStream } from '../src/widgets/dramtiming';
 import { B0, B1, BX, type ComponentDef } from '../src/sim/types';
 
 /** A cell, a switch and a bit line precharged from a VDD/2 rail: charge sharing by hand. */
@@ -143,5 +145,39 @@ describe('DRAM array (switch level)', () => {
 
   it('has a 15 mV offset at 1.1 V', () => {
     expect(DRAM_SA.offset).toBeCloseTo(0.015 / 1.1, 12);
+  });
+});
+
+describe('DRAM timing and the row buffer (dram/timing.ts)', () => {
+  it('converts DDR4-3200 at the single-cycle CPU\'s period from the benchmark results', async () => {
+    const results = (await import('../src/bench/results.json')).default as { psPerNand: number; cpus: { id: string; period: number }[] };
+    expect(PS_PER_NAND).toBe(results.psPerNand);
+    expect(SC_PERIOD_NANDS).toBe(results.cpus.find((c) => c.id === 'sc')!.period);
+    expect(TIMING).toEqual({ tRCD: 4, tCAS: 4, tRP: 4, tRAS: 9, burst: 4, tREFI: 1974, tRFC: 89 });
+    // a row hit costs what today's caches charge for every miss
+    expect(accessCycles('hit', TIMING)).toBe(8);
+    expect([accessCycles('miss', TIMING), accessCycles('conflict', TIMING), accessCycles('closed', TIMING)]).toEqual([12, 16, 12]);
+  });
+
+  it('prices the copy\'s two streams: conflicts on the plain mapping, hits with the XOR hash', () => {
+    const run = (hash: boolean, policy: 'open' | 'closed' = 'open') => {
+      const rb = new RowBuffers({ banks: 2, rowWords: 16, hash }, policy);
+      for (const w of requestStream('copy', 2)) rb.access(w);
+      return rb;
+    };
+    const plain = run(false), xor = run(true), closed = run(false, 'closed');
+    expect(plain.conflicts).toBeGreaterThan(plain.hits); // the streams evict each other's rows
+    expect(xor.conflicts).toBeLessThan(plain.conflicts / 2);
+    expect(xor.hits).toBeGreaterThan(plain.hits);
+    expect(xor.cycles).toBeLessThan(closed.cycles);
+    expect(closed.cycles).toBeLessThan(plain.cycles);
+    expect(bankRow({ banks: 2, rowWords: 16 }, 1024).bank).toBe(bankRow({ banks: 2, rowWords: 16 }, 0).bank);
+    expect(bankRow({ banks: 2, rowWords: 16, hash: true }, 1024).bank).not.toBe(bankRow({ banks: 2, rowWords: 16, hash: true }, 0).bank);
+  });
+
+  it('a read without its restore: the second still senses, the third cannot', () => {
+    const share = (v: number) => (CELL_C * v + BITLINE_C * 0.5) / (CELL_C + BITLINE_C);
+    expect(share(share(1)) - 0.5).toBeGreaterThan(SENSE_OFFSET);
+    expect(share(share(share(1))) - 0.5).toBeLessThan(SENSE_OFFSET);
   });
 });

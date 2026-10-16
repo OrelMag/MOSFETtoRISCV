@@ -103,8 +103,9 @@ export const SENSE_AMP: ComponentDef = define({
   }),
   notes: `In silicon the bit line moves only ~100 mV before the sense amplifier fires: waiting for a full swing
     through one small cell would take far too long, and the regenerative latch turns the small difference into a full
-    logic level. This simulator has no analog voltages, so the bit line here swings fully; the latch still shows the
-    other job of a sense amplifier, holding the result while the bit lines are precharged again.`,
+    logic level. Here the bit line swings fully, so this latch shows the other job of a sense amplifier, holding the
+    result while the bit lines are precharged again. The small-signal read is chapter 32's DRAM, where the switch-level
+    simulator keeps bit-line charge as a level.`,
   hdl: { verilog: '// behaviour: q follows ~blb while sae = 0, holds while sae = 1\nalways_latch if (!sae) q = ~blb;' },
 });
 
