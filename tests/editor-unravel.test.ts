@@ -195,8 +195,9 @@ describe('connectivity never changes', () => {
   const docs = reachableDefs()
     .filter((d) => netlistOf(d))
     .map((d) => docFromDef(d))
-    // (at most 1000 pointers: the 6502's decode PLA, a net label for each of its 2001 nets, takes minutes)
-    .filter((d): d is ChipDoc => !('error' in d) && d.labels.length > 0 && d.labels.length <= 1000);
+    // (the 6502's blocks draw every net as a label: past 200 of them a round trip takes 10 s to minutes (the decode
+    // PLA's 2001), too slow for CI's 30 s; its small blocks stay)
+    .filter((d): d is ChipDoc => !('error' in d) && d.labels.length > 0 && !(d.id.startsWith('u_m65_') && d.labels.length > 200));
   it('covers library components with pointers', () => expect(docs.length).toBeGreaterThan(20));
   // The chapters' CPUs, opened in the sandbox: the biggest documents with the most pointers.
   // (those drawn with net labels: the 6502's top level is all wires)
