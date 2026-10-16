@@ -23,6 +23,7 @@
 import { symbolGeom } from '../sim/geometry';
 import { B0, B1, BX, type Behavior, type ComponentDef, type InstanceDef, type NetDef } from '../sim/types';
 import { decoder, muxTree } from './combinational';
+import { stats, type Stats } from '../sim/stats';
 import { define, merger, splitter } from './define';
 import { AND } from './gates';
 import { ram } from './memory';
@@ -490,6 +491,37 @@ function bankedLevel(k: number): ReturnType<NonNullable<ComponentDef['netlist']>
 }
 
 // ---- ROM levels ---------------------------------------------------------------------------
+
+/** A ROM leaf's cost from its words alone (what stats() counts in leaf(k, w, words)): see romLevelsStats. */
+export type RomLeafStats = (k: number, w: number, content: Uint32Array) => Stats;
+
+/**
+ * stats() of romLevels(k, w, rv, content, …, leaf) without building its levels (rv only changes a splitter, which costs nothing): each level is
+ * its multiplexer tree, its splitter (wiring) and its banks, down to leaves whose cost `leafStats`
+ * gives (it must equal stats(leaf(…)) for the same words).
+ */
+export function romLevelsStats(k: number, w: number, content: Uint32Array, leafStats: RomLeafStats): Stats {
+  const ks = Math.max(ROM_LEAF_K, k - FAN_K), b = k - ks, n = 2 ** b, sz = 2 ** ks;
+  const banks: Stats[] = [];
+  for (let i = 0; i < n; i++) {
+    const slice = content.subarray(i * sz, (i + 1) * sz);
+    banks.push(ks <= ROM_LEAF_K ? leafStats(ks, w, slice) : romLevelsStats(ks, w, slice, leafStats));
+  }
+  // the multiplexer's pitch follows the banks' height, which does not change its cost
+  return sumStats([stats(muxTree(b, w)), ...banks]);
+}
+
+/** The stats of a structure whose instances (none of them wiring) cost these. */
+export function sumStats(parts: Stats[]): Stats {
+  const s: Stats = { nands: 0, transistors: 0, resistors: 0, capacitors: 0, depletion: 0, parts: 0, descendants: 0, levels: 0 };
+  for (const c of parts) {
+    s.nands += c.nands; s.transistors += c.transistors; s.resistors += c.resistors; s.capacitors += c.capacitors; s.depletion += c.depletion;
+    s.parts++;
+    s.descendants += 1 + c.descendants;
+    s.levels = Math.max(s.levels, 1 + c.levels);
+  }
+  return s;
+}
 
 /** The largest ROM built as one mux tree of constants; larger ones are banks of these. */
 export const ROM_LEAF_K = 8;

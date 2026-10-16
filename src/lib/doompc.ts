@@ -12,7 +12,8 @@
 import { symbolGeom } from '../sim/geometry';
 import type { Behavior, ComponentDef, InstanceDef, NetDef } from '../sim/types';
 import { constWord } from './alu';
-import { bankedBigRam, romLevels, wordsHash, type RomLeaf } from './bigmem';
+import { bankedBigRam, romLevels, romLevelsStats, sumStats, wordsHash, type RomLeaf, type RomLeafStats } from './bigmem';
+import { stats } from '../sim/stats';
 import { decoder, muxTree } from './combinational';
 import { merger, splitter } from './define';
 import { AND, MUX2, NOT } from './gates';
@@ -129,6 +130,20 @@ export const romLeaf: RomLeaf = (k, w, content) => {
   return d;
 };
 
+/** What stats() counts in romLeaf(k, w, words): its tree and one constant per word (a tie per bit value it uses). */
+export const romLeafStats: RomLeafStats = (k, w, content) => {
+  const all = 2 ** w - 1;
+  let zero = 0, ones = 0, mixed = 0;
+  for (let i = 0; i < content.length; i++) {
+    const v = content[i] >>> 0;
+    if (v === 0) zero++; else if (v === all) ones++; else mixed++;
+  }
+  const parts = [stats(muxTree(k, w, 4))];
+  const add = (n: number, d: ComponentDef) => { const c = stats(d); for (let i = 0; i < n; i++) parts.push(c); };
+  add(zero, constWord(w, 0)); add(ones, constWord(w, all)); add(mixed, constWord(w, 1));
+  return sumStats(parts);
+};
+
 /** NOP-padded program ROM of 2^16 words, byte addressed (pcOut). */
 export function doomProgramRom(text: ArrayLike<number>): ComponentDef {
   const content = new Uint32Array(1 << 16).fill(0x00000013);
@@ -140,9 +155,11 @@ export function doomProgramRom(text: ArrayLike<number>): ComponentDef {
 export function wadRom(words: Uint32Array, length: number): ComponentDef {
   if (words.length !== 1 << 23) throw new Error('wadRom: the WAD words must span 2^23 (32 MiB)');
   const base = romLevels(23, 32, true, words, `wad_${length}`, romLeaf);
+  // 32 768 ROMs of 256 constants: counted from the words, not by building them
+  const statsOf = () => romLevelsStats(23, 32, words, romLeafStats);
   // 23 levels of 2:1 multiplexers would be 69 NAND delays; the event wheel holds 63 (one cycle is
   // settled to the end anyway: the delay only shapes the timeline inside it)
-  return { ...base, name: 'WAD (game data)', symbol: { kind: 'box', label: 'WAD ROM' }, behavior: { ...base.behavior!, delay: 63 } };
+  return { ...base, name: 'WAD (game data)', symbol: { kind: 'box', label: 'WAD ROM' }, behavior: { ...base.behavior!, delay: 63 }, statsOf };
 }
 
 const pcCache = new WeakMap<Uint32Array, Map<string, ComponentDef>>();
@@ -162,28 +179,16 @@ export function doomComputer(text: Uint32Array, wad: Uint32Array, wadLength: num
   return def;
 }
 
-function build(IM: ComponentDef, WAD: ComponentDef, DEV: ComponentDef): ComponentDef {
-  const CORE = systemCore({ m: true }), RAM = bankedBigRam(21), FB = bankedBigRam(15), RS = muxTree(2, 32);
-  const g = (d: ComponentDef) => symbolGeom(d);
-  // region decode: addr[31:28] → RAM / WAD / devices / frame buffer, write enables, read select
+/** The memory map in gates: addr[31:28] → which memory a store writes, whether a load reads the devices, and the read select. */
+export const DOOM_MAP: ComponentDef = (() => {
   const glue: [string, ComponentDef, string?][] = [['ra', splitter([28, 1, 1, 1, 1])], ['n31', NOT], ['n30', NOT], ['n29', NOT], ['isWad', andN(4)], ['nwad', NOT],
     ['isRam', AND], ['isDev', AND], ['isFb', AND], ['ramWe', AND], ['fbWe', AND], ['devWe', AND], ['devRe', AND], ['s0', MUX2], ['sel', merger([1, 1])]];
-  const ins = columns([
-    [['irq0', TIE0], ['imem', IM, 'program']], [['cpu', CORE, 'core']],
-    [['ram', RAM, 'RAM 8 MiB'], ['wad', WAD, 'WAD'], ['fb', FB, 'frame buffer'], ['dev', DEV, 'devices']],
-    [['rsel', RS, 'read']], ...chunk(glue, 4),
-  ], 14, 0, 24, 10);
+  const ins = columns(chunk(glue, 4), 14, 0, 24, 10);
   const nets: NetDef[] = [];
   const net = (name: string | undefined, ...ends: string[]) => nets.push({ name, ends, tags: true });
-  net('clk', 'clk', 'cpu.clk', 'ram.clk', 'fb.clk', 'dev.clk');
-  net('irq', 'irq0.y', 'cpu.irq');
-  nets.push({ name: 'PC', ends: ['cpu.pcOut', 'imem.addr', 'pcOut'], tags: ['pcOut'] });
-  nets.push({ name: 'Instr', ends: ['imem.data', 'cpu.instr'] });
-  net('addr', 'cpu.memAddr', 'ram.addr', 'wad.addr', 'fb.addr', 'dev.addr', 'ra.in');
-  net('wdata', 'cpu.memWData', 'ram.wdata', 'fb.wdata', 'dev.wdata');
-  net('be', 'cpu.memBE', 'ram.be', 'fb.be');
-  net('memWE', 'cpu.memWE', 'ramWe.a', 'fbWe.a', 'devWe.a');
-  net('memRE', 'cpu.memRE', 'devRe.a');
+  net('addr', 'addr', 'ra.in');
+  net('memWE', 'memWE', 'ramWe.a', 'fbWe.a', 'devWe.a');
+  net('memRE', 'memRE', 'devRe.a');
   net('a28', 'ra.o1', 'isWad.i3');
   net('a29', 'ra.o2', 'n29.a');
   net('a30', 'ra.o3', 'n30.a', 'isFb.b', 's0.b');
@@ -196,13 +201,49 @@ function build(IM: ComponentDef, WAD: ComponentDef, DEV: ComponentDef): Componen
   net('isRam', 'isRam.y', 'ramWe.b');
   net('isDev', 'isDev.y', 'devWe.b', 'devRe.b');
   net('isFb', 'isFb.y', 'fbWe.b');
-  net('ramWe', 'ramWe.y', 'ram.we');
-  net('fbWe', 'fbWe.y', 'fb.we');
-  net('devWe', 'devWe.y', 'dev.we');
-  net('devRe', 'devRe.y', 'dev.re');
+  net('ramWe', 'ramWe.y', 'ramWe');
+  net('fbWe', 'fbWe.y', 'fbWe');
+  net('devWe', 'devWe.y', 'devWe');
+  net('devRe', 'devRe.y', 'devRe');
   // read select: a31 = 0 → RAM (00) or WAD (01); 1 → devices (10) or frame buffer (11)
   net('s0', 's0.y', 'sel.i0');
-  net('region', 'sel.out', 'rsel.s');
+  net('region', 'sel.out', 'region');
+  const right = Math.max(...ins.map((i) => i.at![0] + symbolGeom(i.def).w)) + 12;
+  const pins: Record<string, [number, number]> = { addr: [0, 2], memWE: [0, 6], memRE: [0, 10] };
+  ['ramWe', 'fbWe', 'devWe', 'devRe', 'region'].forEach((n, i) => (pins[n] = [right, 2 + 4 * i]));
+  return {
+    id: 'doommap', name: 'Memory map', category: 'cpu',
+    summary: 'Decodes addr[31:28]: 0 and 2–7 RAM, 1 the WAD (read only: no write enable), 8–B the devices, C–F the frame buffer. A store\'s write enable goes to one of them; a load reads through the 4:1 multiplexer this region selects; a load of the devices raises their read strobe.',
+    ports: [bus('addr', 32, 'in'), bit('memWE', 'in'), bit('memRE', 'in'), bit('ramWe', 'out'), bit('fbWe', 'out'), bit('devWe', 'out'), bit('devRe', 'out'), bus('region', 2, 'out')],
+    symbol: { kind: 'box', label: 'MEMORY MAP' },
+    netlist: () => ({ pins, instances: ins, nets }),
+  };
+})();
+
+function build(IM: ComponentDef, WAD: ComponentDef, DEV: ComponentDef): ComponentDef {
+  const CORE = systemCore({ m: true }), RAM = bankedBigRam(21), FB = bankedBigRam(15), RS = muxTree(2, 32);
+  const g = (d: ComponentDef) => symbolGeom(d);
+  const ins = columns([
+    [['irq0', TIE0], ['imem', IM, 'program']], [['cpu', CORE, 'core'], ['map', DOOM_MAP, 'memory map']],
+    [['ram', RAM, 'RAM 8 MiB'], ['wad', WAD, 'WAD'], ['fb', FB, 'frame buffer'], ['dev', DEV, 'devices']],
+    [['rsel', RS, 'read']],
+  ], 14, 0, 24, 10);
+  const nets: NetDef[] = [];
+  const net = (name: string | undefined, ...ends: string[]) => nets.push({ name, ends, tags: true });
+  net('clk', 'clk', 'cpu.clk', 'ram.clk', 'fb.clk', 'dev.clk');
+  net('irq', 'irq0.y', 'cpu.irq');
+  nets.push({ name: 'PC', ends: ['cpu.pcOut', 'imem.addr', 'pcOut'], tags: ['pcOut'] });
+  nets.push({ name: 'Instr', ends: ['imem.data', 'cpu.instr'] });
+  net('addr', 'cpu.memAddr', 'ram.addr', 'wad.addr', 'fb.addr', 'dev.addr', 'map.addr');
+  net('wdata', 'cpu.memWData', 'ram.wdata', 'fb.wdata', 'dev.wdata');
+  net('be', 'cpu.memBE', 'ram.be', 'fb.be');
+  net('memWE', 'cpu.memWE', 'map.memWE');
+  net('memRE', 'cpu.memRE', 'map.memRE');
+  net('ramWe', 'map.ramWe', 'ram.we');
+  net('fbWe', 'map.fbWe', 'fb.we');
+  net('devWe', 'map.devWe', 'dev.we');
+  net('devRe', 'map.devRe', 'dev.re');
+  net('region', 'map.region', 'rsel.s');
   net('ramR', 'ram.rdata', 'rsel.d0');
   net('wadR', 'wad.data', 'rsel.d1');
   net('devR', 'dev.rdata', 'rsel.d2');
@@ -224,4 +265,3 @@ function build(IM: ComponentDef, WAD: ComponentDef, DEV: ComponentDef): Componen
     netlist: () => ({ pins, instances: ins, nets }),
   };
 }
-

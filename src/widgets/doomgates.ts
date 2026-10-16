@@ -35,7 +35,8 @@ interface Session {
 let session: Session | null = null;
 
 export function doomGatesScene(): Scene {
-  const hide = { autoClock: false as const, panels: [doomGatesPanel] };
+  // larger than a sandbox chip holds (8 MiB of RAM, a 32 MiB ROM): no Open in Sandbox
+  const hide = { autoClock: false as const, panels: [doomGatesPanel], noRemix: true };
   if (!session) {
     const root = bench(systemCore({ m: true }));
     return { ...hide, root, hiddenInputs: ['clk', 'irq', 'instr', 'memRData'] };
@@ -59,7 +60,7 @@ function doomGatesPanel(stage: Stage): Widget {
 
   let alive = true, raf = 0, last = 0, lastPanel = 0;
   let windowRun: { n: number; done: number; retired: number; t0: number; before: Uint8Array; chunk: number } | null = null;
-  let windowSize = WINDOWS[0];
+  let windowSize = WINDOWS[1];
   const held = new Set<string>();
 
   const paint = () => {
