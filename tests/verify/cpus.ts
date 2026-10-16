@@ -57,6 +57,7 @@ export const CPUS: CpuConfig[] = [
   { id: 'pipe-bp', name: 'Pipelined, branch predictor', isa: {}, env: 'bare', cpi: 3, build: (w, imemK, dmemK) => pipelinedCpu(w, { imemK, dmemK, predictor: true }) },
   { id: 'pipe-bal-bp', name: 'Pipelined, balanced + predictor', isa: {}, env: 'bare', cpi: 3, build: (w, imemK, dmemK) => pipelinedCpu(w, { imemK, dmemK, adder: 'ks', balanced: true, predictor: true }) },
   { id: 'pipe-wb2', name: 'Pipelined, 2-way write-back D-cache', isa: {}, env: 'bare', fixedDmemK: 6, cpi: 15, build: (w, imemK) => pipelinedCpu(w, { imemK, adder: 'ks', dcache: 'wb2' }) },
+  { id: 'pipe-wb2-dram', name: 'Pipelined, 2-way write-back D-cache over DRAM (open page)', isa: {}, env: 'bare', fixedDmemK: 6, cpi: 42, build: (w, imemK) => pipelinedCpu(w, { imemK, adder: 'ks', dcache: 'wb2', dram: DRAM_OPEN }) },
   { id: 'pipe-wt-bal-bp', name: 'Pipelined, write-through D-cache, balanced + predictor', isa: {}, env: 'bare', fixedDmemK: 6, cpi: 11, build: (w, imemK) => pipelinedCpu(w, { imemK, adder: 'ks', dcache: 'wt', predictor: true, balanced: true }) },
   { id: 'pipe-m', name: 'Pipelined RV32IM', isa: { m: true }, env: 'bare', cpi: 21, build: (w, imemK, dmemK) => pipelinedCpu(w, { imemK, dmemK, adder: 'ks', m: true }) },
   { id: 'pipe-m-bal-bp', name: 'Pipelined RV32IM, balanced + predictor', isa: { m: true }, env: 'bare', cpi: 21, build: (w, imemK, dmemK) => pipelinedCpu(w, { imemK, dmemK, adder: 'ks', balanced: true, predictor: true, m: true }) },

@@ -13,6 +13,8 @@ import { andN, busMux2, decoder, equal, muxTree, rca } from './combinational';
 export { equal } from './combinational';
 import { cachedMemory } from './cache';
 import { wbCache } from './cache2';
+import type { DramConfig } from '../dram/controller';
+import { cfgKey } from './dramctrl';
 import { CLEAR_BIT0, CONTROL, IMM_GEN, NEXT_PC, PLUS4, PLUS4_FAST, dataMemory, rom } from './cpu';
 import { DIV_E, MUL_E, MUL_M } from './pipem';
 import { define, merger, ones, splitter } from './define';
@@ -555,6 +557,8 @@ export interface PipeOptions {
    * A miss freezes the whole pipeline until the line is in (main memory of 64 words).
    */
   dcache?: 'wt' | 'wb' | 'wb2';
+  /** With dcache 'wb' / 'wb2': main memory is a DRAM controller and device of this geometry (chapter 33). */
+  dram?: DramConfig;
   /**
    * The M extension: multiplies split across E and M (they behave like loads for hazards), divides on
    * the radix-4 SRT divider in E, which stalls the front of the pipeline for 18 cycles.
@@ -570,14 +574,15 @@ function retargetEnd(n: NetDef, from: string, to: string): void {
 
 export function pipelinedCpu(program: number[], opts: PipeOptions = {}): ComponentDef {
   const IM = rom(program, opts.imemK ?? 6);
-  const o = { dmemK: opts.dcache ? 6 : opts.dmemK ?? 5, adder: opts.adder ?? 'rca', balanced: !!opts.balanced, predictor: !!opts.predictor, dcache: opts.dcache, m: !!opts.m } as const;
-  return memo(`pipe_${IM.id}_${o.dmemK}_${o.adder}_${o.balanced}_${o.predictor}_${o.dcache ?? ''}_${o.m}`, () => buildPipe(IM, o));
+  const o = { dmemK: opts.dcache ? 6 : opts.dmemK ?? 5, adder: opts.adder ?? 'rca', balanced: !!opts.balanced, predictor: !!opts.predictor, dcache: opts.dcache, m: !!opts.m, dram: opts.dram } as const;
+  return memo(`pipe_${IM.id}_${o.dmemK}_${o.adder}_${o.balanced}_${o.predictor}_${o.dcache ?? ''}_${o.m}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}`, () => buildPipe(IM, o));
 }
 
-function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; balanced: boolean; predictor: boolean; dcache?: 'wt' | 'wb' | 'wb2'; m: boolean }): ComponentDef {
+function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; balanced: boolean; predictor: boolean; dcache?: 'wt' | 'wb' | 'wb2'; m: boolean; dram?: DramConfig }): ComponentDef {
   const { adder, balanced: bal, predictor: pred, dcache, m } = o;
   if (m && dcache) throw new Error('pipelinedCpu: m and dcache together are not supported');
-  const DM = dcache === 'wt' ? cachedMemory(o.dmemK) : dcache === 'wb' ? wbCache(o.dmemK, 2, 1) : dcache === 'wb2' ? wbCache(o.dmemK, 1, 2) : dataMemory(o.dmemK);
+  if (o.dram && dcache !== 'wb' && dcache !== 'wb2') throw new Error('pipelinedCpu: dram needs a write-back data cache');
+  const DM = dcache === 'wt' ? cachedMemory(o.dmemK) : dcache === 'wb' ? wbCache(o.dmemK, 2, 1, o.dram) : dcache === 'wb2' ? wbCache(o.dmemK, 1, 2, o.dram) : dataMemory(o.dmemK);
   const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder);
   const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = adder === 'ks' || bal ? koggeStone(32) : rca(32);
   const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4, SI = splitter([7, 5, 3, 5, 5, 7]);
@@ -938,7 +943,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   }
   const variant = [adder === 'ks' ? 'fast adders' : '', bal ? 'balanced' : '', pred ? 'branch prediction' : '', dcache ? `${dcache === 'wt' ? 'write-through' : dcache === 'wb2' ? '2-way write-back' : 'write-back'} data cache` : ''].filter(Boolean).join(', ');
   return {
-    id: `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}${dcache ? `_dc${dcache}` : ''}${m ? '_m' : ''}${!dcache && o.dmemK !== 5 ? `_d${o.dmemK}` : ''}`,
+    id: `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}${dcache ? `_dc${dcache}` : ''}${m ? '_m' : ''}${!dcache && o.dmemK !== 5 ? `_d${o.dmemK}` : ''}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}`,
     name: `Pipelined RV32I${m ? 'M' : ''} CPU${variant ? ` (${variant})` : ''}`, category: 'cpu',
     summary: 'Five stages, one instruction entering per cycle. Forwarding, a W→D bypass, load-use stalls and branch flushes keep it architecturally identical to the single-cycle machine.',
     ports: [bit('clk', 'in', 'left', true), bus('pcF', 32, 'out'), bit('validW', 'out'), bus('pcW', 32, 'out'), ...extraPorts],
