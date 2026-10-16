@@ -520,6 +520,12 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .dot { fill: var(--w0); }
 .dot.v1 { fill: var(--w1); }
 .dot.vx { fill: var(--wx); }
+/* A charge level between the rails (switch level: a bit line at VDD/2, after charge sharing): mixed by its level. */
+.wire.vl { stroke: color-mix(in oklab, var(--w1) calc(var(--lv, 0.5) * 100%), var(--w0)); stroke-dasharray: none; }
+.dot.vl { fill: color-mix(in oklab, var(--w1) 50%, var(--w0)); }
+.level-tag { pointer-events: none; }
+.level-tag rect { fill: var(--surface); stroke: var(--border-strong); stroke-width: 0.06; }
+.level-tag text { font: 600 0.8px var(--font-mono); fill: var(--text); }
 .dot.bus { fill: var(--bus); }
 .sym-body { fill: var(--sym-fill); stroke: var(--sym-stroke); stroke-width: 0.15; stroke-linejoin: round; }
 .sym-box { fill: var(--box-fill); stroke: var(--box-stroke); }
@@ -1463,3 +1469,55 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .gfx-help dl { margin: 6px 0 0; }
 .gfx-help dt { font-weight: 600; color: var(--text); margin-top: 6px; }
 .gfx-help dd { margin: 2px 0 0; line-height: 1.4; }
+
+/* ---------- chapter 32: the DRAM panel (widgets/dram.ts) ---------- */
+.dram-panel { width: 372px; }
+.dram-sel { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; color: var(--text-2); font-size: 12px; margin-bottom: 6px; }
+.dram-seg button { padding: 2px 9px; font: 600 11.5px var(--font-mono); }
+.dram-ops { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.dram-status { font-size: 12px; color: var(--text); background: var(--accent-soft); border-radius: 8px; padding: 5px 8px; margin: 2px 0 6px; }
+.dram-grid { display: flex; flex-direction: column; gap: 3px; font: 11px var(--font-mono); }
+.dram-row { display: grid; grid-template-columns: 62px repeat(4, minmax(0, 1fr)) 58px; gap: 3px; align-items: center; }
+.dram-row .lbl { color: var(--muted); white-space: nowrap; }
+.dram-row.sel .lbl { color: var(--accent); font-weight: 700; }
+.dram-row.open .lbl::after { content: ' ◀'; color: var(--good); }
+.dram-row .cellh { text-align: center; color: var(--muted); }
+.dram-row .cellh.sel { color: var(--accent); font-weight: 700; }
+.dram-row .age { text-align: right; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.dram-row.head .age { font-family: var(--font-ui); font-size: 10.5px; }
+.dram-row .age.warn { color: var(--warn); font-weight: 600; }
+.dram-row .age.bad { color: var(--wx); font-weight: 700; }
+.dram-row.lines { margin-top: 2px; }
+.dram-row.lines .v { text-align: center; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dram-row .v.bad { color: var(--wx); font-weight: 700; }
+.dcell { border: 1px solid var(--border); border-radius: 5px; padding: 3px 0; font: 600 10.5px var(--font-mono); cursor: pointer;
+  background: color-mix(in oklab, var(--w1) calc(var(--lv, 0) * 100%), var(--surface-3)); color: var(--text); }
+.dcell.x { background: color-mix(in oklab, var(--wx) 25%, var(--surface)); color: var(--wx); }
+.dcell.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dram-note { font-size: 11.5px; color: var(--text-2); margin-top: 6px; min-height: 2.6em; }
+/* chapter 32: row buffer and timing widgets (widgets/dramtiming.ts) */
+.rb-ctl { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.rb-sum { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 13px; color: var(--text-2); margin: 8px 0; max-width: 560px; }
+.rb-sum b { font: 600 12.5px var(--font-mono); color: var(--text); }
+.rb-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-2); margin-top: 10px; }
+.rb-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.rb-open { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 12px var(--font-mono); color: var(--text-2); margin-bottom: 6px; }
+.rb-lines { display: flex; flex-direction: column; gap: 3px; }
+.rb-widget, .tm-widget { max-width: 900px; }
+.rb-line { display: grid; grid-template-columns: 58px 104px 96px minmax(0, 220px) 34px; gap: 8px; align-items: center; font: 12px var(--font-mono); }
+.tm-widget .rb-line { grid-template-columns: 96px minmax(0, 380px) 82px; margin: 3px 0; }
+.rb-line .rb-addr, .rb-line .rb-br { color: var(--text-2); white-space: nowrap; }
+.rb-kind { font: 600 11.5px var(--font-ui); white-space: nowrap; }
+.rb-kind.hit { color: var(--good); } .rb-kind.miss { color: var(--warn); } .rb-kind.conflict { color: var(--wx); } .rb-kind.closed { color: var(--text-2); }
+.rb-cyc { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.gantt-bar { display: flex; height: 18px; min-width: 0; overflow: hidden; }
+.gantt-bar span, .rb-legend i { display: inline-flex; align-items: center; justify-content: center; font: 600 10px var(--font-ui); color: #fff; border-radius: 3px; margin-right: 1px; flex: 0 0 auto; }
+.g-pre { background: var(--probe-1); } .g-act { background: var(--probe-3); } .g-rd { background: var(--probe-0); } .g-data { background: var(--probe-2); }
+.rb-legend i { width: 14px; height: 10px; }
+.tm-table { border-collapse: collapse; font-size: 13px; margin-bottom: 10px; }
+.tm-table th, .tm-table td { padding: 5px 10px; border-bottom: 1px solid var(--border); text-align: right; vertical-align: top; }
+.tm-table th { color: var(--muted); font-weight: 600; font-size: 12px; }
+.tm-table td { font: 600 12.5px var(--font-mono); white-space: nowrap; }
+.tm-table th:first-child, .tm-table td:first-child { text-align: left; }
+.tm-table .t { text-align: left; white-space: normal; font: 13px var(--font-ui); color: var(--text-2); min-width: 260px; }
+@media (max-width: 640px) { .rb-line { grid-template-columns: 54px minmax(0, 1fr) 30px; } .rb-line .rb-br, .rb-line .rb-kind { display: none; } }

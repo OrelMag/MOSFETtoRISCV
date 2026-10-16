@@ -3,7 +3,7 @@
 
 import { symbolGeom, type Vec } from '../sim/geometry';
 import { NmosSim } from '../sim/nmossim';
-import { SwitchSim } from '../sim/switchsim';
+import { SwitchSim, VDD_VOLTS } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, netlistOf } from '../sim/types';
 import { describeBits, formatBits, type Radix } from '../sim/values';
 import { icon, s } from '../ui/dom';
@@ -48,6 +48,8 @@ interface WireEls {
   label?: SVGGElement;
   labelText?: SVGTextElement;
   labelBg?: SVGRectElement;
+  /** Switch level with charge levels: the voltage tag of a capacitive or half-charged net (made on first use). */
+  level?: { g: SVGGElement; t: SVGTextElement; bg: SVGRectElement; at: Vec };
 }
 
 interface PinEls {
@@ -89,6 +91,7 @@ export class SchematicView {
   private lastHl: { names: string[]; focus: boolean } = { names: [], focus: false };
   private probeG: SVGGElement | null = null;
   private flowG: SVGGElement | null = null;
+  private labelG: SVGGElement | null = null;
   private tokens: FlowTokens | null = null;
   radix: Radix = 'hex';
   /** When > 0, value changes travel along the wires as fronts lasting this many ms. */
@@ -163,6 +166,7 @@ export class SchematicView {
     const instG = s('g', { class: 'insts' });
     const pinG = s('g', { class: 'pins' });
     const labelG = s('g', { class: 'labels' });
+    this.labelG = labelG;
     this.probeG = s('g', { class: 'probes' });
     this.el.append(gridRect, wiresG, this.flowG, tokG, hitG, instG, pinG, labelG, this.probeG);
 
@@ -316,9 +320,21 @@ export class SchematicView {
     if (!ctx) return;
     ctx.sync();
     const flow = this.flowMs > 0 && !reducedMotion();
+    const lvSim = ctx.sim instanceof SwitchSim && ctx.sim.hasLevels ? ctx.sim : null;
     for (const w of this.wires) {
       const bits = ctx.netBits(w.net.index);
-      const vcls = w.net.width > 1 ? busClass(bits) : bitClass(bits[0]);
+      let vcls = w.net.width > 1 ? busClass(bits) : bitClass(bits[0]);
+      if (lvSim && w.net.width === 1) {
+        // A charge level between the rails (a bit line at VDD/2, after sharing): its own colour and a voltage tag.
+        const net = ctx.node.nets?.[w.net.index]?.[0];
+        const l = net === undefined ? NaN : lvSim.level(net);
+        const mid = Number.isFinite(l) && bits[0] === BX;
+        if (mid) {
+          vcls = 'vl';
+          for (const p of w.paths) p.style.setProperty('--lv', l.toFixed(3));
+        }
+        this.paintLevel(w, mid || (net !== undefined && lvSim.design.caps.has(net)) ? l : NaN);
+      }
       if (vcls !== w.shown) {
         if (flow && w.shown !== undefined && w.paths.length) this.flowWire(w, vcls);
         else this.paintWire(w, vcls);
@@ -417,6 +433,33 @@ export class SchematicView {
   }
 
   /** Give every element of a wire the value class vcls (finishing any front in flight). */
+  /** A net's voltage tag (NaN hides it), at the middle of its longest segment. */
+  private paintLevel(w: WireEls, l: number): void {
+    if (!Number.isFinite(l)) {
+      w.level?.g.setAttribute('display', 'none');
+      return;
+    }
+    if (!w.level) {
+      let best: Vec = [0, 0], len = -1;
+      for (const p of w.net.paths) for (let i = 1; i < p.length; i++) {
+        const d = Math.abs(p[i][0] - p[i - 1][0]) + Math.abs(p[i][1] - p[i - 1][1]) + (p[i][1] === p[i - 1][1] ? 0.5 : 0);
+        if (d > len) { len = d; best = [(p[i][0] + p[i - 1][0]) / 2, (p[i][1] + p[i - 1][1]) / 2]; }
+      }
+      const g = s('g', { class: 'level-tag', 'data-net': w.net.index });
+      const bg = s('rect', { rx: 0.4, height: 1.2, y: best[1] - 1.9 });
+      const t = s('text', { x: best[0], y: best[1] - 1.0, 'text-anchor': 'middle' });
+      g.append(bg, t);
+      this.labelG?.append(g);
+      w.level = { g, t, bg, at: best };
+    }
+    const txt = `${(l * VDD_VOLTS).toFixed(2)} V`;
+    w.level.t.textContent = txt;
+    const tw = textWidth(txt, 0.8);
+    w.level.bg.setAttribute('x', String(w.level.at[0] - tw / 2));
+    w.level.bg.setAttribute('width', String(tw));
+    w.level.g.removeAttribute('display');
+  }
+
   private paintWire(w: WireEls, vcls: string): void {
     w.flow?.forEach((a) => a.cancel());
     w.flow = undefined;

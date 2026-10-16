@@ -26,6 +26,7 @@ export * from './cache2';
 export * from './seqparts';
 export * from './storage';
 export * from './cells';
+export * from './dram';
 export * from './cache';
 export * from './multicycle';
 export * from './fpu';

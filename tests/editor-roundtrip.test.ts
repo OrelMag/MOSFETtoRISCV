@@ -54,7 +54,8 @@ const visit = (d: ComponentDef): void => {
   for (const i of netlistOf(d)?.instances ?? []) visit(i.def);
 };
 for (const d of tops) visit(d);
-const defs = [...all].filter((d) => netlistOf(d) && !tops.has(d));
+// A sense amplifier is a primitive drawn with its transistors: its drawing is not what simulates it.
+const defs = [...all].filter((d) => netlistOf(d) && !tops.has(d) && d.prim !== 'sense');
 
 /** Expand the root even when it prefers its behaviour (the ROM); keep the parts' preference. */
 const flat = (def: ComponentDef, mode: 'gate' | 'switch') =>

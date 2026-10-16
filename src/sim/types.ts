@@ -104,6 +104,11 @@ export interface NetDef {
    * decides (a precharged bus keeps its 1 when a small storage node joins it). NmosSim reads it.
    */
   cap?: boolean | number;
+  /**
+   * Switch level, on a `cap` net: the stored charge leaks away, its level halving every `leak` clock
+   * cycles (SwitchSim.leak). A DRAM cell's storage node: refresh must come before a 1 falls too far.
+   */
+  leak?: number;
 }
 
 export interface Netlist {
@@ -169,7 +174,7 @@ export interface ComponentDef {
   symbol: SymbolSpec;
 
   /** Built-in primitive handled directly by the simulators. */
-  prim?: 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'res' | 'cap' | 'alias';
+  prim?: 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'vhalf' | 'res' | 'cap' | 'sense' | 'alias';
   /**
    * Switch level: drive strength of a conducting element, 1 … 4. Transistors are 2 (weak) … 4
    * (strong), default 3; a resistor (prim 'res') is 1 by default, weaker than any transistor. Where
@@ -177,6 +182,11 @@ export interface ComponentDef {
    * writes, pull-ups).
    */
   strength?: number;
+  /**
+   * prim 'sense' (a sense amplifier, ports en, a, b): the smallest level difference between a and b
+   * it resolves, as a fraction of VDD; below it the amplifier latches X.
+   */
+  offset?: number;
   /**
    * For prim 'alias' (splitters / mergers): pairs of [portA, bitA, portB, bitB] that are the
    * same electrical node. Costs nothing and has no delay.
@@ -250,15 +260,16 @@ export function parseEnd(end: string): { inst: string | null; port: string } {
   return i < 0 ? { inst: null, port: end } : { inst: end.slice(0, i), port: end.slice(i + 1) };
 }
 
-export type HierLeafKind = 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'res' | 'cap' | 'behavior';
+export type HierLeafKind = 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'vhalf' | 'res' | 'cap' | 'sense' | 'behavior';
 
 /**
  * Primitives of the switch-level solver: transistors, rails, resistors (always-on weak paths) and
- * capacitors (mark their net as charge-keeping). A gate-level flatten cannot simulate them.
+ * capacitors (mark their net as charge-keeping), the VDD/2 rail and the sense amplifier (the one part
+ * that reads a charge level). A gate-level flatten cannot simulate them.
  */
 export function isSwitchPrim(d: ComponentDef): boolean {
   const p = d.prim;
-  return p === 'nmos' || p === 'pmos' || p === 'dep' || p === 'vdd' || p === 'gnd' || p === 'res' || p === 'cap';
+  return p === 'nmos' || p === 'pmos' || p === 'dep' || p === 'vdd' || p === 'gnd' || p === 'vhalf' || p === 'res' || p === 'cap' || p === 'sense';
 }
 
 /**

@@ -727,11 +727,19 @@ a flash chip does when it cannot overwrite, and how the CPU, DMA and peripherals
 track of chapters after the memory hierarchy; in the campaign, an act of its own. Mockup first for the chapter
 structure and the act.
 
+Mockup approved 2026-10-16 (E:/mockups/memory/memory-mockup.html), every recommendation: chapters 32–35 after chapter 31
+(Inside a DRAM, A memory controller, Flash, Buses and DMA; the appendix keeps its letter); charge as a level on
+capacitive nets only, the sense amplifier the one part that reads it; leakage per clock cycle; DDR4-3200 at the
+single-cycle CPU's clock (4 / 4 / 4, burst 4); the controller behind the write-back caches as new CPU variants; an
+AXI-lite-shaped bus; a floating-gate switch-level part; act 10 "Memory" (optional). Sub-phases 16a–16e, each merged
+on its own.
+
 **DRAM in depth**
-- ⏳ The 1T1C array at switch level: bit lines precharged to V/2, charge sharing, the sense amplifier restoring the
+- ✅ The 1T1C array at switch level: bit lines precharged to V/2, charge sharing, the sense amplifier restoring the
   row (a destructive read and its write-back), leakage over simulated time and refresh before the cell is lost
-- ⏳ Organization: banks, rows and columns, the row buffer (page hit, miss, conflict), tRCD / tRP / tCAS / tRAS in
-  cycles, burst transfers
+  (16a, chapter 32: SwitchSim charge levels, lib/dram.ts, the DRAM panel)
+- ✅ Organization: banks, rows and columns, the row buffer (page hit, miss, conflict), tRCD / tRP / tCAS / tRAS in
+  cycles, burst transfers (chapter 32's row-buffer and timing widgets over dram/timing.ts)
 - ⏳ A DDR-style controller at gate level: command queue, open- and closed-page policies, refresh scheduling,
   FR-FCFS reordering; it drives the CPU's memory port, so cache misses cost what the row buffer says; latency and
   bandwidth measured over the benchmark programs (Phase 13)

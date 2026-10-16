@@ -67,7 +67,7 @@ export const chCache: Chapter = {
         <p>The sense amplifier is a latch: while <code>sae</code> = 0 it follows the bit lines (unpowered, so it never drives them); when
         <code>sae</code> rises it isolates itself and latches the value, which it holds while the bit lines are precharged for the next access.
         In silicon it also <em>amplifies</em>: it fires when the bit lines differ by ~100 mV, long before a small cell could swing a long
-        bit line fully. Our simulator has no analog voltages, so here the swing is full.</p>
+        bit line fully. Here the swing is full; chapter 32 opens a DRAM, where it is not.</p>
         <p>Cost of this 4×4: 320 transistors, of which the cells are 96. The periphery is shared per row and per column, so it amortizes:
         at 8×8 the cells are 43 %, and in a real 32 KB array over 90 %. Sixteen bits of flip-flop registers would cost 960.</p>
         <div class="try">Use the buttons: Precharge, set <code>din</code> and <code>addr</code>, Write; then Precharge and Read.</div>`,
@@ -111,7 +111,7 @@ export const chCache: Chapter = {
     },
     {
       title: 'Leaks, refresh and sense amplifiers',
-      body: '<p>The stored charge leaks through the off transistor and the junction, so every row must be read and rewritten periodically. A read only produces a small voltage on the bit line.</p>',
+      body: '<p>The stored charge leaks through the off transistor and the junction, so every row must be read and rewritten periodically. A read only produces a small voltage on the bit line. Chapter 32 builds the array, the precharge to VDD/2 and the sense amplifier at transistor level, with the charge sharing measured in millivolts.</p>',
       widget: dramWidget,
     },
     {

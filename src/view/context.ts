@@ -94,7 +94,9 @@ export class ViewCtx {
     this.parent.sync();
     if (!this.driver) return;
     for (const p of this.def.ports) {
-      if (p.dir !== 'in') continue;
+      // An opened sense amplifier (a primitive drawn with its transistors) sees its bit lines as the parent has them.
+      const lines = p.dir === 'inout' && this.driver.def.prim === 'sense';
+      if (p.dir !== 'in' && !lines) continue;
       const bits = this.parent.sim.getBits(this.driver.ports[p.name]);
       if (this.sim instanceof SwitchSim && p.width === 1) this.sim.setInputBit(p.name, bits[0]);
       else this.sim.setInput(p.name, Math.max(0, pack(bits)));

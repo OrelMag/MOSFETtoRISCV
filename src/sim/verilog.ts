@@ -105,6 +105,15 @@ export function structuralVerilog(def: ComponentDef): string | null {
       if (n) assigns.push(`  assign ${n} = ${c.prim === 'vdd' ? 'vdd_rail' : 'gnd_rail'};`);
       continue;
     }
+    if (c.prim === 'vhalf') {
+      const n = conn('p');
+      if (n) assigns.push(`  assign ${n} = 1'bx;  // VDD/2: half the supply, no logic level`);
+      continue;
+    }
+    if (c.prim === 'sense') {
+      lines.push(`  // ${inst.name}: sense amplifier on ${c.ports.slice(1).map((p) => conn(p.name) || '(unconnected)').join(' / ')} (compares charge levels: analog, not Verilog)`);
+      continue;
+    }
     if (c.prim === 'nmos' || c.prim === 'pmos') {
       lines.push(`  ${c.prim} ${instName(inst.name)} (${conn('d') || '/*nc*/'}, ${conn('s') || '/*nc*/'}, ${conn('g') || '/*nc*/'});`);
       continue;
