@@ -278,7 +278,9 @@ src/bench/     results.json (scripts/benchmarks.ts --write, checked in; each run
                the four RV32I programs, the cost / speed front, each CPU's family and chapter): the workbench's Benchmarks
                tab (ui/pages/benchmarks.ts, its own chunk)
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
-               instructions), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
+               instructions), fastiss.ts (FastISS: the golden model's semantics, every ROM word predecoded by decode() into
+               typed arrays, one switch, ~90 MIPS on Doom; RAM inline, other regions through overridable load / store / ioRead /
+               ioWrite; no F; tests/fastiss.test.ts: lock step over riscv-tests and random programs), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
                interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), simt.ts
                (SimtISS: a warp of n lanes, one PC, leader, mask, split / join stack, one cycle per active lane for memory),
                simtprograms.ts (the lane kernels, each with its result computed in TypeScript), warps.ts (WarpISS: W SimtISS warps over one
@@ -591,6 +593,16 @@ src/gfx/       raster16.ts: the campaign's (7-bit vertices, 32 × 32, RGB565; Ed
                unit and its cycles by phase, from one sample a cycle), PIPE_COSTS (measured, pinned by tests/gfxpipe.test.ts).
                The kernels and meshes are riscv/gfxprograms.ts (16.16 rotation with mul, vertex buffers f mod 2, the memory map;
                SOFT_CLEAR / SOFT_TRIANGLE: the same frame in software on four warps)
+src/doom/      Appendix B's Doom computer (DOM-free): machine.ts (the memory map: 8 MiB RAM, the WAD read only at 0x1000_0000,
+               I/O registers 3 WADLEN / 6 KEY (a read pops an event) / 7 FLIP beside the system CPU's, a 320 × 200 indexed
+               frame buffer at 0xC000_0000 + palette at 0xC001_0000; DoomDevices shared by FastDoom (riscv/fastiss.ts) and
+               GoldenDoom (the golden model, lock-step checks); CLOCK_KHZ 40 000: game time from mtime), image.ts (doom.img:
+               'RVIM' header, ROM words, initial RAM words; symbolAt over doom.syms.json). The program: ports/doom/ (doomgeneric,
+               GPL-2, vendored with its patches listed in its README, platform layer, link.ld), built by scripts/doom/build.mjs
+               (pinned xPack riscv-none-elf-gcc, rv32im; checked in: public/doom/doom.img + doom.syms.json, so npm test needs
+               no compiler); Freedoom (BSD) is never checked in: scripts/doom/fetch-wad.mjs (pinned URL + sha256) into .cache/doom/;
+               scripts/doom/run-raw.mjs a strict stand-alone runner (NULL-page / WAD stores, PNG frames), scripts/doom/bench.ts
+               cycles per frame (tests/doom.test.ts: boot to the title, 1.5 M instructions against the golden model)
 src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/CAMPAIGN.md). DOM-free:
   types.ts       CampaignNode (act, kind lesson / drill / build / program / core, requires, why, tips, codex,
                  unlocks: library ids or `prefix*` later levels may place, anatomy blocks, base challenge, par, soon)
