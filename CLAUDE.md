@@ -112,7 +112,12 @@ src/sim/       simulation core (no DOM)
   switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes); `strength` levels:
                  rails/inputs > transistors (strength 4..2, ratioed logic) > resistors (prim 'res',
                  strength 1: pull-ups lose to any transistor; two opposing → X) > stored charge
-                 (`cap` nets and prim 'cap' capacitors keep their value when undriven)
+                 (`cap` nets and prim 'cap' capacitors keep their value when undriven); charge levels (DRAM):
+                 `level(net)` a fraction of VDD, floating charge nets joined by switches share Σ C·V / Σ C (C from
+                 NetDef.cap), a level reads as a bit only near a rail (LEVEL_HI / LO, else X); prim 'vhalf' a source
+                 at ½; prim 'sense' (en, a, b) latches the higher line when en rises (X below `offset`), flips when a
+                 stronger driver forces a line; `leak(cycles)` drains nets with NetDef.leak (half-life in cycles);
+                 opened as the root, a sense prim flattens to the transistors it is drawn with
   nmossim.ts     NmosSim: event-driven switch-level engine for large NMOS circuits (Appendix A's 6502): a change
                  recomputes the channel-connected groups it reaches (rails and driven inputs end a group); GND / an
                  input 0 beats VDD / 1 (a short is counted), any of those beats a pull-up (prim 'dep' or 'res' to a
@@ -190,6 +195,10 @@ src/lib/       the component library (registered in `registry` via define())
                  with m the CPU gains a `retire` output (low while a divide stalls it)
   cells.ts       NMOS_STRONG / PMOS_WEAK, SRAM_CELL (6T), SRAM_COLUMN, DRAM_CELL (switch level)
   arrays.ts      WRITE_DRIVER, SENSE_AMP (latch type), sramColumn(R), sramArray(R, C): switch-level SRAM with periphery
+  dram.ts        chapter 32's DRAM at switch level: VHALF (prim 'vhalf'), DRAM_SA (prim 'sense', drawn with 8 transistors),
+                 DRAM_BIT (1T1C, a leaking CELL_C capacitor, bl two-way), dramColumn(R) (precharge / equalize to VDD/2, a
+                 reference bit line of BITLINE_C, column select, the amplifier), dramArray(R, C) (row / column decoders, write
+                 driver, output inverter; protocol: precharge, activate, sense, read / write, close), DRAM4X4, DRAM8X8
   cache.ts       cachedMemory(k, ib) (direct-mapped write-through cache + main memory, stall on
                  miss), wayLookup2; singleCycleCpu(…, { dcache }) uses it (adds `retire`, `dhit`)
   cache2.ts      cacheWay(ib, t), MISS_CTRL, wbCache(k, ib, ways) (write-back, write-allocate, LRU), iCache(rom, ib);
@@ -288,7 +297,13 @@ src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over 
                fronts, the Image menu), image.ts (a drawn circuit as a standalone SVG: computed styles
                inlined, current theme; PNG at 2×; saveFile; exportSchematic for a stage's level, loaded on
                demand; the sandbox's File menu uses it too)
-src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...); cell3d.ts: chapter 25's
+src/dram/      timing.ts: DDR4-3200 in our cycles (CLOCK_NS = the single-cycle CPU's period: TIMING 4 / 4 / 4, tRAS 9, burst 4,
+               tREFI 1 974, tRFC 89), bankRow (rows interleaved over banks, optional XOR hash), accessCycles, RowBuffers
+               (open / closed page, one request at a time): the reference the memory chapters and their controller share
+src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...); dram.ts: chapter 32's DRAM panel
+               (dramScene: the 4 × 4 array driven through its protocol, every cell's charge, bit-line ΔV, the latched row,
+               cycles since each row's restore, Wait = SwitchSim.leak; dramState for challenges); dramtiming.ts: the row
+               buffer over request streams and DDR4's timings at any clock; cell3d.ts: chapter 25's
                standard cells in 3D (orbit camera, painter's order over boxes);
                lanes.ts / warps.ts: chapters 26–29 (the Warp panels: mask grid, stack, issue timeline, scoreboards; on chapter 29's
                core each access, the barrier, shared memory by bank, a kernel switcher; lanes against cores; the occupancy widget,
