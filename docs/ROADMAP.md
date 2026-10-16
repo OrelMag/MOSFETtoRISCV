@@ -740,9 +740,10 @@ on its own.
   (16a, chapter 32: SwitchSim charge levels, lib/dram.ts, the DRAM panel)
 - ✅ Organization: banks, rows and columns, the row buffer (page hit, miss, conflict), tRCD / tRP / tCAS / tRAS in
   cycles, burst transfers (chapter 32's row-buffer and timing widgets over dram/timing.ts)
-- ⏳ A DDR-style controller at gate level: command queue, open- and closed-page policies, refresh scheduling,
-  FR-FCFS reordering; it drives the CPU's memory port, so cache misses cost what the row buffer says; latency and
-  bandwidth measured over the benchmark programs (Phase 13)
+- ✅ A DDR-style controller at gate level: open- and closed-page policies, refresh scheduling, an XOR bank hash; it
+  drives the write-back cache's miss path, so misses cost what the row buffer says; CPUs sc-wb2-dram, sc-wb2-dramc,
+  pipe-wb2-dram pass riscv-tests and fuzzing and are in the benchmark results (16b, chapter 33). FR-FCFS reordering is
+  modelled (dram/schedule.ts) and shown; a gate-level request queue waits for several requesters (DMA, 16d)
 
 **Non-volatile**
 - ⏳ The floating-gate transistor: stored charge shifts the threshold (a switch-level MOSFET with a programmable V_T),

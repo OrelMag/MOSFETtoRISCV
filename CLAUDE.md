@@ -195,6 +195,12 @@ src/lib/       the component library (registered in `registry` via define())
                  with m the CPU gains a `retire` output (low while a divide stalls it)
   cells.ts       NMOS_STRONG / PMOS_WEAK, SRAM_CELL (6T), SRAM_COLUMN, DRAM_CELL (switch level)
   arrays.ts      WRITE_DRIVER, SENSE_AMP (latch type), sramColumn(R), sramArray(R, C): switch-level SRAM with periphery
+  dramctrl.ts    chapter 33: dramCtrl(cfg) (CtrlModel in gates, tests/dramctrl.test.ts compares every output every cycle),
+                 dramDevice(cfg, init?) (DeviceModel as a seq behaviour leaf, no input → output path), dramSystem(cfg) (both,
+                 the chapter's scene); wbCache(k, ib, ways, dram) puts them behind the write-back cache (a miss: write-back
+                 request, then fill, until done); singleCycleCpu / pipelinedCpu({ dram }); CPUs sc-wb2-dram, sc-wb2-dramc,
+                 pipe-wb2-dram (tests/verify/cpus.ts; BitSim lanes give a seq leaf a state each: run.ts laneLeaves; their
+                 benchmark rows are offChip: kept out of the cost comparisons)
   dram.ts        chapter 32's DRAM at switch level: VHALF (prim 'vhalf'), DRAM_SA (prim 'sense', drawn with 8 transistors),
                  DRAM_BIT (1T1C, a leaking CELL_C capacitor, bl two-way), dramColumn(R) (precharge / equalize to VDD/2, a
                  reference bit line of BITLINE_C, column select, the amplifier), dramArray(R, C) (row / column decoders, write
@@ -299,11 +305,19 @@ src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over 
                demand; the sandbox's File menu uses it too)
 src/dram/      timing.ts: DDR4-3200 in our cycles (CLOCK_NS = the single-cycle CPU's period: TIMING 4 / 4 / 4, tRAS 9, burst 4,
                tREFI 1 974, tRFC 89), bankRow (rows interleaved over banks, optional XOR hash), accessCycles, RowBuffers
-               (open / closed page, one request at a time): the reference the memory chapters and their controller share
+               (open / closed page, one request at a time): the reference the memory chapters and their controller share;
+               controller.ts: DeviceModel (banks, row buffers, every timing rule checked: err + why, data X; more than 8 refreshes
+               late loses the data; read(a) by CPU address) and CtrlModel (cycle-exact: one 4-word line request at a time,
+               held until done; IDLE / WPRE / WACT / BURST / CLOSE / WCLOSE / WREF1 / WREF2, one wait counter, refresh first;
+               open / closed page, XOR bank hash; transfer / idle drive both); workload.ts: a program's line requests through
+               the CPUs' 2-way write-back cache model, price() on the models (equal to the gate-level CPUs to the cycle);
+               schedule.ts: FCFS against FR-FCFS over a queue (chapter 33's last step)
 src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...); dram.ts: chapter 32's DRAM panel
                (dramScene: the 4 × 4 array driven through its protocol, every cell's charge, bit-line ΔV, the latched row,
                cycles since each row's restore, Wait = SwitchSim.leak; dramState for challenges); dramtiming.ts: the row
-               buffer over request streams and DDR4's timings at any clock; cell3d.ts: chapter 25's
+               buffer over request streams and DDR4's timings at any clock; dramctrl.ts: chapter 33's controller panel
+               (memCtrlScene: line requests, command timeline, open rows, refresh counter); dramwork.ts: the workloads priced
+               by policy / banks / mapping, and the FR-FCFS queue; cell3d.ts: chapter 25's
                standard cells in 3D (orbit camera, painter's order over boxes);
                lanes.ts / warps.ts: chapters 26–29 (the Warp panels: mask grid, stack, issue timeline, scoreboards; on chapter 29's
                core each access, the barrier, shared memory by bank, a kernel switcher; lanes against cores; the occupancy widget,
