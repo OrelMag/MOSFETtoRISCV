@@ -11,7 +11,7 @@ import { boxText, boxTextOverlaps, ICON, iconSpot, labelRect, portTextRect } fro
 import { counter } from '../src/lib/sequential';
 import { symbolGeom } from '../src/sim/geometry';
 import { families, initialParams } from '../src/lib/resolve';
-import { bigMemTops, cpuTops } from './tops';
+import { bigMemTops, cpuTops, doomTops } from './tops';
 import { rv16Core } from '../src/lib/rv16/cpu';
 import { rv16Pipe } from '../src/lib/rv16/pipe';
 import { rv16SysCore } from '../src/lib/rv16/system';
@@ -38,7 +38,7 @@ for (const o of [{ fwd: false, stall: false, flush: false }, { fwd: true, stall:
 
 describe('schematic labels', () => {
   // the top-level CPUs are not registered (only their parts are): add them explicitly
-  const tops = [...cpuTops(), ...bigMemTops()];
+  const tops = [...cpuTops(), ...bigMemTops(), ...doomTops()];
   const defs = [...new Set([...registry.values(), ...tops])].filter((d) => d.netlist);
   it.each(defs.map((d) => [d.id, d] as const))('%s: no label hides another', (_, d) => {
     expect(labelOverlaps(d, netlistOf(d)!)).toEqual([]);
@@ -52,7 +52,7 @@ describe('schematic labels', () => {
 });
 
 describe('dead parts', () => {
-  const defs = [...new Set([...registry.values(), ...cpuTops()])].filter((d) => d.netlist);
+  const defs = [...new Set([...registry.values(), ...cpuTops(), ...doomTops()])].filter((d) => d.netlist);
   it.each(defs.map((d) => [d.id, d] as const))('%s: every part reaches an output', (_, d) => {
     expect(deadInstances(netlistOf(d)!, d.ports)).toEqual([]);
   });

@@ -2,6 +2,7 @@
 // Doom computer's memory map (doom/machine.ts), run by the fast interpreter (riscv/fastiss.ts).
 
 import { doomPlay } from '../widgets/doom';
+import { doomGatesScene } from '../widgets/doomgates';
 import { chAppendix6502 } from './ch-6502';
 import type { Chapter } from './types';
 
@@ -33,6 +34,25 @@ export const chAppendixDoom: Chapter = {
         zoom shows the column growing downward.
         <b>Back</b> undoes any step.</div>`,
       widget: () => doomPlay(),
+    },
+    {
+      title: 'Hand it to the gates',
+      body: `
+        <p>The same program on the circuit: the RV32IM system core of chapters 18–20 with its memories outside it
+        (the instruction ROM on <code>pcOut → instr</code>, data and I/O on one port with byte enables and a read
+        strobe), and around it the Doom computer's memory map in gates: a region decoder on <code>addr[31:28]</code>,
+        8 MiB of RAM and a 128 KiB frame buffer as byte banks, the WAD as a ROM tree of 2<sup>23</sup> words, and the
+        devices (console, <code>KEY</code> popping its queue on the read strobe, <code>FLIP</code>, <code>WADLEN</code>).
+        Every box opens, down to NANDs.</p>
+        <p>Start the game in the panel, play a little, then <b>Pause</b> and <b>Run on the gates</b>. The interpreter's
+        state goes into the circuit: each register, the PC, the CSRs and the timer bit by bit into both latches of their
+        flip-flops; the RAM, the frame buffer and the key queue into their memories. Then the circuit is clocked while the
+        interpreter steps beside it, and after every instruction the PC and all 31 registers are compared; at the end of
+        the window all 8 MiB of RAM and the frame buffer too.</p>
+        <p><strong>Cost.</strong> The gates run a few thousand cycles a second in this page (the panel measures it): one
+        frame of about 1.9 million cycles takes minutes to hours. The pixels they draw glow yellow: a few columns of a wall
+        per thousand cycles.</p>`,
+      scene: () => doomGatesScene(),
     },
   ],
 };

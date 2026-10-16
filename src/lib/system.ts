@@ -36,7 +36,7 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
  * bottom port (mux select, clock) gets 4 units below it, so the net label hanging from that port
  * clears the next symbol and the name drawn above it.
  */
-function columns(cols: [string, ComponentDef, string?][][], x0: number, y0: number, gapX = 10, gapY = 3): InstanceDef[] {
+export function columns(cols: [string, ComponentDef, string?][][], x0: number, y0: number, gapX = 10, gapY = 3): InstanceDef[] {
   const out: InstanceDef[] = [];
   let x = x0;
   for (const col of cols) {
@@ -137,7 +137,7 @@ export function sysDecode(m = false): ComponentDef {
 }
 export const SYS_DECODE = sysDecode();
 
-function chunk<T>(xs: T[], n: number): T[][] {
+export function chunk<T>(xs: T[], n: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n));
   return out;
@@ -485,7 +485,19 @@ export function systemCpu(program: number[], opts: SystemCpuOptions = {}): Compo
   return memo(`sys_${IM.id}_${adder}${opts.m ? '_m' : ''}_${dmemK}${opts.bus ? '_bus' : ''}`, () => buildSystem(IM, adder, !!opts.m, dmemK, opts.bus ? imemK : 0));
 }
 
-function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean, dmemK: number, busK = 0): ComponentDef {
+/**
+ * The system CPU as a core with ports (Appendix B's Doom computer): the instruction ROM outside
+ * (pcOut → instr) and the data side a port with byte enables, a write and a read strobe (memRE: a
+ * device may act on a read, a key queue pops). Only the timer stays inside (mtime / mtimecmp at
+ * 0x8000_0010 / 14: the interrupt needs it); every other address, I/O included, goes to the port.
+ */
+export function systemCore(opts: { adder?: 'rca' | 'ks'; m?: boolean } = {}): ComponentDef {
+  const adder = opts.adder ?? 'ks';
+  return memo(`syscore_${adder}${opts.m ? '_m' : ''}`, () => buildSystem(null, adder, !!opts.m, 5));
+}
+
+function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, dmemK: number, busK = 0): ComponentDef {
+  const ports = IM === null;
   const SYSD = sysDecode(m), CSRU = csrUnit(m);
   const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = busK ? busMemUnit(busK) : bankedMemory(dmemK);
   const M2 = busMux2(32), M4 = muxTree(2, 32), M8 = muxTree(3, 32), ADD = adder === 'ks' ? koggeStone(32) : rca(32);
@@ -506,8 +518,11 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean, dmemK: n
   alignY('trapmux', M4, 10, 'd0', Y);
   alignY('pc', PC, 22, 'd', P('trapmux', 'y')[1]);
   place('one', TIE1, [17, P('pc', 'en')[1] - 1]);
-  alignY('imem', IM, 36, 'addr', P('pc', 'q')[1]);
-  alignY('si', SI, 56, 'in', P('imem', 'data')[1]);
+  // the core with ports lays out as if the ROM were there (its instr pin where the ROM's data was)
+  const romG = IM ? g(IM) : symbolGeom({ id: 'romgeom', name: '', category: 'memory', ports: [bus('addr', 32, 'in'), bus('data', 32, 'out')], symbol: { kind: 'box', label: 'INSTR MEM' } });
+  const romData: [number, number] = [36 + romG.ports.data.pos[0], P('pc', 'q')[1] - romG.ports.addr.pos[1] + romG.ports.data.pos[1]];
+  if (IM) alignY('imem', IM, 36, 'addr', P('pc', 'q')[1]);
+  alignY('si', SI, 56, 'in', romData[1]);
   alignY('rf', RF, 74, 'wa', P('si', 'o1')[1]);
   alignY('imm', IMM_GEN, 70, 'instr', Y + 22);
   const rfR = at.get('rf')![0] + g(RF).w;
@@ -516,9 +531,9 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean, dmemK: n
   alignY('alu', ALU, rfR + 18, 'a', P('srcA', 'y')[1]);
   const aluR = at.get('alu')![0] + g(ALU).w;
   alignY('st', STORE_ALIGN, aluR + 12, 'wd', Y + 18);
-  alignY('dm', DM, aluR + 30, 'addr', P('alu', 'y')[1]);
+  if (!ports) alignY('dm', DM, aluR + 30, 'addr', P('alu', 'y')[1]);
   alignY('io', IO_UNIT, aluR + 30, 'addr', Y + 70);
-  alignY('ldsel', M2, aluR + 30 + g(DM).w + 8, 'a', P('dm', 'rdata')[1]);
+  alignY('ldsel', M2, aluR + 30 + g(DM).w + 8, 'a', ports ? P('alu', 'y')[1] : P('dm', 'rdata')[1]);
   alignY('ld', LOAD_EXTRACT, P('ldsel', 'y')[0] + 10, 'rdata', P('ldsel', 'y')[1]);
   alignY('res', M8, P('ld', 'value')[0] + 8, 'd1', P('ld', 'value')[1]);
   place('plus4', P4, [36, Y - 10]);
@@ -663,6 +678,57 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean, dmemK: n
   void bottom;
   void fanout;
   const pins: Record<string, [number, number]> = { clk: [0, yS - 10], switches: [0, yS - 6], irq: [0, yS - 2], pcOut: [P('res', 'y')[0] + 20, yS - 10], consoleData: [P('res', 'y')[0] + 20, yS - 6], consoleValid: [P('res', 'y')[0] + 20, yS - 2], leds: [P('res', 'y')[0] + 20, yS + 2] };
+  if (ports) {
+    // ---- a core with ports: the ROM and the data memory outside, only the timer's registers inside
+    const net = (name: string) => nets.find((n) => n.name === name)!;
+    const drop = (name: string) => nets.splice(nets.indexOf(net(name)), 1);
+    const add = (name: string, def: ComponentDef, xy: [number, number]) => { instances.push({ name, def, at: xy }); defs.set(name, def); at.set(name, xy); };
+    const without = (name: string, ...ends: string[]) => {
+      const n = net(name);
+      n.ends = n.ends.filter((e) => !ends.includes(e));
+      if (Array.isArray(n.tags)) n.tags = n.tags.filter((e) => !ends.includes(e));
+    };
+    without('PC', 'imem.addr');
+    const instr = net('Instr');
+    instr.ends = ['instr', 'si.in', 'imm.instr', 'imm12.in'];
+    instr.tags = ['imm12.in'];
+    const alu = net('ALUResult');
+    alu.ends = alu.ends.map((e) => (e === 'dm.addr' ? 'memAddr' : e === 'isIO.in' ? 'ioa.in' : e));
+    alu.tags = (alu.tags as string[]).map((e) => (e === 'isIO.in' ? 'ioa.in' : e)).concat('memAddr');
+    net('StoreData').ends = ['st.wdata', 'memWData', 'io.wdata'];
+    net('ByteEn').ends = ['st.be', 'memBE'];
+    net('MemRead').ends = ['memRData', 'ldsel.a'];
+    net('MemRead').tags = ['memRData'];
+    without('clk', 'dm.clk');
+    net('MemWrite').ends = ['memWq.y', 'memWE'];
+    // internal: the timer's registers 4 and 5 (addr[31:30] = 10, addr[4:3] = 10), not bit 31 alone
+    drop('isIO');
+    instances.splice(instances.findIndex((i) => i.name === 'isIO'), 1);
+    add('ioa', splitter([3, 1, 1, 25, 1, 1]), gridAt());
+    add('n30', NOT, gridAt());
+    add('n3', NOT, gridAt());
+    add('isTimer', andN(4), gridAt());
+    add('memRq', andN(3), gridAt());
+    add('z8', constWord(8, 0), gridAt());
+    nets.push(
+      { name: 'a3', ends: ['ioa.o1', 'n3.a'], tags: true },
+      { name: 'a4', ends: ['ioa.o2', 'isTimer.i2'], tags: true },
+      { name: 'a30', ends: ['ioa.o4', 'n30.a'], tags: true },
+      { name: 'a31', ends: ['ioa.o5', 'isTimer.i0'], tags: true },
+      { name: '¬a30', ends: ['n30.y', 'isTimer.i1'], tags: true },
+      { name: '¬a3', ends: ['n3.y', 'isTimer.i3'], tags: true },
+      { name: 'isIO', ends: ['isTimer.y', 'ldsel.s', 'nio.a', 'ioWq.i2'], tags: true },
+      { name: 'MemReadQ', ends: ['memRq.y', 'memRE'], tags: true },
+      { name: 'switches0', ends: ['z8.y', 'io.switches'], tags: true },
+    );
+    net('isLoad').ends.push('memRq.i0');
+    net('NoTrap').ends.push('memRq.i1');
+    net('notIO').ends.push('memRq.i2');
+    for (const k of ['switches', 'consoleData', 'consoleValid', 'leds']) { drop(k); delete pins[k]; }
+    const xR = P('res', 'y')[0] + 20;
+    pins.instr = romData;
+    Object.assign(pins, { memAddr: [xR, yS + 10], memWData: [xR, yS + 14], memBE: [xR, yS + 18], memWE: [xR, yS + 22], memRE: [xR, yS + 26], memRData: [0, yS + 6] });
+  }
   if (m) {
     // ---- M extension: the multiply/divide unit, a result multiplexer, and the stall it causes
     const xM = P('res', 'y')[0] + 8, yM = yS + Math.max(g(CSRU).h, g(SYSD).h) + 16;
@@ -697,6 +763,16 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean, dmemK: n
       { name: 'irqTakeQ', ends: ['irqg.y', 'trap.irq'], tags: true },
     );
     pins.retire = [P('res', 'y')[0] + 20, yS + 6];
+  }
+  if (ports) {
+    return {
+      id: `syscore${adder === 'ks' ? '' : '_rca'}${m ? '_m' : ''}`, name: `RV32I${m ? 'M' : ''} system core (ports)`, category: 'cpu',
+      summary: `The complete system processor with its memories outside: the instruction ROM on pcOut → instr, data and I/O on one port (byte enables, write and read strobes). Inside: every RV32I${m ? 'M' : ''} instruction, Zicsr, machine-mode traps and interrupts, and the timer (mtime / mtimecmp at 0x8000_0010 / 14).`,
+      ports: [bit('clk', 'in', 'left', true), bit('irq', 'in'), bus('instr', 32, 'in'), bus('memRData', 32, 'in'),
+        bus('pcOut', 32, 'out'), bus('memAddr', 32, 'out'), bus('memWData', 32, 'out'), bus('memBE', 4, 'out'), bit('memWE', 'out'), bit('memRE', 'out'), ...(m ? [bit('retire', 'out')] : [])],
+      symbol: { kind: 'box', label: m ? 'RV32IM CORE' : 'RV32I CORE' },
+      netlist: () => ({ pins, instances, nets }),
+    };
   }
   if (busK) {
     // ---- memory over the bus: instructions beyond the ROM and every load / store through dm (busMemUnit)
@@ -736,7 +812,7 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean, dmemK: n
   const busPorts: PortDef[] = busK ? [bit('retire', 'out'), ...M_OUT.map((sg) => (sg.endsWith('addr') || sg === 'wdata' ? bus(sg, 32, 'out') : sg === 'wstrb' ? bus(sg, 4, 'out') : bit(sg, 'out'))),
     ...M_IN.map((sg) => (sg === 'rdata' ? bus(sg, 32, 'in') : bit(sg, 'in')))] : [];
   return {
-    id: `sys_${IM.id}${adder === 'ks' ? '' : '_rca'}${m ? '_m' : ''}${busK ? '_bus' : dmemK === 5 ? '' : `_d${dmemK}`}`, name: `RV32I${m ? 'M' : ''} system (single-cycle, Zicsr, traps, I/O${busK ? ', on a bus' : ''})`, category: 'cpu',
+    id: `sys_${IM!.id}${adder === 'ks' ? '' : '_rca'}${m ? '_m' : ''}${busK ? '_bus' : dmemK === 5 ? '' : `_d${dmemK}`}`, name: `RV32I${m ? 'M' : ''} system (single-cycle, Zicsr, traps, I/O${busK ? ', on a bus' : ''})`, category: 'cpu',
     summary: `The complete processor: every RV32I instruction including byte and halfword memory access, the Zicsr instructions, machine-mode exceptions and interrupts, and memory-mapped I/O (console, LEDs, switches, timer).${m ? ' Plus the M extension: one-cycle multiplies and 34-cycle divides that stall the processor (retire = 0 while they run).' : ''}`,
     ports: [bit('clk', 'in', 'left', true), bus('switches', 8, 'in'), bit('irq', 'in'), bus('pcOut', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out'), ...(m ? [bit('retire', 'out')] : []), ...busPorts],
     symbol: { kind: 'box', label: m ? 'RV32IM SYSTEM' : 'RV32I SYSTEM' },

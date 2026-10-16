@@ -14,20 +14,20 @@ const W = 320, H = 200;
 /** The system CPU's cycles per second on the gates in the page (cycle engine, docs/ROADMAP.md). */
 const GATE_HZ = 2400;
 const PANEL_MS = 250;
-const FREEDOOM = 'doom/freedoom1.wad';
+export const FREEDOOM = 'doom/freedoom1.wad';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('en');
 const hex = (n: number, d = 8) => (n >>> 0).toString(16).padStart(d, '0');
 const dur = (s: number) => (s < 60 ? `${s.toFixed(0)} s` : s < 3600 ? `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, '0')} s` : `${(s / 3600).toFixed(1)} h`);
 
-interface Loaded {
+export interface Loaded {
   image: DoomImage;
   syms: DoomSymbol[];
   mod: typeof import('../doom/player');
   keys: typeof import('../doom/keys');
 }
 
-async function loadProgram(): Promise<Loaded> {
+export async function loadProgram(): Promise<Loaded> {
   const [img, syms, mod, keys, imageMod] = await Promise.all([
     fetch('doom/doom.img').then((r) => { if (!r.ok) throw new Error(`doom.img: ${r.status}`); return r.arrayBuffer(); }),
     fetch('doom/doom.syms.json').then((r) => { if (!r.ok) throw new Error(`doom.syms.json: ${r.status}`); return r.json() as Promise<DoomSymbol[]>; }),
@@ -37,7 +37,7 @@ async function loadProgram(): Promise<Loaded> {
 }
 
 /** Fetch with a progress callback (bytes so far, total or 0). */
-async function fetchBytes(url: string, progress: (got: number, total: number) => void): Promise<Uint8Array> {
+export async function fetchBytes(url: string, progress: (got: number, total: number) => void): Promise<Uint8Array> {
   const r = await fetch(url);
   if (!r.ok || !r.body) throw new Error(`${url}: ${r.status}`);
   const total = Number(r.headers.get('content-length') ?? 0);
@@ -55,7 +55,7 @@ async function fetchBytes(url: string, progress: (got: number, total: number) =>
 }
 
 /** A WAD's header: IWAD or PWAD. */
-function wadProblem(b: Uint8Array): string | null {
+export function wadProblem(b: Uint8Array): string | null {
   const id = String.fromCharCode(...b.subarray(0, 4));
   if (id !== 'IWAD') return id === 'PWAD' ? 'a PWAD is an add-on: it needs an IWAD (doom1.wad, doom.wad or freedoom1.wad) under it' : 'not a WAD file (it does not start with IWAD)';
   return null;
