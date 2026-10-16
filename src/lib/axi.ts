@@ -434,7 +434,7 @@ export const KEY_QUEUE: ComponentDef = {
  * keyboard's pins (KEY_QUEUE, or the sandbox's keyboard part).
  */
 export const AXI_KEYS: ComponentDef = axiReadPort('axikeys', 'Keyboard slave', 'KEYS',
-  'Two registers behind the bus: +0 the oldest waiting key (0 when none; reading it takes it from the keyboard), +4 the status (bit 0: a key waits). Writes are dropped.', 'code', 'ready');
+  'Two registers behind the bus: +0 the oldest waiting key (0 when none; reading it takes it from the keyboard), +4 the status (bit 0: a key waits). Writes are dropped.', [['code', 'ready', 'ack']]);
 
 /** The default slave: answers any address (reads 0, writes ignored), so a stray address never hangs the bus. */
 export const AXI_DEFAULT: ComponentDef = (() => {
@@ -691,28 +691,39 @@ export function busMemUnit(imemK: number): ComponentDef {
 // ---- the sandbox's system on a bus: ports for its parts, and bundled links -------------------------------
 
 /**
- * A read-to-take port: two registers behind the bus, +0 the data (reading it takes it: ack at the read's
- * handshake, if ready) and +4 the status (bit 0: ready). Writes are dropped. The keyboard's slave
- * (code / ready / ack: KEY_QUEUE or the sandbox's keyboard part) and the timer's (its count's low byte and irq).
+ * A read-to-take port: per channel two registers behind the bus, at 8·i the data (reading it takes it: ack at
+ * the read's handshake, if ready) and at 8·i + 4 the status (bit 0: ready). Writes are dropped. A channel is
+ * [data, ready, ack] pin names: the keyboard's (code / ready / ack: KEY_QUEUE or the sandbox's keyboard part),
+ * a timer's (its count's low byte, irq, ack).
  */
-function axiReadPort(id: string, name: string, label: string, summary: string, data: string, ready: string): ComponentDef {
+function axiReadPort(id: string, name: string, label: string, summary: string, chans: [string, string, string][]): ComponentDef {
   const b = new Builder(14, 14);
   const g = kit(b);
   const { rdHs } = slaveFsm(b, g, 0);
   b.next();
-  const status = g.split('araddr', [2, 1, 29])[1];
-  const take = b.name(g.and(rdHs, g.not(status), ready), 'take', true);
-  const word = g.mux(32, g.merge([data, g.konst(24, 0)], [8, 24]), g.merge([ready, g.konst(31, 0)], [1, 31]), status, `${data} or status`);
+  const n = chans.length, cb = Math.ceil(Math.log2(n));
+  const [, st, ch] = g.split('araddr', cb ? [2, 1, cb, 29 - cb] : [2, 1, 29]);
+  const status = b.name(st, 'status', true);
+  const which = cb ? b.op(decoder(cb, false), [ch], 'channel') : '';
+  const words = chans.map(([data, ready, ack], i) => {
+    const sel = cb ? `${which}.y${i}` : '';
+    b.wire(b.name(g.and(rdHs, g.not(status), ready, ...(sel ? [sel] : [])), `take ${data}`, true), ack);
+    return g.mux(32, g.merge([data, g.konst(24, 0)], [8, 24]), g.merge([ready, g.konst(31, 0)], [1, 31]), status, `${data} or status`);
+  });
+  const word = n === 1 ? words[0] : b.op1(muxTree(cb, 32), [...words, ...(2 ** cb > n ? Array(2 ** cb - n).fill(g.konst(32, 0)) : []), ch], 'channel');
   const rdr = b.op(register(32), [word, rdHs, 'clk'], 'read data', 'rdr');
   b.wire(`${rdr}.q`, 'rdata');
-  b.wire(take, 'ack');
-  const ports: PortDef[] = [...slavePorts(), bus(data, 8, 'in'), bit(ready, 'in'), bit('clk', 'in', 'bottom', true), bit('ack', 'out')];
+  const ports: PortDef[] = [...slavePorts(), ...chans.flatMap(([data, ready]) => [bus(data, 8, 'in'), bit(ready, 'in')]), bit('clk', 'in', 'bottom', true), ...chans.map(([, , ack]) => bit(ack, 'out'))];
   return define({ id, name, category: 'memory', summary, ports, symbol: { kind: 'box', label }, netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }) });
 }
 
-/** The timer's slave: +0 the count's low byte (reading it acknowledges a pending interrupt: ack), +4 bit 0 the irq. */
-export const AXI_TIMER_PORT: ComponentDef = axiReadPort('axitimer', 'Timer port', 'TIMER PORT',
-  'Two registers behind the bus for a timer (seqparts.ts timer): +0 the low byte of its count, and reading it acknowledges a pending interrupt (ack); +4 bit 0 the irq. Writes are dropped.', 'count', 'irq');
+/**
+ * The sandbox system's I/O port: the keyboard at +0 (the oldest key, taken when read) and +4 (status), the timer
+ * at +8 (the low byte of its count; reading it acknowledges its interrupt) and +12 (bit 0: irq).
+ */
+export const AXI_IO_PORT: ComponentDef = axiReadPort('axiio', 'I/O port (keyboard and timer)', 'I/O PORT',
+  'Four registers behind the bus: +0 the oldest waiting key (reading it takes it: kack), +4 bit 0 a key waits; +8 the low byte of a timer\'s count (reading it acknowledges the timer\'s interrupt: tack), +12 bit 0 its irq. Writes are dropped.',
+  [['code', 'ready', 'kack'], ['count', 'irq', 'tack']]);
 
 /**
  * A screen's write port: a store to base + 256·y + 4·x sets pixel (x, y) of a 64 × 64 screen to the store's

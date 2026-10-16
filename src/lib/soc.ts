@@ -7,7 +7,7 @@ import { MAP } from '../bus/model';
 import { BOOT_SOURCE, bootSource, PAYLOAD_SOURCE, SYSTEM_SOURCE, SYSTEM_WORDS } from '../bus/programs';
 import { assemble } from '../riscv/asm';
 import type { ComponentDef, PortDef } from '../sim/types';
-import { AXI_DEFAULT, AXI_KEYS, AXI_PIXEL, AXI_TIMER_PORT, axiBus, axiDram, axiFlash, axiFlashWindow, axiRam, axiScreen, BUS_DRAM, bundled, DMA_ENGINE, KEY_QUEUE, M_IN, M_OUT } from './axi';
+import { AXI_DEFAULT, AXI_KEYS, AXI_IO_PORT, AXI_PIXEL, axiBus, axiDram, axiFlash, axiFlashWindow, axiRam, axiScreen, BUS_DRAM, bundled, DMA_ENGINE, KEY_QUEUE, M_IN, M_OUT } from './axi';
 import { symbolGeom } from '../sim/geometry';
 import { Builder } from './builder';
 import { define } from './define';
@@ -144,8 +144,8 @@ export function busCore(imemK = 7): ComponentDef {
   return d;
 }
 
-/** The sandbox system's map: RAM, flash, DRAM, DMA, screen, keyboard, timer, then the default slave. */
-export const SANDBOX_MAP = [MAP.ram, MAP.flash, MAP.dram, MAP.dma, MAP.screen, MAP.keys, 0x7, 0xf];
+/** The sandbox system's map (chapter 35's): RAM, flash, DRAM, DMA, screen, I/O (keyboard and timer), then the default slave. */
+export const SANDBOX_MAP = [MAP.ram, MAP.flash, MAP.dram, MAP.dma, MAP.screen, MAP.keys, 0xf];
 
 /** The sandbox system's parts, by role (library ids the example places). */
 export const SANDBOX_PARTS = (() => {
@@ -156,6 +156,6 @@ export const SANDBOX_PARTS = (() => {
     bus: bundled(BUS, [['m0_', 'slave'], ['m1_', 'slave'], ...SANDBOX_MAP.map((_, k): [string, 'master'] => [`s${k}_`, 'master'])], `${BUS.id}_b`),
     ram: slave(axiRam(12)), flash: slave(axiFlashWindow(8)), dram: slave(axiDram()),
     dma: bundled(DMA_ENGINE, [['', 'slave'], ['m_', 'master']], 'dma_b'),
-    pixel: slave(AXI_PIXEL), keys: slave(AXI_KEYS), timer: slave(AXI_TIMER_PORT), def: slave(AXI_DEFAULT),
+    pixel: slave(AXI_PIXEL), io: slave(AXI_IO_PORT), def: slave(AXI_DEFAULT),
   };
 })();

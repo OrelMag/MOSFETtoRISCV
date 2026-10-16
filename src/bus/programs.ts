@@ -44,7 +44,7 @@ export const SYSTEM_SOURCE = `# loaded from flash, runs from RAM: each key typed
         li   s0, 0x80000000     # console
         li   s1, 0x20000000     # DRAM: the line typed so far, a word a key
         li   s2, 0x50000000     # screen: 64 × 64, a byte a pixel (RGB332)
-        li   s3, 0x60000000     # keyboard: +0 the oldest key (reading takes it), +4 status
+        li   s3, 0x60000000     # I/O port: keyboard +0 the oldest key (reading takes it), +4 status; timer +8, +12
         li   s4, 0              # keys in the line
         li   s5, 0              # the next cell on the screen (8 × 8 of them)
         j    prompt
@@ -100,7 +100,7 @@ export const SANDBOX_SOURCE = `# loaded from flash, runs from RAM at 0x400. The 
         li   s0, 0x80000000     # console (+0), LEDs (+4)
         li   s1, 0x20000000     # DRAM: the line, a word a key
         li   s2, 0x50000000     # screen: pixel (x, y) at + 256·y + 4·x, its colour the low byte
-        li   s3, 0x60000000     # keyboard: +0 the oldest key (reading takes it), +4 status
+        li   s3, 0x60000000     # I/O port: keyboard +0 the oldest key (reading takes it), +4 status; timer +8, +12
         li   s4, 0              # keys in the line
         li   s5, 0              # the next cell (8 × 8 cells of 8 pixels)
         li   s9, 0              # timer ticks
@@ -156,10 +156,9 @@ prompt: li   t0, 62             # '>'
 handler: li  s6, 0x40000000
         li   s7, 2
         sw   s7, 12(s6)         # clear the DMA's done (still up from the boot's copy)
-        li   s6, 0x70000000
-        lw   s7, 4(s6)          # the timer's irq?
+        lw   s7, 12(s3)         # the timer's irq (the I/O port: +8 its count, +12 its irq)?
         beqz s7, out
-        lw   s7, 0(s6)          # reading its count acknowledges it
+        lw   s7, 8(s3)          # reading its count acknowledges it
         addi s9, s9, 1
         sw   s9, 4(s0)          # the LEDs count the ticks
 out:    mret`;

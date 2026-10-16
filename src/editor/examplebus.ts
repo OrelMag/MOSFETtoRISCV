@@ -1,6 +1,6 @@
 // Examples ▸ System on a bus: chapter 35's computer as a sandbox chip. The system CPU (its boot ROM a ROM part)
 // and the DMA engine are the bus's masters; RAM, a flash (its window in gates over a ROM part holding the
-// program), the DRAM of chapter 33, the DMA's registers, a screen, a keyboard and a timer are its slaves.
+// program), the DRAM of chapter 33, the DMA's registers, a screen, and an I/O port for a keyboard and a timer.
 // Every link is two buses (request, response: lib/axi.ts bundled), every connection a pair of pointers.
 
 import { SANDBOX_SOURCE, SANDBOX_WORDS, bootSource } from '../bus/programs';
@@ -13,14 +13,14 @@ import { Sheet } from './example6502';
 export const NOTES_BUS = 'Chapter 35\'s computer on one bus. Masters: the RV32I system core (boot ROM: the ROM part on its left) and the DMA engine. '
   + 'Slaves, by the top four address bits: 0 RAM (16 KB), 1 the flash (a 64-cycle page read, then 2 cycles a word; its program is the ROM part beside it: Edit program…), '
   + '2 the DRAM (chapter 33\'s controller), 4 the DMA\'s registers, 5 the screen (pixel (x, y) at 0x5000_0000 + 256·y + 4·x, colour the low byte), '
-  + '6 the keyboard (+0 the oldest key, taken when read; +4 status), 7 the timer (+0 its count, reading acknowledges; +4 its irq); anything else the default slave. '
+  + '6 the I/O port: the keyboard (+0 the oldest key, taken when read; +4 status) and the timer (+8 its count, reading it acknowledges; +12 its irq); anything else the default slave. '
   + 'Console, LEDs, switches and mtime are inside the core at 0x8000_0000. At power-on the boot ROM has the DMA copy the flash to RAM 0x400 and jumps there. '
   + 'Run, then type (the keyboard takes keys while running): each key is echoed, kept in DRAM and drawn; Enter prints the line back; the LEDs count the timer\'s interrupts. '
-  + 'Every link is two buses: the request (the master\'s nine signals, 105 bits) and the response (six signals, 37 bits); double-click a part to see them unpacked.';
+  + 'Every link is two buses: the request (the master\'s nine signals, 105 bits) and the response (six signals, 37 bits); double-click a part to see them unpacked. The CPU drawer does not follow this core (its memory and interrupts are behind the bus): watch the console, the screen and the LEDs, or look inside.';
 
 const SLAVES: [string, keyof typeof SANDBOX_PARTS, string][] = [
   ['ram', 'ram', 'RAM 16 KB'], ['flash', 'flash', 'flash window'], ['dram', 'dram', 'DRAM'], ['dmaregs', 'dma', ''],
-  ['pixel', 'pixel', 'screen port'], ['keys', 'keys', 'keyboard port'], ['tport', 'timer', 'timer port'], ['none', 'def', 'default slave'],
+  ['pixel', 'pixel', 'screen port'], ['io', 'io', 'I/O port'], ['none', 'def', 'default slave'],
 ];
 
 /** The sandbox's System on a bus. */
@@ -67,9 +67,9 @@ export function busSystemChip(id: string, name: string): ChipDoc {
   const x5 = x4 + wMax + 18;
   s.part('from', { rom: { k: 8, w: 32, addr: 'word', lang: 'asm', src: SANDBOX_SOURCE } }, [x5, at.get('flash')!], { label: 'flash contents' });
   s.part('scr', { screen: { mode: 'write', size: 64, color: 'rgb332' } }, [x5, at.get('pixel')!], { label: 'screen' });
-  s.part('kbd', { keyboard: true }, [x5, at.get('keys')!], { label: 'keyboard' });
-  s.part('tmr', { lib: 'timer1000' }, [x5, at.get('tport')!], { label: 'timer' });
-  s.part('cnt', { split: [8, 2] }, [x5 + 16, at.get('tport')! + 2]);
+  s.part('kbd', { keyboard: true }, [x5, at.get('io')!], { label: 'keyboard' });
+  s.part('tmr', { lib: 'timer1000' }, [x5, at.get('io')! + 8], { label: 'timer' });
+  s.part('cnt', { split: [8, 2] }, [x5 + 16, at.get('io')! + 10]);
 
   // the links: request and response of every master and slave
   s.tap('cpu.req', 'cpu_req'); s.tap('bus.m0_req', 'cpu_req');
@@ -88,12 +88,12 @@ export function busSystemChip(id: string, name: string): ChipDoc {
     ['dma.irq', 'irq.b', 'dmaIrq'], ['tmr.irq', 'irq.a', 'tmrIrq'], ['irq.y', 'cpu.irq', 'irq'],
     ['flash.addr', 'from.addr', 'faddr'], ['from.data', 'flash.data', 'fdata'],
     ['pixel.x', 'scr.x', 'px'], ['pixel.y', 'scr.y', 'py'], ['pixel.color', 'scr.color', 'pcolor'], ['pixel.we', 'scr.we', 'pwe'],
-    ['keys.ack', 'kbd.ack', 'kack'], ['kbd.code', 'keys.code', 'kcode'], ['kbd.ready', 'keys.ready', 'kready'],
-    ['tmr.irq', 'tport.irq', 'tmrIrq'], ['tport.ack', 'tmr.ack', 'tack'], ['tmr.count', 'cnt.in', 'tcount'], ['cnt.o0', 'tport.count', 'tcount8'],
+    ['io.kack', 'kbd.ack', 'kack'], ['kbd.code', 'io.code', 'kcode'], ['kbd.ready', 'io.ready', 'kready'],
+    ['tmr.irq', 'io.irq', 'tmrIrq'], ['io.tack', 'tmr.ack', 'tack'], ['tmr.count', 'cnt.in', 'tcount'], ['cnt.o0', 'io.count', 'tcount8'],
   ];
   const tapped = new Set<string>();
   for (const [a, b, n] of pairs) for (const e of [a, b]) if (!tapped.has(e)) { tapped.add(e); s.tap(e, n); }
-  for (const p of ['cpu', 'dma', 'bus', 'ram', 'flash', 'dram', 'pixel', 'keys', 'tport', 'none', 'tmr', 'con', 'scr']) s.tap(`${p}.clk`, 'clk');
+  for (const p of ['cpu', 'dma', 'bus', 'ram', 'flash', 'dram', 'pixel', 'io', 'none', 'tmr', 'con', 'scr']) s.tap(`${p}.clk`, 'clk');
   s.tap('pin:clk', 'clk');
   return s.doc(id, name, { notes: NOTES_BUS });
 }
