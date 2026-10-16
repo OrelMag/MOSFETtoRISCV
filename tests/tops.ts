@@ -2,7 +2,7 @@
 // register the top level itself (only its parts), so the schematic tests list them explicitly.
 
 import {
-  dualCore, laneCore, multiCore, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu,
+  dualCore, laneCore, multiCore, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCore, systemCpu,
 } from '../src/lib';
 import { assemble } from '../src/riscv/asm';
 import { CACHE_CPU_PROGRAMS } from '../src/riscv/cprograms';
@@ -23,6 +23,8 @@ export function cpuTops(): ComponentDef[] {
     pipelinedCpu(cw, { adder: 'ks', dcache: 'wb2' }), pipelinedCpu(cw, { adder: 'ks', dcache: 'wt', predictor: true, balanced: true }),
     pipelinedCpu(w, { adder: 'ks', m: true }), pipelinedCpu(w, { adder: 'ks', balanced: true, predictor: true, m: true }),
     pipelinedFpCpu(w), systemCpu(w), systemCpu(w, { m: true }),
+    // Appendix B: the system core with ports (the Doom computer's)
+    systemCore(), systemCore({ m: true }),
     multicycleCpu(w, { control: 'fsm' }), multicycleCpu(w, { control: 'micro' }), dualCore(w),
     multiCore(w, 4), multiCore(w, 8, { dmemK: 10 }), laneCore(w, 4), laneCore(w, 8),
     // Appendix A: the 6502 at transistor level (its blocks register when it is built)
