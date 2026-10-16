@@ -281,6 +281,19 @@ export class FastISS {
     return next;
   }
 
+  /**
+   * Set by a device during run() (a slow-path load or store): run() returns after the current
+   * instruction. A FLIP, a store into the frame buffer: exact stops without a check per instruction.
+   */
+  yieldNow = false;
+  /** Instructions run() has retired so far in the current call (current at slow paths only). */
+  runRetired = 0;
+
+  /** Instructions retired, current also inside a device's load / store during run(). */
+  get retiredNow(): number {
+    return this.retired + this.runRetired;
+  }
+
   /** One instruction (or interrupt entry), as ISS.step without its report. */
   step(): void {
     this.run(1);
@@ -294,14 +307,14 @@ export class FastISS {
     const x = this.xi, kind = this.kind, frd = this.frd, frs1 = this.frs1, frs2 = this.frs2, fimm = this.fimm;
     const d8 = this.d8, d16 = this.d16, d32 = this.dmem, dmask = this.dmask, region = this.region;
     const imask = this.imemWords - 1, sys = this.system;
-    let pc = this.pc, mt = this.mtime, done = 0, retired = 0;
+    let pc = this.pc, mt = this.mtime, done = 0, retired = 0, slow = false;
     let armed = sys && this.mie && (this.mtie || this.meie);
     while (done < n) {
       done++;
       if (armed) {
         const tp = this.mtie && (mt >>> 0) >= (this.mtimecmp >>> 0), ep = this.meie && this.irq;
         if (tp || ep) {
-          this.mtime = mt;
+          this.mtime = mt; this.runRetired = retired; slow = true;
           pc = this.trap(ep ? CAUSE.EXTERNAL_IRQ : CAUSE.TIMER_IRQ, 0, pc);
           mt = (mt + 1) >>> 0;
           armed = false;
@@ -329,43 +342,43 @@ export class FastISS {
         case K.LB:
           addr = x[frs1[i]] + fimm[i];
           if (region[addr >>> 28] === RAM) x[rd] = (d8[addr & dmask] << 24) >> 24;
-          else { this.mtime = mt; x[rd] = this.load(addr >>> 0, 0); }
+          else { this.mtime = mt; this.runRetired = retired; slow = true; x[rd] = this.load(addr >>> 0, 0); }
           break;
         case K.LBU:
           addr = x[frs1[i]] + fimm[i];
           if (region[addr >>> 28] === RAM) x[rd] = d8[addr & dmask];
-          else { this.mtime = mt; x[rd] = this.load(addr >>> 0, 4); }
+          else { this.mtime = mt; this.runRetired = retired; slow = true; x[rd] = this.load(addr >>> 0, 4); }
           break;
         case K.LH: case K.LHU: {
           addr = x[frs1[i]] + fimm[i];
           if (sys && addr & 1) { next = this.misaligned(CAUSE.MISALIGNED_LOAD, addr, pc); break; }
           const u = kind[i] === K.LHU;
           if (region[addr >>> 28] === RAM) { const h = d16[(addr & dmask) >>> 1]; x[rd] = u ? h : (h << 16) >> 16; }
-          else { this.mtime = mt; x[rd] = this.load(addr >>> 0, u ? 5 : 1); }
+          else { this.mtime = mt; this.runRetired = retired; slow = true; x[rd] = this.load(addr >>> 0, u ? 5 : 1); }
           break;
         }
         case K.LW:
           addr = x[frs1[i]] + fimm[i];
           if (sys && addr & 3) { next = this.misaligned(CAUSE.MISALIGNED_LOAD, addr, pc); break; }
           if (region[addr >>> 28] === RAM) x[rd] = d32[(addr & dmask) >>> 2];
-          else { this.mtime = mt; x[rd] = this.load(addr >>> 0, 2); }
+          else { this.mtime = mt; this.runRetired = retired; slow = true; x[rd] = this.load(addr >>> 0, 2); }
           break;
         case K.SB:
           addr = x[frs1[i]] + fimm[i];
           if (region[addr >>> 28] === RAM) d8[addr & dmask] = x[frs2[i]];
-          else { this.mtime = mt; this.store(addr >>> 0, 0, x[frs2[i]]); armed = sys && this.mie && (this.mtie || this.meie); }
+          else { this.mtime = mt; this.runRetired = retired; slow = true; this.store(addr >>> 0, 0, x[frs2[i]]); armed = sys && this.mie && (this.mtie || this.meie); }
           break;
         case K.SH:
           addr = x[frs1[i]] + fimm[i];
           if (sys && addr & 1) { next = this.misaligned(CAUSE.MISALIGNED_STORE, addr, pc); break; }
           if (region[addr >>> 28] === RAM) d16[(addr & dmask) >>> 1] = x[frs2[i]];
-          else { this.mtime = mt; this.store(addr >>> 0, 1, x[frs2[i]]); armed = sys && this.mie && (this.mtie || this.meie); }
+          else { this.mtime = mt; this.runRetired = retired; slow = true; this.store(addr >>> 0, 1, x[frs2[i]]); armed = sys && this.mie && (this.mtie || this.meie); }
           break;
         case K.SW:
           addr = x[frs1[i]] + fimm[i];
           if (sys && addr & 3) { next = this.misaligned(CAUSE.MISALIGNED_STORE, addr, pc); break; }
           if (region[addr >>> 28] === RAM) d32[(addr & dmask) >>> 2] = x[frs2[i]];
-          else { this.mtime = mt; this.store(addr >>> 0, 2, x[frs2[i]]); armed = sys && this.mie && (this.mtie || this.meie); }
+          else { this.mtime = mt; this.runRetired = retired; slow = true; this.store(addr >>> 0, 2, x[frs2[i]]); armed = sys && this.mie && (this.mtie || this.meie); }
           break;
         case K.ADDI: x[rd] = x[frs1[i]] + fimm[i]; break;
         case K.SLLI: x[rd] = x[frs1[i]] << fimm[i]; break;
@@ -401,7 +414,7 @@ export class FastISS {
         case K.REMU: { const a = x[frs1[i]] >>> 0, b = x[frs2[i]] >>> 0; x[rd] = b === 0 ? a : a % b; if (sys) mt += DIV_CYCLES - 1; break; }
         case K.AMOADD: case K.AMOSWAP: {
           addr = x[frs1[i]];
-          this.mtime = mt;
+          this.mtime = mt; this.runRetired = retired; slow = true;
           const old = this.region[addr >>> 28] === RAM ? d32[(addr & dmask) >>> 2] : this.load(addr >>> 0, 2);
           const nv = kind[i] === K.AMOADD ? old + x[frs2[i]] : x[frs2[i]];
           if (this.region[addr >>> 28] === RAM) d32[(addr & dmask) >>> 2] = nv; else this.store(addr >>> 0, 2, nv);
@@ -409,7 +422,7 @@ export class FastISS {
           break;
         }
         case K.SYSTEM:
-          this.mtime = mt;
+          this.mtime = mt; this.runRetired = retired; slow = true;
           next = this.sysInstr(i, pc);
           armed = sys && this.mie && (this.mtie || this.meie);
           break;
@@ -430,11 +443,13 @@ export class FastISS {
         this.halted = false;
       }
       if (sys) mt = (mt + 1) >>> 0;
+      if (slow) { slow = false; if (this.yieldNow) { this.yieldNow = false; break; } }
     }
     this.pc = pc;
     this.mtime = mt >>> 0;
     this.steps += done;
     this.retired += retired;
+    this.runRetired = 0;
     return done;
   }
 

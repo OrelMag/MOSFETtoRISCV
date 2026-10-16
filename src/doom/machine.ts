@@ -124,6 +124,10 @@ function loadData(dmem: Uint32Array, img: DoomImage): void {
 
 /** The Doom computer on the fast interpreter. */
 export class FastDoom extends FastISS {
+  /** Stop run() after a store into the picture (To next pixel) / after a FLIP (To end of frame, frame pacing). */
+  yieldOnPixel = false;
+  yieldOnFlip = false;
+
   constructor(readonly image: DoomImage, readonly dev: DoomDevices) {
     super(image.text, opts(image));
     loadData(this.dmem, image);
@@ -137,6 +141,7 @@ export class FastDoom extends FastISS {
 
   protected override store(addr: number, f3: number, v: number): void {
     if (!this.dev.write(addr, f3, v)) super.store(addr, f3, v);
+    else if (this.yieldOnPixel && addr >= FB_BASE && addr < FB_BASE + SCREEN_W * SCREEN_H) this.yieldNow = true;
   }
 
   protected override ioRead(addr: number): number {
@@ -145,6 +150,7 @@ export class FastDoom extends FastISS {
 
   protected override ioWrite(addr: number, f3: number, v: number): void {
     if (!this.dev.ioWrite((addr >>> 2) & 7)) super.ioWrite(addr, f3, v);
+    else if (this.yieldOnFlip) this.yieldNow = true;
   }
 }
 
