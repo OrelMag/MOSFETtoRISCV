@@ -651,7 +651,16 @@ src/doom/      Appendix B's Doom computer (DOM-free): machine.ts (the memory map
                toFrameEnd (FastISS.yieldNow from FastDoom.yieldOnPixel / yieldOnFlip), back(): a journal per step, snapshots for
                larger operations), keys.ts (KeyboardEvent.code → doomkeys.h). widgets/doom.ts: Appendix B's Play step (chapters/
                ch-doom.ts): fetches doom.img + syms on open, the WAD only on Play (public/doom/freedoom1.wad: fetch-wad.mjs --public,
-               run by the deploy / desktop builds; or the learner's own file); keys only while the screen has focus
+               run by the deploy / desktop builds; or the learner's own file); keys only while the screen has focus.
+               The gate window (step 2, widgets/doomgates.ts): lib/doompc.ts doomComputer(text, wadWords, wadLength) =
+               systemCore({ m: true }) (system.ts: the system CPU with its ROM on pcOut → instr and data on a port memAddr /
+               memWData / memBE / memWE / memRE / memRData; only mtime / mtimecmp inside) + doomProgramRom (romLevels 2^16) +
+               bankedBigRam(21) RAM + wadRom (romLevels 2^23, statsOf: cost counted from the words, romLevelsStats) +
+               bankedBigRam(15) frame buffer + doomDevices (KEY_QUEUE: an external leaf popped by the read strobe) + DOOM_MAP;
+               doom/gates.ts loadGates (registers / PC / CSRs / timer forced into both latches of each flip-flop, memories and the
+               key queue poked; a DualSim through its GateSim, then the cycle engine), runWindow (lock step with FastDoom, PC and
+               registers per retirement), memoryDiff (tests/doomgates.test.ts). The scene starts as the core on a bench and reloads
+               with the whole computer once a game starts (a module-level session); Scene.noRemix hides Open in Sandbox
 src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/CAMPAIGN.md). DOM-free:
   types.ts       CampaignNode (act, kind lesson / drill / build / program / core, requires, why, tips, codex,
                  unlocks: library ids or `prefix*` later levels may place, anatomy blocks, base challenge, par, soon)

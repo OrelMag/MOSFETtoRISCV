@@ -49,6 +49,8 @@ export interface Scene {
    * event-driven switch-level engine.
    */
   engine?: 'cycle' | 'nmos';
+  /** No Open in Sandbox: the circuit is larger than a sandbox chip can hold (Appendix B's Doom computer). */
+  noRemix?: boolean;
 }
 
 export interface Widget {
@@ -107,6 +109,7 @@ export class Stage {
   readonly el: HTMLElement;
   readonly inspector: Inspector;
   scene: Scene | null = null;
+  private remixBtn!: HTMLButtonElement;
   sim: Sim | null = null;
   rootCtx: ViewCtx | null = null;
   ctx: ViewCtx | null = null;
@@ -178,7 +181,7 @@ export class Stage {
       icon('probe', 15), h('span', { class: 'lbl' }, 'Probe')) as HTMLButtonElement;
     this.timingBtn = h('button', { class: 'btn ghost sm toggle', title: 'Timing diagram: probed nets and ports over time', onclick: () => this.showAnalyzer(!this.el.classList.contains('with-analyzer')) },
       icon('wave', 15), h('span', { class: 'lbl' }, 'Timing')) as HTMLButtonElement;
-    const remix = h('button', { class: 'btn ghost sm remix-btn', title: 'Open in Sandbox: an editable copy of the circuit on screen, as one of your own chips', onclick: () => this.remix() },
+    const remix = this.remixBtn = h('button', { class: 'btn ghost sm remix-btn', title: 'Open in Sandbox: an editable copy of the circuit on screen, as one of your own chips', onclick: () => this.remix() },
       icon('chip', 15), h('span', { class: 'lbl' }, 'Open in Sandbox'));
     // The level on screen as an image file (view/image.ts, loaded on first use).
     const imgMenu = h('div', { class: 'pal-menu img-menu', role: 'menu' });
@@ -328,6 +331,7 @@ export class Stage {
     this.initAnalyzer();
     this.goTo(scene.path ?? [], false);
     this.buildControls();
+    this.remixBtn.hidden = !!scene.noRemix;
     this.view.highlight(scene.highlight ?? []);
     this.panels = (scene.panels ?? []).map((f) => f(this));
     for (const p of this.panels) (p.el.dataset.dock === 'left' ? this.dock : this.canvas).append(p.el);

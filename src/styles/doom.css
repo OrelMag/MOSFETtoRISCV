@@ -41,6 +41,18 @@
 .doom-pix p { margin: 0; color: var(--text-2); font-size: 12px; }
 .doom-zoom { width: 192px; height: 120px; image-rendering: pixelated; border-radius: 6px; border: 1px solid var(--border-strong); flex: 0 0 auto; max-width: 100%; background: #000; }
 
+/* Appendix B's gate window (widgets/doomgates.ts): a scene panel */
+.doom-gates-panel { width: 340px; }
+.doom-gates-panel .doom-bezel { padding: 6px; }
+.doom-gates-panel .doom-kv { font-size: 12px; margin-top: 6px; }
+.doom-gates-panel .doom-row { margin: 6px 0; }
+.doom-gate-result { font-size: 12px; line-height: 1.45; border-radius: 6px; }
+.doom-gate-result:empty { display: none; }
+.doom-gate-result.good { background: var(--good-soft); color: var(--text); padding: 6px 8px; }
+.doom-gate-result.good b { color: var(--good); }
+.doom-gate-result.bad { background: var(--bad-soft); color: var(--text); padding: 6px 8px; }
+.doom-gate-result.bad b { color: var(--bad); }
+
 :root { --doom-bezel: #1a1d26; }
 :root[data-theme='dark'] { --doom-bezel: #05060a; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) { --doom-bezel: #05060a; } }

@@ -3,6 +3,7 @@
 // serialized (sandbox save/share).
 
 import type { Sim } from './sim';
+import type { Stats } from './stats';
 
 /** A single bit on a wire: 0, 1, X (unknown / contention) or Z (floating, switch level only). */
 export const B0 = 0;
@@ -199,6 +200,11 @@ export interface ComponentDef {
   behavior?: Behavior;
   /** Simulate by behaviour by default (the structure is still shown when the box is opened). */
   preferBehavior?: boolean;
+  /**
+   * What stats() would count in the structure, computed without building it: for a structure too
+   * large to walk (the 2^23-word WAD ROM: millions of instances). Must equal the walk (tested).
+   */
+  statsOf?: () => Stats;
   /** Reference function for tests and truth tables: packed inputs → packed outputs. */
   spec?: (inputs: number[]) => number[];
   /** Power-on hints for 'zero' mode: internal net name → value. */

@@ -34,6 +34,7 @@ export function stats(def: ComponentDef): Stats {
   else if (def.prim === 'res') s = { ...zero, resistors: 1 };
   else if (def.prim === 'cap') s = { ...zero, capacitors: 1 };
   else if (def.prim && def.prim !== 'sense') s = zero; // a sense amplifier counts the transistors it is drawn with
+  else if (def.statsOf) s = def.statsOf();
   else {
     const nl = netlistOf(def);
     s = { ...zero };
