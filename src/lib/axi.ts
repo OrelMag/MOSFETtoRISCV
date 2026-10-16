@@ -39,6 +39,33 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
   return d;
 }
 
+/** A bus ANDed with one bit (en fans out inside the box, not across the drawing that uses it). */
+export function andBus(w: number): ComponentDef {
+  return memo(`andbus${w}`, () => {
+    const P = 4;
+    const instances = [
+      { name: 'sa', def: splitter(ones(w), P), at: [4, 0] as [number, number] },
+      ...Array.from({ length: w }, (_, i) => ({ name: `g${i}`, def: AND, at: [9, P * i] as [number, number] })),
+      { name: 'my', def: merger(ones(w), P), at: [17, 1] as [number, number] },
+    ];
+    const nets = [
+      { name: 'a', ends: ['a', 'sa.in'] },
+      { name: 'en', ends: ['en', ...Array.from({ length: w }, (_, i) => `g${i}.b`)], trunk: 7 },
+      ...Array.from({ length: w }, (_, i) => ({ ends: [`sa.o${i}`, `g${i}.a`] })),
+      ...Array.from({ length: w }, (_, i) => ({ ends: [`g${i}.y`, `my.i${i}`] })),
+      { name: 'y', ends: ['my.out', 'y'] },
+    ];
+    return define({
+      id: `andbus${w}`, name: `${w}-bit AND with one bit`, category: 'gate',
+      summary: `Each bit of a ANDed with en: the bus when en = 1, all zeros when en = 0 (${w} ANDs).`,
+      ports: [bus('a', w, 'in'), bit('en', 'in'), bus('y', w, 'out')],
+      symbol: { kind: 'box', label: 'AND', w: 6, h: 4 },
+      spec: ([a, en]) => [en ? a : 0],
+      netlist: () => ({ pins: { a: [0, P * w / 2], en: [0, P * w / 2 + 3], y: [22, P * w / 2] }, instances, nets }),
+    });
+  });
+}
+
 /** Small helpers over a Builder: gates of any arity, buses of any width (1 included). */
 function kit(b: Builder) {
   const and = (...xs: string[]) => (xs.length === 1 ? xs[0] : xs.length === 2 ? b.op1(AND, xs) : b.op1(andN(xs.length), xs));
@@ -49,7 +76,7 @@ function kit(b: Builder) {
   const split = (x: string, ws: number[]) => { const s = b.op(splitter(ws), [x]); return ws.map((_, i) => `${s}.o${i}`); };
   const rep = (x: string, n: number) => merge(Array.from({ length: n }, () => x));
   /** A bus ANDed with a bit. */
-  const gate = (x: string, wd: number, en: string) => (wd === 1 ? b.op1(AND, [x, en]) : b.op1(bitwise('and', wd), [x, rep(en, wd)]));
+  const gate = (x: string, wd: number, en: string) => (wd === 1 ? b.op1(AND, [x, en]) : b.op1(andBus(wd), [x, en]));
   /** OR of buses of one width. */
   const orBus = (xs: string[], wd: number) => xs.reduce((acc, x) => b.op1(wd === 1 ? OR : bitwise('or', wd), [acc, x]));
   const konst = (wd: number, v: number) => b.op1(wd === 1 ? (v ? TIE1 : TIE0) : constWord(wd, v), []);
@@ -98,50 +125,124 @@ export const AXI_PORT: ComponentDef = (() => {
 })();
 
 /**
+ * Who holds the bus: a one-hot grant register (all 0: free) and the round-robin arbiter. While free the
+ * arbiter's choice is the grant at once (no cycle lost); it is held from the next edge until the
+ * response handshake (respDone).
+ */
+function axiGrant(M: number): ComponentDef {
+  return memo(`axigrant${M}`, () => {
+    const b = new Builder(14, 14);
+    const g = kit(b);
+    const held = b.op(register(M), ['', g.konst(1, 1), 'clk'], 'held grant', 'held');
+    const heldBits = g.split(`${held}.q`, ones(M));
+    const active = b.name(g.or(...heldBits), 'busy', true);
+    const arb = b.op(arbiterN(M), [...Array.from({ length: M }, (_, m) => `req${m}`), 'clk'], 'arbiter', 'arb');
+    b.next();
+    const cur = Array.from({ length: M }, (_, m) => g.mux(1, `${arb}.g${m}`, heldBits[m], active));
+    const keep = g.and(active, g.not('respDone')), take = g.and(g.not(active), g.or(...Array.from({ length: M }, (_, m) => `req${m}`)));
+    b.wire(g.merge(Array.from({ length: M }, (_, m) => g.or(g.and(keep, heldBits[m]), g.and(take, `${arb}.g${m}`)))), `${held}.d`);
+    cur.forEach((c, m) => b.wire(c, `grant${m}`));
+    b.wire(active, 'busy');
+    const ports: PortDef[] = [...Array.from({ length: M }, (_, m) => bit(`req${m}`, 'in')), bit('respDone', 'in'), bit('clk', 'in', 'bottom', true), ...Array.from({ length: M }, (_, m) => bit(`grant${m}`, 'out')), bit('busy', 'out')];
+    return define({
+      id: `axigrant${M}`, name: `Bus grant (${M} masters)`, category: 'memory',
+      summary: 'Round-robin arbitration (arbiterN): while the bus is free the winner is granted at once; the grant is then held until the response handshake.',
+      ports, symbol: { kind: 'box', label: 'GRANT' },
+      netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
+/** The granted master's signals: an AND-OR over the one-hot grant, per channel signal. */
+function axiMasterMux(M: number): ComponentDef {
+  return memo(`aximmux${M}`, () => {
+    const b = new Builder(14, 14);
+    const g = kit(b);
+    for (const s of M_OUT) b.wire(g.orBus(Array.from({ length: M }, (_, m) => g.gate(`m${m}_${s}`, wOf(s), `grant${m}`)), wOf(s)), s);
+    const ports: PortDef[] = [...Array.from({ length: M }, (_, m) => M_OUT.map((s) => ({ name: `m${m}_${s}`, width: wOf(s), dir: 'in' as const }))).flat(), ...Array.from({ length: M }, (_, m) => bit(`grant${m}`, 'in')),
+      ...M_OUT.map((s) => ({ name: s, width: wOf(s), dir: 'out' as const }))];
+    return define({
+      id: `aximmux${M}`, name: `Bus master multiplexer (${M})`, category: 'memory',
+      summary: 'The granted master\'s address, data, valids and readies, chosen by the one-hot grant (an AND-OR per signal).',
+      ports, symbol: { kind: 'box', label: 'MASTER MUX' },
+      netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
+/** The address decoder: the top nibble of the address presented (AW when writing, else AR); held with the grant. */
+function axiDecoder(codes: number[]): ComponentDef {
+  const S = codes.length;
+  return memo(`axidec${codes.join('_')}`, () => {
+    const b = new Builder(14, 14);
+    const g = kit(b);
+    const addr = g.mux(32, 'araddr', 'awaddr', 'awvalid', 'address');
+    const nib = g.split(addr, [28, 4])[1];
+    b.next();
+    const match = codes.slice(0, S - 1).map((c) => b.op1(equal(4), [nib, g.konst(4, c)], `= ${c.toString(16)}`));
+    const dec = [...match, g.not(g.or(...match))];
+    b.next();
+    const selHeld = b.op(register(S), [g.merge(dec), g.not('busy'), 'clk'], 'addressed slave', 'selh');
+    const sh = g.split(`${selHeld}.q`, ones(S));
+    dec.forEach((d, k) => b.wire(g.mux(1, d, sh[k], 'busy'), `sel${k}`));
+    const ports: PortDef[] = [bus('awaddr', 32, 'in'), bus('araddr', 32, 'in'), bit('awvalid', 'in'), bit('busy', 'in'), bit('clk', 'in', 'bottom', true), ...Array.from({ length: S }, (_, k) => bit(`sel${k}`, 'out'))];
+    return define({
+      id: `axidec${codes.join('_')}`, name: `Bus address decoder (${S} slaves)`, category: 'memory',
+      summary: `Slave k answers addresses whose top four bits are ${codes.slice(0, S - 1).map((c) => c.toString(16)).join(', ')}; any other goes to the last (default) slave. The choice is held while the bus is busy.`,
+      ports, symbol: { kind: 'box', label: 'DECODE' },
+      netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
+/** The addressed slave's answer back to the granted master, and the response handshake that frees the bus. */
+function axiAnswer(M: number, S: number): ComponentDef {
+  return memo(`axians${M}_${S}`, () => {
+    const b = new Builder(14, 14);
+    const g = kit(b);
+    const ans: Record<string, string> = {};
+    for (const s of M_IN) ans[s] = g.orBus(Array.from({ length: S }, (_, k) => g.gate(`s${k}_${s}`, wOf(s), `sel${k}`)), wOf(s));
+    b.next();
+    for (let m = 0; m < M; m++) for (const s of M_IN) b.wire(s === 'rdata' ? ans.rdata : g.and(ans[s], `grant${m}`), `m${m}_${s}`);
+    b.wire(g.or(g.and(ans.bvalid, 'bready'), g.and(ans.rvalid, 'rready')), 'respDone');
+    const ports: PortDef[] = [...Array.from({ length: S }, (_, k) => M_IN.map((s) => ({ name: `s${k}_${s}`, width: wOf(s), dir: 'in' as const }))).flat(),
+      ...Array.from({ length: S }, (_, k) => bit(`sel${k}`, 'in')), ...Array.from({ length: M }, (_, m) => bit(`grant${m}`, 'in')), bit('bready', 'in'), bit('rready', 'in'),
+      ...Array.from({ length: M }, (_, m) => M_IN.map((s) => ({ name: `m${m}_${s}`, width: wOf(s), dir: 'out' as const }))).flat(), bit('respDone', 'out')];
+    return define({
+      id: `axians${M}_${S}`, name: `Bus answer routing (${M} masters, ${S} slaves)`, category: 'memory',
+      summary: 'The addressed slave\'s readies, valids and read data, to the granted master only; respDone when B or R is taken (the bus is then free).',
+      ports, symbol: { kind: 'box', label: 'ANSWER' },
+      netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
+/**
  * The interconnect for M masters and S slaves: slave s answers addresses whose top nibble is codes[s];
  * any other address goes to the last slave (a default slave). Requests are arbitrated round robin; the
- * winner and its slave are held until the response handshake.
+ * winner and its slave are held until the response handshake. Four blocks: grant, master multiplexer,
+ * decoder, answer routing; the slaves' valids are the granted master's gated by the decoder.
  */
 export function axiBus(M: number, codes: number[]): ComponentDef {
   const S = codes.length;
   const id = `axibus${M}_${codes.join('_')}`;
   return memo(id, () => {
-    const b = new Builder(18, 16);
+    const b = new Builder(18, 20);
     const g = kit(b);
     const mp = (m: number, s: string) => `m${m}_${s}`, sp = (k: number, s: string) => `s${k}_${s}`;
-    // who holds the bus: a one-hot grant register (all 0: free) and the slave it addressed
-    const held = b.op(register(M), ['', g.konst(1, 1), 'clk'], 'granted master', 'held');
-    const heldBits = g.split(`${held}.q`, ones(M));
-    const active = b.name(g.or(...heldBits), 'busy', true);
-    const reqs = Array.from({ length: M }, (_, m) => g.or(mp(m, 'awvalid'), mp(m, 'arvalid')));
-    const arb = b.op(arbiterN(M), [...reqs, 'clk'], 'arbiter', 'arb');
+    const gr = b.op(axiGrant(M), [...Array.from({ length: M }, (_, m) => g.or(mp(m, 'awvalid'), mp(m, 'arvalid'))), '', 'clk'], 'grant', 'grant');
+    const mx = b.op(axiMasterMux(M), [...Array.from({ length: M }, (_, m) => M_OUT.map((s) => mp(m, s))).flat(), ...Array.from({ length: M }, (_, m) => `${gr}.grant${m}`)], 'master mux', 'mmux');
     b.next();
-    const cur = Array.from({ length: M }, (_, m) => b.name(g.mux(1, `${arb}.g${m}`, heldBits[m], active), `grant${m}`, true));
-    const pick = (s: string) => g.orBus(cur.map((c, m) => g.gate(mp(m, s), wOf(s), c)), wOf(s));
-    const sig: Record<string, string> = {};
-    for (const s of M_OUT) sig[s] = b.name(pick(s), s, true);
-    b.next();
-    // address decode on the top nibble of the address presented now (AW when writing, else AR)
-    const addr = g.mux(32, sig.araddr, sig.awaddr, sig.awvalid, 'address');
-    const nib = g.split(addr, [28, 4])[1];
-    const match = codes.slice(0, S - 1).map((c) => b.op1(equal(4), [nib, g.konst(4, c)], `= ${c.toString(16)}`));
-    const dec = [...match, g.not(g.or(...match))];
-    const selHeld = b.op(register(S), [g.merge(dec), g.not(active), 'clk'], 'addressed slave', 'selh');
-    const sh = g.split(`${selHeld}.q`, ones(S));
-    const sel = Array.from({ length: S }, (_, k) => b.name(g.mux(1, dec[k], sh[k], active), `sel${k}`, true));
+    const dc = b.op(axiDecoder(codes), [`${mx}.awaddr`, `${mx}.araddr`, `${mx}.awvalid`, `${gr}.busy`, 'clk'], 'decoder', 'dec');
     b.next();
     for (let k = 0; k < S; k++) {
-      for (const s of ['awaddr', 'wdata', 'wstrb', 'araddr'] as const) b.wire(sig[s], sp(k, s));
-      for (const s of ['awvalid', 'wvalid', 'arvalid', 'bready', 'rready'] as const) b.wire(g.and(sig[s], sel[k]), sp(k, s));
+      for (const s of ['awaddr', 'wdata', 'wstrb', 'araddr'] as const) b.wire(`${mx}.${s}`, sp(k, s));
+      for (const s of ['awvalid', 'wvalid', 'arvalid', 'bready', 'rready'] as const) b.wire(g.and(`${mx}.${s}`, `${dc}.sel${k}`), sp(k, s));
     }
-    const ans: Record<string, string> = {};
-    for (const s of M_IN) ans[s] = b.name(g.orBus(sel.map((x, k) => g.gate(sp(k, s), wOf(s), x)), wOf(s)), `${s}`, true);
-    for (let m = 0; m < M; m++) for (const s of M_IN) b.wire(s === 'rdata' ? ans.rdata : g.and(ans[s], cur[m]), mp(m, s));
-    // freed by the response handshake, taken when free and someone asks
-    const respDone = g.or(g.and(ans.bvalid, sig.bready), g.and(ans.rvalid, sig.rready));
-    const keep = g.and(active, g.not(respDone)), take = g.and(g.not(active), g.or(...reqs));
-    b.wire(g.merge(Array.from({ length: M }, (_, m) => g.or(g.and(keep, heldBits[m]), g.and(take, `${arb}.g${m}`)))), `${held}.d`);
     b.next();
+    const an = b.op(axiAnswer(M, S), [...Array.from({ length: S }, (_, k) => M_IN.map((s) => sp(k, s))).flat(), ...Array.from({ length: S }, (_, k) => `${dc}.sel${k}`), ...Array.from({ length: M }, (_, m) => `${gr}.grant${m}`), `${mx}.bready`, `${mx}.rready`], 'answer', 'ans');
+    b.wire(`${an}.respDone`, `${gr}.respDone`);
+    for (let m = 0; m < M; m++) for (const s of M_IN) b.wire(`${an}.m${m}_${s}`, mp(m, s));
     const ports: PortDef[] = [];
     for (let m = 0; m < M; m++) ports.push(...slavePorts(`m${m}_`));
     for (let k = 0; k < S; k++) ports.push(...masterPorts(`s${k}_`));

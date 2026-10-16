@@ -7,7 +7,7 @@ import { LOAD_AT, LOAD_WORDS } from '../bus/programs';
 import { busBench } from '../lib/axi';
 import { ramLeafState } from '../lib/bigmem';
 import { CHAPTER_COMPUTER } from '../lib/soc';
-import { findNode, type HierNode } from '../sim/flatten';
+import { findNode } from '../sim/flatten';
 import { pack } from '../sim/values';
 import { h } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
@@ -41,31 +41,23 @@ const ADDRS: [string, number][] = [
   ['flash 0x1000_0040', 0x10000040], ['DMA status', 0x4000000c], ['nothing there', 0x70000000],
 ];
 
-/** The net named `name` inside `node` (its first bit). */
-function netIn(node: HierNode | null, name: string): number {
-  const i = node?.def.netlist?.().nets.findIndex((n) => n.name === name) ?? -1;
-  return i < 0 || !node?.nets ? -1 : node.nets[i][0];
-}
-
 function busBenchPanel(wait: number): ScenePanel {
   return (stage: Stage): Widget => {
     const sim = () => stage.sim!;
     const root = () => sim().design.root;
     const out = (p: string) => pack(sim().getBits(root().ports[p]));
     const node = (path: string[]) => findNode(root(), path);
-    const bit = (n: number) => (n < 0 ? 0 : sim().getBits([n])[0] === 1 ? 1 : 0);
     const port = (path: string[], p: string) => { const n = node(path); return n ? pack(sim().getBits(n.ports[p])) : 0; };
     const st: BenchState = { txns: [], trace: [], cycles: 0 };
     benchStates.set(stage, st);
     let sel = 0, data = 0x12345678;
     const hook = {
       before: () => {
-        const bus = node(['bus']);
         const cpu = port(['cpu'], 'awvalid') ? 'W' : port(['cpu'], 'arvalid') ? 'R' : port(['cpu'], 'done') ? '✓' : '';
         const dma = port(['dma'], 'm_awvalid') ? 'W' : port(['dma'], 'm_arvalid') ? 'R' : '';
-        const g0 = bit(netIn(bus, 'grant0')), g1 = bit(netIn(bus, 'grant1')), busy = bit(netIn(bus, 'busy'));
+        const g0 = port(['bus', 'grant'], 'grant0'), g1 = port(['bus', 'grant'], 'grant1'), busy = port(['bus', 'grant'], 'busy');
         const grant = !busy && !(cpu || dma) ? '' : g0 ? 'CPU' : g1 ? 'DMA' : '';
-        const s = ['RAM', 'flash', 'DMA', 'none'].find((_, k) => bit(netIn(bus, `sel${k}`)) && (busy || cpu || dma)) ?? '';
+        const s = ['RAM', 'flash', 'DMA', 'none'].find((_, k) => port(['bus', 'dec'], `sel${k}`) === 1 && (busy || cpu || dma)) ?? '';
         st.trace.push({ cpu, dma, grant, slave: s, done: out('done') === 1 });
         if (st.trace.length > TRACE) st.trace.shift();
         st.cycles++;
