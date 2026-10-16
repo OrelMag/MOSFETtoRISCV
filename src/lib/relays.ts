@@ -187,7 +187,7 @@ export const relayAdder = memo((n: number): ComponentDef => {
   ];
   for (let i = 0; i < n; i++) {
     const y = Y0 + P * i;
-    instances.push({ name: `fa${i}`, def: RELAY_FA, at: [X, y] }, load(`ls${i}`, [22, y + 3]));
+    instances.push({ name: `fa${i}`, def: RELAY_FA, at: [X, y] }, load(`ls${i}`, [22, y + 4]));
     nets.push(
       { name: `a${i}`, ends: [`sa.o${i}`, `fa${i}.a`] }, { name: `b${i}`, ends: [`sb.o${i}`, `fa${i}.b`] },
       { name: `s${i}`, ends: [`fa${i}.s`, `ls${i}.y`, `ms.i${i}`] },

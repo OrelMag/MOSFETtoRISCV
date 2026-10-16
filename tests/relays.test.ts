@@ -81,7 +81,7 @@ describe('relay logic', () => {
       sim.setInput('b', b);
       const t0 = sim.time;
       sim.settle();
-      const s = out(sim, 's').reduce((v, x, i) => v | (x << i), 0);
+      const s = out(sim, 's').reduce<number>((v, x, i) => v | (x << i), 0);
       expect([s, out(sim, 'co')[0]], `${a} + ${b}`).toEqual([(a + b) & 15, a + b > 15 ? 1 : 0]);
       expect(sim.time - t0).toBeLessThanOrEqual(1);
     }

@@ -9,6 +9,7 @@ import { SwitchSim } from '../sim/switchsim';
 import { needsSwitchLevel } from '../sim/harness';
 import { completeEdge, type Edge, riseEdge, stepEdge } from '../sim/edge';
 import { PowerMeter } from '../sim/power';
+import { stats } from '../sim/stats';
 import { analyzeTiming } from '../sim/timing';
 import type { PowerOnMode, Sim, SimState } from '../sim/sim';
 import { B0, B1, BZ, type Bit, type ComponentDef, inPorts, netlistOf, outPorts, type PortDef } from '../sim/types';
@@ -67,7 +68,7 @@ export type ScenePanel = (stage: Stage) => Widget;
 export type LeafWidgetFactory = (def: ComponentDef, gate: () => Bit) => Widget;
 
 const LEVEL_NAME: Record<string, string> = {
-  transistor: 'transistors', cell: 'transistors', gate: 'gates', arithmetic: 'gates & blocks',
+  transistor: 'transistors', cell: 'transistors', relay: 'relays', gate: 'gates', arithmetic: 'gates & blocks',
   routing: 'gates & blocks', sequential: 'latches & flip-flops', memory: 'memory', plumbing: 'wiring', cpu: 'processor',
 };
 
@@ -1033,7 +1034,7 @@ export class Stage {
     else if (busy) msg = `propagating… t = ${sim.time - this.changeStart}`;
     else if (this.lastSettle !== null && this.relayTime) msg = `settled in ${this.lastSettle} relay step${this.lastSettle === 1 ? '' : 's'}`;
     else if (this.lastSettle !== null && sim.kind === 'gate') msg = `${this.clockPort() && this.cycles ? 'clock edge ' : ''}settled in ${this.lastSettle} gate delay${this.lastSettle === 1 ? '' : 's'}`;
-    else msg = sim.kind === 'switch' ? 'switch level: solved instantly' : 'settled';
+    else msg = this.relayTime ? 'relays at rest' : sim.kind === 'switch' ? 'switch level: solved instantly' : 'settled';
     const warn = sim.unstable || (!!this.period && this.lateCount > 0);
     this.status.replaceChildren(h('span', { class: `pulse${busy ? ' busy' : ''}${warn ? ' warn' : ''}` }), msg);
   }
@@ -1055,7 +1056,8 @@ export class Stage {
   private levelOf(): string {
     const nl = this.ctx ? netlistOf(this.ctx.def) : undefined;
     if (!nl) return 'gate';
-    if (nl.level === 'switch') return 'transistor';
+    // a relay circuit (prologue P1): its parts are relays, not transistors
+    if (nl.level === 'switch') return stats(this.ctx!.def).relays && !stats(this.ctx!.def).transistors ? 'relay' : 'transistor';
     const kinds = nl.instances.filter((i) => i.def.prim !== 'alias').map((i) => i.def);
     if (kinds.every((d) => d.prim === 'nand')) return 'gate';
     return this.ctx!.def.category;

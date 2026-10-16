@@ -1,0 +1,12 @@
+/* The prologue (P1–P3: relays, vacuum tubes, punch cards) on the map, in the chapter menu and a chapter's header,
+   in brass, as the appendix is in vintage orange (m6502.css). */
+.cards-divider.prologue { color: var(--brass); }
+.cards-divider.prologue::before, .cards-divider.prologue::after { background: var(--brass); }
+.cards-divider.journey { color: var(--muted); }
+.cards-divider.journey::before, .cards-divider.journey::after { background: var(--muted); }
+.card.prologue { border-color: var(--brass); background: linear-gradient(135deg, var(--brass-soft), var(--surface) 70%); }
+.card.prologue .num { color: var(--brass); }
+.qn-group.prologue { color: var(--brass); }
+.qn-group.journey { color: var(--muted); }
+.qn-row.prologue .qn-num { color: var(--brass); }
+.chapter-kicker.prologue { color: var(--brass); }

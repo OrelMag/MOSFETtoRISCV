@@ -110,11 +110,14 @@ export class Inspector {
     else if (d.prim === 'res') cells.push(['1', 'resistor']);
     else if (d.prim === 'dep') cells.push(['1', 'depletion transistor']);
     else if (d.prim === 'cap') cells.push(['1', 'capacitor']);
+    else if (d.prim === 'relay') cells.push(['1', 'relay'], [String((d.ports.length - 2) / 3), 'changeover contacts']);
     else if (d.prim !== 'alias' && d.prim !== 'vdd' && d.prim !== 'gnd') {
-      cells.push([st.transistors.toLocaleString(), 'transistors']);
+      // a relay circuit counts relays, not the transistors it has none of
+      if (st.relays) cells.push([st.relays.toLocaleString(), `relay${st.relays > 1 ? 's' : ''}`]);
+      else cells.push([st.transistors.toLocaleString(), 'transistors']);
       if (st.resistors) cells.push([st.resistors.toLocaleString(), `resistor${st.resistors > 1 ? 's' : ''}`]);
       if (st.capacitors) cells.push([st.capacitors.toLocaleString(), `capacitor${st.capacitors > 1 ? 's' : ''}`]);
-      cells.push([st.nands.toLocaleString(), 'NAND gates']);
+      if (!st.relays || st.nands) cells.push([st.nands.toLocaleString(), 'NAND gates']);
       if (depth !== null && depth > 0) cells.push([String(depth), 'gate delays (worst path)']);
       else if (st.nands > 0 && depth === null) cells.push(['∞', 'has feedback: it remembers']);
       if (st.levels > 0) cells.push([String(st.levels), `level${st.levels > 1 ? 's' : ''} of boxes inside`]);
