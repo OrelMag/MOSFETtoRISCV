@@ -136,7 +136,7 @@ export const chBus: Chapter = {
         behind a refresh, against 2 for the on-chip RAM: the code stays in RAM, and this is the gap the caches of chapter 21 close.</p>
         <p>At 0x5000_0000, a <strong>screen</strong>: a ${SOC_SCREEN} × ${SOC_SCREEN} frame buffer, a byte a pixel (RGB332), built like the RAM in four
         byte lanes so that sb draws one pixel; a display reads it as chapter 30's scan-out reads its frame. At 0x6000_0000, a
-        <strong>keyboard</strong>: +4 says whether a key waits, and reading +0 <em>takes</em> it (the slave pulses ack at the read's
+        <strong>keyboard</strong>: +4 says whether a key waits, and reading +0 <em>takes</em> it (the slave pulses ack in the cycle after the read's
         handshake, ${nands(AXI_KEYS)} NANDs). A read with a side effect: such a register must never sit behind a cache, nor be read
         twice by a CPU that guesses ahead.</p>
         <p>The boot ROM now copies ${SYSTEM_WORDS} words from the flash. The program waits for a key, prints it, appends it to a line kept in

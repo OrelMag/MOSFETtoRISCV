@@ -17,7 +17,7 @@ export const NOTES_6502 = 'A computer of 1975: the MOS 6502 (one bus cycle per c
   + `${NOTES_MAP} The halt detector latches each opcode fetch's address (SYNC) and stops Run when the next one is the same: a JMP to itself. Run, or Run to halt in the CPU drawer.`;
 
 /** A chip document under construction: parts, pins, wires and pointer taps. */
-class Sheet {
+export class Sheet {
   pins: PinDoc[] = [];
   parts: PartDoc[] = [];
   wires: WireDoc[] = [];

@@ -6,7 +6,7 @@ import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { constWord } from './alu';
 import { Builder } from './builder';
-import { addSub, busMux2, muxTree } from './combinational';
+import { addSub, busMux2, equal, incrementer, muxTree } from './combinational';
 import { define, merger, ones, splitter } from './define';
 import { AND, NOT, OR, XOR } from './gates';
 import { counter, DFF, register } from './sequential';
@@ -451,6 +451,44 @@ export function clockDivider(k: number): ComponentDef {
 always_ff @(posedge clk or negedge rst_n) if (!rst_n) q[0] <= 0; else q[0] <= ~q[0];
 for (genvar i = 1; i < K; i++)
   always_ff @(posedge q[i-1] or negedge rst_n) if (!rst_n) q[i] <= 0; else q[i] <= ~q[i];` },
+    });
+  });
+}
+
+// ---- a timer ------------------------------------------------------------------------------------------
+
+/** The periods a timer can have (the sandbox's properties offer these). */
+export const TIMER_PERIODS = [10, 100, 1000, 10000, 100000];
+
+/**
+ * A periodic interrupt: a counter from 0 to period − 1 and round again, and irq, set at the edge where it
+ * wraps and held until ack = 1 at a rising edge (a wrap wins over an ack in the same cycle). count shows
+ * the counter, ⌈log2 period⌉ bits.
+ */
+export function timer(period: number): ComponentDef {
+  const n = Math.max(1, Math.ceil(Math.log2(period)));
+  return memo(`timer${period}`, () => {
+    const b = new Builder(12, 12);
+    b.pins('ack', 'clk');
+    const cnt = b.op(register(n), ['', b.op1(TIE1, []), 'clk'], 'count', 'cnt');
+    const irq = b.op(DFF, ['', 'clk'], 'irq', 'irq');
+    b.next();
+    const wrap = b.name(b.op1(equal(n), [`${cnt}.q`, b.op1(constWord(n, period - 1), [])], `= ${period - 1}`), 'wrap', true);
+    const inc = b.op1(incrementer(n), [`${cnt}.q`], '+ 1');
+    b.next();
+    b.wire(b.op1(busMux2(n), [inc, b.op1(constWord(n, 0), []), wrap], 'or 0'), `${cnt}.d`);
+    b.wire(b.op1(OR, [wrap, b.op1(AND, [`${irq}.q`, b.op1(NOT, ['ack'])])]), `${irq}.d`);
+    b.next();
+    b.wire(`${irq}.q`, 'irq');
+    b.wire(`${cnt}.q`, 'count');
+    const R = b.right;
+    return define({
+      id: `timer${period}`, name: `Timer (every ${period} cycles)`, category: 'sequential',
+      summary: `A periodic interrupt: a ${n}-bit counter runs from 0 to ${period - 1} and round again; irq is set at the edge where it wraps (every ${period} clock edges) and stays 1 until ack = 1 at a rising edge. Wire irq to a CPU's interrupt and have the handler raise ack.`,
+      ports: [bit('ack', 'in'), bit('clk', 'in', 'bottom', true), bit('irq', 'out'), bus('count', n, 'out')],
+      symbol: { kind: 'box', label: 'TIMER' },
+      netlist: () => ({ pins: { ack: [0, 4], clk: [0, 10], irq: [R, 4], count: [R, 8] }, instances: b.instances, nets: b.nets() }),
+      hdl: { verilog: `always_ff @(posedge clk) begin\n  count <= count == ${period - 1} ? 0 : count + 1;\n  irq   <= count == ${period - 1} | (irq & ~ack);\nend` },
     });
   });
 }
