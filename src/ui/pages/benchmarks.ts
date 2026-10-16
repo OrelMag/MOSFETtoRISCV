@@ -79,7 +79,7 @@ export class BenchmarksPage implements Page {
     const link = (c: BenchCpu) => { const ch = chapterOf(c.id); return ch ? h('a', { href: `#/c/${ch}` }, c.name) : c.name; };
     const tile = (big: string, ...small: (Node | string)[]) => h('div', { class: 'hw-tile' }, h('b', null, big), h('span', null, ...small));
     const fast = best((c) => meanOf(c, 'time')), cpi = best((c) => meanOf(c, 'cpi')), tc = best((c) => (c.offChip ? Infinity : meanOf(c, 'time') * c.nands));
-    const en = best((c) => meanOf(c, 'energy'));
+    const en = best((c) => (c.offChip ? Infinity : meanOf(c, 'energy'))); // an off-chip DRAM's energy is not counted either
     return h('div', { class: 'hw-tiles bm-tiles' },
       tile(`${fmt(meanOf(fast, 'time'), 1)} µs`, 'fastest: ', link(fast)),
       tile(fmt(meanOf(cpi, 'cpi'), 2), 'lowest CPI: ', link(cpi)),
