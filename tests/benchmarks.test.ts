@@ -80,8 +80,10 @@ describe('benchmark summary (the Benchmarks tab)', () => {
   it('draws the front through CPUs no other beats on both cost and time', () => {
     const fr = front(RESULTS.cpus);
     expect(fr.length).toBeGreaterThan(1);
+    const onChip = RESULTS.cpus.filter((c) => !c.offChip);
+    expect(onChip.length).toBeLessThan(RESULTS.cpus.length);
     for (const c of RESULTS.cpus) {
-      const beaten = RESULTS.cpus.some((d) => d !== c && d.nands <= c.nands && meanOf(d, 'time') < meanOf(c, 'time'));
+      const beaten = c.offChip || onChip.some((d) => d !== c && d.nands <= c.nands && meanOf(d, 'time') < meanOf(c, 'time'));
       expect(fr.includes(c), c.id).toBe(!beaten);
     }
   });

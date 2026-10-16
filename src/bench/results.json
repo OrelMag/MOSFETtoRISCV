@@ -165,6 +165,96 @@
    ]
   },
   {
+   "id": "sc-wb2-dram",
+   "name": "Single-cycle, 2-way write-back D-cache over DRAM (open page)",
+   "nands": 42297,
+   "period": 115,
+   "offChip": true,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 5899,
+     "dmiss": 61,
+     "dstall": 1018,
+     "switched": 335707647,
+     "functional": 187129235
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2891,
+     "dmiss": 46,
+     "dstall": 783,
+     "switched": 232575373,
+     "functional": 93657570
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3375,
+     "dmiss": 73,
+     "dstall": 1022,
+     "switched": 151939400,
+     "functional": 102401799
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3109,
+     "dmiss": 5,
+     "dstall": 60,
+     "switched": 216126368,
+     "functional": 106623298
+    }
+   ]
+  },
+  {
+   "id": "sc-wb2-dramc",
+   "name": "Single-cycle, 2-way write-back D-cache over DRAM (closed page)",
+   "nands": 42297,
+   "period": 115,
+   "offChip": true,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 6600,
+     "dmiss": 61,
+     "dstall": 1719,
+     "switched": 352237340,
+     "functional": 205866291
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 3406,
+     "dmiss": 46,
+     "dstall": 1298,
+     "switched": 245736705,
+     "functional": 107905131
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3694,
+     "dmiss": 73,
+     "dstall": 1341,
+     "switched": 160234162,
+     "functional": 110949427
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3125,
+     "dmiss": 5,
+     "dstall": 76,
+     "switched": 216493448,
+     "functional": 107053820
+    }
+   ]
+  },
+  {
    "id": "sc-ic",
    "name": "Single-cycle, I-cache",
    "nands": 90723,
@@ -596,6 +686,51 @@
      "dstall": 44,
      "switched": 410045593,
      "functional": 364831109
+    }
+   ]
+  },
+  {
+   "id": "pipe-wb2-dram",
+   "name": "Pipelined, 2-way write-back D-cache over DRAM (open page)",
+   "nands": 54766,
+   "period": 95,
+   "offChip": true,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 8651,
+     "dmiss": 61,
+     "dstall": 976,
+     "switched": 421563141,
+     "functional": 365279019
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 3899,
+     "dmiss": 46,
+     "dstall": 789,
+     "switched": 212468302,
+     "functional": 172968561
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 4339,
+     "dmiss": 73,
+     "dstall": 1098,
+     "switched": 202838160,
+     "functional": 179608898
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 4697,
+     "dmiss": 5,
+     "dstall": 60,
+     "switched": 253776819,
+     "functional": 212241349
     }
    ]
   },

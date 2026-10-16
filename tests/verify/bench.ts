@@ -15,10 +15,10 @@ import { GateSim } from '../../src/sim/gatesim';
 import { PowerMeter } from '../../src/sim/power';
 import { stats } from '../../src/sim/stats';
 import { analyzeTiming } from '../../src/sim/timing';
-import { type Bit, inPorts, type ComponentDef } from '../../src/sim/types';
+import { inPorts, type ComponentDef } from '../../src/sim/types';
 import { issOptions, type CpuConfig } from './cpus';
 import { diffState, readState, type ArchState } from './fuzz';
-import { pause } from './run';
+import { laneLeaves, pause } from './run';
 
 /** Every CPU gets the same memories: a 128-word instruction ROM and 64 words of data memory. */
 export const BENCH_IMEM_K = 7;
@@ -71,6 +71,8 @@ export interface CpuMeasure {
   nands: number;
   /** Clock period in NAND delays (static timing). */
   period: number;
+  /** Main memory is a DRAM device (a separate chip, not counted). */
+  offChip?: boolean;
 }
 
 /** NANDs without the instruction ROM (its size follows the program), and the static-timing period. */
@@ -89,7 +91,8 @@ export function measureCpu(def: ComponentDef): CpuMeasure {
   if (period === undefined) throw new Error(`${def.id}: no register-to-register path`);
   const r = rom(def, false);
   if (!r) throw new Error(`${def.id}: no program ROM found`);
-  return { nands: stats(def).nands - r, period };
+  const dram = (d: ComponentDef): boolean => d.id.startsWith('dramdev') || !!d.netlist?.().instances.some((i) => dram(i.def));
+  return { nands: stats(def).nands - r, period, ...(dram(def) ? { offChip: true } : {}) };
 }
 
 /** Every benchmark cfg can run, at once on one gate-level build (one per lane). */
@@ -98,12 +101,7 @@ export async function benchLanes(cfg: CpuConfig, cases: BenchCase[]): Promise<Be
   const design = flatten(cfg.build(cases[0].words, BENCH_IMEM_K, BENCH_DMEM_K));
   const sim = new BitSim(design);
   const N = 2 ** BENCH_IMEM_K;
-  design.leaves.forEach((leaf, i) => {
-    if (leaf.kind !== 'behavior' || leaf.inputs.length === 0) return;
-    if (!leaf.def.id.startsWith('rom_')) throw new Error(`${cfg.id}: behavioural leaf ${leaf.node.path.join('.')} is not a ROM`);
-    if (leaf.node.path.includes('imem')) sim.setLaneBehavior(i, ([a], lane) => [cases[lane % cases.length].words[Math.floor(a / 4) % N] ?? 0x13]);
-    else sim.setLaneBehavior(i, (ins) => leaf.def.behavior!.eval(ins, undefined));
-  });
+  const laneView = laneLeaves(cfg, design, sim, (l) => cases[l % cases.length].words, N);
   for (const p of inPorts(design.root.def)) sim.setInput(p.name, 0);
   sim.settle();
   const root = design.root, ports = root.ports;
@@ -130,7 +128,7 @@ export async function benchLanes(cfg: CpuConfig, cases: BenchCase[]): Promise<Be
     for (let l = 0; l < n; l++) if (!done[l] && retired[l] === cases[l].instructions) done[l] = c + 1;
   }
   return cases.map((cs, l) => {
-    const view = { design, getBits: (nets: readonly number[]) => nets.map((net) => bit(net, l) as Bit) };
+    const view = laneView(l);
     const diff = done[l] ? diffState(cs.golden, readState(view, root, !!cfg.isa.f)) : `retired ${retired[l]} of ${cs.instructions} in ${max} cycles`;
     return {
       bench: cs.bench.id, instructions: cs.instructions, cycles: done[l], diff,

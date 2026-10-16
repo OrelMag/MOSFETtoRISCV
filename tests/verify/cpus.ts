@@ -4,6 +4,7 @@
 import {
   dualCore, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu,
 } from '../../src/lib';
+import type { DramConfig } from '../../src/dram/controller';
 import type { IssOptions } from '../../src/riscv/iss';
 import type { ComponentDef } from '../../src/sim/types';
 import type { Env } from './images';
@@ -34,11 +35,17 @@ export interface CpuConfig {
   build(words: number[], imemK: number, dmemK: number): ComponentDef;
 }
 
+/** Chapter 33's DRAM behind the caches: the CPU's 64 words in 2 banks of 2 rows of 16 words. */
+export const DRAM_OPEN: DramConfig = { k: 6, banks: 2, rowWords: 16, policy: 'open' };
+export const DRAM_CLOSED: DramConfig = { ...DRAM_OPEN, policy: 'closed' };
+
 export const CPUS: CpuConfig[] = [
   { id: 'sc', name: 'Single-cycle', isa: {}, env: 'bare', cpi: 1, build: (w, imemK, dmemK) => singleCycleCpu(w, { imemK, dmemK }) },
   { id: 'sc-ks', name: 'Single-cycle, fast adders', isa: {}, env: 'bare', cpi: 1, build: (w, imemK, dmemK) => singleCycleCpu(w, { imemK, dmemK, adder: 'ks' }) },
   { id: 'sc-dc', name: 'Single-cycle, write-through D-cache', isa: {}, env: 'bare', fixedDmemK: 6, cpi: 9, build: (w, imemK) => singleCycleCpu(w, { imemK, dmemK: 6, dcache: true, adder: 'ks' }) },
   { id: 'sc-wb2', name: 'Single-cycle, 2-way write-back D-cache', isa: {}, env: 'bare', fixedDmemK: 6, cpi: 13, build: (w, imemK) => singleCycleCpu(w, { imemK, dmemK: 6, dcache: 'wb2', adder: 'ks' }) },
+  { id: 'sc-wb2-dram', name: 'Single-cycle, 2-way write-back D-cache over DRAM (open page)', isa: {}, env: 'bare', fixedDmemK: 6, cpi: 40, build: (w, imemK) => singleCycleCpu(w, { imemK, dmemK: 6, dcache: 'wb2', adder: 'ks', dram: DRAM_OPEN }) },
+  { id: 'sc-wb2-dramc', name: 'Single-cycle, 2-way write-back D-cache over DRAM (closed page)', isa: {}, env: 'bare', fixedDmemK: 6, cpi: 40, build: (w, imemK) => singleCycleCpu(w, { imemK, dmemK: 6, dcache: 'wb2', adder: 'ks', dram: DRAM_CLOSED }) },
   { id: 'sc-ic', name: 'Single-cycle, I-cache', isa: {}, env: 'bare', cpi: 9, build: (w, imemK, dmemK) => singleCycleCpu(w, { imemK, dmemK, icache: true, adder: 'ks' }) },
   { id: 'sc-wb-ic', name: 'Single-cycle, write-back D-cache + I-cache', isa: {}, env: 'bare', fixedDmemK: 6, cpi: 22, build: (w, imemK) => singleCycleCpu(w, { imemK, dmemK: 6, dcache: 'wb', icache: true }) },
   { id: 'sc-f', name: 'Single-cycle RV32IF', isa: { f: true }, env: 'bare', cpi: 30, build: (w, imemK, dmemK) => singleCycleCpu(w, { imemK, dmemK, fpu: true, adder: 'ks' }) },
@@ -50,6 +57,7 @@ export const CPUS: CpuConfig[] = [
   { id: 'pipe-bp', name: 'Pipelined, branch predictor', isa: {}, env: 'bare', cpi: 3, build: (w, imemK, dmemK) => pipelinedCpu(w, { imemK, dmemK, predictor: true }) },
   { id: 'pipe-bal-bp', name: 'Pipelined, balanced + predictor', isa: {}, env: 'bare', cpi: 3, build: (w, imemK, dmemK) => pipelinedCpu(w, { imemK, dmemK, adder: 'ks', balanced: true, predictor: true }) },
   { id: 'pipe-wb2', name: 'Pipelined, 2-way write-back D-cache', isa: {}, env: 'bare', fixedDmemK: 6, cpi: 15, build: (w, imemK) => pipelinedCpu(w, { imemK, adder: 'ks', dcache: 'wb2' }) },
+  { id: 'pipe-wb2-dram', name: 'Pipelined, 2-way write-back D-cache over DRAM (open page)', isa: {}, env: 'bare', fixedDmemK: 6, cpi: 42, build: (w, imemK) => pipelinedCpu(w, { imemK, adder: 'ks', dcache: 'wb2', dram: DRAM_OPEN }) },
   { id: 'pipe-wt-bal-bp', name: 'Pipelined, write-through D-cache, balanced + predictor', isa: {}, env: 'bare', fixedDmemK: 6, cpi: 11, build: (w, imemK) => pipelinedCpu(w, { imemK, adder: 'ks', dcache: 'wt', predictor: true, balanced: true }) },
   { id: 'pipe-m', name: 'Pipelined RV32IM', isa: { m: true }, env: 'bare', cpi: 21, build: (w, imemK, dmemK) => pipelinedCpu(w, { imemK, dmemK, adder: 'ks', m: true }) },
   { id: 'pipe-m-bal-bp', name: 'Pipelined RV32IM, balanced + predictor', isa: { m: true }, env: 'bare', cpi: 21, build: (w, imemK, dmemK) => pipelinedCpu(w, { imemK, dmemK, adder: 'ks', balanced: true, predictor: true, m: true }) },

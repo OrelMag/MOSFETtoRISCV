@@ -43,7 +43,7 @@ const DATAPATH = ['rega', 'regx', 'regy', 'regs', 'alu', 'pc', 'addr', 'data', '
 const CONTROL = ['clock', 'decode', 'control', 'timing', 'intr', 'ir'];
 
 export const chAppendix6502: Chapter = {
-  id: 'appendix-6502', num: 33, appendix: 'A', title: '1975: the 6502', level: 'NMOS',
+  id: 'appendix-6502', num: 34, appendix: 'A', title: '1975: the 6502', level: 'NMOS',
   blurb: 'NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.',
   steps: [
     {

@@ -69,6 +69,27 @@ export function cpuJobs(cfg: CpuConfig, imgs: RvImage[], cov?: IsaCoverage): Lan
  * instruction ROM is evaluated per lane (each lane its own program), every other leaf is a NAND.
  * All jobs share the CPU's memory sizes (imemK, dmemK). Returns one result per job.
  */
+/**
+ * Give BitSim's behavioural leaves their lanes: the program ROM (imem) each lane's program, other ROMs
+ * (microcode) their own, and a stateful leaf (a DRAM device: Behavior.seq) a state per lane. Returns a
+ * lane's view for the co-simulation readers (its bits, its leaves' states).
+ */
+export function laneLeaves(cfg: CpuConfig, design: FlatDesign, sim: BitSim, prog: (lane: number) => number[], N: number): (lane: number) => { design: FlatDesign; getBits(nets: readonly number[]): Bit[]; leafState(li: number): unknown } {
+  const states = new Map<number, unknown[]>();
+  design.leaves.forEach((leaf, i) => {
+    if (leaf.kind !== 'behavior' || leaf.inputs.length === 0) return;
+    const b = leaf.def.behavior!;
+    if (leaf.node.path.includes('imem')) sim.setLaneBehavior(i, ([a], lane) => [prog(lane)[Math.floor(a / 4) % N] ?? 0x13]);
+    else if (b.seq) {
+      const st = Array.from({ length: LANES }, () => b.init?.());
+      states.set(i, st);
+      sim.setLaneBehavior(i, (ins, lane) => b.eval(ins, st[lane]));
+    } else if (leaf.def.id.startsWith('rom_')) sim.setLaneBehavior(i, (ins) => b.eval(ins, undefined));
+    else throw new Error(`${cfg.id}: behavioural leaf ${leaf.node.path.join('.')} (${leaf.def.id}) is neither a ROM nor edge-triggered`);
+  });
+  return (l) => ({ design, getBits: (nets) => nets.map((n) => ((sim.v[n] >>> l) & 1) as Bit), leafState: (li) => states.get(li)?.[l] });
+}
+
 /** Let the event loop run (Vitest's worker RPC times out behind a long synchronous stretch). */
 export const pause = () => new Promise<void>((resolve) => setImmediate(resolve));
 
@@ -80,18 +101,12 @@ export async function runLanes(cfg: CpuConfig, jobs: LaneJob[], imemK: number, d
   const N = 2 ** imemK;
   const progs = Array.from({ length: LANES }, (_, l) => jobs[l % jobs.length].l.words);
   const pr = probe?.(design);
-  design.leaves.forEach((leaf, i) => {
-    if (leaf.kind !== 'behavior' || leaf.inputs.length === 0) return;
-    // stateless ROMs only: the program ROM (imem) gets each lane's program, others (microcode) keep theirs
-    if (!leaf.def.id.startsWith('rom_')) throw new Error(`${cfg.id}: behavioural leaf ${leaf.node.path.join('.')} (${leaf.def.id}) is not a ROM`);
-    if (leaf.node.path.includes('imem')) sim.setLaneBehavior(i, ([a], lane) => [progs[lane][Math.floor(a / 4) % N] ?? 0x13]);
-    else sim.setLaneBehavior(i, (ins) => leaf.def.behavior!.eval(ins, undefined));
-  });
+  const laneView = laneLeaves(cfg, design, sim, (l) => progs[l], N);
   for (const p of inPorts(design.root.def)) sim.setInput(p.name, 0);
   sim.settle();
   const dm = design.root.children!.get('dm');
   if (!dm) throw new Error(`${cfg.id}: no data memory 'dm'`);
-  const lane = (l: number) => ({ getBits: (nets: readonly number[]) => nets.map((n) => ((sim.v[n] >>> l) & 1) as Bit) });
+  const lane = laneView;
   const out: (RunResult | undefined)[] = jobs.map(() => undefined);
   const max = Math.max(...jobs.map((j) => j.max));
   let c = 0;
