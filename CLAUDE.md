@@ -172,7 +172,8 @@ src/lib/       the component library (registered in `registry` via define())
   sequential.ts  SR latch, D latch, DFF (master–slave), DFFE, register(n), counter(n)
   seqparts.ts    NAND3, D_LATCH_R / DFF_R (async reset), TFF, JKFF, upDownCounter(n), shiftRegister(n) (74194-style),
                  lfsr(n) (LFSR_TAPS, lfsrNext), randomSource(n) (XNOR LFSR, xnorLfsrNext), cycleCounter(n),
-                 ringCounter(n, johnson), clockDivider(k)
+                 ringCounter(n, johnson), clockDivider(k), timer(period) (TIMER_PERIODS; a workbench family and the
+                 palette's Timer: wraps every period edges, irq held until ack)
   storage.ts     romArray(preset), minimize() (Quine–McCluskey), pla(preset), fifo(k, w), stack(k, w), cam(k, w),
                  regfileMP(k, w, reads, writes)
   memory.ts      ram(k, w): decoder + registers + mux tree, user-scalable
@@ -220,13 +221,19 @@ src/lib/       the component library (registered in `registry` via define())
                  instruction register, NOP meanwhile; stall; irqOk from a flip-flop (an access under way), not the request: that loop kept the
                  cycle engine away; bus side bus_*); axiDram(c) (BUS_DRAM: dramCtrl + dramDevice(c, init, mask) behind an
                  adapter: a line per access, a store's other bytes masked by dm), axiScreen(n) (the RAM slave as an n × n RGB332
-                 frame buffer), AXI_KEYS (+0 key, taken by the read: ack; +4 status) and KEY_QUEUE (the keyboard: an external
-                 seq leaf, filled through Sim.poke, the sandbox keyboard part's pins); BUS_PARTS registered
+                 frame buffer), axiReadPort (read-to-take channels: +8i data, the read takes it with ack one cycle later, from
+                 a flip-flop: a clockless keyboard part then makes no loop for the cycle engine; +8i + 4 status): AXI_KEYS and
+                 AXI_IO_PORT (keyboard + timer), KEY_QUEUE (the keyboard: an external seq leaf, filled through Sim.poke, the
+                 sandbox keyboard part's pins), AXI_PIXEL (a store sets one pixel of a screen part), axiFlashWindow(k) (the
+                 flash's page timing in gates over a ROM part: addr out, data in), bundled(def, groups) (a link as a request
+                 bus REQ_BITS and a response bus RSP_BITS); BUS_PARTS registered
   soc.ts         busComputer(program, flashImage, { imemK, ramK, ramWait, dram, screen, keys }) (systemCpu({ bus }) and
                  DMA_ENGINE as masters; RAM at 0, flash 0x1000_0000, DRAM 0x2…, DMA 0x4…, screen 0x5…, keyboard 0x6…
                  (instance kbd); DMA irq → CPU irq; socDevices(o): BusModel's devices), chapterComputer / CHAPTER_COMPUTER
                  (bus/programs.ts: a boot ROM that DMA-copies a program from flash to RAM 0x400 and jumps), SYSTEM_COMPUTER
-                 (every slave; SYSTEM_SOURCE: keys to the console, a line in DRAM, blocks on the screen)
+                 (every slave; SYSTEM_SOURCE: keys to the console, a line in DRAM, blocks on the screen); busCore(imemK) (the
+                 bus CPU with its boot ROM outside: romData in), SANDBOX_PARTS (bundled parts on SANDBOX_MAP, chapter 35's map
+                 with the I/O port at 0x6…) for Examples ▸ System on a bus
   relays.ts      prologue P1's relays at switch level: relay(n) (1–6 poles, ids relay, relay2 …), RELAY_NOT / NAND / XOR,
                  RELAY_FA (the carry through contacts on two rails, ci / nci: a contact cannot invert), relayAdder(n) (one
                  relay step for any width), RELAY_LATCH (self-holding), RELAY_BUZZER (a coil through its own break contact);
@@ -513,7 +520,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  each block a user chip, the ROM a cpu4 ROM part, the pins swapped for a TEST key, switches, hex digits, LEDs, halt.
                  The 6502 computer (example6502.ts): the part, a 4K ROM in 6502 assembly, memory6502Chip (decoder, 2K RAM,
                  read muxes), the Devices chip, a halt detector (the last SYNC address = this one); drawn with Sheet (pointer
-                 taps two units out from a port; a user chip's box as compile.ts makes it: Example.build gets the sub-chips)
+                 taps two units out from a port; a user chip's box as compile.ts makes it: Example.build gets the sub-chips).
+                 System on a bus (examplebus.ts, Sheet): SANDBOX_PARTS, a boot ROM part, the flash's contents a word-addressed
+                 ROM part (bus/programs.ts SANDBOX_SOURCE), screen, keyboard and timer parts, every connection a pointer pair;
+                 detectCpu leaves a sysbuscore part alone (its memory and interrupts are behind the bus: no drawer)
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run;

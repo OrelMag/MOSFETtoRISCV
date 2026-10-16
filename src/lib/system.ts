@@ -522,8 +522,8 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   const romG = IM ? g(IM) : symbolGeom({ id: 'romgeom', name: '', category: 'memory', ports: [bus('addr', 32, 'in'), bus('data', 32, 'out')], symbol: { kind: 'box', label: 'INSTR MEM' } });
   const romData: [number, number] = [36 + romG.ports.data.pos[0], P('pc', 'q')[1] - romG.ports.addr.pos[1] + romG.ports.data.pos[1]];
   if (IM) alignY('imem', IM, 36, 'addr', P('pc', 'q')[1]);
-  alignY('si', SI, 56, 'in', romData[1]);
-  alignY('rf', RF, 74, 'wa', P('si', 'o1')[1]);
+  alignY('si', SI, 56 + (busK ? 4 : 0), 'in', romData[1]);
+  alignY('rf', RF, 74 + (busK ? 4 : 0), 'wa', P('si', 'o1')[1]);
   alignY('imm', IMM_GEN, 70, 'instr', Y + 22);
   const rfR = at.get('rf')![0] + g(RF).w;
   alignY('srcA', M2, rfR + 8, 'a', P('rf', 'rd1')[1]);
@@ -531,9 +531,11 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   alignY('alu', ALU, rfR + 18, 'a', P('srcA', 'y')[1]);
   const aluR = at.get('alu')![0] + g(ALU).w;
   alignY('st', STORE_ALIGN, aluR + 12, 'wd', Y + 18);
-  if (!ports) alignY('dm', DM, aluR + 30, 'addr', P('alu', 'y')[1]);
+  // the bus's memory unit is a tall box: room for the labels between it and the store alignment
+  const dmX = aluR + 30 + (busK ? 16 : 0);
+  if (!ports) alignY('dm', DM, dmX, 'addr', P('alu', 'y')[1]);
   alignY('io', IO_UNIT, aluR + 30, 'addr', Y + 70);
-  alignY('ldsel', M2, aluR + 30 + g(DM).w + 8, 'a', ports ? P('alu', 'y')[1] : P('dm', 'rdata')[1]);
+  alignY('ldsel', M2, dmX + g(DM).w + 8, 'a', ports ? P('alu', 'y')[1] : P('dm', 'rdata')[1]);
   alignY('ld', LOAD_EXTRACT, P('ldsel', 'y')[0] + 10, 'rdata', P('ldsel', 'y')[1]);
   alignY('res', M8, P('ld', 'value')[0] + 8, 'd1', P('ld', 'value')[1]);
   place('plus4', P4, [36, Y - 10]);

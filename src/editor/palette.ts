@@ -140,6 +140,7 @@ registerPaletteGroup({
   items: () => [
     lib('cycles16', 'Cycle counter', 'Clock edges since power-on (16 bits; 8 or 32 in the properties)'),
     lib('random8', 'Random', 'A new pseudo-random number every clock edge: an XNOR LFSR that needs no seed (4, 8 or 16 bits in the properties)'),
+    lib('timer1000', 'Timer', 'A periodic interrupt: irq rises every 1000 clock edges (10 to 100 000 in the properties) and stays 1 until ack; count shows the counter'),
   ],
 });
 

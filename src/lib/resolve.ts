@@ -27,7 +27,7 @@ import { bcdAdder, carrySelect, carrySkip } from './adders';
 import { cam, fifo, pla, regfileMP, romArray, stack } from './storage';
 import { sramArray, sramColumn } from './arrays';
 import { wbCache } from './cache2';
-import { clockDivider, cycleCounter, lfsr, randomSource, ringCounter, shiftRegister, upDownCounter } from './seqparts';
+import { clockDivider, cycleCounter, lfsr, randomSource, ringCounter, shiftRegister, timer, TIMER_PERIODS, upDownCounter } from './seqparts';
 import { srt4Divider, srt4Step } from './srt4';
 import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
 import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
@@ -232,6 +232,7 @@ export const families: Family[] = [
   nBit('reg', 'Register', 'sequential', [1, 2, 4, 8, 16], 4, (n) => `reg${n}`, register),
   nBit('creg', 'Register with clear', 'sequential', [1, 4, 8, 16, 32], 4, (n) => `creg${n}`, clearableRegister),
   nBit('counter', 'Counter', 'sequential', [2, 3, 4, 8], 4, (n) => `counter${n}`, counter),
+  { id: 'timer', name: 'Timer', category: 'sequential', params: [count('period', TIMER_PERIODS, 1000)], key: (p) => `timer${p.period}`, make: (p) => timer(p.period) },
   nBit('smul', 'Iterative multiplier', 'sequential', [4, 8, 16, 32], 8, (n) => `smul${n}`, seqMul),
   nBit('pmul', 'Pipelined multiplier', 'sequential', [4, 8, 16, 32], 8, (n) => `pmul${n}`, pipeMul),
   nBit('updown', 'Up/down counter', 'sequential', [2, 4, 8, 16], 4, (n) => `updown${n}`, upDownCounter),

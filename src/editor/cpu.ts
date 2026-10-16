@@ -142,6 +142,9 @@ export const pinNamed = (doc: ChipDoc, dir: 'in' | 'out', width: number, ...name
  * several are several cores (multicpu.ts).
  */
 export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
+  // a core on a bus (Examples ▸ System on a bus): its memory, DMA, keyboard and timer are behind the bus, which no
+  // golden model here follows cycle for cycle (bus/model.ts is the tests'); the drawer would only report mismatches
+  if (doc.parts.some((p) => 'lib' in p.ref && /^sysbuscore/.test(p.ref.lib))) return null;
   const roms = romParts(doc);
   let rom = (roms.find((p) => p.id === 'imem') ?? roms[0])?.id;
   if (!rom) {

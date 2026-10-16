@@ -769,7 +769,9 @@ on its own.
 - ✅ A system on one bus with a memory map: the system CPU (instructions fetched over the bus beyond a boot ROM), DMA,
   RAM, flash; it boots from flash into RAM by DMA (lib/soc.ts, lock-step with the golden model). ✅ the DRAM controller
   as a slave (a data mask on the device: a store writes its bytes without a read), a screen and a keyboard on the bus
-  (chapter 35's sixth step, on the cycle engine). ⏳ the sandbox example (Examples ▸ System on a bus) and a timer part
+  (chapter 35's sixth step, on the cycle engine). ✅ the sandbox example (Examples ▸ System on a bus: boot ROM and flash
+  contents as ROM parts, a screen, keyboard and timer parts behind the bus; the cycle engine) and a timer part (palette,
+  workbench family)
 
 **Campaign**
 - ⏳ An act: a sense amplifier, a DRAM bank with refresh, a row-buffer controller, a bus with two masters and an

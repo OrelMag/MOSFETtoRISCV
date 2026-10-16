@@ -9,6 +9,7 @@ import { openChip } from './session';
 import { PICTURE } from '../riscv/ioprograms';
 import { CPU4_SUBCHIPS, cpu4Chip } from './example4';
 import { computer6502Chip, memory6502Chip } from './example6502';
+import { busSystemChip } from './examplebus';
 
 const pin = (id: string, dir: PinDoc['dir'], at: Vec, width = 1, extra: Partial<PinDoc> = {}): PinDoc => ({ id, name: id, dir, width, at, ...extra });
 const part = (id: string, ref: PartRef, at: Vec, extra: Partial<PartDoc> = {}): PartDoc => ({ id, ref, at, ...extra });
@@ -391,6 +392,11 @@ export const EXAMPLES: Example[] = [
     blurb: 'The MOS 6502 (cycle-exact; open it for its transistors), a 4K ROM in 6502 assembly, 2K of RAM, a console, LEDs and switches behind a memory map. Run: the Fibonacci numbers in decimal.',
     build: (id, n, _sub, docs) => computer6502Chip(id, n, { mem: docs.mem, dev: docs.dev }),
     subchips: { mem: { name: 'Memory map', build: memory6502Chip }, dev: { name: 'Devices', build: (id, n) => devicesChip(id, n, 'at $4000 ($4000 console, $4001 LEDs, $4002 switches)') } },
+  },
+  {
+    id: 'bussystem', name: 'System on a bus',
+    blurb: 'Chapter 35\'s computer: an RV32I core and a DMA engine on one bus to RAM, a flash it boots from, the DRAM of chapter 33, a screen, a keyboard and a timer. Clock rate max, Run, then type.',
+    build: busSystemChip,
   },
   { id: 'sharedbus', name: 'Shared bus', blurb: 'Two tri-state drivers and a pull-down on one wire: a value, a held 0, or a fight (X).', build: sharedBusChip },
   { id: 'wiredand', name: 'Wired-AND', blurb: 'Open-drain NMOS stages and a pull-up: the wire is 1 only when every stage lets go.', build: (id, n) => wiredChip(id, n, 'and') },
