@@ -25,7 +25,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Cache Freedoom (scripts/doom/fetch-wad.mjs: pinned sha256)
+      - name: "Cache Freedoom (scripts/doom/fetch-wad.mjs, pinned sha256)"
         uses: actions/cache@v4
         with:
           path: .cache/doom
@@ -43,7 +43,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Cache Freedoom (scripts/doom/fetch-wad.mjs: pinned sha256)
+      - name: "Cache Freedoom (scripts/doom/fetch-wad.mjs, pinned sha256)"
         uses: actions/cache@v4
         with:
           path: .cache/doom
