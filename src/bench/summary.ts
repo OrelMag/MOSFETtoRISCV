@@ -24,6 +24,8 @@ export interface BenchCpu {
   nands: number;
   /** NAND delays (static timing). */
   period: number;
+  /** Main memory is an off-chip DRAM device (chapter 33): not in `nands`, so kept out of the cost comparisons. */
+  offChip?: boolean;
   runs: BenchRun[];
 }
 
@@ -56,6 +58,7 @@ const CHAPTER: Record<string, string> = {
   'mc-fsm': 'multicycle', 'mc-micro': 'multicycle', pipe: 'pipeline', 'pipe-ks': 'pipepay', 'pipe-bal': 'pipepay',
   'pipe-bp': 'pipepay', 'pipe-bal-bp': 'pipepay', 'pipe-wb2': 'cache', 'pipe-wt-bal-bp': 'cache', 'pipe-m': 'muldiv',
   'pipe-m-bal-bp': 'muldiv', fppipe: 'float', sys: 'traps', 'sys-m': 'muldiv', dual: 'multicore',
+  'sc-wb2-dram': 'memctrl', 'sc-wb2-dramc': 'memctrl', 'pipe-wb2-dram': 'memctrl',
 };
 export const chapterOf = (id: string): string | undefined => CHAPTER[id];
 
@@ -81,6 +84,7 @@ export const meanOf = (cpu: BenchCpu, m: Metric) => geoMean(COMMON.map((b) => me
 /** The CPUs no other CPU beats on both x (default: cost in NANDs) and mean time, lowest x first. */
 export function front(cpus: BenchCpu[], x: (c: BenchCpu) => number = (c) => c.nands): BenchCpu[] {
   const t = new Map(cpus.map((c) => [c, meanOf(c, 'time')]));
-  return [...cpus].sort((a, b) => x(a) - x(b) || t.get(a)! - t.get(b)!)
+  // a CPU whose main memory is off chip costs more than its NANDs say: it is no one's trade-off
+  return cpus.filter((c) => !c.offChip).sort((a, b) => x(a) - x(b) || t.get(a)! - t.get(b)!)
     .filter((c, i, a) => a.slice(0, i).every((d) => t.get(d)! > t.get(c)!));
 }

@@ -14,10 +14,10 @@ import { BitSim, LANES } from '../../src/sim/bitsim';
 import { flatten, type FlatDesign, type HierNode } from '../../src/sim/flatten';
 import { GateSim } from '../../src/sim/gatesim';
 import type { Sim } from '../../src/sim/sim';
-import { type Bit, inPorts } from '../../src/sim/types';
+import { inPorts } from '../../src/sim/types';
 import type { IsaCoverage, LaneProbe } from './coverage';
 import { issOptions, type CpuConfig } from './cpus';
-import { pause } from './run';
+import { laneLeaves, pause } from './run';
 
 /** What a program leaves behind: registers per hart, FP registers and fcsr (F CPUs), data memory. */
 export interface ArchState { x: number[][]; f?: number[]; fcsr?: number; dmem: number[] }
@@ -102,12 +102,7 @@ export async function fuzzLanes(cfg: CpuConfig, cases: FuzzCase[], probe?: (desi
   const sim = new BitSim(design);
   const N = 2 ** imemK;
   const progs = Array.from({ length: LANES }, (_, l) => cases[l % cases.length].words);
-  design.leaves.forEach((leaf, i) => {
-    if (leaf.kind !== 'behavior' || leaf.inputs.length === 0) return;
-    if (!leaf.def.id.startsWith('rom_')) throw new Error(`${cfg.id}: behavioural leaf ${leaf.node.path.join('.')} is not a ROM`);
-    if (leaf.node.path.includes('imem')) sim.setLaneBehavior(i, ([a], lane) => [progs[lane][Math.floor(a / 4) % N] ?? 0x13]);
-    else sim.setLaneBehavior(i, (ins) => leaf.def.behavior!.eval(ins, undefined));
-  });
+  const laneView = laneLeaves(cfg, design, sim, (l) => progs[l], N);
   for (const p of inPorts(design.root.def)) sim.setInput(p.name, 0);
   sim.settle();
   const max = Math.max(...cases.map((c) => budget(cfg, c)));
@@ -129,7 +124,7 @@ export async function fuzzLanes(cfg: CpuConfig, cases: FuzzCase[], probe?: (desi
   }
   const cycles = c;
   return cases.map((c, l) => {
-    const view = { design, getBits: (nets: readonly number[]) => nets.map((n) => ((sim.v[n] >>> l) & 1) as Bit) };
+    const view = laneView(l);
     const diff = diffState(c.golden, readState(view, design.root, !!cfg.isa.f));
     return { seed: c.seed, ok: !diff, diff, cycles };
   });
