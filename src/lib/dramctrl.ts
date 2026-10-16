@@ -5,7 +5,7 @@
 // latched request, and a refresh counter. The device is DeviceModel as a behavioural leaf: the data,
 // and every timing rule, checked.
 
-import { type CtrlModel, Cmd, DeviceModel, type DramConfig, fieldWidths, MAX_POSTPONE } from '../dram/controller';
+import { type CtrlModel, Cmd, DeviceModel, deviceIn, type DramConfig, fieldWidths, MAX_POSTPONE } from '../dram/controller';
 import { TIMING } from '../dram/timing';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
@@ -28,7 +28,7 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
   return d;
 }
 
-const cfgKey = (c: DramConfig) => `${c.k}_${c.banks}_${c.rowWords}_${c.policy === 'open' ? 'o' : 'c'}${c.hash ? 'h' : ''}`;
+export const cfgKey = (c: DramConfig) => `${c.k}_${c.banks}_${c.rowWords}_${c.policy === 'open' ? 'o' : 'c'}${c.hash ? 'h' : ''}`;
 const bitsFor = (v: number) => Math.max(1, Math.ceil(Math.log2(v + 1)));
 
 /** Small helpers over a Builder: gates of any arity, buses of any width (1 included). */
@@ -238,6 +238,6 @@ export function dramDevice(c: DramConfig, init?: ArrayLike<number>): ComponentDe
 }
 
 /** The device's model inside a simulation (for readers: the CPU panel's memory, tests). */
-export const deviceOf = (s: unknown): DeviceModel | null => (s && typeof s === 'object' && 'dev' in s && (s as DevState).dev instanceof DeviceModel ? (s as DevState).dev : null);
+export const deviceOf = deviceIn;
 
 export type { CtrlModel };

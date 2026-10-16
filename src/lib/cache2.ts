@@ -11,6 +11,10 @@ import { AND, MUX2, NOT, OR } from './gates';
 import { ram } from './memory';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
+import type { DramConfig } from '../dram/controller';
+import { accessCycles, TIMING } from '../dram/timing';
+import { cfgKey, dramCtrl, dramDevice } from './dramctrl';
+import { DFF } from './sequential';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -114,18 +118,22 @@ assign last = stall && count == 4'd11;          // write the tag`,
  * first). Store hits only update the cache and set the line's dirty bit. With 2 ways an LRU bit per set
  * picks the victim.
  */
-export function wbCache(k = 6, ib = 2, ways: 1 | 2 = 1): ComponentDef {
+export function wbCache(k = 6, ib = 2, ways: 1 | 2 = 1, dram?: DramConfig): ComponentDef {
   const t = k - 2 - ib, la = ib + 2;
-  const id = `wbcache${k}_${ib}_${ways}`;
+  if (dram && dram.k !== k) throw new Error('wbCache: the DRAM must hold the whole memory');
+  const id = `wbcache${k}_${ib}_${ways}${dram ? `_d${cfgKey(dram)}` : ''}`;
   return memo(id, () => {
     const b = new Builder(18, 16);
     b.pins('addr', 'wd', 'we', 're', 'clk');
     const sa = b.op(splitter([2, 2, ib, t, 30 - k]), ['addr']);
     const off = b.name(`${sa}.o1`, 'offset', true), idx = b.name(`${sa}.o2`, 'index', true), tag = b.name(`${sa}.o3`, 'tag', true);
     b.next();
-    const fsm = b.op(MISS_CTRL, ['', '', 'clk'], 'miss controller', 'fsm');
-    const word = b.name(`${fsm}.word`, 'word', true), wbPh = b.name(`${fsm}.wb`, 'writeBack', true);
-    const fill = b.name(`${fsm}.fill`, 'fill', true), last = b.name(`${fsm}.last`, 'last', true);
+    // the miss path: a counter of fixed latency, or a DRAM controller that says when each word moves
+    const fsm = dram ? b.op(dramCtrl(dram), ['', '', '', 'clk'], 'DRAM controller', 'fsm') : b.op(MISS_CTRL, ['', '', 'clk'], 'miss controller', 'fsm');
+    const word = b.name(`${fsm}.word`, 'word', true);
+    const wbDone = dram ? b.op(DFF, ['', 'clk'], 'written back', 'wbdone') : '';
+    let wbPh = dram ? '' : b.name(`${fsm}.wb`, 'writeBack', true);
+    let fill = dram ? b.name(`${fsm}.dv`, 'fill', true) : b.name(`${fsm}.fill`, 'fill', true), last = dram ? '' : b.name(`${fsm}.last`, 'last', true);
     // address of the word in the data arrays: the CPU's, or the line being moved
     const da = b.name(b.op1(busMux2(la), [b.op1(merger([2, ib]), [off, idx]), b.op1(merger([2, ib]), [word, idx]), ''], 'data address'), 'daddr', true);
     b.next();
@@ -149,15 +157,30 @@ export function wbCache(k = 6, ib = 2, ways: 1 | 2 = 1): ComponentDef {
     const vTag = b.name(vOut('stag', t), 'victimTag', true);
     const vData = b.name(vOut('dout', 32), 'victimData', true);
     const rd = pick(hitWay, `${W[0]}.dout`, ways === 2 ? `${W[1]}.dout` : '', 32, 'hit way');
-    b.wire(stall, `${fsm}.stall`);
-    b.wire(dirtyV, `${fsm}.dirtyV`);
     b.wire(stall, `${da.split('.')[0]}.s`);
+    let memOut: string;
+    if (dram) {
+      // write the dirty victim back first (one request), then fill (a second); the tag is written with the last word
+      wbPh = b.name(b.op1(andN(3), [stall, dirtyV, b.op1(NOT, [`${wbDone}.q`])], 'write back'), 'writeBack', true);
+      const fillPh = b.op1(AND, [stall, b.op1(NOT, [wbPh])], 'fill phase');
+      last = b.name(b.op1(AND, [fillPh, `${fsm}.done`], 'last word'), 'last', true);
+      b.wire(b.op1(andN(3), [stall, b.op1(NOT, [last]), b.op1(OR, [`${wbDone}.q`, b.op1(AND, [wbPh, `${fsm}.done`])])]), `${wbDone}.d`);
+      b.wire(stall, `${fsm}.req`);
+      b.wire(wbPh, `${fsm}.wr`);
+      b.wire(b.op1(busMux2(k - 2), [b.op1(merger([ib, t]), [idx, tag], 'line'), b.op1(merger([ib, t]), [idx, vTag], 'victim line'), wbPh]), `${fsm}.la`);
+      b.next();
+      const dev = b.op(dramDevice(dram), [`${fsm}.cmd`, `${fsm}.ba`, `${fsm}.ra`, `${fsm}.ca`, vData, 'clk'], 'DRAM', 'dram');
+      memOut = `${dev}.rd`;
+    } else {
+      b.wire(stall, `${fsm}.stall`);
+      b.wire(dirtyV, `${fsm}.dirtyV`);
+      b.next();
+      // main memory: written only with victim lines, read only to fill
+      const ma = b.op1(busMux2(k), [b.op1(merger([2, ib, t]), [word, idx, tag], 'fill address'), b.op1(merger([2, ib, t]), [word, idx, vTag], 'write-back address'), wbPh]);
+      memOut = `${b.op(ram(k, 32), [ma, vData, wbPh, 'clk'], 'main memory', 'ram')}.dout`;
+    }
     b.next();
-    // main memory: written only with victim lines, read only to fill
-    const ma = b.op1(busMux2(k), [b.op1(merger([2, ib, t]), [word, idx, tag], 'fill address'), b.op1(merger([2, ib, t]), [word, idx, vTag], 'write-back address'), wbPh]);
-    const mem = b.op(ram(k, 32), [ma, vData, wbPh, 'clk'], 'main memory', 'ram');
-    b.next();
-    const dIn = b.name(b.op1(busMux2(32), ['wd', `${mem}.dout`, stall], 'store / fill data'), 'dataIn', true);
+    const dIn = b.name(b.op1(busMux2(32), ['wd', memOut, stall], 'store / fill data'), 'dataIn', true);
     const dirtyIn = b.name(b.op1(NOT, [stall], 'dirty if a store'), 'dirtyIn', true);
     // per way: data write (fill into the victim, or a store hit into the hitting way) and tag write
     W.forEach((nm, w) => {
@@ -177,6 +200,27 @@ export function wbCache(k = 6, ib = 2, ways: 1 | 2 = 1): ComponentDef {
     b.wire(hit, 'hit');
     const R = b.right;
     const bytes = 16 * 2 ** ib * ways;
+    const tm = dram?.t ?? TIMING;
+    if (dram) return define({
+      id, name: `${4 * 2 ** k}-byte DRAM with a ${bytes}-byte write-back cache${ways === 2 ? ' (2-way)' : ''}`, category: 'memory',
+      summary: `A ${ways === 2 ? '2-way set-associative' : 'direct-mapped'} write-back, write-allocate cache (${2 ** ib} sets × ${ways} way${ways > 1 ? 's' : ''} × 4 words) in front of a DRAM controller and device (${dram.banks} banks, ${dram.rowWords}-word rows, ${dram.policy} page). A miss asks the controller for the line and waits for its last word: ${accessCycles('hit', tm)} cycles on a row hit, ${accessCycles('miss', tm)} on a closed bank, ${accessCycles('conflict', tm)} on another open row, longer behind a refresh. A dirty victim is written back first, as a request of its own.`,
+      ports: [bus('addr', 32, 'in'), bus('wd', 32, 'in'), bit('we', 'in'), bit('re', 'in'), bit('clk', 'in', 'bottom', true), bus('rd', 32, 'out'), bit('stall', 'out'), bit('hit', 'out')],
+      symbol: { kind: 'box', label: ways === 2 ? 'WB 2-WAY $ + DRAM' : 'WB D$ + DRAM' },
+      netlist: () => ({ pins: { addr: [0, 4], wd: [0, 8], we: [0, 12], re: [0, 16], clk: [0, 22], rd: [R, 4], stall: [R, 8], hit: [R, 12] }, instances: b.instances, nets: b.nets() }),
+      hdl: {
+        verilog: `// per access: hit if any way's {valid, tag} matches
+assign stall = (re | we) & ~hit;
+// a miss: req = stall to the DRAM controller; wr = the dirty victim not yet written back
+assign wb = stall & dirtyV & ~wbdone;
+assign la = wb ? {vtag, idx} : {tag, idx};
+always_ff @(posedge clk) begin
+  if (we & hit) begin data[way][{idx, off}] <= wd; dirty[way][idx] <= 1; end
+  if (dv)       data[victim][{idx, word}] <= dram_rd;                 // a word of the fill
+  if (~wb & done) {dirty, valid, tags}[victim][idx] <= {1'b0, 1'b1, tag};
+  wbdone <= stall & ~(~wb & done) & (wbdone | (wb & done));
+${ways === 2 ? '  if ((re | we) & hit) lru[idx] <= ~hitway;\n' : ''}end`,
+      },
+    });
     return define({
       id, name: `${4 * 2 ** k}-byte memory with a ${bytes}-byte write-back cache${ways === 2 ? ' (2-way)' : ''}`, category: 'memory',
       summary: `Main memory of ${2 ** k} words behind a ${ways === 2 ? '2-way set-associative' : 'direct-mapped'} write-back, write-allocate cache: ${2 ** ib} sets × ${ways} way${ways > 1 ? 's' : ''} × 4 words. Store hits stay in the cache (dirty bit). A miss, load or store, stalls ${WB_MISS_CLEAN} cycles, or ${WB_MISS_DIRTY} when the victim line is dirty and must be written back first.${ways === 2 ? ' An LRU bit per set picks the victim.' : ''}`,

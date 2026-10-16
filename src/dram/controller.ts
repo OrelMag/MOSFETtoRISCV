@@ -77,7 +77,11 @@ export class DeviceModel {
     this.t = c.t ?? TIMING;
     this.mem = new Uint32Array(2 ** c.k);
     this.x = new Uint8Array(2 ** c.k);
-    if (init) this.mem.set(Array.from(init).slice(0, this.mem.length));
+    // initial words by CPU address, stored where the mapping puts them
+    if (init) for (let a = 0; a < Math.min(init.length, this.mem.length); a++) {
+      const { col, bank, row } = splitLine(c, a >>> 2);
+      this.mem[this.addr(bank, row, col, a & 3)] = init[a] >>> 0;
+    }
     this.open = new Array<number>(c.banks).fill(-1);
     this.lastAct = new Array<number>(c.banks).fill(-1e9);
     this.lastPre = new Array<number>(c.banks).fill(-1e9);
@@ -92,6 +96,12 @@ export class DeviceModel {
   addr(bank: number, row: number, col: number, w = 0): number {
     const { cb, bb } = fieldWidths(this.c);
     return ((((row << bb) | bank) << cb | col) << 2) | w;
+  }
+
+  /** Word `a` of the CPU's address space (the line address mapped as the controller maps it); −1 if unknown. */
+  read(a: number): number {
+    const { col, bank, row } = splitLine(this.c, a >>> 2), i = this.addr(bank, row, col, a & 3);
+    return this.x[i] ? -1 : this.mem[i];
   }
 
   /** The rising edge at the end of the current cycle, with that cycle's inputs; then the next cycle's outputs. */
@@ -153,6 +163,10 @@ export class DeviceModel {
     return this.out;
   }
 }
+
+/** The device model inside a simulation leaf's state (lib/dramctrl.ts dramDevice), if it is one. */
+export const deviceIn = (s: unknown): DeviceModel | null =>
+  s && typeof s === 'object' && 'dev' in s && (s as { dev: unknown }).dev instanceof DeviceModel ? (s as { dev: DeviceModel }).dev : null;
 
 /** Controller states (the gate-level controller's one-hot flip-flops, in this order). */
 export const ST = { IDLE: 0, WPRE: 1, WACT: 2, BURST: 3, CLOSE: 4, WCLOSE: 5, WREF1: 6, WREF2: 7 } as const;
