@@ -48,7 +48,8 @@ export class CssColors {
       this.probe.style.color = '';
       this.probe.style.color = token.startsWith('--') ? `var(${token})` : token;
       c = parseCssColor(getComputedStyle(this.probe).color) ?? [0.5, 0.5, 0.5, 1];
-      this.cache.set(token, c);
+      // A host not yet in the document has no styles: ask again once it is.
+      if (this.probe.isConnected) this.cache.set(token, c);
     }
     return c;
   }

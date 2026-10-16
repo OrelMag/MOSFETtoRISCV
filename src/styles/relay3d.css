@@ -1,0 +1,99 @@
+/* ---------- The relay close-up (src/widgets/relay3d.ts, relay3dview.ts): loaded with its chunk ---------- */
+.relay3d {
+  /* Materials (the 3D view reads these through gl/color.ts, the flat view and plots use them directly) */
+  --rl-bakelite: light-dark(#3b2a22, #5a4236);
+  --rl-steel: light-dark(#8d95a6, #8a93a6);
+  --rl-steel-2: light-dark(#5f6778, #5d6577);
+  --rl-steel-3: light-dark(#b9c0cc, #a9b1c0);
+  --rl-copper: light-dark(#b8692e, #d07f40);
+  --rl-glow: light-dark(#ff8a1f, #ff9a3a);
+  --rl-spring: light-dark(#cbc4a6, #b9b39c);
+  --rl-blade: light-dark(#c98a4a, #d6965a);
+  --rl-stud: light-dark(#ece3cb, #d8cfb6);
+  --rl-silver: light-dark(#d9dde4, #c9ced8);
+  --rl-contact: var(--good);
+  /* Lights: ambient from above / below and the key light */
+  --rl-sky: light-dark(#a9adb6, #8d93a3);
+  --rl-ground: light-dark(#5a5652, #3d3b3a);
+  --rl-key: light-dark(#e2ded6, #d8d4cc);
+  /* Plot series */
+  --rl-cur: var(--rl-copper);
+  --rl-trav: var(--series-1);
+  --rl-volt: light-dark(#d55181, #e56a98);
+  container-type: inline-size;
+}
+.r3 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+@container (min-width: 760px) { .r3 { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); align-items: start; } }
+.r3-main, .r3-side { min-width: 0; }
+
+/* controls */
+.r3-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin-bottom: 8px; }
+.r3-sl { display: flex; align-items: center; gap: 8px; flex: 1 1 200px; min-width: 0; font-size: 13.5px; }
+.r3-sl span { width: 48px; flex: none; color: var(--text-2); }
+.r3-sl input { flex: 1; min-width: 70px; accent-color: var(--accent); }
+.r3-sl output { width: 58px; flex: none; text-align: right; font: 600 13px var(--font-mono); font-variant-numeric: tabular-nums; }
+.r3-btns { display: flex; gap: 8px; }
+
+/* the stage: canvas or flat drawing, labels and chips over it */
+.r3-stage {
+  position: relative; aspect-ratio: 4 / 3; max-height: 460px; width: 100%; overflow: hidden;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--canvas); background-image: radial-gradient(var(--grid) 1px, transparent 1px); background-size: 20px 20px;
+}
+.r3-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; outline: none; }
+.r3-canvas.dragging { cursor: grabbing; }
+.r3-canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.r3-flat { position: absolute; inset: 0; width: 100%; height: 100%; }
+.r3-flat .r3-edge { stroke: color-mix(in srgb, var(--text) 35%, transparent); stroke-width: 0.15; stroke-linejoin: round; }
+.r3-flat-lbl { font: 500 2.6px var(--font-ui); fill: var(--text-2); }
+.r3-labels { position: absolute; inset: 0; pointer-events: none; }
+.r3-lbl { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.r3-lbl i { position: absolute; left: -2.5px; top: -2.5px; width: 5px; height: 5px; border-radius: 50%; background: var(--text); box-shadow: 0 0 0 1.5px var(--surface); }
+.r3-lbl b {
+  position: absolute; white-space: nowrap; font: 600 11.5px var(--font-ui); color: var(--text);
+  background: color-mix(in srgb, var(--surface) 82%, transparent); border-radius: 4px; padding: 0 4px;
+}
+.r3-lbl.r b { left: 7px; top: -8px; }
+.r3-lbl.l b { right: 7px; top: -8px; }
+.r3-lbl.t b { left: 0; bottom: 6px; transform: translateX(-50%); }
+.r3-lbl.b b { left: 0; top: 6px; transform: translateX(-50%); }
+.r3-lbl.minor b { font-weight: 500; color: var(--text-2); }
+/* the labelled face is turned away: the label would float over whatever hides it */
+.r3-lbl.away { opacity: 0.3; }
+@container (max-width: 480px) { .r3-lbl.minor { display: none; } .r3-lbl b { font-size: 10.5px; } }
+.r3-chips { position: absolute; left: 8px; top: 8px; right: 8px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; }
+.r3-chip { font: 600 11.5px var(--font-mono); padding: 1px 8px; border-radius: 99px; background: var(--surface); border: 1px solid var(--border); color: var(--text-2); }
+.r3-chip.good { color: var(--good); background: var(--good-soft); border-color: transparent; }
+.r3-chip.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.r3-chip.bad { color: var(--bad); background: var(--bad-soft); border-color: transparent; }
+.r3-hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+/* plots */
+.r3-plot { display: block; width: 100%; height: auto; touch-action: none; cursor: ew-resize; }
+.r3-plot .grid { stroke: var(--border); stroke-width: 1; }
+.r3-plot .ax { stroke: var(--border-strong); stroke-width: 1; }
+.r3-plot .tick { font: 10.5px var(--font-mono); fill: var(--muted); }
+.r3-plot .tick.tr { fill: var(--rl-trav); }
+.r3-plot .axl { font: 600 10.5px var(--font-ui); fill: var(--text-2); }
+.r3-plot .band { fill: var(--rl-contact); }
+.r3-plot .band-frame { fill: none; stroke: var(--border-strong); }
+.r3-plot polyline { fill: none; stroke-width: 1.7; stroke-linejoin: round; }
+.r3-plot .cur { stroke: var(--rl-cur); }
+.r3-plot .trav { stroke: var(--rl-trav); }
+.r3-plot .volt { stroke: var(--rl-volt); }
+.r3-plot .cursor { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.r3-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-2); margin: 4px 0 0; }
+.r3-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.r3-legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.r3-legend i.cur { background: var(--rl-cur); }
+.r3-legend i.trav { background: var(--rl-trav); }
+.r3-legend i.volt { background: var(--rl-volt); }
+.r3-legend i.band { width: 11px; height: 11px; border-radius: 3px; background: var(--rl-contact); }
+
+/* the summary */
+.r3-side h4 { margin: 14px 0 6px; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.r3-badge { display: inline-block; font-size: 10.5px; letter-spacing: .04em; padding: 1px 7px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); vertical-align: 1px; }
+.r3-kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 13px; color: var(--text-2); }
+.r3-kv .v { font: 600 12.5px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text); }
+.r3-kv .v.bad { color: var(--bad); }
+.r3-kv .v.good { color: var(--good); }

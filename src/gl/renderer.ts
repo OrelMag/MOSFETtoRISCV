@@ -259,3 +259,7 @@ export function createRenderer(canvas: HTMLCanvasElement, camera: OrbitCamera, o
     },
   };
 }
+
+// The chunk's other entry points, so a page loads the whole renderer with one import().
+export { OrbitCamera } from './camera';
+export { boxMesh, cylinderMesh } from './mesh';
