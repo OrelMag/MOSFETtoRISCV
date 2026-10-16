@@ -24,13 +24,22 @@ export function cpuTops(): ComponentDef[] {
     pipelinedCpu(cw, { adder: 'ks', dcache: 'wb2' }), pipelinedCpu(cw, { adder: 'ks', dcache: 'wt', predictor: true, balanced: true }),
     pipelinedCpu(w, { adder: 'ks', m: true }), pipelinedCpu(w, { adder: 'ks', balanced: true, predictor: true, m: true }),
     pipelinedFpCpu(w), systemCpu(w), systemCpu(w, { m: true }),
-    // Appendix B: the system core with ports, the Doom computer (any program and WAD lay out alike) and its devices
-    systemCore(), systemCore({ m: true }), doomComputer(Uint32Array.from(w), new Uint32Array(1 << 23), 64), doomDevices(64), DOOM_MAP,
+    // Appendix B: the system core with ports (the Doom computer's)
+    systemCore(), systemCore({ m: true }),
     multicycleCpu(w, { control: 'fsm' }), multicycleCpu(w, { control: 'micro' }), dualCore(w),
     multiCore(w, 4), multiCore(w, 8, { dmemK: 10 }), laneCore(w, 4), laneCore(w, 8),
     // Appendix A: the 6502 at transistor level (its blocks register when it is built)
     m6502(),
   ];
+}
+
+/**
+ * Appendix B's Doom computer and its blocks (any program and WAD lay out alike): drawn by the
+ * chapter, checked by the schematic tests, never a sandbox chip (8 MiB of RAM, a 32 MiB ROM).
+ */
+export function doomTops(): ComponentDef[] {
+  const w = assemble(PROGRAMS[0].source).words;
+  return [doomComputer(Uint32Array.from(w), new Uint32Array(1 << 23), 64), doomDevices(64), DOOM_MAP];
 }
 
 /**
