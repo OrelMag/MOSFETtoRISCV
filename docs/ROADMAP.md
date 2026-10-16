@@ -756,9 +756,10 @@ on its own.
 - ✅ A simple bus with a valid / ready handshake (an AXI-lite-style set of channels), address decoding to several
   slaves, arbitration generalizing the dual-core's arbiter, wait states (16d, chapter 35: lib/axi.ts)
 - ✅ DMA: a controller copying memory while the CPU runs, sharing the bus, raising an interrupt when done
-- 🚧 A system on one bus with a memory map: the system CPU (instructions fetched over the bus beyond a boot ROM), DMA,
-  RAM, flash; it boots from flash into RAM by DMA (lib/soc.ts, lock-step with the golden model). ⏳ the DRAM
-  controller as a slave, a screen and keyboard on the bus, the sandbox example and a timer part
+- ✅ A system on one bus with a memory map: the system CPU (instructions fetched over the bus beyond a boot ROM), DMA,
+  RAM, flash; it boots from flash into RAM by DMA (lib/soc.ts, lock-step with the golden model). ✅ the DRAM controller
+  as a slave (a data mask on the device: a store writes its bytes without a read), a screen and a keyboard on the bus
+  (chapter 35's sixth step, on the cycle engine). ⏳ the sandbox example (Examples ▸ System on a bus) and a timer part
 
 **Campaign**
 - ⏳ An act: a sense amplifier, a DRAM bank with refresh, a row-buffer controller, a bus with two masters and an

@@ -47,7 +47,8 @@ export function splitLine(c: DramConfig, la: number): { col: number; bank: numbe
 /** A REF may be postponed this many times (DDR4: 8) before the device loses data. */
 export const MAX_POSTPONE = 8;
 
-export interface DeviceIn { cmd: number; ba: number; ra: number; ca: number; wd: number }
+/** dm: the data mask of a write burst's word (DDR's DM pins), bit i = byte i written; omitted: all four. */
+export interface DeviceIn { cmd: number; ba: number; ra: number; ca: number; wd: number; dm?: number }
 export interface DeviceOut { rd: number; rv: boolean; err: boolean }
 
 /**
@@ -111,9 +112,15 @@ export class DeviceModel {
     for (const b of this.bursts) {
       const w = now - b.at;
       if (b.write && w >= 0 && w < 4) {
-        const a = b.base + w;
+        const a = b.base + w, dm = i.dm ?? 15;
+        if (dm === 0) continue;
         if (b.bad || i.wd < 0) this.x[a] = 1;
-        else { this.mem[a] = i.wd >>> 0; this.x[a] = 0; }
+        else if (dm === 15) { this.mem[a] = i.wd >>> 0; this.x[a] = 0; } else {
+          // a masked write keeps the other bytes (an unknown word stays unknown)
+          let m = 0;
+          for (let k = 0; k < 4; k++) if ((dm >> k) & 1) m |= 0xff << (8 * k);
+          this.mem[a] = ((this.mem[a] & ~m) | (i.wd & m)) >>> 0;
+        }
       }
     }
     this.bursts = this.bursts.filter((b) => now - b.at < 3);

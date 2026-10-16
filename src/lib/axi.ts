@@ -6,6 +6,7 @@
 // the earliest, so a transfer takes at least two cycles; a slow slave adds wait states.
 
 import { MAP } from '../bus/model';
+import type { DramConfig } from '../dram/controller';
 import { FlashDevice, FLASH_TIMES, type FlashGeometry } from '../flash/model';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
@@ -13,6 +14,7 @@ import { bigRam } from './bigmem';
 import { Builder } from './builder';
 import { andN, busMux2, decoder, equal, incrementer, muxTree } from './combinational';
 import { define, merger, ones, splitter } from './define';
+import { cfgKey, dramCtrl, dramDevice } from './dramctrl';
 import { AND, MUX2, NOT, OR } from './gates';
 import { arbiterN } from './mpdecode';
 import { DFF, register } from './sequential';
@@ -298,7 +300,25 @@ function slaveFsm(b: Builder, g: ReturnType<typeof kit>, wait: number) {
  */
 export function axiRam(k: number, wait = 0): ComponentDef {
   const id = `axiram${k}_${wait}`;
-  return memo(id, () => {
+  return memo(id, () => ramSlave(id, k, wait, `RAM slave (${2 ** k} words${wait ? `, ${wait} wait states` : ''})`, wait ? 'SLOW RAM' : 'RAM',
+    `${2 ** k} words in four byte lanes behind the bus: ready whenever idle, a store written at its address handshake (byte enables from wstrb), a load's word answered ${wait ? `${wait + 1} cycles` : 'one cycle'} later.`));
+}
+
+/**
+ * A screen on the bus: an n × n frame buffer, a byte a pixel (RGB332: rrrgggbb), pixel (x, y) at byte n·y + x.
+ * It is the RAM slave (four byte lanes, so sb writes one pixel); a display reads the lanes as chapter 30's
+ * scan-out reads its frame (here the panel paints them).
+ */
+export function axiScreen(n = 64): ComponentDef {
+  const k = Math.log2((n * n) / 4);
+  if (!Number.isInteger(k)) throw new Error('axiScreen: n must be a power of two');
+  const id = `axiscreen${n}`;
+  return memo(id, () => ramSlave(id, k, 0, `Screen slave (${n} × ${n}, RGB332)`, 'SCREEN',
+    `A frame buffer behind the bus: ${n} × ${n} pixels, one byte each (RGB332: rrrgggbb), pixel (x, y) at byte ${n}·y + x, in four byte lanes so that sb writes one pixel. The display reads it as the scan-out of chapter 30 reads its frame.`));
+}
+
+function ramSlave(id: string, k: number, wait: number, name: string, label: string, summary: string): ComponentDef {
+  {
     const b = new Builder(14, 14);
     const g = kit(b);
     const { wrHs, rdHs, rdDone } = slaveFsm(b, g, wait);
@@ -315,13 +335,123 @@ export function axiRam(k: number, wait = 0): ComponentDef {
     b.wire(`${rd}.q`, 'rdata');
     const ports: PortDef[] = [...slavePorts(), bit('clk', 'in', 'bottom', true)];
     return define({
-      id, name: `RAM slave (${2 ** k} words${wait ? `, ${wait} wait states` : ''})`, category: 'memory',
-      summary: `${2 ** k} words in four byte lanes behind the bus: ready whenever idle, a store written at its address handshake (byte enables from wstrb), a load's word answered ${wait ? `${wait + 1} cycles` : 'one cycle'} later.`,
-      ports, symbol: { kind: 'box', label: wait ? 'SLOW RAM' : 'RAM' },
+      id, name, category: 'memory', summary,
+      ports, symbol: { kind: 'box', label },
+      netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+    });
+  }
+}
+
+/** Chapter 35's DRAM: 2^12 words (16 KB), 2 banks of 16-word rows, open page (chapter 33's controller). */
+export const BUS_DRAM: DramConfig = { k: 12, banks: 2, rowWords: 16, policy: 'open' };
+
+/**
+ * A DRAM behind the bus: chapter 33's controller and device, and an adapter. The bus moves a word with byte
+ * strobes; the controller moves 4-word lines. A load reads the line and keeps its word; a store writes the
+ * line with the device's data mask (DDR's DM pins) on the strobed bytes of its word only, so a byte store
+ * needs no read first. The request is latched at the handshake; the response comes the cycle after the
+ * controller's done.
+ */
+export function axiDram(c: DramConfig = BUS_DRAM): ComponentDef {
+  const id = `axidram${cfgKey(c)}`;
+  return memo(id, () => {
+    const b = new Builder(14, 14);
+    const g = kit(b);
+    const act = b.op(DFF, ['', 'clk'], 'request open', 'act');
+    const bq = b.op(DFF, ['', 'clk'], 'bvalid', 'bq'), rq = b.op(DFF, ['', 'clk'], 'rvalid', 'rq');
+    const idle = b.name(g.not(g.or(`${act}.q`, `${bq}.q`, `${rq}.q`)), 'idle', true);
+    const wrHs = b.name(g.and('awvalid', 'wvalid', idle), 'write', true);
+    const rdHs = b.name(g.and('arvalid', idle), 'read', true);
+    const hs = g.or(wrHs, rdHs);
+    b.next();
+    // the request, latched at its handshake: the word address, read or write, the data and its strobes
+    const wa = g.split(g.mux(32, 'araddr', 'awaddr', 'awvalid', 'address'), [2, c.k, 30 - c.k])[1];
+    const rqr = b.op(register(c.k + 1), [g.merge([wa, wrHs], [c.k, 1]), hs, 'clk'], 'request', 'req');
+    const [lw, la, wr] = g.split(`${rqr}.q`, [2, c.k - 2, 1]);
+    const wdr = b.op(register(36), [g.merge(['wdata', 'wstrb'], [32, 4]), wrHs, 'clk'], 'write data', 'wd');
+    const [wdata, strb] = g.split(`${wdr}.q`, [32, 4]);
+    b.next();
+    const ctrl = b.op(dramCtrl(c), [`${act}.q`, wr, la, 'clk'], 'controller', 'ctrl');
+    b.next();
+    // the burst's word that is this request's: its strobes as the data mask, its read word kept
+    const mine = b.name(b.op1(equal(2), [`${ctrl}.word`, lw], 'this word'), 'mine', true);
+    const dm = g.gate(strb, 4, g.and(`${ctrl}.wv`, mine));
+    const dev = b.op(dramDevice(c, undefined, true), [`${ctrl}.cmd`, `${ctrl}.ba`, `${ctrl}.ra`, `${ctrl}.ca`, wdata, dm, 'clk'], 'DRAM', 'dev');
+    b.next();
+    const rdr = b.op(register(32), [`${dev}.rd`, g.and(`${ctrl}.dv`, mine), 'clk'], 'read data', 'rdr');
+    const done = `${ctrl}.done`;
+    b.wire(g.or(hs, g.and(`${act}.q`, g.not(done))), `${act}.d`);
+    b.wire(g.or(g.and(done, wr), g.and(`${bq}.q`, g.not('bready'))), `${bq}.d`);
+    b.wire(g.or(g.and(done, g.not(wr)), g.and(`${rq}.q`, g.not('rready'))), `${rq}.d`);
+    b.wire(idle, 'awready'); b.wire(idle, 'wready'); b.wire(idle, 'arready');
+    b.wire(`${bq}.q`, 'bvalid'); b.wire(`${rq}.q`, 'rvalid');
+    b.wire(`${rdr}.q`, 'rdata');
+    const ports: PortDef[] = [...slavePorts(), bit('clk', 'in', 'bottom', true)];
+    return define({
+      id, name: `DRAM slave (${2 ** c.k} words, ${c.banks} banks)`, category: 'memory',
+      summary: `Chapter 33's controller and a DRAM of ${2 ** c.k} words behind the bus. A load reads its word's 4-word line; a store writes the line with the data mask set on its own strobed bytes only, so a byte store needs no read first. The response comes the cycle after the controller's done: a row hit, a closed bank and another open row each cost more (chapter 33).`,
+      ports, symbol: { kind: 'box', label: 'DRAM' },
       netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
     });
   });
 }
+
+/** The keyboard's queue (KEY_QUEUE) as a simulation holds it: the waiting codes, oldest first. */
+export interface KeyQueueState { q: number[]; clk: number; ack: number }
+export const KEY_QUEUE_DEPTH = 16;
+export const isKeyQueue = (s: unknown): s is KeyQueueState => !!s && typeof s === 'object' && Array.isArray((s as KeyQueueState).q) && 'ack' in s;
+
+/**
+ * A keyboard: keys typed wait in order (at most KEY_QUEUE_DEPTH); code is the oldest (0 when none), ready 1
+ * while one waits, and ack = 1 at a rising clock edge removes it. The world outside the circuit: a
+ * behaviour with no structure (sim/types isExternal) that a panel fills through Sim.poke, with the same
+ * pins as the sandbox's keyboard part.
+ */
+export const KEY_QUEUE: ComponentDef = {
+  id: 'keyqueue', name: 'Keyboard (queue of typed keys)', category: 'memory',
+  summary: `Keys typed wait here in order, ${KEY_QUEUE_DEPTH} at most. code: the oldest (ASCII, 0 when none); ready: 1 while one waits; ack = 1 at a rising clock edge removes it. The world outside the circuit: no gates.`,
+  ports: [bit('ack', 'in'), bit('clk', 'in', 'bottom', true), bus('code', 8, 'out'), bit('ready', 'out')],
+  symbol: { kind: 'box', label: 'KEYBOARD' },
+  behavior: {
+    delay: 1,
+    seq: { clk: 'clk', comb: [] },
+    init: (): KeyQueueState => ({ q: [], clk: 0, ack: 0 }),
+    eval: ([ack, clk], st) => {
+      const s = st as KeyQueueState;
+      const k = clk < 0 ? 2 : clk;
+      if (k !== 1) s.ack = ack === 1 ? 1 : 0;
+      if (s.clk === 0 && k === 1 && s.ack && s.q.length) s.q = s.q.slice(1);
+      s.clk = k;
+      return [s.q[0] ?? 0, s.q.length ? 1 : 0];
+    },
+    carry: (prev) => prev,
+  },
+};
+
+/**
+ * The keyboard's slave: two registers, 0 the oldest key (reading it takes it: ack at the read's handshake)
+ * and 4 the status (bit 0: a key waits). Writes are answered and dropped. code / ready / ack are the
+ * keyboard's pins (KEY_QUEUE, or the sandbox's keyboard part).
+ */
+export const AXI_KEYS: ComponentDef = (() => {
+  const b = new Builder(14, 14);
+  const g = kit(b);
+  const { rdHs } = slaveFsm(b, g, 0);
+  b.next();
+  const status = g.split('araddr', [2, 1, 29])[1];
+  const take = b.name(g.and(rdHs, g.not(status), 'ready'), 'take', true);
+  const word = g.mux(32, g.merge(['code', g.konst(24, 0)], [8, 24]), g.merge(['ready', g.konst(31, 0)], [1, 31]), status, 'key or status');
+  const rdr = b.op(register(32), [word, rdHs, 'clk'], 'read data', 'rdr');
+  b.wire(`${rdr}.q`, 'rdata');
+  b.wire(take, 'ack');
+  const ports: PortDef[] = [...slavePorts(), bus('code', 8, 'in'), bit('ready', 'in'), bit('clk', 'in', 'bottom', true), bit('ack', 'out')];
+  return define({
+    id: 'axikeys', name: 'Keyboard slave', category: 'memory',
+    summary: 'Two registers behind the bus: +0 the oldest waiting key (0 when none; reading it takes it from the keyboard), +4 the status (bit 0: a key waits). Writes are dropped.',
+    ports, symbol: { kind: 'box', label: 'KEYS' },
+    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+  });
+})();
 
 /** The default slave: answers any address (reads 0, writes ignored), so a stray address never hangs the bus. */
 export const AXI_DEFAULT: ComponentDef = (() => {
@@ -530,7 +660,9 @@ export const NOP_WORD = 0x00000013;
  * ports (addr, wdata, be, we → rdata) plus the instruction side. An instruction below the boot ROM's
  * size comes from the ROM (romData); any other is fetched over the bus into an instruction register,
  * the decoder seeing a NOP meanwhile. Loads (re) and stores (we) go over the bus. stall holds the CPU
- * until the instruction is in and its access done; irqOk lets an interrupt in only between accesses.
+ * until the instruction is in and its access done; irqOk lets an interrupt in unless a fetch or an access is
+ * under way since an earlier cycle (in an access's first cycle the trap takes its request back: we and re
+ * fall with NoTrap). A flip-flop, not the request: the request depends on the trap, the trap on irqOk.
  */
 export function busMemUnit(imemK: number): ComponentDef {
   return memo(`busmem${imemK}`, () => {
@@ -555,7 +687,10 @@ export function busMemUnit(imemK: number): ComponentDef {
     b.wire(g.mux(32, g.mux(32, g.konst(32, NOP_WORD), `${ir}.q`, `${irv}.q`, 'IR or NOP'), 'romData', inRom, 'instruction'), 'instr');
     b.wire(`${port}.rdataOut`, 'rdata');
     b.wire(stall, 'stall');
-    b.wire(g.not(g.or(fetch, dataReq)), 'irqOk');
+    // an access requested and not done: a flip-flop, so irqOk does not depend on this cycle's request
+    const infl = b.op(DFF, ['', 'clk'], 'access under way', 'infl');
+    b.wire(g.and(dataReq, g.not(done)), `${infl}.d`);
+    b.wire(g.not(g.or(fetch, `${infl}.q`)), 'irqOk');
     for (const s of M_IN) b.wire(`bus_${s}`, `${port}.${s}`);
     for (const s of M_OUT) b.wire(`${port}.${s}`, `bus_${s}`);
     const ports: PortDef[] = [bus('addr', 32, 'in'), bus('wdata', 32, 'in'), bus('be', 4, 'in'), bit('we', 'in'), bit('clk', 'in', 'bottom', true), bit('re', 'in'), bus('pc', 32, 'in'), bus('romData', 32, 'in'),
@@ -571,4 +706,4 @@ export function busMemUnit(imemK: number): ComponentDef {
 }
 
 /** One of each generated part, registered for the library-wide checks (and the workbench). */
-export const BUS_PARTS = [axiBus(2, [0x0, 0x1, 0x4, 0xf]), axiRam(10), axiRam(10, 3), busMemUnit(7), busBench([1, 2, 3, 4])];
+export const BUS_PARTS = [axiBus(2, [0x0, 0x1, 0x4, 0xf]), axiRam(10), axiRam(10, 3), busMemUnit(7), busBench([1, 2, 3, 4]), axiDram(), axiScreen(64), AXI_KEYS];
