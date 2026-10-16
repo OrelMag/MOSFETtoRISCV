@@ -28,7 +28,11 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
   return d;
 }
 
-export const cfgKey = (c: DramConfig) => `${c.k}_${c.banks}_${c.rowWords}_${c.policy === 'open' ? 'o' : 'c'}${c.hash ? 'h' : ''}`;
+/** A memo key for a configuration: geometry, policy, hash, and the timing when it is not the standard one. */
+export const cfgKey = (c: DramConfig) => {
+  const t = c.t, std = !t || (Object.keys(TIMING) as (keyof typeof TIMING)[]).every((k) => t[k] === TIMING[k]);
+  return `${c.k}_${c.banks}_${c.rowWords}_${c.policy === 'open' ? 'o' : 'c'}${c.hash ? 'h' : ''}${std ? '' : `_t${Object.values(t!).join('.')}`}`;
+};
 const bitsFor = (v: number) => Math.max(1, Math.ceil(Math.log2(v + 1)));
 
 /** Small helpers over a Builder: gates of any arity, buses of any width (1 included). */
@@ -247,7 +251,7 @@ export type { CtrlModel };
  * la), the burst's words out (rd while dv). Written words are recognizable: {seed, line, word}.
  */
 export function dramSystem(c: DramConfig): ComponentDef {
-  const id = `dramsys${cfgKey(c)}${c.t && c.t.tREFI !== TIMING.tREFI ? `_r${c.t.tREFI}` : ''}`;
+  const id = `dramsys${cfgKey(c)}`;
   return memo(id, () => {
     const { cb, bb, rb } = fieldWidths(c), la = c.k - 2;
     const b = new Builder(10, 16);
