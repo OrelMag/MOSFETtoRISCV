@@ -1,11 +1,12 @@
-import { BOOT_SOURCE, LOAD_AT, LOAD_WORDS } from '../bus/programs';
+import { BOOT_SOURCE, LOAD_AT, LOAD_WORDS, SYSTEM_WORDS } from '../bus/programs';
 import { FLASH_TIMES } from '../flash/model';
-import { AXI_PORT, axiBus, DMA_ENGINE, busMemUnit } from '../lib/axi';
+import { AXI_KEYS, AXI_PORT, axiBus, axiDram, DMA_ENGINE, busMemUnit } from '../lib/axi';
+import { SOC_SCREEN } from '../lib/soc';
 import { ramLeafState } from '../lib/bigmem';
 import { findNode } from '../sim/flatten';
 import { stats } from '../sim/stats';
 import type { Stage } from '../view/stage';
-import { BENCH_IMAGE, busBenchActions, busBenchScene, busBenchState, busComputerScene } from '../widgets/bus';
+import { BENCH_IMAGE, busBenchActions, busBenchScene, busBenchState, busComputerActions, busComputerScene, busComputerState, systemComputerScene } from '../widgets/bus';
 import type { Chapter } from './types';
 
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands.toLocaleString('en-US').replace(/,/g, ' ');
@@ -22,7 +23,7 @@ function ramWord(st: Stage, a: number): number {
 
 export const chBus: Chapter = {
   id: 'bus', num: 35, title: 'Buses and DMA', level: 'Memory in depth',
-  blurb: 'A valid / ready handshake, five channels and an address decoder, two masters and an arbiter, a DMA engine that copies while the CPU runs, and a computer that boots from flash into RAM: every part in gates.',
+  blurb: 'A valid / ready handshake, five channels and an address decoder, two masters and an arbiter, a DMA engine that copies while the CPU runs, a computer that boots from flash into RAM, and one with a DRAM, a screen and a keyboard on the same bus: every part in gates.',
   steps: [
     {
       title: 'A handshake',
@@ -122,6 +123,32 @@ export const chBus: Chapter = {
         options: ['Each is fetched over the bus: an address handshake, then the data', 'RAM is slower than ROM by nature', 'The DMA is still copying', 'The decoder needs a cycle for the NOP'],
         answer: 0,
         explain: 'An instruction from RAM is a bus read like any load: the address one cycle, the word the next. A load or store from RAM code costs two more. Caches (chapter 21) are what lets a real CPU fetch at full speed from slow memory.',
+      },
+    },
+    {
+      title: 'Everything on one bus',
+      body: `
+        <p>Three more slaves, and the computer has what a small system on a chip has. At 0x2000_0000, the <strong>DRAM</strong> of
+        chapter 33 behind its controller. The bus moves a word with byte strobes; the controller moves 4-word lines. An adapter
+        joins them: a load reads its word's line and keeps one word; a store writes the line with the DRAM's <strong>data mask</strong>
+        (DDR's DM pins) set on its own strobed bytes only, so even a byte store needs no read first. Adapter and controller:
+        ${nands(axiDram())} NANDs. A load costs 10 cycles on an open row, 14 on a closed bank, 18 when another row is open, more
+        behind a refresh, against 2 for the on-chip RAM: the code stays in RAM, and this is the gap the caches of chapter 21 close.</p>
+        <p>At 0x5000_0000, a <strong>screen</strong>: a ${SOC_SCREEN} × ${SOC_SCREEN} frame buffer, a byte a pixel (RGB332), built like the RAM in four
+        byte lanes so that sb draws one pixel; a display reads it as chapter 30's scan-out reads its frame. At 0x6000_0000, a
+        <strong>keyboard</strong>: +4 says whether a key waits, and reading +0 <em>takes</em> it (the slave pulses ack at the read's
+        handshake, ${nands(AXI_KEYS)} NANDs). A read with a side effect: such a register must never sit behind a cache, nor be read
+        twice by a CPU that guesses ahead.</p>
+        <p>The boot ROM now copies ${SYSTEM_WORDS} words from the flash. The program waits for a key, prints it, appends it to a line kept in
+        DRAM and paints an 8 × 8 block of its colour on the screen; Enter prints the line back from DRAM, last key first.</p>
+        <div class="try">Run, then type into the keyboard field (or Type hello⏎). Watch the blocks appear, Enter read the line back,
+        and the DRAM counters: the line's words sit in one row, so after the first access nearly all are row hits.</div>`,
+      scene: () => systemComputerScene(),
+      challenge: {
+        kind: 'reach', goal: 'Type a line, and have the computer print it back from DRAM.',
+        check: (st) => /[^>\n]+\n[^>\n]+\n>/.test(busComputerState(st)?.console ?? ''),
+        answer: 'Type a few keys and Enter (Type hello⏎ does it): each key is echoed, stored in DRAM and drawn; Enter makes the program read the words back from DRAM, last first, so hello comes back as olleh.',
+        solve: (st) => { const a = busComputerActions(st); a?.type('hi\n'); a?.run(20000, () => /ih\n>/.test(busComputerState(st)?.console ?? '')); },
       },
     },
   ],

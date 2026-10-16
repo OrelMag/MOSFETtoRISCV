@@ -10,6 +10,8 @@ import { randomProgram32 } from '../src/riscv/randprog32';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { pack } from '../src/sim/values';
+import { DualSim } from '../src/sim/dualsim';
+import { busComputerScene, systemComputerScene } from '../src/widgets/bus';
 
 // Chapter 35's computer with every slave (DRAM, screen, keyboard) at gate level, in lock-step with the
 // golden model over the same map (bus/model.ts BusModel with the devices).
@@ -54,7 +56,9 @@ function run(program: number[], keys: number[] = [], max = 40000, flash: number[
   const lanes = [0, 1, 2, 3].map((i) => ramLeafState(sim, node('screen', `lane${i}`))!);
   const screen = (i: number) => ((lanes[0].mem[i] | (lanes[1].mem[i] << 8) | (lanes[2].mem[i] << 16) | (lanes[3].mem[i] << 24)) >>> 0);
   const kq = (sim.leafState(node('kbd').leafIndex!) as { q: number[] }).q;
-  return { iss, bus, dev, screen, kq, took, cycles, gateConsole };
+  const ramLanes = [0, 1, 2, 3].map((i) => ramLeafState(sim, node('ram', `lane${i}`))!);
+  const ram = (i: number) => ((ramLanes[0].mem[i] | (ramLanes[1].mem[i] << 8) | (ramLanes[2].mem[i] << 16) | (ramLanes[3].mem[i] << 24)) >>> 0);
+  return { iss, bus, dev, screen, kq, took, cycles, gateConsole, regs, ram };
 }
 
 const DRAM = `# words, halfwords and bytes in DRAM; two rows of one bank, then the other bank
@@ -77,6 +81,50 @@ const DRAM = `# words, halfwords and bytes in DRAM; two rows of one bank, then t
         sw   a5, 64(s0)
         lb   a6, 65(s0)
 done:   j    done`;
+
+const IRQ_LOOP = `# a load / add / store loop over the bus while the DMA copies RAM to DRAM; its interrupt lands mid-loop
+        la   t0, handler
+        csrw mtvec, t0
+        li   t0, 0x800          # the external interrupt (the DMA's)
+        csrs mie, t0
+        csrsi mstatus, 8
+        li   s1, 0x100
+        li   t0, 0x5a5a0000
+        li   t1, 8
+fill:   sw   t0, 0(s1)          # the words to copy
+        addi t0, t0, 1
+        addi s1, s1, 4
+        addi t1, t1, -1
+        bnez t1, fill
+        li   s0, 0x40000000
+        li   t1, 0x100
+        sw   t1, 0(s0)
+        li   t1, 0x20000000
+        sw   t1, 4(s0)
+        li   t1, 8
+        sw   t1, 8(s0)
+        li   t1, 1
+        sw   t1, 12(s0)         # go
+        li   a0, 0
+        li   a1, 0
+        li   s1, 0x200
+loop:   lw   t2, 0(s1)
+        addi t2, t2, 1
+        sw   t2, 0(s1)
+        addi a0, a0, 1
+        beqz a1, loop
+        li   t2, 20
+more:   lw   t3, 0(s1)          # and a few more after it
+        addi t3, t3, 1
+        sw   t3, 0(s1)
+        addi a0, a0, 1
+        addi t2, t2, -1
+        bnez t2, more
+done:   j    done
+handler: li  t3, 2
+        sw   t3, 12(s0)         # clear the DMA's done (its irq)
+        addi a1, a1, 1
+        mret`;
 
 const SCREEN_KEYS = `# a pixel row on the screen, then two keys from the keyboard to the console
         li   s0, 0x50000000
@@ -130,6 +178,15 @@ describe('chapter 35\'s computer with DRAM, screen and keyboard, against the gol
     expect(r.kq).toEqual([]);
   });
 
+  it('a DMA interrupt in the middle of bus accesses is precise: no store lost or repeated', () => {
+    const r = run(words(IRQ_LOOP), [], 6000, [], false);
+    const x = r.regs();
+    expect(x[11], 'the handler ran once').toBe(1);
+    expect(x[10]).toBeGreaterThan(20);
+    expect(r.ram(0x200 / 4), 'every increment stored once').toBe(x[10]);
+    for (let i = 0; i < 8; i++) expect(r.dev.read(i), `DRAM word ${i}`).toBe((0x5a5a0000 + i) >>> 0);
+  });
+
   it.each([1, 2, 3])('random program %i with its data in DRAM, in lock-step', (seed) => {
     // accesses from the base register (s11) go to DRAM, those computed from a register (andi) stay in RAM
     const src = randomProgram32(seed, { n: 40, sub: true, dmemWords: 32 });
@@ -150,5 +207,41 @@ describe('chapter 35\'s computer with DRAM, screen and keyboard, against the gol
     expect(r.screen(16 * 7 + 1)).toBe(0x61616161);
     expect(r.screen(2)).toBe(0x62626262);
     expect(r.screen(16 * 8)).toBe(0);
+  });
+});
+
+describe('chapter 35\'s last scene on the cycle engine', () => {
+  it('both of the chapter\'s computers ask for it (no combinational loop through the interrupt gate)', () => {
+    for (const scene of [busComputerScene(), systemComputerScene()]) {
+      expect(scene.engine).toBe('cycle');
+      const sim = new DualSim(flatten(scene.root, { mode: 'gate', expand: (d, n) => n.parent === null || !d.preferBehavior }));
+      sim.preferFast = true;
+      for (const [k, v] of Object.entries(scene.inputs ?? {})) sim.setInput(k, v);
+      sim.reset('zero'); sim.settle(); sim.prepare();
+      expect(sim.whyNot, scene.root.id).toBe('');
+    }
+  });
+
+  it('boots and answers typed keys as at gate level', () => {
+    const scene = systemComputerScene();
+    expect(scene.engine).toBe('cycle');
+    const design = flatten(scene.root, { mode: 'gate', expand: (d, n) => n.parent === null || !d.preferBehavior });
+    const sim = new DualSim(design);
+    sim.preferFast = true;
+    for (const [k, v] of Object.entries(scene.inputs ?? {})) sim.setInput(k, v);
+    sim.reset('zero');
+    sim.settle();
+    sim.prepare();
+    expect(sim.whyNot, 'the cycle engine takes it').toBe('');
+    const root = design.root, kbd = root.children!.get('kbd')!.leafIndex!;
+    sim.poke(kbd, { q: [...'hi\n'].map((c) => c.charCodeAt(0)), clk: 0, ack: 0 });
+    const out = (p: string) => pack(sim.getBits(root.ports[p]));
+    let text = '';
+    for (let c = 0; c < 4000 && !text.endsWith('ih\n>'); c++) {
+      if (out('consoleValid') === 1) text += String.fromCharCode(out('consoleData'));
+      sim.setInput('clk', 1); sim.settle(); sim.setInput('clk', 0); sim.settle();
+    }
+    expect(sim.engine).toBe('cycle');
+    expect(text).toBe('>hi\nih\n>');
   });
 });
