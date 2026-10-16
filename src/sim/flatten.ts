@@ -46,6 +46,8 @@ export interface FlatDesign {
   caps: Set<number>;
   /** Relative capacitance of nets given a numeric `cap` (largest per net); others weigh 1 if in caps. */
   capWeight?: Map<number, number>;
+  /** Nets whose charge leaks (NetDef.leak): half-life in clock cycles. */
+  leaks?: Map<number, number>;
 }
 
 /**
@@ -134,6 +136,7 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
   const hints: [number, 0 | 1][] = [];
   const capsRaw: number[] = [];
   const capW: [number, number][] = [];
+  const leakRaw: [number, number][] = [];
 
   const alloc = (w: number): number[] => Array.from({ length: w }, () => uf.make());
 
@@ -203,6 +206,7 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
       if (net.cap) {
         capsRaw.push(...bits);
         if (typeof net.cap === 'number') for (const b of bits) capW.push([b, net.cap]);
+        if (net.leak) for (const b of bits) leakRaw.push([b, net.leak]);
       }
       for (const { inst, port } of resolved) {
         if (inst === null) {
@@ -271,7 +275,9 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
   for (const l of leaves) if (l.kind === 'cap') caps.add(l.terminals![0]);
   const capWeight = new Map<number, number>();
   for (const [raw, w] of capW) capWeight.set(id(raw), Math.max(w, capWeight.get(id(raw)) ?? 0));
-  return { root, netCount: dense.size, leaves, powerOn, caps, capWeight };
+  const leaks = new Map<number, number>();
+  for (const [raw, h] of leakRaw) leaks.set(id(raw), Math.min(h, leaks.get(id(raw)) ?? Infinity));
+  return { root, netCount: dense.size, leaves, powerOn, caps, capWeight, leaks };
 }
 
 export function findNode(root: HierNode, path: readonly string[]): HierNode | null {

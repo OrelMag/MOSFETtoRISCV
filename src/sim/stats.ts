@@ -33,7 +33,7 @@ export function stats(def: ComponentDef): Stats {
   else if (def.prim === 'dep') s = { ...zero, transistors: 1, depletion: 1 };
   else if (def.prim === 'res') s = { ...zero, resistors: 1 };
   else if (def.prim === 'cap') s = { ...zero, capacitors: 1 };
-  else if (def.prim) s = zero;
+  else if (def.prim && def.prim !== 'sense') s = zero; // a sense amplifier counts the transistors it is drawn with
   else {
     const nl = netlistOf(def);
     s = { ...zero };
@@ -115,7 +115,7 @@ export function hasFeedback(def: ComponentDef): boolean {
   const hit = fbCache.get(def);
   if (hit !== undefined) return hit;
   const d = flatten(def, { mode: 'switch' });
-  let result = d.caps.size > 0 || d.leaves.some((l) => !!l.def.behavior?.seq);
+  let result = d.caps.size > 0 || d.leaves.some((l) => !!l.def.behavior?.seq || l.kind === 'sense');
   if (!result) {
     const source = new Uint8Array(d.netCount);
     for (const l of d.leaves) if (l.kind === 'vdd' || l.kind === 'gnd') source[l.terminals![0]] = 1;

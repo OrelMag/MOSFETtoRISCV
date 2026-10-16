@@ -159,7 +159,7 @@ function switchPart(k: string): SVGElement[] {
 
 /** Where an instance's name goes, relative to its symbol (null: rails and wiring are not named). */
 export function instNameAt(def: ComponentDef): { x: number; y: number; anchor: 'start' | 'middle' } | null {
-  if (def.prim === 'alias' || def.prim === 'vdd' || def.prim === 'gnd') return null;
+  if (def.prim === 'alias' || def.prim === 'vdd' || def.prim === 'vhalf' || def.prim === 'gnd') return null;
   const k = def.symbol.kind, g = symbolGeom(def);
   if (k === 'nmos' || k === 'pmos' || k === 'dep') return { x: 3.4, y: 1.45, anchor: 'start' };
   if (k === 'box') return { x: 0.1, y: -0.45, anchor: 'start' };
@@ -253,7 +253,7 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
       break;
     case 'vdd':
       inner.append(s('path', { d: 'M0.2,0.15 H1.8 M1,0.15 V1', class: 'sym-line thick' }));
-      root.append(s('text', { x: 1, y: -0.35, class: 'sym-rail', 'text-anchor': 'middle' }, 'VDD'));
+      root.append(s('text', { x: 1, y: -0.35, class: 'sym-rail', 'text-anchor': 'middle' }, def.symbol.label ?? 'VDD'));
       break;
     case 'gnd':
       inner.append(s('path', { d: 'M1,0 V0.55 M0.2,0.55 H1.8 M0.5,0.95 H1.5 M0.8,1.35 H1.2', class: 'sym-line thick' }));

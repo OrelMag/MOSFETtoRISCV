@@ -520,6 +520,12 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .dot { fill: var(--w0); }
 .dot.v1 { fill: var(--w1); }
 .dot.vx { fill: var(--wx); }
+/* A charge level between the rails (switch level: a bit line at VDD/2, after charge sharing): mixed by its level. */
+.wire.vl { stroke: color-mix(in oklab, var(--w1) calc(var(--lv, 0.5) * 100%), var(--w0)); stroke-dasharray: none; }
+.dot.vl { fill: color-mix(in oklab, var(--w1) 50%, var(--w0)); }
+.level-tag { pointer-events: none; }
+.level-tag rect { fill: var(--surface); stroke: var(--border-strong); stroke-width: 0.06; }
+.level-tag text { font: 600 0.8px var(--font-mono); fill: var(--text); }
 .dot.bus { fill: var(--bus); }
 .sym-body { fill: var(--sym-fill); stroke: var(--sym-stroke); stroke-width: 0.15; stroke-linejoin: round; }
 .sym-box { fill: var(--box-fill); stroke: var(--box-stroke); }
