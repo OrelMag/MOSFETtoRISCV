@@ -10,6 +10,7 @@ import { COMPUTER_PROGRAMS } from '../riscv/ioprograms';
 import { disasm16 } from '../riscv/rv16/isa16';
 import { disasm4 } from '../isa4/isa4';
 import { PROGRAMS4 } from '../isa4/programs4';
+import { SB_PROGRAMS_6502 } from '../m6502/sbprograms';
 import type { HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
 import type { Bit, ComponentDef } from '../sim/types';
@@ -31,7 +32,7 @@ export interface RomImage extends BuiltProgram {
 
 /** Build a ROM's program and check it against the ROM's size and word width. */
 export function romImage(r: Pick<RomRef, 'k' | 'w' | 'lang' | 'src' | 'isa'>): RomImage {
-  const p = buildProgram(r.lang, r.src, r.isa);
+  const p = buildProgram(r.lang, r.src, r.isa, r.k);
   const capacity = 2 ** r.k;
   const problems: ProgramError[] = [...p.errors];
   let error = p.errors.length ? `ROM program: line ${p.errors[0].line}: ${p.errors[0].message}` : null;
@@ -75,11 +76,12 @@ export interface ListingRow {
 
 /** One row per word of the program (the fill past its end is not listed). */
 export function romListing(r: Pick<RomRef, 'w' | 'addr'> & { lang?: ProgramLang }, img: BuiltProgram): ListingRow[] {
-  const dis = r.w === 32 || r.lang === 'cpu4' || r.lang === 'isa';
+  const dis = r.w === 32 || r.lang === 'cpu4' || r.lang === 'isa' || r.lang === '6502';
   const digits = r.w / 4;
   return img.lines.map((l, i) => ({
     index: i,
-    addr: r.addr === 'rv32' ? `0x${l.addr.toString(16).padStart(4, '0')}` : `[${i}]`,
+    // a 6502 ROM: the CPU address the byte answers at, as the program placed it
+    addr: r.addr === 'rv32' ? `0x${l.addr.toString(16).padStart(4, '0')}` : l.at !== undefined ? `$${l.at.toString(16).toUpperCase().padStart(4, '0')}` : `[${i}]`,
     word: (l.word >>> 0).toString(16).padStart(digits, '0'),
     text: dis ? l.text : '',
     srcLine: l.srcLine,
@@ -93,18 +95,22 @@ export const addrValue = (bits: Bit[] | null): number | null => (bits ? pack(bit
  * A program in the other language: assembly → hex words (each with its disassembly as a
  * comment); hex → `.word` lines. Null when the source does not build (nothing to convert).
  */
-export function convertProgram(src: string, to: ProgramLang, from: ProgramLang = to === 'hex' ? 'asm' : 'hex', isa?: IsaDoc): string | null {
+export function convertProgram(src: string, to: ProgramLang, from: ProgramLang = to === 'hex' ? 'asm' : 'hex', isa?: IsaDoc, k = 16): string | null {
   if (from === to) return src;
   if (to !== 'hex' && from !== 'hex') return null; // assembly ↔ assembly of another ISA: no
-  const p = buildProgram(from, src, isa);
+  // 6502 → hex: the ROM's bytes (the program folded into its 2^k)
+  const p = buildProgram(from, src, isa, k);
   if (p.errors.length) return null;
   if (!src.trim()) return '';
+  // hex → 6502: one .byte a word (a word wider than a byte cannot be one)
+  if (to === '6502') return p.words.some((w) => w >>> 0 > 0xff) ? null : p.lines.map((l) => `        .byte $${l.word.toString(16).toUpperCase().padStart(2, '0')}`).join('\n');
   const narrow = (l: ProgramLang) => l === 'rv16' || l === 'cpu4';
-  const d = (to === 'isa' || from === 'isa') && isa ? isa.wordBits / 4 : narrow(to) || narrow(from) ? 4 : 8;
+  const d = (to === 'isa' || from === 'isa') && isa ? isa.wordBits / 4 : from === '6502' ? 2 : narrow(to) || narrow(from) ? 4 : 8;
   return p.lines.map((l, i) => {
     const w = `0x${(l.word >>> 0).toString(16).padStart(d, '0')}`;
     const text = to === 'rv16' ? disasm16(l.word, i) : to === 'cpu4' ? disasm4(l.word) : to === 'isa' && isa ? tableOf(isa).disasm(l.word, i) : l.text;
-    return to === 'hex' ? `${w}  # ${l.text}` : `        .word ${w}   # ${text}`;
+    // a 6502 operand byte or fill has no text of its own
+    return to === 'hex' ? (l.text ? `${w}  # ${l.text}` : w) : `        .word ${w}   # ${text}`;
   }).join('\n');
 }
 
@@ -135,7 +141,7 @@ export const SEG7_FONT = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 
 
 const hexDigits = (ws: number[], d = 2) => ws.map((x) => x.toString(16).padStart(d, '0')).join(' ');
 
-/** Programs to start from: the CPU chapters' samples (RV32I), a few data tables, RV16 and the 4-bit CPU. */
+/** Programs to start from: the CPU chapters' samples (RV32I), a few data tables, RV16, the 4-bit CPU and the 6502. */
 export const ROM_SAMPLES: RomSample[] = [
   ...PROGRAMS.map((p): RomSample => ({ id: p.id, name: p.name, lang: 'asm', src: p.source })),
   ...COMPUTER_PROGRAMS.map((p): RomSample => ({ id: p.id, name: p.name, lang: 'asm', src: p.source })),
@@ -144,10 +150,21 @@ export const ROM_SAMPLES: RomSample[] = [
   { id: 'hello', name: 'ASCII "Hello, RISC-V"', lang: 'hex', src: `# one character per word\n${hexDigits([...'Hello, RISC-V'].map((c) => c.charCodeAt(0)))} 00` },
   { id: 'rv16leds', name: 'RV16: Fibonacci on the LEDs', lang: 'rv16', src: RV16_LEDS },
   ...PROGRAMS4.map((p): RomSample => ({ id: p.id, name: p.name, lang: 'cpu4', src: p.src })),
+  ...SB_PROGRAMS_6502.map((p): RomSample => ({ id: p.id, name: p.name, lang: '6502', src: p.src })),
 ];
 
 /** Smallest k whose 2^k words hold n words (at least 1). */
 export const kFor = (n: number) => Math.max(1, Math.ceil(Math.log2(Math.max(n, 2))));
+
+/** parts.ts MAX_ROM_K (parts.ts imports this file). */
+const MAX_K = 16;
+
+/** The smallest ROM (k) a program fits: its words, or for the 6502 the 2^k its bytes fold into without two sharing a word. */
+export function sampleK(lang: ProgramLang, src: string): number {
+  if (lang !== '6502') return Math.min(MAX_K, kFor(buildProgram(lang, src).words.length));
+  for (let k = 1; k < MAX_K; k++) if (!buildProgram(lang, src, undefined, k).errors.length) return k;
+  return MAX_K;
+}
 
 // ---- RAM ---------------------------------------------------------------------------------
 

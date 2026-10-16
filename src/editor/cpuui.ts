@@ -26,7 +26,7 @@ import { instrMarks, instrUse, STAGE_UNITS, stageUse } from '../widgets/insthw';
 import { PipeHistory, pipeGridRows } from '../widgets/pipegrid';
 import {
   type CpuDesc, type CpuDoc, CpuMonitor, type CpuRead, cpuGaps, detectCpu, fmtWord, mismatchText, type NetRef, nestedRoms, partAt, partNode,
-  memStoreOf, pinNamed, pipelineSlots, refValue, resolveCpu, romParts,
+  memStoreOf, pinNamed, pipelineSlots, readMem, refValue, resolveCpu, romParts,
 } from './cpu';
 import { dockPane, paneShown, showPane, undockPane } from './dock';
 import { type Editor, registerEditorPlugin, registerToolbarAction } from './editor';
@@ -37,8 +37,10 @@ import type { ChipDoc } from './model';
 import { detectMulti, type MultiDesc, MultiMonitor } from './multicpu';
 import { detectRv16, type Rv16Desc, Rv16Monitor } from './cpu16';
 import { disasm16, REG_NAMES16 } from '../riscv/rv16/isa16';
+import { OPCODES } from '../m6502/isa';
 import { type Cpu4Desc, Cpu4Monitor, cpu4Use, detectCpu4 } from './cpu4mon';
 import { detectLanes16, type LaneDesc, LaneMonitor } from './lanemon';
+import { detect6502, flags6502, type M6502Desc, M6502Monitor } from './m6502mon';
 import { registerPropsSection } from './props';
 import { type EdgeHook, type EditorSim, FrameBudget } from './runtime';
 
@@ -64,10 +66,10 @@ const CAUSE_NAMES: Record<number, string> = {
   [CAUSE.TIMER_IRQ]: 'timer interrupt', [CAUSE.EXTERNAL_IRQ]: 'external interrupt',
 };
 
-type Mon = CpuMonitor | MultiMonitor | Rv16Monitor | LaneMonitor | Cpu4Monitor;
-const monKind = (m: Mon) => (m instanceof MultiMonitor ? 'multi' : m instanceof Rv16Monitor ? 'rv16' : m instanceof LaneMonitor ? 'lanes' : m instanceof Cpu4Monitor ? 'cpu4' : 'cpu');
-/** Monitors whose ROM listing is word addressed (rows keyed 4 × the word index, like the RV32 listings). */
-const wordListed = (m: Mon): m is Rv16Monitor | LaneMonitor | Cpu4Monitor => m instanceof Rv16Monitor || m instanceof LaneMonitor || m instanceof Cpu4Monitor;
+type Mon = CpuMonitor | MultiMonitor | Rv16Monitor | LaneMonitor | Cpu4Monitor | M6502Monitor;
+const monKind = (m: Mon) => (m instanceof MultiMonitor ? 'multi' : m instanceof Rv16Monitor ? 'rv16' : m instanceof LaneMonitor ? 'lanes' : m instanceof Cpu4Monitor ? 'cpu4' : m instanceof M6502Monitor ? 'm6502' : 'cpu');
+/** Monitors whose ROM listing is word addressed (rows keyed 4 × the word index, like the RV32 listings; the 6502's: a byte a word). */
+const wordListed = (m: Mon): m is Rv16Monitor | LaneMonitor | Cpu4Monitor | M6502Monitor => m instanceof Rv16Monitor || m instanceof LaneMonitor || m instanceof Cpu4Monitor || m instanceof M6502Monitor;
 interface Entry { chip: string; mon: Mon; pipe: PipeHistory; hook: EdgeHook }
 
 /** Children replaced only when `key` changed (the panel redraws on every simulation change). */
@@ -113,6 +115,8 @@ class CpuPanel {
   private lanes: LaneDesc | null = null;
   /** A 4-bit CPU (a ROM in 4-bit assembly): the example's registers checked every clock. */
   private cpu4: Cpu4Desc | null = null;
+  /** A 6502 part (and a ROM in 6502 assembly): followed instruction by instruction (the part is the cycle-exact model). */
+  private m6502: M6502Desc | null = null;
   private width = 0;
   private off: (() => void)[] = [];
 
@@ -122,6 +126,7 @@ class CpuPanel {
   private now = h('div', { class: 'cpu-now' });
   private listing = h('div', { class: 'cpu-listing sb-cpu-list' });
   private use = h('div', { class: 'cpu-use' });
+  private progHint = h('span', { class: 'cpu-sec-hint' }, 'click a line: the parts it uses');
   private fieldsSec = h('div', { class: 'cpu-sec' }, 'Fields', h('span', { class: 'cpu-sec-hint' }, 'point at a field: its wires'));
   private fields = h('div', { class: 'cpu-fields' });
   private pipeSec = h('div', { class: 'cpu-sec' }, 'Pipeline', h('span', { class: 'cpu-sec-hint' }, 'stage × cycle, last 7 cycles'));
@@ -174,7 +179,7 @@ class CpuPanel {
     this.body = h('div', { class: 'sb-cpu-body' },
       h('div', { class: 'sb-btns sb-cpu-btns' }, this.runBtn, this.stepBtn, this.slowBtn, this.rateSel, reset),
       this.status, this.gaps, this.now,
-      h('div', { class: 'cpu-sec sb-cpu-sechead' }, h('span', null, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: the parts it uses')),
+      h('div', { class: 'cpu-sec sb-cpu-sechead' }, h('span', null, 'Program', this.progHint),
         h('button', { class: 'btn ghost sm', title: 'Edit the program in the ROM (Apply resets the CPU to run it)', onclick: () => this.editProgram() }, icon('code', 13), 'Edit…')),
       this.listing, this.use,
       this.fieldsSec, this.fields,
@@ -271,18 +276,19 @@ class CpuPanel {
         this.desc = this.multi ? null : resolveCpu(ed.doc, chips);
         this.rv16 = this.multi || this.desc ? null : detectRv16(ed.doc, chips);
         this.lanes = this.multi || this.desc || this.rv16 ? null : detectLanes16(ed.doc, chips);
-        this.cpu4 = this.multi || this.desc || this.rv16 || this.lanes ? null : detectCpu4(ed.doc, chips);
+        this.m6502 = this.multi || this.desc || this.rv16 || this.lanes ? null : detect6502(ed.doc, chips);
+        this.cpu4 = this.multi || this.desc || this.rv16 || this.lanes || this.m6502 ? null : detectCpu4(ed.doc, chips);
       }
-      const want = this.multi ? 'multi' : this.rv16 ? 'rv16' : this.lanes ? 'lanes' : this.cpu4 ? 'cpu4' : 'cpu';
+      const want = this.multi ? 'multi' : this.rv16 ? 'rv16' : this.lanes ? 'lanes' : this.m6502 ? 'm6502' : this.cpu4 ? 'cpu4' : 'cpu';
       // Monitors of chips that are gone, replaced by another simulation, or of another kind now.
       for (const [k, v] of this.monitors) {
         const kind = v.chip === chip && monKind(v.mon) !== want;
         if (!ed.ws.open.includes(v.chip) || (v.chip === chip && k !== es) || kind) { this.drop(k, v); this.monitors.delete(k); }
       }
       let entry = this.monitors.get(es);
-      if ((this.desc || this.multi || this.rv16 || this.lanes || this.cpu4) && !entry) {
+      if ((this.desc || this.multi || this.rv16 || this.lanes || this.cpu4 || this.m6502) && !entry) {
         const doc = () => ed.ws.chips[chip] ?? ed.doc, ws = () => ed.ws.chips;
-        const mon: Mon = this.multi ? new MultiMonitor(es, doc, ws) : this.rv16 ? new Rv16Monitor(es, doc, ws) : this.lanes ? new LaneMonitor(es, doc, ws) : this.cpu4 ? new Cpu4Monitor(es, doc, ws) : new CpuMonitor(es, doc, ws);
+        const mon: Mon = this.multi ? new MultiMonitor(es, doc, ws) : this.rv16 ? new Rv16Monitor(es, doc, ws) : this.lanes ? new LaneMonitor(es, doc, ws) : this.m6502 ? new M6502Monitor(es, doc, ws) : this.cpu4 ? new Cpu4Monitor(es, doc, ws) : new CpuMonitor(es, doc, ws);
         const pipe = new PipeHistory();
         const hook: EdgeHook = { after: () => { if (es.sim) pipe.record(es.sim, es.sim.design.root, es.cycles); } };
         es.edgeHooks.add(hook);
@@ -305,8 +311,8 @@ class CpuPanel {
         this.stopSlow();
         // A complete CPU opens its panel by itself (unless closed there); a chip without a program
         // ROM closes it; a bare datapath (a ROM and a PC) leaves it as it was.
-        if ((this.desc?.regs || this.multi || this.rv16 || this.lanes || this.cpu4) && !this.closed.has(chip)) this.setOpen(true);
-        else if (!this.desc && !this.multi && !this.rv16 && !this.lanes && !this.cpu4) this.setOpen(false);
+        if ((this.desc?.regs || this.multi || this.rv16 || this.lanes || this.cpu4 || this.m6502) && !this.closed.has(chip)) this.setOpen(true);
+        else if (!this.desc && !this.multi && !this.rv16 && !this.lanes && !this.cpu4 && !this.m6502) this.setOpen(false);
       }
       this.redock();
       if (this.open) this.renderThrottled();
@@ -352,7 +358,7 @@ class CpuPanel {
   }
 
   private halted(mon: Mon): boolean {
-    return mon instanceof MultiMonitor ? !!mon.m?.halted : mon instanceof LaneMonitor ? mon.halted && mon.done : !!mon.iss?.halted;
+    return mon instanceof MultiMonitor ? !!mon.m?.halted : mon instanceof LaneMonitor ? mon.halted && mon.done : mon instanceof M6502Monitor ? mon.done : !!mon.iss?.halted;
   }
 
   private stepInstr(): void {
@@ -454,16 +460,19 @@ class CpuPanel {
         h('p', null, 'A CPU here is a chip with a ', h('b', null, 'Program ROM (RV32)'), ' (Memory palette: byte addressed, 32-bit words), directly or inside one of its chips. Add one, or open a CPU from the chapters with ',
           h('i', null, 'Open in Sandbox'), '. The panel then follows its PC; with a register file it checks every instruction against the golden model. Two or more placed CPUs sharing a memory run against the multi-hart model.'),
         h('p', null, 'An ', h('b', null, 'RV16'), ' computer (the campaign’s) is a ROM in RV16 assembly next to a placed core with the campaign’s core pins (pc, rwe, rwa, rwd, dwe, daddr, dwdata): its register writes and stores are checked against the RV16 golden model.'),
+        h('p', null, 'A ', h('b', null, '6502'), ' (Examples ▸ 6502 computer) is a placed 6502 part next to a ROM in 6502 assembly: the panel follows it instruction by instruction, with its registers, flags and bus.'),
         h('p', null, 'A ', h('b', null, '4-bit CPU'), ' (Examples ▸ 4-bit CPU) is a ROM in 4-bit assembly: the panel follows the address it reads, and with the example’s registers it checks every one of them against the 4-bit golden model at every clock.'),
         h('p', { class: 'sb-sum' }, 'What counts as the PC, the registers and the memory is set in the chip’s properties (CPU), when nothing is selected.')]);
       return;
     }
     this.renderButtons(mon);
+    this.progHint.textContent = mon instanceof M6502Monitor ? 'at the CPU addresses the ROM answers at' : 'click a line: the parts it uses';
     this.regsSec.hidden = this.regs.hidden = false; // a custom table's view hides them
     if (mon instanceof MultiMonitor) return this.renderMulti(mon);
     if (mon instanceof Rv16Monitor) return this.renderRv16(mon);
     if (mon instanceof LaneMonitor) return this.renderLanes(mon);
     if (mon instanceof Cpu4Monitor) return this.renderCpu4(mon);
+    if (mon instanceof M6502Monitor) return this.render6502(mon);
     const d = mon.desc!;
     const r = mon.read();
     this.renderStatus(mon, d, r);
@@ -481,10 +490,10 @@ class CpuPanel {
     const multi = mon instanceof MultiMonitor;
     keyed(this.runBtn, `${!!this.running}`, () => [icon(this.running ? 'pause' : 'play', 14), this.running ? 'Stop' : 'Run to halt']);
     this.runBtn.disabled = !mon.checking;
-    this.runBtn.title = mon.checking ? `Clock until the program halts (the golden model says when), a mismatch, or ${RUN_CAP.toLocaleString('en')} cycles`
+    this.runBtn.title = mon instanceof M6502Monitor ? `Clock until the program jumps to itself, or ${RUN_CAP.toLocaleString('en')} cycles` : mon.checking ? `Clock until the program halts (the golden model says when), a mismatch, or ${RUN_CAP.toLocaleString('en')} cycles`
       : 'Needs the golden model (a register file to check, a program that builds, a Reset) to know when the program halts';
     this.stepBtn.title = multi ? 'One clock cycle: every core that is not stalled retires an instruction'
-      : mon instanceof Rv16Monitor ? 'Clock until the core’s next register write or store' : mon instanceof LaneMonitor ? 'Clock until the core’s next checked write (a register write, a store or a pixel of any lane)' : mon instanceof Cpu4Monitor ? 'One clock: one instruction' : 'Clock until the next instruction retires';
+      : mon instanceof Rv16Monitor ? 'Clock until the core’s next register write or store' : mon instanceof LaneMonitor ? 'Clock until the core’s next checked write (a register write, a store or a pixel of any lane)' : mon instanceof Cpu4Monitor ? 'One clock: one instruction' : mon instanceof M6502Monitor ? 'Clock to the next opcode fetch: one instruction (2 to 7 cycles)' : 'Clock until the next instruction retires';
     keyed(this.slowBtn, `${!!this.slow}`, () => [icon(this.slow ? 'pause' : 'play', 14), this.slow ? 'Pause' : 'Slow']);
     this.slowBtn.classList.toggle('on', !!this.slow);
     this.slowBtn.title = `Run ${multi ? 'one cycle' : 'one instruction'} at a time at the rate beside it: the current instruction and the parts it uses stay marked`;
@@ -553,7 +562,19 @@ class CpuPanel {
       this.curKey = '';
       const img = rr ? romImage(rr) : null;
       this.rowOf.clear();
-      this.rows = (img?.lines ?? []).map((l) => {
+      if (rr?.lang === '6502') {
+        // a row per instruction (and data byte) at the CPU address it answers at, its bytes beside it
+        const ls = img?.lines ?? [];
+        this.rows = ls.filter((l) => l.text).map((l) => {
+          const n = l.op ? OPCODES[l.word]?.bytes ?? 1 : 1;
+          const bytes = ls.slice(l.addr / 4, l.addr / 4 + n).map((x) => x.word.toString(16).padStart(2, '0')).join(' ');
+          const row = h('div', { class: 'ln', 'data-pc': String(l.addr), title: 'Select this instruction' },
+            h('span', { class: 'a' }, l.at !== undefined ? l.at.toString(16).padStart(4, '0') : `[${l.addr / 4}]`), h('span', { class: 'w' }, bytes.padEnd(8)), h('span', { class: 't' }, l.text));
+          row.addEventListener('click', () => this.select(l.addr));
+          this.rowOf.set(l.addr, row);
+          return row;
+        });
+      } else this.rows = (img?.lines ?? []).map((l) => {
         const row = h('div', { class: 'ln', 'data-pc': String(l.addr), title: 'Mark the parts this instruction uses' },
           h('span', { class: 'a' }, (rr!.lang === 'rv16' || rr!.lang === 'cpu4' || rr!.lang === 'isa' ? l.addr / 4 : l.addr).toString(16).padStart(rr!.lang === 'cpu4' || rr!.lang === 'isa' ? 2 : 4, '0')), h('span', { class: 'w' }, rr!.w <= 16 ? hex4(l.word) : hex8(l.word)), h('span', { class: 't' }, l.text));
         row.addEventListener('click', () => this.select(l.addr));
@@ -732,10 +753,11 @@ class CpuPanel {
   private renderTrace(mon: Mon): void {
     const show = mon instanceof CpuMonitor ? !!mon.desc?.regs : mon instanceof Cpu4Monitor ? !mon.desc?.table : true;
     const rv16 = mon instanceof Rv16Monitor || mon instanceof LaneMonitor;
-    keyed(this.traceSec, rv16 ? 'rv16' : 'cpu', () => (rv16 ? ['Checked writes', h('span', { class: 'cpu-sec-hint' }, 'register writes and stores, newest last')]
-      : ['Retired', h('span', { class: 'cpu-sec-hint' }, 'by the golden model, newest last')]));
+    const m65 = mon instanceof M6502Monitor;
+    keyed(this.traceSec, rv16 ? 'rv16' : m65 ? 'm6502' : 'cpu', () => (rv16 ? ['Checked writes', h('span', { class: 'cpu-sec-hint' }, 'register writes and stores, newest last')]
+      : ['Retired', h('span', { class: 'cpu-sec-hint' }, m65 ? 'what each did, its stores and cycles; newest last' : 'by the golden model, newest last')]));
     // An RV16 listing's rows are keyed like the others' (4 × the word index).
-    const row = (pc: number) => (wordListed(mon) ? 4 * pc : pc);
+    const row = (pc: number) => (mon instanceof M6502Monitor ? 4 * (mon.romIndex(pc) ?? 0) : wordListed(mon) ? 4 * pc : pc);
     this.traceSec.hidden = this.trace.hidden = !show;
     if (mon.seq === this.seqSeen) return;
     this.seqSeen = mon.seq;
@@ -876,6 +898,63 @@ class CpuPanel {
     this.computeMarks();
   }
 
+  // ---- a 6502 ----------------------------------------------------------------------------
+
+  private render6502(mon: M6502Monitor): void {
+    const es = this.ed.sim, d = mon.desc!;
+    const pc = mon.pc, r = mon.read(), bus = mon.bus;
+    const hx = (v: number, n = 2) => v.toString(16).toUpperCase().padStart(n, '0');
+    const bits: HTMLElement[] = [h('span', null, `cycle ${es.cycles}`), h('span', null, `retired ${mon.retired}${mon.retired ? ` · CPI ${(es.cycles / mon.retired).toFixed(2)}` : ''}`)];
+    if (mon.problem) bits.push(h('span', { class: 'warn' }, mon.problem));
+    else bits.push(h('span', { class: 'good', title: 'The part is the cycle-exact model (the transistor-level chip makes the same bus cycles; double-click it): nothing to check against, so the panel follows it, instruction by instruction' }, 'cycle-exact model'));
+    if (mon.halted) bits.push(h('span', { class: 'warn', title: 'The last instruction jumped to itself (JMP *, or a branch to itself)' }, 'halted'));
+    keyed(this.status, bits.map((b) => b.outerHTML).join(''), () => bits);
+    const gap = d.rom ? '' : 'no ROM in 6502 assembly found (a ROM part with Language 6502 assembly, here or in a chip placed here): no listing';
+    keyed(this.gaps, gap, () => (gap ? [h('div', null, h('b', null, 'Followed as far as it goes: '), gap, '.')] : []));
+    const ri = pc !== null && pc >= 0 ? mon.romIndex(pc) : null;
+    this.renderListing(mon, ri !== null ? 4 * ri : pc, null, '');
+    const cur = mon.current;
+    // the instruction under way, the cycle within it and this cycle's bus
+    keyed(this.now, `${pc}|${cur}|${mon.tcycle}|${bus ? `${bus.addr}${bus.write}${bus.data}` : ''}`, () => (cur === null || pc === null
+      ? [h('span', { class: 'fmt' }, 'PC'), h('code', null, pc === null ? (r ? 'in the reset sequence' : 'not simulated') : 'unknown (X)')]
+      : [h('span', { class: 'fmt' }, '6502'), h('code', null, cur), h('span', { class: 'hexw' }, `$${hx(pc, 4)}`),
+        ...(bus ? [h('span', { class: 'sb-cpu-bus', title: 'The last bus cycle: its address, a read or a write, the byte, and which cycle of the instruction it was (T0: the opcode fetch)' },
+          `T${Math.max(0, mon.tcycle - 1)} ${bus.write ? 'W' : 'R'} $${hx(bus.addr, 4)} ${hx(bus.data)}${bus.sync ? ' SYNC' : ''}`)] : [])]));
+    this.fieldsSec.hidden = this.fields.hidden = this.pipeSec.hidden = this.pipe.hidden = this.ioSec.hidden = this.io.hidden = true;
+    this.fregsSec.hidden = this.fregs.hidden = true;
+    keyed(this.use, '', () => []);
+    // registers: A, X, Y, S, P with its flags, PC
+    const names = ['A', 'X', 'Y', 'S', 'P', 'PC'];
+    const x = r ? [r.a, r.x, r.y, r.s, r.p, r.pc] : null;
+    this.trackChanges(mon, [x]);
+    const chg = this.changed[0] ?? new Set<number>();
+    this.regsSec.textContent = 'Registers';
+    this.regs.classList.remove('sb-cpu-mregs');
+    this.regs.style.removeProperty('--n');
+    if (!x) keyed(this.regs, 'none', () => [h('div', { class: 'sb-sum sb-cpu-span' }, mon.problem ?? 'Not simulated.')]);
+    else {
+      keyed(this.regs, `${x.join(',')}|${[...chg].join(',')}`, () => x.map((v, i) => h('div', {
+        class: `r${chg.has(i) && es.cycles > 0 ? ' chg' : ''}${v ? '' : ' z'}`,
+        title: i === 4 ? `P = ${flags6502(v)}: N negative, V overflow, B break (only on the stack), D decimal, I interrupts off, Z zero, C carry` : i === 5 ? `PC = $${hx(v, 4)}: the next byte the CPU fetches` : `${names[i]} = ${v} (${(v << 24) >> 24} signed)`,
+      }, h('span', { class: 'n' }, names[i]), h('span', { class: 'v' }, i === 4 ? `${hx(v)} ${flags6502(v)}` : `$${hx(v, i === 5 ? 4 : 2)}`))));
+    }
+    // the RAM: its non-zero bytes (the zero page and the stack first)
+    const ram = d.ram && es.sim ? readMem(es.sim, d.ram) : null;
+    this.memSec.hidden = this.mem.hidden = !d.ram;
+    if (d.ram) {
+      keyed(this.memSec, `${d.ram}|${ram?.length}`, () => ['RAM', h('span', { class: 'cpu-sec-hint' }, `${d.ram}${ram ? ` · ${ram.length} bytes by its own address, non-zero shown` : ''}`)]);
+      keyed(this.mem, ram ? `${ram.length}:${wordsHash(ram)}` : 'none', () => {
+        if (!ram) return [h('div', { class: 'm z' }, 'not readable')];
+        const nz = ram.map((v, i) => [i, v] as const).filter(([, v]) => v !== 0);
+        return [...(nz.length ? nz.slice(0, 64).map(([i, v]) => h('div', { class: 'm' },
+          h('span', { class: 'n' }, `[$${hx(i, 4)}]`), h('span', { class: 'v' }, v < 0 ? '??' : `$${hx(v)}`), h('span', { class: 'd' }, v < 0 ? '?' : String(v))))
+          : [h('div', { class: 'm z' }, 'all zero')]), ...(nz.length > 64 ? [h('div', { class: 'm z' }, `… ${nz.length - 64} more`)] : [])];
+      });
+    }
+    this.renderTrace(mon);
+    this.computeMarks();
+  }
+
   // ---- a 4-bit CPU ------------------------------------------------------------------------
 
   private renderCpu4(mon: Cpu4Monitor): void {
@@ -979,7 +1058,7 @@ class CpuPanel {
   private computeMarks(): void {
     const mon = this.mon, ed = this.ed;
     if (mon instanceof Cpu4Monitor) return this.computeMarks4(mon);
-    if (mon instanceof Rv16Monitor || mon instanceof LaneMonitor) {
+    if (mon instanceof Rv16Monitor || mon instanceof LaneMonitor || mon instanceof M6502Monitor) {
       // The parts an instruction uses are named after the chapters' RV32 CPUs: nothing to mark here.
       if (this.marked.length || this.wireMarks.size) this.clearMarks();
       return;

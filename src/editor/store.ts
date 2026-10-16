@@ -77,7 +77,7 @@ function sanitizeRef(r: unknown): PartRef | null {
   if ('puzzle' in r) return (r.puzzle === 'in' || r.puzzle === 'out') && int(r.width, 1) && r.width <= PUZZLE_MAX_WIDTH ? { puzzle: r.puzzle, width: r.width } : null;
   if (isObj(r.rom)) {
     const { k, w, addr, lang, src } = r.rom;
-    if (!int(k) || (w !== 8 && w !== 16 && w !== 32) || (addr !== 'word' && addr !== 'rv32') || (lang !== 'asm' && lang !== 'hex' && lang !== 'rv16' && lang !== 'cpu4' && lang !== 'isa') || !str(src)) return null;
+    if (!int(k) || (w !== 8 && w !== 16 && w !== 32) || (addr !== 'word' && addr !== 'rv32') || (lang !== 'asm' && lang !== 'hex' && lang !== 'rv16' && lang !== 'cpu4' && lang !== 'isa' && lang !== '6502') || !str(src)) return null;
     if (lang === 'isa') {
       const isa = sanitizeIsa(r.rom.isa);
       return isa ? { rom: { k, w, addr, lang, src, isa } } : null;

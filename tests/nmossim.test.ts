@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEP, NINV, nnand, nnor } from '../src/lib/nmos';
-import { INV_CMOS, NAND, NOR_CMOS } from '../src/lib/transistors';
+import { INV_CMOS, NAND, NMOS, NOR_CMOS, VDD } from '../src/lib/transistors';
 import { flatten } from '../src/sim/flatten';
 import { NmosSim } from '../src/sim/nmossim';
 import { stats } from '../src/sim/stats';
@@ -27,6 +27,24 @@ function agrees(def: ComponentDef): void {
 }
 
 describe('NmosSim', () => {
+  it('an input never set is driven at 0, as it reads (not a floating node a load pulls up)', () => {
+    // a pass transistor from input a to y, a depletion load on y: y follows a while g = 1
+    const def: ComponentDef = {
+      id: 'test_pass_load', name: 'pass', category: 'cell', symbol: { kind: 'box' },
+      ports: [{ name: 'a', width: 1, dir: 'in' }, { name: 'g', width: 1, dir: 'in' }, { name: 'y', width: 1, dir: 'out' }],
+      netlist: () => ({
+        level: 'switch',
+        instances: [{ name: 'vdd', def: VDD }, { name: 'ld', def: DEP }, { name: 'p', def: NMOS }],
+        nets: [{ ends: ['vdd.p', 'ld.d'] }, { ends: ['ld.s', 'p.s', 'y'] }, { ends: ['a', 'p.d'] }, { ends: ['g', 'p.g'] }],
+      }),
+    };
+    const d = flatten(def, { mode: 'switch' });
+    const sim = new NmosSim(d);
+    sim.setInput('g', 1);
+    sim.settle();
+    expect(sim.getInput('a')).toBe(0);
+    expect(sim.get(d.root.ports.y[0])).toBe(B0);
+  });
   it('NMOS cells match SwitchSim and their specs', () => {
     for (const d of [NINV, nnor(2), nnor(3), nnor(5), nnand(2), nnand(3)]) agrees(d);
   });

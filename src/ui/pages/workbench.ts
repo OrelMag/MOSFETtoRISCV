@@ -56,7 +56,9 @@ export class WorkbenchPage implements Page {
     const root: ComponentDef = def.prim === 'nand' || def.prim === 'nmos' || def.prim === 'pmos' || (!netlistOf(def) && !needsSwitchLevel(def))
       ? bench(def) : def;
     const panels = /^ram\d/.test(def.id) ? [memGridPanel] : [];
-    this.stage.load({ root, panels });
+    // the 6502's active-low lines start inactive (else the chip sits in reset)
+    const inputs = def.id === 'm6502_core' ? { resb: 1, irqb: 1, nmib: 1 } : undefined;
+    this.stage.load({ root, panels, ...(inputs ? { inputs } : {}) });
     const want = `#/workbench/${def.id}`;
     if (location.hash !== want) history.replaceState(null, '', want);
     this.renderParams();

@@ -8,6 +8,7 @@ import { SEG7_FONT } from './memory';
 import { openChip } from './session';
 import { PICTURE } from '../riscv/ioprograms';
 import { CPU4_SUBCHIPS, cpu4Chip } from './example4';
+import { computer6502Chip, memory6502Chip } from './example6502';
 
 const pin = (id: string, dir: PinDoc['dir'], at: Vec, width = 1, extra: Partial<PinDoc> = {}): PinDoc => ({ id, name: id, dir, width, at, ...extra });
 const part = (id: string, ref: PartRef, at: Vec, extra: Partial<PartDoc> = {}): PartDoc => ({ id, ref, at, ...extra });
@@ -285,9 +286,9 @@ export function memoryChip(id: string, name: string): ChipDoc {
  * The computer's small devices, at 0x8000_0000: a console (a store prints the low byte), eight
  * LEDs behind a latch, eight switches. The memory side raises their write enables.
  */
-export function devicesChip(id: string, name: string): ChipDoc {
+export function devicesChip(id: string, name: string, at = 'at 0x8000_0000'): ChipDoc {
   return chip(id, name, {
-    notes: 'The devices at 0x8000_0000: the console prints byte on a clock edge with conWe = 1, the LED latch takes byte with ledWe = 1, and the memory side reads the switches back (sw). Flip the switches here, on the I/O bar or in the Screens panel.',
+    notes: `The devices ${at}: the console prints byte on a clock edge with conWe = 1, the LED latch takes byte with ledWe = 1, and the memory side reads the switches back (sw). Flip the switches here, on the I/O bar or in the Screens panel.`,
     hue: 140,
     pins: [
       pin('byte', 'in', [0, 4], 8), pin('conWe', 'in', [0, 6]), pin('ledWe', 'in', [0, 24]), pin('clk', 'in', [0, 28], 1, { kind: 'clock' }),
@@ -362,8 +363,8 @@ export interface Example {
   id: string;
   name: string;
   blurb: string;
-  /** The example's chip; `sub` holds the ids given to its sub-chips. */
-  build(id: string, name: string, sub: Record<string, string>): ChipDoc;
+  /** The example's chip; `sub` holds the ids given to its sub-chips, `docs` the sub-chips themselves. */
+  build(id: string, name: string, sub: Record<string, string>, docs: Record<string, ChipDoc>): ChipDoc;
   /** Chips the example places (its packaged blocks), added alongside it under fresh ids and names. */
   subchips?: Record<string, { name: string; build(id: string, name: string): ChipDoc }>;
 }
@@ -385,6 +386,12 @@ export const EXAMPLES: Example[] = [
     build: (id, n, sub) => cpu4Chip(id, n, sub),
     subchips: CPU4_SUBCHIPS,
   },
+  {
+    id: 'm6502', name: '6502 computer (1975)',
+    blurb: 'The MOS 6502 (cycle-exact; open it for its transistors), a 4K ROM in 6502 assembly, 2K of RAM, a console, LEDs and switches behind a memory map. Run: the Fibonacci numbers in decimal.',
+    build: (id, n, _sub, docs) => computer6502Chip(id, n, { mem: docs.mem, dev: docs.dev }),
+    subchips: { mem: { name: 'Memory map', build: memory6502Chip }, dev: { name: 'Devices', build: (id, n) => devicesChip(id, n, 'at $4000 ($4000 console, $4001 LEDs, $4002 switches)') } },
+  },
   { id: 'sharedbus', name: 'Shared bus', blurb: 'Two tri-state drivers and a pull-down on one wire: a value, a held 0, or a fight (X).', build: sharedBusChip },
   { id: 'wiredand', name: 'Wired-AND', blurb: 'Open-drain NMOS stages and a pull-up: the wire is 1 only when every stage lets go.', build: (id, n) => wiredChip(id, n, 'and') },
   { id: 'wiredor', name: 'Wired-OR', blurb: 'Open-source PMOS stages and a pull-down: the wire is 1 when any stage pulls it up.', build: (id, n) => wiredChip(id, n, 'or') },
@@ -395,12 +402,12 @@ export function addExample(ws: Workspace, ex: Example): { ws: Workspace; id: str
   const id = uniqueName(`u_${slug(ex.id)}`, Object.keys(ws.chips));
   const name = uniqueName(ex.name, Object.values(ws.chips).map((c) => c.name));
   const chips = { ...ws.chips };
-  const sub: Record<string, string> = {};
+  const sub: Record<string, string> = {}, docs: Record<string, ChipDoc> = {};
   for (const [k, c] of Object.entries(ex.subchips ?? {})) {
     const sid = uniqueName(`${id}_${k}`, [...Object.keys(chips), id]);
-    chips[sid] = c.build(sid, uniqueName(c.name, Object.values(chips).map((x) => x.name)));
+    chips[sid] = docs[k] = c.build(sid, uniqueName(c.name, Object.values(chips).map((x) => x.name)));
     sub[k] = sid;
   }
-  chips[id] = ex.build(id, name, sub);
+  chips[id] = ex.build(id, name, sub, docs);
   return { ws: openChip({ ...ws, chips }, id), id };
 }

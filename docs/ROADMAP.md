@@ -769,7 +769,9 @@ our RV32I is fifty times bigger. Mockup approved 2026-10-13 (lettered section af
   lock-step with the ISS from reset (programs, random interrupts), on all 1.51 M SingleStepTests cases and all 96 M
   cycles of Klaus's test (scripts/m6502/chip-full.ts, in parallel slices), schematics that
   pass the layout rules; the chapter (8 steps), the running panel, the opcode matrix, the transistor ledger
-- ⏳ The 6502 as a sandbox part (with the CPU drawer); undocumented opcodes in the ISS
+- ✅ The 6502 as a sandbox part (Library ▸ Processor parts, opening onto the transistor chip), ROMs in 6502
+  assembly, Examples ▸ 6502 computer, the CPU panel following it
+- ⏳ Undocumented opcodes in the ISS
 
 ---
 

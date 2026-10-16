@@ -8,10 +8,12 @@ import { disasm16 } from '../riscv/rv16/isa16';
 import { assemble4 } from '../isa4/asm4';
 import { disasm4 } from '../isa4/isa4';
 import { type IsaDoc, tableOf } from '../isa/table';
+import { assemble as assemble6502 } from '../m6502/asm';
+import { disasm as disasm6502 } from '../m6502/isa';
 
 /** asm: RV32 assembly; rv16: the campaign's RV16 assembly (16-bit, word addressed); cpu4: the 4-bit
- *  CPU's assembly (16-bit words, word addressed); hex: words. */
-export type ProgramLang = 'asm' | 'hex' | 'rv16' | 'cpu4' | 'isa';
+ *  CPU's assembly (16-bit words, word addressed); 6502: the 6502's assembly (bytes, Appendix A); hex: words. */
+export type ProgramLang = 'asm' | 'hex' | 'rv16' | 'cpu4' | 'isa' | '6502';
 
 export interface ProgramLine {
   /** Byte address of the word. */
@@ -21,6 +23,10 @@ export interface ProgramLine {
   text: string;
   /** 1-based source line the word came from (for a hex gap: the `@` line that skipped it). */
   srcLine: number;
+  /** 6502: the CPU address the byte answers at (the ROM repeats every 2^k bytes; absent: unknown). */
+  at?: number;
+  /** 6502: the first byte of an instruction (its text is the instruction, its operand bytes have none). */
+  op?: boolean;
 }
 
 export interface ProgramError { line: number; message: string }
@@ -105,9 +111,54 @@ function buildHex(src: string): BuiltProgram {
   return { words, errors, lines };
 }
 
-/** Build a program image. asm / rv16 / cpu4: that ISA's assembler; hex: one 32-bit word per token. */
-export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc): BuiltProgram {
+/** A directive line of 6502 source (labels first): its bytes are data, not instructions. */
+const DATA_6502 = /^\s*(?:[A-Za-z_][A-Za-z0-9_]*\s*:\s*)*\./;
+const hex4 = (v: number) => v.toString(16).toUpperCase().padStart(4, '0');
+
+/**
+ * 6502 assembly into a ROM of 2^k bytes. The CPU sees 64K addresses and a ROM decodes only its low k
+ * address bits, so it answers wherever the decoder puts it, repeating every 2^k bytes: byte A of the
+ * program goes to word A mod 2^k (code at $F000 and the vectors at $FFFA fit a 4K ROM). Two bytes
+ * landing on one word is an error. Every word up to the last one written is listed (fill: 0, BRK).
+ */
+function build6502(src: string, k: number): BuiltProgram {
+  const r = assemble6502(src);
+  const N = 2 ** k;
+  const errors: ProgramError[] = [...r.errors];
+  const words: number[] = [];
+  const meta: { at: number; srcLine: number; text: string; op: boolean }[] = [];
+  for (const l of r.lines) {
+    if (!l.bytes.length) continue;
+    const data = DATA_6502.test(l.source);
+    l.bytes.forEach((b, j) => {
+      const at = (l.addr + j) & 0xffff, i = at % N;
+      const was = meta[i];
+      if (was && was.at !== at) {
+        // one report per line (a long .text would give one per byte)
+        if (errors[errors.length - 1]?.line !== l.line) errors.push({ line: l.line, message: `$${hex4(at)} and $${hex4(was.at)} (line ${was.srcLine}) are the same byte of a ${N}-byte ROM, which repeats every ${N} bytes` });
+        return;
+      }
+      while (words.length < i) words.push(0);
+      words[i] = b;
+      const op = !data && j === 0;
+      meta[i] = { at, srcLine: l.line, op, text: data ? `.byte $${b.toString(16).toUpperCase().padStart(2, '0')}` : op ? disasm6502(l.bytes, l.addr) : '' };
+    });
+  }
+  // Where the ROM sits: every byte placed at the same offset from its word (else only placed bytes say).
+  const offs = new Set(meta.flatMap((m, i) => (m ? [m.at - i] : [])));
+  const base = offs.size === 1 ? [...offs][0] : null;
+  const lines = words.map((w, i): ProgramLine => {
+    const m = meta[i];
+    const at = m?.at ?? (base !== null ? base + i : undefined);
+    return { addr: 4 * i, word: w, text: m?.text ?? '', srcLine: m?.srcLine ?? 0, ...(at !== undefined ? { at } : {}), ...(m?.op ? { op: true } : {}) };
+  });
+  return { words, errors, lines };
+}
+
+/** Build a program image. asm / rv16 / cpu4: that ISA's assembler; hex: one 32-bit word per token; 6502: bytes for a ROM of 2^k. */
+export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc, k = 16): BuiltProgram {
   if (lang === 'hex') return buildHex(src);
+  if (lang === '6502') return build6502(src, k);
   if (lang === 'isa') {
     // A custom instruction set (the ROM's own copy of the table): word addressed like RV16.
     if (!isa) return { words: [], errors: [{ line: 0, message: 'no instruction set: pick one in the ROM\'s Language' }], lines: [] };

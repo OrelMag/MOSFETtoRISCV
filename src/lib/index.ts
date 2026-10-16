@@ -41,3 +41,4 @@ export * from './fsm';
 export * from './fsms';
 export * from './raster';
 export * from './gfxpipe';
+export * from './m6502/core';

@@ -70,3 +70,6 @@
 .sb-cpu-mregs .v.z { color: var(--muted); }
 .sb-cpu-mregs .v.chg { color: var(--accent); font-weight: 700; }
 .sb-cpu-btns .sb-cpu-reset { margin-left: auto; }
+/* the 6502's last bus cycle, on a line of its own under the instruction */
+.sb-cpu .cpu-now:has(.sb-cpu-bus) { flex-wrap: wrap; row-gap: 2px; }
+.sb-cpu .cpu-now .sb-cpu-bus { flex-basis: 100%; font: 11px var(--font-mono); color: var(--text-2); }
