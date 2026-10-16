@@ -41,6 +41,35 @@
 .doom-pix p { margin: 0; color: var(--text-2); font-size: 12px; }
 .doom-zoom { width: 192px; height: 120px; image-rendering: pixelated; border-radius: 6px; border: 1px solid var(--border-strong); flex: 0 0 auto; max-width: 100%; background: #000; }
 
+/* Appendix B's first steps (widgets/doominfo.ts): tables, facts, the memory map */
+.doom-info { height: 100%; overflow: auto; box-sizing: border-box; padding: 16px 20px; font-size: 13px; display: flex; flex-direction: column; gap: 12px; max-width: 980px; }
+.doom-info h4 { margin: 4px 0 6px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.doom-info .muted { color: var(--muted); }
+.doom-info .mono { font-family: var(--font-mono); }
+.doom-info .doom-prof { grid-template-columns: minmax(0, 170px) minmax(0, 1fr) 56px; }
+.doom-info .doom-prof .v { white-space: nowrap; }
+.doom-table { border-collapse: collapse; width: 100%; }
+.doom-table th, .doom-table td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+.doom-table thead th { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; border-bottom-color: var(--border-strong); }
+.doom-table tbody th { color: var(--text); font-weight: 600; white-space: nowrap; }
+.doom-table td { color: var(--text-2); }
+.doom-table.compact td { padding: 4px 10px; }
+.doom-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.doom-facts > div { display: flex; flex-direction: column; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); }
+.doom-facts b { font: 700 20px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text); }
+.doom-facts span { color: var(--text-2); font-size: 12px; }
+.doom-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.doom-info .doom-listing { max-height: 260px; overflow: auto; }
+.doom-map { width: 100%; max-width: 640px; height: auto; }
+.doom-map rect { fill: var(--surface); stroke-width: 2; }
+.doom-map .r-mem rect { stroke: var(--good); }
+.doom-map .r-rom rect { stroke: var(--warn); }
+.doom-map .r-io rect { stroke: var(--accent); }
+.doom-map .r-fb rect { stroke: var(--bad); }
+.doom-map .addr { font: 12px var(--font-mono); fill: var(--text-2); }
+.doom-map .name { font: 600 13px var(--font-ui); fill: var(--text); }
+.doom-map .what { font: 12px var(--font-ui); fill: var(--text-2); }
+
 /* Appendix B's gate window (widgets/doomgates.ts): a scene panel */
 .doom-gates-panel { width: 340px; }
 .doom-gates-panel .doom-bezel { padding: 6px; }
