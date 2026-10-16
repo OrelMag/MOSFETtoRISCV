@@ -206,15 +206,21 @@ src/lib/       the component library (registered in `registry` via define())
                  pipe-wb2-dram (tests/verify/cpus.ts; BitSim lanes give a seq leaf a state each: run.ts laneLeaves; their
                  benchmark rows are offChip: kept out of the cost comparisons)
   axi.ts         chapter 35's bus (AXI-lite-shaped: AW + W together, B, AR, R; valid / ready; one transaction at a time):
-                 AXI_PORT (a load / store → a transaction, done), axiBus(M, codes) (arbiterN round robin, decode on the top
+                 AXI_PORT (a load / store → a transaction, done, sent), axiBus(M, codes) (arbiterN round robin, decode on the top
                  nibble, the last slave the default; grant and slave held to the response), axiRam(k, wait) (four bigRam byte
                  lanes, wait states), AXI_DEFAULT, DMA_ENGINE (registers src / dst / len / ctrl as a slave, a copying master,
                  irq), axiFlash(image) (a FlashDevice leaf: page buffer, a page read on a miss), busBench(image, k, wait),
                  busMemUnit(imemK) (the system CPU's memory over the bus: boot ROM below 4·2^imemK, the rest fetched into an
-                 instruction register, NOP meanwhile; stall; irqOk between accesses; bus side bus_*); BUS_PARTS registered
-  soc.ts         busComputer(program, flashImage, { imemK, ramK, ramWait }) (systemCpu({ bus }) and DMA_ENGINE as masters;
-                 RAM at 0, flash 0x1000_0000, DMA 0x4000_0000; DMA irq → CPU irq), chapterComputer / CHAPTER_COMPUTER
-                 (bus/programs.ts: a boot ROM that DMA-copies a program from flash to RAM 0x400 and jumps)
+                 instruction register, NOP meanwhile; stall; irqOk from the port's sent, not the request: that loop kept the
+                 cycle engine away; bus side bus_*); axiDram(c) (BUS_DRAM: dramCtrl + dramDevice(c, init, mask) behind an
+                 adapter: a line per access, a store's other bytes masked by dm), axiScreen(n) (the RAM slave as an n × n RGB332
+                 frame buffer), AXI_KEYS (+0 key, taken by the read: ack; +4 status) and KEY_QUEUE (the keyboard: an external
+                 seq leaf, filled through Sim.poke, the sandbox keyboard part's pins); BUS_PARTS registered
+  soc.ts         busComputer(program, flashImage, { imemK, ramK, ramWait, dram, screen, keys }) (systemCpu({ bus }) and
+                 DMA_ENGINE as masters; RAM at 0, flash 0x1000_0000, DRAM 0x2…, DMA 0x4…, screen 0x5…, keyboard 0x6…
+                 (instance kbd); DMA irq → CPU irq; socDevices(o): BusModel's devices), chapterComputer / CHAPTER_COMPUTER
+                 (bus/programs.ts: a boot ROM that DMA-copies a program from flash to RAM 0x400 and jumps), SYSTEM_COMPUTER
+                 (every slave; SYSTEM_SOURCE: keys to the console, a line in DRAM, blocks on the screen)
   flash.ts       chapter 34's flash at switch level: FG_CELL (prim 'fgmos'), vtOf / V_READ, norArray(R, C) (cells between
                  bit lines and a source line held high while programming), nandBlock(S, N) (strings with string / ground
                  selects, the other rows at the pass voltage); per column a pull-up, an output inverter and a NOR-gated
@@ -333,7 +339,7 @@ src/dram/      timing.ts: DDR4-3200 in our cycles (CLOCK_NS = the single-cycle C
                the CPUs' 2-way write-back cache model, price() on the models (equal to the gate-level CPUs to the cycle);
                schedule.ts: FCFS against FR-FCFS over a queue (chapter 33's last step)
 src/bus/       model.ts: BusMemory / BusModel (the computer's map for the golden model: RAM, flash, DMA registers whose
-               copy is instant; ISS({ bus }) fetches beyond its ROM and loads / stores through it); programs.ts: chapter
+               copy is instant, and with BusDevices a DRAM, a screen, a key queue; ISS({ bus }) fetches beyond its ROM and loads / stores through it); programs.ts: chapter
                35's boot ROM and payload
 src/flash/     model.ts: FlashDevice (program 1 → 0 once per erase, block erase, FLASH_TIMES 64 / 512 / 4096 cycles, wear-out
                after `endurance` erases, factory bad blocks) and Ftl (page map, writes out of place, greedy garbage collection
