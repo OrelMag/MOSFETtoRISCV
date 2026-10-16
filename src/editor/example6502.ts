@@ -5,6 +5,7 @@
 
 import { instPort, type Vec } from '../sim/geometry';
 import type { ComponentDef, PortDef } from '../sim/types';
+import { core6502 } from '../lib/m6502/core';
 import { FIB6502 } from '../m6502/sbprograms';
 import { type ChipDoc, type EndRef, type LabelDoc, type PartDoc, type PartRef, type PinDoc, type WireDoc } from './model';
 import { isError, partDef } from './parts';
@@ -143,6 +144,7 @@ export function memory6502Chip(id: string, name: string): ChipDoc {
 
 /** The computer around its memory map and devices chips (placed by id; their pins give the boxes' ports). */
 export function computer6502Chip(id: string, name: string, sub: { mem: ChipDoc; dev: ChipDoc }, src = FIB6502): ChipDoc {
+  core6502(); // registered (the part resolves by id)
   const s = new Sheet();
   s.pin('clk', 'in', [2, 8], 1, { kind: 'clock' });
   s.part('hi', { const: { width: 1, value: 1 } }, [10, 9]);

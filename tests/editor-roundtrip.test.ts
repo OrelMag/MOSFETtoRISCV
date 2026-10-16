@@ -41,7 +41,7 @@ cachedMemory(6, 2);
  * - A dual-core's cores hold the program ROM, like the CPU tops (opened through remixDef below).
  */
 const cannot = (def: ComponentDef): RegExp | undefined =>
-  /_core$/.test(def.id) ? /unknown library part 'rom_/ : undefined;
+  /_core$/.test(def.id) && def.id !== 'm6502_core' ? /unknown library part 'rom_/ : undefined; // the 6502 has no program ROM inside
 
 // Top-level CPUs are not registered (only their parts), so walk their parts in explicitly. The
 // tops themselves hold a ROM generated for one program, which no id can bring back after a
