@@ -433,25 +433,8 @@ export const KEY_QUEUE: ComponentDef = {
  * and 4 the status (bit 0: a key waits). Writes are answered and dropped. code / ready / ack are the
  * keyboard's pins (KEY_QUEUE, or the sandbox's keyboard part).
  */
-export const AXI_KEYS: ComponentDef = (() => {
-  const b = new Builder(14, 14);
-  const g = kit(b);
-  const { rdHs } = slaveFsm(b, g, 0);
-  b.next();
-  const status = g.split('araddr', [2, 1, 29])[1];
-  const take = b.name(g.and(rdHs, g.not(status), 'ready'), 'take', true);
-  const word = g.mux(32, g.merge(['code', g.konst(24, 0)], [8, 24]), g.merge(['ready', g.konst(31, 0)], [1, 31]), status, 'key or status');
-  const rdr = b.op(register(32), [word, rdHs, 'clk'], 'read data', 'rdr');
-  b.wire(`${rdr}.q`, 'rdata');
-  b.wire(take, 'ack');
-  const ports: PortDef[] = [...slavePorts(), bus('code', 8, 'in'), bit('ready', 'in'), bit('clk', 'in', 'bottom', true), bit('ack', 'out')];
-  return define({
-    id: 'axikeys', name: 'Keyboard slave', category: 'memory',
-    summary: 'Two registers behind the bus: +0 the oldest waiting key (0 when none; reading it takes it from the keyboard), +4 the status (bit 0: a key waits). Writes are dropped.',
-    ports, symbol: { kind: 'box', label: 'KEYS' },
-    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
-  });
-})();
+export const AXI_KEYS: ComponentDef = axiReadPort('axikeys', 'Keyboard slave', 'KEYS',
+  'Two registers behind the bus: +0 the oldest waiting key (0 when none; reading it takes it from the keyboard), +4 the status (bit 0: a key waits). Writes are dropped.', 'code', 'ready');
 
 /** The default slave: answers any address (reads 0, writes ignored), so a stray address never hangs the bus. */
 export const AXI_DEFAULT: ComponentDef = (() => {
@@ -705,5 +688,147 @@ export function busMemUnit(imemK: number): ComponentDef {
   });
 }
 
+// ---- the sandbox's system on a bus: ports for its parts, and bundled links -------------------------------
+
+/**
+ * A read-to-take port: two registers behind the bus, +0 the data (reading it takes it: ack at the read's
+ * handshake, if ready) and +4 the status (bit 0: ready). Writes are dropped. The keyboard's slave
+ * (code / ready / ack: KEY_QUEUE or the sandbox's keyboard part) and the timer's (its count's low byte and irq).
+ */
+function axiReadPort(id: string, name: string, label: string, summary: string, data: string, ready: string): ComponentDef {
+  const b = new Builder(14, 14);
+  const g = kit(b);
+  const { rdHs } = slaveFsm(b, g, 0);
+  b.next();
+  const status = g.split('araddr', [2, 1, 29])[1];
+  const take = b.name(g.and(rdHs, g.not(status), ready), 'take', true);
+  const word = g.mux(32, g.merge([data, g.konst(24, 0)], [8, 24]), g.merge([ready, g.konst(31, 0)], [1, 31]), status, `${data} or status`);
+  const rdr = b.op(register(32), [word, rdHs, 'clk'], 'read data', 'rdr');
+  b.wire(`${rdr}.q`, 'rdata');
+  b.wire(take, 'ack');
+  const ports: PortDef[] = [...slavePorts(), bus(data, 8, 'in'), bit(ready, 'in'), bit('clk', 'in', 'bottom', true), bit('ack', 'out')];
+  return define({ id, name, category: 'memory', summary, ports, symbol: { kind: 'box', label }, netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }) });
+}
+
+/** The timer's slave: +0 the count's low byte (reading it acknowledges a pending interrupt: ack), +4 bit 0 the irq. */
+export const AXI_TIMER_PORT: ComponentDef = axiReadPort('axitimer', 'Timer port', 'TIMER PORT',
+  'Two registers behind the bus for a timer (seqparts.ts timer): +0 the low byte of its count, and reading it acknowledges a pending interrupt (ack); +4 bit 0 the irq. Writes are dropped.', 'count', 'irq');
+
+/**
+ * A screen's write port: a store to base + 256·y + 4·x sets pixel (x, y) of a 64 × 64 screen to the store's
+ * low byte. x, y, color and we go to the sandbox's screen part (write mode), which takes them at the clock
+ * edge of the write's handshake. Reads give 0.
+ */
+export const AXI_PIXEL: ComponentDef = (() => {
+  const b = new Builder(14, 14);
+  const g = kit(b);
+  const { wrHs } = slaveFsm(b, g, 0);
+  b.next();
+  const [, x, y] = g.split('awaddr', [2, 6, 6, 18]);
+  b.wire(x, 'x'); b.wire(y, 'y'); b.wire(g.split('wdata', [8, 24])[0], 'color'); b.wire(wrHs, 'we');
+  b.wire(g.konst(32, 0), 'rdata');
+  const ports: PortDef[] = [...slavePorts(), bit('clk', 'in', 'bottom', true), bus('x', 6, 'out'), bus('y', 6, 'out'), bus('color', 8, 'out'), bit('we', 'out')];
+  return define({
+    id: 'axipixel', name: 'Screen port (a pixel a store)', category: 'memory',
+    summary: 'A store to base + 256·y + 4·x writes pixel (x, y) of a 64 × 64 screen, its colour the low byte: x, y, color and we for a screen part, taken at the edge of the write\'s handshake. Reads give 0.',
+    ports, symbol: { kind: 'box', label: 'PIXEL PORT' },
+    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/**
+ * A flash's read window over a ROM part of 2^k words (the ROM holds the contents; this is the timing): a
+ * page buffer tag (16-word pages) and a counter. A word of the page in the buffer is answered 2 cycles after
+ * its address, any other after a page read of `read` cycles, as chapter 34's flash (axiFlash). addr: the word
+ * the ROM must show (held from the address handshake), data: what it shows. Writes are answered and dropped.
+ */
+export function axiFlashWindow(k: number, read = FLASH_TIMES.read): ComponentDef {
+  const id = `axiflashwin${k}_${read}`;
+  return memo(id, () => {
+    if (k < 5) throw new Error('axiFlashWindow: at least two pages');
+    const b = new Builder(14, 14);
+    const g = kit(b);
+    const cw = Math.max(1, Math.ceil(Math.log2(read)));
+    const pend = b.op(DFF, ['', 'clk'], 'reading', 'pend');
+    const bq = b.op(DFF, ['', 'clk'], 'bvalid', 'bq'), rq = b.op(DFF, ['', 'clk'], 'rvalid', 'rq');
+    const idle = b.name(g.not(g.or(`${pend}.q`, `${bq}.q`, `${rq}.q`)), 'idle', true);
+    const wrHs = b.name(g.and('awvalid', 'wvalid', idle), 'write', true);
+    const rdHs = b.name(g.and('arvalid', idle), 'read', true);
+    b.next();
+    // the word asked for, held; its page against the page in the buffer
+    const wa = g.split('araddr', [2, k, 30 - k])[1];
+    const ra = b.op(register(k), [wa, rdHs, 'clk'], 'word', 'ra');
+    const tag = b.op(register(k - 4), ['', '', 'clk'], 'page in the buffer', 'tag');
+    const valid = b.op(DFF, ['', 'clk'], 'buffer valid', 'valid');
+    const hit = b.name(g.and(`${valid}.q`, b.op1(equal(k - 4), [g.split(wa, [4, k - 4])[1], `${tag}.q`], 'same page')), 'hit', true);
+    b.next();
+    const cnt = b.op(register(cw), ['', g.konst(1, 1), 'clk'], 'page read', 'cnt');
+    const z = b.op1(isZero(cw), [`${cnt}.q`], '= 0');
+    const fire = b.name(g.and(`${pend}.q`, z), 'answer', true);
+    const allOnes = g.konst(cw, 2 ** cw - 1);
+    const dec = b.op1(bitwise('xor', cw), [b.op1(incrementer(cw), [b.op1(bitwise('xor', cw), [`${cnt}.q`, allOnes])]), allOnes], '− 1');
+    b.wire(g.mux(cw, g.gate(dec, cw, g.not(z)), g.mux(cw, g.konst(cw, read - 1), g.konst(cw, 0), hit), rdHs, 'next count'), `${cnt}.d`);
+    b.next();
+    b.wire(g.or(rdHs, g.and(`${pend}.q`, g.not(z))), `${pend}.d`);
+    b.wire(g.split(`${ra}.q`, [4, k - 4])[1], `${tag}.d`); b.wire(fire, `${tag}.en`);
+    b.wire(g.or(`${valid}.q`, fire), `${valid}.d`);
+    const rdr = b.op(register(32), ['data', fire, 'clk'], 'read data', 'rdr');
+    b.wire(g.or(wrHs, g.and(`${bq}.q`, g.not('bready'))), `${bq}.d`);
+    b.wire(g.or(fire, g.and(`${rq}.q`, g.not('rready'))), `${rq}.d`);
+    b.wire(idle, 'awready'); b.wire(idle, 'wready'); b.wire(idle, 'arready');
+    b.wire(`${bq}.q`, 'bvalid'); b.wire(`${rq}.q`, 'rvalid');
+    b.wire(`${rdr}.q`, 'rdata');
+    b.wire(`${ra}.q`, 'addr');
+    const ports: PortDef[] = [...slavePorts(), bus('data', 32, 'in'), bit('clk', 'in', 'bottom', true), bus('addr', k, 'out')];
+    return define({
+      id, name: `Flash window (${2 ** k} words, 16-word pages)`, category: 'memory',
+      summary: `A flash's timing over a ROM of ${2 ** k} words that holds its contents (addr out, data in): a word of the page in the buffer comes 2 cycles after its address, any other after a page read of ${read} cycles (chapter 34). Writes are dropped.`,
+      ports, symbol: { kind: 'box', label: 'FLASH' },
+      netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
+/** The channel signals a master drives, packed bit 0 first (M_OUT order): 105 bits. */
+export const REQ_BITS = M_OUT.reduce((s, x) => s + wOf(x), 0);
+/** What comes back (M_IN order): 37 bits. */
+export const RSP_BITS = M_IN.reduce((s, x) => s + wOf(x), 0);
+
+/**
+ * A part with its bus ports packed: every group (a prefix, and whether the part is the master or the slave
+ * of that link) becomes two buses, `<prefix>req` (the master's signals, REQ_BITS) and `<prefix>rsp` (the
+ * slave's, RSP_BITS). A link is then two wires: the sandbox's System on a bus draws it so.
+ */
+export function bundled(def: ComponentDef, groups: [string, 'master' | 'slave'][], id: string): ComponentDef {
+  return memo(id, () => {
+    const b = new Builder(10, 14);
+    const own = new Set(groups.flatMap(([p]) => [...M_OUT, ...M_IN].map((s) => p + s)));
+    const other = def.ports.filter((p) => !own.has(p.name));
+    const from = new Map<string, string>();
+    for (const [p, side] of groups) {
+      const sigs = side === 'master' ? M_IN : M_OUT;
+      const s = b.op(splitter(sigs.map(wOf)), [side === 'master' ? `${p}rsp` : `${p}req`]);
+      sigs.forEach((sg, i) => from.set(p + sg, `${s}.o${i}`));
+    }
+    b.next();
+    const core = b.op(def, def.ports.filter((pt) => pt.dir === 'in').map((pt) => from.get(pt.name) ?? pt.name), def.name, 'core');
+    b.next();
+    for (const [p, side] of groups) {
+      const sigs = side === 'master' ? M_OUT : M_IN;
+      b.wire(b.op1(merger(sigs.map(wOf)), sigs.map((sg) => `${core}.${p}${sg}`)), side === 'master' ? `${p}req` : `${p}rsp`);
+    }
+    for (const pt of other) if (pt.dir === 'out') b.wire(`${core}.${pt.name}`, pt.name);
+    const packIn = groups.map(([p, side]) => bus(side === 'master' ? `${p}rsp` : `${p}req`, side === 'master' ? RSP_BITS : REQ_BITS, 'in'));
+    const packOut = groups.map(([p, side]) => bus(side === 'master' ? `${p}req` : `${p}rsp`, side === 'master' ? REQ_BITS : RSP_BITS, 'out'));
+    const ports: PortDef[] = [...other.filter((p) => p.dir === 'in'), ...packIn, ...other.filter((p) => p.dir === 'out'), ...packOut];
+    return define({
+      id, name: `${def.name}, bus bundled`, category: def.category,
+      summary: `${def.summary ?? def.name} Its bus ports packed: per link a request bus (the master's ${M_OUT.length} signals, ${REQ_BITS} bits) and a response bus (${M_IN.length} signals, ${RSP_BITS} bits).`,
+      ports, symbol: { ...def.symbol, kind: 'box' },
+      netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
 /** One of each generated part, registered for the library-wide checks (and the workbench). */
-export const BUS_PARTS = [axiBus(2, [0x0, 0x1, 0x4, 0xf]), axiRam(10), axiRam(10, 3), busMemUnit(7), busBench([1, 2, 3, 4]), axiDram(), axiScreen(64), AXI_KEYS];
+export const BUS_PARTS = [axiBus(2, [0x0, 0x1, 0x4, 0xf]), axiRam(10), axiRam(10, 3), busMemUnit(7), busBench([1, 2, 3, 4]), axiDram(), axiScreen(64), AXI_KEYS, axiFlashWindow(8)];

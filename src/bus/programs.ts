@@ -90,3 +90,76 @@ back:   addi s4, s4, -1         # the line back from DRAM, last key first
 prompt: li   t0, 62             # '>'
         sw   t0, 0(s0)
         j    wait`;
+
+/** The sandbox's System on a bus (editor/examplebus.ts): the words its boot ROM copies from the flash. */
+export const SANDBOX_WORDS = 96;
+
+export const SANDBOX_SOURCE = `# loaded from flash, runs from RAM at 0x400. The timer interrupts every 1000 cycles and the LEDs count
+# its ticks. Each key typed is echoed on the console, kept in a line in DRAM and drawn on the screen as a
+# 6 × 6 block of its colour; Enter prints the line back from DRAM, last key first.
+        li   s0, 0x80000000     # console (+0), LEDs (+4)
+        li   s1, 0x20000000     # DRAM: the line, a word a key
+        li   s2, 0x50000000     # screen: pixel (x, y) at + 256·y + 4·x, its colour the low byte
+        li   s3, 0x60000000     # keyboard: +0 the oldest key (reading takes it), +4 status
+        li   s4, 0              # keys in the line
+        li   s5, 0              # the next cell (8 × 8 cells of 8 pixels)
+        li   s9, 0              # timer ticks
+        la   t0, handler
+        csrw mtvec, t0
+        li   t0, 0x800          # the external interrupt: the timer's, or the DMA's
+        csrs mie, t0
+        csrsi mstatus, 8
+        j    prompt
+wait:   lw   t0, 4(s3)          # a key waiting?
+        andi t0, t0, 1
+        beqz t0, wait
+        lw   a0, 0(s3)          # take it
+        sw   a0, 0(s0)          # echo it
+        li   t0, 10
+        beq  a0, t0, enter
+        slli t1, s4, 2
+        add  t1, s1, t1
+        sw   a0, 0(t1)          # append it to the line, in DRAM
+        addi s4, s4, 1
+        andi t1, s5, 7          # its cell: column · 8 pixels · 4 bytes
+        slli t1, t1, 5
+        srli t2, s5, 3          # row · 8 lines · 256 bytes
+        slli t2, t2, 11
+        add  t1, t1, t2
+        add  t1, s2, t1
+        li   t3, 6
+block:  sw   a0, 0(t1)          # 6 pixels a line, a store each
+        sw   a0, 4(t1)
+        sw   a0, 8(t1)
+        sw   a0, 12(t1)
+        sw   a0, 16(t1)
+        sw   a0, 20(t1)
+        addi t1, t1, 256
+        addi t3, t3, -1
+        bnez t3, block
+        addi s5, s5, 1
+        andi s5, s5, 63
+        j    wait
+enter:  beqz s4, prompt
+back:   addi s4, s4, -1         # the line back from DRAM, last key first
+        slli t1, s4, 2
+        add  t1, s1, t1
+        lw   t0, 0(t1)
+        sw   t0, 0(s0)
+        bnez s4, back
+        li   t0, 10
+        sw   t0, 0(s0)
+prompt: li   t0, 62             # '>'
+        sw   t0, 0(s0)
+        j    wait
+# the interrupt: its own registers (s6, s7), so the program never notices it
+handler: li  s6, 0x40000000
+        li   s7, 2
+        sw   s7, 12(s6)         # clear the DMA's done (still up from the boot's copy)
+        li   s6, 0x70000000
+        lw   s7, 4(s6)          # the timer's irq?
+        beqz s7, out
+        lw   s7, 0(s6)          # reading its count acknowledges it
+        addi s9, s9, 1
+        sw   s9, 4(s0)          # the LEDs count the ticks
+out:    mret`;

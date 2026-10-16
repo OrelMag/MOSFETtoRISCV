@@ -7,7 +7,7 @@ import { MAP } from '../bus/model';
 import { BOOT_SOURCE, bootSource, PAYLOAD_SOURCE, SYSTEM_SOURCE, SYSTEM_WORDS } from '../bus/programs';
 import { assemble } from '../riscv/asm';
 import type { ComponentDef, PortDef } from '../sim/types';
-import { AXI_DEFAULT, AXI_KEYS, axiBus, axiDram, axiFlash, axiRam, axiScreen, BUS_DRAM, DMA_ENGINE, KEY_QUEUE, M_IN, M_OUT } from './axi';
+import { AXI_DEFAULT, AXI_KEYS, AXI_PIXEL, AXI_TIMER_PORT, axiBus, axiDram, axiFlash, axiFlashWindow, axiRam, axiScreen, BUS_DRAM, bundled, DMA_ENGINE, KEY_QUEUE, M_IN, M_OUT } from './axi';
 import { symbolGeom } from '../sim/geometry';
 import { Builder } from './builder';
 import { define } from './define';
@@ -111,3 +111,51 @@ export function systemComputer(): ComponentDef {
 }
 
 export const SYSTEM_COMPUTER = systemComputer();
+
+// ---- the sandbox's System on a bus (editor/examples.ts): parts with their links bundled ---------------
+
+/**
+ * The system CPU on a bus with its boot ROM outside (pcOut → a ROM → romData), so that a ROM part holds
+ * the boot program: systemCpu({ bus }) with the ROM taken out of its drawing.
+ */
+export function busCore(imemK = 7): ComponentDef {
+  const id = `sysbuscore${imemK}`;
+  let d = cache.get(id);
+  if (d) return d;
+  const base = systemCpu([], { imemK, bus: true });
+  d = define({
+    id, name: 'RV32I system core on a bus (boot ROM outside)', category: 'cpu',
+    summary: `The system CPU of chapter 35 with its boot ROM outside: instructions below ${4 * 2 ** imemK} bytes come from a ROM on pcOut → romData, any other is fetched over the bus, and loads and stores go over the bus. Console, LEDs, switches and the timer (mtime) stay inside at 0x8000_0000; irq is the external interrupt.`,
+    ports: [...base.ports.filter((p) => p.dir === 'in'), bus('romData', 32, 'in'), ...base.ports.filter((p) => p.dir === 'out')],
+    symbol: { kind: 'box', label: 'RV32I BUS CORE' },
+    netlist: () => {
+      const nl = base.netlist!();
+      const im = nl.instances.find((i) => i.name === 'imem')!, g = symbolGeom(im.def);
+      const swap = (e: string) => (e === 'imem.data' ? 'romData' : e);
+      return {
+        ...nl,
+        pins: { ...nl.pins, romData: [im.at![0] + g.ports.data.pos[0], im.at![1] + g.ports.data.pos[1]] },
+        instances: nl.instances.filter((i) => i.name !== 'imem'),
+        nets: nl.nets.map((n) => ({ ...n, ends: n.ends.filter((e) => e !== 'imem.addr').map(swap), tags: Array.isArray(n.tags) ? n.tags.filter((e) => e !== 'imem.addr').map(swap) : n.tags })),
+      };
+    },
+  });
+  cache.set(id, d);
+  return d;
+}
+
+/** The sandbox system's map: RAM, flash, DRAM, DMA, screen, keyboard, timer, then the default slave. */
+export const SANDBOX_MAP = [MAP.ram, MAP.flash, MAP.dram, MAP.dma, MAP.screen, MAP.keys, 0x7, 0xf];
+
+/** The sandbox system's parts, by role (library ids the example places). */
+export const SANDBOX_PARTS = (() => {
+  const slave = (d: ComponentDef) => bundled(d, [['', 'slave']], `${d.id}_b`);
+  const BUS = axiBus(2, SANDBOX_MAP);
+  return {
+    cpu: bundled(busCore(7), [['', 'master']], 'sysbuscore7_b'),
+    bus: bundled(BUS, [['m0_', 'slave'], ['m1_', 'slave'], ...SANDBOX_MAP.map((_, k): [string, 'master'] => [`s${k}_`, 'master'])], `${BUS.id}_b`),
+    ram: slave(axiRam(12)), flash: slave(axiFlashWindow(8)), dram: slave(axiDram()),
+    dma: bundled(DMA_ENGINE, [['', 'slave'], ['m_', 'master']], 'dma_b'),
+    pixel: slave(AXI_PIXEL), keys: slave(AXI_KEYS), timer: slave(AXI_TIMER_PORT), def: slave(AXI_DEFAULT),
+  };
+})();
