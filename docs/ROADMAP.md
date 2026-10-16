@@ -746,11 +746,11 @@ on its own.
   modelled (dram/schedule.ts) and shown; a gate-level request queue waits for several requesters (DMA, 16d)
 
 **Non-volatile**
-- ⏳ The floating-gate transistor: stored charge shifts the threshold (a switch-level MOSFET with a programmable V_T),
-  program and erase as slow operations; mask ROM (chapter 10) as the read-only ancestor
-- ⏳ NOR and NAND flash arrays (random read against density), page program and block erase
-- ⏳ A flash controller: a logical-to-physical mapping table, garbage collection, wear levelling, bad blocks; a
-  program that boots from flash into RAM
+- ✅ The floating-gate transistor: stored charge shifts the threshold (a switch-level MOSFET with a programmable V_T),
+  program and erase as slow operations; mask ROM (chapter 10) as the read-only ancestor (16c, chapter 34: prim 'fgmos')
+- ✅ NOR and NAND flash arrays (random read against density), page program and block erase (lib/flash.ts)
+- ✅ A flash controller: a logical-to-physical mapping table, garbage collection, wear levelling, bad blocks (flash/model.ts,
+  chapter 34's widgets); ⏳ a program that boots from flash into RAM (16d, chapter 35)
 
 **Interconnect**
 - ⏳ A simple bus with a valid / ready handshake (an AXI-lite-style set of channels), address decoding to several

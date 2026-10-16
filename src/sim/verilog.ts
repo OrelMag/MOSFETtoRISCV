@@ -110,6 +110,10 @@ export function structuralVerilog(def: ComponentDef): string | null {
       if (n) assigns.push(`  assign ${n} = 1'bx;  // VDD/2: half the supply, no logic level`);
       continue;
     }
+    if (c.prim === 'fgmos') {
+      lines.push(`  // ${inst.name}: floating-gate transistor ${conn('d') || '(nc)'} / ${conn('s') || '(nc)'}, gate ${conn('g') || '(nc)'} (its threshold is stored charge: not Verilog)`);
+      continue;
+    }
     if (c.prim === 'sense') {
       lines.push(`  // ${inst.name}: sense amplifier on ${c.ports.slice(1).map((p) => conn(p.name) || '(unconnected)').join(' / ')} (compares charge levels: analog, not Verilog)`);
       continue;

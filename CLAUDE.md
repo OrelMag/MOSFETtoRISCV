@@ -117,7 +117,10 @@ src/sim/       simulation core (no DOM)
                  NetDef.cap), a level reads as a bit only near a rail (LEVEL_HI / LO, else X); prim 'vhalf' a source
                  at ½; prim 'sense' (en, a, b) latches the higher line when en rises (X below `offset`), flips when a
                  stronger driver forces a line; `leak(cycles)` drains nets with NetDef.leak (half-life in cycles);
-                 opened as the root, a sense prim flattens to the transistors it is drawn with
+                 opened as the root, a sense prim flattens to the transistors it is drawn with; prim 'fgmos' (g, d, s, vp,
+                 pgm, ers: flash) an NMOS whose threshold is stored charge (fgCharge / setFgCharge): conducts at g = 1 while
+                 the charge is below FG_READ, always at vp = 1 (pass voltage); a rising pgm with g = 1 and the drain at 0
+                 adds FG_STEP, a rising ers empties it (settle applies the edges, then settles again)
   nmossim.ts     NmosSim: event-driven switch-level engine for large NMOS circuits (Appendix A's 6502): a change
                  recomputes the channel-connected groups it reaches (rails and driven inputs end a group); GND / an
                  input 0 beats VDD / 1 (a short is counted), any of those beats a pull-up (prim 'dep' or 'res' to a
@@ -201,6 +204,10 @@ src/lib/       the component library (registered in `registry` via define())
                  request, then fill, until done); singleCycleCpu / pipelinedCpu({ dram }); CPUs sc-wb2-dram, sc-wb2-dramc,
                  pipe-wb2-dram (tests/verify/cpus.ts; BitSim lanes give a seq leaf a state each: run.ts laneLeaves; their
                  benchmark rows are offChip: kept out of the cost comparisons)
+  flash.ts       chapter 34's flash at switch level: FG_CELL (prim 'fgmos'), vtOf / V_READ, norArray(R, C) (cells between
+                 bit lines and a source line held high while programming), nandBlock(S, N) (strings with string / ground
+                 selects, the other rows at the pass voltage); per column a pull-up, an output inverter and a NOR-gated
+                 strong write driver (din 0 pulls the bit line low: program; 1 inhibits)
   dram.ts        chapter 32's DRAM at switch level: VHALF (prim 'vhalf'), DRAM_SA (prim 'sense', drawn with 8 transistors),
                  DRAM_BIT (1T1C, a leaking CELL_C capacitor, bl two-way), dramColumn(R) (precharge / equalize to VDD/2, a
                  reference bit line of BITLINE_C, column select, the amplifier), dramArray(R, C) (row / column decoders, write
@@ -314,7 +321,13 @@ src/dram/      timing.ts: DDR4-3200 in our cycles (CLOCK_NS = the single-cycle C
                open / closed page, XOR bank hash; transfer / idle drive both); workload.ts: a program's line requests through
                the CPUs' 2-way write-back cache model, price() on the models (equal to the gate-level CPUs to the cycle);
                schedule.ts: FCFS against FR-FCFS over a queue (chapter 33's last step)
-src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...); dram.ts: chapter 32's DRAM panel
+src/flash/     model.ts: FlashDevice (program 1 → 0 once per erase, block erase, FLASH_TIMES 64 / 512 / 4096 cycles, wear-out
+               after `endurance` erases, factory bad blocks) and Ftl (page map, writes out of place, greedy garbage collection
+               when free blocks are down to the reserve, dynamic wear levelling, bad blocks skipped, write amplification);
+               randomWrites (seeded, optional hot set)
+src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...); flash.ts: chapter 34's flash panel
+               (flashScene: the NOR / NAND array read, programmed pulse by pulse with verify, erased; thresholds per cell and
+               an Id–Vg plot), ftlWidget (4 blocks × 4 pages), wearWidget (write amplification, erase counts, wear-out); dram.ts: chapter 32's DRAM panel
                (dramScene: the 4 × 4 array driven through its protocol, every cell's charge, bit-line ΔV, the latched row,
                cycles since each row's restore, Wait = SwitchSim.leak; dramState for challenges); dramtiming.ts: the row
                buffer over request streams and DDR4's timings at any clock; dramctrl.ts: chapter 33's controller panel
