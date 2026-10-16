@@ -28,6 +28,10 @@ export interface DramSceneOptions {
 export interface DramPanelState { waited: number; age: number[]; lastRead: number | null }
 const states = new WeakMap<Stage, DramPanelState>();
 export const dramState = (st: Stage): DramPanelState | undefined => states.get(st);
+/** The panel's own buttons, for a challenge's solve. */
+export interface DramActions { wait(n: number): void; refreshAll(): void }
+const actions = new WeakMap<Stage, DramActions>();
+export const dramActions = (st: Stage): DramActions | undefined => actions.get(st);
 
 /** Nets and leaves the panel reads, by path in the flat design. */
 function probes(sim: SwitchSim, def: ComponentDef) {
@@ -143,6 +147,8 @@ function dramPanel(opts: DramSceneOptions): ScenePanel {
       note = 'Every row refreshed.';
     };
 
+    actions.set(stage, { wait: (n) => wait(n)(), refreshAll: op(refreshAll) });
+
     // Load: the pattern, written row by row, then precharged.
     if (opts.pattern) {
       opts.pattern.forEach((bits, r) => {
@@ -236,6 +242,6 @@ function dramPanel(opts: DramSceneOptions): ScenePanel {
       msg.textContent = note || `A stored 1 is read correctly for ${SAFE_CYCLES} cycles after its last restore (Cs ${CELL_C} fF, Cb ${BITLINE_C} fF, offset ${Math.round(SENSE_OFFSET * VDD_VOLTS * 1000)} mV).`;
     };
     update();
-    return { el, update, destroy: () => states.delete(stage) };
+    return { el, update, destroy: () => { states.delete(stage); actions.delete(stage); } };
   };
 }

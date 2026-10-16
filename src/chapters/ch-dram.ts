@@ -3,7 +3,7 @@ import { accessCycles, CLOCK_NS, cyclesOf, DDR4_3200, TIMING } from '../dram/tim
 import { findNode } from '../sim/flatten';
 import { SENSE_OFFSET, type SwitchSim, VDD_VOLTS } from '../sim/switchsim';
 import type { Stage } from '../view/stage';
-import { dramScene, dramState, SAFE_CYCLES } from '../widgets/dram';
+import { dramActions, dramScene, dramState, SAFE_CYCLES } from '../widgets/dram';
 import { rowBufferWidget, timingWidget } from '../widgets/dramtiming';
 import type { Chapter } from './types';
 
@@ -130,6 +130,7 @@ export const chDram: Chapter = {
           return !!s && s.waited >= 600 && PATTERN.every((bits, r) => [0, 1, 2, 3].every((c) => ((bits >> c) & 1 ? cellLevel(st, r, c) >= READABLE : cellLevel(st, r, c) <= 0.5)));
         },
         answer: `Wait 200, Refresh all, three times. Each row is restored before ${SAFE_CYCLES} cycles pass. Waiting 400 at once would be too late: the 1s would have fallen below ${(READABLE * VDD_VOLTS).toFixed(3)} V.`,
+        solve: (st) => { const a = dramActions(st); for (let i = 0; i < 3; i++) { a?.wait(200); a?.refreshAll(); } },
       },
     },
     {
