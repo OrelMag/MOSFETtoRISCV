@@ -4,13 +4,14 @@
 /** Where the boot ROM puts the program, and how many words it copies. */
 export const LOAD_AT = 0x400, LOAD_WORDS = 16;
 
-export const BOOT_SOURCE = `# boot ROM: copy ${LOAD_WORDS} words from flash (0x1000_0000) to RAM ${'0x' + LOAD_AT.toString(16)} by DMA, wait, jump
+/** The boot ROM for a payload of n words. */
+export const bootSource = (n: number) => `# boot ROM: copy ${n} words from flash (0x1000_0000) to RAM ${'0x' + LOAD_AT.toString(16)} by DMA, wait, jump
         li   t0, 0x40000000     # the DMA's registers
         li   t1, 0x10000000
         sw   t1, 0(t0)          # source: the flash
         li   t1, ${LOAD_AT}
         sw   t1, 4(t0)          # destination: RAM
-        li   t1, ${LOAD_WORDS}
+        li   t1, ${n}
         sw   t1, 8(t0)          # length in words
         li   t1, 1
         sw   t1, 12(t0)         # go
@@ -19,6 +20,8 @@ wait:   lw   t1, 12(t0)         # status: bit 1 = done
         beqz t1, wait
         li   t1, ${LOAD_AT}
         jr   t1                 # run what was loaded`;
+
+export const BOOT_SOURCE = bootSource(LOAD_WORDS);
 
 export const PAYLOAD_SOURCE = `# loaded from flash, runs from RAM: say hello, then count on the LEDs
         li   t0, 0x80000000     # console
@@ -32,3 +35,58 @@ export const PAYLOAD_SOURCE = `# loaded from flash, runs from RAM: say hello, th
 loop:   addi a0, a0, 1
         sw   a0, 4(t0)          # LEDs
         j    loop`;
+
+/** The payload of the computer with every slave, and the words its boot ROM copies (four flash pages). */
+export const SYSTEM_WORDS = 64;
+
+export const SYSTEM_SOURCE = `# loaded from flash, runs from RAM: each key typed goes to the console, into a line kept in DRAM, and
+# onto the screen as an 8 × 8 block of its colour; Enter prints the line back from DRAM, last key first
+        li   s0, 0x80000000     # console
+        li   s1, 0x20000000     # DRAM: the line typed so far, a word a key
+        li   s2, 0x50000000     # screen: 64 × 64, a byte a pixel (RGB332)
+        li   s3, 0x60000000     # keyboard: +0 the oldest key (reading takes it), +4 status
+        li   s4, 0              # keys in the line
+        li   s5, 0              # the next cell on the screen (8 × 8 of them)
+        j    prompt
+wait:   lw   t0, 4(s3)          # a key waiting?
+        andi t0, t0, 1
+        beqz t0, wait
+        lw   a0, 0(s3)          # take it
+        sw   a0, 0(s0)          # echo it
+        li   t0, 10
+        beq  a0, t0, enter
+        slli t1, s4, 2
+        add  t1, s1, t1
+        sw   a0, 0(t1)          # append it to the line, in DRAM
+        addi s4, s4, 1
+        andi t1, s5, 7          # its cell: column (s5 mod 8) · 8 pixels
+        slli t1, t1, 3
+        srli t2, s5, 3          # row (s5 / 8) · 8 lines of 64 bytes
+        slli t2, t2, 9
+        add  t1, t1, t2
+        add  t1, s2, t1
+        slli t2, a0, 8          # the key's code as a colour, in four bytes
+        or   t2, t2, a0
+        slli t3, t2, 16
+        or   t2, t2, t3
+        li   t3, 8
+block:  sw   t2, 0(t1)          # 8 pixels: two words a line
+        sw   t2, 4(t1)
+        addi t1, t1, 64
+        addi t3, t3, -1
+        bnez t3, block
+        addi s5, s5, 1
+        andi s5, s5, 63
+        j    wait
+enter:  beqz s4, prompt
+back:   addi s4, s4, -1         # the line back from DRAM, last key first
+        slli t1, s4, 2
+        add  t1, s1, t1
+        lw   t0, 0(t1)
+        sw   t0, 0(s0)
+        bnez s4, back
+        li   t0, 10
+        sw   t0, 0(s0)
+prompt: li   t0, 62             # '>'
+        sw   t0, 0(s0)
+        j    wait`;

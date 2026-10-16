@@ -4,10 +4,10 @@
 // external interrupt. Console, LEDs, switches and the timer stay inside the CPU at 0x8000_0000.
 
 import { MAP } from '../bus/model';
-import { BOOT_SOURCE, PAYLOAD_SOURCE } from '../bus/programs';
+import { BOOT_SOURCE, bootSource, PAYLOAD_SOURCE, SYSTEM_SOURCE, SYSTEM_WORDS } from '../bus/programs';
 import { assemble } from '../riscv/asm';
 import type { ComponentDef, PortDef } from '../sim/types';
-import { AXI_DEFAULT, axiBus, axiFlash, axiRam, DMA_ENGINE, M_IN, M_OUT } from './axi';
+import { AXI_DEFAULT, AXI_KEYS, axiBus, axiDram, axiFlash, axiRam, axiScreen, BUS_DRAM, DMA_ENGINE, KEY_QUEUE, M_IN, M_OUT } from './axi';
 import { symbolGeom } from '../sim/geometry';
 import { Builder } from './builder';
 import { define } from './define';
@@ -23,14 +23,26 @@ export interface SocOptions {
   ramK?: number;
   /** Wait states of the RAM (default 0). */
   ramWait?: number;
+  /** A DRAM at 0x2000_0000 (BUS_DRAM: chapter 33's controller, 16 KB). */
+  dram?: boolean;
+  /** A 64 × 64 screen at 0x5000_0000. */
+  screen?: boolean;
+  /** A keyboard at 0x6000_0000 (its queue inside the computer: KEY_QUEUE, instance 'kbd'). */
+  keys?: boolean;
 }
+
+/** The screen's side in pixels. */
+export const SOC_SCREEN = 64;
+
+/** The golden model's devices for a computer built with these options (bus/model.ts BusModel). */
+export const socDevices = (o: SocOptions) => ({ dramK: o.dram ? BUS_DRAM.k : undefined, screen: o.screen ? SOC_SCREEN : undefined, keys: !!o.keys });
 
 const cache = new Map<string, ComponentDef>();
 
 export function busComputer(program: number[], flashImage: ArrayLike<number> = [], o: SocOptions = {}): ComponentDef {
   const imemK = o.imemK ?? 7, ramK = o.ramK ?? 12, wait = o.ramWait ?? 0;
   const CPU = systemCpu(program, { imemK, bus: true }), FL = axiFlash(flashImage);
-  const id = `soc_${CPU.id}_${FL.id}_${ramK}_${wait}`;
+  const id = `soc_${CPU.id}_${FL.id}_${ramK}_${wait}${o.dram ? '_dram' : ''}${o.screen ? '_scr' : ''}${o.keys ? '_kbd' : ''}`;
   let d = cache.get(id);
   if (d) return d;
   const b = new Builder(10, 24);
@@ -38,24 +50,39 @@ export function busComputer(program: number[], flashImage: ArrayLike<number> = [
   const cpu = b.op(CPU, [], 'CPU', 'cpu');
   const dma = b.op(DMA_ENGINE, [], 'DMA', 'dma');
   b.next();
-  const bx = b.op(axiBus(2, [MAP.ram, MAP.flash, MAP.dma, 0xf]), [], 'interconnect', 'bus');
+  // the slaves in address order, the default slave last
+  const map: [number, () => string][] = [
+    [MAP.ram, () => b.op(axiRam(ramK, wait), [], 'RAM', 'ram')],
+    [MAP.flash, () => b.op(FL, [], 'flash', 'flash')],
+    ...(o.dram ? [[MAP.dram, () => b.op(axiDram(), [], 'DRAM', 'dram')] as [number, () => string]] : []),
+    [MAP.dma, () => dma],
+    ...(o.screen ? [[MAP.screen, () => b.op(axiScreen(SOC_SCREEN), [], 'screen', 'screen')] as [number, () => string]] : []),
+    ...(o.keys ? [[MAP.keys, () => b.op(AXI_KEYS, [], 'keyboard port', 'keys')] as [number, () => string]] : []),
+    [0xf, () => b.op(AXI_DEFAULT, [], 'default', 'def')],
+  ];
+  const bx = b.op(axiBus(2, map.map(([c]) => c)), [], 'interconnect', 'bus');
   b.next();
-  const slaves = [b.op(axiRam(ramK, wait), [], 'RAM', 'ram'), b.op(FL, [], 'flash', 'flash'), dma, b.op(AXI_DEFAULT, [], 'default', 'def')];
+  const slaves = map.map(([, make]) => make());
   for (const s of M_OUT) { b.wire(`${cpu}.${s}`, `${bx}.m0_${s}`); b.wire(`${dma}.m_${s}`, `${bx}.m1_${s}`); }
   for (const s of M_IN) { b.wire(`${bx}.m0_${s}`, `${cpu}.${s}`); b.wire(`${bx}.m1_${s}`, `${dma}.m_${s}`); }
   slaves.forEach((sl, i) => {
     for (const s of M_OUT) b.wire(`${bx}.s${i}_${s}`, `${sl}.${s}`);
     for (const s of M_IN) b.wire(`${sl}.${s}`, `${bx}.s${i}_${s}`);
   });
-  for (const x of [cpu, dma, bx, slaves[0], slaves[1], slaves[3]]) b.wire('clk', `${x}.clk`);
+  for (const x of [cpu, bx, ...slaves]) b.wire('clk', `${x}.clk`);
+  if (o.keys) {
+    b.next();
+    const kbd = b.op(KEY_QUEUE, ['keys.ack', 'clk'], 'keyboard', 'kbd');
+    b.wire(`${kbd}.code`, 'keys.code'); b.wire(`${kbd}.ready`, 'keys.ready');
+  }
   b.wire('switches', `${cpu}.switches`);
   b.wire(`${dma}.irq`, `${cpu}.irq`);
   for (const p of ['pcOut', 'consoleData', 'consoleValid', 'leds', 'retire']) b.wire(`${cpu}.${p}`, p);
   b.wire(`${dma}.busy`, 'dmaBusy');
   const R = b.right, cg = symbolGeom(CPU), cpuY = b.instances.find((i) => i.name === cpu)!.at![1];
   d = define({
-    id, name: 'Computer on a bus (CPU, DMA, RAM, flash)', category: 'cpu',
-    summary: `The system CPU and a DMA engine share one bus to a ${4 * 2 ** ramK}-byte RAM at 0, a flash at 0x1000_0000 and the DMA's registers at 0x4000_0000. The boot ROM (${4 * 2 ** imemK} bytes) holds the first instructions; everything else is fetched over the bus. The DMA's done interrupt is the CPU's external interrupt.`,
+    id, name: `Computer on a bus (CPU, DMA, RAM, flash${o.dram ? ', DRAM' : ''}${o.screen ? ', screen' : ''}${o.keys ? ', keyboard' : ''})`, category: 'cpu',
+    summary: `The system CPU and a DMA engine share one bus to a ${4 * 2 ** ramK}-byte RAM at 0, a flash at 0x1000_0000 and the DMA's registers at 0x4000_0000. The boot ROM (${4 * 2 ** imemK} bytes) holds the first instructions; everything else is fetched over the bus. The DMA's done interrupt is the CPU's external interrupt.${o.dram ? ' A DRAM (chapter 33\'s controller) at 0x2000_0000.' : ''}${o.screen ? ` A ${SOC_SCREEN} × ${SOC_SCREEN} screen (a byte a pixel) at 0x5000_0000.` : ''}${o.keys ? ' A keyboard at 0x6000_0000 (+0 the oldest key, taken when read; +4 status).' : ''}`,
     ports: [bit('clk', 'in', 'left', true), bus('switches', 8, 'in'), bus('pcOut', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out'), bit('retire', 'out'), bit('dmaBusy', 'out')],
     symbol: { kind: 'box', label: 'COMPUTER' },
     netlist: () => ({ pins: { clk: [0, cpuY + cg.ports.clk.pos[1]], switches: [0, cpuY + cg.ports.switches.pos[1]], pcOut: [R, 4], consoleData: [R, 7], consoleValid: [R, 10], leds: [R, 13], retire: [R, 16], dmaBusy: [R, 19] }, instances: b.instances, nets: b.nets() }),
@@ -64,10 +91,23 @@ export function busComputer(program: number[], flashImage: ArrayLike<number> = [
   return d;
 }
 
+const words = (src: string) => { const a = assemble(src); if (a.errors.length) throw new Error(a.errors[0].message); return a.words; };
+
 /** Chapter 35's computer: the boot ROM and the flash holding the program it loads (bus/programs.ts). */
 export function chapterComputer(): ComponentDef {
-  const words = (src: string) => { const a = assemble(src); if (a.errors.length) throw new Error(a.errors[0].message); return a.words; };
   return busComputer(words(BOOT_SOURCE), words(PAYLOAD_SOURCE));
 }
 
 export const CHAPTER_COMPUTER = chapterComputer();
+
+/** The slaves of chapter 35's last computer. */
+export const SYSTEM_OPTIONS: SocOptions = { dram: true, screen: true, keys: true };
+
+/** Chapter 35's last computer: every slave; the boot ROM loads SYSTEM_SOURCE (keys to console, DRAM and screen). */
+export function systemComputer(): ComponentDef {
+  const payload = words(SYSTEM_SOURCE);
+  if (payload.length > SYSTEM_WORDS) throw new Error(`SYSTEM_SOURCE: ${payload.length} words, the boot ROM copies ${SYSTEM_WORDS}`);
+  return busComputer(words(bootSource(SYSTEM_WORDS)), payload, SYSTEM_OPTIONS);
+}
+
+export const SYSTEM_COMPUTER = systemComputer();
