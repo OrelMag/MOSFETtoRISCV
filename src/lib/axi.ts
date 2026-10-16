@@ -96,8 +96,7 @@ function sidePins(ports: PortDef[], right: number): Record<string, [number, numb
 /**
  * The CPU's side of the bus (one master port): req (a load or store wanted), we, addr, wdata, be (byte
  * enables). It raises AW + W or AR until the slave takes the address, then waits for the response; done
- * is 1 in the cycle the response arrives (the CPU finishes the instruction at that edge); sent, from the
- * address handshake until then.
+ * is 1 in the cycle the response arrives (the CPU finishes the instruction at that edge).
  */
 export const AXI_PORT: ComponentDef = (() => {
   const b = new Builder(14, 14);
@@ -116,9 +115,9 @@ export const AXI_PORT: ComponentDef = (() => {
   b.wire(rd, 'arvalid'); b.wire('addr', 'araddr');
   const one = g.konst(1, 1);
   b.wire(one, 'bready'); b.wire(one, 'rready');
-  b.wire(done, 'done'); b.wire('rdata', 'rdataOut'); b.wire(`${sent}.q`, 'sent');
+  b.wire(done, 'done'); b.wire('rdata', 'rdataOut');
   const ports: PortDef[] = [bit('req', 'in'), bit('we', 'in'), bus('addr', 32, 'in'), bus('data', 32, 'in'), bus('be', 4, 'in'), bit('clk', 'in', 'bottom', true),
-    ...M_IN.map((s) => ({ name: s, width: wOf(s), dir: 'in' as const })), bit('done', 'out'), bus('rdataOut', 32, 'out'), bit('sent', 'out'), ...M_OUT.map((s) => ({ name: s, width: wOf(s), dir: 'out' as const }))];
+    ...M_IN.map((s) => ({ name: s, width: wOf(s), dir: 'in' as const })), bit('done', 'out'), bus('rdataOut', 32, 'out'), ...M_OUT.map((s) => ({ name: s, width: wOf(s), dir: 'out' as const }))];
   return define({
     id: 'axiport', name: 'Bus master port', category: 'memory',
     summary: 'Turns a load or a store into a bus transaction: AW and W (a store) or AR (a load) held valid until the slave takes them, then the response; done in the cycle it arrives. Two cycles at the least.',
@@ -661,9 +660,9 @@ export const NOP_WORD = 0x00000013;
  * ports (addr, wdata, be, we → rdata) plus the instruction side. An instruction below the boot ROM's
  * size comes from the ROM (romData); any other is fetched over the bus into an instruction register,
  * the decoder seeing a NOP meanwhile. Loads (re) and stores (we) go over the bus. stall holds the CPU
- * until the instruction is in and its access done; irqOk lets an interrupt in unless a fetch or a sent access is
- * under way (in an access's first cycle the trap takes its request back: we and re fall with NoTrap). It
- * reads the port's registered state, not the request: the request depends on the trap, the trap on irqOk.
+ * until the instruction is in and its access done; irqOk lets an interrupt in unless a fetch or an access is
+ * under way since an earlier cycle (in an access's first cycle the trap takes its request back: we and re
+ * fall with NoTrap). A flip-flop, not the request: the request depends on the trap, the trap on irqOk.
  */
 export function busMemUnit(imemK: number): ComponentDef {
   return memo(`busmem${imemK}`, () => {
@@ -688,7 +687,10 @@ export function busMemUnit(imemK: number): ComponentDef {
     b.wire(g.mux(32, g.mux(32, g.konst(32, NOP_WORD), `${ir}.q`, `${irv}.q`, 'IR or NOP'), 'romData', inRom, 'instruction'), 'instr');
     b.wire(`${port}.rdataOut`, 'rdata');
     b.wire(stall, 'stall');
-    b.wire(g.not(g.or(fetch, `${port}.sent`)), 'irqOk');
+    // an access requested and not done: a flip-flop, so irqOk does not depend on this cycle's request
+    const infl = b.op(DFF, ['', 'clk'], 'access under way', 'infl');
+    b.wire(g.and(dataReq, g.not(done)), `${infl}.d`);
+    b.wire(g.not(g.or(fetch, `${infl}.q`)), 'irqOk');
     for (const s of M_IN) b.wire(`bus_${s}`, `${port}.${s}`);
     for (const s of M_OUT) b.wire(`${port}.${s}`, `bus_${s}`);
     const ports: PortDef[] = [bus('addr', 32, 'in'), bus('wdata', 32, 'in'), bus('be', 4, 'in'), bit('we', 'in'), bit('clk', 'in', 'bottom', true), bit('re', 'in'), bus('pc', 32, 'in'), bus('romData', 32, 'in'),

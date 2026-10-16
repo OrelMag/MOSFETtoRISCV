@@ -206,12 +206,12 @@ src/lib/       the component library (registered in `registry` via define())
                  pipe-wb2-dram (tests/verify/cpus.ts; BitSim lanes give a seq leaf a state each: run.ts laneLeaves; their
                  benchmark rows are offChip: kept out of the cost comparisons)
   axi.ts         chapter 35's bus (AXI-lite-shaped: AW + W together, B, AR, R; valid / ready; one transaction at a time):
-                 AXI_PORT (a load / store → a transaction, done, sent), axiBus(M, codes) (arbiterN round robin, decode on the top
+                 AXI_PORT (a load / store → a transaction, done), axiBus(M, codes) (arbiterN round robin, decode on the top
                  nibble, the last slave the default; grant and slave held to the response), axiRam(k, wait) (four bigRam byte
                  lanes, wait states), AXI_DEFAULT, DMA_ENGINE (registers src / dst / len / ctrl as a slave, a copying master,
                  irq), axiFlash(image) (a FlashDevice leaf: page buffer, a page read on a miss), busBench(image, k, wait),
                  busMemUnit(imemK) (the system CPU's memory over the bus: boot ROM below 4·2^imemK, the rest fetched into an
-                 instruction register, NOP meanwhile; stall; irqOk from the port's sent, not the request: that loop kept the
+                 instruction register, NOP meanwhile; stall; irqOk from a flip-flop (an access under way), not the request: that loop kept the
                  cycle engine away; bus side bus_*); axiDram(c) (BUS_DRAM: dramCtrl + dramDevice(c, init, mask) behind an
                  adapter: a line per access, a store's other bytes masked by dm), axiScreen(n) (the RAM slave as an n × n RGB332
                  frame buffer), AXI_KEYS (+0 key, taken by the read: ack; +4 status) and KEY_QUEUE (the keyboard: an external
