@@ -422,3 +422,51 @@ export function busBench(image: ArrayLike<number>, k = 10, wait = 0): ComponentD
     });
   });
 }
+
+/** The instruction the decoder sees while an instruction is being fetched over the bus: addi x0, x0, 0. */
+export const NOP_WORD = 0x00000013;
+
+/**
+ * The system CPU's memory over the bus (systemCpu({ bus })): in place of its data memory, with the same
+ * ports (addr, wdata, be, we → rdata) plus the instruction side. An instruction below the boot ROM's
+ * size comes from the ROM (romData); any other is fetched over the bus into an instruction register,
+ * the decoder seeing a NOP meanwhile. Loads (re) and stores (we) go over the bus. stall holds the CPU
+ * until the instruction is in and its access done; irqOk lets an interrupt in only between accesses.
+ */
+export function busMemUnit(imemK: number): ComponentDef {
+  return memo(`busmem${imemK}`, () => {
+    const b = new Builder(14, 14);
+    const g = kit(b);
+    b.pins('addr', 'wdata', 'be', 'we', 're', 'pc', 'romData', 'clk');
+    const hi = g.split('pc', [imemK + 2, 30 - imemK])[1];
+    const inRom = b.name(b.op1(isZero(30 - imemK), [hi], 'in the boot ROM'), 'inRom', true);
+    const irv = b.op(DFF, ['', 'clk'], 'instruction in', 'irv');
+    const ir = b.op(register(32), ['', '', 'clk'], 'instruction register', 'ir');
+    const fetch = b.name(g.and(g.not(inRom), g.not(`${irv}.q`)), 'fetch', true);
+    b.next();
+    const dataReq = b.name(g.and(g.not(fetch), g.or('we', 're')), 'access', true);
+    const port = b.op(AXI_PORT, [g.or(fetch, dataReq), g.and(dataReq, 'we'), g.mux(32, 'addr', 'pc', fetch, 'fetch or data'), 'wdata', 'be', 'clk'], 'bus port', 'port');
+    b.next();
+    const done = `${port}.done`;
+    const fetched = b.name(g.and(done, fetch), 'fetched', true);
+    b.wire(fetched, `${ir}.en`);
+    b.wire(`${port}.rdataOut`, `${ir}.d`);
+    const stall = b.name(g.or(fetch, g.and(dataReq, g.not(done))), 'stall', true);
+    b.wire(g.or(fetched, g.and(`${irv}.q`, stall)), `${irv}.d`);
+    b.wire(g.mux(32, g.mux(32, g.konst(32, NOP_WORD), `${ir}.q`, `${irv}.q`, 'IR or NOP'), 'romData', inRom, 'instruction'), 'instr');
+    b.wire(`${port}.rdataOut`, 'rdata');
+    b.wire(stall, 'stall');
+    b.wire(g.not(g.or(fetch, dataReq)), 'irqOk');
+    for (const s of M_IN) b.wire(s, `${port}.${s}`);
+    for (const s of M_OUT) b.wire(`${port}.${s}`, s);
+    const ports: PortDef[] = [bus('addr', 32, 'in'), bus('wdata', 32, 'in'), bus('be', 4, 'in'), bit('we', 'in'), bit('clk', 'in', 'bottom', true), bit('re', 'in'), bus('pc', 32, 'in'), bus('romData', 32, 'in'),
+      ...M_IN.map((s) => ({ name: s, width: wOf(s), dir: 'in' as const })),
+      bus('rdata', 32, 'out'), bus('instr', 32, 'out'), bit('stall', 'out'), bit('irqOk', 'out'), ...M_OUT.map((s) => ({ name: s, width: wOf(s), dir: 'out' as const }))];
+    return define({
+      id: `busmem${imemK}`, name: 'Memory over the bus', category: 'memory',
+      summary: `The CPU's memory side on a bus: instructions below ${4 * 2 ** imemK} bytes from the boot ROM, any other fetched over the bus into an instruction register (a NOP meanwhile); loads and stores over the bus. stall holds the CPU until both are done.`,
+      ports, symbol: { kind: 'box', label: 'MEMORY BUS' },
+      netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+    });
+  });
+}

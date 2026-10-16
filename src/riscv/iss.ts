@@ -7,6 +7,7 @@
 // memory-mapped I/O, CSRs, exceptions and interrupts (one step = one clock cycle; a cycle in
 // which an interrupt is taken executes no instruction).
 
+import type { BusMemory } from '../bus/model';
 import { F32, fpAddX, fpClass, fpCmpX, fpDivX, fpFmaX, fpFromIntX, fpMinMaxX, fpMulX, fpSqrtX, fpToIntX, type FpResult } from '../sim/fpref';
 import { CSRS, decode, disasm, OPCODES } from './isa';
 
@@ -29,6 +30,11 @@ export interface IssOptions {
   f?: boolean;
   /** Hart id read by csrr mhartid (multi-core). */
   hartid?: number;
+  /**
+   * Memory over a bus (chapter 35's computer): instructions beyond the ROM's imemWords are fetched from
+   * it, and every load and store that is not I/O goes to it instead of dmem.
+   */
+  bus?: BusMemory;
 }
 
 /** Cycles a div / divu / rem / remu occupies on the iterative divider (1 load + 32 steps + 1 write). */
@@ -86,6 +92,8 @@ export class ISS {
   /** Data memory; harts of a multi-core system share one array. */
   dmem: Uint32Array;
   readonly hartid: number;
+  /** Memory over a bus (IssOptions.bus). */
+  readonly bus: BusMemory | undefined;
   halted = false;
   steps = 0;
   readonly system: boolean;
@@ -138,9 +146,11 @@ export class ISS {
     this.m = !!opts.m;
     this.fext = !!opts.f;
     this.hartid = opts.hartid ?? 0;
+    this.bus = opts.bus;
   }
 
   fetch(pc: number): number {
+    if (this.bus && pc >>> 0 >= 4 * this.imemWords) return this.bus.read((pc & ~3) >>> 0);
     return this.imem[(pc >>> 2) % this.imemWords] ?? 0x00000013;
   }
 
@@ -174,7 +184,8 @@ export class ISS {
 
   /** Read the 32-bit word containing addr (memory or I/O). */
   private readWord(addr: number): number {
-    return this.isIo(addr) ? this.ioRead(addr) >>> 0 : this.dmem[this.wordIndex(addr)];
+    if (this.isIo(addr)) return this.ioRead(addr) >>> 0;
+    return this.bus ? this.bus.read((addr & ~3) >>> 0) >>> 0 : this.dmem[this.wordIndex(addr)];
   }
 
   /** When set, every data-memory access (not I/O) is appended here: for cache studies. */
@@ -206,6 +217,12 @@ export class ISS {
       return;
     }
     if (this.memTrace) this.memTrace.push({ addr: addr >>> 0, write: true });
+    if (this.bus) {
+      // the bus sees the lane-aligned data and a byte strobe per lane (lib/lsu.ts STORE_ALIGN)
+      const sh = (addr & 3) * 8, strb = f3 === 0 ? 1 << (addr & 3) : f3 === 1 ? 3 << (addr & 2) : 15;
+      this.bus.write((addr & ~3) >>> 0, (v << sh) >>> 0, strb);
+      return;
+    }
     const i = this.wordIndex(addr);
     if (f3 === 2) this.dmem[i] = v >>> 0;
     else {

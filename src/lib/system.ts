@@ -19,6 +19,7 @@ import { andN, rca } from './combinational';
 import { bitwise, orN } from './wide';
 import { CSRS } from '../riscv/isa';
 import { MDU } from './muldiv';
+import { busMemUnit, M_IN, M_OUT } from './axi';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -467,17 +468,26 @@ export interface SystemCpuOptions {
   /** Instruction ROM of 2^imemK words (default 7), data memory of 2^dmemK (default 5). */
   imemK?: number;
   dmemK?: number;
+  /**
+   * Memory over a bus (chapter 35): no data memory inside, but a bus master port (busMemUnit). The ROM
+   * holds the first 2^imemK words of instructions; any other address is fetched over the bus, and loads
+   * and stores go over it too (I/O at 0x8000_0000 stays inside). The CPU stalls until each is done
+   * (retire = 0) and takes an interrupt only between bus accesses.
+   */
+  bus?: boolean;
 }
 
 export function systemCpu(program: number[], opts: SystemCpuOptions = {}): ComponentDef {
-  const IM = rom(program, opts.imemK ?? 7);
+  const imemK = opts.imemK ?? 7;
+  const IM = rom(program, imemK);
   const adder = opts.adder ?? 'ks', dmemK = opts.dmemK ?? 5;
-  return memo(`sys_${IM.id}_${adder}${opts.m ? '_m' : ''}_${dmemK}`, () => buildSystem(IM, adder, !!opts.m, dmemK));
+  if (opts.bus && opts.m) throw new Error('systemCpu: bus and m together are not supported');
+  return memo(`sys_${IM.id}_${adder}${opts.m ? '_m' : ''}_${dmemK}${opts.bus ? '_bus' : ''}`, () => buildSystem(IM, adder, !!opts.m, dmemK, opts.bus ? imemK : 0));
 }
 
-function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean, dmemK: number): ComponentDef {
+function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean, dmemK: number, busK = 0): ComponentDef {
   const SYSD = sysDecode(m), CSRU = csrUnit(m);
-  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = bankedMemory(dmemK);
+  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = busK ? busMemUnit(busK) : bankedMemory(dmemK);
   const M2 = busMux2(32), M4 = muxTree(2, 32), M8 = muxTree(3, 32), ADD = adder === 'ks' ? koggeStone(32) : rca(32);
   const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4;
   const SI = splitter([7, 5, 3, 5, 5, 7]), IMM12 = splitter([20, 12]);
@@ -688,10 +698,47 @@ function buildSystem(IM: ComponentDef, adder: 'rca' | 'ks', m: boolean, dmemK: n
     );
     pins.retire = [P('res', 'y')[0] + 20, yS + 6];
   }
+  if (busK) {
+    // ---- memory over the bus: instructions beyond the ROM and every load / store through dm (busMemUnit)
+    const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => { instances.push({ name, def, at: xy, label }); defs.set(name, def); at.set(name, xy); };
+    add('memRd', andN(3), gridAt(), 'a load');
+    add('nstall', NOT, gridAt());
+    add('rwm', AND, gridAt());
+    add('irqg', AND, gridAt());
+    instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
+    const net = (name: string) => nets.find((n) => n.name === name)!;
+    nets.splice(nets.indexOf(net('en')), 1);
+    net('Instr').ends = ['dm.instr', ...net('Instr').ends.filter((e) => e !== 'imem.data')];
+    net('PC').ends.push('dm.pc');
+    (net('PC').tags as string[]).push('dm.pc');
+    net('isLoad').ends.push('memRd.i0');
+    net('notIO').ends.push('memRd.i1');
+    net('NoTrap').ends.push('memRd.i2');
+    net('RegWrite').ends = ['rwq.y', 'rwm.a'];
+    net('irqTake').ends = ['csr.irqTake', 'irqg.a'];
+    nets.push(
+      { name: 'BootROM', ends: ['imem.data', 'dm.romData'], tags: ['dm.romData'] },
+      { name: 'LoadReq', ends: ['memRd.y', 'dm.re'], tags: true },
+      { name: 'stall', ends: ['dm.stall', 'nstall.a'], tags: true },
+      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwm.b', 'retire'], tags: ['pc.en', 'rwm.b', 'retire'] },
+      { name: 'RegWriteQ', ends: ['rwm.y', 'rf.we'], tags: true },
+      { name: 'irqOk', ends: ['dm.irqOk', 'irqg.b'], tags: true },
+      { name: 'irqTakeQ', ends: ['irqg.y', 'trap.irq'], tags: true },
+    );
+    pins.retire = [P('res', 'y')[0] + 20, yS + 6];
+    // the bus: the port's channels at the CPU's pins
+    const xB = P('res', 'y')[0] + 20;
+    [...M_OUT, ...M_IN].forEach((sg, i) => {
+      pins[sg] = [xB + (i < M_OUT.length ? 0 : -1) * 0, yS + 10 + 2 * i];
+      nets.push(M_OUT.includes(sg as never) ? { name: sg, ends: [`dm.${sg}`, sg], tags: [`dm.${sg}`] } : { name: sg, ends: [sg, `dm.${sg}`], tags: [`dm.${sg}`] });
+    });
+  }
+  const busPorts: PortDef[] = busK ? [bit('retire', 'out'), ...M_OUT.map((sg) => (sg.endsWith('addr') || sg === 'wdata' ? bus(sg, 32, 'out') : sg === 'wstrb' ? bus(sg, 4, 'out') : bit(sg, 'out'))),
+    ...M_IN.map((sg) => (sg === 'rdata' ? bus(sg, 32, 'in') : bit(sg, 'in')))] : [];
   return {
-    id: `sys_${IM.id}${adder === 'ks' ? '' : '_rca'}${m ? '_m' : ''}${dmemK === 5 ? '' : `_d${dmemK}`}`, name: `RV32I${m ? 'M' : ''} system (single-cycle, Zicsr, traps, I/O)`, category: 'cpu',
+    id: `sys_${IM.id}${adder === 'ks' ? '' : '_rca'}${m ? '_m' : ''}${busK ? '_bus' : dmemK === 5 ? '' : `_d${dmemK}`}`, name: `RV32I${m ? 'M' : ''} system (single-cycle, Zicsr, traps, I/O${busK ? ', on a bus' : ''})`, category: 'cpu',
     summary: `The complete processor: every RV32I instruction including byte and halfword memory access, the Zicsr instructions, machine-mode exceptions and interrupts, and memory-mapped I/O (console, LEDs, switches, timer).${m ? ' Plus the M extension: one-cycle multiplies and 34-cycle divides that stall the processor (retire = 0 while they run).' : ''}`,
-    ports: [bit('clk', 'in', 'left', true), bus('switches', 8, 'in'), bit('irq', 'in'), bus('pcOut', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out'), ...(m ? [bit('retire', 'out')] : [])],
+    ports: [bit('clk', 'in', 'left', true), bus('switches', 8, 'in'), bit('irq', 'in'), bus('pcOut', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out'), ...(m ? [bit('retire', 'out')] : []), ...busPorts],
     symbol: { kind: 'box', label: m ? 'RV32IM SYSTEM' : 'RV32I SYSTEM' },
     netlist: () => ({ pins, instances, nets }),
   };
