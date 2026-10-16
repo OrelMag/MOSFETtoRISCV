@@ -9,6 +9,8 @@ import { parseImage } from '../src/doom/image';
 import { DoomDevices, FastDoom, GoldenDoom, SCREEN_H, SCREEN_W } from '../src/doom/machine';
 
 const root = new URL('../', import.meta.url);
+/** Long loops give the event loop a turn now and then, so the test worker can report to vitest. */
+const breathe = () => new Promise<void>((r) => setImmediate(r));
 const wadPath = new URL('.cache/doom/freedoom1.wad', root);
 
 function load() {
@@ -17,12 +19,12 @@ function load() {
 }
 
 describe('Doom on the Doom computer', () => {
-  it('boots to the title screen on the fast interpreter', () => {
+  it('boots to the title screen on the fast interpreter', async () => {
     const { image, wad } = load();
     const dev = new DoomDevices(wad), cpu = new FastDoom(image, dev);
     const at: number[] = [];
     dev.onFlip = () => at.push(cpu.retired);
-    while (dev.flips < 4 && cpu.retired < 2e9 && !cpu.halted) cpu.run(1_000_000);
+    while (dev.flips < 4 && cpu.retired < 2e9 && !cpu.halted) { cpu.run(1_000_000); await breathe(); }
     expect(cpu.console).not.toMatch(/trap|Error/i);
     expect(cpu.halted).toBe(false);
     expect(dev.flips).toBe(4);
@@ -33,11 +35,12 @@ describe('Doom on the Doom computer', () => {
     expect(dev.shown.length).toBe(SCREEN_W * SCREEN_H);
   }, 600_000);
 
-  it('runs its first instructions identically on the golden model', () => {
+  it('runs its first instructions identically on the golden model', async () => {
     const { image, wad } = load();
     const g = new GoldenDoom(image, new DoomDevices(wad)), f = new FastDoom(image, new DoomDevices(wad));
     const N = 1_500_000;
     for (let s = 0; s < N; s++) {
+      if (s % 50_000 === 0) await breathe();
       const info = g.step();
       f.step();
       if (f.pc !== g.pc || f.mtime !== g.mtime) throw new Error(`step ${s} at 0x${info.pc.toString(16)} ${info.text}: pc / mtime differ`);

@@ -2,10 +2,12 @@
 // Doom computer's memory map (doom/machine.ts), run by the fast interpreter (riscv/fastiss.ts).
 
 import { doomPlay } from '../widgets/doom';
+import { chAppendix6502 } from './ch-6502';
 import type { Chapter } from './types';
 
 export const chAppendixDoom: Chapter = {
-  id: 'appendix-doom', num: 35, appendix: 'B', title: 'Doom on our RISC-V', level: 'Software',
+  // numbered after Appendix A, whatever the journey's length (chapters before it get renumbered)
+  id: 'appendix-doom', num: chAppendix6502.num + 1, appendix: 'B', title: 'Doom on our RISC-V', level: 'Software',
   blurb: 'A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.',
   steps: [
     {

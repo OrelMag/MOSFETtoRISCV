@@ -18,9 +18,9 @@ function player(): DoomPlayer {
   return new DoomPlayer(image, new Uint8Array(readFileSync(wadPath)), syms);
 }
 
-/** Run until `flips` frames are shown (ignoring the wall clock). */
-function boot(p: DoomPlayer, flips: number): void {
-  while (p.dev.flips < flips) p.advance(100, 1e9, 0);
+/** Run until `flips` frames are shown (ignoring the wall clock), giving the event loop a turn so the worker can report. */
+async function boot(p: DoomPlayer, flips: number): Promise<void> {
+  while (p.dev.flips < flips) { p.advance(100, 1e9, 0); await new Promise<void>((r) => setImmediate(r)); }
 }
 
 describe('DoomPlayer', () => {
@@ -33,9 +33,9 @@ describe('DoomPlayer', () => {
     expect(doomKey('MetaLeft')).toBeNull();
   });
 
-  it('runs to the wall clock at the nominal rate and samples a profile', () => {
+  it('runs to the wall clock at the nominal rate and samples a profile', async () => {
     const p = player();
-    boot(p, 2);
+    await boot(p, 2);
     const c0 = p.cycles;
     for (let k = 0; k < 20; k++) p.advance(50, 1e9, 1000 * (k + 1));
     // 20 × 50 ms at the nominal clock, plus the tail of single steps (≤ 64 cycles each call, or a divide)
@@ -49,9 +49,9 @@ describe('DoomPlayer', () => {
     expect(p.where()?.name).toBeTruthy();
   }, 120_000);
 
-  it('steps to the next pixel and back, exactly', () => {
+  it('steps to the next pixel and back, exactly', async () => {
     const p = player();
-    boot(p, 3);
+    await boot(p, 3);
     p.pause();
     const pc0 = p.cpu.pc, x0 = p.cpu.x.slice(), mem0 = p.cpu.dmem.slice(), fb0 = p.dev.fb.slice();
     p.toNextPixel();
@@ -67,9 +67,9 @@ describe('DoomPlayer', () => {
     expect(p.dev.fb).toEqual(fb0);
   }, 120_000);
 
-  it('a single step that stores is undone word for word', () => {
+  it('a single step that stores is undone word for word', async () => {
     const p = player();
-    boot(p, 2);
+    await boot(p, 2);
     p.pause();
     // step until a store into RAM or the frame buffer has happened, then undo every step
     const mem0 = p.cpu.dmem.slice(), fb0 = p.dev.fb.slice(), x0 = p.cpu.x.slice(), pc0 = p.cpu.pc, mt0 = p.cpu.mtime;
@@ -82,9 +82,9 @@ describe('DoomPlayer', () => {
     expect(p.dev.fb).toEqual(fb0);
   }, 120_000);
 
-  it('turns the shown frame into RGBA through its palette, every channel exact', () => {
+  it('turns the shown frame into RGBA through its palette, every channel exact', async () => {
     const p = player();
-    boot(p, 3);
+    await boot(p, 3);
     const rgba = p.dev.rgba();
     let mixed = 0;
     for (let i = 0; i < SCREEN_W * SCREEN_H; i++) {
@@ -95,9 +95,9 @@ describe('DoomPlayer', () => {
     expect(mixed).toBeGreaterThan(1000); // the title uses colours with red and green / blue together
   }, 120_000);
 
-  it('runs to the end of the frame: the next FLIP, exactly', () => {
+  it('runs to the end of the frame: the next FLIP, exactly', async () => {
     const p = player();
-    boot(p, 3);
+    await boot(p, 3);
     p.pause();
     const f0 = p.dev.flips;
     p.toFrameEnd();
