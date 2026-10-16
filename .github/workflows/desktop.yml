@@ -44,6 +44,8 @@ jobs:
           else
             echo "no layout published yet"
           fi
+      - name: Add Freedoom (Appendix B's game data, BSD licence; public/doom/, never checked in)
+        run: node scripts/doom/fetch-wad.mjs --public
       - run: npm run build
       - run: npm ci
         working-directory: desktop

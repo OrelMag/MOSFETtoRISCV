@@ -1,0 +1,46 @@
+/* Appendix B's Play step (widgets/doom.ts): the screen and its controls, beside what the machine is doing. */
+.doom { height: 100%; overflow: auto; box-sizing: border-box; padding: 14px 18px; display: grid; grid-template-columns: minmax(0, 660px) minmax(0, 1fr); gap: 18px; font-size: 13px; }
+@media (max-width: 1100px) { .doom { grid-template-columns: minmax(0, 1fr); } }
+.doom-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.doom-bezel { background: var(--doom-bezel); border-radius: 10px; padding: 10px; }
+.doom-screen { display: block; width: 100%; height: auto; aspect-ratio: 320 / 200; image-rendering: pixelated; border-radius: 4px; background: #000; outline: none; cursor: pointer; }
+.doom-screen:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.doom-status { color: var(--text-2); }
+.doom-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.doom-row:empty { display: none; }
+.doom-row .muted, .doom .muted { color: var(--muted); }
+.doom-file { display: none; }
+.doom-kv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 14px; max-width: 420px; }
+.doom-kv:empty { display: none; }
+.doom-kv span:nth-child(odd) { color: var(--text-2); }
+.doom-kv span:nth-child(even) { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.doom-keys { color: var(--muted); font-size: 12px; line-height: 1.9; }
+.doom-side { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.doom-side h4 { margin: 8px 0 2px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.doom-side h4 .muted { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.doom .mono { font-family: var(--font-mono); }
+.doom-now { padding: 7px 10px; border-radius: 8px; background: var(--surface-2); }
+.doom-prof { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 42px; gap: 4px 8px; align-items: center; font-size: 12px; }
+.doom-prof .k { font-family: var(--font-mono); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doom-prof .t i { display: block; height: 10px; border-radius: 0 4px 4px 0; background: var(--accent); }
+.doom-prof .v { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.doom-mix { display: flex; flex-wrap: wrap; gap: 6px; }
+.doom-mix span { font: 600 11.5px var(--font-mono); padding: 3px 8px; border-radius: 6px; background: var(--surface-2); color: var(--text-2); }
+.doom-mix b { color: var(--text); }
+.doom-trace { font-size: 11.5px; line-height: 17px; background: var(--canvas); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; color: var(--text-2); overflow-x: auto; }
+.doom-trace div { white-space: pre; }
+.doom-trace b { color: var(--accent); font-weight: 600; }
+.doom-listing { font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+.doom-listing > div { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 8px; padding: 1px 10px; white-space: pre; }
+.doom-listing > div span:first-child { color: var(--muted); }
+.doom-listing .fn { display: block; padding: 5px 10px; color: var(--text); font-weight: 600; border-bottom: 1px solid var(--border); white-space: normal; font-family: var(--font-ui); }
+.doom-listing .pc { background: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); }
+.doom-regs { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 1px 10px; font-size: 11px; color: var(--muted); }
+.doom-regs b { color: var(--text); font-weight: 600; }
+.doom-pix { display: flex; gap: 12px; align-items: center; }
+.doom-pix p { margin: 0; color: var(--text-2); font-size: 12px; }
+.doom-zoom { width: 192px; height: 120px; image-rendering: pixelated; border-radius: 6px; border: 1px solid var(--border-strong); flex: 0 0 auto; max-width: 100%; background: #000; }
+
+:root { --doom-bezel: #1a1d26; }
+:root[data-theme='dark'] { --doom-bezel: #05060a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) { --doom-bezel: #05060a; } }

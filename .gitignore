@@ -22,6 +22,8 @@ coverage/
 
 # scripts/m6502/fetch-tests.mjs: SingleStepTests 6502 and Klaus Dormann's functional test (GPL: never checked in)
 /tests/m6502/.cache/
+/public/doom/freedoom1.wad
+/public/doom/freedoom-COPYING.txt
 
 # Doom (scripts/doom): Freedoom fetched by fetch-wad.mjs (never checked in) and the build's objects / ELF
 /.cache/
