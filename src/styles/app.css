@@ -1547,3 +1547,39 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .ro-s.hit { opacity: 0.5; }
 .ro-k { display: inline-block; width: 14px; height: 10px; border-radius: 3px; }
 .ce-table td { text-align: right; } .ce-table td:first-child { text-align: left; }
+/* chapter 34: the flash panel and widgets (widgets/flash.ts) */
+.fl-panel { width: 352px; }
+.fl-grid { display: flex; flex-direction: column; gap: 3px; font: 11px var(--font-mono); margin-top: 4px; }
+.fl-row { display: grid; grid-template-columns: 52px repeat(4, minmax(0, 1fr)); gap: 3px; align-items: center; }
+.fl-row.head span { text-align: center; color: var(--muted); font-size: 10px; }
+.fl-row .lbl { color: var(--muted); }
+.fl-row.sel .lbl { color: var(--accent); font-weight: 700; }
+.fl-cell { border: 1px solid var(--border); border-radius: 5px; padding: 3px 0; font: 600 10.5px var(--font-mono); cursor: pointer; background: color-mix(in oklab, var(--w1) 70%, var(--surface)); color: var(--text); }
+.fl-cell.part { background: color-mix(in oklab, var(--warn) 35%, var(--surface)); }
+.fl-cell.prog { background: var(--surface-3); color: var(--text-2); }
+.fl-cell.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fl-plot { width: 100%; height: auto; margin-top: 6px; }
+.fl-axis { stroke: var(--border-strong); }
+.fl-tick { font: 9px var(--font-mono); fill: var(--muted); }
+.fl-erased { fill: none; stroke: var(--muted); stroke-dasharray: 3 3; stroke-width: 1.2; }
+.fl-curve { fill: none; stroke: var(--accent); stroke-width: 2; }
+.fl-read { stroke: var(--text); stroke-dasharray: 4 3; }
+.ftl-wrap { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; margin: 6px 0; }
+.ftl-blocks { display: flex; gap: 8px; flex-wrap: wrap; }
+.ftl-block { display: flex; flex-direction: column; gap: 3px; padding: 6px; border: 1px solid var(--border); border-radius: 8px; min-width: 86px; font-size: 12px; }
+.ftl-block.active { border-color: var(--accent); }
+.ftl-block.erased { box-shadow: 0 0 0 2px var(--warn); }
+.ftl-block .sub { font-size: 11px; margin: 0; }
+.ftl-page { font: 600 11.5px var(--font-mono); text-align: center; padding: 3px 0; border-radius: 4px; border: 1px solid var(--border); }
+.ftl-page.valid { background: color-mix(in oklab, var(--good) 22%, var(--surface)); }
+.ftl-page.stale { background: color-mix(in oklab, var(--wx) 18%, var(--surface)); color: var(--text-2); }
+.ftl-page.free { color: var(--muted); border-style: dashed; }
+.ftl-page.new { outline: 2px solid var(--accent); }
+.ftl-page.copy { outline: 2px dashed var(--warn); }
+.ftl-table { display: grid; grid-template-columns: repeat(2, auto); gap: 2px 14px; font: 12px var(--font-mono); }
+.ftl-table b { grid-column: 1 / -1; font-family: var(--font-ui); }
+.wear-bars { display: flex; align-items: flex-end; gap: 4px; height: 120px; margin-top: 10px; max-width: 640px; }
+.wear-bar { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
+.wear-bar i { width: 100%; background: var(--probe-0); border-radius: 3px 3px 0 0; min-height: 1px; }
+.wear-bar.bad i { background: var(--wx); }
+.wear-bar em { font: normal 10px var(--font-mono); color: var(--muted); margin-top: 2px; }

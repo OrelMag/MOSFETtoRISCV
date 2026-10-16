@@ -174,7 +174,7 @@ export interface ComponentDef {
   symbol: SymbolSpec;
 
   /** Built-in primitive handled directly by the simulators. */
-  prim?: 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'vhalf' | 'res' | 'cap' | 'sense' | 'alias';
+  prim?: 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'vhalf' | 'res' | 'cap' | 'sense' | 'fgmos' | 'alias';
   /**
    * Switch level: drive strength of a conducting element, 1 … 4. Transistors are 2 (weak) … 4
    * (strong), default 3; a resistor (prim 'res') is 1 by default, weaker than any transistor. Where
@@ -260,16 +260,16 @@ export function parseEnd(end: string): { inst: string | null; port: string } {
   return i < 0 ? { inst: null, port: end } : { inst: end.slice(0, i), port: end.slice(i + 1) };
 }
 
-export type HierLeafKind = 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'vhalf' | 'res' | 'cap' | 'sense' | 'behavior';
+export type HierLeafKind = 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'vhalf' | 'res' | 'cap' | 'sense' | 'fgmos' | 'behavior';
 
 /**
  * Primitives of the switch-level solver: transistors, rails, resistors (always-on weak paths) and
- * capacitors (mark their net as charge-keeping), the VDD/2 rail and the sense amplifier (the one part
- * that reads a charge level). A gate-level flatten cannot simulate them.
+ * capacitors (mark their net as charge-keeping), the VDD/2 rail, the sense amplifier (the one part
+ * that reads a charge level) and the floating-gate transistor (flash). A gate-level flatten cannot simulate them.
  */
 export function isSwitchPrim(d: ComponentDef): boolean {
   const p = d.prim;
-  return p === 'nmos' || p === 'pmos' || p === 'dep' || p === 'vdd' || p === 'gnd' || p === 'vhalf' || p === 'res' || p === 'cap' || p === 'sense';
+  return p === 'nmos' || p === 'pmos' || p === 'dep' || p === 'vdd' || p === 'gnd' || p === 'vhalf' || p === 'res' || p === 'cap' || p === 'sense' || p === 'fgmos';
 }
 
 /**

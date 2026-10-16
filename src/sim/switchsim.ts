@@ -36,6 +36,12 @@
 // that reads levels: when en rises it compares a with b, latches X if they differ by less than its
 // offset, else drives the higher line to 1 and the other to 0 with transistor strength (so a
 // stronger write driver flips it, and it follows). leak(cycles) drains nets with NetDef.leak.
+//
+// Floating gates (flash). prim 'fgmos' (terminals g, d, s, vp, pgm, ers) is an NMOS whose threshold is
+// charge stored on an insulated gate (`fgCharge`, 0 erased … 1). At the read voltage (g = 1) it
+// conducts only while the charge is below FG_READ; at the pass voltage (vp = 1) it always conducts
+// (NAND strings). A rising pgm with g = 1 and the drain at 0 adds FG_STEP of charge (one program
+// pulse: programming is program, verify, repeat); a rising ers removes it all (erase).
 
 import { matchNets, sharedInputs } from './carry';
 import { findNode, type FlatDesign } from './flatten';
@@ -75,6 +81,10 @@ export class SwitchSim implements Sim {
   /** Sense amplifier leaves, and what each has latched: −1 off, 0 / 1 (the value on a), BX. */
   private readonly senses: number[];
   private senseDec: Int8Array;
+  /** Floating-gate leaves, their charge, and their pgm / ers values at the last settle (edges). */
+  private readonly fgs: number[];
+  private fgQ: Float64Array;
+  private fgPrev: Uint8Array;
 
   constructor(design: FlatDesign) {
     this.design = design;
@@ -84,6 +94,9 @@ export class SwitchSim implements Sim {
     this.lv = new Float64Array(design.netCount).fill(NaN);
     this.senses = design.leaves.flatMap((l, li) => (l.kind === 'sense' ? [li] : []));
     this.senseDec = new Int8Array(this.senses.length).fill(-1);
+    this.fgs = design.leaves.flatMap((l, li) => (l.kind === 'fgmos' ? [li] : []));
+    this.fgQ = new Float64Array(this.fgs.length);
+    this.fgPrev = new Uint8Array(this.fgs.length);
     this.behaviors = design.leaves.flatMap((l, li) => (l.kind === 'behavior' ? [li] : []));
     this.state = design.leaves.map((l) => l.def.behavior?.init?.());
     for (const p of design.root.def.ports) {
@@ -114,6 +127,19 @@ export class SwitchSim implements Sim {
     const k = this.senses.indexOf(leaf);
     return k < 0 ? -1 : this.senseDec[k];
   }
+  /** Charge on a floating-gate leaf's gate (0 erased … 1), or NaN if the leaf is not one. */
+  fgCharge(leaf: number): number {
+    const k = this.fgs.indexOf(leaf);
+    return k < 0 ? NaN : this.fgQ[k];
+  }
+  /** Set a floating gate's charge (a chapter's starting state). */
+  setFgCharge(leaf: number, q: number): void {
+    const k = this.fgs.indexOf(leaf);
+    if (k < 0) return;
+    this.fgQ[k] = Math.min(1, Math.max(0, q));
+    this.dirty = true;
+  }
+
   /**
    * Let `cycles` clock cycles of leakage pass: every net with NetDef.leak loses charge (its level
    * halves every `leak` cycles), then the circuit settles again (driven nets are restored at once).
@@ -209,7 +235,7 @@ export class SwitchSim implements Sim {
   saveState(): SimState {
     const st: SwitchState = {
       val: this.val.slice(), conducting: this.conducting.slice(), shorted: this.shorted.slice(),
-      lv: this.lv.slice(), senseDec: this.senseDec.slice(),
+      lv: this.lv.slice(), senseDec: this.senseDec.slice(), fgQ: this.fgQ.slice(), fgPrev: this.fgPrev.slice(),
       inputs: new Map([...this.inputs].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v])),
       state: this.state.map(cloneState),
       unstable: this.unstable, evaluations: this.evaluations, dirty: this.dirty,
@@ -224,6 +250,8 @@ export class SwitchSim implements Sim {
     this.shorted.set(s.shorted);
     this.lv.set(s.lv);
     this.senseDec.set(s.senseDec);
+    this.fgQ.set(s.fgQ);
+    this.fgPrev.set(s.fgPrev);
     this.inputs = new Map([...s.inputs].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v]));
     this.state = s.state.map(cloneState);
     this.unstable = s.unstable;
@@ -255,6 +283,34 @@ export class SwitchSim implements Sim {
   }
 
   settle(): void {
+    this.settleOnce();
+    // a program or erase pulse changes a threshold: settle again with it
+    for (let i = 0; i < 4 && this.fgPulses(); i++) {
+      this.dirty = true;
+      this.settleOnce();
+    }
+  }
+
+  /** Apply the rising edges of pgm / ers on the floating gates; true if a charge changed. */
+  private fgPulses(): boolean {
+    let changed = false;
+    this.fgs.forEach((li, k) => {
+      const [g, d, , , pgm, ers] = this.design.leaves[li].terminals!;
+      const p = this.val[pgm] === B1 ? 1 : 0, e = this.val[ers] === B1 ? 2 : 0, prev = this.fgPrev[k];
+      if (p && !(prev & 1) && this.val[g] === B1 && this.val[d] === B0 && this.fgQ[k] < 1) {
+        this.fgQ[k] = Math.min(1, this.fgQ[k] + FG_STEP);
+        changed = true;
+      }
+      if (e && !(prev & 2) && this.fgQ[k] > 0) {
+        this.fgQ[k] = 0;
+        changed = true;
+      }
+      this.fgPrev[k] = p | e;
+    });
+    return changed;
+  }
+
+  private settleOnce(): void {
     if (!this.dirty) return;
     this.dirty = false;
     const n = this.design.netCount;
@@ -335,13 +391,18 @@ export class SwitchSim implements Sim {
       return srcLv.length - 1;
     };
     // Conducting elements: transistors (switched by their gate) and resistors (always on).
-    const fets: { li: number; g: number; a: number; b: number; nmos: boolean; s: number }[] = [];
+    const fets: { li: number; g: number; a: number; b: number; nmos: boolean; s: number; fg?: number; vp?: number }[] = [];
     const ress: { a: number; b: number; s: number }[] = [];
     leaves.forEach((l, li) => {
       if (l.kind === 'res' || l.kind === 'dep') {
         const [a, b] = l.terminals!;
         ress.push({ a: term(a), b: term(b), s: level(l.def.strength ?? 1) });
         this.conducting[li] = 1;
+        return;
+      }
+      if (l.kind === 'fgmos') {
+        const [g, a, b, vp] = l.terminals!;
+        fets.push({ li, g, a: term(a), b: term(b), nmos: true, s: level(l.def.strength ?? 3), fg: this.fgs.indexOf(li), vp });
         return;
       }
       if (l.kind !== 'nmos' && l.kind !== 'pmos') return;
@@ -370,7 +431,13 @@ export class SwitchSim implements Sim {
       const on = new Uint8Array(fets.length), maybeOn = new Uint8Array(fets.length);
       fets.forEach((f, k) => {
         const gv = val[f.g];
-        const o = f.nmos ? gv === B1 : gv === B0, off = f.nmos ? gv === B0 : gv === B1;
+        let o = f.nmos ? gv === B1 : gv === B0, off = f.nmos ? gv === B0 : gv === B1;
+        if (f.fg !== undefined) {
+          // a floating gate: on at the pass voltage, or at the read voltage while (nearly) erased
+          const pv = val[f.vp!], low = this.fgQ[f.fg] < FG_READ;
+          o = pv === B1 || (gv === B1 && low);
+          off = pv === B0 && (gv === B0 || (gv === B1 && !low));
+        }
         this.conducting[f.li] = o ? 1 : off ? 0 : 2;
         on[k] = o ? 1 : 0;
         maybeOn[k] = off ? 0 : 1;
@@ -509,6 +576,8 @@ function decide(a: number, b: number, offset: number): number {
 
 /** Solver levels (see the header): sources, the weakest transistor, stored charge. */
 const LV_SOURCE = 6, LV_FET = 3, LV_CHARGE = 1;
+/** Charge a program pulse adds to a floating gate, and the charge above which it no longer conducts at the read voltage. */
+export const FG_STEP = 0.2, FG_READ = 0.3;
 /** A source of level ½ (the VDD/2 rail): an X as a bit. */
 const HALF = 4;
 /** The supply the levels are fractions of, in volts (for display). */
@@ -543,6 +612,6 @@ class UF {
 }
 
 interface SwitchState {
-  val: Uint8Array; conducting: Uint8Array; shorted: Uint8Array; lv: Float64Array; senseDec: Int8Array; inputs: Map<string, number | Bit[]>; state: unknown[];
+  val: Uint8Array; conducting: Uint8Array; shorted: Uint8Array; lv: Float64Array; senseDec: Int8Array; fgQ: Float64Array; fgPrev: Uint8Array; inputs: Map<string, number | Bit[]>; state: unknown[];
   unstable: boolean; evaluations: number; dirty: boolean;
 }
