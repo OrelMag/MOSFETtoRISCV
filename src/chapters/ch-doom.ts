@@ -3,6 +3,7 @@
 
 import { doomPlay } from '../widgets/doom';
 import { doomGatesScene } from '../widgets/doomgates';
+import { doomMemoryMap, doomNeeds, doomProgram } from '../widgets/doominfo';
 import { chAppendix6502 } from './ch-6502';
 import type { Chapter } from './types';
 
@@ -11,6 +12,51 @@ export const chAppendixDoom: Chapter = {
   id: 'appendix-doom', num: chAppendix6502.num + 1, appendix: 'B', title: 'Doom on our RISC-V', level: 'Software',
   blurb: 'A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.',
   steps: [
+    {
+      title: 'What a game asks of a computer',
+      body: `
+        <p>Every program so far was written for our CPUs: a few hundred instructions of assembly, a few dozen words of
+        memory. Doom (id Software, 1993; the source released in 1997) is the other kind: about 65 000 lines of C written for
+        a 386 PC, with no idea what runs it. Can our ISA run it unchanged?</p>
+        <p>The ISA is enough. Doom does its geometry in 16.16 fixed point, so integer multiply and divide are all it
+        needs: RV32IM, which the system CPU of chapters 18–20 implements. What it lacks is a computer around it:
+        megabytes of memory where we have kilobytes, a 256-colour screen, a keyboard that reports releases, and a file
+        to read the levels from. The table measures what is needed against what we had.</p>
+        <p>The rest of this appendix builds that computer twice: as a fast interpreter of our ISA, to play it, and in
+        gates, to check it.</p>`,
+      widget: () => doomNeeds(),
+    },
+    {
+      title: 'From C to our ROM',
+      body: `
+        <p>The compiler is GNU GCC with <code>-march=rv32im -mabi=ilp32 -O2</code>: no compressed instructions (our
+        decoder reads 32-bit words), no floating point, no atomics. The C library is newlib; the dozen and more functions it asks
+        of the machine (<code>_write</code>, <code>_sbrk</code>, <code>_open</code> …) are written for this one: a write
+        is stores to the console, the heap grows up from the end of the data, and the only file that opens is the WAD.</p>
+        <p>The source is <a href="https://github.com/ozkl/doomgeneric" target="_blank" rel="noopener">doomgeneric</a>, which
+        leaves four functions to the platform: draw a frame, read a key, read the time, sleep. Five small patches make
+        Doom draw into our frame buffer and read the WAD in place. Our CPUs are Harvard machines, so the linker puts
+        only code in the ROM and everything Doom reads (constants, tables, jump tables) in RAM.</p>
+        <p>The census is of the image itself: a third of the words load or store, one in eleven branches, one in eight
+        jumps or calls; multiplies and divides are under one in a hundred. The
+        innermost loop of the renderer is <code>R_DrawColumn</code>: one texel fetched, looked up in the light table and
+        stored per pixel, down the column.</p>`,
+      widget: () => doomProgram(),
+    },
+    {
+      title: 'The machine',
+      body: `
+        <p>The computer the program runs on is the system CPU with a memory map: RAM at 0, the WAD at
+        <code>0x1000_0000</code>, devices from <code>0x8000_0000</code>, the frame buffer from <code>0xC000_0000</code>.
+        The top four address bits choose; a load reads through one 4:1 multiplexer, a store's write enable goes to one
+        memory, and the WAD has none: it is read only.</p>
+        <p>Three device registers are new. <code>KEY</code> is a queue: a load returns the oldest key event and removes
+        it, so the CPU's data port gains a read strobe. <code>FLIP</code> marks a finished frame (the screen shows the
+        frame buffer as it was then). <code>WADLEN</code> tells the program how much of the WAD region is file.</p>
+        <p>The timer stays inside the core: mtime counts every clock cycle (34 for a divide), and the program reads it
+        for its 35 game tics a second at a nominal 40 MHz. A slower machine plays slower, never differently.</p>`,
+      widget: () => doomMemoryMap(),
+    },
     {
       title: 'Play',
       body: `
