@@ -200,32 +200,35 @@ export function dramCtrl(c: DramConfig): ComponentDef {
 }
 
 /** The device's state in a simulation: the reference model itself, plus the inputs sampled before the edge. */
-interface DevState { dev: DeviceModel; clk: number; pend: { cmd: number; ba: number; ra: number; ca: number; wd: number } }
+interface DevState { dev: DeviceModel; clk: number; pend: { cmd: number; ba: number; ra: number; ca: number; wd: number; dm: number } }
 
 /**
  * A DRAM device for a DramConfig: commands and write data in, read data out (rd, rv: valid; err: a
  * timing rule was broken, sticky). Simulated as DeviceModel (a behavioural leaf whose outputs change
- * only at the clock: no path from an input to an output).
+ * only at the clock: no path from an input to an output). With `mask` it has DDR's data mask (dm, a
+ * bit per byte of the word written this cycle: chapter 35's bus writes single bytes without a read).
  */
-export function dramDevice(c: DramConfig, init?: ArrayLike<number>): ComponentDef {
-  const key = `dramdev${cfgKey(c)}`;
+export function dramDevice(c: DramConfig, init?: ArrayLike<number>, mask = false): ComponentDef {
+  const key = `dramdev${mask ? 'm' : ''}${cfgKey(c)}`;
   const make = (): ComponentDef => {
     const { cb, bb, rb } = fieldWidths(c);
     const t = c.t ?? TIMING;
     return {
       id: key, name: `DRAM device (${2 ** c.k} words, ${c.banks} banks of ${2 ** rb} rows × ${c.rowWords} words)`, category: 'memory',
-      summary: `Banks of rows with a row buffer each. Commands: ACT opens a row (tRCD ${t.tRCD} before a column command), RD / WR move a 4-word burst ${t.tCAS} cycles later, PRE closes a row (tRAS ${t.tRAS} after its ACT, tRP ${t.tRP} before the next ACT), REF every ${t.tREFI} cycles (at most ${MAX_POSTPONE} late) keeps the device busy ${t.tRFC} cycles. A command that breaks a rule sets err, and its data reads X.`,
-      ports: [bus('cmd', 3, 'in'), bus('ba', bb, 'in'), bus('ra', rb, 'in'), bus('ca', cb, 'in'), bus('wd', 32, 'in'), bit('clk', 'in', 'bottom', true),
+      summary: `${mask ? 'With a data mask (dm: a bit per byte of the word written). ' : ''}Banks of rows with a row buffer each. Commands: ACT opens a row (tRCD ${t.tRCD} before a column command), RD / WR move a 4-word burst ${t.tCAS} cycles later, PRE closes a row (tRAS ${t.tRAS} after its ACT, tRP ${t.tRP} before the next ACT), REF every ${t.tREFI} cycles (at most ${MAX_POSTPONE} late) keeps the device busy ${t.tRFC} cycles. A command that breaks a rule sets err, and its data reads X.`,
+      ports: [bus('cmd', 3, 'in'), bus('ba', bb, 'in'), bus('ra', rb, 'in'), bus('ca', cb, 'in'), bus('wd', 32, 'in'), ...(mask ? [bus('dm', 4, 'in')] : []), bit('clk', 'in', 'bottom', true),
         bus('rd', 32, 'out'), bit('rv', 'out'), bit('err', 'out')],
       symbol: { kind: 'box', label: 'DRAM' },
       behavior: {
         delay: 4,
         seq: { clk: 'clk', comb: [] },
-        init: () => ({ dev: new DeviceModel(c, init), clk: 0, pend: { cmd: 0, ba: 0, ra: 0, ca: 0, wd: 0 } } satisfies DevState),
-        eval: ([cmd, ba, ra, ca, wd, clk], st) => {
+        init: () => ({ dev: new DeviceModel(c, init), clk: 0, pend: { cmd: 0, ba: 0, ra: 0, ca: 0, wd: 0, dm: 15 } } satisfies DevState),
+        eval: (ins, st) => {
           const s = st as DevState;
+          const [cmd, ba, ra, ca, wd] = ins, dm = mask ? ins[5] : 15, clk = ins[mask ? 6 : 5];
           const k = clk < 0 ? 2 : clk;
-          if (k !== 1) s.pend = { cmd: cmd < 0 ? Cmd.NOP : cmd, ba: Math.max(0, ba), ra: Math.max(0, ra), ca: Math.max(0, ca), wd };
+          // an unknown mask writes unknown bytes: as an unknown word
+          if (k !== 1) s.pend = { cmd: cmd < 0 ? Cmd.NOP : cmd, ba: Math.max(0, ba), ra: Math.max(0, ra), ca: Math.max(0, ca), wd: dm < 0 ? -1 : wd, dm: dm < 0 ? 15 : dm };
           const p = s.clk;
           s.clk = k;
           if (p === 0 && k === 1) s.dev.edge(s.pend);

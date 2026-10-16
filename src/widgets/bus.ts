@@ -4,9 +4,9 @@
 // from flash; the panel runs it and shows its console, LEDs and where it executes.
 
 import { LOAD_AT, LOAD_WORDS } from '../bus/programs';
-import { busBench } from '../lib/axi';
+import { busBench, isKeyQueue, KEY_QUEUE_DEPTH } from '../lib/axi';
 import { ramLeafState } from '../lib/bigmem';
-import { CHAPTER_COMPUTER } from '../lib/soc';
+import { CHAPTER_COMPUTER, SOC_SCREEN, SYSTEM_COMPUTER } from '../lib/soc';
 import { findNode } from '../sim/flatten';
 import { pack } from '../sim/values';
 import { h } from '../ui/dom';
@@ -143,18 +143,43 @@ export function busComputerScene(): Scene {
     inputs: { clk: 0, switches: 0 },
     hiddenInputs: ['switches'],
     autoClock: false,
-    panels: [computerPanel],
+    engine: 'cycle',
+    panels: [computerPanel(false)],
   };
 }
 
-interface CompState { console: string; retired: number; cycles: number; inRam: number; dmaCycles: number }
+/** The last step's computer: DRAM, screen and keyboard on the bus too. Both computers run on the cycle engine. */
+export function systemComputerScene(): Scene {
+  return {
+    root: SYSTEM_COMPUTER,
+    inputs: { clk: 0, switches: 0 },
+    hiddenInputs: ['switches'],
+    autoClock: false,
+    engine: 'cycle',
+    panels: [computerPanel(true)],
+  };
+}
+
+interface CompState { console: string; retired: number; cycles: number; inRam: number; dmaCycles: number; dram: { hit: number; miss: number; conflict: number; refresh: number } }
 const compStates = new WeakMap<Stage, CompState>();
 export const busComputerState = (st: Stage) => compStates.get(st);
+const compActs = new WeakMap<Stage, { type(text: string): void; run(cycles: number, until?: () => boolean): void }>();
+/** Type into the computer's keyboard, and run it (the last step's challenge). */
+export const busComputerActions = (st: Stage) => compActs.get(st);
 
-const computerPanel: ScenePanel = (stage: Stage): Widget => {
+/** An RGB332 byte as red, green, blue. */
+const rgb332 = (v: number): [number, number, number] => [Math.round(((v >> 5) & 7) * 255 / 7), Math.round(((v >> 2) & 7) * 255 / 7), Math.round((v & 3) * 255 / 3)];
+
+/** A key as the keyboard sends it (ASCII; Enter 10, Backspace 8), or null. */
+const keyCode = (e: KeyboardEvent): number | null => (e.key === 'Enter' ? 10 : e.key === 'Backspace' ? 8 : e.key.length === 1 && e.key.charCodeAt(0) < 128 ? e.key.charCodeAt(0) : null);
+
+const computerPanel = (full: boolean): ScenePanel => (stage: Stage): Widget => {
   const sim = () => stage.sim!;
-  const out = (p: string) => pack(sim().getBits(sim().design.root.ports[p]));
-  const st: CompState = { console: '', retired: 0, cycles: 0, inRam: 0, dmaCycles: 0 };
+  const root = () => sim().design.root;
+  const out = (p: string) => pack(sim().getBits(root().ports[p]));
+  const node = (path: string[]) => findNode(root(), path);
+  const port = (path: string[], p: string) => { const n = node(path); return n ? pack(sim().getBits(n.ports[p])) : 0; };
+  const st: CompState = { console: '', retired: 0, cycles: 0, inRam: 0, dmaCycles: 0, dram: { hit: 0, miss: 0, conflict: 0, refresh: 0 } };
   compStates.set(stage, st);
   const hook = {
     before: () => {
@@ -162,18 +187,34 @@ const computerPanel: ScenePanel = (stage: Stage): Widget => {
       if (out('retire') === 1) { st.retired++; if ((out('pcOut') >>> 0) >= 0x200) st.inRam++; }
       if (out('dmaBusy') === 1) st.dmaCycles++;
       if (out('consoleValid') === 1) st.console += String.fromCharCode(out('consoleData'));
+      if (full) {
+        const d = st.dram, c = ['dram', 'ctrl'];
+        if (port(c, 'hit') === 1) d.hit++;
+        else if (port(c, 'miss') === 1) d.miss++;
+        else if (port(c, 'conflict') === 1) d.conflict++;
+        if (port(c, 'cmd') === 6) d.refresh++;
+      }
     },
   };
   stage.edgeHooks.add(hook);
-  stage.historyHooks.add({ save: () => ({ ...st }), restore: (v) => Object.assign(st, v as CompState) });
+  stage.historyHooks.add({ save: () => ({ ...st, dram: { ...st.dram } }), restore: (v) => { const x = v as CompState; Object.assign(st, x, { dram: { ...x.dram } }); } });
+  // ---- the keyboard: typed keys go into its queue (the KEY_QUEUE leaf's state, through Sim.poke)
+  const kbdLeaf = () => node(['kbd'])?.leafIndex;
+  const waiting = (): number[] => { const li = kbdLeaf(), s = li === undefined ? null : sim().leafState(li); return isKeyQueue(s) ? s.q : []; };
+  const press = (code: number) => {
+    const li = kbdLeaf(), s = li === undefined ? null : sim().leafState(li);
+    if (li === undefined || !isKeyQueue(s) || s.q.length >= KEY_QUEUE_DEPTH) return;
+    sim().poke(li, { ...s, q: [...s.q, code] });
+  };
   let stop: (() => void) | null = null;
   const runBtn = h('button', { class: 'btn sm primary', title: 'Run the computer (Pause to stop)' }, 'Run');
-  runBtn.addEventListener('click', () => {
-    if (stop) { stop(); return; }
+  const run = () => {
+    if (stop) return;
     stage.checkpoint();
     runBtn.textContent = 'Pause';
     stop = frameRun(stage, () => false, () => { stop = null; runBtn.textContent = 'Run'; stage.refresh(); });
-  });
+  };
+  runBtn.addEventListener('click', () => { if (stop) stop(); else run(); });
   const step = h('button', { class: 'btn sm', title: 'Run to the next printed character, or 2 000 cycles' }, 'Run to output');
   step.addEventListener('click', () => {
     stage.checkpoint();
@@ -181,17 +222,56 @@ const computerPanel: ScenePanel = (stage: Stage): Widget => {
     stage.runCycles(2000, () => st.console.length > n);
     stage.refresh();
   });
+  compActs.set(stage, {
+    type: (text) => { for (const c of text) press(c.charCodeAt(0)); },
+    run: (cycles, until) => { stage.runCycles(cycles, until); stage.refresh(); },
+  });
   const status = h('div', { class: 'mc-status' });
   const con = h('pre', { class: 'bus-console' });
   const leds = h('div', { class: 'bus-leds' });
-  const title = h('h4', null, 'Computer on a bus', h('span', { class: 'fold-hint' }));
-  const map = h('div', { class: 'bus-map' },
-    ...[['0x0000_0000', `boot ROM (fetch only), ${0x200} bytes`], ['0x0000_0000 …', 'RAM: code above the ROM, and every load and store'], ['0x1000_0000', 'flash (read only): the program to load'],
-      ['0x4000_0000', 'DMA: source, destination, length, control'], ['0x8000_0000', 'console, LEDs, switches, timer (inside the CPU)']].map(([a, d]) => h('div', null, h('span', null, a), h('span', null, d))));
-  const el = h('div', { class: 'mem-panel cpu-panel mc-panel bus-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title,
-    h('div', { class: 'dram-ops' }, runBtn, step), status, h('div', { class: 'cpu-sec' }, 'Console'), con, h('div', { class: 'cpu-sec' }, 'LEDs'), leds, h('div', { class: 'cpu-sec' }, 'Memory map'), map);
+  const title = h('h4', null, full ? 'Everything on one bus' : 'Computer on a bus', h('span', { class: 'fold-hint' }));
+  const rows: [string, string][] = [['0x0000_0000', `boot ROM (fetch only), ${0x200} bytes`], ['0x0000_0000 …', 'RAM: code above the ROM, and every load and store'], ['0x1000_0000', 'flash (read only): the program to load'],
+    ...(full ? [['0x2000_0000', 'DRAM, 16 KB (chapter 33\'s controller)'] as [string, string]] : []),
+    ['0x4000_0000', 'DMA: source, destination, length, control'],
+    ...(full ? [['0x5000_0000', `screen: ${SOC_SCREEN} × ${SOC_SCREEN}, a byte a pixel (RGB332)`], ['0x6000_0000', 'keyboard: +0 the oldest key (taken), +4 status']] as [string, string][] : []),
+    ['0x8000_0000', 'console, LEDs, switches, timer (inside the CPU)']];
+  const map = h('div', { class: 'bus-map' }, ...rows.map(([a, d]) => h('div', null, h('span', null, a), h('span', null, d))));
+  const parts: (Node | string)[] = [title, h('div', { class: 'dram-ops' }, runBtn, step), status];
+  // ---- the full system: screen, keyboard, DRAM counters
+  let paint = () => {};
+  const extra = h('div', { class: 'mc-status' });
+  let typed: HTMLElement | null = null;
+  if (full) {
+    const canvas = h('canvas', { class: 'bus-screen', width: String(SOC_SCREEN), height: String(SOC_SCREEN), 'aria-label': 'The screen' }) as HTMLCanvasElement;
+    const ctx = canvas.getContext('2d');
+    const img = ctx?.createImageData(SOC_SCREEN, SOC_SCREEN);
+    paint = () => {
+      if (!ctx || !img) return;
+      const lanes = [0, 1, 2, 3].map((i) => ramLeafState(sim(), node(['screen', `lane${i}`]) ?? undefined));
+      for (let p = 0; p < SOC_SCREEN * SOC_SCREEN; p++) {
+        const v = lanes[p & 3]?.mem[p >> 2] ?? 0, [r, g, b] = rgb332(v);
+        img.data.set([r, g, b, 255], 4 * p);
+      }
+      ctx.putImageData(img, 0, 0);
+    };
+    const input = h('input', { class: 'bus-type', type: 'text', placeholder: 'Type here (Enter too)', 'aria-label': 'Type on the computer\'s keyboard', spellcheck: 'false', autocomplete: 'off' }) as HTMLInputElement;
+    input.addEventListener('keydown', (e) => {
+      const c = keyCode(e);
+      if (c === null || e.ctrlKey || e.metaKey || e.altKey) return;
+      e.preventDefault();
+      press(c);
+      if (!stop) run();
+      update();
+    });
+    const hello = h('button', { class: 'btn sm', title: 'Type h, e, l, l, o and Enter, and run' }, 'Type hello⏎');
+    hello.addEventListener('click', () => { for (const c of 'hello\n') press(c.charCodeAt(0)); if (!stop) run(); update(); });
+    typed = h('span', { class: 'sub' });
+    parts.push(h('div', { class: 'cpu-sec' }, 'Screen'), canvas, h('div', { class: 'cpu-sec' }, 'Keyboard'), h('div', { class: 'bus-keys' }, input, hello), typed, extra);
+  }
+  parts.push(h('div', { class: 'cpu-sec' }, 'Console'), con, h('div', { class: 'cpu-sec' }, 'LEDs'), leds, h('div', { class: 'cpu-sec' }, 'Memory map'), map);
+  const el = h('div', { class: 'mem-panel cpu-panel mc-panel bus-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, ...parts);
   title.addEventListener('click', () => el.classList.toggle('collapsed'));
-  const update = () => {
+  function update() {
     const pc = out('pcOut') >>> 0;
     status.replaceChildren(h('span', null, 'PC ', h('b', null, hex(pc)), pc < 0x200 ? ' (boot ROM)' : ' (RAM)'),
       h('span', null, `${st.cycles} cycles · ${st.retired} instructions (${st.inRam} from RAM)`),
@@ -199,7 +279,14 @@ const computerPanel: ScenePanel = (stage: Stage): Widget => {
     con.textContent = st.console || '(nothing yet)';
     const v = out('leds');
     leds.replaceChildren(...Array.from({ length: 8 }, (_, i) => h('span', { class: `bus-led${(v >> (7 - i)) & 1 ? ' on' : ''}` })));
-  };
+    if (full) {
+      const d = st.dram;
+      extra.replaceChildren(h('span', null, 'DRAM ', h('b', null, `${d.hit} row hits`), ` · ${d.miss} closed banks · ${d.conflict} row conflicts · ${d.refresh} refreshes`));
+      const q = waiting();
+      typed!.textContent = q.length ? `Waiting in the keyboard: ${q.map((c) => (c === 10 ? '⏎' : String.fromCharCode(c))).join('')}` : 'No key waiting.';
+      paint();
+    }
+  }
   update();
-  return { el, update, destroy: () => { stop?.(); stage.edgeHooks.delete(hook); compStates.delete(stage); } };
+  return { el, update, destroy: () => { stop?.(); stage.edgeHooks.delete(hook); compStates.delete(stage); compActs.delete(stage); } };
 };
