@@ -570,18 +570,28 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
 - A configurable-depth pipeline lab (3 / 5 / 7 stages): large; the adder swap, predictor, cache and multicycle
   comparisons already show the trade-offs
 
-### Phase 14 — Before the transistor: relays, vacuum tubes, punch cards ⏳
+### Phase 14 — Before the transistor: relays, vacuum tubes, punch cards 🚧
 Why the MOSFET won is best felt, not told: build the same adder from relays and from tubes and *see* the machine
 it becomes. Mockup first for the 3D view, the technology setting and the new act. In the journey, a prologue act
 before the MOSFET chapter; in the campaign, an act of its own (or a side branch) ending in a machine programmed
 with punch cards.
 
 **Relay and tube bricks** (switch level, like the MOSFET)
-- ⏳ Relay: a coil driving changeover contacts (normally open / normally closed), contacts conducting both ways (a
-  pass switch), milliseconds per operation, a latching (self-holding) relay as memory
+- ✅ Relay: a coil driving changeover contacts (normally open / normally closed), contacts conducting both ways (a
+  pass switch), milliseconds per operation, a latching (self-holding) relay as memory. prim 'relay' in SwitchSim
+  (relay steps, an open line reads 0 through the next coil), lib/relays.ts (NOT, NAND, XOR, a full adder with the
+  carry through contacts on two rails, an n-bit adder settling in one step, latch, buzzer), prologue chapter P1
 - ⏳ Triode: the grid controls the plate current, one way only, with a plate resistor as the pull-up (ratioed
   logic, which `switchsim.ts` already models with its resistor strength); tube inverter and NOR, cathode follower,
   the Eccles–Jordan flip-flop; microseconds per operation, watts per tube
+- 🚧 Each device up close in 3D, live, on lumped physics (relay ✅: src/phys/relay.ts, src/gl renderer, P1 step 1; triode next) (as chapter 1's cross-section opens the MOSFET; chapter 25's
+  renderer, cylinders and glow added). Relay: coil current rising with L / R (and the flyback spike at turn-off), pull
+  ∝ (N·I)² / gap² against the return spring, the armature a mass on a spring, so pull-in time, pull-in / drop-out
+  hysteresis and contact bounce come out of the model. Triode: a heated cathode (Richardson emission, seconds of
+  warm-up), the space-charge law I ≈ K·(Vg + Vp/μ)^1.5, electrons drawn flowing and turned back by a negative grid,
+  plate heat as glow. Constants from real datasheets (ENIAC's 6SN7), labelled illustrative; the relay brick's delay
+  and the triode's transfer curve are taken from these models (tests hold them equal), so the picture and the
+  simulation cannot drift apart
 - ⏳ Gates and blocks in each technology, measured like the CMOS ones (relays / tubes, delay, power): first the
   NAND-mapped versions (the brick principle), then native designs that show what each technology is good at
   (changeover contacts make a relay XOR or a mux nearly free; tube logic prefers NOR), so the comparison is honest

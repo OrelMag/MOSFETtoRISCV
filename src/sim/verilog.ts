@@ -114,6 +114,10 @@ export function structuralVerilog(def: ComponentDef): string | null {
       lines.push(`  // ${inst.name}: floating-gate transistor ${conn('d') || '(nc)'} / ${conn('s') || '(nc)'}, gate ${conn('g') || '(nc)'} (its threshold is stored charge: not Verilog)`);
       continue;
     }
+    if (c.prim === 'relay') {
+      lines.push(`  // ${inst.name}: relay, coil ${conn(c.ports[0].name) || '(nc)'} / ${conn(c.ports[1].name) || '(nc)'}, contacts ${c.ports.slice(2).map((p) => conn(p.name) || '(nc)').join(' ')} (electromechanical: not Verilog)`);
+      continue;
+    }
     if (c.prim === 'sense') {
       lines.push(`  // ${inst.name}: sense amplifier on ${c.ports.slice(1).map((p) => conn(p.name) || '(unconnected)').join(' / ')} (compares charge levels: analog, not Verilog)`);
       continue;

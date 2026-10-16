@@ -5,6 +5,7 @@ import './styles/vivid.css';
 import './styles/codeedit.css';
 import './styles/mosfet.css';
 import './styles/m6502.css';
+import './styles/prologue.css';
 import './styles/doom.css';
 import { startApp } from './ui/app';
 

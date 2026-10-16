@@ -13,9 +13,12 @@ export function homePage(): Page {
 
   const cards = chapters.flatMap((c, i) => {
     const p = progress(c.id, c.steps.length);
-    // the appendix after the journey, behind a divider
-    const divider = c.appendix && !chapters[i - 1]?.appendix ? [h('div', { class: 'cards-divider' }, 'Appendix')] : [];
-    return [...divider, h('a', { class: `card${c.appendix ? ' appendix' : ''}`, href: `#/c/${c.id}/0` },
+    // the prologue (before the transistor) and the appendix (after the journey), behind dividers
+    const prev = chapters[i - 1];
+    const divider = c.appendix && !prev?.appendix ? [h('div', { class: 'cards-divider' }, 'Appendix')]
+      : c.prologue && !prev?.prologue ? [h('div', { class: 'cards-divider prologue' }, 'Prologue: before the transistor')]
+      : !c.prologue && !c.appendix && prev?.prologue ? [h('div', { class: 'cards-divider journey' }, 'The journey')] : [];
+    return [...divider, h('a', { class: `card${c.appendix ? ' appendix' : c.prologue ? ' prologue' : ''}`, href: `#/c/${c.id}/0` },
       p >= 1 ? h('span', { class: 'done-badge', title: 'All steps visited' }, icon('check', 16)) : null,
       h('span', { class: 'num' }, `${chapterNo(c)} · ${c.level}`),
       h('h3', null, c.title),

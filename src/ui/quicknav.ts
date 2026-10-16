@@ -61,7 +61,7 @@ export function toggleChapterMenu(anchor: HTMLElement): void {
   const cur = here();
   const rows = chapters.map((c) => {
     const isCur = c.id === cur?.chapter;
-    return h('a', { class: `qn-row${c.appendix ? ' appendix' : ''}`, href: `#/c/${c.id}/0`, role: 'menuitem', 'aria-current': isCur ? 'page' : null },
+    return h('a', { class: `qn-row${c.appendix ? ' appendix' : c.prologue ? ' prologue' : ''}`, href: `#/c/${c.id}/0`, role: 'menuitem', 'aria-current': isCur ? 'page' : null },
       h('span', { class: 'qn-num' }, chapterNo(c)),
       h('span', { class: 'qn-main' }, h('b', null, c.title), h('small', null, `${c.level} · ${c.steps.length} steps`)),
       progressBar(seen(c.id, c.steps.length)));
@@ -71,9 +71,14 @@ export function toggleChapterMenu(anchor: HTMLElement): void {
     closeChapterMenu();
     openQuickNav();
   });
-  // the appendix after the journey, under its own heading
-  const firstA = chapters.findIndex((c) => c.appendix);
-  const listed = firstA < 0 ? rows : [...rows.slice(0, firstA), h('div', { class: 'qn-group', role: 'presentation' }, 'Appendix'), ...rows.slice(firstA)];
+  // the prologue and the appendix under their own headings
+  const group = (cls: string, text: string) => h('div', { class: `qn-group${cls}`, role: 'presentation' }, text);
+  const listed = rows.flatMap((r, i) => {
+    const c = chapters[i], prev = chapters[i - 1];
+    return c.appendix && !prev?.appendix ? [group('', 'Appendix'), r]
+      : c.prologue && !prev?.prologue ? [group(' prologue', 'Prologue'), r]
+      : !c.prologue && !c.appendix && prev?.prologue ? [group(' journey', 'The journey'), r] : [r];
+  });
   const el = h('div', { class: 'ch-menu', role: 'menu', 'aria-label': 'Chapters' }, search, h('div', { class: 'qn-list' }, listed));
   const r = anchor.getBoundingClientRect();
   el.style.top = `${Math.round(r.bottom + 6)}px`;

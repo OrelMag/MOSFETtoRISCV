@@ -21,10 +21,14 @@ import { chDram } from './ch-dram';
 import { chMemCtrl } from './ch-memctrl';
 import { chFlash } from './ch-flash';
 import { chBus } from './ch-bus';
+import { chRelays } from './ch-relays';
 import type { Chapter, FutureChapter } from './types';
 
 export const chapters: Chapter[] = [
-  chMap, chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
+  chMap,
+  // the prologue: before the transistor, labelled P1 …
+  chRelays,
+  chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
   chAlu, chRegfile, chIsa, chSingleCycle, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chMulticycle, chFloat, chMulticore, chSilicon, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
   chDram, chMemCtrl, chFlash, chBus,
   // the appendix: after the journey, lettered

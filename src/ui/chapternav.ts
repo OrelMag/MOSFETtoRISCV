@@ -6,6 +6,8 @@ export interface NavChapter {
   num: number;
   /** An appendix chapter's letter. */
   appendix?: string;
+  /** A prologue chapter's label (P1 …). */
+  prologue?: string;
   title: string;
   blurb: string;
   level: string;
@@ -48,7 +50,7 @@ export function navEntries(chs: readonly NavChapter[]): NavEntry[] {
   if (out) return out;
   out = [];
   const entry = (c: NavChapter, step: number, title: string, text: string): NavEntry =>
-    ({ chapter: c.id, step, num: c.num, no: c.appendix ?? String(c.num).padStart(2, '0'), level: c.level, chTitle: c.title, title, text, href: `#/c/${c.id}/${Math.max(0, step)}`, lt: title.toLowerCase(), lx: text.toLowerCase() });
+    ({ chapter: c.id, step, num: c.num, no: c.prologue ?? c.appendix ?? String(c.num).padStart(2, '0'), level: c.level, chTitle: c.title, title, text, href: `#/c/${c.id}/${Math.max(0, step)}`, lt: title.toLowerCase(), lx: text.toLowerCase() });
   for (const c of chs) {
     out.push(entry(c, -1, c.title, c.blurb));
     c.steps.forEach((s, i) => out!.push(entry(c, i, s.title, plainText(s.body))));
@@ -64,7 +66,7 @@ const wordStart = (s: string, w: string) => {
 
 /** How well one query word matches an entry (0: not at all). */
 function wordScore(e: NavEntry, w: string): number {
-  if (/^\d+$/.test(w) && e.num === Number(w) && !/^[a-z]$/i.test(e.no)) return e.step < 0 ? 100 : 30;
+  if (/^\d+$/.test(w) && e.num === Number(w) && !/^[a-z]\d*$/i.test(e.no)) return e.step < 0 ? 100 : 30;
   if (/^[a-z]$/.test(w) && e.no.toLowerCase() === w) return e.step < 0 ? 100 : 30;
   const ct = e.chTitle.toLowerCase();
   if (e.lt.startsWith(w)) return 60;

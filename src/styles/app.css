@@ -541,6 +541,13 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .sym-dep { stroke: var(--dep-load); stroke-width: 0.34; }
 .conducting .sym-channel { stroke: var(--channel-on); stroke-dasharray: none; stroke-width: 0.3; filter: drop-shadow(0 0 0.3px var(--channel-on)); }
 .maybe .sym-channel { stroke: var(--wx); }
+/* relays: the blade shown at the contact it touches; the coil lit while current flows (it pulls at the next relay step) */
+.relay-blade { stroke: var(--sym-stroke); stroke-width: 0.24; stroke-linecap: round; fill: none; }
+.relay-op, .conducting .relay-rel { display: none; }
+.conducting .relay-op { display: inline; stroke: var(--channel-on); }
+.maybe .relay-op, .maybe .relay-rel { display: inline; stroke: var(--wx); stroke-dasharray: 0.3 0.25; }
+.relay-link { stroke-dasharray: 0.35 0.3; opacity: 0.7; }
+.energized .relay-coil { fill: var(--channel-on); fill-opacity: 0.45; }
 .sym-bus { stroke: var(--plumb); stroke-width: 0.42; stroke-linecap: round; }
 .sym-bus-stub, .sym-tap { stroke: var(--plumb); stroke-width: 0.18; }
 .sym-tiny { font-size: 0.75px; fill: var(--muted); font-family: var(--font-mono); }
