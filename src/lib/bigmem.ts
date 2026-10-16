@@ -1,4 +1,4 @@
-// Large memories: RAM and ROM of 2^7 … 2^16 words. At run time each is one behavioural leaf
+// Large memories: RAM and ROM of 2^7 … 2^21 words (the sandbox offers up to 2^16). At run time each is one behavioural leaf
 // (a typed array: a 64K × 32 RAM costs one evaluation per access, not millions of gates); its
 // structure is still the real circuit, built lazily level by level, so the box stays transparent:
 //
@@ -23,13 +23,14 @@
 import { symbolGeom } from '../sim/geometry';
 import { B0, B1, BX, type Behavior, type ComponentDef, type InstanceDef, type NetDef } from '../sim/types';
 import { decoder, muxTree } from './combinational';
-import { define, splitter } from './define';
+import { define, merger, splitter } from './define';
+import { AND } from './gates';
 import { ram } from './memory';
 
 /** The gate-level bank at the bottom of a large RAM: ram(6, w). */
 export const BANK_K = 6;
-/** Largest memory: 2^16 words. */
-export const BIG_MAX_K = 16;
+/** Largest memory: 2^21 words (8 MiB of bytes: Appendix B's Doom computer). */
+export const BIG_MAX_K = 21;
 /** At most 2^4 banks per level. */
 const FAN_K = 4;
 
@@ -366,6 +367,128 @@ export function ramLeafState(sim: { leafState(li: number): unknown }, node: { le
   return isRamState(s) ? s : null;
 }
 
+// ---- a byte-banked large RAM ------------------------------------------------------------------
+
+/** A banked RAM's state: a RamState of whole words, plus the byte enables sampled with the rest. */
+export interface BankedRamState extends RamState {
+  /** be as last sampled while clk was low (-1: X). */
+  be: number;
+}
+
+const byteMask = (be: number) => ((be & 1 ? 0xff : 0) | (be & 2 ? 0xff00 : 0) | (be & 4 ? 0xff0000 : 0) | (be & 8 ? 0xff000000 : 0)) >>> 0;
+
+function bankedWrite(s: BankedRamState, sure: boolean): void {
+  if (s.we === 0 || s.be === 0) return;
+  s.writes++;
+  if (sure && s.we === 1 && s.a >= 0 && s.be > 0) {
+    if (s.d < 0) { s.x[s.a] = 1; return; }
+    const m = byteMask(s.be);
+    s.mem[s.a] = ((s.mem[s.a] & ~m) | (s.d & m)) >>> 0;
+    // a word with unknown bytes stays unknown unless all four were written
+    if (s.be === 15) s.x[s.a] = 0;
+    return;
+  }
+  // it may or may not have written: those words become unknown (one flag per word)
+  const N = s.mem.length;
+  const lo = s.a < 0 ? 0 : s.a, hi = s.a < 0 ? N : s.a + 1;
+  for (let i = lo; i < hi; i++) s.x[i] = 1;
+}
+
+/** Byte lane i of a banked RAM's state, as that bank's own RAM state (its we as the AND gate gives it). */
+function laneState(s: BankedRamState, i: number): RamState {
+  const N = s.mem.length, mem = new Uint32Array(N);
+  for (let j = 0; j < N; j++) mem[j] = (s.mem[j] >>> (8 * i)) & 0xff;
+  const we = s.we === 0 ? 0 : s.be < 0 ? 2 : s.be & (1 << i) ? s.we : 0;
+  return { mem, x: s.x.slice(), clk: s.clk, we, a: s.a, d: s.d < 0 ? -1 : (s.d >>> (8 * i)) & 0xff, writes: s.writes };
+}
+
+const bankedCache = new Map<number, ComponentDef>();
+
+/**
+ * 2^k words of 32 bits as four byte banks (bigRam(k, 8) each, an AND of we and the lane's byte
+ * enable for its write): bankedMemory's circuit at the large-memory sizes. At run time one
+ * behavioural leaf (one 32-bit word per entry); opened, its banks are seeded with their bytes.
+ * Ports: addr (a byte address: word = addr[k+1:2]), wdata, be, we, clk → rdata.
+ */
+export function bankedBigRam(k: number): ComponentDef {
+  const hit = bankedCache.get(k);
+  if (hit) return hit;
+  if (!Number.isInteger(k) || k <= BANK_K || k > BIG_MAX_K) throw new Error(`bankedBigRam: k must be ${BANK_K + 1}–${BIG_MAX_K}`);
+  const N = 2 ** k;
+  const behavior: Behavior = {
+    delay: 3 * k,
+    init: (mode) => ({ ...freshState(N, 32, mode), be: 0 }) as BankedRamState,
+    seq: { clk: 'clk', comb: ['addr'] },
+    eval: ([addr, d, be, we, clk], st) => {
+      const s = st as BankedRamState;
+      const a = addr < 0 ? -1 : Math.floor(addr / 4) % N;
+      const c = clk < 0 ? 2 : clk;
+      if (c !== 1) {
+        s.we = we < 0 ? 2 : we;
+        s.a = a;
+        s.d = d;
+        s.be = be;
+      }
+      const p = s.clk;
+      s.clk = c;
+      if (p !== 1 && c !== 0 && p !== c) bankedWrite(s, p === 0 && c === 1);
+      return [a < 0 || s.x[a] ? -1 : s.mem[a]];
+    },
+    inside: (st, seed) => {
+      for (let i = 0; i < 4; i++) seed.state(`b${i}`, laneState(st as BankedRamState, i));
+    },
+  };
+  const d = define({
+    id: `bram${N}`, name: `${kWords(N)}×32 memory (byte banks)`, category: 'memory',
+    summary: `${N} words of 32 bits as four byte-wide banks of ${kWords(N)} bytes. Each bank has its own write enable (we and its byte enable), so a store writes one, two or four bytes; reads return the whole word.`,
+    ports: [
+      { name: 'addr', width: 32, dir: 'in' }, { name: 'wdata', width: 32, dir: 'in' }, { name: 'be', width: 4, dir: 'in' },
+      { name: 'we', width: 1, dir: 'in' }, { name: 'clk', width: 1, dir: 'in', side: 'bottom', clock: true }, { name: 'rdata', width: 32, dir: 'out' },
+    ],
+    symbol: { kind: 'box', label: `RAM ${kWords(N)}×32` },
+    behavior,
+    preferBehavior: true,
+    netlist: () => bankedLevel(k),
+    notes: 'Simulated as a lookup table (one evaluation per access). Its structure is four byte banks, each a large RAM of banks down to flip-flops.',
+  });
+  bankedCache.set(k, d);
+  return d;
+}
+
+function bankedLevel(k: number): ReturnType<NonNullable<ComponentDef['netlist']>> {
+  const R = bigRam(k, 8), rg = symbolGeom(R);
+  const pitch = rg.h + 6, bankY = (i: number) => 4 + pitch * i;
+  const nets: NetDef[] = [
+    { name: 'addr', ends: ['addr', 'sa.in'] },
+    { name: 'index', ends: ['sa.o1', ...[0, 1, 2, 3].map((i) => `b${i}.addr`)], tags: [0, 1, 2, 3].map((i) => `b${i}.addr`) },
+    { name: 'wdata', ends: ['wdata', 'lanes.in'] },
+    { name: 'be', ends: ['be', 'sbe.in'] },
+    { name: 'we', ends: ['we', ...[0, 1, 2, 3].map((i) => `w${i}.a`)], tags: [0, 1, 2, 3].map((i) => `w${i}.a`) },
+    { name: 'clk', ends: ['clk', ...[0, 1, 2, 3].map((i) => `b${i}.clk`)], tags: [0, 1, 2, 3].map((i) => `b${i}.clk`) },
+    { name: 'rdata', ends: ['mr.out', 'rdata'] },
+  ];
+  const instances: InstanceDef[] = [
+    { name: 'sa', def: splitter([2, k, 30 - k]), at: [4, -6] },
+    { name: 'lanes', def: splitter([8, 8, 8, 8], pitch), at: [4, bankY(0) + rg.ports.din.pos[1] - pitch / 2] },
+    { name: 'sbe', def: splitter([1, 1, 1, 1]), at: [4, bankY(4) + 2] },
+    { name: 'mr', def: merger([8, 8, 8, 8], pitch), at: [24 + rg.w + 6, bankY(0) + rg.ports.dout.pos[1] - pitch / 2] },
+  ];
+  for (let i = 0; i < 4; i++) {
+    instances.push({ name: `w${i}`, def: AND, at: [14, bankY(i) + rg.ports.we.pos[1] - 1] });
+    instances.push({ name: `b${i}`, def: R, at: [24, bankY(i)] });
+    nets.push(
+      { name: `lane${i}`, ends: [`lanes.o${i}`, `b${i}.din`] },
+      { name: `be${i}`, ends: [`sbe.o${i}`, `w${i}.b`], tags: true },
+      { name: `we${i}`, ends: [`w${i}.y`, `b${i}.we`] },
+      { name: `out${i}`, ends: [`b${i}.dout`, `mr.i${i}`] },
+    );
+  }
+  return {
+    pins: { addr: [0, -3], wdata: [0, bankY(1) + 2], be: [0, bankY(4) + 4], we: [0, bankY(4) + 8], clk: [0, bankY(4) + 11], rdata: [24 + rg.w + 12, bankY(2)] },
+    instances, nets,
+  };
+}
+
 // ---- ROM levels ---------------------------------------------------------------------------
 
 /** The largest ROM built as one mux tree of constants; larger ones are banks of these. */
@@ -400,7 +523,8 @@ export function romLevels(k: number, w: number, rv: boolean, content: Uint32Arra
     preferBehavior: true,
     spec: ([a]) => [content[idx(a)]],
     netlist: () => romLevel(k, w, rv, content, id, leaf),
-    hdl: { synth: romSynth(k, w, rv, content) },
+    // built when read (vexport): a case table of every word is large for a big ROM
+    hdl: { get synth() { return romSynth(k, w, rv, content); } },
     notes: `Simulated as a lookup table. Its structure is the real circuit: ${n} ROMs of ${2 ** ks} words, each a tree of `
       + `two-input multiplexers whose inputs are tied to the program's bits, and a ${n}:1 tree choosing between them.`,
   };
