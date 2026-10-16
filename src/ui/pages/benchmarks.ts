@@ -78,7 +78,7 @@ export class BenchmarksPage implements Page {
     const best = (f: (c: BenchCpu) => number) => cpus.reduce((a, c) => (f(c) < f(a) ? c : a));
     const link = (c: BenchCpu) => { const ch = chapterOf(c.id); return ch ? h('a', { href: `#/c/${ch}` }, c.name) : c.name; };
     const tile = (big: string, ...small: (Node | string)[]) => h('div', { class: 'hw-tile' }, h('b', null, big), h('span', null, ...small));
-    const fast = best((c) => meanOf(c, 'time')), cpi = best((c) => meanOf(c, 'cpi')), tc = best((c) => meanOf(c, 'time') * c.nands);
+    const fast = best((c) => meanOf(c, 'time')), cpi = best((c) => meanOf(c, 'cpi')), tc = best((c) => (c.offChip ? Infinity : meanOf(c, 'time') * c.nands));
     const en = best((c) => meanOf(c, 'energy'));
     return h('div', { class: 'hw-tiles bm-tiles' },
       tile(`${fmt(meanOf(fast, 'time'), 1)} µs`, 'fastest: ', link(fast)),
@@ -120,7 +120,7 @@ export class BenchmarksPage implements Page {
       const hit = s('circle', { class: 'bm-hit', cx, cy, r: 14 });
       hit.addEventListener('pointerenter', () => this.showTip(c, cx / W, cy / H));
       hit.addEventListener('pointerleave', () => { this.tip.hidden = true; });
-      svg.append(s('circle', { class: `bm-dot ${familyOf(c.id)}`, cx, cy, r: 6 }), hit);
+      svg.append(s('circle', { class: `bm-dot ${familyOf(c.id)}${c.offChip ? ' off' : ''}`, cx, cy, r: 6 }), hit);
     }
     for (const c of fr) svg.append(s('text', { class: 'bm-lab', x: X(xOf(c)) + 10, y: Y(meanOf(c, 'time')) - 9 }, c.id));
     return svg;
@@ -128,7 +128,7 @@ export class BenchmarksPage implements Page {
 
   private showTip(c: BenchCpu, fx: number, fy: number): void {
     this.tip.replaceChildren(h('b', null, c.name),
-      h('span', null, `${fmt(meanOf(c, 'time'), 1)} µs · ${fmt(c.nands)} NAND · CPI ${fmt(meanOf(c, 'cpi'), 2)} · ${mhz(c.period)} MHz · ${fmt(meanOf(c, 'energy'))} nJ`));
+      h('span', null, `${fmt(meanOf(c, 'time'), 1)} µs · ${fmt(c.nands)} NAND${c.offChip ? ' + a DRAM chip' : ''} · CPI ${fmt(meanOf(c, 'cpi'), 2)} · ${mhz(c.period)} MHz · ${fmt(meanOf(c, 'energy'))} nJ`));
     this.tip.hidden = false;
     this.tip.style.left = `${(fx * 100).toFixed(1)}%`;
     this.tip.style.top = `${(fy * 100).toFixed(1)}%`;
@@ -197,7 +197,7 @@ export class BenchmarksPage implements Page {
       });
       out.push(h('tr', null,
         h('td', { class: 'hw-name' }, chev, h('i', { class: `bm-fam ${familyOf(c.id)}` }), ch ? h('a', { href: `#/c/${ch}`, title: c.id }, c.name) : h('span', { title: c.id }, c.name)),
-        h('td', null, fmt(c.nands)),
+        h('td', c.offChip ? { title: 'main memory is a DRAM chip outside the CPU: not counted' } : null, fmt(c.nands), c.offChip ? h('span', { class: 'hw-mhz' }, ' + DRAM') : ''),
         h('td', null, String(c.period), h('span', { class: 'hw-mhz' }, ` ${fmt(mhz(c.period))}`)),
         ...BENCHMARKS.map((b) => cell(b.id, this.value(c, b.id))),
         cell('mean', this.value(c, 'mean'))));

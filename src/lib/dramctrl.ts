@@ -241,3 +241,40 @@ export function dramDevice(c: DramConfig, init?: ArrayLike<number>): ComponentDe
 export const deviceOf = deviceIn;
 
 export type { CtrlModel };
+
+/**
+ * Controller and device on one board (chapter 33's scenes): a request in (req held until done, wr,
+ * la), the burst's words out (rd while dv). Written words are recognizable: {seed, line, word}.
+ */
+export function dramSystem(c: DramConfig): ComponentDef {
+  const id = `dramsys${cfgKey(c)}${c.t && c.t.tREFI !== TIMING.tREFI ? `_r${c.t.tREFI}` : ''}`;
+  return memo(id, () => {
+    const { cb, bb, rb } = fieldWidths(c), la = c.k - 2;
+    const b = new Builder(10, 16);
+    b.pins('req', 'wr', 'la', 'seed', 'clk');
+    const ctrl = b.op(dramCtrl(c), ['req', 'wr', 'la', 'clk'], 'controller', 'ctrl');
+    b.next();
+    const pad = 32 - 8 - 2 - la;
+    const wd = b.op1(merger([2, la, pad, 8]), [`${ctrl}.word`, 'la', b.op1(constWord(pad, 0), []), 'seed'], 'write data');
+    b.next();
+    const dev = b.op(dramDevice(c), [`${ctrl}.cmd`, `${ctrl}.ba`, `${ctrl}.ra`, `${ctrl}.ca`, wd, 'clk'], 'DRAM device', 'dev');
+    b.next();
+    for (const p of ['cmd', 'dv', 'wv', 'word', 'done', 'hit', 'miss', 'conflict']) b.wire(`${ctrl}.${p}`, p);
+    b.wire(`${dev}.rd`, 'rd');
+    b.wire(`${dev}.err`, 'err');
+    const R = b.right;
+    void cb; void bb; void rb;
+    const outs = ['rd', 'dv', 'wv', 'word', 'done', 'cmd', 'hit', 'miss', 'conflict', 'err'];
+    return define({
+      id, name: `DRAM controller and device (${c.banks} banks, ${c.policy} page)`, category: 'memory',
+      summary: 'The controller of this chapter driving a DRAM device: raise req with a line address (and wr), clock until done; a read\'s words come out on rd while dv is 1. A write stores {seed, line, word} in each word.',
+      ports: [bit('req', 'in'), bit('wr', 'in'), bus('la', la, 'in'), bus('seed', 8, 'in'), bit('clk', 'in', 'bottom', true),
+        bus('rd', 32, 'out'), bit('dv', 'out'), bit('wv', 'out'), bus('word', 2, 'out'), bit('done', 'out'), bus('cmd', 3, 'out'), bit('hit', 'out'), bit('miss', 'out'), bit('conflict', 'out'), bit('err', 'out')],
+      symbol: { kind: 'box', label: 'DRAM SYSTEM' },
+      netlist: () => ({
+        pins: { req: [0, 4], wr: [0, 8], la: [0, 12], seed: [0, 16], clk: [0, 22], ...Object.fromEntries(outs.map((o, i) => [o, [R, 4 + 3 * i] as [number, number]])) },
+        instances: b.instances, nets: b.nets(),
+      }),
+    });
+  });
+}

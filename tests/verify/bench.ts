@@ -71,6 +71,8 @@ export interface CpuMeasure {
   nands: number;
   /** Clock period in NAND delays (static timing). */
   period: number;
+  /** Main memory is a DRAM device (a separate chip, not counted). */
+  offChip?: boolean;
 }
 
 /** NANDs without the instruction ROM (its size follows the program), and the static-timing period. */
@@ -89,7 +91,8 @@ export function measureCpu(def: ComponentDef): CpuMeasure {
   if (period === undefined) throw new Error(`${def.id}: no register-to-register path`);
   const r = rom(def, false);
   if (!r) throw new Error(`${def.id}: no program ROM found`);
-  return { nands: stats(def).nands - r, period };
+  const dram = (d: ComponentDef): boolean => d.id.startsWith('dramdev') || !!d.netlist?.().instances.some((i) => dram(i.def));
+  return { nands: stats(def).nands - r, period, ...(dram(def) ? { offChip: true } : {}) };
 }
 
 /** Every benchmark cfg can run, at once on one gate-level build (one per lane). */

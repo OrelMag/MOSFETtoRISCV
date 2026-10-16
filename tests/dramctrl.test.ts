@@ -5,6 +5,10 @@ import { dramCtrl } from '../src/lib/dramctrl';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { pack } from '../src/sim/values';
+import { RESULTS } from '../src/bench/summary';
+import { price, workloads } from '../src/dram/workload';
+import { schedule, twoStreams } from '../src/dram/schedule';
+import { COPY } from '../src/chapters/ch-memctrl';
 
 const lcg = (seed: number) => () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) >>> 8);
 
@@ -97,5 +101,37 @@ describe('the gate-level controller is the model, cycle for cycle', () => {
     }
     expect(dev.err ? dev.why : '').toBe('');
     expect(ctrl.stats.refreshes).toBeGreaterThan(4);
+  });
+});
+
+describe('workloads priced by the models (chapter 33)', () => {
+  const cfg = (w: { dmemWords: number }, policy: 'open' | 'closed', hash = false): DramConfig => ({ k: Math.log2(w.dmemWords), banks: 2, rowWords: 16, policy, hash });
+  const gate = (id: string, bench: string) => RESULTS.cpus.find((c) => c.id === id)!.runs.find((r) => r.bench === bench)!.cycles;
+
+  it('equal the gate-level CPUs to the cycle (src/bench/results.json)', () => {
+    for (const w of workloads().filter((x) => x.id !== 'copy')) {
+      const open = price(w, cfg(w, 'open')), closed = price(w, cfg(w, 'closed'));
+      expect(open.cycles, `${w.id} open page`).toBe(gate('sc-wb2-dram', w.id));
+      expect(closed.cycles, `${w.id} closed page`).toBe(gate('sc-wb2-dramc', w.id));
+      expect(w.instructions + open.fixed, `${w.id} fixed latency`).toBe(gate('sc-wb2', w.id));
+    }
+  });
+
+  it('give the copy the numbers chapter 33 quotes', () => {
+    const w = workloads().find((x) => x.id === 'copy')!;
+    const plain = price(w, cfg(w, 'open')), hash = price(w, cfg(w, 'open', true));
+    expect(Math.round((100 * plain.hits) / w.reqs.length)).toBe(COPY.plain);
+    expect(Math.round((100 * hash.hits) / w.reqs.length)).toBe(COPY.hash);
+    expect(Math.round(100 * (1 - hash.cycles / plain.cycles))).toBe(COPY.faster);
+    expect(price(w, cfg(w, 'closed')).cycles).toBeGreaterThan(plain.cycles);
+  });
+
+  it('FR-FCFS batches row hits; with a queue of one it is FCFS', () => {
+    const q = twoStreams();
+    const end = (p: 'fcfs' | 'frfcfs', d: number) => schedule(q, p, d, 2).at(-1)!.end;
+    expect(end('frfcfs', 1)).toBe(end('fcfs', 1));
+    expect(end('frfcfs', 4)).toBeLessThan(end('fcfs', 4));
+    expect(end('frfcfs', 8)).toBeLessThanOrEqual(end('frfcfs', 4));
+    expect(schedule(q, 'fcfs', 4, 2).filter((s) => s.outcome === 'hit').length).toBe(0);
   });
 });

@@ -2,6 +2,7 @@
 // register file, data memory, and a live check against the golden model (the ISS runs in
 // lock-step and every register is compared after each clock edge).
 
+import type { DramConfig } from '../dram/controller';
 import { GateSim } from '../sim/gatesim';
 import { energyFj, fmtEnergy, fmtPower, POWER_NOTE, PowerMeter, powerW } from '../sim/power';
 import type { Sim } from '../sim/sim';
@@ -51,6 +52,8 @@ export interface CpuSceneOptions {
   m?: boolean;
   /** Single-cycle CPU with a data cache in front of a slow main memory (adds cache statistics): see CpuOptions.dcache. */
   dcache?: boolean | 'wb' | 'wb2';
+  /** With dcache 'wb' / 'wb2': main memory is chapter 33's DRAM controller and device. */
+  dram?: DramConfig;
   /** Fetch through an instruction cache (adds fetch-miss stalls). */
   icache?: boolean;
   /** The multicycle CPU with a hardwired or microprogrammed controller (adds the controller panel). */
@@ -68,8 +71,8 @@ export function cpuScene(opts: CpuSceneOptions): Scene {
     root: opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder })
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
-      : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m })
-        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu }),
+      : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram })
+        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
     panels: [cpuPanel({ ...opts, asm }), ...(opts.pipeline ? [pipeDiagram(asm)] : []), ...(opts.system ? [ioPanel] : []), ...(opts.multicycle ? [controllerPanel(opts.multicycle, true)] : []), ...(opts.timing ? [timingPanel] : [])],
