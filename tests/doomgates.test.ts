@@ -9,6 +9,7 @@ import { parseImage } from '../src/doom/image';
 import { DoomDevices, FastDoom } from '../src/doom/machine';
 import { doomDesign, loadGates, memoryDiff, runWindow } from '../src/doom/gates';
 import { GateSim } from '../src/sim/gatesim';
+import { DualSim } from '../src/sim/dualsim';
 
 const root = new URL('../', import.meta.url);
 const wadPath = new URL('.cache/doom/freedoom1.wad', root);
@@ -31,6 +32,17 @@ describe('the gate window', () => {
     const r = runWindow(sim, cpu, 2000);
     expect(r.mismatch).toBeUndefined();
     expect(r.retired).toBeGreaterThan(1000);
+    expect(memoryDiff(sim, cpu)).toBeNull();
+  }, 600_000);
+
+  it('on the cycle engine too (DualSim), handed over during the demo', async () => {
+    const cpu = machine();
+    while (cpu.dev.flips < 380) { cpu.run(1_000_000); await breathe(); }
+    const sim = new DualSim(doomDesign(cpu));
+    loadGates(sim, cpu);
+    expect(sim.engine).toBe('cycle');
+    const r = runWindow(sim, cpu, 3000);
+    expect(r.mismatch).toBeUndefined();
     expect(memoryDiff(sim, cpu)).toBeNull();
   }, 600_000);
 });

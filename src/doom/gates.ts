@@ -15,6 +15,8 @@ import { findNode, flatten, hintBits, type FlatDesign, type HierNode } from '../
 import type { Sim } from '../sim/sim';
 
 import { B0, B1 } from '../sim/types';
+import { DualSim } from '../sim/dualsim';
+import { GateSim } from '../sim/gatesim';
 import { FB_BASE, type FastDoom } from './machine';
 
 /** The Doom computer for this interpreter's program and WAD, flattened (memoized per interpreter). */
@@ -25,10 +27,8 @@ export function doomDesign(cpu: FastDoom): FlatDesign {
   return d;
 }
 
-type Forcing = Pick<Sim, 'design'> & { forceNets(nets: readonly number[], bits: ArrayLike<number>): void };
-
 /** Force an n-bit register (register(n): ff<j>.ff.{master,slave}.sr.{q,q_n}) under `node` to v. */
-function forceReg(sim: Forcing, node: HierNode, path: string, n: number, v: number): void {
+function forceReg(sim: GateSim, node: HierNode, path: string, n: number, v: number): void {
   for (let j = 0; j < n; j++) {
     const b = Math.floor((v >>> 0) / 2 ** j) % 2 ? B1 : B0, nb = b === B1 ? B0 : B1;
     for (const latch of ['master', 'slave']) {
@@ -47,10 +47,14 @@ function leaf(design: FlatDesign, path: string): number {
 }
 
 /**
- * Put the interpreter's state into the gate-level computer (a GateSim of doomDesign(cpu), clk
- * low): after this and a settle, the next rising edge executes the interpreter's next instruction.
+ * Put the interpreter's state into the gate-level computer (a simulation of doomDesign(cpu), clk
+ * low): after this, the next rising edge executes the interpreter's next instruction. A DualSim is
+ * loaded through its GateSim, then handed to the cycle engine (many times faster) if it can take it.
  */
-export function loadGates(sim: Sim & Forcing, cpu: FastDoom): void {
+export function loadGates(target: GateSim | DualSim, cpu: FastDoom): void {
+  const dual = target instanceof DualSim ? target : null;
+  if (dual) dual.preferFast = false;
+  const sim = dual ? dual.gate : (target as GateSim);
   const d = sim.design, core = findNode(d.root, ['cpu'])!;
   sim.reset('zero');
   sim.setInput('clk', 0);
@@ -74,6 +78,11 @@ export function loadGates(sim: Sim & Forcing, cpu: FastDoom): void {
   sim.poke(leaf(d, 'fb'), { mem: fbWords, x: new Uint8Array(fbWords.length), clk: 0, we: 0, a: 0, d: 0, be: 0, writes: 0 } satisfies BankedRamState);
   sim.poke(leaf(d, 'dev.keys'), { q: cpu.dev.keys.slice(), clk: 0, pop: 0 } satisfies KeyQueueState);
   sim.settle();
+  if (dual) {
+    dual.preferFast = true;
+    dual.prepare();
+    dual.settle();
+  }
 }
 
 /** The gate-level computer's frame buffer and palette (128 KiB), as bytes. */

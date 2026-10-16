@@ -18,7 +18,7 @@ import { merger, splitter } from './define';
 import { AND, MUX2, NOT } from './gates';
 import { andN } from './combinational';
 import { register } from './sequential';
-import { systemCore } from './system';
+import { chunk, columns, systemCore } from './system';
 import { TIE0 } from './transistors';
 
 const bit = (name: string, dir: 'in' | 'out', side?: 'bottom') => ({ name, dir, width: 1, ...(side ? { side } : {}) });
@@ -54,20 +54,15 @@ export const KEY_QUEUE: ComponentDef = {
 
 /** The devices beside the core's timer (doom/machine.ts REG): console, LEDs, switches (0), WADLEN, KEY, FLIP. */
 export function doomDevices(wadLength: number): ComponentDef {
-  const ins: InstanceDef[] = [], nets: NetDef[] = [];
-  const add = (name: string, def: ComponentDef, at: [number, number], label?: string) => ins.push({ name, def, at, label });
+  const nets: NetDef[] = [];
   const D = decoder(3, true), M = muxTree(3, 32), R8 = register(8);
-  add('sa', splitter([2, 3, 27]), [4, 0]);
-  add('wdec', D, [16, 0], 'write');
-  add('rdec', D, [16, symbolGeom(D).h + 6], 'read');
-  add('sw', splitter([8, 24]), [4, 2 * symbolGeom(D).h + 14]);
-  add('rLed', R8, [30, 2 * symbolGeom(D).h + 14], 'LEDs');
-  add('keys', KEY_QUEUE, [30, 0]);
-  add('kLen', constWord(32, wadLength), [30, 12], 'WADLEN');
-  add('zLed', merger([8, 24]), [44, 2 * symbolGeom(D).h + 14]);
-  add('z24', constWord(24, 0), [44, 2 * symbolGeom(D).h + 24]);
-  add('z32', constWord(32, 0), [44, 12]);
-  add('rsel', M, [58, 0]);
+  const ins = columns([
+    [['sa', splitter([2, 3, 27])], ['sw', splitter([8, 24])]],
+    [['wdec', D, 'write'], ['rdec', D, 'read']],
+    [['rLed', R8, 'LEDs'], ['keys', KEY_QUEUE], ['kLen', constWord(32, wadLength), 'WADLEN']],
+    [['zLed', merger([8, 24])], ['z24', constWord(24, 0)], ['z32', constWord(32, 0)]],
+    [['rsel', M]],
+  ], 14, 0, 16, 6);
   const net = (name: string | undefined, ...ends: string[]) => nets.push({ name, ends, tags: true });
   net('addr', 'addr', 'sa.in');
   net('reg', 'sa.o1', 'wdec.a', 'rdec.a', 'rsel.s');
@@ -87,7 +82,10 @@ export function doomDevices(wadLength: number): ComponentDef {
   net(undefined, 'z32.y', 'rsel.d0', 'rsel.d2', 'rsel.d4', 'rsel.d5', 'rsel.d7');
   nets.push({ name: 'rdata', ends: ['rsel.y', 'rdata'] });
   net('clk', 'clk', 'rLed.clk', 'keys.clk');
-  const right = 58 + symbolGeom(M).w + 6;
+  const rs = ins.find((i) => i.name === 'rsel')!, rg = symbolGeom(M);
+  const right = rs.at![0] + rg.w + 8;
+  const outY = rs.at![1] + rg.h + 6;
+  const bottom = Math.max(...ins.map((i) => i.at![1] + symbolGeom(i.def).h));
   return {
     id: `doomdev_${wadLength}`, name: 'Doom devices', category: 'cpu',
     summary: 'The I/O registers beside the core\'s timer (register = addr[4:2]): 0 console (a store prints its byte), 1 LEDs, 2 switches (0), 3 WADLEN, 6 KEY (a load takes one key event: the read strobe pops the queue at the edge), 7 FLIP (a store says the frame is done).',
@@ -95,8 +93,8 @@ export function doomDevices(wadLength: number): ComponentDef {
       bus('rdata', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out'), bit('flip', 'out')],
     symbol: { kind: 'box', label: 'DEVICES' },
     netlist: () => ({
-      pins: { addr: [0, 2], wdata: [0, 2 * symbolGeom(D).h + 16], we: [0, 6], re: [0, symbolGeom(D).h + 8], clk: [0, 2 * symbolGeom(D).h + 28],
-        rdata: [right, 4], consoleData: [right, 12], consoleValid: [right, 16], leds: [right, 20], flip: [right, 24] },
+      pins: { addr: [0, 2], wdata: [0, 6], we: [0, 10], re: [0, 14], clk: [0, bottom + 4],
+        rdata: [right, rs.at![1] + rg.ports.y.pos[1]], consoleData: [right, outY], consoleValid: [right, outY + 4], leds: [right, outY + 8], flip: [right, outY + 12] },
       instances: ins, nets,
     }),
   };
@@ -167,25 +165,14 @@ export function doomComputer(text: Uint32Array, wad: Uint32Array, wadLength: num
 function build(IM: ComponentDef, WAD: ComponentDef, DEV: ComponentDef): ComponentDef {
   const CORE = systemCore({ m: true }), RAM = bankedBigRam(21), FB = bankedBigRam(15), RS = muxTree(2, 32);
   const g = (d: ComponentDef) => symbolGeom(d);
-  const ins: InstanceDef[] = [];
-  const add = (name: string, def: ComponentDef, at: [number, number], label?: string) => ins.push({ name, def, at, label });
-  const cg = g(CORE);
-  add('imem', IM, [0, 6], 'program');
-  add('cpu', CORE, [g(IM).w + 16, 0], 'core');
-  const xM = g(IM).w + 16 + cg.w + 24;
-  let y = 0;
-  for (const [name, def, label] of [['ram', RAM, 'RAM 8 MiB'], ['wad', WAD, 'WAD'], ['fb', FB, 'frame buffer'], ['dev', DEV, 'devices']] as [string, ComponentDef, string][]) {
-    add(name, def, [xM, y], label);
-    y += g(def).h + 8;
-  }
-  add('rsel', RS, [xM + Math.max(g(RAM).w, g(WAD).w, g(FB).w, g(DEV).w) + 16, 2], 'read');
-  // region decode under the core: addr[31:28] → RAM / WAD / devices / frame buffer
-  const yG = cg.h + 10, x0 = g(IM).w + 16;
-  const gate = (name: string, def: ComponentDef, i: number) => add(name, def, [x0 + 14 * (i % 6), yG + 12 * Math.floor(i / 6)]);
-  [['ra', splitter([28, 1, 1, 1, 1])], ['n31', NOT], ['n30', NOT], ['n29', NOT], ['isWad', andN(4)], ['nwad', NOT],
-    ['isRam', AND], ['isDev', AND], ['isFb', AND], ['ramWe', AND], ['fbWe', AND], ['devWe', AND],
-    ['devRe', AND], ['s0', MUX2], ['sel', merger([1, 1])], ['irq0', TIE0]]
-    .forEach(([n, d], i) => gate(n as string, d as ComponentDef, i));
+  // region decode: addr[31:28] → RAM / WAD / devices / frame buffer, write enables, read select
+  const glue: [string, ComponentDef, string?][] = [['ra', splitter([28, 1, 1, 1, 1])], ['n31', NOT], ['n30', NOT], ['n29', NOT], ['isWad', andN(4)], ['nwad', NOT],
+    ['isRam', AND], ['isDev', AND], ['isFb', AND], ['ramWe', AND], ['fbWe', AND], ['devWe', AND], ['devRe', AND], ['s0', MUX2], ['sel', merger([1, 1])]];
+  const ins = columns([
+    [['irq0', TIE0], ['imem', IM, 'program']], [['cpu', CORE, 'core']],
+    [['ram', RAM, 'RAM 8 MiB'], ['wad', WAD, 'WAD'], ['fb', FB, 'frame buffer'], ['dev', DEV, 'devices']],
+    [['rsel', RS, 'read']], ...chunk(glue, 4),
+  ], 14, 0, 24, 10);
   const nets: NetDef[] = [];
   const net = (name: string | undefined, ...ends: string[]) => nets.push({ name, ends, tags: true });
   net('clk', 'clk', 'cpu.clk', 'ram.clk', 'fb.clk', 'dev.clk');
@@ -226,7 +213,7 @@ function build(IM: ComponentDef, WAD: ComponentDef, DEV: ComponentDef): Componen
   net('consoleValid', 'dev.consoleValid', 'consoleValid');
   net('leds', 'dev.leds', 'leds');
   net('flip', 'dev.flip', 'flip');
-  const right = xM + Math.max(g(RAM).w, g(WAD).w, g(FB).w, g(DEV).w) + 16 + g(RS).w + 10;
+  const right = Math.max(...ins.map((i) => i.at![0] + g(i.def).w)) + 24;
   const pins: Record<string, [number, number]> = { clk: [0, 2] };
   ['pcOut', 'retire', 'consoleData', 'consoleValid', 'leds', 'flip'].forEach((n, i) => (pins[n] = [right, 4 + 4 * i]));
   return {

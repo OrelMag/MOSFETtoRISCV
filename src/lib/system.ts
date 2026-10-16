@@ -35,7 +35,7 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
  * bottom port (mux select, clock) gets 4 units below it, so the net label hanging from that port
  * clears the next symbol and the name drawn above it.
  */
-function columns(cols: [string, ComponentDef, string?][][], x0: number, y0: number, gapX = 10, gapY = 3): InstanceDef[] {
+export function columns(cols: [string, ComponentDef, string?][][], x0: number, y0: number, gapX = 10, gapY = 3): InstanceDef[] {
   const out: InstanceDef[] = [];
   let x = x0;
   for (const col of cols) {
@@ -136,7 +136,7 @@ export function sysDecode(m = false): ComponentDef {
 }
 export const SYS_DECODE = sysDecode();
 
-function chunk<T>(xs: T[], n: number): T[][] {
+export function chunk<T>(xs: T[], n: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n));
   return out;
