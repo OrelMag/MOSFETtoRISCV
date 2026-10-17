@@ -11,6 +11,7 @@ import { canLookInside, lookInside } from './inside';
 import type { ChipDoc, PinDoc } from './model';
 import { packageDialog } from './package';
 import { registerPropsSection } from './props';
+import { techTable } from '../view/techtable';
 
 const btn = (label: string, title: string, f: () => void, ic?: string) =>
   h('button', { class: 'btn sm', title, onclick: f }, ic ? icon(ic, 14) : null, label);
@@ -93,6 +94,27 @@ registerPropsSection({
       out.append(h('p', { class: 'sb-verdict err' }, diag ? diag.msg.replace(/^not an edge-triggered flip-flop: /, 'Not confirmed: ') : 'Not confirmed yet (the chip has other problems).'));
     }
     return out;
+  },
+});
+
+// The chip priced in relays and tubes (Phase 14c), measured when opened: a large chip's period needs a flattening.
+let techOpen = false;
+registerPropsSection({
+  id: 'chip-tech', order: 15.5,
+  render(ed) {
+    const def = ed.compiled?.def;
+    if (!nothingSelected(ed) || !def) return null;
+    const det = h('details', { class: 'sb-tech' }, h('summary', null, 'In relays and tubes'));
+    const fill = () => det.append(techTable(def));
+    if (techOpen) {
+      det.open = true;
+      fill();
+    }
+    det.addEventListener('toggle', () => {
+      techOpen = det.open;
+      if (det.open && det.childElementCount === 1) fill();
+    });
+    return h('section', { class: 'sb-sec-props' }, det);
   },
 });
 

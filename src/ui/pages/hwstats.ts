@@ -3,6 +3,7 @@
 // build ships the rows as hwstats.json; without it (the dev server) they are computed here.
 
 import { type HwRow, hwStatsLive } from '../../lib/hwstats';
+import { RELAY_MASS, RELAY_VOLUME, TECH, TECH_NOTE, TUBE_MASS, TUBE_VOLUME, type TechId, fmtMass, fmtRate, fmtTime, fmtVolume, fmtWatts } from '../../lib/tech';
 import { PS_NOTE, PS_PER_NAND } from '../../sim/timing';
 import type { Category } from '../../sim/types';
 import { CATEGORY_LABEL } from '../../view/inspector';
@@ -11,17 +12,35 @@ import { benchTabs } from '../benchtabs';
 import { h } from '../dom';
 import type { Page } from './chapter';
 
-type Key = 'name' | 'cat' | 'transistors' | 'nands' | 'depth' | 'period' | 'levels' | 'parts';
-const COLS: { k: Key; label: string; sub?: string }[] = [
-  { k: 'name', label: 'Component' },
-  { k: 'cat', label: 'Category' },
-  { k: 'transistors', label: 'Transistors' },
-  { k: 'nands', label: 'NAND gates', sub: 'log scale' },
-  { k: 'depth', label: 'Depth', sub: 'gate delays' },
-  { k: 'period', label: 'Clock period', sub: 'NAND delays · MHz' },
-  { k: 'levels', label: 'Levels', sub: 'boxes deep' },
-  { k: 'parts', label: 'Boxes inside', sub: 'all levels' },
-];
+type Key = 'name' | 'cat' | 'transistors' | 'nands' | 'depth' | 'period' | 'levels' | 'parts' | 'devices' | 'watts' | 'mass';
+interface Col { k: Key; label: string; sub?: string }
+/** The columns in CMOS, and in relays or tubes: devices, the same steps as time, power and mass instead of the boxes. */
+function columns(t: TechId): Col[] {
+  if (t === 'cmos') {
+    return [
+      { k: 'name', label: 'Component' },
+      { k: 'cat', label: 'Category' },
+      { k: 'transistors', label: 'Transistors' },
+      { k: 'nands', label: 'NAND gates', sub: 'log scale' },
+      { k: 'depth', label: 'Depth', sub: 'gate delays' },
+      { k: 'period', label: 'Clock period', sub: 'NAND delays · MHz' },
+      { k: 'levels', label: 'Levels', sub: 'boxes deep' },
+      { k: 'parts', label: 'Boxes inside', sub: 'all levels' },
+    ];
+  }
+  const step = TECH[t].stepName;
+  return [
+    { k: 'name', label: 'Component' },
+    { k: 'cat', label: 'Category' },
+    { k: 'devices', label: t === 'relay' ? 'Relays' : 'Tubes', sub: t === 'relay' ? 'with fan-out' : 'with followers' },
+    { k: 'nands', label: 'NAND gates', sub: 'log scale' },
+    { k: 'depth', label: 'Depth', sub: `${step}s · time` },
+    { k: 'period', label: 'Clock period', sub: `${step}s · rate` },
+    { k: 'watts', label: 'Power', sub: 'average' },
+    { k: 'mass', label: 'Mass', sub: 'volume' },
+  ];
+}
+const TECH_LABEL: Record<TechId, string> = { cmos: 'CMOS', relay: 'Relays', tube: 'Tubes' };
 const ORDER: Category[] = ['transistor', 'cell', 'gate', 'arithmetic', 'routing', 'sequential', 'memory', 'cpu'];
 
 /** A family's sizes on one row: the largest value of each column (ranges are drawn from members). */
@@ -45,6 +64,9 @@ export class HwStatsPage implements Page {
   private group = true;
   private sort: Key = 'nands';
   private dir = -1;
+  private tech: TechId = 'cmos';
+  private techBtns = h('div', { class: 'hw-tech', role: 'group', 'aria-label': 'Technology' });
+  private techNote = h('p', { class: 'hw-note hw-tech-note' });
   private open = new Set<string>();
   private alive = true;
   private tiles = h('div', { class: 'hw-tiles' });
@@ -70,11 +92,13 @@ export class HwStatsPage implements Page {
         '(transistors, NAND gates), how slow its combinational logic is (gate delays on the worst path) and, for a clocked part, ',
         'the clock period its slowest register-to-register path needs. Click a name to open it on the workbench.'),
       this.tiles,
-      h('div', { class: 'hw-controls' }, search, this.chips,
+      h('div', { class: 'hw-controls' }, search, this.techBtns, this.chips,
         h('div', { class: 'hw-switches' }, check('Group sizes', true, (v) => { this.group = v; }), check('Show wiring parts', false, (v) => { this.wiring = v; }))),
       this.count, this.status,
       h('div', { class: 'hw-table-wrap' }, h('table', { class: 'hw-table' }, h('thead', null, this.head), this.body)),
-      h('p', { class: 'hw-note' }, `${PS_NOTE} Depth is given for combinational parts, the period for clocked ones; switch-level parts (transistor circuits, SRAM cells) have neither.`)));
+      h('p', { class: 'hw-note' }, `${PS_NOTE} Depth is given for combinational parts, the period for clocked ones; switch-level parts (transistor circuits, SRAM cells) have neither.`),
+      this.techNote));
+    this.renderTech();
     this.renderHead();
     loaded ??= fetch('hwstats.json').then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((j: { rows: HwRow[] }) => j.rows)
@@ -93,6 +117,38 @@ export class HwStatsPage implements Page {
 
   destroy(): void {
     this.alive = false;
+  }
+
+  /** A row's value in a column, in the chosen technology (null: a dash). */
+  private get(r: HwRow, k: Key): number | string | null {
+    const t = this.tech;
+    const cell = t === 'cmos' ? null : r[t];
+    if (k === 'devices') return cell?.n ?? null;
+    if (k === 'watts') return cell?.watts ?? null;
+    if (k === 'mass') return cell ? cell.n * (t === 'relay' ? RELAY_MASS : TUBE_MASS) : null;
+    // a native relay or tube part has no NAND steps; a NAND part cannot be priced in another native technology
+    if ((k === 'depth' || k === 'period') && t !== 'cmos' && (!cell || cell.native)) return null;
+    return r[k];
+  }
+
+  private renderTech(): void {
+    this.techBtns.replaceChildren(...(['cmos', 'relay', 'tube'] as TechId[]).map((t) => {
+      const b = h('button', { class: `hw-chip${this.tech === t ? ' on' : ''}`, 'aria-pressed': String(this.tech === t),
+        title: t === 'cmos' ? 'Transistors, NAND delays at an illustrative 25 ps' : `Every NAND as ${TECH[t].brick}: priced in ${TECH[t].name.toLowerCase()}` }, TECH_LABEL[t]);
+      b.addEventListener('click', () => {
+        if (this.tech === t) return;
+        const cols = columns(t).map((c) => c.k);
+        if (!cols.includes(this.sort)) {
+          this.sort = this.sort === 'transistors' ? 'devices' : this.sort === 'devices' ? 'transistors' : 'nands';
+        }
+        this.tech = t;
+        this.renderTech();
+        this.renderHead();
+        this.render();
+      });
+      return b;
+    }));
+    this.techNote.textContent = this.tech === 'cmos' ? '' : `Priced in ${TECH[this.tech].name.toLowerCase()}: ${TECH_NOTE} Native relay and tube parts count their own devices and have no NAND steps.`;
   }
 
   private renderTiles(): void {
@@ -126,7 +182,7 @@ export class HwStatsPage implements Page {
   }
 
   private renderHead(): void {
-    this.head.replaceChildren(...COLS.map((c) => {
+    this.head.replaceChildren(...columns(this.tech).map((c) => {
       const th = h('th', { scope: 'col', 'aria-sort': this.sort === c.k ? (this.dir > 0 ? 'ascending' : 'descending') : null },
         h('button', null, c.label, this.sort === c.k ? h('span', { class: 'hw-arrow' }, this.dir > 0 ? ' ▲' : ' ▼') : null, c.sub ? h('small', null, c.sub) : null));
       th.addEventListener('click', () => {
@@ -159,8 +215,8 @@ export class HwStatsPage implements Page {
         }
         ms.sort((a, b) => a.nands - b.nands);
         const values = {} as Group['values'];
-        for (const c of COLS) {
-          const v = ms.map((m) => m[c.k]).filter((x): x is number => typeof x === 'number');
+        for (const c of columns(this.tech)) {
+          const v = ms.map((m) => this.get(m, c.k)).filter((x): x is number => typeof x === 'number');
           values[c.k] = v.length ? Math.max(...v) : null;
         }
         values.name = ms[0].family!.name;
@@ -168,7 +224,7 @@ export class HwStatsPage implements Page {
         items.push({ family: ms[0].family!, cat: ms[0].cat, members: ms, values });
       }
     }
-    const val = (x: Item, k: Key) => (isGroup(x) ? x.values[k] : x[k]);
+    const val = (x: Item, k: Key) => (isGroup(x) ? x.values[k] ?? null : this.get(x, k));
     items.sort((a, b) => {
       const x = val(a, this.sort), y = val(b, this.sort);
       // Missing values (a dash) sort last either way.
@@ -191,34 +247,56 @@ export class HwStatsPage implements Page {
         this.render();
       });
       const range = (k: Key) => {
-        const v = it.members.map((m) => m[k]).filter((x): x is number => typeof x === 'number');
+        const v = it.members.map((m) => this.get(m, k)).filter((x): x is number => typeof x === 'number');
         if (!v.length) return '—';
         const lo = Math.min(...v), hi = Math.max(...v);
-        return lo === hi ? num(lo) : `${num(lo)}–${num(hi)}`;
+        const f = (x: number) => this.fmt(k, x);
+        return lo === hi ? f(lo) : `${f(lo)}–${f(hi)}`;
       };
       out.push(h('tr', { class: 'hw-fam' },
         h('td', { class: 'hw-name' }, chev, it.family.name, h('span', { class: 'hw-tag' }, `${it.members.length} sizes`)),
         h('td', { class: 'hw-cat' }, dot(it.cat), CATEGORY_LABEL[it.cat]),
-        h('td', null, range('transistors')), h('td', { class: 'hw-nands' }, bar(it.values.nands as number, max), range('nands')),
-        h('td', null, range('depth')), h('td', null, range('period')), h('td', null, range('levels')), h('td', null, range('parts'))));
+        ...columns(this.tech).slice(2).map((c) => (c.k === 'nands'
+          ? h('td', { class: 'hw-nands' }, bar(it.values.nands as number, max), range('nands')) : h('td', null, range(c.k))))));
       if (open) for (const m of it.members) out.push(this.row(m, max, true));
     }
     this.body.replaceChildren(...out);
     this.count.textContent = `${rows.length.toLocaleString('en-US')} components shown${this.group ? `, ${items.length.toLocaleString('en-US')} rows` : ''}`;
   }
 
+  /** A family row's range end, formatted for its column. */
+  private fmt(k: Key, x: number): string {
+    if (this.tech === 'cmos' || (k !== 'watts' && k !== 'mass')) return num(x);
+    return k === 'watts' ? fmtWatts(x) : fmtMass(x);
+  }
+
   private row(r: HwRow, max: number, member = false): HTMLElement {
     const name = r.route ? h('a', { href: r.route }, r.name) : r.name;
+    const t = this.tech;
+    const cell = t === 'cmos' ? null : r[t];
+    const steps = (n: number | null, rate: boolean): (Node | string)[] => {
+      if (n === null || this.get(r, rate ? 'period' : 'depth') === null) return ['—'];
+      const s = n * TECH[t].step;
+      return [num(n), h('span', { class: 'hw-mhz' }, ` ${fmtTime(s)}${rate ? ` · ${fmtRate(s)}` : ''}`)];
+    };
+    const tail = t === 'cmos'
+      ? [h('td', null, num(r.transistors)), h('td', { class: 'hw-nands' }, bar(r.nands, max), num(r.nands)),
+        h('td', null, r.switchLevel ? h('span', { class: 'hw-na' }, 'switch level') : num(r.depth)),
+        h('td', null, r.period === null ? '—' : num(r.period), r.period === null ? null : h('span', { class: 'hw-mhz' }, ` ${mhz(r.period).toLocaleString('en-US')}`)),
+        h('td', null, num(r.levels)), h('td', null, num(r.parts))]
+      : [h('td', null, cell ? num(cell.n) : h('span', { class: 'hw-na' }, r.switchLevel ? 'transistors' : '—'),
+          cell?.native ? h('span', { class: 'hw-tag' }, 'native') : null),
+        h('td', { class: 'hw-nands' }, bar(r.nands, max), num(r.nands)),
+        h('td', null, ...steps(r.depth, false)),
+        h('td', null, ...steps(r.period, true)),
+        h('td', null, cell ? fmtWatts(cell.watts) : '—'),
+        h('td', null, cell ? fmtMass(cell.n * (t === 'relay' ? RELAY_MASS : TUBE_MASS)) : '—',
+          cell ? h('span', { class: 'hw-mhz' }, ` ${fmtVolume(cell.n * (t === 'relay' ? RELAY_VOLUME : TUBE_VOLUME))}`) : null)];
     return h('tr', { class: member ? 'hw-member' : null },
       h('td', { class: 'hw-name' }, member ? null : h('span', { class: 'hw-chev-space' }), name,
         r.cpu ? h('span', { class: 'hw-tag' }, 'chapter CPU') : h('code', null, r.id)),
       h('td', { class: 'hw-cat' }, dot(r.cat), CATEGORY_LABEL[r.cat]),
-      h('td', null, num(r.transistors)),
-      h('td', { class: 'hw-nands' }, bar(r.nands, max), num(r.nands)),
-      h('td', null, r.switchLevel ? h('span', { class: 'hw-na' }, 'switch level') : num(r.depth)),
-      h('td', null, r.period === null ? '—' : num(r.period), r.period === null ? null : h('span', { class: 'hw-mhz' }, ` ${mhz(r.period).toLocaleString('en-US')}`)),
-      h('td', null, num(r.levels)),
-      h('td', null, num(r.parts)));
+      ...tail);
   }
 }
 

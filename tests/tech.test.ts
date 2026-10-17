@@ -9,7 +9,7 @@ import { RELAY_FA, RELAY_NAND, relayAdder } from '../src/lib/relays';
 import { register } from '../src/lib/sequential';
 import {
   FOLLOWER_POWER, PLATE_FANOUT, RELAY_MASS, RELAY_POWER, RELAY_VOLUME, TECH, TUBE_BRICK_POWER, TUBE_MASS, TUBE_VOLUME,
-  cabinets, fmtTime, partKind, price, relayExtra,
+  cabinets, fmtTime, partKind, price, relayExtra, withoutParts,
 } from '../src/lib/tech';
 import { TUBE_FA, TUBE_NAND } from '../src/lib/tubes';
 import { NAND } from '../src/lib/transistors';
@@ -18,7 +18,7 @@ import { gateLevels, nandBrickPower, sectionPower } from '../src/phys/triode';
 import { flatten } from '../src/sim/flatten';
 import { stats } from '../src/sim/stats';
 import { fanHistogram, fanSum } from '../src/sim/techcount';
-import type { ComponentDef } from '../src/sim/types';
+import { type ComponentDef, netlistOf } from '../src/sim/types';
 
 /** The reference: flatten everything and count the NAND inputs on each net. */
 function flatReads(def: ComponentDef): Map<number, number> {
@@ -91,6 +91,15 @@ describe('pricing', () => {
     expect(t.triodes).toBe(n + t.fanout);
     expect(t.diodes).toBe(2 * n);
     expect(cabinets(r)).toBe(Math.ceil(r.devices / 800));
+  });
+
+  it('a CPU without its program ROM: the ROM's NANDs gone, nothing else', () => {
+    const d = singleCycleCpu([0x00000013]);
+    const imem = netlistOf(d)!.instances.find((i) => i.name === 'imem')!.def;
+    const w = withoutParts(d, ['imem']);
+    expect(stats(w).nands).toBe(stats(d).nands - stats(imem).nands);
+    expect(withoutParts(d, ['imem'])).toBe(w);
+    expect(price(w, 'relay', null)!.devices).toBeLessThan(price(d, 'relay', null)!.devices);
   });
 
   it('native parts are priced in their own technology only', () => {

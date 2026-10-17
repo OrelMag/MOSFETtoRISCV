@@ -16,7 +16,7 @@ import { RELAY_COIL_POWER, RELAY_RACK, RELAY_STEP_MS, Z3 } from '../phys/relay';
 import { fanSum } from '../sim/techcount';
 import { stats } from '../sim/stats';
 import { PS_PER_NAND } from '../sim/timing';
-import type { ComponentDef } from '../sim/types';
+import { type ComponentDef, netlistOf } from '../sim/types';
 
 export type TechId = 'cmos' | 'relay' | 'tube';
 export const TECHS: readonly TechId[] = ['cmos', 'relay', 'tube'];
@@ -132,6 +132,34 @@ export function price(def: ComponentDef, tech: TechId, steps: number | null): Pr
   const tubes = Math.ceil(triodes / 2) + s.nands;
   const power = s.nands * TUBE_BRICK_POWER + fanout * FOLLOWER_POWER;
   return withEnergy({ ...base, devices: tubes, fanout, triodes, diodes, power, volume: tubes * TUBE_VOLUME, mass: tubes * TUBE_MASS });
+}
+
+const without = new WeakMap<ComponentDef, Map<string, ComponentDef>>();
+
+/**
+ * The design without some of its top-level parts (a CPU's program ROM: in relays or tubes the program comes off
+ * cards or tape), for counting. Their nets lose those ends; nothing else changes. Memoized per design and names.
+ */
+export function withoutParts(def: ComponentDef, names: readonly string[]): ComponentDef {
+  const key = [...names].sort().join(',');
+  let m = without.get(def);
+  if (!m) without.set(def, (m = new Map()));
+  const hit = m.get(key);
+  if (hit) return hit;
+  const nl = netlistOf(def);
+  if (!nl) return def;
+  const drop = new Set(names);
+  const keep = (end: string) => !drop.has(end.split('.')[0]) || !end.includes('.');
+  const d: ComponentDef = {
+    ...def, id: `${def.id}~no-${key}`, preferBehavior: false, behavior: undefined,
+    netlist: () => ({
+      ...nl,
+      instances: nl.instances.filter((i) => !drop.has(i.name)),
+      nets: nl.nets.map((n) => ({ ...n, ends: n.ends.filter(keep), via: undefined, tags: undefined })).filter((n) => n.ends.length),
+    }),
+  };
+  m.set(key, d);
+  return d;
 }
 
 /** Every technology the design can be priced in. */

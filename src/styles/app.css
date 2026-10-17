@@ -454,6 +454,18 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .ports.used a:hover { text-decoration: underline; }
 .ports.used small { color: var(--muted); font-size: 11.5px; }
 .insp-used .btn { margin-top: 6px; }
+/* The technology table (view/techtable.ts): CMOS, relays and tubes side by side. */
+.tech-box { margin-top: 8px; }
+.tech-scroll { overflow-x: auto; }
+.tech-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tech-table th, .tech-table td { padding: 4px 6px; border-top: 1px solid var(--border); text-align: left; vertical-align: top; }
+.tech-table thead th { border-top: 0; font-weight: 700; color: var(--text); white-space: nowrap; }
+.tech-table thead small { font-weight: 500; color: var(--accent); }
+.tech-table tbody th { font-weight: 500; color: var(--muted); white-space: nowrap; }
+.tech-table td { font-family: var(--font-mono); font-size: 12px; }
+.tech-table td small { color: var(--muted); font-family: var(--font-ui); font-size: 11px; }
+.tech-na { color: var(--muted); font-family: var(--font-ui); }
+.tech-note, .tech-none { color: var(--muted); font-size: 11.5px; line-height: 1.45; margin: 8px 0 0; }
 .insp-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
 .insp-power-v { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
 .insp-power-v input { width: 64px; font: 13px var(--font-mono); padding: 2px 4px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); }
@@ -789,6 +801,8 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .hw-chip small { color: var(--muted); }
 .hw-dot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; flex: none; background: hsl(var(--h) var(--chip-stroke-s) var(--chip-stroke-l)); }
 .hw-dot.none { background: var(--muted); }
+.hw-tech { display: inline-flex; gap: 4px; }
+.hw-tech-note:empty { display: none; }
 .hw-switches { margin-left: auto; display: flex; gap: 14px; color: var(--text-2); font-size: 13px; }
 .hw-switches label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
 .hw-count, .hw-status { color: var(--muted); font-size: 12.5px; margin: 0 0 6px; }
