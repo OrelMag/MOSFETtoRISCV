@@ -3,7 +3,7 @@ import { OrbitCamera } from '../src/gl/camera';
 import { parseCssColor } from '../src/gl/color';
 import { INSTANCE_ATTRS, INSTANCE_FLOATS, packInstances, writeInstance } from '../src/gl/instances';
 import { cross3, dot3, len3, mat4Apply, mat4Identity, mat4LookAt, mat4Mul, mat4Perspective, quatAxisAngle, quatMul, quatRotate, sub3, type Vec3 } from '../src/gl/math';
-import { boxMesh, cylinderMesh, type Mesh } from '../src/gl/mesh';
+import { boxMesh, cylinderMesh, sphereMesh, torusMesh, type Mesh } from '../src/gl/mesh';
 
 const close = (a: ArrayLike<number>, b: ArrayLike<number>, d = 6) => { for (let i = 0; i < b.length; i++) expect(a[i]).toBeCloseTo(b[i], d); };
 
@@ -90,6 +90,23 @@ describe('meshes', () => {
     const m = cylinderMesh(24);
     expect(m.positions.length / 3).toBe(2 * 25 + 2 * 26);
     expect(m.indices.length / 3).toBe(24 * 2 + 24 * 2);
+    checkMesh(m);
+    expect(cylinderMesh(24, false).indices.length / 3).toBe(24 * 2);
+    checkMesh(cylinderMesh(24, false));
+  });
+
+  it('sphere and dome: outward, no triangle without area at a pole', () => {
+    const s = sphereMesh(12, 6);
+    expect(s.indices.length / 3).toBe(12 * 2 * 6 - 2 * 12);
+    checkMesh(s);
+    const d = sphereMesh(12, 4, true);
+    checkMesh(d);
+    for (let k = 1; k < d.positions.length; k += 3) expect(d.positions[k]).toBeGreaterThanOrEqual(-1e-9);
+  });
+
+  it('torus: outward on its elliptic wire', () => {
+    const m = torusMesh(16, 6, 0.05);
+    expect(m.indices.length / 3).toBe(16 * 6 * 2);
     checkMesh(m);
   });
 });
