@@ -513,7 +513,7 @@ export function romLevelsStats(k: number, w: number, content: Uint32Array, leafS
 
 /** The stats of a structure whose instances (none of them wiring) cost these. */
 export function sumStats(parts: Stats[]): Stats {
-  const s: Stats = { nands: 0, transistors: 0, resistors: 0, capacitors: 0, relays: 0, depletion: 0, parts: 0, descendants: 0, levels: 0 };
+  const s: Stats = { nands: 0, transistors: 0, resistors: 0, capacitors: 0, relays: 0, triodes: 0, diodes: 0, depletion: 0, parts: 0, descendants: 0, levels: 0 };
   for (const c of parts) {
     s.nands += c.nands; s.transistors += c.transistors; s.resistors += c.resistors; s.capacitors += c.capacitors; s.depletion += c.depletion;
     s.parts++;

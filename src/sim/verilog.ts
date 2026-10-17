@@ -118,6 +118,14 @@ export function structuralVerilog(def: ComponentDef): string | null {
       lines.push(`  // ${inst.name}: relay, coil ${conn(c.ports[0].name) || '(nc)'} / ${conn(c.ports[1].name) || '(nc)'}, contacts ${c.ports.slice(2).map((p) => conn(p.name) || '(nc)').join(' ')} (electromechanical: not Verilog)`);
       continue;
     }
+    if (c.prim === 'triode') {
+      lines.push(`  // ${inst.name}: triode, grid ${conn('g') || '(nc)'}, plate ${conn('p') || '(nc)'}, cathode ${conn('k') || '(nc)'} (a vacuum tube: not Verilog)`);
+      continue;
+    }
+    if (c.prim === 'diode') {
+      lines.push(`  // ${inst.name}: vacuum diode, anode ${conn('a') || '(nc)'}, cathode ${conn('k') || '(nc)'} (conducts one way: not Verilog)`);
+      continue;
+    }
     if (c.prim === 'sense') {
       lines.push(`  // ${inst.name}: sense amplifier on ${c.ports.slice(1).map((p) => conn(p.name) || '(unconnected)').join(' / ')} (compares charge levels: analog, not Verilog)`);
       continue;

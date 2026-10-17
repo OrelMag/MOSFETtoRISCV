@@ -10,3 +10,14 @@
 .qn-group.journey { color: var(--muted); }
 .qn-row.prologue .qn-num { color: var(--brass); }
 .chapter-kicker.prologue { color: var(--brass); }
+
+/* Prologue P2: the divider widget (widgets/tubedivider.ts), on the MOSFET widgets' plot styles */
+.tdiv .tdiv-on { fill: color-mix(in srgb, var(--good) 12%, transparent); }
+.tdiv .tdiv-gc { fill: color-mix(in srgb, var(--warn) 9%, transparent); }
+.tdiv .tdiv-onl { fill: var(--good); }
+.tdiv .tdiv-link { stroke: var(--border-strong); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.tdiv .tdiv-link.hi { stroke: var(--w1); } .tdiv .tdiv-link.lo { stroke: var(--w0); } .tdiv .tdiv-link.bad { stroke: var(--bad); }
+.tdiv .tdiv-dot { stroke: var(--surface); stroke-width: 2; }
+.tdiv .tdiv-dot.hi { fill: var(--w1); } .tdiv .tdiv-dot.lo { fill: var(--w0); } .tdiv .tdiv-dot.bad { fill: var(--bad); }
+.tdiv .rl { fill: var(--text-2); }
+.mos-note.bad { color: var(--bad); }

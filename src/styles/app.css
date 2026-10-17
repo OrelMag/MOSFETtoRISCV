@@ -548,6 +548,13 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .maybe .relay-op, .maybe .relay-rel { display: inline; stroke: var(--wx); stroke-dasharray: 0.3 0.25; }
 .relay-link { stroke-dasharray: 0.35 0.3; opacity: 0.7; }
 .energized .relay-coil { fill: var(--channel-on); fill-opacity: 0.45; }
+/* vacuum tubes: the heater always glows; the beam from cathode to plate shows while the tube conducts */
+.tube-env { fill-opacity: 0.55; }
+.tube-grid { stroke: var(--sym-stroke); stroke-width: 0.2; stroke-dasharray: 0.3 0.22; fill: none; }
+.tube-heater { stroke: var(--tube-glow); stroke-width: 0.2; fill: none; stroke-linecap: round; }
+.tube-beam { stroke: var(--tube-glow); stroke-width: 0.5; opacity: 0; fill: none; transition: opacity 0.15s; }
+.conducting .tube-beam { opacity: 0.55; filter: drop-shadow(0 0 0.35px var(--tube-glow)); }
+.maybe .tube-beam { opacity: 0.4; stroke: var(--wx); stroke-dasharray: 0.3 0.25; }
 .sym-bus { stroke: var(--plumb); stroke-width: 0.42; stroke-linecap: round; }
 .sym-bus-stub, .sym-tap { stroke: var(--plumb); stroke-width: 0.18; }
 .sym-tiny { font-size: 0.75px; fill: var(--muted); font-family: var(--font-mono); }

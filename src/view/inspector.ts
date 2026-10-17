@@ -111,13 +111,18 @@ export class Inspector {
     else if (d.prim === 'dep') cells.push(['1', 'depletion transistor']);
     else if (d.prim === 'cap') cells.push(['1', 'capacitor']);
     else if (d.prim === 'relay') cells.push(['1', 'relay'], [String((d.ports.length - 2) / 3), 'changeover contacts']);
+    else if (d.prim === 'triode') cells.push(['1', 'triode section (half a 6SN7)']);
+    else if (d.prim === 'diode') cells.push(['1', 'diode section (half a 6AL5)']);
     else if (d.prim !== 'alias' && d.prim !== 'vdd' && d.prim !== 'gnd') {
-      // a relay circuit counts relays, not the transistors it has none of
+      // a relay or tube circuit counts relays or tube sections, not the transistors it has none of
+      const old = st.relays + st.triodes + st.diodes;
       if (st.relays) cells.push([st.relays.toLocaleString(), `relay${st.relays > 1 ? 's' : ''}`]);
-      else cells.push([st.transistors.toLocaleString(), 'transistors']);
+      if (st.triodes) cells.push([st.triodes.toLocaleString(), `triode section${st.triodes > 1 ? 's' : ''}`]);
+      if (st.diodes) cells.push([st.diodes.toLocaleString(), `diode section${st.diodes > 1 ? 's' : ''}`]);
+      if (!old || st.transistors) cells.push([st.transistors.toLocaleString(), 'transistors']);
       if (st.resistors) cells.push([st.resistors.toLocaleString(), `resistor${st.resistors > 1 ? 's' : ''}`]);
       if (st.capacitors) cells.push([st.capacitors.toLocaleString(), `capacitor${st.capacitors > 1 ? 's' : ''}`]);
-      if (!st.relays || st.nands) cells.push([st.nands.toLocaleString(), 'NAND gates']);
+      if (!old || st.nands) cells.push([st.nands.toLocaleString(), 'NAND gates']);
       if (depth !== null && depth > 0) cells.push([String(depth), 'gate delays (worst path)']);
       else if (st.nands > 0 && depth === null) cells.push(['∞', 'has feedback: it remembers']);
       if (st.levels > 0) cells.push([String(st.levels), `level${st.levels > 1 ? 's' : ''} of boxes inside`]);

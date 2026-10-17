@@ -33,6 +33,8 @@
   /* the prologue (relays, tubes, cards) accent */
   --brass: #8a6a12;
   --brass-soft: #f8f1dc;
+  /* a tube's heater and beam (prologue P2) */
+  --tube-glow: #e8730c;
   --warn-soft: #fff4e0;
   /* an uncaught error (ui/errors.ts banner) */
   --bad: #d92d20;
@@ -110,6 +112,7 @@
     --vintage-soft: #2c1c10;
     --brass: #d9b44a;
     --brass-soft: #262010;
+    --tube-glow: #ff9a3a;
     --warn-soft: #2d2210;
     /* an uncaught error (ui/errors.ts banner) */
     --bad: #f87171;
@@ -167,6 +170,7 @@
   --vintage-soft: #2c1c10;
   --brass: #d9b44a;
   --brass-soft: #262010;
+  --tube-glow: #ff9a3a;
   --warn-soft: #2d2210;
   /* an uncaught error (ui/errors.ts banner) */
   --bad: #f87171;

@@ -1,0 +1,53 @@
+/* ---------- The triode close-up (src/widgets/triode3d.ts, triode3dview.ts): loaded with its chunk ----------
+   Layout comes from relay3d.css's generic r3-* classes; this file holds the tube's materials and plots. */
+.tube3d {
+  /* Materials (the 3D view reads these through gl/color.ts, the flat view and plots use them directly) */
+  --tb-bakelite: light-dark(#2f2622, #4a3c35);
+  --tb-pin: light-dark(#c9b37a, #bfa974);
+  --tb-plate: light-dark(#4a4f5a, #5c6270);
+  --tb-nickel: light-dark(#a6adb8, #9aa2ae);
+  --tb-oxide: light-dark(#d8d4ca, #c4c0b6);
+  --tb-red: light-dark(#b8321c, #c43a20);
+  --tb-orange: light-dark(#ff8a1f, #ff9a3a);
+  --tb-heater: light-dark(#f1ede4, #e2ddd2);
+  --tb-grid: light-dark(#8d8775, #a59f8c);
+  --tb-rod: light-dark(#b8692e, #c97a42);
+  --tb-mica: light-dark(rgba(196, 182, 140, 0.62), rgba(170, 160, 128, 0.55));
+  --tb-glass: light-dark(rgba(168, 198, 228, 0.16), rgba(150, 185, 225, 0.11));
+  --tb-glass-edge: light-dark(#8fa6bd, #5f7489);
+  --tb-press: light-dark(rgba(180, 205, 225, 0.3), rgba(150, 180, 210, 0.22));
+  --tb-getter: light-dark(rgba(70, 72, 80, 0.36), rgba(150, 154, 164, 0.3));
+  --tb-getter-cup: light-dark(#6c717c, #858b97);
+  --tb-electron: light-dark(#2a78d6, #6aa8ff);
+  /* Lights: ambient from above / below and the key light */
+  --tb-sky: light-dark(#aeb2bb, #8d93a3);
+  --tb-ground: light-dark(#5a5652, #3d3b3a);
+  --tb-key: light-dark(#e2ded6, #d8d4cc);
+  /* Plot series */
+  --tb-vp: var(--series-1);
+  --tb-ip: var(--tb-orange);
+  container-type: inline-size;
+}
+/* A tall device: a square stage. */
+.tube3d .r3-stage { aspect-ratio: 6 / 7; max-height: 600px; }
+.tube3d .r3-sl span { width: 46px; }
+.tube3d .r3-sl output { width: 66px; }
+.tube3d .r3-btns { flex-wrap: wrap; }
+.tube3d .r3-chip.hot { color: var(--tb-orange); background: color-mix(in srgb, var(--tb-orange) 14%, transparent); border-color: transparent; }
+
+/* the flat view's own strokes */
+.t3-glass { fill: var(--tb-glass); stroke: var(--tb-glass-edge); stroke-width: 0.35; }
+.t3-getter { fill: var(--tb-getter); }
+
+/* plots */
+.t3-plot + .t3-plot { margin-top: 6px; }
+.r3-plot .t3-vp { stroke: var(--tb-vp); }
+.r3-plot .t3-ip { stroke: var(--tb-ip); }
+.r3-plot .t3-cut { stroke: var(--bad); stroke-width: 1.1; stroke-dasharray: 4 3; }
+.r3-plot .t3-cutl { font: 600 10px var(--font-ui); fill: var(--bad); }
+.r3-plot .t3-dot { fill: var(--accent); stroke: var(--surface); stroke-width: 1.5; }
+.r3-plot .t3-hot { fill: color-mix(in srgb, var(--tb-orange) 10%, transparent); }
+.r3-plot.t3-static { cursor: default; }
+.tube3d .r3-kv .v.hot { color: var(--tb-orange); }
+.t3-flat-dot { fill: var(--text); }
+.t3-flat-lead { stroke: var(--text-2); stroke-width: 0.18; }
