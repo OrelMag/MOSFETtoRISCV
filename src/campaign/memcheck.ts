@@ -319,3 +319,236 @@ export function runCtrl(def: ComponentDef, mode: 'gate' | 'switch', traces = ctr
   }
   return finish(lanes, why, limit, def);
 }
+
+// ---- m_dma: a DMA engine on the bus ------------------------------------------------------------------------
+
+/** A copy the bench programs: len words from src to dst (the ranges never overlap). */
+export interface DmaJob { src: number; dst: number; len: number }
+/** A lane of m_dma's bench: its copies and its memory's wait states (per transfer, before ready). */
+export interface DmaTrace { name: string; jobs: DmaJob[]; waits: () => number }
+
+export const DMA_PINS = ['cw', 'ca', 'cd', 'clk', 'rst', 'mr', 'mq', 'mv', 'ma', 'md', 'mw', 'irq', 'busy'];
+
+export function dmaTraces(): DmaTrace[] {
+  const r = rng(131);
+  const rnd = (n: number) => Math.floor(r() * n);
+  const jobs = (): DmaJob[] => [
+    { src: 0x0100, dst: 0x0200, len: 1 },
+    { src: 0x0300, dst: 0x0310, len: 16 },
+    { src: 0x8000 + rnd(0x100), dst: 0x4000 + rnd(0x100), len: 37 },
+    { src: 0x1000, dst: 0x2000, len: 0 },
+    { src: 0xfff0, dst: 0x0040, len: 12 },
+  ];
+  const fixed = (w: number) => () => w;
+  const rand = (seed: number, max: number) => { const q = rng(seed); return () => Math.floor(q() * (max + 1)); };
+  return [
+    { name: 'memory ready at once', jobs: jobs(), waits: fixed(0) },
+    { name: 'one wait state', jobs: jobs(), waits: fixed(1) },
+    { name: 'three wait states', jobs: jobs(), waits: fixed(3) },
+    { name: 'random wait states', jobs: jobs(), waits: rand(1, 3) },
+    { name: 'random, up to 6', jobs: jobs(), waits: rand(2, 6) },
+    { name: 'mostly fast, now and then slow', jobs: jobs(), waits: ((q) => () => (q() < 0.15 ? 5 : 0))(rng(3)) },
+  ];
+}
+
+/** One lane: the program (src, dst, len, wait for irq and check, clear irq) and the memory behind the bus. */
+class DmaLane {
+  readonly mem = new Map<number, number>();
+  job = 0;
+  /** Where the current job is: 0–2 its configuration writes, 3 copying, 4 clearing irq, 5 irq must be down. */
+  step = 0;
+  start = 0;
+  cycles = 0;
+  why = '';
+  /** The transfer waiting for ready: its request, and the wait states left. */
+  pending: { a: number; w: boolean; d: number; left: number } | null = null;
+  transfers = 0;
+  done = false;
+  constructor(readonly t: DmaTrace) {}
+  word(a: number): number { return this.mem.get(a) ?? (Math.imul(a, 2654435761) >>> 16) & 0xffff; }
+  /** The configuration write of this cycle, if any. */
+  cfg(): { cw: number; ca: number; cd: number } {
+    const j = this.t.jobs[this.job];
+    if (this.done || this.why) return { cw: 0, ca: 0, cd: 0 };
+    if (this.step < 3) return { cw: 1, ca: this.step, cd: [j.src, j.dst, j.len][this.step] };
+    if (this.step === 4) return { cw: 1, ca: 3, cd: 0 };
+    return { cw: 0, ca: 0, cd: 0 };
+  }
+  /** The memory this cycle, for the request the DMA shows: ready after its wait states, the word at its address. */
+  ready(mv: number, ma: number, mw: number, md: number): { mr: number; mq: number } {
+    if (!mv || this.done || this.why) return { mr: 0, mq: 0 };
+    if (!this.pending) this.pending = { a: ma, w: !!mw, d: md, left: this.t.waits() };
+    return { mr: this.pending.left === 0 ? 1 : 0, mq: this.word(ma) };
+  }
+  /** End of a cycle, with what the chip showed in it. */
+  check(c: number, cfgWrite: boolean, mv: number, ma: number, mw: number, md: number, mr: number, irq: number, busy: number): void {
+    const j = this.t.jobs[this.job], step = this.step, p = this.pending;
+    const at = `cycle ${c}, copy ${this.job + 1} (${j.len} word${j.len === 1 ? '' : 's'} from ${hex(j.src)} to ${hex(j.dst)})`;
+    if (p && !mv) return void (this.why = `${at}: valid fell before the memory was ready (${p.w ? 'write' : 'read'} ${hex(p.a)})`);
+    if (p && (ma !== p.a || !!mw !== p.w || (p.w && md !== p.d))) return void (this.why = `${at}: the request changed while the memory was not ready (${p.w ? 'write' : 'read'} ${hex(p.a)} became ${mw ? 'write' : 'read'} ${hex(ma)}): hold the address and data until ready`);
+    if (mv && step !== 3) return void (this.why = `${at}: a bus request (${mw ? 'write' : 'read'} ${hex(ma)}) while no copy runs`);
+    if (p && mr) {
+      this.transfers++;
+      if (p.w) {
+        if (((p.a - j.dst) & 0xffff) >= j.len) return void (this.why = `${at}: a write to ${hex(p.a)}, outside the destination`);
+        this.mem.set(p.a, p.d);
+      }
+      this.pending = null;
+    } else if (p) p.left--;
+    if (step < 3) {
+      if (cfgWrite && step === 2) this.start = c;
+      this.step++;
+    } else if (step === 3) {
+      if (irq) {
+        this.cycles += c - this.start;
+        for (let k = 0; k < j.len; k++) {
+          const s = this.word((j.src + k) & 0xffff), t = this.word((j.dst + k) & 0xffff);
+          if (s !== t) return void (this.why = `${at}: irq is up, but word ${k} at ${hex(j.dst + k)} is ${hex(t)}, not ${hex(s)} (from ${hex(j.src + k)})`);
+        }
+        if (busy) return void (this.why = `${at}: irq is up while busy is still 1`);
+        if (this.transfers !== 2 * j.len) return void (this.why = `${at}: ${this.transfers} bus transfers for ${j.len} words (a read and a write each: ${2 * j.len})`);
+        this.step = 4;
+      } else if (!busy && c > this.start + 1) this.why = `${at}: busy is 0 but irq has not risen`;
+    } else if (step === 4) this.step = 5;
+    else if (irq) this.why = `${at}: irq still up after the write to register 3`;
+    else {
+      this.job++;
+      this.step = 0;
+      this.transfers = 0;
+      if (this.job === this.t.jobs.length) this.done = true;
+    }
+  }
+}
+
+export function runDma(def: ComponentDef, mode: 'gate' | 'switch', traces = dmaTraces()): CustomRun {
+  if (mode === 'switch') return { failures: ['switch level: the DMA engine must simulate at gate level'], tested: 0 };
+  const sim = simOf(def, DMA_PINS);
+  if (typeof sim === 'string') return { failures: [sim], tested: 0 };
+  const n = traces.length, lanes = traces.map((t) => new DmaLane(t));
+  const limit = 5000;
+  sim.setInput('rst', 1); sim.setInput('cw', 0); sim.setInput('mr', 0); sim.cycle(); sim.setInput('rst', 0);
+  for (let c = 1; c < limit && lanes.some((d) => !d.done && !d.why); c++) {
+    const cfg = lanes.map((d) => d.cfg());
+    sim.setInput('cw', cfg.map((x) => x.cw)); sim.setInput('ca', cfg.map((x) => x.ca)); sim.setInput('cd', cfg.map((x) => x.cd));
+    sim.settle();
+    const mv = sim.get('mv', n), ma = sim.get('ma', n), mw = sim.get('mw', n), md = sim.get('md', n);
+    const bus = lanes.map((d, l) => d.ready(mv[l], ma[l], mw[l], md[l]));
+    sim.setInput('mr', bus.map((b) => b.mr)); sim.setInput('mq', bus.map((b) => b.mq));
+    sim.settle();
+    const irq = sim.get('irq', n), busy = sim.get('busy', n);
+    lanes.forEach((d, l) => { if (!d.done && !d.why) d.check(c, !!cfg[l].cw, mv[l], ma[l], mw[l], md[l], bus[l].mr, irq[l], busy[l]); });
+    sim.cycle();
+  }
+  const out: LaneRun = { failures: [], failed: [], cycles: 0 };
+  lanes.forEach((d, l) => {
+    const w = d.why || (d.done ? '' : `stuck in copy ${d.job + 1}: irq never rose in ${limit} cycles`);
+    if (w) { out.failures.push(`lane ${l + 1} (${d.t.name}): ${w}`); out.failed.push(l); }
+    out.cycles += d.cycles;
+  });
+  return report(out, n, def);
+}
+
+// ---- m_flash: a page store over flash ----------------------------------------------------------------------
+
+/**
+ * m_flash's chip: 4 blocks of 4 pages, a page one 16-bit word plus a 4-bit spare area (tag). Erased, a page reads
+ * all ones; programming can only clear bits, so a page is programmed once between erases. Times scaled from chapter
+ * 34's (read, program, erase): busy for this many cycles after the command.
+ */
+export const FLASH16 = { blocks: 4, pages: 4, logical: 8, tR: 2, tP: 6, tE: 20 } as const;
+/** Flash commands (fcmd). */
+export const FCMD = { NOP: 0, READ: 1, PROG: 2, ERASE: 3 } as const;
+const FCMD_NAMES = ['NOP', 'READ', 'PROG', 'ERASE'];
+
+export class Flash16Model {
+  readonly data = new Uint16Array(FLASH16.blocks * FLASH16.pages).fill(0xffff);
+  readonly tag = new Uint8Array(FLASH16.blocks * FLASH16.pages).fill(15);
+  readonly erases = new Array<number>(FLASH16.blocks).fill(0);
+  busyUntil = 0;
+  /** The last read's page, shown once the read is done (-1: none). */
+  private shown = -1;
+  why = '';
+  /** What the chip shows during `cycle`: busy, and the last read's word and tag once it is no longer busy. */
+  out(cycle: number): { fbusy: number; fq: number; fqt: number } {
+    const busy = cycle <= this.busyUntil ? 1 : 0;
+    if (busy || this.shown < 0) return { fbusy: busy, fq: (0x3c3c ^ (cycle * 0x2f1d)) & 0xffff, fqt: (cycle * 5) & 15 };
+    return { fbusy: 0, fq: this.data[this.shown], fqt: this.tag[this.shown] };
+  }
+  /** The rising edge at the end of `cycle`, with its command. */
+  edge(cmd: number, fa: number, fd: number, ft: number, cycle: number): void {
+    const fail = (w: string) => { if (!this.why) this.why = `cycle ${cycle}: ${w}`; };
+    if (cmd === FCMD.NOP) return;
+    if (cycle <= this.busyUntil) return fail(`${FCMD_NAMES[cmd]} while the chip is busy (wait for fbusy = 0)`);
+    const blk = fa >> 2;
+    switch (cmd) {
+      case FCMD.READ: this.shown = fa; this.busyUntil = cycle + FLASH16.tR; break;
+      case FCMD.PROG:
+        if (this.tag[fa] !== 15 || this.data[fa] !== 0xffff) return fail(`PROG page ${fa} (block ${blk}), which holds data: flash cannot overwrite a page until its block is erased; write it somewhere erased`);
+        this.data[fa] = fd; this.tag[fa] = ft & 7;
+        this.shown = -1; this.busyUntil = cycle + FLASH16.tP;
+        break;
+      case FCMD.ERASE:
+        for (let p = 0; p < FLASH16.pages; p++) { this.data[blk * FLASH16.pages + p] = 0xffff; this.tag[blk * FLASH16.pages + p] = 15; }
+        this.erases[blk]++;
+        this.shown = -1; this.busyUntil = cycle + FLASH16.tE;
+        break;
+    }
+  }
+}
+
+export const FLASH_PINS = ['lpage', 'wd', 'we', 're', 'clk', 'rst', 'fbusy', 'fq', 'fqt', 'ready', 'rd', 'fcmd', 'fa', 'fd', 'ft'];
+
+/** m_flash's traces: each fills every logical page first (a page never written has no value to read), goes on, and ends reading every page back. */
+export function flashTraces(): MemTrace[] {
+  const r = rng(141);
+  const rnd = (n: number) => Math.floor(r() * n);
+  const L = FLASH16.logical;
+  const fill = (): MemReq[] => Array.from({ length: L }, (_, i) => ({ addr: i, we: true, wd: rnd(0x10000), gap: 0 }));
+  const readAll = (): MemReq[] => Array.from({ length: L }, (_, i) => ({ addr: i, we: false, wd: 0, gap: 0 }));
+  const mk = (name: string, n: number, f: (i: number) => MemReq): MemTrace => ({ name, reqs: [...fill(), ...Array.from({ length: n }, (_, i) => f(i)), ...readAll()] });
+  const req = (addr: number, we: boolean): MemReq => ({ addr, we, wd: rnd(0x10000), gap: rnd(2) });
+  return [
+    mk('random writes and reads', 80, () => req(rnd(L), r() < 0.5)),
+    mk('one page rewritten, over and over', 60, (i) => req(i % 4 === 3 ? rnd(L) : 5, i % 4 !== 3)),
+    mk('every page rewritten in turn', 64, (i) => req(i % L, i % 3 !== 2)),
+    mk('reads only, after the fill', 40, () => req(rnd(L), false)),
+    mk('two hot pages, two cold', 80, (i) => req(i % 5 === 4 ? 2 + rnd(2) : i & 1, r() < 0.7)),
+  ];
+}
+
+export function runFlash(def: ComponentDef, mode: 'gate' | 'switch', traces = flashTraces()): CustomRun {
+  if (mode === 'switch') return { failures: ['switch level: the page store must simulate at gate level'], tested: 0 };
+  const sim = simOf(def, FLASH_PINS);
+  if (typeof sim === 'string') return { failures: [sim], tested: 0 };
+  const n = traces.length, lanes = traces.map((t) => new Requester(t));
+  const dev = traces.map(() => new Flash16Model());
+  const ref = traces.map(() => new Map<number, number>());
+  const why: string[] = new Array<string>(n).fill('');
+  const limit = Math.max(...traces.map((t) => t.reqs.length)) * 120 + 400;
+  const per = (f: (l: number) => number) => Array.from({ length: n }, (_, l) => f(l));
+  sim.setInput('rst', 1); sim.setInput('re', 0); sim.setInput('we', 0); sim.setInput('fbusy', 0); sim.cycle(); sim.setInput('rst', 0);
+  for (let c = 1; c < limit && lanes.some((q, l) => q.done < 0 && !why[l]); c++) {
+    const cur = lanes.map((q) => q.cur), fo = dev.map((d) => d.out(c));
+    sim.setInput('lpage', per((l) => cur[l]?.addr ?? 0));
+    sim.setInput('wd', per((l) => cur[l]?.wd ?? 0));
+    sim.setInput('re', per((l) => (cur[l] && !cur[l]!.we ? 1 : 0)));
+    sim.setInput('we', per((l) => (cur[l]?.we ? 1 : 0)));
+    sim.setInput('fbusy', fo.map((x) => x.fbusy)); sim.setInput('fq', fo.map((x) => x.fq)); sim.setInput('fqt', fo.map((x) => x.fqt));
+    sim.settle();
+    const ready = sim.get('ready', n), rd = sim.get('rd', n), fcmd = sim.get('fcmd', n), fa = sim.get('fa', n), fd = sim.get('fd', n), ft = sim.get('ft', n);
+    for (let l = 0; l < n; l++) {
+      if (why[l] || lanes[l].done >= 0) continue;
+      const q = cur[l];
+      const completed = !!q && !!ready[l];
+      if (completed) {
+        if (q.we) ref[l].set(q.addr, q.wd);
+        else if (rd[l] !== ref[l].get(q.addr)) why[l] = `cycle ${c}: the read of logical page ${q.addr} gave rd = ${hex(rd[l])}; it holds ${hex(ref[l].get(q.addr)!)}`;
+      }
+      dev[l].edge(fcmd[l], fa[l], fd[l], ft[l], c);
+      if (!why[l] && dev[l].why) why[l] = dev[l].why;
+      lanes[l].advance(completed, c);
+    }
+    sim.cycle();
+  }
+  return finish(lanes, why, limit, def);
+}

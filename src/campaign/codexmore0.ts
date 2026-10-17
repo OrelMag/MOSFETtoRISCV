@@ -635,4 +635,11 @@ export const MORE0: Record<string, CodexMore> = {
     lib: 'rv16_dramcol',
     chapters: [{ chapter: 'dram', step: 1, label: 'The read, in slow motion' }, { chapter: 'dram', step: 2, label: 'The sense amplifier' }],
   },
+  dma: {
+    idea: 'A processor copying a buffer spends a load, a store and loop overhead on every word, and waits on memory for each. A <b>DMA engine</b> is a second bus master built for that one job: the processor stores a source, a destination and a length into its registers and moves on; the engine reads a word, writes it, steps its pointers and counts down, then raises an interrupt. Disk controllers, network cards and display controllers all move their data this way.<br>The engine competes for the bus like any master, so the arbiter decides who waits; a processor with caches mostly does not notice. m_dma is 1 366 NANDs: four 16-bit registers (source, destination, count, the word in flight) are 832 of them, three incrementers and the load muxes most of the rest. Its count register holds NOT(words left) and counts up, so the incrementer\'s carry, true when the register is all ones, says the copy is complete, len = 0 included, with no comparator.',
+    example: { title: 'Starting a copy from RV16', body: '<pre>li  t0, 0x8000     # source\nsw  t0, -16(x0)    # 0xFFF0\nli  t0, 0x0100     # destination\nsw  t0, -15(x0)    # 0xFFF1\nli  t0, 64         # words: starts the copy\nsw  t0, -14(x0)    # 0xFFF2\n…                  # work, or wait for the interrupt</pre>' },
+    mistakes: ['Changing the address as soon as the read is issued instead of when it is ready: the memory is still answering the old request.', 'Raising irq when the last read completes instead of the last write.', 'A count that is compared against len: a 16-bit comparator where the incrementer\'s carry already says it.'],
+    lib: 'rv16_dma',
+    chapters: [{ chapter: 'bus', step: 3, label: 'DMA' }],
+  },
 };

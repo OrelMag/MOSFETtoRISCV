@@ -1,15 +1,16 @@
 // Act 10 (memory in depth): the benches catch what their levels are about. A column with no reference capacitance
 // cannot sense; a bank that never refreshes loses a row; a controller that skips refresh or tRCD breaks the chip's
-// rules; and every message names the rule.
+// rules; a bus that re-arbitrates mid-transfer, a DMA that lets go of its request early, a page store that never
+// collects all fail; and every message names the rule.
 
 import { describe, expect, it } from 'vitest';
 import { senseSeq } from '../src/campaign/buildm';
-import { BANK, bankTraces, DCMD, Dram16Model, DRAM16, runBank, runCtrl } from '../src/campaign/memcheck';
+import { BANK, bankTraces, DCMD, Dram16Model, DRAM16, FCMD, Flash16Model, runBank, runCtrl, runDma, runFlash } from '../src/campaign/memcheck';
 import { nodeById } from '../src/campaign/nodes';
 import { checkChallenge } from '../src/editor/challenges';
 import type { Compiled } from '../src/editor/compile';
 import { levelChallenge } from '../src/campaign/levels';
-import { BANK16, bankOf, CTRL16, ctrlOf, DRAM_COL2 } from '../src/lib/rv16/mem16';
+import { BANK16, bankOf, BUS16, busOf, CTRL16, ctrlOf, DMA16, dmaOf, DRAM_COL2, FLASH_STORE16, flashOf } from '../src/lib/rv16/mem16';
 import { type ComponentDef, netlistOf } from '../src/sim/types';
 import { boxTextOverlaps } from '../src/view/boxtext';
 import { labelOverlaps, routeNetlist, symbolOverlaps, wireOverlaps } from '../src/view/route';
@@ -83,8 +84,54 @@ describe('m_ctrl: a row-buffer controller', () => {
   });
 });
 
+describe('m_bus: two masters, one bus', () => {
+  it('a grant that moves while a slave is still waiting fails the sequence', () => {
+    const c = levelChallenge(nodeById('m_bus')!)!;
+    expect(checkChallenge(c, compiled(BUS16, 'gate')).failures).toEqual([]);
+    expect(checkChallenge(c, compiled(busOf('nolock'), 'gate')).failures.length).toBeGreaterThan(0);
+  });
+});
+
+describe('m_dma: a DMA engine', () => {
+  it('the reference copies every job on every memory; one that lets go of its request early is named', () => {
+    const r = runDma(DMA16, 'gate');
+    expect(r.failures).toEqual([]);
+    expect(r.cycles).toBe(nodeById('m_dma')!.par!.cycles);
+    expect(runDma(dmaOf('nohold'), 'gate').failures.join('\n')).toMatch(/hold the address and data until ready|outside the destination/);
+  });
+});
+
+describe('m_flash: a page store over flash', () => {
+  it('the reference keeps every page readable through its collections; without them the chip refuses a program', () => {
+    const r = runFlash(FLASH_STORE16, 'gate');
+    expect(r.failures).toEqual([]);
+    expect(r.cycles).toBe(nodeById('m_flash')!.par!.cycles);
+    expect(runFlash(flashOf('nogc'), 'gate').failures.join('\n')).toMatch(/flash cannot overwrite a page until its block is erased/);
+  });
+
+  it('the chip model: a page programs once, a block erases whole, nothing while busy', () => {
+    const f = new Flash16Model();
+    f.edge(FCMD.PROG, 5, 0x1234, 3, 10);
+    f.edge(FCMD.READ, 5, 0, 0, 12);
+    expect(f.why).toMatch(/while the chip is busy/);
+    const g = new Flash16Model();
+    g.edge(FCMD.PROG, 5, 0x1234, 3, 10);
+    g.edge(FCMD.READ, 5, 0, 0, 20);
+    expect(g.out(21).fbusy).toBe(1);
+    expect(g.out(23)).toEqual({ fbusy: 0, fq: 0x1234, fqt: 3 });
+    g.edge(FCMD.PROG, 5, 0x0000, 3, 30);
+    expect(g.why).toMatch(/PROG page 5 \(block 1\), which holds data/);
+    const h = new Flash16Model();
+    h.edge(FCMD.PROG, 5, 0x1234, 3, 10);
+    h.edge(FCMD.ERASE, 4, 0, 0, 20);
+    h.edge(FCMD.PROG, 5, 0x4321, 1, 50);
+    expect(h.why).toBe('');
+    expect(h.erases).toEqual([0, 1, 0, 0]);
+  });
+});
+
 describe('act 10 schematics', () => {
-  it.each([DRAM_COL2, BANK16, CTRL16].map((d) => [d.id, d] as const))('%s: no symbol on another, no label over one, no two nets on a line', (_, d) => {
+  it.each([DRAM_COL2, BANK16, CTRL16, BUS16, DMA16, FLASH_STORE16].map((d) => [d.id, d] as const))('%s: no symbol on another, no label over one, no two nets on a line', (_, d) => {
     const nl = netlistOf(d)!;
     expect(symbolOverlaps(nl)).toEqual([]);
     expect(labelOverlaps(d, nl)).toEqual([]);

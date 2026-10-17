@@ -1444,4 +1444,30 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
     lib: 'rv16_dramctrl',
     chapters: [{ chapter: 'memctrl', step: 1, label: 'Open page or closed page' }],
   },
+  handshake: {
+    idea: 'Two blocks that do not share a schedule still have to agree on when a word changes hands. The sender raises <b>valid</b> and puts the address and data out; the receiver raises <b>ready</b> when it can take them; the transfer happens at the clock edge of a cycle where both are 1. Neither side needs to know how long the other takes: a memory with wait states simply keeps ready low, a master with nothing to send keeps valid low.<br>One rule makes it work: once valid is up, the sender holds it, and the address and data with it, until ready. A slave may already be working on the request (a DRAM may have opened a row for it); a request that changes under it, or disappears, is a bus error the hardware will not report. AXI uses this handshake on each of its five channels (read address, read data, write address, write data, write response), which lets a slave take addresses ahead of data.',
+    example: { title: 'A read with two wait states', body: '<pre>cycle   valid  addr    ready  data\n  1       1    0x8123    0     –\n  2       1    0x8123    0     –\n  3       1    0x8123    1    0x00ff   ← done\n  4       0      –       –     –</pre>' },
+    mistakes: ['Dropping valid after one cycle because "the slave saw it": it did not take it until ready.', 'Making valid wait for ready: if the slave also waits for valid, nothing ever happens. Ready may wait for valid; valid must not wait for ready.'],
+    lib: 'rv16_bus',
+    chapters: [{ chapter: 'bus', step: 0, label: 'A handshake' }, { chapter: 'bus', step: 1, label: 'Five channels' }],
+  },
+  arbitration: {
+    idea: 'When two masters want the bus in the same cycle, one waits. <b>Fixed priority</b> (master 0 always first) is a gate or two, and lets a busy master 0 starve master 1 forever. <b>Round robin</b> remembers who was served last and, when both ask, grants the other: each master waits at most one transfer of the other, at the cost of one flip-flop. With more masters it generalizes to a rotating priority (the library\'s arbiterN, chapter 24\'s dual-core).<br>The grant must also be <b>held</b>: a transfer that has started (valid up, ready not yet) keeps its master even if the round-robin rule would now pick the other, or the waiting slave would see its request change. m_bus does it with two more flip-flops: a transfer in progress, and whose.',
+    mistakes: ['Re-arbitrating every cycle: the grant can move in the middle of a transfer to a slow slave.', 'Updating "served last" when a master is granted rather than when its transfer completes: under wait states the other master is then skipped.'],
+    lib: 'rv16_bus',
+    chapters: [{ chapter: 'bus', step: 2, label: 'Two masters' }],
+  },
+  ftl: {
+    idea: 'A NAND flash chip reads and programs pages and erases blocks of many pages; programming only turns 1s into 0s, so a page holding data cannot be rewritten until its whole block is erased, and an erase takes milliseconds. The flash translation layer hides all of it. It writes every update to an erased page at the head of a log and records in a <b>mapping table</b> where the logical page now lives; the old copy is garbage.<br>Before the erased pages run out, a <b>garbage collector</b> picks a block, copies the pages of it that are still mapped to the head, and erases it. To know whether a page is live, each page stores the logical page number in its <b>spare area</b> (the out-of-band bytes every flash page has): the page is live if the table still points at it. Spare capacity gives the collector room: here 16 physical pages hold 8 logical ones, one block is always kept erased, and so at least a third of the 12 written pages are garbage at any time. Real FTLs also keep the table itself in flash, survive power loss mid-write and map out bad blocks.',
+    example: { title: 'm_flash, one logical page rewritten', body: '<pre>write lp5 = 0x1111   head 0 → table[5] = 0\nwrite lp5 = 0x2222   head 1 → table[5] = 1   (page 0 is garbage)\nwrite lp5 = 0x3333   head 2 → table[5] = 2\n…\nhead enters block 1 → collect block 2: read each page, copy the mapped ones, erase</pre>' },
+    mistakes: ['Updating the table only when the program finishes, after the read data (and its tag) has left the chip\'s output.', 'Collecting the block the head is writing into.', 'Forgetting that a program into a non-erased page silently corrupts it on real chips (the bench refuses it).'],
+    lib: 'rv16_flashstore',
+    chapters: [{ chapter: 'flash', step: 3, label: 'Never overwrite' }, { chapter: 'flash', step: 4, label: 'Garbage, wear and bad blocks' }],
+  },
+  wearlevel: {
+    idea: 'Each program and erase pushes charge through the floating gate\'s oxide and damages it a little; after some thousands (TLC) to a hundred thousand (SLC) erases a block no longer holds its charge reliably. A file system that rewrites one sector in place would destroy that sector\'s block in an afternoon.<br>An FTL that writes as a log already spreads the erases of hot data: every write goes to the head, and the head walks through all blocks. <b>Static</b> wear levelling goes further: blocks holding cold data (written once, never again) would otherwise never be erased, so the FTL moves that data now and then to put those blocks back into rotation. m_flash\'s log walks the four blocks in turn, so its erases spread evenly by construction.',
+    mistakes: ['Picking the victim block by "fewest live pages" alone (greedy): it is fastest, but the same blocks keep getting collected; real FTLs weigh the age and the erase count too.'],
+    lib: 'rv16_flashstore',
+    chapters: [{ chapter: 'flash', step: 4, label: 'Garbage, wear and bad blocks' }],
+  },
 };

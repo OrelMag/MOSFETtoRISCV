@@ -705,6 +705,24 @@ export const NODES: CampaignNode[] = [
     tips: ['Per bank: an open flag and the open row. Counters of the cycles since the last ACT and since the last PRE, saturating at 15, cover tRCD, tRAS and tRP when one request is in flight at a time.', 'A read\'s data comes tCAS = 4 cycles after its RD: a 4-stage shift register of "RD issued" says when to raise ready, and that no command is needed meanwhile.', 'Refresh: count cycles since the last REF and make it pending well before 256 (128 is a bit test). Pending goes first: PREA once tRAS allows, then REF once tRP allows.', 'After REF nothing may happen for tRFC = 12 cycles: remember that the last close was a REF, and wait 12 instead of 4.'],
     codex: ['dramtiming', 'pagepolicy'], unlocks: ['rv16_dramctrl'], chapters: [{ chapter: 'memctrl', step: 0, label: 'Commands' }, { chapter: 'memctrl', step: 1, label: 'Open page or closed page' }],
   },
+  {
+    id: 'm_bus', act: 10, title: 'Two masters, one bus', kind: 'build', optional: true, requires: ['m_lesson'], base: BUILDM.m_bus, par: { nand: 282, period: 26 },
+    why: 'A processor is not the only thing that wants memory: a DMA engine, a display, a second core do too. A bus lets several masters reach several slaves over one set of wires, one transfer at a time, with a handshake each side can stretch and an arbiter that keeps either master from starving.',
+    tips: ['Three flip-flops of state: who was served last, whether a transfer is in progress, and whose it is.', 'The grant: while a transfer is in progress, its owner; else if both ask, the one not served last; else whoever asks.', 'Two 16-bit muxes take the granted master\'s address and data to every slave; the top two address bits pick whose valid rises, and the same bits pick whose ready and data come back.', 'A transfer is done when the granted master\'s valid and the chosen slave\'s ready are both 1: only that master sees ready.'],
+    codex: ['handshake', 'arbitration'], unlocks: ['rv16_bus'], chapters: [{ chapter: 'bus', step: 0, label: 'A handshake' }, { chapter: 'bus', step: 2, label: 'Two masters' }],
+  },
+  {
+    id: 'm_dma', act: 10, title: 'DMA engine', kind: 'build', optional: true, requires: ['m_bus'], base: BUILDM.m_dma, par: { nand: 1366, period: 48, cycles: 2079 },
+    why: 'Copying memory word by word keeps the processor busy for two bus transfers per word. A DMA engine does the copy itself, as a second master on the bus, while the processor runs on; it raises an interrupt when it is done.',
+    tips: ['Registers: src, dst, a count, and the word in flight; flip-flops for running, read or write, and irq.', 'Count with an incrementer: load NOT len and add 1 per word; the incrementer\'s carry (all ones) means nothing is left, len = 0 included.', 'One request at a time: valid while running and not done, the address src in the read phase and dst in the write phase. When ready: a read latches mq and turns to writing; a write steps src, dst and the count and turns to reading.', 'Hold everything while ready is 0: the address and data come straight from registers that change only when ready.'],
+    codex: ['dma'], unlocks: ['rv16_dma'], chapters: [{ chapter: 'bus', step: 3, label: 'DMA' }],
+  },
+  {
+    id: 'm_flash', act: 10, title: 'Flash page store', kind: 'build', optional: true, requires: ['m_lesson'], base: BUILDM.m_flash, par: { nand: 1049, period: 38, cycles: 7844 },
+    why: 'Flash keeps its data without power, but it cannot overwrite: a page is programmed once, and only a whole block can be erased, thousands of times at most. Every SSD and SD card hides that behind a controller that writes somewhere new each time and keeps a map: the flash translation layer.',
+    tips: ['Write as a log: a head pointer to the next erased page, a table of 8 entries saying where each logical page lives. A write programs the head (with the logical page number as its tag), points the entry there, and moves the head.', 'Keep one block erased ahead of the head. When the head enters a new block, collect the block after it: read each page; if the table still points at it (its tag says whose it was), program it at the head and repoint the entry; then erase the block.', 'Update the table and the head when you issue the program, not when it finishes: fq shows the read page only until the next command.', 'A small state machine: idle, waiting on a read or a program, and the collector\'s read, copy and erase. While fbusy is 1 issue nothing.'],
+    codex: ['ftl', 'wearlevel'], unlocks: ['rv16_flashstore'], chapters: [{ chapter: 'flash', step: 3, label: 'Never overwrite' }, { chapter: 'flash', step: 4, label: 'Garbage, wear and bad blocks' }],
+  },
 ];
 
 export const nodeById = (id: string): CampaignNode | undefined => NODES.find((n) => n.id === id);
