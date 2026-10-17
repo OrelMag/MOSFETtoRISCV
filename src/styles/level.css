@@ -118,10 +118,12 @@
 .cx-sum { font-size: 15px; line-height: 1.55; color: var(--text-2); border-left: 3px solid var(--accent); padding-left: 12px; max-width: 75ch; }
 .cx-sum code, .cx-prose code { font: 0.92em var(--font-mono); background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
 .cx-cols { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 22px; align-items: start; }
-.cx-col { display: grid; gap: 16px; min-width: 0; }
+/* one track no wider than the column: a worked example's long <pre> scrolls instead of widening every section under the figure */
+.cx-col { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
 .cx-entry h4 { margin: 0 0 5px; font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .cx-prose { font-size: 14.5px; line-height: 1.6; color: var(--text); max-width: 72ch; }
 .cx-example { font-size: 14px; }
+.cx-example pre { overflow-x: auto; }
 .cx-mist { margin: 0; padding-left: 18px; color: var(--text); font-size: 14px; line-height: 1.55; }
 .cx-mist li { margin: 4px 0; }
 .cx-anat { max-width: 460px; }
