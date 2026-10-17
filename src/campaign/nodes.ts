@@ -723,6 +723,12 @@ export const NODES: CampaignNode[] = [
     tips: ['Write as a log: a head pointer to the next erased page, a table of 8 entries saying where each logical page lives. A write programs the head (with the logical page number as its tag), points the entry there, and moves the head.', 'Keep one block erased ahead of the head. When the head enters a new block, collect the block after it: read each page; if the table still points at it (its tag says whose it was), program it at the head and repoint the entry; then erase the block.', 'Update the table and the head when you issue the program, not when it finishes: fq shows the read page only until the next command.', 'A small state machine: idle, waiting on a read or a program, and the collector\'s read, copy and erase. While fbusy is 1 issue nothing.'],
     codex: ['ftl', 'wearlevel'], unlocks: ['rv16_flashstore'], chapters: [{ chapter: 'flash', step: 3, label: 'Never overwrite' }, { chapter: 'flash', step: 4, label: 'Garbage, wear and bad blocks' }],
   },
+  {
+    id: 'p_boot', act: 10, title: 'Boot from flash', kind: 'program', optional: true, requires: ['m_dma', 'm_flash'], par: { size: 18, cycles: 253 },
+    why: 'At power-on everything a program needs is in flash, which keeps it without power but is slow to read. A boot loader brings it into RAM first. Let the DMA engine do the copying, and the processor can work while it runs.',
+    tips: ['Loading the table straight from flash works: 8 stall cycles a word. The DMA copies a word every 4.', 'Simplest: start the copy, wait until 0xFFF9 reads 1, clear it, then sum the copy in RAM.', 'Faster: don\'t wait for the whole copy. 0xFFF2 says how many words are left, so you know how many have landed: sum each one as soon as it is there.', 'RV16 is word addressed and its offsets reach −32 … 31: the device registers are -16(x0) … -13(x0), irq is -7(x0), OUT is -3(x0).'],
+    codex: ['boot'], chapters: [{ chapter: 'bus', step: 4, label: 'A computer on one bus' }],
+  },
 ];
 
 export const nodeById = (id: string): CampaignNode | undefined => NODES.find((n) => n.id === id);

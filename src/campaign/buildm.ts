@@ -1,5 +1,6 @@
-// Act 10's build levels (memory in depth, roadmap Phase 16e): a DRAM column at switch level, a bank with refresh
-// and a row-buffer controller, each against a device on its bench (memcheck.ts). No DOM.
+// Act 10's build levels (memory in depth, roadmap Phase 16e): a DRAM column at switch level, a bank with refresh,
+// a row-buffer controller, a two-master bus, a DMA engine and a flash page store, each against a device on its bench
+// (memcheck.ts) or, for the bus, a sequence from a model. No DOM.
 
 import type { BuildChallenge, PinSpec, SeqStep } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';

@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest';
 import { senseSeq } from '../src/campaign/buildm';
 import { BANK, bankTraces, DCMD, Dram16Model, DRAM16, FCMD, Flash16Model, runBank, runCtrl, runDma, runFlash } from '../src/campaign/memcheck';
 import { nodeById } from '../src/campaign/nodes';
+import { assemble16 } from '../src/riscv/rv16/asm16';
+import { DMA_DEV16, Iss16 } from '../src/riscv/rv16/iss16';
 import { checkChallenge } from '../src/editor/challenges';
 import type { Compiled } from '../src/editor/compile';
 import { levelChallenge } from '../src/campaign/levels';
@@ -127,6 +129,28 @@ describe('m_flash: a page store over flash', () => {
     h.edge(FCMD.PROG, 5, 0x4321, 1, 50);
     expect(h.why).toBe('');
     expect(h.erases).toEqual([0, 1, 0, 0]);
+  });
+});
+
+describe('p_boot: the golden model with a DMA engine and flash', () => {
+  const run = (src: string, mem: Record<number, number>) => {
+    const a = assemble16(src);
+    const iss = new Iss16(a.words, { system: true, dma: true }, new Map(Object.entries(mem).map(([k, v]) => [Number(k), v])));
+    iss.run(2000);
+    return iss;
+  };
+  it('copies a word every DMA_DEV16.WORD cycles and raises the interrupt line after the last', () => {
+    const iss = run('li t0, 0x8000\nsw t0, -16(x0)\nli t0, 0x100\nsw t0, -15(x0)\nli t0, 5\nsw t0, -14(x0)\nw: lw t1, -7(x0)\nbeqz t1, w\nhalt\n', { 0x8000: 11, 0x8001: 22, 0x8002: 33, 0x8003: 44, 0x8004: 55 });
+    expect([...iss.dmem.slice(0x100, 0x105)]).toEqual([11, 22, 33, 44, 55]);
+    expect(iss.irq).toBe(1);
+    expect(iss.dma.left).toBe(0);
+    // 5 words at 4 cycles each, counted from the store that started it: the wait loop ends within a loop turn of it
+    expect(iss.steps).toBeGreaterThanOrEqual(7 + 5 * DMA_DEV16.WORD);
+    expect(iss.steps).toBeLessThanOrEqual(7 + 5 * DMA_DEV16.WORD + 3);
+  });
+  it('a load from flash stalls DMA_DEV16.STALL cycles; a store to flash is an error', () => {
+    expect(run('li t0, 0x8000\nlw t1, 0(t0)\nhalt\n', {}).steps).toBe(1 + 1 + DMA_DEV16.STALL + 1); // li (one lui), the load and its stall, halt
+    expect(run('li t0, 0x8000\nsw t0, 0(t0)\nhalt\n', {}).error).toMatch(/a store to flash/);
   });
 });
 

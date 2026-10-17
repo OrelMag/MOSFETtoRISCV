@@ -343,4 +343,24 @@ export const CASES1: Record<string, LevelCase> = {
     without: 'Commands one cycle early read garbage or corrupt a row: the chip does not check, so the controller is the only thing standing between a timing table and silent data loss.',
     cost: '777 NANDs, period 36. One request at a time keeps it small: two since-counters (cycles since the last ACT and the last PRE) cover every timing for both banks, a 4-stage shift register follows a read to its data, an 8-bit counter schedules refresh. A controller that overlaps requests needs counters per bank and a queue: chapter 33\'s FR-FCFS. 11 878 cycles over the eight traces.',
   },
+  m_bus: {
+    problem: 'Two masters, three slaves, one set of wires: the bus has to pick who goes, route the request to the right slave, and bring the answer back to the right master, with a handshake that lets either side take its time. The arbiter must be fair (round robin) and must not take the bus from a transfer still waiting on a slow slave.',
+    without: 'Each master needs its own path to every slave: two masters and three slaves are six sets of address and data wires, and a slave with two ports.',
+    cost: '282 NANDs, period 26: four 16-bit muxes (196) carry the address and data out and the read data back; three flip-flops and a few gates are the arbiter, and a few more decode the address.',
+  },
+  m_dma: {
+    problem: 'Copying a buffer costs a processor a load, a store and the loop around them for every word. A DMA engine is a master on the bus that does it alone: three register writes start it, an interrupt says it is done, and the processor is free in between.',
+    without: 'The processor copies every word itself, at least four instructions a word, each load waiting on memory.',
+    cost: '1 366 NANDs, period 48: four 16-bit registers (src, dst, count, the word in flight) are 832, three incrementers and the load muxes most of the rest. The count holds NOT(words left) and counts up, so the incrementer\'s carry says done with no comparator. 2 079 cycles for the bench\'s 30 copies, wait states included.',
+  },
+  m_flash: {
+    problem: 'Flash keeps its data without power but cannot overwrite: a page is programmed once, then its whole block must be erased, and erasing is slow and wears the block out. The page store makes it look like a memory you can rewrite: every write goes somewhere erased, a table remembers where each page lives, and a collector reclaims blocks full of stale copies.',
+    without: 'Rewriting a page in place means erasing its block first, losing the block\'s other pages unless they are saved and written back: a read-modify-write of four pages and a 20-cycle erase for every rewrite, and the hot block wears out first.',
+    cost: '1 049 NANDs, period 38: the mapping table is 416 (eight 4-bit registers), the head and the victim block and page another 104, the rest the state machine and the address and data muxes. 7 844 cycles over the five traces, collections included.',
+  },
+  p_boot: {
+    problem: 'A program\'s table sits in flash, where every load stalls the processor for 8 cycles. The DMA engine copies a word every 4 cycles and leaves the processor free: the question is what to do while it runs.',
+    without: 'Loading every word from flash: 845 cycles for 64 words.',
+    cost: 'Waiting for the interrupt and then summing the copy: 595 cycles for 64 words. Summing each word as soon as it has landed (0xFFF2 says how many are left): 470. Then the loop is the limit, about 7 cycles a word against the copy\'s 4: a shorter loop is worth more than a faster engine.',
+  },
 };

@@ -1,7 +1,8 @@
 // The benches of act 10's clocked levels (roadmap Phase 16e). The device a level drives sits on the bench as a
 // JS model that knows its rules and names the first one broken: the cell array of m_bank (rows that leak unless
-// they are opened in time), the DRAM chip of m_ctrl (timings, refresh). Each lane of a BitSim runs one request
-// trace with its own device; a request is held until the chip completes it. No DOM.
+// they are opened in time), the DRAM chip of m_ctrl (timings, refresh), the memory behind m_dma's bus port (wait states),
+// the flash chip of m_flash (a page programs once, a block erases whole). Each lane of a BitSim runs one request
+// trace or program of copies with its own device; a request is held until the chip completes it. No DOM.
 
 import type { CustomRun } from '../editor/challenges';
 import { BitSim } from '../sim/bitsim';

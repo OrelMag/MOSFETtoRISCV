@@ -7,7 +7,10 @@
 //   BANK16     m_bank: open page around a 16 × 16 cell array, RAS-only refresh (a row pointer and a timer).
 //   CTRL16     m_ctrl: open page over a two-bank DRAM chip: tRCD / tRAS / tRP from two since-counters, tCAS by a
 //              shift register, auto refresh (PREA, REF, tRFC).
-// bankOf / ctrlOf also build them with a fault, for the tests that prove the benches catch it.
+//   BUS16      m_bus: two masters, three slaves, valid / ready, round robin held through a transfer.
+//   DMA16      m_dma: a bus master copying len words, configured by register writes, irq when done.
+//   FLASH_STORE16  m_flash: a log over a 4 × 4-page flash chip, a mapping table, the owner in the spare area, GC.
+// bankOf / ctrlOf / busOf / dmaOf / flashOf also build them with a fault, for the tests that prove the benches catch it.
 
 import type { ComponentDef, PortDef } from '../../sim/types';
 import { WRITE_DRIVER } from '../arrays';
