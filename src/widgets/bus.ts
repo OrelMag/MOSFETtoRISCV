@@ -1,12 +1,13 @@
 // Chapter 35's panels. The bus bench: a request port (standing in for the CPU) and the DMA engine on one
 // bus to RAM, flash and the DMA's registers; the panel makes reads, writes and a DMA copy, and draws
 // every cycle's handshakes and who holds the bus. The computer: the system CPU on that bus, booting
-// from flash; the panel runs it and shows its console, LEDs and where it executes.
+// from flash (or from punched cards); the panel runs it and shows its console, LEDs and where it executes.
 
 import { LOAD_AT, LOAD_WORDS } from '../bus/programs';
 import { busBench, isKeyQueue, KEY_QUEUE_DEPTH } from '../lib/axi';
 import { ramLeafState } from '../lib/bigmem';
-import { CHAPTER_COMPUTER, SOC_SCREEN, SYSTEM_COMPUTER } from '../lib/soc';
+import { CARD_COMPUTER, CARD_DECK, CHAPTER_COMPUTER, SOC_SCREEN, SYSTEM_COMPUTER } from '../lib/soc';
+import { type CardReaderState, readerProgress } from '../cards/reader';
 import { findNode } from '../sim/flatten';
 import { pack } from '../sim/values';
 import { h } from '../ui/dom';
@@ -148,6 +149,18 @@ export function busComputerScene(): Scene {
   };
 }
 
+/** The computer booting from punched cards: the card boot ROM, the reader holding CARD_DECK at 0x7000_0000. */
+export function cardComputerScene(): Scene {
+  return {
+    root: CARD_COMPUTER,
+    inputs: { clk: 0, switches: 0 },
+    hiddenInputs: ['switches'],
+    autoClock: false,
+    engine: 'cycle',
+    panels: [computerPanel(false, true)],
+  };
+}
+
 /** The last step's computer: DRAM, screen and keyboard on the bus too. Both computers run on the cycle engine. */
 export function systemComputerScene(): Scene {
   return {
@@ -160,7 +173,7 @@ export function systemComputerScene(): Scene {
   };
 }
 
-interface CompState { console: string; retired: number; cycles: number; inRam: number; dmaCycles: number; dram: { hit: number; miss: number; conflict: number; refresh: number } }
+interface CompState { console: string; retired: number; cycles: number; inRam: number; dmaCycles: number; booted: number; dram: { hit: number; miss: number; conflict: number; refresh: number } }
 const compStates = new WeakMap<Stage, CompState>();
 export const busComputerState = (st: Stage) => compStates.get(st);
 const compActs = new WeakMap<Stage, { type(text: string): void; run(cycles: number, until?: () => boolean): void }>();
@@ -173,18 +186,19 @@ const rgb332 = (v: number): [number, number, number] => [Math.round(((v >> 5) & 
 /** A key as the keyboard sends it (ASCII; Enter 10, Backspace 8), or null. */
 const keyCode = (e: KeyboardEvent): number | null => (e.key === 'Enter' ? 10 : e.key === 'Backspace' ? 8 : e.key.length === 1 && e.key.charCodeAt(0) < 128 ? e.key.charCodeAt(0) : null);
 
-const computerPanel = (full: boolean): ScenePanel => (stage: Stage): Widget => {
+const computerPanel = (full: boolean, cards = false): ScenePanel => (stage: Stage): Widget => {
   const sim = () => stage.sim!;
   const root = () => sim().design.root;
   const out = (p: string) => pack(sim().getBits(root().ports[p]));
   const node = (path: string[]) => findNode(root(), path);
   const port = (path: string[], p: string) => { const n = node(path); return n ? pack(sim().getBits(n.ports[p])) : 0; };
-  const st: CompState = { console: '', retired: 0, cycles: 0, inRam: 0, dmaCycles: 0, dram: { hit: 0, miss: 0, conflict: 0, refresh: 0 } };
+  const st: CompState = { console: '', retired: 0, cycles: 0, inRam: 0, dmaCycles: 0, booted: -1, dram: { hit: 0, miss: 0, conflict: 0, refresh: 0 } };
   compStates.set(stage, st);
   const hook = {
     before: () => {
       st.cycles++;
       if (out('retire') === 1) { st.retired++; if ((out('pcOut') >>> 0) >= 0x200) st.inRam++; }
+      if (st.booted < 0 && (out('pcOut') >>> 0) === LOAD_AT) st.booted = st.cycles - 1;
       if (out('dmaBusy') === 1) st.dmaCycles++;
       if (out('consoleValid') === 1) st.console += String.fromCharCode(out('consoleData'));
       if (full) {
@@ -229,14 +243,19 @@ const computerPanel = (full: boolean): ScenePanel => (stage: Stage): Widget => {
   const status = h('div', { class: 'mc-status' });
   const con = h('pre', { class: 'bus-console' });
   const leds = h('div', { class: 'bus-leds' });
-  const title = h('h4', null, full ? 'Everything on one bus' : 'Computer on a bus', h('span', { class: 'fold-hint' }));
+  const title = h('h4', null, full ? 'Everything on one bus' : cards ? 'Booting from cards' : 'Computer on a bus', h('span', { class: 'fold-hint' }));
   const rows: [string, string][] = [['0x0000_0000', `boot ROM (fetch only), ${0x200} bytes`], ['0x0000_0000 …', 'RAM: code above the ROM, and every load and store'], ['0x1000_0000', 'flash (read only): the program to load'],
     ...(full ? [['0x2000_0000', 'DRAM, 16 KB (chapter 33\'s controller)'] as [string, string]] : []),
     ['0x4000_0000', 'DMA: source, destination, length, control'],
+    ...(cards ? [['0x7000_0000', 'card reader: +0 status (bit 0 a card waits, bit 1 hopper empty), +4 the word on the card (taken)']] as [string, string][] : []),
     ...(full ? [['0x5000_0000', `screen: ${SOC_SCREEN} × ${SOC_SCREEN}, a byte a pixel (RGB332)`], ['0x6000_0000', 'keyboard: +0 the oldest key (taken), +4 status']] as [string, string][] : []),
     ['0x8000_0000', 'console, LEDs, switches, timer (inside the CPU)']];
   const map = h('div', { class: 'bus-map' }, ...rows.map(([a, d]) => h('div', null, h('span', null, a), h('span', null, d))));
   const parts: (Node | string)[] = [title, h('div', { class: 'dram-ops' }, runBtn, step), status];
+  // ---- the card reader: where it is in the deck (the reader leaf's state)
+  const reader = h('div', { class: 'mc-status' });
+  const readerState = (): CardReaderState | null => { const li = node(['cards'])?.leafIndex; return li === undefined ? null : sim().leafState(li) as CardReaderState; };
+  if (cards) parts.push(h('div', { class: 'cpu-sec' }, `Card reader: ${CARD_DECK.name}, ${CARD_DECK.cards.length} cards`), reader);
   // ---- the full system: screen, keyboard, DRAM counters
   let paint = () => {};
   const extra = h('div', { class: 'mc-status' });
@@ -275,7 +294,16 @@ const computerPanel = (full: boolean): ScenePanel => (stage: Stage): Widget => {
     const pc = out('pcOut') >>> 0;
     status.replaceChildren(h('span', null, 'PC ', h('b', null, hex(pc)), pc < 0x200 ? ' (boot ROM)' : ' (RAM)'),
       h('span', null, `${st.cycles} cycles · ${st.retired} instructions (${st.inRam} from RAM)`),
-      h('span', null, `DMA busy ${st.dmaCycles} cycles`), h('span', null, `loaded at ${hex(LOAD_AT, 3)}`));
+      ...(cards ? [] : [h('span', null, `DMA busy ${st.dmaCycles} cycles`)]), h('span', null, `loaded at ${hex(LOAD_AT, 3)}`),
+      ...(st.booted >= 0 ? [h('span', null, `jumped there at cycle ${st.booted}`)] : []));
+    if (cards) {
+      const rs = readerState(), p = rs ? readerProgress(rs) : null;
+      const card = p && p.at !== null ? CARD_DECK.cards[p.at] : null;
+      reader.replaceChildren(
+        h('span', null, p ? `${p.taken} of ${p.cards} cards read` : '(no reader)'),
+        h('span', null, !p ? '' : p.at === null ? 'hopper empty' : p.feeding ? `card ${p.at + 1} feeding` : `card ${p.at + 1} at the station`),
+        ...(card ? [h('span', { class: 'mono' }, card.print.slice(0, 48).trimEnd())] : []));
+    }
     con.textContent = st.console || '(nothing yet)';
     const v = out('leds');
     leds.replaceChildren(...Array.from({ length: 8 }, (_, i) => h('span', { class: `bus-led${(v >> (7 - i)) & 1 ? ' on' : ''}` })));

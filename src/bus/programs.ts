@@ -162,3 +162,50 @@ handler: li  s6, 0x40000000
         addi s9, s9, 1
         sw   s9, 4(s0)          # the LEDs count the ticks
 out:    mret`;
+
+// ---- booting from punched cards (chapter 35's card reader at 0x7000_0000) -------------------------------
+
+/** The card reader's registers: STATUS (bit 0 a card waits, bit 1 the hopper is empty), DATA at +4. */
+export const CARD_BASE = 0x70000000;
+
+/**
+ * Clock edges between taking a card and the next one at the read station. A real reader took ~75 ms a card (the
+ * IBM 2540 read 800 a minute): millions of cycles of a CPU like this one; 8 keeps the wait visible but short.
+ */
+export const CARD_FEED = 8;
+
+/** The card boot ROM: what the IBM 1401's Load key did in hardware, read cards into memory until the hopper is empty, then run them. */
+export const CARD_BOOT_SOURCE = `# boot ROM: read the deck word by word into RAM at ${'0x' + LOAD_AT.toString(16)}, then jump there
+boot:   li   s0, 0x${CARD_BASE.toString(16)}     # card reader: STATUS +0, DATA +4
+        li   s1, ${LOAD_AT}           # RAM address
+next:   lw   t0, 0(s0)          # bit 0 card ready, bit 1 hopper empty
+        andi t1, t0, 2
+        bnez t1, run
+        andi t0, t0, 1
+        beqz t0, next
+        lw   t0, 4(s0)          # the word; the reader feeds the next card
+        sw   t0, 0(s1)
+        addi s1, s1, 4
+        j    next
+run:    li   t0, ${LOAD_AT}
+        jr   t0                 # the loaded program`;
+
+/** The program on the cards: runs from RAM, prints CARDS, then counts on the LEDs. */
+export const CARD_PAYLOAD_SOURCE = `# punched on cards, a word a card; runs from RAM at ${'0x' + LOAD_AT.toString(16)}
+        li   t0, 0x80000000     # console
+        li   t1, 67             # C
+        sw   t1, 0(t0)
+        li   t1, 65             # A
+        sw   t1, 0(t0)
+        li   t1, 82             # R
+        sw   t1, 0(t0)
+        li   t1, 68             # D
+        sw   t1, 0(t0)
+        li   t1, 83             # S
+        sw   t1, 0(t0)
+        li   t1, 10
+        sw   t1, 0(t0)
+        li   a0, 0
+loop:   addi a0, a0, 1
+        sw   a0, 4(t0)          # LEDs
+        j    loop`;
