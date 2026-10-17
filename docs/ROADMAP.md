@@ -627,6 +627,11 @@ with punch cards.
 - ⏳ A card-reader boot loader: a small sandbox example where the CPU starts from a boot ROM that reads cards from
   the reader part, word by word, into RAM and jumps to it, as IBM's machines loaded from cards (the 1401's Load
   key); the CPU drawer follows the loaded program like a ROM program, the golden model starting after the load
+  - ✅ On chapter 35's bus computer: step "Booting from cards" (a card-reader slave AXI_CARDS at 0x7000_0000, the
+    reader leaf holding the deck, a 12-instruction boot ROM that copies the deck to 0x400 and jumps there; the golden
+    model counts edges for the reader, so the gate-level computer is co-simulated in lock-step at any feed delay;
+    tests/buscards.test.ts)
+  - ⏳ The sandbox example on the system core with ports (the reader part, the CPU drawer) remains
 
 ### Phase 15 — Journey and campaign track: GPU ✅
 The same bricks arranged for throughput instead of latency: one instruction stream, many lanes, latency hidden by
@@ -772,7 +777,8 @@ on its own.
 - ✅ A system on one bus with a memory map: the system CPU (instructions fetched over the bus beyond a boot ROM), DMA,
   RAM, flash; it boots from flash into RAM by DMA (lib/soc.ts, lock-step with the golden model). ✅ the DRAM controller
   as a slave (a data mask on the device: a store writes its bytes without a read), a screen and a keyboard on the bus
-  (chapter 35's sixth step, on the cycle engine). ✅ the sandbox example (Examples ▸ System on a bus: boot ROM and flash
+  (chapter 35's last step, on the cycle engine). ✅ a boot from punched cards (a card-reader slave, chapter 35's
+  sixth step; Phase 14). ✅ the sandbox example (Examples ▸ System on a bus: boot ROM and flash
   contents as ROM parts, a screen, keyboard and timer parts behind the bus; the cycle engine) and a timer part (palette,
   workbench family)
 

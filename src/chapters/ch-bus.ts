@@ -1,15 +1,22 @@
-import { BOOT_SOURCE, LOAD_AT, LOAD_WORDS, SYSTEM_WORDS } from '../bus/programs';
+import { cardBootTime } from '../bus/cardboot';
+import { BOOT_SOURCE, CARD_BOOT_SOURCE, CARD_FEED, LOAD_AT, LOAD_WORDS, SYSTEM_WORDS } from '../bus/programs';
+import { deckWords } from '../cards/card';
 import { FLASH_TIMES } from '../flash/model';
-import { AXI_KEYS, AXI_PORT, axiBus, axiDram, DMA_ENGINE, busMemUnit } from '../lib/axi';
-import { SOC_SCREEN } from '../lib/soc';
+import { AXI_CARDS, AXI_KEYS, AXI_PORT, axiBus, axiDram, DMA_ENGINE, busMemUnit } from '../lib/axi';
+import { CARD_DECK, SOC_SCREEN } from '../lib/soc';
+import { assemble } from '../riscv/asm';
 import { ramLeafState } from '../lib/bigmem';
 import { findNode } from '../sim/flatten';
 import { stats } from '../sim/stats';
 import type { Stage } from '../view/stage';
-import { BENCH_IMAGE, busBenchActions, busBenchScene, busBenchState, busComputerActions, busComputerScene, busComputerState, systemComputerScene } from '../widgets/bus';
+import { BENCH_IMAGE, busBenchActions, busBenchScene, busBenchState, busComputerActions, busComputerScene, busComputerState, cardComputerScene, systemComputerScene } from '../widgets/bus';
 import type { Chapter } from './types';
 
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands.toLocaleString('en-US').replace(/,/g, ' ');
+
+/** The card boot, from the golden model (bus/cardboot.ts, pinned against the gates): with the reader's feed, and without. */
+const CARD_BOOT = cardBootTime(deckWords(CARD_DECK), CARD_FEED), CARD_BOOT_0 = cardBootTime(deckWords(CARD_DECK), 0);
+const CARD_BOOT_WORDS = assemble(CARD_BOOT_SOURCE).words.length;
 
 /** A RAM word of the bench's RAM (byte lanes). */
 function ramWord(st: Stage, a: number): number {
@@ -23,7 +30,7 @@ function ramWord(st: Stage, a: number): number {
 
 export const chBus: Chapter = {
   id: 'bus', num: 35, title: 'Buses and DMA', level: 'Memory in depth',
-  blurb: 'A valid / ready handshake, five channels and an address decoder, two masters and an arbiter, a DMA engine that copies while the CPU runs, a computer that boots from flash into RAM, and one with a DRAM, a screen and a keyboard on the same bus: every part in gates.',
+  blurb: 'A valid / ready handshake, five channels and an address decoder, two masters and an arbiter, a DMA engine that copies while the CPU runs, a computer that boots from flash into RAM, or from a deck of punched cards, and one with a DRAM, a screen and a keyboard on the same bus: every part in gates.',
   steps: [
     {
       title: 'A handshake',
@@ -123,6 +130,38 @@ export const chBus: Chapter = {
         options: ['Each is fetched over the bus: an address handshake, then the data', 'RAM is slower than ROM by nature', 'The DMA is still copying', 'The decoder needs a cycle for the NOP'],
         answer: 0,
         explain: 'An instruction from RAM is a bus read like any load: the address one cycle, the word the next. A load or store from RAM code costs two more. Caches (chapter 21) are what lets a real CPU fetch at full speed from slow memory.',
+      },
+    },
+    {
+      title: 'Booting from cards',
+      body: `
+        <p>Before flash, the program came on <strong>punched cards</strong>. The IBM 1401's <strong>Load</strong> key was a loader in
+        hardware: it read one card into memory locations 1–80 and branched to location 1. That first card held a few instructions that
+        read the next cards, which read the rest: the program pulled itself up by its bootstraps, hence <em>booting</em>.</p>
+        <p>Here a card reader stands in for the flash, at 0x7000_0000, the deck in its hopper (one word a card, punched in binary along
+        row 9). +0 is STATUS (bit 0: a card waits at the read station, bit 1: the hopper is empty), +4 is DATA, and reading DATA
+        <em>takes</em> the card, as reading the keyboard takes a key: the slave pulses <code>next</code> in the cycle after the read's
+        handshake. ${nands(AXI_CARDS)} NANDs, nearly all of them its 32-bit read register and the status / data multiplexer. The reader brings
+        the next card to the station ${CARD_FEED} edges later. A real reader took about 75 ms a card (800 a minute): millions of cycles of this
+        CPU, which would simply poll longer.</p>
+        <p>The boot ROM is ${CARD_BOOT_WORDS} instructions: poll STATUS, and while the hopper is not empty take each word and store it from
+        0x${LOAD_AT.toString(16)} upward; when the deck is done, jump there.</p>
+        <pre class="code">${CARD_BOOT_SOURCE.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>
+        <p>The deck is ${CARD_DECK.cards.length} cards; the jump to 0x${LOAD_AT.toString(16)} comes at cycle ${CARD_BOOT.cycles},
+        ${(CARD_BOOT.cycles / CARD_DECK.cards.length).toFixed(1)} a card. With no feed delay the loop alone would take
+        ${(CARD_BOOT_0.cycles / CARD_DECK.cards.length).toFixed(1)} (three of its nine instructions go over the bus); the rest is
+        ${CARD_BOOT.idlePolls} polls that found the station empty.</p>
+        <p>Each card also carries a <strong>sequence number</strong> in columns 73–80 (10, 20, 30, …, so that a card can be slipped in
+        between). A dropped deck is not lost: a card sorter, one column a pass, puts it back in order. The loader cannot tell: an unsorted
+        deck loads, and runs as nonsense.</p>
+        <div class="try">Run, and watch the reader work through the deck while the PC stays in the boot ROM; then the PC jumps into RAM
+        and the program from the cards prints and counts.</div>`,
+      scene: () => cardComputerScene(),
+      challenge: {
+        kind: 'reach', goal: 'Boot the computer from the deck: run until the program on the cards prints.',
+        check: (st) => (busComputerState(st)?.console ?? '').includes('CARDS'),
+        answer: `Run (or Run to output). The boot ROM reads the ${CARD_DECK.cards.length} cards into RAM at 0x${LOAD_AT.toString(16)}, waiting for the feed between them; at cycle ${CARD_BOOT.cycles} the hopper is empty and it jumps there, and the program prints CARDS, then counts on the LEDs.`,
+        solve: (st) => { busComputerActions(st)?.run(4000, () => (busComputerState(st)?.console ?? '').endsWith('\n')); },
       },
     },
     {
