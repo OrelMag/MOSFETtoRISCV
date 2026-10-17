@@ -169,7 +169,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     const editor = codeEditor({ value: opts.source, lang: 'rvasm', rows: 14, onChange: () => { errBox.textContent = ''; check(); } });
     editor.el.classList.add('asm-editor');
     const editWrap = h('div', { class: 'cpu-edit', style: 'display:none' }, editor.el, errBox,
-      h('div', { style: 'display:flex;gap:6px;margin-top:6px' },
+      h('div', { style: 'display:flex;flex-wrap:wrap;gap:6px;margin-top:6px' },
         h('button', {
           class: 'btn sm primary', onclick: () => {
             const r = assemble(editor.value);

@@ -72,3 +72,17 @@ export function widerCards(deck: Deck, bits: number): number[] {
   });
   return out;
 }
+
+/**
+ * The narrowest common word width (8, 16 or 32 bits) holding every object card's word: the last row-9 hole in
+ * the word columns tells. 0 for a deck with no object card. A guess (a 16-bit deck of even words reads as 15
+ * bits), good enough to set a reader that would otherwise cut the words off.
+ */
+export function deckBits(deck: Deck): number {
+  let last = 0;
+  for (const c of deck.cards) {
+    if (!isObjectCard(c, MAX_WORD_BITS)) continue;
+    for (let b = MAX_WORD_BITS - 1; b >= last; b--) if (c.cols[b] & ROW9) { last = b + 1; break; }
+  }
+  return last === 0 ? 0 : last <= 8 ? 8 : last <= 16 ? 16 : 32;
+}

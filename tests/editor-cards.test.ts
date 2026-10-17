@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { blankCard, deckWords, objectCard, programDeck, seqText, textCard } from '../src/cards/card';
 import { punchOf } from '../src/cards/hollerith';
-import { cardSource, codeOf, deckProgram, programCards, widerCards } from '../src/cards/program';
+import { cardSource, codeOf, deckBits, deckProgram, programCards, widerCards } from '../src/cards/program';
 import { deckReader, readerSpecOf } from '../src/cards/reader';
 import { cardDoc, cardOf, deckRef, readerRefDef, readerRefOf, type ReaderRef, refDeck, sampleReaderRef, sanitizeReaderRef } from '../src/editor/cardparts';
 import { romDeck, romWithDeck } from '../src/editor/deckio';
@@ -202,5 +202,14 @@ describe('ROM programs as decks', () => {
     expect(b.errors).toEqual([]);
     expect(b.words.map((w) => w >>> 0)).toEqual(a.words.map((w) => w >>> 0));
     expect(codeOf('loop:  addi x1, x1, 1   # count')).toBe('loop: addi x1, x1, 1');
+  });
+});
+
+describe('deck word widths', () => {
+  it('guesses 8, 16 or 32 bits from the object cards, 0 without any', () => {
+    expect(deckBits(programDeck('a', [{ word: 0x41 }], 8))).toBe(8);
+    expect(deckBits(programDeck('b', [{ word: 0x1235 }, { word: 2 }], 16))).toBe(16);
+    expect(deckBits(programDeck('c', [{ word: 0x13 }], 32))).toBe(32);
+    expect(deckBits({ name: 's', cards: [textCard('HELLO')] })).toBe(0);
   });
 });

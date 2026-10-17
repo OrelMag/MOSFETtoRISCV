@@ -6,7 +6,7 @@
 
 import '../styles/cardui.css';
 import { type Card, type Deck, deckFromJson, deckToJson, DECK_EXT, dropDeck, MAX_WORD_BITS, seqOf, sortDeck, textCard, textOf, unpunchable, wordOf } from '../cards/card';
-import { cardSource } from '../cards/program';
+import { cardSource, deckBits } from '../cards/program';
 import { type CardReaderState, MAX_FEED, readerProgress } from '../cards/reader';
 import type { Vec } from '../sim/geometry';
 import { h, icon } from '../ui/dom';
@@ -99,10 +99,11 @@ export async function dropDeckFile(ed: Editor, f: File, at?: Vec): Promise<void>
   const sel = ed.selCount === 1 && ed.sel.parts?.length === 1 ? ed.doc.parts.find((p) => p.id === ed.sel.parts![0]) : undefined;
   if (sel && 'rom' in sel.ref) return void loadDeckIntoRom(ed, sel.id, deck);
   if (sel && 'reader' in sel.ref) {
-    if (setPartRef(ed, sel.id, { reader: deckRef(deck, sel.ref.reader) })) ed.toast(`${sel.id} holds ${deck.name} now (${deck.cards.length} cards)`);
+    const bits = deckBits(deck) || sel.ref.reader.bits;
+    if (setPartRef(ed, sel.id, { reader: deckRef(deck, { ...sel.ref.reader, bits }) })) ed.toast(`${sel.id} holds ${deck.name} now (${deck.cards.length} cards${sel.ref.reader.mode === 'word' ? `, ${bits}-bit words` : ''})`);
     return;
   }
-  const ref: PartRef = { reader: deckRef(deck) };
+  const ref: PartRef = { reader: deckRef(deck, { bits: deckBits(deck) || 32 }) };
   const def = ed.defOfRef(ref);
   if (!def) return void ed.toast('The deck could not be put in a card reader', 'err');
   const where = at ?? ed.view.cam.toWorld(ed.view.svg.getBoundingClientRect().left + ed.view.svg.clientWidth / 2, ed.view.svg.getBoundingClientRect().top + ed.view.svg.clientHeight / 2);
@@ -238,7 +239,7 @@ function readerProps(ed: Editor, p: PartDoc, r: ReaderRef): HTMLElement {
   };
 
   // type a source card: a line punched in the 029 code, after the selected card
-  const typed = h('input', { type: 'text', maxlength: '80', spellcheck: 'false', placeholder: 'a line of source, e.g.  ADDI X3, X0, 10', 'aria-label': 'Source card text' }) as HTMLInputElement;
+  const typed = h('input', { type: 'text', maxlength: '80', spellcheck: 'false', placeholder: 'a line of source', 'aria-label': 'Source card text' }) as HTMLInputElement;
   const warn = h('p', { class: 'sb-card-warn', hidden: true });
   typed.addEventListener('input', () => {
     const bad = unpunchable(typed.value);
@@ -290,7 +291,10 @@ function readerProps(ed: Editor, p: PartDoc, r: ReaderRef): HTMLElement {
       btn('Load deck…', `Replace the deck with a ${DECK_EXT} file`, () => void pickDeck(ed).then((d) => {
         if (!d) return;
         setPick(ed, id, 0);
-        set({ cards: d.cards.slice(0, READER_MAX_CARDS).map(cardDoc), name: d.name.slice(0, READER_NAME_MAX) || 'deck' });
+        // object cards say how wide their words are (most significant bit in column 1): read them at that width
+        const w = deckBits(d);
+        set({ cards: d.cards.slice(0, READER_MAX_CARDS).map(cardDoc), name: d.name.slice(0, READER_NAME_MAX) || 'deck', ...(w ? { bits: w } : {}) });
+        if (w && w !== r.bits && r.mode === 'word') ed.toast(`Reading ${w}-bit words, as the deck's object cards hold`);
       }), 'open'),
       btn('Save deck', `Download the deck as a ${DECK_EXT} file`, () => saveDeck(ed, refDeck(now() ?? r))),
       fromRom),

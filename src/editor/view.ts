@@ -460,7 +460,8 @@ export class EditorView {
     } else if ('reader' in p.ref) {
       // a card reader: the box, and a line saying which card is at the read station
       g.append(drawSymbol(def, p.flip));
-      const text = s('text', { class: 'ed-cr-text', x: geo.w / 2, y: geo.h - 1.5, 'text-anchor': 'middle' }, '');
+      // low on the side of next, which has no other port below it (clk sits mid-bottom, empty right)
+      const text = s('text', { class: 'ed-cr-text', x: p.flip ? geo.w - 0.5 : 0.5, y: geo.h - 2, 'text-anchor': p.flip ? 'end' : 'start' }, '');
       g.append(text);
       disp = { kind: 'reader', width: 0, segs: [], shown: '', text };
     }

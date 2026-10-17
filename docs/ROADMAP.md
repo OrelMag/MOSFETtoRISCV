@@ -619,11 +619,17 @@ with punch cards.
   mode for machine words (one word per column or per row); a deck of cards, reorderable, exportable
 - ⏳ A card reader part (sandbox and campaign) feeding a ROM or a word stream (like the keyboard part), and the
   program input of the relay / tube machine
+  - Sandbox part done (editor/cardparts.ts, cardui.ts): the deck in the document, word or column mode, feed delay;
+    properties punch cards by hand, type source cards, load / save / drop / sort decks, punch one from a ROM, follow
+    the read station live. Still to do: the campaign's reader and the relay / tube machine's program input
 - ⏳ In the campaign: a Hollerith-code drill and a level where the program arrives on cards
 - ⏳ Cards for the RISC-V CPUs: any program (RV32 asm / hex in the ROM editor and the CPU panel, RV16 in the
   campaign) exported as a deck, one instruction per card (its word punched in binary, the source line printed in
   Hollerith along the top, a sequence number in columns 73–80 as on real decks so a dropped deck can be sorted),
   and a deck loaded back into a ROM; drop a deck file on the canvas to load it
+  - Done for the sandbox's ROMs (RV32 asm / hex, RV16, 4-bit CPU, custom ISAs: Save as deck / Load deck in the
+    ROM properties and program editor, a .deck.json dropped on the canvas) and the chapters' CPU panel (cards/program.ts).
+    Still to do: the campaign's RV16 programs
 - ⏳ A card-reader boot loader: a small sandbox example where the CPU starts from a boot ROM that reads cards from
   the reader part, word by word, into RAM and jumps to it, as IBM's machines loaded from cards (the 1401's Load
   key); the CPU drawer follows the loaded program like a ROM program, the golden model starting after the load
