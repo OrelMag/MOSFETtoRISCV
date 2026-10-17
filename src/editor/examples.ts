@@ -10,6 +10,7 @@ import { PICTURE } from '../riscv/ioprograms';
 import { CPU4_SUBCHIPS, cpu4Chip } from './example4';
 import { computer6502Chip, memory6502Chip } from './example6502';
 import { busSystemChip } from './examplebus';
+import { cardsBootChip } from './examplecards';
 
 const pin = (id: string, dir: PinDoc['dir'], at: Vec, width = 1, extra: Partial<PinDoc> = {}): PinDoc => ({ id, name: id, dir, width, at, ...extra });
 const part = (id: string, ref: PartRef, at: Vec, extra: Partial<PartDoc> = {}): PartDoc => ({ id, ref, at, ...extra });
@@ -397,6 +398,11 @@ export const EXAMPLES: Example[] = [
     id: 'bussystem', name: 'System on a bus',
     blurb: 'Chapter 35\'s computer: an RV32I core and a DMA engine on one bus to RAM, a flash it boots from, the DRAM of chapter 33, a screen, a keyboard and a timer. Clock rate max, Run, then type.',
     build: busSystemChip,
+  },
+  {
+    id: 'cardboot', name: 'Boot from cards',
+    blurb: 'An RV32I core whose boot ROM reads a deck from a card reader into RAM and jumps to it, like the IBM 1401\'s Load key. Run; then drop the deck, Reset and Run, and sort it.',
+    build: (id, n) => cardsBootChip(id, n),
   },
   { id: 'sharedbus', name: 'Shared bus', blurb: 'Two tri-state drivers and a pull-down on one wire: a value, a held 0, or a fight (X).', build: sharedBusChip },
   { id: 'wiredand', name: 'Wired-AND', blurb: 'Open-drain NMOS stages and a pull-up: the wire is 1 only when every stage lets go.', build: (id, n) => wiredChip(id, n, 'and') },

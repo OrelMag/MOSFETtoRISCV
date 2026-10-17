@@ -5,6 +5,7 @@
 // at its end left off (a source card is mostly blank on the right), and its print. A reader reads the deck in
 // word mode (row 9 of the first `bits` columns, one word a card) or column mode (12 bits a column, 80 a card).
 
+import type { Sim } from '../sim/sim';
 import type { ComponentDef } from '../sim/types';
 import { blankCard, COLUMNS, type Card, type Deck, MAX_DECK, MAX_WORD_BITS, objectCard, seqText } from '../cards/card';
 import { deckReader, MAX_FEED, readerSpecOf, type ReaderMode } from '../cards/reader';
@@ -130,3 +131,12 @@ export function readerRefOf(d: ComponentDef): ReaderRef | null {
   }
   return deckRef({ name: sp.name ?? 'deck', cards }, { mode: sp.mode, bits: sp.mode === 'word' ? sp.bits : 32, feed: sp.feed });
 }
+
+/**
+ * Why a CPU drawer's golden model sits out on a circuit with a card reader: a program that loads from cards (or
+ * reads them as data) does what the deck says, and no golden model has a card reader to follow it.
+ */
+export const CARDS_NO_GOLDEN = 'a card reader feeds this circuit, which the golden model does not have (it cannot follow a program loaded from cards): watch the console, the registers and the RAM';
+
+/** Does a simulation hold a card reader (the monitors' golden models sit out)? */
+export const simHasCardReader = (sim: Sim | null): boolean => !!sim && sim.design.leaves.some((l) => readerSpecOf(l.def) !== null);
