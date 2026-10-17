@@ -25,8 +25,8 @@ export function tubeDividerWidget(): Widget {
     s('rect', { x: X_GRID - 70, width: 140, y: Y(0), height: Y(V_CUTOFF) - Y(0), class: 'tdiv-on' }),
     s('rect', { x: X_GRID - 70, width: 140, y: Y(V_MAX), height: Y(0) - Y(V_MAX), class: 'tdiv-gc' }),
     s('line', { x1: X_GRID - 70, x2: X_GRID + 70, y1: Y(V_CUTOFF), y2: Y(V_CUTOFF), class: 'vt' }),
-    s('text', { x: X_GRID + 74, y: Y(V_CUTOFF) + 3.5, class: 'tick' }, 'cutoff'),
-    s('text', { x: X_GRID + 74, y: Y(-6) + 3.5, class: 'tick tdiv-onl' }, 'conducts'),
+    s('text', { x: X_GRID + 74, y: Y(0) + 1, class: 'tick tdiv-onl' }, 'conducts'),
+    s('text', { x: X_GRID + 74, y: Y(V_CUTOFF) + 13, class: 'tick' }, `cutoff ${V_CUTOFF} V`),
     s('text', { x: X_GRID + 74, y: Y(130), class: 'tick' }, 'grid current'),
     s('line', { x1: M.l, x2: M.l, y1: M.t, y2: H - M.b, class: 'ax' }),
     s('text', { x: 8, y: M.t, 'text-anchor': 'end', 'dominant-baseline': 'hanging', transform: `rotate(-90 8 ${M.t})`, class: 'axl' }, 'volts'),
@@ -70,7 +70,7 @@ export function tubeDividerWidget(): Widget {
       : 'A 1 no longer turns the next tube on: the divider pulls the grid below cutoff even from a high plate.';
     verdict.classList.toggle('bad', !(okHigh && okLow));
   };
-  const rSl = slider('Ratio', 0.6, 3, 0.05, ratio, (v) => `${v.toFixed(2)} : 1`, (v) => { ratio = v; paint(); });
+  const rSl = slider('Ratio', 0.6, 3, 0.05, ratio, (v) => `${v.toFixed(2)}:1`, (v) => { ratio = v; paint(); });
   const bSl = slider('Bias', -200, 0, 10, bias, (v) => `${v} V`, (v) => { bias = v; paint(); });
   const fSl = slider('Fan-out', 1, 4, 1, fanout, (v) => String(v), (v) => { fanout = v; paint(); });
 

@@ -258,7 +258,7 @@ export const ECCLES_JORDAN: ComponentDef = define({
     const db = divider('rb', X + 1, 11), da = divider('ra', X + 33, 11);
     return {
       level: 'switch',
-      pins: { set: [X + 30, 0], reset: [X + 8, 0], q: [X + 39, 9.5], nq: [0, 8.5] },
+      pins: { set: [X + 30, 0], reset: [X + 8, 0], q: [X + 39, 10], nq: [0, 8] },
       pinDirs: { set: 'down', reset: 'down', nq: 'right' },
       instances: [
         ...db.instances, ...da.instances,
@@ -268,8 +268,8 @@ export const ECCLES_JORDAN: ComponentDef = define({
       ],
       nets: [
         ...db.nets, ...da.nets, supply('rla'), supply('rlb'), cathode('va'), cathode('vb'),
-        { name: 'q', ends: ['va.p', 'rla.b', 'ra1.a', 'q'], via: { 'ra1.a': [[X + 12, 9.5], [X + 34, 9.5]] } },
-        { name: 'nq', ends: ['vb.p', 'rlb.b', 'rb1.a', 'nq'], via: { 'rb1.a': [[X + 26, 8.5], [X + 2, 8.5]] } },
+        { name: 'q', ends: ['va.p', 'rla.b', 'ra1.a', 'q'], via: { 'ra1.a': [[X + 12, 10], [X + 34, 10]] } },
+        { name: 'nq', ends: ['vb.p', 'rlb.b', 'rb1.a', 'nq'], via: { 'rb1.a': [[X + 26, 8], [X + 2, 8]] } },
         { name: 'grid a', ends: ['va.g', 'rb1.b', 'rb2.a', 'dr.k'], trunk: X + 8 },
         { name: 'grid b', ends: ['vb.g', 'ra1.b', 'ra2.a', 'ds.k'], trunk: X + 30 },
         { name: 'set', ends: ['set', 'ds.a'] }, { name: 'reset', ends: ['reset', 'dr.a'] },

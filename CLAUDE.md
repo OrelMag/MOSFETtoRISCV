@@ -111,7 +111,7 @@ src/sim/       simulation core (no DOM)
                  the cycle engine now (tests/cyclesim*.test.ts, cyclekit.ts)
   switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes); `strength` levels:
                  rails/inputs > transistors (strength 4..2, ratioed logic) > resistors (prim 'res',
-                 strength 1: pull-ups lose to any transistor; two opposing → X) > stored charge
+                 strength 1: pull-ups lose to any transistor; two opposing → X) > bias resistors (strength 0) > stored charge
                  (`cap` nets and prim 'cap' capacitors keep their value when undriven); charge levels (DRAM):
                  `level(net)` a fraction of VDD, floating charge nets joined by switches share Σ C·V / Σ C (C from
                  NetDef.cap), a level reads as a bit only near a rail (LEVEL_HI / LO, else X); prim 'vhalf' a source
@@ -126,7 +126,11 @@ src/sim/       simulation core (no DOM)
                  armatures move only at a relay step (relayStep: every relay takes its coil's state at once), so time counts
                  relay steps, step() takes one, settle() takes them until quiet (RELAY_SETTLE_MAX, then unstable: an
                  oscillator); relayState / relayEnergized for the view; kept by saveState, carry; the stage plays relay
-                 steps like gate delays (relayTime: Step, animate, "settled in n relay steps")
+                 steps like gate delays (relayTime: Step, animate, "settled in n relay steps"); prim 'triode' (g, p, k) and
+                 'diode' (a, k) (prologue P2): one-way elements, each two sources of its own set every iteration from the far
+                 terminal (the cathode's 0 onto the plate, the plate's 1 onto the cathode; the triode only while its grid is
+                 1, a maybe at X), as strong as the path behind that value (vLv[2·net + value], kept across solves, saveState,
+                 carry: a cross-coupled pair keeps its bit); levels nothing sits on are skipped
   nmossim.ts     NmosSim: event-driven switch-level engine for large NMOS circuits (Appendix A's 6502): a change
                  recomputes the channel-connected groups it reaches (rails and driven inputs end a group); GND / an
                  input 0 beats VDD / 1 (a short is counted), any of those beats a pull-up (prim 'dep' or 'res' to a
@@ -238,6 +242,12 @@ src/lib/       the component library (registered in `registry` via define())
                  RELAY_FA (the carry through contacts on two rails, ci / nci: a contact cannot invert), relayAdder(n) (one
                  relay step for any width), RELAY_LATCH (self-holding), RELAY_BUZZER (a coil through its own break contact);
                  outputs end on a load (a pull-down standing for the next coil) so a part alone reads 0, not Z
+  tubes.ts       prologue P2's tubes at switch level: TRIODE (a 6SN7 section), DIODE (id vdiode, a 6AL5 section), B_PLUS
+                 (+250 V) / V_NEG (−150 V) rails, RES_DIV (a divider's top leg, strength 2: between the plate resistor and
+                 the tube, so a ratioed plate decides its grid) and RES_BIAS (its bottom leg, strength 0); TRIODE_SWITCH,
+                 TUBE_INV, TUBE_NOR, TUBE_NAND (diode AND + triode: the brick), CATHODE_FOLLOWER, ECCLES_JORDAN (cross-coupled
+                 pair, set / reset through steering diodes), TUBE_FA (the nine-NAND full adder in tube NANDs); every input
+                 behind a 625 kΩ / 375 kΩ divider (labels; the voltages are phys/triode.ts's)
   flash.ts       chapter 34's flash at switch level: FG_CELL (prim 'fgmos'), vtOf / V_READ, norArray(R, C) (cells between
                  bit lines and a source line held high while programming), nandBlock(S, N) (strings with string / ground
                  selects, the other rows at the pass voltage); per column a pull-up, an output inverter and a NOR-gated
@@ -656,12 +666,16 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
 src/phys/      lumped physics models behind the prologue's close-ups (DOM-free): relay.ts (a 24 V telephone relay: saturating
                flux, gap-dependent reluctance, armature and blade with a compliant, bouncing contact, quench resistor; relaySim,
                relayStatic (pull-in / drop-out), relaySummary; RELAY_STEP_MS: the settled time, the relay step's length
-               (tests/phys-relay.test.ts holds it to the model), RELAY_COIL_POWER)
+               (tests/phys-relay.test.ts holds it to the model), RELAY_COIL_POWER); triode.ts (a 6SN7 section: space-charge
+               law fitted to the datasheet, Richardson emission over a 6 s heater warm-up, plateVoltage with divider loads,
+               gateLevels(fanout, top, bottom, bias): a chain's margins, sectionPower / nandBrickPower, TUBE_STEP_US (an
+               estimate), ENIAC's numbers; tests/phys-triode.test.ts)
 src/gl/        the hand-written WebGL2 renderer (its own lazy chunk, no library): instanced meshes (boxMesh, cylinderMesh; 18
                floats per instance: position, scale, quaternion, RGBA, emissive + specular), transparent batches, frames
                on demand, OrbitCamera + orbit controls, context loss recovery; createRenderer returns null without WebGL2.
                widgets/relay3d.ts (relayCloseup: a placeholder, then imports relay3dview.ts: the relay in 3D on
-               phys/relay.ts, sliders, plots, an SVG fallback without WebGL2)
+               phys/relay.ts, sliders, plots, an SVG fallback without WebGL2); widgets/triode3d.ts (triodeCloseup, the same
+               way: triode3dview.ts on phys/triode.ts); widgets/tubedivider.ts (P2's divider explorer: ratio, bias, fan-out)
 src/gfx/       raster16.ts: the campaign's (7-bit vertices, 32 × 32, RGB565; Edge16 / Walk16 models, rasterize16 with the
                19-cycle set-up, draw16, rgb565); raster.ts: the rasterizer's reference model (setup, rasterize: pixel writes
                with their cycles, zPlane / zAt / zStore, blend332, RefFrame: a framebuffer and depth buffer drawn as the

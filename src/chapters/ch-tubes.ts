@@ -155,13 +155,14 @@ export const chTubes: Chapter = {
         (1918), the flip-flop, from one 6SN7.</p>
         <p><code>set</code> drives the right grid high through a steering diode: the right tube conducts, the left
         is cut off, <code>q</code> (the left plate) rises. <code>reset</code> does the mirror image. Let go and the
-        diodes conduct nothing: the pair keeps its bit. At power-on it is undecided (X): a real pair falls into
-        whichever state its slightly stronger tube prefers.</p>
+        diodes conduct nothing: the pair keeps its bit. The scene starts with <code>reset</code> held: powered up
+        with neither, the pair is undecided (X here), and a real one falls into whichever state its slightly
+        stronger tube prefers.</p>
         <p>In NAND bricks the same set–reset latch is ${stats(SR_LATCH).nands} NANDs: ${stats(SR_LATCH).nands} triode
         sections and ${2 * stats(SR_LATCH).nands} diodes; a clocked D flip-flop is ${stats(DFF).nands}. ENIAC kept each
         decimal digit of its accumulators in a ring of ten of these pairs.</p>
         <div class="try">Set, let go, and the bit stays. Then reset.</div>`,
-      scene: () => ({ root: ECCLES_JORDAN, inputs: { set: 0, reset: 0 } }),
+      scene: () => ({ root: ECCLES_JORDAN, inputs: { set: 0, reset: 1 } }),
       challenge: {
         kind: 'reach', goal: 'Store a 1 in q, with set and reset both back at 0.',
         check: (st) => st.value('q') === 1 && st.getInput('set') === 0 && st.getInput('reset') === 0,

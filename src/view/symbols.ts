@@ -211,7 +211,7 @@ export function instNameAt(def: ComponentDef): { x: number; y: number; anchor: '
   if (k === 'res' || k === 'pullup' || k === 'pulldown' || k === 'cap') return { x: 1.75, y: g.h / 2 + 0.3, anchor: 'start' };
   if (k === 'tgate' || k === 'tribuf' || k === 'triinv') return { x: 2.4, y: 0.95, anchor: 'start' };
   if (k === 'relay') return { x: 0.1, y: -0.45, anchor: 'start' };
-  if (k === 'triode' || k === 'diode') return { x: 3.75, y: 0.75, anchor: 'start' };
+  if (k === 'triode' || k === 'diode') return { x: 3.75, y: 3.55, anchor: 'start' };
   return { x: g.w / 2, y: -0.35, anchor: 'middle' };
 }
 
