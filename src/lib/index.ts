@@ -29,6 +29,7 @@ export * from './cells';
 export * from './dram';
 export * from './flash';
 export * from './relays';
+export * from './tubes';
 export * from './axi';
 export * from './soc';
 export * from './cache';
