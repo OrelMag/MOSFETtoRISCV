@@ -1408,4 +1408,40 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
     ],
     chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 2, label: 'A spinning triangle' }],
   },
+  // ---- act 10: memory
+  memwall: {
+    idea: 'From the 1980s on, processor clocks rose by orders of magnitude while the time to read a DRAM row fell by a small factor: a DRAM chip is mostly wires and capacitors whose RC delays shrink slowly, and it is built for density and cost per bit, not speed. Wulf and McKee named the gap the <b>memory wall</b> (1995): past some point the program\'s speed is the memory\'s.<br>Every level of the hierarchy is a way around it. Caches keep recently used words in SRAM next to the core; the row buffer keeps a whole row of the DRAM open so its neighbours are fast; banks let several rows be open at once; controllers reorder requests to hit open rows; GPUs keep enough threads to cover the wait. In this campaign\'s numbers (DDR4-3200 at a 3.95 ns clock) a row hit costs 4 cycles before the data, a row conflict 12.',
+    example: { title: 'One read, three ways', body: '<pre>row hit        RD, 4 cycles (tCAS)                 →  4\nclosed bank    ACT, 4 (tRCD), RD, 4 (tCAS)          →  8\nrow conflict   PRE, 4 (tRP), ACT, 4, RD, 4          → 12 (more if tRAS has not passed)</pre>' },
+    mistakes: ['Quoting a memory\'s bandwidth for its latency: a burst streams words every cycle once it starts, but the first one still waits for the row.'],
+    chapters: [{ chapter: 'dram', step: 5, label: 'Bursts and timings' }, { chapter: 'memctrl', step: 3, label: 'The CPU behind it' }],
+  },
+  rowbuffer: {
+    idea: 'A DRAM array is read a row at a time: the word line joins every cell of the row to its bit line, and every column\'s sense amplifier latches its bit. Those amplifiers now hold the row, thousands of bits of it in a real chip: the <b>row buffer</b>. Column accesses read or write words of it at the speed of the column path (tCAS), while the row stays open.<br>Another row of the same bank needs the bit lines back at VDD/2 first: a precharge (PRE, tRP), then an activate (ACT, tRCD). Each bank has its own amplifiers, so a chip with 2 to 16 banks can keep that many rows open, and requests that alternate between banks never conflict. Which address bits pick the bank is the controller\'s choice: the low bits above the column put neighbouring rows in different banks.',
+    mistakes: ['Treating a row hit as free: tCAS still applies; the row buffer saves tRP and tRCD, not the column access.'],
+    lib: 'rv16_bank',
+    chapters: [{ chapter: 'dram', step: 4, label: 'Rows, columns, banks' }, { chapter: 'memctrl', step: 4, label: 'Banks and address mapping' }],
+  },
+  refresh: {
+    idea: 'The capacitor of a DRAM cell leaks through its access transistor and the junctions around it; a stored 1 decays towards the point where the amplifier can no longer tell it from VDD/2. Opening the row restores every cell of it to a full level, so a refresh is nothing but an activate (and a precharge). JEDEC chips guarantee 64 ms: 8 192 rows in 64 ms is a row every 7.8 µs.<br>Early DRAMs (the 4116) left the bookkeeping to the system: <b>RAS-only refresh</b>, the controller keeping a row counter and activating each row in turn, as m_bank does in cycles the requests leave free. DDR chips keep the counter inside: the controller only sends <b>REF</b> every tREFI with every bank closed, and the chip is busy for tRFC (350 ns for an 8 Gb DDR4). The cost is the same either way: a few percent of the cycles, more as chips grow.',
+    example: { title: 'm_bank\'s budget', body: '16 rows, each opened at least every 288 cycles: one refresh every 18 cycles on average. The reference refreshes when the port is idle and the timer has passed 8, and forces one at 15: at most 16 cycles apart, so every row comes round within 256.' },
+    mistakes: [
+      'Refreshing only when idle: a busy enough request stream then starves refresh until data is lost.',
+      'Closing the open row to refresh another and losing the hit: leave the refreshed row open; the next request may want it.',
+    ],
+    lib: 'rv16_bank',
+    chapters: [{ chapter: 'dram', step: 3, label: 'Leaks and refresh' }, { chapter: 'memctrl', step: 2, label: 'Refresh' }],
+  },
+  dramtiming: {
+    idea: 'A DRAM chip has no clock of its own for its array: its rules are delays, set in nanoseconds by the physics of the array, and the controller counts them in its own cycles. <b>tRCD</b>: from ACT until the row is in the amplifiers and a column may be read or written. <b>tCAS</b> (CAS latency): from RD to the data. <b>tRAS</b>: from ACT until the row may close, the time the amplifiers need to restore the cells. <b>tRP</b>: from PRE until the bit lines are back at VDD/2 and another row may open. <b>tRFC</b>: a refresh keeps the chip busy.<br>DDR4-3200 says 13.75 ns for tRCD, tCAS and tRP and 32 ns for tRAS; at this campaign\'s 3.95 ns clock that is 4, 4, 4 and 9 cycles (rounded up: a command one cycle early is a broken rule, one late only slower). A controller keeps a counter per rule, or, with one request at a time, counters of the cycles since the last ACT and the last PRE.',
+    example: { title: 'A conflict in m_ctrl', body: '<pre>cycle  0  ACT bank 0 row 5\ncycle  4  RD                (tRCD = 4)\ncycle  8  data on dq        (tCAS = 4)\ncycle  9  PRE bank 0        (tRAS = 9 after the ACT)\ncycle 13  ACT bank 0 row 9  (tRP = 4)\ncycle 17  RD, data at 21</pre>' },
+    mistakes: ['Counting from the wrong command: tRAS runs from the ACT, not from the last read.', 'Assuming the data comes with RD: it comes tCAS cycles later; a read is not done when the command goes out.'],
+    lib: 'rv16_dramctrl',
+    chapters: [{ chapter: 'dram', step: 5, label: 'Bursts and timings' }, { chapter: 'memctrl', step: 0, label: 'Commands' }],
+  },
+  pagepolicy: {
+    idea: 'After an access the controller can leave the row open (<b>open page</b>) or close it at once (<b>closed page</b>). Open, the next access to the same row is a row hit (tCAS); an access to another row of that bank pays a precharge on top (tRP + tRCD + tCAS). Closed, every access finds the bank precharged: always tRCD + tCAS, never the conflict, never the hit.<br>Which wins depends on locality. Instruction fetches, array walks and cache-line fills stay in a row: open page. Many independent streams, or random accesses to a large table, rarely hit: closed page, or an adaptive policy that closes a row after it has been idle for a while. Chapter 33 measures both on the benchmarks; m_ctrl\'s traces include runs along a row, so open page is par.',
+    mistakes: ['Closing the row before tRAS has passed: closed page still has to wait for the restore.'],
+    lib: 'rv16_dramctrl',
+    chapters: [{ chapter: 'memctrl', step: 1, label: 'Open page or closed page' }],
+  },
 };

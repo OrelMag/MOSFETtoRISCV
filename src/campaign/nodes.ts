@@ -12,6 +12,7 @@ import { BUILD9 } from './build9';
 import { BUILDFP, FP_REF, fpGives } from './buildfp';
 import { BUILDH } from './buildh';
 import { BUILDK } from './buildk';
+import { BUILDM } from './buildm';
 import { fpAdd, fpMul, lzc, ROUND_DECIDE } from '../lib/fpu';
 import { arrayMul, seqDivider } from '../lib/muldiv';
 import { seqMul } from '../lib/multiply';
@@ -37,6 +38,7 @@ export const ACTS: Act[] = [
   { num: 7, title: 'The system: traps and interrupts', blurb: 'A real processor reacts to the outside world and to its own mistakes. CSRs, exceptions and interrupts, precise even in the pipeline: the finale.' },
   { num: 8, title: 'Side quests', blurb: 'Optional: faster adders, multipliers and dividers, floating point, caches, microcode. Each one is a trade of area for time.' },
   { num: 9, title: 'Throughput: a GPU', blurb: 'Optional, after the finale: the same bricks arranged for throughput instead of latency: one instruction stream, four lanes, each with its own registers. Then the hard part: what the lanes do when they disagree.' },
+  { num: 10, title: 'Memory', blurb: 'Optional, after the finale: what sits behind the data port. Charge on a bit line, a row buffer that leaks, a controller that keeps a chip\'s timings and refreshes it.' },
 ];
 
 export const NODES: CampaignNode[] = [
@@ -677,6 +679,31 @@ export const NODES: CampaignNode[] = [
     why: 'A spinning square, a few frames of it, on the device you built: warp 0 turns the corners, both warps clear the screen, lane 0 hands two triangles to the rasterizer. No multiplier and no sine table: Minsky\'s rule turns a point with two shifts and two adds.',
     tips: ['Clearing is most of the work: give all eight threads a share, several stores per pass.', 'Lane i of warp 0 turns corner i; store each corner\'s screen position (64 + (x >> 8)) where lane 0 can load it.', 'Two bars per frame: after clearing and turning (lane 0 needs the corners and a clean screen), and after drawing (nobody clears a frame still being drawn).', 'On the hardware a load from the screen waits for the rasterizer: one before the clear makes the program right there too.'],
     codex: ['minsky'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 2, label: 'A spinning triangle' }],
+  },
+  // ---- Act 10 -------------------------------------------------------------------------------
+  {
+    id: 'm_lesson', act: 10, title: 'Where the cycles go', kind: 'lesson', optional: true, requires: ['y_final'], body: 'memwall',
+    why: 'Every core so far read its memory in the same cycle. Real memory is a capacitor per bit, read by a sense amplifier, a row at a time, behind a controller that keeps a chip\'s timing rules and refreshes it before it forgets. This act builds that path, from the bit line up.',
+    tips: [], codex: ['memwall', 'rowbuffer'], chapters: [{ chapter: 'dram', label: 'Inside a DRAM' }, { chapter: 'memctrl', label: 'A memory controller' }],
+  },
+  {
+    id: 'm_sense', act: 10, title: 'A DRAM column', kind: 'build', optional: true, requires: ['m_lesson'], base: BUILDM.m_sense, par: { transistors: 34 },
+    gives: ['drambit', 'blcap', 'dramsa', 'vhalf', 'wdrv'],
+    why: 'A DRAM bit is 25 fF on a line of 100 fF: reading it moves the line by a tenth of the supply, and the cell is left holding the same small level. The column turns that into a bit and puts the charge back. Build it from the parts, at switch level.',
+    tips: ['Precharge: one NMOS from VDD/2 to the bit line, gate pre. A second NMOS between the two lines (the equalizer) gives the reference line VDD/2 too.', 'Both lines need the bit line capacitance: the amplifier compares their levels, and a line with no capacitance has no level to keep once pre falls.', 'Cells and the write driver hang on the bit line; the amplifier and the driver span both lines. Nothing else touches the reference line.', 'q can be the bit line itself: once the amplifier has fired it sits at a rail.'],
+    codex: ['senseamp'], unlocks: ['rv16_dramcol'], chapters: [{ chapter: 'dram', step: 2, label: 'The sense amplifier' }],
+  },
+  {
+    id: 'm_bank', act: 10, title: 'A bank with refresh', kind: 'build', optional: true, requires: ['m_sense'], base: BUILDM.m_bank, par: { nand: 319, period: 30, cycles: 5917 },
+    why: 'The amplifiers of a whole row are the row buffer: once a row is open, every word of it is one cycle away, and a word of another row costs a close and an open. Meanwhile every row is leaking, and nobody but the controller will notice before it is too late.',
+    tips: ['State: is a row open, which one, the next row to refresh, and a counter of the cycles since the last refresh.', 'A request hits when a row is open and it is the request\'s row: RW, busy = 0. Otherwise PRE if a row is open, else ACT the request\'s row; busy = 1.', 'A refresh is just ACT of the refresh row (after a PRE if needed): leave that row open, the next request may want it. 16 rows in 288 cycles: one refresh every 18 cycles is enough.', 'Refresh early when nobody is asking (the timer past 8), and force it when it is due (15), ahead of any request.'],
+    codex: ['refresh'], unlocks: ['rv16_bank'], chapters: [{ chapter: 'dram', step: 3, label: 'Leaks and refresh' }, { chapter: 'dram', step: 4, label: 'Rows, columns, banks' }],
+  },
+  {
+    id: 'm_ctrl', act: 10, title: 'Row-buffer controller', kind: 'build', optional: true, requires: ['m_bank'], base: BUILDM.m_ctrl, par: { nand: 777, period: 36, cycles: 11878 },
+    why: 'A real DRAM chip refreshes its own rows when told to (REF), keeps a row buffer per bank and sets every interval in nanoseconds: tRCD from ACT to a read, tCAS from the read to the data, tRAS before the row may close, tRP before the next opens. The controller turns requests into commands at the earliest legal cycle.',
+    tips: ['Per bank: an open flag and the open row. Counters of the cycles since the last ACT and since the last PRE, saturating at 15, cover tRCD, tRAS and tRP when one request is in flight at a time.', 'A read\'s data comes tCAS = 4 cycles after its RD: a 4-stage shift register of "RD issued" says when to raise ready, and that no command is needed meanwhile.', 'Refresh: count cycles since the last REF and make it pending well before 256 (128 is a bit test). Pending goes first: PREA once tRAS allows, then REF once tRP allows.', 'After REF nothing may happen for tRFC = 12 cycles: remember that the last close was a REF, and wait 12 instead of 4.'],
+    codex: ['dramtiming', 'pagepolicy'], unlocks: ['rv16_dramctrl'], chapters: [{ chapter: 'memctrl', step: 0, label: 'Commands' }, { chapter: 'memctrl', step: 1, label: 'Open page or closed page' }],
   },
 ];
 

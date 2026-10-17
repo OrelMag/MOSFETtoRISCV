@@ -158,4 +158,24 @@ the lanes waiting for the other side of an if. Each side then runs with some lan
 <b>lane utilization</b>, not the clock, becomes the number to watch.</p>
 <p>This act builds the lanes, their register file, the mask, then a SIMD core; then the
 reconvergence stack and the SIMT core, on which every lane runs like a thread of its own.</p>`,
+  memwall: `
+<p>Every core of this campaign reads its data memory in the cycle it asks. A real main memory
+cannot: it is <b>DRAM</b>, one transistor and one capacitor per bit, and a bit is a few tens of
+femtofarads, too little to drive anything. Reading means sharing that charge with a <b>bit line</b>
+precharged to VDD/2, which moves by a tenth of the supply, and letting a <b>sense amplifier</b>
+decide which way it moved. The amplifier then drives the line to a rail, which writes the cell back:
+every read destroys and restores.</p>
+<p>A word line opens a whole <b>row</b> at once, so a chip has an amplifier per column, and those
+amplifiers hold the open row: the <b>row buffer</b>. A word of the open row is a column access away
+(tCAS); any other row needs the open one closed (tRP) and the new one opened (tRCD) first. At
+DDR4-3200 and our clock those are 4 cycles each: a row hit costs 4, a row conflict 12, before any
+data moves.</p>
+<h4>Forgetting</h4>
+<p>The capacitors leak. Every row must be opened again within its retention time (64 ms in a real
+chip), and nothing in the processor does it: the <b>controller</b> does, row by row, in cycles taken
+from the requests. Early chips left the row counter to the controller; DDR chips keep it inside and
+only need a <b>REF</b> command now and then, with every bank closed.</p>
+<p>This act builds that path: a column at switch level, a bank that refreshes itself around a cell
+array, then a controller that turns requests into commands at the earliest cycle a chip's timing
+rules allow, and decides how long a row stays open.</p>`,
 };
