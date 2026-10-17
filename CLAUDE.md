@@ -470,6 +470,15 @@ src/lib/m6502/ the chip at transistor level (lib/nmos.ts: DEP, NINV, nnor(n), nn
                program and replays the cycles since (InsideSeed.sim)
 src/isa4/      the 4-bit CPU's ISA: isa4.ts (the 4004's opcode map in 16-bit words: decode4 / disasm4 / fields4; words the
                table does not name run as NOP), asm4.ts, iss4.ts (golden model; halts on a JUN to itself), programs4.ts
+src/cards/      punched cards (DOM-free): hollerith.ts (the IBM 029 code: punchOf / charOf, a column = 12-bit mask, bit 0 row 12
+               … bit 11 row 9), card.ts (Card: 80 column masks + print; Deck; textCard, objectCard: a word in row 9 of columns
+               1–32, its source and hex printed, a sequence number in 73–80; wordOf, seqOf, programDeck, sortDeck, dropDeck,
+               deckToJson / deckFromJson: .deck.json), reader.ts (the card reader: an external leaf, word or column mode, feed
+               delay; cardReader / deckReader memoized by what it reads, readerLeaves, readerProgress, loadedReader for
+               Sim.poke), program.ts (programCards: a program as object cards, each word with its source line, a
+               pseudo-instruction's later words their disassembly; deckProgram: a deck as hex or .word lines with each card's
+               print a comment; widerCards, deckBits: shared by the sandbox's ROMs and the chapters' CPU panel);
+               widgets/carddraw.ts draws a card to scale (cardView, click to punch)
 src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui/pages/sandbox.ts, its own chunk;
                #/sandbox/s/<payload> opens a share link: a banner, imported only on the user's click).
                DOM-free (tested in Node):
@@ -495,6 +504,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  exact to 53 bits only); pixels: a pure view of a px bus; optional vsync; X writes ignored and counted);
                  most significant field first; visual settings in the def but not its id (a resize carries the state);
                  ioNodes / ioState find them at any depth; colorRgb, pixelsOf, paintScreen (dots, grid, X pattern)
+  cardparts.ts   the card reader part ({ reader: ReaderRef }: mode, bits, feed, name, cards as the deck file's holes with
+                 trailing blank columns dropped + print): readerRefDef (cards/reader.ts deckReader), sanitizeReaderRef,
+                 deckRef / refDeck, sampleReaderRef (the palette's HELLO deck), readerRefOf (remix: a reader leaf as a part)
+  deckio.ts      a ROM's program as a deck (romDeck: object cards, w bits) and back (romWithDeck: hex words with the cards'
+                 sources as comments, the ROM grown to hold them; refused when a card's word is wider than the ROM)
   face.ts        a packaged chip's appearance (ChipDoc.face: box size, pins by id on any side at any offset, displays by
                  part path, at / scale): resolveFace (automatic size and pins for what is left out, the box grown to hold
                  everything), applyFace (as PortDef.side, symbol w / h / portPos, keepOut: the label avoids displays),
@@ -645,6 +659,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  Screens drawer: every console, screen and switch bank in the hierarchy by path, live; opens by itself
                  for a nested console or screen (unless closed for that chip), behind a drawer already shown
                  (dockPane's `front` false); its console scrolls natively and follows only at the bottom
+  cardui.ts      plugin: the card reader's property section (mode, bits, feed; the deck listed, the selected card drawn by
+                 widgets/carddraw.ts and punched by hand, the read station followed live; load / save / punch from a ROM /
+                 type a source card / drop / sort / delete / clear, each one undo step); deck files (pickDeck, saveDeck,
+                 loadDeckIntoRom, saveRomDeck: memui.ts's ROM section and program editor), dropDeckFile (fileui.ts: a
+                 .deck.json on the canvas goes into the selected ROM or reader, else a new reader)
   challengeui.ts "Challenges" list drawer (solved ticks via settings), the strip under the canvas while a
                  challenge chip is open (brief, Check, Show answer, Do it for me), purist palette while restricted;
                  a failing Check opens the test player on the first failing case; a core level lists its

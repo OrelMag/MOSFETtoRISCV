@@ -17,7 +17,7 @@ import { buzzerHz, LED_PITCH, ledGrid } from './parts';
 export interface FaceEls { d: FaceShown; disp: DisplayEls }
 /** The live face of a display, a key part ('key') or a keyboard part ('keyboard'). */
 export interface DisplayEls {
-  kind: DisplayKind | 'key' | 'keyboard' | 'io' | 'puzzle'; width: number; segs: SVGElement[]; shown: string;
+  kind: DisplayKind | 'key' | 'keyboard' | 'io' | 'puzzle' | 'reader'; width: number; segs: SVGElement[]; shown: string;
   /** A console, switch bank or screen (ioface.ts). */
   face?: IoFace;
   led?: SVGCircleElement; text?: SVGTextElement; halt?: SVGGElement; buzz?: SVGGElement;

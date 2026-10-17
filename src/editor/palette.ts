@@ -10,6 +10,7 @@
 
 import { libraryItems } from '../lib/catalog';
 import { h, icon } from '../ui/dom';
+import { sampleReaderRef } from './cardparts';
 import { folderGroups } from './folders';
 import type { PartRef, Workspace } from './model';
 
@@ -130,6 +131,7 @@ registerPaletteGroup({
     { id: 'keyboard', name: 'Keyboard', tag: '8-bit', title: 'Typed keys wait in order: code = the oldest (ASCII), ready = 1 while one waits, ack removes it. Keys reach it while the circuit runs or with Type on; costs nothing', place: { part: { keyboard: true } } },
     { id: 'pzin', name: 'Puzzle in', tag: '8-bit', title: 'The input of a program puzzle: data = the next word of the test, ready = 1 while one waits, read = 1 at a rising clk edge takes it. Costs nothing', place: { part: { puzzle: 'in', width: 8 } } },
     { id: 'pzout', name: 'Puzzle out', tag: '8-bit', title: 'The output of a program puzzle: records data at a rising clk edge with we = 1; Check compares the words with the test. Costs nothing', place: { part: { puzzle: 'out', width: 8 } } },
+    { id: 'cards', name: 'Card reader', tag: 'deck', title: 'A deck of punched cards: data = the word punched in row 9 of the card at the read station (or one column at a time), ready = 1 while one waits, next = 1 at a rising clk edge takes it. Punch, load and save decks in the properties; costs nothing', place: { part: { reader: sampleReaderRef() } } },
     { id: 'switches', name: 'Switches', tag: '8-bit', title: 'A bank of toggle switches (1–32 in the properties): click one to flip it, also while running. q = their positions; they stay put through Reset. Costs nothing', place: { part: { switches: 8 } } },
   ],
 });

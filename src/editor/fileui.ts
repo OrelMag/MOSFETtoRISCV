@@ -8,6 +8,8 @@ import { exportHdl } from '../sim/svexport';
 import { h, icon, s } from '../ui/dom';
 import { registerToolbarAction, type Editor } from './editor';
 import { openIsaEditor } from './isaui';
+import { dropDeckFile } from './cardui';
+import { isDeckFile } from '../cards/card';
 import { addFolder, folderGroups, newFolderName, removeFolder } from './folders';
 import type { ChipDoc } from './model';
 import { projectNameOf, readProjects } from './projects';
@@ -521,8 +523,11 @@ export function installFiles(ed: Editor): FilesUi {
     depth = 0;
     over(false);
     const files = [...(e.dataTransfer?.files ?? [])];
+    // A deck of cards goes into the selected ROM or card reader, else onto a new reader where it fell.
+    const deck = files.find((x) => isDeckFile(x.name));
+    if (deck) return void dropDeckFile(ed, deck, ed.view.cam.toWorld(e.clientX, e.clientY));
     const f = files.find((x) => /\.json$/i.test(x.name) || x.type === 'application/json');
-    if (!f) return void ed.toast('Drop a .json file exported from the sandbox', 'err');
+    if (!f) return void ed.toast('Drop a .json file exported from the sandbox, or a deck of cards (.deck.json)', 'err');
     if (files.length > 1) ed.toast('One file at a time: importing the first .json file');
     void importFile(ed, f);
   };

@@ -25,6 +25,7 @@ import { ISA4_PRESET } from '../isa/presets';
 import { copyIsa, isaById, isaList } from './isaops';
 import { openIsaEditor } from './isaui';
 import { virtualRows } from './vlist';
+import { loadDeckIntoRom, pickDeck, saveRomDeck } from './cardui';
 
 /** Each program language: its name, the code editor's highlighter, and the ROM shape it needs (RV16 and the
  *  4-bit CPU: 16-bit words, word addressed; RV32 assembly: 32-bit words). */
@@ -179,7 +180,9 @@ registerPropsSection({
       row('Language', languageSelect(ed, id, r, set), 'Switching converts the program when it builds (RV16, 4-bit CPU: 16-bit words, word addressed; a custom instruction set: its word width)'),
       row('Sample', sample),
       status,
-      h('div', { class: 'sb-btns' }, h('button', { class: 'btn sm primary', title: 'Edit the program with a live listing', onclick: () => openProgramEditor(ed, id) }, icon('code', 14), 'Edit program…')),
+      h('div', { class: 'sb-btns' }, h('button', { class: 'btn sm primary', title: 'Edit the program with a live listing', onclick: () => openProgramEditor(ed, id) }, icon('code', 14), 'Edit program…'),
+        h('button', { class: 'btn sm', title: 'Download the program as a deck of punched cards (.deck.json): one card a word, printed with its source line', onclick: () => saveRomDeck(ed, id) }, 'Save as deck'),
+        h('button', { class: 'btn sm', title: 'Replace the program with the words of a deck of cards (as hex, each card’s print a comment); a .deck.json dropped on the canvas does it too', onclick: () => void pickDeck(ed).then((d) => d && loadDeckIntoRom(ed, id, d)) }, 'Load deck…')),
       now, list.el);
 
     let key = '';
@@ -319,6 +322,12 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
       h('div', { class: 'sb-help-head' }, title, h('button', { class: 'btn ghost icon-only', 'aria-label': 'Cancel', title: 'Cancel (Esc)', onclick: cancel }, icon('close', 16))),
       h('div', { class: 'sb-rom-dlg-body' }, h('div', { class: 'sb-rom-dlg-src' }, ce.el), listBox),
       h('div', { class: 'sb-rom-dlg-foot' }, status,
+        h('button', { class: 'btn sm ghost', title: 'Download the program in the box as a deck of punched cards (.deck.json)', onclick: () => saveRomDeck(ed, partId, ce.value, chipId) }, 'Save as deck'),
+        chipId === ed.chipId ? h('button', { class: 'btn sm ghost', title: 'Replace the program with the words of a deck of cards (applied at once: one undo step)', onclick: () => void pickDeck(ed).then((d) => {
+          if (!d || !loadDeckIntoRom(ed, partId, d)) return;
+          close();
+          openProgramEditor(ed, partId);
+        }) }, 'Load deck…') : null,
         h('button', { class: 'btn sm', onclick: cancel }, 'Cancel'),
         h('button', { class: 'btn sm primary', title: 'Apply (Ctrl+Enter): one undo step', onclick: apply }, 'Apply'))));
   // Keys stay in the dialog: the canvas's shortcuts (Delete, arrows, Ctrl+Z) must not act behind it.
