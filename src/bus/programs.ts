@@ -177,7 +177,7 @@ export const CARD_FEED = 8;
 /** The card boot ROM: what the IBM 1401's Load key did in hardware, read cards into memory until the hopper is empty, then run them. */
 export const CARD_BOOT_SOURCE = `# boot ROM: read the deck word by word into RAM at ${'0x' + LOAD_AT.toString(16)}, then jump there
 boot:   li   s0, 0x${CARD_BASE.toString(16)}     # card reader: STATUS +0, DATA +4
-        li   s1, ${LOAD_AT}           # RAM address
+        li   s1, 0x${LOAD_AT.toString(16)}          # RAM address
 next:   lw   t0, 0(s0)          # bit 0 card ready, bit 1 hopper empty
         andi t1, t0, 2
         bnez t1, run
@@ -187,7 +187,7 @@ next:   lw   t0, 0(s0)          # bit 0 card ready, bit 1 hopper empty
         sw   t0, 0(s1)
         addi s1, s1, 4
         j    next
-run:    li   t0, ${LOAD_AT}
+run:    li   t0, 0x${LOAD_AT.toString(16)}
         jr   t0                 # the loaded program`;
 
 /** The program on the cards: runs from RAM, prints CARDS, then counts on the LEDs. */

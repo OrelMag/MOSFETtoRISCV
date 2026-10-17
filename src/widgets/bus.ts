@@ -244,7 +244,7 @@ const computerPanel = (full: boolean, cards = false): ScenePanel => (stage: Stag
   const con = h('pre', { class: 'bus-console' });
   const leds = h('div', { class: 'bus-leds' });
   const title = h('h4', null, full ? 'Everything on one bus' : cards ? 'Booting from cards' : 'Computer on a bus', h('span', { class: 'fold-hint' }));
-  const rows: [string, string][] = [['0x0000_0000', `boot ROM (fetch only), ${0x200} bytes`], ['0x0000_0000 …', 'RAM: code above the ROM, and every load and store'], ['0x1000_0000', 'flash (read only): the program to load'],
+  const rows: [string, string][] = [['0x0000_0000', `boot ROM (fetch only), ${0x200} bytes`], ['0x0000_0000 …', 'RAM: code above the ROM, and every load and store'], ['0x1000_0000', cards ? 'flash (read only): empty, the program is on the cards' : 'flash (read only): the program to load'],
     ...(full ? [['0x2000_0000', 'DRAM, 16 KB (chapter 33\'s controller)'] as [string, string]] : []),
     ['0x4000_0000', 'DMA: source, destination, length, control'],
     ...(cards ? [['0x7000_0000', 'card reader: +0 status (bit 0 a card waits, bit 1 hopper empty), +4 the word on the card (taken)']] as [string, string][] : []),
