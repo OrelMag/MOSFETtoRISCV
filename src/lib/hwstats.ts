@@ -10,6 +10,7 @@ import { analyzeTiming } from '../sim/timing';
 import type { Category, ComponentDef } from '../sim/types';
 import { registry } from './define';
 import { combos, families, familyOf, resolveComponent } from './resolve';
+import { price } from './tech';
 import { referenceCpus } from './usage';
 
 export interface HwRow {
@@ -33,7 +34,13 @@ export interface HwRow {
   route: string;
   /** One of the chapters' CPUs (not in the library itself). */
   cpu?: true;
+  /** Priced in relays and tubes (lib/tech.ts; absent where it cannot be built that way): devices, of them for
+   *  fan-out, average power (W). Steps are depth / period in that technology's steps. */
+  relay?: TechCell;
+  tube?: TechCell;
 }
+
+export interface TechCell { n: number; fanout: number; watts: number; native?: true }
 
 const SKIP = new Set(['alias', 'vdd', 'gnd']);
 
@@ -67,6 +74,10 @@ export function measure(d: ComponentDef): HwRow {
     route: cpu ? cpu.route : resolveComponent(d.id) === d ? `#/workbench/${d.id}` : '',
   };
   if (f) row.family = { id: f.fam.id, name: f.fam.name };
+  for (const t of ['relay', 'tube'] as const) {
+    const p = price(d, t, null);
+    if (p) row[t] = { n: p.devices, fanout: p.fanout, watts: p.power ?? 0, ...(p.native ? { native: true as const } : {}) };
+  }
   if (cpu) row.cpu = true;
   return row;
 }

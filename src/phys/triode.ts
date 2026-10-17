@@ -139,3 +139,16 @@ export function triodeAt(vg: number, t: number): { Tc: number; sat: number; vp: 
 
 /** ENIAC (1945), for scale: tubes, crystal diodes, relays, resistors, power (W), mass (kg), additions per second. */
 export const ENIAC = { tubes: 17468, diodes: 7200, relays: 1500, resistors: 70000, power: 150e3, mass: 27e3, adds: 5000 };
+/** ENIAC's 40 panels, each 2 × 2 × 8 ft (m), and their share of its tubes. */
+export const ENIAC_PANEL = { w: 0.61, d: 0.61, h: 2.44, count: 40, tubes: Math.round(ENIAC.tubes / 40) };
+
+/** How many dividers one plate can drive with both margins positive (gateLevels): 3 here, 4 fails. */
+export function plateFanout(): number {
+  let k = 1;
+  while (k < 16) {
+    const l = gateLevels(k + 1);
+    if (!(l.marginLow > 0 && l.marginHigh > 0)) break;
+    k++;
+  }
+  return k;
+}

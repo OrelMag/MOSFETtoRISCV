@@ -1,0 +1,63 @@
+/* ---------- The machine hall (src/widgets/hall.ts, hallview.ts): loaded with its chunk ----------
+   Layout borrows relay3d.css's generic r3-* classes (stage, canvas, labels, chips); this file holds the hall's
+   materials, block colours and its own controls. The 3D view reads the colours through gl/color.ts. */
+.hall3d {
+  /* Block colours, largest block first (lib/hall.ts HUES) */
+  --hl-1: light-dark(#3b7dd8, #4f8fe6);
+  --hl-2: light-dark(#e0703a, #e4804c);
+  --hl-3: light-dark(#23a77a, #2fb889);
+  --hl-4: light-dark(#d9a01a, #e2ad2e);
+  --hl-5: light-dark(#c95d93, #d873a3);
+  --hl-6: light-dark(#7f63c9, #9479da);
+  --hl-7: light-dark(#3aa6b9, #4cb7c9);
+  --hl-8: light-dark(#a3743f, #b8875a);
+  --hl-9: light-dark(#6f8f2c, #88a83f);
+  --hl-10: light-dark(#c74545, #d65a5a);
+  /* Materials */
+  --hl-floor: light-dark(#dfe2e8, #232733);
+  --hl-face: light-dark(#3a3f4a, #2b2f38);
+  --hl-chassis: light-dark(#9aa1ad, #6e7582);
+  --hl-relay: light-dark(#59606d, #4a505c);
+  --hl-on: light-dark(#ffcf4a, #ffd666);
+  --hl-glass: light-dark(#8e9aa6, #6c7783);
+  --hl-glow: light-dark(#ff7a1a, #ff8a2e);
+  --hl-person: light-dark(#2a3040, #d9dce4);
+  --hl-table: light-dark(#8b6b4a, #7a5e42);
+  --hl-die: light-dark(#30343c, #a9b0bd);
+  --hl-ring: var(--accent);
+  /* Lights: ambient from above / below and the key light */
+  --hl-sky: light-dark(#b4b8c1, #7d8393);
+  --hl-ground: light-dark(#6a6560, #34322f);
+  --hl-key: light-dark(#e6e2da, #cfcbc3);
+  container-type: inline-size;
+}
+.hall3d .r3-stage { aspect-ratio: 16 / 10; max-height: 560px; }
+.hall-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 8px; }
+.hall-ctl .seg button { padding: 3px 10px; font-size: 12.5px; }
+.hall-run { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 8px; font-size: 12.5px; }
+.hall-run select { font: inherit; padding: 2px 4px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); max-width: 100%; }
+.hall-run .hall-cyc { font: 600 12px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-2); }
+.hall-run .btn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.hall-sum { font: 600 13px var(--font-ui); color: var(--text); margin: 8px 0 2px; overflow-wrap: anywhere; }
+.hall-sub { font-size: 12.5px; color: var(--text-2); margin: 0 0 6px; overflow-wrap: anywhere; }
+.hall-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--text-2); margin: 6px 0; }
+.hall-legend button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 1px 6px; border: 1px solid transparent; border-radius: 6px;
+  background: none; font: inherit; color: inherit; cursor: pointer;
+}
+.hall-legend button:hover, .hall-legend button.on { border-color: var(--border); background: var(--surface-2); color: var(--text); }
+.hall-legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; flex: none; }
+.hall-card {
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); padding: 8px 12px;
+  font-size: 13px; color: var(--text-2); margin-top: 8px; overflow-wrap: anywhere;
+}
+.hall-card b { color: var(--text); }
+.hall-card .hall-sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: 0; }
+.hall-card p { margin: 4px 0 0; }
+.hall-flat { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; }
+.hall3d .r3-lbl.blk b { font-weight: 600; }
+.hall3d .r3-lbl.die b { color: var(--accent); }
+@container (max-width: 520px) {
+  .hall3d .r3-stage { aspect-ratio: 1 / 1; }
+  .hall3d .r3-lbl.small { display: none; }
+}
