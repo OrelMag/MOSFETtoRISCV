@@ -1,5 +1,13 @@
 import { FULL_ADDER, INV_CMOS, INV_PSEUDO, NAND, NMOS_SWITCH, NOR_CMOS, PMOS_SWITCH, rca } from '../lib';
+import {
+  NAND2_UM2, PLATE_FANOUT, RELAY_CONTACTS, RELAY_MASS, RELAY_POWER, RELAY_VOLUME, TECH, TUBE_BRICK_POWER, fmtMass, fmtTime, fmtVolume,
+} from '../lib/tech';
+import { RELAY_STEP_MS } from '../phys/relay';
+import { TUBE_STEP_US } from '../phys/triode';
+import { logicDepth } from '../sim/stats';
+import { PS_PER_NAND } from '../sim/timing';
 import { journeyWidget } from '../widgets/journey';
+import { techCompareWidget } from '../widgets/techcompare';
 import { mosCostWidget } from '../widgets/moscost';
 import { mosfetWidget } from '../widgets/mosfet';
 import { mosRegionsWidget } from '../widgets/mosregions';
@@ -234,6 +242,8 @@ export const chInverter: Chapter = {
   ],
 };
 
+const RCA32_DEPTH = logicDepth(rca(32))!;
+
 export const chNand: Chapter = {
   id: 'nand', num: 3, title: 'The NAND gate', level: 'Transistors → gates',
   blurb: 'Four transistors, and the only brick we will ever need.',
@@ -279,6 +289,35 @@ export const chNand: Chapter = {
         kind: 'quiz', question: 'How many transistors does a CMOS AND gate need, built the natural way?',
         options: ['4: same as NAND', '6: a NAND followed by an inverter', '2'], answer: 1,
         explain: 'A single CMOS stage always inverts, so AND = NAND + NOT = 4 + 2 = 6 transistors. Inverting gates are the cheap ones.',
+      },
+    },
+    {
+      title: 'One NAND, three technologies',
+      body: `
+        <p>A NAND is a function, not a device. The prologue built it twice before the transistor, from relays (P1) and
+        from tubes (P2). Every circuit on this site bottoms out in NANDs, so each can be built in any of the three. The
+        netlist stays the same, and only the price of one NAND changes:</p>
+        <ul>
+          <li><strong>CMOS</strong>: 4 transistors, an illustrative ${PS_PER_NAND} ps, about ${NAND2_UM2} µm² of 28 nm-class
+          silicon, femtojoules per switch.</li>
+          <li><strong>Relays</strong>: one coil per NAND output. Its contacts are the inputs of the gates that read it,
+          ${RELAY_CONTACTS} per relay, so a net read more than ${RELAY_CONTACTS} times needs another coil for every
+          ${RELAY_CONTACTS} more. ${RELAY_STEP_MS} ms per step (P1's model: pull-in plus bounce), ${RELAY_POWER.toFixed(2)} W
+          on average, about ${fmtVolume(RELAY_VOLUME)} and ${fmtMass(RELAY_MASS)}.</li>
+          <li><strong>Tubes</strong>: half a 6SN7 with a 6AL5 diode pair in front and a divider into the grid.
+          ${TUBE_STEP_US.toFixed(1)} µs per step (an R·C estimate) and ${TUBE_BRICK_POWER.toFixed(2)} W, most of it heater,
+          drawn whether the gate switches or not. A plate drives at most ${PLATE_FANOUT} dividers, so a wider net gets a
+          cathode follower.</li>
+        </ul>
+        <p>Scale it up below. <em>Native</em> shows what each technology is good at. Changeover contacts give an adder
+        its carry nearly for free, which is why relay machines did not build adders from NAND bricks. Tubes get no
+        such gift: P2's tube adder is the nine NANDs again. You can price any part the same way in the inspector
+        (<em>In relays and tubes</em>), in the workbench's Statistics tab and in a sandbox chip's properties.</p>`,
+      widget: () => techCompareWidget(),
+      challenge: {
+        kind: 'quiz', question: `Through the brick, the 32-bit ripple-carry adder is ${RCA32_DEPTH} NAND delays deep. Built from relays, one add takes about:`,
+        options: [fmtTime(RCA32_DEPTH * TECH.relay.step), fmtTime(TECH.relay.step), fmtTime(RCA32_DEPTH * TECH.tube.step)], answer: 0,
+        explain: `${RCA32_DEPTH} relay steps × ${RELAY_STEP_MS} ms ≈ ${fmtTime(RCA32_DEPTH * TECH.relay.step)}. P1's relay adder carries through contacts and adds in one step (${fmtTime(TECH.relay.step)}); tubes take ${fmtTime(RCA32_DEPTH * TECH.tube.step)}, CMOS ${fmtTime(RCA32_DEPTH * TECH.cmos.step)}.`,
       },
     },
   ],

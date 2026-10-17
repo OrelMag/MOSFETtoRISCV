@@ -105,7 +105,7 @@ registerPropsSection({
     const def = ed.compiled?.def;
     if (!nothingSelected(ed) || !def) return null;
     const det = h('details', { class: 'sb-tech' }, h('summary', null, 'In relays and tubes'));
-    const fill = () => det.append(techTable(def));
+    const fill = () => det.append(techTable(def, { narrow: true }));
     if (techOpen) {
       det.open = true;
       fill();

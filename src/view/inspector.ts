@@ -165,7 +165,7 @@ export class Inspector {
   /** The part priced in CMOS, relays and tubes (lib/tech.ts; measured on first open: its period needs a flattening). */
   private techSection(d: ComponentDef): HTMLElement {
     const det = h('details', { class: 'insp-used' }, h('summary', null, 'In relays and tubes'));
-    const fill = () => det.append(techTable(d));
+    const fill = () => det.append(techTable(d, { narrow: true }));
     if (this.techOpen) {
       det.open = true;
       fill();

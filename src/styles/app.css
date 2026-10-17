@@ -454,6 +454,14 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .ports.used a:hover { text-decoration: underline; }
 .ports.used small { color: var(--muted); font-size: 11.5px; }
 .insp-used .btn { margin-top: 6px; }
+/* Chapter 3's technology comparison (widgets/techcompare.ts). */
+.tc-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.tc-seg { flex-wrap: wrap; }
+.tc-seg button[disabled] { opacity: 0.45; cursor: default; }
+.tc { max-width: 980px; }
+.tc .tech-table { font-size: 13px; }
+.tc-note { margin-top: 8px; }
+
 /* The technology table (view/techtable.ts): CMOS, relays and tubes side by side. */
 .tech-box { margin-top: 8px; }
 .tech-scroll { overflow-x: auto; }
@@ -466,6 +474,11 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .tech-table td small { color: var(--muted); font-family: var(--font-ui); font-size: 11px; }
 .tech-na { color: var(--muted); font-family: var(--font-ui); }
 .tech-note, .tech-none { color: var(--muted); font-size: 11.5px; line-height: 1.45; margin: 8px 0 0; }
+details.tech-note summary { cursor: pointer; }
+.tech-box.narrow .tech-table { margin-top: 10px; }
+.tech-box.narrow caption { text-align: left; font-weight: 700; font-size: 12.5px; padding: 0 6px 2px; color: var(--text); }
+.tech-box.narrow caption small { font-weight: 500; color: var(--accent); }
+.tech-box.narrow tbody th { width: 38%; }
 .insp-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
 .insp-power-v { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
 .insp-power-v input { width: 64px; font: 13px var(--font-mono); padding: 2px 4px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); }
@@ -802,6 +815,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .hw-dot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; flex: none; background: hsl(var(--h) var(--chip-stroke-s) var(--chip-stroke-l)); }
 .hw-dot.none { background: var(--muted); }
 .hw-tech { display: inline-flex; gap: 4px; }
+.hw-tval { display: block; white-space: nowrap; }
 .hw-tech-note:empty { display: none; }
 .hw-switches { margin-left: auto; display: flex; gap: 14px; color: var(--text-2); font-size: 13px; }
 .hw-switches label { display: flex; gap: 6px; align-items: center; cursor: pointer; }

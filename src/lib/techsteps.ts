@@ -27,6 +27,7 @@ export function designSteps(def: ComponentDef): DesignSteps {
   try {
     const kind = partKind(def);
     if (kind === 'relay') r = { steps: relaySteps(def), clocked: false };
+    else if (def.prim === 'nand') r = { steps: 1, clocked: false };
     else if (kind === 'nand' && !needsSwitchLevel(def)) {
       if (!hasFeedback(def)) r = { steps: logicDepth(def), clocked: false };
       else r = { steps: analyzeTiming(flatten(def, { mode: 'gate' }))?.period ?? null, clocked: true };

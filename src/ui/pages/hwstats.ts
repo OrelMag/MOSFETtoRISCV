@@ -277,7 +277,7 @@ export class HwStatsPage implements Page {
     const steps = (n: number | null, rate: boolean): (Node | string)[] => {
       if (n === null || this.get(r, rate ? 'period' : 'depth') === null) return ['—'];
       const s = n * TECH[t].step;
-      return [num(n), h('span', { class: 'hw-mhz' }, ` ${fmtTime(s)}${rate ? ` · ${fmtRate(s)}` : ''}`)];
+      return [num(n), h('span', { class: 'hw-mhz hw-tval' }, `${fmtTime(s)}${rate ? ` · ${fmtRate(s)}` : ''}`)];
     };
     const tail = t === 'cmos'
       ? [h('td', null, num(r.transistors)), h('td', { class: 'hw-nands' }, bar(r.nands, max), num(r.nands)),
@@ -291,7 +291,7 @@ export class HwStatsPage implements Page {
         h('td', null, ...steps(r.period, true)),
         h('td', null, cell ? fmtWatts(cell.watts) : '—'),
         h('td', null, cell ? fmtMass(cell.n * (t === 'relay' ? RELAY_MASS : TUBE_MASS)) : '—',
-          cell ? h('span', { class: 'hw-mhz' }, ` ${fmtVolume(cell.n * (t === 'relay' ? RELAY_VOLUME : TUBE_VOLUME))}`) : null)];
+          cell ? h('span', { class: 'hw-mhz hw-tval' }, `${fmtVolume(cell.n * (t === 'relay' ? RELAY_VOLUME : TUBE_VOLUME))}`) : null)];
     return h('tr', { class: member ? 'hw-member' : null },
       h('td', { class: 'hw-name' }, member ? null : h('span', { class: 'hw-chev-space' }), name,
         r.cpu ? h('span', { class: 'hw-tag' }, 'chapter CPU') : h('code', null, r.id)),
