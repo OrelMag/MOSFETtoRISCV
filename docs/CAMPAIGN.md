@@ -393,10 +393,24 @@ broken, rather than given parts that read X. References: `src/lib/rv16/mem16.ts`
 - ✅ `m_ctrl`: a two-bank DRAM chip on the bench (64 rows of 16 words per bank, chapter 33's command encoding):
   tRCD / tCAS / tRP 4, tRAS 9, tRFC 12, a REF at least every 256 cycles; one word per command, a write's data with
   its WR ← m_bank. 777 NANDs, period 36, 11 878 cycles
-- ⏳ `m_bus` (two masters, round-robin, three slaves one with wait states), `m_dma` (a bus master copying words,
-  irq when done), `m_flash` (a mapping table over a flash device on the bench: out-of-place writes, a spare block
-  for garbage collection), program puzzle `p_boot` (programs the DMA to copy itself from flash into RAM, waits for
-  the interrupt, jumps; DMA and flash in iss16): 16e-2
+- ✅ `m_bus`: two masters, three slaves (0 below 0x8000, 1 from 0x8000 with 2 wait states, 2 from 0xC000 with 1),
+  valid / ready on both sides, round robin with the grant held through a transfer ← m_lesson. A sequence from a
+  model of the bus and the bench (`busSeq`), including a master asking while the other waits on the slow slave;
+  282 NANDs, period 26
+- ✅ `m_dma`: a bus master configured by writes (0 src, 1 dst, 2 len and start, 3 clear irq), a read then a write
+  per word, irq and busy ← m_bus. Six memories on BitSim lanes (no wait states to six), five copies each (1, 16,
+  37, 0 and 12 words, one across the end of memory): the copy, nothing else written, a request held until ready;
+  1 366 NANDs, period 48, 2 079 cycles
+- ✅ `m_flash`: eight logical pages over a flash chip on the bench (4 blocks of 4 one-word pages and a 4-bit spare
+  area; a page programs once, a block erases whole; read / program / erase busy 2 / 6 / 20 cycles) ← m_lesson. The
+  reference writes a log: a mapping table, the logical page number in the page's spare area, and a collector for the
+  block after the head; five traces, each filling every page first and reading every page back at the end;
+  1 049 NANDs, period 38, 7 844 cycles
+- ✅ program puzzle `p_boot` ← m_dma, m_flash: RV16 keeps instructions apart from data, so what comes from flash is
+  a table (the mockup's "copy itself and jump" cannot run there): sum n words from flash, where a load stalls 8
+  cycles, with a DMA engine copying a word every 4 (iss16 `dma`: registers at 0xFFF0 … 0xFFF3, flash at 0x8000 …
+  0xBFFF, the interrupt line when done). Reference: sum each word as soon as it has landed, 18 words, 253 cycles
+  (waiting for the interrupt first: 316; loading from flash: 442)
 
 ### Act 8 — Side quests (all optional)
 - ✅ `o_mulseq`: shift-and-add multiplier ← a_add16, s_reg16
@@ -535,8 +549,8 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
 - 🚧 **GPU act**: act 9's compute levels are playable (lanes, lane register file, mask, SIMD core, reconvergence
   stack, SIMT core, coalescer, two warps; saxpy, reduction and histogram kernels); the rasterizer follows (roadmap
   Phase 15).
-- 🚧 **Memory act**: act 10's DRAM levels are playable (a DRAM column, a bank with refresh, a row-buffer
-  controller); a shared bus with DMA, a flash page store and the boot puzzle follow (roadmap Phase 16e).
+- ✅ **Memory act**: act 10 (a DRAM column, a bank with refresh, a row-buffer controller, a two-master bus, a DMA
+  engine, a flash page store and the boot puzzle; roadmap Phase 16e).
 
 ---
 

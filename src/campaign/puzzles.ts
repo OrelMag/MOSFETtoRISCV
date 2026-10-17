@@ -39,6 +39,8 @@ export interface ProgramPuzzle {
   lanes?: number;
   /** A kernel on this many warps taking turns (Warps16): cycles are issue slots. */
   warps?: number;
+  /** The boot puzzle's DMA engine and flash (iss16 Iss16Options.dma): cycles count the flash stalls. */
+  dma?: boolean;
   /** Warps with k_frame's rasterizer as a device (lane 0's stores to 0xFFF0 … 0xFFF6 draw into the screen at 0xF000). */
   raster?: boolean;
 }
@@ -68,7 +70,7 @@ export function puzzleMachine(p: ProgramPuzzle, words: number[], asmData: Map<nu
     for (const l of w.lanes) l.input = [...(t.input ?? [])];
     return w;
   }
-  const iss = new Iss16(words, { m: p.m, system: p.system }, data);
+  const iss = new Iss16(words, { m: p.m, system: p.system, dma: p.dma }, data);
   iss.input = [...(t.input ?? [])];
   iss.switches = t.switches ?? 0;
   return iss;
@@ -213,6 +215,26 @@ export const PUZZLES: Record<string, ProgramPuzzle> = {
     ref: `        li   sp, 0x1000\n        la   t0, handler\n        csrw mtvec, t0\n        li   t0, 0x800\n        csrw mie, t0\n        li   a2, 0           # interrupts handled\n        li   t0, 8\n        csrs mstatus, t0\n        li   t1, 3\nwait:   blt  a2, t1, wait\n        halt\n\nhandler:\n        push t0\n        lw   t0, -4(x0)\n        add  t0, t0, t0\n        sw   t0, -3(x0)\n        sw   x0, -7(x0)      # acknowledge\n        addi a2, a2, 1\n        pop  t0\n        mret\n`,
     tests: () => [[20, 60, 100], [30, 45, 60], [50, 200, 400]].map((at, i) => ({ name: `interrupts at ${at.join(', ')}`, input: [5 + i, 1000, 0x7fff], irqAt: at, expect: { out: [u16(2 * (5 + i)), 2000, 0xfffe] } })),
     maxSteps: 3000, system: true,
+  },
+
+
+  // ---- Act 10: memory ----
+  p_boot: {
+    brief: 'A table of <i>n</i> words (8 … 64) is in <b>flash</b>: <i>n</i> at 0x8000, the words from 0x8001. The processor can load from flash, but every load from 0x8000 … 0xBFFF stalls it for 8 cycles. '
+      + 'The <b>DMA engine</b> copies a word every 4 cycles while the program runs: store the source to 0xFFF0, the destination to 0xFFF1 and the length to 0xFFF2, which starts it (a load from 0xFFF2 gives the words left). When the last word is copied it raises the interrupt line: 0xFFF9 reads 1 (and an enabled interrupt traps to mtvec) until a store to 0xFFF3. '
+      + 'Write the sum of the table (mod 2<sup>16</sup>) to OUT, then halt. Graded on size and cycles: stalls and waiting count as cycles.',
+    starter: `# n at 0x8000, the table from 0x8001 (flash: every load stalls 8 cycles)\n# DMA: src -16(x0), dst -15(x0), len -14(x0) (starts; a load gives words left)\n# done: -7(x0) (irq) reads 1 until a store to -13(x0)\n        li   t0, 0x8000\n        lw   a1, 0(t0)       # n\n        li   a0, 0           # sum\n        \n        sw   a0, -3(x0)\n        halt\n`,
+    ref: `        li   t0, 0x8000\n        lw   a1, 0(t0)       # n\n        addi t0, t0, 1\n        sw   t0, -16(x0)     # src\n        li   t1, 0x100\n        sw   t1, -15(x0)     # dst\n        sw   a1, -14(x0)     # len: go\n        li   a0, 0\n        add  a2, t1, a1      # where the copy ends\nloop:   lw   t0, -14(x0)     # words left\n        sub  t0, a2, t0      # the first word not copied yet\n        bge  t1, t0, loop    # wait for the next word\n        lw   t0, 0(t1)\n        add  a0, a0, t0\n        addi t1, t1, 1\n        blt  t1, a2, loop\n        sw   a0, -3(x0)\n        halt\n`,
+    tests: () => {
+      const r = rng(17);
+      return [8, 20, 40, 64].map((n) => {
+        const words = Array.from({ length: n }, () => Math.floor(r() * 65536));
+        const mem: Record<number, number> = { 0x8000: n };
+        words.forEach((v, k) => (mem[0x8001 + k] = v));
+        return { name: `${n} words`, mem, expect: { out: [u16(words.reduce((s, v) => s + v, 0))] } };
+      });
+    },
+    maxSteps: 5000, system: true, dma: true,
   },
 
   // ---- Act 9: kernels, on four lanes ----
