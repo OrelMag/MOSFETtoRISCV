@@ -263,7 +263,8 @@ src/lib/       the component library (registered in `registry` via define())
   dram.ts        chapter 32's DRAM at switch level: VHALF (prim 'vhalf'), DRAM_SA (prim 'sense', drawn with 8 transistors),
                  DRAM_BIT (1T1C, a leaking CELL_C capacitor, bl two-way), dramColumn(R) (precharge / equalize to VDD/2, a
                  reference bit line of BITLINE_C, column select, the amplifier), dramArray(R, C) (row / column decoders, write
-                 driver, output inverter; protocol: precharge, activate, sense, read / write, close), DRAM4X4, DRAM8X8
+                 driver, output inverter; protocol: precharge, activate, sense, read / write, close), DRAM4X4, DRAM8X8;
+                 BITLINE_CAP (a bit line's 100 fF as a part, for the campaign's column: sandbox wires carry no value)
   cache.ts       cachedMemory(k, ib) (direct-mapped write-through cache + main memory, stall on
                  miss), wayLookup2; singleCycleCpu(…, { dcache }) uses it (adds `retire`, `dhit`)
   cache2.ts      cacheWay(ib, t), MISS_CTRL, wbCache(k, ib, ways) (write-back, write-allocate, LRU), iCache(rom, ib);
@@ -433,7 +434,9 @@ src/lib/rv16/  the campaign's RV16 hardware, every block built only from parts i
                RV16_FRAME, the same core with the rasterizer as a device (registers at 0xFFF0 … 0xFFF6 on lane 0's port, a hold
                while it is busy for a device store or a screen load), FRAME_PORTS: + fa / fd / fwe); raster16.ts (act 9 graphics,
                reference gfx/raster16.ts: EDGE16 stepper with a double command, TILE16 walk, RASTER16: set-up by adders and
-               shift-and-add on the steppers, cull from the E sum)
+               shift-and-add on the steppers, cull from the E sum); mem16.ts (act 10: DRAM_COL2 the switch-level column,
+               BANK16 open page + RAS-only refresh, CTRL16 a two-bank DDR-style controller; bankOf / ctrlOf with a fault
+               for the tests)
 src/riscv/rv16/ isa16.ts (fields, encode / decode / disasm), asm16.ts, iss16.ts (golden model: MMIO, CSRs, traps,
                interrupts; halts on jal x0, 0; SIMT words are illegal), simt16.ts (Simt16: a warp of RV16 lanes over one
                memory: mask, leader, split / join stack, tmc, csrr rd, tid; utilization / idle), warps16.ts (Warps16: W warps over
@@ -750,7 +753,7 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
   datasheet.ts   a codex component entry's datasheets: the unlocked library parts' pins, cost, depth, truth table
                  (datasheetOf(id): one part)
   cases.ts       level cases ("why we are building it": problem, without, cost, alternatives as library ids measured
-                 live, counts) in cases0.ts (acts 0–3) / cases1.ts (acts 4–8); measure.ts libCost, finalCpu (the last
+                 live, counts) in cases0.ts (acts 0–3) / cases1.ts (acts 4–10); measure.ts libCost, finalCpu (the last
                  required core's reference, compiled once), copiesInFinal(node) for the after-pass card
   codexmore.ts   the fuller codex (idea, example, mistakes, lib figure, compare, anatomy, chapters) in codexmore0.ts
                  (components, laws, tools) / codexmore1.ts (tricks, concepts); loaded on demand by the codex page
@@ -769,6 +772,10 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  fa / fd / fwe in order against the golden model's draws, applied to the screen); rastercheck.ts k_raster's
                  bench (64 triangles on BitSim lanes, writes in walk order, cycles graded); buildk.ts act 9's levels;
                  puzzles.ts kernels on two warps (`warps`) also run with warp 1 ahead (a missing bar fails)
+  buildm.ts      act 10's levels (memory, Phase 16e): m_sense (a DRAM column at switch level: senseSeq, chapter 32's
+                 protocol), m_bank, m_ctrl; memcheck.ts their benches: the device on the bench as a JS model that names
+                 the first rule broken (ArrayModel: 16 × 16 words, ACT / RW / PRE, rows leak after BANK.RET; Dram16Model:
+                 two banks, DRAM16 timings, REF), request traces (Requester: held until busy = 0 / ready) on BitSim lanes
                DOM: ui/svgs.ts (map and anatomy SVG), ui/levelinfo.ts (criteria, grading table), ui/codexentry.ts (a codex
                entry in full, live schematic), ui/glossaryui.ts (markTerms: hover cards); the page is ui/pages/campaign.ts.
                Levels are played on the level screen (ui/pages/level.ts, #/campaign/play/<node>, the editor's chunk): an

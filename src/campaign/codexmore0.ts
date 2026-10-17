@@ -623,4 +623,16 @@ export const MORE0: Record<string, CodexMore> = {
     lib: 'rv16_edge',
     chapters: [{ chapter: 'pixels', step: 1, label: 'Inside a triangle' }],
   },
+  // ---- act 10: memory
+  senseamp: {
+    idea: 'A DRAM cell cannot drive its bit line: it can only share its charge with it. A 25 fF cell on a 100 fF line precharged to VDD/2 moves the line to (25·V + 100·V/2) / 125: 0.6 VDD for a stored 1, 0.4 VDD for a 0, a swing of 50 mV at 0.5 V around the middle. The sense amplifier is two inverters, each driving the other\'s input, between that line and a <b>reference line</b> of the same capacitance and the same precharge with no cell on it. Powered up (sae), the side that is a little higher turns the opposite pull-down on a little harder, which pulls the other side lower, which turns its own pull-up on harder: positive feedback until the lines sit at the rails.<br>The cell\'s word line is still up, so the rail it ends on is written back into it: the read destroyed the charge and the amplifier restores it. A write is the same with a driver strong enough to flip the amplifier. The two lines must be twins (same capacitance, same precharge, which is what the equalizer guarantees in silicon): any imbalance adds to the signal, and an amplifier\'s offset of some 15 mV leaves little margin.',
+    example: { title: 'A read of a stored 1, in levels of VDD', body: '<pre>pre = 1      bl = 0.50  bl̄ = 0.50   cell = 1.00\npre = 0      bl = 0.50  bl̄ = 0.50   (floating, charge kept)\nwl0 = 1      bl = 0.60  bl̄ = 0.50   cell = 0.60   shared\nsae = 1      bl = 1.00  bl̄ = 0.00   cell = 1.00   restored</pre>' },
+    mistakes: [
+      'Leaving the reference line without capacitance: once pre falls it holds no level, and the amplifier has nothing to compare with.',
+      'Raising sae before the word line: the lines are still equal and the amplifier decides on noise (here: X).',
+      'Forgetting that a read is destructive: closing the word line before the amplifier has fired leaves the cell at 0.6 or 0.4, half way to forgotten.',
+    ],
+    lib: 'rv16_dramcol',
+    chapters: [{ chapter: 'dram', step: 1, label: 'The read, in slow motion' }, { chapter: 'dram', step: 2, label: 'The sense amplifier' }],
+  },
 };

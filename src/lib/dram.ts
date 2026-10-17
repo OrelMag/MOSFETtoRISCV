@@ -98,6 +98,25 @@ export const DRAM_BIT: ComponentDef = define({
   }),
 });
 
+/**
+ * A bit line's capacitance as a part (the campaign's column, m_sense): a sandbox wire has no capacitance
+ * value of its own, and what a read moves the line by depends on the ratio of cell to line.
+ */
+export const BITLINE_CAP: ComponentDef = define({
+  id: 'blcap', name: 'Bit line capacitance', category: 'memory',
+  summary: `The capacitance of a bit line, ${BITLINE_C} fF: four cells' worth here (hundreds of cells hang on a real one). The node keeps its charge while nothing drives it, and a cell joined to it shares its charge with it.`,
+  ports: [bit('a', 'inout', 'top')],
+  symbol: { kind: 'box', label: `${BITLINE_C} fF`, w: 6, h: 4 },
+  netlist: () => ({
+    level: 'switch',
+    pins: { a: [3, 0] },
+    pinDirs: { a: 'down' },
+    instances: [{ name: 'c', def: CAP, at: [3, 4] }],
+    nets: [{ name: 'line', cap: BITLINE_C, ends: ['a', 'c.a'] }],
+  }),
+  hdl: { verilog: '// a capacitance of 100 fF to GND (no logic)' },
+});
+
 const cache = new Map<string, ComponentDef>();
 function memo(key: string, f: () => ComponentDef): ComponentDef {
   let d = cache.get(key);
