@@ -611,14 +611,19 @@ with punch cards.
   from hwstats.json's relay and tube cells); the relay and triode parts are in the sandbox's library palette
 
 **The 3D machine** (to show the bulk)
-- ⏳ A 3D view of any design at physical scale: its flattened netlist as relays on boards in racks, or tubes in
+- ✅ A 3D view of any design at physical scale: its flattened netlist as relays on boards in racks, or tubes in
   chassis in cabinets, with the same design in CMOS beside it (a speck) and a human figure for scale. Sizes,
   power and heat from per-device constants labelled illustrative (as the 25 ps / NAND is); historical machines
-  for reference (Zuse Z3: about 2 600 relays; ENIAC: 17 468 tubes, about 150 kW and 27 t)
-- ⏳ Live: relays click and tubes glow with the simulation's values; orbit, zoom, and a click on a rack opens
-  that block's schematic (transparent boxes in 3D too)
-- ⏳ Its own lazily loaded chunk (a small WebGL renderer, or three.js if it earns its size); the main bundle does
-  not grow
+  for reference (Zuse Z3: about 2 600 relays; ENIAC: 17 468 tubes, about 150 kW and 27 t). Chapter 25 step 9
+  "The same CPU in relays and tubes" (lib/hall.ts, widgets/hallview.ts): the 4-bit CPU and the RV32I without their
+  program ROM, a block's racks or ENIAC panels of its own (RV32I: 78 racks, 70 if shared; 181 panels), every device
+  drawn (55 699 relay boxes, 75 779 tube cylinders), the CMOS die at true size on a table. Only these two CPUs so
+  far, not any design
+- ✅ Live: relays click and tubes glow with the simulation's values; orbit, zoom, and a click on a rack opens
+  that block's schematic (transparent boxes in 3D too). The cycle engine's settled values, at most 20 updates a
+  second; clicks off by default; a flat isometric drawing without WebGL2
+- ✅ Its own lazily loaded chunk (a small WebGL renderer, or three.js if it earns its size); the main bundle does
+  not grow (the view is its own 19 kB chunk; the chapter's computed prose and lib/hall.ts add 7 kB to the main one)
 
 **Punch cards**
 - ⏳ History step in the journey: Jacquard's loom (1804), Hollerith's census cards (1890), the IBM 80-column
