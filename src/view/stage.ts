@@ -69,7 +69,7 @@ export type ScenePanel = (stage: Stage) => Widget;
 export type LeafWidgetFactory = (def: ComponentDef, gate: () => Bit) => Widget;
 
 const LEVEL_NAME: Record<string, string> = {
-  transistor: 'transistors', cell: 'transistors', relay: 'relays', gate: 'gates', arithmetic: 'gates & blocks',
+  transistor: 'transistors', cell: 'transistors', relay: 'relays', tube: 'tubes', gate: 'gates', arithmetic: 'gates & blocks',
   routing: 'gates & blocks', sequential: 'latches & flip-flops', memory: 'memory', plumbing: 'wiring', cpu: 'processor',
 };
 
@@ -1057,8 +1057,11 @@ export class Stage {
   private levelOf(): string {
     const nl = this.ctx ? netlistOf(this.ctx.def) : undefined;
     if (!nl) return 'gate';
-    // a relay circuit (prologue P1): its parts are relays, not transistors
-    if (nl.level === 'switch') return stats(this.ctx!.def).relays && !stats(this.ctx!.def).transistors ? 'relay' : 'transistor';
+    // a relay or tube circuit (prologue P1, P2): its parts are relays or tubes, not transistors
+    if (nl.level === 'switch') {
+      const st = stats(this.ctx!.def);
+      return st.transistors ? 'transistor' : st.relays ? 'relay' : st.triodes + st.diodes ? 'tube' : 'transistor';
+    }
     const kinds = nl.instances.filter((i) => i.def.prim !== 'alias').map((i) => i.def);
     if (kinds.every((d) => d.prim === 'nand')) return 'gate';
     return this.ctx!.def.category;

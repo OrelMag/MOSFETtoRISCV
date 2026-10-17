@@ -183,6 +183,25 @@ function relay(poles: number): SVGElement[] {
   return els;
 }
 
+/**
+ * A vacuum tube in its glass envelope: the plate on top, the cathode at the bottom with its heater under it, and for a
+ * triode the grid between them, dashed (electrons pass through it). The beam between cathode and plate shows while
+ * the tube conducts (class conducting, from the view), the heater always glows.
+ */
+function tube(triode: boolean): SVGElement[] {
+  const line = (d: string, cls = 'sym-line') => s('path', { d, class: cls });
+  const els: SVGElement[] = [
+    s('circle', { cx: 2, cy: 2, r: 1.7, class: 'sym-body tube-env' }),
+    line('M2,0 V0.95 M2,3.05 V4'),
+    line(`M2,${triode ? 1.15 : 1.35} V${triode ? 2.85 : 2.65}`, 'tube-beam'),
+    line('M1.2,0.95 H2.8', 'sym-line thick'),
+    line('M1.3,3.05 H2.7', 'sym-line thick'),
+    line('M1.55,3.4 L2,3.62 L2.45,3.4', 'tube-heater'),
+  ];
+  if (triode) els.push(line('M0,2 H0.75'), line('M0.75,2 H3.25', 'tube-grid'));
+  return els;
+}
+
 /** Where an instance's name goes, relative to its symbol (null: rails and wiring are not named). */
 export function instNameAt(def: ComponentDef): { x: number; y: number; anchor: 'start' | 'middle' } | null {
   if (def.prim === 'alias' || def.prim === 'vdd' || def.prim === 'vhalf' || def.prim === 'gnd') return null;
@@ -192,6 +211,7 @@ export function instNameAt(def: ComponentDef): { x: number; y: number; anchor: '
   if (k === 'res' || k === 'pullup' || k === 'pulldown' || k === 'cap') return { x: 1.75, y: g.h / 2 + 0.3, anchor: 'start' };
   if (k === 'tgate' || k === 'tribuf' || k === 'triinv') return { x: 2.4, y: 0.95, anchor: 'start' };
   if (k === 'relay') return { x: 0.1, y: -0.45, anchor: 'start' };
+  if (k === 'triode' || k === 'diode') return { x: 3.75, y: 0.75, anchor: 'start' };
   return { x: g.w / 2, y: -0.35, anchor: 'middle' };
 }
 
@@ -277,6 +297,9 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
     case 'relay':
       inner.append(...relay((def.ports.length - 2) / 3));
       break;
+    case 'triode': case 'diode':
+      inner.append(...tube(k === 'triode'));
+      break;
     case 'pullup':
       inner.append(...switchPart(k));
       root.append(s('text', { x: 1, y: -0.35, class: 'sym-rail', 'text-anchor': 'middle' }, 'VDD'));
@@ -287,6 +310,8 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
       break;
     case 'gnd':
       inner.append(s('path', { d: 'M1,0 V0.55 M0.2,0.55 H1.8 M0.5,0.95 H1.5 M0.8,1.35 H1.2', class: 'sym-line thick' }));
+      // a labelled low rail (a tube circuit's −150 V): its voltage beside the bars
+      if (def.symbol.label) root.append(s('text', { x: 2.1, y: 1.25, class: 'sym-rail' }, def.symbol.label));
       break;
     default: {
       inner.append(s('rect', { x: 0, y: 0, width: w, height: h, rx: 0.6, class: 'sym-shadow sym-box-shadow', transform: `translate(${flip ? -SHADOW[0] : SHADOW[0]},${SHADOW[1]})` }),

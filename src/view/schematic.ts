@@ -360,8 +360,9 @@ export class SchematicView {
         const li = ctx.childLeaf(name);
         if (li === undefined) continue;
         const k = ctx.sim.design.leaves[li].kind;
-        if (k !== 'nmos' && k !== 'pmos' && k !== 'relay') continue;
-        // a relay: conducting while operated (its make contacts closed), maybe while unknown
+        if (k !== 'nmos' && k !== 'pmos' && k !== 'relay' && k !== 'triode' && k !== 'diode') continue;
+        // a relay: conducting while operated (its make contacts closed), maybe while unknown; a tube while its grid
+        // lets current through (a diode while current flows)
         const c = ctx.sim.conducting[li];
         g.classList.toggle('conducting', c === 1);
         g.classList.toggle('maybe', c === 2);
