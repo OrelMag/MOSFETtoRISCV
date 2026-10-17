@@ -488,7 +488,10 @@ src/cards/      punched cards (DOM-free): hollerith.ts (the IBM 029 code: punchO
                Sim.poke), program.ts (programCards: a program as object cards, each word with its source line, a
                pseudo-instruction's later words their disassembly; deckProgram: a deck as hex or .word lines with each card's
                print a comment; widerCards, deckBits: shared by the sandbox's ROMs and the chapters' CPU panel);
-               widgets/carddraw.ts draws a card to scale (cardView, click to punch)
+               widgets/carddraw.ts draws a card to scale (cardView, click to punch); card.ts also has the card sorter
+               (sorterPass: a pass on one column into pockets 0–9 + rejects, sorterColumns, sortOnSorter: the radix sort);
+               prologue P3 is chapters/ch-cards.ts with widgets/cards.ts (loomWidget, censusWidget, cardEditorWidget,
+               deckWidget with the sorter, readerPanel: the card at the reader's station on a scene)
 src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui/pages/sandbox.ts, its own chunk;
                #/sandbox/s/<payload> opens a share link: a banner, imported only on the user's click).
                DOM-free (tested in Node):

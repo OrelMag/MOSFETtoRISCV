@@ -613,10 +613,15 @@ with punch cards.
   not grow
 
 **Punch cards**
-- ⏳ History step in the journey: Jacquard's loom (1804), Hollerith's census cards (1890), the IBM 80-column
-  card (1928) and its Hollerith code
-- ⏳ A card editor: 80 columns × 12 rows, click to punch, or type and it punches the Hollerith code; a binary
-  mode for machine words (one word per column or per row); a deck of cards, reorderable, exportable
+- ✅ History step in the journey: Jacquard's loom (1804), Hollerith's census cards (1890), the IBM 80-column
+  card (1928) and its Hollerith code. Prologue P3 (chapters/ch-cards.ts, widgets/cards.ts): a chain of cards weaving
+  a pattern, Hollerith's pin press counting a census on dials (a combination through relay contacts), the card
+  editor, a program as an object deck with the card sorter's radix sort, the card reader on a scene
+- ✅ A card editor: 80 columns × 12 rows, click to punch, or type and it punches the Hollerith code; a binary
+  mode for machine words (one word per column or per row); a deck of cards, reorderable, exportable. cards/ (the
+  IBM 029 code, source and object cards: a word in row 9, a sequence number in 73–80; deck files .deck.json, the
+  sorter), widgets/carddraw.ts (a to-scale card); P3's editor and the sandbox reader's properties. Machine words
+  go one per card along row 9 (the mockup's choice); a deck is reordered by dropping and sorting, not by hand
 - ⏳ A card reader part (sandbox and campaign) feeding a ROM or a word stream (like the keyboard part), and the
   program input of the relay / tube machine
   - Sandbox part done (editor/cardparts.ts, cardui.ts): the deck in the document, word or column mode, feed delay;
@@ -634,7 +639,7 @@ with punch cards.
   the reader part, word by word, into RAM and jumps to it, as IBM's machines loaded from cards (the 1401's Load
   key); the CPU drawer follows the loaded program like a ROM program, the golden model starting after the load
   - ✅ On chapter 35's bus computer: step "Booting from cards" (a card-reader slave AXI_CARDS at 0x7000_0000, the
-    reader leaf holding the deck, a 12-instruction boot ROM that copies the deck to 0x400 and jumps there; the golden
+    reader leaf holding the deck, a 13-instruction boot ROM that copies the deck to 0x400 and jumps there; the golden
     model counts edges for the reader, so the gate-level computer is co-simulated in lock-step at any feed delay;
     tests/buscards.test.ts)
   - ⏳ The sandbox example on the system core with ports (the reader part, the CPU drawer) remains
