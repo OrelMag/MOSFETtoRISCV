@@ -1,7 +1,71 @@
 import { chipLayoutWidget } from '../widgets/chiplayout';
 import { journeyWidget } from '../widgets/journey';
 import { clockTreeWidget, fabWidget, floorplanWidget, layoutWidget, mappingWidget, pnrWidget, waferWidget } from '../widgets/silicon';
-import type { Chapter } from './types';
+import { cabinetCounts, hallFacts, periodIn } from '../lib/hall';
+import { fmtArea, fmtJoules, fmtMass, fmtRate, fmtTime, fmtWatts, RELAY_CONTACTS, TECH } from '../lib/tech';
+import { ENIAC, ENIAC_PANEL } from '../phys/triode';
+import { RELAY_RACK, Z3 } from '../phys/relay';
+import { machineHall } from '../widgets/hall';
+import type { Chapter, Step } from './types';
+
+const num = (n: number) => Math.round(n).toLocaleString('en-US');
+const times = (x: number) => (x >= 10 ? num(x) : x.toFixed(1));
+
+/** "The same CPU in relays and tubes": every number from lib/hall.ts (pricing, layout, static timing), computed the
+ *  first time the step is shown or searched (it flattens the RV32I once), not when the chapter loads. */
+function hallStep(): Step {
+  let text: string | null = null, explain: string | null = null;
+  const facts = () => {
+    const f = hallFacts('rv32i'), c4 = hallFacts('cpu4'), r = f.relay, t = f.tube;
+    const rc = cabinetCounts(r), tc = cabinetCounts(t);
+    const pr = periodIn(f.steps, 'relay'), pt = periodIn(f.steps, 'tube'), pc = periodIn(f.steps, 'cmos');
+    const dm = r.blocks.find((b) => b.name === 'dm')!, rf = r.blocks.find((b) => b.name === 'rf')!;
+    const perBit = dm.nands / (32 * 32);
+    text = `
+      <p>Nothing in this course needed silicon: every circuit is NANDs, and a NAND can be a relay (P1) or a triode with two
+      diodes (P2). Here is the single-cycle RV32I of chapter 14 priced that way, block by block, and stood on a floor at
+      physical scale. Its ${num(f.nands)} NANDs (the program ROM left out: relay machines read their programs from film or
+      cards) become <strong>${num(r.total.devices)} relays</strong>, ${num(r.total.fanout)} of them extra coils, because a
+      relay has ${RELAY_CONTACTS} contacts and many nets feed more inputs than that. At ${RELAY_RACK.relays} to a rack that is
+      ${rc.used} racks (${rc.packed} if blocks shared them), ${fmtMass(r.total.mass!)} and ${fmtWatts(r.total.power!)}:
+      ${times(r.total.devices / Z3.relays)} times the Z3's ${num(Z3.relays)} relays. In tubes it is <strong>${num(t.total.devices)}
+      tubes</strong> in ${tc.used} ENIAC-sized panels of ${ENIAC_PANEL.tubes}, ${fmtMass(t.total.mass!)} and ${fmtWatts(t.total.power!)}:
+      ${times(t.total.devices / ENIAC.tubes)} ENIACs. The 4-bit CPU fits in ${num(c4.relay.total.devices)} relays
+      (${cabinetCounts(c4.relay).used} racks).</p>
+      <p>The clock period is the same ${f.steps} gate delays as in CMOS, each now a ${TECH.relay.stepName} of ${fmtTime(TECH.relay.step)}
+      or a ${TECH.tube.stepName} of ${fmtTime(TECH.tube.step)}: one instruction takes <strong>${fmtTime(pr)}</strong> in relays
+      (${(1 / pr).toFixed(2)} instructions a second) and ${fmtTime(pt)} in tubes (${fmtRate(pt)}), against ${fmtTime(pc)} (${fmtRate(pc)}) for the same netlist on
+      ${fmtArea(f.cmos.area!)} of silicon, the speck on the table by the person. An instruction costs ${fmtJoules(r.total.power! * pr)}
+      in relays and ${fmtJoules(t.total.power! * pt)} in tubes.</p>
+      <p>Two blocks fill most of the floor: the register file (${rf.cabinets} racks) and the data memory (${dm.cabinets}), both
+      flip-flops of NANDs, ${perBit.toFixed(1)} NANDs per bit of data memory. Racks are not shared between blocks, so every small
+      block gets one of its own.</p>
+      <div class="try">Run the program and watch the relays switch (or the plates glow): each cycle's settled values from the
+      gate-level simulation, one relay or tube per NAND output of its block (a real relay machine would ripple through
+      ${f.steps} steps to get there). Click a rack to open its block.</div>`;
+    explain = `A flip-flop of NANDs is a master–slave pair of latches: ${perBit.toFixed(1)} NANDs per bit here with the write
+      and read logic, each NAND a relay. A relay is already a latch: one of its own contacts in series with its coil holds it
+      until the circuit is broken. One relay per bit is how the Z3 kept 64 words in ${num(Z3.memory)} relays, while this data
+      memory of 32 words takes ${num(dm.devices)}.`;
+  };
+  return {
+    title: 'The same CPU in relays and tubes',
+    get body() { if (text === null) facts(); return text!; },
+    widget: machineHall,
+    challenge: {
+      kind: 'quiz',
+      question: `The RV32I's 32-word data memory alone fills dozens of relay racks, yet the Z3 kept 64 words in ${num(Z3.memory)} relays. Why?`,
+      options: [
+        'The Z3\'s words were shorter',
+        'Here every bit is a flip-flop of NANDs, each NAND a relay; a relay holding itself through its own contact is a one-relay latch',
+        'Relays cannot hold a value without power, so the Z3 used film',
+        'The Z3 had no data memory, only registers',
+      ],
+      answer: 1,
+      get explain() { if (explain === null) facts(); return explain!; },
+    },
+  };
+}
 
 export const chSilicon: Chapter = {
   id: 'silicon', num: 25, title: 'From netlist to silicon', level: 'Physical design',
@@ -94,6 +158,7 @@ export const chSilicon: Chapter = {
         explain: 'e^(−1 cm² × 0.1) = 0.905 and e^(−4 cm² × 0.1) = 0.670. Four times the area means fewer dies per wafer and a lower fraction of them working: the big die costs about 5.4× as much, not 4×. Chiplets split a large design into smaller dies that yield better.',
       },
     },
+    hallStep(),
     {
       title: 'The journey',
       body: `
