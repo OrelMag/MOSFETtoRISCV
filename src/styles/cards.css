@@ -1,0 +1,13 @@
+/* ---------- Punched cards (src/widgets/carddraw.ts and its users: prologue P3, the card reader, deck views) ---------- */
+.pcard { display: block; width: 100%; height: auto; max-width: 760px; }
+.pcard-body { fill: var(--pcard); stroke: var(--pcard-edge); stroke-width: 1.5; }
+.pcard-digits text { font: 8px var(--font-mono); text-anchor: middle; fill: var(--pcard-ink); opacity: 0.55; }
+.pcard-colno { font: 6px var(--font-mono); text-anchor: middle; fill: var(--pcard-ink); opacity: 0.5; }
+.pcard-print { font: 10.5px var(--font-mono); fill: var(--pcard-ink); white-space: pre; }
+.pcard-holes rect { fill: transparent; }
+.pcard-holes rect.on { fill: var(--pcard-hole); }
+.pcard-hit rect { fill: transparent; cursor: pointer; }
+.pcard-hit rect:hover { fill: var(--pcard-ink); fill-opacity: 0.18; }
+.pcard-marks rect.read { fill: var(--accent); fill-opacity: 0.22; }
+.pcard-marks rect.word { fill: var(--brass); fill-opacity: 0.16; }
+.pcard.plain .pcard-print { font-size: 13px; }
