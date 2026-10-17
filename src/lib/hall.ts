@@ -174,7 +174,7 @@ function share(blocks: HallBlock[], n: number): void {
   const exact = blocks.map((b) => (n * b.priced.devices) / sum);
   const whole = exact.map((x) => Math.trunc(x));
   let left = n - whole.reduce((s, x) => s + x, 0);
-  const order = exact.map((x, i) => i).sort((a, b) => Math.abs(exact[b] - whole[b]) - Math.abs(exact[a] - whole[a]));
+  const order = exact.map((_, i) => i).sort((a, b) => Math.abs(exact[b] - whole[b]) - Math.abs(exact[a] - whole[a]));
   for (const i of order) { if (!left) break; whole[i] += Math.sign(left); left -= Math.sign(left); }
   blocks.forEach((b, i) => (b.devices = Math.max(1, b.priced.devices + whole[i])));
 }
