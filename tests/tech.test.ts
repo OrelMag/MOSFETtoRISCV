@@ -93,7 +93,7 @@ describe('pricing', () => {
     expect(cabinets(r)).toBe(Math.ceil(r.devices / 800));
   });
 
-  it('a CPU without its program ROM: the ROM's NANDs gone, nothing else', () => {
+  it('a CPU without its program ROM: the ROM\'s NANDs gone, nothing else', () => {
     const d = singleCycleCpu([0x00000013]);
     const imem = netlistOf(d)!.instances.find((i) => i.name === 'imem')!.def;
     const w = withoutParts(d, ['imem']);
