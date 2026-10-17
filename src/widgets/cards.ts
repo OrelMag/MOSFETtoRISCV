@@ -126,7 +126,7 @@ export function censusWidget(): Widget {
   let combo = 0;
   const run = ticker(140);
 
-  const CW = 46, x0 = 70, y0 = 26;
+  const CW = 64, x0 = 70, y0 = 26;
   const card = s('svg', { viewBox: `0 0 ${x0 + 4 * CW + 20} ${y0 + FIELDS.length * 26 + 14}`, class: 'census-card', role: 'img', 'aria-label': 'The census card under the press' });
   const dials = h('div', { class: 'census-dials' });
   const info = h('p', { class: 'sub' });
@@ -296,7 +296,9 @@ export function deckWidget(): Widget {
 export function readerPanel(stage: Stage): Widget {
   const view = cardView(blankCard(), { plain: true, label: 'The card at the read station' });
   const line = h('p', { class: 'sub' });
-  const el = h('div', { class: 'card-reader-panel' }, view.el, line);
+  const title = h('h4', null, 'The card at the read station', h('span', { class: 'fold-hint' }));
+  const el = h('div', { class: 'mem-panel card-reader-panel', 'data-dock': 'left' }, title, view.el, line);
+  title.addEventListener('click', () => el.classList.toggle('collapsed'));
   const update = () => {
     const sim = stage.sim;
     const r = sim ? readerLeaves(sim)[0] : undefined;
