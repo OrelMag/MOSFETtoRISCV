@@ -1,5 +1,5 @@
-// Level cases, acts 4–9 (the instruction set, the single-cycle core, the pipeline, the system, side
-// quests, the lanes): every build, core and program level, the optional ones included. The numbers are
+// Level cases, acts 4–10 (the instruction set, the single-cycle core, the pipeline, the system, side
+// quests, the lanes, memory): every build, core and program level, the optional ones included. The numbers are
 // measured on the reference designs: NANDs and depth (sim/stats), clock periods by static timing (cores
 // with the bench's 8-delay memories, corecheck corePeriod / lanecheck lanePeriod), cycles on the core
 // bench's programs (coretests, lanetests), instructions on the puzzles' reference solutions and lane
@@ -326,5 +326,21 @@ export const CASES1: Record<string, LevelCase> = {
     without: 'Without the hold, a program has to wait for the rasterizer by itself (poll a status word, or count cycles), and every program that forgets reads stale pixels. The hold makes a load from the screen a fence: correct by construction, at the price of the turns it waits.',
     cost: '41 250 NANDs, period 147: the two-warp core\'s 30 163, the rasterizer\'s 9 251, and 1 836 for the device: seven registers, the address decoders on lane 0\'s port and every lane\'s, and the hold. The period is the rasterizer\'s set-up path. On the bench\'s 36 programs, 7 635 cycles.',
     alts: [{ name: 'Two warps, no device', lib: 'rv16_warps' }],
+  },
+  // ---- Act 10: memory ---------------------------------------------------------------------------
+  m_sense: {
+    problem: 'A DRAM cell is a 25 fF capacitor behind one transistor: it cannot drive a wire, it can only share its charge with one. Shared with a 100 fF bit line at VDD/2, a stored 1 lifts the line to 0.6 VDD and a 0 drops it to 0.4, and the cell is left at the same level. The column turns that into a bit (the sense amplifier against a twin reference line) and puts the charge back (the amplifier drives the line to a rail while the word line is still up).',
+    without: 'Read the bit line with a logic gate and 0.4 to 0.6 VDD is neither 0 nor 1; and the cell, read once, holds 0.6: a second read would find almost nothing to tell.',
+    cost: '34 transistors: the amplifier 8, the write driver 22 (its gates are NANDs at switch level), the two cells one each, and two of your own: the precharge transistor and the equalizer, which precharges the reference line through the bit line. A real chip pays one amplifier per column, shared by every cell on it: hundreds of cells per amplifier.',
+  },
+  m_bank: {
+    problem: 'Once a row is open its words are a cycle away, and every other row is draining: a bank needs someone who remembers which row is open, decides when to close it, and opens every row again before its charge is gone. Here the array leaves all of that to you, as the DRAMs of the 1970s did: RAS-only refresh, a row pointer and a timer in the controller.',
+    without: 'Without refresh the first row nobody touched for 288 cycles is gone; the long-pause trace loses one before its first request. Without the open row, every access pays an ACT and a PRE.',
+    cost: '319 NANDs, period 30: the state is 165 (a flip-flop and three 4-bit registers: open row, refresh pointer, timer), two incrementers and a row comparator 66, the decisions the rest. 5 917 cycles over the eight traces.',
+  },
+  m_ctrl: {
+    problem: 'A DDR chip does the refreshing itself when asked and keeps a row buffer per bank, but it has rules: a column command only tRCD after its row opened, data tCAS after a read, a row open at least tRAS, tRP before the next. The controller turns each request into the shortest legal sequence of commands, and fits a refresh in before the chip forgets.',
+    without: 'Commands one cycle early read garbage or corrupt a row: the chip does not check, so the controller is the only thing standing between a timing table and silent data loss.',
+    cost: '777 NANDs, period 36. One request at a time keeps it small: two since-counters (cycles since the last ACT and the last PRE) cover every timing for both banks, a 4-stage shift register follows a read to its data, an 8-bit counter schedules refresh. A controller that overlaps requests needs counters per bank and a queue: chapter 33\'s FR-FCFS. 11 878 cycles over the eight traces.',
   },
 };

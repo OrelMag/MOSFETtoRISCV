@@ -774,8 +774,10 @@ on its own.
   workbench family)
 
 **Campaign**
-- ⏳ An act: a sense amplifier, a DRAM bank with refresh, a row-buffer controller, a bus with two masters and an
-  arbiter, a DMA engine, a flash page store with a mapping table; graded build levels as the others
+- 🚧 Act 10 "Memory" (16e, optional, after the finale; docs/CAMPAIGN.md): ✅ a lesson, a DRAM column at switch level
+  around the sense amplifier, a bank with RAS-only refresh, a row-buffer controller with chapter 33's timings, each
+  against a device model on its bench that names the rule broken (16e-1); ⏳ a bus with two masters and an arbiter, a
+  DMA engine, a flash page store with a mapping table, a boot program puzzle (16e-2)
 
 ### Appendix A — An 8-bit CPU of 1975: the MOS 6502 ✅
 After the journey, a lettered appendix: the real 6502 rebuilt the way 1975 built it, at transistor level, and why

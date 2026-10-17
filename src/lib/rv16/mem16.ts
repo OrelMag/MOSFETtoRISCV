@@ -4,6 +4,10 @@
 //
 //   DRAM_COL2  m_sense: a DRAM column of two cells at switch level: precharge to VDD/2 through one transistor,
 //              the equalizer doubling as the reference line's precharge, the sense amplifier, the write driver.
+//   BANK16     m_bank: open page around a 16 × 16 cell array, RAS-only refresh (a row pointer and a timer).
+//   CTRL16     m_ctrl: open page over a two-bank DRAM chip: tRCD / tRAS / tRP from two since-counters, tCAS by a
+//              shift register, auto refresh (PREA, REF, tRFC).
+// bankOf / ctrlOf also build them with a fault, for the tests that prove the benches catch it.
 
 import type { ComponentDef, PortDef } from '../../sim/types';
 import { WRITE_DRIVER } from '../arrays';

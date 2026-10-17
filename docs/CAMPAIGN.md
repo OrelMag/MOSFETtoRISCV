@@ -97,6 +97,7 @@ Each level has a **par** per metric:
 | CPU cores | NANDs, period, cycles; time = period × Σ cycles |
 | Program puzzles | size (words), cycles |
 | Kernel puzzles (act 9) | cycles (warp instructions), idle lanes (%) |
+| Memory controllers (act 10) | NANDs, period, cycles over the request traces |
 
 - ★ passes
 - ★★ every metric ≤ 1.5 × par
@@ -375,6 +376,28 @@ at the clock edge, before that edge's stores) and adds `warp` and a load write p
 writes and stores belong to the warp issuing now, load-port writes to the warp that issued the cycle before; each
 thread's events are compared in order with `Warps16` (riscv/rv16/warps16.ts: the warps taking turns, warp 0 first).
 
+### Act 10 — Memory (roadmap Phase 16e)
+Optional as a whole, after `y_final`, like act 9 (decided 2026-10-16 with the Phase 16 mockup; details 2026-10-17).
+The devices a level drives are on its bench (`memcheck.ts`), JS models that know their rules and name the first one
+broken, rather than given parts that read X. References: `src/lib/rv16/mem16.ts`, from campaign parts only.
+- ✅ `m_lesson`: where the cycles go (DRAM cells, the row buffer, refresh) ← y_final
+- ✅ `m_sense`: a DRAM column of two cells at switch level ← m_lesson. Given: the cells, a bit line capacitance part
+  (`blcap`, 100 fF: a sandbox wire has no capacitance value), the sense amplifier, VDD/2, the write driver; the
+  learner adds precharge and equalize and wires the twin lines. The amplifier stays a primitive: SwitchSim reads a
+  gate between its thresholds as X, so a cross-coupled pair drawn from MOSFETs cannot resolve 50 mV (the mockup's
+  "from transistors" was changed for this). A sequence of chapter 32's protocol, every read twice (the restore);
+  34 transistors
+- ✅ `m_bank`: requests in, commands to a 16 × 16 word array on the bench out (ACT, RW, PRE; a read's word in the
+  same cycle); rows leak unless opened every 288 cycles: RAS-only refresh by a row pointer and a timer ← m_sense.
+  Eight request traces on BitSim lanes, each with its own array; 319 NANDs, period 30, 5 917 cycles
+- ✅ `m_ctrl`: a two-bank DRAM chip on the bench (64 rows of 16 words per bank, chapter 33's command encoding):
+  tRCD / tCAS / tRP 4, tRAS 9, tRFC 12, a REF at least every 256 cycles; one word per command, a write's data with
+  its WR ← m_bank. 777 NANDs, period 36, 11 878 cycles
+- ⏳ `m_bus` (two masters, round-robin, three slaves one with wait states), `m_dma` (a bus master copying words,
+  irq when done), `m_flash` (a mapping table over a flash device on the bench: out-of-place writes, a spare block
+  for garbage collection), program puzzle `p_boot` (programs the DMA to copy itself from flash into RAM, waits for
+  the interrupt, jumps; DMA and flash in iss16): 16e-2
+
 ### Act 8 — Side quests (all optional)
 - ✅ `o_mulseq`: shift-and-add multiplier ← a_add16, s_reg16
 - ✅ `o_mularr`: 8 × 8 array multiplier ← a_add16
@@ -512,8 +535,8 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
 - 🚧 **GPU act**: act 9's compute levels are playable (lanes, lane register file, mask, SIMD core, reconvergence
   stack, SIMT core, coalescer, two warps; saxpy, reduction and histogram kernels); the rasterizer follows (roadmap
   Phase 15).
-- ⏳ **Memory act**: sense amplifier, DRAM bank with refresh, row-buffer controller, a shared bus with DMA and a
-  flash page store (roadmap Phase 16).
+- 🚧 **Memory act**: act 10's DRAM levels are playable (a DRAM column, a bank with refresh, a row-buffer
+  controller); a shared bus with DMA, a flash page store and the boot puzzle follow (roadmap Phase 16e).
 
 ---
 
