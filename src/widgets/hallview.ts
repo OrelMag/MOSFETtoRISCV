@@ -337,7 +337,8 @@ export function hallView(): Widget {
       const p = renderer.project(a.p);
       if (!p || p[0] < 4 || p[1] < 4 || p[0] > w - 4 || p[1] > hh - 14) { a.el.style.display = 'none'; continue; }
       a.el.style.display = '';
-      a.w ||= (a.el.lastElementChild as HTMLElement).offsetWidth;
+      // measured every time: a width read before the web font arrived is too narrow, and the labels then overlap
+      a.w = (a.el.lastElementChild as HTMLElement).offsetWidth + 6;
       const rect = (side: Anchor['side']): [number, number, number, number] => side === 't' ? [p[0] - a.w! / 2, p[1] - 24, p[0] + a.w! / 2, p[1]]
         : side === 'l' ? [p[0] - 9 - a.w!, p[1] - 9, p[0] + 3, p[1] + 9] : [p[0] - 3, p[1] - 9, p[0] + 9 + a.w!, p[1] + 9];
       // a side label that would leave the frame goes to the other side
