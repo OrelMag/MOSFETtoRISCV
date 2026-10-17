@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import '../src/lib/index';
-import { AISLE, CABINET, cabinetCounts, hallCpu, hallFacts, hallLayout, periodIn, withoutProgram } from '../src/lib/hall';
+import { AISLE, CABINET, cabinetCounts, hallCpu, hallFacts, hallLayout, nandOutputsByBlock, periodIn, withoutProgram } from '../src/lib/hall';
+import { flatten } from '../src/sim/flatten';
 import { cabinets, price, withoutParts } from '../src/lib/tech';
 import { stats } from '../src/sim/stats';
 import { netlistOf } from '../src/sim/types';
@@ -77,6 +78,14 @@ describe('the machine hall', () => {
     expect(f.steps).toBeGreaterThan(100);
     expect(periodIn(f.steps, 'relay')).toBeCloseTo(f.steps * 8.2e-3, 2);
     expect(f.cmos.area).toBeGreaterThan(0);
+  });
+
+  it('gives every block of the hall its NAND outputs to show (the program ROM is a lookup leaf)', () => {
+    for (const id of ['cpu4', 'rv32i'] as const) {
+      const cpu = hallCpu(id).def, groups = nandOutputsByBlock(flatten(cpu)), h = hallLayout(cpu, 'relay');
+      for (const b of h.blocks) expect(groups.get(b.name)?.length).toBe(b.nands);
+      expect(groups.has(h.program!)).toBe(false);
+    }
   });
 
   it('leaves a CPU without a program ROM whole', () => {

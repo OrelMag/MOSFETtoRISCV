@@ -8,7 +8,7 @@
 
 import { ENIAC_PANEL } from '../phys/triode';
 import { RELAY_RACK } from '../phys/relay';
-import { flatten } from '../sim/flatten';
+import { flatten, type FlatDesign } from '../sim/flatten';
 import { stats } from '../sim/stats';
 import { analyzeTiming } from '../sim/timing';
 import { type ComponentDef, netlistOf } from '../sim/types';
@@ -161,7 +161,7 @@ export function hallLayout(cpu: ComponentDef, tech: HallTech): Hall {
     tech, spec, def, program, blocks, cabinets: list, total,
     between,
     perRow, rows, width, depth, floor: width * rows * pitchZ,
-    person: [-0.9, 0.9], speck: [-0.9, 0.25],
+    person: [-0.9, 0.9], speck: [-0.15, 1.0],
   };
   memo[tech] = hall;
   return hall;
@@ -237,4 +237,19 @@ export const periodIn = (steps: number, tech: 'cmos' | HallTech): number => step
 /** Cabinets of the hall (Σ per block) and the fewest the devices would fill if blocks shared them. */
 export function cabinetCounts(h: Hall): { used: number; packed: number } {
   return { used: h.cabinets.length, packed: cabinets(h.total) };
+}
+
+/** The output net of every NAND of a flattened CPU, grouped by the top-level instance it sits in (flattening order):
+ *  what each relay or tube of that block's racks shows in the hall. */
+export function nandOutputsByBlock(d: FlatDesign): Map<string, number[]> {
+  const groups = new Map<string, number[]>();
+  for (const leaf of d.leaves) {
+    if (leaf.def.prim !== 'nand') continue;
+    let n = leaf.node;
+    while (n.parent && n.parent.parent) n = n.parent;
+    let g = groups.get(n.name);
+    if (!g) groups.set(n.name, (g = []));
+    g.push(leaf.outputs[0][0]);
+  }
+  return groups;
 }

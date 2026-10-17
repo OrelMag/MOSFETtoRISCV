@@ -12,7 +12,7 @@ import { CssColors, mixRgb, scaleRgb, watchTheme } from '../gl/color';
 import { INSTANCE_FLOATS, writeInstance, type Instance, type RGB } from '../gl/instances';
 import { cross3, norm3, sub3, type Vec3 } from '../gl/math';
 import type { Renderer } from '../gl/renderer';
-import { hallCpu, hallFacts, hallLayout, periodIn, cabinetCounts, type Hall, type HallDesign, type HallTech } from '../lib/hall';
+import { hallCpu, hallFacts, nandOutputsByBlock, hallLayout, periodIn, cabinetCounts, type Hall, type HallDesign, type HallTech } from '../lib/hall';
 import { resolveComponent } from '../lib/resolve';
 import { fmtArea, fmtMass, fmtRate, fmtTime, fmtWatts } from '../lib/tech';
 import { clockCycle } from '../riscv/cosim';
@@ -84,15 +84,7 @@ interface Live {
 
 function buildLive(design: HallDesign): Live {
   const d = flatten(hallCpu(design).def);
-  const groups = new Map<string, number[]>();
-  for (const leaf of d.leaves) {
-    if (leaf.def.prim !== 'nand') continue;
-    let n = leaf.node;
-    while (n.parent && n.parent.parent) n = n.parent;
-    let g = groups.get(n.name);
-    if (!g) groups.set(n.name, (g = []));
-    g.push(leaf.outputs[0][0]);
-  }
+  const groups = nandOutputsByBlock(d);
   const sim = new DualSim(d);
   for (const p of hallCpu(design).def.ports) if (p.dir === 'in') sim.setInput(p.name, 0);
   sim.reset('zero');
