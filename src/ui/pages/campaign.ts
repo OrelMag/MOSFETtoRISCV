@@ -217,7 +217,7 @@ export class CampaignPage implements Page {
             ? `${pz.tests().length} tests on the two-warp golden model (${pz.warps} warps of ${pz.lanes} lanes taking turns, one shared memory); each must end within ${pz.maxSteps.toLocaleString()} cycles with the expected memory, and again with warp ${pz.warps - 1} running ahead.`
             : pz.lanes
             ? `${pz.tests().length} tests on the lane golden model (${pz.lanes} lanes, one shared memory); each must halt within ${pz.maxSteps.toLocaleString()} warp instructions with the expected memory.`
-            : `${pz.tests().length} tests on the golden model; each must halt within ${pz.maxSteps.toLocaleString()} instructions with the expected output.`),
+            : `${pz.tests().length} tests on the golden model; each must halt within ${pz.maxSteps.toLocaleString()} ${pz.dma ? 'cycles (flash stalls included)' : 'instructions'} with the expected output.`),
             pz.tests().map((t) => h('li', null, t.name)))));
       if (st !== 'locked') {
         let card = this.cards.get(n.id);

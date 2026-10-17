@@ -435,10 +435,13 @@ src/lib/rv16/  the campaign's RV16 hardware, every block built only from parts i
                while it is busy for a device store or a screen load), FRAME_PORTS: + fa / fd / fwe); raster16.ts (act 9 graphics,
                reference gfx/raster16.ts: EDGE16 stepper with a double command, TILE16 walk, RASTER16: set-up by adders and
                shift-and-add on the steppers, cull from the E sum); mem16.ts (act 10: DRAM_COL2 the switch-level column,
-               BANK16 open page + RAS-only refresh, CTRL16 a two-bank DDR-style controller; bankOf / ctrlOf with a fault
-               for the tests)
+               BANK16 open page + RAS-only refresh, CTRL16 a two-bank DDR-style controller, BUS16 two masters / three
+               slaves with a held round-robin grant, DMA16 a copying bus master, FLASH_STORE16 a log-structured page store
+               with garbage collection; bankOf / ctrlOf / busOf / dmaOf / flashOf with a fault for the tests)
 src/riscv/rv16/ isa16.ts (fields, encode / decode / disasm), asm16.ts, iss16.ts (golden model: MMIO, CSRs, traps,
-               interrupts; halts on jal x0, 0; SIMT words are illegal), simt16.ts (Simt16: a warp of RV16 lanes over one
+               interrupts; halts on jal x0, 0; SIMT words are illegal; `dma`: the boot puzzle's DMA engine (DMA_DEV16
+               registers at 0xFFF0 … 0xFFF3, a word every 4 cycles, the interrupt line when done) and flash at 0x8000 …
+               0xBFFF, read-only, 8 stall cycles a load: steps then count cycles), simt16.ts (Simt16: a warp of RV16 lanes over one
                memory: mask, leader, split / join stack, tmc, csrr rd, tid; utilization / idle), warps16.ts (Warps16: W warps over
                one memory taking turns, warp 0 first, wasted turns counted; bar waits for the other warp or its end (mask 0);
                stepWarp(w) for other issue orders; raster: lane 0's stores to 0xFFF0 … 0xFFF6 draw at once into 0xF000, draws
@@ -773,9 +776,12 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  bench (64 triangles on BitSim lanes, writes in walk order, cycles graded); buildk.ts act 9's levels;
                  puzzles.ts kernels on two warps (`warps`) also run with warp 1 ahead (a missing bar fails)
   buildm.ts      act 10's levels (memory, Phase 16e): m_sense (a DRAM column at switch level: senseSeq, chapter 32's
-                 protocol), m_bank, m_ctrl; memcheck.ts their benches: the device on the bench as a JS model that names
-                 the first rule broken (ArrayModel: 16 × 16 words, ACT / RW / PRE, rows leak after BANK.RET; Dram16Model:
-                 two banks, DRAM16 timings, REF), request traces (Requester: held until busy = 0 / ready) on BitSim lanes
+                 protocol), m_bank, m_ctrl, m_bus (busSeq: a sequence from a model of the bus and its bench), m_dma,
+                 m_flash; memcheck.ts their benches: the device on the bench as a JS model that names the first rule
+                 broken (ArrayModel: 16 × 16 words, ACT / RW / PRE, rows leak after BANK.RET; Dram16Model: two banks,
+                 DRAM16 timings, REF; DmaLane: a memory with wait states, the copy script, the handshake rule;
+                 Flash16Model: 4 × 4 pages + a spare-area tag, program once, erase a block), request traces (Requester:
+                 held until busy = 0 / ready) on BitSim lanes; p_boot (puzzles.ts `dma`) runs on iss16's DMA engine
                DOM: ui/svgs.ts (map and anatomy SVG), ui/levelinfo.ts (criteria, grading table), ui/codexentry.ts (a codex
                entry in full, live schematic), ui/glossaryui.ts (markTerms: hover cards); the page is ui/pages/campaign.ts.
                Levels are played on the level screen (ui/pages/level.ts, #/campaign/play/<node>, the editor's chunk): an

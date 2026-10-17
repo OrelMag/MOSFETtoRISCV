@@ -213,7 +213,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   divide stalling the front for 18 cycles; +45 % NANDs, period 93 → 93 (fast adders), 59 → 79 (balanced: divider sign fix, Booth tree)
 - ✅ Passing the official `riscv-tests` on every RV32 CPU (see Phase 13 and `docs/VERIFICATION.md`)
 
-### Phase 8 — Memory hierarchy 🚧
+### Phase 8 — Memory hierarchy ✅
 - ✅ Switch level gains transistor strengths and capacitive (charge-holding) nets
 - ✅ 6T SRAM column (precharge, read, write, no read disturb, contention = short) and 1T1C DRAM cell at transistor level
 - ✅ Transistor-level SRAM array (R × C): row decoder, per-column precharge, write driver and latch-type sense amplifier
@@ -224,7 +224,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Gate-level write-back, write-allocate cache with dirty bits and a write-back-then-fill miss controller; 2-way
   set-associative with an LRU bit; instruction cache; all three in the single-cycle CPU, co-simulated per cycle
 - ✅ Data cache (write-through, write-back, 2-way) in the pipelined CPU: a miss freezes every stage, co-simulated at every retirement
-- ⏳ Bus / interconnect basics (see Phase 16, Interconnect); DRAM and flash in depth: Phase 16
+- ✅ Bus / interconnect basics, DRAM and flash in depth: Phase 16 (chapters 32–35, campaign act 10)
 
 ### Phase 9 — Performance & optimization 🚧
 - ✅ Floating point (chapter 23): IEEE 754 explorer and number line; parametric gate-level FPU (unpack, align with sticky,
@@ -742,7 +742,7 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   model (riscv/rv16/simt16.ts: four Iss16 lanes over one memory), and the lane bench (campaign/lanecheck.ts: every
   lane's register writes and stores in order, four memory ports, 32 programs at once on BitSim)
 
-### Phase 16 — Journey and campaign track: Memory ⏳
+### Phase 16 — Journey and campaign track: Memory ✅
 Memory in depth, past today's arrays (chapter 10), cells and caches (Phase 8): how a DRAM chip really answers, what
 a flash chip does when it cannot overwrite, and how the CPU, DMA and peripherals share one bus. In the journey, a
 track of chapters after the memory hierarchy; in the campaign, an act of its own. Mockup first for the chapter
@@ -785,10 +785,11 @@ on its own.
   workbench family)
 
 **Campaign**
-- 🚧 Act 10 "Memory" (16e, optional, after the finale; docs/CAMPAIGN.md): ✅ a lesson, a DRAM column at switch level
-  around the sense amplifier, a bank with RAS-only refresh, a row-buffer controller with chapter 33's timings, each
-  against a device model on its bench that names the rule broken (16e-1); ⏳ a bus with two masters and an arbiter, a
-  DMA engine, a flash page store with a mapping table, a boot program puzzle (16e-2)
+- ✅ Act 10 "Memory" (16e, optional, after the finale; docs/CAMPAIGN.md): a lesson, a DRAM column at switch level
+  around the sense amplifier, a bank with RAS-only refresh, a row-buffer controller with chapter 33's timings (16e-1);
+  a bus with two masters and a round-robin arbiter, a DMA engine, a flash page store (a log, a mapping table, the
+  owner in each page's spare area, garbage collection), a boot program puzzle on the golden model with a DMA engine
+  and flash (16e-2); each device a model on its level's bench that names the rule broken
 
 ### Appendix A — An 8-bit CPU of 1975: the MOS 6502 ✅
 After the journey, a lettered appendix: the real 6502 rebuilt the way 1975 built it, at transistor level, and why

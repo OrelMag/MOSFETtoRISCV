@@ -1,15 +1,18 @@
 // Act 10 (memory in depth): the benches catch what their levels are about. A column with no reference capacitance
 // cannot sense; a bank that never refreshes loses a row; a controller that skips refresh or tRCD breaks the chip's
-// rules; and every message names the rule.
+// rules; a bus that re-arbitrates mid-transfer, a DMA that lets go of its request early, a page store that never
+// collects all fail; and every message names the rule.
 
 import { describe, expect, it } from 'vitest';
 import { senseSeq } from '../src/campaign/buildm';
-import { BANK, bankTraces, DCMD, Dram16Model, DRAM16, runBank, runCtrl } from '../src/campaign/memcheck';
+import { BANK, bankTraces, DCMD, Dram16Model, DRAM16, FCMD, Flash16Model, runBank, runCtrl, runDma, runFlash } from '../src/campaign/memcheck';
 import { nodeById } from '../src/campaign/nodes';
+import { assemble16 } from '../src/riscv/rv16/asm16';
+import { DMA_DEV16, Iss16 } from '../src/riscv/rv16/iss16';
 import { checkChallenge } from '../src/editor/challenges';
 import type { Compiled } from '../src/editor/compile';
 import { levelChallenge } from '../src/campaign/levels';
-import { BANK16, bankOf, CTRL16, ctrlOf, DRAM_COL2 } from '../src/lib/rv16/mem16';
+import { BANK16, bankOf, BUS16, busOf, CTRL16, ctrlOf, DMA16, dmaOf, DRAM_COL2, FLASH_STORE16, flashOf } from '../src/lib/rv16/mem16';
 import { type ComponentDef, netlistOf } from '../src/sim/types';
 import { boxTextOverlaps } from '../src/view/boxtext';
 import { labelOverlaps, routeNetlist, symbolOverlaps, wireOverlaps } from '../src/view/route';
@@ -83,8 +86,76 @@ describe('m_ctrl: a row-buffer controller', () => {
   });
 });
 
+describe('m_bus: two masters, one bus', () => {
+  it('a grant that moves while a slave is still waiting fails the sequence', () => {
+    const c = levelChallenge(nodeById('m_bus')!)!;
+    expect(checkChallenge(c, compiled(BUS16, 'gate')).failures).toEqual([]);
+    expect(checkChallenge(c, compiled(busOf('nolock'), 'gate')).failures.length).toBeGreaterThan(0);
+  });
+});
+
+describe('m_dma: a DMA engine', () => {
+  it('the reference copies every job on every memory; one that lets go of its request early is named', () => {
+    const r = runDma(DMA16, 'gate');
+    expect(r.failures).toEqual([]);
+    expect(r.cycles).toBe(nodeById('m_dma')!.par!.cycles);
+    expect(runDma(dmaOf('nohold'), 'gate').failures.join('\n')).toMatch(/hold the address and data until ready|outside the destination/);
+  });
+});
+
+describe('m_flash: a page store over flash', () => {
+  it('the reference keeps every page readable through its collections; without them the chip refuses a program', () => {
+    const r = runFlash(FLASH_STORE16, 'gate');
+    expect(r.failures).toEqual([]);
+    expect(r.cycles).toBe(nodeById('m_flash')!.par!.cycles);
+    expect(runFlash(flashOf('nogc'), 'gate').failures.join('\n')).toMatch(/flash cannot overwrite a page until its block is erased/);
+  });
+
+  it('the chip model: a page programs once, a block erases whole, nothing while busy', () => {
+    const f = new Flash16Model();
+    f.edge(FCMD.PROG, 5, 0x1234, 3, 10);
+    f.edge(FCMD.READ, 5, 0, 0, 12);
+    expect(f.why).toMatch(/while the chip is busy/);
+    const g = new Flash16Model();
+    g.edge(FCMD.PROG, 5, 0x1234, 3, 10);
+    g.edge(FCMD.READ, 5, 0, 0, 20);
+    expect(g.out(21).fbusy).toBe(1);
+    expect(g.out(23)).toEqual({ fbusy: 0, fq: 0x1234, fqt: 3 });
+    g.edge(FCMD.PROG, 5, 0x0000, 3, 30);
+    expect(g.why).toMatch(/PROG page 5 \(block 1\), which holds data/);
+    const h = new Flash16Model();
+    h.edge(FCMD.PROG, 5, 0x1234, 3, 10);
+    h.edge(FCMD.ERASE, 4, 0, 0, 20);
+    h.edge(FCMD.PROG, 5, 0x4321, 1, 50);
+    expect(h.why).toBe('');
+    expect(h.erases).toEqual([0, 1, 0, 0]);
+  });
+});
+
+describe('p_boot: the golden model with a DMA engine and flash', () => {
+  const run = (src: string, mem: Record<number, number>) => {
+    const a = assemble16(src);
+    const iss = new Iss16(a.words, { system: true, dma: true }, new Map(Object.entries(mem).map(([k, v]) => [Number(k), v])));
+    iss.run(2000);
+    return iss;
+  };
+  it('copies a word every DMA_DEV16.WORD cycles and raises the interrupt line after the last', () => {
+    const iss = run('li t0, 0x8000\nsw t0, -16(x0)\nli t0, 0x100\nsw t0, -15(x0)\nli t0, 5\nsw t0, -14(x0)\nw: lw t1, -7(x0)\nbeqz t1, w\nhalt\n', { 0x8000: 11, 0x8001: 22, 0x8002: 33, 0x8003: 44, 0x8004: 55 });
+    expect([...iss.dmem.slice(0x100, 0x105)]).toEqual([11, 22, 33, 44, 55]);
+    expect(iss.irq).toBe(1);
+    expect(iss.dma.left).toBe(0);
+    // 5 words at 4 cycles each, counted from the store that started it: the wait loop ends within a loop turn of it
+    expect(iss.steps).toBeGreaterThanOrEqual(7 + 5 * DMA_DEV16.WORD);
+    expect(iss.steps).toBeLessThanOrEqual(7 + 5 * DMA_DEV16.WORD + 3);
+  });
+  it('a load from flash stalls DMA_DEV16.STALL cycles; a store to flash is an error', () => {
+    expect(run('li t0, 0x8000\nlw t1, 0(t0)\nhalt\n', {}).steps).toBe(1 + 1 + DMA_DEV16.STALL + 1); // li (one lui), the load and its stall, halt
+    expect(run('li t0, 0x8000\nsw t0, 0(t0)\nhalt\n', {}).error).toMatch(/a store to flash/);
+  });
+});
+
 describe('act 10 schematics', () => {
-  it.each([DRAM_COL2, BANK16, CTRL16].map((d) => [d.id, d] as const))('%s: no symbol on another, no label over one, no two nets on a line', (_, d) => {
+  it.each([DRAM_COL2, BANK16, CTRL16, BUS16, DMA16, FLASH_STORE16].map((d) => [d.id, d] as const))('%s: no symbol on another, no label over one, no two nets on a line', (_, d) => {
     const nl = netlistOf(d)!;
     expect(symbolOverlaps(nl)).toEqual([]);
     expect(labelOverlaps(d, nl)).toEqual([]);

@@ -19,7 +19,16 @@ export interface Iss16Options {
   strictInit?: boolean;
   /** Data addresses below MMIO wrap around dmemWords, like a small RAM decoded on its low bits only. */
   wrap?: boolean;
+  /**
+   * Act 10's boot puzzle: a DMA engine (registers at DMA_DEV16.SRC … DMA_DEV16.CLEAR) copying a word every DMA_DEV16.WORD cycles
+   * while the program runs, raising the interrupt line when done, and flash at DMA_DEV16.FLASH … DMA_DEV16.FLASH_END: read-only,
+   * each load stalling the processor DMA_DEV16.STALL cycles. Steps then count cycles, stalls included.
+   */
+  dma?: boolean;
 }
+
+/** The boot puzzle's devices (Iss16Options.dma): DMA registers below the MMIO block, flash in the upper half. */
+export const DMA_DEV16 = { SRC: 0xfff0, DST: 0xfff1, LEN: 0xfff2, CLEAR: 0xfff3, WORD: 4, FLASH: 0x8000, FLASH_END: 0xbfff, STALL: 8 } as const;
 
 export interface Step16 {
   pc: number;
@@ -55,10 +64,14 @@ export class Iss16 {
   /** External interrupt line (also set by a store of 1 to IRQ). */
   irq = 0;
   written = 0b1;
+  /** The DMA engine (opts.dma): its pointers, the words left, the cycles towards the next word. */
+  dma = { src: 0, dst: 0, left: 0, acc: 0 };
+  /** Cycles the current instruction stalls (a flash load). */
+  private stall = 0;
   readonly opts: Required<Iss16Options>;
 
   constructor(program: ArrayLike<number>, opts: Iss16Options = {}, data?: Map<number, number>) {
-    this.opts = { dmemWords: 65536, m: false, system: false, strictInit: false, wrap: false, ...opts };
+    this.opts = { dmemWords: 65536, m: false, system: false, strictInit: false, wrap: false, dma: false, ...opts };
     this.imem = new Uint16Array(Math.max(1, program.length));
     this.imem.set(Array.from(program, (w) => w & M16));
     this.dmem = new Uint16Array(this.opts.dmemWords);
@@ -79,6 +92,11 @@ export class Iss16 {
 
   private load(a: number): number {
     a &= M16;
+    if (this.opts.dma) {
+      if (a === DMA_DEV16.LEN) return this.dma.left;
+      if (a >= DMA_DEV16.SRC && a <= DMA_DEV16.CLEAR) return 0;
+      if (a >= DMA_DEV16.FLASH && a <= DMA_DEV16.FLASH_END) this.stall += DMA_DEV16.STALL;
+    }
     if (a >= MMIO_BASE) {
       switch (a) {
         case MMIO16.IN: return this.input.length ? this.input.shift()! & M16 : 0;
@@ -96,6 +114,16 @@ export class Iss16 {
     a &= M16;
     v &= M16;
     info.store = { addr: a, value: v };
+    if (this.opts.dma) {
+      const d = this.dma;
+      switch (a) {
+        case DMA_DEV16.SRC: d.src = v; return;
+        case DMA_DEV16.DST: d.dst = v; return;
+        case DMA_DEV16.LEN: d.left = v; d.acc = 0; if (!v) this.irq = 1; return;
+        case DMA_DEV16.CLEAR: this.irq = 0; return;
+      }
+      if (a >= DMA_DEV16.FLASH && a <= DMA_DEV16.FLASH_END) throw new Error(`a store to flash (0x${a.toString(16)}): flash is not written by stores`);
+    }
     if (a >= MMIO_BASE) {
       switch (a) {
         case MMIO16.EXIT: this.exitCode = v; this.halted = true; break;
@@ -136,6 +164,30 @@ export class Iss16 {
   }
 
   step(): Step16 {
+    if (!this.opts.dma) return this.exec();
+    const s0 = this.steps;
+    this.stall = 0;
+    const info = this.exec();
+    this.steps += this.stall;
+    this.runDma(this.steps - s0);
+    return info;
+  }
+
+  /** The DMA engine over `cycles` cycles: a word every DMA_DEV16.WORD, the interrupt line raised after the last. */
+  private runDma(cycles: number): void {
+    const d = this.dma;
+    if (!d.left) return;
+    d.acc += cycles;
+    while (d.left && d.acc >= DMA_DEV16.WORD) {
+      d.acc -= DMA_DEV16.WORD;
+      this.dmem[d.dst] = this.dmem[d.src];
+      d.src = (d.src + 1) & M16;
+      d.dst = (d.dst + 1) & M16;
+      if (!--d.left) { this.irq = 1; d.acc = 0; }
+    }
+  }
+
+  private exec(): Step16 {
     const pc = this.pc;
     const instr = pc < this.imem.length ? this.imem[pc] : 0;
     const info: Step16 = { pc, instr };
@@ -240,17 +292,17 @@ export class Iss16 {
     return {
       pc: this.pc, x: this.x.slice(), dmem: this.dmem.slice(), csr: this.csr.slice(), steps: this.steps, halted: this.halted, error: this.error,
       exitCode: this.exitCode, console: this.console, out: [...this.out], input: [...this.input], leds: this.leds, switches: this.switches,
-      irq: this.irq, written: this.written,
+      irq: this.irq, written: this.written, dma: { ...this.dma },
     };
   }
 
   restore(v: Iss16State): void {
-    Object.assign(this, { ...v, x: v.x.slice(), dmem: v.dmem.slice(), csr: v.csr.slice(), out: [...v.out], input: [...v.input] });
+    Object.assign(this, { ...v, x: v.x.slice(), dmem: v.dmem.slice(), csr: v.csr.slice(), out: [...v.out], input: [...v.input], dma: { ...v.dma } });
   }
 }
 
 export interface Iss16State {
   pc: number; x: Uint16Array; dmem: Uint16Array; csr: Uint16Array; steps: number; halted: boolean; error: string | null;
   exitCode: number | null; console: string; out: number[]; input: number[]; leds: number; switches: number;
-  irq: number; written: number;
+  irq: number; written: number; dma: { src: number; dst: number; left: number; acc: number };
 }

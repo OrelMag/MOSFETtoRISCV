@@ -7,20 +7,23 @@
 //   BANK16     m_bank: open page around a 16 × 16 cell array, RAS-only refresh (a row pointer and a timer).
 //   CTRL16     m_ctrl: open page over a two-bank DRAM chip: tRCD / tRAS / tRP from two since-counters, tCAS by a
 //              shift register, auto refresh (PREA, REF, tRFC).
-// bankOf / ctrlOf also build them with a fault, for the tests that prove the benches catch it.
+//   BUS16      m_bus: two masters, three slaves, valid / ready, round robin held through a transfer.
+//   DMA16      m_dma: a bus master copying len words, configured by register writes, irq when done.
+//   FLASH_STORE16  m_flash: a log over a 4 × 4-page flash chip, a mapping table, the owner in the spare area, GC.
+// bankOf / ctrlOf / busOf / dmaOf / flashOf also build them with a fault, for the tests that prove the benches catch it.
 
 import type { ComponentDef, PortDef } from '../../sim/types';
 import { WRITE_DRIVER } from '../arrays';
 import { Builder } from '../builder';
-import { andN, busMux2, equal, incrementer } from '../combinational';
-import { define, merger, splitter } from '../define';
+import { andN, busMux2, decoder, equal, incrementer, muxTree } from '../combinational';
+import { define, merger, ones, splitter } from '../define';
 import { BITLINE_CAP, DRAM_BIT, DRAM_SA, VHALF } from '../dram';
 import { fanout } from '../fastadd';
-import { AND, NOT, OR } from '../gates';
+import { AND, NOT, OR, XOR } from '../gates';
 import { NAND, NMOS } from '../transistors';
 import { constWord } from '../alu';
 import { bitwise, orN } from '../wide';
-import { RV16_DFF, RV16_DFFE, RV16_REG4 } from './logic';
+import { INC16, MUX16, RV16_DFF, RV16_DFFE, RV16_REG16, RV16_REG4 } from './logic';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -243,3 +246,213 @@ export const ctrlOf = (fault?: 'norefresh' | 'notrcd'): ComponentDef => once(`ct
   });
 });
 export const CTRL16 = ctrlOf();
+
+// ---- m_bus: two masters, one bus ---------------------------------------------------------------------------
+
+/** The address map of m_bus: slave 0 below 0x8000, slave 1 from 0x8000, slave 2 from 0xC000. */
+export const busSlaveOf = (a: number): number => ((a >> 15) & 1 ? 1 + ((a >> 14) & 1) : 0);
+
+/**
+ * Two masters, three slaves, one transfer at a time. The grant: the only master asking; with both asking, the one
+ * not served last; and a transfer in progress keeps its master (lock, own) until the slave is ready, so a waiting
+ * slave never sees its request change. The granted master's address, data and write go to every slave; the address's
+ * top bits pick whose valid rises and whose ready and data come back. With fault 'nolock' a master asking second can
+ * take the bus from a transfer still waiting (the bench must catch it).
+ */
+export const busOf = (fault?: 'nolock'): ComponentDef => once(`bus${fault ?? ''}`, () => {
+  const b = new Builder(10, 12, 4);
+  b.pins('mv0', 'ma0', 'md0', 'mw0', 'mv1', 'ma1', 'md1', 'mw1', 'sr0', 'sq0', 'sr1', 'sq1', 'sr2', 'sq2', 'clk', 'rst');
+  const last = b.add(RV16_DFF, 'served last', 'last'), lock = b.add(RV16_DFF, 'in progress', 'lock'), own = b.add(RV16_DFF, 'owner', 'own');
+  for (const r of [last, lock, own]) b.wire('clk', `${r}.clk`);
+  b.next();
+  const pick = b.op1(busMux2(1), ['mv1', b.op1(NOT, [`${last}.q`]), b.op1(AND, ['mv0', 'mv1'], 'both ask')], 'round robin');
+  const g = fault ? pick : b.op1(busMux2(1), [pick, `${own}.q`, `${lock}.q`], 'grant');
+  b.next();
+  const vg = b.op1(busMux2(1), ['mv0', 'mv1', g], 'valid');
+  const a = b.op1(MUX16, ['ma0', 'ma1', g], 'address');
+  b.wire(b.op1(MUX16, ['md0', 'md1', g], 'data'), 'sd');
+  b.wire(b.op1(busMux2(1), ['mw0', 'mw1', g], 'write'), 'sw');
+  b.wire(a, 'sa');
+  b.next();
+  const top = b.op(splitter([14, 1, 1], 2), [a], 'a15 a14');
+  const a14 = `${top}.o1`, a15 = `${top}.o2`;
+  b.wire(b.op1(AND, [vg, b.op1(NOT, [a15])]), 'sv0');
+  b.wire(b.op1(andN(3), [vg, a15, b.op1(NOT, [a14])]), 'sv1');
+  b.wire(b.op1(andN(3), [vg, a15, a14]), 'sv2');
+  const ready = b.op1(busMux2(1), ['sr0', b.op1(busMux2(1), ['sr1', 'sr2', a14]), a15], 'its ready');
+  const mq = b.op1(MUX16, ['sq0', b.op1(MUX16, ['sq1', 'sq2', a14]), a15], 'its data');
+  b.wire(mq, 'mq0'); b.wire(mq, 'mq1');
+  b.next();
+  const done = b.op1(AND, [vg, ready], 'done');
+  b.wire(b.op1(AND, [done, b.op1(NOT, [g])]), 'mr0');
+  b.wire(b.op1(AND, [done, g]), 'mr1');
+  b.wire(b.op1(OR, ['rst', b.op1(busMux2(1), [`${last}.q`, g, done])], 'm0 first'), `${last}.d`);
+  b.wire(b.op1(andN(3), [b.op1(NOT, ['rst']), vg, b.op1(NOT, [done])], 'waiting'), `${lock}.d`);
+  b.wire(g, `${own}.d`);
+  const R = b.right;
+  const m = (i: number): PortDef[] => [bit(`mv${i}`, 'in'), bus(`ma${i}`, 16, 'in'), bus(`md${i}`, 16, 'in'), bit(`mw${i}`, 'in')];
+  const s = (j: number): PortDef[] => [bit(`sr${j}`, 'in'), bus(`sq${j}`, 16, 'in')];
+  const ins = [...m(0), ...m(1), ...s(0), ...s(1), ...s(2), clkIn(), bit('rst', 'in')];
+  const outs = [bit('mr0', 'out'), bus('mq0', 16, 'out'), bit('mr1', 'out'), bus('mq1', 16, 'out'), bit('sv0', 'out'), bit('sv1', 'out'), bit('sv2', 'out'),
+    bus('sa', 16, 'out'), bus('sd', 16, 'out'), bit('sw', 'out')];
+  return define({
+    id: `rv16_bus${fault ? `_${fault}` : ''}`, name: 'Two-master bus (RV16)', category: 'routing',
+    summary: 'valid / ready on both sides: a round-robin grant held until the transfer completes, the address decoded to three slaves (0 below 0x8000, 1 from 0x8000, 2 from 0xC000), the granted master\'s address, data and write to all of them, the chosen slave\'s ready and data back.',
+    ports: [...ins, ...outs], symbol: { kind: 'box', label: 'BUS' },
+    netlist: () => ({ pins: { ...pinsAt(ins.map((p) => p.name), 0, 3), ...pinsAt(outs.map((p) => p.name), R, 3) }, instances: b.instances, nets: b.nets() }),
+  });
+});
+export const BUS16 = busOf();
+
+// ---- m_dma: a DMA engine -----------------------------------------------------------------------------------
+
+/** NOT of a 16-bit word: sixteen inverters between a splitter and a merger. */
+function not16(b: Builder, x: string, label: string): string {
+  const s = b.op(splitter(ones(16), 1), [x]);
+  return b.op1(merger(ones(16), 1), ones(16).map((_, i) => b.op1(NOT, [`${s}.o${i}`])), label);
+}
+
+/**
+ * A bus master that copies len words from src to dst. Configuration writes: 0 src, 1 dst, 2 len (and start), 3 clear
+ * irq. The count register holds NOT(words left) and counts up: its incrementer's carry (all ones) says every word
+ * is done, len = 0 included; that ends the copy and raises irq. Each word is a read (its word latched when ready),
+ * then a write; a request is held until ready. With fault 'nohold' the address moves on before the write is ready.
+ */
+export const dmaOf = (fault?: 'nohold'): ComponentDef => once(`dma${fault ?? ''}`, () => {
+  const b = new Builder(10, 12, 4);
+  b.pins('cw', 'ca', 'cd', 'clk', 'rst', 'mr', 'mq');
+  const dec = b.op(decoder(2, false), ['ca'], 'register');
+  const we = [0, 1, 2, 3].map((i) => b.op1(AND, ['cw', `${dec}.y${i}`]));
+  const start = we[2];
+  const nlen = not16(b, 'cd', 'NOT len');
+  const nrst = b.op1(NOT, ['rst']);
+  b.next();
+  // state
+  const src = b.add(RV16_REG16, 'src', 'src'), dst = b.add(RV16_REG16, 'dst', 'dst'), cnt = b.add(RV16_REG16, 'NOT left', 'cnt');
+  const data = b.add(RV16_REG16, 'word', 'data');
+  const run = b.add(RV16_DFF, 'running', 'run'), phase = b.add(RV16_DFF, 'write phase', 'phase'), irq = b.add(RV16_DFF, 'irq', 'irqff');
+  for (const r of [src, dst, cnt, data, run, phase, irq]) b.wire('clk', `${r}.clk`);
+  b.next();
+  const left = b.op(INC16, [`${cnt}.q`], 'count');
+  const fin = b.op1(AND, [`${run}.q`, `${left}.cout`], 'all done');
+  const mv = b.op1(AND, [`${run}.q`, b.op1(NOT, [`${left}.cout`])], 'valid');
+  const step = b.op1(AND, [mv, 'mr'], 'ready');
+  const rstep = b.op1(AND, [step, b.op1(NOT, [`${phase}.q`])], 'read done'), wstep = b.op1(AND, [step, `${phase}.q`], 'write done');
+  b.wire(mv, 'mv'); b.wire(`${phase}.q`, 'mw'); b.wire(`${data}.q`, 'md'); b.wire(`${run}.q`, 'busy'); b.wire(`${irq}.q`, 'irq');
+  b.wire(b.op1(MUX16, [`${src}.q`, `${dst}.q`, fault ? b.op1(XOR, [`${phase}.q`, 'mr']) : `${phase}.q`], 'address'), 'ma');
+  b.next();
+  // next state
+  const load = (r: string, w: string, label: string) => {
+    b.wire(b.op1(MUX16, [b.op1(INC16, [`${r}.q`], '+1'), 'cd', w], label), `${r}.d`);
+    b.wire(b.op1(OR, [w, wstep]), `${r}.en`);
+  };
+  load(src, we[0], 'src'); load(dst, we[1], 'dst');
+  b.wire(b.op1(MUX16, [`${left}.y`, nlen, start], 'NOT left'), `${cnt}.d`); b.wire(b.op1(OR, [start, wstep]), `${cnt}.en`);
+  b.wire('mq', `${data}.d`); b.wire(rstep, `${data}.en`);
+  const nstart = b.op1(NOT, [start]);
+  b.wire(b.op1(AND, [nrst, b.op1(OR, [start, b.op1(AND, [`${run}.q`, b.op1(NOT, [fin])])])], 'run next'), `${run}.d`);
+  b.wire(b.op1(andN(3), [nrst, nstart, b.op1(XOR, [`${phase}.q`, step])], 'phase next'), `${phase}.d`);
+  b.wire(b.op1(andN(4), [nrst, nstart, b.op1(NOT, [we[3]]), b.op1(OR, [`${irq}.q`, fin])], 'irq next'), `${irq}.d`);
+  const R = b.right;
+  const ins: PortDef[] = [bit('cw', 'in'), bus('ca', 2, 'in'), bus('cd', 16, 'in'), clkIn(), bit('rst', 'in'), bit('mr', 'in'), bus('mq', 16, 'in')];
+  const outs: PortDef[] = [bit('mv', 'out'), bus('ma', 16, 'out'), bus('md', 16, 'out'), bit('mw', 'out'), bit('irq', 'out'), bit('busy', 'out')];
+  return define({
+    id: `rv16_dma${fault ? `_${fault}` : ''}`, name: 'DMA engine (RV16)', category: 'memory',
+    summary: 'A bus master copying len words from src to dst, a read and a write per word, each held until ready; configured by writes to its registers (0 src, 1 dst, 2 len and start, 3 clear irq); irq when the last word is written.',
+    ports: [...ins, ...outs], symbol: { kind: 'box', label: 'DMA' },
+    netlist: () => ({ pins: { ...pinsAt(ins.map((p) => p.name), 0), ...pinsAt(outs.map((p) => p.name), R) }, instances: b.instances, nets: b.nets() }),
+  });
+});
+export const DMA16 = dmaOf();
+
+// ---- m_flash: a page store over flash ----------------------------------------------------------------------
+
+/**
+ * Eight logical pages over a flash chip of 4 blocks × 4 one-word pages, written as a log. A mapping table (8 × 4
+ * bits) says where each logical page lives; a write programs the next free page at the head, with the logical page
+ * number in the page's spare area (its tag), and points the table at it. When the head enters a new block, the block
+ * after it is collected: each of its pages is read, and copied to the head if the table still points at it (its
+ * tag says whose it was); then the block is erased, and is the spare when the head gets there. The table and the head
+ * move when a program is issued, while the tag is still on fq. With fault 'nogc' it never collects (the chip must
+ * then refuse a program into a page that holds data).
+ */
+export const flashOf = (fault?: 'nogc'): ComponentDef => once(`flash${fault ?? ''}`, () => {
+  const b = new Builder(10, 12, 4);
+  b.pins('lpage', 'wd', 'we', 're', 'clk', 'rst', 'fbusy', 'fq', 'fqt');
+  const nrst = b.op1(NOT, ['rst']);
+  const free = b.op1(NOT, ['fbusy'], 'chip free');
+  const tq = b.op(splitter([3, 1], 2), ['fqt'], 'tag | erased');
+  b.next();
+  // state: one flip-flop per waiting state (none set: idle), the pending collection, head, victim block and page
+  const st = ['rw', 'pw', 'gr', 'grw', 'gpw', 'ge', 'gew'].map((s) => b.add(RV16_DFF, s.toUpperCase(), `s_${s}`));
+  const gcp = b.add(RV16_DFF, 'collect next', 'gcp');
+  const hp = b.add(RV16_REG4, 'head', 'hp');
+  const gi = [0, 1].map((i) => b.add(RV16_DFFE, i ? undefined : 'victim page', `gi${i}`));
+  const vb = [0, 1].map((i) => b.add(RV16_DFFE, i ? undefined : 'victim block', `vb${i}`));
+  for (const r of [...st, gcp, hp, ...gi, ...vb]) b.wire('clk', `${r}.clk`);
+  const map = Array.from({ length: 8 }, (_, i) => b.add(RV16_REG4, i ? undefined : 'mapping table', `l2p${i}`));
+  for (const r of map) b.wire('clk', `${r}.clk`);
+  const [rw, pw, gr, grw, gpw, ge, gew] = st.map((r) => `${r}.q`);
+  b.next();
+  const idle = b.op1(NOT, [b.op1(OR, [b.op1(orN(4), [rw, pw, gr, grw]), b.op1(orN(3), [gpw, ge, gew])])], 'idle');
+  const idx = b.op1(busMux2(3), ['lpage', `${tq}.o0`, grw], 'whose page');
+  const entry = b.op1(muxTree(3, 4), [...map.map((r) => `${r}.q`), idx], 'where it lives');
+  const vpage = b.op1(merger([1, 1, 2], 2), [`${gi[0]}.q`, `${gi[1]}.q`, b.op1(merger([1, 1], 2), [`${vb[0]}.q`, `${vb[1]}.q`])], 'victim page');
+  const live = b.op1(AND, [b.op1(NOT, [`${tq}.o1`]), b.op1(equal(4), [entry, vpage], 'still mapped?')], 'live');
+  b.next();
+  const goGC = fault ? b.op1(constWord(1, 0), [], 'never') : b.op1(AND, [idle, `${gcp}.q`], 'collect');
+  const ask = b.op1(AND, [idle, b.op1(NOT, [goGC])]);
+  const goRd = b.op1(AND, [ask, 're'], 'read');
+  const goWr = b.op1(andN(3), [ask, 'we', b.op1(NOT, ['re'])], 'write');
+  const grFree = b.op1(AND, [grw, free]);
+  const gcProg = b.op1(AND, [grFree, live], 'copy');
+  const prog = b.op1(OR, [goWr, gcProg], 'PROG');
+  const read = b.op1(OR, [goRd, gr], 'READ');
+  const pageDone = b.op1(OR, [b.op1(AND, [grFree, b.op1(NOT, [live])]), b.op1(AND, [gpw, free])], 'page done');
+  const last = b.op1(AND, [`${gi[0]}.q`, `${gi[1]}.q`], 'last page');
+  b.next();
+  // the chip
+  b.wire(b.op1(merger([1, 1], 2), [b.op1(OR, [read, ge]), b.op1(OR, [prog, ge])], 'fcmd'), 'fcmd');
+  b.wire(b.op1(busMux2(4), [b.op1(busMux2(4), [vpage, entry, goRd]), `${hp}.q`, prog], 'page'), 'fa');
+  b.wire(b.op1(MUX16, ['wd', 'fq', grw], 'word'), 'fd');
+  b.wire(idx, 'ft');
+  b.wire(b.op1(AND, [b.op1(OR, [rw, pw]), free], 'ready'), 'ready');
+  b.wire('fq', 'rd');
+  // next state
+  const hold = (s: string, enter: string) => b.op1(AND, [nrst, b.op1(OR, [enter, b.op1(AND, [s, 'fbusy'])])]);
+  b.wire(hold(rw, goRd), `${st[0]}.d`);
+  b.wire(hold(pw, goWr), `${st[1]}.d`);
+  b.wire(b.op1(AND, [nrst, b.op1(OR, [goGC, b.op1(AND, [pageDone, b.op1(NOT, [last])])])]), `${st[2]}.d`);
+  b.wire(hold(grw, gr), `${st[3]}.d`);
+  b.wire(hold(gpw, gcProg), `${st[4]}.d`);
+  b.wire(b.op1(andN(3), [nrst, pageDone, last]), `${st[5]}.d`);
+  b.wire(hold(gew, ge), `${st[6]}.d`);
+  const hinc = b.op(incrementer(4), [`${hp}.q`], '+1');
+  const hb = b.op(splitter([1, 1, 2], 2), [`${hp}.q`]);
+  b.wire(b.op1(bitwise('and', 4), [`${hinc}.y`, b.op1(fanout(4), [nrst])], '0 on reset'), `${hp}.d`);
+  b.wire(b.op1(OR, [prog, 'rst']), `${hp}.en`);
+  const wrap = b.op1(andN(3), [prog, `${hb}.o0`, `${hb}.o1`], 'block full');
+  b.wire(b.op1(andN(3), [nrst, b.op1(NOT, [goGC]), b.op1(OR, [`${gcp}.q`, wrap])], 'collect next'), `${gcp}.d`);
+  // victim page: 0 when a collection starts, + 1 after each page; victim block: the one after the head's
+  const ngc = b.op1(NOT, [goGC]), gEn = b.op1(OR, [goGC, pageDone]);
+  b.wire(b.op1(AND, [ngc, b.op1(NOT, [`${gi[0]}.q`])]), `${gi[0]}.d`);
+  b.wire(b.op1(AND, [ngc, b.op1(XOR, [`${gi[0]}.q`, `${gi[1]}.q`])]), `${gi[1]}.d`);
+  for (const r of gi) b.wire(gEn, `${r}.en`);
+  const hbs = b.op(splitter([1, 1], 2), [`${hb}.o2`]);
+  b.wire(b.op1(NOT, [`${hbs}.o0`]), `${vb[0]}.d`);
+  b.wire(b.op1(XOR, [`${hbs}.o0`, `${hbs}.o1`]), `${vb[1]}.d`);
+  for (const r of vb) b.wire(goGC, `${r}.en`);
+  // the table: entry idx ← head when a program is issued
+  const sel = b.op(decoder(3, true), [idx, prog], 'which entry');
+  map.forEach((r, i) => { b.wire(`${hp}.q`, `${r}.d`); b.wire(`${sel}.y${i}`, `${r}.en`); });
+  const R = b.right;
+  const ins: PortDef[] = [bus('lpage', 3, 'in'), bus('wd', 16, 'in'), bit('we', 'in'), bit('re', 'in'), clkIn(), bit('rst', 'in'), bit('fbusy', 'in'), bus('fq', 16, 'in'), bus('fqt', 4, 'in')];
+  const outs: PortDef[] = [bit('ready', 'out'), bus('rd', 16, 'out'), bus('fcmd', 2, 'out'), bus('fa', 4, 'out'), bus('fd', 16, 'out'), bus('ft', 3, 'out')];
+  return define({
+    id: `rv16_flashstore${fault ? `_${fault}` : ''}`, name: 'Flash page store (RV16)', category: 'memory',
+    summary: 'Eight logical pages over 16 flash pages, written as a log: a mapping table, a head that programs the next erased page (the logical page number in its spare area), and a collector that copies the live pages of the block after the head and erases it.',
+    ports: [...ins, ...outs], symbol: { kind: 'box', label: 'FLASH STORE' },
+    netlist: () => ({ pins: { ...pinsAt(ins.map((p) => p.name), 0), ...pinsAt(outs.map((p) => p.name), R) }, instances: b.instances, nets: b.nets() }),
+  });
+});
+export const FLASH_STORE16 = flashOf();
