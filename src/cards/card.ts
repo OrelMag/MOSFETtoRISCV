@@ -185,3 +185,28 @@ export function deckFromJson(text: string): Deck | string {
 
 /** Does a dropped or picked file look like a deck (by name)? */
 export const isDeckFile = (name: string): boolean => name.toLowerCase().endsWith(DECK_EXT);
+
+// ---- the card sorter ---------------------------------------------------------------------------
+// An IBM 082 sorts on one column a pass: each card drops into the pocket of the digit punched there (cards with
+// a blank or non-digit column go to the reject pocket, last here). Stacked back 0 to 9, then sorted on the next
+// column to the left, the deck ends in order: a radix sort, least significant digit first, one pass per digit.
+
+/** One pass on column `col`: the pockets 0–9, then the rejects (each in the order the cards came). */
+export function sorterPass(cards: readonly Card[], col: number): Card[][] {
+  const pockets: Card[][] = Array.from({ length: 11 }, () => []);
+  for (const c of cards) {
+    const ch = charOf(c.cols[col]);
+    pockets[ch !== null && /[0-9]/.test(ch) ? Number(ch) : 10].push(c);
+  }
+  return pockets;
+}
+
+/** The sequence columns that differ between cards, rightmost first: the passes an operator would make. */
+export function sorterColumns(cards: readonly Card[]): number[] {
+  const out: number[] = [];
+  for (let c = SEQ_FROM + SEQ_LEN - 1; c >= SEQ_FROM; c--) if (new Set(cards.map((k) => k.cols[c])).size > 1) out.push(c);
+  return out;
+}
+
+/** The deck after every pass the operator makes. */
+export const sortOnSorter = (cards: readonly Card[]): Card[] => sorterColumns(cards).reduce<Card[]>((cs, c) => sorterPass(cs, c).flat(), cards.slice());

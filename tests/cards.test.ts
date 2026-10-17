@@ -133,3 +133,15 @@ describe('card reader', () => {
     expect(readerProgress(r.sim.leafState(li) as CardReaderState)).toMatchObject({ taken: 0, at: 0, cards: 1 });
   });
 });
+
+describe('card sorter', () => {
+  it('a radix sort on the sequence columns puts a dropped deck back in order', async () => {
+    const { sortOnSorter, sorterColumns, sorterPass } = await import('../src/cards/card');
+    const deck = programDeck('t', Array.from({ length: 37 }, (_, i) => ({ word: i })));
+    const dropped = dropDeck(deck.cards, 3);
+    expect(sorterColumns(dropped)).toEqual([78, 77]); // tens and hundreds of 10 … 370
+    expect(deckWords({ name: '', cards: sortOnSorter(dropped) })).toEqual(deck.cards.map((_, i) => i));
+    const pockets = sorterPass([textCard('X')], 0);
+    expect(pockets[10].length).toBe(1); // a letter goes to the rejects
+  });
+});

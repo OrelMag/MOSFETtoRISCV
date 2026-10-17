@@ -4,7 +4,7 @@
 //
 // Word mode: `data` is the word punched in row 9 of the card at the station (cards/card.ts wordOf), `ready` is 1
 // while a card waits there, and next = 1 at a rising clk edge takes it: the next card arrives `feed` edges later
-// (a reader moves cards; the IBM 2540 read 800 a minute). `empty` is 1 once the hopper has run out and the last
+// (a reader moves cards: the IBM 1402 read 800 a minute). `empty` is 1 once the hopper has run out and the last
 // card has been taken. Column mode: the same, a 12-bit column at a time (80 a card, the feed delay between cards).
 //
 // The deck is part of the definition (one definition per deck, like a ROM's program), so a Reset puts it back in
