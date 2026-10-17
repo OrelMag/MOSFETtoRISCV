@@ -194,7 +194,7 @@ describe('palette', () => {
   const ctx: PaletteCtx = { ws: emptyWorkspace(), chipId: 'u_main', canPlace: () => true };
   it('has the built-in groups, the library included', () => {
     const ids = paletteGroups().map((g) => g.id);
-    expect(ids).toEqual(expect.arrayContaining(['io', 'fets', 'const', 'disp', 'wiring', 'lib', 'mine']));
+    expect(ids).toEqual(expect.arrayContaining(['io', 'fets', 'devices', 'const', 'disp', 'wiring', 'lib', 'mine']));
     const lib = paletteGroups().find((g) => g.id === 'lib')!;
     expect(visibleItems(lib, ctx, false).length).toBeGreaterThan(50);
   });
