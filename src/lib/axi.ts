@@ -436,6 +436,32 @@ export const KEY_QUEUE: ComponentDef = {
 export const AXI_KEYS: ComponentDef = axiReadPort('axikeys', 'Keyboard slave', 'KEYS',
   'Two registers behind the bus: +0 the oldest waiting key (0 when none; reading it takes it from the keyboard), +4 the status (bit 0: a key waits). Writes are dropped.', [['code', 'ready', 'ack']]);
 
+/**
+ * The card reader's slave: +0 STATUS (bit 0: a card waits at the read station, bit 1: the hopper is empty), +4 DATA
+ * (the word punched on the card at the station). Reading DATA takes the card: `next` is 1 in the cycle after the
+ * read's handshake (from a flip-flop, as the keyboard slave's ack), so the reader (cards/reader.ts, an external
+ * leaf) feeds the next card at the edge after; both registers are latched at the handshake. Writes are dropped.
+ */
+export const AXI_CARDS: ComponentDef = (() => {
+  const b = new Builder(14, 14);
+  const g = kit(b);
+  const { rdHs } = slaveFsm(b, g, 0);
+  b.next();
+  const isData = b.name(g.split('araddr', [2, 1, 29])[1], 'data reg', true);
+  const nq = b.op(DFF, [b.name(g.and(rdHs, isData, 'ready'), 'take the card', true), 'clk'], 'next card', 'nextq');
+  b.wire(`${nq}.q`, 'next');
+  const word = g.mux(32, g.merge(['ready', 'empty', g.konst(30, 0)], [1, 1, 30]), 'data', isData, 'status or data');
+  const rdr = b.op(register(32), [word, rdHs, 'clk'], 'read data', 'rdr');
+  b.wire(`${rdr}.q`, 'rdata');
+  const ports: PortDef[] = [...slavePorts(), bus('data', 32, 'in'), bit('ready', 'in'), bit('empty', 'in'), bit('clk', 'in', 'bottom', true), bit('next', 'out')];
+  return define({
+    id: 'axicards', name: 'Card reader slave', category: 'memory',
+    summary: 'Two registers behind the bus: +0 the status (bit 0: a card waits at the read station, bit 1: the hopper is empty), +4 the word on the card at the station (reading it takes the card: next = 1 in the cycle after, and the reader feeds the next one). Writes are dropped.',
+    ports, symbol: { kind: 'box', label: 'CARDS' },
+    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+  });
+})();
+
 /** The default slave: answers any address (reads 0, writes ignored), so a stray address never hangs the bus. */
 export const AXI_DEFAULT: ComponentDef = (() => {
   const b = new Builder(14, 14);
@@ -845,4 +871,4 @@ export function bundled(def: ComponentDef, groups: [string, 'master' | 'slave'][
 }
 
 /** One of each generated part, registered for the library-wide checks (and the workbench). */
-export const BUS_PARTS = [axiBus(2, [0x0, 0x1, 0x4, 0xf]), axiRam(10), axiRam(10, 3), busMemUnit(7), busBench([1, 2, 3, 4]), axiDram(), axiScreen(64), AXI_KEYS, axiFlashWindow(8)];
+export const BUS_PARTS = [axiBus(2, [0x0, 0x1, 0x4, 0xf]), axiRam(10), axiRam(10, 3), busMemUnit(7), busBench([1, 2, 3, 4]), axiDram(), axiScreen(64), AXI_KEYS, AXI_CARDS, axiFlashWindow(8)];

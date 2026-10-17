@@ -230,14 +230,18 @@ src/lib/       the component library (registered in `registry` via define())
                  AXI_IO_PORT (keyboard + timer), KEY_QUEUE (the keyboard: an external seq leaf, filled through Sim.poke, the
                  sandbox keyboard part's pins), AXI_PIXEL (a store sets one pixel of a screen part), axiFlashWindow(k) (the
                  flash's page timing in gates over a ROM part: addr out, data in), bundled(def, groups) (a link as a request
-                 bus REQ_BITS and a response bus RSP_BITS); BUS_PARTS registered
+                 bus REQ_BITS and a response bus RSP_BITS); BUS_PARTS registered; AXI_CARDS (a card reader's slave: +0 status
+                 ready / empty, +4 the card's word, the read takes it: next from a flip-flop one cycle later)
   soc.ts         busComputer(program, flashImage, { imemK, ramK, ramWait, dram, screen, keys }) (systemCpu({ bus }) and
                  DMA_ENGINE as masters; RAM at 0, flash 0x1000_0000, DRAM 0x2…, DMA 0x4…, screen 0x5…, keyboard 0x6…
                  (instance kbd); DMA irq → CPU irq; socDevices(o): BusModel's devices), chapterComputer / CHAPTER_COMPUTER
                  (bus/programs.ts: a boot ROM that DMA-copies a program from flash to RAM 0x400 and jumps), SYSTEM_COMPUTER
                  (every slave; SYSTEM_SOURCE: keys to the console, a line in DRAM, blocks on the screen); busCore(imemK) (the
                  bus CPU with its boot ROM outside: romData in), SANDBOX_PARTS (bundled parts on SANDBOX_MAP, chapter 35's map
-                 with the I/O port at 0x6…) for Examples ▸ System on a bus
+                 with the I/O port at 0x6…) for Examples ▸ System on a bus; { cards: Deck, cardFeed }: AXI_CARDS at 0x7… (instance
+                 cardport) and the deck's reader leaf (cards/reader.ts deckReader, instance cards); asmDeck(name, src) (a program as
+                 object cards, each printed with its source line), CARD_DECK, cardComputer(deck, feed) / CARD_COMPUTER (the card boot
+                 ROM, no flash: chapter 35's "Booting from cards")
   relays.ts      prologue P1's relays at switch level: relay(n) (1–6 poles, ids relay, relay2 …), RELAY_NOT / NAND / XOR,
                  RELAY_FA (the carry through contacts on two rails, ci / nci: a contact cannot invert), relayAdder(n) (one
                  relay step for any width), RELAY_LATCH (self-holding), RELAY_BUZZER (a coil through its own break contact);
@@ -369,6 +373,12 @@ src/dram/      timing.ts: DDR4-3200 in our cycles (CLOCK_NS = the single-cycle C
 src/bus/       model.ts: BusMemory / BusModel (the computer's map for the golden model: RAM, flash, DMA registers whose
                copy is instant, and with BusDevices a DRAM, a screen, a key queue; ISS({ bus }) fetches beyond its ROM and loads / stores through it); programs.ts: chapter
                35's boot ROM and payload
+               Card reader: BusDevices.cards { items, feed } → CardModel, the one time-dependent device: whoever steps the ISS sets
+               BusModel.now (rising edges so far, at the retiring edge); a read sees the reader CARD_LAG (2) edges earlier and a DATA
+               read takes the card 2 edges after that, so lock-step stays exact at any feed. programs.ts CARD_BOOT_SOURCE (poll
+               STATUS, copy the deck to 0x400, jump: the 1401's Load key), CARD_PAYLOAD_SOURCE, CARD_BASE, CARD_FEED (8 edges);
+               cardboot.ts cardBootTime(items, feed): the boot's cycles from the golden model (boot ROM: 1 cycle, a load / store 2),
+               pinned against the gates by tests/buscards.test.ts
 src/flash/     model.ts: FlashDevice (program 1 → 0 once per erase, block erase, FLASH_TIMES 64 / 512 / 4096 cycles, wear-out
                after `endurance` erases, factory bad blocks) and Ftl (page map, writes out of place, greedy garbage collection
                when free blocks are down to the reserve, dynamic wear levelling, bad blocks skipped, write amplification);
