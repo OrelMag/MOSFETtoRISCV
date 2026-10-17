@@ -581,10 +581,13 @@ with punch cards.
   pass switch), milliseconds per operation, a latching (self-holding) relay as memory. prim 'relay' in SwitchSim
   (relay steps, an open line reads 0 through the next coil), lib/relays.ts (NOT, NAND, XOR, a full adder with the
   carry through contacts on two rails, an n-bit adder settling in one step, latch, buzzer), prologue chapter P1
-- ⏳ Triode: the grid controls the plate current, one way only, with a plate resistor as the pull-up (ratioed
+- ✅ Triode: the grid controls the plate current, one way only, with a plate resistor as the pull-up (ratioed
   logic, which `switchsim.ts` already models with its resistor strength); tube inverter and NOR, cathode follower,
-  the Eccles–Jordan flip-flop; microseconds per operation, watts per tube
-- 🚧 Each device up close in 3D, live, on lumped physics (relay ✅: src/phys/relay.ts, src/gl renderer, P1 step 1; triode next) (as chapter 1's cross-section opens the MOSFET; chapter 25's
+  the Eccles–Jordan flip-flop; microseconds per operation, watts per tube. prim 'triode' and 'diode' in SwitchSim
+  (one-way elements; a strength-0 bias resistor for the dividers' legs to −150 V), lib/tubes.ts (the diode NAND brick,
+  the nine-NAND full adder in tubes), phys/triode.ts (levels, fan-out margins, power), prologue chapter P2 (7 steps,
+  the divider explorer)
+- ✅ Each device up close in 3D, live, on lumped physics (relay: src/phys/relay.ts, src/gl renderer, P1 step 1; triode: src/phys/triode.ts, widgets/triode3dview.ts, P2 step 1) (as chapter 1's cross-section opens the MOSFET; chapter 25's
   renderer, cylinders and glow added). Relay: coil current rising with L / R (and the flyback spike at turn-off), pull
   ∝ (N·I)² / gap² against the return spring, the armature a mass on a spring, so pull-in time, pull-in / drop-out
   hysteresis and contact bounce come out of the model. Triode: a heated cathode (Richardson emission, seconds of

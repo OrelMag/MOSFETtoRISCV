@@ -134,6 +134,14 @@ export function symbolGeom(def: ComponentDef): SymbolGeom {
       ports[poles[3 * i + 1].name] = { pos: [x + 1, 4], exit: 'down' };
       ports[poles[3 * i + 2].name] = { pos: [x - 1, 4], exit: 'down' };
     }
+  } else if (k === 'triode' || k === 'diode') {
+    // a tube: plate (anode) on top, cathode at the bottom, a triode's grid on the left
+    g = { w: 4, h: 4, ports };
+    const [first, ...rest] = def.ports;
+    const [p, c] = k === 'triode' ? rest : [first, rest[0]];
+    if (k === 'triode') ports[first.name] = { pos: [0, 2], exit: 'left' };
+    ports[p.name] = { pos: [2, 0], exit: 'up' };
+    ports[c.name] = { pos: [2, 4], exit: 'down' };
   } else if (k === 'vdd') {
     g = { w: 2, h: 1, ports };
     ports[def.ports[0].name] = { pos: [1, 1], exit: 'down' };

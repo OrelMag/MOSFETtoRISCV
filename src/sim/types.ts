@@ -42,7 +42,9 @@ export type SymbolKind =
   /** Switch-level parts: resistor, pull-up / pull-down, capacitor, transmission gate, tri-states. */
   | 'res' | 'pullup' | 'pulldown' | 'cap' | 'tgate' | 'tribuf' | 'triinv'
   /** An electromechanical relay: its coil and changeover contacts (prologue P1). */
-  | 'relay';
+  | 'relay'
+  /** Vacuum tubes (prologue P2): a triode section, a diode section. */
+  | 'triode' | 'diode';
 
 export interface SymbolSpec {
   kind: SymbolKind;
@@ -177,12 +179,13 @@ export interface ComponentDef {
   symbol: SymbolSpec;
 
   /** Built-in primitive handled directly by the simulators. */
-  prim?: 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'vhalf' | 'res' | 'cap' | 'sense' | 'fgmos' | 'relay' | 'alias';
+  prim?: 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'vhalf' | 'res' | 'cap' | 'sense' | 'fgmos' | 'relay' | 'triode' | 'diode' | 'alias';
   /**
-   * Switch level: drive strength of a conducting element, 1 … 4. Transistors are 2 (weak) … 4
-   * (strong), default 3; a resistor (prim 'res') is 1 by default, weaker than any transistor. Where
+   * Switch level: drive strength of a conducting element, 0 … 4. Transistors are 2 (weak) … 4
+   * (strong), default 3; a resistor (prim 'res') is 1 by default, weaker than any transistor, and 0
+   * is a bias resistor that any resistor overrides (a tube divider's leg to its negative rail). Where
    * paths of different strength fight, the stronger one decides the node (ratioed logic, SRAM
-   * writes, pull-ups).
+   * writes, pull-ups). Triodes and diodes are 3 by default.
    */
   strength?: number;
   /**
@@ -268,16 +271,16 @@ export function parseEnd(end: string): { inst: string | null; port: string } {
   return i < 0 ? { inst: null, port: end } : { inst: end.slice(0, i), port: end.slice(i + 1) };
 }
 
-export type HierLeafKind = 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'vhalf' | 'res' | 'cap' | 'sense' | 'fgmos' | 'relay' | 'behavior';
+export type HierLeafKind = 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'vhalf' | 'res' | 'cap' | 'sense' | 'fgmos' | 'relay' | 'triode' | 'diode' | 'behavior';
 
 /**
  * Primitives of the switch-level solver: transistors, rails, resistors (always-on weak paths) and
  * capacitors (mark their net as charge-keeping), the VDD/2 rail, the sense amplifier (the one part
- * that reads a charge level), the floating-gate transistor (flash) and the relay. A gate-level flatten cannot simulate them.
+ * that reads a charge level), the floating-gate transistor (flash), the relay and the vacuum tubes. A gate-level flatten cannot simulate them.
  */
 export function isSwitchPrim(d: ComponentDef): boolean {
   const p = d.prim;
-  return p === 'nmos' || p === 'pmos' || p === 'dep' || p === 'vdd' || p === 'gnd' || p === 'vhalf' || p === 'res' || p === 'cap' || p === 'sense' || p === 'fgmos' || p === 'relay';
+  return p === 'nmos' || p === 'pmos' || p === 'dep' || p === 'vdd' || p === 'gnd' || p === 'vhalf' || p === 'res' || p === 'cap' || p === 'sense' || p === 'fgmos' || p === 'relay' || p === 'triode' || p === 'diode';
 }
 
 /**

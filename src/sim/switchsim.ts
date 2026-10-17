@@ -9,9 +9,10 @@
 // strongest). A node takes the value of its strongest definite path, unless an equally strong or
 // stronger path to the opposite value exists or might exist (then X). This is what lets a bit-line
 // driver overpower an SRAM cell's weak pull-up. Levels, strongest first:
-//   6        rails and driven inputs
-//   5, 4, 3  transistors of strength 4 (wide), 3 (default), 2 (narrow)
-//   2        resistors (strength 1): always conducting, weaker than any transistor
+//   7        rails and driven inputs
+//   6, 5, 4  transistors of strength 4 (wide), 3 (default), 2 (narrow)
+//   3        resistors (strength 1): always conducting, weaker than any transistor
+//   2        bias resistors (strength 0): a divider's leg to a bias rail, overridden by any resistor
 //   1        stored charge: nets marked `cap` (or with a capacitor) keep their value when undriven
 // So a node reached only through a pull-up resistor is 1, any conducting transistor path to GND
 // overrides it (pseudo-NMOS, open-drain buses), and two resistors pulling opposite ways give X.
@@ -52,6 +53,15 @@
 // contacts are solved again. So a carry running through contacts settles within a step, and a coil fed through its
 // own break contact oscillates with a period of two steps. time counts relay steps; step() takes one, settle()
 // takes them until no coil disagrees with its armature (an oscillator stops after RELAY_SETTLE_MAX and is unstable).
+//
+// Vacuum tubes (prologue P2). Current crosses a tube one way only, from plate (anode) to cathode, so a tube can pull
+// its plate down or its cathode up but never passes a signal back: no transmission gate. prim 'diode' (terminals a, k)
+// always conducts that way; prim 'triode' (g, p, k) only while its grid is 1. Each is two sources of its own, at the
+// element's strength, re-derived every iteration from the far side: one on the anode carrying the cathode's 0, one on
+// the cathode carrying the anode's 1, each as strong as the path behind that value (vLv, kept from the last solution
+// so a cross-coupled pair of triodes keeps its bit). A far side at X makes it a maybe, as strong as the path that
+// could bring that value (not the other one: a junction that might be pulled to 0 hard offers no strong 1). Tubes
+// take no time of their own.
 
 import { matchNets, sharedInputs } from './carry';
 import { findNode, type FlatDesign } from './flatten';
@@ -100,6 +110,11 @@ export class SwitchSim implements Sim {
   private readonly relays: number[];
   private readonly relayOf = new Map<number, number>();
   private relayOp: Uint8Array;
+  /** Triode and diode leaves (one-way elements, see the header). */
+  private readonly oneWays: number[];
+  /** Per net and value (index 2·net + value): the level of the path that brings that value in the last solution, sure
+   *  or possible (what a one-way element passes on). */
+  private vLv: Uint8Array;
 
   constructor(design: FlatDesign) {
     this.design = design;
@@ -116,6 +131,8 @@ export class SwitchSim implements Sim {
     this.relays = design.leaves.flatMap((l, li) => (l.kind === 'relay' ? [li] : []));
     this.relays.forEach((li, k) => this.relayOf.set(li, k));
     this.relayOp = new Uint8Array(this.relays.length).fill(B0);
+    this.oneWays = design.leaves.flatMap((l, li) => (l.kind === 'triode' || l.kind === 'diode' ? [li] : []));
+    this.vLv = new Uint8Array(2 * design.netCount);
     this.state = design.leaves.map((l) => l.def.behavior?.init?.());
     for (const p of design.root.def.ports) {
       if (p.dir === 'in') {
@@ -280,6 +297,7 @@ export class SwitchSim implements Sim {
       if (!opts.known || b !== BX) {
         this.val[net] = b;
         this.lv[net] = prev instanceof SwitchSim ? prev.lv[map[net]] : levelOfBit(b);
+        for (const w of [B0, B1]) this.vLv[2 * net + w] = prev instanceof SwitchSim ? prev.vLv[2 * map[net] + w] : b === w ? LV_FET : 0;
       }
     }
     // behavioural leaves at the same path with the same definition keep their state (a held key)
@@ -304,7 +322,7 @@ export class SwitchSim implements Sim {
     const st: SwitchState = {
       val: this.val.slice(), conducting: this.conducting.slice(), shorted: this.shorted.slice(),
       lv: this.lv.slice(), senseDec: this.senseDec.slice(), fgQ: this.fgQ.slice(), fgPrev: this.fgPrev.slice(),
-      relayOp: this.relayOp.slice(), time: this.time,
+      relayOp: this.relayOp.slice(), time: this.time, vLv: this.vLv.slice(),
       inputs: new Map([...this.inputs].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v])),
       state: this.state.map(cloneState),
       unstable: this.unstable, evaluations: this.evaluations, dirty: this.dirty,
@@ -323,6 +341,7 @@ export class SwitchSim implements Sim {
     this.fgPrev.set(s.fgPrev);
     this.relayOp.set(s.relayOp);
     this.time = s.time;
+    this.vLv.set(s.vLv);
     this.inputs = new Map([...s.inputs].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v]));
     this.state = s.state.map(cloneState);
     this.unstable = s.unstable;
@@ -343,6 +362,8 @@ export class SwitchSim implements Sim {
     for (let i = 0; i < this.val.length; i++) {
       this.val[i] = vals[i];
       this.lv[i] = levelOfBit(vals[i]);
+      this.vLv[2 * i] = vals[i] === B0 ? LV_FET : 0;
+      this.vLv[2 * i + 1] = vals[i] === B1 ? LV_FET : 0;
     }
     this.dirty = true;
   }
@@ -515,6 +536,22 @@ export class SwitchSim implements Sim {
       srcV.push(BX, BX);
       return { k, en, a, b, ta: term(a), tb: term(b), va: srcLv.length - 2, vb: srcLv.length - 1, s: level(l.def.strength ?? 3), off: l.def.offset ?? SENSE_OFFSET };
     });
+    // One-way elements: two sources each (va on the anode, vk on the cathode), set every iteration (see the header).
+    const ows = this.oneWays.map((li) => {
+      const l = leaves[li], t = l.terminals!;
+      const [g, a, k] = l.kind === 'triode' ? t : [-1, t[0], t[1]];
+      const ta = term(a), tk = term(k); // (term pushes a source copy: before the element's own two)
+      srcLv.push(0, 0);
+      srcV.push(B0, B1);
+      return { li, g, a, k, ta, tk, va: srcLv.length - 2, vk: srcLv.length - 1, s: level(l.def.strength ?? 3), sa: 0, sk: 0 };
+    });
+    /** How a net offers `want` to a one-way element: [level, 2 sure / 1 maybe / 0 not]. */
+    const offer = (net: number, want: number): [number, number] => {
+      const sv = source[net];
+      if (sv >= 0) return sv === want ? [LV_SOURCE, 2] : sv === HALF ? [LV_SOURCE, 1] : [0, 0];
+      const v = val[net], l = this.vLv[2 * net + want];
+      return v === want ? [l, 2] : v === BX && l ? [l, 1] : [0, 0];
+    };
     const N = srcLv.length;
     /** Per sense amplifier this iteration: −1 off, −2 maybe on (en X / Z), else the value on a (0, 1, BX). */
     const dec = new Int8Array(sas.length);
@@ -554,12 +591,31 @@ export class SwitchSim implements Sim {
         srcV[sa.va] = d === B0 || d === B1 ? d : BX;
         srcV[sa.vb] = d === B0 || d === B1 ? 1 - d : BX;
       }
+      for (const o of ows) {
+        const gv = o.g < 0 ? B1 : val[o.g];
+        const gate = gv === B1 ? 2 : gv === B0 ? 0 : 1;
+        const [la, fa] = offer(o.k, B0), [lk, fk] = offer(o.a, B1);
+        const sa = Math.min(gate, fa), sk = Math.min(gate, fk);
+        const nla = sa ? la : 0, nlk = sk ? lk : 0;
+        if (sa !== o.sa || sk !== o.sk || nla !== srcLv[o.va] || nlk !== srcLv[o.vk]) changed = true;
+        o.sa = sa; o.sk = sk; srcLv[o.va] = nla; srcLv[o.vk] = nlk;
+        this.conducting[o.li] = o.g >= 0 ? (gate === 2 ? 1 : gate === 1 ? 2 : 0) : sa === 2 || sk === 2 ? 1 : sa || sk ? 2 : 0;
+      }
+      // Levels nothing sits on add nothing (the same groups and sources as the level above): skip them.
+      const present = new Uint8Array(LV_SOURCE + 1);
+      present[LV_SOURCE] = present[LV_CHARGE] = 1;
+      for (const f of fets) present[f.s] = 1;
+      for (const r of ress) present[r.s] = 1;
+      for (const sa of sas) present[sa.s] = 1;
+      for (const o of ows) present[o.s] = 1;
+      for (let i = 0; i < N; i++) present[srcLv[i]] = 1;
       // Strongest definite / possible path from a 1, a 0, a ½ or an X source, per node (levels: see
       // the header).
       const d1 = new Uint8Array(n), d0 = new Uint8Array(n), dX = new Uint8Array(n), dH = new Uint8Array(n);
       const m1 = new Uint8Array(n), m0 = new Uint8Array(n), mX = new Uint8Array(n), mH = new Uint8Array(n);
       let sureC: UF | null = null, maybeC: UF | null = null;
       for (let L = LV_SOURCE; L >= LV_CHARGE; L--) {
+        if (!present[L]) continue;
         const sure = new UF(N), maybe = new UF(N);
         fets.forEach((f, k) => {
           if (f.s < L) return;
@@ -570,6 +626,13 @@ export class SwitchSim implements Sim {
           if (r.s < L) continue;
           sure.union(r.a, r.b);
           maybe.union(r.a, r.b);
+        }
+        for (const o of ows) {
+          if (o.s < L) continue;
+          if (o.sa === 2) sure.union(o.ta, o.va);
+          if (o.sa) maybe.union(o.ta, o.va);
+          if (o.sk === 2) sure.union(o.tk, o.vk);
+          if (o.sk) maybe.union(o.tk, o.vk);
         }
         for (const sa of sas) {
           const d = dec[sa.k];
@@ -644,6 +707,9 @@ export class SwitchSim implements Sim {
           }
         }
         lv[i] = l;
+        const any = Math.max(mX[i], dX[i], mH[i]);
+        this.vLv[2 * i] = v === B0 ? d0[i] : v === BX ? Math.max(m0[i], any) : 0;
+        this.vLv[2 * i + 1] = v === B1 ? d1[i] : v === BX ? Math.max(m1[i], any) : 0;
         // current flows from a rail to the other through conducting transistors
         this.shorted[i] = d1[i] >= LV_FET && d0[i] >= LV_FET ? 1 : 0;
         if (val[i] !== v) {
@@ -679,7 +745,7 @@ function decide(a: number, b: number, offset: number): number {
 }
 
 /** Solver levels (see the header): sources, the weakest transistor, stored charge. */
-const LV_SOURCE = 6, LV_FET = 3, LV_CHARGE = 1;
+const LV_SOURCE = 7, LV_FET = 4, LV_CHARGE = 1;
 /** Relay steps settle() takes at most: a relay circuit still moving after them oscillates. */
 export const RELAY_SETTLE_MAX = 64;
 /** Charge a program pulse adds to a floating gate, and the charge above which it no longer conducts at the read voltage. */
@@ -694,8 +760,8 @@ export const LEVEL_HI = 0.7, LEVEL_LO = 0.3;
 export const SENSE_OFFSET = 0.015 / VDD_VOLTS;
 const bitOfLevel = (l: number): Bit => (l >= LEVEL_HI ? B1 : l <= LEVEL_LO ? B0 : BX);
 const levelOfBit = (b: number): number => (b === B1 ? 1 : b === B0 ? 0 : NaN);
-/** Level of a conducting element of strength s (1 = resistor … 4 = wide transistor). */
-const level = (s: number) => Math.min(LV_SOURCE - 1, Math.max(LV_CHARGE + 1, Math.round(s) + 1));
+/** Level of a conducting element of strength s (0 = bias resistor, 1 = resistor … 4 = wide transistor). */
+const level = (s: number) => Math.min(LV_SOURCE - 1, Math.max(LV_CHARGE + 1, Math.round(s) + 2));
 
 class UF {
   p: Int32Array;
@@ -719,6 +785,6 @@ class UF {
 
 interface SwitchState {
   val: Uint8Array; conducting: Uint8Array; shorted: Uint8Array; lv: Float64Array; senseDec: Int8Array; fgQ: Float64Array; fgPrev: Uint8Array; inputs: Map<string, number | Bit[]>; state: unknown[];
-  relayOp: Uint8Array; time: number;
+  relayOp: Uint8Array; time: number; vLv: Uint8Array;
   unstable: boolean; evaluations: number; dirty: boolean;
 }

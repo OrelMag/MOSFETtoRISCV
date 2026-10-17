@@ -13,6 +13,9 @@ export interface Stats {
   capacitors: number;
   /** Relays (prologue P1): a coil and its contacts each. */
   relays: number;
+  /** Vacuum tube sections (prologue P2): triodes (a 6SN7 holds two) and diodes (a 6AL5 holds two). */
+  triodes: number;
+  diodes: number;
   /** Of the transistors, depletion-mode loads (NMOS logic's pull-ups). */
   depletion: number;
   /** Number of instances one level down. */
@@ -29,13 +32,15 @@ export function stats(def: ComponentDef): Stats {
   const hit = cache.get(def);
   if (hit) return hit;
   let s: Stats;
-  const zero = { nands: 0, transistors: 0, resistors: 0, capacitors: 0, relays: 0, depletion: 0, parts: 0, descendants: 0, levels: 0 };
+  const zero = { nands: 0, transistors: 0, resistors: 0, capacitors: 0, relays: 0, triodes: 0, diodes: 0, depletion: 0, parts: 0, descendants: 0, levels: 0 };
   if (def.prim === 'nand') s = { ...zero, nands: 1, transistors: 4, parts: 4, descendants: 4, levels: 1 };
   else if (def.prim === 'nmos' || def.prim === 'pmos' || def.prim === 'fgmos') s = { ...zero, transistors: 1 };
   else if (def.prim === 'dep') s = { ...zero, transistors: 1, depletion: 1 };
   else if (def.prim === 'res') s = { ...zero, resistors: 1 };
   else if (def.prim === 'cap') s = { ...zero, capacitors: 1 };
   else if (def.prim === 'relay') s = { ...zero, relays: 1 };
+  else if (def.prim === 'triode') s = { ...zero, triodes: 1 };
+  else if (def.prim === 'diode') s = { ...zero, diodes: 1 };
   else if (def.prim && def.prim !== 'sense') s = zero; // a sense amplifier counts the transistors it is drawn with
   else if (def.statsOf) s = def.statsOf();
   else {
@@ -49,6 +54,8 @@ export function stats(def: ComponentDef): Stats {
         s.resistors += c.resistors;
         s.capacitors += c.capacitors;
         s.relays += c.relays;
+        s.triodes += c.triodes;
+        s.diodes += c.diodes;
         s.depletion += c.depletion;
         if (inst.def.prim !== 'alias') {
           s.parts++;
@@ -134,10 +141,13 @@ export function hasFeedback(def: ComponentDef): boolean {
     for (const t of relays) for (let p = 2; p + 2 < t.length; p += 3) for (const o of [t[p + 1], t[p + 2]]) {
       if (!source[t[p]] && !source[o]) parent[find(t[p])] = find(o);
     }
+    // a triode's plate and cathode are a channel its grid gates; a diode is a channel with no gate
+    const tubes = d.leaves.filter((l) => l.kind === 'triode').map((l) => l.terminals!);
+    for (const [, a, b] of tubes) if (!source[a] && !source[b]) parent[find(a)] = find(b);
     // a resistor joins its ends into one channel-connected group too (it has no gate to feed)
     for (const l of d.leaves) {
       const [a, b] = l.terminals ?? [];
-      if ((l.kind === 'res' || l.kind === 'dep' || l.kind === 'relay') && !source[a] && !source[b]) parent[find(a)] = find(b);
+      if ((l.kind === 'res' || l.kind === 'dep' || l.kind === 'relay' || l.kind === 'diode') && !source[a] && !source[b]) parent[find(a)] = find(b);
     }
     const edges = new Map<number, Set<number>>();
     const edge = (from: number, to: number) => {
@@ -147,6 +157,7 @@ export function hasFeedback(def: ComponentDef): boolean {
       edges.get(f)!.add(find(to));
     };
     for (const [g, a, b] of fets) edge(g, source[a] ? b : a);
+    for (const [g, a, b] of tubes) edge(g, source[a] ? b : a);
     for (const t of relays) for (let p = 2; p + 2 < t.length; p += 3) {
       const c = source[t[p]] ? (source[t[p + 1]] ? t[p + 2] : t[p + 1]) : t[p];
       for (const coil of [t[0], t[1]]) edge(coil, c);
