@@ -7,13 +7,14 @@
 // A part is placed by library reference only when a fresh page load can find it by that id
 // (a part defined when the site loads, a family member, a generator pattern). Parts generated
 // on the way (a CPU's data memory, its program ROM, its constants) would not resolve after a
-// reload, so they come along as sandbox parts (ROM, constant) or as chips of their own.
+// reload, so they come along as sandbox parts (ROM, constant, card reader) or as chips of their own.
 
 import { listed } from '../lib/catalog';
 import { registry } from '../lib/define';
 import { regenerable } from '../lib/resolve';
 import { disasm } from '../riscv/isa';
 import { type ComponentDef, netlistOf } from '../sim/types';
+import { readerRefOf } from './cardparts';
 import { docFromDef } from './fromdef';
 import { same } from './history';
 import { type ChipDoc, type PartRef, slug, uniqueName, type Workspace } from './model';
@@ -74,7 +75,8 @@ export function remixDef(ws: Workspace, def: ComponentDef): { ws: Workspace; id:
   const refOf = (d: ComponentDef): PartRef | undefined => {
     if (userChip(ws, d)) return { chip: d.id };
     if (stableRef(d)) return undefined;
-    const special = romRef(d) ?? constRef(d);
+    const reader = readerRefOf(d);
+    const special = romRef(d) ?? constRef(d) ?? (reader ? { reader } : undefined);
     if (special) return special;
     // Brought along as a chip (reusing an identical one from an earlier remix). If it cannot be
     // one (a port wider than a pin), the library reference stays: it works until a reload.

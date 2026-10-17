@@ -1,0 +1,12 @@
+/* ---------- The sandbox's card reader panel (src/editor/cardui.ts; the card itself: cards.css) ---------- */
+.sb-reader .pcard { margin: 8px 0 2px; border-radius: 4px; }
+.sb-card-cap { font-size: 12px; color: var(--text-2); margin: 2px 0 8px; }
+.sb-card-cap code { font: 11.5px var(--font-mono); color: var(--text); }
+.sb-deck-list { max-height: 200px; }
+.sb-deck-list .asm-table td.d { white-space: pre; }
+.sb-deck-list .asm-table tr.sel td { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.sb-deck-list .asm-table tr.taken td { opacity: 0.45; }
+.sb-card-type { display: flex; gap: 6px; margin-top: 8px; }
+.sb-card-type input { flex: 1; min-width: 0; font: 12px var(--font-mono); text-transform: uppercase; }
+.sb-card-warn { color: var(--wx); font-size: 12px; margin: 4px 0 0; }
+.sb-btns select { max-width: 9.5em; }

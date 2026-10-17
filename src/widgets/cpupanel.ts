@@ -26,6 +26,8 @@ import { pack } from '../sim/values';
 import { debounce, h } from '../ui/dom';
 import { codeEditor } from './codeedit';
 import { stepEffect } from '../riscv/trace';
+import { DECK_EXT, deckFromJson, deckToJson } from '../cards/card';
+import { deckProgram, programCards } from '../cards/program';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import type { FieldKey } from '../riscv/fields';
 import { instrUse, stageUse, STAGE_UNITS } from './insthw';
@@ -179,7 +181,37 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
             stage.load(cpuScene({ ...opts, source: editor.value }));
           },
         }, 'Assemble & load'),
+        h('button', { class: 'btn sm', title: 'Download the program as a deck of punched cards (.deck.json): one card a word, printed with its source line', onclick: saveAsDeck }, 'Save as deck'),
+        h('button', { class: 'btn sm', title: 'Put the words of a deck of cards in the box (.word lines, each card’s print a comment)', onclick: loadDeck }, 'Load deck…'),
         h('button', { class: 'btn sm', onclick: () => { editWrap.style.display = 'none'; } }, 'Close')));
+    // Decks of punched cards (cards/program.ts, shared with the sandbox's ROMs): one object card a word.
+    function saveAsDeck(): void {
+      const r = assemble(editor.value);
+      editor.setDiagnostics(r.errors);
+      if (r.errors.length) return void (errBox.textContent = r.errors.map((e) => `line ${e.line}: ${e.message}`).join('\n'));
+      if (!r.words.length) return void (errBox.textContent = 'The program is empty: nothing to punch.');
+      const name = progs.find((p) => p.id === sel.value)?.name ?? 'my program';
+      const deck = programCards(name, editor.value, r.lines.map((l) => ({ word: l.word, srcLine: l.srcLine, dis: disasm(l.word, l.addr) })));
+      const file = `${name.trim().replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || 'program'}${DECK_EXT}`;
+      void import('../view/image').then((m) => m.saveFile(file, deckToJson(deck)));
+    }
+    function loadDeck(): void {
+      const input = h('input', { type: 'file', accept: `${DECK_EXT},.json,application/json`, style: 'display:none' }) as HTMLInputElement;
+      input.addEventListener('change', () => {
+        const f = input.files?.[0];
+        input.remove();
+        if (!f) return;
+        void f.text().then((text) => {
+          const d = deckFromJson(text);
+          if (typeof d === 'string') return void (errBox.textContent = `${f.name}: ${d}`);
+          editor.value = deckProgram(d, 32, 'asm');
+          errBox.textContent = '';
+          check();
+        }, () => { errBox.textContent = `${f.name}: could not be read`; });
+      });
+      editWrap.append(input);
+      input.click();
+    }
     const editBtn = h('button', { class: 'btn sm', onclick: () => { editWrap.style.display = editWrap.style.display === 'none' ? 'block' : 'none'; } }, 'Edit');
 
     const body = h('div', { class: 'cpu-body' },
