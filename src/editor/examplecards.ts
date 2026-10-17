@@ -101,15 +101,15 @@ export function cardsBootChip(id: string, name: string, deck: Deck = cardsDeck()
   s.part('ps', { split: [2, 6, 4, 1, 19] }, [8, 14]);
   s.tap('ps.in', 'pc'); s.tap('ps.o1', 'pcw'); s.tap('ps.o3', 'p12');
   // the halt detector: `j .` (jal x0, 0) fetched
-  s.part('hj', { const: { width: 32, value: 0x6f } }, [2, 28], { label: 'j .' });
+  s.part('hj', { const: { width: 32, value: 0x6f } }, [2, 26], { label: 'j .' });
   s.part('eq', { lib: 'eq32' }, [10, 25]);
   s.part('halt', { display: 'halt', width: 1 }, [16, 27]);
-  s.tap('eq.a', 'instr'); s.wire('hj.y', 'eq.b'); s.wire('eq.eq', 'halt.a');
+  s.wire('hj.y', 'eq.a'); s.tap('eq.b', 'instr'); s.wire('eq.eq', 'halt.a');
 
   // the core (hart 0, the memory port always granted)
   s.part('cpu', { lib: 'rv32i_core' }, [36, 6], { label: 'RV32I core' });
   s.part('hart', { const: { width: 32, value: 0 } }, [30, 14]);
-  s.part('grant', { const: { width: 1, value: 1 } }, [34, 18]);
+  s.part('grant', { const: { width: 1, value: 1 } }, [26, 18]);
   s.tap('cpu.clk', 'clk'); s.tap('cpu.instr', 'instr'); s.tap('cpu.memRData', 'rdata');
   s.wire('hart.y', 'cpu.hartid'); s.wire('grant.y', 'cpu.grant');
   s.tap('cpu.pcOut', 'pc'); s.tap('cpu.memAddr', 'addr'); s.tap('cpu.memWData', 'wdata'); s.tap('cpu.memWE', 'we'); s.tap('cpu.memReq', 'req');
@@ -121,14 +121,14 @@ export function cardsBootChip(id: string, name: string, deck: Deck = cardsDeck()
   s.tap('ra.in', 'addr'); s.tap('ra.o1', 'aw');
   s.part('bs', { split: [8, 24] }, [66, 23]);
   s.tap('bs.in', 'wdata'); s.tap('bs.o0', 'byte');
-  s.part('n31', { lib: 'not' }, [79, 4]);
-  s.part('ramst', { lib: 'and' }, [82, 4], { label: 'RAM store' });
+  s.part('n31', { lib: 'not' }, [81, 4]);
+  s.part('ramst', { lib: 'and' }, [84, 4], { label: 'RAM store' });
   s.tap('n31.a', 'a31'); s.wire('n31.y', 'ramst.a'); s.tap('ramst.b', 'we'); s.tap('ramst.y', 'ramWe');
-  s.part('n30', { lib: 'not' }, [79, 10]);
-  s.part('cwe', { lib: 'and3' }, [82, 10], { label: 'console store' });
+  s.part('n30', { lib: 'not' }, [81, 10]);
+  s.part('cwe', { lib: 'and3' }, [84, 10], { label: 'console store' });
   s.tap('n30.a', 'a30'); s.wire('n30.y', 'cwe.i0'); s.tap('cwe.i1', 'a31'); s.tap('cwe.i2', 'we'); s.tap('cwe.y', 'conWe');
-  s.part('nwe', { lib: 'not' }, [79, 18]);
-  s.part('take', { lib: 'and5' }, [82, 18], { label: 'DATA load' });
+  s.part('nwe', { lib: 'not' }, [81, 18]);
+  s.part('take', { lib: 'and5' }, [84, 18], { label: 'DATA load' });
   s.tap('nwe.a', 'we'); s.wire('nwe.y', 'take.i0');
   s.tap('take.i1', 'req'); s.tap('take.i2', 'a31'); s.tap('take.i3', 'a30'); s.tap('take.i4', 'a2'); s.tap('take.y', 'take');
 
