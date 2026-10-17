@@ -595,12 +595,20 @@ with punch cards.
   plate heat as glow. Constants from real datasheets (ENIAC's 6SN7), labelled illustrative; the relay brick's delay
   and the triode's transfer curve are taken from these models (tests hold them equal), so the picture and the
   simulation cannot drift apart
-- ⏳ Gates and blocks in each technology, measured like the CMOS ones (relays / tubes, delay, power): first the
+- ✅ Gates and blocks in each technology, measured like the CMOS ones (relays / tubes, delay, power): first the
   NAND-mapped versions (the brick principle), then native designs that show what each technology is good at
-  (changeover contacts make a relay XOR or a mux nearly free; tube logic prefers NOR), so the comparison is honest
-- ⏳ A technology setting for any chip (CMOS / relay / tube) in the chapters, the workbench and the sandbox:
-  the netlist is the same, the counts, delay, power and volume follow the technology; sandbox palette parts for
-  the relay and the triode
+  (changeover contacts make a relay XOR or a mux nearly free; tube logic prefers NOR), so the comparison is honest.
+  lib/tech.ts prices any design through the NAND brick: a relay coil per NAND output with ⌈k / 4⌉ − 1 more for a net
+  read by k contacts (sim/techcount.ts counts fan-out per definition, equal to the flattened count), a tube brick
+  (½ 6SN7 + a 6AL5, 4.86 W) with cathode followers past the plate's fan-out of 3 (from the levels model); steps ×
+  8.2 ms / 1 µs / 25 ps; volume and mass from a relay rack, the Z3 and ENIAC's panels. Native parts by their own
+  devices, relay steps measured on SwitchSim (lib/techsteps.ts). Chapter 3's last step "One NAND, three
+  technologies" (widgets/techcompare.ts): NAND, full adder, 32-bit adder, the two CPUs without their program ROM
+  (withoutParts), NAND-mapped or native
+- ✅ A technology setting for any chip (CMOS / relay / tube) in the chapters, the workbench and the sandbox:
+  the netlist is the same, the counts, delay, power and volume follow the technology (view/techtable.ts: the
+  inspector's "In relays and tubes", a sandbox chip's properties, the Statistics tab's CMOS / Relays / Tubes switch
+  from hwstats.json's relay and tube cells); the relay and triode parts are in the sandbox's library palette
 
 **The 3D machine** (to show the bulk)
 - ⏳ A 3D view of any design at physical scale: its flattened netlist as relays on boards in racks, or tubes in
