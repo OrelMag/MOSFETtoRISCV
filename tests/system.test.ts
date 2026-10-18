@@ -44,6 +44,21 @@ describe('complete system CPU (gate level) vs golden model', () => {
       console.log(`${p.id}: ${r.leaves} leaves, console ${JSON.stringify(r.console)}`);
     }, 180000);
   }
+  it('has mstatush: reads 0, writes ignored, no trap (Spike found it missing)', () => {
+    const { iss } = cosim(`
+        la t0, trap
+        csrw mtvec, t0
+        li t1, -1
+        csrw mstatush, t1
+        csrr a0, mstatush
+        csrrs a1, mstatush, t1
+        li a2, 1
+done:   j done
+trap:   li a2, 2
+        j trap
+`, 20);
+    expect([iss.x[10], iss.x[11], iss.x[12]]).toEqual([0, 0, 1]);
+  }, 180000);
   it('runs the user-mode sample programs too', () => {
     for (const id of ['primer', 'gcd']) cosim(PROGRAMS.find((p) => p.id === id)!.source, 120);
   }, 180000);

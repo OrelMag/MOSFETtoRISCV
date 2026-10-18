@@ -8,8 +8,8 @@
 // Spike runs von Neumann, our ISS Harvard with wrapping memories; the program sees the same machine because the
 // code and the data window sit at multiples of their memories' sizes. Allowed differences (both readings legal):
 // on an illegal instruction Spike puts the instruction in mtval and on ebreak the pc, ours 0; the comparison then
-// takes Spike's value so that a later csrr mtval agrees. And Spike's mret writes zero to two CSRs ours does not
-// have (UNMODELLED: reading them traps in ours, so no program sees the difference); any other value fails.
+// takes Spike's value so that a later csrr mtval agrees. And Spike's mret writes zero to tcontrol, which ours does not
+// have (UNMODELLED: reading it traps in ours, so no program sees the difference); any other value fails.
 
 import { assemble } from '../../src/riscv/asm';
 import { CSRS, decode, OPCODES } from '../../src/riscv/isa';
@@ -171,11 +171,13 @@ export interface OracleResult {
 
 const CAUSE_NAMES: Record<number, string> = Object.fromEntries(Object.entries(TRAPS).map(([k, v]) => [v, k.replace(/^trap_/, '')]));
 const STORE_BITS = [8, 16, 32];
-/** CSRs Spike has and ours does not, which Spike's mret writes (with zero here). */
+/** CSRs Spike has and ours does not, which Spike's mret writes (with zero here). mstatush was one until Spike
+ * showed it missing; ours now has it, read-only zero. */
 export const UNMODELLED: Record<number, string> = {
-  0x310: 'mstatush (RV32: MBE, SBE, MPV, GVA)',
   0x7a5: 'tcontrol (Sdtrig debug triggers)',
 };
+/** What Spike's mret writes besides the pc: mstatush (MPV cleared) and tcontrol (MTE ← MPTE). */
+const MRET_WRITES = [0x310, 0x7a5];
 
 /** The address a load reads, from the registers before it executes (undefined for anything else). */
 function loadAddr(iss: ISS, word: number): number | undefined {
@@ -276,7 +278,7 @@ export function issAsSpikeLog(c: OracleCase): string {
       const a = (info.word >>> 20) & 0xfff, writes = (d.funct3 & 3) === 1 || d.rs1 !== 0;
       if (writes && iss.csrRead(a) !== null && a !== CSRS.misa) csrs.push([a, iss.csrRead(a)!]);
     }
-    if (d.name === 'mret') for (const a of Object.keys(UNMODELLED)) csrs.push([+a, 0]);
+    if (d.name === 'mret') for (const a of MRET_WRITES) csrs.push([a, 0]);
     // Spike's map order: x registers, f registers, CSRs by number
     if (info.rd) s += reg('x', info.rd, info.value!);
     if (info.fwrite) s += reg('f', info.fwrite.rd, info.fwrite.value);
