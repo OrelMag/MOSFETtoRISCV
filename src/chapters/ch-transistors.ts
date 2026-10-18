@@ -68,6 +68,45 @@ export const chMap: Chapter = {
 export const chMosfet: Chapter = {
   id: 'mosfet', num: 1, title: 'The MOSFET', level: 'Transistors',
   blurb: 'A switch with no moving parts, controlled by a voltage: its three regions, and what one switch costs in time and energy.',
+  goals: [
+    'say how a gate voltage past the threshold Vt (0.45 V here) turns a depletion layer into a conducting channel',
+    'tell cut-off, linear and saturation apart from Vgs, Vds and Vt, and give the current in each',
+    'state which gate level turns an NMOS on and which a PMOS, and which rail each pulls a wire to',
+    'estimate a switch\'s delay as C·ΔV / I and its energy per swing as C·V²',
+  ],
+  recap: {
+    keep: [
+      'An NMOS is two n-type islands (source, drain) in p-type silicon under an insulated gate. Past the threshold Vt (0.45 V in the model here, a 1.8 V device) extra gate charge pulls electrons into a channel between them.',
+      'Cut-off: Vgs &lt; Vt, no current. Linear: Vds &lt; Vgs − Vt, a resistor. Saturation: Vds ≥ Vgs − Vt, the drain end pinches off and Id = k·(Vgs − Vt)²/2, set by the gate alone. A falling output passes through saturation, so that current sets the speed.',
+      'NMOS conducts on a 1 and pulls a wire down to 0; PMOS conducts on a 0 and pulls it up to 1. Either one alone leaves its output floating (Z) for the other input value.',
+      'Delay ≈ C·ΔV / I, energy ≈ C·V² per full swing, half lost in each network. With 1 fF per gate, an output driving two inputs (5 fF) falls to half in about 21 ps for 16 fJ a swing: the order of the site\'s 25 ps per gate delay.',
+      'Widening a transistor buys current (less delay) and adds load to the stage before it. Dynamic power is P ≈ α·C·V²·f.',
+    ],
+    practise: ['t_inv'],
+    check: [
+      {
+        question: 'An NMOS (Vt = 0.45 V) has Vgs = 0.9 V and Vds = 1.2 V. Which region is it in?',
+        options: ['Linear', 'Saturation', 'Cut-off'],
+        answer: 1,
+        explain: 'Vgs − Vt = 0.45 V and Vds = 1.2 V is above it: the drain end of the channel has pinched off.',
+        why: ['Linear needs Vds below Vgs − Vt, here 0.45 V. A large Vgs does not make it linear; the overdrive against Vds does.', '', 'Cut-off needs Vgs below Vt. At 0.9 V a channel exists at the source end.'],
+      },
+      {
+        question: 'An NMOS has Vgs = 0.95 V and Vds = 1.5 V (Vt = 0.45 V). Vgs rises to 1.45 V, Vds unchanged, and it stays in saturation. The drain current becomes about:',
+        options: ['Twice as large', 'Four times as large', 'The same: in saturation the current no longer depends on the voltages'],
+        answer: 1,
+        explain: 'Id = k·(Vgs − Vt)²/2: the overdrive doubles from 0.5 V to 1.0 V, so the current grows four times (the λ factor is unchanged, since Vds is).',
+        why: ['The current goes as the square of the overdrive Vgs − Vt, not as Vgs.', '', 'Saturation makes the current (nearly) independent of Vds. The gate still sets it.'],
+      },
+      {
+        question: 'An output\'s load grows from 5 fF to 10 fF, and its transistor is made twice as wide. Its energy per 0 → 1 → 0 swing becomes:',
+        options: ['About twice as large', 'The same: the wider transistor makes up for it', 'Four times as large'],
+        answer: 0,
+        explain: 'Energy per swing is C·V²: it follows the load alone. The wider transistor doubles the current, so the delay, C·ΔV / I, stays the same.',
+        why: ['', 'Width buys current, which shortens the delay. The charge moved per swing, C·V, still doubles.', 'Energy goes as V², not as C²: doubling C doubles it.'],
+      },
+    ],
+  },
   steps: [
     {
       title: 'A switch made of silicon',
@@ -82,7 +121,7 @@ export const chMosfet: Chapter = {
         extra gate charge pulls electrons up into a thin <em>channel</em> instead, and current can flow from
         drain to source. Lower the gate and the channel disappears.</p>
         <p>Everything on the right is computed from the classic square-law model: once the channel exists,
-        Id = k·(Vgs − Vt)²/2 in saturation, with k = 220 µA/V² and Vt = 0.45 V, a plausible small device at
+        the drain current Id = k·(Vgs − Vt)²/2 in saturation (Vgs: the gate-to-source voltage), with k = 220 µA/V² and Vt = 0.45 V, a plausible small device at
         1.8 V. The channel's thickness is its charge, and each carrier moves at the local field.</p>
         <div class="try">Press <strong>Sweep</strong>, or drag the gate past 0.45 V: the depletion layer grows
         then stops, electrons (filled dots; holes are rings) rise into a channel, and the current leaves zero.
@@ -94,7 +133,7 @@ export const chMosfet: Chapter = {
       body: `
         <p>The channel holds Vgs − Vt of charge at the source but only Vgs − Vt − Vds at the drain, so it
         tapers. Hold the gate and raise the drain:</p>
-        <ul><li><strong>Linear</strong> (Vds &lt; Vgs − Vt): the current grows with Vds, Id = k·((Vgs − Vt)·Vds − Vds²/2).
+        <ul><li><strong>Linear</strong> (Vds, the drain-to-source voltage, &lt; Vgs − Vt): the current grows with Vds, Id = k·((Vgs − Vt)·Vds − Vds²/2).
         The channel is a resistor.</li>
         <li><strong>Saturation</strong> (Vds ≥ Vgs − Vt): the drain end <strong>pinches off</strong>, and the
         current hardly grows: Id = k·(Vgs − Vt)²/2. A current source set by the gate alone. The same current
@@ -112,6 +151,7 @@ export const chMosfet: Chapter = {
         kind: 'quiz', question: 'An NMOS has Vgs = 1.2 V and Vds = 0.3 V (Vt = 0.45 V). Which region is it in?',
         options: ['Linear', 'Saturation', 'Cut-off'], answer: 0,
         explain: 'Vgs − Vt = 0.75 V, and Vds = 0.3 V is below it, so the channel reaches the drain without pinching off: linear. Raise Vds past 0.75 V and it saturates.',
+        why: ['', 'Saturation needs Vds ≥ Vgs − Vt = 0.75 V. At 0.3 V the channel still reaches the drain.', 'Cut-off needs Vgs below Vt. 1.2 V is well above 0.45 V.'],
       },
     },
     {
@@ -130,6 +170,7 @@ export const chMosfet: Chapter = {
         kind: 'quiz', question: 'A PMOS transistor has its gate at 0 V and its source at VDD. Is it on or off?',
         options: ['On: the gate is below the source by more than the threshold', 'Off: the gate is 0, so nothing happens', 'It depends on the drain voltage'],
         answer: 0, explain: 'PMOS turns on when the gate is pulled below its source. With the source at VDD and the gate at 0 V, it conducts strongly.',
+        why: ['', 'That is the NMOS rule. A PMOS conducts when its gate sits below its source, and 0 V is the whole supply below VDD.', 'The drain sets how much current flows (the region). Whether a channel exists is set by the gate against the source.'],
       },
     },
     {
@@ -153,13 +194,14 @@ export const chMosfet: Chapter = {
         kind: 'quiz', question: 'An output drives 2 inputs (5 fF: 2 × 2 gates + 1 fF of wire). It is rewired to drive 4. Its delay becomes about:',
         options: ['The same: the transistor did not change', '1.8 times longer', 'Twice as long'], answer: 1,
         explain: 'The load grows from 5 fF to 9 fF (the wire stays 1 fF) and the current is unchanged, so the delay, C·ΔV / I, grows by 9 / 5 = 1.8.',
+        why: ['The transistor sets the current I, but the delay is C·ΔV / I, and C grew.', '', 'Only the gate load doubles, from 4 fF to 8 fF. The 1 fF of wire stays, so C grows by 9 / 5.'],
       },
     },
     {
       title: 'One switch is not enough',
       body: `
-        <p>Here is an NMOS between an output wire and ground. Toggle the gate <code>g</code>.</p>
-        <p>With <code>g = 1</code> the transistor conducts and drags <code>out</code> down to <strong>0</strong>.
+        <p>Here is <span data-show="n1">an NMOS</span> between an output wire and <span data-show="gnd">ground</span>. Toggle the gate <span data-show="pin:g"><code>g</code></span>.</p>
+        <p>With <code>g = 1</code> the transistor conducts and drags <span data-show="pin:out"><code>out</code></span> down to <strong>0</strong>.
         With <code>g = 0</code> it lets go, and <code>out</code> is connected to <em>nothing</em>. It is
         <strong>floating</strong>, shown as <strong>Z</strong> (dashed purple). A floating wire is not 0. It
         is "whatever charge happened to be left there".</p>
@@ -169,15 +211,16 @@ export const chMosfet: Chapter = {
         kind: 'quiz', question: 'With g = 0, what value does "out" have?',
         options: ['0', '1', 'Z: it is not connected to anything'], answer: 2,
         explain: 'An off transistor is an open switch. Nothing drives the output, so it floats. To always have a valid output we need a second switch that pulls up.',
+        why: ['0 is a driven level: it needs a conducting path to ground, and the only one is open.', 'Nothing in this circuit connects out to VDD, so nothing can make a 1.', ''],
       },
     },
     {
       title: '…and its mirror image',
       body: `
-        <p>A PMOS between VDD and the output does the opposite: <code>g = 0</code> pulls <code>out</code> up to
+        <p><span data-show="p1">A PMOS</span> between <span data-show="vdd">VDD</span> and the output does the opposite: <code>g = 0</code> pulls <code>out</code> up to
         <strong>1</strong>; <code>g = 1</code> leaves it floating.</p>
         <p>Each switch can only do half the job. The NMOS can make a 0 but not a 1; the PMOS a 1 but not a 0.
-        Put them together and every input gets a firm answer. That is the next chapter.</p>`,
+        Put them together and every input gets a firm answer. That is <a href="#/c/inverter/0">the next chapter</a>.</p>`,
       scene: () => ({ root: PMOS_SWITCH, inputs: { g: 1 } }),
     },
   ],
@@ -186,20 +229,61 @@ export const chMosfet: Chapter = {
 export const chInverter: Chapter = {
   id: 'inverter', num: 2, title: 'The CMOS inverter', level: 'Transistors',
   blurb: 'Two complementary transistors: the first logic gate.',
+  goals: [
+    'build an inverter from one PMOS pull-up and one NMOS pull-down sharing a gate',
+    'say why a CMOS gate draws almost no current while its input holds still',
+    'name the three properties that made CMOS win: restoring levels, no static path, power only when switching',
+    'price a pseudo-NMOS gate against CMOS: one device fewer per input, current while its output is 0',
+  ],
+  builds: ['mosfet'],
+  recap: {
+    keep: [
+      'CMOS inverter: a PMOS from VDD to y, an NMOS from y to GND, both gates on a. For a valid input exactly one conducts, so y = NOT a.',
+      'With the input still there is no path from VDD to ground: static power is almost zero. Energy goes into charging the capacitance downstream, at each transition.',
+      'The output connects straight to a rail, so a slightly weak input still gives a full output: noise does not accumulate from gate to gate.',
+      'Pseudo-NMOS: a resistor pull-up against a stronger NMOS (ratioed logic). An n-input NOR is n transistors and a resistor instead of 2n transistors, paid for with current while y = 0, a low level only as good as the ratio and a slow rising edge.',
+    ],
+    practise: ['t_inv'],
+    check: [
+      {
+        question: 'How many devices does a three-input NOR take in pseudo-NMOS, and in CMOS?',
+        options: ['3 transistors and a resistor, against 6 transistors', '4 transistors, against 6', '3 transistors and a resistor, against 4 transistors'],
+        answer: 0,
+        explain: 'Pseudo-NMOS keeps the n parallel NMOS and replaces the whole PMOS network with one resistor: n + 1 devices against 2n.',
+        why: ['', 'The pull-up is a resistor, not a transistor: pseudo-NMOS removes the PMOS network entirely.', 'A CMOS gate needs one PMOS per input as well as one NMOS per input: 2n = 6.'],
+      },
+      {
+        question: 'Where does a CMOS inverter spend its energy?',
+        options: ['Charging and discharging the capacitance it drives, at each transition', 'In a current from VDD to ground while y = 0', 'In the PMOS, for as long as y = 1'],
+        answer: 0,
+        explain: 'One network is always open, so with the input still no current flows. Each transition moves the charge of the load: that is the energy.',
+        why: ['', 'That is the pseudo-NMOS inverter. In CMOS the PMOS is off while y = 0, so there is no path from VDD.', 'With y held at 1 the PMOS conducts but the NMOS is off: once y has charged, no current flows.'],
+      },
+      {
+        question: 'A CMOS inverter\'s input is a slightly weak 1, a little below VDD. Its output is:',
+        options: ['A full 0: the NMOS connects y straight to GND', 'A slightly weak 0, passing the error on', 'Z: neither transistor is sure'],
+        answer: 0,
+        explain: 'The output comes from a rail, not from the input. A weak input still turns one network on and the other off, so the level is restored.',
+        why: ['', 'Passing the error on is what a restoring gate avoids: y is connected to GND, whatever the exact input voltage.', 'The NMOS is still on and the PMOS still off: one network conducts, so y is driven.'],
+      },
+    ],
+  },
   steps: [
     {
       title: 'Pull up, pull down',
       body: `
-        <p>Stack a PMOS on top of an NMOS and tie their gates together. That is a <strong>CMOS inverter</strong>.</p>
+        <p>Stack <span data-show="p1">a PMOS</span> on top of <span data-show="n1">an NMOS</span> and tie their gates together. That is a <strong>CMOS inverter</strong>.</p>
         <ul><li><code>a = 0</code>: the PMOS conducts, the NMOS is off → <code>y</code> is pulled up to <strong>1</strong>.</li>
         <li><code>a = 1</code>: the NMOS conducts, the PMOS is off → <code>y</code> is pulled down to <strong>0</strong>.</li></ul>
         <p>The output is always the opposite of the input: <strong>y = NOT a</strong>. Conducting transistors
         are drawn with a solid glowing channel.</p>
         <div class="try">Toggle <code>a</code> and watch exactly one transistor turn on at a time.</div>`,
       scene: () => ({ root: INV_CMOS, inputs: { a: 0 } }),
+      tries: [(st) => st.value('y') === 0],
       challenge: {
         kind: 'quiz', question: 'For a valid input (0 or 1), how many of the inverter\'s transistors conduct?',
         options: ['None', 'Exactly one', 'Both'], answer: 1,
+        why: ['Then y would float. For either valid input one network conducts and drives it.', '', 'Both on would short VDD to ground. The shared gate turns one on exactly when it turns the other off.'],
         explain: 'Exactly one. So there is never a direct path from VDD to ground, and a CMOS gate draws (almost) no current while it is not switching. That is why your phone battery lasts a day, not a minute.',
       },
     },
@@ -208,7 +292,7 @@ export const chInverter: Chapter = {
       body: `
         <p>Three properties make CMOS the technology of every chip you own:</p>
         <ul>
-        <li><strong>Restoring.</strong> The output is connected straight to VDD or ground, so a slightly weak input
+        <li><strong>Restoring.</strong> The output is connected straight to <span data-show="vdd">VDD</span> or <span data-show="gnd">ground</span>, so a slightly weak input
         still produces a perfect output. Noise does not accumulate from gate to gate.</li>
         <li><strong>Almost no static power.</strong> One of the two paths is always open.</li>
         <li><strong>Power only when switching.</strong> Energy is spent charging and discharging the tiny
@@ -221,7 +305,7 @@ export const chInverter: Chapter = {
     {
       title: 'The cheaper, hotter way: a pull-up',
       body: `
-        <p>Replace the PMOS with a <strong>resistor</strong> to VDD and keep the NMOS: a
+        <p>Replace the PMOS with a <span data-show="pu"><strong>resistor</strong></span> to VDD and keep <span data-show="n1">the NMOS</span>: a
         <strong>pseudo-NMOS</strong> inverter. With <code>a = 0</code> the resistor pulls <code>y</code> to 1.
         With <code>a = 1</code> both paths conduct and the NMOS wins, because it is sized to be much stronger
         (<em>ratioed</em> logic; here a resistor is weaker than any transistor).</p>
@@ -237,6 +321,7 @@ export const chInverter: Chapter = {
         kind: 'quiz', question: 'When does the pseudo-NMOS inverter draw current with its input held still?',
         options: ['Never', 'While a = 0', 'While a = 1', 'Always'], answer: 2,
         explain: 'While a = 1 the NMOS conducts and the resistor connects VDD to it: a resistive path from VDD to ground. With a = 0 the NMOS is open and no current flows once y has charged to 1.',
+        why: ['That is CMOS. Here the resistor is always connected to VDD, so a conducting NMOS below it makes a steady path to ground.', 'With a = 0 the NMOS is open: y charges to 1 through the resistor and the current stops.', '', 'With a = 0 nothing below the resistor conducts, so once y is at 1 no current flows.'],
       },
     },
   ],

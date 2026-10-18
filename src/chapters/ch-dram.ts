@@ -37,22 +37,71 @@ const share = (v: number) => (CELL_C * v + BITLINE_C * 0.5) / (CELL_C + BITLINE_
 const twice = share(share(1)), thrice = share(twice);
 const GHZ3 = 1 / 3;
 const conflict3 = cyclesOf(DDR4_3200.tRP, GHZ3) + cyclesOf(DDR4_3200.tRCD, GHZ3) + cyclesOf(DDR4_3200.tCAS, GHZ3) + TIMING.burst;
+/** The swing with twice the bit line (the recap's question). */
+const DV2 = 0.5 * CELL_C / (CELL_C + 2 * BITLINE_C);
+const OFFSET_MV = Math.round(SENSE_OFFSET * VDD_VOLTS * 1000);
 
 export const chDram: Chapter = {
   id: 'dram', num: 32, title: 'Inside a DRAM', level: 'Memory in depth',
   blurb: 'A 1T1C array at transistor level: bit lines at VDD/2, charge sharing measured in millivolts, the sense amplifier that restores a destroyed row, leakage and refresh, the row buffer and DDR4 timings in cycles.',
+  goals: [
+    'compute the bit-line swing of a 1T1C read from the cell and bit-line capacitances',
+    'say why a DRAM read destroys the row, and how the sense amplifier writes it back',
+    'work out how long a row survives without refresh, and what refresh costs a DDR4 device',
+    'price a row hit, a miss and a conflict in cycles from tRCD, tCAS, tRP and the burst',
+  ],
+  builds: ['latches', 'memory', 'cache'],
+  recap: {
+    keep: [
+      `A 1T1C cell is one transistor and a ${CELL_C} fF capacitor. On a ${BITLINE_C} fF bit line precharged to VDD/2, a full 1 or 0 moves the line by only ±${mV(DV)} mV: ΔV = (V<sub>cell</sub> − VDD/2) · Cs / (Cs + Cb).`,
+      'Charge sharing leaves the cell at the bit line\'s level: <strong>a read destroys the row</strong>. The sense amplifier (two cross-coupled inverters) drives both lines to the rails and, with the word line still up, writes the row back.',
+      'The amplifiers of a bank hold its open row: the <strong>row buffer</strong>. A hit needs only the column command, a miss an activate first, a conflict a precharge and then an activate.',
+      `Cells leak towards 0: here a 1 stays readable for ${SAFE_CYCLES} cycles after its last restore. DDR4 refreshes every row within 64 ms, a REF every ${DDR4_3200.tREFI / 1000} µs that blocks the device for ${DDR4_3200.tRFC} ns: ${((100 * DDR4_3200.tRFC) / DDR4_3200.tREFI).toFixed(1)} % of the time.`,
+      `DDR4-3200: tRCD = tCAS = tRP = ${DDR4_3200.tRCD} ns, ${TIMING.tRCD} cycles each at our ${CLOCK_NS.toFixed(2)} ns clock. With a 4-word burst: hit ${accessCycles('hit', TIMING)}, miss ${accessCycles('miss', TIMING)}, conflict ${accessCycles('conflict', TIMING)} cycles.`,
+    ],
+    practise: ['m_sense', 'm_bank'],
+    check: [
+      {
+        question: `Hang twice as many cells on each bit line, so it is ${2 * BITLINE_C} fF instead of ${BITLINE_C}. How far does a stored 1 now move it?`,
+        options: [`${mV(DV2)} mV`, `${mV(DV)} mV`, `${mV(DV / 2)} mV`, `${mV(2 * DV)} mV`],
+        answer: 0,
+        explain: `ΔV = 0.55 V · ${CELL_C} / (${CELL_C} + ${2 * BITLINE_C}) = ${mV(DV2)} mV. Still above the ${OFFSET_MV} mV offset, but the margin shrinks: that is the limit on how many cells a bit line can amortize its amplifier over.`,
+        why: ['', 'The cell\'s charge is now shared with twice the capacitance, so the line moves less.', 'Halving would hold if ΔV went as 1 / Cb. It goes as Cs / (Cs + Cb), and the cell\'s own 25 fF stays in the sum.', 'More capacitance on the line takes more charge to move it: the swing falls, it cannot grow.'],
+      },
+      {
+        question: 'After an activate, why must the whole row be written back, and what does it?',
+        options: [
+          'Every cell of the row shared its charge with its bit line; the sense amplifiers restore them all while the word line is still up',
+          'The column select drained the one cell it read; the controller rewrites that word',
+          'The read heated the cells and they leak faster; the next refresh restores them',
+          'Only cells holding 1 lost charge; the write driver puts it back',
+        ],
+        answer: 0,
+        explain: 'The word line joins every cell of the row to its bit line at once, so every cell is left near VDD/2. Each column\'s amplifier swings its bit line to a rail, and the cell, still connected, follows: the read is its own write-back.',
+        why: ['', 'The damage is done before any column is selected: raising the word line shares the charge of every cell in the row.', 'Leakage has nothing to do with it. Charge sharing moved the cells to the bit lines\' level, and waiting for refresh would lose them.', 'A stored 0 is pulled up towards VDD/2 just as a 1 is pulled down. The amplifiers restore both, and the write driver only acts on a write.'],
+      },
+      {
+        question: `Here a row hit costs ${accessCycles('hit', TIMING)} cycles and a miss ${accessCycles('miss', TIMING)}. What does the miss pay for that the hit does not?`,
+        options: ['tRCD: the activate, word line and sensing before the column command', 'tRP: the precharge', 'tCAS: the column path', 'tRFC: a refresh'],
+        answer: 0,
+        explain: `A closed bank must first open the row: ACT, then tRCD = ${TIMING.tRCD} cycles before the column command. ${accessCycles('miss', TIMING)} − ${accessCycles('hit', TIMING)} = ${TIMING.tRCD}. A conflict adds tRP on top: ${accessCycles('conflict', TIMING)}.`,
+        why: ['', 'A precharge is needed only when another row is open in the bank: that is the conflict.', 'Every access pays tCAS, the hit included.', 'A refresh delays a request only when one falls in its way; it is not part of a miss.'],
+      },
+    ],
+  },
   steps: [
     {
       title: 'An array of capacitors',
       body: `
-        <p>An SRAM bit costs six transistors (chapter 21). A DRAM bit is one access transistor and one capacitor of about
+        <p>An SRAM bit costs six transistors (<a href="#/c/cache/0">chapter 21</a>). A DRAM bit is one access transistor and one capacitor of about
         ${CELL_C} fF: the <strong>1T1C</strong> cell. The bit is the charge on the capacitor, so nothing holds it; it only has
         to survive until it is read or refreshed. A 16 Gbit DDR5 die holds seventeen billion of these.</p>
-        <p>Each row of cells shares a <strong>word line</strong> (the access transistors' gates), each column a <strong>bit line</strong>.
+        <p>Each row of cells shares a <strong>word line</strong> (the access transistors' gates, raised by the
+        <span data-show="rdec">row decoder</span>), each <span data-show="col0 col1 col2 col3">column</span> a <strong>bit line</strong>.
         Next to every bit line runs a <strong>reference</strong> line of the same capacitance (${BITLINE_C} fF) and no cells. Three
         transistors per column precharge both to <strong>VDD/2</strong> and equalize them.</p>
         <p>Cost of this 4 × 4: the cells are 16 transistors and 16 capacitors. Each column then adds 3 precharge transistors,
-        2 for the column select and an 8-transistor sense amplifier: 13 per column, more than its cells. Real arrays hang 512 to
+        2 for the column select and an 8-transistor <span data-show="col0.sa">sense amplifier</span>: 13 per column, more than its cells. Real arrays hang 512 to
         1 024 cells on a bit line to amortize them.</p>
         <div class="try">The cells power on unknown (X). In the panel pick a row, then Activate, Sense, choose a column and data,
         Write; Close; Precharge. Each cell shows its voltage, and the wires show theirs.</div>`,
@@ -60,6 +109,10 @@ export const chDram: Chapter = {
       challenge: {
         kind: 'reach', goal: 'Store a 1 in row 2, column 3, and leave the array closed and precharged.',
         check: (st) => cellLevel(st, 2, 3) >= 0.9 && st.getInput('act') === 0 && st.getInput('pre') === 1,
+        hints: [
+          'A write goes through the row buffer: the row has to be open and sensed before the data lines can change one of its cells.',
+          'Close the row before you precharge: while its word line is up the cell is joined to its bit line, and the precharge pulls that line to VDD/2.',
+        ],
         answer: 'Row 2, Activate, Sense; column 3, data 1, Write; Close; Precharge. A write needs the row open: the data lines flip that column\'s sense amplifier, and the open cell follows its bit line.',
         solve: (st) => { openRow(st, 2); st.setInputs({ col: 3, din: 1, cs: 1, we: 1 }); st.setInputs({ we: 0, cs: 0 }); closeRow(st); },
       },
@@ -73,15 +126,19 @@ export const chDram: Chapter = {
         read as a logic level, the line is X.</p>
         <p>The simulator now keeps a <em>level</em> on every capacitive net. Floating nets joined by a conducting transistor share
         their charge, Σ C·V / Σ C, and the wires show their voltage. Everywhere else the circuit is still 0, 1, X and Z.</p>
-        <p>The cell lost its charge in the process: it now sits at the bit line's level too. Sharing destroys the bit, so a DRAM
+        <p><span data-show="c1">The cell</span> lost its charge in the process: it now sits at the bit line's level too. Sharing destroys the bit, so a DRAM
         read must write the value back.</p>
-        <div class="try">The panel shows the array's contents and the view is inside column 1. Activate row 1 and stop: read each bit
-        line's distance from VDD/2 in the panel's <code>bl − bl̄</code> row, and the bit line's voltage on the drawing.</div>`,
+        <div class="try">The panel shows the array's contents and the view is inside column 1. Activate <span data-show="c1">row 1</span> and stop: read each bit
+        line's distance from <span data-show="vh0 vh1">VDD/2</span> in the panel's <code>bl − bl̄</code> row (bit line minus reference line), and the bit line's voltage on the drawing.</div>`,
       scene: () => dramScene({ pattern: PATTERN, path: ['col1'] }),
       challenge: {
         kind: 'reach', goal: `Activate row 1 and stop before sensing: every bit line sits ${mV(DV)} mV above or below VDD/2.`,
         check: (st) => st.getInput('act') === 1 && st.getInput('sae') === 0 && st.getInput('row') === 1 && st.getInput('pre') === 0
           && [0, 1, 2, 3].every((c) => Math.abs(Math.abs(cellLevel(st, 1, c) - 0.5) - DV) < 1e-6),
+        hints: [
+          'Charge sharing happens the moment the word line rises. The sense amplifier does nothing until it is enabled.',
+          `The row selector picks whose word line Activate raises. Sense would amplify the ${mV(DV)} mV and end the experiment.`,
+        ],
         answer: 'Precharge (it is already), select row 1, Activate. Row 1 holds 0, 1, 1, 0: columns 1 and 2 read +110 mV, columns 0 and 3 −110 mV, and the cells sit at the same levels: their charge is gone.',
         solve: (st) => { st.setInputs({ act: 0, sae: 0, pre: 1 }); st.setInputs({ pre: 0, row: 1, act: 1 }); },
       },
@@ -89,24 +146,31 @@ export const chDram: Chapter = {
     {
       title: 'The sense amplifier',
       body: `
-        <p>The sense amplifier is two cross-coupled inverters between the bit line and its reference, powered through a head and a
-        foot transistor when <code>sae</code> rises. Both lines start near VDD/2. The higher one turns the opposite pull-down on a
+        <p><span data-show="sa">The sense amplifier</span> is two cross-coupled inverters between the bit line and its reference, powered through a head and a
+        foot transistor when <code>sae</code> (sense-amplifier enable) rises. Both lines start near VDD/2. The higher one turns the opposite pull-down on a
         little harder, which pulls that line lower, which turns this side's pull-up on harder. The feedback ends with both lines at
         the rails.</p>
         <p>The word line is still up, so the cell is recharged to a full level as the bit line swings: <strong>the read writes the row
         back</strong>. The amplifiers now hold the whole row. That is the <strong>row buffer</strong>: any column of it can be read or
-        written through the column select until the row is closed.</p>
+        written through the <span data-show="ca cb">column select</span> until the row is closed.</p>
         <p>A switch model cannot amplify 110 mV, so the amplifier is a primitive here: drawn with its 8 transistors, it compares the two
         levels and latches. Real amplifiers have an offset of some millivolts (mismatched transistors); below ${Math.round(SENSE_OFFSET * VDD_VOLTS * 1000)} mV
         this one latches X.</p>
         <div class="try">The view is inside column 0. Activate a row and Sense, and watch the lines and the cell go to the rails. Open
         the SENSE box to see its transistors.</div>`,
       scene: () => dramScene({ pattern: PATTERN, path: ['col0'], highlight: ['sa'] }),
+      tries: [(st) => st.getInput('act') === 1 && st.getInput('sae') === 1],
       challenge: {
         kind: 'quiz',
         question: 'You activate a row holding a 1 and close it again without sensing. What does the cell hold?',
         options: ['The 1, unchanged: nothing was read out', `The shared level, ${(share(1) * VDD_VOLTS).toFixed(2)} V: the next read sees a smaller signal`, 'A 0', 'X'],
         answer: 1,
+        why: [
+          'Activating is the damage: the word line joins the cell to its bit line and they share charge, whether or not the amplifier fires.',
+          '',
+          'The charge spread over the bit line; it did not drain to ground. The shared level sits above VDD/2.',
+          `The cell holds a definite voltage, ${(share(1) * VDD_VOLTS).toFixed(2)} V. X is only what a logic gate would make of it; the amplifier can still sense it.`,
+        ],
         explain: `Charge sharing moved the cell to the bit line's level and nothing restored it. The next read shares again from ${(share(1) * VDD_VOLTS).toFixed(2)} V: the line moves ${mV(twice - 0.5)} mV, still above the ${Math.round(SENSE_OFFSET * VDD_VOLTS * 1000)} mV offset. A third read moves it ${(((thrice - 0.5) * VDD_VOLTS) * 1000).toFixed(0)} mV: X. Try it: Activate, Close, Precharge, three times, then Sense.`,
       },
     },
@@ -117,10 +181,10 @@ export const chDram: Chapter = {
         ${CELL_HALFLIFE} clock cycles, and the amplifier reads it correctly while its bit line moves by more than its offset: for
         <strong>${SAFE_CYCLES} cycles</strong> after the last restore. After that it reads X, and after a few more it reads 0 and writes
         that 0 back. The bit is gone.</p>
-        <p><strong>Refresh</strong> is a read with nothing out: activate a row, sense it (which restores it), close it. Every row must be
+        <p><strong>Refresh</strong> is a read with nothing out: <span data-show="rdec">activate a row</span>, sense it (which restores it), close it. Every row must be
         refreshed within the retention time. In silicon that is 64 ms, and a DDR4 device refreshes in 8 192 REF commands, one every
         ${DDR4_3200.tREFI / 1000} µs, each keeping it busy for ${DDR4_3200.tRFC} ns: ${((100 * DDR4_3200.tRFC) / DDR4_3200.tREFI).toFixed(1)} % of the time
-        lost. The cells leak towards 0, so a stored 0 lasts forever. A cell in an open row never leaks: its amplifier holds it.</p>
+        lost. The cells leak towards 0, so a stored 0 lasts forever. A cell in an open row never leaks: its <span data-show="col0.sa">amplifier</span> holds it.</p>
         <div class="try">Wait 200 cycles and watch row ages turn orange, then red. Refresh a row and its age returns to 0.</div>`,
       scene: () => dramScene({ pattern: PATTERN }),
       challenge: {
@@ -129,6 +193,10 @@ export const chDram: Chapter = {
           const s = dramState(st);
           return !!s && s.waited >= 600 && PATTERN.every((bits, r) => [0, 1, 2, 3].every((c) => ((bits >> c) & 1 ? cellLevel(st, r, c) >= READABLE : cellLevel(st, r, c) <= 0.5)));
         },
+        hints: [
+          `A row stays readable for ${SAFE_CYCLES} cycles after its last restore. What has to happen to every row before that runs out?`,
+          `One Wait of 600 is far too long. Cut the waiting into pieces shorter than ${SAFE_CYCLES} cycles, and restore every row between them.`,
+        ],
         answer: `Wait 200, Refresh all, three times. Each row is restored before ${SAFE_CYCLES} cycles pass. Waiting 400 at once would be too late: the 1s would have fallen below ${(READABLE * VDD_VOLTS).toFixed(3)} V.`,
         solve: (st) => { const a = dramActions(st); for (let i = 0; i < 3; i++) { a?.wait(200); a?.refreshAll(); } },
       },
@@ -149,6 +217,12 @@ export const chDram: Chapter = {
         question: 'The copy with 2 banks and the plain mapping: source at word 0, destination at word 1 024 (rows of 16 words). Why do almost all its accesses conflict?',
         options: ['1 024 words is a whole number of rows times both banks, so each source line and its destination share a bank and evict each other\'s row', 'The row buffer only holds one line', 'Writes always need a precharge', 'The burst is too short'],
         answer: 0,
+        why: [
+          '',
+          'The row buffer holds a whole row, 16 words here: four lines. The trouble is two rows wanting the same bank.',
+          'A write to the open row is a row hit like a read. It needs a precharge only when another row is open in its bank.',
+          'The burst sets how long an access takes once the row is open, not whether it hits.',
+        ],
         explain: '1 024 / (16 × 2) = 32 rows: the destination is the same bank, 32 rows down. The XOR hash folds the row\'s parity into the bank number, so the two streams land in different banks and both rows stay open.',
       },
     },
@@ -160,7 +234,7 @@ export const chDram: Chapter = {
         At our single-cycle CPU's ${CLOCK_NS.toFixed(2)} ns clock that is ${TIMING.tRCD} cycles each. After the column command the data comes as a
         <strong>burst</strong>: here a 4-word cache line, one word a cycle.</p>
         <p>A row hit is then ${accessCycles('hit', TIMING)} cycles, a miss ${accessCycles('miss', TIMING)}, a conflict ${accessCycles('conflict', TIMING)}.
-        Chapter 21's caches charge a fixed 8 for every miss, which is a row hit. Chapter 33 builds the controller that issues these
+        <a href="#/c/cache/0">Chapter 21</a>'s caches charge a fixed 8 for every miss, which is a row hit. <a href="#/c/memctrl/0">Chapter 33</a> builds the controller that issues these
         commands, and lets the caches pay what the row buffer says.</p>`,
       widget: timingWidget,
       challenge: {
@@ -168,7 +242,13 @@ export const chDram: Chapter = {
         question: 'The same DDR4-3200 device behind a 3 GHz CPU: how many cycles does a row conflict cost for a 4-word line?',
         options: [String(accessCycles('conflict', TIMING)), '42', String(conflict3), '1 000'],
         answer: 2,
-        explain: `Each of tRP, tRCD and tCAS is 13.75 ns, ${cyclesOf(DDR4_3200.tRP, GHZ3)} cycles at 0.33 ns, plus the 4-word burst: ${conflict3}. The nanoseconds stayed, the cycles multiplied by 10: the memory wall.`,
+        why: [
+          `That is the count at our ${CLOCK_NS.toFixed(2)} ns clock. The device's intervals are fixed in nanoseconds, so a faster clock waits more cycles.`,
+          'That is one interval, 13.75 ns at 0.33 ns a cycle. A conflict waits for tRP, tRCD and tCAS in turn, then the burst.',
+          '',
+          `Too many: 1 000 cycles at 3 GHz are 333 ns. Three intervals of 13.75 ns plus the burst come to ${conflict3} cycles.`,
+        ],
+        explain: `Each of tRP, tRCD and tCAS is 13.75 ns, ${cyclesOf(DDR4_3200.tRP, GHZ3)} cycles at 0.33 ns, plus the 4-word burst: ${conflict3}. The nanoseconds stayed; each interval went from ${TIMING.tRP} cycles to ${cyclesOf(DDR4_3200.tRP, GHZ3)}: the memory wall.`,
       },
     },
   ],

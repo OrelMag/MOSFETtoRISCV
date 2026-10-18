@@ -82,7 +82,11 @@ function routes(): Route[] {
   add('#/', light);
   add('#/', themed('dark'), ' (dark)');
   for (const theme of ['light', 'dark'] as const) {
-    for (const c of chapters) c.steps.forEach((_, i) => add(`#/c/${c.id}/${i}`, themed(theme), theme === 'dark' ? ' (dark)' : ''));
+    for (const c of chapters) {
+      c.steps.forEach((_, i) => add(`#/c/${c.id}/${i}`, themed(theme), theme === 'dark' ? ' (dark)' : ''));
+      // the recap, one past the last step
+      if (c.recap) add(`#/c/${c.id}/${c.steps.length}`, themed(theme), theme === 'dark' ? ' (dark)' : '');
+    }
   }
   // The default of every workbench family (what the family picker opens first).
   for (const f of families) add(`#/workbench/${f.key(initialParams(f))}`, light);
