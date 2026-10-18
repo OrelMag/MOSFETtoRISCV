@@ -123,7 +123,9 @@ export const chMulticore: Chapter = {
         <p>The fix belongs in the instruction set: <code>amoadd.w rd, rs2, (rs1)</code> reads the word, adds, and writes it back in a <em>single</em> memory access.
         Nothing can come in between, because <span data-show="arb">the arbiter</span> grants the port for that one access. In the core, the atomic looks like a load to the control unit (it writes rd),
         <span data-show="core0.amux">its address is rs1 itself</span>, and <span data-show="core0.amoadd">a dedicated adder</span> computes old + rs2 for the write.</p>
-        <p>In a real system with caches, the core gets the cache line exclusively and holds it for the duration of the operation; the same idea, with coherence doing the arbitration.</p>`,
+        <p>Doing the read, the add and the write in one cycle, serialized by the one port's arbiter, is a deliberate simplification. In a real system with caches,
+        the core gets the cache line exclusively and holds it for the duration of the operation: the same idea, with coherence doing the arbitration. RISC-V also has
+        <code>lr.w</code> / <code>sc.w</code>, a reservation on the word that makes the store fail if another core wrote it in between; our cores do not implement them.</p>`,
       scene: () => dualCoreScene(mc('atomic')),
       challenge: {
         kind: 'reach', goal: 'Run to the end: the counter must be 40.',

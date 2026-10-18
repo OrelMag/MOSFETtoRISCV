@@ -265,9 +265,13 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ The real flow: the dual-core exported as Verilog, synthesized by Yosys to the sky130 cell library and placed,
   clock-tree-built and routed by OpenROAD into a GDS (`.github/workflows/layout.yml`, published into the site); the
   export first cross-checked cycle by cycle against our gate-level simulation (`scripts/verify-export.ts`)
-- ⏳ The same flow for the system CPU (RV32IM + Zicsr; its export already passes the Yosys cross-check, Phase 13); the
-  flow's timing and area reports shown next to our own static timing and NAND-count floorplan, so the learner sees how
-  far the unit-delay estimate is from sky130
+- ✅ The same flow for the system CPU: `systemCore({ m: true })` (RV32IM + Zicsr, traps, interrupts; both memories outside
+  its ports, as SRAM macros), cross-checked by `verify-export.ts core-m` on a bench with its ROM, data memory and I/O; one
+  flow job per design, published together (the system core under layout/sys/; only main and manual runs publish). Under
+  each layout, our estimates of the same design (scripts/export-layout.ts → source.json): area per block from the NAND
+  count at one NAND2 cell each against the cells placed in that block, and our critical path in NAND delays (outputs
+  counted, as the flow's zero output delay counts them) against OpenSTA's after routing (summarize.mjs reads 6_finish.rpt),
+  both drawn as bars by block, and the ps one of our NAND delays is worth in that layout
 
 ### Phase 12 — Parity with Turing Complete and Digital Logic Sim 🚧
 The simulator already went further than both games: transistors and Z, gate delays (glitches,
@@ -516,8 +520,8 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
   resolution model, not physics; CPUs are checked against our own ISS plus the independent checks below
 - ✅ Screenshots and GIFs in the README (drill-down to transistors, carry ripple, pipeline, sandbox, layout)
 - ✅ The timing panels (chapters and sandbox) and the static-timing step name the 25 ps / NAND as illustrative
-- ⏳ Chapter 25 separates the teaching P&R from the OpenROAD run; the pipeline chapters call cache-miss freezing and
-  arbiter-serialized atomics deliberate simplifications
+- ✅ Chapter 25 separates the teaching P&R from the OpenROAD run; chapters 21 and 24 call cache-miss freezing and
+  arbiter-serialized atomics deliberate simplifications (and name non-blocking caches, lr.w / sc.w)
 - ✅ Repository description, homepage and topics on GitHub
 
 **Independent verification** (our ISS and our CPUs share one author: a misreading of the spec passes in both)
