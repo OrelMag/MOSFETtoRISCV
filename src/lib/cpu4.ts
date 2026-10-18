@@ -431,19 +431,11 @@ export const CPU4_PORTS: PortDef[] = [
 const cpus = new Map<string, ComponentDef>();
 
 /**
- * The 4-bit computer: program ROM, the six blocks, and a halt detector (the word is JUN to its own
- * address). Inputs: the TEST pin and four switches; outputs: four digits, four LEDs, halt.
+ * Everything of the 4-bit CPU but its program memory, from the instruction word on: its fields and the halt detector
+ * (the word is JUN to its own address), then Decode over the index registers, the ALU over the accumulator, the PC &
+ * stack over the I/O ports (which run straight out). The PC also goes to `pcSinks` (the ROM's address, or a pin).
  */
-export function cpu4(words: ArrayLike<number>): ComponentDef {
-  const R0 = rom4(words);
-  let d = cpus.get(R0.id);
-  if (d) return d;
-  const b = new Builder(10, 12, 6);
-  b.pins('clk', 'test', 'sw');
-  // Four columns: the ROM and its fields (with the halt detector), Decode over the index registers,
-  // the ALU over the accumulator, the PC & stack over the I/O ports (which run straight out).
-  const rom = b.op(R0, [''], 'program', 'rom');
-  const instr = b.name(`${rom}.data`, 'instr', true);
+function cpu4Body(b: Builder, instr: string, pcSinks: string[]): void {
   const fl = b.op(splitter([8, 4, 4], 4), [instr], 'fields');
   const lo = b.name(`${fl}.o0`, 'lo', true), opa = b.name(`${fl}.o1`, 'opa', true);
   // Halt: the word is JUN (0x40) to its own address.
@@ -466,10 +458,26 @@ export function cpu4(words: ArrayLike<number>): ComponentDef {
   b.next();
   const pcs = b.op(CPU4_PC, [c('pcsel'), lo, pair, c('push'), c('pop'), 'clk'], 'PC & stack', 'pcs');
   const pc = b.name(`${pcs}.pc`, 'pc', true);
-  b.wire(pc, `${rom}.addr`);
+  for (const s of pcSinks) b.wire(pc, s);
   b.wire(pc, `${self}.b`);
   const io = b.op(CPU4_IO, [pair, c('srcwe'), a, c('wrr'), 'clk'], 'I/O', 'io');
   IO4_OUTS.forEach((n) => b.wire(`${io}.${n}`, n));
+}
+
+/**
+ * The 4-bit computer: program ROM, the six blocks, and a halt detector (the word is JUN to its own
+ * address). Inputs: the TEST pin and four switches; outputs: four digits, four LEDs, halt.
+ */
+export function cpu4(words: ArrayLike<number>): ComponentDef {
+  const R0 = rom4(words);
+  let d = cpus.get(R0.id);
+  if (d) return d;
+  const b = new Builder(10, 12, 6);
+  b.pins('clk', 'test', 'sw');
+  // Four columns: the ROM and its fields (with the halt detector), Decode over the index registers,
+  // the ALU over the accumulator, the PC & stack over the I/O ports (which run straight out).
+  const rom = b.op(R0, [''], 'program', 'rom');
+  cpu4Body(b, b.name(`${rom}.data`, 'instr', true), [`${rom}.addr`]);
   const R = b.right;
   d = define({
     id: `cpu4_${R0.id.slice('cpu4_rom_'.length)}`, name: '4-bit CPU (4004-inspired)', category: 'cpu',
@@ -490,3 +498,27 @@ export const CPU4_STATE = {
 
 // Built at load (the example's program), so the layout and routing checks cover the whole computer.
 export const CPU4_BCD = cpu4(assemble4(BCD4).words);
+
+export const CPU4_CORE_PORTS: PortDef[] = [
+  bit('clk', 'in', true), bit('test', 'in'), bus('sw', 4, 'in'), bus('instr', 16, 'in'),
+  bus('pc', 8, 'out'), ...IO4_OUTS.map((n) => bus(n, 4, 'out')), bit('halt', 'out'),
+];
+
+/**
+ * The 4-bit CPU without its ROM: the instruction word comes in on `instr` and the PC goes out on `pc`, so a program
+ * memory of any kind can sit outside (Act P's card loader fills a RAM, then hands it to this core). The same blocks,
+ * wired the same way, as cpu4(); the halt detector stays inside.
+ */
+export const CPU4_CORE: ComponentDef = (() => {
+  const b = new Builder(18, 12, 6);
+  b.pins('clk', 'test', 'sw', 'instr');
+  cpu4Body(b, 'instr', ['pc']);
+  const R = b.right;
+  return define({
+    id: 'cpu4_proc', name: '4-bit CPU without ROM', category: 'cpu',
+    summary: 'The 4-bit CPU with an instruction port instead of its ROM: it shows its PC on pc and executes the 16-bit word on instr at every rising clk edge. PC & stack, Decode, sixteen 4-bit index registers, a 4-bit ALU, the accumulator and carry, SRC / WRR output ports for four digits and four LEDs; halt = 1 while instr is a JUN to its own address.',
+    ports: CPU4_CORE_PORTS,
+    symbol: { kind: 'box', label: 'CPU 4 CORE' },
+    netlist: () => ({ pins: { ...pinsAt(ins(CPU4_CORE_PORTS), 0, 6), ...pinsAt(outs(CPU4_CORE_PORTS), R, 6) }, instances: b.instances, nets: b.nets() }),
+  });
+})();
