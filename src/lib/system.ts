@@ -169,6 +169,8 @@ const CSR_ORDER: [string, number][] = [
   ['mcause', CSRS.mcause], ['mtval', CSRS.mtval], ['mip', CSRS.mip], ['mcycle', CSRS.mcycle], ['cycle', CSRS.cycle], ['mhartid', CSRS.mhartid],
   // mandatory read-only ids, all zero ("not implemented" / non-commercial)
   ['mvendorid', CSRS.mvendorid], ['marchid', CSRS.marchid], ['mimpid', CSRS.mimpid],
+  // RV32's upper half of mstatus (MBE, SBE, MPV, GVA): little-endian, no hypervisor, so all zero; writes ignored
+  ['mstatush', CSRS.mstatush],
 ];
 
 export function csrUnit(m = false): ComponentDef {
@@ -308,7 +310,7 @@ export function csrUnit(m = false): ComponentDef {
   const merged = mergeByDriver(nets);
   // 14 between columns: an output label pointing right and an input label pointing left share the gap
   const instances = columns(chunk(ins, 12), 14, 0, 14, 2);
-  const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 11;
+  const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 14;
   const inNames = ['addr', 'funct3', 'rs1v', 'zimm5', 'csrWrite', 'trap', 'trapCause', 'trapPC', 'trapVal', 'mret', 'mtime', 'mtip', 'meip', 'clk'];
   const outNames = ['rdata', 'known', 'mtvecOut', 'mepcOut', 'irqTake', 'irqCause'];
   const pins: Record<string, [number, number]> = {};

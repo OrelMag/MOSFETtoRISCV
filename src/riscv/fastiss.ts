@@ -214,7 +214,7 @@ export class FastISS {
       case CSRS.mtval: return this.mtval;
       case CSRS.mip: return this.mip;
       case CSRS.mcycle: case CSRS.cycle: return this.mtime;
-      case CSRS.mhartid: case CSRS.mvendorid: case CSRS.marchid: case CSRS.mimpid: return 0;
+      case CSRS.mhartid: case CSRS.mvendorid: case CSRS.marchid: case CSRS.mimpid: case CSRS.mstatush: return 0;
       default: return null; // fflags / frm / fcsr: no F extension
     }
   }

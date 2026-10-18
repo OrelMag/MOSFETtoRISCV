@@ -517,7 +517,7 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
   machine mode with traps) linked as ELFs without a toolchain, commit logs compared instruction by instruction (pc,
   word, x / f writes, stores, load addresses, CSR writes, trap cause / epc / tval). Seeds 1–1000: 6000 programs,
   1 236 958 instructions, no difference beyond two legal ones (mtval on illegal / ebreak; mret's zero writes to
-  mstatush and tcontrol, CSRs ours lacks). Seeds 1–1000 per variant on every ISA change, 4000 more each night
+  tcontrol, a debug CSR ours lacks); it found `mstatush` missing from the golden model and the system CPU (added). Seeds 1–1000 per variant on every ISA change, 4000 more each night
 - ✅ RV32 random-program fuzzing (`src/riscv/randprog32.ts`): ALU edge values, every branch, jal / jalr, loops,
   loads / stores of every width, hazard-dense operand choice, CSRs, traps and a timer interrupt, M, F (special
   values, every rounding mode), atomics on the dual-core; final state against the golden model on every CPU, a

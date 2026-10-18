@@ -143,7 +143,7 @@ export const chTraps: Chapter = {
   builds: ['cpu', 'io'],
   recap: {
     keep: [
-      'CSRs: a separate space of 12-bit addresses, accessed with <code>csrrw</code> (swap), <code>csrrs</code> (set bits), <code>csrrc</code> (clear bits) and their immediate forms. This CPU has fifteen, one address comparator each.',
+      'CSRs: a separate space of 12-bit addresses, accessed with <code>csrrw</code> (swap), <code>csrrs</code> (set bits), <code>csrrc</code> (clear bits) and their immediate forms. This CPU has sixteen, one address comparator each.',
       'A trap: PC ← mtvec, mepc ← the address of the trapping instruction, mcause ← the reason, MPIE ← MIE, MIE ← 0. <code>mret</code> jumps to mepc and restores MIE.',
       'mcause: 2 illegal instruction, 3 breakpoint, 4 misaligned load, 6 misaligned store, 11 ecall; interrupts set bit 31 (0x80000007 timer, 0x8000000B external). A trapping instruction writes nothing.',
       'An interrupt is pending in mip while its source holds, and taken at the next instruction boundary only if enabled in mie and globally by mstatus.MIE.',
@@ -181,8 +181,8 @@ export const chTraps: Chapter = {
         <p>A second, separate register space: <strong>CSRs</strong>, addressed by a 12-bit number and accessed only with
         <code>csrrw</code> (swap), <code>csrrs</code> (set bits) and <code>csrrc</code> (clear bits), plus immediate forms. This CPU implements the
         machine-mode set an embedded core needs: mstatus, misa, mie, mtvec, mscratch, mepc, mcause, mtval, mip, mcycle/cycle and mhartid, plus the identity
-        registers every core must have (mvendorid, marchid, mimpid), which read 0.</p>
-        <p>Open the CSR unit: fifteen <span data-show="is_mstatus is_mtvec is_mepc is_mcause">address comparators</span>, a
+        registers every core must have (mvendorid, marchid, mimpid) and RV32's upper half of mstatus (mstatush), which read 0.</p>
+        <p>Open the CSR unit: sixteen <span data-show="is_mstatus is_mtvec is_mepc is_mcause">address comparators</span>, a
         <span data-show="rsel">read multiplexer</span>, the <span data-show="orOld andOld opSel">read-modify-write logic</span>,
         and the <span data-show="rTvec rEpc rCause rTval">registers</span>, some of them written by hardware on a trap.</p>`,
       scene: () => ({ root: CSR_UNIT, inputs: { addr: 0x305, funct3: 1, rs1v: 0x40, csrWrite: 1, clk: 0 } }),
