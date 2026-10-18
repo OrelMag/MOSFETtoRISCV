@@ -177,6 +177,25 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 .cp-kmap td.cov { background: var(--good-soft); color: var(--good); }
 .cp-kmap td.bad { background: color-mix(in srgb, var(--warn) 22%, var(--surface)); color: var(--warn); }
 .cp-kmap td.miss { box-shadow: inset 0 0 0 2px var(--warn); }
+/* A drill's figure (drills.ts: the relay's curves, card columns), inline in the question. */
+.cp-fig { display: block; max-width: 100%; height: auto; margin: 8px 0 2px; font-family: var(--font-mono); background: var(--surface); border-radius: 6px; }
+.cp-fig .gr, .cp-fig .gr2, .cp-fig .ax { fill: none; }
+.cp-fig .gr { stroke: var(--border); stroke-width: 0.6; }
+.cp-fig .gr2 { stroke: var(--border-strong); stroke-width: 0.8; }
+.cp-fig .ax { stroke: var(--text-2); stroke-width: 0.9; stroke-dasharray: 3 2; }
+.cp-fig .tk { fill: var(--muted); font-size: 9px; }
+.cp-fig polyline, .cp-fig .dash { fill: none; stroke-width: 1.7; stroke-linejoin: round; }
+.cp-fig .dash { stroke-dasharray: 5 3; stroke-width: 1.2; }
+.cp-fig .c1 { stroke: var(--series-1); }
+.cp-fig .c2 { stroke: var(--series-2); }
+.cp-fig .c3 { stroke: var(--good); stroke-width: 1.3; }
+.cp-fig .lb1, .cp-fig .lb2, .cp-fig .lb3 { font-size: 9.5px; }
+.cp-fig .lb1 { fill: var(--series-1); }
+.cp-fig .lb2 { fill: var(--series-2); }
+.cp-fig .lb3 { fill: var(--good); }
+.cp-fig .pc { fill: var(--pcard); stroke: var(--pcard-edge); }
+.cp-fig .pg { stroke: var(--pcard-edge); stroke-width: 0.5; }
+.cp-fig .ph { fill: var(--pcard-hole); }
 
 /* ---- program puzzles ---- */
 .cp-puzzle .code-edit { margin-bottom: 8px; }
