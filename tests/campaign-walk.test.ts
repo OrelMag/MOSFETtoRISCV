@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { codexById } from '../src/campaign/codex';
 import { levelChallenge } from '../src/campaign/levels';
 import { NODES, nodeById } from '../src/campaign/nodes';
+import { NUDGES } from '../src/campaign/nudges';
 import { makeWalk, partialDoc, stepMetrics, walkOf } from '../src/campaign/walk';
 import { WALKS } from '../src/campaign/walks';
 import { checkChallenge, scoreOf } from '../src/editor/challenges';
@@ -18,6 +19,33 @@ const playable = NODES.filter((n) => levelChallenge(n));
 const once = (xs: string[]) => new Set(xs).size === xs.length;
 
 describe('walkthroughs', () => {
+  it('are authored for every build and core level, each with one question to predict and a nudge', () => {
+    for (const n of playable.filter((x) => x.kind === 'build' || x.kind === 'core')) {
+      const script = WALKS[n.id];
+      expect(script, `${n.id}: authored walk`).toBeTruthy();
+      expect(script.filter((st) => st.ask).length, `${n.id}: one ask`).toBe(1);
+      for (const st of script) {
+        if (!st.ask) continue;
+        expect(st.ask.answer, n.id).toBeLessThan(st.ask.options.length);
+        expect(st.ask.why?.length, `${n.id}: a why per option`).toBe(st.ask.options.length);
+      }
+      expect(NUDGES[n.id]?.trim(), `${n.id}: nudge`).toBeTruthy();
+    }
+    for (const id of Object.keys(NUDGES)) expect(nodeById(id), `nudge for '${id}'`).toBeTruthy();
+  });
+
+  it('draw a wire between two part ports as soon as both parts are placed (one whose ends meet at a point too)', () => {
+    for (const n of playable) {
+      const w = walkOf(n)!;
+      for (const z of w.main.wires) {
+        if (!('part' in z.a) || !('part' in z.b)) continue;
+        const ends = [z.a.part, z.b.part];
+        const k = w.steps.findIndex((_, i) => ends.every((p) => partialDoc(w, i).parts.some((q) => q.id === p)));
+        if (k >= 0) expect(partialDoc(w, k).wires.some((x) => x.id === z.id), `${n.id}: wire ${z.id} at step ${k + 1}`).toBe(true);
+      }
+    }
+  });
+
   it('exist for every playable level and only there', () => {
     for (const n of NODES) expect(!!walkOf(n), n.id).toBe(!!levelChallenge(n));
   });

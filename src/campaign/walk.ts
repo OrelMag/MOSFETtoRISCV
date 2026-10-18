@@ -558,6 +558,8 @@ function partialWiring(main: ChipDoc, geo: Geo, present: Set<string>): { wires: 
   for (const [id, ss] of cuts) {
     const u = [...ss].sort((x, y) => x - y).filter((s, i, a) => i === 0 || s - a[i - 1] > EPS);
     for (let i = 1; i < u.length; i++) edges.push({ w: id, s0: u[i - 1], s1: u[i], a: nodeAt(id, u[i - 1], 0), b: nodeAt(id, u[i], 0) });
+    // a wire whose ends meet at one point (a part port on a pin, a rail on a resistor) still joins them
+    if (u.length === 1) edges.push({ w: id, s0: 0, s1: 0, a: endNode(byId.get(id)!.a), b: endNode(byId.get(id)!.b) });
   }
   // Prune: a missing part's port goes with every wire on it (wires meeting at a port do not touch
   // without the part), then, repeatedly, the leaves that are not present.

@@ -18,6 +18,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'NMOS pull-down',
       text: 'n1 runs from y to GND with its gate on a. It conducts when a = 1 and passes a strong 0. Exactly one transistor conducts for each a, so y is always driven and no current flows from VDD to GND at rest. Two transistors, half the cost of NAND(a, a).',
       parts: ['n1'], codex: ['inverter'],
+      ask: {
+        question: 'p1 (VDD to y, gate on a) makes the a = 0 row right. What drives y to 0 for a = 1?',
+        options: ['An NMOS from y to GND, gate on a', 'A PMOS from y to GND, gate on a', 'An NMOS from y to GND, gate on ¬a', 'Nothing: y falls to 0 once p1 is off'],
+        answer: 0,
+        explain: 'An NMOS conducts while its gate is 1 and passes a strong 0: n1 from y to GND, gate on a, is p1\'s dual.',
+        why: ['', 'A PMOS conducts on a 0 gate: it would pull down when a = 0, against p1, and it passes only a weak 0.', 'There is no ¬a yet: that is what is being built. An NMOS with its gate on a already conducts when a = 1.', 'With p1 off nothing drives y: it floats (Z) and the row fails.'],
+      },
     },
   ],
   t_nand: [
@@ -40,6 +47,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Second NMOS, in series',
       text: 'n2 joins the internal node to GND, gate on b. The pull-down conducts only when a = b = 1, exactly when the pull-up is off: series in one network, parallel in its dual. Four transistors. The series pair is NMOS, the faster type; a NOR puts it in the PMOS network, 2 to 3 times weaker per width, which is why CMOS libraries build on the NAND.',
       parts: ['n2', 'gnd'], codex: ['cmos', 'duality', 'nand'],
+      ask: {
+        question: 'n1 runs from y to an internal node, gate on a. The pull-down must conduct only when a = b = 1. Where does n2, gate on b, go?',
+        options: ['From the node to GND: in series with n1', 'From y to GND: in parallel with n1', 'From VDD to y', 'From the node back to y'],
+        answer: 0,
+        explain: 'Series NMOS conduct only when both gates are 1: exactly the a = b = 1 row the parallel PMOS leave floating.',
+        why: ['', 'In parallel the pull-down conducts when a or b is 1: the NOR\'s pull-down, fighting the PMOS on the rows with one input at 1.', 'The pull-up is done: the parallel PMOS cover every row with an input at 0. An NMOS passes only a weak 1.', 'n1 already joins y to the node; another channel between them changes nothing, and the node still never reaches GND.'],
+      },
     },
   ],
   g_sop: [
@@ -62,6 +76,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'One wide NAND',
       text: 'y = ¬(t1·t2·t3·t4) is the OR of the four terms. Without a 4-input NAND it is two ANDs (u12, u13) and a NAND (u14). 20 NANDs, depth 7 (1 + 2 + 1 + 2 + 1): par.',
       parts: ['u12', 'u13', 'u14'], codex: ['universality'],
+      ask: {
+        question: 'u8 to u11 deliver the four products inverted, ¬p1 to ¬p4. With 2-input gates only, which makes y = p1 + p2 + p3 + p4?',
+        options: ['AND(¬p1, ¬p2) and AND(¬p3, ¬p4), then a NAND of the two', 'NAND(¬p1, ¬p2), that NANDed with ¬p3, then with ¬p4', 'Invert each, then an OR tree of the four', 'OR(¬p1, ¬p2) and OR(¬p3, ¬p4), then a NAND'],
+        answer: 0,
+        explain: 'y = ¬(¬p1·¬p2·¬p3·¬p4), a 4-input NAND: two ANDs and a NAND, 5 NANDs, depth 3.',
+        why: ['', 'NAND(¬p1, ¬p2) = p1 + p2, but the next NAND inverts it again: ¬(p1 + p2) + p3.', 'Right function, but 4 inverters and 3 ORs cost 13 NANDs and depth 5, against 5 NANDs and depth 3.', 'NAND(¬p1 + ¬p2, ¬p3 + ¬p4) = p1·p2 + p3·p4: products of pairs, not the OR of all four.'],
+      },
     },
   ],
   g_wide: [
@@ -79,6 +100,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'The top of the tree',
       text: 'u13 and u14 cover eight bits each, u15 all sixteen: any is done at depth 8, four levels of ORs. A chain of the same 15 ORs costs the same 45 NANDs but is 30 deep.',
       parts: ['u13', 'u14', 'u15'], codex: ['depth'],
+      ask: {
+        question: 'Fifteen 2-input ORs (2 NAND delays each) combine sixteen bits in a balanced tree. How deep is any?',
+        options: ['8', '30', '16', '4'],
+        answer: 0,
+        explain: 'Four levels of ORs (16 → 8 → 4 → 2 → 1) at 2 NAND delays each: depth 8, for the same 45 NANDs as a 30-deep chain.',
+        why: ['', 'That is the chain: each OR waits for the one before it, 15 × 2.', 'A tree halves the count at each level: log2 16 = 4 levels, at 2 delays each.', 'Four levels of ORs, but each OR is 2 NAND delays deep.'],
+      },
     },
     {
       title: 'Zero is not any',
@@ -101,6 +129,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Outputs 1 to 3',
       text: 'Output k takes a_i where bit i of k is 1 and ¬a_i where it is 0: u5 = a0·¬a1·¬a2·en, u6 = ¬a0·a1·¬a2·en, u7 = a0·a1·¬a2·en. Any two outputs differ in at least one literal, so at most one is 1.',
       parts: ['u5', 'u6', 'u7'],
+      ask: {
+        question: 'Output k is an AND of en and three address literals. Which literals does output 3 (binary 011) take?',
+        options: ['a0, a1, ¬a2', '¬a0, ¬a1, a2', 'a0 and a1 only', 'a0, a1, a2'],
+        answer: 0,
+        explain: 'Bit i of k picks a_i where it is 1 and ¬a_i where it is 0: 3 = 011 gives a0·a1·¬a2·en.',
+        why: ['', 'That is output 4 (100): every literal complemented.', 'Without ¬a2, output 3 would also be 1 for address 7 (111): two outputs at once.', 'That is output 7 (111).'],
+      },
     },
     {
       title: 'Outputs 4 to 7',
@@ -133,6 +168,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Merge the result',
       text: 'Bits 12 to 15 complete the row and the merger joins the sixteen outputs into y. 3 × 16 + 1 = 49 NANDs, depth 3: par. Sixteen copies of your 2:1 mux (the library\'s mux2x16) cost 64 at the same depth.',
       parts: ['ta12', 'tb12', 'y12', 'ta13', 'tb13', 'y13', 'ta14', 'tb14', 'y14', 'ta15', 'tb15', 'y15', 'my'],
+      ask: {
+        question: 'Each bit is ta, tb and y, 3 NANDs, and every bit shares the one inverter on s. What does the 16-bit mux cost?',
+        options: ['49 NANDs', '64 NANDs', '48 NANDs'],
+        answer: 0,
+        explain: '3 × 16 + 1 = 49: the inverter is paid once. Sixteen complete 2:1 muxes would pay it sixteen times.',
+        why: ['', 'That is sixteen whole 2:1 muxes, each with its own inverter on s (the library\'s mux2x16).', 'The bits still need ¬s: one inverter, shared, makes 49.'],
+      },
     },
   ],
   g_eq16: [
@@ -150,6 +192,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Zero detect',
       text: 'The merger bundles the sixteen differences and your zero detect (u19) reports whether they are all 0: a balanced OR tree and an inverter, 46 NANDs, depth 9. Its any output stays unused. 110 NANDs, depth 3 + 9 = 12: par.',
       parts: ['u18', 'u19'], codex: ['depth'],
+      ask: {
+        question: 'u2 to u17 give a[k] ⊕ b[k] for every bit. What turns the sixteen into eq?',
+        options: ['1 when all sixteen are 0: a zero detect', '1 when any of them is 1: an OR', 'An AND of all sixteen', 'Their XOR (parity)'],
+        answer: 0,
+        explain: 'a = b exactly when no bit differs: your zero detect on the sixteen differences, 46 NANDs, depth 9.',
+        why: ['', 'That is a ≠ b: one differing bit makes it 1.', 'The AND is 1 only when every bit differs: a = ¬b.', 'Parity counts differing bits mod 2: words that differ in two bits would read equal.'],
+      },
     },
   ],
   a_add4: [
@@ -167,6 +216,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Bit 2',
       text: 'fa2 continues the chain: the carry into bit 3 settles at depth 5 + 2 + 2 = 9.',
       parts: ['fa2'],
+      ask: {
+        question: 'The carry out of bit 0 settles at depth 5, and each later full adder adds 2 on the carry. At what depth does the carry into bit 3 settle?',
+        options: ['9', '15', '7', '11'],
+        answer: 0,
+        explain: '5 + 2 + 2 = 9: a and b reach every bit at once, so only the carry path counts, 2 NAND delays per bit.',
+        why: ['', 'Only the first full adder pays 5 (from its a and b); the later ones wait for their carry in alone: 2 each.', 'That is the carry into bit 2: bit 1 adds 2 to the 5.', 'That is the carry out of bit 3: 2 more than its carry in.'],
+      },
     },
     {
       title: 'Bit 3 and cout',
@@ -194,6 +250,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'The top nibble',
       text: 'u5 adds bits 15 to 12; the merger gathers s. 144 NANDs, the cost of sixteen full adders. Depth 36 on s[15], 35 on cout: hierarchy changes the drawing, not the carry chain.',
       parts: ['u5', 'u6'], codex: ['criticalpath'],
+      ask: {
+        question: 'u2\'s carry out settles at depth 11, and each later 4-bit adder adds 8 to the carry\'s depth. At what depth does cout settle?',
+        options: ['35', '11', '32', '44'],
+        answer: 0,
+        explain: '11 + 8 + 8 + 8 = 35: the carry still crosses all sixteen full adders. Hierarchy changes the drawing, not the chain.',
+        why: ['', 'Boxes do not run in parallel here: each nibble waits for the carry of the one below.', 'The first nibble pays 11, not 8: its a and b start the chain 3 deeper than a carry in would.', 'Only the first nibble starts from a and b; the later ones wait for the carry alone, 8 each.'],
+      },
     },
   ],
   a_inc16: [
@@ -201,6 +264,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Bit 0: a NOT and a wire',
       text: 'With b = 0 and cin = 1, bit k of a + 1 is a half adder of a[k] and the carry in. For bit 0 the carry in is the constant 1: the sum is ¬a0 and the carry out is a0 itself. n0 = ¬a0 costs 1 NAND, where a half adder on a constant 1 costs 5.',
       parts: ['sa', 'n0'], codex: ['incrementer'],
+      ask: {
+        question: 'Bit 0 of a + 1 is a half adder of a0 and a constant 1. What do its sum and carry reduce to?',
+        options: ['Sum ¬a0, carry a0', 'Sum a0, carry 0', 'Sum 1, carry a0', 'Sum ¬a0, carry 1'],
+        answer: 0,
+        explain: 'a0 ⊕ 1 = ¬a0 and a0·1 = a0: one NAND as an inverter and a plain wire, where a half adder costs 5.',
+        why: ['', 'That is a + 0. Adding 1 always flips bit 0, and a0·1 = a0 carries whenever a0 = 1.', 'a0 ⊕ 1 is ¬a0, not 1: for a0 = 1 the sum bit is 0.', 'The carry is a0·1 = a0: for a0 = 0 nothing carries.'],
+      },
     },
     {
       title: 'Bit 1',
@@ -228,6 +298,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'sub is the carry in',
       text: 'fa0 adds a[0], b[0] ⊕ sub and cin = sub. With sub = 1 the adder computes a + ¬b + 1 = a − b in two\'s complement, and the + 1 costs no gate.',
       parts: ['sa', 'fa0'], codex: ['twos'],
+      ask: {
+        question: 'With sub = 1 the XORs give ¬b, and a − b = a + ¬b + 1. Where does the + 1 come from?',
+        options: ['sub on the first full adder\'s carry in', 'An incrementer after the adder', 'A constant 1 on the carry in', 'The XORs add it'],
+        answer: 0,
+        explain: 'cin = sub: 0 for a + b, 1 for a + ¬b + 1 = a − b. The + 1 costs no gate.',
+        why: ['', 'It would work, at 76 NANDs and a second carry chain, for a + 1 the carry in gives for free.', 'Then a + b would come out one too high: the + 1 belongs to subtraction only.', 'An XOR inverts; it never adds. ¬b + 1 needs a carry in.'],
+      },
     },
     {
       title: 'The carry chain',
@@ -270,6 +347,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Choose',
       text: 'When the signs differ the negative one is smaller: lt = a15. lt = differ ? a15 : ltu is a 2:1 mux drawn as 4 NANDs (u24 to u27; the mux part is not unlocked here). 169 NANDs, depth 39: par. The textbook N ⊕ V needs the sum\'s sign and the overflow flag, so your whole subtractor: 217 NANDs, depth 44.',
       parts: ['u24', 'u25', 'u26', 'u27'], codex: ['mux'],
+      ask: {
+        question: 'When the signs agree, lt = ltu. When a15 ≠ b15, what is lt?',
+        options: ['a15', 'b15', 'ltu', '0'],
+        answer: 0,
+        explain: 'With the signs different the negative one is smaller: a < b exactly when a is the negative one, a15 = 1.',
+        why: ['', 'b15 = 1 means b is the negative, smaller one: then a < b is false.', 'Across the sign, unsigned order is reversed: a negative number is a large unsigned one.', 'One of the two is negative and smaller; when it is a, lt = 1.'],
+      },
     },
   ],
   a_shift16: [
@@ -282,6 +366,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'The fill bit',
       text: 'Bits entering at the top are f2 = a[15]·arith·¬left: the sign for sra, 0 for srl, and 0 for sll even when arith = 1. f2 settles at depth 4 and starts the critical path.',
       parts: ['sa', 'nl', 'f1', 'f2'],
+      ask: {
+        question: 'For sll the word is reversed, shifted right and reversed back. What must the bits entering at the top of the right shift be?',
+        options: ['0, even when arith = 1', 'a[15]', 'a[0]', '1'],
+        answer: 0,
+        explain: 'After the second reverse, bits entering at the top come out at the bottom of a << sh, which takes zeros. Hence f2 = a[15]·arith·¬left.',
+        why: ['', 'That is sra\'s fill. Reversed back, the top of the right shift becomes the bottom of the left shift.', 'a[0] is the reversed word\'s top bit, but a left shift fills its low end with zeros whatever a[0] is.', 'No shift fills with ones except sra of a negative word.'],
+      },
     },
     {
       title: 'Shift by 1, then by 2',
@@ -319,6 +410,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Comparisons from the adder',
       text: 'The adder already subtracts for slt and sltu, so its flags answer both: slt = n ⊕ v, sltu = ¬cout. zslt and zsltu zero-extend each bit to 16 for free. 5 NANDs buy two instructions; your 169-NAND less-than unit pays for its own adder.',
       parts: ['slt', 'zslt', 'sltu', 'zsltu'], codex: ['flags'],
+      ask: {
+        question: 'The adder already computes a − b for slt and sltu. Which of its flags gives slt?',
+        options: ['n ⊕ v', 'n', '¬cout', 'v'],
+        answer: 0,
+        explain: 'Overflow flips the sign of the result, so the true sign of a − b is n ⊕ v: slt = n ⊕ v, sltu = ¬cout.',
+        why: ['', 'n alone is wrong when a − b overflows: 0x7FFF − 0xFFFF = 0x8000 has n = 1, yet 32767 > −1.', '¬cout is sltu, the unsigned order.', 'v only says the sign bit is wrong, not which way the comparison goes.'],
+      },
     },
     {
       title: 'The shifter',
@@ -351,6 +449,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Slave, open while clk = 1',
       text: 'The slave copies the master while clk is high and holds while it is low, so q changes only just after a rising edge. 9 NANDs: par. The inverter closes the master one delay after the slave opens, so d must stay put just after the edge: a hold time.',
       parts: ['slave'], codex: ['dff', 'edge', 'setuphold'],
+      ask: {
+        question: 'The master is open while clk = 0 and holds from the rising edge. When must the slave be open?',
+        options: ['While clk = 1', 'While clk = 0, with the master', 'Always', 'Only at the rising edge'],
+        answer: 0,
+        explain: 'Open on opposite phases, the two never form a transparent path: q takes what the master held at the rising edge and keeps it for a whole cycle.',
+        why: ['', 'Both open at once is one transparent path: q would follow d, a latch rather than a flip-flop.', 'A slave that never closes passes every change: while clk = 0 the master follows d, and so would q.', 'A latch is open for a level, not an edge. The edge appears where one latch closes as the other opens.'],
+      },
     },
   ],
   s_reg4: [
@@ -363,6 +468,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Bits 1 and 2',
       text: 'ff1 and ff2 take their own data bits and share en and clk with ff0: all bits load or hold together on the same edge.',
       parts: ['ff1', 'ff2'], codex: ['register'],
+      ask: {
+        question: 'ff0 holds by reloading its own q through a mux while en = 0. Why not hold it by ANDing the clock with en?',
+        options: ['en changing while clk = 1 would make an edge of its own, and the gate delays this clock against the others', 'An AND costs more than the mux', 'The flip-flop has no clock input to gate', 'An AND would invert the clock'],
+        answer: 0,
+        explain: 'The mux keeps one clean clock on every flip-flop: all bits capture on the same edge, and en only chooses what they capture.',
+        why: ['', 'An AND is 2 NANDs, the mux 4: the gate is cheaper, and still the worse choice.', 'It has one, and clk reaches it untouched: that is the point.', 'AND does not invert. The trouble is the extra edge when en rises while clk is high.'],
+      },
     },
     {
       title: 'Bit 3',
@@ -390,6 +502,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Bits 15 to 12',
       text: 'u4 completes the word and the merger gathers q. 4 × 52 = 208 NANDs: par. The library\'s reg16 costs 240: its D latches have 5 NANDs (an inverter on d) where yours have 4. Period 8: clk-to-q (3), the enable mux on the q → d loop (2), setup (3).',
       parts: ['u4', 'u5'], codex: ['setuphold'],
+      ask: {
+        question: 'Four of your 4-bit registers at 52 NANDs each, joined by a splitter and a merger. What does the 16-bit register cost?',
+        options: ['208 NANDs', '240 NANDs', '144 NANDs', '212 NANDs'],
+        answer: 0,
+        explain: '4 × 52 = 208: splitters and mergers are wiring, so a register of registers is just the sixteen 13-NAND cells.',
+        why: ['', 'That is the library\'s reg16: its D latches have 5 NANDs where yours have 4.', 'That is sixteen flip-flops without enables; the enable muxes add 4 NANDs a bit.', 'Splitters and mergers cost nothing: there is no glue to pay for.'],
+      },
     },
   ],
   s_pc: [
@@ -412,6 +531,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Reset wins',
       text: 'u3 selects the constant 0 when rst = 1. It is the mux nearest the register, so rst overrides ld. 144 + 76 + 2 × 49 = 318 NANDs: par. Period 41: clk-to-q (3), incrementer (31), two muxes (2 each on the data), setup (3).',
       parts: ['u0', 'u3'], codex: ['criticalpath'],
+      ask: {
+        question: 'u2 picks d over pc + 1 when ld = 1. Where does the mux that selects 0 on rst go, so that rst beats ld?',
+        options: ['Between u2 and the register', 'Between the register and the incrementer', 'On u2\'s pc + 1 input', 'On the clock'],
+        answer: 0,
+        explain: 'The mux nearest the register has the last word: u3 selects 0 whatever u2 chose, so rst overrides ld.',
+        why: ['', 'Zeroing the incrementer\'s input loads 0 + 1 = 1 on reset, and ld = 1 still passes d.', 'Then ld = 1 still passes d: rst would only beat the increment.', 'Gating the clock stops the register; it does not load 0.'],
+      },
     },
   ],
   m_rf: [
@@ -434,6 +560,13 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Read port 1',
       text: 'u10, an 8:1 tree of seven of your 49-NAND bus muxes (343 NANDs, depth 7), selects x[ra1]; the library\'s tree of 64-NAND muxes would be 448. Input 0 is the constant 0: x0 always reads 0 and costs no register, which saves 208 NANDs.',
       parts: ['u1', 'u10'], codex: ['regfile', 'mux'],
+      ask: {
+        question: 'x0 must always read 0. What does the read tree take on its input 0?',
+        options: ['The constant 0', 'A register that is never written', 'A register reset to 0', 'x1'],
+        answer: 0,
+        explain: 'A constant 0 on input 0: x0 reads 0 and costs no register, 208 NANDs saved. Writes to x0 reach nothing, since decoder output 0 drives no register.',
+        why: ['', 'It costs 208 NANDs and holds whatever power-on left in it, not necessarily 0.', 'Still 208 NANDs for a value that never changes, plus a reset line.', 'Then x0 would read x1\'s value.'],
+      },
     },
     {
       title: 'Read port 2',
