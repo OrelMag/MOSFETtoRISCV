@@ -811,6 +811,11 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  required core's reference, compiled once), copiesInFinal(node) for the after-pass card
   codexmore.ts   the fuller codex (idea, example, mistakes, lib figure, compare, anatomy, chapters) in codexmore0.ts
                  (components, laws, tools) / codexmore1.ts (tricks, concepts) / codexmoreP.ts (act P); loaded on demand
+                 with codexcheck.ts (Check yourself: two Quizzes per entry in codexcheck0–3.ts, tests/codex-guide.test.ts)
+  codexlinks.ts  how entries connect: CODEX_ORDER, buildsOn / leadsTo (from the level graph), seeAlso (related both ways),
+                 neighbours; ui/codexfigs.ts: figures from the site's widgets for entries without a part (number explorer,
+                 instruction fields, adder comparison, the gate-level RV32I pipeline run a few cycles); the codex page
+                 searches titles and summaries, filters by kind; a locked entry shows its summary
   glossary.ts    codex terms in prose (titles, parenthetical names, aliases, plurals; acronyms as written)
   walk.ts        walkOf(node): the reference answer as steps (authored in walks.ts / walks1.ts / walks2.ts, else
                  generated in dataflow order, like parts grouped), partialDoc(walk, k), stepMetrics (cost, depth,
@@ -856,7 +861,8 @@ src/puzzles/   program puzzles (the sandbox's Puzzles drawer; roadmap Phase 12).
                  replay.ts the player (a test on the editor's own simulation, checkpoints for stepping back)
 src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-free: every chapter / step as a
                searchable entry, searchNav ranking), quicknav.ts (chapter menu on the top bar and the chapter title,
-               Ctrl/⌘ K or `/` search palette; `/` is left to the sandbox there)
+               Ctrl/⌘ K or `/` search palette; `/` is left to the sandbox there); quiz.ts: quizBox (chapters, recaps, codex,
+               walkthrough), options in a fixed shuffle per question (shuffleOrder: authors write the answer first)
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
 tests/verify/  CPU verification (docs/VERIFICATION.md): cpus.ts (every RV32 CPU variant: build, ISA, env,
