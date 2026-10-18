@@ -14,7 +14,7 @@ export const SKY130_NAND2_UM2 = 3.75;
 interface SourceInfo {
   nands: number;
   name?: string;
-  blocks?: { name: string; label: string; nands: number }[];
+  blocks?: { name: string; label: string; nands: number; module?: string | null }[];
   timing?: { period: number; clkToQ: number; setup: number; psPerNand: number; launch: string; capture: string; stages: { block: string; arrival: number }[] };
 }
 interface FinishTiming {
@@ -38,6 +38,7 @@ export interface LayoutSummary {
   kinds: Record<string, number>;
   blocks?: string[];
   blockArea: Record<string, number>;
+  synthArea?: Record<string, number>;
   sta?: FinishTiming | null;
   masters: [string, number][];
   metrics: Record<string, number | string>;
@@ -241,24 +242,30 @@ function estimateVsFlow(sum: LayoutSummary, blocks: string[], label: (b: string)
   const um = (a: number) => `${(a / 1e3).toFixed(a >= 1e4 ? 0 : 1)}k`;
   const ratio = (r: number) => (Number.isFinite(r) ? `${r.toFixed(2)} ×` : '–');
 
-  // area: every NAND equivalent priced as a NAND2 cell, against the cells the flow placed in that block
-  const shown = blocks.filter((b) => b !== 'other');
-  const ours = new Map(src.blocks.map((b) => [b.name, b.nands]));
-  const rest = src.nands - shown.reduce((a, b) => a + (ours.get(b) ?? 0), 0);
-  const placed = Object.values(sum.blockArea).reduce((a, v) => a + v, 0);
-  const row = (name: string, nands: number, area: number, bold = false) => {
-    const td = (t: string, cls?: string) => h('td', cls ? { class: cls } : null, bold ? h('strong', null, t) : t);
-    return h('tr', null, td(name), td(nands.toLocaleString(), 'num'), td(um(nands * SKY130_NAND2_UM2), 'num'), td(um(area), 'num'), td(ratio(area / (nands * SKY130_NAND2_UM2)), 'num'));
-  };
-  out.push(h('div', { class: 'lay-scroll' }, h('table', { class: 'cmp' },
-    h('thead', null, h('tr', null, h('th', null, 'block'), h('th', null, 'our NANDs'), h('th', null, `× ${SKY130_NAND2_UM2} µm²`), h('th', null, 'sky130 µm²'), h('th', null, 'sky130 / ours'))),
-    h('tbody', null,
-      ...shown.map((b) => row(label(b), ours.get(b) ?? 0, sum.blockArea[b] ?? 0)),
-      row('other (glue, clock tree)', rest, sum.blockArea.other ?? 0),
-      row('whole design', src.nands, placed, true)))));
-  const synth = Number(sum.metrics.synth__design__instance__area);
-  out.push(h('p', { class: 'sub' }, `Each of our NAND equivalents is priced as one ${SKY130_NAND2_UM2} µm² NAND2 cell. The library does better wherever it has one cell for what we build from several NANDs: a flip-flop with an enable (edfxtp) instead of a DFF and a multiplexer, a 2:1 multiplexer (mux2i), a half adder. `
-    + (Number.isFinite(synth) ? `Straight out of synthesis the cells covered ${um(synth)} µm²; the clock tree, timing repair buffers and well taps placed afterwards bring it to ${um(placed)} µm².` : '')));
+  // area: every NAND equivalent priced as a NAND2 cell, against Yosys's area for the blocks it synthesized as modules
+  // of their own (a flattened block's cells lose its name, so only these can be told apart), the rest together
+  const SA = sum.synthArea ?? {};
+  const total = SA.mosfet_riscv ?? Number(sum.metrics.synth__design__instance__area);
+  const kept = src.blocks.filter((b) => b.module && SA[b.module] !== undefined);
+  if (kept.length && Number.isFinite(total)) {
+    const keptNands = kept.reduce((a, b) => a + b.nands, 0), keptArea = kept.reduce((a, b) => a + SA[b.module!], 0);
+    const row = (name: string, nands: number, area: number, bold = false) => {
+      const td = (t: string, cls?: string) => h('td', cls ? { class: cls } : null, bold ? h('strong', null, t) : t);
+      return h('tr', null, td(name), td(nands.toLocaleString(), 'num'), td(um(nands * SKY130_NAND2_UM2), 'num'), td(um(area), 'num'), td(ratio(area / (nands * SKY130_NAND2_UM2)), 'num'));
+    };
+    out.push(h('div', { class: 'lay-scroll' }, h('table', { class: 'cmp' },
+      h('thead', null, h('tr', null, h('th', null, 'block'), h('th', null, 'our NANDs'), h('th', null, `× ${SKY130_NAND2_UM2} µm²`), h('th', null, 'sky130 µm²'), h('th', null, 'sky130 / ours'))),
+      h('tbody', null,
+        ...kept.map((b) => row(label(b.name), b.nands, SA[b.module!])),
+        row('the rest', src.nands - keptNands, total - keptArea),
+        row('whole design', src.nands, total, true)))));
+    const over = kept.filter((b) => SA[b.module!] > b.nands * SKY130_NAND2_UM2);
+    const ha = sum.masters.find(([m]) => m === 'sky130_fd_sc_hd__ha_1')?.[1] ?? 0;
+    const placed = Number(sum.metrics.finish__design__instance__area__stdcell);
+    out.push(h('p', { class: 'sub' }, `Each of our NAND equivalents is priced as one ${SKY130_NAND2_UM2} µm² NAND2 cell, against the cells Yosys chose for the same logic. The library does better wherever it has one cell for what we build from several NANDs (a flip-flop with an enable, edfxtp, instead of a DFF and a multiplexer; a 2:1 multiplexer, mux2i; an and-or-invert), and Yosys removes logic whose result nothing reads and merges what is computed twice, which our count keeps. `
+      + (over.length ? `Where the ratio is above 1 (${over.map((b) => label(b.name)).join(', ')}) it spent more than our count${ha ? `: it built the adders from ${ha.toLocaleString()} half-adder cells (ha_1, 12.5 µm² each) and buffered the heavily loaded nets` : ''}. ` : '')
+      + (Number.isFinite(placed) ? `Placement then adds the clock tree, timing repair buffers and well taps: ${um(placed)} µm² of cells on the finished die.` : '')));
+  }
 
   // timing: our unit-delay critical path against OpenSTA's after routing
   const t = src.timing, sta = sum.sta;

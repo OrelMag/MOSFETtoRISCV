@@ -44,10 +44,13 @@ export SYNTH_MINIMUM_KEEP_SIZE = 2000
 `);
 
 // Our side. Blocks: the top level's instances holding at least 1 % of the NANDs (the flow's cell names start
-// with the instance name); the rest is "other".
+// with the instance name); the rest is "other". Each with its Verilog module: Yosys reports the area of every
+// module it kept whole (synth_stat.txt), which is the fair comparison (a flattened module's cells lose its name).
 const nands = stats(top).nands;
+const topText = /^module mosfet_riscv\b[\s\S]*?^endmodule/m.exec(v.verilog)![0];
+const moduleOf = new Map([...topText.matchAll(/^ {2}(\S+) (\S+) \(/gm)].map((m) => [m[2], m[1].replace(/^\\/, '')]));
 const blocks = netlistOf(top)!.instances
-  .map((i) => ({ name: i.name, label: i.label ?? i.name, nands: stats(i.def).nands }))
+  .map((i) => ({ name: i.name, label: i.label ?? i.name, nands: stats(i.def).nands, module: moduleOf.get(i.name) ?? null }))
   .filter((b) => b.nands >= nands / 100)
   .sort((a, b) => b.nands - a.nands);
 // outputs: a path into a port counts, as the flow's zero output delay counts it

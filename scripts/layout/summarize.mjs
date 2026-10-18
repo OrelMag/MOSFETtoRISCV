@@ -81,11 +81,16 @@ function finishTiming() {
   };
 }
 
+// Yosys's area of every module it kept whole (submodules included), from the synthesis statistics
+const synthArea = {};
+const stat = walk(join(dir, 'reports')).find((f) => f.endsWith('synth_stat.txt'));
+if (stat) for (const m of readFileSync(stat, 'utf8').matchAll(/Chip area for module '\\?([^']+)': ([\d.]+)/g)) synthArea[m[1]] = +m[2];
+
 const pick = (re) => Object.fromEntries(Object.entries(metrics).filter(([k, v]) => re.test(k) && typeof v !== 'object'));
 const summary = {
   generated: new Date().toISOString(), platform: 'sky130hd',
   source, run: read(join(dir, 'run.json')), tiles: read(join(dir, 'tiles/tiles.json')),
-  die, core, kinds: kindCount, blocks: BLOCKS, blockArea, sta: finishTiming(),
+  die, core, kinds: kindCount, blocks: BLOCKS, blockArea, synthArea, sta: finishTiming(),
   masters: Object.entries(masters).filter(([m]) => kindOf(m) !== 'filler').sort((a, b) => b[1] - a[1]).slice(0, 30),
   metrics: pick(/(instance__(count|area)|utilization|timing__setup__(ws|tns)|clock__skew|wirelength|power__total|die__area|core__area|drc__errors|antenna__violating)/i),
 };

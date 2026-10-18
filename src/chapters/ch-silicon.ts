@@ -201,7 +201,7 @@ export const chSilicon: Chapter = {
         outside its ports as SRAM macros would be (checked the same way, on a bench with its ROM and data memory). Under each layout, our own estimates of the same design
         stand beside the flow's: the area if every NAND equivalent were a NAND2 cell, against what the cells took, block by block; our critical path in NAND delays, against
         OpenSTA's in nanoseconds after routing. Their ratio says what one of our unit delays is worth in a real 130 nm layout.</p>
-        <div class="try">Switch to the system core and find the block where sky130 beats our NAND count by the widest margin. Which library cell does it?</div>`,
+        <div class="try">Switch to the system core: find the block sky130 builds far smaller than our NAND count, and the one it builds larger. Then compare where the two critical paths run.</div>`,
       widget: chipLayoutWidget,
     },
     {
