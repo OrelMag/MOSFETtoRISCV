@@ -149,6 +149,11 @@ instruction at a time (`tests/verify/spike.ts`, `scripts/spike-oracle.ts`).
   runs seeds 1–1000 per variant on every push touching `src/riscv/`, `fpref.ts` or the oracle, and a new
   range of 4000 every night. Locally (no Spike on Windows), `--self` checks the plumbing against a
   Spike-format log of our own ISS, as `tests/spike-oracle.test.ts` does in `npm test`.
+- **Result.** Seeds 1–1000 on all six variants (Spike revision `5a76066`): 6000 programs, 1 236 958
+  instructions compared, no difference. The only gaps were the two legal ones above, found on the first run:
+  every system program stopped at its first `mret` until the zero writes to `mstatush` / `tcontrol` were
+  allowed. Our golden model has no `mstatush`; the specification makes it part of RV32's machine mode
+  (read-only zero would do), so adding it to the model and the system CPU is a small open item.
 
 ## Coverage
 
