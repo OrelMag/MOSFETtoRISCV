@@ -257,7 +257,7 @@ export const CASES1: Record<string, LevelCase> = {
   k_lanes: {
     problem: 'One instruction, four results. A lane is the single-cycle core\'s execute step for one thread: the operand-b mux (its own rs2 or the shared immediate) and an ALU. All four lanes take the same <code>alu</code> operation, <code>bimm</code> and immediate from the one control unit; only their operands differ. <b>nz</b> has a bit per lane, rs1 ≠ 0: the predicate <code>split</code> will test, computed by every lane on its own register.',
     without: 'One result per instruction: a loop over n elements runs n iterations, where four lanes run n / 4.',
-    cost: '4 596 NANDs, depth 55: per lane a 1 055-NAND ripple ALU, a 49-NAND bus mux and a 16-input OR for nz (45), 1 149 in all. Nothing inside the block is shared; the sharing is around it, where one control unit, one immediate generator and one PC feed all four. Kogge–Stone ALUs (1 273 NANDs each) would make the four lanes 5 468 NANDs.',
+    cost: '4 596 NANDs, depth 55, the ALU\'s y (its depth 64 is the zero flag, unused here: nz tests rs1): per lane a 1 055-NAND ripple ALU, a 49-NAND bus mux and a 16-input OR for nz (45), 1 149 in all. Nothing inside the block is shared; the sharing is around it, where one control unit, one immediate generator and one PC feed all four. Kogge–Stone ALUs (1 273 NANDs each) would make the four lanes 5 468 NANDs.',
     alts: [{ name: 'Four lanes with Kogge–Stone ALUs', nand: 5468, note: '4 × (1 273 + 49 + 45): the measured rv16_alu16ks, bus mux and OR tree' }, { name: 'One lane\'s ripple ALU', lib: 'rv16_alu16' }],
   },
   k_vrf: {

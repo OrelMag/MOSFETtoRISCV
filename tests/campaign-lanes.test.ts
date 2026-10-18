@@ -72,6 +72,19 @@ describe('the lane bench', () => {
   });
 });
 
+describe('the lane block (k_lanes)', () => {
+  it('is as deep as one ALU\'s y: the ALU\'s 64 is its zero flag, which the lanes leave unused (nz reads rs1)', async () => {
+    const { LANES16 } = await import('../src/lib/rv16/lanes16');
+    const { RV16_ALU16 } = await import('../src/lib/rv16/logic');
+    const { keepPorts } = await import('../src/sim/dead');
+    const { logicDepth } = await import('../src/sim/stats');
+    expect(logicDepth(RV16_ALU16)).toBe(64);
+    expect(logicDepth(keepPorts(RV16_ALU16, ['a', 'b', 'ctl', 'zero']))).toBe(64);
+    expect(logicDepth(keepPorts(RV16_ALU16, ['a', 'b', 'ctl', 'y']))).toBe(55);
+    expect(logicDepth(LANES16)).toBe(55);
+  });
+});
+
 describe('the models behind the build levels', () => {
   it('the leader is the lowest active lane', () => {
     expect([0b0001, 0b0110, 0b1100, 0b1000, 0].map((m) => leaderOf(m))).toEqual([
