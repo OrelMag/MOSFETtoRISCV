@@ -817,9 +817,11 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  instruction fields, adder comparison, the gate-level RV32I pipeline run a few cycles); the codex page
                  searches titles and summaries, filters by kind; a locked entry shows its summary
   glossary.ts    codex terms in prose (titles, parenthetical names, aliases, plurals; acronyms as written)
-  walk.ts        walkOf(node): the reference answer as steps (authored in walks.ts / walks1.ts / walks2.ts, else
-                 generated in dataflow order, like parts grouped), partialDoc(walk, k), stepMetrics (cost, depth,
-                 rows right per output)
+  walk.ts        walkOf(node): the reference answer as steps (authored in walks.ts / walks1–7.ts for every build and core
+                 level, a test checks it; else generated in dataflow order, like parts grouped), partialDoc(walk, k),
+                 stepMetrics (cost, depth, rows right per output); a step's `ask` (one per walk) is answered before its
+                 parts show (predict first). buildalong.ts: Build along's check (parts by kind and place, nets by the
+                 ports they join) and snap; nudges.ts: the first rung of the hint ladder (tipsOf: nudge, then tips)
   corecheck.ts   the CPU core bench (coreCheck carries its CoreSpec: coreSpecOf): instr / drdata served
                  combinationally, register-write and store traces
                  compared with iss16 in order, cycle budget, irq from stores to 0xFFF9, 32 BitSim lanes (GateSim

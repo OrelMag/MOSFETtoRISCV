@@ -468,8 +468,16 @@ challenges stay open. Added since:
   chapters it builds on and closes with a recap step (what to keep, three Check yourself questions, its codex entries
   and campaign levels); parts named in the text light on the stage (a click frames them); a highlighted scene says what
   is lit; every wrong quiz option says why; reach challenges have hint ladders; try boxes tick themselves; Deeper folds;
-  step dots and the chapter menu count checks solved. Next in the same pass: the codex (search, links both ways,
-  figures, Check yourself) and the walkthrough (authored walks, predict first, build along)
+  step dots and the chapter menu count checks solved
+- ✅ The codex as a guide (merge 3): search over titles and summaries and a kind filter; under each summary where to
+  learn it (chapters, levels), what it builds on and leads to (from the level graph) and related entries both ways;
+  previous / next; figures from the site's widgets for entries without a part (the gate-level pipeline run a few cycles,
+  the number explorer, instruction fields); two Check yourself questions per entry and a generated drill for the number
+  entries; locked entries show their summary. Every quiz shows its options in a fixed shuffle per question
+- ✅ The walkthrough as a guide (merge 4): one hint ladder (a nudge, the tips, the walk from step 1, the solution behind a
+  confirm); every build and core level has an authored walk, each with one question to predict before the step that holds
+  its trick; Build along: the step's parts as outlines, snapped into place, Check step compares the learner's wiring with
+  the reference (parts by kind and place, nets by the ports they join)
 - ✅ Progress tracking (visited steps, solved challenges, in local storage) and "Reset progress"; the chapters
   stay open (soft locks exist only in the campaign, see `docs/CAMPAIGN.md`)
 - ✅ Reduced motion: CSS animations and transitions off, slow-motion fronts drawn as plain changes
