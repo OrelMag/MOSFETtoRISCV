@@ -13,6 +13,7 @@ import type { IsaDoc } from '../isa/table';
 import { instPort, type ExitDir, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
 import type { CpuDoc } from './cpu';
+import type { ReaderRef } from './cardparts';
 import type { ScreenRef } from './ioparts';
 
 export type { Vec, ExitDir };
@@ -181,6 +182,11 @@ export type PartRef =
    * rising clk edge), 'out' records the words written (data at a rising clk edge with we = 1). Zero cost.
    */
   | { puzzle: 'in' | 'out'; width: number }
+  /**
+   * A card reader (editor/cardparts.ts, cards/reader.ts): a deck of punched cards held in the document like a ROM's program;
+   * next = 1 at a rising clk edge takes the card (word mode) or column (column mode) on data, ready says one waits. Zero cost.
+   */
+  | { reader: ReaderRef }
   /** Read-only memory: 2^k words of w bits. 'rv32' addresses bytes like a PC (addr = 4·word). */
   | { rom: { k: number; w: 8 | 16 | 32; addr: 'word' | 'rv32'; lang: 'asm' | 'hex' | 'rv16' | 'cpu4' | 'isa' | '6502'; src: string;
       /** lang 'isa': the instruction set, a copy of the workspace's table (so the ROM builds on its own, in a share link too). */

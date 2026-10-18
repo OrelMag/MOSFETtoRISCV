@@ -232,14 +232,18 @@ src/lib/       the component library (registered in `registry` via define())
                  AXI_IO_PORT (keyboard + timer), KEY_QUEUE (the keyboard: an external seq leaf, filled through Sim.poke, the
                  sandbox keyboard part's pins), AXI_PIXEL (a store sets one pixel of a screen part), axiFlashWindow(k) (the
                  flash's page timing in gates over a ROM part: addr out, data in), bundled(def, groups) (a link as a request
-                 bus REQ_BITS and a response bus RSP_BITS); BUS_PARTS registered
+                 bus REQ_BITS and a response bus RSP_BITS); BUS_PARTS registered; AXI_CARDS (a card reader's slave: +0 status
+                 ready / empty, +4 the card's word, the read takes it: next from a flip-flop one cycle later)
   soc.ts         busComputer(program, flashImage, { imemK, ramK, ramWait, dram, screen, keys }) (systemCpu({ bus }) and
                  DMA_ENGINE as masters; RAM at 0, flash 0x1000_0000, DRAM 0x2…, DMA 0x4…, screen 0x5…, keyboard 0x6…
                  (instance kbd); DMA irq → CPU irq; socDevices(o): BusModel's devices), chapterComputer / CHAPTER_COMPUTER
                  (bus/programs.ts: a boot ROM that DMA-copies a program from flash to RAM 0x400 and jumps), SYSTEM_COMPUTER
                  (every slave; SYSTEM_SOURCE: keys to the console, a line in DRAM, blocks on the screen); busCore(imemK) (the
                  bus CPU with its boot ROM outside: romData in), SANDBOX_PARTS (bundled parts on SANDBOX_MAP, chapter 35's map
-                 with the I/O port at 0x6…) for Examples ▸ System on a bus
+                 with the I/O port at 0x6…) for Examples ▸ System on a bus; { cards: Deck, cardFeed }: AXI_CARDS at 0x7… (instance
+                 cardport) and the deck's reader leaf (cards/reader.ts deckReader, instance cards); asmDeck(name, src) (a program as
+                 object cards, each printed with its source line), CARD_DECK, cardComputer(deck, feed) / CARD_COMPUTER (the card boot
+                 ROM, no flash: chapter 35's "Booting from cards")
   relays.ts      prologue P1's relays at switch level: relay(n) (1–6 poles, ids relay, relay2 …), RELAY_NOT / NAND / XOR,
                  RELAY_FA (the carry through contacts on two rails, ci / nci: a contact cannot invert), relayAdder(n) (one
                  relay step for any width), RELAY_LATCH (self-holding), RELAY_BUZZER (a coil through its own break contact);
@@ -377,6 +381,12 @@ src/dram/      timing.ts: DDR4-3200 in our cycles (CLOCK_NS = the single-cycle C
 src/bus/       model.ts: BusMemory / BusModel (the computer's map for the golden model: RAM, flash, DMA registers whose
                copy is instant, and with BusDevices a DRAM, a screen, a key queue; ISS({ bus }) fetches beyond its ROM and loads / stores through it); programs.ts: chapter
                35's boot ROM and payload
+               Card reader: BusDevices.cards { items, feed } → CardModel, the one time-dependent device: whoever steps the ISS sets
+               BusModel.now (rising edges so far, at the retiring edge); a read sees the reader CARD_LAG (2) edges earlier and a DATA
+               read takes the card 2 edges after that, so lock-step stays exact at any feed. programs.ts CARD_BOOT_SOURCE (poll
+               STATUS, copy the deck to 0x400, jump: the 1401's Load key), CARD_PAYLOAD_SOURCE, CARD_BASE, CARD_FEED (8 edges);
+               cardboot.ts cardBootTime(items, feed): the boot's cycles from the golden model (boot ROM: 1 cycle, a load / store 2),
+               pinned against the gates by tests/buscards.test.ts
 src/flash/     model.ts: FlashDevice (program 1 → 0 once per erase, block erase, FLASH_TIMES 64 / 512 / 4096 cycles, wear-out
                after `endurance` erases, factory bad blocks) and Ftl (page map, writes out of place, greedy garbage collection
                when free blocks are down to the reserve, dynamic wear levelling, bad blocks skipped, write amplification);
@@ -478,6 +488,18 @@ src/lib/m6502/ the chip at transistor level (lib/nmos.ts: DEP, NINV, nnor(n), nn
                program and replays the cycles since (InsideSeed.sim)
 src/isa4/      the 4-bit CPU's ISA: isa4.ts (the 4004's opcode map in 16-bit words: decode4 / disasm4 / fields4; words the
                table does not name run as NOP), asm4.ts, iss4.ts (golden model; halts on a JUN to itself), programs4.ts
+src/cards/      punched cards (DOM-free): hollerith.ts (the IBM 029 code: punchOf / charOf, a column = 12-bit mask, bit 0 row 12
+               … bit 11 row 9), card.ts (Card: 80 column masks + print; Deck; textCard, objectCard: a word in row 9 of columns
+               1–32, its source and hex printed, a sequence number in 73–80; wordOf, seqOf, programDeck, sortDeck, dropDeck,
+               deckToJson / deckFromJson: .deck.json), reader.ts (the card reader: an external leaf, word or column mode, feed
+               delay; cardReader / deckReader memoized by what it reads, readerLeaves, readerProgress, loadedReader for
+               Sim.poke), program.ts (programCards: a program as object cards, each word with its source line, a
+               pseudo-instruction's later words their disassembly; deckProgram: a deck as hex or .word lines with each card's
+               print a comment; widerCards, deckBits: shared by the sandbox's ROMs and the chapters' CPU panel);
+               widgets/carddraw.ts draws a card to scale (cardView, click to punch); card.ts also has the card sorter
+               (sorterPass: a pass on one column into pockets 0–9 + rejects, sorterColumns, sortOnSorter: the radix sort);
+               prologue P3 is chapters/ch-cards.ts with widgets/cards.ts (loomWidget, censusWidget, cardEditorWidget,
+               deckWidget with the sorter, readerPanel: the card at the reader's station on a scene)
 src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui/pages/sandbox.ts, its own chunk;
                #/sandbox/s/<payload> opens a share link: a banner, imported only on the user's click).
                DOM-free (tested in Node):
@@ -503,6 +525,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  exact to 53 bits only); pixels: a pure view of a px bus; optional vsync; X writes ignored and counted);
                  most significant field first; visual settings in the def but not its id (a resize carries the state);
                  ioNodes / ioState find them at any depth; colorRgb, pixelsOf, paintScreen (dots, grid, X pattern)
+  cardparts.ts   the card reader part ({ reader: ReaderRef }: mode, bits, feed, name, cards as the deck file's holes with
+                 trailing blank columns dropped + print): readerRefDef (cards/reader.ts deckReader), sanitizeReaderRef,
+                 deckRef / refDeck, sampleReaderRef (the palette's HELLO deck), readerRefOf (remix: a reader leaf as a part)
+  deckio.ts      a ROM's program as a deck (romDeck: object cards, w bits) and back (romWithDeck: hex words with the cards'
+                 sources as comments, the ROM grown to hold them; refused when a card's word is wider than the ROM)
   face.ts        a packaged chip's appearance (ChipDoc.face: box size, pins by id on any side at any offset, displays by
                  part path, at / scale): resolveFace (automatic size and pins for what is left out, the box grown to hold
                  everything), applyFace (as PortDef.side, symbol w / h / portPos, keepOut: the label avoids displays),
@@ -548,6 +575,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  System on a bus (examplebus.ts, Sheet): SANDBOX_PARTS, a boot ROM part, the flash's contents a word-addressed
                  ROM part (bus/programs.ts SANDBOX_SOURCE), screen, keyboard and timer parts, every connection a pointer pair;
                  detectCpu leaves a sysbuscore part alone (its memory and interrupts are behind the bus: no drawer)
+                 Boot from cards (examplecards.ts, Sheet): rv32i_core, a boot ROM part (CARDS_LOADER_SOURCE) below pc bit 12, a
+                 two-port 64-word RAM above it (port 0 data, port 1 fetch), the card reader part at 0xC000_0000 (STATUS +0, DATA +4:
+                 a load from DATA raises next) holding asmCards' deck of CARDS_PAYLOAD_SOURCE, a console at 0x8000_0000, a halt
+                 part on `j .`; the CPU drawer's golden model sits out (cardparts.ts CARDS_NO_GOLDEN, simHasCardReader). The reader leaf
+                 is a `seq` behaviour (outputs from its state alone), so the cycle engine runs the loop through amoadd's memWData
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run;
@@ -653,6 +685,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  Screens drawer: every console, screen and switch bank in the hierarchy by path, live; opens by itself
                  for a nested console or screen (unless closed for that chip), behind a drawer already shown
                  (dockPane's `front` false); its console scrolls natively and follows only at the bottom
+  cardui.ts      plugin: the card reader's property section (mode, bits, feed; the deck listed, the selected card drawn by
+                 widgets/carddraw.ts and punched by hand, the read station followed live; load / save / punch from a ROM /
+                 type a source card / drop / sort / delete / clear, each one undo step); deck files (pickDeck, saveDeck,
+                 loadDeckIntoRom, saveRomDeck: memui.ts's ROM section and program editor), dropDeckFile (fileui.ts: a
+                 .deck.json on the canvas goes into the selected ROM or reader, else a new reader)
   challengeui.ts "Challenges" list drawer (solved ticks via settings), the strip under the canvas while a
                  challenge chip is open (brief, Check, Show answer, Do it for me), purist palette while restricted;
                  a failing Check opens the test player on the first failing case; a core level lists its

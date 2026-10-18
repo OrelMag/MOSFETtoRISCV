@@ -626,20 +626,37 @@ with punch cards.
   not grow (the view is its own 19 kB chunk; the chapter's computed prose and lib/hall.ts add 7 kB to the main one)
 
 **Punch cards**
-- ⏳ History step in the journey: Jacquard's loom (1804), Hollerith's census cards (1890), the IBM 80-column
-  card (1928) and its Hollerith code
-- ⏳ A card editor: 80 columns × 12 rows, click to punch, or type and it punches the Hollerith code; a binary
-  mode for machine words (one word per column or per row); a deck of cards, reorderable, exportable
+- ✅ History step in the journey: Jacquard's loom (1804), Hollerith's census cards (1890), the IBM 80-column
+  card (1928) and its Hollerith code. Prologue P3 (chapters/ch-cards.ts, widgets/cards.ts): a chain of cards weaving
+  a pattern, Hollerith's pin press counting a census on dials (a combination through relay contacts), the card
+  editor, a program as an object deck with the card sorter's radix sort, the card reader on a scene
+- ✅ A card editor: 80 columns × 12 rows, click to punch, or type and it punches the Hollerith code; a binary
+  mode for machine words (one word per column or per row); a deck of cards, reorderable, exportable. cards/ (the
+  IBM 029 code, source and object cards: a word in row 9, a sequence number in 73–80; deck files .deck.json, the
+  sorter), widgets/carddraw.ts (a to-scale card); P3's editor and the sandbox reader's properties. Machine words
+  go one per card along row 9 (the mockup's choice); a deck is reordered by dropping and sorting, not by hand
 - ⏳ A card reader part (sandbox and campaign) feeding a ROM or a word stream (like the keyboard part), and the
   program input of the relay / tube machine
+  - Sandbox part done (editor/cardparts.ts, cardui.ts): the deck in the document, word or column mode, feed delay;
+    properties punch cards by hand, type source cards, load / save / drop / sort decks, punch one from a ROM, follow
+    the read station live. Still to do: the campaign's reader and the relay / tube machine's program input
 - ⏳ In the campaign: a Hollerith-code drill and a level where the program arrives on cards
 - ⏳ Cards for the RISC-V CPUs: any program (RV32 asm / hex in the ROM editor and the CPU panel, RV16 in the
   campaign) exported as a deck, one instruction per card (its word punched in binary, the source line printed in
   Hollerith along the top, a sequence number in columns 73–80 as on real decks so a dropped deck can be sorted),
   and a deck loaded back into a ROM; drop a deck file on the canvas to load it
+  - Done for the sandbox's ROMs (RV32 asm / hex, RV16, 4-bit CPU, custom ISAs: Save as deck / Load deck in the
+    ROM properties and program editor, a .deck.json dropped on the canvas) and the chapters' CPU panel (cards/program.ts).
+    Still to do: the campaign's RV16 programs
 - ⏳ A card-reader boot loader: a small sandbox example where the CPU starts from a boot ROM that reads cards from
   the reader part, word by word, into RAM and jumps to it, as IBM's machines loaded from cards (the 1401's Load
   key); the CPU drawer follows the loaded program like a ROM program, the golden model starting after the load
+  - ✅ On chapter 35's bus computer: step "Booting from cards" (a card-reader slave AXI_CARDS at 0x7000_0000, the
+    reader leaf holding the deck, a 13-instruction boot ROM that copies the deck to 0x400 and jumps there; the golden
+    model counts edges for the reader, so the gate-level computer is co-simulated in lock-step at any feed delay;
+    tests/buscards.test.ts)
+  - ✅ Examples ▸ Boot from cards (editor/examplecards.ts): rv32i_core, a boot ROM part, a two-port RAM, the reader part at
+    0xC000_0000 and a console; Drop / Sort in the reader's panel; the CPU drawer's golden model sits out (tests/editor-cardboot.test.ts)
 
 ### Phase 15 — Journey and campaign track: GPU ✅
 The same bricks arranged for throughput instead of latency: one instruction stream, many lanes, latency hidden by
@@ -785,7 +802,8 @@ on its own.
 - ✅ A system on one bus with a memory map: the system CPU (instructions fetched over the bus beyond a boot ROM), DMA,
   RAM, flash; it boots from flash into RAM by DMA (lib/soc.ts, lock-step with the golden model). ✅ the DRAM controller
   as a slave (a data mask on the device: a store writes its bytes without a read), a screen and a keyboard on the bus
-  (chapter 35's sixth step, on the cycle engine). ✅ the sandbox example (Examples ▸ System on a bus: boot ROM and flash
+  (chapter 35's last step, on the cycle engine). ✅ a boot from punched cards (a card-reader slave, chapter 35's
+  sixth step; Phase 14). ✅ the sandbox example (Examples ▸ System on a bus: boot ROM and flash
   contents as ROM parts, a screen, keyboard and timer parts behind the bus; the cycle engine) and a timer part (palette,
   workbench family)
 

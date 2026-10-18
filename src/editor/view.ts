@@ -6,6 +6,7 @@
 
 import { symbolGeom, type Vec } from '../sim/geometry';
 import type { PuzzleInState, PuzzleOutState } from './puzzleparts';
+import { type CardReaderState, readerProgress } from '../cards/reader';
 import { B1, BX, BZ, type Bit, type ComponentDef, netlistOf } from '../sim/types';
 import { formatBits, pack, type Radix } from '../sim/values';
 import { s } from '../ui/dom';
@@ -456,6 +457,13 @@ export class EditorView {
       const text = s('text', { class: 'ed-pz-text', x: geo.w / 2, y: geo.h - 1.5, 'text-anchor': 'middle' }, '');
       g.append(text);
       disp = { kind: 'puzzle', width: 0, segs: [], shown: '', text };
+    } else if ('reader' in p.ref) {
+      // a card reader: the box, and a line saying which card is at the read station
+      g.append(drawSymbol(def, p.flip));
+      // low on the side of next, which has no other port below it (clk sits mid-bottom, empty right)
+      const text = s('text', { class: 'ed-cr-text', x: p.flip ? geo.w - 0.5 : 0.5, y: geo.h - 2, 'text-anchor': p.flip ? 'end' : 'start' }, '');
+      g.append(text);
+      disp = { kind: 'reader', width: 0, segs: [], shown: '', text };
     }
     else g.append(drawSymbol(def, p.flip));
     const faces = drawFace(g, def, !!p.flip);
@@ -643,6 +651,7 @@ export class EditorView {
       if (e.disp?.face) e.disp.face.paint(v?.sim ?? null, v?.sim?.design.root.children?.get(id) ?? null);
       else if (e.disp?.kind === 'key') this.paintKey(e.disp, v?.endBits(`p:${id}.q`) ?? null);
       else if (e.disp?.kind === 'puzzle') this.paintPuzzle(e.disp, e.doc.ref, v?.sim ?? null, v?.sim?.design.root.children?.get(id)?.leafIndex);
+      else if (e.disp?.kind === 'reader') this.paintReader(e.disp, e.doc.ref, v?.sim ?? null, v?.sim?.design.root.children?.get(id)?.leafIndex);
       else if (e.disp?.kind === 'keyboard') this.paintKeyboard(e.disp, v?.endBits(`p:${id}.code`) ?? null, v?.endBits(`p:${id}.ready`) ?? null, v?.keyboardQueue(id) ?? null);
       else if (e.disp) paintDisplay(e.disp, v?.endBits(`p:${id}.a`) ?? null, this.radix);
       if (e.faces) paintFace(e.faces, v?.sim ?? null, v?.sim?.design.root.children?.get(id) ?? null, this.radix);
@@ -684,6 +693,18 @@ export class EditorView {
       const left = st.q.length - (st.i ?? 0);
       t = left > 0 ? `next ${st.q[st.i ?? 0]} · ${left} left` : st.q.length ? 'all taken' : 'empty';
     } else if (st && st.out) t = st.out.length ? `got ${st.out.slice(-3).map((x) => (x < 0 ? 'X' : String(x))).join(' ')}${st.out.length > 3 ? ' …' : ''}` : 'nothing yet';
+    if (t === d.shown) return;
+    d.shown = t;
+    d.text!.textContent = t;
+  }
+
+  /** A card reader's line: the card at the read station (and column), or how many cards it holds when not simulated. */
+  private paintReader(d: DisplayEls, ref: PartDoc['ref'], sim: Sim | null, li: number | undefined): void {
+    const st = sim && li !== undefined ? sim.leafState(li) as CardReaderState | undefined : undefined;
+    const pr = st?.q ? readerProgress(st) : null;
+    const n = 'reader' in ref ? ref.reader.cards.length : 0;
+    const t = !pr ? `${n} card${n === 1 ? '' : 's'}` : pr.at === null ? 'empty'
+      : pr.feeding ? `feeding ${pr.at + 1}/${pr.cards}` : `card ${pr.at + 1}/${pr.cards}${st!.per > 1 ? ` col ${pr.column + 1}` : ''}`;
     if (t === d.shown) return;
     d.shown = t;
     d.text!.textContent = t;

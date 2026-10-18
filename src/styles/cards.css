@@ -1,0 +1,57 @@
+/* ---------- Punched cards (src/widgets/carddraw.ts and its users: prologue P3, the card reader, deck views) ---------- */
+.pcard { display: block; width: 100%; height: auto; max-width: 760px; }
+.pcard-body { fill: var(--pcard); stroke: var(--pcard-edge); stroke-width: 1.5; }
+.pcard-digits text { font: 8px var(--font-mono); text-anchor: middle; fill: var(--pcard-ink); opacity: 0.55; }
+.pcard-colno { font: 6px var(--font-mono); text-anchor: middle; fill: var(--pcard-ink); opacity: 0.5; }
+.pcard-print { font: 10.5px var(--font-mono); fill: var(--pcard-ink); white-space: pre; }
+.pcard-holes rect { fill: transparent; }
+.pcard-holes rect.on { fill: var(--pcard-hole); }
+.pcard-hit rect { fill: transparent; cursor: pointer; }
+.pcard-hit rect:hover { fill: var(--pcard-ink); fill-opacity: 0.18; }
+.pcard-marks rect.read { fill: var(--accent); fill-opacity: 0.22; }
+.pcard-marks rect.word { fill: var(--brass); fill-opacity: 0.16; }
+.pcard.plain .pcard-print { font-size: 13px; }
+
+/* prologue P3's widgets (src/widgets/cards.ts) */
+.cards-w .panel { min-width: 0; }
+.cards-ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cards-ctl select { font: inherit; padding: 3px 6px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); }
+.loom { display: block; width: 100%; max-width: 520px; height: auto; }
+.loom-card { fill: var(--pcard); stroke: var(--pcard-edge); }
+.loom-card.at { stroke: var(--brass); stroke-width: 2.5; }
+.loom-hole { fill: var(--pcard); stroke: var(--pcard-ink); stroke-opacity: 0.4; cursor: pointer; }
+.loom-hole.on { fill: var(--pcard-hole); stroke: none; }
+.loom-up { fill: var(--brass); }
+.loom-dn { fill: var(--accent); fill-opacity: 0.45; }
+.loom-cap, .census-t, .census-o { font: 11px var(--font-sans, system-ui); fill: var(--text-2); }
+.census-card { display: block; width: 100%; max-width: 400px; height: auto; }
+.census-body { fill: var(--pcard); stroke: var(--pcard-edge); stroke-width: 1.5; }
+.census-card .census-t, .census-card .census-o { fill: var(--pcard-ink); }
+.census-hole { fill: none; stroke: var(--pcard-ink); stroke-opacity: 0.45; }
+.census-hole.on { fill: var(--pcard-hole); stroke: none; }
+.census-dials { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; margin: 10px 0; }
+.census-dial { display: grid; grid-template-columns: 40px 1fr; grid-template-rows: auto auto; column-gap: 6px; align-items: center; font-size: 12px; color: var(--text-2); }
+.census-dial svg { grid-row: span 2; }
+.census-dial b { font: 600 14px var(--font-mono); color: var(--text); }
+.census-dial .face { fill: var(--surface); stroke: var(--border-strong); }
+.census-dial .hand { stroke: var(--text); stroke-width: 2; stroke-linecap: round; }
+.census-dial.lit .face { stroke: var(--brass); stroke-width: 2.5; }
+.census-dial.relay { grid-column: span 2; }
+.card-type { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.card-text { flex: 1; min-width: 0; max-width: 560px; font: 13px var(--font-mono); padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); text-transform: uppercase; }
+.card-chart { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 4px; }
+.card-chart button { white-space: nowrap; display: flex; gap: 6px; align-items: baseline; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text-2); font: 11px var(--font-mono); cursor: pointer; }
+.card-chart button b { color: var(--text); font-size: 13px; min-width: 1ch; }
+.card-chart button:hover { border-color: var(--brass); }
+.deck-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.deck-list { display: flex; flex-direction: column; gap: 3px; max-height: 340px; overflow: auto; font: 12px var(--font-mono); }
+.deck-list button { flex: none; text-align: left; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); border-radius: 6px; padding: 3px 8px; font: inherit; cursor: pointer; display: grid; grid-template-columns: 6.5em 6.5em 1fr; gap: 8px; white-space: nowrap; overflow: hidden; }
+.deck-list button span:first-child { color: var(--muted); }
+.deck-list button span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.deck-list button[aria-selected="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.sorter .pockets { display: flex; gap: 6px; align-items: flex-end; margin-top: 6px; }
+.sorter .pocket { display: flex; flex-direction: column; align-items: center; gap: 2px; font: 11px var(--font-mono); color: var(--text-2); min-width: 22px; }
+.sorter .pocket .bar { width: 18px; background: var(--brass); border-radius: 3px 3px 0 0; min-height: 1px; }
+.sorter .pocket b { color: var(--text); }
+.card-reader-panel { width: min(380px, calc(100vw - 48px)); }
+.card-reader-panel p { margin: 6px 0 0; }

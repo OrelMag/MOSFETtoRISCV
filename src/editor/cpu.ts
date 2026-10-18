@@ -17,6 +17,7 @@
 
 import { type RamState, ramLeafState, ramWords } from '../lib/bigmem';
 import { PUZZLE_NO_GOLDEN, simHasPuzzlePorts } from './puzzleparts';
+import { CARDS_NO_GOLDEN, simHasCardReader } from './cardparts';
 import { consoleAppend, consoleInit, type ConsoleState, consoleText, ioNodes, ioState, type SwitchState } from './ioparts';
 import { cacheLines } from '../riscv/cosim';
 import { ABI, FABI } from '../riscv/isa';
@@ -562,6 +563,7 @@ export class CpuMonitor {
     this.problem = !d ? 'no program ROM (a ROM part with byte addresses and 32-bit words)'
       : !prog ? `the program in ROM '${d.rom}' does not build`
       : simHasPuzzlePorts(this.es.sim) ? PUZZLE_NO_GOLDEN
+      : simHasCardReader(this.es.sim) ? CARDS_NO_GOLDEN
       : null;
     if (!d || !prog || this.problem) { this.iss = null; return; }
     // The ISS's memory wraps like the hardware's: as many words as the data memory part holds.

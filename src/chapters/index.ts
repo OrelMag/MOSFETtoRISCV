@@ -23,12 +23,13 @@ import { chFlash } from './ch-flash';
 import { chBus } from './ch-bus';
 import { chRelays } from './ch-relays';
 import { chTubes } from './ch-tubes';
+import { chCards } from './ch-cards';
 import type { Chapter, FutureChapter } from './types';
 
 export const chapters: Chapter[] = [
   chMap,
   // the prologue: before the transistor, labelled P1 …
-  chRelays, chTubes,
+  chRelays, chTubes, chCards,
   chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
   chAlu, chRegfile, chIsa, chSingleCycle, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chMulticycle, chFloat, chMulticore, chSilicon, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
   chDram, chMemCtrl, chFlash, chBus,

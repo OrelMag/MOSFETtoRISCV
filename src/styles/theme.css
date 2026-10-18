@@ -35,6 +35,11 @@
   --brass-soft: #f8f1dc;
   /* a tube's heater and beam (prologue P2) */
   --tube-glow: #e8730c;
+  /* a punched card (prologue P3, the card reader): manila, its ink, the holes */
+  --pcard: #efe0b8;
+  --pcard-ink: #6d5a33;
+  --pcard-hole: #141824;
+  --pcard-edge: #cdb98a;
   --warn-soft: #fff4e0;
   /* an uncaught error (ui/errors.ts banner) */
   --bad: #d92d20;
@@ -113,6 +118,10 @@
     --brass: #d9b44a;
     --brass-soft: #262010;
     --tube-glow: #ff9a3a;
+    --pcard: #cdbd94;
+    --pcard-ink: #4d3f22;
+    --pcard-hole: #0a0c12;
+    --pcard-edge: #a8976b;
     --warn-soft: #2d2210;
     /* an uncaught error (ui/errors.ts banner) */
     --bad: #f87171;
@@ -171,6 +180,10 @@
   --brass: #d9b44a;
   --brass-soft: #262010;
   --tube-glow: #ff9a3a;
+  --pcard: #cdbd94;
+  --pcard-ink: #4d3f22;
+  --pcard-hole: #0a0c12;
+  --pcard-edge: #a8976b;
   --warn-soft: #2d2210;
   /* an uncaught error (ui/errors.ts banner) */
   --bad: #f87171;

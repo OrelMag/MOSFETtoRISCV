@@ -13,6 +13,7 @@ import type { DisplayKind, PartRef } from './model';
 import { ramInit, ramWithInit, romImage } from './memory';
 import { PORT_MAX_K, PORT_MAX_N, portMemory } from '../lib/portmem';
 import { ioRefDef } from './ioparts';
+import { readerRefDef } from './cardparts';
 import { PUZZLE_MAX_WIDTH, puzzleIn, puzzleOut } from './puzzleparts';
 import { ROM_LEAF_K, romLevels, wordsHash } from '../lib/bigmem';
 
@@ -74,6 +75,7 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
     if (ref.puzzle === 'out') return puzzleOut(ref.width);
     return { error: 'puzzle port: in or out' };
   }
+  if ('reader' in ref) return readerRefDef(ref.reader);
   const io = ioRefDef(ref);
   if (io) return io;
   if ('ram' in ref) {
