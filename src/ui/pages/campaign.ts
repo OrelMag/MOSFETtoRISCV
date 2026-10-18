@@ -31,6 +31,7 @@ import { loadWorkspace, saveWorkspace } from '../../editor/store';
 import { resolveComponent } from '../../lib/resolve';
 import { h, icon } from '../dom';
 import type { Page } from './chapter';
+import { tipsOf } from '../../campaign/nudges';
 
 const html = (tag: 'div' | 'p' | 'span', cls: string, content: string) => {
   const el = h(tag, { class: cls });
@@ -255,11 +256,11 @@ export class CampaignPage implements Page {
       dependents(n.id).length ? h('p', null, h('b', null, 'Leads to: '), dependents(n.id).map((d, i) => [i ? ', ' : '', h('a', { href: `#/campaign/n/${d.id}` }, d.title)])) : null));
 
     // Tips, one at a time.
-    if (n.tips.length && !n.soon) {
-      const shown = Math.min(np?.tips ?? 0, n.tips.length);
+    if (tipsOf(n).length && !n.soon) {
+      const shown = Math.min(np?.tips ?? 0, tipsOf(n).length);
       el.append(h('div', { class: 'cp-tips' }, h('h4', null, 'Tips'),
-        shown ? h('ol', null, n.tips.slice(0, shown).map((t) => { const li = h('li'); li.innerHTML = t; return li; })) : null,
-        shown < n.tips.length ? h('button', { class: 'btn sm ghost', onclick: () => p.revealTip(n.id, n.tips.length) }, icon('info', 14), shown ? 'Another tip' : 'Show a tip') : null));
+        shown ? h('ol', null, tipsOf(n).slice(0, shown).map((t) => { const li = h('li'); li.innerHTML = t; return li; })) : null,
+        shown < tipsOf(n).length ? h('button', { class: 'btn sm ghost', onclick: () => p.revealTip(n.id, tipsOf(n).length) }, icon('info', 14), shown ? 'Another tip' : 'Show a tip') : null));
     }
 
     // Codex and chapters.

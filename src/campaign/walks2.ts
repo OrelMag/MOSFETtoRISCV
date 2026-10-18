@@ -17,6 +17,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'I: instr[15:10]',
       text: 'The merger puts instr[12:10], instr[14:13] and instr[15] in bits 5:0 and copies instr[15] into bits 15:6. Sign extension is fan-out: the 6-bit 111111 becomes 0xFFFF = −1. addi, lw and jalr use it, with offsets −32 to 31.',
       parts: ['u2'], codex: ['signext', 'immediates'],
+      ask: {
+        question: 'addi\'s field instr[15:10] reads 111110. Which 16-bit value must the generator output?',
+        options: ['0xFFFE', '0x003E', '0x00FE', '0x803E'],
+        answer: 0,
+        explain: '111110 is −2 in six bits; sign extension copies instr[15] into bits 15:6, giving 0xFFFE. In hardware that is fan-out: zero gates.',
+        why: ['', 'Zero extension reads the field as 62, but addi takes offsets from −32 to 31: the top bit is a sign.', 'The ALU adds 16-bit words: all ten upper bits must copy the sign, not just two.', 'Two\'s complement is not sign-magnitude: 0x803E is −32 706.'],
+      },
     },
     {
       title: 'S/B: f3 and rd',
@@ -65,6 +72,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'The ALU operation',
       text: 'For R-type, alu = {OPX, f3}: alu[k] = (OP | OPX)·f3[k] and alu3 = OPX, so addi, lw and sw get 0000 = add with no term of their own. The immediate shifts take their type from instr[15:14]: sll 0001, srl 0101, sra 1101. So SHI is ORed into alu0, SHI·(f2 + f1) into alu2 and SHI·f2 into alu3.',
       parts: ['u13', 'u14', 'u15', 'u16', 'u17', 'u18', 'u19', 'u20', 'u21'], codex: ['alu'],
+      ask: {
+        question: 'For R-type, alu = {OPX, f3}: alu[k] = (OP | OPX)·f3[k]. addi, lw and sw must add (code 0000). What does the unit need for them?',
+        options: ['Nothing: their alu bits are already 0', 'An OR of ADDI, LW and SW into each alu bit', 'A 4-bit mux that selects 0000 for them', 'f3 passed through for every opcode'],
+        answer: 0,
+        explain: 'Every term of alu is gated by an R-type line (or SHI), so any other opcode gets 0000, which is add: the three instructions cost no logic at all.',
+        why: ['', 'Raising bits would select another operation: add is the code with no bit set.', 'The AND with OP | OPX already gives 0000 off R-type; a mux would buy zeros that are free.', 'In lw and addi, instr[15:13] is part of the immediate: passing it on would pick an operation from the offset.'],
+      },
     },
   ],
 
@@ -88,6 +102,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Invert by cond[0]',
       text: 'take = pick ⊕ cond[0]: bne = ¬(a = b) and bge = ¬(a < b) share one XOR. The opcode table puts the condition in op[1:0], so it needs no decoding. 287 NANDs, depth 44: 39 for the less-than, 2 through the mux, 3 through the XOR.',
       parts: ['u4'], codex: ['branches'],
+      ask: {
+        question: 'The mux gives a = b for opcodes 8, 9 and a < b for 10, 11. bne (9) and bge (11) need the opposite. How do they get it?',
+        options: ['One XOR with cond[0] after the mux', 'Two more comparators, for a ≠ b and a ≥ b', 'A 4:1 mux over eq, ¬eq, lt and ¬lt', 'Swap a and b in the comparator for bge'],
+        answer: 0,
+        explain: 'bne = ¬(a = b) and bge = ¬(a < b), and cond[0] is 1 for exactly those two: take = pick ⊕ cond[0], 4 NANDs.',
+        why: ['', 'Inverting a result costs one gate; the existing comparators (110 and 169 NANDs) already hold the information.', 'It works, but cond[0] alone says whether to invert: one XOR replaces the wider mux and two inverters.', 'b < a is a > b, not a ≥ b: equal operands would not branch.'],
+      },
     },
   ],
 
@@ -116,6 +137,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Load the PC?',
       text: 'ld = jal + jalr + br·take. br masks take, because for any other instruction the comparator compares whatever the rs1 and rs2 fields happen to name. When ld = 0 the PC counts. 421 NANDs in all.',
       parts: ['u4', 'u5', 'u6'], codex: ['pc', 'branches'],
+      ask: {
+        question: 'The comparator\'s take is computed for every instruction, branch or not. What must ld be?',
+        options: ['jal + jalr + br·take', 'jal + jalr + take', 'br·take', 'take'],
+        answer: 0,
+        explain: 'Jumps always load the PC; a branch loads it only when taken. br masks take, which for any other instruction compares whatever the rs1 and rs2 fields name.',
+        why: ['', 'An add would jump whenever its rs1 and rs2 fields happen to satisfy the condition.', 'jal and jalr always jump: they need their own terms.', 'Both mistakes: jumps would not load, and any instruction could.'],
+      },
     },
   ],
 
@@ -139,6 +167,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Register file',
       text: 'The splitter takes rd = instr[6:4], rs1 = instr[9:7] and rs2 = instr[12:10] straight to the register file: with fixed field positions the reads start without waiting for control. 2 193 NANDs, 56% of the core: seven 16-bit registers (x0 is wired to 0), a write decoder, two 8:1 read muxes. Reads are combinational; x[rd] is written at the rising edge when rwe.',
       parts: ['u0', 'u5'], codex: ['regfile'],
+      ask: {
+        question: 'Control is 13 NAND delays deep. When can the register file start reading rs1 and rs2?',
+        options: ['At once: the fields sit at fixed bits of instr', 'Once control has decoded the format', 'Once the immediate is selected'],
+        answer: 0,
+        explain: 'RV16 keeps rs1 and rs2 at the same bits in every format, so a splitter wires them straight from instr and the reads overlap control; an instruction that does not use them ignores the values.',
+        why: ['', 'Only the register numbers matter, and their position never depends on the format: there is nothing to decode.', 'The immediate goes to the b mux, not to the register file.'],
+      },
     },
     {
       title: 'ALU operand b',
@@ -167,6 +202,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Decode a load or a store',
       text: 'lw: rwe, bimm, isel = 0 (offset instr[15:10]), add, wb = 1. sw: mwe, bimm, isel = 1, add, no rwe; it has no rd, so its offset {instr[15:13], instr[6:4]} uses the rd field\'s bits. A third format, so the immediate gets a second 2:1 mux: isel[0] picks I or S/B, isel[1] that or U (without jumps J is never picked): 98 NANDs.',
       parts: ['u1', 'u2', 'pick3', 'u3'], codex: ['loadstore'],
+      ask: {
+        question: 'sw names a base (rs1) and a value to store (rs2) and writes no register. Where does RV16 keep the low three bits of its offset?',
+        options: ['In the rd field, instr[6:4]', 'In the rs2 field', 'In the opcode bits', 'Nowhere: store offsets are multiples of 8'],
+        answer: 0,
+        explain: 'The offset is {instr[15:13], instr[6:4]}: the field sw does not need carries it. That is a third immediate format, so the generator\'s output gets a second 2:1 mux.',
+        why: ['', 'rs2 names the register whose value is stored: sw reads it.', 'The opcode tells sw from every other instruction; its bits cannot double as an offset.', 'sw has the same −32 to 31 word range as lw: it needs all six bits.'],
+      },
     },
     {
       title: 'Base and data',
@@ -190,6 +232,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'The PC, now loadable',
       text: 'pc ← rst ? 0 : ld ? target : pc + 1. The next-PC logic placed below decides ld and target and already computes pc + 1, so the PC is a plain 16-bit register (144 NANDs, no enable: it loads every cycle) behind two 2:1 bus muxes. The 318-NAND PC block would repeat that incrementer.',
       parts: ['u10', 'u11', 'u12', 'u13'], codex: ['pc'],
+      ask: {
+        question: 'Next PC already computes pc + 1 for the link register. What should the PC itself be now?',
+        options: ['A plain register behind load and reset muxes, fed next PC\'s pc + 1', 'Core II\'s 318-NAND PC block, incrementer included', 'A register with enable, loaded only on jumps'],
+        answer: 0,
+        explain: 'The PC loads every cycle (pc + 1, a target, or 0), so it needs no enable; reusing next PC\'s pc + 1 saves the PC block\'s 76-NAND incrementer.',
+        why: ['', 'Its incrementer would compute the same pc + 1 a second time: 76 NANDs for nothing.', 'Between jumps the PC must still count: an enable that is 0 would freeze it.'],
+      },
     },
     {
       title: 'Decode',
@@ -243,6 +292,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Decode the address',
       text: 'Partial decoding on daddr[15] alone: RAM write = dwe·¬daddr[15], LED write = dwe·daddr[15]. A NOT and two ANDs, 5 NANDs; the price is aliasing: every address from 0x8000 up is the LED register, and the RAM repeats 512 times below it.',
       parts: ['u3', 'u4', 'u5'], codex: ['mmio'],
+      ask: {
+        question: 'The program keeps its data in words 0 to 63 and writes the LEDs at 0xFFFB. What is the cheapest decode that keeps the two apart?',
+        options: ['daddr[15] alone', 'A 16-bit comparison with 0xFFFB', 'None: the RAM only sees daddr[5:0]'],
+        answer: 0,
+        explain: 'RAM write = dwe·¬daddr[15], LED write = dwe·daddr[15]: a NOT and two ANDs, 5 NANDs. One bit separates the two ranges the program uses; every other address aliases one of them.',
+        why: ['', 'Exact, but it compares 16 bits where one already tells the two ranges apart.', 'Then every store would write the RAM, 0xFFFB as word 59 (0xFFFB mod 64), and the LEDs would have no write enable of their own.'],
+      },
     },
     {
       title: 'LED register',
@@ -262,6 +318,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Load on en or clr',
       text: 'The register loads when en + clr. A flush must clear a stage even while it is stalled (en = 0), so clr wins.',
       parts: ['u2'], codex: ['stall'],
+      ask: {
+        question: 'A flush must clear a stage even while a stall holds it (en = 0). What should the register\'s load enable be?',
+        options: ['en + clr', 'en', 'en·¬clr', 'clr'],
+        answer: 0,
+        explain: 'An OR lets clr load the mux\'s zeros whatever en says: clr wins.',
+        why: ['', 'With en = 0 the stage would keep its wrong-path instruction through the flush.', 'That blocks the clear exactly when both arrive together.', 'Then the register would never take d.'],
+      },
     },
     {
       title: 'The register',
@@ -290,6 +353,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'D: registers, falling edge',
       text: 'The register file is clocked by ¬clk: W writes at mid-cycle and D reads the new value in the second half. An instruction three behind its producer therefore sees the result without forwarding.',
       parts: ['u3', 'u12'], codex: ['regfile'],
+      ask: {
+        question: 'An instruction three behind its producer is in D in the cycle the producer is in W. How can it read the new value without forwarding?',
+        options: ['Write the register file at the falling edge, so D reads the new value in the second half', 'Nothing to do: W writes at the rising edge, before D reads', 'It cannot: it needs a third nop'],
+        answer: 0,
+        explain: 'Clocked by ¬clk, the register file takes W\'s value at mid-cycle, and D/E captures what D reads at the next rising edge.',
+        why: ['', 'D/E captures D\'s reads at the same rising edge at which W would write: D still saw the old value.', 'That works, at one more cycle per instruction; the falling-edge write makes it unnecessary.'],
+      },
     },
     {
       title: 'D/E',
@@ -333,6 +403,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'M before W, for fa',
       text: 'fa[0] = from M; fa[1] = from W·¬(from M). When both stages write rs1, M holds the newer value, so it wins.',
       parts: ['u10', 'u11'],
+      ask: {
+        question: 'Two instructions in a row write x1, and the next one reads it: M and W both match rs1. Which value goes to E?',
+        options: ['M\'s: it is the newer write', 'W\'s: it was written first', 'The register file\'s'],
+        answer: 0,
+        explain: 'In program order the instruction in M comes after the one in W, so its x1 is the one the reader must see: from W only when M does not match.',
+        why: ['', 'W holds the older instruction: its x1 is overwritten by the one in M.', 'The register file was read in D, before either had written x1.'],
+      },
     },
     {
       title: 'The same for rs2',
@@ -376,6 +453,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'M: a result to forward',
       text: 'A 2:1 mux on wb[1] gives M\'s result, the ALU or the immediate: a load\'s word exists only at the end of M (these programs leave a nop after every load), and without jumps there is no pc + 1. The value mux still feeds W.',
       parts: ['u34', 'u35', 'pick43', 'u36'],
+      ask: {
+        question: 'Which value should M forward to E?',
+        options: ['The ALU result or the immediate, picked by wb[1]', 'The value mux\'s output, a load\'s word included', 'The ALU result only'],
+        answer: 0,
+        explain: 'A load\'s word exists only at the end of M, so M forwards what it already has: the ALU result, or lui\'s immediate. These programs leave a nop after every load.',
+        why: ['', 'Forwarding drdata would put the data memory and the ALU in series in one cycle, the path the pipeline was cut to avoid.', 'lui writes its immediate: a user right after it would read a stale register.'],
+      },
     },
     {
       title: 'M/W',
@@ -394,6 +478,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Does D read it?',
       text: 'rs1 = rdE or rs2 = rdE: two 3-bit comparators and an OR. rs2 counts even for addi and lw, which do not read it: an occasional needless stall costs a cycle and spares decoding which sources each opcode reads.',
       parts: ['u2', 'u3', 'u4'], codex: ['comparator'],
+      ask: {
+        question: 'The unit compares rs2 with rdE even for addi and lw, whose rs2 field holds immediate bits. What does that cost?',
+        options: ['Now and then a needless one-cycle stall', 'Wrong results when the bits match', 'A stall after every load'],
+        answer: 0,
+        explain: 'A stall only delays: the instruction is decoded again a cycle later. Decoding which sources each opcode reads would add gates to save a rare cycle.',
+        why: ['', 'A stall never changes what an instruction computes, only when.', 'Only a match stalls: a load whose rd the next instruction\'s fields do not name costs nothing.'],
+      },
     },
     {
       title: 'Stall',
@@ -428,6 +519,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Hold the front',
       text: 'On a stall the PC reloads its own value through a 2:1 mux (the PC register is always enabled), and F/D gets en = ¬stall. The instruction in D is decoded again next cycle.',
       parts: ['u5', 'u8'], codex: ['stall'],
+      ask: {
+        question: 'On a stall the instruction in D must be decoded again next cycle. What do the PC and F/D do?',
+        options: ['Both hold: the PC reloads its own value, F/D gets en = 0', 'F/D holds and the PC moves on', 'The PC holds and F/D clears'],
+        answer: 0,
+        explain: 'The PC register has no enable, so a 2:1 mux feeds pc back to it; F/D gets en = ¬stall. The bubble goes into D/E, behind the load.',
+        why: ['', 'The word fetched meanwhile has nowhere to go, since F/D refuses it: that instruction would be skipped.', 'Clearing F/D throws away the very instruction that is waiting for the load.'],
+      },
     },
     {
       title: 'Bubble into E',
@@ -471,6 +569,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Flush the wrong path',
       text: 'F/D clr = rst + redirect, and redirect is the bubble OR\'s third input: the two younger instructions, fetched as if the branch fell through, become bubbles. 9 239 NANDs, +1 687; period still 78: forwarding → comparator → next PC → F/D clear takes 77. Two cycles per taken branch or jump: 1 495 cycles against Core III\'s 1 236, but 116 610 NAND delays against 121 128, about 4% faster.',
       parts: ['u10'], codex: ['flush'],
+      ask: {
+        question: 'A taken branch is in E. How many instructions behind it were fetched on the wrong path?',
+        options: ['Two: the ones in D and F', 'One: the one in D', 'Three: D, F and the target'],
+        answer: 0,
+        explain: 'At the edge the PC loads the target, F/D clears (dropping F\'s word) and D/E clears (dropping D\'s): two cycles per taken branch or jump.',
+        why: ['', 'F is fetching in the same cycle: its word would enter F/D at the edge.', 'The target is the right path: the PC loads it at that edge.'],
+      },
     },
   ],
 
@@ -505,6 +610,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'MIE and MPIE',
       text: 'MIE\' = trap ? 0 : mret ? MPIE : written; MPIE\' = trap ? MIE : mret ? 1 : written. A trap turns interrupts off and remembers the old enable in MPIE; mret puts it back.',
       parts: ['u28', 'u29', 'u30', 'u31', 'u32'], codex: ['interrupts'],
+      ask: {
+        question: 'A trap must turn interrupts off, and mret must later restore whatever the enable was. What does a trap do to MIE and MPIE?',
+        options: ['MPIE ← MIE, MIE ← 0', 'MIE ← 0 only', 'MIE ← MPIE', 'MPIE ← 0, MIE ← 1'],
+        answer: 0,
+        explain: 'MPIE keeps the enable the trap interrupted; mret copies it back into MIE and sets MPIE to 1.',
+        why: ['', 'Then mret has nothing to restore: the old enable is lost.', 'That is mret\'s move, not the trap\'s.', 'Backwards: the handler would run with interrupts on and the old enable forgotten.'],
+      },
     },
     {
       title: 'Read port',
@@ -543,6 +655,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Trap and cause',
       text: 'trap = ill + ecall + ebreak (+ intr, always 0 here). mcause is mostly constant bit by bit: bit 1 = 1, bit 15 = intr, bit 0 = intr + ¬ill, bit 3 = intr + ¬ill·ecall, the rest 0. That gives ebreak 3, ecall 11, illegal 2, interrupt 0x800B in 5 NANDs.',
       parts: ['u9', 'u10', 'u11', 'u12', 'u13', 'u14', 'u15', 'u16', 'u17', 'u18', 'u19'], codex: ['traps'],
+      ask: {
+        question: 'mcause is 3 for ebreak, 11 for ecall, 2 for an illegal instruction and 0x800B for an interrupt. Which bit is 1 for all four?',
+        options: ['Bit 1', 'Bit 0', 'Bit 3', 'Bit 15'],
+        answer: 0,
+        explain: 'Bit 1 is a constant 1; of the rest only bits 0, 3 and 15 ever change, each a function of ill, ecall and intr. No 16-bit mux of constants is needed.',
+        why: ['', 'Illegal (2) has it clear: bit 0 = intr + ¬ill.', 'ebreak (3) and illegal (2) have it clear: bit 3 = intr + ¬ill·ecall.', 'Only the interrupt sets it.'],
+      },
     },
     {
       title: 'The instruction does not run',
@@ -591,6 +710,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Nothing runs',
       text: '¬trap cancels the register write and the store. mepc ← pc, so after mret the interrupted instruction runs from the start.',
       parts: ['u19', 'u24', 'u25', 'u26', 'u28'],
+      ask: {
+        question: 'An interrupt is taken in the cycle an add is at pc. Where must the handler\'s mret return?',
+        options: ['To pc: the add has not run', 'To pc + 1: the add completed', 'To mtvec'],
+        answer: 0,
+        explain: '¬trap cancelled the add\'s register write, so mepc ← pc and the handler returns to mepc unchanged; only ecall\'s handler adds 1.',
+        why: ['', 'Its write was cancelled: skipping it would lose the add.', 'mtvec is the handler itself.'],
+      },
     },
     {
       title: 'To the handler',
@@ -609,6 +735,13 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'A valid bit',
       text: 'One flip-flop with clear: valid ← ¬clr·(en + valid), so it loads 1 with F/D and clears with it. An OR, a NOT, an AND and a 9-NAND flip-flop: 15 NANDs. A bubble\'s all-zero word is opcode 0, f3 0, rs2 field 0, an illegal SYSTEM encoding: without this bit every bubble would trap.',
       parts: ['u13', 'u14', 'u15', 'u16'], codex: ['precise'],
+      ask: {
+        question: 'Pipelines I to IV needed no valid bit. Why does this one?',
+        options: ['A bubble\'s all-zero word would trap as an illegal instruction', 'Bubbles would write registers', 'The hazard unit needs it to stall'],
+        answer: 0,
+        explain: 'Opcode 0, f3 0, rs2 field 0 is no legal SYSTEM instruction. The valid bit is 0 in a bubble and gates every trap, so only real instructions raise one.',
+        why: ['', 'A bubble\'s control word is all zeros: rwe = mwe = 0, as before.', 'The load-use test reads rdE and the load bit, as in Pipeline III.'],
+      },
     },
     {
       title: 'D: decode, registers',

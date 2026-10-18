@@ -271,6 +271,12 @@
 .ed-hot { fill: color-mix(in srgb, var(--ed-preview) 25%, transparent); stroke: var(--ed-preview); stroke-width: 0.12; pointer-events: none; }
 .ed-hot.bad { fill: color-mix(in srgb, var(--ed-err) 25%, transparent); stroke: var(--ed-err); }
 .ed-ghost { opacity: var(--ed-ghost); pointer-events: none; }
+/* Build along: the step's parts as dashed outlines where they go */
+.ed-guides { pointer-events: none; }
+.ed-guide { opacity: 0.7; }
+.ed-guide * { fill: none !important; stroke: var(--accent) !important; stroke-dasharray: 0.35 0.25; stroke-width: 0.1 !important; }
+.ed-guide text { fill: var(--accent) !important; stroke: none !important; }
+.ed-guide .hit { display: none; }
 
 /* toast, prompt, help */
 .sb-toast {

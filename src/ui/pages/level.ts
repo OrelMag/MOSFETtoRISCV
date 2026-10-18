@@ -33,6 +33,7 @@ import { h, icon } from '../dom';
 import { settings } from '../settings';
 import type { Page } from './chapter';
 import { WalkMode } from './levelwalk';
+import { tipsOf } from '../../campaign/nudges';
 
 type Tab = 'walk' | 'why' | 'task' | 'tips' | 'codex';
 
@@ -63,6 +64,8 @@ export class LevelPage implements Page {
   private side = h('aside', { class: 'lv-side', 'aria-label': 'The level' });
   private edWrap = h('div', { class: 'lv-ed' });
   private tab: Tab = 'why';
+  /** The Tips tab asks before it shows the whole solution. */
+  private confirmSolution = false;
   private result: HTMLElement | null = null;
   /** The walkthrough, while it is shown. */
   private walk: WalkMode | null = null;
@@ -107,7 +110,8 @@ export class LevelPage implements Page {
     this.chal = installChallenges(this.editor, {
       checked: (r, g) => this.checked(r, g),
       actions: () => (hasWalk ? [h('button', { class: 'btn sm', 'data-chal': 'walk', title: 'The reference answer built step by step, each step explained', onclick: () => this.startWalk(0) }, icon('play', 12), 'Walk me through it')] : []),
-      showAnswer: () => (hasWalk ? this.startWalk(Infinity) : this.showAnswer()),
+      // Show answer is the ladder's last rung: the Tips tab asks first.
+      showAnswer: () => { if (this.walk) return this.startWalk(Infinity); this.tab = 'tips'; this.confirmSolution = true; this.renderSide(); },
     });
     this.edWrap.append(this.editor.el);
     this.el = h('div', { class: 'lv-page' }, this.bar, h('div', { class: 'lv-body' }, this.side, this.edWrap));
@@ -169,9 +173,9 @@ export class LevelPage implements Page {
 
   private renderSide(): void {
     const n = this.node!, p = progress();
-    const shownTips = Math.min(p.get(n.id)?.tips ?? 0, n.tips.length);
+    const shownTips = Math.min(p.get(n.id)?.tips ?? 0, tipsOf(n).length);
     const tabs: [Tab, string, string?][] = this.walk ? [['walk', 'Walkthrough'], ['why', 'Why'], ['task', 'Task']]
-      : [['why', 'Why'], ['task', 'Task'], ['tips', 'Tips', n.tips.length ? `${shownTips}/${n.tips.length}` : undefined], ['codex', 'Codex', n.codex.length ? String(n.codex.length) : undefined]];
+      : [['why', 'Why'], ['task', 'Task'], ['tips', 'Tips', tipsOf(n).length ? `${shownTips}/${tipsOf(n).length}` : undefined], ['codex', 'Codex', n.codex.length ? String(n.codex.length) : undefined]];
     if (!tabs.some(([id]) => id === this.tab)) this.tab = tabs[0][0];
     const bar = h('div', { class: 'lv-tabs', role: 'tablist' }, tabs.map(([id, label, badge]) =>
       h('button', { class: this.tab === id ? 'on' : '', role: 'tab', 'aria-selected': String(this.tab === id), onclick: () => { this.tab = id; this.renderSide(); } },
@@ -237,13 +241,35 @@ export class LevelPage implements Page {
       n.unlocks?.length ? h('p', null, h('b', null, 'Unlocks: '), n.unlocks.map(name).join(', ')) : null));
   }
 
+  /** The hint ladder: the tips one at a time (a nudge first), then the walkthrough from step 1, then the solution. */
   private tipsTab(el: HTMLElement): void {
     const n = this.node!, p = progress();
-    const shown = Math.min(p.get(n.id)?.tips ?? 0, n.tips.length);
-    if (!n.tips.length) return void el.append(h('p', { class: 'sub' }, 'No tips for this level.'));
-    if (shown) el.append(h('ol', { class: 'lv-tips' }, n.tips.slice(0, shown).map((t) => rich('li', t))));
-    else el.append(h('p', { class: 'sub' }, `${n.tips.length} tip${n.tips.length === 1 ? '' : 's'}, revealed one at a time. The last one usually says how par is reached.`));
-    if (shown < n.tips.length) el.append(h('p', null, h('button', { class: 'btn sm', onclick: () => p.revealTip(n.id, n.tips.length) }, icon('info', 13), shown ? 'Another tip' : 'Show a tip')));
+    const tips = tipsOf(n);
+    const shown = Math.min(p.get(n.id)?.tips ?? 0, tips.length);
+    const hasWalk = !!walkOf(n)?.steps.length;
+    const rung = (label: string, used: boolean, ...body: (HTMLElement | null)[]) =>
+      h('section', { class: `lv-rung${used ? ' used' : ''}` }, h('div', { class: 'lv-rung-k' }, used ? icon('check', 11) : null, label), ...body);
+    const rungs: HTMLElement[] = [];
+    if (tips.length) {
+      rungs.push(rung(`Tips · ${shown} of ${tips.length}`, shown >= tips.length,
+        shown ? h('ol', { class: 'lv-tips' }, tips.slice(0, shown).map((t) => rich('li', t)))
+          : h('p', { class: 'sub' }, 'Revealed one at a time, the first a nudge, the last usually how par is reached.'),
+        shown < tips.length ? h('p', null, h('button', { class: 'btn sm', onclick: () => p.revealTip(n.id, tips.length) }, icon('info', 13), shown ? 'Another tip' : 'Show a tip')) : null));
+    }
+    if (hasWalk) {
+      rungs.push(rung('Walk', false,
+        h('p', { class: 'sub' }, 'The reference answer built a step at a time, each step explained; some ask you to predict first. Your chip stays as it is.'),
+        h('p', null, h('button', { class: 'btn sm', onclick: () => this.startWalk(0) }, icon('play', 12), 'Walk me through it'))));
+    }
+    const solve = () => { this.confirmSolution = false; if (hasWalk) this.startWalk(Infinity); else this.showAnswer(); };
+    rungs.push(rung('Solution', false,
+      h('p', { class: 'sub' }, 'The whole reference circuit. Stars you already earned stay.'),
+      this.confirmSolution
+        ? h('div', { class: 'lv-confirm' }, h('span', null, 'Show the whole answer?'),
+          h('button', { class: 'btn sm primary', onclick: solve }, 'Show it'),
+          h('button', { class: 'btn sm ghost', onclick: () => { this.confirmSolution = false; this.renderSide(); } }, 'Not yet'))
+        : h('p', null, h('button', { class: 'btn sm ghost', onclick: () => { this.confirmSolution = true; this.renderSide(); } }, 'Show solution…'))));
+    el.append(h('div', { class: 'lv-ladder' }, rungs));
   }
 
   private codexTab(el: HTMLElement): void {

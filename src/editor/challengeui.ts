@@ -36,6 +36,7 @@ import { type Editor, registerToolbarAction } from './editor';
 import { type PaletteItem, registerPaletteGroup } from './palette';
 import { TestPlayer } from './testplayer';
 import { testSet } from './testrun';
+import { tipsOf } from '../campaign/nudges';
 
 const RULE: Record<'transistors' | 'nand' | 'any', [string, string]> = {
   transistors: ['transistors only', 'Transistors, rails, wiring and your own chips built from them'],
@@ -328,8 +329,8 @@ class ChallengeUi {
   /** A campaign level's tips (one at a time) and its way back / onward. */
   private levelEl(n: CampaignNode): HTMLElement {
     const p = progress();
-    const shown = Math.min(p.get(n.id)?.tips ?? 0, n.tips.length);
-    const tips = h('ol', { class: 'sb-chal-tips' }, n.tips.slice(0, shown).map((t) => {
+    const shown = Math.min(p.get(n.id)?.tips ?? 0, tipsOf(n).length);
+    const tips = h('ol', { class: 'sb-chal-tips' }, tipsOf(n).slice(0, shown).map((t) => {
       const li = h('li');
       li.innerHTML = t;
       return li;
@@ -338,7 +339,7 @@ class ChallengeUi {
     return h('div', { class: 'sb-chal-level' },
       shown ? tips : null,
       h('div', { class: 'sb-chal-links' },
-        shown < n.tips.length ? h('button', { class: 'btn sm ghost', 'data-chal': 'tip', onclick: () => { p.revealTip(n.id, n.tips.length); this.version++; this.render(); } }, icon('info', 13), shown ? 'Another tip' : 'A tip') : null,
+        shown < tipsOf(n).length ? h('button', { class: 'btn sm ghost', 'data-chal': 'tip', onclick: () => { p.revealTip(n.id, tipsOf(n).length); this.version++; this.render(); } }, icon('info', 13), shown ? 'Another tip' : 'A tip') : null,
         h('a', { class: 'btn sm ghost', href: `#/campaign/n/${n.id}` }, icon('chevL', 13), 'Campaign'),
         h('a', { class: 'btn sm ghost', href: `#/campaign/play/${n.id}`, title: 'This level on its own screen: the brief, the why, the walkthrough' }, 'Level screen'),
         next ? h('a', { class: 'btn sm', href: levelChallenge(next) && !next.soon ? `#/campaign/play/${next.id}` : `#/campaign/n/${next.id}`, title: next.title }, `Next: ${next.title}`, icon('chevR', 13)) : null));

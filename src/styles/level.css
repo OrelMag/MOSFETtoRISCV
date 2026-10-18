@@ -163,6 +163,32 @@
 .lv-rows b.ok { color: var(--good); }
 .lv-gen { font-size: 12px; }
 .lv-walknav { display: flex; gap: 6px; align-items: center; padding: 10px 0 14px; margin-top: auto; border-top: 1px solid var(--border); position: sticky; bottom: 0; background: var(--surface); }
+
+/* the hint ladder (Tips tab) and the walkthrough's predict-first and Learn it */
+.lv-ladder { display: grid; gap: 0; }
+.lv-rung { border: 1px solid var(--border); padding: 8px 12px; background: var(--surface); }
+.lv-rung + .lv-rung { border-top: none; }
+.lv-rung:first-child { border-radius: 10px 10px 0 0; }
+.lv-rung:last-child { border-radius: 0 0 10px 10px; }
+.lv-rung:only-child { border-radius: 10px; }
+.lv-rung.used { background: var(--surface-2); }
+.lv-rung-k { display: flex; align-items: center; gap: 4px; font: 600 11px var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.lv-rung.used .lv-rung-k { color: var(--good); }
+.lv-rung p { margin: 4px 0; }
+.lv-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; font-size: 13px; }
+.lv-predict { display: grid; gap: 6px; justify-items: start; }
+.lv-predict .challenge { margin-top: 4px; justify-self: stretch; }
+.lv-learn { align-items: center; margin-bottom: 8px; }
+.lv-learn-k { font: 600 11px var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.lv-modes { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
+.lv-modes button { font: 600 12.5px var(--font-ui); padding: 4px 12px; border: 0; background: var(--surface); color: var(--text-2); cursor: pointer; }
+.lv-modes button.on { background: var(--accent); color: var(--accent-text); }
+.lv-modes button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.lv-build { display: grid; gap: 4px; margin: 6px 0; }
+.lv-build p { margin: 2px 0; }
+.lv-verdict { font-size: 13px; color: var(--text); background: var(--warn-soft); border-radius: 8px; padding: 6px 10px; }
+.lv-verdict p { margin: 2px 0; }
+.lv-verdict.ok { background: var(--good-soft); color: var(--good); font-weight: 600; display: flex; align-items: center; gap: 4px; }
 /* the codex guide: where to learn it and how it connects, the lead sentence, figures, Check yourself, previous / next */
 .cx-rows { display: grid; gap: 6px; margin-top: 12px; }
 .cx-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
