@@ -189,3 +189,28 @@
 .lv-verdict { font-size: 13px; color: var(--text); background: var(--warn-soft); border-radius: 8px; padding: 6px 10px; }
 .lv-verdict p { margin: 2px 0; }
 .lv-verdict.ok { background: var(--good-soft); color: var(--good); font-weight: 600; display: flex; align-items: center; gap: 4px; }
+/* the codex guide: where to learn it and how it connects, the lead sentence, figures, Check yourself, previous / next */
+.cx-rows { display: grid; gap: 6px; margin-top: 12px; }
+.cx-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cx-row-k { font: 600 11px var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); min-width: 78px; }
+.cx-idea p { margin: 0 0 0.8em; }
+.cx-idea p:last-child { margin-bottom: 0; }
+.cx-lead { font-weight: 600; color: var(--text); }
+.cx-anat-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.cx-anat-chips .btn.on { border-style: solid; border-color: var(--accent); color: var(--accent); }
+.cx-widget { background: var(--surface); padding: 10px 12px 0; }
+.cx-widget figcaption { margin: 10px -12px 0; }
+.cx-widget .widget { box-shadow: none; border: 0; padding: 0; }
+.cx-fields { display: grid; gap: 8px; overflow-x: auto; }
+.cx-fields b { font: 600 11px var(--font-mono); color: var(--muted); }
+.cx-listing { font: 12px var(--font-mono); background: var(--surface-2); border-radius: 6px; padding: 6px 10px; margin: 0 0 8px; overflow-x: auto; }
+.cx-pipe { padding-bottom: 6px; }
+.cx-check { display: grid; gap: 10px; }
+.cx-check .challenge { margin-top: 0; }
+.cx-try-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.cx-try-in { font: 13px var(--font-mono); padding: 5px 8px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); min-width: 0; width: 12em; }
+.cx-try-in:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cx-prevnext { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--border); padding-top: 10px; font-size: 13.5px; }
+.cx-prevnext a { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); text-decoration: none; }
+.cx-prevnext a:hover { text-decoration: underline; }
+.cp-codex-entry.locked .cx-sum { margin: 6px 0 12px; }

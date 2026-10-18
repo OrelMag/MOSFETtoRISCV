@@ -10,6 +10,8 @@ import { MORE0 } from './codexmore0';
 import { MORE1 } from './codexmore1';
 import { MOREP } from './codexmoreP';
 
+export { checkOf } from './codexcheck';
+
 export interface CodexMore {
   /** HTML: the idea in a paragraph or two, for an engineer meeting it for the first time. */
   idea: string;

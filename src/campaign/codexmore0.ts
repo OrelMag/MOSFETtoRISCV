@@ -64,7 +64,7 @@ export const MORE0: Record<string, CodexMore> = {
     mistakes: [
       'Complementing the variables when taking the dual: the dual of <code>a + ¬a·b</code> is <code>a·(¬a + b)</code>.',
       'Confusing the dual with the complement: the complement also inverts every literal (De Morgan); the dual does not, and is in general a different function.',
-      'Drawing the pull-up as a copy of the pull-down: both then conduct for some inputs and short V<sub>DD</sub> to ground.',
+      'Drawing the pull-up as a copy of the pull-down: for some inputs both conduct and short V<sub>DD</sub> to ground, for others neither does and the output floats.',
     ],
     lib: 'nor_cmos',
     chapters: [{ chapter: 'inverter', step: 0, label: 'Pull up, pull down' }, { chapter: 'nand', step: 1, label: 'NOR, for comparison' }],
@@ -502,7 +502,7 @@ export const MORE0: Record<string, CodexMore> = {
   },
   assembly: {
     idea: 'Assembly is machine code with names: one line per instruction, mnemonics for opcodes, ABI names for registers (a0, sp, ra), labels for addresses, and pseudo-instructions that expand to real ones (li, mv, j, call, ret, beqz). The assembler needs two passes because a branch may name a label further down. Pass 1 walks the source counting words to give every label an address, so each pseudo-instruction\'s size must be decided before its operands are known: li is one word when the value fits a 6-bit immediate or has its low 6 bits zero, else two. Pass 2 encodes each instruction, computing branch and jump offsets as target − pc and checking that they fit.<br>RV16 branch offsets are 6 bits (−32…31 words) and jal\'s 9 bits (−256…255): a loop longer than that closes with an inverted branch around a jump.',
-    example: { title: 'Encode a loop', body: '<code>0: loop: addi a0, a0, -1</code>: op 4, rd 3, rs1 3, imm −1 = 111111 → <code>0xFDB4</code><br><code>1: bne a0, x0, loop</code>: offset 0 − 1 = −1, split as imm[5:3] at bits 15:13 and imm[2:0] at 6:4 → <code>0xE1F9</code><br><code>li a1, 1000</code>: 1000 = 1024 − 24 → <code>lui a1, 1024</code> (<code>0x0447</code>), <code>addi a1, a1, -24</code> (<code>0xA244</code>)' },
+    example: { title: 'Encode a loop', body: '<code>0: loop: addi a0, a0, -1</code>: op 4, rd 3, rs1 3, imm −1 = 111111 → <code>0xFDB4</code><br><code>1: bne a0, x0, loop</code>: offset 0 − 1 = −1, split as imm[5:3] at bits 15:13 and imm[2:0] at 6:4 → <code>0xE1F9</code><br><code>li a1, 1000</code>: 1000 = 1024 − 24 → <code>lui a1, 16</code> (16 × 64 = 1024, <code>0x0447</code>), <code>addi a1, a1, -24</code> (<code>0xA244</code>)' },
     mistakes: [
       'Computing a branch offset from the next instruction: RV16 offsets are relative to the branch itself (pc + imm).',
       'Assuming li is one instruction: a value outside −32…31 without zero low bits takes lui + addi, and every label after it moves.',

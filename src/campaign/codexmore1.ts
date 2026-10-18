@@ -748,7 +748,7 @@ predict backward taken: wrong at the 10 inner exits and the outer
     mistakes: [
       'Counting only conditional branches: j, call and ret also redirect fetch; jal can be predicted statically, jalr (ret) depends on a register.',
       'Predicting forward branches taken: an if-then\'s forward branch goes either way; backward-taken works because loops repeat.',
-      'Ignoring the predictor\'s own delay: its adder and mux in F lengthen every cycle, here by 3 delays.',
+      'Ignoring the predictor\'s own delay: its adder and mux in F lengthen every cycle, here by 2 delays (78 → 80).',
     ],
     anatomy: ['npc', 'br', 'p1'],
     chapters: [

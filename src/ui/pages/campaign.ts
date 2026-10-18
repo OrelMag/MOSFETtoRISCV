@@ -11,6 +11,8 @@ import { BLOCKS, blockNodes } from '../../campaign/anatomy';
 import { CODEX, CODEX_KINDS, codexById } from '../../campaign/codex';
 import { type Datasheet, datasheetOf, datasheets } from '../../campaign/datasheet';
 import type { CodexMore } from '../../campaign/codexmore';
+import { CODEX_ORDER, plainSummary } from '../../campaign/codexlinks';
+import type { Quiz } from '../../chapters/types';
 import { codexEntryEl } from '../../campaign/ui/codexentry';
 import { ancestors, dependents, isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { LESSONS } from '../../campaign/lessons';
@@ -43,6 +45,10 @@ const STATUS_LABEL = { locked: 'Locked', available: 'Available', started: 'In pr
 export class CampaignPage implements Page {
   /** The fuller codex (loaded on the first visit to an entry). */
   private moreOf: ((id: string) => CodexMore | undefined) | undefined;
+  private checkOf: (id: string) => Quiz[] = () => [];
+  /** The codex list's search text and kind filter, kept across entries. */
+  private cxQuery = '';
+  private cxKind = '';
   readonly kind = 'campaign';
   readonly el: HTMLElement;
   private main = h('div', { class: 'cp-main' });
@@ -366,14 +372,41 @@ export class CampaignPage implements Page {
     const p = progress();
     const unlocked = p.codexUnlocked();
     const foundIn = (id: string) => NODES.filter((n) => n.codex.includes(id));
+    // Search (titles first, then summaries) and a kind filter, applied in place and kept across entries.
+    const search = h('input', { class: 'cx-search', type: 'search', placeholder: `Search ${CODEX.length} entries`, 'aria-label': 'Search the codex', value: this.cxQuery });
+    const kinds = h('div', { class: 'cx-kinds' }, [{ id: '', title: 'All' }, ...CODEX_KINDS].map((k) =>
+      h('button', { class: `cx-kind${this.cxKind === k.id ? ' on' : ''}`, 'data-k': k.id, onclick: () => { this.cxKind = k.id; filter(); } }, k.title)));
+    const empty = h('p', { class: 'sub', hidden: true }, 'No entry matches.');
+    const groups = CODEX_KINDS.map((k) => {
+      const items = CODEX_ORDER.filter((e) => e.kind === k.id).map((e) => {
+        const li = h('li', { 'data-k': e.kind, 'data-t': e.title.toLowerCase(), 'data-s': plainSummary(e).toLowerCase() }, unlocked.has(e.id)
+          ? h('a', { href: `#/campaign/codex/${e.id}`, class: e.id === sel ? 'on' : '' }, e.title)
+          : h('a', { href: `#/campaign/codex/${e.id}`, class: `locked${e.id === sel ? ' on' : ''}`, title: 'Not discovered yet' }, icon('flag', 11), e.title));
+        return li;
+      });
+      return { head: h('h4', null, k.title), ul: h('ul', null, items), items };
+    });
+    const filter = () => {
+      const q = this.cxQuery.trim().toLowerCase();
+      let shown = 0;
+      for (const g of groups) {
+        let n = 0;
+        for (const li of g.items) {
+          const ok = (!this.cxKind || li.dataset.k === this.cxKind) && (!q || li.dataset.t!.includes(q) || li.dataset.s!.includes(q));
+          li.hidden = !ok;
+          if (ok) n++;
+        }
+        g.head.hidden = g.ul.hidden = n === 0;
+        shown += n;
+      }
+      empty.hidden = shown > 0;
+      for (const b of kinds.children) b.classList.toggle('on', (b as HTMLElement).dataset.k === this.cxKind);
+    };
+    search.addEventListener('input', () => { this.cxQuery = search.value; filter(); });
     const list = h('nav', { class: 'cp-codex-list' },
       h('p', { class: 'sub' }, `${[...unlocked].filter((u) => codexById(u)).length} of ${CODEX.length} entries discovered`),
-      CODEX_KINDS.map((k) => {
-        const es = CODEX.filter((e) => e.kind === k.id);
-        return [h('h4', null, k.title), h('ul', null, es.map((e) => h('li', null, unlocked.has(e.id)
-          ? h('a', { href: `#/campaign/codex/${e.id}`, class: e.id === sel ? 'on' : '' }, e.title)
-          : h('a', { href: `#/campaign/codex/${e.id}`, class: `locked${e.id === sel ? ' on' : ''}`, title: 'Not discovered yet' }, icon('flag', 11), e.title))))];
-      }));
+      search, kinds, empty, groups.flatMap((g) => [g.head, g.ul]));
+    filter();
     const e = sel ? codexById(sel) : undefined;
     let detail: HTMLElement;
     if (!e) {
@@ -381,20 +414,22 @@ export class CampaignPage implements Page {
         h('p', null, 'Every component you build, every law and tool you use, collected as you go. Entries unlock when you finish (or skip) the level that teaches them; Unlock all reveals them all.'));
     } else if (!unlocked.has(e.id)) {
       const where = foundIn(e.id);
-      detail = h('div', { class: 'cp-codex-entry locked' }, h('h2', null, e.title),
-        h('p', null, 'Not discovered yet. Found in: ', where.map((n, i) => [i ? ', ' : '', h('a', { href: `#/campaign/n/${n.id}` }, n.title)])));
+      // The one-line summary is no secret (the hover cards show it): the rest unlocks with the level.
+      detail = h('div', { class: 'cp-codex-entry locked' }, h('h2', null, e.title), html('div', 'cx-sum', e.body),
+        h('p', null, 'The full entry unlocks when you pass ', where.map((n, i) => [i ? (i === where.length - 1 ? ' or ' : ', ') : '', h('a', { href: `#/campaign/n/${n.id}` }, n.title)]), '.'));
     } else if (this.moreOf === undefined) {
       // The fuller texts are a chunk of their own: load them, then draw the entry.
       detail = h('div', { class: 'cp-codex-entry' }, h('h2', null, e.title), html('div', 'cp-codex-body', e.body));
       import('../../campaign/codexmore').then((m) => {
         this.moreOf = m.moreOf;
+        this.checkOf = m.checkOf;
         if (location.hash === `#/campaign/codex/${e.id}`) this.main.replaceChildren(this.codexView(e.id));
       }, () => { this.moreOf = () => undefined; });
     } else {
       const more = this.moreOf(e.id);
       const sheet = more?.lib ? datasheetOf(more.lib) : undefined;
       const sheets = sheet ? [sheetEl(sheet)] : e.kind === 'component' ? datasheets(e.id).map(sheetEl) : [];
-      detail = codexEntryEl(e, more, p.view, sheets);
+      detail = codexEntryEl(e, more, p.view, sheets, this.checkOf(e.id));
     }
     return h('div', { class: 'cp-codex' }, list, detail);
   }

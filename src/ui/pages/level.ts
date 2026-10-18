@@ -281,7 +281,7 @@ export class LevelPage implements Page {
       if (!e) continue;
       el.append(unlocked.has(id)
         ? h('section', { class: 'lv-cx' }, h('h4', null, e.title), rich('p', e.body), h('a', { class: 'lv-more', href: `#/campaign/codex/${id}` }, 'Open in the codex', icon('chevR', 12)))
-        : h('section', { class: 'lv-cx locked' }, h('h4', null, e.title), h('p', { class: 'sub' }, 'Added to the codex when you pass or skip this level.')));
+        : h('section', { class: 'lv-cx locked' }, h('h4', null, e.title), rich('p', e.body), h('p', { class: 'sub' }, 'The full entry is added to the codex when you pass or skip this level.')));
     }
   }
 
