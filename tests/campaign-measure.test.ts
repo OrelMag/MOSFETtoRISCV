@@ -7,7 +7,9 @@ import { nodeById } from '../src/campaign/nodes';
 
 describe('level screen measurements', () => {
   it('measures library parts', () => {
-    expect(libCost('full_adder')).toEqual({ nand: 9, transistors: 36, depth: 6 });
+    expect(libCost('full_adder')).toEqual({ nand: 9, transistors: 36, depth: 6, relays: 9, tubes: 27, steps: 6 });
+    // A relay part is priced as drawn: its relays, no NANDs, no relay-step estimate.
+    expect(libCost('relay_nand')).toEqual({ nand: 0, transistors: 0, depth: null, relays: 2 });
     expect(libCost('no_such_part')).toBeUndefined();
   });
 
