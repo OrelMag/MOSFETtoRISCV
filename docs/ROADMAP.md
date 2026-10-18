@@ -642,7 +642,8 @@ with punch cards.
     reader leaf holding the deck, a 13-instruction boot ROM that copies the deck to 0x400 and jumps there; the golden
     model counts edges for the reader, so the gate-level computer is co-simulated in lock-step at any feed delay;
     tests/buscards.test.ts)
-  - ⏳ The sandbox example on the system core with ports (the reader part, the CPU drawer) remains
+  - ✅ Examples ▸ Boot from cards (editor/examplecards.ts): rv32i_core, a boot ROM part, a two-port RAM, the reader part at
+    0xC000_0000 and a console; Drop / Sort in the reader's panel; the CPU drawer's golden model sits out (tests/editor-cardboot.test.ts)
 
 ### Phase 15 — Journey and campaign track: GPU ✅
 The same bricks arranged for throughput instead of latency: one instruction stream, many lanes, latency hidden by

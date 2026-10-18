@@ -567,6 +567,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  System on a bus (examplebus.ts, Sheet): SANDBOX_PARTS, a boot ROM part, the flash's contents a word-addressed
                  ROM part (bus/programs.ts SANDBOX_SOURCE), screen, keyboard and timer parts, every connection a pointer pair;
                  detectCpu leaves a sysbuscore part alone (its memory and interrupts are behind the bus: no drawer)
+                 Boot from cards (examplecards.ts, Sheet): rv32i_core, a boot ROM part (CARDS_LOADER_SOURCE) below pc bit 12, a
+                 two-port 64-word RAM above it (port 0 data, port 1 fetch), the card reader part at 0xC000_0000 (STATUS +0, DATA +4:
+                 a load from DATA raises next) holding asmCards' deck of CARDS_PAYLOAD_SOURCE, a console at 0x8000_0000, a halt
+                 part on `j .`; the CPU drawer's golden model sits out (cardparts.ts CARDS_NO_GOLDEN, simHasCardReader). The reader leaf
+                 is a `seq` behaviour (outputs from its state alone), so the cycle engine runs the loop through amoadd's memWData
   geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run;

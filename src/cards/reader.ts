@@ -97,6 +97,9 @@ export function cardReader(spec: CardReaderSpec): ComponentDef {
     ],
     symbol: { kind: 'box', label: 'CARD READER', w: 10, h: 8 },
     behavior: {
+      // edge-triggered storage (the card at the station): the outputs follow the state alone, which moves only at
+      // a rising clk edge, so the cycle engine may run a circuit whose logic carries data back into next
+      seq: { clk: 'clk', comb: [] },
       init: () => freshReaderState(sp, key),
       carry: (prev) => {
         const p = prev as CardReaderState | undefined;
