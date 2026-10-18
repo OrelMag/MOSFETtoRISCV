@@ -247,12 +247,52 @@ const RCA32_DEPTH = logicDepth(rca(32))!;
 export const chNand: Chapter = {
   id: 'nand', num: 3, title: 'The NAND gate', level: 'Transistors → gates',
   blurb: 'Four transistors, and the only brick we will ever need.',
+  goals: [
+    'build a two-input gate from a pull-up network of PMOS and its dual pull-down of NMOS',
+    'say why designers prefer NAND to NOR (the slow PMOS in parallel, not in series)',
+    'explain why one gate type is enough for every circuit on this site',
+    'price a NAND in transistors, and in relays and tubes',
+  ],
+  builds: ['inverter'],
+  recap: {
+    keep: [
+      'A CMOS gate is a pull-up network of PMOS and a pull-down network of NMOS that are each other\'s dual: parallel in one, series in the other. For every input exactly one of them conducts.',
+      'NAND: PMOS in parallel, NMOS in series. NOR is the dual. A single CMOS stage always inverts, so NAND (4 transistors) is cheaper than AND (6).',
+      'NAND is <strong>functionally complete</strong>. Every circuit on this site bottoms out in NANDs, and the gate counts count them.',
+      'A NAND is a function: CMOS, relays or tubes change its price (time, power, size), never the netlist.',
+    ],
+    practise: ['t_nand', 't_nor', 'r_nand'],
+    check: [
+      {
+        question: 'A three-input CMOS NAND has six transistors. How are they arranged?',
+        options: ['Three PMOS in parallel, three NMOS in series', 'Three PMOS in series, three NMOS in parallel', 'Three PMOS in parallel, three NMOS in parallel'],
+        answer: 0,
+        explain: 'The output may fall to 0 only when every input is 1, so the pull-down needs all three NMOS in a chain, and any one input at 0 must pull up: PMOS in parallel.',
+        why: ['', 'That is the three-input NOR: its output is 1 only when every input is 0.', 'Then for mixed inputs both networks conduct at once: a short from VDD to GND, and y is neither 0 nor 1.'],
+      },
+      {
+        question: 'Why do chip designers prefer NAND to NOR?',
+        options: ['NAND puts the weaker PMOS in parallel, so at equal speed it is smaller', 'NAND needs fewer transistors', 'NOR is not functionally complete'],
+        answer: 0,
+        explain: 'Holes are two to three times slower than electrons. NOR stacks its PMOS in series, so they must be made wider to pull up as fast.',
+        why: ['', 'Both need four transistors.', 'NOR is complete too. The preference is about speed and area, not about what can be built.'],
+      },
+      {
+        question: 'On a CMOS NAND with a = 0 and b = 1, which transistors conduct?',
+        options: ['The PMOS whose gate is a, and the NMOS whose gate is b', 'Both PMOS', 'Both NMOS', 'None of them'],
+        answer: 0,
+        explain: 'A PMOS conducts on a 0 at its gate, an NMOS on a 1. The PMOS on a pulls y up to 1; the NMOS on b conducts, but the one on a is off, so there is no path to ground.',
+        why: ['', 'The PMOS on b has a 1 at its gate: it is off.', 'The NMOS on a has a 0 at its gate: it is off, so the series path is broken.', 'Then y would float. In CMOS one network always conducts.'],
+      },
+    ],
+  },
   steps: [
     {
       title: 'Two inputs',
       body: `
-        <p>Give the inverter a second input. Put two PMOS transistors <em>in parallel</em> (either one can pull
-        up) and two NMOS <em>in series</em> (both must conduct to pull down).</p>
+        <p>Give the inverter a second input. Put two PMOS transistors <span data-show="p1 p2">p1, p2</span>
+        <em>in parallel</em> (either one can pull up) and two NMOS <span data-show="n1 n2">n1, n2</span> <em>in series</em>
+        (both must conduct to pull down).</p>
         <p>The output is 0 only when <code>a</code> AND <code>b</code> are both 1. That is NOT-AND:
         <strong>NAND</strong>.</p>
         <table><tr><th>a</th><th>b</th><th>y</th></tr><tr><td>0</td><td>0</td><td>1</td></tr><tr><td>0</td><td>1</td><td>1</td></tr><tr><td>1</td><td>0</td><td>1</td></tr><tr><td>1</td><td>1</td><td>0</td></tr></table>
@@ -260,6 +300,10 @@ export const chNand: Chapter = {
       scene: () => ({ root: NAND, inputs: { a: 1, b: 0 } }),
       challenge: {
         kind: 'reach', goal: 'Make the NAND output 0.', check: (st) => st.value('y') === 0,
+        hints: [
+          'y can only reach 0 through the two NMOS at the bottom. When does a chain of two switches in series conduct?',
+          'An NMOS conducts when its gate is 1. Follow each NMOS gate back to the input that drives it.',
+        ],
         answer: 'a = 1 and b = 1: both series NMOS conduct, connecting y to GND, and both PMOS are off.',
         solve: (st) => st.setInputs({ a: 1, b: 1 }),
       },
@@ -267,12 +311,14 @@ export const chNand: Chapter = {
     {
       title: 'NOR, for comparison',
       body: `
-        <p>Swap the arrangement (PMOS in series, NMOS in parallel) and you get <strong>NOR</strong>:
-        the output is 1 only when both inputs are 0.</p>
+        <p>Swap the arrangement (PMOS <span data-show="p1 p2">in series</span>, NMOS <span data-show="n1 n2">in parallel</span>)
+        and you get <strong>NOR</strong>: the output is 1 only when both inputs are 0.</p>
         <p>Both work, but chip designers prefer NAND. Holes move about two to three times slower than electrons, so
         PMOS transistors are weaker. NOR puts the weak PMOS devices <em>in series</em>, which makes its
-        pull-up slow. NAND puts them in parallel. At the same speed, a NAND is smaller.</p>`,
-      scene: () => ({ root: NOR_CMOS, inputs: { a: 0, b: 0 } }),
+        pull-up slow. NAND puts them in parallel. At the same speed, a NAND is smaller.</p>
+        <div class="try">Find the one input that makes the NOR output 1.</div>`,
+      scene: () => ({ root: NOR_CMOS, inputs: { a: 1, b: 0 } }),
+      tries: [(st) => st.value('y') === 1],
     },
     {
       title: 'One brick to build everything',
@@ -288,6 +334,7 @@ export const chNand: Chapter = {
       challenge: {
         kind: 'quiz', question: 'How many transistors does a CMOS AND gate need, built the natural way?',
         options: ['4: same as NAND', '6: a NAND followed by an inverter', '2'], answer: 1,
+        why: ['A NAND is 4, but its output is inverted, and undoing that inversion costs an inverter.', '', 'Two transistors make an inverter: one input, no AND.'],
         explain: 'A single CMOS stage always inverts, so AND = NAND + NOT = 4 + 2 = 6 transistors. Inverting gates are the cheap ones.',
       },
     },
@@ -317,6 +364,7 @@ export const chNand: Chapter = {
       challenge: {
         kind: 'quiz', question: `Through the brick, the 32-bit ripple-carry adder is ${RCA32_DEPTH} NAND delays deep. Built from relays, one add takes about:`,
         options: [fmtTime(RCA32_DEPTH * TECH.relay.step), fmtTime(TECH.relay.step), fmtTime(RCA32_DEPTH * TECH.tube.step)], answer: 0,
+        why: ['', 'That is P1\'s native relay adder, whose carry runs through changeover contacts in one step. Through the NAND brick the carry ripples gate by gate.', 'That is the tube time: tubes switch in microseconds, relays in milliseconds.'],
         explain: `${RCA32_DEPTH} relay steps × ${RELAY_STEP_MS} ms ≈ ${fmtTime(RCA32_DEPTH * TECH.relay.step)}. P1's relay adder carries through contacts and adds in one step (${fmtTime(TECH.relay.step)}); tubes take ${fmtTime(RCA32_DEPTH * TECH.tube.step)}, CMOS ${fmtTime(RCA32_DEPTH * TECH.cmos.step)}.`,
       },
     },
