@@ -910,79 +910,79 @@
   {
    "id": "sys",
    "name": "System (Zicsr, traps, I/O)",
-   "nands": 88286,
+   "nands": 88383,
    "period": 126,
    "runs": [
     {
      "bench": "fib",
      "instructions": 4881,
      "cycles": 4881,
-     "switched": 677595355,
-     "functional": 326454745
+     "switched": 677933216,
+     "functional": 326700548
     },
     {
      "bench": "sort",
      "instructions": 2108,
      "cycles": 2108,
-     "switched": 434732034,
-     "functional": 148034639
+     "switched": 434861832,
+     "functional": 148145005
     },
     {
      "bench": "matmul",
      "instructions": 2353,
      "cycles": 2353,
-     "switched": 291738088,
-     "functional": 149913476
+     "switched": 291831316,
+     "functional": 149992963
     },
     {
      "bench": "crc",
      "instructions": 3049,
      "cycles": 3049,
-     "switched": 482164126,
-     "functional": 206701957
+     "switched": 482350193,
+     "functional": 206829521
     }
    ]
   },
   {
    "id": "sys-m",
    "name": "System RV32IM",
-   "nands": 108864,
+   "nands": 108961,
    "period": 127,
    "runs": [
     {
      "bench": "fib",
      "instructions": 4881,
      "cycles": 4881,
-     "switched": 691921572,
-     "functional": 336336145
+     "switched": 692259434,
+     "functional": 336581948
     },
     {
      "bench": "sort",
      "instructions": 2108,
      "cycles": 2108,
-     "switched": 549728793,
-     "functional": 161082088
+     "switched": 549858591,
+     "functional": 161192455
     },
     {
      "bench": "matmul",
      "instructions": 2353,
      "cycles": 2353,
-     "switched": 299501760,
-     "functional": 154865005
+     "switched": 299594988,
+     "functional": 154944492
     },
     {
      "bench": "matmul-m",
      "instructions": 885,
      "cycles": 885,
-     "switched": 129395801,
-     "functional": 59270894
+     "switched": 129484184,
+     "functional": 59306814
     },
     {
      "bench": "crc",
      "instructions": 3049,
      "cycles": 3049,
-     "switched": 596151244,
-     "functional": 218934116
+     "switched": 596337311,
+     "functional": 219061679
     }
    ]
   },
