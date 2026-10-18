@@ -637,7 +637,7 @@ export function seqDivider(n: number, mux: Mux2Kind = LIB_MUX2): ComponentDef {
       { name: 'start', ends: ['start', 'load.a'] },
       { name: '¬busy', ends: ['nbusy.y', 'load.b'], tags: true },
       { name: 'load', ends: ['load.y', 'mr.s', 'mq.s', 'mcnt.s', 'rd.en', 'en.a', 'nrun.a'], tags: ['mr.s', 'mq.s', 'mcnt.s', 'rd.en', 'nrun.a'] },
-      { name: 'busy', ends: ['run.q', 'nbusy.a', 'en.b', 'dn.a', 'keep.a', 'busy'], tags: true },
+      { name: 'busy', ends: ['run.q', 'nbusy.a', 'dn.a', 'keep.a', 'busy'], tags: true },
       { name: 'step', ends: ['en.y', 'rr.en', 'rq.en', 'cnt.en'], tags: true },
       { name: 'zero', ends: ['z.y', 'mr.b'] },
       { name: 'R', ends: ['rr.q', 'step.r', 'r'], tags: ['r'] },
@@ -659,7 +659,7 @@ export function seqDivider(n: number, mux: Mux2Kind = LIB_MUX2): ComponentDef {
       { name: `count[${k}]`, ends: ['sc.o1', 'dn.b'], tags: true },
       { name: 'done', ends: ['dn.y', 'ndn.a', 'done'], tags: true },
       { name: '¬done', ends: ['ndn.y', 'keep.b'] },
-      { name: 'stay', ends: ['keep.y', 'nrun.b'], tags: true },
+      { name: 'stay', ends: ['keep.y', 'nrun.b', 'en.b'], tags: true },
       { name: 'busyNext', ends: ['nrun.y', 'run.d'] },
       { name: 'clk', ends: ['clk', 'rr.clk', 'rq.clk', 'rd.clk', 'cnt.clk', 'run.clk'], tags: ['rr.clk', 'rq.clk', 'rd.clk', 'cnt.clk', 'run.clk'] },
     ];
@@ -682,7 +682,7 @@ export function seqDivider(n: number, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   wire [N:0] r2 = {r, q[N-1]}, diff = r2 - {1'b0, d};
   always_ff @(posedge clk) begin
     if (load) begin r <= '0; q <= a; d <= b; count <= '0; end
-    else if (busy) begin
+    else if (busy & ~done) begin
       r <= diff[N] ? r2[N-1:0] : diff[N-1:0];
       q <= {q[N-2:0], ~diff[N]};
       count <= count + 1;

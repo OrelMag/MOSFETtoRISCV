@@ -77,6 +77,24 @@ describe('iterative divider', () => {
       expect([out(s, 'q'), out(s, 'r')]).toEqual(b === 0 ? [255, a] : [Math.floor(a / b), a % b]);
       tick(s);
       expect(out(s, 'busy')).toBe(0);
+      expect([out(s, 'q'), out(s, 'r')], 'the result holds after done').toEqual(b === 0 ? [255, a] : [Math.floor(a / b), a % b]);
+    }
+  });
+
+  it('every iterative unit stops stepping in its done cycle: the result holds until the next start', async () => {
+    const { seqMul } = await import('../src/lib/multiply');
+    const { nrSeqDivider, srtDivider } = await import('../src/lib/divide');
+    const { srt4Divider } = await import('../src/lib/srt4');
+    for (const def of [seqMul(8), nrSeqDivider(8), srtDivider(8), srt4Divider(8)]) {
+      const s = simulate(def);
+      const outs = def.ports.filter((p) => p.dir === 'out' && p.name !== 'done' && p.name !== 'busy').map((p) => p.name);
+      set(s, { clk: 0, start: 0, a: 0, b: 0 });
+      set(s, { start: 1, a: 200, b: 7 });
+      tick(s);
+      set(s, { start: 0 });
+      for (let i = 0; !out(s, 'done'); i++) { tick(s); expect(i, def.id).toBeLessThan(40); }
+      const at = outs.map((p) => out(s, p));
+      for (let i = 0; i < 3; i++) { tick(s); expect(outs.map((p) => out(s, p)), `${def.id} ${i + 1} cycles after done`).toEqual(at); }
     }
   });
 });
