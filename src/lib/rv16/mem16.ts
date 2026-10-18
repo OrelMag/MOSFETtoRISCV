@@ -135,7 +135,10 @@ export const BANK16 = bankOf();
 
 // ---- m_ctrl: a row-buffer controller ------------------------------------------------------------------------
 
-/** A 4-bit counter of the cycles since a clear, stopping at 15 (its incrementer's carry says 15); cleared later. */
+/**
+ * A 4-bit counter of the cycles since a command, stopping at 15 (its incrementer's carry says 15); cleared later.
+ * The clear loads 1, not 0: the cycle after the command is one cycle since it, so q ≥ t is exactly the chip's rule.
+ */
 function sinceCounter(b: Builder, label: string): { q: string; clear: (c: string) => void } {
   const r = b.add(RV16_REG4, label);
   b.wire('clk', `${r}.clk`);
@@ -143,7 +146,9 @@ function sinceCounter(b: Builder, label: string): { q: string; clear: (c: string
     q: `${r}.q`,
     clear: (c) => {
       const inc = b.op(incrementer(4), [`${r}.q`], '+1');
-      b.wire(b.op1(bitwise('and', 4), [`${inc}.y`, b.op1(fanout(4), [b.op1(NOT, [c])])], '0 on clear'), `${r}.d`);
+      const s = b.op(splitter([1, 3], 2), [`${inc}.y`]);
+      const hi = b.op1(bitwise('and', 3), [`${s}.o1`, b.op1(fanout(3), [b.op1(NOT, [c])])]);
+      b.wire(b.op1(merger([1, 3], 2), [b.op1(OR, [`${s}.o0`, c]), hi], '1 on clear'), `${r}.d`);
       b.wire(b.op1(OR, [c, b.op1(NOT, [`${inc}.cout`])], 'count'), `${r}.en`);
     },
   };

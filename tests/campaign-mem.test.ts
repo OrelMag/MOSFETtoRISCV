@@ -65,6 +65,16 @@ describe('m_ctrl: a row-buffer controller', () => {
     expect(r.cycles).toBe(nodeById('m_ctrl')!.par!.cycles);
   });
 
+  it('the reference issues each command at the first cycle the chip allows: par is the chip\'s, not one cycle more', () => {
+    // A read opening bank 0 row 5, then a row conflict on the same bank: ACT 21, RD 25 (tRCD), data 29 (tCAS);
+    // PRE 30 (tRAS = 9 after 21), ACT 34 (tRP), RD 38, data 42: done at the end of 42.
+    const A = Dram16Model.addr;
+    const trace = { name: 'conflict', lead: 20, reqs: [{ addr: A(0, 5, 3), we: false, wd: 0, gap: 0 }, { addr: A(0, 9, 7), we: false, wd: 0, gap: 0 }] };
+    const r = runCtrl(CTRL16, 'gate', [trace]);
+    expect(r.failures).toEqual([]);
+    expect(r.cycles).toBe(43);
+  });
+
   it('without refresh the chip forgets', () => {
     expect(runCtrl(ctrlOf('norefresh'), 'gate').failures.join('\n')).toMatch(new RegExp(`no REF for \\d+ cycles: the chip needs one at least every ${DRAM16.tREFI} cycles`));
   });

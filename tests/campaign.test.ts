@@ -21,7 +21,8 @@ import { deadParts, openInputs } from '../src/editor/lint';
 import { emptyWorkspace } from '../src/editor/model';
 import { resolveComponent } from '../src/lib/resolve';
 import { chip, part, pin, wire, workspace } from './editorkit';
-import type { ComponentDef } from '../src/sim/types';
+import { deadInstances } from '../src/sim/dead';
+import { type ComponentDef, netlistOf } from '../src/sim/types';
 
 class MapKV {
   m = new Map<string, string>();
@@ -116,6 +117,10 @@ describe('every playable level', () => {
       expect(deadParts(d, lib.compiled(d.id)!), d.id).toEqual([]);
       expect(openInputs(lib.compiled(d.id)!), d.id).toEqual([]);
     }
+    // No part serves only an output the level does not check (it would inflate par; a free extra pin like busy is fine).
+    const asked = new Set(c.ports.map((p) => p.name));
+    const top = lib.compiled(main.id)!.def;
+    expect(deadInstances(netlistOf(top)!, top.ports.filter((p) => asked.has(p.name))), 'parts serving only unchecked outputs').toEqual([]);
     const r = checkChallenge(c, lib.compiled(main.id));
     expect(r.failures).toEqual([]);
     expect(r.restrictionViolations).toEqual([]);

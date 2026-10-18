@@ -10,6 +10,7 @@ import { arrayMul, seqDivider } from '../lib/muldiv';
 import { RV16_MUX2 } from '../lib/rv16/logic';
 import { seqMul } from '../lib/multiply';
 import { F16, fpAddX, fpMulX } from '../sim/fpref';
+import { keepPorts } from '../sim/dead';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { rng } from './drills';
 
@@ -81,7 +82,7 @@ export const BUILD8: Record<string, () => BuildChallenge> = {
       vectors: () => FP_EDGE.flatMap((a) => FP_EDGE.flatMap((b) => [0, 1, 2, 3, 4].map((rm) => [a, b, 0, rm]))),
       care: ([, , , rm]) => [rm > 4 ? 0 : 0xffff],
     },
-    answer: refOf('o_fpadd', () => fpAdd(F16, RV16_MUX2), 'binary16 adder'),
+    answer: refOf('o_fpadd', () => keepPorts(fpAdd(F16, RV16_MUX2), ['a', 'b', 'sub', 'rm', 'y']), 'binary16 adder'),
   }),
   o_fpmul: () => ({
     id: 'o_fpmul', title: 'binary16 multiplier', level: 'arithmetic', allowed: 'nand',
@@ -92,6 +93,6 @@ export const BUILD8: Record<string, () => BuildChallenge> = {
       vectors: () => FP_EDGE.flatMap((a) => FP_EDGE.flatMap((b) => [0, 1, 2, 3, 4].map((rm) => [a, b, rm]))),
       care: ([, , rm]) => [rm > 4 ? 0 : 0xffff],
     },
-    answer: refOf('o_fpmul', () => fpMul(F16, RV16_MUX2), 'binary16 multiplier'),
+    answer: refOf('o_fpmul', () => keepPorts(fpMul(F16, RV16_MUX2), ['a', 'b', 'rm', 'y']), 'binary16 multiplier'),
   }),
 };

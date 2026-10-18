@@ -179,7 +179,8 @@ end`,
 
 /**
  * Control for an n-step iterative unit: start (while idle) raises load for one cycle; then busy, with
- * step = 1, for n cycles; done rises for one cycle when the count reaches n. n + 2 cycles in all.
+ * step = 1, for n cycles; done rises for one cycle when the count reaches n, with step = 0 so the result
+ * holds until the next start. n + 2 cycles in all.
  */
 export function iterCtrl(n: number): ComponentDef {
   // A power of two is reached when the count's top bit rises; any other n needs a comparator.
@@ -209,7 +210,7 @@ export function iterCtrl(n: number): ComponentDef {
       { name: 'start', ends: ['start', 'load.a'] },
       { name: '¬busy', ends: ['nbusy.y', 'load.b'] },
       { name: 'load', ends: ['load.y', 'mcnt.s', 'en.a', 'nrun.a', 'load'], tags: ['mcnt.s', 'nrun.a', 'load'] },
-      { name: 'busy', ends: ['run.q', 'nbusy.a', 'en.b', 'dn.a', 'keep.a', 'busy'], tags: ['nbusy.a', 'en.b', 'dn.a', 'keep.a'] },
+      { name: 'busy', ends: ['run.q', 'nbusy.a', 'dn.a', 'keep.a', 'busy'], tags: ['nbusy.a', 'dn.a', 'keep.a'] },
       { name: 'step', ends: ['en.y', 'cnt.en', 'step'], tags: ['cnt.en', 'step'] },
       { name: 'zc', ends: ['zc.y', 'mcnt.b'] },
       { name: 'cntD', ends: ['mcnt.y', 'cnt.d'] },
@@ -219,7 +220,7 @@ export function iterCtrl(n: number): ComponentDef {
       { name: pow2 ? `count[${k}]` : `count = ${n}`, ends: [pow2 ? 'sc.o1' : 'sc.eq', 'dn.b'], tags: true },
       { name: 'done', ends: ['dn.y', 'ndn.a', 'done'], tags: true },
       { name: '¬done', ends: ['ndn.y', 'keep.b'] },
-      { name: 'stay', ends: ['keep.y', 'nrun.b'] },
+      { name: 'stay', ends: ['keep.y', 'nrun.b', 'en.b'], tags: ['en.b'] },
       { name: 'busyNext', ends: ['nrun.y', 'run.d'] },
       { name: 'clk', ends: ['clk', 'cnt.clk', 'run.clk'], tags: ['cnt.clk', 'run.clk'] },
     ];
@@ -236,10 +237,11 @@ export function iterCtrl(n: number): ComponentDef {
       hdl: {
         verilog: `wire load = start & ~busy;
 assign done = busy & ${pow2 ? `count[${k}]` : `count == ${n}`};
-assign step = load | busy;
+wire stay = busy & ~done;
+assign step = load | stay;
 always_ff @(posedge clk) begin
   if (step) count <= load ? '0 : count + 1;
-  busy <= load | (busy & ~done);
+  busy <= load | stay;
 end`,
       },
     });

@@ -216,7 +216,8 @@ export type CoreMd = '' | 'mul' | 'div';
  * reference for Core II; with arith, no loads either (the result is the ALU's or lui's immediate),
  * the reference for Core I. full = true: all of RV16I, the PC loading next PC's pc + 1 (no second
  * incrementer). md: the MD opcode too (full only): a multiplier on the result mux, and a divider
- * that holds the PC until it is done.
+ * that holds the PC until it is done. fast: a Kogge–Stone ALU (c_fast's reference); next PC keeps its ripple
+ * adders, since the branch path through it ends two delays behind the load path either way.
  */
 export function rv16Core(full: boolean, fast = false, md: CoreMd = '', arith = false): ComponentDef {
   const key = `${full ? 'full' : arith ? 'arith' : 'straight'}${fast ? '_ks' : ''}${md ? `_${md}` : ''}`;
@@ -247,7 +248,7 @@ export function rv16Core(full: boolean, fast = false, md: CoreMd = '', arith = f
   if (full) {
     const take = b.op1(BRANCH16, [r1, r2, cond], 'branch?');
     b.next();
-    np = b.op(fast ? NEXTPC16F : NEXTPC16, ['', immv, r1, `${ctl}.br`, take, `${ctl}.jal`, `${ctl}.jalr`], 'next PC');
+    np = b.op(NEXTPC16, ['', immv, r1, `${ctl}.br`, take, `${ctl}.jal`, `${ctl}.jalr`], 'next PC');
     ld = `${np}.ld`;
     target = `${np}.target`;
     pc1 = `${np}.pc1`;

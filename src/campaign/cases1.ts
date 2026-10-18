@@ -88,7 +88,7 @@ export const CASES1: Record<string, LevelCase> = {
   c_fast: {
     problem: 'Every instruction pays Core III\'s slowest path: PC → instruction memory → control → ALU → data memory → result mux → register file, 98 delays, of which the ripple ALU is 50. Static timing names the path; Kogge–Stone adders, carries in logarithmic depth instead of a chain, shorten it without changing a single instruction or cycle.',
     without: 'The same 1 236 cycles at period 98.',
-    cost: 'The reference swaps the ALU and both next-PC adders: 5 403 NANDs (+662, +14%) for period 76 (−22%), so the 28 programs take 93 936 NAND delays instead of 121 128. The load path stays the longest, now with the branch two delays behind it: instruction memory → register file → comparator (44 deep: its less-than waits for the carry chain) → next PC → PC, 74.',
+    cost: 'The reference swaps only the ALU: 4 959 NANDs (+218, +5%) for period 76 (−22%), so the 28 programs take 93 936 NAND delays instead of 121 128. The load path stays the longest, now with the branch two delays behind it: instruction memory → register file → comparator (44 deep: its less-than waits for the carry chain) → next PC → PC, 74. Kogge–Stone adders in next PC would add 444 NANDs and leave the period at 76: speed up only what lies on the critical path.',
     alts: [{ name: 'Kogge–Stone ALU', lib: 'rv16_alu16ks' }, { name: 'Ripple ALU', lib: 'rv16_alu16' }],
   },
 
@@ -219,17 +219,17 @@ export const CASES1: Record<string, LevelCase> = {
   o_fpnorm: {
     problem: 'Add, multiply and int → float all end with a raw significand and exponent that must become a correctly rounded binary16 word. Normalize &amp; round shifts out the leading zeros as far as the exponent allows (stopping at a subnormal), or shifts right with sticky when the exponent is below 1; rounds on guard and sticky with the rounding decision; bumps the exponent when rounding carries out of 1.11…1; and turns a field past 30 into ∞ or the largest finite. It also raises the overflow, underflow and inexact flags.',
     without: 'Each unit carries its own normalizer and rounder, each copy another place to get a corner case wrong.',
-    cost: '2 058 NANDs, depth 86 for the adder\'s 15-bit significand (2 666, depth 90 for the multiplier\'s 22 bits): more than half of the binary16 adder (3 755). Once it exists, the adder, the multiplier and the converter are mostly wiring around it.',
+    cost: '2 058 NANDs, depth 86 for the adder\'s 15-bit significand (2 666, depth 90 for the multiplier\'s 22 bits): more than half of the binary16 adder (3 732). Once it exists, the adder, the multiplier and the converter are mostly wiring around it.',
   },
   o_fpadd: {
     problem: 'a + b in binary16: unpack both, swap so that |a| ≥ |b|, shift b right by the exponent difference keeping a sticky bit, add or subtract the significands (<code>sub</code> flips b\'s sign), then normalize &amp; round. The special cases wrap around it: a NaN in, or ∞ − ∞, gives the canonical NaN 0x7E00, and x − x is +0, except −0 when rounding down.',
     without: 'Floating-point addition in software: field extraction, shifts, compares and adds, dozens of integer instructions per operation.',
-    cost: '3 755 NANDs, depth 163, normalize &amp; round 2 058 of them. The same design in binary32 (8-bit exponent, 23-bit fraction) is 8 218 NANDs, depth 181: area roughly doubles, depth grows by 18.',
+    cost: '3 732 NANDs, depth 163, normalize &amp; round 2 058 of them. The same design in binary32 (8-bit exponent, 23-bit fraction) is 8 195 NANDs, depth 181: area roughly doubles, depth grows by 18.',
     alts: [{ name: 'binary32 adder', lib: 'fpadd8_23' }],
   },
   o_fpmul: {
     problem: 'Multiplying floats needs no alignment: XOR the signs, add the exponents (less one bias), multiply the 11-bit significands into a 22-bit product, then normalize &amp; round. Two significands in [1, 2) give a product in [1, 4), so its top bit decides a shift by one place.',
-    cost: '4 935 NANDs, depth 150: the 11 × 11 Wallace multiplier is 1 696 and the 22-bit normalize &amp; round 2 666. Shallower than the adder (163), which must align before it adds. An 11 × 11 array multiplier is smaller (1 232) but 100 deep against 48; binary32 takes 14 913 NANDs, the significand multiplier growing with the square of the width.',
+    cost: '4 912 NANDs, depth 150: the 11 × 11 Wallace multiplier is 1 696 and the 22-bit normalize &amp; round 2 666. Shallower than the adder (163), which must align before it adds. An 11 × 11 array multiplier is smaller (1 232) but 100 deep against 48; binary32 takes 14 913 NANDs, the significand multiplier growing with the square of the width.',
     alts: [{ name: 'binary32 multiplier', lib: 'fpmul8_23' }],
   },
   o_fpcmp: {
@@ -257,7 +257,7 @@ export const CASES1: Record<string, LevelCase> = {
   k_lanes: {
     problem: 'One instruction, four results. A lane is the single-cycle core\'s execute step for one thread: the operand-b mux (its own rs2 or the shared immediate) and an ALU. All four lanes take the same <code>alu</code> operation, <code>bimm</code> and immediate from the one control unit; only their operands differ. <b>nz</b> has a bit per lane, rs1 ≠ 0: the predicate <code>split</code> will test, computed by every lane on its own register.',
     without: 'One result per instruction: a loop over n elements runs n iterations, where four lanes run n / 4.',
-    cost: '4 596 NANDs, depth 55: per lane a 1 055-NAND ripple ALU, a 49-NAND bus mux and a 16-input OR for nz (45), 1 149 in all. Nothing inside the block is shared; the sharing is around it, where one control unit, one immediate generator and one PC feed all four. Kogge–Stone ALUs (1 273 NANDs each) would make the four lanes 5 468 NANDs.',
+    cost: '4 596 NANDs, depth 55, the ALU\'s y (its depth 64 is the zero flag, unused here: nz tests rs1): per lane a 1 055-NAND ripple ALU, a 49-NAND bus mux and a 16-input OR for nz (45), 1 149 in all. Nothing inside the block is shared; the sharing is around it, where one control unit, one immediate generator and one PC feed all four. Kogge–Stone ALUs (1 273 NANDs each) would make the four lanes 5 468 NANDs.',
     alts: [{ name: 'Four lanes with Kogge–Stone ALUs', nand: 5468, note: '4 × (1 273 + 49 + 45): the measured rv16_alu16ks, bus mux and OR tree' }, { name: 'One lane\'s ripple ALU', lib: 'rv16_alu16' }],
   },
   k_vrf: {
@@ -341,7 +341,7 @@ export const CASES1: Record<string, LevelCase> = {
   m_ctrl: {
     problem: 'A DDR chip does the refreshing itself when asked and keeps a row buffer per bank, but it has rules: a column command only tRCD after its row opened, data tCAS after a read, a row open at least tRAS, tRP before the next. The controller turns each request into the shortest legal sequence of commands, and fits a refresh in before the chip forgets.',
     without: 'Commands one cycle early read garbage or corrupt a row: the chip does not check, so the controller is the only thing standing between a timing table and silent data loss.',
-    cost: '777 NANDs, period 36. One request at a time keeps it small: two since-counters (cycles since the last ACT and the last PRE) cover every timing for both banks, a 4-stage shift register follows a read to its data, an 8-bit counter schedules refresh. A controller that overlaps requests needs counters per bank and a queue: chapter 33\'s FR-FCFS. 11 878 cycles over the eight traces.',
+    cost: '779 NANDs, period 36. One request at a time keeps it small: two since-counters (cycles since the last ACT and the last PRE) cover every timing for both banks, a 4-stage shift register follows a read to its data, an 8-bit counter schedules refresh. A controller that overlaps requests needs counters per bank and a queue: chapter 33\'s FR-FCFS. 10 690 cycles over the eight traces.',
   },
   m_bus: {
     problem: 'Two masters, three slaves, one set of wires: the bus has to pick who goes, route the request to the right slave, and bring the answer back to the right master, with a handshake that lets either side take its time. The arbiter must be fair (round robin) and must not take the bus from a transfer still waiting on a slow slave.',

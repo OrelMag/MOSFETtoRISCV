@@ -33,6 +33,14 @@ describe('the core bench', () => {
     expect(r.cycles).toBeGreaterThan(500);
   });
 
+  it('c_fast\'s reference pays only for what shortens its period: the fast ALU, not fast next-PC adders', async () => {
+    const { stats } = await import('../src/sim/stats');
+    const { RV16_ALU16, RV16_ALU16KS } = await import('../src/lib/rv16/logic');
+    const [slow, fast] = [rv16Core(true), rv16Core(true, true)];
+    expect(stats(fast).nands - stats(slow).nands).toBe(stats(RV16_ALU16KS).nands - stats(RV16_ALU16).nands);
+    expect(corePeriod(fast)!).toBeLessThan(corePeriod(slow)!);
+  });
+
   it('a core without branch hardware fails the control-flow programs, naming the instruction', () => {
     const r = runCore(rv16Core(false), 'gate', tests(3));
     expect(r.failures.length).toBeGreaterThan(0);

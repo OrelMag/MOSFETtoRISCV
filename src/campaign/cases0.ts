@@ -156,7 +156,7 @@ export const CASES0: Record<string, LevelCase> = {
   o_fastadd: {
     problem: 'In a ripple adder the carry crosses every bit at 2 delays each, and that chain is on the single-cycle core\'s critical path: the ALU, the branch comparator and the next-PC adders all ripple. A parallel-prefix adder computes every carry from generate / propagate pairs (g = a·b, p = a ⊕ b), combined in log2(16) = 4 levels, so the carry into bit k no longer waits for bit k − 1.',
     without: 'Depth doubles with the width: 36 for a 16-bit ripple adder, 68 for 32 bits.',
-    cost: 'Kogge–Stone: 366 NANDs, depth 16, against the ripple adder\'s 144 and 36; carry-select sits between them (312, depth 20). In the core, the fast ALU and next-PC adders make it 5403 NANDs instead of 4741, and the core level\'s clock period falls from 98 to 76 delays.',
+    cost: 'Kogge–Stone: 366 NANDs, depth 16, against the ripple adder\'s 144 and 36; carry-select sits between them (312, depth 20). In the core, the fast ALU makes it 4959 NANDs instead of 4741, and the core level\'s clock period falls from 98 to 76 delays; fast next-PC adders on top would cost 444 more and buy nothing, being off the critical path.',
     alts: [{ name: 'Ripple carry', lib: 'rca16' }, { name: 'Carry-select, 4-bit blocks', lib: 'csel16_4' }],
   },
 
