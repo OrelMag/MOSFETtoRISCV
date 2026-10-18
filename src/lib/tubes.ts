@@ -136,7 +136,7 @@ export const TRIODE_SWITCH: ComponentDef = define({
 /** An inverter that reads a plate: the divider shifts it to grid levels. */
 export const TUBE_INV: ComponentDef = define({
   id: 'tube_inv', name: 'Tube inverter', category: 'gate',
-  summary: 'A triode, its plate resistor, and the divider that shifts the input (a plate: 81 or 250 V) down to grid levels (−46 or −3 V).',
+  summary: 'A triode, its plate resistor, and the divider that shifts the input (a plate: about 128 or 241 V in a chain) down to grid levels (−46 or −3 V).',
   ports: [bit('a', 'in'), bit('y', 'out')],
   symbol: { kind: 'not' },
   spec: ([a]) => [a ? 0 : 1],
