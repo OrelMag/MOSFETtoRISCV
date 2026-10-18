@@ -84,7 +84,7 @@ export const NODES: CampaignNode[] = [
   {
     id: 'r_pull', act: 11, title: 'Pull-in and drop-out', kind: 'drill', optional: true, requires: ['intro'], drill: 'relay', par: { mistakes: 2 },
     why: 'A relay is a magnet against a spring, so it is not a clean switch: it closes at one voltage, opens at a much lower one, takes milliseconds and bounces. Read those numbers off the physical model before building with its logic, where all of it becomes one relay step.',
-    tips: [], codex: ['relay', 'relaystep'], soon: true,
+    tips: [], codex: ['relay', 'relaystep'],
     chapters: [{ chapter: 'relays', label: 'Relays' }],
   },
   {
@@ -132,7 +132,7 @@ export const NODES: CampaignNode[] = [
   {
     id: 'h_card', act: 11, title: 'Read a card', kind: 'drill', optional: true, requires: ['intro'], drill: 'hollerith', par: { mistakes: 2 },
     why: 'For seventy years programs and data arrived on cards. Read the Hollerith code both ways: what a column says, and which holes a character needs. Then the binary kind, a word punched one bit a column.',
-    tips: [], codex: ['hollerith'], soon: true,
+    tips: [], codex: ['hollerith'],
     chapters: [{ chapter: 'cards', step: 2, label: 'Eighty columns' }],
   },
   {
