@@ -9,6 +9,7 @@ import { BUILD6 } from './build6';
 import { BUILD7 } from './build7';
 import { BUILD8, partsOf } from './build8';
 import { BUILD9 } from './build9';
+import { BUILDCARD } from './buildcard';
 import { BUILDFP, FP_REF, fpGives } from './buildfp';
 import { BUILDH } from './buildh';
 import { BUILDK } from './buildk';
@@ -136,9 +137,16 @@ export const NODES: CampaignNode[] = [
     chapters: [{ chapter: 'cards', step: 2, label: 'Eighty columns' }],
   },
   {
-    id: 'h_loader', act: 11, title: 'Program on cards', kind: 'build', optional: true, requires: ['h_card', 'r_clock'],
-    why: 'A computer with an empty memory and a deck in the reader. Build the loader: a counter that addresses the memory, a write for each card, and the switch that hands memory to the 4-bit CPU once the hopper is empty. The Z3 read its program off punched film the same way.',
-    tips: [], codex: ['loader'], soon: true,
+    id: 'h_loader', act: 11, title: 'Program on cards', kind: 'build', optional: true, requires: ['h_card', 'r_clock'], base: BUILDCARD.h_loader,
+    par: { relays: 233, cycles: 182 }, gives: ['not', 'and', 'or', 'dff', 'counter8', 'mux2x8', 'cpu4_proc', 'ram256x16'],
+    why: 'A computer with an empty memory and a deck in the reader. Build the loader: a counter that addresses the memory, a write for each card, and the switch that hands memory to the 4-bit CPU once the hopper is empty. The Z3 read its program off punched film the same way, and the loader is priced as the Z3 was built: in relays.',
+    tips: [
+      'Tie the reader\'s next to 1: it takes a card at every rising edge one waits. Then ready is the write enable: the card\'s word goes into the RAM word the counter addresses, and the counter (enabled by ready) moves on at the same edge.',
+      'The RAM\'s address is a 2:1 mux on run: the counter while loading, the CPU\'s pc after. Tie test and sw to 0.',
+      'Hold the CPU back by its clock: clk AND run. run must not rise while clk is high (the CPU would see half a pulse before its first word is through the mux): take empty into a flip-flop clocked on the falling edge, clk through a NOT.',
+      'Cycles: the reader sets the pace, a card every four edges. Take each card as soon as it is ready and raise run in the cycle the last one goes, and you are at par.',
+    ],
+    codex: ['loader'],
     chapters: [{ chapter: 'cards', step: 4, label: 'A machine that reads them' }],
   },
 

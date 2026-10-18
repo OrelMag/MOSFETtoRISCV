@@ -58,6 +58,8 @@ function deviceItems(r: CheckResult, lim: Limits, item: (v: number, unit: string
     s.relays !== undefined || lim.maxRelays !== undefined ? item(s.relays ?? 0, s.relays === 1 ? 'relay' : 'relays', lim.maxRelays) : null,
     s.tubes !== undefined || lim.maxTubes !== undefined ? item(s.tubes ?? 0, s.tubes === 1 ? 'tube section' : 'tube sections', lim.maxTubes) : null,
     s.steps !== undefined ? item(s.steps, s.steps === 1 ? 'relay step' : 'relay steps', lim.maxSteps) : null,
+    // a bench that counts cycles (the card loader: cycles until run)
+    s.cycles !== undefined ? item(s.cycles, 'cycles', lim.maxCycles) : null,
   ];
 }
 
