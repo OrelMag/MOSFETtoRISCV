@@ -10,7 +10,8 @@ lock-step test. The checks below do not rely on that model alone.
 | Lock-step co-simulation of the chapters' programs | our golden model | `tests/cpu.test.ts`, `pipeline`, `system`, … | yes |
 | **Official riscv-tests** (rv32ui, rv32um, rv32uf, rv32ua, rv32mi) | the tests themselves (self-checking) | `tests/verify-*.test.ts`, `scripts/rvtests.ts` | all of them, every CPU |
 | **Random programs** | our golden model, final state | `tests/verify-*.test.ts`, `scripts/fuzz32.ts` | seeds 1–32 per CPU |
-| **Coverage** of the two above | — | `tests/verify-*.test.ts`, `scripts/coverage.ts` | no gaps allowed |
+| **Spike**, the reference simulator, on random programs | Spike, commit by commit | `scripts/spike-oracle.ts`, `.github/workflows/spike.yml` | its plumbing only (no Spike); CI on every ISA change |
+| **Coverage** of the riscv-tests and random programs | — | `tests/verify-*.test.ts`, `scripts/coverage.ts` | no gaps allowed |
 | Exported Verilog (dual-core, system CPUs), synthesized by Yosys | our gate-level simulation | `scripts/verify-export.ts` | CI gate before deploy |
 
 The riscv-tests come from another author, so they check the golden model too: it runs every image,
@@ -118,6 +119,37 @@ first difference and the program.
 --out failures.json` runs any range; the scheduled workflow `.github/workflows/verify.yml` runs a new
 range every night and keeps the failures as an artifact.
 
+## Spike: a second oracle for the golden model
+
+The random programs above compare the CPUs with our golden model; [Spike](https://github.com/riscv-software-src/riscv-isa-sim),
+the RISC-V reference simulator, checks the golden model itself, on the same kind of programs, one
+instruction at a time (`tests/verify/spike.ts`, `scripts/spike-oracle.ts`).
+
+- **The programs.** `randomProgram32` for six ISA variants: RV32I, RV32IM, RV32IF (the CPUs' user-level
+  sets), RV32IMF with byte and halfword access (everything at once), and the system CPUs' RV32I(M) +
+  Zicsr in machine mode with CSRs, `ecall`, `ebreak`, illegal words and misaligned loads, stores and
+  jumps. Two options keep them runnable on Spike and leave every other program unchanged: `dataBase`
+  moves the data window to 0x2_0000 (Spike is von Neumann; the code sits at 0x1_0000, and our ISS's
+  memories wrap, so it sees the same machine), and `timer: false` drops the timer interrupt (it needs our
+  memory-mapped `mtime`; Spike's CLINT ticks on its own schedule).
+- **The image.** An ELF32 written in TypeScript (`tests/verify/elf.ts`, no toolchain): the program, a boot
+  stub (turns the FPU on, `mstatus.FS`, which Spike requires and our ISS does not model, then jumps to
+  the program) and an exit stub writing `tohost`, where the final jump-to-self went.
+- **The comparison.** Spike runs with `--priv=m -l --log-commits`; each commit line is matched with one
+  step of our ISS: pc and instruction word, the integer register written and its value, the f register,
+  the store (address, width, data), the load address, every CSR Spike reports written (ours must read the
+  same value), and each trap (cause, `mepc`, `mtval`). The first difference ends the run with the step,
+  the instruction and both sides; the program, the ELF and Spike's log are kept.
+- **Allowed differences.** On an illegal instruction Spike writes the instruction to `mtval`, on `ebreak`
+  the pc; ours writes 0. Both are legal; the comparison takes Spike's value (counted as an allowance) so a
+  later `csrr mtval` agrees. Spike's `mret` also writes zero to `mstatush` (RV32's upper `mstatus`: MBE,
+  SBE, MPV, GVA) and `tcontrol` (Sdtrig debug triggers), which ours does not have (reading them traps); a
+  zero there is an allowance, any other value or any other CSR ours lacks is a difference.
+- **Where it runs.** `.github/workflows/spike.yml` builds Spike once at a pinned revision (cached) and
+  runs seeds 1–300 per variant on every push touching `src/riscv/`, `fpref.ts` or the oracle, and a new
+  range of 4000 every night. Locally (no Spike on Windows), `--self` checks the plumbing against a
+  Spike-format log of our own ISS, as `tests/spike-oracle.test.ts` does in `npm test`.
+
 ## Coverage
 
 What the riscv-tests and the random programs reach on each CPU. Instructions and trap causes come
@@ -205,9 +237,11 @@ riscv-tests suites).
 
 ## What this does not prove
 
-- **The random programs still use our golden model as the oracle**, at the final state. They catch the
-  hardware disagreeing with the model, not both sharing a misreading. A second, independent model
-  (Spike or Sail) comparing commit logs on the same programs is the next step (docs/ROADMAP.md, Phase 13).
+- **The CPUs' random programs still use our golden model as the oracle**, at the final state. Spike
+  checks that model, instruction by instruction, on programs drawn the same way, so a misreading shared
+  by a CPU and the model now has to be shared by Spike too; but the CPUs never run against Spike directly,
+  the programs are not the ones `npm test` gives the CPUs, and Spike's view stops at what its commit log
+  shows (a CSR written as a side effect of a trap is not in it).
 - **`bare` is our environment.** The test bodies are the official ones; the code around them (start,
   pass / fail reporting) is ours, as env/p's would be on any core without traps.
 - **Features we do not claim are not tested**: byte / halfword access outside the system CPUs,

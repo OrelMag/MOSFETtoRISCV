@@ -74,7 +74,7 @@ for (const cfg of configs) {
     }
   };
   await Promise.all(Array.from({ length: Math.max(1, jobs) }, async () => { while (next < seeds.length) await one(seeds[next++]); }));
-  console.log(`${cfg.id.padEnd(6)} ${s.matched}/${s.programs} programs match, ${s.steps} instructions compared, ${s.allowances} mtval allowances (${((performance.now() - t1) / 1000).toFixed(1)} s)`);
+  console.log(`${cfg.id.padEnd(6)} ${s.matched}/${s.programs} programs match, ${s.steps} instructions compared, ${s.allowances} allowances (${((performance.now() - t1) / 1000).toFixed(1)} s)`);
 }
 rmSync(tmp, { recursive: true, force: true });
 console.log(`total ${((performance.now() - t0) / 1000).toFixed(0)} s, ${failures.length} failures`);
