@@ -63,8 +63,8 @@ function finishTiming() {
   const setup = +(/(-?[\d.]+)\s+-?[\d.]+\s+library setup time/.exec(sec)?.[1] ?? NaN);
   // an output pin's line: fanout cap slew delay time edge pin (master)
   const cellsOn = [];
-  for (const m of sec.split('data arrival time')[0].matchAll(/^\s+\d+\s+[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)\s+[\^v]\s+(\S+)\s+\((sky130\S+)\)/gm)) {
-    cellsOn.push({ delay: +m[1], time: +m[2], inst: m[3].replace(/\/[^/]+$/, ''), master: m[4].replace(/^sky130_fd_sc_hd__/, '') });
+  for (const m of sec.split('data arrival time')[0].matchAll(/^\s+(\d+)\s+[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)\s+[\^v]\s+(\S+)\s+\((sky130\S+)\)/gm)) {
+    cellsOn.push({ fanout: +m[1], delay: +m[2], time: +m[3], inst: m[4].replace(/\/[^/]+$/, ''), master: m[5].replace(/^sky130_fd_sc_hd__/, '') });
   }
   // by block, as our own critical path is listed (inputs and output buffers belong to no block)
   const stages = [];
@@ -76,6 +76,8 @@ function finishTiming() {
   return {
     periodMin: min ? +min[1] : null, fmax: min ? +min[2] : null, start, end, arrival, setup: Number.isFinite(setup) ? -setup : null,
     cells: cellsOn.length, stages,
+    // the slowest cells on it: mostly buffers driving a large fan-out, which a unit delay does not see
+    slowest: [...cellsOn].sort((a, b) => b.delay - a.delay).slice(0, 3).map(({ master, delay, fanout, inst }) => ({ master, delay, fanout, block: blockOf(inst) })),
   };
 }
 
