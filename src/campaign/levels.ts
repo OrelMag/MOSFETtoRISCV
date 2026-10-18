@@ -18,8 +18,9 @@ export function levelChallenge(n: CampaignNode): BuildChallenge | undefined {
   let c = cache.get(n.id);
   if (!c) {
     const b = n.base();
-    // Act 0 builds from transistors; afterwards the campaign's rule replaces the challenge's.
-    const allowed = b.allowed === 'transistors' ? b.allowed : ruleFor(n.id);
+    // Act 0 builds from transistors and the relay / tube levels from their own parts (a strict rule); elsewhere the
+    // campaign's rule replaces the challenge's.
+    const allowed = b.allowed === 'transistors' || (typeof b.allowed === 'object' && b.allowed.strict) ? b.allowed : ruleFor(n.id);
     c = { ...b, id: `${CP}${n.id}`, title: n.title, allowed, limits: parLimits(n.par) ?? b.limits };
     cache.set(n.id, c);
   }

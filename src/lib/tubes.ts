@@ -156,6 +156,32 @@ export const TUBE_INV: ComponentDef = define({
   },
 });
 
+/** Two tube inverters in a row: the second reads the first's plate through its divider (the campaign's v_inv). */
+export const TUBE_BUF: ComponentDef = define({
+  id: 'tube_buf', name: 'Two tube inverters', category: 'gate',
+  summary: 'A tube inverter driving another: na is the first plate, y the second. Each grid reads a plate through a divider to −150 V.',
+  ports: [bit('a', 'in'), bit('na', 'out'), bit('y', 'out')],
+  symbol: { kind: 'box', label: '¬¬', w: 6, h: 4 },
+  spec: ([a]) => [a ? 0 : 1, a],
+  // TUBE_INV twice, drawn flat (the dividers in view), the second divider on the first plate
+  netlist: () => {
+    const d1 = divider('r', 4, 6), d2 = divider('s', 20, 6);
+    return {
+      level: 'switch',
+      pins: { a: [1, 6], na: [34, 2], y: [34, 7] },
+      instances: [...d1.instances, ...plateRes('rl', 12, 3), ...triodeAt('v1', 11, 8), ...d2.instances, ...plateRes('sl', 28, 3), ...triodeAt('v2', 27, 8)],
+      nets: [
+        ...d1.nets, ...d2.nets, supply('rl'), supply('sl'), cathode('v1'), cathode('v2'),
+        { name: 'a', ends: ['a', 'r1.a'] },
+        { name: 'grid 1', ends: ['r1.b', 'r2.a', 'v1.g'] },
+        { name: 'na', ends: ['rl.b', 'v1.p', 's1.a', 'na'], trunk: 2 },
+        { name: 'grid 2', ends: ['s1.b', 's2.a', 'v2.g'] },
+        { name: 'y', ends: ['sl.b', 'v2.p', 'y'] },
+      ],
+    };
+  },
+});
+
 /** Two triodes on one plate resistor: either one conducting pulls the plate down. The tube's natural gate. */
 export const TUBE_NOR: ComponentDef = define({
   id: 'tube_nor', name: 'Tube NOR', category: 'gate',

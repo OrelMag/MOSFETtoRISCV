@@ -66,6 +66,8 @@ export interface CustomRun {
   cycles?: number;
   /** The clock period, when the bench measures it itself (a core with its memories). */
   period?: number;
+  /** Relays, when the bench prices the circuit itself (a gate-level chip counted as relay logic). */
+  relays?: number;
   /** Indices of the tests (e.g. the programs) that failed. */
   failed?: number[];
 }
@@ -82,6 +84,11 @@ export interface LibRule {
   lib: readonly string[];
   /** Short text for the rule badge ('NAND + 6 unlocked parts'). */
   label?: string;
+  /**
+   * Only the listed parts, switch-level ones included (the campaign's relay and tube levels: relays, rails and loads,
+   * no MOSFET, no NAND unless listed). Without it every switch-level part is allowed and NAND always is.
+   */
+  strict?: boolean;
 }
 
 /** The rule's kind, for badges and CSS ('lib' for a campaign rule). */
@@ -101,6 +108,12 @@ export interface Limits {
   maxPeriod?: number;
   /** Clock cycles of a custom bench (CPU cores). */
   maxCycles?: number;
+  /** Relays (relay levels; a gate-level chip priced in relays by its bench). */
+  maxRelays?: number;
+  /** Vacuum tube sections: triodes and diodes. */
+  maxTubes?: number;
+  /** Relay steps from an input change until every armature rests. */
+  maxSteps?: number;
 }
 
 export interface BuildChallenge {
@@ -120,6 +133,8 @@ export interface BuildChallenge {
   answer: () => ChipDoc[];
   /** Library id of the state machine it should be (lib/fsms.ts): after Check, the circuit can be read back as a diagram. */
   fsm?: string;
+  /** Rules on the circuit's structure beyond its parts (a tube grid read through a divider): each problem fails Check. */
+  rules?: (def: ComponentDef) => string[];
 }
 
 export interface Score {
@@ -131,6 +146,11 @@ export interface Score {
   period?: number | null;
   /** Clock cycles a custom bench counted (CPU cores). */
   cycles?: number;
+  /** Relays and tube sections (triodes + diodes) of a switch-level chip that has any; a bench may price relays itself. */
+  relays?: number;
+  tubes?: number;
+  /** Most relay steps one input change took to come to rest (a chip with relays). */
+  steps?: number;
 }
 
 export interface CheckResult {
@@ -196,7 +216,7 @@ const RANDOM_VECTORS = 4096;
 const ZERO: Score = { nand: 0, transistors: 0, depth: null };
 
 /** What a simulation run found. */
-interface Run { failures: string[]; tested: number; vector?: Record<string, number>; cycles?: number; period?: number; failed?: number[] }
+interface Run { failures: string[]; tested: number; vector?: Record<string, number>; cycles?: number; period?: number; failed?: number[]; relays?: number; steps?: number }
 
 /** Check a compiled chip against a challenge. Never throws. */
 export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefined): CheckResult {
@@ -213,6 +233,7 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
     const errors = compiled.diags.filter((d) => d.level === 'error').map((d) => `error: ${d.msg}`);
     res.failures.push(...pinProblems, ...errors.slice(0, 3));
     if (errors.length > 3) res.failures.push(`… and ${errors.length - 3} more errors`);
+    if (!res.failures.length && ch.rules) res.failures.push(...ch.rules(def));
     if (!res.failures.length) {
       const c = ch.check;
       const r: Run = c.kind === 'table'
@@ -224,6 +245,8 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
       if (r.failed) res.failed = r.failed.slice(0, MAX_FAILED);
       if (r.cycles !== undefined) res.score.cycles = r.cycles;
       if (r.period !== undefined) res.score.period = r.period;
+      if (r.relays !== undefined) res.score.relays = r.relays;
+      if (r.steps !== undefined) res.score.steps = r.steps;
     }
   } catch (e) {
     res.failures.push(`cannot simulate: ${e instanceof Error ? e.message : String(e)}`);
@@ -234,7 +257,7 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
 
 /** The score Check reports: NANDs, transistors, depth (gate level), period when clocked and sequential. */
 export function scoreOf(def: ComponentDef, mode: 'gate' | 'switch', clocked: boolean): Score {
-  let s = { nands: 0, transistors: 0 };
+  let s = { nands: 0, transistors: 0, relays: 0, triodes: 0, diodes: 0 };
   try { s = stats(def); } catch { /* a broken part: no score */ }
   let depth: number | null = null;
   let period: number | null = null;
@@ -246,7 +269,8 @@ export function scoreOf(def: ComponentDef, mode: 'gate' | 'switch', clocked: boo
       } catch { /* no timing */ }
     }
   }
-  return { nand: s.nands, transistors: s.transistors, depth, period };
+  const devices = { ...(s.relays ? { relays: s.relays } : {}), ...(s.triodes + s.diodes ? { tubes: s.triodes + s.diodes } : {}) };
+  return { nand: s.nands, transistors: s.transistors, depth, period, ...devices };
 }
 
 function checkPins(def: ComponentDef, want: PinSpec[]): string[] {
@@ -269,6 +293,7 @@ function allowedLeaf(d: ComponentDef, allowed: Allowed): string | null {
   if (d.prim === 'alias') return null; // splitters, mergers, displays
   if (isExternal(d) || ioInfo(d)) return null; // keys, keyboards, switches, consoles, screens: zero cost, and a check reads the sources released (0)
   const lib = typeof allowed === 'object' ? allowed : null;
+  if (lib?.strict) return libAllowed(lib, d.id) || d.category === 'plumbing' ? null : `${d.name}: not one of this level's parts (${lib.label ?? lib.lib.join(', ')})`;
   if (isSwitchPrim(d)) return null; // transistors, rails, resistors, capacitors (your own NAND stays usable)
   if (d.id === 'tie0' || d.id === 'tie1' || d.id.startsWith('sb_const') || /^const\d+_[0-9a-f]+$/.test(d.id)) return null;
   if (d.prim === 'nand') return allowed === 'transistors' ? 'a library NAND: build it from transistors' : null;
@@ -346,10 +371,15 @@ export function seqStart(sim: Sim, ports: PinSpec[], check: Extract<ChallengeChe
   return vals;
 }
 
-/** Step k of a sequence: its inputs (kept in `vals`), then a clock cycle if it ticks. Throws when it oscillates. */
-export function seqStep(sim: Sim, clk: string, st: SeqStep, k: number, vals: Record<string, number>): void {
+/**
+ * Step k of a sequence: its inputs (kept in `vals`), then a clock cycle if it ticks. Throws when it oscillates.
+ * `took` hears the simulator's time each settle took (relay steps on SwitchSim).
+ */
+export function seqStep(sim: Sim, clk: string, st: SeqStep, k: number, vals: Record<string, number>, took?: (dt: number) => void): void {
   const settle = (what: string) => {
+    const t0 = sim.time;
     sim.settle();
+    took?.(sim.time - t0);
     if (sim.unstable) throw new Error(`it does not settle (${what})`);
   };
   for (const [p, v] of Object.entries(st.set ?? {})) {
@@ -398,6 +428,9 @@ function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], 
   const failed: number[] = [];
   let bad = 0;
   let vector: Record<string, number> | undefined;
+  // Relay steps: SwitchSim's time counts them (other simulators: no relays, no steps reported).
+  const relays = sim instanceof SwitchSim && sim.hasRelays;
+  let steps = 0;
   const compare = (v: number[], got: Bit[][], row: number) => {
     const want = spec(v);
     const mask = care?.(v);
@@ -414,7 +447,9 @@ function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], 
   // vectors pass, an acyclic NAND netlist is swept 32 vectors at a time.
   const slow = (v: number[], row: number) => {
     I.forEach((p, i) => sim.setInput(p.name, v[i]));
+    const t0 = sim.time;
     sim.settle();
+    steps = Math.max(steps, sim.time - t0);
     if (sim.unstable) throw new Error(`it does not settle for ${fmtIns(I, v)} (it oscillates)`);
     compare(v, O.map((p) => readBits(sim, p.name)), row);
   };
@@ -441,7 +476,7 @@ function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], 
   }
   rest.forEach((v, i) => slow(v, from + i));
   if (bad > failures.length) failures.push(`… ${bad - failures.length} more of ${vs.length} rows wrong`);
-  return { failures, tested: vs.length, failed, ...(vector ? { vector } : {}) };
+  return { failures, tested: vs.length, failed, ...(vector ? { vector } : {}), ...(relays ? { steps } : {}) };
 }
 
 function runSequence(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], check: Extract<ChallengeCheck, { kind: 'sequence' }>): Run {
@@ -452,8 +487,10 @@ function runSequence(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[
   const failures: string[] = [];
   const failed: number[] = [];
   let bad = 0;
+  const relays = sim instanceof SwitchSim && sim.hasRelays;
+  let steps = 0;
   check.steps.forEach((st, k) => {
-    seqStep(sim, clk, st, k, vals);
+    seqStep(sim, clk, st, k, vals, (n) => { steps = Math.max(steps, n); });
     const wrong = Object.entries(st.expect).flatMap(([p, want]) => {
       const g = readBits(sim, p);
       return matches(g, want) ? [] : [[p, fmtBits(g), fmtNum(want, g.length)]];
@@ -467,7 +504,7 @@ function runSequence(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[
     }
   });
   if (bad > failures.length) failures.push(`… ${bad - failures.length} more of ${check.steps.length} steps wrong`);
-  return { failures, tested: check.steps.length, failed };
+  return { failures, tested: check.steps.length, failed, ...(relays ? { steps } : {}) };
 }
 
 // ---- answers ---------------------------------------------------------------------------------

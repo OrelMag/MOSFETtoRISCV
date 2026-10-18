@@ -16,7 +16,7 @@ export interface ChapterLink {
 }
 
 /** Metrics a level is graded on (lower is better). */
-export type Metric = 'nand' | 'transistors' | 'depth' | 'period' | 'cycles' | 'size' | 'mistakes' | 'idle';
+export type Metric = 'nand' | 'transistors' | 'depth' | 'period' | 'cycles' | 'size' | 'mistakes' | 'idle' | 'relays' | 'tubes' | 'steps';
 
 export type Par = Partial<Record<Metric, number>>;
 
@@ -58,6 +58,8 @@ export interface CampaignNode {
 
 export interface Act {
   num: number;
+  /** Shown instead of "Act <num>" (the side act before the transistor: "Act P", like the prologue chapters P1–P3). */
+  label?: string;
   title: string;
   /** HTML: the act's place in the story. */
   blurb: string;
@@ -74,5 +76,8 @@ export function parLimits(par: Par | undefined): Limits | undefined {
   if (par.depth !== undefined) l.maxDepth = par.depth;
   if (par.period !== undefined) l.maxPeriod = par.period;
   if (par.cycles !== undefined) l.maxCycles = par.cycles;
+  if (par.relays !== undefined) l.maxRelays = par.relays;
+  if (par.tubes !== undefined) l.maxTubes = par.tubes;
+  if (par.steps !== undefined) l.maxSteps = par.steps;
   return l;
 }

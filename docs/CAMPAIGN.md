@@ -98,6 +98,8 @@ Each level has a **par** per metric:
 | Program puzzles | size (words), cycles |
 | Kernel puzzles (act 9) | cycles (warp instructions), idle lanes (%) |
 | Memory controllers (act 10) | NANDs, period, cycles over the request traces |
+| Relay levels (act P) | relays, relay steps (the most steps one input change takes to rest) |
+| Tube levels (act P) | tube sections (triodes + diodes) |
 
 - ★ passes
 - ★★ every metric ≤ 1.5 × par
@@ -246,6 +248,41 @@ Legend: `id` ← requires · *opt* optional · (ex) an existing sandbox challeng
 - ✅ `t_inv` (ex) ← intro
 - ✅ `t_nand` (ex) ← t_inv
 - ✅ *opt* `t_nor` (ex) ← t_inv
+
+### Act P — Before the transistor (roadmap Phase 14e)
+Optional as a whole, beside act 0 (it needs only `intro`); act number 11 with the label "Act P", listed right after act 0
+(approved with the Phase 14 mockup, recommendation 9, 2026-10-16). Builds are at switch level under a **strict rule**
+(`LibRule.strict`: only the listed parts, switch-level ones included, no MOSFET and no NAND): relays (1 to 6 poles), VDD,
+GND and pull-down loads; or triodes, vacuum diodes, plate / divider / bias resistors, B+, −150 V and GND. References are
+prologue P1 / P2's library circuits (`src/lib/relays.ts`, `tubes.ts`) drawn as chips (`src/campaign/buildr.ts`). The
+level screen prices the CMOS alternatives in the same metrics through the technology setting (`measure.ts libCost`).
+- ✅ drill `r_pull`: pull-in and drop-out, read off the relay model's curves ← intro. Ten kinds from phys/relay.ts
+  (pull-in / drop-out / hysteresis on the pull-against-spring chart, also for relay variants; operated or released at
+  V; first touch, rest, bounces and release off a run chart; coil power; the turn-off spike), units parsed (parseQty)
+- ✅ `r_nand`: two break contacts in parallel from VDD, a load on y ← r_pull. 2 relays, 1 step
+- ✅ `r_xor`: changeover XOR ← r_nand. 2 relays, 1 step (NAND-mapped: 4 relays, 3 steps)
+- ✅ `r_adder`: 4-bit adder, the carry through contacts on two lines ← r_xor. 8 relays (a 5-pole and a 4-pole per
+  bit), 1 step; the reference's full adder is a chip of its own
+- ✅ `r_latch`: self-holding relay ← r_nand. 3 relays (the mockup's 1 assumed set and reset were contacts; a pin always
+  drives its line, so each operates a relay of its own)
+- ✅ `r_clock`: the buzzer and a ÷2 ← r_latch. A custom bench steps relays (16 with en = 1: y changes every step, q every
+  second; then en = 0: both rest, q holds; then restart). 2 relays (`relay_clock`: the buzzer's second pole feeds the
+  divider's coil from its own break or make contact; the mockup's 3 counted an en relay the pin makes unnecessary)
+- ✅ `v_inv`: two tube inverters in a row (na = ¬a, y = a) ← intro. 2 tube sections. A rule beyond the parts
+  (`BuildChallenge.rules`: `gridProblems`): every triode grid is read through a divider (never wired straight to a plate,
+  an input or B+, and biased to −150 V), since the simulator's logic levels alone would accept a plate on a grid
+- ✅ `v_ff`: Eccles–Jordan, set / reset through steering diodes ← v_inv. 4 tube sections (2 triodes, 2 diodes; the
+  mockup said "2 triodes")
+- ✅ drill `h_card`: Hollerith code both ways, a short source card, object cards (row 9 → value, value → columns,
+  column 1 the most significant bit) ← intro
+- ✅ `h_loader`: program on cards ← h_card, r_clock. Given: a card reader (23 object cards, feed 3 edges), a 256 × 16
+  RAM and the 4-bit CPU without its ROM (`cpu4_proc`: instr in, pc out). The learner builds the loader (address counter,
+  a write per card, run once the hopper is empty, the RAM's address from the counter or the pc, the CPU's clock gated by
+  run) from a strict rule of NAND, NOT, AND, OR, DFF, an 8-bit counter, a 2:1 8-bit mux. The bench (GateSim) runs two
+  decks (the reader's and MULTIPLY4, poked into the hopper with the feed forced to 3): run low while cards are left, the
+  RAM equal to the deck when it rises, the outputs at halt equal to Iss4's. Graded in relays (lib/tech.ts price of the
+  learner's logic, CPU / RAM / reader left out) and cycles to load over both decks: 233 relays, 182 cycles. A loader
+  that feeds the CPU NOPs and uses its pc as the address counter beats par by far (allowed)
 
 ### Act 1 — Logic
 - ✅ `l_bool`: Boolean algebra (identities, De Morgan, bubble pushing), lesson + simplification drill ← intro

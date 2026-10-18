@@ -599,12 +599,19 @@ function partialWiring(main: ChipDoc, geo: Geo, present: Set<string>): { wires: 
       b: full1 ? { ref: w.b, node: endNode(w.b) } : { open: nodeAt(w.id, r[1], 0) },
     });
   }
-  // A branch off a wire that is gone entirely (both its ends missing) is open at that junction too.
+  // A branch off a wire that is gone entirely (both its ends missing) is open at that junction too, unless it leaves
+  // that wire right at the wire's own end on a part, pin or pointer still there: then it hangs on that end.
   const sides = ['a', 'b'] as const;
   for (const k of kws.values()) {
     for (const s of sides) {
       const e = k[s];
-      if ('ref' in e && 'wire' in e.ref && !kws.has(e.ref.wire)) k[s] = { open: e.node };
+      if (!('ref' in e && 'wire' in e.ref) || kws.has(e.ref.wire)) continue;
+      const gone = byId.get(e.ref.wire);
+      const end = keep(e.node) ? [gone?.a, gone?.b].find((x): x is EndRef => !!x && !('wire' in x) && endNode(x) === e.node) : undefined;
+      if (end) {
+        k[s] = { ref: end, node: e.node };
+        k.changed = true;
+      } else k[s] = { open: e.node };
     }
   }
   // A wire cut back to a junction continues along a branch that leaves it there: merge the two.

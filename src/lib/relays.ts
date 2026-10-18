@@ -264,3 +264,36 @@ export const RELAY_BUZZER: ComponentDef = define({
     ],
   }),
 });
+
+/**
+ * The buzzer and a divide-by-two from two relays (the campaign's buzzer clock). k is the buzzer, fed by en through
+ * its own break contact. t toggles at every step k is operated: k's second pole connects t's coil to N (VDD through
+ * t's break contact: on while t is released) while k is operated and to P (VDD through t's make contact: on while t
+ * is operated) while k is released, so t' = k ? ¬t : t. Every armature moves at once at a relay step, so the
+ * toggle reads the old t: q has twice y's period. With en = 0, k rests released and t holds.
+ */
+export const RELAY_CLOCK: ComponentDef = define({
+  id: 'relay_clock', name: 'Relay clock and ÷2', category: 'sequential',
+  summary: 'Two relays: a buzzer (y changes every relay step) and a relay that toggles while the buzzer is operated (q, half the rate).',
+  ports: [bit('en', 'in'), bit('y', 'out'), bit('q', 'out')],
+  symbol: { kind: 'box', label: 'CLK ÷2', w: 6, h: 4 },
+  netlist: () => ({
+    level: 'switch',
+    pins: { en: [2, 3], y: [40, 3], q: [40, 16] },
+    instances: [
+      { name: 'k', def: relay(2), at: [8, 6] }, { name: 'gk', def: GND, at: [8, 11] },
+      { name: 't', def: relay(2), at: [24, 6] }, { name: 'gt', def: GND, at: [24, 11] },
+      { name: 'vt', def: VDD, at: [27, 3] }, { name: 'vq', def: VDD, at: [30, 3] },
+      load('lq', [35, 13]),
+    ],
+    nets: [
+      { name: 'en', ends: ['en', 'k.c1'] }, { name: 'gnd k', ends: ['k.b', 'gk.p'] }, { name: 'gnd t', ends: ['t.b', 'gt.p'] },
+      { name: 'y', ends: ['k.nc1', 'k.a', 'y'], trunk: 3 },
+      { name: 'vdd t', ends: ['vt.p', 't.c1'] }, { name: 'vdd q', ends: ['vq.p', 't.c2'] },
+      { name: 'coil t', ends: ['k.c2', 't.a'], trunk: 4 },
+      { name: 'P', ends: ['t.no1', 'k.nc2'], tags: ['t.no1', 'k.nc2'] },
+      { name: 'N', ends: ['t.nc1', 'k.no2'], tags: ['t.nc1', 'k.no2'] },
+      { name: 'q', ends: ['t.no2', 'lq.y', 'q'], trunk: 16 },
+    ],
+  }),
+});

@@ -27,6 +27,7 @@ export function criteria(ch: BuildChallenge): string[] {
   }
   out.push(typeof ch.allowed === 'string'
     ? ch.allowed === 'transistors' ? 'Built from transistors, rails and wiring (and your own chips made of them).' : 'Built from NAND gates (and your chips made of them).'
+    : ch.allowed.strict ? `Built only from ${ch.allowed.label ?? 'the parts listed below'} (and your own chips made of them): no MOSFET, no NAND.`
     : 'Built from NAND, wiring, constants, your own chips, and the parts unlocked below.');
   return out;
 }

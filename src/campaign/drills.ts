@@ -1,7 +1,11 @@
 // Drills: short generated exercises with an exact checker. A drill level is passed after enough
 // correct answers; mistakes cost stars. Binary and hex, two's complement, Boolean simplification
-// and Karnaugh maps (an exact minimum, don't-cares included). No DOM.
+// and Karnaugh maps (an exact minimum, don't-cares included); Act P's relay (numbers read off the physical
+// model's curves, drawn as inline SVG) and punched cards. No DOM.
 
+import { objectCard, seqText, textCard, wordOf } from '../cards/card';
+import { CHARSET, charOf, punchOf, ROW9, ROWS, rowsOf, rowsOfChar } from '../cards/hollerith';
+import { RELAY, RELAY_STEP_MS, RELAY_SUPPLY, type RelayParams, relayPull, type RelayRun, relaySim, relayStatic, relaySummary, T_OFF, T_ON, Z3 } from '../phys/relay';
 import { assemble16 } from '../riscv/rv16/asm16';
 import { decode16, disasm16 } from '../riscv/rv16/isa16';
 
@@ -466,4 +470,387 @@ const float: Drill = {
   },
 };
 
-export const DRILLS: Record<string, Drill> = { binary, twos, kmap, boolean, isa16, float };
+// ---- quantities, yes / no, figures ----------------------------------------------------------------
+
+const PREFIX: Record<string, number> = { '': 1, m: 1e-3, 'µ': 1e-6, u: 1e-6, k: 1e3 };
+
+/** A number with an optional unit, in `unit`: a bare number is taken in `unit`, a prefixed base unit converts
+ *  (1440 mW = 1.44 W, 0.0082 s = 8.2 ms). Null when it is not a quantity of that kind. */
+export function parseQty(s: string, unit: 'V' | 'ms' | 'W'): number | null {
+  const t = s.trim().replace(/−/g, '-').replace(/\s+/g, '').replace(/,/g, '.');
+  const m = t.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)([a-zµ]*)$/i);
+  if (!m) return null;
+  const x = Number(m[1]), u = m[2].toLowerCase();
+  if (!u) return x;
+  const base = unit === 'ms' ? 's' : unit.toLowerCase();
+  if (!u.endsWith(base)) return null;
+  const f = PREFIX[u.slice(0, -base.length)];
+  if (f === undefined) return null;
+  return unit === 'ms' ? (x * f) / 1e-3 : x * f;
+}
+
+/** Within `tol` of `want` (absolute, or relative when `rel`); `signed`: say so when only the sign is wrong. */
+function qtyAnswer(want: number, unit: 'V' | 'ms' | 'W', tol: number, rel = false, signed = false): Question['check'] {
+  return (a) => {
+    const x = parseQty(a, unit);
+    if (x === null) return { ok: false, why: `write a number (in ${unit})` };
+    const lim = (rel ? tol * Math.abs(want) : tol) + 1e-9;
+    if (Math.abs(x - want) <= lim) return { ok: true };
+    if (signed && Math.abs(-x - want) <= lim) return { ok: false, why: 'the right size, the wrong sign' };
+    return { ok: false, why: `not within ${rel ? `${tol * 100} %` : `${tol} ${unit}`} of the model` };
+  };
+}
+
+function yesNo(want: boolean): Question['check'] {
+  return (t) => {
+    const y = /^\s*(y|yes|1|true|closed)\s*$/i.test(t), n = /^\s*(n|no|0|false|open)\s*$/i.test(t);
+    return { ok: (y && want) || (n && !want), why: y || n ? 'no' : 'yes or no' };
+  };
+}
+
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const f1 = (x: number) => x.toFixed(1), f2 = (x: number) => x.toFixed(2);
+/** A polyline's points in integer pixels, the inner points of flat runs dropped (keeps a figure small). */
+function pts(p: [number, number][]): string {
+  const q = p.map(([x, y]) => [Math.round(x), Math.round(y)] as const);
+  return q.filter((c, i) => i === 0 || i === q.length - 1 || q[i - 1][1] !== c[1] || q[i + 1][1] !== c[1])
+    .map(([x, y]) => `${x},${y}`).join(' ');
+}
+const svgOpen = (w: number, h: number, label: string) =>
+  `<svg class="cp-fig" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${esc(label)}">`;
+const txt = (x: number, y: number, s: string, cls = 'tk', anchor = 'middle') =>
+  `<text x="${Math.round(x)}" y="${Math.round(y)}" class="${cls}" text-anchor="${anchor}">${esc(s)}</text>`;
+const ln = (x1: number, y1: number, x2: number, y2: number, cls: string) =>
+  `<line x1="${Math.round(x1)}" y1="${Math.round(y1)}" x2="${Math.round(x2)}" y2="${Math.round(y2)}" class="${cls}"/>`;
+
+/** Grid lines gathered into one path per class (a line element each would double a figure's size). */
+class Grid {
+  private d: Record<string, string> = {};
+  v(x: number, y0: number, y1: number, cls: string): void { this.d[cls] = `${this.d[cls] ?? ''}M${Math.round(x)} ${Math.round(y0)}V${Math.round(y1)}`; }
+  h(y: number, x0: number, x1: number, cls: string): void { this.d[cls] = `${this.d[cls] ?? ''}M${Math.round(x0)} ${Math.round(y)}H${Math.round(x1)}`; }
+  svg(): string { return Object.entries(this.d).map(([c, d]) => `<path d="${d}" class="${c}"/>`).join(''); }
+}
+
+// ---- the relay (Act P) ------------------------------------------------------------------------------
+
+/** A relay to ask about: the chapter's, or one with another coil or spring (so the numbers are not learnt by heart). */
+interface RelayCase { p: RelayParams; what: string }
+
+function relayCase(r: () => number): RelayCase {
+  const k = r();
+  if (k < 0.5) return { p: RELAY, what: 'The chapter\'s relay' };
+  if (k < 0.75) {
+    const Rc = [300, 500, 600][int(r, 0, 2)];
+    return { p: { ...RELAY, Rc }, what: `The relay rewound with ${Rc < RELAY.Rc ? 'thicker' : 'thinner'} wire (${RELAY.N} turns, ${Rc} Ω instead of ${RELAY.Rc} Ω)` };
+  }
+  const F0 = [0.8, 1.2][int(r, 0, 1)];
+  return { p: { ...RELAY, F0 }, what: `The relay with its return spring preloaded to ${F0} N instead of ${RELAY.F0} N` };
+}
+
+const staticCache = new Map<string, { pull: number; drop: number }>();
+/** relayStatic, rounded to its 10 mV grid. */
+export function relayThresholds(p: RelayParams): { pull: number; drop: number } {
+  const key = `${p.Rc}|${p.F0}|${p.N}`;
+  let v = staticCache.get(key);
+  if (!v) {
+    const s = relayStatic(p);
+    if (s.pull === null || s.drop === null) throw new Error('relay drill: no thresholds');
+    v = { pull: Math.round(s.pull * 100) / 100, drop: Math.round(s.drop * 100) / 100 };
+    staticCache.set(key, v);
+  }
+  return v;
+}
+
+const runCache = new Map<string, RelayRun>();
+function relayRun(V: number, p: RelayParams): RelayRun {
+  const key = `${V}|${p.Rc}|${p.F0}|${p.e}|${p.Rq}`;
+  let run = runCache.get(key);
+  if (!run) { run = relaySim(V, p); runCache.set(key, run); }
+  return run;
+}
+
+/** The settled pull at the open and the closed gap against supply voltage, with the spring's force at each end. */
+function pullChart(p: RelayParams, vmax: number): string {
+  const W = 340, H = 164, X0 = 34, X1 = 326, Y0 = 142, Y1 = 28, FMAX = 3;
+  const x = (V: number) => X0 + (V / vmax) * (X1 - X0), y = (F: number) => Y0 - (F / FMAX) * (Y0 - Y1);
+  const g = new Grid();
+  let t = '';
+  for (let V = 0; V <= vmax; V++) {
+    g.v(x(V), Y1, Y0, V % 5 ? 'gr' : 'gr2');
+    if (V % 5 === 0) t += txt(x(V), Y0 + 12, `${V}${V === vmax ? ' V' : ''}`);
+  }
+  for (let F = 0; F <= FMAX; F += 0.5) {
+    const whole = Number.isInteger(F);
+    g.h(y(F), X0, X1, whole ? 'gr2' : 'gr');
+    if (whole) t += txt(X0 - 4, y(F) + 3, `${F}${F === FMAX ? ' N' : ''}`, 'tk', 'end');
+  }
+  let o = svgOpen(W, H, 'Magnet pull and spring force against supply voltage') + g.svg() + t;
+  const curve = (gap: number) => {
+    const c: [number, number][] = [];
+    for (let k = 0; k <= 120; k++) {
+      const V = (vmax * k) / 120, F = relayPull(V, gap, p);
+      c.push([x(V), y(Math.min(F, FMAX))]);
+      if (F >= FMAX) break;
+    }
+    return c;
+  };
+  const open = curve(0), closed = curve(p.travel), held = p.F0 + p.k * p.travel;
+  o += ln(X0, y(p.F0), X1, y(p.F0), 'c1 dash') + ln(X0, y(held), X1, y(held), 'c2 dash');
+  o += `<polyline points="${pts(open)}" class="c1"/><polyline points="${pts(closed)}" class="c2"/>`;
+  // A legend, not labels on the curves: each pull shares its colour with the spring force it must beat.
+  o += txt(X0, 10, '— pull, armature out', 'lb1', 'start') + txt(X0 + 122, 10, `- - preload ${f2(p.F0)} N`, 'lb1', 'start');
+  o += txt(X0, 22, '— pull, armature in', 'lb2', 'start') + txt(X0 + 122, 22, `- - spring at the stop ${f2(held)} N`, 'lb2', 'start');
+  return `${o}</svg>`;
+}
+
+/** A run between absolute times t0 and t1: coil current, armature travel and the make contact, against time after `zero`. */
+function runChart(run: RelayRun, t0: number, t1: number, zero: number, after: string): string {
+  const W = 340, H = 170, X0 = 34, X1 = 302, Y0 = 108, Y1 = 22, CY0 = 134, CY1 = 120;
+  const x = (t: number) => X0 + ((t - t0) / (t1 - t0)) * (X1 - X0);
+  const win = run.s.filter((q) => q.t >= t0 - 1e-9 && q.t <= t1 + 1e-9);
+  const imax = Math.max(10, Math.ceil((Math.max(...win.map((q) => q.i)) * 1e3 * 1.08) / 10) * 10);
+  const yI = (mA: number) => Y0 - (mA / imax) * (Y0 - Y1), yX = (mm: number) => Y0 - (mm / 0.8) * (Y0 - Y1);
+  const g = new Grid();
+  let o = txt(X0, 10, '— coil current (mA)', 'lb1', 'start') + txt(X0 + 120, 10, '— armature (mm)', 'lb2', 'start') + txt(X0 + 214, 10, '— contact', 'lb3', 'start');
+  const k0 = Math.ceil((t0 - zero) * 1e3 - 1e-9), k1 = Math.floor((t1 - zero) * 1e3 + 1e-9), every = k1 - k0 > 12 ? 2 : 1;
+  for (let k = k0; k <= k1; k++) {
+    const X = x(zero + k / 1e3);
+    g.v(X, Y1, CY0, k === 0 ? 'ax' : k % (2 * every) ? 'gr' : 'gr2');
+    if (k % every === 0) o += txt(X, CY0 + 12, String(k));
+  }
+  o += txt(X1, CY0 + 26, `ms ${after}`, 'tk', 'end');
+  const step = imax > 60 ? 20 : 10;
+  for (let mA = 0; mA <= imax; mA += step) {
+    g.h(yI(mA), X0, X1, 'gr');
+    o += txt(X0 - 4, yI(mA) + 3, String(mA), 'tk', 'end');
+  }
+  for (const mm of [0, 0.4, 0.8]) o += txt(X1 + 4, yX(mm) + 3, String(mm), 'tk', 'start');
+  o = svgOpen(W, H, `Coil current, armature travel and contact against time ${after}`) + g.svg() + o;
+  // Current and travel are smooth: at most ~75 points each keeps the figure near 3 kB.
+  const stride = Math.max(1, Math.ceil(win.length / 75)), cs = win.filter((_, j) => j % stride === 0 || j === win.length - 1);
+  o += `<polyline points="${pts(cs.map((q) => [x(q.t), yI(q.i * 1e3)]))}" class="c1"/>`;
+  o += `<polyline points="${pts(cs.map((q) => [x(q.t), yX(q.x * 1e3)]))}" class="c2"/>`;
+  // The contact from its exact events (a bounce can be shorter than a sample).
+  let on = run.ev.filter((e) => e.t < t0).at(-1)?.closed ?? false;
+  const cp: [number, number][] = [[x(t0), on ? CY1 : CY0]];
+  for (const e of run.ev) if (e.t >= t0 && e.t <= t1) { cp.push([x(e.t), on ? CY1 : CY0], [x(e.t), e.closed ? CY1 : CY0]); on = e.closed; }
+  cp.push([x(t1), on ? CY1 : CY0]);
+  o += `<polyline points="${cp.map(([a, b]) => `${f1(a)},${b}`).join(' ')}" class="c3"/>`;
+  o += txt(X1 + 4, CY1 + 3, 'closed', 'tk', 'start') + txt(X1 + 4, CY0 + 3, 'open', 'tk', 'start');
+  return `${o}</svg>`;
+}
+
+/** The shortest opening of the make contact while the coil is on (s): one under ~60 µs is not readable on a chart. */
+function shortestOpen(run: RelayRun): number {
+  const on = run.ev.filter((e) => e.t < T_OFF);
+  let m = Infinity;
+  for (let k = 1; k < on.length; k++) if (on[k].closed) m = Math.min(m, on[k].t - on[k - 1].t);
+  return m;
+}
+
+const relay: Drill = {
+  id: 'relay', title: 'Pull-in and drop-out', goal: 6,
+  how: 'Read the numbers off the model\'s curves. Voltages in V within ±0.3 V (hysteresis ±0.5 V), times in ms within ±0.3 ms, power and the turn-off spike within ±2 %; bounces exact; yes or no. A unit is optional (1440 mW and 0.0082 s are read as such).',
+  make(r) {
+    const k = r();
+    if (k < 0.45) {
+      const c = relayCase(r), { pull, drop } = relayThresholds(c.p), held = c.p.F0 + c.p.k * c.p.travel;
+      const why = `Released, the armature is out: the pull at the full gap must beat the preload (${f2(c.p.F0)} N), first at <b>${f2(pull)} V</b>. Operated, the gap is closed and the pull (∝ (N·I)² / gap², saturating) far larger: it holds the stretched spring (${f2(held)} N) down to <b>${f2(drop)} V</b>.`;
+      if (k < 0.31) {
+        const which = k < 0.12 ? 'pull' : k < 0.24 ? 'drop' : 'hyst';
+        const want = which === 'pull' ? pull : which === 'drop' ? drop : pull - drop;
+        const ask = which === 'pull' ? 'the <b>pull-in</b> voltage, the lowest supply that closes a released relay (V)'
+          : which === 'drop' ? 'the <b>drop-out</b> voltage, below which an operated relay lets go (V)'
+            : 'the <b>hysteresis</b>, pull-in minus drop-out (V)';
+        return {
+          prompt: `${c.what}: settled magnet pull and spring force against supply voltage. Read ${ask}.<br>${pullChart(c.p, 5 * Math.ceil((pull + 2) / 5))}`,
+          placeholder: which === 'hyst' ? 'V (±0.5)' : 'V (±0.3)', check: qtyAnswer(want, 'V', which === 'hyst' ? 0.5 : 0.3), answer: `${f2(want)} V`,
+          explain: `${why}${which === 'hyst' ? ` ${f2(pull)} − ${f2(drop)} = ${f2(pull - drop)} V: a Schmitt trigger made of iron, so a noisy coil line does not chatter.` : ''}`,
+        };
+      }
+      const operated = r() < 0.5, lo = Math.max(0.5, drop - 2);
+      let V = 0;
+      do V = Math.round((r() < 0.5 ? drop + r() * (pull - drop) : lo + r() * (pull + 6 - lo)) * 2) / 2;
+      while (Math.abs(V - pull) < 0.4 || Math.abs(V - drop) < 0.4);
+      const closed = operated ? V > drop : V >= pull;
+      return {
+        prompt: `${c.what}, <b>${operated ? 'operated' : 'released'}</b>, its supply set to <b>${V} V</b> and left until the coil current settles. Is the make contact closed? (yes / no)<br>${pullChart(c.p, 5 * Math.ceil(Math.max(pull + 2, V + 1) / 5))}`,
+        placeholder: 'yes / no', check: yesNo(closed), answer: closed ? 'yes' : 'no',
+        explain: `${operated ? `Operated: it stays in above the drop-out, ${f2(drop)} V.` : `Released: it pulls in only from the pull-in, ${f2(pull)} V, up.`}${V > drop && V < pull ? ` Between ${f2(drop)} and ${f2(pull)} V the answer depends on where the armature already is.` : ''} ${why}`,
+      };
+    }
+    if (k < 0.85) {
+      const which = k < 0.55 ? 'touch' : k < 0.65 ? 'settled' : k < 0.75 ? 'bounces' : 'release';
+      for (;;) {
+        const V = int(r, 18, 28);
+        const e = which === 'settled' || which === 'bounces' ? [0.4, 0.5, 0.55, 0.6, 0.7][int(r, 0, 4)] : RELAY.e;
+        const Rq = which === 'release' ? [1000, 2000, 4000, 8000][int(r, 0, 3)] : RELAY.Rq;
+        const p = { ...RELAY, e, Rq }, run = relayRun(V, p), s = relaySummary(run, p);
+        if (s.firstTouch === null || s.settled === null || s.release === null || shortestOpen(run) < 60e-6) continue;
+        const ms = (t: number) => t * 1e3;
+        const what = `The chapter's relay${e !== RELAY.e ? ` with contacts of restitution e = ${e}` : ''}${Rq !== RELAY.Rq ? ` and a ${Rq} Ω quench resistor` : ''}, switched on at <b>${V} V</b>`;
+        if (which === 'release') {
+          return {
+            prompt: `${what}, then off. How long after switch-off does the make contact open (ms)?<br>${runChart(run, T_OFF - 1e-3, T_OFF + s.release + 1.5e-3, T_OFF, 'after switch-off')}`,
+            placeholder: 'ms (±0.3)', check: qtyAnswer(ms(s.release), 'ms', 0.3), answer: `${f1(ms(s.release))} ms`,
+            explain: `The current decays through coil and quench resistor, τ = L / (${RELAY.Rc} + ${Rq}) Ω, and the armature lets go once the pull falls below the stretched spring: ${f2(ms(s.release))} ms. A larger quench resistor releases faster but spikes higher (−${Rq} Ω × the current).`,
+          };
+        }
+        const chart = runChart(run, T_ON, T_ON + s.settled + 1.5e-3, T_ON, 'after switch-on');
+        if (which === 'touch') {
+          return {
+            prompt: `${what}. How long after switch-on does the make contact first touch (ms)?<br>${chart}`,
+            placeholder: 'ms (±0.3)', check: qtyAnswer(ms(s.firstTouch), 'ms', 0.3), answer: `${f1(ms(s.firstTouch))} ms`,
+            explain: `The current climbs with τ = L / R until the pull beats the preload; then the armature moves, the gap shrinks, L rises and the current dips. First touch at ${f2(ms(s.firstTouch))} ms: a higher supply reaches the pull-in current sooner on the same exponential.`,
+          };
+        }
+        if (which === 'settled') {
+          return {
+            prompt: `${what}. When does the make contact close for good, its last bounce over (ms after switch-on)?<br>${chart}`,
+            placeholder: 'ms (±0.3)', check: qtyAnswer(ms(s.settled), 'ms', 0.3), answer: `${f1(ms(s.settled))} ms`,
+            explain: `First touch at ${f2(ms(s.firstTouch))} ms, ${s.bounces} bounce${s.bounces === 1 ? '' : 's'}, at rest from ${f2(ms(s.settled))} ms. The simulator's relay step (${RELAY_STEP_MS} ms) is this time for the chapter's relay at ${RELAY_SUPPLY} V: nothing may read the contact earlier.`,
+          };
+        }
+        return {
+          prompt: `${what}. How many times does the make contact open again after its first touch while the coil is on (bounces)?<br>${chart}`,
+          placeholder: 'a count', answer: String(s.bounces),
+          check: (t) => { const n = parseNum(t); return n === null ? { ok: false, why: 'a count' } : { ok: n === s.bounces, why: 'count the dips of the contact trace' }; },
+          explain: `${s.bounces} opening${s.bounces === 1 ? '' : 's'} between ${f2(ms(s.firstTouch))} and ${f2(ms(s.settled))} ms. Each impact keeps e = ${e} of the blade's speed: livelier contacts (larger e) bounce more and longer.`,
+        };
+      }
+    }
+    if (k < 0.92) {
+      const Rc = [300, 400, 400, 500, 600][int(r, 0, 4)], V = [12, 24, 24, 36, 48][int(r, 0, 4)];
+      const p = { ...RELAY, Rc }, P = relaySummary(relayRun(V, p), p).power;
+      return {
+        prompt: `A ${Rc} Ω relay coil on <b>${V} V</b>, operated. What power does it draw (W)?`,
+        placeholder: 'W (±2 %)', check: qtyAnswer(P, 'W', 0.02, true), answer: `${P.toPrecision(3)} W`,
+        explain: `P = V² / R = ${V}² / ${Rc} = ${P.toPrecision(3)} W, all of it heat, for as long as the relay holds. ${Z3.relays} of them: ${((P * Z3.relays) / 1e3).toPrecision(2)} kW (the Z3 drew about ${Z3.power / 1e3} kW).`,
+      };
+    }
+    const V = int(r, 18, 28), Rq = [1000, 2000, 4000, 8000][int(r, 0, 3)];
+    const p = { ...RELAY, Rq }, run = relayRun(V, p), s = relaySummary(run, p);
+    const iOff = run.s.find((q) => Math.abs(q.t - T_OFF) < 1e-9)!.i;
+    return {
+      prompt: `The chapter's relay on <b>${V} V</b> carries ${f2(iOff * 1e3)} mA when its supply is cut; a <b>${Rq} Ω</b> quench resistor across the coil takes the current. The coil terminal voltage just after switch-off (V)?`,
+      placeholder: 'V (±2 %)', check: qtyAnswer(s.spike, 'V', 0.02, true, true), answer: `${s.spike.toPrecision(3)} V`,
+      explain: `The inductance keeps the current flowing the same way, now through the resistor: v = −Rq·i = −${Rq} Ω × ${f2(iOff * 1e3)} mA = ${s.spike.toFixed(1)} V. Without a path the contact that cut the coil would arc. A larger Rq releases faster (τ = L / (Rc + Rq)), and the spike grows with it.`,
+    };
+  },
+};
+
+// ---- punched cards (Act P) ------------------------------------------------------------------------------
+
+/** Columns of a card (12 rows each), holes filled; optional column numbers above. */
+function cardFig(cols: readonly number[], numbers: boolean): string {
+  const P = 14, R = 11, L = 24, T = numbers ? 16 : 6, W = L + cols.length * P + 6, H = T + 12 * R + 6;
+  let o = svgOpen(W, H, `${cols.length} card column${cols.length === 1 ? '' : 's'}, rows 12 to 9`);
+  o += `<path d="M ${L + 2} ${T - 4} H ${W - 1} V ${H - 1} H ${L - 4} V ${T + 2} Z" class="pc"/>`;
+  ROWS.forEach((name, i) => {
+    o += txt(L - 8, T + i * R + R / 2 + 3, name, 'tk', 'end');
+    o += ln(L, T + i * R + R / 2, L + cols.length * P, T + i * R + R / 2, 'pg');
+  });
+  cols.forEach((m, c) => {
+    if (numbers) o += txt(L + c * P + P / 2, T - 7, String(c + 1));
+    for (let i = 0; i < 12; i++) if (m & (1 << i)) o += `<rect x="${L + c * P + P / 2 - 3}" y="${T + i * R + 1.5}" width="6" height="8" class="ph"/>`;
+  });
+  return `${o}</svg>`;
+}
+
+/** Why a column says what it says. */
+function codeWhy(ch: string): string {
+  const rows = rowsOfChar(ch)!;
+  if (/[0-9]/.test(ch)) return `${ch}: a digit is one hole, in its own row.`;
+  if (/[A-I]/.test(ch)) return `${ch} = ${rows}: zone 12 with the digits 1–9 is A–I.`;
+  if (/[J-R]/.test(ch)) return `${ch} = ${rows}: zone 11 with 1–9 is J–R.`;
+  if (/[S-Z]/.test(ch)) return `${ch} = ${rows}: zone 0 with 2–9 is S–Z (0-1 is the slash).`;
+  return `${esc(ch)} = ${rows}: ${rows.includes('8') ? 'a sign is a zone (or none), a digit and the 8 row.' : rows.includes('-') ? 'a zone and a digit that no letter uses.' : 'a zone alone.'}`;
+}
+
+/** Characters a learner can type (¢ and ¬ are on no keyboard; a blank column makes no question). */
+const TYPEABLE = CHARSET.filter((c) => c !== ' ' && c !== '¢' && c !== '¬');
+/** Short source-card texts (a blank column is a space). */
+export const CARD_WORDS = ['READ', 'PUNCH', 'STOP', 'CALL', 'END', 'GOTO', 'IF(X)', 'X=Y+1', 'A*B', 'I=1,9', 'SUM', 'LOAD', 'HALT', 'JUMP', 'Z3', 'IBM', '$1.50', 'N-1', 'A/B', 'DO 10'];
+
+function pickChar(r: () => number): string {
+  const u = r();
+  const pool = TYPEABLE.filter(u < 0.6 ? (c) => /[A-Z]/.test(c) : u < 0.8 ? (c) => /[0-9]/.test(c) : (c) => !/[A-Z0-9]/.test(c));
+  return pool[int(r, 0, pool.length - 1)];
+}
+
+const hollerith: Drill = {
+  id: 'hollerith', title: 'Read a card', goal: 6,
+  how: 'Rows from the top: zones 12, 11, 0, then digits 1–9. Characters as typed (case does not matter). Rows as <code>12-3-8</code> (any order; spaces or commas work too). Object cards: the word in row 9, column 1 its most significant bit; values in hex, columns as numbers (<code>1 4 7</code>).',
+  make(r) {
+    const k = r();
+    if (k < 0.25) {
+      const ch = pickChar(r), m = punchOf(ch)!;
+      return {
+        prompt: `What character does this column hold?<br>${cardFig([m], false)}`, placeholder: 'A', answer: ch, explain: codeWhy(ch),
+        check: (t) => {
+          const a = t.trim().toUpperCase();
+          if (a.length !== 1) return { ok: false, why: 'one character' };
+          const rows = rowsOfChar(a);
+          return { ok: a === ch, why: rows === null ? 'not a character the 029 punches' : `${esc(a)} is ${rows || 'a blank column'}` };
+        },
+      };
+    }
+    if (k < 0.5) {
+      const ch = pickChar(r), m = punchOf(ch)!;
+      return {
+        prompt: `Which rows does the 029 punch for <code>${esc(ch)}</code>?`, placeholder: '12-3-8', answer: rowsOf(m), explain: codeWhy(ch),
+        check: (t) => {
+          const toks = t.trim().split(/[\s,;\-–/+]+/).filter(Boolean);
+          if (!toks.length) return { ok: false, why: 'rows, like 12-3' };
+          let a = 0;
+          for (const x of toks) {
+            const i = (ROWS as readonly string[]).indexOf(x);
+            if (i < 0) return { ok: false, why: `there is no row ${esc(x)} (rows: 12, 11, 0–9)` };
+            a |= 1 << i;
+          }
+          const c = charOf(a);
+          return { ok: a === m, why: c === null ? 'no character has those holes' : `those holes are ${c === ' ' ? 'a blank' : esc(c)}` };
+        },
+      };
+    }
+    if (k < 0.7) {
+      const word = CARD_WORDS[int(r, 0, CARD_WORDS.length - 1)];
+      const cols = textCard(word).cols.slice(0, word.length);
+      return {
+        prompt: `Columns 1–${word.length} of a source card: what was punched?<br>${cardFig(cols, true)}`, placeholder: 'READ', answer: word,
+        explain: `${[...word].map((c) => (c === ' ' ? 'a blank column' : `${esc(c)} ${rowsOfChar(c)}`)).join(', ')}.`,
+        check: (t) => {
+          const a = t.trim().toUpperCase();
+          if (a === word) return { ok: true };
+          if (a.length !== word.length) return { ok: false, why: `${word.length} columns, ${word.length} characters (a blank column is a space)` };
+          const i = [...a].findIndex((c, j) => c !== word[j]);
+          return { ok: false, why: `column ${i + 1} is not ${esc(a[i])}` };
+        },
+      };
+    }
+    const bits = [8, 12, 16][int(r, 0, 2)], w0 = int(r, 1, 2 ** bits - 1);
+    const card = objectCard(w0, '', seqText(0), bits);
+    const holes = card.cols.slice(0, bits).flatMap((m, c) => (m & ROW9 ? [c + 1] : []));
+    const value = wordOf(card, bits), hx = `0x${hex(value, bits)}`;
+    const why = `${grp(bin(value, bits))}: column c holds bit ${bits} − c, so column 1 is the most significant bit (2^${bits - 1}) and column ${bits} the least.`;
+    if (k < 0.85) {
+      return {
+        prompt: `The word columns of an object card (${bits} bits, row 9 only). Its value in hex?<br>${cardFig(card.cols.slice(0, bits), true)}`,
+        placeholder: '0x..', check: numAnswer(value, 16), answer: hx, explain: why,
+      };
+    }
+    return {
+      prompt: `An object card holds the ${bits}-bit word <b>${hx}</b>. Which of columns 1–${bits} get a hole in row 9?<br>${cardFig(new Array<number>(bits).fill(0), true)}`,
+      placeholder: '1 4 7', answer: holes.join(' '), explain: why,
+      check: (t) => {
+        const toks = t.trim().split(/[\s,;]+/).filter(Boolean);
+        const ns = toks.map((x) => (/^\d+$/.test(x) ? Number(x) : NaN));
+        if (!toks.length || ns.some((n) => !(n >= 1 && n <= bits))) return { ok: false, why: `column numbers 1–${bits}` };
+        const got = [...new Set(ns)].sort((a, b) => a - b);
+        return { ok: got.join(' ') === holes.join(' '), why: `those holes read 0x${hex(got.reduce((w, c) => w + 2 ** (bits - c), 0), bits)}` };
+      },
+    };
+  },
+};
+
+export const DRILLS: Record<string, Drill> = { binary, twos, kmap, boolean, isa16, float, relay, hollerith };
