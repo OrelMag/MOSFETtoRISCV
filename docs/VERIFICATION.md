@@ -146,7 +146,7 @@ instruction at a time (`tests/verify/spike.ts`, `scripts/spike-oracle.ts`).
   SBE, MPV, GVA) and `tcontrol` (Sdtrig debug triggers), which ours does not have (reading them traps); a
   zero there is an allowance, any other value or any other CSR ours lacks is a difference.
 - **Where it runs.** `.github/workflows/spike.yml` builds Spike once at a pinned revision (cached) and
-  runs seeds 1–300 per variant on every push touching `src/riscv/`, `fpref.ts` or the oracle, and a new
+  runs seeds 1–1000 per variant on every push touching `src/riscv/`, `fpref.ts` or the oracle, and a new
   range of 4000 every night. Locally (no Spike on Windows), `--self` checks the plumbing against a
   Spike-format log of our own ISS, as `tests/spike-oracle.test.ts` does in `npm test`.
 

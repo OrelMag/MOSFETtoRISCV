@@ -512,8 +512,12 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
   `npm test` on the golden model and on all 22 CPU variants at gate level, 32 programs per BitSim run (one per lane);
   the pass / fail matrix is in `docs/VERIFICATION.md`. Found: the golden model's RV32 shift decode, the missing id
   CSRs (golden model and system CPU), the pipelined divider's sign with forwarded operands
-- ⏳ A second ISS as oracle for ours: Spike (or Sail) in a CI job, random programs, commit logs compared
-  instruction by instruction
+- ✅ A second ISS as oracle for ours: Spike in a CI job (`.github/workflows/spike.yml`, pinned revision, cached
+  build), random programs for six ISA variants (RV32I / IM / IF, IMF with byte and halfword access, the system CPUs'
+  machine mode with traps) linked as ELFs without a toolchain, commit logs compared instruction by instruction (pc,
+  word, x / f writes, stores, load addresses, CSR writes, trap cause / epc / tval). First run: 1800 programs,
+  370 746 instructions, no difference beyond two legal ones (mtval on illegal / ebreak; mret's zero writes to
+  mstatush and tcontrol, CSRs ours lacks). Seeds 1–1000 per variant on every ISA change, 4000 more each night
 - ✅ RV32 random-program fuzzing (`src/riscv/randprog32.ts`): ALU edge values, every branch, jal / jalr, loops,
   loads / stores of every width, hazard-dense operand choice, CSRs, traps and a timer interrupt, M, F (special
   values, every rounding mode), atomics on the dual-core; final state against the golden model on every CPU, a
