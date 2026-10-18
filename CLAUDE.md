@@ -247,13 +247,15 @@ src/lib/       the component library (registered in `registry` via define())
   relays.ts      prologue P1's relays at switch level: relay(n) (1–6 poles, ids relay, relay2 …), RELAY_NOT / NAND / XOR,
                  RELAY_FA (the carry through contacts on two rails, ci / nci: a contact cannot invert), relayAdder(n) (one
                  relay step for any width), RELAY_LATCH (self-holding), RELAY_BUZZER (a coil through its own break contact);
-                 outputs end on a load (a pull-down standing for the next coil) so a part alone reads 0, not Z
+                 outputs end on a load (a pull-down standing for the next coil) so a part alone reads 0, not Z; RELAY_CLOCK
+                 (the buzzer and a ÷2 from two relays: t' = k ? ¬t : t, the campaign's r_clock)
   tubes.ts       prologue P2's tubes at switch level: TRIODE (a 6SN7 section), DIODE (id vdiode, a 6AL5 section), B_PLUS
                  (+250 V) / V_NEG (−150 V) rails, RES_DIV (a divider's top leg, strength 2: between the plate resistor and
                  the tube, so a ratioed plate decides its grid) and RES_BIAS (its bottom leg, strength 0); TRIODE_SWITCH,
                  TUBE_INV, TUBE_NOR, TUBE_NAND (diode AND + triode: the brick), CATHODE_FOLLOWER, ECCLES_JORDAN (cross-coupled
                  pair, set / reset through steering diodes), TUBE_FA (the nine-NAND full adder in tube NANDs); every input
-                 behind a 625 kΩ / 375 kΩ divider (labels; the voltages are phys/triode.ts's)
+                 behind a 625 kΩ / 375 kΩ divider (labels; the voltages are phys/triode.ts's); TUBE_BUF (two inverters drawn
+                 flat, the campaign's v_inv)
   tech.ts        the technology setting (Phase 14c): price(def, 'cmos' | 'relay' | 'tube', steps) through the NAND brick
                  (relays: a coil per NAND output + relayExtra per net's fan-out; tubes: ½ 6SN7 + a 6AL5 per NAND, followers
                  past PLATE_FANOUT), or a native relay / tube part by its own devices; constants from phys/relay.ts /
@@ -604,7 +606,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  solveChallenge; challengeset.ts: CHALLENGES and their reference answers (chip documents
                  drawn with a small kit, each answer built from the answers of the rungs below);
                  CheckResult.failed: indices of the failing cases; tableRows / seqStart / seqStep: the
-                 cases Check runs, shared with the test player
+                 cases Check runs, shared with the test player. LibRule.strict: only the listed parts, switch-level ones
+                 included (act P: relays and loads, or tubes and resistors; no MOSFET, no NAND); Score.relays / tubes (stats)
+                 and steps (relay steps per input change, SwitchSim time; a bench may price relays itself: CustomRun.relays);
+                 BuildChallenge.rules: structural problems beyond the parts (act P's tube grids read through a divider)
   testrun.ts     testSet(ch) (Check's cases, made on demand), TestReplay: a case played on the editor's own
                  simulation (EditorSim.notify / reapply), never the document; sequences step back from
                  checkpoints every 32 steps; a table replay starts from X (as Check's fresh simulation);
@@ -766,7 +771,8 @@ src/doom/      Appendix B's Doom computer (DOM-free): machine.ts (the memory map
 src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/CAMPAIGN.md). DOM-free:
   types.ts       CampaignNode (act, kind lesson / drill / build / program / core, requires, why, tips, codex,
                  unlocks: library ids or `prefix*` later levels may place, anatomy blocks, base challenge, par, soon)
-  nodes.ts       ACTS and NODES: the tree, act 0 (transistors) to act 8 (side quests)
+  nodes.ts       ACTS and NODES: the tree, act 0 (transistors) to act 10 (memory), and act P (num 11, `label`, listed after
+                 act 0: ACTS is in map order, so look acts up by number: actName / actTitle)
   graph.ts       ancestors, topo, ruleFor(id) (NAND + unlocks of the requirements' closure: fixed per level),
                  statusOf (locked / available / started / solved / skipped; Unlock all), nextAvailable
   levels.ts      levelChallenge(node): the base BuildChallenge with the campaign rule and par, id cp_<node>,
@@ -779,6 +785,10 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
   anatomy.ts     the target CPU as blocks (intro diagram), blockNodes; layout.ts the map's placement
   drills.ts      generated questions with exact checkers (numbers, Boolean parser, exact K-map minimum, RV16
                  encoding, binary16); puzzles.ts RV16 program puzzles on the golden model (size, cycles)
+  buildr.ts      act P (before the transistor, act 11 labelled "Act P", optional, beside act 0): relay levels (NAND, XOR,
+                 4-bit adder with the carry through contacts, self-holding relay, buzzer clock: a custom bench stepping
+                 relays) and tube levels (two inverters in a row, Eccles–Jordan) under RELAY_RULE / TUBE_RULE (strict);
+                 gridProblems: every triode grid behind a divider. Graded in relays, relay steps, tube sections
   build1/5/6/7/8/9.ts, buildh.ts, buildfp.ts  the levels new to the campaign by act: BuildChallenges whose reference
                  answers are library blocks drawn as chips (docFromDef; build9 / buildfp also draw sub-units as chips of
                  their own); a side quest gives its reference's parts (givesOf); buildfp: the FP ladder (unpack, rounding
@@ -793,10 +803,11 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
   datasheet.ts   a codex component entry's datasheets: the unlocked library parts' pins, cost, depth, truth table
                  (datasheetOf(id): one part)
   cases.ts       level cases ("why we are building it": problem, without, cost, alternatives as library ids measured
-                 live, counts) in cases0.ts (acts 0–3) / cases1.ts (acts 4–10); measure.ts libCost, finalCpu (the last
+                 live, counts) in cases0.ts (acts 0–3) / cases1.ts (acts 4–10) / casesP.ts (act P); measure.ts libCost
+                 (also relays, tube sections and steps through lib/tech.ts price: a relay level's alternatives), finalCpu (the last
                  required core's reference, compiled once), copiesInFinal(node) for the after-pass card
   codexmore.ts   the fuller codex (idea, example, mistakes, lib figure, compare, anatomy, chapters) in codexmore0.ts
-                 (components, laws, tools) / codexmore1.ts (tricks, concepts); loaded on demand by the codex page
+                 (components, laws, tools) / codexmore1.ts (tricks, concepts) / codexmoreP.ts (act P); loaded on demand
   glossary.ts    codex terms in prose (titles, parenthetical names, aliases, plurals; acronyms as written)
   walk.ts        walkOf(node): the reference answer as steps (authored in walks.ts / walks1.ts / walks2.ts, else
                  generated in dataflow order, like parts grouped), partialDoc(walk, k), stepMetrics (cost, depth,
