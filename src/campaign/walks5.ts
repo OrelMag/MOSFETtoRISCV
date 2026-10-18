@@ -416,8 +416,8 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'Special cases',
-      text: 'invalid = a signaling NaN, or ∞ − ∞ (both infinite and subtracting). Any NaN or invalid gives the canonical NaN 0x7E00; else an infinite operand gives ∞ with its sign; else the rounded sum. Two 16-bit muxes on the output, one on the flags. 3 755 NANDs, depth 163.',
-      parts: ['u41', 'u42', 'u43', 'u44', 'u45', 'u49', 'u51', 'u52', 'u58'],
+      text: 'invalid = a signaling NaN, or ∞ − ∞ (both infinite and subtracting). Any NaN or invalid gives the canonical NaN 0x7E00; else an infinite operand gives ∞ with its sign; else the rounded sum. Two 16-bit muxes on the output. 3 732 NANDs, depth 163 (the library\'s unit also gathers the exception flags, 23 NANDs more).',
+      parts: ['u41', 'u42', 'u43', 'u44', 'u45', 'u49', 'u51'],
     },
   ],
 
@@ -456,8 +456,8 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'Special cases',
-      text: 'invalid = a signaling NaN, or ∞ × 0 either way round; any NaN or invalid gives 0x7E00; else an infinite operand gives ∞ with the XORed sign. A zero needs no case: a zero significand rounds to a signed zero. 4 935 NANDs, depth 150, shallower than the adder\'s 163.',
-      parts: ['u15', 'u16', 'u17', 'u18', 'u19', 'u23', 'u25', 'u26', 'u32'],
+      text: 'invalid = a signaling NaN, or ∞ × 0 either way round; any NaN or invalid gives 0x7E00; else an infinite operand gives ∞ with the XORed sign. A zero needs no case: a zero significand rounds to a signed zero. 4 912 NANDs, depth 150, shallower than the adder\'s 163.',
+      parts: ['u15', 'u16', 'u17', 'u18', 'u19', 'u23', 'u25'],
     },
   ],
 

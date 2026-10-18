@@ -9,6 +9,7 @@ import { aluSpec } from '../lib/alu';
 import { addSub } from '../lib/combinational';
 import { koggeStone } from '../lib/fastadd';
 import { ADD16, CMP16, DEC3, DET101, EQ16, INC16, MUX16, PC16, PRIME4, PRIMES4, RF8, RV16_ALU16, RV16_REG16, RV16_SHIFT16, WIDE16 } from '../lib/rv16/logic';
+import { keepPorts } from '../sim/dead';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { rng } from './drills';
 
@@ -213,7 +214,7 @@ export const BUILD1: Record<string, () => BuildChallenge> = {
     brief: '<b>{cout, s} = a + b + cin</b> again, now graded on <b>depth</b>: compute the carries with a parallel-prefix tree. The generate / propagate cells are given.',
     ports: pins([['a', 16], ['b', 16], ['cin']], [['s', 16], ['cout']]),
     check: { kind: 'table', spec: ([a, b, c]) => [(a + b + c) & 0xffff, (a + b + c) >> 16], vectors: () => withBit(pairs16()) },
-    answer: refOf('o_fastadd', () => koggeStone(16), 'Fast adder'),
+    answer: refOf('o_fastadd', () => keepPorts(koggeStone(16), ['a', 'b', 'cin', 's', 'cout']), 'Fast adder'),
   }),
   s_reg16: () => ({
     id: 's_reg16', title: '16-bit register', level: 'sequential', allowed: 'nand',

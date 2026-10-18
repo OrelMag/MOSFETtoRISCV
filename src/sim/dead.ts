@@ -51,3 +51,34 @@ export function deadInstances(nl: Netlist, ports: ComponentDef['ports']): string
   while (work.length) for (const name of netParts[work.pop()!]) wake(name);
   return nl.instances.filter((i) => !live.has(i.name)).map((i) => i.name);
 }
+
+const kept = new WeakMap<ComponentDef, Map<string, ComponentDef>>();
+
+/**
+ * The component with only the named ports, and without the parts that served only the others: a level's reference
+ * answer drawn from a library part with more outputs than the level checks (a Kogge–Stone adder's overflow, an FP
+ * unit's flags), so that its cost, and so par, is that of what the level asks for. Memoized per def and port set.
+ */
+export function keepPorts(def: ComponentDef, names: readonly string[]): ComponentDef {
+  const key = [...names].sort().join(',');
+  const per = kept.get(def) ?? kept.set(def, new Map()).get(def)!;
+  let d = per.get(key);
+  if (d) return d;
+  const want = new Set(names);
+  const ports = def.ports.filter((p) => want.has(p.name));
+  d = {
+    ...def, id: `${def.id}__${key.replace(/,/g, '_')}`, ports,
+    spec: undefined, behavior: undefined, hdl: undefined,
+    netlist: () => {
+      const nl = def.netlist!();
+      const dead = new Set(deadInstances(nl, ports));
+      const keepEnd = (e: string) => { const { inst, port } = parseEnd(e); return inst === null ? want.has(port) : !dead.has(inst); };
+      const nets = nl.nets.map((n) => ({ ...n, ends: n.ends.filter(keepEnd), tags: Array.isArray(n.tags) ? n.tags.filter(keepEnd) : n.tags }))
+        .filter((n) => n.ends.length > 1);
+      const pins = nl.pins && Object.fromEntries(Object.entries(nl.pins).filter(([k]) => want.has(k)));
+      return { ...nl, pins, instances: nl.instances.filter((i) => !dead.has(i.name)), nets };
+    },
+  };
+  per.set(key, d);
+  return d;
+}

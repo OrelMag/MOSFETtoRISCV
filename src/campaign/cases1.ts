@@ -219,17 +219,17 @@ export const CASES1: Record<string, LevelCase> = {
   o_fpnorm: {
     problem: 'Add, multiply and int → float all end with a raw significand and exponent that must become a correctly rounded binary16 word. Normalize &amp; round shifts out the leading zeros as far as the exponent allows (stopping at a subnormal), or shifts right with sticky when the exponent is below 1; rounds on guard and sticky with the rounding decision; bumps the exponent when rounding carries out of 1.11…1; and turns a field past 30 into ∞ or the largest finite. It also raises the overflow, underflow and inexact flags.',
     without: 'Each unit carries its own normalizer and rounder, each copy another place to get a corner case wrong.',
-    cost: '2 058 NANDs, depth 86 for the adder\'s 15-bit significand (2 666, depth 90 for the multiplier\'s 22 bits): more than half of the binary16 adder (3 755). Once it exists, the adder, the multiplier and the converter are mostly wiring around it.',
+    cost: '2 058 NANDs, depth 86 for the adder\'s 15-bit significand (2 666, depth 90 for the multiplier\'s 22 bits): more than half of the binary16 adder (3 732). Once it exists, the adder, the multiplier and the converter are mostly wiring around it.',
   },
   o_fpadd: {
     problem: 'a + b in binary16: unpack both, swap so that |a| ≥ |b|, shift b right by the exponent difference keeping a sticky bit, add or subtract the significands (<code>sub</code> flips b\'s sign), then normalize &amp; round. The special cases wrap around it: a NaN in, or ∞ − ∞, gives the canonical NaN 0x7E00, and x − x is +0, except −0 when rounding down.',
     without: 'Floating-point addition in software: field extraction, shifts, compares and adds, dozens of integer instructions per operation.',
-    cost: '3 755 NANDs, depth 163, normalize &amp; round 2 058 of them. The same design in binary32 (8-bit exponent, 23-bit fraction) is 8 218 NANDs, depth 181: area roughly doubles, depth grows by 18.',
+    cost: '3 732 NANDs, depth 163, normalize &amp; round 2 058 of them. The same design in binary32 (8-bit exponent, 23-bit fraction) is 8 195 NANDs, depth 181: area roughly doubles, depth grows by 18.',
     alts: [{ name: 'binary32 adder', lib: 'fpadd8_23' }],
   },
   o_fpmul: {
     problem: 'Multiplying floats needs no alignment: XOR the signs, add the exponents (less one bias), multiply the 11-bit significands into a 22-bit product, then normalize &amp; round. Two significands in [1, 2) give a product in [1, 4), so its top bit decides a shift by one place.',
-    cost: '4 935 NANDs, depth 150: the 11 × 11 Wallace multiplier is 1 696 and the 22-bit normalize &amp; round 2 666. Shallower than the adder (163), which must align before it adds. An 11 × 11 array multiplier is smaller (1 232) but 100 deep against 48; binary32 takes 14 913 NANDs, the significand multiplier growing with the square of the width.',
+    cost: '4 912 NANDs, depth 150: the 11 × 11 Wallace multiplier is 1 696 and the 22-bit normalize &amp; round 2 666. Shallower than the adder (163), which must align before it adds. An 11 × 11 array multiplier is smaller (1 232) but 100 deep against 48; binary32 takes 14 913 NANDs, the significand multiplier growing with the square of the width.',
     alts: [{ name: 'binary32 multiplier', lib: 'fpmul8_23' }],
   },
   o_fpcmp: {

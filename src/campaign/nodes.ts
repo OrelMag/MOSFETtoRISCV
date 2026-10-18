@@ -283,7 +283,7 @@ export const NODES: CampaignNode[] = [
     id: 'o_fastadd', act: 2, title: 'Fast adders', kind: 'build', optional: true, requires: ['a_add16'],
     why: 'The ripple adder\'s carry chain is the CPU\'s critical path. Computing carries with a prefix tree takes log2(n) levels: more gates, a faster clock.',
     tips: ['Generate g = a·b, propagate p = a ⊕ b; (g, p) pairs combine associatively.', 'Kogge–Stone: log2(16) = 4 levels of combining.'],
-    codex: ['cla', 'prefix'], unlocks: ['ks16', 'cla4', 'rv16_alu16ks', 'rv16_nextpc_ks'], chapters: [{ chapter: 'fastadd', label: 'Faster adders' }], base: BUILD1.o_fastadd, par: { nand: 366, depth: 16 }, gives: ['gp', 'graycell', 'blackcell'] },
+    codex: ['cla', 'prefix'], unlocks: ['ks16', 'cla4', 'rv16_alu16ks', 'rv16_nextpc_ks'], chapters: [{ chapter: 'fastadd', label: 'Faster adders' }], base: BUILD1.o_fastadd, par: { nand: 362, depth: 14 }, gives: ['gp', 'graycell', 'blackcell'] },
 
   // ---- Act 3 --------------------------------------------------------------------------------
   {
@@ -621,13 +621,13 @@ export const NODES: CampaignNode[] = [
     codex: ['normalize', 'rounding', 'subnormal'],
   },
   {
-    id: 'o_fpadd', act: 8, title: 'FP adder', kind: 'build', optional: true, requires: ['o_fpunpack', 'o_fpnorm'], base: BUILD8.o_fpadd, givesOf: fpGives(() => fpAdd(F16, RV16_MUX2)), par: { nand: 3755, depth: 163 },
+    id: 'o_fpadd', act: 8, title: 'FP adder', kind: 'build', optional: true, requires: ['o_fpunpack', 'o_fpnorm'], base: BUILD8.o_fpadd, givesOf: fpGives(() => fpAdd(F16, RV16_MUX2)), par: { nand: 3732, depth: 163 },
     why: 'Adding floats means aligning their binary points first, then adding, normalising and rounding: the hardest of the four operations to get exactly right. Every block it needs is one you have built.',
     tips: ['Swap so that |a| ≥ |b|, shift b right by the exponent difference (keep a sticky bit), add or subtract the significands.', 'Leave room: put the significands at bits 13..3 of a 15-bit word (a carry above, guard and sticky below), and hand normalize & round exponent + 1.', 'x − x is +0 (−0 in RDN). NaN in, or ∞ − ∞, gives the canonical NaN 0x7E00.'],
     codex: ['ieee754', 'rounding'],
   },
   {
-    id: 'o_fpmul', act: 8, title: 'FP multiplier', kind: 'build', optional: true, requires: ['o_fpadd', 'o_mularr'], base: BUILD8.o_fpmul, givesOf: fpGives(() => fpMul(F16, RV16_MUX2)), par: { nand: 4935, depth: 150 },
+    id: 'o_fpmul', act: 8, title: 'FP multiplier', kind: 'build', optional: true, requires: ['o_fpadd', 'o_mularr'], base: BUILD8.o_fpmul, givesOf: fpGives(() => fpMul(F16, RV16_MUX2)), par: { nand: 4912, depth: 150 },
     why: 'Multiplying floats is simpler than adding them: multiply the significands, add the exponents, XOR the signs, then normalise and round.',
     tips: ['11 × 11 bits gives a 22-bit product; its top bit decides whether to shift by one.'], codex: ['ieee754'],
   },

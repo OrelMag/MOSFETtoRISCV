@@ -45,13 +45,8 @@ export const WALKS4: Record<string, WalkScript> = {
     },
     {
       title: 'The sums',
-      text: 's_i = p_i ⊕ c_i, with c_0 = cin and c_i the G of position i − 1: sixteen XORs, 64 NANDs, merged into s. Every sum bit is ready by depth 14.',
+      text: 's_i = p_i ⊕ c_i, with c_0 = cin and c_i the G of position i − 1: sixteen XORs, 64 NANDs, merged into s. Every sum bit is ready by depth 14. 362 NANDs, against 144 NANDs and depth 36 for the ripple adder: 2.5 times the gates for under half the delay. (The library\'s ks16 adds the ALU\'s overflow v = c16 ⊕ c15: one more XOR, depth 16.)',
       parts: ['x0', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7', 'x8', 'x9', 'x10', 'x11', 'x12', 'x13', 'x14', 'x15'], codex: ['xor'],
-    },
-    {
-      title: 'Overflow',
-      text: 'v = c16 ⊕ c15, one more XOR after the last carries: at depth 16, the deepest output. 366 NANDs, against 144 NANDs and depth 36 for the ripple adder: 2.5 times the gates for under half the delay.',
-      parts: ['vx'], codex: ['overflow'],
     },
   ],
 
