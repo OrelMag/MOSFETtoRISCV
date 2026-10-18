@@ -19,6 +19,12 @@ export interface Rand32Options {
   mp?: boolean;
   /** Data-memory words the loads and stores use (power of two, default 32). */
   dmemWords?: number;
+  /** Where the data window starts (a multiple of its size, below 0x8000_0000; default 0). Our data memories wrap
+   * around their size, so any base reads the same words; a von Neumann machine (Spike) needs the window clear of
+   * the code. Programs without it are unchanged. */
+  dataBase?: number;
+  /** The system mode's timer interrupt (default on): it needs our memory-mapped mtime / mtimecmp. */
+  timer?: boolean;
 }
 
 /** mulberry32: small, fast, good enough. */
@@ -97,13 +103,14 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
     emit(`csrw mtvec, ${H0}`);
   }
   for (const x of POOL) emit(`li ${x}, ${word()}`);
-  emit(`li ${BASE}, ${B / 2}`);
+  const D = o.dataBase;
+  emit(`li ${BASE}, ${(D ?? 0) + B / 2}`);
   for (let i = 0; i < 4; i++) emit(`sw ${pick(POOL)}, ${4 * int(-W / 2, W / 2 - 1)}(${BASE})`);
   if (o.f) {
     for (const fr of FPOOL) { emit(`li ${T0}, ${r() < 0.7 ? pick(FEDGE) : word()}`); emit(`fmv.w.x ${fr}, ${T0}`); }
     emit(`fsrmi ${int(0, 4)}`);
   }
-  if (o.system && r() < 0.7) {
+  if (o.system && r() < 0.7 && o.timer !== false) {
     // a timer interrupt some 10 to 60 cycles from now
     emit(`li ${T0}, 0x80000010`);
     emit(`lw ${T1}, 0(${T0})`);
@@ -121,7 +128,12 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
     const misalign = o.system && r() < 0.08 && size > 1;
     if (r() < 0.3) {
       emit(`andi ${ADDR}, ${src()}, ${(B - 1) & ~(misalign ? 0 : size - 1)}`);
-      emit(`${op} ${reg}, 0(${ADDR})`);
+      if (D === undefined) emit(`${op} ${reg}, 0(${ADDR})`);
+      else {
+        // into the window: BASE is its middle
+        emit(`add ${ADDR}, ${ADDR}, ${BASE}`);
+        emit(`${op} ${reg}, ${-B / 2}(${ADDR})`);
+      }
     } else {
       const off = size * int(-B / 2 / size, B / 2 / size - 1) + (misalign ? 1 : 0);
       emit(`${op} ${reg}, ${off}(${BASE})`);
@@ -180,6 +192,7 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
       const v = r();
       if (v < 0.7) {
         emit(`andi ${ADDR}, ${src()}, ${(B - 1) & ~3}`);
+        if (D !== undefined) emit(`xor ${ADDR}, ${ADDR}, ${BASE}`); // no offset in an AMO: D | (ADDR ^ B / 2)
         emit(`${pick(['amoadd.w', 'amoswap.w'])} ${dst()}, ${src()}, (${ADDR})`);
       } else emit(`csrr ${dst()}, mhartid`);
     } else {

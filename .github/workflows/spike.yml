@@ -1,0 +1,74 @@
+name: Spike oracle
+
+# Our golden model (src/riscv/iss.ts) against Spike, the RISC-V reference simulator, on random programs, commit
+# by commit: pc, word, register and f-register writes, stores, load addresses, CSR writes, traps
+# (tests/verify/spike.ts, docs/VERIFICATION.md). On every push that touches the ISA code, seeds 1..1000 per ISA
+# variant; each night a new range of 4000. Failures (program, ELF, Spike's log, the first difference) are kept
+# as an artifact. Spike is built once at a pinned revision and cached.
+on:
+  push:
+    paths:
+      - 'src/riscv/**'
+      - 'src/sim/fpref.ts'
+      - 'tests/verify/spike.ts'
+      - 'tests/verify/elf.ts'
+      - 'scripts/spike-oracle.ts'
+      - '.github/workflows/spike.yml'
+  schedule:
+    - cron: '41 2 * * *'
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: 'Seed range, e.g. 5000..9000 (empty: 1..1000 on a push or by hand, a new range at night)'
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  SPIKE_REV: 5a760667bf0d0ab893173b9eeff9c109c8d7dd9a
+
+jobs:
+  spike:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Spike's run-time dependency (it compiles its device tree with dtc)
+        run: sudo apt-get update && sudo apt-get install -y device-tree-compiler
+      - name: Cache Spike
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/spike
+          key: spike-${{ env.SPIKE_REV }}
+      - name: Build Spike
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y libboost-regex-dev libboost-system-dev
+          git clone https://github.com/riscv-software-src/riscv-isa-sim /tmp/spike-src
+          cd /tmp/spike-src && git checkout "$SPIKE_REV"
+          mkdir build && cd build && ../configure --prefix="$HOME/spike" && make -j"$(nproc)" && make install
+      - run: ~/spike/bin/spike --help 2>&1 | head -5 || true
+      - run: npm ci
+      - name: Compare
+        env:
+          SEEDS: ${{ inputs.seeds }}
+          RUN: ${{ github.run_number }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ -z "$SEEDS" ]; then
+            if [ "$EVENT" = schedule ]; then FROM=$((1000 + 4000 * RUN)); SEEDS="$FROM..$((FROM + 3999))"; else SEEDS="1..1000"; fi
+          fi
+          echo "seeds $SEEDS"
+          npx vite-node scripts/spike-oracle.ts --spike ~/spike/bin/spike --seeds "$SEEDS" --out spike-report
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spike-report
+          path: spike-report
+          if-no-files-found: ignore

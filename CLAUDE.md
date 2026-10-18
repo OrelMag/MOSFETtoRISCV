@@ -55,6 +55,9 @@ on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-
 (Yosys synthesizes the exported dual-core and the RV32I / RV32IM system CPUs, each netlist is simulated against ours,
 every output every cycle, on their programs with irq pulses and switch changes). Run it locally (`npx vite-node scripts/verify-export.ts all`, needs `pip install yowasp-yosys`)
 before merging a change to the exporters, the dual-core or the system CPU (one design: `verify-export.ts sys-m`).
+`.github/workflows/spike.yml` (every push touching `src/riscv/`, fpref.ts or the oracle; nightly on new seeds) runs
+the golden model against Spike, commit by commit (`scripts/spike-oracle.ts`, docs/VERIFICATION.md); a change to the
+ISS should leave it green before merging (its failure artifact keeps the program, ELF and Spike's log).
 
 ## Stack and conventions
 
@@ -863,7 +866,11 @@ tests/verify/  CPU verification (docs/VERIFICATION.md): cpus.ts (every RV32 CPU 
                coverage.ts (instructions, traps, hardware events per lane), suite.ts (verify-*.test.ts),
                bench.ts (the benchmark set per lane: cycles to the golden model's instruction count, cache
                misses / stall cycles from the stall nets, final state checked; measureCpu: NANDs without the
-               program ROM, period); scripts/rvtests.ts (matrix), fuzz32.ts (any seed range), coverage.ts (tables;
+               program ROM, period); spike.ts (the golden model against Spike: oracleCase links a random
+               program (dataBase, timer: false) as an ELF (elf.ts, no toolchain) with boot / exit stubs, parseSpikeLog,
+               compareWithSpike commit by commit; issAsSpikeLog: the plumbing's self-test); scripts/rvtests.ts
+               (matrix), fuzz32.ts (any seed range), spike-oracle.ts (configs, seeds, --spike, --self, --out; CI only:
+               no Spike on Windows), coverage.ts (tables;
                --write updates the doc), benchmarks.ts (every CPU, ~6 min; --write saves src/bench/results.json,
                checked in: tests/benchmarks.test.ts fails when a program changed since, and re-measures `sc`)
 ```
