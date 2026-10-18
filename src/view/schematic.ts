@@ -613,6 +613,31 @@ export class SchematicView {
     this.cam.apply();
   }
 
+  /**
+   * Frame instances (and pins, `pin:<name>`) with a margin, never zooming in past `minW` grid units: a part named in a
+   * chapter's text and pinned. Leaves the view alone when none of them is drawn here.
+   */
+  frameInsts(names: string[], margin = 4, minW = 40): void {
+    const root = this.el.getScreenCTM();
+    if (!root) return;
+    const inv = root.inverse();
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const n of names) {
+      const g = n.startsWith('pin:') ? this.pins.find((p) => p.pin.name === n.slice(4))?.g : this.insts.get(n);
+      const m = g?.getScreenCTM();
+      if (!g || !m) continue;
+      const b = g.getBBox();
+      const toSvg = inv.multiply(m);
+      for (const [px, py] of [[b.x, b.y], [b.x + b.width, b.y], [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]]) {
+        const p = new DOMPoint(px, py).matrixTransform(toSvg);
+        x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y);
+      }
+    }
+    if (!Number.isFinite(x0)) return;
+    this.cam.fit({ x: x0 - margin, y: y0 - margin, w: x1 - x0 + 2 * margin, h: y1 - y0 + 2 * margin }, this.insetRight, minW);
+    this.cam.fitted = false;
+  }
+
   /** Pan (without zooming) so that a point is centred, unless it is already well inside the view. */
   centerOn(p: Vec): void {
     this.cam.centerOn(p);

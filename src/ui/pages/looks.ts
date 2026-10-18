@@ -1,5 +1,5 @@
 // Text that points at the circuit. An element of a step's text with data-show="hz fwdA" lights those instances of the
-// scene's opening view while hovered or focused, and keeps them lit when clicked (again: unpinned). Names are
+// scene's opening view while hovered or focused, and keeps them lit and framed when clicked (again: unpinned; Fit shows the whole circuit again). Names are
 // instances of that view, `pin:a` for a pin, or a dotted path ('dp.alu') that opens the instances before the last and
 // lights it there (on click only: hovering never navigates). litLine() says in words what the step's own highlight
 // shows, each item itself pointing at its parts.
@@ -49,6 +49,7 @@ export function wireLooks(root: HTMLElement, stage: Stage): () => void {
       stage.goTo(home());
     }
     stage.highlight(list, true);
+    if (nav) stage.frame(list);
   };
   const rest = (): void => {
     if (pinned) return apply(names(pinned), false);
