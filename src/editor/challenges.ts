@@ -133,6 +133,8 @@ export interface BuildChallenge {
   answer: () => ChipDoc[];
   /** Library id of the state machine it should be (lib/fsms.ts): after Check, the circuit can be read back as a diagram. */
   fsm?: string;
+  /** Rules on the circuit's structure beyond its parts (a tube grid read through a divider): each problem fails Check. */
+  rules?: (def: ComponentDef) => string[];
 }
 
 export interface Score {
@@ -231,6 +233,7 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
     const errors = compiled.diags.filter((d) => d.level === 'error').map((d) => `error: ${d.msg}`);
     res.failures.push(...pinProblems, ...errors.slice(0, 3));
     if (errors.length > 3) res.failures.push(`… and ${errors.length - 3} more errors`);
+    if (!res.failures.length && ch.rules) res.failures.push(...ch.rules(def));
     if (!res.failures.length) {
       const c = ch.check;
       const r: Run = c.kind === 'table'
