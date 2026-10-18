@@ -229,3 +229,8 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 .cp-pz-lanes th.off { text-decoration: line-through; }
 .cp-pz-lanes td { background: var(--surface-2); border-radius: 5px; padding: 2px 8px; }
 .cp-pz-lanes td.off { opacity: 0.45; }
+.cx-search { width: 100%; font: 13px var(--font-ui); padding: 6px 9px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); margin: 4px 0 6px; }
+.cx-search:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cx-kinds { display: flex; flex-wrap: wrap; gap: 4px; }
+.cx-kind { font: 11.5px var(--font-ui); padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2); cursor: pointer; }
+.cx-kind.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
