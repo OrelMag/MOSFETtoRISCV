@@ -1,6 +1,7 @@
 // Quick navigation UI: the chapter menu (top bar, chapter title) and the Ctrl/⌘ K search palette.
 
 import { chapters } from '../chapters';
+import { checksDone } from '../chapters/checks';
 import { chapterNo } from '../chapters/types';
 import { navEntries, searchNav, snippet, type NavEntry } from './chapternav';
 import { h, icon } from './dom';
@@ -20,7 +21,15 @@ function here(): { chapter: string; step: number } | null {
   return m ? { chapter: m[1], step: Number(m[2] ?? 0) } : null;
 }
 
-const seen = (id: string, n: number) => Math.min(1, settings.visited(id).length / n);
+const seen = (id: string, n: number) => Math.min(1, settings.visited(id).filter((k) => k < n).length / n);
+
+/** ' · 2 / 5 checks' for a started chapter with checks, else ''. */
+function checksNote(id: string): string {
+  const c = chapters.find((x) => x.id === id);
+  if (!c || !settings.visited(id).length) return '';
+  const { done, total } = checksDone(c, (k) => settings.isSolved(k));
+  return total ? ` · ${done} / ${total} checks` : '';
+}
 
 function progressBar(p: number): HTMLElement {
   return p >= 1 ? h('span', { class: 'qn-done', title: 'All steps visited' }, icon('check', 14))
@@ -159,7 +168,7 @@ export function openQuickNav(): void {
       h('span', { class: 'qn-num' }, e.no),
       h('span', { class: 'qn-main' },
         h('b', null, e.title),
-        h('small', null, ch ? `${e.level} · ${n} steps` : `${e.chTitle} · step ${e.step + 1} of ${n}`),
+        h('small', null, ch ? `${e.level} · ${n} steps${checksNote(e.chapter)}` : `${e.chTitle} · step ${e.step + 1} of ${n}`),
         q && !titleHit ? h('span', { class: 'qn-snip' }, snippet(e, q)) : null),
       ch ? progressBar(seen(e.chapter, n)) : settings.visited(e.chapter).includes(e.step) ? h('span', { class: 'qn-done', title: 'Visited' }, icon('check', 14)) : h('span'));
     a.addEventListener('click', close);

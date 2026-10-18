@@ -462,7 +462,14 @@ challenges stay open. Added since:
 - ✅ Click a program line: the hardware it uses (and its pipeline stage), or its word in the ROM
 - ✅ Search palette (`Ctrl/⌘ K` or `/`) over every chapter and step; chapter menu on the top bar
 - ✅ Hover definitions (campaign/glossary.ts): codex terms in the chapters' prose and on the level screen are underlined,
-  their summary shown in a card with a link to the entry; a switch in the view menu turns them off
+  their summary shown in a card with a link to the entry; a switch in the view menu turns them off (marked the first
+  time a term is met in a chapter)
+- ✅ A guide around the chapters' prose (learning-guide pass, merges 1–2): every chapter opens with goals and the
+  chapters it builds on and closes with a recap step (what to keep, three Check yourself questions, its codex entries
+  and campaign levels); parts named in the text light on the stage (a click frames them); a highlighted scene says what
+  is lit; every wrong quiz option says why; reach challenges have hint ladders; try boxes tick themselves; Deeper folds;
+  step dots and the chapter menu count checks solved. Next in the same pass: the codex (search, links both ways,
+  figures, Check yourself) and the walkthrough (authored walks, predict first, build along)
 - ✅ Progress tracking (visited steps, solved challenges, in local storage) and "Reset progress"; the chapters
   stay open (soft locks exist only in the campaign, see `docs/CAMPAIGN.md`)
 - ✅ Reduced motion: CSS animations and transitions off, slow-motion fronts drawn as plain changes

@@ -1,4 +1,5 @@
 import { chapters, future } from '../../chapters';
+import { checksDone } from '../../chapters/checks';
 import { chapterNo } from '../../chapters/types';
 import { ladder } from '../../widgets/journey';
 import { h, icon } from '../dom';
@@ -6,8 +7,14 @@ import { reportLink } from '../errors';
 import { settings } from '../settings';
 import type { Page } from './chapter';
 
+/** '40% seen · 2 / 5 checks' on a started chapter's card. */
+function seenNote(c: (typeof chapters)[number], p: number): string {
+  const { done, total } = checksDone(c, (k) => settings.isSolved(k));
+  return `${Math.round(p * 100)}% seen${total ? ` · ${done} / ${total} checks` : ''}`;
+}
+
 export function homePage(): Page {
-  const progress = (id: string, n: number) => settings.visited(id).length / n;
+  const progress = (id: string, n: number) => settings.visited(id).filter((k) => k < n).length / n;
   const started = chapters.filter((c) => settings.visited(c.id).length > 0);
   const resume = started.length ? started[started.length - 1] : null;
 
@@ -23,7 +30,7 @@ export function homePage(): Page {
       h('span', { class: 'num' }, `${chapterNo(c)} · ${c.level}`),
       h('h3', null, c.title),
       h('p', null, c.blurb),
-      h('div', { class: 'meta' }, h('span', null, `${c.steps.length} steps`), h('span', null, p > 0 ? `${Math.round(p * 100)}% seen` : '')))];
+      h('div', { class: 'meta' }, h('span', null, `${c.steps.length} steps`), h('span', null, p > 0 ? seenNote(c, p) : '')))];
   });
   const soon = future.map((c) =>
     h('div', { class: 'card soon' },

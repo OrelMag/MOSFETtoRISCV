@@ -256,6 +256,58 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .challenge .explain { margin-top: 8px; font-size: 14px; color: var(--text-2); }
 .challenge-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .challenge .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.challenge .hint-step { font-size: 13px; padding: 6px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); margin-top: 6px; color: var(--text); }
+.challenge .hint-step b { color: var(--accent); }
+.challenge .explain code { font-size: 12.5px; }
+
+/* the guide: goals, text that points at the circuit, checkable try boxes, recap */
+.steps-row { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
+.steps-dots button.solved { background: var(--good); }
+.steps-dots button.solved.cur { background: var(--accent); box-shadow: 0 0 0 2px var(--good-soft), 0 0 0 3px var(--good); }
+.steps-dots button.recap { width: 12px; background: transparent; box-shadow: inset 0 0 0 1.5px var(--border-strong); }
+.steps-dots button.recap.cur { background: var(--accent); box-shadow: none; }
+.checks-count { font: 11.5px var(--font-mono); color: var(--muted); white-space: nowrap; }
+.ch-goals {
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
+  border-radius: var(--radius-sm); padding: 10px 14px 10px; margin: 0 0 16px; font-size: 14px;
+}
+.ch-goals ul { margin: 4px 0 2px; padding-left: 1.2em; color: var(--text); }
+.ch-goals li { margin: 0.2em 0; }
+.ch-goals-k, .recap-k, .ch-links-k, .lit-k { font: 600 11px var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.ch-links { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.ch-links-k { margin-right: 2px; }
+.ch-chip {
+  font-size: 12px; padding: 2px 9px; border-radius: 99px; border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--text-2); text-decoration: none;
+}
+.ch-chip:hover { border-color: var(--accent); color: var(--text); }
+.ch-chip.cx { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.ch-chip.lv { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, var(--border)); }
+.look {
+  color: var(--accent); border-bottom: 1.5px dotted currentColor; cursor: pointer; border-radius: 3px;
+  transition: background 0.12s;
+}
+.prose .look { white-space: nowrap; }
+.look:hover, .look:focus-visible, .look.on { background: var(--accent-soft); outline: none; }
+.look.on { box-shadow: 0 0 0 1px var(--accent); }
+.lit-line {
+  font-size: 13px; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 6px 10px; margin: 0.4em 0 0.9em; line-height: 1.7;
+}
+.lit-k { margin-right: 8px; }
+.prose details.deeper { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); padding: 6px 12px; margin: 0.9em 0; }
+.prose details.deeper > summary { cursor: pointer; font-weight: 600; font-size: 13.5px; color: var(--text-2); }
+.prose details.deeper[open] > summary { margin-bottom: 6px; }
+.prose details.deeper p { font-size: 13.5px; }
+.prose .try.tried { border-style: solid; border-color: var(--good); }
+.prose .try-done { display: flex; align-items: center; gap: 4px; margin-top: 4px; color: var(--good); font-weight: 600; font-size: 13px; }
+.recap-k { margin: 2px 0 6px; }
+.recap-keep li { color: var(--text); }
+.recap-links { margin-top: 16px; display: grid; gap: 4px; }
+.recap-check { margin-top: 18px; }
+.recap-check + .challenge { margin-top: 0; }
+.challenge + .challenge { margin-top: 10px; }
+.challenge-head .tag { flex: none; white-space: nowrap; }
 
 /* ---------- stage ---------- */
 .stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--canvas); position: relative; }

@@ -16,6 +16,46 @@ const SORT_CARDS = sampleDeck().cards.length;
 export const chCards: Chapter = {
   id: 'cards', num: 0, prologue: 'P3', title: 'Punch cards', level: 'Input',
   blurb: 'Holes in cards: a loom\'s pattern, a nation counted, a program a card at a time, and the reader that feeds it in.',
+  goals: [
+    'count combinations on a tabulator: relay contacts in series for AND, in parallel for OR',
+    'punch and read a character in the 029\'s Hollerith code, zone and digit rows',
+    'explain why a card sorter sorts on the least significant column first, and how many passes it needs',
+    'read a deck into a circuit through a card reader\'s ready, data, empty and next',
+  ],
+  builds: ['relays'],
+  recap: {
+    keep: [
+      'Jacquard (1804): a card per pick, a hole lets its hook lift its warp threads. The loom is fixed and the pattern lives in the deck: a program.',
+      'Hollerith (1890): a pin through a hole closes a circuit through mercury and steps a dial. Combinations go through relay contacts, in series for AND, in parallel for OR.',
+      `IBM's card: ${COLUMNS} columns of 12 rows. A digit is one hole, a letter a zone (12, 11 or 0) and a digit, most signs add an 8; only ${CHARSET.length} of a column's 4 096 patterns are characters.`,
+      'A card sorter drops each card into the pocket of its digit in one column. Rightmost column first, each pass stable, a pass per digit: the radix sort.',
+      `To a circuit a card reader is <code>ready</code>, <code>data</code>, <code>empty</code>, and <code>next</code> taken at a rising edge. Here the next card arrives ${FEED} edges after each one; the IBM 1402 read 800 cards a minute.`,
+    ],
+    practise: ['h_card', 'h_loader'],
+    check: [
+      {
+        question: 'Which holes does the 029 punch for the letter T?',
+        options: ['0 and 3', '11 and 3', '12 and 3', '0 and 2'],
+        answer: 0,
+        explain: 'The 0-zone letters start at 2: S is 0-2, so T is 0-3.',
+        why: ['', '11-3 is L: zone 11 holds J to R.', '12-3 is C: zone 12 holds A to I.', '0-2 is S. The 0 zone starts at digit 2, so T is one further.'],
+      },
+      {
+        question: 'A dropped deck carries sequence numbers from 1 to 999. How many passes through the sorter put it back in order?',
+        options: ['3', '1', '10'],
+        answer: 0,
+        explain: 'One pass per digit of the key, rightmost first: units, tens, hundreds.',
+        why: ['', 'One pass sorts on one column only: cards with the same last digit stay mixed on the others.', 'Ten is the number of digit pockets, not of passes. The passes follow the number of digits in the key.'],
+      },
+      {
+        question: `The reader holds next at 1 and needs ${FEED} edges to feed each card. How many rising edges take a 10-card deck?`,
+        options: [`${10 + 9 * FEED}`, '10', `${10 * (FEED + 1)}`],
+        answer: 0,
+        explain: `A card is taken at an edge, then the reader needs ${FEED} edges to bring the next: 10 + 9 × ${FEED} = ${10 + 9 * FEED}.`,
+        why: ['', `A card is taken only at an edge where one is ready. After each one the reader needs ${FEED} more edges to feed the next.`, 'No feed time follows the last card: after it the hopper is empty.'],
+      },
+    ],
+  },
   steps: [
     {
       title: 'A chain of cards',
@@ -36,6 +76,7 @@ export const chCards: Chapter = {
         kind: 'quiz', question: 'A loom has 8 hooks and a chain of 6 cards. After how many picks does the cloth repeat down its length?',
         options: ['6', '8', '48', '14'], answer: 0,
         explain: 'The chain loops after its last card, so pick 7 reads card 1 again. The 8 hooks set the repeat across the cloth, not along it.',
+        why: ['', 'The 8 hooks set the repeat across the cloth (the harness ties each hook to every eighth thread), not down its length.', 'Cards and hooks do not have to come round together: down the length only the chain matters.', 'Cards and hooks do not add: one card is one pick, and the chain loops after 6.'],
       },
     },
     {
@@ -46,7 +87,7 @@ export const chCards: Chapter = {
         and closed it. A grid of spring pins came down; a pin that met a hole dipped into a cup of mercury beneath and closed
         a circuit, and each circuit stepped a counting dial on by one. The count of nearly 63 million people was out in months.</p>
         <p>Counting a <em>combination</em> (married women) needs AND: the circuits of both holes energize relays, and the dial
-        is driven through their contacts in series, as in prologue P1. The data had become electrical. Hollerith's company
+        is driven through their contacts in series, as in <a href="#/c/relays/0">prologue P1</a>. The data had become electrical. Hollerith's company
         merged into what was named IBM in 1924, and the card stayed the computer's input for half a century.</p>
         <div class="try">Press a few cards one by one and watch which dials move, then run the stack.</div>`,
       widget: () => censusWidget(),
@@ -55,6 +96,7 @@ export const chCards: Chapter = {
         options: ['Drive the dial through the two holes\' relay contacts in parallel', 'In series', 'Add the two dials afterwards', 'It cannot'],
         answer: 0,
         explain: 'Contacts in parallel conduct when either closes: OR. Adding the two dials afterwards would count a married immigrant twice.',
+        why: ['', 'Contacts in series conduct only when both close: that counts people who are married and born abroad, an AND.', 'A person who is both steps each dial once, so the sum counts them twice.', 'Contacts in parallel give OR as directly as contacts in series give AND.'],
       },
     },
     {
@@ -74,6 +116,7 @@ export const chCards: Chapter = {
         kind: 'quiz', question: 'Which holes does the 029 punch for the letter K?',
         options: ['11 and 2', '12 and 11', '11 and 1', '0 and 2'], answer: 0,
         explain: 'J, K, L … R are zone 11 with the digits 1 to 9, so K is 11-2. A is 12-1 and S is 0-2: the 0-zone letters start at 2.',
+        why: ['', 'A letter is one zone and one digit, and 12 and 11 are both zones.', '11-1 is J, the first letter of zone 11. K is the next one.', '0-2 is S: zone 0 holds S to Z.'],
       },
     },
     {
@@ -98,14 +141,15 @@ export const chCards: Chapter = {
           'The sorter can only read column 80', 'It is faster', 'Either order works'],
         answer: 0,
         explain: 'Sorting most significant first would scramble the order within a pocket on the next pass. Least significant first, every pass is stable, so after the pass on digit k the deck is sorted on the last k digits.',
+        why: ['', 'The 082 reads whichever column the operator sets for the pass.', 'Both orders take a pass per digit. The order decides whether the result is sorted, not how fast.', 'Most significant first, the next pass regroups the cards by a lower digit and undoes the higher one.'],
       },
     },
     {
       title: 'A machine that reads them',
       body: `
-        <p>A <strong>card reader</strong> moves cards from a hopper past brushes or photocells. To a circuit it is three
-        signals and a request: <code>ready</code> while a card waits at the read station, <code>data</code> the word punched
-        in its row 9, <code>empty</code> once the last card is gone, and <code>next</code> = 1 at a rising clock edge takes the
+        <p>A <span data-show="u"><strong>card reader</strong></span> moves cards from a hopper past brushes or photocells. To a circuit it is three
+        signals and a request: <span data-show="pin:ready"><code>ready</code></span> while a card waits at the read station, <span data-show="pin:data"><code>data</code></span> the word punched
+        in its row 9, <span data-show="pin:empty"><code>empty</code></span> once the last card is gone, and <span data-show="pin:next"><code>next</code></span> = 1 at a rising clock edge takes the
         card. The next one arrives ${FEED} edges later: a reader is mechanical, and the IBM 1402 read 800 cards a minute, 75 ms
         a card. Like a keyboard it stands for the world outside, so it costs no gates.</p>
         <p>This deck is the sum program, ${SUM_DECK.cards.length} cards. Feeding it into a computer's memory is a job for a little program
@@ -115,9 +159,14 @@ export const chCards: Chapter = {
         <div class="try">Set <code>next</code> to 1 and Pulse: each card's word appears on <code>data</code>, with ${FEED} empty
         cycles between cards while the reader feeds.</div>`,
       scene: () => ({ root: READER, inputs: { next: 0 }, clock: 'clk', autoClock: false, panels: [readerPanel] }),
+      tries: [(st) => st.getInput('next') === 1 && st.cycles > 0],
       challenge: {
         kind: 'reach', goal: 'Read the whole deck, until the reader says empty.',
         check: (st) => st.value('empty') === 1,
+        hints: [
+          'The reader gives up a card only at a rising edge with next at 1.',
+          `After each card it needs ${FEED} more edges to feed the next, and ready is 0 meanwhile: those Pulses take nothing, but they are needed.`,
+        ],
         answer: `Hold next at 1 and Pulse: one card is taken at every edge where one is ready, and the reader then needs ${FEED} edges to feed the next. ${SUM_DECK.cards.length} cards take ${SUM_DECK.cards.length + (SUM_DECK.cards.length - 1) * FEED} edges.`,
         solve: (st) => {
           st.setInput('next', 1);

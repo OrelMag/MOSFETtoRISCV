@@ -30,25 +30,77 @@ const pulses = Math.ceil(FG_READ / FG_STEP);
 export const chFlash: Chapter = {
   id: 'flash', num: 34, title: 'Flash', level: 'Memory in depth',
   blurb: 'The floating-gate transistor at switch level, programmed pulse by pulse and erased by the block; NOR against NAND arrays; and the translation layer that never overwrites: mapping, garbage collection, wear levelling, bad blocks.',
+  goals: [
+    'say how charge on a floating gate shifts a cell\'s threshold, and so what it reads',
+    'explain why flash programs only from 1 to 0, a row at a time, and erases only whole blocks',
+    'compare NOR and NAND arrays in area, read path and use',
+    'follow a flash translation layer through rewrites and garbage collection, and compute its write amplification',
+  ],
+  builds: ['mosfet', 'memory'],
+  recap: {
+    keep: [
+      `Charge on the floating gate raises the threshold. Erased, Vt = ${vtOf(0)} V: the cell conducts at the ${V_READ} V read voltage and reads 1. Programmed, Vt ≥ ${V_READ} V: it reads 0. Here a pulse adds ${(5 * FG_STEP).toFixed(1)} V, so a program takes ${pulses} pulses, each followed by a verify.`,
+      'Programming only clears bits (1 → 0), a row at a time, each bit line programming or inhibiting its cell. Only a block erase sets bits back to 1: <strong>flash cannot overwrite</strong>.',
+      `Real SLC: a page read ${FLASH_REAL_US.read} µs, a program ${FLASH_REAL_US.program} µs, a block erase ${FLASH_REAL_US.erase / 1000} ms. At our clock: ${FLASH_TIMES.read}, ${FLASH_TIMES.program} and ${FLASH_TIMES.erase} cycles.`,
+      'NOR: every cell on its bit line, about 10 F², random reads in tens of nanoseconds (boot code, execute in place). NAND: cells in series, about 4 F², a pass voltage on the other rows, pages in tens of microseconds (files, SSDs).',
+      'The translation layer writes each version to a fresh page and maps logical to physical pages. Stale pages wait for garbage collection. Write amplification = page programs / host writes; spare space lowers it, wear levelling spreads the erases.',
+    ],
+    practise: ['m_flash'],
+    check: [
+      {
+        question: 'A row holds 1100. You program it with data 1010 and do not erase. What does it hold?',
+        options: ['1000', '1010', '1110', '0110'],
+        answer: 0,
+        explain: 'A program can only clear bits, so the result is the AND of the two: 1100 AND 1010 = 1000. Writing 1010 for real needs an erase of the block first.',
+        why: ['', 'Bit 1 is 0 in the row and 1 in the data. A program cannot raise a bit: only an erase can.', 'That is the OR. A program adds charge, which can only turn 1s into 0s.', 'That is the XOR. Flash has no toggle: a programmed bit stays 0 until its block is erased.'],
+      },
+      {
+        question: 'Why does a NAND cell take about 4 F² where a NOR cell takes about 10?',
+        options: [
+          'Its cells sit in series and share one contact at each end of the string; a NOR cell needs its own bit-line contact',
+          'A NAND cell is a smaller transistor',
+          'A NAND cell stores two bits',
+          'NAND needs no sense amplifiers',
+        ],
+        answer: 0,
+        explain: 'The contacts, not the transistors, set the pitch. A string of eight here (128 or more in real chips) pays for two contacts in all.',
+        why: ['', 'The cell is the same floating-gate transistor in both arrays. The difference is the wiring.', 'Both arrays here store one bit a cell (SLC). Several bits a cell is a separate trick, open to either.', 'Every bit line still needs a sense circuit. What NAND saves is a contact per cell.'],
+      },
+      {
+        question: 'Garbage collection takes a block of 8 pages, 6 of them still valid. Counting the host writes that then fill the freed pages, what is the write amplification?',
+        options: ['4', '3', '1.33', '0.75'],
+        answer: 0,
+        explain: 'The block frees 8 − 6 = 2 pages for 6 copies. Two host writes then cost 2 + 6 = 8 page programs: 8 / 2 = 4.',
+        why: ['', 'That is copies per freed page. The host\'s own write into each freed page is a program too.', 'That is 8 / 6, pages per valid page: no measure of extra programs.', 'That is the fraction of the block still valid. Write amplification is programs divided by host writes.'],
+      },
+    ],
+  },
   steps: [
     {
       title: 'A gate that remembers',
       body: `
-        <p>A flash cell is an NMOS transistor with a second gate buried in the oxide under the first, connected to nothing. Electrons
+        <p>A <span data-show="c0_0">flash cell</span> is an NMOS transistor with a second gate buried in the oxide under the first, connected to nothing. Electrons
         put on this <strong>floating gate</strong> stay there for years, and their charge raises the transistor's threshold. Erased,
         the cell has Vt = ${vtOf(0)} V and conducts at the read voltage of ${V_READ} V: it reads 1. Programmed, Vt ≥ ${V_READ} V and it stays
         off: it reads 0. One transistor a bit, no capacitor to refresh, and nothing lost without power.</p>
-        <p>Its ancestor is chapter 10's mask ROM, where a bit is a transistor that is there or not, fixed at manufacture. Flash makes
+        <p>Its ancestor is <a href="#/c/memory/0">chapter 10</a>'s mask ROM, where a bit is a transistor that is there or not, fixed at manufacture. Flash makes
         that choice electrically, and can undo it.</p>
         <p>The simulator gives each floating gate a charge. A program pulse adds ${FG_STEP} (${(5 * FG_STEP).toFixed(1)} V of threshold), an erase pulse removes
         it all. The panel's curve is the selected cell's drain current against its gate voltage, the dashed one an erased cell's.</p>
-        <div class="try">Pick a cell of row 0, program the row with data 1110, and watch its threshold climb pulse by pulse.</div>`,
+        <div class="try">Pick a cell of <span data-show="c0_0 c0_1 c0_2 c0_3">row 0</span>, program the row with data 1110, and watch its threshold climb pulse by pulse.</div>`,
       scene: () => flashScene({ kind: 'nor' }),
+      tries: [(st) => rowsOf(st, 1)[0] === 0b1110],
       challenge: {
         kind: 'quiz',
         question: `A cell's threshold is ${vtOf(FG_STEP).toFixed(1)} V after one program pulse. What does it read?`,
         options: ['1: at the read voltage it still conducts', '0: it has been programmed', 'X: it is between the two', 'It depends on the bit line'],
         answer: 0,
+        why: [
+          '',
+          `One pulse is not enough: the cell reads 0 only once its threshold passes the ${V_READ} V read voltage. That is why programming verifies and pulses again.`,
+          'A read applies one gate voltage: a cell whose threshold is below it conducts (1), one whose threshold is above it stays off (0). There is no third reading.',
+          'The bit line only senses whether the cell conducts. The floating gate\'s charge, through the threshold, decides that.',
+        ],
         explain: `${vtOf(FG_STEP).toFixed(1)} V is below the ${V_READ} V read voltage, so the cell still turns on: 1. That is why programming verifies after each pulse and repeats: here ${pulses} pulses. Too many pulses push the threshold needlessly high and wear the oxide.`,
       },
     },
@@ -56,18 +108,22 @@ export const chFlash: Chapter = {
       title: 'Program and erase',
       body: `
         <p>Programming forces electrons through the oxide, so it only ever moves bits from 1 to 0, and slowly: a pulse at a time, a
-        verify read after each. All the cells of a row are programmed together, each bit line choosing: pulled low, its cell is
+        verify read after each. All the cells of a row are programmed together, each bit line choosing: <span data-show="wd0 wd1 wd2 wd3">pulled low</span>, its cell is
         programmed; left high, it is inhibited. Erasing pulls the electrons back out, and the array does it for a whole
         <strong>block</strong> at once.</p>
         <p>So flash cannot overwrite. To turn one 0 back into a 1, the controller must read every row of the block, erase the
         block and program the rows again. The times show what that costs: on a real SLC device a page read is
         ${FLASH_REAL_US.read} µs, a page program ${FLASH_REAL_US.program} µs, a block erase ${FLASH_REAL_US.erase / 1000} ms. Scaled to our
         clock: ${FLASH_TIMES.read}, ${FLASH_TIMES.program} and ${FLASH_TIMES.erase} cycles.</p>
-        <div class="try">Row 1 holds 1010. Make it 0110 and keep rows 0, 2 and 3 as they are.</div>`,
+        <div class="try"><span data-show="c1_0 c1_1 c1_2 c1_3">Row 1</span> holds 1010. Make it 0110 and keep rows 0, 2 and 3 as they are.</div>`,
       scene: () => flashScene({ kind: 'nor', pattern: PATTERN }),
       challenge: {
         kind: 'reach', goal: 'Rewrite row 1 from 1010 to 0110, and keep the other rows (0011, 1111, 0101).',
         check: (st) => rowsOf(st, 4).every((v, r) => v === TARGET[r]),
+        hints: [
+          'A program can only clear bits (1 → 0). Which bit of 1010 → 0110 has to go the other way?',
+          'Only an erase sets bits back to 1, and it takes the whole block: note what the other rows hold before you erase.',
+        ],
         answer: 'Programming 0110 over 1010 only clears bits: 1010 AND 0110 = 0010. Bit 2 must go from 0 to 1, which only an erase can do. Read rows 0, 2 and 3, Erase block, then program all four rows: 0011, 0110, 1111 (nothing to program), 0101.',
         solve: (st) => { const a = flashActions(st); a?.erase(); TARGET.forEach((d, r) => { if (d !== 0b1111) a?.program(r, d); }); st.refresh(); },
       },
@@ -78,8 +134,9 @@ export const chFlash: Chapter = {
         <p>In the <strong>NOR</strong> array every cell sits between its bit line and the source line, so any one cell can be read
         directly and fast: tens of nanoseconds, fast enough to run code from (execute in place). Each cell needs its own bit-line
         contact, about 10 F² of silicon (F: the feature size).</p>
-        <p>A <strong>NAND</strong> string puts its cells in series, eight here (128 or more in real chips), with one contact at each end.
-        A read puts the selected row at the read voltage and every other row at the <strong>pass voltage</strong>, high enough to turn on
+        <p>A <strong>NAND</strong> string puts its <span data-show="c0_0 c1_0 c2_0 c3_0 c4_0 c5_0 c6_0 c7_0">cells in series</span>, eight here (128 or more in real chips), with
+        <span data-show="ss0 gs0">one contact at each end</span>.
+        A read puts the selected row at the read voltage and every other row at the <span data-show="p0 p1 p2 p3 p4 p5 p6 p7"><strong>pass voltage</strong></span>, high enough to turn on
         any cell whatever it holds; the string conducts only if the selected cell is erased. About 4 F² a cell and no random access:
         a page is sensed in tens of microseconds and then streamed out. NAND holds files and SSDs, NOR holds boot code.</p>
         <div class="try">Read a row: every other row's cells sit at the pass voltage. Program a row, then erase the block.</div>`,
@@ -89,6 +146,12 @@ export const chFlash: Chapter = {
         question: 'Why can a NAND string not be read faster by selecting one cell directly?',
         options: ['Its cells are in series: the current of the selected one must pass through all the others', 'NAND cells hold more charge', 'The pass voltage is too slow to set up', 'NAND has no sense amplifier'],
         answer: 0,
+        why: [
+          '',
+          'The cell is the same floating-gate transistor in both arrays. The difference is the wiring.',
+          'The pass voltage is set once per read. What makes the read slow is the small current through a long series chain.',
+          'It has a sense circuit on every bit line, as NOR does. What it senses is a weak current through every cell of the string.',
+        ],
         explain: 'The string is one path. The others are turned fully on (the pass voltage) so that only the selected cell decides, but the current is the small current of a long series chain: sensing it takes microseconds, so NAND reads a whole page at a time.',
       },
     },
@@ -109,6 +172,12 @@ export const chFlash: Chapter = {
         question: 'The host has written logical page 2 five times. How many valid copies of it are on the flash?',
         options: ['One: the table points to the newest, the other four are stale', 'Five', 'None until garbage collection', 'Two: the newest and a backup'],
         answer: 0,
+        why: [
+          '',
+          'Five copies were programmed, but only the one the table points to is valid. The other four are stale.',
+          'The newest copy is valid from the moment it is programmed. Garbage collection only reclaims stale pages.',
+          'The translation layer keeps no backup. The older versions are stale, not reserves.',
+        ],
         explain: 'Each write programs a fresh page and marks the old one stale. Until their blocks are collected the four old copies still hold their data, which is why deleting a file on an SSD does not erase it at once (and why TRIM tells the controller which pages it may forget).',
       },
     },
@@ -128,6 +197,12 @@ export const chFlash: Chapter = {
         question: 'Why does more spare space lower write amplification?',
         options: ['Collected blocks hold fewer valid pages, so fewer copies are needed per page freed', 'Spare blocks are faster', 'Wear levelling is switched off', 'The host writes less'],
         answer: 0,
+        why: [
+          '',
+          'Every block is the same flash. Spare space helps by leaving fewer valid pages to copy, not by speed.',
+          'Wear levelling picks which free block opens next. The copies a collection needs depend on how full the collected block is.',
+          'Write amplification is a ratio, programs per host write. The host writes the same; the copies per write fall.',
+        ],
         explain: 'With logical space L on physical space P, the average block is L / P valid. Collecting a block with v valid pages out of n frees n − v pages for v copies; as L / P falls, v falls, and so do the copies per freed page.',
       },
     },

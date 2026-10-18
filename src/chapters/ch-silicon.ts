@@ -23,7 +23,7 @@ function hallStep(): Step {
     const perBit = dm.nands / (32 * 32);
     text = `
       <p>Nothing in this course needed silicon: every circuit is NANDs, and a NAND can be a relay (P1) or a triode with two
-      diodes (P2). Here is the single-cycle RV32I of chapter 14 priced that way, block by block, and stood on a floor at
+      diodes (P2). Here is the single-cycle RV32I of <a href="#/c/cpu/0">chapter 14</a> priced that way, block by block, and stood on a floor at
       physical scale. Its ${num(f.nands)} NANDs (the program ROM left out: relay machines read their programs from film or
       cards) become <strong>${num(r.total.devices)} relays</strong>, ${num(r.total.fanout)} of them extra coils, because a
       relay has ${RELAY_CONTACTS} contacts and many nets feed more inputs than that. At ${RELAY_RACK.relays} to a rack that is
@@ -37,9 +37,10 @@ function hallStep(): Step {
       (${(1 / pr).toFixed(2)} instructions a second) and ${fmtTime(pt)} in tubes (${fmtRate(pt)}), against ${fmtTime(pc)} (${fmtRate(pc)}) for the same netlist on
       ${fmtArea(f.cmos.area!)} of silicon, the speck on the table by the person. An instruction costs ${fmtJoules(r.total.power! * pr)}
       in relays and ${fmtJoules(t.total.power! * pt)} in tubes.</p>
+      <details class="deeper"><summary>Deeper: where the racks go</summary>
       <p>Two blocks fill most of the floor: the register file (${rf.cabinets} racks) and the data memory (${dm.cabinets}), both
       flip-flops of NANDs, ${perBit.toFixed(1)} NANDs per bit of data memory. Racks are not shared between blocks, so every small
-      block gets one of its own.</p>
+      block gets one of its own.</p></details>
       <div class="try">Run the program and watch the relays switch (or the plates glow): each cycle's settled values from the
       gate-level simulation, one relay or tube per NAND output of its block (a real relay machine would ripple through
       ${f.steps} steps to get there). Click a rack to open its block.</div>`;
@@ -62,6 +63,12 @@ function hallStep(): Step {
         'The Z3 had no data memory, only registers',
       ],
       answer: 1,
+      why: [
+        'Shorter words would save a fraction, not a factor of dozens: the difference is in how each bit is stored.',
+        '',
+        'A relay holds a value while powered, latched through its own contact. The Z3 read its program from punched film; its data sat in relays.',
+        'The Z3 had a memory of 64 words, the very words in the question.',
+      ],
       get explain() { if (explain === null) facts(); return explain!; },
     },
   };
@@ -70,6 +77,46 @@ function hallStep(): Step {
 export const chSilicon: Chapter = {
   id: 'silicon', num: 25, title: 'From netlist to silicon', level: 'Physical design',
   blurb: 'Standard cells in layout, how they are made, technology mapping, place and route, the clock tree, a floorplan of our dual-core, and wafer economics.',
+  goals: [
+    'read a standard cell\'s layout: transistors where polysilicon crosses diffusion, PMOS in the n-well, NMOS below',
+    'say what technology mapping, annealing placement and maze routing each decide',
+    'explain why wire delay and clock skew, not gates alone, set a routed chip\'s clock period',
+    'estimate a die\'s yield and cost per good die from its area and the defect density',
+  ],
+  builds: ['nand', 'fastadd', 'multicore'],
+  recap: {
+    keep: [
+      'A transistor is where a strip of polysilicon crosses diffusion. A standard cell sits between a VDD rail on top and a GND rail below, PMOS in the n-well above, NMOS beneath. NAND2 puts its NMOS in series and its PMOS in parallel, NOR2 the mirror image.',
+      'Synthesis ends in technology mapping onto a library of hundreds of cells; placement (simulated annealing) minimizes wire length; routing (Lee\'s maze router, two metal layers and vias) connects every net. A good placement also leaves room to route.',
+      'Unbuffered wire delay grows with the square of the length. After routing, static timing is redone with the real parasitics, and clock skew is subtracted from the period.',
+      'Our dual-core\'s logic is about 0.73 mm on a side in SkyWater 130 nm and 0.2 mm at 28 nm, where the bond pads set the die size. Its exported Verilog goes through Yosys and OpenROAD to a GDS, the synthesized netlist checked cycle by cycle against this site\'s simulation.',
+      'Yield falls as e<sup>−A·D₀</sup>: at 0.1 defects/cm², 90 % for 100 mm² and 67 % for 400 mm², so the big die costs about 5.4 times as much per good die.',
+    ],
+    practise: [],
+    check: [
+      {
+        question: 'An unbuffered wire is made twice as long. Its delay grows about:',
+        options: ['4×', '2×', 'Not at all: only gates have delay'],
+        answer: 0,
+        explain: 'Resistance and capacitance both grow with the length, and the delay goes with their product. That is why long wires get buffers.',
+        why: ['', 'Resistance and capacitance both double, and the delay goes with their product, not with either alone.', 'On a modern chip wires dominate delay. Counting NAND delays leaves them out, which is why timing is redone after routing.'],
+      },
+      {
+        question: 'What does technology mapping decide?',
+        options: ['Which library cells implement each piece of logic, cheapest first', 'Where each cell sits on the die', 'Which metal tracks each net uses', 'Which mask layers the fab needs'],
+        answer: 0,
+        explain: 'Mapping is the last step of synthesis: it covers the logic netlist with library cells. Placement, routing and masks come after.',
+        why: ['', 'That is placement, which comes after synthesis.', 'That is routing, after placement.', 'The masks follow from the finished layout; mapping works on the logic netlist.'],
+      },
+      {
+        question: 'At D₀ = 0.1 defects/cm², a die grows from 100 mm² to 200 mm². Its cost per good die rises by about:',
+        options: ['2.2×', '2×', '4×'],
+        answer: 0,
+        explain: 'Twice the area per die, and the yield falls from e<sup>−0.1</sup> = 90 % to e<sup>−0.2</sup> = 82 %: 2 × 0.905 / 0.819 ≈ 2.2.',
+        why: ['', 'That counts the area only. The bigger die also yields less, 82 % instead of 90 %, so each good one costs more.', 'Cost grows faster than area, but not as its square at this defect density: 2 × 0.905 / 0.819 ≈ 2.2.'],
+      },
+    ],
+  },
   steps: [
     {
       title: 'Gates become geometry',
@@ -92,6 +139,7 @@ export const chSilicon: Chapter = {
         kind: 'quiz', question: 'Why is the gate "self-aligned" to the source and drain?',
         options: ['A robot aligns each transistor', 'The gate is patterned first and itself masks the source/drain implant, so they line up with it automatically', 'Masks are aligned to within one atom', 'Source and drain are drawn on the same mask as the gate'],
         answer: 1,
+        why: ['Billions of transistors are patterned at once through masks; nothing places them one by one.', '', 'Mask-to-mask alignment has a real tolerance, and that error is exactly what self-alignment avoids.', 'Diffusion and polysilicon are separate masks. The trick is that the etched gate itself shields the channel during the implant.'],
         explain: 'Implanting after the gate is etched means the channel under the gate stays undoped while the regions on both sides are doped: the edges match the gate exactly, with no mask-to-mask misalignment. It was one of the inventions that made MOS scaling possible.',
       },
     },
@@ -115,6 +163,7 @@ export const chSilicon: Chapter = {
         kind: 'quiz', question: 'Why does a better placement make routing easier, not just shorter?',
         options: ['It does not', 'Shorter nets use fewer tracks, so fewer nets compete for the same routing resources and fewer fail', 'The router is faster on small grids', 'Annealing also routes the nets'],
         answer: 1,
+        why: ['Routing resources are finite: long, crossing nets congest the channels until some nets cannot be routed at all.', '', 'The grid is the same size either way; what changes is how many nets compete for each track.', 'Annealing only moves cells to shorten the estimated wire length; the router still has to find every path.'],
         explain: 'Every routed segment blocks a track for all other nets. A placement with long, crossing nets congests the channels; an annealed placement leaves room. Real tools estimate congestion during placement for exactly this reason.',
       },
     },
@@ -122,7 +171,7 @@ export const chSilicon: Chapter = {
       title: 'Wires and the clock',
       body: `
         <p>On a modern chip, wires and not transistors dominate delay and power. A long wire has resistance and capacitance proportional to its length, so its delay
-        grows with the square of the length unless buffers are inserted. The static timing analysis of chapter 15 counted NAND delays only. After routing, the tools
+        grows with the square of the length unless buffers are inserted. The static timing analysis of <a href="#/c/fastadd/0">chapter 15</a> counted NAND delays only. After routing, the tools
         repeat it with the real wire parasitics and fix the violations (timing closure).</p>
         <p>The most important wire is the clock: it must reach every flip-flop at the same moment. Any difference (skew) has to be subtracted from the clock period.</p>`,
       widget: clockTreeWidget,
@@ -130,7 +179,7 @@ export const chSilicon: Chapter = {
     {
       title: 'A floorplan of our dual-core',
       body: `
-        <p>Put it all together: the dual-core of chapter 24, sized from its netlist. In the open SkyWater 130 nm process its logic would fill about 0.73 mm × 0.73 mm.
+        <p>Put it all together: the dual-core of <a href="#/c/multicore/0">chapter 24</a>, sized from its netlist. In the open SkyWater 130 nm process its logic would fill about 0.73 mm × 0.73 mm.
         At 28 nm it shrinks to about 0.2 mm on a side, and then the ring of bond pads, not the logic, sets the die size (pad-limited). Real systems-on-chip are the opposite: billions of transistors, with memories as dense SRAM macros, not flip-flops.</p>
         <p>The open-source flow is real: Yosys (synthesis) and OpenROAD (placement, clock tree, routing) take Verilog like the structural Verilog on every component's Verilog tab and produce
         a layout that SkyWater can manufacture.</p>`,
@@ -155,6 +204,7 @@ export const chSilicon: Chapter = {
       challenge: {
         kind: 'quiz', question: 'With D₀ = 0.1 defects/cm², how does the yield of a 100 mm² die compare with a 400 mm² die?',
         options: ['Same yield', '90 % versus 67 %', '90 % versus 23 %', '99 % versus 96 %'], answer: 1,
+        why: ['Defects land at random across the wafer, so a bigger die is more likely to catch one.', '', 'Far too steep for 0.1 defects/cm²: a 4 cm² die expects 0.4 defects, and e<sup>−0.4</sup> = 0.67.', 'That takes 100 mm² as 0.1 cm². It is 1 cm², so the expected defect counts are 0.1 and 0.4.'],
         explain: 'e^(−1 cm² × 0.1) = 0.905 and e^(−4 cm² × 0.1) = 0.670. Four times the area means fewer dies per wafer and a lower fraction of them working: the big die costs about 5.4× as much, not 4×. Chiplets split a large design into smaller dies that yield better.',
       },
     },
@@ -165,7 +215,7 @@ export const chSilicon: Chapter = {
         <p>That is the whole path: a voltage-controlled switch, a NAND, gates, adders, latches, memories, an ALU, a single-cycle RISC-V, a pipeline, interrupts,
         multiplication, caches, microcode, floating point, two cores, and geometry on a wafer. Every value on every wire along the way was computed, not drawn, and every box can still be opened all the way down to
         the four transistors of a NAND.</p>
-        <p>The journey goes on with the same bricks arranged for throughput: chapters 26–31 build a GPU, from lanes sharing
+        <p>The journey goes on with the same bricks arranged for throughput: <a href="#/c/lanes/0">chapters 26–31</a> build a GPU, from lanes sharing
         one instruction stream to a rasterizer drawing into a frame buffer.</p>
         <p>Or go further on your own: build it for real on an FPGA from the Verilog tabs; read Harris &amp; Harris, Patterson &amp; Hennessy, or Weste &amp; Harris for CMOS VLSI; or tape out
         a design on an open-source shuttle.</p>`,
@@ -174,7 +224,8 @@ export const chSilicon: Chapter = {
         kind: 'quiz', question: 'What did every component in this course have in common?',
         options: ['Each was written in Verilog first', 'Each was built only from components of the levels below it, down to the NAND and its four transistors, and checked against a specification', 'Each was drawn by hand', 'Each was simulated in analogue'],
         answer: 1,
-        explain: 'Abstraction with transparency: every level is a box you may use without opening, and every box opens. Specifications, exhaustive tests and the golden model kept each level honest.',
+        why: ['The Verilog on each component\'s tab is generated from its netlist, after the fact.', '', 'The drawings come from the netlists (their layout hints and the router); the netlist is the source.', 'The simulation is digital: 0, 1 and X at gate level, a switch-level solver for transistors.'],
+        explain: 'Abstraction with transparency: every level is a box you may use without opening, and every box opens. Specifications, exhaustive tests and the instruction-set simulator kept each level honest.',
       },
     },
   ],

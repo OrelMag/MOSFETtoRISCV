@@ -2,6 +2,17 @@ import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, NetDef } from '../sim/types';
 import type { Scene, Stage, Widget } from '../view/stage';
 
+/** A multiple-choice question (a step's quiz, a chapter recap's Check yourself). HTML in every text. */
+export interface Quiz {
+  question: string;
+  options: string[];
+  answer: number;
+  /** Shown once answered (or revealed). */
+  explain: string;
+  /** Per option, why it is right or wrong: the misconception behind a wrong one. Shown when that option is picked. */
+  why?: string[];
+}
+
 export type Challenge =
   | {
       kind: 'reach';
@@ -12,14 +23,10 @@ export type Challenge =
       answer: string;
       /** Optional: perform the answer on the live circuit. */
       solve?: (stage: Stage) => void;
+      /** Hints revealed one at a time before the answer: a nudge first, then more concrete. */
+      hints?: string[];
     }
-  | {
-      kind: 'quiz';
-      question: string;
-      options: string[];
-      answer: number;
-      explain: string;
-    };
+  | ({ kind: 'quiz' } & Quiz);
 
 export interface StepAction {
   label: string;
@@ -34,6 +41,13 @@ export interface Step {
   widget?: () => Widget;
   challenge?: Challenge;
   actions?: StepAction[];
+  /**
+   * What the scene's highlight shows, in words (HTML). By default a line is made from the highlighted instances'
+   * names; '' hides it. Names in the body marked data-show="inst other" light those instances (ui/pages/looks.ts).
+   */
+  lit?: string;
+  /** Conditions for the body's .try boxes, in order: a box ticks itself once its condition holds. */
+  tries?: ((stage: Stage) => boolean)[];
 }
 
 export interface Chapter {
@@ -49,6 +63,15 @@ export interface Chapter {
   blurb: string;
   /** The abstraction level this chapter lives at. */
   level: string;
+  /** What the learner will be able to do after it (HTML), shown on the first step. */
+  goals?: string[];
+  /** Chapters it builds on (ids), linked on the first step. */
+  builds?: string[];
+  /**
+   * The step after the last: what to keep, questions to check yourself, the campaign levels that practise it (node ids;
+   * else found from the campaign's links). Codex entries are added from their links.
+   */
+  recap?: { keep: string[]; check?: Quiz[]; practise?: string[] };
   steps: Step[];
 }
 

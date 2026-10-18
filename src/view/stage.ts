@@ -1151,6 +1151,11 @@ export class Stage {
     this.view.focusInst(name);
   }
 
+  /** Bring instances of the current view (`pin:<name>` for pins) into view, framed: a part pinned from a chapter's text. */
+  frame(names: string[]): void {
+    this.view.frameInsts(names);
+  }
+
   /** Highlight instances in the current view (empty list clears). */
   highlight(names: string[], focus = false): void {
     this.view.highlight(names, focus);
