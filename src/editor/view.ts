@@ -106,6 +106,8 @@ export class EditorView {
   private band: SVGRectElement;
   private hot: SVGCircleElement;
   private ghost: SVGGElement;
+  /** Outlines of parts still to place (a walkthrough's step in Build along). */
+  private guides: SVGGElement;
   private gHandles: SVGGElement;
   private handlesKey = '';
 
@@ -133,8 +135,9 @@ export class EditorView {
     this.band = s('rect', { class: 'ed-band', width: 0, height: 0, display: 'none' });
     this.hot = s('circle', { class: 'ed-hot', r: 0.42, display: 'none' });
     this.ghost = s('g', { class: 'ed-ghost' });
+    this.guides = s('g', { class: 'ed-guides' });
     this.gHandles = s('g', { class: 'ed-handles' });
-    this.gOver.append(this.gHandles, this.ghost, this.preview, this.band, this.hot);
+    this.gOver.append(this.guides, this.gHandles, this.ghost, this.preview, this.band, this.hot);
     this.svg.append(defs,
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid)' }),
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid5)' }),
@@ -819,6 +822,16 @@ export class EditorView {
     if (at) this.ghost.setAttribute('transform', `translate(${at[0]},${at[1]})`);
   }
   private ghostKey = '';
+
+  /** Outlines of parts to place, each where it goes (never hit-tested); an empty list clears them. */
+  showGuides(parts: { part: PartDoc; def: ComponentDef | undefined }[]): void {
+    this.guides.replaceChildren(...parts.map(({ part, def }) => {
+      const g = this.drawPart({ ...part, label: part.label ?? part.id }, def).g;
+      g.removeAttribute('data-part');
+      g.setAttribute('class', 'ed-guide');
+      return g;
+    }));
+  }
 
   /** Draw a part symbol for a ghost (displays drawn like placed ones). */
   ghostOf(def: ComponentDef, ref?: PartDoc['ref']): SVGGElement {

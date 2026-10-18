@@ -4,14 +4,19 @@
 // those names. Each step redraws the scratch chip and selects what the step added. "I'll take it
 // from here" copies the partial circuit into the level's chip (one undo step); leaving removes the
 // scratch chip and the chips it brought, unless the learner took them. A step with a question (WalkStep.ask) keeps its
-// parts back until it is answered: predict first, then see.
+// parts back until it is answered: predict first, then see. Build along: the learner places the step's parts on their
+// outlines and wires them, and Check step compares the result with the reference (campaign/buildalong.ts).
 
+import { checkBuild, snapCandidate, type BuildCheck } from '../../campaign/buildalong';
 import { codexById } from '../../campaign/codex';
 import { stepMetrics, partialDoc, type StepMetrics, type Walk, walkOf } from '../../campaign/walk';
 import type { CampaignNode } from '../../campaign/types';
 import type { BuildChallenge } from '../../editor/challenges';
 import type { Editor } from '../../editor/editor';
-import type { ChipDoc, Workspace } from '../../editor/model';
+import { compileChip } from '../../editor/compile';
+import type { ChipDoc, PartDoc, Workspace } from '../../editor/model';
+import { moveSel } from '../../editor/ops';
+import { partDef } from '../../editor/parts';
 import { openChip } from '../../editor/session';
 import { importChips } from '../../editor/store';
 import { h, icon } from '../dom';
@@ -30,6 +35,13 @@ export class WalkMode {
   private metrics = new Map<number, StepMetrics>();
   /** Steps whose question was answered (or skipped) in this walk. */
   private revealed = new Set<number>();
+  /** Watch the reference being built, or build each step yourself. */
+  mode: 'watch' | 'build' = 'watch';
+  /** The step the scratch chip was last set up for in Build along (the learner's work on it is kept). */
+  private buildStep = -1;
+  private checkRes: BuildCheck | null = null;
+  private passed = new Set<number>();
+  private readonly snapHook = () => this.snap();
 
   /** undefined when the level has no walkthrough. */
   static open(ed: Editor, node: CampaignNode, ch: BuildChallenge, k: number, levelChip: string, changed: () => void): WalkMode | undefined {
@@ -54,6 +66,7 @@ export class WalkMode {
     if (r.added.includes(mainId)) delete chips[mainId];
     this.added = r.added.filter((a) => a !== mainId);
     if (ed.level) ed.level.chipId = this.scratchId;
+    ed.paintHooks.add(this.snapHook);
     // The step's parts are shown selected: that selection must not open the properties panel.
     ed.el.classList.add('walking');
     this.k = Math.max(0, Math.min(k, w.steps.length - 1));
@@ -87,13 +100,27 @@ export class WalkMode {
     this.show(this.ed.ws);
   }
 
+  /** The step's parts as they sit in the reference: the outlines of Build along. */
+  private guides(k = this.k): PartDoc[] {
+    const ids = new Set(this.walk.steps[k].parts);
+    return this.docAt(k).parts.filter((p) => ids.has(p.id));
+  }
+
   private show(ws: Workspace, first = false): void {
     const ed = this.ed;
     const held = !!this.pending();
-    const next = openChip({ ...ws, chips: { ...ws.chips, [this.scratchId]: this.docAt(held ? this.k - 1 : this.k) } }, this.scratchId);
+    const build = this.mode === 'build';
+    let doc: ChipDoc;
+    if (build) {
+      // A step entered in Build along starts from the reference before it; the learner's work on it then stays.
+      if (this.buildStep !== this.k || !ws.chips[this.scratchId]) { doc = this.docAt(this.k - 1); this.buildStep = this.k; this.checkRes = null; }
+      else doc = ws.chips[this.scratchId];
+    } else doc = this.docAt(held ? this.k - 1 : this.k);
+    const next = openChip({ ...ws, chips: { ...ws.chips, [this.scratchId]: doc } }, this.scratchId);
     ed.volatile(next);
     const s = this.walk.steps[this.k];
-    ed.select(held ? {} : { parts: [...s.parts], wires: [...s.wires], labels: [...s.labels] });
+    ed.view.showGuides(build && !held ? this.guides().map((part) => ({ part, def: ed.defOf(part) })) : []);
+    ed.select(held || build ? {} : { parts: [...s.parts], wires: [...s.wires], labels: [...s.labels] });
     if (first) ed.fitView();
     this.changed();
   }
@@ -101,6 +128,40 @@ export class WalkMode {
   go(k: number): void {
     this.k = Math.max(0, Math.min(k, this.walk.steps.length - 1));
     this.show(this.ed.ws);
+  }
+
+  setMode(m: 'watch' | 'build'): void {
+    if (m === this.mode) return;
+    this.mode = m;
+    this.buildStep = -1;
+    this.show(this.ed.ws);
+  }
+
+  /** Build along: is the learner's chip wired like the reference after this step? */
+  checkStep(): void {
+    const ed = this.ed;
+    const mine = ed.ws.chips[this.scratchId];
+    const mc = ed.lib.compiled(this.scratchId);
+    if (!mine || !mc) return;
+    const ref = this.docAt(this.k);
+    const rc = compileChip(ref, (r) => partDef(r, (id) => ed.lib.defOf(id)));
+    this.checkRes = checkBuild(ref, rc.netOfEnd, mine, mc.netOfEnd);
+    if (this.checkRes.ok) this.passed.add(this.k);
+    this.changed();
+  }
+
+  /** Build along: a part dropped near its outline moves onto it (after a drag, never during one). */
+  private snap(): void {
+    const ed = this.ed;
+    if (this.mode !== 'build' || ed.chipId !== this.scratchId || ed.history.inTransaction || this.pending()) return;
+    const mine = ed.ws.chips[this.scratchId];
+    const c = mine && snapCandidate(this.guides(), mine);
+    if (!c) return;
+    const p = mine.parts.find((x) => x.id === c.id)!;
+    ed.edit((doc) => {
+      const moved = moveSel(doc, { parts: [c.id] }, [c.at[0] - p.at[0], c.at[1] - p.at[1]], ed.defOf);
+      return { ...moved, parts: moved.parts.map((x) => (x.id === c.id ? { ...x, flip: c.flip || undefined } : x)) };
+    });
   }
 
   /** Cost and rows right after the current step (measured once, compiling the partial circuit). */
@@ -143,9 +204,25 @@ export class WalkMode {
   private restoreLevel(): void {
     if (this.ed.level) this.ed.level.chipId = this.levelChip;
     this.ed.el.classList.remove('walking');
+    this.ed.paintHooks.delete(this.snapHook);
+    this.ed.view.showGuides([]);
   }
 
   // ---- the side panel ----------------------------------------------------------------------------
+
+  /** Build along's part of the step card: what to do, Check step, and the verdict. */
+  private buildBox(): HTMLElement {
+    const r = this.checkRes, done = this.passed.has(this.k);
+    const name = (p: PartDoc) => p.label ?? p.id;
+    const verdict = !r ? null : r.ok ? h('p', { class: 'lv-verdict ok' }, icon('check', 12), ' Wired like the reference.')
+      : h('div', { class: 'lv-verdict' },
+        r.missing.length ? h('p', null, 'Still to place on their outlines: ', r.missing.map(name).join(', '), '.') : null,
+        r.wiring.length ? h('p', null, 'Wired differently from the reference: ', r.wiring.slice(0, 4).join(', '), r.wiring.length > 4 ? ` and ${r.wiring.length - 4} more` : '', '.') : null,
+        r.extra.length ? h('p', null, 'Not in the reference here: ', r.extra.join(', '), '.') : null);
+    return h('div', { class: 'lv-build' },
+      h('p', { class: 'sub' }, done ? 'Done. Next starts the next step from the reference.' : 'Place the outlined parts (a part dropped near its outline snaps onto it) and wire them.'),
+      h('p', null, h('button', { class: 'btn sm primary', onclick: () => this.checkStep() }, 'Check step')), verdict);
+  }
 
   panel(par: { nand?: number; depth?: number }, close: () => void, take: () => void): HTMLElement {
     const w = this.walk, s = w.steps[this.k];
@@ -158,6 +235,7 @@ export class WalkMode {
       h('h3', null, `Step ${this.k + 1} of ${w.steps.length} · ${s.title}`),
       ask ? h('div', { class: 'lv-predict' }, quizBox(ask, this.askKey(this.k), 'Predict first', () => this.reveal()),
         h('button', { class: 'btn ghost sm', onclick: () => this.reveal() }, 'Show the step')) : h('p', null, s.text),
+      !ask && this.mode === 'build' ? this.buildBox() : null,
       s.codex.length ? h('div', { class: 'lv-chips' }, s.codex.map((id) => codexById(id)).filter((e) => !!e).map((e) => h('a', { class: 'lv-chip acc', href: `#/campaign/codex/${e!.id}` }, `Codex: ${e!.title}`))) : null,
       ask ? null : meters,
       s.authored ? null : h('p', { class: 'lv-gen sub' }, 'Generated from the reference circuit.'));
@@ -179,6 +257,9 @@ export class WalkMode {
       this.last ? h('button', { class: 'btn sm primary', onclick: close }, 'Done') : h('button', { class: 'btn sm primary', onclick: () => this.go(this.k + 1) }, 'Next', icon('chevR', 13)),
       h('span', { class: 'lv-spacer' }),
       h('button', { class: 'btn sm', title: 'Copy the circuit so far into your chip and finish it yourself (one undo step)', onclick: take }, this.last ? 'Use this answer' : 'I\'ll take it from here'));
-    return h('div', { class: 'lv-walk' }, learn.length ? h('div', { class: 'lv-chips lv-learn' }, h('span', { class: 'lv-learn-k' }, 'Learn it'), ...learn) : null, list, card, nav);
+    const modes = h('div', { class: 'lv-modes', role: 'tablist' },
+      h('button', { class: this.mode === 'watch' ? 'on' : '', role: 'tab', onclick: () => this.setMode('watch') }, 'Watch'),
+      h('button', { class: this.mode === 'build' ? 'on' : '', role: 'tab', title: 'Place each step\'s parts on their outlines and wire them yourself', onclick: () => this.setMode('build') }, 'Build along'));
+    return h('div', { class: 'lv-walk' }, modes, learn.length ? h('div', { class: 'lv-chips lv-learn' }, h('span', { class: 'lv-learn-k' }, 'Learn it'), ...learn) : null, list, card, nav);
   }
 }
