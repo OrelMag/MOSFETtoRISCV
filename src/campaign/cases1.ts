@@ -341,7 +341,7 @@ export const CASES1: Record<string, LevelCase> = {
   m_ctrl: {
     problem: 'A DDR chip does the refreshing itself when asked and keeps a row buffer per bank, but it has rules: a column command only tRCD after its row opened, data tCAS after a read, a row open at least tRAS, tRP before the next. The controller turns each request into the shortest legal sequence of commands, and fits a refresh in before the chip forgets.',
     without: 'Commands one cycle early read garbage or corrupt a row: the chip does not check, so the controller is the only thing standing between a timing table and silent data loss.',
-    cost: '777 NANDs, period 36. One request at a time keeps it small: two since-counters (cycles since the last ACT and the last PRE) cover every timing for both banks, a 4-stage shift register follows a read to its data, an 8-bit counter schedules refresh. A controller that overlaps requests needs counters per bank and a queue: chapter 33\'s FR-FCFS. 11 878 cycles over the eight traces.',
+    cost: '779 NANDs, period 36. One request at a time keeps it small: two since-counters (cycles since the last ACT and the last PRE) cover every timing for both banks, a 4-stage shift register follows a read to its data, an 8-bit counter schedules refresh. A controller that overlaps requests needs counters per bank and a queue: chapter 33\'s FR-FCFS. 10 690 cycles over the eight traces.',
   },
   m_bus: {
     problem: 'Two masters, three slaves, one set of wires: the bus has to pick who goes, route the request to the right slave, and bring the answer back to the right master, with a handshake that lets either side take its time. The arbiter must be fair (round robin) and must not take the bus from a transfer still waiting on a slow slave.',

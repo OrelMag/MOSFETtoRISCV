@@ -165,17 +165,17 @@ export const WALKS7: Record<string, WalkScript> = {
     {
       title: 'Opening and closing',
       text: 'An ACT loads its bank\'s row register and sets its flag; a PRE clears its bank\'s flag, PREA both. Each flag: ¬rst · (ACT here + open · ¬close here).',
-      parts: ['u1', 'u2', 'u48', 'u49', 'u52', 'u76', 'u77', 'u78', 'u79', 'u80', 'u81', 'u82', 'u83', 'u84', 'u85', 'u86', 'u87'],
+      parts: ['u1', 'u2', 'u48', 'u49', 'u52', 'u82', 'u83', 'u84', 'u85', 'u86', 'u87', 'u88', 'u89', 'u90', 'u91', 'u92', 'u93'],
     },
     {
       title: 'Counting',
-      text: 'Each since counter: +1 (20 NANDs), forced to 0 by its clear (ACT; PRE, PREA or REF; reset), held at 15 by its own incrementer\'s carry. The refresh count\'s low half always counts; the high half counts on the low half\'s carry. REF clears both halves.',
-      parts: ['u53', 'u54', 'u55', 'u56', 'u57', 'u58', 'u59', 'u60', 'u61', 'u62', 'u63', 'u64', 'u65', 'u66', 'u67', 'u68', 'u69', 'u70', 'u71', 'u72', 'u73', 'u74', 'u75'], codex: ['incrementer'],
+      text: 'Each since counter: +1 (20 NANDs), set to 1 by its clear (the cycle after a command is one cycle since it, so q ≥ 4 is exactly tRCD) (ACT; PRE, PREA or REF; reset), held at 15 by its own incrementer\'s carry. The refresh count\'s low half always counts; the high half counts on the low half\'s carry. REF clears both halves.',
+      parts: ['u53', 'u54', 'u55', 'u56', 'u57', 'u58', 'u59', 'u60', 'u61', 'u62', 'u63', 'u64', 'u65', 'u66', 'u67', 'u68', 'u69', 'u70', 'u71', 'u72', 'u73', 'u74', 'u75', 'u76', 'u77', 'u78', 'u79', 'u80', 'u81'], codex: ['incrementer'],
     },
     {
       title: 'After REF, and the read pipe',
-      text: 'lastref is set by REF and kept until the next PRE or PREA. The shift register loads RD at its first stage and moves one stage a cycle. 777 NANDs; the six 4-bit registers are 312 of them.',
-      parts: ['u88', 'u89', 'u90', 'u91', 'u92', 'u93', 'u94', 'u95'],
+      text: 'lastref is set by REF and kept until the next PRE or PREA. The shift register loads RD at its first stage and moves one stage a cycle. 779 NANDs; the six 4-bit registers are 312 of them.',
+      parts: ['u94', 'u95', 'u96', 'u97', 'u98', 'u99', 'u100', 'u101'],
     },
   ],
 
