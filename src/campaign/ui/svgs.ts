@@ -5,7 +5,7 @@ import { s } from '../../ui/dom';
 import { BLOCKS, blockNodes, LINKS, VIEW } from '../anatomy';
 import { ancestors, isDone, statusOf, type ProgressView } from '../graph';
 import { BAND_GAP, COL_GAP, LINE_GAP, mapLayout, NODE_H, NODE_W, ROW_GAP } from '../layout';
-import { ACTS } from '../nodes';
+import { ACTS, actName } from '../nodes';
 import type { CampaignNode } from '../types';
 
 const KIND_MARK: Record<CampaignNode['kind'], string> = { lesson: 'read', drill: 'drill', build: 'build', program: 'code', core: 'CPU' };
@@ -42,7 +42,7 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
   for (const b of L.bands) {
     const act = ACTS.find((a) => a.num === b.act)!;
     svg.append(s('rect', { class: 'cp-band', x: 4, y: b.y, width: L.w - 8, height: b.h, rx: 10 }),
-      s('text', { class: 'cp-band-title', x: 16, y: b.y + 21 }, `Act ${act.num} · ${act.title}`));
+      s('text', { class: 'cp-band-title', x: 16, y: b.y + 21 }, `${actName(act.num)} · ${act.title}`));
   }
   // Edges under the nodes: from the right of a requirement to the left of the node. Within an act
   // they are short and always drawn; between acts they cross the whole map, so they appear only for
@@ -92,7 +92,7 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
     const from = crossIn.get(n.id);
     if (from) {
       g.append(s('circle', { class: 'cp-port', cx: 0, cy: NODE_H / 2, r: 4 },
-        s('title', null, `Builds on ${from.map((m) => `${m.title} (Act ${m.act})`).join(', ')}: point here to see the lines`)));
+        s('title', null, `Builds on ${from.map((m) => `${m.title} (${actName(m.act)})`).join(', ')}: point here to see the lines`)));
     }
     const hover = (on: boolean) => edges.querySelectorAll(`[data-a="${n.id}"], [data-b="${n.id}"]`).forEach((e) => e.classList.toggle('hover', on));
     g.addEventListener('mouseenter', () => hover(true));

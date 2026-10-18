@@ -17,7 +17,7 @@ import { coreSpecOf } from '../campaign/corecheck';
 import { measured } from '../campaign/grade';
 import { isDone, nextAvailable } from '../campaign/graph';
 import { levelChallenge, nodeOfChip } from '../campaign/levels';
-import { ACTS } from '../campaign/nodes';
+import { actName, actTitle } from '../campaign/nodes';
 import { progress } from '../campaign/progress';
 import type { CampaignNode } from '../campaign/types';
 import { libraryItems } from '../lib/catalog';
@@ -26,7 +26,7 @@ import { h, icon } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { CHALLENGES } from './challengeset';
 import {
-  type Allowed, type BuildChallenge, challengeChipId, challengeOf, type CheckResult, checkChallenge, importAnswer, LEVELS, libAllowed, type LibRule,
+  type Allowed, type BuildChallenge, challengeChipId, challengeOf, type CheckResult, checkChallenge, importAnswer, LEVELS, libAllowed, type LibRule, type Limits,
   ruleKind, solveChallenge, solvedKey, startChallenge,
 } from './challenges';
 import { dockPane, paneShown, showPane, undockPane } from './dock';
@@ -47,6 +47,18 @@ const RULE: Record<'transistors' | 'nand' | 'any', [string, string]> = {
 function rule(a: Allowed): [string, string] {
   if (typeof a === 'string') return RULE[a];
   return [a.label ?? 'unlocked parts', `NAND, wiring, constants, your own chips, and the parts unlocked by the levels this one builds on: ${a.lib.filter((x) => x !== 'nand').join(', ') || 'none yet'}`];
+}
+
+/** A relay or tube level (a strict rule): scored in relays, tube sections and relay steps, not NANDs. */
+const deviceRule = (ch: BuildChallenge): boolean => typeof ch.allowed === 'object' && !!ch.allowed.strict;
+
+function deviceItems(r: CheckResult, lim: Limits, item: (v: number, unit: string, par?: number, before?: boolean) => HTMLElement | null): (HTMLElement | null)[] {
+  const s = r.score;
+  return [
+    s.relays !== undefined || lim.maxRelays !== undefined ? item(s.relays ?? 0, s.relays === 1 ? 'relay' : 'relays', lim.maxRelays) : null,
+    s.tubes !== undefined || lim.maxTubes !== undefined ? item(s.tubes ?? 0, s.tubes === 1 ? 'tube section' : 'tube sections', lim.maxTubes) : null,
+    s.steps !== undefined ? item(s.steps, s.steps === 1 ? 'relay step' : 'relay steps', lim.maxSteps) : null,
+  ];
 }
 
 // ---- the "Unlocked parts" palette group ----------------------------------------------------------
@@ -212,7 +224,7 @@ class ChallengeUi {
         h('button', { class: `btn ghost icon-only sb-chal-fold${this.collapsed ? '' : ' open'}`, title: this.collapsed ? 'Show the brief' : 'Hide the brief', 'aria-expanded': String(!this.collapsed),
           onclick: () => { this.collapsed = !this.collapsed; this.render(); } }, icon('chevR', 14)),
         lv
-          ? h('a', { class: `sb-chal-flag${solved ? ' solved' : ''}`, href: `#/campaign/n/${lv.id}`, title: `Back to the campaign: ${ACTS[lv.act]?.title ?? ''}` }, icon(solved ? 'check' : 'flag', 13), `Campaign · Act ${lv.act}`)
+          ? h('a', { class: `sb-chal-flag${solved ? ' solved' : ''}`, href: `#/campaign/n/${lv.id}`, title: `Back to the campaign: ${actTitle(lv.act)}` }, icon(solved ? 'check' : 'flag', 13), `Campaign · ${actName(lv.act)}`)
           : h('span', { class: `sb-chal-flag${solved ? ' solved' : ''}`, title: solved ? 'Solved' : 'Challenge' }, icon(solved ? 'check' : 'flag', 13), LEVELS.find((l) => l.id === ch.level)?.title ?? ch.level),
         h('h3', null, ch.title),
         lv && lp?.stars ? h('span', { class: 'sb-chal-stars', title: `Best: ${lp.stars} of 3 stars` }, '★'.repeat(lp.stars) + '☆'.repeat(3 - lp.stars)) : null,
@@ -273,6 +285,7 @@ class ChallengeUi {
     const lv = this.level;
     const lp = lv ? progress().get(lv.id) : undefined;
     const score = ch.allowed === 'transistors' ? [item(r.score.transistors, 'transistors', lim.maxTransistors)]
+      : deviceRule(ch) ? deviceItems(r, lim, item)
       : [item(r.score.nand, 'NAND', lim.maxNand), item(r.score.depth, 'depth', lim.maxDepth, true), item(r.score.period, 'period', lim.maxPeriod, true), item(r.score.cycles, 'cycles', lim.maxCycles)];
     return h('span', { class: `sb-chal-sum ${r.ok ? 'ok' : 'bad'}${stale ? ' stale' : ''}`, role: 'status' },
       r.ok ? h('b', { class: 'v' }, icon('check', 13), 'Passes') : h('b', { class: 'v' }, icon('close', 13), 'Not yet'),
@@ -390,6 +403,7 @@ class ChallengeUi {
     const period = r.score.period;
     const parts = ch.allowed === 'transistors'
       ? [item(r.score.transistors, 'transistors', lim.maxTransistors)]
+      : deviceRule(ch) ? deviceItems(r, lim, item)
       : [item(r.score.nand, 'NAND', lim.maxNand), r.score.depth !== null ? item(r.score.depth, 'depth', lim.maxDepth, true) : null,
         period !== undefined && period !== null ? item(period, 'period', lim.maxPeriod, true) : null,
         r.score.cycles !== undefined ? item(r.score.cycles, 'cycles', lim.maxCycles) : null,

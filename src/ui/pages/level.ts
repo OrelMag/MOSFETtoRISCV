@@ -17,7 +17,7 @@ import { dependents, isDone, nextAvailable, statusOf } from '../../campaign/grap
 import { levelChallenge, levelChipId } from '../../campaign/levels';
 import { altCost, copiesInFinal, countedPart, finalCpu } from '../../campaign/measure';
 import { walkOf } from '../../campaign/walk';
-import { ACTS, nodeById } from '../../campaign/nodes';
+import { actName, actTitle, nodeById } from '../../campaign/nodes';
 import { progress } from '../../campaign/progress';
 import type { CampaignNode, Metric } from '../../campaign/types';
 import { criteria, gradeTable } from '../../campaign/ui/levelinfo';
@@ -140,16 +140,16 @@ export class LevelPage implements Page {
     if (this.walk) {
       this.bar.replaceChildren(
         h('a', { class: 'lv-back', href: `#/campaign/n/${n.id}`, title: 'The campaign map' }, icon('chevL', 14), 'Map'),
-        h('span', { class: 'lv-crumb' }, `Act ${n.act} · ${ACTS[n.act]?.title ?? ''}`, h('span', { class: 'sep' }, '›'), h('b', null, n.title)),
+        h('span', { class: 'lv-crumb' }, `${actName(n.act)} · ${actTitle(n.act)}`, h('span', { class: 'sep' }, '›'), h('b', null, n.title)),
         h('span', { class: 'lv-badge acc' }, 'WALKTHROUGH'),
         h('span', { class: 'lv-spacer' }),
         h('button', { class: 'btn sm ghost', title: 'Back to your own circuit, as you left it', onclick: () => this.leaveWalk() }, 'Leave the walkthrough'));
       return;
     }
-    const parText = (Object.keys(par) as Metric[]).map((k) => `${k === 'depth' || k === 'period' ? `${k} ` : ''}${par[k]!.toLocaleString()}${k === 'depth' || k === 'period' ? '' : ` ${METRIC[k].unit}`}`);
+    const parText = (Object.keys(par) as Metric[]).map((k) => `${k === 'depth' || k === 'period' ? `${k} ` : ''}${par[k]!.toLocaleString()}${k === 'depth' || k === 'period' ? '' : ` ${par[k] === 1 ? METRIC[k].unit.replace(/s$/, '') : METRIC[k].unit}`}`);
     this.bar.replaceChildren(...[
       h('a', { class: 'lv-back', href: `#/campaign/n/${n.id}`, title: 'The campaign map' }, icon('chevL', 14), 'Map'),
-      h('span', { class: 'lv-crumb' }, `Act ${n.act} · ${ACTS[n.act]?.title ?? ''}`, h('span', { class: 'sep' }, '›'), h('b', null, n.title)),
+      h('span', { class: 'lv-crumb' }, `${actName(n.act)} · ${actTitle(n.act)}`, h('span', { class: 'sep' }, '›'), h('b', null, n.title)),
       h('span', { class: 'lv-badge' }, KIND_LABEL[n.kind]),
       st === 'solved' ? h('span', { class: 'lv-badge good' }, 'SOLVED') : st === 'skipped' ? h('span', { class: 'lv-badge' }, 'SKIPPED') : null,
       parText.length ? h('span', { class: 'lv-par', title: 'Par: three stars at or under it on every metric' }, 'par ', h('b', null, parText.join(' · '))) : null,
@@ -307,7 +307,7 @@ export class LevelPage implements Page {
     const par = n.par ?? {};
     const c = caseOf(n.id);
     const alts = (c?.alts ?? []).map((a) => ({ name: a.name, cost: altCost(a) }));
-    const metrics = (['nand', 'transistors', 'depth', 'period', 'cycles'] as Metric[]).filter((k) => par[k] !== undefined || (k === 'transistors' && par.nand !== undefined));
+    const metrics = (['nand', 'transistors', 'relays', 'tubes', 'steps', 'depth', 'period', 'cycles'] as Metric[]).filter((k) => par[k] !== undefined || (k === 'transistors' && par.nand !== undefined));
     const cell = (v: number | null | undefined) => (v === undefined || v === null ? '—' : v.toLocaleString());
     const table = metrics.length ? h('table', { class: 'lv-res-table' },
       h('tr', null, h('th', null, 'Metric'), h('th', null, 'Yours'), h('th', null, 'Par'), alts.map((a) => h('th', null, a.name))),

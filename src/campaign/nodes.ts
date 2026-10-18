@@ -41,6 +41,12 @@ export const ACTS: Act[] = [
   { num: 10, title: 'Memory', blurb: 'Optional, after the finale: what sits behind the data port. Charge on a bit line, a row buffer that leaks, a controller that keeps a chip\'s timings and refreshes it.' },
 ];
 
+/** An act's name as the map and the crumbs show it: "Act 3", or its own label ("Act P"). */
+export const actName = (num: number): string => ACTS.find((a) => a.num === num)?.label ?? `Act ${num}`;
+
+/** An act's title by its number (acts are listed in map order, not by number). */
+export const actTitle = (num: number): string => ACTS.find((a) => a.num === num)?.title ?? '';
+
 export const NODES: CampaignNode[] = [
   // ---- Act 0 --------------------------------------------------------------------------------
   {

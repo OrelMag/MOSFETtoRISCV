@@ -15,7 +15,7 @@ import { codexEntryEl } from '../../campaign/ui/codexentry';
 import { ancestors, dependents, isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { LESSONS } from '../../campaign/lessons';
 import { levelChallenge, levelChipId, startCandidates, startFrom } from '../../campaign/levels';
-import { ACTS, NODES, nodeById } from '../../campaign/nodes';
+import { ACTS, actName, NODES, nodeById } from '../../campaign/nodes';
 import { exportCampaign, importCampaign, progress } from '../../campaign/progress';
 import type { CampaignNode } from '../../campaign/types';
 import { PUZZLES } from '../../campaign/puzzles';
@@ -190,7 +190,7 @@ export class CampaignPage implements Page {
     const act = ACTS.find((a) => a.num === n.act)!;
     const el = h('div', { class: `cp-node-panel ${st}` });
     el.append(
-      h('div', { class: 'cp-crumb' }, h('a', { href: '#/campaign' }, 'Map'), ' › ', `Act ${act.num}: ${act.title}`),
+      h('div', { class: 'cp-crumb' }, h('a', { href: '#/campaign' }, 'Map'), ' › ', `${actName(act.num)}: ${act.title}`),
       h('h2', null, n.title),
       h('div', { class: 'cp-badges' },
         h('span', { class: 'cp-badge kind' }, KIND_LABEL[n.kind]),
