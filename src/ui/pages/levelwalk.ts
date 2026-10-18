@@ -237,7 +237,7 @@ export class WalkMode {
         h('button', { class: 'btn ghost sm', onclick: () => this.reveal() }, 'Show the step')) : h('p', null, s.text),
       !ask && this.mode === 'build' ? this.buildBox() : null,
       s.codex.length ? h('div', { class: 'lv-chips' }, s.codex.map((id) => codexById(id)).filter((e) => !!e).map((e) => h('a', { class: 'lv-chip acc', href: `#/campaign/codex/${e!.id}` }, `Codex: ${e!.title}`))) : null,
-      ask ? null : meters,
+      ask || this.mode === 'build' ? null : meters,
       s.authored ? null : h('p', { class: 'lv-gen sub' }, 'Generated from the reference circuit.'));
     // Compiling the partial circuit takes a moment on a big level: after the panel is on screen.
     setTimeout(() => {
