@@ -6,6 +6,7 @@
 import { UserLibrary } from '../editor/library';
 import { emptyWorkspace } from '../editor/model';
 import { resolveComponent } from '../lib/resolve';
+import { price } from '../lib/tech';
 import { copiesIn } from '../lib/usage';
 import { logicDepth, stats } from '../sim/stats';
 import type { ComponentDef } from '../sim/types';
@@ -19,6 +20,13 @@ export interface Cost {
   transistors: number;
   /** null: sequential or switch level. */
   depth: number | null;
+  /**
+   * In the technology setting (lib/tech.ts): relays and tube sections (triodes + diodes), as drawn for a relay or tube
+   * part, NAND-mapped with its fan-out for a NAND part; relay steps = NAND depth for a NAND part. Absent: no such build.
+   */
+  relays?: number;
+  tubes?: number;
+  steps?: number;
 }
 
 /** NANDs, transistors and depth of a library part (undefined: unknown id). */
@@ -26,7 +34,13 @@ export function libCost(id: string): Cost | undefined {
   const d = resolveComponent(id);
   if (!d) return undefined;
   const s = stats(d);
-  return { nand: s.nands, transistors: s.transistors, depth: logicDepth(d) };
+  const depth = logicDepth(d);
+  const r = price(d, 'relay', depth), t = price(d, 'tube', depth);
+  return {
+    nand: s.nands, transistors: s.transistors, depth,
+    ...(r ? { relays: r.devices } : {}), ...(t ? { tubes: (t.triodes ?? 0) + (t.diodes ?? 0) } : {}),
+    ...(r && !r.native && depth !== null ? { steps: depth } : {}),
+  };
 }
 
 /** An alternative's cost: measured when it names a library part, else the numbers it states. */

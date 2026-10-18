@@ -4,11 +4,12 @@
 // compiles back (compile.ts) to the same flat circuit, which tests/editor-roundtrip.test.ts
 // checks for every component of the library.
 
-import { type ExitDir, instPort, type Vec } from '../sim/geometry';
+import { type ExitDir, instPort, symbolGeom, type Vec } from '../sim/geometry';
 import { type ComponentDef, netlistOf, parseEnd } from '../sim/types';
 import { routeNetlist, tagStub } from '../view/route';
+import { autoFace } from './face';
 import {
-  type ChipDoc, type EndRef, isIdent, type LabelDoc, onPolyline, type PartDoc, type PartRef, type PinDoc, slug,
+  type ChipDoc, type EndRef, type FaceDoc, type FacePinDoc, type FaceSide, isIdent, type LabelDoc, onPolyline, type PartDoc, type PartRef, type PinDoc, slug,
   uniqueName, type WireDoc,
 } from './model';
 import { isError, MAX_WIDTH, partDef } from './parts';
@@ -164,11 +165,37 @@ export function docFromDef(def: ComponentDef, opts: FromDefOptions = {}): ChipDo
     w.init = v;
   }
 
+  const name = opts.name ?? def.name;
+  const face = boxFace(def, pins, name);
   return {
-    id: opts.id ?? `u_${slug(def.id)}`, name: opts.name ?? def.name,
+    id: opts.id ?? `u_${slug(def.id)}`, name,
     ...(def.notes ? { notes: def.notes } : {}),
-    pins, parts, wires, labels,
+    pins, parts, wires, labels, ...(face ? { face } : {}),
   };
+}
+
+/**
+ * A box part's own box as the chip's face, when it differs from the box the chip would get by itself (pins on the
+ * top or bottom, a size of its own): a copy of the chip placed where the part was then lines up with the wires
+ * drawn to the part (a reference answer drawing its sub-units as chips). Undefined when the automatic box is the same.
+ */
+function boxFace(def: ComponentDef, pins: PinDoc[], label: string): FaceDoc | undefined {
+  if (def.symbol.kind !== 'box') return undefined;
+  const g = symbolGeom(def);
+  const auto = autoFace(pins, label);
+  const sideOf = (e: ExitDir): FaceSide => (e === 'up' ? 'top' : e === 'down' ? 'bottom' : e);
+  const places: Record<string, FacePinDoc> = {};
+  let same = auto.w === g.w && auto.h === g.h;
+  for (const p of pins) {
+    const pg = g.ports[p.name];
+    if (!pg) return undefined;
+    const side = sideOf(pg.exit), at = side === 'left' || side === 'right' ? pg.pos[1] : pg.pos[0];
+    if (!Number.isInteger(at) || at < 1) return undefined;
+    places[p.id] = { side, at };
+    const a = auto.pins.get(p.id);
+    if (!a || a.side !== side || a.at !== at) same = false;
+  }
+  return same ? undefined : { w: g.w, h: g.h, pins: places };
 }
 
 /** How a library part is placed: splitters and mergers by their widths, the rest by id. */

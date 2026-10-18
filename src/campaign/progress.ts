@@ -52,7 +52,7 @@ export function sanitizeCampaign(raw: unknown): CampaignState {
     if (v.stars === 1 || v.stars === 2 || v.stars === 3) p.stars = v.stars;
     if (isObj(v.best)) {
       const b: Measured = {};
-      for (const [k, x] of Object.entries(v.best)) if (typeof x === 'number' && Number.isFinite(x) && x >= 0 && ['nand', 'transistors', 'depth', 'period', 'cycles', 'size', 'mistakes'].includes(k)) b[k as keyof Measured] = x;
+      for (const [k, x] of Object.entries(v.best)) if (typeof x === 'number' && Number.isFinite(x) && x >= 0 && ['nand', 'transistors', 'depth', 'period', 'cycles', 'size', 'mistakes', 'idle', 'relays', 'tubes', 'steps'].includes(k)) b[k as keyof Measured] = x;
       p.best = b;
     }
     if (typeof v.tips === 'number' && v.tips >= 0) p.tips = Math.floor(Math.min(v.tips, 20));

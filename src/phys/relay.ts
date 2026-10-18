@@ -106,10 +106,16 @@ export function relaySim(V: number, p: RelayParams = RELAY): RelayRun {
   return { V, s, ev };
 }
 
+/** The magnet's settled pull (N) on the armature at supply V (current V / Rc) with the armature moved by x. */
+export function relayPull(V: number, x: number, p: RelayParams = RELAY): number {
+  const q = phiOf(p, (p.N * V) / p.Rc, reluct(p, x));
+  return (q * q) / (2 * MU0 * p.A);
+}
+
 /** Static thresholds, 10 mV apart: the lowest supply whose pull at full gap beats the preload (pull-in), and the
  *  highest whose pull at the closed gap no longer holds the stretched spring (drop-out). */
 export function relayStatic(p: RelayParams = RELAY): { pull: number | null; drop: number | null } {
-  const f = (V: number, x: number) => { const q = phiOf(p, (p.N * V) / p.Rc, reluct(p, x)); return (q * q) / (2 * MU0 * p.A); };
+  const f = (V: number, x: number) => relayPull(V, x, p);
   let pull: number | null = null, drop: number | null = null;
   for (let V = 0; V <= 40; V += 0.01) if (f(V, 0) > p.F0) { pull = V; break; }
   for (let V = 40; V >= 0; V -= 0.01) if (f(V, p.travel) < p.F0 + p.k * p.travel) { drop = V; break; }

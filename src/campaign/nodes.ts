@@ -9,10 +9,12 @@ import { BUILD6 } from './build6';
 import { BUILD7 } from './build7';
 import { BUILD8, partsOf } from './build8';
 import { BUILD9 } from './build9';
+import { BUILDCARD } from './buildcard';
 import { BUILDFP, FP_REF, fpGives } from './buildfp';
 import { BUILDH } from './buildh';
 import { BUILDK } from './buildk';
 import { BUILDM } from './buildm';
+import { BUILDR } from './buildr';
 import { fpAdd, fpMul, lzc, ROUND_DECIDE } from '../lib/fpu';
 import { arrayMul, seqDivider } from '../lib/muldiv';
 import { seqMul } from '../lib/multiply';
@@ -29,6 +31,7 @@ const sandbox = (id: string) => (): BuildChallenge => {
 
 export const ACTS: Act[] = [
   { num: 0, title: 'Prologue: what are we building?', blurb: 'A processor is a loop: fetch an instruction, decode it, execute it, write the result back, go again. Every block of that loop is a circuit you will build. It all starts with a switch.' },
+  { num: 11, label: 'Act P', title: 'Before the transistor', blurb: 'Optional, beside act 0: the same logic in what computers were first built from. Relays, whose contacts pass a signal both ways and add 32 bits in one 8 ms step; vacuum tubes, ten thousand times faster, that only pull down and need a divider between every two gates; and cards, how the program got in.' },
   { num: 1, title: 'Logic', blurb: 'From one gate, every Boolean function. Decoders choose a register, multiplexers route operands, comparators decide branches: the CPU\'s control is all logic.' },
   { num: 2, title: 'Numbers and arithmetic', blurb: 'Bits become numbers when you agree on what they mean. Then one adder does addition, subtraction and comparison: the heart of the ALU.' },
   { num: 3, title: 'State and memory', blurb: 'Logic forgets; a CPU must remember: the program counter, eight registers, data. Feedback makes a latch, two latches make a flip-flop, flip-flops make everything else.' },
@@ -40,6 +43,12 @@ export const ACTS: Act[] = [
   { num: 9, title: 'Throughput: a GPU', blurb: 'Optional, after the finale: the same bricks arranged for throughput instead of latency: one instruction stream, four lanes, each with its own registers. Then the hard part: what the lanes do when they disagree.' },
   { num: 10, title: 'Memory', blurb: 'Optional, after the finale: what sits behind the data port. Charge on a bit line, a row buffer that leaks, a controller that keeps a chip\'s timings and refreshes it.' },
 ];
+
+/** An act's name as the map and the crumbs show it: "Act 3", or its own label ("Act P"). */
+export const actName = (num: number): string => ACTS.find((a) => a.num === num)?.label ?? `Act ${num}`;
+
+/** An act's title by its number (acts are listed in map order, not by number). */
+export const actTitle = (num: number): string => ACTS.find((a) => a.num === num)?.title ?? '';
 
 export const NODES: CampaignNode[] = [
   // ---- Act 0 --------------------------------------------------------------------------------
@@ -70,6 +79,75 @@ export const NODES: CampaignNode[] = [
     tips: ['Swap series and parallel relative to the NAND.'],
     codex: ['nor', 'duality'], unlocks: ['nor_cmos'], par: { transistors: 4 },
     chapters: [{ chapter: 'nand', step: 1, label: 'NOR, for comparison' }],
+  },
+
+  // ---- Act P: before the transistor ----------------------------------------------------------
+  {
+    id: 'r_pull', act: 11, title: 'Pull-in and drop-out', kind: 'drill', optional: true, requires: ['intro'], drill: 'relay', par: { mistakes: 2 },
+    why: 'A relay is a magnet against a spring, so it is not a clean switch: it closes at one voltage, opens at a much lower one, takes milliseconds and bounces. Read those numbers off the physical model before building with its logic, where all of it becomes one relay step.',
+    tips: [], codex: ['relay', 'relaystep'],
+    chapters: [{ chapter: 'relays', label: 'Relays' }],
+  },
+  {
+    id: 'r_nand', act: 11, title: 'A relay NAND', kind: 'build', optional: true, requires: ['r_pull'], base: BUILDR.r_nand, par: { relays: 2, steps: 1 },
+    why: 'The brick again, in relays. A NAND is 1 unless both coils pull: two break contacts in parallel from the supply. Nothing ever drives the output to 0; an open line feeds the next coil, which pulls it down.',
+    tips: ['a and b each operate a relay: the pin on the coil\'s a end, GND on its b end.', 'From VDD through each relay\'s break contact (c to nc) to y: either released relay connects y to the supply.', 'An output nobody drives reads Z here: end y on a pull-down, the next relay\'s coil drawn as its resistance.'],
+    codex: ['openzero'], chapters: [{ chapter: 'relays', step: 2, label: 'Contacts conduct both ways' }],
+  },
+  {
+    id: 'r_xor', act: 11, title: 'Changeover XOR', kind: 'build', optional: true, requires: ['r_nand'], base: BUILDR.r_xor, par: { relays: 2, steps: 1 },
+    why: 'XOR costs 4 NANDs and 3 delays in CMOS. A changeover contact is a 2:1 multiplexer that passes either way, so XOR is two relays and one step: the first puts the supply on one of two lines, the second picks the other one.',
+    tips: ['Relay a: VDD on its common, so exactly one of its no / nc lines carries the supply.', 'Relay b: its common is y; its no and nc go to a\'s lines crossed over (b\'s nc to a\'s no, b\'s no to a\'s nc).', 'End y on a load.'],
+    codex: ['relay'], chapters: [{ chapter: 'relays', step: 3, label: 'What contacts are good at' }],
+  },
+  {
+    id: 'r_adder', act: 11, title: 'Carry through contacts', kind: 'build', optional: true, requires: ['r_xor'], base: BUILDR.r_adder, par: { relays: 8, steps: 1 },
+    why: 'A 4-bit adder whose carry never waits for a coil. The operands operate the relays; the carry runs through their contacts on two lines, c and not c, and arrives at once. The sum is ready one relay step after the operands, for 4 bits or 32.',
+    tips: ['Carry in is 0: the c line open, the ¬c line on VDD.', 'co = b ? (a ? 1 : c) : (a ? c : open); ¬co is its mirror. s = a ? (b ? c : ¬c) : (b ? ¬c : c): two lines chosen by b, then one of them by a.', 'Per bit, relay a needs five poles (four for the carry pair, one for the sum), relay b four. Build one bit as a chip, then chain four.', 'End each sum line and the carry out on a load.'],
+    codex: ['contactcarry'], chapters: [{ chapter: 'relays', step: 4, label: 'A carry that needs no time' }],
+  },
+  {
+    id: 'r_latch', act: 11, title: 'A relay that holds', kind: 'build', optional: true, requires: ['r_nand'], base: BUILDR.r_latch, par: { relays: 3 },
+    why: 'Memory in relays: a relay that feeds its own coil through its own contact stays in after the pulse that pulled it in is gone, until a break contact in that path opens. The Z3 stored every bit of its memory this way.',
+    tips: ['q is the coil line of the holding relay k. Set operates a relay whose make contact puts VDD on q.', 'k feeds itself: its make contact connects q to a holding line.', 'The holding line comes from VDD through the break contact of a reset relay: reset opens it, and k drops out.'],
+    codex: ['selfhold'], chapters: [{ chapter: 'relays', step: 5, label: 'Memory that holds itself' }],
+  },
+  {
+    id: 'r_clock', act: 11, title: 'The buzzer clock', kind: 'build', optional: true, requires: ['r_latch'], base: BUILDR.r_clock, par: { relays: 2 },
+    why: 'A relay fed through its own break contact cannot rest: the doorbell\'s buzzer, and a clock of two relay steps. Then halve it with a second relay that toggles only while the first is pulled in: a counter bit, the start of every sequencer.',
+    tips: ['Buzzer: en on the common of k\'s break contact, the break contact on k\'s own coil line, which is y.', 'The divider relay t toggles whenever k is operated: its coil then reads a line that carries VDD only while t is released; while k is released it reads one that carries VDD only while t is operated.', 'Both lines come from t\'s own changeover contact with VDD on its common; one more pole of k chooses between them. q: a make contact of t to a load.'],
+    codex: ['buzzer'], chapters: [{ chapter: 'relays', step: 6, label: 'A relay that cannot stop' }],
+  },
+  {
+    id: 'v_inv', act: 11, title: 'Two tubes in a row', kind: 'build', optional: true, requires: ['intro'], base: BUILDR.v_inv, par: { tubes: 2 },
+    why: 'A triode inverts: grid 1, the plate falls; grid 0, the plate resistor pulls it up. But a plate swings between 81 and 250 V, and a grid needs 0 V to conduct and −12.5 V to stop. Two inverters in a row only work with a level shift between them.',
+    tips: ['Each inverter: a plate resistor from B+ (+250 V) to the plate, the triode from the plate to GND (its cathode), the plate is the output.', 'Every grid reads its input through a divider: a divider resistor from the plate (or the input, also a plate level) to the grid, a bias resistor from the grid to −150 V.', 'na is the first plate, y the second.'],
+    codex: ['triode', 'griddivider'], chapters: [{ chapter: 'tubes', step: 2, label: 'Levels that do not line up' }],
+  },
+  {
+    id: 'v_ff', act: 11, title: 'Eccles–Jordan', kind: 'build', optional: true, requires: ['v_inv'], base: BUILDR.v_ff, par: { tubes: 4 },
+    why: 'One bit in one bulb (1918): two triodes, each holding the other off. Every flip-flop of the tube machines, ENIAC\'s counters included, was this pair.',
+    tips: ['Two inverters, each grid reading the other\'s plate through a divider: q is one plate, nq the other.', 'set must turn on the tube whose plate is nq, reset the other one. A wire from the pin to the grid would also hold the grid at 0 while the pin is 0.', 'Steering diodes, anode on the pin and cathode on the grid: a 1 pulls the grid up, a 0 lets go.'],
+    codex: ['ecclesjordan'], chapters: [{ chapter: 'tubes', step: 5, label: 'One bit in one bulb' }],
+  },
+  {
+    id: 'h_card', act: 11, title: 'Read a card', kind: 'drill', optional: true, requires: ['intro'], drill: 'hollerith', par: { mistakes: 2 },
+    why: 'For seventy years programs and data arrived on cards. Read the Hollerith code both ways: what a column says, and which holes a character needs. Then the binary kind, a word punched one bit a column.',
+    tips: [], codex: ['hollerith'],
+    chapters: [{ chapter: 'cards', step: 2, label: 'Eighty columns' }],
+  },
+  {
+    id: 'h_loader', act: 11, title: 'Program on cards', kind: 'build', optional: true, requires: ['h_card', 'r_clock'], base: BUILDCARD.h_loader,
+    par: { relays: 233, cycles: 182 }, gives: ['not', 'and', 'or', 'dff', 'counter8', 'mux2x8', 'cpu4_proc', 'ram256x16'],
+    why: 'A computer with an empty memory and a deck in the reader. Build the loader: a counter that addresses the memory, a write for each card, and the switch that hands memory to the 4-bit CPU once the hopper is empty. The Z3 read its program off punched film the same way, and the loader is priced as the Z3 was built: in relays.',
+    tips: [
+      'Tie the reader\'s next to 1: it takes a card at every rising edge one waits. Then ready is the write enable: the card\'s word goes into the RAM word the counter addresses, and the counter (enabled by ready) moves on at the same edge.',
+      'The RAM\'s address is a 2:1 mux on run: the counter while loading, the CPU\'s pc after. Tie test and sw to 0.',
+      'Hold the CPU back by its clock: clk AND run. run must not rise while clk is high (the CPU would see half a pulse before its first word is through the mux): take empty into a flip-flop clocked on the falling edge, clk through a NOT.',
+      'Cycles: the reader sets the pace, a card every four edges. Take each card as soon as it is ready and raise run in the cycle the last one goes, and you are at par.',
+    ],
+    codex: ['loader'],
+    chapters: [{ chapter: 'cards', step: 4, label: 'A machine that reads them' }],
   },
 
   // ---- Act 1 --------------------------------------------------------------------------------

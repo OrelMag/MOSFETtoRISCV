@@ -15,6 +15,9 @@ export const METRIC: Record<Metric, { label: string; unit: string; hint: string 
   cycles: { label: 'Cycles', unit: 'cycles', hint: 'Clock cycles to run the tests' },
   size: { label: 'Size', unit: 'words', hint: 'Program size in instruction words' },
   mistakes: { label: 'Mistakes', unit: 'mistakes', hint: 'Wrong answers and answers shown, before the drill was complete' },
+  relays: { label: 'Relays', unit: 'relays', hint: 'Relays in the whole hierarchy (a coil and its contacts each)' },
+  tubes: { label: 'Tube sections', unit: 'sections', hint: 'Triode and diode sections (a 6SN7 bulb holds two triodes, a 6AL5 two diodes)' },
+  steps: { label: 'Relay steps', unit: 'steps', hint: 'Most relay steps (about 8 ms each) one input change takes to come to rest' },
   idle: { label: 'Idle lanes', unit: '%', hint: 'Lane-steps with the lane switched off, as a share of all lane-steps (100 % − lane utilization), mean over the tests' },
 };
 
@@ -24,6 +27,9 @@ export function measured(s: Score): Measured {
   if (s.depth !== null) m.depth = s.depth;
   if (s.period !== undefined && s.period !== null) m.period = s.period;
   if (s.cycles !== undefined) m.cycles = s.cycles;
+  if (s.relays !== undefined) m.relays = s.relays;
+  if (s.tubes !== undefined) m.tubes = s.tubes;
+  if (s.steps !== undefined) m.steps = s.steps;
   return m;
 }
 

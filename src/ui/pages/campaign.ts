@@ -15,7 +15,7 @@ import { codexEntryEl } from '../../campaign/ui/codexentry';
 import { ancestors, dependents, isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { LESSONS } from '../../campaign/lessons';
 import { levelChallenge, levelChipId, startCandidates, startFrom } from '../../campaign/levels';
-import { ACTS, NODES, nodeById } from '../../campaign/nodes';
+import { ACTS, actName, NODES, nodeById } from '../../campaign/nodes';
 import { exportCampaign, importCampaign, progress } from '../../campaign/progress';
 import type { CampaignNode } from '../../campaign/types';
 import { PUZZLES } from '../../campaign/puzzles';
@@ -178,7 +178,7 @@ export class CampaignPage implements Page {
       h('p', null, 'Each level builds one block of a processor from the blocks before it. Pick a level on the map, or continue with the next one.'),
       next ? h('a', { class: 'btn primary', href: `#/campaign/n/${next.id}` }, `${p.summary().done ? 'Continue' : 'Begin'}: ${next.title}`, icon('chevR', 16)) : null,
       h('h3', null, 'Acts'),
-      h('ol', { class: 'cp-acts', start: 0 }, ACTS.map((a) => h('li', null, h('b', null, a.title), html('span', 'sub', ` — ${a.blurb}`)))));
+      h('ul', { class: 'cp-acts' }, ACTS.map((a) => h('li', null, h('b', null, `${actName(a.num)} · ${a.title}`), html('span', 'sub', ` — ${a.blurb}`)))));
   }
 
   private nodePanel(n: CampaignNode): HTMLElement {
@@ -190,7 +190,7 @@ export class CampaignPage implements Page {
     const act = ACTS.find((a) => a.num === n.act)!;
     const el = h('div', { class: `cp-node-panel ${st}` });
     el.append(
-      h('div', { class: 'cp-crumb' }, h('a', { href: '#/campaign' }, 'Map'), ' › ', `Act ${act.num}: ${act.title}`),
+      h('div', { class: 'cp-crumb' }, h('a', { href: '#/campaign' }, 'Map'), ' › ', `${actName(act.num)}: ${act.title}`),
       h('h2', null, n.title),
       h('div', { class: 'cp-badges' },
         h('span', { class: 'cp-badge kind' }, KIND_LABEL[n.kind]),

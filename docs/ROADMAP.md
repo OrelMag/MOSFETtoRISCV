@@ -643,8 +643,16 @@ with punch cards.
   program input of the relay / tube machine
   - Sandbox part done (editor/cardparts.ts, cardui.ts): the deck in the document, word or column mode, feed delay;
     properties punch cards by hand, type source cards, load / save / drop / sort decks, punch one from a ROM, follow
-    the read station live. Still to do: the campaign's reader and the relay / tube machine's program input
-- ⏳ In the campaign: a Hollerith-code drill and a level where the program arrives on cards
+    the read station live; the campaign's reader in h_loader (14e). Still to do: the relay / tube machine's program input
+- ✅ In the campaign: a Hollerith-code drill (`h_card`) and a level where the program arrives on cards (`h_loader`:
+  the learner's loader fills a RAM from the reader for the 4-bit CPU, graded in relays and cycles to load)
+
+**The campaign act** (14e)
+- ✅ Act P "Before the transistor", optional, beside act 0 (docs/CAMPAIGN.md): relay levels at switch level (NAND, XOR,
+  a 4-bit adder with the carry through contacts, a self-holding relay, the buzzer clock and its ÷2), tube levels (two
+  inverters in a row with the grids behind dividers, Eccles–Jordan), a relay drill on the physical model's curves, the
+  Hollerith drill and the card loader; strict part rules (no MOSFET, no NAND), graded in relays, relay steps and tube
+  sections, the CMOS alternatives priced the same way through the technology setting
 - ⏳ Cards for the RISC-V CPUs: any program (RV32 asm / hex in the ROM editor and the CPU panel, RV16 in the
   campaign) exported as a deck, one instruction per card (its word punched in binary, the source line printed in
   Hollerith along the top, a sequence number in columns 73–80 as on real decks so a dropped deck can be sorted),
