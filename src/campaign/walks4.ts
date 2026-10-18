@@ -175,12 +175,12 @@ export const WALKS4: Record<string, WalkScript> = {
     },
     {
       title: 'Next PC, fast adders',
-      text: 'The reference also swaps next PC\'s two adders for Kogge–Stone ones: 865 NANDs, +444. The period does not move (it is 76 with the ripple next PC too), so two thirds of the extra NANDs buy nothing here.',
+      text: 'Next PC keeps its two ripple adders (421 NANDs). Kogge–Stone ones would cost 865, +444, and the period would not move: the branch path reaches the PC through ld, not through the adders, and the target adders (36 deep) finish before the comparator (44). Spend NANDs only on the critical path.',
       parts: ['u8'],
     },
     {
       title: 'Write back',
-      text: 'The 4:1 result mux into the register file. 5 403 NANDs (+662, +14%) for period 76 (−22%): the same 1 236 cycles take 93 936 NAND delays instead of 121 128.',
+      text: 'The 4:1 result mux into the register file. 4 959 NANDs (+218, +5%) for period 76 (−22%): the same 1 236 cycles take 93 936 NAND delays instead of 121 128.',
       parts: ['u9'], codex: ['cpi'],
     },
   ],

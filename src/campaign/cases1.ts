@@ -88,7 +88,7 @@ export const CASES1: Record<string, LevelCase> = {
   c_fast: {
     problem: 'Every instruction pays Core III\'s slowest path: PC → instruction memory → control → ALU → data memory → result mux → register file, 98 delays, of which the ripple ALU is 50. Static timing names the path; Kogge–Stone adders, carries in logarithmic depth instead of a chain, shorten it without changing a single instruction or cycle.',
     without: 'The same 1 236 cycles at period 98.',
-    cost: 'The reference swaps the ALU and both next-PC adders: 5 403 NANDs (+662, +14%) for period 76 (−22%), so the 28 programs take 93 936 NAND delays instead of 121 128. The load path stays the longest, now with the branch two delays behind it: instruction memory → register file → comparator (44 deep: its less-than waits for the carry chain) → next PC → PC, 74.',
+    cost: 'The reference swaps only the ALU: 4 959 NANDs (+218, +5%) for period 76 (−22%), so the 28 programs take 93 936 NAND delays instead of 121 128. The load path stays the longest, now with the branch two delays behind it: instruction memory → register file → comparator (44 deep: its less-than waits for the carry chain) → next PC → PC, 74. Kogge–Stone adders in next PC would add 444 NANDs and leave the period at 76: speed up only what lies on the critical path.',
     alts: [{ name: 'Kogge–Stone ALU', lib: 'rv16_alu16ks' }, { name: 'Ripple ALU', lib: 'rv16_alu16' }],
   },
 
