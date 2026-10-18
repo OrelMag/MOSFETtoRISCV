@@ -1061,6 +1061,17 @@ as a black box only after its inside has been shown. A clocked scene starts runn
 2 Hz; Pulse / Step / Back / a hand-clocked edge pause it): give it `autoClock: false` when its exercise counts Pulses
 from the first state. Say what each thing *costs*.
 
+The guide around the prose (ui/pages/chapter.ts, looks.ts; tests/chapter-guide.test.ts checks every name and id):
+- `goals` (3–4, "In this chapter you will …") and `builds` (earlier chapter ids) open the first step; `recap` (`keep`,
+  `check`: three Quizzes, `practise`: level ids) is a step of its own after the last (`#/c/<id>/<steps.length>`), with
+  the codex entries that link the chapter (campaign/chapterlinks.ts, loaded on demand).
+- Name a part in the text with `<span data-show="hz fwdA">…</span>`: hover lights it on the stage, a click pins it
+  (`pin:a` a pin, `dp.alu` opens dp). A highlighted scene gets a "Lit on the circuit" line from the instances' labels
+  (`Step.lit` overrides it, `''` hides it).
+- A quiz's `why` (one per option) says why a wrong pick is wrong; a reach challenge's `hints` come before Show answer;
+  `Step.tries` ticks the body's `.try` boxes in order once a condition holds. Folded asides: `<details class="deeper">`.
+- Checks (challenges and recap questions, chapters/checks.ts) fill the step dots and the chapter menu's counts.
+
 ## Major changes: mockup first
 
 Before building a major change (a new screen or page, a new visual mode, restructured navigation, a new act

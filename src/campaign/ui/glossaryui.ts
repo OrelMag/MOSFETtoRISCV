@@ -4,14 +4,14 @@
 
 import '../../styles/glossary.css';
 import { h, icon } from '../../ui/dom';
-import { codexById } from '../codex';
+import { CODEX_KINDS, codexById } from '../codex';
 import { Glossary } from '../glossary';
 
 let gloss: Glossary | null = null;
 let card: HTMLElement | null = null;
 let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
-const SKIP = 'a, code, pre, h1, h2, h3, h4, button, .gl, svg, kbd, .no-gloss';
+const SKIP = 'a, code, pre, h1, h2, h3, h4, button, .gl, svg, kbd, .no-gloss, [data-show]';
 
 /** Mark the first mention of each term in `root` (at most `max` marks); `skip` ids are not marked. */
 export function markTerms(root: HTMLElement, max = 10, skip: ReadonlySet<string> = new Set()): void {
@@ -50,6 +50,18 @@ export function markTerms(root: HTMLElement, max = 10, skip: ReadonlySet<string>
   }
 }
 
+/** The codex terms mentioned in an HTML fragment (outside the parts markTerms skips): what a reader already met there. */
+export function termsIn(html: string): Set<string> {
+  gloss ??= new Glossary();
+  const root = h('div', { html });
+  const out = new Set<string>();
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (t) => (t.parentElement?.closest(SKIP) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+  });
+  for (let t = walker.nextNode(); t; t = walker.nextNode()) for (const m of gloss.find((t as Text).data)) out.add(m.id);
+  return out;
+}
+
 function show(el: HTMLElement): void {
   const e = codexById(el.dataset.cx ?? '');
   if (!e) return;
@@ -62,7 +74,7 @@ function show(el: HTMLElement): void {
   }
   const sum = h('div', { class: 'gl-sum' });
   sum.innerHTML = e.body;
-  card.replaceChildren(h('div', { class: 'gl-title' }, h('b', null, e.title), h('span', { class: 'gl-kind' }, e.kind)), sum,
+  card.replaceChildren(h('div', { class: 'gl-title' }, h('b', null, e.title), h('span', { class: 'gl-kind' }, CODEX_KINDS.find((k) => k.id === e.kind)?.title.replace(/s$/, '') ?? e.kind)), sum,
     h('a', { class: 'gl-more', href: `#/campaign/codex/${e.id}` }, 'Open in the codex', icon('chevR', 12)));
   card.hidden = false;
   const r = el.getBoundingClientRect();
