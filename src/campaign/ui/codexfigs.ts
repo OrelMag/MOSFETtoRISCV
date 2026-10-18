@@ -21,8 +21,9 @@ const BRANCH = ['li t0, 1', 'beq t0, t0, skip', 'addi t1, zero, 99', 'addi t1, z
 
 /** The gate-level pipeline run for `cycles` cycles on `lines`, drawn as the chapters' pipeline diagram. */
 function pipelineRun(lines: string[], cycles: number, caption: string): CodexFigure {
-  const grid = h('div', { class: 'pipe-grid cx-pipe' }, h('p', { class: 'sub' }, 'Running the gate-level pipeline…'));
+  const grid = h('div', { class: 'pipe-grid cx-pipe' }, h('p', { class: 'sub' }, 'Running the gate-level RV32I pipeline…'));
   const timer = setTimeout(() => {
+    if (!grid.isConnected) return; // the entry was left before the run started
     const words = assemble(lines.join('\n')).words;
     const sim = new GateSim(flatten(pipelinedCpu(words)));
     sim.setInput('clk', 0);
@@ -33,7 +34,7 @@ function pipelineRun(lines: string[], cycles: number, caption: string): CodexFig
       const s = pipeSnap(sim, sim.design.root, c);
       if (s) snaps.push(s);
     }
-    if (grid.isConnected || !grid.parentElement) grid.replaceChildren(...pipeGridRows(snaps, (pc) => words[pc >>> 2], cycles));
+    grid.replaceChildren(...pipeGridRows(snaps, (pc) => words[pc >>> 2], cycles));
   }, 30);
   const listing = h('pre', { class: 'cx-listing' }, lines.join('\n'));
   return { el: h('div', null, listing, grid), caption, destroy: () => clearTimeout(timer) };
@@ -53,8 +54,8 @@ const FIGS: Record<string, () => CodexFigure> = {
   loadstore: () => ({ el: h('div', { class: 'cx-fields' }, breakdown('lw a0, 8(sp)'), breakdown('sw a0, 8(sp)')), caption: 'A load and a store: the same base + offset, the offset split in the S format so rs2 keeps its place.' }),
   assembly: () => ({ el: breakdown('addi a0, a0, 1'), caption: 'What the assembler makes of one line: opcode, registers and the immediate in their fields.' }),
   criticalpath: () => live(adderComparison(), 'Adders compared on gates and depth: the depth is the critical path through each.'),
-  pipeline: () => pipelineRun(INDEP, 11, 'Independent instructions on the gate-level pipeline: after four cycles of fill, one retires every cycle.'),
-  hazards: () => pipelineRun(HAZARDS, 13, 'Every data hazard in a row, on the gate-level pipeline: the event row marks each forward and the load-use stall.'),
+  pipeline: () => pipelineRun(INDEP, 11, 'Independent instructions on the chapters' gate-level RV32I pipeline: after four cycles of fill, one retires every cycle.'),
+  hazards: () => pipelineRun(HAZARDS, 13, 'Every data hazard in a row, on the chapters' gate-level RV32I pipeline (it bypasses W into D where RV16 writes its registers at the falling edge): the event row marks each forward and the load-use stall.'),
   forwarding: () => pipelineRun(HAZARDS, 13, 'The event row marks where a value is forwarded (M→E, W→E) instead of waited for.'),
   loaduse: () => pipelineRun(HAZARDS, 13, 'The add after the load is held in D for one cycle: a bubble enters E.'),
   stall: () => pipelineRun(HAZARDS, 13, 'A stall freezes F and D for a cycle and sends a bubble down the pipe.'),
