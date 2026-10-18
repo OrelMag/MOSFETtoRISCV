@@ -3,10 +3,11 @@
 // measured cost. What the screen can compute is not written here: the levels that build on this one
 // (graph), the copies of the unlocked part in the finished CPU (lib/usage.ts copiesIn), the learner's
 // score and par. Alternatives name library parts where they exist, so their cost is measured too.
-// The texts live in cases0.ts (acts 0–3) and cases1.ts (acts 4–9). No DOM.
+// The texts live in cases0.ts (acts 0–3), cases1.ts (acts 4–10) and casesP.ts (act P). No DOM.
 
 import { CASES0 } from './cases0';
 import { CASES1 } from './cases1';
+import { CASESP } from './casesP';
 
 /** Another way to build the same block, shown next to the learner's result. */
 export interface CaseAlt {
@@ -31,7 +32,7 @@ export interface LevelCase {
   counts?: string;
 }
 
-const ALL: Record<string, LevelCase> = { ...CASES0, ...CASES1 };
+const ALL: Record<string, LevelCase> = { ...CASES0, ...CASES1, ...CASESP };
 
 export function caseOf(nodeId: string): LevelCase | undefined {
   return ALL[nodeId];

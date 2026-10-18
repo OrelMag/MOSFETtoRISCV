@@ -178,7 +178,7 @@ export class CampaignPage implements Page {
       h('p', null, 'Each level builds one block of a processor from the blocks before it. Pick a level on the map, or continue with the next one.'),
       next ? h('a', { class: 'btn primary', href: `#/campaign/n/${next.id}` }, `${p.summary().done ? 'Continue' : 'Begin'}: ${next.title}`, icon('chevR', 16)) : null,
       h('h3', null, 'Acts'),
-      h('ol', { class: 'cp-acts', start: 0 }, ACTS.map((a) => h('li', null, h('b', null, a.title), html('span', 'sub', ` — ${a.blurb}`)))));
+      h('ul', { class: 'cp-acts' }, ACTS.map((a) => h('li', null, h('b', null, `${actName(a.num)} · ${a.title}`), html('span', 'sub', ` — ${a.blurb}`)))));
   }
 
   private nodePanel(n: CampaignNode): HTMLElement {

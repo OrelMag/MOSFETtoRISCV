@@ -94,7 +94,7 @@ export const NODES: CampaignNode[] = [
     codex: ['openzero'], chapters: [{ chapter: 'relays', step: 2, label: 'Contacts conduct both ways' }],
   },
   {
-    id: 'r_xor', act: 11, title: 'XOR from changeover contacts', kind: 'build', optional: true, requires: ['r_nand'], base: BUILDR.r_xor, par: { relays: 2, steps: 1 },
+    id: 'r_xor', act: 11, title: 'Changeover XOR', kind: 'build', optional: true, requires: ['r_nand'], base: BUILDR.r_xor, par: { relays: 2, steps: 1 },
     why: 'XOR costs 4 NANDs and 3 delays in CMOS. A changeover contact is a 2:1 multiplexer that passes either way, so XOR is two relays and one step: the first puts the supply on one of two lines, the second picks the other one.',
     tips: ['Relay a: VDD on its common, so exactly one of its no / nc lines carries the supply.', 'Relay b: its common is y; its no and nc go to a\'s lines crossed over (b\'s nc to a\'s no, b\'s no to a\'s nc).', 'End y on a load.'],
     codex: ['relay'], chapters: [{ chapter: 'relays', step: 3, label: 'What contacts are good at' }],
@@ -118,7 +118,7 @@ export const NODES: CampaignNode[] = [
     codex: ['buzzer'], chapters: [{ chapter: 'relays', step: 6, label: 'A relay that cannot stop' }],
   },
   {
-    id: 'v_inv', act: 11, title: 'A tube that drives another', kind: 'build', optional: true, requires: ['intro'], base: BUILDR.v_inv, par: { tubes: 2 },
+    id: 'v_inv', act: 11, title: 'Two tubes in a row', kind: 'build', optional: true, requires: ['intro'], base: BUILDR.v_inv, par: { tubes: 2 },
     why: 'A triode inverts: grid 1, the plate falls; grid 0, the plate resistor pulls it up. But a plate swings between 81 and 250 V, and a grid needs 0 V to conduct and −12.5 V to stop. Two inverters in a row only work with a level shift between them.',
     tips: ['Each inverter: a plate resistor from B+ (+250 V) to the plate, the triode from the plate to GND (its cathode), the plate is the output.', 'Every grid reads its input through a divider: a divider resistor from the plate (or the input, also a plate level) to the grid, a bias resistor from the grid to −150 V.', 'na is the first plate, y the second.'],
     codex: ['triode', 'griddivider'], chapters: [{ chapter: 'tubes', step: 2, label: 'Levels that do not line up' }],
