@@ -571,7 +571,7 @@ function relayRun(V: number, p: RelayParams): RelayRun {
 
 /** The settled pull at the open and the closed gap against supply voltage, with the spring's force at each end. */
 function pullChart(p: RelayParams, vmax: number): string {
-  const W = 340, H = 146, X0 = 34, X1 = 326, Y0 = 124, Y1 = 8, FMAX = 3;
+  const W = 340, H = 164, X0 = 34, X1 = 326, Y0 = 142, Y1 = 28, FMAX = 3;
   const x = (V: number) => X0 + (V / vmax) * (X1 - X0), y = (F: number) => Y0 - (F / FMAX) * (Y0 - Y1);
   const g = new Grid();
   let t = '';
@@ -597,9 +597,9 @@ function pullChart(p: RelayParams, vmax: number): string {
   const open = curve(0), closed = curve(p.travel), held = p.F0 + p.k * p.travel;
   o += ln(X0, y(p.F0), X1, y(p.F0), 'c1 dash') + ln(X0, y(held), X1, y(held), 'c2 dash');
   o += `<polyline points="${pts(open)}" class="c1"/><polyline points="${pts(closed)}" class="c2"/>`;
-  o += txt(X1 - 2, y(p.F0) + 11, `preload ${f2(p.F0)} N`, 'lb1', 'end') + txt(X1 - 2, y(held) - 4, `spring at the stop ${f2(held)} N`, 'lb2', 'end');
-  const ce = closed.at(-1)!;
-  o += txt(x(vmax * 0.62), y(relayPull(vmax * 0.62, 0, p)) - 6, 'pull, armature out', 'lb1', 'end') + txt(ce[0] + 5, ce[1] + 10, 'pull, armature in', 'lb2', 'start');
+  // A legend, not labels on the curves: each pull shares its colour with the spring force it must beat.
+  o += txt(X0, 10, '— pull, armature out', 'lb1', 'start') + txt(X0 + 122, 10, `- - preload ${f2(p.F0)} N`, 'lb1', 'start');
+  o += txt(X0, 22, '— pull, armature in', 'lb2', 'start') + txt(X0 + 122, 22, `- - spring at the stop ${f2(held)} N`, 'lb2', 'start');
   return `${o}</svg>`;
 }
 
@@ -713,7 +713,7 @@ const relay: Drill = {
         }
         return {
           prompt: `${what}. How many times does the make contact open again after its first touch while the coil is on (bounces)?<br>${chart}`,
-          placeholder: '3', answer: String(s.bounces),
+          placeholder: 'a count', answer: String(s.bounces),
           check: (t) => { const n = parseNum(t); return n === null ? { ok: false, why: 'a count' } : { ok: n === s.bounces, why: 'count the dips of the contact trace' }; },
           explain: `${s.bounces} opening${s.bounces === 1 ? '' : 's'} between ${f2(ms(s.firstTouch))} and ${f2(ms(s.settled))} ms. Each impact keeps e = ${e} of the blade's speed: livelier contacts (larger e) bounce more and longer.`,
         };
