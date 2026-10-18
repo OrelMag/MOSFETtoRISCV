@@ -148,6 +148,8 @@ src/sim/       simulation core (no DOM)
   harness.ts     simulate(def), evalOnce, forEachInput: for tests, truth tables, workbench;
                  reachesTransistors(def) (would a gate-level flatten hit a transistor?)
   stats.ts       transistor / NAND counts, logic depth
+  techcount.ts   fanInfo / fanHistogram / fanSum: NAND inputs reading each 1-bit net, per definition (memoized, never
+                 flat: only port counts and joined port bits travel up; equal to the flattened count, tests/tech.test.ts)
   dead.ts        deadInstances(netlist, ports): parts no path leads from to an output (tested over every netlist
                  and reference answer; the sandbox lint warns about them)
   settle.ts      outputSettle(def, vectors): simulated input-to-last-output-change delay (sees false paths)
@@ -252,6 +254,12 @@ src/lib/       the component library (registered in `registry` via define())
                  TUBE_INV, TUBE_NOR, TUBE_NAND (diode AND + triode: the brick), CATHODE_FOLLOWER, ECCLES_JORDAN (cross-coupled
                  pair, set / reset through steering diodes), TUBE_FA (the nine-NAND full adder in tube NANDs); every input
                  behind a 625 kΩ / 375 kΩ divider (labels; the voltages are phys/triode.ts's)
+  tech.ts        the technology setting (Phase 14c): price(def, 'cmos' | 'relay' | 'tube', steps) through the NAND brick
+                 (relays: a coil per NAND output + relayExtra per net's fan-out; tubes: ½ 6SN7 + a 6AL5 per NAND, followers
+                 past PLATE_FANOUT), or a native relay / tube part by its own devices; constants from phys/relay.ts /
+                 triode.ts, the Z3 and ENIAC (tests hold them equal); cabinets (racks / panels), withoutParts (a CPU without
+                 its program ROM), fmt* and TECH_NOTE; techsteps.ts designSteps(def): depth, period or relay steps
+                 (SwitchSim); view/techtable.ts the table (inspector, sandbox chip properties, chapter 3's techcompare widget)
   flash.ts       chapter 34's flash at switch level: FG_CELL (prim 'fgmos'), vtOf / V_READ, norArray(R, C) (cells between
                  bit lines and a source line held high while programming), nandBlock(S, N) (strings with string / ground
                  selects, the other rows at the pass voltage); per column a pull-up, an output inverter and a NOR-gated
@@ -355,8 +363,8 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                its result computed in TypeScript)
 src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over crossings; untangle's A* reroutes stop after
                UNTANGLE_POPS states per schematic, leaving overlaps rather than freezing the page: scripts/route-perf.ts times one),
-               inspector (info with "Where it is used" and "Power": powerpanel.ts, live from the stage's PowerMeter or
-               measurePower on random inputs; truth table, Verilog + download), analyzer.ts (the Timing panel:
+               inspector (info with "Where it is used", "Power": powerpanel.ts, live from the stage's PowerMeter or
+               measurePower on random inputs, and "In relays and tubes": techtable.ts; truth table, Verilog + download), analyzer.ts (the Timing panel:
                lanes from onTrace, cursors, VCD), stage.ts (probe mode, clock period, slow-motion
                fronts, the Image menu), image.ts (a drawn circuit as a standalone SVG: computed styles
                inlined, current theme; PNG at 2×; saveFile; exportSchematic for a stage's level, loaded on

@@ -49,6 +49,11 @@ export const RELAY_COIL_POWER = (RELAY_SUPPLY * RELAY_SUPPLY) / RELAY.Rc;
  *  A constant, not computed at import (25 000 steps); tests/phys-relay.test.ts keeps it equal to the model's. */
 export const RELAY_STEP_MS = 8.2;
 
+/** Zuse's Z3 (1941), for scale: relays (of them memory), power (W), mass (kg), clock (Hz). */
+export const Z3 = { relays: 2600, memory: 1408, power: 4e3, mass: 1e3, hz: 5 };
+/** A relay rack (m): 2 m high, 0.8 m wide, 0.5 m deep, 800 relays on its shelves (illustrative). */
+export const RELAY_RACK = { w: 0.8, d: 0.5, h: 2.0, relays: 800 };
+
 export interface RelaySample {
   /** Time (s), coil current (A), armature travel (m, 0 = open), blade position (m), NO contact closed,
    *  coil terminal voltage (V). */

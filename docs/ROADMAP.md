@@ -595,22 +595,35 @@ with punch cards.
   plate heat as glow. Constants from real datasheets (ENIAC's 6SN7), labelled illustrative; the relay brick's delay
   and the triode's transfer curve are taken from these models (tests hold them equal), so the picture and the
   simulation cannot drift apart
-- ⏳ Gates and blocks in each technology, measured like the CMOS ones (relays / tubes, delay, power): first the
+- ✅ Gates and blocks in each technology, measured like the CMOS ones (relays / tubes, delay, power): first the
   NAND-mapped versions (the brick principle), then native designs that show what each technology is good at
-  (changeover contacts make a relay XOR or a mux nearly free; tube logic prefers NOR), so the comparison is honest
-- ⏳ A technology setting for any chip (CMOS / relay / tube) in the chapters, the workbench and the sandbox:
-  the netlist is the same, the counts, delay, power and volume follow the technology; sandbox palette parts for
-  the relay and the triode
+  (changeover contacts make a relay XOR or a mux nearly free; tube logic prefers NOR), so the comparison is honest.
+  lib/tech.ts prices any design through the NAND brick: a relay coil per NAND output with ⌈k / 4⌉ − 1 more for a net
+  read by k contacts (sim/techcount.ts counts fan-out per definition, equal to the flattened count), a tube brick
+  (½ 6SN7 + a 6AL5, 4.86 W) with cathode followers past the plate's fan-out of 3 (from the levels model); steps ×
+  8.2 ms / 1 µs / 25 ps; volume and mass from a relay rack, the Z3 and ENIAC's panels. Native parts by their own
+  devices, relay steps measured on SwitchSim (lib/techsteps.ts). Chapter 3's last step "One NAND, three
+  technologies" (widgets/techcompare.ts): NAND, full adder, 32-bit adder, the two CPUs without their program ROM
+  (withoutParts), NAND-mapped or native
+- ✅ A technology setting for any chip (CMOS / relay / tube) in the chapters, the workbench and the sandbox:
+  the netlist is the same, the counts, delay, power and volume follow the technology (view/techtable.ts: the
+  inspector's "In relays and tubes", a sandbox chip's properties, the Statistics tab's CMOS / Relays / Tubes switch
+  from hwstats.json's relay and tube cells); the relay and triode parts are in the sandbox's library palette
 
 **The 3D machine** (to show the bulk)
-- ⏳ A 3D view of any design at physical scale: its flattened netlist as relays on boards in racks, or tubes in
+- ✅ A 3D view of any design at physical scale: its flattened netlist as relays on boards in racks, or tubes in
   chassis in cabinets, with the same design in CMOS beside it (a speck) and a human figure for scale. Sizes,
   power and heat from per-device constants labelled illustrative (as the 25 ps / NAND is); historical machines
-  for reference (Zuse Z3: about 2 600 relays; ENIAC: 17 468 tubes, about 150 kW and 27 t)
-- ⏳ Live: relays click and tubes glow with the simulation's values; orbit, zoom, and a click on a rack opens
-  that block's schematic (transparent boxes in 3D too)
-- ⏳ Its own lazily loaded chunk (a small WebGL renderer, or three.js if it earns its size); the main bundle does
-  not grow
+  for reference (Zuse Z3: about 2 600 relays; ENIAC: 17 468 tubes, about 150 kW and 27 t). Chapter 25 step 9
+  "The same CPU in relays and tubes" (lib/hall.ts, widgets/hallview.ts): the 4-bit CPU and the RV32I without their
+  program ROM, a block's racks or ENIAC panels of its own (RV32I: 78 racks, 70 if shared; 181 panels), every device
+  drawn (55 699 relay boxes, 75 779 tube cylinders), the CMOS die at true size on a table. Only these two CPUs so
+  far, not any design
+- ✅ Live: relays click and tubes glow with the simulation's values; orbit, zoom, and a click on a rack opens
+  that block's schematic (transparent boxes in 3D too). The cycle engine's settled values, at most 20 updates a
+  second; clicks off by default; a flat isometric drawing without WebGL2
+- ✅ Its own lazily loaded chunk (a small WebGL renderer, or three.js if it earns its size); the main bundle does
+  not grow (the view is its own 19 kB chunk; the chapter's computed prose and lib/hall.ts add 7 kB to the main one)
 
 **Punch cards**
 - ✅ History step in the journey: Jacquard's loom (1804), Hollerith's census cards (1890), the IBM 80-column

@@ -10,6 +10,7 @@ import { structuralVerilog } from '../sim/verilog';
 import { h, icon } from '../ui/dom';
 import { copiesIn, referenceCpus, usedIn, type Parent } from '../lib/usage';
 import { powerBody, type LivePower } from './powerpanel';
+import { techTable } from './techtable';
 
 export interface InspectTarget {
   def: ComponentDef;
@@ -42,6 +43,8 @@ export class Inspector {
   private usedOpen = false;
   /** "Power" is open (kept across parts and re-renders, like "Where it is used"). */
   private powerOpen = false;
+  /** "In relays and tubes" is open (kept like the others). */
+  private techOpen = false;
   private usedAll = new WeakSet<ComponentDef>();
   private usage = new WeakMap<ComponentDef, { parents: Parent[]; cpus: { label: string; n: number }[] }>();
 
@@ -139,6 +142,7 @@ export class Inspector {
     if (rows.length) b.append(h('table', { class: 'ports' }, h('tbody', null, rows)));
     if (d.notes) b.append(h('div', { class: 'insp-notes', html: d.notes }));
     if (!d.prim || (d.prim === 'nand' && t.power)) b.append(this.powerSection(t));
+    if ((!d.prim || d.prim === 'nand') && d.category !== 'plumbing') b.append(this.techSection(d));
     // Library parts only: a user chip has the sandbox's own "used by" (editor/chips.ts).
     if (d.prim !== 'alias' && d.prim !== 'vdd' && d.prim !== 'gnd' && d.category !== 'custom') b.append(this.usedSection(d));
   }
@@ -153,6 +157,21 @@ export class Inspector {
     }
     det.addEventListener('toggle', () => {
       this.powerOpen = det.open;
+      if (det.open && det.childElementCount === 1) fill();
+    });
+    return det;
+  }
+
+  /** The part priced in CMOS, relays and tubes (lib/tech.ts; measured on first open: its period needs a flattening). */
+  private techSection(d: ComponentDef): HTMLElement {
+    const det = h('details', { class: 'insp-used' }, h('summary', null, 'In relays and tubes'));
+    const fill = () => det.append(techTable(d, { narrow: true }));
+    if (this.techOpen) {
+      det.open = true;
+      fill();
+    }
+    det.addEventListener('toggle', () => {
+      this.techOpen = det.open;
       if (det.open && det.childElementCount === 1) fill();
     });
     return det;

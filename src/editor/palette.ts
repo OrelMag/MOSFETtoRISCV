@@ -172,6 +172,21 @@ registerPaletteGroup({
   ],
 });
 
+// The prologue's devices (P1, P2): a circuit drawn with them is priced natively in its properties ("In relays and tubes").
+registerPaletteGroup({
+  id: 'devices', title: 'Relays and tubes', order: 26, collapsed: true,
+  items: () => [
+    lib('relay', 'Relay', 'A coil (a, b) and one changeover contact (c, no, nc): c touches no one relay step (8.2 ms) after current flows in the coil. Contacts conduct both ways'),
+    lib('relay4', 'Relay, 4 poles', 'One coil, four changeover contacts: what a NAND brick\'s coil drives'),
+    lib('triode', 'Triode', 'Grid, plate, cathode: conducts plate → cathode only, while the grid is 1. Needs a plate resistor to B+ and a divider on its grid'),
+    lib('vdiode', 'Vacuum diode', 'Conducts anode → cathode only: the AND in front of a tube NAND'),
+    lib('bplus', 'B+ (+250 V)', 'The plate supply: a tube circuit\'s 1'),
+    lib('vneg', 'Bias (−150 V)', 'The negative rail a grid divider pulls towards'),
+    lib('res_div', 'Divider resistor', 'A divider\'s top leg, from a plate to the next grid (stronger than a plate resistor)'),
+    lib('res_bias', 'Bias resistor', 'A divider\'s bottom leg, to the bias rail (the weakest)'),
+  ],
+});
+
 registerPaletteGroup({
   id: 'const', title: 'Constants', order: 30, purist: true,
   items: () => [

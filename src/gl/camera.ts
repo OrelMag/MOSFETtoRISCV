@@ -18,7 +18,7 @@ export class OrbitCamera implements OrbitView {
   /** Vertical field of view (radians). */
   fov = (35 * Math.PI) / 180;
   readonly limits: OrbitLimits;
-  private readonly home: OrbitView;
+  private home: OrbitView;
 
   constructor(view: OrbitView, limits: Partial<OrbitLimits> = {}) {
     this.limits = { minDist: view.dist / 4, maxDist: view.dist * 4, minPitch: -0.2, maxPitch: Math.PI / 2 - 0.01, ...limits };
@@ -30,6 +30,13 @@ export class OrbitCamera implements OrbitView {
   /** Back to the view it was made with. */
   reset(): void {
     this.target = [...this.home.target]; this.yaw = this.home.yaw; this.pitch = this.home.pitch; this.dist = this.home.dist;
+  }
+
+  /** A new home view (and limits), moved to at once: one camera across scenes of different sizes (the hall). */
+  rehome(view: OrbitView, limits: Partial<OrbitLimits> = {}): void {
+    Object.assign(this.limits, limits);
+    this.home = { target: [...view.target], yaw: view.yaw, pitch: view.pitch, dist: view.dist };
+    this.reset();
   }
 
   /** Is it at the view it was made with? */
