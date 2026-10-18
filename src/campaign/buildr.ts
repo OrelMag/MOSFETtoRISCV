@@ -166,7 +166,7 @@ export const BUILDR: Record<string, () => BuildChallenge> = {
     answer: refOf('r_nand', () => RELAY_NAND, 'Relay NAND'),
   }),
   r_xor: () => ({
-    id: 'r_xor', title: 'XOR from changeover contacts', level: 'transistors', allowed: RELAY_RULE,
+    id: 'r_xor', title: 'Changeover XOR', level: 'transistors', allowed: RELAY_RULE,
     brief: `y = a ⊕ b from relays, with no coil waiting on another. ${RELAY_NOTE}`,
     ports: pinsOf(RELAY_XOR), check: table(([a, b]) => [a ^ b]),
     answer: refOf('r_xor', () => RELAY_XOR, 'Relay XOR'),
@@ -191,7 +191,7 @@ export const BUILDR: Record<string, () => BuildChallenge> = {
     answer: refOf('r_clock', () => RELAY_CLOCK, 'Relay clock'),
   }),
   v_inv: () => ({
-    id: 'v_inv', title: 'A tube that drives another', level: 'transistors', allowed: TUBE_RULE,
+    id: 'v_inv', title: 'Two tubes in a row', level: 'transistors', allowed: TUBE_RULE,
     brief: `na = ¬a, y = a, from two tube inverters, the second reading the first's plate. ${TUBE_NOTE}`,
     ports: pinsOf(TUBE_BUF), check: table(([a]) => [a ? 0 : 1, a]), rules: gridProblems,
     answer: refOf('v_inv', () => TUBE_BUF, 'Two tube inverters'),

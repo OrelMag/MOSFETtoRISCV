@@ -100,7 +100,7 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 .cp-done { display: inline-flex; align-items: center; gap: 5px; color: var(--good); font-weight: 600; }
 .cp-mini-anatomy { display: block; margin-top: 10px; }
 .cp-welcome h2 { margin-top: 0; }
-.cp-acts { padding-left: 22px; }
+.cp-acts { padding-left: 0; list-style: none; }
 .cp-acts li { margin: 6px 0; font-size: 13.5px; }
 
 /* ---- the CPU anatomy ---- */

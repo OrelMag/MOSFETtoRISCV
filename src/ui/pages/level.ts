@@ -19,7 +19,7 @@ import { altCost, copiesInFinal, countedPart, finalCpu } from '../../campaign/me
 import { walkOf } from '../../campaign/walk';
 import { actName, actTitle, nodeById } from '../../campaign/nodes';
 import { progress } from '../../campaign/progress';
-import type { CampaignNode, Metric } from '../../campaign/types';
+import type { CampaignNode, Metric, Par } from '../../campaign/types';
 import { criteria, gradeTable } from '../../campaign/ui/levelinfo';
 import { hideGlossary, markTerms } from '../../campaign/ui/glossaryui';
 import { anatomySvg } from '../../campaign/ui/svgs';
@@ -98,7 +98,9 @@ export class LevelPage implements Page {
       }
     }
     p.open(n.id, true);
-    const hide = ruleKind(ch.allowed) === 'transistors' ? [] : ['fets', 'switch'];
+    // A relay / tube level (a strict rule) lists its own parts under Unlocked parts and has no NAND.
+    const strict = typeof ch.allowed === 'object' && !!ch.allowed.strict;
+    const hide = ruleKind(ch.allowed) === 'transistors' ? [] : strict ? ['fets', 'switch', 'lib'] : ['fets', 'switch'];
     this.editor = new Editor(chipId, { level: { chipId, actions: LEVEL_ACTIONS, hideGroups: hide } });
     if (this.editor.chipId !== chipId) this.editor.openChip(chipId);
     const hasWalk = !!walkOf(n)?.steps.length;
@@ -201,8 +203,11 @@ export class LevelPage implements Page {
       if (c?.cost) sec.append(rich('p', c.cost));
       const rows: [string, string][] = [];
       const par = n.par ?? {};
-      if (par.nand !== undefined || par.depth !== undefined) rows.push(['Par', costText(par.nand, par.depth)]);
-      for (const { a, cost } of alts) rows.push([a.name, costText(cost.nand, cost.depth)]);
+      // A relay or tube level compares in its own devices (the technology setting's price of a NAND alternative).
+      const devices = par.relays !== undefined || par.tubes !== undefined || par.steps !== undefined;
+      if (devices) rows.push(['Par', deviceText(par, par)]);
+      else if (par.nand !== undefined || par.depth !== undefined) rows.push(['Par', costText(par.nand, par.depth)]);
+      for (const { a, cost } of alts) rows.push([a.name, devices ? deviceText(cost, par) : costText(cost.nand, cost.depth)]);
       if (rows.length) sec.append(h('div', { class: 'lv-cost' }, rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)])));
       const copies = h('p', { class: 'lv-copies' });
       sec.append(copies);
@@ -315,13 +320,14 @@ export class LevelPage implements Page {
         h('td', { class: par[k] === undefined ? '' : (m[k] ?? Infinity) <= par[k]! ? 'par' : 'over' }, cell(m[k])),
         h('td', null, cell(par[k])),
         alts.map((a) => h('td', null, cell((a.cost as Record<string, number | null | undefined>)[k])))))) : null;
-    // NAND bars: yours, par and the alternatives on one scale.
+    // Area bars: yours, par and the alternatives on one scale, in NANDs (relays or tube sections on a relay / tube level).
+    const unit: 'nand' | 'relays' | 'tubes' = par.relays !== undefined ? 'relays' : par.tubes !== undefined ? 'tubes' : 'nand';
     const bars: [string, number, boolean][] = [];
-    if (m.nand !== undefined) bars.push(['Yours', m.nand, true]);
-    if (par.nand !== undefined && par.nand !== m.nand) bars.push(['Par', par.nand, false]);
-    for (const a of alts) if (a.cost.nand !== undefined) bars.push([a.name, a.cost.nand, false]);
+    if (m[unit] !== undefined) bars.push(['Yours', m[unit]!, true]);
+    if (par[unit] !== undefined && par[unit] !== m[unit]) bars.push(['Par', par[unit]!, false]);
+    for (const a of alts) { const v = (a.cost as Partial<Record<typeof unit, number>>)[unit]; if (v !== undefined) bars.push([a.name, v, false]); }
     const max = Math.max(1, ...bars.map((b) => b[1]));
-    const barEl = bars.length > 1 ? h('div', { class: 'lv-bars', title: 'NANDs' }, bars.flatMap(([k, v, you]) =>
+    const barEl = bars.length > 1 ? h('div', { class: 'lv-bars', title: METRIC[unit].label }, bars.flatMap(([k, v, you]) =>
       [h('span', null, k), h('span', { class: 'track' }, h('i', { class: you ? 'you' : '', style: `width:${(100 * v / max).toFixed(1)}%` })), h('span', { class: 'v' }, v.toLocaleString())])) : null;
     const callout = h('div', { class: 'lv-callout' });
     const unlocks = (n.unlocks ?? []).filter((u) => !u.endsWith('*')).map((u) => resolveComponent(u)?.name ?? u);
@@ -375,6 +381,16 @@ function blockOf(n: CampaignNode): { id: string; own: boolean } | undefined {
     ring = ring.flatMap((d) => dependents(d.id)).filter((d) => !d.optional && !seen.has(d.id));
   }
   return undefined;
+}
+
+/** Relays, tube sections and relay steps of `c`, those the level grades (`par`) only. */
+function deviceText(c: { relays?: number; tubes?: number; steps?: number }, par: Par): string {
+  const n = (v: number, one: string, many: string) => `${v.toLocaleString()} ${v === 1 ? one : many}`;
+  const out: string[] = [];
+  if (c.relays !== undefined && par.relays !== undefined) out.push(n(c.relays, 'relay', 'relays'));
+  if (c.tubes !== undefined && par.tubes !== undefined) out.push(n(c.tubes, 'tube section', 'tube sections'));
+  if (c.steps !== undefined && par.steps !== undefined) out.push(n(c.steps, 'step', 'steps'));
+  return out.join(' · ') || '—';
 }
 
 function costText(nand: number | undefined, depth: number | null | undefined): string {
