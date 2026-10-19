@@ -63,6 +63,8 @@
   box-shadow: var(--shadow-lg);
 }
 .sb-levelmode.props-on .sb-props, .sb-levelmode.props-sel:not(.walking) .sb-props { display: block; }
+/* a phone: 290 px of panel would cover most of the canvas at every tap on a part or pin; the Properties button pins it */
+@media (max-width: 760px) { .sb-levelmode.props-sel:not(.props-on) .sb-props { display: none; } }
 
 /* The strip under the canvas on the level screen. */
 .sb-chal-screen .sb-chal-head { padding: 7px 10px; gap: 12px; }

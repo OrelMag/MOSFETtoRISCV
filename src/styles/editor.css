@@ -233,6 +233,11 @@
 .ed-svg .wire-hit { cursor: inherit; stroke-width: 0.8; }
 /* a selected wire's corners (squares) and a straight wire's breakpoints (circles): drag to reshape, double-click to remove */
 .ed-handle { fill: var(--surface); stroke: var(--ed-sel); stroke-width: 0.12; pointer-events: none; }
+/* where wires attach to the selected / hovered parts and pins: a drag from a dot draws a wire */
+.ed-port { fill: var(--ed-preview); stroke: var(--surface); stroke-width: 0.08; pointer-events: none; }
+/* an output no wire reaches yet (geom.ts openOutputs): neutral and dashed, "not connected", rather than the X colour */
+.pin.ed-open .pin-knob { stroke-dasharray: 0.3 0.2; }
+.out-lamp.open .knob { background: transparent; border-style: dashed; }
 .ed-svg .wire-hit:hover { stroke: color-mix(in srgb, var(--ed-sel) 14%, transparent); }
 
 /* displays */

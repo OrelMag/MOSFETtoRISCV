@@ -22,7 +22,7 @@ import { lookInside } from './inside';
 import { flipSwitch, ioInfo, switchAt, type SwitchState } from './ioparts';
 import { faceHit, nodeAt } from './face';
 import { toggleSwitch } from './ioface';
-import { branchPoint, drives, grabOn, type Hit, hitTest, hitWire, nextSameName, partAnchor, pointerGeom, snapPt, WireDraft } from './geom';
+import { branchPoint, drives, grabOn, type Hit, hitTest, hitWire, knobPortSide, nextSameName, partAnchor, pointerGeom, snapPt, WireDraft } from './geom';
 import { renamePin } from './chips';
 import { type ChipDoc, commentBox, endGeom, endKey, type EndRef, type ExitDir as Face, type PinDoc, pinBig, pinValue } from './model';
 import {
@@ -35,7 +35,8 @@ type State =
   | { k: 'idle' }
   /** Pressed on an object; a click or a drag, not decided yet. */
   /** `name`: the press was on the object's drawn name (a click then renames a selected object). */
-  | { k: 'press'; hit: Hit; at: Vec; sx: number; sy: number; was: boolean; shift: boolean; name: boolean }
+  /** `wire`: on a pin knob's port side, where a drag draws a wire from the pin (a tap still toggles it). */
+  | { k: 'press'; hit: Hit; at: Vec; sx: number; sy: number; was: boolean; shift: boolean; name: boolean; wire?: { end: EndRef; pos: Vec } }
   | { k: 'move'; at: Vec; base: ChipDoc; sel: Sel; d: Vec }
   /**
    * Reshaping one wire: what the press grabbed on it (geom.ts grabOn), from the document before the drag.
@@ -52,6 +53,8 @@ type State =
 let clipboard: Clip | null = null;
 
 const DRAG_PX = 4;
+/** Port hit radius in screen px: a mouse, and a finger (a touch press, larger: the knob itself stays the pin's). */
+const PORT_PX = 8, PORT_PX_TOUCH = 14;
 const MIRROR: Record<Face, Face> = { left: 'right', right: 'left', up: 'up', down: 'down' };
 
 const typing = (t: EventTarget | null) => {
@@ -70,6 +73,8 @@ export class Tools {
   /** A double tap does what a double-click does (iOS Safari may send no dblclick for it). */
   private taps = new DoubleTap();
   private panning = false;
+  /** The last press came from a finger: ports are hit from further away (tol). */
+  private touch = false;
   private buttonHeld: PinDoc | null = null;
   private off: (() => void)[] = [];
   /** A mode that takes clicks first (probing): true when it consumed the press. */
@@ -97,6 +102,7 @@ export class Tools {
     on(svg, 'pointerleave', () => {
       if (this.state.k === 'place' && !this.state.drag) this.ed.view.showGhost(null);
       this.ed.view.showHot(null);
+      this.ed.view.showPortsOf([], []);
       this.ed.hoverWire(null);
     });
     on(document, 'keydown', (e) => this.key(e));
@@ -129,7 +135,7 @@ export class Tools {
   }
 
   private tol(): number {
-    return Math.min(1.2, Math.max(0.35, this.ed.view.px(8)));
+    return this.touch ? Math.min(1.5, Math.max(0.5, this.ed.view.px(PORT_PX_TOUCH))) : Math.min(1.2, Math.max(0.35, this.ed.view.px(PORT_PX)));
   }
 
   private hit(p: Vec): Hit {
@@ -172,6 +178,7 @@ export class Tools {
     const act = document.activeElement as HTMLElement | null;
     if (act && act !== document.body && !this.ed.view.svg.contains(act)) act.blur();
     if (this.panning || e.button !== 0) return;
+    this.touch = e.pointerType === 'touch';
     const ed = this.ed;
     const p = this.world(e);
     this.cursor = p;
@@ -193,8 +200,15 @@ export class Tools {
     }
 
     const named = nameHit(e.target);
-    const h = named ?? this.hit(p);
+    let h = named ?? this.hit(p);
     if (this.onPress?.(h, e)) return;
+    let wire: { end: EndRef; pos: Vec } | undefined;
+    // A finger on a pin's connection point presses the pin: a tap toggles it, a drag draws the wire. At a
+    // phone's zoom the knob and the stub's end are a few px apart, too close for a finger to choose between.
+    if (h.k === 'port' && 'pin' in h.end && this.touch && !e.shiftKey) {
+      wire = { end: h.end, pos: h.pos };
+      h = { k: 'pin', id: h.end.pin };
+    }
     if (h.k === 'port') return this.startWire(h.end, h.pos, e);
     if (h.k === 'wire' && (e.ctrlKey || e.altKey || e.metaKey)) {
       const poly = ed.view.polys.get(h.id);
@@ -214,8 +228,9 @@ export class Tools {
         this.buttonHeld = pin;
         ed.sim.setInput(pin, 1);
       }
+      if (pin && !wire && !named && !e.shiftKey && knobPortSide(pin, p)) wire = { end: { pin: pin.id }, pos: pin.at };
     }
-    this.state = { k: 'press', hit: h, at: p, sx: e.clientX, sy: e.clientY, was, shift: e.shiftKey, name: !!named };
+    this.state = { k: 'press', hit: h, at: p, sx: e.clientX, sy: e.clientY, was, shift: e.shiftKey, name: !!named, wire };
   }
 
   private move(e: PointerEvent): void {
@@ -227,6 +242,12 @@ export class Tools {
     switch (st.k) {
       case 'press': {
         if (Math.hypot(e.clientX - st.sx, e.clientY - st.sy) < DRAG_PX) return;
+        // Dragged out of a knob's port side: a wire from the pin, as from its connection point.
+        if (st.wire) {
+          if (this.buttonHeld) this.release();
+          this.startWire(st.wire.end, st.wire.pos, e);
+          return;
+        }
         const h = st.hit;
         // A wire dragged on its own reshapes; one of several selected moves with the rest.
         const poly = h.k === 'wire' && ed.selCount <= 1 ? ed.view.polys.get(h.id) : undefined;
@@ -263,10 +284,14 @@ export class Tools {
       case 'place':
         return this.ghost(st.item, p);
       default: {
+        if (e.pointerType === 'mouse' || e.pointerType === 'pen') this.touch = false;
         const h = this.hit(p);
-        ed.view.showHot(h.k === 'port' ? h.pos : null);
-        ed.hoverWire(h.k === 'wire' ? h.id : null, e);
         const pin = h.k === 'pin' ? ed.doc.pins.find((q) => q.id === h.id) : undefined;
+        // On a knob's port side the connection point lights up: a drag from here draws a wire.
+        ed.view.showHot(h.k === 'port' ? h.pos : pin && knobPortSide(pin, p) ? pin.at : null);
+        const owner = h.k === 'port' ? hitOwner(h) : h;
+        ed.view.showPortsOf(owner.k === 'part' ? [owner.id] : [], owner.k === 'pin' ? [owner.id] : []);
+        ed.hoverWire(h.k === 'wire' ? h.id : null, e);
         ed.view.svg.style.cursor = h.k === 'wire' ? this.wireCursor(h.id, p)
           : h.k === 'port' ? 'crosshair' : pin && pin.dir !== 'out' ? 'pointer' : h.k === 'none' ? '' : this.isSelected(h) ? 'move' : 'pointer';
       }
@@ -307,7 +332,8 @@ export class Tools {
         // Released somewhere else after dragging out of a port: connect if it is a target.
         if (st.held && Math.hypot(e.clientX - st.sx, e.clientY - st.sy) >= DRAG_PX) {
           const t = this.target(p);
-          if (t.end) this.finish(st.draft, t.end, t.pos, t.exit);
+          // Back where it started: the wire stays armed for a click, as after a press without a drag.
+          if (t.end && !atStart(st.draft, t.end)) this.finish(st.draft, t.end, t.pos, t.exit);
         }
         if (this.state.k === 'wire') this.state.held = false;
         return;
@@ -589,6 +615,8 @@ export class Tools {
 
   private wireClick(draft: WireDraft, p: Vec): void {
     const t = this.target(p);
+    // A second tap where the wire started, before any corner: the wire is let go, no complaint.
+    if (t.end && atStart(draft, t.end)) return this.cancel();
     if (t.end) return this.finish(draft, t.end, t.pos, t.exit);
     draft.addCorner(t.pos);
     this.previewWire(draft, p);
@@ -892,6 +920,9 @@ export class Tools {
 }
 
 let lastName: string | undefined;
+
+/** `end` is where the draft started, and no corner was fixed yet. */
+const atStart = (draft: WireDraft, end: EndRef) => !draft.pts.length && endKey(end) === endKey(draft.from);
 
 /** The clipboard holds something to paste. */
 export const canPaste = () => !!clipboard;

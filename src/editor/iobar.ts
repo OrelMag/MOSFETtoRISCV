@@ -13,6 +13,7 @@ import { h } from '../ui/dom';
 import { nextDrive, pinOrder } from './chips';
 import { type Editor, registerEditorPlugin, registerToolbarAction } from './editor';
 import { bankValue, controlPath, flipBank, IOBAR_BANKS, type NestedControl, nestedControls } from './ionested';
+import { openOutputs } from './geom';
 import { type ChipDoc, type PinDoc, pinBig, pinValue } from './model';
 
 const PREF = 'mosfet2riscv:sandbox:iobar';
@@ -196,8 +197,11 @@ class IoBar {
   private paint(): void {
     const sim = this.ed.sim;
     for (const c of this.ins) c.paint(c.pin ? sim.pinBits(c.pin.name) : null);
+    const open = openOutputs(this.ed.doc);
     for (const o of this.outs) {
-      const bits = sim.pinBits(o.pin.name);
+      // An output no wire reaches yet: neutral, as on the canvas (geom.ts openOutputs), not the X colour.
+      const bits = open.has(o.pin.id) ? null : sim.pinBits(o.pin.name);
+      o.el.classList.toggle('open', open.has(o.pin.id));
       const z = !!bits && bits.every((b) => b === BZ), x = !bits || (!z && bits.some((b) => b !== B0 && b !== B1));
       o.el.classList.toggle('vx', x && !!bits);
       o.el.classList.toggle('vz', z);

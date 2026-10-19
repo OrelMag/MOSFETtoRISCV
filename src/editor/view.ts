@@ -9,8 +9,8 @@ import type { PuzzleInState, PuzzleOutState } from './puzzleparts';
 import { type CardReaderState, readerProgress } from '../cards/reader';
 import { B1, BX, BZ, type Bit, type ComponentDef, netlistOf } from '../sim/types';
 import { formatBits, pack, type Radix } from '../sim/values';
-import { s } from '../ui/dom';
-import { Camera, type ViewBox } from '../view/camera';
+import { coarsePointer, s } from '../ui/dom';
+import { Camera, TOUCH_PX, touchZoom, type ViewBox } from '../view/camera';
 import { applyFlow, flowDash, flowKey, flowText } from '../view/flow';
 import { FlowTokens, type Lane } from '../view/flowtokens';
 import { netKey, setNetHue, spreadHues, USER_HUE } from '../view/nethue';
@@ -19,7 +19,7 @@ import { bitClass, busClass } from '../view/schematic';
 import { drawPinGlyph, drawSymbol, instNameAt, type PinGlyph, placePinValue } from '../view/symbols';
 import type { Compiled, Diag } from './compile';
 import { type WireFlow, wireFlows } from './flowdir';
-import { partBox, pinBody, pinKnob, pointerGeom, wireGroups } from './geom';
+import { openOutputs, partBox, pinBody, pinKnob, pointerGeom, portHandles, wireGroups } from './geom';
 import { HopCache } from './hops';
 import {
   type ChipDoc, COMMENT_LINE, type CommentDoc, commentBox, type DefOf, defaultFace, type LabelDoc, type PartDoc, type PinDoc, pinBig, polyline, type WireDoc,
@@ -110,6 +110,11 @@ export class EditorView {
   private guides: SVGGElement;
   private gHandles: SVGGElement;
   private handlesKey = '';
+  /** Port handles: where wires attach to the selected parts and pins, and to the one under the mouse. */
+  private gPorts: SVGGElement;
+  private portsKey = '';
+  private hoverOwner: { parts: string[]; pins: string[] } = { parts: [], pins: [] };
+  private defOf: DefOf | null = null;
 
   constructor(host: HTMLElement) {
     // tabindex -1: where the focus goes back to when a dialog or drawer over it closes (not a Tab stop)
@@ -138,7 +143,8 @@ export class EditorView {
     this.ghost = s('g', { class: 'ed-ghost' });
     this.guides = s('g', { class: 'ed-guides' });
     this.gHandles = s('g', { class: 'ed-handles' });
-    this.gOver.append(this.guides, this.gHandles, this.ghost, this.preview, this.band, this.hot);
+    this.gPorts = s('g', { class: 'ed-ports' });
+    this.gOver.append(this.guides, this.gPorts, this.gHandles, this.ghost, this.preview, this.band, this.hot);
     this.svg.append(defs,
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid)' }),
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid5)' }),
@@ -160,6 +166,7 @@ export class EditorView {
   render(doc: ChipDoc, defOf: DefOf): void {
     const prev = this.doc;
     this.doc = doc;
+    this.defOf = defOf;
     const geomChanged = !prev || prev.parts !== doc.parts || prev.pins !== doc.pins || prev.labels !== doc.labels;
     // Objects that moved or changed: only the wires ending on them need a new polyline.
     const dirty = new Set<string>();
@@ -319,6 +326,7 @@ export class EditorView {
    * on a straight one's breakpoints.
    */
   private drawHandles(): void {
+    this.drawPorts();
     const ids = (this.sel.wires ?? []).length <= 8 ? this.sel.wires ?? [] : [];
     const els = ids.map((id) => this.wires.get(id)).filter((e): e is WireEls => !!e?.poly);
     const key = els.map((e) => `${e.doc.straight ? 's' : ''}${e.key}`).join('|');
@@ -328,6 +336,25 @@ export class EditorView {
     this.gHandles.replaceChildren(...els.flatMap((e) => e.poly!.slice(1, -1).map(([x, y]) => (e.doc.straight
       ? s('circle', { class: 'ed-handle', cx: x, cy: y, r })
       : s('rect', { class: 'ed-handle', x: x - r, y: y - r, width: 2 * r, height: 2 * r })))));
+  }
+
+  /** The parts and pins whose port handles show besides the selection's (the one under the mouse). */
+  showPortsOf(parts: string[], pins: string[]): void {
+    this.hoverOwner = { parts, pins };
+    this.drawPorts();
+  }
+
+  /** Small dots on the ports of the selected parts and pins (a few at most) and of the hovered one. */
+  private drawPorts(): void {
+    const doc = this.doc, defOf = this.defOf;
+    const few = (xs?: string[]) => (xs && xs.length <= 8 ? xs : []);
+    const parts = [...new Set([...few(this.sel.parts), ...this.hoverOwner.parts])];
+    const pins = [...new Set([...few(this.sel.pins), ...this.hoverOwner.pins])];
+    const pts = doc && defOf ? portHandles(doc, defOf, parts, pins) : [];
+    const key = pts.map(([x, y]) => `${x},${y}`).join(' ');
+    if (key === this.portsKey) return;
+    this.portsKey = key;
+    this.gPorts.replaceChildren(...pts.map(([x, y]) => s('circle', { class: 'ed-port', cx: x, cy: y, r: 0.3 })));
   }
 
   /**
@@ -622,10 +649,12 @@ export class EditorView {
         d.el.setAttribute('class', vc);
       }
     }
+    const open = this.doc ? openOutputs(this.doc) : new Set<string>();
     for (const e of this.pins.values()) {
       const p = e.doc;
-      const bits = v?.pinBits(p.name) ?? null;
-      const base = `pin ${p.dir === 'in' ? 'pin-in clickable' : p.dir === 'inout' ? 'pin-in clickable ed-pin-io' : 'pin-out'} ed-pin${p.kind && p.dir === 'in' && p.kind !== 'toggle' ? ` ed-pin-${p.kind}` : ''}`;
+      // An output no wire reaches yet: neutral, not the X colour (openOutputs).
+      const bits = open.has(p.id) ? null : v?.pinBits(p.name) ?? null;
+      const base = `pin ${p.dir === 'in' ? 'pin-in clickable' : p.dir === 'inout' ? 'pin-in clickable ed-pin-io' : 'pin-out'} ed-pin${p.kind && p.dir === 'in' && p.kind !== 'toggle' ? ` ed-pin-${p.kind}` : ''}${open.has(p.id) ? ' ed-open' : ''}`;
       const vc = bits ? (p.width === 1 ? bitClass(bits[0]) : busClass(bits)) : p.width === 1 ? '' : 'bus';
       const cls = `${base} ${vc}${e.cls}`;
       if (e.g.getAttribute('class') !== cls) {
@@ -888,12 +917,27 @@ export class EditorView {
     return { x: x0 - 3, y: y0 - 3, w: x1 - x0 + 6, h: y1 - y0 + 6 };
   }
 
-  /** Show the whole chip in the canvas left of `insetRight` px (a docked drawer). */
+  /**
+   * Show the whole chip in the canvas left of `insetRight` px (a docked drawer). On a touch screen a small
+   * circuit (and an empty canvas) is shown at TOUCH_PX at least, so its parts and pins take a finger: a
+   * circuit somewhat larger than the screen is then a pan away (touchZoom).
+   */
   fit(defOf: DefOf, insetRight = 0): void {
     const b = this.contentBox(defOf);
-    if (b) this.cam.fit(b, insetRight, 40);
-    else {
-      this.cam.fit({ x: -4, y: -4, w: 60, h: 36 });
+    const width = this.svg.getBoundingClientRect().width;
+    const touch = coarsePointer() && width > 0;
+    if (!b) {
+      // Empty: 60 units across, or on a touch screen what TOUCH_PX leaves (a phone: ~24), around the same centre.
+      const w = touch ? Math.min(60, width / TOUCH_PX) : 60, h = w * 0.6;
+      this.cam.fit({ x: 26 - w / 2, y: 14 - h / 2, w, h }, 0, w);
+      return;
+    }
+    this.cam.fit(b, insetRight, touch ? Math.min(40, width / TOUCH_PX) : 40);
+    if (!touch) return;
+    const vb = touchZoom(this.cam.vb, width, [b.x + b.w / 2, b.y + b.h / 2]);
+    if (vb !== this.cam.vb) {
+      this.cam.vb = vb;
+      this.cam.apply();
     }
   }
 }

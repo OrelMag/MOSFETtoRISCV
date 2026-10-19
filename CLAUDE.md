@@ -652,7 +652,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  a load from DATA raises next) holding asmCards' deck of CARDS_PAYLOAD_SOURCE, a console at 0x8000_0000, a halt
                  part on `j .`; the CPU drawer's golden model sits out (cardparts.ts CARDS_NO_GOLDEN, simHasCardReader). The reader leaf
                  is a `seq` behaviour (outputs from its state alone), so the cycle engine runs the loop through amoadd's memWData
-  geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
+  geom.ts        snapping (ports on grid points), hit testing (a pin's knob before any port: a tap toggles it, a drag
+                 from its half facing the stub wires (knobPortSide), from the far side moves; a part's port reaches only
+                 PORT_INSIDE into its body), portHandles (dots on the selected / hovered), openOutputs (outputs no wire
+                 reaches: drawn neutral, not X), pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run;
                  edgeHooks (before / after every rising edge, gate mode: after once quiet), runCycles;
@@ -734,7 +737,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   editor.ts      Editor: workspace + history + library + sim + panels; registerToolbarAction, slots
   view.ts        EditorView: one SVG element per object updated in place, live values, overlays
   tools.ts       the mouse / keyboard state machine (place, select, drag, band, free-hand wires, pointers, rename
-                 in place: F2 / a click on a selected name / editInline)
+                 in place: F2 / a click on a selected name / editInline); a finger gets a larger port radius and its
+                 press on a pin's port presses the pin (tap toggles, drag wires); a second tap on a wire's start lets
+                 it go. On a touch screen Fit and the empty canvas use at least camera.ts TOUCH_PX per unit (touchZoom)
   ctxmenu.ts     plugin: the right-click menu (selection actions with their shortcuts, or the canvas's own);
                  pointerui.ts: its unravel / collapse actions and their dialogs
   iobar.ts       plugin: the chip's pins as a bar above the run bar (the workbench's switches and lamps, I/O toggle);
