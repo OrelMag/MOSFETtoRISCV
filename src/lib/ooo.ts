@@ -372,8 +372,8 @@ const chunks = (P: number) => Array.from({ length: Math.ceil(P / 32) }, (_, i) =
  * The issue queue: 8 entries, two dispatch slots (each to the lowest free entry), two ports. Each port picks the
  * oldest candidate bound to it: ready, and its result bus free when it would arrive (a 1-cycle instruction needs
  * next cycle's bus; a 2-cycle one never collides at pick; a divide needs the divider free). Outputs per port: the
- * picked entry's operands, payload and class; free1 / free2: room for one / two; cnt0 / cnt1: entries waiting on each
- * port after this cycle's picks (port binding balances them).
+ * picked entry's operands, payload and class; free1 / free2: room for one / two; cnt0 / cnt1: entries bound to each
+ * port before this cycle's picks (port binding balances them, taking this cycle's picks off itself).
  */
 export function issueQueue(P: number): ComponentDef {
   return memo(`iq8_${P}`, () => {
@@ -441,10 +441,8 @@ export function issueQueue(P: number): ComponentDef {
       const pieces = Array.from({ length: 8 }, (_, e) => b.op(splitter(chunks(P)), [`e${e}.payQ`], undefined, `ps${p}_${e}`));
       const parts = chunks(P).map((w, k) => b.op1(onehotMux(8, w), [g, ...pieces.map((x) => `${x}.o${k}`)], undefined, `pay${p}m${k}`));
       b.wire(chunks(P).length > 1 ? b.op1(merger(chunks(P)), parts, undefined, `pay${p}j`) : parts[0], `pay${p}`);
-      const mine = Array.from({ length: 8 }, (_, e) => {
-        const onP = p ? `e${e}.portQ` : `np${e}.y`;
-        return b.op1(andN(3), [`e${e}.valid`, onP, b.op1(NOT, [picks[e]], undefined, `npk${p}_${e}`)], undefined, `w${p}_${e}`);
-      });
+      // entries bound to this port, counted before this cycle's picks (early: binding takes the picks off late)
+      const mine = Array.from({ length: 8 }, (_, e) => b.op1(AND, [`e${e}.valid`, p ? `e${e}.portQ` : `np${e}.y`], undefined, `w${p}_${e}`));
       b.wire(b.op1(popcount(8), [b.op1(merger(Array(8).fill(1)), mine, undefined, `waiting${p}`)], undefined, `cnt${p}c`), `cnt${p}`);
     }
     b.wire(`${l0}.any`, 'free1');

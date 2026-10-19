@@ -115,42 +115,50 @@ export const DISPATCH_CTL: ComponentDef = (() => {
 
 /**
  * Which port each dispatched instruction is bound to: its class's only port, else the port with fewer instructions
- * waiting (port 0 on a tie); slot 1 counts slot 0's choice.
+ * waiting after this cycle's picks (port 0 on a tie); slot 1 counts slot 0's choice. The counts come before the picks
+ * (cnt0 / cnt1, early) and the picks (go0 / go1) late, after select: so every comparison binding may need, of
+ * D = cnt0 − cnt1 against −2 … 2, is made early, and the late signals only choose among them.
  */
 export const BIND: ComponentDef = (() => {
-  const b = new Builder(16, 20);
-  const ins = ['cnt0', 'cnt1', 'need0', 'both0', 'p1only0', 'both1', 'p1only1'];
+  const b = new Builder(16, 18);
+  const ins = ['cnt0', 'cnt1', 'go0', 'go1', 'need0', 'both0', 'p1only0', 'both1', 'p1only1'];
   b.pins(...ins);
-  const one = b.op1(TIE1, [], undefined, 'one'), zero = b.op1(TIE0, [], undefined, 'zero');
-  const z = (w: number, nm: string) => b.op1(constWord(w, 0), [], undefined, nm);
-  const c0 = b.op1(merger([4, 1]), ['cnt0', z(1, 'za')], undefined, 'c05'), c1 = b.op1(merger([4, 1]), ['cnt1', z(1, 'zb')], undefined, 'c15');
+  const one = b.op1(TIE1, [], undefined, 'one');
+  const z1 = (nm: string) => b.op1(constWord(1, 0), [], undefined, nm);
+  const c0 = b.op1(merger([4, 1]), ['cnt0', z1('za')], undefined, 'c05'), c1 = b.op1(merger([4, 1]), ['cnt1', z1('zb')], undefined, 'c15');
+  const sel = b.name(b.op1(merger([1, 1]), ['go0', 'go1'], undefined, 'picks'), 'picks', true);
   b.next();
-  // fewer on port 1? (cnt1 − cnt0 < 0, five bits: no overflow)
-  const lt0 = b.op1(addSub(5), [c1, c0, one], undefined, 'cmp0');
+  const D = b.name(b.op1(addSub(5), [c0, c1, one], undefined, 'D'), 'cnt0 − cnt1', true);
   b.next();
-  const s0 = b.op(splitter([4, 1]), [lt0], undefined, 's0');
+  // gt[k]: D > k, i.e. D − (k + 1) not negative (five bits: no overflow for D in −8 … 8)
+  const gt: Record<number, string> = {};
+  for (const k of [-2, -1, 0, 1, 2]) {
+    const s = b.op(addSub(5), [D, b.op1(constWord(5, (k + 1) & 31), [], undefined, `k${k + 2}`), one], undefined, `d${k + 2}`);
+    gt[k] = b.name(b.op1(NOT, [`${s}.n`], undefined, `gt${k + 2}`), `D > ${k}`, true);
+  }
   b.next();
-  const port0 = b.name(b.op1(OR, ['p1only0', b.op1(AND, ['both0', `${s0}.o1`], undefined, 'pick0')], undefined, 'port0'), 'port0', true);
+  // by the picks (go0, go1): D > go0 − go1 + adj
+  const by = (adj: number, nm: string) => b.op1(muxTree(2, 1), [gt[adj], gt[1 + adj], gt[-1 + adj], gt[adj], sel], undefined, nm);
+  const lt0 = by(0, 'lt0'), lm = by(-1, 'ltm'), lp = by(1, 'ltp');
   b.next();
-  // slot 1: slot 0's entry counted on the port it took
-  const on1 = b.op1(AND, ['need0', port0], undefined, 'on1'), on0 = b.op1(AND, ['need0', b.op1(NOT, [port0], undefined, 'np0')], undefined, 'on0');
+  const port0 = b.name(b.op1(OR, ['p1only0', b.op1(AND, ['both0', lt0], undefined, 'pick0')], undefined, 'port0'), 'port0', true);
   b.next();
-  const a0 = b.op1(addSub(5), [c0, b.op1(merger([1, 4]), [on0, z(4, 'z4a')], undefined, 'i0'), zero], undefined, 'n0');
-  const a1 = b.op1(addSub(5), [c1, b.op1(merger([1, 4]), [on1, z(4, 'z4b')], undefined, 'i1'), zero], undefined, 'n1');
+  // slot 1 counts slot 0's entry on the port it took: +1 on port 1, −1 (one more on port 0)
+  const with0 = b.op1(busMux2(1), [lm, lp, port0], undefined, 'with0');
   b.next();
-  const lt1 = b.op1(addSub(5), [a1, a0, one], undefined, 'cmp1');
-  b.next();
-  const s1 = b.op(splitter([4, 1]), [lt1], undefined, 's1');
+  const lt1 = b.op1(busMux2(1), [lt0, with0, 'need0'], undefined, 'lt1');
   b.next();
   b.wire(port0, 'port0');
-  b.wire(b.op1(OR, ['p1only1', b.op1(AND, ['both1', `${s1}.o1`], undefined, 'pick1')], undefined, 'port1'), 'port1');
+  b.wire(b.op1(OR, ['p1only1', b.op1(AND, ['both1', lt1], undefined, 'pick1')], undefined, 'port1'), 'port1');
   const R = b.right;
   return define({
     id: 'bind', name: 'Port binding', category: 'cpu',
-    summary: 'Binds each dispatched instruction to an issue port: multiply and divide to port 1, loads and stores to port 0, anything both ports run to the one with fewer instructions waiting (port 0 on a tie). The second instruction of a pair counts the first one\'s choice.',
-    ports: [bus('cnt0', 4, 'in'), bus('cnt1', 4, 'in'), bit('need0', 'in'), bit('both0', 'in'), bit('p1only0', 'in'), bit('both1', 'in'), bit('p1only1', 'in'), bit('port0', 'out'), bit('port1', 'out')],
+    summary: 'Binds each dispatched instruction to an issue port: multiply and divide to port 1, loads and stores to port 0, anything both ports run to the one with fewer instructions waiting once this cycle\'s picks have left (port 0 on a tie). The second instruction of a pair counts the first one\'s choice. Every comparison it may need is made before the picks are known.',
+    ports: [bus('cnt0', 4, 'in'), bus('cnt1', 4, 'in'), bit('go0', 'in'), bit('go1', 'in'), bit('need0', 'in'), bit('both0', 'in'), bit('p1only0', 'in'), bit('both1', 'in'), bit('p1only1', 'in'),
+      bit('port0', 'out'), bit('port1', 'out')],
     symbol: { kind: 'box', label: 'BIND' },
-    spec: ([c0, c1, need0, both0, p10, both1, p11]) => {
+    spec: ([cnt0, cnt1, go0, go1, need0, both0, p10, both1, p11]) => {
+      const c0 = cnt0 - go0, c1 = cnt1 - go1;
       const p0 = p10 ? 1 : both0 && c1 < c0 ? 1 : 0;
       const n0 = c0 + (need0 && !p0 ? 1 : 0), n1 = c1 + (need0 && p0 ? 1 : 0);
       return [p0, p11 ? 1 : both1 && n1 < n0 ? 1 : 0];
@@ -477,7 +485,7 @@ function buildOoo(IM: ComponentDef, dmemK: number): ComponentDef {
     v0: 'fd0s.o0', v1: 'fd1s.o0', need0: 'cls0.needIq', need1: 'cls1.needIq', st0: 'cls0.store', st1: 'cls1.store',
     rob1: 'rob.free1', rob2: 'rob.free2', iq1: 'iq.free1', iq2: 'iq.free2', sq1: 'sq.free1', sq2: 'sq.free2',
   }, 'dispatch?');
-  put(BIND, 'bind', { cnt0: 'iq.cnt0', cnt1: 'iq.cnt1', need0: 'cls0.needIq', both0: 'cls0.both', p1only0: 'cls0.p1only', both1: 'cls1.both', p1only1: 'cls1.p1only' }, 'port binding');
+  put(BIND, 'bind', { cnt0: 'iq.cnt0', cnt1: 'iq.cnt1', go0: 'iq.go0', go1: 'iq.go1', need0: 'cls0.needIq', both0: 'cls0.both', p1only0: 'cls0.p1only', both1: 'cls1.both', p1only1: 'cls1.p1only' }, 'port binding');
   const wr = S.map((s) => and(`dc.d${s}`, `cls${s}.wrd`, `wr${s}`));
   put(RAT, 'rat', {
     rs1_0: 'si0.o3', rs2_0: 'si0.o4', rs1_1: 'si1.o3', rs2_1: 'si1.o4', rd0: 'si0.o1', we0: wr[0], tag0: 'rob.tailTag', rd1: 'si1.o1', we1: wr[1], tag1: 'rob.tail1Tag',
