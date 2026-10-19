@@ -230,7 +230,7 @@ export class Stage {
     this.canvas = h('div', { class: 'canvas' });
     this.levelBadge = h('div', { class: 'level-badge' });
     this.dock = h('div', { class: 'panel-dock' });
-    this.canvas.append(this.levelBadge, h('div', { class: 'hint-badge' }, 'double-click a part to open it · drag a part to move it · right-click a pointer to unravel it · drag to pan · wheel or pinch to zoom'), this.dock);
+    this.canvas.append(this.levelBadge, h('div', { class: 'hint-badge' }, 'double-click a part to open it · drag a part to move it (shift: pick several) · right-click for layout · drag to pan · wheel or pinch to zoom'), this.dock);
     this.controls = h('div', { class: 'controls' });
     this.status = h('div', { class: 'status' });
     this.el = h('section', { class: 'stage' }, bar, this.canvas, this.analyzer.el, this.controls);
@@ -247,7 +247,14 @@ export class Stage {
     this.view.arrange = true;
     this.el.tabIndex = -1;
     this.el.addEventListener('keydown', (e) => {
-      if ((e.target as HTMLElement).tagName === 'INPUT') return;
+      if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return;
+      // the learner's layout: undo / redo, and Esc lets go of picked parts before it goes up a level
+      const k = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'y')) {
+        if (this.view.undo(k === 'y' || e.shiftKey)) e.preventDefault();
+        return;
+      }
+      if (e.key === 'Escape' && this.view.dropGroup()) return;
       if (e.key === 'p' || e.key === 'P') this.setProbeMode(!this.probeMode);
       if (e.key === 'Escape' && this.probeMode) {
         this.setProbeMode(false);
