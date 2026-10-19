@@ -2,7 +2,7 @@
 // sequences: what each unit holds and answers must be what the model's own data structures hold and answer.
 
 import { describe, expect, it } from 'vitest';
-import { btbCommit, issueQueue } from '../src/lib/ooo';
+import { btbCommit, issueQueue, RAT } from '../src/lib/ooo';
 import { simulate } from '../src/sim/harness';
 import { lcg, out, set, tick } from './util';
 
@@ -115,4 +115,43 @@ describe('issue queue', () => {
     }
     expect(picked).toBeGreaterThan(1000);
   }, 300_000);
+});
+
+describe('rename table', () => {
+  it('maps each register to its youngest in-flight writer, as the model\'s rat()', () => {
+    const s = simulate(RAT), r = lcg(53);
+    let inflight: { tag: number; rd: number }[] = [];
+    let tail = 0;
+    set(s, { clk: 0, rs1_0: 0, rs2_0: 0, rs1_1: 0, rs2_1: 0, rd0: 0, we0: 0, tag0: 0, rd1: 0, we1: 0, tag1: 0, crd0: 0, cv0: 0, ctag0: 0, crd1: 0, cv1: 0, ctag1: 0, flush: 0 });
+    const youngest = (list: { tag: number; rd: number }[], reg: number) => {
+      if (!reg) return [0, -1];
+      for (let i = list.length - 1; i >= 0; i--) if (list[i].rd === reg) return [1, list[i].tag];
+      return [0, -1];
+    };
+    for (let t = 0; t < 2000; t++) {
+      const nC = Math.min(inflight.length, r(3)), room = 16 - inflight.length;
+      const nD = Math.min(room, r(3));
+      const reg = () => (r(4) === 0 ? 0 : 1 + r(8));
+      const disp = Array.from({ length: nD }, () => ({ tag: 0, rd: reg() }));
+      disp.forEach((d) => { d.tag = tail; tail = (tail + 1) % 16; });
+      const src = [reg(), reg(), reg(), reg()];
+      const flush = r(80) === 0 ? 1 : 0;
+      const io: Record<string, number> = { rs1_0: src[0], rs2_0: src[1], rs1_1: src[2], rs2_1: src[3], flush };
+      [0, 1].forEach((k) => {
+        io[`we${k}`] = k < nD ? 1 : 0; io[`rd${k}`] = disp[k]?.rd ?? 0; io[`tag${k}`] = disp[k]?.tag ?? 0;
+        io[`cv${k}`] = k < nC ? 1 : 0; io[`crd${k}`] = inflight[k]?.rd ?? 0; io[`ctag${k}`] = inflight[k]?.tag ?? 0;
+      });
+      set(s, io);
+      // lookups see the mappings at the start of the cycle; slot 1's also slot 0's destination
+      const want = [youngest(inflight, src[0]), youngest(inflight, src[1]),
+        youngest([...inflight, ...disp.slice(0, 1)], src[2]), youngest([...inflight, ...disp.slice(0, 1)], src[3])];
+      ['a0', 'b0', 'a1', 'b1'].forEach((nm, i) => {
+        expect(out(s, `${nm}v`), `t ${t} ${nm} mapped`).toBe(want[i][0]);
+        if (want[i][0]) expect(out(s, `${nm}t`), `t ${t} ${nm} tag`).toBe(want[i][1]);
+      });
+      tick(s);
+      inflight = [...inflight.slice(nC), ...disp];
+      if (flush) { inflight = []; }
+    }
+  }, 120_000);
 });

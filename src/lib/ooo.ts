@@ -15,6 +15,7 @@ import { constWord } from './alu';
 import { bitwise, orN } from './wide';
 import { lowestOne, onehotMux } from './lanes';
 import { popcount } from './coding';
+import { nonZero } from './pipeline';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -516,3 +517,113 @@ export function invertN(n: number): ComponentDef {
     });
   });
 }
+
+// ---- the rename table ------------------------------------------------------------------------------------------------
+
+/**
+ * One register's rename entry {mapped, tag}, next state: dispatch maps it (slot 1 last: it is younger), else a
+ * commit of the instruction it names unmaps it (the register file has the value now), else a flush unmaps it.
+ */
+export const RAT_CELL: ComponentDef = (() => {
+  const b = new Builder(14, 14);
+  b.pins('q', 'wr0', 'tag0', 'wr1', 'tag1', 'clr', 'flush');
+  const k1 = b.op1(TIE1, [], undefined, 'one');
+  const m0 = b.op1(merger([1, TAG]), [k1, 'tag0'], undefined, 'map0'), m1 = b.op1(merger([1, TAG]), [k1, 'tag1'], undefined, 'map1');
+  const qs = b.op(splitter([1, TAG]), ['q'], undefined, 'qs');
+  b.next();
+  const gone = b.op1(OR, ['clr', 'flush'], undefined, 'gone');
+  b.next();
+  const keepV = b.op1(AND, [`${qs}.o0`, b.op1(NOT, [gone], undefined, 'nGone')], undefined, 'keepV');
+  b.next();
+  const kept = b.op1(merger([1, TAG]), [keepV, `${qs}.o1`], undefined, 'kept');
+  b.next();
+  const w0 = b.op1(busMux2(1 + TAG), [kept, m0, 'wr0'], undefined, 'w0');
+  b.next();
+  const w1 = b.op1(busMux2(1 + TAG), [w0, m1, 'wr1'], undefined, 'w1');
+  b.next();
+  // a flush also undoes this cycle's mappings: everything dispatched is gone
+  b.wire(b.op1(bitwise('and', 1 + TAG), [w1, b.op1(merger([1, TAG]), [b.op1(NOT, ['flush'], undefined, 'nFlush'), b.op1(constWord(TAG, 15), [], undefined, 'all')], undefined, 'mask')], undefined, 'y'), 'y');
+  const R = b.right;
+  return define({
+    id: 'ratcell', name: 'Rename entry', category: 'cpu',
+    summary: 'Which reorder-buffer entry will write this register, if any. Dispatch maps it (the second instruction of a pair last); the commit of the instruction it names, or a flush, unmaps it: the register file holds the value again.',
+    ports: [bus('q', 1 + TAG, 'in'), bit('wr0', 'in'), bus('tag0', TAG, 'in'), bit('wr1', 'in'), bus('tag1', TAG, 'in'), bit('clr', 'in'), bit('flush', 'in'), bus('y', 1 + TAG, 'out')],
+    symbol: { kind: 'box', label: 'MAP' },
+    spec: ([q, wr0, t0, wr1, t1, clr, flush]) => {
+      if (flush) return [((wr1 ? 1 + 2 * t1 : wr0 ? 1 + 2 * t0 : q) & ~1) & 31];
+      return [wr1 ? 1 + 2 * t1 : wr0 ? 1 + 2 * t0 : clr ? q & ~1 & 31 : q];
+    },
+    netlist: () => ({ pins: { q: [0, 2], wr0: [0, 4], tag0: [0, 6], wr1: [0, 8], tag1: [0, 10], clr: [0, 12], flush: [0, 14], y: [R, 2] }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/**
+ * The rename table (P6 style: a register maps to the reorder-buffer entry of its youngest in-flight writer). Four
+ * lookups (two sources of each dispatch slot; slot 1's sources see slot 0's destination), two mappings a cycle, two
+ * unmappings at commit (only when the register still names the committing instruction: a younger writer keeps it),
+ * and a flush that unmaps everything. x0 is never mapped.
+ */
+export const RAT: ComponentDef = (() => {
+  const E = 1 + TAG, N = 32, R = register(E), D = decoder(5, true, 10), RP = readPort(5, E);
+  const b = new Builder(18, 24, 4);
+  const ins = ['rs1_0', 'rs2_0', 'rs1_1', 'rs2_1', 'rd0', 'we0', 'tag0', 'rd1', 'we1', 'tag1', 'crd0', 'cv0', 'ctag0', 'crd1', 'cv1', 'ctag1', 'flush', 'clk'];
+  b.pins(...ins);
+  const one = b.op1(TIE1, [], undefined, 'one');
+  const none = b.op1(constWord(E, 0), [], 'x0: never mapped', 'x0');
+  // writes: x0 never
+  const wr0 = b.op1(AND, ['we0', b.op1(nonZero(5), ['rd0'], undefined, 'nz0')], undefined, 'wr0'), wr1 = b.op1(AND, ['we1', b.op1(nonZero(5), ['rd1'], undefined, 'nz1')], undefined, 'wr1');
+  b.next();
+  b.op(D, ['rd0', wr0], 'map, slot 0', 'd0');
+  b.op(D, ['rd1', wr1], 'map, slot 1', 'd1');
+  b.op(RP, ['all.out', 'crd0'], 'commit, older', 'rc0');
+  b.op(RP, ['all.out', 'crd1'], 'commit, younger', 'rc1');
+  b.next();
+  // a commit unmaps a register only if it still names the committing instruction
+  const unmap = (k: number) => {
+    const s = b.op(splitter([1, TAG]), [`rc${k}.y`], undefined, `rcs${k}`);
+    const same = b.op1(equal(TAG), [`${s}.o1`, `ctag${k}`], undefined, `same${k}`);
+    return b.op1(andN(3), [`cv${k}`, `${s}.o0`, same], undefined, `un${k}`);
+  };
+  const un0 = unmap(0), un1 = unmap(1);
+  b.next();
+  b.op(D, ['crd0', un0], 'unmap, older', 'c0');
+  b.op(D, ['crd1', un1], 'unmap, younger', 'c1');
+  b.next();
+  const qs: string[] = [none];
+  for (let r = 1; r < N; r++) {
+    // the decoders reach every row: their outputs as labels
+    b.name(`d0.y${r}`, `w0_${r}`, true); b.name(`d1.y${r}`, `w1_${r}`, true); b.name(`c0.y${r}`, `u0_${r}`, true); b.name(`c1.y${r}`, `u1_${r}`, true);
+    const clr = b.op1(OR, [`c0.y${r}`, `c1.y${r}`], undefined, `clr${r}`);
+    const nx = b.op1(RAT_CELL, [`x${r}.q`, `d0.y${r}`, 'tag0', `d1.y${r}`, 'tag1', clr, 'flush'], undefined, `n${r}`);
+    b.op(R, [nx, one, 'clk'], `x${r}`, `x${r}`);
+    qs.push(`x${r}.q`);
+    if (r % 8 === 7) b.next();
+  }
+  b.next();
+  b.name(b.op1(merger(Array(N).fill(E), 2), qs, undefined, 'all'), 'maps', true);
+  b.next();
+  // lookups: slot 1's sources see slot 0's destination
+  const look = ['rs1_0', 'rs2_0', 'rs1_1', 'rs2_1'].map((rs, i) => b.op1(RP, ['all.out', rs], `lookup ${rs}`, `rd${i}`));
+  b.next();
+  const out = (i: number, nm: string) => {
+    let y = look[i];
+    if (i >= 2) {
+      const hit = b.op1(AND, [wr0, b.op1(equal(5), [['rs1_1', 'rs2_1'][i - 2], 'rd0'], undefined, `byp${i}e`)], undefined, `byp${i}`);
+      y = b.op1(busMux2(E), [y, b.op1(merger([1, TAG]), [one, 'tag0'], undefined, `t0m${i}`), hit], undefined, `by${i}`);
+    }
+    const s = b.op(splitter([1, TAG]), [y], undefined, `os${i}`);
+    b.wire(`${s}.o0`, `${nm}v`); b.wire(`${s}.o1`, `${nm}t`);
+  };
+  ['a0', 'b0', 'a1', 'b1'].forEach((nm, i) => out(i, nm));
+  const R0 = b.right;
+  const W: Record<string, number> = { rs1_0: 5, rs2_0: 5, rs1_1: 5, rs2_1: 5, rd0: 5, tag0: TAG, rd1: 5, tag1: TAG, crd0: 5, ctag0: TAG, crd1: 5, ctag1: TAG };
+  const outs = ['a0', 'b0', 'a1', 'b1'].flatMap((n): [string, number][] => [[`${n}v`, 1], [`${n}t`, TAG]]);
+  return define({
+    id: 'rat', name: 'Rename table', category: 'cpu',
+    summary: 'For each register, the reorder-buffer entry of the youngest instruction in flight that writes it, or none (the register file has the value). Dispatch looks up both instructions\' sources (the second sees the first\'s destination) and maps their destinations; a commit unmaps a register still naming the committing instruction; a flush unmaps them all.',
+    ports: [...ins.map((n) => (n === 'clk' ? bit('clk', 'in', 'bottom', true) : W[n] ? bus(n, W[n], 'in') : bit(n, 'in'))), ...outs.map(([n, w]) => (w > 1 ? bus(n, w, 'out') : bit(n, 'out')))],
+    symbol: { kind: 'box', label: 'RENAME TABLE' },
+    netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), ...Object.fromEntries(outs.map(([n], i) => [n, [R0, 2 + 2 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
