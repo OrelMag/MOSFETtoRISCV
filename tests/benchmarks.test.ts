@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import results from '../src/bench/results.json';
-import { RESULTS, chapterOf, familyOf, front, meanOf } from '../src/bench/summary';
+import { FAMILIES, RESULTS, chapterOf, familyOf, front, meanOf } from '../src/bench/summary';
 import { chapterById } from '../src/chapters';
 import { BENCHMARKS, crc32, xorshift32 } from '../src/riscv/benchprograms';
 import { BENCH_DMEM_K, BENCH_IMEM_K, benchCase, benchCases, benchEnergy, benchLanes, measureCpu, programsHash, runsOn } from './verify/bench';
@@ -73,7 +73,7 @@ describe('benchmark summary (the Benchmarks tab)', () => {
     for (const c of CPUS) {
       const ch = chapterOf(c.id);
       expect(ch && chapterById(ch), c.id).toBeTruthy();
-      expect(['single', 'multi', 'pipe']).toContain(familyOf(c.id));
+      expect(FAMILIES.map((f) => f.key)).toContain(familyOf(c.id));
     }
   });
 

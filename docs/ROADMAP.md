@@ -822,7 +822,7 @@ the pipelines' 1-cycle data memory; RV32IM without traps; a cycle-exact model th
   looked up for both slots, a 4-entry return-address stack (lib/ras.ts, the model's rules), a pair check (lane 1: no
   memory, multiplier or divider; one control instruction a pair; nothing after a divide; no read of slot 0's result:
   else hold and shift), a 4-read 2-write register file, look-ahead forwarding from both lanes. riscv-tests, 2048 random
-  programs and the benchmarks match the golden model. 193 771 NANDs (+37 % on pipe-m-bal-bp), period 80 (79), CPI fib
+  programs and the benchmarks match the golden model. 193 768 NANDs (+37 % on pipe-m-bal-bp), period 80 (79), CPI fib
   1.13, sort 1.01, matmul 1.05, matmul-m 1.09, crc 0.97 (1.35 / 1.18 / 1.30 / 1.25 / 1.23). Chapter 24 step 2; the
   pipeline diagram, listing and sandbox drawer show both lanes; the Benchmarks tab's two-wide family
 - ⏳ 17c: the `ooo` core at gate level, equal to the model every cycle, and its panel; 17d: measured (plan:

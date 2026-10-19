@@ -107,7 +107,7 @@ export const chOoo: Chapter = {
         Returns are predicted by a <span data-show="ras">4-entry return-address stack</span>. Up to two instructions
         retire a cycle: the golden model steps once for each, and the diagram shows each stage's second lane under
         it.</p>
-        <p>Measured on the benchmark set: 193 771 NANDs against 141 655 for one lane (+37 %), a clock period of 80 NAND
+        <p>Measured on the benchmark set: 193 768 NANDs against 141 655 for one lane (+37 %), a clock period of 80 NAND
         delays against 79, and CPI fib 1.13, sort 1.01, matmul 1.05, matmul-m 1.09, crc 0.97 against 1.35, 1.18,
         1.30, 1.25, 1.23. Only 29 to 53 % of the instructions go in pairs; the others wait for a result, the one memory
         lane or a branch. About a sixth less time for a third more gates.</p>`,
