@@ -299,8 +299,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .prose details.deeper > summary { cursor: pointer; font-weight: 600; font-size: 13.5px; color: var(--text-2); }
 .prose details.deeper[open] > summary { margin-bottom: 6px; }
 .prose details.deeper p { font-size: 13.5px; }
-.prose .try.tried { border-style: solid; border-color: var(--good); }
-.prose .try-done { display: flex; align-items: center; gap: 4px; margin-top: 4px; color: var(--good); font-weight: 600; font-size: 13px; }
+/* a try ticked: quieter than a solved check (green), which is what the chapter's counter counts */
+.prose .try.tried { border-style: solid; }
+.prose .try-done { display: flex; align-items: center; gap: 4px; margin-top: 4px; color: var(--text-2); font-weight: 600; font-size: 13px; }
+.prose .try-done small { font-weight: 400; color: var(--muted); font-size: 12px; }
 .recap-k { margin: 2px 0 6px; }
 .recap-keep li { color: var(--text); }
 .recap-links { margin-top: 16px; display: grid; gap: 4px; }

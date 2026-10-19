@@ -162,7 +162,11 @@ export class ChapterPage implements Page {
         builds.map((x) => h('a', { class: 'ch-chip', href: `#/c/${x.id}/0` }, `${chapterNo(x)} · ${x.title}`))) : null);
   }
 
-  /** A .try box with a condition (Step.tries) ticks itself once the condition holds on the stage, and stays ticked. */
+  /**
+   * A .try box with a condition (Step.tries) ticks itself once the condition holds on the stage, and stays ticked. A try
+   * is practice, not one of the chapter's checks (challenges and recap questions, chapters/checks.ts): its tick says so,
+   * in the quiet style, so it does not read as a solved check the counter missed.
+   */
   private wireTries(prose: HTMLElement, st: Step): void {
     if (!st.tries?.length) return;
     const boxes = [...prose.querySelectorAll<HTMLElement>('.try')];
@@ -172,7 +176,8 @@ export class ChapterPage implements Page {
       const key = `${this.chapter.id}:${this.step}:try${k}`;
       const tick = () => {
         box.classList.add('tried');
-        box.append(h('span', { class: 'try-done' }, icon('check', 13), 'Done'));
+        box.append(h('span', { class: 'try-done', title: 'Tries are practice on the circuit; the checks counted at the top are the Challenge and Question boxes' },
+          icon('check', 13), 'Tried it', h('small', null, ' · practice, not a check')));
       };
       if (settings.isSolved(key)) return tick();
       this.unlisten.push(this.stage.onChange(() => {
