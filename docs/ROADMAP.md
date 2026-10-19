@@ -854,7 +854,11 @@ the pipelines' 1-cycle data memory; RV32IM without traps; a cycle-exact model th
   programs and the benchmarks match the golden model. 193 768 NANDs (+37 % on pipe-m-bal-bp), period 80 (79), CPI fib
   1.13, sort 1.01, matmul 1.05, matmul-m 1.09, crc 0.97 (1.35 / 1.18 / 1.30 / 1.25 / 1.23). Chapter 24 step 2; the
   pipeline diagram, listing and sandbox drawer show both lanes; the Benchmarks tab's two-wide family
-- ⏳ 17c: the `ooo` core at gate level, equal to the model every cycle, and its panel; 17d: measured (plan:
+- ✅ 17c-1: the out-of-order core's units (lib/ooo.ts): the return stack with two operations a cycle, the BTB trained at
+  commit by the model's rules, the issue queue (wakeup, age matrix, select per port with bus slots and the divider), the
+  rename table, the reorder buffer, the store queue with forwarding, a data memory with a read and a write port; each
+  checked against the model's rules cycle by cycle (tests/ooounits.test.ts)
+- ⏳ 17c-2: the `ooo` core at gate level, equal to the model every cycle; 17c-3: its panel; 17d: measured (plan:
   E:/mockups/ooo/PLAN-17b-17d.md)
 
 ### Phase 16 — Journey and campaign track: Memory ✅
