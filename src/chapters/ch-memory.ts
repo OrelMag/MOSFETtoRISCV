@@ -1,5 +1,6 @@
 import { cam, fifo, pla, romArray, stack, clockDivider, counter, DFF, DFF_R, DFFE, D_LATCH, JKFF, lfsr, ram, register, ringCounter, shiftRegister, SR_LATCH, upDownCounter } from '../lib';
-import { DET101, DET101_FSM } from '../lib';
+import { DET101, DET101_FSM, RV16_DFF, RV16_DFFE, RV16_DLATCH } from '../lib';
+import { stats } from '../sim/stats';
 import { pack } from '../sim/values';
 import { fsmPanel } from '../widgets/fsmpanel';
 import { memGridPanel } from '../widgets/memgrid';
@@ -7,6 +8,8 @@ import { memSizePanel } from '../widgets/memsize';
 import { portCost } from '../widgets/storage';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
+
+const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
 
 /** Value currently stored in word i of a RAM scene. */
 function word(st: Stage, i: number): number {
@@ -19,18 +22,19 @@ export const chLatches: Chapter = {
   blurb: 'Loop a gate\'s output back to its input and it starts to remember.',
   goals: [
     'store a bit in two cross-coupled NANDs, and say what the forbidden input does to them',
-    'explain metastability as a race between two gates that no logic decides',
+    'explain metastability: a balanced latch that noise resolves, in a time with no upper bound',
     'derive a D latch from the SR latch, transparent while its enable is 1',
-    'build an edge-triggered flip-flop from two latches, and give it a load enable',
+    'build an edge-triggered flip-flop from two latches, state its setup, hold and clock-to-q times, and give it a load enable',
   ],
   builds: ['gates'],
   recap: {
     keep: [
-      'Feedback makes memory. Two cross-coupled NANDs (an SR latch, 2 NANDs) set on s_n = 0, reset on r_n = 0 and hold with both at 1.',
-      'Both inputs low gives q = q̄ = 1. Releasing both at once starts a race whose winner nothing predicts: metastability.',
-      'D latch (5 NANDs): d and ¬d drive set and reset, gated by e, so the forbidden input cannot occur. Transparent while e = 1, closed while e = 0.',
-      'D flip-flop (11 NANDs): a master latch open while clk is low, a slave open while it is high. q changes only at the rising edge.',
-      'Load enable: a multiplexer feeds q back into d while en = 0. 15 NANDs a bit.',
+      `Feedback makes memory. Two cross-coupled NANDs (an SR latch, ${nands(SR_LATCH)} NANDs) set on s_n = 0, reset on r_n = 0 and hold with both at 1.`,
+      'Both inputs low gives q = q̄ = 1. Released together, the pair balances at its metastable point: noise picks the winner, and the time it takes has no bound (P(undecided after t) ∝ e^(−t/τ)).',
+      `D latch (${nands(D_LATCH)} NANDs): d and ¬d drive set and reset, gated by e, so the forbidden input cannot occur. Transparent while e = 1, closed while e = 0. Taking r_n = NAND(s_n, e) drops the inverter: ${nands(RV16_DLATCH)} NANDs.`,
+      `D flip-flop (${nands(DFF)} NANDs, ${nands(RV16_DFF)} with the ${nands(RV16_DLATCH)}-NAND latch): a master latch open while clk is low, a slave open while it is high. q changes only at the rising edge.`,
+      'The timing contract: d settled a setup time before the edge, held a hold time after it; q follows clk-to-q later. Period ≥ clk-to-q + slowest logic + setup.',
+      `Load enable: a multiplexer feeds q back into d while en = 0 (${nands(DFFE)} NANDs a bit). The clock itself is not gated (real chips do, with clock-gating cells).`,
     ],
     practise: ['s_sr', 's_dlatch', 's_dff'],
     check: [
@@ -50,10 +54,17 @@ export const chLatches: Chapter = {
       },
       {
         question: 'Why do designers keep an SR latch from seeing s_n and r_n released at the same instant?',
-        options: ['The two NANDs race, and which one wins cannot be known', 'It always resets the latch', 'It shorts the supply to ground', 'It leaves q = q̄ = 1 for good'],
+        options: ['The pair balances at its metastable point: noise picks the winner, and how long that takes has no bound', 'It always resets the latch', 'It shorts the supply to ground', 'It leaves q = q̄ = 1 for good'],
         answer: 0,
-        explain: 'Both NANDs see (1, 1) and switch together. In silicon one is a hair faster and wins, but nothing in the logic says which.',
-        why: ['', 'Neither input wins by design: the outcome depends on which gate happens to be faster.', 'Each NAND is a complete CMOS gate and never shorts the supply. Both outputs at 1 is a legal logic state, just not a useful one.', 'Both outputs are 1 only while both inputs are held low; on release they race.'],
+        explain: 'Both NANDs see (1, 1) and start to switch together. In silicon the outputs hang near mid-rail until mismatch and noise, amplified by the loop, tip them: the chance of still being undecided after t falls as e^(−t/τ), small but never zero.',
+        why: ['', 'Neither input wins by design: mismatch and noise decide, and nothing bounds when.', 'Each NAND is a complete CMOS gate and never shorts the supply. Both outputs at 1 is a legal logic state, just not a useful one.', 'Both outputs are 1 only while both inputs are held low; on release the pair has to fall one way.'],
+      },
+      {
+        question: 'Between two flip-flops the slowest logic is 20 NAND delays; clk-to-q is 3 and setup 2. What is the shortest safe clock period?',
+        options: ['25 delays: clk-to-q + logic + setup', '20 delays: the logic alone', '23 delays: setup is met at the edge itself', '22 delays: clk-to-q overlaps the logic'],
+        answer: 0,
+        explain: 'After the edge q needs 3 delays to change, the logic 20 more, and the next flip-flop wants d settled 2 delays before its edge: 25.',
+        why: ['', 'The logic only starts once q has changed (clk-to-q), and must finish before the capturing flip-flop\'s setup window.', 'd must be settled a setup time before the edge, not at it: the master needs that long to take it.', 'The logic\'s input is q: it cannot start before q has changed.'],
       },
     ],
   },
@@ -85,11 +96,16 @@ export const chLatches: Chapter = {
       title: 'The forbidden input, and races',
       body: `
         <p>Pull <em>both</em> inputs low and both outputs go to 1, so q and q̄ are no longer opposites. Worse: release
-        both at exactly the same moment and <span data-show="g1 g2">each NAND</span> sees (1, 1), both switch to 0, then both see 0 and switch back…
-        In a perfectly symmetric world the latch would oscillate forever.</p>
-        <p>Real silicon is never perfectly symmetric. One gate is a hair faster and wins, but you cannot know which.
-        This is <strong>metastability</strong>, and it is why designers avoid the forbidden input. The simulator detects
-        the race and resolves it the way silicon does: arbitrarily.</p>`,
+        both at exactly the same moment and <span data-show="g1 g2">each NAND</span> sees (1, 1) and starts to fall. In the logic
+        model they fall together, see 0, rise together, and oscillate forever.</p>
+        <p>In silicon the outputs are voltages, and the pair settles first at a balance point near mid-rail, both outputs half
+        way. The loop's gain amplifies any imbalance (a transistor mismatch, thermal noise) exponentially, the gap growing as
+        e^(t/τ), with τ set by the gates' gain and load (picoseconds in a modern process). Noise decides <em>which</em> way it
+        falls; nothing bounds <em>when</em>: the chance of still being undecided after a time t falls as e^(−t/τ), never to zero,
+        and a gate reading the half-way voltage meanwhile may see 0 or 1. This is <strong>metastability</strong>. Designers keep the
+        forbidden input away, and give any flip-flop that may sample a changing input time to settle before anything reads it
+        (chapter 9's synchronizer). Here the simulator detects the oscillation and settles the pair arbitrarily, in no time; in silicon
+        the resolution takes time, usually little, occasionally a lot.</p>`,
       scene: () => ({ root: SR_LATCH, inputs: { s_n: 0, r_n: 0 } }),
       actions: [
         { label: 'Release both at once', run: (st) => st.setInputs({ s_n: 1, r_n: 1 }) },
@@ -103,7 +119,16 @@ export const chLatches: Chapter = {
         gated by an enable <code>e</code>.</p>
         <ul><li><code>e = 1</code>: the latch is <strong>transparent</strong>, and q follows d.</li>
         <li><code>e = 0</code>: the latch is <strong>closed</strong>, and q holds the last value.</li></ul>
-        <p>The <span data-show="sr">SR latch</span> is inside, as a box. Open it.</p>`,
+        <p>The <span data-show="sr">SR latch</span> is inside, as a box. Open it.</p>
+        <details class="deeper"><summary>Deeper: a latch in ${nands(RV16_DLATCH)} NANDs, a flip-flop in ${nands(RV16_DFF)}</summary>
+        <p><span data-show="inv">The inverter on d</span> is not needed. <span data-show="g1">g1</span> already computes s_n = NAND(d, e),
+        which is ¬d while e = 1. Feed it to <span data-show="g2">g2</span> in place of ¬d: r_n = NAND(NAND(d, e), e). While e = 1,
+        r_n = d, so d = 0 resets as before; while e = 0, s_n = r_n = 1: hold. d still reaches r_n through two gates (g1, g2 in
+        place of the inverter, g2), so nothing gets slower: ${nands(RV16_DLATCH)} NANDs in place of ${nands(D_LATCH)}.</p>
+        <p>Two of these latches and the clock inverter make a ${nands(RV16_DFF)}-NAND flip-flop (the library's is ${nands(DFF)}), and its
+        enable version is ${nands(RV16_DFFE)} (against ${nands(DFFE)}). The campaign's levels build these, so their pars count
+        ${nands(RV16_DLATCH)} and ${nands(RV16_DFF)}, and the state machine in chapter 9 is made of them. The chapters keep the
+        ${nands(D_LATCH)}-NAND latch on stage because its set and reset sides read more plainly.</p></details>`,
       scene: () => ({ root: D_LATCH, inputs: { d: 1, e: 1 } }),
       challenge: {
         kind: 'reach', goal: 'Make the latch hold a 1 while d = 0.',
@@ -124,6 +149,14 @@ export const chLatches: Chapter = {
         <p>Chain two D latches with <span data-show="inv">opposite enables</span>: the <strong><span data-show="master">master</span></strong> is open while the clock is low; the
         <strong><span data-show="slave">slave</span></strong> while it is high. At the moment the clock rises, the master closes (capturing d)
         and the slave opens (showing it). This is the <strong>edge-triggered D flip-flop</strong>.</p>
+        <p>"At the edge" is a contract with three numbers, all visible here. <strong>Setup</strong> (2 delays here): d must have crossed
+        <span data-show="master">the master</span> before clk rises; a falling d goes through the master's inverter and a NAND.
+        <strong>Hold</strong> (1 delay here): d must then stay put until the master has closed, and clk reaches the master's enable through
+        <span data-show="inv">an inverter</span>. <strong>Clock-to-q</strong> (2 delays here for a rising q, 3 for a falling one): the time the
+        <span data-show="slave">slave</span> takes to show the captured value. Between two flip-flops the period must cover clk-to-q + the
+        slowest logic + setup, and clk-to-q plus the fastest path must outlast the hold time. Here the numbers fall out of unit NAND delays; in
+        silicon they come from characterizing the cell, tens of picoseconds each, and a d that changes inside the window can leave
+        the master balanced half way: metastable.</p>
         <div class="try">Change d while the clock is low: q does not move. Press <strong>Pulse</strong>: q
         takes d's value at the rising edge. Open the <strong>Timing</strong> panel to see it over time.</div>`,
       scene: () => ({ root: DFF, inputs: { d: 1, clk: 0 }, autoClock: false }),
@@ -134,7 +167,17 @@ export const chLatches: Chapter = {
       body: `
         <p>Often we want a flip-flop to keep its value on most clock edges and only load a new one sometimes.
         Put <span data-show="mux">a multiplexer</span> in front: when <code>en = 0</code> it feeds q back into d, so the
-        <span data-show="ff">flip-flop</span> reloads its own value. When <code>en = 1</code> it lets the new d through.</p>`,
+        <span data-show="ff">flip-flop</span> reloads its own value. When <code>en = 1</code> it lets the new d through.</p>
+        <details class="deeper"><summary>Deeper: why not gate the clock?</summary>
+        <p>The obvious alternative is clk·en into the flip-flop: no mux, no reloading. But an AND on the clock delays this flip-flop's edge
+        against its neighbours' (skew, eating into setup or hold), and if en changes while clk is high the gated clock gets a runt pulse
+        or a second edge. The <span data-show="mux">mux</span> leaves the clock untouched and makes en an ordinary data input, with its
+        own setup and hold like d.</p>
+        <p>Real chips gate clocks all the same, because the clock net and the flip-flops it toggles are a large share of dynamic power, and a
+        register that is not loading need not be clocked. They use an <strong>integrated clock-gating cell</strong> (ICG): a latch,
+        transparent while clk is low, holds en steady through the high phase, and an AND passes clk only when the latched en is 1, so the
+        gated clock has whole pulses only. One ICG serves a whole register, and synthesis inserts it where it finds exactly this
+        mux-and-feedback pattern. Every load enable on this site is the mux.</p></details>`,
       scene: () => ({ root: DFFE, inputs: { d: 1, en: 0, clk: 0 } }),
     },
   ],
@@ -144,7 +187,7 @@ export const chRegisters: Chapter = {
   id: 'registers', num: 9, title: 'Registers & counters', level: 'Sequential blocks',
   blurb: 'Store a whole word on every clock edge; count, shift, reset, and divide a clock.',
   goals: [
-    'build a register from enable flip-flops, and price a stored bit (15 NANDs, 60 transistors)',
+    `build a register from enable flip-flops, and price a stored bit (${nands(DFFE)} NANDs, ${stats(DFFE).transistors} transistors)`,
     'close a register → logic → register loop into a counter, a shift register, an LFSR or a ring counter',
     'say why an asynchronous reset is released through a synchronizer, and why a ripple divider\'s bits glitch',
     'design a state machine from its transition table: state encoding, next-state logic, Mealy or Moore output',
@@ -152,11 +195,11 @@ export const chRegisters: Chapter = {
   builds: ['latches', 'adders'],
   recap: {
     keep: [
-      'A register is n enable flip-flops sharing a clock and an enable: 15 NANDs (60 transistors) per bit here.',
+      `A register is n enable flip-flops sharing a clock and an enable: ${nands(DFFE)} NANDs (${stats(DFFE).transistors} transistors) per bit here.`,
       'Register → logic → register is the shape of every synchronous circuit: an incrementer makes a counter, neighbour wiring a shift register, an XOR of taps an LFSR (2ⁿ − 1 states), an inverted loop a Johnson counter (2n states).',
-      'An asynchronous reset clears q at once, clock or no clock. Its release is an input change that can land next to a clock edge, so real designs synchronize it.',
+      'An asynchronous reset clears q at once, clock or no clock. Its release must meet a recovery time before the edge (a setup for reset), so real designs release it through a synchronizer: two flip-flops in series, the first given a whole cycle to settle if it goes metastable.',
       'A ripple divider (each toggle flip-flop clocked by the one before) halves the frequency per flip-flop, but its bits change one after another: a poor counter, and no clock for logic that also sees the original.',
-      'A state machine is a state register plus next-state and output logic. The 101 detector: two flip-flops, n0 = x, n1 = ¬x·s0, Mealy output y = x·s1, 28 NANDs in all.',
+      `A state machine is a state register plus next-state and output logic. The 101 detector: two flip-flops, n0 = x, n1 = ¬x·s0, Mealy output y = x·s1, ${nands(DET101)} NANDs in all. One-hot encoding spends a flip-flop per state to make that logic trivial.`,
     ],
     practise: ['s_reg4', 's_reg16', 's_cnt4', 's_pc', 's_fsm'],
     check: [
@@ -237,8 +280,20 @@ export const chRegisters: Chapter = {
         <p>At power-on every flip-flop holds whatever the race inside it produced. A chip needs a way to force a known state, and it
         must work before any clock runs. Give two NANDs of each latch a third input, <code>rst_n</code>: held low, it blocks the set side
         and forces the reset side, so q = 0 at once, clock or no clock. <span data-show="master slave">Both latches</span> of the flip-flop get it.</p>
-        <p>"Asynchronous" is the catch: releasing reset is itself an input change that can land right next to a clock edge. Real designs
-        assert reset asynchronously but release it through a small synchronizer.</p>
+        <p>"Asynchronous" is the catch: releasing reset is itself an input change that can land right next to a clock edge. A flip-flop
+        specifies a <strong>recovery time</strong> (rst_n high at least that long before the edge: reset's setup) and a <strong>removal
+        time</strong> (its hold). Release inside that window and some flip-flops leave reset on this edge, others on the next, or one goes
+        metastable. Real designs assert reset asynchronously but release it through a <strong>synchronizer</strong>: two flip-flops in
+        series on the chip's clock, the first fed a constant 1, both cleared by the raw rst_n. Their output drops with rst_n at once, but
+        rises only at a clock edge, so the rest of the chip leaves reset together. If the first flip-flop catches the release inside its
+        window and goes metastable, it has a whole clock period to settle before the second samples it.</p>
+        <details class="deeper"><summary>Deeper: how safe are two flip-flops?</summary>
+        <p>A flip-flop caught metastable is still undecided after a time t with probability ∝ e^(−t/τ) (chapter 8). The rate of failures
+        is about f_clk · f_data · T₀ · e^(−t_r/τ), where f_data is how often the input changes, T₀ the window the cell is sensitive in, and
+        t_r the time allowed to resolve: one clock period minus clk-to-q and setup. Every extra period multiplies the mean time between
+        failures by e^(T/τ): with τ = 10 ps and a 1 ns clock, e^100 ≈ 10⁴³. So two flip-flops are the norm, three at high clock rates.
+        The same synchronizer serves any single asynchronous bit (a button, an interrupt line, a flag from another clock domain); a
+        multi-bit value needs more, since its bits may settle on different cycles: a handshake, a Gray-coded counter, an asynchronous FIFO.</p></details>
         <div class="try">Clock a 1 in (d = 1, pulse), then pull rst_n low: q clears immediately, without a clock edge.</div>`,
       scene: () => ({ root: DFF_R, inputs: { d: 1, clk: 0, rst_n: 1 }, autoClock: false }),
       challenge: {
@@ -321,8 +376,11 @@ export const chRegisters: Chapter = {
         <p>Close a <span data-show="reg">shift register</span> on itself and a single 1 circulates: a <strong>ring counter</strong>, n states from n flip-flops, already
         one-hot (no decoder). <span data-show="inv">Invert the bit on its way round</span> and you get a <strong>Johnson counter</strong>: 2n states (0000, 0001, 0011, …,
         1111, 1110, …), only one bit changing per step, and each state is recognised by a single 2-input gate. Both trade flip-flops for
-        decoding logic, which is why they show up in state machines and multiphase clocks.</p>`,
+        decoding logic, which is why they show up in state machines and multiphase clocks.</p>
+        <div class="try">While init = 1 every edge loads 0000 and the counter stands still. Set init = 0 and watch 0000, 0001, 0011, 0111,
+        1111, then the zeros march in: 1110, 1100, … 8 states.</div>`,
       scene: () => ({ root: ringCounter(4, true), inputs: { init: 1, clk: 0 } }),
+      tries: [(st) => st.getInput('init') === 0 && st.value('q') === 0b1100],
     },
     {
       title: 'Dividing a clock',
@@ -349,12 +407,21 @@ export const chRegisters: Chapter = {
           <tr><td>10</td><td>0</td><td>00</td><td>0</td></tr><tr><td>10</td><td>1</td><td>01</td><td>1</td></tr></tbody></table>
         <p>Code 11 never occurs, so it is a don't care: <span data-show="g0 n0"><code>n0 = x</code></span>,
         <span data-show="g1 h1 k1 n1"><code>n1 = ¬x·s0</code></span>, and the output <span data-show="yn yg"><code>y = x·s1</code></span>, each next
-        bit ANDed with ¬rst for a synchronous reset. <span data-show="s0 s1">Two 9-NAND flip-flops</span> and 10 NANDs of logic.</p>
+        bit ANDed with ¬rst for a synchronous reset. <span data-show="s0 s1">Two ${nands(RV16_DFF)}-NAND flip-flops</span>
+        (the ${nands(RV16_DLATCH)}-NAND latch from <a href="#/c/latches/2">chapter 8's aside</a>, as the campaign builds them) and ${nands(DET101) - 2 * nands(RV16_DFF)} NANDs of logic.</p>
         <p>y reads x directly: a <strong>Mealy</strong> output.</p>
         <details class="deeper"><summary>Deeper: Mealy or Moore</summary>
         <p>A <strong>Moore</strong> output depends on the state alone: add S3 "saw 101" with
         y = 1 there (it still fits in two flip-flops, 11 is free) and the detection comes a cycle later, but clean. The Mealy y follows x, glitches
         included, so whatever reads it must sample it at the clock edge.</p></details>
+        <details class="deeper"><summary>Deeper: one-hot states</summary>
+        <p>Two flip-flops for three states is a dense (binary) encoding. <strong>One-hot</strong> gives each state its own flip-flop
+        (S0, S1, S2 = 001, 010, 100): one more flip-flop here, but each next-state bit is just the OR of the arcs entering that state,
+        and every state test reads one flip-flop with no decoding. For the detector: S1' = x (every 1 leads to S1), S2' = ¬x·S1,
+        S0' = ¬x·(S0 + S2), y = x·S2. The costs: reset must set S0 rather than clear everything, and an upset (a particle strike) that makes two bits hot is a state the
+        logic never planned for. FPGAs, rich in flip-flops, encode machines one-hot by default; ASIC flows weigh flip-flops against
+        logic per machine. A ring counter is a one-hot machine with no inputs, and the campaign's multicycle core steps through F, E, M, W
+        one-hot.</p></details>
         <p>The diagram is drawn from the same table as the circuit, and a test reads the circuit back into it state by state. Hover an arc to light
         the gates that make that transition.</p>
         <div class="try">Set x and pulse: 1, 0, 1. Watch the dashed arc move when you flip x before the edge.</div>`,
@@ -466,8 +533,8 @@ export const chMemory: Chapter = {
         <p>The same three parts scale to any size. Pick a size in the panel. The address grows one bit each time
         the number of words doubles, and so does <span data-show="dec">the decoder</span> and the depth of <span data-show="rmux">the mux tree</span>.</p>
         <p>Watch the transistor count in the Info tab: a 64 × 16 memory built this way already needs about 80 000
-        transistors. That is why real memories use dense custom cells, and why a 16 GB phone
-        holds on the order of 10¹¹ transistors in memory alone.</p>`,
+        transistors. That is why real memories use dense custom cells: a phone's 16 GB of DRAM is 1.4 × 10¹¹ bits, each one transistor and a
+        capacitor. Stored at ${stats(DFFE).transistors} transistors a bit, as here, it would take 8 × 10¹² transistors.</p>`,
       scene: () => ({ root: ram(4, 8), inputs: { addr: 0, din: 0x42, we: 1, clk: 0 }, panels: [memSizePanel, memGridPanel] }),
       challenge: {
         kind: 'reach', goal: 'In a memory with at least 16 words, store 0x2A at address 13.',
@@ -507,8 +574,9 @@ export const chMemory: Chapter = {
         keeps the two planes but makes the first one flexible: true and <span data-show="u1 u2 u3 u4">complemented input rails</span>, an AND plane that builds only the product
         terms the outputs need, and an OR plane that sums them. The terms here come from Quine–McCluskey minimization, run when the page loads.</p>
         <p>The 7-segment font needs 28 terms (more than the ROM's 16 words, because the seven outputs share few of them), but each term is a
-        2- or 3-input AND, so the PLA costs 164 NANDs against 313 for the ROM. Early microprocessors decoded instructions with PLAs; the FPGA's
-        lookup tables are their descendants.</p>
+        2- or 3-input AND, so the PLA costs 164 NANDs against 313 for the ROM. Early microprocessors decoded instructions with PLAs (the 6502's
+        decode ROM is one), and PALs, GALs and CPLDs are their field-programmable descendants. An FPGA's lookup table is the other branch:
+        a tiny ROM, 16 or 64 SRAM bits read by a mux tree on its inputs.</p>
         <div class="try">Set x to 0–15 and read y as segments a (bit 0) to g (bit 6). Open <span data-show="u5">a term</span>, then
         <span data-show="u33">an output's OR gate</span>.</div>`,
       scene: () => ({ root: pla('seg7'), inputs: { x: 5 } }),
@@ -559,7 +627,7 @@ export const chMemory: Chapter = {
       body: `
         <p>An ordinary memory answers "what is at this address?". A <strong>CAM</strong> answers "where is this value?". Each entry gets
         <span data-show="u10 u11 u12 u13">its own comparator</span>, all comparing with the key at the same time, and
-        <span data-show="u19">a priority encoder</span> (<a href="#/c/routing/0">chapter 7</a>) turns the matches into hit and index.
+        <span data-show="u19">a priority encoder</span> (<a href="#/c/routing/6">chapter 7</a>) turns the matches into hit and index.
         A valid bit per entry keeps never-written entries from matching.</p>
         <p>One comparator per entry is why CAMs stay small: a TLB (address translation) has tens of entries, a fully associative cache a few
         hundred lines at most, a network router's lookup table is the big exception, and burns power accordingly.</p>`,

@@ -112,7 +112,7 @@ export const chGates: Chapter = {
       title: 'XNOR: are they equal?',
       body: `
         <p><span data-show="x1">XOR</span> followed by <span data-show="not1">NOT</span> gives 1 when the inputs are equal.
-        Chain XNORs on every bit of two numbers and AND
+        Put an XNOR on every bit pair of two numbers and AND
         the results together, and you have an equality comparator (the processor's <code>beq</code>
         instruction will need one).</p>`,
       scene: () => ({ root: XNOR, inputs: { a: 1, b: 1 } }),
@@ -123,7 +123,19 @@ export const chGates: Chapter = {
         <p>A <strong>multiplexer</strong> (mux) picks one of two inputs: <code>y = s ? b : a</code>.
         The <span data-show="pin:s">select line <code>s</code></span> decides which input gets through.</p>
         <p>It is <span data-show="g1 g2 g3 g4">four NANDs</span>, and it may be the most important block in a processor: muxes choose the next
-        instruction address, choose between a register and a constant, and choose what gets written back.</p>`,
+        instruction address, choose between a register and a constant, and choose what gets written back.</p>
+        <details class="deeper"><summary>Deeper: any truth table in NANDs</summary>
+        <p>Every truth table has a circuit, found mechanically. Take each row whose output is 1 and write its inputs as an AND
+        (a <em>minterm</em>: ¬s·a·¬b for s a b = 010); OR the minterms. That <strong>sum of products</strong> is two levels of logic, AND
+        then OR, and De Morgan turns it into two levels of NAND: x·y + z·w = ¬(¬(x·y)·¬(z·w)), an OR of ANDs is a NAND of NANDs.
+        The multiplexer is exactly this: y = ¬s·a + s·b = NAND(NAND(¬s, a), NAND(s, b)), plus one NAND for ¬s, which is
+        <span data-show="g1 g2 g3 g4">the four gates on the stage</span>.</p>
+        <p>The raw minterms are rarely the cheapest sum: its table has four (s a b = 010, 011, 101, 111), merged in pairs into
+        two, since x·b + x·¬b = x. A <strong>Karnaugh map</strong> lays the table out on a grid in Gray-code order, so rows that
+        differ in one input sit side by side (edges wrapping); circling the largest power-of-two blocks of 1s, don't-cares
+        included where they help, reads off a minimal sum of products by eye, up to four or five inputs. Past that, programs
+        do it: Quine–McCluskey (exact, run for <a href="#/c/memory/5">chapter 10's PLA</a>) and the heuristics inside synthesis
+        tools. Nor is a minimal sum the cheapest circuit: the XOR above shares m and takes 4 NANDs, against 5 for its sum of products a·¬b + ¬a·b (two inverters, three NANDs).</p></details>`,
       scene: () => ({ root: MUX2, inputs: { a: 1, b: 0, s: 0 } }),
       challenge: {
         kind: 'reach', goal: 'Make the output follow input b, then set b = 1.',
@@ -155,6 +167,7 @@ export const chBinary: Chapter = {
       'Fixed-width arithmetic wraps around like an odometer: in 4 bits, 15 + 1 = 0.',
       'Two\'s complement gives the top bit a negative weight (−8 in 4 bits, −128 in 8). All ones is −1.',
       'To negate, invert every bit and add 1. The same adder adds signed and unsigned numbers.',
+      'Signed overflow: the true result leaves −2ⁿ⁻¹…2ⁿ⁻¹ − 1 (8 bits: 0x7F + 1 = 0x80 = −128). Operands of opposite sign never overflow.',
       'Bits carry no type: the instruction decides how to read them.',
     ],
     practise: ['n_bin', 'n_twos'],
@@ -200,6 +213,8 @@ export const chBinary: Chapter = {
         must be 15, or <code>1111</code>. Calling that pattern <strong>−1</strong> works perfectly: −1 + 1 = 0.</p>
         <p>That is <strong>two's complement</strong>: the top bit is worth −8 instead of +8 (in 4 bits), and the
         same adder circuit adds signed and unsigned numbers. To negate a number, invert every bit and add 1.</p>
+        <p>Signed results can overflow too: in 8 bits 0x7F + 1 = 0x80, which reads 127 + 1 = −128. The true
+        sum has left −128…127; adding two numbers of opposite sign never overflows.</p>
         <p>The same bits mean different numbers depending on how you read them. The hardware does not
         care; the <em>instruction</em> decides how to interpret them.</p>`,
       widget: () => numberWidget(4, true),
