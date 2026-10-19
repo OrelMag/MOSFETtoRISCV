@@ -1,4 +1,4 @@
-// Chapter 31: the vertex kernels against plain arithmetic, the software kernels against the reference picture, and
+// Chapter 32: the vertex kernels against plain arithmetic, the software kernels against the reference picture, and
 // the whole pipeline at gate level (the cycle engine): every frame's picture, the vertex buffers, what each unit did
 // in a frame, and the numbers the chapter and its cost widget quote.
 
@@ -71,7 +71,7 @@ describe('vertex kernels', () => {
 });
 
 describe('the same frame in software', () => {
-  it('clear and triangle on four warps: the reference picture, and the cycles chapter 31 quotes', () => {
+  it('clear and triangle on four warps: the reference picture, and the cycles chapter 32 quotes', () => {
     const m = meshById('triangle'), opts = { warps: 4, lanes: 4, latency: 8, mul: true, imemWords: 256, dmemWords: SOFT_DMEM_WORDS };
     for (const f of [1, 9, 23, 40]) {
       const v = transformed(m, f), tv = m.tris[0].i.map((k) => v[k]);
@@ -135,7 +135,7 @@ describe('the pipeline at gate level', () => {
       expect(pictures.length).toBe(3);
       pictures.forEach((p, f) => expect(Buffer.from(p).equals(Buffer.from(framePicture(m, f))), `frame ${f}`).toBe(true));
       vbufs.forEach((v, f) => expect(v, `vertex buffer, frame ${f}`).toEqual(transformed(m, f).map(packVertex)));
-      // frame 1's phases (chapter 31 and the cost widget quote them); frames end on a flip, so they are whole scan-outs
+      // frame 1's phases (chapter 32 and the cost widget quote them); frames end on a flip, so they are whole scan-outs
       const want = PIPE_COSTS.frames.find((x) => x.id === m.id)!;
       expect(records[1].totals).toEqual({ clear: want.clear, draw: want.draw, wait: want.wait, kernel: want.kernel });
       for (const r of records.slice(1)) expect(r.cycles % 1024).toBe(0);
@@ -163,7 +163,7 @@ describe('step 5: the clear a word a cycle', () => {
     }, 120000);
   }
 
-  it('chapter 30 and steps 1–4 keep their parts', () => {
+  it('chapter 31 and steps 1–4 keep their parts', () => {
     expect([ROP.id, CMD_UNIT.id, frameBuffers().id, gpu31(meshById('triangle')).id]).toEqual(['rop', 'cmd_unit', 'fb2_pixbuf_pixbuf', 'gpu31_triangle']);
     expect(gpu31(meshById('triangle'), { clear: 'word' }).id).toBe('gpu31_triangle_w');
   });
@@ -171,7 +171,7 @@ describe('step 5: the clear a word a cycle', () => {
 
 // The registry-wide schematic tests (route.test.ts, layout.test.ts) never build gpu31: below it, the core's 128-word
 // lane memory takes the router minutes. Its own levels are checked here: the top, the core with its host port.
-describe('chapter 31 schematics', () => {
+describe('chapter 32 schematics', () => {
   const g = gpu31(meshById('cube')), core = inst(g, 'core');
   for (const d of [g, core, inst(core, 'mem'), CMD_UNIT, gpu31(meshById('cube'), { clear: 'word' }), cmdUnit(true), CLEAR_UNIT, ROP_W]) {
     it(`${d.id}: no two nets on one line, no overlaps, every part reaches an output`, () => {
@@ -185,7 +185,7 @@ describe('chapter 31 schematics', () => {
   }
 });
 
-describe('chapter 31 quotes these numbers', () => {
+describe('chapter 32 quotes these numbers', () => {
   it('the cost of each stage', () => {
     const g = gpu31(meshById('triangle')), core = inst(g, 'core'), mem = inst(inst(core, 'mem'), 'mem');
     const got: Record<string, number> = {

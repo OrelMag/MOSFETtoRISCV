@@ -1,4 +1,4 @@
-// Chapter 30's last step: the learner draws (triangles, polygons, brush strokes) and the gate-level GPU draws it. The
+// Chapter 31's last step: the learner draws (triangles, polygons, brush strokes) and the gate-level GPU draws it. The
 // pad shows the shapes as drawn (smooth, each at its opacity); gfx/tessellate.ts cuts them into triangles; the screen
 // panel feeds them to the rasterizer and the result is compared, pixel for pixel, with the reference picture.
 

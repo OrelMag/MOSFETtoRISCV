@@ -34,7 +34,7 @@ function ramWord(st: Stage, a: number): number {
 }
 
 export const chBus: Chapter = {
-  id: 'bus', num: 35, title: 'Buses and DMA', level: 'Memory in depth',
+  id: 'bus', num: 36, title: 'Buses and DMA', level: 'Memory in depth',
   blurb: 'A valid / ready handshake, five channels and an address decoder, two masters and an arbiter, a DMA engine that copies while the CPU runs, a computer that boots from flash into RAM, or from a deck of punched cards, and one with a DRAM, a screen and a keyboard on the same bus: every part in gates.',
   goals: [
     'say on which edge a valid / ready transfer happens, and why the sender may not wait for ready',
@@ -157,7 +157,7 @@ export const chBus: Chapter = {
       title: 'Two masters',
       body: `
         <p>A <span data-show="dma">DMA engine</span> is a second <strong>master</strong>: it starts transactions of its own. Two masters, one bus: the interconnect's
-        <span data-show="bus.grant"><strong>arbiter</strong></span> (<a href="#/c/multicore/0">chapter 24</a>'s round-robin arbiter) grants the bus to one requester, and the grant is held until
+        <span data-show="bus.grant"><strong>arbiter</strong></span> (<a href="#/c/multicore/0">chapter 25</a>'s round-robin arbiter) grants the bus to one requester, and the grant is held until
         that transaction's response: one transaction at a time. The other master's valid stays up meanwhile; it simply waits.</p>
         <p><span data-show="bus">The interconnect</span> is the arbiter, the multiplexers that route the granted master's signals to the addressed slave and the
         slave's answer back, and the decoder: ${nands(axiBus(2, [0, 1, 4, 15]))} NANDs for two masters and four slaves.
@@ -195,7 +195,7 @@ export const chBus: Chapter = {
         while the new data still sits in dirty cache lines: the driver must <strong>clean</strong> (write back) those lines first.
         Copying <em>in</em>, it writes RAM under lines the cache still holds: the driver must <strong>invalidate</strong> them, or the
         CPU reads the stale copy. Embedded systems do this in software around every transfer; bigger systems make the DMA's accesses
-        <strong>coherent</strong>, snooping them against the caches as a second core's would be (<a href="#/c/multicore/0">chapter 24</a>).
+        <strong>coherent</strong>, snooping them against the caches as a second core's would be (<a href="#/c/multicore/0">chapter 25</a>).
         Either way, the stores that fill the buffer must reach memory before the store that starts the engine: on a CPU that
         reorders memory accesses, a <strong>fence</strong> goes before that MMIO kick.</p></details>
         <div class="try">Copy, run until the interrupt, and watch RAM from 0x100 fill with the flash's words (0xF1A5_00nn).</div>`,
@@ -279,7 +279,7 @@ export const chBus: Chapter = {
       title: 'Everything on one bus',
       body: `
         <p>Three more slaves, and the computer has what a small system on a chip has. At 0x2000_0000, the <span data-show="dram"><strong>DRAM</strong></span> of
-        <a href="#/c/memctrl/0">chapter 33</a> behind its controller and a bus adapter (adapter and controller:
+        <a href="#/c/memctrl/0">chapter 34</a> behind its controller and a bus adapter (adapter and controller:
         ${nands(axiDram())} NANDs). A load costs 10 cycles on an open row, 14 on a closed bank, 18 when another row is open, more
         behind a refresh, against 2 for the on-chip RAM: the code stays in RAM, and this is the gap the caches of <a href="#/c/cache/0">chapter 21</a> close.</p>
         <details class="deeper"><summary>Deeper: the adapter and the data mask</summary>
@@ -288,7 +288,7 @@ export const chBus: Chapter = {
         (DDR's DM pins) set on every byte except its own strobed ones, so the DRAM leaves the rest of the line alone and even a byte
         store needs no read first.</p></details>
         <p>At 0x5000_0000, a <span data-show="screen"><strong>screen</strong></span>: a ${SOC_SCREEN} × ${SOC_SCREEN} frame buffer, a byte a pixel (RGB332), built like the RAM in four
-        byte lanes so that sb draws one pixel; a display reads it as <a href="#/c/pixels/0">chapter 30</a>'s scan-out reads its frame. At 0x6000_0000, a
+        byte lanes so that sb draws one pixel; a display reads it as <a href="#/c/pixels/0">chapter 31</a>'s scan-out reads its frame. At 0x6000_0000, a
         <span data-show="keys kbd"><strong>keyboard</strong></span>: +4 says whether a key waits, and reading +0 <em>takes</em> it (the slave pulses ack, the acknowledge that drops the key, in the cycle after the read's
         handshake, ${nands(AXI_KEYS)} NANDs). A read with a side effect: such a register must never sit behind a cache, nor be read
         twice by a CPU that guesses ahead.</p>

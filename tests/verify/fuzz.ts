@@ -5,7 +5,7 @@
 // result differs: the failure keeps the seed, the program, the cycle and that first differing state.
 
 import { assemble } from '../../src/riscv/asm';
-import { clockCycle, cpuState, dmemWords, retiring } from '../../src/riscv/cosim';
+import { clockCycle, cpuState, dmemWords, retireCount, retirePc } from '../../src/riscv/cosim';
 import { ABI, disasm, FABI } from '../../src/riscv/isa';
 import { ISS } from '../../src/riscv/iss';
 import { MultiISS } from '../../src/riscv/multi';
@@ -143,16 +143,17 @@ export async function firstDivergence(cfg: CpuConfig, c: FuzzCase): Promise<stri
   for (const p of inPorts(design.root.def)) sim.setInput(p.name, 0);
   sim.settle();
   const iss = new ISS(c.words, { ...issOptions(cfg.isa), dmemWords: 2 ** fuzzDmemK(cfg), imemWords: 2 ** imemK });
-  const f = !!cfg.isa.f, pcW = design.root.ports.pcW;
+  const f = !!cfg.isa.f;
   for (let cyc = 1; cyc <= budget(cfg, c) && !iss.halted; cyc++) {
     if ((cyc & 15) === 0) await pause();
-    const ret = retiring(sim);
-    // a pipeline says which instruction retires: it must be the golden model's next
-    const at = ret && pcW ? sim.getBits(pcW).reduce<number>((a, b, i) => a + b * 2 ** i, 0) : iss.pc;
+    const ret = retireCount(sim);
+    // a pipeline says which instruction retires (the oldest, when several do): it must be the golden model's next
+    const at = (ret ? retirePc(sim, design.root) : null) ?? iss.pc;
     if (at !== iss.pc) return `cycle ${cyc}: retiring ${hex(at)}, golden ${hex(iss.pc)} ${disasm(iss.fetch(iss.pc), iss.pc)} (control flow went astray)`;
     clockCycle(sim);
     if (!ret) continue;
-    const info = iss.step();
+    let info = iss.step();
+    for (let k = 1; k < ret && !iss.halted; k++) info = iss.step();
     const want: ArchState = { x: [[...iss.x]], dmem: [], ...(f ? { f: [...iss.f], fcsr: (iss.frm << 5) | iss.fflags } : {}) };
     const got = readState(sim, design.root, f);
     const d = diffState(want, { ...got, dmem: [] });

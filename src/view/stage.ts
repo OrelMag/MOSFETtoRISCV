@@ -363,7 +363,7 @@ export class Stage {
   }
 
   /**
-   * Let go of the last scene before the next one is built: two designs of chapter 31's size at once
+   * Let go of the last scene before the next one is built: two designs of chapter 32's size at once
    * (each about half a gigabyte) are more than some browsers allow a tab, and the tab died.
    */
   private release(): void {

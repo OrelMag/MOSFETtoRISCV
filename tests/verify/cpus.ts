@@ -35,7 +35,7 @@ export interface CpuConfig {
   build(words: number[], imemK: number, dmemK: number): ComponentDef;
 }
 
-/** Chapter 33's DRAM behind the caches: the CPU's 64 words in 2 banks of 2 rows of 16 words. */
+/** Chapter 34's DRAM behind the caches: the CPU's 64 words in 2 banks of 2 rows of 16 words. */
 export const DRAM_OPEN: DramConfig = { k: 6, banks: 2, rowWords: 16, policy: 'open' };
 export const DRAM_CLOSED: DramConfig = { ...DRAM_OPEN, policy: 'closed' };
 

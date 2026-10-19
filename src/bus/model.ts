@@ -1,4 +1,4 @@
-// The memory map of chapter 35's computer, as the golden model sees it: RAM from address 0 (code beyond
+// The memory map of chapter 36's computer, as the golden model sees it: RAM from address 0 (code beyond
 // the boot ROM and every load and store below the flash), the flash read-only at 0x1000_0000, the DRAM at
 // 0x2000_0000, the DMA engine's registers at 0x4000_0000, the screen's frame buffer at 0x5000_0000, the
 // keyboard at 0x6000_0000, the card reader at 0x7000_0000, nothing elsewhere (reads 0). The DMA copies at once

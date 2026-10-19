@@ -16,7 +16,7 @@ import type { ComponentDef } from '../src/sim/types';
 import { pack } from '../src/sim/values';
 import { cardComputerScene } from '../src/widgets/bus';
 
-// Chapter 35's card computer: the card reader's slave alone against the golden model's CardModel, then the whole
+// Chapter 36's card computer: the card reader's slave alone against the golden model's CardModel, then the whole
 // computer booting from a deck at gate level in lock-step with the golden model (bus/model.ts: the reader is the
 // one device that needs the edge count, BusModel.now).
 
@@ -160,7 +160,7 @@ function runCards(deck: Deck, done: string, feed = CARD_FEED, max = 6000, lock =
   return { iss, bus, cycles, booted, retired, gateConsole, ram, reader, def };
 }
 
-describe('booting from cards: chapter 35\'s computer with a card reader', () => {
+describe('booting from cards: chapter 36\'s computer with a card reader', () => {
   it('the boot ROM reads the deck into RAM and runs it, in lock-step with the golden model', () => {
     const r = runCards(CARD_DECK, 'CARDS\n');
     expect(r.def).toBe(CARD_COMPUTER);

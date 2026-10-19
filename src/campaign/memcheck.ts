@@ -183,9 +183,9 @@ function finish(lanes: Requester[], why: string[], limit: number, def: Component
 
 // ---- m_ctrl: a DRAM chip with timings --------------------------------------------------------------------
 
-/** m_ctrl's chip: two banks of 64 rows of 16 words; chapter 33's timings (DDR4-3200 at our clock), one word per command. */
+/** m_ctrl's chip: two banks of 64 rows of 16 words; chapter 34's timings (DDR4-3200 at our clock), one word per command. */
 export const DRAM16 = { banks: 2, rows: 64, cols: 16, tRCD: 4, tCAS: 4, tRP: 4, tRAS: 9, tRFC: 12, tREFI: 256 } as const;
-/** Chip commands (cmd), chapter 33's encoding. */
+/** Chip commands (cmd), chapter 34's encoding. */
 export const DCMD = { NOP: 0, ACT: 1, RD: 2, WR: 3, PRE: 4, PREA: 5, REF: 6 } as const;
 export const DCMD_NAMES = ['NOP', 'ACT', 'RD', 'WR', 'PRE', 'PREA', 'REF', '7'];
 

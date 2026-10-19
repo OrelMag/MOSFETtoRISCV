@@ -33,7 +33,7 @@ const READ_REAL = Math.round((FLASH_REAL_US.read * 1000) / CLOCK_NS);
 const SCALE = 10 * Math.round(READ_REAL / FLASH_TIMES.read / 10);
 
 export const chFlash: Chapter = {
-  id: 'flash', num: 34, title: 'Flash', level: 'Memory in depth',
+  id: 'flash', num: 35, title: 'Flash', level: 'Memory in depth',
   blurb: 'The floating-gate transistor at switch level, programmed pulse by pulse and erased by the block; NOR against NAND arrays; and the translation layer that never overwrites: mapping, garbage collection, wear levelling, bad blocks.',
   goals: [
     'say how charge on a floating gate shifts a cell\'s threshold, and so what it reads',

@@ -24,7 +24,7 @@ export interface BenchCpu {
   nands: number;
   /** NAND delays (static timing). */
   period: number;
-  /** Main memory is an off-chip DRAM device (chapter 33): not in `nands`, so kept out of the cost comparisons. */
+  /** Main memory is an off-chip DRAM device (chapter 34): not in `nands`, so kept out of the cost comparisons. */
   offChip?: boolean;
   runs: BenchRun[];
 }

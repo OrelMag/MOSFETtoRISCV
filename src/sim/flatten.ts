@@ -52,7 +52,7 @@ export interface FlatDesign {
 
 /**
  * flatten's nodes: every field declared up front (one shape for all), and the path computed from the
- * parents rather than stored, which on a large design (chapter 31: 600 000 nodes) is real memory.
+ * parents rather than stored, which on a large design (chapter 32: 600 000 nodes) is real memory.
  */
 class Node implements HierNode {
   expanded = false;
@@ -250,7 +250,7 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
     return d;
   };
   // In place, each array once: a net's array is also its sinks' port arrays and a leaf's inputs, and
-  // copies of them were most of a large design's memory (chapter 31: 413 501 leaves).
+  // copies of them were most of a large design's memory (chapter 32: 413 501 leaves).
   const done = new Set<number[]>();
   const remap = (a: number[]): void => {
     if (done.has(a)) return;

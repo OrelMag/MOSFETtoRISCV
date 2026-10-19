@@ -1,4 +1,4 @@
-// Chapter 35's panels. The bus bench: a request port (standing in for the CPU) and the DMA engine on one
+// Chapter 36's panels. The bus bench: a request port (standing in for the CPU) and the DMA engine on one
 // bus to RAM, flash and the DMA's registers; the panel makes reads, writes and a DMA copy, and draws
 // every cycle's handshakes and who holds the bus. The computer: the system CPU on that bus, booting
 // from flash (or from punched cards); the panel runs it and shows its console, LEDs and where it executes.
@@ -245,7 +245,7 @@ const computerPanel = (full: boolean, cards = false): ScenePanel => (stage: Stag
   const leds = h('div', { class: 'bus-leds' });
   const title = h('h4', null, full ? 'Everything on one bus' : cards ? 'Booting from cards' : 'Computer on a bus', h('span', { class: 'fold-hint' }));
   const rows: [string, string][] = [['0x0000_0000', `boot ROM (fetch only), ${0x200} bytes`], ['0x0000_0000 …', 'RAM: code above the ROM, and every load and store'], ['0x1000_0000', cards ? 'flash (read only): empty, the program is on the cards' : 'flash (read only): the program to load'],
-    ...(full ? [['0x2000_0000', 'DRAM, 16 KB (chapter 33\'s controller)'] as [string, string]] : []),
+    ...(full ? [['0x2000_0000', 'DRAM, 16 KB (chapter 34\'s controller)'] as [string, string]] : []),
     ['0x4000_0000', 'DMA: source, destination, length, control'],
     ...(cards ? [['0x7000_0000', 'card reader: +0 status (bit 0 a card waits, bit 1 hopper empty), +4 the word on the card (taken)']] as [string, string][] : []),
     ...(full ? [['0x5000_0000', `screen: ${SOC_SCREEN} × ${SOC_SCREEN}, a byte a pixel (RGB332)`], ['0x6000_0000', 'keyboard: +0 the oldest key (taken), +4 status']] as [string, string][] : []),
