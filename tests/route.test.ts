@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cachedMemory, dualCore, multicycleCpu, pipelinedCpu, singleCycleCpu, systemCpu } from '../src/lib';
+import { brentKung, cachedMemory, dualCore, multicycleCpu, pipelinedCpu, singleCycleCpu, sklansky, systemCpu } from '../src/lib';
 import { define } from '../src/lib/define';
 import { reachableDefs } from '../src/lib/resolve';
 import { NAND } from '../src/lib/transistors';
@@ -20,6 +20,8 @@ multicycleCpu(words, { control: 'fsm' });
 multicycleCpu(words, { control: 'micro' });
 dualCore(words);
 cachedMemory(6, 2);
+// The parallel-prefix adders beside Kogge–Stone, powers of two and not.
+for (const n of [4, 5, 8, 12, 16, 32]) { brentKung(n); sklansky(n); }
 
 /** Every component reachable from the registry, plus the top-level CPUs (not registered) and their parts. */
 function allDefs(): ComponentDef[] {
