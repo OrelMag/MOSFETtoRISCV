@@ -758,7 +758,7 @@ svg.schematic .dot.fld { fill: var(--fc); }
 /* the ladder scrolls in its own box (opened at the visitor's rung, journey.ts), faded where more rungs lie past an edge */
 .ladder {
   display: flex; flex-direction: column; gap: 6px; position: relative;
-  max-height: min(600px, calc(100vh - 160px)); overflow-y: auto; padding-right: 4px; scrollbar-width: thin;
+  max-height: min(600px, calc(100vh - 160px)); overflow-y: auto; padding: 1px 4px 2px 0; scrollbar-width: thin;
 }
 .ladder.more-up { mask-image: linear-gradient(to bottom, transparent, #000 40px); }
 .ladder.more-down { mask-image: linear-gradient(to top, transparent, #000 40px); }
