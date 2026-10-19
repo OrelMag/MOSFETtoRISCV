@@ -270,12 +270,12 @@ export function srt4Finish(n: number): ComponentDef {
  * first remainder is the dividend's top bits shifted down two places, so it starts inside the
  * convergence range), finish. n/2 + 3 cycles; same ports as seqDivider.
  */
-export function srt4Divider(n: number): ComponentDef {
+export function srt4Divider(n: number, abort = false): ComponentDef {
   const k = log2(n), W = n + 4, Q = n + 2, m = n / 2 + 1;
-  return memo(`srt4div${n}`, () => {
+  return memo(`srt4div${n}${abort ? 'a' : ''}`, () => {
     const b = new Builder(10, 12);
-    b.pins('clk', 'start', 'a', 'b');
-    const ctl = b.op(iterCtrl(m), ['clk', 'start'], 'control');
+    b.pins('clk', 'start', 'a', 'b', ...(abort ? ['abort'] : []));
+    const ctl = b.op(iterCtrl(m, abort), ['clk', 'start', ...(abort ? ['abort'] : [])], 'control');
     const nm = b.op(srtNorm(n), ['a', 'b']);
     const load = b.name(`${ctl}.load`, 'load', true), step = b.name(`${ctl}.step`, 'step', true);
     b.next();
@@ -314,11 +314,11 @@ export function srt4Divider(n: number): ComponentDef {
     b.wire(`${ctl}.busy`, 'busy');
     const R = b.right;
     return define({
-      id: `srt4div${n}`, name: `${n}-bit iterative radix-4 SRT divider`, category: 'sequential',
+      id: `srt4div${n}${abort ? 'a' : ''}`, name: `${n}-bit iterative radix-4 SRT divider${abort ? ' (abortable)' : ''}`, category: 'sequential',
       summary: `Two quotient bits per clock: ${m} radix-4 steps (digits −2…+2) after normalizing, ${m + 2} cycles in all against ${n + 2} for radix 2. Each step is longer (a wider estimate and four comparisons) but still has no carry chain.`,
-      ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bus('a', n, 'in'), bus('b', n, 'in'), bus('q', n, 'out'), bus('r', n, 'out'), bit('done', 'out'), bit('busy', 'out')],
+      ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bus('a', n, 'in'), bus('b', n, 'in'), ...(abort ? [bit('abort', 'in')] : []), bus('q', n, 'out'), bus('r', n, 'out'), bit('done', 'out'), bit('busy', 'out')],
       symbol: { kind: 'box', label: `SRT4 DIV${n}` },
-      netlist: () => ({ pins: { clk: [0, 30], start: [0, 6], a: [0, 14], b: [0, 18], q: [R, 6], r: [R, 10], done: [R, 14], busy: [R, 18] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { clk: [0, 30], start: [0, 6], a: [0, 14], b: [0, 18], ...(abort ? { abort: [0, 22] as [number, number] } : {}), q: [R, 6], r: [R, 10], done: [R, 14], busy: [R, 18] }, instances: b.instances, nets: b.nets() }),
     });
   });
 }

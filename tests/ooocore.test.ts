@@ -8,6 +8,7 @@ import { assemble } from '../src/riscv/asm';
 import { BENCHMARKS } from '../src/riscv/benchprograms';
 import { clockCycle, cpuState, retireCount } from '../src/riscv/cosim';
 import { ISS } from '../src/riscv/iss';
+import { randomProgram32 } from '../src/riscv/randprog32';
 import { OooModel } from '../src/riscv/ooomodel';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
@@ -69,4 +70,12 @@ describe('out-of-order core: the benchmark set, cycle for cycle', () => {
     const r = cosimOoo(bm.source, { imemK: 7, dmemK: 6, max: 20000 });
     console.log(`${bm.id}: CPI ${(r.cycles / r.retired).toFixed(2)} (${r.retired} instructions, ${r.cycles} cycles)`);
   }, 1_800_000);
+});
+
+describe('out-of-order core: random RV32IM programs, cycle for cycle', () => {
+  for (let seed = 1; seed <= 12; seed++) it(`seed ${seed}`, () => {
+    const src = randomProgram32(seed, { m: true, dmemWords: 32 });
+    const n = assemble(src).words.length;
+    cosimOoo(src, { imemK: Math.max(6, Math.ceil(Math.log2(n))), dmemK: 5, max: 20000 });
+  }, 600_000);
 });

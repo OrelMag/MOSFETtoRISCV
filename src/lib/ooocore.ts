@@ -16,7 +16,7 @@ import { PREDECODE, rom2 } from './pipe2w';
 import { btbCommit, dataMemory2, issueQueue, RAT, reorderBuffer, STORE_QUEUE } from './ooo';
 import { ras2 } from './ras';
 import { regfile2w } from './regfile';
-import { DIV_E, MUL_E, MUL_M } from './pipem';
+import { divE, MUL_E, MUL_M } from './pipem';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { bitwise, orN } from './wide';
@@ -259,7 +259,8 @@ export const DIV_UNIT: ComponentDef = (() => {
   const go = b.name(b.op1(OR, ['start', 'run.q'], undefined, 'go'), 'go', true);
   const f = b.op1(busMux2(2), [`${hs}.o0`, 'f', 'start'], undefined, 'fNow');
   b.next();
-  b.op(DIV_E, ['clk', go, 'a', 'b', f], 'radix-4 SRT', 'dv');
+  // a flush aborts the divide in flight (the model frees the divider at once)
+  b.op(divE(true), ['clk', go, 'a', 'b', f, 'flush'], 'radix-4 SRT', 'dv');
   b.next();
   const done = b.name(b.op1(AND, [go, b.op1(NOT, ['dv.stall'], undefined, 'nst')], undefined, 'done'), 'done', true);
   const ready = b.op1(OR, [done, 'wait.q'], undefined, 'ready');

@@ -182,11 +182,12 @@ end`,
  * step = 1, for n cycles; done rises for one cycle when the count reaches n, with step = 0 so the result
  * holds until the next start. n + 2 cycles in all.
  */
-export function iterCtrl(n: number): ComponentDef {
+/** abort: an input that ends a running operation (busy falls at the next edge): a flushed divide. */
+export function iterCtrl(n: number, abort = false): ComponentDef {
   // A power of two is reached when the count's top bit rises; any other n needs a comparator.
   const pow2 = 2 ** log2(n) === n;
   const k = pow2 ? log2(n) : Math.ceil(Math.log2(n + 1)), cw = pow2 ? k + 1 : k;
-  return memo(`iter${n}`, () => {
+  return memo(`iter${n}${abort ? 'a' : ''}`, () => {
     const CNT = register(cw), MC = busMux2(cw), INC = incrementer(cw);
     const cg = symbolGeom(CNT), mg = symbolGeom(MC), ig = symbolGeom(INC);
     const x1 = 10, x2 = x1 + mg.w + 8, x3 = x2 + cg.w + 10, yC = 4, yG = yC + cg.h + 12;
@@ -205,6 +206,7 @@ export function iterCtrl(n: number): ComponentDef {
       { name: 'keep', def: AND, at: [x3 + 6, yG + 11] },
       { name: 'nrun', def: OR, at: [x3 + 13, yG] },
       { name: 'run', def: DFF, at: [x3 + 24, yG - 1], label: 'busy' },
+      ...(abort ? [{ name: 'nab', def: NOT, at: [x3 + 13, yG + 8] as [number, number] }, { name: 'kill', def: AND, at: [x3 + 18, yG + 2] as [number, number] }] : []),
     ];
     const nets: NetDef[] = [
       { name: 'start', ends: ['start', 'load.a'] },
@@ -221,17 +223,18 @@ export function iterCtrl(n: number): ComponentDef {
       { name: 'done', ends: ['dn.y', 'ndn.a', 'done'], tags: true },
       { name: '¬done', ends: ['ndn.y', 'keep.b'] },
       { name: 'stay', ends: ['keep.y', 'nrun.b', 'en.b'], tags: ['en.b'] },
-      { name: 'busyNext', ends: ['nrun.y', 'run.d'] },
+      ...(abort ? [{ name: 'busyNext', ends: ['nrun.y', 'kill.a'] }, { name: 'abort', ends: ['abort', 'nab.a'] }, { name: '¬abort', ends: ['nab.y', 'kill.b'] }, { name: 'busyKept', ends: ['kill.y', 'run.d'] }] as NetDef[]
+        : [{ name: 'busyNext', ends: ['nrun.y', 'run.d'] }] as NetDef[]),
       { name: 'clk', ends: ['clk', 'cnt.clk', 'run.clk'], tags: ['cnt.clk', 'run.clk'] },
     ];
     const right = x3 + 40;
     return define({
-      id: `iter${n}`, name: `${n}-step iteration control`, category: 'sequential',
+      id: `iter${n}${abort ? 'a' : ''}`, name: `${n}-step iteration control${abort ? ' (abortable)' : ''}`, category: 'sequential',
       summary: `start (while idle) gives one load cycle; then busy, stepping a ${cw}-bit counter, until the count reaches ${n}: done for one cycle, and back to idle. ${n + 2} cycles per operation.`,
-      ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bit('load', 'out'), bit('step', 'out'), bit('done', 'out'), bit('busy', 'out')],
+      ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), ...(abort ? [bit('abort', 'in')] : []), bit('load', 'out'), bit('step', 'out'), bit('done', 'out'), bit('busy', 'out')],
       symbol: { kind: 'box', label: 'CTRL' },
       netlist: () => ({
-        pins: { start: [0, yG + 4], clk: [0, yG + 18], load: [right, yG + 22], step: [right, yG + 26], done: [right, yG + 8], busy: [right, yG + 1] },
+        pins: { start: [0, yG + 4], clk: [0, yG + 18], ...(abort ? { abort: [0, yG + 12] as [number, number] } : {}), load: [right, yG + 22], step: [right, yG + 26], done: [right, yG + 8], busy: [right, yG + 1] },
         instances, nets,
       }),
       hdl: {
