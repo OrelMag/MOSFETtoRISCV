@@ -5,6 +5,7 @@ import {
   sectionPower, warmup,
 } from '../phys/triode';
 import { stats } from '../sim/stats';
+import { PS_PER_NAND } from '../sim/timing';
 import { triodeCloseup } from '../widgets/triode3d';
 import { tubeDividerWidget } from '../widgets/tubedivider';
 import type { Chapter } from './types';
@@ -19,6 +20,8 @@ const w2 = (x: number) => x.toFixed(2);
 const thin = (n: number) => Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
 /** The 4-bit CPU of the examples, without its ROM (Phase 14 mockup, measured). */
 const CPU4_NANDS = 3357;
+/** Tube steps per CMOS NAND delay, to the nearest 10 000. */
+const VS_CMOS = thin(Math.round((TUBE_STEP_US * 1e6) / PS_PER_NAND / 1e4) * 1e4);
 
 export const chTubes: Chapter = {
   id: 'tubes', num: 0, prologue: 'P2', title: 'Vacuum tubes', level: 'Thermionic',
@@ -35,7 +38,7 @@ export const chTubes: Chapter = {
       `Electrons leave only the hot cathode, so a triode conducts from plate to cathode only. The grid sets the current: about 0 V conducts, below ${V_CUTOFF} V the tube is cut off (plate at ${B_PLUS} V). From cold, nothing flows for ${WARM.t10.toFixed(1)} s.`,
       `Under its plate resistor a triode inverts, and its plate swings between ${v(V_LOW)} V and ${B_PLUS} V: ratioed logic. A ${R_DIV_TOP / 1e3} kΩ / ${R_DIV_BOTTOM / 1e3} kΩ divider to ${V_BIAS} V brings a plate to grid levels; it loads the plate, and at four dividers the chain stops working. Wide fan-outs get a cathode follower.`,
       'One-way conduction means no transmission gate and no carry through switches: every tube gate regenerates its output, and every stage adds a step.',
-      `NOR is the native gate: triodes in parallel under one plate resistor. The NAND brick is a 6AL5 diode AND, a divider and half a 6SN7: ${w2(BRICK.total)} W, ${w2(BRICK.heaters)} W of it heaters. Eccles–Jordan holds a bit in one 6SN7.`,
+      `NOR is the natural triode gate: triodes in parallel under one plate resistor (real machines also gated with multi-grid tubes and diodes). The NAND brick is a 6AL5 diode AND, a divider and half a 6SN7: ${w2(BRICK.total)} W, ${w2(BRICK.heaters)} W of it heaters. Eccles–Jordan holds a bit in one 6SN7.`,
       `A tube step is about ${TUBE_STEP_US.toFixed(1)} µs (an R·C estimate): about ${thin(Math.round(RELAY_STEP_MS * 1e3 / TUBE_STEP_US / 100) * 100)} times a relay's speed. ENIAC: ${thin(ENIAC.tubes)} tubes, ${ENIAC.power / 1e3} kW, a tube failure about every two days.`,
     ],
     practise: ['v_inv', 'v_ff'],
@@ -48,7 +51,7 @@ export const chTubes: Chapter = {
         why: ['', `Each divider pulls the plate toward ${V_BIAS} V: one already holds a cut-off plate at ${v(L1.high)} V, and at four the margins are gone.`, `A grid at plate level (${v(V_LOW)} V or more) conducts for ever: the next tubes would never turn off.`],
       },
       {
-        question: 'Why were tube machines built from NOR rather than from triodes in series?',
+        question: 'Why is NOR, not a series stack, the natural gate for triodes?',
         options: [
           'In series the upper tube\'s cathode would float, which moves its grid levels; in parallel each input costs one section',
           'NOR needs fewer resistors',
@@ -60,10 +63,10 @@ export const chTubes: Chapter = {
       },
       {
         question: 'About how many tube steps fit in one relay step?',
-        options: [`About ${thin(Math.round(RELAY_STEP_MS * 1e3 / TUBE_STEP_US / 100) * 100)}`, 'About 40 000', 'About 10'],
+        options: [`About ${thin(Math.round(RELAY_STEP_MS * 1e3 / TUBE_STEP_US / 100) * 100)}`, `About ${VS_CMOS}`, 'About 10'],
         answer: 0,
         explain: `${RELAY_STEP_MS} ms against about ${TUBE_STEP_US.toFixed(1)} µs: a relay waits for iron to move, a tube for a resistor to charge the next grid.`,
-        why: ['', 'That is how much slower a tube step is than a 25 ps CMOS NAND.', 'A relay step is milliseconds and a tube step about a microsecond: nearly four orders of magnitude apart.'],
+        why: ['', `That is how much slower a tube step is than a ${PS_PER_NAND} ps CMOS NAND.`, 'A relay step is milliseconds and a tube step about a microsecond: nearly four orders of magnitude apart.'],
       },
     ],
   },
@@ -101,11 +104,11 @@ export const chTubes: Chapter = {
       body: `
         <p>As a switch, <span data-show="v1">the triode</span> sits under <span data-show="rl">its plate resistor</span>, cathode on ground. Grid at 1: current flows and the
         plate falls to ${v(V_LOW)} V, a 0. Grid at 0: the tube is cut off and the resistor pulls the plate to
-        ${B_PLUS} V, a 1. That is <strong>ratioed logic</strong>, like the pseudo-NMOS of <a href="#/c/inverter/0">chapter 2</a>: the tube wins
+        ${B_PLUS} V, a 1. That is <strong>ratioed logic</strong> (<a href="#/c/inverter/0">chapter 2</a> meets it again in pseudo-NMOS): the tube wins
         over the resistor, and while it conducts, current flows from B+ (the +${B_PLUS} V plate supply) to ground for nothing.</p>
         <p>Electrons only leave the hot cathode, so current crosses the tube one way only. A triode can pull its
-        plate down or push its cathode up, but it never passes a signal back the way a contact or a MOSFET channel
-        does. There is no transmission gate in tubes, and no carry that runs through switches as in the relay adder.
+        plate down or push its cathode up, but it never passes a signal back the way a contact does (or, from
+        chapter 1 on, a MOSFET channel). There is no transmission gate in tubes, and no carry that runs through switches as in the relay adder.
         The orange line is the beam: it shows while the tube conducts.</p>
         <div class="try">Toggle <code>g</code> and watch the beam and the plate.</div>`,
       scene: () => ({ root: TRIODE_SWITCH, inputs: { g: 0 } }),
@@ -155,9 +158,11 @@ export const chTubes: Chapter = {
       title: 'NOR is the tube\'s gate',
       body: `
         <p>Put <span data-show="va vb">two triodes</span> in parallel under <span data-show="rl">one plate resistor</span>. Either one conducting pulls the plate down; it is a
-        1 only while both are cut off. That is a <strong>NOR</strong>, from one twin triode, and it is the gate tube
-        machines were built from: inputs in parallel cost one section each, while two tubes in series (a NAND) would
-        need the upper one's cathode to float, which would move its grid's levels too.</p>
+        1 only while both are cut off. That is a <strong>NOR</strong>, from one twin triode, and it is the natural triode
+        gate: inputs in parallel cost one section each, while two tubes in series (a NAND) would need the upper one's
+        cathode to float, which would move its grid's levels too. Real machines mixed styles: ENIAC gated with 6L7
+        pentagrids (two control grids in one bulb, an AND), and SEAC and UNIVAC did most of their logic in crystal
+        diodes, with tubes to restore the levels.</p>
         <p>The schematic is honest about the cost: each input has <span data-show="ra1 ra2 rb1 rb2">its own ${R_DIV_TOP / 1e3} kΩ / ${R_DIV_BOTTOM / 1e3} kΩ
         divider</span> to ${V_BIAS} V, and the plate resistor burns ${w2(SEC.resistor)} W whenever a tube conducts. In the
         simulation <span data-show="ra1 rb1">the divider's top resistor</span> decides the grid and <span data-show="ra2 rb2">its bottom leg</span> (a bias resistor, the weakest
@@ -215,6 +220,17 @@ export const chTubes: Chapter = {
         <p>In NAND bricks the same set–reset latch is ${stats(SR_LATCH).nands} NANDs: ${stats(SR_LATCH).nands} triode
         sections and ${2 * stats(SR_LATCH).nands} diodes; a clocked D flip-flop is ${stats(DFF).nands}. ENIAC kept each
         decimal digit of its accumulators in a ring of ten of these pairs.</p>
+        <details class="deeper"><summary>Deeper: memory in the tube era</summary>
+        <p>At two triodes a bit, flip-flops were for registers only: ENIAC's twenty accumulators held twenty ten-digit
+        numbers. Larger stores kept bits in something cheaper and used tubes only to read and rewrite them. A
+        <strong>mercury delay line</strong> (EDSAC, 1949; UNIVAC I, 1951) sent bits as sound pulses down a tube of mercury
+        and fed them back in at the far end: hundreds of bits per tank, but serial, a word coming round once per
+        circulation, about a millisecond. The <strong>Williams tube</strong> (the Manchester Baby, 1948) stored bits as
+        charge spots on a cathode-ray tube's screen, read through a pickup plate and rewritten, refreshed like
+        <a href="#/c/dram/0">chapter 32</a>'s DRAM: 1 024 bits a tube, random access, temperamental.
+        <strong>Magnetic core</strong> (Whirlwind, 1953) won: a ferrite ring a bit, magnetized one way or the other,
+        random access in microseconds, kept with the power off, read destructively and rewritten. Core held main
+        memory until semiconductor DRAM displaced it in the 1970s.</p></details>
         <div class="try">Set, let go, and the bit stays. Then reset.</div>`,
       scene: () => ({ root: ECCLES_JORDAN, inputs: { set: 0, reset: 1 } }),
       challenge: {
@@ -235,13 +251,16 @@ export const chTubes: Chapter = {
         sections, ${stats(TUBE_FA).diodes} diode sections, about ${v(9 * BRICK.total)} W. A tube gate switches in about
         ${TUBE_STEP_US.toFixed(0)} µs (the plate resistor charging the next grid, an estimate), about
         ${thin(Math.round(RELAY_STEP_MS * 1e3 / TUBE_STEP_US / 100) * 100)} times faster than a relay's ${RELAY_STEP_MS} ms and still some
-        40 000 times slower than a 25 ps CMOS NAND.</p>
+        ${VS_CMOS} times slower than a ${PS_PER_NAND} ps CMOS NAND.</p>
         <p><strong>ENIAC</strong> (1945): ${thin(ENIAC.tubes)} tubes, ${thin(ENIAC.diodes)} crystal diodes,
         ${thin(ENIAC.relays)} relays, ${thin(ENIAC.resistors)} resistors, ${ENIAC.power / 1e3} kW, ${ENIAC.mass / 1e3} t,
         ${thin(ENIAC.adds)} additions a second. Heaters age fastest while warming up, so it was left on: then a tube
-        failed about every two days, and finding which one took a while. Every tube is a filament with a lifetime;
-        no machine could grow much past ENIAC's size before it spent more time broken than running.</p>
-        <p>The transistor (1947) switches with no heater, no vacuum and no warm-up, which is where <a href="#/c/mosfet/0">chapter 1</a> begins.
+        failed about every two days, and finding which one took a while. Every tube is a filament with a lifetime, so
+        reliability, not wiring, bounded a tube machine. SAGE's AN/FSQ-7 (1958) reached some 50 000 tubes a site only by
+        building the computer twice, one on line and one on standby, and by running tubes at reduced voltage
+        (marginal checking) to find the weak ones before they failed.</p>
+        <p>The transistor switches with no heater, no vacuum and no warm-up: the bipolar point-contact transistor in 1947,
+        then the MOSFET in 1959, which is where <a href="#/c/mosfet/0">chapter 1</a> begins.
         <a href="#/c/silicon/0">Chapter 25</a> prices the CPU you build in relays and in tubes.</p>`,
       scene: () => ({ root: TUBE_FA, inputs: { a: 1, b: 1, cin: 0 } }),
       challenge: {

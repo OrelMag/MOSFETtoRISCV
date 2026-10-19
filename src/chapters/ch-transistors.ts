@@ -1,10 +1,10 @@
-import { FULL_ADDER, INV_CMOS, INV_PSEUDO, NAND, NMOS_SWITCH, NOR_CMOS, PMOS_SWITCH, rca } from '../lib';
+import { INV_CMOS, INV_PSEUDO, NAND, NMOS_SWITCH, NOR_CMOS, PMOS_SWITCH, rca } from '../lib';
 import {
   NAND2_UM2, PLATE_FANOUT, RELAY_CONTACTS, RELAY_MASS, RELAY_POWER, RELAY_VOLUME, TECH, TUBE_BRICK_POWER, fmtMass, fmtTime, fmtVolume,
 } from '../lib/tech';
 import { RELAY_STEP_MS } from '../phys/relay';
 import { TUBE_STEP_US } from '../phys/triode';
-import { logicDepth } from '../sim/stats';
+import { logicDepth, stats } from '../sim/stats';
 import { PS_PER_NAND } from '../sim/timing';
 import { journeyWidget } from '../widgets/journey';
 import { techCompareWidget } from '../widgets/techcompare';
@@ -40,7 +40,8 @@ export const chMap: Chapter = {
         <div class="try">Open <code>fa0</code>, then a NAND, then a transistor. Use the breadcrumbs above
         the circuit, or press <kbd>Esc</kbd>, to climb back up.</div>
         <p>Wires show their values: a glowing wire carries a <strong>1</strong>, a dim one a <strong>0</strong>.
-        Thick blue wires are <em>buses</em> (several bits travelling together); their value is printed on them.
+        Thicker wires are <em>buses</em> (several bits travelling together); their value is printed on them. Each net
+        has a hue of its own, to follow it by eye (Colour per net, in the wire-colour menu).
         Use the HEX / BIN / DEC switch in the top bar to change how buses are written.</p>`,
       scene: () => ({ root: rca(4), inputs: { a: 5, b: 3 } }),
       challenge: {
@@ -54,13 +55,14 @@ export const chMap: Chapter = {
       title: 'How the levels stack up',
       body: `
         <p>Look at the <strong>Info</strong> tab on the right: it counts what the adder costs. A 4-bit adder
-        is 36 NAND gates, or 144 transistors. Select any part (single click) to see its own cost.</p>
+        is ${stats(rca(4)).nands} NAND gates, or ${stats(rca(4)).transistors} transistors. Select any part (single click)
+        to see its own cost: a full adder is ${stats(rca(4)).nands / 4} NANDs.</p>
         <p>Every number on this site is <em>measured</em> from the circuit itself, not quoted from a book.
         That includes the "gate delays": how many gates a signal must pass through, which sets how fast the
         circuit can go.</p>
         <p>The <strong>Verilog</strong> tab shows the same circuit as a hardware description. Chip designers
         write Verilog, and tools turn it into gates like these.</p>`,
-      scene: () => ({ root: FULL_ADDER, inputs: { a: 1, b: 1, cin: 0 } }),
+      scene: () => ({ root: rca(4), inputs: { a: 9, b: 7 } }),
     },
   ],
 };
@@ -77,7 +79,7 @@ export const chMosfet: Chapter = {
   recap: {
     keep: [
       'An NMOS is two n-type islands (source, drain) in p-type silicon under an insulated gate. Past the threshold Vt (0.45 V in the model here, a 1.8 V device) extra gate charge pulls electrons into a channel between them.',
-      'Cut-off: Vgs &lt; Vt, no current. Linear: Vds &lt; Vgs − Vt, a resistor. Saturation: Vds ≥ Vgs − Vt, the drain end pinches off and Id = k·(Vgs − Vt)²/2, set by the gate alone. A falling output passes through saturation, so that current sets the speed.',
+      'Cut-off: Vgs &lt; Vt, no current (here; in silicon a subthreshold leak, tenfold less per 60–100 mV below Vt). Linear: Vds &lt; Vgs − Vt, a resistor. Saturation: Vds ≥ Vgs − Vt, the drain end pinches off and Id = k·(Vgs − Vt)²/2, set by the gate alone. A falling output passes through saturation, so that current sets the speed.',
       'NMOS conducts on a 1 and pulls a wire down to 0; PMOS conducts on a 0 and pulls it up to 1. Either one alone leaves its output floating (Z) for the other input value.',
       'Delay ≈ C·ΔV / I, energy ≈ C·V² per full swing, half lost in each network. With 1 fF per gate, an output driving two inputs (5 fF) falls to half in about 21 ps for 16 fJ a swing: the order of the site\'s 25 ps per gate delay.',
       'Widening a transistor buys current (less delay) and adds load to the stage before it. Dynamic power is P ≈ α·C·V²·f.',
@@ -144,6 +146,17 @@ export const chMosfet: Chapter = {
         boundary.</p>
         <p>Digital logic lives at the ends: off is cut-off. A gate pulling its output from 1.8 V to 0 V passes
         through saturation first, then linear, so the saturation current decides how fast it switches.</p>
+        <details class="deeper"><summary>Deeper: leakage and short channels</summary>
+        <p>Here cut-off is zero current; in silicon it is not. Below Vt the channel is weak, not gone: carriers diffuse
+        across it, and this <strong>subthreshold</strong> current falls about tenfold for every 60–100 mV the gate drops
+        below Vt (60 mV a decade, kT/q·ln 10, is the room-temperature limit). An off transistor leaks, and a lower Vt,
+        which buys speed at a low VDD, multiplies the leak: billions of off transistors burn watts doing nothing. Thin
+        oxide adds gate tunnelling, which is why high-k dielectrics replaced silicon dioxide at 45 nm.</p>
+        <p>The square law also fails as channels shorten. Past a critical field carriers stop speeding up
+        (<strong>velocity saturation</strong>), so the current grows nearly linearly with Vgs − Vt rather than as its
+        square. The drain's field reaches under the gate and lowers the barrier at the source (<strong>DIBL</strong>):
+        Vt falls as Vds rises and as the channel shortens, and λ grows. Leakage is why Vt, and with it VDD, stopped
+        scaling in the mid-2000s, and clock frequencies stalled with them.</p></details>
         <div class="try">Press <strong>Sweep drain</strong>: the dot runs along one curve and crosses the dashed
         boundary as the channel pinches off.</div>`,
       widget: () => mosRegionsWidget(),
@@ -233,7 +246,7 @@ export const chInverter: Chapter = {
     'build an inverter from one PMOS pull-up and one NMOS pull-down sharing a gate',
     'say why a CMOS gate draws almost no current while its input holds still',
     'name the three properties that made CMOS win: restoring levels, no static path, power only when switching',
-    'price a pseudo-NMOS gate against CMOS: one device fewer per input, current while its output is 0',
+    'price a pseudo-NMOS gate against CMOS: one always-on pull-up in place of n PMOS, current while its output is 0',
   ],
   builds: ['mosfet'],
   recap: {
@@ -241,16 +254,16 @@ export const chInverter: Chapter = {
       'CMOS inverter: a PMOS from VDD to y, an NMOS from y to GND, both gates on a. For a valid input exactly one conducts, so y = NOT a.',
       'With the input still there is no path from VDD to ground: static power is almost zero. Energy goes into charging the capacitance downstream, at each transition.',
       'The output connects straight to a rail, so a slightly weak input still gives a full output: noise does not accumulate from gate to gate.',
-      'Pseudo-NMOS: a resistor pull-up against a stronger NMOS (ratioed logic). An n-input NOR is n transistors and a resistor instead of 2n transistors, paid for with current while y = 0, a low level only as good as the ratio and a slow rising edge.',
+      'Pseudo-NMOS: an always-on pull-up (a resistor here, a PMOS with its gate grounded in silicon) against a stronger NMOS (ratioed logic). An n-input NOR is n NMOS and one pull-up, n + 1 devices against 2n, paid for with current while y = 0, a low level only as good as the ratio and a slow rising edge.',
     ],
     practise: ['t_inv'],
     check: [
       {
         question: 'How many devices does a three-input NOR take in pseudo-NMOS, and in CMOS?',
-        options: ['3 transistors and a resistor, against 6 transistors', '4 transistors, against 6', '3 transistors and a resistor, against 4 transistors'],
+        options: ['3 NMOS and one always-on pull-up (a resistor here; in silicon a grounded-gate PMOS, so 4 transistors), against 6 transistors', '3 NMOS and three pull-ups, against 6 transistors', '3 NMOS and one pull-up, against 4 transistors'],
         answer: 0,
-        explain: 'Pseudo-NMOS keeps the n parallel NMOS and replaces the whole PMOS network with one resistor: n + 1 devices against 2n.',
-        why: ['', 'The pull-up is a resistor, not a transistor: pseudo-NMOS removes the PMOS network entirely.', 'A CMOS gate needs one PMOS per input as well as one NMOS per input: 2n = 6.'],
+        explain: 'Pseudo-NMOS keeps the n parallel NMOS and replaces the whole PMOS network with one always-on pull-up: n + 1 devices against 2n.',
+        why: ['', 'One pull-up serves the whole gate: pseudo-NMOS replaces the PMOS network, one device per input, with a single always-on load.', 'A CMOS gate needs one PMOS per input as well as one NMOS per input: 2n = 6.'],
       },
       {
         question: 'Where does a CMOS inverter spend its energy?',
@@ -299,23 +312,46 @@ export const chInverter: Chapter = {
         capacitance of the wires and gates downstream. Fewer transitions means less power.</li>
         </ul>
         <p>Switch to the <strong>Truth table</strong> tab: it was computed by actually solving the transistor
-        network for every input.</p>`,
+        network for every input.</p>
+        <details class="deeper"><summary>Deeper: what restoring means</summary>
+        <p>Here a wire is 0, 1, X or Z; in silicon it is a voltage, and an inverter maps input voltage to output voltage
+        along its <strong>voltage transfer characteristic</strong> (VTC): flat near both rails, steep in the middle,
+        crossing V<sub>in</sub> = V<sub>out</sub> at the switching threshold V<sub>M</sub> (about VDD/2 when the PMOS
+        is made wide enough to match the NMOS). Where the slope is −1 lie the input limits V<sub>IL</sub> and
+        V<sub>IH</sub>; the outputs there, V<sub>OH</sub> and V<sub>OL</sub>, sit close to the rails. The
+        <strong>noise margins</strong> NM<sub>L</sub> = V<sub>IL</sub> − V<sub>OL</sub> and NM<sub>H</sub> =
+        V<sub>OH</sub> − V<sub>IH</sub> are how much noise a level can pick up between two gates and still be read
+        right.</p>
+        <p>Restoring means <strong>gain</strong>: between V<sub>IL</sub> and V<sub>IH</sub> the slope is steeper than
+        1, near the rails flatter. A level that arrives a little off lands on a flat part and leaves closer to the rail,
+        so a chain of gates squeezes errors out instead of adding them up. A network without gain, a resistor divider
+        or a chain of pass switches, passes every error on and shrinks the swing at each stage. Pseudo-NMOS (next
+        step) has a V<sub>OL</sub> above 0, set by its ratio: a smaller NM<sub>L</sub>.</p></details>
+        <details class="deeper"><summary>Deeper: the moment both conduct</summary>
+        <p>Here the transistors are ideal switches; in silicon, while the input passes between Vt (the NMOS turns on)
+        and VDD − |Vt| (the PMOS turns off), both conduct, and a <strong>short-circuit current</strong> flows straight
+        from VDD to ground. With sharp input edges it costs about a tenth of the switching energy; a slow edge keeps both
+        on longer, one reason designers bound transition times. Add the subthreshold leak of
+        <a href="#/c/mosfet/1">chapter 1</a>'s off transistor, and "almost no static power" is milliwatts to watts on a
+        large chip, not zero.</p></details>`,
       scene: () => ({ root: INV_CMOS, inputs: { a: 1 } }),
     },
     {
       title: 'The cheaper, hotter way: a pull-up',
       body: `
-        <p>Replace the PMOS with a <span data-show="pu"><strong>resistor</strong></span> to VDD and keep <span data-show="n1">the NMOS</span>: a
-        <strong>pseudo-NMOS</strong> inverter. With <code>a = 0</code> the resistor pulls <code>y</code> to 1.
+        <p>Replace the PMOS with <span data-show="pu"><strong>a pull-up</strong></span> to VDD that is always on and keep
+        <span data-show="n1">the NMOS</span>: a <strong>pseudo-NMOS</strong> inverter. Here the pull-up is a resistor; in
+        silicon it is a PMOS with its gate tied to ground, always conducting and made weak, which is the same thing to
+        the logic. With <code>a = 0</code> the pull-up takes <code>y</code> to 1.
         With <code>a = 1</code> both paths conduct and the NMOS wins, because it is sized to be much stronger
         (<em>ratioed</em> logic; here a resistor is weaker than any transistor).</p>
         <p>What it costs: while <code>y = 0</code> a current flows from VDD through the resistor and the NMOS
         to ground, all the time, not just while switching. The low level is only as good as the ratio, and the
-        rising edge is as slow as the resistor. What it saves: one device per input. An n-input NOR is n
-        transistors and one resistor instead of 2n transistors, which is why wide NORs (PLA and ROM rows) and
-        open-drain buses still pull up.</p>
+        rising edge is as slow as the pull-up. What it saves: the pull-up network. An n-input NOR is n NMOS and one
+        pull-up, n + 1 devices instead of 2n, which is why wide NORs (PLA and ROM rows) and open-drain buses still
+        pull up.</p>
         <div class="try">Toggle <code>a</code> and watch the NMOS override the pull-up. The truth table is the
-        CMOS inverter's: same function, half the transistors, none of the standby savings.</div>`,
+        CMOS inverter's: same function, no device saved at one input, none of the standby savings.</div>`,
       scene: () => ({ root: INV_PSEUDO, inputs: { a: 1 } }),
       challenge: {
         kind: 'quiz', question: 'When does the pseudo-NMOS inverter draw current with its input held still?',
