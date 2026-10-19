@@ -112,7 +112,8 @@ export class EditorView {
   private handlesKey = '';
 
   constructor(host: HTMLElement) {
-    this.svg = s('svg', { class: 'schematic ed-svg', role: 'application', 'aria-label': 'Circuit editor canvas' });
+    // tabindex -1: where the focus goes back to when a dialog or drawer over it closes (not a Tab stop)
+    this.svg = s('svg', { class: 'schematic ed-svg', role: 'application', 'aria-label': 'Circuit editor canvas', tabindex: -1 });
     const defs = s('defs');
     defs.innerHTML = `<pattern id="ed-grid" width="1" height="1" patternUnits="userSpaceOnUse">
       <circle cx="0" cy="0" r="0.07" class="grid-dot"/></pattern>

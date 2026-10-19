@@ -344,6 +344,8 @@ class PuzzleUi {
     });
     dockPane(this.ed, { id: 'puzzles', label: 'Puzzles', icon: 'puzzle', el: this.drawer, width: 380 });
     this.renderList();
+    // into the list, as the challenge list does (Esc gives the focus back: dock.ts)
+    this.drawer.querySelector<HTMLElement>('.sb-chal-item')?.focus();
   }
 
   private closeList(): void {
