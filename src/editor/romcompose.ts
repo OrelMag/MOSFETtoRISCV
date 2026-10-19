@@ -1,20 +1,24 @@
-// The instruction composer in the program editor of an RV32 ROM: Ctrl+Space (or the footer's
+// The instruction builder in a ROM's program editor (RV32, RV16, the 4-bit CPU, a Custom ISA table): Ctrl+Space (or the footer's
 // button) opens it under the source on the caret's line, with that line's instruction, its address
 // and the program's labels; Replace writes the line back (its label, indentation and comment kept),
 // Insert adds a line below. Each is one native undo step in the code editor. The composer is
 // loaded on first use (its own chunk).
 
-import { assemble } from '../riscv/asm';
+import type { ComposeIsa } from '../isa/composekit';
+import { commentStart } from '../riscv/asm';
 import { h } from '../ui/dom';
 import type { CodeEditor } from '../widgets/codeedit';
 import type { Composer } from '../widgets/composer';
 
-const LABELS = /^(\s*(?:[A-Za-z_.$][\w.$]*\s*:\s*)*)([^#]*?)(\s*#.*)?$/;
+const LABELS = /^(\s*(?:[A-Za-z_.$][\w.$]*\s*:\s*)*)(.*)$/;
 
-/** A line split into its label prefix (with indentation), code and trailing comment. */
+/** A line split into its label prefix (with indentation), code and trailing comment (# ; or //). */
 export function splitLine(line: string): { prefix: string; code: string; comment: string } {
-  const m = line.match(LABELS)!;
-  return { prefix: m[1], code: m[2].trim(), comment: m[3] ?? '' };
+  const at = commentStart(line);
+  const body = line.slice(0, at).replace(/\s+$/, '');
+  const comment = at < line.length ? line.slice(body.length) : '';
+  const m = body.match(LABELS)!;
+  return { prefix: m[1], code: m[2].trim(), comment };
 }
 
 /** Line n rewritten around new code: the label, indentation and comment stay. */
@@ -40,7 +44,8 @@ export interface RomComposer {
   readonly isOpen: boolean;
 }
 
-export function romComposer(ce: CodeEditor, body: HTMLElement, toast: (m: string) => void): RomComposer {
+/** isaOf: the ROM's instruction set for the builder (loaded on first use, with the builder). */
+export function romComposer(ce: CodeEditor, body: HTMLElement, toast: (m: string) => void, isaOf: () => Promise<ComposeIsa | null>): RomComposer {
   let pane: HTMLElement | null = null;
   let seq = 0;
 
@@ -60,19 +65,20 @@ export function romComposer(ce: CodeEditor, body: HTMLElement, toast: (m: string
     const lines = src.split('\n');
     const line = lines[n - 1] ?? '';
     const { code } = splitLine(line);
-    const r = assemble(src);
+    const [isa, { instrComposer }] = await Promise.all([isaOf(), import('../widgets/composer')]);
+    if (my !== seq) return;
+    if (!isa) return void toast('This ROM\'s language has no instruction builder');
+    const r = isa.program(src);
     const here = r.lines.filter((l) => l.srcLine === n);
     const broken = r.errors.some((e) => e.line === n);
     // Replace a line holding one instruction (or a broken one); a pseudo-instruction's words, or a
     // line with none (label, comment, blank), get a new line below.
     const canReplace = here.length === 1 || (broken && !!code);
     const after = r.lines.find((l) => l.srcLine > n);
-    const pc = here.length ? here[0].addr : after?.addr ?? r.words.length * 4;
+    const pc = here.length ? here[0].addr : after?.addr ?? r.end;
     const word = here.length === 1 ? here[0].word : undefined;
-    const { instrComposer } = await import('../widgets/composer');
-    if (my !== seq) return;
     close();
-    const cmp: Composer = instrComposer({ word, pc: canReplace ? pc : here.length ? here[here.length - 1].addr + 4 : pc, labels: r.labels });
+    const cmp: Composer = instrComposer({ isa, word, pc: canReplace ? pc : here.length ? here[here.length - 1].addr + isa.step : pc, labels: r.labels });
 
     const put = (below: boolean) => {
       if (!cmp.ok) return void toast('Not an instruction this builder writes: fix the word first');
@@ -84,7 +90,7 @@ export function romComposer(ce: CodeEditor, body: HTMLElement, toast: (m: string
     const what = here.length > 1 ? `line ${n} is a pseudo-instruction (${here.length} words): a new instruction goes below it`
       : canReplace ? `line ${n}${word === undefined ? ' (does not assemble)' : ''}: ${code || '(empty)'}` : `after line ${n}`;
     pane = h('div', { class: 'sb-rom-cmp', role: 'region', 'aria-label': 'Instruction builder' },
-      h('div', { class: 'sb-rom-cmp-head' }, h('b', null, 'Build an instruction'), h('span', null, `· ${what} · address 0x${pc.toString(16)}`), h('span', { class: 'grow' }),
+      h('div', { class: 'sb-rom-cmp-head' }, h('b', null, 'Build an instruction'), h('span', null, `· ${what} · ${isa.name} · address 0x${pc.toString(16)}`), h('span', { class: 'grow' }),
         canReplace ? h('button', { class: 'btn sm primary', title: 'Replace the line (Enter in the builder\'s text box)', onclick: () => put(false) }, `Replace line ${n}`) : null,
         h('button', { class: `btn sm${canReplace ? '' : ' primary'}`, onclick: () => put(true) }, 'Insert below'),
         h('button', { class: 'btn sm ghost', title: 'Close the builder (Esc)', onclick: () => close() }, 'Close')),
