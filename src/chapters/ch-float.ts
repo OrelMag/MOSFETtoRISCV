@@ -21,11 +21,11 @@ export const chFloat: Chapter = {
   builds: ['muldiv', 'pipeline'],
   recap: {
     keep: [
-      'A float is (−1)<sup>s</sup> × 1.f × 2<sup>e − bias</sup>, the leading 1 hidden. Exponent 0 holds zero and the subnormals, all ones ∞ and NaN. Every binade holds the same 2<sup>M</sup> values (2<sup>23</sup> in float32), so precision is relative.',
+      'A float is (−1)<sup>s</sup> × 1.f × 2<sup>e − bias</sup>, the leading 1 hidden. Exponent 0 holds zero and the subnormals, all ones ∞ and NaN. Every binade holds the same 2<sup>M</sup> values (2<sup>23</sup> in float32), so precision is relative. A NaN\'s top fraction bit is its quiet bit (0: signaling, NV when used); every NaN RISC-V computes is the canonical 0x7FC00000.',
       'Guard, round and sticky bits are enough to round exactly. RNE rounds up when G = 1 and (S = 1 or the last kept bit is 1); the five modes differ in that one decision, a 62-NAND block.',
       'RISC-V never traps on a float exception: NV, DZ, OF, UF and NX accumulate in fflags. UF needs a result that is tiny (judged after rounding) <em>and</em> inexact.',
       'float32: the adder is about 8 200 NANDs and 181 deep, the multiplier 14 900 and 176, the fma 26 300 and 270, one rounding against 357 for fmul then fadd.',
-      'In the single-cycle CPU the FPU triples the size and stretches the period from 103 to 313 NAND delays. Cut into E, M and X, the pipelined RV32IF runs at 121, is smaller (163 500 against 172 500 NANDs) and 1.3 to 2.2 times faster.',
+      'In the single-cycle CPU the FPU triples the size and stretches the period from 103 to 313 NAND delays. Cut into E, M and X, the pipelined RV32IF runs at 121, is smaller (163 500 against 172 500 NANDs) and 1.3 to 2.2 times faster on six of the seven programs; the CSR-heavy one is 5 % slower.',
     ],
     practise: ['n_float', 'o_fpunpack', 'o_fpround', 'o_fpsticky', 'o_fplzc', 'o_fpnorm', 'o_fpadd', 'o_fpmul', 'o_fpcmp', 'o_fpcvt'],
     check: [
@@ -59,7 +59,12 @@ export const chFloat: Chapter = {
         <p>A float is a sign, an exponent and a fraction: (−1)<sup>s</sup> × 1.f × 2<sup>e − bias</sup>. The leading 1 is not stored
         (the <em>hidden bit</em>). The exponent is biased, so that comparing two positive floats as integers orders them correctly.
         Exponent 0 marks zero and the <strong>subnormals</strong> (no hidden bit, gradual underflow). Exponent all ones marks
-        <strong>infinity</strong> and <strong>NaN</strong>.</p>
+        <strong>infinity</strong> (fraction 0) and <strong>NaN</strong> (fraction ≠ 0).</p>
+        <p>The top fraction bit of a NaN is the <em>quiet</em> bit. A quiet NaN (1) passes through arithmetic without complaint; a
+        <em>signaling</em> NaN (0, with some lower fraction bit set so that it is not ∞) raises the invalid flag when an operation consumes it. IEEE 754
+        lets a NaN carry a payload through a computation; RISC-V does not: every NaN an operation produces is the <strong>canonical NaN</strong>
+        0x7FC00000 (positive, quiet, payload 0), whatever the operands were. Only loads, stores, moves and sign injection copy a NaN's bits unchanged.
+        In the 8-bit format the circuits below use, the canonical NaN is 0 1111 100 = 0x7C.</p>
         <p>0.1 has no finite binary expansion, so the float called 0.1 is really 0.100000001490116…: the nearest of the
         2<sup>32</sup> patterns.</p>`,
       widget: floatExplorer,
@@ -82,7 +87,8 @@ export const chFloat: Chapter = {
         <span data-show="u1">exponent field is 0</span>), and <span data-show="pin:zero pin:inf pin:nan">flags for zero,
         infinity and NaN</span>. Subnormals behave as if their exponent were 1, which makes the rest of the datapath uniform.</p>
         <p>These steps use an 8-bit format (4 exponent bits, 3 fraction bits) so you can see every wire. The same generators build float32,
-        and the small versions are tested on <em>every</em> input combination against exact arithmetic.</p>
+        and the small versions are tested against exact arithmetic: a 6-bit format on every operand pair, the 8-bit ones on every special and boundary
+        operand against every other, plus a random sample (details in "float32: the same circuit, bigger").</p>
         <div class="try">0x5A = 0 1011 010 = +1.010₂ × 2^(11 − 7) = 20. Try 0x05 (a subnormal) and 0x78 (infinity).</div>`,
       scene: () => ({ root: fpUnpack(E4M3), inputs: { x: 0x5a } }),
       tries: [(st) => st.value('inf') === 1],
@@ -144,7 +150,7 @@ export const chFloat: Chapter = {
         kind: 'quiz', question: 'fcvt.w.s of −2.5 in RNE, RTZ, RDN, RUP and RMM gives…',
         options: ['−2, −2, −3, −2, −3', '−3, −2, −3, −2, −3', '−2, −2, −2, −3, −3', '−2, −3, −3, −2, −2'], answer: 0,
         why: ['', 'That rounds the RNE tie away from zero. Ties to even picks −2, whose last bit is 0.', 'That swaps RDN and RUP: from −2.5, towards −∞ is −3 and towards +∞ is −2.', 'RTZ never increases the magnitude, so −2.5 truncates to −2; and RMM breaks a tie away from zero, to −3.'],
-        explain: 'A tie: RNE picks the even neighbour (−2); RTZ truncates (−2); RDN goes towards −∞ (−3); RUP towards +∞ (−2); RMM away from zero (−3). The "Rounding modes" program on the CPU below computes exactly this.',
+        explain: 'A tie: RNE picks the even neighbour (−2); RTZ truncates (−2); RDN goes towards −∞ (−3); RUP towards +∞ (−2); RMM away from zero (−3). The "Rounding modes" program on the FPU CPU later in this chapter computes exactly this.',
       },
     },
     {
@@ -158,7 +164,8 @@ export const chFloat: Chapter = {
         as if the exponent were unbounded. And UF is raised only if the tiny result is also inexact: a subnormal computed exactly raises nothing. Detecting
         "after rounding" costs <span data-show="u50">a second rounding decision</span>: with G as the last bit and the bit below it (R) as the new guard, would the M + 1 kept
         bits carry into 2<sup>emin</sup>? Modes and flags add about 250 NANDs (4.5 %) to the float32 normalize &amp; round unit. With its incrementers
-        and overflow test made parallel (see the pipelined FPU at the end of the chapter) it is 6 120 NANDs and 102 NAND delays deep.</p>
+        and overflow test made parallel (see the pipelined FPU at the end of the chapter), the multiplier's instance (48-bit significand) is 6 120 NANDs and
+        102 NAND delays deep.</p>
         <div class="try">exp = 0, mant = 1111 0000: 1.111 × 2<sup>−7</sup>. It rounds to 0x08 = 2<sup>−6</sup>, the smallest normal, yet flags = UF NX (0x03): with an unbounded exponent it is exact at 1.111 × 2<sup>−7</sup>, below 2<sup>−6</sup>. Now mant = 1111 1100: the same result, but only NX. In RTZ (rm = 1) the first stays subnormal, 0x07.</div>`,
       scene: () => ({ root: normRound(E4M3, 8), inputs: { sign: 0, exp: 0, mant: 0b11110000, stin: 0, rm: 0 } }),
     },
@@ -178,8 +185,9 @@ export const chFloat: Chapter = {
         <p>fcvt.w.s and fcvt.wu.s reuse the same ideas backwards. Put the significand at the top of a (w + 1)-bit word, its hidden bit at weight
         2<sup>w−1</sup>, and shift right by (w − 1 + bias) − exponent with a sticky shifter: the bottom bit is G, the shifted-out bits are S. Round in mode rm
         (an incrementer), then check the range: −2<sup>31</sup> … 2<sup>31</sup> − 1 signed, 0 … 2<sup>32</sup> − 1 unsigned. NaN, ±∞ and anything out
-        of range after rounding saturate to the largest integer of that sign (NaN counts as positive) and raise NV; otherwise NX if G or S. −0.3 → unsigned
-        is 0 (just NX), but −0.7 rounds (in RNE) to −1: invalid.</p>
+        of range after rounding saturate and raise NV: NaN, +∞ and too-large positives to the top of the range (2<sup>31</sup> − 1 or
+        2<sup>32</sup> − 1), −∞ and too-large negatives to the bottom (−2<sup>31</sup> signed, 0 unsigned); otherwise NX if G or S. −0.3 → unsigned
+        is 0 (just NX), but −0.7 rounds (in RNE) to −1, out of the unsigned range: 0 again, now with NV.</p>
         <p>The float32 → int32 converter costs 3 450 NANDs and is 104 deep: <span data-show="u0">an aligning box</span> (a 33-bit sticky shifter) and <span data-show="u1">a rounding box</span> (a prefix
         incrementer, the range check, a negator), which the pipelined FPU puts in two stages.</p>
         <div class="try">a = 0x42 is 2.5 (0 1000 010), into an 8-bit integer: y = 2 in RNE. Try rm = 3 (RUP) and rm = 4 (RMM). Then 0x7F (NaN): 127 and NV.</div>`,
@@ -205,12 +213,15 @@ export const chFloat: Chapter = {
         restored (<span data-show="u13">a multiplexer</span>). M + 4 steps give the M + 1 kept bits, G and one more bit (for tininess) even when the quotient is below 1; the final
         remainder ≠ 0 is the sticky bit, and <span data-show="u23">the shared normalize &amp; round</span> does the rest, in any mode. Exponent: e<sub>a</sub> − e<sub>b</sub> + bias.
         <span data-show="u30">x / 0</span> is ∞ with <strong>DZ</strong>; 0 / 0 and ∞ / ∞ are NaN with NV.</p>
-        <p>float32: 27 steps, <strong>29 cycles</strong>, 10 300 NANDs (6 100 of them normalize &amp; round, 2 300 the two prenormalizers); the step
+        <p>float32: 27 steps, <strong>29 cycles</strong>, 10 300 NANDs (4 500 of them normalize &amp; round, 2 300 the two prenormalizers); the step
         loop is 58 NAND delays.</p>
         <details class="deeper"><summary>Deeper: why restoring</summary>
-        <p>It is the integer step unchanged, and a mux is cheap. Non-restoring division drops the mux (add or subtract by the previous
-        sign) but needs a correction step before the remainder can serve as a sticky bit; real FPUs use SRT radix-4 with a redundant remainder,
-        2 bits per clock with no carry chain in the loop, at the price of a quotient-digit table.</p></details>
+        <p>It is the integer step unchanged, and a mux is cheap. Chapter 20 built the alternatives. <a href="#/c/muldiv/16">Non-restoring division</a>
+        drops the mux (add or subtract by the previous sign) but needs a correction step before the remainder can serve as a sticky bit.
+        <a href="#/c/muldiv/17">SRT</a> keeps the remainder in carry-save form, so no carry chain sits in the loop, and <a href="#/c/muldiv/19">radix 4</a>
+        makes two quotient bits a clock, at the price of a digit-selection table; real FPUs use radix-4 (or higher) SRT, shared with square root.
+        Here the 58-delay step already fits well inside the CPU's clock (313 NAND delays single-cycle, 121 pipelined), so a shorter step buys nothing; fewer steps would: radix 4 would roughly halve
+        the 29 cycles.</p></details>
         <div class="try">1.0 / 3.0 in the 8-bit format: start = 1. Pulse the clock 8 times: q fills from the right, then done = 1 and y = 0x2B (1.011₂ × 2<sup>−2</sup> = 0.34375, rounded up: NX). Try b = 0 (1 / 0 = ∞, DZ).</div>`,
       scene: () => ({ root: fpDiv(E4M3), inputs: { a: 0x38, b: 0x44, rm: 0, start: 1, clk: 0 }, autoClock: false }),
       challenge: {
@@ -258,7 +269,8 @@ export const chFloat: Chapter = {
         <span data-show="u3">the same normalize &amp; round</span>. fmsub, fnmsub and fnmadd only flip the signs of c and the product. ∞ × 0 is invalid even when c is a quiet NaN, as RISC-V requires.</p>
         <p>One rounding makes x·x − p exact where fmul then fsub gives 0, and makes dot products, polynomial evaluation (Horner) and Newton steps
         both faster and more accurate. float32 fma: 26 300 NANDs, 270 deep: deeper than either multiplier (176) or adder (181), but shallower than
-        the two in a row (357). It is built as three boxes, multiply (92 deep), align and add (91), round (106): the stages of the pipelined FPU.
+        the two in a row (357). It is built as three boxes, multiply (92 deep), align and add (91), round (106: the 52-bit normalize &amp; round, 102, then the NaN and ∞
+        cases): the stages of the pipelined FPU.
         A production FMA shifts the addend in a 3M + 5-bit window <em>while</em> the tree multiplies; this one swaps like the adder, which is
         simpler but puts the shifter after the tree.</p>
         <div class="try">x = 0x39 (1.125): x² = 1.265625 = 1.010001₂ needs 6 fraction bits. fmul gives 1.010₂ = 1.25 (0x3A). Here c = 0x3A with negC = 1: fma(x, x, −1.25) = 2<sup>−6</sup> = 0x08, exactly, no flags; fmul then fsub would give 0.</div>`,
@@ -279,9 +291,14 @@ export const chFloat: Chapter = {
       title: 'float32: the same circuit, bigger',
       body: `
         <p>Generated from the same code with 8 exponent and 23 fraction bits. The float32 adder costs about <strong>8 200 NANDs</strong> and is
-        181 NAND delays deep. The multiplier costs about <strong>14 900</strong> (mostly its 24 × 24 tree) and is 176 deep. The small formats are tested on
-        every operand pair in every rounding mode, flags included, against exact rational arithmetic (a few million cases, simulated 32 at a time);
-        float32 on random and special operands (subnormals, infinities, NaNs, cancellation), and against the host CPU in round to nearest even.</p>
+        181 NAND delays deep. The multiplier costs about <strong>14 900</strong> (mostly its 24 × 24 tree) and is 176 deep.</p>
+        <p>The small formats are tested in every rounding mode, flags included, against exact rational arithmetic, simulated 32 cases at a time. The 6-bit
+        format (3 exponent bits, 2 fraction bits) is exhaustive: every operand pair for add, subtract, multiply and divide, every triple and sign variant
+        for the fma (one rounding mode per case, rotating). The 8-bit formats are sampled: every special or boundary operand (zeros, subnormals, the smallest and largest normals, infinities,
+        NaNs) against every operand, plus 3 000 random pairs; the fma on random triples biased towards cancellation. Square root and the conversions
+        see every 8-bit input. Well over a million cases in all; every pair of the 8-bit formats is a switch for a long run by hand, not part of the
+        regular test suite. float32 is tested on random and special operands (subnormals, infinities, NaNs, cancellation), and against the host CPU in
+        round to nearest even.</p>
         <div class="try">1.5 (0x3FC00000) + 2.25 (0x40100000) = 3.75 (0x40700000). Follow <span data-show="u22 u27">the significands</span> through the aligner and the adder.</div>`,
       scene: () => ({ root: fpAdd(F32), inputs: { a: 0x3fc00000, b: 0x40100000, sub: 0 } }),
     },
@@ -291,9 +308,11 @@ export const chFloat: Chapter = {
         <p>The single-cycle CPU gains <span data-show="frf">a second register file</span> (f0–f31, no hard-wired zero, three read ports) and
         <span data-show="fpu">an FPU</span> implementing all of RV32F:
         flw, fsw, fadd.s, fsub.s, fmul.s, the four fused multiply-adds, fdiv.s and fsqrt.s (iterative: they stall the CPU, see below), sign injection
-        (fmv.s, fneg.s, fabs.s), fmin/fmax.s, feq/flt/fle.s, fcvt.w[u].s, fcvt.s.w[u], fmv.x.w, fmv.w.x and fclass.s, in all five rounding modes, with
+        (fsgnj.s, fsgnjn.s, fsgnjx.s, behind the pseudo-instructions fmv.s, fneg.s and fabs.s), fmin/fmax.s, feq/flt/fle.s, fcvt.w[u].s, fcvt.s.w[u], fmv.x.w, fmv.w.x and fclass.s, in all five rounding modes, with
         the exception flags. flw and fsw reuse the integer load/store path, disguised as lw and sw. The opcode or funct7 selects one of <span data-show="fpu.u61">the units'
-        results</span>; the FPU is 85 200 NANDs.</p>
+        results</span>; the FPU is 85 200 NANDs. The f registers are 32 bits wide because there is no D. A core with doubles has 64-bit f registers
+        and keeps a single <em>NaN-boxed</em>, its upper 32 bits all ones: read as a double it is a NaN, and a single whose upper half is not all ones
+        reads as the canonical NaN.</p>
         <p>The cost: about 172 500 NANDs (3 times the integer CPU), and a clock period of <strong>313</strong> NAND delays instead of 103, set by
         the fused multiply-add. A float operation in one cycle makes every instruction slow. Real cores pipeline the FPU over 3 to 5 cycles.</p>
         <div class="try">Run "0.1 ten times": the sum is 0x3F800001, one ulp above 1.0, and feq.s says 0.</div>`,
@@ -358,10 +377,10 @@ export const chFloat: Chapter = {
       body: `
         <p><span data-show="fpu.u16">The fused multiply-adds</span> have their own opcodes (0x43, 0x47, 0x4B, 0x4F) and their own format, <strong>R4</strong>: a third source register
         rs3 in bits 31:27, the format (00 = single) in 26:25, rm in funct3. Three operands need <span data-show="frf">a third read port on the f register file</span>: one more
-        32-way multiplexer tree of 32-bit words, 3 970 NANDs. Bits 3:2 of the opcode are the two negations (c, then the product), so
+        32-way multiplexer tree of 32-bit words, 3 970 NANDs. Bits 3:2 of the opcode are the two negations (bit 3 negates the product, bit 2 c), so
         <span data-show="fdec">the decoder</span> hands them to <span data-show="fpu">the unit</span> directly.</p>
         <p>In a single-cycle CPU the deepest instruction sets the clock: adding the fma took the period from 274 to 368 NAND delays (+34 %), paid by
-        every add and branch (313 once the rounder is shortened, below). A pipelined FPU gives fma several cycles of latency instead.</p>
+        every add and branch (313 once normalize &amp; round is shortened, below). A pipelined FPU gives fma several cycles of latency instead.</p>
         <div class="try">Run "Fused multiply-add": a0 = 0 (fmul then fsub), a1 = 0x33800000 (fmsub.s, 2<sup>−24</sup>), then 17, 7, −7, −17 from the four variants.
         "Horner with fmadd" evaluates a cubic in 3 instructions instead of 6.</div>`,
       scene: () => cpuScene({ source: fsrc('fma'), fpu: true, adder: 'ks', highlight: ['fpu', 'frf'] }),
@@ -387,13 +406,13 @@ export const chFloat: Chapter = {
         <p>Hazards. An FP result exists only at the end of X, so an instruction in D that reads an f register written by an instruction in E or M
         <span data-show="fhz"><strong>waits</strong></span> (an interlock), and then gets the value <span data-show="fA fB fC"><strong>forwarded from W</strong></span>
         (the select is decided in D, one cycle early).</p>
-        <p>The clock: <strong>121</strong> NAND delays instead of 313. The E stage (unpack, prenormalize, the 24 × 24 tree) sets it; X, the rounder,
-        is 118; the integer stages are at most 97.</p>
+        <p>The clock: <strong>121</strong> NAND delays instead of 313. The E stage (unpack, prenormalize, the 24 × 24 tree) sets it; X, the stage built
+        around the round box (106 deep on its own), is 118; the integer stages are at most 97.</p>
         <details class="deeper"><summary>Deeper: why not forward from X, the other hazards, and a shorter rounder</summary>
-        <p>Forwarding from X instead would chain the rounder (118 deep) into the next multiply (92) in one cycle and nearly double the period. FP results
+        <p>Forwarding from X instead would chain the X stage (118 deep) into the next multiply (92) in one cycle and nearly double the period. FP results
         bound for x registers wait the same way; loads are forwarded from X. fdiv / fsqrt hold F, D and E and send bubbles into M (a structural stall).
         fcsr is read in E and written in W: CSR accesses wait until no FP instruction is in flight, and FP instructions wait behind a CSR write.</p>
-        <p>Getting to 121 meant shortening the rounder first: its two ripple incrementers became prefix trees
+        <p>Getting to 121 meant shortening normalize &amp; round first: its two ripple incrementers became prefix trees
         (49 → 13 levels) and its overflow test now runs in parallel with the rounding, 142 → 102 deep, which also took the single-cycle CPU from 368 to 313.</p></details>
         <div class="try">Run "Dependent vs independent adds" and watch the pipeline diagram: in the first half every fadd.s waits two cycles for the previous
         one; with three accumulators the adds flow one per cycle. The timing panel shows the critical path.</div>`,
@@ -425,7 +444,7 @@ export const chFloat: Chapter = {
           <tr><td>Newton's √2</td><td>170 → 199</td><td>53.2 k → 24.1 k</td><td>2.21×</td></tr>
           <tr><td>exception flags</td><td>28 → 76</td><td>8.8 k → 9.2 k</td><td>0.95×</td></tr>
         </table>
-        <p>The pipeline wins 1.3 to 2.2 times; the iterative units gain most, because their 28 cycles now run at the short clock. CPI rises from 1 to
+        <p>The pipeline wins 1.3 to 2.2 times on six of the seven programs; the iterative units gain most, because their 28 cycles now run at the short clock. CPI rises from 1 to
         1.6–2.7 (fadd chains, the fill; 11.7 with divisions). "Exception flags" is slower: almost every other instruction reads fflags, and each CSR access
         <span data-show="fhz">waits for the FP pipe to drain</span>. Real code keeps CSR accesses out of loops and interleaves independent work, as the compiler would schedule it.</p>`,
       scene: () => cpuScene({ source: fsrc('dot'), pipeline: true, fpu: true, adder: 'ks', highlight: ['fhz'] }),
@@ -451,7 +470,7 @@ export const chFloat: Chapter = {
         kind: 'quiz', question: 'Why does x == x fail when x is NaN?',
         options: ['A hardware bug', 'IEEE 754 defines every comparison with NaN as unordered (false), so x != x is the portable NaN test', 'NaN has many encodings', 'Only signaling NaNs do this'],
         answer: 1,
-        why: ['It is the specified behaviour: IEEE 754 requires it, and the comparator forces it on purpose.', '', 'The same NaN bit pattern compared with itself is unequal too: the rule is about NaN, not about its encodings.', 'Quiet NaNs compare unordered as well. A signaling NaN differs only in raising NV (and flt.s / fle.s raise NV on any NaN).'],
+        why: ['It is the specified behaviour: IEEE 754 requires it, and the comparator forces it on purpose.', '', 'The same NaN bit pattern compared with itself is unequal too: the rule is about NaN, not about its encodings.', 'Quiet NaNs compare unordered as well. A signaling NaN (quiet bit 0) differs only in raising NV in feq.s (flt.s / fle.s raise NV on any NaN).'],
         explain: 'NaN means "no meaningful value"; ordering it would be meaningless too. The comparator checks the NaN flags of both operands and forces eq, lt and le to 0.',
       },
     },
