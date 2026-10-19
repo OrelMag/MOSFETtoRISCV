@@ -12,7 +12,7 @@ import type { Vec } from '../sim/geometry';
 import type { PowerOnMode } from '../sim/sim';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { describeBits } from '../sim/values';
-import { h, icon } from '../ui/dom';
+import { coarsePointer, h, hintBadge, icon } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { closePopover } from '../view/popover';
 import type { Compiled, Diag } from './compile';
@@ -21,13 +21,14 @@ import { History } from './history';
 import { UserLibrary } from './library';
 import { chipDeps, type ChipDoc, type DefOf, type PartRef, type PinValue, type Workspace } from './model';
 import type { Sel } from './ops';
-import { PalettePanel, toggleFavorite } from './palette';
+import { PalettePanel, toggleFavorite, type PaletteItem } from './palette';
 import { isError, keyLabel, partDef } from './parts';
 import { MAIN_PROJECT, projectKey, readProjects, touchProject } from './projects';
 import { PropsPanel } from './props';
 import { AUTO_HZ, EditorSim, HZ_STEPS, type RunMode } from './runtime';
 import { activeChip, closeChip, keepVolatile, newChip, openChip, setPinValue } from './session';
 import { loadWorkspace, saveWorkspace } from './store';
+import { shedActions } from './toolbarfit';
 import { Tools } from './tools';
 import { EditorView } from './view';
 import { Buzzers } from './audio';
@@ -38,6 +39,8 @@ export interface ToolbarAction {
   icon: string;
   /** Text after the icon (omit for an icon-only button). */
   label?: string;
+  /** Its name in the toolbar's More menu (default: label, else title). */
+  menu?: string;
   order: number;
   run(ed: Editor): void;
   enabled?(ed: Editor): boolean;
@@ -92,7 +95,7 @@ registerToolbarAction({ id: 'zout', title: 'Zoom out', icon: 'minus', order: 30,
 registerToolbarAction({ id: 'zin', title: 'Zoom in', icon: 'plus', order: 40, run: (ed) => ed.view.cam.zoom(0.8) });
 registerToolbarAction({ id: 'fit', title: 'Fit to screen', icon: 'fit', order: 50, run: (ed) => ed.fitView() });
 registerToolbarAction({ id: 'props', title: 'Properties of the selection or the chip', icon: 'sidebar', label: 'Properties', order: 85, levelOnly: true, run: (ed) => ed.toggleProps(), active: (ed) => ed.propsPinned });
-registerToolbarAction({ id: 'help', title: 'Keyboard shortcuts (?)', icon: 'info', order: 90, run: (ed) => ed.showHelp() });
+registerToolbarAction({ id: 'help', title: 'Keyboard shortcuts (?)', menu: 'Keyboard shortcuts', icon: 'info', order: 90, run: (ed) => ed.showHelp() });
 
 const withChip = (ws: Workspace, doc: ChipDoc): Workspace => ({ ...ws, chips: { ...ws.chips, [doc.id]: doc } });
 
@@ -131,8 +134,14 @@ export class Editor {
   compiled!: Compiled;
 
   private canvas: HTMLElement;
+  private topEl: HTMLElement;
   private tabs: HTMLElement;
   private actionsEl: HTMLElement;
+  /** The toolbar's overflow: actions shedActions moved off a narrow bar. */
+  private moreBtn: HTMLButtonElement;
+  private moreMenu: HTMLElement | null = null;
+  private partsBtn: HTMLButtonElement;
+  private topResize: ResizeObserver;
   private controls: HTMLElement;
   private status: HTMLElement;
   private toastEl: HTMLElement;
@@ -182,10 +191,14 @@ export class Editor {
       onclick: () => this.actionsEl.querySelector<HTMLElement>(`[data-action=${id}]`)?.click() }, icon(ic, 14), label);
     this.emptyEl = h('div', { class: 'sb-empty-chip', hidden: true },
       h('h3', null, 'An empty chip'),
-      h('p', null, 'Drag a part from the palette: an Input, a NAND and an Output make a first circuit. Wire them by dragging from pin to pin.'),
+      h('p', null, coarsePointer()
+        ? 'Tap a part in the Parts list, then tap the canvas to place it: an Input, a NAND and an Output make a first circuit. Wire them by dragging from pin to pin.'
+        : 'Drag a part from the palette: an Input, a NAND and an Output make a first circuit. Wire them by dragging from pin to pin.'),
       h('div', { class: 'row' }, act('examples', 'Examples', 'book'), act('challenges', 'Challenges', 'flag'), act('puzzles', 'Puzzles', 'puzzle')));
+    // Touch (tools.ts): one finger wires, moves and draws a band; two fingers pan and zoom (camera.ts).
     this.canvas.append(overlay, this.emptyEl, this.toastEl, this.tipEl,
-      h('div', { class: 'hint-badge sb-hint' }, 'drag from a pin to wire · L pointer · wheel zoom · Space+drag pan · ? shortcuts'));
+      hintBadge('drag from a pin to wire · L pointer · wheel zoom · Space+drag pan · ? shortcuts',
+        'drag from a pin: wire · double-tap: open · pinch: zoom', 'sandbox', ' sb-hint'));
     this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }), top: h('div', { class: 'sb-top-slot' }) };
 
     this.sim = new EditorSim({ gateRate: () => settings.speed });
@@ -193,7 +206,7 @@ export class Editor {
     this.sim.onHalt = () => this.halted();
 
     this.palette = new PalettePanel(() => ({ ws: this.ws, chipId: this.chipId, canPlace: (c) => this.lib.canPlace(this.chipId, c) }), {
-      pick: (item, e) => this.tools.pickFromPalette(item, e),
+      pick: (item, e) => this.pickPart(item, e),
       purist: () => !!this.level || !!this.ws.purist,
       setPurist: (v) => this.volatile({ ...this.ws, ...(v ? { purist: true } : { purist: undefined }) }),
       toggleFavorite: (key) => {
@@ -211,11 +224,17 @@ export class Editor {
 
     this.tabs = h('div', { class: 'sb-tabs', role: 'tablist' });
     this.actionsEl = h('div', { class: 'sb-actions' });
+    this.moreBtn = h('button', { class: 'btn ghost sm sb-more', title: 'More tools', 'aria-label': 'More tools', 'aria-haspopup': 'menu', 'aria-expanded': 'false', hidden: true,
+      onclick: () => this.toggleMore() }, icon('more', 16), h('span', null, 'More')) as HTMLButtonElement;
+    // On a phone the palette is a drawer under the top bar, closed until this button opens it (editor.css).
+    this.palette.el.id = 'sb-palette';
+    this.partsBtn = h('button', { class: 'btn sm sb-parts-btn', title: 'Show or hide the parts list', 'aria-controls': 'sb-palette', 'aria-expanded': 'false',
+      onclick: () => this.showParts(!this.el.classList.contains('pal-open')) }, icon('plus', 15), 'Parts') as HTMLButtonElement;
     this.status = h('div', { class: 'status' });
     this.controls = h('div', { class: 'controls sb-controls' });
     const center = h('section', { class: 'sb-center' }, this.canvas, this.slots.bottom, this.controls);
-    this.el = h('div', { class: this.level ? 'sandbox sb-levelmode' : 'sandbox' },
-      h('div', { class: 'sb-top' }, this.tabs, this.slots.top, this.actionsEl), this.palette.el, center, this.props.el);
+    this.topEl = h('div', { class: 'sb-top' }, this.partsBtn, this.tabs, this.slots.top, this.actionsEl);
+    this.el = h('div', { class: this.level ? 'sandbox sb-levelmode' : 'sandbox' }, this.topEl, this.palette.el, center, this.props.el);
 
     this.tools = new Tools(this);
     this.buildControls();
@@ -230,6 +249,18 @@ export class Editor {
       }
     });
     this.resize.observe(this.canvas);
+    // The toolbar's More menu follows the top bar's width (tabs and slot items change it too: renderTabs, fitActions).
+    // The autosave indicator (fileui.ts) arrives in slots.top after the constructor, and web fonts change every width.
+    let topW = 0, slotW = 0;
+    this.topResize = new ResizeObserver(() => {
+      if (this.topEl.clientWidth === topW && this.slots.top.offsetWidth === slotW) return;
+      topW = this.topEl.clientWidth;
+      slotW = this.slots.top.offsetWidth;
+      this.fitActions();
+    });
+    this.topResize.observe(this.topEl);
+    this.topResize.observe(this.slots.top);
+    document.fonts?.ready.then(() => this.fitSoon(), () => {});
     this.refresh();
     for (const p of plugins) {
       const off = p(this);
@@ -655,12 +686,16 @@ export class Editor {
     return [top, ...ws.open.filter((id) => id !== top && uses.has(id))];
   }
 
+  /** The toolbar actions this editor shows (a level screen: its own list). */
+  private barActions(): ToolbarAction[] {
+    const only = this.level?.actions;
+    return actions.filter((a) => (only ? only.includes(a.id) : !a.levelOnly));
+  }
+
   /** Redraw the top bar's buttons (a toggle changed state). */
   renderActions(): void {
     this.actionsEl.replaceChildren();
-    const only = this.level?.actions;
-    for (const a of actions) {
-      if (only ? !only.includes(a.id) : a.levelOnly) continue;
+    for (const a of this.barActions()) {
       const b = h('button', { class: `btn ghost ${a.label ? 'sm' : 'icon-only'}`, title: a.title, 'aria-label': a.title, 'data-action': a.id, onclick: () => a.run(this) },
         icon(a.icon, 16), a.label ? h('span', null, a.label) : null) as HTMLButtonElement;
       if (a.enabled && !a.enabled(this)) b.disabled = true;
@@ -669,8 +704,135 @@ export class Editor {
         b.classList.toggle('on', on);
         b.setAttribute('aria-pressed', String(on));
       }
+      // the last fit's choice until the next frame measures again: no flash of a full bar
+      b.hidden = this.shed.has(a.id);
       this.actionsEl.append(b);
     }
+    this.moreBtn.hidden = !this.shed.size;
+    this.actionsEl.append(this.moreBtn);
+    if (this.moreMenu) this.fillMore();
+    this.fitSoon();
+  }
+
+  // ---- the toolbar's More menu -------------------------------------------------------------
+
+  /** Actions in the More menu (toolbarfit.ts shedActions). */
+  private shed = new Set<string>();
+  private fitFrame = 0;
+
+  private fitSoon(): void {
+    if (!this.fitFrame) this.fitFrame = requestAnimationFrame(() => { this.fitFrame = 0; this.fitActions(); });
+  }
+
+  /**
+   * Move the least used actions into More until the rest fit: beside the chip tabs (which keep room
+   * for the open tab, Open… and New chip), or below 1000 px on a row of their own (editor.css).
+   */
+  private fitActions(): void {
+    const top = this.topEl, bar = this.actionsEl;
+    if (!top.isConnected || !top.clientWidth) return;
+    const btns = [...bar.querySelectorAll<HTMLButtonElement>(':scope > [data-action]')];
+    for (const b of btns) b.hidden = false;
+    this.moreBtn.hidden = false;
+    const moreW = this.moreBtn.offsetWidth;
+    const px = (v: string) => parseFloat(v) || 0;
+    const cs = getComputedStyle(top);
+    let room = top.clientWidth - px(cs.paddingLeft) - px(cs.paddingRight);
+    if (!matchMedia('(max-width: 1000px)').matches) {
+      const gap = px(cs.columnGap);
+      const essential = [...this.tabs.children].filter((el) => el.matches('.sb-tab.on, .sb-open, .sb-new, .sb-trail')) as HTMLElement[];
+      const tabsGap = px(getComputedStyle(this.tabs).columnGap);
+      const tabsNeed = essential.reduce((s, el) => s + el.offsetWidth, 0) + tabsGap * Math.max(0, essential.length - 1);
+      const others = [this.partsBtn, this.slots.top].filter((el) => el.offsetWidth > 0);
+      room -= Math.min(tabsNeed, room / 2) + others.reduce((s, el) => s + el.offsetWidth + gap, 0) + gap;
+    }
+    this.shed = shedActions(btns.map((b) => ({ id: b.dataset.action!, w: b.offsetWidth })), room, moreW, px(getComputedStyle(bar).columnGap));
+    for (const b of btns) b.hidden = this.shed.has(b.dataset.action!);
+    this.moreBtn.hidden = !this.shed.size;
+    if (!this.shed.size) this.closeMore();
+    else if (this.moreMenu) this.fillMore();
+  }
+
+  /** Where an action's own menu opens: its button, or More when it is in there. */
+  actionAnchor(id: string): HTMLElement | null {
+    const b = this.actionsEl.querySelector<HTMLElement>(`[data-action="${id}"]`);
+    return b && !b.hidden ? b : this.shed.has(id) ? this.moreBtn : b;
+  }
+
+  private toggleMore(): void {
+    if (this.moreMenu) return this.closeMore();
+    const menu = this.moreMenu = h('div', { class: 'sb-menu sb-more-menu', role: 'menu', 'aria-label': 'More tools' });
+    this.fillMore();
+    this.el.append(menu);
+    const r = this.moreBtn.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    this.moreBtn.setAttribute('aria-expanded', 'true');
+    document.addEventListener('pointerdown', this.moreAway, true);
+    document.addEventListener('keydown', this.moreKey, true);
+    menu.querySelector<HTMLElement>('button:not(:disabled)')?.focus();
+  }
+
+  private fillMore(): void {
+    const menu = this.moreMenu!;
+    menu.replaceChildren();
+    for (const a of this.barActions()) {
+      if (!this.shed.has(a.id)) continue;
+      const on = a.active?.(this);
+      const item = h('button', { role: a.active ? 'menuitemcheckbox' : 'menuitem', 'aria-checked': a.active ? String(!!on) : null, class: on ? 'on' : null, title: a.title,
+        onclick: () => { this.closeMore(); a.run(this); } }, icon(a.icon, 16), h('span', null, h('b', null, a.menu ?? a.label ?? a.title))) as HTMLButtonElement;
+      if (a.enabled && !a.enabled(this)) item.disabled = true;
+      menu.append(item);
+    }
+  }
+
+  private readonly moreAway = (e: Event) => {
+    if (!this.moreMenu?.contains(e.target as Node) && !this.moreBtn.contains(e.target as Node)) this.closeMore();
+  };
+  private readonly moreKey = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    this.closeMore();
+    this.moreBtn.focus();
+  };
+
+  private closeMore(): void {
+    if (!this.moreMenu) return;
+    this.moreMenu.remove();
+    this.moreMenu = null;
+    this.moreBtn.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('pointerdown', this.moreAway, true);
+    document.removeEventListener('keydown', this.moreKey, true);
+  }
+
+  // ---- the phone's parts drawer --------------------------------------------------------------
+
+  /** Open or close the palette drawer (a phone; wider screens always show the palette). */
+  showParts(on: boolean): void {
+    this.el.classList.toggle('pal-open', on);
+    this.partsBtn.setAttribute('aria-expanded', String(on));
+  }
+
+  /**
+   * A press on a palette item. In the phone's drawer a tap (no drag) arms the part and closes the
+   * drawer, so the next tap on the canvas places it; a drag out of the open drawer works as on a desktop.
+   */
+  private pickPart(item: PaletteItem, e: PointerEvent): void {
+    this.tools.pickFromPalette(item, e);
+    if (!this.partsDrawer) return;
+    const up = () => {
+      document.removeEventListener('pointerup', up);
+      const st = this.tools.state;
+      if (st.k !== 'place' || st.drag) return;
+      this.showParts(false);
+      this.toast(`Tap the canvas to place ${item.name}`);
+    };
+    document.addEventListener('pointerup', up);
+  }
+
+  /** The palette is a drawer (editor.css, max-width 760px) and open. */
+  private get partsDrawer(): boolean {
+    return this.el.classList.contains('pal-open') && matchMedia('(max-width: 760px)').matches;
   }
 
   private readonly buzzers = new Buzzers();
@@ -931,6 +1093,9 @@ export class Editor {
     this.tools.destroy();
     this.unsub();
     this.resize.disconnect();
+    this.topResize.disconnect();
+    this.closeMore();
+    if (this.fitFrame) cancelAnimationFrame(this.fitFrame);
     if (this.frame) cancelAnimationFrame(this.frame);
     closePopover();
   }

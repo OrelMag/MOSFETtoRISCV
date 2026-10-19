@@ -103,7 +103,7 @@ const MENU: (MenuItem | null)[] = [
 
 function openMenu(ed: Editor): void {
   if (menu) return closeMenu();
-  const btn = ed.el.querySelector<HTMLElement>('[data-action="file"]');
+  const btn = ed.actionAnchor('file');
   const r = btn?.getBoundingClientRect() ?? new DOMRect(16, 60, 0, 0);
   menu = h('div', { class: 'sb-menu', role: 'menu', 'aria-label': 'File' });
   for (const it of MENU) {
