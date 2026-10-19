@@ -67,7 +67,7 @@ export const WALKS7: Record<string, WalkScript> = {
     },
     {
       title: 'The refresh state',
-      text: 'rcnt is the next row to refresh, timer the cycles since the last refresh, held at 15. due = all four timer bits. Two more 52-NAND registers: the four registers are 165 of the bank\'s 319 NANDs.',
+      text: 'rcnt is the next row to refresh, timer the cycles since the last refresh, held at 15. due = all four timer bits. Two more 52-NAND registers: with orow and the open flip-flop the state is 165 (3 × 52 + 9) of the bank\'s 319 NANDs.',
       parts: ['rcnt', 'timer', 'u4'], codex: ['refresh', 'counter'],
     },
     {
@@ -132,7 +132,7 @@ export const WALKS7: Record<string, WalkScript> = {
     },
     {
       title: 'A read in flight',
-      text: 'tCAS = 4: a 4-stage shift register carries "RD issued" to the cycle its word is on dq. While any stage is 1 the controller issues nothing, so a refresh cannot close a row under a pending read.',
+      text: 'tCAS = 4: a 4-stage shift register carries "RD issued" to the cycle its word is on dq. While any stage is 1 the controller issues nothing, so a refresh cannot close a row under a pending read. Here one request at a time; a real controller pipelines column commands (a RD to an open row every tCCD while earlier bursts are still on their way) and so meets rules this one never does: tWR (a write\'s data into the row before PRE), tRTP (read to PRE), tRRD (ACT to ACT in another bank) and tFAW (at most four ACTs in a window).',
       parts: ['rd0', 'rd1', 'rd2', 'rd3', 'u27', 'u28'], codex: ['dramtiming'],
     },
     {

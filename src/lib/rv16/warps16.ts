@@ -23,7 +23,7 @@ import { AND, NOT, OR } from '../gates';
 import { bitwise, orN } from '../wide';
 import { BRANCH16, CTL16, IMM16, NEXTPC16 } from './cpu';
 import { LANE_PORTS, LANEDEC16, LANES16, MASK16, NL, STACK16, VRF16 } from './lanes16';
-import { choose4, MUX16, RV16_DFF, RV16_MUX4, RV16_REG16, RV16_REG4 } from './logic';
+import { choose4, MUX16, RV16_DFF, RV16_DFFE, RV16_MUX4, RV16_REG16, RV16_REG4 } from './logic';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -266,12 +266,14 @@ function rv16Warps(raster: boolean): ComponentDef {
     const dw = b.op(splitter(ones(NL), 2), [b.op1(bitwise('or', NL), dwe)]);
     const wr = b.op1(AND, [`${dw}.o0`, inDev], 'device write');
     const dec = b.op(splitter(ones(8), 2), [b.op1(DEC3, [`${a0}.o0`, wr], 'which register')]);
-    const v7 = `${b.op(splitter([7, 9], 2), [r2[0]])}.o0`;
+    // a vertex is 7 bits: lane 0's rs2 bits 3:0 into a 4-bit register, bits 6:4 into three enable flip-flops
+    const vs = b.op(splitter([4, 1, 1, 1, 9], 2), [r2[0]], 'a vertex: rs2 bits 6:0');
     const VP = ['v0x', 'v0y', 'v1x', 'v1y', 'v2x', 'v2y'];
     VP.forEach((p, k) => {
-      const r = b.add(RV16_REG16, p, `r_${p}`);
-      b.wire(b.op1(merger([7, 9], 2), [v7, b.op1(constWord(9, 0), [])]), `${r}.d`); b.wire(`${dec}.o${k}`, `${r}.en`); b.wire('clk', `${r}.clk`);
-      b.wire(`${b.op(splitter([7, 9], 2), [`${r}.q`])}.o0`, `${rs}.${p}`);
+      const en = `${dec}.o${k}`;
+      const lo = b.op(RV16_REG4, [`${vs}.o0`, en, 'clk'], `${p} bits 3:0`, `r_${p}`);
+      const hi = [4, 5, 6].map((j, i) => b.op1(RV16_DFFE, [`${vs}.o${i + 1}`, en, 'clk'], `${p} bit ${j}`, `r_${p}${j}`));
+      b.wire(b.op1(merger([4, 1, 1, 1], 2), [`${lo}.q`, ...hi]), `${rs}.${p}`);
     });
     const cr = b.add(RV16_REG16, 'colour', 'r_col');
     b.wire(r2[0], `${cr}.d`); b.wire(`${dec}.o6`, `${cr}.en`); b.wire('clk', `${cr}.clk`);

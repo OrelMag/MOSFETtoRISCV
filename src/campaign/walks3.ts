@@ -137,7 +137,7 @@ export const WALKS3: Record<string, WalkScript> = {
   r_clock: [
     {
       title: 'The buzzer',
-      text: 'en sits on the common of k\'s first pole, and its break contact is k\'s own coil line, y. Released, k feeds its coil and pulls in one relay step later; pulled in, it cuts its own current and drops out the step after. y changes at every relay step: a period of two steps, 16.4 ms at 8.2 ms a step. With en = 0, k rests and its coil holds y at 0.',
+      text: 'en sits on the common of k\'s first pole, and its break contact is k\'s own coil line, y. Released, k feeds its coil and pulls in one relay step later; pulled in, it cuts its own current and drops out the step after. y changes at every relay step: a period of two steps, here 16.4 ms at 8.2 ms a step; a real relay drops out faster than it pulls in (3.4 ms against 8.2 in the site\'s relay model), so a real buzzer runs at about 12 ms, unevenly. With en = 0, k rests and its coil holds y at 0.',
       parts: ['k'], codex: ['buzzer', 'relaystep'],
     },
     {
@@ -149,7 +149,7 @@ export const WALKS3: Record<string, WalkScript> = {
         options: ['t\'s break line: on the supply while t is released', 't\'s make line: on the supply while t is operated', 'VDD directly', 'y'],
         answer: 0,
         explain: 'Fed from its own break line, t pulls in if it was out and drops out if it was in: a flip. Fed from its make line while k is released, it stays as it is.',
-        why: ['', 'That line keeps t as it is: it is the hold, which belongs on k\'s break contact.', 'Then t is in whenever k is: q would follow y one step late, not at half its rate.', 'y is k\'s own coil line: t would copy the buzzer, a step late.'],
+        why: ['', 'That line keeps t as it is: it is the hold, which belongs on k\'s break contact.', 'Then k\'s first operation pulls t in, and its break contact feeds t from t\'s own make line: t holds itself in for good, q sticks at 1.', 'y is k\'s coil line, cut by k\'s own break contact: it is 0 exactly while k is operated. t drops out at k\'s first operation and nothing pulls it in again: q sticks at 0.'],
       },
     },
     {
@@ -234,7 +234,7 @@ export const WALKS3: Record<string, WalkScript> = {
     },
     {
       title: 'Hold the CPU by its clock',
-      text: 'gate = clk AND run: the CPU sees no edge until the memory is its own. 2 NANDs.',
+      text: 'gate = clk AND run: the CPU sees no edge until the memory is its own. 2 NANDs. Act 3 warns against gating a clock; this one is safe because run changes only while clk is low (next step), so clk AND run never makes a short pulse: whole pulses or none. That is the rule a clock-gating cell (ICG) enforces in silicon: a latch, open while clk is low, holds the enable steady through the high phase.',
       parts: ['gate'], codex: ['clockgating'],
     },
     {

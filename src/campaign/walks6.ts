@@ -5,6 +5,9 @@
 
 import type { WalkScript } from './walk';
 
+/** k_frame's vertex registers: r_<v> (bits 3:0) and r_<v>4 … r_<v>6 (lib/rv16/warps16.ts). */
+const VERTS = ['v0x', 'v0y', 'v1x', 'v1y', 'v2x', 'v2y'];
+
 export const WALKS6: Record<string, WalkScript> = {
   k_lanes: [
     {
@@ -34,7 +37,7 @@ export const WALKS6: Record<string, WalkScript> = {
   k_vrf: [
     {
       title: 'Lane 0\'s registers',
-      text: 'Your 8 × 16 register file, 2193 NANDs. wa, ra1 and ra2 are wired to it unchanged: every lane uses the same register numbers. The splitter cuts we into four bits; bit 0 is this file\'s write enable. x0 reads 0 inside it, so it reads 0 in every lane.',
+      text: 'Your 8 × 16 register file, 2172 NANDs. wa, ra1 and ra2 are wired to it unchanged: every lane uses the same register numbers. The splitter cuts we into four bits; bit 0 is this file\'s write enable. x0 reads 0 inside it, so it reads 0 in every lane.',
       parts: ['u1'], codex: ['regfile', 'vrf'],
     },
     {
@@ -51,7 +54,7 @@ export const WALKS6: Record<string, WalkScript> = {
     },
     {
       title: 'Lanes 2 and 3',
-      text: 'Two more files: 4 × 2193 = 8772 NANDs, almost twice the four lanes (4596). Logic can be shared between threads, storage cannot: in the SIMD core this block is 8772 of 15774 NANDs.',
+      text: 'Two more files: 4 × 2172 = 8688 NANDs, almost twice the four lanes (4596). Logic can be shared between threads, storage cannot: in the SIMD core this block is 8688 of 15669 NANDs.',
       parts: ['u3', 'u4'], codex: ['register'],
     },
   ],
@@ -94,7 +97,7 @@ export const WALKS6: Record<string, WalkScript> = {
   k_simd: [
     {
       title: 'One front end',
-      text: 'The single-cycle core\'s control unit (200 NANDs) and immediate generator (0), the 147-NAND 4:1 mux that picks the immediate format, and the given lane decoder (73), which spots split, join, tmc and csrr on tid. All decoded once, for the four lanes.',
+      text: 'The single-cycle core\'s control unit (200 NANDs) and immediate generator (0), the 147-NAND 4:1 mux that picks the immediate format, and the given lane decoder (52), which spots split, join, tmc and csrr on tid. All decoded once, for the four lanes.',
       parts: ['u1', 'u2', 'u3', 'u4'], codex: ['control', 'immediates', 'warp'],
     },
     {
@@ -104,7 +107,7 @@ export const WALKS6: Record<string, WalkScript> = {
     },
     {
       title: 'Lane registers',
-      text: 'The lane register file, 8772 NANDs: rd, rs1 and rs2 straight from the instruction fields, we from the mask. It is 56% of the core.',
+      text: 'The lane register file, 8688 NANDs: rd, rs1 and rs2 straight from the instruction fields, we from the mask. It is 55% of the core.',
       parts: ['u7'], codex: ['vrf'],
     },
     {
@@ -141,7 +144,7 @@ export const WALKS6: Record<string, WalkScript> = {
     },
     {
       title: 'The PC',
-      text: 'pc + 1 or the branch / jump target, 0 at reset, into a 16-bit register without enable (144 NANDs). One PC for four threads: 15774 NANDs, of which the four datapaths are 4596.',
+      text: 'pc + 1 or the branch / jump target, 0 at reset, into a 16-bit register without enable (144 NANDs). One PC for four threads: 15669 NANDs, of which the four datapaths are 4596.',
       parts: ['u32', 'u34', 'u35'], codex: ['pc', 'simd'],
     },
   ],
@@ -199,7 +202,7 @@ export const WALKS6: Record<string, WalkScript> = {
     },
     {
       title: 'Mask, registers, lanes, as before',
-      text: 'The active mask (102 NANDs), the lane register file (8772) and the four lanes (4596), wired as in the SIMD core.',
+      text: 'The active mask (102 NANDs), the lane register file (8688) and the four lanes (4596), wired as in the SIMD core.',
       parts: ['u6', 'u7', 'u8'], codex: ['lane'],
     },
     {
@@ -231,7 +234,7 @@ export const WALKS6: Record<string, WalkScript> = {
     },
     {
       title: 'The join\'s jump',
-      text: 'One more 16-bit mux after the branch / jump choice: jpc when the stack jumps. Then reset and the PC register as before. 17837 NANDs, 2063 more than the SIMD core: the price of letting four lanes behave as four threads.',
+      text: 'One more 16-bit mux after the branch / jump choice: jpc when the stack jumps. Then reset and the PC register as before. 17732 NANDs, 2063 more than the SIMD core: the price of letting four lanes behave as four threads.',
       parts: ['u35', 'u36', 'u38', 'u39'], codex: ['pc'],
     },
   ],
@@ -279,7 +282,7 @@ export const WALKS6: Record<string, WalkScript> = {
     },
     {
       title: 'State, twice',
-      text: 'Everything that is state is duplicated: per warp a PC with enable (208 NANDs), a mask (102), a stack (1995), lane registers (8772) and a waiting bit for bar (9). 11086 NANDs a warp; the shared parts are paid once.',
+      text: 'Everything that is state is duplicated: per warp a PC with enable (208 NANDs), a mask (102), a stack (1995), lane registers (8688) and a waiting bit for bar (9). 11002 NANDs a warp; the shared parts are paid once.',
       parts: ['u22', 'u23', 'u24', 'u25', 'u26', 'u27', 'u28', 'u29', 'u30', 'u31'], codex: ['vrf', 'warp'],
     },
     {
@@ -331,7 +334,7 @@ export const WALKS6: Record<string, WalkScript> = {
     },
     {
       title: 'bar',
-      text: 'Arriving first (bar · go_w · the other not waiting) sets the warp\'s waiting bit; it stays set until the other warp goes on bar. A warp waits while its bit is set and the other still has lanes, so a finished warp releases it. 30163 NANDs, against 17837 for one SIMT core.',
+      text: 'Arriving first (bar · go_w · the other not waiting) sets the warp\'s waiting bit; it stays set until the other warp goes on bar. A warp waits while its bit is set and the other still has lanes, so a finished warp releases it. 29974 NANDs, against 17732 for one SIMT core.',
       parts: ['u108', 'u109', 'u110', 'u111', 'u112', 'u113', 'u114', 'u115', 'u140', 'u141', 'u142', 'u143', 'u144', 'u145', 'u146', 'u147'], codex: ['barrier'],
     },
   ],
@@ -339,12 +342,12 @@ export const WALKS6: Record<string, WalkScript> = {
   k_edge: [
     {
       title: 'Decode the command',
-      text: 'A 3→8 decoder (51 NANDs), enabled by a constant 1: one line per command, hold, load, right, skip, down, up, band and double. Everything below is steered by single lines.',
+      text: 'A 3→8 decoder (30 NANDs), enabled by a constant 1: one line per command, hold, load, right, skip, down, up, band and double. Everything below is steered by single lines.',
       parts: ['u1'], codex: ['decoder'],
     },
     {
       title: 'E and R',
-      text: 'Two 16-bit registers with enable, 208 NANDs each: E, the edge function at the current pixel, and R, its value where the current band started.',
+      text: 'Two 16-bit registers with enable, 208 NANDs each: E, the edge function at the current pixel, and R, its value where the current band started. 16 bits are enough: vertices are 7-bit quarter pixels, so A, B and every Δ lie within ±127 and |E| = |A·Δx + B·Δy| ≤ 2·127² = 32 258, below 2^15.',
       parts: ['E', 'R'], codex: ['register', 'edgefn'],
     },
     {
@@ -381,7 +384,7 @@ export const WALKS6: Record<string, WalkScript> = {
     },
     {
       title: 'inside',
-      text: 'inside = E ≥ 0: NOT of the sign bit, 1 NAND. 984 NANDs in all, 416 of them the two registers.',
+      text: 'inside = E ≥ 0: NOT of the sign bit, 1 NAND. 963 NANDs in all, 416 of them the two registers.',
       parts: ['u23'], codex: ['not'],
     },
   ],
@@ -454,7 +457,7 @@ export const WALKS6: Record<string, WalkScript> = {
     },
     {
       title: 'Set-up steps',
-      text: 'A flip-flop per step, started by go while idle: load, two sign steps, 14 pairs counted by t, the bias, the cull. A chain of 19 cycles before the walk, 250 NANDs.',
+      text: 'A flip-flop per step, started by go while idle: load, two sign steps, 14 shift-and-add steps counted by t (7 bits, each for A and for B), the bias, the cull. A chain of 19 cycles before the walk, 250 NANDs.',
       parts: ['seq'], codex: ['fsm'],
     },
     {
@@ -471,7 +474,7 @@ export const WALKS6: Record<string, WalkScript> = {
     },
     {
       title: 'Three edge steppers',
-      text: 'Your edge stepper, three times (984 NANDs each), each on its operands. Their command is the set-up\'s OR the walk\'s: each is 0 while the other runs, so a 3-bit OR merges them.',
+      text: 'Your edge stepper, three times (963 NANDs each), each on its operands. Their command is the set-up\'s OR the walk\'s: each is 0 while the other runs, so a 3-bit OR merges them.',
       parts: ['edge0', 'edge1', 'edge2', 'u0'], codex: ['edgefn'],
     },
     {
@@ -486,7 +489,7 @@ export const WALKS6: Record<string, WalkScript> = {
     },
     {
       title: 'Write a pixel',
-      text: 'fwe = pix · all three inside; fa = 32·y + x is a merger of the walk\'s y and x, fd is col. 9251 NANDs, 6516 of them the set-up and the three steppers.',
+      text: 'fwe = pix · all three inside; fa = 32·y + x is a merger of the walk\'s y and x, fd is col. 9188 NANDs, 6453 of them the set-up and the three steppers.',
       parts: ['u2', 'u3'], codex: ['and'],
     },
   ],
@@ -499,7 +502,7 @@ export const WALKS6: Record<string, WalkScript> = {
     },
     {
       title: 'State per warp, as before',
-      text: 'Per warp a PC, mask, stack, lane registers and waiting bit: 11086 NANDs a warp.',
+      text: 'Per warp a PC, mask, stack, lane registers and waiting bit: 11002 NANDs a warp.',
       parts: ['u22', 'u23', 'u24', 'u25', 'u26', 'u27', 'u28', 'u29', 'u30', 'u31'], codex: ['warp'],
     },
     {
@@ -519,7 +522,7 @@ export const WALKS6: Record<string, WalkScript> = {
     },
     {
       title: 'Masks, stacks, PCs, bar, as before',
-      text: 'Per warp the mask and stack controls gated by go, the PC that moves only when its warp goes, and the waiting bit for bar. Up to here, the two-warp core (30163 NANDs) and the hold gate.',
+      text: 'Per warp the mask and stack controls gated by go, the PC that moves only when its warp goes, and the waiting bit for bar. Up to here, the two-warp core (29974 NANDs) and the hold gate.',
       parts: ['u85', 'u86', 'u87', 'u88', 'u89', 'u90', 'u91', 'u117', 'u118', 'u119', 'u120', 'u121', 'u122', 'u123', 'u153', 'u104', 'u105', 'u107', 'u108', 'u136', 'u137', 'u139', 'u140', 'u109', 'u110', 'u111', 'u112', 'u113', 'u114', 'u115', 'u116', 'u141', 'u142', 'u143', 'u144', 'u145', 'u146', 'u147', 'u148'], codex: ['barrier'],
     },
     {
@@ -539,17 +542,17 @@ export const WALKS6: Record<string, WalkScript> = {
     },
     {
       title: 'The device registers',
-      text: 'A write happens when lane 0\'s store actually goes (dwe bit 0, which includes go) to the device: a 3→8 decoder on address bits 2:0 enables one of six vertex registers (lane 0\'s rs2, low 7 bits) or the colour register. Seven 208-NAND registers, 1456 NANDs.',
-      parts: ['u185', 'u187', 'u188', 'r_v0x', 'r_v0y', 'r_v1x', 'r_v1y', 'r_v2x', 'r_v2y', 'r_col'], codex: ['register', 'decoder'],
+      text: 'A write happens when lane 0\'s store actually goes (dwe bit 0, which includes go) to the device: a 3→8 decoder on address bits 2:0 enables one of six vertex registers or the colour register. A vertex is 7 bits, lane 0\'s rs2 bits 6:0: a 4-bit register and three enable flip-flops, 91 NANDs. Six of them and the 16-bit colour register: 754 NANDs. Width is cost: 16-bit vertex registers would add 702 NANDs for nine bits that are always 0.',
+      parts: ['u185', 'u187', 'u188', ...VERTS.flatMap((p) => [`r_${p}`, `r_${p}4`, `r_${p}5`, `r_${p}6`]), 'r_col'], codex: ['register', 'decoder'],
     },
     {
       title: 'The rasterizer',
-      text: 'Your rasterizer, 9251 NANDs, on the seven registers. The store to 0xFFF6 sets a flip-flop that is its go in the next cycle, when the colour is in its register. Its fa, fd and fwe are the core\'s pixel port.',
+      text: 'Your rasterizer, 9188 NANDs, on the seven registers. The store to 0xFFF6 sets a flip-flop that is its go in the next cycle, when the colour is in its register. Its fa, fd and fwe are the core\'s pixel port.',
       parts: ['rast', 'startF'], codex: ['device'],
     },
     {
       title: 'Hold while busy',
-      text: 'busy for the core = the rasterizer\'s busy OR the start flip-flop; held = busy · (devStore + screen load), into the NOT before go. 41250 NANDs: the two-warp core, the rasterizer, 1456 for the registers and 380 for the rest.',
+      text: 'busy for the core = the rasterizer\'s busy OR the start flip-flop; held = busy · (devStore + screen load), into the NOT before go. 40275 NANDs: the two-warp core, the rasterizer, 754 for the registers and 359 for the rest.',
       parts: ['u182', 'u183', 'u184'], codex: ['stall', 'device'],
       ask: {
         question: 'Why is held built from the control unit\'s mwe and the load decode, not from dwe and the masks\' write enables?',
