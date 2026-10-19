@@ -2,7 +2,7 @@
 // register the top level itself (only its parts), so the schematic tests list them explicitly.
 
 import {
-  dualCore, dualPipeCpu, laneCore, multiCore, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCore, systemCpu,
+  dualCore, dualPipeCpu, laneCore, multiCore, multicycleCpu, oooCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCore, systemCpu,
 } from '../src/lib';
 import { assemble } from '../src/riscv/asm';
 import { CACHE_CPU_PROGRAMS } from '../src/riscv/cprograms';
@@ -25,7 +25,7 @@ export function cpuTops(): ComponentDef[] {
     pipelinedCpu(w, { adder: 'ks', m: true }), pipelinedCpu(w, { adder: 'ks', balanced: true, predictor: true, m: true }),
     pipelinedFpCpu(w), systemCpu(w), systemCpu(w, { m: true }),
     // chapter 24: the dual-issue pipeline
-    dualPipeCpu(w),
+    dualPipeCpu(w), oooCpu(w),
     // Appendix B: the system core with ports (the Doom computer's)
     systemCore(), systemCore({ m: true }),
     multicycleCpu(w, { control: 'fsm' }), multicycleCpu(w, { control: 'micro' }), dualCore(w),
