@@ -1049,8 +1049,10 @@ links, bus taps, duplicate and pin reordering. The gaps:
   pass-transistor steps and the campaign's act 0 can show it. Mockup first (a new visual state)
 
 **Cross-layer debugging**:
-- ⏳ The drill-down breadcrumb live: each level's value at the opened instance (hex at the top, `bit [7] = 1` where a
-  bus was sliced), following the simulation, in the chapters' stage and the sandbox's look inside
+- ✅ The drill-down breadcrumb live (view/crumbvals.ts): each level's value at the opened instance (hex at the top,
+  `bit [7] = 1` where a bus was sliced), following the simulation, in the chapters' stage and the sandbox's look
+  inside. From the deepest level up, a level shows the output carrying the one below (the same flat nets), else its
+  first; the top level only when its pins carry it
 - ⏳ A slack heatmap: every gate coloured by how close its arrival time is to the critical path's (unit or load
   delay), a toggle on the Timing panel beside the drawn critical path
 
