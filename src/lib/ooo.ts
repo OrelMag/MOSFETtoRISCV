@@ -569,7 +569,7 @@ export function robCell(D: number, V: number): ComponentDef {
  */
 export function reorderBuffer(D: number, V: number): ComponentDef {
   return memo(`rob16_${D}_${V}`, () => {
-    const N = 16, W = 1 + D + V, C = robCell(D, V), R = register(W), RP = readPort(4, W), DEC = decoder(4, true, 10);
+    const N = 16, W = 1 + D + V, C = robCell(D, V), R = register(W), DEC = decoder(4, true, 10);
     const b = new Builder(18, 24, 4);
     const ins = ['a0', 'a1', 'dd0', 'dd1', 'dn0', 'dn1', 'dv0', 'dv1', 'bw0', 'btag0', 'bv0', 'bw1', 'btag1', 'bv1', 'ce0', 'ce1', 'flush', 'rtag0', 'rtag1', 'rtag2', 'rtag3', 'clk'];
     b.pins(...ins);
@@ -594,12 +594,17 @@ export function reorderBuffer(D: number, V: number): ComponentDef {
       if (e % 4 === 3) b.next();
     }
     b.next();
-    const all = b.name(b.op1(merger(Array(N).fill(W), 2), qs, undefined, 'all'), 'entries', true);
+    // the entries bundled field by field: done, dispatch fields, value, execution info (each bundle within a sandbox
+    // pin's 1024 bits, and an operand reads only done and value)
+    const F = [1, D, 32, V - 32];
+    const fsp = qs.map((q, e) => b.op(splitter(F), [q], undefined, `fs${e}`));
     b.next();
+    const bund = F.map((w, i) => b.name(b.op1(merger(Array(N).fill(w), 2), fsp.map((x) => `${x}.o${i}`), undefined, `all${i}`), ['done', 'dispatched', 'values', 'info'][i], true));
+    b.next();
+    const rd = (i: number, sel: string, nm: string, label?: string) => b.op1(readPort(4, F[i]), [bund[i], sel], label, nm);
     // the two oldest, for commit; operands by tag
-    const h0 = b.op(splitter([1, D, V]), [b.op1(RP, [all, 'head.q'], 'head', 'rh0')], undefined, 'h0s');
-    const h1 = b.op(splitter([1, D, V]), [b.op1(RP, [all, head1], 'head + 1', 'rh1')], undefined, 'h1s');
-    const ops = [0, 1, 2, 3].map((k) => b.op(splitter([1, D, 32, V - 32]), [b.op1(RP, [all, `rtag${k}`], `operand ${k}`, `ro${k}`)], undefined, `os${k}`));
+    const heads = ([['head.q', 'h0', 'head'], [head1, 'h1', 'head + 1']] as const).map(([sel, nm, lb]) => F.map((_, i) => rd(i, sel, `${nm}f${i}`, i ? undefined : lb)));
+    const ops = [0, 1, 2, 3].map((k) => [rd(0, `rtag${k}`, `ro${k}d`, `operand ${k}`), rd(2, `rtag${k}`, `ro${k}v`)]);
     b.next();
     // pointer updates: head += commits; count += allocations − commits; a flush leaves it empty
     const nC = b.op1(merger([1, 1]), [b.op1(XOR, ['ce0', 'ce1'], undefined, 'c1'), b.op1(AND, ['ce0', 'ce1'], undefined, 'c2')], undefined, 'nC');
@@ -622,10 +627,9 @@ export function reorderBuffer(D: number, V: number): ComponentDef {
     b.wire(b.op1(NOT, [full], undefined, 'room2'), 'free2');
     b.wire(b.op1(nonZero(5), ['cnt.q'], undefined, 'any'), 'h0valid');
     b.wire(b.op1(nonZero(4), [`${b.op(splitter([1, 4]), ['cnt.q'], undefined, 'c2s')}.o1`], undefined, 'twoPlus'), 'h1valid');
-    b.wire(`${h0}.o0`, 'h0done'); b.wire(`${h0}.o1`, 'h0d'); b.wire(`${h0}.o2`, 'h0v');
-    b.wire(`${h1}.o0`, 'h1done'); b.wire(`${h1}.o1`, 'h1d'); b.wire(`${h1}.o2`, 'h1v');
+    heads.forEach((h, k) => { b.wire(h[0], `h${k}done`); b.wire(h[1], `h${k}d`); b.wire(b.op1(merger([32, V - 32]), [h[2], h[3]], undefined, `hv${k}`), `h${k}v`); });
     b.wire('head.q', 'headTag'); b.wire(head1, 'head1Tag'); b.wire(tail, 'tailTag'); b.wire(tail1, 'tail1Tag');
-    for (const k of [0, 1, 2, 3]) { b.wire(`${ops[k]}.o0`, `rdone${k}`); b.wire(`${ops[k]}.o2`, `rval${k}`); }
+    for (const k of [0, 1, 2, 3]) { b.wire(ops[k][0], `rdone${k}`); b.wire(ops[k][1], `rval${k}`); }
     const R0 = b.right;
     const Wd: Record<string, number> = { dd0: D, dd1: D, dv0: V, dv1: V, btag0: 4, bv0: V, btag1: 4, bv1: V, rtag0: 4, rtag1: 4, rtag2: 4, rtag3: 4 };
     const outs: [string, number][] = [['free1', 1], ['free2', 1], ['h0valid', 1], ['h0done', 1], ['h0d', D], ['h0v', V], ['h1valid', 1], ['h1done', 1], ['h1d', D], ['h1v', V],

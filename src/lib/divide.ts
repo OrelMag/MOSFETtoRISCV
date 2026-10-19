@@ -206,7 +206,7 @@ export function iterCtrl(n: number, abort = false): ComponentDef {
       { name: 'keep', def: AND, at: [x3 + 6, yG + 11] },
       { name: 'nrun', def: OR, at: [x3 + 13, yG] },
       { name: 'run', def: DFF, at: [x3 + 24, yG - 1], label: 'busy' },
-      ...(abort ? [{ name: 'nab', def: NOT, at: [x3 + 13, yG + 8] as [number, number] }, { name: 'kill', def: AND, at: [x3 + 18, yG + 2] as [number, number] }] : []),
+      ...(abort ? [{ name: 'nab', def: NOT, at: [x3 + 13, yG + 12] as [number, number] }, { name: 'kill', def: AND, at: [x3 + 18, yG + 9] as [number, number] }] : []),
     ];
     const nets: NetDef[] = [
       { name: 'start', ends: ['start', 'load.a'] },
