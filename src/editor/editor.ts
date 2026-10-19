@@ -13,6 +13,7 @@ import type { PowerOnMode } from '../sim/sim';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { describeBits } from '../sim/values';
 import { coarsePointer, h, hintBadge, icon } from '../ui/dom';
+import { showKeySheet } from '../ui/keyhelp';
 import { settings } from '../ui/settings';
 import { closePopover } from '../view/popover';
 import type { Compiled, Diag } from './compile';
@@ -687,7 +688,7 @@ export class Editor {
   }
 
   /** The toolbar actions this editor shows (a level screen: its own list). */
-  private barActions(): ToolbarAction[] {
+  barActions(): ToolbarAction[] {
     const only = this.level?.actions;
     return actions.filter((a) => (only ? only.includes(a.id) : !a.levelOnly));
   }
@@ -1042,46 +1043,12 @@ export class Editor {
     area.select();
   }
 
+  /** The sandbox's key sheet (ui/keyhelp.ts, drawn from the key table ui/keys.ts), the mouse gestures folded under it. */
   showHelp(): void {
-    const keys: [string, string][] = [
-      ['Drag from a pin or port', 'draw a wire; click empty canvas to add a corner'],
-      ['Space or /', 'flip the wire\'s L (while drawing)'],
-      ['Backspace', 'remove the last corner (while drawing)'],
-      ['Click a pin, port, pointer or wire', 'finish the wire (on a wire: a branch)'],
-      ['Ctrl/Alt + drag a wire', 'start a branch from it'],
-      ['Drag a wire', 'reshape it: a corner moves, a segment slides (a simple connection bends)'],
-      ['Double-click a corner', 'remove that bend'],
-      ['Right-click a wire ▸ Add a bend here', 'a new corner on the cursor: move it, click to drop it'],
-      ['Wire colours ▸ Simple connections', 'new wires run straight between the points you click'],
-      ['☆ on a palette item', 'pin it to Favorites at the top of the palette (★ unpins)'],
-      ['1 … 9', 'pick favorite 1 to 9: click the canvas to place it (Shift: place several)'],
-      ['L', 'place a pointer (same name = same net)'],
-      ['Click a selected pointer / double-click', 'jump to the next pointer with that name'],
-      ['T', 'place a comment · double-click one to edit it'],
-      ['Click a selected name · double-click a name', 'rename a part or pin where it is drawn'],
-      ['F2', 'rename the selected part, pin or pointer (a comment: edit its text)'],
-      ['Right-click', 'actions for what is under the cursor (or the canvas)'],
-      ['Drag empty canvas', 'select with a rubber band (Shift: add)'],
-      ['Shift + click', 'add to / remove from the selection'],
-      ['Space + drag, middle drag, two fingers', 'pan · wheel or pinch: zoom'],
-      ['Ctrl+Z · Ctrl+Shift+Z / Ctrl+Y', 'undo · redo'],
-      ['Ctrl+C · X · V · D · A', 'copy · cut · paste · duplicate · select all'],
-      ['Delete / Backspace', 'delete the selection'],
-      ['F', 'flip the selection left–right'],
-      ['Arrows (Shift: ×5)', 'nudge the selection'],
-      ['Ctrl+Enter', 'run / pause the simulation'],
-      ['A key a Key part listens to', 'drives it while held (and is not a shortcut while that chip is open)'],
-      ['Any key, while running or with Type on', 'is typed into the chip\'s Keyboard parts'],
-      ['Esc', 'cancel · clear the selection · leave Type'],
-    ];
-    const close = () => ov.remove();
-    const ov = h('div', { class: 'sb-help', role: 'dialog', 'aria-label': 'Keyboard shortcuts', onclick: (e: Event) => { if (e.target === ov) close(); } },
-      h('div', { class: 'panel' },
-        h('div', { class: 'sb-help-head' }, h('h3', null, 'Sandbox shortcuts'), h('button', { class: 'btn ghost icon-only', 'aria-label': 'Close', onclick: close }, icon('close', 16))),
-        h('dl', null, keys.map(([k, v]) => [h('dt', null, k), h('dd', null, v)]))));
-    this.el.append(ov);
-    ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-    (ov.querySelector('button') as HTMLButtonElement).focus();
+    showKeySheet({
+      title: 'Sandbox keys', sub: 'Keys act on the canvas whenever focus is not in a text field or a panel.',
+      groups: ['place', 'wire', 'select', 'edit', 'view', 'panels'], taken: new Set(this.sim.keyBinds), mouse: MOUSE_HELP, cls: 'sb-keys',
+    });
   }
 
   destroy(): void {
@@ -1100,6 +1067,27 @@ export class Editor {
     closePopover();
   }
 }
+
+/** The sandbox's mouse gestures (its keys are in the key table, ui/keys.ts). */
+const MOUSE_HELP: [string, string][] = [
+  ['Drag from a pin or port', 'draw a wire; click empty canvas to add a corner'],
+  ['Click a pin, port, pointer or wire', 'finish the wire (on a wire: a branch)'],
+  ['Ctrl/Alt + drag a wire', 'start a branch from it'],
+  ['Drag a wire', 'reshape it: a corner moves, a segment slides (a simple connection bends)'],
+  ['Double-click a corner', 'remove that bend'],
+  ['Right-click a wire ▸ Add a bend here', 'a new corner on the cursor: move it, click to drop it'],
+  ['Wire colours ▸ Simple connections', 'new wires run straight between the points you click'],
+  ['☆ on a palette item', 'pin it to Favorites at the top of the palette (★ unpins)'],
+  ['Click a selected pointer / double-click', 'jump to the next pointer with that name'],
+  ['Double-click a comment', 'edit it'],
+  ['Click a selected name · double-click a name', 'rename a part or pin where it is drawn'],
+  ['Right-click', 'actions for what is under the cursor (or the canvas)'],
+  ['Drag empty canvas', 'select with a rubber band (Shift: add)'],
+  ['Shift + click', 'add to / remove from the selection'],
+  ['Space + drag, middle drag, two fingers', 'pan · wheel or pinch: zoom'],
+  ['A key a Key part listens to', 'drives it while held (and is not a shortcut while that chip is open)'],
+  ['Any key, while running or with Type on', 'is typed into the chip\'s Keyboard parts'],
+];
 
 /** Simulations kept for chips that are not the active tab. */
 const KEEP_SIMS = 4;

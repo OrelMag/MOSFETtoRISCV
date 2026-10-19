@@ -23,6 +23,7 @@ import { type ProbeTarget, resolveProbe, sameTarget } from './probes';
 import { registerPropsSection } from './props';
 import type { EditorSim } from './runtime';
 import { type ChipTiming, chipTiming } from './sta';
+import { matches, shortcutAllowed } from '../ui/keys';
 
 /** Port lanes a chip starts with (the analyzer gets crowded beyond that). */
 const PIN_LANES = 8;
@@ -79,8 +80,8 @@ class Analysis {
       // Esc is also the editor's (cancel, clear the selection): it leaves probe mode as well.
       if (e.key === 'Escape' && this.probing && !typing(e.target)) return this.setProbing(false);
       if (typing(e.target) || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
-      if ((e.target as HTMLElement | null)?.closest?.('.sb-help')) return;
-      if (e.key === 'p' || e.key === 'P') { e.preventDefault(); this.setProbing(!this.probing); }
+      if ((e.target as HTMLElement | null)?.closest?.('.sb-help, .key-help')) return;
+      if (matches(e, 'sb.probe') && shortcutAllowed(e)) { e.preventDefault(); this.setProbing(!this.probing); }
     };
     document.addEventListener('keydown', key);
     this.off.push(() => document.removeEventListener('keydown', key), settings.onChange(() => { this.la.radix = settings.radix; this.la.update(); }));
