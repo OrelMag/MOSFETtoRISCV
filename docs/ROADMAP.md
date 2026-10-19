@@ -243,6 +243,9 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   CSR serialization, structural stalls for the iterative units; period 121 vs 313 (single-cycle), CPI 1.6–2.7, co-simulated
 - 🚧 Superscalar and out-of-order execution: Phase 17 (chapter 25)
 - Compressed instructions (C), A extension (LR/SC, AMO)
+- RV64I (and RV64M): the datapath generators are already parametric in width (alu(n), regfile(k, w), the adders and
+  shifters), so a 64-bit single-cycle core is mostly the W-suffixed instructions, sign extension of 32-bit results and a
+  golden model in BigInt or paired words; riscv-tests' rv64ui / rv64um and Spike's rv64 log then check it (Phase 19)
 - Virtual memory (Sv32), TLB, U/S/M privilege levels (stretch)
 
 ### Phase 10 — Multi-core ✅ (chapter 26)
@@ -889,6 +892,15 @@ the pipelines' 1-cycle data memory; RV32IM without traps; a cycle-exact model th
   the rename table, wakeup (one issue-queue entry), select (the age matrix and the wakeup-select loop that sets the
   clock), the reorder buffer, loads and stores (every load forwarded while a divide holds commit), the whole core
 - ⏳ 17d: measured (plan: E:/mockups/ooo/PLAN-17b-17d.md)
+- ⏳ 17e: an out-of-order lab you configure (Phase 19; FREESS's strength). `OooModel` already takes any width, ROB,
+  issue queue, store queue, latencies, predictor, BTB / RAS sizes, recovery point and in-order issue; what it lacks is
+  ports decoupled from width and units per port (today port 0 takes memory, port 1 mul / div). Generalize the model
+  (n ports, a unit mix per port, pipelined or iterative units, fetch / commit width separate from issue width), keep
+  `OOO_CORE` as one point the gates are checked against, then a widget on chapter 25 and the workbench: the knobs, a
+  program (the benchmarks, assembly, or chapter 15's Python), the per-cycle timeline, CPI and where the cycles go (front
+  end, full ROB / queue, port conflicts, mispredictions, divider). Its cost side from the gates: ROB, issue queue and
+  store queue sizes as parameters of lib/ooocore.ts (the core stays 2-wide), NANDs and period per size measured, so the
+  lab prices a configuration instead of only timing it
 
 ### Phase 16 — Journey and campaign track: Memory ✅
 Memory in depth, past today's arrays (chapter 10), cells and caches (Phase 8): how a DRAM chip really answers, what
@@ -955,6 +967,47 @@ language and functions.
   forty example programs in six sections (pyprograms.ts: each with what it prints, under 20 000 cycles)
 - ⏳ The same programs on the pipeline (stalls and flushes per Python line); RV32IM (mul / div instead of the
   routines); strings and a heap
+
+### Phase 19 — Where other tools still win ⏳
+From a comparison with other tools (2026-10-19): Digital, DigitalJS, Circuit Artist, FREESS and Ripes each still do
+something better. Their maturity, user bases and years of classroom polish are not roadmap items; the rest are. Each
+gap here, closed the site's way (computed, transparent down to the transistor, checked against an independent tool):
+
+**HDL in, not only out** (Digital drops a VHDL or Verilog component into a schematic; DigitalJS turns Verilog into an
+animated schematic). The site exports Verilog and already runs Yosys in CI, so its JSON netlist is the way in.
+- ⏳ Yosys JSON as sandbox chips: `write_json` after a synthesis to Yosys's fine-grained cells (`$_AND_`, `$_OR_`,
+  `$_NOT_`, `$_XOR_`, `$_MUX_`, `$_DFF_P_`, `$_DFFE_PP_`, …), each cell a library part, so an imported design opens
+  down to NANDs and transistors like everything else; ports become pins, a hierarchy kept (`synth` without `-flatten`)
+  becomes nested user chips; a layered placement left to right by logic depth (the JSON carries no drawing), pointers
+  for long nets. File ▸ Import and drag-and-drop of a `.json`
+- ⏳ Verilog typed in the sandbox: Yosys in the browser (`@yowasp/yosys`, WebAssembly, loaded only when used: tens of
+  MB) producing that JSON, errors as diagnostics on the source lines; the module stays editable as text beside its
+  schematic. Round trip in the tests: our own export (vexport.ts) imported back must simulate equal to the original,
+  every output every cycle (verify-export.ts's comparison)
+- ⏳ "The same adder in Verilog": a chapter step or sandbox example with a 4-bit adder as text beside its imported
+  schematic, its NANDs and depth against the hand-drawn one
+- VHDL through GHDL's Yosys plugin only if a WebAssembly build exists; else not planned
+
+**Delay that depends on load** (Circuit Artist models wire delay from length and fan-out; here every NAND costs one
+unit, wires nothing). The fan-out capacitance per net is already computed for the power estimate (sim/power.ts).
+- ⏳ A load-dependent delay mode (a setting, off by default so the chapters' quoted numbers stay): a NAND's delay by
+  logical effort, d = p + g·h (NAND2: g = 4/3, p = 2), h its load over its input capacitance from netCaps (0.5 fF per
+  NAND input, 0.3 fF of wire per branch). Static timing first (sim/timing.ts, the sandbox's sta.ts: the critical path
+  in the new unit, each gate's share of it), then GateSim with integer delays on a finer grain (tenths of a unit) so
+  glitches and races follow the loads too
+- ⏳ Where it changes the story, each step showing both numbers: Kogge–Stone's fan-out against a sparser prefix tree
+  (Brent–Kung, new to the library; unit delay makes Kogge–Stone look free), a high-fan-out select or enable needing a
+  buffer tree, a memory's row decoder, the clock net
+- ⏳ Checked against silicon: per path, the load-weighted estimate against OpenSTA's after routing on the two sky130
+  layouts (today one NAND delay is worth ≈157–171 ps there; a load model should narrow the spread path to path)
+- Wire length only where a design is placed (chapter 27's teaching placer, the OpenROAD runs), never from a
+  schematic's drawn wires: a drawing's length is not a layout's
+
+**Out of order you can configure** (FREESS: ROB size, issue width, functional units): Phase 17e. The gate-level
+2-wide core (Phase 17c) stays fixed; the lab varies the model and prices sizes from the gates.
+
+**ISA breadth** (Ripes: RV64, the C extension): RV64I / RV64M and C in Phase 9, each checked by riscv-tests and Spike
+like the RV32 cores.
 
 ### Appendix A — An 8-bit CPU of 1975: the MOS 6502 ✅
 After the journey, a lettered appendix: the real 6502 rebuilt the way 1975 built it, at transistor level, and why
