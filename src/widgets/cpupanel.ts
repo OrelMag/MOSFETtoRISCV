@@ -66,6 +66,11 @@ export interface CpuSceneOptions {
   editable?: boolean;
   /** The dual-issue RV32IM pipeline of chapter 24 (implies pipeline and m: two lanes in the listing and the diagram). */
   wide?: boolean;
+  /** The single-cycle CPU's ROM (2^imemK words) and data memory (2^dmemK words), when not the defaults (6 and 5). */
+  imemK?: number;
+  dmemK?: number;
+  /** Panels docked beside the CPU panel (chapter 15's Python panel); with them the program is theirs to choose. */
+  extraPanels?: ScenePanel[];
 }
 
 /** A scene running `source` on the single-cycle CPU, with the CPU panel attached. */
@@ -78,17 +83,18 @@ export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
       : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram })
-        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu }),
+        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
-    panels: [cpuPanel({ ...opts, asm }), ...(opts.pipeline ? [pipeDiagram(asm)] : []), ...(opts.system ? [ioPanel] : []), ...(opts.multicycle ? [controllerPanel(opts.multicycle, true)] : []), ...(opts.timing ? [timingPanel] : [])],
+    panels: [cpuPanel({ ...opts, asm }), ...(opts.pipeline ? [pipeDiagram(asm)] : []), ...(opts.system ? [ioPanel] : []), ...(opts.multicycle ? [controllerPanel(opts.multicycle, true)] : []), ...(opts.timing ? [timingPanel] : []), ...(opts.extraPanels ?? [])],
   };
 }
 
 function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
   return (stage: Stage): Widget => {
     const asm = opts.asm;
-    const issOpts = opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.dcache || opts.wide ? { dmemWords: 64 } : {};
+    const issOpts = opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.dcache || opts.wide ? { dmemWords: 64 }
+      : { ...(opts.imemK ? { imemWords: 2 ** opts.imemK } : {}), ...(opts.dmemK ? { dmemWords: 2 ** opts.dmemK } : {}) };
     let iss = new ISS(asm.words, issOpts);
     let lastX: number[] = new Array(32).fill(0);
     let changed = new Set<number>();
@@ -221,7 +227,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     const editBtn = h('button', { class: 'btn sm', onclick: () => { editWrap.style.display = editWrap.style.display === 'none' ? 'block' : 'none'; } }, 'Edit');
 
     const body = h('div', { class: 'cpu-body' },
-      h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, editBtn, runBtn),
+      h('div', { class: 'param-row', style: 'margin-bottom:6px' }, ...(opts.extraPanels?.length ? [] : [sel, editBtn]), runBtn),
       slowCtl.el,
       editWrap, status, haltLine, now,
       h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its hardware')), listing, usePath,
@@ -273,7 +279,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
           if (fd >= 0 && diff < 0) mismatch = `${FABI[fd]} differs: hardware ${hex(f![fd])}, model ${hex(iss.f[fd])}`;
           const fc = cpuState(stage.sim).fcsr;
           if (fc !== undefined && fc !== ((iss.frm << 5) | iss.fflags) && diff < 0 && fd < 0) mismatch = `fcsr differs: hardware ${hex(fc, 2)}, model ${hex((iss.frm << 5) | iss.fflags, 2)}`;
-          if (diff >= 0) mismatch = `${ABI[diff]} differs after "${disasm(iss.imem[(iss.pc >>> 2) % 64] ?? 0x13)}": hardware ${hex(x[diff])}, model ${hex(iss.x[diff])}`;
+          if (diff >= 0) mismatch = `${ABI[diff]} differs after "${disasm(iss.imem[(iss.pc >>> 2) % (issOpts.imemWords ?? 64)] ?? 0x13)}": hardware ${hex(x[diff])}, model ${hex(iss.x[diff])}`;
         }
       },
     });

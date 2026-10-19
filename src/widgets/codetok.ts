@@ -12,9 +12,11 @@ import { DIRECTIVES4 } from '../isa4/asm4';
 import { BY_NAME4, JCN_NAMES, pair4, reg4 } from '../isa4/isa4';
 import { type IsaDoc, tableOf } from '../isa/table';
 import { MNEMONICS as M65 } from '../m6502/isa';
+import { BUILTINS, KEYWORDS } from '../lang/ast';
 
-/** rvasm: RV32 assembly; rv16asm: the campaign's RV16; cpu4asm: the 4-bit CPU's; m6502asm: the 6502's (Appendix A); hex: words. */
-export type CodeLang = 'rvasm' | 'rv16asm' | 'cpu4asm' | 'm6502asm' | 'hex' | { table: IsaDoc };
+/** rvasm: RV32 assembly; rv16asm: the campaign's RV16; cpu4asm: the 4-bit CPU's; m6502asm: the 6502's (Appendix A); hex: words;
+ *  py: the Python subset of chapter 15. */
+export type CodeLang = 'rvasm' | 'rv16asm' | 'cpu4asm' | 'm6502asm' | 'hex' | 'py' | { table: IsaDoc };
 
 /** Token classes (CSS: .tk-<cls>); '' is plain text / whitespace.
  *  com comment · lbl label · op instruction · ps pseudo-instruction · dir directive · reg register
@@ -196,9 +198,29 @@ function hex(line: string): Tok[] {
   return out;
 }
 
+const PY_BUILTINS = new Set<string>(BUILTINS);
+
+/** The Python subset (src/lang): keywords, built-ins, numbers, comments; a string is marked bad (not supported). */
+function py(line: string): Tok[] {
+  const out: Tok[] = [];
+  let at = 0;
+  while (at < line.length) {
+    const rest = line.slice(at);
+    const m = rest.match(/^\s+/) ?? rest.match(/^#.*/) ?? rest.match(/^(0[xX][0-9a-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|\d[\d_]*)/)
+      ?? rest.match(/^[A-Za-z_]\w*/) ?? rest.match(/^(["'])(?:\\.|(?!\1).)*\1?/) ?? rest.match(/^./);
+    const text = m![0], c = text[0];
+    const cls: TokClass = /\s/.test(c) ? '' : c === '#' ? 'com' : /\d/.test(c) ? 'num' : c === '"' || c === "'" ? 'bad'
+      : /[A-Za-z_]/.test(c) ? (KEYWORDS.has(text) ? 'kw' : PY_BUILTINS.has(text) ? 'op' : '') : 'pun';
+    out.push({ text, cls });
+    at += text.length;
+  }
+  return out;
+}
+
 /** Split one line into classified tokens; their texts concatenate to `line`. */
 export function tokenize(line: string, lang: CodeLang): Tok[] {
   if (typeof lang === 'object') return rvasm(line, tableWords(lang.table));
   if (lang === 'm6502asm') return m6502asm(line);
+  if (lang === 'py') return py(line);
   return lang === 'hex' ? hex(line) : rvasm(line, lang === 'rv16asm' ? RV16 : lang === 'cpu4asm' ? CPU4 : RV32);
 }
