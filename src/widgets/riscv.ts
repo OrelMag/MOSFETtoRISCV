@@ -2,7 +2,8 @@
 
 import { assemble } from '../riscv/asm';
 import { ABI, decode, disasm, type Fmt } from '../riscv/isa';
-import { formatStrip, instrBreakdown } from './instrfields';
+import { formatStrip } from './instrfields';
+import { instrComposer } from './composer';
 import { ISS } from '../riscv/iss';
 import { PROGRAMS } from '../riscv/programs';
 import { debounce, h } from '../ui/dom';
@@ -20,54 +21,25 @@ const MEANING: Record<string, string> = {
   J: 'Jump: rd = pc + 4; pc += imm (±1 MiB).',
 };
 
+/** Chapter 13's instruction builder: the composer, what its format means, and the six formats. */
 export function instructionExplorer(): Widget {
-  const input = h('input', { type: 'text', class: 'num-in', value: 'addi a0, a0, -5', spellcheck: 'false', 'aria-label': 'instruction' }) as HTMLInputElement;
-  input.style.cssText = 'width:100%;padding:8px 10px;border-radius:9px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font:600 14px var(--font-mono)';
-  const out = h('div');
   const examples = ['add t0, t1, t2', 'addi a0, a0, -5', 'srai t0, t1, 3', 'lw s0, 8(sp)', 'sw a1, -4(s0)', 'beq a0, zero, 16', 'lui a0, 0x12345', 'jal ra, 2048', 'li a0, 0x12345678', 'csrrw t0, mscratch, t1', 'flw fa0, 4(a0)'];
-  const render = () => {
-    const t = input.value.trim();
-    let words: number[] = [];
-    let err = '';
-    if (/^(0x)?[0-9a-f]{8}$/i.test(t)) words = [parseInt(t.replace(/^0x/i, ''), 16) >>> 0];
-    else {
-      const r = assemble(t);
-      if (r.errors.length) err = r.errors[0].message;
-      else words = r.words;
-    }
-    out.replaceChildren();
-    if (!words.length) {
-      out.append(h('p', { class: 'asm-errors' }, err || 'Type an instruction or a hex word.'));
-      return;
-    }
-    // A pseudo-instruction (li, la, call) may expand to two real instructions: show each.
-    if (words.length > 1) out.append(h('p', { class: 'sub' }, `A pseudo-instruction: the assembler emits ${words.length} instructions.`));
-    for (const word of words) {
-      const d = decode(word);
-      out.append(
-        h('div', { class: 'readout' },
-          h('div', null, h('b', null, hex(word)), h('span', null, 'machine code')),
-          h('div', null, h('b', null, `${d.fmt}-type`), h('span', null, 'format')),
-          h('div', null, h('b', null, d.name), h('span', null, 'operation')),
-          h('div', null, h('b', null, disasm(word)), h('span', null, 'disassembled'))),
-        instrBreakdown(word),
-        h('p', { class: 'sub' }, MEANING[d.fmt]),
-      );
-    }
+  const meaning = h('p', { class: 'sub' });
+  const show = (word: number) => {
+    const d = decode(word);
+    meaning.textContent = d.spec ? `${hex(word)}, ${d.fmt}-type. ${MEANING[d.fmt] ?? ''}` : '';
   };
-  input.addEventListener('input', render);
-  render();
+  const cmp = instrComposer({ word: 0xffb50513, examples, onChange: (w) => show(w) });
+  show(cmp.word);
   const formats = h('div', null, (['R', 'I', 'S', 'B', 'U', 'J'] as Fmt[]).map((f) =>
     h('div', { style: 'margin-bottom:6px' }, h('b', { style: 'font-family:var(--font-mono)' }, `${f}-type`), formatStrip(f))));
   return {
-    el: h('div', { class: 'widget' }, h('div', { class: 'wgrid' },
+    el: h('div', { class: 'widget' },
       h('div', { class: 'panel' },
-        h('h3', null, 'Instruction explorer'),
-        h('p', { class: 'sub' }, 'Type assembly or a 32-bit hex word.'),
-        input,
-        h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;margin:8px 0' }, examples.map((e) => h('button', { class: 'btn sm', onclick: () => { input.value = e; render(); } }, e))),
-        out),
-      h('div', { class: 'panel' }, h('h3', null, 'The six formats'), h('p', { class: 'sub' }, 'rs1, rs2 and rd sit in the same bits in every format, so the register file can be read before the instruction is even decoded.'), formats))),
+        h('h3', null, 'Instruction builder'),
+        h('p', { class: 'sub' }, 'Pick an operation, click registers, drag the immediate, flip any bit, or type assembly or a 32-bit hex word.'),
+        cmp.el, meaning),
+      h('div', { class: 'panel', style: 'margin-top:16px' }, h('h3', null, 'The six formats'), h('p', { class: 'sub' }, 'rs1, rs2 and rd sit in the same bits in every format, so the register file can be read before the instruction is even decoded.'), formats)),
   };
 }
 

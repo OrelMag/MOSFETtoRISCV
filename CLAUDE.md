@@ -357,7 +357,9 @@ src/bench/     results.json (scripts/benchmarks.ts --write, checked in; each run
                the four RV32I programs, the cost / speed front, each CPU's family and chapter): the workbench's Benchmarks
                tab (ui/pages/benchmarks.ts, its own chunk)
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
-               instructions), fastiss.ts (FastISS: the golden model's semantics, every ROM word predecoded by decode() into
+               instructions), compose.ts (the instruction builder's model: a spec + operands both ways, slotsOf in assembly
+               order with bank / range, encodeParts / partsOf (null: bits it would not set), retarget, textOf (a target by label),
+               parseLine, PALETTE; every instruction round-trips through asm.ts: tests/compose.test.ts), fastiss.ts (FastISS: the golden model's semantics, every ROM word predecoded by decode() into
                typed arrays, one switch, ~90 MIPS on Doom; RAM inline, other regions through overridable load / store / ioRead /
                ioWrite; no F; tests/fastiss.test.ts: lock step over riscv-tests and random programs), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
                interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), ilp.ts (chapter 24: classify(word) → class /
@@ -444,6 +446,9 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                panels slim to 240 px on a narrow stage); gfxpipe.ts: chapter 32 (pipelineScene:
                gpu31 on the cycle engine; the panel: screen, frames per second, the last frame's timeline from FrameRecorder, the
                vertex kernel in lock-step with WarpISS (launch()), every frame against framePicture; costWidget: PIPE_COSTS);
+               composer.ts: the instruction builder (instrComposer: palette, asm / hex input, clickable bits, the immediate
+               generator's wiring as bands per run + one sign bracket, operand cards, decode chain, major-opcode map, a data path
+               sketch lit from instrUse); chapter 13's explorer and editor/romcompose.ts host it.
                insthw.ts maps an instruction to the units it uses (and pipeline stage units; laneUse(word, core, at): the lane /
                warp cores' instances, tests/insthw.test.ts: every kernel instruction, every warp count); slowctl.ts: what the CPU
                panel and the Warp panels share: slowControls (Slow / Back / Step, gate · cycle · instr levels, the rate; `retired()`
@@ -700,6 +705,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   memui.ts       Memory palette group, ROM / RAM property sections (live listing, RAM grid, initial
                  contents), the program editor dialog, Examples ▸; values polled per frame while shown; long
                  lists build only the rows in view (vlist.ts: virtualRows), a large RAM's grid has Go to
+  romcompose.ts  the instruction builder in an RV32 ROM's program editor (Ctrl+Space / Build instruction): the caret's
+                 line, its address and the labels; Replace keeps label, indentation and comment (withCode), Insert below
   package.ts     "Package as chip…" dialog (name, hue, notes; the face editor: pins dragged along / across edges, corner
                  resize, displays ticked, moved and scaled, live; Save & new circuit)
   dispface.ts    the displays' SVG faces (drawDisplay / paintDisplay) and a placed chip's face displays (drawFace /
