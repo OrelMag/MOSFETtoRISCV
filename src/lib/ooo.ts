@@ -5,12 +5,12 @@
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { Builder } from './builder';
-import { andN, busMux2, decoder, equal } from './combinational';
+import { addSub, andN, busMux2, decoder, equal, incrementer, rca } from './combinational';
 import { define, merger, splitter } from './define';
-import { AND, NOT, OR } from './gates';
+import { AND, NOT, OR, XOR } from './gates';
 import { readPort, writeSelect } from './regfile';
 import { register } from './sequential';
-import { TIE1 } from './transistors';
+import { TIE0, TIE1 } from './transistors';
 import { constWord } from './alu';
 import { bitwise, orN } from './wide';
 import { lowestOne, onehotMux } from './lanes';
@@ -627,3 +627,120 @@ export const RAT: ComponentDef = (() => {
   });
 })();
 
+
+// ---- the reorder buffer ------------------------------------------------------------------------------------------------
+
+/**
+ * One reorder-buffer entry's next state: {done, D (what dispatch writes), V (the result: value and execution info)}.
+ * Allocated by dispatch slot 0 or 1 (D, done when the value is known at decode, V then), else written by result bus
+ * 0 or 1 (done, V), else held.
+ */
+export function robCell(D: number, V: number): ComponentDef {
+  return memo(`robc${D}_${V}`, () => {
+    const b = new Builder(16, 18);
+    b.pins('q', 'a0', 'a1', 'dd0', 'dd1', 'dn0', 'dn1', 'dv0', 'dv1', 'b0', 'b1', 'bv0', 'bv1');
+    const qs = b.op(splitter([1, D, V]), ['q'], undefined, 'qs');
+    const one = b.op1(TIE1, [], undefined, 'one');
+    b.next();
+    const vb = b.op1(busMux2(V), [b.op1(busMux2(V), [`${qs}.o2`, 'bv1', 'b1'], undefined, 'vb1'), 'bv0', 'b0'], undefined, 'vb0');
+    const db = b.op1(busMux2(1), [`${qs}.o0`, one, b.op1(OR, ['b0', 'b1'], undefined, 'bus')], undefined, 'db');
+    b.next();
+    const v1 = b.op1(busMux2(V), [vb, 'dv1', 'a1'], undefined, 'va1'), d1 = b.op1(busMux2(1), [db, 'dn1', 'a1'], undefined, 'da1');
+    const D1 = b.op1(busMux2(D), [`${qs}.o1`, 'dd1', 'a1'], undefined, 'Da1');
+    b.next();
+    const v0 = b.op1(busMux2(V), [v1, 'dv0', 'a0'], undefined, 'va0'), d0 = b.op1(busMux2(1), [d1, 'dn0', 'a0'], undefined, 'da0');
+    const D0 = b.op1(busMux2(D), [D1, 'dd0', 'a0'], undefined, 'Da0');
+    b.next();
+    b.wire(b.op1(merger([1, D, V]), [d0, D0, v0], undefined, 'next'), 'y');
+    const R = b.right;
+    const W = 1 + D + V;
+    return define({
+      id: `robc${D}_${V}`, name: 'Reorder-buffer entry (next)', category: 'cpu',
+      summary: 'What a reorder-buffer entry holds next cycle: a dispatched instruction (its fields, and its value at once when decode knows it), else a result from a bus (done), else what it holds.',
+      ports: [bus('q', W, 'in'), bit('a0', 'in'), bit('a1', 'in'), bus('dd0', D, 'in'), bus('dd1', D, 'in'), bit('dn0', 'in'), bit('dn1', 'in'), bus('dv0', V, 'in'), bus('dv1', V, 'in'),
+        bit('b0', 'in'), bit('b1', 'in'), bus('bv0', V, 'in'), bus('bv1', V, 'in'), bus('y', W, 'out')],
+      symbol: { kind: 'box', label: 'ROB ENTRY' },
+      netlist: () => ({ pins: { q: [0, 2], a0: [0, 4], a1: [0, 6], dd0: [0, 8], dd1: [0, 10], dn0: [0, 12], dn1: [0, 14], dv0: [0, 16], dv1: [0, 18], b0: [0, 20], b1: [0, 22], bv0: [0, 24], bv1: [0, 26], y: [R, 2] }, instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
+/**
+ * The reorder buffer: 16 entries in program order between head and head + count. Dispatch allocates up to two at the
+ * tail (slot 1 only with slot 0); the result buses write entries by tag; commit retires up to two from the head
+ * (ce0, ce1: decided outside, from h0 / h1); flush empties it (after this cycle's commits). free1 / free2: room for one
+ * / two (entries committed this cycle are not reused before the next). Operand reads by tag: done and value (the low
+ * 32 bits of V).
+ */
+export function reorderBuffer(D: number, V: number): ComponentDef {
+  return memo(`rob16_${D}_${V}`, () => {
+    const N = 16, W = 1 + D + V, C = robCell(D, V), R = register(W), RP = readPort(4, W), DEC = decoder(4, true, 10);
+    const b = new Builder(18, 24, 4);
+    const ins = ['a0', 'a1', 'dd0', 'dd1', 'dn0', 'dn1', 'dv0', 'dv1', 'bw0', 'btag0', 'bv0', 'bw1', 'btag1', 'bv1', 'ce0', 'ce1', 'flush', 'rtag0', 'rtag1', 'rtag2', 'rtag3', 'clk'];
+    b.pins(...ins);
+    const one = b.op1(TIE1, [], undefined, 'one'), zero = b.op1(TIE0, [], undefined, 'zero');
+    // pointers: head, and count (0 … 16); the tail is head + count
+    const cs = b.op(splitter([4, 1]), ['cnt.q'], undefined, 'cs');
+    const tail = b.name(b.op1(rca(4), ['head.q', `${cs}.o0`, zero], undefined, 'tail'), 'tail', true);
+    const tail1 = b.name(b.op1(incrementer(4), [tail], undefined, 'tail1'), 'tail + 1', true);
+    const head1 = b.name(b.op1(incrementer(4), ['head.q'], undefined, 'head1'), 'head + 1', true);
+    b.next();
+    b.op(DEC, [tail, 'a0'], 'allocate, slot 0', 'al0');
+    b.op(DEC, [tail1, 'a1'], 'allocate, slot 1', 'al1');
+    b.op(DEC, ['btag0', 'bw0'], 'bus 0', 'wb0');
+    b.op(DEC, ['btag1', 'bw1'], 'bus 1', 'wb1');
+    b.next();
+    const qs: string[] = [];
+    for (let e = 0; e < N; e++) {
+      b.name(`al0.y${e}`, `a0_${e}`, true); b.name(`al1.y${e}`, `a1_${e}`, true); b.name(`wb0.y${e}`, `b0_${e}`, true); b.name(`wb1.y${e}`, `b1_${e}`, true);
+      const nx = b.op1(C, [`r${e}.q`, `al0.y${e}`, `al1.y${e}`, 'dd0', 'dd1', 'dn0', 'dn1', 'dv0', 'dv1', `wb0.y${e}`, `wb1.y${e}`, 'bv0', 'bv1'], undefined, `nx${e}`);
+      b.op(R, [nx, one, 'clk'], `entry ${e}`, `r${e}`);
+      qs.push(`r${e}.q`);
+      if (e % 4 === 3) b.next();
+    }
+    b.next();
+    const all = b.name(b.op1(merger(Array(N).fill(W), 2), qs, undefined, 'all'), 'entries', true);
+    b.next();
+    // the two oldest, for commit; operands by tag
+    const h0 = b.op(splitter([1, D, V]), [b.op1(RP, [all, 'head.q'], 'head', 'rh0')], undefined, 'h0s');
+    const h1 = b.op(splitter([1, D, V]), [b.op1(RP, [all, head1], 'head + 1', 'rh1')], undefined, 'h1s');
+    const ops = [0, 1, 2, 3].map((k) => b.op(splitter([1, D, 32, V - 32]), [b.op1(RP, [all, `rtag${k}`], `operand ${k}`, `ro${k}`)], undefined, `os${k}`));
+    b.next();
+    // pointer updates: head += commits; count += allocations − commits; a flush leaves it empty
+    const nC = b.op1(merger([1, 1]), [b.op1(XOR, ['ce0', 'ce1'], undefined, 'c1'), b.op1(AND, ['ce0', 'ce1'], undefined, 'c2')], undefined, 'nC');
+    const nA = b.op1(merger([1, 1]), [b.op1(XOR, ['a0', 'a1'], undefined, 'na1'), b.op1(AND, ['a0', 'a1'], undefined, 'na2')], undefined, 'nA');
+    const k0 = (w: number, nm: string) => b.op1(constWord(w, 0), [], undefined, nm);
+    b.next();
+    const headN = b.op1(rca(4), ['head.q', b.op1(merger([2, 2]), [nC, k0(2, 'z2')], undefined, 'nC4'), zero], undefined, 'headN');
+    const plus = b.op1(addSub(5), ['cnt.q', b.op1(merger([2, 3]), [nA, k0(3, 'z3a')], undefined, 'nA5'), zero], undefined, 'plus');
+    b.next();
+    const minus = b.op1(addSub(5), [plus, b.op1(merger([2, 3]), [nC, k0(3, 'z3c')], undefined, 'nC5'), one], undefined, 'minus');
+    b.next();
+    const cntN = b.op1(busMux2(5), [minus, k0(5, 'z5'), 'flush'], undefined, 'cntN');
+    b.next();
+    b.op(register(4), [headN, one, 'clk'], 'head', 'head');
+    b.op(register(5), [cntN, one, 'clk'], 'count', 'cnt');
+    b.next();
+    // room: fewer than 16 (one), fewer than 15 (two); the head entries hold instructions: count ≥ 1, ≥ 2
+    const full = b.op1(OR, [`${cs}.o1`, b.op1(equal(4), [`${cs}.o0`, b.op1(constWord(4, 15), [], undefined, 'k15')], undefined, 'is15')], undefined, 'atLeast15');
+    b.wire(b.op1(NOT, [`${cs}.o1`], undefined, 'room1'), 'free1');
+    b.wire(b.op1(NOT, [full], undefined, 'room2'), 'free2');
+    b.wire(b.op1(nonZero(5), ['cnt.q'], undefined, 'any'), 'h0valid');
+    b.wire(b.op1(nonZero(4), [`${b.op(splitter([1, 4]), ['cnt.q'], undefined, 'c2s')}.o1`], undefined, 'twoPlus'), 'h1valid');
+    b.wire(`${h0}.o0`, 'h0done'); b.wire(`${h0}.o1`, 'h0d'); b.wire(`${h0}.o2`, 'h0v');
+    b.wire(`${h1}.o0`, 'h1done'); b.wire(`${h1}.o1`, 'h1d'); b.wire(`${h1}.o2`, 'h1v');
+    b.wire('head.q', 'headTag'); b.wire(head1, 'head1Tag'); b.wire(tail, 'tailTag'); b.wire(tail1, 'tail1Tag');
+    for (const k of [0, 1, 2, 3]) { b.wire(`${ops[k]}.o0`, `rdone${k}`); b.wire(`${ops[k]}.o2`, `rval${k}`); }
+    const R0 = b.right;
+    const Wd: Record<string, number> = { dd0: D, dd1: D, dv0: V, dv1: V, btag0: 4, bv0: V, btag1: 4, bv1: V, rtag0: 4, rtag1: 4, rtag2: 4, rtag3: 4 };
+    const outs: [string, number][] = [['free1', 1], ['free2', 1], ['h0valid', 1], ['h0done', 1], ['h0d', D], ['h0v', V], ['h1valid', 1], ['h1done', 1], ['h1d', D], ['h1v', V],
+      ['headTag', 4], ['head1Tag', 4], ['tailTag', 4], ['tail1Tag', 4], ...[0, 1, 2, 3].flatMap((k): [string, number][] => [[`rdone${k}`, 1], [`rval${k}`, 32]])];
+    return define({
+      id: `rob16_${D}_${V}`, name: 'Reorder buffer (16 entries)', category: 'cpu',
+      summary: 'The instructions in flight, in program order: dispatch appends up to two at the tail, a result bus marks its entry done with the value, and commit retires up to two done entries from the head, so the register file only ever sees results in order. A value waits here until then: P6 style, the entry\'s number is the instruction\'s tag.',
+      ports: [...ins.map((n) => (n === 'clk' ? bit('clk', 'in', 'bottom', true) : Wd[n] ? bus(n, Wd[n], 'in') : bit(n, 'in'))), ...outs.map(([n, w]) => (w > 1 ? bus(n, w, 'out') : bit(n, 'out')))],
+      symbol: { kind: 'box', label: 'REORDER BUFFER' },
+      netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), ...Object.fromEntries(outs.map(([n], i) => [n, [R0, 2 + 2 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
+    });
+  });
+}

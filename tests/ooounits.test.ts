@@ -2,7 +2,7 @@
 // sequences: what each unit holds and answers must be what the model's own data structures hold and answer.
 
 import { describe, expect, it } from 'vitest';
-import { btbCommit, issueQueue, RAT } from '../src/lib/ooo';
+import { btbCommit, issueQueue, RAT, reorderBuffer } from '../src/lib/ooo';
 import { simulate } from '../src/sim/harness';
 import { lcg, out, set, tick } from './util';
 
@@ -154,4 +154,48 @@ describe('rename table', () => {
       if (flush) { inflight = []; }
     }
   }, 120_000);
+});
+
+describe('reorder buffer', () => {
+  it('allocates at the tail, takes results by tag, retires from the head, as the model\'s ROB list', () => {
+    const D = 6, V = 40, s = simulate(reorderBuffer(D, V)), r = lcg(67);
+    const ent = new Map<number, { done: number; d: number; v: number }>();
+    let head = 0, count = 0;
+    const rv = () => r(2 ** 32) + 2 ** 32 * r(2 ** (V - 32));
+    set(s, { clk: 0, a0: 0, a1: 0, dd0: 0, dd1: 0, dn0: 0, dn1: 0, dv0: 0, dv1: 0, bw0: 0, btag0: 0, bv0: 0, bw1: 0, btag1: 0, bv1: 0, ce0: 0, ce1: 0, flush: 0, rtag0: 0, rtag1: 0, rtag2: 0, rtag3: 0 });
+    for (let t = 0; t < 2000; t++) {
+      const tag = (k: number) => (head + k) % 16;
+      expect([out(s, 'free1'), out(s, 'free2'), out(s, 'h0valid'), out(s, 'h1valid')], `t ${t} room`).toEqual([count < 16 ? 1 : 0, count < 15 ? 1 : 0, count >= 1 ? 1 : 0, count >= 2 ? 1 : 0]);
+      expect([out(s, 'headTag'), out(s, 'head1Tag'), out(s, 'tailTag'), out(s, 'tail1Tag')], `t ${t} pointers`).toEqual([head, (head + 1) % 16, tag(count), tag(count + 1)]);
+      for (const k of [0, 1]) if (count > k) {
+        const e = ent.get(tag(k))!;
+        expect([out(s, `h${k}done`), out(s, `h${k}d`)], `t ${t} head ${k}`).toEqual([e.done, e.d]);
+        if (e.done) expect(out(s, `h${k}v`), `t ${t} head ${k} value`).toBe(e.v);
+      }
+      const inFlight = Array.from({ length: count }, (_, k) => tag(k)), pending = inFlight.filter((g) => !ent.get(g)!.done);
+      const nC = Math.min(count, r(3)), nA = Math.min(16 - count, r(3));
+      const alloc = Array.from({ length: nA }, () => ({ d: r(2 ** D), dn: r(4) === 0 ? 1 : 0, dv: rv() }));
+      const buses = [0, 1].map(() => (pending.length && r(2) ? { tag: pending[r(pending.length)], v: rv() } : null));
+      if (buses[0] && buses[1] && buses[0].tag === buses[1].tag) buses[1] = null;
+      const rtags = [0, 1, 2, 3].map(() => (inFlight.length ? inFlight[r(inFlight.length)] : 0));
+      const flush = r(100) === 0 ? 1 : 0;
+      set(s, {
+        a0: nA >= 1 ? 1 : 0, a1: nA >= 2 ? 1 : 0, dd0: alloc[0]?.d ?? 0, dd1: alloc[1]?.d ?? 0, dn0: alloc[0]?.dn ?? 0, dn1: alloc[1]?.dn ?? 0, dv0: alloc[0]?.dv ?? 0, dv1: alloc[1]?.dv ?? 0,
+        bw0: buses[0] ? 1 : 0, btag0: buses[0]?.tag ?? 0, bv0: buses[0]?.v ?? 0, bw1: buses[1] ? 1 : 0, btag1: buses[1]?.tag ?? 0, bv1: buses[1]?.v ?? 0,
+        ce0: nC >= 1 ? 1 : 0, ce1: nC >= 2 ? 1 : 0, flush, rtag0: rtags[0], rtag1: rtags[1], rtag2: rtags[2], rtag3: rtags[3],
+      });
+      rtags.forEach((g, k) => {
+        if (!inFlight.length) return;
+        const e = ent.get(g)!;
+        expect(out(s, `rdone${k}`), `t ${t} read ${k} done`).toBe(e.done);
+        if (e.done) expect(out(s, `rval${k}`) >>> 0, `t ${t} read ${k}`).toBe(e.v % 2 ** 32);
+      });
+      tick(s);
+      const at = tag(count);
+      for (const bz of buses) if (bz) { const e = ent.get(bz.tag)!; e.done = 1; e.v = bz.v; }
+      alloc.forEach((a, k) => ent.set((at + k) % 16, { done: a.dn, d: a.d, v: a.dn ? a.dv : ent.get((at + k) % 16)?.v ?? 0 }));
+      head = (head + nC) % 16;
+      count = flush ? 0 : count + nA - nC;
+    }
+  }, 300_000);
 });
