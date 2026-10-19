@@ -51,13 +51,17 @@ browser context; it fails on exceptions, console / browser errors, failed reques
 a 390 px phone (a few pages). `--only <substring>`, `--headful`, `--dwell <ms>` (wait after settling, default 600).
 
 CI (`.github/workflows/deploy.yml`) runs tests beside build + smoke (one job) and deploys `dist/` to GitHub Pages
-on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-export.ts <design>`, one parallel job per design (multi, sys, sys-m)
+on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-export.ts <design>`, one parallel job per design (multi, sys, sys-m, core-m: the system core with ports on tests/syscorebench.ts, the layout flow's design)
 (Yosys synthesizes the exported dual-core and the RV32I / RV32IM system CPUs, each netlist is simulated against ours,
 every output every cycle, on their programs with irq pulses and switch changes). Run it locally (`npx vite-node scripts/verify-export.ts all`, needs `pip install yowasp-yosys`)
 before merging a change to the exporters, the dual-core or the system CPU (one design: `verify-export.ts sys-m`).
 `.github/workflows/spike.yml` (every push touching `src/riscv/`, fpref.ts or the oracle; nightly on new seeds) runs
 the golden model against Spike, commit by commit (`scripts/spike-oracle.ts`, docs/VERIFICATION.md); a change to the
 ISS should leave it green before merging (its failure artifact keeps the program, ELF and Spike's log).
+`.github/workflows/layout.yml` (pushes touching scripts/layout/, export-layout.ts, vexport.ts) runs OpenROAD-flow-scripts on sky130
+per design (`export-layout.ts dual | sys`: Verilog, config, source.json with our NAND counts per block and static timing), ~35 min
+each; main and manual runs publish the release layout-latest (dual-core at its root, system core under sys/), which the deploy unpacks
+into dist/layout/ (widgets/chiplayout.ts).
 
 ## Stack and conventions
 

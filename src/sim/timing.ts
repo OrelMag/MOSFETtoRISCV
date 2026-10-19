@@ -47,11 +47,13 @@ function hasInnerFf(def: ComponentDef): boolean {
   return r;
 }
 
-export function analyzeTiming(design: FlatDesign): TimingReport | null {
+/** `outputs`: the root's outputs are capture points too (due at the next edge, no setup), as a synthesis
+ *  constraint with zero output delay counts them: a core whose memories sit outside its ports. */
+export function analyzeTiming(design: FlatDesign, opts: { outputs?: boolean } = {}): TimingReport | null {
   const leaves = design.leaves;
   const excluded = new Uint8Array(leaves.length);
   const qSource = new Map<number, string[]>(); // net -> launching dff path
-  const captures: { net: number; dff: string[] }[] = [];
+  const captures: { net: number; dff: string[]; pin?: boolean }[] = [];
   // Edge-triggered behaviours (a large RAM): their inputs but clk are captured like a flip-flop's
   // d, and only their comb inputs reach the outputs, which launch at clk-to-q at the earliest.
   const tin = leaves.map((l) => l.inputs);
@@ -75,6 +77,7 @@ export function analyzeTiming(design: FlatDesign): TimingReport | null {
     n.children?.forEach((c) => walk(c, insideDff || isDff));
   };
   walk(design.root, false);
+  if (opts.outputs) for (const p of design.root.def.ports) if (p.dir === 'out') for (const net of design.root.ports[p.name]) captures.push({ net, dff: [p.name], pin: true });
   if (!captures.length) return null;
 
   const driver = new Int32Array(design.netCount).fill(-1);
@@ -118,10 +121,11 @@ export function analyzeTiming(design: FlatDesign): TimingReport | null {
   let worst = -1, cap = captures[0];
   const byInst = new Map<string, number>();
   for (const c of captures) {
-    const a = arr(c.net);
+    const a = arr(c.net) + (c.pin ? 0 : SETUP);
     if (a > worst) { worst = a; cap = c; }
+    if (c.pin) continue;
     const top = c.dff[0] ?? '';
-    byInst.set(top, Math.max(byInst.get(top) ?? 0, a + SETUP));
+    byInst.set(top, Math.max(byInst.get(top) ?? 0, a));
   }
   // Trace back.
   const path: { node: string[]; arrival: number }[] = [];
@@ -145,5 +149,5 @@ export function analyzeTiming(design: FlatDesign): TimingReport | null {
     else stages.push({ inst: top, arrival: p.arrival });
   }
   const byCapture = [...byInst].map(([inst, period]) => ({ inst, period })).sort((a, b) => b.period - a.period);
-  return { period: worst + SETUP, logic: worst - CLK_TO_Q, launch, capture: cap.dff, path, nets, stages, byCapture };
+  return { period: worst, logic: worst - (cap.pin ? 0 : SETUP) - CLK_TO_Q, launch, capture: cap.dff, path, nets, stages, byCapture };
 }

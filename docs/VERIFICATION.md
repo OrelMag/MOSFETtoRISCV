@@ -12,7 +12,7 @@ lock-step test. The checks below do not rely on that model alone.
 | **Random programs** | our golden model, final state | `tests/verify-*.test.ts`, `scripts/fuzz32.ts` | seeds 1–32 per CPU |
 | **Spike**, the reference simulator, on random programs | Spike, commit by commit | `scripts/spike-oracle.ts`, `.github/workflows/spike.yml` | its plumbing only (no Spike); CI on every ISA change |
 | **Coverage** of the riscv-tests and random programs | — | `tests/verify-*.test.ts`, `scripts/coverage.ts` | no gaps allowed |
-| Exported Verilog (dual-core, system CPUs), synthesized by Yosys | our gate-level simulation | `scripts/verify-export.ts` | CI gate before deploy |
+| Exported Verilog (dual-core, system CPUs, the system core with ports), synthesized by Yosys | our gate-level simulation | `scripts/verify-export.ts` | CI gate before deploy |
 
 The riscv-tests come from another author, so they check the golden model too: it runs every image,
 with each CPU's ISA, before the CPU does.

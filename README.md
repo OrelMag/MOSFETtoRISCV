@@ -10,7 +10,8 @@ any part to look inside, all the way down to the MOSFETs. Wire values are comput
 event-driven gate-level simulator (one delay unit per NAND, so glitches and races are visible) and
 a switch-level transistor solver. Transistor counts, gate counts and critical paths are measured
 from the circuits themselves, every CPU is co-simulated against a RISC-V golden model, and the
-dual-core is exported as Verilog and taken through Yosys and OpenROAD to a sky130 layout.
+dual-core and the RV32IM system core are exported as Verilog and taken through Yosys and OpenROAD to
+sky130 layouts, whose reports stand beside the site's own area and timing estimates.
 
 Four ways in: the **[journey](https://orelmag.github.io/MOSFETtoRISCV/#/c/map/0)** (28 chapters),
 the **[campaign](https://orelmag.github.io/MOSFETtoRISCV/#/campaign)** (build it to unlock it),
@@ -153,12 +154,14 @@ panel shows the energy per instruction as the program runs.
 - **Drawings**: every registered schematic is checked for nets sharing a line, overlapping symbols
   and hidden labels.
 - **HDL**: generated SystemVerilog comes with a self-checking testbench drawn from our own
-  simulation; `scripts/verify-export.ts` synthesizes the dual-core and the system CPUs (RV32I and
-  RV32IM with Zicsr, MMIO and interrupts) with Yosys, simulates each gate netlist and compares every
+  simulation; `scripts/verify-export.ts` synthesizes the dual-core, the system CPUs (RV32I and
+  RV32IM with Zicsr, MMIO and interrupts) and the RV32IM system core with ports on a bench with Yosys, simulates each gate netlist and compares every
   output cycle by cycle with the site's simulation under the same inputs (irq pulses, switches).
-- **Silicon**: `.github/workflows/layout.yml` runs the exported dual-core through
-  OpenROAD-flow-scripts on SkyWater 130 nm (synthesis, floorplan, placement, clock tree, routing)
-  and the GDS, tiles and reports are published into the site (chapter 25).
+- **Silicon**: `.github/workflows/layout.yml` runs the exported dual-core and the RV32IM system
+  core (its memories outside its ports) through OpenROAD-flow-scripts on SkyWater 130 nm (synthesis,
+  floorplan, placement, clock tree, routing); the GDS, tiles and reports are published into the site
+  (chapter 25), each beside our estimate of the same design: area per block from the NAND count,
+  the critical path in NAND delays against OpenSTA's after routing.
 
 ## Scope and limitations
 
@@ -194,8 +197,7 @@ The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next feat
   memory; chapters 28–29), then graphics (a rasterizer and the graphics pipeline; chapters 30–31).
 - **A second oracle**: Spike or Sail comparing commit logs with our ISS on the random programs.
 - **Architecture**: private caches with a coherent bus in the gate-level cores, `lr.w` / `sc.w`;
-  the C extension and the rest of A; a scoreboard / Tomasulo widget; the system CPU through the
-  sky130 flow, its reports next to our own estimates.
+  the C extension and the rest of A; a scoreboard / Tomasulo widget.
 - **Memory track**: DRAM at switch level and a DDR-style controller, flash with its controller, a
   shared bus with DMA.
 - **Before the transistor**: the same adder in relays and vacuum tubes, a 3D view of the machine it

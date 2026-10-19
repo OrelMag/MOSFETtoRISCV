@@ -3,14 +3,16 @@
 // with our own gate-level simulation of the same design under the same inputs.
 // Designs: the dual-core on every multi-core program, the system CPU (RV32I + Zicsr, MMIO, traps,
 // interrupts) and the RV32IM system CPU on their programs, with irq pulses and switch changes driven
-// on both sides.
+// on both sides; and the RV32IM system core with ports (the layout flow's design) on a bench of ROM,
+// data memory and I/O unit.
 // Needs Yosys (YOSYS env var, or yowasp-yosys from pip).
 // Run: npx vite-node scripts/verify-export.ts [all | <design> | <design>:<program> | <program>] [cycles]
-// (designs: multi, sys, sys-m). Exits 1 on any difference, so CI can gate the deploy on it.
+// (designs: multi, sys, sys-m, core-m). Exits 1 on any difference, so CI can gate the deploy on it.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { dualCore, systemCpu } from '../src/lib';
+import { coreBench } from '../tests/syscorebench';
 import { assemble } from '../src/riscv/asm';
 import { clockCycle } from '../src/riscv/cosim';
 import { MC_PROGRAMS } from '../src/riscv/mcprograms';
@@ -57,6 +59,11 @@ const CHECKS: Check[] = [
   // interrupts on the M CPU too: its retire output and the divider's stall are in the comparison
   ...['timer', 'irq'].map((id): Check => ({
     design: 'sys-m', id, top: () => systemCpu(words(SYSTEM_PROGRAMS, id), { m: true }), cycles: sysCycles(id), inputs: sysInputs(sysIrq(id)), flow: 'map',
+  })),
+  // the RV32IM system core with ports (the layout flow's `sys` design) on its bench: its module is the one laid out
+  ...[...M_PROGRAMS.map((p) => ({ id: p.id, w: words(M_PROGRAMS, p.id), cycles: p.id === 'mcorner' ? 600 : 700, irq: [] as number[] })),
+    ...['timer', 'irq'].map((id) => ({ id, w: words(SYSTEM_PROGRAMS, id), cycles: sysCycles(id), irq: sysIrq(id) }))].map((p): Check => ({
+    design: 'core-m', id: p.id, top: () => coreBench(p.w, true), cycles: p.cycles, inputs: sysInputs(p.irq), flow: 'map',
   })),
 ];
 

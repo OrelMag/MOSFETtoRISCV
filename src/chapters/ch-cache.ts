@@ -337,6 +337,9 @@ export const chCache: Chapter = {
         registers, the flushes <span data-show="hz">the hazard unit</span> may be asking for, and the branch predictor's counters (which are not idempotent). One
         signal, the cache's <code>stall</code>, <span data-show="gPC gFD gFl1 gFl2 gV">gates every enable</span> for the 8 or 12 cycles of the miss, and W reports a retirement only when
         the freeze is over, so the instruction-set simulator still steps once per instruction.</p>
+        <p>Freezing everything is a deliberate simplification: it is easy to get right and to check. Real pipelines keep going past a miss (a non-blocking
+        cache: later instructions that hit, or do not touch memory, carry on while miss-status registers track the outstanding misses), at the cost of
+        a scoreboard to stop an instruction that needs the missing data.</p>
         <p>A bug worth knowing: our first version let flushed bubbles reach the cache. A bubble's fields are not all zero, and one of them looked
         like a load, so it caused real misses that cost time but not correctness. The co-simulation passed; the miss count did not match the
         single-cycle CPU's. The fix is <span data-show="ldV">one AND gate</span>: only a <em>valid</em> instruction in M may access the cache.</p>

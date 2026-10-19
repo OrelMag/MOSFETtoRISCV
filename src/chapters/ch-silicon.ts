@@ -76,7 +76,7 @@ function hallStep(): Step {
 
 export const chSilicon: Chapter = {
   id: 'silicon', num: 25, title: 'From netlist to silicon', level: 'Physical design',
-  blurb: 'Standard cells in layout, how they are made, technology mapping, place and route, the clock tree, a floorplan of our dual-core, and wafer economics.',
+  blurb: 'Standard cells in layout, how they are made, technology mapping, place and route, the clock tree, a floorplan of our dual-core, the real flow on two of our CPUs against our own estimates, and wafer economics.',
   goals: [
     'read a standard cell\'s layout: transistors where polysilicon crosses diffusion, PMOS in the n-well, NMOS below',
     'say what technology mapping, annealing placement and maze routing each decide',
@@ -89,7 +89,7 @@ export const chSilicon: Chapter = {
       'A transistor is where a strip of polysilicon crosses diffusion. A standard cell sits between a VDD rail on top and a GND rail below, PMOS in the n-well above, NMOS beneath. NAND2 puts its NMOS in series and its PMOS in parallel, NOR2 the mirror image.',
       'Synthesis ends in technology mapping onto a library of hundreds of cells; placement (simulated annealing) minimizes wire length; routing (Lee\'s maze router, two metal layers and vias) connects every net. A good placement also leaves room to route.',
       'Unbuffered wire delay grows with the square of the length. After routing, static timing is redone with the real parasitics, and clock skew is subtracted from the period.',
-      'Our dual-core\'s logic is about 0.73 mm on a side in SkyWater 130 nm and 0.2 mm at 28 nm, where the bond pads set the die size. Its exported Verilog goes through Yosys and OpenROAD to a GDS, the synthesized netlist checked cycle by cycle against this site\'s simulation.',
+      'Our dual-core\'s logic is about 0.73 mm on a side in SkyWater 130 nm and 0.2 mm at 28 nm, where the bond pads set the die size. Its exported Verilog, and the RV32IM system core\'s, go through Yosys and OpenROAD to a GDS, each synthesized netlist checked cycle by cycle against this site\'s simulation; beside our NAND counts and unit delays, the flow shows how far those estimates are from real cells.',
       'Yield falls as e<sup>−A·D₀</sup>: at 0.1 defects/cm², 90 % for 100 mm² and 67 % for 400 mm², so the big die costs about 5.4 times as much per good die.',
     ],
     practise: [],
@@ -157,6 +157,9 @@ export const chSilicon: Chapter = {
         <p>Next the cells get positions and the nets get wires. Placement tries to minimize total wire length; the classic method is <strong>simulated annealing</strong>.
         Routing then finds a path for every connection on a grid of metal tracks, avoiding all other wires. Two layers with preferred directions (horizontal on one,
         vertical on the other) and vias between them make it a shortest-path problem: Lee's maze router, 1961.</p>
+        <p>What runs here is a teaching model: one cost (wire length), a grid of a few dozen cells, two metal layers and no design rules. The flow in
+        "The real thing" below is a different program altogether: OpenROAD places analytically (a smooth wire-length model solved over the whole chip, then legalized onto the
+        rows), repairs timing with buffers and resized cells, builds the clock tree, and routes on five metal layers under sky130's design rules.</p>
         <div class="try">Pick a circuit, Route it straight from the random placement, then Anneal and Route again: compare the wire length and the vias.</div>`,
       widget: pnrWidget,
       challenge: {
@@ -182,7 +185,8 @@ export const chSilicon: Chapter = {
         <p>Put it all together: the dual-core of <a href="#/c/multicore/0">chapter 24</a>, sized from its netlist. In the open SkyWater 130 nm process its logic would fill about 0.73 mm × 0.73 mm.
         At 28 nm it shrinks to about 0.2 mm on a side, and then the ring of bond pads, not the logic, sets the die size (pad-limited). Real systems-on-chip are the opposite: billions of transistors, with memories as dense SRAM macros, not flip-flops.</p>
         <p>The open-source flow is real: Yosys (synthesis) and OpenROAD (placement, clock tree, routing) take Verilog like the structural Verilog on every component's Verilog tab and produce
-        a layout that SkyWater can manufacture.</p>`,
+        a layout that SkyWater can manufacture. The next step does it, and its table puts this estimate (each NAND equivalent priced as one NAND2 cell)
+        beside the area the cells really took.</p>`,
       widget: floorplanWidget,
     },
     {
@@ -192,7 +196,12 @@ export const chSilicon: Chapter = {
         through the real open-source flow for SkyWater's 130 nm process: <strong>Yosys</strong> synthesizes it to the sky130 standard-cell library, and
         <strong>OpenROAD</strong> floorplans, places, builds the clock tree, routes and checks it, producing a GDS file a foundry could manufacture.</p>
         <p>Before the flow ran, the exported Verilog was checked: Yosys's synthesized gate netlist, simulated cycle by cycle, matches this site's own gate-level
-        simulation on all four multi-core programs. Colour the cells by block to find the two cores, the shared memory and the arbiter; zoom in until the routing shows.</p>`,
+        simulation on all four multi-core programs. Colour the cells by block to find the two cores, the shared memory and the arbiter; zoom in until the routing shows.</p>
+        <p>The second design is the system CPU of <a href="#/c/traps/0">chapter 19</a> with the M extension: RV32IM, the CSRs, traps and interrupts, its two memories
+        outside its ports as SRAM macros would be (checked the same way, on a bench with its ROM and data memory). Under each layout, our own estimates of the same design
+        stand beside the flow's: the area if every NAND equivalent were a NAND2 cell, against what the cells took, block by block; our critical path in NAND delays, against
+        OpenSTA's in nanoseconds after routing. Their ratio says what one of our unit delays is worth in a real 130 nm layout.</p>
+        <div class="try">Switch to the system core: find the block sky130 builds far smaller than our NAND count, and the one it builds larger. Then compare where the two critical paths run.</div>`,
       widget: chipLayoutWidget,
     },
     {
