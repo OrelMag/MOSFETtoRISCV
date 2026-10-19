@@ -994,7 +994,8 @@ animated schematic). The site exports Verilog and already runs Yosys in CI, so i
   `.v` / `.sv`; the text beside the canvas, synthesized a second after typing stops (or Ctrl/⌘ Enter), one chip per
   module (ids kept, so parents keep their wires); errors on their lines, the last good build kept; the drawing is
   generated (canvas edits refused, Detach makes ordinary chips); top module and gates (NAND / +XOR MUX / AND OR) in the
-  properties. Round trip in the tests: our own export of six library parts and the whole single-cycle CPU imported
+  properties. Round trip in the tests: our own export (both: the synthesizable one and File ▸ Export Verilog's
+  structural one) of six library parts and the whole single-cycle CPU imported
   back simulates equal to the original, every output every cycle (tests/hdl-import.test.ts, Yosys from npm in Node)
 - ✅ Examples ▸ The same adder in Verilog: ADD4 beside `assign {co, s} = a + b + ci;` on the same inputs (36 against
   44 NANDs with the default gates)

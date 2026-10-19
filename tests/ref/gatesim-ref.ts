@@ -179,7 +179,7 @@ export class RefGateSim implements Sim {
     // Any storage loop without a hint is still X: break the tie by forcing outputs, the way
     // real silicon settles to an arbitrary state, then let the circuit resolve itself.
     if (mode !== 'x') {
-      for (let round = 0; round < 4096; round++) {
+      for (let round = 0; round < Math.max(4096, this.design.leaves.length); round++) {
         const l = this.design.leaves.findIndex((leaf) =>
           leaf.outputs.some((p) => p.some((net) => this.val[net] === BX)));
         if (l < 0) break;
