@@ -212,7 +212,7 @@ describe('Python subset: random programs, compiled vs interpreted', () => {
 });
 
 describe('Python subset on the gate-level CPU', () => {
-  for (const id of ['sum', 'fib']) {
+  for (const id of ['sum', 'fib', 'hanoi']) {
     it(`${id}: lock step with the golden model`, () => {
       const p = PY_PROGRAMS.find((q) => q.id === id)!;
       const c = compilePy(p.source, { dmemWords: 64 });

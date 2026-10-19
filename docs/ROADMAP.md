@@ -951,7 +951,8 @@ language and functions.
   messages, 300 seeded random programs compiled vs interpreted (PY_FUZZ=n; 8 000 pass)
 - ✅ The chapter (6 steps): three languages linked, expressions and registers, the cost of * // % per line, the program
   on the gate-level CPU with the Python panel (the line running, its cycles and toggles, the variables read from the
-  registers and data memory, the output, the stack), functions and the stack, an editor compiling as you type
+  registers and data memory, the output, the stack), functions and the stack, an editor compiling as you type;
+  forty example programs in six sections (pyprograms.ts: each with what it prints, under 20 000 cycles)
 - ⏳ The same programs on the pipeline (stalls and flushes per Python line); RV32IM (mul / div instead of the
   routines); strings and a heap
 

@@ -13,6 +13,7 @@ import { isOooCore, oooSnap, type OooSnap } from '../src/riscv/ooosnap';
 import { randomProgram32 } from '../src/riscv/randprog32';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
+import { stepped } from './yieldtick';
 import { emptyWorkspace } from '../src/editor/model';
 import { remixDef } from '../src/editor/remix';
 import { UserLibrary } from '../src/editor/library';
@@ -48,7 +49,7 @@ const comparable = (s: OooSnap, wrong: Set<number>) => ({
   sq: s.sq.map(({ addr: _a, data: _d, ...r }) => r),
 });
 
-function check(source: string, { imemK = 6, dmemK = 6, max = 4000 } = {}): number {
+function* check(source: string, { imemK = 6, dmemK = 6, max = 4000 } = {}): Generator<void, number> {
   const words = assemble(source).words;
   const design = flatten(oooCpu(words, { imemK, dmemK }));
   expect(isOooCore(design.root)).toBe(true);
@@ -64,16 +65,17 @@ function check(source: string, { imemK = 6, dmemK = 6, max = 4000 } = {}): numbe
     if (model.halted) break;
     const want = modelSnap(model);
     expect(comparable(oooSnap(sim, design.root), want.wrong), `after cycle ${cycles - 1}`).toEqual(comparable(want, want.wrong));
+    if (cycles % 200 === 0) yield;
   }
   expect(model.halted).toBe(true);
   return cycles;
 }
 
 describe('the out-of-order core read from its gates equals the model', () => {
-  it('chapter 25\'s dot product', () => { check(DUAL_SOURCE); }, 600_000);
-  it('fib (calls, returns, mispredictions)', () => { check(BENCHMARKS.find((b) => b.id === 'fib')!.source, { imemK: 7, dmemK: 7, max: 8000 }); }, 600_000);
-  it('random programs (divides, loads behind stores, flushes)', () => {
-    for (const seed of [3, 7, 11]) check(randomProgram32(seed, { m: true, dmemWords: 32 }), { imemK: 7, dmemK: 5 });
+  it('chapter 25\'s dot product', async () => { await stepped(check(DUAL_SOURCE)); }, 600_000);
+  it('fib (calls, returns, mispredictions)', async () => { await stepped(check(BENCHMARKS.find((b) => b.id === 'fib')!.source, { imemK: 7, dmemK: 7, max: 8000 })); }, 600_000);
+  it('random programs (divides, loads behind stores, flushes)', async () => {
+    for (const seed of [3, 7, 11]) await stepped(check(randomProgram32(seed, { m: true, dmemWords: 32 }), { imemK: 7, dmemK: 5 }));
   }, 600_000);
 });
 
