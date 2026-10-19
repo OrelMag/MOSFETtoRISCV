@@ -160,7 +160,7 @@
 
 /* ---------- canvas ---------- */
 .sb-center { grid-area: center; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--canvas); }
-.sb-canvas { flex: 1; position: relative; min-height: 0; overflow: hidden; }
+.sb-canvas { flex: 1; position: relative; min-height: 0; overflow: hidden; touch-action: manipulation; }
 .sb-canvas > svg.ed-svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; outline: none; }
 .sb-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 .sb-overlay > * { pointer-events: auto; }

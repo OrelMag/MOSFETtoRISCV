@@ -14,6 +14,7 @@ import { installPanZoom } from '../view/camera';
 import { closePopover, editNumber } from '../view/popover';
 import { drawPinGlyph } from '../view/symbols';
 import { s } from '../ui/dom';
+import { DoubleTap } from '../ui/doubletap';
 import { settings } from '../ui/settings';
 import { nextDrive } from './chips';
 import type { Editor } from './editor';
@@ -63,6 +64,8 @@ export class Tools {
   /** Last cursor position over the canvas (world units), for paste and placing. */
   cursor: Vec | null = null;
   private space = false;
+  /** A double tap does what a double-click does (iOS Safari may send no dblclick for it). */
+  private taps = new DoubleTap();
   private panning = false;
   private buttonHeld: PinDoc | null = null;
   private off: (() => void)[] = [];
@@ -273,9 +276,14 @@ export class Tools {
     const st = this.state;
     const p = this.world(e);
     switch (st.k) {
-      case 'press':
+      case 'press': {
         this.state = { k: 'idle' };
-        return this.click(st, e);
+        this.click(st, e);
+        // what was tapped, the same thing twice (a wire anywhere along it)
+        const h = st.hit, key = h.k === 'wire' ? `wire ${h.id}` : `${st.name} ${JSON.stringify(h)}`;
+        if (this.taps.upEvent(e, key) && this.state.k === 'idle') this.dbl(e);
+        return;
+      }
       case 'move':
       case 'reshape':
         if (st.k === 'reshape' && st.hover) return;
@@ -360,6 +368,7 @@ export class Tools {
   }
 
   private dbl(e: MouseEvent): void {
+    if (e.type === 'dblclick' && !this.taps.dblclick(e.timeStamp)) return;
     const ed = this.ed;
     const named = nameHit(e.target);
     if (named) {

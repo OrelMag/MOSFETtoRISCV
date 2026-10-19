@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Camera, COVER_GAP, FOLD_BESIDE_PX, fitBox, freeRect, MIN_FIT_PX, type Rect, startFolded, underCover, type ViewBox } from '../src/view/camera';
+import { Camera, COVER_GAP, FOLD_BESIDE_PX, fitBox, freeArea, freeRect, MIN_FIT_H, MIN_FIT_PX, type Rect, roomBeside, startFolded, underCover, type ViewBox } from '../src/view/camera';
 
 /** A host of a settable size and an svg that only records its view box: enough for Camera. */
 function rig(w: number, h: number) {
@@ -159,5 +159,36 @@ describe('fitting around the stage panels', () => {
     expect(underCover(vb, cpu, W, H, [panel(H - 24)])).toBe(true);
     const beside = fitBox(cpu, W, H, [panel(H - 24)]);
     expect(underCover(beside, cpu, W, H, [panel(380)])).toBe(false);
+  });
+});
+
+describe('the touch hint line on a phone', () => {
+  // #/workbench/rca4: four full adders stacked (tall), the one-line hint pill 12 px from the left, right and bottom.
+  const rca4: ViewBox = { x: -5, y: -6.9, w: 25, h: 56 };
+  const pill = (W: number, H: number): Rect => ({ x: 12, y: H - 10 - 27, w: W - 24, h: 27 });
+
+  it('a 390 × 844 phone: the circuit is fitted above the pill, clear of it', () => {
+    const W = 390, H = 373; // the canvas between the stage bar and the controls
+    expect(roomBeside(rca4, W, H, [pill(W, H)])).toBe(true);
+    const p = onScreen(fitBox(rca4, W, H, [pill(W, H)]), rca4, W, H);
+    expect(p.top).toBeGreaterThanOrEqual(-1e-6);
+    expect(p.bottom).toBeLessThanOrEqual(pill(W, H).y - COVER_GAP + 1e-6);
+  });
+
+  it('a short canvas (a 320 × 568 phone): too little above the pill, so the fit would take the whole canvas under it', () => {
+    const W = 320, H = 116;
+    expect(pill(W, H).y - COVER_GAP).toBeLessThan(MIN_FIT_H);
+    expect(freeArea(W, H, [pill(W, H)], rca4.w, rca4.h)).toBeNull();
+    expect(freeRect(W, H, [pill(W, H)], rca4.w, rca4.h)).toEqual({ x: 0, y: 0, w: W, h: H });
+    // the stage then hides the pill (Stage.placeHint)
+    expect(roomBeside(rca4, W, H, [pill(W, H)])).toBe(false);
+    expect(roomBeside(rca4, W, H, [])).toBe(true);
+  });
+
+  it('room is judged on the drawing widened to the minimum fit width, and an unsized host always has room', () => {
+    const tiny: ViewBox = { x: 0, y: 0, w: 1, h: 1 };
+    expect(roomBeside(tiny, 0, 0, [pill(390, 373)])).toBe(true);
+    expect(roomBeside(tiny, 390, 373, [pill(390, 373)])).toBe(true);
+    expect(freeArea(390, 373, [], 10, 10)).toEqual({ x: 0, y: 0, w: 390, h: 373 });
   });
 });

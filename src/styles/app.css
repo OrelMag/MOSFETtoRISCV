@@ -333,7 +333,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .stage-bar.compact .btn .lbl { display: none; }
 .stage-bar.stacked { flex-wrap: wrap; row-gap: 2px; padding-top: 4px; padding-bottom: 4px; }
 .stage-bar.stacked > .crumbs { flex: 1 1 100%; }
-.canvas { flex: 1; position: relative; min-height: 0; overflow: hidden; }
+/* manipulation: a double tap on the panels and badges over the circuit does not zoom the page either (the svg: none) */
+.canvas { flex: 1; position: relative; min-height: 0; overflow: hidden; touch-action: manipulation; }
 .canvas > svg.schematic { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 .canvas > svg.schematic:active { cursor: grabbing; }
 .canvas .widget-host { position: absolute; inset: 0; overflow: auto; background: var(--bg); z-index: 4; }
