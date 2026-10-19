@@ -47,7 +47,7 @@ export interface RomComposer {
 }
 
 /** isaOf: the ROM's instruction set for the builder (loaded on first use, with the builder). */
-export function romComposer(ce: CodeEditor, body: HTMLElement, toast: (m: string) => void, isaOf: () => Promise<ComposeIsa | null>): RomComposer {
+export function romComposer(ce: CodeEditor, body: HTMLElement, toast: (m: string) => void, isaOf: () => Promise<ComposeIsa | null>, onCustomSlot?: () => void): RomComposer {
   let pane: HTMLElement | null = null;
   let seq = 0;
 
@@ -94,7 +94,7 @@ export function romComposer(ce: CodeEditor, body: HTMLElement, toast: (m: string
       const rb = pane?.querySelector<HTMLElement>('.sb-rom-replace');
       if (rb) rb.textContent = `Replace line ${n}`;
     };
-    const cmp: Composer = instrComposer({ isa, word, pc: canReplace ? pc : here.length ? here[here.length - 1].addr + isa.step : pc, labels: r.labels, deposit: { label: 'Deposit next', run: deposit } });
+    const cmp: Composer = instrComposer({ isa, word, pc: canReplace ? pc : here.length ? here[here.length - 1].addr + isa.step : pc, labels: r.labels, deposit: { label: 'Deposit next', run: deposit }, onCustomSlot });
 
     const put = (below: boolean) => {
       if (!cmp.ok) return void toast('Not an instruction this builder writes: fix the word first');
