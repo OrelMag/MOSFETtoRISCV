@@ -54,6 +54,8 @@ interface State {
   traceRate: number;
   /** chapterId → indices of visited steps */
   visited: Record<string, number[]>;
+  /** The chapter step viewed last (the home page's Continue). */
+  last?: { chapter: string; step: number };
   /** "chapterId:step" → solved */
   solved: Record<string, boolean>;
   /** Campaign map: optional acts unfolded (true) or folded (false) by the learner; absent: the default. */
@@ -131,10 +133,15 @@ export const settings = {
   },
   visit(chapter: string, step: number): void {
     const v = (state.visited[chapter] ??= []);
-    if (!v.includes(step)) {
-      v.push(step);
-      save();
-    }
+    const moved = state.last?.chapter !== chapter || state.last.step !== step;
+    if (moved) state.last = { chapter, step };
+    if (!v.includes(step)) v.push(step);
+    else if (!moved) return;
+    save();
+  },
+  /** The chapter step viewed last, if any. */
+  lastStep(): { chapter: string; step: number } | undefined {
+    return state.last;
   },
   visited(chapter: string): number[] {
     return state.visited[chapter] ?? [];
@@ -157,6 +164,7 @@ export const settings = {
   resetProgress(): void {
     state.visited = {};
     state.solved = {};
+    delete state.last;
     save();
     // The campaign and the puzzles keep their own keys (campaign/progress.ts CAMPAIGN_KEY, puzzles/grade.ts PUZZLES_KEY).
     try {

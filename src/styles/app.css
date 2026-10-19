@@ -784,6 +784,7 @@ svg.schematic .dot.fld { fill: var(--fc); }
 .hero h1 .grad { background: linear-gradient(90deg, var(--accent), #e8590c); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero p.lead { font-size: 18px; color: var(--text-2); margin: 0 0 24px; max-width: 34em; }
 .hero .cta { display: flex; gap: 10px; flex-wrap: wrap; }
+.hero .cta-campaign { display: contents; } /* its button swapped once the campaign is known to be started (home.ts) */
 .eyebrow { font: 600 12px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 /* the ladder scrolls in its own box (opened at the visitor's rung, journey.ts), faded where more rungs lie past an edge */
 .ladder {
@@ -821,9 +822,11 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .card .num { font: 700 12px var(--font-mono); color: var(--accent); }
 .card h3 { margin: 0; font-size: 16px; letter-spacing: -0.01em; }
 .card p { margin: 0; font-size: 13.5px; color: var(--text-2); }
-.card .meta { margin-top: auto; padding-top: 8px; font: 12px var(--font-mono); color: var(--muted); display: flex; justify-content: space-between; }
+.card .meta { margin-top: auto; padding-top: 8px; font: 12px var(--font-mono); color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 12px; justify-content: space-between; }
 .card.soon { opacity: 0.6; border-style: dashed; }
-.card .done-badge { position: absolute; top: 12px; right: 12px; color: var(--good); }
+/* Finished (every step seen, every check solved): a filled tick; every step seen with checks left: a faint dashed one. */
+.card .done-badge { position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--good); background: var(--good-soft); }
+.card .done-badge.seen { color: var(--muted); background: none; border: 1px dashed var(--border-strong); }
 .features { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin-bottom: 44px; }
 .feature { padding: 16px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border); }
 .feature h4 { margin: 8px 0 4px; font-size: 15px; }

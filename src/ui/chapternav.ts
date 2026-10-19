@@ -110,3 +110,43 @@ export function snippet(e: NavEntry, query: string, n = 90): string {
   const to = Math.min(e.text.length, from + n);
   return `${from > 0 ? '…' : ''}${e.text.slice(from, to).trim()}${to < e.text.length ? '…' : ''}`;
 }
+
+// ---- the home page's Continue and chapter cards ----------------------------------------------------
+
+/** The part of a chapter Continue reads. */
+export interface ResumeChapter { id: string; steps: readonly unknown[] }
+
+/**
+ * Where Continue goes: the step last viewed (`last`), or, once every step of that chapter has been seen, the next
+ * chapter in book order at its first unseen step (`next`). Without a record of the last view (progress saved before
+ * it was kept): the last chapter started, at its furthest step. Null for a new visitor.
+ */
+export function resumeTarget<C extends ResumeChapter>(chs: readonly C[], visited: (id: string) => readonly number[], last?: { chapter: string; step: number }): { chapter: C; step: number; next: boolean } | null {
+  let i = last ? chs.findIndex((c) => c.id === last.chapter) : -1;
+  let step = i >= 0 ? last!.step : 0;
+  if (i < 0) {
+    for (let k = chs.length - 1; k >= 0 && i < 0; k--) if (visited(chs[k].id).length) i = k;
+    if (i < 0) return null;
+    step = Math.max(0, ...visited(chs[i].id));
+  }
+  const cur = chs[i];
+  // the recap is one past the last step
+  if (step < 0 || step > cur.steps.length) step = 0;
+  const allSeen = (c: C) => { const v = visited(c.id); return c.steps.every((_, k) => v.includes(k)); };
+  const nxt = chs[i + 1];
+  if (allSeen(cur) && nxt) {
+    const v = visited(nxt.id);
+    const first = nxt.steps.findIndex((_, k) => !v.includes(k));
+    return { chapter: nxt, step: Math.max(0, first), next: true };
+  }
+  return { chapter: cur, step, next: false };
+}
+
+/**
+ * A chapter card's mark: 'done' (the full tick) once every step was seen and every check solved, 'seen' when the
+ * steps were all seen but checks remain, else none. `seen` is the fraction of steps visited.
+ */
+export function chapterMark(seen: number, checks: { done: number; total: number }): 'done' | 'seen' | null {
+  if (seen < 1) return null;
+  return checks.done >= checks.total ? 'done' : 'seen';
+}
