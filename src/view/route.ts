@@ -32,6 +32,8 @@ export interface RoutedNet {
   tags: NetTag[];
   /** One polyline per sink (driver → sink). */
   paths: Vec[][];
+  /** The end each path runs to (null: the stub to a hand-placed tag), when the router knows it. */
+  ends?: (string | null)[];
   dots: Vec[];
   /** Where to draw the bus value label, and how wide it may be before it runs off its segment. */
   label: Vec | null;
@@ -75,7 +77,8 @@ function endGeom(def: ComponentDef, nl: Netlist, pins: Map<string, PinGeom>, end
   return instPort(i.def, i.at ?? [0, 0], i.flip, port);
 }
 
-function simplify(pts: Vec[]): Vec[] {
+/** Drops repeated points and the middle of three in a line. */
+export function simplify(pts: Vec[]): Vec[] {
   const out: Vec[] = [];
   for (const p of pts) {
     const last = out[out.length - 1];
@@ -101,6 +104,8 @@ interface NetPlan {
   /** Per sink, in netlist order: an authored (`via`) path, or the stub points [P, P1, S1, S]
    *  of a route through the trunk. */
   sinks: ({ path: Vec[] } | { free: Quad })[];
+  /** The end each of `sinks` runs to (null: a tag stub). */
+  ends: (string | null)[];
   /** The trunk runs vertically (x = trunk) for a horizontal driver, else horizontally. */
   h: boolean;
   /** Preferred trunk coordinate. */
@@ -175,7 +180,7 @@ export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[
     const sinkNames = drawn.map((i) => net.ends[i]);
     const multi = sinks.length > 1;
     const h = horiz(drv.exit);
-    const plan: NetPlan = { index, width, tags, sinks: [], h, t0: 0 };
+    const plan: NetPlan = { index, width, tags, sinks: [], ends: [...sinkNames], h, t0: 0 };
     sinks.forEach((s, si) => {
       const via = net.via?.[sinkNames[si]];
       if (via && via.length) {
@@ -202,7 +207,10 @@ export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[
     for (const t of tags) {
       if (!t.at) continue;
       const { path } = tagStub(t.pos, ends[net.ends.indexOf(t.end)].exit, t.at);
-      if (path.length > 1) plan.sinks.push({ path: t.end === net.ends[0] ? path : path.reverse() });
+      if (path.length > 1) {
+        plan.sinks.push({ path: t.end === net.ends[0] ? path : path.reverse() });
+        plan.ends.push(null);
+      }
     }
     const a = h ? 0 : 1, f = plan.sinks.map((_, i) => freeOf(plan, i)).find((q) => q);
     plan.t0 = net.trunk ?? (multi || !f ? P1[a] : half((P1[a] + f[2][a]) / 2));
@@ -217,7 +225,7 @@ export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[
   untangle(plans, all, boxes);
   const nets = plans.map((n): RoutedNet => {
     const paths = all[n.index];
-    return { index: n.index, width: n.width, tags: n.tags, paths, dots: junctions(paths), label: null, labelRoom: 0 };
+    return { index: n.index, width: n.width, tags: n.tags, paths, ends: n.ends, dots: junctions(paths), label: null, labelRoom: 0 };
   });
   // Bus value labels go last, clear of every tap label and net tag.
   const obstacles = [...allTaps.map((t) => t.rect), ...nets.flatMap((n) => n.tags.map((t) => tagGeom(t, nl.nets[n.index].name ?? `n${n.index}`).rect))];
