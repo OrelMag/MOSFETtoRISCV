@@ -258,8 +258,8 @@ The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next feat
   (from the capacitances the power estimate already computes), checked path by path against the
   sky130 runs; Kogge–Stone stops looking free.
 - **An out-of-order lab**: width, ROB, queues, ports and units set by the learner on the model, on
-  the benchmarks or their own program, priced by the gates; then the measured comparison of every
-  CPU in chapter 25.
+  the benchmarks or their own program, priced by the gates (chapter 25 already measures the four
+  CPUs side by side and the model's width × window).
 - **ISA breadth**: RV64I / RV64M and the C extension; the rest of A (lr.w / sc.w) with private
   caches and a coherent bus in the gate-level cores.
 - **Python on the pipeline** (stalls and flushes per line), with RV32IM, strings and a heap.
