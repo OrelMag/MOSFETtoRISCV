@@ -139,7 +139,8 @@ export class ChapterPage implements Page {
     b.replaceChildren();
     if (this.step === 0 && (c.goals?.length || c.builds?.length)) b.append(this.goalsCard());
     b.append(h('h2', { class: 'step-title' }, st.title), prose);
-    const lit = st.scene && this.stage.scene ? litLine(this.stage.scene, st.lit) : null;
+    // target: a big scene is still being built (Stage.load)
+    const lit = st.scene && this.stage.target ? litLine(this.stage.target, st.lit) : null;
     if (lit) b.append(lit);
     this.unlisten.push(wireLooks(b, this.stage));
     this.gloss(prose);

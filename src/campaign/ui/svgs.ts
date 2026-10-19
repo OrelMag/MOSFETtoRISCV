@@ -4,8 +4,8 @@
 import { s } from '../../ui/dom';
 import { BLOCKS, blockNodes, LINKS, VIEW } from '../anatomy';
 import { ancestors, isDone, statusOf, type ProgressView } from '../graph';
-import { BAND_GAP, COL_GAP, LINE_GAP, mapLayout, NODE_H, NODE_W, ROW_GAP } from '../layout';
-import { ACTS, actName } from '../nodes';
+import { BAND_GAP, COL_GAP, LINE_GAP, mapLayout, NODE_H, NODE_W, OPTIONAL_ACTS, ROW_GAP } from '../layout';
+import { ACTS, actName, NODES } from '../nodes';
 import type { CampaignNode } from '../types';
 
 const KIND_MARK: Record<CampaignNode['kind'], string> = { lesson: 'read', drill: 'drill', build: 'build', program: 'code', core: 'CPU' };
@@ -35,14 +35,51 @@ export function drawnRequires(n: CampaignNode): string[] {
   return n.requires.filter((r) => r !== 'intro' && !n.requires.some((o) => o !== r && ancOf(o).has(r)));
 }
 
-/** The map, its acts wrapped to at most `maxCols` columns a line (layout.ts mapColsFor). */
-export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string | undefined, go: (id: string) => void, maxCols = Infinity): SVGSVGElement {
-  const L = mapLayout(maxCols);
+/** `g` made a button: a click, Enter or Space calls `f`. */
+function pressable<T extends SVGElement>(g: T, f: () => void): T {
+  g.addEventListener('click', f);
+  g.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      f();
+    }
+  });
+  return g;
+}
+
+/**
+ * The map, its acts wrapped to at most `maxCols` columns a line (layout.ts mapColsFor). The optional
+ * acts in `folded` are a header (title, what it holds, Show); `fold` folds or unfolds one.
+ */
+export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string | undefined, go: (id: string) => void, maxCols = Infinity,
+  folded: ReadonlySet<number> = new Set(), fold?: (act: number, folded: boolean) => void): SVGSVGElement {
+  const L = mapLayout(maxCols, folded);
   const svg = s('svg', { class: 'cp-map', viewBox: `0 0 ${L.w} ${L.h}`, width: L.w, height: L.h, role: 'img', 'aria-label': 'The campaign map' });
   for (const b of L.bands) {
     const act = ACTS.find((a) => a.num === b.act)!;
+    const name = `${actName(act.num)} · ${act.title}`;
+    if (b.folded) {
+      const ns = NODES.filter((n) => n.act === act.num);
+      const done = ns.filter((n) => isDone(view(n.id))).length;
+      const open = ns.filter((n) => !n.soon && ['available', 'started'].includes(statusOf(n, view, unlockAll))).length;
+      const what = `Optional · ${ns.length} levels${done ? ` · ${done} done` : ''}${open ? ` · ${open} open` : ''}`;
+      const g = s('g', { class: 'cp-fold folded', 'data-act': act.num, tabindex: 0, role: 'button', 'aria-expanded': 'false', 'aria-label': `${name}: ${what}. Show its levels` },
+        s('title', null, 'Show this act\'s levels'),
+        s('rect', { class: 'cp-band', x: 4, y: b.y, width: L.w - 8, height: b.h, rx: 10 }),
+        s('text', { class: 'cp-band-title', x: 16, y: b.y + 21 }, name),
+        s('text', { class: 'cp-fold-what', x: 16, y: b.y + 40 }, what),
+        s('text', { class: 'cp-fold-btn', x: L.w - 16, y: b.y + 40, 'text-anchor': 'end' }, 'Show ▾'));
+      svg.append(fold ? pressable(g, () => fold(act.num, false)) : g);
+      continue;
+    }
     svg.append(s('rect', { class: 'cp-band', x: 4, y: b.y, width: L.w - 8, height: b.h, rx: 10 }),
-      s('text', { class: 'cp-band-title', x: 16, y: b.y + 21 }, `${actName(act.num)} · ${act.title}`));
+      s('text', { class: 'cp-band-title', x: 16, y: b.y + 21 }, name));
+    if (fold && OPTIONAL_ACTS.has(act.num)) {
+      svg.append(pressable(s('g', { class: 'cp-fold', 'data-act': act.num, tabindex: 0, role: 'button', 'aria-expanded': 'true', 'aria-label': `Fold ${name}` },
+        s('title', null, 'Fold this optional act to one line'),
+        s('rect', { class: 'cp-fold-hit', x: L.w - 72, y: b.y + 6, width: 60, height: 22, rx: 6 }),
+        s('text', { class: 'cp-fold-btn', x: L.w - 18, y: b.y + 21, 'text-anchor': 'end' }, 'Hide ▴')), () => fold(act.num, true)));
+    }
   }
   // Edges under the nodes: from the right of a requirement to the left of the node. Within an act
   // they are short and always drawn; between acts they cross the whole map, so they appear only for

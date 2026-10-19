@@ -474,7 +474,7 @@ let closeMenu: (() => void) | null = null;
 
 function examplesMenu(ed: Editor): void {
   if (closeMenu) return closeMenu();
-  const btn = ed.el.querySelector<HTMLElement>('[data-action=examples]');
+  const btn = ed.actionAnchor('examples');
   const r = btn?.getBoundingClientRect();
   const menu = h('div', { class: 'sb-menu', role: 'menu', 'aria-label': 'Examples' },
     h('div', { class: 'sb-menu-head' }, 'Load an example as a new chip'),

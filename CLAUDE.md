@@ -48,7 +48,7 @@ from the code (chapter steps in both themes, each workbench family's default, ca
 level, sandbox and its examples seeded in localStorage) as a fresh load in parallel tabs (`--tabs n`), each in its own
 browser context; it fails on exceptions, console / browser errors, failed requests (`OPTIONAL`: layout/ and Google Fonts),
 "could not load" panels, editor error toasts / diagnostics, an empty main view, and horizontal overflow at 1280 px and on
-a 390 px phone (a few pages). `--only <substring>`, `--headful`, `--dwell <ms>` (wait after settling, default 600).
+a 390 px phone (a few pages), and a sandbox toolbar label cut or scrolled out of view (also at 1440 and 1920 px). `--only <substring>`, `--headful`, `--dwell <ms>` (wait after settling, default 600).
 
 CI (`.github/workflows/deploy.yml`) runs tests beside build + smoke (one job) and deploys `dist/` to GitHub Pages
 on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-export.ts <design>`, one parallel job per design (multi, sys, sys-m, core-m: the system core with ports on tests/syscorebench.ts, the layout flow's design)
@@ -666,6 +666,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   unravel.ts     unravelPointer(s) (a pointer name → wires from the driver: square shapes, else A* on the half grid;
                  never on another net), collapseWire(s) (a wire tree → one pointer per end), pointersOf(sel), suggestName
   hops.ts        HopCache: wire hops recomputed for the moved wires and those crossing them only
+  toolbarfit.ts  shedActions: which toolbar actions move into the More menu on a narrow top bar (SHED_ORDER, least
+                 used first; editor.ts fitActions measures beside the open tab / Open… / New chip, or on a row of its own
+                 below 1000 px); below 760 px the palette is a drawer behind a Parts button (a tap arms a part)
   wirehue.ts     net colours: `hue` on wires and pointers, userHues (the colour most of a net's pieces carry),
                  colourNets (a whole net), hueOfNets, WIRE_HUES; hueswatch.ts: the swatch row (menu, properties)
   flowdir.ts     wireFlows: which way each drawn wire carries its signal (from part outputs / chip inputs,
@@ -834,7 +837,8 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
   progress.ts    Progress (own storage key, injected KV): status, best, stars, tips, seen; codexUnlocked;
                  exportCampaign / importCampaign (progress + level chips' closure, merged, never overwriting)
   codex.ts       CODEX entries (component / law / tool / trick / concept); lessons.ts lesson HTML
-  anatomy.ts     the target CPU as blocks (intro diagram), blockNodes; layout.ts the map's placement
+  anatomy.ts     the target CPU as blocks (intro diagram), blockNodes; layout.ts the map's placement (OPTIONAL_ACTS: P, 8, 9,
+                 10 fold to a header line, foldedActs: until a level in them is opened, or as settings.actOpen left them)
   drills.ts      generated questions with exact checkers (numbers, Boolean parser, exact K-map minimum, RV16
                  encoding, binary16); puzzles.ts RV16 program puzzles on the golden model (size, cycles)
   buildr.ts      act P (before the transistor, act 11 labelled "Act P", optional, beside act 0): relay levels (NAND, XOR,
@@ -1072,7 +1076,7 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
 - The simulator is rebuilt only when `simKey` (connectivity + part definitions) changes; input
   values are stripped before compiling, so toggling an input recompiles nothing.
 - Later phases plug in through `registerPaletteGroup`, `registerPropsSection`,
-  `registerToolbarAction` (`active` for toggles), `registerEditorPlugin` (per-editor state, with a
+  `registerToolbarAction` (`active` for toggles, `menu`: its name in More), `registerEditorPlugin` (per-editor state, with a
   cleanup), `registerDiagSource` (extra diagnostics, e.g. lint), `Editor.onSimChange`,
   `Tools.onPress` (a mode that takes clicks first) and `editor.slots` (`overlay` over the canvas,
   `bottom` above the run bar, `top` in the tab bar). `editor.saveState` / `onSave()` report autosave

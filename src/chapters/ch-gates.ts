@@ -203,7 +203,7 @@ export const chBinary: Chapter = {
         digit is worth ten times the one to its right; in <strong>binary</strong>, twice: 1, 2, 4, 8, 16…</p>
         <p>Long binary numbers are hard to read, so we write them in <strong>hexadecimal</strong>, one digit (0–9,
         A–F) for every four bits. <code>0b1010_1111</code> is <code>0xAF</code> is 175.</p>
-        <div class="try">Flip bits on the left. Try making 255, then add 1.</div>`,
+        <div class="try">Flip the bits. Try making 255, then add 1.</div>`,
       widget: () => numberWidget(8, false),
     },
     {

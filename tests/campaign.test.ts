@@ -8,7 +8,7 @@ import { BLOCKS, blockNodes, LINKS } from '../src/campaign/anatomy';
 import { CODEX, codexById } from '../src/campaign/codex';
 import { measured, stars } from '../src/campaign/grade';
 import { ancestors, nextAvailable, ruleFor, statusOf, topo } from '../src/campaign/graph';
-import { MAP_MIN_SCALE, MAP_MIN_W, mapColsFor, mapLayout, NODE_H, NODE_W } from '../src/campaign/layout';
+import { FOLDED_H, foldedActs, MAP_MIN_SCALE, MAP_MIN_W, mapColsFor, mapLayout, NODE_H, NODE_W, OPTIONAL_ACTS } from '../src/campaign/layout';
 import { LESSONS } from '../src/campaign/lessons';
 import { levelChallenge, levelChipId, nodeOfChip, startCandidates, startFrom } from '../src/campaign/levels';
 import { ACTS, NODES, nodeById } from '../src/campaign/nodes';
@@ -205,6 +205,34 @@ describe('the map and the anatomy', () => {
         const counts = [...perLine.values()].map((s) => s.size);
         expect(Math.max(...counts) - Math.min(...counts), `${cols}: act ${b.act}`).toBeLessThanOrEqual(1);
       }
+    }
+  });
+
+  it('folds the optional acts to a header until one of their levels is opened, or as the learner left them', () => {
+    // Act P and the acts after the finale; never the main path
+    expect([...OPTIONAL_ACTS].sort((a, b) => a - b)).toEqual([8, 9, 10, 11]);
+    const none = () => undefined;
+    expect(foldedActs(none, none)).toEqual(OPTIONAL_ACTS);
+    // a level of act P opened (its state exists), or selected: act P unfolds
+    expect(foldedActs((id) => (id === 'r_pull' ? { status: 'started' as const } : undefined), none).has(11)).toBe(false);
+    expect(foldedActs(none, none, 'r_nand').has(11)).toBe(false);
+    // the learner's choice wins either way, except for the selected level's act
+    expect(foldedActs(none, (a) => a === 11).has(11)).toBe(false);
+    expect(foldedActs((id) => (id === 'r_pull' ? { status: 'started' as const } : undefined), () => false).has(11)).toBe(true);
+    expect(foldedActs(none, () => false, 'r_nand').has(11)).toBe(false);
+  });
+
+  it('a folded act is one header line: none of its levels placed, the acts after it moved up', () => {
+    for (const cols of [Infinity, 4, 1]) {
+      const open = mapLayout(cols), L = mapLayout(cols, OPTIONAL_ACTS);
+      for (const p of L.nodes.values()) expect(OPTIONAL_ACTS.has(p.node.act), p.node.id).toBe(false);
+      expect(L.nodes.size).toBe(NODES.filter((n) => !OPTIONAL_ACTS.has(n.act)).length);
+      const bandP = L.bands.find((b) => b.act === 11)!;
+      expect(bandP).toMatchObject({ folded: true, h: FOLDED_H });
+      // act 1 starts right below act 0 and act P's header
+      const act1 = (m: typeof L) => m.bands.find((b) => b.act === 1)!.y;
+      expect(act1(L)).toBe(bandP.y + FOLDED_H + (act1(open) - open.bands.find((b) => b.act === 11)!.y - open.bands.find((b) => b.act === 11)!.h));
+      expect(act1(L)).toBeLessThan(act1(open));
     }
   });
 

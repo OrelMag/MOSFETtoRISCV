@@ -93,6 +93,13 @@
 }
 .sb-new { flex: none; }
 .sb-actions { display: flex; align-items: center; gap: 2px; flex: none; }
+/* The least used actions move into More when the bar is too narrow for them (editor.ts fitActions). */
+.sb-more { flex: none; }
+.sb-more-menu { min-width: 220px; }
+.sb-more-menu button.on b { color: var(--accent); }
+/* A phone's palette drawer button (editor.ts showParts). */
+.sb-parts-btn { display: none; flex: none; }
+.sandbox.pal-open .sb-parts-btn { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 
 /* ---------- palette ---------- */
 .sb-palette { grid-area: pal; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
@@ -384,17 +391,22 @@
 
 @media (max-width: 1100px) {
   .sandbox { grid-template-columns: 200px minmax(0, 1fr) 240px; }
-  .sb-hint { display: none; }
+  .sb-hint:not(.touch) { display: none; }
 }
-/* The actions take ~840 px with their labels: below that they wrap under the tabs instead of widening the page
-   (wrapped, not scrolled, so their drop-down menus are not clipped). */
+/* Below 1000 px the actions get a row of their own under the tabs, on one line: what does not fit is in More
+   (editor.ts fitActions measures for this breakpoint). */
 @media (max-width: 1000px) {
   .sb-top { flex-wrap: wrap; }
-  .sb-actions { flex: 1 1 100%; flex-wrap: wrap; }
+  .sb-actions { flex: 1 1 100%; min-width: 0; }
 }
 @media (max-width: 760px) {
   .sandbox { display: flex; flex-direction: column; height: auto; }
-  .sb-palette { max-height: 34vh; border-right: 0; border-bottom: 1px solid var(--border); }
+  /* the palette is a drawer under the top bar, closed by default: the canvas starts near the top */
+  .sb-parts-btn { display: inline-flex; }
+  .sandbox:not(.pal-open) > .sb-palette { display: none; }
+  .sb-palette { max-height: 50vh; border-right: 0; border-bottom: 1px solid var(--border); }
+  /* a vertical swipe scrolls the drawer (a drag would have to go down into the canvas anyway): a tap arms a part */
+  .sb-item { touch-action: pan-y; }
   .sb-center { height: 70vh; }
   .sb-props { border-left: 0; border-top: 1px solid var(--border); }
 }

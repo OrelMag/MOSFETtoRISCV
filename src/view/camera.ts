@@ -4,19 +4,20 @@
 
 import type { Vec } from '../sim/geometry';
 import { installPinch } from './pinch';
+import { overlaps, type Rect } from './route';
 
 export interface ViewBox { x: number; y: number; w: number; h: number }
 
-/** Below this many pixels beside an overlay there is no point fitting the drawing there: it is
- *  fitted to the whole width and the overlay covers it (a phone; the learner folds the panel). */
-export const MIN_FIT_PX = 120;
+/** Here a rectangle in screen pixels from the host's top-left corner (an overlay panel, a free area). */
+export type { Rect };
 
-/** Screen pixels left of an overlay `insetRight` px wide, or the whole width when that is too
- *  little to draw in (see MIN_FIT_PX). */
-export function usableWidth(width: number, insetRight: number): number {
-  const u = width - insetRight;
-  return insetRight > 0 && u >= MIN_FIT_PX ? u : width;
-}
+/** Below this many pixels wide (MIN_FIT_H high) beside the overlays there is no point fitting the drawing there:
+ *  it is fitted to the whole host and the overlays cover it (a phone; the learner folds the panel). */
+export const MIN_FIT_PX = 120;
+export const MIN_FIT_H = 80;
+
+/** Pixels kept clear between the drawing and an overlay panel. */
+export const COVER_GAP = 12;
 
 /** Below this many pixels left beside it, a foldable right-docked stage panel starts folded (Stage.foldable). */
 export const FOLD_BESIDE_PX = 300;
@@ -28,23 +29,67 @@ export function startFolded(canvasW: number, panelW: number): boolean {
 }
 
 /**
- * The view box showing `bbox` whole in a host of `width` × `height` px, centred in the part not
- * covered by `insetRight` px on the right (never under it, see usableWidth), at least `minW`
- * grid units wide. The box has the host's aspect ratio, so the svg scales it uniformly.
+ * Where a drawing of `bw` × `bh` (any unit) shows largest on a `width` × `height` px host part of which floating
+ * panels `cover` (each kept `gap` px clear): of the rectangles that touch no cover, the one giving the largest
+ * scale, the larger on a tie. Beside a full-height panel that is the strip left of it; beside a short one it may
+ * be the full width under it (a wide circuit), and a bottom-left panel takes its corner away. The whole host when
+ * no free rectangle is MIN_FIT_PX wide and MIN_FIT_H high.
  */
-export function fitBox(bbox: ViewBox, width: number, height: number, insetRight = 0, minW = 34): ViewBox {
-  const usable = usableWidth(width, insetRight);
-  const aspect = usable > 0 && height > 0 ? usable / height : 16 / 10;
+export function freeRect(width: number, height: number, cover: Rect[], bw: number, bh: number, gap = COVER_GAP): Rect {
+  const host: Rect = { x: 0, y: 0, w: width, h: height };
+  const boxes = cover.map((c) => {
+    const x0 = Math.max(0, c.x - gap), y0 = Math.max(0, c.y - gap);
+    const x1 = Math.min(width, c.x + c.w + gap), y1 = Math.min(height, c.y + c.h + gap);
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }).filter((b) => b.w > 0 && b.h > 0);
+  if (!boxes.length || !(bw > 0 && bh > 0)) return host;
+  // Every maximal free rectangle has its edges on the host's or a cover's edges: try them all (a few covers).
+  const edges = (a: number[]) => [...new Set(a)].sort((p, q) => p - q);
+  const xs = edges([0, width, ...boxes.flatMap((b) => [b.x, b.x + b.w])]);
+  const ys = edges([0, height, ...boxes.flatMap((b) => [b.y, b.y + b.h])]);
+  let best: Rect | null = null, bestS = 0;
+  for (let i = 0; i < xs.length; i++) for (let j = i + 1; j < xs.length; j++) {
+    if (xs[j] - xs[i] < MIN_FIT_PX) continue;
+    for (let k = 0; k < ys.length; k++) for (let l = k + 1; l < ys.length; l++) {
+      const r = { x: xs[i], y: ys[k], w: xs[j] - xs[i], h: ys[l] - ys[k] };
+      if (r.h < MIN_FIT_H || boxes.some((b) => overlaps(r, b))) continue;
+      const s = Math.min(r.w / bw, r.h / bh);
+      if (!best || s > bestS * (1 + 1e-9) || (s >= bestS * (1 - 1e-9) && r.w * r.h > best.w * best.h)) { best = r; bestS = s; }
+    }
+  }
+  return best ?? host;
+}
+
+/** A right overlay `insetRight` px wide (gap included) as a cover of a `width` × `height` host. */
+const insetCover = (width: number, height: number, insetRight: number): Rect[] =>
+  insetRight > 0 ? [{ x: width - insetRight, y: 0, w: insetRight, h: height }] : [];
+
+/**
+ * The view box showing `bbox` whole in a host of `width` × `height` px, as large as it fits and centred in the
+ * free part of the host (freeRect): `cover` lists the overlay panels' rectangles, or is a right inset in px (gap
+ * included). At least `minW` grid units wide. The box has the host's aspect ratio, so the svg scales it uniformly.
+ */
+export function fitBox(bbox: ViewBox, width: number, height: number, cover: Rect[] | number = 0, minW = 34): ViewBox {
   let { x, y, w, h } = bbox;
   if (w < minW) { x -= (minW - w) / 2; w = minW; }
-  if (w / h > aspect) {
-    const nh = w / aspect; y -= (nh - h) / 2; h = nh;
-  } else {
-    const nw = h * aspect; x -= (nw - w) / 2; w = nw;
+  if (!(width > 0 && height > 0)) {
+    // Not laid out yet: any box of a sensible aspect (the stage refits once it has a size).
+    const aspect = 16 / 10;
+    if (w / h > aspect) { const nh = w / aspect; y -= (nh - h) / 2; h = nh; } else { const nw = h * aspect; x -= (nw - w) / 2; w = nw; }
+    return { x, y, w, h };
   }
-  // Extend the view to the right so the drawing sits in the uncovered part.
-  if (usable < width && width > 0) w = w * (width / usable);
-  return { x, y, w, h };
+  const a = typeof cover === 'number' ? freeRect(width, height, insetCover(width, height, cover), w, h, 0) : freeRect(width, height, cover, w, h);
+  const s = Math.min(a.w / w, a.h / h); // px per grid unit
+  return { x: x + w / 2 - (a.x + a.w / 2) / s, y: y + h / 2 - (a.y + a.h / 2) / s, w: width / s, h: height / s };
+}
+
+/** Does `bbox`, shown through `vb` on a `width` × `height` px host, reach under a cover (less its gap)? A fitted
+ *  view refits then; a panel that only shrank or grew into empty space leaves the drawing where it is. */
+export function underCover(vb: ViewBox, bbox: ViewBox, width: number, height: number, cover: Rect[]): boolean {
+  if (!(width > 0 && height > 0 && vb.w > 0)) return false;
+  const s = width / vb.w;
+  const r = { x: (bbox.x - vb.x) * s, y: (bbox.y - vb.y) * s, w: bbox.w * s, h: bbox.h * s };
+  return cover.some((c) => overlaps(r, c));
 }
 
 export class Camera {
@@ -63,13 +108,13 @@ export class Camera {
   }
 
   /**
-   * Show `bbox` whole, centred in the part of the host not covered by `insetRight` screen
-   * pixels on the right, never narrower than `minW` grid units (so a tiny circuit doesn't look
-   * cartoonish).
+   * Show `bbox` whole, centred in the part of the host its overlays leave free (`cover`: their
+   * rectangles, or a right inset in px; see fitBox), never narrower than `minW` grid units (so a
+   * tiny circuit doesn't look cartoonish).
    */
-  fit(bbox: ViewBox, insetRight = 0, minW = 34): void {
+  fit(bbox: ViewBox, cover: Rect[] | number = 0, minW = 34): void {
     const r = this.host.getBoundingClientRect();
-    this.vb = fitBox(bbox, r.width, r.height, insetRight, minW);
+    this.vb = fitBox(bbox, r.width, r.height, cover, minW);
     this.fitted = true;
     this.size = r.width > 0 && r.height > 0 ? { w: r.width, h: r.height } : null;
     this.apply();
