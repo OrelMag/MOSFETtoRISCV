@@ -7,6 +7,7 @@ import { Inspector } from '../../view/inspector';
 import { Stage } from '../../view/stage';
 import { transistorLeaf } from '../../widgets/mosfet';
 import { h, icon } from '../dom';
+import { drillLanded, drillSegs, syncDrill } from '../drillpath';
 import { toggleChapterMenu } from '../quicknav';
 import { quizBox } from '../quiz';
 import { settings } from '../settings';
@@ -28,9 +29,13 @@ export class ChapterPage implements Page {
   private step = -1;
   /** Has the stage shown anything yet (a step without a scene keeps the last one, or borrows a neighbour's)? */
   private shown = false;
+  /** Is the stage showing a scene (not a widget)? Only a scene has a drill path in the hash. */
+  private sceneShown = false;
+  /** Following the address bar (a route): the stage's moves are not new history entries. */
+  private routing = false;
   private unlisten: (() => void)[] = [];
 
-  constructor(chapter: Chapter, step: number) {
+  constructor(chapter: Chapter, step: number, path?: string[]) {
     this.chapter = chapter;
     this.inspector = new Inspector();
     this.stage = new Stage(this.inspector);
@@ -40,7 +45,39 @@ export class ChapterPage implements Page {
     this.foot = h('div', { class: 'narrative-foot' });
     const narrative = h('aside', { class: 'narrative' }, this.head, this.body, this.foot);
     this.el = h('div', { class: 'layout' }, narrative, this.stage.el, this.inspector.el);
-    this.goStep(step);
+    // Each level opened is a history entry (ui/drillpath.ts): #/c/<chapter>/<step>/<instance>/…
+    this.stage.onNavigate(() => {
+      if (this.sceneShown) syncDrill(this.hash(), this.routing);
+    });
+    this.goStep(step, path);
+  }
+
+  /** This step's address, with the part open on the stage unless it is the scene's opening view. */
+  private hash(): string {
+    const drill = this.sceneShown ? drillSegs(this.stage.targetPath, this.stage.target?.path ?? []) : '';
+    return `#/c/${this.chapter.id}/${this.step}${drill}`;
+  }
+
+  private clamp(i: number): number {
+    return Math.max(0, Math.min(this.recap >= 0 ? this.recap : this.chapter.steps.length - 1, i));
+  }
+
+  /** The route: step `i` and the drill path after it (undefined: the scene's opening view). */
+  route(i: number, path?: string[]): void {
+    if (drillLanded()) {
+      // our own step back (Up, a breadcrumb) arrived: the stage is there, or has moved on since
+      if (this.sceneShown) syncDrill(this.hash());
+      return;
+    }
+    if (this.clamp(i) !== this.step) return this.goStep(i, path);
+    if (!this.sceneShown) return;
+    this.routing = true;
+    try {
+      this.stage.openPath(path ?? this.stage.target?.path ?? []);
+    } finally {
+      this.routing = false;
+    }
+    syncDrill(this.hash(), true);
   }
 
   /** The recap's index (one past the last step), or -1 without one. */
@@ -48,44 +85,56 @@ export class ChapterPage implements Page {
     return recapIndex(this.chapter) ?? -1;
   }
 
-  goStep(i: number): void {
+  /** `path`: open the scene this deep (a drill path from the address bar), else at its opening view. */
+  goStep(i: number, path?: string[]): void {
     const steps = this.chapter.steps;
-    i = Math.max(0, Math.min(this.recap >= 0 ? this.recap : steps.length - 1, i));
+    i = this.clamp(i);
     if (i === this.step) return;
     this.step = i;
     this.unlisten.forEach((f) => f());
     this.unlisten = [];
     if (i === this.recap) {
-      this.show(steps.length - 1);
+      this.show(steps.length - 1, path);
       this.renderHead();
       this.renderRecap();
     } else {
       settings.visit(this.chapter.id, i);
-      this.show(i);
+      this.show(i, path);
       this.renderHead();
       this.renderBody(steps[i]);
     }
     this.renderFoot();
     this.body.scrollTop = 0;
-    const want = `#/c/${this.chapter.id}/${i}`;
+    const want = this.hash();
     if (location.hash !== want) history.replaceState(null, '', want);
   }
 
   /** Put step i's scene or widget on the stage; a step without either keeps what is shown, or borrows the nearest earlier one's. */
-  private show(i: number): void {
+  private show(i: number, path?: string[]): void {
     const steps = this.chapter.steps;
     const has = (k: number) => !!(steps[k].scene || steps[k].widget);
     let k = i;
     if (!has(k)) {
-      if (this.shown) return;
+      if (this.shown) {
+        if (path && this.sceneShown) {
+          this.routing = true;
+          try {
+            this.stage.openPath(path);
+          } finally {
+            this.routing = false;
+          }
+        }
+        return;
+      }
       while (k > 0 && !has(k)) k--;
       if (!has(k)) k = steps.findIndex((s) => s.scene || s.widget);
       if (k < 0) return;
     }
     const st = steps[k];
-    if (st.scene) this.stage.load(st.scene());
+    if (st.scene) this.stage.load(st.scene(), path);
     else this.stage.showWidget(st.widget!());
     this.shown = true;
+    this.sceneShown = !!st.scene;
     this.el.classList.toggle('no-inspector', !st.scene);
   }
 

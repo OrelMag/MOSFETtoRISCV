@@ -8,6 +8,7 @@ import { homePage } from './pages/home';
 import { WorkbenchPage } from './pages/workbench';
 import { installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './quicknav';
 import { applyTheme, PALETTES, settings, type Theme } from './settings';
+import { parseDrill } from './drillpath';
 import type { Radix } from '../sim/values';
 
 /**
@@ -176,11 +177,13 @@ export function startApp(root: HTMLElement): void {
     if (key === 'c') {
       const ch = chapterById(parts[1] ?? '') ?? chapters[0];
       const step = Number(parts[2] ?? 0) || 0;
+      // after the step, the part opened on its stage (ui/drillpath.ts)
+      const path = parseDrill(parts.slice(3));
       if (page instanceof ChapterPage && page.chapter === ch) {
-        page.goStep(step);
+        page.route(step, path);
         return;
       }
-      mount(new ChapterPage(ch, step));
+      mount(new ChapterPage(ch, step, path));
     } else if (key === 'workbench' && parts[1] === 'stats') {
       // The Statistics tab: a chunk of its own (its rows come from hwstats.json).
       if ((page as { kind?: string } | null)?.kind === 'hwstats') return;
@@ -198,11 +201,12 @@ export function startApp(root: HTMLElement): void {
         if (seq === routeSeq) view.replaceChildren(loadFailed('benchmarks', e));
       });
     } else if (key === 'workbench') {
+      const path = parseDrill(parts.slice(2));
       if (page instanceof WorkbenchPage) {
-        page.open(parts[1] ?? 'rca4');
+        page.route(parts[1] ?? 'rca4', path);
         return;
       }
-      mount(new WorkbenchPage(parts[1] ?? 'rca4'));
+      mount(new WorkbenchPage(parts[1] ?? 'rca4', path));
     } else if (key === 'campaign' && parts[1] === 'play') {
       // A level on its own screen: the editor's chunk, like the sandbox.
       const lv = page as (Page & { kind?: string; nodeId?: string }) | null;
