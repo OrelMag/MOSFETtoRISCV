@@ -4,7 +4,10 @@
 // operands in assembly order with their register bank or range, the palette's groups, and the
 // text to put back in a program (a branch target named by its label when one sits there).
 
-import { BY_NAME, CSR_NAMES, decode, disasm, encB, encI, encJ, encR, encR4, encS, encU, INSTRS, OPCODES, type InstrSpec } from './isa';
+import { assemble } from './asm';
+import { fieldRole, fieldsOf, immBits } from './fields';
+import { ABI, BY_NAME, CSR_NAMES, CSRS, decode, disasm, encB, encI, encJ, encR, encR4, encS, encU, FABI, IMM_TOP, INSTRS, OPCODES, type ImmFmt, type InstrSpec } from './isa';
+import { parseWithOffsets, type CField, type CInstr, type ComposeIsa, type CSlot, type Parts as CParts, type ParseResult } from '../isa/composekit';
 
 export type SlotKey = 'rd' | 'rs1' | 'rs2' | 'rs3' | 'imm' | 'csr' | 'zimm' | 'rm';
 
@@ -137,23 +140,15 @@ export function textOf(word: number, pc?: number, labels?: Map<string, number>):
   return base;
 }
 
-/** Parse one line of assembly or a hex word into a word; labels resolve against pc. */
-export function parseLine(text: string, assemble: (src: string) => { words: number[]; errors: { message: string }[] }, pc = 0, labels?: Map<string, number>): { word: number } | { words: number[] } | { error: string } {
-  const t = text.replace(/#.*/, '').trim().replace(/^(?:[A-Za-z_.$][\w.$]*\s*:\s*)+/, '');
-  if (!t) return { error: 'Type an instruction (addi a0, a0, -1) or a hex word (0xfff50513).' };
-  if (/^0x[0-9a-f]{1,8}$/i.test(t) || /^[0-9a-f]{8}$/i.test(t)) return { word: parseInt(t.replace(/^0x/i, ''), 16) >>> 0 };
-  // A label as the last operand of a branch / jump becomes its offset from this instruction.
-  let src = t;
-  const m = t.match(/^(\S+)\s+(.*?)([A-Za-z_.$][\w.$]*)$/);
-  if (m && labels?.has(m[3])) {
-    const spec = BY_NAME.get(m[1].toLowerCase());
-    const branchy = !spec || spec.fmt === 'B' || spec.fmt === 'J';
-    if (branchy) src = `${m[1]} ${m[2]}${labels.get(m[3])! - pc}`;
-  }
-  const r = assemble(src);
-  if (r.errors.length) return { error: r.errors[0].message };
-  if (r.words.length === 1) return { word: r.words[0] >>> 0 };
-  return { words: r.words };
+/** Branch pseudo-instructions: their last operand is a target too. */
+export const BRANCH_PSEUDO = new Set(['beqz', 'bnez', 'blez', 'bgez', 'bltz', 'bgtz', 'bgt', 'ble', 'bgtu', 'bleu', 'j']);
+
+/** Parse one line of assembly or a hex word into a word; a branch / jump target label resolves against pc. */
+export function parseLine(text: string, assemble: (src: string) => { words: number[]; errors: { message: string }[] }, pc = 0, labels?: Map<string, number>): ParseResult {
+  return parseWithOffsets(text, assemble, 32, pc, labels, (op) => {
+    const spec = BY_NAME.get(op);
+    return spec ? spec.fmt === 'B' || spec.fmt === 'J' : BRANCH_PSEUDO.has(op);
+  });
 }
 
 export interface PaletteGroup { id: string; name: string; names: string[]; more?: boolean }
@@ -175,3 +170,51 @@ export const PALETTE: PaletteGroup[] = [
 
 /** A CSR operand's name (or its number in hex). */
 export const csrName = (n: number) => CSR_NAMES[n] ?? `0x${n.toString(16)}`;
+
+// ---- the builder's adapter -------------------------------------------------------------------
+
+const RM_NAMES = ['rne', 'rtz', 'rdn', 'rup', 'rmm', '', '', 'dyn'];
+const CSR_OPTIONS = Object.entries(CSRS).sort((a, b) => a[1] - b[1]).map(([name, value]) => ({ name, value }));
+
+function cslot(s: Slot): CSlot {
+  if (s.bank) return { key: s.key, label: s.key, kind: 'reg', names: s.bank === 'f' ? FABI : ABI, min: 0, max: 31, step: 1, dest: s.key === 'rd' };
+  if (s.key === 'csr') return { key: 'csr', label: 'csr', kind: 'num', options: CSR_OPTIONS, min: 0, max: 0xfff, step: 1, hex: true };
+  if (s.key === 'rm') return { key: 'rm', label: 'rm', kind: 'enum', options: [0, 1, 2, 3, 4, 7].map((v) => ({ name: v === 7 ? 'dyn (the mode in frm)' : RM_NAMES[v], value: v })), min: 0, max: 7, step: 1 };
+  return { key: s.key, label: s.key, kind: 'num', min: s.min!, max: s.max!, step: s.step!, role: s.key === 'zimm' ? 'imm' : s.role };
+}
+
+const CINSTRS = new Map(INSTRS.map((spec): [string, CInstr] => [spec.name, { id: spec.name, name: spec.name, slots: slotsOf(spec).map(cslot) }]));
+
+const toParts = (rec: CParts): Parts => ({ ...NO_PARTS, ...rec, rs1: rec.zimm ?? rec.rs1 ?? 0 });
+
+/** RV32 for the instruction builder. */
+export const RV32_COMPOSE: ComposeIsa = {
+  id: 'asm', name: 'RV32', wordBits: 32, step: 4, rv32: true, start: 0xfff50513,
+  groups: PALETTE.map((g) => ({ name: g.name, ids: g.names, more: g.more })),
+  instr: (id) => CINSTRS.get(id),
+  encode: (id, parts) => encodeParts(BY_NAME.get(id)!, toParts(parts)),
+  decode(word) {
+    const c = partsOf(word);
+    if (!c) return null;
+    const rec: CParts = {};
+    for (const s of slotsOf(c.spec)) rec[s.key] = s.key === 'zimm' ? c.parts.rs1 : c.parts[s.key];
+    return { id: c.spec.name, parts: rec };
+  },
+  fields: (word) => fieldsOf(word).map((f): CField => ({ key: f.key, label: f.label, hi: f.hi, lo: f.lo, role: fieldRole(f.key), used: f.used, meaning: f.meaning, value: f.value })),
+  imm(word) {
+    const c = partsOf(word);
+    const slot = c && slotsOf(c.spec).find((s) => s.key === 'imm');
+    if (!c || !slot || slot.role === 'shamt') return null;
+    const d = decode(word);
+    const ib = immBits(word);
+    const note = d.fmt === 'U' ? 'the upper 20 bits as they are, the low 12 tied to ground'
+      : `bit 31 copied into every bit above bit ${IMM_TOP[d.fmt as ImmFmt]} (sign extension)${d.fmt === 'B' || d.fmt === 'J' ? ', bit 0 tied to ground' : ''}`;
+    return { wires: ib.map((b) => ({ bit: b.bit, src: b.src, sign: b.sign, value: b.value })), value: d.imm, text: d.fmt === 'U' ? `0x${(d.imm >>> 0).toString(16)}` : String(d.imm), note };
+  },
+  text: (word, pc, labels) => textOf(word, pc, labels),
+  parse: (line, pc, labels) => parseLine(line, assemble, pc, labels),
+  program(src) {
+    const r = assemble(src);
+    return { lines: r.lines, labels: r.labels, errors: r.errors, end: r.words.length * 4 };
+  },
+};

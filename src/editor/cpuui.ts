@@ -983,13 +983,13 @@ class CpuPanel {
     const ROLE = { op: 'f-op', reg: 'f-rd', imm: 'f-imm', cond: 'f-fn', none: 'f-imm unused' } as const;
     keyed(this.fields, fw === null ? 'none' : `${fpc}:${fw}:${this.sel !== null}`, () => {
       if (fw === null) return [];
-      let hi = 15;
+      let hi = isa.wordBits - 1;
       const boxes = isa.fields(fw).map((f) => {
         const top = hi;
         hi -= f.bits;
         return h('div', { class: ROLE[f.kind], style: `--w:${f.bits}`, title: `${f.name}, bits ${top}:${top - f.bits + 1} = ${f.value}` },
           h('div', { class: 'fname' }, f.name),
-          h('div', { class: 'fbits' }, Array.from({ length: f.bits }, (_, i) => h('span', { class: 'bit' }, String((fw >> (top - i)) & 1)))));
+          h('div', { class: 'fbits' }, Array.from({ length: f.bits }, (_, i) => h('span', { class: 'bit' }, String((fw >>> (top - i)) & 1)))));
       });
       return [
         h('div', { class: 'cpu-fields-head' }, h('code', null, isa.disasm(fw, fpc!)), h('span', null, this.sel !== null ? 'selected' : 'current')),
