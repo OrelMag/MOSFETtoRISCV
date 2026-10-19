@@ -341,10 +341,29 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   color: var(--muted); background: color-mix(in srgb, var(--surface) 85%, transparent);
   border: 1px solid var(--border); padding: 3px 8px; border-radius: 99px;
 }
+.level-badge:empty { display: none; }
 .hint-badge {
   position: absolute; left: 12px; bottom: 10px; z-index: 2; pointer-events: none;
   font-size: 12px; color: var(--muted);
 }
+/* A big scene being built (Stage.load): painted before the page holds still for up to a second. The spinner turns
+   on the compositor, so it keeps turning while the main thread builds. */
+.stage-busy {
+  position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--bg) 45%, transparent); cursor: progress;
+}
+.stage-busy-box {
+  display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 99px;
+  background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-lg);
+  font-size: 13.5px; font-weight: 550; color: var(--text-2);
+}
+.stage-busy-spin {
+  width: 14px; height: 14px; border-radius: 50%; flex: none;
+  border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent);
+  animation: stage-busy-spin 0.8s linear infinite;
+}
+@keyframes stage-busy-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .stage-busy-spin { animation: none; } }
 
 .controls {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;

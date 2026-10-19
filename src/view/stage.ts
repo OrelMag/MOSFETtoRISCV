@@ -109,10 +109,24 @@ const DIR = () => h('span', { class: 'dir', 'aria-hidden': 'true' }, '▸');
 /** The learner's last fold or unfold of a foldable panel (see Stage.foldable): later scenes follow it. */
 let foldChoice: boolean | null = null;
 
+/** Scenes at least this big (NAND gates plus a quarter of the transistors) are built behind a "Building…" cue
+ *  painted first: flattening, simulating and drawing chapter 14's CPU (56 000 NANDs) holds the page half a second. */
+export const BUSY_GATES = 10_000;
+
+/** Run `f` once the browser has painted what is on screen now: a frame, then a task. (A hidden tab paints no
+ *  frames: there it runs after the frame the tab next shows.) */
+function afterPaint(f: () => void): void {
+  requestAnimationFrame(() => setTimeout(f, 0));
+}
+
 export class Stage {
   readonly el: HTMLElement;
   readonly inspector: Inspector;
   scene: Scene | null = null;
+  /** A big scene waiting for its "Building…" cue to paint (load), and the load it belongs to. */
+  private pending: Scene | null = null;
+  private loadSeq = 0;
+  private busyEl: HTMLElement | null = null;
   private remixBtn!: HTMLButtonElement;
   sim: Sim | null = null;
   rootCtx: ViewCtx | null = null;
@@ -310,6 +324,12 @@ export class Stage {
 
   /** Replace the schematic with a bespoke widget (null returns to schematic mode). */
   showWidget(w: Widget | null): void {
+    if (w && this.pending) {
+      // a widget step came before the big scene was built: it wins
+      this.loadSeq++;
+      this.pending = null;
+      this.busy(null);
+    }
     if (this.widget) {
       this.widget.w.destroy?.();
       this.widget.host.remove();
@@ -324,7 +344,50 @@ export class Stage {
     this.widget = { w, host };
   }
 
+  /** The scene on the stage, or the big one being built for it (load). */
+  get target(): Scene | null {
+    return this.pending ?? this.scene;
+  }
+
+  /**
+   * Show a scene. A big one (BUSY_GATES) first puts a "Building…" cue over the canvas and is built once that has
+   * painted, a frame later: building is one synchronous stretch of up to a second, which would otherwise freeze the
+   * page with no sign of why. Until then the old scene stays (under the cue) and `scene` is still the old one.
+   */
   load(scene: Scene): void {
+    const seq = ++this.loadSeq;
+    const st = stats(scene.root);
+    const size = st.nands + st.transistors / 4;
+    if (size < BUSY_GATES) {
+      this.pending = null;
+      this.busy(null);
+      this.build(scene);
+      return;
+    }
+    this.pending = scene;
+    this.stopAnim();
+    this.stopClock();
+    this.busy(st.nands ? `Building the circuit: ${st.nands.toLocaleString()} NAND gates…` : 'Building the circuit…');
+    afterPaint(() => {
+      if (seq !== this.loadSeq) return;
+      this.pending = null;
+      try {
+        this.build(scene);
+      } finally {
+        this.busy(null);
+      }
+    });
+  }
+
+  /** The "Building…" cue over the canvas (null removes it). */
+  private busy(text: string | null): void {
+    this.busyEl?.remove();
+    this.busyEl = text === null ? null
+      : h('div', { class: 'stage-busy', role: 'status', 'aria-live': 'polite' }, h('span', { class: 'stage-busy-box' }, h('span', { class: 'stage-busy-spin', 'aria-hidden': 'true' }), text));
+    if (this.busyEl) this.canvas.append(this.busyEl);
+  }
+
+  private build(scene: Scene): void {
     this.edgeHooks.clear();
     this.historyHooks.clear();
     this.resetHooks.clear();
@@ -1301,6 +1364,8 @@ export class Stage {
   }
 
   destroy(): void {
+    this.loadSeq++;
+    this.pending = null;
     this.showWidget(null);
     this.stopAnim();
     this.stopClock();
