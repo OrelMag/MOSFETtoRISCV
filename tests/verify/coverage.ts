@@ -42,7 +42,22 @@ export class HwCoverage implements LaneProbe {
     const ev = (name: string, mask: Event['mask'], edge = false) => { this.events.push({ name, mask, edge, prev: 0 }); this.counts.set(name, 0); };
     const port = (inst: string, p: string) => kids.get(inst)?.ports[p];
     const hz = kids.get('hz');
-    if (hz) {
+    if (hz?.def.id === 'hazard2') {
+      // the dual-issue pipeline: four operands' forwarding selects in ID/EX of both lanes (1 W0, 2 W1, 3 M0, 4 M1)
+      const sel = ['DE', 'DE1'].flatMap((r) => ['fwdAE', 'fwdBE'].map((p) => port(r, p)!));
+      const fwd = (ks: number[]) => (v: Int32Array) => sel.reduce((m, nets) => ks.reduce((mm, k) => mm | eq(v, nets, k), m), 0);
+      ev('forward M → E', fwd([3, 4]));
+      ev('forward W → E', fwd([1, 2]));
+      ev('forward from lane 1', fwd([2, 4]));
+      ev('bypass W → D', (v) => ['A0', 'B0', 'A1', 'B1'].reduce((m, o) => m | any(v, hz.ports[`byp${o}`]), 0));
+      ev('load-use stall', (v) => any(v, hz.ports.lwStall));
+      ev('flush', (v) => any(v, port('pctl', 'redirect')!));
+      ev('misprediction', (v) => any(v, port('mis', 'mispredict')!) | any(v, port('mis1', 'mispredict')!));
+      ev('misprediction in lane 1', (v) => any(v, port('mis1', 'mispredict')!));
+      ev('pair issued', (v) => any(v, port('v1D', 'y')!) & any(v, port('pctl', 'run')!));
+      ev('pair split', (v) => any(v, port('pctl', 'shift')!));
+      ev('divide stall', (v) => any(v, port('dive', 'stall')!));
+    } else if (hz) {
       const six = kids.has('MX');
       const fa = port('DE', 'fwdAE') ?? hz.ports.forwardA, fb = port('DE', 'fwdBE') ?? hz.ports.forwardB;
       const fwd = (k: number) => (v: Int32Array) => eq(v, fa, k) | eq(v, fb, k);

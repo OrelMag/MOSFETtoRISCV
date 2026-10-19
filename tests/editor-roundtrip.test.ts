@@ -38,10 +38,11 @@ cachedMemory(6, 2);
 /**
  * Components that cannot be drawn in the sandbox, and why. Keep this short: fix docFromDef
  * instead where the sandbox can express the circuit.
- * - A dual-core's cores hold the program ROM, like the CPU tops (opened through remixDef below).
+ * - A dual-core's cores hold the program ROM, like the CPU tops (opened through remixDef below), and so does
+ *   the dual-issue pipeline's two-port instruction memory (rom2_).
  */
 const cannot = (def: ComponentDef): RegExp | undefined =>
-  /_core$/.test(def.id) && def.id !== 'm6502_core' ? /unknown library part 'rom_/ : undefined; // the 6502 has no program ROM inside
+  (/_core$/.test(def.id) && def.id !== 'm6502_core') || /^rom2_/.test(def.id) ? /unknown library part 'rom_/ : undefined; // the 6502 has no program ROM inside
 
 // Top-level CPUs are not registered (only their parts), so walk their parts in explicitly. The
 // tops themselves hold a ROM generated for one program, which no id can bring back after a

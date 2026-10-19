@@ -429,6 +429,10 @@ export function pipelineSlots(v: CpuSimView, doc: ChipDoc, d: CpuDesc): { stage:
   const f = d.pc ? refValue(v, doc, d.pc) : null;
   if (f !== null && f >= 0) out.push({ stage: 'F', pc: f });
   for (const [stage, inst] of regs) if (val(inst, `valid${stage}`) === 1 && val(inst, `pc${stage}`) >= 0) out.push({ stage, pc: val(inst, `pc${stage}`) });
+  // a dual-issue pipeline's second lane (FD1 …): the younger instruction of each stage, tagged D₁ …
+  if (kids.has('FD1')) {
+    for (const [stage, inst] of regs) if (val(`${inst}1`, `valid${stage}`) === 1 && val(`${inst}1`, `pc${stage}`) >= 0) out.push({ stage: `${stage}₁`, pc: val(`${inst}1`, `pc${stage}`) });
+  }
   return out;
 }
 

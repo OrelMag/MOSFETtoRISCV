@@ -830,8 +830,17 @@ the pipelines' 1-cycle data memory; RV32IM without traps; a cycle-exact model th
   0.99. Chapter 24 with five model steps (the dataflow limit, where in-order stops, the scoreboard, rename / wait /
   commit, speculation) on `widgets/ooo.ts`; its numbers pinned by tests/ooo-chapter.test.ts. Found: on the benchmark
   set the front end limits more than the window (fib: CPI 0.99, perfect prediction 0.63)
-- ⏳ 17b: `pipe-2w` at gate level; 17c: the `ooo` core at gate level, equal to the model every cycle, and its panel;
-  17d: measured (plan: E:/mockups/ooo/PLAN-17b-17d.md)
+- ✅ More than one retirement per cycle (feat/multi-retire): a CPU gives the count on `retire` (oldest first, `pcW0`);
+  the CPU panel, the sandbox monitor, fuzz replay and the benchmark lanes step the golden model that many times.
+- ✅ 17b: `pipe-2w` (lib/pipe2w.ts), the balanced RV32IM pipeline with prediction two lanes wide: two ROM reads, the BTB
+  looked up for both slots, a 4-entry return-address stack (lib/ras.ts, the model's rules), a pair check (lane 1: no
+  memory, multiplier or divider; one control instruction a pair; nothing after a divide; no read of slot 0's result:
+  else hold and shift), a 4-read 2-write register file, look-ahead forwarding from both lanes. riscv-tests, 2048 random
+  programs and the benchmarks match the golden model. 193 768 NANDs (+37 % on pipe-m-bal-bp), period 80 (79), CPI fib
+  1.13, sort 1.01, matmul 1.05, matmul-m 1.09, crc 0.97 (1.35 / 1.18 / 1.30 / 1.25 / 1.23). Chapter 24 step 2; the
+  pipeline diagram, listing and sandbox drawer show both lanes; the Benchmarks tab's two-wide family
+- ⏳ 17c: the `ooo` core at gate level, equal to the model every cycle, and its panel; 17d: measured (plan:
+  E:/mockups/ooo/PLAN-17b-17d.md)
 
 ### Phase 16 — Journey and campaign track: Memory ✅
 Memory in depth, past today's arrays (chapter 10), cells and caches (Phase 8): how a DRAM chip really answers, what

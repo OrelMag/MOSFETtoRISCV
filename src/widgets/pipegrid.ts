@@ -43,16 +43,21 @@ export function pipeGridRows(snaps: PipeSnap[], wordAt: (pc: number) => number |
   };
   const hue = (pc: number) => (pc * 47) % 360;
   const head = h('div', { class: 'pg-row head' }, h('span', { class: 'pg-st' }, ''), shown.map((s) => h('span', { class: 'pg-c' }, String(s.cycle))));
-  const rows = stages.map((st, si) => h('div', { class: 'pg-row' }, h('span', { class: 'pg-st' }, st),
-    shown.map((s) => {
-      const slot = s.slots[si];
-      if (!slot?.valid) return h('span', { class: 'pg-c bubble', title: 'bubble' }, '·');
-      return h('span', { class: 'pg-c', style: `--h:${hue(slot.pc)}`, title: `${hex(slot.pc, 4)}: ${disasm(wordAt(slot.pc) ?? 0x13, slot.pc)}` }, mnem(slot.pc));
-    })));
+  // a dual-issue pipeline: each stage's second lane (the younger instruction) in a row under it
+  const wide = shown.some((s) => s.slots1);
+  const row = (st: string, pick: (s: PipeSnap) => PipeSnap['slots'][number] | undefined, lane1 = false) =>
+    h('div', { class: `pg-row${lane1 ? ' lane1' : ''}` }, h('span', { class: 'pg-st' }, st),
+      shown.map((s) => {
+        const slot = pick(s);
+        if (!slot?.valid) return h('span', { class: 'pg-c bubble', title: 'bubble' }, '·');
+        return h('span', { class: 'pg-c', style: `--h:${hue(slot.pc)}`, title: `${hex(slot.pc, 4)}: ${disasm(wordAt(slot.pc) ?? 0x13, slot.pc)}` }, mnem(slot.pc));
+      }));
+  const rows = stages.flatMap((st, si) => [row(st, (s) => s.slots[si]), ...(wide ? [row(`${st}₁`, (s) => s.slots1?.[si], true)] : [])]);
   const ev = h('div', { class: 'pg-row ev' }, h('span', { class: 'pg-st' }, ''), shown.map((s) => {
     const tags: string[] = [];
     if (s.stall) tags.push('stall');
     if (s.flush) tags.push('flush');
+    if (s.split) tags.push('split');
     if (s.fwdA === 2 || s.fwdB === 2) tags.push('M→E');
     if (s.stages.length === 6 && (s.fwdA === 3 || s.fwdB === 3)) tags.push('X→E');
     if (s.fwdA === 1 || s.fwdB === 1) tags.push('W→E');
