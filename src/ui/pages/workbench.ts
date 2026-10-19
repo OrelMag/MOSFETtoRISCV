@@ -44,7 +44,7 @@ export class WorkbenchPage implements Page {
       this.current = '';
       this.stage.showWidget({ el: h('div', { class: 'widget' }, h('div', { class: 'panel' },
         h('h3', null, 'Unknown component'),
-        h('p', { class: 'sub' }, `No component called "${id}". ${near.length ? 'Did you mean:' : 'Pick one from the list on the left, or search it.'}`),
+        h('p', { class: 'sub' }, `No component called "${id}". ${near.length ? 'Did you mean:' : 'Pick one from the library list, or search it.'}`),
         near.length ? h('div', { class: 'suggest' }, near.map((it) => h('button', { class: 'btn', onclick: () => this.open(it.id) }, it.name))) : null)) });
       this.renderParams();
       this.renderList();
