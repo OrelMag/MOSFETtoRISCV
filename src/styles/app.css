@@ -433,6 +433,31 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   border-radius: 99px; padding: 2px 10px; font: 700 13px var(--font-mono); text-align: right; cursor: pointer;
 }
 .out-num.vx .v { color: var(--wx); background: color-mix(in srgb, var(--wx) 12%, var(--surface)); }
+/* Drilled in: whose pins the bar drives (the top level's), and the open part's own pins, read-only (Stage.syncScope). */
+.ctl-scope { display: inline-flex; align-items: baseline; gap: 6px; font-size: 13px; color: var(--text); padding-right: 10px; border-right: 1px solid var(--border-strong); }
+.ctl-scope b { font-weight: 600; }
+.ctl-inner {
+  flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
+  padding: 4px 10px; border: 1px dashed var(--border-strong); border-radius: 10px; background: var(--surface-2);
+  font: 600 12px var(--font-mono); color: var(--text-2);
+}
+.ctl-inner b { font: 700 13px var(--font-mono); color: var(--text); }
+.ctl-inner .kind { font: 500 12px var(--font-ui); color: var(--muted); }
+.ctl-inner .ro { font: 500 11px var(--font-ui); color: var(--muted); font-style: italic; margin-right: 4px; }
+.ctl-inner .arrow, .ctl-inner .more { color: var(--muted); }
+.ctl-inner .more { font-weight: 500; }
+.ctl-pin { display: inline-flex; align-items: center; gap: 4px; }
+.ctl-pin i {
+  font-style: normal; min-width: 1.6em; text-align: center; padding: 0 6px; border-radius: 99px;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+}
+.ctl-pin i.v1 { background: color-mix(in srgb, var(--w1) 28%, var(--surface)); border-color: var(--w1); }
+@media (max-width: 760px) {
+  /* a phone: one line, scrolled sideways, so the circuit keeps its room (the part's kind is in the breadcrumb) */
+  .ctl-inner { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; scrollbar-width: thin; }
+  .ctl-inner > * { flex: none; }
+  .ctl-inner .kind { display: none; }
+}
 .status { margin-left: auto; font: 12px var(--font-mono); color: var(--muted); display: flex; align-items: center; gap: 8px; }
 .status .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
 .status .pulse.busy { background: var(--w1); animation: blink 0.6s infinite; }

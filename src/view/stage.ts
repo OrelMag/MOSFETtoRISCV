@@ -78,6 +78,8 @@ const LEVEL_NAME: Record<string, string> = {
 const HISTORY_MAX = 100;
 /** The stage's Run: one clock cycle every RUN_MS (2 Hz, slow enough to follow every edge), high for the first half. */
 const RUN_MS = 500;
+/** The open part's pins shown in the bar's read-only row (the rest are in the inspector's Info). */
+const INNER_PINS = 10;
 
 /** Panel state that Back restores together with the simulation (a golden model, a trace log). */
 export interface HistoryHook {
@@ -137,6 +139,11 @@ export class Stage {
   private crumbs: HTMLElement;
   private bar: HTMLElement;
   private controls: HTMLElement;
+  /** Drilled in, the bar says whose pins it drives (the top level's), and shows the open part's own pins read-only. */
+  private scopeEl: HTMLElement | null = null;
+  private innerEl: HTMLElement | null = null;
+  private innerFor: ViewCtx | null = null;
+  private innerVals: { el: HTMLElement; port: PortDef }[] = [];
   private canvas: HTMLElement;
   /** Bottom-left stack for panels with `data-dock="left"` (see layoutDock). */
   private dock: HTMLElement;
@@ -1012,6 +1019,10 @@ export class Stage {
     const c = this.controls;
     c.replaceChildren();
     this.runBtn = null;
+    this.innerEl = h('div', { class: 'ctl-inner', role: 'group', hidden: true });
+    this.scopeEl = h('span', { class: 'ctl-scope', hidden: true });
+    this.innerFor = null;
+    c.append(this.innerEl, this.scopeEl);
     const root = this.scene!.root;
     const ins = inPorts(root).filter((p) => !(this.scene!.hiddenInputs ?? []).includes(p.name));
     const clk = this.clockPort();
@@ -1133,6 +1144,7 @@ export class Stage {
       if (document.activeElement !== el) el.value = formatNumber(this.getInput(p.name), p.width, settings.radix === 'bin' && p.width > 8 ? 'hex' : settings.radix);
     }
     if (this.backBtn) this.backBtn.disabled = !this.history.length;
+    this.syncScope();
     const sim = this.sim;
     const busy = sim.busy();
     let msg: string;
@@ -1244,6 +1256,51 @@ export class Stage {
       (c.lastChild as HTMLElement).title = item.kind ? `${item.label} (${item.kind})` : item.label;
     });
     this.fitBar();
+    this.syncScope();
+  }
+
+  /**
+   * The bottom bar always drives the top level's pins. Drilled in, the canvas shows a part whose pins often have
+   * the same names (a, b, cin, s inside an adder's fa0): the bar then says whose pins it holds, and a read-only row
+   * above it shows the open part's own pins, live.
+   */
+  private syncScope(): void {
+    const scope = this.scopeEl, inner = this.innerEl, ctx = this.ctx, root = this.rootCtx;
+    if (!scope || !inner || !ctx || !root) return;
+    const deep = ctx !== root || !!this.leaf;
+    scope.hidden = !deep;
+    if (deep && !scope.childElementCount) {
+      scope.append(h('span', { class: 'label' }, 'Pins of'), h('b', null, root.def.name));
+      scope.title = `These inputs and outputs are the pins of the whole ${root.def.name} (the top level), not of the part open on the canvas`;
+    }
+    const showInner = ctx !== root && !this.leaf;
+    inner.hidden = !showInner;
+    if (!showInner) {
+      this.innerFor = null;
+      return;
+    }
+    if (this.innerFor !== ctx) {
+      this.innerFor = ctx;
+      const name = ctx.path[ctx.path.length - 1];
+      const ports = [...inPorts(ctx.def), ...outPorts(ctx.def)];
+      const shown = ports.slice(0, INNER_PINS);
+      this.innerVals = [];
+      inner.setAttribute('aria-label', `Pins of ${name} (read-only)`);
+      inner.replaceChildren(h('span', { class: 'label' }, 'Inside'), h('b', null, name), h('span', { class: 'kind' }, ctx.def.name), h('span', { class: 'ro' }, 'read-only'));
+      shown.forEach((p, i) => {
+        if (i && p.dir === 'out' && shown[i - 1].dir !== 'out') inner.append(h('span', { class: 'arrow', 'aria-hidden': 'true' }, '→'));
+        const el = h('i');
+        this.innerVals.push({ el, port: p });
+        inner.append(h('span', { class: 'ctl-pin', title: `${name}.${p.name} (${p.dir === 'out' ? 'output' : 'input'} of ${ctx.def.name})` }, p.name, el));
+      });
+      if (ports.length > shown.length) inner.append(h('span', { class: 'more' }, `+${ports.length - shown.length} more in Info`));
+    }
+    for (const { el, port } of this.innerVals) {
+      const bits = ctx.portBits(port.name);
+      const txt = formatBits(bits, port.width === 1 ? 'bin' : settings.radix === 'bin' && port.width > 8 ? 'hex' : settings.radix);
+      if (el.textContent !== txt) el.textContent = txt;
+      el.classList.toggle('v1', port.width === 1 && bits[0] === B1);
+    }
   }
 
   /** Drop the bar's button labels (icons and tooltips remain) when the hierarchy would otherwise
