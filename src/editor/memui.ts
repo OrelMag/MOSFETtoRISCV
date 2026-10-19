@@ -317,8 +317,10 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
   };
 
   const body = h('div', { class: 'sb-rom-dlg-body' }, h('div', { class: 'sb-rom-dlg-src' }, ce.el), listBox);
-  // RV32 assembly: the instruction builder on the caret's line (Ctrl+Space).
-  const builder = applied.lang === 'asm' ? romComposer(ce, body, (m) => ed.toast(m, 'err')) : null;
+  // Every language with instructions: the instruction builder on the caret's line (Ctrl+Space).
+  const builder = applied.lang !== 'hex' && applied.lang !== '6502'
+    ? romComposer(ce, body, (m) => ed.toast(m, 'err'), () => import('../isa/compose').then((c) => c.composeIsaOf(applied.lang, applied.isa)))
+    : null;
   const title = h('h3', null, icon('code', 16), `Program · ${partId}`,
     h('small', null, `${2 ** applied.k} × ${applied.w} bits · ${applied.addr === 'rv32' ? 'byte addressed' : 'word addressed'} · ${langName(applied)}`));
   const ov = h('div', { class: 'sb-help sb-rom-dlg', role: 'dialog', 'aria-label': `Program of ${partId}` },

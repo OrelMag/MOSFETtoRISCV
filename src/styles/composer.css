@@ -27,7 +27,8 @@
 
 /* the word: 32 columns, bit numbers / bits / field names */
 .cmp-scroll { overflow-x: auto; padding-bottom: 2px; }
-.cmp-strip { min-width: 560px; display: grid; grid-template-columns: repeat(32, minmax(0, 1fr)); gap: 2px; }
+.cmp-strip { min-width: calc(var(--n, 32) * 17.5px); display: grid; grid-template-columns: repeat(var(--n, 32), minmax(0, 1fr)); gap: 2px; }
+.cmp-gap { height: 22px; }
 .cmp-bn { font: 9.5px var(--font-mono); color: var(--muted); text-align: center; }
 .cmp-bit { height: 28px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 4px; font: 700 13px var(--font-mono);
   background: color-mix(in srgb, var(--fc) 12%, var(--surface)); color: color-mix(in srgb, var(--fc) 75%, var(--text)); }
@@ -41,7 +42,7 @@ button.cmp-bit { cursor: pointer; }
 .cmp-fl.unused b { color: var(--muted); }
 
 /* the immediate generator: a wire from each source bit to its place in the 32-bit immediate */
-.cmp-wires { position: relative; width: 100%; min-width: 560px; height: 54px; }
+.cmp-wires { position: relative; width: 100%; min-width: calc(var(--n, 32) * 17.5px); height: 54px; }
 .cmp-wires svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .cmp-wires polygon { fill: var(--fc); fill-opacity: 0.22; }
 .cmp-wires polygon.sign { fill-opacity: 0.08; stroke: var(--fc); stroke-opacity: 0.45; stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
@@ -62,7 +63,7 @@ button.cmp-bit { cursor: pointer; }
 .cmp-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
 .cmp-tabs button { font: 12px var(--font-mono); padding: 2px 9px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); cursor: pointer; }
 .cmp-tabs button.on { border-color: var(--fc); color: var(--fc); background: color-mix(in srgb, var(--fc) 14%, var(--surface)); font-weight: 700; }
-.cmp-regs { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; }
+.cmp-regs { display: grid; grid-template-columns: repeat(var(--cols, 8), minmax(0, 1fr)); gap: 3px; }
 .cmp-reg { padding: 2px 0; border-radius: 4px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: 10.5px var(--font-mono); line-height: 1.2; cursor: pointer; }
 .cmp-reg small { display: block; font-size: 9.5px; color: var(--muted); }
 .cmp-reg:hover { border-color: var(--fc); }
@@ -112,3 +113,5 @@ button.cmp-bit { cursor: pointer; }
 .sb-rom-cmp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); }
 .sb-rom-cmp-head b { color: var(--text); font-size: 13px; }
 .sb-rom-cmp-head .grow { flex: 1; }
+.cmp-near { display: flex; flex-wrap: wrap; gap: 4px; }
+.cmp-near .cmp-chip small { color: var(--muted); font-size: 10px; }
