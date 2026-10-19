@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { busMux2, rca } from '../src/lib/combinational';
-import { koggeStone } from '../src/lib/fastadd';
+import { brentKung, koggeStone, sklansky } from '../src/lib/fastadd';
+import { chapterById } from '../src/chapters';
 import { register } from '../src/lib/sequential';
 import { bestBuffering, effortDelay, fanoutOf, inputArrivals, leafDelays, nandDelay, netLoads, TAU_PER_UNIT } from '../src/sim/delay';
 import { flatten } from '../src/sim/flatten';
@@ -82,5 +83,26 @@ describe('load-dependent depth and timing', () => {
     expect(u.period).toBe(CLK_TO_Q + u.logic + SETUP);
     expect(l.period).toBeGreaterThan(0);
     for (const p of l.path) expect(p.fanout).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('chapter 16 quotes the prefix family as measured', () => {
+  const f = (x: number | null) => x!.toFixed(1);
+  it('recap numbers', () => {
+    const keep = chapterById('fastadd')!.recap!.keep.join(' ');
+    expect(keep).toContain(`Kogge–Stone ${f(logicDepth(koggeStone(32), 'load'))} units, Sklansky ${f(logicDepth(sklansky(32), 'load'))}, Brent–Kung ${f(logicDepth(brentKung(32), 'load'))}`);
+  });
+  it('the prose: Sklansky ties in unit delay, loses as drawn, comes back with buffers', () => {
+    expect(logicDepth(sklansky(64))).toBe(logicDepth(koggeStone(64)));
+    const drawn = [sklansky(64), brentKung(64), koggeStone(64)].map((d) => logicDepth(d, 'drawn')!);
+    expect(drawn[0]).toBeGreaterThan(drawn[1]);
+    expect(drawn[1]).toBeGreaterThan(drawn[2]);
+    const sk = logicDepth(sklansky(64), 'load')!, ks = logicDepth(koggeStone(64), 'load')!;
+    expect(sk - ks).toBeGreaterThan(0);
+    expect(sk - ks).toBeLessThan(5); // "within a few units"
+    expect(logicDepth(brentKung(64), 'load')!).toBeGreaterThan(sk);
+    const step = chapterById('fastadd')!.steps.find((s) => s.title === 'When fan-out costs')!;
+    const q = step.challenge!;
+    expect(q.kind === 'quiz' && q.answer).toBe(0);
   });
 });

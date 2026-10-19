@@ -2,6 +2,8 @@
 // what does it look like in Verilog.
 
 import { evalOnce, forEachInput, inputBits, simulate } from '../sim/harness';
+import { DELAY_NOTE, type DelayModel, fmtDelay } from '../sim/delay';
+import { settings } from '../ui/settings';
 import { hasFeedback, logicDepth, stats } from '../sim/stats';
 import { type Bit, BZ, type Category, type ComponentDef, inPorts, netlistOf, outPorts } from '../sim/types';
 import { formatBits, formatNumber, pack, type Radix } from '../sim/values';
@@ -108,7 +110,7 @@ export class Inspector {
     if (d.prim !== 'alias') actions.append(h('a', { class: 'btn sm', href: `#/workbench/${d.id}` }, icon('bench', 14), 'Workbench'));
     if (actions.childElementCount) b.append(actions);
 
-    const cells: [string, string][] = [];
+    const cells: [string, string, string?][] = [];
     if (d.prim === 'nmos' || d.prim === 'pmos') cells.push(['1', 'transistor']);
     else if (d.prim === 'res') cells.push(['1', 'resistor']);
     else if (d.prim === 'dep') cells.push(['1', 'depletion transistor']);
@@ -126,11 +128,16 @@ export class Inspector {
       if (st.resistors) cells.push([st.resistors.toLocaleString(), `resistor${st.resistors > 1 ? 's' : ''}`]);
       if (st.capacitors) cells.push([st.capacitors.toLocaleString(), `capacitor${st.capacitors > 1 ? 's' : ''}`]);
       if (!old || st.nands) cells.push([st.nands.toLocaleString(), 'NAND gates']);
-      if (depth !== null && depth > 0) cells.push([String(depth), 'gate delays (worst path)']);
+      if (depth !== null && depth > 0) {
+        const unit: [string, string] = [String(depth), 'gate delays (worst path)'];
+        const loaded = logicDepthSafe(d, 'load');
+        const load: [string, string, string] | null = loaded === null ? null : [fmtDelay(loaded, 'load'), 'units under load', DELAY_NOTE];
+        cells.push(...(settings.loadDelay && load ? [load, unit] : load ? [unit, load] : [unit]));
+      }
       else if (st.nands > 0 && depth === null) cells.push(['∞', 'has feedback: it remembers']);
       if (st.levels > 0) cells.push([String(st.levels), `level${st.levels > 1 ? 's' : ''} of boxes inside`]);
     }
-    if (cells.length) b.append(h('div', { class: 'stats' }, cells.map(([v, l]) => h('div', { class: 'stat' }, h('b', null, v), h('span', null, l)))));
+    if (cells.length) b.append(h('div', { class: 'stats' }, cells.map(([v, l, tip]) => h('div', { class: 'stat', title: tip }, h('b', null, v), h('span', null, l)))));
 
     const rows = d.ports.map((p) => {
       const bits = t.portBits?.(p.name);
@@ -310,9 +317,9 @@ function download(name: string, text: string): void {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-function logicDepthSafe(d: ComponentDef): number | null {
+function logicDepthSafe(d: ComponentDef, model: DelayModel = 'unit'): number | null {
   try {
-    return logicDepth(d);
+    return logicDepth(d, model);
   } catch {
     return null;
   }

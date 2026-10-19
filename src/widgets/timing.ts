@@ -1,6 +1,6 @@
 // Static-timing panel for CPU scenes, and the adder cost/speed comparison.
 
-import { koggeStone, rca, CLA4 } from '../lib';
+import { brentKung, busMux2, CLA4, koggeStone, rca, sklansky } from '../lib';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
 import { analyzeTiming, CLK_TO_Q, PS_NOTE, PS_PER_NAND, SETUP, type TimingReport } from '../sim/timing';
@@ -92,5 +92,46 @@ export function adderComparison(): Widget {
         h('tbody', null, rows)),
       h('p', { class: 'sub', style: 'margin-top:12px' },
         `4-bit carry-lookahead (2-input NAND trees only): ${cla.nands} NANDs, depth ${cla.depth}: worse than ripple at this width. At 4 bits the prefix adder only ties ripple; the crossover is the point. Ripple grows by 2 delays per bit; Kogge–Stone by one prefix level (2 NANDs) per doubling, but its area grows as n·log n, and its wiring (the long diagonals) is the real cost on silicon. Practical designs mix the two: Brent–Kung, Han–Carlson, sparse trees.`))),
+  };
+}
+
+/** Chapter 16's last step: the prefix family (and a wide select) under unit delay, under load, and as drawn. */
+export function prefixDelays(): Widget {
+  const body = h('div');
+  const pick = h('div', { class: 'seg', role: 'group', 'aria-label': 'Width' });
+  const rowsOf = (n: number) => [
+    { name: 'Ripple carry', def: rca(n) },
+    { name: 'Brent–Kung', def: brentKung(n) },
+    { name: 'Sklansky', def: sklansky(n) },
+    { name: 'Kogge–Stone', def: koggeStone(n) },
+    { name: `${n}-bit mux (one select)`, def: busMux2(n) },
+  ].map((r) => ({ ...r, nands: stats(r.def).nands, unit: logicDepth(r.def) ?? 0, load: logicDepth(r.def, 'load') ?? 0, drawn: logicDepth(r.def, 'drawn') ?? 0 }));
+  const cache = new Map<number, ReturnType<typeof rowsOf>>();
+  const show = (n: number) => {
+    for (const b of pick.querySelectorAll('button')) b.classList.toggle('on', b.dataset.n === String(n));
+    let rows = cache.get(n);
+    if (!rows) cache.set(n, (rows = rowsOf(n)));
+    // Ripple carry is off this scale (it grows with n): its numbers only.
+    const max = Math.max(...rows.slice(1).map((r) => r.drawn));
+    const bar = (v: number, cls: string) => h('span', { class: `cbar ${cls}`, style: `width:${Math.min(100, (v / max) * 100)}%` });
+    body.replaceChildren(h('table', { class: 'cmp pfx' },
+      h('thead', null, h('tr', null, h('th', null, `${n} bits`), h('th', { class: 'num' }, 'NANDs'), h('th', { class: 'num', title: 'Every NAND one delay' }, 'unit'),
+        h('th', { class: 'num', title: DELAY_NOTE }, 'load'), h('th', { class: 'num', title: 'By load, minimum-size gates, no buffers' }, 'as drawn'), h('th', null, ''))),
+      h('tbody', null, rows.map((r, i) => h('tr', null,
+        h('td', null, h('a', { href: `#/workbench/${r.def.id}` }, r.name)),
+        h('td', { class: 'num' }, r.nands.toLocaleString()),
+        h('td', { class: 'num' }, String(r.unit)),
+        h('td', { class: 'num' }, r.load.toFixed(1)),
+        h('td', { class: 'num' }, r.drawn.toFixed(1)),
+        h('td', { class: 'barcell' }, i ? h('span', { class: 'pfx-bars' }, bar(r.unit, 'u'), bar(r.load, 'l'), bar(r.drawn, 'd')) : h('span', { class: 'sub' }, 'off the scale')))))));
+  };
+  for (const n of [16, 32, 64]) pick.append(h('button', { 'data-n': String(n), onclick: () => show(n) }, `${n}-bit`));
+  show(32);
+  return {
+    el: h('div', { class: 'widget' }, h('div', { class: 'panel' },
+      h('h3', null, 'When fan-out costs ', pick),
+      h('p', { class: 'sub' }, 'Worst-case depth of each circuit from its netlist, in three models: every NAND one delay; each NAND by its load with buffer trees where they pay; by its load with minimum-size gates and no buffers. Measured between gates: each input driven by a minimum NAND, each output loading one NAND input.'),
+      body,
+      h('div', { class: 'pfx-legend sub' }, h('span', null, h('i', { class: 'u' }), 'unit'), h('span', null, h('i', { class: 'l' }), 'load'), h('span', null, h('i', { class: 'd' }), 'as drawn')))),
   };
 }

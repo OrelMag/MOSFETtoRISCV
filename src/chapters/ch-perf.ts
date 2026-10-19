@@ -1,12 +1,16 @@
-import { CLA4, addSubFast, alu, carrySelect, carrySkip, isZero, koggeStone, muxTree, rca } from '../lib';
+import { CLA4, addSubFast, alu, brentKung, carrySelect, carrySkip, isZero, koggeStone, muxTree, rca, sklansky } from '../lib';
+import { FF_INPUT, FF_WIRE } from '../sim/netcap';
+import { nandDelay } from '../sim/delay';
 import { logicDepth } from '../sim/stats';
 import { PROGRAMS } from '../riscv/programs';
 import { cpuScene } from '../widgets/cpupanel';
 import { adderVariants } from '../widgets/adders';
-import { adderComparison } from '../widgets/timing';
+import { adderComparison, prefixDelays } from '../widgets/timing';
 import type { Chapter } from './types';
 
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
+const fmt = (x: number | null) => (x ?? 0).toFixed(1);
+const fo16 = { drawn: fmt(nandDelay(16 * (FF_INPUT + FF_WIRE), false)), buffered: fmt(nandDelay(16 * (FF_INPUT + FF_WIRE))) };
 
 export const chFastAdders: Chapter = {
   id: 'fastadd', num: 16, title: 'Faster adders', level: 'Optimization',
@@ -25,6 +29,7 @@ export const chFastAdders: Chapter = {
       'Kogge–Stone, 32 bits: 878 NANDs, 18 NAND delays, one level more per doubling of the width. Carry-select: 680 NANDs, 32 delays.',
       'Carry-skip: static depth 83, but that path is false; simulated, it settles in about 31. Static timing assumes every path can carry the last change.',
       'On the single-cycle CPU the critical path is a branch, 155 NAND delays. Kogge–Stone adders cut it to 103, and decode, the immediate mux and the zero detector take over.',
+      'Counting load (d = p + g·h, one unit = a NAND driving one input), with buffer trees: 32 bits, Kogge–Stone 30.0 units, Sklansky 31.5, Brent–Kung 40.5. Drawn without buffers, the 64-bit Sklansky is the slowest of the three. Wire length is not in the model.',
     ],
     practise: ['o_fastadd', 'c_fast'],
     check: [
@@ -200,6 +205,32 @@ export const chFastAdders: Chapter = {
         options: ['Almost all of it', 'Less than half: the 8:1 result mux and the zero detector are the rest', 'None: the ALU is no longer on the path'], answer: 1,
         why: ['That was true of the ripple adder. A Kogge–Stone grows with log₂ n and is now a minority of the ALU\'s path.', '', 'The branch path still subtracts in the ALU and reads its zero flag.'],
         explain: `A 32-bit Kogge–Stone is ${logicDepth(koggeStone(32))} NAND delays (${logicDepth(addSubFast(32))} with the inversion for subtraction). The result multiplexer (3 levels of MUX2, ${logicDepth(muxTree(3, 32, 16))}) and the zero detector (a 5-level OR tree plus an inverter, ${logicDepth(isZero(32))}) add as much again. Real designs compute "zero" in parallel with the sum for exactly this reason.`,
+      },
+    },
+    {
+      title: 'When fan-out costs',
+      body: `
+        <p>Every delay so far counted one unit per NAND, whatever it drives. A real gate charges its load. By logical
+        effort a NAND2 takes d = p + g·h: parasitic delay p = 2τ, logical effort g = 4/3, and h its load over one input's
+        capacitance (the same per-net capacitance the power estimate uses). One unit below is a NAND driving one NAND input.
+        A NAND driving sixteen takes ${fo16.drawn} units with minimum-size gates. A pair of inverters sized up in front of
+        the load, which synthesis inserts, brings that to ${fo16.buffered}.</p>
+        <p>Under unit delay, Sklansky ties Kogge–Stone with fewer cells. Its last level has one cell driving n/2 others.
+        Count the loads and, drawn with minimum-size gates, the 64-bit Sklansky falls behind even Brent–Kung. With buffer
+        trees it comes back to within a few units of Kogge–Stone, and the buffers are not in its NAND count. Brent–Kung pays
+        in levels in every model. Kogge–Stone's own price, n·log n cells and diagonals 2<sup>j</sup> rows long, is wiring.
+        This model does not see wire length: a drawing's wires are not a layout's, and length is only real once a design is
+        placed (<a href="#/c/silicon/0">chapter 27</a>).</p>
+        <p>The Timing panels have the same <b>Unit / Load</b> switch, here and in the sandbox. The view menu's
+        <b>Load-dependent delay</b> makes them open on Load. The other chapters quote unit delay.</p>`,
+      widget: () => prefixDelays(),
+      challenge: {
+        kind: 'quiz', question: 'Drawn with minimum-size gates and no buffers, which 64-bit prefix adder is slowest?',
+        options: ['Sklansky', 'Brent–Kung', 'Kogge–Stone', 'They tie: all three have logarithmic carries'], answer: 0,
+        why: ['', `It has the most levels (${logicDepth(brentKung(64))} NAND delays in unit delay against ${logicDepth(sklansky(64))}), but every cell output drives at most two cells per level.`,
+          'It has the most cells and wires, but each cell drives at most two cells per level: its loads stay light.',
+          'The number of levels is only the unit-delay view. What each level drives decides the rest.'],
+        explain: `As drawn: Sklansky ${fmt(logicDepth(sklansky(64), 'drawn'))}, Brent–Kung ${fmt(logicDepth(brentKung(64), 'drawn'))}, Kogge–Stone ${fmt(logicDepth(koggeStone(64), 'drawn'))} units. Sklansky's last level has one cell driving 32. Buffer trees bring it to ${fmt(logicDepth(sklansky(64), 'load'))}, against Kogge–Stone's ${fmt(logicDepth(koggeStone(64), 'load'))}.`,
       },
     },
   ],

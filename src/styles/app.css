@@ -1332,9 +1332,19 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .asm-table tr.err td { color: var(--wx); }
 
 .tstages { font: 11.5px var(--font-mono); display: grid; gap: 2px; }
-.tstages .ts { display: grid; grid-template-columns: 52px 1fr 30px; gap: 6px; align-items: center; }
+.tstages .ts { display: grid; grid-template-columns: 52px 1fr 40px; gap: 6px; align-items: center; }
 .tstages .bar { height: 8px; border-radius: 3px; background: var(--w1); opacity: 0.8; }
 .tstages .a { text-align: right; color: var(--muted); }
+/* The Unit / Load switch of the Timing panels (view/delayui.ts) and the heaviest nets on a load-model path. */
+.seg.delay-seg { padding: 1px; border-radius: 7px; }
+.seg.delay-seg button { font-size: 11px; padding: 1px 8px; }
+.sb-tm-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.delay-heavy { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border); display: grid; gap: 2px; font: 11px/1.35 var(--font-mono); }
+.delay-heavy .hd, .delay-heavy .row { display: grid; grid-template-columns: minmax(0, 1fr) 48px 74px; gap: 6px; }
+.delay-heavy .hd { font: 600 10.5px var(--font-ui); color: var(--muted); }
+.delay-heavy .hd span + span, .delay-heavy .row span + span { text-align: right; font-variant-numeric: tabular-nums; }
+.delay-heavy .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.delay-heavy .d { color: var(--warn); }
 .cmp { border-collapse: collapse; width: 100%; font: 13px var(--font-mono); }
 .cmp th, .cmp td { padding: 4px 8px; border-bottom: 1px solid var(--border); }
 .cmp th { color: var(--text-2); font-weight: 600; text-align: left; }
@@ -1343,6 +1353,16 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .cbar { display: block; height: 10px; border-radius: 3px; }
 .cbar.r { background: var(--w1); }
 .cbar.k { background: var(--bus); }
+/* Chapter 16's prefix adders in three delay models (widgets/timing.ts prefixDelays). */
+.panel h3:has(> .seg) { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pfx-bars { display: grid; gap: 2px; }
+.pfx-bars .cbar, .pfx-legend i { height: 4px; border-radius: 2px; }
+.cbar.u, .pfx-legend i.u { background: var(--muted); }
+.cbar.l, .pfx-legend i.l { background: var(--accent); }
+.cbar.d, .pfx-legend i.d { background: var(--warn); }
+.pfx-legend { display: flex; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
+.pfx-legend i { display: inline-block; width: 14px; margin-right: 5px; vertical-align: middle; }
+.cmp.pfx td a { color: inherit; }
 
 .pipe-grid { font: 11px var(--font-mono); overflow-x: auto; }
 .pg-row { display: flex; gap: 2px; margin-bottom: 2px; }
