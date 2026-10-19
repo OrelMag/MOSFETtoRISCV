@@ -4,15 +4,16 @@
 import { symbolGeom, type Vec } from '../sim/geometry';
 import { NmosSim } from '../sim/nmossim';
 import { SwitchSim, VDD_VOLTS } from '../sim/switchsim';
-import { B0, B1, BX, BZ, type Bit, netlistOf } from '../sim/types';
+import { B0, B1, BX, BZ, type Bit, type Netlist, netlistOf } from '../sim/types';
 import { describeBits, formatBits, type Radix } from '../sim/values';
-import { icon, s } from '../ui/dom';
+import { h, icon, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import { Camera, installPanZoom, usableWidth, type ViewBox } from './camera';
 import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
 import { FlowTokens, type Lane } from './flowtokens';
 import type { ViewCtx } from './context';
-import { hopPathData, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type RoutedNet, type TapLabel } from './route';
+import { hopPathData, overlaps, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type Rect, type RoutedNet, type TapLabel } from './route';
+import { applyLayout, canRedo, canUndo, dropLastEdit, editLayout, isTagged, layoutOf, showsTags, undoLayout } from './layout';
 import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
 
@@ -25,7 +26,14 @@ export interface SchematicEvents {
   netClick?(net: number): boolean;
   /** The probe on a net of the current view, if any. */
   probeOf?(net: number): { color: number; label: string } | null;
+  /** The learner moved a part or unravelled a pointer (the level was redrawn). */
+  layoutChanged?(): void;
 }
+
+interface MenuItem { label: string; hint?: string; run: () => void }
+
+/** A level routed faster than this (ms) re-routes its wires live while a part is dragged. */
+const LIVE_ROUTE_MS = 25;
 
 interface WireEls {
   net: RoutedNet;
@@ -98,6 +106,21 @@ export class SchematicView {
   flowMs = 0;
   /** Screen pixels on the right covered by a docked panel; fit() keeps the circuit clear of them. */
   insetRight = 0;
+  /** Parts can be dragged and pointers unravelled (view/layout.ts): the stage's views, not a read-only look inside. */
+  arrange = false;
+  /** The level's netlist as authored (before the learner's layout). */
+  private base: Netlist | null = null;
+  /** A part drag just ended: the click it ends with does not select. */
+  private dragged = false;
+  /** Parts picked to move together; the parts being dragged; their places while a live drag goes on. */
+  private group = new Set<string>();
+  private dragging = new Set<string>();
+  private preview: Record<string, Vec> | null = null;
+  /** Where each part is drawn now, and its box (grid units); how long the last routing took. */
+  private atOf = new Map<string, Vec>();
+  private boxes = new Map<string, Rect>();
+  private routeMs = 0;
+  private menu: HTMLElement | null = null;
   private tooltip: HTMLDivElement;
 
   constructor(private host: HTMLElement, private events: SchematicEvents) {
@@ -107,7 +130,8 @@ export class SchematicView {
     host.append(this.el, this.tooltip);
     this.cam = new Camera(this.el, host);
     installPanZoom(this.el, this.cam, {
-      canStart: (e) => !(e.target as Element).closest('.inst, .pin.clickable, .bus-label'),
+      // shift-drag on the canvas picks parts (bandSelect) instead of panning
+      canStart: (e) => !(this.arrange && e.shiftKey) && !(e.target as Element).closest('.inst, .pin.clickable, .bus-label'),
       onTap: (target) => {
         const n = target.closest('[data-net]');
         if (n) this.clickNet(Number(n.getAttribute('data-net')), target);
@@ -115,16 +139,26 @@ export class SchematicView {
           this.select(null);
           this.events.select(null);
           this.selectNet(-1);
+          this.setGroup([]);
         }
       },
       onHover: (e) => this.hoverTip(e),
       onLeave: () => (this.tooltip.style.opacity = '0'),
     });
+    this.el.addEventListener('contextmenu', (e) => this.contextMenu(e));
+    this.el.addEventListener('pointerdown', (e) => {
+      if (this.arrange && e.shiftKey && e.button === 0 && !(e.target as Element).closest('.inst, .pin, .bus-label')) this.bandSelect(e);
+    });
+    document.addEventListener('pointerdown', (e) => {
+      if (this.menu && !this.menu.contains(e.target as Node)) this.closeMenu();
+    });
   }
 
   /** Drop the drawing and its context (which holds the simulation), until the next show(). */
   clear(): void {
+    this.closeMenu();
     this.ctx = null;
+    this.base = null;
     this.selected = null;
     this.selectedNet = -1;
     this.el.replaceChildren();
@@ -142,13 +176,23 @@ export class SchematicView {
     this.selectedNet = -1;
     this.faded.clear();
     this.netMarks = new Map();
-    const nl = netlistOf(ctx.def);
+    this.closeMenu();
+    if (!keepView) this.group = new Set();
+    const base = this.base = netlistOf(ctx.def) ?? null;
     this.el.replaceChildren();
     this.wires = [];
     this.pins = [];
     this.insts.clear();
-    if (!nl) return;
+    this.atOf.clear();
+    this.boxes.clear();
+    if (!base) return;
+    const lay = this.arrange ? layoutOf(ctx.def.id) : undefined;
+    const nl = !this.arrange ? base
+      : applyLayout(base, this.preview ? { wired: [], tagged: [], ...lay, at: { ...lay?.at, ...this.preview } } : lay);
+    this.el.classList.toggle('arrange', this.arrange);
+    const t0 = performance.now();
     const { nets, pins } = routeNetlist(ctx.def, nl);
+    this.routeMs = performance.now() - t0;
     const pathData = hopPathData(nets, splitterBars(nl));
     const tapsOf = new Map<number, TapLabel[]>();
     for (const t of tapLabels(nl)) tapsOf.set(t.net, [...tapsOf.get(t.net) ?? [], t]);
@@ -177,7 +221,8 @@ export class SchematicView {
     };
 
     // Wires
-    const hues = spreadHues(nets.map((n) => ({ key: netKey(nl.nets[n.index]), polys: n.paths })));
+    // keyed by the authored net: a wire drawn as pointers is named for its driver, but keeps its colour
+    const hues = spreadHues(nets.map((n) => ({ key: netKey(base.nets[n.index]), polys: n.paths })));
     for (const [ni, net] of nets.entries()) {
       const cls = net.width > 1 ? 'wire bus' : 'wire';
       const w: WireEls = { net, paths: [], dots: [], tags: [], taps: [] };
@@ -254,9 +299,11 @@ export class SchematicView {
       grow(at[0] + geo.w, at[1] + geo.h);
       const openable = ctx.canOpen(inst.name);
       const g = s('g', {
-        class: `inst${openable ? ' openable' : ''}${inst.def.prim === 'alias' ? ' plumbing' : ''}`,
+        class: `inst${openable ? ' openable' : ''}${inst.def.prim === 'alias' ? ' plumbing' : ''}${this.group.has(inst.name) ? ' grouped' : ''}${this.dragging.has(inst.name) ? ' dragging' : ''}`,
         transform: `translate(${at[0]},${at[1]})`, 'data-inst': inst.name,
       });
+      this.atOf.set(inst.name, at);
+      this.boxes.set(inst.name, { x: at[0], y: at[1], w: geo.w, h: geo.h });
       g.append(s('rect', { class: 'hit', x: -0.4, y: -0.4, width: geo.w + 0.8, height: geo.h + 0.8, rx: 0.6 }));
       g.append(drawSymbol(inst.def, inst.flip));
       const nameAt = instNameAt(inst.def);
@@ -276,9 +323,16 @@ export class SchematicView {
       }
       g.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (this.dragged) return;
+        if (this.arrange && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+          this.toggleGroup(inst.name);
+          return;
+        }
+        this.setGroup([]);
         this.select(inst.name);
         this.events.select(inst.name);
       });
+      if (this.arrange) g.addEventListener('pointerdown', (e) => this.dragInst(e, inst.name));
       g.addEventListener('dblclick', (e) => {
         e.stopPropagation();
         if (openable) this.events.open(inst.name);
@@ -647,6 +701,322 @@ export class SchematicView {
     return this.selected;
   }
 
+  // ---- the learner's layout (view/layout.ts) ----------------------------------------------
+
+  /** Parts picked to move together (shift-click, or shift-drag a box), as a set; empty clears. */
+  setGroup(names: Iterable<string>): void {
+    this.group = new Set([...names].filter((n) => this.insts.has(n)));
+    for (const [n, g] of this.insts) g.classList.toggle('grouped', this.group.has(n));
+  }
+
+  /** Let go of the picked parts (Esc); false when none were picked. */
+  dropGroup(): boolean {
+    if (!this.group.size) return false;
+    this.setGroup([]);
+    return true;
+  }
+
+  private toggleGroup(name: string): void {
+    const g = new Set(this.group);
+    if (this.selected && !g.size) g.add(this.selected);
+    if (g.has(name)) g.delete(name);
+    else g.add(name);
+    this.setGroup(g);
+  }
+
+  /** Shift-drag on the canvas: a box; every part it touches joins the picked ones. */
+  private bandSelect(e: PointerEvent): void {
+    const [x0, y0] = this.cam.toWorld(e.clientX, e.clientY);
+    const band = s('rect', { class: 'pick-band', x: x0, y: y0, width: 0, height: 0 });
+    this.el.append(band);
+    this.el.setPointerCapture(e.pointerId);
+    let box = { x: x0, y: y0, w: 0, h: 0 };
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId) return;
+      const [x, y] = this.cam.toWorld(ev.clientX, ev.clientY);
+      box = { x: Math.min(x, x0), y: Math.min(y, y0), w: Math.abs(x - x0), h: Math.abs(y - y0) };
+      band.setAttribute('x', String(box.x));
+      band.setAttribute('y', String(box.y));
+      band.setAttribute('width', String(box.w));
+      band.setAttribute('height', String(box.h));
+    };
+    const up = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId) return;
+      this.el.removeEventListener('pointermove', move);
+      this.el.removeEventListener('pointerup', up);
+      this.el.removeEventListener('pointercancel', up);
+      band.remove();
+      if (ev.type === 'pointercancel' || box.w + box.h < 0.5) return;
+      const hit = [...this.boxes].filter(([, b]) => overlaps(b, box)).map(([n]) => n);
+      this.setGroup([...this.group, ...hit]);
+    };
+    this.el.addEventListener('pointermove', move);
+    this.el.addEventListener('pointerup', up);
+    this.el.addEventListener('pointercancel', up);
+  }
+
+  /**
+   * Drag a part (and the parts picked with it) to a new place, in whole grid units. On a level that routes quickly
+   * the wires follow while it moves; on a big one the symbols move alone, their wires faded, and the wires are routed
+   * when they are dropped. A second finger (a pinch) or Esc puts them back.
+   */
+  private dragInst(e: PointerEvent, name: string): void {
+    const id = this.ctx?.def.id, base = this.base;
+    if (e.button !== 0 || !id || !base || (e.target as Element).closest('.open-badge')) return;
+    const [x0, y0] = this.cam.toWorld(e.clientX, e.clientY);
+    const moving = this.group.has(name) ? [...this.group] : [name];
+    const start = new Map(moving.map((n) => [n, this.atOf.get(n) ?? [0, 0] as Vec]));
+    const live = this.routeMs < LIVE_ROUTE_MS;
+    let moved = false, d: Vec = [0, 0], frame = 0;
+    const set = new Set(moving);
+    const mine = this.wires.filter((w) => base.nets[w.net.index].ends.some((x) => set.has(x.slice(0, x.indexOf('.')))));
+    // inline opacity: value classes are rewritten on every repaint
+    const fade = (on: boolean) => {
+      for (const w of mine) {
+        for (const el of [...w.paths, ...w.tags, ...w.dots, ...w.taps, ...(w.ants ?? []), ...(w.label ? [w.label] : [])]) el.style.opacity = on ? '0.2' : '';
+      }
+    };
+    const placed = (): Record<string, Vec> => Object.fromEntries(moving.map((n) => {
+      const p = start.get(n)!;
+      return [n, [p[0] + d[0], p[1] + d[1]] as Vec];
+    }));
+    const place = () => {
+      for (const [n, p] of Object.entries(placed())) this.insts.get(n)?.setAttribute('transform', `translate(${p[0]},${p[1]})`);
+    };
+    const reroute = () => {
+      frame = 0;
+      this.preview = placed();
+      this.relayout(false);
+    };
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId) return;
+      const [x, y] = this.cam.toWorld(ev.clientX, ev.clientY);
+      if (!moved) {
+        // below this (grid units) a press is still a click
+        if (Math.abs(x - x0) + Math.abs(y - y0) < 0.6) return;
+        moved = true;
+        // on the svg, which outlives the redraws of a live drag
+        this.el.setPointerCapture(e.pointerId);
+        this.dragging = set;
+        for (const n of moving) this.insts.get(n)?.classList.add('dragging');
+        this.tooltip.style.opacity = '0';
+        if (!live) fade(true);
+      }
+      const nd: Vec = [Math.round(x - x0), Math.round(y - y0)];
+      if (nd[0] === d[0] && nd[1] === d[1]) return;
+      d = nd;
+      if (!live) place();
+      else if (!frame) frame = requestAnimationFrame(reroute);
+    };
+    const stop = (commit: boolean) => {
+      this.el.removeEventListener('pointermove', move);
+      this.el.removeEventListener('pointerup', up);
+      this.el.removeEventListener('pointercancel', cancel);
+      this.el.removeEventListener('pointerdown', other);
+      document.removeEventListener('keydown', key, true);
+      if (!moved) return;
+      if (frame) cancelAnimationFrame(frame);
+      this.dragging = new Set();
+      this.preview = null;
+      for (const n of moving) this.insts.get(n)?.classList.remove('dragging');
+      // the click that follows pointerup must not select the part
+      this.dragged = true;
+      setTimeout(() => (this.dragged = false));
+      if (commit && (d[0] || d[1])) {
+        const to = placed();
+        this.edit((l) => {
+          for (const n of moving) {
+            const home = base.instances.find((i) => i.name === n)?.at ?? [0, 0];
+            if (to[n][0] === home[0] && to[n][1] === home[1]) delete l.at[n];
+            else l.at[n] = to[n];
+          }
+        });
+      } else if (live) {
+        this.relayout(false);
+      } else {
+        d = [0, 0];
+        place();
+        fade(false);
+      }
+    };
+    const up = (ev: PointerEvent) => { if (ev.pointerId === e.pointerId) stop(true); };
+    const cancel = (ev: PointerEvent) => { if (ev.pointerId === e.pointerId) stop(false); };
+    const other = (ev: PointerEvent) => { if (ev.pointerId !== e.pointerId) stop(false); };
+    const key = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape' || !moved) return;
+      ev.stopPropagation();
+      stop(false);
+    };
+    this.el.addEventListener('pointermove', move);
+    this.el.addEventListener('pointerup', up);
+    this.el.addEventListener('pointercancel', cancel);
+    this.el.addEventListener('pointerdown', other);
+    document.addEventListener('keydown', key, true);
+  }
+
+  /** Change this level's layout (one undo step) and draw it again. */
+  private edit(f: Parameters<typeof editLayout>[1]): void {
+    const id = this.ctx?.def.id;
+    if (!id) return;
+    editLayout(id, f);
+    this.redraw();
+  }
+
+  /** Undo (or redo) the last layout edit of this level; false when there is none. */
+  undo(redo = false): boolean {
+    const id = this.ctx?.def.id;
+    if (!id || !this.arrange || !undoLayout(id, redo)) return false;
+    this.redraw();
+    return true;
+  }
+
+  /**
+   * Draw the level again after a layout edit. Routing a big level takes seconds (a hundred unravelled nets on one of
+   * chapter 30's blocks: ~7 s), so a badge says so first, painted before the work starts.
+   */
+  private redraw(after?: () => void): void {
+    const ctx = this.ctx;
+    this.host.classList.add('routing');
+    requestAnimationFrame(() => setTimeout(() => {
+      this.host.classList.remove('routing');
+      if (this.ctx !== ctx) return;
+      this.relayout();
+      after?.();
+    }));
+  }
+
+  private setWired(keys: string[], on: boolean): void {
+    const ks = new Set(keys);
+    this.edit((l) => (l.wired = on ? [...l.wired, ...keys] : l.wired.filter((k) => !ks.has(k))));
+  }
+
+  private setTagged(keys: string[], on: boolean): void {
+    const ks = new Set(keys);
+    this.edit((l) => (l.tagged = on ? [...l.tagged, ...keys] : l.tagged.filter((k) => !ks.has(k))));
+  }
+
+  /**
+   * Draw one wire as pointers. The router wires a net anyway when its labels would sit on each other (a sink right
+   * next to its driver): then the edit is taken back, and the learner told why, rather than nothing happening.
+   */
+  private toPointers(index: number, name: string): void {
+    const ctx = this.ctx, base = this.base;
+    if (!ctx || !base) return;
+    editLayout(ctx.def.id, (l) => l.tagged.push(netKey(base.nets[index])));
+    this.redraw(() => {
+      if (this.wires.find((w) => w.net.index === index)?.tags.length) return;
+      dropLastEdit(ctx.def.id);
+      this.relayout();
+      this.note(`${name} is too short for pointers: its labels would sit on each other`);
+    });
+  }
+
+  /** A short message over the canvas, for a few seconds. */
+  private note(text: string): void {
+    this.host.dataset.note = text;
+    this.host.classList.add('noting');
+    clearTimeout(this.noteTimer);
+    this.noteTimer = setTimeout(() => this.host.classList.remove('noting'), 3500);
+  }
+  private noteTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Draw the level again after a layout edit, keeping the view, the selection, picked parts, highlights and marks. */
+  private relayout(notify = true): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const keep = { hl: this.lastHl, marks: this.netMarks, sel: this.selected, net: this.selectedNet, radix: new Map(this.radixOverride), group: this.group };
+    this.show(ctx, this.interactive, true);
+    this.radixOverride = keep.radix;
+    this.netMarks = keep.marks;
+    this.select(keep.sel && this.insts.has(keep.sel) ? keep.sel : null);
+    this.setGroup(keep.group);
+    // repaints every wire, with the marks
+    this.selectNet(keep.net);
+    this.highlight(keep.hl.names, keep.hl.focus);
+    this.update();
+    if (notify) this.events.layoutChanged?.();
+  }
+
+  /** What the learner can do to this level's layout, and to the net or part under the pointer. */
+  private layoutItems(target?: Element | null): MenuItem[] {
+    const ctx = this.ctx, base = this.base;
+    if (!ctx || !base || !this.arrange) return [];
+    const id = ctx.def.id;
+    const lay = layoutOf(id);
+    const items: MenuItem[] = [];
+    const ni = target?.closest('[data-net]')?.getAttribute('data-net');
+    const net = ni == null ? undefined : base.nets[Number(ni)];
+    if (net) {
+      const key = netKey(net), shown = showsTags(net, lay);
+      if (isTagged(net)) {
+        const name = net.name ?? `n${ni}`;
+        if (shown) items.push({ label: `Unravel ${name}`, hint: 'Draw this pointer as wires from its driver', run: () => this.setWired([key], true) });
+        else items.push({ label: `${name} back to pointers`, hint: 'Its labels again, as the chapter drew it', run: () => this.setWired([key], false) });
+      } else {
+        const name = net.name ?? net.ends[0];
+        if (!shown) items.push({ label: `Draw ${name} as pointers`, hint: 'A label at each end instead of the wire', run: () => this.toPointers(Number(ni), name) });
+        else items.push({ label: `${name} back to a wire`, hint: 'As the chapter drew it', run: () => this.setTagged([key], false) });
+      }
+    }
+    const inst = target?.closest('[data-inst]')?.getAttribute('data-inst');
+    const back = inst && this.group.has(inst) ? [...this.group].filter((n) => lay?.at[n]) : inst && lay?.at[inst] ? [inst] : [];
+    if (back.length) {
+      items.push({ label: back.length > 1 ? `Put the ${back.length} picked parts back` : `Put ${back[0]} back`, hint: 'Where the chapter drew it',
+        run: () => this.edit((l) => back.forEach((n) => delete l.at[n])) });
+    }
+    if (canUndo(id)) items.push({ label: 'Undo', hint: 'Ctrl+Z', run: () => this.undo() });
+    if (canRedo(id)) items.push({ label: 'Redo', hint: 'Ctrl+Shift+Z', run: () => this.undo(true) });
+    const left = base.nets.filter((x) => showsTags(x, lay));
+    if (left.length) {
+      const hint = `${left.length} net${left.length > 1 ? 's' : ''} drawn as wires${left.length > 60 ? ': a few seconds to route' : ''}`;
+      items.push({ label: 'Unravel all pointers', hint, run: () => this.edit((l) => {
+        l.wired = [...l.wired, ...left.filter(isTagged).map(netKey)];
+        l.tagged = [];
+      }) });
+    }
+    if (lay) items.push({ label: 'Reset layout', hint: 'This level as the chapter drew it', run: () => this.edit((l) => {
+      l.at = {};
+      l.wired = [];
+      l.tagged = [];
+    }) });
+    return items;
+  }
+
+  private contextMenu(e: MouseEvent): void {
+    const items = this.layoutItems(e.target as Element);
+    if (!items.length) return;
+    e.preventDefault();
+    this.openMenu(items, e.clientX, e.clientY);
+  }
+
+  /** The level's layout actions as a menu at a point on the screen (the stage's Layout button). */
+  layoutMenu(x: number, y: number): void {
+    this.openMenu(this.layoutItems(), x, y);
+  }
+
+  get menuOpen(): boolean {
+    return !!this.menu;
+  }
+
+  private openMenu(items: MenuItem[], x: number, y: number): void {
+    this.closeMenu();
+    const m = this.menu = h('div', { class: 'pal-menu open sch-menu', role: 'menu' },
+      items.length ? items.map((it) => h('button', { role: 'menuitem', onclick: () => {
+        this.closeMenu();
+        it.run();
+      } }, h('span', null, h('b', null, it.label), it.hint && h('small', null, it.hint))))
+        : h('p', { class: 'sch-menu-note' }, 'Drag a part to move it (shift-click or shift-drag to pick several). Right-click a wire to draw it as pointers.'));
+    document.body.append(m);
+    const r = m.getBoundingClientRect();
+    m.style.left = `${Math.max(4, Math.min(x, innerWidth - r.width - 4))}px`;
+    m.style.top = `${Math.max(4, Math.min(y, innerHeight - r.height - 4))}px`;
+  }
+
+  closeMenu(): void {
+    this.menu?.remove();
+    this.menu = null;
+  }
+
   // ---- pan & zoom ---------------------------------------------------------------------
 
   /** Everything drawn at this level, in grid units (what fit() frames, and what an image exports). */
@@ -682,7 +1052,7 @@ export class SchematicView {
 
   private hoverTip(e: PointerEvent): void {
     const t = (e.target as Element).closest('[data-net]');
-    if (!t || !this.ctx) {
+    if (!t || !this.ctx || this.dragging.size) {
       this.tooltip.style.opacity = '0';
       this.setHover(-1);
       return;

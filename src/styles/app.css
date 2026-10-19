@@ -654,6 +654,23 @@ svg.schematic.focus .inst.hl .hit { animation: none; fill: color-mix(in srgb, va
 .open-badge .icon { color: #fff; stroke-width: 2.6; }
 .inst.openable:hover .open-badge, .inst.selected .open-badge { opacity: 1; }
 .inst.plumbing .hit { display: none; }
+/* the learner's layout (view/layout.ts): parts drag, the right-click menu */
+svg.schematic.arrange .inst:not(.openable) { cursor: grab; }
+svg.schematic .inst.dragging { cursor: grabbing; opacity: 0.85; }
+svg.schematic .inst.dragging .hit { fill: color-mix(in srgb, var(--sel) 10%, transparent); stroke: var(--sel); stroke-width: 0.1; stroke-dasharray: 0.4 0.3; }
+svg.schematic .inst.grouped .hit { fill: color-mix(in srgb, var(--sel) 20%, transparent); stroke: var(--sel); stroke-width: 0.16; }
+svg.schematic .pick-band { fill: color-mix(in srgb, var(--sel) 8%, transparent); stroke: var(--sel); stroke-width: 0.08; stroke-dasharray: 0.4 0.3; pointer-events: none; }
+.pal-menu.sch-menu { position: fixed; right: auto; top: 0; min-width: 260px; }
+.pal-menu.sch-menu small { display: block; color: var(--muted); font-size: 12px; }
+.sch-menu-note { margin: 4px 8px; max-width: 260px; font-size: 13px; color: var(--muted); }
+.canvas.routing { cursor: progress; }
+.canvas.noting::after { content: attr(data-note); }
+.canvas.routing::after { content: 'Routing wires…'; }
+.canvas.routing::after, .canvas.noting::after {
+  position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 5;
+  font-size: 13px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 99px;
+  padding: 4px 12px; box-shadow: var(--shadow-lg); pointer-events: none;
+}
 
 .pin-knob { fill: var(--surface-3); stroke: var(--border-strong); stroke-width: 0.12; transition: fill 0.12s; }
 .pin.v1 .pin-knob { fill: var(--w1); stroke: var(--w1); filter: drop-shadow(0 0 0.5px var(--w1)); }
@@ -998,6 +1015,8 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .topbar { padding: 0 10px; gap: 6px; }
   .tools .seg { display: none; }
   .stage-bar .btn .lbl, .la-hint { display: none; }
+  /* a phone pinches to zoom: the buttons' room goes to the Layout menu */
+  .stage-bar .zoom-btn { display: none; }
   .la-names { width: 120px; }
   .tools .lbl { display: none; }
   .brand { font-size: 14px; }
