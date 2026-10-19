@@ -35,6 +35,15 @@
 .cp-map { display: block; max-width: 100%; height: auto; font-family: var(--font-ui); }
 .cp-band { fill: var(--surface-2); opacity: 0.55; }
 .cp-band-title { font-size: 12px; font-weight: 700; fill: var(--text-2); letter-spacing: 0.02em; text-transform: uppercase; }
+/* an optional act folded to its header, or the Hide button of an open one */
+.cp-fold { cursor: pointer; outline: none; }
+.cp-fold.folded .cp-band { stroke: var(--border-strong); stroke-dasharray: 5 3; stroke-width: 1.2; }
+.cp-fold.folded:hover .cp-band, .cp-fold:focus-visible .cp-band { stroke: var(--accent); opacity: 0.9; }
+.cp-fold-what { font-size: 12px; fill: var(--muted); }
+.cp-fold-btn { font-size: 12px; font-weight: 600; fill: var(--accent); }
+.cp-fold-hit { fill: transparent; }
+.cp-fold:hover .cp-fold-hit, .cp-fold:focus-visible .cp-fold-hit { fill: var(--accent-soft); }
+.cp-fold:focus-visible .cp-fold-hit { stroke: var(--accent); }
 .cp-edge { fill: none; stroke: var(--border-strong); stroke-width: 1.4; }
 .cp-edge.done { stroke: var(--good); opacity: 0.7; }
 .cp-edge.opt { stroke-dasharray: 4 3; }

@@ -56,10 +56,12 @@ interface State {
   visited: Record<string, number[]>;
   /** "chapterId:step" → solved */
   solved: Record<string, boolean>;
+  /** Campaign map: optional acts unfolded (true) or folded (false) by the learner; absent: the default. */
+  openActs: Record<string, boolean>;
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {}, openActs: {} };
 
 function load(): State {
   try {
@@ -143,6 +145,14 @@ export const settings = {
   },
   isSolved(key: string): boolean {
     return !!state.solved[key];
+  },
+  /** An optional campaign act as the learner left it: open, folded, or never set (undefined). */
+  actOpen(act: number): boolean | undefined {
+    return state.openActs[act];
+  },
+  setActOpen(act: number, open: boolean): void {
+    state.openActs[act] = open;
+    save();
   },
   resetProgress(): void {
     state.visited = {};

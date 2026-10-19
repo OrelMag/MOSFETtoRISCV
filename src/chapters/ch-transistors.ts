@@ -25,8 +25,8 @@ export const chMap: Chapter = {
         a few gates make an adder, adders and registers make a processor.</p>
         <p>This journey climbs those levels one at a time. Every level is built <em>only</em> from the
         level below it, and nothing is hidden: every box you see is a <strong>transparent box</strong>.</p>
-        <div class="note">The ladder on the right is the whole journey. Each rung lists what it is made of;
-        a click opens the chapter that builds it.</div>`,
+        <div class="note">The ladder of abstraction is the whole journey, from the MOSFET on its bottom rung upward. Each rung
+        lists what it is made of; a click opens the chapter that builds it.</div>`,
       widget: () => journeyWidget(),
     },
     {
@@ -54,7 +54,7 @@ export const chMap: Chapter = {
     {
       title: 'How the levels stack up',
       body: `
-        <p>Look at the <strong>Info</strong> tab on the right: it counts what the adder costs. A 4-bit adder
+        <p>Look at the inspector's <strong>Info</strong> tab: it counts what the adder costs. A 4-bit adder
         is ${stats(rca(4)).nands} NAND gates, or ${stats(rca(4)).transistors} transistors. Select any part (single click)
         to see its own cost: a full adder is ${stats(rca(4)).nands / 4} NANDs.</p>
         <p>Every number on this site is <em>measured</em> from the circuit itself, not quoted from a book.
@@ -122,7 +122,7 @@ export const chMosfet: Chapter = {
         <em>depletion</em> layer. Past the <strong>threshold voltage</strong> Vt the depletion stops growing:
         extra gate charge pulls electrons up into a thin <em>channel</em> instead, and current can flow from
         drain to source. Lower the gate and the channel disappears.</p>
-        <p>Everything on the right is computed from the classic square-law model: once the channel exists,
+        <p>Everything in the panel is computed from the classic square-law model: once the channel exists,
         the drain current Id = k·(Vgs − Vt)²/2 in saturation (Vgs: the gate-to-source voltage), with k = 220 µA/V² and Vt = 0.45 V, a plausible small device at
         1.8 V. The channel's thickness is its charge, and each carrier moves at the local field.</p>
         <div class="try">Press <strong>Sweep</strong>, or drag the gate past 0.45 V: the depletion layer grows
