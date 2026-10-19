@@ -195,8 +195,15 @@ export class Tools {
     }
 
     const named = nameHit(e.target);
-    const h = named ?? this.hit(p);
+    let h = named ?? this.hit(p);
     if (this.onPress?.(h, e)) return;
+    let wire: { end: EndRef; pos: Vec } | undefined;
+    // A finger on a pin's connection point presses the pin: a tap toggles it, a drag draws the wire. At a
+    // phone's zoom the knob and the stub's end are a few px apart, too close for a finger to choose between.
+    if (h.k === 'port' && 'pin' in h.end && this.touch && !e.shiftKey) {
+      wire = { end: h.end, pos: h.pos };
+      h = { k: 'pin', id: h.end.pin };
+    }
     if (h.k === 'port') return this.startWire(h.end, h.pos, e);
     if (h.k === 'wire' && (e.ctrlKey || e.altKey || e.metaKey)) {
       const poly = ed.view.polys.get(h.id);
@@ -210,14 +217,13 @@ export class Tools {
     const was = this.isSelected(h);
     if (!was && !e.shiftKey) ed.select(selOf(h));
     else if (!was && e.shiftKey) ed.select(toggle(ed.sel, h));
-    let wire: { end: EndRef; pos: Vec } | undefined;
     if (h.k === 'pin') {
       const pin = ed.doc.pins.find((q) => q.id === h.id);
       if (pin?.dir === 'in' && pin.kind === 'button' && !e.shiftKey) {
         this.buttonHeld = pin;
         ed.sim.setInput(pin, 1);
       }
-      if (pin && !named && !e.shiftKey && knobPortSide(pin, p)) wire = { end: { pin: pin.id }, pos: pin.at };
+      if (pin && !wire && !named && !e.shiftKey && knobPortSide(pin, p)) wire = { end: { pin: pin.id }, pos: pin.at };
     }
     this.state = { k: 'press', hit: h, at: p, sx: e.clientX, sy: e.clientY, was, shift: e.shiftKey, name: !!named, wire };
   }
