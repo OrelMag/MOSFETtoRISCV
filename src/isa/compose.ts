@@ -66,19 +66,25 @@ export function tableCompose(doc: IsaDoc, id = `isa:${doc.id}`): ComposeIsa {
     }
     return u32(w);
   };
-  const decode = (word: number) => {
+  const loose = (word: number) => {
     const w = u32(word);
     const c = t.match(w);
     if (!c) return null;
     const r = rows.indexOf(c);
     const parts: Parts = {};
     for (const l of c.def.operands) parts[l] = fromRaw(r, l, extract(r, l, w));
-    return encode(String(r), parts) === w ? { id: String(r), parts } : null;
+    return { id: String(r), parts };
+  };
+  // Exact: no don't-care bit set, every register a named one.
+  const decode = (word: number) => {
+    const c = loose(word);
+    return c && encode(c.id, c.parts) === u32(word) ? c : null;
   };
   const operandText = (_r: number, l: string, v: number) => {
     const d = doc.operands[l];
     if (d?.kind === 'reg') return d.names[v] ?? String(v);
     if (d?.kind === 'enum') return Object.entries(d.names).find(([, x]) => x === v)?.[0] ?? String(v);
+    if (d?.kind === 'imm' && d.hex) return `${v < 0 ? '-' : ''}0x${Math.abs(v).toString(16).toUpperCase()}`;
     if (d?.kind === 'addr') return d.rel ? `pc ${v < 0 ? '−' : '+'} ${Math.abs(v)}` : `0x${v.toString(16).toUpperCase()}`;
     return String(v);
   };
@@ -119,10 +125,11 @@ export function tableCompose(doc: IsaDoc, id = `isa:${doc.id}`): ComposeIsa {
     if (!l || nbits(r, l) < 2) return null;
     const pos = c.bits.get(l)!;
     const v = fromRaw(r, l, extract(r, l, w));
-    const split = pos.some((b, i) => i && pos[i - 1] !== b + 1);
+    // Bits that sit together in order need no drawing: only an operand split over the word does.
+    if (!pos.some((b, i) => i && pos[i - 1] !== b + 1)) return null;
     return {
       wires: wiresOf(w, pos, pos.length, false), value: v, text: operandText(r, l, v),
-      note: `operand ${l}'s ${pos.length} bits, most significant first${split ? ', gathered from the places the pattern splits them over' : ''}`,
+      note: `operand ${l}'s ${pos.length} bits, gathered from the places the pattern splits them over`,
     };
   };
 
@@ -176,7 +183,7 @@ export function tableCompose(doc: IsaDoc, id = `isa:${doc.id}`): ComposeIsa {
     id, name: doc.name, wordBits: W, step: 1, start: rows.length ? encode('0', {}) : 0,
     groups: [{ name: 'Instructions', ids: instrs.map((i) => i.id) }],
     instr: (sid) => instrs[Number(sid)],
-    encode, decode, fields, imm, text, parse, program,
+    encode, decode, loose, fields, imm, text, parse, program,
   };
 }
 

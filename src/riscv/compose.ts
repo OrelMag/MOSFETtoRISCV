@@ -200,6 +200,14 @@ export const RV32_COMPOSE: ComposeIsa = {
     for (const s of slotsOf(c.spec)) rec[s.key] = s.key === 'zimm' ? c.parts.rs1 : c.parts[s.key];
     return { id: c.spec.name, parts: rec };
   },
+  loose(word) {
+    const d = decode(word);
+    if (!d.spec) return null;
+    const all: CParts = { rd: d.rd, rs1: d.rs1, rs2: d.rs2, rs3: d.rs3, csr: word >>> 20, rm: d.funct3, zimm: d.rs1, imm: d.spec.fmt === 'U' ? d.imm >>> 12 : d.imm };
+    const parts: CParts = {};
+    for (const s of slotsOf(d.spec)) parts[s.key] = all[s.key];
+    return { id: d.spec.name, parts };
+  },
   fields: (word) => fieldsOf(word).map((f): CField => ({ key: f.key, label: f.label, hi: f.hi, lo: f.lo, role: fieldRole(f.key), used: f.used, meaning: f.meaning, value: f.value })),
   imm(word) {
     const c = partsOf(word);

@@ -4,7 +4,9 @@
 // program (targets by label). Adapters: RV32 (riscv/compose.ts), RV16 (riscv/rv16/compose16.ts),
 // tables, the 4-bit CPU's included (isa/compose.ts). DOM-free.
 
-export type Role = 'op' | 'rd' | 'rs' | 'fn' | 'imm';
+import { commentStart } from '../riscv/asm';
+
+export type Role ='op' | 'rd' | 'rs' | 'fn' | 'imm';
 
 /** One operand as written. */
 export interface CSlot {
@@ -60,6 +62,8 @@ export interface ComposeIsa {
   encode(id: string, parts: Parts): number;
   /** A word as instruction + operands; null when none matches, or bits are set the builder would not set. */
   decode(word: number): { id: string; parts: Parts } | null;
+  /** The instruction a word names even with bits set the builder would not set ("one bit away"). */
+  loose(word: number): { id: string; parts: Parts } | null;
   fields(word: number): CField[];
   imm(word: number): CImm | null;
   /** The word as a line of the program: pc in the ISA's address unit, a target by label when one fits. */
@@ -102,7 +106,7 @@ const LABEL_PREFIX = /^(?:[A-Za-z_.$][\w.$]*\s*:\s*)+/;
 
 /** A line without its labels and comment (#, ;, //). */
 export function codeOf(line: string): string {
-  return line.replace(/(#|;|\/\/).*$/, '').trim().replace(LABEL_PREFIX, '').trim();
+  return line.slice(0, commentStart(line)).trim().replace(LABEL_PREFIX, '').trim();
 }
 
 /** Parse one line with an assembler that resolves a branch's numeric offset: a trailing label becomes

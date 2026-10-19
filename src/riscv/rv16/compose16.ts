@@ -91,6 +91,13 @@ export const GROUPS16: CGroup[] = [
   { name: 'SIMT (lanes)', ids: ['split', 'join', 'tmc', 'bar'], more: true },
 ];
 
+function loose16(word: number): { id: string; parts: Parts } | null {
+  const d = decode16(word & 0xffff);
+  if (!d.spec) return null;
+  const all: Parts = { rd: d.rd, rs1: d.rs1, rs2: d.rs2, csr: d.csr, imm: d.spec.fmt === 'U' ? d.imm >> 6 : d.imm };
+  return { id: d.spec.name, parts: carryParts(all, {}, INSTRS.get(d.spec.name)!) };
+}
+
 const BRANCH16 = new Set(['beqz', 'bnez', 'bltz', 'bgez', 'blez', 'bgtz', 'bgt', 'ble', 'j']);
 
 /** RV16 for the instruction builder. */
@@ -100,14 +107,10 @@ export const RV16_COMPOSE: ComposeIsa = {
   instr: (id) => INSTRS.get(id),
   encode: (id, parts) => encode16(BY_NAME16.get(id)!, parts),
   decode(word) {
-    const w = word & 0xffff;
-    const d = decode16(w);
-    if (!d.spec) return null;
-    const ins = INSTRS.get(d.spec.name)!;
-    const all: Parts = { rd: d.rd, rs1: d.rs1, rs2: d.rs2, csr: d.csr, imm: d.spec.fmt === 'U' ? d.imm >> 6 : d.imm };
-    const parts = carryParts(all, {}, ins);
-    return encode16(d.spec, parts) === w ? { id: d.spec.name, parts } : null;
+    const c = loose16(word);
+    return c && encode16(BY_NAME16.get(c.id)!, c.parts) === (word & 0xffff) ? c : null;
   },
+  loose: loose16,
   fields: fields16,
   imm(word) {
     const d = decode16(word & 0xffff);
