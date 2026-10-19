@@ -12,7 +12,9 @@ event-driven gate-level simulator (one delay unit per NAND, so glitches and race
 a switch-level transistor solver. Transistor counts, gate counts and critical paths are measured
 from the circuits themselves, every CPU is co-simulated against a RISC-V golden model, and the
 dual-core and the RV32IM system core are exported as Verilog and taken through Yosys and OpenROAD to
-sky130 layouts, whose reports stand beside the site's own area and timing estimates.
+sky130 layouts, whose reports stand beside the site's own area and timing estimates. Verilog goes
+both ways: any circuit exports as Verilog, and Verilog written in the sandbox is synthesized by Yosys
+in the page into chips that open down to the transistors like everything else.
 
 Four ways in: the **[journey](https://orelmag.github.io/MOSFETtoRISCV/#/c/map/0)** (37 chapters,
 three prologue chapters and two appendices), the **[campaign](https://orelmag.github.io/MOSFETtoRISCV/#/campaign)**
@@ -108,7 +110,9 @@ simulator, so whatever you build is a real component of the site. The full guide
 - Place parts from the whole library (or only NAND and transistors in *purist* mode), draw wires
   freehand with corners and branches, and connect distant nets with **pointers** (named net labels).
 - Watch values live, per clock cycle or one gate delay at a time; probe wires into a timing
-  diagram (VCD export), and read a chip's static timing with its critical path drawn on it.
+  diagram (VCD export), and read a chip's static timing with its critical path drawn on it, in
+  NAND delays or by load (logical effort: a gate driving many inputs is slower), with the heaviest
+  nets listed.
 - **Package** a circuit as a chip (name, colour, pin order), use it in other circuits, nest chips
   to any depth and edit them later: every user of the chip is rebuilt. A face editor puts pins on
   any side and the chip's displays, screens and switches on its box; chips go in folders, circuits
@@ -131,8 +135,8 @@ simulator, so whatever you build is a real component of the site. The full guide
 - **Verilog chips**: write a module as text and Yosys, running in the page (WebAssembly, nothing
   uploaded), draws it from the library's gates beside the text a second after you stop typing;
   every module becomes a chip that opens down to NANDs and transistors. `.v` / `.sv` files and
-  Yosys JSON netlists import the same way; our own Verilog export imported back simulates equal to
-  the original (a whole RV32I CPU among the tests).
+  Yosys JSON netlists import the same way, and File ▸ Export Verilog goes the other way: exported
+  and imported back, a chip (a whole RV32I CPU among the tests) simulates equal to the original.
 - Wide pins up to 1024 bits, exact; autosave, chip files, share links, Verilog and image export.
 - 21 optional **build challenges**, from a CMOS inverter to an instruction fetch unit, with a test
   player that steps through the failing cases.
@@ -174,8 +178,10 @@ Every number on screen comes from the circuit it describes:
 
 The CPUs' counts are the Benchmarks tab's: the 64-word data memory included, the program ROM left out.
 
-The chapters compare implementations on these numbers: ripple, carry-lookahead, Kogge–Stone,
-carry-select and carry-skip adders (static depth against simulated delay, false paths included);
+The chapters compare implementations on these numbers: ripple, carry-lookahead, Brent–Kung,
+Sklansky, Kogge–Stone, carry-select and carry-skip adders (static depth against simulated delay,
+false paths included, and in unit against load-dependent delay, where a prefix tree's fan-out stops
+being free);
 array, Wallace-tree and Booth multipliers; restoring, non-restoring and SRT dividers; single-cycle,
 multicycle (hardwired and microcoded), pipelined, dual-issue and out-of-order CPUs on clock period ×
 CPI. The workbench's Benchmarks tab runs one program set on all 27 gate-level CPUs (cycles, period,
@@ -216,7 +222,10 @@ also be priced in relays and tubes.
 - **HDL**: generated SystemVerilog comes with a self-checking testbench drawn from our own
   simulation; `scripts/verify-export.ts` synthesizes the dual-core and the RV32I / RV32IM system CPUs
   with Yosys, simulates each gate netlist and compares every output cycle by cycle with the site's
-  simulation under the same inputs (irq pulses, switches). The deploy waits on it.
+  simulation under the same inputs (irq pulses, switches). The deploy waits on it. Import is checked
+  the same way: both of our exporters' Verilog, through Yosys and back into chips, matches the
+  original every output every cycle (library parts and the single-cycle CPU), and all 74 of Yosys's
+  flip-flop and latch cells match its own definitions.
 - **Silicon**: `.github/workflows/layout.yml` runs the exported dual-core and the RV32IM system
   core (its memories outside its ports) through OpenROAD-flow-scripts on SkyWater 130 nm (synthesis,
   floorplan, placement, clock tree, routing); the GDS, tiles and reports are published into the site
@@ -233,10 +242,13 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
   strengths (rails, transistors, resistors) and stored charge on capacitive nodes (charge sharing
   for DRAM, a stored threshold for flash). There is no I–V curve, sizing or analog transient: it is
   not SPICE. The relay and the triode have lumped physical models of their own, behind the prologue.
-- **Timing is in NAND delays.** Every NAND costs one unit, whatever it drives; static timing finds
-  the longest register-to-register path in those units. Clock rates in MHz assume an **illustrative
-  25 ps per NAND** (a loaded NAND2 in a 28 nm-class process), not timing characterized from a cell
-  library: no slew, load, wire RC, skew or corners. The sky130 run's own reports are the real numbers.
+- **Timing is in NAND delays.** By default every NAND costs one unit, whatever it drives; static
+  timing finds the longest register-to-register path in those units. A load mode weighs each gate by
+  logical effort (d = p + g·h, its fan-out capacitance from the power estimate's per-input and
+  per-branch values), in static timing only: the gate simulator still steps one unit per NAND. Clock
+  rates in MHz assume an **illustrative 25 ps per NAND** (a loaded NAND2 in a 28 nm-class process),
+  not timing characterized from a cell library: no slew, wire RC, skew or corners. The sky130 run's
+  own reports are the real numbers.
 - **Two kinds of place and route.** The placer (simulated annealing) and router (two-layer Lee) in
   `src/sim/pnr.ts` are teaching models run on small netlists; the full layout comes from OpenROAD.
 - **Power is an estimate.** Dynamic energy is ½ C V² per toggle, with the toggles counted by the
@@ -257,9 +269,11 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
 
 The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next features:
 
-- **Delay that depends on load**: a logical-effort mode where a NAND's delay grows with its fan-out
-  (from the capacitances the power estimate already computes), checked path by path against the
-  sky130 runs; Kogge–Stone stops looking free.
+- **Load-dependent delay, further**: the gate simulator on the loaded delays (glitches and races
+  following the loads), a memory's row decoder and the clock net in both units, and the estimate
+  checked path by path against the sky130 runs.
+- **Verilog in the journey**: the same adder as text and as gates in a chapter step, and a Verilog
+  chip's critical path mapped back to its source lines.
 - **An out-of-order lab**: width, ROB, queues, ports and units set by the learner on the model, on
   the benchmarks or their own program, priced by the gates (chapter 25 already measures the four
   CPUs side by side and the model's width × window).
@@ -304,6 +318,7 @@ the 3D views.
 - `src/view/`: SVG schematics with drill-down, inspector (info, truth table, Verilog, power), timing panel
 - `src/widgets/`, `src/gl/`, `src/phys/`: the explainers, the 3D views and the physical models behind them
 - `src/editor/`: the sandbox (document model, compiler to components, user-chip library, editor UI)
+- `src/hdl/`: HDL in: Yosys in WebAssembly, and its JSON netlist turned into placed, routed chips
 - `src/campaign/`, `src/puzzles/`: the campaign (levels, grading, drills, walkthroughs, codex) and
   the program puzzles
 - `src/m6502/`, `src/doom/`, `src/gfx/`, `src/dram/`, `src/flash/`, `src/bus/`, `src/cards/`: the
