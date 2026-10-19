@@ -233,7 +233,7 @@ export class Stage {
     // press outside it, this button's too: a press that found it open only closes it.
     let layoutWasOpen = false;
     const layoutBtn = h('button', {
-      class: 'btn ghost sm', title: 'Layout: unravel pointers into wires, or reset this level (drag a part to move it)', 'aria-haspopup': 'menu',
+      class: 'btn ghost sm', title: 'Layout: unravel pointers into wires, or reset this level (drag a part or a wire to move it)', 'aria-haspopup': 'menu',
       onpointerdown: () => (layoutWasOpen = this.view.menuOpen),
       onclick: (e: Event) => {
         if (layoutWasOpen) return;
@@ -259,8 +259,8 @@ export class Stage {
     this.levelBadge = h('div', { class: 'level-badge' });
     this.dock = h('div', { class: 'panel-dock' });
     // Touch: dblclick comes from a double tap; the Layout button stands in for the right-click menu.
-    this.hint = hintBadge('double-click a part to open it · drag a part to move it (shift: pick several) · right-click for layout · drag to pan · wheel or pinch to zoom',
-      'double-tap a part: open · drag: move / pan · pinch: zoom', 'stage');
+    this.hint = hintBadge('double-click a part to open it · drag a part or a wire to move it (shift: pick several) · right-click for layout · drag to pan · wheel or pinch to zoom',
+      'double-tap a part: open · drag: move / pan (a wire: tap it first) · pinch: zoom', 'stage');
     this.canvas.append(this.levelBadge, this.hint, this.dock);
     this.controls = h('div', { class: 'controls' });
     this.status = h('div', { class: 'status' });

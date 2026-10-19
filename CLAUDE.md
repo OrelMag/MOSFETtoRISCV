@@ -418,7 +418,10 @@ src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over 
                UNTANGLE_POPS states per schematic, leaving overlaps rather than freezing the page: scripts/route-perf.ts times one),
                layout.ts (the learner's layout on the stage, per component id in localStorage: parts dragged to whole grid
                units, several at once (shift-click, shift-drag a box; Esc lets go), wires following live on a level that
-               routes under LIVE_ROUTE_MS, else on drop; pointers (NetDef.tags) unravelled into wires one by one or all,
+               routes under LIVE_ROUTE_MS, else on drop; a wire's segment dragged sideways in half units (dragSegment: the
+               net's whole run on that line moves, a stub stays on a pin; a finger moves only the selected wire), kept as
+               the learner's corners (LayoutEdit.via → NetDef.via, over the author's; RoutedNet.ends names each path's
+               sink; dropped when a part they touch moves; "Reroute" lets go); pointers (NetDef.tags) unravelled into wires one by one or all,
                and wires drawn as pointers (tags: true, named for the driver; a net too short for them is taken back with
                a note); undo / redo per component for the visit (Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y); applyLayout keeps the
                nets and their order, so the simulation, probes and marks are untouched; a moved part's nets drop its
