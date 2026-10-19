@@ -227,7 +227,7 @@ export const chTubes: Chapter = {
         and fed them back in at the far end: hundreds of bits per tank, but serial, a word coming round once per
         circulation, about a millisecond. The <strong>Williams tube</strong> (the Manchester Baby, 1948) stored bits as
         charge spots on a cathode-ray tube's screen, read through a pickup plate and rewritten, refreshed like
-        <a href="#/c/dram/0">chapter 33</a>'s DRAM: 1 024 bits a tube, random access, temperamental.
+        <a href="#/c/dram/0">chapter 34</a>'s DRAM: 1 024 bits a tube, random access, temperamental.
         <strong>Magnetic core</strong> (Whirlwind, 1953) won: a ferrite ring a bit, magnetized one way or the other,
         random access in microseconds, kept with the power off, read destructively and rewritten. Core held main
         memory until semiconductor DRAM displaced it in the 1970s.</p></details>
@@ -261,7 +261,7 @@ export const chTubes: Chapter = {
         (marginal checking) to find the weak ones before they failed.</p>
         <p>The transistor switches with no heater, no vacuum and no warm-up: the bipolar point-contact transistor in 1947,
         then the MOSFET in 1959, which is where <a href="#/c/mosfet/0">chapter 1</a> begins.
-        <a href="#/c/silicon/0">Chapter 26</a> prices the CPU you build in relays and in tubes.</p>`,
+        <a href="#/c/silicon/0">Chapter 27</a> prices the CPU you build in relays and in tubes.</p>`,
       scene: () => ({ root: TUBE_FA, inputs: { a: 1, b: 1, cin: 0 } }),
       challenge: {
         kind: 'quiz', question: `The 4-bit CPU of the examples is about ${thin(CPU4_NANDS)} NANDs without its ROM. Built from tube NAND bricks at ${w2(BRICK.total)} W each, it draws about:`,

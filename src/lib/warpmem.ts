@@ -1,4 +1,4 @@
-// Chapter 30's memory system for the warp core: one memory port shared by the lanes.
+// Chapter 31's memory system for the warp core: one memory port shared by the lanes.
 //
 //   access unit   which lanes one access serves. Global memory is read and written a 16-byte line
 //                 at a time: the lowest lane still to serve picks the line, every lane in it goes

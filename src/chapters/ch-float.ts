@@ -10,7 +10,7 @@ const E4M3 = { E: 4, M: 3 };
 const fsrc = (id: string) => F_PROGRAMS.find((p) => p.id === id)!.source;
 
 export const chFloat: Chapter = {
-  id: 'float', num: 23, title: 'Floating point', level: 'Arithmetic',
+  id: 'float', num: 24, title: 'Floating point', level: 'Arithmetic',
   blurb: 'IEEE 754 from the bits up: unpack, align, add or multiply, normalize, round in five modes with exception flags, and an FPU in the CPU.',
   goals: [
     'decode a float from its sign, biased exponent and fraction, subnormals, infinities and NaNs included',
@@ -173,7 +173,7 @@ export const chFloat: Chapter = {
       title: 'Multiplication',
       body: `
         <p>Multiplication is simpler than addition: no alignment. <span data-show="u2">The sign is an XOR</span>, <span data-show="u9 u12">the exponents add</span>
-        (minus one bias), and the significands go through <span data-show="u3">a tree multiplier</span> from <a href="#/c/muldiv/0">chapter 20</a>. The product of two
+        (minus one bias), and the significands go through <span data-show="u3">a tree multiplier</span> from <a href="#/c/muldiv/0">chapter 21</a>. The product of two
         numbers in [1, 2) lies in [1, 4), so normalization moves it at most one place, unless subnormal inputs leave leading zeros, which
         <span data-show="u14">the shared unit</span> handles anyway. <span data-show="u17">∞ × 0 is NaN</span>.</p>
         <div class="try">a = b = 0x3A (1.25): 1.5625 = 1.1001₂ needs 4 fraction bits, an exact tie, so it rounds to the even neighbour 1.100₂ = 1.5 (0x3C). Then 0x46 (3.5) × 0x42 (2.5) = 8.75 = 1.00011₂ × 2³: above the tie, it rounds up to 9 (0x51).</div>`,
@@ -207,7 +207,7 @@ export const chFloat: Chapter = {
       title: 'Division, one bit per clock',
       body: `
         <p>Division has no shortcut like the multiplier's tree: each quotient bit depends on the remainder left by the previous one. So the FPU
-        reuses the integer divider of <a href="#/c/muldiv/0">chapter 20</a>: <strong>radix-2 restoring division</strong>, one step per clock. Both significands are first
+        reuses the integer divider of <a href="#/c/muldiv/0">chapter 21</a>: <strong>radix-2 restoring division</strong>, one step per clock. Both significands are first
         <span data-show="u3 u4"><em>prenormalized</em></span> (a subnormal's leading zeros shifted out, the exponent lowered), so they lie in [1, 2) and the quotient in (½, 2).
         <span data-show="u11">The step</span> tries remainder − divisor; if it does not borrow, the quotient bit is 1 and the difference is kept, otherwise the remainder is
         restored (<span data-show="u13">a multiplexer</span>). M + 4 steps give the M + 1 kept bits, G and one more bit (for tininess) even when the quotient is below 1; the final
@@ -216,7 +216,7 @@ export const chFloat: Chapter = {
         <p>float32: 27 steps, <strong>29 cycles</strong>, 10 300 NANDs (4 500 of them normalize &amp; round, 2 300 the two prenormalizers); the step
         loop is 58 NAND delays.</p>
         <details class="deeper"><summary>Deeper: why restoring</summary>
-        <p>It is the integer step unchanged, and a mux is cheap. Chapter 20 built the alternatives. <a href="#/c/muldiv/16">Non-restoring division</a>
+        <p>It is the integer step unchanged, and a mux is cheap. Chapter 21 built the alternatives. <a href="#/c/muldiv/16">Non-restoring division</a>
         drops the mux (add or subtract by the previous sign) but needs a correction step before the remainder can serve as a sticky bit.
         <a href="#/c/muldiv/17">SRT</a> keeps the remainder in carry-save form, so no carry chain sits in the loop, and <a href="#/c/muldiv/19">radix 4</a>
         makes two quotient bits a clock, at the price of a digit-selection table; real FPUs use radix-4 (or higher) SRT, shared with square root.
@@ -394,7 +394,7 @@ export const chFloat: Chapter = {
     {
       title: 'A pipelined FPU',
       body: `
-        <p>The five-stage pipeline of <a href="#/c/pipeline/0">chapter 16</a> gains <span data-show="MX XW">a sixth stage, <strong>X</strong></span>, between M and W. Every instruction, integer or FP,
+        <p>The five-stage pipeline of <a href="#/c/pipeline/0">chapter 17</a> gains <span data-show="MX XW">a sixth stage, <strong>X</strong></span>, between M and W. Every instruction, integer or FP,
         walks F D E M X W, so they all retire in program order and the instruction-set simulator can still be stepped at W. The FP pipe is the fused
         multiply-add cut into its three boxes: <span data-show="fpx"><em>multiply</em> in E</span>, <span data-show="fadd"><em>align and add</em> in M</span>,
         <span data-show="fres"><em>round</em> in X</span>. One rounder serves all the arithmetic (fadd, fmul, the fused multiply-adds, fcvt.s.w, fdiv, fsqrt), so the pipelined RV32IF CPU,

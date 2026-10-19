@@ -13,7 +13,7 @@ import { pack } from '../src/sim/values';
 import { DualSim } from '../src/sim/dualsim';
 import { busComputerScene, systemComputerScene } from '../src/widgets/bus';
 
-// Chapter 36's computer with every slave (DRAM, screen, keyboard) at gate level, in lock-step with the
+// Chapter 37's computer with every slave (DRAM, screen, keyboard) at gate level, in lock-step with the
 // golden model over the same map (bus/model.ts BusModel with the devices).
 
 const IMEM_K = 8, RAM_K = 10;
@@ -149,7 +149,7 @@ key:    lw   t0, 4(s1)
         lw   a2, 4(s1)
 done:   j    done`;
 
-describe('chapter 36\'s computer with DRAM, screen and keyboard, against the golden model', () => {
+describe('chapter 37\'s computer with DRAM, screen and keyboard, against the golden model', () => {
   it('DRAM: words, halfwords and bytes (the data mask), in lock-step', () => {
     const r = run(words(DRAM));
     expect(r.iss.x[10]).toBe(0x1122ab44);
@@ -210,7 +210,7 @@ describe('chapter 36\'s computer with DRAM, screen and keyboard, against the gol
   });
 });
 
-describe('chapter 36\'s last scene on the cycle engine', () => {
+describe('chapter 37\'s last scene on the cycle engine', () => {
   it('both of the chapter\'s computers ask for it (no combinational loop through the interrupt gate)', () => {
     for (const scene of [busComputerScene(), systemComputerScene()]) {
       expect(scene.engine).toBe('cycle');

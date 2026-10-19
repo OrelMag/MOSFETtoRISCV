@@ -1,4 +1,4 @@
-// The out-of-order core as a cycle-level model (chapter 24): the reference the gate-level core must match cycle for
+// The out-of-order core as a cycle-level model (chapter 25): the reference the gate-level core must match cycle for
 // cycle, and what the chapter's explorers run at any size. DOM-free.
 //
 // The core (OOO_CORE; P6 style: values wait in the reorder buffer, the rename table maps a register to a ROB entry):

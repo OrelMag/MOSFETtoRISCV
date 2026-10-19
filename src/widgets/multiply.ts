@@ -1,4 +1,4 @@
-// Chapter 20 widget: five ways to multiply, measured (area, clock period, latency, throughput).
+// Chapter 21 widget: five ways to multiply, measured (area, clock period, latency, throughput).
 
 import { boothMul, pipeMul, seqMul, treeMul } from '../lib';
 import { flatten } from '../sim/flatten';

@@ -82,7 +82,7 @@ export const chPython: Chapter = {
     {
       title: 'What * // % cost',
       body: `
-        <p>RV32I has no multiply or divide instructions (the M extension of chapter 20 adds them). The compiler
+        <p>RV32I has no multiply or divide instructions (the M extension of chapter 21 adds them). The compiler
         spends instructions instead.</p>
         <p>A power of two is a shift or a mask: <code>n % 2</code> is one <code>andi</code>, <code>n // 2</code> one
         <code>srai</code> (an arithmetic shift is exactly Python's floor division by 2), <code>x * 8</code> one
@@ -91,7 +91,7 @@ export const chPython: Chapter = {
         <code>rt.divmod</code> runs 32 passes of shift, compare, subtract, then fixes the signs for Python's rounding
         toward minus infinity.</p>
         <p>Measured: Collatz from 27 runs 938 cycles, every line a few instructions. In gcd, <code>t = a % b</code>
-        costs about 240 cycles a call, 1 472 of the program's 1 545. Chapter 20's divider does the same 32 steps in
+        costs about 240 cycles a call, 1 472 of the program's 1 545. Chapter 21's divider does the same 32 steps in
         hardware, with no instruction fetched between them.</p>`,
       widget: () => pyCost(['gcd']),
     },

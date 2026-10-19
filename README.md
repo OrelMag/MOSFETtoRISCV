@@ -13,16 +13,16 @@ from the circuits themselves, every CPU is co-simulated against a RISC-V golden 
 dual-core and the RV32IM system core are exported as Verilog and taken through Yosys and OpenROAD to
 sky130 layouts, whose reports stand beside the site's own area and timing estimates.
 
-Four ways in: the **[journey](https://orelmag.github.io/MOSFETtoRISCV/#/c/map/0)** (28 chapters),
+Four ways in: the **[journey](https://orelmag.github.io/MOSFETtoRISCV/#/c/map/0)** (37 chapters),
 the **[campaign](https://orelmag.github.io/MOSFETtoRISCV/#/campaign)** (build it to unlock it),
 the **[workbench](https://orelmag.github.io/MOSFETtoRISCV/#/workbench/rca4)** (any component on
 its own) and the **[sandbox](https://orelmag.github.io/MOSFETtoRISCV/#/sandbox)** (your own circuits).
 
 ## The journey
 
-**36 chapters**, from the MOSFET, the CMOS inverter and NAND, through gates, binary numbers,
+**37 chapters**, from the MOSFET, the CMOS inverter and NAND, through gates, binary numbers,
 adders, multiplexers, latches, registers and memory arrays, to the ALU, the register file, RV32I
-assembly, a single-cycle CPU, faster adders, pipelining (hazards, forwarding, branch prediction),
+assembly, a single-cycle CPU, Python compiled to RV32I by the site's own compiler and run on it, faster adders, pipelining (hazards, forwarding, branch prediction),
 bytes and memory-mapped I/O, traps and interrupts, multiply / divide, caches, multicycle and
 microcoded control, floating point (RV32F), out-of-order execution (renaming, a reorder buffer,
 speculation), many cores (atomics, coherence), place and route on
@@ -36,11 +36,11 @@ silicon, and then the start of a GPU track: a lane core (one decoder, many ALUs)
 </tr>
 <tr>
 <td><img src="docs/images/ripple.gif" alt="The carry rippling through an 8-bit adder"><br><sub><b>Ch. 6</b>: toggle <code>cin</code> on 0xFF + 0 and watch the carry ripple, one gate delay at a time.</sub></td>
-<td><img src="docs/images/pipeline.gif" alt="A five-stage pipeline stepping cycle by cycle"><br><sub><b>Ch. 16</b>: a gate-level five-stage pipeline, its diagram marking forwarding, stalls and flushes.</sub></td>
+<td><img src="docs/images/pipeline.gif" alt="A five-stage pipeline stepping cycle by cycle"><br><sub><b>Ch. 17</b>: a gate-level five-stage pipeline, its diagram marking forwarding, stalls and flushes.</sub></td>
 </tr>
 <tr>
 <td><img src="docs/images/cpu.png" alt="The single-cycle RV32I CPU running Fibonacci"><br><sub><b>Ch. 14</b>: a 56k-NAND RV32I CPU running Fibonacci, every instruction checked against the golden model.</sub></td>
-<td><img src="docs/images/cache.png" alt="The cache explorer on a column-major matrix sum"><br><sub><b>Ch. 21</b>: caches on real address traces: size, line, ways, replacement, write policy, 3C misses.</sub></td>
+<td><img src="docs/images/cache.png" alt="The cache explorer on a column-major matrix sum"><br><sub><b>Ch. 22</b>: caches on real address traces: size, line, ways, replacement, write policy, 3C misses.</sub></td>
 </tr>
 </table>
 
@@ -134,8 +134,8 @@ panel shows the energy per instruction as the program runs.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/silicon.jpg" alt="The dual-core placed and routed in SkyWater 130 nm, coloured by block"><br><sub><b>Ch. 26</b>: the dual-core after Yosys and OpenROAD on sky130: 14.8k standard cells, coloured by block.</sub></td>
-<td width="50%"><img src="docs/images/coherence.png" alt="MESI coherence explorer showing false sharing"><br><sub><b>Ch. 25</b>: MSI / MESI on a snooping bus: false sharing, ping-pong, private data.</sub></td>
+<td width="50%"><img src="docs/images/silicon.jpg" alt="The dual-core placed and routed in SkyWater 130 nm, coloured by block"><br><sub><b>Ch. 27</b>: the dual-core after Yosys and OpenROAD on sky130: 14.8k standard cells, coloured by block.</sub></td>
+<td width="50%"><img src="docs/images/coherence.png" alt="MESI coherence explorer showing false sharing"><br><sub><b>Ch. 26</b>: MSI / MESI on a snooping bus: false sharing, ping-pong, private data.</sub></td>
 </tr>
 </table>
 
@@ -161,7 +161,7 @@ panel shows the energy per instruction as the program runs.
 - **Silicon**: `.github/workflows/layout.yml` runs the exported dual-core and the RV32IM system
   core (its memories outside its ports) through OpenROAD-flow-scripts on SkyWater 130 nm (synthesis,
   floorplan, placement, clock tree, routing); the GDS, tiles and reports are published into the site
-  (chapter 26), each beside our estimate of the same design: area per block from the NAND count,
+  (chapter 27), each beside our estimate of the same design: area per block from the NAND count,
   the critical path in NAND delays against OpenSTA's after routing.
 
 ## Scope and limitations
@@ -195,7 +195,7 @@ The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next feat
 
 - **GPU track**: the campaign's act 9 (four RV16 lanes, the active mask, a reconvergence stack, a
   SIMT core, kernel puzzles), then warps and memory (a warp scheduler, coalescing, banked shared
-  memory; chapters 29–30), then graphics (a rasterizer and the graphics pipeline; chapters 31–32).
+  memory; chapters 30–31), then graphics (a rasterizer and the graphics pipeline; chapters 32–33).
 - **A second oracle**: Spike or Sail comparing commit logs with our ISS on the random programs.
 - **Architecture**: private caches with a coherent bus in the gate-level cores, `lr.w` / `sc.w`;
   the C extension and the rest of A; a scoreboard / Tomasulo widget.

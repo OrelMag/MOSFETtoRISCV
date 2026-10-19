@@ -1,4 +1,4 @@
-// Workloads for the controller (chapter 34): a program run on the golden model, its loads and stores
+// Workloads for the controller (chapter 35): a program run on the golden model, its loads and stores
 // through the behavioural model of the CPUs' 2-way write-back cache, gives the line requests the cache
 // would make (a dirty victim's write-back, then the fill) and the instructions between them. Priced on
 // the cycle-exact controller and device (CtrlModel, DeviceModel).

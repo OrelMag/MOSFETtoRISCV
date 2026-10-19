@@ -1,4 +1,4 @@
-// Programs for chapter 21 (caches). The first group produces address traces for the cache
+// Programs for chapter 22 (caches). The first group produces address traces for the cache
 // explorer (run on the ISS with a 4 KB data memory); the second runs on the gate-level CPU with
 // its 4-line direct-mapped data cache (256-byte main memory).
 

@@ -1,4 +1,4 @@
-// Phase 17c: the out-of-order core's units (chapter 24). Each follows the rules of riscv/ooomodel.ts, the model the
+// Phase 17c: the out-of-order core's units (chapter 25). Each follows the rules of riscv/ooomodel.ts, the model the
 // core must equal cycle for cycle (the plan's "model's rules" list, E:/mockups/ooo/PLAN-17b-17d.md), and each is
 // checked against those rules in tests/ooounits.test.ts.
 

@@ -1,4 +1,4 @@
-// Chapters 11–17 quote measured numbers: each is measured here and found in the chapter's text, so an edit to
+// Chapters 11–14 and 16–18 quote measured numbers: each is measured here and found in the chapter's text, so an edit to
 // either the hardware or the prose that breaks the match fails (content review 2026-10-18, slice j-cpu).
 import { describe, expect, it } from 'vitest';
 import { chAlu, chIsa, chRegfile, chSingleCycle } from '../src/chapters/ch-cpu';
@@ -160,7 +160,7 @@ describe('pipelines (findings 2–7)', () => {
     return cycles / iss.steps;
   };
 
-  it('chapter 16: E is ~7× (ripple) / 4.4× (KS) the other stages, and the pipeline loses', () => {
+  it('chapter 17: E is ~7× (ripple) / 4.4× (KS) the other stages, and the pipeline loses', () => {
     const r = period(pipelinedCpu(W0)), k = period(pipelinedCpu(W0, { adder: 'ks' }));
     expect([r.period, k.period]).toEqual([145, 93]);
     const others = Math.max(...r.byCapture.filter((c) => ['MW', 'rf', 'dm'].includes(c.inst)).map((c) => c.period));
@@ -176,7 +176,7 @@ describe('pipelines (findings 2–7)', () => {
     expect(t).not.toContain('barely pays');
   }, 120000);
 
-  it('chapter 17: periods, the path through the comparator, and the price of the BTB', () => {
+  it('chapter 18: periods, the path through the comparator, and the price of the BTB', () => {
     const bal = pipelinedCpu(W0, { adder: 'ks', balanced: true }), pred = pipelinedCpu(W0, { adder: 'ks', balanced: true, predictor: true });
     const tb = period(bal), tp = period(pred);
     expect([period(pipelinedCpu(W0, { balanced: true })).period, tb.period, tp.period]).toEqual([103, 59, 70]);
@@ -198,7 +198,7 @@ describe('pipelines (findings 2–7)', () => {
     expect(t).toContain(`from ${sp(cb)} to ${sp(cp)} NANDs`);
   }, 120000);
 
-  it('chapter 17: prediction is about a draw (period +19 %, CPI −14 %), wins fib and gcd, loses mul', () => {
+  it('chapter 18: prediction is about a draw (period +19 %, CPI −14 %), wins fib and gcd, loses mul', () => {
     const ids = ['fib', 'gcd', 'mul'];
     const plain = ids.map((id) => cpiOf(id, { adder: 'ks', balanced: true }));
     const pred = ids.map((id) => cpiOf(id, { adder: 'ks', balanced: true, predictor: true }));

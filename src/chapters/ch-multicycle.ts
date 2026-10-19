@@ -25,7 +25,7 @@ function stateTable(): Widget {
 }
 
 export const chMulticycle: Chapter = {
-  id: 'multicycle', num: 22, title: 'Multicycle & microcode', level: 'Processor',
+  id: 'multicycle', num: 23, title: 'Multicycle & microcode', level: 'Processor',
   blurb: 'One ALU and one memory port reused over several short cycles, sequenced by a hardwired state machine or by microcode.',
   goals: [
     'split instructions into steps that share one ALU and one memory port, with registers across the step boundaries',
@@ -157,7 +157,7 @@ export const chMulticycle: Chapter = {
         so each instruction takes 300 to 340 delays instead of 103.
         The gate count does not even go down: <span data-show="ir oldpc ra rb data aluout">six 32-bit registers</span> (about 2 900 NANDs) cost more than the two adders they replace.</p>
         <p>Multicycle machines made sense when memory was the expensive, slow part and logic was scarce. Their lasting legacy is the controller,
-        and the idea of overlapping the steps instead of serialising them: the pipeline of <a href="#/c/pipeline/0">chapter 16</a>.</p>`,
+        and the idea of overlapping the steps instead of serialising them: the pipeline of <a href="#/c/pipeline/0">chapter 17</a>.</p>`,
       scene: () => cpuScene({ source: src('gcd'), multicycle: 'fsm', timing: true }),
       challenge: {
         kind: 'quiz', question: 'The steps are unbalanced: the ALU step needs 85 delays, the others much less. What would make the multicycle CPU competitive?',

@@ -1,10 +1,10 @@
-// Golden model of the warp cores (chapters 29–30): W warps of n lanes over one data memory. Each warp
+// Golden model of the warp cores (chapters 30–31): W warps of n lanes over one data memory. Each warp
 // is a SimtISS of its own (its PC, mask, stack and every lane's registers); which warp runs next is
 // the hardware's choice (its scheduler), so the model steps the warp the hardware issued. Warp 0 runs
 // from reset; wspawn rs1, rs2 (run by any warp) starts warps 1 … rs1 − 1 at the leader's rs2, with
 // every lane active. tid = warp · n + lane; nwarps reads W.
 //
-// Chapter 30's cores add a shared memory (smemWords > 0, at SHARED_BASE) and bar rs1, rs2: the warp
+// Chapter 31's cores add a shared memory (smemWords > 0, at SHARED_BASE) and bar rs1, rs2: the warp
 // waits at barrier rs1 until rs2 warps (itself included) have arrived; the last arrival releases them
 // all and carries on. The hardware has one barrier, so warps waiting at two ids at once is an error.
 //
@@ -55,7 +55,7 @@ export class WarpISS {
     this.waiting = this.warps.map(() => false);
   }
 
-  /** A dispatch (chapter 32's command unit, every warp done): warp 0 starts again at PC 0 with every lane active. */
+  /** A dispatch (chapter 33's command unit, every warp done): warp 0 starts again at PC 0 with every lane active. */
   launch(): void {
     const w = this.warps[0];
     w.pc = 0;

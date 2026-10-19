@@ -1,4 +1,4 @@
-// Programs for the single-cycle CPU with the FPU (chapter 23). Constants enter through integer
+// Programs for the single-cycle CPU with the FPU (chapter 24). Constants enter through integer
 // registers (li + fmv.w.x) or conversions (fcvt.s.w).
 
 import type { Program } from './programs';

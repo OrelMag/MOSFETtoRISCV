@@ -483,11 +483,11 @@ export interface CpuOptions {
    * can stall); 'wb' = write-back, write-allocate; 'wb2' = 2-way write-back with LRU (loads and stores can stall).
    */
   dcache?: boolean | 'wb' | 'wb2';
-  /** With dcache 'wb' / 'wb2': main memory is a DRAM controller and device of this geometry (chapter 34), not a fixed latency. */
+  /** With dcache 'wb' / 'wb2': main memory is a DRAM controller and device of this geometry (chapter 35), not a fixed latency. */
   dram?: DramConfig;
   /** Fetch through an 8-line instruction cache in front of the ROM (fetch misses stall). */
   icache?: boolean;
-  /** Add the floating-point register file, the FPU and fcsr (RV32F of chapter 23). */
+  /** Add the floating-point register file, the FPU and fcsr (RV32F of chapter 24). */
   fpu?: boolean;
   /**
    * A core of the multi-core processor: no data memory of its own but a memory port (address,

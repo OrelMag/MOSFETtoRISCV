@@ -54,17 +54,17 @@ export interface CpuSceneOptions {
   m?: boolean;
   /** Single-cycle CPU with a data cache in front of a slow main memory (adds cache statistics): see CpuOptions.dcache. */
   dcache?: boolean | 'wb' | 'wb2';
-  /** With dcache 'wb' / 'wb2': main memory is chapter 34's DRAM controller and device. */
+  /** With dcache 'wb' / 'wb2': main memory is chapter 35's DRAM controller and device. */
   dram?: DramConfig;
   /** Fetch through an instruction cache (adds fetch-miss stalls). */
   icache?: boolean;
   /** The multicycle CPU with a hardwired or microprogrammed controller (adds the controller panel). */
   multicycle?: 'fsm' | 'micro';
-  /** Single-cycle CPU with the FPU and f registers (chapter 23). */
+  /** Single-cycle CPU with the FPU and f registers (chapter 24). */
   fpu?: boolean;
   /** Show the program editor. */
   editable?: boolean;
-  /** The dual-issue RV32IM pipeline of chapter 24 (implies pipeline and m: two lanes in the listing and the diagram). */
+  /** The dual-issue RV32IM pipeline of chapter 25 (implies pipeline and m: two lanes in the listing and the diagram). */
   wide?: boolean;
   /** The single-cycle CPU's ROM (2^imemK words) and data memory (2^dmemK words), when not the defaults (6 and 5). */
   imemK?: number;

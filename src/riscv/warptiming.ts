@@ -8,7 +8,7 @@
 //              the pointer issues; when two or more were ready, the pointer moves past it
 //   loads      a load issued in cycle t is written back at the end of cycle t + L − 1
 //
-// Chapter 30's core (lsu): a memory instruction serves its lanes in accesses (lib/warpmem.ts
+// Chapter 31's core (lsu): a memory instruction serves its lanes in accesses (lib/warpmem.ts
 // serveLanes: a line, a set of banks, one lane for amoadd.w), one per cycle, and holds the issue
 // port until the last; only then does its warp move on. A shared-memory access reaches the memory
 // Ls − 1 cycles later instead of L − 1, so it waits a cycle while a global request issued L − Ls
@@ -54,7 +54,7 @@ export interface WarpTiming {
 
 export interface TimingOptions extends WarpsOptions {
   latency: number;
-  /** Chapter 30's memory system (one port, accesses per line or bank, shared memory, bar, amoadd.w). */
+  /** Chapter 31's memory system (one port, accesses per line or bank, shared memory, bar, amoadd.w). */
   lsu?: boolean;
   /** Shared memory's latency (lsu; default 2). */
   sharedLatency?: number;

@@ -1,4 +1,4 @@
-// The CDC 6600's scoreboard (1964), as Hennessy & Patterson tell it, for chapter 24's explorer. DOM-free.
+// The CDC 6600's scoreboard (1964), as Hennessy & Patterson tell it, for chapter 25's explorer. DOM-free.
 // Four steps per instruction, each at least a cycle, every decision taken on the state at the start of the cycle:
 //   issue      in order, when its unit is free and no instruction in flight writes the same register (WAW);
 //   read       both operands, once no unit in flight still has to write them (RAW);

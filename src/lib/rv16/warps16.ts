@@ -7,7 +7,7 @@
 //              answers one cycle late: a load's word comes back while the other warp issues and is
 //              written through a second register write port, so no warp ever waits for it
 //
-// The serving rule is chapter 30's (lib/warpmem.ts serveLanes, 16-byte lines of RV32 bytes): the leader
+// The serving rule is chapter 31's (lib/warpmem.ts serveLanes, 16-byte lines of RV32 bytes): the leader
 // picks the line, every active lane in it rides along. The warp core's golden model is
 // riscv/rv16/warps16.ts.
 

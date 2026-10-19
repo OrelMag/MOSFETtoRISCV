@@ -1,4 +1,4 @@
-// Chapter 32's reference: what one frame of the pipeline draws. The command unit (lib/gfxpipe.ts) clears the back
+// Chapter 33's reference: what one frame of the pipeline draws. The command unit (lib/gfxpipe.ts) clears the back
 // frame and draws the mesh's triangles with frame f's vertices, as the vertex kernel (riscv/gfxprograms.ts) left
 // them in the vertex buffer; here the same frame comes from plain arithmetic and the rasterizer's reference model.
 

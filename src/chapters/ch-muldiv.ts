@@ -14,7 +14,7 @@ const msrc = (id: string) => M_PROGRAMS.find((p) => p.id === id)!.source;
 const pct = (a: number, b: number) => Math.round((a / b - 1) * 100);
 
 export const chMulDiv: Chapter = {
-  id: 'muldiv', num: 20, title: 'Multiply & divide', level: 'Arithmetic',
+  id: 'muldiv', num: 21, title: 'Multiply & divide', level: 'Arithmetic',
   blurb: 'Array and Wallace-tree multipliers, Baugh–Wooley and Booth, restoring, non-restoring and SRT division, and the M extension in the single-cycle and pipelined CPUs.',
   goals: [
     'reduce a column of partial products with 3:2 carry-save rows and say why the tree\'s depth grows with log n, the array\'s with n',
@@ -157,7 +157,7 @@ export const chMulDiv: Chapter = {
       body: `
         <p>Now produce <span data-show="pp0 pp1 pp2 pp3 pp4 pp5 pp6 pp7"><em>all</em> partial products</span> at once, and feed them to
         <span data-show="L0_0 L0_1 L1_0 L1_1 L2_0 L3_0">layers of compressors</span>: 8 words → 6 → 4 → 3 → 2 in four levels,
-        each one full-adder delay. <span data-show="cpa">One fast adder</span> (the Kogge–Stone from <a href="#/c/fastadd/0">chapter 15</a>) adds the last two words.</p>
+        each one full-adder delay. <span data-show="cpa">One fast adder</span> (the Kogge–Stone from <a href="#/c/fastadd/0">chapter 16</a>) adds the last two words.</p>
         <p>Each compressor row only builds the columns its three words actually cover: full adders where three bits meet,
         half adders where two do, plain wires elsewhere. This is the Wallace tree; Dadda's variant schedules the same cells a little more
         cleverly, using fewer half adders.</p>
@@ -439,7 +439,7 @@ export const chMulDiv: Chapter = {
       title: 'RV32IM',
       body: `
         <p>The complete system CPU with <span data-show="md">the M unit</span> beside <span data-show="mres">the result multiplexer</span>: about ${kNands(sysNands(true).core)} NANDs
-        without its program ROM, ${pct(sysNands(true).core, sysNands(false).core)} % more than the RV32I machine of <a href="#/c/io/0">chapter 18</a>
+        without its program ROM, ${pct(sysNands(true).core, sysNands(false).core)} % more than the RV32I machine of <a href="#/c/io/0">chapter 19</a>
         (${kNands(sysNands(false).core)}); the M unit alone is ${stats(MDU).nands.toLocaleString('en-US').replace(/,/g, ' ')}. With its ${kNands(sysNands(true).rom)}-NAND program ROM:
         ${kNands(sysNands(true).all)} against ${kNands(sysNands(false).all)}. It is still checked
         against the instruction-set simulator (the reference model that runs the program one instruction at a time) on every instruction. The timing panel shows the cost in speed: <strong>one NAND delay</strong> (126 → 127).
