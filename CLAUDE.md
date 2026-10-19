@@ -382,9 +382,12 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
 src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over crossings; untangle's A* reroutes stop after
                UNTANGLE_POPS states per schematic, leaving overlaps rather than freezing the page: scripts/route-perf.ts times one),
                layout.ts (the learner's layout on the stage, per component id in localStorage: parts dragged to whole grid
-               units, pointers (NetDef.tags) unravelled into wires one by one or all; applyLayout keeps the nets and their
-               order, so the simulation, probes and marks are untouched; a moved part's nets drop its trunk / via; the
-               right-click menu and the stage's Layout button; Open in Sandbox takes the arrangement),
+               units, several at once (shift-click, shift-drag a box; Esc lets go), wires following live on a level that
+               routes under LIVE_ROUTE_MS, else on drop; pointers (NetDef.tags) unravelled into wires one by one or all,
+               and wires drawn as pointers (tags: true, named for the driver; a net too short for them is taken back with
+               a note); undo / redo per component for the visit (Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y); applyLayout keeps the
+               nets and their order, so the simulation, probes and marks are untouched; a moved part's nets drop its
+               trunk / via; the right-click menu and the stage's Layout button; Open in Sandbox takes the arrangement),
                inspector (info with "Where it is used", "Power": powerpanel.ts, live from the stage's PowerMeter or
                measurePower on random inputs, and "In relays and tubes": techtable.ts; truth table, Verilog + download), analyzer.ts (the Timing panel:
                lanes from onTrace, cursors, VCD), stage.ts (probe mode, clock period, slow-motion
