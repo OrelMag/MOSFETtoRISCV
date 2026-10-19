@@ -44,6 +44,8 @@ export interface Layout {
   dmemWords: number;
   /** Runtime routines the program needed. */
   runtime: string[];
+  /** The program's functions, in order (each the label of its first instruction). */
+  funcs: string[];
 }
 
 const fitsI = (v: number) => v >= -2048 && v <= 2047;
@@ -204,7 +206,7 @@ export class CodeGen {
     this.mod = { ...mod, body };
     for (const s of body) if (s.kind === 'def') { const f = scope.funcs.get(s.name)!; f.body = s.body; }
     stmtsRuntime(body, this.runtime);
-    this.layout = { homes: [], lists: [], outBase: 0, stackTop: 4 * dmemWords, dmemWords, runtime: [] };
+    this.layout = { homes: [], lists: [], outBase: 0, stackTop: 4 * dmemWords, dmemWords, runtime: [], funcs: [...scope.funcs.keys()] };
   }
 
   private emit(text: string): void { this.out.push({ text: `        ${text}`, py: this.line }); }

@@ -178,10 +178,9 @@ function scopeAt(c: Compiled, pc: number): string | null {
   let best: string | null = null, at = -1;
   const halt = L.get('halt') ?? L.get('program.halt') ?? 0;
   if (pc <= halt) return '';
-  for (const hm of c.layout!.homes) {
-    if (!hm.scope) continue;
-    const a = L.get(hm.scope);
-    if (a !== undefined && a <= pc && a > at) { at = a; best = hm.scope; }
+  for (const fn of c.layout!.funcs) {
+    const a = L.get(fn);
+    if (a !== undefined && a <= pc && a > at) { at = a; best = fn; }
   }
   const rt = Math.min(...c.layout!.runtime.map((r) => L.get(`rt.${r}`)!), Infinity);
   return pc >= rt ? null : best ?? '';
@@ -248,7 +247,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
     const vars = h('div', { class: 'py-kv' });
     const out = h('div', { class: 'py-out', 'aria-live': 'polite' });
     const stackBox = h('div', { class: 'py-kv py-stack' });
-    const hasFuncs = L.homes.some((x) => x.scope);
+    const hasFuncs = L.funcs.length > 0;
     // Bottom-left, beside the CPU panel on the right (two right-docked panels would cover each other).
     const title = h('h4', null, 'Python', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel py-panel', 'data-dock': 'left' }, title,
