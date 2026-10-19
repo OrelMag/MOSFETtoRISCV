@@ -39,6 +39,41 @@ export interface PaletteItem {
   disabled?: string;
   /** A user chip's colour: a swatch before the name. */
   hue?: number;
+  /** A part of any width: its range, the width it starts at, and its placement at a width (the tag becomes a
+   *  width chooser; the last width picked is remembered per item). */
+  sized?: { min: number; max: number; def: number; at(w: number): Placement };
+}
+
+// ---- widths ------------------------------------------------------------------------------------
+
+/** The limits the properties panel holds parts to (parts.ts MAX_WIDTH, a constant's exact 53 bits, ioparts.ts
+ *  MAX_SWITCHES, puzzleparts.ts PUZZLE_MAX_WIDTH; tests/palette-widths.test.ts keeps them equal). */
+export const WIDTH_LIMITS = { pin: 1024, constant: 53, switches: 32, puzzle: 32 } as const;
+/** Quick choices offered for a width (those inside the item's range). */
+export const QUICK_WIDTHS = [1, 2, 4, 8, 16, 32, 64];
+
+const WIDTHS_KEY = 'mosfet2riscv:palette-widths';
+const remembered: Record<string, number> = (() => {
+  try { return JSON.parse(globalThis.localStorage?.getItem(WIDTHS_KEY) ?? '{}') ?? {}; } catch { return {}; }
+})();
+
+/** The width an item places at: the last one picked for it, else its default (clamped to its range). */
+export function itemWidth(key: string, it: PaletteItem): number {
+  const s = it.sized;
+  if (!s) return 0;
+  const w = remembered[key] ?? s.def;
+  return Number.isInteger(w) && w >= s.min && w <= s.max ? w : s.def;
+}
+
+/** Remember a width for an item (a per-viewer convenience: browser storage, best effort). */
+export function setItemWidth(key: string, w: number): void {
+  remembered[key] = w;
+  try { globalThis.localStorage?.setItem(WIDTHS_KEY, JSON.stringify(remembered)); } catch { /* private window: this session only */ }
+}
+
+/** The item as it places at width w: the placement and the tag follow. */
+export function sizedItem(it: PaletteItem, w: number): PaletteItem {
+  return it.sized ? { ...it, place: it.sized.at(w), tag: `${w}-bit` } : it;
 }
 
 export interface PaletteCtx {
@@ -124,15 +159,15 @@ registerPaletteGroup({
     { id: 'in1', name: 'Input', title: 'A 1-bit input pin: click it to toggle', place: { pin: { dir: 'in', width: 1 } } },
     { id: 'button', name: 'Button', title: 'A 1-bit input that is 1 only while held down', place: { pin: { dir: 'in', width: 1, kind: 'button' } } },
     { id: 'clock', name: 'Clock', title: 'A 1-bit input driven by the run loop (Run / Step)', place: { pin: { dir: 'in', width: 1, kind: 'clock' } } },
-    { id: 'in8', name: 'Input bus', tag: '8-bit', title: 'An N-bit input pin: click it to edit the value (width in the properties)', place: { pin: { dir: 'in', width: 8 } } },
+    { id: 'in8', name: 'Input bus', tag: '8-bit', title: 'An N-bit input pin: click it to edit the value. Pick the width on its tag (any of 1–1024 later in the properties)', place: { pin: { dir: 'in', width: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.pin, def: 8, at: (w) => ({ pin: { dir: 'in', width: w } }) } },
     { id: 'out1', name: 'Output', title: 'A 1-bit output pin', place: { pin: { dir: 'out', width: 1 } } },
-    { id: 'out8', name: 'Output bus', tag: '8-bit', title: 'An N-bit output pin', place: { pin: { dir: 'out', width: 8 } } },
+    { id: 'out8', name: 'Output bus', tag: '8-bit', title: 'An N-bit output pin. Pick the width on its tag', place: { pin: { dir: 'out', width: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.pin, def: 8, at: (w) => ({ pin: { dir: 'out', width: w } }) } },
     { id: 'key', name: 'Key', tag: 'A', title: 'A keyboard key: 1 while it is held (pick the key in the properties). Listens from inside a placed chip too; costs nothing', place: { part: { key: 'a' } } },
     { id: 'keyboard', name: 'Keyboard', tag: '8-bit', title: 'Typed keys wait in order: code = the oldest (ASCII), ready = 1 while one waits, ack removes it. Keys reach it while the circuit runs or with Type on; costs nothing', place: { part: { keyboard: true } } },
-    { id: 'pzin', name: 'Puzzle in', tag: '8-bit', title: 'The input of a program puzzle: data = the next word of the test, ready = 1 while one waits, read = 1 at a rising clk edge takes it. Costs nothing', place: { part: { puzzle: 'in', width: 8 } } },
-    { id: 'pzout', name: 'Puzzle out', tag: '8-bit', title: 'The output of a program puzzle: records data at a rising clk edge with we = 1; Check compares the words with the test. Costs nothing', place: { part: { puzzle: 'out', width: 8 } } },
+    { id: 'pzin', name: 'Puzzle in', tag: '8-bit', title: 'The input of a program puzzle: data = the next word of the test, ready = 1 while one waits, read = 1 at a rising clk edge takes it. Costs nothing', place: { part: { puzzle: 'in', width: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.puzzle, def: 8, at: (w) => ({ part: { puzzle: 'in', width: w } }) } },
+    { id: 'pzout', name: 'Puzzle out', tag: '8-bit', title: 'The output of a program puzzle: records data at a rising clk edge with we = 1; Check compares the words with the test. Costs nothing', place: { part: { puzzle: 'out', width: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.puzzle, def: 8, at: (w) => ({ part: { puzzle: 'out', width: w } }) } },
     { id: 'cards', name: 'Card reader', tag: 'deck', title: 'A deck of punched cards: data = the word punched in row 9 of the card at the read station (or one column at a time), ready = 1 while one waits, next = 1 at a rising clk edge takes it. Punch, load and save decks in the properties; costs nothing', place: { part: { reader: sampleReaderRef() } } },
-    { id: 'switches', name: 'Switches', tag: '8-bit', title: 'A bank of toggle switches (1–32 in the properties): click one to flip it, also while running. q = their positions; they stay put through Reset. Costs nothing', place: { part: { switches: 8 } } },
+    { id: 'switches', name: 'Switches', tag: '8-bit', title: 'A bank of toggle switches (1–32 in the properties): click one to flip it, also while running. q = their positions; they stay put through Reset. Costs nothing', place: { part: { switches: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.switches, def: 8, at: (w) => ({ part: { switches: w } }) } },
   ],
 });
 
@@ -192,7 +227,7 @@ registerPaletteGroup({
   items: () => [
     { id: 'k0', name: 'Constant 0', place: { part: { const: { width: 1, value: 0 } } } },
     { id: 'k1', name: 'Constant 1', place: { part: { const: { width: 1, value: 1 } } } },
-    { id: 'k8', name: 'Constant', tag: '8-bit', title: 'An N-bit constant (width and value in the properties)', place: { part: { const: { width: 8, value: 0 } } } },
+    { id: 'k8', name: 'Constant', tag: '8-bit', title: 'An N-bit constant (the value in the properties)', place: { part: { const: { width: 8, value: 0 } } }, sized: { min: 1, max: WIDTH_LIMITS.constant, def: 8, at: (w) => ({ part: { const: { width: w, value: 0 } } }) } },
   ],
 });
 
@@ -200,10 +235,10 @@ registerPaletteGroup({
   id: 'disp', title: 'Displays', order: 40, purist: true,
   items: () => [
     { id: 'led', name: 'LED', title: 'Lights when its input is 1', place: { part: { display: 'led' } } },
-    { id: 'leds', name: 'LED bank', tag: '8-bit', title: 'One LED per bit, most significant first, rows of 8 (width in the properties)', place: { part: { display: 'led', width: 8 } } },
+    { id: 'leds', name: 'LED bank', tag: '8-bit', title: 'One LED per bit, most significant first, rows of 8 (width in the properties)', place: { part: { display: 'led', width: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.pin, def: 8, at: (w) => ({ part: { display: 'led', width: w } }) } },
     { id: 'seg7', name: '7-segment', tag: '8-bit', title: 'Bit 0 = segment a … bit 6 = g, bit 7 = decimal point', place: { part: { display: 'seg7', width: 8 } } },
     { id: 'hex', name: 'Hex digit', tag: '4-bit', title: 'Shows a 4-bit value as 0–F', place: { part: { display: 'hex', width: 4 } } },
-    { id: 'value', name: 'Value', tag: '8-bit', title: 'Shows a bus value in the chosen radix', place: { part: { display: 'value', width: 8 } } },
+    { id: 'value', name: 'Value', tag: '8-bit', title: 'Shows a bus value in the chosen radix', place: { part: { display: 'value', width: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.pin, def: 8, at: (w) => ({ part: { display: 'value', width: w } }) } },
     { id: 'buzzer', name: 'Buzzer', title: 'Sounds while its input is 1 (A4, 440 Hz); give it a bus to play MIDI note v (60 = middle C)', place: { part: { display: 'buzzer' } } },
     { id: 'halt', name: 'Halt', title: 'Stops Run after the step where its input reads 1 (any bit of a bus); placed inside a chip, it still stops Run', place: { part: { display: 'halt' } } },
     { id: 'console', name: 'Console', tag: 'ASCII', title: 'A terminal: prints the character on data at a rising clk edge with we = 1 (\\n new line, \\b backspace, \\f clears). Costs nothing', place: { part: { console: { cols: 32, rows: 8 } } } },
@@ -387,19 +422,27 @@ export class PalettePanel {
   }
 
   /** One item: drag or click to place; its star pins it to Favorites (number `n`: the key that arms it). */
-  private itemButton(key: string, it: PaletteItem, fav: boolean, n?: number): HTMLElement {
+  private itemButton(key: string, raw: PaletteItem, fav: boolean, n?: number): HTMLElement {
+    // a sized part places at its remembered width; its tag opens the width chooser
+    const it = raw.sized ? sizedItem(raw, itemWidth(key, raw)) : raw;
+    const wtag = raw.sized ? h('small', { class: 'sb-wtag', title: 'Pick a width', 'aria-hidden': 'true' }, it.tag, ' ▾') : null;
     const star = h('span', { class: `sb-star${fav ? ' on' : ''}`, title: fav ? 'Remove from favorites' : 'Add to favorites', 'aria-hidden': 'true' }, fav ? '★' : '☆');
     const b = h('button', {
       class: `lib-item sb-item${it.disabled ? ' disabled' : ''}${this.armed === key ? ' on' : ''}`,
       title: `${it.disabled ?? it.title ?? it.name}${n ? ` (key ${n})` : ''}`, 'data-item': key, 'aria-disabled': it.disabled ? 'true' : null,
     }, it.hue !== undefined ? h('i', { class: 'sb-swatch-dot', style: `--chip-h:${it.hue}` }) : null, h('span', null, it.name),
-    it.tag ? h('small', null, it.tag) : null, n ? h('kbd', { class: 'sb-fav-key' }, n) : null, star);
+    wtag ?? (it.tag ? h('small', null, it.tag) : null), n ? h('kbd', { class: 'sb-fav-key' }, n) : null, star);
     b.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       if (e.target === star) {
         e.preventDefault();
         e.stopPropagation();
         return this.hooks.toggleFavorite(key);
+      }
+      if (wtag && wtag.contains(e.target as Node) && !it.disabled) {
+        e.preventDefault();
+        e.stopPropagation();
+        return this.chooseWidth(key, raw, b);
       }
       if (it.disabled) return;
       e.preventDefault();
@@ -414,9 +457,42 @@ export class PalettePanel {
     return b;
   }
 
-  /** The n-th favorite (0-based) as number keys see it: purist applied, no search filter. */
+  /** The n-th favorite (0-based) as number keys see it: purist applied, no search filter; a sized part at its width. */
   favorite(n: number): { key: string; item: PaletteItem } | null {
-    return this.favorites()[n] ?? null;
+    const f = this.favorites()[n];
+    return f ? { key: f.key, item: f.item.sized ? sizedItem(f.item, itemWidth(f.key, f.item)) : f.item } : null;
+  }
+
+  private chooser: HTMLElement | null = null;
+
+  /** The width chooser under an item: quick widths in its range and any other; a pick is remembered and arms the item. */
+  private chooseWidth(key: string, it: PaletteItem, anchor: HTMLElement): void {
+    this.chooser?.remove();
+    const s = it.sized!;
+    const cur = itemWidth(key, it);
+    const pick = (w: number) => {
+      if (!Number.isInteger(w) || w < s.min || w > s.max) return void (input.value = String(cur));
+      setItemWidth(key, w);
+      close();
+      this.render();
+      this.hooks.arm?.(sizedItem(it, w), key);
+    };
+    const input = h('input', { type: 'number', min: s.min, max: s.max, value: cur, 'aria-label': `${it.name}: width in bits (${s.min}–${s.max})` }) as HTMLInputElement;
+    input.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') pick(Number(input.value)); if (e.key === 'Escape') close(); });
+    const el = h('div', { class: 'sb-wchooser', role: 'dialog', 'aria-label': `Width of ${it.name}` },
+      h('div', { class: 'sb-wchooser-row' }, QUICK_WIDTHS.filter((w) => w >= s.min && w <= s.max).map((w) => h('button', { type: 'button', class: w === cur ? 'on' : '', onclick: () => pick(w) }, w))),
+      h('div', { class: 'sb-wchooser-row' }, h('span', null, 'other'), input, h('button', { type: 'button', class: 'btn sm', onclick: () => pick(Number(input.value)) }, 'Place'), h('small', null, `${s.min}–${s.max} bits`)));
+    const away = (e: PointerEvent) => { if (!el.contains(e.target as Node)) close(); };
+    const close = () => { el.remove(); this.chooser = null; document.removeEventListener('pointerdown', away, true); };
+    document.addEventListener('pointerdown', away, true);
+    const r = anchor.getBoundingClientRect(), pr = this.el.getBoundingClientRect();
+    el.style.top = `${r.bottom - pr.top + this.el.scrollTop + 2}px`;
+    el.style.left = `${Math.max(4, r.left - pr.left)}px`;
+    this.el.append(el);
+    this.chooser = el;
+    this.list.addEventListener('scroll', close, { once: true });
+    input.focus();
+    input.select();
   }
 
   /** The favorites shown here: those of hidden groups (a level screen) left out. */

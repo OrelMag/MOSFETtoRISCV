@@ -486,3 +486,14 @@
   .sb-save { position: relative; }
   .sb-save::after { content: ''; position: absolute; inset: -13px -9px; }
 }
+
+/* A sized part's width tag and chooser (palette.ts chooseWidth) */
+.sb-palette { position: relative; }
+.sb-item .sb-wtag { padding: 0 5px; border-radius: 4px; border: 1px dashed var(--border-strong); cursor: pointer; }
+.sb-item .sb-wtag:hover { border-color: var(--accent); color: var(--accent); }
+.sb-wchooser { position: absolute; z-index: 40; display: grid; gap: 6px; padding: 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); box-shadow: var(--shadow-lg); font-size: 12px; }
+.sb-wchooser-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.sb-wchooser-row > button:not(.btn) { min-width: 30px; padding: 3px 6px; border-radius: 5px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: 600 12px var(--font-mono); cursor: pointer; }
+.sb-wchooser-row > button.on { border-color: var(--accent); background: var(--accent); color: var(--accent-text); }
+.sb-wchooser input { width: 64px; padding: 3px 6px; border-radius: 5px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font: 12px var(--font-mono); }
+.sb-wchooser small { color: var(--muted); }
