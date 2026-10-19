@@ -4,6 +4,7 @@
 // checking every thread's writes as the level's bench does.
 
 import { describe, expect, it } from 'vitest';
+import { tick } from './yieldtick';
 import { addLaneBench, failingTest } from '../src/campaign/bench';
 import { coreSpecOf } from '../src/campaign/corecheck';
 import { levelChallenge } from '../src/campaign/levels';
@@ -89,7 +90,8 @@ describe('debug a lane core test in the sandbox', { timeout: 300000 }, () => {
     const r = bench('k_frame', 'k_warps', 'a triangle');
     expect('error' in r && r.error).toMatch(/fa, fd, fwe/);
   });
-  it('every program of every lane level runs to its end on the reference core, no mismatch', () => {
+  // a macrotask after each program: the whole loop holds its worker for a minute and more (tests/yieldtick.ts)
+  it('every program of every lane level runs to its end on the reference core, no mismatch', async () => {
     const bad: string[] = [];
     for (const lv of ['k_simd', 'k_simt', 'k_warps', 'k_frame']) {
       const ch = levelChallenge(nodeById(lv)!)!;
@@ -106,6 +108,7 @@ describe('debug a lane core test in the sandbox', { timeout: 300000 }, () => {
         const m = new LaneMonitor(es, () => doc, () => r.ws.chips);
         m.runToHalt(Infinity, 20000);
         if (m.mismatch || !m.done) bad.push(`${lv} ${t.name}: ${m.mismatch?.detail ?? `not done after ${es.cycles} cycles`}`);
+        await tick();
       }
     }
     expect(bad).toEqual([]);

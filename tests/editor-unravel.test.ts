@@ -4,6 +4,7 @@
 // wires, and the nets (their ends, stored charge, power-on value) must be the same.
 
 import { describe, expect, it } from 'vitest';
+import { stepped } from './yieldtick';
 import { CHALLENGES } from '../src/editor/challengeset';
 import { compileChip } from '../src/editor/compile';
 import { EXAMPLES, addExample } from '../src/editor/examples';
@@ -53,7 +54,11 @@ function harness(ws: Workspace, id: string) {
  * Unravel each pointer name alone (as the menu does: no wire drawn on another net), then every
  * name in turn, then collapse every wire: all keep the nets. `alone`: how many names to try alone.
  */
-function roundTrip(ws: Workspace, id: string, alone = Infinity) {
+/**
+ * The round trip as phases (yield between them): a CPU's takes minutes on CI, and a test that holds its worker past
+ * vitest's 60 s RPC timeout fails the run although every test passed (tests/yieldtick.ts).
+ */
+function* roundTripSteps(ws: Workspace, id: string, alone = Infinity) {
   const { doc, compile, defOf } = harness(ws, id);
   const before = compile(doc);
   expect(errors(before)).toEqual([]);
@@ -62,6 +67,7 @@ function roundTrip(ws: Workspace, id: string, alone = Infinity) {
   const names = [...new Set(doc.labels.map((l) => l.name))].filter((n) => canUnravel(doc, n));
   const base = overlaps(doc, before, defOf);
   for (const n of names.slice(0, alone)) {
+    yield;
     const r = unravelPointer(doc, n, defOf);
     expect(r.reason, n).toBeUndefined();
     const c1 = compile(r.doc);
@@ -69,6 +75,7 @@ function roundTrip(ws: Workspace, id: string, alone = Infinity) {
     expect(overlaps(r.doc, c1, defOf), `“${n}” drawn on another net`).toBeLessThanOrEqual(base);
   }
 
+  yield;
   const u = unravelPointers(doc, names, defOf);
   expect(u.reason).toBeUndefined();
   if (names.length) expect(u.doc.labels.some((l) => names.includes(l.name))).toBe(false);
@@ -78,6 +85,7 @@ function roundTrip(ws: Workspace, id: string, alone = Infinity) {
   expect(offWire(cu)).toBe(offWire(before));
   expect(nets(cu.def)).toEqual(want);
 
+  yield;
   const c = collapseWires(u.doc, u.doc.wires.map((w) => w.id), defOf);
   expect(c.reason).toBeUndefined();
   const cc = compile(c.doc);
@@ -85,6 +93,11 @@ function roundTrip(ws: Workspace, id: string, alone = Infinity) {
   expect(nets(cc.def)).toEqual(want);
   expect(overlaps(c.doc, cc, defOf), 'stubs drawn on another net').toBeLessThanOrEqual(overlaps(u.doc, cu, defOf));
   return { names, unravelled: u.doc, collapsed: c.doc };
+}
+
+function roundTrip(ws: Workspace, id: string, alone = Infinity) {
+  const g = roundTripSteps(ws, id, alone);
+  for (;;) { const r = g.next(); if (r.done) return r.value; }
 }
 
 describe('unravel', () => {
@@ -202,10 +215,10 @@ describe('connectivity never changes', () => {
   // The chapters' CPUs, opened in the sandbox: the biggest documents with the most pointers.
   // (those drawn with net labels: the 6502's top level is all wires). The dual-issue pipeline's top is labels almost
   // throughout: ~18 s here, ~46 s on CI's runner, past the default 30 s; the out-of-order core's ~54 s here.
-  it.each(cpuTops().filter((d) => netlistOf(d)!.nets.some((n) => n.tags)).map((d) => [d.id, d] as const))('CPU: %s', (_, def) => {
+  it.each(cpuTops().filter((d) => netlistOf(d)!.nets.some((n) => n.tags)).map((d) => [d.id, d] as const))('CPU: %s', async (_, def) => {
     const r = remixDef(emptyWorkspace(), def);
     if ('error' in r) throw new Error(r.error);
-    const { names } = roundTrip(r.ws, r.id, 12);
+    const { names } = await stepped(roundTripSteps(r.ws, r.id, 12));
     expect(names.length).toBeGreaterThan(0);
   }, 400_000);
 
