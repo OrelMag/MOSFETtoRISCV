@@ -27,6 +27,12 @@ export interface CodeEditor {
   /** Highlight one 1-based line (e.g. the PC's) and scroll it into view; null clears. */
   setActiveLine(n: number | null): void;
   focus(): void;
+  /** The 1-based line holding the caret. */
+  caretLine(): number;
+  /** Scroll 1-based line n into view (the active line is left alone). */
+  reveal(n: number): void;
+  /** Replace 1-based line n (one native undo step); `after`: insert a new line below it instead. */
+  putLine(n: number, text: string, after?: boolean): void;
   destroy(): void;
 }
 
@@ -190,6 +196,14 @@ export function codeEditor(opts: CodeEditorOpts): CodeEditor {
   render();
 
   const lineHeight = () => parseFloat(getComputedStyle(ta).lineHeight) || 18;
+  const reveal = (n: number) => {
+    const lh = lineHeight(), pad = parseFloat(getComputedStyle(ta).paddingTop) || 0;
+    const top = pad + (n - 1) * lh;
+    if (top < ta.scrollTop + pad || top + lh > ta.scrollTop + ta.clientHeight - pad) {
+      ta.scrollTop = Math.max(0, top - ta.clientHeight / 3);
+      sync();
+    }
+  };
 
   return {
     el,
@@ -215,15 +229,18 @@ export function codeEditor(opts: CodeEditorOpts): CodeEditor {
       if (n === active) return;
       active = n;
       render();
-      if (n === null) return;
-      const lh = lineHeight(), pad = parseFloat(getComputedStyle(ta).paddingTop) || 0;
-      const top = pad + (n - 1) * lh;
-      if (top < ta.scrollTop + pad || top + lh > ta.scrollTop + ta.clientHeight - pad) {
-        ta.scrollTop = Math.max(0, top - ta.clientHeight / 3);
-        sync();
-      }
+      if (n !== null) reveal(n);
     },
+    reveal,
     focus() { ta.focus(); },
+    caretLine() { return ta.value.slice(0, ta.selectionStart).split('\n').length; },
+    putLine(n, text, after = false) {
+      const lines = ta.value.split('\n');
+      const i = Math.max(0, Math.min(lines.length - 1, n - 1));
+      const start = lines.slice(0, i).reduce((p, l) => p + l.length + 1, 0), end = start + lines[i].length;
+      if (after) edit(end, end, '\n' + text, end + 1 + text.length, end + 1 + text.length);
+      else edit(start, end, text, start + text.length, start + text.length);
+    },
     destroy() {
       ta.removeEventListener('input', changed);
       ta.removeEventListener('scroll', sync);

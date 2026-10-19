@@ -282,10 +282,10 @@ export const chIsa: Chapter = {
         <p>Immediates pay for that. The S format splits its immediate around rs2; B and J scramble theirs so that the sign
         is always bit 31 and most immediate bits sit in the same place across formats. The immediate generator then needs
         fewer multiplexer inputs per bit.</p>
-        <p>Under the fields, the immediate is rebuilt bit by bit the way the hardware does it: each result bit is a wire
-        from one instruction bit (the number below it), a sign copy of bit 31 (<code>s</code>), or ground. No gates.</p>
-        <div class="try">Try <code>beq a0, zero, 16</code> and <code>jal ra, 2048</code>: watch where the offset bits go.
-        Point at a bit of the immediate to see its source.</div>`,
+        <p>Under the word, the immediate is rebuilt bit by bit the way the hardware does it: each result bit is a wire
+        from one instruction bit, a copy of bit 31 (dashed), or ground. No gates.</p>
+        <div class="try">Pick <code>beq</code> and drag its offset: bit 12 of the offset lands in instruction bit 31, bit 11 in bit 7.
+        Then flip bit 30 of an <code>add</code>, or any bit of the opcode, and see what the decoder makes of it.</div>`,
       widget: () => instructionExplorer(),
       challenge: {
         kind: 'quiz', question: 'Why is the branch offset stored in units of 2 bytes, not 4, even though RV32I instructions are 4 bytes?',

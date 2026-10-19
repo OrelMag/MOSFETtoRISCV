@@ -405,6 +405,20 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   references; Do it for me loads the reference program
 - ⏳ After the puzzles: per-puzzle pins (a maze robot's sensors, a traffic light's lamps) as a third part kind; the
   campaign's RV16 program levels run on your own core
+
+**Graphical instruction builder** (mockup approved 2026-10-19: four concepts, all to be built, RV32 first)
+- ✅ 1. Composer, RV32 (riscv/compose.ts, widgets/composer.ts): one instruction edited from any side. Pick the
+  operation, click registers, drag the immediate, flip any bit, or type asm / hex. Shown with it: the immediate
+  generator's wires, the decode chain, the major-opcode map and the units it uses (insthw.ts). Every RV32 instruction
+  (I, M, Zicsr, F, A, SIMT) goes both ways through the assembler (tests/compose.test.ts). Chapter 13's explorer is now
+  the builder. The sandbox's program editor opens it on the caret's line (Ctrl+Space, Build instruction): Replace
+  keeps the line's label, indentation and comment; Insert adds a line below
+- ⏳ 2. Any ISA: the composer over the Isa interface (RV16, the 4-bit CPU, custom tables: fields from
+  IsaTable.compiled.bits); a layout table per RV16 format; the CPU drawer's custom-table strip assumes 16-bit words
+- ⏳ 3. Encoding designer: custom-ISA patterns painted on a bit grid (the same pattern text), the opcode map, clashes
+  with an example word, the fill ratio; then the table's decoder as a PLA with its NAND count
+- ⏳ 4. Program as tiles (a view of the program text: branch arrows, data dependencies) and a front panel (toggle
+  switches, Deposit / Examine)
 - ✅ Examples ▸ 4-bit CPU (4004-inspired; src/isa4, lib/cpu4.ts): the 4004's opcode map and mnemonics, one instruction
   per 16-bit ROM word and per clock (the 4004 byte high, its second byte low), 29 instructions (the 4004's set minus the
   4002 RAM-chip ones, FIN, KBP and DCL): 4-bit accumulator and carry, 16 × 4-bit index registers in 8 pairs, an 8-bit
