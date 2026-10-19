@@ -454,6 +454,8 @@ src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over 
                a note); undo / redo per component for the visit (Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y); applyLayout keeps the
                nets and their order, so the simulation, probes and marks are untouched; a moved part's nets drop its
                trunk / via; the right-click menu and the stage's Layout button; Open in Sandbox takes the arrangement),
+               crumbvals.ts (the breadcrumb's live values, stage and look inside: each level the output carrying the one
+               below, `bit [7] = 1` where the level above's bus was sliced),
                inspector (info with "Where it is used", "Power": powerpanel.ts, live from the stage's PowerMeter or
                measurePower on random inputs, and "In relays and tubes": techtable.ts; truth table, Verilog + download), analyzer.ts (the Timing panel:
                lanes from onTrace, cursors, VCD), stage.ts (probe mode, clock period, slow-motion

@@ -405,6 +405,13 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .crumbs button.cur { color: var(--text); font-weight: 650; }
 .crumbs .sep { color: var(--muted); font-size: 12px; }
 .crumbs .kind { color: var(--muted); font-weight: 400; margin-left: 3px; }
+/* The value each level shows (crumbvals.ts): the chain follows one signal down. */
+.crumbs .val {
+  margin-left: 5px; padding: 0 5px; border-radius: 99px; border: 1px solid var(--border);
+  font: 500 11.5px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-2);
+}
+.crumbs .val.v1 { background: color-mix(in srgb, var(--w1) 28%, var(--surface)); border-color: var(--w1); color: var(--text); }
+.crumbs .val.vx { border-color: var(--wx); color: var(--wx); }
 /* The bar's buttons keep their size; the hierarchy takes what is left. A name longer than that is
    cut with an ellipsis (the full name is the button's title) instead of running under the buttons,
    as a nowrap button in a shrunk .crumbs used to. Stage.fitBar first drops the button labels

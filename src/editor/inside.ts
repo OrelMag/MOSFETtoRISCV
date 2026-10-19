@@ -12,6 +12,7 @@ import type { Sim } from '../sim/sim';
 import { netlistOf } from '../sim/types';
 import { h, hintBadge, icon, s } from '../ui/dom';
 import { ViewCtx } from '../view/context';
+import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from '../view/crumbvals';
 import { SchematicView } from '../view/schematic';
 import type { Widget } from '../view/stage';
 import { transistorLeaf } from '../widgets/mosfet';
@@ -56,6 +57,7 @@ class InsideView {
   private leaf: { name: string; w: Widget } | null = null;
   /** Repaints the faces of the consoles, switches and screens at this level (ioface.ts). */
   private ioPaint: (() => void) | null = null;
+  private crumbVals: { el: HTMLElement; v: CrumbValue }[] = [];
   private readonly chip: string;
   private readonly hook = () => this.tick();
 
@@ -196,17 +198,36 @@ class InsideView {
     // The chip itself first: it is the editor underneath, so it closes the view.
     c.append(h('button', { title: 'Back to editing', onclick: () => this.close() }, ed.doc.name));
     const p = this.path;
+    const levels: ViewCtx[] = [];
+    for (let l: ViewCtx | null = this.ctx; l; l = l.parent) levels.unshift(l);
+    const vals = crumbValues(levels);
+    this.crumbVals = [];
+    const valEl = (i: number, name: string, above: string, btn: HTMLElement) => {
+      const v = vals[i];
+      if (!v) return;
+      const el = h('span', { class: 'val' });
+      this.crumbVals.push({ el, v });
+      btn.append(el);
+      btn.title = btn.title ? `${btn.title}\n${crumbTitle(v, name, above)}` : crumbTitle(v, name, above);
+    };
+    valEl(0, ed.doc.name, '', c.lastChild as HTMLElement);
     let ctx: ViewCtx | null = this.root;
     p.forEach((name, i) => {
       const node = ctx?.node.children?.get(name);
       const last = i === p.length - 1;
-      c.append(h('span', { class: 'sep' }, '›'),
-        h('button', { class: last ? 'cur' : '', onclick: () => (last ? null : this.goTo(p.slice(0, i + 1))) },
-          name, node ? h('span', { class: 'kind' }, node.def.name) : null));
+      const btn = h('button', { class: last ? 'cur' : '', onclick: () => (last ? null : this.goTo(p.slice(0, i + 1))) },
+        name, node ? h('span', { class: 'kind' }, node.def.name) : null);
+      c.append(h('span', { class: 'sep' }, '›'), btn);
+      valEl(i + 1, name, i ? p[i - 1] : ed.doc.name, btn);
       ctx = ctx && !last ? safeChild(ctx, name) : null;
     });
+    this.syncCrumbVals();
     // Deep paths overflow the bar: keep the current level in view.
     requestAnimationFrame(() => (c.scrollLeft = c.scrollWidth));
+  }
+
+  private syncCrumbVals(): void {
+    paintCrumbVals(this.crumbVals, this.ed.view.radix);
   }
 
   /** Sync and redraw from the editor's simulation (every repaint). */
@@ -227,6 +248,7 @@ class InsideView {
     this.view.update();
     this.ioPaint?.();
     this.leaf?.w.update?.();
+    this.syncCrumbVals();
     const nl = netlistOf(ctx.def);
     const what = this.leaf ? 'a single transistor' : nl?.level === 'switch' ? 'transistors' : 'gates & blocks';
     const txt = `${what} · ${ctx.isSubSim ? 'own simulation, driven by its parent' : 'live'}`;

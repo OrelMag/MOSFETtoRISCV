@@ -19,6 +19,7 @@ import { LogicAnalyzer, netKey } from './analyzer';
 import { h, hintBadge, icon } from '../ui/dom';
 import { applyTheme, settings } from '../ui/settings';
 import { switchSim, ViewCtx } from './context';
+import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from './crumbvals';
 import { Inspector } from './inspector';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber } from './popover';
@@ -145,6 +146,7 @@ export class Stage {
   private innerEl: HTMLElement | null = null;
   private innerFor: ViewCtx | null = null;
   private innerVals: { el: HTMLElement; port: PortDef }[] = [];
+  private crumbVals: { el: HTMLElement; v: CrumbValue }[] = [];
   private canvas: HTMLElement;
   /** Bottom-left stack for panels with `data-dock="left"` (see layoutDock). */
   private dock: HTMLElement;
@@ -1153,6 +1155,7 @@ export class Stage {
     }
     if (this.backBtn) this.backBtn.disabled = !this.history.length;
     this.syncScope();
+    this.syncCrumbVals();
     const sim = this.sim;
     const busy = sim.busy();
     let msg: string;
@@ -1245,26 +1248,40 @@ export class Stage {
     c.replaceChildren();
     if (!this.rootCtx) return;
     const chain: { label: string; kind: string; path: string[] }[] = [];
+    const levels: ViewCtx[] = [];
     let ctx: ViewCtx | null = this.ctx;
     while (ctx) {
       const name = ctx.path[ctx.path.length - 1];
       chain.unshift({ label: name ?? ctx.def.name, kind: name ? ctx.def.name : '', path: ctx.path });
+      levels.unshift(ctx);
       ctx = ctx.parent;
     }
     if (this.leaf) {
       const def = this.ctx!.node.children!.get(this.leaf.name)!.def;
       chain.push({ label: this.leaf.name, kind: def.name, path: this.path });
     }
+    const vals = crumbValues(levels);
+    this.crumbVals = [];
     chain.forEach((item, i) => {
       if (i) c.append(h('span', { class: 'sep' }, '›'));
       const last = i === chain.length - 1;
+      const v = vals[i];
+      const el = v ? h('span', { class: 'val' }) : null;
+      if (el && v) this.crumbVals.push({ el, v });
       c.append(h('button', { class: last ? 'cur' : '', onclick: () => (last ? null : this.goTo(item.path)) },
-        item.label, item.kind ? h('span', { class: 'kind' }, item.kind) : null));
+        item.label, item.kind ? h('span', { class: 'kind' }, item.kind) : null, el));
       // The name may be cut with an ellipsis (app.css): the tooltip keeps it whole.
-      (c.lastChild as HTMLElement).title = item.kind ? `${item.label} (${item.kind})` : item.label;
+      const title = item.kind ? `${item.label} (${item.kind})` : item.label;
+      (c.lastChild as HTMLElement).title = v ? `${title}\n${crumbTitle(v, item.label, chain[i - 1]?.label ?? '')}` : title;
     });
+    this.syncCrumbVals();
     this.fitBar();
     this.syncScope();
+  }
+
+  /** The breadcrumb's values follow the simulation (crumbvals.ts). */
+  private syncCrumbVals(): void {
+    paintCrumbVals(this.crumbVals, settings.radix);
   }
 
   /**
@@ -1313,18 +1330,19 @@ export class Stage {
 
   /** Drop the bar's button labels (icons and tooltips remain) when the hierarchy would otherwise
    *  be cut or wrap; measured with the labels shown, so it comes back once there is room. Still cut
-   *  without them (a phone: the buttons take the whole bar, the name read "4…"), the hierarchy gets
-   *  a row of its own above the buttons (.stacked). */
+   *  or wrapped without them (a phone: the buttons take the whole bar, the name read "4…"; a deep
+   *  path with its values beside the buttons), the hierarchy gets a row of its own above the buttons
+   *  (.stacked). */
   private fitBar(): void {
     const bar = this.bar;
     bar.classList.remove('compact', 'stacked');
     const items = [...this.crumbs.querySelectorAll('button')];
     if (!items.length) return;
     const cut = () => items.some((b) => b.scrollWidth > b.clientWidth + 1);
-    const wrapped = items[items.length - 1].offsetTop > items[0].offsetTop + 2;
-    if (!cut() && !wrapped) return;
+    const wrapped = () => items[items.length - 1].offsetTop > items[0].offsetTop + 2;
+    if (!cut() && !wrapped()) return;
     bar.classList.add('compact');
-    if (cut()) bar.classList.add('stacked');
+    if (cut() || wrapped()) bar.classList.add('stacked');
   }
 
   /** Open `path` and highlight (and bring into view) the instance `name` inside it. */
