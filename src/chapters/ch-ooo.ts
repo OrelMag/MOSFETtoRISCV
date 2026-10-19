@@ -2,7 +2,9 @@ import { ageBit, iqEntry, RAT, SELECT8 } from '../lib/ooo';
 import { PAY } from '../lib/ooocore';
 import { PROGRAMS } from '../riscv/programs';
 import { cpuScene } from '../widgets/cpupanel';
-import { dataflowWidget, orderWidget, robWidget, scoreboardWidget, speculationWidget } from '../widgets/ooo';
+import { dataflowWidget, measuredWidget, orderWidget, robWidget, scoreboardWidget, speculationWidget } from '../widgets/ooo';
+import { cpuState } from '../riscv/cosim';
+import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
 
 // Every number in the prose comes from riscv/ooomodel.ts, riscv/ilp.ts and riscv/scoreboard.ts on the programs
@@ -52,6 +54,52 @@ loop:   div  t4, t3, t5       # 19 cycles: nothing younger commits before it
         sw   s0, 64(zero)     # 36
 halt:   j    halt`;
 
+const CRC_HEAD = `# CRC-32 (as zlib) of 4 words of xorshift32 at word 0; the CRC at word 4
+        li   t0, 0x2545f491   # seed
+        li   t1, 0
+        li   t2, 16           # 4 words
+gen:    slli t3, t0, 13      # xorshift32
+        xor  t0, t0, t3
+        srli t3, t0, 17
+        xor  t0, t0, t3
+        slli t3, t0, 5
+        xor  t0, t0, t3
+        sw   t0, 0(t1)
+        addi t1, t1, 4
+        bne  t1, t2, gen
+        li   a0, -1           # crc = 0xffffffff
+        li   a1, 0xedb88320   # the reflected polynomial
+        li   t1, 0
+word:   lw   t3, 0(t1)
+        xor  a0, a0, t3       # bytes enter least significant first
+        li   t4, 32
+`;
+const CRC_TAIL = `        addi t1, t1, 4
+        bne  t1, t2, word
+        not  a0, a0
+        sw   a0, 16(zero)
+halt:   j    halt`;
+/** The last step's program: CRC-32 of four words, one bit at a time, a branch on each bit. */
+export const CRC4_SOURCE = CRC_HEAD + `bit:    andi t5, a0, 1
+        srli a0, a0, 1
+        beqz t5, next         # taken half the time, at random
+        xor  a0, a0, a1
+next:   addi t4, t4, -1
+        bnez t4, bit
+` + CRC_TAIL;
+/** Its answer: the decision made data (0 or all ones, and the polynomial). */
+export const CRC4_BRANCHLESS = CRC_HEAD + `bit:    andi t5, a0, 1
+        srli a0, a0, 1
+        neg  t5, t5           # 0 or all ones
+        and  t5, t5, a1
+        xor  a0, a0, t5       # the polynomial or 0: no branch
+        addi t4, t4, -1
+        bnez t4, bit
+` + CRC_TAIL;
+/** CRC-32 of xorshift32's first four words from 0x2545f491 (benchprograms.ts crc32), and the challenge's cycle budget. */
+export const CRC4_VALUE = 0x32036c8a, CRC4_BUDGET = 700;
+const halted = (st: Stage) => !!st.sim && st.sim.getBits(st.sim.design.root.ports.halted ?? [])[0] === 1;
+
 /** The select step: entries from oldest to youngest (7 last: the 56-bit matrix stays an exact number), and the candidates. */
 export const SELECT_ORDER = [4, 1, 6, 0, 3, 2, 5, 7], SELECT_CAND = [6, 3, 5];
 const olderBits = (order: number[]) => order.reduce((m, i, a) => order.slice(a + 1).reduce((mm, j) => mm + 2 ** ageBit(i, j), m), 0);
@@ -73,6 +121,7 @@ export const chOoo: Chapter = {
       'In order, the first stalled instruction stops everything behind it. Reordering hides latency (the dot product, 2-wide: CPI 1.14 → 0.91 at load and multiply latency 2, 1.60 → 1.10 at 4) but adds no units: one divider still finishes one division at a time.',
       'RAW is a true dependence. WAR and WAW are clashes of names. The CDC 6600\'s scoreboard stalls on all three; renaming removes the last two.',
       'P6 style: an instruction\'s tag is its reorder-buffer entry. Dispatch renames in order, each port issues the oldest ready instruction, result buses wake the waiting ones, and commit leaves the head in order, so the register file always holds a precise state.',
+      'Measured on the gates, the out-of-order core has the lowest CPI (0.99) but not the shortest time: its clock is 93 NAND delays against the dual-issue pipeline\'s 80, so 92.3 delays an instruction against 83.1, for 1.85× the NANDs and 1.9× the energy. Wider and deeper helps less and less (Pollack\'s rule), and code without unpredictable branches helps every core.',
       'Speculation fills the window. Our core finds a misprediction when the branch executes and recovers when it commits. On fib a 4-entry return-address stack takes CPI from 1.29 to 0.99, recovering at execute would give 0.92, and perfect prediction 0.63: on these programs the front end limits more than the window.',
     ],
     check: [
@@ -342,6 +391,68 @@ export const chOoo: Chapter = {
         <p>Pick a program in the CPU panel and run it to the halt. Its ✓ says the golden model agreed after every commit;
         the Out of order panel's, that the model agreed every cycle.</p>`,
       scene: () => cpuScene({ source: PROGRAMS.find((p) => p.id === 'sort')!.source, ooo: true }),
+    },
+    {
+      title: 'Measured, all together',
+      body: `
+        <p>Four machines, the same four programs, every number from the gate-level CPUs' benchmark runs: the fastest
+        single-cycle CPU, the best RV32IM pipeline, the dual-issue pipeline and the out-of-order core. The time of an
+        instruction is the clock period times the CPI: NAND delays per instruction.</p>
+        <p>The out-of-order core has the lowest CPI, 0.99, but not the shortest time: its period is 93 NAND delays
+        against the dual-issue pipeline's 80 (wakeup and select in one cycle), so an instruction takes 92.3 delays against
+        83.1, and the pipeline 99.6. With the hardware multiply (matmul-m) it is ahead: 78 against 88. It costs 2.54× the
+        pipeline's NANDs and spends 133.6 pJ an instruction, 1.9× the dual-issue pipeline's.</p>
+        <p>Pollack's rule says a core's performance grows as the square root of its area: 2.54× the NANDs should buy
+        1.59×. Here it buys 1.08×. Our memory answers in one cycle; a real core's misses its caches for hundreds, and
+        hiding that is what large windows are for. The model shows the rest: at 2 wide the window stops paying at 16
+        entries (CPI 0.96 at 16, 32 and 64), 4 wide reaches 0.83 at 16 and 0.79 at 32, and 1 wide gains nothing from any
+        window (1.36). Each step costs more than the last, which is why chips since the mid-2000s spend their transistors on
+        more cores rather than wider ones: the next chapter.</p>`,
+      widget: measuredWidget,
+    },
+    {
+      title: 'Code that helps the hardware',
+      body: `
+        <p>crc spends its time on one branch: is the low bit 1? It goes either way at random, so no predictor learns it:
+        290 mispredictions in 3 049 instructions on our core, each paid when the branch reaches the head of the reorder
+        buffer. The cure is in the code. Make the decision data: <code>neg</code> turns the bit into 0 or all ones,
+        <code>and</code> with the polynomial picks it or 0, and the <code>xor</code> always runs. Two more instructions a
+        bit, and no branch.</p>
+        <p>On the benchmark that is 3 819 instructions instead of 3 049, but 2 330 cycles instead of 3 021: 21
+        mispredictions. The in-order dual-issue machine of step 3 gains as much (3 045 → 2 370 cycles): the win is in
+        prediction, not in reordering. Compilers do this where they can (if-conversion into a select, cmov on x86,
+        czero in RISC-V's Zicond).</p>
+        <p>The core runs the CRC of four words, a branch on every bit: 807 cycles. Edit the program in the CPU panel and
+        run it to the halt.</p>`,
+      scene: () => ({ ...cpuScene({ source: CRC4_SOURCE, ooo: true }), autoClock: false }),
+      challenge: {
+        kind: 'reach',
+        goal: `Rewrite the inner loop without its branch: the same CRC in a0 (0x${CRC4_VALUE.toString(16)}), halted in under ${CRC4_BUDGET} cycles.`,
+        // a0 at the halt (the register file is written at commit; the store to word 4 drains from the store queue after)
+        check: (st) => halted(st) && st.cycles < CRC4_BUDGET && !!st.sim && cpuState(st.sim).x[10] === CRC4_VALUE,
+        hints: [
+          'The branch only decides whether to xor the polynomial. Could the xor always run, with either the polynomial or 0?',
+          '<code>neg</code> of a bit that is 0 or 1 gives 0 or all ones (0xFFFFFFFF): a mask.',
+        ],
+        answer: `<pre>bit:    andi t5, a0, 1
+        srli a0, a0, 1
+        neg  t5, t5           # 0 or all ones
+        and  t5, t5, a1
+        xor  a0, a0, t5       # the polynomial or 0
+        addi t4, t4, -1
+        bnez t4, bit</pre><p>610 cycles: 963 instructions at CPI 0.63, 9 mispredictions instead of 81.</p>`,
+        solve: (st) => {
+          // a scene this large is built after a paint: clock it once it is on the stage, a few cycles a frame, to the halt
+          const sc = { ...cpuScene({ source: CRC4_BRANCHLESS, ooo: true }), autoClock: false };
+          st.load(sc);
+          const run = () => {
+            if (st.scene !== sc) return void setTimeout(run, 50);
+            st.runCycles(12, () => halted(st));
+            if (!halted(st) && st.cycles < 3 * CRC4_BUDGET) requestAnimationFrame(run);
+          };
+          run();
+        },
+      },
     },
   ],
 };

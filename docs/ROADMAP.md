@@ -241,7 +241,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Pipelined FPU: six-stage RV32IF pipeline (F D E M X W, in-order retirement), the FMA split over E / M / X as the FP pipe
   for fadd / fsub / fmul / fma / fcvt.s.w and (unrounded) fdiv / fsqrt, one shared rounder; FP interlocks + forwarding from W,
   CSR serialization, structural stalls for the iterative units; period 121 vs 313 (single-cycle), CPI 1.6–2.7, co-simulated
-- 🚧 Superscalar and out-of-order execution: Phase 17 (chapter 25)
+- ✅ Superscalar and out-of-order execution: Phase 17 (chapter 25)
 - Compressed instructions (C), A extension (LR/SC, AMO)
 - RV64I (and RV64M): the datapath generators are already parametric in width (alu(n), regfile(k, w), the adders and
   shifters), so a 64-bit single-cycle core is mostly the W-suffixed instructions, sign extension of 32-bit results and a
@@ -852,7 +852,7 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   model (riscv/rv16/simt16.ts: four Iss16 lanes over one memory), and the lane bench (campaign/lanecheck.ts: every
   lane's register writes and stores in order, four memory ports, 32 programs at once on BitSim)
 
-### Phase 17 — Out of order 🚧 (chapter 25)
+### Phase 17 — Out of order ✅ (chapter 25)
 More than one instruction per cycle, between floating point and many cores, so the journey runs from instruction-level to
 thread-level to data-level parallelism. Mockup approved 2026-10-19 (E:/mockups/ooo/ooo-mockup.html), every recommendation:
 chapter 25 (24–35 renumbered); two gate-level CPUs, `pipe-2w` (dual issue, in order) and `ooo` (2-wide out of order);
@@ -891,7 +891,15 @@ the pipelines' 1-cycle data memory; RV32IM without traps; a cycle-exact model th
   and picks checked every cycle; a row lights its units), also in the sandbox's CPU drawer; chapter 25's gate steps:
   the rename table, wakeup (one issue-queue entry), select (the age matrix and the wakeup-select loop that sets the
   clock), the reorder buffer, loads and stores (every load forwarded while a divide holds commit), the whole core
-- ⏳ 17d: measured (plan: E:/mockups/ooo/PLAN-17b-17d.md)
+- ✅ 17c-3 follow-up: the core drawn in three bands, labels between blocks (lib/placer.ts, shared with the warp core)
+- ✅ 17d: measured. "Measured, all together" (widgets/ooo.ts measuredWidget: the fastest single-cycle CPU, the best RV32IM
+  pipeline, pipe-2w and ooo from results.json; CPI 1.00 / 1.26 / 1.04 / 0.99, but 106 / 99.6 / 83.1 / 92.3 NAND delays an
+  instruction: the out-of-order core's period (93) costs it the lead except with the hardware multiply; 133.6 pJ an
+  instruction; Pollack: 2.54× the pipeline's NANDs for 1.08×; width × window on the model: 16 entries are the knee at
+  2 wide, 4 wide 0.79). "Code that helps the hardware": crc without its data-dependent branch (neg / and mask), 3 021 →
+  2 330 cycles, 290 → 21 mispredictions, as much on the in-order machine; a reach challenge on the gates (the CRC of
+  four words under 700 cycles: 807 → 610), with hints, Show answer and Do it for me. CI: long tests yield to the event
+  loop (tests/yieldtick.ts: vitest's 60 s RPC timeout had failed a deploy with every test passing)
 - ⏳ 17e: an out-of-order lab you configure (Phase 19; FREESS's strength). `OooModel` already takes any width, ROB,
   issue queue, store queue, latencies, predictor, BTB / RAS sizes, recovery point and in-order issue; what it lacks is
   ports decoupled from width and units per port (today port 0 takes memory, port 1 mul / div). Generalize the model

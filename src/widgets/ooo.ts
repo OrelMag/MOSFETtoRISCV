@@ -7,6 +7,7 @@ import { BENCHMARKS } from '../riscv/benchprograms';
 import { criticalPath, dataflow, LAT, latencyOf, traceOf, type Latencies, type TraceEntry } from '../riscv/ilp';
 import { ABI } from '../riscv/isa';
 import { OooModel, OOO_CORE, type OooConfig, type Uop } from '../riscv/ooomodel';
+import { geoMean, meanOf, RESULTS, runOf, type BenchCpu } from '../bench/summary';
 import { OOO_PROGRAMS, SCOREBOARD_SOURCE } from '../riscv/oooprograms';
 import { Scoreboard } from '../riscv/scoreboard';
 import { h, s } from '../ui/dom';
@@ -327,5 +328,59 @@ export function speculationWidget(): Widget {
     h('p', { class: 'sub' }, 'The same core, four front ends. Each run goes to the program\'s final jump; the golden model says where the program really went.'),
     out);
   update();
+  return { el, destroy: () => { token++; } };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Step: measured, all together. The gate-level CPUs' benchmark runs (bench/results.json), then width × window on the model.
+
+/** The four machines the chapter compares: the fastest single-cycle CPU, the best RV32IM pipeline, the two 2-wide cores. */
+export const MEASURED_CPUS = ['sc-ks', 'pipe-m-bal-bp', 'pipe-2w', 'ooo'];
+/** The model's grid: widths and reorder-buffer sizes (issue queue half the ROB, store queue a quarter, at least 4). */
+export const GRID_WIDTHS = [1, 2, 4], GRID_ROBS = [8, 16, 32, 64];
+export const GRID_PROGRAMS = ['fib', 'sort', 'matmul', 'matmul-m', 'crc'];
+export const gridConfig = (width: number, rob: number): Partial<OooConfig> => ({ width, rob, iq: Math.max(4, rob / 2), sq: Math.max(4, rob / 4) });
+
+export function measuredWidget(): Widget {
+  let token = 0;
+  const cpus = MEASURED_CPUS.map((id) => RESULTS.cpus.find((c) => c.id === id)!);
+  const base = cpus[1];
+  const row = (c: BenchCpu) => {
+    const cpi = meanOf(c, 'cpi'), d = cpi * c.period, mm = runOf(c, 'matmul-m');
+    return h('tr', { class: c.id === 'ooo' ? 'ours' : '' }, h('td', null, c.name), ...[
+      c.nands.toLocaleString('en').replace(/,/g, ' '), `${(c.nands / base.nands).toFixed(2)}×`, String(c.period), fix(cpi), d.toFixed(1),
+      mm ? ((mm.cycles / mm.instructions) * c.period).toFixed(0) : '–', meanOf(c, 'epi').toFixed(1),
+    ].map((v) => h('td', null, v)));
+  };
+  const table = h('div', { class: 'scroll' }, h('table', { class: 'data ooo-tab num' },
+    h('tr', null, ...['', 'NANDs', 'cost', 'period', 'CPI', 'delays / instr', 'with mul', 'pJ / instr'].map((t) => h('th', null, t))), ...cpus.map(row)));
+  const grid = h('div', null, h('p', { class: 'sub' }, 'Running…'));
+  const words = GRID_PROGRAMS.map((id) => oooProgram(id).words);
+  const fill = () => {
+    const my = ++token, cells = new Map<string, number>();
+    const jobs = GRID_WIDTHS.flatMap((w) => GRID_ROBS.map((r) => [w, r] as const));
+    let k = 0;
+    const next = () => {
+      if (my !== token) return;
+      if (k === jobs.length) {
+        grid.replaceChildren(h('div', { class: 'scroll' }, h('table', { class: 'data ooo-tab num' },
+          h('tr', null, h('th', null, 'CPI'), ...GRID_ROBS.map((r) => h('th', null, `window ${r}`))),
+          ...GRID_WIDTHS.map((w) => h('tr', { class: w === OOO_CORE.width ? 'ours' : '' }, h('td', null, `${w} wide`),
+            ...GRID_ROBS.map((r) => h('td', { class: w === OOO_CORE.width && r === OOO_CORE.rob ? 'now' : '' }, fix(cells.get(`${w}/${r}`)!))))))));
+        return;
+      }
+      const [w, r] = jobs[k++];
+      const cpis = words.map((ws) => { const s = new OooModel(ws, gridConfig(w, r), OPTS).run(200_000); return s.cycles / s.instructions; });
+      cells.set(`${w}/${r}`, geoMean(cpis));
+      setTimeout(next, 0);
+    };
+    setTimeout(next, 0);
+  };
+  const el = h('div', { class: 'widget ooo-widget' },
+    h('div', { class: 'cpu-sec' }, 'The gate-level CPUs', h('span', { class: 'cpu-sec-hint' }, 'fib, sort, matmul, crc: geometric means')), table,
+    h('p', { class: 'sub' }, 'Cost against the pipeline; a period and a delay in NAND delays (static timing); "with mul": matmul with the M extension\'s multiply, where a CPU has one; energy estimated from every net\'s toggles.'),
+    h('div', { class: 'cpu-sec' }, 'Width × window, on the model', h('span', { class: 'cpu-sec-hint' }, 'CPI, geometric mean of fib, sort, matmul, matmul-m, crc')), grid,
+    h('p', { class: 'sub' }, 'The model of the core, its width (fetch, dispatch, ports, commit) and its reorder buffer changed; the issue queue half the buffer. Our core is the highlighted cell.'));
+  fill();
   return { el, destroy: () => { token++; } };
 }

@@ -10,7 +10,11 @@ import { oooRun, type OooConfig } from '../src/riscv/ooomodel';
 import { OOO_PROGRAMS, SCOREBOARD_SOURCE } from '../src/riscv/oooprograms';
 import { Scoreboard } from '../src/riscv/scoreboard';
 import RESULTS from '../src/bench/results.json';
-import { DUAL_SOURCE, SELECT_ORDER, STORE_SOURCE } from '../src/chapters/ch-ooo';
+import { CRC4_BRANCHLESS, CRC4_BUDGET, CRC4_SOURCE, CRC4_VALUE, DUAL_SOURCE, SELECT_ORDER, STORE_SOURCE } from '../src/chapters/ch-ooo';
+import { geoMean, meanOf, runOf } from '../src/bench/summary';
+import { crc32, xorshift32 } from '../src/riscv/benchprograms';
+import { GRID_PROGRAMS, GRID_ROBS, gridConfig, MEASURED_CPUS } from '../src/widgets/ooo';
+import { tick } from './yieldtick';
 import { AGE8, iqEntry, issueQueue, RAT, RAT_ROW, reorderBuffer, SELECT8, STORE_QUEUE, TAG } from '../src/lib/ooo';
 import { oooCpu, PAY } from '../src/lib/ooocore';
 import { equal } from '../src/lib/combinational';
@@ -165,4 +169,58 @@ describe('chapter 25: the gate-level steps', () => {
     for (let t = 0; t < 4; t++) clockCycle(sim);
     expect(cpuState(sim).dmem[16]).toBe(36);
   }, 120_000);
+});
+
+describe('chapter 25: measured, and code that helps the hardware', () => {
+  const cpu = (id: string) => RESULTS.cpus.find((c) => c.id === id)!;
+  it('the four CPUs: CPI, delays per instruction, energy, Pollack', () => {
+    const row = (id: string) => { const c = cpu(id), m = meanOf(c, 'cpi'); return { cpi: m.toFixed(2), d: (m * c.period).toFixed(1), pj: meanOf(c, 'epi').toFixed(1) }; };
+    expect(MEASURED_CPUS.map(row)).toEqual([{ cpi: '1.00', d: '106.0', pj: '47.6' }, { cpi: '1.26', d: '99.6', pj: '66.6' }, { cpi: '1.04', d: '83.1', pj: '71.0' }, { cpi: '0.99', d: '92.3', pj: '133.6' }]);
+    const mm = (id: string) => { const r = runOf(cpu(id), 'matmul-m')!; return ((r.cycles / r.instructions) * cpu(id).period).toFixed(0); };
+    expect([mm('ooo'), mm('pipe-2w')]).toEqual(['78', '88']);
+    const area = cpu('ooo').nands / cpu('pipe-m-bal-bp').nands;
+    expect([area.toFixed(2), Math.sqrt(area).toFixed(2), (99.6 / 92.3).toFixed(2), (cpu('ooo').nands / cpu('pipe-2w').nands).toFixed(2), (133.6 / 71.0).toFixed(1)]).toEqual(['2.54', '1.59', '1.08', '1.85', '1.9']);
+    for (const v of ['0.99', 'against the dual-issue pipeline\'s 80', '92.3 delays against 83.1, and the pipeline 99.6', '78 against 88', '2.54×', '133.6 pJ', '1.59×', '1.08×', '1.85× the NANDs']) quoted(v);
+  });
+
+  it('width × window on the model', () => {
+    const grid = (w: number, r: number) => geoMean(GRID_PROGRAMS.map(words).map((ws) => { const s = oooRun(ws, gridConfig(w, r), OPTS); return s.cycles / s.instructions; })).toFixed(2);
+    expect([16, 32, 64].map((r) => grid(2, r))).toEqual(['0.96', '0.96', '0.96']);
+    expect([grid(4, 16), grid(4, 32)]).toEqual(['0.83', '0.79']);
+    expect(GRID_ROBS.map((r) => grid(1, r))).toEqual(['1.36', '1.36', '1.36', '1.36']);
+    for (const v of ['0.96 at 16, 32 and 64', '0.83 at 16 and 0.79 at 32', '(1.36)']) quoted(v);
+  });
+
+  it('crc without its branch, on the model', () => {
+    const crc = BENCHMARKS.find((b) => b.id === 'crc')!.source;
+    const free = crc.replace('        beqz t5, next\n        xor  a0, a0, a1\nnext:   addi t4, t4, -1', '        neg  t5, t5\n        and  t5, t5, a1\n        xor  a0, a0, t5\n        addi t4, t4, -1');
+    expect(free).not.toBe(crc);
+    const run = (src: string, cfg: Partial<OooConfig> = {}) => oooRun(assemble(src).words, cfg, OPTS);
+    const [a, b] = [run(crc), run(free)];
+    expect([a.instructions, a.cycles, a.mispredicts, b.instructions, b.cycles, b.mispredicts]).toEqual([3049, 3021, 290, 3819, 2330, 21]);
+    expect([run(crc, { inorder: true }).cycles, run(free, { inorder: true }).cycles]).toEqual([3045, 2370]);
+    for (const v of ['290 mispredictions in 3 049', '3 819 instructions instead of 3 049', '2 330 cycles instead of 3 021', '3 045 → 2 370']) quoted(v);
+  });
+
+  it('the challenge\'s CRC on the gates: 807 cycles with the branch, under the budget without', async () => {
+    const want = crc32(xorshift32(0x2545f491, 4));
+    expect(want).toBe(CRC4_VALUE);
+    const gates = async (src: string) => {
+      const design = flatten(oooCpu(assemble(src).words, { imemK: 6, dmemK: 6 })), sim = new GateSim(design);
+      sim.setInput('clk', 0); sim.settle();
+      let t = 0;
+      for (; t < 3000 && sim.getBits(design.root.ports.halted)[0] !== 1; t++) { clockCycle(sim); if (t % 200 === 0) await tick(); }
+      const a0 = cpuState(sim).x[10];
+      for (let k = 0; k < 4; k++) clockCycle(sim); // the store drains from the store queue
+      return { cycles: t, a0, crc: cpuState(sim).dmem[4] };
+    };
+    const m = (src: string) => oooRun(assemble(src).words, {}, { dmemWords: 64, imemWords: 64 });
+    expect([m(CRC4_SOURCE).cycles, m(CRC4_SOURCE).instructions, m(CRC4_SOURCE).mispredicts]).toEqual([807, 769, 81]);
+    expect([m(CRC4_BRANCHLESS).cycles, m(CRC4_BRANCHLESS).instructions, m(CRC4_BRANCHLESS).mispredicts]).toEqual([610, 963, 9]);
+    const [a, b] = [await gates(CRC4_SOURCE), await gates(CRC4_BRANCHLESS)];
+    expect([a.a0, b.a0, a.crc, b.crc]).toEqual([want, want, want, want]);
+    expect(a.cycles).toBeGreaterThanOrEqual(CRC4_BUDGET);
+    expect(b.cycles).toBeLessThan(CRC4_BUDGET);
+    quoted('807 cycles');
+  }, 300_000);
 });
