@@ -257,6 +257,16 @@ export function grabOn(poly: Vec[], p: Vec, tol: number): Exclude<WireGrab, { be
   return { seg, at: snapPt(p) };
 }
 
+/**
+ * Output pins no wire reaches yet. Their net is undriven, so the simulation reads X there; drawn in the X colour
+ * a fresh Output looked like an error before it was even wired, so the view shows these neutral ("not connected").
+ */
+export function openOutputs(doc: ChipDoc): Set<string> {
+  const outs = new Set(doc.pins.filter((p) => p.dir === 'out').map((p) => p.id));
+  for (const w of doc.wires) for (const e of [w.a, w.b]) if ('pin' in e) outs.delete(e.pin);
+  return outs;
+}
+
 /** A part output or a chip input: two of these on one wire are always a short at gate level. */
 export function drives(doc: ChipDoc, e: EndRef, defOf: DefOf): boolean {
   if ('part' in e) {

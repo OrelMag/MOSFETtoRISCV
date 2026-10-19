@@ -7,7 +7,7 @@ import '../src/lib';
 import { resolveComponent } from '../src/lib/resolve';
 import { compileChip } from '../src/editor/compile';
 import {
-  branchPoint, drives, elbow, hitTest, knobPortSide, nextSameName, onPinKnob, partAnchor, pointerGeom, portHandles, snapPt, wireGroups, WireDraft,
+  branchPoint, drives, elbow, hitTest, knobPortSide, nextSameName, onPinKnob, openOutputs, partAnchor, pointerGeom, portHandles, snapPt, wireGroups, WireDraft,
 } from '../src/editor/geom';
 import { emptyWorkspace, type ChipDoc, type DefOf, type PartRef } from '../src/editor/model';
 import { addPart, addPin, addWire, moveSel } from '../src/editor/ops';
@@ -106,6 +106,12 @@ describe('hit testing', () => {
   it('port handles: the attach points of the given parts and pins', () => {
     expect(portHandles(doc, defOf, ['x'], ['s']).sort()).toEqual([[12, 3], [20, 3], [8, 2], [8, 4]].sort());
     expect(portHandles(doc, defOf, [], [])).toEqual([]);
+  });
+
+  it('open outputs: output pins no wire reaches (drawn neutral, not in the X colour)', () => {
+    expect([...openOutputs(doc)]).toEqual([]);
+    const d = chip('u_o', 'O', { pins: [pin('i', 'in', [0, 0]), pin('o', 'out', [10, 0]), pin('q', 'out', [10, 4])], wires: [wire('w1', 'pin:i', 'pin:o')] });
+    expect([...openOutputs(d)]).toEqual(['q']);
   });
 
   it('pointers: the attach point is a port, the flag selects', () => {

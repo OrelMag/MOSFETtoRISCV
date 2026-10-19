@@ -19,7 +19,7 @@ import { bitClass, busClass } from '../view/schematic';
 import { drawPinGlyph, drawSymbol, instNameAt, type PinGlyph, placePinValue } from '../view/symbols';
 import type { Compiled, Diag } from './compile';
 import { type WireFlow, wireFlows } from './flowdir';
-import { partBox, pinBody, pinKnob, pointerGeom, portHandles, wireGroups } from './geom';
+import { openOutputs, partBox, pinBody, pinKnob, pointerGeom, portHandles, wireGroups } from './geom';
 import { HopCache } from './hops';
 import {
   type ChipDoc, COMMENT_LINE, type CommentDoc, commentBox, type DefOf, defaultFace, type LabelDoc, type PartDoc, type PinDoc, pinBig, polyline, type WireDoc,
@@ -648,10 +648,12 @@ export class EditorView {
         d.el.setAttribute('class', vc);
       }
     }
+    const open = this.doc ? openOutputs(this.doc) : new Set<string>();
     for (const e of this.pins.values()) {
       const p = e.doc;
-      const bits = v?.pinBits(p.name) ?? null;
-      const base = `pin ${p.dir === 'in' ? 'pin-in clickable' : p.dir === 'inout' ? 'pin-in clickable ed-pin-io' : 'pin-out'} ed-pin${p.kind && p.dir === 'in' && p.kind !== 'toggle' ? ` ed-pin-${p.kind}` : ''}`;
+      // An output no wire reaches yet: neutral, not the X colour (openOutputs).
+      const bits = open.has(p.id) ? null : v?.pinBits(p.name) ?? null;
+      const base = `pin ${p.dir === 'in' ? 'pin-in clickable' : p.dir === 'inout' ? 'pin-in clickable ed-pin-io' : 'pin-out'} ed-pin${p.kind && p.dir === 'in' && p.kind !== 'toggle' ? ` ed-pin-${p.kind}` : ''}${open.has(p.id) ? ' ed-open' : ''}`;
       const vc = bits ? (p.width === 1 ? bitClass(bits[0]) : busClass(bits)) : p.width === 1 ? '' : 'bus';
       const cls = `${base} ${vc}${e.cls}`;
       if (e.g.getAttribute('class') !== cls) {
