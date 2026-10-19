@@ -224,7 +224,18 @@ src/lib/       the component library (registered in `registry` via define())
                  single pipeline's instance names (ctl, byA, clr0, …), lane 1 adds a 1 (FD1, DE1, alu1, …); retire = the
                  count, pcW0 the oldest; tests/pipe2w.test.ts (lock step), verify-wide.test.ts
   ras.ts         the return-address stack: ras(n, w) (speculative + committed copies of {valid, address} entries,
-                 restore from the committed copy's next state; the model's rules: rasNext), rasStack(n, w)
+                 restore from the committed copy's next state; the model's rules: rasNext), rasStack(n, w); ras2(n, w) (two
+                 operations a cycle per copy, in order: rasOp chained; top1 / any1 after slot 0's: the out-of-order core's)
+  ooo.ts         chapter 24's out-of-order core's units, each following riscv/ooomodel.ts's rules (tests/ooounits.test.ts
+                 checks them against the model's data structures, cycle by cycle): btbCommit (looked up for both fetch slots,
+                 trained at commit by up to two in order, BTB_TRAIN: the model's rules, not the pipelines'), issueQueue(P)
+                 (iqEntry: operands ready or tagged, woken by either result bus and passed on the same cycle, a load's store
+                 mask; AGE8 / SELECT8: per port the oldest candidate whose result bus is free; lowest free entries), RAT
+                 (RAT_ROW recognizes its own register; slot 1 sees slot 0's destination; unmap at commit only if still named),
+                 reorderBuffer(D, V) (head + count, two allocations / bus writes / commits, operands by tag), STORE_QUEUE
+                 (forwarding from the youngest older store to the word: before the tail the load saw), dataMemory2(k) (a read
+                 and a write address). Rows on shared wires (rowArray): the sandbox round trip of a block drawn with hundreds
+                 of labels takes minutes
   lsu.ts         STORE_ALIGN, LOAD_EXTRACT, bankedMemory(k) (byte / halfword access)
   system.ts      SYS_DECODE (illegal-instruction detection), CSR_UNIT, TRAP_UNIT, IO_UNIT,
                  systemCpu(program, { m }): the complete RV32I(M) + Zicsr + M-mode traps / interrupts + MMIO;
