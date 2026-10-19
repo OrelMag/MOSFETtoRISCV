@@ -67,7 +67,8 @@ into dist/layout/ (widgets/chiplayout.ts).
 
 - Vite + TypeScript (strict, `verbatimModuleSyntax`: use `import type` for types). No UI
   framework: plain DOM + SVG with small helpers in `src/ui/dom.ts`. Keep the bundle small.
-- Hash routing (`#/c/<chapter>/<step>`, `#/workbench/<componentId>`, `#/workbench/stats`, `#/workbench/bench`, `#/sandbox/<chipId>`, `#/campaign[/n/<node> | /play/<node> | /intro | /codex[/<id>]]`,
+- Hash routing (`#/c/<chapter>/<step>[/<inst>…]`, `#/workbench/<componentId>[/<inst>…]` — the optional segments are the
+  part opened on the stage, one history entry per level, `~` for the top when the scene opens deeper (ui/drillpath.ts) — `#/workbench/stats`, `#/workbench/bench`, `#/sandbox/<chipId>`, `#/campaign[/n/<node> | /play/<node> | /intro | /codex[/<id>]]`,
   `#/sandbox/s/<payload>` for a share link) so the site works on
   any static host or sub-path.
 - Theme: CSS custom properties in `src/styles/`; `data-theme="light|dark"` on `<html>`, or
