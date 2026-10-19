@@ -13,6 +13,9 @@ import { isOooCore, oooSnap, type OooSnap } from '../src/riscv/ooosnap';
 import { randomProgram32 } from '../src/riscv/randprog32';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
+import { emptyWorkspace } from '../src/editor/model';
+import { remixDef } from '../src/editor/remix';
+import { UserLibrary } from '../src/editor/library';
 
 /** The model's state after cycle t, in the snapshot's shape; wrong: the reorder-buffer tags on a wrong path. */
 function modelSnap(m: OooModel): OooSnap & { wrong: Set<number> } {
@@ -67,9 +70,28 @@ function check(source: string, { imemK = 6, dmemK = 6, max = 4000 } = {}): numbe
 }
 
 describe('the out-of-order core read from its gates equals the model', () => {
-  it('chapter 24\'s dot product', () => { check(DUAL_SOURCE); }, 600_000);
+  it('chapter 25\'s dot product', () => { check(DUAL_SOURCE); }, 600_000);
   it('fib (calls, returns, mispredictions)', () => { check(BENCHMARKS.find((b) => b.id === 'fib')!.source, { imemK: 7, dmemK: 7, max: 8000 }); }, 600_000);
   it('random programs (divides, loads behind stores, flushes)', () => {
     for (const seed of [3, 7, 11]) check(randomProgram32(seed, { m: true, dmemWords: 32 }), { imemK: 7, dmemK: 5 });
+  }, 600_000);
+});
+
+describe('the out-of-order core opened in the sandbox', () => {
+  it('is recognized, and reads the same as the library core every cycle', () => {
+    const words = assemble(DUAL_SOURCE).words, def = oooCpu(words, { imemK: 6, dmemK: 6 });
+    const r = remixDef(emptyWorkspace(), def);
+    if ('error' in r) throw new Error(r.error);
+    const sims = [def, new UserLibrary(r.ws).defOf(r.id)!].map((d) => {
+      const design = flatten(d), sim = new GateSim(design);
+      sim.setInput('clk', 0);
+      sim.settle();
+      return { sim, root: design.root };
+    });
+    expect(sims.map((x) => isOooCore(x.root))).toEqual([true, true]);
+    for (let t = 0; t < 80; t++) {
+      expect(oooSnap(sims[1].sim, sims[1].root), `cycle ${t}`).toEqual(oooSnap(sims[0].sim, sims[0].root));
+      for (const x of sims) clockCycle(x.sim);
+    }
   }, 600_000);
 });

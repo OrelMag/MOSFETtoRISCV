@@ -883,8 +883,12 @@ the pipelines' 1-cycle data memory; RV32IM without traps; a cycle-exact model th
   tests, fuzzing and coverage events. 359 262 NANDs (pipe-2w 193 768), period 93 NAND delays (wakeup → select → operand;
   port binding was 135 until its comparisons moved before the picks), CPI fib 0.99, sort 0.77, matmul 1.28, matmul-m
   0.84, crc 0.99. Random programs found a flushed divide still running inside the divider: a flush now aborts it
-- ⏳ 17c-3: its panel and the chapter's gate steps; 17d: measured (plan:
-  E:/mockups/ooo/PLAN-17b-17d.md)
+- ✅ 17c-3: the Out of order panel (widgets/ooopanel.ts: the reorder buffer, issue queue, rename table and store queue
+  read from the gates by riscv/ooosnap.ts, equal to the model every cycle; the model's timeline beside them, its commits
+  and picks checked every cycle; a row lights its units), also in the sandbox's CPU drawer; chapter 25's gate steps:
+  the rename table, wakeup (one issue-queue entry), select (the age matrix and the wakeup-select loop that sets the
+  clock), the reorder buffer, loads and stores (every load forwarded while a divide holds commit), the whole core
+- ⏳ 17d: measured (plan: E:/mockups/ooo/PLAN-17b-17d.md)
 
 ### Phase 16 — Journey and campaign track: Memory ✅
 Memory in depth, past today's arrays (chapter 10), cells and caches (Phase 8): how a DRAM chip really answers, what

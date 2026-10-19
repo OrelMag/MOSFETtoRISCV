@@ -494,6 +494,8 @@ const quote = (s: string) => JSON.stringify(s.length > 24 ? `…${s.slice(-24)}`
  */
 export class CpuMonitor {
   iss: ISS | null = null;
+  /** The options the ISS was made with (its memory sizes: the out-of-order view's model takes the same). */
+  issOpts: IssOptions | null = null;
   desc: CpuDesc | null = null;
   mismatch: Mismatch | null = null;
   /** The ISS started with the hardware (cycle 0). */
@@ -587,6 +589,7 @@ export class CpuMonitor {
     const { dmemWords: _n, ...rest } = d.iss;
     const opts: IssOptions = { ...rest, imemWords: 2 ** prog.k, dmemWords: 2 ** Math.round(Math.log2(Math.max(1, n))) };
     this.iss = new ISS(prog.words, opts);
+    this.issOpts = opts;
   }
 
   /** Can the golden model check this CPU (a program, registers to compare, in step since cycle 0)? */

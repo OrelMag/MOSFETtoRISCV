@@ -5,13 +5,24 @@ import { disasm } from '../src/riscv/isa';
 import { SIMT_PROGRAMS } from '../src/riscv/simtprograms';
 import { WARP_DMEM_K, WARP_PROGRAMS, WARP_SMEM_K } from '../src/riscv/warpprograms';
 import { netlistOf } from '../src/sim/types';
-import { instrUse, laneUse, STAGE_UNITS } from '../src/widgets/insthw';
+import { instrUse, laneUse, oooUse, STAGE_UNITS } from '../src/widgets/insthw';
+import { oooCpu } from '../src/lib/ooocore';
 
 // The program-listing highlight names top-level instances: keep the tables in step with the CPUs.
 const names = (d: ReturnType<typeof singleCycleCpu>) => new Set(netlistOf(d)!.instances.map((i) => i.name));
 const prog = assemble('addi t0, zero, 1\nadd t1, t0, t0\nlw t2, 0(zero)\nsw t2, 4(zero)\nbeq t0, t1, 0\njal ra, 4\njalr zero, 0(ra)\nlui a0, 1\nauipc a1, 0').words;
 
 describe('instruction → hardware map', () => {
+  it('the out-of-order core: every unit named exists, on either port', () => {
+    const have = names(oooCpu(prog));
+    const ops = [...prog, ...assemble('mul t0, t1, t2\ndiv t0, t1, t2').words];
+    for (const w of ops) for (const port of [-1, 0, 1]) {
+      const units = oooUse(w, port).units;
+      expect(units.filter((u) => !have.has(u)), `${disasm(w, 0)} on port ${port}`).toEqual([]);
+      expect(units).toContain('rob');
+    }
+  });
+
   it('every pipeline stage unit exists in the pipelined CPU', () => {
     // the M units exist only in the RV32IM variant
     const have = new Set([...names(pipelinedCpu(prog, {})), ...names(pipelinedCpu(prog, { adder: 'ks', m: true }))]);

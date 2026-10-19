@@ -70,10 +70,13 @@ function fields(sim: Reader, nets: number[], widths: readonly number[]): number[
 const word = (sim: Reader, nets: number[]) => fields(sim, nets, [nets.length])[0];
 const pos = (layout: [string, number][], name: string) => layout.findIndex(([f]) => f === name);
 
-/** Is `root` the out-of-order core (a reorder buffer and an issue queue at its top)? */
+/**
+ * Is `root` the out-of-order core (a reorder buffer and an issue queue at its top)? Opened in the sandbox, those two
+ * are user chips made from the library's (u_rob16…, u_iq8…), with the same instances inside.
+ */
 export function isOooCore(root: HierNode): boolean {
   const k = root.children;
-  return !!k?.get('rob')?.def.id.startsWith('rob16') && !!k.get('iq')?.def.id.startsWith('iq8');
+  return /^(u_)?rob16_/.test(k?.get('rob')?.def.id ?? '') && /^(u_)?iq8_/.test(k?.get('iq')?.def.id ?? '');
 }
 
 export function oooSnap(sim: Reader, root: HierNode): OooSnap {
