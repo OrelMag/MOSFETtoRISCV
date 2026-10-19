@@ -88,8 +88,9 @@ export const chSilicon: Chapter = {
     keep: [
       'A transistor is where a strip of polysilicon crosses diffusion. A standard cell sits between a VDD rail on top and a GND rail below, PMOS in the n-well above, NMOS beneath. NAND2 puts its NMOS in series and its PMOS in parallel, NOR2 the mirror image.',
       'Synthesis ends in technology mapping onto a library of hundreds of cells; placement (simulated annealing) minimizes wire length; routing (Lee\'s maze router, two metal layers and vias) connects every net. A good placement also leaves room to route.',
-      'Unbuffered wire delay grows with the square of the length. After routing, static timing is redone with the real parasitics, and clock skew is subtracted from the period.',
-      'Our dual-core\'s logic is about 0.73 mm on a side in SkyWater 130 nm and 0.2 mm at 28 nm, where the bond pads set the die size. Its exported Verilog, and the RV32IM system core\'s, go through Yosys and OpenROAD to a GDS, each synthesized netlist checked cycle by cycle against this site\'s simulation; beside our NAND counts and unit delays, the flow shows how far those estimates are from real cells.',
+      'Unbuffered wire delay grows with the square of the length. After routing, static timing is redone with the real parasitics. Skew shifts both checks: a late capture clock helps setup but can break hold, which no slower clock fixes; the tools add buffers to the short paths.',
+      'Power: ½ C V² per toggle (the clock tree a large share, cut by clock gating), plus leakage through transistors that are off, delivered through a power grid whose IR drop is checked like timing.',
+      'Our dual-core\'s logic is about 0.73 mm on a side in SkyWater 130 nm and 0.2 mm at 28 nm, where the bond pads set the die size. Its exported Verilog, and the RV32IM system core\'s, go through Yosys, OpenROAD and KLayout to a GDS, each synthesized netlist checked cycle by cycle against this site\'s simulation; beside our NAND counts and unit delays, the flow shows how far those estimates are from real cells.',
       'Yield falls as e<sup>−A·D₀</sup>: at 0.1 defects/cm², 90 % for 100 mm² and 67 % for 400 mm², so the big die costs about 5.4 times as much per good die.',
     ],
     practise: [],
@@ -176,7 +177,26 @@ export const chSilicon: Chapter = {
         <p>On a modern chip, wires and not transistors dominate delay and power. A long wire has resistance and capacitance proportional to its length, so its delay
         grows with the square of the length unless buffers are inserted. The static timing analysis of <a href="#/c/fastadd/0">chapter 15</a> counted NAND delays only. After routing, the tools
         repeat it with the real wire parasitics and fix the violations (timing closure).</p>
-        <p>The most important wire is the clock: it must reach every flip-flop at the same moment. Any difference (skew) has to be subtracted from the clock period.</p>`,
+        <p>The most important wire is the clock: it should reach every flip-flop at the same moment. A flip-flop needs its input steady from a
+        <strong>setup</strong> time before the capturing edge to a <strong>hold</strong> time after it, and the difference in clock arrival (skew) shifts
+        both checks. Setup bounds the slowest path: clock-to-q + logic + setup ≤ period + skew, skew being how much later the capturing flip-flop's clock
+        arrives than the launching one's. A capture clock that arrives early costs setup margin, and a slower clock pays it back. Hold bounds the fastest
+        path: clock-to-q + the shortest logic ≥ hold + skew. A capture clock that arrives <em>late</em> gives the slow paths time but lets new data race
+        down a short path and overwrite the old value before the late edge samples it: a <strong>hold violation</strong>, and no slower clock fixes it,
+        since the period is not in the inequality. The tools build the clock tree to keep skew small, then pad the short paths with buffers (hold
+        fixing). Our own static timing assumes an ideal clock and checks the setup side only; the flow in "The real thing" repairs and checks both
+        on its routed clock tree.</p>
+        <details class="deeper"><summary>Deeper: power</summary>
+        <p>Every net that switches charges or discharges its capacitance: ½ C V² per toggle, glitches included. That is what the inspector's Power
+        section measures, with C estimated from each net's fan-out. Summed, dynamic power is α C V² f, α the fraction of nets toggling per cycle. Wires
+        carry much of C, and the clock toggles twice every cycle into every flip-flop, so the clock tree alone often takes a third of a chip's dynamic
+        power. <strong>Clock gating</strong> is the cheapest cure: an enable, latched so that it cannot glitch, stops the clock of a register that is
+        not being written; synthesis inserts it from enables such as the register file's write enables.</p>
+        <p><strong>Leakage</strong> is the other part: an off transistor still conducts a little, a current that grows about tenfold for every 60 to
+        100 mV less threshold voltage. It flows whether the logic switches or not (the reason Dennard scaling ended, <a href="#/c/multicore/0">chapter 24</a>),
+        and is fought with high-threshold cells off the critical path and power gating, switching an idle block's supply off. The current arrives through a
+        <strong>power grid</strong>: wide straps on the top metal layers down to each cell row's VDD and GND rails. Its resistance drops the supply (IR drop)
+        and slows the cells far from the pads, so the grid is sized and checked like the timing.</p></details>`,
       widget: clockTreeWidget,
     },
     {
@@ -194,7 +214,8 @@ export const chSilicon: Chapter = {
       body: `
         <p>The same dual-core, exported as Verilog by this site (each core's program ROM becomes an instruction port, as a memory macro would be), and pushed
         through the real open-source flow for SkyWater's 130 nm process: <strong>Yosys</strong> synthesizes it to the sky130 standard-cell library, and
-        <strong>OpenROAD</strong> floorplans, places, builds the clock tree, routes and checks it, producing a GDS file a foundry could manufacture.</p>
+        <strong>OpenROAD</strong> floorplans, places, builds the clock tree, routes and checks it, and <strong>KLayout</strong> merges the cells' layouts
+        into the final GDS file, the format a foundry manufactures from (the steps run by OpenROAD-flow-scripts).</p>
         <p>Before the flow ran, the exported Verilog was checked: Yosys's synthesized gate netlist, simulated cycle by cycle, matches this site's own gate-level
         simulation on all four multi-core programs. Colour the cells by block to find the two cores, the shared memory and the arbiter; zoom in until the routing shows.</p>
         <p>The second design is the system CPU of <a href="#/c/traps/0">chapter 19</a> with the M extension: RV32IM, the CSRs, traps and interrupts, its two memories
@@ -225,7 +246,10 @@ export const chSilicon: Chapter = {
         multiplication, caches, microcode, floating point, two cores, and geometry on a wafer. Every value on every wire along the way was computed, not drawn, and every box can still be opened all the way down to
         the four transistors of a NAND.</p>
         <p>The journey goes on with the same bricks arranged for throughput: <a href="#/c/lanes/0">chapters 26–31</a> build a GPU, from lanes sharing
-        one instruction stream to a rasterizer drawing into a frame buffer.</p>
+        one instruction stream to a rasterizer drawing into a frame buffer. <a href="#/c/dram/0">Chapters 32–35</a> go below the caches: a DRAM
+        cell by cell, its controller, flash, and a bus with DMA that boots a computer from flash. The appendices rebuild a real chip, the
+        <a href="#/c/appendix-6502/0">6502</a>, in NMOS transistors, and run <a href="#/c/appendix-doom/0">Doom</a> on the RV32IM system, a window of it
+        on the gates.</p>
         <p>Or go further on your own: build it for real on an FPGA from the Verilog tabs; read Harris &amp; Harris, Patterson &amp; Hennessy, or Weste &amp; Harris for CMOS VLSI; or tape out
         a design on an open-source shuttle.</p>`,
       widget: journeyWidget,

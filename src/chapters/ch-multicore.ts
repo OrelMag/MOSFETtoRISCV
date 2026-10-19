@@ -29,11 +29,12 @@ export const chMulticore: Chapter = {
   builds: ['cpu', 'cache'],
   recap: {
     keep: [
-      'Dynamic power is C·V²·f. Since about 2005 the supply voltage no longer falls with each generation, so clocks stay near 3 to 5 GHz and the extra transistors become extra cores.',
+      'Dynamic power is C·V²·f. Since about 2005 the supply voltage no longer falls with each generation, so clocks stay near 3 to 5 GHz and the extra transistors become extra cores. Amdahl: with a fraction p parallel, n cores give 1 / ((1 − p) + p / n), never more than 1 / (1 − p).',
       'Two copies of the single-cycle core share one single-port memory. A round-robin arbiter grants it to one core per cycle; the loser holds its PC and register write and tries again.',
       'Every access is atomic; a load–add–store sequence is not: two cores adding 1 twenty times each end at 20, not 40. <code>amoadd.w</code> reads, adds and writes in one arbitrated access: 40, every time.',
       'An <code>amoswap.w</code> spin lock makes any critical section safe, at a price: over four times the run time of the atomic add, the cores fighting for the port while they spin.',
       'Private caches stay coherent by write-invalidate snooping, per line. MESI\'s Exclusive state makes private data free; two variables on one line ping-pong between caches (false sharing).',
+      'Real cores reorder (RVWMO): with store buffers both cores of the store-buffering test can read 0. A lock is taken with acquire (<code>amoswap.w.aq</code>) and freed with release (<code>.rl</code> or <code>fence rw,w</code>). LR/SC builds any other atomic as a retry loop; this site\'s cores have the two AMOs only.',
     ],
     practise: ['m_bus'],
     check: [
@@ -62,6 +63,13 @@ export const chMulticore: Chapter = {
         explain: 'Both protocols fetch the block on the read miss. MSI leaves it Shared, so the write must broadcast an upgrade; MESI leaves it Exclusive, and the write moves it to Modified silently.',
         why: ['', 'Under MSI the read leaves the block Shared, so the write must broadcast an invalidation first.', 'MESI\'s Exclusive state exists for exactly this case: E to M needs no bus.', 'The read miss still fetches the block over the bus, in either protocol.'],
       },
+      {
+        question: 'A program spends 90 % of its time in work that parallelizes perfectly. What speed-up do 8 cores give, and what is the most any number of cores can give?',
+        options: ['About 4.7×, at most 10×', '7.2×, at most 9×', '8×, with no limit', 'About 4.7×, with no limit'],
+        answer: 0,
+        explain: 'Amdahl: 1 / ((1 − p) + p / n) = 1 / (0.1 + 0.9 / 8) = 1 / 0.2125 ≈ 4.7. As n grows, p / n vanishes and the serial 10 % remains: 1 / 0.1 = 10×.',
+        why: ['', '7.2 is 0.9 × 8: it drops the serial tenth, which runs at one core\'s speed whatever n is. And the ceiling is 1 / 0.1 = 10, not 9.', 'Only the parallel 90 % shrinks with more cores; the serial 10 % takes as long as ever.', 'The serial 10 % never shrinks: even with infinitely many cores the run takes a tenth of the original time, so 10× is the ceiling.'],
+      },
     ],
   },
   steps: [
@@ -72,12 +80,16 @@ export const chMulticore: Chapter = {
         Clock rates climbed. Around 2005 the voltage stopped falling, because leakage current grows as the threshold voltage drops. Dynamic power is
         C·V²·f, so faster clocks now meant hotter chips. Frequencies have stayed near 3 to 5 GHz ever since.</p>
         <p>Moore's law kept delivering transistors, though, and the way to use them without raising the clock is <strong>more cores</strong>. Software
-        then has to be parallel, and correct in parallel, which is what this chapter is about.</p>`,
+        then has to be parallel, and correct in parallel, which is what this chapter is about.</p>
+        <p>Cores speed up only the part of the work that runs in parallel. With a fraction p of it parallel, n cores give a speed-up of
+        1 / ((1 − p) + p / n) (<strong>Amdahl's law</strong>): at p = 90 %, 8 cores give 1 / (0.1 + 0.1125) = 4.7×, and no number of cores beats
+        1 / (1 − p) = 10×. The serial tenth, plus the time the cores spend waiting for each other (the lock below), sets the ceiling. What saves
+        many-core machines is that bigger problems usually grow the parallel part, not the serial one (Gustafson).</p>`,
       challenge: {
-        kind: 'quiz', question: 'A core runs at 4 GHz and 1.0 V. Two cores at 2.8 GHz and 0.8 V do the same work in parallel. Relative dynamic power?',
+        kind: 'quiz', question: 'A core runs at 4 GHz and 1.0 V. Two cores at 2.8 GHz and 0.8 V split the same work between them. Relative dynamic power?',
         options: ['Twice as much', 'About the same', 'About 0.9×', 'About half'], answer: 2,
         why: ['That counts the cores and forgets that V² and f both fell: each core runs at 0.64 × 0.7 of the power.', 'Close, but 3.58 against 4 is a real saving: the voltage pays quadratically.', '', 'Each slower core uses 0.64 × 0.7 ≈ 0.45 of the power, and there are two of them: 0.9×, not 0.5×.'],
-        explain: 'P ∝ cores × V² × f: 2 × 0.64 × 2.8 = 3.58 versus 1 × 1 × 4 = 4, so about 0.9× the power for 1.4× the throughput (if the work parallelizes). Lower voltage pays quadratically.',
+        explain: 'P ∝ cores × V² × f: 2 × 0.64 × 2.8 = 3.58 versus 1 × 1 × 4 = 4, so about 0.9× the power for 1.4× the throughput (if the work parallelizes). The energy per task falls further, to 0.64× (V²: the same switching at 0.8 V): lower voltage pays quadratically.',
       },
     },
     {
@@ -124,8 +136,22 @@ export const chMulticore: Chapter = {
         Nothing can come in between, because <span data-show="arb">the arbiter</span> grants the port for that one access. In the core, the atomic looks like a load to the control unit (it writes rd),
         <span data-show="core0.amux">its address is rs1 itself</span>, and <span data-show="core0.amoadd">a dedicated adder</span> computes old + rs2 for the write.</p>
         <p>Doing the read, the add and the write in one cycle, serialized by the one port's arbiter, is a deliberate simplification. In a real system with caches,
-        the core gets the cache line exclusively and holds it for the duration of the operation: the same idea, with coherence doing the arbitration. RISC-V also has
-        <code>lr.w</code> / <code>sc.w</code>, a reservation on the word that makes the store fail if another core wrote it in between; our cores do not implement them.</p>`,
+        the core gets the cache line exclusively and holds it for the duration of the operation: the same idea, with coherence doing the arbitration.</p>
+        <details class="deeper"><summary>Deeper: LR/SC, the other half of the A extension</summary>
+        <p><code>lr.w rd, (rs1)</code> loads a word and places a <em>reservation</em> on it (in practice on its cache line). <code>sc.w rd, rs2, (rs1)</code>
+        stores rs2 only if the reservation still holds, and writes rd = 0 on success, non-zero on failure. Another hart's store to the reserved bytes breaks
+        the reservation, and an implementation may fail an sc for other reasons too, so software always loops. Any read-modify-write that no AMO
+        provides becomes atomic, compare-and-swap for instance:</p>
+        <pre class="code">cas: lr.w  t0, (a0)       # a0: address, a1: expected, a2: new
+     bne   t0, a1, fail   # someone else's value: give up
+     sc.w  t1, a2, (a0)
+     bnez  t1, cas        # reservation lost: try again</pre>
+        <p>Retry loops can livelock, two harts breaking each other's reservations forever. RISC-V promises eventual success only to a
+        <em>constrained</em> loop: at most 16 instructions, and between lr and sc only base integer instructions, with no loads, stores, backward
+        jumps or taken backward branches, fences or system instructions. An AMO needs no loop: the memory (or the cache that owns the line) does the
+        whole operation as one request, so it always completes and stays cheap under contention, where LR/SC retries pile up. LR/SC covers the
+        rest. The cores on this site implement two AMOs, <code>amoadd.w</code> and <code>amoswap.w</code>, and no LR/SC: one arbitrated access is
+        easy to make atomic; a reservation needs a monitor watching every other core's stores.</p></details>`,
       scene: () => dualCoreScene(mc('atomic')),
       challenge: {
         kind: 'reach', goal: 'Run to the end: the counter must be 40.',
@@ -154,6 +180,8 @@ export const chMulticore: Chapter = {
         a write in one must reach the other. The standard answer is a <strong>write-invalidate snooping protocol</strong>. Before writing, a core broadcasts on the bus and every other
         copy is invalidated. A read of a block that someone holds Modified gets the data from that cache.</p>
         <p>MESI adds an <em>Exclusive</em> state: a block read by only one core can later be written without any bus traffic. That covers the common case of private data.</p>
+        <p>Snooping needs every cache to see every request, a broadcast that stops scaling past a few dozen cores. Large machines keep a
+        <strong>directory</strong> instead: per memory block, a record of which caches hold it, so invalidations go point to point to the sharers alone.</p>
         <div class="try">Compare "Private read-then-write" under MSI and MESI. Then compare "False sharing" with "Padded".</div>`,
       widget: coherenceWidget,
       challenge: {
@@ -170,7 +198,15 @@ export const chMulticore: Chapter = {
         <p>Our dual-core is <strong>sequentially consistent</strong>: there is one memory port, so all accesses happen in one global order consistent with each program.
         Real cores reorder: a store waits in a store buffer while later loads go ahead, and that is invisible to one thread but not to another. RISC-V specifies a
         weak model (RVWMO) and gives the programmer <code>fence</code> instructions, plus <em>acquire</em> and <em>release</em> bits on atomics (the aq and rl bits this
-        implementation ignores), to restore order exactly where it matters.</p>`,
+        implementation ignores), to restore order exactly where it matters.</p>
+        <p>The classic litmus test is <em>store buffering</em>. From x = y = 0, core 0 stores x = 1 and then loads y, core 1 stores y = 1 and
+        then loads x. Sequentially consistent, some store comes first in the one global order, so at least one load sees a 1. With store buffers each
+        store waits in its own core while the load behind it goes ahead, and <strong>both cores read 0</strong>.
+        RVWMO allows that outcome (so does x86); a <code>fence w,r</code> between each store and its load forbids it.</p>
+        <p>A lock needs order at both ends. Taking it is an <em>acquire</em>: the critical section's loads and stores must not be performed before the
+        lock is held, or they could read the counter while another core still owns it: <code>amoswap.w.aq</code> (or the swap, then <code>fence r,rw</code>).
+        Freeing it is a <em>release</em>: everything before must be visible before the lock reads free: <code>amoswap.w.rl x0, x0, (lock)</code>
+        (or <code>fence rw,w</code>, then the store). Accesses may move into the critical section, never out of it.</p>`,
       challenge: {
         kind: 'quiz', question: 'In the spin lock, why should the release (sw zero, lock) have release semantics on a real RISC-V core?',
         options: ['To make it faster', 'So that the stores of the critical section become visible to other cores before the lock appears free', 'Because sw cannot write zero', 'It does not matter'],

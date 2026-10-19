@@ -1,4 +1,5 @@
-import { CLA4, carrySelect, carrySkip, koggeStone, rca } from '../lib';
+import { CLA4, addSubFast, alu, carrySelect, carrySkip, isZero, koggeStone, muxTree, rca } from '../lib';
+import { logicDepth } from '../sim/stats';
 import { PROGRAMS } from '../riscv/programs';
 import { cpuScene } from '../widgets/cpupanel';
 import { adderVariants } from '../widgets/adders';
@@ -176,8 +177,10 @@ export const chFastAdders: Chapter = {
         marks an edge that arrives while signals are still switching with a red triangle.</p>
         <p>Measured on this program (static critical path 155): at 150 every edge is clean; at 140 one edge comes
         early, yet the sum is still right, because the path being exercised that cycle was shorter than the worst case;
-        at 130 a half-rippled <span data-show="alu">ALU</span> result is captured and the program ends with a0 = 66 instead of 55. The gap between the
-        worst case and the typical case is where overclockers find headroom, and why vendors keep a guard band.</p>
+        at 130 the last <code>bne</code> (11 − 11, a carry through all 32 bits) is captured half-rippled in the
+        <span data-show="alu">ALU</span>: its zero flag still says "different", the loop adds an eleventh time, and Run to
+        halt stops at the first mismatch with a0 = 66 instead of 55. Past i = 11 the hardware never leaves the loop. The gap
+        between the worst case and the typical case is where overclockers find headroom, and why vendors keep a guard band.</p>
         <div class="try">Set the period to the critical path, run to halt; then halve it, reset and run again. Probe
         (<kbd>P</kbd>) the ALU result to watch it arrive late.</div>`,
       scene: () => ({ ...cpuScene({ source: src('sum'), timing: true }), analyzer: true }),
@@ -193,10 +196,10 @@ export const chFastAdders: Chapter = {
         path and the next one appears. Pipelining, next, attacks the problem differently: it cuts the path into pieces.</p>`,
       scene: () => cpuScene({ source: src('sum'), timing: true, adder: 'ks' }),
       challenge: {
-        kind: 'quiz', question: 'After the adder swap, roughly how much of the ALU\'s 46 NAND delays is the adder itself?',
+        kind: 'quiz', question: `After the adder swap, roughly how much of the ALU's ${logicDepth(alu(32, 'ks'))} NAND delays is the adder itself?`,
         options: ['Almost all of it', 'Less than half: the 8:1 result mux and the zero detector are the rest', 'None: the ALU is no longer on the path'], answer: 1,
         why: ['That was true of the ripple adder. A Kogge–Stone grows with log₂ n and is now a minority of the ALU\'s path.', '', 'The branch path still subtracts in the ALU and reads its zero flag.'],
-        explain: 'A 32-bit Kogge–Stone is 18 NAND delays. The result multiplexer (3 levels of MUX2) and the zero detector (a 5-level OR tree plus an inverter) add more than that. Real designs compute "zero" in parallel with the sum for exactly this reason.',
+        explain: `A 32-bit Kogge–Stone is ${logicDepth(koggeStone(32))} NAND delays (${logicDepth(addSubFast(32))} with the inversion for subtraction). The result multiplexer (3 levels of MUX2, ${logicDepth(muxTree(3, 32, 16))}) and the zero detector (a 5-level OR tree plus an inverter, ${logicDepth(isZero(32))}) add as much again. Real designs compute "zero" in parallel with the sum for exactly this reason.`,
       },
     },
   ],

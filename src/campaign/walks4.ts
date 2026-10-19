@@ -75,7 +75,7 @@ export const WALKS4: Record<string, WalkScript> = {
         options: ['en + rst', 'en', 'en·¬rst', 'The clock, gated by en'],
         answer: 0,
         explain: 'By De Morgan, NAND(¬en, ¬rst) = en + rst: two inverters and a NAND. With rst = 1 the register loads the zeros from the AND row.',
-        why: ['', 'With en = 0 the register holds, and rst would wait until counting resumes.', 'That blocks the load exactly when rst needs it.', 'Never gate the clock (glitches, skew): the register\'s enable mux exists to avoid it.'],
+        why: ['', 'With en = 0 the register holds, and rst would wait until counting resumes.', 'That blocks the load exactly when rst needs it.', 'en can change while clk is high, and clk AND en then glitches: a short pulse, an extra edge; the AND also skews the clock. Never gate a clock with a signal that can change while it is high; the register\'s enable mux avoids the question.'],
       },
     },
   ],
@@ -125,7 +125,7 @@ export const WALKS4: Record<string, WalkScript> = {
         options: ['we·(addr = k)', 'we', 'addr = k', 'clk·(addr = k)'],
         answer: 0,
         explain: 'A decoder with an enable input makes all four at once: we on its enable, addr on its select. The tip\'s AND is folded into the decoder.',
-        why: ['', 'Every write would store d in all four words.', 'Every edge would write the addressed word, reads (we = 0) included.', 'Never gate the clock: each register already has an enable for exactly this.'],
+        why: ['', 'Every write would store d in all four words.', 'Every edge would write the addressed word, reads (we = 0) included.', 'addr can change while clk is high, so clk·(addr = k) can glitch into an extra edge; and it would write on reads too. Never gate a clock with a signal that can change while it is high: each register already has an enable for exactly this.'],
       },
     },
     {
@@ -175,7 +175,7 @@ export const WALKS4: Record<string, WalkScript> = {
     },
     {
       title: 'Write back',
-      text: 'The 4:1 result mux into the register file. 4 959 NANDs (+218, +5%) for period 76 (−22%): the same 1 236 cycles take 93 936 NAND delays instead of 121 128.',
+      text: 'The 4:1 result mux into the register file. 4 938 NANDs (+218, +5%) for period 76 (−22%): the same 1 236 cycles take 93 936 NAND delays instead of 121 128.',
       parts: ['u9'], codex: ['cpi'],
     },
   ],
@@ -206,7 +206,7 @@ export const WALKS4: Record<string, WalkScript> = {
         options: ['Those with a negative offset (instr[15] = 1)', 'All of them', 'None: only jal', 'Those with a positive offset'],
         answer: 0,
         explain: 'A backward branch closes a loop and is taken on every iteration but the last. RV16 keeps every immediate\'s sign in instr[15], so the test is one AND.',
-        why: ['', 'Forward branches (an if skipping code) often fall through: each wrong guess costs the two-cycle flush a "not taken" guess avoided.', 'Then loops still pay two cycles per iteration, the case worth fixing.', 'Backwards: a forward branch falls through about as often as not, a loop\'s backward branch almost never.'],
+        why: ['', 'Forward branches (an if skipping code) fall through about as often as not: guessed taken, each one that falls through pays the two-cycle flush, so on average they win nothing.', 'Then loops still pay two cycles per iteration, the case worth fixing.', 'Backwards: a forward branch falls through about as often as not, a loop\'s backward branch almost never, and this rule guesses the loop wrong on every iteration.'],
       },
     },
     {
@@ -221,7 +221,7 @@ export const WALKS4: Record<string, WalkScript> = {
     },
     {
       title: 'Check in E',
-      text: 'redirect = ld ⊕ predicted: taken but not guessed goes to the target, guessed but not taken back to pc + 1 (a mux on predicted). +571 NANDs (9 810); the XOR lengthens the comparator → next PC → flush path, period 80 (+2). The 31 programs fall from 2 653 cycles to 2 303 (−13%), 184 240 NAND delays against 206 934.',
+      text: 'redirect = ld ⊕ predicted: taken but not guessed goes to the target, guessed but not taken back to pc + 1 (a mux on predicted). +571 NANDs (9 789); the XOR lengthens the comparator → next PC → flush path, period 80 (+2). The 31 programs fall from 2 653 cycles to 2 303 (−13%), 184 240 NAND delays against 206 934.',
       parts: ['u54', 'u55'], codex: ['controlhazard', 'flush'],
     },
   ],
@@ -304,7 +304,7 @@ export const WALKS4: Record<string, WalkScript> = {
     },
     {
       title: 'The PC loads in W',
-      text: 'next = ld ? target : pc + 1, the reset mux, and a PC register with enable W + rst. 5 224 NANDs (+483 over Core III) and period 76 instead of 98, but 3 865 cycles instead of 1 236: 293 740 NAND delays against 121 128, 2.4 times slower.',
+      text: 'next = ld ? target : pc + 1, the reset mux, and a PC register with enable W + rst. 5 203 NANDs (+483 over Core III) and period 76 instead of 98, but 3 865 cycles instead of 1 236: 293 740 NAND delays against 121 128, 2.4 times slower.',
       parts: ['u16', 'u21', 'u23', 'u24'], codex: ['pc', 'cpi'],
       ask: {
         question: 'An instruction spends 3 or 4 cycles in the core. When must the PC load its next value?',

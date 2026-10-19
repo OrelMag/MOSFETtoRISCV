@@ -5,13 +5,16 @@ import { ISS } from '../riscv/iss';
 import { PROGRAMS } from '../riscv/programs';
 import { flatten } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
-import { analyzeTiming } from '../sim/timing';
+import { CLK_TO_Q, SETUP, analyzeTiming } from '../sim/timing';
 import { h } from '../ui/dom';
 import type { Stage, Widget } from '../view/stage';
 import { cpuScene } from '../widgets/cpupanel';
 import type { Chapter } from './types';
 
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
+/** The single-cycle CPU's logic between registers (period 155), cut into n even stages with a register each. */
+const LOGIC = 155 - CLK_TO_Q - SETUP;
+const cut = (n: number) => Math.round(LOGIC / n) + CLK_TO_Q + SETUP;
 
 const INDEP = `# independent instructions: no hazards
         li   a0, 1
@@ -96,9 +99,11 @@ export const chPipeline: Chapter = {
     keep: [
       'Five stages, one instruction in each: up to one instruction per cycle, at the period of the <em>slowest</em> stage. One instruction takes no less time than before.',
       'Pipeline registers carry each instruction\'s operands, destination and control bits (and a valid bit), so it acts on the right data cycles later.',
+      'Structural hazards (two instructions wanting one unit in one cycle) do not occur here: separate instruction and data memories, two read ports and a write port, adders of its own for PC + 4 and the branch target.',
       'Data hazards: a result one or two instructions back is forwarded from M or W into E; three back, W is bypassed into D. A load followed by its use also costs one stall.',
-      'Control hazards: branches resolve in E. A taken branch or a jump flushes the two instructions fetched behind it.',
-      'Here E keeps almost the whole single-cycle path, so the pipeline barely pays until its stages are balanced (the next chapter).',
+      'Control hazards: branches resolve in E. A taken branch or a jump flushes the two instructions fetched behind it. The same flush makes exceptions precise: carried with the instruction, acted on in a late stage, nothing younger written.',
+      `Every stage pays the register overhead (clk-to-q ${CLK_TO_Q} + setup ${SETUP} = ${CLK_TO_Q + SETUP} NAND delays) and deeper pipelines lose more cycles per flush: depth has diminishing returns.`,
+      'Here E keeps almost the whole single-cycle path (145 against at most 21 for F, M and W), so the pipeline does not pay: 145 × CPI 1.34 on fib is about 194 NAND delays per instruction against the single-cycle 155. Balancing the stages (the next chapter) fixes that.',
     ],
     practise: ['pi_reg', 'pi_core0', 'pi_fwd', 'pi_core1', 'pi_haz', 'pi_core2', 'pi_core3'],
     check: [
@@ -135,6 +140,18 @@ export const chPipeline: Chapter = {
         (Fetch, Decode, Execute, Memory, Writeback) and starts a new instruction every cycle.</p>
         <p>Latency per instruction does not improve (it gets slightly worse). <strong>Throughput</strong> can approach one
         instruction per cycle at a clock period set by the slowest stage instead of the whole path.</p>
+        <details class="deeper"><summary>Deeper: why not twenty stages?</summary>
+        <p>Every pipeline register costs its clk-to-q and setup: ${CLK_TO_Q} + ${SETUP} = ${CLK_TO_Q + SETUP} NAND delays per stage
+        with our flip-flop. Cut L delays of logic into N even stages and the period is L / N + ${CLK_TO_Q + SETUP}: the single-cycle CPU's
+        ${LOGIC} (155 less one register's ${CLK_TO_Q + SETUP}) in five stages is ${cut(5)}, in ten ${cut(10)}, in twenty ${cut(20)}. The overhead becomes the clock. Meanwhile a deeper pipeline resolves branches later, so each
+        misprediction flushes more instructions, and a load's result waits more stages: CPI rises as the period falls. Cuts are
+        never even either (a 32-bit adder is hard to split). Real cores settled around 10–20 stages after the 31-stage
+        Pentium 4 (Prescott) ran hot and gained little.</p></details>
+        <p>Three things can stop an instruction from starting: a <strong>structural</strong> hazard (two instructions need
+        one unit in the same cycle), a <strong>data</strong> hazard (an operand is not computed yet) and a <strong>control</strong>
+        hazard (the next PC is not known yet). This design has no structural ones: separate instruction and data memories, a
+        register file with two read ports and a write port, its own adders for PC + 4 and the branch target. One memory port
+        for both fetch and loads would collide on every <code>lw</code> and <code>sw</code>.</p>
         <div class="try">Pulse a few times and watch the pipeline diagram (bottom left): each instruction moves one stage per cycle. These eight instructions are independent, so after four cycles of fill one retires every cycle.</div>`,
       scene: () => cpuScene({ source: INDEP, pipeline: true }),
       tries: [(st) => st.cycles >= 5],
@@ -149,8 +166,9 @@ export const chPipeline: Chapter = {
         <p>Each is a wide register with an <strong>enable</strong> (de-assert to stall) and a <strong>synchronous clear</strong>
         (assert to replace the contents with a bubble: all control bits 0, so it writes nothing). Open one: it is the register
         from <a href="#/c/registers/0">chapter 9</a> with a mask in front.</p>
-        <p>Note the <span data-show="rf">register file</span>: written in W, read in D. The PC and control signals of an instruction travel with it so
-        that, when it writes back three cycles later, the right register gets the right value.</p>`,
+        <p>Note the <span data-show="rf">register file</span>: written in W, read in D. An instruction's destination
+        register number (rd) and its RegWrite bit travel with it so that, when it writes back three cycles later, the right
+        register gets the right value.</p>`,
       scene: () => cpuScene({ source: INDEP, pipeline: true, highlight: ['FD', 'DE', 'EM', 'MW'] }),
     },
     {
@@ -199,6 +217,15 @@ export const chPipeline: Chapter = {
         bubbles) and the <span data-show="pcmux">PC</span> jumps to the target. Jumps always pay the two cycles.</p>
         <p>Loops are full of taken branches: this one loses two cycles per iteration. Watch the CPI in the panel. Real cores
         predict branches (dynamic predictors are often more than 95% accurate) and resolve them earlier.</p>
+        <details class="deeper"><summary>Deeper: precise exceptions</summary>
+        <p>The same flush serves exceptions. An illegal instruction found in D, a misaligned load in M, a page fault: the
+        handler must see the machine as if instructions ran one at a time, with every older instruction finished and no
+        younger one having written a register or memory. That is a <strong>precise</strong> exception. A pipeline gets it by
+        recording the exception in the pipeline register beside the instruction, doing nothing yet, and acting when it reaches
+        a late stage (before any store of its own commits): squash it and everything behind, save its PC (<code>mepc</code>),
+        fetch the handler. An older instruction's exception, discovered later, still wins because it reaches that stage first.
+        Interrupts are taken between two instructions the same way. This pipeline takes no traps;
+        <a href="#/c/traps/0">chapter 19</a> adds them to the single-cycle CPU, where every exception is precise for free.</p></details>
         <div class="try">Pulse until the loop branch is taken: two instructions turn into bubbles.</div>`,
       scene: () => cpuScene({ source: src('sum'), pipeline: true, highlight: ['npc', 'hz', 'pcmux'] }),
       tries: [(st) => !!snap(st)?.flush],
@@ -227,7 +254,7 @@ export const chPipeline: Chapter = {
         options: ['A faster register file', 'Moving work out of the E stage (precomputed forwarding, a separate branch comparator, a faster adder)', 'Adding more pipeline registers to the F stage', 'A larger data memory'],
         answer: 1,
         why: ['The register file sits in D, already far shorter than E: the period would not move.', '', 'F is one of the short stages (about 20 NAND delays); splitting it shortens nothing that sets the clock.', 'A larger memory is a deeper mux tree: M gets slower, not faster.'],
-        explain: 'The period is set by the slowest stage, and E is ~3× slower than the others. Only shortening E (or splitting it) moves the clock. The Kogge–Stone variant already shows the effect: 145 → 93.',
+        explain: 'The period is set by the slowest stage, and E is about 7× slower than F, M and W with ripple adders (145 against at most 21), 4.4× with Kogge–Stone (93). The IF/ID and PC rows of the timing panel show nearly the same number because they capture the redirect from E, not a slow fetch. Only shortening E (or splitting it) moves the clock: 145 → 93 with the faster adder.',
       },
     },
   ],

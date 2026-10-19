@@ -4,8 +4,16 @@
 import { doomPlay } from '../widgets/doom';
 import { doomGatesScene } from '../widgets/doomgates';
 import { doomMemoryMap, doomNeeds, doomProgram } from '../widgets/doominfo';
+import { RESULTS } from '../bench/summary';
 import { chAppendix6502 } from './ch-6502';
 import type { Chapter } from './types';
+
+/** A demo frame's median cycles (scripts/doom/bench.ts). */
+const FRAME_CYCLES = 1.9e6;
+/** The RV32IM system CPU's static-timing period (src/bench/results.json: NAND delays × ps per NAND), ns, and a frame on silicon, ms. */
+const SYS_M = RESULTS.cpus.find((c) => c.id === 'sys-m');
+const SYS_NS = ((SYS_M?.period ?? NaN) * RESULTS.psPerNand) / 1000;
+const FRAME_MS = Math.round((FRAME_CYCLES * SYS_NS) / 1e6);
 
 export const chAppendixDoom: Chapter = {
   // numbered after Appendix A, whatever the journey's length (chapters before it get renumbered)
@@ -24,7 +32,7 @@ export const chAppendixDoom: Chapter = {
       'GCC (<code>-march=rv32im -mabi=ilp32 -O2</code>) and newlib give 57,889 instruction words. Our CPUs are Harvard machines, so only code goes in the ROM; constants, tables and jump tables go in RAM.',
       'The top four address bits choose the memory: RAM at 0, the WAD (read only) at <code>0x1000_0000</code>, devices from <code>0x8000_0000</code>, the frame buffer from <code>0xC000_0000</code>. A load of <code>KEY</code> removes the event it returns, so the data port gains a read strobe.',
       'Game time is <code>mtime</code>, which counts clock cycles, at a nominal 40 MHz: a slower machine plays slower, never differently.',
-      'A frame is about 1.9 M cycles: 48 ms at 40 MHz, about 13 minutes on the gate-level CPU in this page, about 8 ms for the same gates on silicon at their 4 ns period.',
+      `A frame is about 1.9 M cycles: 48 ms at 40 MHz, about 13 minutes on the gate-level CPU in this page, about ${FRAME_MS} ms for the same gates on silicon at their ${SYS_NS.toFixed(1)} ns period.`,
     ],
     practise: ['c_computer', 'o_mcore'],
     check: [
@@ -75,7 +83,7 @@ export const chAppendixDoom: Chapter = {
         is stores to the console, the heap grows up from the end of the data, and the only file that opens is the WAD
         (Doom's data file: levels, graphics, sounds).</p>
         <p>The source is <a href="https://github.com/ozkl/doomgeneric" target="_blank" rel="noopener">doomgeneric</a>, which
-        leaves four functions to the platform: draw a frame, read a key, read the time, sleep. Five small patches make
+        leaves six functions to the platform: initialize, draw a frame, read a key, read the time, sleep, set the window title. Five small patches make
         Doom draw into our frame buffer and read the WAD in place. Our CPUs are Harvard machines, so the linker puts
         only code in the ROM and everything Doom reads (constants, tables, jump tables) in RAM.</p>
         <p>The census is of the image itself: a third of the words load or store, one in eleven branches, one in eight
@@ -118,7 +126,7 @@ export const chAppendixDoom: Chapter = {
         <p><strong>Cost.</strong> A frame of the demo takes 1.0–3.0 M cycles (median 1.9 M): 48 ms at 40 MHz. The
         interpreter manages about 90 M instructions a second. The gate-level system CPU in this page manages about
         2,400 cycles a second: one frame would take about 13 minutes. The same gates on silicon, at their static-timing
-        period of about 4 ns, would draw it in 8 ms.</p>
+        period of ${SYS_M?.period} NAND delays (${SYS_NS.toFixed(1)} ns at ${RESULTS.psPerNand} ps a NAND), would draw it in about ${FRAME_MS} ms.</p>
         <div class="try">Start the game, then <b>Pause</b> on a wall and press <b>To next pixel</b> a few times:
         each press stops just after an <code>sb</code> into the frame buffer (the listing's line above the PC), and the
         zoom shows the column growing downward.

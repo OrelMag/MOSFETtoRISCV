@@ -1,3 +1,4 @@
+import { WB_MISS_CLEAN, WB_MISS_DIRTY } from '../lib/cache2';
 import { BITLINE_C, CELL_C, CELL_HALFLIFE } from '../lib/dram';
 import { accessCycles, CLOCK_NS, cyclesOf, DDR4_3200, TIMING } from '../dram/timing';
 import { findNode } from '../sim/flatten';
@@ -36,7 +37,10 @@ function closeRow(st: Stage): void {
 const share = (v: number) => (CELL_C * v + BITLINE_C * 0.5) / (CELL_C + BITLINE_C);
 const twice = share(share(1)), thrice = share(twice);
 const GHZ3 = 1 / 3;
-const conflict3 = cyclesOf(DDR4_3200.tRP, GHZ3) + cyclesOf(DDR4_3200.tRCD, GHZ3) + cyclesOf(DDR4_3200.tCAS, GHZ3) + TIMING.burst;
+/** DDR4-3200's pins: 3 200 MT/s on a 1 600 MHz clock (tCK, ns); CL in clocks; a BL8 burst in ns. */
+const MTS = 3200, TCK = 2000 / MTS, CL_TCK = Math.round(DDR4_3200.tCAS / TCK), BL8_NS = 8 * 1000 / MTS;
+const burst3 = cyclesOf(BL8_NS, GHZ3);
+const conflict3 = cyclesOf(DDR4_3200.tRP, GHZ3) + cyclesOf(DDR4_3200.tRCD, GHZ3) + cyclesOf(DDR4_3200.tCAS, GHZ3) + burst3;
 /** The swing with twice the bit line (the recap's question). */
 const DV2 = 0.5 * CELL_C / (CELL_C + 2 * BITLINE_C);
 const OFFSET_MV = Math.round(SENSE_OFFSET * VDD_VOLTS * 1000);
@@ -56,8 +60,9 @@ export const chDram: Chapter = {
       `A 1T1C cell is one transistor and a ${CELL_C} fF capacitor. On a ${BITLINE_C} fF bit line precharged to VDD/2, a full 1 or 0 moves the line by only ±${mV(DV)} mV: ΔV = (V<sub>cell</sub> − VDD/2) · Cs / (Cs + Cb).`,
       'Charge sharing leaves the cell at the bit line\'s level: <strong>a read destroys the row</strong>. The sense amplifier (two cross-coupled inverters) drives both lines to the rails and, with the word line still up, writes the row back.',
       'The amplifiers of a bank hold its open row: the <strong>row buffer</strong>. A hit needs only the column command, a miss an activate first, a conflict a precharge and then an activate.',
-      `Cells leak towards 0: here a 1 stays readable for ${SAFE_CYCLES} cycles after its last restore. DDR4 refreshes every row within 64 ms, a REF every ${DDR4_3200.tREFI / 1000} µs that blocks the device for ${DDR4_3200.tRFC} ns: ${((100 * DDR4_3200.tRFC) / DDR4_3200.tREFI).toFixed(1)} % of the time.`,
+      `Here cells leak towards 0, and a 1 stays readable for ${SAFE_CYCLES} cycles after its last restore. DDR4 refreshes every row within 64 ms, a REF every ${DDR4_3200.tREFI / 1000} µs that blocks the device for ${DDR4_3200.tRFC} ns: ${((100 * DDR4_3200.tRFC) / DDR4_3200.tREFI).toFixed(1)} % of the time.`,
       `DDR4-3200: tRCD = tCAS = tRP = ${DDR4_3200.tRCD} ns, ${TIMING.tRCD} cycles each at our ${CLOCK_NS.toFixed(2)} ns clock. With a 4-word burst: hit ${accessCycles('hit', TIMING)}, miss ${accessCycles('miss', TIMING)}, conflict ${accessCycles('conflict', TIMING)} cycles.`,
+      `The name reads: ${MTS} MT/s, data on both edges of a ${MTS / 2} MHz clock (tCK = ${TCK} ns); ${CL_TCK}-${CL_TCK}-${CL_TCK} = CL-tRCD-tRP in clocks, ${DDR4_3200.tCAS} ns each. An 8n prefetch lets a slow array feed fast pins: a burst of 8 transfers, ${BL8_NS} ns, a 64-byte line on a 64-bit channel. Banks work in parallel: one can activate while another bursts.`,
     ],
     practise: ['m_sense', 'm_bank'],
     check: [
@@ -98,8 +103,10 @@ export const chDram: Chapter = {
         to survive until it is read or refreshed. A 16 Gbit DDR5 die holds seventeen billion of these.</p>
         <p>Each row of cells shares a <strong>word line</strong> (the access transistors' gates, raised by the
         <span data-show="rdec">row decoder</span>), each <span data-show="col0 col1 col2 col3">column</span> a <strong>bit line</strong>.
-        Next to every bit line runs a <strong>reference</strong> line of the same capacitance (${BITLINE_C} fF) and no cells. Three
-        transistors per column precharge both to <strong>VDD/2</strong> and equalize them.</p>
+        Next to every bit line runs a <strong>reference</strong> line of the same capacitance (${BITLINE_C} fF): here a line with no cells;
+        in a real array it is another bit line, its folded twin in the same mat (whose cells hang on other word lines) or, in an
+        open-bit-line array, a bit line of the neighbouring mat. Three transistors per column precharge both to <strong>VDD/2</strong>
+        and equalize them.</p>
         <p>Cost of this 4 × 4: the cells are 16 transistors and 16 capacitors. Each column then adds 3 precharge transistors,
         2 for the column select and an 8-transistor <span data-show="col0.sa">sense amplifier</span>: 13 per column, more than its cells. Real arrays hang 512 to
         1 024 cells on a bit line to amortize them.</p>
@@ -184,7 +191,16 @@ export const chDram: Chapter = {
         <p><strong>Refresh</strong> is a read with nothing out: <span data-show="rdec">activate a row</span>, sense it (which restores it), close it. Every row must be
         refreshed within the retention time. In silicon that is 64 ms, and a DDR4 device refreshes in 8 192 REF commands, one every
         ${DDR4_3200.tREFI / 1000} µs, each keeping it busy for ${DDR4_3200.tRFC} ns: ${((100 * DDR4_3200.tRFC) / DDR4_3200.tREFI).toFixed(1)} % of the time
-        lost. The cells leak towards 0, so a stored 0 lasts forever. A cell in an open row never leaks: its <span data-show="col0.sa">amplifier</span> holds it.</p>
+        lost. Here cells leak only towards 0, so a stored 0 never fades; in silicon many arrays store half their bits inverted
+        (true and anti-cells), so lost charge reads as 1 in some cells and 0 in others, and refresh must cover every bit. A cell in
+        an open row does not decay: its <span data-show="col0.sa">amplifier</span> holds it.</p>
+        <details class="deeper"><summary>Deeper: row hammer</summary>
+        <p>Refresh assumes a cell loses charge only by leaking. Activating one row over and over (the <em>aggressor</em>) disturbs
+        the cells of its neighbours and drains them faster: Kim et al. (2014) flipped bits in 110 of 129 DDR3 modules with as few as
+        139 000 activations inside one 64 ms window, and denser parts since have flipped with under 5 000. A program that hammers the
+        rows around a victim flips bits it may not write; Project Zero turned that into a privilege escalation in 2015. Defences count
+        activations and refresh the neighbours (DDR4's target row refresh, DDR5's refresh management), refresh more often, or add ECC.
+        Here cells do not couple: each leaks alone.</p></details>
         <div class="try">Wait 200 cycles and watch row ages turn orange, then red. Refresh a row and its age returns to 0.</div>`,
       scene: () => dramScene({ pattern: PATTERN }),
       challenge: {
@@ -209,7 +225,8 @@ export const chDram: Chapter = {
         command. A closed bank needs an activate first (a <strong>miss</strong>). Another row open in that bank needs a precharge
         before the activate (a <strong>conflict</strong>).</p>
         <p>Rows are interleaved over the banks, so consecutive lines fill a row and then move on to the next bank. Banks are
-        independent: while one waits for its precharge, another can be read. Two streams that land in the same bank keep closing each
+        independent: while one waits for its precharge or activate, another can be read, and a controller with several requests
+        overlaps them (bank-level parallelism; DDR4 groups its 16 banks in 4 bank groups, <a href="#/c/memctrl/0">chapter 33</a>). Two streams that land in the same bank keep closing each
         other's rows. A memory copy whose destination sits a multiple of the bank stride away does exactly that.</p>`,
       widget: rowBufferWidget,
       challenge: {
@@ -234,21 +251,29 @@ export const chDram: Chapter = {
         At our single-cycle CPU's ${CLOCK_NS.toFixed(2)} ns clock that is ${TIMING.tRCD} cycles each. After the column command the data comes as a
         <strong>burst</strong>: here a 4-word cache line, one word a cycle.</p>
         <p>A row hit is then ${accessCycles('hit', TIMING)} cycles, a miss ${accessCycles('miss', TIMING)}, a conflict ${accessCycles('conflict', TIMING)}.
-        <a href="#/c/cache/0">Chapter 21</a>'s caches charge a fixed 8 for every miss, which is a row hit. <a href="#/c/memctrl/0">Chapter 33</a> builds the controller that issues these
-        commands, and lets the caches pay what the row buffer says.</p>`,
+        <a href="#/c/cache/0">Chapter 21</a>'s caches charge a fixed ${WB_MISS_CLEAN} for a miss (${WB_MISS_DIRTY} with a dirty victim to write back first);
+        ${WB_MISS_CLEAN} is a row hit. <a href="#/c/memctrl/0">Chapter 33</a> builds the controller that issues these
+        commands, and lets the caches pay what the row buffer says.</p>
+        <details class="deeper"><summary>Deeper: what DDR4-3200 22-22-22 means</summary>
+        <p>${MTS} MT/s (million transfers a second per data pin): data moves on both edges of a ${MTS / 2} MHz clock, so tCK = ${TCK} ns.
+        The three numbers are CL (tCAS), tRCD and tRP in clocks: ${CL_TCK} × ${TCK} = ${DDR4_3200.tCAS} ns each. The array cannot keep up
+        with the pins, so each column access fetches 8 bits per data pin at once (<strong>8n prefetch</strong>) and shifts them out as a
+        <strong>burst of 8</strong> (BL8) over 4 clocks, ${BL8_NS} ns: on a 64-bit channel, a 64-byte cache line. From DDR to DDR5 the
+        transfer rate rose from 200–400 to 4 800 MT/s and more, the prefetch from 2n to 16n; CL in nanoseconds stayed at about 13–17. The latency is the array's, and the
+        array has not got faster.</p></details>`,
       widget: timingWidget,
       challenge: {
         kind: 'quiz',
-        question: 'The same DDR4-3200 device behind a 3 GHz CPU: how many cycles does a row conflict cost for a 4-word line?',
-        options: [String(accessCycles('conflict', TIMING)), '42', String(conflict3), '1 000'],
+        question: `The same DDR4-3200 device behind a 3 GHz CPU: how many cycles does a row conflict cost, the line coming as one BL8 burst (${BL8_NS} ns)?`,
+        options: [String(accessCycles('conflict', TIMING)), String(cyclesOf(DDR4_3200.tRP, GHZ3)), String(conflict3), '1 000'],
         answer: 2,
         why: [
           `That is the count at our ${CLOCK_NS.toFixed(2)} ns clock. The device's intervals are fixed in nanoseconds, so a faster clock waits more cycles.`,
-          'That is one interval, 13.75 ns at 0.33 ns a cycle. A conflict waits for tRP, tRCD and tCAS in turn, then the burst.',
+          `That is one interval, ${DDR4_3200.tRP} ns at 0.33 ns a cycle. A conflict waits for tRP, tRCD and tCAS in turn, then the burst.`,
           '',
-          `Too many: 1 000 cycles at 3 GHz are 333 ns. Three intervals of 13.75 ns plus the burst come to ${conflict3} cycles.`,
+          `Too many: 1 000 cycles at 3 GHz are 333 ns. Three intervals of ${DDR4_3200.tRP} ns plus the ${BL8_NS} ns burst come to ${conflict3} cycles.`,
         ],
-        explain: `Each of tRP, tRCD and tCAS is 13.75 ns, ${cyclesOf(DDR4_3200.tRP, GHZ3)} cycles at 0.33 ns, plus the 4-word burst: ${conflict3}. The nanoseconds stayed; each interval went from ${TIMING.tRP} cycles to ${cyclesOf(DDR4_3200.tRP, GHZ3)}: the memory wall.`,
+        explain: `Each of tRP, tRCD and tCAS is ${DDR4_3200.tRP} ns, ${cyclesOf(DDR4_3200.tRP, GHZ3)} cycles at 0.33 ns; the burst, 8 transfers at ${MTS} MT/s, is ${BL8_NS} ns, ${burst3} cycles: ${conflict3}. The nanoseconds stayed; each interval went from ${TIMING.tRP} cycles to ${cyclesOf(DDR4_3200.tRP, GHZ3)}: the memory wall.`,
       },
     },
   ],

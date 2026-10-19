@@ -73,7 +73,7 @@ export const WALKS5: Record<string, WalkScript> = {
   o_mcore: [
     {
       title: 'Core III, as before',
-      text: 'Control, immediates, register file, ALU, branch comparator, next PC, result mux and PC: Core III unchanged, 4 741 NANDs at period 98. Its control unit writes nothing for opcode 0011, so MD needs a decode, a datapath and a write of its own.',
+      text: 'Control, immediates, register file, ALU, branch comparator, next PC, result mux and PC: Core III unchanged, 4 720 NANDs at period 98. Its control unit writes nothing for opcode 0011, so MD needs a decode, a datapath and a write of its own.',
       parts: ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u20', 'u22', 'u23'], codex: ['singlecycle'],
     },
     {
@@ -83,7 +83,7 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'The multiplier',
-      text: 'The MD multiplier (3 257 NANDs, depth 166) reads rs1 and rs2 straight from the register file. Inside, one unsigned 16 × 16 array (2 672) serves all four: a signed high half is the unsigned one minus b when a < 0, and minus a when b < 0.',
+      text: 'The MD multiplier (3 257 NANDs, depth 166) reads rs1 and rs2 straight from the register file. Inside, one unsigned 16 × 16 array (2 672) serves all four: the signed high half (mulh) is the unsigned one minus b when a < 0 and minus a when b < 0; mulhsu (a signed, b unsigned) takes only the first correction, mulhu neither.',
       parts: ['u15'], codex: ['arraymul', 'signedmul'],
       ask: {
         question: 'The multiplier is 166 deep and sits between the register file\'s read and write ports. Core III ran at period 98. What happens?',
@@ -95,7 +95,7 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'Write the product',
-      text: 'rwe = rwe + MD, and one more 16-bit mux puts the product on the write-back path when MD: 52 NANDs. 8 058 NANDs in all, +3 317 over Core III.',
+      text: 'rwe = rwe + MD, and one more 16-bit mux puts the product on the write-back path when MD: 52 NANDs. 8 037 NANDs in all, +3 317 over Core III.',
       parts: ['u18', 'u19'], codex: ['datapath'],
     },
   ],
@@ -170,7 +170,7 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'Write once, at the end',
-      text: 'A 16-bit mux picks the multiplier or the divider by f3[2], and the MD mux puts it on write-back. rwe = rwe + MD · ¬hold: nothing is written until the last cycle. 10 567 NANDs, period 193; every divide holds the core 18 cycles.',
+      text: 'A 16-bit mux picks the multiplier or the divider by f3[2], and the MD mux puts it on write-back. rwe = rwe + MD · ¬hold: nothing is written until the last cycle. 10 546 NANDs, period 193; every divide holds the core 18 cycles.',
       parts: ['u22', 'u23', 'u24', 'u25', 'u26'], codex: ['datapath'],
     },
   ],
@@ -514,7 +514,7 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'Normalize and round',
-      text: 'The 16-bit normalize & round (2 258 NANDs, depth 90) finds the leading 1, shifts it to the top and rounds what does not fit in 11 bits: integers above 2 048 can be inexact. The exponent is the constant 30 and stin is 0. 2 690 NANDs, depth 109.',
+      text: 'The 16-bit normalize & round (2 258 NANDs, depth 90) finds the leading 1, shifts it to the top and rounds what does not fit in 11 bits: integers above 2 048 can be inexact. One case overflows: an unsigned x ≥ 65 520 rounds to nearest to 2^16, past the largest finite 65 504, and gives ∞ with OF and NX (toward zero or down it stops at 65 504; up, anything above 65 504 overflows). The exponent is the constant 30 and stin is 0. 2 690 NANDs, depth 109.',
       parts: ['u5'], codex: ['normalize', 'rounding'],
       ask: {
         question: 'The integer\'s top bit weighs 2^15. Which exponent does normalize & round get?',

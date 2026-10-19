@@ -11,13 +11,13 @@ export const CASES0: Record<string, LevelCase> = {
   t_inv: {
     problem: 'A computer is switches driving the gates of other switches. Every CMOS gate is two networks on one output: PMOS pulling it to VDD, NMOS pulling it to GND, driven by the same inputs. The inverter is the smallest case, one transistor in each, and sets the rule every later cell obeys: for any input exactly one network conducts, so the output is always driven and no static current flows.',
     without: 'With a resistor in place of the PMOS (pseudo-NMOS) the output still inverts with one transistor, but current flows from VDD to GND for as long as a = 1, and the rising edge is only as fast as the resistor charges the load.',
-    cost: 'Two transistors. The campaign keeps a single brick, so its NOT is a NAND with tied inputs (4 transistors): the single-cycle core\'s 163 NOTs cost 652 transistors where CMOS inverters would need 326.',
+    cost: 'Two transistors. The campaign keeps a single brick, so its NOT is a NAND with tied inputs (4 transistors): the single-cycle core\'s 196 NOT gates cost 784 transistors where CMOS inverters would need 392.',
     alts: [{ name: 'Pseudo-NMOS inverter (pull-up resistor + NMOS)', lib: 'inv_pseudo' }],
   },
   t_nand: {
     problem: 'NAND is functionally complete: NOT, AND, OR, the multiplexers, the adders, the flip-flops, all of RV16 down to its last register bit is NANDs. Two NMOS in series pull the output low only when a = b = 1; two PMOS in parallel pull it high when either input is 0. From the next level on this cell is the only primitive, and every cost in the campaign is counted in it: NANDs for area, NAND delays for depth and clock period.',
     without: 'A single CMOS stage can only invert: AND and OR each need a second stage (6 transistors). Without an inverting gate that is complete on its own (NAND or NOR) the brick would be bigger and slower.',
-    cost: 'Four transistors, one delay. The single-cycle core is 4741 NANDs (18964 transistors), the pipeline with traps 12059 (48236). Cell libraries also offer inverters, AOI cells and 3- and 4-input NANDs; counting in 2-input NANDs keeps one unit for area and time.',
+    cost: 'Four transistors, one delay. The single-cycle core is 4720 NANDs (18880 transistors), the pipeline with traps 12038 (48152). Cell libraries also offer inverters, AOI cells and 3- and 4-input NANDs; counting in 2-input NANDs keeps one unit for area and time.',
     alts: [{ name: 'CMOS NOR (the dual)', lib: 'nor_cmos' }],
   },
   t_nor: {
@@ -38,7 +38,7 @@ export const CASES0: Record<string, LevelCase> = {
     cost: '2 NANDs, depth 2: a NAND, then a NOT. When the result feeds another NAND the NOT can often be dropped (NAND–NAND logic): that is how the par of most later levels is reached.',
   },
   g_or: {
-    problem: 'OR merges conditions. The next-PC logic redirects on jal OR jalr OR (branch AND taken); each control signal is the OR of the opcode lines that need it (rwe is the OR of nine); the zero detect is a tree of ORs over 16 bits. De Morgan makes it from NANDs: a + b = ¬(¬a · ¬b).',
+    problem: 'OR merges conditions. The next-PC logic redirects on jal OR jalr OR (branch AND taken); each control signal is the OR of the opcode lines that need it (rwe is the OR of nine opcode lines, lui\'s two among them); the zero detect is a tree of ORs over 16 bits. De Morgan makes it from NANDs: a + b = ¬(¬a · ¬b).',
     without: 'An OR would need its own cell. With De Morgan it is two inverters and a NAND.',
     cost: '3 NANDs, depth 2. When the inputs come from NANDs their inversions cancel: an OR of two ANDs is three NANDs in all (NAND–NAND), the shape every sum of products takes.',
     alts: [{ name: 'NOR, then NOT', nand: 5, depth: 4, note: 'The four-NAND NOR (depth 3) followed by a NOT.' }],
@@ -61,8 +61,12 @@ export const CASES0: Record<string, LevelCase> = {
   g_sop: {
     problem: 'The control unit is specified as a table, opcode → control signals, and must become gates. This level practises the method on one function of 4 inputs (is a prime?): K-map, minimal sum of products, then two levels of NANDs, which map one-to-one onto the products and the OR. The RV16 control unit (Act 5) has 14 output bits, each a function of the opcode and f3.',
     without: 'Read straight off the table the function is six minterms of four literals each; minimised it is four products of three literals.',
-    cost: 'The reference shares three inverters and builds each 3-input product from 2-input gates: 20 NANDs, depth 7. A 16:1 mux used as a lookup table (an FPGA LUT: constants on the data inputs, a on the select) fits any 4-input function and costs 60 NANDs before simplification.',
-    alts: [{ name: '16:1 mux as a lookup table', lib: 'mux16x1' }],
+    cost: 'Minimised and built NAND–NAND (three inverters, each 3-literal product from 2-input gates, a 4-input NAND for the OR) it is 20 NANDs, depth 7; with the pairs ¬a2·a1 and a2·a0 shared between products, 16. Par is 8, depth 5: the map\'s lower half is a2 ? a0 : a1 and its upper half that mux with two cells removed, so y = (a2 ? a0 : a1) · (¬a3 + a0·¬(a1·a2)), ¬(a1·a2) serving both factors and standing in for the mux\'s inverter. No circuit of 2-input NANDs is smaller or shallower. A 16:1 mux used as a lookup table (an FPGA LUT: constants on the data inputs, a on the select) fits any 4-input function and costs 60 NANDs before simplification.',
+    alts: [
+      { name: 'Minimal sum of products, NAND–NAND', nand: 20, depth: 7, note: 'Three inverters, four 3-literal products (an AND and a NAND each), the 4-input NAND as two ANDs and a NAND.' },
+      { name: 'Sum of products, shared pairs', nand: 16, depth: 7, note: '(¬a2·a1)·¬a3 + (¬a2·a1)·a0 + (a2·a0)·¬a3 + (a2·a0)·¬a1: two pairs serve the four products.' },
+      { name: '16:1 mux as a lookup table', lib: 'mux16x1' },
+    ],
   },
   g_wide: {
     problem: 'Some questions are about a whole word: is it zero? The ALU\'s zero output and the equality comparator behind beq / bne both end in a 16-input OR, fifteen 2-input gates however they are arranged. In a chain the first input passes through all fifteen; in a balanced tree through four. The gate count is the same either way: depth sets the clock.',
@@ -72,9 +76,9 @@ export const CASES0: Record<string, LevelCase> = {
   },
   g_dec: {
     problem: 'The register file has eight registers and one write port: the 3-bit rd field must become eight enable lines, exactly one of them 1, and none while rwe = 0. Output k is the AND of the enable and the address bits or their complements that spell k. A 4→16 decoder on the opcode is the first stage of the control unit.',
-    without: 'Each of x1–x7 would compare rd itself: seven 3-bit equality comparators (19 NANDs each, 133 in all) plus their enables, against one 51-NAND decoder.',
-    cost: 'Three shared inverters and eight 4-input ANDs: 51 NANDs, depth 5, par equal to the reference. Without the enable input it is 35 NANDs (3-input ANDs, same depth): gating rwe inside costs 16 NANDs and no delay, where eight ANDs after the decoder would cost the same 16 and add 2 delays.',
-    alts: [{ name: '3→8 decoder without enable', lib: 'dec3' }],
+    without: 'Each of x1–x7 would compare rd itself: seven 3-bit equality comparators (19 NANDs each, 133 in all) plus their enables, against one 30-NAND decoder.',
+    cost: 'Predecoded: two inverters and four 2-input ANDs turn (a0, a1) into four lines, a NAND, a NOT and an AND turn (a2, en) into two, and eight 2-input ANDs combine one of each: 30 NANDs, depth 5, par equal to the reference. Eight 4-input ANDs on three shared inverters, the textbook form, are 51 at the same depth. The enable costs 3 NANDs and no delay here (an inverter on a2 would replace the pair\'s 4), where eight ANDs after the decoder would cost 16 and add 2 delays. Memory row decoders are built the same way: predecoders, then one 2- or 3-input AND per row.',
+    alts: [{ name: 'Eight 4-input ANDs', nand: 51, depth: 5, note: 'Three inverters, then per output en and three literals through three 2-input ANDs (6 NANDs, depth 4).' }, { name: '3→8 decoder without enable (library)', lib: 'dec3' }],
   },
   g_mux8: {
     problem: 'Data moves 16 bits at a time, so every mux of the datapath is sixteen copies of the 1-bit cell sharing one select. This bus mux picks the ALU\'s b operand (rs2 or the immediate) and the PC\'s next value; trees of it are the 4:1 immediate and result selects and the register file\'s two 8:1 read ports.',
@@ -114,7 +118,7 @@ export const CASES0: Record<string, LevelCase> = {
   a_add16: {
     problem: 'RV16 words are 16 bits. Four 4-bit adders, the carry out of each into the next, add them. The next-PC logic has two: pc + imm for taken branches and jal, rs1 + imm for jalr. The ALU\'s adder / subtractor and the branch comparator\'s less-than carry the same chain.',
     without: 'No branch or jump targets and no 16-bit arithmetic: the ALU, the comparator and the next-PC logic all start from this adder.',
-    cost: '144 NANDs, depth 36: the carry crosses every bit, and the single-cycle core\'s critical path runs through such chains. A 16-bit Kogge–Stone adder (the side quest of this act) is 366 NANDs, depth 16; a carry-select adder 312 NANDs, depth 20.',
+    cost: '144 NANDs, depth 36: the carry crosses every bit, and the single-cycle core\'s critical path runs through such chains. A 16-bit Kogge–Stone adder (the side quest of this act) is 362 NANDs, depth 14 as its level builds it (the library\'s, listed below, 366 and 16); a carry-select adder 312 NANDs, depth 20.',
     alts: [{ name: 'Kogge–Stone (parallel prefix)', lib: 'ks16' }, { name: 'Carry-select, 4-bit blocks', lib: 'csel16_4' }],
   },
   a_inc16: {
@@ -141,7 +145,7 @@ export const CASES0: Record<string, LevelCase> = {
   a_shift16: {
     problem: 'sll, srl, sra and their immediate forms shift by 0 to 15 places in one cycle. Each of the four shift-amount bits controls a level of muxes shifting by 1, 2, 4 or 8; a level that is off passes the word through. The ALU has one right shifter for all three: a left shift reverses the bits before and after it, and sra fills with the sign bit instead of 0.',
     without: 'A left shift by k could be k additions (x + x); srl and sra would have no short substitute.',
-    cost: 'Four shift levels and a reversal level on each side, six 16-bit 2:1 muxes (49 NANDs each), plus 3 gates for the fill: 299 NANDs, depth 14. A left-only shifter is 196 NANDs, depth 9: sharing one array between both directions costs the two reversal levels (98 NANDs) instead of a second array.',
+    cost: 'Four shift levels and a reversal level on each side, six 16-bit 2:1 muxes (49 NANDs each), plus 3 gates for the fill: 299 NANDs, depth 14. A left-only shifter of these muxes is 196 NANDs, depth 9 (the library\'s, with 64-NAND muxes, 256): sharing one array between both directions costs the two reversal levels (98 NANDs) instead of a second array.',
     alts: [
       { name: 'Left shifter only (4 levels)', lib: 'shl16_4' },
       { name: 'A 16:1 mux per output bit', nand: 960, depth: 9, note: 'One direction only: sixteen 1-bit 16:1 muxes (60 NANDs, depth 9 each), each output bit picking its source bit.' },
@@ -156,7 +160,7 @@ export const CASES0: Record<string, LevelCase> = {
   o_fastadd: {
     problem: 'In a ripple adder the carry crosses every bit at 2 delays each, and that chain is on the single-cycle core\'s critical path: the ALU, the branch comparator and the next-PC adders all ripple. A parallel-prefix adder computes every carry from generate / propagate pairs (g = a·b, p = a ⊕ b), combined in log2(16) = 4 levels, so the carry into bit k no longer waits for bit k − 1.',
     without: 'Depth doubles with the width: 36 for a 16-bit ripple adder, 68 for 32 bits.',
-    cost: 'Kogge–Stone: 366 NANDs, depth 16, against the ripple adder\'s 144 and 36; carry-select sits between them (312, depth 20). In the core, the fast ALU makes it 4959 NANDs instead of 4741, and the core level\'s clock period falls from 98 to 76 delays; fast next-PC adders on top would cost 444 more and buy nothing, being off the critical path.',
+    cost: 'Kogge–Stone: 362 NANDs, depth 14 (the library\'s version 366, depth 16), against the ripple adder\'s 144 and 36; carry-select sits between them (312, depth 20). In the core, the fast ALU makes it 4938 NANDs instead of 4720, and the core level\'s clock period falls from 98 to 76 delays; fast next-PC adders on top would cost 444 more and buy nothing, being off the critical path.',
     alts: [{ name: 'Ripple carry', lib: 'rca16' }, { name: 'Carry-select, 4-bit blocks', lib: 'csel16_4' }],
   },
 
@@ -220,8 +224,8 @@ export const CASES0: Record<string, LevelCase> = {
   m_rf: {
     problem: 'An R-type instruction reads two registers and writes a third in the same cycle, so the register file has two read ports (rs1 = instr[9:7], rs2 = instr[12:10]) and one write port (rd = instr[6:4]). Writes: the 3→8 decoder on rd, enabled by rwe, loads one of x1–x7 at the clock edge. Reads: two 8:1 bus muxes, combinational. x0 always reads 0: a constant, with no register behind it.',
     without: 'With one read port an R-type instruction would take two cycles; a real x0 would spend 208 NANDs storing a value no write may change.',
-    cost: 'Seven 16-bit registers (1456), two 8:1 read muxes (343 each) and the decoder (51): 2193 NANDs, nearly half the single-cycle core. Each extra read port is another 343. The pipeline writes the file at the falling edge, so an instruction three behind its producer reads the new value with no third port and no forwarding.',
-    alts: [{ name: 'x0 as a real register', nand: 2611, note: 'Eight 16-bit registers instead of seven (+208 NANDs), x0\'s never enabled.' }],
+    cost: 'Seven 16-bit registers (1456), two 8:1 read muxes (343 each) and the decoder (30): 2172 NANDs, nearly half the single-cycle core. Each extra read port is another 343. The pipeline writes the file at the falling edge, so an instruction three behind its producer reads the new value with no third port and no forwarding.',
+    alts: [{ name: 'x0 as a real register', nand: 2380, note: 'Eight 16-bit registers instead of seven (+208 NANDs), x0\'s never enabled.' }],
   },
 
   // ---- Lessons and drills whose case adds to the why --------------------------------------------

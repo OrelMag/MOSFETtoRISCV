@@ -41,7 +41,7 @@ export const CHECK3: Record<string, Quiz[]> = {
       options: ['Add 1', 'Nothing', 'Subtract 1'],
       answer: 1,
       explain: 'For an interrupt mepc is the next instruction that has not run, so mret resumes exactly there.',
-      why: ['That is the ecall rule; here the instruction at 0x0030 has not executed and would be skipped.', '', 'The instruction before 0x0030 already completed; running it again repeats its effect.'],
+      why: ['That is the ecall rule: mepc holds the ecall itself, and returning there would trap again. Here the instruction at 0x0030 has not run and would be skipped.', '', 'The instruction before 0x0030 already completed; running it again repeats its effect.'],
     },
     {
       question: 'A handler services the device and returns with <code>mret</code> but never stores 0 to IRQ (0xFFF9). What happens?',
@@ -92,11 +92,11 @@ export const CHECK3: Record<string, Quiz[]> = {
       why: ['', 'Storing the leading 1 as well (fraction 1100000000) encodes 1.75 × 2 = 3.5: the leading 1 is implicit.', 'Exponent field 00001 forgets the bias: that is 1.5 × 2^−14.', 'That is 1.5: the significand is right but the exponent was not raised by one.'],
     },
     {
-      question: 'Which of these integers does binary16 not store exactly?',
-      options: ['1,000', '2,048', '3,000', '4,097'],
-      answer: 3,
-      explain: 'With 11 significant bits the spacing between 4,096 and 8,192 is 4, so 4,097 rounds to 4,096.',
-      why: ['Every integer up to 2,048 is exact.', '2,048 = 2^11 is exact, as is every power of two in range.', 'Between 2,048 and 4,096 the spacing is 2, so even integers like 3,000 are still exact.', ''],
+      question: 'Which binary16 pattern is a NaN?',
+      options: ['0x7E00', '0x7C00', '0x8000', '0x7BFF'],
+      answer: 0,
+      explain: 'Exponent field 31 is reserved: fraction 0 is ±∞, any other fraction NaN. 0x7E00 = 0 11111 1000000000, the canonical quiet NaN a RISC-V FPU returns. Field 0 with fraction 0 is ±0.',
+      why: ['', '0 11111 0000000000: fraction 0 with field 31 is +∞, the result of an overflow or of 1 / +0.', '1 00000 0000000000 is −0: sign set, everything else 0. It compares equal to +0, yet 1 / −0 = −∞.', '0 11110 1111111111 is 65,504, the largest finite value: field 30 is the top normal binade.'],
     },
   ],
   rounding: [
@@ -108,11 +108,11 @@ export const CHECK3: Record<string, Quiz[]> = {
       why: ['', 'Down would keep lsb 1; ties go to the even neighbour, which is the one above.', 'The fraction wrapped to 0 without the carry reaching the exponent: rounding up 1.11…1 must increment the exponent.'],
     },
     {
-      question: 'An adder\'s alignment shifter keeps the first bit shifted out (G) but drops the rest instead of ORing them into S. Which RNE result does it get wrong?',
-      options: ['A result just above half an ulp with an even lsb: rounded down as if a tie', 'An exact tie: rounded up', 'A result below half an ulp: rounded up', 'None: RNE only needs G'],
+      question: 'A binary16 result is −1.0000000000|01… (lsb 0, G 0, S 1): a little below −1.0. What does RDN (round down, towards −∞) give?',
+      options: ['0xBC01: one ulp further from zero', '0xBC00: less than half an ulp was dropped', '0xBC00: rounding down truncates the magnitude'],
       answer: 0,
-      explain: 'With S lost, G = 1 and S = 0 look like a tie, so an even lsb stays; the true value was above half and should round up.',
-      why: ['', 'A true tie has S = 0 anyway; it is still decided by the lsb.', 'Below half means G = 0, which the shifter still gets right: it rounds down.', 'G = 1 alone cannot tell a tie from more than half; S makes the difference.'],
+      explain: 'RDN rounds every inexact result towards −∞. Below zero that increases the magnitude whenever G + S = 1: −(1 + 2^−10) = 1 01111 0000000001. RNE, RTZ, RUP and RMM all give 0xBC00 here; NX is set either way.',
+      why: ['', 'Half an ulp is RNE\'s (and RMM\'s) rule. The directed modes ignore the distance: any inexact result goes the way the mode points.', 'Truncating the magnitude is RTZ. For a negative value the floor is the larger magnitude: RDN and RTZ agree only above zero.'],
     },
   ],
   subnormal: [
@@ -172,11 +172,11 @@ export const CHECK3: Record<string, Quiz[]> = {
       why: ['Each lane works on its own operands, so each needs its own registers.', 'Each lane computes its own result: an ALU per lane.', '', 'The result path carries each lane\'s own value: one per lane.'],
     },
     {
-      question: 'RV16\'s 4-lane SIMD core is 15,774 NANDs against 18,964 for four single-cycle cores, about 17% smaller. Why so little?',
+      question: 'RV16\'s 4-lane SIMD core is 15,669 NANDs against 18,880 for four single-cycle cores, about 17% smaller. Why so little?',
       options: ['The per-lane part (registers, ALU) dominates a core; the shared control is a small share', 'The lane decoder and mask cost as much as three cores\' control', 'SIMD lanes need wider registers than scalar cores'],
       answer: 0,
-      explain: 'Of 15,774 NANDs, 1,818 are shared and 3,489 per lane; the register files alone are 56%. The bigger saving is one instruction memory and fetch for four results.',
-      why: ['', 'Mask and lane decoder together are 175 NANDs; the shared part is 1,818 in all.', 'Each lane has the same 16-bit registers as the scalar core.'],
+      explain: 'Of 15,669 NANDs, 1,797 are shared and 3,468 per lane; the register files alone are 55%. The bigger saving is one instruction memory and fetch for four results.',
+      why: ['', 'Mask and lane decoder together are 154 NANDs; the shared part is 1,797 in all.', 'Each lane has the same 16-bit registers as the scalar core.'],
     },
   ],
   leader: [
@@ -229,11 +229,11 @@ export const CHECK3: Record<string, Quiz[]> = {
   ],
   simt: [
     {
-      question: 'Thread 0 of a warp spins on a word that thread 1 of the same warp writes later in the program. What happens on a SIMT core?',
+      question: 'Thread 0 of a warp spins on a word that thread 1 of the same warp writes later in the program. What happens on this SIMT core (one PC per warp, a reconvergence stack)?',
       options: ['It never finishes: while thread 0 spins, thread 1 waits masked off', 'It works after a few iterations, as the threads interleave', 'It works at once: lanes in lock-step see each other\'s writes'],
       answer: 0,
-      explain: 'The threads share one PC: the warp runs the spinning side with thread 1 parked, and returns to thread 1 only after the loop exits.',
-      why: ['', 'Threads of one warp do not interleave in time; only warps do.', 'Thread 1 has not reached its store, so there is nothing to see.'],
+      explain: 'The threads share one PC: the warp runs the spinning side with thread 1 parked, and returns to thread 1 only after the loop exits. Nvidia GPUs since Volta keep a PC per thread and schedule a warp\'s threads independently: there the spin eventually yields to thread 1.',
+      why: ['', 'On a stack-based core the threads of one warp do not interleave in time; only warps do. Interleaving them takes a PC per thread (Volta\'s independent thread scheduling).', 'Thread 1 has not reached its store, so there is nothing to see.'],
     },
     {
       question: 'A kernel splits on <code>tid &lt; 2</code> but forgets the join. What happens?',
@@ -252,11 +252,11 @@ export const CHECK3: Record<string, Quiz[]> = {
       why: ['', '50% is the if alone (12 of 24): quoting the region instead of the whole run.', 'Masked lanes still occupy the cycle; they count in the denominator.'],
     },
     {
-      question: 'With no if / else at all, a 16-word sum scores 87% and a 64-word sum 95%. Why the difference?',
-      options: ['The combine at the end, with few lanes still holding partial sums, is the same length but a smaller share of the longer run', 'The longer array has fewer memory stalls', 'The 16-word sum mispredicts more branches'],
+      question: 'On four lanes the if / else test runs at 71% lane utilization, the nested-if test (an if on <code>tid &amp; 2</code> holding an if on <code>tid &amp; 1</code>) at 59%. Why is nesting worse?',
+      options: ['Inside the outer if two lanes are on, and the inner if splits them again: its sides run on one lane of four', 'Every split and join runs with all lanes off', 'Nested code has more instructions, and utilization falls with the instruction count'],
       answer: 0,
-      explain: 'The reduction\'s combine idles lanes for a fixed number of instructions; the strided part runs at full width and grows with n.',
-      why: ['', 'Utilization counts lane-steps per instruction, not cycles: stalls do not enter it.', 'Prediction affects cycles, not which lanes are on.'],
+      explain: 'Masks narrow down the nesting: the outer body runs on 2 of 4 lanes, the inner sides on 1 of 4 (3 instructions on lane 3, 2 on lane 2). Lane-steps 16 + 8 + 3 + 2 + 4 + 4 + 8 = 45 over 19 × 4 = 76: 59%.',
+      why: ['', 'split and join are instructions like any other, issued under the current mask; the cost is the one-lane inner sides.', 'Utilization is a ratio: extra instructions at full width would raise it. It falls because each nested side has fewer lanes on.'],
     },
   ],
   barrel: [
@@ -341,11 +341,11 @@ export const CHECK3: Record<string, Quiz[]> = {
   ],
   refresh: [
     {
-      question: 'm_bank opens each of its 16 rows at least every 288 cycles: a refresh every 18 cycles on average. With 32 rows and the same retention, how often?',
-      options: ['Every 9 cycles', 'Every 18 cycles', 'Every 36 cycles'],
+      question: 'DDR4 at our clock: a REF at least every tREFI = 1 974 cycles (7.8 µs), each keeping an 8 Gb chip busy for tRFC = 89 cycles (350 ns). What share of the time does refresh take, and at 16 Gb (tRFC 550 ns)?',
+      options: ['About 4.5%; about 7% at 16 Gb', 'About 4.5% at either size: tREFI does not change', 'Under 1%: a refresh is one activate and precharge, about 45 ns'],
       answer: 0,
-      explain: 'Twice the rows in the same time: 288 / 32 = 9 cycles between refreshes on average.',
-      why: ['', 'The rate depends on the row count: each row still needs its turn within 288 cycles.', 'More rows need more refreshes in the same time, not fewer.'],
+      explain: 'tRFC / tREFI: 89 / 1 974 = 4.5% (350 / 7 800 ns), and 550 / 7 800 = 7% at 16 Gb. tREFI stays fixed by retention (8 192 REFs in 64 ms), so each REF refreshes more rows as chips grow, and tRFC grows with them.',
+      why: ['', 'tREFI stays, but a bigger chip has more rows to cover in the same 8 192 REFs: tRFC grows, 350 ns to 550 ns, and so does the share.', 'One REF refreshes several rows in every bank at once; that is why tRFC is 350 ns, not one row cycle.'],
     },
     {
       question: 'A controller refreshes only when no request is waiting. What can go wrong?',
@@ -412,7 +412,7 @@ export const CHECK3: Record<string, Quiz[]> = {
       why: ['', 'The spare area says whose page it was, not whether it is current; the table decides.', 'That would roll logical page 3 back to an old version.'],
     },
     {
-      question: 'An FTL like m_flash keeps 8 logical pages in 20 physical pages (5 blocks of 4), always one block erased. When the 16 pages outside that block are all written, at least how many are garbage?',
+      question: 'An FTL on m_flash\'s scheme, but with 5 blocks of 4 pages (20 physical), keeps 8 logical pages and always one block erased. When the 16 pages outside that block are all written, at least how many are garbage?',
       options: ['8', '4', '12', '0'],
       answer: 0,
       explain: 'At most 8 written pages can be live (one per logical page), so at least 16 − 8 = 8 are garbage.',

@@ -173,9 +173,9 @@ export const CHECK0: Record<string, Quiz[]> = {
   ],
   fulladder: [
     {
-      question: 'a = 1, b = 1, cin = 0. What are s and cout, and what cout would a design taking the carry from a ⊕ b give?',
+      question: 'a = 1, b = 1, cin = 0. What are s and cout, and what cout would a design give that forgets the generate term, cout = cin·(a ⊕ b)?',
       options: ['s = 1, cout = 0; that design agrees', 's = 0, cout = 1; that design gives 0', 's = 0, cout = 0; that design agrees'], answer: 1,
-      explain: '1 + 1 + 0 = 2 = binary 10. The carry is a·b + cin·(a ⊕ b) = 1; a ⊕ b is 0 here.',
+      explain: '1 + 1 + 0 = 2 = binary 10. The carry is a·b + cin·(a ⊕ b) = 1; without the generate term a·b only cin·(a ⊕ b) = 0 is left.',
       why: ['Two 1s have even parity: the sum bit is 0, and a column summing to 2 carries.', '', 'A column summing to 2 must carry: cout is the majority of the inputs, here 1.'],
     },
     {
@@ -238,7 +238,7 @@ export const CHECK0: Record<string, Quiz[]> = {
       question: 'The 16-bit ALU is 1 055 NANDs, 64 delays deep with ripple carry. What should be made faster to shorten its critical path?',
       options: ['The subtractor\'s carry chain', 'The 8:1 result mux, its biggest part', 'The barrel shifter'], answer: 0,
       explain: 'The delay is in the carry chain: a Kogge–Stone adder takes the ALU from 64 to 42 delays for 218 more NANDs.',
-      why: ['', 'The result mux is most of the area (343 NANDs) but only a few levels deep.', 'The shifter is large (299 NANDs) but only 14 deep.'],
+      why: ['', 'The result mux is the largest part (343 NANDs, a third of the ALU) but only 7 levels deep.', 'The shifter is large (299 NANDs) but only 14 deep.'],
     },
   ],
   latch: [
@@ -285,9 +285,9 @@ export const CHECK0: Record<string, Quiz[]> = {
   ],
   register: [
     {
-      question: 'With the 9-NAND flip-flop, a 12-bit register with load enable costs:',
+      question: 'With the 9-NAND flip-flop and a 4-NAND enable mux per bit (as s_reg4 builds it), a 12-bit register with load enable costs:',
       options: ['108 NANDs', '156 NANDs', '180 NANDs'], answer: 1,
-      explain: '9 for the flip-flop + 4 for the enable mux = 13 per bit, × 12 = 156.',
+      explain: '9 for the flip-flop + 4 for the enable mux = 13 per bit, × 12 = 156. Sharing one ¬en across the bits, as a bus mux can share ¬s, makes it 1 + 12 × 12 = 145.',
       why: ['108 is the flip-flops alone; each bit also needs its 4-NAND enable mux.', '', '180 is 15 per bit, the library\'s 11-NAND flip-flop drawing; with the 9-NAND one it is 13.'],
     },
     {
@@ -341,8 +341,8 @@ export const CHECK0: Record<string, Quiz[]> = {
   ],
   regfile: [
     {
-      question: 'Adding a third read port to the RV16 8 × 16 register file (2 193 NANDs) costs about:',
-      options: ['1 456 NANDs: another copy of the registers', '343 NANDs: one more 8:1 bus mux tree', '51 NANDs: another decoder'], answer: 1,
+      question: 'Adding a third read port to the RV16 8 × 16 register file (2 172 NANDs) costs about:',
+      options: ['1 456 NANDs: another copy of the registers', '343 NANDs: one more 8:1 bus mux tree', '30 NANDs: another decoder'], answer: 1,
       explain: 'Read ports share the storage; each has its own mux tree. The two existing ones are 686 NANDs, 343 each.',
       why: ['Every port reads the same registers; only the selection is duplicated.', '', 'A decoder selects the register written; a read port selects with a mux tree.'],
     },
@@ -386,7 +386,7 @@ export const CHECK0: Record<string, Quiz[]> = {
       question: 'An external interrupt is taken at pc = 0x0080, before the instruction there has run. Which is right?',
       options: ['mepc = 0x0081: the hardware skips to the next instruction', 'mepc = 0x0080, mcause = 0x800B, and mret returns to 0x0080 as is', 'mepc = 0x0080, and the handler must add 1 as after an ecall'], answer: 1,
       explain: 'mepc holds the instruction that was interrupted, which has not executed; it must run on return.',
-      why: ['mepc is the interrupted instruction, not the next one; skipping it would lose an instruction that never ran.', '', 'An ecall has executed, so the handler skips it; an interrupted instruction has not, and adding 1 would skip it.'],
+      why: ['mepc is the interrupted instruction, not the next one; skipping it would lose an instruction that never ran.', '', 'After an ecall mepc holds the ecall itself, so the handler adds 1 or mret would trap again; an interrupted instruction has not run, and adding 1 would skip it.'],
     },
     {
       question: 'csrrs t0, mip, x0:',
@@ -459,10 +459,10 @@ export const CHECK0: Record<string, Quiz[]> = {
       why: ['Neighbouring addresses differ in the index (5 and 6) and live in different lines.', '', 'The index is the low three bits: 0x51 ends in 001 (line 1), 0x15 in 101 (line 5).'],
     },
     {
-      question: 'After reset the tag array holds zeros. Without valid bits, the first load from 0x03:',
-      options: ['Hits on line 3 and returns whatever its data holds', 'Misses, since nothing was loaded', 'Stalls until the tag array is initialized'], answer: 0,
-      explain: '0x03 has tag 00000 and index 3; the stored tag is 00000 too, so the comparator says hit.',
-      why: ['', 'Nothing records "loaded" except the valid bit; the tag comparison alone matches.', 'There is no initialization pass; valid bits cleared by reset are what make the first access miss.'],
+      question: 'A hit takes 1 cycle and a miss 20 more. Direct-mapped, 10% of accesses miss; 2-way set-associative, 6% miss, but the way mux stretches every hit to 2 cycles. Average access time of each?',
+      options: ['3 and 3.2 cycles: the direct-mapped cache wins', '3 and 2.2 cycles: the 2-way cache wins', '2 and 1.2 cycles: the 2-way cache wins'], answer: 0,
+      explain: 'AMAT = hit time + miss rate × miss penalty: 1 + 0.10 × 20 = 3 against 2 + 0.06 × 20 = 3.2. Associativity buys fewer conflict misses with a slower hit; it pays once misses are dear: at a 50-cycle penalty it is 6 against 5.',
+      why: ['', 'That keeps the 2-way hit at 1 cycle. The slower hit is paid by every access, not only by the misses.', 'That leaves out the hit time: a miss still pays the lookup, so AMAT starts from the hit time and adds miss rate × penalty.'],
     },
   ],
   lane: [

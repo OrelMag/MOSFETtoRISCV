@@ -126,7 +126,7 @@ export class ChapterPage implements Page {
     const met = settings.visited(c.id).filter((k) => k < this.step && k < c.steps.length).map((k) => c.steps[k].body);
     import('../../campaign/ui/glossaryui').then((m) => {
       if (!el.isConnected) return;
-      const skip = new Set<string>();
+      const skip = m.chapterSkip(c);
       for (const b of met) for (const id of m.termsIn(b)) skip.add(id);
       m.markTerms(el, 10, skip);
     }, () => {});

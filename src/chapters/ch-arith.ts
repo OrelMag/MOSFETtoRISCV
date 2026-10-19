@@ -1,12 +1,35 @@
+import type { ComponentDef } from '../sim/types';
 import { addSub, bcdAdder, decoder, demux, encoder, FULL_ADDER, FULL_ADDER_HA, HALF_ADDER, busMux2, magComparator, muxTree, priorityEncoder, rca } from '../lib';
+import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
 import type { Chapter } from './types';
+
+/** NAND delays to one output port (logicDepth reports the deepest output; the subtractor's is v, not the carry). */
+function portDepth(def: ComponentDef, port: string): number {
+  const d = flatten(def, { mode: 'gate' });
+  const driverOf = new Int32Array(d.netCount).fill(-1);
+  d.leaves.forEach((l, i) => l.outputs.forEach((p) => p.forEach((n) => (driverOf[n] = i))));
+  const memo = new Int32Array(d.leaves.length).fill(-1);
+  const depth = (li: number): number => {
+    if (memo[li] >= 0) return memo[li];
+    let m = 0;
+    for (const p of d.leaves[li].inputs) for (const n of p) if (driverOf[n] >= 0) m = Math.max(m, depth(driverOf[n]));
+    return (memo[li] = m + (d.leaves[li].kind === 'nand' ? 1 : 0));
+  };
+  let max = 0;
+  for (const n of d.root.ports[port]) if (driverOf[n] >= 0) max = Math.max(max, depth(driverOf[n]));
+  return max;
+}
+
+const CMP32 = logicDepth(magComparator(32, false));
+/** The 32-bit subtractor's carry out: a < b (unsigned) exactly when it is 0, a borrow. */
+const BORROW32 = portDepth(addSub(32), 'cout');
 
 export const chAdders: Chapter = {
   id: 'adders', num: 6, title: 'Adders', level: 'Arithmetic',
   blurb: 'From adding two bits to adding two numbers, and why carries are slow.',
   goals: [
-    'build a half adder (5 NANDs) and a full adder (9 NANDs), and say which gates the 9-NAND version saves',
+    `build a half adder (${stats(HALF_ADDER).nands} NANDs) and a full adder (${stats(FULL_ADDER).nands} NANDs), and say which gates the ${stats(FULL_ADDER).nands}-NAND version saves`,
     'chain full adders into a ripple-carry adder and say how its delay grows with the width',
     'turn the adder into a subtractor with one XOR per bit and the carry-in',
     'compare numbers, signed and unsigned, with a comparator whose depth grows with log n',
@@ -14,11 +37,11 @@ export const chAdders: Chapter = {
   builds: ['gates', 'binary'],
   recap: {
     keep: [
-      'Half adder: s = a XOR b, c = a AND b, 5 NANDs. Full adder: two half adders and an OR (13 NANDs), or 9 NANDs once the cancelling inverters go, with cin → cout two NAND delays.',
-      'A ripple-carry adder chains n full adders, and the carry crosses every one. 4 bits: 36 NANDs, 12 delays deep; 32 bits: 288 NANDs, 68 deep.',
-      'Subtraction: a − b = a + ¬b + 1. An XOR on every b bit plus <code>sub</code> into the carry-in make one adder/subtractor.',
-      'A magnitude comparator merges "greater" and "equal" fields in a tree: 27 delays at 32 bits against 73 for the subtractor\'s borrow. The signed one differs only in the sign bit\'s cell.',
-      'BCD keeps one decimal digit per four bits: a digit sum above 9 gets 6 added and a decimal carry. 80 NANDs per digit against 36 for a 4-bit binary adder.',
+      `Half adder: s = a XOR b, c = a AND b, ${stats(HALF_ADDER).nands} NANDs. Full adder: two half adders and an OR (${stats(FULL_ADDER_HA).nands} NANDs), or ${stats(FULL_ADDER).nands} NANDs once the cancelling inverters go, with cin → cout two NAND delays.`,
+      `A ripple-carry adder chains n full adders, and the carry crosses every one. 4 bits: ${stats(rca(4)).nands} NANDs, ${logicDepth(rca(4))} delays deep; 32 bits: ${stats(rca(32)).nands} NANDs, ${logicDepth(rca(32))} deep.`,
+      'Subtraction: a − b = a + ¬b + 1. An XOR on every b bit plus <code>sub</code> into the carry-in make one adder/subtractor. Signed overflow v = the carry into the top bit XOR the carry out of it.',
+      `A magnitude comparator merges "greater" and "equal" fields in a tree: ${CMP32} delays at 32 bits against ${BORROW32} for the subtractor's carry out (the inverted borrow). The signed one differs only in the sign bit's cell.`,
+      `BCD keeps one decimal digit per four bits: a digit sum above 9 gets 6 added and a decimal carry. ${stats(bcdAdder(1)).nands} NANDs per digit against ${stats(rca(4)).nands} for a 4-bit binary adder.`,
     ],
     practise: ['a_ha', 'a_fa', 'a_add4', 'a_add16', 'a_addsub16', 'a_slt'],
     check: [
@@ -37,7 +60,7 @@ export const chAdders: Chapter = {
         why: ['', 'Only b passes through XORs; a goes straight into the full adders.', 'Overflow has its own output, v. The carry-in completes the negation: ¬b alone is −b − 1.'],
       },
       {
-        question: 'Why is the 32-bit comparator 27 NAND delays deep while the subtractor\'s borrow is 73?',
+        question: `Why is the 32-bit comparator ${CMP32} NAND delays deep while the subtractor's carry out (the inverted borrow) takes ${BORROW32}?`,
         options: ['It merges bit fields in a tree, so its depth grows with log n', 'It is built from faster gates', 'It computes no difference, so it has fewer gates', 'It compares only the top bits'],
         answer: 0,
         explain: 'Each combine cell decides a field from two halves: "the higher one decides, unless equal". log₂ 32 = 5 levels of cells replace a 32-stage chain.',
@@ -52,7 +75,7 @@ export const chAdders: Chapter = {
         <p>Add two bits and the answer needs two bits: 1 + 1 = <code>10</code> in binary. The low bit is the
         <strong>sum</strong> <code>s</code>; the high bit is the <strong>carry</strong> <code>c</code>.</p>
         <ul><li><span data-show="g1 g2 g3 g4"><code>s = a XOR b</code></span></li><li><span data-show="g1 g5"><code>c = a AND b</code></span></li></ul>
-        <p>This is a <strong>half adder</strong>. It is the XOR circuit from <a href="#/c/gates/0">chapter 4</a> plus one extra NAND:
+        <p>This is a <strong>half adder</strong>. It is the XOR circuit from <a href="#/c/gates/4">chapter 4</a> plus one extra NAND:
         the carry reuses the XOR's first gate. That makes 5 NANDs.</p>`,
       scene: () => ({ root: HALF_ADDER, inputs: { a: 1, b: 1 } }),
     },
@@ -90,7 +113,7 @@ export const chAdders: Chapter = {
       title: 'Chaining: the ripple-carry adder',
       body: `
         <p>Line up <span data-show="fa0 fa1 fa2 fa3">four full adders</span> and connect each carry-out to the next carry-in. That gives a <strong>4-bit
-        ripple-carry adder</strong>, the circuit from <a href="#/c/map/0">the first chapter</a>.</p>
+        ripple-carry adder</strong>, the circuit from <a href="#/c/map/1">the map chapter</a>.</p>
         <p>The <span data-show="sa sb">splitter on the left</span> (the thin bar) breaks the bus <code>a</code> into single wires, one per full adder;
         the <span data-show="ms">merger on the right</span> bundles the sum bits back into a bus.</p>
         <div class="try">Compute 9 + 7. Watch the carries: which full adders produce one?</div>`,
@@ -125,6 +148,9 @@ export const chAdders: Chapter = {
         <p>Two's complement makes subtraction easy: <code>a − b = a + (NOT b) + 1</code>.</p>
         <p>Put <span data-show="x0 x1 x2 x3 x4 x5 x6 x7">an XOR on every <code>b</code> input</span>: with <code>sub = 1</code> each XOR inverts its bit. Feed
         <code>sub</code> into the carry-in as well to add the 1. One circuit now adds <em>and</em> subtracts.</p>
+        <p>It also reports overflow. <code>cout</code> is the unsigned flag: a carry out of an add, or no carry out of a subtract (a
+        borrow). The signed result is wrong exactly when the carry into the top bit differs from the carry out of it:
+        <span data-show="vx"><code>v = c7 XOR c8</code></span> here, and <code>n</code> is the top bit of s.</p>
         <div class="try">Compute 5 − 7 (a = 5, b = 7, sub = 1). Switch the radix to DEC in the top bar, then click the
         <code>s</code> label on the wire to cycle through readings: is it 254 or −2? Both.</div>`,
       scene: () => ({ root: addSub(8), inputs: { a: 5, b: 7, sub: 0 } }),
@@ -142,11 +168,11 @@ export const chAdders: Chapter = {
     {
       title: 'Comparing without subtracting',
       body: `
-        <p>The subtractor already compares: a &lt; b exactly when a − b borrows. But the borrow is the slowest signal it has, at the
-        end of the full carry chain. A dedicated <strong>magnitude comparator</strong> skips the arithmetic. <span data-show="c0 c1 c2 c3">Each bit</span> says
+        <p>The subtractor already compares: a &lt; b (unsigned) exactly when a − b borrows. But the borrow (no carry out) comes at the end
+        of the full carry chain. A dedicated <strong>magnitude comparator</strong> skips the arithmetic. <span data-show="c0 c1 c2 c3">Each bit</span> says
         <em>greater here</em> (a·¬b) and <em>equal here</em> (a XNOR b). A <span data-show="m0 m1 m2">tree of combine cells</span> then merges neighbouring fields:
         the high field decides, unless it is equal. <span data-show="lt">lt</span> is neither greater nor equal.</p>
-        <p>At 32 bits that is ${logicDepth(magComparator(32, false))} gate delays against ${logicDepth(addSub(32))} for the subtractor's borrow, for a similar cost (${stats(magComparator(32, false)).nands} NANDs against ${stats(addSub(32)).nands}). The depth grows
+        <p>At 32 bits that is ${CMP32} gate delays against ${BORROW32} for the subtractor's carry out, for a similar cost (${stats(magComparator(32, false)).nands} NANDs against ${stats(addSub(32)).nands}). The depth grows
         with log n instead of n.</p>
         <div class="try">Open a <code>combine</code> cell: it is the same "the higher one decides" rule as the carry-lookahead cells in
         <a href="#/c/fastadd/0">chapter 15</a>.</div>`,
@@ -178,8 +204,8 @@ export const chAdders: Chapter = {
         <p>Calculators, clocks and money keep numbers in decimal: four bits per digit, values 0–9, the codes 1010–1111 unused. This is
         <strong>binary-coded decimal</strong>. Read a BCD number in hex and it looks decimal: 0x38 is thirty-eight.</p>
         <p>Adding two digits in binary is right up to 9. Above that the sum must skip the six unused codes, so whenever the binary sum is
-        more than 9 (a carry out, or 1010–1111) the <span data-show="u2 u3">digit adder</span> adds 6 and sends a decimal carry to the next digit. 80 NANDs per digit,
-        against 36 for a 4-bit binary adder: the price of decimal. x86 kept <code>daa</code> (decimal adjust) for exactly this; RISC-V has none.</p>
+        more than 9 (a carry out, or 1010–1111) the <span data-show="u2 u3">digit adder</span> adds 6 and sends a decimal carry to the next digit. ${stats(bcdAdder(1)).nands} NANDs per digit,
+        against ${stats(rca(4)).nands} for a 4-bit binary adder: the price of decimal. x86 had <code>daa</code> (decimal adjust) for exactly this until 64-bit mode dropped it; RISC-V has none.</p>
         <div class="try">In HEX mode, set a = 0x38 and b = 0x45: s = 0x83, thirty-eight plus forty-five.</div>`,
       scene: () => ({ root: bcdAdder(2), inputs: { a: 0x38, b: 0x45, cin: 0 } }),
       challenge: {
@@ -211,7 +237,7 @@ export const chRouting: Chapter = {
       'A decoder raises exactly one of 2ⁿ outputs (one-hot): each output is an AND of true and inverted address rails. An enable is one more input on every AND.',
       'A 2ᵏ:1 multiplexer is a tree of 2ᵏ − 1 two-input muxes, k levels deep. A w-bit bus mux is w of them sharing one select. Eight 4-bit words to one: 7 bus muxes, 112 NANDs, 7 NAND delays.',
       'An encoder ORs the inputs whose index has bit j set (8 inputs: 27 NANDs). It cannot tell input 0 from no input, nor make sense of two at once.',
-      'A priority encoder reports the highest request plus a valid bit v, built recursively from half-size encoders: 7 NAND delays for 8 inputs, 11 for 32.',
+      `A priority encoder reports the highest request plus a valid bit v, built recursively from half-size encoders: ${logicDepth(priorityEncoder(8))} NAND delays for 8 inputs, ${logicDepth(priorityEncoder(32))} for 32.`,
       'A demultiplexer sends one word to one of 2ᵏ outputs: a decoder gating rows of ANDs. A memory writes through a decoder and reads through a mux tree.',
     ],
     practise: ['g_dec', 'g_mux8'],
@@ -279,7 +305,16 @@ export const chRouting: Chapter = {
       title: 'Switching whole buses',
       body: `
         <p>To choose between two 4-bit numbers, use <span data-show="m0 m1 m2 m3">four 2:1 muxes side by side</span>, all listening to
-        <span data-show="pin:s">the same select line</span>. This is a <strong>bus multiplexer</strong>: one MUX2 per bit.</p>`,
+        <span data-show="pin:s">the same select line</span>. This is a <strong>bus multiplexer</strong>: one MUX2 per bit.</p>
+        <details class="deeper"><summary>Deeper: tri-state buses</summary>
+        <p>Boards and early computers chose differently: every source drives the same wires through a <strong>tri-state buffer</strong>,
+        which either drives its value or lets go (output Z, high impedance), and one-hot enables from a decoder let exactly one source
+        speak. No mux tree, and one wire per bit however many sources.</p>
+        <p>Inside chips the mux won. Two enables overlapping for a moment let two drivers fight (contention: a short from supply to ground
+        through both); none enabled leaves the bus floating at an undefined level that needs a keeper; a long wire with many drivers is
+        slow and hard to time; and static timing, scan test and FPGA fabrics all want every net to have exactly one driver. Tri-states
+        survive at the pins (a memory chip's data bus, open-drain lines such as I²C) and in dense arrays, where SRAM cells share a bit
+        line. The sandbox has the part (TRIBUF), simulated at switch level.</p></details>`,
       scene: () => ({ root: busMux2(4), inputs: { a: 0x3, b: 0xc, s: 0 } }),
     },
     {
@@ -315,7 +350,7 @@ export const chRouting: Chapter = {
         <p>A <strong>priority encoder</strong> accepts any pattern of requests and reports the highest one, plus <span data-show="pin:v"><code>v</code></span> (valid)
         to tell "request 0" from "no request". It is built recursively: <span data-show="lo hi">two half-size encoders</span>, and if the upper half has any
         request it wins, so its <code>v</code> becomes the top index bit and steers <span data-show="mx">a multiplexer</span> for the low bits.</p>
-        <p>log₂ n levels of multiplexers: 7 gate delays for 8 inputs, 11 for 32. Interrupt controllers, arbiters, floating-point
+        <p>log₂ n − 1 levels of multiplexers: ${logicDepth(priorityEncoder(8))} gate delays for 8 inputs, ${logicDepth(priorityEncoder(32))} for 32. Interrupt controllers, arbiters, floating-point
         normalization (find the leading 1) and content-addressable memories all rely on one.</p>`,
       scene: () => ({ root: priorityEncoder(8), inputs: { r: 0b00010110 } }),
       challenge: {

@@ -193,7 +193,7 @@ export const TRIBUF: ComponentDef = define({
  */
 export const INV_PSEUDO: ComponentDef = define({
   id: 'inv_pseudo', name: 'Pseudo-NMOS inverter', category: 'cell',
-  summary: 'A pull-up resistor and one NMOS: the NMOS overrides the resistor while a = 1. One transistor, but it draws current from VDD to GND the whole time a = 1.',
+  summary: 'A pull-up resistor (in silicon an always-on PMOS, its gate grounded) and one NMOS: the NMOS overrides the pull-up while a = 1. It draws current from VDD to GND the whole time a = 1.',
   ports: [{ name: 'a', width: 1, dir: 'in' }, { name: 'y', width: 1, dir: 'out' }],
   symbol: { kind: 'not' },
   spec: ([a]) => [a ? 0 : 1],

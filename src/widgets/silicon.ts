@@ -405,7 +405,7 @@ export function clockTreeWidget(): Widget {
     s += `<text x="${W / 2}" y="${W - 4}" text-anchor="middle" class="lbl">H-tree</text><text x="${W + 40 + W / 2}" y="${W - 4}" text-anchor="middle" class="lbl">one spine from the top</text>`;
     svg.innerHTML = s;
     box.replaceChildren(svg);
-    info.textContent = `${sinks} flip-flops. H-tree: every path from the root to a flip-flop has the same length, so the clock edge arrives everywhere at once (zero skew, ideally). Spine: the nearest flip-flop is ${Math.round(near)} units away, the farthest ${Math.round(far)}. That difference is skew, and it eats directly into the clock period.`;
+    info.textContent = `${sinks} flip-flops. H-tree: every path from the root to a flip-flop has the same length, so the clock edge arrives everywhere at once (zero skew, ideally). Spine: the nearest flip-flop is ${Math.round(near)} units away, the farthest ${Math.round(far)}. That difference is skew: an edge arriving early at the capturing flip-flop eats into the period (setup), one arriving late lets a fast path race through in the same cycle (hold).`;
   };
   const sl = h('input', { type: 'range', min: '1', max: '5', value: String(levels) }) as HTMLInputElement;
   sl.addEventListener('input', () => { levels = Number(sl.value); render(); });

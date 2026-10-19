@@ -58,31 +58,31 @@ export const WALKS1: Record<string, WalkScript> = {
   ],
   g_sop: [
     {
-      title: 'Minimize, then complement',
-      text: 'The K-map of the primes 2, 3, 5, 7, 11, 13 has four essential prime implicants: y = ¬a3¬a2a1 + ¬a3a2a0 + ¬a2a1a0 + a2¬a1a0, each covering two minterms. a0 only appears true, so three inverters suffice: u1 = ¬a3, u2 = ¬a2, u3 = ¬a1.',
-      parts: ['u0', 'u1', 'u2', 'u3'], codex: ['kmap', 'sop'],
+      title: 'Read the map by halves',
+      text: 'The K-map of the primes 2, 3, 5, 7, 11, 13 has three essential prime implicants, ¬a3¬a2a1 (2, 3), ¬a2a1a0 (3, 11) and a2¬a1a0 (5, 13), and a choice for 7: ¬a3a2a0 or ¬a3a1a0. Built NAND–NAND that is 20 NANDs, depth 7; sharing the pairs ¬a2·a1 and a2·a0 between products, 16. Cheaper still: the lower half (a3 = 0) is 2, 3, 5, 7, that is y = a2 ? a0 : a1, and the upper half keeps 11 and 13 of that mux\'s 10, 11, 13, 15. n12 = ¬(a1·a2) and n02 = ¬(a2·a0) start both.',
+      parts: ['u0', 'n12', 'n02'], codex: ['kmap', 'sop'],
     },
     {
-      title: 'Pairs of literals',
-      text: 'With 2-input gates a 3-literal product is an AND of two literals, then a NAND with the third. u4 = ¬a3·¬a2, u5 = ¬a3·a2, u6 = ¬a2·a1, u7 = a2·¬a1: no pair is shared between terms, so all four are needed.',
-      parts: ['u4', 'u5', 'u6', 'u7'],
-    },
-    {
-      title: 'The inverted products',
-      text: 'u8 to u11 NAND each pair with its third literal (a1, a0, a0, a0). Each is 0 exactly on the minterms of its term: the first level of NAND–NAND logic produces the products already inverted.',
-      parts: ['u8', 'u9', 'u10', 'u11'], codex: ['nandnand'],
-    },
-    {
-      title: 'One wide NAND',
-      text: 'y = ¬(t1·t2·t3·t4) is the OR of the four terms. Without a 4-input NAND it is two ANDs (u12, u13) and a NAND (u14). 20 NANDs, depth 7 (1 + 2 + 1 + 2 + 1): par.',
-      parts: ['u12', 'u13', 'u14'], codex: ['universality'],
+      title: 'A mux without its inverter',
+      text: 'k1 = NAND(a1, n12) = ¬(a1·¬a2), because a1·¬(a1·a2) = a1·¬a2: n12 already holds the inversion of a2 wherever a1 = 1, so the mux needs no NOT. mux = NAND(n02, k1) = a2·a0 + ¬a2·a1: right on the whole lower half, 3 NANDs, depth 3.',
+      parts: ['k1', 'mux'], codex: ['mux', 'nandnand'],
       ask: {
-        question: 'u8 to u11 deliver the four products inverted, ¬p1 to ¬p4. With 2-input gates only, which makes y = p1 + p2 + p3 + p4?',
-        options: ['AND(¬p1, ¬p2) and AND(¬p3, ¬p4), then a NAND of the two', 'NAND(¬p1, ¬p2), that NANDed with ¬p3, then with ¬p4', 'Invert each, then an OR tree of the four', 'OR(¬p1, ¬p2) and OR(¬p3, ¬p4), then a NAND'],
+        question: 'n12 = ¬(a1·a2). What does k1 = NAND(a1, n12) compute?',
+        options: ['¬(a1·¬a2)', '¬a1', 'a1·a2', '1 for every input: a1 and n12 are never both 1'],
         answer: 0,
-        explain: 'y = ¬(¬p1·¬p2·¬p3·¬p4), a 4-input NAND: two ANDs and a NAND, 5 NANDs, depth 3.',
-        why: ['', 'NAND(¬p1, ¬p2) = p1 + p2, but the next NAND inverts it again: ¬(p1 + p2) + p3.', 'Right function, but 4 inverters and 3 ORs cost 13 NANDs and depth 5, against 5 NANDs and depth 3.', 'NAND(¬p1 + ¬p2, ¬p3 + ¬p4) = p1·p2 + p3·p4: products of pairs, not the OR of all four.'],
+        explain: 'a1·¬(a1·a2) = a1·¬a2, so k1 = ¬(a1·¬a2): the NAND–NAND half of a mux term, with n12 doing the inverter\'s work.',
+        why: ['', 'At a1 = a2 = 1, n12 = 0 and k1 = 1, where ¬a1 = 0.', 'k1 is a NAND output: it is 1 whenever a1 = 0, where a1·a2 = 0.', 'At a1 = 1, a2 = 0 both are 1, and k1 = 0.'],
       },
+    },
+    {
+      title: 'Correct the upper half',
+      text: 'k0 = NAND(a0, n12) = ¬(a0·¬(a1·a2)), from the same n12; hi = NAND(a3, k0) = ¬a3 + a0·¬(a1·a2). hi is 1 on the whole lower half, and in the upper half only on 9, 11 and 13: it removes 10 (a0 = 0) and 15 (a1 = a2 = 1) from the mux\'s ones, and 9 is not among them.',
+      parts: ['k0', 'hi'],
+    },
+    {
+      title: 'AND the two',
+      text: 'ny = NAND(mux, hi) and inv = ¬ny: y = (a2 ? a0 : a1) · (¬a3 + a0·¬(a1·a2)). 8 NANDs, depth 5 (n12, k1, mux, ny, inv): par, and the minimum on both counts: an exhaustive search finds no circuit of 7 two-input NANDs for this function, and none of any size 4 deep. A minimal sum of products is where to start, not where to stop: look for pieces the terms share.',
+      parts: ['ny', 'inv'], codex: ['universality', 'depth'],
     },
   ],
   g_wide: [
@@ -116,31 +116,31 @@ export const WALKS1: Record<string, WalkScript> = {
   ],
   g_dec: [
     {
-      title: 'Shared complements',
-      text: 'u1, u2 and u3 make ¬a0, ¬a1 and ¬a2 once. All eight outputs draw on them, so three NANDs serve the whole decoder.',
-      parts: ['u0', 'u1', 'u2', 'u3'], codex: ['decoder'],
+      title: 'Predecode in pairs',
+      text: 'Output k is en AND the three address literals that spell k. Eight 4-input ANDs (6 NANDs each) and three inverters cost 51 NANDs. Decode the inputs two at a time instead: (a0, a1) into four lines, (a2, en) into two, then output k is one 2-input AND of a line from each group. na0 and na1 make ¬a0 and ¬a1 once for the first group.',
+      parts: ['u0', 'na0', 'na1'], codex: ['decoder'],
     },
     {
-      title: 'Output 0',
-      text: 'u4 = ¬a0·¬a1·¬a2·en: the minterm of address 0, with en as a fourth input. A 4-input AND is three 2-input ANDs in a tree: 6 NANDs, depth 4.',
-      parts: ['u4'], codex: ['and'],
+      title: 'Four lines from a0, a1',
+      text: 'p_j = 1 when a1a0 = j: p0 = ¬a0·¬a1, p1 = a0·¬a1, p2 = ¬a0·a1, p3 = a0·a1. 8 NANDs, depth 3; each line serves two outputs.',
+      parts: ['p0', 'p1', 'p2', 'p3'], codex: ['and'],
     },
     {
-      title: 'Outputs 1 to 3',
-      text: 'Output k takes a_i where bit i of k is 1 and ¬a_i where it is 0: u5 = a0·¬a1·¬a2·en, u6 = ¬a0·a1·¬a2·en, u7 = a0·a1·¬a2·en. Any two outputs differ in at least one literal, so at most one is 1.',
-      parts: ['u5', 'u6', 'u7'],
+      title: 'Two lines from a2, en',
+      text: 't = ¬(en·a2), q1 = ¬t = en·a2, and q0 = AND(en, t) = en·¬(en·a2) = en·¬a2: the NAND already holds ¬a2 wherever en = 1, so a2 needs no inverter. 4 NANDs, depth 3; each line serves four outputs, and both are 0 while en = 0.',
+      parts: ['t', 'q0', 'q1'],
       ask: {
-        question: 'Output k is an AND of en and three address literals. Which literals does output 3 (binary 011) take?',
-        options: ['a0, a1, ¬a2', '¬a0, ¬a1, a2', 'a0 and a1 only', 'a0, a1, a2'],
+        question: 't = NAND(a2, en) and q1 = ¬t = en·a2 are built. Which makes q0 = en·¬a2 for the fewest NANDs?',
+        options: ['AND(en, t)', 'AND(en, ¬a2), with an inverter on a2', '¬t', 'NAND(en, t)'],
         answer: 0,
-        explain: 'Bit i of k picks a_i where it is 1 and ¬a_i where it is 0: 3 = 011 gives a0·a1·¬a2·en.',
-        why: ['', 'That is output 4 (100): every literal complemented.', 'Without ¬a2, output 3 would also be 1 for address 7 (111): two outputs at once.', 'That is output 7 (111).'],
+        explain: 'en·¬(en·a2) = en·¬a2: 2 NANDs, against 3 with an inverter on a2.',
+        why: ['', 'Right function, one NAND more: t already does the inverter\'s work wherever en = 1.', 'That is q1 = en·a2.', 'That is ¬q0: 1 while en = 0, so outputs 0 to 3 would light with the decoder disabled.'],
       },
     },
     {
-      title: 'Outputs 4 to 7',
-      text: 'u8 to u11 repeat the pattern with a2 true, and the merger gathers the eight lines into y. 8 × 6 + 3 = 51 NANDs, depth 5 (an inverter, then the AND tree): par.',
-      parts: ['u8', 'u9', 'u10', 'u11', 'u12'], codex: ['bus'],
+      title: 'Eight 2-input ANDs',
+      text: 'y_k = p[k mod 4] · q[k div 4], 2 NANDs each, and the merger gathers the eight lines into y. Two outputs differ in their p or their q line, so at most one is 1, and none while en = 0. 2 + 8 + 4 + 16 = 30 NANDs, depth 5 (inverter, AND, AND): par, 21 fewer than eight 4-input ANDs at the same depth. Memories decode their rows this way: a 7→128 decoder is a 3→8 and a 4→16 predecoder and 128 two-input ANDs.',
+      parts: ['y0', 'y1', 'y2', 'y3', 'y4', 'y5', 'y6', 'y7', 'my'], codex: ['bus'],
     },
   ],
   g_mux8: [
@@ -359,7 +359,7 @@ export const WALKS1: Record<string, WalkScript> = {
   a_shift16: [
     {
       title: 'Reverse for left shifts',
-      text: 'A left shift is a right shift of the bit-reversed word, reversed back. rin reverses a (wiring, 0 NANDs) and mr selects it when left = 1. One right-shift datapath then serves sll, srl and sra, for two 64-NAND muxes instead of a second 256-NAND shifter.',
+      text: 'A left shift is a right shift of the bit-reversed word, reversed back. rin reverses a (wiring, 0 NANDs) and mr selects it when left = 1. One right-shift datapath then serves sll, srl and sra, for two 49-NAND muxes (98) instead of a second four-level shifter (4 × 49 = 196).',
       parts: ['rin', 'mr'], codex: ['shifter'],
     },
     {
@@ -376,7 +376,7 @@ export const WALKS1: Record<string, WalkScript> = {
     },
     {
       title: 'Shift by 1, then by 2',
-      text: 'Level k shifts by 2^k when sh[k] = 1. w0 and w1 are wiring (bits moved down, f2 entering at the top); m0 and m1 choose shifted or not. Each level costs 64 NANDs and 2 delays on the data.',
+      text: 'Level k shifts by 2^k when sh[k] = 1. w0 and w1 are wiring (bits moved down, f2 entering at the top); m0 and m1 choose shifted or not. Each level costs 49 NANDs (one shared-inverter bus mux) and 2 delays on the data.',
       parts: ['ss', 'w0', 'm0', 'w1', 'm1'],
     },
     {
@@ -543,7 +543,7 @@ export const WALKS1: Record<string, WalkScript> = {
   m_rf: [
     {
       title: 'Write select',
-      text: 'u0, your decoder, turns wa into a one-hot word, enabled by we: at most one register sees en = 1. 51 NANDs.',
+      text: 'u0, your decoder, turns wa into a one-hot word, enabled by we: at most one register sees en = 1. 30 NANDs, predecoded.',
       parts: ['u0'], codex: ['decoder'],
     },
     {
@@ -553,7 +553,7 @@ export const WALKS1: Record<string, WalkScript> = {
     },
     {
       title: 'Registers x2 to x7',
-      text: 'u4 to u9 take decoder outputs 2 to 7. Output 0 drives nothing: a write to x0 reaches no register, so it is ignored. The seven registers cost 1456 NANDs, 61% of the file.',
+      text: 'u4 to u9 take decoder outputs 2 to 7. Output 0 drives nothing: a write to x0 reaches no register, so it is ignored. The seven registers cost 1456 NANDs, 67% of the file.',
       parts: ['u4', 'u5', 'u6', 'u7', 'u8', 'u9'],
     },
     {
@@ -570,7 +570,7 @@ export const WALKS1: Record<string, WalkScript> = {
     },
     {
       title: 'Read port 2',
-      text: 'u11 is a second tree on the same eight words, selected by ra2. Reads are combinational and independent, so an instruction reads rs1 and rs2 in the same cycle. 2193 NANDs: par. Period 11: wa through the decoder (5) and an enable mux (3), plus setup (3).',
+      text: 'u11 is a second tree on the same eight words, selected by ra2. Reads are combinational and independent, so an instruction reads rs1 and rs2 in the same cycle. 2172 NANDs: par. Period 11: wa through the decoder (5) and an enable mux (3), plus setup (3).',
       parts: ['u11'],
     },
   ],

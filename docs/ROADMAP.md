@@ -482,6 +482,11 @@ challenges stay open. Added since:
   confirm); every build and core level has an authored walk, each with one question to predict before the step that holds
   its trick; Build along: the step's parts as outlines, snapped into place, Check step compares the learner's wiring with
   the reference (parts by kind and place, nets by the ports they join)
+- ✅ Content review (2026-10-19): 166 findings over the chapters, codex and walkthroughs fixed (no quiz answer was wrong;
+  typed numbers drifted, model simplifications read as device facts, one core's choices as how GPUs work); breadth
+  added inside existing steps (the flip-flop timing contract and synchronizers, LR/SC / acquire / Amdahl, virtual
+  memory, real-GPU reconvergence, DDR timing rules, row hammer, power) and 25 codex entries for chapter topics; quoted
+  numbers read back from the texts by `tests/content-*.test.ts`; three campaign references re-authored (docs/CAMPAIGN.md)
 - ✅ Progress tracking (visited steps, solved challenges, in local storage) and "Reset progress"; the chapters
   stay open (soft locks exist only in the campaign, see `docs/CAMPAIGN.md`)
 - ✅ Reduced motion: CSS animations and transitions off, slow-motion fronts drawn as plain changes

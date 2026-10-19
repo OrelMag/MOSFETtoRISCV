@@ -8,6 +8,7 @@ import { assemble } from '../riscv/asm';
 import { ramLeafState } from '../lib/bigmem';
 import { findNode } from '../sim/flatten';
 import { stats } from '../sim/stats';
+import { netlistOf } from '../sim/types';
 import type { Stage } from '../view/stage';
 import { BENCH_IMAGE, busBenchActions, busBenchScene, busBenchState, busComputerActions, busComputerScene, busComputerState, cardComputerScene, systemComputerScene } from '../widgets/bus';
 import type { Chapter } from './types';
@@ -17,6 +18,10 @@ const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands.toLocaleString(
 /** The card boot, from the golden model (bus/cardboot.ts, pinned against the gates): with the reader's feed, and without. */
 const CARD_BOOT = cardBootTime(deckWords(CARD_DECK), CARD_FEED), CARD_BOOT_0 = cardBootTime(deckWords(CARD_DECK), 0);
 const CARD_BOOT_WORDS = assemble(CARD_BOOT_SOURCE).words.length;
+
+/** The DMA engine's share in flip-flops (registers and single DFFs), from its instances. */
+const DMA_REG_PCT = Math.round((100 * (netlistOf(DMA_ENGINE)?.instances ?? [])
+  .filter((i) => /^(reg\d+|dff)$/.test(i.def.id)).reduce((s, i) => s + stats(i.def).nands, 0)) / stats(DMA_ENGINE).nands);
 
 /** A RAM word of the bench's RAM (byte lanes). */
 function ramWord(st: Stage, a: number): number {
@@ -41,9 +46,9 @@ export const chBus: Chapter = {
   recap: {
     keep: [
       'A transfer happens at the rising edge where <strong>valid</strong> and <strong>ready</strong> are both 1. The sender raises valid without waiting for ready; either side may stretch the wait.',
-      'AXI-lite shape: a write uses AW, W and B, a read AR and R, each with its own handshake. Even a ready slave costs 2 cycles an access; with 3 wait states a store takes 5.',
+      'AXI-lite shape: a write uses AW, W and B, a read AR and R, each with its own handshake. Even a ready slave costs 2 cycles an access; with 3 wait states a store takes 5. Full AXI adds bursts (one address, up to 256 beats) and IDs (several transactions in flight, answered out of order).',
       `The interconnect is an arbiter (round robin), the multiplexers that route the granted master to the addressed slave, and a decoder on the top four address bits: ${nands(axiBus(2, [0, 1, 4, 15]))} NANDs for two masters and four slaves. The grant holds until the response, so a slow slave stalls the other master too.`,
-      `A DMA engine is four registers at 0x4000_0000 and a read-then-write state machine: ${nands(DMA_ENGINE)} NANDs. Two bus transactions a word, irq when done, and the CPU runs meanwhile.`,
+      `A DMA engine is four registers at 0x4000_0000 and a read-then-write state machine: ${nands(DMA_ENGINE)} NANDs. Two bus transactions a word, irq when done, and the CPU runs meanwhile. Behind a write-back cache, clean before a DMA reads memory, invalidate before the CPU reads what a DMA wrote, fence before the kick (or snoop the DMA).`,
       `Booting: a small ROM fetches the program from storage into RAM at 0x${LOAD_AT.toString(16)} and jumps there: ${LOAD_WORDS} words from flash by DMA, or ${CARD_DECK.cards.length} punched cards polled from a reader.`,
     ],
     practise: ['m_bus', 'm_dma', 'p_boot'],
@@ -73,6 +78,18 @@ export const chBus: Chapter = {
         answer: 0,
         explain: 'Four register writes from the CPU, then a read and a write for every word: 4 + 2 × 16 = 36. (Clearing the interrupt afterwards is one more store.)',
         why: ['', 'That is the copy alone. The four setup stores go over the bus too: the DMA\'s registers are a slave at 0x4000_0000.', 'That counts one transaction a word. The DMA reads each word into a register, then writes it: two.', 'That is one per word, and no setup. Each word is a read and a write.'],
+      },
+      {
+        question: 'Give the CPU a write-back data cache. It fills a buffer with stores, then starts the DMA to copy the buffer to a device. The device receives old data. What was missing?',
+        options: [
+          'Cleaning the buffer\'s dirty lines to RAM (and a fence) before the store that starts the DMA',
+          'Invalidating the buffer\'s lines after the DMA finishes',
+          'A wait state on the DMA\'s reads',
+          'Nothing: the arbiter orders the CPU\'s stores before the DMA\'s reads',
+        ],
+        answer: 0,
+        explain: 'The new data sat in dirty lines; the DMA reads RAM, which still held the old. Before a transfer out of memory the driver writes the lines back (clean) and fences, so the data is in RAM before the MMIO store that kicks the engine. Before a transfer into memory it invalidates instead, so the CPU does not read a stale line. A coherent interconnect snoops the DMA\'s accesses and makes both automatic.',
+        why: ['', 'Invalidation is for the other direction: after a DMA writes RAM, so the CPU drops its stale copies. Here the stale copy is in RAM, and invalidating would throw the new data away.', 'Timing is not the problem: however slowly the DMA reads, RAM holds the old words until the cache writes them back.', 'The arbiter orders bus transactions. Stores that hit in a write-back cache never reach the bus until their lines are evicted or cleaned.'],
       },
     ],
   },
@@ -105,10 +122,19 @@ export const chBus: Chapter = {
     {
       title: 'Five channels',
       body: `
-        <p>The bus here has the shape of AXI-lite, the on-chip bus of most ARM and RISC-V systems: five channels, each with its own
-        valid and ready. A write uses three: the address (AW), the data (W) and the response (B). A read uses two: the address (AR)
-        and the data (R). Our masters raise AW and W together and our slaves take them together, which AXI allows. Real systems
-        also let a master keep several transactions in flight; ours keeps one.</p>
+        <p>The bus here has the shape of AXI-lite, the register-access subset of ARM's AXI (one word per transaction, no IDs): five
+        channels, each with its own valid and ready. A write uses three: the address (AW), the data (W) and the response (B). A read
+        uses two: the address (AR) and the data (R). Our masters raise AW and W together and our slaves take them together, which AXI
+        allows. The main data paths of ARM SoCs use full AXI, and many RISC-V SoCs TileLink or AXI: both add bursts and several
+        transactions in flight; ours keeps one.</p>
+        <details class="deeper"><summary>Deeper: bursts and IDs</summary>
+        <p>Full AXI sends one address for a <strong>burst</strong> of up to 256 data beats (AxLEN): INCR steps the address, WRAP wraps
+        it inside a line so a cache fill can start at the word the CPU is waiting for, FIXED repeats it for a FIFO. One handshake on AR
+        then buys a whole line on R. Each transaction also carries an <strong>ID</strong> (AxID): responses with the same ID come back in
+        order, responses with different IDs in any order, so a master can keep many reads in flight and a fast slave need not wait for
+        a slow one. The interconnect extends the IDs with the master's number to route the answers back. W has kept no ID since AXI4:
+        write data follows the order of its addresses. Each extra field is wires on the channels and state in every slave: AXI-lite
+        drops them for registers that move one word at a time.</p></details>
         <p>The <span data-show="bus.dec"><strong>address decoder</strong></span> looks at the top four address bits: 0x0… is RAM, 0x1… the flash, 0x4… the DMA engine's
         registers. Any other address goes to a <span data-show="def">default slave</span> that answers 0, so a stray pointer never hangs the bus (AXI would
         answer with an error and the CPU would trap). A slow slave just holds back valid: <span data-show="ram">this RAM</span> has 3 <strong>wait states</strong>.</p>`,
@@ -158,10 +184,20 @@ export const chBus: Chapter = {
         <p>Copying a block with the CPU costs a load and a store per word, and the CPU does nothing else. A <span data-show="dma"><strong>DMA engine</strong></span>
         does it on its own: four registers (source, destination, length, control) written by the CPU as ordinary stores to 0x4000_0000,
         then a state machine that reads a word, writes it, steps both addresses and counts down. When the count reaches 0 it raises
-        <span data-show="pin:irq"><strong>irq</strong></span>, the CPU's external interrupt, until the CPU clears it. ${nands(DMA_ENGINE)} NANDs, two thirds of them in its four
-        32-bit registers.</p>
+        <span data-show="pin:irq"><strong>irq</strong></span>, the CPU's external interrupt, until the CPU clears it. ${nands(DMA_ENGINE)} NANDs, ${DMA_REG_PCT} % of them flip-flops: source,
+        destination, the 16-bit length, the word in flight, the read-back word, the state and the slave's two response flags. Most of the rest steps the addresses and
+        multiplexes the registers.</p>
         <p>It costs bus time: two transactions a word, and every one the CPU wants meanwhile waits for the bus. Its gain is that the CPU
         keeps running, and that a slow source (the flash's ${FLASH_TIMES.read}-cycle page reads) delays the DMA, not the program.</p>
+        <details class="deeper"><summary>Deeper: DMA and the caches</summary>
+        <p>The CPU here has no data cache, so RAM is the only copy. Put a write-back cache (<a href="#/c/cache/0">chapter 21</a>) in front of it
+        and the DMA, which talks to RAM directly, sees two problems. Copying <em>out</em> of a buffer the CPU just wrote, it reads RAM
+        while the new data still sits in dirty cache lines: the driver must <strong>clean</strong> (write back) those lines first.
+        Copying <em>in</em>, it writes RAM under lines the cache still holds: the driver must <strong>invalidate</strong> them, or the
+        CPU reads the stale copy. Embedded systems do this in software around every transfer; bigger systems make the DMA's accesses
+        <strong>coherent</strong>, snooping them against the caches as a second core's would be (<a href="#/c/multicore/0">chapter 24</a>).
+        Either way, the stores that fill the buffer must reach memory before the store that starts the engine: on a CPU that
+        reorders memory accesses, a <strong>fence</strong> goes before that MMIO kick.</p></details>
         <div class="try">Copy, run until the interrupt, and watch RAM from 0x100 fill with the flash's words (0xF1A5_00nn).</div>`,
       scene: () => busBenchScene(),
       challenge: {
@@ -249,7 +285,8 @@ export const chBus: Chapter = {
         <details class="deeper"><summary>Deeper: the adapter and the data mask</summary>
         <p>The bus moves a word with byte strobes; the controller moves 4-word lines. An adapter
         joins them: a load reads its word's line and keeps one word; a store writes the line with the DRAM's <strong>data mask</strong>
-        (DDR's DM pins) set on its own strobed bytes only, so even a byte store needs no read first.</p></details>
+        (DDR's DM pins) set on every byte except its own strobed ones, so the DRAM leaves the rest of the line alone and even a byte
+        store needs no read first.</p></details>
         <p>At 0x5000_0000, a <span data-show="screen"><strong>screen</strong></span>: a ${SOC_SCREEN} × ${SOC_SCREEN} frame buffer, a byte a pixel (RGB332), built like the RAM in four
         byte lanes so that sb draws one pixel; a display reads it as <a href="#/c/pixels/0">chapter 30</a>'s scan-out reads its frame. At 0x6000_0000, a
         <span data-show="keys kbd"><strong>keyboard</strong></span>: +4 says whether a key waits, and reading +0 <em>takes</em> it (the slave pulses ack, the acknowledge that drops the key, in the cycle after the read's

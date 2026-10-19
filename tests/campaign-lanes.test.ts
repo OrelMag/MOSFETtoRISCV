@@ -200,15 +200,15 @@ describe('the two-warp bench (k_warps)', async () => {
     expect(b.cycles).toBe(a.cycles);
   }, 120000);
 
-  it('the numbers the level quotes: 30 163 NANDs (17 544 of lane registers), period 95, 2 160 turns, 59 idle', async () => {
+  it('the numbers the level quotes: 29 974 NANDs (17 376 of lane registers), period 95, 2 160 turns, 59 idle', async () => {
     const { stats } = await import('../src/sim/stats');
     const { VRF16 } = await import('../src/lib/rv16/lanes16');
     const { assemble16 } = await import('../src/riscv/rv16/asm16');
     const { Warps16 } = await import('../src/riscv/rv16/warps16');
     const { decode16 } = await import('../src/riscv/rv16/isa16');
-    expect(stats(RV16_WARPS).nands).toBe(30163);
-    expect(stats(RV16_WARPS).nands - stats(rv16Lanes(true)).nands).toBe(12326);
-    expect(2 * stats(VRF16).nands).toBe(17544);
+    expect(stats(RV16_WARPS).nands).toBe(29974);
+    expect(stats(RV16_WARPS).nands - stats(rv16Lanes(true)).nands).toBe(12242);
+    expect(2 * stats(VRF16).nands).toBe(17376);
     expect(warpPeriod(RV16_WARPS)).toBe(95);
     let turns = 0, alone = 0, idle = 0;
     for (const t of warpTests()) {

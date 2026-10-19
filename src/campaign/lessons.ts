@@ -23,12 +23,13 @@ build it. Built blocks light up.</p>
 <h4>Why this machine</h4>
 <p><b>RV16</b> is RISC-V shrunk to 16 bits: 16-bit data and instructions, 8 registers with
 x0 = 0, load / store, fixed field positions. Small enough to build by hand and test
-exhaustively, real enough to run loops, functions, a stack and interrupt handlers.</p>
+thoroughly, real enough to run loops, functions, a stack and interrupt handlers.</p>
 <h4>How the campaign works</h4>
 <ul>
   <li>Every level builds one block from blocks you already have. It starts as a chip in the
-  sandbox with its pins in place; <b>Check</b> runs the complete test set (every input
-  combination, a clocked sequence, or whole programs against a golden model).</li>
+  sandbox with its pins in place; <b>Check</b> runs the level's test set: every input
+  combination up to 16 input bits, 4 096 random ones (after the level's edge cases) above that; a
+  clocked sequence; or whole programs against a golden model.</li>
   <li>What you may use: NAND, wiring, your own chips, and the <b>parts unlocked</b> by the
   levels below. Solve a level and its block becomes a library part for the levels above.</li>
   <li><b>Grades</b>: ★ passes, ★★ within 1.5 × par, ★★★ at or under par on every metric
@@ -65,8 +66,9 @@ circuit and an expression are the same object; algebra rewrites one into a cheap
 beyond 4–5 variables, <b>Quine–McCluskey</b>.</p>`,
 
   mem: `
-<p>You built memory from flip-flops: 9 NANDs per bit, a decoder and a mux per array. Real memories
-use 6-transistor SRAM cells (caches, register files) or 1-transistor-1-capacitor DRAM cells (main
+<p>You built memory from flip-flops: 13 NANDs per bit (a 9-NAND flip-flop and its 4-NAND enable
+mux), a decoder on the write port and an 8:1 bus mux per read port. Your register file is about 2 200 NANDs
+for 112 bits of state: some 20 NANDs, 80 transistors, a bit. Real memories use 6-transistor SRAM cells (caches, register files) or 1-transistor-1-capacitor DRAM cells (main
 memory), with sense amplifiers to read them. From here on, memories are given as parts: the
 instruction <b>ROM</b> (the program) and the data <b>RAM</b>.</p>`,
 
@@ -90,8 +92,9 @@ against it; the hardware may implement it any way it likes (single-cycle, pipeli
   <tr><th>I</th><td colspan="2">imm[5:0]</td><td>rs1</td><td>rd</td><td>op</td></tr>
   <tr><th>S / B</th><td>imm[5:3]</td><td>rs2</td><td>rs1</td><td>imm[2:0]</td><td>op</td></tr>
   <tr><th>J</th><td colspan="3">imm[8:0]</td><td>rd</td><td>op</td></tr>
+  <tr><th>U</th><td colspan="3">imm[9:1]</td><td>rd</td><td>imm[0] · 111</td></tr>
 </table>
-<p>op: 1 OP, 2 OPX (sub, sra), 4 ADDI, 5 SHI, 6 LW, x111 LUI, 8–11 BEQ BNE BLT BGE, 12 JAL, 13 JALR,
+<p>op: 1 OP, 2 OPX (sub, sra), 4 ADDI, 5 SHI, 6 LW, x111 LUI (7 and 15: bit 3 is imm[0]), 8–11 BEQ BNE BLT BGE, 12 JAL, 13 JALR,
 14 SW, 0 SYSTEM, 3 MD (multiply / divide, optional). The ALU control is just {op = OPX, f3}. Because
 rs1 and rs2 are always in the same place, the register file is read while the control unit is still
 decoding.</p>
@@ -149,7 +152,7 @@ instruction on its own operands: four results per cycle for one fetch and one de
 apart at the start.</p>
 <h4>What it costs</h4>
 <p>The control is cheap: the SIMD core you will build adds about 11 000 NANDs to your single-cycle
-core for three extra lanes. Most of that is <b>registers</b>: four register files are 8 772 NANDs.
+core for three extra lanes. Most of that is <b>registers</b>: four register files are 8 688 NANDs.
 A real GPU is the same, with its register file the largest structure on the chip.</p>
 <h4>The hard part</h4>
 <p>One PC cannot go two ways. When the lanes disagree on a branch, something has to give: an
@@ -173,8 +176,9 @@ data moves.</p>
 <h4>Forgetting</h4>
 <p>The capacitors leak. Every row must be opened again within its retention time (64 ms in a real
 chip), and nothing in the processor does it: the <b>controller</b> does, row by row, in cycles taken
-from the requests. Early chips left the row counter to the controller; DDR chips keep it inside and
-only need a <b>REF</b> command now and then, with every bank closed.</p>
+from the requests. Early chips (the 4116) left the row counter to the controller; from the mid-1980s
+chips kept it inside (CAS-before-RAS refresh, then SDRAM's and DDR's auto refresh), so today's only need
+a <b>REF</b> command every 7.8 µs (tREFI), with every bank closed.</p>
 <p>This act builds that path: a column at switch level, a bank that refreshes itself around a cell
 array, then a controller that turns requests into commands at the earliest cycle a chip's timing
 rules allow, and decides how long a row stays open.</p>`,

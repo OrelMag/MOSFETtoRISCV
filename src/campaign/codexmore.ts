@@ -9,6 +9,7 @@ import type { ChapterLink } from './types';
 import { MORE0 } from './codexmore0';
 import { MORE1 } from './codexmore1';
 import { MOREP } from './codexmoreP';
+import { MORE2 } from './codexmore2';
 
 export { checkOf } from './codexcheck';
 
@@ -28,7 +29,7 @@ export interface CodexMore {
   chapters?: ChapterLink[];
 }
 
-const ALL: Record<string, CodexMore> = { ...MORE0, ...MORE1, ...MOREP };
+const ALL: Record<string, CodexMore> = { ...MORE0, ...MORE1, ...MOREP, ...MORE2 };
 
 export function moreOf(id: string): CodexMore | undefined {
   return ALL[id];

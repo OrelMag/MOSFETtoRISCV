@@ -37,7 +37,7 @@ export const VHALF: ComponentDef = define({
 /**
  * The DRAM sense amplifier: two cross-coupled inverters between the bit lines, powered through a
  * head and a foot transistor when en rises. Drawn with its 8 transistors; simulated as a primitive,
- * because what it does (amplify a 50 mV difference) is below the switch model's resolution.
+ * because what it does (amplify a ~110 mV difference: 0.1 VDD at 1.1 V) is below the switch model's resolution.
  */
 export const DRAM_SA: ComponentDef = define({
   id: 'dramsa', name: 'DRAM sense amplifier', category: 'memory', prim: 'sense', offset: SENSE_OFFSET,

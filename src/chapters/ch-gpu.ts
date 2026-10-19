@@ -16,16 +16,16 @@ export const chLanes: Chapter = {
     'say what a lane core has once (PC, fetch, decode, control) and what it copies per lane (registers, ALU, result multiplexer)',
     'explain how one PC takes a branch: the leader, the lowest active lane, decides',
     'count the cycles of a load or store on one memory port: one per active lane',
-    'explain why four lanes save only about a fifth of the gates of four cores here, and run saxpy slower',
+    'explain why four lanes save under a fifth of the gates of four cores here, most of it program ROMs, and run saxpy slower',
   ],
   builds: ['cpu', 'multicore'],
   recap: {
     keep: [
       'A lane core is one PC, one program ROM, one control unit and N lanes, each a 31 × 32-bit register file, SrcA / SrcB multiplexers, an ALU and a result multiplexer. Every lane gets the same fields, control signals and immediate.',
       'A thread finds out which it is with <code>csrr t0, tid</code>, a constant wired into each lane. The threads stepping together form a <em>warp</em> (SIMT: single instruction, multiple threads).',
-      'One PC means one branch decision: the <strong>leader</strong>, the lowest active lane, found by a lowest-set-bit circuit, sends its flags to the next-PC logic through one-hot multiplexers.',
+      'On this core one PC means one branch decision: the <strong>leader</strong>, the lowest active lane, found by a lowest-set-bit circuit, sends its flags to the next-PC logic through one-hot multiplexers.',
       'With one memory port, a load or store takes one cycle per active lane, lowest first: saxpy runs 74 instructions in 134 cycles.',
-      'Against four cores the lanes save only about a fifth of the gates (a lane is mostly its register file: 23 141 of its 27 584 NANDs), and they are slower on saxpy, because a memory access stops all four lanes.',
+      'Against four cores the lanes save 18 % of the gates, and 24 192 of the 32 670 NANDs saved are the three program ROMs they do without; without ROMs the saving is 6 %, because a lane is mostly its register file (23 141 of its 27 584 NANDs). And they are slower on saxpy: a memory access stops all four lanes.',
     ],
     practise: ['k_lanes', 'k_vrf', 'k_simd', 'p_saxpy'],
     check: [
@@ -62,11 +62,12 @@ export const chLanes: Chapter = {
         <p><a href="#/c/multicore/0">Chapter 24</a> got parallelism by copying whole cores. The other way is to keep <strong>one instruction stream</strong> and copy only the datapath: one
         fetch, one decode, one control unit, and N <strong>lanes</strong>, each with its own registers and ALU. Give each lane a way to sit out an instruction
         and the programmer can write an ordinary scalar program per element, a <em>thread</em>; the N threads stepping together form a <em>warp</em>. NVIDIA
-        calls this SIMT (single instruction, multiple threads). Its warps are 32 lanes wide; ours has 4.</p>`,
+        calls this SIMT (single instruction, multiple threads). Its warps are 32 threads, issued over 16 or 32 lanes depending on the unit (one instruction
+        then takes two cycles or one); AMD's wavefronts are 32 or 64 threads. Ours has 4 threads on 4 lanes.</p>`,
       challenge: {
         kind: 'quiz', question: 'Which of these does a lane core have only once, however many lanes it has?',
         options: ['The register file', 'The ALU', 'The program counter', 'The result multiplexer'], answer: 2,
-        explain: 'One PC per warp is the definition: every lane runs the instruction it points to. Registers, ALU and the result mux are per lane, because each thread computes its own values.',
+        explain: 'One PC per warp is what makes this a lane core: every lane runs the instruction it points to. Registers, ALU and the result mux are per lane, because each thread computes its own values. (NVIDIA since Volta keeps a PC per thread, so a warp\'s threads can drift apart, but it still issues one instruction at a time to the threads that share a PC.)',
         why: ['Each thread keeps its own values in the same register numbers, so each lane needs a register file of its own.', 'Every lane computes on its own operands in the same cycle: one ALU per lane.', '', 'Each lane chooses between its own ALU result, its loaded word and the rest: the result multiplexer is per lane.'],
       },
     },
@@ -88,7 +89,7 @@ export const chLanes: Chapter = {
     {
       title: 'The leader',
       body: `
-        <p>One PC means one branch decision per instruction. The lanes all compute the comparison, but only one is listened to: the <strong>leader</strong>, the
+        <p>Here one PC means one branch decision per instruction. The lanes all compute the comparison, but only one is listened to: the <strong>leader</strong>, the
         lowest active lane. A <span data-show="lead">lowest-set-bit circuit</span> turns the active mask into a one-hot word, and one-hot multiplexers (an AND per bit and an OR tree: no decoder,
         the select is already one-hot) bring the <span data-show="lF">leader's ALU flags</span> to the <span data-show="npc">next-PC logic</span> and its
         <span data-show="lAlu">ALU result</span> to the <span data-show="clr0">jalr target</span>.</p>
@@ -117,8 +118,9 @@ export const chLanes: Chapter = {
       body: `
         <p>The same work on <a href="#/c/multicore/0">chapter 24</a>'s cores, four of them, each finding its index with <code>csrr mhartid</code>, against the lane core. Both bars are counted
         from the actual designs, and both cycle counts come from the instruction-set simulators, which the gate-level circuits match cycle for cycle.</p>
-        <p>The lanes save the front end three times over, yet only about a fifth of the gates: here a lane is mostly its register file (23 141 of its 27 584 NANDs,
-        flip-flops and multiplexers). And they are slower on saxpy, because a load or store stops all four lanes, while a core that waits for the memory port lets
+        <p>The lanes save the front end three times over, yet only 18 % of the gates, and most of that is program ROM: four cores read four copies of the
+        program, the lanes one, and 24 192 of the 32 670 NANDs saved are those three ROMs. Leave the ROMs out of both and the lanes save 6 %: a lane is mostly
+        its register file (23 141 of its 27 584 NANDs, flip-flops and multiplexers), and the PC, decoder and control they share are small beside it. And they are slower on saxpy, because a load or store stops all four lanes, while a core that waits for the memory port lets
         the other three compute. Real GPUs answer both: memory as wide as a warp, with a <strong>coalescer</strong> merging neighbouring addresses into one access
         (<a href="#/c/feed/0">chapter 29</a>), and many warps so that one waiting does not idle the lanes (<a href="#/c/warps/0">chapter 28</a>). Their register files are SRAM, and the cores they compete with have
         large front ends (out-of-order logic, predictors, caches), so the sharing pays far more than it does here.</p>`,
@@ -140,10 +142,11 @@ export const chSimt: Chapter = {
   recap: {
     keep: [
       'The active mask: a lane whose bit is 0 still sees every instruction, but its register write enable is off and the memory sequencer skips it. The register stores the mask inverted, so all lanes are active at power-on. <code>tmc</code> loads it from the leader\'s rs1.',
-      'Without help, a divergent branch follows the leader, and the other lanes compute the wrong side.',
+      'Without help, a divergent branch on this core follows the leader, and the other lanes compute the wrong side.',
       '<code>split</code> runs the lanes with rs1 ≠ 0 first and pushes one entry: the mask before, the waiting lanes, the resume PC, a pending bit. The first <code>join</code> switches to the waiting lanes and jumps back; the second restores the mask and pops.',
       'The stack is a shift register of four entries: four levels of nesting. <code>pred</code> turns lanes off without an entry, for loops whose length differs per lane.',
-      'Divergence runs both sides, each with part of the lanes: 45 % of the lane-steps did work in the tmc kernel, 58 % with the nested ifs.',
+      'Divergence runs both sides, each with part of the lanes: 58 % of the lane-steps did work with the nested ifs. Lanes switched off on purpose cost the same: 45 % in the tmc kernel, where lane 0 adds alone.',
+      'Here the programmer writes split and join. On real GPUs the compiler places the reconvergence point (the branch\'s immediate post-dominator): a per-warp stack before Volta, convergence barriers with a PC per thread since, and on AMD an EXEC mask kept by scalar instructions.',
     ],
     practise: ['k_mask', 'k_stack', 'k_simt', 'p_reduce'],
     check: [
@@ -205,6 +208,18 @@ export const chSimt: Chapter = {
         <p>The <code>join</code> at the end of the if is reached twice. The first time the entry is pending: the else lanes become the mask and the
         <span data-show="jmux">PC jumps back</span> to just after the split, where their branch goes the other way. The second time it is not: the original mask comes back and the entry is popped. This is
         the scheme of Vortex, the open-source RISC-V GPU. A split on which the lanes agree pushes an entry with nothing pending, so its join just pops.</p>
+        <details class="deeper"><summary>Deeper: reconvergence on real GPUs</summary>
+        <p>Here split and join are instructions the programmer writes. On real GPUs the compiler places them: the warp reconverges at the branch's
+        <em>immediate post-dominator</em>, the first instruction every path from the branch must pass through (the end of the if, the exit of the loop).</p>
+        <p>NVIDIA before Volta did it much as here: <code>SSY</code> pushed the reconvergence address onto a per-warp stack in hardware, the divergent branch
+        pushed the side not taken, and a <code>SYNC</code> at the post-dominator popped back to the waiting threads, then to the full mask. Since Volta
+        (2017) every thread has its own PC: <code>BSSY</code> / <code>BSYNC</code> name a convergence barrier, the scheduler runs one group of threads with
+        a common PC at a time and may switch between them, so a thread spinning on a lock held by another thread of its warp no longer deadlocks
+        (on this core, or on a stack machine, it does); <code>__syncwarp()</code> makes reconvergence explicit where the program relies on it.</p>
+        <p>AMD keeps no stack at all: a 32- or 64-bit <code>EXEC</code> mask decides which lanes write, and the compiler saves, narrows and restores it with
+        scalar instructions (<code>s_and_saveexec_b64</code> before the then-side, an XOR for the else-side, the saved mask back at the end), skipping a
+        side whose mask is empty with <code>s_cbranch_execz</code>. Predication with a software stack, in other words: nesting depth is limited only by the
+        scalar registers the compiler spends on it.</p></details>
         <div class="try">Watch the stack and the mask grid as the clock passes each join: odd lanes, then even lanes, then all four. <strong>Pulse</strong> pauses the clock for one edge at a time.</div>`,
       scene: () => laneCoreScene('diverge'),
     },
@@ -248,7 +263,7 @@ export const chWarps: Chapter = {
   id: 'warps', num: 28, title: 'Hiding latency', level: 'Throughput',
   blurb: 'A memory that answers 8 cycles later: a scoreboard, several warps resident, a scheduler picking a ready one each cycle, and what each warp costs.',
   goals: [
-    'say why a GPU hides memory latency with more warps rather than with caches',
+    'say why a GPU hides the memory latency its caches leave with more warps, and what the caches are for',
     'follow a load through the scoreboard: which instruction waits, and until which cycle',
     'say what a warp slot holds and what all warps share',
     'judge when another resident warp stops paying, from empty issue slots and its gate cost',
@@ -258,7 +273,7 @@ export const chWarps: Chapter = {
     keep: [
       'Here memory answers 8 cycles later: a load issued in cycle t is written back at the end of t + 7, and its first use can issue in t + 8. One warp runs saxpy over 64 elements in 266 cycles, 42 % of its issue slots empty.',
       'A scoreboard, one pending bit per register, stops a warp only at the first instruction that reads a pending register or writes one.',
-      'A warp slot holds a PC, a mask and stack, a running bit and a scoreboard; each lane holds a register bank per warp. The program ROM, the decoder, the ALUs and the memory are shared.',
+      'A warp slot holds a PC, a mask and stack, a running bit and a scoreboard; each lane holds a register bank per warp. The program, the decoder, the ALUs and the memory are shared; each warp reads the program through a port of its own, which in gates is a copy of the ROM.',
       'A round-robin scheduler issues one ready warp a cycle. Four warps: 172 instructions in 172 cycles, the latency hidden; two warps 192 cycles, one 266.',
       'The second warp costs 110 715 NANDs, 92 564 of them registers. A real GPU fixes the register file, and the registers a thread needs decide how many warps fit: the occupancy.',
     ],
@@ -292,7 +307,9 @@ export const chWarps: Chapter = {
       title: 'A memory that makes you wait',
       body: `
         <p>Until now the data memory answered in the cycle it was asked. Real memory does not: a DRAM access takes on the order of 100 ns, hundreds of cycles, and a
-        CPU hides that with caches because one thread keeps reusing a little data. A GPU streams through data it touches once, so caches help it much less.</p>
+        CPU hides most of that with caches, because one thread keeps reusing a little data. GPUs have caches too (an H100's L2 is 50 MB), and kernels that reuse
+        data, matrix multiply above all, are written to hit them; but there they mostly save DRAM bandwidth, and every miss that remains still costs hundreds of
+        cycles, for thousands of threads at once. A GPU hides that latency instead: while one warp waits, another issues.</p>
         <p>Here the <span data-show="mem">memory</span> sits behind a <strong>pipeline of 8 cycles</strong>: a load or store enters with its warp, destination register, active lanes,
         addresses and data, and reaches the memory 7 pipeline registers later. A load issued in cycle t is written back at the end of cycle t + 7, so an
         instruction that needs it can issue in cycle t + 8. One request enters every cycle: the memory is slow, not busy. (Each lane still has a port of its own
@@ -310,12 +327,21 @@ export const chWarps: Chapter = {
         an instruction issues, the <span data-show="hz0">scoreboard check</span> reads the pending bits of the registers it uses: rs1 and rs2 if its opcode reads them, rd if it writes one (a load must not overwrite
         a register another load is about to fill). Any pending bit set: not ready.</p>
         <p>In saxpy the two loads issue back to back, both in flight at once, and the warp stops only at <code>slli a0, t5, 1</code>, the first use of x[i].
-        A load costs the warp 8 − 1 = 7 cycles at most, less when independent work follows it: moving loads up is the compiler's job on a real GPU.</p>`,
+        A load costs the warp 8 − 1 = 7 cycles at most, less when independent work follows it: moving loads up is the compiler's job on a real GPU.</p>
+        <details class="deeper"><summary>Deeper: how real GPUs track dependencies</summary>
+        <p>Here only loads are slow: the ALU answers in the cycle, so a pending bit per register on loads is all the scoreboard needs. In a real GPU the ALUs are
+        pipelined too (about 4 cycles from one FP32 instruction to a dependent one on recent NVIDIA parts, more for the special-function unit), and other warps hide
+        that latency just as they hide memory's.</p>
+        <p>Nor is it all done by a hardware scoreboard. Since Maxwell (2014), NVIDIA's compiler writes control bits beside each instruction: for fixed-latency operations
+        a <em>stall count</em>, the cycles to wait before the warp's next instruction; for variable-latency ones (memory, special functions) one of six
+        dependency barriers per warp, which the instruction sets and a later one waits on. AMD's compiler inserts <code>s_waitcnt</code>, waiting until the
+        counter of outstanding memory operations falls far enough. And an SM is four partitions, each with its own warp scheduler issuing one warp a cycle from
+        its own pool: four of this chapter's scheduler side by side.</p></details>`,
       scene: () => warpCoreScene('saxpy64', { warps: 1, highlight: ['hz0', 'warp0'] }),
       challenge: {
-        kind: 'quiz', question: 'lw t5, 0(t4) issues in cycle 10 with 8-cycle loads. lw a1, 256(t4) follows. In which cycle can add a0, a0, a1 issue at the earliest?',
+        kind: 'quiz', question: 'lw t5, 0(t4) issues in cycle 10 with 8-cycle loads, and lw a1, 256(t4) follows it. If add a0, a0, a1 came right after the second load, in which cycle could it issue at the earliest?',
         options: ['Cycle 11', 'Cycle 18', 'Cycle 19', 'Cycle 26'], answer: 2,
-        explain: 'The second load issues in cycle 11 (it does not depend on the first), so a1 is written back at the end of cycle 18 and an instruction reading it can issue in cycle 19. Waiting for each load in turn would push it to cycle 26.',
+        explain: 'The second load issues in cycle 11 (it does not depend on the first), so a1 is written back at the end of cycle 18 and an instruction reading it can issue in cycle 19. Waiting for each load in turn would push it to cycle 26. (In saxpy the slli and add on x[i] come first, so that add issues in cycle 20.)',
         why: ['Cycle 11 is when the second load issues; its word is still 7 cycles away.', 'a1 is written back at the end of cycle 18, so an instruction reading it issues one cycle later.', '', 'That waits for each load in turn; the second load does not depend on the first, so both are in flight at once.'],
       },
     },
@@ -324,8 +350,11 @@ export const chWarps: Chapter = {
       body: `
         <p>While one warp waits, another could issue, if the core holds several. Each <span data-show="warp0 warp1 warp2 warp3"><strong>warp slot</strong></span>
         keeps one warp's PC, its active mask and split / join stack, a running bit and its scoreboard; <span data-show="lane0 lane1 lane2 lane3">each lane</span>
-        keeps one register bank per warp, and the <span data-show="wid">warp number</span> picks the bank. Nothing else is copied: the program ROM, the
-        <span data-show="ctl sdec">decoder</span>, the ALUs and the <span data-show="mem">memory</span> are shared.</p>
+        keeps one register bank per warp, and the <span data-show="wid">warp number</span> picks the bank. The program, the
+        <span data-show="ctl sdec">decoder</span>, the ALUs and the <span data-show="mem">memory</span> are shared. The program's contents are shared, not its
+        read port: every warp's scoreboard check needs that warp's next instruction in every cycle, so each slot reads the program through a
+        <span data-show="im0 im1 im2 im3">port of its own</span>, and a read port in gates is a whole ROM, a copy of the same words. A real GPU keeps one instruction
+        cache and a small buffer of next instructions per warp.</p>
         <p>Warp 0 runs from reset and starts the others: <span data-show="spGo"><code>wspawn t0, t1</code></span> starts warps 1 to t0 − 1 at the address in t1, every lane active. A thread
         learns who it is with <code>csrr t0, tid</code>, now warp · 4 + lane, and how many threads there are from <code>nwarps</code>: thread tid takes
         elements tid, tid + 16, tid + 32 and tid + 48.</p>
@@ -356,12 +385,13 @@ export const chWarps: Chapter = {
       title: 'Occupancy',
       body: `
         <p>A warp is cheap to switch to but not cheap to keep. The second warp adds 110 715 NANDs to the core: its registers, 31 × 32 bits in each of 4 lanes
-        (92 564), a read of the program ROM for its next instruction (8 064), its slot of PC, mask, stack and scoreboard (6 203), its scoreboard check (736),
+        (92 564), its read port into the program, a copy of the ROM (8 064), its slot of PC, mask, stack and scoreboard (6 203), its scoreboard check (736),
         the wspawn compare that starts it, and wider multiplexers. Each resident warp buys issue slots only while some are still empty: past that, it only adds gates.</p>
         <p>A real GPU turns the question around. Its register file is fixed (65 536 32-bit registers per streaming multiprocessor on recent NVIDIA parts), and a
-        kernel's register count decides how many threads fit: at 32 registers a thread, 2 048 threads (64 warps of 32); at 64 registers, half as many. That
-        fraction of the maximum is the <strong>occupancy</strong>. Fewer registers per thread, more warps, more latency hidden; too few registers, and the
-        compiler spills to slow memory instead.</p>
+        kernel's register count decides how many threads fit: at 32 registers a thread, 2 048 threads (64 warps of 32, the most an A100 or H100 SM holds; an
+        RTX 30 or 40 SM stops at 1 536); at 64 registers, half as many. Shared memory per block and the block size limit it too: whichever runs out first
+        decides. The resident warps as a fraction of the maximum are the <strong>occupancy</strong>. Fewer registers per thread, more warps, more latency hidden;
+        too few registers, and the compiler spills to slow memory instead.</p>
         <p>The widget sweeps the warps and the load latency with the timing model, which the tests check against the gate-level core cycle for cycle.</p>`,
       widget: occupancyWidget,
     },
@@ -374,7 +404,7 @@ export const chFeed: Chapter = {
   goals: [
     'count the accesses a warp\'s load takes on a line-wide port, from its lanes\' addresses',
     'find bank conflicts in a banked shared memory, and remove one by padding',
-    'say when a barrier is needed, and why amoadd.w serves one lane per access',
+    'say when a barrier is needed, why this core serves amoadd.w one lane per access, and what real GPUs serialize instead',
     'judge when tiling a matrix multiply pays, from memory bandwidth against extra instructions',
   ],
   builds: ['warps', 'cache'],
@@ -383,7 +413,7 @@ export const chFeed: Chapter = {
       'One port a 16-byte line wide replaces a port per lane: 77 829 NANDs instead of 183 964 for 128 words. The access unit serves the leader\'s line and every lane on it; each other line costs another access.',
       'Coalescing is a data-layout question: the same 76-instruction kernel takes 124 cycles by rows (68 accesses) and 76 by columns (20).',
       'Shared memory: 64 words in four banks (word w in bank w mod 4), loads in 2 cycles instead of 8. Different words in one bank conflict, one word read by several lanes is broadcast, and padding a 4-word row to 5 spreads a column over the banks.',
-      '<code>bar rs1, rs2</code> holds each warp until rs2 warps have arrived: a waiting bit per warp and a population count. <code>amoadd.w</code> reads, adds and writes in one access, one lane per access, so lanes on one word all count.',
+      '<code>bar rs1, rs2</code> holds each warp until rs2 warps have arrived: a waiting bit per warp and a population count. <code>amoadd.w</code> reads, adds and writes in one access; this core serves it one lane per access (one adder at the memory), so lanes on one word all count. Real GPUs run atomics in units at the L2 slices and shared-memory banks: lanes on different words proceed together, only lanes on one word take turns.',
       'Tiling cut global accesses from 144 to 40 but ran 560 instructions instead of 396: here the plain kernel wins, 396 cycles to 592. Tiling pays only when memory is the bottleneck: in the chart, from one line every three cycles.',
     ],
     practise: ['k_coal', 'p_hist'],
@@ -441,6 +471,12 @@ export const chFeed: Chapter = {
         <p>By rows: 68 accesses, 48 cycles holding the issue port, 124 cycles. By columns: 20 accesses and 76 cycles, every issue slot used. The data layout alone
         decides it. GPU programmers call the good case <em>coalesced</em> and arrange arrays so that neighbouring threads touch neighbouring words: a structure of
         arrays rather than an array of structures.</p>
+        <details class="deeper"><summary>Deeper: how wide a real access is</summary>
+        <p>Here a line is 16 bytes, one word per lane of a 4-lane warp. NVIDIA's L1 and L2 keep 128-byte lines, one 4-byte word for each of a warp's 32
+        threads, but move them in four 32-byte <em>sectors</em>: a warp's load costs one transaction per sector it touches, not per line. Thirty-two
+        consecutive words, aligned, are 4 sectors; shifted by one word, 5; a stride of two words, 8 sectors for the same 128 useful bytes; scattered words, up
+        to 32 sectors that each bring 32 bytes for 4 used. DRAM bursts are the same size again (a GDDR6 channel or an HBM2 pseudo-channel moves
+        32 bytes a burst, the sector's size; a 64-bit DDR4 channel 64), so layout matters at every level down to the DRAM.</p></details>
         <div class="try">Run to halt by rows, then switch the kernel to columns: the faded cells in the timeline are the extra accesses, and they are gone.</div>`,
       scene: () => warpCoreScene('rows', { warps: 4, programs: ['rows', 'cols'], highlight: ['acc', 'mem'] }),
       tries: [halted],
@@ -488,9 +524,12 @@ export const chFeed: Chapter = {
         even) may hit the same bin at once. With <code>lw</code>, <code>addi</code>, <code>sw</code> they would all read the same count, add one, and store: four
         lanes on one bin count once.</p>
         <p><code>amoadd.w rd, rs2, (rs1)</code> reads the word at rs1, writes it back plus rs2 and returns the old value, all in one memory access, so nothing
-        comes in between. In the lanes it is served <strong>one lane per access</strong>, lowest first: the <span data-show="acc">access unit</span> sends the
-        leader alone, and an adder at the <span data-show="mem">memory</span> (a 32-bit Kogge–Stone, 878 NANDs) makes the new word. Lanes on one bin then all
-        count, one after the other.</p>
+        comes in between. This core serves it <strong>one lane per access</strong>, lowest first: the <span data-show="acc">access unit</span> sends the
+        leader alone, and one adder at the <span data-show="mem">memory</span> (a 32-bit Kogge–Stone, 878 NANDs) makes the new word. Lanes on one bin then all
+        count, one after the other; lanes on different bins wait too, which is the price of one adder instead of four.</p>
+        <p>Real GPUs serialize less. Atomics run in units beside each L2 slice (global memory) and each shared-memory bank, so lanes on different words are served
+        in parallel like any coalesced access, and only lanes on the same word take turns; and the compiler can fold a warp's adds to one word into a single atomic
+        (warp-aggregated atomics). A histogram with few bins is therefore still slow on a GPU, and one with many bins is not.</p>
         <p>16 loads and 64 atomic adds: 80 accesses, 48 cycles holding the port, 197 cycles. The <span data-show="xdec">decoder</span> hands amoadd.w to the
         <span data-show="ctl">control unit</span> disguised as <code>lw</code> (it reads memory and writes rd) and <span data-show="immA">zeroes its
         immediate</span>: the address is rs1.</p>`,
@@ -498,8 +537,8 @@ export const chFeed: Chapter = {
       challenge: {
         kind: 'quiz', question: 'Lanes 0–3 of one warp run amoadd.w on bins 3, 3, 7, 3. How many accesses does it take, and what does bin 3 gain?',
         options: ['2 accesses, +3', '4 accesses, +3', '4 accesses, +1', '1 access, +3'], answer: 1,
-        explain: 'amoadd.w serves one lane per access, so four accesses whatever the addresses; the three lanes on bin 3 each add 1. A plain load / add / store would leave bin 3 one higher, not three.',
-        why: ['That would be coalescing by line; amoadd.w is never coalesced: the access unit sends the leader alone.', '', 'Each access reads, adds and writes back with nothing in between, so all three lanes on bin 3 count: that is what an atomic is for.', 'An amoadd.w access serves one lane, never four.'],
+        explain: 'This core serves amoadd.w one lane per access, so four accesses whatever the addresses (a real GPU would take lane 2\'s bin 7 alongside the others and serialize only the three on bin 3); the three lanes on bin 3 each add 1. A plain load / add / store would leave bin 3 one higher, not three.',
+        why: ['That would be coalescing by line; on this core amoadd.w is never coalesced: the access unit sends the leader alone.', '', 'Each access reads, adds and writes back with nothing in between, so all three lanes on bin 3 count: that is what an atomic is for.', 'On this core an amoadd.w access serves one lane, never four.'],
       },
     },
     {

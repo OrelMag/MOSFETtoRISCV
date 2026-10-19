@@ -298,7 +298,7 @@ export const RSETUP16: ComponentDef = (() => {
 const CHAIN = ['load', 'upX', 'upY', 'pairs', 'bias', 'cull'] as const;
 
 /**
- * The set-up's sequence: go while idle (walk included) starts load → upX → upY → 14 pairs (t = 0 … 13; j = t >> 1
+ * The set-up's sequence: go while idle (walk included) starts load → upX → upY → 7 pairs in 14 steps (t = 0 … 13; j = t >> 1
  * picks bit 6 − j of Δ, h = t mod 2: double and add A, or add B) → bias → cull. cmd: the steppers' command for
  * the step (load 1, up 5, double 7, right 2; cull loads E into itself, so R starts at the first tile too).
  */
@@ -341,7 +341,7 @@ export const RSEQ16: ComponentDef = (() => {
   const R = b.right;
   return define({
     id: 'rv16_rseq', name: 'Set-up sequencer (RV16)', category: 'sequential',
-    summary: 'A flip-flop per set-up step: go while idle starts load, then the two sign steps (Δx₇, Δy₇ weigh −128), 14 shift-and-add pairs counted by t (j = t >> 1 picks the bit, h = t mod 2 the operand), the bias, the cull. cmd is the steppers\' command for the step; busy covers the set-up and the walk.',
+    summary: 'A flip-flop per set-up step: go while idle starts load, then the two sign steps (Δx₇, Δy₇ weigh −128), 7 shift-and-add pairs in 14 steps counted by t (j = t >> 1 picks the bit, h = t mod 2 the operand, A or B), the bias, the cull. cmd is the steppers\' command for the step; busy covers the set-up and the walk.',
     ports: [bit('go', 'in'), bit('walking', 'in'), clkIn(), bit('rst', 'in'), bus('cmd', 3, 'out'), bus('j', 3, 'out'), bit('h', 'out'),
       ...CHAIN.filter((k) => k !== 'load').map((k) => bit(k, 'out')), bit('busy', 'out')],
     symbol: { kind: 'box', label: 'SET-UP STEPS' },

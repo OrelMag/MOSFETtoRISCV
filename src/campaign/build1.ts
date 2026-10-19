@@ -129,7 +129,7 @@ export const ALU_OPS = [0, 8, 1, 2, 3, 4, 5, 13, 6, 7];
 export const BUILD1: Record<string, () => BuildChallenge> = {
   g_sop: () => ({
     id: 'g_sop', title: 'Prime detector', level: 'gates', allowed: 'nand',
-    brief: '<b>y = 1</b> when the 4-bit number <code>a</code> is prime (2, 3, 5, 7, 11, 13). Draw its K-map, find a minimal sum of products, and build it NAND–NAND.',
+    brief: '<b>y = 1</b> when the 4-bit number <code>a</code> is prime (2, 3, 5, 7, 11, 13). Draw its K-map and find a minimal sum of products: NAND–NAND it is 20 gates. Par is 8: look for what the terms share.',
     ports: pins([['a', 4]], [['y']]), check: { kind: 'table', spec: ([a]) => [PRIMES4.includes(a) ? 1 : 0] },
     answer: refOf('g_sop', () => PRIME4, 'Prime detector'),
   }),

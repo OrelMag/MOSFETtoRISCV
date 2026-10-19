@@ -1,12 +1,23 @@
 import { DFF, RELAY_BUZZER, RELAY_LATCH, RELAY_NAND, RELAY_NOT, RELAY_XOR, relayAdder, rca } from '../lib';
-import { RELAY_COIL_POWER, RELAY_STEP_MS, relayStatic } from '../phys/relay';
+import { NAND2_UM2, RELAY_CONTACTS, RELAY_MASS, RELAY_VOLUME, fmtMass, fmtVolume } from '../lib/tech';
+import { RELAY_COIL_POWER, RELAY_STEP_MS, Z3, relayStatic } from '../phys/relay';
 import { logicDepth, stats } from '../sim/stats';
+import { PS_PER_NAND } from '../sim/timing';
 import { relayCloseup } from '../widgets/relay3d';
 import type { Chapter } from './types';
 
 const ADD4 = relayAdder(4);
 const PULL = relayStatic();
 const ms = (x: number) => x.toFixed(1);
+const thin = (n: number) => Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
+/** The Z3's speed (Rojas): an addition in about 0.8 s, a multiplication in about 3 s, on a clock of about 5 Hz. */
+const Z3_SPEED = 'an addition in about 0.8 s and a multiplication in about 3 s';
+/** The buzzer in the step model: a period of two relay steps. */
+const BUZZ_HZ = Math.round(1000 / (2 * RELAY_STEP_MS));
+/** Our relay's release after switch-off (ms): relaySummary(relaySim(24)).release, pinned by tests/content-prologue.test.ts (read from the text). */
+const RELEASE_MS = 3.4;
+/** Operations a telephone relay's contacts are rated for under load (order of magnitude). */
+const CONTACT_LIFE = 1e7;
 
 export const chRelays: Chapter = {
   id: 'relays', num: 0, prologue: 'P1', title: 'Relays', level: 'Electromechanical',
@@ -22,8 +33,8 @@ export const chRelays: Chapter = {
       `A telephone relay on 24 V closes at ${ms(PULL.pull ?? 0)} V, opens only below ${ms(PULL.drop ?? 0)} V, and is settled ${ms(RELAY_STEP_MS)} ms after switch-on, bounce included: one relay step.`,
       'Contacts pass a line both ways at full strength, isolated from the coil. Every line ends on a coil, a resistor to ground: <strong>voltage means 1, no connection means 0</strong>.',
       `Changeover contacts make selection nearly free: XOR is 2 relays and 1 step (in CMOS 4 NANDs, 3 delays). The adder's carry runs through closed contacts on two lines, c and its complement: 1 step at any width, against ${logicDepth(rca(32))} gate delays for a 32-bit CMOS ripple-carry adder.`,
-      'A relay fed through its own make contact holds itself: one relay per bit (the Z3: 1 408 of its 2 600 relays). Fed through its own break contact it buzzes with a period of two relay steps, about 60 Hz.',
-      `One relay draws ${RELAY_COIL_POWER.toFixed(2)} W while its coil is on. The Z3: about 4 kW, about a tonne, 5 additions a second.`,
+      `A relay fed through its own make contact holds itself: one relay per bit (the Z3: ${thin(Z3.memory)} of its ${thin(Z3.relays)} relays). Fed through its own break contact it buzzes: in the step model a period of two relay steps, about ${BUZZ_HZ} Hz.`,
+      `One relay draws ${RELAY_COIL_POWER.toFixed(2)} W while its coil is on, and its contacts wear: every break of a coil's current draws an arc. The Z3: ${thin(Z3.relays)} relays, about ${Z3.power / 1e3} kW, about a tonne, ${Z3_SPEED}.`,
     ],
     practise: ['r_pull', 'r_nand', 'r_xor', 'r_adder', 'r_latch', 'r_clock'],
     check: [
@@ -91,15 +102,25 @@ export const chRelays: Chapter = {
       title: 'Contacts conduct both ways',
       body: `
         <p>A contact is two pieces of metal touching. It passes whatever is on one side to the other, in both
-        directions and at full strength, with no threshold to lose. A MOSFET's channel is a switch too, but a relay's
-        contacts are isolated from the coil that moves them: a line on a contact never disturbs the coil.</p>
+        directions and at full strength, with no threshold to lose (the transistor of <a href="#/c/mosfet/0">chapter 1</a>,
+        ahead, will lose one). The contacts are also isolated from the coil that moves them: a line on a contact never
+        disturbs the coil.</p>
         <p>An open contact leaves its line connected to nothing, so why does <code>y</code> read 0 here? Because in a
         relay machine every line ends on the <strong>coil</strong> of the next relay, and a coil is a resistor to ground:
         an undriven line is pulled to 0 through it. The <span data-show="ld"><em>load</em></span> drawn on <code>y</code> stands for that coil.
         That is relay logic's convention: <strong>voltage means 1, no connection means 0</strong>.</p>
         <p>This NAND puts <span data-show="ra rb">the two relays'</span> break contacts in parallel from VDD: the output is connected unless both
-        coils pull. In relays the brick costs one relay per input; a relay with four poles serves four gates, so a
-        NAND-mapped machine needs about one relay per NAND.</p>
+        coils pull. A relay machine pays per <em>signal</em>, not per gate: each signal gets one coil, and that relay's
+        ${RELAY_CONTACTS} poles are ${RELAY_CONTACTS} gate inputs reading it. A NAND-mapped machine needs about one relay
+        per NAND output, plus one more for every ${RELAY_CONTACTS} readers past the first ${RELAY_CONTACTS}.</p>
+        <details class="deeper"><summary>Deeper: 1937, Shannon and Stibitz</summary>
+        <p>In his 1937 MIT master's thesis, <em>A Symbolic Analysis of Relay and Switching Circuits</em>, Claude
+        Shannon showed that Boolean algebra describes contact networks exactly: contacts in series are AND, in
+        parallel OR, a break contact NOT. A relay circuit could now be written as an expression, simplified on paper
+        and built with fewer contacts. The same year George Stibitz, at Bell Labs, wired two relays, two flashlight
+        bulbs and strips cut from a tin can on his kitchen table into the <strong>Model K</strong>: a one-bit binary
+        adder, sum and carry on the bulbs. It grew into Bell Labs' Complex Number Calculator (1940), which Stibitz
+        drove from Dartmouth over a teleprinter line.</p></details>
         <div class="try">Set <code>a</code> and <code>b</code> to 1 and watch both blades leave VDD.</div>`,
       scene: () => ({ root: RELAY_NAND, inputs: { a: 0, b: 0 }, animate: true }),
       tries: [(st) => st.value('y') === 0],
@@ -171,7 +192,7 @@ export const chRelays: Chapter = {
           'Setting the bit is easy. The test is whether it stays once set is back at 0.',
           'q is k\'s coil line. Wait until k has pulled in: then one of its own contacts feeds its coil without set.',
         ],
-        answer: 'Set to 1 and wait for q (two relay steps: set pulls in, then k), then set back to 0: k holds itself through its own contact.',
+        answer: 'Set to 1 and wait until k has pulled in (two relay steps: set pulls in and lights q, then k operates), then set back to 0: k holds itself through its own contact.',
         solve: (st) => { st.setInputs({ set: 1, reset: 0 }); st.sim?.settle(); st.setInputs({ set: 0 }); },
       },
     },
@@ -179,17 +200,20 @@ export const chRelays: Chapter = {
       title: 'A relay that cannot stop',
       body: `
         <p>Now feed <span data-show="k">a coil</span> through its own <em>break</em> contact. Current flows, the armature pulls in, the contact
-        opens, the current stops, the spring pulls it back, the contact closes: a square wave with a period of two
-        relay steps. That is a doorbell's <strong>buzzer</strong>, and the first clock.</p>
+        opens, the current stops, the spring pulls it back, the contact closes. In our step model that is a square
+        wave with a period of two relay steps. That is a doorbell's <strong>buzzer</strong>, and the simplest clock. A
+        real one runs faster and lopsided: our relay takes ${ms(RELAY_STEP_MS)} ms to pull in and settle but releases
+        ${ms(RELEASE_MS)} ms after its current stops, and its break contact opens before the armature has finished its
+        travel.</p>
         <p>A relay machine needs a clock because contacts bounce and coils take time: every step must wait until the
         slowest relay has moved and stopped bouncing. Real machines used a motor-driven drum of cams to time their
-        phases; the Z3 ran at about 5 Hz.</p>
+        phases; the Z3 ran at about ${Z3.hz} Hz.</p>
         <div class="try">Switch <code>en</code> on and watch it run. The status line says it never settles.</div>`,
       scene: () => ({ root: RELAY_BUZZER, inputs: { en: 0 }, animate: true }),
       challenge: {
-        kind: 'quiz', question: `A relay step takes ${ms(RELAY_STEP_MS)} ms. At what frequency does the buzzer run?`,
+        kind: 'quiz', question: `In the step model a relay step takes ${ms(RELAY_STEP_MS)} ms. At what frequency does the buzzer run?`,
         options: ['About 60 Hz', 'About 120 Hz', 'About 8 Hz'], answer: 0,
-        explain: 'Two steps per period: 16 ms, about 60 Hz. You hear it as a hum. A CMOS ring oscillator of three inverters runs at gigahertz.',
+        explain: `Two steps per period: ${ms(2 * RELAY_STEP_MS)} ms, about ${BUZZ_HZ} Hz, a hum. The real relay drops out faster than it pulls in (${ms(RELEASE_MS)} ms against ${ms(RELAY_STEP_MS)}), so a real buzzer runs a little faster, its wave lopsided. A CMOS ring oscillator of three inverters runs at gigahertz.`,
         why: ['', 'That is one relay step per period. The relay has to pull in and then drop out again: two steps.', `That reads the ${ms(RELAY_STEP_MS)} ms step as a frequency. A period is two steps, ${ms(2 * RELAY_STEP_MS)} ms.`],
       },
     },
@@ -197,9 +221,17 @@ export const chRelays: Chapter = {
       title: 'What it costs',
       body: `
         <p>One relay here (a telephone relay on 24 V) draws <strong>${RELAY_COIL_POWER.toFixed(2)} W</strong> while its
-        coil is on and takes <strong>${ms(RELAY_STEP_MS)} ms</strong> to move and stop bouncing. It weighs grams and fills a fist. A CMOS NAND switches in about
-        25 ps on femtojoules and is a few square micrometres of silicon.</p>
-        <p>The Z3: 2 600 relays, about 4 kW, about a tonne, 5 additions a second, its program read from punched film.
+        coil is on and takes <strong>${ms(RELAY_STEP_MS)} ms</strong> to move and stop bouncing. Its share of a rack is about
+        ${fmtVolume(RELAY_VOLUME)}, and the Z3's tonne over its relays is ${fmtMass(RELAY_MASS)} a relay, frame and wiring
+        included. A CMOS NAND switches in about ${PS_PER_NAND} ps on femtojoules and takes about ${NAND2_UM2} µm² of
+        silicon.</p>
+        <p>Contacts wear out. Every contact feeds a coil, and breaking a coil's current is breaking an inductor: its
+        stored energy has to go somewhere, and what a quench path (the first step's resistor) does not take arcs across
+        the opening gap. Each arc pits one contact and plates metal onto the other. Contacts are rated for some ${thin(CONTACT_LIFE / 1e6)} million operations under load; a relay switching on
+        every cycle of a ${Z3.hz} Hz clock spends that in about ${Math.round(CONTACT_LIFE / Z3.hz / 86400)} days. Dust and
+        oxide films open contacts too: the "bug" taped into the Harvard Mark II's log in 1947 was a moth caught in a relay.</p>
+        <p>The Z3: ${thin(Z3.relays)} relays, about ${Z3.power / 1e3} kW, about a tonne, ${Z3_SPEED} (its clock about
+        ${Z3.hz} Hz), its program read from punched film.
         <span data-show="fa0 fa1 fa2 fa3">The relay adder above</span> beats the CMOS ripple adder in <em>steps</em> (1 against ${logicDepth(rca(32))} at 32 bits),
         and loses by eight orders of magnitude in time per step. That trade, and the tube's answer to it, is <a href="#/c/tubes/0">the next
         chapter</a>. <a href="#/c/silicon/0">Chapter 25</a> prices the whole CPU you build in relays and tubes.</p>`,
