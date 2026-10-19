@@ -68,6 +68,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'search.slash', group: 'anywhere', caps: [], does: '', match: [{ key: '/', code: 'Slash' }] },
   { id: 'help', group: 'anywhere', caps: ['?'], does: 'the keys on this page', match: [{ key: '?' }] },
   { id: 'esc', group: 'anywhere', caps: ['Esc'], does: 'close the top dialog or menu (in search: clear the query first)' },
+  { id: 'code.leave', group: 'anywhere', caps: ['Esc', 'Tab'], does: 'leave a code editor (there Tab indents)' },
   { id: 'skip', group: 'anywhere', caps: ['Tab'], does: 'the first stop is "Skip to the circuit" (on pages with one)' },
   // ---- chapter pages
   { id: 'step.next', group: 'chapter', caps: [']'], does: 'next step (at the end: the next chapter)', match: [{ code: 'BracketRight', codeOnly: true, shift: false }] },
@@ -136,10 +137,15 @@ export function shortcutAllowed(e: KeyLike, on = settings.singleKeys): boolean {
   return on || !isSingleKey(e);
 }
 
+const NOT_TEXT = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file', 'image']);
+
 /** The focus is in a field that takes typing. */
 export function typing(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;
-  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || !!el.isContentEditable);
+  if (!el) return false;
+  // a checkbox, radio or button input takes no typing: shortcuts still work there
+  if (el.tagName === 'INPUT') return !NOT_TEXT.has((el as HTMLInputElement).type);
+  return el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || !!el.isContentEditable;
 }
 
 /**

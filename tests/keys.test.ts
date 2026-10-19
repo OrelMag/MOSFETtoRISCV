@@ -111,6 +111,8 @@ describe('dispatcher', () => {
     expect(typing({ tagName: 'INPUT' } as unknown as EventTarget)).toBe(true);
     expect(typing({ tagName: 'DIV', isContentEditable: true } as unknown as EventTarget)).toBe(true);
     expect(typing({ tagName: 'BUTTON', isContentEditable: false } as unknown as EventTarget)).toBe(false);
+    expect(typing({ tagName: 'INPUT', type: 'checkbox' } as unknown as EventTarget)).toBe(false);
+    expect(typing({ tagName: 'INPUT', type: 'search' } as unknown as EventTarget)).toBe(true);
     expect(typing(null)).toBe(false);
   });
 });
