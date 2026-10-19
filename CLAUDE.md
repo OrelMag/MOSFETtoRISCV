@@ -379,6 +379,10 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                its result computed in TypeScript)
 src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over crossings; untangle's A* reroutes stop after
                UNTANGLE_POPS states per schematic, leaving overlaps rather than freezing the page: scripts/route-perf.ts times one),
+               layout.ts (the learner's layout on the stage, per component id in localStorage: parts dragged to whole grid
+               units, pointers (NetDef.tags) unravelled into wires one by one or all; applyLayout keeps the nets and their
+               order, so the simulation, probes and marks are untouched; a moved part's nets drop its trunk / via; the
+               right-click menu and the stage's Layout button; Open in Sandbox takes the arrangement),
                inspector (info with "Where it is used", "Power": powerpanel.ts, live from the stage's PowerMeter or
                measurePower on random inputs, and "In relays and tubes": techtable.ts; truth table, Verilog + download), analyzer.ts (the Timing panel:
                lanes from onTrace, cursors, VCD), stage.ts (probe mode, clock period, slow-motion

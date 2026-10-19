@@ -23,6 +23,7 @@ import { Inspector } from './inspector';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber } from './popover';
 import { startFolded } from './camera';
+import { applyLayout, layoutOf } from './layout';
 import { SchematicView } from './schematic';
 
 export interface Scene {
@@ -178,8 +179,8 @@ export class Stage {
   constructor(inspector: Inspector) {
     this.inspector = inspector;
     this.crumbs = h('nav', { class: 'crumbs', 'aria-label': 'Hierarchy' });
-    const btn = (ic: string, title: string, fn: () => void) =>
-      h('button', { class: 'btn ghost icon-only', title, 'aria-label': title, onclick: fn }, icon(ic, 16));
+    const btn = (ic: string, title: string, fn: () => void, cls = '') =>
+      h('button', { class: `btn ghost icon-only${cls}`, title, 'aria-label': title, onclick: fn }, icon(ic, 16));
     this.probeBtn = h('button', { class: 'btn ghost sm toggle probe-btn', title: 'Probe mode (P): click any wire to add it to the timing diagram', onclick: () => this.setProbeMode(!this.probeMode) },
       icon('probe', 15), h('span', { class: 'lbl' }, 'Probe')) as HTMLButtonElement;
     this.timingBtn = h('button', { class: 'btn ghost sm toggle', title: 'Timing diagram: probed nets and ports over time', onclick: () => this.showAnalyzer(!this.el.classList.contains('with-analyzer')) },
@@ -200,6 +201,18 @@ export class Stage {
     document.addEventListener('pointerdown', (e) => {
       if (!imgMenu.contains(e.target as Node) && !imgBtn.contains(e.target as Node)) imgMenu.classList.remove('open');
     });
+    // The learner's layout of this level (view/layout.ts): unravel its pointers, reset it. The menu closes on any
+    // press outside it, this button's too: a press that found it open only closes it.
+    let layoutWasOpen = false;
+    const layoutBtn = h('button', {
+      class: 'btn ghost sm', title: 'Layout: unravel pointers into wires, or reset this level (drag a part to move it)', 'aria-haspopup': 'menu',
+      onpointerdown: () => (layoutWasOpen = this.view.menuOpen),
+      onclick: (e: Event) => {
+        if (layoutWasOpen) return;
+        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        this.view.layoutMenu(r.left, r.bottom + 6);
+      },
+    }, icon('move', 15), h('span', { class: 'lbl' }, 'Layout'));
     // The side panes (narrative or library, inspector) fold away for a full-width circuit; the
     // choice is a setting (data-wide on <html>), so it holds across steps and pages.
     this.panesBtn = h('button', { class: 'btn ghost icon-only toggle panes-btn', onclick: () => {
@@ -208,16 +221,16 @@ export class Stage {
     } }, icon('sidebar', 16)) as HTMLButtonElement;
     this.syncPanesBtn();
     const bar = this.bar = h('div', { class: 'stage-bar' },
-      this.crumbs, remix, h('div', { class: 'pal-wrap' }, imgBtn, imgMenu), this.probeBtn, this.timingBtn,
+      this.crumbs, remix, h('div', { class: 'pal-wrap' }, imgBtn, imgMenu), layoutBtn, this.probeBtn, this.timingBtn,
       btn('up', 'Up one level (Esc)', () => this.up()),
-      btn('minus', 'Zoom out', () => this.view.zoom(1.25)),
-      btn('plus', 'Zoom in', () => this.view.zoom(0.8)),
+      btn('minus', 'Zoom out', () => this.view.zoom(1.25), ' zoom-btn'),
+      btn('plus', 'Zoom in', () => this.view.zoom(0.8), ' zoom-btn'),
       btn('fit', 'Fit to screen', () => this.view.fit()),
       this.panesBtn);
     this.canvas = h('div', { class: 'canvas' });
     this.levelBadge = h('div', { class: 'level-badge' });
     this.dock = h('div', { class: 'panel-dock' });
-    this.canvas.append(this.levelBadge, h('div', { class: 'hint-badge' }, 'double-click a part to open it · drag to pan · wheel or pinch to zoom'), this.dock);
+    this.canvas.append(this.levelBadge, h('div', { class: 'hint-badge' }, 'double-click a part to open it · drag a part to move it · right-click a pointer to unravel it · drag to pan · wheel or pinch to zoom'), this.dock);
     this.controls = h('div', { class: 'controls' });
     this.status = h('div', { class: 'status' });
     this.el = h('section', { class: 'stage' }, bar, this.canvas, this.analyzer.el, this.controls);
@@ -231,6 +244,7 @@ export class Stage {
       netClick: (i) => this.netClick(i),
       probeOf: (i) => this.probeOf(i),
     });
+    this.view.arrange = true;
     this.el.tabIndex = -1;
     this.el.addEventListener('keydown', (e) => {
       if ((e.target as HTMLElement).tagName === 'INPUT') return;
@@ -424,8 +438,11 @@ export class Stage {
 
   /** The level on screen as a new sandbox chip (remix.ts is loaded on demand), then go there. */
   private remix(): void {
-    const def = this.ctx?.def;
-    if (!def) return;
+    const shown = this.ctx?.def;
+    if (!shown) return;
+    // as the learner arranged it: moved parts, unravelled pointers drawn as wires
+    const lay = layoutOf(shown.id), nl = netlistOf(shown);
+    const def: ComponentDef = lay && nl ? { ...shown, netlist: () => applyLayout(nl, lay) } : shown;
     import('../editor/remix').then((m) => {
       const r = m.remixIntoStorage(def);
       if ('error' in r) this.status.replaceChildren(h('span', { class: 'pulse warn' }), `Cannot open in the sandbox: ${r.error}`);
