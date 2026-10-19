@@ -96,7 +96,7 @@ export function perfTable(title: string, configs: PerfConfig[], programs: string
   const el = h('div', { class: 'widget' }, h('div', { class: 'panel' },
     h('h3', null, title),
     h('table', { class: 'cmp' },
-      h('thead', null, h('tr', null, h('th', null, 'processor'), h('th', null, 'period'), h('th', null, `CPI (${programs.join(', ')})`), h('th', null, 'time / instr'), h('th', { title: POWER_NOTE }, `energy / instr (${VDD} V)`), h('th', null, 'speed'))),
+      h('thead', null, h('tr', null, h('th', null, 'processor'), h('th', null, 'period'), h('th', null, `CPI (${programs.join(', ')})`), h('th', { title: `Average, then per program (${programs.join(' · ')})` }, 'time / instr'), h('th', { title: POWER_NOTE }, `energy / instr (${VDD} V)`), h('th', null, 'speed'))),
       body),
     status,
     h('p', { class: 'sub', style: 'margin-top:8px' }, note)));
@@ -106,7 +106,7 @@ export function perfTable(title: string, configs: PerfConfig[], programs: string
   const energyStep = () => {
     if (cancelled) return;
     if (ei >= rows.length) {
-      status.textContent = 'Periods in NAND delays (static timing). CPI averaged over the programs, measured on the gate-level pipeline; energy per instruction on the same programs, every net’s toggles counted (an estimate: hover the column). Speed bars: longer is faster.';
+      status.textContent = `Periods in NAND delays (static timing). CPI averaged over the programs, measured on the gate-level pipeline; under each time / instr, the time per program (${programs.join(' · ')}); energy per instruction on the same programs, every net’s toggles counted (an estimate: hover the column). Speed bars: longer is faster.`;
       return;
     }
     const r = rows[ei];
@@ -136,11 +136,13 @@ export function perfTable(title: string, configs: PerfConfig[], programs: string
     }
     const r = rows[i++];
     const period = measurePeriod(r.c);
-    const cpi = programs.map((p) => measureCpi(r.c, p)).reduce((a, b) => a + b, 0) / programs.length;
+    const cpis = programs.map((p) => measureCpi(r.c, p));
+    const cpi = cpis.reduce((a, b) => a + b, 0) / programs.length;
     r.t = period * cpi;
     r.cells.period.textContent = String(period);
     r.cells.cpi.textContent = cpi.toFixed(2);
-    r.cells.t.textContent = r.t.toFixed(0);
+    // the average hides which programs win: each program's time below it
+    r.cells.t.replaceChildren(r.t.toFixed(0), h('div', { class: 'sub', style: 'font-size:11px;white-space:nowrap', title: programs.join(' · ') }, cpis.map((c) => (period * c).toFixed(0)).join(' · ')));
     status.textContent = `Measuring… ${i} / ${rows.length}`;
     setTimeout(step, 20);
   };

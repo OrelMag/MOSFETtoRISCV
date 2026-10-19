@@ -1,6 +1,8 @@
 import { alu, addSub, bitwise, regfile, shifter } from '../lib';
 import { cpuState } from '../riscv/cosim';
 import { PROGRAMS } from '../riscv/programs';
+import { stats } from '../sim/stats';
+import { netlistOf } from '../sim/types';
 import { pack } from '../sim/values';
 import { cpuScene } from '../widgets/cpupanel';
 import { memGridPanel } from '../widgets/memgrid';
@@ -9,6 +11,20 @@ import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
 
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
+const fmt = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+
+/** The 32 × 32 register file's NANDs by part: registers w1…w31, read ports rp1 / rp2, the rest (decoder). */
+const RF_COST = (() => {
+  const rf = regfile(5, 32);
+  let regs = 0, ports = 0, rest = 0;
+  for (const i of netlistOf(rf)!.instances) {
+    const n = stats(i.def).nands;
+    if (/^w\d+$/.test(i.name)) regs += n;
+    else if (/^rp\d$/.test(i.name)) ports += n;
+    else rest += n;
+  }
+  return { regs, port: ports / 2, dec: rest, total: stats(rf).nands, perBit: regs / (31 * 32) };
+})();
 
 function reg(st: Stage, i: number): number {
   const n = st.rootCtx?.node.children?.get(`w${i}`);
@@ -22,7 +38,7 @@ export const chAlu: Chapter = {
     'say why bitwise operations cost n gates and constant depth at any width',
     'build a barrel shifter from log₂ n mux stages, with one right-shifter serving all three shifts',
     'read signed and unsigned less-than from one subtraction (N ⊕ V, ¬C)',
-    'decode the ALU control straight from the instruction\'s funct7[5] and funct3 bits',
+    'say where the ALU control comes from: {funct7[5], funct3} for an R-type, a few gates for immediates, addresses and branches',
   ],
   builds: ['adders', 'routing'],
   recap: {
@@ -30,7 +46,8 @@ export const chAlu: Chapter = {
       'Bitwise AND / OR / XOR: n independent gates, 2–3 NAND delays at any width. <code>not</code> is <code>xori rd, rs, -1</code>.',
       'Barrel shifter: log₂ n stages of 2:1 muxes, stage j shifting by 2<sup>j</sup> (the shift itself is wiring). Left = reverse, shift right, reverse back; an arithmetic shift fills with <code>arith ∧ a[n−1]</code>. 32 bits: 901 NANDs, 16 delays deep.',
       'No comparator: a − b gives Z (equal), N ⊕ V (signed less-than: N alone lies on overflow) and ¬C (unsigned less-than: no carry out of a + ¬b + 1).',
-      'Every unit computes every cycle and an 8:1 mux on funct3 picks the result. <code>ctl = {funct7[5], funct3}</code>: ctl[3] selects SUB over ADD and SRA over SRL; SLT and SLTU force subtraction.',
+      'Every unit computes every cycle and an 8:1 mux on ctl[2:0] picks the result; ctl[3] selects SUB over ADD and SRA over SRL; SLT and SLTU force subtraction.',
+      'The codes match R-type encodings: there <code>ctl = {funct7[5], funct3}</code>, plain wiring. Elsewhere the control unit decides: OP-IMM passes bit 30 (imm[10]) only for <code>srai</code>, loads / stores / <code>jalr</code> / <code>auipc</code> force ADD, branches force SUB.',
       'At 32 bits: 2 610 NANDs, 98 NAND delays deep. The ripple adder sets the depth, the shifter and the result mux take most of the area.',
     ],
     practise: ['a_addsub16', 'a_slt', 'a_shift16', 'a_alu16'],
@@ -51,10 +68,10 @@ export const chAlu: Chapter = {
       },
       {
         question: '<code>srl</code> and <code>sra</code> share funct3 = 101. What tells the ALU which one to do?',
-        options: ['funct7[5], wired straight in as ctl[3]', 'The opcode', 'A decoder reading all seven funct7 bits', 'The sign of rs2'],
+        options: ['funct7[5] (instruction bit 30), passed on as ctl[3]', 'The opcode', 'A decoder reading all seven funct7 bits', 'The sign of rs2'],
         answer: 0,
-        explain: 'ctl = {funct7[5], funct3}: 0101 is SRL, 1101 SRA. The same bit picks SUB (1000) over ADD (0000).',
-        why: ['', 'Both are R-type (or both OP-IMM for the immediate forms): the opcode says where the operand comes from, not which shift.', 'Only bit 5 of funct7 differs between them, and the ALU takes it as is: no decoder.', 'rs2 gives the shift amount. The fill bit comes from a, and only when ctl says arithmetic.'],
+        explain: 'For an R-type ctl = {funct7[5], funct3}: 0101 is SRL, 1101 SRA, and the same bit picks SUB (1000) over ADD (0000). For OP-IMM the control unit passes bit 30 only when funct3 = 101 (srli / srai): in addi or andi that bit is imm[10], and <code>addi a0, a0, -1</code> would otherwise subtract.',
+        why: ['', 'Both are R-type (or both OP-IMM for the immediate forms): the opcode says where the operand comes from, not which shift.', 'Only bit 5 of funct7 differs between them: one gate passes it on, no wider decoder.', 'rs2 gives the shift amount. The fill bit comes from a, and only when ctl says arithmetic.'],
       },
     ],
   },
@@ -105,9 +122,14 @@ export const chAlu: Chapter = {
       body: `
         <p>All units (<span data-show="add">adder</span>, <span data-show="shift">shifter</span>,
         <span data-show="slt sltu">set-less-than</span>, <span data-show="xor or and">bitwise</span>) compute in parallel on
-        every cycle; an <span data-show="mux">8:1 multiplexer</span> driven by funct3 picks the result.
-        The control code is <code>ctl = {funct7[5], funct3}</code>, the instruction's own bits, so the ALU decoder is almost
-        empty. ctl[3] selects SUB over ADD and SRA over SRL; SLT and SLTU also force subtraction.</p>
+        every cycle; an <span data-show="mux">8:1 multiplexer</span> driven by ctl[2:0] picks the result.
+        ctl[3] selects SUB over ADD and SRA over SRL; SLT and SLTU also force subtraction.</p>
+        <p>The codes are chosen to match R-type encodings: for <code>add</code> … <code>and</code>,
+        <code>ctl = {funct7[5], funct3}</code>, plain wiring. Other instructions need a few gates in
+        <a href="#/c/cpu/0">chapter 14</a>'s control unit. OP-IMM has no funct7: bit 30 is imm[10], so it passes as ctl[3]
+        only for the shifts (funct3 = 101: <code>srai</code>); else <code>addi a0, a0, -1</code> would subtract. Loads, stores,
+        <code>jalr</code> and <code>auipc</code> force ADD (an address; their funct3 is a width or nothing), branches force SUB
+        and read the flags. With op = R ∨ OP-IMM: ctl[2:0] = op ∧ funct3, ctl[3] = op ∧ funct7[5] ∧ (R ∨ funct3 = 101) ∨ branch.</p>
         <p>Note the cost structure in the Info tab: the shifter and mux trees dominate area; the ripple adder dominates delay.
         That is why <a href="#/c/fastadd/0">a later chapter</a> replaces it with a parallel-prefix adder.</p>
         <div class="note">ctl: 0000 ADD · 1000 SUB · 0001 SLL · 0010 SLT · 0011 SLTU · 0100 XOR · 0101 SRL · 1101 SRA · 0110 OR · 0111 AND</div>`,
@@ -131,7 +153,7 @@ export const chRegfile: Chapter = {
   blurb: '32 registers, two read ports, one write port, and x0 wired to zero.',
   goals: [
     'say why an R-type instruction needs two read ports and one write port, and what each port costs',
-    'explain how a constant x0 gives mv, li, nop, j and beqz for free',
+    'explain how a constant x0 gives li, nop, j, beqz, neg and ret for free',
     'price the 32 × 32 register file in NANDs against the rest of the CPU',
   ],
   builds: ['registers', 'memory'],
@@ -139,9 +161,9 @@ export const chRegfile: Chapter = {
     keep: [
       'Two asynchronous read ports and one synchronous write port: two operands in, one result out, every cycle.',
       'Structure: a write decoder, one register with enable per word, every word bundled onto one bus, and a mux tree per read port.',
-      'x0 has no flip-flops: its slot is a constant 0 and writes to it go nowhere. <code>mv</code>, <code>li</code>, <code>nop</code>, <code>j</code> and <code>beqz</code> are pseudo-instructions built on it.',
-      'RV32I: 31 × 32 flip-flops, a 5→32 decoder, two 32:1 trees of 32-bit words: 23 141 NANDs, nearly half of the single-cycle CPU (about 48 000 without its program ROM).',
-      'Here every read port is a whole mux tree: a third would add 3 968 NANDs. A custom SRAM cell adds a port for about two transistors per bit.',
+      'x0 has no flip-flops: its slot is a constant 0 and writes to it go nowhere. <code>li</code> (addi rd, x0, imm), <code>nop</code>, <code>j</code> (jal x0), <code>beqz</code>, <code>neg</code> (sub rd, x0, rs) and <code>ret</code> (jalr x0, 0(ra)) are pseudo-instructions built on it; <code>mv</code> is addi rd, rs, 0 and needs none.',
+      `RV32I: 31 × 32 flip-flops, a 5→32 decoder, two 32:1 trees of 32-bit words: ${fmt(RF_COST.total)} NANDs, nearly half of the single-cycle CPU (about 48 000 without its program ROM).`,
+      `Here every read port is a whole mux tree: a third would add ${fmt(RF_COST.port)} NANDs. A custom SRAM cell adds a port for about two transistors per bit.`,
     ],
     practise: ['m_rf'],
     check: [
@@ -178,7 +200,7 @@ export const chRegfile: Chapter = {
         memory array from <a href="#/c/memory/0">chapter 10</a> with a second mux tree.</p>
         <p>All register outputs are bundled into <span data-show="bundle">one wide bus</span> feeding both read ports; that is the usual way to draw
         "every word reaches every port". Register <span data-show="x0">x0</span> does not exist: its slot is a constant 0, and writes to it go nowhere.
-        That gives you <code>mv</code>, <code>li</code>, <code>nop</code>, <code>j</code> and <code>beqz</code> for free as pseudo-instructions.</p>
+        That gives <code>li</code>, <code>nop</code>, <code>j</code>, <code>beqz</code>, <code>neg</code> and <code>ret</code> for free as pseudo-instructions, each an ordinary instruction with x0 as a source or destination.</p>
         <div class="try">Write a value: set wa, wd, we = 1, Pulse. Then point ra1 / ra2 at it.</div>`,
       scene: () => ({ root: regfile(3, 8), inputs: { wa: 5, wd: 0x42, we: 1, clk: 0, ra1: 5, ra2: 0 }, panels: [memGridPanel] }),
       tries: [(st) => st.getInput('ra2') !== 0 && st.value('rd2') > 0],
@@ -198,7 +220,7 @@ export const chRegfile: Chapter = {
       body: `
         <p>RV32I's register file: <span data-show="w1 w2 w3 w31">31 × 32 flip-flops</span> with enable, a
         <span data-show="dec">5→32 write decoder</span> and two <span data-show="rp1 rp2">32:1 multiplexer trees</span> of
-        32-bit words. At this site's construction (15 NANDs per bit) that is ~23 000 NANDs, roughly half of the whole CPU.</p>
+        32-bit words. At this site's construction that is ${fmt(RF_COST.regs)} NANDs of registers (${RF_COST.perBit} per bit: a flip-flop with enable), ${fmt(RF_COST.port)} per read port and ${fmt(RF_COST.dec)} for the decoder: ${fmt(RF_COST.total)} NANDs, nearly half of the whole CPU.</p>
         <p>Real designs use custom multi-ported SRAM cells: an extra read port costs two transistors per bit, not a whole
         mux tree. Register-file port count is a first-order cost in superscalar cores for exactly this reason.</p>`,
       scene: () => ({ root: regfile(5, 32), inputs: { wa: 10, wd: 0xcafe, we: 1, clk: 0, ra1: 10, ra2: 0 } }),
@@ -223,6 +245,7 @@ export const chIsa: Chapter = {
       'Immediates pay for it: S splits its immediate around rs2, B and J scramble theirs so the sign is always bit 31. Each immediate bit is a wire, a copy of bit 31, or 0: no gates.',
       'Branch and jump offsets count 2-byte units (bit 0 is not stored), so the 16-bit C extension needs no new format.',
       'The assembler works in two passes: labels first (<code>li</code> may grow to <code>lui</code> + <code>addi</code>), then encoding. The instruction-set simulator, written from the specification, is the reference every gate-level CPU is checked against.',
+      'Offsets count from the branch or jump\'s own PC. Every I-type immediate is sign-extended, andi / ori / xori / sltiu included. <code>la</code> and <code>call</code> are <code>auipc</code> + addi / jalr: PC-relative, ±2 GiB, with the upper part rounded by + 0x800 like <code>li</code>.',
     ],
     practise: ['i_enc', 'p_add', 'p_loop', 'p_call'],
     check: [
@@ -244,7 +267,7 @@ export const chIsa: Chapter = {
         question: '<code>li a0, 0x12345</code> assembles to how many words?',
         options: ['Two: lui, then addi', 'One: li is an instruction', 'One addi, since the value is positive', 'Three'],
         answer: 0,
-        explain: '<code>lui a0, 0x12</code> sets the upper 20 bits, <code>addi a0, a0, 0x345</code> adds the low 12. Pass 1 must know the size to place every label after it.',
+        explain: '<code>lui a0, 0x12</code> sets the upper 20 bits, <code>addi a0, a0, 0x345</code> adds the low 12. addi sign-extends, so when bit 11 of the constant is set lui takes one more: <code>li a0, 0x12845</code> is <code>lui a0, 0x13</code>; <code>addi a0, a0, -1979</code> (0x13000 − 0x7BB). Pass 1 must know the size to place every label after it.',
         why: ['', 'li is a pseudo-instruction: RV32I has no li opcode.', 'addi\'s immediate is 12 bits signed (−2048 … 2047); 0x12345 = 74 565 does not fit.', 'lui supplies 20 bits and addi 12: two instructions cover any 32-bit constant.'],
       },
     ],
@@ -276,6 +299,18 @@ export const chIsa: Chapter = {
       body: `
         <p>The assembler turns text into those words in two passes: pass 1 assigns addresses to labels (pseudo-instructions
         like <code>li</code> may expand to two words, <code>lui</code> + <code>addi</code>), pass 2 encodes.</p>
+        <details class="deeper"><summary>Deeper: addresses and constants, the details that bite</summary>
+        <p><strong>PC-relative to the instruction itself.</strong> A branch or <code>jal</code> at address A jumps to
+        A + offset, not A + 4 + offset (MIPS and ARM count from the next instruction): <code>beq</code> at 0x100 with offset 16
+        lands on 0x110.</p>
+        <p><strong>Every I-type immediate is sign-extended</strong>, logical ones too: <code>andi a0, a0, -16</code> masks
+        with 0xFFFF_FFF0, <code>xori rd, rs, -1</code> is <code>not</code>, <code>sltiu rd, rs, -1</code> compares (unsigned) with 0xFFFF_FFFF,
+        and a mask such as 0x800 does not fit at all (−2048 … 2047).</p>
+        <p><strong>lui + addi rounds.</strong> addi adds a signed 12-bit value, so the upper part is (v + 0x800) &gt;&gt; 12:
+        <code>li a0, 0x12845</code> becomes <code>lui a0, 0x13</code>; <code>addi a0, a0, -1979</code>.</p>
+        <p><strong>auipc for addresses.</strong> <code>la a0, sym</code> is <code>auipc a0, hi</code>; <code>addi a0, a0, lo</code>
+        and <code>call f</code> is <code>auipc ra, hi</code>; <code>jalr ra, lo(ra)</code>, both from the distance to the
+        symbol, rounded the same way: position-independent code with ±2 GiB reach, where <code>jal</code> reaches ±1 MiB.</p></details>
         <p>The result runs immediately on an <strong>instruction-set simulator</strong>, written directly from the
         specification. The gate-level CPU in the next chapter is checked against it after every clock cycle.</p>
         <div class="try">Edit the program: errors show up with their line numbers, and the machine code updates as you type.</div>`,
@@ -315,7 +350,7 @@ export const chSingleCycle: Chapter = {
   recap: {
     keep: [
       'One instruction per clock: PC → instruction memory → decode and register read → ALU → data memory → result mux → register file, written at the next rising edge.',
-      'Control comes from the opcode: RegWrite, ALUSrcB, ResultSrc, MemWrite, ImmSrc, and ALUControl = {funct7[5], funct3}. add and addi differ only in ALUSrcB and ImmSrc.',
+      'Control comes from the opcode: RegWrite, ALUSrcB, ResultSrc, MemWrite, ImmSrc, and ALUControl: {funct7[5], funct3} for an R-type; funct3 for OP-IMM, with bit 30 only for <code>srai</code>; ADD for loads, stores, <code>jalr</code> and <code>auipc</code>; SUB for branches.',
       'Branches subtract in the ALU and read its flags (beq Z, bne ¬Z, blt N⊕V, bge ¬(N⊕V), bltu ¬C, bgeu C); a separate adder computes PC + imm<sub>B</sub>.',
       '<code>jal</code> writes PC + 4 and jumps to PC + imm<sub>J</sub>; <code>jalr</code> jumps to rs1 + imm with bit 0 cleared by wiring.',
       'About 48 000 NANDs without the program ROM, 155 NAND delays per cycle with ripple adders, and the clock must fit the slowest instruction.',
@@ -375,8 +410,11 @@ export const chSingleCycle: Chapter = {
         <p>For <code>add</code>: RegWrite = 1 (write rd), ALUSrcB = 0 (the <span data-show="srcB">second ALU operand</span>
         is rs2; the <span data-show="srcA">first</span> is rs1), ResultSrc = ALU (the <span data-show="res">result mux</span>
         writes back the ALU's output), ALUControl = {funct7[5], funct3} (the <span data-show="alu">ALU</span>'s operation).
-        For <code>addi</code> the only difference is ALUSrcB = 1 with ImmSrc = I (the
-        <span data-show="imm">immediate generator</span> builds an I-type immediate).</p>
+        For <code>addi</code>: ALUSrcB = 1 with ImmSrc = I (the <span data-show="imm">immediate generator</span> builds an
+        I-type immediate), and ALUControl = {0, funct3}: bit 30 is imm[10] here, so <code>addi a0, a0, -1</code> must not
+        become a subtraction. Only <code>srai</code> (funct3 = 101) passes it on. Loads, stores, <code>jalr</code> and
+        <code>auipc</code> get ADD, branches SUB, whatever their funct3: a few gates in the
+        <span data-show="ctl">control unit</span>.</p>
         <div class="try">Pulse through the program and watch the highlighted path: <span data-show="rf">register file</span> → ALU → result mux → back into the register file.</div>`,
       scene: () => cpuScene({ source: RTYPE, highlight: ['rf', 'srcA', 'srcB', 'alu', 'res', 'imm'] }),
       tries: [(st) => { try { return st.sim ? cpuState(st.sim).x[16] === 1 : false; } catch { return false; } }],
@@ -392,7 +430,7 @@ export const chSingleCycle: Chapter = {
         <div class="try">Pulse to the <code>lw</code> and compare the status bar's "settled in N gate delays" with an <code>addi</code>.</div>`,
       scene: () => cpuScene({ source: MEMOPS, highlight: ['alu', 'dm', 'res'] }),
       challenge: {
-        kind: 'quiz', question: 'Which instruction class sets the clock period of a single-cycle CPU?',
+        kind: 'quiz', question: 'With realistic memories (SRAM slower than the logic around it), which instruction class sets the clock period of a single-cycle CPU?',
         options: ['R-type (two register reads)', 'lw (ALU, then memory, then write-back)', 'beq (subtract and compare)', 'jal (no register read)'], answer: 1,
         why: ['Both register reads happen in parallel, and an R-type skips the data memory entirely.', '', 'With a realistic memory, a branch ends at the next-PC logic and never waits for a data-memory read. (This site\'s memories are fast mux trees, so chapter 15\'s static timing finds a branch path on top: a surprise only cheap memory allows.)', 'jal reads no register, and its path through an adder to the result mux is shorter still.'],
         explain: 'Every cycle must be long enough for the slowest instruction, and lw chains the ALU and the memory read. The other instructions waste the slack. That is the motivation for multicycle and pipelined designs.',
