@@ -36,6 +36,35 @@ export function s<K extends keyof SVGElementTagNameMap>(tag: K, attrs?: Attrs | 
   return el;
 }
 
+/** A touch screen is the main pointer (a phone or tablet): gestures, not a mouse and keys. */
+export const coarsePointer = (): boolean => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
+/**
+ * The canvas's gesture hint (.hint-badge): the mouse wording, or on a touch screen the touch wording
+ * on one line (it sits over the circuit: wrapped on a phone it hid the lower pins). The first touch on
+ * the canvas hides it for this visit; a tap on it hides it for good (remembered under `key`).
+ */
+export function hintBadge(mouse: string, touch: string, key: string, cls = ''): HTMLElement {
+  const store = `mosfet2riscv:hint:${key}`;
+  if (!coarsePointer()) return h('div', { class: `hint-badge${cls}` }, mouse);
+  let off = false;
+  try { off = localStorage.getItem(store) === 'off'; } catch { /* storage blocked: shown */ }
+  const el = h('button', { class: `hint-badge touch${cls}`, hidden: off, title: 'Tap to hide this hint', 'aria-label': `${touch} (tap to hide)` },
+    h('span', null, touch), h('span', { class: 'x', 'aria-hidden': 'true' }, '×'));
+  el.addEventListener('click', () => {
+    el.hidden = true;
+    try { localStorage.setItem(store, 'off'); } catch { /* not remembered */ }
+  });
+  // Seen once the canvas is touched: out of the circuit's way until the next visit.
+  const touched = (e: Event) => {
+    if (el.contains(e.target as Node)) return;
+    el.hidden = true;
+    el.parentElement?.removeEventListener('pointerdown', touched, true);
+  };
+  queueMicrotask(() => el.parentElement?.addEventListener('pointerdown', touched, true));
+  return el;
+}
+
 export function clear(el: Element): void {
   while (el.firstChild) el.firstChild.remove();
 }
@@ -55,6 +84,9 @@ const ICONS: Record<string, string> = {
   open: '<path d="M15 3h6v6M21 3l-8 8M10 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/>',
   zoomin: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',
+  // a snail: Slow motion, not Play
+  slow: '<path d="M2 20h16a3 3 0 0 0 3-3V10"/><path d="M19 6l2 4 2-4"/><path d="M4 20a7 7 0 1 1 13-3.5"/><path d="M10.5 17a3 3 0 1 1 3-3"/>',
+  more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
   pause: '<path d="M7 4h4v16H7zM14 4h4v16h-4z"/>',
   step: '<path d="M6 4l10 8-10 8zM18 4v16"/>',
   stepBack: '<path d="M18 4L8 12l10 8zM6 4v16"/>',

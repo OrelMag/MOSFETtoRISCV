@@ -620,9 +620,19 @@ export class Tools {
       else ed.view.showGhost(null);
       ed.palette.markDrop(folder(ev));
     };
-    const upH = (ev: PointerEvent) => {
+    const off = () => {
       document.removeEventListener('pointermove', mv);
       document.removeEventListener('pointerup', upH);
+      document.removeEventListener('pointercancel', cancelH);
+    };
+    // The browser took the touch over (a swipe scrolling the phone's parts drawer: editor.css pan-y): no part.
+    const cancelH = () => {
+      off();
+      ed.palette.markDrop(null);
+      if (this.state.k === 'place' && this.state.drag) this.cancel();
+    };
+    const upH = (ev: PointerEvent) => {
+      off();
       ed.palette.markDrop(null);
       const st = this.state;
       if (st.k !== 'place') return;
@@ -640,6 +650,7 @@ export class Tools {
     };
     document.addEventListener('pointermove', mv);
     document.addEventListener('pointerup', upH);
+    document.addEventListener('pointercancel', cancelH);
   }
 
   /** Arm the comment tool (key T). */

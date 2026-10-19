@@ -16,7 +16,7 @@ import type { PowerOnMode, Sim, SimState } from '../sim/sim';
 import { B0, B1, BZ, type Bit, type ComponentDef, inPorts, netlistOf, outPorts, type PortDef } from '../sim/types';
 import { formatBits, formatNumber, mask, pack, packBig, type Radix, unpackBig } from '../sim/values';
 import { LogicAnalyzer, netKey } from './analyzer';
-import { h, icon } from '../ui/dom';
+import { h, hintBadge, icon } from '../ui/dom';
 import { applyTheme, settings } from '../ui/settings';
 import { switchSim, ViewCtx } from './context';
 import { Inspector } from './inspector';
@@ -230,7 +230,9 @@ export class Stage {
     this.canvas = h('div', { class: 'canvas' });
     this.levelBadge = h('div', { class: 'level-badge' });
     this.dock = h('div', { class: 'panel-dock' });
-    this.canvas.append(this.levelBadge, h('div', { class: 'hint-badge' }, 'double-click a part to open it · drag a part to move it (shift: pick several) · right-click for layout · drag to pan · wheel or pinch to zoom'), this.dock);
+    // Touch: dblclick comes from a double tap; the Layout button stands in for the right-click menu.
+    this.canvas.append(this.levelBadge, hintBadge('double-click a part to open it · drag a part to move it (shift: pick several) · right-click for layout · drag to pan · wheel or pinch to zoom',
+      'double-tap a part: open · drag: move / pan · pinch: zoom', 'stage'), this.dock);
     this.controls = h('div', { class: 'controls' });
     this.status = h('div', { class: 'status' });
     this.el = h('section', { class: 'stage' }, bar, this.canvas, this.analyzer.el, this.controls);
@@ -1157,15 +1159,19 @@ export class Stage {
   }
 
   /** Drop the bar's button labels (icons and tooltips remain) when the hierarchy would otherwise
-   *  be cut or wrap; measured with the labels shown, so it comes back once there is room. */
+   *  be cut or wrap; measured with the labels shown, so it comes back once there is room. Still cut
+   *  without them (a phone: the buttons take the whole bar, the name read "4…"), the hierarchy gets
+   *  a row of its own above the buttons (.stacked). */
   private fitBar(): void {
     const bar = this.bar;
-    bar.classList.remove('compact');
+    bar.classList.remove('compact', 'stacked');
     const items = [...this.crumbs.querySelectorAll('button')];
     if (!items.length) return;
-    const cut = items.some((b) => b.scrollWidth > b.clientWidth + 1);
+    const cut = () => items.some((b) => b.scrollWidth > b.clientWidth + 1);
     const wrapped = items[items.length - 1].offsetTop > items[0].offsetTop + 2;
-    if (cut || wrapped) bar.classList.add('compact');
+    if (!cut() && !wrapped) return;
+    bar.classList.add('compact');
+    if (cut()) bar.classList.add('stacked');
   }
 
   /** Open `path` and highlight (and bring into view) the instance `name` inside it. */

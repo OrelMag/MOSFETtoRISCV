@@ -10,6 +10,17 @@ import { installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './q
 import { applyTheme, PALETTES, settings, type Theme } from './settings';
 import type { Radix } from '../sim/values';
 
+/**
+ * Which of the top bar's circuit settings a route uses: the bus radix wherever a circuit is drawn
+ * (Stage: chapters and the workbench; the editor: sandbox and campaign levels), Slow motion only on
+ * a Stage (the editor has its own gate-delay mode). Elsewhere they would do nothing.
+ */
+function stageTools(parts: string[]): { radix: boolean; slow: boolean } {
+  const [key, sub] = parts;
+  const stage = key === 'c' || (key === 'workbench' && sub !== 'stats' && sub !== 'bench');
+  return { radix: stage || key === 'sandbox' || (key === 'campaign' && sub === 'play'), slow: stage };
+}
+
 export function startApp(root: HTMLElement): void {
   installErrorReporting();
   applyTheme();
@@ -33,11 +44,13 @@ export function startApp(root: HTMLElement): void {
   installQuickNav();
   const searchBtn = h('button', { class: 'btn ghost icon-only', title: `Jump to a chapter or step (${QUICK_KEY})`, 'aria-label': 'Jump to a chapter or step', onclick: () => openQuickNav() }, icon('search', 18));
 
-  const radix = h('div', { class: 'seg', title: 'How buses show their value' });
-  const radixes: [Radix, string][] = [['hex', 'HEX'], ['bin', 'BIN'], ['dec', 'DEC']];
-  for (const [r, label] of radixes) radix.append(h('button', { 'data-r': r, onclick: () => settings.set('radix', r) }, label));
+  const radix = h('div', { class: 'seg', role: 'group', title: 'How buses show their value', 'aria-label': 'How buses show their value' });
+  const radixes: [Radix, string, string][] = [['hex', 'HEX', 'hexadecimal'], ['bin', 'BIN', 'binary'], ['dec', 'DEC', 'decimal']];
+  for (const [r, label, long] of radixes) radix.append(h('button', { 'data-r': r, title: `Bus values in ${long}`, onclick: () => settings.set('radix', r) }, label));
 
-  const animate = h('button', { class: 'btn sm toggle', title: 'Slow motion: one gate delay at a time, each change travelling along its wires' }, icon('play', 14), h('span', { class: 'lbl' }, 'Slow motion'));
+  // A snail, not a play triangle: on a phone the label is hidden and ▶ read as "Run".
+  const animate = h('button', { class: 'btn sm toggle slow-btn', title: 'Slow motion: one gate delay at a time, each change travelling along its wires', 'aria-label': 'Slow motion' },
+    icon('slow', 16), h('span', { class: 'lbl' }, 'Slow motion'));
   animate.addEventListener('click', () => settings.set('animate', !settings.animate));
 
   const themeBtn = h('button', { class: 'btn ghost icon-only', 'aria-label': 'Theme' });
@@ -54,7 +67,7 @@ export function startApp(root: HTMLElement): void {
     const item = h('button', { role: 'menuitemradio', 'data-p': p.id, onclick: () => {
       settings.set('palette', p.id);
       applyTheme();
-      palMenu.classList.remove('open');
+      palOpen(false);
     } }, h('span', { class: 'pal-sw', 'data-palette': p.id }, h('i', { class: 's0' }), h('i', { class: 's1' }), h('i', { class: 'sx' }), h('i', { class: 'sb' })),
     h('span', null, h('b', null, p.name), h('small', null, p.blurb)));
     palMenu.append(item);
@@ -108,13 +121,17 @@ export function startApp(root: HTMLElement): void {
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Automatic clock'), h('small', null, 'A circuit with a clock starts running (2 Hz) when opened; Pulse, Step or Back pauses it')));
   palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), vividItem, boardItem, cartoonItem, modItem, flowItem, netItem, simpleItem, glossItem, clockItem);
-  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'Wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections, automatic clock', 'aria-label': 'Wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections, automatic clock', 'aria-haspopup': 'menu' }, swatch());
+  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections, automatic clock', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
+  const palOpen = (on: boolean) => {
+    palMenu.classList.toggle('open', on);
+    palBtn.setAttribute('aria-expanded', String(on));
+  };
   palBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    palMenu.classList.toggle('open');
+    palOpen(!palMenu.classList.contains('open'));
   });
   document.addEventListener('pointerdown', (e) => {
-    if (!palMenu.contains(e.target as Node) && !palBtn.contains(e.target as Node)) palMenu.classList.remove('open');
+    if (!palMenu.contains(e.target as Node) && !palBtn.contains(e.target as Node)) palOpen(false);
   });
   const palWrap = h('div', { class: 'pal-wrap' }, palBtn, palMenu);
 
@@ -133,6 +150,7 @@ export function startApp(root: HTMLElement): void {
     clockItem.setAttribute('aria-checked', String(settings.autoClock));
     for (const b of radix.querySelectorAll<HTMLButtonElement>('button')) b.classList.toggle('on', b.dataset.r === settings.radix);
     animate.classList.toggle('on', settings.animate);
+    animate.setAttribute('aria-pressed', String(settings.animate));
     themeBtn.replaceChildren(icon(settings.theme === 'light' ? 'sun' : settings.theme === 'dark' ? 'moon' : 'auto', 18));
     themeBtn.title = `Theme: ${settings.theme} (click to change)`;
   };
@@ -152,6 +170,9 @@ export function startApp(root: HTMLElement): void {
     const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
     const key = parts[0] ?? 'home';
     for (const a of nav.querySelectorAll<HTMLAnchorElement>('a')) a.classList.toggle('active', a.dataset.key === key || (key === '' && a.dataset.key === 'home'));
+    const shows = stageTools(parts);
+    radix.hidden = !shows.radix;
+    animate.hidden = !shows.slow;
     if (key === 'c') {
       const ch = chapterById(parts[1] ?? '') ?? chapters[0];
       const step = Number(parts[2] ?? 0) || 0;
