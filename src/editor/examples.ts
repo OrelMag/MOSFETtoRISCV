@@ -11,6 +11,7 @@ import { CPU4_SUBCHIPS, cpu4Chip } from './example4';
 import { computer6502Chip, memory6502Chip } from './example6502';
 import { busSystemChip } from './examplebus';
 import { cardsBootChip } from './examplecards';
+import { add4VerilogChip, sameAdderChip } from './examplehdl';
 
 const pin = (id: string, dir: PinDoc['dir'], at: Vec, width = 1, extra: Partial<PinDoc> = {}): PinDoc => ({ id, name: id, dir, width, at, ...extra });
 const part = (id: string, ref: PartRef, at: Vec, extra: Partial<PartDoc> = {}): PartDoc => ({ id, ref, at, ...extra });
@@ -398,6 +399,12 @@ export const EXAMPLES: Example[] = [
     id: 'bussystem', name: 'System on a bus',
     blurb: 'Chapter 37\'s computer: an RV32I core and a DMA engine on one bus to RAM, a flash it boots from, the DRAM of chapter 35, a screen, a keyboard and a timer. Clock rate max, Run, then type.',
     build: busSystemChip,
+  },
+  {
+    id: 'verilog-adder', name: 'The same adder in Verilog',
+    blurb: 'A 4-bit adder twice: the library\'s ripple-carry ADD4, and one line of Verilog drawn by Yosys in the page. Compare their NANDs and depth; edit the text.',
+    build: (id, n, sub, docs) => sameAdderChip(id, n, sub, docs),
+    subchips: { add4: { name: 'add4', build: add4VerilogChip } },
   },
   {
     id: 'cardboot', name: 'Boot from cards',

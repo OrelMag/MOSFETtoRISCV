@@ -2,7 +2,7 @@
 import { defineConfig, type Plugin } from 'vite';
 import { execSync } from 'node:child_process';
 import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 
 // Version X.YYY.ZZZ: major and minor from package.json, the build number is the git commit count
@@ -18,10 +18,10 @@ const version = `${major}.${String(minor).padStart(3, '0')}.${String(build).padS
 // files (yosys/bundle.js and its wasm), never bundled, so nothing loads it until a Verilog chip is synthesized.
 const YOSYS = fileURLToPath(new URL('./node_modules/@yowasp/yosys/gen', import.meta.url));
 function yosysFiles(): Plugin {
-  let outDir = 'dist';
+  let outDir = 'dist', building = false;
   return {
     name: 'yosys-files',
-    configResolved(c) { outDir = c.build.outDir; },
+    configResolved(c) { outDir = resolve(c.root, c.build.outDir); building = c.command === 'build' && !process.env.VITEST; },
     configureServer(server) {
       server.middlewares.use('/yosys/', (req, res, next) => {
         const f = join(YOSYS, decodeURIComponent((req.url ?? '').split('?')[0]).replace(/^\/+/, ''));
@@ -31,7 +31,7 @@ function yosysFiles(): Plugin {
       });
     },
     closeBundle() {
-      if (!existsSync(YOSYS)) return;
+      if (!building || !existsSync(YOSYS)) return; // (vitest runs plugins too: no copy into its dummy outDir)
       const to = join(outDir, 'yosys');
       mkdirSync(to, { recursive: true });
       for (const f of readdirSync(YOSYS)) copyFileSync(join(YOSYS, f), join(to, f));

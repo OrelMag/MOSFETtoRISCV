@@ -59,7 +59,7 @@ export interface ImportOptions {
   /** The top module (default: the one Yosys marked top, else the one nothing instantiates). */
   top?: string;
   /** Chip id for a module (resynthesis keeps its chips); default `u_<slug>` made unique against `taken`. */
-  idOf?: (module: string) => string | undefined;
+  idOf?: (module: string, isTop: boolean) => string | undefined;
   taken?: Iterable<string>;
 }
 
@@ -109,7 +109,7 @@ export function importYosysJson(json: unknown, opts: ImportOptions = {}): HdlImp
   const taken = new Set(opts.taken ?? []);
   const ids = new Map<string, string>();
   for (const n of order) {
-    const want = opts.idOf?.(n);
+    const want = opts.idOf?.(n, n === top);
     const id = want ?? uniqueName(`u_${slug(n)}`, taken);
     taken.add(id);
     ids.set(n, id);
@@ -586,7 +586,8 @@ function place(insts: Inst[], byName: Map<string, Inst>, list: NetB[], ports: Po
     const i = queue[qi];
     for (const s of succ.get(i)!) {
       if (back.has(`${i.name}>${s.name}`)) continue;
-      if (i.fixed !== 'in') depth.set(s, Math.max(depth.get(s)!, depth.get(i)! + (s.fixed === 'out' ? 0 : 1)));
+      // Input splitters and constants (nothing drives them) add no depth: their readers can sit in the first column.
+      if (i.fixed !== 'in' && pred.get(i)!.size) depth.set(s, Math.max(depth.get(s)!, depth.get(i)! + (s.fixed === 'out' ? 0 : 1)));
       indeg.set(s, indeg.get(s)! - 1);
       if (indeg.get(s) === 0) queue.push(s);
     }

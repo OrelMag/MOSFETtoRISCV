@@ -70,7 +70,7 @@ export interface SynthOptions {
 export function synthScript(files: string[], o: SynthOptions = {}): string {
   const top = o.top ? `-top ${o.top}` : '-auto-top';
   return [
-    `read_verilog -sv ${files.join(' ')}`,
+    `read_verilog -sv -noblackbox ${files.join(' ')}`, // (an empty module is a chip with pins, not a black box)
     `hierarchy -check ${top}`,
     `synth ${o.top ? `-top ${o.top}` : '-auto-top'}`,
     `abc -g ${GATE_SETS[o.gates ?? 'std'].abc}`,

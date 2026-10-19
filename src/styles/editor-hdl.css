@@ -1,0 +1,115 @@
+/* Verilog chips (editor/hdlui.ts): the text pane left of the canvas, the banner over it, the properties. */
+
+:root {
+  --hdl-kw: light-dark(#7c3aed, #c4a5ff);
+  --hdl-nm: light-dark(#b45309, #fbbf24);
+  --hdl-st: light-dark(#0e7490, #7dd3fc);
+  --hdl-cm: light-dark(#6b7280, #6b7590);
+  --hdl-sys: light-dark(#be185d, #f9a8d4);
+  --hdl-code-bg: light-dark(#fbfbfe, #0e1119);
+}
+
+.sb-mid { flex: 1; display: flex; min-height: 0; min-width: 0; }
+.sb-left { display: flex; min-height: 0; }
+.sb-mid > .sb-canvas { min-width: 0; }
+
+.hdl-pane {
+  position: relative; width: 420px; max-width: 60vw; display: flex; flex-direction: column; min-height: 0;
+  background: var(--hdl-code-bg); border-right: 1px solid var(--border);
+}
+.hdl-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.hdl-head .grow { flex: 1; }
+.hdl-file { font: 600 12.5px var(--font-mono); color: var(--text); }
+.hdl-state { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.hdl-state.ok { color: var(--good); }
+.hdl-state.bad { color: var(--bad); }
+
+.hdl-code { position: relative; flex: 1; min-height: 120px; }
+.hdl-hl, .hdl-ta {
+  position: absolute; inset: 0; margin: 0; padding: 8px 10px 8px 46px; border: 0;
+  font: 12.5px/1.6 var(--font-mono); tab-size: 2; white-space: pre; overflow: auto; letter-spacing: 0;
+  font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; /* <= is two characters, not ≤ */
+}
+.hdl-hl { overflow: hidden; color: var(--text); pointer-events: none; counter-reset: hdl-ln; }
+.hdl-ta {
+  background: transparent; color: transparent; caret-color: var(--text); resize: none; outline: none;
+  user-select: text; -webkit-text-fill-color: transparent;
+}
+.hdl-ta::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); -webkit-text-fill-color: transparent; }
+.hdl-ta:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+.hdl-hl .ln { display: block; position: relative; min-height: 1.6em; }
+.hdl-hl .ln::before {
+  counter-increment: hdl-ln; content: counter(hdl-ln); position: absolute; left: -40px; width: 30px; text-align: right;
+  color: var(--muted); opacity: 0.7;
+}
+.hdl-hl .ln:last-child::before { content: none; }
+.hdl-hl .ln.err { background: color-mix(in srgb, var(--bad) 10%, transparent); text-decoration: underline wavy var(--bad); text-underline-offset: 3px; }
+.hdl-hl .ln.warn { background: color-mix(in srgb, var(--warn) 9%, transparent); }
+.hdl-hl .ln.err::before { color: var(--bad); opacity: 1; }
+.hdl-hl i { font-style: normal; }
+.hdl-hl .kw { color: var(--hdl-kw); }
+.hdl-hl .nm { color: var(--hdl-nm); }
+.hdl-hl .st { color: var(--hdl-st); }
+.hdl-hl .cm { color: var(--hdl-cm); font-style: italic; }
+.hdl-hl .sys { color: var(--hdl-sys); }
+
+.hdl-diags { border-top: 1px solid var(--border); max-height: 30%; overflow: auto; background: var(--surface); }
+.hdl-diag {
+  display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 4px 10px; color: var(--text-2);
+  font: 12px/1.45 var(--font-mono); cursor: pointer; user-select: text;
+}
+.hdl-diag:hover { background: var(--surface-2); }
+.hdl-diag.none { cursor: default; color: var(--muted); }
+.hdl-diag.none:hover { background: transparent; }
+.hdl-diag-at { font-weight: 600; }
+.hdl-diag.error .hdl-diag-at { color: var(--bad); }
+.hdl-diag.warn .hdl-diag-at { color: var(--warn); }
+.hdl-status {
+  display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 6px 10px; border-top: 1px solid var(--border);
+  font: 11.5px var(--font-mono); color: var(--muted); background: var(--surface);
+}
+.hdl-status b { color: var(--text); font-weight: 500; }
+.hdl-grip { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 2; touch-action: none; }
+.hdl-grip:hover { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+
+.hdl-banner {
+  position: absolute; top: 10px; left: 10px; right: calc(10px + var(--dock-space, 0px)); z-index: 6;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px 6px 10px; font-size: 12.5px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow);
+}
+.hdl-banner .grow { flex: 1; min-width: 160px; color: var(--text-2); }
+.hdl-banner b { color: var(--text); }
+.hdl-badge, .sb-tab-hdl {
+  font: 600 10px var(--font-mono); color: var(--hdl-kw); border: 1px solid color-mix(in srgb, var(--hdl-kw) 50%, transparent);
+  border-radius: 4px; padding: 0 4px; line-height: 15px;
+}
+.sb-tab-hdl { margin-left: 2px; }
+.sb-canvas.hdl-stale svg.ed-svg { opacity: 0.45; filter: grayscale(0.6); }
+.sb-new-more { flex: none; padding-inline: 4px; margin-left: -6px; }
+
+.hdl-props select { width: 100%; min-width: 0; }
+.hdl-seg { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.hdl-seg button {
+  flex: 1; border: 0; background: transparent; padding: 4px 6px; font: inherit; font-size: 12px; color: var(--text-2); cursor: pointer;
+}
+.hdl-seg button + button { border-left: 1px solid var(--border); }
+.hdl-seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.hdl-mods { list-style: none; margin: 4px 0 8px; padding: 0; display: grid; gap: 2px; }
+.hdl-mods li { display: flex; align-items: baseline; gap: 4px; }
+.hdl-dlg-diags { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; }
+.hdl-dlg-diags .warn { color: var(--warn); }
+.hdl-dlg-diags .error { color: var(--bad); }
+
+@media (max-width: 760px) {
+  /* stacked: the text above, the canvas below at its usual height */
+  .sb-center:has(.hdl-pane:not([hidden])) { height: auto; }
+  .sb-mid { flex-direction: column; }
+  .sb-mid > .sb-canvas { min-height: 60vh; }
+  .hdl-pane { width: auto !important; max-width: none; height: 340px; border-right: 0; border-bottom: 1px solid var(--border); }
+  .hdl-grip { display: none; }
+  .hdl-banner { top: 6px; left: 6px; right: 6px; padding: 4px 6px; font-size: 12px; }
+  .hdl-banner .grow { flex-basis: 100%; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sb-canvas.hdl-stale svg.ed-svg { transition: opacity 0.2s, filter 0.2s; }
+}
