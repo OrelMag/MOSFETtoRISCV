@@ -22,7 +22,7 @@ import { switchSim, ViewCtx } from './context';
 import { Inspector } from './inspector';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber } from './popover';
-import { startFolded } from './camera';
+import { startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { SchematicView } from './schematic';
 
@@ -109,10 +109,24 @@ const DIR = () => h('span', { class: 'dir', 'aria-hidden': 'true' }, '▸');
 /** The learner's last fold or unfold of a foldable panel (see Stage.foldable): later scenes follow it. */
 let foldChoice: boolean | null = null;
 
+/** Scenes at least this big (NAND gates plus a quarter of the transistors) are built behind a "Building…" cue
+ *  painted first: flattening, simulating and drawing chapter 14's CPU (56 000 NANDs) holds the page half a second. */
+export const BUSY_GATES = 10_000;
+
+/** Run `f` once the browser has painted what is on screen now: a frame, then a task. (A hidden tab paints no
+ *  frames: there it runs after the frame the tab next shows.) */
+function afterPaint(f: () => void): void {
+  requestAnimationFrame(() => setTimeout(f, 0));
+}
+
 export class Stage {
   readonly el: HTMLElement;
   readonly inspector: Inspector;
   scene: Scene | null = null;
+  /** A big scene waiting for its "Building…" cue to paint (load), and the load it belongs to. */
+  private pending: Scene | null = null;
+  private loadSeq = 0;
+  private busyEl: HTMLElement | null = null;
   private remixBtn!: HTMLButtonElement;
   sim: Sim | null = null;
   rootCtx: ViewCtx | null = null;
@@ -125,12 +139,16 @@ export class Stage {
   /** Bottom-left stack for panels with `data-dock="left"` (see layoutDock). */
   private dock: HTMLElement;
   private levelBadge: HTMLElement;
+  /** The how-to line at the canvas's bottom left, kept clear of the panels (placeHint). */
+  private hint: HTMLElement;
+  /** rightInset() when the cover was last synced: a fold, unfold or width change refits a fitted view. */
+  private inset = 0;
   private status: HTMLElement;
   private leaf: { name: string; widget: Widget } | null = null;
   private widget: { w: Widget; host: HTMLElement } | null = null;
   private panels: Widget[] = [];
-  /** Watches the right-docked panels: folded, unfolded or resized, the fit makes room (syncInset). */
-  private panelSize = new ResizeObserver(() => this.syncInset());
+  /** Watches the scene's panels: folded, unfolded or resized, the fit makes room (syncCover). */
+  private panelSize = new ResizeObserver(() => this.syncCover());
   /** The scene's foldable panels still wait for their first layout to decide whether they start folded. */
   private foldPending = false;
   private anim: ReturnType<typeof setInterval> | null = null;
@@ -231,8 +249,9 @@ export class Stage {
     this.levelBadge = h('div', { class: 'level-badge' });
     this.dock = h('div', { class: 'panel-dock' });
     // Touch: dblclick comes from a double tap; the Layout button stands in for the right-click menu.
-    this.canvas.append(this.levelBadge, hintBadge('double-click a part to open it · drag a part to move it (shift: pick several) · right-click for layout · drag to pan · wheel or pinch to zoom',
-      'double-tap a part: open · drag: move / pan · pinch: zoom', 'stage'), this.dock);
+    this.hint = hintBadge('double-click a part to open it · drag a part to move it (shift: pick several) · right-click for layout · drag to pan · wheel or pinch to zoom',
+      'double-tap a part: open · drag: move / pan · pinch: zoom', 'stage');
+    this.canvas.append(this.levelBadge, this.hint, this.dock);
     this.controls = h('div', { class: 'controls' });
     this.status = h('div', { class: 'status' });
     this.el = h('section', { class: 'stage' }, bar, this.canvas, this.analyzer.el, this.controls);
@@ -280,9 +299,9 @@ export class Stage {
     // change): a view the learner zoomed into must survive that.
     new ResizeObserver(() => {
       this.autoFold();
-      this.view.insetRight = this.rightInset();
+      this.inset = this.rightInset();
+      this.layoutDock(false);
       this.view.resized();
-      this.layoutDock();
       this.fitBar();
     }).observe(this.canvas);
   }
@@ -307,6 +326,12 @@ export class Stage {
 
   /** Replace the schematic with a bespoke widget (null returns to schematic mode). */
   showWidget(w: Widget | null): void {
+    if (w && this.pending) {
+      // a widget step came before the big scene was built: it wins
+      this.loadSeq++;
+      this.pending = null;
+      this.busy(null);
+    }
     if (this.widget) {
       this.widget.w.destroy?.();
       this.widget.host.remove();
@@ -321,7 +346,50 @@ export class Stage {
     this.widget = { w, host };
   }
 
+  /** The scene on the stage, or the big one being built for it (load). */
+  get target(): Scene | null {
+    return this.pending ?? this.scene;
+  }
+
+  /**
+   * Show a scene. A big one (BUSY_GATES) first puts a "Building…" cue over the canvas and is built once that has
+   * painted, a frame later: building is one synchronous stretch of up to a second, which would otherwise freeze the
+   * page with no sign of why. Until then the old scene stays (under the cue) and `scene` is still the old one.
+   */
   load(scene: Scene): void {
+    const seq = ++this.loadSeq;
+    const st = stats(scene.root);
+    const size = st.nands + st.transistors / 4;
+    if (size < BUSY_GATES) {
+      this.pending = null;
+      this.busy(null);
+      this.build(scene);
+      return;
+    }
+    this.pending = scene;
+    this.stopAnim();
+    this.stopClock();
+    this.busy(st.nands ? `Building the circuit: ${st.nands.toLocaleString()} NAND gates…` : 'Building the circuit…');
+    afterPaint(() => {
+      if (seq !== this.loadSeq) return;
+      this.pending = null;
+      try {
+        this.build(scene);
+      } finally {
+        this.busy(null);
+      }
+    });
+  }
+
+  /** The "Building…" cue over the canvas (null removes it). */
+  private busy(text: string | null): void {
+    this.busyEl?.remove();
+    this.busyEl = text === null ? null
+      : h('div', { class: 'stage-busy', role: 'status', 'aria-live': 'polite' }, h('span', { class: 'stage-busy-box' }, h('span', { class: 'stage-busy-spin', 'aria-hidden': 'true' }), text));
+    if (this.busyEl) this.canvas.append(this.busyEl);
+  }
+
+  private build(scene: Scene): void {
     this.edgeHooks.clear();
     this.historyHooks.clear();
     this.resetHooks.clear();
@@ -362,10 +430,11 @@ export class Stage {
     this.panels = (scene.panels ?? []).map((f) => f(this));
     for (const p of this.panels) (p.el.dataset.dock === 'left' ? this.dock : this.canvas).append(p.el);
     for (const p of this.panels) if (p.el.dataset.dock === 'right') this.foldable(p.el);
+    for (const p of this.panels) this.panelSize.observe(p.el);
     this.foldPending = true;
     this.autoFold();
-    this.view.insetRight = this.rightInset();
-    this.layoutDock();
+    this.inset = this.rightInset();
+    this.layoutDock(false);
     this.view.fit();
     this.refresh();
     if (settings.autoClock && scene.autoClock !== false) this.startClock();
@@ -1209,7 +1278,6 @@ export class Stage {
       el.classList.toggle('collapsed');
       if (el.dataset.fold) foldChoice = el.classList.contains('collapsed');
     });
-    this.panelSize.observe(el);
   }
 
   /** Decide, once the canvas and the scene's panels have a size, which foldable panels start folded. */
@@ -1222,14 +1290,49 @@ export class Stage {
     for (const p of fold) p.el.classList.toggle('collapsed', foldChoice ?? startFolded(w, p.el.offsetWidth));
   }
 
-  /** A right-docked panel changed size (folded, unfolded): make room for it, refitting a still-fitted view. */
-  private syncInset(): void {
+  /** A panel changed size (folded, unfolded, grew): make room for it, refitting a still-fitted view when the
+   *  right dock's width changed or a panel now covers part of the circuit. */
+  private syncCover(): void {
     this.autoFold();
     const inset = this.rightInset();
-    if (inset === this.view.insetRight) return;
-    this.view.insetRight = inset;
-    if (this.view.fitted) this.view.fit();
-    this.layoutDock();
+    const refit = inset !== this.inset;
+    this.inset = inset;
+    this.dockOut();
+    this.placeHint();
+    this.view.setCover(this.covers(), refit);
+  }
+
+  /** Where the scene's panels and the how-to line sit on the canvas (px from its top-left corner): what the fit
+   *  keeps clear. */
+  private covers(): Rect[] {
+    const c = this.canvas.getBoundingClientRect();
+    const out: Rect[] = [];
+    for (const el of [...this.panels.map((p) => p.el), this.hint]) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) out.push({ x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height });
+    }
+    return out;
+  }
+
+  /** The how-to line: above the bottom-left panels, and wrapped short of the right-docked panels beside it (it was
+   *  cut off under the CPU panel); hidden when that leaves it no room, or would lift it into the canvas's top half
+   *  (a tall bottom-left panel, a phone), where it would cost the circuit more room than it is worth. */
+  private placeHint(): void {
+    const H = this.canvas.clientHeight, W = this.canvas.clientWidth;
+    const c = this.canvas.getBoundingClientRect();
+    const docked = [...this.dock.children].map((e) => e.getBoundingClientRect()).filter((r) => r.height > 0);
+    const bottom = docked.length ? H - Math.min(...docked.map((r) => r.top - c.top)) + 6 : 10;
+    // A line or two above `bottom`: the right panels reaching that low push its right edge in.
+    const lineTop = H - bottom - 40;
+    let right = 12;
+    for (const p of this.panels) {
+      if (p.el.dataset.dock !== 'right') continue;
+      const r = p.el.getBoundingClientRect();
+      if (r.width > 0 && r.bottom - c.top > lineTop) right = Math.max(right, c.right - r.left + 12);
+    }
+    this.hint.style.bottom = `${bottom}px`;
+    this.hint.style.maxWidth = `${W - right - 12}px`;
+    this.hint.hidden = this.hint.dataset.off === '1' || W - right - 12 < 160 || (docked.length > 0 && lineTop < H / 2);
   }
 
   /** Screen space the unfolded right-docked panels cover (with their 12 px margin and a 12 px gap).
@@ -1240,13 +1343,21 @@ export class Stage {
     return widths.length ? Math.max(...widths) + 24 : 0;
   }
 
+  /** Lay the bottom-left panels out again (a panel that changes size calls it), and keep the circuit and the
+   *  how-to line clear of them (`refit`: false when the caller fits next anyway). */
+  layoutDock(refit = true): void {
+    this.dockOut();
+    this.placeHint();
+    if (refit) this.view.setCover(this.covers());
+    else this.view.cover = this.covers();
+  }
+
   /** Bottom-left panels sit beside the right dock: side by side when they fit, else stacked, each
    *  shrinking and scrolling. Several scenes combine two of them (I/O or pipeline + static timing). */
-  /** Lay the bottom-left panels out again (a panel that changes size calls it). */
-  layoutDock(): void {
+  private dockOut(): void {
     const panels = [...this.dock.children] as HTMLElement[];
     if (!panels.length) return;
-    const inset = this.view.insetRight;
+    const inset = this.inset;
     // Too narrow beside the right dock: overlap it rather than squeeze the panels to nothing.
     this.dock.style.right = `${inset && this.canvas.clientWidth - inset - 12 >= 260 ? inset : 12}px`;
     this.dock.classList.remove('row');
@@ -1260,6 +1371,8 @@ export class Stage {
   }
 
   destroy(): void {
+    this.loadSeq++;
+    this.pending = null;
     this.showWidget(null);
     this.stopAnim();
     this.stopClock();

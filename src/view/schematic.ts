@@ -8,7 +8,7 @@ import { B0, B1, BX, BZ, type Bit, type Netlist, netlistOf } from '../sim/types'
 import { describeBits, formatBits, type Radix } from '../sim/values';
 import { h, icon, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
-import { Camera, installPanZoom, usableWidth, type ViewBox } from './camera';
+import { Camera, installPanZoom, underCover, type ViewBox } from './camera';
 import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
 import { FlowTokens, type Lane } from './flowtokens';
 import type { ViewCtx } from './context';
@@ -104,8 +104,8 @@ export class SchematicView {
   radix: Radix = 'hex';
   /** When > 0, value changes travel along the wires as fronts lasting this many ms. */
   flowMs = 0;
-  /** Screen pixels on the right covered by a docked panel; fit() keeps the circuit clear of them. */
-  insetRight = 0;
+  /** Screen rectangles (from the canvas's corner) the stage's panels cover; fit() keeps the circuit clear of them. */
+  cover: Rect[] = [];
   /** Parts can be dragged and pointers unravelled (view/layout.ts): the stage's views, not a read-only look inside. */
   arrange = false;
   /** The level's netlist as authored (before the learner's layout). */
@@ -658,13 +658,10 @@ export class SchematicView {
     if (!g) return;
     const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(g.getAttribute('transform') ?? '');
     if (!m) return;
-    const r = this.host.getBoundingClientRect();
-    const usable = usableWidth(r.width, this.insetRight);
-    const h = span * (r.height / usable || 0.6);
-    const w = span * (r.width / usable || 1);
-    this.cam.vb = { x: Number(m[1]) - span / 2 + 6, y: Number(m[2]) - h / 2, w, h };
+    // `span` units across the widest free part of the canvas, centred on the part's corner
+    const x = Number(m[1]) + 6, y = Number(m[2]);
+    this.cam.fit({ x: x - span / 2, y: y - span / 20, w: span, h: span / 10 }, this.cover, 0);
     this.cam.fitted = false;
-    this.cam.apply();
   }
 
   /**
@@ -688,7 +685,7 @@ export class SchematicView {
       }
     }
     if (!Number.isFinite(x0)) return;
-    this.cam.fit({ x: x0 - margin, y: y0 - margin, w: x1 - x0 + 2 * margin, h: y1 - y0 + 2 * margin }, this.insetRight, minW);
+    this.cam.fit({ x: x0 - margin, y: y0 - margin, w: x1 - x0 + 2 * margin, h: y1 - y0 + 2 * margin }, this.cover, minW);
     this.cam.fitted = false;
   }
 
@@ -1025,7 +1022,7 @@ export class SchematicView {
   }
 
   fit(): void {
-    this.cam.fit(this.bbox, this.insetRight);
+    this.cam.fit(this.bbox, this.cover);
   }
 
   /** Still showing what the last fit() chose (the learner has not zoomed or panned since). */
@@ -1036,6 +1033,15 @@ export class SchematicView {
   /** The canvas changed size: refit only a view the learner has not zoomed or panned. */
   resized(): void {
     if (!this.cam.resized()) this.fit();
+  }
+
+  /** The panels moved or changed size: a fitted view refits when they now cover part of the circuit (only then: a
+   *  panel growing during a run into empty space, or shrinking, leaves the drawing still). */
+  setCover(cover: Rect[], refit = false): void {
+    this.cover = cover;
+    if (!this.cam.fitted) return;
+    const r = this.host.getBoundingClientRect();
+    if (refit || underCover(this.cam.vb, this.bbox, r.width, r.height, cover)) this.fit();
   }
 
   zoom(factor: number, cx?: number, cy?: number): void {

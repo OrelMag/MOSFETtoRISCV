@@ -51,14 +51,18 @@ export function hintBadge(mouse: string, touch: string, key: string, cls = ''): 
   try { off = localStorage.getItem(store) === 'off'; } catch { /* storage blocked: shown */ }
   const el = h('button', { class: `hint-badge touch${cls}`, hidden: off, title: 'Tap to hide this hint', 'aria-label': `${touch} (tap to hide)` },
     h('span', null, touch), h('span', { class: 'x', 'aria-hidden': 'true' }, '×'));
+  // data-off: dismissed, so a layout that places the hint (Stage.placeHint) keeps it hidden.
+  if (off) el.dataset.off = '1';
   el.addEventListener('click', () => {
     el.hidden = true;
+    el.dataset.off = '1';
     try { localStorage.setItem(store, 'off'); } catch { /* not remembered */ }
   });
   // Seen once the canvas is touched: out of the circuit's way until the next visit.
   const touched = (e: Event) => {
     if (el.contains(e.target as Node)) return;
     el.hidden = true;
+    el.dataset.off = '1';
     el.parentElement?.removeEventListener('pointerdown', touched, true);
   };
   queueMicrotask(() => el.parentElement?.addEventListener('pointerdown', touched, true));
