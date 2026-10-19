@@ -1,6 +1,6 @@
 // Level 5: the ALU and its parts. The ALU implements every RV32I integer operation. Its
-// 4-bit control code is {funct7[5], funct3}: the instruction's own encoding, so the decoder
-// barely has to translate it.
+// 4-bit control code is {funct7[5], funct3} for R-type: the instruction's own encoding. The decoder
+// still forces ADD (loads, stores, jalr, auipc), SUB (branches) and ignores bit 30 for OP-IMM except srai.
 //   0000 ADD  1000 SUB  0001 SLL  0010 SLT  0011 SLTU  0100 XOR  0101 SRL  1101 SRA  0110 OR  0111 AND
 
 import { symbolGeom } from '../sim/geometry';
@@ -341,7 +341,7 @@ export function aluOf(n: number, adder: 'rca' | 'ks', MX: ComponentDef, SH: Comp
       <tr><td>0010</td><td>SLT</td><td>1101</td><td>SRA</td></tr>
       <tr><td>0011</td><td>SLTU</td><td>0110</td><td>OR</td></tr>
       <tr><td>0100</td><td>XOR</td><td>0111</td><td>AND</td></tr></table>
-      ctl = {funct7[5], funct3}: the low three bits select the result, the top bit selects subtract / arithmetic shift.
+      ctl = {funct7[5], funct3} for R-type instructions: the low three bits select the result, the top bit selects subtract / arithmetic shift. The control unit still decodes: an I-type's bit 30 is imm[10], so addi keeps ctl[3] = 0 (only srai uses it), and loads, stores and branches get ADD or SUB whatever their funct3.
       SLT and SLTU subtract and read the flags: a &lt; b (signed) is N ⊕ V; a &lt; b (unsigned) is NOT carry.`,
     hdl: {
       verilog: `module alu #(parameter int N = ${n}) (

@@ -64,7 +64,7 @@ export class BenchmarksPage implements Page {
       h('div', { class: 'hw-table-wrap bm-wrap' }, h('table', { class: 'hw-table bm-table' }, h('thead', null, this.head), this.body)),
       this.programs(),
       h('p', { class: 'hw-note' }, `${PS_NOTE} NAND counts include the ${RESULTS.dmemWords}-word data memory (and the caches), not the `,
-        `${RESULTS.imemWords}-word instruction ROM, whose size follows the program. The dual-core runs each program on hart 0, hart 1 parked. `,
+        `${RESULTS.imemWords}-word instruction ROM, whose size follows the program (a larger ROM is a deeper read tree: the single-cycle CPU’s period here is a few delays above the chapters’, which run smaller programs). The dual-core runs each program on hart 0, hart 1 parked. `,
         'Measured by scripts/benchmarks.ts.'),
       h('p', { class: 'hw-note' }, `Energy at ${VDD} V: each run simulated again on the event-driven gate simulator, every net’s toggles counted. ${POWER_NOTE}`)));
     this.renderChart();
