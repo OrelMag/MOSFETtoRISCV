@@ -359,7 +359,8 @@ src/bench/     results.json (scripts/benchmarks.ts --write, checked in; each run
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
                instructions), compose.ts (the instruction builder's model: a spec + operands both ways, slotsOf in assembly
                order with bank / range, encodeParts / partsOf (null: bits it would not set), retarget, textOf (a target by label),
-               parseLine, PALETTE; every instruction round-trips through asm.ts: tests/compose.test.ts), fastiss.ts (FastISS: the golden model's semantics, every ROM word predecoded by decode() into
+               parseLine, PALETTE; every instruction round-trips through asm.ts: tests/compose.test.ts; RV32_COMPOSE: its
+               builder adapter, isa/composekit.ts), fastiss.ts (FastISS: the golden model's semantics, every ROM word predecoded by decode() into
                typed arrays, one switch, ~90 MIPS on Doom; RAM inline, other regions through overridable load / store / ioRead /
                ioWrite; no F; tests/fastiss.test.ts: lock step over riscv-tests and random programs), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
                interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), ilp.ts (chapter 24: classify(word) → class /
@@ -446,8 +447,9 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                panels slim to 240 px on a narrow stage); gfxpipe.ts: chapter 32 (pipelineScene:
                gpu31 on the cycle engine; the panel: screen, frames per second, the last frame's timeline from FrameRecorder, the
                vertex kernel in lock-step with WarpISS (launch()), every frame against framePicture; costWidget: PIPE_COSTS);
-               composer.ts: the instruction builder (instrComposer: palette, asm / hex input, clickable bits, the immediate
-               generator's wiring as bands per run + one sign bracket, operand cards, decode chain, major-opcode map, a data path
+               composer.ts: the instruction builder over any ComposeIsa (instrComposer({ isa }): palette, asm / hex input,
+               clickable bits for any word width, the immediate's wiring as bands per run + one sign bracket, operand cards,
+               decode chain, one bit away (isa.loose), and for RV32 the major-opcode map and a data path
                sketch lit from instrUse); chapter 13's explorer and editor/romcompose.ts host it.
                insthw.ts maps an instruction to the units it uses (and pipeline stage units; laneUse(word, core, at): the lane /
                warp cores' instances, tests/insthw.test.ts: every kernel instruction, every warp count); slowctl.ts: what the CPU
@@ -490,7 +492,11 @@ src/riscv/rv16/ isa16.ts (fields, encode / decode / disasm), asm16.ts, iss16.ts 
 src/isa/       Custom ISA: table.ts (IsaDoc: instructions as mnemonic + operand letters + bit pattern, operand kinds reg / enum
                / imm / addr; IsaTable: assemble, disasm (most specific pattern), fields, words, problems; sanitizeIsa),
                presets.ts (ISA4_PRESET: the 4-bit ISA as a table, equal to asm4 / disasm4 on every word), isa.ts (Isa:
-               one shape over RV32, RV16, cpu4 and tables; isaOf(lang, table); used by program puzzles too)
+               one shape over RV32, RV16, cpu4 and tables; isaOf(lang, table); used by program puzzles too);
+               composekit.ts (ComposeIsa: what the instruction builder needs: slots, encode / decode / loose, fields, the
+               immediate's wiring, text by label, a line parsed in context, program), compose.ts (tableCompose(doc): a table's
+               rows as instructions, split operands wired; CPU4_COMPOSE; composeIsaOf(lang, table)); riscv/rv16/compose16.ts
+               RV16's (each format's fields written out); tests/compose-isa.test.ts: every adapter against its own assembler
 src/m6502/     Appendix A's 6502 (DOM-free): isa.ts (151 documented opcodes, modes, disasm), asm.ts (two-pass
                assembler, ';' comments, $hex %bin, *= .org .byte .word .text .fill), iss.ts (Cpu6502: cycle-exact, every
                bus cycle incl. dummy accesses, IRQ / NMI / RESET as the NMOS chip; save / restore), programs.ts (samples;
@@ -705,8 +711,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   memui.ts       Memory palette group, ROM / RAM property sections (live listing, RAM grid, initial
                  contents), the program editor dialog, Examples ▸; values polled per frame while shown; long
                  lists build only the rows in view (vlist.ts: virtualRows), a large RAM's grid has Go to
-  romcompose.ts  the instruction builder in an RV32 ROM's program editor (Ctrl+Space / Build instruction): the caret's
-                 line, its address and the labels; Replace keeps label, indentation and comment (withCode), Insert below
+  romcompose.ts  the instruction builder in a ROM's program editor, any language but hex / 6502 (Ctrl+Space / Build
+                 instruction): the caret's line, its address and labels from isa.program; Replace keeps label, indentation
+                 and comment (# ; //: withCode), Insert below
   package.ts     "Package as chip…" dialog (name, hue, notes; the face editor: pins dragged along / across edges, corner
                  resize, displays ticked, moved and scaled, live; Save & new circuit)
   dispface.ts    the displays' SVG faces (drawDisplay / paintDisplay) and a placed chip's face displays (drawFace /

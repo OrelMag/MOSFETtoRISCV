@@ -122,3 +122,11 @@ describe('instruction builder adapters', () => {
     expect(composeIsaOf('hex')).toBeNull();
   });
 });
+
+describe('program editor lines in other languages', () => {
+  it('keeps a ; comment (the 4-bit CPU) when the code is replaced', async () => {
+    const { splitLine, withCode } = await import('../src/editor/romcompose');
+    expect(splitLine('        FIM  P0, 0x12      ; R0 R1 = 1 2')).toEqual({ prefix: '        ', code: 'FIM  P0, 0x12', comment: '      ; R0 R1 = 1 2' });
+    expect(withCode('loop:   JUN loop  // again', 'JUN start')).toBe('loop:   JUN start  // again');
+  });
+});
