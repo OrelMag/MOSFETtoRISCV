@@ -418,10 +418,20 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   assembler on every instruction. The builder draws any word width; a table operand split over the word is drawn
   gathered; "one bit away" lists what flipping one opcode bit makes. The program editor's Ctrl+Space works in every
   language with instructions (a ; or // comment kept). The CPU drawer's table strip no longer assumes 16-bit words
-- ⏳ 3. Encoding designer: custom-ISA patterns painted on a bit grid (the same pattern text), the opcode map, clashes
-  with an example word, the fill ratio; then the table's decoder as a PLA with its NAND count
-- ⏳ 4. Program as tiles (a view of the program text: branch arrows, data dependencies) and a front panel (toggle
-  switches, Deposit / Examine)
+- ✅ 3. Encoding designer (isa/design.ts, editor/isadesign.ts): the ISA dialog's Design tab. A brush (0, 1, ignored,
+  an operand letter) dragged across the bits writes the same pattern text; while it lasts the row's problems, clashes
+  (with a word both decode), special cases (the most specific pattern wins), each operand's range against its bits,
+  an opcode map over the 3–4 bits the patterns fix most, coverage, and a plain decoder's cost follow the draft (one AND
+  per instruction over its fixed bits plus the NOT of each special case, in NANDs and gate delays; the model is held
+  to stats(andN(k))). Letting go is one undo step
+- ⏳ 3b. The decoder as a chip: the table's match lines built in gates and opened in the sandbox
+- ✅ 4. Program as tiles and a front panel (isa/tiles.ts, editor/romtiles.ts, the composer's Switches view). The program
+  editor's Text | Tiles: a tile per line from the ISA's adapter (any language with instructions): name, operands, the
+  word as a strip of its fields; branch arrows in the gutter to the target line; pointing at a tile outlines the lines
+  above that wrote the registers it reads. The text stays what is stored: a click opens the builder on the line, a drag
+  moves the line (one undo step). Switches: the word on toggle switches with a lamp each, grouped by field; Deposit next
+  puts it on a new line below and moves on (the program editor), or into a small memory chapter 13 runs on the golden
+  model
 - ✅ Examples ▸ 4-bit CPU (4004-inspired; src/isa4, lib/cpu4.ts): the 4004's opcode map and mnemonics, one instruction
   per 16-bit ROM word and per clock (the 4004 byte high, its second byte low), 29 instructions (the 4004's set minus the
   4002 RAM-chip ones, FIN, KBP and DCL): 4-bit accumulator and carry, 16 × 4-bit index registers in 8 pairs, an 8-bit

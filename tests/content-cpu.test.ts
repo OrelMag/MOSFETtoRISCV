@@ -61,6 +61,10 @@ describe('register file and single-cycle CPU (findings 9, 10, 11)', () => {
     expect(rf / c).toBeGreaterThan(0.45);
     expect(rf / c).toBeLessThan(0.5);
     expect(text(chRegfile)).toContain('about 48 000');
+    // chapter 14 quotes the same count, and says the Info tab's (with the program ROM) is larger
+    expect(text(chSingleCycle)).toContain('about 48 000 NANDs without its program ROM');
+    expect(text(chSingleCycle)).not.toMatch(/all 48 000/);
+    expect(stats(singleCycleCpu(W0)).nands).toBeGreaterThan(c);
   });
   it('the pseudo-instructions credited to x0 use x0; mv does not', () => {
     const fields = (src: string) => assemble(src).words.map((w) => ({ rd: (w >>> 7) & 31, rs1: (w >>> 15) & 31, rs2: (w >>> 20) & 31 }));

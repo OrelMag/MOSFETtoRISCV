@@ -384,8 +384,8 @@ export const chSingleCycle: Chapter = {
     {
       title: 'The datapath',
       body: `
-        <p>This is a complete RV32I processor, all 48 000 NANDs of it simulated at gate level. Each <strong>Pulse</strong>
-        executes one instruction:</p>
+        <p>This is a complete RV32I processor, simulated at gate level: about 48 000 NANDs without its program ROM
+        (the Info tab's total counts the ROM too, which grows with the program). Each <strong>Pulse</strong> executes one instruction:</p>
         <ul><li><strong>Fetch</strong>: <span data-show="pc">PC</span> addresses the <span data-show="imem">instruction memory</span>; +4 computes the next sequential address.</li>
         <li><strong>Decode</strong>: the splitter fans the instruction fields out; the <span data-show="rf">register file</span> reads rs1/rs2 while the
         <span data-show="ctl">control unit</span> and <span data-show="imm">immediate generator</span> work on the opcode.</li>

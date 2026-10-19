@@ -11,10 +11,11 @@ import { type InstrDef, type IsaDoc, type OperandDef, sanitizeIsa, tableOf } fro
 import { h, icon } from '../ui/dom';
 import { saveFile } from '../view/image';
 import type { Editor } from './editor';
+import { designPane, type DesignState } from './isadesign';
 import { copyIsa, deleteIsa, isaById, isaList, isaUses, putIsa } from './isaops';
 import { slug } from './model';
 
-type Tab = 'instrs' | 'operands' | 'check';
+type Tab = 'instrs' | 'design' | 'operands' | 'check';
 const FORMAT = 'mosfet2riscv-isa';
 
 /** The colour role of an operand letter (the CPU drawer's field colours). */
@@ -69,6 +70,7 @@ export function openIsaEditor(ed: Editor, id?: string): void {
   let sel = id ?? isaList(ed.ws)[0]?.id ?? Object.keys(ISA_PRESETS)[0];
   let tab: Tab = 'instrs';
   let tryText = '';
+  const design: DesignState = { row: 0, brush: '1' };
 
   const list = h('div', { class: 'isa-side' });
   const main = h('div', { class: 'isa-main' });
@@ -113,7 +115,7 @@ export function openIsaEditor(ed: Editor, id?: string): void {
   const renderList = () => {
     const mine = isaList(ed.ws);
     const item = (d: IsaDoc, preset: boolean) => h('button', {
-      class: `isa-item${d.id === sel ? ' on' : ''}`, onclick: () => { sel = d.id; tryText = ''; render(); },
+      class: `isa-item${d.id === sel ? ' on' : ''}`, onclick: () => { sel = d.id; tryText = ''; design.row = 0; render(); },
     }, h('span', null, d.name), h('small', null, `${preset ? 'preset · read-only · ' : ''}${d.wordBits}-bit words · ${d.instrs.length} instructions`));
     const fileIn = h('input', { type: 'file', accept: '.json,application/json', hidden: true }) as HTMLInputElement;
     fileIn.addEventListener('change', async () => {
@@ -157,9 +159,9 @@ export function openIsaEditor(ed: Editor, id?: string): void {
           onclick: () => { ed.editWs((ws) => deleteIsa(ws, doc.id)); sel = isaList(ed.ws)[0]?.id ?? Object.keys(ISA_PRESETS)[0]; render(); },
         }, 'Delete')));
     const probs = t.problems;
-    const tabs = h('div', { class: 'isa-tabs', role: 'tablist' }, ([['instrs', `Instructions (${doc.instrs.length})`], ['operands', `Operands (${Object.keys(doc.operands).length})`], ['check', probs.length ? `Check (${probs.length})` : 'Check ✓']] as [Tab, string][])
+    const tabs = h('div', { class: 'isa-tabs', role: 'tablist' }, ([['instrs', `Instructions (${doc.instrs.length})`], ['design', 'Design'], ['operands', `Operands (${Object.keys(doc.operands).length})`], ['check', probs.length ? `Check (${probs.length})` : 'Check ✓']] as [Tab, string][])
       .map(([k, label]) => h('button', { role: 'tab', class: `${tab === k ? 'on' : ''}${k === 'check' && probs.length ? ' warn' : ''}`, 'aria-selected': String(tab === k), onclick: () => { tab = k; render(); } }, label)));
-    main.replaceChildren(head, tabs, tab === 'instrs' ? instrsTab(doc, preset) : tab === 'operands' ? operandsTab(doc, preset) : checkTab(doc));
+    main.replaceChildren(head, tabs, tab === 'instrs' ? instrsTab(doc, preset) : tab === 'design' ? designPane(doc, preset, design, commit, render, patternBits) : tab === 'operands' ? operandsTab(doc, preset) : checkTab(doc));
   };
 
   const instrsTab = (doc: IsaDoc, preset: boolean): HTMLElement => {

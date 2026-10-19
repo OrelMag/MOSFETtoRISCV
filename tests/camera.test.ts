@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Camera, FOLD_BESIDE_PX, fitBox, MIN_FIT_PX, startFolded, usableWidth, type ViewBox } from '../src/view/camera';
+import { Camera, COVER_GAP, FOLD_BESIDE_PX, fitBox, freeRect, MIN_FIT_PX, type Rect, startFolded, underCover, type ViewBox } from '../src/view/camera';
 
 /** A host of a settable size and an svg that only records its view box: enough for Camera. */
 function rig(w: number, h: number) {
@@ -72,10 +72,10 @@ describe('fitting beside an overlay panel', () => {
   });
 
   it('fits to the whole width when the panel leaves too little to draw in (a phone)', () => {
-    expect(usableWidth(390, 354)).toBe(390);
-    expect(usableWidth(540, 354)).toBe(186);
-    expect(usableWidth(540, 0)).toBe(540);
-    expect(usableWidth(354 + MIN_FIT_PX, 354)).toBe(MIN_FIT_PX);
+    const strip = (w: number, inset: number) => freeRect(w, 330, [{ x: w - inset, y: 0, w: inset, h: 330 }], 546, 270, 0).w;
+    expect(strip(390, 354)).toBe(390);
+    expect(strip(540, 354)).toBe(186);
+    expect(strip(354 + MIN_FIT_PX, 354)).toBe(MIN_FIT_PX);
     const b = boxes[0];
     expect(fitBox(b, 390, 330, 354)).toEqual(fitBox(b, 390, 330, 0));
   });
@@ -93,5 +93,71 @@ describe('fitting beside an overlay panel', () => {
     cam.fit(boxes[0], 354);
     expect(cam.vb).toEqual(fitBox(boxes[0], 540, 530, 354));
     expect(cam.fitted).toBe(true);
+  });
+});
+
+describe('fitting around the stage panels', () => {
+  // The single-cycle CPU's top level: wide and short. A 1440 px window between the side panes: a 700 × 640 canvas.
+  const cpu: ViewBox = { x: -12, y: -5, w: 546, h: 180 };
+  const W = 700, H = 640;
+  /** The CPU panel (right-docked, 330 px wide, 12 px from the top and the right edge), `h` px tall. */
+  const panel = (h: number): Rect => ({ x: W - 342, y: 12, w: 330, h });
+  /** The pipeline diagram docked bottom-left. */
+  const diagram: Rect = { x: 12, y: H - 182, w: 334, h: 170 };
+
+  function clear(vb: ViewBox, b: ViewBox, cover: Rect[]) {
+    const p = onScreen(vb, b, W, H);
+    expect(p.left).toBeGreaterThanOrEqual(-1e-6);
+    expect(p.top).toBeGreaterThanOrEqual(-1e-6);
+    expect(p.right).toBeLessThanOrEqual(W + 1e-6);
+    expect(p.bottom).toBeLessThanOrEqual(H + 1e-6);
+    for (const c of cover) {
+      const apart = p.right <= c.x - COVER_GAP + 1e-6 || p.left >= c.x + c.w + COVER_GAP - 1e-6
+        || p.bottom <= c.y - COVER_GAP + 1e-6 || p.top >= c.y + c.h + COVER_GAP - 1e-6;
+      expect(apart).toBe(true);
+    }
+    return p;
+  }
+
+  it('beside a full-height panel: the strip left of it, as with a right inset', () => {
+    const cover = [panel(H - 24)];
+    expect(fitBox(cpu, W, H, cover)).toEqual(fitBox(cpu, W, H, 342 + COVER_GAP));
+    const p = clear(fitBox(cpu, W, H, cover), cpu, cover);
+    expect(p.right - p.left).toBeCloseTo(W - 342 - COVER_GAP);
+  });
+
+  it('under a short panel: a wide circuit takes the full width below it, larger than beside it', () => {
+    const cover = [panel(380)];
+    const p = clear(fitBox(cpu, W, H, cover), cpu, cover);
+    expect(p.top).toBeGreaterThanOrEqual(12 + 380 + COVER_GAP - 1e-6);
+    expect(p.right - p.left).toBeGreaterThan(W - 342 - COVER_GAP);
+    // A tall block still goes beside it: that shows it larger.
+    const tall: ViewBox = { x: 0, y: 0, w: 60, h: 140 };
+    const q = clear(fitBox(tall, W, H, cover), tall, cover);
+    expect(q.right).toBeLessThanOrEqual(W - 342 - COVER_GAP + 1e-6);
+    expect(q.bottom - q.top).toBeCloseTo(H);
+  });
+
+  it('clear of the bottom-left dock and a folded panel too', () => {
+    for (const cover of [[panel(H - 24), diagram], [panel(38)], [panel(38), diagram], [panel(380), diagram]]) {
+      for (const b of [cpu, { x: 0, y: 0, w: 60, h: 140 }, { x: 3, y: 4, w: 10, h: 8 }]) clear(fitBox(b, W, H, cover), b, cover);
+    }
+  });
+
+  it('the free rectangle is the largest for the drawing, and the whole host when nothing useful is left', () => {
+    expect(freeRect(W, H, [], 10, 10)).toEqual({ x: 0, y: 0, w: W, h: H });
+    // a phone with the panel open: it covers nearly everything
+    expect(freeRect(390, 500, [{ x: 12, y: 12, w: 366, h: 476 }], 546, 180)).toEqual({ x: 0, y: 0, w: 390, h: 500 });
+    const r = freeRect(W, H, [panel(380)], 546, 180);
+    expect(r).toEqual({ x: 0, y: 12 + 380 + COVER_GAP, w: W, h: H - 404 });
+  });
+
+  it('a panel growing over the fitted circuit asks for a refit; one that shrank or grew into empty space does not', () => {
+    const vb = fitBox(cpu, W, H, [panel(380)]);
+    expect(underCover(vb, cpu, W, H, [panel(380)])).toBe(false);
+    expect(underCover(vb, cpu, W, H, [panel(300)])).toBe(false);
+    expect(underCover(vb, cpu, W, H, [panel(H - 24)])).toBe(true);
+    const beside = fitBox(cpu, W, H, [panel(H - 24)]);
+    expect(underCover(beside, cpu, W, H, [panel(380)])).toBe(false);
   });
 });

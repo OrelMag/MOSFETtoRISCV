@@ -33,6 +33,10 @@ export interface CodeEditor {
   reveal(n: number): void;
   /** Replace 1-based line n (one native undo step); `after`: insert a new line below it instead. */
   putLine(n: number, text: string, after?: boolean): void;
+  /** The caret at the start of 1-based line n. */
+  caretTo(n: number): void;
+  /** Replace the whole text as one native undo step (unlike `value =`, which clears the history). */
+  replaceAll(text: string): void;
   destroy(): void;
 }
 
@@ -240,6 +244,13 @@ export function codeEditor(opts: CodeEditorOpts): CodeEditor {
       const start = lines.slice(0, i).reduce((p, l) => p + l.length + 1, 0), end = start + lines[i].length;
       if (after) edit(end, end, '\n' + text, end + 1 + text.length, end + 1 + text.length);
       else edit(start, end, text, start + text.length, start + text.length);
+    },
+    caretTo(n) {
+      const at = ta.value.split('\n').slice(0, Math.max(0, n - 1)).reduce((p, l) => p + l.length + 1, 0);
+      ta.setSelectionRange(at, at);
+    },
+    replaceAll(text) {
+      if (text !== ta.value) edit(0, ta.value.length, text, 0, 0);
     },
     destroy() {
       ta.removeEventListener('input', changed);

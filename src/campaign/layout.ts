@@ -3,10 +3,13 @@
 // are ordered by the rows of what they require (fewer crossings). An act with more columns than
 // the map's width holds wraps them onto further lines, like text, as evenly as it can. No DOM.
 
-import { ACTS, NODES } from './nodes';
+import type { ProgressView } from './graph';
+import { ACTS, NODES, nodeById } from './nodes';
 import type { CampaignNode } from './types';
 
 export const NODE_W = 168, NODE_H = 46, COL_GAP = 32, ROW_GAP = 14, LINE_GAP = 26, BAND_HEAD = 34, BAND_GAP = 18, MARGIN = 16;
+/** A folded act's band: its title and a line saying what it holds. */
+export const FOLDED_H = 54;
 
 export interface Placed {
   node: CampaignNode;
@@ -21,6 +24,8 @@ export interface Band {
   act: number;
   y: number;
   h: number;
+  /** Drawn as a header only: none of its levels is placed. */
+  folded?: boolean;
 }
 
 export interface MapLayout {
@@ -43,11 +48,29 @@ export function mapColsFor(width: number): number {
   return Math.max(1, Math.floor((width / MAP_MIN_SCALE - MARGIN) / (NODE_W + COL_GAP)));
 }
 
-const cached = new Map<number, MapLayout>();
+/** Acts whose every level is optional (Act P, the side quests, the GPU, memory): the map can fold each to a header. */
+export const OPTIONAL_ACTS: ReadonlySet<number> = new Set(ACTS.map((a) => a.num).filter((num) => {
+  const ns = NODES.filter((n) => n.act === num);
+  return ns.length > 0 && ns.every((n) => n.optional);
+}));
 
-/** The map with at most `maxCols` columns on a line (Infinity: every act on one line). */
-export function mapLayout(maxCols = Infinity): MapLayout {
-  const hit = cached.get(maxCols);
+/**
+ * The optional acts the map shows folded: as the learner last left each (`open`), else folded until
+ * one of its levels is opened. The selected level's act is always open. Act P sits between act 0 and
+ * act 1: folded, the main path starts near the top of the map, on a phone too.
+ */
+export function foldedActs(view: ProgressView, open: (act: number) => boolean | undefined, selected?: string): Set<number> {
+  const selAct = selected ? nodeById(selected)?.act : undefined;
+  const touched = (act: number) => NODES.some((n) => n.act === act && view(n.id) !== undefined);
+  return new Set([...OPTIONAL_ACTS].filter((act) => act !== selAct && !(open(act) ?? touched(act))));
+}
+
+const cached = new Map<string, MapLayout>();
+
+/** The map with at most `maxCols` columns on a line (Infinity: every act on one line); the acts in `folded` as headers only. */
+export function mapLayout(maxCols = Infinity, folded: ReadonlySet<number> = new Set()): MapLayout {
+  const key = `${maxCols}|${[...folded].sort((a, b) => a - b).join(',')}`;
+  const hit = cached.get(key);
   if (hit) return hit;
   const byId = new Map(NODES.map((n) => [n.id, n]));
   const col = new Map<string, number>();
@@ -69,6 +92,11 @@ export function mapLayout(maxCols = Infinity): MapLayout {
   for (const act of ACTS) {
     const ns = NODES.filter((n) => n.act === act.num);
     if (!ns.length) continue;
+    if (folded.has(act.num)) {
+      bands.push({ act: act.num, y, h: FOLDED_H, folded: true });
+      y += FOLDED_H + BAND_GAP;
+      continue;
+    }
     const cols: CampaignNode[][] = [];
     for (const n of ns) (cols[colOf(n)] ??= []).push(n);
     // Order each column by the mean row of its requirements already placed (barycentre).
@@ -100,6 +128,6 @@ export function mapLayout(maxCols = Infinity): MapLayout {
   }
   // The last column keeps its channel on the right (an edge wrapping onto the next line runs down it).
   const layout = { nodes: placed, bands, w: Math.max(MAP_MIN_W, MARGIN + used * (NODE_W + COL_GAP)), h: y - BAND_GAP + MARGIN, cols: used };
-  cached.set(maxCols, layout);
+  cached.set(key, layout);
   return layout;
 }

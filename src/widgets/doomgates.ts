@@ -56,7 +56,7 @@ function doomGatesPanel(stage: Stage): Widget {
   const title = h('h4', null, 'Doom · interpreter and gates', h('span', { class: 'fold-hint' }));
   const el = h('div', { class: 'mem-panel cpu-panel doom-gates-panel', 'data-dock': 'right' }, title,
     h('div', { class: 'cpu-body' }, h('div', { class: 'doom-bezel' }, canvas), status, controls, result, stats,
-      h('p', { class: 'cpu-sec-hint' }, 'Pause, then hand the moment to the gates: the registers, PC, CSRs and timer go into their flip-flops, the RAM, frame buffer and key queue into their memories, and the circuit on the left runs the next cycles while the interpreter steps beside it, comparing every instruction.')));
+      h('p', { class: 'cpu-sec-hint' }, 'Pause, then hand the moment to the gates: the registers, PC, CSRs and timer go into their flip-flops, the RAM, frame buffer and key queue into their memories, and the circuit runs the next cycles while the interpreter steps alongside it, comparing every instruction.')));
 
   let alive = true, raf = 0, last = 0, lastPanel = 0;
   let windowRun: { n: number; done: number; retired: number; t0: number; before: Uint8Array; chunk: number } | null = null;

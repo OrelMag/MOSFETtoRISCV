@@ -256,6 +256,8 @@ Optional as a whole, beside act 0 (it needs only `intro`); act number 11 with th
 GND and pull-down loads; or triodes, vacuum diodes, plate / divider / bias resistors, B+, −150 V and GND. References are
 prologue P1 / P2's library circuits (`src/lib/relays.ts`, `tubes.ts`) drawn as chips (`src/campaign/buildr.ts`). The
 level screen prices the CMOS alternatives in the same metrics through the technology setting (`measure.ts libCost`).
+On the map it is folded to its header line (like acts 8–10) until one of its levels is opened, so act 1 stays near the top;
+Show / Hide is remembered per act (`layout.ts foldedActs`, `settings.actOpen`).
 - ✅ drill `r_pull`: pull-in and drop-out, read off the relay model's curves ← intro. Ten kinds from phys/relay.ts
   (pull-in / drop-out / hysteresis on the pull-against-spring chart, also for relay variants; operated or released at
   V; first touch, rest, bounces and release off a run chart; coil power; the turn-off spike), units parsed (parseQty)
