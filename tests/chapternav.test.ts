@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { chapterById, chapters } from '../src/chapters';
-import { LADDER } from '../src/widgets/journey';
+import { LADDER, ladderFocus } from '../src/widgets/journey';
 import { navEntries, plainText, searchNav, snippet, type NavChapter } from '../src/ui/chapternav';
 
 const book: NavChapter[] = [
@@ -80,5 +80,11 @@ describe('the journey ladder', () => {
     // Appendices come after the journey and are not on it.
     const last = chapters.filter((c) => !c.appendix).at(-1)!;
     expect(LADDER[0].num).toBe(chapters.find((c) => c.level === last.level)?.num);
+  });
+
+  it('opens at the bottom rung (the first chapter) for a new visitor, else at the highest rung visited', () => {
+    expect(LADDER.at(-1)!.chapter).toBe(chapters.find((c) => c.num === 1 && !c.prologue && !c.appendix)!.id);
+    expect(ladderFocus(() => false)).toBe(LADDER.length - 1);
+    expect(LADDER[ladderFocus((id) => id === 'mosfet' || id === 'cpu' || id === 'alu')].chapter).toBe('cpu');
   });
 });
