@@ -9,10 +9,12 @@
 
 import { instPort, type Vec } from '../sim/geometry';
 import type { Sim } from '../sim/sim';
+import { DELAY_NOTE, type DelayModel, delayWord, fmtDelay, psPer } from '../sim/delay';
 import { CLK_TO_Q, PS_NOTE, PS_PER_NAND, SETUP } from '../sim/timing';
 import { h, icon, s } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { LogicAnalyzer, type Lane } from '../view/analyzer';
+import { defaultDelay, delaySwitch, heavyList } from '../view/delayui';
 import { textWidth } from '../view/route';
 import type { Compiled } from './compile';
 import { type Editor, registerDiagSource, registerEditorPlugin, registerToolbarAction } from './editor';
@@ -59,6 +61,8 @@ class Analysis {
   private timingEl = h('section', { class: 'sb-sec-props sb-timing' });
   private timingKey: unknown[] = [];
   private timing: ChipTiming | null = null;
+  /** The Timing section's delay model (the Unit / Load switch). */
+  private delayModel: DelayModel = defaultDelay();
   private timingTimer: ReturnType<typeof setTimeout> | null = null;
   private lintCache: { built: Compiled | null; doc: ChipDoc | null; r: LintResult } = { built: null, doc: null, r: { diags: [], open: [] } };
   private off: (() => void)[] = [];
@@ -419,10 +423,10 @@ class Analysis {
     const ed = this.ed, es = ed.sim;
     const c = ed.compiled;
     const design = es.sim && es.sim.kind === 'gate' && es.built?.connKey === c?.connKey ? es.sim.design : null;
-    const key = [c, design, this.showCrit];
+    const key = [c, design, this.showCrit, this.delayModel];
     if (key.every((k, i) => k === this.timingKey[i])) return;
     this.timingKey = key;
-    this.timing = c ? chipTiming(ed.doc, c, design) : null;
+    this.timing = c ? chipTiming(ed.doc, c, design, this.delayModel) : null;
     this.renderTiming();
     this.drawCrit();
   }
@@ -435,26 +439,31 @@ class Analysis {
   private renderTiming(): void {
     const el = this.timingEl;
     const t = this.timing;
-    el.replaceChildren(h('h3', null, 'Timing'));
+    const m = this.delayModel;
+    const sw = t && (t.ok || t.depth !== undefined) ? delaySwitch(m, (x) => { this.delayModel = x; this.updateTiming(); }) : null;
+    el.replaceChildren(h('h3', { class: 'sb-tm-h' }, 'Timing', ...(sw ? [sw] : [])));
     if (!t) return void el.append(h('p', { class: 'sb-sum' }, 'Computing…'));
     if (!t.ok) return void el.append(h('p', { class: 'sb-sum' }, t.why));
     const r = t.report;
+    const f = (x: number) => fmtDelay(x, m);
     const maxA = Math.max(1, r.stages[r.stages.length - 1]?.arrival ?? 1);
     let prev = 0;
     const btn = h('button', { class: `btn sm toggle${this.showCrit ? ' on' : ''}`, 'aria-pressed': String(this.showCrit), title: 'Highlight the parts and wires of the longest register-to-register path',
       onclick: () => { this.showCrit = !this.showCrit; this.timingKey = []; this.updateTiming(); } }, icon('wave', 14), this.showCrit ? 'Hide critical path' : 'Show critical path');
     el.append(
       h('div', { class: 'sb-tm-read' },
-        h('div', null, h('b', null, String(r.period)), h('span', null, 'NAND delays per cycle')),
-        h('div', { title: PS_NOTE }, h('b', null, t.mhz >= 1000 ? `${(t.mhz / 1000).toFixed(2)} GHz` : `${t.mhz.toFixed(0)} MHz`), h('span', null, `max clock at an illustrative ${PS_PER_NAND} ps / NAND`))),
-      h('p', { class: 'sb-sum' }, `clk→q ${CLK_TO_Q} + logic ${r.logic} + setup ${SETUP}. Launch ${r.launch.join('.') || 'an input'}, capture ${r.capture.join('.')}.`),
+        h('div', null, h('b', null, f(r.period)), h('span', null, `${delayWord(m)} per cycle`)),
+        h('div', { title: m === 'unit' ? PS_NOTE : DELAY_NOTE }, h('b', null, t.mhz >= 1000 ? `${(t.mhz / 1000).toFixed(2)} GHz` : `${t.mhz.toFixed(0)} MHz`),
+          h('span', null, m === 'unit' ? `max clock at an illustrative ${PS_PER_NAND} ps / NAND` : `max clock at ≈ ${psPer(m, PS_PER_NAND).toFixed(1)} ps / unit`))),
+      h('p', { class: 'sb-sum' }, `clk→q ${f(r.launch.length ? r.stages[0].arrival : CLK_TO_Q)} + logic ${f(r.logic)} + setup ${SETUP}. Launch ${r.launch.join('.') || 'an input'}, capture ${r.capture.join('.')}.`),
       h('div', { class: 'tstages sb-tm-stages' }, r.stages.map((st) => {
         const w = Math.max(2, ((st.arrival - prev) / maxA) * 100);
         prev = st.arrival;
-        return h('div', { class: 'ts' }, h('span', { class: 'n' }, st.inst || '(chip)'), h('span', { class: 'bar', style: `width:${w}%` }), h('span', { class: 'a' }, String(st.arrival)));
+        return h('div', { class: 'ts' }, h('span', { class: 'n' }, st.inst || '(chip)'), h('span', { class: 'bar', style: `width:${w}%` }), h('span', { class: 'a' }, f(st.arrival)));
       })),
+      ...[heavyList(r)].filter((x): x is HTMLElement => !!x),
       ...(r.byCapture.length > 1 ? [h('details', { class: 'sb-tm-caps' }, h('summary', null, `Period needed at each of ${r.byCapture.length} capturing parts`),
-        h('ol', null, r.byCapture.slice(0, 12).map((b) => h('li', null, h('span', null, b.inst || '(chip)'), h('b', null, String(b.period))))))] : []),
+        h('ol', null, r.byCapture.slice(0, 12).map((b) => h('li', null, h('span', null, b.inst || '(chip)'), h('b', null, f(b.period))))))] : []),
       h('div', { class: 'sb-btns' }, btn));
   }
 

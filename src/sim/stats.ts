@@ -1,6 +1,7 @@
 // Cost of a component, measured from its structure: NAND count, transistor count, and the
 // logic depth (longest input → output path in NAND delays) for combinational parts.
 
+import { type DelayModel, inputArrivals, leafDelays } from './delay';
 import { flatten } from './flatten';
 import { needsSwitchLevel } from './harness';
 import { type ComponentDef, netlistOf } from './types';
@@ -69,20 +70,23 @@ export function stats(def: ComponentDef): Stats {
   return s;
 }
 
-const depthCache = new WeakMap<ComponentDef, number | null>();
+const depthCache = { unit: new WeakMap<ComponentDef, number | null>(), load: new WeakMap<ComponentDef, number | null>(), drawn: new WeakMap<ComponentDef, number | null>() };
 
 /**
- * Longest path from any input to any output, in NAND delays. Returns null when the
- * component contains feedback (it is sequential, so "depth" is not meaningful).
+ * Longest path from any input to any output, in NAND delays (or under the load model, delay.ts, in its
+ * units). Returns null when the component contains feedback (it is sequential, so "depth" is not meaningful).
  */
-export function logicDepth(def: ComponentDef): number | null {
-  if (depthCache.has(def)) return depthCache.get(def)!;
+export function logicDepth(def: ComponentDef, model: DelayModel = 'unit'): number | null {
+  const byDef = depthCache[model];
+  if (byDef.has(def)) return byDef.get(def)!;
   let result: number | null = null;
   try {
     const d = flatten(def, { mode: 'gate' });
     const driverOf = new Int32Array(d.netCount).fill(-1);
     d.leaves.forEach((l, i) => l.outputs.forEach((p) => p.forEach((n) => (driverOf[n] = i))));
-    const memo = new Int32Array(d.leaves.length).fill(-1);
+    const memo = new Float64Array(d.leaves.length).fill(-1);
+    const loaded = model !== 'unit' ? leafDelays(d, model) : null;
+    const inArr = inputArrivals(d, model);
     const state = new Uint8Array(d.leaves.length); // 0 new, 1 visiting, 2 done
     // an edge-triggered behaviour (a large RAM) is storage, like a loop of gates
     let cyclic = d.leaves.some((l) => !!l.def.behavior?.seq);
@@ -94,8 +98,8 @@ export function logicDepth(def: ComponentDef): number | null {
       }
       state[li] = 1;
       let m = 0;
-      for (const p of d.leaves[li].inputs) for (const n of p) if (driverOf[n] >= 0) m = Math.max(m, leafDepth(driverOf[n]));
-      const own = d.leaves[li].kind === 'nand' ? 1 : (d.leaves[li].def.behavior?.delay ?? 0);
+      for (const p of d.leaves[li].inputs) for (const n of p) m = Math.max(m, driverOf[n] >= 0 ? leafDepth(driverOf[n]) : inArr ? inArr[n] : 0);
+      const own = d.leaves[li].kind === 'nand' ? (loaded ? loaded[li] : 1) : (d.leaves[li].def.behavior?.delay ?? 0);
       memo[li] = m + own;
       state[li] = 2;
       return memo[li];
@@ -109,7 +113,7 @@ export function logicDepth(def: ComponentDef): number | null {
   } catch {
     result = null;
   }
-  depthCache.set(def, result);
+  byDef.set(def, result);
   return result;
 }
 

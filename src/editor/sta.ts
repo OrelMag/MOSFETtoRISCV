@@ -5,6 +5,7 @@
 // nets on the path that are nets of the chip itself (HierNode.nets of the root), through
 // Compiled.netOfWire.
 
+import { type DelayModel, delayWord, fmtDelay, psPer } from '../sim/delay';
 import type { FlatDesign } from '../sim/flatten';
 import { logicDepth } from '../sim/stats';
 import { analyzeTiming, PS_PER_NAND, type TimingReport } from '../sim/timing';
@@ -21,33 +22,34 @@ export type ChipTiming =
   | { ok: true; report: TimingReport; mhz: number; path: CriticalPath }
   | { ok: false; why: string; depth?: number };
 
-const reports = new WeakMap<FlatDesign, TimingReport | null>();
+const reports = { unit: new WeakMap<FlatDesign, TimingReport | null>(), load: new WeakMap<FlatDesign, TimingReport | null>(), drawn: new WeakMap<FlatDesign, TimingReport | null>() };
 
-/** analyzeTiming, once per flattened design. */
-export function timingOf(design: FlatDesign): TimingReport | null {
-  let r = reports.get(design);
-  if (r === undefined) reports.set(design, (r = analyzeTiming(design)));
+/** analyzeTiming, once per flattened design and delay model. */
+export function timingOf(design: FlatDesign, model: DelayModel = 'unit'): TimingReport | null {
+  let r = reports[model].get(design);
+  if (r === undefined) reports[model].set(design, (r = analyzeTiming(design, { delay: model })));
   return r;
 }
 
 /**
  * Timing of a compiled chip. `design` is its gate-level flattening (the editor's simulation
- * already has one). Explains when there is nothing to time.
+ * already has one). Explains when there is nothing to time. `model`: the delay model (sim/delay.ts).
  */
-export function chipTiming(doc: ChipDoc, built: Compiled, design: FlatDesign | null): ChipTiming {
+export function chipTiming(doc: ChipDoc, built: Compiled, design: FlatDesign | null, model: DelayModel = 'unit'): ChipTiming {
   if (built.mode === 'switch') {
     return { ok: false, why: 'Switch level: transistors are solved as switches, without delays. Static timing needs a gate-level chip (its transistor chips used through their derived models).' };
   }
   if (!design) return { ok: false, why: 'Not simulated yet (see the diagnostics).' };
-  const report = timingOf(design);
+  const report = timingOf(design, model);
   if (!report) {
-    const depth = logicDepth(built.def);
+    const depth = logicDepth(built.def, model);
     if (depth !== null) {
-      return { ok: false, depth, why: `No flip-flops: combinational. The longest input → output path is ${depth} NAND delay${depth === 1 ? '' : 's'}.` };
+      const words = model === 'unit' ? `NAND delay${depth === 1 ? '' : 's'}` : `${delayWord(model)} under load (${logicDepth(built.def)} NAND delays)`;
+      return { ok: false, depth, why: `No flip-flops: combinational. The longest input → output path is ${fmtDelay(depth, model)} ${words}.` };
     }
     return { ok: false, why: 'Feedback but no flip-flops (latches, or loops of gates): no clock edge to time from. A chip of your own counts as a flip-flop only once it is marked as one.' };
   }
-  return { ok: true, report, mhz: 1e6 / (report.period * PS_PER_NAND), path: criticalPath(report, doc, built, design) };
+  return { ok: true, report, mhz: 1e6 / (report.period * psPer(model, PS_PER_NAND)), path: criticalPath(report, doc, built, design) };
 }
 
 /** The chip's parts, wires and pins on a critical path. */

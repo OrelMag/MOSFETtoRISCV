@@ -10,6 +10,7 @@ import { kWords } from '../lib/bigmem';
 import { PORT_MAX_K } from '../lib/portmem';
 import { familyOf } from '../lib/resolve';
 import type { Vec } from '../sim/geometry';
+import { DELAY_NOTE, fmtDelay } from '../sim/delay';
 import { logicDepth, stats } from '../sim/stats';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { parseBig } from '../sim/values';
@@ -429,7 +430,9 @@ export class PropsPanel {
     this.depthTimer = setTimeout(() => {
       if (this.ed.compiled?.def !== def || this.ed.compiled.mode !== 'gate') return;
       const d = logicDepth(def);
-      el.textContent = d === null ? 'sequential' : `depth ${d}`;
+      const load = d === null ? null : logicDepth(def, 'load');
+      el.textContent = d === null ? 'sequential' : load === null ? `depth ${d}` : `depth ${d} · ${fmtDelay(load, 'load')} under load`;
+      el.title = load === null ? '' : DELAY_NOTE;
     }, 300);
   }
 
