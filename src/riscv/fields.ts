@@ -3,6 +3,7 @@
 // f registers. The instruction breakdown draws this; the hardware view colours wires from it.
 
 import { ABI, CSR_NAMES, decode, FABI, IMM_SRC, IMM_TOP, OPCODES, RM_OPERANDS } from './isa';
+import type { CustomRow } from './custom';
 
 export type FieldKey = 'opcode' | 'rd' | 'funct3' | 'rs1' | 'rs2' | 'rs3' | 'funct7' | 'fmt' | 'imm' | 'shamt' | 'csr' | 'zimm' | 'funct12';
 export type FieldRole = 'op' | 'rd' | 'rs' | 'fn' | 'imm';
@@ -56,16 +57,16 @@ const bitsOf = (w: number, hi: number, lo: number) => Math.floor((w >>> 0) / 2 *
 const sgn = (v: number) => (v < 0 ? `${v}` : `+${v}`);
 
 /** The fields of one instruction word, high bits first, tiling bits 31..0 exactly. */
-export function fieldsOf(word: number): Field[] {
+export function fieldsOf(word: number, custom?: readonly CustomRow[]): Field[] {
   const w = word >>> 0;
-  const d = decode(w);
+  const d = decode(w, custom);
   const s = d.spec;
   const fp = s?.fp;
   const reg = (bank: 'f' | 'x' | undefined, r: number) => (bank === 'f' ? `f${r} (${FABI[r]})` : `x${r} (${ABI[r]})`);
   const F = (key: FieldKey, hi: number, lo: number, meaning: string, label: string = key, used = true): Field =>
     ({ key, hi, lo, value: bitsOf(w, hi, lo), label, meaning, used });
 
-  const opcode = F('opcode', 6, 0, s ? `${OPNAME[d.opcode]} (${d.fmt}-type)` : OPNAME[d.opcode] ?? 'not an RV32 opcode');
+  const opcode = F('opcode', 6, 0, s ? `${s.custom ? `custom-${s.custom.slot}: ${s.name}` : OPNAME[d.opcode]} (${d.fmt}-type)` : OPNAME[d.opcode] ?? 'not an RV32 opcode');
   const f3name = (F3[d.opcode] ?? [])[d.funct3];
   let f3m = s ? (f3name || s.name) : '?';
   if (d.opcode === OPCODES.OP && d.funct7 === 1) f3m = s?.name ?? '?';
@@ -131,8 +132,8 @@ export interface ImmBit {
 }
 
 /** How the immediate generator assembles this instruction's 32-bit immediate (empty for R-type). */
-export function immBits(word: number): ImmBit[] {
-  const fmt = decode(word).fmt;
+export function immBits(word: number, custom?: readonly CustomRow[]): ImmBit[] {
+  const fmt = decode(word, custom).fmt;
   if (fmt === 'R' || fmt === 'R4') return [];
   const map = IMM_SRC[fmt];
   return Array.from({ length: 32 }, (_, i) => {

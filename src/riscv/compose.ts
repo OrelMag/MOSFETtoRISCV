@@ -5,6 +5,7 @@
 // text to put back in a program (a branch target named by its label when one sits there).
 
 import { assemble } from './asm';
+import { meaning, rowsKey, specOf, type CustomRow } from './custom';
 import { fieldRole, fieldsOf, immBits } from './fields';
 import { ABI, BY_NAME, CSR_NAMES, CSRS, decode, disasm, encB, encI, encJ, encR, encR4, encS, encU, FABI, IMM_TOP, INSTRS, OPCODES, type ImmFmt, type InstrSpec } from './isa';
 import { parseWithOffsets, type CField, type CInstr, type ComposeIsa, type CSlot, type Parts as CParts, type ParseResult } from '../isa/composekit';
@@ -106,9 +107,9 @@ export function encodeParts(spec: InstrSpec, p: Parts): number {
 }
 
 /** A word as spec + operands, or null when no instruction decodes it (or its fixed bits differ). */
-export function partsOf(word: number): Composed | null {
+export function partsOf(word: number, custom?: readonly CustomRow[]): Composed | null {
   const w = word >>> 0;
-  const d = decode(w);
+  const d = decode(w, custom);
   const spec = d.spec;
   if (!spec) return null;
   if (spec.name in FIXED) return FIXED[spec.name] === w ? { spec, parts: { ...NO_PARTS } } : null;
@@ -131,9 +132,9 @@ export function retarget(from: Parts, spec: InstrSpec): Parts {
 }
 
 /** The assembly text of a word for a program: disasm, with a branch / jump target by label. */
-export function textOf(word: number, pc?: number, labels?: Map<string, number>): string {
-  const d = decode(word);
-  const base = disasm(word);
+export function textOf(word: number, pc?: number, labels?: Map<string, number>, custom?: readonly CustomRow[]): string {
+  const d = decode(word, custom);
+  const base = disasm(word, undefined, custom);
   if (pc === undefined || !labels || !d.spec || (d.fmt !== 'B' && d.fmt !== 'J')) return base;
   const at = pc + d.imm;
   for (const [name, addr] of labels) if (addr === at) return base.replace(/-?\d+$/, name);
@@ -144,8 +145,10 @@ export function textOf(word: number, pc?: number, labels?: Map<string, number>):
 export const BRANCH_PSEUDO = new Set(['beqz', 'bnez', 'blez', 'bgez', 'bltz', 'bgtz', 'bgt', 'ble', 'bgtu', 'bleu', 'j']);
 
 /** Parse one line of assembly or a hex word into a word; a branch / jump target label resolves against pc. */
-export function parseLine(text: string, assemble: (src: string) => { words: number[]; errors: { message: string }[] }, pc = 0, labels?: Map<string, number>): ParseResult {
+export function parseLine(text: string, assemble: (src: string) => { words: number[]; errors: { message: string }[] }, pc = 0, labels?: Map<string, number>, custom: readonly CustomRow[] = []): ParseResult {
   return parseWithOffsets(text, assemble, 32, pc, labels, (op) => {
+    const own = custom.find((r) => r.name === op);
+    if (own) return own.fmt === 'B' || own.next === 'jump';
     const spec = BY_NAME.get(op);
     return spec ? spec.fmt === 'B' || spec.fmt === 'J' : BRANCH_PSEUDO.has(op);
   });
@@ -187,42 +190,62 @@ const CINSTRS = new Map(INSTRS.map((spec): [string, CInstr] => [spec.name, { id:
 
 const toParts = (rec: CParts): Parts => ({ ...NO_PARTS, ...rec, rs1: rec.zimm ?? rec.rs1 ?? 0 });
 
+/** RV32 for the instruction builder; `custom`: the CPU's custom instructions (riscv/custom.ts), a palette group of
+ *  their own, encoded, decoded and written like the rest. */
+export function rv32Compose(custom: readonly CustomRow[] = []): ComposeIsa {
+  const key = custom.length ? rowsKey(custom) : '';
+  const hit = composeCache.get(key);
+  if (hit) return hit;
+  const own = new Map(custom.map((r) => [r.name, specOf(r)]));
+  const specOfId = (id: string) => BY_NAME.get(id) ?? own.get(id)!;
+  const ownInstrs = new Map([...own].map(([n, s]): [string, CInstr] => [n, { id: n, name: n, summary: meaning(s.custom).join('; '), slots: slotsOf(s).map(cslot) }]));
+  const asm = (src: string) => assemble(src, custom);
+  const isa: ComposeIsa = {
+    id: 'asm', name: custom.length ? `RV32 + ${custom.map((r) => r.name).join(', ')}` : 'RV32', wordBits: 32, step: 4, rv32: true, start: 0xfff50513,
+    groups: [
+      ...(custom.length ? [{ name: 'Yours', ids: custom.map((r) => r.name) }] : []),
+      ...PALETTE.map((g) => ({ name: g.name, ids: g.names, more: g.more })),
+    ],
+    instr: (id) => CINSTRS.get(id) ?? ownInstrs.get(id),
+    encode: (id, parts) => encodeParts(specOfId(id), toParts(parts)),
+    decode(word) {
+      const c = partsOf(word, custom);
+      if (!c) return null;
+      const rec: CParts = {};
+      for (const s of slotsOf(c.spec)) rec[s.key] = s.key === 'zimm' ? c.parts.rs1 : c.parts[s.key];
+      return { id: c.spec.name, parts: rec };
+    },
+    loose(word) {
+      const d = decode(word, custom);
+      if (!d.spec) return null;
+      const all: CParts = { rd: d.rd, rs1: d.rs1, rs2: d.rs2, rs3: d.rs3, csr: word >>> 20, rm: d.funct3, zimm: d.rs1, imm: d.spec.fmt === 'U' ? d.imm >>> 12 : d.imm };
+      const parts: CParts = {};
+      for (const s of slotsOf(d.spec)) parts[s.key] = all[s.key];
+      return { id: d.spec.name, parts };
+    },
+    fields: (word) => fieldsOf(word, custom).map((f): CField => ({ key: f.key, label: f.label, hi: f.hi, lo: f.lo, role: fieldRole(f.key), used: f.used, meaning: f.meaning, value: f.value })),
+    imm(word) {
+      const c = partsOf(word, custom);
+      const slot = c && slotsOf(c.spec).find((s) => s.key === 'imm');
+      if (!c || !slot || slot.role === 'shamt') return null;
+      const d = decode(word, custom);
+      const ib = immBits(word, custom);
+      const note = d.fmt === 'U' ? 'the upper 20 bits as they are, the low 12 tied to ground'
+        : `bit 31 copied into every bit above bit ${IMM_TOP[d.fmt as ImmFmt]} (sign extension)${d.fmt === 'B' || d.fmt === 'J' ? ', bit 0 tied to ground' : ''}`;
+      return { wires: ib.map((b) => ({ bit: b.bit, src: b.src, sign: b.sign, value: b.value })), value: d.imm, text: d.fmt === 'U' ? `0x${(d.imm >>> 0).toString(16)}` : String(d.imm), note };
+    },
+    text: (word, pc, labels) => textOf(word, pc, labels, custom),
+    parse: (line, pc, labels) => parseLine(line, asm, pc, labels, custom),
+    program(src) {
+      const r = asm(src);
+      return { lines: r.lines, labels: r.labels, errors: r.errors, end: r.words.length * 4 };
+    },
+  };
+  composeCache.set(key, isa);
+  return isa;
+}
+
+const composeCache = new Map<string, ComposeIsa>();
+
 /** RV32 for the instruction builder. */
-export const RV32_COMPOSE: ComposeIsa = {
-  id: 'asm', name: 'RV32', wordBits: 32, step: 4, rv32: true, start: 0xfff50513,
-  groups: PALETTE.map((g) => ({ name: g.name, ids: g.names, more: g.more })),
-  instr: (id) => CINSTRS.get(id),
-  encode: (id, parts) => encodeParts(BY_NAME.get(id)!, toParts(parts)),
-  decode(word) {
-    const c = partsOf(word);
-    if (!c) return null;
-    const rec: CParts = {};
-    for (const s of slotsOf(c.spec)) rec[s.key] = s.key === 'zimm' ? c.parts.rs1 : c.parts[s.key];
-    return { id: c.spec.name, parts: rec };
-  },
-  loose(word) {
-    const d = decode(word);
-    if (!d.spec) return null;
-    const all: CParts = { rd: d.rd, rs1: d.rs1, rs2: d.rs2, rs3: d.rs3, csr: word >>> 20, rm: d.funct3, zimm: d.rs1, imm: d.spec.fmt === 'U' ? d.imm >>> 12 : d.imm };
-    const parts: CParts = {};
-    for (const s of slotsOf(d.spec)) parts[s.key] = all[s.key];
-    return { id: d.spec.name, parts };
-  },
-  fields: (word) => fieldsOf(word).map((f): CField => ({ key: f.key, label: f.label, hi: f.hi, lo: f.lo, role: fieldRole(f.key), used: f.used, meaning: f.meaning, value: f.value })),
-  imm(word) {
-    const c = partsOf(word);
-    const slot = c && slotsOf(c.spec).find((s) => s.key === 'imm');
-    if (!c || !slot || slot.role === 'shamt') return null;
-    const d = decode(word);
-    const ib = immBits(word);
-    const note = d.fmt === 'U' ? 'the upper 20 bits as they are, the low 12 tied to ground'
-      : `bit 31 copied into every bit above bit ${IMM_TOP[d.fmt as ImmFmt]} (sign extension)${d.fmt === 'B' || d.fmt === 'J' ? ', bit 0 tied to ground' : ''}`;
-    return { wires: ib.map((b) => ({ bit: b.bit, src: b.src, sign: b.sign, value: b.value })), value: d.imm, text: d.fmt === 'U' ? `0x${(d.imm >>> 0).toString(16)}` : String(d.imm), note };
-  },
-  text: (word, pc, labels) => textOf(word, pc, labels),
-  parse: (line, pc, labels) => parseLine(line, assemble, pc, labels),
-  program(src) {
-    const r = assemble(src);
-    return { lines: r.lines, labels: r.labels, errors: r.errors, end: r.words.length * 4 };
-  },
-};
+export const RV32_COMPOSE: ComposeIsa = rv32Compose();

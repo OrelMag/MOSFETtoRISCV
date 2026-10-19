@@ -143,3 +143,6 @@ button.cmp-bit { cursor: pointer; }
 .cmp-mem-row { display: grid; grid-template-columns: 70px 100px minmax(0, 1fr); gap: 10px; padding: 2px 8px; border-radius: 4px; }
 .cmp-mem-row:nth-child(even) { background: var(--surface-2); }
 .cmp-mem-row span:first-child { color: var(--muted); }
+.cmp-omap button { padding: 3px 1px; border: 0; border-radius: 3px; background: var(--good-soft); color: var(--good); font: 700 8px var(--font-ui); line-height: 1.15; cursor: pointer; overflow-wrap: anywhere; }
+.cmp-omap button:hover { outline: 2px solid var(--good); outline-offset: -2px; }
+.cmp-omap span.yours { background: color-mix(in srgb, var(--accent) 22%, var(--surface)); color: var(--accent); font-weight: 700; }

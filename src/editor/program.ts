@@ -2,6 +2,7 @@
 // per-word listing. DOM-free, so the circuit editor, the tests and the highlighter share it.
 
 import { assemble } from '../riscv/asm';
+import type { CustomRow } from '../riscv/custom';
 import { disasm } from '../riscv/isa';
 import { assemble16 } from '../riscv/rv16/asm16';
 import { disasm16 } from '../riscv/rv16/isa16';
@@ -156,7 +157,8 @@ function build6502(src: string, k: number): BuiltProgram {
 }
 
 /** Build a program image. asm / rv16 / cpu4: that ISA's assembler; hex: one 32-bit word per token; 6502: bytes for a ROM of 2^k. */
-export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc, k = 16): BuiltProgram {
+/** custom: an RV32 program's custom instructions (riscv/custom.ts). */
+export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc, k = 16, custom: readonly CustomRow[] = []): BuiltProgram {
   if (lang === 'hex') return buildHex(src);
   if (lang === '6502') return build6502(src, k);
   if (lang === 'isa') {
@@ -174,10 +176,10 @@ export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc, k = 1
     const r = assemble4(src);
     return { words: r.words, errors: r.errors, lines: r.lines.map((l) => ({ addr: 4 * l.addr, word: l.word, text: disasm4(l.word), srcLine: l.srcLine })) };
   }
-  const r = assemble(src);
+  const r = assemble(src, custom);
   return {
     words: r.words,
     errors: r.errors,
-    lines: r.lines.map((l) => ({ addr: l.addr, word: l.word, text: disasm(l.word, l.addr), srcLine: l.srcLine })),
+    lines: r.lines.map((l) => ({ addr: l.addr, word: l.word, text: disasm(l.word, l.addr, custom), srcLine: l.srcLine })),
   };
 }
