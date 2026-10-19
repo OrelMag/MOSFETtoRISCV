@@ -1794,6 +1794,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   /* the footer's links sit in its text (inline links, which WCAG 2.5.8 exempts): 32 px lines, each link padded to its line's height */
   .footer { line-height: 32px; }
   .footer a { padding-block: 8px; }
+  .footer-meta a { padding-block: 9px; }
   .qn-list a, .qn-list button { min-height: 40px; }
 }
 /* A phone's top bar holds ten targets (home, five nav links, four tools) in 390 px: no gaps between them (each
