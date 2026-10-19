@@ -395,16 +395,16 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
 }
 
 /** The issue queue's payload: what execute needs beyond the operands. */
-const PAY: [string, number][] = [['tag', 4], ['pc', 32], ['imm', 32], ['pnext', 32], ['aluCtl', 4], ['aluSrcA', 1], ['aluSrcB', 1], ['resultSrc', 2], ['funct3', 3],
+export const PAY: [string, number][] = [['tag', 4], ['pc', 32], ['imm', 32], ['pnext', 32], ['aluCtl', 4], ['aluSrcA', 1], ['aluSrcB', 1], ['resultSrc', 2], ['funct3', 3],
   ['branch', 1], ['jalr', 1], ['store', 1], ['sqIdx', 2], ['ltail', 3]];
 const PW = PAY.reduce((a, [, w]) => a + w, 0);
 const pi = (n: string) => PAY.findIndex(([f]) => f === n);
 /** A reorder-buffer entry: what dispatch writes (D), and the result (V). */
-const ROB_D: [string, number][] = [['rd', 5], ['pc', 32], ['store', 1], ['branch', 1], ['jal', 1], ['jalr', 1], ['call', 1], ['ret', 1]];
-const ROB_V: [string, number][] = [['value', 32], ['next', 32], ['mis', 1]];
+export const ROB_D: [string, number][] = [['rd', 5], ['pc', 32], ['store', 1], ['branch', 1], ['jal', 1], ['jalr', 1], ['call', 1], ['ret', 1]];
+export const ROB_V: [string, number][] = [['value', 32], ['next', 32], ['mis', 1]];
 const di = (n: string) => ROB_D.findIndex(([f]) => f === n), vi = (n: string) => ROB_V.findIndex(([f]) => f === n);
 /** A fetch-register slot. */
-const FD: [string, number][] = [['valid', 1], ['pc', 32], ['word', 32], ['pnext', 32]];
+export const FD: [string, number][] = [['valid', 1], ['pc', 32], ['word', 32], ['pnext', 32]];
 
 export interface OooOptions {
   /** Instruction ROM of 2^imemK words (default 6). */

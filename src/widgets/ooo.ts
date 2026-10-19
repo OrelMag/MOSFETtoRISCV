@@ -120,7 +120,7 @@ export function dataflowWidget(): Widget {
 // ---------------------------------------------------------------------------------------------------------------
 // A timeline of instructions: dispatch, waiting, issue, execution, done, commit (and flushed ones).
 
-function timeline(uops: Uop[], c0: number, c1: number): HTMLElement {
+export function timeline(uops: Uop[], c0: number, c1: number): HTMLElement {
   const n = c1 - c0 + 1;
   const head = h('tr', null, h('th', null, ''), ...Array.from({ length: n }, (_, i) => h('th', { class: 'c' }, String(c0 + i))));
   const rows = uops.map((u) => {
@@ -144,7 +144,7 @@ function timeline(uops: Uop[], c0: number, c1: number): HTMLElement {
   return h('div', { class: 'scroll' }, h('table', { class: 'ooo-tl' }, h('thead', null, head), h('tbody', null, ...rows)));
 }
 
-const legend = () => h('div', { class: 'rb-legend ooo-legend' },
+export const legend = () => h('div', { class: 'rb-legend ooo-legend' },
   ...([['f', 'F', 'fetched'], ['q', '', 'waiting to dispatch'], ['d', 'D', 'dispatched (renamed)'], ['w', '', 'waiting for an operand or a port'], ['i', 'I', 'picked'], ['x', 'X', 'executing; result at the last'], ['r', '', 'done, waiting to commit'], ['c', 'C', 'committed'], ['k', '✕', 'flushed']] as const)
     .map(([c, t, l]) => h('span', null, h('i', { class: `ooo-k ${c}` }, t), l)));
 

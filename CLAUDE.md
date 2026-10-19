@@ -427,7 +427,10 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                input in memory; lsu / shared / mul / threads flags), mcprograms.ts, cosim.ts (CPU state;
                `retireCount()` = how many times to step the ISS this cycle (validW / a 1-bit retire, or a wider retire
                output: the count, oldest first, for a CPU that retires several; none: 1), `retiring()` = count > 0,
-               `retirePc()` (pcW0, else pcW: the oldest retiring); dmemWords), randprog32.ts (seeded random RV32 programs per ISA),
+               `retirePc()` (pcW0, else pcW: the oldest retiring); dmemWords), ooosnap.ts (the out-of-order core's state read
+               from its registers: fetch register, ROB head first, issue queue oldest first with the tags each operand waits for,
+               rename table, store queue; oooIssued: each port's pick; isOooCore, sandbox copies (u_rob16…) included;
+               tests/ooosnap.test.ts: equal to the model every cycle), randprog32.ts (seeded random RV32 programs per ISA),
                benchprograms.ts (the benchmark set: fib, sort, matmul (+ mul), CRC-32, a float kernel; each with
                its result computed in TypeScript)
 src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over crossings; untangle's A* reroutes stop after
@@ -512,7 +515,11 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                editor's next line)
                sketch lit from instrUse); chapter 13's explorer and editor/romcompose.ts host it.
                insthw.ts maps an instruction to the units it uses (and pipeline stage units; laneUse(word, core, at): the lane /
-               warp cores' instances, tests/insthw.test.ts: every kernel instruction, every warp count); slowctl.ts: what the CPU
+               warp cores' instances, tests/insthw.test.ts: every kernel instruction, every warp count; oooUse(word, port): the
+               out-of-order core's, by the port it went to); ooopanel.ts: chapter 25's Out of order panel (oooView: Reorder
+               buffer / Queues from ooosnap, Timeline from the model; OooFollower: the model stepped at every edge beside the gates,
+               commits and port picks compared, replayed after a Reset or Back; the sandbox's CPU drawer shows the same view);
+               slowctl.ts: what the CPU
                panel and the Warp panels share: slowControls (Slow / Back / Step, gate · cycle · instr levels, the rate; `retired()`
                from an edge hook ends an instr step), markInstr / clearInstr / showInstrUse (the units lit, the field wires
                coloured), frameRun (a Run to halt in a 12 ms frame budget, the cycle engine prepared first); fsmpanel.ts: a live state
@@ -1079,9 +1086,10 @@ tests/verify/  CPU verification (docs/VERIFICATION.md): cpus.ts (every RV32 CPU 
 
 ### CPU scenes
 
-`cpuScene({ source, pipeline?, system?, m?, dcache?, multicycle?, adder?, timing?, wide? })` (widgets/cpupanel.ts) builds a CPU scene
+`cpuScene({ source, pipeline?, system?, m?, dcache?, multicycle?, adder?, timing?, wide?, ooo? })` (widgets/cpupanel.ts) builds a CPU scene
 with the CPU panel (listing, registers, memory, golden-model lock-step) and optionally the
-pipeline diagram and the static-timing panel. Panels observe clock edges through
+pipeline diagram and the static-timing panel; `ooo`: the out-of-order core on the cycle engine with the Out of order panel
+(widgets/ooopanel.ts; the two panels share the selected instruction through an OooLink). Panels observe clock edges through
 `stage.edgeHooks` (before / after every rising edge), so they stay correct during fast runs.
 The pipeline's golden model steps when a valid instruction is in W (`retiring()`); a CPU that retires several a cycle
 gives their count on `retire` and the golden model steps that many times before the state is compared (`retireCount()`:

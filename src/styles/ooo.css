@@ -65,3 +65,23 @@
 .ooo-cols { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; }
 .ooo-cols > div { min-width: 0; overflow-x: auto; }
 @media (max-width: 760px) { .ooo-cols { grid-template-columns: 1fr; } }
+
+/* the Out of order panel on the gate-level core (widgets/ooopanel.ts) */
+.ooo-panel { width: min(460px, 100%); }
+.ooo-panel .rb-ctl { margin-bottom: 4px; }
+.ooo-psum { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 11.5px; color: var(--text-2); margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+.ooo-panel .ooo-cols { gap: 10px; }
+.ooo-ptab { font-size: 11.5px; margin-bottom: 4px; }
+.ooo-ptab th, .ooo-ptab td { padding: 2px 6px; }
+.ooo-ptab .mono { font-size: 11.5px; }
+.ooo-ptab tr { cursor: pointer; }
+.ooo-ptab tr:first-child { cursor: default; }
+.ooo-ptab tr:hover td { background: var(--surface-2); }
+.ooo-ptab tr.sel td { background: var(--accent-soft); box-shadow: inset 0 -1px 0 var(--accent); }
+.ooo-tab .st.ready { background: var(--accent-soft); color: var(--accent); }
+.ooo-tab .tagref { font: 11.5px var(--font-mono); color: var(--warn); margin-right: 4px; }
+.ooo-tab .ops .ok { color: var(--good); }
+.ooo-regs .muted { color: var(--muted); }
+.ooo-panel .ooo-regs { font-size: 11.5px; gap: 2px 10px; margin-bottom: 4px; }
+.ooo-panel .ooo-tl td.ins { font-size: 11px; padding-right: 8px; }
+.ooo-panel .ooo-tl th.c { min-width: 18px; }

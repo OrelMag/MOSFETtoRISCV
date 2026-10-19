@@ -229,3 +229,32 @@ export function laneUse(word: number, core: LaneCoreShape, at: LaneAt = {}): Ins
     default: return u([], 'no data path work');
   }
 }
+
+/**
+ * The hardware an instruction uses on chapter 25's out-of-order core (lib/ooocore.ts), as its top-level instances:
+ * fetch, decode, rename and dispatch for every instruction, then the port it was bound to (`port`, -1: not yet bound),
+ * and the reorder buffer and commit. Loads and stores run on port 0 (the data memory and the store queue), multiplies
+ * and divides on port 1; jal and lui are done at decode (their value is known there).
+ */
+export function oooUse(word: number, port = -1): InstrUse {
+  const op = word & 0x7f, f3 = (word >>> 12) & 7, f7 = word >>> 25;
+  const front = ['pc', 'imem', 'btb', 'ras', 'fp', 'fd0', 'fd1', 'ctl0', 'ctl1', 'imm0', 'imm1', 'cls0', 'cls1', 'kn0', 'kn1', 'dc', 'bind', 'rat', 'rf', 'opA0', 'opB0', 'opA1', 'opB1'];
+  const back = ['rob', 'cm'];
+  const at = (p: number) => [`e1_${p}`, `ex${p}`];
+  const ports = port < 0 ? [0, 1] : [port];
+  const u = (mid: string[], path: string): InstrUse => ({ units: [...new Set([...front, ...mid, ...back])], path });
+  switch (op) {
+    case OPCODES.OP:
+      if (f7 === 1) return (f3 & 4)
+        ? u(['iq', ...at(1), 'div'], 'rename → issue queue → port 1 → the radix-4 divider (one division at a time) → bus 1 → ROB → commit → rd')
+        : u(['iq', ...at(1), 'mule', 'e2_1', 'mulm'], 'rename → issue queue → port 1 → the multiplier over two cycles → bus 1 → ROB → commit → rd');
+      return u(['iq', ...ports.flatMap(at)], 'rename → issue queue → an ALU port → its result bus → ROB → commit → rd');
+    case OPCODES.OPIMM: case OPCODES.AUIPC: return u(['iq', ...ports.flatMap(at)], 'rename → issue queue → an ALU port → its result bus → ROB → commit → rd');
+    case OPCODES.LOAD: return u(['iq', ...at(0), 'dm', 'sq', 'e2_0'], 'rename → issue queue (waits for older stores) → port 0: address → data memory, or the store queue forwards → bus 0 a cycle later → ROB → commit → rd');
+    case OPCODES.STORE: return u(['iq', ...at(0), 'sq', 'dm'], 'rename → issue queue → port 0: address and data → store queue; at commit → data memory');
+    case OPCODES.BRANCH: case OPCODES.JALR:
+      return u(['iq', ...ports.flatMap(at)], 'rename → issue queue → a port compares (or adds) and checks the prediction → ROB; a misprediction flushes at commit');
+    case OPCODES.JAL: case OPCODES.LUI: return u([], 'decode knows the value (pc + 4, or the immediate): straight to the ROB, done → commit → rd');
+    default: return u([], 'no data path work');
+  }
+}

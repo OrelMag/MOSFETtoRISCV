@@ -1,3 +1,6 @@
+import { ageBit, iqEntry, RAT, SELECT8 } from '../lib/ooo';
+import { PAY } from '../lib/ooocore';
+import { PROGRAMS } from '../riscv/programs';
 import { cpuScene } from '../widgets/cpupanel';
 import { dataflowWidget, orderWidget, robWidget, scoreboardWidget, speculationWidget } from '../widgets/ooo';
 import type { Chapter } from './types';
@@ -32,6 +35,27 @@ loop:   lw   t0, 0(a0)
         bnez t3, loop
         sw   s0, 128(zero)
 halt:   j    halt`;
+
+/** The loads-and-stores step's program: a divide per element holds commit back while the store and load behind it run. */
+export const STORE_SOURCE = `# s0 = 8 + 7 + … + 1 through memory, a divide per element holding commit back
+        li   a0, 0
+        li   t3, 8
+        li   t5, 3
+        li   s0, 0
+loop:   div  t4, t3, t5       # 19 cycles: nothing younger commits before it
+        sw   t3, 0(a0)        # executes at once and waits in the store queue
+        lw   t1, 0(a0)        # takes t3 from the store queue
+        add  s0, s0, t1
+        addi a0, a0, 4
+        addi t3, t3, -1
+        bnez t3, loop
+        sw   s0, 64(zero)     # 36
+halt:   j    halt`;
+
+/** The select step: entries from oldest to youngest (7 last: the 56-bit matrix stays an exact number), and the candidates. */
+export const SELECT_ORDER = [4, 1, 6, 0, 3, 2, 5, 7], SELECT_CAND = [6, 3, 5];
+const olderBits = (order: number[]) => order.reduce((m, i, a) => order.slice(a + 1).reduce((mm, j) => mm + 2 ** ageBit(i, j), m), 0);
+const IQ_PAY = PAY.reduce((a, [, w]) => a + w, 0);
 
 export const chOoo: Chapter = {
   id: 'ooo', num: 25, title: 'Out of order', level: 'Processor',
@@ -181,6 +205,96 @@ export const chOoo: Chapter = {
       },
     },
     {
+      title: 'The rename table in gates',
+      body: `
+        <p>This is our core's rename table at gate level. <span data-show="rows">31 rows</span>, one per register (x0 is
+        never renamed), each hold a valid bit and a 4-bit tag: the reorder-buffer entry of the youngest instruction in
+        flight that writes the register. Each row recognizes its own register number among the four that can touch it
+        in a cycle: the two destinations dispatch maps and the two that commit unmaps.</p>
+        <p><span data-show="rd0 rd1 rd2 rd3">Four read ports</span> look up the sources of the pair being dispatched. The
+        second instruction's sources also <span data-show="byp2 byp3 by2 by3">compare against the first's
+        destination</span>: the first maps it in this same cycle, too late for the table to answer. At commit,
+        <span data-show="rc0 rc1">two more read ports</span> check that the register still names the committing entry;
+        only then does it go back to the register file (a younger writer keeps it). A flush clears every valid bit at
+        once. We recover at commit, when everything older has committed, so the register file is then exactly
+        right.</p>
+        <div class="try">The scene dispatches a pair writing <code>t0</code> (entry 3) and <code>t1</code> (entry 4),
+        and the second reads <code>t0</code>: its lookup (<code>a1v</code>, <code>a1t</code>) says entry 3 already.
+        Pulse the clock: rows t0 and t1 now hold their tags.</div>
+        <p>Cost: 12 443 NANDs, of which the 31 rows take 275 each.</p>`,
+      scene: () => ({ root: RAT, autoClock: false, inputs: { rs1_0: 10, rs2_0: 11, rs1_1: 5, rs2_1: 0, rd0: 5, we0: 1, tag0: 3, rd1: 6, we1: 1, tag1: 4, clk: 0 }, highlight: ['rows', 'by2'] }),
+      tries: [(st) => st.value('a1v') === 1 && st.value('a1t') === 3],
+    },
+    {
+      title: 'Wakeup (Tomasulo, IBM 360/91, 1967)',
+      body: `
+        <p>Tomasulo's reservation stations held an instruction with, for each operand, either its value or the tag of
+        the unit that would produce it. Every result went out on the Common Data Bus with its tag, and every station
+        compared. Our issue-queue entry is the same idea with reorder-buffer tags: the instruction's
+        <span data-show="payR">payload</span> (${IQ_PAY} bits: tag, PC, immediate, predicted next PC, control) and, per
+        operand, <span data-show="rdyAQ rdyBQ">a ready bit</span>, <span data-show="valAQ valBQ">a 32-bit value</span>
+        and <span data-show="tags">a producer tag</span>.</p>
+        <p>Each cycle two result buses carry a tag and a value each. <span data-show="e0A e1A e0B e1B">Four 4-bit
+        comparators</span> (two operands × two buses) watch them. A waiting operand whose tag matches wakes:
+        <span data-show="rdy">ready</span> rises in the same cycle and <code>opA</code> passes the bus value straight on,
+        so the entry can be picked at once; the clock edge then captures the value. That pass-through is what lets a
+        dependent instruction issue the cycle after its producer.</p>
+        <div class="try">Pulse once: the entry fills, operand B ready (7), operand A waiting for entry 5.</div>
+        <div class="try">Set <code>alloc</code> to 0 and <code>bv0</code> to 1: bus 0 now carries tag 5 with the value 42.
+        <code>ready</code> rises before any clock edge, and <code>opA</code> (the bus value, passed on while the operand
+        waits) is what the port would take.</div>
+        <p>4 247 NANDs an entry, eight entries. The four comparators are a small part of that: storage and 32-bit
+        multiplexers are most of it. Big cores keep scores of entries and read the operands after issue, so an entry holds
+        no values; there the comparators, tags × buses × entries, are what grows.</p>`,
+      scene: () => ({
+        root: iqEntry(IQ_PAY), autoClock: false, highlight: ['e0A', 'e1A', 'e0B', 'e1B'],
+        inputs: { alloc: 1, port: 0, load: 0, div: 0, lat2: 0, tagA: 5, rdyA: 0, valA: 0, tagB: 0, rdyB: 1, valB: 7, smask: 0, pay: 0, bv0: 0, bt0: 5, bx0: 42, bv1: 0, bt1: 0, bx1: 0, sdone: 0, pick: 0, flush: 0, clk: 0 },
+      }),
+      tries: [(st) => st.value('valid') === 1, (st) => st.value('ready') === 1 && st.value('opA') === 42],
+    },
+    {
+      title: 'Choosing who goes',
+      body: `
+        <p>Each port picks the oldest ready entry bound to it: the oldest first drains the head of the reorder buffer,
+        and commit waits on nothing else. The entries are not kept in order, though (a freed slot takes whatever comes
+        next), and keeping them sorted would mean shifting ~200-bit entries every cycle. Instead an <strong>age
+        matrix</strong> records, for every ordered pair of entries, which holds the older instruction: 56 bits for eight
+        entries, 1 536 NANDs. A new entry is younger than every entry present: its row clears and its column sets.</p>
+        <p>Select is then two levels of logic. Entry e wins when it is a candidate and no other candidate is older:
+        <span data-show="blk6">an OR over seven ANDs</span>, <span data-show="g6">then an AND with its own
+        request</span>. The whole grant word is 280 NANDs and 11 levels deep, with no chain from entry 0 to 7 as in a
+        priority encoder.</p>
+        <div class="try">Entries 6, 3 and 5 are candidates, and the matrix orders the entries 4, 1, 6, 0, 3, 2, 5, 7 from
+        the oldest: 6 gets the grant. Clear its bit in <code>cand</code>: 3 wins.</div>
+        <p>Wakeup and select together are the loop that sets the clock: a result's tag arrives on a bus, the waiting entry
+        wakes, select picks it, and its operands reach the port's register, all within one cycle, or a chain of dependent
+        additions cannot run back to back. In our core this is the critical path, 93 NAND delays against the dual-issue
+        pipeline's 80. Port binding sat on it at first, when dispatch counted each port's entries after this cycle's
+        picks; counting before the picks and taking them off in parallel moved it off.</p>`,
+      scene: () => ({ root: SELECT8, inputs: { cand: SELECT_CAND.reduce((m, e) => m | (1 << e), 0), older: olderBits(SELECT_ORDER) }, highlight: ['blk6', 'g6'] }),
+      tries: [(st) => st.value('grant') === 1 << 3],
+    },
+    {
+      title: 'The reorder buffer, in gates',
+      body: `
+        <p>Here is the whole core: <span data-show="pc imem btb ras fp">fetch</span> of two words a cycle with the BTB and
+        the return stack, <span data-show="dc rat bind">decode, rename and binding to a port</span>, <span data-show="iq">the
+        issue queue</span>, two ports with <span data-show="e1_0 e1_1">an ALU each</span>, and on port 1
+        <span data-show="mule mulm div">the multiplier and the divider</span>, <span data-show="rob">the reorder
+        buffer</span> and <span data-show="cm rf">commit into the register file</span>.</p>
+        <p><span data-show="rob">The reorder buffer</span> is the largest block: 16 entries of 109 bits (done; the
+        destination, PC and kind of control transfer, written at dispatch; the value, the real next PC and a mispredict
+        bit, written by a result bus), 70 541 NANDs. Up to two entries leave the head a cycle, at most one of them a
+        store, and write the register file. The core's <code>retire</code> output counts them and the golden model steps
+        once per commit, so the CPU panel compares the registers after every commit even though instructions finish out of
+        order.</p>
+        <p>The Out of order panel reads the reorder buffer, the issue queue, the rename table and the store queue from
+        their registers. Its timeline is the model of the earlier steps, running beside the gates: every cycle both must
+        commit the same instructions and pick the same one on each port. Click an instruction in either panel to light
+        the hardware it uses. The program is step 2's dot product, on the cycle engine.</p>`,
+      scene: () => cpuScene({ source: DUAL_SOURCE, ooo: true, highlight: ['rob', 'cm', 'rf'] }),
+    },
+    {
       title: 'Guessing past branches',
       body: `
         <p>A 16-entry window is eight cycles of fetch at two per cycle, and these programs branch every two to four
@@ -197,6 +311,37 @@ export const chOoo: Chapter = {
         0.92. Perfect prediction would give 0.63: on these programs the front end limits more than the window.
         matmul's software multiply and crc branch on data bits, which no predictor learns.</p>`,
       widget: speculationWidget,
+    },
+    {
+      title: 'Loads and stores',
+      body: `
+        <p>A store cannot write memory when it executes: it may be on a wrong path, and memory has no undo. So
+        <span data-show="sq">the store queue</span> (4 entries) takes each store's address and data when it executes, and
+        commit drains the oldest into <span data-show="dm">the data memory</span>, one a cycle, in program order. A flush
+        just drops the younger entries.</p>
+        <p>A load must then see stores that have not reached memory. Ours waits until every older store has executed (its
+        address is known), then reads memory and the queue together: the youngest older store to the same word, if there
+        is one, supplies the value (store-to-load forwarding). Waiting for the older addresses is the simple, safe rule;
+        big cores guess that a load does not alias a store and replay it when a store proves them wrong.</p>
+        <p>The program sums 8 + 7 + … + 1 through memory. Each element starts with a divide that holds commit back for 19
+        cycles; the store and the load behind it execute meanwhile, and every load takes its value from the queue, long
+        before its store reaches memory. The queue costs 8 544 NANDs.</p>`,
+      scene: () => cpuScene({ source: STORE_SOURCE, ooo: true, highlight: ['sq', 'dm'] }),
+    },
+    {
+      title: 'The whole core',
+      body: `
+        <p>All together: 359 262 NANDs without the program ROM, against 193 768 for the dual-issue pipeline and 141 655
+        for one pipeline. The reorder buffer takes 70 541, the issue queue 56 888, the BTB 35 662, the register file
+        (four reads, two writes) 35 463, the divider 16 742, the rename table 12 443, the return stack 10 824 and the
+        store queue 8 544.</p>
+        <p>Measured on the benchmark set at a period of 93 NAND delays: CPI fib 0.99, sort 0.77, matmul 1.28, matmul-m
+        0.84, crc 0.99, against 1.13, 1.01, 1.05, 1.09, 0.97 for the dual-issue pipeline. sort gains most. matmul loses:
+        its software multiply branches on data bits, and every misprediction costs the trip to the head of the reorder
+        buffer, where the in-order pipeline recovers in E.</p>
+        <p>Pick a program in the CPU panel and run it to the halt. Its ✓ says the golden model agreed after every commit;
+        the Out of order panel's, that the model agreed every cycle.</p>`,
+      scene: () => cpuScene({ source: PROGRAMS.find((p) => p.id === 'sort')!.source, ooo: true }),
     },
   ],
 };

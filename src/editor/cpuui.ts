@@ -22,8 +22,10 @@ import { pack } from '../sim/values';
 import { h, icon } from '../ui/dom';
 import type { FieldKey } from '../riscv/fields';
 import { instrBreakdown } from '../widgets/instrfields';
-import { instrMarks, instrUse, STAGE_UNITS, stageUse } from '../widgets/insthw';
+import { instrMarks, instrUse, oooUse, STAGE_UNITS, stageUse } from '../widgets/insthw';
 import { PipeHistory, pipeGridRows } from '../widgets/pipegrid';
+import { OooFollower, oooView } from '../widgets/ooopanel';
+import { isOooCore, oooSnap } from '../riscv/ooosnap';
 import {
   type CpuDesc, type CpuDoc, CpuMonitor, type CpuRead, cpuGaps, detectCpu, fmtWord, mismatchText, type NetRef, nestedRoms, partAt, partNode,
   memStoreOf, pinNamed, pipelineSlots, readMem, refValue, resolveCpu, romParts,
@@ -132,6 +134,12 @@ class CpuPanel {
   private fieldsSec = h('div', { class: 'cpu-sec' }, 'Fields', h('span', { class: 'cpu-sec-hint' }, 'point at a field: its wires'));
   private fields = h('div', { class: 'cpu-fields' });
   private pipeSec = h('div', { class: 'cpu-sec' }, 'Pipeline', h('span', { class: 'cpu-sec-hint' }, 'stage × cycle, last 7 cycles'));
+  /** Chapter 25's out-of-order core: its structures read from the gates, and the model run beside them (widgets/ooopanel.ts). */
+  private oooSec = h('div', { class: 'cpu-sec' }, 'Out of order', h('span', { class: 'cpu-sec-hint' }, 'read from the gates; click a row: its parts'));
+  private oooV = oooView((pc, port) => this.select(pc, port));
+  private oooF: { es: EditorSim; iss: unknown; f: OooFollower; hook: EdgeHook } | null = null;
+  /** The port the selected instruction was bound to, when picked from the out-of-order view (-1: not known). */
+  private selPort = -1;
   private pipe = h('div', { class: 'pipe-grid sb-cpu-pipe' });
   private ioSec = h('div', { class: 'cpu-sec' }, 'I/O', h('span', { class: 'cpu-sec-hint' }, 'memory-mapped at 0x8000_0000'));
   private io: HTMLElement;
@@ -187,6 +195,7 @@ class CpuPanel {
       this.listing, this.use,
       this.fieldsSec, this.fields,
       this.pipeSec, this.pipe,
+      this.oooSec, this.oooV.el,
       this.ioSec, this.io,
       this.regsSec, this.regs,
       this.fregsSec, this.fregs,
@@ -210,6 +219,7 @@ class CpuPanel {
     this.stopSlow();
     this.off.forEach((f) => f());
     for (const [es, e] of this.monitors) this.drop(es, e);
+    this.dropOoo();
     this.monitors.clear();
     this.clearMarks();
     if (this.open) undockPane(this.ed, 'cpu');
@@ -481,9 +491,10 @@ class CpuPanel {
     const d = mon.desc!;
     const r = mon.read();
     this.renderStatus(mon, d, r);
-    this.renderListing(mon, r?.pc ?? null, pipelineSlots(this.ed.sim, doc, d)?.map((s) => ({ tag: s.stage, pc: s.pc })) ?? null, r?.pc === null ? 'not found' : 'unknown (X)');
+    this.renderListing(mon, r?.pc ?? null, pipelineSlots(this.ed.sim, doc, d)?.map((s) => ({ tag: s.stage, pc: s.pc })) ?? this.oooTags(), r?.pc === null ? 'not found' : 'unknown (X)');
     this.renderFields(mon, d, r);
     this.renderPipe(mon);
+    this.renderOoo(mon);
     this.renderIo(mon);
     this.renderRegs(mon, r);
     this.renderMem(d, r);
@@ -612,7 +623,8 @@ class CpuPanel {
   }
 
   /** A listing line clicked: mark the parts its instruction uses (the site's CPUs' names), or clear. */
-  private select(pc: number): void {
+  private select(pc: number, port = -1): void {
+    this.selPort = port;
     this.sel = this.sel === pc ? null : pc;
     this.fieldPin = this.fieldHover = null;
     this.curKey = '';
@@ -663,6 +675,41 @@ class CpuPanel {
     this.pipeSec.hidden = this.pipe.hidden = !snaps.length;
     if (!snaps.length) return;
     keyed(this.pipe, `${snaps[snaps.length - 1].cycle}|${snaps.length}|${this.listKey}`, () => pipeGridRows(snaps, (pc) => mon.wordAt(pc) ?? undefined, 7));
+  }
+
+  /** The out-of-order core's listing tags: fetched, in the issue queue, executing, done in the reorder buffer. */
+  private oooTags(): { tag: string; pc: number }[] | null {
+    const sim = this.ed.sim.sim;
+    if (!sim || !isOooCore(sim.design.root)) return null;
+    const s = oooSnap(sim, sim.design.root);
+    return [...s.fetched.map((f) => ({ tag: 'F', pc: f.pc })), ...s.rob.map((r) => ({ tag: r.done ? 'ROB' : s.iq.some((e) => e.tag === r.tag) ? 'IQ' : 'EX', pc: r.pc }))];
+  }
+
+  /**
+   * The out-of-order view: the core's structures from its registers, and the model (OooFollower) stepped at every
+   * edge beside it for the timeline, remade with each golden model (a new program, a reset).
+   */
+  private renderOoo(mon: CpuMonitor): void {
+    const es = this.ed.sim, sim = es.sim;
+    const on = !!sim && isOooCore(sim.design.root) && !!mon.iss && !!mon.issOpts;
+    this.oooSec.hidden = this.oooV.el.hidden = !on;
+    if (!on) return this.dropOoo();
+    if (!this.oooF || this.oooF.es !== es || this.oooF.iss !== mon.iss) {
+      this.dropOoo();
+      const f = new OooFollower(mon.iss!.imem, { imemWords: mon.issOpts!.imemWords ?? 64, dmemWords: mon.issOpts!.dmemWords ?? 32 });
+      const hook: EdgeHook = { before: () => { if (es.sim) f.before(es.sim, es.sim.design.root); }, after: () => f.after() };
+      es.edgeHooks.add(hook);
+      this.oooF = { es, iss: mon.iss, f, hook };
+    }
+    const f = this.oooF.f;
+    f.sync(es.cycles);
+    this.oooV.show(oooSnap(sim!, sim!.design.root), f.words, f, this.sel);
+  }
+
+  private dropOoo(): void {
+    if (!this.oooF) return;
+    this.oooF.es.edgeHooks.delete(this.oooF.hook);
+    this.oooF = null;
   }
 
   /**
@@ -1087,7 +1134,9 @@ class CpuPanel {
     } else if (mon && f) {
       word = mon.wordAt(f.pc);
       if (word !== null) {
-        const u = instrUse(word);
+        // the out-of-order core's parts, by the port the instruction went to when it was picked from its view
+        const ooo = !!ed.sim.sim && isOooCore(ed.sim.sim.design.root);
+        const u = ooo ? oooUse(word, f.pc === this.sel ? this.selPort : -1) : instrUse(word);
         units = u.units;
         path = u.path;
       }
