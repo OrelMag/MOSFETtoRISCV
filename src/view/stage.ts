@@ -1159,15 +1159,19 @@ export class Stage {
   }
 
   /** Drop the bar's button labels (icons and tooltips remain) when the hierarchy would otherwise
-   *  be cut or wrap; measured with the labels shown, so it comes back once there is room. */
+   *  be cut or wrap; measured with the labels shown, so it comes back once there is room. Still cut
+   *  without them (a phone: the buttons take the whole bar, the name read "4…"), the hierarchy gets
+   *  a row of its own above the buttons (.stacked). */
   private fitBar(): void {
     const bar = this.bar;
-    bar.classList.remove('compact');
+    bar.classList.remove('compact', 'stacked');
     const items = [...this.crumbs.querySelectorAll('button')];
     if (!items.length) return;
-    const cut = items.some((b) => b.scrollWidth > b.clientWidth + 1);
+    const cut = () => items.some((b) => b.scrollWidth > b.clientWidth + 1);
     const wrapped = items[items.length - 1].offsetTop > items[0].offsetTop + 2;
-    if (cut || wrapped) bar.classList.add('compact');
+    if (!cut() && !wrapped) return;
+    bar.classList.add('compact');
+    if (cut()) bar.classList.add('stacked');
   }
 
   /** Open `path` and highlight (and bring into view) the instance `name` inside it. */
