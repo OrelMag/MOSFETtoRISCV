@@ -299,8 +299,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .prose details.deeper > summary { cursor: pointer; font-weight: 600; font-size: 13.5px; color: var(--text-2); }
 .prose details.deeper[open] > summary { margin-bottom: 6px; }
 .prose details.deeper p { font-size: 13.5px; }
-.prose .try.tried { border-style: solid; border-color: var(--good); }
-.prose .try-done { display: flex; align-items: center; gap: 4px; margin-top: 4px; color: var(--good); font-weight: 600; font-size: 13px; }
+/* a try ticked: quieter than a solved check (green), which is what the chapter's counter counts */
+.prose .try.tried { border-style: solid; }
+.prose .try-done { display: flex; align-items: center; gap: 4px; margin-top: 4px; color: var(--text-2); font-weight: 600; font-size: 13px; }
+.prose .try-done small { font-weight: 400; color: var(--muted); font-size: 12px; }
 .recap-k { margin: 2px 0 6px; }
 .recap-keep li { color: var(--text); }
 .recap-links { margin-top: 16px; display: grid; gap: 4px; }
@@ -810,6 +812,7 @@ svg.schematic .dot.fld { fill: var(--fc); }
 .hero h1 .grad { background: linear-gradient(90deg, var(--accent), #e8590c); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero p.lead { font-size: 18px; color: var(--text-2); margin: 0 0 24px; max-width: 34em; }
 .hero .cta { display: flex; gap: 10px; flex-wrap: wrap; }
+.hero .cta-campaign { display: contents; } /* its button swapped once the campaign is known to be started (home.ts) */
 .eyebrow { font: 600 12px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 /* the ladder scrolls in its own box (opened at the visitor's rung, journey.ts), faded where more rungs lie past an edge */
 .ladder {
@@ -847,9 +850,11 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .card .num { font: 700 12px var(--font-mono); color: var(--accent); }
 .card h3 { margin: 0; font-size: 16px; letter-spacing: -0.01em; }
 .card p { margin: 0; font-size: 13.5px; color: var(--text-2); }
-.card .meta { margin-top: auto; padding-top: 8px; font: 12px var(--font-mono); color: var(--muted); display: flex; justify-content: space-between; }
+.card .meta { margin-top: auto; padding-top: 8px; font: 12px var(--font-mono); color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 12px; justify-content: space-between; }
 .card.soon { opacity: 0.6; border-style: dashed; }
-.card .done-badge { position: absolute; top: 12px; right: 12px; color: var(--good); }
+/* Finished (every step seen, every check solved): a filled tick; every step seen with checks left: a faint dashed one. */
+.card .done-badge { position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--good); background: var(--good-soft); }
+.card .done-badge.seen { color: var(--muted); background: none; border: 1px dashed var(--border-strong); }
 .features { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin-bottom: 44px; }
 .feature { padding: 16px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border); }
 .feature h4 { margin: 8px 0 4px; font-size: 15px; }
@@ -1112,6 +1117,9 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .cpu-status .good { color: var(--good); font-weight: 600; }
 .cpu-status .bad { color: var(--wx); font-weight: 600; }
 .cpu-status .warn { color: var(--warn); font-weight: 600; }
+.cpu-halt { font: 600 12.5px var(--font-mono); color: var(--warn); background: var(--warn-soft); border-radius: 6px; padding: 5px 8px; margin: 0 0 6px; }
+.cpu-halt b { color: var(--text); }
+.cpu-halt[hidden] { display: none; }
 .cpu-now { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; background: var(--accent-soft); margin-bottom: 4px; }
 .cpu-now .fmt { font: 700 11px var(--font-mono); color: var(--accent); }
 .cpu-now code { background: none; padding: 0; font-weight: 600; color: var(--text); }

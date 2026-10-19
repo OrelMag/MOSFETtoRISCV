@@ -91,6 +91,7 @@
 .lv-res-table td:first-child { font-family: var(--font-ui); color: var(--text-2); }
 .lv-res-table td.par { color: var(--good); font-weight: 600; }
 .lv-res-table td.over { color: var(--warn); font-weight: 600; }
+.lv-bars-k { font: 600 11px var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
 .lv-bars { display: grid; grid-template-columns: minmax(0, 150px) 1fr auto; gap: 5px 10px; align-items: center; font-size: 12px; }
 .lv-bars .track { height: 12px; }
 .lv-bars .track i { display: block; height: 100%; border-radius: 3px; background: var(--border-strong); }

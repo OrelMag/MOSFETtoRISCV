@@ -57,9 +57,10 @@ export interface EditorOptions {
    * A campaign level screen around one chip: tabs only for it and the chips it uses (no other
    * chips, no New chip), the toolbar actions listed in `actions`, the palette locked to purist
    * (the level's rule) without the groups in `hideGroups`, and the properties panel shown over the
-   * canvas while something is selected or while pinned.
+   * canvas while something is selected or while pinned. `first`: the palette groups listed first (default: the
+   * unlocked parts, the library's NAND, wiring, constants, My chips).
    */
-  level?: { chipId: string; actions: readonly string[]; hideGroups?: readonly string[] };
+  level?: { chipId: string; actions: readonly string[]; hideGroups?: readonly string[]; first?: readonly string[] };
   /** The project whose workspace is loaded and saved (projects.ts); default: the current one, the first for a level. */
   project?: string;
 }
@@ -217,7 +218,7 @@ export class Editor {
       newFolder: this.level ? undefined : () => void this.newFolder(),
       renameFolder: this.level ? undefined : (from, to) => this.renameFolder(from, to),
       hidden: (g) => !!this.level?.hideGroups?.includes(g),
-      first: this.level ? ['unlocked', 'lib', 'wiring', 'const', 'mine'] : undefined,
+      first: this.level ? this.level.first ?? ['unlocked', 'lib', 'wiring', 'const', 'mine'] : undefined,
       closed: this.level ? ['io', 'disp'] : undefined,
     });
     this.props = new PropsPanel(this);
@@ -825,9 +826,23 @@ export class Editor {
       const st = this.tools.state;
       if (st.k !== 'place' || st.drag) return;
       this.showParts(false);
-      this.toast(`Tap the canvas to place ${item.name}`);
+      this.palette.clearSearch(); // the drawer reopens on the whole palette, not on this search's results
+      this.placeHint = `Tap the canvas to place ${item.name}`;
+      this.toast(this.placeHint);
     };
     document.addEventListener('pointerup', up);
+  }
+
+  /** The phone's tap-to-place hint while it may be on screen. */
+  private placeHint = '';
+
+  /** The armed part was placed or let go: its tap-to-place hint goes at once rather than after the toast's time. */
+  endPlaceHint(): void {
+    if (this.placeHint && this.toastEl.textContent === this.placeHint) {
+      if (this.toastTimer) clearTimeout(this.toastTimer);
+      this.toastEl.className = 'sb-toast';
+    }
+    this.placeHint = '';
   }
 
   /** The palette is a drawer (editor.css, max-width 760px) and open. */
