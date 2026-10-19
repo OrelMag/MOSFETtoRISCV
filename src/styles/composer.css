@@ -1,0 +1,110 @@
+/* The instruction composer (widgets/composer.ts): chapter 13 and the sandbox's program editor. */
+
+.cmp { display: grid; gap: 10px; min-width: 0; container-type: inline-size; }
+.cmp .f-bad { --fc: var(--bad); }
+.cmp .f-zero { --fc: var(--muted); }
+.cmp h4 { margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-2); }
+
+.cmp-pal { display: grid; gap: 5px; }
+.cmp-group { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+.cmp-group .gname { width: 92px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.cmp-chip { font: 500 12px var(--font-mono); padding: 2px 7px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.cmp-chip:hover { border-color: var(--accent); }
+.cmp-chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.cmp-more { justify-self: start; }
+
+.cmp-inrow { display: flex; gap: 8px; }
+.cmp-in { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: 600 15px var(--font-mono); }
+.cmp-in.err { border-color: var(--bad); }
+.cmp-ex { display: flex; flex-wrap: wrap; gap: 6px; }
+.cmp-msg { min-height: 18px; font-size: 12px; color: var(--text-2); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cmp-msg.err { color: var(--bad); }
+
+.cmp-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 14px; align-items: start; }
+.cmp-main { display: grid; gap: 10px; min-width: 0; }
+.cmp-side { display: grid; gap: 14px; min-width: 0; }
+@container (max-width: 760px) { .cmp-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* the word: 32 columns, bit numbers / bits / field names */
+.cmp-scroll { overflow-x: auto; padding-bottom: 2px; }
+.cmp-strip { min-width: 560px; display: grid; grid-template-columns: repeat(32, minmax(0, 1fr)); gap: 2px; }
+.cmp-bn { font: 9.5px var(--font-mono); color: var(--muted); text-align: center; }
+.cmp-bit { height: 28px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 4px; font: 700 13px var(--font-mono);
+  background: color-mix(in srgb, var(--fc) 12%, var(--surface)); color: color-mix(in srgb, var(--fc) 75%, var(--text)); }
+button.cmp-bit { cursor: pointer; }
+.cmp-bit.one { background: var(--fc); color: var(--surface); }
+.cmp-bit.unused { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--fc) 10%, var(--surface)) 0 4px, var(--surface) 4px 8px); color: var(--muted); }
+.cmp-bit:hover, .cmp-bit.hot { outline: 2px solid var(--text); outline-offset: -1px; }
+.cmp-fl { min-width: 0; text-align: center; border-top: 2px solid var(--fc); padding-top: 2px; line-height: 1.25; }
+.cmp-fl b { display: block; font-size: 11px; color: var(--fc); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp-fl small { display: block; font: 10.5px var(--font-mono); color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp-fl.unused b { color: var(--muted); }
+
+/* the immediate generator: a wire from each source bit to its place in the 32-bit immediate */
+.cmp-wires { display: block; width: 100%; min-width: 560px; height: 54px; }
+.cmp-wires line { stroke: var(--fld-imm); stroke-width: 1.2; opacity: 0.5; }
+.cmp-wires line.sign { stroke-dasharray: 2 3; opacity: 0.3; }
+.cmp-wires line.hot { stroke-width: 2.6; opacity: 1; }
+.cmp-imm .cmp-bit { height: 22px; font-size: 11.5px; }
+.cmp-imm .cmp-bit.sign { opacity: 0.55; }
+.cmp-imm .cmp-bit.zero { background: var(--surface-3); color: var(--muted); }
+.cmp-immcap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 12px; color: var(--text-2); }
+.cmp-immcap b { font-family: var(--font-mono); color: var(--fld-imm); }
+
+/* operands */
+.cmp-ops { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.cmp-card { min-width: 0; padding: 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); display: grid; gap: 6px; align-content: start; }
+.cmp-card h4 { margin: 0; }
+.cmp-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.cmp-tabs button { font: 12px var(--font-mono); padding: 2px 9px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); cursor: pointer; }
+.cmp-tabs button.on { border-color: var(--fc); color: var(--fc); background: color-mix(in srgb, var(--fc) 14%, var(--surface)); font-weight: 700; }
+.cmp-regs { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; }
+.cmp-reg { padding: 2px 0; border-radius: 4px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: 10.5px var(--font-mono); line-height: 1.2; cursor: pointer; }
+.cmp-reg small { display: block; font-size: 9.5px; color: var(--muted); }
+.cmp-reg:hover { border-color: var(--fc); }
+.cmp-reg.on { background: var(--fc); border-color: var(--fc); color: var(--surface); }
+.cmp-reg.on small { color: var(--surface); }
+.cmp-reg.also { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--fc) 45%, transparent); }
+.cmp-numrow { display: flex; gap: 8px; align-items: center; }
+.cmp-num { width: 110px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: 13px var(--font-mono); }
+.cmp-range { flex: 1; min-width: 0; accent-color: var(--fld-imm); }
+.cmp-sel { padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: 12px var(--font-mono); }
+.cmp-note { margin: 0; font-size: 12px; color: var(--text-2); }
+
+.cmp-out { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; margin: 0; font-size: 13px; align-items: baseline; }
+.cmp-out dt { font-size: 11.5px; color: var(--muted); }
+.cmp-out dd { margin: 0; font-family: var(--font-mono); overflow-wrap: anywhere; }
+.cmp-out dd.big { font-size: 16px; font-weight: 700; }
+.cmp-out dd span[class^='f-'] { color: var(--fc); }
+.cmp-badge { font: 700 11px var(--font-ui); padding: 1px 8px; border-radius: 99px; }
+.cmp-badge.bad { background: var(--bad-soft); color: var(--bad); }
+
+/* side: the data path it uses, the decode chain, the major-opcode map */
+.cmp-dp { display: block; width: 100%; height: auto; }
+.cmp-dp rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+.cmp-dp text { fill: var(--muted); font: 600 9.5px var(--font-ui); text-anchor: middle; dominant-baseline: central; }
+.cmp-dp .lit rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; }
+.cmp-dp .lit text { fill: var(--accent); }
+.cmp-dp path { fill: none; stroke: var(--border-strong); stroke-width: 1; }
+.cmp-dp path.lit { stroke: var(--accent); stroke-width: 1.8; }
+.cmp-path { margin: 4px 0 0; font-size: 12px; color: var(--text-2); }
+.cmp-chain { display: grid; gap: 3px; font-size: 12px; }
+.cmp-chain div { display: flex; gap: 8px; align-items: baseline; }
+.cmp-chain code { flex: none; font: 11.5px var(--font-mono); color: var(--fc, var(--text)); }
+.cmp-chain span { color: var(--text-2); min-width: 0; }
+.cmp-chain .end span { color: var(--text); font: 700 12.5px var(--font-mono); }
+.cmp-chain .end.bad span { color: var(--bad); }
+.cmp-omap { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 2px; }
+.cmp-omap span { padding: 3px 1px; border-radius: 3px; background: var(--surface-2); color: var(--muted); font-size: 8px; line-height: 1.15; text-align: center; overflow-wrap: anywhere; }
+.cmp-omap span.used { background: var(--surface-3); color: var(--text-2); font-weight: 600; }
+.cmp-omap span.free { background: var(--good-soft); color: var(--good); }
+.cmp-omap span.cur { background: var(--accent); color: var(--accent-text); font-weight: 700; }
+
+/* the program editor: the composer below the source while it is open */
+.sb-rom-dlg-body.composing { grid-template-columns: minmax(0, 1fr); }
+.sb-rom-dlg-body.composing .sb-rom-dlg-list { display: none; }
+.sb-rom-dlg-body.composing .sb-rom-dlg-src .code-edit { height: min(calc(8 * var(--ce-lh) + 2 * var(--ce-pad) + 2px), 24vh); }
+.sb-rom-cmp { border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); padding: 10px 12px; display: grid; gap: 10px; overflow: auto; max-height: 56vh; min-width: 0; }
+.sb-rom-cmp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); }
+.sb-rom-cmp-head b { color: var(--text); font-size: 13px; }
+.sb-rom-cmp-head .grow { flex: 1; }

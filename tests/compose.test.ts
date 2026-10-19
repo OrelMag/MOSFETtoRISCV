@@ -79,3 +79,17 @@ describe('composer model', () => {
     for (const n of names) expect(BY_NAME.has(n), n).toBe(true);
   });
 });
+
+describe('program editor: lines rewritten around the built instruction', () => {
+  it('keeps the label, indentation and comment', async () => {
+    const { codeIndent, splitLine, withCode } = await import('../src/editor/romcompose');
+    expect(splitLine('loop:   add t0, t0, t1   # sum')).toEqual({ prefix: 'loop:   ', code: 'add t0, t0, t1', comment: '   # sum' });
+    expect(withCode('loop:   add t0, t0, t1   # sum', 'sub t0, t0, t1')).toBe('loop:   sub t0, t0, t1   # sum');
+    expect(withCode('        lw a0, 0(a1)', 'lw a0, 4(a1)')).toBe('        lw a0, 4(a1)');
+    expect(withCode('add a0, a0, a1', 'nop')).toBe('nop');
+    expect(withCode('        bogus a0#x', 'nop')).toBe('        nop #x');
+    expect(codeIndent('loop:')).toBe(' '.repeat(8));
+    expect(codeIndent('    addi a0, a0, 1')).toBe('    ');
+    expect(codeIndent('')).toBe(' '.repeat(8));
+  });
+});

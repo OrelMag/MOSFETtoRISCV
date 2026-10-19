@@ -26,6 +26,7 @@ import { copyIsa, isaById, isaList } from './isaops';
 import { openIsaEditor } from './isaui';
 import { virtualRows } from './vlist';
 import { loadDeckIntoRom, pickDeck, saveRomDeck } from './cardui';
+import { romComposer } from './romcompose';
 
 /** Each program language: its name, the code editor's highlighter, and the ROM shape it needs (RV16 and the
  *  4-bit CPU: 16-bit words, word addressed; RV32 assembly: 32-bit words). */
@@ -315,13 +316,17 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
     close();
   };
 
+  const body = h('div', { class: 'sb-rom-dlg-body' }, h('div', { class: 'sb-rom-dlg-src' }, ce.el), listBox);
+  // RV32 assembly: the instruction builder on the caret's line (Ctrl+Space).
+  const builder = applied.lang === 'asm' ? romComposer(ce, body, (m) => ed.toast(m, 'err')) : null;
   const title = h('h3', null, icon('code', 16), `Program · ${partId}`,
     h('small', null, `${2 ** applied.k} × ${applied.w} bits · ${applied.addr === 'rv32' ? 'byte addressed' : 'word addressed'} · ${langName(applied)}`));
   const ov = h('div', { class: 'sb-help sb-rom-dlg', role: 'dialog', 'aria-label': `Program of ${partId}` },
     h('div', { class: 'panel' },
       h('div', { class: 'sb-help-head' }, title, h('button', { class: 'btn ghost icon-only', 'aria-label': 'Cancel', title: 'Cancel (Esc)', onclick: cancel }, icon('close', 16))),
-      h('div', { class: 'sb-rom-dlg-body' }, h('div', { class: 'sb-rom-dlg-src' }, ce.el), listBox),
+      body,
       h('div', { class: 'sb-rom-dlg-foot' }, status,
+        builder?.button,
         h('button', { class: 'btn sm ghost', title: 'Download the program in the box as a deck of punched cards (.deck.json)', onclick: () => saveRomDeck(ed, partId, ce.value, chipId) }, 'Save as deck'),
         chipId === ed.chipId ? h('button', { class: 'btn sm ghost', title: 'Replace the program with the words of a deck of cards (applied at once: one undo step)', onclick: () => void pickDeck(ed).then((d) => {
           if (!d || !loadDeckIntoRom(ed, partId, d)) return;
@@ -333,7 +338,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
   // Keys stay in the dialog: the canvas's shortcuts (Delete, arrows, Ctrl+Z) must not act behind it.
   ov.addEventListener('keydown', (e) => {
     e.stopPropagation();
-    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    if (e.key === 'Escape') { e.preventDefault(); if (!builder?.close()) cancel(); }
     else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); apply(); }
     else ov.classList.remove('confirm');
   });
@@ -347,7 +352,8 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
   live(ov, () => {
     const i = ed.chipId === chipId ? romNow(ed, partId, applied) : null;
     const same = ce.value === applied.src;
-    const k = same ? i : null;
+    // While the builder is open the source stays on the line being built (the PC would scroll it away).
+    const k = same && !builder?.isOpen ? i : null;
     if (k === cur) return;
     cur = k;
     list.setCurrent(i);
