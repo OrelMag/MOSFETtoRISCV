@@ -2,7 +2,7 @@
 // program, which instructions it claims, and which riscv-tests environment it can run.
 
 import {
-  dualCore, dualPipeCpu, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu,
+  dualCore, dualPipeCpu, multicycleCpu, oooCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu,
 } from '../../src/lib';
 import type { DramConfig } from '../../src/dram/controller';
 import type { IssOptions } from '../../src/riscv/iss';
@@ -62,6 +62,7 @@ export const CPUS: CpuConfig[] = [
   { id: 'pipe-m', name: 'Pipelined RV32IM', isa: { m: true }, env: 'bare', cpi: 21, build: (w, imemK, dmemK) => pipelinedCpu(w, { imemK, dmemK, adder: 'ks', m: true }) },
   { id: 'pipe-m-bal-bp', name: 'Pipelined RV32IM, balanced + predictor', isa: { m: true }, env: 'bare', cpi: 21, build: (w, imemK, dmemK) => pipelinedCpu(w, { imemK, dmemK, adder: 'ks', balanced: true, predictor: true, m: true }) },
   { id: 'pipe-2w', name: 'Dual-issue pipelined RV32IM', isa: { m: true }, env: 'bare', cpi: 21, build: (w, imemK, dmemK) => dualPipeCpu(w, { imemK, dmemK }) },
+  { id: 'ooo', name: 'Out-of-order RV32IM (2-wide, ROB 16)', isa: { m: true }, env: 'bare', cpi: 21, build: (w, imemK, dmemK) => oooCpu(w, { imemK, dmemK }) },
   { id: 'fppipe', name: 'Pipelined RV32IF (six stages)', isa: { f: true }, env: 'bare', cpi: 30, build: (w, imemK, dmemK) => pipelinedFpCpu(w, { imemK, dmemK }) },
   { id: 'sys', name: 'System (Zicsr, traps, I/O)', isa: { sub: true, system: true }, env: 'p', imemK: 7, cpi: 1, build: (w, imemK, dmemK) => systemCpu(w, { imemK, dmemK }) },
   { id: 'sys-m', name: 'System RV32IM', isa: { sub: true, system: true, m: true }, env: 'p', imemK: 7, cpi: 34, build: (w, imemK, dmemK) => systemCpu(w, { imemK, dmemK, m: true }) },

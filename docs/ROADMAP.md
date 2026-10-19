@@ -878,7 +878,12 @@ the pipelines' 1-cycle data memory; RV32IM without traps; a cycle-exact model th
   commit by the model's rules, the issue queue (wakeup, age matrix, select per port with bus slots and the divider), the
   rename table, the reorder buffer, the store queue with forwarding, a data memory with a read and a write port; each
   checked against the model's rules cycle by cycle (tests/ooounits.test.ts)
-- ⏳ 17c-2: the `ooo` core at gate level, equal to the model every cycle; 17c-3: its panel; 17d: measured (plan:
+- ✅ 17c-2: the `ooo` core at gate level (lib/ooocore.ts), equal to the model every cycle on targeted programs, the
+  benchmarks and 100 random programs (commits and each port's pick per cycle; every register after every commit); riscv-
+  tests, fuzzing and coverage events. 359 262 NANDs (pipe-2w 193 768), period 93 NAND delays (wakeup → select → operand;
+  port binding was 135 until its comparisons moved before the picks), CPI fib 0.99, sort 0.77, matmul 1.28, matmul-m
+  0.84, crc 0.99. Random programs found a flushed divide still running inside the divider: a flush now aborts it
+- ⏳ 17c-3: its panel and the chapter's gate steps; 17d: measured (plan:
   E:/mockups/ooo/PLAN-17b-17d.md)
 
 ### Phase 16 — Journey and campaign track: Memory ✅

@@ -28,7 +28,7 @@ jobs:
           - mc-fsm mc-micro dual sys
           - sc-f fppipe
           - pipe-m pipe-m-bal-bp sys-m
-          - pipe-2w
+          - pipe-2w ooo
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -248,6 +248,17 @@ src/lib/       the component library (registered in `registry` via define())
                  (forwarding from the youngest older store to the word: before the tail the load saw), dataMemory2(k) (a read
                  and a write address). Rows on shared wires (rowArray): the sandbox round trip of a block drawn with hundreds
                  of labels takes minutes
+  ooocore.ts     chapter 25's out-of-order core: oooCpu(program, { imemK, dmemK }) (`ooo`), equal to riscv/ooomodel.ts's
+                 OOO_CORE every cycle (tests/ooocore.test.ts: commits and each port's pick per cycle, the golden model after
+                 every commit, on targeted programs, the benchmarks and random programs). Fetch (rom2, FETCH_OOO: the model's
+                 prediction, ras2, btbCommit; the fetch register refilled when dispatch empties it), dispatch (OOO_CLASS: the
+                 model's classify, so a wrong path through unknown words waits on nothing the model would not; DISPATCH_CTL,
+                 BIND: the counts before the picks, every comparison made early; OPERAND: register file / ROB / bus / wait;
+                 KNOWN: jal / lui done at decode), the issue queue, two ports (EXEC; loads with store-queue forwarding; the
+                 Booth multiplier over E1 / E2; DIV_UNIT: divE(true), aborted by a flush), a result bus per port, commit
+                 (COMMIT_CTL: two a cycle, one store, flush on a committed misprediction). Instances: pc (fetch PC), imem,
+                 rf (regfile2w), dm (dataMemory2), rob, iq, rat, sq, btb, ras, div, cm, dc, bind, e1_0 / e1_1, e2_0 / e2_1;
+                 outputs retire (count), pcW0, pcF (the oldest not committed), halted
   lsu.ts         STORE_ALIGN, LOAD_EXTRACT, bankedMemory(k) (byte / halfword access)
   system.ts      SYS_DECODE (illegal-instruction detection), CSR_UNIT, TRAP_UNIT, IO_UNIT,
                  systemCpu(program, { m }): the complete RV32I(M) + Zicsr + M-mode traps / interrupts + MMIO;
@@ -382,7 +393,8 @@ src/lib/       the component library (registered in `registry` via define())
                  SRT_SELECT, srtStep, srtNorm, srtFinish, srtDivider(n) (radix-2 SRT, carry-save remainder)
   srt4.ts        srt4Thresholds() (computed), SRT4_SELECT (carry-save comparisons), srt4Term, srt4Step, srt4Finish,
                  srt4Divider(n) (radix 4, n/2 + 3 cycles); iterCtrl(n) handles any step count
-  pipem.ts       MUL_E / MUL_M (Booth tree in E, 64-bit Kogge–Stone in M), DIV_E (radix-4 SRT, stall until done)
+  pipem.ts       MUL_E / MUL_M (Booth tree in E, 64-bit Kogge–Stone in M), DIV_E (radix-4 SRT, stall until done); divE(abort)
+                 (with an abort input: iterCtrl(n, abort) / srt4Divider(n, abort); DIV_E = divE(false), unchanged)
   multiply.ts    seqMul(n) (shift and add), boothRow / boothPP / boothReduce / boothTree / boothMul(n) (radix-4 Booth,
                  sign-constant trick), pipeMul(n) (3-stage pipelined Booth)
   adders.ts      carrySelect(n, k), carrySkip(n, k), BCD_DIGIT, bcdAdder(d)

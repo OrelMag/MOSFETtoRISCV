@@ -81,6 +81,18 @@ export class HwCoverage implements LaneProbe {
       const mis = kids.get('mis');
       if (mis) ev('misprediction', (v) => any(v, mis.ports.mispredict));
     }
+    if (kids.has('rob') && kids.has('iq')) {
+      // the out-of-order core
+      const p = (inst: string, q: string) => port(inst, q)!;
+      ev('flush (misprediction at commit)', (v) => any(v, p('cm', 'flush')));
+      ev('two commits', (v) => any(v, p('cm', 'c1')));
+      ev('issue on both ports', (v) => any(v, p('iq', 'go0')) & any(v, p('iq', 'go1')));
+      ev('store-to-load forwarding', (v) => any(v, p('ld2', 'y')) & any(v, p('sq', 'fwdHit')));
+      ev('ROB full', (v) => ~any(v, p('rob', 'free1')));
+      ev('issue queue full', (v) => ~any(v, p('iq', 'free1')));
+      ev('store queue full', (v) => ~any(v, p('sq', 'free1')));
+      ev('divide in flight', (v) => any(v, p('div', 'busy')));
+    }
     const dm = kids.get('dm');
     if (dm?.ports.hit) {
       const { re, we, hit, stall } = dm.ports;

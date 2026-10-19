@@ -201,13 +201,13 @@ describe('connectivity never changes', () => {
   it('covers library components with pointers', () => expect(docs.length).toBeGreaterThan(20));
   // The chapters' CPUs, opened in the sandbox: the biggest documents with the most pointers.
   // (those drawn with net labels: the 6502's top level is all wires). The dual-issue pipeline's top is labels almost
-  // throughout: ~18 s here, ~46 s on CI's runner, past the default 30 s.
+  // throughout: ~18 s here, ~46 s on CI's runner, past the default 30 s; the out-of-order core's ~54 s here.
   it.each(cpuTops().filter((d) => netlistOf(d)!.nets.some((n) => n.tags)).map((d) => [d.id, d] as const))('CPU: %s', (_, def) => {
     const r = remixDef(emptyWorkspace(), def);
     if ('error' in r) throw new Error(r.error);
     const { names } = roundTrip(r.ws, r.id, 12);
     expect(names.length).toBeGreaterThan(0);
-  }, 180_000);
+  }, 400_000);
 
   it.each(docs.map((d) => [d.id, d] as const))('library: %s', (_, d) => {
     const ws = workspace(d);

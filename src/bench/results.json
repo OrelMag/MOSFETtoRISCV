@@ -908,6 +908,49 @@
    ]
   },
   {
+   "id": "ooo",
+   "name": "Out-of-order RV32IM (2-wide, ROB 16)",
+   "nands": 359262,
+   "period": 93,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 4833,
+     "switched": 1396350757,
+     "functional": 969709105
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 1632,
+     "switched": 656964885,
+     "functional": 366905019
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3002,
+     "switched": 853068400,
+     "functional": 592307776
+    },
+    {
+     "bench": "matmul-m",
+     "instructions": 885,
+     "cycles": 740,
+     "switched": 215015776,
+     "functional": 148399517
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3021,
+     "switched": 1118328261,
+     "functional": 649105099
+    }
+   ]
+  },
+  {
    "id": "fppipe",
    "name": "Pipelined RV32IF (six stages)",
    "nands": 175310,
