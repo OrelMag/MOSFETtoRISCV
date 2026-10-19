@@ -1,4 +1,4 @@
-// Chapter 33's measurements: the benchmarks (and a memory copy) priced by the cycle-exact controller
+// Chapter 34's measurements: the benchmarks (and a memory copy) priced by the cycle-exact controller
 // under a page policy, a bank count and an address mapping; and the reordering step's queue, FCFS
 // against FR-FCFS.
 

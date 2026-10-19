@@ -1,4 +1,4 @@
-// The machine hall (Phase 14c, chapter 25): a CPU priced in relays or vacuum tubes and laid out on a floor at
+// The machine hall (Phase 14c, chapter 26): a CPU priced in relays or vacuum tubes and laid out on a floor at
 // physical scale. Its top-level blocks are priced one by one (lib/tech.ts price), each fills whole racks or ENIAC
 // panels of its own, and the racks stand in rows with aisles between them. DOM-free: the 3D view
 // (widgets/hallview.ts), its 2D fallback, the chapter's prose and tests/hall.test.ts all read the same layout.

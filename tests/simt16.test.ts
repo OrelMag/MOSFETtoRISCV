@@ -46,7 +46,7 @@ describe('the lane golden model', () => {
   });
 
   it('split / join run both sides of an if, one after the other, and reconverge', () => {
-    // odd lanes triple, even lanes halve (the chapter 27 kernel)
+    // odd lanes triple, even lanes halve (the chapter 28 kernel)
     const w = warp(`
         csrr t0, tid
         slli t1, t0, 15         # bit 0 of tid, alone

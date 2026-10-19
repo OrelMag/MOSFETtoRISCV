@@ -1,6 +1,6 @@
-// Examples ▸ System on a bus: chapter 35's computer as a sandbox chip. The system CPU (its boot ROM a ROM part)
+// Examples ▸ System on a bus: chapter 36's computer as a sandbox chip. The system CPU (its boot ROM a ROM part)
 // and the DMA engine are the bus's masters; RAM, a flash (its window in gates over a ROM part holding the
-// program), the DRAM of chapter 33, the DMA's registers, a screen, and an I/O port for a keyboard and a timer.
+// program), the DRAM of chapter 34, the DMA's registers, a screen, and an I/O port for a keyboard and a timer.
 // Every link is two buses (request, response: lib/axi.ts bundled), every connection a pair of pointers.
 
 import { SANDBOX_SOURCE, SANDBOX_WORDS, bootSource } from '../bus/programs';
@@ -10,9 +10,9 @@ import type { ChipDoc, PartRef } from './model';
 import { isError, partDef } from './parts';
 import { Sheet } from './example6502';
 
-export const NOTES_BUS = 'Chapter 35\'s computer on one bus. Masters: the RV32I system core (boot ROM: the ROM part on its left) and the DMA engine. '
+export const NOTES_BUS = 'Chapter 36\'s computer on one bus. Masters: the RV32I system core (boot ROM: the ROM part on its left) and the DMA engine. '
   + 'Slaves, by the top four address bits: 0 RAM (16 KB), 1 the flash (a 64-cycle page read, then 2 cycles a word; its program is the ROM part beside it: Edit program…), '
-  + '2 the DRAM (chapter 33\'s controller), 4 the DMA\'s registers, 5 the screen (pixel (x, y) at 0x5000_0000 + 256·y + 4·x, colour the low byte), '
+  + '2 the DRAM (chapter 34\'s controller), 4 the DMA\'s registers, 5 the screen (pixel (x, y) at 0x5000_0000 + 256·y + 4·x, colour the low byte), '
   + '6 the I/O port: the keyboard (+0 the oldest key, taken when read; +4 status) and the timer (+8 its count, reading it acknowledges; +12 its irq); anything else the default slave. '
   + 'Console, LEDs, switches and mtime are inside the core at 0x8000_0000. At power-on the boot ROM has the DMA copy the flash to RAM 0x400 and jumps there. '
   + 'Set the clock rate to max (the menu by Step), Run, then type (the keyboard takes keys while running): each key is echoed, kept in DRAM and drawn; Enter prints the line back; the LEDs count the timer\'s interrupts. '

@@ -13,7 +13,7 @@ import type { Scene } from '../src/view/stage';
 import { laneCoreScene } from '../src/widgets/lanes';
 import { warpCoreScene } from '../src/widgets/warps';
 
-// Chapters 26–29 run their lane and warp cores on the cycle engine (Scene.engine 'cycle'): every scene the
+// Chapters 27–30 run their lane and warp cores on the cycle engine (Scene.engine 'cycle'): every scene the
 // chapters and the panels' switchers load builds on it, stays on it, and matches the golden model in
 // lock-step the way the Warp panels check it.
 
@@ -36,7 +36,7 @@ function load(scene: Scene) {
   return { sim, root: design.root };
 }
 
-describe('chapters 26–29 on the cycle engine', () => {
+describe('chapters 27–30 on the cycle engine', () => {
   it('every lane and warp core scene of the chapters asks for it (GateSim on request)', () => {
     const scenes = [chLanes, chSimt, chWarps, chFeed].flatMap((c) => c.steps.filter((s) => s.scene).map((s) => s.scene!()));
     expect(scenes.length).toBeGreaterThan(10);

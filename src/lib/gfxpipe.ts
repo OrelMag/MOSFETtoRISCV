@@ -1,6 +1,6 @@
-// Chapter 31: the graphics pipeline. A vertex kernel on a warp core (one warp of four lanes with multipliers)
+// Chapter 32: the graphics pipeline. A vertex kernel on a warp core (one warp of four lanes with multipliers)
 // writes each frame's screen vertices into a vertex buffer; the command unit reads the triangles and their
-// vertices from the same memory and feeds chapter 30's rasterizer, depth test and framebuffer; the scan-out
+// vertices from the same memory and feeds chapter 31's rasterizer, depth test and framebuffer; the scan-out
 // sends the front frame to the screen. The reference is gfx/pipeline.ts, the kernels riscv/gfxprograms.ts.
 //
 //   CMD_UNIT  a state machine, one flip-flop a state: launch the kernel on the next frame and clear the back
@@ -144,7 +144,7 @@ export const CMD_UNIT = cmdUnit(false);
 const CW = 10;
 
 /**
- * Chapter 31's faster clear: start (one cycle) → word 0, then one word a cycle to word 1 023 with cwe = 1: the frame's four
+ * Chapter 32's faster clear: start (one cycle) → word 0, then one word a cycle to word 1 023 with cwe = 1: the frame's four
  * byte banks and the depth buffer's four banks all take that word, four pixels a cycle (1 024 cycles a frame, not 4 438).
  */
 export const CLEAR_UNIT: ComponentDef = (() => {
@@ -184,11 +184,11 @@ export function cuState(q: number): CuState {
 const gpuCache = new Map<string, ComponentDef>();
 
 export interface Gpu31Options {
-  /** 'word': the clear unit clears four pixels a cycle (step 5); default 'pixel', chapter 30's rasterizer walking the screen. */
+  /** 'word': the clear unit clears four pixels a cycle (step 5); default 'pixel', chapter 31's rasterizer walking the screen. */
   clear?: 'pixel' | 'word';
 }
 
-/** The whole pipeline for a mesh: the vertex kernel's warp core, the command unit, chapter 30's GPU. */
+/** The whole pipeline for a mesh: the vertex kernel's warp core, the command unit, chapter 31's GPU. */
 export function gpu31(m: Mesh, opts: Gpu31Options = {}): ComponentDef {
   const wide = opts.clear === 'word';
   const key = `${m.id}${wide ? '/w' : ''}`;

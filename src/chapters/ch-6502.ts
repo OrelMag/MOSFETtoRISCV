@@ -57,7 +57,7 @@ export const LEDGER = {
 const k = (n: number) => n.toLocaleString('en-US');
 
 export const chAppendix6502: Chapter = {
-  id: 'appendix-6502', num: 36, appendix: 'A', title: '1975: the 6502', level: 'NMOS',
+  id: 'appendix-6502', num: 37, appendix: 'A', title: '1975: the 6502', level: 'NMOS',
   blurb: 'NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.',
   goals: [
     'count the transistors of an NMOS ratioed gate against its CMOS twin (n + 1 against 2n) and say what the saving costs in power',

@@ -18,7 +18,7 @@ const runToHalt = () => { [...document.querySelectorAll<HTMLButtonElement>('.cpu
 const halted = () => !!document.querySelector('.cpu-panel .cpu-status .warn');
 
 export const chMulticore: Chapter = {
-  id: 'multicore', num: 24, title: 'Many cores', level: 'Systems',
+  id: 'multicore', num: 25, title: 'Many cores', level: 'Systems',
   blurb: 'Two cores sharing one memory: arbitration, a race, atomic operations, a spin lock, and cache coherence.',
   goals: [
     'say why the end of Dennard scaling turned extra transistors into extra cores, from dynamic power C·V²·f',

@@ -1,4 +1,4 @@
-// Axis-aligned boxes drawn in 3D as SVG polygons (chapter 25's standard cells): an orbit camera, an orthographic
+// Axis-aligned boxes drawn in 3D as SVG polygons (chapter 26's standard cells): an orbit camera, an orthographic
 // projection and the painter's algorithm. DOM-free: it returns markup.
 
 /** A box in layout units: x across the cell, y down it (VDD at y = 0), z up from the silicon surface. */

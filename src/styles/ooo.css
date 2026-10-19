@@ -1,0 +1,67 @@
+/* Chapter 24: out of order (widgets/ooo.ts). Colours from the theme tokens, so both themes follow. */
+.ooo-widget { max-width: 980px; }
+.ooo-sel { font: 13px var(--font-ui); padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+.ooo-sum { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 13px; color: var(--text-2); margin: 8px 0; max-width: 720px; }
+.ooo-sum b { font: 600 12.5px var(--font-mono); color: var(--text); }
+.ooo-slide { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--text-2); margin: 4px 0 8px; }
+.ooo-slide input { flex: 1 1 auto; min-width: 0; max-width: 420px; accent-color: var(--accent); }
+
+/* the dataflow schedule */
+.ooo-df-svg { display: block; }
+.ooo-df-svg .g { stroke: var(--border); stroke-width: 1; }
+.ooo-df-svg .ax { font: 10px var(--font-mono); fill: var(--muted); }
+.ooo-df-svg .ins { font: 11.5px var(--font-mono); fill: var(--text-2); }
+.ooo-df-svg .ins.crit { fill: var(--text); font-weight: 600; }
+.ooo-df-svg .bar { fill: var(--series-1); opacity: 0.55; }
+.ooo-df-svg .bar.load, .ooo-df-svg .bar.store { fill: var(--series-3); }
+.ooo-df-svg .bar.mul, .ooo-df-svg .bar.div { fill: var(--series-2); }
+.ooo-df-svg .bar.branch, .ooo-df-svg .bar.jal, .ooo-df-svg .bar.jalr { fill: var(--series-4); }
+.ooo-df-svg .bar.crit { opacity: 1; stroke: var(--text); stroke-width: 1.5; }
+.ooo-df-svg .edge { fill: none; stroke: var(--muted); stroke-width: 1; opacity: 0.7; }
+.ooo-df-svg .edge.crit { stroke: var(--text); stroke-width: 1.8; opacity: 1; }
+
+/* timelines: one row per instruction, one column per cycle */
+.ooo-run { margin-bottom: 10px; }
+.ooo-tl { border-collapse: separate; border-spacing: 0 2px; font-variant-numeric: tabular-nums; }
+.ooo-tl th.c { font: 500 10px var(--font-mono); color: var(--muted); padding: 0; min-width: 22px; text-align: center; }
+.ooo-tl td.ins { font: 12px var(--font-mono); color: var(--text); padding-right: 12px; white-space: nowrap; }
+.ooo-tl tr.gone td.ins { color: var(--muted); text-decoration: line-through; }
+.ooo-tl tr.wrong td.ins { color: var(--muted); font-style: italic; }
+.ooo-tl td.c { padding: 0; text-align: center; }
+.ooo-tl td.c span, .ooo-k { display: block; height: 18px; margin: 0 1px; border-radius: 3px; font: 600 10px/18px var(--font-mono); color: var(--text); }
+.ooo-k { display: inline-block; width: 18px; margin-right: 6px; vertical-align: -4px; text-align: center; }
+.ooo-tl span.f, .ooo-k.f { background: var(--surface-2); color: var(--muted); }
+.ooo-tl span.q, .ooo-k.q { background: repeating-linear-gradient(90deg, var(--surface-3) 0 2px, transparent 2px 5px); }
+.ooo-tl span.d, .ooo-k.d { background: var(--surface-3); }
+.ooo-tl span.w, .ooo-k.w { background: repeating-linear-gradient(135deg, var(--surface-3) 0 3px, transparent 3px 6px); }
+.ooo-tl span.i, .ooo-k.i { background: var(--accent-soft); color: var(--accent); }
+.ooo-tl span.x, .ooo-k.x { background: var(--series-1); color: #fff; }
+.ooo-tl span.r, .ooo-k.r { background: color-mix(in oklab, var(--good) 28%, transparent); }
+.ooo-tl span.c, .ooo-k.c { background: var(--accent); color: var(--accent-text); }
+.ooo-tl span.k, .ooo-k.k { background: var(--bad-soft); color: var(--bad); }
+.ooo-legend { margin-top: 6px; }
+
+/* tables: instruction status, units, ROB, issue queue, the speculation table */
+.ooo-tab { border-collapse: collapse; font-size: 12.5px; margin-bottom: 8px; }
+.ooo-tab th, .ooo-tab td { padding: 3px 9px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+.ooo-tab th { color: var(--muted); font-weight: 600; font-size: 11.5px; }
+.ooo-tab .mono, .ooo-tab.num td { font-family: var(--font-mono); font-size: 12px; }
+.ooo-tab.num td:not(:first-child), .ooo-tab.num th:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.ooo-tab.num td:first-child { font-family: var(--font-ui); }
+.ooo-tab tr.ours td { font-weight: 600; background: var(--accent-soft); }
+.ooo-tab td.now { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.ooo-tab td.why { color: var(--warn); font-size: 12px; }
+.ooo-tab td.why.executing, .ooo-tab td.why.in-order { color: var(--text-2); }
+.ooo-tab tr.idle td { color: var(--muted); }
+.ooo-tab tr.head td { background: var(--accent-soft); }
+.ooo-tab tr.wrong td.mono { color: var(--muted); font-style: italic; }
+.ooo-tab .ops span { font: 12px var(--font-mono); margin-right: 6px; }
+.ooo-tab .ops .tag { color: var(--warn); }
+.ooo-tab .st { font-size: 11.5px; padding: 1px 6px; border-radius: 99px; background: var(--surface-2); color: var(--text-2); margin-right: 4px; }
+.ooo-tab .st.done { background: color-mix(in oklab, var(--good) 22%, transparent); color: var(--text); }
+.ooo-tab .st.issued { background: color-mix(in oklab, var(--series-1) 22%, transparent); color: var(--text); }
+.ooo-tab .st.bad { background: var(--bad-soft); color: var(--bad); }
+.ooo-regs { display: flex; flex-wrap: wrap; gap: 3px 14px; font: 12px var(--font-mono); color: var(--text-2); margin-bottom: 8px; }
+.ooo-cols { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; }
+.ooo-cols > div { min-width: 0; overflow-x: auto; }
+@media (max-width: 760px) { .ooo-cols { grid-template-columns: 1fr; } }

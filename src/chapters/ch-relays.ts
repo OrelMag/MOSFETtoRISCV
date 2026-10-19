@@ -234,7 +234,7 @@ export const chRelays: Chapter = {
         ${Z3.hz} Hz), its program read from punched film.
         <span data-show="fa0 fa1 fa2 fa3">The relay adder above</span> beats the CMOS ripple adder in <em>steps</em> (1 against ${logicDepth(rca(32))} at 32 bits),
         and loses by eight orders of magnitude in time per step. That trade, and the tube's answer to it, is <a href="#/c/tubes/0">the next
-        chapter</a>. <a href="#/c/silicon/0">Chapter 25</a> prices the whole CPU you build in relays and tubes.</p>`,
+        chapter</a>. <a href="#/c/silicon/0">Chapter 26</a> prices the whole CPU you build in relays and tubes.</p>`,
       scene: () => ({ root: ADD4, inputs: { a: 15, b: 1 }, animate: true }),
       challenge: {
         kind: 'quiz', question: 'A NAND-mapped relay machine needs about one relay per NAND. The 4-bit CPU of the examples is about 3 400 NANDs without its ROM. With 1.44 W per coil and about half the coils on, it draws about:',

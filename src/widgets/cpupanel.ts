@@ -54,7 +54,7 @@ export interface CpuSceneOptions {
   m?: boolean;
   /** Single-cycle CPU with a data cache in front of a slow main memory (adds cache statistics): see CpuOptions.dcache. */
   dcache?: boolean | 'wb' | 'wb2';
-  /** With dcache 'wb' / 'wb2': main memory is chapter 33's DRAM controller and device. */
+  /** With dcache 'wb' / 'wb2': main memory is chapter 34's DRAM controller and device. */
   dram?: DramConfig;
   /** Fetch through an instruction cache (adds fetch-miss stalls). */
   icache?: boolean;
