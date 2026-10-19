@@ -26,7 +26,12 @@ export interface ComposerOpts {
   /** Example lines offered as buttons under the input. */
   examples?: string[];
   onChange?(word: number, ok: boolean): void;
+  /** The front panel's Deposit button (Switches view): what it does with the word. */
+  deposit?: { label: string; run(word: number): void };
 }
+
+/** Fields or switches: the last view picked, for the next builder opened. */
+let lastView: 'fields' | 'switches' = 'fields';
 
 export interface Composer {
   el: HTMLElement;
@@ -82,6 +87,7 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
   let hot = -1;
   /** Instruction bit feeding each immediate bit (this word's). */
   let srcOf: (number | 'zero')[] = [];
+  let view = lastView;
 
   const pal = h('div', { class: 'cmp-pal' });
   const input = h('input', { class: 'cmp-in', type: 'text', spellcheck: 'false', autocomplete: 'off', 'aria-label': 'Instruction as assembly or a hex word' }) as HTMLInputElement;
@@ -98,6 +104,14 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
   const dp = isa.rv32 ? s('svg', { class: 'cmp-dp', viewBox: '0 0 300 142', role: 'img' }) : null;
   const path = isa.rv32 ? h('p', { class: 'cmp-path' }) : null;
   const omap = isa.rv32 ? h('div', { class: 'cmp-omap' }) : null;
+  // The front panel: the same word on toggle switches with a lamp each, grouped by field (Altair, PDP-8).
+  const panel = h('div', { class: 'cmp-panel', style: `--n:${W}` });
+  const scroll = h('div', { class: 'cmp-scroll' }, strip, wires, immRow);
+  const viewBtn = (v: 'fields' | 'switches', label: string) => h('button', {
+    type: 'button', class: view === v ? 'on' : '', 'aria-pressed': String(view === v),
+    onclick: () => { view = lastView = v; render(null); },
+  }, label);
+  const viewBar = h('div', { class: 'cmp-viewbar' });
   const examples = opts.examples?.length
     ? h('div', { class: 'cmp-ex' }, opts.examples.map((e) => h('button', { class: 'btn sm', type: 'button', onclick: () => { input.value = e; fromText(); } }, e)))
     : null;
@@ -109,7 +123,7 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
     msg,
     h('div', { class: 'cmp-grid' },
       h('div', { class: 'cmp-main' },
-        h('div', { class: 'cmp-scroll' }, strip, wires, immRow),
+        viewBar, scroll, panel,
         immCap, ops, out),
       h('div', { class: 'cmp-side' },
         dp ? h('div', null, h('h4', null, 'Uses'), dp, path) : null,
@@ -158,8 +172,13 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
         : isa.rv32 ? `${hex(word)} is not an RV32 instruction here: the CPU traps with mcause 2 (illegal instruction).`
           : `${hex(word)} is not an instruction of ${isa.name}${fields[0]?.label === '.word' ? '' : ', or has bits set the builder leaves alone'}.`;
     }
-    renderStrip(fields, !!c);
-    renderImm(c ? isa.imm(word) : null, c ? isa.instr(c.id) : undefined, fields);
+    viewBar.replaceChildren(h('span', { class: 'cmp-seg' }, viewBtn('fields', 'Fields'), viewBtn('switches', 'Switches')),
+      view === 'switches' && opts.deposit ? h('button', { type: 'button', class: 'btn sm primary', disabled: !c, title: c ? '' : 'Not an instruction', onclick: () => opts.deposit!.run(word) }, opts.deposit.label) : '');
+    scroll.hidden = view !== 'fields';
+    panel.hidden = view !== 'switches';
+    if (view === 'switches') renderPanel(fields, !!c);
+    else renderStrip(fields, !!c);
+    renderImm(view === 'fields' && c ? isa.imm(word) : null, view === 'fields' && c ? isa.instr(c.id) : undefined, fields);
     if (from !== 'slider') renderOps(c);
     renderOut(c, fields);
     renderSide(c, fields);
@@ -207,6 +226,18 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
         title: `${f.label} [${f.hi}:${f.lo}] = ${f.value}: ${f.meaning}`,
       }, h('b', null, f.label), h('small', null, sub.trim())));
     }
+  }
+
+  function renderPanel(fields: CField[], ok: boolean) {
+    panel.replaceChildren(...fields.map((f) => h('div', { class: `cmp-pg ${ok ? role(f) : 'f-bad'}` },
+      h('div', { class: 'cmp-pl', title: `${f.label}: ${f.meaning}` }, f.label.replace(/\[.*\]$/, '')),
+      h('div', { class: 'cmp-sws' }, Array.from({ length: f.hi - f.lo + 1 }, (_, i) => {
+        const b = f.hi - i, v = bitOf(word, b);
+        return h('div', { class: 'cmp-sw' },
+          h('span', { class: `cmp-led${v ? ' on' : ''}` }),
+          h('button', { type: 'button', class: `cmp-tog${v ? ' up' : ''}`, 'aria-label': `switch ${b}: ${v ? 'up' : 'down'}`, 'aria-pressed': String(!!v), onclick: () => set(word ^ 2 ** b) }),
+          h('span', { class: 'cmp-swn' }, b));
+      })))));
   }
 
   function renderImm(imm: CImm | null, ins: CInstr | undefined, fields: CField[]) {

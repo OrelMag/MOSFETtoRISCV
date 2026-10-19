@@ -27,6 +27,7 @@ import { openIsaEditor } from './isaui';
 import { virtualRows } from './vlist';
 import { loadDeckIntoRom, pickDeck, saveRomDeck } from './cardui';
 import { romComposer } from './romcompose';
+import { romTiles } from './romtiles';
 
 /** Each program language: its name, the code editor's highlighter, and the ROM shape it needs (RV16 and the
  *  4-bit CPU: 16-bit words, word addressed; RV32 assembly: 32-bit words). */
@@ -271,6 +272,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
     ce.setDiagnostics(img.problems.filter((e) => e.line > 0));
     list = listingTable(romListing(applied, img), (r) => r.srcLine && ce.setActiveLine(r.srcLine), new Set(img.problems.map((e) => e.line)));
     listBox.replaceChildren(list.el);
+    if (tilesOn) tiles?.refresh();
     cur = undefined;
     const errs = img.problems;
     status.className = `sb-rom-dlg-status${errs.length ? ' err' : ''}`;
@@ -316,13 +318,31 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
     close();
   };
 
-  const body = h('div', { class: 'sb-rom-dlg-body' }, h('div', { class: 'sb-rom-dlg-src' }, ce.el), listBox);
-  // Every language with instructions: the instruction builder on the caret's line (Ctrl+Space).
-  const builder = applied.lang !== 'hex' && applied.lang !== '6502'
-    ? romComposer(ce, body, (m) => ed.toast(m, 'err'), () => import('../isa/compose').then((c) => c.composeIsaOf(applied.lang, applied.isa)))
-    : null;
+  const srcBox = h('div', { class: 'sb-rom-dlg-src' }, ce.el);
+  const body = h('div', { class: 'sb-rom-dlg-body' }, srcBox, listBox);
+  // Every language with instructions: the instruction builder on the caret's line (Ctrl+Space), and the
+  // program as tiles (a view of the text: a click builds a line, a drag moves it).
+  const hasIsa = applied.lang !== 'hex' && applied.lang !== '6502';
+  const isaOf = () => import('../isa/compose').then((c) => c.composeIsaOf(applied.lang, applied.isa));
+  const builder = hasIsa ? romComposer(ce, body, (m) => ed.toast(m, 'err'), isaOf) : null;
+  const tiles = builder ? romTiles(ce, isaOf, (n) => builder.openAt(n)) : null;
+  let tilesOn = false;
+  const showTiles = (on: boolean) => {
+    tilesOn = on;
+    if (!tiles) return;
+    // Off screen, not display: none: the builder and a drag still edit it (native undo needs it focusable)
+    ce.el.classList.toggle('ce-away', on);
+    if (on && !tiles.el.isConnected) srcBox.append(tiles.el);
+    tiles.el.hidden = !on;
+    if (on) tiles.refresh();
+    viewSeg.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', (i === 1) === on));
+  };
+  const viewSeg = h('span', { class: 'cmp-seg sb-rom-view', role: 'group', 'aria-label': 'View' },
+    h('button', { class: 'on', onclick: () => showTiles(false) }, 'Text'),
+    h('button', { title: 'The program as tiles: branch arrows, where each register was written; click a tile to build it, drag to move it', onclick: () => showTiles(true) }, 'Tiles'));
   const title = h('h3', null, icon('code', 16), `Program · ${partId}`,
-    h('small', null, `${2 ** applied.k} × ${applied.w} bits · ${applied.addr === 'rv32' ? 'byte addressed' : 'word addressed'} · ${langName(applied)}`));
+    h('small', null, `${2 ** applied.k} × ${applied.w} bits · ${applied.addr === 'rv32' ? 'byte addressed' : 'word addressed'} · ${langName(applied)}`),
+    tiles ? viewSeg : null);
   const ov = h('div', { class: 'sb-help sb-rom-dlg', role: 'dialog', 'aria-label': `Program of ${partId}` },
     h('div', { class: 'panel' },
       h('div', { class: 'sb-help-head' }, title, h('button', { class: 'btn ghost icon-only', 'aria-label': 'Cancel', title: 'Cancel (Esc)', onclick: cancel }, icon('close', 16))),

@@ -29,7 +29,27 @@ export function instructionExplorer(): Widget {
     const d = decode(word);
     meaning.textContent = d.spec ? `${hex(word)}, ${d.fmt}-type. ${MEANING[d.fmt] ?? ''}` : '';
   };
-  const cmp = instrComposer({ word: 0xffb50513, examples, onChange: (w) => show(w) });
+  // The front panel's memory: Switches ▸ Deposit stores the word at the next address, as programs went in
+  // before assemblers; Run plays them on the golden model.
+  const mem: number[] = [];
+  const memBox = h('div', { class: 'cmp-mem' });
+  const runOut = h('div', { class: 'cpu-regs' });
+  const renderMem = () => {
+    runOut.replaceChildren();
+    memBox.replaceChildren(
+      h('div', { class: 'cmp-mem-head' }, h('b', null, `Memory: ${mem.length} word${mem.length === 1 ? '' : 's'} deposited`),
+        h('button', { class: 'btn sm', disabled: !mem.length, onclick: () => {
+          const iss = new ISS([...mem, 0x0000006f]); // a jump to itself after the last word: halt
+          const n = iss.run(1000);
+          const regs = [...iss.x].map((v, i) => [i, v] as const).filter(([i, v]) => i && v);
+          runOut.replaceChildren(h('p', { class: 'sub' }, `Golden model: ${iss.halted ? `halted after ${n} instructions` : `still running after ${n} instructions`}.${regs.length ? '' : ' No register changed.'}`),
+            ...regs.map(([i, v]) => h('div', { class: 'r' }, h('span', { class: 'n' }, ABI[i]), h('span', { class: 'v' }, `${hex(v)} (${v | 0})`))));
+        } }, 'Run'),
+        h('button', { class: 'btn sm ghost', disabled: !mem.length, onclick: () => { mem.length = 0; renderMem(); } }, 'Clear')),
+      ...mem.map((w, i) => h('div', { class: 'cmp-mem-row' }, h('span', null, hex(4 * i, 4)), h('code', null, hex(w)), h('span', null, disasm(w, 4 * i)))));
+  };
+  const cmp = instrComposer({ word: 0xffb50513, examples, onChange: (w) => show(w), deposit: { label: 'Deposit next', run: (w) => { mem.push(w); renderMem(); } } });
+  renderMem();
   show(cmp.word);
   const formats = h('div', null, (['R', 'I', 'S', 'B', 'U', 'J'] as Fmt[]).map((f) =>
     h('div', { style: 'margin-bottom:6px' }, h('b', { style: 'font-family:var(--font-mono)' }, `${f}-type`), formatStrip(f))));
@@ -38,7 +58,9 @@ export function instructionExplorer(): Widget {
       h('div', { class: 'panel' },
         h('h3', null, 'Instruction builder'),
         h('p', { class: 'sub' }, 'Pick an operation, click registers, drag the immediate, flip any bit, or type assembly or a 32-bit hex word.'),
-        cmp.el, meaning),
+        cmp.el, meaning,
+        h('p', { class: 'sub' }, 'Switches: the same word on a front panel. Before assemblers, programs went in like this, a word at a time: set the switches, Deposit next.'),
+        memBox, runOut),
       h('div', { class: 'panel', style: 'margin-top:16px' }, h('h3', null, 'The six formats'), h('p', { class: 'sub' }, 'rs1, rs2 and rd sit in the same bits in every format, so the register file can be read before the instruction is even decoded.'), formats)),
   };
 }
