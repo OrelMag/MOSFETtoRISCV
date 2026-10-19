@@ -171,7 +171,12 @@ src/sim/       simulation core (no DOM)
                  toggles; breakdown(node): switched C by the child driving each net, the clock and inputs at the root),
                  measurePower(def) on seeded random vectors / clock cycles, vectorPower, fmtEnergy / fmtPower, POWER_NOTE
   timing.ts      static timing: register-to-register critical path, per-capture-stage periods (a `seq` leaf:
-                 inputs captured, comb inputs → outputs launched at clk-to-q)
+                 inputs captured, comb inputs → outputs launched at clk-to-q); { delay: 'load' } times by delay.ts
+  netcap.ts      FF_INPUT / FF_DRIVER / FF_WIRE, netCaps, driverOf (shared by power.ts and delay.ts; power re-exports them)
+  delay.ts       load-dependent delay (Phase 19): logical effort per NAND (d = p + g·h), DelayModel 'unit' | 'load'
+                 (buffer chain where it pays) | 'drawn' (none); netLoads (outputs load one input), inputArrivals (inputs
+                 driven by a minimum NAND), leafDelays, heavyNets, PS_PER_UNIT, DELAY_NOTE; logicDepth(def, model);
+                 view/delayui.ts the Timing panels' Unit / Load switch (settings.loadDelay the default)
   verilog.ts     structural Verilog generated from any netlist (identifiers sanitized, alias
                  boxes from their bit map)
   svexport.ts    exportHdl(def, 'structure' | 'synth', testbench?): whole hierarchy in one file,
@@ -215,7 +220,8 @@ src/lib/       the component library (registered in `registry` via define())
                  CONTROL, NEXT_PC, PLUS4(_FAST), singleCycleCpu(program, { adder, custom }); opcodeDecoder(extra) /
                  control(custom): the generators (OPCODE_DECODER / CONTROL are the no-customs case): a custom row is
                  one more class and an OR input per signal it asserts (riscv/custom.ts signalsOf)
-  fastadd.ts     gp / gray / black prefix cells, CLA4, koggeStone(n), addSubFast(n)
+  fastadd.ts     gp / gray / black prefix cells, CLA4, prefixAdder (one drawing for any prefix network): koggeStone(n),
+                 brentKung(n), sklansky(n) (ksLevels / bkLevels / skLevels, prefixInfo), addSubFast(n)
   wide.ts        bitwise(op, n), orN(n) (shared by alu.ts and fastadd.ts to avoid an import cycle)
   usage.ts       usedIn(def) (parents with instance counts, the chapters' CPUs included), copiesIn(top, def),
                  referenceCpus(): the inspector's "Where it is used"

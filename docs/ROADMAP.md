@@ -998,14 +998,19 @@ animated schematic). The site exports Verilog and already runs Yosys in CI, so i
 
 **Delay that depends on load** (Circuit Artist models wire delay from length and fan-out; here every NAND costs one
 unit, wires nothing). The fan-out capacitance per net is already computed for the power estimate (sim/power.ts).
-- ⏳ A load-dependent delay mode (a setting, off by default so the chapters' quoted numbers stay): a NAND's delay by
-  logical effort, d = p + g·h (NAND2: g = 4/3, p = 2), h its load over its input capacitance from netCaps (0.5 fF per
-  NAND input, 0.3 fF of wire per branch). Static timing first (sim/timing.ts, the sandbox's sta.ts: the critical path
-  in the new unit, each gate's share of it), then GateSim with integer delays on a finer grain (tenths of a unit) so
-  glitches and races follow the loads too
-- ⏳ Where it changes the story, each step showing both numbers: Kogge–Stone's fan-out against a sparser prefix tree
-  (Brent–Kung, new to the library; unit delay makes Kogge–Stone look free), a high-fan-out select or enable needing a
-  buffer tree, a memory's row decoder, the clock net
+- ✅ Load-dependent delay in static timing (sim/delay.ts; mockup approved 2026-10-19): a NAND's delay by logical effort,
+  d = p + g·h (NAND2: g = 4/3, p = 2τ), h its load over one input from netCaps (sim/netcap.ts, shared with power: 0.5 fF
+  per NAND input, 0.3 fF of wire per branch); an inverter-pair buffer chain assumed where it pays ('load'), or none
+  ('drawn'). One unit = a NAND driving one NAND input (4.13τ, ≈ 16.5 ps at 4 ps/τ); a part alone is measured
+  between gates (inputs driven by a minimum NAND, outputs loading one input). analyzeTiming(design, { delay }) and
+  logicDepth(def, model); the Timing panels (CPU scenes, the sandbox) have a Unit / Load switch and list the heaviest
+  nets on the path, the inspector and chip properties give both depths, the view menu's Load-dependent delay picks
+  the default. The single-cycle CPU: 155 NAND delays, 242.9 units (its control nets drive up to 576 inputs)
+- ⏳ GateSim with the loaded delays on a finer grain (tenths of a unit) so glitches and races follow the loads too
+- ✅ Where it changes the story: chapter 16's last step, "When fan-out costs": ripple, Brent–Kung and Sklansky (new to
+  the library, lib/fastadd.ts prefixAdder) and Kogge–Stone, and a wide select, in unit, load and as-drawn delay.
+  Unit delay ties Sklansky with Kogge–Stone; drawn without buffers the 64-bit Sklansky is the slowest of the three
+- ⏳ Still to show both numbers: a memory's row decoder, the clock net
 - ⏳ Checked against silicon: per path, the load-weighted estimate against OpenSTA's after routing on the two sky130
   layouts (today one NAND delay is worth ≈157–171 ps there; a load model should narrow the spread path to path)
 - Wire length only where a design is placed (chapter 27's teaching placer, the OpenROAD runs), never from a
