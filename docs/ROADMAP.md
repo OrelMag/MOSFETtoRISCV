@@ -1028,6 +1028,48 @@ unit, wires nothing). The fan-out capacitance per net is already computed for th
 **ISA breadth** (Ripes: RV64, the C extension): RV64I / RV64M and C in Phase 9, each checked by riscv-tests and Spike
 like the RV32 cores.
 
+### Phase 20 — Reviewer feedback (2026-10-19) ⏳
+An outside review asked for CMOS realism, cross-layer debugging, campaign polish and an FPGA path. Much of it was
+already there: 0 / 1 / X / Z at switch level with shorts and floating nodes, the critical path drawn on the chip (unit
+and load-dependent delay), instruction fields coloured to match their wires (CPU panel), the logic analyzer with
+cursors, VCD and Back, star ratings against par on NANDs / transistors and depth / period, a failing Check opening the
+test player on the failing case, the campaign's pipeline / forwarding / hazard levels and MMIO screens, compressed share
+links, bus taps, duplicate and pin reordering. The gaps:
+
+**CMOS realism** (at switch level, where bad habits form):
+- ⏳ Shorts named, not just X: a net where a path to VDD and a path to GND are both on (crowbar) drawn pulsing red /
+  orange, distinct from an X of unknown inputs; a floating net (Z) dashed. The solver already counts shorts
+  (switchsim); the view and the lint need the reason per net. Both themes, every wire palette
+- ⏳ Campaign transistor levels fail on a short with its own message ("row 3: VDD shorted to GND through …"), also where
+  the output happens to resolve, and on every input transition taken one bit at a time (the switch solver has no
+  time: a transition is the states between two vectors), so only complementary pull-up / pull-down networks pass
+- ⏳ Weak levels (IEEE 1164 H / L): an nMOS passing a 1 or a pMOS passing a 0 drops a threshold; the net carries a weak
+  level, drawn dimmed, and a gate input reading it is unreliable (X downstream) unless restored by an inverter or
+  passed by a transmission gate. A new solver state (strength already exists: switchsim levels), so chapters 1–3's
+  pass-transistor steps and the campaign's act 0 can show it. Mockup first (a new visual state)
+
+**Cross-layer debugging**:
+- ⏳ The drill-down breadcrumb live: each level's value at the opened instance (hex at the top, `bit [7] = 1` where a
+  bus was sliced), following the simulation, in the chapters' stage and the sandbox's look inside
+- ⏳ A slack heatmap: every gate coloured by how close its arrival time is to the critical path's (unit or load
+  delay), a toggle on the Timing panel beside the drawn critical path
+
+**Campaign and sandbox polish**:
+- ⏳ Rotation (R) for parts in the sandbox: today parts only mirror; geometry, routing, faces and the editor's hit
+  tests all assume inputs left / outputs right, so this is the larger item here
+- ⏳ Pong on the sandbox computer: a program for Examples ▸ Computer's 64 × 64 screen with the keyboard part (or
+  switches) as paddles, and the same on the campaign's RV16 bench screen
+- Separate stars for area and for speed (functional / area-optimal / speed-optimal) instead of one rating over every
+  metric: a grading change across 125 levels' pars; decide before building
+
+**An FPGA path** (a student's CPU on a $15 board such as a Tang Nano):
+- ⏳ File ▸ Export Verilog for FPGA: the synthesizable export (vexport.ts: flip-flops as processes, behavioural parts
+  from their hdl.synth bodies) from the sandbox, which today offers only the structural one (flip-flops as NAND
+  loops, which FPGA tools reject or mangle); user chips marked as flip-flops (ChipDoc.ff) become processes, a drawn
+  latch loop left is reported; a top wrapper and a pin-constraint example (Gowin .cst) for the board, checked by
+  Yosys (synth_gowin) in CI
+- `.dig` export for Digital: low priority (Verilog already reaches it)
+
 ### Appendix A — An 8-bit CPU of 1975: the MOS 6502 ✅
 After the journey, a lettered appendix: the real 6502 rebuilt the way 1975 built it, at transistor level, and why
 our RV32I is fifty times bigger. Mockup approved 2026-10-13 (lettered section after chapter 33, the "vintage" accent).
