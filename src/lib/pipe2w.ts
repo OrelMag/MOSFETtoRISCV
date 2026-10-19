@@ -339,7 +339,7 @@ function buildDual(IM: ComponentDef, dmemK: number): ComponentDef {
   b.pins('clk');
 
   // ---- F: two words, two predictions -----------------------------------------------------------------------------
-  put(register(32), 'pc', { d: 'pcmux.y', en: 'ctl.enPC', clk: 'clk' }, 'PC');
+  put(register(32), 'pc', { d: 'pcmux.y', en: 'pctl.enPC', clk: 'clk' }, 'PC');
   b.next();
   put(PLUS4_FAST, 'plus4', { a: 'pc.q' }, 'pc + 4');
   put(PLUS4_FAST, 'plus8', { a: 'plus4.y' }, 'pc + 8');
@@ -347,26 +347,26 @@ function buildDual(IM: ComponentDef, dmemK: number): ComponentDef {
   put(btbOf(2), 'btb', { pcF: 'pc.q', pcF1: 'plus4.y', pcE: 'upd.pcE', updE: 'upd.upd', takenE: 'upd.taken', isJumpE: 'upd.isJump', targetE: 'upd.target', clk: 'clk' }, 'branch predictor');
   put(PREDECODE, 'pd0', { instr: 'imem.data0' }, 'slot 0');
   put(PREDECODE, 'pd1', { instr: 'imem.data1' }, 'slot 1');
-  put(ras(4, 32), 'ras', { pushF: 'fctl.pushF', popF: 'fctl.popF', valF: 'fctl.valF', pushC: 'cmt.pushC', popC: 'cmt.popC', valC: 'cmt.valC', restore: 'ctl.redirect', clk: 'clk' }, 'return stack');
+  put(ras(4, 32), 'ras', { pushF: 'fctl.pushF', popF: 'fctl.popF', valF: 'fctl.valF', pushC: 'cmt.pushC', popC: 'cmt.popC', valC: 'cmt.valC', restore: 'pctl.redirect', clk: 'clk' }, 'return stack');
   b.next();
   put(FETCH_PRED, 'fctl', {
     call0: 'pd0.call', ret0: 'pd0.ret', call1: 'pd1.call', ret1: 'pd1.ret', pt0: 'btb.predTaken', pt1: 'btb.predTaken1', tgt0: 'btb.predTarget', tgt1: 'btb.predTarget1',
-    top: 'ras.top', any: 'ras.any', pc4: 'plus4.y', pc8: 'plus8.y', advance: 'ctl.fetchGo',
+    top: 'ras.top', any: 'ras.any', pc4: 'plus4.y', pc8: 'plus8.y', advance: 'pctl.fetchGo',
   }, 'fetch prediction');
   b.next();
-  put(M2, 'pcmux', { a: 'fctl.next', b: 'ctl.correctPC', s: 'ctl.redirect' }, 'next PC');
+  put(M2, 'pcmux', { a: 'fctl.next', b: 'pctl.correctPC', s: 'pctl.redirect' }, 'next PC');
   // IF/ID: lane 0 takes slot 0, or (hold and shift) the waiting slot 1
   const one = b.op1(TIE1, [], undefined, 'vF');
-  const shift = (f: string, w: number, a: string) => b.op1(w === 32 ? M2 : busMux2(w), [a, `FD1.${f}D`, 'ctl.shift'], undefined, `sh_${f}`);
+  const shift = (f: string, w: number, a: string) => b.op1(w === 32 ? M2 : busMux2(w), [a, `FD1.${f}D`, 'pctl.shift'], undefined, `sh_${f}`);
   const fd0: Record<string, string> = {
     validF: shift('valid', 1, one), pcF: shift('pc', 32, 'pc.q'), pcPlus4F: shift('pcPlus4', 32, 'plus4.y'), instrF: shift('instr', 32, 'imem.data0'),
     predTargetF: shift('predTarget', 32, 'fctl.target0'), predTakenF: shift('predTaken', 1, 'fctl.take0'), callF: shift('call', 1, 'pd0.call'), retF: shift('ret', 1, 'pd0.ret'),
   };
   b.next();
-  put(stageReg('IF/ID', 'F', 'D', F_FIELDS), 'FD', { ...fd0, en: 'ctl.enFD', clr: 'ctl.redirect', clk: 'clk' });
+  put(stageReg('IF/ID', 'F', 'D', F_FIELDS), 'FD', { ...fd0, en: 'pctl.enFD', clr: 'pctl.redirect', clk: 'clk' });
   put(stageReg('IF/ID 1', 'F', 'D', F_FIELDS), 'FD1', {
     validF: 'fctl.valid1', pcF: 'plus4.y', pcPlus4F: 'plus8.y', instrF: 'imem.data1', predTargetF: 'fctl.target1', predTakenF: 'fctl.take1', callF: 'pd1.call', retF: 'pd1.ret',
-    en: 'ctl.enFD', clr: 'ctl.clrFD1', clk: 'clk',
+    en: 'pctl.enFD', clr: 'pctl.clrFD1', clk: 'clk',
   });
   b.next();
 
@@ -374,10 +374,10 @@ function buildDual(IM: ComponentDef, dmemK: number): ComponentDef {
   for (const l of L) {
     const FD = `FD${s(l)}`;
     put(splitter([7, 5, 3, 5, 5, 7]), `si${s(l)}`, { in: `${FD}.instrD` });
-    put(CONTROL, `ctl${l}`, { op: `si${s(l)}.o0`, funct3: `si${s(l)}.o2`, funct7: `si${s(l)}.o5` });
-    put(IMM_GEN, `imm${s(l)}`, { instr: `${FD}.instrD`, src: `ctl${l}.immSrc` });
+    put(CONTROL, l ? 'ctl1' : 'ctl', { op: `si${s(l)}.o0`, funct3: `si${s(l)}.o2`, funct7: `si${s(l)}.o5` });
+    put(IMM_GEN, `imm${s(l)}`, { instr: `${FD}.instrD`, src: `${l ? 'ctl1' : 'ctl'}.immSrc` });
     put(ISSUE_CLASS, `cls${l}`, { op: `si${s(l)}.o0`, funct3: `si${s(l)}.o2`, funct7: `si${s(l)}.o5` });
-    put(orN(3), `isCtl${l}`, { i0: `ctl${l}.branch`, i1: `ctl${l}.jump`, i2: `ctl${l}.jalr` });
+    put(orN(3), `isCtl${l}`, { i0: `${l ? 'ctl1' : 'ctl'}.branch`, i1: `${l ? 'ctl1' : 'ctl'}.jump`, i2: `${l ? 'ctl1' : 'ctl'}.jalr` });
     put(AND, `u1v${l}`, { a: `cls${l}.u1`, b: `${FD}.validD` });
     put(AND, `u2v${l}`, { a: `cls${l}.u2`, b: `${FD}.validD` });
   }
@@ -387,7 +387,7 @@ function buildDual(IM: ComponentDef, dmemK: number): ComponentDef {
     ra1: 'si.o3', ra2: 'si.o4', ra3: 'si1.o3', ra4: 'si1.o4', clk: 'clk',
   });
   put(PAIR_CHECK, 'pair', {
-    v1: 'FD1.validD', mem1: 'cls1.mem', md1: 'cls1.md', ctrl0: 'isCtl0.y', ctrl1: 'isCtl1.y', div0: 'cls0.div', regWrite0: 'ctl0.regWrite', rd0: 'si.o1',
+    v1: 'FD1.validD', mem1: 'cls1.mem', md1: 'cls1.md', ctrl0: 'isCtl0.y', ctrl1: 'isCtl1.y', div0: 'cls0.div', regWrite0: 'ctl.regWrite', rd0: 'si.o1',
     rs1: 'si1.o3', rs2: 'si1.o4', u1: 'cls1.u1', u2: 'cls1.u2',
   }, 'pair?');
   put(HAZARD2, 'hz', {
@@ -401,24 +401,24 @@ function buildDual(IM: ComponentDef, dmemK: number): ComponentDef {
   put(NOT, 'nrs1E', { a: 'rsE.o1' });
   put(andN(3), 'ldE', { i0: 'rsE.o0', i1: 'nrs1E.y', i2: 'DE.validE' });
   // a multiply takes the load's path (resultSrc = 01); W bypass into each register read
-  put(busMux2(2), 'rsm', { a: 'ctl0.resultSrc', b: 'kLd.y', s: 'cls0.mul' }, 'load path');
+  put(busMux2(2), 'rsm', { a: 'ctl.resultSrc', b: 'kLd.y', s: 'cls0.mul' }, 'load path');
   put(constWord(2, 1), 'kLd', {});
   const rdOf = ['rf.rd1', 'rf.rd2', 'rf.rd3', 'rf.rd4'];
-  OPS.forEach((o, i) => put(M4, `by${o}`, { d0: rdOf[i], d1: 'res.y', d2: 'res1.y', d3: 'res1.y', s: `hz.byp${o}` }, `bypass ${o}`));
-  put(CONTROL_2W, 'ctl', {
+  OPS.forEach((o, i) => put(M4, `by${o.replace('0', '')}`, { d0: rdOf[i], d1: 'res.y', d2: 'res1.y', d3: 'res1.y', s: `hz.byp${o}` }, `bypass ${o}`));
+  put(CONTROL_2W, 'pctl', {
     redirect0: 'mis.mispredict', redirect1: 'mis1.mispredict', lwStall: 'hz.lwStall', divStall: 'dive.stall', pairOk: 'pair.ok', v0: 'FD.validD', v1: 'FD1.validD',
     corr0: 'corr.y', corr1: 'corr1.y',
   }, 'pipeline control');
   b.next();
   for (const l of L) {
-    const FD = `FD${s(l)}`, A = l ? 'A1' : 'A0', B = l ? 'B1' : 'B0', c = `ctl${l}`;
+    const FD = `FD${s(l)}`, A = l ? 'A1' : 'A0', B = l ? 'B1' : 'B0', c = l ? 'ctl1' : 'ctl';
     put(stageReg(`ID/EX${l ? ' 1' : ''}`, 'D', 'E', D_FIELDS(!l)), `DE${s(l)}`, {
-      validD: l ? 'v1D.y' : `${FD}.validD`, pcD: `${FD}.pcD`, pcPlus4D: `${FD}.pcPlus4D`, rd1D: `by${A}.y`, rd2D: `by${B}.y`, immD: `imm${s(l)}.imm`, predTargetD: `${FD}.predTargetD`,
+      validD: l ? 'v1D.y' : `${FD}.validD`, pcD: `${FD}.pcD`, pcPlus4D: `${FD}.pcPlus4D`, rd1D: `by${A.replace('0', '')}.y`, rd2D: `by${B.replace('0', '')}.y`, immD: `imm${s(l)}.imm`, predTargetD: `${FD}.predTargetD`,
       rdD: `si${s(l)}.o1`, regWriteD: `${c}.regWrite`, aluSrcAD: `${c}.aluSrcA`, aluSrcBD: `${c}.aluSrcB`, resultSrcD: l ? `${c}.resultSrc` : 'rsm.y',
       branchD: `${c}.branch`, jumpD: `${c}.jump`, jalrD: `${c}.jalr`, aluCtlD: `${c}.aluCtl`, funct3D: `si${s(l)}.o2`,
       fwdAD: `hz.fwd${A}`, fwdBD: `hz.fwd${B}`, predTakenD: `${FD}.predTakenD`, callD: `${FD}.callD`, retD: `${FD}.retD`,
-      ...(l ? {} : { memWriteD: 'ctl0.memWrite', mulD: 'cls0.mul', divD: 'cls0.div' }),
-      en: 'ctl.run', clr: l ? 'ctl.clrDE1' : 'ctl.clrDE', clk: 'clk',
+      ...(l ? {} : { memWriteD: 'ctl.memWrite', mulD: 'cls0.mul', divD: 'cls0.div' }),
+      en: 'pctl.run', clr: l ? 'pctl.clrDE1' : 'pctl.clrDE', clk: 'clk',
     });
   }
   put(AND, 'v1D', { a: 'FD1.validD', b: 'pair.ok' });
@@ -435,12 +435,12 @@ function buildDual(IM: ComponentDef, dmemK: number): ComponentDef {
     put(BRANCH_CMP, `bcmp${x}`, { a: `fwdA${x}.y`, b: `fwdB${x}.y`, funct3: `${DE}.funct3E`, branch: `${DE}.branchE`, jump: `${DE}.jumpE`, jalr: `${DE}.jalrE` });
     put(ADD, `target${x}`, { a: `${DE}.pcE`, b: `${DE}.immE`, cin: tie0() }, 'PC + imm');
     put(ADD, `jtgt${x}`, { a: `fwdA${x}.y`, b: `${DE}.immE`, cin: tie0() }, 'rs1 + imm');
-    put(CLEAR_BIT0, `clr${x}`, { in: `jtgt${x}.s`, zero: tie0() });
-    put(M4, `corr${x}`, { d0: `${DE}.pcPlus4E`, d1: `target${x}.s`, d2: `clr${x}.out`, d3: `${DE}.pcPlus4E`, s: `bcmp${x}.pcSrc` }, 'correct PC');
-    put(AND, `vE${x}`, { a: `${DE}.validE`, b: 'ctl.run' });
+    put(CLEAR_BIT0, `clr0${x}`, { in: `jtgt${x}.s`, zero: tie0() });
+    put(M4, `corr${x}`, { d0: `${DE}.pcPlus4E`, d1: `target${x}.s`, d2: `clr0${x}.out`, d3: `${DE}.pcPlus4E`, s: `bcmp${x}.pcSrc` }, 'correct PC');
+    put(AND, `vE${x}`, { a: `${DE}.validE`, b: 'pctl.run' });
     put(MISPREDICT, `mis${x}`, {
       branch: `${DE}.branchE`, jump: `${DE}.jumpE`, jalr: `${DE}.jalrE`, pcSrc: `bcmp${x}.pcSrc`, predTaken: `${DE}.predTakenE`, predTarget: `${DE}.predTargetE`,
-      tgtB: `target${x}.s`, tgtJ: `clr${x}.out`, valid: `vE${x}.y`,
+      tgtB: `target${x}.s`, tgtJ: `clr0${x}.out`, valid: `vE${x}.y`,
     });
   }
   // lane 0: multiply (first half) and divide
@@ -465,7 +465,7 @@ function buildDual(IM: ComponentDef, dmemK: number): ComponentDef {
       validE: `${DE}.validE`, pcE: `${DE}.pcE`, pcPlus4E: `${DE}.pcPlus4E`, aluResultE: l ? 'alu1.y' : 'mdE.y', immE: `${DE}.immE`, rdE: `${DE}.rdE`,
       regWriteE: `${DE}.regWriteE`, resultSrcE: `${DE}.resultSrcE`,
       ...(l ? {} : { writeDataE: 'fwdB.y', memWriteE: 'DE.memWriteE', mulE: 'DE.mulE', mfE: 'f3E.o0', msE: 'mule.s', mcE: 'mule.c' }),
-      en: one, clr: l ? 'ctl.clrEM1' : 'dive.stall', clk: 'clk',
+      en: one, clr: l ? 'pctl.clrEM1' : 'dive.stall', clk: 'clk',
     });
   }
   b.next();
@@ -503,8 +503,8 @@ function buildDual(IM: ComponentDef, dmemK: number): ComponentDef {
   // names for the nets the readers and the drawing refer to
   const nm: Record<string, string> = {
     'pc.q': 'PCF', 'pcmux.y': 'PCNext', 'plus4.y': 'PCF+4', 'plus8.y': 'PCF+8', 'imem.data0': 'InstrF0', 'imem.data1': 'InstrF1',
-    'ctl.redirect': 'redirect', 'ctl.correctPC': 'CorrectPC', 'ctl.enPC': 'enPC', 'ctl.enFD': 'enFD', 'ctl.shift': 'shift', 'ctl.clrFD1': 'clrFD1',
-    'ctl.run': 'run', 'ctl.clrDE': 'clrDE', 'ctl.clrDE1': 'clrDE1', 'ctl.clrEM1': 'clrEM1', 'ctl.fetchGo': 'fetchGo', 'pair.ok': 'pairOk', 'hz.lwStall': 'lwStall',
+    'pctl.redirect': 'redirect', 'pctl.correctPC': 'CorrectPC', 'pctl.enPC': 'enPC', 'pctl.enFD': 'enFD', 'pctl.shift': 'shift', 'pctl.clrFD1': 'clrFD1',
+    'pctl.run': 'run', 'pctl.clrDE': 'clrDE', 'pctl.clrDE1': 'clrDE1', 'pctl.clrEM1': 'clrEM1', 'pctl.fetchGo': 'fetchGo', 'pair.ok': 'pairOk', 'hz.lwStall': 'lwStall',
     'dive.stall': 'divStall', 'res.y': 'ResultW0', 'res1.y': 'ResultW1', 'fwdM.y': 'FwdM0', 'fwdM1.y': 'FwdM1', 'mis.mispredict': 'mispredict0', 'mis1.mispredict': 'mispredict1',
     'corr.y': 'CorrectPC0', 'corr1.y': 'CorrectPC1', 'fctl.next': 'PredictedPC', 'fctl.valid1': 'slot1Valid',
   };

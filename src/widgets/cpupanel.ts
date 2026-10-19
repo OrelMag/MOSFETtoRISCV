@@ -7,7 +7,7 @@ import { GateSim } from '../sim/gatesim';
 import { energyFj, fmtEnergy, fmtPower, POWER_NOTE, PowerMeter, powerW } from '../sim/power';
 import type { Sim } from '../sim/sim';
 import { analyzeTiming } from '../sim/timing';
-import { MC_FIELDS, MC_FSM_SPEC, MC_STATES, microword, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu } from '../lib';
+import { MC_FIELDS, MC_FSM_SPEC, MC_STATES, dualPipeCpu, microword, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu } from '../lib';
 import { fsmView } from './fsmpanel';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { cacheLines, cpuState, retireCount, retiring } from '../riscv/cosim';
@@ -64,13 +64,17 @@ export interface CpuSceneOptions {
   fpu?: boolean;
   /** Show the program editor. */
   editable?: boolean;
+  /** The dual-issue RV32IM pipeline of chapter 24 (implies pipeline and m: two lanes in the listing and the diagram). */
+  wide?: boolean;
 }
 
 /** A scene running `source` on the single-cycle CPU, with the CPU panel attached. */
-export function cpuScene(opts: CpuSceneOptions): Scene {
+export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
+  const opts = sceneOpts.wide ? { ...sceneOpts, pipeline: true, m: true } : sceneOpts;
   const asm = assemble(opts.source);
   return {
-    root: opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder })
+    root: opts.wide ? dualPipeCpu(asm.words, { dmemK: 6 })
+      : opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder })
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
       : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram })
@@ -84,7 +88,7 @@ export function cpuScene(opts: CpuSceneOptions): Scene {
 function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
   return (stage: Stage): Widget => {
     const asm = opts.asm;
-    const issOpts = opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.dcache ? { dmemWords: 64 } : {};
+    const issOpts = opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.dcache || opts.wide ? { dmemWords: 64 } : {};
     let iss = new ISS(asm.words, issOpts);
     let lastX: number[] = new Array(32).fill(0);
     let changed = new Set<number>();
@@ -225,7 +229,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       ...(opts.fpu ? [h('div', { class: 'cpu-sec' }, 'Floating-point registers (non-zero)'), fregs] : []),
       ...(opts.dcache ? [h('div', { class: 'cpu-sec' }, opts.dcache === 'wb2' ? 'Data cache (2 sets × 2 ways × 4 words, write-back)' : opts.dcache === 'wb' ? 'Data cache (4 lines × 4 words, write-back)' : 'Data cache (4 lines × 4 words)'), dlines] : []),
       h('div', { class: 'cpu-sec' }, wb ? 'Memory as the program sees it (dirty lines included)' : opts.dcache ? 'Main memory (non-zero words)' : 'Data memory (non-zero words)'), mem);
-    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.pipeline ? (opts.m ? 'RV32IM pipeline' : 'RV32I pipeline') : 'RV32I CPU', h('span', { class: 'fold-hint' }));
+    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.wide ? 'RV32IM dual-issue pipeline' : opts.pipeline ? (opts.m ? 'RV32IM pipeline' : 'RV32I pipeline') : 'RV32I CPU', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title, body);
 
     // Golden model in lock-step: it executes one instruction whenever the hardware retires one
@@ -347,6 +351,9 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
           // the pipelined FPU CPU has a sixth stage, X, between M and W
           ...(root.has('MX') ? [['X', v('MX', 'pcX'), v('MX', 'validX') === 1], ['W', v('XW', 'pcW'), v('XW', 'validW') === 1]] as [string, number, boolean][]
             : [['W', v('MW', 'pcW'), v('MW', 'validW') === 1]] as [string, number, boolean][]),
+          // the dual-issue pipeline's second lane (the younger instruction of each stage)
+          ...(root.has('FD1') ? [['F₁', (v('pc', 'q') + 4) >>> 0, v('fctl', 'valid1') === 1], ['D₁', v('FD1', 'pcD'), v('FD1', 'validD') === 1],
+            ['E₁', v('DE1', 'pcE'), v('DE1', 'validE') === 1], ['M₁', v('EM1', 'pcM'), v('EM1', 'validM') === 1], ['W₁', v('MW1', 'pcW'), v('MW1', 'validW') === 1]] as [string, number, boolean][] : []),
         ];
         for (const [stg, pc, valid] of slots) if (valid && pc >= 0) inFlight.set(pc >>> 0, [...(inFlight.get(pc >>> 0) ?? []), stg]);
       }

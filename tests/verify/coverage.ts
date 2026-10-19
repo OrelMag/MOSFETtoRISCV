@@ -51,11 +51,11 @@ export class HwCoverage implements LaneProbe {
       ev('forward from lane 1', fwd([2, 4]));
       ev('bypass W → D', (v) => ['A0', 'B0', 'A1', 'B1'].reduce((m, o) => m | any(v, hz.ports[`byp${o}`]), 0));
       ev('load-use stall', (v) => any(v, hz.ports.lwStall));
-      ev('flush', (v) => any(v, port('ctl', 'redirect')!));
+      ev('flush', (v) => any(v, port('pctl', 'redirect')!));
       ev('misprediction', (v) => any(v, port('mis', 'mispredict')!) | any(v, port('mis1', 'mispredict')!));
       ev('misprediction in lane 1', (v) => any(v, port('mis1', 'mispredict')!));
-      ev('pair issued', (v) => any(v, port('v1D', 'y')!) & any(v, port('ctl', 'run')!));
-      ev('pair split', (v) => any(v, port('ctl', 'shift')!));
+      ev('pair issued', (v) => any(v, port('v1D', 'y')!) & any(v, port('pctl', 'run')!));
+      ev('pair split', (v) => any(v, port('pctl', 'shift')!));
       ev('divide stall', (v) => any(v, port('dive', 'stall')!));
     } else if (hz) {
       const six = kids.has('MX');

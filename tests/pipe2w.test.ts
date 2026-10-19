@@ -2,6 +2,8 @@
 // and the CPU in lock-step with the golden model (two instructions may retire a cycle, oldest first).
 
 import { describe, expect, it } from 'vitest';
+import RESULTS from '../src/bench/results.json';
+import { chOoo, DUAL_SOURCE } from '../src/chapters/ch-ooo';
 import { dualPipeCpu } from '../src/lib/pipe2w';
 import { regfile2w, writeSelect } from '../src/lib/regfile';
 import { assemble } from '../src/riscv/asm';
@@ -84,8 +86,39 @@ describe('dual-issue pipeline vs golden model', () => {
   }, 300000);
   for (const p of PIPE_M_PROGRAMS) it(p.id, () => { const r = cosim(p.source); console.log(`${p.id}: ${r.retired} instructions in ${r.cycles} cycles, ${r.pairs} pairs`); }, 600000);
   it('plain RV32I programs', () => { for (const p of PROGRAMS.slice(0, 3)) cosim(p.source); }, 600000);
+  const paired: number[] = [];
   for (const bm of BENCHMARKS.filter((b) => !b.needs?.f)) it(`benchmark ${bm.id}`, () => {
     const r = cosim(bm.source, { imemK: 7, dmemK: 6, max: 20000 });
+    paired.push((2 * r.pairs) / r.retired);
     console.log(`${bm.id}: CPI ${(r.cycles / r.retired).toFixed(2)} (${r.retired} instructions, ${r.cycles} cycles, ${r.pairs} pairs)`);
   }, 900000);
+  it('step 2 quotes the share of instructions that go in pairs', () => {
+    const pct = (x: number) => Math.round(100 * x);
+    const text = chOoo.steps.find((s) => s.title === 'Two at a time, in order')!.body.replace(/\s+/g, ' ');
+    expect(paired.length).toBe(5);
+    expect(text).toContain(`Only ${pct(Math.min(...paired))} to ${pct(Math.max(...paired))} %`);
+  });
+});
+
+describe('chapter 24, step 2', () => {
+  it('its program runs on the scene\'s CPU and leaves a · b = 72 at 0x80', () => {
+    const words = assemble(DUAL_SOURCE).words;
+    const iss = new ISS(words, { dmemWords: 64 });
+    iss.run(10000);
+    expect(iss.dmem[32]).toBe(72);
+    expect(cosim(DUAL_SOURCE, { dmemK: 6 }).pairs).toBeGreaterThan(0);
+  }, 300000);
+
+  it('quotes the measured cost and CPI', () => {
+    const cpu = (id: string) => RESULTS.cpus.find((c) => c.id === id)!;
+    const two = cpu('pipe-2w'), one = cpu('pipe-m-bal-bp');
+    const text = chOoo.steps.find((s) => s.title === 'Two at a time, in order')!.body.replace(/\s+/g, ' ');
+    const n = (x: number) => x.toLocaleString('en-US').replace(/,/g, ' ');
+    const cpis = (c: typeof two) => c.runs.map((r) => `${r.bench} ${(r.cycles / r.instructions).toFixed(2)}`);
+    expect(text).toContain(`${n(two.nands)} NANDs against ${n(one.nands)}`);
+    expect(text).toContain(`+${Math.round(100 * (two.nands / one.nands - 1))} %`);
+    expect(text).toContain(`period of ${two.period} NAND delays against ${one.period}`);
+    expect(text).toContain(`CPI ${cpis(two).join(', ')} against`);
+    expect(text).toContain(one.runs.map((r) => (r.cycles / r.instructions).toFixed(2)).join(', '));
+  });
 });
