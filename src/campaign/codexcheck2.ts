@@ -108,7 +108,7 @@ export const CHECK2: Record<string, Quiz[]> = {
       question: 'What does an 8-bit 2:1 bus multiplexer cost here (<code>busMux2(8)</code>)?',
       options: ['32 NANDs, depth 3', '4 NANDs, depth 3', '32 NANDs, depth 24', '8 NANDs, depth 1'],
       answer: 0,
-      explain: 'A bus operation is one 1-bit circuit per bit: 8 muxes of 4 NANDs, all in parallel, so depth stays 3.',
+      explain: 'A bus operation is one 1-bit circuit per bit: 8 muxes of 4 NANDs, all in parallel, so depth stays 3. One ¬s shared by every bit would make it 25; busMux2 keeps each slice whole.',
       why: ['', 'One 1-bit mux switches one wire; an 8-bit bus needs 8.', 'The 8 slices work side by side, not in series: depth is that of one slice.', 'A 1-bit mux is 4 NANDs (inverter, two NANDs, a NAND to combine), depth 3.'],
     },
     {

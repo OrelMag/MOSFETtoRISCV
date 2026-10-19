@@ -387,7 +387,7 @@ export const CHECK1: Record<string, Quiz[]> = {
       options: ['While clk is high, so the AND sees en as early as possible', 'While clk is low, so en is frozen while clk is high', 'No latch is needed: clk + ¬en with an OR is glitch-free'],
       answer: 1,
       explain: 'The latch passes en while clk is low (the AND output is 0 anyway) and holds it during the high phase, so the gated clock cannot start or stop mid-pulse.',
-      why: ['Transparent during the high phase, it passes the very changes that cause the glitch.', '', 'An OR moves the glitch to the low phase, and the gated clock is still a gate late (skew).'],
+      why: ['Transparent during the high phase, it passes the very changes that cause the glitch.', '', 'clk + ¬en is glitch-free only if en settles within clk\'s high phase: its logic gets half a cycle instead of the latch\'s whole one, and the gated clock is still a gate late (skew).'],
     },
   ],
   forwarding: [
@@ -456,7 +456,7 @@ export const CHECK1: Record<string, Quiz[]> = {
   ],
   privatization: [
     {
-      question: 'Three lanes of a warp all meet value 2 in the same <code>lw</code> / <code>addi</code> / <code>sw</code> on one shared counter that holds 5. What does it hold afterwards?',
+      question: 'Three active lanes of a warp run the same <code>lw</code> / <code>addi</code> (+1) / <code>sw</code> together on one shared counter that holds 5. What does it hold afterwards?',
       options: ['8: each lane adds 1', '6: all three read 5 and store 6', '7: the lanes\' stores are applied one after another'],
       answer: 1,
       explain: 'The read-modify-write happens in lock-step: all three lanes load 5 in the same cycle, compute 6 and store 6. Two counts are lost.',
