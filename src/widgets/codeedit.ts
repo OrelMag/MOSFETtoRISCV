@@ -156,9 +156,14 @@ export function codeEditor(opts: CodeEditorOpts): CodeEditor {
     rewrite(all ? (l) => l.replace(/^(\s*)# ?/, '$1') : (l) => (l.trim() ? `${l.slice(0, ind)}# ${l.slice(ind)}` : l));
   };
 
+  // Tab indents, so Esc then Tab leaves the editor (no keyboard trap, WCAG 2.1.2; listed in ui/keys.ts)
+  let leaving = false;
   const onKey = (ev: KeyboardEvent) => {
     if (ta.readOnly || ev.isComposing) return;
     const mod = ev.ctrlKey || ev.metaKey;
+    const leave = leaving;
+    leaving = ev.key === 'Escape';
+    if (ev.key === 'Tab' && leave) return;
     if (ev.key === 'Tab' && !mod && !ev.altKey) {
       ev.preventDefault();
       const s = ta.selectionStart, e = ta.selectionEnd;

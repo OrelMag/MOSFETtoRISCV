@@ -104,10 +104,19 @@
 /* ---------- palette ---------- */
 .sb-palette { grid-area: pal; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
 .sb-pal-head { display: flex; align-items: center; gap: 8px; padding: 10px; border-bottom: 1px solid var(--border); }
+.sb-search { position: relative; flex: 1; min-width: 0; display: flex; }
 .sb-pal-head input[type=search] {
-  flex: 1; min-width: 0; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border);
+  flex: 1; min-width: 0; padding: 6px 28px 6px 10px; border-radius: 8px; border: 1px solid var(--border);
   background: var(--surface-2); color: var(--text); font: inherit; font-size: 13px;
 }
+/* our own clear button, there whenever the search holds text (palette.ts) */
+.sb-pal-head input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; display: none; }
+.sb-search-x {
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center;
+  min-width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer;
+}
+.sb-search-x:hover { color: var(--text); background: var(--surface-3); }
+.sb-search-x[hidden] { display: none; }
 .sb-purist { display: inline-flex; align-items: center; gap: 4px; font: 600 12px var(--font-ui); color: var(--text-2); cursor: pointer; white-space: nowrap; }
 .sb-purist input { accent-color: var(--accent); margin: 0; }
 .sb-pal-list { flex: 1; overflow-y: auto; padding: 4px 8px 16px; }
@@ -160,7 +169,7 @@
 
 /* ---------- canvas ---------- */
 .sb-center { grid-area: center; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--canvas); }
-.sb-canvas { flex: 1; position: relative; min-height: 0; overflow: hidden; }
+.sb-canvas { flex: 1; position: relative; min-height: 0; overflow: hidden; touch-action: manipulation; }
 .sb-canvas > svg.ed-svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; outline: none; }
 .sb-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 .sb-overlay > * { pointer-events: auto; }
@@ -224,6 +233,11 @@
 .ed-svg .wire-hit { cursor: inherit; stroke-width: 0.8; }
 /* a selected wire's corners (squares) and a straight wire's breakpoints (circles): drag to reshape, double-click to remove */
 .ed-handle { fill: var(--surface); stroke: var(--ed-sel); stroke-width: 0.12; pointer-events: none; }
+/* where wires attach to the selected / hovered parts and pins: a drag from a dot draws a wire */
+.ed-port { fill: var(--ed-preview); stroke: var(--surface); stroke-width: 0.08; pointer-events: none; }
+/* an output no wire reaches yet (geom.ts openOutputs): neutral and dashed, "not connected", rather than the X colour */
+.pin.ed-open .pin-knob { stroke-dasharray: 0.3 0.2; }
+.out-lamp.open .knob { background: transparent; border-style: dashed; }
 .ed-svg .wire-hit:hover { stroke: color-mix(in srgb, var(--ed-sel) 14%, transparent); }
 
 /* displays */
@@ -459,3 +473,16 @@
 .sb-ctx-hues > span { font: 600 11px var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .sb-row-hues { grid-template-columns: minmax(0, 1fr); gap: 5px; }
 
+
+/* touch (app.css has the shared part): palette rows, group headers, the favourite star and the top bar's
+   tabs at 40 px; the star takes the row's full height and 40 px at its end */
+@media (pointer: coarse) {
+  .sb-item { min-height: 40px; align-items: center; }
+  .sb-star { align-self: stretch; width: 40px; margin: -4px -8px -4px 0; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .sb-group > summary, .sb-sec > summary { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }
+  .sb-addfolder { min-width: 40px; min-height: 40px; align-items: center; justify-content: center; }
+  .sb-tab-name, .sb-proj, .sb-menu button { min-height: 40px; }
+  /* the save state: a dot and a word in the bar, its tap area spread around it */
+  .sb-save { position: relative; }
+  .sb-save::after { content: ''; position: absolute; inset: -13px -9px; }
+}

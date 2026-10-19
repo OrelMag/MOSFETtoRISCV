@@ -501,6 +501,8 @@ let closeMenu: (() => void) | null = null;
 function examplesMenu(ed: Editor): void {
   if (closeMenu) return closeMenu();
   const btn = ed.actionAnchor('examples');
+  // Esc puts the focus back where the menu was opened from (the toolbar, More, the empty chip's card)
+  const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const r = btn?.getBoundingClientRect();
   const menu = h('div', { class: 'sb-menu', role: 'menu', 'aria-label': 'Examples' },
     h('div', { class: 'sb-menu-head' }, 'Load an example as a new chip'),
@@ -516,7 +518,12 @@ function examplesMenu(ed: Editor): void {
   menu.style.width = `${W}px`;
   // A press outside closes it; the button's own click toggles it (run() above).
   const away = (e: Event) => { if (!menu.contains(e.target as Node) && !btn?.contains(e.target as Node)) close(); };
-  const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  const esc = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    close();
+    (opener?.isConnected ? opener : btn)?.focus();
+  };
   const close = () => {
     menu.remove();
     document.removeEventListener('pointerdown', away, true);

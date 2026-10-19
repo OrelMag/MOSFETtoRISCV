@@ -2,6 +2,7 @@ import { chapters, future } from '../../chapters';
 import { checksDone } from '../../chapters/checks';
 import { chapterNo } from '../../chapters/types';
 import { ladder } from '../../widgets/journey';
+import { chapterMark, resumeTarget } from '../chapternav';
 import { h, icon } from '../dom';
 import { reportLink } from '../errors';
 import { settings } from '../settings';
@@ -13,10 +14,29 @@ function seenNote(c: (typeof chapters)[number], p: number): string {
   return `${Math.round(p * 100)}% seen${total ? ` · ${done} / ${total} checks` : ''}`;
 }
 
+/**
+ * "Continue campaign: <level>" in place of "Play the campaign" when the campaign has been started: its own next level (graph.ts nextAvailable, as
+ * the map's welcome panel offers it). Loaded only then, so the campaign's chunk stays off a plain visit's home page.
+ */
+function campaignLink(into: HTMLElement): void {
+  try {
+    if (!localStorage.getItem('mosfet2riscv:campaign:v1')) return;
+  } catch { return; }
+  Promise.all([import('../../campaign/progress'), import('../../campaign/graph')]).then(([{ progress }, { nextAvailable }]) => {
+    const p = progress();
+    if (!Object.keys(p.state.nodes).length) return;
+    const next = nextAvailable(p.view, p.unlockAll);
+    if (!next || !into.isConnected) return;
+    into.replaceChildren(h('a', { class: 'btn', href: `#/campaign/n/${next.id}`, title: 'The next level open on the campaign map' }, icon('flag', 16), `Continue campaign: ${next.title}`));
+  }, () => {});
+}
+
 export function homePage(): Page {
   const progress = (id: string, n: number) => settings.visited(id).filter((k) => k < n).length / n;
-  const started = chapters.filter((c) => settings.visited(c.id).length > 0);
-  const resume = started.length ? started[started.length - 1] : null;
+  const resume = resumeTarget(chapters, (id) => settings.visited(id), settings.lastStep());
+  // "Play the campaign", replaced by "Continue campaign: <level>" once the campaign has been started
+  const campaign = h('span', { class: 'cta-campaign' }, h('a', { class: 'btn', href: '#/campaign' }, icon('flag', 16), 'Play the campaign'));
+  campaignLink(campaign);
 
   const cards = chapters.flatMap((c, i) => {
     const p = progress(c.id, c.steps.length);
@@ -25,8 +45,11 @@ export function homePage(): Page {
     const divider = c.appendix && !prev?.appendix ? [h('div', { class: 'cards-divider' }, 'Appendix')]
       : c.prologue && !prev?.prologue ? [h('div', { class: 'cards-divider prologue' }, 'Prologue: before the transistor')]
       : !c.prologue && !c.appendix && prev?.prologue ? [h('div', { class: 'cards-divider journey' }, 'The journey')] : [];
+    // The full tick only for a finished chapter (every step seen, every check solved); all seen with checks left: a lighter mark.
+    const mark = chapterMark(p, checksDone(c, (k) => settings.isSolved(k)));
     return [...divider, h('a', { class: `card${c.appendix ? ' appendix' : c.prologue ? ' prologue' : ''}`, href: `#/c/${c.id}/0` },
-      p >= 1 ? h('span', { class: 'done-badge', title: 'All steps visited' }, icon('check', 16)) : null,
+      mark === 'done' ? h('span', { class: 'done-badge', title: 'Finished: every step seen, every check solved', 'aria-label': 'Finished' }, icon('check', 16))
+        : mark === 'seen' ? h('span', { class: 'done-badge seen', title: 'Every step seen; some checks are still open', 'aria-label': 'All steps seen' }, icon('check', 13)) : null,
       h('span', { class: 'num' }, `${chapterNo(c)} · ${c.level}`),
       h('h3', null, c.title),
       h('p', null, c.blurb),
@@ -47,8 +70,9 @@ export function homePage(): Page {
         h('h1', null, 'From a single ', h('span', { class: 'grad' }, 'MOSFET'), ' to a ', h('span', { class: 'grad' }, 'RISC-V'), ' processor.'),
         h('p', { class: 'lead' }, 'Build a computer one level at a time. Start with a transistor, make a gate, then adders, memory, and a processor. Every box on screen is transparent: open it and keep going down until you reach silicon.'),
         h('div', { class: 'cta' },
-          h('a', { class: 'btn primary', href: resume ? `#/c/${resume.id}/0` : '#/c/map/0' }, resume ? `Continue: ${resume.title}` : 'Start the journey', icon('chevR', 16)),
-          h('a', { class: 'btn', href: '#/campaign' }, icon('flag', 16), 'Play the campaign'),
+          h('a', { class: 'btn primary', href: resume ? `#/c/${resume.chapter.id}/${resume.step}` : '#/c/map/0' },
+            resume ? `${resume.next ? 'Next chapter' : 'Continue'}: ${resume.chapter.title}` : 'Start the journey', icon('chevR', 16)),
+          campaign,
           h('a', { class: 'btn', href: '#/workbench/rca4' }, icon('bench', 16), 'Open the workbench'),
           h('a', { class: 'btn', href: '#/sandbox' }, icon('chip', 16), 'Open the sandbox'))),
       ladder()),

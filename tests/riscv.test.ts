@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { assemble } from '../src/riscv/asm';
-import { decode, disasm } from '../src/riscv/isa';
+import { decode, disasm, regNumber } from '../src/riscv/isa';
 import { ISS } from '../src/riscv/iss';
 import { PROGRAMS } from '../src/riscv/programs';
 
@@ -21,6 +21,19 @@ describe('assembler', () => {
 
   it('assembles every sample without errors', () => {
     for (const p of PROGRAMS) expect(assemble(p.source).errors, p.id).toEqual([]);
+  });
+
+  it('leaves the declared result of each sample in its register at the halt (the CPU panel shows it)', () => {
+    const declared = PROGRAMS.filter((p) => p.result);
+    expect(declared.map((p) => p.id)).toEqual(['sum', 'mul', 'gcd', 'primer']);
+    for (const p of declared) {
+      const iss = new ISS(assemble(p.source).words);
+      iss.run(10_000);
+      expect(iss.halted, p.id).toBe(true);
+      const r = regNumber(p.result!.reg);
+      expect(r, p.id).not.toBeNull();
+      expect(iss.x[r!] | 0, p.id).toBe(p.result!.value);
+    }
   });
 
   it('expands li for large constants', () => {

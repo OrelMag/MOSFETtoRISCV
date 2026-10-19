@@ -67,12 +67,18 @@ into dist/layout/ (widgets/chiplayout.ts).
 
 - Vite + TypeScript (strict, `verbatimModuleSyntax`: use `import type` for types). No UI
   framework: plain DOM + SVG with small helpers in `src/ui/dom.ts`. Keep the bundle small.
-- Hash routing (`#/c/<chapter>/<step>`, `#/workbench/<componentId>`, `#/workbench/stats`, `#/workbench/bench`, `#/sandbox/<chipId>`, `#/campaign[/n/<node> | /play/<node> | /intro | /codex[/<id>]]`,
+- Hash routing (`#/c/<chapter>/<step>[/<inst>…]`, `#/workbench/<componentId>[/<inst>…]` — the optional segments are the
+  part opened on the stage, one history entry per level, `~` for the top when the scene opens deeper (ui/drillpath.ts) — `#/workbench/stats`, `#/workbench/bench`, `#/sandbox/<chipId>`, `#/campaign[/n/<node> | /play/<node> | /intro | /codex[/<id>]]`,
   `#/sandbox/s/<payload>` for a share link) so the site works on
   any static host or sub-path.
 - Theme: CSS custom properties in `src/styles/`; `data-theme="light|dark"` on `<html>`, or
   absent for auto (`prefers-color-scheme`). Always define new colours for both themes.
 - Match the surrounding code: terse, typed, comments explain *why*.
+- Accessibility: a control drawn in SVG is a `g` with role="button", tabindex 0, an aria-label and Enter / Space
+  (never inside role="img": the campaign map and the anatomy are role="group"); `--muted` is the faintest text
+  colour that passes WCAG AA (4.5:1) on --bg / --surface / --surface-2, so do not go lighter for small text. Touch:
+  `@media (pointer: coarse)` blocks at the end of app.css and editor.css grow buttons, rows and icon buttons to
+  40 px; a new small control gets a rule there. A menu or drawer closed with Esc gives the focus back to its opener.
 
 ## Architecture
 
@@ -650,7 +656,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  a load from DATA raises next) holding asmCards' deck of CARDS_PAYLOAD_SOURCE, a console at 0x8000_0000, a halt
                  part on `j .`; the CPU drawer's golden model sits out (cardparts.ts CARDS_NO_GOLDEN, simHasCardReader). The reader leaf
                  is a `seq` behaviour (outputs from its state alone), so the cycle engine runs the loop through amoadd's memWData
-  geom.ts        snapping (ports on grid points), hit testing, pointer flags, junction groups, WireDraft
+  geom.ts        snapping (ports on grid points), hit testing (a pin's knob before any port: a tap toggles it, a drag
+                 from its half facing the stub wires (knobPortSide), from the far side moves; a part's port reaches only
+                 PORT_INSIDE into its body), portHandles (dots on the selected / hovered), openOutputs (outputs no wire
+                 reaches: drawn neutral, not X), pointer flags, junction groups, WireDraft
   session.ts     tab stack, new chips, input values kept across undo (keepVolatile)
   runtime.ts     EditorSim: rebuild on connectivity change only (debounced, carry state), cycle / gate run;
                  edgeHooks (before / after every rising edge, gate mode: after once quiet), runCycles;
@@ -732,12 +741,15 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   editor.ts      Editor: workspace + history + library + sim + panels; registerToolbarAction, slots
   view.ts        EditorView: one SVG element per object updated in place, live values, overlays
   tools.ts       the mouse / keyboard state machine (place, select, drag, band, free-hand wires, pointers, rename
-                 in place: F2 / a click on a selected name / editInline)
+                 in place: F2 / a click on a selected name / editInline); a finger gets a larger port radius and its
+                 press on a pin's port presses the pin (tap toggles, drag wires); a second tap on a wire's start lets
+                 it go. On a touch screen Fit and the empty canvas use at least camera.ts TOUCH_PX per unit (touchZoom)
   ctxmenu.ts     plugin: the right-click menu (selection actions with their shortcuts, or the canvas's own);
                  pointerui.ts: its unravel / collapse actions and their dialogs
   iobar.ts       plugin: the chip's pins as a bar above the run bar (the workbench's switches and lamps, I/O toggle);
                  each control acts as a click on the pin; then the switch banks and keys inside placed chips, by path
                  (ionested.ts, DOM-free: nestedControls once per simulation, flipBank; past 3 banks "+n more")
+  searchactions.ts plugin: the editor's toolbar actions, run / pause and New chip in the search (`>`)
   keys.ts        plugin: document keys → key parts (a bound key is taken from the shortcuts while the chip is open)
                  and keyboard parts (while running, or with the Type toolbar toggle); released on blur
   props.ts       properties of the selection or the chip, diagnostics; registerPropsSection
@@ -862,6 +874,7 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  chip u_ch_cp_<node>; nodeOfChip; startCandidates / startFrom (a core level begun as a copy of an
                  earlier core level's chip, plus the new pins)
   grade.ts       measured(score), stars (★ pass, ★★ ≤ 1.5 × par, ★★★ ≤ par on every graded metric), better
+  cardlabel.ts   KIND_LABEL, STATUS_LABEL, levelCardLabel (a map card's accessible name: "Build: CMOS inverter, locked")
   progress.ts    Progress (own storage key, injected KV): status, best, stars, tips, seen; codexUnlocked;
                  exportCampaign / importCampaign (progress + level chips' closure, merged, never overwriting)
   codex.ts       CODEX entries (component / law / tool / trick / concept); lessons.ts lesson HTML
@@ -943,9 +956,20 @@ src/puzzles/   program puzzles (the sandbox's Puzzles drawer; roadmap Phase 12).
                  faster, ★★★ cycles × NANDs below all), PuzzleProgress (own key); start.ts the choices and the puzzle chip;
                  replay.ts the player (a test on the editor's own simulation, checkpoints for stepping back)
 src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-free: every chapter / step as a
-               searchable entry, searchNav ranking), quicknav.ts (chapter menu on the top bar and the chapter title,
-               Ctrl/⌘ K or `/` search palette; `/` is left to the sandbox there); quiz.ts: quizBox (chapters, recaps, codex,
-               walkthrough), options in a fixed shuffle per question (shuffleOrder: authors write the answer first)
+               searchable entry, searchNav ranking; NavItem / rankItems for every kind of search row), quicknav.ts
+               (chapter menu on the top bar and the chapter title; the search box: Ctrl/⌘ K or `/`, groups, scope chips
+               on Tab, `>` actions, a footer naming ↵ / Shift ↵; focusStage, the skip link's target); searchsources.ts
+               (DOM-free: registerSearchSource, registerActions, recent picks, searchGroups), searchbuiltin.ts (chapters,
+               workbench, the app's and the stage's actions; campaign levels and codex from searchcampaign.ts, a chunk
+               loaded on the first keystroke: locked ones listed, marked, brief only); keys.ts (the key table KEYS
+               every help sheet is drawn from, matches: event.key, else event.code on a non-Latin layout, brackets by
+               code; the single-key switch settings.singleKeys, WCAG 2.1.4; bindKeys / installKeys: Ctrl K in the
+               window's capture phase, other global keys in its bubble phase after the page's own listeners);
+               keyhelp.ts (the `?` sheets: Keys on this page, the sandbox's); quiz.ts: quizBox (chapters, recaps, codex,
+               walkthrough), options in a fixed shuffle per question (shuffleOrder: authors write the answer first), a
+               pick scrolls its explanation into view; stagenotes.ts: over a chapter's canvas the step's challenge goal (a
+               click shows its card), green and announced (aria-live) once solved, toasts when a Try box ticks (words:
+               feedback.ts, DOM-free); reveal() scrolls into view, smooth unless reduced motion
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
 tests/verify/  CPU verification (docs/VERIFICATION.md): cpus.ts (every RV32 CPU variant: build, ISA, env,

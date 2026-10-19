@@ -7,6 +7,7 @@ import { SwitchSim, VDD_VOLTS } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, type Netlist, netlistOf } from '../sim/types';
 import { describeBits, formatBits, type Radix } from '../sim/values';
 import { h, icon, s } from '../ui/dom';
+import { DoubleTap } from '../ui/doubletap';
 import { reducedMotion } from '../ui/motion';
 import { Camera, installPanZoom, underCover, type ViewBox } from './camera';
 import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
@@ -112,6 +113,8 @@ export class SchematicView {
   private base: Netlist | null = null;
   /** A part drag just ended: the click it ends with does not select. */
   private dragged = false;
+  /** A double tap opens a part like a double-click (iOS Safari may send no dblclick for it). */
+  private taps = new DoubleTap();
   /** Parts picked to move together; the parts being dragged; their places while a live drag goes on. */
   private group = new Set<string>();
   private dragging = new Set<string>();
@@ -333,9 +336,12 @@ export class SchematicView {
         this.events.select(inst.name);
       });
       if (this.arrange) g.addEventListener('pointerdown', (e) => this.dragInst(e, inst.name));
+      g.addEventListener('pointerup', (e) => {
+        if (this.taps.upEvent(e, inst.name) && openable && !this.dragged) this.events.open(inst.name);
+      });
       g.addEventListener('dblclick', (e) => {
         e.stopPropagation();
-        if (openable) this.events.open(inst.name);
+        if (openable && this.taps.dblclick(e.timeStamp)) this.events.open(inst.name);
       });
       this.insts.set(inst.name, g);
       instG.append(g);

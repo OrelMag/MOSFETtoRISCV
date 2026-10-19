@@ -6,6 +6,7 @@ import { BLOCKS, blockNodes, LINKS, VIEW } from '../anatomy';
 import { ancestors, isDone, statusOf, type ProgressView } from '../graph';
 import { BAND_GAP, COL_GAP, LINE_GAP, mapLayout, NODE_H, NODE_W, OPTIONAL_ACTS, ROW_GAP } from '../layout';
 import { ACTS, actName, NODES } from '../nodes';
+import { levelCardLabel } from '../cardlabel';
 import type { CampaignNode } from '../types';
 
 const KIND_MARK: Record<CampaignNode['kind'], string> = { lesson: 'read', drill: 'drill', build: 'build', program: 'code', core: 'CPU' };
@@ -50,14 +51,23 @@ function pressable<T extends SVGElement>(g: T, f: () => void): T {
 /**
  * The map, its acts wrapped to at most `maxCols` columns a line (layout.ts mapColsFor). The optional
  * acts in `folded` are a header (title, what it holds, Show); `fold` folds or unfolds one.
+ * For assistive tech it is a group of acts, each a group holding its Show / Hide button and its level
+ * cards (buttons named by levelCardLabel), in that order: Tab walks the map act by act, column by column.
  */
 export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string | undefined, go: (id: string) => void, maxCols = Infinity,
   folded: ReadonlySet<number> = new Set(), fold?: (act: number, folded: boolean) => void): SVGSVGElement {
   const L = mapLayout(maxCols, folded);
-  const svg = s('svg', { class: 'cp-map', viewBox: `0 0 ${L.w} ${L.h}`, width: L.w, height: L.h, role: 'img', 'aria-label': 'The campaign map' });
+  const svg = s('svg', { class: 'cp-map', viewBox: `0 0 ${L.w} ${L.h}`, width: L.w, height: L.h, role: 'group', 'aria-label': 'The campaign map' });
+  // Painted bottom up: the bands, the edges, then each act's title, buttons and cards (the edges run under the cards).
+  const bands = s('g', { class: 'cp-bands', 'aria-hidden': 'true' });
+  const edges = s('g', { class: 'cp-edges', 'aria-hidden': 'true' });
+  svg.append(bands, edges);
+  const actGroups = new Map<number, SVGGElement>();
   for (const b of L.bands) {
     const act = ACTS.find((a) => a.num === b.act)!;
     const name = `${actName(act.num)} · ${act.title}`;
+    const ag = s('g', { class: 'cp-act', role: 'group', 'aria-label': name });
+    svg.append(ag);
     if (b.folded) {
       const ns = NODES.filter((n) => n.act === act.num);
       const done = ns.filter((n) => isDone(view(n.id))).length;
@@ -69,13 +79,15 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
         s('text', { class: 'cp-band-title', x: 16, y: b.y + 21 }, name),
         s('text', { class: 'cp-fold-what', x: 16, y: b.y + 40 }, what),
         s('text', { class: 'cp-fold-btn', x: L.w - 16, y: b.y + 40, 'text-anchor': 'end' }, 'Show ▾'));
-      svg.append(fold ? pressable(g, () => fold(act.num, false)) : g);
+      ag.append(fold ? pressable(g, () => fold(act.num, false)) : g);
       continue;
     }
-    svg.append(s('rect', { class: 'cp-band', x: 4, y: b.y, width: L.w - 8, height: b.h, rx: 10 }),
-      s('text', { class: 'cp-band-title', x: 16, y: b.y + 21 }, name));
+    actGroups.set(act.num, ag);
+    bands.append(s('rect', { class: 'cp-band', x: 4, y: b.y, width: L.w - 8, height: b.h, rx: 10 }));
+    // the group is named after the act: its title would be read twice
+    ag.append(s('text', { class: 'cp-band-title', x: 16, y: b.y + 21, 'aria-hidden': 'true' }, name));
     if (fold && OPTIONAL_ACTS.has(act.num)) {
-      svg.append(pressable(s('g', { class: 'cp-fold', 'data-act': act.num, tabindex: 0, role: 'button', 'aria-expanded': 'true', 'aria-label': `Fold ${name}` },
+      ag.append(pressable(s('g', { class: 'cp-fold', 'data-act': act.num, tabindex: 0, role: 'button', 'aria-expanded': 'true', 'aria-label': `Fold ${name}` },
         s('title', null, 'Fold this optional act to one line'),
         s('rect', { class: 'cp-fold-hit', x: L.w - 72, y: b.y + 6, width: 60, height: 22, rx: 6 }),
         s('text', { class: 'cp-fold-btn', x: L.w - 18, y: b.y + 21, 'text-anchor': 'end' }, 'Hide ▴')), () => fold(act.num, true)));
@@ -84,7 +96,6 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
   // Edges under the nodes: from the right of a requirement to the left of the node. Within an act
   // they are short and always drawn; between acts they cross the whole map, so they appear only for
   // the level pointed at or selected (a port on its left edge says it has some).
-  const edges = s('g', { class: 'cp-edges' });
   const crossIn = new Map<string, CampaignNode[]>();
   for (const p of L.nodes.values()) {
     for (const r of drawnRequires(p.node)) {
@@ -109,18 +120,19 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
       edges.append(s('path', { class: `cp-edge${done ? ' done' : ''}${p.node.optional ? ' opt' : ''}${cross ? ' cross' : ''}${hot ? ' hot' : ''}`, d, 'data-a': r, 'data-b': p.node.id }));
     }
   }
-  svg.append(edges);
   for (const p of L.nodes.values()) {
     const n = p.node;
     const st = statusOf(n, view, unlockAll);
     const stars = view(n.id)?.stars ?? 0;
+    // A locked level opens too (its panel says what it needs), so it is a working button that says "locked", not a disabled one.
+    const label = levelCardLabel(n, st, stars);
     const g = s('g', {
       class: `cp-node ${st}${n.optional ? ' opt' : ''}${n.soon ? ' soon' : ''}${n.id === selected ? ' sel' : ''}`,
       transform: `translate(${p.x},${p.y})`, tabindex: 0, role: 'button', 'data-node': n.id,
-      'aria-label': `${n.title}: ${n.soon ? 'coming soon' : st}`,
+      'aria-label': label, 'aria-current': n.id === selected ? 'true' : null,
     },
-    s('title', null, `${n.title}${n.optional ? ' (optional)' : ''} — ${n.soon ? 'coming soon' : st}`),
-    s('rect', { width: NODE_W, height: NODE_H, rx: 8 }),
+    s('title', null, label),
+    s('rect', { class: 'cp-card', width: NODE_W, height: NODE_H, rx: 8 }),
     s('text', { class: 'cp-node-kind', x: 10, y: 15 }, `${KIND_MARK[n.kind]}${n.optional ? ' · optional' : ''}${n.soon ? ' · soon' : ''}`),
     s('text', { class: 'cp-node-title', x: 10, y: 34 }, n.title),
     st === 'solved' && n.kind !== 'lesson' ? s('text', { class: 'cp-node-stars', x: NODE_W - 8, y: 15, 'text-anchor': 'end' }, '★'.repeat(stars) + '☆'.repeat(3 - stars)) : null,
@@ -128,7 +140,7 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
     st === 'locked' ? s('text', { class: 'cp-node-lock', x: NODE_W - 8, y: 15, 'text-anchor': 'end' }, 'locked') : null);
     const from = crossIn.get(n.id);
     if (from) {
-      g.append(s('circle', { class: 'cp-port', cx: 0, cy: NODE_H / 2, r: 4 },
+      g.append(s('circle', { class: 'cp-port', cx: 0, cy: NODE_H / 2, r: 4, 'aria-hidden': 'true' },
         s('title', null, `Builds on ${from.map((m) => `${m.title} (${actName(m.act)})`).join(', ')}: point here to see the lines`)));
     }
     const hover = (on: boolean) => edges.querySelectorAll(`[data-a="${n.id}"], [data-b="${n.id}"]`).forEach((e) => e.classList.toggle('hover', on));
@@ -143,17 +155,19 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
         go(n.id);
       }
     });
-    svg.append(g);
+    // the focus ring: outside the card, so it shows on a selected card (accent border) and a locked one (faded)
+    g.append(s('rect', { class: 'cp-focus', x: -4, y: -4, width: NODE_W + 8, height: NODE_H + 8, rx: 11 }));
+    actGroups.get(n.act)!.append(g);
   }
   return svg;
 }
 
-/** The anatomy diagram; a click on a block calls `pick`. */
-export function anatomySvg(view: ProgressView, selected: string | undefined, pick: (id: string) => void): SVGSVGElement {
+/** The anatomy diagram; a click on a block calls `pick`. Without `pick` it is a picture (the level panel's, inside a link). */
+export function anatomySvg(view: ProgressView, selected: string | undefined, pick?: (id: string) => void): SVGSVGElement {
   const by = blockNodes();
-  const svg = s('svg', { class: 'cp-anatomy', viewBox: `0 0 ${VIEW.w} ${VIEW.h}`, role: 'img', 'aria-label': 'Block diagram of the pipelined RV16 processor' });
+  const svg = s('svg', { class: 'cp-anatomy', viewBox: `0 0 ${VIEW.w} ${VIEW.h}`, role: pick ? 'group' : 'img', 'aria-label': 'Block diagram of the pipelined RV16 processor' });
   const pos = new Map(BLOCKS.map((b) => [b.id, b]));
-  const links = s('g', { class: 'cp-links' });
+  const links = s('g', { class: 'cp-links', 'aria-hidden': 'true' });
   let backs = 0;
   for (const l of LINKS) {
     const a = pos.get(l.from)!, b = pos.get(l.to)!;
@@ -175,19 +189,19 @@ export function anatomySvg(view: ProgressView, selected: string | undefined, pic
   for (const b of BLOCKS) {
     const ids = by.get(b.id) ?? [];
     const built = ids.length > 0 && ids.every((id) => isDone(view(id)));
-    const g = s('g', { class: `cp-block${b.kind ? ` ${b.kind}` : ''}${built ? ' built' : ''}${b.id === selected ? ' sel' : ''}`, tabindex: 0, role: 'button', 'data-block': b.id },
+    const g = s('g', { class: `cp-block${b.kind ? ` ${b.kind}` : ''}${built ? ' built' : ''}${b.id === selected ? ' sel' : ''}`, 'data-block': b.id },
       s('title', null, `${b.label}${built ? ' (built)' : ''}`),
       s('rect', { x: b.x, y: b.y, width: b.w, height: b.h, rx: b.kind === 'preg' ? 3 : 7 }),
       b.kind === 'preg'
         ? s('text', { x: b.x + b.w / 2, y: b.y - 5, 'text-anchor': 'middle' }, b.label)
         : s('text', { x: b.x + b.w / 2, y: b.y + b.h / 2 + 4, 'text-anchor': 'middle' }, b.label));
-    g.addEventListener('click', () => pick(b.id));
-    g.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        pick(b.id);
-      }
-    });
+    if (pick) {
+      g.setAttribute('tabindex', '0');
+      g.setAttribute('role', 'button');
+      g.setAttribute('aria-label', `${b.label}${built ? ', built' : ''}`);
+      if (b.id === selected) g.setAttribute('aria-current', 'true');
+      pressable(g, () => pick(b.id));
+    }
     svg.append(g);
   }
   return svg;

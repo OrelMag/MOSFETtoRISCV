@@ -6,8 +6,9 @@ import { installErrorReporting, loadFailed } from './errors';
 import { ChapterPage, type Page } from './pages/chapter';
 import { homePage } from './pages/home';
 import { WorkbenchPage } from './pages/workbench';
-import { installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './quicknav';
+import { focusStage, installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './quicknav';
 import { applyTheme, PALETTES, settings, type Theme } from './settings';
+import { parseDrill } from './drillpath';
 import type { Radix } from '../sim/values';
 
 /**
@@ -42,7 +43,13 @@ export function startApp(root: HTMLElement): void {
   nav.append(navLink('#/', 'layers', 'Journey', 'home'), chLink, navLink('#/campaign', 'flag', 'Campaign', 'campaign'),
     navLink('#/workbench/rca4', 'bench', 'Workbench', 'workbench'), navLink('#/sandbox', 'chip', 'Sandbox', 'sandbox'));
   installQuickNav();
-  const searchBtn = h('button', { class: 'btn ghost icon-only', title: `Jump to a chapter or step (${QUICK_KEY})`, 'aria-label': 'Jump to a chapter or step', onclick: () => openQuickNav() }, icon('search', 18));
+  const searchBtn = h('button', { class: 'btn ghost icon-only', title: `Search chapters, components, levels, codex and actions (${QUICK_KEY}, /)`, 'aria-label': 'Search', 'aria-keyshortcuts': 'Control+K /', onclick: () => openQuickNav() }, icon('search', 18));
+  // The first Tab stop: straight to the circuit where a page has one (S does the same), else to the page.
+  const skip = h('button', { class: 'skip-link' }, 'Skip to the circuit');
+  skip.addEventListener('focus', () => { skip.textContent = document.querySelector('#view section.stage') ? 'Skip to the circuit' : 'Skip to the content'; });
+  skip.addEventListener('click', () => {
+    if (!focusStage()) view.focus();
+  });
 
   const radix = h('div', { class: 'seg', role: 'group', title: 'How buses show their value', 'aria-label': 'How buses show their value' });
   const radixes: [Radix, string, string][] = [['hex', 'HEX', 'hexadecimal'], ['bin', 'BIN', 'binary'], ['dec', 'DEC', 'decimal']];
@@ -160,7 +167,8 @@ export function startApp(root: HTMLElement): void {
   const topbar = h('header', { class: 'topbar' },
     h('a', { class: 'brand', href: '#/', 'aria-label': 'MOSFET → RISC-V: home' }, h('span', { class: 'brand-mark' }, icon('chip', 18)), h('span', { class: 'brand-name' }, 'MOSFET → RISC-V'), h('small', null, 'a journey through abstraction')),
     nav, h('div', { class: 'spacer' }), h('div', { class: 'tools' }, searchBtn, radix, animate, palWrap, themeBtn));
-  root.append(topbar, view);
+  view.tabIndex = -1;
+  root.append(skip, topbar, view);
 
   let page: Page | null = null;
   // A route that loads its page asynchronously must not mount it if another route came since.
@@ -176,11 +184,13 @@ export function startApp(root: HTMLElement): void {
     if (key === 'c') {
       const ch = chapterById(parts[1] ?? '') ?? chapters[0];
       const step = Number(parts[2] ?? 0) || 0;
+      // after the step, the part opened on its stage (ui/drillpath.ts)
+      const path = parseDrill(parts.slice(3));
       if (page instanceof ChapterPage && page.chapter === ch) {
-        page.goStep(step);
+        page.route(step, path);
         return;
       }
-      mount(new ChapterPage(ch, step));
+      mount(new ChapterPage(ch, step, path));
     } else if (key === 'workbench' && parts[1] === 'stats') {
       // The Statistics tab: a chunk of its own (its rows come from hwstats.json).
       if ((page as { kind?: string } | null)?.kind === 'hwstats') return;
@@ -198,11 +208,12 @@ export function startApp(root: HTMLElement): void {
         if (seq === routeSeq) view.replaceChildren(loadFailed('benchmarks', e));
       });
     } else if (key === 'workbench') {
+      const path = parseDrill(parts.slice(2));
       if (page instanceof WorkbenchPage) {
-        page.open(parts[1] ?? 'rca4');
+        page.route(parts[1] ?? 'rca4', path);
         return;
       }
-      mount(new WorkbenchPage(parts[1] ?? 'rca4'));
+      mount(new WorkbenchPage(parts[1] ?? 'rca4', path));
     } else if (key === 'campaign' && parts[1] === 'play') {
       // A level on its own screen: the editor's chunk, like the sandbox.
       const lv = page as (Page & { kind?: string; nodeId?: string }) | null;

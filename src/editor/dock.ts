@@ -24,6 +24,8 @@ class Dock {
   private tabs: HTMLElement;
   private panes: DockPane[] = [];
   private active = '';
+  /** What had the focus when each pane opened: closing a pane that holds the focus gives it back there. */
+  private openers = new Map<string, HTMLElement>();
 
   constructor(private ed: Editor) {
     this.tabs = h('div', { class: 'sb-dock-tabs', role: 'tablist', 'aria-label': 'Side panels' });
@@ -34,6 +36,8 @@ class Dock {
   add(p: DockPane, front = true): void {
     const old = this.panes.find((q) => q.id === p.id);
     if (old && old.el !== p.el) old.el.remove();
+    const a = document.activeElement;
+    if (!old && a instanceof HTMLElement && a !== document.body && !p.el.contains(a)) this.openers.set(p.id, a);
     this.panes = [...this.panes.filter((q) => q.id !== p.id), p];
     p.el.classList.add('sb-docked');
     this.host.append(p.el);
@@ -44,10 +48,18 @@ class Dock {
   remove(id: string): void {
     const p = this.panes.find((q) => q.id === id);
     if (!p) return;
+    const focused = p.el.contains(document.activeElement);
+    const opener = this.openers.get(id);
+    this.openers.delete(id);
     p.el.remove();
     this.panes = this.panes.filter((q) => q !== p);
     if (this.active === id) this.active = this.panes[this.panes.length - 1]?.id ?? '';
     this.render();
+    if (!focused) return;
+    // the opener, or its twin if the toolbar was redrawn since (same data-action), else the canvas
+    const act = opener?.dataset.action;
+    const back = opener?.isConnected ? opener : act ? this.ed.el.querySelector<HTMLElement>(`[data-action="${CSS.escape(act)}"]:not([hidden])`) : null;
+    (back ?? this.ed.view.svg).focus({ preventScroll: true });
   }
 
   has(id: string): boolean {

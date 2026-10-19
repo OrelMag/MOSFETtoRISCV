@@ -550,7 +550,7 @@ challenges stay open. Added since:
   the wire-colour menu), in the chapters, the workbench and the sandbox
 - ✅ Offline desktop program: `npm run desktop` builds a portable Windows `.exe` (the built site in Electron, fonts
   bundled, data next to the `.exe`), published by the *Desktop program* workflow as the release `desktop-latest`
-- ⏳ Keyboard navigation beyond the shortcuts (search palette, sandbox keys)
+- ⏳ Keyboard navigation beyond the shortcuts. Done: one key table behind every `?` sheet, letters by position on non-Latin layouts, a switch for single-key shortcuts, `[ ] { }` through the chapters, a skip link and S to the circuit, Esc then Tab out of code editors, and the search (chapters, workbench, campaign, codex, `>` actions). Next: a part cursor on the stage (run, step, inputs, zoom by key), then placing and wiring in the sandbox by keyboard
 - ✅ Export the sandbox canvas as SVG / PNG (current theme), and the level on a chapter's or the workbench's stage (the
   stage bar's Image menu: the whole level with its live values, whatever the zoom, without probe flags)
 - VHDL view of every component

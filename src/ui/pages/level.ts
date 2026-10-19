@@ -12,7 +12,7 @@ import '../../styles/campaign.css';
 import '../../styles/level.css';
 import { caseOf } from '../../campaign/cases';
 import { codexById } from '../../campaign/codex';
-import { METRIC, measured } from '../../campaign/grade';
+import { type AreaUnit, areaBars, METRIC, measured } from '../../campaign/grade';
 import { dependents, isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { levelChallenge, levelChipId } from '../../campaign/levels';
 import { altCost, copiesInFinal, countedPart, finalCpu } from '../../campaign/measure';
@@ -104,7 +104,9 @@ export class LevelPage implements Page {
     // A relay / tube level (a strict rule) lists its own parts under Unlocked parts and has no NAND.
     const strict = typeof ch.allowed === 'object' && !!ch.allowed.strict;
     const hide = ruleKind(ch.allowed) === 'transistors' ? [] : strict ? ['fets', 'switch', 'lib'] : ['fets', 'switch'];
-    this.editor = new Editor(chipId, { level: { chipId, actions: LEVEL_ACTIONS, hideGroups: hide } });
+    // A transistor level's own parts (transistors and rails) lead the palette, before wiring and NAND.
+    const first = ruleKind(ch.allowed) === 'transistors' ? ['fets', 'unlocked', 'wiring', 'const', 'switch', 'lib', 'mine'] : undefined;
+    this.editor = new Editor(chipId, { level: { chipId, actions: LEVEL_ACTIONS, hideGroups: hide, first } });
     if (this.editor.chipId !== chipId) this.editor.openChip(chipId);
     const hasWalk = !!walkOf(n)?.steps.length;
     this.chal = installChallenges(this.editor, {
@@ -181,7 +183,7 @@ export class LevelPage implements Page {
       h('button', { class: this.tab === id ? 'on' : '', role: 'tab', 'aria-selected': String(this.tab === id), onclick: () => { this.tab = id; this.renderSide(); } },
         label, badge ? h('small', null, badge) : null)));
     const body = h('div', { class: 'lv-sidebody', role: 'tabpanel' });
-    if (this.tab === 'walk' && this.walk) body.append(this.walk.panel(n.par ?? {}, () => this.leaveWalk(), () => this.takeWalk()));
+    if (this.tab === 'walk' && this.walk) body.append(this.walk.panel(n.par ?? {}, () => this.leaveWalk(), () => this.takeWalk(), () => this.finishWalk()));
     else if (this.tab === 'why') this.whyTab(body);
     else if (this.tab === 'task') this.taskTab(body);
     else if (this.tab === 'tips') this.tipsTab(body);
@@ -209,9 +211,13 @@ export class LevelPage implements Page {
       const par = n.par ?? {};
       // A relay or tube level compares in its own devices (the technology setting's price of a NAND alternative).
       const devices = par.relays !== undefined || par.tubes !== undefined || par.steps !== undefined;
+      // A transistor level compares in transistors (its parts have no NANDs: "0 NAND" said nothing).
+      const fets = !devices && par.transistors !== undefined && par.nand === undefined;
+      const fetText = (v: number | undefined) => (v === undefined ? '—' : `${v.toLocaleString()} transistor${v === 1 ? '' : 's'}`);
       if (devices) rows.push(['Par', deviceText(par, par)]);
+      else if (fets) rows.push(['Par', fetText(par.transistors)]);
       else if (par.nand !== undefined || par.depth !== undefined) rows.push(['Par', costText(par.nand, par.depth)]);
-      for (const { a, cost } of alts) rows.push([a.name, devices ? deviceText(cost, par) : costText(cost.nand, cost.depth)]);
+      for (const { a, cost } of alts) rows.push([a.name, devices ? deviceText(cost, par) : fets ? fetText(cost.transistors) : costText(cost.nand, cost.depth)]);
       if (rows.length) sec.append(h('div', { class: 'lv-cost' }, rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)])));
       const copies = h('p', { class: 'lv-copies' });
       sec.append(copies);
@@ -322,6 +328,12 @@ export class LevelPage implements Page {
     this.renderSide();
   }
 
+  /** Build along's last step: the learner's circuit becomes the level's chip and is checked (a pass shows the result card). */
+  private finishWalk(): void {
+    this.takeWalk();
+    this.chal?.check();
+  }
+
   private showAnswer(): void {
     // Until the walkthrough: the reference answer in the full sandbox, as chips of their own.
     const ed = this.editor!, ch = this.ch!;
@@ -346,15 +358,13 @@ export class LevelPage implements Page {
         h('td', { class: par[k] === undefined ? '' : (m[k] ?? Infinity) <= par[k]! ? 'par' : 'over' }, cell(m[k])),
         h('td', null, cell(par[k])),
         alts.map((a) => h('td', null, cell((a.cost as Record<string, number | null | undefined>)[k])))))) : null;
-    // Area bars: yours, par and the alternatives on one scale, in NANDs (relays or tube sections on a relay / tube level).
-    const unit: 'nand' | 'relays' | 'tubes' = par.relays !== undefined ? 'relays' : par.tubes !== undefined ? 'tubes' : 'nand';
-    const bars: [string, number, boolean][] = [];
-    if (m[unit] !== undefined) bars.push(['Yours', m[unit]!, true]);
-    if (par[unit] !== undefined && par[unit] !== m[unit]) bars.push(['Par', par[unit]!, false]);
-    for (const a of alts) { const v = (a.cost as Partial<Record<typeof unit, number>>)[unit]; if (v !== undefined) bars.push([a.name, v, false]); }
-    const max = Math.max(1, ...bars.map((b) => b[1]));
-    const barEl = bars.length > 1 ? h('div', { class: 'lv-bars', title: METRIC[unit].label }, bars.flatMap(([k, v, you]) =>
-      [h('span', null, k), h('span', { class: 'track' }, h('i', { class: you ? 'you' : '', style: `width:${(100 * v / max).toFixed(1)}%` })), h('span', { class: 'v' }, v.toLocaleString())])) : null;
+    // Area bars: yours, par and the alternatives on one scale, in the level's area metric, labelled with it.
+    const area = areaBars(m, par, alts.map((a) => ({ name: a.name, cost: a.cost as Partial<Record<AreaUnit, number>> })));
+    const max = Math.max(1, ...(area?.bars ?? []).map((b) => b[1]));
+    const barEl = area ? h('div', { class: 'lv-bars-box' },
+      h('div', { class: 'lv-bars-k' }, `Area, in ${area.unit === 'nand' ? 'NANDs' : METRIC[area.unit].label.toLowerCase()}`),
+      h('div', { class: 'lv-bars', title: METRIC[area.unit].hint }, area.bars.flatMap(([k, v, you]) =>
+        [h('span', null, k), h('span', { class: 'track' }, h('i', { class: you ? 'you' : '', style: `width:${(100 * v / max).toFixed(1)}%` })), h('span', { class: 'v' }, v.toLocaleString())]))) : null;
     const callout = h('div', { class: 'lv-callout' });
     const unlocks = (n.unlocks ?? []).filter((u) => !u.endsWith('*')).map((u) => resolveComponent(u)?.name ?? u);
     const codex = n.codex.map((id) => codexById(id)).filter((e) => !!e);
