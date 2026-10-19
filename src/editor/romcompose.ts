@@ -39,6 +39,8 @@ export interface RomComposer {
   /** The footer's button. */
   button: HTMLElement;
   open(): void;
+  /** Open it on 1-based line n (the Tiles view's click). */
+  openAt(n: number): void;
   /** Close it if open (true: it was). */
   close(): boolean;
   readonly isOpen: boolean;
@@ -60,10 +62,10 @@ export function romComposer(ce: CodeEditor, body: HTMLElement, toast: (m: string
 
   const open = async () => {
     const my = ++seq;
-    const n = ce.caretLine();
-    const src = ce.value;
+    let n = ce.caretLine();
+    let src = ce.value;
     const lines = src.split('\n');
-    const line = lines[n - 1] ?? '';
+    let line = lines[n - 1] ?? '';
     const { code } = splitLine(line);
     const [isa, { instrComposer }] = await Promise.all([isaOf(), import('../widgets/composer')]);
     if (my !== seq) return;
@@ -78,7 +80,21 @@ export function romComposer(ce: CodeEditor, body: HTMLElement, toast: (m: string
     const pc = here.length ? here[0].addr : after?.addr ?? r.end;
     const word = here.length === 1 ? here[0].word : undefined;
     close();
-    const cmp: Composer = instrComposer({ isa, word, pc: canReplace ? pc : here.length ? here[here.length - 1].addr + isa.step : pc, labels: r.labels });
+    // The front panel's Deposit: the word as a new line below, and the next one below that (Deposit next).
+    const deposit = (w: number) => {
+      if (ce.value !== src && ce.value.split('\n')[n - 1] !== line) return void toast(`Line ${n} changed since the builder opened: open it again`);
+      const text = codeIndent(line) + isa.text(w);
+      ce.putLine(n, text, true);
+      n += 1;
+      line = text;
+      src = ce.value;
+      ce.reveal(n);
+      where.textContent = `· deposited at line ${n} · next below it`;
+      // Replace now means the line just deposited
+      const rb = pane?.querySelector<HTMLElement>('.sb-rom-replace');
+      if (rb) rb.textContent = `Replace line ${n}`;
+    };
+    const cmp: Composer = instrComposer({ isa, word, pc: canReplace ? pc : here.length ? here[here.length - 1].addr + isa.step : pc, labels: r.labels, deposit: { label: 'Deposit next', run: deposit } });
 
     const put = (below: boolean) => {
       if (!cmp.ok) return void toast('Not an instruction this builder writes: fix the word first');
@@ -87,11 +103,13 @@ export function romComposer(ce: CodeEditor, body: HTMLElement, toast: (m: string
       else ce.putLine(n, withCode(line, cmp.text));
       close();
     };
+    const where = h('span', null);
     const what = here.length > 1 ? `line ${n} is a pseudo-instruction (${here.length} words): a new instruction goes below it`
       : canReplace ? `line ${n}${word === undefined ? ' (does not assemble)' : ''}: ${code || '(empty)'}` : `after line ${n}`;
+    where.textContent = `· ${what} · ${isa.name} · address 0x${pc.toString(16)}`;
     pane = h('div', { class: 'sb-rom-cmp', role: 'region', 'aria-label': 'Instruction builder' },
-      h('div', { class: 'sb-rom-cmp-head' }, h('b', null, 'Build an instruction'), h('span', null, `· ${what} · ${isa.name} · address 0x${pc.toString(16)}`), h('span', { class: 'grow' }),
-        canReplace ? h('button', { class: 'btn sm primary', title: 'Replace the line (Enter in the builder\'s text box)', onclick: () => put(false) }, `Replace line ${n}`) : null,
+      h('div', { class: 'sb-rom-cmp-head' }, h('b', null, 'Build an instruction'), where, h('span', { class: 'grow' }),
+        canReplace ? h('button', { class: 'btn sm primary sb-rom-replace', title: 'Replace the line (Enter in the builder\'s text box)', onclick: () => put(false) }, `Replace line ${n}`) : null,
         h('button', { class: `btn sm${canReplace ? '' : ' primary'}`, onclick: () => put(true) }, 'Insert below'),
         h('button', { class: 'btn sm ghost', title: 'Close the builder (Esc)', onclick: () => close() }, 'Close')),
       cmp.el);
@@ -110,5 +128,5 @@ export function romComposer(ce: CodeEditor, body: HTMLElement, toast: (m: string
   }, true);
 
   const button = h('button', { class: 'btn sm ghost', title: 'Build the instruction on the caret\'s line from its fields (Ctrl+Space)', onclick: () => void open() }, 'Build instruction');
-  return { button, open: () => void open(), close, get isOpen() { return !!pane; } };
+  return { button, open: () => void open(), openAt: (n) => { ce.caretTo(n); void open(); }, close, get isOpen() { return !!pane; } };
 }

@@ -115,3 +115,31 @@ button.cmp-bit { cursor: pointer; }
 .sb-rom-cmp-head .grow { flex: 1; }
 .cmp-near { display: flex; flex-wrap: wrap; gap: 4px; }
 .cmp-near .cmp-chip small { color: var(--muted); font-size: 10px; }
+
+/* Fields | Switches, and the front panel: the word on toggle switches with a lamp each, grouped by field */
+.cmp-viewbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cmp-seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 7px; overflow: hidden; }
+.cmp-seg button { border: 0; background: var(--surface); color: var(--text-2); padding: 3px 11px; font: 600 12px var(--font-ui); cursor: pointer; }
+.cmp-seg button.on { background: var(--accent); color: var(--accent-text); }
+.cmp-panel {
+  --metal: light-dark(#2b2f3a, #171a22); --panel-ink: light-dark(#e8e2cc, #d9d2b8);
+  --lamp-off: light-dark(#4a2a26, #3a1d1a); --lamp-on: light-dark(#ff5a3c, #ff6a4c);
+  display: flex; gap: 10px; overflow-x: auto; padding: 14px; border-radius: 10px; background: var(--metal); color: var(--panel-ink);
+}
+.cmp-pg { display: grid; gap: 4px; flex: none; }
+.cmp-pl { font: 700 10px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; text-align: center; color: color-mix(in srgb, var(--fc) 60%, white); border-bottom: 2px solid color-mix(in srgb, var(--fc) 70%, white); padding-bottom: 2px; white-space: nowrap; }
+.cmp-sws { display: flex; gap: 2px; }
+.cmp-sw { display: grid; justify-items: center; gap: 5px; width: 17px; }
+.cmp-led { width: 10px; height: 10px; border-radius: 50%; background: var(--lamp-off); }
+.cmp-led.on { background: var(--lamp-on); box-shadow: 0 0 8px var(--lamp-on); }
+.cmp-tog { position: relative; width: 14px; height: 26px; padding: 0; border: 0; border-radius: 4px; background: linear-gradient(#5d6273, #3a3e4b); cursor: pointer; }
+.cmp-tog::after { content: ''; position: absolute; left: 2px; right: 2px; bottom: 2px; height: 11px; border-radius: 3px; background: linear-gradient(#e8e4d8, #b8b2a0); transition: bottom 0.08s; }
+.cmp-tog.up::after { bottom: 13px; }
+.cmp-tog:focus-visible { outline: 2px solid var(--lamp-on); outline-offset: 2px; }
+.cmp-swn { font: 8.5px var(--font-mono); opacity: 0.6; }
+@media (prefers-reduced-motion: reduce) { .cmp-tog::after { transition: none; } }
+.cmp-mem { display: grid; gap: 2px; margin-top: 8px; font: 12px var(--font-mono); }
+.cmp-mem-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-family: var(--font-ui); margin-bottom: 4px; }
+.cmp-mem-row { display: grid; grid-template-columns: 70px 100px minmax(0, 1fr); gap: 10px; padding: 2px 8px; border-radius: 4px; }
+.cmp-mem-row:nth-child(even) { background: var(--surface-2); }
+.cmp-mem-row span:first-child { color: var(--muted); }

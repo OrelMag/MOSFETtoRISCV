@@ -462,7 +462,9 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                vertex kernel in lock-step with WarpISS (launch()), every frame against framePicture; costWidget: PIPE_COSTS);
                composer.ts: the instruction builder over any ComposeIsa (instrComposer({ isa }): palette, asm / hex input,
                clickable bits for any word width, the immediate's wiring as bands per run + one sign bracket, operand cards,
-               decode chain, one bit away (isa.loose), and for RV32 the major-opcode map and a data path
+               decode chain, one bit away (isa.loose), and for RV32 the major-opcode map and a data path; Fields | Switches: the
+               front panel (toggles + lamps by field), opts.deposit's button: chapter 13's memory run on the ISS, the program
+               editor's next line)
                sketch lit from instrUse); chapter 13's explorer and editor/romcompose.ts host it.
                insthw.ts maps an instruction to the units it uses (and pipeline stage units; laneUse(word, core, at): the lane /
                warp cores' instances, tests/insthw.test.ts: every kernel instruction, every warp count); slowctl.ts: what the CPU
@@ -731,7 +733,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  lists build only the rows in view (vlist.ts: virtualRows), a large RAM's grid has Go to
   romcompose.ts  the instruction builder in a ROM's program editor, any language but hex / 6502 (Ctrl+Space / Build
                  instruction): the caret's line, its address and labels from isa.program; Replace keeps label, indentation
-                 and comment (# ; //: withCode), Insert below
+                 and comment (# ; //: withCode), Insert below, Deposit next (a line below, then the next); openAt(n)
+  romtiles.ts    the program editor's Tiles view (Text | Tiles): isa/tiles.ts programTiles (kinds, reads / writes from
+                 dest slots, target line, the nearest writer above of each read) drawn as tiles with gutter arrows; a click
+                 builds the line, a drag moves it (moveLine, CodeEditor.replaceAll: one undo step); the code editor stays
+                 in the page off screen (ce-away) so edits keep their native undo
   package.ts     "Package as chip…" dialog (name, hue, notes; the face editor: pins dragged along / across edges, corner
                  resize, displays ticked, moved and scaled, live; Save & new circuit)
   dispface.ts    the displays' SVG faces (drawDisplay / paintDisplay) and a placed chip's face displays (drawFace /
