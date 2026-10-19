@@ -1,14 +1,17 @@
 import { BOOTH_ENC, MDU, SRT_SELECT, arrayDiv, arrayMul, boothMul, csa, divStep, nrArrayDiv, pipeMul, popcount, seqDivider, seqMul, srt4Divider, srtDivider, treeMul } from '../lib';
 import { cpuState } from '../riscv/cosim';
+import { stats } from '../sim/stats';
 import { M_PROGRAMS } from '../riscv/mprograms';
 import { PIPE_M_PROGRAMS } from '../riscv/pmprograms';
 import { cpuScene } from '../widgets/cpupanel';
 import { divComparison } from '../widgets/divide';
 import { boothWidget, mulComparison } from '../widgets/muldiv';
 import { mulStyles } from '../widgets/multiply';
+import { kNands, sysNands } from './ch-system';
 import type { Chapter } from './types';
 
 const msrc = (id: string) => M_PROGRAMS.find((p) => p.id === id)!.source;
+const pct = (a: number, b: number) => Math.round((a / b - 1) * 100);
 
 export const chMulDiv: Chapter = {
   id: 'muldiv', num: 20, title: 'Multiply & divide', level: 'Arithmetic',
@@ -55,6 +58,13 @@ export const chMulDiv: Chapter = {
         answer: 0,
         explain: '+1 is correct anywhere in [0, 2d) and −1 anywhere in [−2d, 0). An estimate that is low by up to one unit still lands in a region whose digit is allowed, so no full-width carry is needed.',
         why: ['', 'The low bits carry real information. They stop mattering for the choice only because a slightly wrong digit is repaired by later ones.', 'Normalization fixes the thresholds, but with only the digits 0 and 1 the choice would still need the exact sign of the full remainder.', 'That full-width carry chain is what SRT removes: the remainder stays as a sum word and a carry word.'],
+      },
+      {
+        question: '<code>div</code> and <code>rem</code> with rs1 = −2³¹ (0x80000000) and rs2 = −1. What does RISC-V specify?',
+        options: ['Quotient 0x80000000 (−2³¹ again), remainder 0, and no trap', 'An overflow exception', 'Quotient 0x7FFFFFFF, saturated', 'Nothing: the result is implementation-defined'],
+        answer: 0,
+        explain: 'The true quotient +2³¹ does not fit in 32 bits, so it wraps to 0x80000000; the remainder is 0. RISC-V specifies it, as it specifies division by zero, so that division never traps (x86\'s idiv raises a divide error here). This M unit gets it for free: it divides 2³¹ by 1 unsigned, the signs agree so nothing is negated, and 2³¹ read as signed is −2³¹.',
+        why: ['', 'RISC-V has no integer arithmetic exceptions at all: overflow, like division by zero, gives a specified result.', 'Saturation would need a comparator and a constant the spec never asks for; the quotient simply wraps.', 'The spec fixes the result exactly, so every core and the golden model agree.'],
       },
     ],
   },
@@ -136,9 +146,9 @@ export const chMulDiv: Chapter = {
       scene: () => ({ root: popcount(8), inputs: { x: 0xb7 } }),
       challenge: {
         kind: 'quiz', question: 'The 32-bit popcount is 35 gate delays deep. A carry-save version compresses all 32 bits with full adders first. Roughly how deep would that tree be before the final adder?',
-        options: ['About 7 full-adder levels (each shrinks the rows by 1.5)', '32 levels, one per bit', '1 level', '5 levels exactly, like a binary tree'],
+        options: ['8 full-adder levels (each keeps two rows of every three)', '32 levels, one per bit', '1 level', '5 levels exactly, like a binary tree'],
         answer: 0,
-        explain: 'Each 3:2 level shrinks the number of rows by a factor of 1.5. Going from 32 one-bit rows to 2 rows takes about log₁.₅(16) ≈ 7 levels, then one fast adder. Same structure as the Wallace multiplier.',
+        explain: 'Each 3:2 level shrinks the number of rows by about 1.5: log₁.₅(16) ≈ 6.8. Rows come whole, so it takes 8: 32 → 22 → 15 → 10 → 7 → 5 → 4 → 3 → 2, then one fast adder. Same structure as the Wallace multiplier.',
         why: ['', 'One level per bit would be a serial chain. The full adders of one level work on disjoint bits at the same time.', 'One level only turns every three rows into two: 32 rows become 22.', 'A binary tree halves the rows each level. A 3:2 level keeps two of every three, so it needs more levels than log₂ 32.'],
       },
     },
@@ -312,7 +322,7 @@ export const chMulDiv: Chapter = {
       challenge: {
         kind: 'quiz', question: 'Is a non-restoring step faster than a restoring one?',
         options: [
-          'Not much: the restore multiplexer is gone, but the add/subtract choice puts an XOR on the divisor in the same place',
+          'Not much: the restore multiplexer after the carry chain is gone, but the add/subtract choice puts an XOR on the divisor before it',
           'Yes, about twice as fast, because it never restores',
           'No, it is slower because it needs an extra step',
           'Yes, because it does not need a carry chain',
@@ -326,9 +336,10 @@ export const chMulDiv: Chapter = {
       title: 'SRT: a redundant quotient',
       body: `
         <p>The carry chain is the problem: each step must know the sign of a full-width sum before it can choose. SRT division
-        (Sweeney, Robertson and Tocher, 1958) removes it with two ideas. First, allow quotient digits <strong>−1, 0 and +1</strong>. The
+        (Sweeney, Robertson and Tocher, 1958) allows quotient digits <strong>−1, 0 and +1</strong>. The
         choice then no longer has to be exact: when the remainder is near zero, either neighbouring digit keeps it in range, and the error is
-        fixed by a later digit. Second, since the choice only needs a rough idea of the remainder, keep the remainder in <strong>carry-save form</strong>,
+        fixed by a later digit. The second idea came later and is what makes SRT fast in hardware: since the choice only needs a rough idea of the
+        remainder, keep the remainder in <strong>carry-save form</strong>,
         <span data-show="u10 u11">two words</span> whose sum is the true value. Each step is then <span data-show="u20">one row of independent full adders</span>, whatever the width.</p>
         <p>For that to work the divisor must be normalized (½ ≤ d < 1, its top bit set): <span data-show="u1">the leading zeros of b are counted and both operands
         shifted</span>. The quotient comes out as two words, <span data-show="u12 u13">the +1 digits and the −1 digits</span>, and their difference is the answer.
@@ -349,8 +360,8 @@ export const chMulDiv: Chapter = {
     {
       title: 'Choosing the digit',
       body: `
-        <p>The digit is chosen from the shifted remainder 2w, in units of half the divisor: +1 if 2w ≥ 0, 0 if −½ ≤ 2w < 0, −1 below.
-        Only the top four bits of the sum and carry words are added, so the estimate can be low by up to one unit. That is safe:
+        <p>The digit is chosen from the shifted remainder 2w against fixed thresholds (normalization put d in [½, 1)): +1 if 2w ≥ 0, 0 if −½ ≤ 2w < 0, −1 below.
+        Only the top four bits of the sum and carry words are added, an estimate in steps of ½, so it can be low by up to one step. That is safe:
         +1 is correct anywhere in [0, 2d), and −1 anywhere in [−2d, 0); the regions overlap around zero and the 0 digit covers the gap.</p>
         <p>The circuit does not even form the 4-bit sum. It needs only <span data-show="sign">its sign</span> (<span data-show="cy">a carry into bit 3</span>, looked ahead from the bits below)
         and whether it is −1, which happens exactly when <span data-show="m1">every bit pair differs</span>. 14 NAND delays, at any operand width.</p>`,
@@ -409,7 +420,7 @@ export const chMulDiv: Chapter = {
         ],
         answer: 0,
         why: ['', 'It needs fewer: 7 against 10. Each of them is longer.', 'Both dividers normalize once, in the load cycle, whatever the operands.', 'The final addition runs once per division. The crossover comes from the step delay times the number of steps.'],
-        explain: 'Both have a fixed overhead of load, done and one extra digit. At 8 bits radix 4 saves 3 cycles of 44 against 10 of 29: 308 against 290. At 32 bits it saves 15 cycles: 836 against 1 054. Real dividers go further: radix 8 or 16 by overlapping two or three radix-2 or radix-4 stages per cycle.',
+        explain: 'Both pay a load cycle and a done cycle; radix 4 also one extra digit (the dividend is shifted down two places). At 8 bits radix 4 takes 7 cycles of 44 delays against 10 of 29: 308 against 290. At 32 bits, 19 of 44 against 34 of 31: 836 against 1 054. Real dividers go further: radix 8 or 16 by overlapping two or three radix-2 or radix-4 stages per cycle.',
       },
     },
     {
@@ -427,7 +438,10 @@ export const chMulDiv: Chapter = {
     {
       title: 'RV32IM',
       body: `
-        <p>The complete system CPU with <span data-show="md">the M unit</span> beside <span data-show="mres">the result multiplexer</span>: about 104 000 NANDs, 25 % more than without it, still checked
+        <p>The complete system CPU with <span data-show="md">the M unit</span> beside <span data-show="mres">the result multiplexer</span>: about ${kNands(sysNands(true).core)} NANDs
+        without its program ROM, ${pct(sysNands(true).core, sysNands(false).core)} % more than the RV32I machine of <a href="#/c/io/0">chapter 18</a>
+        (${kNands(sysNands(false).core)}); the M unit alone is ${stats(MDU).nands.toLocaleString('en-US').replace(/,/g, ' ')}. With its ${kNands(sysNands(true).rom)}-NAND program ROM:
+        ${kNands(sysNands(true).all)} against ${kNands(sysNands(false).all)}. It is still checked
         against the instruction-set simulator (the reference model that runs the program one instruction at a time) on every instruction. The timing panel shows the cost in speed: <strong>one NAND delay</strong> (126 → 127).
         The critical path does not even pass through the multiplier. The tree is shallow enough to hide behind the existing
         branch-and-trap decision, which now ends through the new stall logic in the register file's write enable. Press "Highlight path" to see it.</p>
@@ -450,8 +464,12 @@ export const chMulDiv: Chapter = {
     {
       title: 'What it costs a program',
       body: `
-        <p>Real processors pipeline the multiplier (3 or 4 stages, one result per cycle) and use faster dividers: radix-4 or SRT dividers
-        that make 2 or more quotient bits per cycle, still taking 10 to 40 cycles. Division is rare enough that nobody spends the area to make it fast.</p>`,
+        <p>Real processors pipeline the multiplier (3 or 4 stages, one result per cycle) and use faster dividers than this one: radix-4 SRT (as built
+        above, 2 bits a cycle) or radix 16 (two radix-4 stages overlapped in one cycle), still 10 to 40 cycles for 32 or 64 bits. Division is rare
+        enough that it gets a fraction of the multiplier's area: fast enough not to dominate a program, never one result per cycle.</p>
+        <p>Floating-point units often divide another way: Newton–Raphson or Goldschmidt iterations on the multiplier they already have, starting from
+        a small table's estimate of 1/d. Each iteration (two multiplies) doubles the number of correct bits, 8 → 16 → 32 → 64, against a fixed few
+        per cycle for digit recurrence, but the result needs a final correction step to be rounded exactly.</p>`,
       challenge: {
         kind: 'quiz', question: 'On this CPU, a loop body has 20 instructions, one of which is a divide (34 cycles; everything else takes 1). What is the CPI?',
         options: ['1.0', '1.65', '2.65', '34'], answer: 2,

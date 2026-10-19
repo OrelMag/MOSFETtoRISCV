@@ -1,12 +1,29 @@
-import { CSR_UNIT, LOAD_EXTRACT, STORE_ALIGN, TRAP_UNIT, bankedMemory } from '../lib';
+import { CSR_UNIT, LOAD_EXTRACT, STORE_ALIGN, TRAP_UNIT, bankedMemory, systemCpu } from '../lib';
+import { withoutParts } from '../lib/tech';
 import { cpuState } from '../riscv/cosim';
 import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';
+import { stats } from '../sim/stats';
 import { pack } from '../sim/values';
 import { cpuScene } from '../widgets/cpupanel';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
 
 const sys = (id: string) => SYSTEM_PROGRAMS.find((p) => p.id === id)!.source;
+
+/** NANDs of the complete system CPU (RV32I, or RV32IM with `m`), with and without its program ROM. The ROM is a
+ *  fixed 128-word mux tree whatever the program, so an empty program measures it. */
+const sysMemo = new Map<boolean, { all: number; core: number; rom: number }>();
+export function sysNands(m: boolean): { all: number; core: number; rom: number } {
+  let r = sysMemo.get(m);
+  if (!r) {
+    const d = systemCpu([], { m });
+    const all = stats(d).nands, core = stats(withoutParts(d, ['imem'])).nands;
+    sysMemo.set(m, (r = { all, core, rom: all - core }));
+  }
+  return r;
+}
+/** A count rounded to thousands, spaced as the site writes numbers: 67 131 → "67 000". */
+export const kNands = (n: number) => (Math.round(n / 1000) * 1000).toLocaleString('en-US').replace(/,/g, ' ');
 
 function csrq(st: Stage, inst: string): number {
   const csr = st.rootCtx?.node.children?.get('csr');
@@ -29,8 +46,8 @@ export const chIO: Chapter = {
       'A store replicates the byte (or half) into every lane and raises byte enables only for the addressed bytes: <code>sb</code> to address 2 → be = 0100, <code>sh</code> to address 2 → 1100.',
       'The data memory is four 8-bit banks, each written when we ∧ be<sub>i</sub>; a read returns the whole word.',
       'A load picks the lane with a 4:1 (byte) or 2:1 (half) mux, then sign- or zero-extends by wiring alone: the cost is all in the multiplexers.',
-      'A halfword at an odd address or a word off a 4-byte boundary is misaligned; the complete CPU traps on it.',
-      'Addresses with bit 31 set go to the I/O unit: a store to 0x8000_0000 prints a byte, 0x8000_0004 sets the LEDs, a load from 0x8000_0008 reads the switches. The whole machine is about 67 000 NANDs without its program ROM.',
+      'A halfword at an odd address or a word off a 4-byte boundary is misaligned. RISC-V lets an implementation handle it in hardware or trap; the complete CPU traps.',
+      `Addresses with bit 31 set go to the I/O unit: a store to 0x8000_0000 prints a byte, 0x8000_0004 sets the LEDs, a load from 0x8000_0008 reads the switches. The whole machine is about ${kNands(sysNands(false).core)} NANDs without its program ROM.`,
     ],
     practise: ['c_computer'],
     check: [
@@ -45,7 +62,7 @@ export const chIO: Chapter = {
         question: 'Which of these accesses is misaligned?',
         options: ['<code>lw</code> from address 6', '<code>lh</code> from address 6', '<code>lb</code> from address 7', '<code>sw</code> to address 8'],
         answer: 0,
-        explain: 'A word must sit on a 4-byte boundary; address 6 spans two words. The complete CPU raises a misaligned-load exception instead (next chapter).',
+        explain: 'An aligned word sits on a 4-byte boundary; address 6 spans two words. RISC-V lets a core either split such an access in hardware or trap; the complete CPU raises a misaligned-load exception (next chapter).',
         why: ['', 'A halfword needs only an even address.', 'A byte can sit at any address.', '8 is a multiple of 4.'],
       },
       {
@@ -66,7 +83,8 @@ export const chIO: Chapter = {
         <p>For a store, the <strong>store alignment</strong> unit <span data-show="r8 r16">replicates the byte (or half)</span> into every lane it could go to,
         and raises <strong><span data-show="dec bsel">byte enables</span></strong> only for the addressed bytes: <code>sb</code> to address 2 enables byte 2, <code>sh</code>
         to address 2 enables bytes 2–3. A halfword at an odd address, or a word not on a 4-byte boundary, is
-        <span data-show="mis"><em>misaligned</em></span>; the complete CPU turns that into an exception.</p>
+        <span data-show="mis"><em>misaligned</em></span>. RISC-V lets an implementation either handle a misaligned access (two memory accesses stitched together) or
+        trap and leave it to software; the complete CPU traps.</p>
         <div class="try">Set size = 0 (byte) and step addr through 0–3: one enable bit moves across.</div>`,
       scene: () => ({ root: STORE_ALIGN, inputs: { wd: 0xab, addr: 2, size: 0 } }),
       tries: [(st) => st.getInput('size') === 0 && st.getInput('addr') !== 2],
@@ -101,10 +119,11 @@ export const chIO: Chapter = {
         <p>This is the full processor: the single-cycle datapath plus the <span data-show="st ld">load/store unit</span> and
         <span data-show="dm">byte-banked memory</span>, an <strong><span data-show="io">I/O unit</span></strong>, and (next chapter)
         <span data-show="csr trap">CSRs, a trap unit</span> and interrupts. Every RV32I instruction plus Zicsr, about
-        67 000 NAND gates, and still checked against the instruction-set simulator every cycle.</p>
+        ${kNands(sysNands(false).core)} NAND gates without the program ROM (${kNands(sysNands(false).all)} with it), and still checked against the instruction-set simulator every cycle.</p>
         <p>Addresses with bit 31 set go to <strong>memory-mapped I/O</strong> instead of the data memory. A store to
-        0x8000_0000 is not a store at all: the I/O unit sends the byte to the <span data-show="pin:consoleData">console</span>. That is how every processor talks to
-        the outside world, from UARTs to GPUs.</p>
+        0x8000_0000 is not a store at all: the I/O unit sends the byte to the <span data-show="pin:consoleData">console</span>. That is how most processors talk to
+        the outside world, from UARTs to GPUs; x86 also keeps a separate 64 K I/O port space with its own <code>in</code> / <code>out</code> instructions,
+        now used mostly by legacy devices.</p>
         <div class="try">Run the program. The console fills one <code>sb</code> at a time.</div>`,
       scene: () => cpuScene({ source: sys('hello'), system: true }),
       challenge: {
@@ -144,10 +163,11 @@ export const chTraps: Chapter = {
   recap: {
     keep: [
       'CSRs: a separate space of 12-bit addresses, accessed with <code>csrrw</code> (swap), <code>csrrs</code> (set bits), <code>csrrc</code> (clear bits) and their immediate forms. This CPU has sixteen, one address comparator each.',
-      'A trap: PC ← mtvec, mepc ← the address of the trapping instruction, mcause ← the reason, MPIE ← MIE, MIE ← 0. <code>mret</code> jumps to mepc and restores MIE.',
+      'A trap: PC ← mtvec, mepc ← the address of the trapping instruction, mcause ← the reason, MPIE ← MIE, MIE ← 0. <code>mret</code> jumps to mepc and restores MIE. mtvec\'s low two bits are its MODE: 0 direct (every trap to BASE), 1 vectored (interrupt <em>n</em> to BASE + 4<em>n</em>); here MODE is wired to 0.',
       'mcause: 2 illegal instruction, 3 breakpoint, 4 misaligned load, 6 misaligned store, 11 ecall; interrupts set bit 31 (0x80000007 timer, 0x8000000B external). A trapping instruction writes nothing.',
       'An interrupt is pending in mip while its source holds, and taken at the next instruction boundary only if enabled in mie and globally by mstatus.MIE.',
-      'Priority: interrupts, then illegal instruction, ebreak, ecall, misaligned fetch, load, store. CSR unit, trap unit and system decoder: about 10 000 NANDs.',
+      'Priority: interrupts (external, then timer), then illegal instruction, ebreak, ecall, misaligned fetch, load, store. CSR unit, trap unit and system decoder: about 10 000 NANDs.',
+      'The hardware saves only the PC and the cause: a handler saves every register it uses (mscratch gives it a register to swap with sp), nests only by saving mepc and mcause and setting MIE again, and an idle loop waits in <code>wfi</code>. Machine mode is the only mode here; with user mode, mstatus.MPP says where a trap came from and ecall\'s cause is 8 from U, 11 from M.',
     ],
     practise: ['y_csr', 'y_trap', 'y_irq', 'p_handler', 'y_final'],
     check: [
@@ -172,6 +192,13 @@ export const chTraps: Chapter = {
         explain: 'Everything the handler needs to know where and why, and nothing the interrupted program owns.',
         why: ['', 'Without mepc and mcause the handler could neither return nor know why it was called.', 'A trap must not touch any general register: the interrupted program may be using ra.', 'Saving registers is the handler\'s job, in software; the hardware saves only the PC and the cause.'],
       },
+      {
+        question: 'The timer and the external interrupt are both pending and both enabled, with MIE = 1. What does mcause hold in the handler?',
+        options: ['0x8000000B: external interrupts outrank the timer', '0x80000007: the timer, its cause number is lower', 'Whichever became pending first', 'Both bits, ORed into one cause'],
+        answer: 0,
+        explain: 'The privileged spec fixes the order among machine interrupts: external (11), then software (3), then timer (7). The CSR unit here picks external over timer; the timer stays pending in mip and is taken right after the handler\'s mret, unless the handler moved mtimecmp.',
+        why: ['', 'Priority is not the cause number: the spec puts external interrupts first, since a device cannot wait as long as a tick can.', 'The hardware keeps no arrival order: it looks at what is pending at the instruction boundary and picks by fixed priority.', 'mcause holds one cause; the other interrupt stays pending in mip.'],
+      },
     ],
   },
   steps: [
@@ -179,9 +206,10 @@ export const chTraps: Chapter = {
       title: 'Control and status registers',
       body: `
         <p>A second, separate register space: <strong>CSRs</strong>, addressed by a 12-bit number and accessed only with
-        <code>csrrw</code> (swap), <code>csrrs</code> (set bits) and <code>csrrc</code> (clear bits), plus immediate forms. This CPU implements the
-        machine-mode set an embedded core needs: mstatus, misa, mie, mtvec, mscratch, mepc, mcause, mtval, mip, mcycle/cycle and mhartid, plus the identity
-        registers every core must have (mvendorid, marchid, mimpid) and RV32's upper half of mstatus (mstatush), which read 0.</p>
+        <code>csrrw</code> (swap), <code>csrrs</code> (set bits) and <code>csrrc</code> (clear bits), plus immediate forms. This CPU implements a
+        working subset of machine mode: mstatus, misa, mie, mtvec, mscratch, mepc, mcause, mtval, mip, mcycle/cycle and mhartid, plus the identity
+        registers every core must have (mvendorid, marchid, mimpid) and RV32's upper half of mstatus (mstatush), which read 0. Left out: minstret,
+        the counters' upper halves (mcycleh …) and 64 bits of time; here mcycle reads the 32-bit timer mtime.</p>
         <p>Open the CSR unit: sixteen <span data-show="is_mstatus is_mtvec is_mepc is_mcause">address comparators</span>, a
         <span data-show="rsel">read multiplexer</span>, the <span data-show="orOld andOld opSel">read-modify-write logic</span>,
         and the <span data-show="rTvec rEpc rCause rTval">registers</span>, some of them written by hardware on a trap.</p>`,
@@ -194,9 +222,17 @@ export const chTraps: Chapter = {
         the PC goes to <code>mtvec</code> through the <span data-show="trapmux">trap / mret multiplexer</span>, the address of the
         interrupted instruction is saved in <code>mepc</code>, the reason in <code>mcause</code> (both in the
         <span data-show="csr">CSR unit</span>), and interrupts are disabled
-        (MIE → MPIE, MIE = 0). The handler ends with <code>mret</code>, which jumps back to <code>mepc</code> and restores MIE.</p>
+        (MIE → MPIE, MIE = 0). The handler ends with <code>mret</code>, which jumps back to <code>mepc</code> and restores MIE.
+        mtvec's low two bits are its MODE: 0 <em>direct</em> sends every trap to the same address, 1 <em>vectored</em> sends interrupt <em>n</em>
+        to BASE + 4<em>n</em> (exceptions still to BASE), saving the handler the dispatch on mcause. Here the two bits are wired to 0: direct only.</p>
         <p><code>ecall</code> traps on purpose: it is how a program calls the operating system. Here a three-line "OS" prints the
         character in a0. Note the handler adds 4 to mepc so that <code>mret</code> returns <em>after</em> the ecall.</p>
+        <details class="deeper"><summary>Deeper: privilege modes</summary>
+        <p>This CPU has only machine mode (M), the one mode every RISC-V core must have, so the "OS" and the program share it. A real system runs
+        programs in user mode (U), and an OS with virtual memory in supervisor mode (S). A trap goes to M (or, if delegated, S) and records the mode
+        it came from in mstatus.MPP (2 bits: 0 U, 1 S, 3 M); <code>mret</code> returns to that mode. Hence three ecall causes: 8 from U, 9 from S,
+        11 from M. In U, an access to a machine CSR or an <code>mret</code> is an illegal instruction, and PMP registers fence off memory: that is
+        what stops a program from taking over the machine. Here MPP is wired to 3 and ecall's cause is always 11.</p></details>
         <div class="try">Pulse to the ecall and watch mepc and mcause (11 = ecall) change in the I/O panel, and the PC jump to the handler.</div>`,
       scene: () => cpuScene({ source: sys('syscall'), system: true, highlight: ['trap', 'csr', 'trapmux'] }),
       tries: [(st) => { try { return csrq(st, 'rCause') === 11; } catch { return false; } }],
@@ -229,8 +265,15 @@ export const chTraps: Chapter = {
         <code>mtime</code> and a compare register <code>mtimecmp</code>; while mtime ≥ mtimecmp the timer interrupt is
         <em>pending</em> (mip.MTIP). It is <em>taken</em> at the next instruction boundary if it is enabled (mie.MTIE) and
         interrupts are globally on (mstatus.MIE): three bits in the <span data-show="csr">CSR unit</span>.</p>
-        <p>The handler prints a dot and moves mtimecmp 40 cycles ahead. The main loop never knows it was interrupted: that is
-        the foundation of every multitasking operating system's scheduler tick.</p>
+        <p>The handler prints a dot and moves mtimecmp 40 cycles ahead. The main loop never knows it was interrupted, but only because this handler
+        touches t1, t2 and s1, which the loop does not use. A real handler saves every register it uses first: it swaps sp with
+        <code>mscratch</code> (<code>csrrw sp, mscratch, sp</code>), which the OS set to point at a save area, stores the registers there, and
+        undoes it all before <code>mret</code>. That is the foundation of every multitasking operating system's scheduler tick: save one
+        program's registers, load another's.</p>
+        <details class="deeper"><summary>Deeper: nested interrupts</summary>
+        <p>The hardware does not nest: there is one mepc and one mcause, and the trap cleared MIE. A handler that should itself be interruptible
+        (a slow one, under a more urgent device) saves mepc, mcause and mstatus on its stack, then sets MIE again; before returning it clears MIE
+        and restores them. Cores with many interrupt levels (RISC-V's CLIC, Arm's NVIC) do that stacking in hardware.</p></details>
         <div class="try">Let the clock run and watch the dots, mepc (where the loop was interrupted) and s1 (tick count).</div>`,
       scene: () => cpuScene({ source: sys('timer'), system: true, highlight: ['io', 'csr'] }),
       challenge: {
@@ -251,14 +294,16 @@ export const chTraps: Chapter = {
         <span data-show="csr">CSR unit</span>; the <span data-show="trap">trap unit</span> takes it). The handler toggles the LEDs and counts presses.
         Because the line is checked at every instruction boundary, the response time is one instruction: hardware latency is
         the reason real-time systems love simple, short pipelines.</p>
+        <p>The loop here spins. A real idle loop waits in <code>wfi</code> (wait for interrupt): the core may stop its clock until an interrupt is
+        pending and enabled in mie, even with mstatus.MIE = 0. The spec lets <code>wfi</code> be a no-op, and here it is one.</p>
         <div class="try">Pulse a few cycles to finish the setup, then press "IRQ (one cycle)" in the I/O panel.</div>`,
       scene: () => cpuScene({ source: sys('irq'), system: true, highlight: ['csr', 'trap'] }),
       challenge: {
-        kind: 'quiz', question: 'An interrupt arrives while MIE = 0 (we are inside a handler). What happens?',
+        kind: 'quiz', question: 'A device raises its interrupt line, and holds it until the handler services it, while MIE = 0 (we are inside a handler). What happens?',
         options: ['It is lost', 'It stays pending in mip and is taken after mret sets MIE again', 'It interrupts the handler anyway', 'The CPU halts'],
         answer: 1,
         why: ['Pending and enabled are separate: mip keeps showing the request for as long as the device holds the line.', '', 'MIE = 0 is exactly what keeps a handler from being interrupted.', 'Nothing halts: the interrupt just waits for MIE.'],
-        explain: 'Pending and enabled are separate: the interrupt remains visible in mip (for a level-triggered line, as long as the device holds it) and is taken as soon as mret restores MIE. That is why handlers must clear the cause at the device.',
+        explain: 'Pending and enabled are separate: mip shows the line for as long as the device holds it, and the interrupt is taken as soon as mret restores MIE. That is why handlers must clear the cause at the device. This scene\'s IRQ button is different: it raises the line for one cycle and nothing latches it, so a press during the handler is lost. Real systems latch the request, in the device or in an interrupt controller (RISC-V\'s PLIC), until software acknowledges it.',
       },
     },
     {

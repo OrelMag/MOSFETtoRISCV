@@ -35,7 +35,7 @@ export const chCache: Chapter = {
       'A 6T SRAM cell is two cross-coupled inverters and two access transistors: 6 transistors a bit, against 60 for a flip-flop with enable. Sizing (pull-down &gt; access &gt; pull-up) keeps a read from flipping the cell and lets a write flip it. DRAM is one transistor and one capacitor, paid for with refresh and slow, destructive reads.',
       'SEC-DED: Hamming check bits at positions 1, 2, 4, … spell the position of one flipped bit, and one more parity bit tells one error from two. 8 data bits need 5 extra, 64 need 8: the 72-bit ECC word.',
       'Address = tag | index | word offset | byte offset. A hit is valid AND stored tag = address tag. Here a miss stalls 8 cycles (4 of latency, then 4 to copy the line); a dirty victim adds 4 to write it back first.',
-      'Misses are compulsory, capacity or conflict. Ways remove conflict misses at the price of comparators, a wider hit multiplexer and replacement state: "Two arrays, one set" drops from 33 misses to 9 with two ways.',
+      'Misses are compulsory, capacity or conflict. Ways remove conflict misses at the price of comparators, a wider hit multiplexer and replacement state: "Two arrays, one set" drops from 33 misses (direct-mapped write-back) to 9 with two ways.',
       'AMAT = hit time + miss rate × miss penalty, level by level: 4 + 0.05 × (12 + 0.2 × 250) = 7.1 cycles.',
     ],
     practise: ['o_cache'],
@@ -257,7 +257,10 @@ export const chCache: Chapter = {
         (the control field that selects the value written back), raises <code>re</code>, and a miss holds <span data-show="pc">the PC</span> and the
         <span data-show="rwg">register write</span> (<code>retire</code> = 0) until the line arrives. The instruction-set simulator steps only when an instruction retires, so it still checks every one.
         The cache costs about 10 000 NANDs of tag and data arrays, and the clock period does not change (103).</p>
-        <p>An honest caveat: the "slow" main memory here is flip-flops too; its latency is modelled by the 4 wait cycles.</p>
+        <p>An honest caveat: the "slow" main memory here is flip-flops too; its latency is modelled by the 4 wait cycles on a load miss only.
+        A store writes it in its own cycle, so here write-through never stalls. A real memory cannot take a word every cycle: a write-through
+        cache puts a <strong>write buffer</strong> in front of it (a few queued address / data pairs, drained when the bus is free, checked by
+        loads that might want a queued word), and stalls only when the buffer is full. Bandwidth, not latency, is then the limit.</p>
         <div class="try">Run "Sum an array twice": 4 misses in the first pass, none in the second. Then try "Two arrays, one set".</div>`,
       scene: () => cpuScene({ source: csrc('reuse'), dcache: true, adder: 'ks', highlight: ['dm'] }),
       challenge: {
@@ -280,7 +283,7 @@ export const chCache: Chapter = {
         victim back, 4–7 wait, 8–11 fill, and a clean victim jumps from 0 to 5.</p>
         <p>The panel's memory view now shows the memory <em>as the program sees it</em>: main memory overlaid with the dirty lines, which are
         the only up-to-date copy. That is the coherence problem of <a href="#/c/multicore/0">chapter 24</a> in its simplest form.</p>
-        <div class="try">Run "Update an array in place": 48 stores, all of them hits after the first pass's 4 misses. Open <span data-show="dm.ram"><code>dm</code> → <code>ram</code></span>: main memory is still all zero.</div>`,
+        <div class="try">Run "Update an array in place": 48 stores, every one a hit, because each follows a load of the same word; the first pass's loads miss 4 times and bring the lines in. Open <span data-show="dm.ram"><code>dm</code> → <code>ram</code></span>: main memory is still all zero.</div>`,
       scene: () => cpuScene({ source: csrc('inplace'), dcache: 'wb', adder: 'ks', highlight: ['dm'] }),
       challenge: {
         kind: 'quiz', question: 'In "Update an array in place" (48 stores to 16 words), how many words reach main memory with each cache?',
@@ -297,9 +300,11 @@ export const chCache: Chapter = {
         load misses. A <span data-show="dm"><strong>2-way set-associative</strong> cache</span> of the same size has half as many sets, but each holds two lines: both
         arrays fit. Both ways are compared at once (the 2-way tag compare of a few steps back), and
         <span data-show="dm.lru">one <strong>LRU</strong> bit per set</span>,
-        flipped on every hit, names the way to evict next.</p>
-        <p>Measured: 33 misses direct-mapped (32 loads and the final store), 9 with two ways; the run takes less than half the cycles.</p>
-        <div class="try">Run "Two arrays, one set" here, then compare with the direct-mapped CPU two steps back.</div>`,
+        set on every hit to point at the other way, names the way to evict next.</p>
+        <p>Measured: 33 misses with the direct-mapped write-back cache one step back (32 loads and the final store, which allocates its line),
+        32 with the write-through cache two steps back (its store miss fetches nothing), 9 with two ways; the run takes less than half the
+        write-back one's cycles.</p>
+        <div class="try">Run "Two arrays, one set" here, then compare with the direct-mapped CPUs one and two steps back.</div>`,
       scene: () => cpuScene({ source: csrc('pingpong'), dcache: 'wb2', adder: 'ks', highlight: ['dm'] }),
       challenge: {
         kind: 'reach', goal: 'Run the program to the end.',
@@ -357,15 +362,32 @@ export const chCache: Chapter = {
         ],
         answer: 0,
         why: ['', 'A data miss does nothing to fetch. The problem is that E has nowhere to send its instruction while M is occupied.', 'The register file is free. The stages cannot advance because M will not take the next instruction.', 'Then E would move into M and overwrite the stalled access. In order, the pipeline moves as one.'],
-        explain: 'An in-order pipeline moves as a whole: if M holds, E must hold or overwrite it, and so on back to the PC. Out-of-order cores avoid this: other instructions continue around a missing load (non-blocking caches, a load queue).',
+        explain: 'An in-order pipeline moves as a whole: if M holds, E must hold or overwrite it, and so on back to the PC. With a non-blocking cache even an in-order core avoids this: the missing load leaves M with its register marked pending, and the pipeline stalls only when an instruction uses that register (stall on use). Out-of-order cores go further: other instructions continue around a missing load (a load queue, many outstanding misses).',
       },
     },
     {
       title: 'Average memory access time',
       body: `
         <p>AMAT = hit time + miss rate × miss penalty. A modern core: an L1 hit in 4 cycles, 5 % misses, and an L2 behind it that hits in 12
-        cycles but itself misses 20 % of the time to DRAM at 250. Write-back caches (only dirty lines go to memory) dominate for exactly this
-        reason: memory bandwidth is the scarce resource.</p>`,
+        cycles but itself misses 20 % of the time to DRAM at 250.</p>
+        <p>Latency is one cost; bandwidth is the other. A write-through cache sends every store down a level, a write-back cache only each dirty
+        line once, when it is evicted. That is why write-back dominates from L2 outward (and in most L1s): with several cores sharing one
+        memory bus, bandwidth is the scarce resource.</p>
+        <p>Two more choices shape a real hierarchy. <strong>Inclusive</strong> levels keep a copy of everything above them in the level below
+        (a snoop that misses L3 need not ask the L1s), at the price of duplicated capacity; <strong>exclusive</strong> levels hold each line in one
+        place only, so L2 + L3 capacity adds up, at the price of moving lines both ways on every miss. And <strong>prefetching</strong> fetches
+        lines before they are asked for: a next-line or stride prefetcher spots a sequential sweep (the row-major sum, "Vector add") and turns
+        its compulsory misses into hits, at the cost of bandwidth and, when it guesses wrong, of lines it evicts for nothing.</p>
+        <details class="deeper"><summary>Deeper: virtual memory</summary>
+        <p>The site's CPUs use physical addresses only. An operating system gives every program its own <strong>virtual</strong> address space:
+        memory is split into <strong>pages</strong> (4 KB), and a <strong>page table</strong> in memory maps each virtual page to a physical one,
+        with permission bits (read, write, execute, user). RISC-V's Sv32 walks a two-level table; a missing or forbidden page traps (a page fault)
+        and the OS fixes it, possibly loading the page from disk. Walking the table on every access would multiply memory traffic, so a
+        <strong>TLB</strong> caches recent translations: a small, fully associative cache of page-table entries, 32 to 64 in an L1 TLB.</p>
+        <p>Translation sits on the path of every load. L1 caches overlap the two: they are <strong>virtually indexed, physically tagged</strong>.
+        The index and offset come from the low 12 bits, which translation does not change, so the set is read while the TLB translates the upper
+        bits, and the tag compare uses the physical page number. That caps an L1 at page size × ways: 4 KB × 8 ways = 32 KB, which is why so
+        many L1 data caches are exactly 32 KB, 8-way.</p></details>`,
       challenge: {
         kind: 'quiz', question: 'L1: 4-cycle hit, 5 % miss rate. L2: 12-cycle hit, 20 % local miss rate. DRAM: 250 cycles. What is the AMAT?',
         options: ['4.6 cycles', '7.1 cycles', '16.5 cycles', '266 cycles'], answer: 1,

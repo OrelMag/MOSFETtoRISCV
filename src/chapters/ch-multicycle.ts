@@ -40,7 +40,7 @@ export const chMulticycle: Chapter = {
       '13 states. Branch, lui and auipc take 3 cycles; ALU operations, stores and jal 4; loads and jalr 5.',
       'Hardwired control: a 4-bit state register, a 4→16 decoder, an AND gate per opcode-dependent transition and OR gates per signal: 412 NANDs.',
       'Microcode: a µPC addresses a ROM of microwords (14 control bits, a 4-bit next address, a 2-bit sequencing mode), with dispatch ROMs indexed by the opcode: 6 124 NANDs here, because these ROMs are mux trees of constants.',
-      'Period 85 NAND delays against the single-cycle CPU\'s 103 (both with Kogge–Stone adders), but CPI ≈ 3.8: about 320 delays per instruction.',
+      'Period 85 NAND delays against the single-cycle CPU\'s 103 (both with Kogge–Stone adders), but CPI 3.6 to 4.0 on the sample programs: about 300 to 340 delays per instruction.',
     ],
     practise: ['s_fsm', 'o_mc'],
     check: [
@@ -153,7 +153,8 @@ export const chMulticycle: Chapter = {
       title: 'Was it worth it?',
       body: `
         <p>Measured with the timing panel: the clock period drops from 103 to <strong>85</strong> NAND delays. The longest step is still a full
-        <span data-show="alu">ALU</span> operation followed by the <span data-show="npc">branch decision</span>. But the CPI is now about <strong>3.8</strong>, so each instruction takes ~320 delays instead of 103.
+        <span data-show="alu">ALU</span> operation followed by the <span data-show="npc">branch decision</span>. But the CPI is now <strong>3.6 to 4.0</strong> on the sample programs (this gcd: 51 instructions in 182 cycles, 3.57),
+        so each instruction takes 300 to 340 delays instead of 103.
         The gate count does not even go down: <span data-show="ir oldpc ra rb data aluout">six 32-bit registers</span> (about 2 900 NANDs) cost more than the two adders they replace.</p>
         <p>Multicycle machines made sense when memory was the expensive, slow part and logic was scarce. Their lasting legacy is the controller,
         and the idea of overlapping the steps instead of serialising them: the pipeline of <a href="#/c/pipeline/0">chapter 16</a>.</p>`,
