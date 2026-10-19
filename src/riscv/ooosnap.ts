@@ -125,3 +125,9 @@ export function oooSnap(sim: Reader, root: HierNode): OooSnap {
   }
   return { fetched, rob: robRows, iq: iqRows, rat: ratRows, sq: sqRows };
 }
+
+/** The instruction each port picks this cycle (its PC; -1: none), from the issue queue's grants. */
+export function oooIssued(sim: Reader, root: HierNode): number[] {
+  const iq = child(root, 'iq'), pc = pos(PAY, 'pc'), at = PAY.slice(0, pc).reduce((a, [, w]) => a + w, 0);
+  return [0, 1].map((p) => (word(sim, iq.ports[`go${p}`]) ? word(sim, iq.ports[`pay${p}`].slice(at, at + 32)) : -1));
+}

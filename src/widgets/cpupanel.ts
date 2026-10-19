@@ -7,7 +7,7 @@ import { GateSim } from '../sim/gatesim';
 import { energyFj, fmtEnergy, fmtPower, POWER_NOTE, PowerMeter, powerW } from '../sim/power';
 import type { Sim } from '../sim/sim';
 import { analyzeTiming } from '../sim/timing';
-import { MC_FIELDS, MC_FSM_SPEC, MC_STATES, dualPipeCpu, microword, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu } from '../lib';
+import { MC_FIELDS, MC_FSM_SPEC, MC_STATES, dualPipeCpu, microword, multicycleCpu, oooCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu } from '../lib';
 import { fsmView } from './fsmpanel';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { cacheLines, cpuState, retireCount, retiring } from '../riscv/cosim';
@@ -30,7 +30,9 @@ import { DECK_EXT, deckFromJson, deckToJson } from '../cards/card';
 import { deckProgram, programCards } from '../cards/program';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import type { FieldKey } from '../riscv/fields';
-import { instrUse, stageUse, STAGE_UNITS } from './insthw';
+import { instrUse, oooUse, stageUse, STAGE_UNITS } from './insthw';
+import { isOooCore, oooSnap } from '../riscv/ooosnap';
+import { oooPanel, type OooLink } from './ooopanel';
 import { clearInstr, markInstr, slowControls } from './slowctl';
 import { instrBreakdown } from './instrfields';
 import { PipeHistory, pipeGridRows } from './pipegrid';
@@ -66,6 +68,8 @@ export interface CpuSceneOptions {
   editable?: boolean;
   /** The dual-issue RV32IM pipeline of chapter 25 (implies pipeline and m: two lanes in the listing and the diagram). */
   wide?: boolean;
+  /** Chapter 25's out-of-order core (implies m; runs on the cycle engine; adds the Out of order panel). */
+  ooo?: boolean;
   /** The single-cycle CPU's ROM (2^imemK words) and data memory (2^dmemK words), when not the defaults (6 and 5). */
   imemK?: number;
   dmemK?: number;
@@ -73,12 +77,19 @@ export interface CpuSceneOptions {
   extraPanels?: ScenePanel[];
 }
 
+/** The out-of-order core's instruction ROM: 2^k words, at least 64. */
+const oooImemK = (words: number[]) => Math.max(6, Math.ceil(Math.log2(Math.max(1, words.length))));
+
 /** A scene running `source` on the single-cycle CPU, with the CPU panel attached. */
 export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
-  const opts = sceneOpts.wide ? { ...sceneOpts, pipeline: true, m: true } : sceneOpts;
+  const opts = sceneOpts.wide ? { ...sceneOpts, pipeline: true, m: true } : sceneOpts.ooo ? { ...sceneOpts, m: true } : sceneOpts;
   const asm = assemble(opts.source);
+  // the CPU panel and the Out of order panel share the selected instruction
+  const link: OooLink = {};
   return {
+    ...(opts.ooo ? { engine: 'cycle' as const } : {}),
     root: opts.wide ? dualPipeCpu(asm.words, { dmemK: 6 })
+      : opts.ooo ? oooCpu(asm.words, { imemK: oooImemK(asm.words), dmemK: 6 })
       : opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder })
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
@@ -86,14 +97,15 @@ export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
         : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
-    panels: [cpuPanel({ ...opts, asm }), ...(opts.pipeline ? [pipeDiagram(asm)] : []), ...(opts.system ? [ioPanel] : []), ...(opts.multicycle ? [controllerPanel(opts.multicycle, true)] : []), ...(opts.timing ? [timingPanel] : []), ...(opts.extraPanels ?? [])],
+    panels: [cpuPanel({ ...opts, asm, link }), ...(opts.pipeline ? [pipeDiagram(asm)] : []),
+      ...(opts.ooo ? [oooPanel(asm.words, { imemWords: 2 ** oooImemK(asm.words), dmemWords: 64 }, link)] : []), ...(opts.system ? [ioPanel] : []), ...(opts.multicycle ? [controllerPanel(opts.multicycle, true)] : []), ...(opts.timing ? [timingPanel] : []), ...(opts.extraPanels ?? [])],
   };
 }
 
-function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
+function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): ScenePanel {
   return (stage: Stage): Widget => {
     const asm = opts.asm;
-    const issOpts = opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.dcache || opts.wide ? { dmemWords: 64 }
+    const issOpts = opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.ooo ? { dmemWords: 64, imemWords: 2 ** oooImemK(asm.words) } : opts.dcache || opts.wide ? { dmemWords: 64 }
       : { ...(opts.imemK ? { imemWords: 2 ** opts.imemK } : {}), ...(opts.dmemK ? { dmemWords: 2 ** opts.dmemK } : {}) };
     let iss = new ISS(asm.words, issOpts);
     let lastX: number[] = new Array(32).fill(0);
@@ -107,6 +119,12 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     const trace = h('div', { class: 'cpu-trace' });
     /** The listing line the user clicked: its hardware stays highlighted. */
     let selPc: number | null = null;
+    /** The out-of-order core: the port the selected instruction was bound to (-1: not known). */
+    let selPort = -1;
+    if (opts.link) {
+      opts.link.select = (pc, port = -1) => { selPc = pc; selPort = port; update(); };
+      opts.link.selected = () => selPc;
+    }
     const usePath = h('div', { class: 'cpu-use' });
     /** Instruction breakdown: the field pinned by a click, the one under the pointer. */
     let fieldPin: FieldKey | null = null, fieldHover: FieldKey | null = null;
@@ -138,7 +156,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     };
     const wb = opts.dcache === 'wb' || opts.dcache === 'wb2';
     const sel = h('select', { 'aria-label': 'program' }) as HTMLSelectElement;
-    const progs = opts.fpu ? [...F_PROGRAMS, ...PROGRAMS] : opts.dcache ? [...CACHE_CPU_PROGRAMS, ...PROGRAMS] : opts.pipeline && opts.m ? [...PIPE_M_PROGRAMS, ...PROGRAMS] : opts.m ? [...M_PROGRAMS, ...SYSTEM_PROGRAMS, ...PROGRAMS] : opts.system ? [...SYSTEM_PROGRAMS, ...PROGRAMS] : PROGRAMS;
+    const progs = opts.fpu ? [...F_PROGRAMS, ...PROGRAMS] : opts.dcache ? [...CACHE_CPU_PROGRAMS, ...PROGRAMS] : (opts.pipeline || opts.ooo) && opts.m ? [...PIPE_M_PROGRAMS, ...PROGRAMS] : opts.m ? [...M_PROGRAMS, ...SYSTEM_PROGRAMS, ...PROGRAMS] : opts.system ? [...SYSTEM_PROGRAMS, ...PROGRAMS] : PROGRAMS;
     for (const p of progs) sel.append(h('option', { value: p.id }, p.name));
     sel.append(h('option', { value: '__custom' }, 'My program'));
     const match = progs.find((p) => p.source === opts.source);
@@ -162,7 +180,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       stage.checkpoint();
       runBtn.textContent = 'Stop';
       const tick = () => {
-        stage.runCycles(opts.pipeline ? 3 : opts.m || opts.fpu || opts.dcache || opts.icache || opts.multicycle ? 10 : 4, () => iss.halted);
+        stage.runCycles(opts.ooo ? 2 : opts.pipeline ? 3 : opts.m || opts.fpu || opts.dcache || opts.icache || opts.multicycle ? 10 : 4, () => iss.halted);
         if (iss.halted || mismatch || stage.cycles > 20000) return stopRun();
         running = requestAnimationFrame(tick);
       };
@@ -171,7 +189,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
 
     // Slow mode: the learner sets the pace and the level of detail; the highlight follows execution.
     /** Cycles and instructions differ only when an instruction can take several cycles. */
-    const multiCycle = !!(opts.pipeline || opts.multicycle || opts.m || opts.dcache || opts.icache);
+    const multiCycle = !!(opts.pipeline || opts.ooo || opts.multicycle || opts.m || opts.dcache || opts.icache);
     const finished = () => iss.halted || !!mismatch || stage.cycles > 20000;
     const slowCtl = slowControls(stage, { multiCycle, finished, onStart: () => stopRun() });
 
@@ -237,7 +255,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       ...(opts.fpu ? [h('div', { class: 'cpu-sec' }, 'Floating-point registers (non-zero)'), fregs] : []),
       ...(opts.dcache ? [h('div', { class: 'cpu-sec' }, opts.dcache === 'wb2' ? 'Data cache (2 sets × 2 ways × 4 words, write-back)' : opts.dcache === 'wb' ? 'Data cache (4 lines × 4 words, write-back)' : 'Data cache (4 lines × 4 words)'), dlines] : []),
       h('div', { class: 'cpu-sec' }, wb ? 'Memory as the program sees it (dirty lines included)' : opts.dcache ? 'Main memory (non-zero words)' : 'Data memory (non-zero words)'), mem);
-    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.wide ? 'RV32IM dual-issue pipeline' : opts.pipeline ? (opts.m ? 'RV32IM pipeline' : 'RV32I pipeline') : 'RV32I CPU', h('span', { class: 'fold-hint' }));
+    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.wide ? 'RV32IM dual-issue pipeline' : opts.ooo ? 'RV32IM out-of-order core' : opts.pipeline ? (opts.m ? 'RV32IM pipeline' : 'RV32I pipeline') : 'RV32I CPU', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title, body);
 
     // Golden model in lock-step: it executes one instruction whenever the hardware retires one
@@ -326,12 +344,12 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       if (!stage.inEdge) lastX = st.x;
       const atBoundary = !sim.design.root.ports.fetch || sim.getBits(sim.design.root.ports.fetch)[0] === 1;
       // Mid-edge the PC register has already moved but the golden model steps only when the edge is done.
-      if (!mismatch && !opts.pipeline && !stage.inEdge && atBoundary && st.pc !== iss.pc) mismatch = `PC differs: hardware ${hex(st.pc)}, model ${hex(iss.pc)}`;
+      if (!mismatch && !opts.pipeline && !opts.ooo && !stage.inEdge && atBoundary && st.pc !== iss.pc) mismatch = `PC differs: hardware ${hex(st.pc)}, model ${hex(iss.pc)}`;
       const halted = iss.halted;
       const parts: HTMLElement[] = [
         h('span', null, `cycle ${stage.cycles}`),
         h('span', null, opts.pipeline || opts.m || opts.fpu || opts.multicycle ? `retired ${iss.steps}${iss.steps ? ` · CPI ${(stage.cycles / iss.steps).toFixed(2)}` : ''}` : `PC ${hex(st.pc, 4)}`),
-        ...(opts.m && (opts.pipeline ? divStall(sim) : !retiring(sim)) ? [h('span', { class: 'warn', title: 'The iterative divider is working; the PC and register writes are stalled' }, 'dividing… stalled')] : []),
+        ...(opts.m && !opts.ooo && (opts.pipeline ? divStall(sim) : !retiring(sim)) ? [h('span', { class: 'warn', title: 'The iterative divider is working; the PC and register writes are stalled' }, 'dividing… stalled')] : []),
         ...(opts.fpu && !opts.pipeline && !retiring(sim) ? [h('span', { class: 'warn', title: 'An iterative unit (fdiv.s / fsqrt.s) is working; the PC and register writes are stalled' }, 'fdiv / fsqrt… stalled')] : []),
         ...(opts.dcache ? [h('span', null, `${wb ? 'accesses' : 'loads'} ${loads} · misses ${misses}${loads ? ` · hit rate ${(100 * (loads - misses) / loads).toFixed(0)} %` : ''}`)] : []),
         ...((opts.dcache || opts.icache) && cacheStall(sim) ? [h('span', { class: 'warn', title: 'A cache missed: the PC and register write wait while the line is moved' }, `miss: waiting for memory (cycle ${stallRun + 1})`)] : []),
@@ -371,6 +389,11 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
             ['E₁', v('DE1', 'pcE'), v('DE1', 'validE') === 1], ['M₁', v('EM1', 'pcM'), v('EM1', 'validM') === 1], ['W₁', v('MW1', 'pcW'), v('MW1', 'validW') === 1]] as [string, number, boolean][] : []),
         ];
         for (const [stg, pc, valid] of slots) if (valid && pc >= 0) inFlight.set(pc >>> 0, [...(inFlight.get(pc >>> 0) ?? []), stg]);
+      } else if (opts.ooo && isOooCore(sim.design.root)) {
+        // the out-of-order core: fetched, waiting in the issue queue, executing, done in the reorder buffer
+        const snap = oooSnap(sim, sim.design.root), at = (pc: number, s: string) => inFlight.set(pc >>> 0, [...(inFlight.get(pc >>> 0) ?? []), s]);
+        for (const f of snap.fetched) at(f.pc, 'F');
+        for (const r of snap.rob) at(r.pc, r.done ? 'ROB' : snap.iq.some((e) => e.tag === r.tag) ? 'IQ' : 'EX');
       }
       const keepScroll = listing.scrollTop;
       listing.replaceChildren(...asm.lines.map((l) => {
@@ -465,14 +488,16 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
         return;
       }
       const w = wordAt(pc);
-      const use = instrUse(w);
+      const use = opts.ooo ? oooUse(w, pc === selPc ? selPort : -1) : instrUse(w);
       const stages = inFlight.get(pc) ?? [];
-      const carried = !opts.pipeline || !stages.length || stages.includes('D');
-      const note = markFields(carried ? w : null, stages.length ? stages.flatMap((s) => stageUse(s as keyof typeof STAGE_UNITS, use)) : use.units);
+      // the out-of-order core decodes in two slots: no single set of field wires to colour
+      const carried = !opts.ooo && (!opts.pipeline || !stages.length || stages.includes('D'));
+      const note = markFields(carried ? w : null, stages.length && !opts.ooo ? stages.flatMap((s) => stageUse(s as keyof typeof STAGE_UNITS, use)) : use.units);
       usePath.replaceChildren(h('code', null, disasm(w, pc)), h('span', null,
-        opts.pipeline ? (stages.length ? ` · now in ${stages.join(' + ')}; highlighted: that stage's part of the work.` : ' · not in the pipeline now; highlighted: all the hardware it uses.') : ''),
+        opts.ooo ? (stages.length ? ` · now ${stages.join(' + ')} (F fetched, IQ waiting, EX executing, ROB done); highlighted: all the hardware it uses.` : ' · not in flight now; highlighted: all the hardware it uses.')
+          : opts.pipeline ? (stages.length ? ` · now in ${stages.join(' + ')}; highlighted: that stage's part of the work.` : ' · not in the pipeline now; highlighted: all the hardware it uses.') : ''),
         h('div', null, use.path),
-        !carried ? h('div', { class: 'ibd-note' }, 'Field colours appear while it is in D, where the instruction is split.') : '',
+        !carried && !opts.ooo ? h('div', { class: 'ibd-note' }, 'Field colours appear while it is in D, where the instruction is split.') : '',
         note ? h('div', { class: 'ibd-note' }, note) : '');
     };
     /** Append the newly retired instructions to the trace (the log is never rebuilt while it grows). */
