@@ -53,7 +53,7 @@ export function docFromDef(def: ComponentDef, opts: FromDefOptions = {}): ChipDo
       return { error: `part '${inst.name}' (${inst.def.id}) cannot be placed by reference${isError(back) ? `: ${back.error}` : ' (its id names another component)'}` };
     }
     const at = inst.at ?? [0, 0];
-    parts.push({ id: inst.name, ref, at: [at[0], at[1]], ...(inst.flip ? { flip: true } : {}), ...(inst.label ? { label: inst.label } : {}) });
+    parts.push({ id: inst.name, ref, at: [at[0], at[1]], ...(inst.flip ? { flip: true } : {}), ...(inst.rot ? { rot: inst.rot } : {}), ...(inst.label ? { label: inst.label } : {}) });
   }
 
   const { nets: routed, pins: pg } = routeNetlist(def, nl);
@@ -70,7 +70,7 @@ export function docFromDef(def: ComponentDef, opts: FromDefOptions = {}): ChipDo
     const { inst, port } = parseEnd(end);
     if (inst === null) return pg.get(port)!;
     const i = nl.instances.find((x) => x.name === inst)!;
-    return instPort(i.def, i.at ?? [0, 0], i.flip, port);
+    return instPort(i.def, i.at ?? [0, 0], i.flip, port, i.rot);
   };
   const ref = (end: string): EndRef => {
     const { inst, port } = parseEnd(end);

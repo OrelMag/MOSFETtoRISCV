@@ -4,7 +4,7 @@
 // polylines), with the site's hops, junction dots and value colours, so a circuit looks the
 // same here as in the inside view of the chip it becomes.
 
-import { symbolGeom, type Vec } from '../sim/geometry';
+import { orientGeom, type Rot, type Vec } from '../sim/geometry';
 import type { PuzzleInState, PuzzleOutState } from './puzzleparts';
 import { type CardReaderState, readerProgress } from '../cards/reader';
 import { B1, BX, BZ, type Bit, type ComponentDef, netlistOf } from '../sim/types';
@@ -179,7 +179,7 @@ export class EditorView {
       const e = this.parts.get(p.id);
       if (e && e.doc === p && e.def === def) continue;
       dirty.add(`p:${p.id}`);
-      if (e && e.def === def && e.doc.ref === p.ref && !!e.doc.flip === !!p.flip && e.doc.label === p.label) {
+      if (e && e.def === def && e.doc.ref === p.ref && !!e.doc.flip === !!p.flip && e.doc.rot === p.rot && e.doc.label === p.label) {
         e.g.setAttribute('transform', `translate(${p.at[0]},${p.at[1]})`);
         e.doc = p;
         continue;
@@ -472,7 +472,8 @@ export class EditorView {
         s('text', { class: 'inst-name', x: 0.1, y: -0.45 }, p.label ?? p.id));
       return { g };
     }
-    const geo = symbolGeom(def);
+    // A turned part (R) is drawn in its turned frame; only parts canTurn allows ever carry rot.
+    const geo = orientGeom(def, p.flip, p.rot);
     g.append(s('rect', { class: 'hit', x: -0.4, y: -0.4, width: geo.w + 0.8, height: geo.h + 0.8, rx: 0.6 }));
     let disp: DisplayEls | undefined;
     const io = ioInfo(def) ? drawIoFace(def, !!p.flip) : null;
@@ -496,9 +497,9 @@ export class EditorView {
       g.append(text);
       disp = { kind: 'reader', width: 0, segs: [], shown: '', text };
     }
-    else g.append(drawSymbol(def, p.flip));
-    const faces = drawFace(g, def, !!p.flip);
-    const nameAt = instNameAt(def);
+    else g.append(drawSymbol(def, p.flip, p.rot));
+    const faces = drawFace(g, def, !!p.flip, p.rot);
+    const nameAt = instNameAt(def, p.flip, p.rot);
     if (nameAt) g.append(s('text', { class: 'inst-name', x: nameAt.x, y: nameAt.y, 'text-anchor': nameAt.anchor }, p.label ?? p.id));
     return { g, disp, faces };
   }
@@ -864,8 +865,8 @@ export class EditorView {
   }
 
   /** Draw a part symbol for a ghost (displays drawn like placed ones). */
-  ghostOf(def: ComponentDef, ref?: PartDoc['ref']): SVGGElement {
-    return this.drawPart({ id: '', ref: ref ?? { lib: def.id }, at: [0, 0], label: ' ' }, def).g;
+  ghostOf(def: ComponentDef, ref?: PartDoc['ref'], flip?: boolean, rot?: Rot): SVGGElement {
+    return this.drawPart({ id: '', ref: ref ?? { lib: def.id }, at: [0, 0], label: ' ', ...(flip ? { flip } : {}), ...(rot ? { rot } : {}) }, def).g;
   }
 
   /** Flash an object (a jump to a pointer). */
@@ -893,7 +894,7 @@ export class EditorView {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     const grow = (x: number, y: number) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); };
     for (const p of doc.parts) {
-      const b = partBox(defOf(p), p.at);
+      const b = partBox(defOf(p), p.at, p.flip, p.rot);
       grow(b.x, b.y - 1);
       grow(b.x + b.w, b.y + b.h);
     }

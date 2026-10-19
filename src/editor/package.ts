@@ -140,7 +140,7 @@ export function packageDialog(ed: Editor): void {
     }
     // Displays: an outline to grab, a scale handle on the selected one.
     for (const d of r.displays) {
-      const key = pathKey(d.path), b = shownBox(d, w, false), on = sel?.k === 'disp' && sel.key === key;
+      const key = pathKey(d.path), b = shownBox(d, w, bh, false), on = sel?.k === 'disp' && sel.key === key;
       root.append(s('rect', { class: `sb-face-disp${on ? ' on' : ''}`, x: b.x - 0.15, y: b.y - 0.15, width: b.w + 0.3, height: b.h + 0.3, rx: 0.25, 'data-disp': key },
         s('title', null, `${itemTitle(d)} ${d.path.join('.')}: drag to move`)));
       if (on) root.append(s('rect', { class: 'sb-face-handle', x: b.x + b.w - 0.25, y: b.y + b.h - 0.25, width: 0.6, height: 0.6, 'data-scale': key },

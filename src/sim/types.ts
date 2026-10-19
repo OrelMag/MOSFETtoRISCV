@@ -61,6 +61,8 @@ export interface SymbolSpec {
   noPortLabels?: boolean;
   /** Draw the label vertically (narrow boxes). */
   verticalLabel?: boolean;
+  /** A box given a quarter turn (geometry.ts orientedBox): top and bottom port names run across the box. */
+  turned?: boolean;
   /** Hue (0–359) tinting a user chip's box; lightness comes from the theme. */
   color?: number;
   /** Areas of a box (its own units) the label keeps clear of, or leaves the box when it cannot: a user chip's face displays. */
@@ -74,6 +76,8 @@ export interface InstanceDef {
   at?: [number, number];
   /** Mirror horizontally (inputs on the right). Useful in feedback layouts. */
   flip?: boolean;
+  /** Quarter turns clockwise after the mirror (geometry.ts orientGeom; `at` stays the turned box's top-left). */
+  rot?: 1 | 2 | 3;
   /** Short caption drawn near the symbol (defaults to the instance name). */
   label?: string;
 }

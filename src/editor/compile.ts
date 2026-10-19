@@ -370,7 +370,7 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
   const nl: Netlist = {
     level: mode,
     instances: [...parts.values()].map(({ doc: p, def }) => ({
-      name: p.id, def, at: [p.at[0], p.at[1]], ...(p.flip ? { flip: true } : {}), ...(p.label ? { label: p.label } : {}),
+      name: p.id, def, at: [p.at[0], p.at[1]], ...(p.flip ? { flip: true } : {}), ...(p.rot ? { rot: p.rot } : {}), ...(p.label ? { label: p.label } : {}),
     })),
     nets,
     pins: Object.fromEntries(ordered.map((p) => [p.name, [p.at[0], p.at[1]]])),

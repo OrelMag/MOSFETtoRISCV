@@ -1,7 +1,7 @@
 // The schematic: one component's internal netlist drawn as SVG, with live wire values.
 // Rendering builds the DOM once; update() only touches classes and labels.
 
-import { symbolGeom, type Vec } from '../sim/geometry';
+import { orientGeom, type Vec } from '../sim/geometry';
 import { NmosSim } from '../sim/nmossim';
 import { SwitchSim, VDD_VOLTS } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, type Netlist, netlistOf } from '../sim/types';
@@ -305,7 +305,7 @@ export class SchematicView {
     // Instances
     for (const inst of nl.instances) {
       const at: Vec = inst.at ?? [0, 0];
-      const geo = symbolGeom(inst.def);
+      const geo = orientGeom(inst.def, inst.flip, inst.rot);
       grow(at[0], at[1]);
       grow(at[0] + geo.w, at[1] + geo.h);
       const openable = ctx.canOpen(inst.name);
@@ -316,8 +316,8 @@ export class SchematicView {
       this.atOf.set(inst.name, at);
       this.boxes.set(inst.name, { x: at[0], y: at[1], w: geo.w, h: geo.h });
       g.append(s('rect', { class: 'hit', x: -0.4, y: -0.4, width: geo.w + 0.8, height: geo.h + 0.8, rx: 0.6 }));
-      g.append(drawSymbol(inst.def, inst.flip));
-      const nameAt = instNameAt(inst.def);
+      g.append(drawSymbol(inst.def, inst.flip, inst.rot));
+      const nameAt = instNameAt(inst.def, inst.flip, inst.rot);
       if (nameAt) g.append(s('text', { class: 'inst-name', x: nameAt.x, y: nameAt.y, 'text-anchor': nameAt.anchor }, inst.label ?? inst.name));
       if (openable) {
         const badge = s('g', { class: 'open-badge', transform: `translate(${geo.w - 0.2},${-0.9})` });

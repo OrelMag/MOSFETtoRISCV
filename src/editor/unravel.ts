@@ -114,7 +114,7 @@ class Scene {
   /** `gone`: pointers about to go. */
   constructor(doc: ChipDoc, defOf: DefOf, gone: Set<string>, poly: (w: WireDoc) => Vec[] | null) {
     this.boxes = [
-      ...doc.parts.map((p) => partBox(defOf(p), p.at)),
+      ...doc.parts.map((p) => partBox(defOf(p), p.at, p.flip, p.rot)),
       ...doc.pins.map(pinBody),
       ...doc.labels.filter((l) => !gone.has(l.id)).map((l) => pointerGeom(l).rect),
     ];
@@ -611,7 +611,7 @@ export function collapseWire(doc: ChipDoc, id: string, name: string, defOf: DefO
   const gone = new Set(tree);
   const wires = doc.wires.filter((w) => !gone.has(w.id));
   const old = doc.wires.filter((w) => gone.has(w.id));
-  const boxes: Rect[] = [...doc.parts.map((p) => partBox(defOf(p), p.at)), ...doc.pins.map(pinBody), ...doc.labels.map((l) => pointerGeom(l).rect)];
+  const boxes: Rect[] = [...doc.parts.map((p) => partBox(defOf(p), p.at, p.flip, p.rot)), ...doc.pins.map(pinBody), ...doc.labels.map((l) => pointerGeom(l).rect)];
   // The other wires a stub must not run along (those on the same end are the same net).
   const segs = new Scene({ ...doc, parts: [], pins: [], labels: [], wires }, defOf, new Set(), (w) => polyline(doc, w, defOf));
   const endsOf = new Map(wires.map((w) => [w.id, [endKey(w.a), endKey(w.b)]]));

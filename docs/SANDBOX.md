@@ -48,7 +48,8 @@ rebuilt in it from the level below (both are checked by tests, see [Guarantees](
 | Jump to the twin pointer | Click a selected pointer, or double-click it |
 | Select | Click; Shift + click to add or remove; drag empty canvas for a rubber band (Shift: add) |
 | Move | Drag the selection; arrows nudge (Shift: ×5) |
-| Flip left–right | `F` (there is no rotation, as in DLS) |
+| Flip left–right | `F` |
+| Rotate a quarter turn | `R` clockwise · `Shift+R` anticlockwise; while placing a part, `R` / `F` turn the part about to be placed. Displays and I/O parts only flip |
 | Copy · cut · paste · duplicate · select all | Ctrl+C · X · V · D · A |
 | Delete | Delete / Backspace (wires attached to deleted parts go too) |
 | Undo · redo | Ctrl+Z · Ctrl+Shift+Z / Ctrl+Y (a drag is one step) |
