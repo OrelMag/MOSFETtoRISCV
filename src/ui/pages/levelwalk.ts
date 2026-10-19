@@ -5,7 +5,9 @@
 // from here" copies the partial circuit into the level's chip (one undo step); leaving removes the
 // scratch chip and the chips it brought, unless the learner took them. A step with a question (WalkStep.ask) keeps its
 // parts back until it is answered: predict first, then see. Build along: the learner places the step's parts on their
-// outlines and wires them, and Check step compares the result with the reference (campaign/buildalong.ts).
+// outlines and wires them, and Check step compares the result with the reference (campaign/buildalong.ts). The last
+// step never ends on a bare Done (which dropped the circuit): Build along's Finish makes the learner's circuit the
+// level's chip and checks it; Watch offers Use this answer (as Do it for me) or Build it myself (back to their own).
 
 import { checkBuild, snapCandidate, type BuildCheck } from '../../campaign/buildalong';
 import { codexById } from '../../campaign/codex';
