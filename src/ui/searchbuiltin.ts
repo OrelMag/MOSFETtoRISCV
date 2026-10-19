@@ -107,21 +107,24 @@ function stageActions(): NavItem[] {
   const label = (b: HTMLElement) => (b.textContent?.trim() || b.getAttribute('aria-label') || b.title || '').replace(/\s+/g, ' ');
   const out: NavItem[] = [];
   const seen = new Set<string>();
-  const add = (b: HTMLButtonElement, title: string, sub: string, keys?: string[]) => {
+  const add = (b: HTMLButtonElement, title: string, sub: string, keys?: string[], onPage = true) => {
     if (b.disabled || !title || seen.has(title) || !b.getClientRects().length) return;
     seen.add(title);
-    out.push(here(act(`stage.${title}`, title, sub, () => b.click(), keys)));
+    const it = act(`stage.${title}`, title, sub, () => b.click(), keys);
+    out.push(onPage ? here(it) : it);
   };
-  for (const b of st.querySelectorAll<HTMLButtonElement>('.controls button')) {
+  // Run / Pulse / Step / Back / Reset (worded buttons: not a bus's − + or an output's radix), then the 1-bit inputs
+  for (const b of st.querySelectorAll<HTMLButtonElement>('.controls button.btn')) {
     const t = label(b);
-    if (b.classList.contains('in-toggle')) add(b, `Toggle input ${b.dataset.port ?? t}`, 'Circuit · input');
-    else add(b, t, `Circuit · ${b.title || 'control'}`);
+    if (/^[A-Za-z][A-Za-z ]{2,}$/.test(t)) add(b, t, `Circuit · ${b.title || 'control'}`);
   }
+  for (const b of st.querySelectorAll<HTMLButtonElement>('.controls button.in-toggle')) add(b, `Toggle input ${b.dataset.port ?? label(b)}`, 'Circuit · input');
   for (const b of st.querySelectorAll<HTMLButtonElement>('.stage-bar button')) {
     const t = b.getAttribute('aria-label') || b.title || label(b);
-    if (!t || b.closest('.pal-menu')) continue;
-    const name = t.replace(/\s*\(.*\)$/, '');
-    add(b, name, `Circuit · ${t}`, /probe/i.test(t) ? ['P'] : /^Up one level/.test(t) ? ['Esc'] : undefined);
+    // not the crumbs (places, not actions) nor a menu's own items
+    if (!t || b.closest('.pal-menu, .crumbs')) continue;
+    const name = t.replace(/\s*\(.*\)$/, '').replace(/:.*$/, '');
+    add(b, name, `Circuit · ${t}`, /probe/i.test(t) ? ['P'] : /^Up one level/.test(t) ? ['Esc'] : undefined, false);
   }
   return out;
 }

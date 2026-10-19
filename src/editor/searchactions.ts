@@ -22,7 +22,7 @@ function actionsOf(ed: Editor): NavItem[] {
   for (const a of ed.barActions()) {
     if (a.enabled && !a.enabled(ed)) continue;
     const { name, keys } = split(a.title);
-    const title = a.menu ?? a.label ?? name;
+    const title = (a.menu ?? a.label ?? name).replace(/\s*[▸…]+$/, '');
     const on = a.active?.(ed);
     out.push({
       kind: 'action', id: `sb.${a.id}`, title, sub: `${where} · ${name}${on === undefined ? '' : on ? ' (on)' : ' (off)'}`,

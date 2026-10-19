@@ -216,6 +216,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .kh-head h3 { margin: 0; font-size: 18px; color: var(--text); }
 .kh-sub { font-size: 12.5px; }
 .kh-close { margin-left: auto; color: var(--muted); }
+.kh-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .kh-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 10px 14px; }
 .kh-grp { border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px 6px; background: var(--surface-2); }
 .kh-grp h4 { margin: 0 0 4px; font: 600 10.5px var(--font-mono); letter-spacing: .09em; text-transform: uppercase; color: var(--accent); }

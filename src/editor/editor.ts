@@ -1047,7 +1047,7 @@ export class Editor {
   showHelp(): void {
     showKeySheet({
       title: 'Sandbox keys', sub: 'Keys act on the canvas whenever focus is not in a text field or a panel.',
-      groups: ['place', 'wire', 'select', 'edit', 'view', 'panels'], taken: new Set(this.sim.keyBinds), mouse: MOUSE_HELP, cls: 'sb-keys',
+      groups: ['place', 'wire', 'select', 'edit', 'view', 'panels'], taken: new Set(this.sim.keyBinds), mouse: MOUSE_HELP, cls: 'sb-keysheet',
     });
   }
 
