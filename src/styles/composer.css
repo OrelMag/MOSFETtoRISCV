@@ -41,10 +41,14 @@ button.cmp-bit { cursor: pointer; }
 .cmp-fl.unused b { color: var(--muted); }
 
 /* the immediate generator: a wire from each source bit to its place in the 32-bit immediate */
-.cmp-wires { display: block; width: 100%; min-width: 560px; height: 54px; }
-.cmp-wires line { stroke: var(--fld-imm); stroke-width: 1.2; opacity: 0.5; }
-.cmp-wires line.sign { stroke-dasharray: 2 3; opacity: 0.3; }
-.cmp-wires line.hot { stroke-width: 2.6; opacity: 1; }
+.cmp-wires { position: relative; width: 100%; min-width: 560px; height: 54px; }
+.cmp-wires svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.cmp-wires polygon { fill: var(--fc); fill-opacity: 0.22; }
+.cmp-wires polygon.sign { fill-opacity: 0.08; stroke: var(--fc); stroke-opacity: 0.45; stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.cmp-wires polygon.hot { fill-opacity: 0.5; }
+.cmp-wires polygon.sign.hot { fill-opacity: 0.25; stroke-opacity: 1; }
+.cmp-wires line { stroke: var(--text); stroke-width: 1.6; }
+.cmp-sign { position: absolute; bottom: 4px; transform: translateX(-50%); padding: 0 6px; border-radius: 4px; background: var(--surface); color: var(--text-2); font: 10.5px var(--font-mono); white-space: nowrap; pointer-events: none; }
 .cmp-imm .cmp-bit { height: 22px; font-size: 11.5px; }
 .cmp-imm .cmp-bit.sign { opacity: 0.55; }
 .cmp-imm .cmp-bit.zero { background: var(--surface-3); color: var(--muted); }

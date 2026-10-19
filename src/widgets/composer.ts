@@ -87,7 +87,12 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
   const input = h('input', { class: 'cmp-in', type: 'text', spellcheck: 'false', autocomplete: 'off', 'aria-label': 'Instruction as assembly or a hex word' }) as HTMLInputElement;
   const msg = h('div', { class: 'cmp-msg', role: 'status' });
   const strip = h('div', { class: 'cmp-strip' });
-  const wires = s('svg', { class: 'cmp-wires', viewBox: '0 0 32 10', preserveAspectRatio: 'none', 'aria-hidden': 'true' });
+  // The immediate generator's wiring between the word and the immediate: a band per run of bits wired in order,
+  // one bracket for the sign copies of bit 31 (a line per wire was a thicket: 19 sign lines alone).
+  const bands = s('svg', { viewBox: '0 0 32 10', preserveAspectRatio: 'none', 'aria-hidden': 'true' });
+  const wires = h('div', { class: 'cmp-wires' }, bands);
+  /** Instruction bit feeding each immediate bit (this word's format). */
+  let srcOf: (number | 'zero')[] = [];
   const immRow = h('div', { class: 'cmp-strip cmp-imm' });
   const immCap = h('div', { class: 'cmp-immcap' });
   const ops = h('div', { class: 'cmp-ops' });
@@ -200,7 +205,9 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
     const slot = c && slotsOf(c.spec).find((x) => x.key === 'imm');
     const ib = slot ? immBits(word) : [];
     immRow.replaceChildren();
-    wires.replaceChildren();
+    bands.replaceChildren();
+    wires.querySelector('.cmp-sign')?.remove();
+    srcOf = ib.map((x) => x.src);
     if (!c || !slot || !ib.length) {
       immRow.hidden = true;
       wires.style.display = 'none';
@@ -227,26 +234,47 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
         onmouseenter: () => { hot = typeof x.src === 'number' ? x.src : -1; lightWires(); },
         onmouseleave: () => { hot = -1; lightWires(); },
       }, x.value));
-      if (typeof x.src === 'number') {
-        wires.append(s('line', { x1: 31.5 - x.src, y1: 0, x2: 31.5 - b, y2: 10, 'vector-effect': 'non-scaling-stroke', class: k, 'data-src': x.src, 'data-i': b }));
-      }
     }
-    const top = IMM_TOP[d.fmt as ImmFmt] ?? 11;
+    // Runs of immediate bits wired from consecutive instruction bits, high to low; the sign copies are one run.
+    const runs: { hi: number; lo: number; src: number; sign: boolean }[] = [];
+    for (let b = 31; b >= 0; b--) {
+      const x = ib[b];
+      if (x.src === 'zero') continue;
+      const last = runs[runs.length - 1];
+      if (last && last.lo === b + 1 && last.sign === x.sign && (x.sign || last.src - (last.hi - b) === x.src)) last.lo = b;
+      else runs.push({ hi: b, lo: b, src: x.src, sign: x.sign });
+    }
+    const g = 0.1;
+    for (const r of runs) {
+      const srcLo = r.sign ? 31 : r.src - (r.hi - r.lo);
+      const pts = `${31 - r.src + g},0 ${32 - srcLo - g},0 ${32 - r.lo - g},10 ${31 - r.hi + g},10`;
+      bands.append(s('polygon', { points: pts, class: `${role(fieldAt(fields, r.src))}${r.sign ? ' sign' : ''}`, 'data-hi': r.src, 'data-lo': srcLo }));
+    }
+    const sign = runs.find((r) => r.sign);
+    if (sign) {
+      const n = sign.hi - sign.lo + 1;
+      wires.append(h('span', { class: 'cmp-sign', style: `left:${((31 - sign.hi + 32 - sign.lo) / 2 / 32) * 100}%` }, `bit 31 copied × ${n}`));
+    }
     const val = d.fmt === 'U' ? `0x${(d.imm >>> 0).toString(16)}` : String(d.imm);
     immCap.replaceChildren(
-      h('span', null, d.fmt === 'U' ? 'The immediate generator\'s output: the upper 20 bits, the low 12 tied to ground.' : `The immediate generator's output: ${d.fmt === 'B' || d.fmt === 'J' ? 'bit 0 tied to ground, ' : ''}sign-extended from bit ${top} (dashed: copies of bit 31). Point at a bit to see where it comes from.`),
+      h('span', null, d.fmt === 'U'
+        ? 'Top: the instruction. Bottom: the immediate the immediate generator makes of it, the upper 20 bits as they are, the low 12 tied to ground.'
+        : `Top: the instruction. Bottom: the immediate the immediate generator makes of it. Each band is wires from instruction bits to immediate bits${sign ? ', and bit 31 is copied into every bit above the top one (sign extension)' : ''}${d.fmt === 'B' || d.fmt === 'J' ? '; bit 0 is tied to ground' : ''}. Point at a bit to follow it.`),
       h('b', null, `imm = ${val}`));
     lightWires();
   }
 
   function lightWires() {
     for (const b of strip.querySelectorAll<HTMLElement>('.cmp-bit')) b.classList.toggle('hot', Number(b.dataset.b) === hot);
-    for (const l of wires.querySelectorAll('line')) l.classList.toggle('hot', Number(l.getAttribute('data-src')) === hot);
-    for (const b of immRow.querySelectorAll<HTMLElement>('.cmp-bit')) {
-      const i = Number(b.dataset.i);
-      const line = wires.querySelector(`line[data-i="${i}"]`);
-      b.classList.toggle('hot', hot >= 0 && Number(line?.getAttribute('data-src')) === hot);
-    }
+    for (const p of bands.querySelectorAll('polygon')) p.classList.toggle('hot', hot >= Number(p.dataset.lo) && hot <= Number(p.dataset.hi));
+    for (const b of immRow.querySelectorAll<HTMLElement>('.cmp-bit')) b.classList.toggle('hot', hot >= 0 && srcOf[Number(b.dataset.i)] === hot);
+    // the exact wire of the bit pointed at (not the sign fan: its bracket lights instead)
+    bands.querySelectorAll('line').forEach((l) => l.remove());
+    if (hot >= 0) srcOf.forEach((src, i) => {
+      if (src === hot && !(hot === 31 && i > (IMM_TOP[decode(word).fmt as ImmFmt] ?? 31))) {
+        bands.append(s('line', { x1: 31.5 - hot, y1: 0, x2: 31.5 - i, y2: 10, 'vector-effect': 'non-scaling-stroke' }));
+      }
+    });
   }
 
   function renderOps(c: Composed | null) {
