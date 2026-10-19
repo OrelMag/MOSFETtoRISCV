@@ -189,6 +189,10 @@ src/lib/       the component library (registered in `registry` via define())
                  palette's Timer: wraps every period edges, irq held until ack)
   storage.ts     romArray(preset), minimize() (Quine–McCluskey), pla(preset), fifo(k, w), stack(k, w), cam(k, w),
                  regfileMP(k, w, reads, writes)
+  isadecoder.ts  isaDecoder(doc): a Custom ISA table's decoder in gates (not registered: built per table, opened by the
+                 Design tab through remixDef): complement rails where a pattern needs a 0, one AND per instruction over its
+                 fixed bits, the NOT of each more specific overlapping pattern, valid = OR; matchNames; its NANDs equal
+                 isa/design.ts's estimate + the OR (tests/isa-decoder.test.ts, also every output against match())
   memory.ts      ram(k, w): decoder + registers + mux tree, user-scalable
   portmem.ts     portMemory(k, w, n, init): a read and a write port per lane (highest port wins a word), ≤ 2^6 words
                  lanePortMemory (gates, any width), up to 2^10 bigPortMemory: one leaf (PortRamState, a RamState + what
