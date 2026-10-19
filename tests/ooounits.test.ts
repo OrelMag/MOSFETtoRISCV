@@ -2,7 +2,7 @@
 // sequences: what each unit holds and answers must be what the model's own data structures hold and answer.
 
 import { describe, expect, it } from 'vitest';
-import { btbCommit, issueQueue, RAT, reorderBuffer } from '../src/lib/ooo';
+import { btbCommit, dataMemory2, issueQueue, RAT, reorderBuffer, STORE_QUEUE } from '../src/lib/ooo';
 import { simulate } from '../src/sim/harness';
 import { lcg, out, set, tick } from './util';
 
@@ -198,4 +198,66 @@ describe('reorder buffer', () => {
       count = flush ? 0 : count + nA - nC;
     }
   }, 300_000);
+});
+
+describe('store queue', () => {
+  it('stores in order from dispatch to commit; a load forwards from the youngest older store to its word', () => {
+    const s = simulate(STORE_QUEUE), r = lcg(79);
+    let q: { seq: number; idx: number; done: number; addr: number; data: number }[] = [];
+    let head = 0, seq = 0;
+    const loads: { tail: number; firstYounger: number }[] = [];
+    const addrs = [0x00, 0x04, 0x08, 0x40, 0x44];
+    set(s, { clk: 0, al0: 0, al1: 0, sw: 0, sidx: 0, saddr: 0, sdata: 0, cs: 0, flush: 0, ltail: 0, laddr: 0 });
+    let forwarded = 0;
+    for (let t = 0; t < 3000; t++) {
+      const count = q.length, tail = (head + count) % 8;
+      expect([out(s, 'free1'), out(s, 'free2'), out(s, 'tail')], `t ${t} room`).toEqual([count < 4 ? 1 : 0, count < 3 ? 1 : 0, tail]);
+      const pend = q.filter((x) => !x.done).reduce((m, x) => m | (1 << x.idx), 0), done = q.filter((x) => x.done).reduce((m, x) => m | (1 << x.idx), 0);
+      expect([out(s, 'pend'), out(s, 'done')], `t ${t} pend / done`).toEqual([pend, done]);
+      // this cycle: commit the head if done, execute one pending store, dispatch up to two
+      const cs = q.length && q[0].done && r(2) ? 1 : 0;
+      const waiting = q.filter((x) => !x.done), ex = waiting.length && r(2) ? waiting[r(waiting.length)] : null;
+      const exv = ex ? { addr: addrs[r(addrs.length)] + 4 * 0, data: r(2 ** 32) } : null;
+      const nA = Math.min(4 - count, r(3)), al0 = nA >= 1 ? r(2) : 0, al1 = nA >= 2 || (nA === 1 && !al0) ? r(2) : 0;
+      const flush = r(120) === 0 ? 1 : 0;
+      // a load: any recorded one the head has not passed
+      const live = loads.filter((l) => ((l.tail - head + 8) % 8) <= q.length);
+      const ld = live.length && r(2) ? live[r(live.length)] : null, laddr = addrs[r(addrs.length)];
+      set(s, { al0, al1, sw: ex ? 1 : 0, sidx: ex?.idx ?? 0, saddr: exv?.addr ?? 0, sdata: exv?.data ?? 0, cs, flush, ltail: ld?.tail ?? 0, laddr });
+      if (al0) expect(out(s, 'idx0'), `t ${t} idx0`).toBe(tail % 4);
+      if (al1) expect(out(s, 'idx1'), `t ${t} idx1`).toBe((tail + al0) % 4);
+      if (cs) expect([out(s, 'memWe'), out(s, 'memAddr'), out(s, 'memData') >>> 0], `t ${t} drain`).toEqual([1, q[0].addr, q[0].data >>> 0]);
+      if (ld) {
+        const older = q.filter((x) => x.seq < ld.firstYounger && x.done && x.addr === laddr);
+        const y = older[older.length - 1];
+        expect(out(s, 'fwdHit'), `t ${t} forward hit`).toBe(y ? 1 : 0);
+        if (y) { expect(out(s, 'fwdData') >>> 0, `t ${t} forward data`).toBe(y.data >>> 0); forwarded++; }
+      }
+      tick(s);
+      if (ex && exv) Object.assign(ex, { done: 1, ...exv });
+      // a store younger than a load commits only after that load has: the load is gone
+      if (cs) { const c = q.shift()!; head = (head + 1) % 8; for (let i = loads.length - 1; i >= 0; i--) if (loads[i].firstYounger <= c.seq) loads.splice(i, 1); }
+      let tl = tail;
+      for (const a of [al0, al1]) if (a) { q.push({ seq: seq++, idx: tl % 4, done: 0, addr: 0, data: 0 }); tl = (tl + 1) % 8; }
+      if (r(3) === 0) loads.push({ tail: (head + q.length) % 8, firstYounger: seq });
+      if (flush) { q = []; loads.length = 0; }
+      if (loads.length > 12) loads.shift();
+    }
+    expect(forwarded).toBeGreaterThan(100);
+  }, 300_000);
+});
+
+describe('data memory with a read and a write port', () => {
+  it('reads one word while writing another', () => {
+    const s = simulate(dataMemory2(4)), r = lcg(83), mem = new Array(16).fill(0);
+    set(s, { clk: 0, raddr: 0, waddr: 0, wd: 0, we: 1 });
+    for (let a = 0; a < 16; a++) { set(s, { waddr: 4 * a }); tick(s); }
+    for (let t = 0; t < 300; t++) {
+      const v = { raddr: 4 * r(16), waddr: 4 * r(16), wd: r(2 ** 32), we: r(2) };
+      set(s, v);
+      expect(out(s, 'rd') >>> 0, `t ${t}`).toBe(mem[v.raddr / 4] >>> 0);
+      tick(s);
+      if (v.we) mem[v.waddr / 4] = v.wd;
+    }
+  });
 });
