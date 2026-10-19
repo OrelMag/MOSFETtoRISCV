@@ -8,6 +8,7 @@ import { Stage } from '../../view/stage';
 import { transistorLeaf } from '../../widgets/mosfet';
 import { h, icon } from '../dom';
 import { drillLanded, drillSegs, syncDrill } from '../drillpath';
+import { bindKeys } from '../keys';
 import { toggleChapterMenu } from '../quicknav';
 import { quizBox } from '../quiz';
 import { settings } from '../settings';
@@ -37,6 +38,7 @@ export class ChapterPage implements Page {
   private unlisten: (() => void)[] = [];
   /** The step's challenge goal and "done" toasts over the canvas: the text panel's cards are often out of sight. */
   private notes = new StageNotes();
+  private unbindKeys: () => void;
 
   constructor(chapter: Chapter, step: number, path?: string[]) {
     this.chapter = chapter;
@@ -52,6 +54,19 @@ export class ChapterPage implements Page {
     // Each level opened is a history entry (ui/drillpath.ts): #/c/<chapter>/<step>/<instance>/…
     this.stage.onNavigate(() => {
       if (this.sceneShown) syncDrill(this.hash(), this.routing);
+    });
+    // [ ] step, { } change chapter (ui/keys.ts): ] and [ press the foot's Next and Back, whatever they lead to
+    const press = (el: Element | null) => (el instanceof HTMLButtonElement || el instanceof HTMLAnchorElement ? el.click() : false);
+    const jump = (d: number) => {
+      const c = chapters[chapters.indexOf(this.chapter) + d];
+      if (!c) return false;
+      location.hash = `#/c/${c.id}/0`;
+    };
+    this.unbindKeys = bindKeys({
+      'step.next': () => press(this.foot.lastElementChild),
+      'step.prev': () => press(this.foot.firstElementChild),
+      'chapter.next': () => jump(1),
+      'chapter.prev': () => jump(-1),
     });
     this.goStep(step, path);
   }
@@ -332,6 +347,13 @@ export class ChapterPage implements Page {
       ? h('button', { class: 'btn primary', onclick: () => this.goStep(this.step + 1) }, this.step + 1 === this.recap ? 'Recap' : 'Next', icon('chevR', 16))
       : next ? h('a', { class: 'btn primary', href: `#/c/${next.id}/0` }, next.title, icon('chevR', 16))
         : h('a', { class: 'btn primary', href: '#/' }, 'Back to the map');
+    // the key on each (hidden on touch screens and with single-key shortcuts off: app.css)
+    if (prevBtn instanceof HTMLButtonElement || prevBtn instanceof HTMLAnchorElement) {
+      prevBtn.setAttribute('aria-keyshortcuts', '[');
+      prevBtn.append(h('kbd', { class: 'kbd-hint', 'aria-hidden': 'true' }, '['));
+    }
+    nextBtn.setAttribute('aria-keyshortcuts', ']');
+    nextBtn.append(h('kbd', { class: 'kbd-hint', 'aria-hidden': 'true' }, ']'));
     this.foot.replaceChildren(prevBtn, h('span', { class: 'count' }, this.step === this.recap ? 'Recap' : `${this.step + 1} / ${n}`), nextBtn);
   }
 
@@ -343,6 +365,7 @@ export class ChapterPage implements Page {
 
   destroy(): void {
     this.notes.clear();
+    this.unbindKeys();
     this.unlisten.forEach((f) => f());
     this.stage.destroy();
   }

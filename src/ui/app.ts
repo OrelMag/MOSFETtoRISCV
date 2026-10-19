@@ -6,7 +6,7 @@ import { installErrorReporting, loadFailed } from './errors';
 import { ChapterPage, type Page } from './pages/chapter';
 import { homePage } from './pages/home';
 import { WorkbenchPage } from './pages/workbench';
-import { installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './quicknav';
+import { focusStage, installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './quicknav';
 import { applyTheme, PALETTES, settings, type Theme } from './settings';
 import { parseDrill } from './drillpath';
 import type { Radix } from '../sim/values';
@@ -43,7 +43,13 @@ export function startApp(root: HTMLElement): void {
   nav.append(navLink('#/', 'layers', 'Journey', 'home'), chLink, navLink('#/campaign', 'flag', 'Campaign', 'campaign'),
     navLink('#/workbench/rca4', 'bench', 'Workbench', 'workbench'), navLink('#/sandbox', 'chip', 'Sandbox', 'sandbox'));
   installQuickNav();
-  const searchBtn = h('button', { class: 'btn ghost icon-only', title: `Jump to a chapter or step (${QUICK_KEY})`, 'aria-label': 'Jump to a chapter or step', onclick: () => openQuickNav() }, icon('search', 18));
+  const searchBtn = h('button', { class: 'btn ghost icon-only', title: `Search chapters, components, levels, codex and actions (${QUICK_KEY}, /)`, 'aria-label': 'Search', 'aria-keyshortcuts': 'Control+K /', onclick: () => openQuickNav() }, icon('search', 18));
+  // The first Tab stop: straight to the circuit where a page has one (S does the same), else to the page.
+  const skip = h('button', { class: 'skip-link' }, 'Skip to the circuit');
+  skip.addEventListener('focus', () => { skip.textContent = document.querySelector('#view section.stage') ? 'Skip to the circuit' : 'Skip to the content'; });
+  skip.addEventListener('click', () => {
+    if (!focusStage()) view.focus();
+  });
 
   const radix = h('div', { class: 'seg', role: 'group', title: 'How buses show their value', 'aria-label': 'How buses show their value' });
   const radixes: [Radix, string, string][] = [['hex', 'HEX', 'hexadecimal'], ['bin', 'BIN', 'binary'], ['dec', 'DEC', 'decimal']];
@@ -161,7 +167,8 @@ export function startApp(root: HTMLElement): void {
   const topbar = h('header', { class: 'topbar' },
     h('a', { class: 'brand', href: '#/', 'aria-label': 'MOSFET → RISC-V: home' }, h('span', { class: 'brand-mark' }, icon('chip', 18)), h('span', { class: 'brand-name' }, 'MOSFET → RISC-V'), h('small', null, 'a journey through abstraction')),
     nav, h('div', { class: 'spacer' }), h('div', { class: 'tools' }, searchBtn, radix, animate, palWrap, themeBtn));
-  root.append(topbar, view);
+  view.tabIndex = -1;
+  root.append(skip, topbar, view);
 
   let page: Page | null = null;
   // A route that loads its page asynchronously must not mount it if another route came since.

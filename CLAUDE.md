@@ -745,6 +745,7 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   iobar.ts       plugin: the chip's pins as a bar above the run bar (the workbench's switches and lamps, I/O toggle);
                  each control acts as a click on the pin; then the switch banks and keys inside placed chips, by path
                  (ionested.ts, DOM-free: nestedControls once per simulation, flipBank; past 3 banks "+n more")
+  searchactions.ts plugin: the editor's toolbar actions, run / pause and New chip in the search (`>`)
   keys.ts        plugin: document keys → key parts (a bound key is taken from the shortcuts while the chip is open)
                  and keyboard parts (while running, or with the Type toolbar toggle); released on blur
   props.ts       properties of the selection or the chip, diagnostics; registerPropsSection
@@ -948,8 +949,16 @@ src/puzzles/   program puzzles (the sandbox's Puzzles drawer; roadmap Phase 12).
                  faster, ★★★ cycles × NANDs below all), PuzzleProgress (own key); start.ts the choices and the puzzle chip;
                  replay.ts the player (a test on the editor's own simulation, checkpoints for stepping back)
 src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-free: every chapter / step as a
-               searchable entry, searchNav ranking), quicknav.ts (chapter menu on the top bar and the chapter title,
-               Ctrl/⌘ K or `/` search palette; `/` is left to the sandbox there); quiz.ts: quizBox (chapters, recaps, codex,
+               searchable entry, searchNav ranking; NavItem / rankItems for every kind of search row), quicknav.ts
+               (chapter menu on the top bar and the chapter title; the search box: Ctrl/⌘ K or `/`, groups, scope chips
+               on Tab, `>` actions, a footer naming ↵ / Shift ↵; focusStage, the skip link's target); searchsources.ts
+               (DOM-free: registerSearchSource, registerActions, recent picks, searchGroups), searchbuiltin.ts (chapters,
+               workbench, the app's and the stage's actions; campaign levels and codex from searchcampaign.ts, a chunk
+               loaded on the first keystroke: locked ones listed, marked, brief only); keys.ts (the key table KEYS
+               every help sheet is drawn from, matches: event.key, else event.code on a non-Latin layout, brackets by
+               code; the single-key switch settings.singleKeys, WCAG 2.1.4; bindKeys / installKeys: Ctrl K in the
+               window's capture phase, other global keys in its bubble phase after the page's own listeners);
+               keyhelp.ts (the `?` sheets: Keys on this page, the sandbox's); quiz.ts: quizBox (chapters, recaps, codex,
                walkthrough), options in a fixed shuffle per question (shuffleOrder: authors write the answer first), a
                pick scrolls its explanation into view; stagenotes.ts: over a chapter's canvas the step's challenge goal (a
                click shows its card), green and announced (aria-live) once solved, toasts when a Try box ticks (words:

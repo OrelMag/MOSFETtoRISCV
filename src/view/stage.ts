@@ -25,6 +25,7 @@ import { closePopover, editNumber } from './popover';
 import { roomBeside, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { SchematicView } from './schematic';
+import { matches, shortcutAllowed } from '../ui/keys';
 
 export interface Scene {
   root: ComponentDef;
@@ -275,7 +276,9 @@ export class Stage {
       probeOf: (i) => this.probeOf(i),
     });
     this.view.arrange = true;
-    this.el.tabIndex = -1;
+    // Tab-reachable (and S or the skip link focus it, ui/quicknav.ts): its keys work while it has focus
+    this.el.tabIndex = 0;
+    this.el.setAttribute('aria-label', 'Circuit');
     this.el.addEventListener('keydown', (e) => {
       if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return;
       // the learner's layout: undo / redo, and Esc lets go of picked parts before it goes up a level
@@ -285,7 +288,7 @@ export class Stage {
         return;
       }
       if (e.key === 'Escape' && this.view.dropGroup()) return;
-      if (e.key === 'p' || e.key === 'P') this.setProbeMode(!this.probeMode);
+      if (matches(e, 'stage.probe') && shortcutAllowed(e)) this.setProbeMode(!this.probeMode);
       if (e.key === 'Escape' && this.probeMode) {
         this.setProbeMode(false);
         return;

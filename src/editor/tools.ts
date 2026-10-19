@@ -30,6 +30,7 @@ import {
   namePart, removeBend, type Sel, selectAll, setComment, setLabel, setPin, type WireGrab,
 } from './ops';
 import type { PaletteItem } from './palette';
+import { matches, shortcutAllowed } from '../ui/keys';
 
 type State =
   | { k: 'idle' }
@@ -803,7 +804,7 @@ export class Tools {
 
   private key(e: KeyboardEvent): void {
     if (typing(e.target) || e.defaultPrevented) return;
-    if ((e.target as HTMLElement | null)?.closest?.('.sb-help')) return;
+    if ((e.target as HTMLElement | null)?.closest?.('.sb-help, .key-help')) return;
     const ed = this.ed;
     const st = this.state;
     const mod = e.ctrlKey || e.metaKey;
@@ -813,7 +814,7 @@ export class Tools {
     // A bend being carried: any key but a modifier drops the edit (Esc included).
     if (st.k === 'reshape' && st.hover && !['Control', 'Shift', 'Alt', 'Meta'].includes(k)) { done(); this.cancel(); return; }
     if (st.k === 'wire') {
-      if (k === ' ' || k === '/') { done(); st.draft.flip(); if (this.cursor) this.previewWire(st.draft, this.cursor); return; }
+      if (k === ' ' || (k === '/' && shortcutAllowed(e))) { done(); st.draft.flip(); if (this.cursor) this.previewWire(st.draft, this.cursor); return; }
       if (k === 'Backspace') { done(); if (!st.draft.undo()) this.cancel(); else if (this.cursor) this.previewWire(st.draft, this.cursor); return; }
       if (k === 'Escape') { done(); this.cancel(); return; }
     }
@@ -839,11 +840,13 @@ export class Tools {
       return;
     }
     if (e.altKey) return;
+    // single character keys: off with the setting (WCAG 2.1.4); letters by their position on a non-Latin layout (keys.ts)
+    if (!shortcutAllowed(e)) return;
+    if (matches(e, 'sb.flip')) { done(); this.flip(); return; }
+    if (matches(e, 'sb.pointer')) { done(); this.armPointer(); return; }
+    if (matches(e, 'sb.comment')) { done(); this.armComment(); return; }
     switch (k) {
       case 'Delete': case 'Backspace': done(); this.del(); return;
-      case 'f': case 'F': done(); this.flip(); return;
-      case 'l': case 'L': done(); this.armPointer(); return;
-      case 't': case 'T': done(); this.armComment(); return;
       case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': {
         const f = ed.palette.favorite(+k - 1);
         if (!f) return;
