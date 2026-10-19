@@ -23,3 +23,5 @@ import './ioui';
 import './cardui';
 // Program puzzles: the Puzzles drawer, the start dialog and the strip while a puzzle chip is open.
 import './puzzleui';
+// The editor's actions in the search box (`>`).
+import './searchactions';
