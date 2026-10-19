@@ -9,7 +9,7 @@ import { ram } from './memory';
 import { BANK_K, bigRam, ramBank } from './bigmem';
 import { alu, bitwise, isZero, orN, shifter, zext } from './alu';
 import { singleCycleCpu } from './cpu';
-import { addSubFast, fanout, koggeStone } from './fastadd';
+import { addSubFast, brentKung, fanout, koggeStone, sklansky } from './fastadd';
 import { csrUnit, sysDecode } from './system';
 import { regfile } from './regfile';
 import { assemble } from '../riscv/asm';
@@ -53,6 +53,8 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^ram64x(\d+)_bank$/, (m) => ramBank(+m[1])],
   [/^alu(\d+)(ks)?$/, (m) => alu(+m[1], m[2] ? 'ks' : 'rca')],
   [/^ks(\d+)$/, (m) => koggeStone(+m[1])],
+  [/^bk(\d+)$/, (m) => brentKung(+m[1])],
+  [/^sk(\d+)$/, (m) => sklansky(+m[1])],
   // wiring and units only a CPU generator builds (a CPU opened in the sandbox places them by id)
   [/^fan(\d+)$/, (m) => fanout(+m[1])],
   [/^sysdec(_m)?$/, (m) => sysDecode(!!m[1])],
@@ -156,6 +158,8 @@ export const families: Family[] = [
     key: (p) => `alu${p.bits}${p.adder ? 'ks' : ''}`, make: (p) => alu(p.bits, p.adder ? 'ks' : 'rca'),
   },
   nBit('ks', 'Kogge–Stone adder', 'arithmetic', [4, 8, 16, 32], 8, (n) => `ks${n}`, koggeStone),
+  nBit('bk', 'Brent–Kung adder', 'arithmetic', [4, 8, 16, 32], 8, (n) => `bk${n}`, brentKung),
+  nBit('sk', 'Sklansky adder', 'arithmetic', [4, 8, 16, 32], 8, (n) => `sk${n}`, sklansky),
   nBit('csel', 'Carry-select adder', 'arithmetic', [8, 16, 32], 16, (n) => `csel${n}_4`, (n) => carrySelect(n)),
   nBit('cskip', 'Carry-skip adder', 'arithmetic', [8, 16, 32], 16, (n) => `cskip${n}_4`, (n) => carrySkip(n)),
   { id: 'bcd', name: 'BCD adder', category: 'arithmetic', params: [count('digits', [2, 3, 4], 2)], key: (p) => `bcd${p.digits}`, make: (p) => bcdAdder(p.digits) },
