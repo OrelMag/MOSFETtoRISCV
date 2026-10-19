@@ -480,7 +480,7 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                the compiler's homes, output, the stack labelled by the stores; Step line, Back via historyHooks; the editor
                in codeedit's 'py' language); ooo.ts: chapter 25's explorers
                (dataflow schedule, in-order against out-of-order timelines, the scoreboard, the reorder-buffer explorer, the
-               speculation table; styles/ooo.css); bus.ts: chapter 37's panels
+               speculation table; measuredWidget: the four CPUs from results.json and width × window on the model; styles/ooo.css); bus.ts: chapter 37's panels
                (busBenchScene: reads / writes / a DMA copy on the bus bench, a per-cycle trace of handshakes and grants;
                busComputerScene: the computer booting from flash, console, LEDs, memory map); flash.ts: chapter 36's flash panel
                (flashScene: the NOR / NAND array read, programmed pulse by pulse with verify, erased; thresholds per cell and
@@ -1291,3 +1291,6 @@ Several Claude sessions (and their subagents) work in this repo at once.
   overlap check in `tests/layout.test.ts` or `tests/route.test.ts`), then the fix; prefer fixing the
   shared renderer / router over a per-component patch.
 - Visual changes: run `npm run dev` and look at it, in both light and dark themes.
+- A test that runs for many seconds (a CPU over thousands of cycles, a large sandbox round trip) yields now and then
+  (tests/yieldtick.ts: `await tick()`, `stepped(generator)`): one that holds its worker past vitest's 60 s RPC timeout
+  fails the whole run on CI although every test passed.
