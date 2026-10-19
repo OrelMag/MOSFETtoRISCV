@@ -22,6 +22,7 @@ export * from './pipem';
 export * from './ras';
 export * from './pipe2w';
 export * from './ooo';
+export * from './ooocore';
 export * from './multiply';
 export * from './adders';
 export * from './arrays';

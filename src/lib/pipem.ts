@@ -79,9 +79,19 @@ export const MUL_M: ComponentDef = (() => {
  * the sign back, with RISC-V's rules for division by zero and overflow. While go = 1 and the divider is
  * not done, stall = 1 and the pipeline holds the instruction in E.
  */
-export const DIV_E: ComponentDef = (() => {
+const divCache = new Map<boolean, ComponentDef>();
+export const DIV_E: ComponentDef = divE(false);
+
+/** abort (the out-of-order core's flush): ends a running divide at once. */
+export function divE(abort: boolean): ComponentDef {
+  let d = divCache.get(abort);
+  if (!d) divCache.set(abort, (d = buildDivE(abort)));
+  return d;
+}
+
+function buildDivE(abort: boolean): ComponentDef {
   const b = new Builder(16, 12);
-  b.pins('clk', 'go', 'a', 'b', 'f');
+  b.pins('clk', 'go', 'a', 'b', 'f', ...(abort ? ['abort'] : []));
   const sa = b.op(splitter([31, 1]), ['a']);
   const sb = b.op(splitter([31, 1]), ['b']);
   const sf = b.op(splitter([1, 1]), ['f']);
@@ -95,7 +105,7 @@ export const DIV_E: ComponentDef = (() => {
   const ma = b.op1(condNegate(32), ['a', negA], '|a|');
   const mb = b.op1(condNegate(32), ['b', negB], '|b|');
   b.next();
-  const dv = b.op(srt4Divider(32), ['clk', '', ma, mb], 'radix-4 SRT divider');
+  const dv = b.op(srt4Divider(32, abort), ['clk', '', ma, mb, ...(abort ? ['abort'] : [])], 'radix-4 SRT divider');
   const busy = b.name(`${dv}.busy`, 'busy', true), done = b.name(`${dv}.done`, 'done', true);
   const start = b.name(b.op1(AND, ['go', b.op1(NOT, [busy])], 'start'), 'start', true);
   b.wire(start, `${dv}.start`);
@@ -118,11 +128,11 @@ export const DIV_E: ComponentDef = (() => {
   b.wire(b.op1(AND, ['go', b.op1(NOT, [done])], 'stall'), 'stall');
   const R = b.right;
   return define({
-    id: 'dive', name: 'Divide unit (E stage)', category: 'cpu',
+    id: abort ? 'divea' : 'dive', name: `Divide unit (E stage${abort ? ', abortable' : ''})`, category: 'cpu',
     summary: 'div, divu, rem, remu: magnitudes into the radix-4 SRT divider (19 cycles), signs kept from the start and fixed on the way out; division by zero gives −1 and the dividend, −2³¹ / −1 gives −2³¹ and 0, both falling out of the hardware. stall holds the pipeline until done.',
-    ports: [bit('clk', 'in', 'bottom', true), bit('go', 'in'), bus('a', 32, 'in'), bus('b', 32, 'in'), bus('f', 2, 'in'), bus('y', 32, 'out'), bit('stall', 'out')],
+    ports: [bit('clk', 'in', 'bottom', true), bit('go', 'in'), bus('a', 32, 'in'), bus('b', 32, 'in'), bus('f', 2, 'in'), ...(abort ? [bit('abort', 'in')] : []), bus('y', 32, 'out'), bit('stall', 'out')],
     symbol: { kind: 'box', label: 'DIV (E)' },
-    netlist: () => ({ pins: { clk: [0, 24], go: [0, 4], a: [0, 8], b: [0, 12], f: [0, 16], y: [R, 4], stall: [R, 8] }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { clk: [0, 24], go: [0, 4], a: [0, 8], b: [0, 12], f: [0, 16], ...(abort ? { abort: [0, 20] as [number, number] } : {}), y: [R, 4], stall: [R, 8] }, instances: b.instances, nets: b.nets() }),
   });
-})();
+}
 

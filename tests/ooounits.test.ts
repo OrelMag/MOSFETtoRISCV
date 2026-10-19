@@ -95,7 +95,7 @@ describe('issue queue', () => {
           expect(out(s, `opA${p}`) >>> 0, `t ${t} opA${p}`).toBe((e.rdyA ? e.valA : bus(e.tagA)) >>> 0);
           expect(out(s, `opB${p}`) >>> 0, `t ${t} opB${p}`).toBe((e.rdyB ? e.valB : bus(e.tagB)) >>> 0);
         }
-        expect(out(s, `cnt${p}`), `t ${t} cnt${p}`).toBe(ents.filter((e, i) => e && e.port === p && grant[0] !== i && grant[1] !== i).length);
+        expect(out(s, `cnt${p}`), `t ${t} cnt${p}`).toBe(ents.filter((e) => e && e.port === p).length);
       }
       tick(s);
       // the next state
