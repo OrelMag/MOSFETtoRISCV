@@ -40,7 +40,7 @@ npm run desktop      # build + desktop/ (Electron, own package): portable Window
 local @fontsource copies) on a private `app://mosfet` origin; data next to the .exe (PORTABLE_EXECUTABLE_DIR);
 fuses off (runAsNode: VS Code sets ELECTRON_RUN_AS_NODE, so run `electron .` there with it unset). Share links
 made in the program point at the public site (editor/files.ts `SITE_URL`). `.github/workflows/desktop.yml`
-(manual or `v*` tag) publishes the release `desktop-latest`.
+(after every successful deploy of main, from the deployed commit; manual; or a `v*` tag) publishes the release `desktop-latest`.
 
 `scripts/smoke.ts` (no dependency: launches Chrome itself, `CHROME` env else the usual paths, and speaks the DevTools
 Protocol over Node's WebSocket) serves dist/ with `vite preview` (or `--url <site>`) and opens every route generated

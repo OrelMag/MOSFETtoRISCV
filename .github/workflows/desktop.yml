@@ -1,12 +1,17 @@
 name: Desktop program
 
 # Builds the portable Windows program (desktop/: the site inside Electron, one .exe, nothing to install)
-# and publishes it as the release "desktop-latest". Run by hand, or by pushing a v* tag.
+# and publishes it as the release "desktop-latest". Run after every successful deploy of main (so the
+# program matches the site), by hand, or by pushing a v* tag.
 
 on:
   workflow_dispatch:
   push:
     tags: ['v*']
+  workflow_run:
+    workflows: ['Deploy to GitHub Pages']
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: write
@@ -17,13 +22,18 @@ concurrency:
 
 jobs:
   windows:
+    # After a deploy: only a successful one, built from the commit it deployed (not main's head, which may have moved).
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: windows-latest
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.SHA }}
           fetch-depth: 0 # the build number in the version is the commit count
       - uses: actions/setup-node@v4
         with:
@@ -60,7 +70,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete desktop-latest --yes --cleanup-tag || true
-          gh release create desktop-latest desktop/release/*.exe --target "$GITHUB_SHA" \
+          gh release create desktop-latest desktop/release/*.exe --target "$SHA" \
             --title "Desktop program (Windows, portable)" \
-            --notes "One .exe, nothing to install: the whole site offline in a window of its own. Built from $GITHUB_SHA ($GITHUB_REF_NAME). Progress and sandbox chips are kept in a MOSFET-to-RISCV-data folder next to the .exe. Unsigned: Windows SmartScreen asks once (More info → Run anyway)." \
+            --notes "One .exe, nothing to install: the whole site offline in a window of its own. Built from $SHA ($GITHUB_REF_NAME). Progress and sandbox chips are kept in a MOSFET-to-RISCV-data folder next to the .exe. Unsigned: Windows SmartScreen asks once (More info → Run anyway)." \
             --prerelease
