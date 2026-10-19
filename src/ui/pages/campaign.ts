@@ -24,12 +24,13 @@ import { PUZZLES } from '../../campaign/puzzles';
 import { drillCard } from '../../campaign/ui/drillui';
 import { puzzleCard } from '../../campaign/ui/puzzleui';
 import { criteria, gradeTable } from '../../campaign/ui/levelinfo';
-import { mapColsFor } from '../../campaign/layout';
+import { foldedActs, mapColsFor } from '../../campaign/layout';
 import { anatomySvg, mapSvg } from '../../campaign/ui/svgs';
 import { type BuildChallenge, importAnswer, startChallenge } from '../../editor/challenges';
 import { loadWorkspace, saveWorkspace } from '../../editor/store';
 import { resolveComponent } from '../../lib/resolve';
 import { h, icon } from '../dom';
+import { settings } from '../settings';
 import type { Page } from './chapter';
 import { tipsOf } from '../../campaign/nudges';
 
@@ -158,7 +159,16 @@ export class CampaignPage implements Page {
   private mapView(selected: string | undefined): HTMLElement {
     const p = progress();
     const sel = selected ? nodeById(selected) : undefined;
-    const draw = (cols: number) => mapSvg(p.view, p.unlockAll, sel?.id, (id) => { location.hash = `#/campaign/n/${id}`; }, cols);
+    // Optional acts fold to a header line (Act P would push act 1 down), as the learner last left them.
+    const folded = foldedActs(p.view, (a) => settings.actOpen(a), sel?.id);
+    const fold = (act: number, f: boolean) => {
+      settings.setActOpen(act, !f);
+      // the selected level keeps its act open: folding that act leaves the level
+      if (f && sel?.act === act) { location.hash = '#/campaign'; return; }
+      this.render();
+      this.main.querySelector<SVGElement>(`.cp-fold[data-act="${act}"]`)?.focus();
+    };
+    const draw = (cols: number) => mapSvg(p.view, p.unlockAll, sel?.id, (id) => { location.hash = `#/campaign/n/${id}`; }, cols, folded, fold);
     const legend = h('div', { class: 'cp-legend' },
       h('span', { class: 'l available' }, 'available'), h('span', { class: 'l solved' }, 'solved'), h('span', { class: 'l skipped' }, 'skipped'),
       h('span', { class: 'l locked' }, 'locked'), h('span', { class: 'l opt' }, 'optional'), NODES.some((n) => n.soon) ? h('span', { class: 'l soon' }, 'coming soon') : null,

@@ -825,7 +825,8 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
   progress.ts    Progress (own storage key, injected KV): status, best, stars, tips, seen; codexUnlocked;
                  exportCampaign / importCampaign (progress + level chips' closure, merged, never overwriting)
   codex.ts       CODEX entries (component / law / tool / trick / concept); lessons.ts lesson HTML
-  anatomy.ts     the target CPU as blocks (intro diagram), blockNodes; layout.ts the map's placement
+  anatomy.ts     the target CPU as blocks (intro diagram), blockNodes; layout.ts the map's placement (OPTIONAL_ACTS: P, 8, 9,
+                 10 fold to a header line, foldedActs: until a level in them is opened, or as settings.actOpen left them)
   drills.ts      generated questions with exact checkers (numbers, Boolean parser, exact K-map minimum, RV16
                  encoding, binary16); puzzles.ts RV16 program puzzles on the golden model (size, cycles)
   buildr.ts      act P (before the transistor, act 11 labelled "Act P", optional, beside act 0): relay levels (NAND, XOR,
