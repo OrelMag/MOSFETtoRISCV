@@ -13,7 +13,8 @@ const PORT_FONT = 0.8, LABEL_FONT = 1.05;
 /** Advance per character: the port font is monospace (0.6 em); the label's UI font is narrower on average. */
 const PORT_EM = 0.6, LABEL_EM = 0.58;
 
-export interface BoxPortText { name: string; x: number; y: number; anchor: 'start' | 'middle' | 'end'; side: string; clock: boolean }
+/** `across`: drawn turned a quarter (rotate(-90) about x, y: reading upwards), a turned box's top and bottom names. */
+export interface BoxPortText { name: string; x: number; y: number; anchor: 'start' | 'middle' | 'end'; side: string; clock: boolean; across?: boolean }
 export interface BoxText {
   ports: BoxPortText[];
   /** The label's baseline (centred on x), or null for none. */
@@ -27,7 +28,11 @@ const textRect = (x: number, y: number, chars: number, font: number, em: number,
 };
 
 /** A port name's box (an overline is no wider: active-low names drop their _n). */
-export const portTextRect = (p: BoxPortText): Rect => textRect(p.x, p.y, p.name.endsWith('_n') ? p.name.length - 2 : p.name.length, PORT_FONT, PORT_EM, p.anchor);
+export const portTextRect = (p: BoxPortText): Rect => {
+  const r = textRect(p.x, p.y, p.name.endsWith('_n') ? p.name.length - 2 : p.name.length, PORT_FONT, PORT_EM, p.anchor);
+  // rotate(-90) about (x, y): along the text is up the screen, its glyphs left of x
+  return p.across ? { x: p.x - (p.y - r.y), y: p.y - (r.x + r.w - p.x), w: r.h, h: r.w } : r;
+};
 export const labelRect = (l: NonNullable<BoxText['label']>): Rect => textRect(l.x, l.y, l.text.length, LABEL_FONT, LABEL_EM, 'middle');
 
 const hit = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -48,16 +53,26 @@ export function boxText(def: ComponentDef, flip = false): BoxText {
     else if (side === 'right') { x = w - 0.45; anchor = 'end'; }
     else if (side === 'top') { y = 1.15; anchor = 'middle'; }
     else { y = h - 0.5; anchor = 'middle'; }
+    const across = !!def.symbol.turned && (side === 'top' || side === 'bottom');
+    if (across) {
+      // reading upwards from the bottom edge, or down to the top edge's name ending under it
+      x = pg.pos[0] + 0.28;
+      y = side === 'top' ? 0.45 : h - 0.45;
+      anchor = side === 'top' ? 'end' : 'start';
+    }
     if (flip && (side === 'left' || side === 'right')) {
       x = w - x;
       anchor = anchor === 'start' ? 'end' : 'start';
     }
-    const clock = !!p.clock && (side === 'left' || side === 'bottom' || side === 'top');
+    // (a right-side clock: a box turned upside down)
+    const clock = !!p.clock;
     if (clock) {
       if (side === 'left') x += flip ? -0.7 : 0.7;
+      else if (side === 'right') x += flip ? 0.7 : -0.7;
       else if (side === 'bottom') y -= 0.6;
+      else if (across) y += 0.6;
     }
-    ports.push({ name: p.name, x, y, anchor, side, clock });
+    ports.push({ name: p.name, x, y, anchor, side, clock, ...(across ? { across } : {}) });
   }
   if (!text) return { ports, label: null };
   const mid = h / 2 + 0.45;
@@ -104,7 +119,7 @@ export function iconSpot(def: ComponentDef, t: BoxText): { x: number; y: number 
   for (const p of t.ports) if (p.clock) {
     const pos = g.ports[p.name]?.pos;
     if (!pos) continue;
-    if (p.side === 'left') rs.push({ x: p.x < w / 2 ? 0 : w - 0.8, y: pos[1] - 0.6, w: 0.8, h: 1.2 });
+    if (p.side === 'left' || p.side === 'right') rs.push({ x: p.x < w / 2 ? 0 : w - 0.8, y: pos[1] - 0.6, w: 0.8, h: 1.2 });
     else rs.push({ x: pos[0] - 0.6, y: p.side === 'top' ? 0 : h - 0.8, w: 1.2, h: 0.8 });
   }
   const m = 0.35, pad = 0.15;

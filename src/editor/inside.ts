@@ -146,7 +146,7 @@ class InsideView {
       const g = faceOf(inst.def) && this.view.el.querySelector(`[data-inst="${CSS.escape(inst.name)}"]`);
       if (!g) continue;
       const fg = s('g', null);
-      const els = drawFace(fg, inst.def, !!inst.flip);
+      const els = drawFace(fg, inst.def, !!inst.flip, inst.rot);
       if (!els) continue;
       g.append(fg);
       all.push({ els, name: inst.name });

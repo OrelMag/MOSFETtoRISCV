@@ -9,7 +9,7 @@
 //
 // Geometry and the wire being drawn are DOM-free (geom.ts); this file only routes events.
 
-import { type ExitDir, type Vec } from '../sim/geometry';
+import { type ExitDir, orientExit, type Rot, type Vec } from '../sim/geometry';
 import { installPanZoom } from '../view/camera';
 import { closePopover, editNumber } from '../view/popover';
 import { drawPinGlyph } from '../view/symbols';
@@ -20,14 +20,14 @@ import { nextDrive } from './chips';
 import type { Editor } from './editor';
 import { lookInside } from './inside';
 import { flipSwitch, ioInfo, switchAt, type SwitchState } from './ioparts';
-import { faceHit, nodeAt } from './face';
+import { canTurn, faceHit, nodeAt } from './face';
 import { toggleSwitch } from './ioface';
 import { branchPoint, drives, grabOn, type Hit, hitTest, hitWire, knobPortSide, nextSameName, partAnchor, pointerGeom, snapPt, WireDraft } from './geom';
 import { renamePin } from './chips';
 import { type ChipDoc, commentBox, endGeom, endKey, type EndRef, type ExitDir as Face, type PinDoc, pinBig, pinValue } from './model';
 import {
   addComment, addLabel, addPart, addPin, addWire, boxSelect, type Clip, copySel, deleteSel, dragWire, duplicate, flipParts, moveSel, pasteClip,
-  namePart, removeBend, type Sel, selectAll, setComment, setLabel, setPin, type WireGrab,
+  namePart, removeBend, rotateParts, type Sel, selectAll, setComment, setLabel, setPin, type WireGrab,
 } from './ops';
 import type { PaletteItem } from './palette';
 import { matches, shortcutAllowed } from '../ui/keys';
@@ -47,8 +47,8 @@ type State =
   | { k: 'band'; at: Vec; add: boolean }
   /** `held`: the button is still down since the press that started it (drag-to-connect). */
   | { k: 'wire'; draft: WireDraft; held: boolean; sx: number; sy: number }
-  /** Placing a palette item; `drag` while it is being dragged out of the palette. */
-  | { k: 'place'; item: PaletteItem; drag: boolean; sx: number; sy: number; key: string };
+  /** Placing a palette item; `drag` while it is being dragged out of the palette. `flip` / `rot`: F and R pressed meanwhile. */
+  | { k: 'place'; item: PaletteItem; drag: boolean; sx: number; sy: number; key: string; flip?: boolean; rot?: Rot };
 
 /** Clipboard shared by every chip of the session (copy in one tab, paste in another). */
 let clipboard: Clip | null = null;
@@ -356,7 +356,7 @@ export class Tools {
     if (!p || !def) return false;
     const x = at[0] - p.at[0], y = at[1] - p.at[1];
     // A switch bank shown on a placed chip's face flips too (face.ts).
-    const hit = info ? null : faceHit(def, !!p.flip, x, y);
+    const hit = info ? null : faceHit(def, !!p.flip, x, y, p.rot);
     if (hit?.d.kind === 'switches') {
       const bit = switchAt(hit.d.width, hit.lx, hit.ly);
       const node = nodeAt(ed.sim.sim?.design.root.children?.get(id), hit.d.path);
@@ -721,7 +721,8 @@ export class Tools {
     if ('part' in pl) {
       const def = this.ed.defOfRef(pl.part);
       if (!def) return v.showGhost(null);
-      return v.showGhost(key, () => v.ghostOf(def, pl.part), partAnchor(def, p));
+      const st = this.state, flip = st.k === 'place' ? st.flip : undefined, rot = st.k === 'place' ? st.rot : undefined;
+      return v.showGhost(`${key}|${!!flip}|${rot ?? 0}`, () => v.ghostOf(def, pl.part, flip, rot), partAnchor(def, p, flip, rot));
     }
     v.showGhost(key, () => {
       if ('comment' in pl) {
@@ -743,9 +744,10 @@ export class Tools {
   private place(item: PaletteItem, p: Vec, keep: boolean): void {
     const ed = this.ed;
     const pl = item.place;
+    const st = this.state, flip = st.k === 'place' ? st.flip : undefined, rot = st.k === 'place' ? st.rot : undefined;
     const again = () => {
       if (keep) {
-        this.state = { k: 'place', item, drag: false, sx: 0, sy: 0, key: ed.palette.armed ?? item.id };
+        this.state = { k: 'place', item, drag: false, sx: 0, sy: 0, key: ed.palette.armed ?? item.id, flip, rot };
         ed.palette.setArmed(ed.palette.armed);
       }
     };
@@ -753,10 +755,11 @@ export class Tools {
     if ('part' in pl) {
       const def = ed.defOfRef(pl.part);
       if (!def) return void ed.toast(`Cannot place ${item.name}`, 'err');
-      const r = addPart(ed.doc, pl.part, partAnchor(def, p));
+      const r = addPart(ed.doc, pl.part, partAnchor(def, p, flip, rot));
       if (r.id === undefined) return void ed.toast(r.reason, 'err');
       const id = r.id;
-      ed.edit(() => r.doc);
+      const turned = flip || rot ? { ...r.doc, parts: r.doc.parts.map((q) => (q.id === id ? { ...q, ...(flip ? { flip } : {}), ...(rot ? { rot } : {}) } : q)) } : r.doc;
+      ed.edit(() => turned);
       ed.select({ parts: [id] });
       return again();
     }
@@ -842,7 +845,20 @@ export class Tools {
     if (e.altKey) return;
     // single character keys: off with the setting (WCAG 2.1.4); letters by their position on a non-Latin layout (keys.ts)
     if (!shortcutAllowed(e)) return;
+    // F and R while a part waits to be placed turn the part to be placed
+    if (st.k === 'place' && 'part' in st.item.place && (matches(e, 'sb.flip') || matches(e, 'sb.rotate'))) {
+      done();
+      const def = ed.defOfRef(st.item.place.part);
+      if (matches(e, 'sb.flip')) {
+        st.flip = !st.flip || undefined;
+        if (st.rot && st.rot !== 2) st.rot = (4 - st.rot) as Rot;
+      } else if (canTurn(st.item.place.part, def)) st.rot = (((st.rot ?? 0) + (e.shiftKey ? 3 : 1)) % 4 || undefined) as Rot | undefined;
+      else return void ed.toast(`${st.item.name} does not turn (it can mirror: F)`);
+      if (this.cursor) this.ghost(st.item, this.cursor);
+      return;
+    }
     if (matches(e, 'sb.flip')) { done(); this.flip(); return; }
+    if (matches(e, 'sb.rotate')) { done(); this.rotate(e.shiftKey ? 3 : 1); return; }
     if (matches(e, 'sb.pointer')) { done(); this.armPointer(); return; }
     if (matches(e, 'sb.comment')) { done(); this.armComment(); return; }
     switch (k) {
@@ -900,6 +916,35 @@ export class Tools {
     const r = duplicate(ed.doc, ed.sel, [2, 2]);
     ed.edit(() => r.doc);
     ed.select(r.sel);
+  }
+
+  /**
+   * Turn the selection a quarter clockwise (turns 3: anticlockwise), each object in place: parts about their middle,
+   * pins and pointers face the next way round. Displays and I/O parts do not turn (face.ts canTurn).
+   */
+  rotate(turns: 1 | 3 = 1): void {
+    const ed = this.ed;
+    const sel = ed.sel;
+    if (!ed.selCount) return;
+    const parts = (sel.parts ?? []).filter((id) => { const p = ed.doc.parts.find((q) => q.id === id); return !!p && canTurn(p.ref, ed.defOf(p)); });
+    const fixed = (sel.parts?.length ?? 0) - parts.length;
+    if (fixed && !parts.length && !sel.pins?.length && !sel.labels?.length) {
+      return void ed.toast(fixed === 1 ? 'Displays and I/O parts do not turn (they can mirror: F)' : `These ${fixed} parts do not turn (displays and I/O parts can mirror: F)`);
+    }
+    const turn = (f: Face): Face => orientExit(f, false, turns);
+    ed.edit((doc0) => {
+      let doc = rotateParts(doc0, parts, turns, ed.defOf);
+      for (const id of sel.pins ?? []) {
+        const p = doc.pins.find((q) => q.id === id);
+        if (p) doc = setPin(doc, id, { face: turn(p.face ?? (p.dir === 'in' ? 'right' : 'left')) }, ed.defOf).doc;
+      }
+      for (const id of sel.labels ?? []) {
+        const l = doc.labels.find((q) => q.id === id);
+        if (l) doc = setLabel(doc, id, { face: turn(l.face ?? 'right') }, ed.defOf).doc;
+      }
+      return doc;
+    });
+    if (fixed) ed.toast(`${fixed} ${fixed === 1 ? 'part' : 'parts'} left as ${fixed === 1 ? 'it was' : 'they were'}: displays and I/O parts do not turn`);
   }
 
   /** Mirror the selection: parts flip, pins and pointers face the other way. */

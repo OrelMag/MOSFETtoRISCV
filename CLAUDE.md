@@ -87,7 +87,10 @@ src/sim/       simulation core (no DOM)
   types.ts       ComponentDef / PortDef / Netlist / NetDef: the single source of truth; Behavior: init(mode),
                  seq (edge-triggered state: timing / logicDepth see storage), carry (heal on an edit), inside (seed
                  an opened leaf's structure: InsideSeed.state / .bits); hdl.synth (vexport's body for a part)
-  geometry.ts    symbol sizes and port positions (grid units) shared by authors, router, renderer
+  geometry.ts    symbol sizes and port positions (grid units) shared by authors, router, renderer; orientGeom / instPort:
+                 an instance mirrored (flip) then turned (rot, quarter turns clockwise; `at` = the turned box's top-left);
+                 orientedBox: a turned box as a box of its own (drawn upright, symbol.turned: top / bottom names across);
+                 centredAt: a part's corner keeping its ports on the grid
   flatten.ts     hierarchy → flat 1-bit nets + leaves, keeping a HierNode tree mapping every
                  level's ports/wires to flat nets (this is what makes every box transparent);
                  powerOn hints may be dotted paths into children ('w3.ff0.ff.slave.sr.q'); one array per net, shared by the ports
@@ -667,7 +670,7 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  displays, a WeakMap set by compile.ts), the face editor's edits (movePin swaps, pinToSide, resizeFace,
                  toggleDisplay, placeDisplay, autoLayout), faceHit / nodeAt / shownNets for a placed chip
   library.ts     UserLibrary: Merkle-cached compile of every chip, cycle checks, renamePort, removeChip
-  ops.ts         pure edits (add / move / delete / flip / set*, copy / paste, namePart: rename where the name is
+  ops.ts         pure edits (add / move / delete / flip / rotateParts (R: about the part's middle) / set*, copy / paste, namePart: rename where the name is
                  drawn); wires stay orthogonal (a straight wire's breakpoints stay put); dragWire (a corner or
                  segment grabbed: geom.ts grabOn; or a new corner: `{ bend }`, carried by the cursor after the right-click menu's
                  "Add a bend here"), removeBend, setStraight, clearBends

@@ -4,7 +4,7 @@
 // Everything is in grid units. Hit tolerances come in from the caller, already converted from
 // screen pixels, so a click is as forgiving at any zoom.
 
-import { type ExitDir, symbolGeom, type Vec } from '../sim/geometry';
+import { centredAt, type ExitDir, orientGeom, type Rot, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
 import { type Rect, textWidth } from '../view/route';
 import {
@@ -17,30 +17,12 @@ export const DIR: Record<ExitDir, Vec> = { left: [-1, 0], right: [1, 0], up: [0,
 const horiz = (d: ExitDir) => d === 'left' || d === 'right';
 
 export const snapPt = (p: Vec): Vec => [Math.round(p[0]), Math.round(p[1])];
-const frac = (v: number) => v - Math.floor(v);
+/** Top-left corner for a part (mirrored, turned) centred under `c`, its ports on grid points (geometry.ts centredAt). */
+export const partAnchor = (def: ComponentDef, c: Vec, flip?: boolean, rot?: Rot): Vec => centredAt(def, c, flip, rot);
 
-/**
- * Top-left corner for a part centred under `c`, chosen so its ports land on integer grid points
- * (wires drawn on the grid then meet them exactly). Symbols whose ports sit on half units shift
- * by that half (for most of their ports, when they disagree).
- */
-export function partAnchor(def: ComponentDef, c: Vec): Vec {
-  const g = symbolGeom(def);
-  // The fractional offset most ports share (a pitch-1 splitter's taps sit on half units).
-  const count = new Map<string, number>();
-  let fx = 0, fy = 0, best = 0;
-  for (const { pos } of Object.values(g.ports)) {
-    const k = `${frac(pos[0])},${frac(pos[1])}`;
-    const n = (count.get(k) ?? 0) + 1;
-    count.set(k, n);
-    if (n > best) [best, fx, fy] = [n, frac(pos[0]), frac(pos[1])];
-  }
-  return [Math.round(c[0] - g.w / 2 + fx) - fx, Math.round(c[1] - g.h / 2 + fy) - fy];
-}
-
-export function partBox(def: ComponentDef | undefined, at: Vec): Rect {
+export function partBox(def: ComponentDef | undefined, at: Vec, flip?: boolean, rot?: Rot): Rect {
   if (!def) return { x: at[0], y: at[1], w: 6, h: 4 };
-  const g = symbolGeom(def);
+  const g = orientGeom(def, flip, rot);
   return { x: at[0], y: at[1], w: g.w, h: g.h };
 }
 
@@ -191,7 +173,7 @@ export function hitTest(doc: ChipDoc, defOf: DefOf, p: Vec, tol: number, polys?:
     let v = inside.get(id);
     if (v === undefined) {
       const q = doc.parts.find((x) => x.id === id);
-      v = !!q && inRect(partBox(defOf(q), q.at), p);
+      v = !!q && inRect(partBox(defOf(q), q.at, q.flip, q.rot), p);
       inside.set(id, v);
     }
     return v;
@@ -208,7 +190,7 @@ export function hitTest(doc: ChipDoc, defOf: DefOf, p: Vec, tol: number, polys?:
   for (let i = doc.labels.length - 1; i >= 0; i--) if (inRect(pointerGeom(doc.labels[i]).rect, p, 0.1)) return { k: 'label', id: doc.labels[i].id };
   for (let i = doc.parts.length - 1; i >= 0; i--) {
     const q = doc.parts[i];
-    if (inRect(partBox(defOf(q), q.at), p, 0.2)) return { k: 'part', id: q.id };
+    if (inRect(partBox(defOf(q), q.at, q.flip, q.rot), p, 0.2)) return { k: 'part', id: q.id };
   }
   const w = hitWire(doc, defOf, p, tol, polys);
   if (w) return w;

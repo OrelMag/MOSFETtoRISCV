@@ -150,7 +150,8 @@ function sanitizePart(p: unknown): PartDoc | null {
   const ref = sanitizeRef(p.ref);
   const at = vec(p.at);
   if (!ref || !at) return null;
-  return compact({ id: p.id, ref, at, flip: p.flip === true ? true : undefined, label: str(p.label) ? p.label : undefined });
+  const rot = p.rot === 1 || p.rot === 2 || p.rot === 3 ? (p.rot as 1 | 2 | 3) : undefined;
+  return compact({ id: p.id, ref, at, flip: p.flip === true ? true : undefined, rot, label: str(p.label) ? p.label : undefined });
 }
 
 /** A net colour: a whole hue in [0, 360) or 'auto'. */

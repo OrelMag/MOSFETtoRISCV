@@ -7,10 +7,10 @@
 // along in a WeakMap (faceOf). Nothing here touches the DOM (the tests run in Node).
 
 import type { HierNode } from '../sim/flatten';
-import { symbolGeom } from '../sim/geometry';
+import { orientPoint, type Rot, symbolGeom } from '../sim/geometry';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { consoleLayout, ioInfo, screenLayout } from './ioparts';
-import type { DisplayKind, FaceDisplayDoc, FaceDoc, FacePinDoc, FaceSide, PartDoc, PinDoc, Vec } from './model';
+import type { DisplayKind, FaceDisplayDoc, FaceDoc, FacePinDoc, FaceSide, PartDoc, PartRef, PinDoc, Vec } from './model';
 import { displayOf } from './parts';
 
 /** Largest box side (grid units). */
@@ -319,22 +319,35 @@ export function pruneFace(face: FaceDoc, pinIds: ReadonlySet<string>): FaceDoc |
 
 // ---- a placed chip ----------------------------------------------------------------------------
 
-/** Where a shown display sits on a placed box `w` wide (mirrored with the part, its picture not). */
-export function shownBox(d: FaceShown, w: number, flip: boolean): { x: number; y: number; w: number; h: number } {
+/**
+ * Where a shown display sits on a placed w × h box (as drawn, before the part's turn): mirrored and turned with the
+ * part, its picture not (upright, centred where its middle lands).
+ */
+export function shownBox(d: FaceShown, w: number, h: number, flip: boolean, rot?: Rot): { x: number; y: number; w: number; h: number } {
   const dw = d.crop.w * d.scale, dh = d.crop.h * d.scale;
-  return { x: flip ? w - d.x - dw : d.x, y: d.y, w: dw, h: dh };
+  const [cx, cy] = orientPoint([d.x + dw / 2, d.y + dh / 2], w, h, flip, rot);
+  return { x: cx - dw / 2, y: cy - dh / 2, w: dw, h: dh };
 }
 
 /** The display under a point of a placed chip (part-local units), and the point in the display part's own units. */
-export function faceHit(def: ComponentDef, flip: boolean, x: number, y: number): { d: FaceShown; lx: number; ly: number } | null {
+export function faceHit(def: ComponentDef, flip: boolean, x: number, y: number, rot?: Rot): { d: FaceShown; lx: number; ly: number } | null {
   const f = faceOf(def);
   if (!f) return null;
-  const w = symbolGeom(def).w;
+  const g = symbolGeom(def);
   for (let i = f.displays.length - 1; i >= 0; i--) {
-    const d = f.displays[i], b = shownBox(d, w, flip);
+    const d = f.displays[i], b = shownBox(d, g.w, g.h, flip, rot);
     if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return { d, lx: d.crop.x + (x - b.x) / d.scale, ly: d.crop.y + (y - b.y) / d.scale };
   }
   return null;
+}
+
+/**
+ * Can R turn this part? Not a display, key, keyboard, console, screen, switch bank, puzzle port or card reader: their
+ * faces are pictures laid out for one way up (they still mirror).
+ */
+export function canTurn(ref: PartRef, def: ComponentDef | undefined): boolean {
+  if (!def || ioInfo(def)) return false;
+  return !('display' in ref || 'key' in ref || 'keyboard' in ref || 'puzzle' in ref || 'reader' in ref);
 }
 
 /** The hierarchy node at `path` below `node` (null when a level is not expanded in this simulation). */

@@ -1,7 +1,7 @@
 // SVG drawings of every symbol kind, in grid units. Each returns a <g> whose origin is the
 // symbol's top-left corner. Port positions match geometry.ts exactly.
 
-import { poleX, symbolGeom } from '../sim/geometry';
+import { isBoxKind, orientedBox, orientGeom, orientPoint, poleX, type Rot, symbolGeom } from '../sim/geometry';
 import type { Category, ComponentDef } from '../sim/types';
 import { s } from '../ui/dom';
 import { boxText, ICON, iconSpot } from './boxtext';
@@ -202,8 +202,25 @@ function tube(triode: boolean): SVGElement[] {
   return els;
 }
 
-/** Where an instance's name goes, relative to its symbol (null: rails and wiring are not named). */
-export function instNameAt(def: ComponentDef): { x: number; y: number; anchor: 'start' | 'middle' } | null {
+/**
+ * Where an instance's name goes, relative to its (turned) symbol (null: rails and wiring are not named). A turned
+ * part's name sits where its upright place lands, upright, on the side of the box it lands beside.
+ */
+export function instNameAt(def: ComponentDef, flip?: boolean, rot?: Rot): { x: number; y: number; anchor: 'start' | 'middle' | 'end' } | null {
+  const up = uprightNameAt(def);
+  if (!up || !rot) return up;
+  if (isBoxKind(def)) return { x: 0.1, y: -0.45, anchor: 'start' };
+  const g = symbolGeom(def), o = orientGeom(def, flip, rot);
+  // the name's middle, a line high, as drawn upright
+  const cx = up.anchor === 'middle' ? up.x : up.x + 0.5, cy = up.y - 0.3;
+  const [x, y] = orientPoint([cx, cy], g.w, g.h, flip, rot);
+  if (x >= o.w) return { x: o.w + 0.35, y: y + 0.3, anchor: 'start' };
+  if (x <= 0) return { x: -0.35, y: y + 0.3, anchor: 'end' };
+  if (y <= o.h / 2) return { x, y: Math.min(y, 0) - 0.05, anchor: 'middle' };
+  return { x, y: Math.max(y, o.h) + 0.95, anchor: 'middle' };
+}
+
+function uprightNameAt(def: ComponentDef): { x: number; y: number; anchor: 'start' | 'middle' } | null {
   if (def.prim === 'alias' || def.prim === 'vdd' || def.prim === 'vhalf' || def.prim === 'gnd') return null;
   const k = def.symbol.kind, g = symbolGeom(def);
   if (k === 'nmos' || k === 'pmos' || k === 'dep') return { x: 3.4, y: 1.45, anchor: 'start' };
@@ -221,7 +238,40 @@ export const CATEGORY_HUE: Partial<Record<Category, number>> = {
   transistor: 25, cell: 25, gate: 250, arithmetic: 145, routing: 185, sequential: 330, memory: 45, cpu: 215,
 };
 
-export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
+/** Font size (grid units) of a symbol's text by its class (styles/app.css), for keeping it upright on a turn. */
+const FONT: Record<string, number> = { 'sym-tiny': 0.75, 'sym-rail': 0.85, 'sym-port': 0.8, 'sym-label': 1.05 };
+
+/**
+ * An instance's symbol in its own frame (the turned box's top-left at 0, 0): mirrored (flip), then turned rot quarter
+ * turns clockwise. A box is laid out again on its new sides (orientedBox), so its text reads as usual; any other
+ * drawing turns as a whole, each text turned back upright about its middle.
+ */
+export function drawSymbol(def: ComponentDef, flip = false, rot?: Rot): SVGGElement {
+  if (!rot) return drawUpright(def, flip);
+  if (isBoxKind(def)) return drawUpright(orientedBox(def, flip, rot), false);
+  const root = drawUpright(def, flip);
+  const g = symbolGeom(def), deg = 90 * rot;
+  const [tx, ty] = orientPoint([0, 0], g.w, g.h, false, rot);
+  const turned = s('g', { transform: `translate(${tx},${ty}) rotate(${deg})` });
+  turned.append(...Array.from(root.childNodes));
+  root.append(turned);
+  for (const el of Array.from(turned.querySelectorAll('text'))) {
+    const x = Number(el.getAttribute('x') ?? 0), y = Number(el.getAttribute('y') ?? 0);
+    const size = FONT[el.getAttribute('class') ?? ''] ?? 0.8;
+    const w = (el.textContent ?? '').length * size * 0.6, a = el.getAttribute('text-anchor');
+    const cx = a === 'middle' ? x : a === 'end' ? x - w / 2 : x + w / 2, cy = y - 0.3 * size;
+    // inside a mirrored group a turn runs the other way
+    const mirrored = !!el.parentElement?.closest('[transform*="scale(-1"]');
+    el.setAttribute('transform', `rotate(${mirrored ? deg : -deg} ${cx} ${cy})`);
+  }
+  // Shadows keep falling down and right: their offset turned back (and mirrored back inside a mirrored group).
+  let [sx, sy] = SHADOW;
+  for (let i = 0; i < rot; i++) [sx, sy] = [sy, -sx];
+  for (const el of Array.from(turned.querySelectorAll('.sym-shadow'))) el.setAttribute('transform', `translate(${flip ? -sx : sx},${sy})`);
+  return root;
+}
+
+function drawUpright(def: ComponentDef, flip: boolean): SVGGElement {
   const g = symbolGeom(def);
   const k = def.symbol.kind;
   // A user chip's hue tints its box (styles: .sym.chip); lightness follows the theme. Library
@@ -326,14 +376,17 @@ export function drawSymbol(def: ComponentDef, flip = false): SVGGElement {
         if (p.clock) {
           // clock triangle marker
           const pg = g.ports[p.name], side = p.side;
-          const cx = side === 'left' ? (flip ? w : 0) : pg.pos[0];
-          const cy = side === 'left' ? pg.pos[1] : side === 'top' ? 0 : h;
-          const d = side === 'left'
-            ? (flip ? `M${cx},${cy - 0.5} L${cx - 0.7},${cy} L${cx},${cy + 0.5}` : `M${cx},${cy - 0.5} L${cx + 0.7},${cy} L${cx},${cy + 0.5}`)
+          const across = side === 'left' || side === 'right';
+          // at the box's left edge pointing in, or the right edge (a flipped box's left pins, a turned box's right ones)
+          const atRight = side === 'right' ? !flip : side === 'left' && flip;
+          const cx = across ? (atRight ? w : 0) : pg.pos[0];
+          const cy = across ? pg.pos[1] : side === 'top' ? 0 : h;
+          const d = across
+            ? (atRight ? `M${cx},${cy - 0.5} L${cx - 0.7},${cy} L${cx},${cy + 0.5}` : `M${cx},${cy - 0.5} L${cx + 0.7},${cy} L${cx},${cy + 0.5}`)
             : side === 'bottom' ? `M${cx - 0.5},${cy} L${cx},${cy - 0.7} L${cx + 0.5},${cy}` : `M${cx - 0.5},${cy} L${cx},${cy + 0.7} L${cx + 0.5},${cy}`;
           root.append(s('path', { d, class: 'sym-line' }));
         }
-        root.append(s('text', { x: p.x, y: p.y, class: 'sym-port', 'text-anchor': p.anchor }, portLabel(p.name)));
+        root.append(s('text', { x: p.x, y: p.y, class: 'sym-port', 'text-anchor': p.anchor, transform: p.across ? `rotate(-90 ${p.x} ${p.y})` : null }, portLabel(p.name)));
       }
       if (def.symbol.verticalLabel) {
         root.append(s('text', { x: w / 2, y: h / 2, class: 'sym-label', 'text-anchor': 'middle', transform: `rotate(-90 ${w / 2} ${h / 2})`, dy: 0.4 }, def.symbol.label ?? def.name));

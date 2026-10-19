@@ -148,7 +148,7 @@ describe('displays on the face', () => {
     const es = sim(w, 'u_top');
     const def = new UserLibrary(w).compiled('u_in')!.def;
     const d = faceOf(def)!.displays[0];
-    const b = shownBox(d, symbolGeom(def).w, true);
+    const b = shownBox(d, symbolGeom(def).w, symbolGeom(def).h, true);
     const [cx, cy] = switchCell(4, 0);
     const hit = faceHit(def, true, b.x + (cx + SW_PITCH / 2) * d.scale, b.y + (cy + 0.8) * d.scale)!;
     expect(hit.d.kind).toBe('switches');

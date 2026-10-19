@@ -127,9 +127,12 @@ export interface PartDoc {
   /** Instance name: unique within the chip, identifier characters only, no '.'. */
   id: string;
   ref: PartRef;
-  /** Top-left of the symbol. */
+  /** Top-left of the symbol (of its turned box when rot is set). */
   at: Vec;
+  /** Mirrored left–right (before the turn). */
   flip?: boolean;
+  /** Quarter turns clockwise (R). */
+  rot?: 1 | 2 | 3;
   /** Caption (defaults to the id). */
   label?: string;
 }
@@ -325,7 +328,7 @@ export function endGeom(doc: ChipDoc, e: EndRef, defOf: DefOf): { pos: Vec; exit
     const p = doc.parts.find((q) => q.id === e.part);
     const d = p && defOf(p);
     if (!p || !d || !d.ports.some((q) => q.name === e.port)) return null;
-    return instPort(d, p.at, p.flip, e.port);
+    return instPort(d, p.at, p.flip, e.port, p.rot);
   }
   if ('pin' in e) {
     const p = doc.pins.find((q) => q.id === e.pin);

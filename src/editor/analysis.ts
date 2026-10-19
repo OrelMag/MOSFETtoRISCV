@@ -390,7 +390,7 @@ class Analysis {
       if (!p || !def || !g) continue;
       let pos: Vec;
       try {
-        pos = instPort(def, [0, 0], p.flip, o.port).pos;
+        pos = instPort(def, [0, 0], p.flip, o.port, p.rot).pos;
       } catch {
         continue;
       }

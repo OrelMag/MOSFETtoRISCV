@@ -6,6 +6,7 @@
 import type { Vec } from '../sim/geometry';
 import { h } from '../ui/dom';
 import { type Editor, registerEditorPlugin } from './editor';
+import { canTurn } from './face';
 import { canLookInside, lookInside } from './inside';
 import { inspect } from './inspect';
 import { nextSameName } from './geom';
@@ -63,6 +64,12 @@ function entries(ed: Editor, at: Vec): Entry[] {
     ];
   }
   const flip: Item = { label: 'Flip', key: 'F', run: () => t.flip() };
+  // Displays and I/O parts only mirror (face.ts canTurn): a selection of nothing else cannot turn.
+  const still = !(s.pins?.length || s.labels?.length) && (s.parts ?? []).every((id) => { const p = ed.doc.parts.find((q) => q.id === id); return !p || !canTurn(p.ref, ed.defOf(p)); });
+  const turn: Item[] = [
+    { label: 'Rotate clockwise', key: 'R', run: () => t.rotate(1), disabled: still },
+    { label: 'Rotate anticlockwise', key: 'Shift+R', run: () => t.rotate(3), disabled: still },
+  ];
   // Wires: straight (simple connections) or square, bends out.
   const wireIds = s.wires ?? [];
   const wires = ed.doc.wires.filter((w) => wireIds.includes(w.id));
@@ -82,7 +89,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
       ...(wires.length ? [{ label: 'Collapse selected', run: () => collapseAll(ed, wireIds) }] : []),
       ...pick,
     ];
-    return [flip, ...shape, ...(ptrs.length ? [null, ...ptrs] : []), null, ...edits];
+    return [flip, ...turn, ...shape, ...(ptrs.length ? [null, ...ptrs] : []), null, ...edits];
   }
   if (s.parts?.length) {
     const p = ed.doc.parts.find((q) => q.id === s.parts![0]);
@@ -94,7 +101,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
         ? { label: 'Edit chip', key: 'double-click', run: () => ed.editChip(chip) }
         : { label: 'Look inside', key: 'double-click', run: () => lookInside(ed, [p.id]), disabled: !canLookInside(ed, p.id) },
       { label: 'Inspect', run: () => inspect(ed, p.id) },
-      flip, ...(pick.length ? [null, ...pick] : []), null, ...edits,
+      flip, ...turn, ...(pick.length ? [null, ...pick] : []), null, ...edits,
     ];
   }
   if (s.pins?.length) {
@@ -110,7 +117,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
         },
       }))
       : [];
-    return [{ label: 'Rename', key: 'F2', run: () => t.rename({ k: 'pin', id: pin.id }) }, ...kinds, flip, null, ...edits];
+    return [{ label: 'Rename', key: 'F2', run: () => t.rename({ k: 'pin', id: pin.id }) }, ...kinds, flip, ...turn, null, ...edits];
   }
   if (s.labels?.length) {
     const id = s.labels[0];
@@ -119,7 +126,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
       { label: 'Rename', key: 'F2', run: () => t.rename({ k: 'label', id }) },
       { label: 'Jump to the next one', key: 'click', run: () => t.jump(id), disabled: !nextSameName(ed.doc, id) },
       { label: 'Unravel into wires', run: () => unravel(ed, [name]), disabled: !canUnravel(ed.doc, name) },
-      flip, null, ...edits,
+      flip, ...turn, null, ...edits,
     ];
   }
   if (s.comments?.length) {
