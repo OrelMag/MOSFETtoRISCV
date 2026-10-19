@@ -12,7 +12,7 @@ import { Stage } from '../../view/stage';
 import { memGridPanel } from '../../widgets/memgrid';
 import { transistorLeaf } from '../../widgets/mosfet';
 import { benchOpened, benchTabs } from '../benchtabs';
-import { h } from '../dom';
+import { h, icon } from '../dom';
 import type { Page } from './chapter';
 
 export class WorkbenchPage implements Page {
@@ -22,6 +22,9 @@ export class WorkbenchPage implements Page {
   private params: HTMLElement;
   private current = '';
   private filter = '';
+  /** On a phone the library is a drawer above the stage, closed until this button opens it (app.css). */
+  private libBtn: HTMLButtonElement;
+  private libName: HTMLElement;
 
   constructor(id: string) {
     const inspector = new Inspector();
@@ -31,12 +34,22 @@ export class WorkbenchPage implements Page {
     search.addEventListener('input', () => { this.filter = search.value.toLowerCase(); this.renderList(); });
     this.list = h('div', { class: 'lib-list' });
     this.params = h('div', { class: 'param-row', style: 'padding:0 12px 10px' });
-    const lib = h('aside', { class: 'library' }, benchTabs('components'), search, this.params, this.list);
-    this.el = h('div', { class: 'bench' }, lib, this.stage.el, inspector.el);
+    const lib = h('aside', { class: 'library', id: 'bench-library' }, benchTabs('components'), search, this.params, this.list);
+    this.libName = h('span', { class: 'bench-libname' });
+    this.libBtn = h('button', { class: 'btn sm bench-libbtn', 'aria-controls': 'bench-library', 'aria-expanded': 'false', title: 'Show or hide the component library',
+      onclick: () => this.showLibrary(!this.el.classList.contains('lib-open')) }, icon('menu', 15), h('b', null, 'Components'), this.libName, icon('chevD', 14)) as HTMLButtonElement;
+    this.el = h('div', { class: 'bench' }, this.libBtn, lib, this.stage.el, inspector.el);
     this.open(id || 'rca4');
   }
 
+  private showLibrary(on: boolean): void {
+    this.el.classList.toggle('lib-open', on);
+    this.libBtn.setAttribute('aria-expanded', String(on));
+  }
+
   open(id: string): void {
+    // A pick in the phone's drawer closes it, the circuit comes back into view.
+    if (this.el?.classList.contains('lib-open')) this.showLibrary(false);
     const def = resolveComponent(id);
     if (!def) {
       // A stale or mistyped link: say so, offer the closest parts, and keep the library list to pick from.
@@ -51,6 +64,7 @@ export class WorkbenchPage implements Page {
       return;
     }
     this.current = def.id;
+    this.libName.textContent = def.name;
     benchOpened(def.id, this.el);
     // Primitives and transistor-level parts are shown inside a test bench so they can be opened.
     const root: ComponentDef = def.prim === 'nand' || def.prim === 'nmos' || def.prim === 'pmos' || (!netlistOf(def) && !needsSwitchLevel(def))
