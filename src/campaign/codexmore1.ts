@@ -989,7 +989,7 @@ NAND–NAND:  3 NOT + 4 × (AND + NAND) + final NAND4 (AND, AND, NAND)
       'Combining the NAND outputs with an OR: that computes ¬p<sub>1</sub> + ¬p<sub>2</sub>, a different function; the second level is a NAND.',
       'Skipping minimisation: NAND–NAND removes inverters, but the number of terms and literals comes from the K-map.',
     ],
-    lib: 'rv16_prime4',
+    lib: 'rv16_prime4_sop',
     chapters: [{ chapter: 'gates', step: 2, label: 'OR: De Morgan\'s trick' }, { chapter: 'memory', step: 5, label: 'The PLA' }],
   },
 
@@ -1249,7 +1249,7 @@ split      14 instructions   stored 0, 3, 1, 9
   },
 
   simt: {
-    idea: `Single instruction, multiple threads: SIMD hardware with the programming model of independent threads. Each thread is an ordinary scalar program over its own registers, with its own ifs and loops; the hardware runs a warp of them on one PC and keeps the illusion with the active mask (which lanes write) and the reconvergence stack (which lanes are still owed the other side of an if). A correct program needs no knowledge of the lanes; a fast one does, because divergence and the tail of a reduction leave lanes idle.<br>The cost over SIMD is small: RV16's SIMT core is the SIMD core plus the stack, a PC mux and a mask mux, 17,837 NANDs against 15,669 (+13%), at the same period of 100. Its 25 test programs, the split ones among them, take 919 cycles. Nvidia named the model; Vortex, the open-source RISC-V GPU, adds split, join and tmc to RV32 as the campaign adds them to RV16.`,
+    idea: `Single instruction, multiple threads: SIMD hardware with the programming model of independent threads. Each thread is an ordinary scalar program over its own registers, with its own ifs and loops; the hardware runs a warp of them on one PC and keeps the illusion with the active mask (which lanes write) and the reconvergence stack (which lanes are still owed the other side of an if). A correct program needs no knowledge of the lanes; a fast one does, because divergence and the tail of a reduction leave lanes idle.<br>The cost over SIMD is small: RV16's SIMT core is the SIMD core plus the stack, a PC mux and a mask mux, 17,732 NANDs against 15,669 (+13%), at the same period of 100. Its 25 test programs, the split ones among them, take 919 cycles. Nvidia named the model; Vortex, the open-source RISC-V GPU, adds split, join and tmc to RV32 as the campaign adds them to RV16.`,
     example: {
       title: 'Nested ifs, four threads',
       body: `<pre>a0 = 0
@@ -1319,7 +1319,7 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
   },
 
   barrel: {
-    idea: `Barrel scheduling (fine-grained multithreading) gives the issue slots to the warps in a fixed rotation, one instruction each. A warp's consecutive instructions are then W cycles apart, so any latency up to W − 1 cycles between them is invisible: no forwarding, no stall, no scoreboard. The CDC 6600's peripheral processors (1964) shared one datapath this way among ten threads; Sun's Niagara and today's GPUs keep the idea and add a scheduler that picks a ready warp instead of the next one.<br>The campaign's two-warp core rotates two warps over a memory one cycle late: a load's word comes back during the other warp's turn and is written then, through a second register write port. The cost is the state: a PC, mask, stack and lane register file per warp, +12 326 NANDs over the SIMT core (30 163 against 17 837), more than half of it registers. A fixed rotation also wastes the turns of a warp that cannot use them (waiting at a barrier, or finished): 59 of the 2 160 turns in the level's 31 programs.`,
+    idea: `Barrel scheduling (fine-grained multithreading) gives the issue slots to the warps in a fixed rotation, one instruction each. A warp's consecutive instructions are then W cycles apart, so any latency up to W − 1 cycles between them is invisible: no forwarding, no stall, no scoreboard. The CDC 6600's peripheral processors (1964) shared one datapath this way among ten threads; Sun's Niagara and today's GPUs keep the idea and add a scheduler that picks a ready warp instead of the next one.<br>The campaign's two-warp core rotates two warps over a memory one cycle late: a load's word comes back during the other warp's turn and is written then, through a second register write port. The cost is the state: a PC, mask, stack and lane register file per warp, +12 242 NANDs over the SIMT core (29 974 against 17 732), more than half of it registers. A fixed rotation also wastes the turns of a warp that cannot use them (waiting at a barrier, or finished): 59 of the 2 160 turns in the level's 31 programs.`,
     example: {
       title: 'A load, in turns',
       body: `<pre>cycle  issues               the memory, at the edge   register writes

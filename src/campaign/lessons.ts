@@ -152,7 +152,7 @@ instruction on its own operands: four results per cycle for one fetch and one de
 apart at the start.</p>
 <h4>What it costs</h4>
 <p>The control is cheap: the SIMD core you will build adds about 11 000 NANDs to your single-cycle
-core for three extra lanes. Most of that is <b>registers</b>: four register files are 8 772 NANDs.
+core for three extra lanes. Most of that is <b>registers</b>: four register files are 8 688 NANDs.
 A real GPU is the same, with its register file the largest structure on the chip.</p>
 <h4>The hard part</h4>
 <p>One PC cannot go two ways. When the lanes disagree on a branch, something has to give: an

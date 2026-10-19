@@ -172,11 +172,11 @@ export const CHECK3: Record<string, Quiz[]> = {
       why: ['Each lane works on its own operands, so each needs its own registers.', 'Each lane computes its own result: an ALU per lane.', '', 'The result path carries each lane\'s own value: one per lane.'],
     },
     {
-      question: 'RV16\'s 4-lane SIMD core is 15,774 NANDs against 18,964 for four single-cycle cores, about 17% smaller. Why so little?',
+      question: 'RV16\'s 4-lane SIMD core is 15,669 NANDs against 18,880 for four single-cycle cores, about 17% smaller. Why so little?',
       options: ['The per-lane part (registers, ALU) dominates a core; the shared control is a small share', 'The lane decoder and mask cost as much as three cores\' control', 'SIMD lanes need wider registers than scalar cores'],
       answer: 0,
-      explain: 'Of 15,774 NANDs, 1,818 are shared and 3,489 per lane; the register files alone are 56%. The bigger saving is one instruction memory and fetch for four results.',
-      why: ['', 'Mask and lane decoder together are 175 NANDs; the shared part is 1,818 in all.', 'Each lane has the same 16-bit registers as the scalar core.'],
+      explain: 'Of 15,669 NANDs, 1,797 are shared and 3,468 per lane; the register files alone are 55%. The bigger saving is one instruction memory and fetch for four results.',
+      why: ['', 'Mask and lane decoder together are 154 NANDs; the shared part is 1,797 in all.', 'Each lane has the same 16-bit registers as the scalar core.'],
     },
   ],
   leader: [

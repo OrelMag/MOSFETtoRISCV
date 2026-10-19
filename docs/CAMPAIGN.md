@@ -385,12 +385,12 @@ adding levels to it never reopens a finished campaign. Its finale (finalCpu of t
 - ✅ kernel puzzle `p_hist` ← k_warps: 16 bins, 8 threads on two warps, no atomics (private counters, a bar, a combine);
   each test also runs with warp 1 ahead, so a kernel missing its bar fails
 - ✅ `k_edge` ← k_simd: one edge function stepped with one adder (E and the band start R; load, right, skip, down, up,
-  band, double), 984 NANDs; a sequence against `Edge16`
+  band, double), 963 NANDs; a sequence against `Edge16`
 - ✅ `k_tile` ← k_edge: the tile walk over 4 × 4 tiles in bands, a TEST cycle per tile, a column serpentine, the
   steppers' commands, 479 NANDs; a sequence against `Walk16`
 - ✅ `k_raster` ← k_tile: set-up by adders (A, B, the top-left bias, the box in tiles, the tile offsets), each E at the
   first tile by shift-and-add on its own stepper (17 cycles, no multiplier), the cull from the sum of the three E, the
-  tile test; 9 251 NANDs, period 145. Its bench (`rastercheck.ts`) runs 64 triangles and compares every pixel write in
+  tile test; 9 188 NANDs, period 145. Its bench (`rastercheck.ts`) runs 64 triangles and compares every pixel write in
   the walk's order; the set-up's length is the learner's, graded as cycles (7 439 for the reference)
 - ✅ `k_frame` ← k_raster, k_warps: the two-warp core with the rasterizer as a device (lane 0's stores to 0xFFF0 … 0xFFF6,
   the screen at 0xF000 + 32·y + x, RGB565), a warp's turn held while the rasterizer is busy if it would store to it or
@@ -551,10 +551,10 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
 - **Measured** (phase D): the reference single-cycle core is 5 748 NANDs, clock period 98 NAND delays with
   8-delay memories in the path (81 with Kogge–Stone adders). The bench runs 28 programs (≈1 240 cycles in
   all) in 0.2–0.6 s on 32 bit-parallel lanes; the event-driven fallback gives identical results.
-- **Today's pars** (the figures above are as first measured; §9's review tightened the references): Core III 4 741
-  NANDs, period 98; Pipelines I–IV 7 083 / 7 438 / 7 552 / 9 239, period 65–78; the trap cores 7 278, period 100; the
-  finale 12 059, period 81; prediction 9 810, period 80; multiply core 8 058, period 191; divide core 10 567, period
-  193; multicycle 5 224, period 76; the cache 3 497, period 36.
+- **Today's pars** (the figures above are as first measured; §9's review tightened the references): Core III 4 720
+  NANDs, period 98; Pipelines I–IV 7 062 / 7 417 / 7 531 / 9 218, period 65–78; the trap cores 7 257, period 100; the
+  finale 12 038, period 81; prediction 9 789, period 80; multiply core 8 037, period 191; divide core 10 546, period
+  193; multicycle 5 203, period 76; the cache 3 497, period 36.
 
 ---
 
@@ -675,6 +675,17 @@ per flip-flop, 15 per enable flip-flop). The levels now unlock campaign cells at
   1 445, `o_dcore` 10 612 → 10 567, `o_fpadd` 3 785 → 3 755, `o_fpmul` 4 965 → 4 935, `o_fpcvt` 2 840 → 2 690.
   `tests/campaign.test.ts` now allows no exception. `o_mulseq` keeps the library mux: its level gives it and does not
   unlock the 49-NAND one, and nothing downstream places its multiplier.
+- [x] **Content review** (`fix/content-review`, 2026-10-19): three references a learner beat by following the tips.
+  `rv16_prime4` (g_sop) is 8 NANDs at depth 5, y = (a2 ? a0 : a1) · (¬a3 + a0·¬(a1·a2)), proven minimal by exhaustive
+  search (the K-map's sum of products stays as `rv16_prime4_sop`, 20, for the codex figures); `rv16_dec3` (g_dec)
+  predecodes, 51 → 30; k_frame's vertex registers are 7 bits as its tip says (702 fewer). The decoder sits in
+  `rv16_rf`, so every core shrinks (periods and cycles unchanged): `m_rf` 2 193 → 2 172, `c_core1` 3 913 → 3 892,
+  `c_core2` 4 011 → 3 990, `c_core3` 4 741 → 4 720, `c_computer` 27 104 → 27 083, Pipelines I–IV 7 083 / 7 438 /
+  7 552 / 9 239 → 7 062 / 7 417 / 7 531 / 9 218, `o_bpred` 9 810 → 9 789, `y_trap` / `y_irq` 7 278 → 7 257,
+  `y_final` 12 059 → 12 038, `o_mcore` 8 058 → 8 037, `o_dcore` 10 567 → 10 546, `o_mc` 5 224 → 5 203, `k_vrf`
+  8 772 → 8 688, `k_simd` 15 774 → 15 669, `k_simt` 17 837 → 17 732, `k_warps` 30 163 → 29 974, `k_edge` 984 → 963,
+  `k_raster` 9 251 → 9 188, `k_frame` 41 250 → 40 275; g_sop 20 → 8, g_dec 51 → 30. The quoted numbers are now read
+  back from the texts by `tests/content-*.test.ts`.
 
 **What the measurements say about the pipeline**: with the tightened parts, Pipeline IV takes 1 495 cycles × 78 =
 116 610 NAND delays against Core III's 1 236 × 98 = 121 128: about 4 % faster (before, at period 82, it was 1 %

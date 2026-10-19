@@ -54,6 +54,39 @@ export const PRIME4: ComponentDef = (() => {
   });
 })();
 
+/** The same function as the textbook writes it: four product terms read off the K-map, NAND–NAND (20, depth 7). The codex's K-map and NAND–NAND figures. */
+export const PRIME4_SOP: ComponentDef = (() => {
+  const b = new Builder(8, 10, 4);
+  b.pins('a');
+  const s = b.op(splitter([1, 1, 1, 1], 4), ['a']);
+  const [a0, a1, a2, a3] = [0, 1, 2, 3].map((i) => b.name(`${s}.o${i}`, `a${i}`, true));
+  b.next();
+  const n3 = b.name(b.op1(NOT, [a3], '¬a3'), 'na3', true);
+  const n2 = b.name(b.op1(NOT, [a2], '¬a2'), 'na2', true);
+  const n1 = b.name(b.op1(NOT, [a1], '¬a1'), 'na1', true);
+  b.next();
+  // m2, m3: ¬a3¬a2a1 · m5, m7: ¬a3a2a0 · m3, m11: ¬a2a1a0 · m5, m13: a2¬a1a0
+  const p1 = b.op1(AND, [n3, n2]), p2 = b.op1(AND, [n3, a2]), p3 = b.op1(AND, [n2, a1]), p4 = b.op1(AND, [a2, n1]);
+  b.next();
+  const t1 = b.op1(NAND, [p1, a1], '¬(¬a3¬a2a1)'), t2 = b.op1(NAND, [p2, a0], '¬(¬a3a2a0)');
+  const t3 = b.op1(NAND, [p3, a0], '¬(¬a2a1a0)'), t4 = b.op1(NAND, [p4, a0], '¬(a2¬a1a0)');
+  b.next();
+  const u = b.op1(AND, [t1, t2]), v = b.op1(AND, [t3, t4]);
+  b.next();
+  b.wire(b.op1(NAND, [u, v], 'OR of the terms'), 'y');
+  const R = b.right;
+  return define({
+    id: 'rv16_prime4_sop', name: 'Prime detector (sum of products)', category: 'gate',
+    summary: 'y = 1 when a is prime (2, 3, 5, 7, 11, 13): four product terms read off a K-map, NAND–NAND (rv16_prime4 does it in 8).',
+    ports: [bus('a', 4, 'in'), bit('y', 'out')],
+    symbol: { kind: 'box', label: 'PRIME?' },
+    spec: ([a]) => [PRIMES4.includes(a) ? 1 : 0],
+    netlist: () => ({ pins: { a: [0, 6], y: [R, 6] }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** 16-input OR as a balanced tree, and its complement: "is the word zero?". */
+
 /** 16-input OR as a balanced tree, and its complement: "is the word zero?". */
 export const WIDE16: ComponentDef = (() => {
   const b = new Builder(8, 10, 2);

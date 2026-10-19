@@ -454,7 +454,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Missing the wrap-around: the left and right columns, and the top and bottom rows, are neighbours.',
       'Circling groups of 3 or 6 cells: only rectangles of 1, 2, 4, 8… cells are product terms.',
     ],
-    lib: 'rv16_prime4',
+    lib: 'rv16_prime4_sop',
   },
   qm: {
     idea: 'Quine–McCluskey is the K-map as an algorithm, so it works for any number of variables and a program can run it. Write the minterms (and don\'t-cares) in binary, grouped by their number of 1s. Merge every pair from neighbouring groups that differs in one bit, writing a dash there; repeat on the merged terms until nothing merges. Terms never merged are the prime implicants. Then choose a minimum set of primes covering every minterm (don\'t-cares need no cover): the essential primes first, then the rest, a set-cover problem that is exponential in the worst case (Petrick\'s method, or a heuristic).<br>The site\'s PLA generator runs it on every output when the page loads: the 7-segment decoder comes out as 28 terms, 164 NANDs, against 313 for the same function as a ROM.',

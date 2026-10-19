@@ -341,8 +341,8 @@ export const CHECK0: Record<string, Quiz[]> = {
   ],
   regfile: [
     {
-      question: 'Adding a third read port to the RV16 8 × 16 register file (2 193 NANDs) costs about:',
-      options: ['1 456 NANDs: another copy of the registers', '343 NANDs: one more 8:1 bus mux tree', '51 NANDs: another decoder'], answer: 1,
+      question: 'Adding a third read port to the RV16 8 × 16 register file (2 172 NANDs) costs about:',
+      options: ['1 456 NANDs: another copy of the registers', '343 NANDs: one more 8:1 bus mux tree', '30 NANDs: another decoder'], answer: 1,
       explain: 'Read ports share the storage; each has its own mux tree. The two existing ones are 686 NANDs, 343 each.',
       why: ['Every port reads the same registers; only the selection is duplicated.', '', 'A decoder selects the register written; a read port selects with a mux tree.'],
     },
