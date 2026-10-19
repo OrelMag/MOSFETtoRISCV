@@ -91,7 +91,7 @@ registerSearchSource({
 });
 
 const act = (id: string, title: string, sub: string, run: () => void, keys?: string[]): NavItem => ({ kind: 'action', id, title, sub, run, keys });
-const toggle = (k: 'animate' | 'wireFlow' | 'netColors' | 'glossary' | 'autoClock' | 'simpleWires' | 'singleKeys' | 'wide') => () => {
+const toggle = (k: 'animate' | 'wireFlow' | 'netColors' | 'glossary' | 'autoClock' | 'loadDelay' | 'simpleWires' | 'singleKeys' | 'wide') => () => {
   settings.set(k, !settings[k]);
   applyTheme();
 };
@@ -172,6 +172,7 @@ registerActions((ctx) => {
     act('vivid', 'Vivid look', `bright filled parts, thick wires (${onOff(settings.vivid)})`, () => { settings.setVivid(!settings.vivid); applyTheme(); }),
     act('gloss', 'Hover definitions', `codex terms underlined in the chapters (${onOff(settings.glossary)})`, toggle('glossary')),
     act('clock', 'Automatic clock', `a circuit with a clock starts running (${onOff(settings.autoClock)})`, toggle('autoClock')),
+    act('delay', 'Load-dependent delay', `timing panels and the inspector time each NAND by its load (${onOff(settings.loadDelay)})`, toggle('loadDelay')),
     act('simple', 'Simple connections', `sandbox: straight wires at any angle (${onOff(settings.simpleWires)})`, toggle('simpleWires')),
     act('go.journey', 'Go to the journey map', 'home', go('#/')),
     act('go.campaign', 'Go to the campaign map', 'campaign', go('#/campaign')),

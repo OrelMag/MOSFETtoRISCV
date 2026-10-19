@@ -70,7 +70,7 @@ export function stats(def: ComponentDef): Stats {
   return s;
 }
 
-const depthCache = { unit: new WeakMap<ComponentDef, number | null>(), load: new WeakMap<ComponentDef, number | null>() };
+const depthCache = { unit: new WeakMap<ComponentDef, number | null>(), load: new WeakMap<ComponentDef, number | null>(), drawn: new WeakMap<ComponentDef, number | null>() };
 
 /**
  * Longest path from any input to any output, in NAND delays (or under the load model, delay.ts, in its
@@ -85,7 +85,7 @@ export function logicDepth(def: ComponentDef, model: DelayModel = 'unit'): numbe
     const driverOf = new Int32Array(d.netCount).fill(-1);
     d.leaves.forEach((l, i) => l.outputs.forEach((p) => p.forEach((n) => (driverOf[n] = i))));
     const memo = new Float64Array(d.leaves.length).fill(-1);
-    const loaded = model === 'load' ? leafDelays(d, 'load') : null;
+    const loaded = model !== 'unit' ? leafDelays(d, model) : null;
     const inArr = inputArrivals(d, model);
     const state = new Uint8Array(d.leaves.length); // 0 new, 1 visiting, 2 done
     // an edge-triggered behaviour (a large RAM) is storage, like a loop of gates

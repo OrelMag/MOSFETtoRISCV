@@ -9,9 +9,11 @@
 // declared delay; root inputs are ideal sources.
 
 import type { FlatDesign } from './flatten';
+import type { TimingReport } from './timing';
 import { FF_DRIVER as DRIVER_OWN, FF_INPUT, FF_WIRE, netCaps } from './netcap';
 
-export type DelayModel = 'unit' | 'load';
+/** 'unit': every NAND 1. 'load': by its load, buffered where that pays. 'drawn': by its load, minimum size, no buffers. */
+export type DelayModel = 'unit' | 'load' | 'drawn';
 
 /** NAND2: logical effort and parasitic delay (τ). An inverter: 1 and 1. */
 export const G_NAND = 4 / 3;
@@ -65,31 +67,31 @@ export function netLoads(d: FlatDesign): Float64Array {
 /** Fan-out (NAND inputs, each with its wire) that a load of `load` fF stands for. */
 export const fanoutOf = (load: number) => Math.max(0, Math.round(load / ONE_INPUT));
 
-const leafCache = new WeakMap<FlatDesign, Float64Array>();
+const leafCache = { load: new WeakMap<FlatDesign, Float64Array>(), drawn: new WeakMap<FlatDesign, Float64Array>() };
 
 /**
  * Delay of every leaf in units under `model`. 'unit': a NAND 1, a behaviour its declared delay (1 if none).
- * 'load': a NAND by its output's load (the larger if it drives several nets), buffered where that pays.
+ * 'load': a NAND by its output's load (the larger if it drives several nets), buffered where that pays; 'drawn': unbuffered.
  */
 export function leafDelays(d: FlatDesign, model: DelayModel): Float64Array {
-  if (model === 'load') {
-    const hit = leafCache.get(d);
+  if (model !== 'unit') {
+    const hit = leafCache[model].get(d);
     if (hit) return hit;
   }
-  const loads = model === 'load' ? netLoads(d) : null;
+  const loads = model !== 'unit' ? netLoads(d) : null;
   const out = new Float64Array(d.leaves.length);
   d.leaves.forEach((l, i) => {
     if (l.kind !== 'nand') { out[i] = l.def.behavior?.delay ?? 1; return; }
     if (!loads) { out[i] = 1; return; }
     let load = 0;
     for (const p of l.outputs) for (const net of p) load = Math.max(load, loads[net]);
-    out[i] = nandDelay(load);
+    out[i] = nandDelay(load, model === 'load');
   });
-  if (model === 'load') leafCache.set(d, out);
+  if (model !== 'unit') leafCache[model].set(d, out);
   return out;
 }
 
-const inputCache = new WeakMap<FlatDesign, Float64Array>();
+const inputCache = { load: new WeakMap<FlatDesign, Float64Array>(), drawn: new WeakMap<FlatDesign, Float64Array>() };
 
 /**
  * Arrival time of every net nothing inside drives (0 but under the load model): a root input is driven by a
@@ -97,14 +99,14 @@ const inputCache = new WeakMap<FlatDesign, Float64Array>();
  */
 export function inputArrivals(d: FlatDesign, model: DelayModel): Float64Array | null {
   if (model === 'unit') return null;
-  const hit = inputCache.get(d);
+  const hit = inputCache[model].get(d);
   if (hit) return hit;
   const loads = netLoads(d), out = new Float64Array(d.netCount);
   for (const p of d.root.def.ports) {
     if (p.dir !== 'in') continue;
-    for (const net of d.root.ports[p.name] ?? []) out[net] = Math.max(0, nandDelay(loads[net]) - 1);
+    for (const net of d.root.ports[p.name] ?? []) out[net] = Math.max(0, nandDelay(loads[net], model === 'load') - 1);
   }
-  inputCache.set(d, out);
+  inputCache[model].set(d, out);
   return out;
 }
 
@@ -114,3 +116,34 @@ export const PS_PER_TAU = 4;
 export const PS_PER_UNIT = PS_PER_TAU * TAU_PER_UNIT;
 
 export const DELAY_NOTE = `Load-dependent delay: each NAND by logical effort, d = p + g·h (NAND2: g = 4/3, p = 2 τ), h its load over one input (${FF_INPUT} fF per NAND input driven + ${FF_WIRE} fF of wire per branch, as for power): minimum-size gates as drawn, with a chain of inverter pairs assumed where a net's load makes one faster (not counted in the NANDs). One unit = a NAND driving one NAND input (${TAU_PER_UNIT.toFixed(2)} τ, ≈ ${PS_PER_UNIT.toFixed(1)} ps at an illustrative ${PS_PER_TAU} ps per τ). A part alone is measured between gates: each input driven by a minimum NAND, each output loading one NAND input. Wire length is not modelled: a drawing's wires are not a layout's.`;
+
+/** A load-model number as text: one decimal, a unit-model one as an integer. */
+export const fmtDelay = (x: number, model: DelayModel) => (model === 'unit' ? String(Math.round(x)) : x.toFixed(1));
+
+/** Words for a delay figure: "NAND delays" or "units". */
+export const delayWord = (model: DelayModel) => (model === 'unit' ? 'NAND delays' : 'units');
+
+/** Picoseconds per delay under a model (unit: PS_PER_NAND, passed in to keep timing.ts out of the cycle). */
+export const psPer = (model: DelayModel, psPerNand: number) => (model === 'unit' ? psPerNand : PS_PER_UNIT);
+
+export interface HeavyNet {
+  /** The leaf driving the net (hierarchical path). */
+  node: string[];
+  fanout: number;
+  /** Its delay on the path, in units, and the inverter pairs assumed in front of the load. */
+  delay: number;
+  pairs: number;
+}
+
+/** The most heavily loaded nets on a load-model critical path (fan-out above 4), heaviest first. */
+export function heavyNets(r: TimingReport, n = 4): HeavyNet[] {
+  if (r.model === 'unit') return [];
+  const out: HeavyNet[] = [];
+  r.path.forEach((p, i) => {
+    const fo = p.fanout ?? 0;
+    if (fo <= 4) return;
+    const delay = p.arrival - (i ? r.path[i - 1].arrival : r.launch.length ? r.stages[0].arrival : 0);
+    out.push({ node: p.node, fanout: fo, delay, pairs: r.model === 'load' ? bestBuffering(fo * ONE_INPUT).pairs : 0 });
+  });
+  return out.sort((a, b) => b.fanout - a.fanout).slice(0, n);
+}

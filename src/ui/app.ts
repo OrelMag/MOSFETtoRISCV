@@ -127,8 +127,12 @@ export function startApp(root: HTMLElement): void {
   const clockItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('autoClock', !settings.autoClock) },
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Automatic clock'), h('small', null, 'A circuit with a clock starts running (2 Hz) when opened; Pulse, Step or Back pauses it')));
-  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), vividItem, boardItem, cartoonItem, modItem, flowItem, netItem, simpleItem, glossItem, clockItem);
-  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections, automatic clock', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
+  // Load-dependent delay: which side the Timing panels and the inspector open on (sim/delay.ts).
+  const delayItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('loadDelay', !settings.loadDelay) },
+    h('span', { class: 'pal-flow-sw' }, h('i')),
+    h('span', null, h('b', null, 'Load-dependent delay'), h('small', null, 'Timing panels and the inspector open on each NAND timed by what it drives; the chapters quote unit delay')));
+  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), vividItem, boardItem, cartoonItem, modItem, flowItem, netItem, simpleItem, glossItem, clockItem, delayItem);
+  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections, automatic clock, load-dependent delay', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
   const palOpen = (on: boolean) => {
     palMenu.classList.toggle('open', on);
     palBtn.setAttribute('aria-expanded', String(on));
@@ -155,6 +159,7 @@ export function startApp(root: HTMLElement): void {
     simpleItem.setAttribute('aria-checked', String(settings.simpleWires));
     glossItem.setAttribute('aria-checked', String(settings.glossary));
     clockItem.setAttribute('aria-checked', String(settings.autoClock));
+    delayItem.setAttribute('aria-checked', String(settings.loadDelay));
     for (const b of radix.querySelectorAll<HTMLButtonElement>('button')) b.classList.toggle('on', b.dataset.r === settings.radix);
     animate.classList.toggle('on', settings.animate);
     animate.setAttribute('aria-pressed', String(settings.animate));

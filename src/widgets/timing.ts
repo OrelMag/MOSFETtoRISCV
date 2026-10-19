@@ -4,50 +4,63 @@ import { koggeStone, rca, CLA4 } from '../lib';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
 import { analyzeTiming, CLK_TO_Q, PS_NOTE, PS_PER_NAND, SETUP, type TimingReport } from '../sim/timing';
+import { DELAY_NOTE, type DelayModel, delayWord, fmtDelay, psPer } from '../sim/delay';
 import { h } from '../ui/dom';
+import { defaultDelay, delaySwitch, heavyList } from '../view/delayui';
 import type { ScenePanel, Stage, Widget } from '../view/stage';
 
-const reports = new WeakMap<object, TimingReport | null>();
+const reports = { unit: new WeakMap<object, TimingReport | null>(), load: new WeakMap<object, TimingReport | null>(), drawn: new WeakMap<object, TimingReport | null>() };
 
 export const timingPanel: ScenePanel = (stage: Stage): Widget => {
   const body = h('div');
-  const title = h('h4', null, 'Critical path', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'static timing'));
+  let model = defaultDelay();
+  const sw = h('span');
+  const title = h('h4', null, h('span', null, 'Critical path ', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'static timing')), sw);
   const el = h('div', { class: 'mem-panel', 'data-dock': 'left', style: 'width:300px' }, title, body);
   title.addEventListener('click', () => el.classList.toggle('collapsed'));
   const design = stage.sim!.design;
-  let rep = reports.get(design);
-  if (rep === undefined) {
-    rep = analyzeTiming(design);
-    reports.set(design, rep);
-  }
-  if (!rep) {
-    body.append(h('p', { class: 'sub' }, 'No flip-flops: nothing to time.'));
-    return { el };
-  }
-  const r = rep;
-  const ns = (r.period * PS_PER_NAND) / 1000;
-  const mhz = 1000 / ns;
+  const reportOf = (m: DelayModel) => {
+    let r = reports[m].get(design);
+    if (r === undefined) reports[m].set(design, (r = analyzeTiming(design, { delay: m })));
+    return r;
+  };
   let on = true;
   const btn = h('button', { class: 'btn sm toggle on' }, 'Highlight path');
   const apply = () => {
     btn.classList.toggle('on', on);
-    stage.highlight(on ? [...new Set(r.stages.map((s) => s.inst))] : []);
+    const r = reportOf(model);
+    stage.highlight(on && r ? [...new Set(r.stages.map((s) => s.inst))] : []);
   };
   btn.addEventListener('click', () => { on = !on; apply(); });
-  const maxA = r.stages[r.stages.length - 1]?.arrival ?? 1;
-  let prev = 0;
-  body.append(
-    h('div', { class: 'readout', style: 'margin-top:0' },
-      h('div', null, h('b', null, String(r.period)), h('span', null, 'NAND delays per cycle')),
-      h('div', { title: PS_NOTE }, h('b', null, `${mhz.toFixed(0)} MHz`), h('span', null, `at an illustrative ${PS_PER_NAND} ps / NAND`))),
-    h('p', { class: 'sub', style: 'margin:8px 0 6px;font-size:12.5px' }, `clk→q ${CLK_TO_Q} + logic ${r.logic} + setup ${SETUP}. Launch: ${r.launch.join('.')}, capture: ${r.capture.slice(0, 2).join('.')}…`),
-    h('div', { class: 'tstages' }, r.stages.map((s) => {
-      const w = Math.max(2, ((s.arrival - prev) / maxA) * 100);
-      prev = s.arrival;
-      return h('div', { class: 'ts' }, h('span', { class: 'n' }, s.inst), h('span', { class: 'bar', style: `width:${w}%` }), h('span', { class: 'a' }, String(s.arrival)));
-    })),
-    h('div', { style: 'margin-top:8px' }, btn),
-  );
+  const render = () => {
+    const r = reportOf(model);
+    sw.replaceChildren(delaySwitch(model, (m) => { model = m; render(); apply(); }));
+    if (!r) return void body.replaceChildren(h('p', { class: 'sub' }, 'No flip-flops: nothing to time.'));
+    const other = reportOf(model === 'load' ? 'unit' : 'load')!;
+    const ps = psPer(model, PS_PER_NAND), mhz = 1e6 / (r.period * ps);
+    const otherMhz = 1e6 / (other.period * psPer(other.model, PS_PER_NAND));
+    const q = r.stages[0]?.arrival ?? CLK_TO_Q;
+    const f = (x: number) => fmtDelay(x, model);
+    const maxA = r.stages[r.stages.length - 1]?.arrival ?? 1;
+    let prev = 0;
+    body.replaceChildren(
+      h('div', { class: 'readout', style: 'margin-top:0' },
+        h('div', null, h('b', null, f(r.period)), h('span', null, `${delayWord(model)} per cycle`)),
+        h('div', { title: model === 'load' ? DELAY_NOTE : PS_NOTE }, h('b', null, `${mhz.toFixed(0)} MHz`), h('span', null, model === 'load' ? `at ≈ ${ps.toFixed(1)} ps / unit` : `at an illustrative ${PS_PER_NAND} ps / NAND`))),
+      h('p', { class: 'sub', style: 'margin:8px 0 6px;font-size:12.5px' }, `clk→q ${f(r.launch.length ? q : CLK_TO_Q)} + logic ${f(r.logic)} + setup ${SETUP}. Launch: ${r.launch.join('.')}, capture: ${r.capture.slice(0, 2).join('.')}…`),
+      h('div', { class: 'tstages' }, r.stages.map((s) => {
+        const w = Math.max(2, ((s.arrival - prev) / maxA) * 100);
+        prev = s.arrival;
+        return h('div', { class: 'ts' }, h('span', { class: 'n' }, s.inst), h('span', { class: 'bar', style: `width:${w}%` }), h('span', { class: 'a' }, f(s.arrival)));
+      })),
+      ...[heavyList(r)].filter((x): x is HTMLElement => !!x),
+      h('p', { class: 'sub', style: 'margin:6px 0 0;font-size:12px' }, model === 'load'
+        ? `Unit delay: ${other.period} NAND delays, ${otherMhz.toFixed(0)} MHz.`
+        : `Under load: ${fmtDelay(other.period, 'load')} units, ${otherMhz.toFixed(0)} MHz.`),
+      h('div', { style: 'margin-top:8px' }, btn),
+    );
+  };
+  render();
   apply();
   return { el, destroy: () => stage.highlight([]) };
 };

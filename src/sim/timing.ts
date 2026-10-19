@@ -60,13 +60,13 @@ export function analyzeTiming(design: FlatDesign, opts: { outputs?: boolean; del
   const leaves = design.leaves;
   const excluded = new Uint8Array(leaves.length);
   const qSource = new Map<number, string[]>(); // net -> launching dff path
-  const loads = model === 'load' ? netLoads(design) : null;
+  const loads = model !== 'unit' ? netLoads(design) : null;
   const allDrivers = loads ? driverOf(design) : null;
   const inArr = inputArrivals(design, model);
   // A flip-flop's last NAND drives the q net: under the load model it sees that net's load.
   const clkToQ = (net: number) => {
     const d = allDrivers ? allDrivers[net] : -1;
-    return d < 0 || leaves[d].kind !== 'nand' ? CLK_TO_Q : CLK_TO_Q - 1 + nandDelay(loads![net]);
+    return d < 0 || leaves[d].kind !== 'nand' ? CLK_TO_Q : CLK_TO_Q - 1 + nandDelay(loads![net], model === 'load');
   };
   const captures: { net: number; dff: string[]; pin?: boolean }[] = [];
   // Edge-triggered behaviours (a large RAM): their inputs but clk are captured like a flip-flop's
