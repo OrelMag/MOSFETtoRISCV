@@ -73,6 +73,11 @@ into dist/layout/ (widgets/chiplayout.ts).
 - Theme: CSS custom properties in `src/styles/`; `data-theme="light|dark"` on `<html>`, or
   absent for auto (`prefers-color-scheme`). Always define new colours for both themes.
 - Match the surrounding code: terse, typed, comments explain *why*.
+- Accessibility: a control drawn in SVG is a `g` with role="button", tabindex 0, an aria-label and Enter / Space
+  (never inside role="img": the campaign map and the anatomy are role="group"); `--muted` is the faintest text
+  colour that passes WCAG AA (4.5:1) on --bg / --surface / --surface-2, so do not go lighter for small text. Touch:
+  `@media (pointer: coarse)` blocks at the end of app.css and editor.css grow buttons, rows and icon buttons to
+  40 px; a new small control gets a rule there. A menu or drawer closed with Esc gives the focus back to its opener.
 
 ## Architecture
 
@@ -855,6 +860,7 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  chip u_ch_cp_<node>; nodeOfChip; startCandidates / startFrom (a core level begun as a copy of an
                  earlier core level's chip, plus the new pins)
   grade.ts       measured(score), stars (★ pass, ★★ ≤ 1.5 × par, ★★★ ≤ par on every graded metric), better
+  cardlabel.ts   KIND_LABEL, STATUS_LABEL, levelCardLabel (a map card's accessible name: "Build: CMOS inverter, locked")
   progress.ts    Progress (own storage key, injected KV): status, best, stars, tips, seen; codexUnlocked;
                  exportCampaign / importCampaign (progress + level chips' closure, merged, never overwriting)
   codex.ts       CODEX entries (component / law / tool / trick / concept); lessons.ts lesson HTML

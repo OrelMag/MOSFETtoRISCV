@@ -259,6 +259,8 @@ export interface PaletteHooks {
   setPurist(v: boolean): void;
   /** Pin an item at the top, or unpin it. */
   toggleFavorite(key: string): void;
+  /** Enter or Space on an item (a click with no pointer): arm it for a click on the canvas. */
+  arm?(item: PaletteItem, key: string): void;
   /** The purist switch is fixed (a level screen: the level's rule decides), so it is not drawn. */
   locked?: boolean;
   /** Groups left out entirely. */
@@ -402,6 +404,12 @@ export class PalettePanel {
       if (it.disabled) return;
       e.preventDefault();
       this.hooks.pick(it, e);
+    });
+    // the keyboard: a click with no pointer behind it (detail 0) arms the item, as a tap does
+    b.addEventListener('click', (e) => {
+      if (e.detail !== 0 || !this.hooks.arm) return;
+      if (it.disabled) return;
+      this.hooks.arm(it, key);
     });
     return b;
   }

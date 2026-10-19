@@ -208,6 +208,11 @@ export class Editor {
 
     this.palette = new PalettePanel(() => ({ ws: this.ws, chipId: this.chipId, canPlace: (c) => this.lib.canPlace(this.chipId, c) }), {
       pick: (item, e) => this.pickPart(item, e),
+      arm: (item, key) => {
+        this.tools.arm(item, key);
+        if (this.partsDrawer) this.showParts(false);
+        this.toast(`${item.name}: click the canvas to place it (Esc cancels)`);
+      },
       purist: () => !!this.level || !!this.ws.purist,
       setPurist: (v) => this.volatile({ ...this.ws, ...(v ? { purist: true } : { purist: undefined }) }),
       toggleFavorite: (key) => {
@@ -695,6 +700,9 @@ export class Editor {
 
   /** Redraw the top bar's buttons (a toggle changed state). */
   renderActions(): void {
+    // a toggle redraws the bar: the focus stays on the button pressed (or More, if it moved there)
+    const a = document.activeElement;
+    const focused = a instanceof HTMLElement && a !== this.moreBtn && this.actionsEl.contains(a) ? a.dataset.action : undefined;
     this.actionsEl.replaceChildren();
     for (const a of this.barActions()) {
       const b = h('button', { class: `btn ghost ${a.label ? 'sm' : 'icon-only'}`, title: a.title, 'aria-label': a.title, 'data-action': a.id, onclick: () => a.run(this) },
@@ -711,6 +719,10 @@ export class Editor {
     }
     this.moreBtn.hidden = !this.shed.size;
     this.actionsEl.append(this.moreBtn);
+    if (focused) {
+      const b = this.actionsEl.querySelector<HTMLElement>(`[data-action="${CSS.escape(focused)}"]`);
+      (b && !b.hidden ? b : this.moreBtn).focus({ preventScroll: true });
+    }
     if (this.moreMenu) this.fillMore();
     this.fitSoon();
   }
@@ -1089,8 +1101,13 @@ export class Editor {
       ['Any key, while running or with Type on', 'is typed into the chip\'s Keyboard parts'],
       ['Esc', 'cancel · clear the selection · leave Type'],
     ];
-    const close = () => ov.remove();
-    const ov = h('div', { class: 'sb-help', role: 'dialog', 'aria-label': 'Keyboard shortcuts', onclick: (e: Event) => { if (e.target === ov) close(); } },
+    // closed, the focus goes back where it was (the More menu's item is gone: then the canvas)
+    const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+    const close = () => {
+      ov.remove();
+      (opener?.isConnected ? opener : this.view.svg).focus({ preventScroll: true });
+    };
+    const ov = h('div', { class: 'sb-help', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Keyboard shortcuts', onclick: (e: Event) => { if (e.target === ov) close(); } },
       h('div', { class: 'panel' },
         h('div', { class: 'sb-help-head' }, h('h3', null, 'Sandbox shortcuts'), h('button', { class: 'btn ghost icon-only', 'aria-label': 'Close', onclick: close }, icon('close', 16))),
         h('dl', null, keys.map(([k, v]) => [h('dt', null, k), h('dd', null, v)]))));

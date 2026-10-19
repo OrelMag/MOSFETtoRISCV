@@ -26,6 +26,7 @@ import { puzzleCard } from '../../campaign/ui/puzzleui';
 import { criteria, gradeTable } from '../../campaign/ui/levelinfo';
 import { foldedActs, mapColsFor } from '../../campaign/layout';
 import { anatomySvg, mapSvg } from '../../campaign/ui/svgs';
+import { KIND_LABEL, STATUS_LABEL } from '../../campaign/cardlabel';
 import { type BuildChallenge, importAnswer, startChallenge } from '../../editor/challenges';
 import { loadWorkspace, saveWorkspace } from '../../editor/store';
 import { resolveComponent } from '../../lib/resolve';
@@ -40,8 +41,25 @@ const html = (tag: 'div' | 'p' | 'span', cls: string, content: string) => {
   return el;
 };
 
-const KIND_LABEL: Record<CampaignNode['kind'], string> = { lesson: 'Lesson', drill: 'Drill', build: 'Build', program: 'Program', core: 'CPU core' };
-const STATUS_LABEL = { locked: 'Locked', available: 'Available', started: 'In progress', solved: 'Solved', skipped: 'Skipped' };
+/**
+ * Before `root` is redrawn: a function that puts the focus back on the redrawn twin of what had it (the
+ * page is rebuilt on every selection and progress change: Enter on a map card or Skip in the panel would
+ * otherwise drop a keyboard user at the top of the page). A map card, act button or diagram block by its
+ * id; a panel button or link by its text, else the selected card.
+ */
+function keepFocus(root: HTMLElement): () => void {
+  const a = document.activeElement;
+  if (!(a instanceof HTMLElement || a instanceof SVGElement) || !root.contains(a)) return () => {};
+  const sel = (['node', 'act', 'block'] as const).map((k) => [k, a.getAttribute(`data-${k}`)] as const).find(([, v]) => v !== null);
+  const text = a.matches('button, a') ? a.textContent : null;
+  return () => {
+    if (document.activeElement !== document.body && document.activeElement !== null) return; // something took it already
+    const el = sel
+      ? root.querySelector<SVGElement>(`[data-${sel[0]}="${CSS.escape(sel[1]!)}"][tabindex]`)
+      : [...root.querySelectorAll<HTMLElement>('button, a')].find((b) => b.textContent === text) ?? root.querySelector<SVGElement>('.cp-node.sel');
+    el?.focus({ preventScroll: true });
+  };
+}
 
 export class CampaignPage implements Page {
   /** The fuller codex (loaded on the first visit to an entry). */
@@ -90,6 +108,7 @@ export class CampaignPage implements Page {
     const route = this.parts.join('/');
     const panelTop = route === this.drawn ? this.main.querySelector<HTMLElement>('.cp-panel')?.scrollTop ?? 0 : 0;
     this.drawn = route;
+    const refocus = keepFocus(this.main);
     this.renderHead();
     const [a, b] = this.parts;
     if (a === 'intro') this.main.replaceChildren(this.introView());
@@ -102,6 +121,7 @@ export class CampaignPage implements Page {
     }
     const panel = this.main.querySelector<HTMLElement>('.cp-panel');
     if (panel && panelTop) panel.scrollTop = panelTop;
+    refocus();
   }
 
   // ---- header ---------------------------------------------------------------------------------
@@ -187,7 +207,9 @@ export class CampaignPage implements Page {
       const cols = mapColsFor(scroll.clientWidth);
       if (scroll.clientWidth <= 0 || cols === this.mapCols) return;
       this.mapCols = cols;
+      const refocus = keepFocus(scroll);
       scroll.replaceChildren(draw(cols));
+      refocus();
     });
     this.mapFit.observe(scroll);
     return h('div', { class: 'cp-split' },
@@ -225,7 +247,7 @@ export class CampaignPage implements Page {
       h('div', { class: 'cp-why' }, h('h4', null, 'Why you need it'), html('p', '', n.why)));
 
     if (n.id === 'intro') {
-      el.append(h('a', { class: 'cp-mini-anatomy', href: '#/campaign/intro', title: 'Open the full diagram' }, anatomySvg(p.view, undefined, () => { location.hash = '#/campaign/intro'; })));
+      el.append(h('a', { class: 'cp-mini-anatomy', href: '#/campaign/intro', title: 'Open the full diagram', 'aria-label': 'The CPU: open the full block diagram' }, anatomySvg(p.view, undefined)));
     }
     if (n.body && LESSONS[n.body]) el.append(html('div', 'cp-lesson', LESSONS[n.body]));
     if (ch) el.append(h('div', { class: 'cp-brief' }, h('h4', null, 'The task'), html('p', '', ch.brief)));
@@ -370,11 +392,17 @@ export class CampaignPage implements Page {
   private introView(): HTMLElement {
     const p = progress();
     const by = blockNodes();
-    const info = h('div', { class: 'cp-block-info' });
+    // read out when a block is picked (the diagram stays where it is)
+    const info = h('div', { class: 'cp-block-info', 'aria-live': 'polite' });
     const pick = (id: string) => {
       const b = BLOCKS.find((x) => x.id === id);
       if (!b) return;
-      for (const g of svgWrap.querySelectorAll('.cp-block')) g.classList.toggle('sel', (g as SVGElement).dataset.block === id);
+      for (const g of svgWrap.querySelectorAll('.cp-block')) {
+        const on = (g as SVGElement).dataset.block === id;
+        g.classList.toggle('sel', on);
+        if (on) g.setAttribute('aria-current', 'true');
+        else g.removeAttribute('aria-current');
+      }
       const ns = (by.get(id) ?? []).map((x) => nodeById(x)).filter((x): x is CampaignNode => !!x);
       const all = new Set<string>();
       for (const x of ns) {

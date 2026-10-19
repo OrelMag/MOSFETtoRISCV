@@ -53,16 +53,20 @@
 .cp-port { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; }
 .cp-legend .port::before { border-radius: 50%; border-color: var(--accent); width: 7px; height: 7px; }
 .cp-node { cursor: pointer; outline: none; }
-.cp-node rect { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.4; transition: stroke 0.12s, fill 0.12s; }
-.cp-node.available rect, .cp-node.started rect { stroke: var(--accent); stroke-width: 2; }
-.cp-node.started rect { fill: var(--accent-soft); }
-.cp-node.solved rect { stroke: var(--good); fill: var(--good-soft); }
-.cp-node.skipped rect { stroke: var(--muted); fill: var(--surface-3); }
-.cp-node.locked { opacity: 0.5; }
-.cp-node.opt rect { stroke-dasharray: 5 3; }
-.cp-node.soon rect { fill: var(--surface-2); stroke-dasharray: 2 3; }
-.cp-node.sel rect, .cp-node:focus-visible rect { stroke: var(--accent); stroke-width: 3; }
-.cp-node:hover rect { stroke-width: 2.4; }
+.cp-node .cp-card { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.4; transition: stroke 0.12s, fill 0.12s; }
+.cp-node.available .cp-card, .cp-node.started .cp-card { stroke: var(--accent); stroke-width: 2; }
+.cp-node.started .cp-card { fill: var(--accent-soft); }
+.cp-node.solved .cp-card { stroke: var(--good); fill: var(--good-soft); }
+.cp-node.skipped .cp-card { stroke: var(--muted); fill: var(--surface-3); }
+/* faded, but not its focus ring */
+.cp-node.locked > :not(.cp-focus) { opacity: 0.5; }
+.cp-node.opt .cp-card { stroke-dasharray: 5 3; }
+.cp-node.soon .cp-card { fill: var(--surface-2); stroke-dasharray: 2 3; }
+.cp-node.sel .cp-card { stroke: var(--accent); stroke-width: 3; }
+.cp-node:hover .cp-card { stroke-width: 2.4; }
+/* the keyboard focus: a ring outside the card (the selected card has an accent border already) */
+.cp-focus { fill: none; stroke: none; pointer-events: none; }
+.cp-node:focus-visible .cp-focus { stroke: var(--accent); stroke-width: 2.5; }
 .cp-node-kind { font-size: 10px; font-family: var(--font-mono); fill: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .cp-node-title { font-size: 13px; font-weight: 600; fill: var(--text); }
 .cp-node-stars { font-size: 12px; fill: var(--warn); }
@@ -136,6 +140,7 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 .cp-block.built rect { fill: var(--good-soft); stroke: var(--good); }
 .cp-block.built text { fill: var(--text); }
 .cp-block.sel rect, .cp-block:focus-visible rect, .cp-block:hover rect { stroke: var(--accent); stroke-width: 2.6; }
+.cp-block:focus-visible rect { stroke-width: 3.6; stroke-dasharray: none; }
 .cp-intro-top { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
 .cp-anatomy-wrap, .cp-block-info { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; }
 .cp-block-info h3 { margin: 0 0 6px; }

@@ -58,6 +58,9 @@ const typing = (t: EventTarget | null) => {
   const el = t as HTMLElement | null;
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
 };
+/** A focused control: Space presses it (a button, a summary, a menu item), it does not start a pan. */
+const control = (t: EventTarget | null) =>
+  !!(t as Element | null)?.closest?.('button, a[href], summary, [role=button], [role^=menuitem], [role=tab], [role=checkbox], [role=switch], [role=option], [role=radio]');
 
 export class Tools {
   state: State = { k: 'idle' };
@@ -786,7 +789,7 @@ export class Tools {
       if (k === 'Backspace') { done(); if (!st.draft.undo()) this.cancel(); else if (this.cursor) this.previewWire(st.draft, this.cursor); return; }
       if (k === 'Escape') { done(); this.cancel(); return; }
     }
-    if (k === ' ') { done(); this.space = true; return; }
+    if (k === ' ' && !control(e.target)) { done(); this.space = true; return; }
     if (k === 'Escape') {
       done();
       closePopover();
