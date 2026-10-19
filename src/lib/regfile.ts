@@ -6,7 +6,8 @@
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { constWord } from './alu';
-import { decoder, muxTree } from './combinational';
+import { busMux2, decoder, muxTree } from './combinational';
+import { OR } from './gates';
 import { define, merger, splitter } from './define';
 import { register } from './sequential';
 
@@ -45,6 +46,117 @@ export function readPort(k: number, w: number): ComponentDef {
           { name: 'y', ends: ['mux.y', 'y'] },
         ],
       }),
+    });
+  });
+}
+
+/**
+ * A register's write select for two write ports: written when either port's decoder picks it (OR), and
+ * with port 1's data when port 1 does (port 1 wins: in a dual-issue CPU it carries the younger instruction).
+ */
+export function writeSelect(w: number): ComponentDef {
+  return memo(`wsel${w}`, () => {
+    const MX = busMux2(w);
+    return define({
+      id: `wsel${w}`, name: `Write select (2 ports, ${w} bits)`, category: 'routing',
+      summary: 'Picks what a register of a two-write-port file loads: enabled when either write port addresses it, with port 1\'s data when port 1 does (the younger instruction wins).',
+      ports: [bit('y0', 'in'), bit('y1', 'in'), bus('wd0', w, 'in'), bus('wd1', w, 'in'), bus('d', w, 'out'), bit('en', 'out')],
+      symbol: { kind: 'box', label: 'WR', w: 4, h: 8, portPos: { y0: 1, y1: 3, wd0: 5, wd1: 7, d: 2, en: 4 } },
+      spec: ([y0, y1, a, b]) => [y1 ? b : a, y0 || y1 ? 1 : 0],
+      netlist: () => ({
+        pins: { y0: [0, 10], y1: [0, 4], wd0: [0, 1], wd1: [0, 2], d: [16, 3], en: [16, 11] },
+        instances: [{ name: 'mux', def: MX, at: [8, 0] }, { name: 'or', def: OR, at: [8, 9] }],
+        nets: [
+          { name: 'wd0', ends: ['wd0', 'mux.a'] }, { name: 'wd1', ends: ['wd1', 'mux.b'] },
+          { name: 'y1', ends: ['y1', 'mux.s', 'or.b'], via: { 'mux.s': [[4, 4], [4, 7], [10, 7]] }, trunk: 4 },
+          { name: 'y0', ends: ['y0', 'or.a'] },
+          { name: 'd', ends: ['mux.y', 'd'] }, { name: 'en', ends: ['or.y', 'en'] },
+        ],
+      }),
+    });
+  });
+}
+
+/**
+ * The register file of a dual-issue CPU: 2^k registers of w bits with x0 = 0, four read ports (two
+ * instructions, two operands each) and two write ports; when both write one register, port 1 wins.
+ * Registers are w1 … w(2^k − 1), as in regfile(), so every reader of a register file reads this one too.
+ */
+export function regfile2w(k: number, w: number): ComponentDef {
+  return memo(`rf2w${k}x${w}`, () => {
+    const N = 2 ** k, R = register(w), rg = symbolGeom(R);
+    const P = Math.max(rg.h + 4, 10);
+    const D = decoder(k, true, P), dg = symbolGeom(D);
+    const WS = writeSelect(w), wg = symbolGeom(WS);
+    const RP = readPort(k, w), rpg = symbolGeom(RP);
+    const Z = constWord(w, 0), zg = symbolGeom(Z);
+    const dAt: [number, number] = [6, 2];
+    const dOut = (i: number) => dAt[1] + dg.ports[`y${i}`].pos[1];
+    // a row: the write select's y0 level with the decoder's output, its d / en level with the register's
+    const sTop = (i: number) => dOut(i) - wg.ports.y0.pos[1];
+    const xS = dAt[0] + dg.w + 10, xR = xS + wg.w + 6;
+    const rTop = (i: number) => sTop(i) + wg.ports.d.pos[1] - rg.ports.d.pos[1];
+    const qY = (i: number) => rTop(i) + rg.ports.q.pos[1];
+    const xQ = xR + rg.w + 6, mqTop = qY(0) - P / 2, busY = mqTop + (N * P) / 2;
+    const xP = xQ + 10;
+    const rpAt = (j: number): [number, number] => [xP, busY - rpg.ports.words.pos[1] + j * (rpg.h + 10)];
+    const d1At: [number, number] = [dAt[0], dAt[1] + dg.h + 8];
+    const instances: InstanceDef[] = [
+      { name: 'dec0', def: D, at: dAt, label: 'write port 0' },
+      { name: 'dec1', def: D, at: d1At, label: 'write port 1' },
+      { name: 'x0', def: Z, at: [xR + rg.w - zg.w, qY(0) - zg.ports.y.pos[1]], label: 'x0 = 0' },
+      { name: 'bundle', def: merger(Array(N).fill(w), P), at: [xQ, mqTop] },
+      ...[0, 1, 2, 3].map((j): InstanceDef => ({ name: `rp${j + 1}`, def: RP, at: rpAt(j) })),
+    ];
+    const nets: NetDef[] = [{ name: 'q0', ends: ['x0.y', 'bundle.i0'] }];
+    const wd0 = ['wd0'], wd1 = ['wd1'], clk = ['clk'];
+    for (let i = 1; i < N; i++) {
+      instances.push({ name: `ws${i}`, def: WS, at: [xS, sTop(i)] }, { name: `w${i}`, def: R, at: [xR, rTop(i)], label: `x${i}` });
+      nets.push(
+        { name: `p0w${i}`, ends: [`dec0.y${i}`, `ws${i}.y0`] },
+        { name: `p1w${i}`, ends: [`dec1.y${i}`, `ws${i}.y1`], tags: true },
+        { name: `d${i}`, ends: [`ws${i}.d`, `w${i}.d`] }, { name: `en${i}`, ends: [`ws${i}.en`, `w${i}.en`] },
+        { name: `q${i}`, ends: [`w${i}.q`, `bundle.i${i}`] },
+      );
+      wd0.push(`ws${i}.wd0`); wd1.push(`ws${i}.wd1`); clk.push(`w${i}.clk`);
+    }
+    const bottom = Math.max(d1At[1] + dg.h, rTop(N - 1) + rg.h, rpAt(3)[1] + rpg.h) + 4;
+    nets.push(
+      { name: 'wa0', ends: ['wa0', 'dec0.a'], tags: ['dec0.a'] }, { name: 'we0', ends: ['we0', 'dec0.en'], tags: ['dec0.en'] },
+      { name: 'wa1', ends: ['wa1', 'dec1.a'], tags: ['dec1.a'] }, { name: 'we1', ends: ['we1', 'dec1.en'], tags: ['dec1.en'] },
+      { name: 'wd0', ends: wd0, trunk: xS - 3 }, { name: 'wd1', ends: wd1, trunk: xS - 6 },
+      { name: 'clk', ends: clk, trunk: xR + rg.w + 2 },
+      { name: 'regs', ends: ['bundle.out', ...[1, 2, 3, 4].map((j) => `rp${j}.words`)], trunk: xP - 3 },
+      ...[1, 2, 3, 4].flatMap((j): NetDef[] => [
+        { name: `ra${j}`, ends: [`ra${j}`, `rp${j}.sel`], tags: [`rp${j}.sel`] },
+        { name: `rd${j}`, ends: [`rp${j}.y`, `rd${j}`] },
+      ]),
+    );
+    const outX = xP + rpg.w + 6;
+    const ins = ['wa0', 'we0', 'wd0', 'wa1', 'we1', 'wd1', 'ra1', 'ra2', 'ra3', 'ra4'];
+    return define({
+      id: `regfile${N}x${w}_4r2w`, name: `Register file (${N} × ${w}, 4 read, 2 write ports)`, category: 'memory',
+      summary: `${N} registers of ${w} bits, x0 always reads 0. Four read ports (two instructions, two operands each) and two write ports, all in one cycle: each register's write select takes either port, and port 1 (the younger instruction) wins when both write one register.`,
+      ports: [
+        bus('wa0', k, 'in'), bit('we0', 'in'), bus('wd0', w, 'in'), bus('wa1', k, 'in'), bit('we1', 'in'), bus('wd1', w, 'in'),
+        ...[1, 2, 3, 4].map((j) => bus(`ra${j}`, k, 'in')), bit('clk', 'in', 'bottom', true),
+        ...[1, 2, 3, 4].map((j) => bus(`rd${j}`, w, 'out')),
+      ],
+      symbol: { kind: 'box', label: 'REGISTERS 4R 2W' },
+      netlist: () => ({
+        pins: {
+          ...Object.fromEntries(ins.map((n, i) => [n, [0, bottom + 2 * i] as [number, number]])), clk: [0, bottom + 2 * ins.length],
+          ...Object.fromEntries([1, 2, 3, 4].map((j) => [`rd${j}`, [outX, rpAt(j - 1)[1] + rpg.ports.y.pos[1]] as [number, number]])),
+        },
+        instances, nets,
+      }),
+      hdl: {
+        verilog: `always_ff @(posedge clk) begin
+  if (we0 && wa0 != 0) x[wa0] <= wd0;
+  if (we1 && wa1 != 0) x[wa1] <= wd1;   // port 1 last: it wins a register both write
+end
+assign rd1 = (ra1 == 0) ? '0 : x[ra1];   // likewise rd2, rd3, rd4`,
+      },
     });
   });
 }
