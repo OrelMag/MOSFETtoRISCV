@@ -7,7 +7,7 @@ import '../src/lib';
 import { resolveComponent } from '../src/lib/resolve';
 import { compileChip } from '../src/editor/compile';
 import {
-  branchPoint, drives, elbow, hitTest, nextSameName, partAnchor, pointerGeom, snapPt, wireGroups, WireDraft,
+  branchPoint, drives, elbow, hitTest, knobPortSide, nextSameName, onPinKnob, partAnchor, pointerGeom, portHandles, snapPt, wireGroups, WireDraft,
 } from '../src/editor/geom';
 import { emptyWorkspace, type ChipDoc, type DefOf, type PartRef } from '../src/editor/model';
 import { addPart, addPin, addWire, moveSel } from '../src/editor/ops';
@@ -68,6 +68,44 @@ describe('hit testing', () => {
     // w5 runs x.y (12,3) → s (20,3)
     expect(hitTest(doc, defOf, [16, 3.2], 0.4)).toEqual({ k: 'wire', id: 'w5', at: [16, 3] });
     expect(hitTest(doc, defOf, [30, 30], 0.4)).toEqual({ k: 'none' });
+  });
+
+  it('a pin knob is the pin at any tolerance: a tap toggles it, not a wire from its port', () => {
+    // a low zoom (tol 1.2): the port at (0, 2) used to reach over most of the knob centred at (-0.9, 2)
+    for (const x of [-0.9, -0.4, -0.2, -1.6]) expect(hitTest(doc, defOf, [x, 2], 1.2)).toEqual({ k: 'pin', id: 'a' });
+    // past the knob's edge, towards and beyond the connection point: the port
+    expect(hitTest(doc, defOf, [0.05, 2], 1.2)).toMatchObject({ k: 'port', end: { pin: 'a' } });
+    expect(hitTest(doc, defOf, [0.9, 2.3], 1.2)).toMatchObject({ k: 'port', end: { pin: 'a' } });
+    // an output's knob sits right of its connection point (s at (20, 3))
+    expect(hitTest(doc, defOf, [20.9, 3], 1.2)).toEqual({ k: 'pin', id: 's' });
+    expect(hitTest(doc, defOf, [19.4, 3], 1.2)).toMatchObject({ k: 'port', end: { pin: 's' } });
+  });
+
+  it("the knob's port side: a drag from there wires, from the far side it moves", () => {
+    const a = doc.pins.find((p) => p.id === 'a')!, s = doc.pins.find((p) => p.id === 's')!;
+    expect(knobPortSide(a, [-0.5, 2])).toBe(true);
+    expect(knobPortSide(a, [-0.3, 2.3])).toBe(true);
+    expect(knobPortSide(a, [-1.3, 2])).toBe(false);
+    expect(knobPortSide(a, [0.6, 2])).toBe(false); // off the knob: the port itself
+    expect(knobPortSide(s, [20.4, 3])).toBe(true);
+    expect(knobPortSide(s, [21.4, 3])).toBe(false);
+    expect(onPinKnob(a, [-0.9, 2.7])).toBe(true);
+    expect(onPinKnob(a, [-0.9, 2.95])).toBe(false);
+  });
+
+  it("a part's port reaches only a little into the part's own body", () => {
+    // xor x: box (8, 1)–(12, 5), port a at (8, 2), b at (8, 4), y at (12, 3)
+    expect(hitTest(doc, defOf, [8.4, 2], 1.2)).toEqual({ k: 'port', end: { part: 'x', port: 'a' }, pos: [8, 2] });
+    expect(hitTest(doc, defOf, [9, 2.2], 1.2)).toEqual({ k: 'part', id: 'x' });
+    expect(hitTest(doc, defOf, [11, 3], 1.2)).toEqual({ k: 'part', id: 'x' });
+    // outside the body the tolerance is whole
+    expect(hitTest(doc, defOf, [7, 2], 1.2)).toEqual({ k: 'port', end: { part: 'x', port: 'a' }, pos: [8, 2] });
+    expect(hitTest(doc, defOf, [13.1, 3], 1.2)).toMatchObject({ k: 'port', end: { part: 'x', port: 'y' } });
+  });
+
+  it('port handles: the attach points of the given parts and pins', () => {
+    expect(portHandles(doc, defOf, ['x'], ['s']).sort()).toEqual([[12, 3], [20, 3], [8, 2], [8, 4]].sort());
+    expect(portHandles(doc, defOf, [], [])).toEqual([]);
   });
 
   it('pointers: the attach point is a port, the flag selects', () => {

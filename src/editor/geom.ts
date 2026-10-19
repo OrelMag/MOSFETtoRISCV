@@ -63,6 +63,34 @@ export function pinBody(p: PinDoc): Rect {
   return f === 'right' ? { x: cx - len + 0.6, y: cy - 0.9, w: len, h: 1.8 } : { x: cx - 0.6, y: cy - 0.9, w: len, h: 1.8 };
 }
 
+/** Radius of a 1-bit pin's knob (drawPinGlyph). */
+export const KNOB_R = 0.8;
+
+/**
+ * Is p on a pin's knob (a bus pin: its value box)? There a tap toggles the pin (or edits its value) and a
+ * drag moves it, so no port's hit area reaches in, however forgiving the tolerance at a low zoom.
+ */
+export function onPinKnob(pin: PinDoc, p: Vec): boolean {
+  if (pin.width === 1) return dist(pinKnob(pin), p) <= KNOB_R + 0.05;
+  return inRect(pinBody(pin), p);
+}
+
+/** How far from a pin's connection point (along its axis) the knob's port side reaches. */
+const PORT_SIDE = 0.9;
+
+/**
+ * Is p on the side of a pin's knob that faces its connection point (the half of a 1-bit knob towards the
+ * stub)? A drag from there draws a wire; from the far side it moves the pin. A tap toggles it either way.
+ */
+export function knobPortSide(pin: PinDoc, p: Vec): boolean {
+  if (!onPinKnob(pin, p)) return false;
+  const d = DIR[defaultFace(pin)];
+  return (pin.at[0] - p[0]) * d[0] + (pin.at[1] - p[1]) * d[1] <= PORT_SIDE;
+}
+
+/** How far a part's port reaches into the part's own body (grid units): the rest of the body selects and drags it. */
+export const PORT_INSIDE = 0.5;
+
 export const TAG_H = 1.35;
 const STUB = 1;
 
@@ -133,21 +161,47 @@ export function attachPoints(doc: ChipDoc, defOf: DefOf): { end: EndRef; pos: Ve
   return out;
 }
 
+/**
+ * Where wires attach to these parts and pins: the handles drawn on a selected or hovered object, so a
+ * finger or the mouse knows where a drag starts a wire (a pin's knob toggles and moves it).
+ */
+export function portHandles(doc: ChipDoc, defOf: DefOf, parts: readonly string[], pins: readonly string[]): Vec[] {
+  if (!parts.length && !pins.length) return [];
+  const ps = new Set(parts), qs = new Set(pins);
+  return attachPoints(doc, defOf).filter((a) => ('part' in a.end && ps.has(a.end.part)) || ('pin' in a.end && qs.has(a.end.pin))).map((a) => a.pos);
+}
+
 /** Distance from p to an orthogonal polyline. */
 export function distToPolyline(poly: Vec[], p: Vec): number {
   return dist(nearestOn(poly, p), p);
 }
 
 /**
- * What is under p. Ports win within `tol` (so a wire can start on a pin that sits on a part's
- * edge), then pins, pointers and parts (the last drawn on top), then wires, then comments (drawn
- * under everything, so a note never hides the circuit from the mouse).
+ * What is under p. A pin's knob comes first (a tap toggles it: see onPinKnob), then ports within
+ * `tol` (so a wire can start on a pin that sits on a part's edge; into a part's own body a port
+ * reaches PORT_INSIDE at most, so the body still drags the part at a low zoom), then pins,
+ * pointers and parts (the last drawn on top), then wires, then comments (drawn under everything,
+ * so a note never hides the circuit from the mouse).
  */
 export function hitTest(doc: ChipDoc, defOf: DefOf, p: Vec, tol: number, polys?: Map<string, Vec[]>): Hit {
+  for (let i = doc.pins.length - 1; i >= 0; i--) if (onPinKnob(doc.pins[i], p)) return { k: 'pin', id: doc.pins[i].id };
   let best: Hit = { k: 'none' }, bd = tol;
+  const inside = new Map<string, boolean>();
+  const inPart = (id: string) => {
+    let v = inside.get(id);
+    if (v === undefined) {
+      const q = doc.parts.find((x) => x.id === id);
+      v = !!q && inRect(partBox(defOf(q), q.at), p);
+      inside.set(id, v);
+    }
+    return v;
+  };
   for (const a of attachPoints(doc, defOf)) {
     const d = dist(a.pos, p);
-    if (d <= bd) { bd = d; best = { k: 'port', end: a.end, pos: a.pos }; }
+    if (d > bd) continue;
+    if ('part' in a.end && d > PORT_INSIDE && inPart(a.end.part)) continue;
+    bd = d;
+    best = { k: 'port', end: a.end, pos: a.pos };
   }
   if (best.k !== 'none') return best;
   for (let i = doc.pins.length - 1; i >= 0; i--) if (inRect(pinBody(doc.pins[i]), p)) return { k: 'pin', id: doc.pins[i].id };

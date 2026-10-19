@@ -19,7 +19,7 @@ import { bitClass, busClass } from '../view/schematic';
 import { drawPinGlyph, drawSymbol, instNameAt, type PinGlyph, placePinValue } from '../view/symbols';
 import type { Compiled, Diag } from './compile';
 import { type WireFlow, wireFlows } from './flowdir';
-import { partBox, pinBody, pinKnob, pointerGeom, wireGroups } from './geom';
+import { partBox, pinBody, pinKnob, pointerGeom, portHandles, wireGroups } from './geom';
 import { HopCache } from './hops';
 import {
   type ChipDoc, COMMENT_LINE, type CommentDoc, commentBox, type DefOf, defaultFace, type LabelDoc, type PartDoc, type PinDoc, pinBig, polyline, type WireDoc,
@@ -110,6 +110,11 @@ export class EditorView {
   private guides: SVGGElement;
   private gHandles: SVGGElement;
   private handlesKey = '';
+  /** Port handles: where wires attach to the selected parts and pins, and to the one under the mouse. */
+  private gPorts: SVGGElement;
+  private portsKey = '';
+  private hoverOwner: { parts: string[]; pins: string[] } = { parts: [], pins: [] };
+  private defOf: DefOf | null = null;
 
   constructor(host: HTMLElement) {
     this.svg = s('svg', { class: 'schematic ed-svg', role: 'application', 'aria-label': 'Circuit editor canvas' });
@@ -137,7 +142,8 @@ export class EditorView {
     this.ghost = s('g', { class: 'ed-ghost' });
     this.guides = s('g', { class: 'ed-guides' });
     this.gHandles = s('g', { class: 'ed-handles' });
-    this.gOver.append(this.guides, this.gHandles, this.ghost, this.preview, this.band, this.hot);
+    this.gPorts = s('g', { class: 'ed-ports' });
+    this.gOver.append(this.guides, this.gPorts, this.gHandles, this.ghost, this.preview, this.band, this.hot);
     this.svg.append(defs,
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid)' }),
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid5)' }),
@@ -159,6 +165,7 @@ export class EditorView {
   render(doc: ChipDoc, defOf: DefOf): void {
     const prev = this.doc;
     this.doc = doc;
+    this.defOf = defOf;
     const geomChanged = !prev || prev.parts !== doc.parts || prev.pins !== doc.pins || prev.labels !== doc.labels;
     // Objects that moved or changed: only the wires ending on them need a new polyline.
     const dirty = new Set<string>();
@@ -318,6 +325,7 @@ export class EditorView {
    * on a straight one's breakpoints.
    */
   private drawHandles(): void {
+    this.drawPorts();
     const ids = (this.sel.wires ?? []).length <= 8 ? this.sel.wires ?? [] : [];
     const els = ids.map((id) => this.wires.get(id)).filter((e): e is WireEls => !!e?.poly);
     const key = els.map((e) => `${e.doc.straight ? 's' : ''}${e.key}`).join('|');
@@ -327,6 +335,25 @@ export class EditorView {
     this.gHandles.replaceChildren(...els.flatMap((e) => e.poly!.slice(1, -1).map(([x, y]) => (e.doc.straight
       ? s('circle', { class: 'ed-handle', cx: x, cy: y, r })
       : s('rect', { class: 'ed-handle', x: x - r, y: y - r, width: 2 * r, height: 2 * r })))));
+  }
+
+  /** The parts and pins whose port handles show besides the selection's (the one under the mouse). */
+  showPortsOf(parts: string[], pins: string[]): void {
+    this.hoverOwner = { parts, pins };
+    this.drawPorts();
+  }
+
+  /** Small dots on the ports of the selected parts and pins (a few at most) and of the hovered one. */
+  private drawPorts(): void {
+    const doc = this.doc, defOf = this.defOf;
+    const few = (xs?: string[]) => (xs && xs.length <= 8 ? xs : []);
+    const parts = [...new Set([...few(this.sel.parts), ...this.hoverOwner.parts])];
+    const pins = [...new Set([...few(this.sel.pins), ...this.hoverOwner.pins])];
+    const pts = doc && defOf ? portHandles(doc, defOf, parts, pins) : [];
+    const key = pts.map(([x, y]) => `${x},${y}`).join(' ');
+    if (key === this.portsKey) return;
+    this.portsKey = key;
+    this.gPorts.replaceChildren(...pts.map(([x, y]) => s('circle', { class: 'ed-port', cx: x, cy: y, r: 0.3 })));
   }
 
   /**
