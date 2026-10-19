@@ -61,6 +61,7 @@ export class WorkbenchPage implements Page {
         near.length ? h('div', { class: 'suggest' }, near.map((it) => h('button', { class: 'btn', onclick: () => this.open(it.id) }, it.name))) : null)) });
       this.renderParams();
       this.renderList();
+      this.showLibrary(true); // a phone: the list to pick from, opened
       return;
     }
     this.current = def.id;
