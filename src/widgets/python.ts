@@ -6,7 +6,7 @@
 import { compilePy, outputOf } from '../lang/compile';
 import type { Compiled } from '../lang/compile';
 import type { Home } from '../lang/codegen';
-import { PY_PROGRAMS } from '../lang/pyprograms';
+import { PY_GROUPS, PY_PROGRAMS } from '../lang/pyprograms';
 import { cpuState } from '../riscv/cosim';
 import { ABI, disasm } from '../riscv/isa';
 import { ISS } from '../riscv/iss';
@@ -38,6 +38,14 @@ const signed = (v: number) => String(v | 0);
 const hex8 = (v: number) => (v >>> 0).toString(16).padStart(8, '0');
 const progOf = (id: string) => PY_PROGRAMS.find((p) => p.id === id)!;
 
+/** The program list in its sections; the chosen program's blurb in `blurb`. */
+function programPicker(label: string, blurb: HTMLElement): HTMLSelectElement {
+  const sel = h('select', { class: 'py-sel', 'aria-label': label }) as HTMLSelectElement;
+  for (const g of PY_GROUPS) sel.append(h('optgroup', { label: g }, ...PY_PROGRAMS.filter((p) => p.group === g).map((p) => h('option', { value: p.id }, p.name))));
+  sel.addEventListener('change', () => { blurb.textContent = PY_PROGRAMS.find((p) => p.id === sel.value)?.blurb ?? ''; });
+  return sel;
+}
+
 /** Python lines of a source (1-based index → text). */
 const pyLines = (src: string) => src.replace(/\s+$/, '').split('\n');
 
@@ -45,11 +53,11 @@ const pyLines = (src: string) => src.replace(/\s+$/, '').split('\n');
 
 /** Python | assembly | machine words, linked line by line; the chosen word's fields; where each variable lives. */
 export function pyLinked(initial: string, line: number): Widget {
-  const sel = h('select', { class: 'py-sel', 'aria-label': 'program' }) as HTMLSelectElement;
-  for (const p of PY_PROGRAMS) sel.append(h('option', { value: p.id }, p.name));
+  const blurb = h('div', { class: 'py-blurb' }, progOf(initial).blurb);
+  const sel = programPicker('program', blurb);
   sel.value = initial;
   const body = h('div');
-  const el = h('div', { class: 'py-widget' }, h('div', { class: 'py-row' }, sel, h('span', { class: 'py-hint' }, 'point at a line: the same line in every column; click: pin it, its fields below')), body);
+  const el = h('div', { class: 'py-widget' }, h('div', { class: 'py-row' }, sel, h('span', { class: 'py-hint' }, 'point at a line: the same line in every column; click: pin it, its fields below')), blurb, body);
   let pinned = line, hover: number | null = null;
   let c = pyCompile(progOf(initial).source);
   const cols = { py: h('div', { class: 'py-code' }), asm: h('div', { class: 'py-code' }), words: h('div', { class: 'py-code' }) };
@@ -137,10 +145,10 @@ export function pyProfile(c: Compiled, maxSteps = 200_000): Profile {
 }
 
 export function pyCost(ids: string[]): Widget {
-  const sel = h('select', { class: 'py-sel', 'aria-label': 'program' }) as HTMLSelectElement;
-  for (const p of PY_PROGRAMS) sel.append(h('option', { value: p.id }, p.name));
+  const blurb = h('div', { class: 'py-blurb' }, progOf(ids[0]).blurb);
+  const sel = programPicker('program', blurb);
   const out = h('div');
-  const el = h('div', { class: 'py-widget' }, h('div', { class: 'py-row' }, sel, h('span', { class: 'py-hint' }, 'cycles per Python line, measured on the golden model')), out);
+  const el = h('div', { class: 'py-widget' }, h('div', { class: 'py-row' }, sel, h('span', { class: 'py-hint' }, 'cycles per Python line, measured on the golden model')), blurb, out);
   const show = () => {
     const src = progOf(sel.value).source, c = pyCompile(src), p = pyProfile(c);
     const lines = pyLines(src).map((t, i) => ({ n: i + 1, t, own: p.own.get(i + 1) ?? 0, rt: p.rt.get(i + 1) ?? 0, ins: c.pcsOfPy(i + 1).length })).filter((r) => r.ins);
@@ -206,10 +214,11 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
     let selLine: number | null = null;
     let timer: number | null = null;
 
-    const sel = h('select', { 'aria-label': 'Python program' }) as HTMLSelectElement;
-    for (const p of PY_PROGRAMS) sel.append(h('option', { value: p.id }, p.name));
+    const mine = PY_PROGRAMS.find((p) => p.source === source);
+    const blurb = h('div', { class: 'py-blurb' }, mine?.blurb ?? '');
+    const sel = programPicker('Python program', blurb);
     sel.append(h('option', { value: '__custom' }, 'My program'));
-    sel.value = PY_PROGRAMS.find((p) => p.source === source)?.id ?? '__custom';
+    sel.value = mine?.id ?? '__custom';
     sel.addEventListener('change', () => {
       const p = PY_PROGRAMS.find((q) => q.id === sel.value);
       if (p) stage.load(pyScene(p.source, { edit: !editWrap.hidden }));
@@ -252,7 +261,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
     const title = h('h4', null, 'Python', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel py-panel', 'data-dock': 'left' }, title,
       h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, editBtn, stepBtn, playBtn),
-      editWrap, status,
+      blurb, editWrap, status,
       h('div', { class: 'py-cols' },
         h('div', null,
           h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its instructions and hardware')), listing,

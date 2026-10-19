@@ -141,8 +141,9 @@ export const chPython: Chapter = {
       title: 'Your own program',
       body: `
         <p>The editor compiles as you type and points at the first error in Python's terms. <em>Compile &amp; load</em>
-        puts the program in the ROM and resets the CPU. The program list holds the chapter's examples: a sieve with a
-        list, a bubble sort, multiplication by hand.</p>
+        puts the program in the ROM and resets the CPU. The program list holds forty examples in six sections (first steps,
+        numbers, lists, functions, bits, multiply and divide): a sieve, three sorts, binary search, a matrix multiply,
+        the towers of Hanoi, Ackermann, a random-number generator, division by hand.</p>
         <p>The limits are the machine's: 256 instructions of ROM, 64 words of data memory shared by the variables, the
         lists, the output and the stack (output that runs into the stack overwrites it), seven temporaries, twelve
         variables a function (twenty in one that calls nothing).</p>`,

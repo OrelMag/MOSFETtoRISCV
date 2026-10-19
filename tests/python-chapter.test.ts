@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { chPython } from '../src/chapters/ch-python';
 import { compilePy } from '../src/lang/compile';
-import { PY_PROGRAMS } from '../src/lang/pyprograms';
+import { PY_GROUPS, PY_PROGRAMS } from '../src/lang/pyprograms';
 import { singleCycleCpu } from '../src/lib';
 import { clockCycle } from '../src/riscv/cosim';
 import { ISS } from '../src/riscv/iss';
@@ -83,6 +83,14 @@ describe('chapter 15: the numbers in the text', () => {
       const c = compilePy(p.source, { dmemWords: 2 ** PY_DMEM_K });
       expect(c.error, p.id).toBeNull();
       expect(c.words.length, p.id).toBeLessThanOrEqual(2 ** PY_IMEM_K);
+      // the CPU panel's Run to halt stops at 20 000 cycles
+      expect(pyProfile(c).steps, p.id).toBeLessThan(20_000);
     }
+  });
+
+  it('the program list: unique ids, every one in a section, every section used', () => {
+    expect(new Set(PY_PROGRAMS.map((p) => p.id)).size).toBe(PY_PROGRAMS.length);
+    for (const p of PY_PROGRAMS) expect(PY_GROUPS, p.id).toContain(p.group);
+    for (const g of PY_GROUPS) expect(PY_PROGRAMS.some((p) => p.group === g), g).toBe(true);
   });
 });
