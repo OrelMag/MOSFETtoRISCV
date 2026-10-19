@@ -125,6 +125,8 @@ export class Stage {
   scene: Scene | null = null;
   /** A big scene waiting for its "Building…" cue to paint (load), and the load it belongs to. */
   private pending: Scene | null = null;
+  /** Where the pending scene opens (load's `at`), if not its own Scene.path. */
+  private pendingAt: string[] | undefined;
   private loadSeq = 0;
   private busyEl: HTMLElement | null = null;
   private remixBtn!: HTMLButtonElement;
@@ -355,18 +357,20 @@ export class Stage {
    * Show a scene. A big one (BUSY_GATES) first puts a "Building…" cue over the canvas and is built once that has
    * painted, a frame later: building is one synchronous stretch of up to a second, which would otherwise freeze the
    * page with no sign of why. Until then the old scene stays (under the cue) and `scene` is still the old one.
+   * `at`: open this path instead of Scene.path (a drill path from the address bar), which stays the scene's opening view.
    */
-  load(scene: Scene): void {
+  load(scene: Scene, at?: string[]): void {
     const seq = ++this.loadSeq;
     const st = stats(scene.root);
     const size = st.nands + st.transistors / 4;
     if (size < BUSY_GATES) {
       this.pending = null;
       this.busy(null);
-      this.build(scene);
+      this.build(scene, at);
       return;
     }
     this.pending = scene;
+    this.pendingAt = at;
     this.stopAnim();
     this.stopClock();
     this.busy(st.nands ? `Building the circuit: ${st.nands.toLocaleString()} NAND gates…` : 'Building the circuit…');
@@ -374,7 +378,7 @@ export class Stage {
       if (seq !== this.loadSeq) return;
       this.pending = null;
       try {
-        this.build(scene);
+        this.build(scene, at);
       } finally {
         this.busy(null);
       }
@@ -389,7 +393,7 @@ export class Stage {
     if (this.busyEl) this.canvas.append(this.busyEl);
   }
 
-  private build(scene: Scene): void {
+  private build(scene: Scene, at?: string[]): void {
     this.edgeHooks.clear();
     this.historyHooks.clear();
     this.resetHooks.clear();
@@ -423,7 +427,7 @@ export class Stage {
     this.lateEvents = 0;
     this.setProbeMode(false);
     this.initAnalyzer();
-    this.goTo(scene.path ?? [], false);
+    this.goTo(at ?? scene.path ?? [], false);
     this.buildControls();
     this.remixBtn.hidden = !!scene.noRemix;
     this.view.highlight(scene.highlight ?? []);
@@ -488,6 +492,21 @@ export class Stage {
   get path(): string[] {
     const p = this.ctx?.path ?? [];
     return this.leaf ? [...p, this.leaf.name] : p;
+  }
+
+  /** The path on screen, or the one a scene still being built will open on. */
+  get targetPath(): string[] {
+    return this.pending ? this.pendingAt ?? this.pending.path ?? [] : this.path;
+  }
+
+  /** Open `path` unless it is open already (Back / Forward to a drill path); a scene still being built opens there. */
+  openPath(path: string[]): void {
+    if (this.pending) {
+      this.pendingAt = path;
+      return;
+    }
+    const cur = this.path;
+    if (path.length !== cur.length || path.some((x, i) => x !== cur[i])) this.goTo(path);
   }
 
   open(child: string): void {
