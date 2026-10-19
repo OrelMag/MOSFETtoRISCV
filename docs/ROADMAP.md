@@ -418,8 +418,13 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   assembler on every instruction. The builder draws any word width; a table operand split over the word is drawn
   gathered; "one bit away" lists what flipping one opcode bit makes. The program editor's Ctrl+Space works in every
   language with instructions (a ; or // comment kept). The CPU drawer's table strip no longer assumes 16-bit words
-- ⏳ 3. Encoding designer: custom-ISA patterns painted on a bit grid (the same pattern text), the opcode map, clashes
-  with an example word, the fill ratio; then the table's decoder as a PLA with its NAND count
+- ✅ 3. Encoding designer (isa/design.ts, editor/isadesign.ts): the ISA dialog's Design tab. A brush (0, 1, ignored,
+  an operand letter) dragged across the bits writes the same pattern text; while it lasts the row's problems, clashes
+  (with a word both decode), special cases (the most specific pattern wins), each operand's range against its bits,
+  an opcode map over the 3–4 bits the patterns fix most, coverage, and a plain decoder's cost follow the draft (one AND
+  per instruction over its fixed bits plus the NOT of each special case, in NANDs and gate delays; the model is held
+  to stats(andN(k))). Letting go is one undo step
+- ⏳ 3b. The decoder as a chip: the table's match lines built in gates and opened in the sandbox
 - ⏳ 4. Program as tiles (a view of the program text: branch arrows, data dependencies) and a front panel (toggle
   switches, Deposit / Examine)
 - ✅ Examples ▸ 4-bit CPU (4004-inspired; src/isa4, lib/cpu4.ts): the 4004's opcode map and mnemonics, one instruction

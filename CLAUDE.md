@@ -692,7 +692,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  previous cycle's warp's, pixel writes in draw order; the model runs ahead to the next write); the CPU
                  drawer's lane view (every thread's registers, the issuing warp on the listing)
   isaops.ts      custom ISAs in a workspace: ws.isas the tables, each ROM on one holds a copy (romRef.isa); isaList, copyIsa,
-                 putIsa (an edit reaches every ROM that holds it), deleteIsa; isaui.ts the ISA editor dialog (File ▸ Instruction sets…)
+                 putIsa (an edit reaches every ROM that holds it), deleteIsa; isaui.ts the ISA editor dialog (File ▸ Instruction sets…);
+                 isadesign.ts its Design tab (patterns painted on a bit grid, a drag = one undo step; the analysis is
+                 isa/design.ts: clashes, shadows, the opcode map's window and cells, coverage, a plain decoder's NANDs / depth)
   m6502mon.ts    detect6502 (a placed m6502_core, a ROM in 6502 assembly, a RAM of bytes, here or one chip down),
                  M6502Monitor: follows the part (it is the cycle-exact model: nothing compared): the bus read before each
                  edge, an instruction from one SYNC to the next (its bytes, stores, cycles; IRQ / NMI sequences), halted on
