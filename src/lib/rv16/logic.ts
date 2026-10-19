@@ -5,7 +5,7 @@
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../../sim/types';
 import { Builder } from '../builder';
 import { aluOf, constWord, shifterOf } from '../alu';
-import { andN, busMux2, HALF_ADDER, muxTreeOf, rca, type Mux2Kind } from '../combinational';
+import { busMux2, HALF_ADDER, muxTreeOf, rca, type Mux2Kind } from '../combinational';
 import { define, merger, splitter } from '../define';
 import type { FsmInputs, FsmSpec } from '../fsm';
 import { AND, MUX2, NOT, OR, XOR } from '../gates';
@@ -16,32 +16,37 @@ const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
 const pinsAt = (names: string[], x: number, step = 4, y0 = 4): Record<string, [number, number]> => Object.fromEntries(names.map((n, i) => [n, [x, y0 + step * i]]));
 
-/** Is a 4-bit number prime? The g_sop level's function: a sum of products from a K-map. */
+/** Is a 4-bit number prime? The g_sop level's function, read off its K-map. */
 export const PRIMES4 = [2, 3, 5, 7, 11, 13];
 
+/**
+ * The fewest 2-input NANDs (8: an exhaustive search finds none with 7) at the least depth (5: no NAND circuit
+ * reaches the function in 4). The map's lower half (a3 = 0) is a2 ? a0 : a1, a multiplexer; its upper half keeps
+ * only 11 and 13 of that mux's ones, so y = mux · (¬a3 + a0·¬(a1·a2)). ¬(a1·a2) serves both factors, and
+ * ¬(a1·¬a2) = NAND(a1, ¬(a1·a2)) stands in for the mux's inverter (tests/content-walk-a.test.ts).
+ */
 export const PRIME4: ComponentDef = (() => {
   const b = new Builder(8, 10, 4);
   b.pins('a');
   const s = b.op(splitter([1, 1, 1, 1], 4), ['a']);
   const [a0, a1, a2, a3] = [0, 1, 2, 3].map((i) => b.name(`${s}.o${i}`, `a${i}`, true));
   b.next();
-  const n3 = b.name(b.op1(NOT, [a3], '¬a3'), 'na3', true);
-  const n2 = b.name(b.op1(NOT, [a2], '¬a2'), 'na2', true);
-  const n1 = b.name(b.op1(NOT, [a1], '¬a1'), 'na1', true);
+  const n12 = b.name(b.op1(NAND, [a1, a2], '¬(a1·a2)', 'n12'), 'n12', true);
+  const n02 = b.op1(NAND, [a0, a2], '¬(a2·a0)', 'n02');
   b.next();
-  // m2, m3: ¬a3¬a2a1 · m5, m7: ¬a3a2a0 · m3, m11: ¬a2a1a0 · m5, m13: a2¬a1a0
-  const p1 = b.op1(AND, [n3, n2]), p2 = b.op1(AND, [n3, a2]), p3 = b.op1(AND, [n2, a1]), p4 = b.op1(AND, [a2, n1]);
+  const k1 = b.op1(NAND, [a1, n12], '¬(a1·¬a2)', 'k1');
+  const k0 = b.op1(NAND, [a0, n12], '¬(a0·¬(a1·a2))', 'k0');
   b.next();
-  const t1 = b.op1(NAND, [p1, a1], '¬(¬a3¬a2a1)'), t2 = b.op1(NAND, [p2, a0], '¬(¬a3a2a0)');
-  const t3 = b.op1(NAND, [p3, a0], '¬(¬a2a1a0)'), t4 = b.op1(NAND, [p4, a0], '¬(a2¬a1a0)');
+  const mux = b.op1(NAND, [n02, k1], 'a2 ? a0 : a1', 'mux');
+  const hi = b.op1(NAND, [a3, k0], '¬a3 + a0·¬(a1·a2)', 'hi');
   b.next();
-  const u = b.op1(AND, [t1, t2]), v = b.op1(AND, [t3, t4]);
+  const ny = b.op1(NAND, [mux, hi], '¬y', 'ny');
   b.next();
-  b.wire(b.op1(NAND, [u, v], 'OR of the terms'), 'y');
+  b.wire(b.op1(NOT, [ny], 'y', 'inv'), 'y');
   const R = b.right;
   return define({
     id: 'rv16_prime4', name: 'Prime detector (4-bit)', category: 'gate',
-    summary: 'y = 1 when a is prime (2, 3, 5, 7, 11, 13): four product terms read off a K-map, NAND–NAND.',
+    summary: 'y = 1 when a is prime (2, 3, 5, 7, 11, 13): y = (a2 ? a0 : a1) · (¬a3 + a0·¬(a1·a2)), 8 NANDs, depth 5 (a sum of products read off the K-map: 20, depth 7).',
     ports: [bus('a', 4, 'in'), bit('y', 'out')],
     symbol: { kind: 'box', label: 'PRIME?' },
     spec: ([a]) => [PRIMES4.includes(a) ? 1 : 0],
@@ -76,23 +81,31 @@ export const WIDE16: ComponentDef = (() => {
   });
 })();
 
-/** 3→8 decoder with enable, one-hot output bus. */
+/**
+ * 3→8 decoder with enable, one-hot output bus, predecoded in two groups: (a0, a1) into four lines p0–p3,
+ * (a2, en) into two, q0 = en·¬a2 and q1 = en·a2; output k = p[k mod 4] · q[k div 4]. 30 NANDs, depth 5,
+ * against 51 for eight 4-input ANDs. q0 = en·NAND(en, a2) needs no inverter on a2.
+ */
 export const DEC3: ComponentDef = (() => {
   const b = new Builder(8, 10, 2);
   b.pins('a', 'en');
   const s = b.op(splitter([1, 1, 1], 4), ['a']);
-  const a = [0, 1, 2].map((i) => b.name(`${s}.o${i}`, `a${i}`, true));
+  const [a0, a1, a2] = [0, 1, 2].map((i) => b.name(`${s}.o${i}`, `a${i}`, true));
   b.next();
-  const na = a.map((x, i) => b.name(b.op1(NOT, [x], `¬a${i}`), `na${i}`, true));
+  const na0 = b.name(b.op1(NOT, [a0], '¬a0', 'na0'), 'na0', true);
+  const na1 = b.name(b.op1(NOT, [a1], '¬a1', 'na1'), 'na1', true);
+  const t = b.name(b.op1(NAND, [a2, 'en'], '¬(en·a2)', 't'), 't', true);
   b.next();
-  const and4 = andN(4);
-  const ys = Array.from({ length: 8 }, (_, k) => b.op1(and4, [(k & 1 ? a : na)[0], (k & 2 ? a : na)[1], (k & 4 ? a : na)[2], 'en'], `y${k}`));
+  const p = [[na0, na1], [a0, na1], [na0, a1], [a0, a1]].map(([x, y], j) => b.name(b.op1(AND, [x, y], `p${j}`, `p${j}`), `p${j}`, true));
+  const q = [b.op1(AND, ['en', t], 'en·¬a2', 'q0'), b.op1(NOT, [t], 'en·a2', 'q1')].map((x, j) => b.name(x, `q${j}`, true));
   b.next();
-  b.wire(b.op1(merger(Array(8).fill(1), 2), ys), 'y');
+  const ys = Array.from({ length: 8 }, (_, k) => b.op1(AND, [p[k & 3], q[k >> 2]], `y${k}`, `y${k}`));
+  b.next();
+  b.wire(b.op1(merger(Array(8).fill(1), 2), ys, undefined, 'my'), 'y');
   const R = b.right;
   return define({
     id: 'rv16_dec3', name: '3→8 decoder (bus)', category: 'routing',
-    summary: 'y = en ? 1 << a : 0: output k is the AND of en and the address bits (or their complements) that spell k.',
+    summary: 'y = en ? 1 << a : 0, predecoded: (a0, a1) into four lines, (a2, en) into two, output k the AND of one of each (30 NANDs, depth 5; eight 4-input ANDs: 51).',
     ports: [bus('a', 3, 'in'), bit('en', 'in'), bus('y', 8, 'out')],
     symbol: { kind: 'box', label: 'DEC 3→8' },
     spec: ([a, en]) => [en ? 1 << a : 0],

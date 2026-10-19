@@ -23,9 +23,9 @@ export const NUDGES: Record<string, string> = {
   g_or: 'Find a law that turns a sum into a product.',
   g_xor: 'Look for a signal that both halves of the textbook formula could share.',
   g_mux: 'Write down when the output equals a and when it equals b, then build that sentence.',
-  g_sop: 'Do not build the table row by row: shrink it first.',
+  g_sop: 'Do not build the table row by row: shrink it first, then look for pieces the products could share.',
   g_wide: 'The gate count is fixed; what you choose is how deep the signals have to go.',
-  g_dec: 'Each output answers one question: is the address exactly my number?',
+  g_dec: 'Each output answers one question: is the address exactly my number? Answer it two bits at a time, and share the halves.',
   g_mux8: 'The wide version is the narrow one many times over; see what the copies can share.',
   g_eq16: 'Equality is a question every bit position must answer the same way.',
   // act 2: arithmetic

@@ -165,7 +165,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Register file',
-      text: 'The splitter takes rd = instr[6:4], rs1 = instr[9:7] and rs2 = instr[12:10] straight to the register file: with fixed field positions the reads start without waiting for control. 2 193 NANDs, 56% of the core: seven 16-bit registers (x0 is wired to 0), a write decoder, two 8:1 read muxes. Reads are combinational; x[rd] is written at the rising edge when rwe.',
+      text: 'The splitter takes rd = instr[6:4], rs1 = instr[9:7] and rs2 = instr[12:10] straight to the register file: with fixed field positions the reads start without waiting for control. 2 172 NANDs, 56% of the core: seven 16-bit registers (x0 is wired to 0), a write decoder, two 8:1 read muxes. Reads are combinational; x[rd] is written at the rising edge when rwe.',
       parts: ['u0', 'u5'], codex: ['regfile'],
       ask: {
         question: 'Control is 13 NAND delays deep. When can the register file start reading rs1 and rs2?',
@@ -187,7 +187,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Write back',
-      text: 'wb is 0 (the ALU) or 3 (the immediate, so lui skips the ALU), and bit 0 tells them apart: one more 2:1 bus mux picks what rd receives. 3 913 NANDs, period 84 with the bench\'s 8-delay memories: PC → instruction memory → control → ALU → result mux → register file, and every instruction pays for that path.',
+      text: 'wb is 0 (the ALU) or 3 (the immediate, so lui skips the ALU), and bit 0 tells them apart: one more 2:1 bus mux picks what rd receives. 3 892 NANDs, period 84 with the bench\'s 8-delay memories: PC → instruction memory → control → ALU → result mux → register file, and every instruction pays for that path.',
       parts: ['u10', 'u11'], codex: ['criticalpath'],
     },
   ],
@@ -222,7 +222,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Load write-back',
-      text: 'wb = 1 selects drdata, which the memory returns in the same cycle: the result gets a second 2:1 mux too (wb is 0, 1 or 3: no pc + 1 without jumps). 4 011 NANDs, 98 over Core I for the two extra muxes; the bigger cost is time: the data memory sits behind the ALU, and that path sets the period at 98 instead of 84.',
+      text: 'wb = 1 selects drdata, which the memory returns in the same cycle: the result gets a second 2:1 mux too (wb is 0, 1 or 3: no pc + 1 without jumps). 3 990 NANDs, 98 over Core I for the two extra muxes; the bigger cost is time: the data memory sits behind the ALU, and that path sets the period at 98 instead of 84.',
       parts: ['pick11', 'u9'], codex: ['criticalpath'],
     },
   ],
@@ -267,7 +267,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Write the link',
-      text: 'The result mux becomes a 4:1 bus mux, its third input pc1: jal and jalr write the return address. 4 741 NANDs, period still 98: the load path stays longer than the branch path through the comparator and next PC.',
+      text: 'The result mux becomes a 4:1 bus mux, its third input pc1: jal and jalr write the return address. 4 720 NANDs, period still 98: the load path stays longer than the branch path through the comparator and next PC.',
       parts: ['u9'], codex: ['cpi'],
     },
   ],
@@ -275,7 +275,7 @@ export const WALKS2: Record<string, WalkScript> = {
   c_computer: [
     {
       title: 'The core',
-      text: 'Core III as one part, 4 741 NANDs. Its instr and drdata pins expect answers in the same cycle; here parts give them instead of the bench.',
+      text: 'Core III as one part, 4 720 NANDs. Its instr and drdata pins expect answers in the same cycle; here parts give them instead of the bench.',
       parts: ['u0'], codex: ['cpu'],
     },
     {
@@ -302,7 +302,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'LED register',
-      text: 'A 16-bit register (208 NANDs) loaded at the edge when its write is 1: the program\'s sw t0, -5(x0) writes 0xFFFB. Nothing reads it back, so a load from an I/O address returns RAM data. 27 104 NANDs, period 110: the RAM\'s decoder and read mux are slower than the bench\'s 8-delay memory.',
+      text: 'A 16-bit register (208 NANDs) loaded at the edge when its write is 1: the program\'s sw t0, -5(x0) writes 0xFFFB. Nothing reads it back, so a load from an I/O address returns RAM data: reading it would take read decoding as well, a 2:1 bus mux on drdata steered by daddr[15] (49 NANDs). 27 083 NANDs, period 110: the RAM\'s decoder and read mux are slower than the bench\'s 8-delay memory.',
       parts: ['u7'], codex: ['register'],
     },
   ],
@@ -328,7 +328,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'The register',
-      text: 'A 16-bit register with enable, 208 NANDs: q ← clr ? 0 : en ? d : q at the rising edge. 260 NANDs in all, period 8. The finished RV16 has 16 of them, 4 160 NANDs, 32% of the chip.',
+      text: 'A 16-bit register with enable, 208 NANDs: q ← clr ? 0 : en ? d : q at the rising edge. 260 NANDs in all, period 8. The finished RV16 has 16 of them, 4 160 NANDs, a third of the chip.',
       parts: ['u3'], codex: ['register'],
     },
   ],
@@ -383,7 +383,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'M/W and write-back',
-      text: 'The value, rwe and rd reach the register file\'s write port and the rwe / rwa / rwd pins. 7 083 NANDs, period 65 instead of 98; but with two nops after every instruction the programs take 2 508 cycles, against 824 unpadded on Core II.',
+      text: 'The value, rwe and rd reach the register file\'s write port and the rwe / rwa / rwd pins. 7 062 NANDs, period 65 instead of 98; but with two nops after every instruction the programs take 2 508 cycles, against 824 unpadded on Core II.',
       parts: ['u34', 'u35', 'u36', 'u37'], codex: ['cpi'],
     },
   ],
@@ -441,7 +441,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Execute',
-      text: 'The forwarded operands feed the b mux and the ALU. Forwarding and its mux now sit in front of the ALU, and the period goes from 65 to 78.',
+      text: 'The forwarded operands feed the b mux and the ALU. Forwarding and its mux now sit in front of the ALU, and the period goes from 65 to 78. The select path sets it: fa and fb settle 13 delays after the clock edge, long after the operands, and every bit of both muxes waits for them.',
       parts: ['u21', 'u26', 'u27'], codex: ['criticalpath'],
     },
     {
@@ -463,7 +463,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'M/W',
-      text: 'W\'s value is written back and forwarded at distance 2; distance 3 is covered by the falling-edge write. 7 438 NANDs, +355 over Pipeline I: 970 cycles instead of 2 508, and 6% fewer NAND delays than Core II.',
+      text: 'W\'s value is written back and forwarded at distance 2; distance 3 is covered by the falling-edge write. 7 417 NANDs, +355 over Pipeline I: 970 cycles instead of 2 508, and 6% fewer NAND delays than Core II.',
       parts: ['u38', 'u39', 'u40', 'u41'], codex: ['cpi'],
     },
   ],
@@ -529,7 +529,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Bubble into E',
-      text: 'D/E clr = rst + stall, plus a third input tied to 0 that Pipeline IV gives to the flush. The load moves on to M, and a cycle later W forwards its word. 7 552 NANDs, +114, period unchanged at 78: 917 cycles instead of 970, one lost cycle per load-use pair.',
+      text: 'D/E clr = rst + stall, plus a third input tied to 0 that Pipeline IV gives to the flush. The load moves on to M, and a cycle later W forwards its word. 7 531 NANDs, +114, period unchanged at 78: 917 cycles instead of 970, one lost cycle per load-use pair.',
       parts: ['u18'], codex: ['cpi'],
     },
   ],
@@ -567,7 +567,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Flush the wrong path',
-      text: 'F/D clr = rst + redirect, and redirect is the bubble OR\'s third input: the two younger instructions, fetched as if the branch fell through, become bubbles. 9 239 NANDs, +1 687; period still 78: forwarding → comparator → next PC → F/D clear takes 77. Two cycles per taken branch or jump: 1 495 cycles against Core III\'s 1 236, but 116 610 NAND delays against 121 128, about 4% faster.',
+      text: 'F/D clr = rst + redirect, and redirect is the bubble OR\'s third input: the two younger instructions, fetched as if the branch fell through, become bubbles. 9 218 NANDs, +1 687; period still 78: forwarding → comparator → next PC → F/D clear takes 77. Two cycles per taken branch or jump: 1 495 cycles against Core III\'s 1 236, but 116 610 NAND delays against 121 128, about 4% faster.',
       parts: ['u10'], codex: ['flush'],
       ask: {
         question: 'A taken branch is in E. How many instructions behind it were fetched on the wrong path?',
@@ -643,7 +643,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'System decode',
-      text: 'Given: opcode 0 with f3 = 0 is ecall, ebreak or mret by its rs2 field (1, 2, 3); f3 = 1–3 is csrrw / csrrs / csrrc. It also computes the CSR write value (rs1, old | rs1, old & ¬rs1) and its enable: csrrs and csrrc with rs1 = x0 only read. 533 NANDs.',
+      text: 'Given: opcode 0 with f3 = 0 is ecall, ebreak or mret by its rs2 field (1, 2, 3); f3 = 1–3 is csrrw / csrrs / csrrc. It also computes the CSR write value (rs1, old | rs1, old & ¬rs1) and its enable: csrrs and csrrc with rs1 = x0 only read. 439 NANDs.',
       parts: ['u6'],
     },
     {
@@ -675,7 +675,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'mtvec and mepc',
-      text: 'target = trap ? mtvec : mret ? mepc : next PC\'s target, and the PC loads on ld + trap + mret: a trap wins in the target mux, so ld needs no ¬trap. At the same edge the CSR file saves pc in mepc, so ecall\'s handler must add 1 to mepc before mret to skip it. 7 278 NANDs, period 100.',
+      text: 'target = trap ? mtvec : mret ? mepc : next PC\'s target, and the PC loads on ld + trap + mret: a trap wins in the target mux, so ld needs no ¬trap. At the same edge the CSR file saves pc in mepc, so ecall\'s handler must add 1 to mepc before mret to skip it. 7 257 NANDs, period 100.',
       parts: ['u30', 'u31', 'u32'], codex: ['pc'],
     },
   ],
@@ -720,7 +720,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'To the handler',
-      text: 'The PC loads mtvec, and MIE drops to 0 so the handler is not interrupted in turn. Zero NANDs over Exceptions: 7 278, period 100.',
+      text: 'The PC loads mtvec, and MIE drops to 0 so the handler is not interrupted in turn. Zero NANDs over Exceptions: 7 257, period 100.',
       parts: ['u29', 'u30', 'u31'], codex: ['traps'],
     },
   ],
@@ -765,7 +765,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'A precise trap',
-      text: 'exception = (ill + ecall + ebreak)·valid, interrupt = intr·valid, mret·valid; trap = exception + interrupt, with the single-cycle core\'s five cause NANDs. The instruction in E has written nothing yet; the older ones in M and W complete, the younger ones in F and D are flushed.',
+      text: 'exception = (ill + ecall + ebreak)·valid, interrupt = intr·valid, mret·valid. The interrupt needs valid too: a bubble has no pc of its own (its D/E slot was cleared), so an interrupt taken on it would save a wrong mepc, and the handler would resume where the program never was. trap = exception + interrupt, with the single-cycle core\'s five cause NANDs. The instruction in E has written nothing yet; the older ones in M and W complete, the younger ones in F and D are flushed.',
       parts: ['u45', 'u46', 'u47', 'u48', 'u50', 'u52', 'u53', 'u54', 'u55', 'u56', 'u60'], codex: ['precise', 'traps'],
     },
     {
@@ -775,7 +775,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'Load-use, M and W',
-      text: 'As in Pipeline IV, except that loadE uses rwe after the ¬trap gate, so a load interrupted in E raises no stall. 12 059 NANDs; the 45 programs take 2 399 cycles, 194 319 NAND delays, against 197 600 on the single-cycle core with traps (1 976 cycles at period 100).',
+      text: 'As in Pipeline IV, except that loadE uses rwe after the ¬trap gate, so a load interrupted in E raises no stall. 12 038 NANDs; the 45 programs take 2 399 cycles, 194 319 NAND delays, against 197 600 on the single-cycle core with traps (1 976 cycles at period 100).',
       parts: ['u68', 'u69', 'u70', 'u71', 'u73', 'u74', 'u75', 'u76', 'u77', 'u78', 'u79', 'pick84', 'u80', 'u81', 'u83', 'u84', 'u85', 'u86', 'u87'], codex: ['loaduse'],
     },
   ],
