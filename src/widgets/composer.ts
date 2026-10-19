@@ -28,6 +28,8 @@ export interface ComposerOpts {
   onChange?(word: number, ok: boolean): void;
   /** The front panel's Deposit button (Switches view): what it does with the word. */
   deposit?: { label: string; run(word: number): void };
+  /** RV32: a free custom slot in the opcode map becomes a button ("Make it real…": the custom instructions dialog). */
+  onCustomSlot?: () => void;
 }
 
 /** Fields or switches: the last view picked, for the next builder opened. */
@@ -455,10 +457,21 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
     dp.setAttribute('aria-label', c ? `Uses: ${[...lit].map((k) => BLOCKS[k][4]).join(', ')}` : 'Control finds no instruction: a trap');
     path.textContent = c ? use.path : 'Control finds no instruction here: the trap unit takes over (mcause 2).';
     const op = word & 0x7f;
-    omap.replaceChildren(...MAJOR.map((name, i) => h('span', {
-      class: `${i === ((op >> 2) & 31) ? 'cur' : USED.has(i) ? 'used' : /custom/.test(name) ? 'free' : ''}`,
-      title: `inst[6:2] = ${i.toString(2).padStart(5, '0')}${i === 2 ? ': the SIMT instructions of the lane cores' : /custom/.test(name) ? ': free for your own instructions' : ''}`,
-    }, name)));
+    omap.replaceChildren(...MAJOR.map((name, i) => {
+      const bits = i.toString(2).padStart(5, '0');
+      // A custom slot holding one of the CPU's own instructions shows its name; a free one offers to make one.
+      const yours = i !== 2 && /custom/.test(name) ? isa.loose(((i << 2) | 3) >>> 0) : null;
+      const free = i !== 2 && /custom/.test(name) && !yours;
+      const cls = `${i === ((op >> 2) & 31) ? 'cur' : yours ? 'yours' : USED.has(i) ? 'used' : free ? 'free' : ''}`;
+      const label = yours ? isa.instr(yours.id)!.name : name;
+      if (free && opts.onCustomSlot) {
+        return h('button', { type: 'button', class: cls, title: `inst[6:2] = ${bits}: free. Make it real: give this CPU an instruction of its own here`, onclick: () => opts.onCustomSlot!() }, name);
+      }
+      return h('span', {
+        class: cls,
+        title: `inst[6:2] = ${bits}${i === 2 ? ': the SIMT instructions of the lane cores' : yours ? `: ${label}, this CPU's own instruction` : free ? ': free for your own instructions' : ''}`,
+      }, label);
+    }));
   }
 
   // ---- text input --------------------------------------------------------------------------

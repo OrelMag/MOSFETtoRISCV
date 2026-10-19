@@ -1,6 +1,8 @@
 // RV32I: encodings, decoding and disassembly. The single source of truth for the assembler,
 // the instruction-set simulator and the instruction explorer.
 
+import { slotOpcode, specOf, type CustomRow } from './custom';
+
 export type Fmt = 'R' | 'R4' | 'I' | 'S' | 'B' | 'U' | 'J';
 
 export const OPCODES = {
@@ -27,6 +29,8 @@ export interface InstrSpec {
   fp?: FpRoles;
   /** SIMT (lane cores): the register operands it takes, in assembly order. */
   simt?: ('rs1' | 'rs2')[];
+  /** A custom instruction (riscv/custom.ts): its control row. */
+  custom?: CustomRow;
 }
 
 const FR = (name: string, f7: number, fp: FpRoles, f3?: number): InstrSpec => ({ name, fmt: 'R', opcode: OPCODES.OPFP, funct7: f7, funct3: fp.rm ? undefined : f3, hw: false, fp });
@@ -219,7 +223,9 @@ export const IMM_SRC: Record<ImmFmt, (i: number) => number | 'zero'> = {
 };
 export const IMM_TOP: Record<ImmFmt, number> = { I: 11, S: 11, B: 12, U: 31, J: 20 };
 
-export function decode(word: number): Decoded {
+/** custom: the CPU's custom instructions (riscv/custom.ts): a word on a custom slot is the slot's row, whatever its
+ *  funct3 / funct7 (the control unit matches opcode[6:2] only). */
+export function decode(word: number, custom?: readonly CustomRow[]): Decoded {
   const w = word >>> 0;
   const opcode = w & 0x7f, rd = (w >>> 7) & 31, funct3 = (w >>> 12) & 7, rs1 = (w >>> 15) & 31, rs2 = (w >>> 20) & 31, funct7 = w >>> 25;
   let spec: InstrSpec | null = null;
@@ -239,6 +245,10 @@ export function decode(word: number): Decoded {
     spec = s;
     break;
   }
+  if (!spec && custom?.length) {
+    const row = custom.find((r) => slotOpcode(r.slot) === opcode);
+    if (row) spec = specOf(row);
+  }
   const fmt: Fmt = spec?.fmt ?? 'I';
   let imm = 0;
   switch (fmt) {
@@ -256,8 +266,8 @@ const rn = (r: number) => ABI[r];
 const frn = (r: number) => FABI[r];
 
 /** Disassemble one word; pc (if given) resolves branch / jump targets to absolute addresses. */
-export function disasm(word: number, pc?: number): string {
-  const d = decode(word);
+export function disasm(word: number, pc?: number, custom?: readonly CustomRow[]): string {
+  const d = decode(word, custom);
   const tgt = (off: number) => (pc === undefined ? `${off}` : `0x${u32(pc + off).toString(16)}`);
   if (!d.spec) return `.word 0x${d.word.toString(16).padStart(8, '0')}`;
   const n = d.name;

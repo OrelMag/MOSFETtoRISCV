@@ -16,6 +16,7 @@
 // system CPU's consoleData / switches / leds pins.
 
 import { type RamState, ramLeafState, ramWords } from '../lib/bigmem';
+import type { CustomRow } from '../riscv/custom';
 import { PUZZLE_NO_GOLDEN, simHasPuzzlePorts } from './puzzleparts';
 import { CARDS_NO_GOLDEN, simHasCardReader } from './cardparts';
 import { consoleAppend, consoleInit, type ConsoleState, consoleText, ioNodes, ioState, type SwitchState } from './ioparts';
@@ -42,6 +43,8 @@ export interface CpuIss {
   f?: boolean;
   /** Data memory words (default: as many as the data memory part holds, else 32). */
   dmemWords?: number;
+  /** The core's custom instructions (a { core } part's rows): found, never a setting. */
+  custom?: CustomRow[];
 }
 
 /** ChipDoc.cpu: the user's settings; every field left out is detected. */
@@ -69,6 +72,8 @@ export interface CpuDesc extends CpuDoc {
   iss: CpuIss;
   /** The part with an `fcsr` output (RV32F: frm and the accrued flags); detected only. */
   fcsr?: string;
+  /** The memory-port core (rv32i_core, or a { core } part with custom instructions) at the top level; detected only. */
+  core?: string;
   /** Which fields were detected rather than set by the user. */
   auto: Set<keyof CpuDoc>;
 }
@@ -157,7 +162,8 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   const pcPin = pinNamed(doc, 'out', 32, 'pcOut', 'pcF', 'pc');
   const pcReg = partNamed(doc, 'pc');
   const pc: NetRef = pcPin ? { pin: pcPin.id } : pcReg ? { part: pcReg.id, port: 'q' } : { part: rom.split('.')[0], port: 'addr' };
-  const core = doc.parts.find((p) => 'lib' in p.ref && isPortCore(p.ref.lib));
+  const core = doc.parts.find((p) => ('lib' in p.ref && isPortCore(p.ref.lib)) || 'core' in p.ref);
+  const custom = core && 'core' in core.ref ? core.ref.core.custom : undefined;
   const regs = partNamed(doc, 'rf', 'regs', 'regfile') ?? doc.parts.find((p) => 'lib' in p.ref && /^regfile/.test(p.ref.lib));
   const regsPath = regs?.id ?? (core ? `${core.id}.rf` : undefined);
   const fregs = partNamed(doc, 'frf', 'fregs');
@@ -174,9 +180,10 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   const fcsr = partNamed(doc, 'fcsr');
   const mmio = !system && hasIoParts(doc, chips);
   return {
-    rom, pc, auto, iss: { ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}) },
+    rom, pc, auto, iss: { ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}), ...(custom?.length ? { custom } : {}) },
     ...(regsPath ? { regs: regsPath } : {}), ...(fregs ? { fregs: fregs.id } : {}), ...(dmem ? { dmem: dmem.id } : inner.length === 1 ? { dmem: inner[0] } : {}),
     ...(retire ? { retire: { pin: retire.id } } : {}), ...(pipeline ? { pipeline } : {}), ...(fcsr ? { fcsr: fcsr.id } : {}),
+    ...(core && (('lib' in core.ref && core.ref.lib === 'rv32i_core') || 'core' in core.ref) ? { core: core.id } : {}),
   };
 }
 
@@ -198,7 +205,8 @@ export function resolveCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   // A ROM chosen by hand: the detected PC may belong to another ROM's address.
   if (set.rom && !set.pc && det && 'part' in det.pc! && det.pc.port === 'addr') out.pc = { part: romId.split('.')[0], port: 'addr' };
   for (const k of ['regs', 'fregs', 'dmem'] as const) if (out[k] === '') delete out[k];
-  out.iss = { ...out.iss };
+  // The core's custom rows follow the hardware, whatever the settings say about the rest.
+  out.iss = { ...out.iss, ...(det?.iss.custom ? { custom: det.iss.custom } : {}) };
   return out;
 }
 
