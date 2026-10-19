@@ -185,8 +185,208 @@ ball:   slli t0, s3, 8
 
 ${PRINT}`;
 
+/** Messages Pong prints when a side scores (tests read them). */
+export const PONG_YOU = 'You score!\n', PONG_CPU = 'Computer scores\n', PONG_GAME = 'New game\n';
+
+/**
+ * Pong on the switches: the left paddle is the player's (switch 7 up, switch 6 down), the right one the computer's,
+ * which only moves once the ball comes its way past column 40, so a steep ball beats it; switch 4 on hands it to a
+ * second player (switch 1 up, 0 down). A miss scores for the other side: the LEDs hold the score (the left player's
+ * in the high nibble), the console says who scored, and the ball is served again towards the side that missed; ten
+ * points start a new game. Never halts.
+ */
+export const PONG = `# Pong: your paddle is on the left (switch 7 up, switch 6 down), the
+# computer's on the right; switch 4 on gives it to a second player (switch 1
+# up, switch 0 down). The LEDs keep the score, yours in the high four bits;
+# ten points win, and a new game starts.
+        li   s1, 0x80000000     # devices
+        li   s0, 0xC0000000     # screen
+${say('Pong!\n')}
+        li   s7, 0              # score
+        sw   s7, 4(s1)
+        li   s4, -1             # first serve: towards you
+serve:  li   s8, 27             # paddle tops: left, right
+        li   s9, 27
+        li   a0, 1
+        mv   a1, s8
+        call paddle
+        li   a0, 62
+        mv   a1, s9
+        call paddle
+        li   s2, 31             # the ball in the middle column
+        andi t0, s6, 31         # at a height the frame count picks
+        addi s3, t0, 16
+        li   s5, 1
+        andi t0, s6, 32
+        beqz t0, frame
+        li   s5, -1
+frame:  li   a3, 0              # erase the ball
+        call ball
+        lw   t5, 8(s1)          # the left paddle: switch 7 up, switch 6 down
+        srli t0, t5, 7
+        andi t0, t0, 1
+        srli t1, t5, 6
+        andi t1, t1, 1
+        sub  a2, t1, t0
+        li   a0, 1
+        mv   a1, s8
+        call step
+        mv   s8, a1
+        lw   t5, 8(s1)          # the right paddle: a second player on switch 4
+        andi t0, t5, 16
+        beqz t0, cpu
+        srli t0, t5, 1
+        andi t0, t0, 1
+        andi t1, t5, 1
+        sub  a2, t1, t0
+        j    right
+cpu:    li   a2, 0              # the computer waits for the ball to come its way
+        blez s4, right          # past column 40, then aims its middle at it
+        li   t0, 40
+        blt  s2, t0, right
+        addi t0, s3, -4
+        beq  t0, s9, right
+        li   a2, 1
+        bgt  t0, s9, right
+        li   a2, -1
+right:  li   a0, 62
+        mv   a1, s9
+        call step
+        mv   s9, a1
+        addi s6, s6, 1          # frames
+        add  s2, s2, s4         # move the ball
+        add  s3, s3, s5
+        bgtz s3, ny0            # off the top: y = -y
+        neg  s3, s3
+        neg  s5, s5
+ny0:    li   t0, 62             # and off the bottom: y = 124 - y
+        blt  s3, t0, ny1
+        li   t1, 124
+        sub  s3, t1, s3
+        neg  s5, s5
+ny1:    li   t0, 2              # at the left paddle's column, moving left
+        bne  s2, t0, nl
+        bgtz s4, nl
+        mv   a1, s8
+        call hit
+        beqz a0, nl
+        li   s4, 1
+        mv   s5, a0
+nl:     li   t0, 60             # at the right paddle's, moving right
+        bne  s2, t0, nr
+        bltz s4, nr
+        mv   a1, s9
+        call hit
+        beqz a0, nr
+        li   s4, -1
+        mv   s5, a0
+nr:     beqz s2, lost           # past a paddle: a point
+        li   t0, 62
+        beq  s2, t0, won
+        li   a3, 0xfc           # yellow
+        call ball
+        li   t0, 150            # wait a little
+wait:   addi t0, t0, -1
+        bnez t0, wait
+        j    frame
+lost:   addi s7, s7, 1
+${say(PONG_CPU)}
+        j    score
+won:    addi s7, s7, 16
+${say(PONG_YOU)}
+score:  andi t0, s7, 15         # ten points win a game: a new one
+        li   t1, 10
+        beq  t0, t1, game
+        srli t0, s7, 4
+        bne  t0, t1, shown
+game:   li   s7, 0
+${say(PONG_GAME)}
+shown:  sw   s7, 4(s1)
+        j    serve
+
+# paddle: column a0 white from row a1 for 10 rows, black elsewhere
+paddle: slli t0, a0, 2
+        add  t0, t0, s0         # (x, 0)
+        li   t1, 0              # y
+        addi t2, a1, 10
+        li   t4, 64
+pl:     li   t3, 0
+        blt  t1, a1, pp
+        bge  t1, t2, pp
+        li   t3, 0xff
+pp:     sw   t3, 0(t0)
+        addi t0, t0, 256
+        addi t1, t1, 1
+        bne  t1, t4, pl
+        ret
+
+# step: the paddle in column a0 with its top at a1 moves by a2 (-1, 0, 1),
+# staying on the screen: one row painted, one erased. Returns the top in a1.
+step:   beqz a2, sret
+        add  t2, a1, a2         # the new top
+        bltz t2, sret
+        li   t3, 54             # 64 - 10
+        bgt  t2, t3, sret
+        slli t4, a0, 2
+        add  t4, t4, s0         # (x, 0)
+        li   t6, 0xff
+        bgtz a2, sdown
+        slli t5, t2, 8          # up: the new top row white
+        add  t5, t5, t4
+        sw   t6, 0(t5)
+        addi t5, a1, 9          # and the old bottom row black
+        slli t5, t5, 8
+        add  t5, t5, t4
+        sw   zero, 0(t5)
+        mv   a1, t2
+        ret
+sdown:  slli t5, a1, 8          # down: the old top row black
+        add  t5, t5, t4
+        sw   zero, 0(t5)
+        addi t5, t2, 9          # and the new bottom row white
+        slli t5, t5, 8
+        add  t5, t5, t4
+        sw   t6, 0(t5)
+        mv   a1, t2
+sret:   ret
+
+# hit: does the ball (rows s3, s3 + 1) meet the paddle with its top at a1? a0 = 0: no;
+# else the ball's new vertical step, by where it struck: -2 and -1 off the top part,
+# 1 and 2 off the bottom part
+hit:    addi t0, s3, 1
+        sub  t0, t0, a1         # the ball's lower row, from the paddle's top: 0 .. 10 meet
+        li   a0, 0
+        bltz t0, hret
+        li   t1, 10
+        bgt  t0, t1, hret
+        li   a0, -2
+        li   t1, 2
+        blt  t0, t1, hret
+        li   a0, -1
+        li   t1, 5
+        blt  t0, t1, hret
+        li   a0, 1
+        li   t1, 8
+        blt  t0, t1, hret
+        li   a0, 2
+hret:   ret
+
+# ball: a 2 x 2 square at (s2, s3) in colour a3
+ball:   slli t0, s3, 8
+        add  t0, t0, s0
+        slli t1, s2, 2
+        add  t0, t0, t1
+        sw   a3, 0(t0)
+        sw   a3, 4(t0)
+        sw   a3, 256(t0)
+        sw   a3, 260(t0)
+        ret
+
+${PRINT}`;
+
 export const COMPUTER_PROGRAMS: IoProgram[] = [
   { id: 'picture', name: 'Computer: greeting and a picture', source: PICTURE },
   { id: 'liveswitches', name: 'Computer: live switches', source: LIVE_SWITCHES },
   { id: 'bounce', name: 'Computer: a bouncing ball', source: BOUNCE },
+  { id: 'pong', name: 'Computer: Pong on the switches', source: PONG },
 ];

@@ -1060,8 +1060,12 @@ links, bus taps, duplicate and pin reordering. The gaps:
   laid out again on its new sides (orientedBox: top and bottom names run across, clock markers on any side), other
   symbols turn whole with their text kept upright; R / Shift+R, the right-click menu, R / F while placing a part, a
   chip's face displays upright where their place lands; displays and I/O parts only mirror (face.ts canTurn)
-- ⏳ Pong on the sandbox computer: a program for Examples ▸ Computer's 64 × 64 screen with the keyboard part (or
-  switches) as paddles, and the same on the campaign's RV16 bench screen
+- ✅ Pong on the sandbox computer: a ROM sample for Examples ▸ Computer's 64 × 64 screen (riscv/ioprograms.ts PONG),
+  paddles on the switches (7 / 6 yours, 1 / 0 a second player's with switch 4, else the computer's, which reacts
+  once the ball passes column 40), the return angle set by where the ball meets the paddle, the score on the LEDs,
+  ten points a game; checked pixel for pixel on the gates and played out on the golden model
+- ⏳ Pong on the campaign's RV16 bench: its only screen is the lane bench's 32 × 32 rasterizer screen, so this needs
+  a screen on the core bench first
 - Separate stars for area and for speed (functional / area-optimal / speed-optimal) instead of one rating over every
   metric: a grading change across 125 levels' pars; decide before building
 

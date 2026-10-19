@@ -193,7 +193,9 @@ resistor over stored charge.
   word). The program greets on the console, paints a gradient, a sun and a triangle in the
   switches' colour, and halts on `j .` (a halt part watches for it); the CPU panel checks every
   instruction, the console and the LEDs against the golden model. The ROM editor's samples include
-  two more programs for it: live switches and a bouncing ball.
+  three more programs for it: live switches, a bouncing ball and Pong (switch 7 / 6 move your paddle up / down
+  against the computer; switch 4 gives the right paddle to a second player on switches 1 / 0; the LEDs keep the
+  score).
 - **Examples ▸ 6502 computer**: the **6502** part (Library ▸ Processor parts: the cycle-exact model of Appendix A
   behind synchronous pins, one bus cycle per clock; double-click it for the transistor-level chip, which replays
   what the model did), a 4K ROM in 6502 assembly, a **Memory map** chip (double-click: the decoder, 2K of RAM, the
