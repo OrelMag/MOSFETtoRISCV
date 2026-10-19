@@ -12,7 +12,7 @@ import '../../styles/campaign.css';
 import '../../styles/level.css';
 import { caseOf } from '../../campaign/cases';
 import { codexById } from '../../campaign/codex';
-import { METRIC, measured } from '../../campaign/grade';
+import { type AreaUnit, areaBars, METRIC, measured } from '../../campaign/grade';
 import { dependents, isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { levelChallenge, levelChipId } from '../../campaign/levels';
 import { altCost, copiesInFinal, countedPart, finalCpu } from '../../campaign/measure';
@@ -211,9 +211,13 @@ export class LevelPage implements Page {
       const par = n.par ?? {};
       // A relay or tube level compares in its own devices (the technology setting's price of a NAND alternative).
       const devices = par.relays !== undefined || par.tubes !== undefined || par.steps !== undefined;
+      // A transistor level compares in transistors (its parts have no NANDs: "0 NAND" said nothing).
+      const fets = !devices && par.transistors !== undefined && par.nand === undefined;
+      const fetText = (v: number | undefined) => (v === undefined ? '—' : `${v.toLocaleString()} transistor${v === 1 ? '' : 's'}`);
       if (devices) rows.push(['Par', deviceText(par, par)]);
+      else if (fets) rows.push(['Par', fetText(par.transistors)]);
       else if (par.nand !== undefined || par.depth !== undefined) rows.push(['Par', costText(par.nand, par.depth)]);
-      for (const { a, cost } of alts) rows.push([a.name, devices ? deviceText(cost, par) : costText(cost.nand, cost.depth)]);
+      for (const { a, cost } of alts) rows.push([a.name, devices ? deviceText(cost, par) : fets ? fetText(cost.transistors) : costText(cost.nand, cost.depth)]);
       if (rows.length) sec.append(h('div', { class: 'lv-cost' }, rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)])));
       const copies = h('p', { class: 'lv-copies' });
       sec.append(copies);
@@ -354,15 +358,13 @@ export class LevelPage implements Page {
         h('td', { class: par[k] === undefined ? '' : (m[k] ?? Infinity) <= par[k]! ? 'par' : 'over' }, cell(m[k])),
         h('td', null, cell(par[k])),
         alts.map((a) => h('td', null, cell((a.cost as Record<string, number | null | undefined>)[k])))))) : null;
-    // Area bars: yours, par and the alternatives on one scale, in NANDs (relays or tube sections on a relay / tube level).
-    const unit: 'nand' | 'relays' | 'tubes' = par.relays !== undefined ? 'relays' : par.tubes !== undefined ? 'tubes' : 'nand';
-    const bars: [string, number, boolean][] = [];
-    if (m[unit] !== undefined) bars.push(['Yours', m[unit]!, true]);
-    if (par[unit] !== undefined && par[unit] !== m[unit]) bars.push(['Par', par[unit]!, false]);
-    for (const a of alts) { const v = (a.cost as Partial<Record<typeof unit, number>>)[unit]; if (v !== undefined) bars.push([a.name, v, false]); }
-    const max = Math.max(1, ...bars.map((b) => b[1]));
-    const barEl = bars.length > 1 ? h('div', { class: 'lv-bars', title: METRIC[unit].label }, bars.flatMap(([k, v, you]) =>
-      [h('span', null, k), h('span', { class: 'track' }, h('i', { class: you ? 'you' : '', style: `width:${(100 * v / max).toFixed(1)}%` })), h('span', { class: 'v' }, v.toLocaleString())])) : null;
+    // Area bars: yours, par and the alternatives on one scale, in the level's area metric, labelled with it.
+    const area = areaBars(m, par, alts.map((a) => ({ name: a.name, cost: a.cost as Partial<Record<AreaUnit, number>> })));
+    const max = Math.max(1, ...(area?.bars ?? []).map((b) => b[1]));
+    const barEl = area ? h('div', { class: 'lv-bars-box' },
+      h('div', { class: 'lv-bars-k' }, `Area, in ${area.unit === 'nand' ? 'NANDs' : METRIC[area.unit].label.toLowerCase()}`),
+      h('div', { class: 'lv-bars', title: METRIC[area.unit].hint }, area.bars.flatMap(([k, v, you]) =>
+        [h('span', null, k), h('span', { class: 'track' }, h('i', { class: you ? 'you' : '', style: `width:${(100 * v / max).toFixed(1)}%` })), h('span', { class: 'v' }, v.toLocaleString())]))) : null;
     const callout = h('div', { class: 'lv-callout' });
     const unlocks = (n.unlocks ?? []).filter((u) => !u.endsWith('*')).map((u) => resolveComponent(u)?.name ?? u);
     const codex = n.codex.map((id) => codexById(id)).filter((e) => !!e);

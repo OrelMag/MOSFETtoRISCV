@@ -2,7 +2,9 @@
 // part in the finished CPU.
 
 import { describe, expect, it } from 'vitest';
-import { copiesInFinal, countedPart, finalCpu, libCost } from '../src/campaign/measure';
+import { caseOf } from '../src/campaign/cases';
+import { areaBars } from '../src/campaign/grade';
+import { altCost, copiesInFinal, countedPart, finalCpu, libCost } from '../src/campaign/measure';
 import { nodeById } from '../src/campaign/nodes';
 
 describe('level screen measurements', () => {
@@ -41,5 +43,26 @@ describe('level screen measurements', () => {
     expect(copiesInFinal(nodeById('k_tile')!)).toBe(1);
     // act 9 is optional as a whole: its finale is still found
     expect(['k_lesson', 'k_lanes', 'k_simt', 'k_coal', 'k_warps', 'p_hist', 'k_edge', 'k_tile', 'k_raster', 'k_frame', 'p_spin'].every((id) => nodeById(id)!.optional)).toBe(true);
+  });
+});
+
+describe('the after-pass card\'s area bars', () => {
+  it('compare a transistor level in transistors, not in NANDs it has none of', () => {
+    // CMOS inverter: yours 2 transistors at par 2, the pseudo-NMOS alternative (the case's own, measured live)
+    const n = nodeById('t_inv')!;
+    const alts = (caseOf(n.id)?.alts ?? []).map((a) => ({ name: a.name, cost: altCost(a) }));
+    const b = areaBars({ nand: 0, transistors: 2 }, n.par ?? {}, alts)!;
+    expect(b.unit).toBe('transistors');
+    expect(b.bars[0]).toEqual(['Yours', 2, true]);
+    expect(b.bars.length).toBeGreaterThan(1);
+    expect(b.bars.every(([, v]) => v > 0)).toBe(true);
+  });
+
+  it('keep NANDs on a gate level, leave par out when it equals yours, and drop a comparison of zeros', () => {
+    const alts = [{ name: 'Textbook', cost: { nand: 12 } }];
+    expect(areaBars({ nand: 9 }, { nand: 9 }, alts)).toEqual({ unit: 'nand', bars: [['Yours', 9, true], ['Textbook', 12, false]] });
+    expect(areaBars({ nand: 9 }, { nand: 8 }, [])).toEqual({ unit: 'nand', bars: [['Yours', 9, true], ['Par', 8, false]] });
+    expect(areaBars({ nand: 0 }, {}, [{ name: 'Other', cost: { nand: 0 } }])).toBeNull();
+    expect(areaBars({ nand: 9 }, { nand: 9 }, [])).toBeNull();
   });
 });
