@@ -108,6 +108,8 @@ function routes(): Route[] {
   for (const v of VIEWPORTS) {
     for (const hash of ['#/', `#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/campaign', '#/sandbox']) add(hash, light, ` (${v.name})`, v);
   }
+  // The sandbox's toolbar at the common desktop widths too (CLIPPED: no label cut, nothing scrolled out of view).
+  for (const width of [1440, 1920]) add('#/sandbox', light, ` (${width}px)`, { width, height: 900, mobile: false, name: `${width}px` });
   const ex = examplesWorkspace();
   for (const id of ex.ids) add(`#/sandbox/${id}`, { ...light, [SANDBOX_KEY]: ex.json });
   return only ? out.filter((r) => r.label.includes(only)) : out;
@@ -261,6 +263,26 @@ const OVERFLOW = `(() => {
   return ['page ' + document.documentElement.scrollWidth + 'px wide in a ' + W + 'px window: ' + out.join(', ')];
 })()`;
 
+/**
+ * The sandbox's top bar with a label cut or scrolled out of view (at 1440 px "+ New chip" read "New chi"
+ * under the autosave indicator): the actions that do not fit belong in its More menu (editor.ts fitActions).
+ */
+const CLIPPED = `(() => {
+  const top = document.querySelector('.sb-top');
+  if (!top) return [];
+  const tabs = top.querySelector('.sb-tabs'), tr = tabs.getBoundingClientRect(), R = top.getBoundingClientRect().right;
+  const out = [];
+  for (const el of top.querySelectorAll('.sb-tab.on, .sb-open, .sb-new, .sb-top-slot > *, .sb-actions > button')) {
+    const b = el.getBoundingClientRect();
+    if (!b.width) continue;
+    const name = (el.textContent || el.getAttribute('aria-label') || el.className).trim().slice(0, 24);
+    if (el.scrollWidth > el.clientWidth + 1) out.push('toolbar label cut: ' + name);
+    else if (tabs.contains(el) && (b.left < tr.left - 1 || b.right > tr.right + 1)) out.push('toolbar item scrolled out of view: ' + name);
+    else if (b.right > R + 1) out.push('toolbar item past the bar: ' + name);
+  }
+  return out;
+})()`;
+
 class Tab {
   private session = '';
   private errors: string[] = [];
@@ -353,6 +375,8 @@ class Tab {
       if (route.viewport) {
         const wide = (await this.send('Runtime.evaluate', { expression: OVERFLOW, returnByValue: true })).result.value as string[];
         for (const p of wide) this.errors.push(`overflow: ${p}`);
+        const cut = (await this.send('Runtime.evaluate', { expression: CLIPPED, returnByValue: true })).result.value as string[];
+        for (const p of cut) this.errors.push(p);
       }
     } catch (e) {
       this.errors.push(String(e instanceof Error ? e.message : e));
