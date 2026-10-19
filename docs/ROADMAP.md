@@ -434,6 +434,22 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   moves the line (one undo step). Switches: the word on toggle switches with a lamp each, grouped by field; Deposit next
   puts it on a new line below and moves on (the program editor), or into a small memory chapter 13 runs on the golden
   model
+- ⏳ 5. Your own instruction, end to end (mockup first): a free custom opcode (custom-1…3), its behaviour as a row of
+  the single-cycle CPU's control signals (register write, ALU sources and operation, immediate format, memory write,
+  result, next PC); the control unit gains one opcode class (an AND) and an OR input per signal it asserts, the golden
+  model learns the row, and a program using it runs on the gates in lock step. What the datapath cannot do in one
+  cycle is named, with the hardware it would need
+
+**More builders, after the instruction builder** (proposed 2026-10-19, kept for later)
+- ⏳ Microcode painter: the multicycle CPU's microprogram (MC_MICRO) as a grid of control signals × microinstructions,
+  painted like the encoding designer; each microword lights its datapath, the result is checked against MC_STATES;
+  microcode for a new instruction, or a shorter sequence and fewer cycles
+- ⏳ Karnaugh map painter: 1s, 0s and don't-cares painted on a K-map or truth table, the minimal cover drawn as loops
+  (minimize()), the circuit opened as two-level gates or a PLA with its NAND count; the campaign's K-map drills answered
+  on it
+- ⏳ Memory-map designer: address regions (RAM, ROM, screen, console, keys) dragged onto the address space, overlaps and
+  gaps shown, the address decoder opened as a chip (the ISA decoder's match lines over address bits); chapter 35's bus
+  and the sandbox computer's map
 - ✅ Examples ▸ 4-bit CPU (4004-inspired; src/isa4, lib/cpu4.ts): the 4004's opcode map and mnemonics, one instruction
   per 16-bit ROM word and per clock (the 4004 byte high, its second byte low), 29 instructions (the 4004's set minus the
   4002 RAM-chip ones, FIN, KBP and DCL): 4-bit accumulator and carry, 16 × 4-bit index registers in 8 pairs, an 8-bit
