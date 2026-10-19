@@ -17,7 +17,7 @@ import { EditorSim } from '../src/editor/runtime';
 import { registry } from '../src/lib/define';
 import { regenerable } from '../src/lib/resolve';
 import { assemble } from '../src/riscv/asm';
-import { COMPUTER_PROGRAMS, DONE_TEXT, GREETING, packChars, PICTURE } from '../src/riscv/ioprograms';
+import { COMPUTER_PROGRAMS, DONE_TEXT, GREETING, packChars, PICTURE, PONG, PONG_CPU, PONG_GAME, PONG_YOU } from '../src/riscv/ioprograms';
 import { IO, ISS } from '../src/riscv/iss';
 import { breathe } from './setup';
 
@@ -225,6 +225,73 @@ describe('the computer example', () => {
     expect(Math.min(...ball.map(([, y]) => y))).toBeGreaterThan(20 + 10);
   });
 
+  it('pong: the hardware paints what the model stores, a paddle following switches 7 and 6', async () => {
+    const { es, mon } = open(PONG);
+    const model = modelScreen(mon);
+    await run(es, mon, 4000);
+    expect(screenDiff(es, model)).toBeNull();
+    es.pokeLeaf(leaf(es, 'dev.sw'), { v: 0x40 }); // switch 6: your paddle down
+    await run(es, mon, 12000);
+    expect(mon.mismatch && mismatchText(mon.mismatch)).toBeNull();
+    expect(mon.iss!.halted).toBe(false);
+    expect(mon.console).toBe('Pong!\n');
+    expect(screenDiff(es, model)).toBeNull();
+    const px = (io(es, 'screen') as ScreenState).px;
+    const column = (x: number) => [...Array(64).keys()].filter((y) => px[y * 64 + x] === 0xff);
+    const left = column(1), right = column(62);
+    expect(left.length).toBe(10);
+    expect(right.length).toBe(10);
+    expect(left[0]).toBeGreaterThan(27); // it went down from the middle
+    expect(left[9] - left[0]).toBe(9);
+    expect([...px].filter((c) => c === 0xfc).length).toBe(4); // the ball
+  });
+});
+
+describe('pong on the golden model', () => {
+  const words = assemble(PONG).words;
+  /** `steps` instructions with the switches set by `play` from the machine's registers before each. */
+  function game(steps: number, play: (iss: ISS) => number): ISS {
+    const iss = new ISS(words, { mmio: true, imemWords: 1024, dmemWords: 4096 });
+    for (let n = 0; n < steps; n++) { iss.switches = play(iss); iss.step(); }
+    return iss;
+  }
+  const points = (iss: ISS, s: string) => iss.console.split(s).length - 1;
+  // registers: s2 = x18 ball x, s3 = x19 ball y, s8 = x24 left paddle top, s9 = x25 right paddle top
+  const follow = (iss: ISS, top: number, up: number, down: number) => {
+    const aim = iss.x[19] - 4;
+    return aim > top ? down : aim < top ? up : 0;
+  };
+
+  it('a player who stands still loses every point, and ten points start a new game', () => {
+    const iss = game(400000, () => 0);
+    expect(points(iss, PONG_YOU)).toBe(0);
+    expect(points(iss, PONG_CPU)).toBeGreaterThanOrEqual(10);
+    expect(points(iss, PONG_GAME)).toBeGreaterThanOrEqual(1);
+    expect(iss.leds).toBe(points(iss, PONG_CPU) % 10); // the computer's points, in the low four bits
+  });
+
+  it('a player who follows the ball scores, with the angle set by where the ball meets the paddle', () => {
+    const iss = game(1_000_000, (m) => follow(m, m.x[24], 0x80, 0x40));
+    expect(points(iss, PONG_YOU)).toBeGreaterThan(points(iss, PONG_CPU));
+    expect(points(iss, PONG_YOU)).toBeGreaterThan(0);
+  });
+
+  it('switch 4 hands the right paddle to a second player (switches 1 and 0)', () => {
+    // the left player follows the ball; the right one, standing still, never moves its paddle and loses
+    // the right paddle's tops from the first serve on (s9 = x25 is 27 there)
+    let tops = new Set<number>();
+    const seen = (m: ISS) => { if (tops.size || m.x[25] === 27) tops.add(m.x[25]); };
+    const still = game(400000, (m) => { seen(m); return 0x10 | follow(m, m.x[24], 0x80, 0x40); });
+    expect([...tops]).toEqual([27]);
+    expect(points(still, PONG_YOU)).toBeGreaterThan(points(still, PONG_CPU));
+    // switch 1 moves it up to the top
+    tops = new Set();
+    game(20000, (m) => { seen(m); return 0x12; });
+    expect(Math.min(...tops)).toBe(0);
+  });
+});
+
+describe('the computer example, failures', () => {
   it('a console that disagrees with the model is a mismatch', async () => {
     // the hardware console drops a character the model prints: its write enable cut (inside the devices)
     const { ws, id } = addExample(emptyWorkspace(), EX);
