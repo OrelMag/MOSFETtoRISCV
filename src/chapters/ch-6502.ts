@@ -42,6 +42,20 @@ const PHASES = (() => {
 const DATAPATH = ['rega', 'regx', 'regy', 'regs', 'alu', 'pc', 'addr', 'data', 'flags', 'buses'];
 const CONTROL = ['clock', 'decode', 'control', 'timing', 'intr', 'ir'];
 
+/**
+ * The ledger's counts (widgets/m6502ledger.ts measures them when it opens: too slow to build the RV32I here).
+ * tests/content-mem.test.ts measures the same parts and holds these to them.
+ */
+export const LEDGER = {
+  /** Transistors: our 6502, our single-cycle RV32I with its memories (rounded as the text quotes them). */
+  m6502: 4500, rv32i: 226000,
+  /** % of the RV32I's transistors: register file + data memory + program ROM; register file + data memory alone. */
+  storePct: 90, rfDmPct: 76,
+  /** Transistors per bit: a 6502 register bit, a bit of the RV32I's register file (with its read multiplexers' share). */
+  bit6502: 10, bitRf: 90,
+} as const;
+const k = (n: number) => n.toLocaleString('en-US');
+
 export const chAppendix6502: Chapter = {
   id: 'appendix-6502', num: 36, appendix: 'A', title: '1975: the 6502', level: 'NMOS',
   blurb: 'NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.',
@@ -58,7 +72,7 @@ export const chAppendix6502: Chapter = {
       'Two phases φ1 and φ2, never high together, make a latch of one pass transistor and the charge on an inverter\'s gate: a master–slave bit is <strong>6 transistors</strong>, against 44 for our NAND flip-flop. The charge leaks in milliseconds, so the NMOS 6502 cannot stop its clock.',
       'Four precharged buses (DB, SB, ADL, ADH): every line is charged to 1 in φ2, and a source pulls its 0 bits down in φ1. A source costs 2 transistors per bit, a destination 1, and two sources at once give the AND, with no contention.',
       'Control is a ring of T states, the opcode in IR and a decode PLA: 245 computed rows here, about 130 on the real chip. T1 fetches the next opcode while its rows finish the previous instruction.',
-      'About 4,500 transistors against about 226,000 for our single-cycle RV32I: three quarters of the RV32I is storage built from logic, and the rest pays for NAND-only static CMOS, 32 bits and separate adders in a single cycle.',
+      `About ${k(LEDGER.m6502)} transistors against about ${k(LEDGER.rv32i)} for our single-cycle RV32I: ${LEDGER.storePct} % of the RV32I is storage built from logic (register file and data memory ${LEDGER.rfDmPct} %, program ROM ${LEDGER.storePct - LEDGER.rfDmPct} %), and NAND-only static CMOS, 32 bits and separate adders in a single cycle make every part of it dearer.`,
     ],
     practise: ['t_nor', 's_dff'],
     check: [
@@ -80,8 +94,8 @@ export const chAppendix6502: Chapter = {
         question: 'Where do most of the extra transistors of our single-cycle RV32I go, compared with our 6502?',
         options: ['Storage built from logic: the register file, the data memory and the program ROM', 'Decoding a harder instruction set', 'More instructions than the 6502\'s 56'],
         answer: 0,
-        explain: 'Three quarters of the RV32I is storage. The 6502 keeps three 8-bit registers and leaves memory off the chip; its registers are 10 transistors a bit against about 90 for the RV32I\'s register file.',
-        why: ['', 'Decoding is not where the transistors go: storage alone is three quarters of the RV32I.', 'RV32I has fewer instructions than the 6502. The gap comes from storage, width (32 bits against 8) and technology.'],
+        explain: `${LEDGER.storePct} % of the RV32I is storage, ${LEDGER.rfDmPct} % in the register file and data memory alone. The 6502 keeps three 8-bit registers and leaves memory off the chip; its registers are ${LEDGER.bit6502} transistors a bit against about ${LEDGER.bitRf} for the RV32I's register file.`,
+        why: ['', `Decoding is not where the transistors go: storage alone is ${LEDGER.storePct} % of the RV32I.`, 'RV32I has fewer instructions than the 6502. The gap comes from storage, width (32 bits against 8) and technology.'],
       },
     ],
   },
@@ -89,7 +103,8 @@ export const chAppendix6502: Chapter = {
     {
       title: 'One transistor less: NMOS',
       body: `
-        <p>In 1975 there was no cheap PMOS on the same die. A gate was a pull-down network of
+        <p>In 1975 CMOS existed (RCA's CD4000 logic from 1968, its 1802 CPU in 1976) but was slower and less dense; a dense, fast,
+        cheap microprocessor was NMOS. A gate was a pull-down network of
         <span data-show="n0 n1">enhancement NMOS</span> under one <span data-show="ld"><strong>depletion-mode</strong> NMOS</span>: its threshold is below zero, so with its
         gate tied to its source it always conducts, weakly. It is a load resistor that costs one transistor.</p>
         <p>Any pull-down that conducts beats the load (the pull-downs are drawn several times stronger: <em>ratioed
@@ -214,8 +229,16 @@ ${PHASES}
         6502's register file in memory: 3 cycles to read it, 4 for an absolute address.</p>
         <p>Every cycle is a bus access, the dummy ones included: a read of the next byte after an implied
         instruction, the old value written back by a read-modify-write, a read at the wrong page while an index's
-        carry is fixed. Our transistors make exactly these: on all 1.5 million cases of Tom Harte's SingleStepTests and
-        all 96 million cycles of Klaus Dormann's functional test, every bus cycle matches a reference model.</p>`,
+        carry is fixed. Our transistors make exactly these: on all 1.51 million cases of Tom Harte's SingleStepTests for the
+        151 documented opcodes (10 000 each) and all 96 million cycles of Klaus Dormann's functional test, every bus cycle matches a
+        reference model.</p>
+        <details class="deeper"><summary>Deeper: quirks</summary>
+        <p><code>JMP ($xxFF)</code> takes the pointer's high byte from $xx00, not from the next page: the indirect address's low byte is
+        incremented without a carry into the high byte (fixed in the CMOS 65C02). <code>BRK</code> shares the IRQ vector at $FFFE; the
+        handler tells them apart by the B bit of the status byte pushed on the stack (a flag that exists only there), and BRK skips the
+        byte after it. The NMOS chip leaves the D flag set on an interrupt, and its N, V and Z after a decimal ADC are not those of the
+        decimal result. The earliest chips (1975–76) shipped without a working <code>ROR</code>. And the 105 undocumented opcodes do
+        whatever the PLA's rows make of them; programs came to rely on some (LAX, SAX), and the 65C02 turned them into NOPs or new instructions.</p></details>`,
       widget: () => opcodeMatrix(),
     },
     {
@@ -230,22 +253,30 @@ ${PHASES}
         fetched). The pin trace is what a logic analyser on the real chip would show.</p>
         <div class="try">Step through <code>LDA msg,X</code>: three operand fetches, then the read, and the next
         opcode fetch is where A changes. Try the <code>irq</code> program and press <b>IRQ</b>.</div>
-        <p>About 4,500 transistors switch in an event-driven simulation: thousands of cycles a second, where the
+        <p>About ${k(LEDGER.m6502)} transistors switch in an event-driven simulation: thousands of cycles a second, where the
         silicon did a million.</p>`,
       scene: () => m6502Scene({}),
     },
     {
       title: 'The transistor ledger',
       body: `
-        <p>Our 6502: about 4,500 transistors. Our single-cycle RV32I: about 226,000, fifty times more. Where does it go?</p>
-        <p><strong>Memory.</strong> Three quarters of the RV32I is storage built from logic: a 32 × 32 register file,
-        32 words of data memory, the program ROM. The 6502 keeps 3 registers and leaves memory off the chip.</p>
+        <p>Our 6502: about ${k(LEDGER.m6502)} transistors. Our single-cycle RV32I: about ${k(LEDGER.rv32i)}, ${Math.round(LEDGER.rv32i / LEDGER.m6502)} times more. Where does it go?</p>
+        <p><strong>Memory.</strong> ${LEDGER.storePct} % of the RV32I is storage built from logic: a 32 × 32 register file and
+        32 words of data memory (${LEDGER.rfDmPct} % between them), and the program ROM. The 6502 keeps 3 registers and leaves memory off the chip.</p>
         <p><strong>Technology.</strong> NAND-only static CMOS against NMOS with dynamic latches and pass transistors:
         the table compares the same function in each, measured from both libraries.</p>
         <p><strong>Width and time.</strong> 32 bits against 8, and a single cycle that needs separate adders for the ALU,
         PC + 4 and the branch target, where the 6502 spends several cycles on one adder.</p>
         <p>None of the RV32I's choices are wrong: it is built from one brick so that every bit can be opened. The 6502
-        shows what a 1975 team did to fit a CPU on one small, cheap die: it sold for $25.</p>`,
+        shows what a 1975 team did to fit a CPU on one small, cheap die: it sold for $25, where Intel's 8080 had launched at $360.</p>
+        <details class="deeper"><summary>Deeper: the people and the family</summary>
+        <p>Chuck Peddle and Bill Mensch had worked on Motorola's 6800; with a few colleagues they left for MOS Technology in 1974 to
+        build a far cheaper CPU. Their first, the 6501, fitted the 6800's socket; Motorola sued, and MOS dropped the 6501 and kept the
+        6502, whose pins differ. MOS sold it with the KIM-1 board (1976); Commodore bought MOS that year. The family went everywhere:
+        the Apple I and II, the Commodore PET and VIC-20, the C64 (its 6510 adds an I/O port), the BBC Micro, the Atari 2600 (a 6507:
+        28 pins, 13 address lines, 8 KiB of address space) and the NES (Ricoh's 2A03: a 6502 without decimal mode, with the sound on
+        the die). Mensch founded the Western Design Center, whose CMOS 65C02 and 16-bit 65C816 (Apple IIGS, Super NES) are still
+        made.</p></details>`,
       widget: () => ledger(),
     },
   ],

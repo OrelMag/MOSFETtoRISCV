@@ -34,7 +34,8 @@ export const chMemCtrl: Chapter = {
   builds: ['cache', 'dram'],
   recap: {
     keep: [
-      'Commands: ACT, RD, WR, PRE (PREA: every bank), REF. Each waits for a rule: tRCD after an ACT, tRP after a PRE, tRAS before a row may close, tRFC after a REF. The device here turns a broken rule into X.',
+      'Commands: ACT, RD, WR, PRE (PREA: every bank), REF (DDR4 adds MRS, ZQ, self-refresh, power-down). Each waits for a rule: tRCD after an ACT, tRP after a PRE, tRAS before a row may close, tRFC after a REF. The device here turns a broken rule into X.',
+      'Overlapping requests across banks adds rules between them: tRRD between ACTs, tFAW (four ACTs a window), tCCD_S / _L between column commands (bank groups: alternate them), tWR before a written row closes, tWTR for the bus to turn from write to read.',
       `The controller is seven state flip-flops, one wait counter that every command loads, an open-row table and a refresh counter: ${fmt(stats(dramCtrl(CFG)).nands)} NANDs, serving one request at a time.`,
       `Open page: a hit ${accessCycles('hit', TIMING)} cycles, a conflict ${accessCycles('conflict', TIMING)}. Closed page: ${accessCycles('miss', TIMING)} every time. The benchmarks' 256 bytes are four rows, so open page wins there.`,
       `A refresh every ${TIMING.tREFI} cycles: precharge all, REF, ${TIMING.tRFC} silent cycles. A request behind it waits up to ${TIMING.tRP + TIMING.tRFC + accessCycles('miss', TIMING)} cycles, and every bank is closed afterwards.`,
@@ -79,15 +80,26 @@ export const chMemCtrl: Chapter = {
     {
       title: 'Commands',
       body: `
-        <p>A DRAM device understands six commands. <strong>ACT</strong> opens a row in a bank, <strong>RD</strong> / <strong>WR</strong>
+        <p>Six commands do the work. <strong>ACT</strong> opens a row in a bank, <strong>RD</strong> / <strong>WR</strong>
         move a burst from or to the open row, <strong>PRE</strong> closes it (<strong>PREA</strong>: every bank), <strong>REF</strong>
-        refreshes. Each has a rule about when it may come (<a href="#/c/dram/0">chapter 32</a>): tRCD after an ACT before a column command, tRP after a PRE
+        refreshes. A DDR4 device also takes MRS (set the mode registers: CL, burst length), ZQ (calibrate the output drivers),
+        self-refresh entry / exit and power-down, which this model leaves out. Each working command has a rule about when it may come (<a href="#/c/dram/0">chapter 32</a>): tRCD after an ACT before a column command, tRP after a PRE
         before the next ACT, tRAS before a row may close, tRFC of silence after a REF. <span data-show="dev">The device</span> here checks every one, and a
         command that breaks one turns its data into X.</p>
         <p><span data-show="ctrl">The controller</span> turns "read line 5" into the right commands at the right cycles. In gates it is small: <span data-show="ctrl.st">seven state
         flip-flops</span> (idle when none is set), <span data-show="ctrl.cnt">one wait counter</span> that every command loads with its delay, an open-row table (a valid bit and
         a row register per bank) and a refresh counter. ${fmt(stats(dramCtrl(CFG)).nands)} NANDs. It serves one request at a time,
         as the cache asks: the cache holds <span data-show="pin:req"><code>req</code></span> until <code>done</code>.</p>
+        <details class="deeper"><summary>Deeper: the rules a real controller also obeys</summary>
+        <p>One request at a time needs only the four rules above. A controller that overlaps requests across banks (bank-level
+        parallelism: activate bank 1 while bank 0 bursts) meets the rules between banks too. DDR4-3200, an 8 Gb ×8 device, roughly:
+        <strong>tRRD</strong> between two ACTs to different banks (2.5 ns, 4.9 ns within one bank group); <strong>tFAW</strong>, at most
+        four ACTs in any 21 ns window (the activate current the supply can deliver); <strong>tCCD_S / tCCD_L</strong> between column
+        commands, 4 clocks to another bank group, 5 ns within one: DDR4's 16 banks sit in 4 <strong>bank groups</strong> that share
+        their data path, so a controller alternates groups to keep the bus full; <strong>tWR</strong>, 15 ns of write recovery before a
+        written row may precharge; <strong>tWTR</strong>, 2.5–7.5 ns from a write's data to the next read, as the bus turns around; tRTP
+        from a read to the precharge. A scheduler tracks each rule per bank, group and rank; this one has no second request to overlap,
+        so none of them binds.</p></details>
         <div class="try">Read line 0, then line 1, then line 8, and compare the three timelines. Lines 0–3 share row 0 of bank 0;
         lines 4–7 are row 0 of bank 1; line 8 is row 1 of bank 0.</div>`,
       scene: () => memCtrlScene({ cfg: CFG }),
