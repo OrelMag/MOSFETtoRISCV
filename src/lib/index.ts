@@ -21,6 +21,7 @@ export * from './srt4';
 export * from './pipem';
 export * from './ras';
 export * from './pipe2w';
+export * from './ooo';
 export * from './multiply';
 export * from './adders';
 export * from './arrays';

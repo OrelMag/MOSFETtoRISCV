@@ -5,10 +5,10 @@
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { Builder } from './builder';
-import { addSub, andN, busMux2, decoder, equal, incrementer, rca } from './combinational';
+import { addSub, andN, busMux2, decoder, equal, incrementer, muxTree, rca } from './combinational';
 import { define, merger, splitter } from './define';
 import { AND, NOT, OR, XOR } from './gates';
-import { readPort, writeSelect } from './regfile';
+import { readPort, regfile, writeSelect } from './regfile';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { constWord } from './alu';
@@ -329,40 +329,6 @@ export const AGE_CELL: ComponentDef = (() => {
   });
 })();
 
-/** The issue queue's age matrix: for every pair of entries, which holds the older instruction (56 bits, ageBit). */
-export const AGE8: ComponentDef = (() => {
-  const b = new Builder(18, 26, 3);
-  b.pins('alloc0', 'alloc1', 'valid', 'clk');
-  const one = b.op1(TIE1, [], undefined, 'one');
-  const a0 = b.op(splitter(Array(8).fill(1)), ['alloc0'], undefined, 'a0s'), a1 = b.op(splitter(Array(8).fill(1)), ['alloc1'], undefined, 'a1s');
-  const v = b.op(splitter(Array(8).fill(1)), ['valid'], undefined, 'vs');
-  const old = b.op(splitter(Array(56).fill(1)), ['age.q'], undefined, 'olds');
-  b.next();
-  const alloc = Array.from({ length: 8 }, (_, i) => b.name(b.op1(OR, [`${a0}.o${i}`, `${a1}.o${i}`], undefined, `al${i}`), `alloc${i}`, true));
-  b.next();
-  const cells: string[] = new Array(56);
-  for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) {
-    if (i === j) continue;
-    const k = ageBit(i, j);
-    // a grid of identical cells: every connection drawn as a named label
-    b.name(`${old}.o${k}`, `o${i}${j}`, true);
-    cells[k] = b.name(b.op1(AGE_CELL, [`${old}.o${k}`, `${v}.o${i}`, `${a0}.o${i}`, alloc[i], `${a1}.o${j}`, alloc[j]], undefined, `c${i}_${j}`), `n${i}${j}`, true);
-    if (k % 14 === 13) b.next();
-  }
-  b.next();
-  const nx = b.op1(merger(Array(56).fill(1)), cells, undefined, 'nx');
-  b.next();
-  b.op(register(56), [nx, one, 'clk'], 'older', 'age');
-  b.wire('age.q', 'older');
-  const R = b.right;
-  return define({
-    id: 'age8', name: 'Age matrix (8 entries)', category: 'cpu',
-    summary: 'Which of any two issue-queue entries holds the older instruction, one bit per ordered pair: a new entry is younger than every entry already there (and the second of a pair dispatched together younger than the first). Select uses it to find the oldest ready entry without keeping the queue in order.',
-    ports: [bus('alloc0', 8, 'in'), bus('alloc1', 8, 'in'), bus('valid', 8, 'in'), bit('clk', 'in', 'bottom', true), bus('older', 56, 'out')],
-    symbol: { kind: 'box', label: 'AGE MATRIX' },
-    netlist: () => ({ pins: { alloc0: [0, 2], alloc1: [0, 4], valid: [0, 6], clk: [0, 8], older: [R, 2] }, instances: b.instances, nets: b.nets() }),
-  });
-})();
 
 /**
  * Select: the oldest candidate. Entry e is granted when it is a candidate and no other candidate is older than it
@@ -557,75 +523,6 @@ export const RAT_CELL: ComponentDef = (() => {
   });
 })();
 
-/**
- * The rename table (P6 style: a register maps to the reorder-buffer entry of its youngest in-flight writer). Four
- * lookups (two sources of each dispatch slot; slot 1's sources see slot 0's destination), two mappings a cycle, two
- * unmappings at commit (only when the register still names the committing instruction: a younger writer keeps it),
- * and a flush that unmaps everything. x0 is never mapped.
- */
-export const RAT: ComponentDef = (() => {
-  const E = 1 + TAG, N = 32, R = register(E), D = decoder(5, true, 10), RP = readPort(5, E);
-  const b = new Builder(18, 24, 4);
-  const ins = ['rs1_0', 'rs2_0', 'rs1_1', 'rs2_1', 'rd0', 'we0', 'tag0', 'rd1', 'we1', 'tag1', 'crd0', 'cv0', 'ctag0', 'crd1', 'cv1', 'ctag1', 'flush', 'clk'];
-  b.pins(...ins);
-  const one = b.op1(TIE1, [], undefined, 'one');
-  const none = b.op1(constWord(E, 0), [], 'x0: never mapped', 'x0');
-  // writes: x0 never
-  const wr0 = b.op1(AND, ['we0', b.op1(nonZero(5), ['rd0'], undefined, 'nz0')], undefined, 'wr0'), wr1 = b.op1(AND, ['we1', b.op1(nonZero(5), ['rd1'], undefined, 'nz1')], undefined, 'wr1');
-  b.next();
-  b.op(D, ['rd0', wr0], 'map, slot 0', 'd0');
-  b.op(D, ['rd1', wr1], 'map, slot 1', 'd1');
-  b.op(RP, ['all.out', 'crd0'], 'commit, older', 'rc0');
-  b.op(RP, ['all.out', 'crd1'], 'commit, younger', 'rc1');
-  b.next();
-  // a commit unmaps a register only if it still names the committing instruction
-  const unmap = (k: number) => {
-    const s = b.op(splitter([1, TAG]), [`rc${k}.y`], undefined, `rcs${k}`);
-    const same = b.op1(equal(TAG), [`${s}.o1`, `ctag${k}`], undefined, `same${k}`);
-    return b.op1(andN(3), [`cv${k}`, `${s}.o0`, same], undefined, `un${k}`);
-  };
-  const un0 = unmap(0), un1 = unmap(1);
-  b.next();
-  b.op(D, ['crd0', un0], 'unmap, older', 'c0');
-  b.op(D, ['crd1', un1], 'unmap, younger', 'c1');
-  b.next();
-  const qs: string[] = [none];
-  for (let r = 1; r < N; r++) {
-    // the decoders reach every row: their outputs as labels
-    b.name(`d0.y${r}`, `w0_${r}`, true); b.name(`d1.y${r}`, `w1_${r}`, true); b.name(`c0.y${r}`, `u0_${r}`, true); b.name(`c1.y${r}`, `u1_${r}`, true);
-    const clr = b.op1(OR, [`c0.y${r}`, `c1.y${r}`], undefined, `clr${r}`);
-    const nx = b.op1(RAT_CELL, [`x${r}.q`, `d0.y${r}`, 'tag0', `d1.y${r}`, 'tag1', clr, 'flush'], undefined, `n${r}`);
-    b.op(R, [nx, one, 'clk'], `x${r}`, `x${r}`);
-    qs.push(`x${r}.q`);
-    if (r % 8 === 7) b.next();
-  }
-  b.next();
-  b.name(b.op1(merger(Array(N).fill(E), 2), qs, undefined, 'all'), 'maps', true);
-  b.next();
-  // lookups: slot 1's sources see slot 0's destination
-  const look = ['rs1_0', 'rs2_0', 'rs1_1', 'rs2_1'].map((rs, i) => b.op1(RP, ['all.out', rs], `lookup ${rs}`, `rd${i}`));
-  b.next();
-  const out = (i: number, nm: string) => {
-    let y = look[i];
-    if (i >= 2) {
-      const hit = b.op1(AND, [wr0, b.op1(equal(5), [['rs1_1', 'rs2_1'][i - 2], 'rd0'], undefined, `byp${i}e`)], undefined, `byp${i}`);
-      y = b.op1(busMux2(E), [y, b.op1(merger([1, TAG]), [one, 'tag0'], undefined, `t0m${i}`), hit], undefined, `by${i}`);
-    }
-    const s = b.op(splitter([1, TAG]), [y], undefined, `os${i}`);
-    b.wire(`${s}.o0`, `${nm}v`); b.wire(`${s}.o1`, `${nm}t`);
-  };
-  ['a0', 'b0', 'a1', 'b1'].forEach((nm, i) => out(i, nm));
-  const R0 = b.right;
-  const W: Record<string, number> = { rs1_0: 5, rs2_0: 5, rs1_1: 5, rs2_1: 5, rd0: 5, tag0: TAG, rd1: 5, tag1: TAG, crd0: 5, ctag0: TAG, crd1: 5, ctag1: TAG };
-  const outs = ['a0', 'b0', 'a1', 'b1'].flatMap((n): [string, number][] => [[`${n}v`, 1], [`${n}t`, TAG]]);
-  return define({
-    id: 'rat', name: 'Rename table', category: 'cpu',
-    summary: 'For each register, the reorder-buffer entry of the youngest instruction in flight that writes it, or none (the register file has the value). Dispatch looks up both instructions\' sources (the second sees the first\'s destination) and maps their destinations; a commit unmaps a register still naming the committing instruction; a flush unmaps them all.',
-    ports: [...ins.map((n) => (n === 'clk' ? bit('clk', 'in', 'bottom', true) : W[n] ? bus(n, W[n], 'in') : bit(n, 'in'))), ...outs.map(([n, w]) => (w > 1 ? bus(n, w, 'out') : bit(n, 'out')))],
-    symbol: { kind: 'box', label: 'RENAME TABLE' },
-    netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), ...Object.fromEntries(outs.map(([n], i) => [n, [R0, 2 + 2 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
-  });
-})();
 
 
 // ---- the reorder buffer ------------------------------------------------------------------------------------------------
@@ -744,3 +641,420 @@ export function reorderBuffer(D: number, V: number): ComponentDef {
     });
   });
 }
+
+// ---- the store queue and the data memory -------------------------------------------------------------------------------
+
+/** A 4-bit word rotated right by k (bit j of y = bit (j + k) mod 4 of x): an entry's position from the queue's head. */
+export const ROT4: ComponentDef = (() => {
+  const b = new Builder(12, 12);
+  b.pins('x', 'k');
+  const s = b.op(splitter([1, 1, 1, 1]), ['x'], undefined, 's');
+  b.next();
+  const rot = [0, 1, 2, 3].map((k) => b.op1(merger([1, 1, 1, 1]), [0, 1, 2, 3].map((j) => `${s}.o${(j + k) % 4}`), undefined, `r${k}`));
+  b.next();
+  b.wire(b.op1(muxTree(2, 4), [...rot, 'k'], undefined, 'm'), 'y');
+  const R = b.right;
+  return define({
+    id: 'rot4', name: '4-bit rotate', category: 'routing',
+    summary: 'Rotates a 4-bit word right by 0 to 3 places: in a circular queue, entry (head + j) moves to position j, the oldest first.',
+    ports: [bus('x', 4, 'in'), bus('k', 2, 'in'), bus('y', 4, 'out')],
+    symbol: { kind: 'box', label: 'ROT' },
+    spec: ([x, k]) => [((x >> k) | (x << (4 - k))) & 15],
+    netlist: () => ({ pins: { x: [0, 2], k: [0, 4], y: [R, 2] }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** The inverse rotation: left by k. */
+export const ROT4L: ComponentDef = (() => {
+  const b = new Builder(12, 12);
+  b.pins('x', 'k');
+  const s = b.op(splitter([1, 1, 1, 1]), ['x'], undefined, 's');
+  b.next();
+  const rot = [0, 1, 2, 3].map((k) => b.op1(merger([1, 1, 1, 1]), [0, 1, 2, 3].map((j) => `${s}.o${(j - k + 4) % 4}`), undefined, `r${k}`));
+  b.next();
+  b.wire(b.op1(muxTree(2, 4), [...rot, 'k'], undefined, 'm'), 'y');
+  const R = b.right;
+  return define({
+    id: 'rot4l', name: '4-bit rotate left', category: 'routing',
+    summary: 'Rotates a 4-bit word left by 0 to 3 places: a queue position back to its entry (position j is entry head + j).',
+    ports: [bus('x', 4, 'in'), bus('k', 2, 'in'), bus('y', 4, 'out')],
+    symbol: { kind: 'box', label: 'ROT←' },
+    spec: ([x, k]) => [((x << k) | (x >> (4 - k))) & 15],
+    netlist: () => ({ pins: { x: [0, 2], k: [0, 4], y: [R, 2] }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** The youngest of the older stores that match: a mask by queue position (0 = the oldest), the first k of them older. */
+export const YOUNGEST_OLDER: ComponentDef = (() => {
+  const b = new Builder(14, 14);
+  b.pins('m', 'k');
+  const ms = b.op(splitter([1, 1, 1, 1]), ['m'], undefined, 'ms'), ks = b.op(splitter([1, 1, 1]), ['k'], undefined, 'ks');
+  b.next();
+  // older[j]: j < k (k = 0 … 4)
+  const k0 = `${ks}.o0`, k1 = `${ks}.o1`, k2 = `${ks}.o2`;
+  const o0 = b.op1(orN(3), [k0, k1, k2], undefined, 'o0');
+  const o1 = b.op1(OR, [k1, k2], undefined, 'o1');
+  const o2 = b.op1(OR, [b.op1(AND, [k1, k0], undefined, 'k3'), k2], undefined, 'o2');
+  const o3 = k2;
+  b.next();
+  const c = [o0, o1, o2, o3].map((o, j) => b.op1(AND, [`${ms}.o${j}`, o], undefined, `c${j}`));
+  b.next();
+  // the highest such position: reverse, lowest one, reverse back
+  const low = b.op(lowestOne(4), [b.op1(merger([1, 1, 1, 1]), [c[3], c[2], c[1], c[0]], undefined, 'rev')], undefined, 'low');
+  b.next();
+  const ls = b.op(splitter([1, 1, 1, 1]), [`${low}.y`], undefined, 'ls');
+  b.next();
+  b.wire(b.op1(merger([1, 1, 1, 1]), [`${ls}.o3`, `${ls}.o2`, `${ls}.o1`, `${ls}.o0`], undefined, 'y'), 'y');
+  b.wire(`${low}.any`, 'hit');
+  const R = b.right;
+  return define({
+    id: 'youngestolder', name: 'Youngest older match', category: 'cpu',
+    summary: 'Among the matching stores, by position in the queue (0 the oldest), the youngest of the first k: the stores older than the load. Store-to-load forwarding takes its data.',
+    ports: [bus('m', 4, 'in'), bus('k', 3, 'in'), bus('y', 4, 'out'), bit('hit', 'out')],
+    symbol: { kind: 'box', label: 'YOUNGEST' },
+    spec: ([m, k]) => {
+      let y = 0;
+      for (let j = 0; j < Math.min(k, 4); j++) if ((m >> j) & 1) y = 1 << j;
+      return [y, y ? 1 : 0];
+    },
+    netlist: () => ({ pins: { m: [0, 2], k: [0, 4], y: [R, 2], hit: [R, 4] }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/**
+ * The store queue: 4 stores in program order (head and count; 3-bit pointers so a full queue is told from an empty
+ * one). Dispatch appends the pair's stores (al0: slot 0's, al1: slot 1's); a store's execution writes its address
+ * and data by index and marks it done at the end of that cycle; commit drains the head (one a cycle) into memory
+ * (memWe / memAddr / memData); a flush drops what is left after this cycle's commit. A load's forwarding: of the
+ * stores older than it (those before the tail it saw at dispatch, ltail) the youngest with its word address, if
+ * any. pend: entries holding a store not yet executed (a dispatched load waits for those); done: executed.
+ */
+export const STORE_QUEUE: ComponentDef = (() => {
+  const E = 1 + 30 + 32; // done, word address, data
+  const b = new Builder(18, 24, 4);
+  const ins = ['al0', 'al1', 'sw', 'sidx', 'saddr', 'sdata', 'cs', 'flush', 'ltail', 'laddr', 'clk'];
+  b.pins(...ins);
+  const one = b.op1(TIE1, [], undefined, 'one'), zero = b.op1(TIE0, [], undefined, 'zero');
+  const k0 = (w: number, nm: string) => b.op1(constWord(w, 0), [], undefined, nm);
+  const hs = b.op(splitter([2, 1]), ['head.q'], undefined, 'hs');
+  const tail = b.name(b.op1(rca(3), ['head.q', 'cnt.q', zero], undefined, 'tail'), 'tail', true);
+  const tl = b.op(splitter([2, 1]), [tail], undefined, 'tl');
+  const t1 = b.op1(incrementer(2), [`${tl}.o0`], undefined, 'tail1');
+  const sa = b.op(splitter([2, 30]), ['saddr'], undefined, 'sa');
+  const la = b.op(splitter([2, 30]), ['laddr'], undefined, 'la');
+  b.next();
+  // where each dispatched store goes: slot 0's at the tail, slot 1's after it (or at the tail alone)
+  const at1 = b.op1(busMux2(2), [`${tl}.o0`, t1, 'al0'], undefined, 'at1');
+  b.op(decoder(2, true, 4), [`${tl}.o0`, 'al0'], 'slot 0', 'd0');
+  b.op(decoder(2, true, 4), [at1, 'al1'], 'slot 1', 'd1');
+  b.op(decoder(2, true, 4), ['sidx', 'sw'], 'execute', 'dx');
+  b.next();
+  const entry = b.op1(merger([1, 30, 32]), [one, `${sa}.o1`, 'sdata'], undefined, 'exec');
+  const qs: string[] = [], dones: string[] = [], vs: string[] = [];
+  const cs = b.op(splitter([1, 1, 1, 1]), [b.op1(cntMask(), ['cnt.q', `${hs}.o0`], undefined, 'occ')], undefined, 'occs');
+  for (let e = 0; e < 4; e++) {
+    // dispatch clears the entry (not done); execution fills it; else it holds
+    const al = b.op1(OR, [`d0.y${e}`, `d1.y${e}`], undefined, `al${e}`);
+    const cleared = b.op1(busMux2(E), [`q${e}.q`, k0(E, `ze${e}`), al], undefined, `cl${e}`);
+    b.op(register(E), [b.op1(busMux2(E), [cleared, entry, `dx.y${e}`], undefined, `n${e}`), one, 'clk'], `store ${e}`, `q${e}`);
+    const f = b.op(splitter([1, 30, 32]), [`q${e}.q`], undefined, `f${e}`);
+    qs.push(f); dones.push(b.op1(AND, [`${f}.o0`, `${cs}.o${e}`], undefined, `dn${e}`)); vs.push(`${cs}.o${e}`);
+  }
+  b.next();
+  const doneV = b.op1(merger([1, 1, 1, 1]), dones, undefined, 'doneV');
+  const pend = b.op1(merger([1, 1, 1, 1]), [0, 1, 2, 3].map((e) => b.op1(AND, [vs[e], b.op1(NOT, [`${qs[e]}.o0`], undefined, `nd${e}`)], undefined, `p${e}`)), undefined, 'pendV');
+  // forwarding: matches by entry, then by position from the head; the older ones are the first (ltail - head)
+  const match = b.op1(merger([1, 1, 1, 1]), [0, 1, 2, 3].map((e) => b.op1(andN(3), [vs[e], `${qs[e]}.o0`, b.op1(equal(30), [`${qs[e]}.o1`, `${la}.o1`], undefined, `eq${e}`)], undefined, `m${e}`)), undefined, 'matchV');
+  b.next();
+  const older = b.op1(addSub(3), ['ltail', 'head.q', one], undefined, 'older');
+  const pos = b.op1(ROT4, [match, `${hs}.o0`], undefined, 'pos');
+  b.next();
+  const yo = b.op(YOUNGEST_OLDER, [pos, older], undefined, 'yo');
+  b.next();
+  const pick = b.op1(ROT4L, [`${yo}.y`, `${hs}.o0`], undefined, 'pick');
+  b.next();
+  b.wire(b.op1(onehotMux(4, 32), [pick, ...qs.map((f) => `${f}.o2`)], undefined, 'fdata'), 'fwdData');
+  b.wire(`${yo}.hit`, 'fwdHit');
+  // commit: the head store to memory
+  const hd = b.op(splitter([1, 30, 32]), [b.op1(muxTree(2, E), [...[0, 1, 2, 3].map((e) => `q${e}.q`), `${hs}.o0`], undefined, 'headE')], undefined, 'hd');
+  b.wire(b.op1(merger([2, 30]), [k0(2, 'z2'), `${hd}.o1`], undefined, 'maddr'), 'memAddr');
+  b.wire(`${hd}.o2`, 'memData');
+  b.wire('cs', 'memWe');
+  b.next();
+  // pointers: head += commit, count += stores dispatched − commit (a flush: none left)
+  const nA = b.op1(merger([1, 1]), [b.op1(XOR, ['al0', 'al1'], undefined, 'na1'), b.op1(AND, ['al0', 'al1'], undefined, 'na2')], undefined, 'nA');
+  const headN = b.op1(rca(3), ['head.q', b.op1(merger([1, 2]), ['cs', k0(2, 'z2b')], undefined, 'cs3'), zero], undefined, 'headN');
+  const plus = b.op1(addSub(3), ['cnt.q', b.op1(merger([2, 1]), [nA, k0(1, 'z1')], undefined, 'nA3'), zero], undefined, 'plus');
+  b.next();
+  const minus = b.op1(addSub(3), [plus, b.op1(merger([1, 2]), ['cs', k0(2, 'z2c')], undefined, 'cs3b'), one], undefined, 'minus');
+  b.next();
+  const cntN = b.op1(busMux2(3), [minus, k0(3, 'z3'), 'flush'], undefined, 'cntN');
+  b.next();
+  b.op(register(3), [headN, one, 'clk'], 'head', 'head');
+  b.op(register(3), [cntN, one, 'clk'], 'count', 'cnt');
+  b.next();
+  const cnt = b.op(splitter([1, 1, 1]), ['cnt.q'], undefined, 'cn');
+  b.wire(b.op1(NOT, [`${cnt}.o2`], undefined, 'room1'), 'free1');
+  b.wire(b.op1(NOT, [b.op1(OR, [`${cnt}.o2`, b.op1(AND, [`${cnt}.o1`, `${cnt}.o0`], undefined, 'is3')], undefined, 'atLeast3')], undefined, 'room2'), 'free2');
+  b.wire(tail, 'tail'); b.wire(`${tl}.o0`, 'idx0'); b.wire(at1, 'idx1'); b.wire(pend, 'pend'); b.wire(doneV, 'done');
+  const R0 = b.right;
+  const W: Record<string, number> = { sidx: 2, saddr: 32, sdata: 32, ltail: 3, laddr: 32 };
+  const outs: [string, number][] = [['free1', 1], ['free2', 1], ['tail', 3], ['idx0', 2], ['idx1', 2], ['pend', 4], ['done', 4], ['fwdHit', 1], ['fwdData', 32], ['memWe', 1], ['memAddr', 32], ['memData', 32]];
+  return define({
+    id: 'storeq4', name: 'Store queue (4 entries)', category: 'cpu',
+    summary: 'Stores wait here from dispatch to commit: executing writes their address and data, commit drains the oldest into the data memory, one a cycle, so memory only ever changes in program order. A load meanwhile takes its value from the youngest older store to the same word, if there is one (store-to-load forwarding).',
+    ports: [...ins.map((n) => (n === 'clk' ? bit('clk', 'in', 'bottom', true) : W[n] ? bus(n, W[n], 'in') : bit(n, 'in'))), ...outs.map(([n, w]) => (w > 1 ? bus(n, w, 'out') : bit(n, 'out')))],
+    symbol: { kind: 'box', label: 'STORE QUEUE' },
+    netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), ...Object.fromEntries(outs.map(([n], i) => [n, [R0, 2 + 2 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** Which of the 4 queue entries hold a store: the `count` entries from the head (circular). */
+function cntMask(): ComponentDef {
+  return memo('sqocc', () => {
+    const b = new Builder(12, 12);
+    b.pins('cnt', 'head');
+    // position j holds a store when j < count; entry e is position (e - head) mod 4
+    const k = b.op(splitter([1, 1, 1]), ['cnt'], undefined, 'k');
+    b.next();
+    const o0 = b.op1(orN(3), [`${k}.o0`, `${k}.o1`, `${k}.o2`], undefined, 'o0'), o1 = b.op1(OR, [`${k}.o1`, `${k}.o2`], undefined, 'o1');
+    const o2 = b.op1(OR, [b.op1(AND, [`${k}.o1`, `${k}.o0`], undefined, 'k3'), `${k}.o2`], undefined, 'o2');
+    b.next();
+    const posMask = b.op1(merger([1, 1, 1, 1]), [o0, o1, o2, `${k}.o2`], undefined, 'pm');
+    b.next();
+    b.wire(b.op1(ROT4L, [posMask, 'head'], undefined, 'y'), 'y');
+    const R = b.right;
+    return define({
+      id: 'sqocc', name: 'Queue occupancy', category: 'cpu',
+      summary: 'Which entries of a 4-entry circular queue hold something: count of them, from the head on.',
+      ports: [bus('cnt', 3, 'in'), bus('head', 2, 'in'), bus('y', 4, 'out')],
+      symbol: { kind: 'box', label: 'IN USE' },
+      spec: ([c, h]) => { let y = 0; for (let j = 0; j < Math.min(c, 4); j++) y |= 1 << ((h + j) % 4); return [y]; },
+      netlist: () => ({ pins: { cnt: [0, 2], head: [0, 4], y: [R, 2] }, instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
+/**
+ * The out-of-order core's data memory: 2^k words read at one address (a load) while another is written (a store
+ * draining at commit). Its words are w0 … in `ram` (a register file without a hard-wired zero), as every data memory's,
+ * so the readers find them.
+ */
+export function dataMemory2(k: number): ComponentDef {
+  return memo(`dmem2_${k}`, () => {
+    const RF = regfile(k, 32, false), rg = symbolGeom(RF);
+    const b = new Builder(12, 14);
+    b.pins('raddr', 'waddr', 'wd', 'we', 'clk');
+    const ra = b.op(splitter([2, k, 30 - k]), ['raddr'], undefined, 'ra'), wa = b.op(splitter([2, k, 30 - k]), ['waddr'], undefined, 'wa');
+    b.next();
+    b.op(RF, [`${wa}.o1`, `${ra}.o1`, `${ra}.o1`, 'wd', 'we', 'clk'], 'words', 'ram');
+    b.next();
+    b.wire('ram.rd1', 'rd');
+    void rg;
+    const R = b.right;
+    return define({
+      id: `dmem2_${k}`, name: 'Data memory (read and write port)', category: 'memory',
+      summary: `${2 ** k} words. A load reads one address while a committing store writes another, in the same cycle: separate read and write ports.`,
+      ports: [bus('raddr', 32, 'in'), bus('waddr', 32, 'in'), bus('wd', 32, 'in'), bit('we', 'in'), bit('clk', 'in', 'bottom', true), bus('rd', 32, 'out')],
+      symbol: { kind: 'box', label: 'DATA MEMORY' },
+      netlist: () => ({ pins: { raddr: [0, 2], waddr: [0, 4], wd: [0, 6], we: [0, 8], clk: [0, 10], rd: [R, 2] }, instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
+// ---- arrays drawn as rows on shared wires ---------------------------------------------------------------------------
+
+/**
+ * Rows of one part stacked at one pitch, the shared inputs on vertical trunks at the left (pins at the bottom-left),
+ * a per-row constant (the row's own number) beside each row, every row's output bundled into one word at the right:
+ * drawn with wires, as the register files are, rather than with a label per row.
+ */
+function rowArray(o: {
+  id: string; name: string; summary: string; label: string; row: ComponentDef | ((r: number) => ComponentDef); n: number; first?: number;
+  /** The row input taking a constant (the row's number), and its width; none if absent. */
+  me?: { port: string; width: number };
+  /** Bundled output: the rows' `out`, entry 0 (or a constant for the rows below `first`) first. */
+  out: string; outWidth: number; zeroBelow?: boolean;
+  /** Ports, and which row input each shared input feeds (same name if absent). */
+  shared: PortDef[];
+}): ComponentDef {
+  const { n } = o, first = o.first ?? 0, rowOf = typeof o.row === 'function' ? o.row : () => o.row as ComponentDef, rg = symbolGeom(rowOf(first));
+  const P = rg.h + 2, top = (r: number) => 2 + r * P;
+  const inPorts = o.shared.filter((p) => p.dir === 'in');
+  const xT = (k: number) => 6 + 2 * k, xC = 6 + 2 * inPorts.length + 4, xRow = xC + 12;
+  const instances: InstanceDef[] = [], nets: NetDef[] = [];
+  const outY = (r: number) => top(r) + rg.ports[o.out].pos[1];
+  const xQ = xRow + rg.w + 6, mqTop = outY(0) - P / 2;
+  instances.push({ name: 'bundle', def: merger(Array(n).fill(o.outWidth), P), at: [xQ, mqTop] });
+  const sinks = new Map<string, string[]>(inPorts.map((p) => [p.name, [p.name]]));
+  for (let r = 0; r < n; r++) {
+    if (r < first) {
+      instances.push({ name: `z${r}`, def: constWord(o.outWidth, 0), at: [xRow + rg.w - 6, outY(r) - 1], label: `${r}: none` });
+      nets.push({ name: `q${r}`, ends: [`z${r}.y`, `bundle.i${r}`] });
+      continue;
+    }
+    instances.push({ name: `r${r}`, def: rowOf(r), at: [xRow, top(r)], label: `${r}` });
+    if (o.me) {
+      const k = constWord(o.me.width, r), kg = symbolGeom(k);
+      instances.push({ name: `k${r}`, def: k, at: [xC, top(r) + rg.ports[o.me.port].pos[1] - kg.ports.y.pos[1]] });
+      nets.push({ name: `me${r}`, ends: [`k${r}.y`, `r${r}.${o.me.port}`] });
+    }
+    for (const p of inPorts) sinks.get(p.name)!.push(`r${r}.${p.name}`);
+    nets.push({ name: `q${r}`, ends: [`r${r}.${o.out}`, `bundle.i${r}`] });
+  }
+  inPorts.forEach((p, k) => nets.push({ name: p.name, ends: sinks.get(p.name)!, trunk: xT(k) }));
+  const outP = o.shared.filter((p) => p.dir === 'out');
+  nets.push({ name: outP[0].name, ends: ['bundle.out', outP[0].name] });
+  const bottom = top(n) + 4;
+  return define({
+    id: o.id, name: o.name, category: 'cpu', summary: o.summary, ports: o.shared,
+    symbol: { kind: 'box', label: o.label },
+    netlist: () => ({
+      pins: { ...Object.fromEntries(inPorts.map((p, k) => [p.name, [0, bottom + 2 * k] as [number, number]])), [outP[0].name]: [xQ + 10, mqTop + (n * P) / 2] },
+      instances, nets,
+    }),
+  });
+}
+
+/**
+ * One register of the rename table, with its own name decoding: it is mapped when a dispatch slot's destination
+ * is this register (me), unmapped when a committing instruction's destination is, and it still names it.
+ */
+export const RAT_ROW: ComponentDef = (() => {
+  const b = new Builder(16, 18);
+  const ins = ['me', 'rd0', 'wr0', 'tag0', 'rd1', 'wr1', 'tag1', 'crd0', 'un0', 'crd1', 'un1', 'flush', 'clk'];
+  b.pins(...ins);
+  const one = b.op1(TIE1, [], undefined, 'one');
+  const hit = (rd: string, en: string, nm: string) => b.op1(AND, [b.op1(equal(5), ['me', rd], undefined, `is${nm}`), en], undefined, nm);
+  const w0 = hit('rd0', 'wr0', 'w0'), w1 = hit('rd1', 'wr1', 'w1'), u0 = hit('crd0', 'un0', 'u0'), u1 = hit('crd1', 'un1', 'u1');
+  b.next();
+  const clr = b.op1(OR, [u0, u1], undefined, 'clr');
+  b.next();
+  const nx = b.op1(RAT_CELL, ['map.q', w0, 'tag0', w1, 'tag1', clr, 'flush'], undefined, 'next');
+  b.next();
+  b.op(register(1 + TAG), [nx, one, 'clk'], 'mapping', 'map');
+  b.wire('map.q', 'q');
+  const R = b.right;
+  const W: Record<string, number> = { me: 5, rd0: 5, tag0: TAG, rd1: 5, tag1: TAG, crd0: 5, crd1: 5 };
+  return define({
+    id: 'ratrow', name: 'Rename-table row', category: 'cpu',
+    summary: 'One register\'s mapping, with its own name: a dispatch slot whose destination is this register maps it, a committing instruction whose destination it is unmaps it (if it still names that instruction), a flush unmaps it.',
+    ports: [...ins.map((n) => (n === 'clk' ? bit('clk', 'in', 'bottom', true) : W[n] ? bus(n, W[n], 'in') : bit(n, 'in'))), bus('q', 1 + TAG, 'out')],
+    symbol: { kind: 'box', label: 'MAPPING' },
+    netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), q: [R, 2] }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** The rename table's 31 rows (x0 never mapped), bundled: 32 × {mapped, tag}. */
+export const RAT_ARRAY: ComponentDef = rowArray({
+  id: 'ratarray', name: 'Rename-table rows', label: 'MAPPINGS', row: RAT_ROW, n: 32, first: 1, me: { port: 'me', width: 5 }, out: 'q', outWidth: 1 + TAG,
+  summary: 'The 31 registers\' mappings, one row each on shared wires: every row recognizes its own register number among the dispatch and commit destinations.',
+  shared: [bus('rd0', 5, 'in'), bit('wr0', 'in'), bus('tag0', TAG, 'in'), bus('rd1', 5, 'in'), bit('wr1', 'in'), bus('tag1', TAG, 'in'), bus('crd0', 5, 'in'), bit('un0', 'in'),
+    bus('crd1', 5, 'in'), bit('un1', 'in'), bit('flush', 'in'), bit('clk', 'in', 'bottom', true), bus('maps', 32 * (1 + TAG), 'out')],
+});
+
+/**
+ * One row of the age matrix: entry i's 7 bits "i is older than j" (j ≠ i), from the allocations of this cycle (as
+ * AGE_CELL) and the entries' valid bits.
+ */
+export function ageRow(i: number): ComponentDef {
+  return memo(`agerow${i}`, () => {
+    const b = new Builder(18, 24, 3);
+    b.pins('alloc0', 'alloc1', 'alloc', 'valid', 'clk');
+    const one = b.op1(TIE1, [], undefined, 'one');
+    const s = (bus: string) => b.op(splitter(Array(8).fill(1)), [bus], undefined, `${bus}S`);
+    const a0 = s('alloc0'), a1 = s('alloc1'), al = s('alloc'), v = s('valid'), old = b.op(splitter(Array(7).fill(1)), ['bits.q'], undefined, 'oldS');
+    b.next();
+    const js = [0, 1, 2, 3, 4, 5, 6, 7].filter((j) => j !== i);
+    const cells = js.map((j, k) => b.op1(AGE_CELL, [`${old}.o${k}`, `${v}.o${i}`, `${a0}.o${i}`, `${al}.o${i}`, `${a1}.o${j}`, `${al}.o${j}`], `${i} older than ${j}`, `c${j}`));
+    b.next();
+    b.op(register(7), [b.op1(merger(Array(7).fill(1)), cells, undefined, 'nx'), one, 'clk'], `${i} older than`, 'bits');
+    b.wire('bits.q', 'older');
+    const R = b.right;
+    return define({
+      id: `agerow${i}`, name: `Age-matrix row ${i}`, category: 'cpu',
+      summary: `Whether entry ${i} holds an older instruction than each other entry, kept up to date as entries are allocated.`,
+      ports: [bus('alloc0', 8, 'in'), bus('alloc1', 8, 'in'), bus('alloc', 8, 'in'), bus('valid', 8, 'in'), bit('clk', 'in', 'bottom', true), bus('older', 7, 'out')],
+      symbol: { kind: 'box', label: `AGE ${i}` },
+      netlist: () => ({ pins: { alloc0: [0, 2], alloc1: [0, 4], alloc: [0, 6], valid: [0, 8], clk: [0, 10], older: [R, 2] }, instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
+/** The issue queue's age matrix: for every pair of entries, which holds the older instruction (56 bits, ageBit). */
+export const AGE_ARRAY: ComponentDef = rowArray({
+  id: 'agearray', name: 'Age-matrix rows', label: 'AGE ROWS', row: ageRow, n: 8, out: 'older', outWidth: 7,
+  summary: 'The age matrix as eight rows on shared wires, row i holding whether entry i is older than each other entry.',
+  shared: [bus('alloc0', 8, 'in'), bus('alloc1', 8, 'in'), bus('alloc', 8, 'in'), bus('valid', 8, 'in'), bit('clk', 'in', 'bottom', true), bus('older', 56, 'out')],
+});
+
+export const AGE8: ComponentDef = (() => {
+  const b = new Builder(16, 18);
+  b.pins('alloc0', 'alloc1', 'valid', 'clk');
+  const al = b.op1(bitwise('or', 8), ['alloc0', 'alloc1'], 'allocated', 'al');
+  b.next();
+  b.op(AGE_ARRAY, ['alloc0', 'alloc1', al, 'valid', 'clk'], undefined, 'rows');
+  b.next();
+  b.wire('rows.older', 'older');
+  const R = b.right;
+  return define({
+    id: 'age8', name: 'Age matrix (8 entries)', category: 'cpu',
+    summary: 'Which of any two issue-queue entries holds the older instruction, one bit per ordered pair: a new entry is younger than every entry already there (and the second of a pair dispatched together younger than the first). Select uses it to find the oldest ready entry without keeping the queue in order.',
+    ports: [bus('alloc0', 8, 'in'), bus('alloc1', 8, 'in'), bus('valid', 8, 'in'), bit('clk', 'in', 'bottom', true), bus('older', 56, 'out')],
+    symbol: { kind: 'box', label: 'AGE MATRIX' },
+    netlist: () => ({ pins: { alloc0: [0, 2], alloc1: [0, 4], valid: [0, 6], clk: [0, 8], older: [R, 2] }, instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/**
+ * The rename table (P6 style: a register maps to the reorder-buffer entry of its youngest in-flight writer). Four
+ * lookups (two sources of each dispatch slot; slot 1's sources see slot 0's destination), two mappings a cycle, two
+ * unmappings at commit (only when the register still names the committing instruction: a younger writer keeps it),
+ * and a flush that unmaps everything. x0 is never mapped.
+ */
+export const RAT: ComponentDef = (() => {
+  const E = 1 + TAG, RP = readPort(5, E);
+  const b = new Builder(18, 24, 4);
+  const ins = ['rs1_0', 'rs2_0', 'rs1_1', 'rs2_1', 'rd0', 'we0', 'tag0', 'rd1', 'we1', 'tag1', 'crd0', 'cv0', 'ctag0', 'crd1', 'cv1', 'ctag1', 'flush', 'clk'];
+  b.pins(...ins);
+  const one = b.op1(TIE1, [], undefined, 'one');
+  // writes: x0 never
+  const wr0 = b.name(b.op1(AND, ['we0', b.op1(nonZero(5), ['rd0'], undefined, 'nz0')], undefined, 'wr0'), 'map0', true);
+  const wr1 = b.op1(AND, ['we1', b.op1(nonZero(5), ['rd1'], undefined, 'nz1')], undefined, 'wr1');
+  b.op(RP, ['rows.maps', 'crd0'], 'commit, older', 'rc0');
+  b.op(RP, ['rows.maps', 'crd1'], 'commit, younger', 'rc1');
+  b.next();
+  // a commit unmaps a register only if it still names the committing instruction
+  const unmap = (k: number) => {
+    const sp = b.op(splitter([1, TAG]), [`rc${k}.y`], undefined, `rcs${k}`);
+    const same = b.op1(equal(TAG), [`${sp}.o1`, `ctag${k}`], undefined, `same${k}`);
+    return b.op1(andN(3), [`cv${k}`, `${sp}.o0`, same], undefined, `un${k}`);
+  };
+  const un0 = unmap(0), un1 = unmap(1);
+  b.next();
+  b.op(RAT_ARRAY, ['rd0', wr0, 'tag0', 'rd1', wr1, 'tag1', 'crd0', un0, 'crd1', un1, 'flush', 'clk'], undefined, 'rows');
+  b.name('rows.maps', 'maps', true);
+  b.next();
+  // lookups: slot 1's sources see slot 0's destination
+  const look = ['rs1_0', 'rs2_0', 'rs1_1', 'rs2_1'].map((rs, i) => b.op1(RP, ['rows.maps', rs], `lookup ${rs}`, `rd${i}`));
+  b.next();
+  ['a0', 'b0', 'a1', 'b1'].forEach((nm, i) => {
+    let y = look[i];
+    if (i >= 2) {
+      const hit = b.op1(AND, [wr0, b.op1(equal(5), [['rs1_1', 'rs2_1'][i - 2], 'rd0'], undefined, `byp${i}e`)], undefined, `byp${i}`);
+      y = b.op1(busMux2(E), [y, b.op1(merger([1, TAG]), [one, 'tag0'], undefined, `t0m${i}`), hit], undefined, `by${i}`);
+    }
+    const sp = b.op(splitter([1, TAG]), [y], undefined, `os${i}`);
+    b.wire(`${sp}.o0`, `${nm}v`); b.wire(`${sp}.o1`, `${nm}t`);
+  });
+  const R0 = b.right;
+  const W: Record<string, number> = { rs1_0: 5, rs2_0: 5, rs1_1: 5, rs2_1: 5, rd0: 5, tag0: TAG, rd1: 5, tag1: TAG, crd0: 5, ctag0: TAG, crd1: 5, ctag1: TAG };
+  const outs = ['a0', 'b0', 'a1', 'b1'].flatMap((n): [string, number][] => [[`${n}v`, 1], [`${n}t`, TAG]]);
+  return define({
+    id: 'rat', name: 'Rename table', category: 'cpu',
+    summary: 'For each register, the reorder-buffer entry of the youngest instruction in flight that writes it, or none (the register file has the value). Dispatch looks up both instructions\' sources (the second sees the first\'s destination) and maps their destinations; a commit unmaps a register still naming the committing instruction; a flush unmaps them all.',
+    ports: [...ins.map((n) => (n === 'clk' ? bit('clk', 'in', 'bottom', true) : W[n] ? bus(n, W[n], 'in') : bit(n, 'in'))), ...outs.map(([n, w]) => (w > 1 ? bus(n, w, 'out') : bit(n, 'out')))],
+    symbol: { kind: 'box', label: 'RENAME TABLE' },
+    netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), ...Object.fromEntries(outs.map(([n], i) => [n, [R0, 2 + 2 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
+  });
+})();
