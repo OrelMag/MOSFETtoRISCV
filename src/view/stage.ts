@@ -22,7 +22,7 @@ import { switchSim, ViewCtx } from './context';
 import { Inspector } from './inspector';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber } from './popover';
-import { startFolded, type Rect } from './camera';
+import { roomBeside, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { SchematicView } from './schematic';
 
@@ -478,6 +478,11 @@ export class Stage {
     this.ctx = ctx;
     this.selected = null;
     this.view.show(ctx, ctx === this.rootCtx);
+    // Another level, another shape: the how-to line may fit beside it now, or no longer.
+    if (this.placeHint()) {
+      this.view.cover = this.covers();
+      this.view.fit();
+    }
     if (ctx === this.rootCtx && this.scene) this.view.highlight(this.scene.highlight ?? []);
     if (leafName) this.openLeaf(leafName);
     this.renderCrumbs();
@@ -1316,8 +1321,11 @@ export class Stage {
 
   /** The how-to line: above the bottom-left panels, and wrapped short of the right-docked panels beside it (it was
    *  cut off under the CPU panel); hidden when that leaves it no room, or would lift it into the canvas's top half
-   *  (a tall bottom-left panel, a phone), where it would cost the circuit more room than it is worth. */
-  private placeHint(): void {
+   *  (a tall bottom-left panel, a phone), where it would cost the circuit more room than it is worth, or when it
+   *  would leave the circuit no free area (a short canvas: the fit would take the whole canvas and the line would
+   *  hide the bottom pins). True when it was shown or hidden. */
+  private placeHint(): boolean {
+    const was = this.hint.hidden;
     const H = this.canvas.clientHeight, W = this.canvas.clientWidth;
     const c = this.canvas.getBoundingClientRect();
     const docked = [...this.dock.children].map((e) => e.getBoundingClientRect()).filter((r) => r.height > 0);
@@ -1333,6 +1341,8 @@ export class Stage {
     this.hint.style.bottom = `${bottom}px`;
     this.hint.style.maxWidth = `${W - right - 12}px`;
     this.hint.hidden = this.hint.dataset.off === '1' || W - right - 12 < 160 || (docked.length > 0 && lineTop < H / 2);
+    if (!this.hint.hidden && !roomBeside(this.view.contentBox(), W, H, this.covers())) this.hint.hidden = true;
+    return this.hint.hidden !== was;
   }
 
   /** Screen space the unfolded right-docked panels cover (with their 12 px margin and a 12 px gap).

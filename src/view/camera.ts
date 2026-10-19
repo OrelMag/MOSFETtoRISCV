@@ -36,6 +36,12 @@ export function startFolded(canvasW: number, panelW: number): boolean {
  * no free rectangle is MIN_FIT_PX wide and MIN_FIT_H high.
  */
 export function freeRect(width: number, height: number, cover: Rect[], bw: number, bh: number, gap = COVER_GAP): Rect {
+  return freeArea(width, height, cover, bw, bh, gap) ?? { x: 0, y: 0, w: width, h: height };
+}
+
+/** freeRect's choice, or null when no rectangle clear of the covers is MIN_FIT_PX wide and MIN_FIT_H high (the
+ *  drawing would be fitted to the whole host, under the covers). */
+export function freeArea(width: number, height: number, cover: Rect[], bw: number, bh: number, gap = COVER_GAP): Rect | null {
   const host: Rect = { x: 0, y: 0, w: width, h: height };
   const boxes = cover.map((c) => {
     const x0 = Math.max(0, c.x - gap), y0 = Math.max(0, c.y - gap);
@@ -57,7 +63,17 @@ export function freeRect(width: number, height: number, cover: Rect[], bw: numbe
       if (!best || s > bestS * (1 + 1e-9) || (s >= bestS * (1 - 1e-9) && r.w * r.h > best.w * best.h)) { best = r; bestS = s; }
     }
   }
-  return best ?? host;
+  return best;
+}
+
+/**
+ * Does `bbox` (widened to `minW` as fitBox does) keep a place of its own on a `width` × `height` px host beside
+ * these covers? False when the fit would fall back to the whole host and the covers would hide part of it: the
+ * stage's how-to line gives way then (a short canvas: a small phone, a scene's panels).
+ */
+export function roomBeside(bbox: ViewBox, width: number, height: number, cover: Rect[], minW = 34): boolean {
+  if (!(width > 0 && height > 0)) return true;
+  return freeArea(width, height, cover, Math.max(bbox.w, minW), bbox.h) !== null;
 }
 
 /** A right overlay `insetRight` px wide (gap included) as a cover of a `width` × `height` host. */
