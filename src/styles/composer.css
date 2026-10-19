@@ -1,6 +1,6 @@
 /* The instruction composer (widgets/composer.ts): chapter 13 and the sandbox's program editor. */
 
-.cmp { display: grid; gap: 10px; min-width: 0; container-type: inline-size; }
+div.cmp { display: grid; gap: 10px; min-width: 0; container-type: inline-size; }
 .cmp .f-bad { --fc: var(--bad); }
 .cmp .f-zero { --fc: var(--muted); }
 .cmp h4 { margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-2); }
