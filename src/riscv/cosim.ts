@@ -114,6 +114,10 @@ export interface PipeSnap {
   /** F D E M (X) W. */
   stages: string[];
   slots: { pc: number; valid: boolean }[];
+  /** A dual-issue pipeline's second lane (the younger instruction of each stage), stage by stage. */
+  slots1?: { pc: number; valid: boolean }[];
+  /** Dual issue: the pair in D split (the first went alone, the second moved up). */
+  split?: boolean;
   stall: boolean;
   flush: boolean;
   /** Forwarding selects of the E stage (0: register file, 1: from W, 2: from M, 3: from X). */
@@ -139,6 +143,25 @@ export function pipeSnap(sim: Pick<Sim, 'getBits'>, root: HierNode, cycle: numbe
     for (let i = bits.length - 1; i >= 0; i--) x = x * 2 + (bits[i] === 1 ? 1 : 0);
     return x;
   };
+  if (kids.has('FD1')) {
+    // the dual-issue pipeline: two lanes of registers (FD / FD1 …), forwarding selects 1 W0, 2 W1, 3 M0, 4 M1
+    const lane = (s: string) => [
+      { pc: (v('pc', 'q') + (s ? 4 : 0)) >>> 0, valid: s ? v('fctl', 'valid1') === 1 : true },
+      { pc: v(`FD${s}`, 'pcD'), valid: v(`FD${s}`, 'validD') === 1 },
+      { pc: v(`DE${s}`, 'pcE'), valid: v(`DE${s}`, 'validE') === 1 },
+      { pc: v(`EM${s}`, 'pcM'), valid: v(`EM${s}`, 'validM') === 1 },
+      { pc: v(`MW${s}`, 'pcW'), valid: v(`MW${s}`, 'validW') === 1 },
+    ];
+    const sel = [v('DE', 'fwdAE'), v('DE', 'fwdBE'), v('DE1', 'fwdAE'), v('DE1', 'fwdBE')];
+    const fromM = sel.some((x) => x === 3 || x === 4), fromW = sel.some((x) => x === 1 || x === 2);
+    return {
+      cycle, slots: lane(''), slots1: lane('1'), stages: ['F', 'D', 'E', 'M', 'W'],
+      stall: v('pctl', 'enFD') === 0, flush: v('pctl', 'redirect') === 1, split: v('pctl', 'shift') === 1,
+      // the grid's tags: any operand forwarded from M (fwdA = 2), any from W (fwdB = 1)
+      fwdA: fromM ? 2 : fromW ? 1 : 0, fwdB: fromM && fromW ? 1 : 0,
+      byp: ['A0', 'B0', 'A1', 'B1'].some((o) => v('hz', `byp${o}`) > 0),
+    };
+  }
   // the pipelined FPU CPU has a sixth stage, X, between M and W
   const six = kids.has('MX');
   const frozenPipe = !six && kids.has('gFl1');

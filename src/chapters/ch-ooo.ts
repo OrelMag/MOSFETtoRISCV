@@ -1,8 +1,37 @@
+import { cpuScene } from '../widgets/cpupanel';
 import { dataflowWidget, orderWidget, robWidget, scoreboardWidget, speculationWidget } from '../widgets/ooo';
 import type { Chapter } from './types';
 
 // Every number in the prose comes from riscv/ooomodel.ts, riscv/ilp.ts and riscv/scoreboard.ts on the programs
-// named; tests/ooo-chapter.test.ts recomputes them.
+// named; tests/ooo-chapter.test.ts recomputes them. The dual-issue pipeline's (step 2) come from the gate-level CPU
+// (src/bench/results.json; tests/pipe2w.test.ts).
+
+/** Step 2's program: two vectors filled, then their dot product (72) stored at 0x80. */
+export const DUAL_SOURCE = `# a[i] = i + 1 at 0x00, b[i] = 2 at 0x20 (8 words each), then a · b into 0x80
+        li   a0, 0
+        li   t0, 1
+        li   t1, 2
+        li   t3, 8
+fill:   sw   t0, 0(a0)
+        sw   t1, 32(a0)
+        addi t0, t0, 1
+        addi a0, a0, 4
+        addi t3, t3, -1
+        bnez t3, fill
+        li   a0, 0
+        li   a1, 32
+        li   t3, 8
+        li   s0, 0
+loop:   lw   t0, 0(a0)
+        lw   t1, 0(a1)
+        mul  t2, t0, t1
+        add  s0, s0, t2
+        addi a0, a0, 4
+        addi a1, a1, 4
+        addi t3, t3, -1
+        bnez t3, loop
+        sw   s0, 128(zero)
+halt:   j    halt`;
 
 export const chOoo: Chapter = {
   id: 'ooo', num: 24, title: 'Out of order', level: 'Processor',
@@ -63,10 +92,32 @@ export const chOoo: Chapter = {
       widget: dataflowWidget,
     },
     {
+      title: 'Two at a time, in order',
+      body: `
+        <p>The obvious first step is two pipelines side by side: the balanced RV32IM pipeline with prediction, twice.
+        <span data-show="imem">Fetch reads two words a cycle</span> (pc and pc + 4) and <span data-show="btb">the BTB
+        looks both up</span>; a slot predicted taken ends the pair. Decode issues the second instruction beside the first
+        unless <span data-show="pair">the pair check</span> says no: lane 1 has no data memory, multiplier or divider, a
+        pair carries at most one control instruction (one redirect, one predictor update), nothing pairs with a divide,
+        and the second may not read the first one's result. Then the first goes alone, and the second moves up a slot
+        while the PC holds for a cycle.</p>
+        <p>The rest is the single pipeline twice, wired across: <span data-show="rf">a register file with four read and
+        two write ports</span>, <span data-show="hz">forwarding from both lanes' M and W stages, the younger lane
+        first</span> (it wrote last), and a misprediction in lane 0 killing lane 1's instruction in E (it is younger).
+        Returns are predicted by a <span data-show="ras">4-entry return-address stack</span>. Up to two instructions
+        retire a cycle: the golden model steps once for each, and the diagram shows each stage's second lane under
+        it.</p>
+        <p>Measured on the benchmark set: 193 768 NANDs against 141 655 for one lane (+37 %), a clock period of 80 NAND
+        delays against 79, and CPI fib 1.13, sort 1.01, matmul 1.05, matmul-m 1.09, crc 0.97 against 1.35, 1.18,
+        1.30, 1.25, 1.23. Only 29 to 53 % of the instructions go in pairs; the others wait for a result, the one memory
+        lane or a branch. About a sixth less time for a third more gates.</p>`,
+      scene: () => cpuScene({ source: DUAL_SOURCE, wide: true, highlight: ['pair', 'hz', 'rf'] }),
+    },
+    {
       title: 'Where in-order stops',
       body: `
-        <p>The obvious first step is two pipelines side by side: fetch two instructions, issue both when they are
-        independent, else only the first. In order, the first instruction that waits stops everything behind it.</p>
+        <p>That pipeline is still in order: the first instruction that waits stops everything behind it, in both
+        lanes.</p>
         <p>Below, the dot product runs on two 2-wide machines with the same front end, ports and latencies. In order,
         the add waits for the multiply, and the next element's loads wait behind the add. Out of order, those loads go
         while the multiply runs. At load and multiply latency 2 that is CPI 1.14 against 0.91; at latency 4, 1.60

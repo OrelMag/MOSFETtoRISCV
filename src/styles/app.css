@@ -928,6 +928,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .bm-fam { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--series-1); }
 .bm-fam.multi { background: var(--series-2); }
 .bm-fam.pipe { background: var(--series-3); }
+.bm-fam.wide { background: var(--series-4); }
 .bm-dash { display: inline-block; width: 18px; border-top: 1.5px dashed var(--text-2); }
 .bm-chart { position: relative; padding: 4px 8px 8px; }
 .bm-chart svg { display: block; width: 100%; height: auto; }
@@ -938,6 +939,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .bm-dot { fill: var(--series-1); stroke: var(--surface); stroke-width: 2; }
 .bm-dot.multi { fill: var(--series-2); }
 .bm-dot.pipe { fill: var(--series-3); }
+.bm-dot.wide { fill: var(--series-4); }
 .bm-dot.off { fill-opacity: 0.18; stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 2 2; }
 .bm-hit { fill: transparent; cursor: default; }
 .bm-tip { position: absolute; pointer-events: none; transform: translate(-50%, calc(-100% - 12px)); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); white-space: nowrap; }
@@ -1137,6 +1139,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .pipe-grid { font: 11px var(--font-mono); overflow-x: auto; }
 .pg-row { display: flex; gap: 2px; margin-bottom: 2px; }
 .pg-st { width: 16px; color: var(--muted); font-weight: 700; flex: none; }
+.pg-row.lane1 .pg-st { font-weight: 400; }
 .pg-c { width: 46px; flex: none; text-align: center; border-radius: 4px; padding: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   background: hsl(var(--h, 220) 70% 50% / 0.18); color: var(--text); }
 .pg-row.head .pg-c { background: none; color: var(--muted); }

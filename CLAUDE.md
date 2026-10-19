@@ -199,7 +199,8 @@ src/lib/       the component library (registered in `registry` via define())
                  bigRamWithInit (initial words in the leaf's power-on state); romLevels (banks of 2^8-word ROMs,
                  shared by content hash, wordsHash); ramLeafState / ramWords for readers; kWords labels
   alu.ts         constWord, zext, wiring boxes, bitwise, orN, isZero, barrel shifter, alu(n)
-  regfile.ts     regfile(k, w) with x0 = 0, two read ports fed by one bundled word bus
+  regfile.ts     regfile(k, w) with x0 = 0, two read ports fed by one bundled word bus; regfile2w(k, w): 4 read, 2 write
+                 ports (writeSelect per register: port 1, the younger instruction, wins), w<i> names like regfile
   cpu.ts         single-cycle RV32I: rom (preferBehavior), dataMemory, IMM_GEN, OPCODE_DECODER,
                  CONTROL, NEXT_PC, PLUS4(_FAST), singleCycleCpu(program, { adder })
   fastadd.ts     gp / gray / black prefix cells, CLA4, koggeStone(n), addSubFast(n)
@@ -211,7 +212,19 @@ src/lib/       the component library (registered in `registry` via define())
   pipeline.ts    equal, nonZero, clearableRegister, pipeline registers (fields on fixed rows),
                  hazardUnit(lookAhead), BRANCH_CMP, BTB (16 × 62-bit), SAT_COUNTER, MISPREDICT,
                  pipelinedCpu(program, { adder, balanced, predictor, dcache, m }) (a cache miss in M freezes every stage;
-                 m: multiply split E/M, behaving like a load for hazards; divide stalls F/D/E)
+                 m: multiply split E/M, behaving like a load for hazards; divide stalls F/D/E); btbOf(1 | 2): the BTB with
+                 one or two fetch read ports (BTB = btbOf(1), unchanged)
+  pipe2w.ts      chapter 24's dual-issue in-order RV32IM pipeline: dualPipeCpu(program, { imemK, dmemK }) (pipe-2w): rom2 (two
+                 ROM reads, pc and pc + 4; not registered, like rom), PREDECODE (calls / returns from the word), FETCH_PRED (the
+                 pair's next PC: return stack, BTB, pc + 8; slot 1 only when slot 0 is not predicted taken), ISSUE_CLASS,
+                 PAIR_CHECK (slot 1 issues unless it needs lane 0's memory / multiplier / divider, is a second control
+                 instruction, follows a divide or reads slot 0's result: then hold and shift), HAZARD2 (look-ahead forwarding
+                 from both lanes' M and W, the younger first: 1 W0, 2 W1, 3 M0, 4 M1; W bypass; load-use stall), CONTROL_2W
+                 (instance pctl: redirect, stalls, shift, every enable / clear), UPDATE_2W, COMMIT_RAS; lane 0 keeps the
+                 single pipeline's instance names (ctl, byA, clr0, …), lane 1 adds a 1 (FD1, DE1, alu1, …); retire = the
+                 count, pcW0 the oldest; tests/pipe2w.test.ts (lock step), verify-wide.test.ts
+  ras.ts         the return-address stack: ras(n, w) (speculative + committed copies of {valid, address} entries,
+                 restore from the committed copy's next state; the model's rules: rasNext), rasStack(n, w)
   lsu.ts         STORE_ALIGN, LOAD_EXTRACT, bankedMemory(k) (byte / halfword access)
   system.ts      SYS_DECODE (illegal-instruction detection), CSR_UNIT, TRAP_UNIT, IO_UNIT,
                  systemCpu(program, { m }): the complete RV32I(M) + Zicsr + M-mode traps / interrupts + MMIO;
@@ -977,7 +990,7 @@ tests/verify/  CPU verification (docs/VERIFICATION.md): cpus.ts (every RV32 CPU 
 
 ### CPU scenes
 
-`cpuScene({ source, pipeline?, system?, m?, dcache?, multicycle?, adder?, timing? })` (widgets/cpupanel.ts) builds a CPU scene
+`cpuScene({ source, pipeline?, system?, m?, dcache?, multicycle?, adder?, timing?, wide? })` (widgets/cpupanel.ts) builds a CPU scene
 with the CPU panel (listing, registers, memory, golden-model lock-step) and optionally the
 pipeline diagram and the static-timing panel. Panels observe clock edges through
 `stage.edgeHooks` (before / after every rising edge), so they stay correct during fast runs.

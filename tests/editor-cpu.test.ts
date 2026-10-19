@@ -13,6 +13,7 @@ import { sanitizeChip } from '../src/editor/store';
 import { singleCycleCpu } from '../src/lib/cpu';
 import { multicycleCpu } from '../src/lib/multicycle';
 import { pipelinedCpu } from '../src/lib/pipeline';
+import { dualPipeCpu } from '../src/lib/pipe2w';
 import { assemble } from '../src/riscv/asm';
 import { ISS } from '../src/riscv/iss';
 import { PROGRAMS } from '../src/riscv/programs';
@@ -168,6 +169,22 @@ describe('golden model in lock-step', { timeout: 60000 }, () => {
     expect(m.mismatch).toBeNull();
     expect(m.iss!.halted).toBe(true);
     const g = golden(words);
+    expect(m.read()!.x).toEqual([...g.x].map((v) => v >>> 0));
+    expect(m.read()!.dmem).toEqual([...g.dmem]);
+  });
+
+  it('dual issue: a 2-bit retire count steps the model once per instruction retired', () => {
+    const words = prog('fib');
+    const c = open(dualPipeCpu(words));
+    // the two-port instruction memory is a chip holding the two ROM reads: found with the workspace's chips
+    expect(detectCpu(c.doc(), c.ws.chips)).toMatchObject({ rom: 'imem.p0', retire: { pin: expect.any(String) }, pipeline: true });
+    const m = new CpuMonitor(c.es, c.doc, () => c.ws.chips);
+    while (!m.done && c.es.cycles < 3000) m.runToHalt(Infinity);
+    expect(m.mismatch).toBeNull();
+    expect(m.iss!.halted).toBe(true);
+    const g = golden(words);
+    expect(m.retired).toBe(g.steps);
+    expect(m.retired).toBeGreaterThan(c.es.cycles * 0.5); // more than one a cycle at times
     expect(m.read()!.x).toEqual([...g.x].map((v) => v >>> 0));
     expect(m.read()!.dmem).toEqual([...g.dmem]);
   });

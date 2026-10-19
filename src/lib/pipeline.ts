@@ -391,7 +391,17 @@ export const SAT_COUNTER: ComponentDef = define({
  * Branch target buffer: 16 entries of {valid, tag, target, 2-bit counter, is-jump}, built like
  * the register file (decoder + registers + two read ports). Read in F (predict), written in E.
  */
-export const BTB: ComponentDef = (() => {
+export const BTB: ComponentDef = btbOf(1);
+
+/**
+ * The BTB with one fetch read port (the pipelines'), or two (the dual-issue pipeline's: the slots at pc and
+ * pc + 4 are looked up at once; port 1 is pcF1 → predTaken1 / predTarget1). One update port either way.
+ */
+export function btbOf(fetchPorts: 1 | 2): ComponentDef {
+  return memo(`btb_${fetchPorts}`, () => buildBtb(fetchPorts));
+}
+
+function buildBtb(nF: 1 | 2): ComponentDef {
   const K = 4, N = 16, W = 1 + 26 + 32 + 2 + 1; // valid, tag, target, ctr, jmp
   const R = register(W);
   const rg = symbolGeom(R);
@@ -407,47 +417,72 @@ export const BTB: ComponentDef = (() => {
   const xQ = xR + rg.w + 6;
   const mqTop = qY(0) - P / 2;
   const xP = xQ + 8;
-  const rpF: [number, number] = [xP, mqTop + 10];
-  const rpE: [number, number] = [xP, rpF[1] + rpg.h + 20];
+  // fetch read port f (port 0 keeps the one-port BTB's part names), then the update port below
+  const rpFs: [number, number][] = Array.from({ length: nF }, (_, f) => [xP, mqTop + 10 + f * (rpg.h + 20)]);
+  const sfx = (f: number) => (f ? String(f) : '');
+  const rpF = rpFs[0];
+  const rpE: [number, number] = [xP, rpFs[nF - 1][1] + rpg.h + 20];
+  const fetchInst = (f: number): InstanceDef[] => {
+    const at = rpFs[f], s = sfx(f);
+    return [
+      { name: `fF${s}`, def: splitter([1, 26, 32, 1, 1, 1]), at: [xP + rpg.w + 6, at[1] + rpg.ports.y.pos[1] - 6] },
+      { name: `hitF${s}`, def: equal(26), at: [xP + rpg.w + 24, at[1] - 5] },
+      { name: `vF${s}`, def: AND, at: [xP + rpg.w + 40, at[1] - 4] },
+      { name: `dir${s}`, def: OR, at: [xP + rpg.w + 40, at[1] + 4] },
+      { name: `pt${s}`, def: AND, at: [xP + rpg.w + 48, at[1]] },
+    ];
+  };
+  const fetchNets = (f: number): NetDef[] => {
+    const s = sfx(f);
+    return [
+      { name: `entryF${s}`, ends: [`rdF${s}.y`, `fF${s}.in`] },
+      { name: `validF${s}`, ends: [`fF${s}.o0`, `vF${s}.a`], tags: true },
+      { name: `storedTagF${s}`, ends: [`fF${s}.o1`, `hitF${s}.b`] },
+      { name: `predTarget${s}`, ends: [`fF${s}.o2`, `predTarget${s}`], tags: true },
+      { name: `ctrF${s}[1]`, ends: [`fF${s}.o4`, `dir${s}.b`], tags: true },
+      { name: `jmpF${s}`, ends: [`fF${s}.o5`, `dir${s}.a`], tags: true },
+      { name: `tagEqF${s}`, ends: [`hitF${s}.eq`, `vF${s}.b`] },
+      { name: `hitF${s}`, ends: [`vF${s}.y`, `pt${s}.a`], tags: true },
+      { name: `dirF${s}`, ends: [`dir${s}.y`, `pt${s}.b`] },
+      { name: `predTaken${s}`, ends: [`pt${s}.y`, `predTaken${s}`], tags: true },
+    ];
+  };
+  const two = nF === 2;
+  const f0 = fetchInst(0), f1 = two ? fetchInst(1) : [];
   const instances: InstanceDef[] = [
     { name: 'dec', def: D, at: dAt },
     { name: 'bundle', def: merger(Array(N).fill(W), P), at: [xQ, mqTop] },
-    { name: 'rdF', def: RP, at: rpF, label: 'read (fetch)' },
+    { name: 'rdF', def: RP, at: rpF, label: two ? 'read (fetch, pc)' : 'read (fetch)' },
+    ...(two ? [{ name: 'rdF1', def: RP, at: rpFs[1], label: 'read (fetch, pc + 4)' }] : []),
     { name: 'rdE', def: RP, at: rpE, label: 'read (update)' },
     { name: 'spF', def: splitter([2, K, 26]), at: [4, -7] },
+    ...(two ? [{ name: 'spF1', def: splitter([2, K, 26]), at: [4, -17] as [number, number] }] : []),
     { name: 'spE', def: splitter([2, K, 26]), at: [4, 3] },
-    { name: 'fF', def: splitter([1, 26, 32, 1, 1, 1]), at: [xP + rpg.w + 6, rpF[1] + rpg.ports.y.pos[1] - 6] },
+    f0[0],
     { name: 'fE', def: splitter(fields), at: [xP + rpg.w + 6, rpE[1] + rpg.ports.y.pos[1] - 5] },
-    { name: 'hitF', def: equal(26), at: [xP + rpg.w + 24, rpF[1] - 5] },
+    f0[1],
     { name: 'hitE', def: equal(26), at: [xP + rpg.w + 24, rpE[1] - 4] },
-    { name: 'vF', def: AND, at: [xP + rpg.w + 40, rpF[1] - 4] },
+    f0[2],
     { name: 'vE', def: AND, at: [xP + rpg.w + 40, rpE[1] - 4] },
-    { name: 'dir', def: OR, at: [xP + rpg.w + 40, rpF[1] + 4] },
-    { name: 'pt', def: AND, at: [xP + rpg.w + 48, rpF[1]] },
+    f0[3], f0[4], ...f1,
     { name: 'ctr', def: SAT_COUNTER, at: [xP + rpg.w + 48, rpE[1] + 4] },
     { name: 'one', def: TIE1, at: [6, 18] },
     { name: 'newE', def: merger(fields), at: [10, 22] },
   ];
+  const n0 = fetchNets(0), n1 = two ? fetchNets(1) : [];
   const nets: NetDef[] = [
     { name: 'pcF', ends: ['pcF', 'spF.in'] },
+    ...(two ? [{ name: 'pcF1', ends: ['pcF1', 'spF1.in'] }, { name: 'idxF1', ends: ['spF1.o1', 'rdF1.sel'], tags: true }, { name: 'tagF1', ends: ['spF1.o2', 'hitF1.a'], tags: true }] as NetDef[] : []),
     { name: 'pcE', ends: ['pcE', 'spE.in'] },
     { name: 'idxF', ends: ['spF.o1', 'rdF.sel'], tags: true },
     { name: 'tagF', ends: ['spF.o2', 'hitF.a'], tags: true },
     { name: 'idxE', ends: ['spE.o1', 'dec.a', 'rdE.sel'], tags: true },
     { name: 'tagE', ends: ['spE.o2', 'hitE.a', 'newE.i1'], tags: true },
     { name: 'upd', ends: ['updE', 'dec.en'], tags: true },
-    { name: 'entries', ends: ['bundle.out', 'rdF.words', 'rdE.words'], trunk: xP - 3 },
-    { name: 'entryF', ends: ['rdF.y', 'fF.in'] },
+    { name: 'entries', ends: ['bundle.out', 'rdF.words', ...(two ? ['rdF1.words'] : []), 'rdE.words'], trunk: xP - 3 },
+    n0[0],
     { name: 'entryE', ends: ['rdE.y', 'fE.in'] },
-    { name: 'validF', ends: ['fF.o0', 'vF.a'], tags: true },
-    { name: 'storedTagF', ends: ['fF.o1', 'hitF.b'] },
-    { name: 'predTarget', ends: ['fF.o2', 'predTarget'], tags: true },
-    { name: 'ctrF[1]', ends: ['fF.o4', 'dir.b'], tags: true },
-    { name: 'jmpF', ends: ['fF.o5', 'dir.a'], tags: true },
-    { name: 'tagEqF', ends: ['hitF.eq', 'vF.b'] },
-    { name: 'hitF', ends: ['vF.y', 'pt.a'], tags: true },
-    { name: 'dirF', ends: ['dir.y', 'pt.b'] },
-    { name: 'predTaken', ends: ['pt.y', 'predTaken'], tags: true },
+    ...n0.slice(1), ...n1,
     { name: 'validE', ends: ['fE.o0', 'vE.a'], tags: true },
     { name: 'storedTagE', ends: ['fE.o1', 'hitE.b'] },
     { name: 'ctrE', ends: ['fE.o3', 'ctr.c'], tags: true },
@@ -469,21 +504,27 @@ export const BTB: ComponentDef = (() => {
   }
   nets.push({ name: 'newEntry', ends: ['newE.out', ...fieldsSink], trunk: xR - 3 });
   nets.push({ name: 'clk', ends: clk, tags: clk.slice(1) });
-  void fieldsSink;
+  const xO = xP + rpg.w + 60;
   return define({
-    id: 'btb16', name: 'Branch target buffer (16 entries)', category: 'cpu',
-    summary: '16 entries indexed by PC[5:2], each {valid, tag = PC[31:6], target, 2-bit counter, is-jump}. Fetch reads it to predict; Execute writes the outcome back. Built from the register file\'s parts: a decoder, registers and two read ports.',
+    id: two ? 'btb16x2' : 'btb16', name: `Branch target buffer (16 entries${two ? ', two fetch ports' : ''})`, category: 'cpu',
+    summary: two
+      ? '16 entries indexed by PC[5:2], each {valid, tag = PC[31:6], target, 2-bit counter, is-jump}. Fetch looks up both slots of its pair at once (pc and pc + 4, two read ports); Execute writes the outcome back through the third.'
+      : '16 entries indexed by PC[5:2], each {valid, tag = PC[31:6], target, 2-bit counter, is-jump}. Fetch reads it to predict; Execute writes the outcome back. Built from the register file\'s parts: a decoder, registers and two read ports.',
     ports: [
-      bus('pcF', 32, 'in'), bus('pcE', 32, 'in'), bit('updE', 'in'), bit('takenE', 'in'), bit('isJumpE', 'in'), bus('targetE', 32, 'in'),
+      bus('pcF', 32, 'in'), ...(two ? [bus('pcF1', 32, 'in')] : []), bus('pcE', 32, 'in'), bit('updE', 'in'), bit('takenE', 'in'), bit('isJumpE', 'in'), bus('targetE', 32, 'in'),
       bit('clk', 'in', 'bottom', true), bit('predTaken', 'out'), bus('predTarget', 32, 'out'),
+      ...(two ? [bit('predTaken1', 'out'), bus('predTarget1', 32, 'out')] : []),
     ],
     symbol: { kind: 'box', label: 'BTB' },
     netlist: () => ({
-      pins: { pcF: [0, -4], pcE: [0, 6], updE: [0, 10], takenE: [0, 12], isJumpE: [0, 14], targetE: [0, 16], clk: [0, 34], predTaken: [xP + rpg.w + 60, rpF[1] + 1], predTarget: [xP + rpg.w + 60, rpF[1] + 6] },
+      pins: {
+        pcF: [0, -4], pcE: [0, 6], updE: [0, 10], takenE: [0, 12], isJumpE: [0, 14], targetE: [0, 16], clk: [0, 34], predTaken: [xO, rpF[1] + 1], predTarget: [xO, rpF[1] + 6],
+        ...(two ? { pcF1: [0, -14] as [number, number], predTaken1: [xO, rpFs[1][1] + 1] as [number, number], predTarget1: [xO, rpFs[1][1] + 6] as [number, number] } : {}),
+      },
       instances, nets,
     }),
     hdl: {
-      verilog: `// Primer hdl/rv_pipe_bp.sv
+      verilog: `// Primer hdl/rv_pipe_bp.sv${two ? ' (two fetch lookups: iF = pcF[5:2] and iF1 = pcF1[5:2], the same way)' : ''}
 assign hitF = valid[iF] && (tag[iF] == pcF[31:6]);
 assign predTakenF  = hitF && (jmp[iF] || ctr[iF][1]);
 assign predTargetF = tgt[iF];
@@ -496,7 +537,7 @@ always_ff @(posedge clk)
   end`,
     },
   });
-})();
+}
 
 /** Misprediction check in E: wrong direction, or right direction with a wrong target. */
 export const MISPREDICT: ComponentDef = define({

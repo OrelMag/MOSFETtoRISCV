@@ -865,6 +865,49 @@
    ]
   },
   {
+   "id": "pipe-2w",
+   "name": "Dual-issue pipelined RV32IM",
+   "nands": 193768,
+   "period": 80,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 5527,
+     "switched": 779902748,
+     "functional": 658390222
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2124,
+     "switched": 509779022,
+     "functional": 282539050
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 2480,
+     "switched": 340533397,
+     "functional": 295749665
+    },
+    {
+     "bench": "matmul-m",
+     "instructions": 885,
+     "cycles": 969,
+     "switched": 134939700,
+     "functional": 115230388
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 2948,
+     "switched": 515431468,
+     "functional": 379162864
+    }
+   ]
+  },
+  {
    "id": "fppipe",
    "name": "Pipelined RV32IF (six stages)",
    "nands": 175310,
