@@ -181,7 +181,7 @@ export class LevelPage implements Page {
       h('button', { class: this.tab === id ? 'on' : '', role: 'tab', 'aria-selected': String(this.tab === id), onclick: () => { this.tab = id; this.renderSide(); } },
         label, badge ? h('small', null, badge) : null)));
     const body = h('div', { class: 'lv-sidebody', role: 'tabpanel' });
-    if (this.tab === 'walk' && this.walk) body.append(this.walk.panel(n.par ?? {}, () => this.leaveWalk(), () => this.takeWalk()));
+    if (this.tab === 'walk' && this.walk) body.append(this.walk.panel(n.par ?? {}, () => this.leaveWalk(), () => this.takeWalk(), () => this.finishWalk()));
     else if (this.tab === 'why') this.whyTab(body);
     else if (this.tab === 'task') this.taskTab(body);
     else if (this.tab === 'tips') this.tipsTab(body);
@@ -320,6 +320,12 @@ export class LevelPage implements Page {
     this.tab = 'task';
     this.renderBar();
     this.renderSide();
+  }
+
+  /** Build along's last step: the learner's circuit becomes the level's chip and is checked (a pass shows the result card). */
+  private finishWalk(): void {
+    this.takeWalk();
+    this.chal?.check();
   }
 
   private showAnswer(): void {
