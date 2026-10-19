@@ -5,6 +5,7 @@
 import type { Quiz } from '../chapters/types';
 import { h, icon } from './dom';
 import { settings } from './settings';
+import { reveal as intoView } from './stagenotes';
 
 /** A shuffle of 0 … n − 1 that depends only on `seed` (FNV-1a, then Fisher–Yates on its stream). */
 export function shuffleOrder(n: number, seed: string): number[] {
@@ -26,7 +27,8 @@ export function shuffleOrder(n: number, seed: string): number[] {
 export function quizBox(q: Quiz, key: string, label: string, onSolved: () => void): HTMLElement {
   const box = h('div', { class: 'challenge' });
   const tag = h('span', { class: 'tag' }, label);
-  const explain = h('div', { class: 'explain' });
+  // polite: a screen reader reads the verdict out after a pick
+  const explain = h('div', { class: 'explain', 'aria-live': 'polite' });
   const opts = h('div', { class: 'options' });
   const reveal = h('button', { class: 'btn ghost sm', style: 'margin-top:8px' }, 'Show answer');
   const buttons: HTMLElement[] = [];
@@ -40,16 +42,19 @@ export function quizBox(q: Quiz, key: string, label: string, onSolved: () => voi
     box.classList.add('solved');
     tag.replaceChildren(icon('check', 12), ' Solved');
   };
-  reveal.addEventListener('click', right);
+  reveal.addEventListener('click', () => { right(); intoView(explain); });
   q.options.forEach((o, i) => {
     const btn = h('button', { class: 'btn' }, o);
     btn.addEventListener('click', () => {
       if (i !== q.answer) {
         btn.classList.add('wrong');
         explain.innerHTML = q.why?.[i] ?? 'Not quite. Try another answer.';
+        // below the fold of a long step, or of the page on a phone: bring the explanation up
+        intoView(explain);
         return;
       }
       right();
+      intoView(explain);
       if (settings.isSolved(key)) return;
       settings.solve(key);
       markSolved();

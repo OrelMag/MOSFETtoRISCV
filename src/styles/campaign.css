@@ -68,7 +68,9 @@
 .cp-node-stars { font-size: 12px; fill: var(--warn); }
 .cp-node-skip, .cp-node-lock { font-size: 10px; fill: var(--muted); font-family: var(--font-mono); }
 
-.cp-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; position: sticky; top: 8px; max-height: calc(100vh - var(--topbar-h) - 40px); overflow: auto; }
+/* As tall as the map pane beside it (its scroller: 100vh - topbar - 150px), so its foot, the action bar, is on screen
+   before the page is scrolled too. */
+.cp-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; position: sticky; top: 8px; max-height: calc(100vh - var(--topbar-h) - 108px); overflow: auto; }
 .cp-panel h2 { margin: 2px 0 6px; font-size: 20px; }
 .cp-panel h4 { margin: 14px 0 6px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); }
 .cp-panel p, .cp-panel li { line-height: 1.5; font-size: 14px; }
@@ -104,7 +106,16 @@
 .cp-chip { display: inline-flex; align-items: center; gap: 5px; margin: 0 6px 6px 0; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); text-decoration: none; font-size: 12.5px; }
 a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 .cp-chip.locked { color: var(--muted); border-style: dashed; background: none; }
-.cp-node-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+/* The level's actions. With a main one (.sticky: Play, Done reading, Next) they stick to the foot of the panel (its own
+   scroller on a desktop, the page on a phone), in reach under a long lesson or brief. Out to the panel's edges (its
+   padding; bottom: sticky offsets count from the scroller's content box), so text scrolls under them unseen. */
+.cp-node-actions {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 18px -18px -16px; padding: 12px 18px 14px;
+  border-top: 1px solid var(--border); background: var(--surface);
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.cp-node-actions.sticky { position: sticky; bottom: -16px; z-index: 1; }
+.cp-intro .cp-node-actions { margin: 18px 0 0; padding: 14px 0 0; background: none; }
 .cp-node-actions .sub { flex-basis: 100%; margin: 0; }
 .cp-done { display: inline-flex; align-items: center; gap: 5px; color: var(--good); font-weight: 600; }
 .cp-mini-anatomy { display: block; margin-top: 10px; }
@@ -158,8 +169,13 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 @media (max-width: 1000px) {
   .cp-split, .cp-intro-top, .cp-codex { grid-template-columns: minmax(0, 1fr); }
   .cp-panel, .cp-codex-list { position: static; max-height: none; }
+  /* the page scrolls, not the panel: no scroller of its own, so the action bar sticks to the screen's foot */
+  .cp-panel { overflow: visible; }
+  .cp-node-actions.sticky { bottom: 0; }
   .cp-map-scroll { max-height: 60vh; }
 }
+/* A phone: the document scrolls, so .scroll must not be a scroller of its own (the action bar sticks to the screen). */
+@media (max-width: 760px) { .cp-page { overflow: visible; } }
 @media (max-width: 600px) {
   .cp-wrap { padding: 10px 16px 30px; }
   .cp-stats { flex-wrap: wrap; }

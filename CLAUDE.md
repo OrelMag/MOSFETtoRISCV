@@ -938,7 +938,10 @@ src/puzzles/   program puzzles (the sandbox's Puzzles drawer; roadmap Phase 12).
 src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-free: every chapter / step as a
                searchable entry, searchNav ranking), quicknav.ts (chapter menu on the top bar and the chapter title,
                Ctrl/⌘ K or `/` search palette; `/` is left to the sandbox there); quiz.ts: quizBox (chapters, recaps, codex,
-               walkthrough), options in a fixed shuffle per question (shuffleOrder: authors write the answer first)
+               walkthrough), options in a fixed shuffle per question (shuffleOrder: authors write the answer first), a
+               pick scrolls its explanation into view; stagenotes.ts: over a chapter's canvas the step's challenge goal (a
+               click shows its card), green and announced (aria-live) once solved, toasts when a Try box ticks (words:
+               feedback.ts, DOM-free); reveal() scrolls into view, smooth unless reduced motion
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
 tests/verify/  CPU verification (docs/VERIFICATION.md): cpus.ts (every RV32 CPU variant: build, ISA, env,
