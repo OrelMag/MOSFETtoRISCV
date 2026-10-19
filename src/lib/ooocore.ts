@@ -19,6 +19,7 @@ import { regfile2w } from './regfile';
 import { divE, MUL_E, MUL_M } from './pipem';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
+import { type At, placedNets, Placer } from './placer';
 import { bitwise, orN } from './wide';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
@@ -638,13 +639,72 @@ function buildOoo(IM: ComponentDef, dmemK: number): ComponentDef {
     'bus0v.y': 'bus0', 'bus1v.y': 'bus1', 'bus0t.y': 'tag0', 'bus1t.y': 'tag1', 'fgo.y': 'fetch', 'iq.go0': 'issue0', 'iq.go1': 'issue1',
   };
   for (const [d, n] of Object.entries(names)) b.name(d, n, true);
-  const R = b.right, H = b.height;
+  const { pins, nets } = oooDrawing(b, ['pcF', 'retire', 'pcW0', 'halted']);
   return {
     id: `ooo_${IM.id.replace(/^rom2_/, '')}_d${dmemK}`, name: 'Out-of-order RV32IM CPU (2-wide, ROB 16, issue queue 8)', category: 'cpu',
     summary: 'Fetches and dispatches two instructions a cycle in order, renames their registers to reorder-buffer entries, issues them out of order to two ports as their operands arrive on the result buses, and commits them in order, two a cycle: the register file and memory only ever see results in program order. A misprediction is found at execute and recovered from at commit.',
     ports: [bit('clk', 'in', 'left', true), bus('pcF', 32, 'out'), bus('retire', 2, 'out'), bus('pcW0', 32, 'out'), bit('halted', 'out')],
     symbol: { kind: 'box', label: 'RV32IM OUT OF ORDER' },
-    netlist: () => ({ pins: { clk: [0, H + 6], pcF: [R, H + 6], retire: [R, H + 9], pcW0: [R, H + 12], halted: [R, H + 15] }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins, instances: b.instances, nets }),
     hdl: { verilog: '// P6-style 2-wide out-of-order RV32IM core: rename (RAT → ROB tags), issue queue with wakeup and oldest-first select, ROB, store queue.' },
   };
+}
+
+// ---- the core's drawing ---------------------------------------------------------------------------
+
+/**
+ * The core in three bands, as an instruction goes: fetch, the fetch register and decode of both slots; dispatch and
+ * rename, the operands, the issue queue, the reorder buffer with the store queue and the data memory; the two ports,
+ * the multiplier and the divider, the result buses and commit. Wires inside a block, labels between blocks.
+ */
+function oooDrawing(b: Builder, outs: string[]): { pins: Record<string, At>; nets: ReturnType<typeof placedNets> } {
+  const P = new Placer(b.instances), raw = b.nets();
+  const GAP = 14, BLOCK = 22, BAND = 18;
+  /** A block's columns from x (top at y); returns its right edge and bottom. */
+  const block = (grp: string, x: number, y: number, cols: string[][], gap = GAP) => P.cols(grp, x, y, cols, gap, 4);
+  const band = (y: number, blocks: [string, string[][], number?][]) => {
+    let x = 12, bottom = y;
+    for (const [grp, cols, gap] of blocks) {
+      const r = block(grp, x, y, cols, gap);
+      x = r.right + BLOCK;
+      bottom = Math.max(bottom, r.bottom);
+    }
+    return bottom;
+  };
+
+  // band A: fetch, the fetch register, decode (slot 1 under slot 0)
+  const a1 = band(4, [
+    ['fetch', [['one', 'zero', 'pc', 'plus4', 'plus8'], ['imem', 'pd0', 'pd1'], ['btb'], ['ras'], ['fp']]],
+    ['fdreg', [['F0', 'F1', 'fdEmpty'], ['nd1', 'shift', 'nv0', 'nv1', 'rest', 'went', 'fgo'], ['moved', 'kept0', 'kept1'], ['n0', 'n1'], ['fl0', 'fl1', 'fpcF'], ['fd0', 'fd1', 'fpcN']]],
+  ]);
+  const dx = P.extent('fetch', 'fdreg').right + BLOCK;
+  const d0 = block('dec', dx, 4, [['fd0s', 'si0'], ['ctl0', 'imm0'], ['cls0'], ['dpd0', 'kn0']]);
+  const d1 = block('dec', dx, d0.bottom + 8, [['fd1s', 'si1'], ['ctl1', 'imm1'], ['cls1'], ['dpd1', 'kn1']]);
+  // band B: dispatch and rename, the operands, the issue queue, the reorder buffer and memory
+  const yB = Math.max(a1, d1.bottom) + BAND;
+  const b1 = band(yB, [
+    ['dispatch', [['dc', 'bind'], ['wr0', 'wr1', 'known0', 'known1'], ['rat'], ['rf']]],
+    ['operands', [['sameA1', 'nzA1', 'selfA10', 'selfA1', 'sameB1', 'nzB1', 'selfB10', 'selfB1'], ['opA0', 'opB0'], ['opA1', 'opB1']]],
+    ['issue', [['st0d', 'st0bit', 'st0m', 'z2', 'st0n', 'ltail1'], ['ld0f', 'mask0', 'pend1', 'ld1f', 'mask1'], ['pay0', 'pay1'], ['al0', 'al1', 'nDivBusy', 'divFree'], ['iq']]],
+    ['rob', [['zrd0', 'rd0', 'zrd1', 'rd1', 'st1d', 'sw'], ['robD0', 'robD1', 'robV0', 'robV1'], ['rob'], ['sq', 'dm']], 18],
+  ]);
+  // band C: the ports, the long units, the result buses, commit
+  band(b1 + BAND, [
+    ['exec', [['l2p0', 'r2n0', 'v1n0', 'l2p1', 'r2n1', 'v1n1', 'nFlush'], ['e1in0', 'e1in1'], ['r2_0', 'e1_0', 'r2_1', 'e1_1'], ['e1s0', 'e1s1'], ['pp0', 'pp1', 'f3p1'], ['ex0', 'ex1'],
+      ['nl20', 'ndv0', 'now0', 'nl21', 'ndv1', 'now1']], 18],
+    ['units', [['ldv', 'ld2', 'v2n0', 'mu2', 'v2n1', 'dstart', 'taken1', 'free1'], ['e2in0', 'e2in1', 'dinfo'], ['e2_0', 'mule', 'e2_1'], ['e2s0', 'e2s1'], ['mulm', 'div']]],
+    ['buses', [['v1_0', 'v2_0', 'v1_1', 'v2_1', 'vd'], ['t2d', 'V2d'], ['bus0t', 'bus0V', 'bus0v', 'bus1t', 'bus1V', 'bus1v'], ['bus0x', 'bus1x']]],
+    ['commit', [['hd0', 'hv0', 'hd1', 'hv1'], ['halt0', 'link0', 'halt1', 'link1'], ['cm'], ['ctrl0', 'nret0', 'tr0', 'jj0', 'seq0', 'tk0', 'rcp0', 'rcq0'],
+      ['ctrl1', 'nret1', 'tr1', 'jj1', 'seq1', 'tk1', 'rcp1', 'rcq1'], ['cs0', 'cs1', 'cs', 'redir'], ['one1', 'two', 'count', 'now']]],
+  ]);
+
+  for (const i of b.instances) {
+    const p = P.at.get(i.name);
+    if (!p || p.some(Number.isNaN)) throw new Error(`oooCpu: no place for ${i.name}`);
+    i.at = p;
+  }
+  const right = Math.max(...b.instances.map((i) => P.right(i.name))) + 12;
+  const pins: Record<string, At> = { clk: [0, 2] };
+  outs.forEach((p, i) => (pins[p] = [right, 2 + 3 * i]));
+  return { pins, nets: placedNets(P, raw) };
 }

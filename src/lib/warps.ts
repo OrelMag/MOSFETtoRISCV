@@ -13,7 +13,7 @@
 //                 that warp sits out the cycle (one write port per bank)
 
 import { symbolGeom } from '../sim/geometry';
-import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
+import type { ComponentDef, NetDef, PortDef } from '../sim/types';
 import { alu, constWord, isZero } from './alu';
 import { Builder } from './builder';
 import { magComparator, popcount } from './coding';
@@ -28,6 +28,7 @@ import { arbiterN } from './mpdecode';
 import { regfile } from './regfile';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
+import { type At, Placer } from './placer';
 import { accessUnit, lsuMemory } from './warpmem';
 import { bitwise, orN } from './wide';
 
@@ -773,66 +774,7 @@ export function warpCore(program: number[], opts: WarpCoreOptions = {}): Compone
 
 // ---- the core's drawing ---------------------------------------------------------------------------
 
-type At = [number, number];
 const range = (k: number) => Array.from({ length: k }, (_, i) => i);
-
-/** Places a built netlist's instances by name; names a variant lacks are skipped, so one plan serves every variant. */
-class Placer {
-  readonly at = new Map<string, At>();
-  readonly group = new Map<string, string>();
-  private readonly defs: Map<string, ComponentDef>;
-  constructor(insts: InstanceDef[]) { this.defs = new Map(insts.map((i) => [i.name, i.def])); }
-  has(nm: string): boolean { return this.defs.has(nm); }
-  private geom(nm: string) { return symbolGeom(this.defs.get(nm)!); }
-  w(nm: string): number { return this.has(nm) ? this.geom(nm).w : 0; }
-  h(nm: string): number { return this.has(nm) ? this.geom(nm).h : 0; }
-  private port(nm: string, port: string | number): string {
-    return typeof port === 'string' ? port : this.defs.get(nm)!.ports.filter((p) => p.dir !== 'out')[port].name;
-  }
-  /** The first output's name. */
-  out(nm: string): string { return this.defs.get(nm)!.ports.find((p) => p.dir === 'out')!.name; }
-  put(grp: string, nm: string, x: number, y: number): void {
-    if (!this.has(nm)) return;
-    this.at.set(nm, [x, y]);
-    this.group.set(nm, grp);
-  }
-  /** Put nm at x with a port (by name, or the k-th input) on row y. */
-  row(grp: string, nm: string, port: string | number, x: number, y: number): void {
-    if (this.has(nm)) this.put(grp, nm, x, y - this.geom(nm).ports[this.port(nm, port)].pos[1]);
-  }
-  /** Where a placed port is (by name, or the k-th input). */
-  pin(nm: string, port: string | number): At {
-    // a part or port this variant lacks: so does the part placed by it
-    const g = this.at.has(nm) ? this.geom(nm).ports[this.port(nm, port)] : undefined;
-    if (!g) return [NaN, NaN];
-    const [x, y] = this.at.get(nm)!;
-    return [x + g.pos[0], y + g.pos[1]];
-  }
-  x(nm: string): number { return this.at.get(nm)?.[0] ?? NaN; }
-  y(nm: string): number { return this.at.get(nm)?.[1] ?? NaN; }
-  right(nm: string): number { return this.at.has(nm) ? this.x(nm) + this.w(nm) : -Infinity; }
-  bottom(nm: string): number { return this.at.has(nm) ? this.y(nm) + this.h(nm) : -Infinity; }
-  /** Columns from (x, y), gap apart, their parts vgap apart. Returns the right edge and the bottom. */
-  cols(grp: string, x: number, y: number, columns: string[][], gap = 12, vgap = 4): { right: number; bottom: number } {
-    let cx = x, right = x, bottom = y;
-    for (const c of columns) {
-      const names = c.filter((nm) => this.has(nm));
-      if (!names.length) continue;
-      let cy = y, cw = 0;
-      for (const nm of names) { this.put(grp, nm, cx, cy); cy += this.h(nm) + vgap; cw = Math.max(cw, this.w(nm)); }
-      bottom = Math.max(bottom, cy - vgap);
-      right = cx + cw;
-      cx += cw + gap;
-    }
-    return { right, bottom };
-  }
-  /** The rightmost and lowest edges of the parts placed in some groups. */
-  extent(...groups: string[]): { right: number; bottom: number } {
-    let right = 0, bottom = 0;
-    for (const [nm, g] of this.group) if (groups.includes(g)) { right = Math.max(right, this.right(nm)); bottom = Math.max(bottom, this.bottom(nm)); }
-    return { right, bottom };
-  }
-}
 
 /** Nets named after the port that drives them: control signals. */
 const BY_PORT = new Set(['ctl', 'sdec', 'xdec', 'npc', 'lead', 'mem', 'acc', 'barCmp']);
