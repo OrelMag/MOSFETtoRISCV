@@ -838,6 +838,7 @@ svg.schematic.arrange .inst:not(.openable) { cursor: grab; }
 svg.schematic .inst.dragging { cursor: grabbing; opacity: 0.85; }
 svg.schematic .inst.dragging .hit { fill: color-mix(in srgb, var(--sel) 10%, transparent); stroke: var(--sel); stroke-width: 0.1; stroke-dasharray: 0.4 0.3; }
 svg.schematic .inst.grouped .hit { fill: color-mix(in srgb, var(--sel) 20%, transparent); stroke: var(--sel); stroke-width: 0.16; }
+svg.schematic.reshaping, svg.schematic.reshaping .wire-hit { cursor: grabbing !important; }
 svg.schematic .pick-band { fill: color-mix(in srgb, var(--sel) 8%, transparent); stroke: var(--sel); stroke-width: 0.08; stroke-dasharray: 0.4 0.3; pointer-events: none; }
 .pal-menu.sch-menu { position: fixed; right: auto; top: 0; min-width: 260px; }
 .pal-menu.sch-menu small { display: block; color: var(--muted); font-size: 12px; }

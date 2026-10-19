@@ -14,7 +14,7 @@ import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
 import { FlowTokens, type Lane } from './flowtokens';
 import type { ViewCtx } from './context';
 import { hopPathData, overlaps, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type Rect, type RoutedNet, type TapLabel } from './route';
-import { applyLayout, canRedo, canUndo, dropLastEdit, editLayout, isTagged, layoutOf, showsTags, undoLayout } from './layout';
+import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, showsTags, undoLayout, type LayoutEdit } from './layout';
 import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
 
@@ -27,7 +27,7 @@ export interface SchematicEvents {
   netClick?(net: number): boolean;
   /** The probe on a net of the current view, if any. */
   probeOf?(net: number): { color: number; label: string } | null;
-  /** The learner moved a part or unravelled a pointer (the level was redrawn). */
+  /** The learner moved a part or a wire, or unravelled a pointer (the level was redrawn). */
   layoutChanged?(): void;
 }
 
@@ -107,7 +107,7 @@ export class SchematicView {
   flowMs = 0;
   /** Screen rectangles (from the canvas's corner) the stage's panels cover; fit() keeps the circuit clear of them. */
   cover: Rect[] = [];
-  /** Parts can be dragged and pointers unravelled (view/layout.ts): the stage's views, not a read-only look inside. */
+  /** Parts and wires can be dragged and pointers unravelled (view/layout.ts): the stage's views, not a read-only look inside. */
   arrange = false;
   /** The level's netlist as authored (before the learner's layout). */
   private base: Netlist | null = null;
@@ -119,6 +119,8 @@ export class SchematicView {
   private group = new Set<string>();
   private dragging = new Set<string>();
   private preview: Record<string, Vec> | null = null;
+  /** A wire is being dragged: no hover tips meanwhile. */
+  private reshaping = false;
   /** Where each part is drawn now, and its box (grid units); how long the last routing took. */
   private atOf = new Map<string, Vec>();
   private boxes = new Map<string, Rect>();
@@ -134,7 +136,7 @@ export class SchematicView {
     this.cam = new Camera(this.el, host);
     installPanZoom(this.el, this.cam, {
       // shift-drag on the canvas picks parts (bandSelect) instead of panning
-      canStart: (e) => !(this.arrange && e.shiftKey) && !(e.target as Element).closest('.inst, .pin.clickable, .bus-label'),
+      canStart: (e) => !(this.arrange && e.shiftKey) && !(e.target as Element).closest('.inst, .pin.clickable, .bus-label') && this.grabbedNet(e) < 0,
       onTap: (target) => {
         const n = target.closest('[data-net]');
         if (n) this.clickNet(Number(n.getAttribute('data-net')), target);
@@ -151,6 +153,8 @@ export class SchematicView {
     this.el.addEventListener('contextmenu', (e) => this.contextMenu(e));
     this.el.addEventListener('pointerdown', (e) => {
       if (this.arrange && e.shiftKey && e.button === 0 && !(e.target as Element).closest('.inst, .pin, .bus-label')) this.bandSelect(e);
+      const net = this.grabbedNet(e);
+      if (net >= 0) this.dragWire(e, net);
     });
     document.addEventListener('pointerdown', (e) => {
       if (this.menu && !this.menu.contains(e.target as Node)) this.closeMenu();
@@ -189,9 +193,13 @@ export class SchematicView {
     this.atOf.clear();
     this.boxes.clear();
     if (!base) return;
-    const lay = this.arrange ? layoutOf(ctx.def.id) : undefined;
-    const nl = !this.arrange ? base
-      : applyLayout(base, this.preview ? { wired: [], tagged: [], ...lay, at: { ...lay?.at, ...this.preview } } : lay);
+    let lay = this.arrange ? layoutOf(ctx.def.id) : undefined;
+    if (this.arrange && this.preview) {
+      // a live part drag: drawn as it will be on drop, without the corners it leaves behind
+      const p: LayoutEdit = lay = { wired: [], tagged: [], ...lay, at: { ...lay?.at, ...this.preview } };
+      dropCorners(p, base, Object.keys(this.preview));
+    }
+    const nl = !this.arrange ? base : applyLayout(base, lay);
     this.el.classList.toggle('arrange', this.arrange);
     const t0 = performance.now();
     const { nets, pins } = routeNetlist(ctx.def, nl);
@@ -833,6 +841,7 @@ export class SchematicView {
             if (to[n][0] === home[0] && to[n][1] === home[1]) delete l.at[n];
             else l.at[n] = to[n];
           }
+          dropCorners(l, base, moving);
         });
       } else if (live) {
         this.relayout(false);
@@ -841,6 +850,107 @@ export class SchematicView {
         place();
         fade(false);
       }
+    };
+    const up = (ev: PointerEvent) => { if (ev.pointerId === e.pointerId) stop(true); };
+    const cancel = (ev: PointerEvent) => { if (ev.pointerId === e.pointerId) stop(false); };
+    const other = (ev: PointerEvent) => { if (ev.pointerId !== e.pointerId) stop(false); };
+    const key = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape' || !moved) return;
+      ev.stopPropagation();
+      stop(false);
+    };
+    this.el.addEventListener('pointermove', move);
+    this.el.addEventListener('pointerup', up);
+    this.el.addEventListener('pointercancel', cancel);
+    this.el.addEventListener('pointerdown', other);
+    document.addEventListener('keydown', key, true);
+  }
+
+  /**
+   * The net whose wire a press would drag (-1: none): the stage, not probing, a plain press on a wire. A finger
+   * pans the canvas over wires, so it moves only the wire already selected (tap it first).
+   */
+  private grabbedNet(e: PointerEvent): number {
+    if (!this.arrange || e.button !== 0 || e.shiftKey || this.host.classList.contains('probing')) return -1;
+    const t = (e.target as Element).closest('.wire-hit, .wires [data-net]');
+    const idx = t ? Number(t.getAttribute('data-net')) : -1;
+    return idx >= 0 && (e.pointerType !== 'touch' || idx === this.selectedNet) ? idx : -1;
+  }
+
+  /** On the stage a wire's hit stroke shows which way the segment under the pointer moves. */
+  private wireCursor(t: SVGPathElement, e: PointerEvent): void {
+    const w = this.arrange && !this.host.classList.contains('probing') ? this.wires.find((x) => x.net.index === Number(t.dataset.net)) : undefined;
+    const seg = w && nearestSegment(w.net.paths, this.cam.toWorld(e.clientX, e.clientY), 0.7, (i) => !w.net.ends?.[i]);
+    t.style.cursor = seg ? (seg.axis === 'h' ? 'ns-resize' : 'ew-resize') : '';
+  }
+
+  /**
+   * Drag a segment of a wire across its direction, in half grid units: the wire moves as one (the net's other
+   * paths along the same line too), its neighbours stretch, and at a pin a short stub stays. On drop its corners
+   * are kept (NetDef.via, in the layout). A press that does not move is a click on the wire; Esc or a second
+   * finger puts it back.
+   */
+  private dragWire(e: PointerEvent, idx: number): void {
+    const w = this.wires.find((x) => x.net.index === idx), base = this.base;
+    if (!w || !base) return;
+    const target = e.target as Element;
+    const ends = w.net.ends ?? [];
+    const fixed = (i: number) => !ends[i];
+    const [x0, y0] = this.cam.toWorld(e.clientX, e.clientY);
+    // only stubs to hand-placed tags under the press: a click
+    const grab = nearestSegment(w.net.paths, [x0, y0], 0.7, fixed);
+    const hit = this.el.querySelector<SVGPathElement>(`.wire-hit[data-net="${idx}"]`);
+    const was = { d: w.paths.map((p) => p.getAttribute('d') ?? ''), hit: hit?.getAttribute('d') ?? '' };
+    const extras = [...w.dots, ...w.taps, ...(w.ants ?? []), ...(w.flowEls ?? []), ...(w.label ? [w.label] : [])];
+    let moved = false, by = 0, paths = w.net.paths;
+    const line = (p: Vec[]) => 'M' + p.map(([x, y]) => `${x},${y}`).join(' L');
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId || !grab) return;
+      const [x, y] = this.cam.toWorld(ev.clientX, ev.clientY);
+      if (!moved) {
+        // below this (grid units) a press is still a click
+        if (Math.abs(x - x0) + Math.abs(y - y0) < 0.6) return;
+        moved = true;
+        this.el.setPointerCapture(e.pointerId);
+        this.reshaping = true;
+        this.tooltip.style.opacity = '0';
+        this.el.classList.add('reshaping');
+        // inline opacity: value classes are rewritten on every repaint
+        for (const el of extras) el.style.opacity = '0';
+      }
+      const nb = Math.round((grab.axis === 'h' ? y - y0 : x - x0) * 2) / 2;
+      if (nb === by) return;
+      by = nb;
+      paths = dragSegment(w.net.paths, grab.pi, grab.k, by, fixed);
+      w.paths.forEach((el, i) => el.setAttribute('d', line(paths[i])));
+      hit?.setAttribute('d', paths.map(line).join(' '));
+    };
+    const stop = (commit: boolean) => {
+      this.el.removeEventListener('pointermove', move);
+      this.el.removeEventListener('pointerup', up);
+      this.el.removeEventListener('pointercancel', cancel);
+      this.el.removeEventListener('pointerdown', other);
+      document.removeEventListener('keydown', key, true);
+      if (!moved) {
+        if (commit) this.clickNet(idx, target);
+        return;
+      }
+      this.reshaping = false;
+      this.el.classList.remove('reshaping');
+      if (commit && by) {
+        const k = netKey(base.nets[idx]);
+        this.edit((l) => {
+          const own = (l.via ??= {})[k] = { ...l.via[k] };
+          paths.forEach((p, i) => {
+            const end = ends[i];
+            if (p !== w.net.paths[i] && end) own[end] = p.slice(1, -1);
+          });
+        });
+        return;
+      }
+      w.paths.forEach((el, i) => el.setAttribute('d', was.d[i]));
+      hit?.setAttribute('d', was.hit);
+      for (const el of extras) el.style.opacity = '';
     };
     const up = (ev: PointerEvent) => { if (ev.pointerId === e.pointerId) stop(true); };
     const cancel = (ev: PointerEvent) => { if (ev.pointerId === e.pointerId) stop(false); };
@@ -960,12 +1070,18 @@ export class SchematicView {
         if (!shown) items.push({ label: `Draw ${name} as pointers`, hint: 'A label at each end instead of the wire', run: () => this.toPointers(Number(ni), name) });
         else items.push({ label: `${name} back to a wire`, hint: 'As the chapter drew it', run: () => this.setTagged([key], false) });
       }
+      if (!shown && lay?.via?.[key]) {
+        items.push({ label: `Reroute ${net.name ?? net.ends[0]}`, hint: 'Let go of your bends: drawn as the router would', run: () => this.edit((l) => delete l.via?.[key]) });
+      }
     }
     const inst = target?.closest('[data-inst]')?.getAttribute('data-inst');
     const back = inst && this.group.has(inst) ? [...this.group].filter((n) => lay?.at[n]) : inst && lay?.at[inst] ? [inst] : [];
     if (back.length) {
       items.push({ label: back.length > 1 ? `Put the ${back.length} picked parts back` : `Put ${back[0]} back`, hint: 'Where the chapter drew it',
-        run: () => this.edit((l) => back.forEach((n) => delete l.at[n])) });
+        run: () => this.edit((l) => {
+          back.forEach((n) => delete l.at[n]);
+          dropCorners(l, base, back);
+        }) });
     }
     if (canUndo(id)) items.push({ label: 'Undo', hint: 'Ctrl+Z', run: () => this.undo() });
     if (canRedo(id)) items.push({ label: 'Redo', hint: 'Ctrl+Shift+Z', run: () => this.undo(true) });
@@ -981,6 +1097,7 @@ export class SchematicView {
       l.at = {};
       l.wired = [];
       l.tagged = [];
+      delete l.via;
     }) });
     return items;
   }
@@ -1008,7 +1125,7 @@ export class SchematicView {
         this.closeMenu();
         it.run();
       } }, h('span', null, h('b', null, it.label), it.hint && h('small', null, it.hint))))
-        : h('p', { class: 'sch-menu-note' }, 'Drag a part to move it (shift-click or shift-drag to pick several). Right-click a wire to draw it as pointers.'));
+        : h('p', { class: 'sch-menu-note' }, 'Drag a part to move it (shift-click or shift-drag to pick several), or a wire to move it sideways. Right-click a wire to draw it as pointers.'));
     document.body.append(m);
     const r = m.getBoundingClientRect();
     m.style.left = `${Math.max(4, Math.min(x, innerWidth - r.width - 4))}px`;
@@ -1064,7 +1181,8 @@ export class SchematicView {
 
   private hoverTip(e: PointerEvent): void {
     const t = (e.target as Element).closest('[data-net]');
-    if (!t || !this.ctx || this.dragging.size) {
+    if (t?.classList.contains('wire-hit')) this.wireCursor(t as SVGPathElement, e);
+    if (!t || !this.ctx || this.dragging.size || this.reshaping) {
       this.tooltip.style.opacity = '0';
       this.setHover(-1);
       return;

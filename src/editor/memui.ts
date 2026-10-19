@@ -323,8 +323,15 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
   // Every language with instructions: the instruction builder on the caret's line (Ctrl+Space), and the
   // program as tiles (a view of the text: a click builds a line, a drag moves it).
   const hasIsa = applied.lang !== 'hex' && applied.lang !== '6502';
-  const isaOf = () => import('../isa/compose').then((c) => c.composeIsaOf(applied.lang, applied.isa));
-  const builder = hasIsa ? romComposer(ce, body, (m) => ed.toast(m, 'err'), isaOf) : null;
+  const isaOf = () => import('../isa/compose').then((c) => c.composeIsaOf(applied.lang, applied.isa, applied.custom));
+  // RV32: the CPU's own instructions (editor/owninstr.ts), from the footer or a free custom slot in the builder;
+  // the program editor closes for it and reopens after
+  const customInstrs = () => {
+    if (ce.value !== applied.src) return void ed.toast('Apply or cancel the program first', 'err');
+    close();
+    void import('./owninstr').then((m) => m.openCustomInstructions(ed, () => openProgramEditor(ed, partId, chipId)));
+  };
+  const builder = hasIsa ? romComposer(ce, body, (m) => ed.toast(m, 'err'), isaOf, applied.lang === 'asm' ? customInstrs : undefined) : null;
   const tiles = builder ? romTiles(ce, isaOf, (n) => builder.openAt(n)) : null;
   let tilesOn = false;
   const showTiles = (on: boolean) => {
@@ -349,6 +356,8 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
       body,
       h('div', { class: 'sb-rom-dlg-foot' }, status,
         builder?.button,
+        // An RV32 program's CPU can learn its own instructions (editor/owninstr.ts); the editor reopens after
+        applied.lang === 'asm' ? h('button', { class: 'btn sm ghost', title: 'Your own instructions for this CPU: the core and the golden model learn them, and this program can use them', onclick: customInstrs }, 'Custom instructions…') : null,
         h('button', { class: 'btn sm ghost', title: 'Download the program in the box as a deck of punched cards (.deck.json)', onclick: () => saveRomDeck(ed, partId, ce.value, chipId) }, 'Save as deck'),
         chipId === ed.chipId ? h('button', { class: 'btn sm ghost', title: 'Replace the program with the words of a deck of cards (applied at once: one undo step)', onclick: () => void pickDeck(ed).then((d) => {
           if (!d || !loadDeckIntoRom(ed, partId, d)) return;

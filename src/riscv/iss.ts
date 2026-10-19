@@ -8,6 +8,7 @@
 // which an interrupt is taken executes no instruction).
 
 import type { BusMemory } from '../bus/model';
+import { aluCtlOf, aluOp, branchTaken, FMT_FIELDS, type CustomRow } from './custom';
 import { F32, fpAddX, fpClass, fpCmpX, fpDivX, fpFmaX, fpFromIntX, fpMinMaxX, fpMulX, fpSqrtX, fpToIntX, type FpResult } from '../sim/fpref';
 import { CSRS, decode, disasm, OPCODES } from './isa';
 
@@ -35,6 +36,8 @@ export interface IssOptions {
    * it, and every load and store that is not I/O goes to it instead of dmem.
    */
   bus?: BusMemory;
+  /** The CPU's custom instructions (riscv/custom.ts): each executes its control row. */
+  custom?: readonly CustomRow[];
 }
 
 /** Cycles a div / divu / rem / remu occupies on the iterative divider (1 load + 32 steps + 1 write). */
@@ -100,6 +103,7 @@ export class ISS {
   /** I/O at 0x8000_0000 (system or mmio). */
   readonly io: boolean;
   readonly m: boolean;
+  readonly custom: readonly CustomRow[];
   readonly fext: boolean;
   /** Floating-point registers (raw float32 bits). */
   readonly f = new Uint32Array(32);
@@ -144,6 +148,7 @@ export class ISS {
     this.system = !!opts.system;
     this.io = this.system || !!opts.mmio;
     this.m = !!opts.m;
+    this.custom = opts.custom ?? [];
     this.fext = !!opts.f;
     this.hartid = opts.hartid ?? 0;
     this.bus = opts.bus;
@@ -298,7 +303,7 @@ export class ISS {
       }
     }
     const word = this.fetch(pc);
-    const d = decode(word);
+    const d = decode(word, this.custom);
     const x = this.x;
     const a = x[d.rs1] | 0, b = x[d.rs2] | 0, ua = x[d.rs1], ub = x[d.rs2];
     let next = (pc + 4) >>> 0;
@@ -318,7 +323,18 @@ export class ISS {
     let extraCycles = 0;
     let fWrite: number | undefined;
     if (this.system && (!d.spec || (isM && !this.m) || (isF && !this.fext))) trap = new Trap(CAUSE.ILLEGAL);
-    else if (isF) {
+    else if (d.spec?.custom) {
+      // A custom instruction: its control row, as the single-cycle CPU's data path runs it (riscv/custom.ts).
+      const r = d.spec.custom;
+      const A = r.srcA === 'pc' ? pc | 0 : a, B = r.srcB === 'imm' ? d.imm | 0 : b;
+      const y = aluOp(aluCtlOf(r, word), A, B);
+      const old = r.regWrite && r.result === 'mem' ? this.load(y >>> 0, 2) : 0;
+      if (r.memWrite) { this.store(y >>> 0, 2, b); store = { addr: y >>> 0, value: b >>> 0 }; }
+      if (r.regWrite && FMT_FIELDS[r.fmt].rd) write({ alu: y, mem: old, pc4: pc + 4, imm: d.imm }[r.result]);
+      if (r.next === 'branch') { if (branchTaken(d.funct3, a, b)) jumpTo(pc + d.imm); }
+      else if (r.next === 'jump') jumpTo(pc + d.imm);
+      else if (r.next === 'jalr') jumpTo(y & ~1);
+    } else if (isF) {
       const fa = this.f[d.rs1], fb = this.f[d.rs2];
       // rounding mode: the instruction's rm field, or frm when rm = 7 (dynamic)
       const rm = d.funct3 === 7 ? this.frm : d.funct3;
@@ -465,7 +481,7 @@ export class ISS {
     this.steps++;
     const t = trap as Trap | null;
     const fwrite = !t && fWrite !== undefined ? { rd: d.rd, value: fWrite >>> 0 } : undefined;
-    return { pc, word, text: disasm(word, pc), rd, value, store, fwrite, trap: t ? { cause: t.cause, interrupt: false } : undefined, halted: this.halted };
+    return { pc, word, text: disasm(word, pc, this.custom), rd, value, store, fwrite, trap: t ? { cause: t.cause, interrupt: false } : undefined, halted: this.halted };
   }
 
   run(maxSteps = 10000): number {

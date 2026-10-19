@@ -212,7 +212,9 @@ src/lib/       the component library (registered in `registry` via define())
   regfile.ts     regfile(k, w) with x0 = 0, two read ports fed by one bundled word bus; regfile2w(k, w): 4 read, 2 write
                  ports (writeSelect per register: port 1, the younger instruction, wins), w<i> names like regfile
   cpu.ts         single-cycle RV32I: rom (preferBehavior), dataMemory, IMM_GEN, OPCODE_DECODER,
-                 CONTROL, NEXT_PC, PLUS4(_FAST), singleCycleCpu(program, { adder })
+                 CONTROL, NEXT_PC, PLUS4(_FAST), singleCycleCpu(program, { adder, custom }); opcodeDecoder(extra) /
+                 control(custom): the generators (OPCODE_DECODER / CONTROL are the no-customs case): a custom row is
+                 one more class and an OR input per signal it asserts (riscv/custom.ts signalsOf)
   fastadd.ts     gp / gray / black prefix cells, CLA4, koggeStone(n), addSubFast(n)
   wide.ts        bitwise(op, n), orN(n) (shared by alu.ts and fastadd.ts to avoid an import cycle)
   usage.ts       usedIn(def) (parents with instance counts, the chapters' CPUs included), copiesIn(top, def),
@@ -391,7 +393,9 @@ src/bench/     results.json (scripts/benchmarks.ts --write, checked in; each run
                the four RV32I programs, the cost / speed front, each CPU's family and chapter): the workbench's Benchmarks
                tab (ui/pages/benchmarks.ts, its own chunk)
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
-               instructions), compose.ts (the instruction builder's model: a spec + operands both ways, slotsOf in assembly
+               instructions; assemble(src, custom)), custom.ts (CustomRow: a custom instruction as a slot, a format and a row
+               of control signals; problemsOf, signalsOf, meaning, execCustom / aluCtlOf as the hardware's ALU decoder;
+               decode / disasm / ISS({ custom }) take the rows; sanitizeRows, rowsKey), compose.ts (the instruction builder's model: a spec + operands both ways, slotsOf in assembly
                order with bank / range, encodeParts / partsOf (null: bits it would not set), retarget, textOf (a target by label),
                parseLine, PALETTE; every instruction round-trips through asm.ts: tests/compose.test.ts; RV32_COMPOSE: its
                builder adapter, isa/composekit.ts), fastiss.ts (FastISS: the golden model's semantics, every ROM word predecoded by decode() into
@@ -418,7 +422,10 @@ src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over 
                UNTANGLE_POPS states per schematic, leaving overlaps rather than freezing the page: scripts/route-perf.ts times one),
                layout.ts (the learner's layout on the stage, per component id in localStorage: parts dragged to whole grid
                units, several at once (shift-click, shift-drag a box; Esc lets go), wires following live on a level that
-               routes under LIVE_ROUTE_MS, else on drop; pointers (NetDef.tags) unravelled into wires one by one or all,
+               routes under LIVE_ROUTE_MS, else on drop; a wire's segment dragged sideways in half units (dragSegment: the
+               net's whole run on that line moves, a stub stays on a pin; a finger moves only the selected wire), kept as
+               the learner's corners (LayoutEdit.via → NetDef.via, over the author's; RoutedNet.ends names each path's
+               sink; dropped when a part they touch moves; "Reroute" lets go); pointers (NetDef.tags) unravelled into wires one by one or all,
                and wires drawn as pointers (tags: true, named for the driver; a net too short for them is taken back with
                a note); undo / redo per component for the visit (Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y); applyLayout keeps the
                nets and their order, so the simulation, probes and marks are untouched; a moved part's nets drop its
@@ -801,6 +808,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   analysis.ts    plugin: probe mode (P) + LogicAnalyzer in slots.bottom, Timing props section with
                  the critical path drawn on the chip, lint as a diag source, open-input marks; records only while
                  the panel is open (its trace listener puts DualSim on GateSim)
+  owninstr.ts    Custom instructions… (the CPU drawer's Custom…, a ROM's program editor): up to three rows on an
+                 rv32i_core, their problems, data path, signals and generated golden-model code, the control unit's cost
+                 measured; Apply (one undo step): the core part becomes { core: { custom } }, the ROM ref gets a copy
   cpuui.ts       plugin: the CPU panel (docked drawer: status, listing with the PC and pipeline stages, a
                  click marks the instruction's parts (insthw names) and colours its field wires
                  (instrMarks → wires by net), field breakdown (widgets/instrfields), pipeline diagram
