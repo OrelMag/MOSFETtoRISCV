@@ -48,10 +48,10 @@ const lineStart = (v: string, i: number) => (i > 0 ? v.lastIndexOf('\n', i - 1) 
 
 export function codeEditor(opts: CodeEditorOpts): CodeEditor {
   const { lang } = opts;
-  const tab = opts.tabSize ?? (lang === 'hex' ? 4 : 8);
+  const tab = opts.tabSize ?? (lang === 'hex' || lang === 'py' ? 4 : 8);
   const ta = h('textarea', {
     class: 'ce-ta', spellcheck: 'false', wrap: 'off', autocomplete: 'off', autocapitalize: 'off',
-    'aria-label': lang === 'hex' ? 'hex words' : 'assembly source',
+    'aria-label': lang === 'hex' ? 'hex words' : lang === 'py' ? 'Python source' : 'assembly source',
   }) as HTMLTextAreaElement;
   ta.value = opts.value;
   ta.readOnly = !!opts.readOnly;
@@ -180,8 +180,10 @@ export function codeEditor(opts: CodeEditorOpts): CodeEditor {
       const head = v.slice(lineStart(v, s), s);
       let ind = head.match(/^[ \t]*/)![0];
       // After "loop:   add ..." continue in the mnemonic column; after a bare "loop:", one stop in.
-      const lab = lang !== 'hex' ? head.match(LABEL_PREFIX) : null;
+      const lab = lang !== 'hex' && lang !== 'py' ? head.match(LABEL_PREFIX) : null;
       if (lab) ind = ' '.repeat(head.slice(lab[0].length).trim() ? lab[0].length : tab);
+      // Python: a line ending in ':' opens a block
+      if (lang === 'py' && /:\s*(#.*)?$/.test(head)) ind += ' '.repeat(tab);
       edit(s, e, '\n' + ind, s + 1 + ind.length, s + 1 + ind.length);
     } else if (mod && ev.key === '/') {
       ev.preventDefault();

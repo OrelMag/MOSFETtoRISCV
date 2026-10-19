@@ -1,4 +1,4 @@
-// Chapters 27–32 (ch-gpu.ts, ch-gfx.ts): the numbers and claims their prose quotes that the text cannot compute in place,
+// Chapters 28–33 (ch-gpu.ts, ch-gfx.ts): the numbers and claims their prose quotes that the text cannot compute in place,
 // measured here and read back from the text, so a change to either side fails.
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
@@ -28,7 +28,7 @@ const quizText = (c: Chapter, title: string) => {
   return q.kind === 'quiz' ? flat(`${q.question} ${q.options.join(' ')} ${q.explain}`) : '';
 };
 
-describe('chapter 27: lanes against cores', () => {
+describe('chapter 28: lanes against cores', () => {
   it('the saving with and without the program ROMs, as the text quotes it', () => {
     const sax = SIMT_PROGRAMS.find((p) => p.id === 'saxpy')!;
     const LC = laneCore(assemble(sax.source).words, 4), MC = multiCore(assemble(SAXPY_CORES).words, 4);
@@ -46,7 +46,7 @@ describe('chapter 27: lanes against cores', () => {
     expect(romSaved / saved).toBeGreaterThan(0.5); // "most of that is program ROM"
   }, 120000);
 
-  it('saxpy cycles and the lane utilization chapter 28 quotes', () => {
+  it('saxpy cycles and the lane utilization chapter 29 quotes', () => {
     const run = (id: string) => { const m = new SimtISS(assemble(SIMT_PROGRAMS.find((p) => p.id === id)!.source).words, { lanes: 4 }); m.run(5000); return m; };
     const s = run('saxpy');
     expect([s.retired, s.cycles]).toEqual([74, 134]);
@@ -59,7 +59,7 @@ describe('chapter 27: lanes against cores', () => {
   });
 });
 
-describe('chapter 29: a warp\'s program port', () => {
+describe('chapter 30: a warp\'s program port', () => {
   it('every warp slot reads the program through a ROM of its own: 8 064 NANDs, the copy the text describes', () => {
     const p = WARP_PROGRAMS.find((x) => x.id === 'saxpy64')!;
     const words = assemble(p.source(4)).words;
@@ -83,7 +83,7 @@ describe('chapter 29: a warp\'s program port', () => {
   });
 });
 
-describe('chapter 30: atomics scoped to this core', () => {
+describe('chapter 31: atomics scoped to this core', () => {
   it('the text says real GPUs serialize only lanes on one word', () => {
     expect(step(chFeed, 'Atomics')).toContain('This core serves it <strong>one lane per access</strong>');
     expect(step(chFeed, 'Atomics')).toContain('only lanes on the same word take turns');
@@ -91,14 +91,14 @@ describe('chapter 30: atomics scoped to this core', () => {
   });
 });
 
-describe('chapter 31: the clear and the depth test', () => {
+describe('chapter 32: the clear and the depth test', () => {
   it('one clear count from go, explained once', () => {
     expect(CLEAR_CYCLES + 1).toBe(4437);
     expect(step(chPixels, 'Depth')).toContain(`${fmt(CLEAR_CYCLES + 1)} cycles from go (84 before the walk starts, then 256 tiles of 17`);
     expect(84 + 256 * 17).toBe(CLEAR_CYCLES);
-    // chapter 32's clear phase is the launch cycle and the same clear
+    // chapter 33's clear phase is the launch cycle and the same clear
     expect(PIPE_COSTS.frames.find((f) => f.id === 'triangle')!.clear).toBe(CLEAR_CYCLES + 2);
-    expect(step(chGfxPipeline, 'The pipeline').replace(/<\/?a[^>]*>/g, '')).toContain(`the clear 4 438 (the launch cycle, then chapter 31's ${fmt(CLEAR_CYCLES + 1)}-cycle clear`);
+    expect(step(chGfxPipeline, 'The pipeline').replace(/<\/?a[^>]*>/g, '')).toContain(`the clear 4 438 (the launch cycle, then chapter 32's ${fmt(CLEAR_CYCLES + 1)}-cycle clear`);
   });
 
   it('the two crossing triangles never tie at a pixel centre, so both orders give the same picture', () => {
@@ -108,7 +108,7 @@ describe('chapter 31: the clear and the depth test', () => {
   });
 });
 
-describe('chapter 32: the vertex kernel and the cube', () => {
+describe('chapter 33: the vertex kernel and the cube', () => {
   it('the loop is tested at the bottom; a multiple of 4 keeps its branch uniform, three vertices would too', () => {
     const lines = vertexKernel(meshById('triangle')).split('\n').map((l) => l.replace(/#.*/, '').trim()).filter(Boolean);
     const blt = lines.findIndex((l) => /^blt\s+t0, s1, loop$/.test(l));

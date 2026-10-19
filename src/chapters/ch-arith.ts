@@ -175,7 +175,7 @@ export const chAdders: Chapter = {
         <p>At 32 bits that is ${CMP32} gate delays against ${BORROW32} for the subtractor's carry out, for a similar cost (${stats(magComparator(32, false)).nands} NANDs against ${stats(addSub(32)).nands}). The depth grows
         with log n instead of n.</p>
         <div class="try">Open a <code>combine</code> cell: it is the same "the higher one decides" rule as the carry-lookahead cells in
-        <a href="#/c/fastadd/0">chapter 15</a>.</div>`,
+        <a href="#/c/fastadd/0">chapter 16</a>.</div>`,
       scene: () => ({ root: magComparator(4), inputs: { a: 9, b: 6 } }),
     },
     {

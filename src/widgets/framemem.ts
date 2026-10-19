@@ -1,4 +1,4 @@
-// Chapters 31–32: every memory the graphics hardware keeps, shown live in the screen panels. The two frames (which one
+// Chapters 32–33: every memory the graphics hardware keeps, shown live in the screen panels. The two frames (which one
 // is front, which back), the depth buffer, and what the back frame holds while it is rebuilt. Its pixels are dimmed until
 // something writes them after the flip that made it the back frame. Then who writes it this cycle, and a filmstrip of
 // the frame being rebuilt (before, after the clear, after each triangle, on screen).
@@ -66,11 +66,11 @@ type Hue = 'draw' | 'wait' | 'kernel' | 'scan';
 export interface WriterRow { unit: string; hue: Hue; text: string }
 
 export interface FrameMemOptions {
-  /** A rasterizer writes the back frame (else the frames are fixed pictures: chapter 31, step 1). */
+  /** A rasterizer writes the back frame (else the frames are fixed pictures: chapter 32, step 1). */
   gpu: boolean;
   /** A depth buffer behind the rasterizer. */
   depth: boolean;
-  /** More units to list (chapter 32: the command unit, the warp core), between the ROP and the scan-out. */
+  /** More units to list (chapter 33: the command unit, the warp core), between the ROP and the scan-out. */
   rows?: (sim: Sim) => WriterRow[];
 }
 

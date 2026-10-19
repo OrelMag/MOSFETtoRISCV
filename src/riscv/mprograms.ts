@@ -1,4 +1,4 @@
-// Programs for the RV32IM system CPU (chapter 20): multiply and divide.
+// Programs for the RV32IM system CPU (chapter 21): multiply and divide.
 
 import type { Program } from './programs';
 

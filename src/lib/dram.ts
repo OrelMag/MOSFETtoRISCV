@@ -1,4 +1,4 @@
-// A DRAM array at switch level (chapter 33). 1T1C cells hang on a bit line; a second bit line of
+// A DRAM array at switch level (chapter 34). 1T1C cells hang on a bit line; a second bit line of
 // the same capacitance, with no cells, is the reference. Both are precharged and equalized to VDD/2;
 // raising a word line shares the cell's charge with its bit line, which moves by a few tens of
 // millivolts (SwitchSim's charge levels); the sense amplifier compares the pair, drives them to the
@@ -77,7 +77,7 @@ export const DRAM_SA: ComponentDef = define({
 });
 
 /**
- * A cell of the array: chapter 21's 1T1C cell with its storage node inside (a capacitor of CELL_C
+ * A cell of the array: chapter 22's 1T1C cell with its storage node inside (a capacitor of CELL_C
  * that leaks) and a two-way bit line: the cell drives it when it is read.
  */
 export const DRAM_BIT: ComponentDef = define({

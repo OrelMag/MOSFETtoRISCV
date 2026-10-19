@@ -1,4 +1,4 @@
-// Chapter 20 widget: restoring, non-restoring and SRT dividers, measured from their netlists.
+// Chapter 21 widget: restoring, non-restoring and SRT dividers, measured from their netlists.
 
 import { nrDivStep, nrSeqDivider, seqDivider, srt4Divider, srt4Step, srtDivider, srtStep, divStep } from '../lib';
 import { flatten } from '../sim/flatten';

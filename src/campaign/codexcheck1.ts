@@ -279,10 +279,10 @@ export const CHECK1: Record<string, Quiz[]> = {
   ],
   microcode: [
     {
-      question: 'A controller has 24 states and 18 control signals. Microcoded like chapter 22\'s (control bits, a next-address field, 2 sequencing bits), how wide is a microword?',
+      question: 'A controller has 24 states and 18 control signals. Microcoded like chapter 23\'s (control bits, a next-address field, 2 sequencing bits), how wide is a microword?',
       options: ['20 bits: 18 + 2, the micro-PC simply counts', '44 bits: 18 + a 24-bit one-hot next state + 2', '25 bits: 18 + 5 + 2'],
       answer: 2,
-      explain: 'The next-address field must name any of 24 words: ⌈log<sub>2</sub> 24⌉ = 5 bits. Chapter 22\'s 13 states take 4 by the same rule.',
+      explain: 'The next-address field must name any of 24 words: ⌈log<sub>2</sub> 24⌉ = 5 bits. Chapter 23\'s 13 states take 4 by the same rule.',
       why: ['This design stores the next address in the word; a counting micro-PC is another design, and it still needs a jump field for branches.', 'A ROM address is binary: one-hot would waste 19 bits of every word.', ''],
     },
     {

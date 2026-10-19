@@ -9,7 +9,7 @@ import type { DoomSymbol } from '../doom/image';
 const fmt = (n: number) => Math.round(n).toLocaleString('en');
 const hex = (n: number, d = 8) => (n >>> 0).toString(16).padStart(d, '0');
 
-/** B.1: Doom's needs against the system CPU of chapters 18–20, and what Appendix B adds. */
+/** B.1: Doom's needs against the system CPU of chapters 19–21, and what Appendix B adds. */
 export function doomNeeds(): Widget {
   const rows: [string, string, string, string][] = [
     ['ISA', '32-bit integers, multiply and divide; fixed point, no floats', 'RV32IM + Zicsr, machine mode', 'nothing'],

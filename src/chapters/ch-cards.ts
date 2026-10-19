@@ -154,7 +154,7 @@ export const chCards: Chapter = {
         a card. Like a keyboard it stands for the world outside, so it costs no gates.</p>
         <p>This deck is the sum program, ${SUM_DECK.cards.length} cards. Feeding it into a computer's memory is a job for a little program
         of its own: the IBM 1401's <strong>Load</strong> key read the first card into memory and ran it, and that card read the
-        rest. <a href="#/c/bus/5">Chapter 36</a> builds that boot loader on a bus computer, and the sandbox has the card reader as a part, with
+        rest. <a href="#/c/bus/5">Chapter 37</a> builds that boot loader on a bus computer, and the sandbox has the card reader as a part, with
         decks made from any ROM program.</p>
         <div class="try">Set <code>next</code> to 1 and Pulse: each card's word appears on <code>data</code>, with ${FEED} empty
         cycles between cards while the reader feeds.</div>`,

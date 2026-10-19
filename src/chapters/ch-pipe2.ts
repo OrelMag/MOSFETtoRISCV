@@ -21,7 +21,7 @@ function predicted(st: Stage): boolean {
 }
 
 export const chPipePay: Chapter = {
-  id: 'pipepay', num: 17, title: 'Making the pipeline pay', level: 'Processor',
+  id: 'pipepay', num: 18, title: 'Making the pipeline pay', level: 'Processor',
   blurb: 'Balance the stages, then predict branches: measured, step by step.',
   goals: [
     'move the forwarding decision one stage earlier and say what it takes off the critical path',

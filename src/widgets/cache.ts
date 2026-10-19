@@ -1,4 +1,4 @@
-// Chapter 21 widgets: the cache explorer (real address traces from the ISS through a configurable
+// Chapter 22 widgets: the cache explorer (real address traces from the ISS through a configurable
 // cache model), DRAM retention and refresh, and the memory hierarchy at a glance.
 
 import { assemble } from '../riscv/asm';

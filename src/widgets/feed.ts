@@ -1,4 +1,4 @@
-// Chapter 30 widgets: which lanes each memory access serves (the gate-level access unit, evaluated
+// Chapter 31 widgets: which lanes each memory access serves (the gate-level access unit, evaluated
 // for any stride and offset, global lines or shared banks), and when tiling a matrix multiply pays
 // (the timing model, which the tests check against the gate-level core, swept over memory bandwidth).
 

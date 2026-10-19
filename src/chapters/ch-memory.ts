@@ -344,7 +344,7 @@ export const chRegisters: Chapter = {
         chooses: hold, shift right, shift left, or load in parallel (mode 0–3). Fed one bit at a time at <code>sr</code> (the serial input of a
         right shift; <code>sl</code> serves a left shift), it turns a serial
         stream into a parallel word; loaded in parallel and shifted, it does the reverse. That is the heart of every serial link: UART, SPI,
-        PCIe lanes, the iterative multiplier and divider of <a href="#/c/muldiv/0">chapter 20</a>.</p>
+        PCIe lanes, the iterative multiplier and divider of <a href="#/c/muldiv/0">chapter 21</a>.</p>
         <div class="try">mode = 1 (shift right) with sr = 1: pulse four times and watch the ones march in from the top.</div>`,
       scene: () => ({ root: shiftRegister(4), inputs: { mode: 1, sr: 1, sl: 0, d: 0, clk: 0 }, autoClock: false }),
       tries: [(st) => st.value('q') === 0b1111],
@@ -398,7 +398,7 @@ export const chRegisters: Chapter = {
       body: `
         <p>A counter is a register whose next value is a fixed function of its value. Let that function read inputs too and you have a
         <strong>finite-state machine</strong>: a state register, next-state logic, output logic. It is how hardware runs a sequence (a divider's
-        iterations, a cache refill, the steps of a multicycle CPU in <a href="#/c/multicycle/0">chapter 22</a>).</p>
+        iterations, a cache refill, the steps of a multicycle CPU in <a href="#/c/multicycle/0">chapter 23</a>).</p>
         <p>The design is mechanical. Recognise 1, 0, 1 on a serial input x, overlaps included: S0 has seen nothing useful, S1 a 1, S2 a 1 then
         a 0. Draw the transitions, encode the states in two flip-flops (s1 s0 = 00, 01, 10), write the table:</p>
         <table class="cmp fsm-tt"><thead><tr><th>s1 s0</th><th>x</th><th>n1 n0</th><th>y</th></tr></thead><tbody>

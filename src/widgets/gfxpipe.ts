@@ -1,4 +1,4 @@
-// Chapter 32 widgets: the pipeline scene (the vertex kernel's warp core, the command unit, chapter 31's GPU) with
+// Chapter 33 widgets: the pipeline scene (the vertex kernel's warp core, the command unit, chapter 32's GPU) with
 // its panel (the screen, frames per second measured in the page, what each unit did in the last frame, the vertex
 // kernel in lock-step with its golden model and every frame checked against the reference picture), and the cost
 // widget (NANDs per stage, cycles per frame by phase, the same frame drawn in software on the lanes).
@@ -24,7 +24,7 @@ const fmt = (n: number) => n.toLocaleString('en').replace(/,/g, ' ');
 export interface PipeSceneOptions {
   highlight?: string[];
   path?: string[];
-  /** How the back frame is cleared: chapter 31's rasterizer (default), or step 5's clear unit, a word a cycle. */
+  /** How the back frame is cleared: chapter 32's rasterizer (default), or step 5's clear unit, a word a cycle. */
   clear?: 'pixel' | 'word';
   /** Step 5: a switch between the two clears, and their frames compared. */
   clearSwitch?: boolean;

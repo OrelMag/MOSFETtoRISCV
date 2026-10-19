@@ -1,4 +1,4 @@
-// Chapters 23, 25 and 26's numbers that the text quotes as typed figures: each measured here and looked up in the text,
+// Chapters 24, 26 and 27's numbers that the text quotes as typed figures: each measured here and looked up in the text,
 // so a change to either the library or the prose fails the test.
 import { describe, expect, it } from 'vitest';
 import { chFloat } from '../src/chapters/ch-float';
@@ -22,7 +22,7 @@ const fmt = (n: number, q = 1) => (Math.round(n / q) * q).toLocaleString('en-US'
 const nands = (d: ComponentDef) => stats(d).nands;
 const depth = (d: ComponentDef) => logicDepth(d)!;
 
-describe('chapter 23 (floating point) quotes measured numbers', () => {
+describe('chapter 24 (floating point) quotes measured numbers', () => {
   const t = text(chFloat);
   const has = (s: string) => expect(t, s).toContain(s);
 
@@ -70,7 +70,7 @@ describe('chapter 23 (floating point) quotes measured numbers', () => {
   });
 });
 
-describe('chapter 25 (many cores): Amdahl', () => {
+describe('chapter 26 (many cores): Amdahl', () => {
   it('quotes 1 / ((1 − p) + p / n) for p = 90 %, n = 8, and its limit', () => {
     const t = text(chMulticore), p = 0.9, s = (1 / ((1 - p) + p / 8)).toFixed(1), lim = Math.round(1 / (1 - p));
     expect(t).toContain(`8 cores give 1 / (0.1 + ${(p / 8).toFixed(4)}) = ${s}×, and no number of cores beats 1 / (1 − p) = ${lim}×`);

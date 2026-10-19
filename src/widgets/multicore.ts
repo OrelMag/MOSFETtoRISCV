@@ -1,4 +1,4 @@
-// Chapter 25 widgets: the dual-core scene (both cores, shared memory, golden-model lock-step) and
+// Chapter 26 widgets: the dual-core scene (both cores, shared memory, golden-model lock-step) and
 // the cache-coherence explorer.
 
 import { dualCore } from '../lib';

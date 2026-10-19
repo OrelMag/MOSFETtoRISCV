@@ -10,7 +10,7 @@ function halted(st: Stage): boolean {
 }
 
 export const chLanes: Chapter = {
-  id: 'lanes', num: 27, title: 'Lanes', level: 'Throughput',
+  id: 'lanes', num: 28, title: 'Lanes', level: 'Throughput',
   blurb: 'One fetch and decode feeding four ALUs, each with its own registers: a lane core, measured against four cores.',
   goals: [
     'say what a lane core has once (PC, fetch, decode, control) and what it copies per lane (registers, ALU, result multiplexer)',
@@ -59,7 +59,7 @@ export const chLanes: Chapter = {
         <p>Chapters <a href="#/c/fastadd/0">15</a> to <a href="#/c/float/0">23</a> spent gates on <em>latency</em>: forwarding, branch prediction and caches all make one instruction stream finish sooner. Many
         workloads are instead thousands of independent copies of one small program: a pixel, a matrix element, a neuron's activation. For them the figure of
         merit is results per second per gate (and per watt), and the latency of any one result hardly matters.</p>
-        <p><a href="#/c/multicore/0">Chapter 25</a> got parallelism by copying whole cores. The other way is to keep <strong>one instruction stream</strong> and copy only the datapath: one
+        <p><a href="#/c/multicore/0">Chapter 26</a> got parallelism by copying whole cores. The other way is to keep <strong>one instruction stream</strong> and copy only the datapath: one
         fetch, one decode, one control unit, and N <strong>lanes</strong>, each with its own registers and ALU. Give each lane a way to sit out an instruction
         and the programmer can write an ordinary scalar program per element, a <em>thread</em>; the N threads stepping together form a <em>warp</em>. NVIDIA
         calls this SIMT (single instruction, multiple threads). Its warps are 32 threads, issued over 16 or 32 lanes depending on the unit (one instruction
@@ -94,7 +94,7 @@ export const chLanes: Chapter = {
         the select is already one-hot) bring the <span data-show="lF">leader's ALU flags</span> to the <span data-show="npc">next-PC logic</span> and its
         <span data-show="lAlu">ALU result</span> to the <span data-show="clr0">jalr target</span>.</p>
         <p>In saxpy the branch agrees in every lane: each lane does exactly four elements, so <code>blt t3, t2, loop</code> is taken or not taken by all of them at
-        once. When lanes disagree, the leader's choice is wrong for the others; <a href="#/c/simt/0">chapter 28</a> fixes that.</p>`,
+        once. When lanes disagree, the leader's choice is wrong for the others; <a href="#/c/simt/0">chapter 29</a> fixes that.</p>`,
       scene: () => laneCoreScene('saxpy', { highlight: ['lead', 'lF', 'lAlu', 'npc'] }),
     },
     {
@@ -116,13 +116,13 @@ export const chLanes: Chapter = {
     {
       title: 'Lanes against cores',
       body: `
-        <p>The same work on <a href="#/c/multicore/0">chapter 25</a>'s cores, four of them, each finding its index with <code>csrr mhartid</code>, against the lane core. Both bars are counted
+        <p>The same work on <a href="#/c/multicore/0">chapter 26</a>'s cores, four of them, each finding its index with <code>csrr mhartid</code>, against the lane core. Both bars are counted
         from the actual designs, and both cycle counts come from the instruction-set simulators, which the gate-level circuits match cycle for cycle.</p>
         <p>The lanes save the front end three times over, yet only 18 % of the gates, and most of that is program ROM: four cores read four copies of the
         program, the lanes one, and 24 192 of the 32 670 NANDs saved are those three ROMs. Leave the ROMs out of both and the lanes save 6 %: a lane is mostly
         its register file (23 141 of its 27 584 NANDs, flip-flops and multiplexers), and the PC, decoder and control they share are small beside it. And they are slower on saxpy, because a load or store stops all four lanes, while a core that waits for the memory port lets
         the other three compute. Real GPUs answer both: memory as wide as a warp, with a <strong>coalescer</strong> merging neighbouring addresses into one access
-        (<a href="#/c/feed/0">chapter 30</a>), and many warps so that one waiting does not idle the lanes (<a href="#/c/warps/0">chapter 29</a>). Their register files are SRAM, and the cores they compete with have
+        (<a href="#/c/feed/0">chapter 31</a>), and many warps so that one waiting does not idle the lanes (<a href="#/c/warps/0">chapter 30</a>). Their register files are SRAM, and the cores they compete with have
         large front ends (out-of-order logic, predictors, caches), so the sharing pays far more than it does here.</p>`,
       widget: lanesVsCoresWidget,
     },
@@ -130,7 +130,7 @@ export const chLanes: Chapter = {
 };
 
 export const chSimt: Chapter = {
-  id: 'simt', num: 28, title: 'Threads in lock-step', level: 'Throughput',
+  id: 'simt', num: 29, title: 'Threads in lock-step', level: 'Throughput',
   blurb: 'The active mask, divergent branches, split / join and the reconvergence stack, predication, and what divergence costs.',
   goals: [
     'say what the active mask switches off in a lane, and what it leaves running',
@@ -260,7 +260,7 @@ export const chSimt: Chapter = {
 };
 
 export const chWarps: Chapter = {
-  id: 'warps', num: 29, title: 'Hiding latency', level: 'Throughput',
+  id: 'warps', num: 30, title: 'Hiding latency', level: 'Throughput',
   blurb: 'A memory that answers 8 cycles later: a scoreboard, several warps resident, a scheduler picking a ready one each cycle, and what each warp costs.',
   goals: [
     'say why a GPU hides the memory latency its caches leave with more warps, and what the caches are for',
@@ -313,7 +313,7 @@ export const chWarps: Chapter = {
         <p>Here the <span data-show="mem">memory</span> sits behind a <strong>pipeline of 8 cycles</strong>: a load or store enters with its warp, destination register, active lanes,
         addresses and data, and reaches the memory 7 pipeline registers later. A load issued in cycle t is written back at the end of cycle t + 7, so an
         instruction that needs it can issue in cycle t + 8. One request enters every cycle: the memory is slow, not busy. (Each lane still has a port of its own
-        into the memory; <a href="#/c/feed/0">chapter 30</a> replaces them with one port and a coalescer.)</p>
+        into the memory; <a href="#/c/feed/0">chapter 31</a> replaces them with one port and a coalescer.)</p>
         <p>One warp runs saxpy over 64 elements already in memory: 154 instructions in 266 cycles. 112 issue slots, 42 %, pass with nothing to issue.</p>
         <div class="try">Run to halt and read the issue timeline: after each pair of <code>lw</code>s, the warp sits striped (a load in flight) and the idle row fills.</div>`,
       scene: () => warpCoreScene('saxpy64', { warps: 1, highlight: ['mem'] }),
@@ -367,7 +367,7 @@ export const chWarps: Chapter = {
       body: `
         <p>A warp is <span data-show="rdy0 rdy1 rdy2 rdy3"><strong>ready</strong></span> when it runs, its next instruction passes the
         <span data-show="hz0 hz1 hz2 hz3">scoreboard check</span>, and none of its loads is being written back. The
-        <span data-show="sched"><strong>scheduler</strong></span> is <a href="#/c/multicore/0">chapter 25</a>'s round-robin arbiter over the ready warps: the first at or after its pointer issues, and when two or more were
+        <span data-show="sched"><strong>scheduler</strong></span> is <a href="#/c/multicore/0">chapter 26</a>'s round-robin arbiter over the ready warps: the first at or after its pointer issues, and when two or more were
         ready, the pointer moves past the winner. One warp issues per cycle; its PC, mask and stack move, the others' stay.</p>
         <p>Four warps run the same 64 elements in 172 cycles for 172 instructions: not one issue slot is empty, and the 8-cycle latency is hidden entirely. Two
         warps take 192 cycles (83 % of the slots), one warp 266.</p>
@@ -399,7 +399,7 @@ export const chWarps: Chapter = {
 };
 
 export const chFeed: Chapter = {
-  id: 'feed', num: 30, title: 'Feeding the lanes', level: 'Throughput',
+  id: 'feed', num: 31, title: 'Feeding the lanes', level: 'Throughput',
   blurb: 'One memory port a line wide: coalescing, a banked shared memory and bank conflicts, a barrier, atomics; a reduction, a histogram and a tiled matrix multiply.',
   goals: [
     'count the accesses a warp\'s load takes on a line-wide port, from its lanes\' addresses',
@@ -445,12 +445,12 @@ export const chFeed: Chapter = {
     {
       title: 'One port, a line wide',
       body: `
-        <p><a href="#/c/warps/0">Chapter 29</a>'s memory gave every lane a read and a write port of its own: four address decoders and four 128-way multiplexers of 32 bits, 183 964 NANDs for
+        <p><a href="#/c/warps/0">Chapter 30</a>'s memory gave every lane a read and a write port of its own: four address decoders and four 128-way multiplexers of 32 bits, 183 964 NANDs for
         128 words. No real memory is built that way. A DRAM moves a <em>burst</em> of neighbouring bytes per access, and a cache a whole line; here the memory reads
         and writes a <strong>16-byte line</strong>, four words side by side, through one port: 77 829 NANDs for the same 128 words.</p>
         <p>Four lanes now share that port. The <strong>access unit</strong> decides which of them one access serves: the lowest lane still to serve leads, and every
         lane whose address bits 31 … 4 match the leader's (the same line) goes along. The others wait for the next access. A memory instruction holds the issue
-        port for one cycle per access, and its warp moves on only after the last: <a href="#/c/lanes/0">chapter 27</a>'s sequencer, looping over lines instead of lanes. Each access's words
+        port for one cycle per access, and its warp moves on only after the last: <a href="#/c/lanes/0">chapter 28</a>'s sequencer, looping over lines instead of lanes. Each access's words
         go back to the lanes it served; the scoreboard clears with the last.</p>
         <p>The widget evaluates the gate-level access unit (5 870 NANDs) on four addresses, then again on the lanes it left, until none is left.</p>
         <div class="try">Try stride 1 with offsets 0 and 1, then stride 3: when does a misaligned access cost a second cycle?</div>`,

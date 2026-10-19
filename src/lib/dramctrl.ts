@@ -1,4 +1,4 @@
-// Chapter 34's DRAM controller at gate level, and the DRAM device behind it. The controller is
+// Chapter 35's DRAM controller at gate level, and the DRAM device behind it. The controller is
 // dram/controller.ts's CtrlModel in gates, cycle for cycle (tests/dramctrl.test.ts runs both side by
 // side): seven state flip-flops (IDLE is none of them set, so power-on needs no reset), one wait
 // counter loaded by every command, an open-row table (a valid bit and a row register per bank), the
@@ -206,7 +206,7 @@ interface DevState { dev: DeviceModel; clk: number; pend: { cmd: number; ba: num
  * A DRAM device for a DramConfig: commands and write data in, read data out (rd, rv: valid; err: a
  * timing rule was broken, sticky). Simulated as DeviceModel (a behavioural leaf whose outputs change
  * only at the clock: no path from an input to an output). With `mask` it has DDR's data mask (dm, a
- * bit per byte of the word written this cycle: chapter 36's bus writes single bytes without a read).
+ * bit per byte of the word written this cycle: chapter 37's bus writes single bytes without a read).
  */
 export function dramDevice(c: DramConfig, init?: ArrayLike<number>, mask = false): ComponentDef {
   const key = `dramdev${mask ? 'm' : ''}${cfgKey(c)}`;
@@ -250,7 +250,7 @@ export const deviceOf = deviceIn;
 export type { CtrlModel };
 
 /**
- * Controller and device on one board (chapter 34's scenes): a request in (req held until done, wr,
+ * Controller and device on one board (chapter 35's scenes): a request in (req held until done, wr,
  * la), the burst's words out (rd while dv). Written words are recognizable: {seed, line, word}.
  */
 export function dramSystem(c: DramConfig): ComponentDef {

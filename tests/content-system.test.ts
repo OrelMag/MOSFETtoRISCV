@@ -1,4 +1,4 @@
-// Numbers quoted in chapters 18–22 (ch-system, ch-muldiv, ch-cache, ch-multicycle) that the text cannot compute in
+// Numbers quoted in chapters 19–23 (ch-system, ch-muldiv, ch-cache, ch-multicycle) that the text cannot compute in
 // place: each is measured here and compared with the number the text quotes, so an edit to either fails.
 
 import { describe, expect, it } from 'vitest';
@@ -28,7 +28,7 @@ const text = (c: Chapter, title: string) => {
 };
 const flat = (s: string) => s.replace(/\s+/g, ' ');
 
-describe('chapters 18–19: the system CPU', () => {
+describe('chapters 19–20: the system CPU', () => {
   it('measures the program ROM the same for any program, so sysNands may use an empty one', () => {
     const src = (id: string) => SYSTEM_PROGRAMS.find((p) => p.id === id)!.source;
     const hello = systemCpu(assemble(src('hello')).words);
@@ -57,7 +57,7 @@ describe('chapters 18–19: the system CPU', () => {
   });
 });
 
-describe('chapter 20: multiply and divide', () => {
+describe('chapter 21: multiply and divide', () => {
   it('counts the 3:2 levels of a 32-bit popcount tree', () => {
     const rows = [32];
     while (rows[rows.length - 1] > 2) { const r = rows[rows.length - 1]; rows.push(2 * Math.floor(r / 3) + (r % 3)); }
@@ -83,7 +83,7 @@ describe('chapter 20: multiply and divide', () => {
   });
 });
 
-describe('chapter 21: caches', () => {
+describe('chapter 22: caches', () => {
   it('quotes the write-through miss count that its frozen cycles imply', () => {
     const t = flat(text(chCache, 'A cache in the pipeline'));
     const frozen = Number(/391 cycles, (\d+) frozen/.exec(t)![1]);
@@ -91,7 +91,7 @@ describe('chapter 21: caches', () => {
   });
 });
 
-describe('chapter 22: multicycle CPI', () => {
+describe('chapter 23: multicycle CPI', () => {
   // cycles per instruction class, from the state table (tests/multicycle.test.ts runs the gates against the ISS)
   const cyclesOf = (word: number) => {
     const n = decode(word).name;

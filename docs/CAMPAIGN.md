@@ -424,12 +424,12 @@ broken, rather than given parts that read X. References: `src/lib/rv16/mem16.ts`
   (`blcap`, 100 fF: a sandbox wire has no capacitance value), the sense amplifier, VDD/2, the write driver; the
   learner adds precharge and equalize and wires the twin lines. The amplifier stays a primitive: SwitchSim reads a
   gate between its thresholds as X, so a cross-coupled pair drawn from MOSFETs cannot resolve 50 mV (the mockup's
-  "from transistors" was changed for this). A sequence of chapter 33's protocol, every read twice (the restore);
+  "from transistors" was changed for this). A sequence of chapter 34's protocol, every read twice (the restore);
   34 transistors
 - ✅ `m_bank`: requests in, commands to a 16 × 16 word array on the bench out (ACT, RW, PRE; a read's word in the
   same cycle); rows leak unless opened every 288 cycles: RAS-only refresh by a row pointer and a timer ← m_sense.
   Eight request traces on BitSim lanes, each with its own array; 319 NANDs, period 30, 5 917 cycles
-- ✅ `m_ctrl`: a two-bank DRAM chip on the bench (64 rows of 16 words per bank, chapter 34's command encoding):
+- ✅ `m_ctrl`: a two-bank DRAM chip on the bench (64 rows of 16 words per bank, chapter 35's command encoding):
   tRCD / tCAS / tRP 4, tRAS 9, tRFC 12, a REF at least every 256 cycles; one word per command, a write's data with
   its WR ← m_bank. 779 NANDs, period 36, 10 690 cycles
 - ✅ `m_bus`: two masters, three slaves (0 below 0x8000, 1 from 0x8000 with 2 wait states, 2 from 0xC000 with 1),

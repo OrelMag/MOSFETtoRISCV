@@ -32,7 +32,7 @@ export interface IssOptions {
   /** Hart id read by csrr mhartid (multi-core). */
   hartid?: number;
   /**
-   * Memory over a bus (chapter 36's computer): instructions beyond the ROM's imemWords are fetched from
+   * Memory over a bus (chapter 37's computer): instructions beyond the ROM's imemWords are fetched from
    * it, and every load and store that is not I/O goes to it instead of dmem.
    */
   bus?: BusMemory;
