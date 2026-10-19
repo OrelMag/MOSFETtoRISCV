@@ -7,6 +7,7 @@
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { IMM_SRC } from '../riscv/isa';
+import { rowsKey, signalsOf, SLOT_CODE, type CustomRow } from '../riscv/custom';
 import { alu, constWord, orN } from './alu';
 import { koggeStone } from './fastadd';
 import { andN, busMux2, incrementer, muxTree, rca } from './combinational';
@@ -190,61 +191,87 @@ export const CLASSES: [string, number][] = [
   ['JAL', 0b11011], ['JALR', 0b11001], ['LUI', 0b01101], ['AUIPC', 0b00101],
 ];
 
-/** Recognises the nine opcode classes: one 5-input AND per class on true/complement rails. */
-export const OPCODE_DECODER: ComponentDef = (() => {
-  const n = 5;
-  const g = andN(n);
-  const gh = symbolGeom(g).h;
-  const pitch = gh + 2;
-  const T = (i: number) => 8 + 7 * i, C = (i: number) => T(i) + 5;
-  const XG = T(n) + 3, Y0 = 2 * n + 4;
-  const instances: InstanceDef[] = [{ name: 'sa', def: splitter([2, 1, 1, 1, 1, 1]), at: [3, -2] }];
-  const trueEnds: string[][] = Array.from({ length: n }, (_, i) => [`sa.o${i + 1}`, `inv${i}.a`]);
-  const compEnds: string[][] = Array.from({ length: n }, (_, i) => [`inv${i}.y`]);
-  for (let i = 0; i < n; i++) instances.push({ name: `inv${i}`, def: NOT, at: [T(i) + 1, 2 * i] });
-  const gIn = g.ports.filter((p) => p.dir === 'in').map((p) => p.name);
-  const nets: NetDef[] = [{ name: 'op', ends: ['op', 'sa.in'] }];
-  const pins: Record<string, [number, number]> = { op: [0, 4] };
-  CLASSES.forEach(([name, code], k) => {
-    instances.push({ name: `is_${name}`, def: g, at: [XG, Y0 + pitch * k] });
-    for (let i = 0; i < n; i++) ((code >> i) & 1 ? trueEnds : compEnds)[i].push(`is_${name}.${gIn[i]}`);
-    nets.push({ name, ends: [`is_${name}.y`, name] });
-    pins[name] = [XG + 8, Y0 + pitch * k + gh / 2];
+/** Recognises the opcode classes: one 5-input AND per class on true/complement rails. `extra`: more classes
+ *  (a custom instruction's: name and opcode[6:2]); without them, the nine of RV32I (OPCODE_DECODER). */
+export function opcodeDecoder(extra: readonly [string, number][] = []): ComponentDef {
+  const classes: [string, number][] = [...CLASSES, ...extra];
+  const key = extra.length ? `opdec_${extra.map(([n, c]) => `${n}_${c}`).join('_')}` : 'opdec';
+  return memo(key, () => {
+    const n = 5;
+    const g = andN(n);
+    const gh = symbolGeom(g).h;
+    const pitch = gh + 2;
+    const T = (i: number) => 8 + 7 * i, C = (i: number) => T(i) + 5;
+    const XG = T(n) + 3, Y0 = 2 * n + 4;
+    const instances: InstanceDef[] = [{ name: 'sa', def: splitter([2, 1, 1, 1, 1, 1]), at: [3, -2] }];
+    const trueEnds: string[][] = Array.from({ length: n }, (_, i) => [`sa.o${i + 1}`, `inv${i}.a`]);
+    const compEnds: string[][] = Array.from({ length: n }, (_, i) => [`inv${i}.y`]);
+    for (let i = 0; i < n; i++) instances.push({ name: `inv${i}`, def: NOT, at: [T(i) + 1, 2 * i] });
+    const gIn = g.ports.filter((p) => p.dir === 'in').map((p) => p.name);
+    const nets: NetDef[] = [{ name: 'op', ends: ['op', 'sa.in'] }];
+    const pins: Record<string, [number, number]> = { op: [0, 4] };
+    classes.forEach(([name, code], k) => {
+      instances.push({ name: `is_${name}`, def: g, at: [XG, Y0 + pitch * k] });
+      for (let i = 0; i < n; i++) ((code >> i) & 1 ? trueEnds : compEnds)[i].push(`is_${name}.${gIn[i]}`);
+      nets.push({ name, ends: [`is_${name}.y`, name] });
+      pins[name] = [XG + 8, Y0 + pitch * k + gh / 2];
+    });
+    for (let i = 0; i < n; i++) {
+      nets.push({ name: `op${i + 2}`, ends: trueEnds[i], trunk: T(i) });
+      nets.push({ name: `op${i + 2}_n`, ends: compEnds[i], trunk: C(i) });
+    }
+    return define({
+      id: key,
+      name: extra.length ? `Opcode decoder (+ ${extra.map(([nm]) => nm.replace(/^cx_/, '')).join(', ')})` : 'Opcode decoder', category: 'cpu',
+      summary: `Which kind of instruction is this? One AND gate per instruction class matches opcode[6:2] (bits 1:0 are always 11)${extra.length ? `; ${extra.length} custom class${extra.length > 1 ? 'es' : ''} on the free slots` : ''}.`,
+      ports: [bus('op', 7, 'in'), ...classes.map(([nm]) => bit(nm, 'out'))],
+      symbol: { kind: 'box', label: 'OPCODE' },
+      netlist: () => ({ pins, instances, nets }),
+    });
   });
-  for (let i = 0; i < n; i++) {
-    nets.push({ name: `op${i + 2}`, ends: trueEnds[i], trunk: T(i) });
-    nets.push({ name: `op${i + 2}_n`, ends: compEnds[i], trunk: C(i) });
-  }
-  return define({
-    id: 'opdec', name: 'Opcode decoder', category: 'cpu',
-    summary: 'Which kind of instruction is this? One AND gate per instruction class matches opcode[6:2] (bits 1:0 are always 11).',
-    ports: [bus('op', 7, 'in'), ...CLASSES.map(([n]) => bit(n, 'out'))],
-    symbol: { kind: 'box', label: 'OPCODE' },
-    netlist: () => ({ pins, instances, nets }),
-  });
-})();
+}
 
-/** Control unit: opcode classes → datapath control signals (OR gates), plus the ALU decoder. */
-export const CONTROL: ComponentDef = (() => {
-  const D = OPCODE_DECODER;
+/** The nine RV32I opcode classes. */
+export const OPCODE_DECODER: ComponentDef = opcodeDecoder();
+
+/** Control unit: opcode classes → datapath control signals (OR gates), plus the ALU decoder. `custom`: custom
+ *  instructions (riscv/custom.ts), each one more opcode class and an OR input on every signal its row asserts. */
+export function control(custom: readonly CustomRow[] = []): ComponentDef {
+  return memo(custom.length ? `control_cx${rowsKey(custom)}` : 'control', () => buildControl(custom));
+}
+
+function buildControl(custom: readonly CustomRow[]): ComponentDef {
+  const cx = custom.map((r) => ({ row: r, cls: `cx_${r.name.replace(/[^\w]/g, '_')}`, sigs: new Set(signalsOf(r)) }));
+  const D = opcodeDecoder(cx.map((c) => [c.cls, SLOT_CODE[c.row.slot]]));
+  const classes: [string, number][] = [...CLASSES, ...cx.map((c): [string, number] => [c.cls, SLOT_CODE[c.row.slot]])];
   const dg = symbolGeom(D);
   const rail = (k: number) => dg.w + 4 + 2 * k; // vertical rail per class
-  const classIdx = new Map(CLASSES.map(([n], i) => [n, i]));
-  const XO = rail(CLASSES.length) + 4; // OR gate column
+  const classIdx = new Map(classes.map(([n], i) => [n, i]));
+  const XO = rail(classes.length) + 4; // OR gate column
+  const by = (sig: string) => cx.filter((c) => c.sigs.has(sig)).map((c) => c.cls);
   type Sig = { name: string; from: string[] };
   const sigs: Sig[] = [
-    { name: 'regWrite', from: ['R', 'I', 'LOAD', 'JAL', 'JALR', 'LUI', 'AUIPC'] },
-    { name: 'aluSrcB', from: ['I', 'LOAD', 'STORE', 'JALR', 'AUIPC'] },
-    { name: 'resSrc0', from: ['LOAD', 'LUI'] },
-    { name: 'resSrc1', from: ['JAL', 'JALR', 'LUI'] },
-    { name: 'immSrc0', from: ['STORE', 'LUI', 'AUIPC'] },
-    { name: 'immSrc1', from: ['BRANCH', 'LUI', 'AUIPC'] },
-    { name: 'aluOp', from: ['R', 'I'] },
+    { name: 'regWrite', from: ['R', 'I', 'LOAD', 'JAL', 'JALR', 'LUI', 'AUIPC', ...by('regWrite')] },
+    { name: 'aluSrcB', from: ['I', 'LOAD', 'STORE', 'JALR', 'AUIPC', ...by('aluSrcB')] },
+    { name: 'resSrc0', from: ['LOAD', 'LUI', ...by('resSrc0')] },
+    { name: 'resSrc1', from: ['JAL', 'JALR', 'LUI', ...by('resSrc1')] },
+    { name: 'immSrc0', from: ['STORE', 'LUI', 'AUIPC', ...by('immSrc0')] },
+    { name: 'immSrc1', from: ['BRANCH', 'LUI', 'AUIPC', ...by('immSrc1')] },
+    { name: 'aluOp', from: ['R', 'I', ...by('aluOp')] },
   ];
-  const direct: [string, string][] = [['aluSrcA', 'AUIPC'], ['memWrite', 'STORE'], ['branch', 'BRANCH'], ['jump', 'JAL'], ['jalr', 'JALR'], ['immSrc2', 'JAL']];
+  // A signal one class drives straight through; a custom class that asserts it too turns it into an OR.
+  const direct: [string, string][] = [];
+  for (const [sig, c] of [['aluSrcA', 'AUIPC'], ['memWrite', 'STORE'], ['branch', 'BRANCH'], ['jump', 'JAL'], ['jalr', 'JALR'], ['immSrc2', 'JAL']] as [string, string][]) {
+    const more = by(sig);
+    if (more.length) sigs.push({ name: sig, from: [c, ...more] });
+    else direct.push([sig, c]);
+  }
+  const subs = by('alt');
+  const ALT = subs.length ? orN(2 + subs.length) : OR;
+  const altIn = ALT.ports.filter((p) => p.dir === 'in').map((p) => p.name);
   const instances: InstanceDef[] = [{ name: 'dec', def: D, at: [4, 0] }];
   const nets: NetDef[] = [{ name: 'op', ends: ['op', 'dec.op'] }];
-  const classEnds = new Map<string, string[]>(CLASSES.map(([n]) => [n, [`dec.${n}`]]));
+  const classEnds = new Map<string, string[]>(classes.map(([n]) => [n, [`dec.${n}`]]));
   let y = 2;
   const gateOut = new Map<string, string>();
   for (const s of sigs) {
@@ -257,8 +284,9 @@ export const CONTROL: ComponentDef = (() => {
     y += gg.h + 2;
   }
   for (const [sig, c] of direct) gateOut.set(sig, `dec.${c}`);
-  // ALU decoder: ctl[2:0] = aluOp ? funct3 : 0; ctl[3] = aluOp & f7b5 & (R | f3 == 101) | BRANCH
+  // ALU decoder: ctl[2:0] = aluOp ? funct3 : 0; ctl[3] = aluOp & f7b5 & (R | f3 == 101) | BRANCH (| a subtracting custom class)
   const ya = y + 2;
+  const altH = symbolGeom(ALT).h;
   instances.push(
     { name: 'sf3', def: splitter([1, 1, 1]), at: [XO - 10, ya] },
     { name: 'sf7', def: splitter([5, 1, 1]), at: [XO - 10, ya + 8] },
@@ -269,12 +297,15 @@ export const CONTROL: ComponentDef = (() => {
     { name: 'is101', def: andN(3), at: [XO + 11, ya + 14] },
     { name: 'shR', def: OR, at: [XO + 18, ya + 15] },
     { name: 'alt1', def: andN(3), at: [XO + 25, ya + 13] },
-    { name: 'alt', def: OR, at: [XO + 32, ya + 15] },
+    { name: 'alt', def: ALT, at: [XO + 32, ya + 17 - altH / 2] },
     { name: 'mctl', def: merger([1, 1, 1, 1]), at: [XO + 40, ya] },
     { name: 'mimm', def: merger([1, 1, 1]), at: [XO + 40, 22] },
     { name: 'mres', def: merger([1, 1]), at: [XO + 40, 9] },
   );
-  for (const [c, ends] of classEnds) nets.push({ name: c, ends: [...ends, ...(c === 'R' ? ['shR.a'] : []), ...(c === 'BRANCH' ? ['alt.b'] : [])], trunk: rail(classIdx.get(c)!) });
+  for (const [c, ends] of classEnds) {
+    const sub = subs.indexOf(c);
+    nets.push({ name: c, ends: [...ends, ...(c === 'R' ? ['shR.a'] : []), ...(c === 'BRANCH' ? [`alt.${altIn[1]}`] : []), ...(sub >= 0 ? [`alt.${altIn[2 + sub]}`] : [])], trunk: rail(classIdx.get(c)!) });
+  }
   nets.push(
     { name: 'f3', ends: ['funct3', 'sf3.in'] },
     { name: 'f7', ends: ['funct7', 'sf7.in'] },
@@ -286,7 +317,7 @@ export const CONTROL: ComponentDef = (() => {
     { name: 'f7b5', ends: ['sf7.o1', 'alt1.i1'] },
     { name: 'is101', ends: ['is101.y', 'shR.b'] },
     { name: 'shR', ends: ['shR.y', 'alt1.i2'] },
-    { name: 'alt1', ends: ['alt1.y', 'alt.a'] },
+    { name: 'alt1', ends: ['alt1.y', `alt.${altIn[0]}`] },
     { name: 'c0', ends: ['a0.y', 'mctl.i0'] },
     { name: 'c1', ends: ['a1.y', 'mctl.i1'] },
     { name: 'c2', ends: ['a2.y', 'mctl.i2'] },
@@ -320,9 +351,14 @@ export const CONTROL: ComponentDef = (() => {
   const OX = XO + 50;
   const pins: Record<string, [number, number]> = { op: [0, 4], funct3: [XO - 14, ya + 1.5], funct7: [XO - 14, ya + 11] };
   outs.forEach((o, i) => (pins[o] = [OX, 2 + 4 * i]));
+  const customRows = custom.map((r) => {
+    const res = r.regWrite ? { alu: 'ALU', mem: 'mem', pc4: 'PC+4', imm: 'imm' }[r.result] : '–';
+    return `<tr><td>${r.name} (custom-${r.slot})</td><td>${r.regWrite ? 1 : 0}</td><td>${r.fmt}</td><td>${r.srcA === 'pc' ? 'PC' : 'rs1'}</td><td>${r.srcB}</td><td>${r.memWrite ? 1 : 0}</td><td>${res}</td></tr>`;
+  }).join('');
   return define({
-    id: 'control', name: 'Control unit', category: 'cpu',
-    summary: 'Turns the instruction\'s opcode and function fields into the switch settings for the datapath: which mux inputs to pick, whether to write a register or memory, which ALU operation.',
+    id: custom.length ? `control_cx${rowsKey(custom)}` : 'control',
+    name: custom.length ? `Control unit (+ ${custom.map((r) => r.name).join(', ')})` : 'Control unit', category: 'cpu',
+    summary: `Turns the instruction's opcode and function fields into the switch settings for the datapath: which mux inputs to pick, whether to write a register or memory, which ALU operation.${custom.length ? ` With ${custom.map((r) => r.name).join(', ')}: one more opcode class each, ORed into the signals its row asserts.` : ''}`,
     ports: [
       bus('op', 7, 'in'), bus('funct3', 3, 'in'), bus('funct7', 7, 'in'),
       bit('regWrite', 'out'), bus('immSrc', 3, 'out'), bit('aluSrcA', 'out'), bit('aluSrcB', 'out'),
@@ -340,9 +376,13 @@ export const CONTROL: ComponentDef = (() => {
       <tr><td>JAL</td><td>1</td><td>J</td><td>–</td><td>–</td><td>0</td><td>PC+4</td></tr>
       <tr><td>JALR</td><td>1</td><td>I</td><td>rs1</td><td>imm</td><td>0</td><td>PC+4</td></tr>
       <tr><td>LUI</td><td>1</td><td>U</td><td>–</td><td>–</td><td>0</td><td>imm</td></tr>
-      <tr><td>AUIPC</td><td>1</td><td>U</td><td>PC</td><td>imm</td><td>0</td><td>ALU</td></tr></table>`,
+      <tr><td>AUIPC</td><td>1</td><td>U</td><td>PC</td><td>imm</td><td>0</td><td>ALU</td></tr>${customRows}</table>`,
   });
-})();
+}
+
+/** The control unit of RV32I. */
+export const CONTROL: ComponentDef = control();
+
 
 /** Branch decision and next-PC select. */
 export const NEXT_PC: ComponentDef = (() => {
@@ -459,6 +499,8 @@ export interface CpuOptions {
   imemPort?: boolean;
   /** Instruction ROM of 2^imemK words (default 6: 64 words). */
   imemK?: number;
+  /** Custom instructions (riscv/custom.ts): the control unit gains an opcode class per row. */
+  custom?: readonly CustomRow[];
 }
 
 /** PC + 4 with a parallel-prefix adder. */
@@ -495,11 +537,11 @@ export const PLUS4_FAST: ComponentDef = define({
 export function singleCycleCpu(program: number[], opts: CpuOptions = {}): ComponentDef {
   const IM = rom(program, opts.imemK ?? 6);
   const adder = opts.adder ?? 'rca';
-  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? `_dc${opts.dcache === true ? '' : opts.dcache}` : ''}${opts.fpu ? '_fp' : ''}${opts.shared ? '_mp' : ''}${opts.imemPort ? '_ip' : ''}${opts.icache ? '_ic' : ''}${opts.dram ? `_dram${cfgKey(opts.dram)}` : ''}`;
-  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, opts.dcache ?? false, !!opts.fpu, !!opts.shared, !!opts.imemPort, !!opts.icache, opts.imemK ?? 6, opts.dram));
+  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? `_dc${opts.dcache === true ? '' : opts.dcache}` : ''}${opts.fpu ? '_fp' : ''}${opts.shared ? '_mp' : ''}${opts.imemPort ? '_ip' : ''}${opts.icache ? '_ic' : ''}${opts.dram ? `_dram${cfgKey(opts.dram)}` : ''}${opts.custom?.length ? `_cx${rowsKey(opts.custom)}` : ''}`;
+  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, opts.dcache ?? false, !!opts.fpu, !!opts.shared, !!opts.imemPort, !!opts.icache, opts.imemK ?? 6, opts.dram, opts.custom ?? []));
 }
 
-function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: boolean | 'wb' | 'wb2' = false, fpu = false, shared = false, imemPort = false, icache = false, imemK = 6, dram?: DramConfig): ComponentDef {
+function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: boolean | 'wb' | 'wb2' = false, fpu = false, shared = false, imemPort = false, icache = false, imemK = 6, dram?: DramConfig, custom: readonly CustomRow[] = []): ComponentDef {
   if (dram && dcache !== 'wb' && dcache !== 'wb2') throw new Error('singleCycleCpu: dram needs a write-back data cache');
   if (icache && (fpu || shared)) throw new Error('singleCycleCpu: icache with fpu or shared is not supported');
   const IMEM = icache ? iCache(IM, 3, imemK) : IM;
@@ -541,7 +583,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   place('gndT', TIE0, [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 5]);
   alignY('clr0', CLEAR_BIT0, aluR + 12, 'in', Y + 18);
   place('gndJ', TIE0, [P('clr0', 'zero')[0] - 6, P('clr0', 'zero')[1] + 1]);
-  place('ctl', CONTROL, [8, 0]);
+  place('ctl', custom.length ? control(custom) : CONTROL, [8, 0]);
   place('npc', NEXT_PC, [62, 0]);
 
   const labels: Record<string, string> = { pcmux: 'next PC', pc: 'PC', srcA: 'SrcA', srcB: 'SrcB', res: 'result', target: 'PC + imm' };
@@ -836,7 +878,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       bus('memAddr', 32, 'out'), bus('memWData', 32, 'out'), bit('memWE', 'out'), bit('memReq', 'out'), bit('retire', 'out'));
   }
   return {
-    id: imemPort ? 'rv32i_core' : key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
+    id: imemPort ? (custom.length ? `rv32i_cx${rowsKey(custom)}_core` : 'rv32i_core') : (custom.length ? `cx${rowsKey(custom)}_` : '') + key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
     summary: dcache === 'wb' || dcache === 'wb2'
       ? `The single-cycle processor with its data memory behind a ${dcache === 'wb2' ? '2-way set-associative' : 'direct-mapped'} write-back cache. Loads and stores that miss hold the PC and the register write (retire = 0): ${dram ? `as long as the DRAM controller takes for the line (${dram.banks} banks, ${dram.policy} page): 8 cycles on a row hit, 12 on a closed bank, 16 on another open row, plus a write-back of a dirty victim first` : '8 cycles, or 12 when a dirty line must be written back first'}.`
       : dcache
