@@ -1309,7 +1309,8 @@ export class Stage {
   }
 
   /** The how-to line: above the bottom-left panels, and wrapped short of the right-docked panels beside it (it was
-   *  cut off under the CPU panel); hidden when that leaves it no room. */
+   *  cut off under the CPU panel); hidden when that leaves it no room, or would lift it into the canvas's top half
+   *  (a tall bottom-left panel, a phone), where it would cost the circuit more room than it is worth. */
   private placeHint(): void {
     const H = this.canvas.clientHeight, W = this.canvas.clientWidth;
     const c = this.canvas.getBoundingClientRect();
@@ -1325,7 +1326,7 @@ export class Stage {
     }
     this.hint.style.bottom = `${bottom}px`;
     this.hint.style.right = `${right}px`;
-    this.hint.hidden = W - right - 12 < 160 || lineTop < H / 3;
+    this.hint.hidden = W - right - 12 < 160 || (docked.length > 0 && lineTop < H / 2);
   }
 
   /** Screen space the unfolded right-docked panels cover (with their 12 px margin and a 12 px gap).

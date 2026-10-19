@@ -11,9 +11,10 @@ export interface ViewBox { x: number; y: number; w: number; h: number }
 /** Here a rectangle in screen pixels from the host's top-left corner (an overlay panel, a free area). */
 export type { Rect };
 
-/** Below this many pixels (either way) beside the overlays there is no point fitting the drawing there: it is
- *  fitted to the whole host and the overlays cover it (a phone; the learner folds the panel). */
+/** Below this many pixels wide (MIN_FIT_H high) beside the overlays there is no point fitting the drawing there:
+ *  it is fitted to the whole host and the overlays cover it (a phone; the learner folds the panel). */
 export const MIN_FIT_PX = 120;
+export const MIN_FIT_H = 80;
 
 /** Pixels kept clear between the drawing and an overlay panel. */
 export const COVER_GAP = 12;
@@ -32,7 +33,7 @@ export function startFolded(canvasW: number, panelW: number): boolean {
  * panels `cover` (each kept `gap` px clear): of the rectangles that touch no cover, the one giving the largest
  * scale, the larger on a tie. Beside a full-height panel that is the strip left of it; beside a short one it may
  * be the full width under it (a wide circuit), and a bottom-left panel takes its corner away. The whole host when
- * no free rectangle is MIN_FIT_PX each way.
+ * no free rectangle is MIN_FIT_PX wide and MIN_FIT_H high.
  */
 export function freeRect(width: number, height: number, cover: Rect[], bw: number, bh: number, gap = COVER_GAP): Rect {
   const host: Rect = { x: 0, y: 0, w: width, h: height };
@@ -51,7 +52,7 @@ export function freeRect(width: number, height: number, cover: Rect[], bw: numbe
     if (xs[j] - xs[i] < MIN_FIT_PX) continue;
     for (let k = 0; k < ys.length; k++) for (let l = k + 1; l < ys.length; l++) {
       const r = { x: xs[i], y: ys[k], w: xs[j] - xs[i], h: ys[l] - ys[k] };
-      if (r.h < MIN_FIT_PX || boxes.some((b) => overlaps(r, b))) continue;
+      if (r.h < MIN_FIT_H || boxes.some((b) => overlaps(r, b))) continue;
       const s = Math.min(r.w / bw, r.h / bh);
       if (!best || s > bestS * (1 + 1e-9) || (s >= bestS * (1 - 1e-9) && r.w * r.h > best.w * best.h)) { best = r; bestS = s; }
     }
