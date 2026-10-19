@@ -1,6 +1,7 @@
 // A two-pass RV32I assembler: labels, ABI register names, the common pseudo-instructions and
 // .word. Errors are collected per line instead of thrown, so the editor can show them all.
 
+import { specOf, type CustomRow } from './custom';
 import { BY_NAME, CSRS, encB, encI, encJ, encR, encR4, encS, encU, fregNumber, OPCODES, regNumber, RM_OPERANDS } from './isa';
 
 export interface AsmLine {
@@ -98,7 +99,8 @@ export const PSEUDO_OPS: readonly string[] = [
 /** Directives: .word emits data, the others are accepted and ignored. */
 export const DIRECTIVES: readonly string[] = ['.word', '.text', '.globl', '.global', '.section', '.align'];
 
-export function assemble(src: string): AsmResult {
+/** custom: the CPU's custom instructions (riscv/custom.ts), assembled like any other. */
+export function assemble(src: string, custom: readonly CustomRow[] = []): AsmResult {
   const stmts: Stmt[] = [];
   const labels = new Map<string, number>();
   const errors: { line: number; message: string }[] = [];
@@ -129,7 +131,7 @@ export function assemble(src: string): AsmResult {
   const lines: AsmLine[] = [];
   for (const st of stmts) {
     try {
-      const out = encode(st, labels);
+      const out = encode(st, labels, custom);
       if (out.length !== st.size) throw new AsmError('internal: size mismatch');
       out.forEach((w, k) => {
         words.push(w >>> 0);
@@ -146,7 +148,7 @@ export function assemble(src: string): AsmResult {
   return { words, lines, labels, errors };
 }
 
-function encode(st: Stmt, labels: Map<string, number>): number[] {
+function encode(st: Stmt, labels: Map<string, number>, custom: readonly CustomRow[] = []): number[] {
   const { op, args, addr } = st;
   const need = (n: number) => {
     if (args.length !== n) throw new AsmError(`${op} expects ${n} operand${n === 1 ? '' : 's'}, got ${args.length}`);
@@ -299,7 +301,8 @@ function encode(st: Stmt, labels: Map<string, number>): number[] {
     case '.word': return args.map((a) => value(a) >>> 0);
   }
 
-  const spec = BY_NAME.get(op);
+  const own = custom.find((r) => r.name === op);
+  const spec = BY_NAME.get(op) ?? (own ? specOf(own) : undefined);
   if (!spec) throw new AsmError(`unknown instruction "${op}"`);
   if (spec.opcode === OPCODES.AMO) {
     need(3);

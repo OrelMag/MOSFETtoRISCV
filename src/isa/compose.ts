@@ -4,7 +4,8 @@
 // exactly (tests/compose-isa.test.ts holds them to the table's own assembler and disassembler).
 
 import { assemble4 } from '../isa4/asm4';
-import { RV32_COMPOSE } from '../riscv/compose';
+import { RV32_COMPOSE, rv32Compose } from '../riscv/compose';
+import type { CustomRow } from '../riscv/custom';
 import { RV16_COMPOSE } from '../riscv/rv16/compose16';
 import { codeOf, clampSlot, wiresOf, type CField, type CInstr, type ComposeIsa, type CSlot, type Parts, type ProgramInfo } from './composekit';
 import { ISA4_PRESET } from './presets';
@@ -206,8 +207,8 @@ export const CPU4_COMPOSE: ComposeIsa = {
 const tables = new WeakMap<IsaDoc, ComposeIsa>();
 
 /** The builder's ISA for a ROM language ('asm', 'rv16', 'cpu4'; 'isa' with its table), or null. */
-export function composeIsaOf(lang: string, table?: IsaDoc): ComposeIsa | null {
-  if (lang === 'asm') return RV32_COMPOSE;
+export function composeIsaOf(lang: string, table?: IsaDoc, custom?: readonly CustomRow[]): ComposeIsa | null {
+  if (lang === 'asm') return custom?.length ? rv32Compose(custom) : RV32_COMPOSE;
   if (lang === 'rv16') return RV16_COMPOSE;
   if (lang === 'cpu4') return CPU4_COMPOSE;
   if (lang === 'isa' && table) {

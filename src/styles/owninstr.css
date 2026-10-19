@@ -1,0 +1,48 @@
+/* The custom instructions dialog (editor/owninstr.ts): rows on the left, the row's control signals and what they mean on the right. */
+
+.oi-dlg .panel { width: min(1120px, 96vw); }
+.oi-body { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 16px; min-height: 0; overflow: auto; max-height: 72vh; }
+.oi-left { display: flex; flex-direction: column; gap: 4px; }
+.oi-sec { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 8px 0 2px; }
+.oi-sec:first-child { margin-top: 0; }
+.oi-item { display: grid; gap: 1px; text-align: left; border: 1px solid transparent; background: none; color: var(--text-2); padding: 6px 8px; border-radius: var(--radius-sm); cursor: pointer; font: 13px var(--font-mono); }
+.oi-item b { color: var(--text); }
+.oi-item small { font: 11px var(--font-ui); color: var(--muted); }
+.oi-item:hover { background: var(--surface-2); }
+.oi-item.on { border-color: var(--accent); background: var(--accent-soft); }
+.oi-item.bad { box-shadow: inset 3px 0 0 var(--bad); }
+.oi-preset { justify-content: flex-start; text-align: left; font: 12px var(--font-mono); white-space: normal; }
+.oi-right { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.oi-enc { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.oi-enc label { display: grid; gap: 3px; font-size: 11.5px; color: var(--muted); }
+.oi-enc input, .oi-enc select { font: 13px var(--font-mono); color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px; padding: 4px 7px; }
+.oi-name { width: 110px; }
+.oi-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 900px) { .oi-cols { grid-template-columns: minmax(0, 1fr); } .oi-body { grid-template-columns: minmax(0, 1fr); } }
+.oi-ctl { display: grid; gap: 6px; align-content: start; }
+.oi-line { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; align-items: center; }
+.oi-line > span:first-child { font: 600 12px var(--font-mono); color: var(--text-2); }
+.oi-seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border-strong); border-radius: 7px; overflow: hidden; justify-self: start; }
+.oi-seg button { border: 0; border-right: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 3px 9px; font: 12px var(--font-ui); cursor: pointer; }
+.oi-seg button:last-child { border-right: 0; }
+.oi-seg button.on { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+.oi-sem { margin-top: 6px; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); font: 600 14px var(--font-mono); display: grid; gap: 2px; }
+.oi-probs { display: grid; gap: 4px; font-size: 12.5px; }
+.oi-probs div { padding: 4px 9px; border-radius: 6px; }
+.oi-probs .bad { background: var(--bad-soft); color: var(--bad); }
+.oi-probs .warn { background: var(--warn-soft); color: var(--warn); }
+.oi-probs .note { background: var(--surface-2); color: var(--text-2); }
+.oi-probs .ok { background: var(--good-soft); color: var(--good); }
+.oi-side { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.oi-side h4 { margin: 4px 0 0; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-2); }
+.oi-dp { width: 100%; height: auto; display: block; }
+.oi-dp rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+.oi-dp text { fill: var(--muted); font: 600 10px var(--font-ui); text-anchor: middle; dominant-baseline: central; }
+.oi-dp .lit rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.8; }
+.oi-dp .lit text { fill: var(--accent); }
+.oi-dp path { fill: none; stroke: var(--border-strong); stroke-width: 1.2; }
+.oi-dp path.lit { stroke: var(--accent); stroke-width: 2.2; }
+.oi-dp text.lbl { font: 500 9px var(--font-mono); fill: var(--muted); text-anchor: start; }
+.oi-sigs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
+.oi-sigs code { font: 11.5px var(--font-mono); padding: 1px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); }
+.oi-code { margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); font: 12px/1.55 var(--font-mono); white-space: pre; overflow-x: auto; }
