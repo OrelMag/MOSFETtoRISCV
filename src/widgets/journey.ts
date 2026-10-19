@@ -64,16 +64,18 @@ export function ladder(): HTMLElement {
     box.classList.toggle('more-down', box.scrollTop + box.clientHeight < box.scrollHeight - 2);
   };
   box.addEventListener('scroll', edges, { passive: true });
-  // Scrolled once it has a size (it is built before the page is attached): the focus rung at the box's bottom.
+  // The focus rung at the box's bottom once it has a size (it is built before the page is attached), and again
+  // while sizes settle (web fonts, a phone's wrapped rungs), until the visitor scrolls it.
   if (typeof ResizeObserver !== 'undefined') {
     const ro = new ResizeObserver(() => {
       if (!box.clientHeight) return;
-      ro.disconnect();
       const r = rungs[focus];
       box.scrollTop = focus === LADDER.length - 1 ? box.scrollHeight : r.offsetTop + r.offsetHeight + 24 - box.clientHeight;
       edges();
     });
     ro.observe(box);
+    rungs.forEach((r) => ro.observe(r));
+    for (const ev of ['wheel', 'touchstart', 'pointerdown', 'keydown']) box.addEventListener(ev, () => ro.disconnect(), { once: true, passive: true });
   }
   return box;
 }
