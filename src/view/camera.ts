@@ -108,6 +108,26 @@ export function underCover(vb: ViewBox, bbox: ViewBox, width: number, height: nu
   return cover.some((c) => overlaps(r, c));
 }
 
+/**
+ * On a touch screen the sandbox shows a small circuit at no fewer than this many px per grid unit: a NAND
+ * (4 units) 64 px wide, a pin's knob 26 px, inputs 2 units apart 32 px apart, so a finger can hit them.
+ */
+export const TOUCH_PX = 16;
+
+/**
+ * A fitted view box (`vb`, the host's aspect, `width` px wide) made touch-usable: when it shows fewer than
+ * `minPx` px per grid unit but at least `slack` of that (a small circuit, a little larger than the screen),
+ * it is zoomed in to `minPx` around `c` (the drawing's centre stays where the fit put it), and the rest of
+ * the circuit is a pan away. A large circuit (a CPU) keeps its fit: there Fit means "show me all of it".
+ */
+export function touchZoom(vb: ViewBox, width: number, c: Vec, minPx = TOUCH_PX, slack = 0.6): ViewBox {
+  if (!(width > 0 && vb.w > 0)) return vb;
+  const s = width / vb.w;
+  if (s >= minPx || s < minPx * slack) return vb;
+  const k = s / minPx;
+  return { x: c[0] - (c[0] - vb.x) * k, y: c[1] - (c[1] - vb.y) * k, w: vb.w * k, h: vb.h * k };
+}
+
 export class Camera {
   vb: ViewBox = { x: 0, y: 0, w: 10, h: 10 };
   /** Showing what the last fit() chose: the learner has not zoomed or panned since. */

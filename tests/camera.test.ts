@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Camera, COVER_GAP, FOLD_BESIDE_PX, fitBox, freeArea, freeRect, MIN_FIT_H, MIN_FIT_PX, type Rect, roomBeside, startFolded, underCover, type ViewBox } from '../src/view/camera';
+import { Camera, COVER_GAP, FOLD_BESIDE_PX, fitBox, freeArea, freeRect, MIN_FIT_H, MIN_FIT_PX, type Rect, roomBeside, startFolded, TOUCH_PX, touchZoom, underCover, type ViewBox } from '../src/view/camera';
 
 /** A host of a settable size and an svg that only records its view box: enough for Camera. */
 function rig(w: number, h: number) {
@@ -190,5 +190,27 @@ describe('the touch hint line on a phone', () => {
     expect(roomBeside(tiny, 0, 0, [pill(390, 373)])).toBe(true);
     expect(roomBeside(tiny, 390, 373, [pill(390, 373)])).toBe(true);
     expect(freeArea(390, 373, [], 10, 10)).toEqual({ x: 0, y: 0, w: 390, h: 373 });
+  });
+});
+
+describe('the sandbox on a touch screen', () => {
+  const W = 390, H = 560;
+  it('a small circuit fitted on a phone is zoomed in to TOUCH_PX around its centre, which stays put', () => {
+    const bbox: ViewBox = { x: 0, y: 0, w: 36, h: 12 }; // 10.8 px per unit: a 4-unit NAND 43 px wide
+    const vb = fitBox(bbox, W, H, 0, 24);
+    const z = touchZoom(vb, W, [18, 6]);
+    expect(W / z.w).toBeCloseTo(TOUCH_PX);
+    expect(z.w / z.h).toBeCloseTo(vb.w / vb.h);
+    // the centre is at the same screen point before and after
+    const at = (v: ViewBox) => [(18 - v.x) * W / v.w, (6 - v.y) * W / v.w];
+    expect(at(z)[0]).toBeCloseTo(at(vb)[0]);
+    expect(at(z)[1]).toBeCloseTo(at(vb)[1]);
+  });
+
+  it('a circuit that already fits large enough, or a large one (Fit shows all of it), is left alone', () => {
+    const small = fitBox({ x: 0, y: 0, w: 20, h: 10 }, W, H, 0, 24);
+    expect(touchZoom(small, W, [10, 5])).toBe(small);
+    const cpu = fitBox({ x: 0, y: 0, w: 120, h: 90 }, W, H, 0, 24);
+    expect(touchZoom(cpu, W, [60, 45])).toBe(cpu);
   });
 });

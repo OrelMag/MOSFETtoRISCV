@@ -9,8 +9,8 @@ import type { PuzzleInState, PuzzleOutState } from './puzzleparts';
 import { type CardReaderState, readerProgress } from '../cards/reader';
 import { B1, BX, BZ, type Bit, type ComponentDef, netlistOf } from '../sim/types';
 import { formatBits, pack, type Radix } from '../sim/values';
-import { s } from '../ui/dom';
-import { Camera, type ViewBox } from '../view/camera';
+import { coarsePointer, s } from '../ui/dom';
+import { Camera, TOUCH_PX, touchZoom, type ViewBox } from '../view/camera';
 import { applyFlow, flowDash, flowKey, flowText } from '../view/flow';
 import { FlowTokens, type Lane } from '../view/flowtokens';
 import { netKey, setNetHue, spreadHues, USER_HUE } from '../view/nethue';
@@ -914,12 +914,27 @@ export class EditorView {
     return { x: x0 - 3, y: y0 - 3, w: x1 - x0 + 6, h: y1 - y0 + 6 };
   }
 
-  /** Show the whole chip in the canvas left of `insetRight` px (a docked drawer). */
+  /**
+   * Show the whole chip in the canvas left of `insetRight` px (a docked drawer). On a touch screen a small
+   * circuit (and an empty canvas) is shown at TOUCH_PX at least, so its parts and pins take a finger: a
+   * circuit somewhat larger than the screen is then a pan away (touchZoom).
+   */
   fit(defOf: DefOf, insetRight = 0): void {
     const b = this.contentBox(defOf);
-    if (b) this.cam.fit(b, insetRight, 40);
-    else {
-      this.cam.fit({ x: -4, y: -4, w: 60, h: 36 });
+    const width = this.svg.getBoundingClientRect().width;
+    const touch = coarsePointer() && width > 0;
+    if (!b) {
+      // Empty: 60 units across, or on a touch screen what TOUCH_PX leaves (a phone: ~24), around the same centre.
+      const w = touch ? Math.min(60, width / TOUCH_PX) : 60, h = w * 0.6;
+      this.cam.fit({ x: 26 - w / 2, y: 14 - h / 2, w, h }, 0, w);
+      return;
+    }
+    this.cam.fit(b, insetRight, touch ? Math.min(40, width / TOUCH_PX) : 40);
+    if (!touch) return;
+    const vb = touchZoom(this.cam.vb, width, [b.x + b.w / 2, b.y + b.h / 2]);
+    if (vb !== this.cam.vb) {
+      this.cam.vb = vb;
+      this.cam.apply();
     }
   }
 }
