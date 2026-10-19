@@ -245,10 +245,11 @@ export class GateSim implements Sim {
     this.relax();
 
     // Any storage loop without a hint is still X: break the tie by forcing outputs, the way
-    // real silicon settles to an arbitrary state, then let the circuit resolve itself.
+    // real silicon settles to an arbitrary state, then let the circuit resolve itself. A round per leaf at most: a
+    // CPU whose flip-flops are plain NAND latches (imported from structural Verilog) has thousands of loops to break.
     if (mode !== 'x') {
       const { outStart, outList, val } = this;
-      for (let round = 0; round < 4096; round++) {
+      for (let round = 0; round < Math.max(4096, L); round++) {
         // the first leaf with an X output: the owner of the first X in outList (sorted by leaf)
         let k = 0;
         while (k < outList.length && val[outList[k]] !== BX) k++;

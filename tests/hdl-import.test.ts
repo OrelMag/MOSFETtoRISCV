@@ -16,6 +16,8 @@ import { inPorts, netlistOf, outPorts, type ComponentDef } from '../src/sim/type
 import { routeNetlist, symbolOverlaps, wireOverlaps } from '../src/view/route';
 import { singleCycleCpu } from '../src/lib/cpu';
 import { synthVerilog } from '../src/sim/vexport';
+import { exportHdl } from '../src/sim/svexport';
+import { assemble } from '../src/riscv/asm';
 
 const ADD4 = `module add4(input [3:0] a, b, input ci, output [3:0] s, output co);
   assign {co, s} = a + b + ci;
@@ -168,8 +170,40 @@ describe('Yosys storage cells as library parts', () => {
   }
 });
 
-// The roadmap's round trip: our own synthesizable export (vexport.ts) through Yosys and back must simulate equal
-// to the original, every output every cycle (combinational parts: every input, or random ones past 12 bits).
+const FIB_LOOP = ['li a0, 0', 'li a1, 1', 'loop: add a2, a0, a1', 'mv a0, a1', 'mv a1, a2', 'sw a0, 0(zero)', 'j loop'].join('\n');
+
+// The roadmap's round trip: Verilog we export, through Yosys and back, must simulate equal to the original, every
+// output every cycle (combinational parts: every input, or random ones past ~9 bits). Both exporters: the synthesizable
+// one (vexport.ts, flip-flops as processes) and the structural one the sandbox's File ▸ Export Verilog writes
+// (svexport.ts 'structure': the hierarchy down to NAND cells).
+function sameOutputs(name: string, orig: ComponentDef, def: ComponentDef, cycles: number): void {
+  const ins = inPorts(orig), outs = outPorts(orig);
+  expect(def.ports.map((p) => `${p.dir}:${p.name}:${p.width}`).sort()).toEqual(orig.ports.map((p) => `${p.dir}:${p.name}:${p.width}`).sort());
+  const a = new GateSim(flatten(orig)), b = new GateSim(flatten(def));
+  a.reset('zero'); b.reset('zero');
+  const read = (s: GateSim) => outs.map((p) => s.getBits(s.design.root.ports[p.name]).join(''));
+  let seed = 12345;
+  const rnd = (w: number) => { let v = 0; for (let i = 0; i < w; i++) { seed = (seed * 1103515245 + 12345) >>> 0; v = v * 2 + ((seed >> 16) & 1); } return v; };
+  const clock = ins.find((p) => p.clock);
+  const steps = cycles || Math.min(2 ** ins.reduce((n, p) => n + p.width, 0), 600);
+  for (let i = 0; i < steps; i++) {
+    for (const p of ins) if (p !== clock) { const v = rnd(p.width); a.setInput(p.name, v); b.setInput(p.name, v); }
+    if (clock) { a.setInput(clock.name, 0); b.setInput(clock.name, 0); }
+    a.settle(); b.settle();
+    expect(read(b), `${name} step ${i}`).toEqual(read(a));
+    if (clock) {
+      a.setInput(clock.name, 1); b.setInput(clock.name, 1);
+      a.settle(); b.settle();
+      expect(read(b), `${name} step ${i} after the edge`).toEqual(read(a));
+    }
+  }
+}
+
+const EXPORTERS: [string, (d: ComponentDef) => { text: string; top: string }][] = [
+  ['synthesizable', (d) => ({ text: synthVerilog(d, 'dut').verilog, top: 'dut' })],
+  ['structural (File ▸ Export Verilog)', (d) => { const f = exportHdl(d, 'structure'); return { text: f.text, top: f.top }; }],
+];
+
 describe('export → Yosys → import round trip', () => {
   const CASES: [string, () => ComponentDef, number][] = [
     ['rca(6)', () => rca(6), 0],
@@ -178,35 +212,29 @@ describe('export → Yosys → import round trip', () => {
     ['counter(4)', () => counter(4), 40],
     ['register(4)', () => register(4), 40],
     ['shiftRegister(4)', () => shiftRegister(4), 60],
+    // a program that loops forever: fib into a0, store, jump back
+    ['the single-cycle RV32I CPU', () => singleCycleCpu(assemble(FIB_LOOP).words), 200],
   ];
-  for (const [name, make, cycles] of CASES) {
-    it(name, async () => {
-      const orig = make();
-      const { verilog } = synthVerilog(orig, 'dut');
-      const imp = await importVerilog(verilog, { top: 'dut' });
-      const { def } = compiledTop(imp);
-      const ins = inPorts(orig), outs = outPorts(orig);
-      expect(def.ports.map((p) => `${p.dir}:${p.name}:${p.width}`).sort()).toEqual(orig.ports.map((p) => `${p.dir}:${p.name}:${p.width}`).sort());
-      const a = new GateSim(flatten(orig)), b = new GateSim(flatten(def));
-      a.reset('zero'); b.reset('zero');
-      const read = (s: GateSim) => outs.map((p) => s.getBits(s.design.root.ports[p.name]).join(''));
-      let seed = 12345;
-      const rnd = (w: number) => { let v = 0; for (let i = 0; i < w; i++) { seed = (seed * 1103515245 + 12345) >>> 0; v = v * 2 + ((seed >> 16) & 1); } return v; };
-      const clock = ins.find((p) => p.clock);
-      const steps = cycles || Math.min(2 ** ins.reduce((n, p) => n + p.width, 0), 600);
-      for (let i = 0; i < steps; i++) {
-        for (const p of ins) if (p !== clock) { const v = rnd(p.width); a.setInput(p.name, v); b.setInput(p.name, v); }
-        if (clock) { a.setInput(clock.name, 0); b.setInput(clock.name, 0); }
-        a.settle(); b.settle();
-        expect(read(b), `${name} step ${i}`).toEqual(read(a));
-        if (clock) {
-          a.setInput(clock.name, 1); b.setInput(clock.name, 1);
-          a.settle(); b.settle();
-          expect(read(b), `${name} step ${i} after the edge`).toEqual(read(a));
-        }
+  for (const [how, exp] of EXPORTERS) {
+    describe(how, () => {
+      for (const [name, make, cycles] of CASES) {
+        it(name, async () => {
+          const orig = make();
+          const { text, top } = exp(orig);
+          const { def } = compiledTop(await importVerilog(text, { top }));
+          sameOutputs(name, orig, def, cycles);
+        }, 120_000);
       }
-    }, 60_000);
+    });
   }
+
+  // The other way round: a chip drawn from Verilog, exported with File ▸ Export Verilog and imported again.
+  it('a Verilog chip exported and imported again', async () => {
+    const first = compiledTop(await importVerilog(TOP)).def;
+    const f = exportHdl(first, 'structure');
+    const again = compiledTop(await importVerilog(f.text, { top: f.top })).def;
+    sameOutputs('top, twice', first, again, 60);
+  }, 120_000);
 });
 
 // The drawing: no two nets on one line, no part on another (the checks every library schematic passes).
