@@ -95,6 +95,13 @@ export function measureCpu(def: ComponentDef): CpuMeasure {
   return { nands: stats(def).nands - r, period, ...(dram(def) ? { offChip: true } : {}) };
 }
 
+/**
+ * The nets that say how many instructions retire at the next edge: validW (pipelines), retire (multi-cycle
+ * instructions; more bits: the count, for a CPU that retires several a cycle), retire0 (the multi-core's
+ * hart 0); undefined: one every cycle.
+ */
+const retireNets = (ports: Record<string, number[]>): number[] | undefined => ports.validW ?? ports.retire ?? ports.retire0;
+
 /** Every benchmark cfg can run, at once on one gate-level build (one per lane). */
 export async function benchLanes(cfg: CpuConfig, cases: BenchCase[]): Promise<BenchRun[]> {
   if (cases.length > LANES) throw new Error('benchLanes: at most 32 cases');
@@ -105,8 +112,7 @@ export async function benchLanes(cfg: CpuConfig, cases: BenchCase[]): Promise<Be
   for (const p of inPorts(design.root.def)) sim.setInput(p.name, 0);
   sim.settle();
   const root = design.root, ports = root.ports;
-  // validW (pipelines), retire (multi-cycle instructions), retire0 (the multi-core's hart 0), else every cycle
-  const retire = (ports.validW ?? ports.retire ?? ports.retire0)?.[0];
+  const retire = retireNets(ports);
   const stallNet = (name: string) => root.children!.get(name)?.ports.stall?.[0];
   const dNet = stallNet('dm'), iNet = stallNet('imem');
   const bit = (net: number, l: number) => (sim.v[net] >>> l) & 1;
@@ -122,14 +128,16 @@ export async function benchLanes(cfg: CpuConfig, cases: BenchCase[]): Promise<Be
       if (done[l]) continue;
       if (dNet !== undefined) { const s = bit(dNet, l); dstall[l] += s; dmiss[l] += s & ~prevD[l]; prevD[l] = s; }
       if (iNet !== undefined) { const s = bit(iNet, l); istall[l] += s; imiss[l] += s & ~prevI[l]; prevI[l] = s; }
-      if (retire === undefined || bit(retire, l)) retired[l]++;
+      retired[l] += retire ? retire.reduce((a, net, i) => a + (bit(net, l) << i), 0) : 1;
     }
     sim.cycle();
-    for (let l = 0; l < n; l++) if (!done[l] && retired[l] === cases[l].instructions) done[l] = c + 1;
+    for (let l = 0; l < n; l++) if (!done[l] && retired[l] >= cases[l].instructions) done[l] = c + 1;
   }
   return cases.map((cs, l) => {
     const view = laneView(l);
-    const diff = done[l] ? diffState(cs.golden, readState(view, root, !!cfg.isa.f)) : `retired ${retired[l]} of ${cs.instructions} in ${max} cycles`;
+    const diff = !done[l] ? `retired ${retired[l]} of ${cs.instructions} in ${max} cycles`
+      : retired[l] > cs.instructions ? `retired ${retired[l]}, past the golden model's ${cs.instructions}`
+      : diffState(cs.golden, readState(view, root, !!cfg.isa.f));
     return {
       bench: cs.bench.id, instructions: cs.instructions, cycles: done[l], diff,
       ...(dNet !== undefined ? { dmiss: dmiss[l], dstall: dstall[l] } : {}),
@@ -160,15 +168,14 @@ export async function benchEnergy(cfg: CpuConfig, cs: BenchCase): Promise<BenchE
   const sim = new GateSim(flatten(cfg.build(cs.words, BENCH_IMEM_K, BENCH_DMEM_K)));
   for (const p of inPorts(sim.design.root.def)) sim.setInput(p.name, 0);
   sim.settle();
-  const ports = sim.design.root.ports;
-  const retire = (ports.validW ?? ports.retire ?? ports.retire0)?.[0];
+  const retire = retireNets(sim.design.root.ports);
   const m = new PowerMeter(sim);
   const max = Math.ceil(cs.instructions * cfg.cpi * 1.5) + 100;
   let retired = 0, c = 0;
   while (retired < cs.instructions) {
     if (c >= max) throw new Error(`${cfg.id} ${cs.bench.id}: retired ${retired} of ${cs.instructions} in ${max} cycles`);
     if ((c & 15) === 15) await pause();
-    if (retire === undefined || sim.get(retire) === 1) retired++;
+    retired += retire ? retire.reduce((a, net, i) => a + ((sim.get(net) === 1 ? 1 : 0) << i), 0) : 1;
     sim.setInput('clk', 1); sim.settle(); m.mark();
     sim.setInput('clk', 0); sim.settle(); m.mark();
     c++;

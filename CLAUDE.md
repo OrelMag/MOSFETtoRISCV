@@ -367,7 +367,9 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                hardware issued), warptiming.ts (the warp core's cycles from the golden model and the scheduler's rules, lsu: accesses per
                line / bank, the held issue port, shared slots, globalEvery; checked against the gates), warpprograms.ts (kernels with their
                input in memory; lsu / shared / mul / threads flags), mcprograms.ts, cosim.ts (CPU state;
-               `retiring()` = step the ISS this cycle?; dmemWords), randprog32.ts (seeded random RV32 programs per ISA),
+               `retireCount()` = how many times to step the ISS this cycle (validW / a 1-bit retire, or a wider retire
+               output: the count, oldest first, for a CPU that retires several; none: 1), `retiring()` = count > 0,
+               `retirePc()` (pcW0, else pcW: the oldest retiring); dmemWords), randprog32.ts (seeded random RV32 programs per ISA),
                benchprograms.ts (the benchmark set: fib, sort, matmul (+ mul), CRC-32, a float kernel; each with
                its result computed in TypeScript)
 src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over crossings; untangle's A* reroutes stop after
@@ -951,7 +953,9 @@ tests/verify/  CPU verification (docs/VERIFICATION.md): cpus.ts (every RV32 CPU 
 with the CPU panel (listing, registers, memory, golden-model lock-step) and optionally the
 pipeline diagram and the static-timing panel. Panels observe clock edges through
 `stage.edgeHooks` (before / after every rising edge), so they stay correct during fast runs.
-The pipeline's golden model steps when a valid instruction is in W (`retiring()`).
+The pipeline's golden model steps when a valid instruction is in W (`retiring()`); a CPU that retires several a cycle
+gives their count on `retire` and the golden model steps that many times before the state is compared (`retireCount()`:
+the CPU panel, the sandbox's CpuMonitor, fuzz replay, benchmark lanes and energy runs).
 Clicking a listing line highlights the instruction's hardware (insthw.ts) in focus mode
 (`stage.highlight(names, true)` fades the rest); "in ROM" calls `stage.reveal(['imem'], 'c<i>')`.
 **Slow mode** (CPU panel) ticks at a learner-set rate (`settings.traceRate`, or `speed` for gates) at one of

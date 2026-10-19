@@ -166,8 +166,10 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   // A port core's memory may sit inside a user chip of its own (the computer's memory side).
   const inner = !dmem && core ? nestedParts(doc, chips, (p) => 'ram' in p.ref && p.ref.ram.w === 32) : [];
   const validW = pinNamed(doc, 'out', 1, 'validW');
-  const retire = validW ?? pinNamed(doc, 'out', 1, 'retire');
-  const pipeline = !!validW || (!!partNamed(doc, 'FD') && !!partNamed(doc, 'MW'));
+  // a 2-bit retire counts the instructions retiring together (a wide CPU: a pipeline as far as checking goes)
+  const wide = pinNamed(doc, 'out', 2, 'retire');
+  const retire = validW ?? pinNamed(doc, 'out', 1, 'retire') ?? wide;
+  const pipeline = !!validW || !!wide || (!!partNamed(doc, 'FD') && !!partNamed(doc, 'MW'));
   const system = !!partNamed(doc, 'csr') && !!partNamed(doc, 'trap');
   const fcsr = partNamed(doc, 'fcsr');
   const mmio = !system && hasIoParts(doc, chips);
@@ -500,7 +502,8 @@ export class CpuMonitor {
   private lastDoc: ChipDoc | null = null;
   private lastChips: Chips | undefined;
   private resets = -1;
-  private willRetire = false;
+  /** Instructions retiring at the coming edge (the retire count; 1 for a 1-bit retire). */
+  private willRetire = 0;
   /** The console and switch-bank parts of the simulation they were found in (mmio without pins). */
   private io: { sim: Sim; console?: HierNode; switches?: HierNode } | null = null;
   /** Characters the console part had taken when `console` was last read from it (-1: not yet). */
@@ -633,14 +636,14 @@ export class CpuMonitor {
 
   private before(): void {
     const d = this.desc, iss = this.iss;
-    this.willRetire = false;
+    this.willRetire = 0;
     if (!d) return;
     const doc = this.doc();
     // The console takes a character on every edge with consoleValid (the IO unit's write strobe).
     if (pinValue(this.es, doc, 'consoleValid', 'out', 1) === 1) this.console += String.fromCharCode(Math.max(0, pinValue(this.es, doc, 'consoleData', 'out', 8) ?? 0) & 0xff);
     if (!iss || !this.synced) return;
     const r = d.retire && d.retire !== 'every' ? refValue(this.es, doc, d.retire) : 1;
-    this.willRetire = r === 1;
+    this.willRetire = r !== null && r > 0 ? r : 0;
     if (iss.io) {
       // The system CPU's inputs, sampled like the hardware samples them (or a switch bank part).
       const irq = iss.system ? pinValue(this.es, doc, 'irq', 'in', 1) : null;
@@ -655,19 +658,26 @@ export class CpuMonitor {
     const iss = this.iss, d = this.desc;
     const conPart = !!d && this.readConsolePart();
     if (!this.willRetire || !iss || !d || iss.halted) return;
-    this.willRetire = false;
+    const n = this.willRetire;
+    this.willRetire = 0;
     if (!d.regs) {
       // Nothing to compare with (a datapath being built): count, but do not let the model run
       // its own course (it takes branches the hardware may not have yet).
-      this.retired++;
+      this.retired += n;
       this.seq++;
       return;
     }
-    const info = iss.step();
-    this.retired++;
+    // the retiring instructions, oldest first; the state is compared after the last
+    let info = iss.step(), stored = !!info.store && !(iss.io && info.store.addr >= 0x80000000);
+    for (let k = 0; ; ) {
+      this.retired++;
+      this.log.push({ cycle: this.es.cycles, pc: info.pc, text: info.text, effect: stepEffect(info) });
+      if (this.log.length > CpuMonitor.LOG) this.log.shift();
+      if (++k >= n || iss.halted) break;
+      info = iss.step();
+      stored ||= !!info.store && !(iss.io && info.store.addr >= 0x80000000);
+    }
     this.seq++;
-    this.log.push({ cycle: this.es.cycles, pc: info.pc, text: info.text, effect: stepEffect(info) });
-    if (this.log.length > CpuMonitor.LOG) this.log.shift();
     if (this.mismatch) return;
     const sim = this.es.sim;
     if (!sim) return;
@@ -691,7 +701,7 @@ export class CpuMonitor {
       if (pc !== null && pc !== iss.pc >>> 0) return void at('pc', 'PC', iss.pc, pc);
     }
     // (a store to I/O leaves the data memory alone: no need to read it)
-    if (d.dmem && (d.pipeline ? iss.halted : info.store && !(iss.io && info.store.addr >= 0x80000000))) {
+    if (d.dmem && (d.pipeline ? iss.halted : stored)) {
       const mem = readMem(sim, d.dmem);
       const m = mem && memDiff(mem, iss.dmem);
       if (m) return void at('mem', memName(m.i), m.model, m.hw);
