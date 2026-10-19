@@ -4,6 +4,8 @@
 // workbench lists it, and defIndex() would offer them as library parts).
 
 import { muxTree } from '../lib/combinational';
+import { sanitizeRows } from '../riscv/custom';
+import { singleCycleCpu } from '../lib/cpu';
 import { merger, ones, splitter } from '../lib/define';
 import { symbolGeom } from '../sim/geometry';
 import { defIndex, resolveComponent } from '../lib/resolve';
@@ -90,6 +92,10 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
     return ramWithInit(k, w, init);
   }
   if ('rom' in ref) return romPart(ref.rom);
+  if ('core' in ref) {
+    const custom = sanitizeRows(ref.core.custom);
+    return singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true, custom });
+  }
   return { error: 'unknown part kind' };
 }
 

@@ -323,7 +323,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
   // Every language with instructions: the instruction builder on the caret's line (Ctrl+Space), and the
   // program as tiles (a view of the text: a click builds a line, a drag moves it).
   const hasIsa = applied.lang !== 'hex' && applied.lang !== '6502';
-  const isaOf = () => import('../isa/compose').then((c) => c.composeIsaOf(applied.lang, applied.isa));
+  const isaOf = () => import('../isa/compose').then((c) => c.composeIsaOf(applied.lang, applied.isa, applied.custom));
   const builder = hasIsa ? romComposer(ce, body, (m) => ed.toast(m, 'err'), isaOf) : null;
   const tiles = builder ? romTiles(ce, isaOf, (n) => builder.openAt(n)) : null;
   let tilesOn = false;

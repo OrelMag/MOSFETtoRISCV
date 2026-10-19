@@ -6,6 +6,7 @@
 // newer schema) is copied to BACKUP_KEY before the empty workspace replaces it.
 
 import { sanitizeIsa } from '../isa/table';
+import { sanitizeRows } from '../riscv/custom';
 import { sanitizeCpu } from './cpu';
 import { mergeFolders, sanitizeFolders } from './folders';
 import { same } from './history';
@@ -84,7 +85,12 @@ function sanitizeRef(r: unknown): PartRef | null {
       const isa = sanitizeIsa(r.rom.isa);
       return isa ? { rom: { k, w, addr, lang, src, isa } } : null;
     }
-    return { rom: { k, w, addr, lang, src } };
+    const custom = lang === 'asm' ? sanitizeRows(r.rom.custom) : [];
+    return { rom: { k, w, addr, lang, src, ...(custom.length ? { custom } : {}) } };
+  }
+  if (isObj(r.core)) {
+    const custom = sanitizeRows(r.core.custom);
+    return custom.length ? { core: { custom } } : { lib: 'rv32i_core' };
   }
   if (isObj(r.ram)) {
     const { k, w, init, ports } = r.ram;

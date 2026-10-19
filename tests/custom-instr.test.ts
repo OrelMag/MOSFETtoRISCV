@@ -143,3 +143,33 @@ describe('custom instructions: the drawings', () => {
     }, 120000);
   }
 });
+
+describe('custom instructions in the sandbox', () => {
+  it('the instruction builder knows them: a palette group, encode → text → assemble', async () => {
+    const { rv32Compose } = await import('../src/riscv/compose');
+    const isa = rv32Compose([P.lwx, P.subi]);
+    expect(isa.groups[0]).toEqual({ name: 'Yours', ids: ['lwx', 'subi'] });
+    for (const id of ['lwx', 'subi']) {
+      const w = isa.encode(id, { rd: 10, rs1: 11, rs2: 12, imm: -7 });
+      expect(isa.decode(w)?.id).toBe(id);
+      const text = isa.text(w);
+      expect(assemble(text, [P.lwx, P.subi]).words[0] >>> 0, text).toBe(w);
+    }
+    expect(isa.fields(isa.encode('lwx', { rd: 1, rs1: 2, rs2: 3 }))[5].meaning).toMatch(/custom-1: lwx/);
+  });
+
+  it('a core part and a ROM keep their rows through storage', async () => {
+    const { sanitizeChip } = await import('../src/editor/store');
+    const chip = (ref: unknown) => sanitizeChip({ id: 'u_t', name: 't', pins: [], parts: [{ id: 'p', ref, at: [0, 0] }], wires: [] })?.parts[0]?.ref;
+    expect(chip({ core: { custom: [P.lwx, { junk: 1 }] } })).toEqual({ core: { custom: [P.lwx] } });
+    expect(chip({ core: { custom: [] } })).toEqual({ lib: 'rv32i_core' });
+    const rom = { k: 6, w: 32, addr: 'rv32', lang: 'asm', src: 'lwx a0, a1, a2', custom: [P.lwx] };
+    expect(chip({ rom })).toEqual({ rom });
+  });
+
+  it('the part builds the core with the control unit grown', async () => {
+    const { partDef } = await import('../src/editor/parts');
+    const d = partDef({ core: { custom: [P.lwx] } }, () => undefined);
+    expect('error' in d ? d.error : d.id).toMatch(/^rv32i_cx\w+_core$/);
+  });
+});

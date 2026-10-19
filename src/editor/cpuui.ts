@@ -603,7 +603,7 @@ class CpuPanel {
     const w = pc !== null && pc >= 0 ? mon.wordAt(pc) : null;
     this.now.replaceChildren(...(w === null
       ? [h('span', { class: 'fmt' }, 'PC'), h('code', null, noPc)]
-      : [h('span', { class: 'fmt' }, `${decode(w).fmt}-type`), h('code', null, disasm(w, pc!)), h('span', { class: 'hexw' }, `0x${hex4(pc!)}`)]));
+      : [h('span', { class: 'fmt' }, `${decode(w, this.desc?.iss.custom).fmt}-type`), h('code', null, disasm(w, pc!, this.desc?.iss.custom)), h('span', { class: 'hexw' }, `0x${hex4(pc!)}`)]));
   }
 
   /** A listing line clicked: mark the parts its instruction uses (the site's CPUs' names), or clear. */
@@ -636,7 +636,7 @@ class CpuPanel {
     this.fieldsSec.hidden = this.fields.hidden = !this.running && w === null;
     if (this.running) return; // frozen while running fast: a breakdown per frame is noise
     keyed(this.fields, f && w !== null ? `${f.pc}:${w}:${f.role}` : 'none', () => (f && w !== null ? [
-      h('div', { class: 'cpu-fields-head' }, h('code', null, disasm(w, f.pc)), h('span', null, f.role)),
+      h('div', { class: 'cpu-fields-head' }, h('code', null, disasm(w, f.pc, this.desc?.iss.custom)), h('span', null, f.role)),
       instrBreakdown(w, {
         compact: true, selected: this.fieldPin, onField: (k, sticky) => {
           if (sticky) this.fieldPin = this.fieldPin === k ? null : k;
@@ -784,7 +784,7 @@ class CpuPanel {
     keyed(this.now, cores.map((c, i) => `${c.pc}|${mon.lastStall[i]}`).join(','), () => [h('div', { class: 'sb-cpu-cores' }, cores.map((c, i) => {
       const w = c.pc !== null && c.pc >= 0 ? mon.wordAt(c.pc) : null;
       return h('div', { class: 'sb-cpu-core' }, h('b', { class: 'sb-cpu-hart' }, `C${i}`),
-        h('code', null, w === null ? 'PC unknown' : `${hex4(c.pc!)}  ${disasm(w, c.pc!)}`),
+        h('code', null, w === null ? 'PC unknown' : `${hex4(c.pc!)}  ${disasm(w, c.pc!, this.desc?.iss.custom)}`),
         mon.lastStall[i] ? h('span', { class: 'warn', title: 'Lost the memory port to the other core at the last edge' }, 'stalled') : null);
     }))]);
     this.renderListing(mon, null, cores.flatMap((c, i) => (c.pc !== null && c.pc >= 0 ? [{ tag: `C${i}`, pc: c.pc, title: `core ${i} (${d.cores[i].part}) fetches this` }] : [])), '');
@@ -792,7 +792,7 @@ class CpuPanel {
     const w = this.sel !== null ? mon.wordAt(this.sel) : null;
     this.fieldsSec.hidden = this.fields.hidden = w === null;
     keyed(this.fields, w === null ? 'none' : `${this.sel}:${w}`, () => (w === null ? [] : [
-      h('div', { class: 'cpu-fields-head' }, h('code', null, disasm(w, this.sel!)), h('span', null, 'selected')),
+      h('div', { class: 'cpu-fields-head' }, h('code', null, disasm(w, this.sel!, this.desc?.iss.custom)), h('span', null, 'selected')),
       instrBreakdown(w, { compact: true })]));
     this.pipeSec.hidden = this.pipe.hidden = this.ioSec.hidden = this.io.hidden = this.fregsSec.hidden = this.fregs.hidden = true;
     // registers side by side: the ones any core has set
@@ -1102,7 +1102,7 @@ class CpuPanel {
     this.useKey = '';
     this.applyMarks();
     if (this.sel !== null && word !== null && this.open) {
-      keyed(this.use, `${this.sel}|${word}|${this.marked.length}`, () => [h('code', null, disasm(word!, this.sel!)),
+      keyed(this.use, `${this.sel}|${word}|${this.marked.length}`, () => [h('code', null, disasm(word!, this.sel!, this.desc?.iss.custom)),
         h('div', null, this.marked.length ? path : 'No parts named like the chapters’ CPU (rf, alu, imm, …) to mark here.')]);
     } else keyed(this.use, '', () => []);
   }
