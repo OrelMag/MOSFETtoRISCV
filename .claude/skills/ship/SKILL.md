@@ -26,7 +26,9 @@ Merging deploys the site. Work from the branch's own worktree, never from the sh
    new `origin/main`, and re-run the gate if the new commits touch the same areas.
    Then `git checkout <branch>` again in the worktree.
 6. **Watch the deploy:** `gh run list --workflow deploy.yml --limit 1`, then `gh run watch <id> --exit-status`
-   (gh is at `C:\Program Files\GitHub CLI`). On failure, report the failing job's log.
+   (gh is at `C:\Program Files\GitHub CLI`). On failure, report the failing job's log. A successful deploy
+   starts the desktop build (desktop.yml, ~5 min: the .exe in the release `desktop-latest`); watch it too
+   (`gh run list --workflow desktop.yml --limit 1`) and report it, or say it is still running.
 7. **Report** the merge commit, the deploy result and https://orelmag.github.io/MOSFETtoRISCV/ (the footer's
    build number is the commit count of main).
 
