@@ -72,6 +72,8 @@ export interface CpuDesc extends CpuDoc {
   iss: CpuIss;
   /** The part with an `fcsr` output (RV32F: frm and the accrued flags); detected only. */
   fcsr?: string;
+  /** The memory-port core (rv32i_core, or a { core } part with custom instructions) at the top level; detected only. */
+  core?: string;
   /** Which fields were detected rather than set by the user. */
   auto: Set<keyof CpuDoc>;
 }
@@ -181,6 +183,7 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
     rom, pc, auto, iss: { ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}), ...(custom?.length ? { custom } : {}) },
     ...(regsPath ? { regs: regsPath } : {}), ...(fregs ? { fregs: fregs.id } : {}), ...(dmem ? { dmem: dmem.id } : inner.length === 1 ? { dmem: inner[0] } : {}),
     ...(retire ? { retire: { pin: retire.id } } : {}), ...(pipeline ? { pipeline } : {}), ...(fcsr ? { fcsr: fcsr.id } : {}),
+    ...(core && (('lib' in core.ref && core.ref.lib === 'rv32i_core') || 'core' in core.ref) ? { core: core.id } : {}),
   };
 }
 

@@ -127,6 +127,8 @@ class CpuPanel {
   private listing = h('div', { class: 'cpu-listing sb-cpu-list' });
   private use = h('div', { class: 'cpu-use' });
   private progHint = h('span', { class: 'cpu-sec-hint' }, 'click a line: the parts it uses');
+  /** Custom instructions on an RV32I core (editor/owninstr.ts): shown when the CPU has one. */
+  private customBtn = h('button', { class: 'btn ghost sm', hidden: true, title: 'Your own instructions: a free opcode, its behaviour as a row of control signals; the core and the golden model learn it', onclick: () => void import('./owninstr').then((m) => m.openCustomInstructions(this.ed)) }, 'Custom…') as HTMLButtonElement;
   private fieldsSec = h('div', { class: 'cpu-sec' }, 'Fields', h('span', { class: 'cpu-sec-hint' }, 'point at a field: its wires'));
   private fields = h('div', { class: 'cpu-fields' });
   private pipeSec = h('div', { class: 'cpu-sec' }, 'Pipeline', h('span', { class: 'cpu-sec-hint' }, 'stage × cycle, last 7 cycles'));
@@ -180,7 +182,8 @@ class CpuPanel {
       h('div', { class: 'sb-btns sb-cpu-btns' }, this.runBtn, this.stepBtn, this.slowBtn, this.rateSel, reset),
       this.status, this.gaps, this.now,
       h('div', { class: 'cpu-sec sb-cpu-sechead' }, h('span', null, 'Program', this.progHint),
-        h('button', { class: 'btn ghost sm', title: 'Edit the program in the ROM (Apply resets the CPU to run it)', onclick: () => this.editProgram() }, icon('code', 13), 'Edit…')),
+        h('span', { class: 'sb-cpu-secbtns' }, this.customBtn,
+          h('button', { class: 'btn ghost sm', title: 'Edit the program in the ROM (Apply resets the CPU to run it)', onclick: () => this.editProgram() }, icon('code', 13), 'Edit…'))),
       this.listing, this.use,
       this.fieldsSec, this.fields,
       this.pipeSec, this.pipe,
@@ -274,6 +277,8 @@ class CpuPanel {
         this.descChips = chips;
         this.multi = detectMulti(ed.doc, chips);
         this.desc = this.multi ? null : resolveCpu(ed.doc, chips);
+        this.customBtn.hidden = !this.desc?.core;
+        this.customBtn.textContent = this.desc?.iss.custom?.length ? `Custom: ${this.desc.iss.custom.map((r) => r.name).join(', ')}` : 'Custom…';
         this.rv16 = this.multi || this.desc ? null : detectRv16(ed.doc, chips);
         this.lanes = this.multi || this.desc || this.rv16 ? null : detectLanes16(ed.doc, chips);
         this.m6502 = this.multi || this.desc || this.rv16 || this.lanes ? null : detect6502(ed.doc, chips);

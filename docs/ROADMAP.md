@@ -434,11 +434,15 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   moves the line (one undo step). Switches: the word on toggle switches with a lamp each, grouped by field; Deposit next
   puts it on a new line below and moves on (the program editor), or into a small memory chapter 13 runs on the golden
   model
-- ⏳ 5. Your own instruction, end to end (mockup first): a free custom opcode (custom-1…3), its behaviour as a row of
-  the single-cycle CPU's control signals (register write, ALU sources and operation, immediate format, memory write,
-  result, next PC); the control unit gains one opcode class (an AND) and an OR input per signal it asserts, the golden
-  model learns the row, and a program using it runs on the gates in lock step. What the datapath cannot do in one
-  cycle is named, with the hardware it would need
+- ✅ 5. Your own instruction, end to end (mockup approved 2026-10-19; riscv/custom.ts, editor/owninstr.ts): a free
+  custom opcode (custom-1…3, one instruction each), a format (R / I / S / B / U) and its behaviour as a row of the
+  single-cycle CPU's control signals (register write, ALU sources and operation, memory write, result, next PC). The
+  control unit gains one opcode class (an AND) and an OR input per signal it asserts (control(custom); lwx: +14 NANDs
+  on 152), the golden model runs the row, the assembler and the instruction builder take it. Sandbox: the CPU drawer's
+  Custom… (and the program editor's Custom instructions…) on an rv32i_core; Apply makes it a { core: { custom } }
+  part and gives the ROM a copy of the rows. Eight rows run in lock step on the gates (tests/custom-instr.test.ts);
+  what a row cannot do in one cycle is named
+- ⏳ 5b. Then: chapter 14's challenge "add indexed load"; the pipelined CPU (a load-like row stalls like a load); RV16
 
 **More builders, after the instruction builder** (proposed 2026-10-19, kept for later)
 - ⏳ Microcode painter: the multicycle CPU's microprogram (MC_MICRO) as a grid of control signals × microinstructions,
