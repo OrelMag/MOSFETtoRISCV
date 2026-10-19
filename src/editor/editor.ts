@@ -826,9 +826,23 @@ export class Editor {
       const st = this.tools.state;
       if (st.k !== 'place' || st.drag) return;
       this.showParts(false);
-      this.toast(`Tap the canvas to place ${item.name}`);
+      this.palette.clearSearch(); // the drawer reopens on the whole palette, not on this search's results
+      this.placeHint = `Tap the canvas to place ${item.name}`;
+      this.toast(this.placeHint);
     };
     document.addEventListener('pointerup', up);
+  }
+
+  /** The phone's tap-to-place hint while it may be on screen. */
+  private placeHint = '';
+
+  /** The armed part was placed or let go: its tap-to-place hint goes at once rather than after the toast's time. */
+  endPlaceHint(): void {
+    if (this.placeHint && this.toastEl.textContent === this.placeHint) {
+      if (this.toastTimer) clearTimeout(this.toastTimer);
+      this.toastEl.className = 'sb-toast';
+    }
+    this.placeHint = '';
   }
 
   /** The palette is a drawer (editor.css, max-width 760px) and open. */

@@ -144,6 +144,8 @@ export class Tools {
   cancel(): void {
     const st = this.state;
     if (st.k === 'move' || st.k === 'reshape') this.ed.cancel();
+    // placed, or given up: the phone's "Tap the canvas to place …" hint has done its job
+    if (st.k === 'place') this.ed.endPlaceHint();
     this.state = { k: 'idle' };
     this.ed.view.showPreview(null);
     this.ed.view.showBand(null);

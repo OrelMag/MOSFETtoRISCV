@@ -104,10 +104,19 @@
 /* ---------- palette ---------- */
 .sb-palette { grid-area: pal; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
 .sb-pal-head { display: flex; align-items: center; gap: 8px; padding: 10px; border-bottom: 1px solid var(--border); }
+.sb-search { position: relative; flex: 1; min-width: 0; display: flex; }
 .sb-pal-head input[type=search] {
-  flex: 1; min-width: 0; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border);
+  flex: 1; min-width: 0; padding: 6px 28px 6px 10px; border-radius: 8px; border: 1px solid var(--border);
   background: var(--surface-2); color: var(--text); font: inherit; font-size: 13px;
 }
+/* our own clear button, there whenever the search holds text (palette.ts) */
+.sb-pal-head input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; display: none; }
+.sb-search-x {
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center;
+  min-width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer;
+}
+.sb-search-x:hover { color: var(--text); background: var(--surface-3); }
+.sb-search-x[hidden] { display: none; }
 .sb-purist { display: inline-flex; align-items: center; gap: 4px; font: 600 12px var(--font-ui); color: var(--text-2); cursor: pointer; white-space: nowrap; }
 .sb-purist input { accent-color: var(--accent); margin: 0; }
 .sb-pal-list { flex: 1; overflow-y: auto; padding: 4px 8px 16px; }

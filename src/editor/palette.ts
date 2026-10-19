@@ -281,6 +281,8 @@ export class PalettePanel {
   readonly top: HTMLElement;
   private list: HTMLElement;
   private search: HTMLInputElement;
+  /** Clears the search; shown whenever it holds text (the browser's own × only shows on focus). */
+  private searchX: HTMLButtonElement;
   private purist: HTMLInputElement;
   /** Groups the user collapsed or opened (kept across re-renders). */
   private open = new Map<string, boolean>();
@@ -288,14 +290,16 @@ export class PalettePanel {
 
   constructor(private ctx: () => PaletteCtx, private hooks: PaletteHooks) {
     this.search = h('input', { type: 'search', placeholder: 'Search parts…', 'aria-label': 'Search parts' }) as HTMLInputElement;
-    this.search.addEventListener('input', () => this.render());
+    this.search.addEventListener('input', () => { this.searchX.hidden = !this.search.value; this.render(); });
+    this.searchX = h('button', { class: 'sb-search-x', type: 'button', title: 'Clear the search', 'aria-label': 'Clear the search', hidden: true,
+      onclick: () => { this.clearSearch(); this.search.focus(); } }, icon('close', 13)) as HTMLButtonElement;
     this.purist = h('input', { type: 'checkbox' }) as HTMLInputElement;
     this.purist.addEventListener('change', () => hooks.setPurist(this.purist.checked));
     const pur = h('label', { class: 'sb-purist', title: 'Only transistors, NAND, pins, constants, wiring, displays and your own chips: build everything else yourself' },
       this.purist, 'Purist');
     this.list = h('div', { class: 'sb-pal-list' });
     this.top = h('div', { class: 'sb-pal-top' });
-    this.el = h('aside', { class: 'sb-palette', 'aria-label': 'Parts' }, this.top, h('div', { class: 'sb-pal-head' }, this.search, hooks.locked ? null : pur), this.list);
+    this.el = h('aside', { class: 'sb-palette', 'aria-label': 'Parts' }, this.top, h('div', { class: 'sb-pal-head' }, h('span', { class: 'sb-search' }, this.search, this.searchX), hooks.locked ? null : pur), this.list);
   }
 
   render(): void {
@@ -463,6 +467,14 @@ export class PalettePanel {
   /** Outline the drop target (null: none). */
   markDrop(folder: string | null): void {
     for (const el of this.list.querySelectorAll<HTMLElement>('[data-folder]')) el.classList.toggle('sb-drop', el.dataset.folder === folder);
+  }
+
+  /** Empty the search (the phone's drawer closing on a part picked from it), showing the whole palette again. */
+  clearSearch(): void {
+    if (!this.search.value) return;
+    this.search.value = '';
+    this.searchX.hidden = true;
+    this.render();
   }
 
   setArmed(key: string | null): void {
