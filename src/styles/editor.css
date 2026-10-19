@@ -405,6 +405,8 @@
   .sb-parts-btn { display: inline-flex; }
   .sandbox:not(.pal-open) > .sb-palette { display: none; }
   .sb-palette { max-height: 50vh; border-right: 0; border-bottom: 1px solid var(--border); }
+  /* a vertical swipe scrolls the drawer (a drag would have to go down into the canvas anyway): a tap arms a part */
+  .sb-item { touch-action: pan-y; }
   .sb-center { height: 70vh; }
   .sb-props { border-left: 0; border-top: 1px solid var(--border); }
 }
