@@ -286,6 +286,26 @@ and the ISS options.
     PNG, in the current theme).
   - **Manage chips…**: size, users, folder, open, duplicate, delete; folders renamed and deleted.
 
+## Verilog chips
+
+- **New chip ▾ ▸ Verilog chip**, or **File ▸ Import…** a `.v` / `.sv` file (or drop it): the text sits
+  left of the canvas and Yosys, running in the page, draws it a second after you stop typing
+  (**Ctrl/⌘ Enter** at once). The first synthesis fetches Yosys (78 MB, once; the browser keeps it).
+  Nothing is uploaded.
+- Every module becomes a chip, its instances placed chips; the top module (automatic, or chosen in
+  the properties) is the chip that holds the text, and its tab shows **.v**. The drawing uses the
+  library's parts: NANDs, XORs, multiplexers and the master–slave DFF (with gates for a reset, set or
+  enable), so every chip opens down to transistors, simulates, probes and packages like any other.
+- **Gates** in the properties picks what the logic may be mapped onto: NAND only, NAND + XOR + MUX
+  (default), or AND / OR / NOT. The NAND count and depth follow.
+- The drawing follows the text: moving or wiring parts on the canvas is refused. **Detach as drawn
+  chip** turns the chips into ordinary ones (Ctrl+Z brings the text back). A text with errors shows
+  them under it and on their lines; the canvas keeps the last good build, dimmed.
+- A Yosys JSON netlist (`write_json` after `synth`, any of Yosys's gate-level cells) imports as drawn
+  chips. Not drawable: inout ports, word-level cells (synthesize first), vendor primitives (`LUT6`, …),
+  flip-flops with both an asynchronous set and reset. VHDL is not supported.
+- **Examples ▸ The same adder in Verilog**: the library's ADD4 and one line of Verilog side by side.
+
 ## Challenges
 
 **Challenges** lists 21 optional build challenges, one or more per level:

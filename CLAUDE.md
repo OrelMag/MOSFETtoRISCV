@@ -614,6 +614,16 @@ src/cards/      punched cards (DOM-free): hollerith.ts (the IBM 029 code: punchO
                (sorterPass: a pass on one column into pockets 0–9 + rejects, sorterColumns, sortOnSorter: the radix sort);
                prologue P3 is chapters/ch-cards.ts with widgets/cards.ts (loomWidget, censusWidget, cardEditorWidget,
                deckWidget with the sorter, readerPanel: the card at the reader's station on a scene)
+src/hdl/       HDL in (DOM-free): yosysjson.ts (importYosysJson: Yosys's write_json → ChipDocs, one per module, instances as
+               placed chips; every fine-grained cell as library parts, parseFf: the $_DFF* / $_SDFF* / $_DLATCH* family from
+               dff / dffe / dff_r / d_latch(_r) and gates (a set = a reset of the inverted value); place(): columns by logic
+               depth (loops cut at storage), rows from the drivers, wires between neighbouring columns routed here as `via`
+               (a trunk each, ordered so no wire runs along another: driver row = sink row is the only constraint), the rest
+               pointers named after the signals; HdlImport.drawn: the placed netlists, for layout tests), yosys.ts (Yosys 0.68 in
+               WebAssembly, @yowasp/yosys pinned: vite.config.ts serves / copies node_modules/@yowasp/yosys/gen as yosys/, loaded
+               on the first synthesis (CDN fallback); synthesize(files, { top, gates }): read_verilog -sv -noblackbox, hierarchy,
+               synth, abc -g <GATE_SETS>, write_json; parseYosysLog → line diagnostics; setYosysLoader for Node: tests/hdlkit.ts
+               runs the npm package, which needs --experimental-wasm-exnref (v8.setFlagsFromString) under Node 22)
 src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui/pages/sandbox.ts, its own chunk;
                #/sandbox/s/<payload> opens a share link: a banner, imported only on the user's click).
                DOM-free (tested in Node):
@@ -675,6 +685,15 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  asm ↔ hex conversion, ROM_SAMPLES; readRam (live words; a large RAM's from its leaf state),
                  ramWithInit (initial contents as dotted power-on hints into the flip-flops' latches; > 2^6 words:
                  bigRamWithInit)
+  hdl.ts         Verilog chips (ChipDoc.hdl: module, src on the group's top chip or `of` its id, stale): newVerilogChip,
+                 setSource, resynthesize / applyNetlist (ids kept by module, the top module on the home chip; a vanished
+                 module deleted, or detached when another chip places it), detachGroup, importNetlist (Yosys JSON → drawn
+                 chips), isGenerated + bodyKey (Editor.edit refuses changes to a generated body), verilogModules
+  hdlui.ts       plugin: the Verilog pane in slots.left (textarea over a highlighted pre, synthesized 1 s after typing or Ctrl/⌘
+                 Enter: text + drawing one undo step; a stale chip shown or placed below is synthesized once per text, as a
+                 volatile change), the canvas banner (Detach, Hide text), the 'hdl' props section (top, gates, modules),
+                 registerFileImporter for .v / .sv and Yosys JSON, registerNewChipKind (New chip ▾ Verilog chip);
+                 examplehdl.ts: Examples ▸ The same adder in Verilog
   examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, console, screen, the computer, shared bus,
                  wired-AND / OR), addExample: new chip (and an example's `subchips`, fresh ids), opened. The computer
                  (computerChip, ~60 × 64 units: readable at fit with the CPU drawer): rv32i_core (lib/resolve.ts
@@ -1170,7 +1189,8 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
   `registerToolbarAction` (`active` for toggles, `menu`: its name in More), `registerEditorPlugin` (per-editor state, with a
   cleanup), `registerDiagSource` (extra diagnostics, e.g. lint), `Editor.onSimChange`,
   `Tools.onPress` (a mode that takes clicks first) and `editor.slots` (`overlay` over the canvas,
-  `bottom` above the run bar, `top` in the tab bar). `editor.saveState` / `onSave()` report autosave
+  `bottom` above the run bar, `top` in the tab bar, `left` beside the canvas: the Verilog pane), `registerFileImporter`
+  (fileui.ts: more file kinds for Import and drag-and-drop), `registerNewChipKind` (New chip ▾). `editor.saveState` / `onSave()` report autosave
   (saved / saving / error). `editor.paintHooks` run after every repaint (live views over the
   simulation: look inside, inspector). `editor.sim.edgeHooks` observe rising clock edges (before /
   after, whatever drives them: Run, Step, a click on a clock, `runCycles`); the CPU panel's golden
