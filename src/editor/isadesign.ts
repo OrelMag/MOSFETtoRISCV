@@ -19,8 +19,9 @@ function role(doc: IsaDoc, ch: string): string {
 
 const hexOf = (w: number, W: number) => `0x${(w >>> 0).toString(16).toUpperCase().padStart(W / 4, '0')}`;
 
-/** commit: a changed table (one undo step, then a redraw); rerender: a redraw only (another row picked). */
-export function designPane(doc: IsaDoc, preset: boolean, st: DesignState, commit: (doc: IsaDoc) => void, rerender: () => void, patternBits: (doc: IsaDoc, p: string) => HTMLElement): HTMLElement {
+/** commit: a changed table (one undo step, then a redraw); rerender: a redraw only (another row picked);
+ *  openDecoder: build the table's decoder as a sandbox chip and open it. */
+export function designPane(doc: IsaDoc, preset: boolean, st: DesignState, commit: (doc: IsaDoc) => void, rerender: () => void, patternBits: (doc: IsaDoc, p: string) => HTMLElement, openDecoder?: () => void): HTMLElement {
   const W = doc.wordBits;
   if (st.row >= doc.instrs.length) st.row = Math.max(0, doc.instrs.length - 1);
   const list = h('div', { class: 'isd-list' });
@@ -111,7 +112,10 @@ export function designPane(doc: IsaDoc, preset: boolean, st: DesignState, commit
         h('div', { class: 'sb-sum' }, `${a.exact ? '' : 'at most '}${a.decoded.toLocaleString('en')} of ${a.total.toLocaleString('en')} words decode (${pct < 0.1 && pct > 0 ? '< 0.1' : pct.toFixed(1)}%): room for ${a.exact ? '' : 'at least '}${(a.total - a.decoded).toLocaleString('en')} more.`),
         h('div', { class: 'isd-bar' }, h('i', { style: `width:${Math.min(100, pct)}%` }))),
       h('div', { class: 'isd-dec' }, h('h4', null, 'Decoder'),
-        h('p', null, h('b', null, `${dec.nands.toLocaleString('en')} NANDs`), `, ${dec.depth} gate delays: one AND per instruction over its fixed bits (${dec.ands} NANDs), and ${dec.nots} shared inverters${a.shadows.length ? ' (a special case\'s match, inverted, keeps the general one off)' : ''}. Fewer fixed bits per instruction, a cheaper decoder.`)));
+        h('p', null, h('b', null, `${dec.nands.toLocaleString('en')} NANDs`), `, ${dec.depth} gate delays: one AND per instruction over its fixed bits (${dec.ands} NANDs), and ${dec.nots} shared inverters${a.shadows.length ? ' (a special case\'s match, inverted, keeps the general one off)' : ''}. Fewer fixed bits per instruction, a cheaper decoder.`),
+        // Built from the saved table (not a drag in progress): a match line per instruction and valid
+        openDecoder && !a.clashes.length ? h('button', { type: 'button', class: 'btn sm', title: 'The decoder as a chip of your own: open it, drill into it, simulate it', onclick: openDecoder }, 'Open the decoder in the sandbox') : '',
+        openDecoder && a.clashes.length ? h('p', { class: 'sb-sum' }, 'Fix the clashes first: a word two instructions both claim has no single match line.') : ''));
   };
 
   // ---- painting ----

@@ -79,6 +79,18 @@ export function openIsaEditor(ed: Editor, id?: string): void {
     open = null;
     ed.view.svg.focus?.();
   };
+  /** The table's decoder in gates as a new chip (one undo step), opened; the dialog closes. */
+  const openDecoder = (doc: IsaDoc) => void Promise.all([import('../lib/isadecoder'), import('./remix')]).then(([{ isaDecoder }, { remixDef }]) => {
+    let err = '';
+    ed.editWs((ws) => {
+      const r = remixDef(ws, isaDecoder(doc));
+      if ('error' in r) { err = r.error; return ws; }
+      return r.ws;
+    });
+    if (err) return void ed.toast(`The decoder could not be built: ${err}`, 'err');
+    close();
+    ed.toast(`Opened the ${doc.name} decoder: a match line per instruction (Ctrl+Z removes it)`);
+  });
   const ov = h('div', { class: 'sb-help isa-dlg', role: 'dialog', 'aria-label': 'Instruction sets' },
     h('div', { class: 'panel' },
       h('div', { class: 'sb-help-head' }, h('h3', null, icon('code', 16), 'Instruction sets'),
@@ -161,7 +173,7 @@ export function openIsaEditor(ed: Editor, id?: string): void {
     const probs = t.problems;
     const tabs = h('div', { class: 'isa-tabs', role: 'tablist' }, ([['instrs', `Instructions (${doc.instrs.length})`], ['design', 'Design'], ['operands', `Operands (${Object.keys(doc.operands).length})`], ['check', probs.length ? `Check (${probs.length})` : 'Check ✓']] as [Tab, string][])
       .map(([k, label]) => h('button', { role: 'tab', class: `${tab === k ? 'on' : ''}${k === 'check' && probs.length ? ' warn' : ''}`, 'aria-selected': String(tab === k), onclick: () => { tab = k; render(); } }, label)));
-    main.replaceChildren(head, tabs, tab === 'instrs' ? instrsTab(doc, preset) : tab === 'design' ? designPane(doc, preset, design, commit, render, patternBits) : tab === 'operands' ? operandsTab(doc, preset) : checkTab(doc));
+    main.replaceChildren(head, tabs, tab === 'instrs' ? instrsTab(doc, preset) : tab === 'design' ? designPane(doc, preset, design, commit, render, patternBits, () => openDecoder(doc)) : tab === 'operands' ? operandsTab(doc, preset) : checkTab(doc));
   };
 
   const instrsTab = (doc: IsaDoc, preset: boolean): HTMLElement => {

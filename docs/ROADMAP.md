@@ -424,7 +424,9 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   an opcode map over the 3–4 bits the patterns fix most, coverage, and a plain decoder's cost follow the draft (one AND
   per instruction over its fixed bits plus the NOT of each special case, in NANDs and gate delays; the model is held
   to stats(andN(k))). Letting go is one undo step
-- ⏳ 3b. The decoder as a chip: the table's match lines built in gates and opened in the sandbox
+- ✅ 3b. The decoder as a chip (lib/isadecoder.ts): the Design tab's "Open the decoder in the sandbox" builds the table's
+  decoder in gates (a match line per instruction, valid) as a chip of your own; checked against the table's match() and
+  costing exactly the tab's estimate plus the valid OR
 - ✅ 4. Program as tiles and a front panel (isa/tiles.ts, editor/romtiles.ts, the composer's Switches view). The program
   editor's Text | Tiles: a tile per line from the ISA's adapter (any language with instructions): name, operands, the
   word as a strip of its fields; branch arrows in the gutter to the target line; pointing at a tile outlines the lines
