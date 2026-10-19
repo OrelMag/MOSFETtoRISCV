@@ -24,7 +24,7 @@ export function cpuTops(): ComponentDef[] {
     pipelinedCpu(cw, { adder: 'ks', dcache: 'wb2' }), pipelinedCpu(cw, { adder: 'ks', dcache: 'wt', predictor: true, balanced: true }),
     pipelinedCpu(w, { adder: 'ks', m: true }), pipelinedCpu(w, { adder: 'ks', balanced: true, predictor: true, m: true }),
     pipelinedFpCpu(w), systemCpu(w), systemCpu(w, { m: true }),
-    // chapter 24: the dual-issue pipeline
+    // chapter 25: the dual-issue pipeline
     dualPipeCpu(w), oooCpu(w),
     // Appendix B: the system core with ports (the Doom computer's)
     systemCore(), systemCore({ m: true }),

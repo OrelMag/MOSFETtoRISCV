@@ -10,7 +10,7 @@
 // there; the second restores the mask and pops. A split on which the active lanes agree pushes an
 // entry with nothing pending, so its join just pops.
 //
-// The warp cores of chapter 30 add a shared memory (smem): addresses with bit 12 set
+// The warp cores of chapter 31 add a shared memory (smem): addresses with bit 12 set
 // (SHARED_BASE = 0x1000) go to it, the rest to the data memory, each wrapping at its size as the
 // hardware's decoders do. With `mul`, the lanes have multipliers: mul runs; any other M
 // instruction (and mul without them) is an error, since the lanes' ALU would compute something else.
@@ -18,7 +18,7 @@
 import { CSRS, decode, disasm, OPCODES } from './isa';
 import { ISS, type IssOptions, type ModelState, restoreFields, saveFields, type StepInfo } from './iss';
 
-/** Shared memory's base address: bit 12 picks it (chapter 30's warp cores). */
+/** Shared memory's base address: bit 12 picks it (chapter 31's warp cores). */
 export const SHARED_BASE = 0x1000;
 export const isShared = (addr: number) => (addr & SHARED_BASE) !== 0;
 
@@ -63,7 +63,7 @@ export interface SimtOptions {
   warps?: number;
   /** A data memory shared with other warps (warps.ts); else one of dmemWords. */
   dmem?: Uint32Array;
-  /** Shared memory at SHARED_BASE (chapter 30's warp cores; none: addresses wrap into dmem). */
+  /** Shared memory at SHARED_BASE (chapter 31's warp cores; none: addresses wrap into dmem). */
   smem?: Uint32Array;
   /** The lanes multiply (mul only). */
   mul?: boolean;
@@ -98,7 +98,7 @@ export class SimtISS {
   /** Warp number, and the warps the core holds. */
   readonly warp: number;
   readonly warps: number;
-  /** nwarps exists on the warp cores only (the lane core of chapters 27–28 does not decode it). */
+  /** nwarps exists on the warp cores only (the lane core of chapters 28–29 does not decode it). */
   private readonly csrs: Set<number>;
   pc = 0;
   mask: number;

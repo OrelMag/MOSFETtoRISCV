@@ -32,7 +32,7 @@ function csrq(st: Stage, inst: string): number {
 }
 
 export const chIO: Chapter = {
-  id: 'io', num: 18, title: 'Bytes and the outside world', level: 'System',
+  id: 'io', num: 19, title: 'Bytes and the outside world', level: 'System',
   blurb: 'Byte and halfword memory access, and memory-mapped I/O: a console, LEDs, switches and a timer.',
   goals: [
     'store a byte or halfword into a word memory with replicated data and byte enables',
@@ -151,7 +151,7 @@ export const chIO: Chapter = {
 };
 
 export const chTraps: Chapter = {
-  id: 'traps', num: 19, title: 'Traps and interrupts', level: 'Privileged ISA',
+  id: 'traps', num: 20, title: 'Traps and interrupts', level: 'Privileged ISA',
   blurb: 'CSRs, exceptions, ecall, timer and external interrupts: how hardware hands control to software.',
   goals: [
     'read and write CSRs with csrrw, csrrs and csrrc, and name the machine-mode registers a trap uses',

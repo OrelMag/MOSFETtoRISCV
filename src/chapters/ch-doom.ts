@@ -67,7 +67,7 @@ export const chAppendixDoom: Chapter = {
         memory. Doom (id Software, 1993; the source released in 1997) is the other kind: about 65 000 lines of C written for
         a 386 PC, with no idea what runs it. Can our ISA run it unchanged?</p>
         <p>The ISA is enough. Doom does its geometry in 16.16 fixed point, so integer multiply and divide are all it
-        needs: RV32IM, which the system CPU of <a href="#/c/io/0">chapters 18–20</a> implements. What it lacks is a computer around it:
+        needs: RV32IM, which the system CPU of <a href="#/c/io/0">chapters 19–21</a> implements. What it lacks is a computer around it:
         megabytes of memory where we have kilobytes, a 256-colour screen, a keyboard that reports releases, and a file
         to read the levels from. The table measures what is needed against what we had.</p>
         <p>The rest of this appendix builds that computer twice: as a fast interpreter of our ISA, to play it, and in
@@ -110,7 +110,7 @@ export const chAppendixDoom: Chapter = {
       title: 'Play',
       body: `
         <p>This is Doom (1993): the C source of <a href="https://github.com/ozkl/doomgeneric" target="_blank" rel="noopener">doomgeneric</a>
-        compiled by GCC with <code>-march=rv32im</code> into 57,889 instruction words, the ISA of the system CPU of <a href="#/c/io/0">chapters 18–20</a>.
+        compiled by GCC with <code>-march=rv32im</code> into 57,889 instruction words, the ISA of the system CPU of <a href="#/c/io/0">chapters 19–21</a>.
         No floats (Doom is fixed point), no compressed instructions, machine mode only.</p>
         <p>The program sees a small computer: 8 MiB of RAM, the game data (a WAD file) mapped read-only at
         <code>0x1000_0000</code>, a 320 × 200 frame buffer of palette indices at <code>0xC000_0000</code>, and three I/O
@@ -137,7 +137,7 @@ export const chAppendixDoom: Chapter = {
       title: 'Hand it to the gates',
       body: `
         <p>The same program on the circuit: <span data-show="u">the RV32IM system core</span> of
-        <a href="#/c/io/0">chapters 18–20</a> with its memories outside it (the instruction ROM on
+        <a href="#/c/io/0">chapters 19–21</a> with its memories outside it (the instruction ROM on
         <span data-show="pin:pcOut pin:instr"><code>pcOut → instr</code></span>,
         <span data-show="pin:memAddr pin:memWData pin:memRData pin:memBE pin:memRE">data and I/O on one port with byte
         enables and a read strobe</span>), and around it the Doom computer's memory map in gates: a region decoder on <code>addr[31:28]</code>,

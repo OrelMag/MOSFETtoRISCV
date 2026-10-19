@@ -46,7 +46,7 @@ const DV2 = 0.5 * CELL_C / (CELL_C + 2 * BITLINE_C);
 const OFFSET_MV = Math.round(SENSE_OFFSET * VDD_VOLTS * 1000);
 
 export const chDram: Chapter = {
-  id: 'dram', num: 33, title: 'Inside a DRAM', level: 'Memory in depth',
+  id: 'dram', num: 34, title: 'Inside a DRAM', level: 'Memory in depth',
   blurb: 'A 1T1C array at transistor level: bit lines at VDD/2, charge sharing measured in millivolts, the sense amplifier that restores a destroyed row, leakage and refresh, the row buffer and DDR4 timings in cycles.',
   goals: [
     'compute the bit-line swing of a 1T1C read from the cell and bit-line capacitances',
@@ -98,7 +98,7 @@ export const chDram: Chapter = {
     {
       title: 'An array of capacitors',
       body: `
-        <p>An SRAM bit costs six transistors (<a href="#/c/cache/0">chapter 21</a>). A DRAM bit is one access transistor and one capacitor of about
+        <p>An SRAM bit costs six transistors (<a href="#/c/cache/0">chapter 22</a>). A DRAM bit is one access transistor and one capacitor of about
         ${CELL_C} fF: the <strong>1T1C</strong> cell. The bit is the charge on the capacitor, so nothing holds it; it only has
         to survive until it is read or refreshed. A 16 Gbit DDR5 die holds seventeen billion of these.</p>
         <p>Each row of cells shares a <strong>word line</strong> (the access transistors' gates, raised by the
@@ -226,7 +226,7 @@ export const chDram: Chapter = {
         before the activate (a <strong>conflict</strong>).</p>
         <p>Rows are interleaved over the banks, so consecutive lines fill a row and then move on to the next bank. Banks are
         independent: while one waits for its precharge or activate, another can be read, and a controller with several requests
-        overlaps them (bank-level parallelism; DDR4 groups its 16 banks in 4 bank groups, <a href="#/c/memctrl/0">chapter 34</a>). Two streams that land in the same bank keep closing each
+        overlaps them (bank-level parallelism; DDR4 groups its 16 banks in 4 bank groups, <a href="#/c/memctrl/0">chapter 35</a>). Two streams that land in the same bank keep closing each
         other's rows. A memory copy whose destination sits a multiple of the bank stride away does exactly that.</p>`,
       widget: rowBufferWidget,
       challenge: {
@@ -251,8 +251,8 @@ export const chDram: Chapter = {
         At our single-cycle CPU's ${CLOCK_NS.toFixed(2)} ns clock that is ${TIMING.tRCD} cycles each. After the column command the data comes as a
         <strong>burst</strong>: here a 4-word cache line, one word a cycle.</p>
         <p>A row hit is then ${accessCycles('hit', TIMING)} cycles, a miss ${accessCycles('miss', TIMING)}, a conflict ${accessCycles('conflict', TIMING)}.
-        <a href="#/c/cache/0">Chapter 21</a>'s caches charge a fixed ${WB_MISS_CLEAN} for a miss (${WB_MISS_DIRTY} with a dirty victim to write back first);
-        ${WB_MISS_CLEAN} is a row hit. <a href="#/c/memctrl/0">Chapter 34</a> builds the controller that issues these
+        <a href="#/c/cache/0">Chapter 22</a>'s caches charge a fixed ${WB_MISS_CLEAN} for a miss (${WB_MISS_DIRTY} with a dirty victim to write back first);
+        ${WB_MISS_CLEAN} is a row hit. <a href="#/c/memctrl/0">Chapter 35</a> builds the controller that issues these
         commands, and lets the caches pay what the row buffer says.</p>
         <details class="deeper"><summary>Deeper: what DDR4-3200 22-22-22 means</summary>
         <p>${MTS} MT/s (million transfers a second per data pin): data moves on both edges of a ${MTS / 2} MHz clock, so tCK = ${TCK} ns.

@@ -426,13 +426,13 @@ export const chSingleCycle: Chapter = {
         <span data-show="dm">data memory</span> writes), data = rs2. Nothing is written back.
         <code>lw</code>: same address computation, ResultSrc = memory (the <span data-show="res">result mux</span> passes the loaded word). On paper that is the longest path:
         clock → PC → instruction memory → register file → ALU (32-bit ripple add) → data-memory read mux → result mux → register
-        file input. <a href="#/c/fastadd/0">Chapter 15</a> measures this machine and finds a surprise.</p>
+        file input. <a href="#/c/fastadd/0">Chapter 16</a> measures this machine and finds a surprise.</p>
         <div class="try">Pulse to the <code>lw</code> and compare the status bar's "settled in N gate delays" with an <code>addi</code>.</div>`,
       scene: () => cpuScene({ source: MEMOPS, highlight: ['alu', 'dm', 'res'] }),
       challenge: {
         kind: 'quiz', question: 'With realistic memories (SRAM slower than the logic around it), which instruction class sets the clock period of a single-cycle CPU?',
         options: ['R-type (two register reads)', 'lw (ALU, then memory, then write-back)', 'beq (subtract and compare)', 'jal (no register read)'], answer: 1,
-        why: ['Both register reads happen in parallel, and an R-type skips the data memory entirely.', '', 'With a realistic memory, a branch ends at the next-PC logic and never waits for a data-memory read. (This site\'s memories are fast mux trees, so chapter 15\'s static timing finds a branch path on top: a surprise only cheap memory allows.)', 'jal reads no register, and its path through an adder to the result mux is shorter still.'],
+        why: ['Both register reads happen in parallel, and an R-type skips the data memory entirely.', '', 'With a realistic memory, a branch ends at the next-PC logic and never waits for a data-memory read. (This site\'s memories are fast mux trees, so chapter 16\'s static timing finds a branch path on top: a surprise only cheap memory allows.)', 'jal reads no register, and its path through an adder to the result mux is shorter still.'],
         explain: 'Every cycle must be long enough for the slowest instruction, and lw chains the ALU and the memory read. The other instructions waste the slack. That is the motivation for multicycle and pipelined designs.',
       },
     },

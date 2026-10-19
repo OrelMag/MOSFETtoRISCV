@@ -86,7 +86,7 @@ function payWidget(): Widget {
 }
 
 export const chPipeline: Chapter = {
-  id: 'pipeline', num: 16, title: 'Pipelining', level: 'Processor',
+  id: 'pipeline', num: 17, title: 'Pipelining', level: 'Processor',
   blurb: 'Five stages working on five instructions at once, and the hazards that come with it.',
   goals: [
     'explain why five stages raise throughput but not the latency of one instruction',
@@ -225,7 +225,7 @@ export const chPipeline: Chapter = {
         a late stage (before any store of its own commits): squash it and everything behind, save its PC (<code>mepc</code>),
         fetch the handler. An older instruction's exception, discovered later, still wins because it reaches that stage first.
         Interrupts are taken between two instructions the same way. This pipeline takes no traps;
-        <a href="#/c/traps/0">chapter 19</a> adds them to the single-cycle CPU, where every exception is precise for free.</p></details>
+        <a href="#/c/traps/0">chapter 20</a> adds them to the single-cycle CPU, where every exception is precise for free.</p></details>
         <div class="try">Pulse until the loop branch is taken: two instructions turn into bubbles.</div>`,
       scene: () => cpuScene({ source: src('sum'), pipeline: true, highlight: ['npc', 'hz', 'pcmux'] }),
       tries: [(st) => !!snap(st)?.flush],

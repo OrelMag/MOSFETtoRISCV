@@ -23,7 +23,7 @@ const refOf = (id: string, def: () => ComponentDef, name: string) => (): ChipDoc
 };
 
 /**
- * The column's test: writes and reads of both cells through the protocol of chapter 33 (precharge, word line,
+ * The column's test: writes and reads of both cells through the protocol of chapter 34 (precharge, word line,
  * sense, then write or read, close). Each read is destructive, so reading a cell twice proves the restore.
  */
 export function senseSeq(): SeqStep[] {
@@ -108,7 +108,7 @@ export function busSeq(): SeqStep[] {
 export const BUILDM: Record<string, () => BuildChallenge> = {
   m_sense: () => ({
     id: 'm_sense', title: 'A DRAM column', level: 'memory', allowed: 'nand',
-    brief: 'Two 1T1C cells on a bit line, read and written through a sense amplifier, at switch level. The bench drives chapter 33\'s protocol: <b>pre</b> = 1 then 0 (both bit lines to VDD/2, then floating), a word line <b>wl0</b> or <b>wl1</b> (the cell shares its charge with its line), <b>sae</b> (the amplifier drives the higher line to VDD and the other to GND, and the open cell is restored), then either a read or a write (<b>we</b> = 1 with <b>d</b>: the write driver flips the lines), then the word line and sae fall. <b>q</b> must be the cell\'s bit once sensed. '
+    brief: 'Two 1T1C cells on a bit line, read and written through a sense amplifier, at switch level. The bench drives chapter 34\'s protocol: <b>pre</b> = 1 then 0 (both bit lines to VDD/2, then floating), a word line <b>wl0</b> or <b>wl1</b> (the cell shares its charge with its line), <b>sae</b> (the amplifier drives the higher line to VDD and the other to GND, and the open cell is restored), then either a read or a write (<b>we</b> = 1 with <b>d</b>: the write driver flips the lines), then the word line and sae fall. <b>q</b> must be the cell\'s bit once sensed. '
       + 'Given: the cells, a bit line capacitance part (100 fF), the amplifier, VDD/2 and the write driver. The amplifier compares two lines, so the second one needs the same capacitance and the same precharge, and nothing else on it.',
     ports: pinsOf(DRAM_COL2),
     check: { kind: 'sequence', steps: senseSeq() },

@@ -9,6 +9,7 @@ import { chCache } from './ch-cache';
 import { chMulticycle } from './ch-multicycle';
 import { chFloat } from './ch-float';
 import { chOoo } from './ch-ooo';
+import { chPython } from './ch-python';
 import { chMulticore } from './ch-multicore';
 import { chSilicon } from './ch-silicon';
 import { chFeed, chLanes, chSimt, chWarps } from './ch-gpu';
@@ -32,7 +33,7 @@ export const chapters: Chapter[] = [
   // the prologue: before the transistor, labelled P1 …
   chRelays, chTubes, chCards,
   chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
-  chAlu, chRegfile, chIsa, chSingleCycle, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chMulticycle, chFloat, chOoo, chMulticore, chSilicon, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
+  chAlu, chRegfile, chIsa, chSingleCycle, chPython, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chMulticycle, chFloat, chOoo, chMulticore, chSilicon, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
   chDram, chMemCtrl, chFlash, chBus,
   // the appendix: after the journey, lettered
   chAppendix6502, chAppendixDoom,

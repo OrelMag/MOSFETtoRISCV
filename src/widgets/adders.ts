@@ -1,4 +1,4 @@
-// Chapter 15 widget: four adders, measured two ways (static depth and simulated delay), and what an add costs in
+// Chapter 16 widget: four adders, measured two ways (static depth and simulated delay), and what an add costs in
 // energy (sim/power.ts: toggles on the same vectors, glitches included).
 
 import { carrySelect, carrySkip, koggeStone, rca } from '../lib';

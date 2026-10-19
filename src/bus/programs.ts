@@ -1,4 +1,4 @@
-// Chapter 36's programs: a boot ROM that copies a program from flash into RAM by DMA and jumps to it, and
+// Chapter 37's programs: a boot ROM that copies a program from flash into RAM by DMA and jumps to it, and
 // the program it copies (it runs from RAM at 0x400 and prints on the console).
 
 /** Where the boot ROM puts the program, and how many words it copies. */
@@ -163,7 +163,7 @@ handler: li  s6, 0x40000000
         sw   s9, 4(s0)          # the LEDs count the ticks
 out:    mret`;
 
-// ---- booting from punched cards (chapter 36's card reader at 0x7000_0000) -------------------------------
+// ---- booting from punched cards (chapter 37's card reader at 0x7000_0000) -------------------------------
 
 /** The card reader's registers: STATUS (bit 0 a card waits, bit 1 the hopper is empty), DATA at +4. */
 export const CARD_BASE = 0x70000000;

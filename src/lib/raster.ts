@@ -1,4 +1,4 @@
-// Chapter 31: a triangle rasterizer at gate level, behind it a double-buffered framebuffer and the scan-out
+// Chapter 32: a triangle rasterizer at gate level, behind it a double-buffered framebuffer and the scan-out
 // that sends it to the screen. The reference model is gfx/raster.ts (same arithmetic, same cycle order).
 //
 //   EDGE_STEP   one edge function E, stepped with an adder: +dx (a pixel right), ±dy (a pixel down / up),
@@ -709,7 +709,7 @@ export const ROP: ComponentDef = (() => {
 })();
 
 /**
- * Chapter 32's faster clear: the ROP with its depth buffer in four banks of 1 024 × 16 (bank j: pixels with x mod 4 = j,
+ * Chapter 33's faster clear: the ROP with its depth buffer in four banks of 1 024 × 16 (bank j: pixels with x mod 4 = j,
  * as the frame's byte banks), so the clear unit writes a whole word a cycle: with cwe, every depth bank takes 0xFFFF and
  * the frame word ca takes the colour cd in all four bytes (wall). Otherwise as ROP, without fclr: the rasterizer no
  * longer clears.
@@ -763,7 +763,7 @@ const bufCache = new Map<string, ComponentDef>();
 /**
  * One 64 × 64 frame of RGB332 bytes: four byte banks (pixel x mod 4), so a word address reads four neighbours at
  * once (q, pixel 4a in its low byte) while a write goes to one bank (lane = x mod 4). q8: the byte at a, lane.
- * `init`: the frame's pixels at power-on (index y·64 + x). wide (chapter 32's faster clear): `all` writes d into every
+ * `init`: the frame's pixels at power-on (index y·64 + x). wide (chapter 33's faster clear): `all` writes d into every
  * bank at word a, four pixels in one cycle.
  */
 export function pixelBuffer(init?: ArrayLike<number>, wide = false): ComponentDef {
@@ -811,7 +811,7 @@ const fbCache = new Map<string, ComponentDef>();
 /**
  * Two frames. front = 0: frame 0 is read by the scan-out (ra: a word), frame 1 written by the rasterizer (wa: a
  * pixel); front = 1 the other way round. rq: the four front pixels at ra; wq: the back frame's pixel at wa. wide: wall
- * writes the back frame's whole word at wa (four pixels: chapter 32's clear unit).
+ * writes the back frame's whole word at wa (four pixels: chapter 33's clear unit).
  */
 export function frameBuffers(init0?: ArrayLike<number>, init1?: ArrayLike<number>, wide = false): ComponentDef {
   const F0 = pixelBuffer(init0, wide), F1 = pixelBuffer(init1, wide);
@@ -886,7 +886,7 @@ export const SCAN_OUT: ComponentDef = (() => {
 
 const topCache = new Map<string, ComponentDef>();
 
-/** Framebuffers and scan-out only (chapter 31, step 1): two pictures in memory, flipped on request. */
+/** Framebuffers and scan-out only (chapter 32, step 1): two pictures in memory, flipped on request. */
 export function displayTop(init0: ArrayLike<number>, init1: ArrayLike<number>): ComponentDef {
   const FB = frameBuffers(init0, init1);
   const key = `disp_${FB.id}`;
@@ -913,7 +913,7 @@ export function displayTop(init0: ArrayLike<number>, init1: ArrayLike<number>): 
   return d;
 }
 
-/** The rasterizer drawing into the back frame while the scan-out shows the front one (chapter 31, steps 2–3). */
+/** The rasterizer drawing into the back frame while the scan-out shows the front one (chapter 32, steps 2–3). */
 export const GPU30: ComponentDef = (() => {
   const b = new Builder(10, 14, 4);
   b.pins(...VERTEX_PINS, 'col', 'go', 'swap', 'sync', 'clk');
@@ -936,7 +936,7 @@ export const GPU30: ComponentDef = (() => {
   });
 })();
 
-/** Chapter 31, steps 4–5: the rasterizer with depth, the depth test and blending, the double framebuffer, the scan-out. */
+/** Chapter 32, steps 4–5: the rasterizer with depth, the depth test and blending, the double framebuffer, the scan-out. */
 export const GPU30Z: ComponentDef = (() => {
   const RZ = rasterizer(true);
   const b = new Builder(10, 14, 4);

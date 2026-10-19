@@ -218,7 +218,7 @@ describe('depth and blending', () => {
   });
 });
 
-describe('chapter 31 quotes these numbers', () => {
+describe('chapter 32 quotes these numbers', () => {
   it('costs and cycles in the prose', () => {
     const n = (d: Parameters<typeof stats>[0]) => stats(d).nands;
     expect([n(SCAN_OUT), n(RAST_SETUP), n(boothMul(10)), n(EDGE_STEP), n(RAST_WALK), n(RASTERIZER), n(Z_SETUP), n(BLEND332)])

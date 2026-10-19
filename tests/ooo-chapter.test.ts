@@ -1,4 +1,4 @@
-// Chapter 24's quoted numbers, recomputed from the models (riscv/ilp.ts, ooomodel.ts, scoreboard.ts), so the prose
+// Chapter 25's quoted numbers, recomputed from the models (riscv/ilp.ts, ooomodel.ts, scoreboard.ts), so the prose
 // cannot drift from them.
 
 import { describe, expect, it } from 'vitest';
@@ -18,7 +18,7 @@ const text = [...chOoo.steps.map((s) => s.body), ...chOoo.recap!.keep].join(' ')
 const quoted = (v: string) => expect(text, v).toContain(v);
 const LONG = { lat: { alu: 1, load: 4, mul: 4, div: 19 } };
 
-describe('chapter 24: the numbers it quotes', () => {
+describe('chapter 25: the numbers it quotes', () => {
   it('dataflow ceilings', () => {
     const ipc = (id: string) => dataflow(traceOf(words(id), OPTS)).ipc;
     expect(ipc('fib').toFixed(1)).toBe('10.3');

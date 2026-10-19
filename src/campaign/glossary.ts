@@ -46,9 +46,9 @@ const SKIP = new Set(['abstraction', 'feedback', 'flags', 'identities', 'roundin
 /** Entries whose names mean something else before the GPU chapters: a loom's warp, a byte lane, an energy barrier. */
 const GPU_ONLY = ['warp', 'lane', 'barrier'];
 
-/** Entries not to mark in a chapter (markTerms' skip set): the GPU act's terms before chapter 27 and in the prologue (number 0). */
+/** Entries not to mark in a chapter (markTerms' skip set): the GPU act's terms before chapter 28 and in the prologue (number 0). */
 export function chapterSkip(c: { num: number }): Set<string> {
-  return new Set(c.num < 27 ? GPU_ONLY : []);
+  return new Set(c.num < 28 ? GPU_ONLY : []);
 }
 
 /** Phrases that use a term's word for something else: found, so no shorter term claims them, and never marked. */

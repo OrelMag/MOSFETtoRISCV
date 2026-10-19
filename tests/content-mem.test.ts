@@ -27,19 +27,19 @@ const text = (c: Chapter) => JSON.stringify(c);
 const T = (d: Parameters<typeof stats>[0]) => stats(d).transistors;
 
 describe('memory chapters: quoted numbers', () => {
-  it('ch 33: a full cell moves the bit line by the 110 mV the read challenge quotes', () => {
+  it('ch 34: a full cell moves the bit line by the 110 mV the read challenge quotes', () => {
     const mv = Math.round(0.5 * CELL_C / (CELL_C + BITLINE_C) * VDD_VOLTS * 1000);
     expect(mv).toBe(110);
     expect(text(chDram)).toContain('+110 mV');
   });
 
-  it('ch 33: the 3 GHz conflict pays three 13.75 ns intervals and a 2.5 ns BL8 burst', () => {
+  it('ch 34: the 3 GHz conflict pays three 13.75 ns intervals and a 2.5 ns BL8 burst', () => {
     const q = chDram.steps.find((s) => s.title === 'Bursts and timings')!.challenge!;
     expect(q.kind).toBe('quiz');
     if (q.kind === 'quiz') expect(q.options[q.answer]).toBe(String(3 * Math.ceil(13.75 * 3) + Math.ceil(2.5 * 3)));
   });
 
-  it('ch 35: the flash times are a real page read scaled down, ratios about kept', () => {
+  it('ch 36: the flash times are a real page read scaled down, ratios about kept', () => {
     const real = Math.round((FLASH_REAL_US.read * 1000) / CLOCK_NS);
     expect(text(chFlash)).toContain(real.toLocaleString('en-US').replace(/,/g, ' '));
     const scale = real / FLASH_TIMES.read;
@@ -50,7 +50,7 @@ describe('memory chapters: quoted numbers', () => {
     expect(text(chFlash)).toContain('about 100×');
   });
 
-  it('ch 36: the DMA engine\'s flip-flop share is what the text says', () => {
+  it('ch 37: the DMA engine\'s flip-flop share is what the text says', () => {
     const regs = new Set(['src', 'dst', 'len', 'data', 'rdr', 'st', 'bq', 'rq']);
     const n = (netlistOf(DMA_ENGINE)?.instances ?? []).filter((i) => regs.has(i.name)).reduce((s, i) => s + stats(i.def).nands, 0);
     const pct = Math.round((100 * n) / stats(DMA_ENGINE).nands);

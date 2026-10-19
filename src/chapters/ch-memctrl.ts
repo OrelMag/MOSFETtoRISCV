@@ -23,7 +23,7 @@ const fmt = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
 const slower = (a: string, b: string, bench: string) => `${(((run(a, bench) / run(b, bench)) - 1) * 100).toFixed(1)} %`;
 
 export const chMemCtrl: Chapter = {
-  id: 'memctrl', num: 34, title: 'A memory controller', level: 'Memory in depth',
+  id: 'memctrl', num: 35, title: 'A memory controller', level: 'Memory in depth',
   blurb: 'Commands and their timing rules in gates: a controller that opens and closes rows, refreshes on time and serves the cache; open against closed page, address mapping and FR-FCFS, measured on the benchmarks.',
   goals: [
     'list the DRAM commands and the timing rule that guards each',
@@ -83,7 +83,7 @@ export const chMemCtrl: Chapter = {
         <p>Six commands do the work. <strong>ACT</strong> opens a row in a bank, <strong>RD</strong> / <strong>WR</strong>
         move a burst from or to the open row, <strong>PRE</strong> closes it (<strong>PREA</strong>: every bank), <strong>REF</strong>
         refreshes. A DDR4 device also takes MRS (set the mode registers: CL, burst length), ZQ (calibrate the output drivers),
-        self-refresh entry / exit and power-down, which this model leaves out. Each working command has a rule about when it may come (<a href="#/c/dram/0">chapter 33</a>): tRCD after an ACT before a column command, tRP after a PRE
+        self-refresh entry / exit and power-down, which this model leaves out. Each working command has a rule about when it may come (<a href="#/c/dram/0">chapter 34</a>): tRCD after an ACT before a column command, tRP after a PRE
         before the next ACT, tRAS before a row may close, tRFC of silence after a REF. <span data-show="dev">The device</span> here checks every one, and a
         command that breaks one turns its data into X.</p>
         <p><span data-show="ctrl">The controller</span> turns "read line 5" into the right commands at the right cycles. In gates it is small: <span data-show="ctrl.st">seven state
@@ -171,7 +171,7 @@ export const chMemCtrl: Chapter = {
     {
       title: 'The CPU behind it',
       body: `
-        <p>The <span data-show="dm">write-back cache</span> of <a href="#/c/cache/0">chapter 21</a> had a miss controller counting to a fixed 8 or 12. Here it asks instead. On a miss it
+        <p>The <span data-show="dm">write-back cache</span> of <a href="#/c/cache/0">chapter 22</a> had a miss controller counting to a fixed 8 or 12. Here it asks instead. On a miss it
         raises <code>req</code> with the line address; if the victim is dirty it first asks for a write (<code>wr</code>) with the victim's
         address, and the controller says which word it wants each cycle; then it asks for the fill and writes each word as
         <code>dv</code> (data valid: the device is delivering a read word) says. The tag is written with the last word. The stall lasts exactly as long as the DRAM takes.</p>
@@ -231,7 +231,7 @@ export const chMemCtrl: Chapter = {
         oldest of all only when nothing hits. With a CPU and a write buffer working on two rows of one bank, FCFS turns every request
         into a conflict; FR-FCFS batches each row's requests, as deep as the queue lets it.</p>
         <p>It needs requests to choose from. This chapter's controller has one: the cache asks for a line and waits. A queue comes with a
-        write buffer, several cores (<a href="#/c/multicore/0">chapter 25</a>) or a DMA engine (<a href="#/c/bus/0">chapter 36</a>). Its cost is the queue itself, address and data
+        write buffer, several cores (<a href="#/c/multicore/0">chapter 26</a>) or a DMA engine (<a href="#/c/bus/0">chapter 37</a>). Its cost is the queue itself, address and data
         registers per entry, and a row-hit comparator per entry feeding a priority encoder. FR-FCFS is also unfair: a stream of hits can
         hold an old request back, so real controllers cap how long a request may wait.</p>`,
       widget: reorderWidget,

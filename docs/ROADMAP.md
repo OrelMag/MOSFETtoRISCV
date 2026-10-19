@@ -96,7 +96,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Carry-select and carry-skip adders, static depth against simulated delay (carry-skip's false path); BCD adder
 - ✅ Register file (32 × 32, x0 hard-wired), two read ports and one write port
 - ✅ Comparison and coding blocks: log-depth magnitude comparator (signed / unsigned), encoder, recursive priority
-  encoder, demultiplexer, population count, absolute value, parity, Hamming SEC-DED encoder / decoder (ECC step in ch. 21)
+  encoder, demultiplexer, population count, absolute value, parity, Hamming SEC-DED encoder / decoder (ECC step in ch. 22)
 - ✅ Workbench lists every library component: each generator is a family with parameter dropdowns
   (adders, multipliers, dividers, float units, register files, caches, …), plus every fixed processor part
 - ✅ **Sandbox** (`#/sandbox`): a Digital-Logic-Sim-style editor
@@ -200,7 +200,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Memory-mapped I/O: console, LEDs, switches, mtime / mtimecmp timer
 - ✅ Zicsr + machine mode: 12 CSRs, traps (illegal, ecall, ebreak, misaligned fetch/load/store), mret
 - ✅ Timer and external interrupts; I/O panel with live CSR state; 67k-NAND system CPU co-simulated every cycle
-- ✅ M extension (chapter 20): array and Wallace-tree multipliers (measured depth 310 vs 68 at 32 bits), Baugh–Wooley signed
+- ✅ M extension (chapter 21): array and Wallace-tree multipliers (measured depth 310 vs 68 at 32 bits), Baugh–Wooley signed
   products, radix-4 Booth encoder + recoding explorer, restoring division (step, array divider, iterative divider), and an
   RV32IM system CPU (104k NAND) with one-cycle multiplies and 34-cycle stalling divides, co-simulated per retirement
 - ✅ Non-restoring division (step, array, iterative) and radix-2 SRT (carry-save remainder, 4-bit digit selection,
@@ -209,7 +209,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   measured against Baugh–Wooley; 3-stage pipelined Booth multiplier (latency 4, one product per cycle)
 - ✅ Radix-4 SRT divider: digits −2…+2, selection thresholds computed from the containment bounds and checked
   exhaustively, carry-save comparisons; n/2 + 3 cycles, 21 % faster than radix 2 at 32 bits
-- ✅ M extension in the pipelined CPU (chapter 20): multiplier split over E / M (a multiply is a load for hazards), radix-4 SRT
+- ✅ M extension in the pipelined CPU (chapter 21): multiplier split over E / M (a multiply is a load for hazards), radix-4 SRT
   divide stalling the front for 18 cycles; +45 % NANDs, period 93 → 93 (fast adders), 59 → 79 (balanced: divider sign fix, Booth tree)
 - ✅ Passing the official `riscv-tests` on every RV32 CPU (see Phase 13 and `docs/VERIFICATION.md`)
 
@@ -224,10 +224,10 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Gate-level write-back, write-allocate cache with dirty bits and a write-back-then-fill miss controller; 2-way
   set-associative with an LRU bit; instruction cache; all three in the single-cycle CPU, co-simulated per cycle
 - ✅ Data cache (write-through, write-back, 2-way) in the pipelined CPU: a miss freezes every stage, co-simulated at every retirement
-- ✅ Bus / interconnect basics, DRAM and flash in depth: Phase 16 (chapters 33–36, campaign act 10)
+- ✅ Bus / interconnect basics, DRAM and flash in depth: Phase 16 (chapters 34–37, campaign act 10)
 
 ### Phase 9 — Performance & optimization 🚧
-- ✅ Floating point (chapter 23): IEEE 754 explorer and number line; parametric gate-level FPU (unpack, align with sticky,
+- ✅ Floating point (chapter 24): IEEE 754 explorer and number line; parametric gate-level FPU (unpack, align with sticky,
   add/sub, tree multiply, shared normalize & round with RNE and subnormals, compare, int→float), exhaustively tested on
   small formats and against host float32; single-cycle RV32IF CPU (subset) co-simulated with both register files
 - ✅ RV32F without div / sqrt / fma: all five rounding modes (and dyn → frm) and the five exception flags in the shared
@@ -241,11 +241,11 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Pipelined FPU: six-stage RV32IF pipeline (F D E M X W, in-order retirement), the FMA split over E / M / X as the FP pipe
   for fadd / fsub / fmul / fma / fcvt.s.w and (unrounded) fdiv / fsqrt, one shared rounder; FP interlocks + forwarding from W,
   CSR serialization, structural stalls for the iterative units; period 121 vs 313 (single-cycle), CPI 1.6–2.7, co-simulated
-- 🚧 Superscalar and out-of-order execution: Phase 17 (chapter 24)
+- 🚧 Superscalar and out-of-order execution: Phase 17 (chapter 25)
 - Compressed instructions (C), A extension (LR/SC, AMO)
 - Virtual memory (Sv32), TLB, U/S/M privilege levels (stretch)
 
-### Phase 10 — Multi-core ✅ (chapter 25)
+### Phase 10 — Multi-core ✅ (chapter 26)
 - ✅ Gate-level dual-core: one core definition instantiated twice, csrr mhartid, shared memory behind a round-robin arbiter
 - ✅ amoswap.w / amoadd.w; race (20 of 40 updates survive), atomic add and spin-lock demos
 - ✅ Multi-hart golden model with identical arbitration; both cores co-simulated every cycle
@@ -253,10 +253,10 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ More than two cores: `multiCore(program, n)` (n = 2, 4, 8) on an n-way round-robin arbiter (`arbiterN`: a one-hot
   pointer, masked and unmasked priority chains, n − 1 flip-flops; on the workbench) and up to 64K words of shared memory;
   co-simulated every cycle against MultiISS with n harts. The 4-core runs ~4 500 cycles/s on the cycle engine in Node
-  (scripts/sim-perf.ts). Chapter 25 keeps the dual-core; chapter 27 measures the lane core against `multiCore(4)`
+  (scripts/sim-perf.ts). Chapter 26 keeps the dual-core; chapter 28 measures the lane core against `multiCore(4)`
 - ⏳ Private caches in the gate-level cores with a coherent bus; lr.w / sc.w
 
-### Phase 11 — From netlist to silicon ✅ (chapter 26)
+### Phase 11 — From netlist to silicon ✅ (chapter 27)
 - ✅ INV / NAND2 / NOR2 standard cells in layout (layers, live conduction), λ dimensions, sky130 reference
 - ✅ Fabrication cross-section, step by step (wells, STI, gate, lithography, etch, implants, contacts, metal)
 - ✅ Technology mapping measured on our designs (inverters, double inversions)
@@ -452,7 +452,7 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   (minimize()), the circuit opened as two-level gates or a PLA with its NAND count; the campaign's K-map drills answered
   on it
 - ⏳ Memory-map designer: address regions (RAM, ROM, screen, console, keys) dragged onto the address space, overlaps and
-  gaps shown, the address decoder opened as a chip (the ISA decoder's match lines over address bits); chapter 35's bus
+  gaps shown, the address decoder opened as a chip (the ISA decoder's match lines over address bits); chapter 36's bus
   and the sandbox computer's map
 - ✅ Examples ▸ 4-bit CPU (4004-inspired; src/isa4, lib/cpu4.ts): the 4004's opcode map and mnemonics, one instruction
   per 16-bit ROM word and per clock (the 4004 byte high, its second byte low), 29 instructions (the 4004's set minus the
@@ -574,7 +574,7 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
   resolution model, not physics; CPUs are checked against our own ISS plus the independent checks below
 - ✅ Screenshots and GIFs in the README (drill-down to transistors, carry ripple, pipeline, sandbox, layout)
 - ✅ The timing panels (chapters and sandbox) and the static-timing step name the 25 ps / NAND as illustrative
-- ✅ Chapter 26 separates the teaching P&R from the OpenROAD run; chapters 21 and 25 call cache-miss freezing and
+- ✅ Chapter 27 separates the teaching P&R from the OpenROAD run; chapters 22 and 26 call cache-miss freezing and
   arbiter-serialized atomics deliberate simplifications (and name non-blocking caches, lr.w / sc.w)
 - ✅ Repository description, homepage and topics on GitHub
 
@@ -613,7 +613,7 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
   like the 25 ps / NAND), ½ C V² per toggle, V set by the learner, f from static timing. The inspector's Power section
   (energy per cycle or operation, power, glitch share, α, split by the block driving each net, the clock net its own
   row: live on a chapter or workbench scene, else on seeded random inputs); energy per add and glitch share in chapter
-  15's adders, energy per instruction in chapter 17's table, in the CPU panel and the sandbox's CPU drawer (gate mode);
+  15's adders, energy per instruction in chapter 18's table, in the CPU panel and the sandbox's CPU drawer (gate mode);
   energy, energy per instruction, glitches and power on the Benchmarks tab (every run again on GateSim, its cycle count
   equal to BitSim's) with a speed-against-energy chart. Labelled an estimate: no leakage, no clock buffers. Found: the
   pipeline spends what the single-cycle CPU does per instruction (46 pJ) although it runs 50 % more cycles: its
@@ -664,7 +664,7 @@ with punch cards.
   (one-way elements; a strength-0 bias resistor for the dividers' legs to −150 V), lib/tubes.ts (the diode NAND brick,
   the nine-NAND full adder in tubes), phys/triode.ts (levels, fan-out margins, power), prologue chapter P2 (7 steps,
   the divider explorer)
-- ✅ Each device up close in 3D, live, on lumped physics (relay: src/phys/relay.ts, src/gl renderer, P1 step 1; triode: src/phys/triode.ts, widgets/triode3dview.ts, P2 step 1) (as chapter 1's cross-section opens the MOSFET; chapter 26's
+- ✅ Each device up close in 3D, live, on lumped physics (relay: src/phys/relay.ts, src/gl renderer, P1 step 1; triode: src/phys/triode.ts, widgets/triode3dview.ts, P2 step 1) (as chapter 1's cross-section opens the MOSFET; chapter 27's
   renderer, cylinders and glow added). Relay: coil current rising with L / R (and the flyback spike at turn-off), pull
   ∝ (N·I)² / gap² against the return spring, the armature a mass on a spring, so pull-in time, pull-in / drop-out
   hysteresis and contact bounce come out of the model. Triode: a heated cathode (Richardson emission, seconds of
@@ -691,7 +691,7 @@ with punch cards.
 - ✅ A 3D view of any design at physical scale: its flattened netlist as relays on boards in racks, or tubes in
   chassis in cabinets, with the same design in CMOS beside it (a speck) and a human figure for scale. Sizes,
   power and heat from per-device constants labelled illustrative (as the 25 ps / NAND is); historical machines
-  for reference (Zuse Z3: about 2 600 relays; ENIAC: 17 468 tubes, about 150 kW and 27 t). Chapter 26 step 9
+  for reference (Zuse Z3: about 2 600 relays; ENIAC: 17 468 tubes, about 150 kW and 27 t). Chapter 27 step 9
   "The same CPU in relays and tubes" (lib/hall.ts, widgets/hallview.ts): the 4-bit CPU and the RV32I without their
   program ROM, a block's racks or ENIAC panels of its own (RV32I: 78 racks, 70 if shared; 181 panels), every device
   drawn (55 699 relay boxes, 75 779 tube cylinders), the CMOS die at true size on a table. Only these two CPUs so
@@ -736,7 +736,7 @@ with punch cards.
 - ⏳ A card-reader boot loader: a small sandbox example where the CPU starts from a boot ROM that reads cards from
   the reader part, word by word, into RAM and jumps to it, as IBM's machines loaded from cards (the 1401's Load
   key); the CPU drawer follows the loaded program like a ROM program, the golden model starting after the load
-  - ✅ On chapter 36's bus computer: step "Booting from cards" (a card-reader slave AXI_CARDS at 0x7000_0000, the
+  - ✅ On chapter 37's bus computer: step "Booting from cards" (a card-reader slave AXI_CARDS at 0x7000_0000, the
     reader leaf holding the deck, a 13-instruction boot ROM that copies the deck to 0x400 and jumps there; the golden
     model counts edges for the reader, so the gate-level computer is co-simulated in lock-step at any feed delay;
     tests/buscards.test.ts)
@@ -748,64 +748,64 @@ The same bricks arranged for throughput instead of latency: one instruction stre
 other threads rather than by forwarding and caches. Every unit is measured like the CPUs (NANDs, depth, period) and
 co-simulated against a golden model.
 
-**Decided** (mockup approved 2026-10-11): journey chapters 27–32 after silicon (Lanes, Threads in lock-step, Hiding
+**Decided** (mockup approved 2026-10-11): journey chapters 28–33 after silicon (Lanes, Threads in lock-step, Hiding
 latency, Feeding the lanes, Pixels and triangles, The graphics pipeline); campaign act 9 after the side quests,
 requiring the finale; explicit split / join divergence (Vortex's scheme) with pred for comparison, on custom-0
 (funct3: tmc 0, wspawn 1, split 2, join 3, bar 4, pred 5) and read-only CSRs lane / warp / nlanes / tid / tmask
 (0xCC0–0xCC4); a lane-count generator (2 / 4 / 8), 4 shown; RV16: SYSTEM funct3 4–7 (split, join, tmc, bar) and
-CSR 7 = tid, a 32 × 32 RGB565 screen at 0xF000–0xF3FF, one pixel per word. Order: lane core + chapters 27–28, then
+CSR 7 = tid, a 32 × 32 RGB565 screen at 0xF000–0xF3FF, one pixel per word. Order: lane core + chapters 28–29, then
 the campaign's first levels, then warps and memory (28–29), graphics last (30–31).
 
 **Work in phases** (each merged and deployed on its own)
-- ✅ 1. RV32 lane core, its golden model and chapters 27–28: deployed 2026-10-11 (913fec6). Groundwork before it:
+- ✅ 1. RV32 lane core, its golden model and chapters 28–29: deployed 2026-10-11 (913fec6). Groundwork before it:
   multiCore(n) with arbiterN (e3c6b2a), the 4-core baseline the lanes are measured against
 - ✅ 2. Campaign act 9, first levels (below), with the RV16 encodings, a 4-lane RV16 golden model and a lane bench
 - ✅ 3. Warps and memory (mockup approved 2026-10-13), in three parts: ✅ 3a warps, scoreboard, an 8-cycle memory and
-  chapter 29; ✅ 3b coalescing, banked shared memory, bar, amoadd.w in the lanes and chapter 30; ✅ 3c the act's coalescer,
+  chapter 30; ✅ 3b coalescing, banked shared memory, bar, amoadd.w in the lanes and chapter 31; ✅ 3c the act's coalescer,
   two-warp and histogram levels
 - ✅ 4. Graphics (mockup approved 2026-10-13: quarter-pixel vertices, 18-bit edges, 4 × 4 tiles walked as bands, depth with
-  chapter 20's divider, a scan-out feeding a screen panel), in three parts: ✅ 4a the rasterizer, framebuffer, scan-out,
-  depth and blending, chapter 31; ✅ 4b the vertex kernel, command unit and chapter 32; ✅ 4c the RV16 raster device,
+  chapter 21's divider, a scan-out feeding a screen panel), in three parts: ✅ 4a the rasterizer, framebuffer, scan-out,
+  depth and blending, chapter 32; ✅ 4b the vertex kernel, command unit and chapter 33; ✅ 4c the RV16 raster device,
   bench, k_edge / k_tile / k_raster / k_frame and p_spin
 
 **Graphics**
-- ✅ Pixels and triangles (chapter 31): a 64 × 64 RGB332 framebuffer in four byte banks, double buffered, a gate-level
+- ✅ Pixels and triangles (chapter 32): a 64 × 64 RGB332 framebuffer in four byte banks, double buffered, a gate-level
   scan-out (a word a cycle, vsync, flip at vsync or at once: tearing); the rasterizer (lib/raster.ts, 11 989 NANDs, one
   pixel a cycle): set-up on one Booth multiplier, three edge steppers, a tile walk that skips tiles an edge rules out
   (the large preset 1 914 cycles against 3 368 for its box); with depth, a depth set-up (Booth, 30-bit divider, Horner;
   12 032 NANDs, +76 cycles) and a 32-bit stepper, and a ROP with a 64 × 64 × 16-bit depth buffer and alpha blending.
   Checked against gfx/raster.ts pixel for pixel and cycle for cycle (tests/raster.test.ts)
-- ✅ The graphics pipeline (chapter 32): a vertex kernel (16.16 rotation with mul, one thread a vertex) on a one-warp
+- ✅ The graphics pipeline (chapter 33): a vertex kernel (16.16 rotation with mul, one thread a vertex) on a one-warp
   core with a host port, a command unit (1 997 NANDs) that launches it a frame ahead, clears, reads the triangles and
-  their vertices from a double-buffered vertex buffer and feeds chapter 31's rasterizer with depth; a spinning
+  their vertices from a double-buffered vertex buffer and feeds chapter 32's rasterizer with depth; a spinning
   triangle (6 144 cycles a frame) and a cube (7 168–8 192) at gate level on the cycle engine, about three and two frames
   a second in the page, every frame checked against the reference. Where the gates go: the warp core 182 121 NANDs busy
   1 % of the frame, the clear 72 % of it (software on 16 threads clears in 804 cycles), the triangle in software 6 825
   cycles against 1 268
-- ✅ A faster clear (chapter 32, step 5): a clear unit (278 NANDs, a word counter) writes four pixels and four depths a
+- ✅ A faster clear (chapter 33, step 5): a clear unit (278 NANDs, a word counter) writes four pixels and four depths a
   cycle into the frame's byte banks and a depth buffer split into four banks: the clear 1 026 cycles instead of 4 438,
   the triangle's frame 3 072 (was 6 144), the cube's 4 096 or 5 120 (was 7 168–8 192), about 580 NANDs in all; the
   scene switches between the two clears, every frame checked against the reference
 
 **Compute**
-- ✅ Lanes (chapter 27): laneCore(program, n) (lib/lanes.ts): the single-cycle front end feeding n lanes (registers,
+- ✅ Lanes (chapter 28): laneCore(program, n) (lib/lanes.ts): the single-cycle front end feeding n lanes (registers,
   ALU, result mux each); the leader (lowest active lane) steers branches through one-hot muxes; a memory sequencer
   serves one active lane per cycle. Measured against multiCore(4): 149 043 NANDs against 181 713 (a lane is mostly its
   23 141-NAND register file), but 134 cycles against 96 on saxpy (a load stops every lane)
-- ✅ SIMT (chapter 28): the active mask (inverted flip-flops: all lanes at power-on), tmc, split / join with a 4-entry
+- ✅ SIMT (chapter 29): the active mask (inverted flip-flops: all lanes at power-on), tmc, split / join with a 4-entry
   shift-register stack (mask, else mask, resume PC, pending), pred; lane utilization per kernel (45–100 %). Golden
   model riscv/simt.ts, co-simulated every cycle (PC, mask, every lane's registers, the stack) on 2, 4 and 8 lanes; the
   Warp panel (widgets/lanes.ts) runs it in lock-step
-- ✅ Warps (chapter 29, Hiding latency): warpCore(program, { warps, lanes, latency }) (lib/warps.ts): warp slots (PC,
-  mask and stack, run bit, a scoreboard of pending bits), the scoreboard check, chapter 25's round-robin arbiter over the
+- ✅ Warps (chapter 30, Hiding latency): warpCore(program, { warps, lanes, latency }) (lib/warps.ts): warp slots (PC,
+  mask and stack, run bit, a scoreboard of pending bits), the scoreboard check, chapter 26's round-robin arbiter over the
   ready warps, a register bank per warp in every lane, and a data memory with a port per lane behind an L-cycle pipeline
   (initial contents as power-on hints). Co-simulated against riscv/warps.ts (WarpISS: the warp the scheduler issued
   steps) after every issue; riscv/warptiming.ts predicts its cycles exactly (tested). Measured, saxpy on 64 elements,
   8-cycle loads: 266 / 192 / 172 cycles on 1 / 2 / 4 warps (58 / 83 / 100 % of the issue slots); a warp costs 110 622
   NANDs (its registers 92 564). The Warp panel (widgets/warps.ts) draws the issue timeline and the scoreboards; the
   occupancy widget sweeps warps and latency; the top level drawn by hand in four bands (warps, decode, lanes, memory),
-  about twice as large at fit in chapters 29, 30 and 32
-- ✅ Feeding the lanes (chapter 30): warpCore(…, { lsu: true, mul }) (lib/warpmem.ts): one memory port behind an access
+  about twice as large at fit in chapters 30, 31 and 33
+- ✅ Feeding the lanes (chapter 31): warpCore(…, { lsu: true, mul }) (lib/warpmem.ts): one memory port behind an access
   unit (a global access serves the lanes in the leader's 16-byte line; a 4-bank shared memory at 0x1000 serves each lane
   whose bank row is its word, broadcasts included; amoadd.w one lane per access); a memory instruction holds the issue
   port one cycle per access. Shared accesses enter the pipeline Ls − 1 stages from the end (2 cycles against 8) when
@@ -814,20 +814,20 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   co-simulated cycle for cycle on six new kernels. Measured: sums stored by rows 124 cycles (68 accesses) against 76 by
   columns (20); tree reduction 298 cycles (strided pairs, bank conflicts: 330); histogram 197; matmul 396 cycles plain
   against 592 tiled at a line per cycle, tiled ahead from a line every 3 cycles (622 against 668). The one-port core is
-  cheaper than chapter 29's: 625 016 NANDs against 674 490 (four ports cost 183 964, a line memory 77 829)
+  cheaper than chapter 30's: 625 016 NANDs against 674 490 (four ports cost 183 964, a line memory 77 829)
 - ✅ ISA: the SIMT extension above, assembler and disassembler, the multi-lane golden model; kernels saxpy, divergence,
   nested ifs, pred loops, tmc, a forgotten split; wspawn and nwarps (CSR 0xCC5) with the warps; bar, amoadd.w in the
   lanes, mul; reduction, histogram, plain and tiled matrix multiply
-- ✅ The lane and warp cores' listing marks (insthw laneUse) and Slow mode, as the CPU panel has; chapters 27–30 on the
+- ✅ The lane and warp cores' listing marks (insthw laneUse) and Slow mode, as the CPU panel has; chapters 28–31 on the
   cycle engine (Run to halt several times faster in the page)
 - ✅ The campaign's lane cores on a sandbox bench (a failing program of k_simd, k_simt, k_warps or k_frame opens around the
   learner's core, a memory port per lane, the CPU drawer checking every thread live); the sandbox RAM gained ports
 
 **Graphics**
-- ✅ Framebuffer and scan-out to a pixel screen, double buffering, flips at vsync (chapter 31)
-- ✅ Fixed-function blocks that open to gates (chapter 31): edge functions and a rasterizer (bounding box, half-plane tests, a
+- ✅ Framebuffer and scan-out to a pixel screen, double buffering, flips at vsync (chapter 32)
+- ✅ Fixed-function blocks that open to gates (chapter 32): edge functions and a rasterizer (bounding box, half-plane tests, a
   tile walk), barycentric interpolation, a z-buffer test, a blend unit; fixed point first, then the FPU
-- ✅ Vertex transform as a kernel on the compute cores (chapter 32); a spinning triangle (then a small mesh) with frames per
+- ✅ Vertex transform as a kernel on the compute cores (chapter 33); a spinning triangle (then a small mesh) with frames per
   second at gate level and the cost of each stage of the graphics pipeline
 
 **Campaign**
@@ -849,10 +849,10 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   model (riscv/rv16/simt16.ts: four Iss16 lanes over one memory), and the lane bench (campaign/lanecheck.ts: every
   lane's register writes and stores in order, four memory ports, 32 programs at once on BitSim)
 
-### Phase 17 — Out of order 🚧 (chapter 24)
+### Phase 17 — Out of order 🚧 (chapter 25)
 More than one instruction per cycle, between floating point and many cores, so the journey runs from instruction-level to
 thread-level to data-level parallelism. Mockup approved 2026-10-19 (E:/mockups/ooo/ooo-mockup.html), every recommendation:
-chapter 24 (24–35 renumbered); two gate-level CPUs, `pipe-2w` (dual issue, in order) and `ooo` (2-wide out of order);
+chapter 25 (24–35 renumbered); two gate-level CPUs, `pipe-2w` (dual issue, in order) and `ooo` (2-wide out of order);
 P6 style (values in the reorder buffer, the rename table maps a register to a ROB entry); ROB 16, issue queue 8, two
 ports with a result bus each, store queue 4; BTB + 2-bit counters + a 4-entry return-address stack; recovery at commit;
 the pipelines' 1-cycle data memory; RV32IM without traps; a cycle-exact model the gates must match; no campaign levels.
@@ -862,7 +862,7 @@ the pipelines' 1-cycle data memory; RV32IM without traps; a cycle-exact model th
   instructions fetched and executed until the flush; tests/ooomodel.test.ts checks every rule every cycle on the
   benchmarks and random programs), `riscv/scoreboard.ts` (the CDC 6600's, reproducing Hennessy and Patterson's table).
   The model found the port policy: branches on both ports and binding to the less busy port take fib from CPI 1.15 to
-  0.99. Chapter 24 with five model steps (the dataflow limit, where in-order stops, the scoreboard, rename / wait /
+  0.99. Chapter 25 with five model steps (the dataflow limit, where in-order stops, the scoreboard, rename / wait /
   commit, speculation) on `widgets/ooo.ts`; its numbers pinned by tests/ooo-chapter.test.ts. Found: on the benchmark
   set the front end limits more than the window (fib: CPI 0.99, perfect prediction 0.63)
 - ✅ More than one retirement per cycle (feat/multi-retire): a CPU gives the count on `retire` (oldest first, `pcW0`);
@@ -872,7 +872,7 @@ the pipelines' 1-cycle data memory; RV32IM without traps; a cycle-exact model th
   memory, multiplier or divider; one control instruction a pair; nothing after a divide; no read of slot 0's result:
   else hold and shift), a 4-read 2-write register file, look-ahead forwarding from both lanes. riscv-tests, 2048 random
   programs and the benchmarks match the golden model. 193 768 NANDs (+37 % on pipe-m-bal-bp), period 80 (79), CPI fib
-  1.13, sort 1.01, matmul 1.05, matmul-m 1.09, crc 0.97 (1.35 / 1.18 / 1.30 / 1.25 / 1.23). Chapter 24 step 2; the
+  1.13, sort 1.01, matmul 1.05, matmul-m 1.09, crc 0.97 (1.35 / 1.18 / 1.30 / 1.25 / 1.23). Chapter 25 step 2; the
   pipeline diagram, listing and sandbox drawer show both lanes; the Benchmarks tab's two-wide family
 - ✅ 17c-1: the out-of-order core's units (lib/ooo.ts): the return stack with two operations a cycle, the BTB trained at
   commit by the model's rules, the issue queue (wakeup, age matrix, select per port with bus slots and the divider), the
@@ -892,7 +892,7 @@ a flash chip does when it cannot overwrite, and how the CPU, DMA and peripherals
 track of chapters after the memory hierarchy; in the campaign, an act of its own. Mockup first for the chapter
 structure and the act.
 
-Mockup approved 2026-10-16 (E:/mockups/memory/memory-mockup.html), every recommendation: chapters 33–36 after chapter 32
+Mockup approved 2026-10-16 (E:/mockups/memory/memory-mockup.html), every recommendation: chapters 34–37 after chapter 33
 (Inside a DRAM, A memory controller, Flash, Buses and DMA; the appendix keeps its letter); charge as a level on
 capacitive nets only, the sense amplifier the one part that reads it; leakage per clock cycle; DDR4-3200 at the
 single-cycle CPU's clock (4 / 4 / 4, burst 4); the controller behind the write-back caches as new CPU variants; an
@@ -902,43 +902,58 @@ on its own.
 **DRAM in depth**
 - ✅ The 1T1C array at switch level: bit lines precharged to V/2, charge sharing, the sense amplifier restoring the
   row (a destructive read and its write-back), leakage over simulated time and refresh before the cell is lost
-  (16a, chapter 33: SwitchSim charge levels, lib/dram.ts, the DRAM panel)
+  (16a, chapter 34: SwitchSim charge levels, lib/dram.ts, the DRAM panel)
 - ✅ Organization: banks, rows and columns, the row buffer (page hit, miss, conflict), tRCD / tRP / tCAS / tRAS in
-  cycles, burst transfers (chapter 33's row-buffer and timing widgets over dram/timing.ts)
+  cycles, burst transfers (chapter 34's row-buffer and timing widgets over dram/timing.ts)
 - ✅ A DDR-style controller at gate level: open- and closed-page policies, refresh scheduling, an XOR bank hash; it
   drives the write-back cache's miss path, so misses cost what the row buffer says; CPUs sc-wb2-dram, sc-wb2-dramc,
-  pipe-wb2-dram pass riscv-tests and fuzzing and are in the benchmark results (16b, chapter 34). FR-FCFS reordering is
+  pipe-wb2-dram pass riscv-tests and fuzzing and are in the benchmark results (16b, chapter 35). FR-FCFS reordering is
   modelled (dram/schedule.ts) and shown; a gate-level request queue waits for several requesters (DMA, 16d)
 
 **Non-volatile**
 - ✅ The floating-gate transistor: stored charge shifts the threshold (a switch-level MOSFET with a programmable V_T),
-  program and erase as slow operations; mask ROM (chapter 10) as the read-only ancestor (16c, chapter 35: prim 'fgmos')
+  program and erase as slow operations; mask ROM (chapter 10) as the read-only ancestor (16c, chapter 36: prim 'fgmos')
 - ✅ NOR and NAND flash arrays (random read against density), page program and block erase (lib/flash.ts)
 - ✅ A flash controller: a logical-to-physical mapping table, garbage collection, wear levelling, bad blocks (flash/model.ts,
-  chapter 35's widgets); ✅ a program that boots from flash into RAM (chapter 36)
+  chapter 36's widgets); ✅ a program that boots from flash into RAM (chapter 37)
 
 **Interconnect**
 - ✅ A simple bus with a valid / ready handshake (an AXI-lite-style set of channels), address decoding to several
-  slaves, arbitration generalizing the dual-core's arbiter, wait states (16d, chapter 36: lib/axi.ts)
+  slaves, arbitration generalizing the dual-core's arbiter, wait states (16d, chapter 37: lib/axi.ts)
 - ✅ DMA: a controller copying memory while the CPU runs, sharing the bus, raising an interrupt when done
 - ✅ A system on one bus with a memory map: the system CPU (instructions fetched over the bus beyond a boot ROM), DMA,
   RAM, flash; it boots from flash into RAM by DMA (lib/soc.ts, lock-step with the golden model). ✅ the DRAM controller
   as a slave (a data mask on the device: a store writes its bytes without a read), a screen and a keyboard on the bus
-  (chapter 36's last step, on the cycle engine). ✅ a boot from punched cards (a card-reader slave, chapter 36's
+  (chapter 37's last step, on the cycle engine). ✅ a boot from punched cards (a card-reader slave, chapter 37's
   sixth step; Phase 14). ✅ the sandbox example (Examples ▸ System on a bus: boot ROM and flash
   contents as ROM parts, a screen, keyboard and timer parts behind the bus; the cycle engine) and a timer part (palette,
   workbench family)
 
 **Campaign**
 - ✅ Act 10 "Memory" (16e, optional, after the finale; docs/CAMPAIGN.md): a lesson, a DRAM column at switch level
-  around the sense amplifier, a bank with RAS-only refresh, a row-buffer controller with chapter 34's timings (16e-1);
+  around the sense amplifier, a bank with RAS-only refresh, a row-buffer controller with chapter 35's timings (16e-1);
   a bus with two masters and a round-robin arbiter, a DMA engine, a flash page store (a log, a mapping table, the
   owner in each page's spare area, garbage collection), a boot program puzzle on the golden model with a DMA engine
   and flash (16e-2); each device a model on its level's bench that names the rule broken
 
+### Phase 18 — From Python to gates ✅ (chapter 15)
+A program in a high-level language running on the gates, line by line. Mockup approved 2026-10-19
+(E:/mockups/python/python-mockup.html): chapter 15, after the single-cycle CPU (15–37 renumbered); RV32I; the core
+language and functions.
+- ✅ src/lang/: a Python subset (ints that wrap at 32 bits, if / while / for-range, break / continue, def with
+  recursion, global, fixed global lists, and / or / not, chained comparisons, `a if c else b`, print len abs min max),
+  a reference interpreter (the golden model), and an RV32I code generator with source maps (Python line ↔ assembly ↔
+  addresses). Tests: the samples on the ISS and two on the gates in lock step, the runtime routines' edge cases, error
+  messages, 300 seeded random programs compiled vs interpreted (PY_FUZZ=n; 8 000 pass)
+- ✅ The chapter (6 steps): three languages linked, expressions and registers, the cost of * // % per line, the program
+  on the gate-level CPU with the Python panel (the line running, its cycles and toggles, the variables read from the
+  registers and data memory, the output, the stack), functions and the stack, an editor compiling as you type
+- ⏳ The same programs on the pipeline (stalls and flushes per Python line); RV32IM (mul / div instead of the
+  routines); strings and a heap
+
 ### Appendix A — An 8-bit CPU of 1975: the MOS 6502 ✅
 After the journey, a lettered appendix: the real 6502 rebuilt the way 1975 built it, at transistor level, and why
-our RV32I is fifty times bigger. Mockup approved 2026-10-13 (lettered section after chapter 32, the "vintage" accent).
+our RV32I is fifty times bigger. Mockup approved 2026-10-13 (lettered section after chapter 33, the "vintage" accent).
 - ✅ NMOS depletion-load logic: prim `dep` (a weak always-on load), NMOS gates (n + 1 transistors), complex AOI gates
 - ✅ NmosSim: an event-driven switch-level engine (channel-connected groups, as visual6502) for a chip of 4,500
   transistors; capacitance-weighted charge sharing (precharged buses), pending nodes kept after an oscillation

@@ -1,0 +1,51 @@
+/* Chapter 15: from Python to gates (widgets/python.ts). Colours from the theme tokens, so both themes follow. */
+.py-widget { max-width: 1100px; }
+.py-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 8px; }
+.py-sel { font: 13px var(--font-ui); padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+.py-hint { font-size: 12.5px; color: var(--muted); }
+
+/* Python | assembly | words */
+.py-tri { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 150px); gap: 12px; }
+@media (max-width: 900px) { .py-tri { grid-template-columns: minmax(0, 1fr); } }
+.py-code { font: 12.5px/1.65 var(--font-mono); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 0; overflow-x: auto; max-height: 460px; overflow-y: auto; }
+.py-code .ln { padding: 0 10px; white-space: pre; border-left: 3px solid transparent; color: var(--text); }
+.py-code .ln[data-py=""] { color: var(--muted); }
+.py-code .ln:not([data-py=""]) { cursor: pointer; }
+.py-code .ln .no { display: inline-block; width: 30px; color: var(--muted); user-select: none; }
+.py-code .ln.cm { color: var(--muted); font-style: italic; }
+.py-code .ln.lb { color: var(--accent); }
+.py-code .ln.on { background: var(--accent-soft); border-left-color: var(--accent); }
+.py-fields, .py-homes { margin-top: 10px; }
+.py-fld { margin: 4px 0 8px; }
+.py-fld > code { display: block; font: 12px var(--font-mono); color: var(--text-2); margin-bottom: 3px; }
+
+/* key / value lists */
+.py-kv { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 2px 12px; font-size: 12.5px; color: var(--text-2); max-width: 640px; }
+.py-kv > span:nth-child(even) { font: 12px var(--font-mono); color: var(--text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.py-where { font: 11px var(--font-mono); color: var(--muted); }
+.py-ins { display: flex; flex-direction: column; }
+.py-ins code.now { color: var(--accent); font-weight: 700; }
+.py-list { white-space: normal; }
+.py-stack { max-height: 160px; overflow: auto; }
+
+/* cost per line */
+.py-prof { display: grid; grid-template-columns: minmax(0, 240px) 44px minmax(0, 1fr) 64px; gap: 4px 10px; align-items: center; font-size: 12.5px; max-width: 900px; }
+.py-prof .hd { font: 600 10.5px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.py-prof .k { font: 12px var(--font-mono); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.py-prof .i, .py-prof .v { font: 12px var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; color: var(--text); }
+.py-prof .bw { display: flex; min-width: 0; }
+.py-prof .b { height: 10px; border-radius: 0 3px 3px 0; background: var(--accent); min-width: 1px; }
+.py-prof .b.rt, .py-sw.rt { background: var(--warn); }
+.py-sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; }
+
+/* the panel beside the CPU */
+.py-listing .ln .t { white-space: pre; }
+.py-listing .ln .a { color: var(--muted); min-width: 1.5em; text-align: right; }
+.py-cyc { margin-left: auto; font: 600 10px var(--font-mono); color: var(--muted); padding-left: 8px; }
+.py-out { font: 12px/1.5 var(--font-mono); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; white-space: pre; max-height: 120px; overflow: auto; color: var(--text); }
+.py-edit { margin-bottom: 8px; }
+.py-panel { width: min(620px, 100%); }
+.py-cols { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.py-cols > div { flex: 1 1 260px; min-width: 0; }
+.py-ins { max-height: 9.5em; overflow: auto; }
+.py-panel .py-listing { max-height: 150px; }

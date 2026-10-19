@@ -1,4 +1,4 @@
-// Chapter 31's drawing pad: what the learner draws (polygons, brush strokes) turned into the only thing the rasterizer
+// Chapter 32's drawing pad: what the learner draws (polygons, brush strokes) turned into the only thing the rasterizer
 // draws, triangles, the way a driver does it. DOM-free; tests/gfxdraw.test.ts checks the pieces and runs a drawing on
 // the gate-level GPU against the reference.
 //
@@ -191,7 +191,7 @@ export interface DrawingCost {
   setup: number;
 }
 
-/** What a drawing costs on chapter 31's GPU (with depth), from the reference model. */
+/** What a drawing costs on chapter 32's GPU (with depth), from the reference model. */
 export function drawingCost(d: Drawing): DrawingCost {
   let culled = 0, pixels = 0, draw = 0, set = 0;
   const ops = drawingOps(d);
