@@ -54,7 +54,8 @@ const LINK = (r: number) => r === 1 || r === 5;
 /** The program ROM with two read ports (the slots at pc and pc + 4): two copies of one ROM, as on a real chip a dual-ported array. */
 export function rom2(words: number[], k: number): ComponentDef {
   const R = rom(words, k), rg = symbolGeom(R);
-  return memo(`rom2_${R.id}`, () => define({
+  // not registered (like rom()): a ROM made for one program is no library part
+  return memo(`rom2_${R.id}`, () => ({
     id: `${R.id.replace(/^rom_/, 'rom2_')}`, name: 'Instruction memory (two read ports)', category: 'memory',
     summary: `The program ROM read twice a cycle: the word at pc and the word at pc + 4, the two slots of a fetch pair. ${2 ** k} words.`,
     ports: [bus('addr0', 32, 'in'), bus('addr1', 32, 'in'), bus('data0', 32, 'out'), bus('data1', 32, 'out')],
@@ -449,13 +450,13 @@ function buildDual(IM: ComponentDef, dmemK: number): ComponentDef {
   put(DIV_E, 'dive', { clk: 'clk', go: 'goDiv.y', a: 'fwdA.y', b: 'fwdB.y', f: 'f3E.o0' }, 'divide');
   put(M2, 'mdE', { a: 'alu.y', b: 'dive.y', s: 'DE.divE' }, 'ALU / divide');
   // one predictor update (the lane with the control instruction; returns are left to the return stack) and one
-  // committed return-stack update; lane 1's are void when lane 0 mispredicts (it is younger)
+  // committed return-stack update (a pair holds at most one control instruction)
   put(UPDATE_2W, 'upd', {
     ctl0: 'mis.isCtrl', ctl1: 'mis1.isCtrl', taken0: 'mis.taken', taken1: 'mis1.taken', pc0: 'DE.pcE', pc1: 'DE1.pcE', target0: 'corr.y', target1: 'corr1.y',
-    jump0: 'DE.jumpE', jalr0: 'DE.jalrE', jump1: 'DE1.jumpE', jalr1: 'DE1.jalrE', ret0: 'DE.retE', ret1: 'DE1.retE', kill1: 'mis.mispredict',
+    jump0: 'DE.jumpE', jalr0: 'DE.jalrE', jump1: 'DE1.jumpE', jalr1: 'DE1.jalrE', ret0: 'DE.retE', ret1: 'DE1.retE',
   }, 'predictor update');
   put(COMMIT_RAS, 'cmt', {
-    v0: 'vE.y', v1: 'vE1.y', kill1: 'mis.mispredict', call0: 'DE.callE', ret0: 'DE.retE', call1: 'DE1.callE', ret1: 'DE1.retE', link0: 'DE.pcPlus4E', link1: 'DE1.pcPlus4E',
+    v0: 'vE.y', v1: 'vE1.y', call0: 'DE.callE', ret0: 'DE.retE', call1: 'DE1.callE', ret1: 'DE1.retE', link0: 'DE.pcPlus4E', link1: 'DE1.pcPlus4E',
   }, 'return stack update');
   b.next();
   for (const l of L) {
@@ -577,6 +578,7 @@ export const CONTROL_2W: ComponentDef = (() => {
   const corr = b.op1(busMux2(32), ['corr1', 'corr0', 'redirect0'], undefined, 'corr');
   const run = b.name(b.op1(NOT, ['divStall'], undefined, 'run'), 'run', true);
   const nOk = b.op1(NOT, ['pairOk'], undefined, 'nOk');
+  const nLw = b.op1(NOT, ['lwStall'], undefined, 'nLw');
   b.next();
   const nRedir = b.op1(NOT, [redirect], undefined, 'nRedir');
   const split = b.name(b.op1(andN(3), ['v0', 'v1', nOk], undefined, 'split'), 'split', true);
@@ -592,7 +594,8 @@ export const CONTROL_2W: ComponentDef = (() => {
   const fetch = b.op1(AND, [goD, nSplit], undefined, 'fetchGo');
   b.next();
   const enPC = b.op1(OR, [fetch, redirect], undefined, 'enPC');
-  const fetchGo = b.op1(AND, [fetch, nRedir], undefined, 'fetchAdv');
+  // the return stack's speculative update: a flush restores it anyway (restore wins), so no wait for the redirect
+  const fetchGo = b.op1(andN(3), [run, nLw, nSplit], undefined, 'fetchAdv');
   const clrFD1 = b.op1(OR, [redirect, shift], undefined, 'clrFD1');
   const clrDE = b.op1(OR, [redirect, stall], undefined, 'clrDE');
   const clrDE1 = b.op1(orN(3), [redirect, stall, nOk], undefined, 'clrDE1');
@@ -613,56 +616,56 @@ export const CONTROL_2W: ComponentDef = (() => {
   });
 })();
 
-/** The BTB's one update: the lane holding the control instruction (at most one per pair), never for a return. */
+/**
+ * The BTB's one update: the lane holding the control instruction (at most one per pair), never for a return.
+ * Lane 1's update needs no word from lane 0's misprediction: lane 1 holds a control instruction only when lane 0
+ * does not, and lane 0 then mispredicts only if it was predicted taken, which would have kept slot 1 from being
+ * fetched. So the update starts at once, beside the misprediction check (it was the critical path behind it).
+ */
 export const UPDATE_2W: ComponentDef = (() => {
   const b = new Builder(16, 18);
-  b.pins('ctl0', 'ctl1', 'taken0', 'taken1', 'pc0', 'pc1', 'target0', 'target1', 'jump0', 'jalr0', 'jump1', 'jalr1', 'ret0', 'ret1', 'kill1');
-  const nk = b.op1(NOT, ['kill1'], undefined, 'nKill');
+  b.pins('ctl0', 'ctl1', 'taken0', 'taken1', 'pc0', 'pc1', 'target0', 'target1', 'jump0', 'jalr0', 'jump1', 'jalr1', 'ret0', 'ret1');
   const nr0 = b.op1(NOT, ['ret0'], undefined, 'nRet0'), nr1 = b.op1(NOT, ['ret1'], undefined, 'nRet1');
   const j0 = b.op1(OR, ['jump0', 'jalr0'], undefined, 'j0'), j1 = b.op1(OR, ['jump1', 'jalr1'], undefined, 'j1');
   b.next();
   const u0 = b.op1(AND, ['ctl0', nr0], undefined, 'u0');
-  const u1 = b.name(b.op1(andN(3), ['ctl1', nr1, nk], undefined, 'u1'), 'lane1', true);
+  const u1 = b.op1(AND, ['ctl1', nr1], undefined, 'u1');
   b.next();
   b.wire(b.op1(OR, [u0, u1], undefined, 'upd'), 'upd');
-  b.wire(b.op1(busMux2(32), ['pc0', 'pc1', u1], undefined, 'pc'), 'pcE');
-  b.wire(b.op1(busMux2(32), ['target0', 'target1', u1], undefined, 'tgt'), 'target');
-  b.wire(b.op1(busMux2(1), ['taken0', 'taken1', u1], undefined, 'tk'), 'taken');
-  b.wire(b.op1(busMux2(1), [j0, j1, u1], undefined, 'jmp'), 'isJump');
+  b.wire(b.op1(busMux2(32), ['pc0', 'pc1', 'ctl1'], undefined, 'pc'), 'pcE');
+  b.wire(b.op1(busMux2(32), ['target0', 'target1', 'ctl1'], undefined, 'tgt'), 'target');
+  b.wire(b.op1(busMux2(1), ['taken0', 'taken1', 'ctl1'], undefined, 'tk'), 'taken');
+  b.wire(b.op1(busMux2(1), [j0, j1, 'ctl1'], undefined, 'jmp'), 'isJump');
   const R = b.right;
-  const ins = ['ctl0', 'ctl1', 'taken0', 'taken1', 'pc0', 'pc1', 'target0', 'target1', 'jump0', 'jalr0', 'jump1', 'jalr1', 'ret0', 'ret1', 'kill1'];
+  const ins = ['ctl0', 'ctl1', 'taken0', 'taken1', 'pc0', 'pc1', 'target0', 'target1', 'jump0', 'jalr0', 'jump1', 'jalr1', 'ret0', 'ret1'];
   const outs = ['upd', 'pcE', 'target', 'taken', 'isJump'];
   return define({
     id: 'upd2w', name: 'Predictor update (dual issue)', category: 'cpu',
     summary: 'One BTB write a cycle: from the lane with the control instruction (a pair holds at most one). Returns are not written: the return stack predicts them.',
     ports: [bit('ctl0', 'in'), bit('ctl1', 'in'), bit('taken0', 'in'), bit('taken1', 'in'), bus('pc0', 32, 'in'), bus('pc1', 32, 'in'), bus('target0', 32, 'in'), bus('target1', 32, 'in'),
-      bit('jump0', 'in'), bit('jalr0', 'in'), bit('jump1', 'in'), bit('jalr1', 'in'), bit('ret0', 'in'), bit('ret1', 'in'), bit('kill1', 'in'),
+      bit('jump0', 'in'), bit('jalr0', 'in'), bit('jump1', 'in'), bit('jalr1', 'in'), bit('ret0', 'in'), bit('ret1', 'in'),
       bit('upd', 'out'), bus('pcE', 32, 'out'), bus('target', 32, 'out'), bit('taken', 'out'), bit('isJump', 'out')],
     symbol: { kind: 'box', label: 'BTB UPDATE' },
     netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), ...Object.fromEntries(outs.map((n, i) => [n, [R, 2 + 2 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
   });
 })();
 
-/** The committed return stack follows the calls and returns that reach E for real (lane 1's only if lane 0 did not mispredict). */
+/** The committed return stack follows the calls and returns that reach E (valid; lane 1's need no check of lane 0: see UPDATE_2W). */
 export const COMMIT_RAS: ComponentDef = (() => {
   const b = new Builder(16, 18);
-  b.pins('v0', 'v1', 'kill1', 'call0', 'ret0', 'call1', 'ret1', 'link0', 'link1');
-  const nk = b.op1(NOT, ['kill1'], undefined, 'nKill');
-  b.next();
-  const l1 = b.op1(AND, ['v1', nk], undefined, 'live1');
-  b.next();
-  const c0 = b.op1(AND, ['call0', 'v0'], undefined, 'c0'), c1 = b.name(b.op1(AND, ['call1', l1], undefined, 'c1'), 'call1v', true);
-  const r0 = b.op1(AND, ['ret0', 'v0'], undefined, 'r0'), r1 = b.op1(AND, ['ret1', l1], undefined, 'r1');
+  b.pins('v0', 'v1', 'call0', 'ret0', 'call1', 'ret1', 'link0', 'link1');
+  const c0 = b.op1(AND, ['call0', 'v0'], undefined, 'c0'), c1 = b.name(b.op1(AND, ['call1', 'v1'], undefined, 'c1'), 'call1v', true);
+  const r0 = b.op1(AND, ['ret0', 'v0'], undefined, 'r0'), r1 = b.op1(AND, ['ret1', 'v1'], undefined, 'r1');
   b.next();
   b.wire(b.op1(OR, [c0, c1], undefined, 'push'), 'pushC');
   b.wire(b.op1(OR, [r0, r1], undefined, 'pop'), 'popC');
   b.wire(b.op1(busMux2(32), ['link0', 'link1', c1], undefined, 'link'), 'valC');
   const R = b.right;
-  const ins = ['v0', 'v1', 'kill1', 'call0', 'ret0', 'call1', 'ret1', 'link0', 'link1'];
+  const ins = ['v0', 'v1', 'call0', 'ret0', 'call1', 'ret1', 'link0', 'link1'];
   return define({
     id: 'cmtras2w', name: 'Return stack update (committed copy)', category: 'cpu',
-    summary: 'The calls and returns that really ran update the committed copy of the return stack: those in E, valid and not killed by an older misprediction.',
-    ports: [bit('v0', 'in'), bit('v1', 'in'), bit('kill1', 'in'), bit('call0', 'in'), bit('ret0', 'in'), bit('call1', 'in'), bit('ret1', 'in'), bus('link0', 32, 'in'), bus('link1', 32, 'in'),
+    summary: 'The calls and returns that really ran update the committed copy of the return stack: those in E, valid (a pair holds at most one).',
+    ports: [bit('v0', 'in'), bit('v1', 'in'), bit('call0', 'in'), bit('ret0', 'in'), bit('call1', 'in'), bit('ret1', 'in'), bus('link0', 32, 'in'), bus('link1', 32, 'in'),
       bit('pushC', 'out'), bit('popC', 'out'), bus('valC', 32, 'out')],
     symbol: { kind: 'box', label: 'STACK UPDATE' },
     netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), pushC: [R, 2], popC: [R, 4], valC: [R, 6] }, instances: b.instances, nets: b.nets() }),

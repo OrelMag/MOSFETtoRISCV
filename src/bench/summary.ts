@@ -42,22 +42,25 @@ export const RESULTS = data as BenchResults;
 /** The programs every CPU runs (the mean is taken over these, so every CPU does the same work). */
 export const COMMON = ['fib', 'sort', 'matmul', 'crc'];
 
-export type Family = 'single' | 'multi' | 'pipe';
+export type Family = 'single' | 'multi' | 'pipe' | 'wide';
 export const FAMILIES: { key: Family; label: string }[] = [
   { key: 'single', label: 'Single-cycle' },
   { key: 'multi', label: 'Multicycle' },
   { key: 'pipe', label: 'Pipelined' },
+  { key: 'wide', label: 'Two-wide (dual issue, out of order)' },
 ];
 
+/** CPUs that issue two instructions a cycle (chapter 24). */
+const WIDE = new Set(['pipe-2w', 'ooo']);
 /** The system CPUs and the dual-core are single-cycle cores. */
-export const familyOf = (id: string): Family => (id.startsWith('mc') ? 'multi' : id.startsWith('pipe') || id === 'fppipe' ? 'pipe' : 'single');
+export const familyOf = (id: string): Family => (WIDE.has(id) ? 'wide' : id.startsWith('mc') ? 'multi' : id.startsWith('pipe') || id === 'fppipe' ? 'pipe' : 'single');
 
 /** The chapter that builds each CPU. */
 const CHAPTER: Record<string, string> = {
   sc: 'cpu', 'sc-ks': 'fastadd', 'sc-dc': 'cache', 'sc-wb2': 'cache', 'sc-ic': 'cache', 'sc-wb-ic': 'cache', 'sc-f': 'float',
   'mc-fsm': 'multicycle', 'mc-micro': 'multicycle', pipe: 'pipeline', 'pipe-ks': 'pipepay', 'pipe-bal': 'pipepay',
   'pipe-bp': 'pipepay', 'pipe-bal-bp': 'pipepay', 'pipe-wb2': 'cache', 'pipe-wt-bal-bp': 'cache', 'pipe-m': 'muldiv',
-  'pipe-m-bal-bp': 'muldiv', fppipe: 'float', sys: 'traps', 'sys-m': 'muldiv', dual: 'multicore',
+  'pipe-m-bal-bp': 'muldiv', 'pipe-2w': 'ooo', fppipe: 'float', sys: 'traps', 'sys-m': 'muldiv', dual: 'multicore',
   'sc-wb2-dram': 'memctrl', 'sc-wb2-dramc': 'memctrl', 'pipe-wb2-dram': 'memctrl',
 };
 export const chapterOf = (id: string): string | undefined => CHAPTER[id];

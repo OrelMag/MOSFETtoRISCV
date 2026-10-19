@@ -61,7 +61,7 @@ export function writeSelect(w: number): ComponentDef {
       id: `wsel${w}`, name: `Write select (2 ports, ${w} bits)`, category: 'routing',
       summary: 'Picks what a register of a two-write-port file loads: enabled when either write port addresses it, with port 1\'s data when port 1 does (the younger instruction wins).',
       ports: [bit('y0', 'in'), bit('y1', 'in'), bus('wd0', w, 'in'), bus('wd1', w, 'in'), bus('d', w, 'out'), bit('en', 'out')],
-      symbol: { kind: 'box', label: 'WR', w: 4, h: 8, portPos: { y0: 1, y1: 3, wd0: 5, wd1: 7, d: 2, en: 4 } },
+      symbol: { kind: 'box', label: 'WR', w: 4, h: 8, portPos: { y0: 1, y1: 3, wd0: 5, wd1: 7, d: 2, en: 4 }, noPortLabels: true },
       spec: ([y0, y1, a, b]) => [y1 ? b : a, y0 || y1 ? 1 : 0],
       netlist: () => ({
         pins: { y0: [0, 10], y1: [0, 4], wd0: [0, 1], wd1: [0, 2], d: [16, 3], en: [16, 11] },

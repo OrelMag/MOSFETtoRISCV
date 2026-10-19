@@ -19,6 +19,8 @@ export * from './coding';
 export * from './divide';
 export * from './srt4';
 export * from './pipem';
+export * from './ras';
+export * from './pipe2w';
 export * from './multiply';
 export * from './adders';
 export * from './arrays';
