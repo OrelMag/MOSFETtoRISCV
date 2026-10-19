@@ -53,6 +53,8 @@ export interface HdlImport {
   top: string;
   modules: ImportedModule[];
   diags: HdlDiag[];
+  /** The drawings the chips were made from (placed netlists, by chip id): for layout checks. */
+  drawn: Map<string, ComponentDef>;
 }
 
 export interface ImportOptions {
@@ -119,11 +121,13 @@ export function importYosysJson(json: unknown, opts: ImportOptions = {}): HdlImp
   const defs = new Map<string, ComponentDef>(); // chip id → compiled def
   const chips: ChipDoc[] = [];
   const modules: ImportedModule[] = [];
+  const drawn = new Map<string, ComponentDef>();
   for (const n of order) {
     const r = buildModule(n, mods[n], ids, defs, mods);
     if ('error' in r) return { error: `module ${n}: ${r.error}` };
     diags.push(...r.diags.map((d) => ({ ...d, module: n })));
     const doc = r.doc;
+    drawn.set(doc.id, r.def);
     const c = compileChip(doc, (ref) => partDef(ref, (id) => defs.get(id)));
     const errs = c.diags.filter((d) => d.level === 'error');
     if (errs.length) return { error: `module ${n}: the drawn chip does not compile: ${errs[0].msg}` };
@@ -131,7 +135,7 @@ export function importYosysJson(json: unknown, opts: ImportOptions = {}): HdlImp
     chips.push(doc);
     modules.push({ module: n, chip: doc.id, cells: r.cells });
   }
-  return { chips, top: ids.get(top)!, modules, diags };
+  return { chips, top: ids.get(top)!, modules, diags, drawn };
 }
 
 const isBlackbox = (m: YModule) => !!m.attributes && ('blackbox' in m.attributes || 'whitebox' in m.attributes);
@@ -171,7 +175,7 @@ interface NetB { drv?: string; sinks: string[]; name?: string; bus?: boolean }
 
 function buildModule(
   modName: string, m: YModule, ids: Map<string, string>, defs: Map<string, ComponentDef>, all: Record<string, YModule>,
-): { doc: ChipDoc; diags: HdlDiag[]; cells: Record<string, number> } | { error: string } {
+): { doc: ChipDoc; def: ComponentDef; diags: HdlDiag[]; cells: Record<string, number> } | { error: string } {
   const diags: HdlDiag[] = [];
   const warn = (msg: string, attrs?: Record<string, unknown>) => diags.push({ level: 'warn', msg, ...srcOf(attrs) });
   const cells: Record<string, number> = {};
@@ -496,7 +500,7 @@ function buildModule(
   };
   const doc = docFromDef(def, { id: def.id, name: modName, refOf: (d) => refs.get(d) });
   if ('error' in doc) return { error: doc.error };
-  return { doc, diags, cells };
+  return { doc, def, diags, cells };
 }
 
 const pinNameOf = (m: YModule, port: string): string => {
@@ -607,36 +611,25 @@ function place(insts: Inst[], byName: Map<string, Inst>, list: NetB[], ports: Po
   const ncol = present.length;
   const colOf = (end: string) => instOf(end)?.col ?? (ports.find((p) => p.name === end)!.dir === 'in' ? 0 : ncol - 1);
 
-  // Which nets are wired (short, forward, few sinks); the rest are pointers.
+  const geomOf = (i: Inst) => symbolGeom(i.def);
+  const portOf = (end: string) => geomOf(instOf(end)!).ports[end.slice(end.indexOf('.') + 1)];
+  const exitOf = (end: string) => (instOf(end) ? portOf(end).exit : ports.find((p) => p.name === end)!.dir === 'in' ? 'right' : 'left');
+
+  // Which nets may be wires: forward into the next column only, a few sinks, leaving to the right and entering
+  // from the left (a select or clock pin on a part's edge is reached by a pointer). The rest are pointers.
   const wired = list.map((n) => {
     const c = colOf(n.drv!);
-    return n.sinks.length <= 4 && n.sinks.every((s) => colOf(s) === c + 1);
+    return n.sinks.length <= 4 && exitOf(n.drv!) === 'right' && n.sinks.every((s) => colOf(s) === c + 1 && exitOf(s) === 'left');
   });
-
-  // Gap after each column: room for the wired nets' trunks and the pointers on either side.
-  const trunks = new Array(ncol).fill(0), tagOut = new Array(ncol).fill(0), tagIn = new Array(ncol).fill(0);
-  list.forEach((n, i) => {
-    const c = colOf(n.drv!);
-    if (wired[i]) { trunks[c]++; return; }
-    const w = tagW(n.name ?? 'n00');
-    tagOut[c] = Math.max(tagOut[c], w);
-    for (const s of n.sinks) { const sc = colOf(s); tagIn[sc] = Math.max(tagIn[sc], w); }
-  });
-  const colW = new Array(ncol).fill(0);
-  for (const i of insts) colW[i.col] = Math.max(colW[i.col], symbolGeom(i.def).w);
-  const colX = new Array(ncol).fill(0);
-  for (let c = 1; c < ncol; c++) colX[c] = colX[c - 1] + colW[c - 1] + Math.ceil(3 + trunks[c - 1] * 0.5 + tagOut[c - 1] + tagIn[c]);
 
   // Rows. Input pins and their splitters stacked in port order.
   const pins: Record<string, Vec> = {};
-  const geomOf = (i: Inst) => symbolGeom(i.def);
+  const placed = new Set<Inst>();
   const endY = (end: string): number | undefined => {
     const i = instOf(end);
     if (!i) return pins[end]?.[1];
-    if (!placed.has(i)) return undefined;
-    return i.y + geomOf(i).ports[end.slice(end.indexOf('.') + 1)].pos[1];
+    return placed.has(i) ? i.y + portOf(end).pos[1] : undefined;
   };
-  const placed = new Set<Inst>();
   let cur = 2;
   for (const p of ports.filter((q) => q.dir === 'in')) {
     const sp = insts.find((i) => i.fixed === 'in' && list.some((n) => n.drv === p.name && n.sinks.includes(`${i.name}.in`)));
@@ -644,14 +637,13 @@ function place(insts: Inst[], byName: Map<string, Inst>, list: NetB[], ports: Po
       const g = geomOf(sp);
       sp.y = cur;
       placed.add(sp);
-      pins[p.name] = [colX[0], cur + g.ports.in.pos[1]];
+      pins[p.name] = [0, cur + g.ports.in.pos[1]];
       cur += g.h + VGAP + 1;
     } else {
-      pins[p.name] = [colX[0], cur + 1];
+      pins[p.name] = [0, cur + 1];
       cur += 3;
     }
   }
-
   // Each column of parts: rows where their inputs come from, kept apart.
   const ins = new Map<Inst, NetB[]>();
   list.forEach((n) => n.sinks.forEach((s) => { const i = instOf(s); if (i) { if (!ins.has(i)) ins.set(i, []); ins.get(i)!.push(n); } }));
@@ -659,24 +651,21 @@ function place(insts: Inst[], byName: Map<string, Inst>, list: NetB[], ports: Po
     const col = insts.filter((i) => i.col === c && !placed.has(i));
     const want = new Map<Inst, number>();
     for (const i of col) {
-      const g = geomOf(i);
       const ys: number[] = [];
       for (const n of ins.get(i) ?? []) {
         const y = endY(n.drv!);
         if (y === undefined) continue;
-        for (const s of n.sinks) if (instOf(s) === i) ys.push(y - g.ports[s.slice(s.indexOf('.') + 1)].pos[1]);
+        for (const s of n.sinks) if (instOf(s) === i) ys.push(y - portOf(s).pos[1]);
       }
       want.set(i, ys.length ? ys.reduce((a, b) => a + b, 0) / ys.length : Infinity);
     }
     col.sort((a, b) => (want.get(a)! - want.get(b)!) || 0);
     let bottom = 0;
     for (const i of col) {
-      const g = geomOf(i);
       const w = want.get(i)!;
-      const y = Math.max(Number.isFinite(w) ? w : bottom, bottom);
-      i.y = snapY(i.def, y);
+      i.y = snapY(i.def, Math.max(Number.isFinite(w) ? w : bottom, bottom));
       placed.add(i);
-      bottom = i.y + g.h + VGAP;
+      bottom = i.y + geomOf(i).h + VGAP;
     }
   }
   // Output pins: beside what drives them, in port order.
@@ -685,9 +674,57 @@ function place(insts: Inst[], byName: Map<string, Inst>, list: NetB[], ports: Po
     const n = list.find((x) => x.sinks.includes(p.name));
     const y = n ? endY(n.drv!) : undefined;
     const py = Math.max(Math.round(y ?? ob), ob);
-    pins[p.name] = [colX[ncol - 1], py];
+    pins[p.name] = [0, py];
     ob = py + 3;
   }
+
+  // Wires, routed here (the router then has nothing to untangle): in a gap every wired net gets a vertical trunk of
+  // its own. Rows of output ports are distinct, and so are rows of input ports, so two wires can only meet where one's
+  // driver row is another's sink row: there the first one's trunk must lie left of the second's. Kahn's order over
+  // those pairs (by driver row otherwise); a net caught in a cycle (two nets swapping rows) becomes pointers.
+  const Y = (end: string) => endY(end)!;
+  const order = new Map<number, number[]>();
+  list.forEach((n, i) => { if (wired[i]) { const c = colOf(n.drv!); if (!order.has(c)) order.set(c, []); order.get(c)!.push(i); } });
+  for (const [c, idx] of order) {
+    const bySink = new Map<number, number>();
+    for (const i of idx) for (const s of list[i].sinks) bySink.set(Y(s), i);
+    const next = new Map<number, number>(), indeg = new Map(idx.map((i) => [i, 0]));
+    for (const a of idx) {
+      const b = bySink.get(Y(list[a].drv!));
+      if (b !== undefined && b !== a) { next.set(a, b); indeg.set(b, indeg.get(b)! + 1); }
+    }
+    const byRow = (a: number, b: number) => Y(list[a].drv!) - Y(list[b].drv!);
+    const ready = idx.filter((i) => indeg.get(i) === 0).sort(byRow);
+    const out: number[] = [];
+    while (ready.length) {
+      const i = ready.shift()!;
+      out.push(i);
+      const b = next.get(i);
+      if (b !== undefined && indeg.set(b, indeg.get(b)! - 1).get(b) === 0) { ready.push(b); ready.sort(byRow); }
+    }
+    for (const i of idx) if (!out.includes(i)) wired[i] = false;
+    order.set(c, out);
+  }
+
+  // Gap after each column: the pointers leaving it, a trunk per wire, the pointers entering the next column.
+  const tagOut = new Array(ncol).fill(0), tagIn = new Array(ncol).fill(0);
+  list.forEach((n, i) => {
+    if (wired[i]) return;
+    const w = tagW(n.name ?? 'n00');
+    const c = colOf(n.drv!);
+    tagOut[c] = Math.max(tagOut[c], w);
+    for (const s of n.sinks) { const sc = colOf(s); tagIn[sc] = Math.max(tagIn[sc], w); }
+  });
+  const colW = new Array(ncol).fill(0);
+  for (const i of insts) colW[i.col] = Math.max(colW[i.col], geomOf(i).w);
+  const colX = new Array(ncol).fill(0), trunk0 = new Array(ncol).fill(0);
+  for (let c = 1; c < ncol; c++) {
+    trunk0[c - 1] = colX[c - 1] + colW[c - 1] + Math.ceil(tagOut[c - 1]) + 2;
+    colX[c] = trunk0[c - 1] + (order.get(c - 1)?.length ?? 0) + 1 + Math.ceil(tagIn[c]);
+  }
+  for (const p of ports) pins[p.name][0] = p.dir === 'in' ? colX[0] : colX[ncol - 1];
+  const via = new Map<number, number>(); // net → its trunk's x
+  for (const [c, out] of order) out.forEach((i, k) => via.set(i, trunk0[c] + k));
 
   const instances: InstanceDef[] = insts.map((i) => ({
     name: i.name, def: i.def, at: [colX[i.col], i.y] as [number, number], ...(i.label ? { label: i.label } : {}),
@@ -696,7 +733,11 @@ function place(insts: Inst[], byName: Map<string, Inst>, list: NetB[], ports: Po
   const netDefs: NetDef[] = list.map((n, i) => {
     let name = n.name;
     if (name !== undefined) { name = uniqueName(name, used); used.add(name); }
-    return { ...(name !== undefined ? { name } : {}), ends: [n.drv!, ...n.sinks], ...(wired[i] ? {} : { tags: true as const }) };
+    const t = via.get(i);
+    const route = wired[i] && t !== undefined
+      ? { via: Object.fromEntries(n.sinks.map((s) => [s, [[t, Y(s)] as [number, number]]])) }
+      : { tags: true as const };
+    return { ...(name !== undefined ? { name } : {}), ends: [n.drv!, ...n.sinks], ...route };
   });
   return { instances, nets: netDefs, pins };
 }

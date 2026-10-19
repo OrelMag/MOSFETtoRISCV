@@ -12,7 +12,9 @@ import { rca } from '../src/lib/combinational';
 import { koggeStone } from '../src/lib/fastadd';
 import { counter, register } from '../src/lib/sequential';
 import { shiftRegister } from '../src/lib/seqparts';
-import { inPorts, outPorts, type ComponentDef } from '../src/sim/types';
+import { inPorts, netlistOf, outPorts, type ComponentDef } from '../src/sim/types';
+import { routeNetlist, symbolOverlaps, wireOverlaps } from '../src/view/route';
+import { singleCycleCpu } from '../src/lib/cpu';
 import { synthVerilog } from '../src/sim/vexport';
 
 const ADD4 = `module add4(input [3:0] a, b, input ci, output [3:0] s, output co);
@@ -205,4 +207,24 @@ describe('export → Yosys → import round trip', () => {
       }
     }, 60_000);
   }
+});
+
+// The drawing: no two nets on one line, no part on another (the checks every library schematic passes).
+describe('imported drawings', () => {
+  const check = (imp: Awaited<ReturnType<typeof importVerilog>>) => {
+    for (const [id, def] of imp.drawn) {
+      const nl = netlistOf(def)!;
+      expect(symbolOverlaps(nl), id).toEqual([]);
+      expect(wireOverlaps(routeNetlist(def, nl).nets), id).toEqual([]);
+    }
+  };
+  it('a hierarchy of small modules', async () => check(await importVerilog(TOP)), 60_000);
+  it('the single-cycle RV32I CPU, exported and imported back, in under a few seconds', async () => {
+    const { verilog } = synthVerilog(singleCycleCpu([0x00000013]), 'dut');
+    const t = performance.now();
+    const imp = await importVerilog(verilog, { top: 'dut' });
+    expect(imp.chips.length).toBeGreaterThan(40);
+    expect(performance.now() - t).toBeLessThan(15_000);
+    check(imp);
+  }, 120_000);
 });
