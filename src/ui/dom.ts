@@ -55,6 +55,9 @@ const ICONS: Record<string, string> = {
   open: '<path d="M15 3h6v6M21 3l-8 8M10 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/>',
   zoomin: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',
+  // a snail: Slow motion, not Play
+  slow: '<path d="M2 20h16a3 3 0 0 0 3-3V10"/><path d="M19 6l2 4 2-4"/><path d="M4 20a7 7 0 1 1 13-3.5"/><path d="M10.5 17a3 3 0 1 1 3-3"/>',
+  more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
   pause: '<path d="M7 4h4v16H7zM14 4h4v16h-4z"/>',
   step: '<path d="M6 4l10 8-10 8zM18 4v16"/>',
   stepBack: '<path d="M18 4L8 12l10 8zM6 4v16"/>',
