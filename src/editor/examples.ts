@@ -396,7 +396,7 @@ export const EXAMPLES: Example[] = [
   },
   {
     id: 'bussystem', name: 'System on a bus',
-    blurb: 'Chapter 35\'s computer: an RV32I core and a DMA engine on one bus to RAM, a flash it boots from, the DRAM of chapter 33, a screen, a keyboard and a timer. Clock rate max, Run, then type.',
+    blurb: 'Chapter 36\'s computer: an RV32I core and a DMA engine on one bus to RAM, a flash it boots from, the DRAM of chapter 34, a screen, a keyboard and a timer. Clock rate max, Run, then type.',
     build: busSystemChip,
   },
   {

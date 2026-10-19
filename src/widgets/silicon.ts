@@ -1,4 +1,4 @@
-// Chapter 25 widgets: cell layout, fabrication, technology mapping, place & route, clock tree,
+// Chapter 26 widgets: cell layout, fabrication, technology mapping, place & route, clock tree,
 // floorplan and wafer economics. The numbers are computed from this site's own netlists.
 
 import { FULL_ADDER, alu, counter, dataMemory, dualCore, rca, singleCycleCpu } from '../lib';

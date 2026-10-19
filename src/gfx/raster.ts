@@ -1,4 +1,4 @@
-// The rasterizer's reference model (chapter 30): what the gate-level block in lib/raster.ts computes, cycle by
+// The rasterizer's reference model (chapter 31): what the gate-level block in lib/raster.ts computes, cycle by
 // cycle, in plain arithmetic. DOM-free; the tests run the hardware against it.
 //
 // Coordinates are in quarter pixels (8 bits: 0 … 255 on a 64 × 64 screen); pixel (x, y)'s centre is at
@@ -134,7 +134,7 @@ export function drawInto(fb: Uint8Array, v: Vtx[], col: number): RasterRun {
 
 export { MOD as EDGE_MOD };
 
-// ---- depth and blending (chapter 30, steps 4–5) ---------------------------------------------------------
+// ---- depth and blending (chapter 31, steps 4–5) ---------------------------------------------------------
 //
 // z is given per vertex (8 bits, 0 near … 255 far) and is linear across the triangle, a plane like the edges:
 //   z(p) = z0 + Zx·(p.x − x0) + Zy·(p.y − y0)   (per quarter pixel, Z_FRAC fraction bits)

@@ -25,8 +25,8 @@ export const CHECK4: Record<string, Quiz[]> = {
       question: 'Two cores each run <code>lw t0, 0(a0); addi t0, t0, 1; sw t0, 0(a0)</code> twenty times on one counter. Every single access is atomic. Why can the result be less than 40?',
       options: ['A core can load between the other\'s load and store, so both store the same incremented value', 'The memory drops one of two simultaneous stores', 'addi is not atomic', 'The cores read stale values from their caches'],
       answer: 0,
-      explain: 'Atomic accesses do not make an atomic sequence. In chapter 24 core 1 runs one cycle behind and always loads before core 0 has stored: the counter ends at 20. amoadd.w does the read, the add and the write in one access, and gives 40.',
-      why: ['', 'An access that loses arbitration waits a cycle; none is dropped.', 'addi works on a register; only the memory accesses are shared.', 'Chapter 24\'s dual-core has no caches at all, and the race happens anyway.'],
+      explain: 'Atomic accesses do not make an atomic sequence. In chapter 25 core 1 runs one cycle behind and always loads before core 0 has stored: the counter ends at 20. amoadd.w does the read, the add and the write in one access, and gives 40.',
+      why: ['', 'An access that loses arbitration waits a cycle; none is dropped.', 'addi works on a register; only the memory accesses are shared.', 'Chapter 25\'s dual-core has no caches at all, and the race happens anyway.'],
     },
     {
       question: 'In an LR/SC loop, <code>sc.w t1, t0, (a0)</code> leaves t1 = 1. What happened, and what should the code do?',
@@ -48,7 +48,7 @@ export const CHECK4: Record<string, Quiz[]> = {
       question: 'A lock is released with a plain <code>sw zero, lock</code> on a weakly ordered RISC-V core. What can go wrong, and what fixes it?',
       options: ['The lock store can become visible before the critical section\'s stores; put fence rw,w before it (or use amoswap.w.rl)', 'Nothing: a store of zero is always ordered', 'The store is not atomic; use two stores', 'The lock word must be read first'],
       answer: 0,
-      explain: 'Release semantics: nothing before the release may become visible after it. Without it another hart can take the lock and still read the old data. On chapter 24\'s sequentially consistent dual-core this cannot happen, which is why such bugs hide.',
+      explain: 'Release semantics: nothing before the release may become visible after it. Without it another hart can take the lock and still read the old data. On chapter 25\'s sequentially consistent dual-core this cannot happen, which is why such bugs hide.',
       why: ['', 'The value is irrelevant; RVWMO may reorder it with earlier stores to other addresses.', 'An aligned word store is already atomic; the problem is order, not atomicity.', 'Reading the lock orders nothing about the earlier stores.'],
     },
   ],
@@ -365,7 +365,7 @@ export const CHECK4: Record<string, Quiz[]> = {
       why: ['', 'That is at 32 registers a thread.', 'That would be 128 registers a thread.', 'That counts registers, not threads.'],
     },
     {
-      question: 'Chapter 28\'s saxpy takes 266 cycles on one warp, 192 on two and 172 on four. Why would an eighth warp gain almost nothing?',
+      question: 'Chapter 29\'s saxpy takes 266 cycles on one warp, 192 on two and 172 on four. Why would an eighth warp gain almost nothing?',
       options: ['Four warps already fill every issue slot; more warps only add registers and gates', 'The memory cannot take more requests', 'The scheduler supports four warps at most', 'Each warp runs the whole array'],
       answer: 0,
       explain: 'At four warps 172 instructions issue in 172 cycles: no slot is left empty for another warp to fill. Each resident warp costs a slot and a register bank per lane (the second one 110 715 NANDs).',
@@ -377,7 +377,7 @@ export const CHECK4: Record<string, Quiz[]> = {
       question: 'Depth test on (strictly nearer passes). A pixel arrives with exactly the depth already stored. What happens?',
       options: ['It is not written: equal is not nearer', 'It is written: it is not farther', 'The colours are averaged', 'The depth buffer is cleared'],
       answer: 0,
-      explain: 'Chapter 30\'s comparator is "less than": the first triangle drawn at that depth keeps the pixel. Real APIs let the program choose less, less-or-equal and others.',
+      explain: 'Chapter 31\'s comparator is "less than": the first triangle drawn at that depth keeps the pixel. Real APIs let the program choose less, less-or-equal and others.',
       why: ['', 'That would be a less-or-equal test.', 'Blending is a separate step applied to a pixel that passed.', 'The buffer is cleared once per frame, not by a test.'],
     },
     {

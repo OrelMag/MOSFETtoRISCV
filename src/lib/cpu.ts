@@ -443,7 +443,7 @@ export interface CpuOptions {
    * can stall); 'wb' = write-back, write-allocate; 'wb2' = 2-way write-back with LRU (loads and stores can stall).
    */
   dcache?: boolean | 'wb' | 'wb2';
-  /** With dcache 'wb' / 'wb2': main memory is a DRAM controller and device of this geometry (chapter 33), not a fixed latency. */
+  /** With dcache 'wb' / 'wb2': main memory is a DRAM controller and device of this geometry (chapter 34), not a fixed latency. */
   dram?: DramConfig;
   /** Fetch through an 8-line instruction cache in front of the ROM (fetch misses stall). */
   icache?: boolean;

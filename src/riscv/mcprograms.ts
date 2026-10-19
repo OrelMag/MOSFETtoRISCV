@@ -1,4 +1,4 @@
-// Programs for the dual-core processor (chapter 24). Both cores run the same code; csrr mhartid
+// Programs for the dual-core processor (chapter 25). Both cores run the same code; csrr mhartid
 // returns 0 or 1. The shared counter lives at address 64, the lock at 68.
 
 import type { Program } from './programs';

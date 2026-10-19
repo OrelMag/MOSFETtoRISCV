@@ -3,7 +3,7 @@ import { rca } from '../src/lib/combinational';
 import { findNode, flatten, type HierNode } from '../src/sim/flatten';
 import { inPorts, netlistOf } from '../src/sim/types';
 
-// Chapter 31's cube scene flattens to 413 594 leaves and 600 114 nodes. Picking the cube built it while
+// Chapter 32's cube scene flattens to 413 594 leaves and 600 114 nodes. Picking the cube built it while
 // the triangle's design was still alive, and the tab died: a design keeps one array per net and no
 // stored paths, which halved its memory.
 describe('flatten', () => {

@@ -1,4 +1,4 @@
-// Programs for the lane cores (chapters 26–27). Every lane runs the same code; csrr lane / tid /
+// Programs for the lane cores (chapters 27–28). Every lane runs the same code; csrr lane / tid /
 // nlanes tell them apart. Each program writes its results to memory, where `expect` checks them
 // (computed here in TypeScript, independently of both the golden model and the hardware).
 
@@ -142,7 +142,7 @@ end:    j     end`,
 ];
 
 /**
- * saxpy for the multi-core (chapter 24's cores, MultiISS): the same work split the same way, each core
+ * saxpy for the multi-core (chapter 25's cores, MultiISS): the same work split the same way, each core
  * finding its index with csrr mhartid instead of tid. For the lanes-against-cores comparison.
  */
 export const SAXPY_CORES = SIMT_PROGRAMS[0].source

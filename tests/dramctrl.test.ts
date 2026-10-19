@@ -104,7 +104,7 @@ describe('the gate-level controller is the model, cycle for cycle', () => {
   });
 });
 
-describe('workloads priced by the models (chapter 33)', () => {
+describe('workloads priced by the models (chapter 34)', () => {
   const cfg = (w: { dmemWords: number }, policy: 'open' | 'closed', hash = false): DramConfig => ({ k: Math.log2(w.dmemWords), banks: 2, rowWords: 16, policy, hash });
   const gate = (id: string, bench: string) => RESULTS.cpus.find((c) => c.id === id)!.runs.find((r) => r.bench === bench)!.cycles;
 
@@ -117,7 +117,7 @@ describe('workloads priced by the models (chapter 33)', () => {
     }
   });
 
-  it('give the copy the numbers chapter 33 quotes', () => {
+  it('give the copy the numbers chapter 34 quotes', () => {
     const w = workloads().find((x) => x.id === 'copy')!;
     const plain = price(w, cfg(w, 'open')), hash = price(w, cfg(w, 'open', true));
     expect(Math.round((100 * plain.hits) / w.reqs.length)).toBe(COPY.plain);

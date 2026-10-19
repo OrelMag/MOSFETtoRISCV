@@ -1,4 +1,4 @@
-// The DRAM controller and device of chapter 33, as cycle-exact reference models. The gate-level
+// The DRAM controller and device of chapter 34, as cycle-exact reference models. The gate-level
 // controller (lib/dramctrl.ts) is checked against CtrlModel cycle by cycle; the device leaf behind it
 // is DeviceModel itself. One request (a 4-word line, read or written) at a time, as the caches' miss
 // controller issues them.

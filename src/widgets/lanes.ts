@@ -1,4 +1,4 @@
-// Chapters 26–27 widgets: the lane core scene with its Warp panel (listing, the active mask step by
+// Chapters 27–28 widgets: the lane core scene with its Warp panel (listing, the active mask step by
 // step, the split / join stack, each lane's registers, golden-model lock-step), and the lanes
 // against cores comparison (NANDs by block and cycles, both measured).
 

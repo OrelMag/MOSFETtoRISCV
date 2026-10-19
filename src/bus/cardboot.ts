@@ -1,4 +1,4 @@
-// How long chapter 35's card boot takes, from the golden model: the boot ROM run on the ISS over a BusModel with the
+// How long chapter 36's card boot takes, from the golden model: the boot ROM run on the ISS over a BusModel with the
 // card reader, its clock advanced by what each instruction costs on the bus computer (boot ROM code: 1 cycle, a load
 // or a store 2, the bus's address and data handshakes). tests/buscards.test.ts pins it against the gates.
 

@@ -136,7 +136,7 @@ describe('the coalescer (k_coal)', () => {
     }
   });
 
-  it('the numbers its case quotes: 467 NANDs, depth 27; chapter 29\'s access unit 5 870, depth 58', async () => {
+  it('the numbers its case quotes: 467 NANDs, depth 27; chapter 30\'s access unit 5 870, depth 58', async () => {
     const { COAL16 } = await import('../src/lib/rv16/warps16');
     const { accessUnit } = await import('../src/lib/warpmem');
     const { logicDepth, stats } = await import('../src/sim/stats');
