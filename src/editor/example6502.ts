@@ -87,7 +87,7 @@ function end(s: string | EndRef): EndRef {
 }
 
 /** A user chip's box as compile.ts builds it (pins in order: inputs, then outputs, top to bottom), for its port positions. */
-function chipBox(doc: ChipDoc): ComponentDef {
+export function chipBox(doc: ChipDoc): ComponentDef {
   const byPos = (a: PinDoc, b: PinDoc) => a.at[1] - b.at[1] || a.at[0] - b.at[0];
   const ports: PortDef[] = (['in', 'inout', 'out'] as const).flatMap((d) => doc.pins.filter((p) => p.dir === d).sort(byPos))
     .map((p) => ({ name: p.name, width: p.width, dir: p.dir, ...(p.kind === 'clock' ? { clock: true } : {}) }));

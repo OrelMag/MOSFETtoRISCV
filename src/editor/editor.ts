@@ -8,6 +8,7 @@
 // library, view, simulation and panels up to date; during a drag it runs once per frame.
 
 import { setUserResolver } from '../lib/resolve';
+import { bodyKey, isGenerated } from './hdl';
 import type { Vec } from '../sim/geometry';
 import type { PowerOnMode } from '../sim/sim';
 import { type ComponentDef, netlistOf } from '../sim/types';
@@ -75,6 +76,13 @@ export function registerEditorPlugin(p: EditorPlugin): void {
   plugins.push(p);
 }
 
+/** Other kinds of new chip, offered beside New chip (hdlui.ts: a Verilog chip). */
+export interface NewChipKind { label: string; hint: string; icon: string; run(ed: Editor): void }
+const newChipKinds: NewChipKind[] = [];
+export function registerNewChipKind(k: NewChipKind): void {
+  newChipKinds.push(k);
+}
+
 /** Extra diagnostics of the current chip (lint), listed and drawn with the compiler's. */
 export type DiagSource = (ed: Editor) => Diag[];
 const diagSources: DiagSource[] = [];
@@ -129,13 +137,13 @@ export class Editor {
   readonly props: PropsPanel;
   readonly tools: Tools;
   /** Where later phases put things: over the canvas, between the canvas and the run bar, and in the top bar. */
-  readonly slots: { overlay: HTMLElement; bottom: HTMLElement; top: HTMLElement };
+  readonly slots: { overlay: HTMLElement; bottom: HTMLElement; top: HTMLElement; left: HTMLElement };
   /** Autosave: 'saving' while a save is pending, else the result of the last one. */
   saveState: { state: 'saved' | 'saving' | 'error'; reason?: string } = { state: 'saved' };
   sel: Sel = {};
   compiled!: Compiled;
 
-  private canvas: HTMLElement;
+  readonly canvas: HTMLElement;
   private topEl: HTMLElement;
   private tabs: HTMLElement;
   private actionsEl: HTMLElement;
@@ -201,7 +209,7 @@ export class Editor {
     this.canvas.append(overlay, this.emptyEl, this.toastEl, this.tipEl,
       hintBadge('drag from a pin to wire · L pointer · wheel zoom · Space+drag pan · ? shortcuts',
         'drag from a pin: wire · double-tap: open · pinch: zoom', 'sandbox', ' sb-hint'));
-    this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }), top: h('div', { class: 'sb-top-slot' }) };
+    this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }), top: h('div', { class: 'sb-top-slot' }), left: h('div', { class: 'sb-left' }) };
 
     this.sim = new EditorSim({ gateRate: () => settings.speed });
     this.sim.onChange = () => this.simChanged();
@@ -239,7 +247,7 @@ export class Editor {
       onclick: () => this.showParts(!this.el.classList.contains('pal-open')) }, icon('plus', 15), 'Parts') as HTMLButtonElement;
     this.status = h('div', { class: 'status' });
     this.controls = h('div', { class: 'controls sb-controls' });
-    const center = h('section', { class: 'sb-center' }, this.canvas, this.slots.bottom, this.controls);
+    const center = h('section', { class: 'sb-center' }, h('div', { class: 'sb-mid' }, this.slots.left, this.canvas), this.slots.bottom, this.controls);
     this.topEl = h('div', { class: 'sb-top' }, this.partsBtn, this.tabs, this.slots.top, this.actionsEl);
     this.el = h('div', { class: this.level ? 'sandbox sb-levelmode' : 'sandbox' }, this.topEl, this.palette.el, center, this.props.el);
 
@@ -320,6 +328,12 @@ export class Editor {
     const doc = this.doc;
     const next = f(doc);
     if (next === doc) return;
+    // A chip drawn from Verilog: its body follows the text (name, colour, notes, face and comments stay editable).
+    if (isGenerated(this.ws, doc.id) && bodyKey(next) !== bodyKey(doc)) {
+      this.toast(`${doc.name} is drawn from Verilog: edit its text, or Detach it to draw on it`, 'err');
+      if (this.history.inTransaction) this.view.render(doc, this.defOf);
+      return;
+    }
     if (this.history.inTransaction) this.history.update(withChip(this.ws, next));
     else this.history.push(withChip(this.ws, next));
     this.changed();
@@ -509,7 +523,7 @@ export class Editor {
     }
     this.sel = prune(this.sel, doc);
     this.view.render(doc, this.defOf);
-    this.emptyEl.hidden = !!this.level || !!(doc.pins.length || doc.parts.length || doc.wires.length || doc.labels.length || doc.comments?.length);
+    this.emptyEl.hidden = !!this.level || !!doc.hdl || !!(doc.pins.length || doc.parts.length || doc.wires.length || doc.labels.length || doc.comments?.length);
     if (!this.emptyEl.hidden) for (const b of this.emptyEl.querySelectorAll<HTMLElement>('[data-for]')) b.hidden = !actions.some((a) => a.id === b.dataset.for);
     if (switched && this.fitted) this.fitView();
     this.view.setSelection(this.sel);
@@ -641,7 +655,7 @@ export class Editor {
   private renderTabs(): void {
     const ws = this.ws;
     if (this.trail.length && (this.trail[this.trail.length - 1] !== this.chipId || this.trail.some((t) => !ws.chips[t]))) this.trail = [];
-    const key = JSON.stringify([ws.open, this.chipId, ws.open.map((o) => ws.chips[o]?.name), this.trail, this.trail.map((t) => ws.chips[t]?.name), ws.folders, Object.keys(ws.chips).length]);
+    const key = JSON.stringify([ws.open, this.chipId, ws.open.map((o) => ws.chips[o]?.name), ws.open.map((o) => !!ws.chips[o]?.hdl), this.trail, this.trail.map((t) => ws.chips[t]?.name), ws.folders, Object.keys(ws.chips).length]);
     if (key === this.tabsKey) return;
     this.tabsKey = key;
     this.tabs.replaceChildren();
@@ -664,7 +678,7 @@ export class Editor {
       if (!c) continue;
       const on = id === this.chipId;
       const tab = h('div', { class: `sb-tab${on ? ' on' : ''}`, role: 'tab', 'aria-selected': String(on), title: c.name, 'data-chip': id },
-        h('button', { class: 'sb-tab-name', onclick: () => this.openChip(id) }, icon('chip', 13), c.name));
+        h('button', { class: 'sb-tab-name', onclick: () => this.openChip(id) }, icon('chip', 13), c.name, c.hdl ? h('span', { class: 'sb-tab-hdl', title: 'Drawn from Verilog' }, '.v') : null));
       if (shown.length > 1 && id !== this.level?.chipId) tab.append(h('button', { class: 'sb-tab-x', title: `Close ${c.name}`, 'aria-label': `Close ${c.name}`, onclick: () => this.closeTab(id) }, icon('close', 12)));
       this.tabs.append(tab);
     }
@@ -679,6 +693,30 @@ export class Editor {
       this.tabs.append(sel);
     }
     this.tabs.append(h('button', { class: 'btn ghost sm sb-new', title: 'A new empty chip', onclick: () => this.newChip() }, icon('plus', 14), 'New chip'));
+    if (newChipKinds.length) {
+      const more: HTMLButtonElement = h('button', { class: 'btn ghost sm sb-new-more', title: 'Other kinds of new chip', 'aria-label': 'Other kinds of new chip', 'aria-haspopup': 'menu',
+        onclick: () => this.newChipMenu(more) }, icon('chevD', 12));
+      this.tabs.append(more);
+    }
+  }
+
+  /** New chip ▾: an empty chip or one of the registered kinds. */
+  private newChipMenu(anchor: HTMLElement): void {
+    this.el.querySelector('.sb-newmenu')?.remove();
+    const close = () => { menu.remove(); document.removeEventListener('pointerdown', away, true); };
+    const away = (e: Event) => { if (!menu.contains(e.target as Node) && e.target !== anchor) close(); };
+    const item = (label: string, hint: string, ic: string, run: () => void) => h('button', { role: 'menuitem', onclick: () => { close(); run(); } },
+      icon(ic, 16), h('span', null, h('b', null, label), h('small', null, hint)));
+    const menu = h('div', { class: 'sb-menu sb-newmenu', role: 'menu', 'aria-label': 'New chip' },
+      item('Empty chip', 'draw it from parts', 'plus', () => this.newChip()),
+      ...newChipKinds.map((k) => item(k.label, k.hint, k.icon, () => k.run(this))));
+    menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { close(); anchor.focus(); } });
+    this.el.append(menu);
+    const r = anchor.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    document.addEventListener('pointerdown', away, true);
+    menu.querySelector('button')?.focus();
   }
 
   /** Level screen: the level's chip first, then the open chips it places (directly or deeper). */

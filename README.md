@@ -128,6 +128,11 @@ simulator, so whatever you build is a real component of the site. The full guide
 - **Programs on your own CPU**: a custom instruction set written as a table gives its own
   assembler and disassembler; 14 program puzzles run on the gates of a ready-made CPU or your own,
   scored on cycles, NANDs and program size.
+- **Verilog chips**: write a module as text and Yosys, running in the page (WebAssembly, nothing
+  uploaded), draws it from the library's gates beside the text a second after you stop typing;
+  every module becomes a chip that opens down to NANDs and transistors. `.v` / `.sv` files and
+  Yosys JSON netlists import the same way; our own Verilog export imported back simulates equal to
+  the original (a whole RV32I CPU among the tests).
 - Wide pins up to 1024 bits, exact; autosave, chip files, share links, Verilog and image export.
 - 21 optional **build challenges**, from a CMOS inverter to an instruction fetch unit, with a test
   player that steps through the failing cases.
@@ -252,8 +257,6 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
 
 The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next features:
 
-- **HDL in, not only out**: Yosys JSON netlists, then Verilog typed in the sandbox (Yosys in
-  WebAssembly), imported as chips that open down to transistors like everything else.
 - **Delay that depends on load**: a logical-effort mode where a NAND's delay grows with its fan-out
   (from the capacitances the power estimate already computes), checked path by path against the
   sky130 runs; Kogge–Stone stops looking free.

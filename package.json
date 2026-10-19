@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "@yowasp/yosys": "0.68.1207",
     "typescript": "^5.9.0",
     "vite": "^7.0.0",
     "vite-node": "^3.2.4",

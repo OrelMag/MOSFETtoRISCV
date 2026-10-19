@@ -983,17 +983,22 @@ gap here, closed the site's way (computed, transparent down to the transistor, c
 
 **HDL in, not only out** (Digital drops a VHDL or Verilog component into a schematic; DigitalJS turns Verilog into an
 animated schematic). The site exports Verilog and already runs Yosys in CI, so its JSON netlist is the way in.
-- ⏳ Yosys JSON as sandbox chips: `write_json` after a synthesis to Yosys's fine-grained cells (`$_AND_`, `$_OR_`,
-  `$_NOT_`, `$_XOR_`, `$_MUX_`, `$_DFF_P_`, `$_DFFE_PP_`, …), each cell a library part, so an imported design opens
-  down to NANDs and transistors like everything else; ports become pins, a hierarchy kept (`synth` without `-flatten`)
-  becomes nested user chips; a layered placement left to right by logic depth (the JSON carries no drawing), pointers
-  for long nets. File ▸ Import and drag-and-drop of a `.json`
-- ⏳ Verilog typed in the sandbox: Yosys in the browser (`@yowasp/yosys`, WebAssembly, loaded only when used: tens of
-  MB) producing that JSON, errors as diagnostics on the source lines; the module stays editable as text beside its
-  schematic. Round trip in the tests: our own export (vexport.ts) imported back must simulate equal to the original,
-  every output every cycle (verify-export.ts's comparison)
-- ⏳ "The same adder in Verilog": a chapter step or sandbox example with a 4-bit adder as text beside its imported
-  schematic, its NANDs and depth against the hand-drawn one
+- ✅ Yosys JSON as sandbox chips (hdl/yosysjson.ts): every fine-grained cell a library part (flip-flops with any reset,
+  set, enable or clock polarity built from dff / dffe / dff_r / latches and gates, all 74 checked against Yosys's
+  definitions), every module a user chip and its instances placed chips; placed left to right by logic depth (loops cut
+  at storage), each column ordered by its drivers' rows, wires between neighbouring columns routed there (a trunk each,
+  ordered so none runs along another: the router has nothing to untangle), long nets as pointers named after the
+  Verilog signals. File ▸ Import and drag-and-drop of a `.json` (drawn chips: a netlist has no text)
+- ✅ Verilog chips (editor/hdl.ts, hdlui.ts; mockup approved 2026-10-19): Yosys 0.68 in the page (`@yowasp/yosys`, 78 MB
+  served beside the site as yosys/, fetched on the first synthesis), New chip ▾ Verilog chip or File ▸ Import of a
+  `.v` / `.sv`; the text beside the canvas, synthesized a second after typing stops (or Ctrl/⌘ Enter), one chip per
+  module (ids kept, so parents keep their wires); errors on their lines, the last good build kept; the drawing is
+  generated (canvas edits refused, Detach makes ordinary chips); top module and gates (NAND / +XOR MUX / AND OR) in the
+  properties. Round trip in the tests: our own export of six library parts and the whole single-cycle CPU imported
+  back simulates equal to the original, every output every cycle (tests/hdl-import.test.ts, Yosys from npm in Node)
+- ✅ Examples ▸ The same adder in Verilog: ADD4 beside `assign {co, s} = a + b + ci;` on the same inputs (36 against
+  44 NANDs with the default gates)
+- ⏳ A chapter step with the Verilog adder; the analysis of a Verilog chip's critical path mapped back to its source lines
 - VHDL through GHDL's Yosys plugin only if a WebAssembly build exists; else not planned
 
 **Delay that depends on load** (Circuit Artist models wire delay from length and fan-out; here every NAND costs one

@@ -131,6 +131,20 @@ function sanitizeFf(f: unknown): ChipDoc['ff'] {
   return compact({ d: f.d, q: f.q, clk: f.clk, en: f.en });
 }
 
+const GATES = ['nand', 'std', 'aoi'] as const;
+/** At most 1 MB of Verilog per chip group (a whole RV32I core is ~60 kB). */
+const MAX_HDL = 1 << 20;
+function sanitizeHdl(x: unknown): ChipDoc['hdl'] {
+  if (!isObj(x) || !str(x.module) || !x.module) return undefined;
+  const s = x.src;
+  const src = isObj(s) && str(s.file) && str(s.text) && s.text.length <= MAX_HDL
+    ? compact({ file: s.file || 'top.v', text: s.text, top: str(s.top) && s.top ? s.top : undefined, gates: GATES.find((g) => g === s.gates) ?? 'std' })
+    : undefined;
+  const of = str(x.of) && isIdent(x.of) ? x.of : undefined;
+  if (!src && !of) return undefined;
+  return compact({ module: x.module, src, of: src ? undefined : of, stale: x.stale === true ? true as const : undefined });
+}
+
 function sanitizePart(p: unknown): PartDoc | null {
   if (!isObj(p) || !str(p.id) || !isIdent(p.id)) return null;
   const ref = sanitizeRef(p.ref);
@@ -235,6 +249,7 @@ export function sanitizeChip(c: unknown): ChipDoc | null {
     face: sanitizeFace(c.face, new Set(uniquePins.map((p) => p.id))),
     ff: sanitizeFf(c.ff),
     cpu: sanitizeCpu(c.cpu),
+    hdl: sanitizeHdl(c.hdl),
     pins: uniquePins, parts, wires, labels,
     comments: comments.length ? comments : undefined,
   });
