@@ -287,6 +287,8 @@ class Tab {
   private session = '';
   private errors: string[] = [];
   private inflight = new Map<string, string>();
+  /** This route's document (`?smoke=<seq>`): a request the previous page started as it was left is not this route's. */
+  private doc: RegExp | null = null;
   private lastNet = 0;
   private loaded = false;
   private script = '';
@@ -324,6 +326,7 @@ class Tab {
         if (p.entry.level === 'error' && p.entry.source !== 'network') this.errors.push(`log: ${p.entry.text}`);
         break;
       case 'Network.requestWillBeSent':
+        if (this.doc && p.documentURL && !this.doc.test(p.documentURL)) break;
         this.inflight.set(p.requestId, p.request.url);
         this.lastNet = Date.now();
         break;
@@ -351,6 +354,7 @@ class Tab {
     const t0 = Date.now();
     this.errors = [];
     this.inflight.clear();
+    this.doc = new RegExp(`[?&]smoke=${seq}(?:[&#]|$)`);
     this.loaded = false;
     // Storage as the route wants it, set before any of the page's scripts run.
     if (this.script) await this.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: this.script });
