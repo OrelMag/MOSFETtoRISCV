@@ -10,7 +10,7 @@
 
 import type { Sim } from '../sim/sim';
 import { netlistOf } from '../sim/types';
-import { h, icon, s } from '../ui/dom';
+import { h, hintBadge, icon, s } from '../ui/dom';
 import { ViewCtx } from '../view/context';
 import { SchematicView } from '../view/schematic';
 import type { Widget } from '../view/stage';
@@ -65,7 +65,7 @@ class InsideView {
     this.crumbs = h('nav', { class: 'crumbs', 'aria-label': 'Inside' });
     this.badge = h('div', { class: 'level-badge' });
     this.canvas = h('div', { class: 'canvas sb-inside-canvas' }, this.badge,
-      h('div', { class: 'hint-badge' }, 'double-click a part to open it · Esc: up · live: toggle inputs on the left, or Run'));
+      hintBadge('double-click a part to open it · Esc: up · live: toggle inputs on the left, or Run', 'double-tap a part: open · tap an input to toggle it', 'inside'));
     this.el = h('section', { class: 'sb-inside', role: 'dialog', 'aria-label': 'Look inside', tabindex: '-1' },
       h('div', { class: 'stage-bar sb-inside-bar' },
         h('span', { class: 'sb-inside-tag' }, icon('layers', 14), 'Inside'), this.crumbs,

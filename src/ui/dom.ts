@@ -36,6 +36,35 @@ export function s<K extends keyof SVGElementTagNameMap>(tag: K, attrs?: Attrs | 
   return el;
 }
 
+/** A touch screen is the main pointer (a phone or tablet): gestures, not a mouse and keys. */
+export const coarsePointer = (): boolean => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
+/**
+ * The canvas's gesture hint (.hint-badge): the mouse wording, or on a touch screen the touch wording
+ * on one line (it sits over the circuit: wrapped on a phone it hid the lower pins). The first touch on
+ * the canvas hides it for this visit; a tap on it hides it for good (remembered under `key`).
+ */
+export function hintBadge(mouse: string, touch: string, key: string, cls = ''): HTMLElement {
+  const store = `mosfet2riscv:hint:${key}`;
+  if (!coarsePointer()) return h('div', { class: `hint-badge${cls}` }, mouse);
+  let off = false;
+  try { off = localStorage.getItem(store) === 'off'; } catch { /* storage blocked: shown */ }
+  const el = h('button', { class: `hint-badge touch${cls}`, hidden: off, title: 'Tap to hide this hint', 'aria-label': `${touch} (tap to hide)` },
+    h('span', null, touch), h('span', { class: 'x', 'aria-hidden': 'true' }, '×'));
+  el.addEventListener('click', () => {
+    el.hidden = true;
+    try { localStorage.setItem(store, 'off'); } catch { /* not remembered */ }
+  });
+  // Seen once the canvas is touched: out of the circuit's way until the next visit.
+  const touched = (e: Event) => {
+    if (el.contains(e.target as Node)) return;
+    el.hidden = true;
+    el.parentElement?.removeEventListener('pointerdown', touched, true);
+  };
+  queueMicrotask(() => el.parentElement?.addEventListener('pointerdown', touched, true));
+  return el;
+}
+
 export function clear(el: Element): void {
   while (el.firstChild) el.firstChild.remove();
 }
