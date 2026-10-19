@@ -61,6 +61,8 @@ export class CampaignPage implements Page {
   /** Columns the map was last drawn with: as many as its pane holds (wider acts wrap), redrawn when that changes. */
   private mapCols = Infinity;
   private mapFit: ResizeObserver | null = null;
+  /** The route last drawn (parts joined). */
+  private drawn = '';
   /** Drill and puzzle cards keep their state (question, count, code) while the page redraws around them. */
   private cards = new Map<string, HTMLElement>();
 
@@ -84,6 +86,10 @@ export class CampaignPage implements Page {
   private render(): void {
     const sc = this.main.querySelector<HTMLElement>('.cp-map-scroll');
     if (sc) this.mapScroll = { left: sc.scrollLeft, top: sc.scrollTop };
+    // The level panel redrawn for the same level (a tip shown, Done reading) keeps its place in the text.
+    const route = this.parts.join('/');
+    const panelTop = route === this.drawn ? this.main.querySelector<HTMLElement>('.cp-panel')?.scrollTop ?? 0 : 0;
+    this.drawn = route;
     this.renderHead();
     const [a, b] = this.parts;
     if (a === 'intro') this.main.replaceChildren(this.introView());
@@ -94,6 +100,8 @@ export class CampaignPage implements Page {
       sc2.scrollLeft = this.mapScroll.left;
       sc2.scrollTop = this.mapScroll.top;
     }
+    const panel = this.main.querySelector<HTMLElement>('.cp-panel');
+    if (panel && panelTop) panel.scrollTop = panelTop;
   }
 
   // ---- header ---------------------------------------------------------------------------------
@@ -307,7 +315,11 @@ export class CampaignPage implements Page {
     if (n.kind === 'lesson') {
       bar.append(st === 'solved'
         ? h('span', { class: 'cp-done' }, icon('check', 15), 'Read')
-        : h('button', { class: 'btn primary', onclick: () => p.solve(n.id) }, icon('check', 15), 'Done reading'));
+        : h('button', { class: 'btn primary', onclick: () => {
+          p.solve(n.id);
+          // the panel redrew: keyboard focus goes to the way on (Next), not back to the top of the page
+          this.main.querySelector<HTMLElement>('.cp-next')?.focus({ preventScroll: true });
+        } }, icon('check', 15), 'Done reading'));
       if (n.id === 'intro') bar.append(h('a', { class: 'btn', href: '#/campaign/intro' }, 'The full diagram'));
     } else if (ch) {
       const chip = levelChipId(n);
@@ -325,7 +337,16 @@ export class CampaignPage implements Page {
         : h('button', { class: 'btn ghost', title: 'Count this level as done: its part unlocks (the reference solution stands in for yours)', onclick: () => p.skip(n.id) }, 'Skip'));
     }
     const next = isDone(p.view(n.id)) ? nextAvailable(p.view, p.unlockAll, n.id) : undefined;
-    if (next) bar.append(h('a', { class: 'btn ghost', href: `#/campaign/n/${next.id}` }, `Next: ${next.title}`, icon('chevR', 14)));
+    // the main action once nothing else is (a lesson read, a drill passed): where to go next
+    if (next) {
+      const main = !bar.querySelector('.btn.primary');
+      const go = h('a', { class: `btn ${main ? 'primary' : 'ghost'} cp-next`, href: `#/campaign/n/${next.id}` }, `Next: ${next.title}`, icon('chevR', 14));
+      // a read lesson: right after its tick, before the lesson's extras
+      if (main && n.kind === 'lesson') bar.insertBefore(go, bar.children[1] ?? null);
+      else bar.append(go);
+    }
+    // sticky (campaign.css) only with a main action to keep in reach: a drill's lone Skip stays at the end
+    bar.classList.toggle('sticky', !!bar.querySelector('.btn.primary'));
     return bar;
   }
 
