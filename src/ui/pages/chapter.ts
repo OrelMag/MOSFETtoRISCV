@@ -10,6 +10,7 @@ import { h, icon } from '../dom';
 import { toggleChapterMenu } from '../quicknav';
 import { quizBox } from '../quiz';
 import { settings } from '../settings';
+import { reveal, StageNotes } from '../stagenotes';
 import { litLine, wireLooks } from './looks';
 
 export interface Page {
@@ -29,6 +30,8 @@ export class ChapterPage implements Page {
   /** Has the stage shown anything yet (a step without a scene keeps the last one, or borrows a neighbour's)? */
   private shown = false;
   private unlisten: (() => void)[] = [];
+  /** The step's challenge goal and "done" toasts over the canvas: the text panel's cards are often out of sight. */
+  private notes = new StageNotes();
 
   constructor(chapter: Chapter, step: number) {
     this.chapter = chapter;
@@ -39,7 +42,8 @@ export class ChapterPage implements Page {
     this.body = h('div', { class: 'narrative-body' });
     this.foot = h('div', { class: 'narrative-foot' });
     const narrative = h('aside', { class: 'narrative' }, this.head, this.body, this.foot);
-    this.el = h('div', { class: 'layout' }, narrative, this.stage.el, this.inspector.el);
+    this.el = h('div', { class: 'layout' }, narrative, this.stage.el, this.inspector.el, this.notes.live);
+    this.stage.el.querySelector('.canvas')?.append(this.notes.el);
     this.goStep(step);
   }
 
@@ -55,6 +59,7 @@ export class ChapterPage implements Page {
     this.step = i;
     this.unlisten.forEach((f) => f());
     this.unlisten = [];
+    this.notes.clear();
     if (i === this.recap) {
       this.show(steps.length - 1);
       this.renderHead();
@@ -178,6 +183,7 @@ export class ChapterPage implements Page {
       this.unlisten.push(this.stage.onChange(() => {
         if (box.classList.contains('tried') || !cond(this.stage)) return;
         settings.solve(key);
+        this.notes.tried(box.textContent ?? '');
         tick();
       }));
     });
@@ -219,10 +225,20 @@ export class ChapterPage implements Page {
     row.append(show);
     box.append(hints, row, ans);
     if (settings.isSolved(key)) markSolved();
+    // The goal over the canvas too; a click on it shows this card (and lands keyboard focus there).
+    box.tabIndex = -1;
+    this.notes.goal(ch.goal, box.classList.contains('solved'), () => {
+      reveal(box);
+      box.focus({ preventScroll: true });
+    });
     this.unlisten.push(this.stage.onChange(() => {
       if (box.classList.contains('solved') || !ch.check(this.stage)) return;
       markSolved();
       this.renderHead();
+      this.notes.solved();
+      // Where the text panel scrolls on its own (not on a phone, where it sits above the stage and moving it would
+      // move the circuit away), bring the card, now green, into view.
+      if (this.textScrolls()) reveal(box);
     }));
     return box;
   }
@@ -265,7 +281,14 @@ export class ChapterPage implements Page {
     this.foot.replaceChildren(prevBtn, h('span', { class: 'count' }, this.step === this.recap ? 'Recap' : `${this.step + 1} / ${n}`), nextBtn);
   }
 
+  /** Does the text panel scroll by itself (side by side with the stage), rather than with the page (a phone)? */
+  private textScrolls(): boolean {
+    const o = getComputedStyle(this.body).overflowY;
+    return (o === 'auto' || o === 'scroll') && this.body.scrollHeight > this.body.clientHeight;
+  }
+
   destroy(): void {
+    this.notes.clear();
     this.unlisten.forEach((f) => f());
     this.stage.destroy();
   }
