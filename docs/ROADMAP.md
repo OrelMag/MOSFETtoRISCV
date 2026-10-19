@@ -1055,8 +1055,11 @@ links, bus taps, duplicate and pin reordering. The gaps:
   delay), a toggle on the Timing panel beside the drawn critical path
 
 **Campaign and sandbox polish**:
-- ⏳ Rotation (R) for parts in the sandbox: today parts only mirror; geometry, routing, faces and the editor's hit
-  tests all assume inputs left / outputs right, so this is the larger item here
+- ✅ Rotation (R) for parts in the sandbox: `rot` (quarter turns after the mirror) on a part and an InstanceDef,
+  one transform (geometry.ts orientGeom / instPort) for ports, boxes, hit tests, routing and look inside; a box is
+  laid out again on its new sides (orientedBox: top and bottom names run across, clock markers on any side), other
+  symbols turn whole with their text kept upright; R / Shift+R, the right-click menu, R / F while placing a part, a
+  chip's face displays upright where their place lands; displays and I/O parts only mirror (face.ts canTurn)
 - ⏳ Pong on the sandbox computer: a program for Examples ▸ Computer's 64 × 64 screen with the keyboard part (or
   switches) as paddles, and the same on the campaign's RV16 bench screen
 - Separate stars for area and for speed (functional / area-optimal / speed-optimal) instead of one rating over every

@@ -165,7 +165,7 @@ export class WalkMode {
     const p = mine.parts.find((x) => x.id === c.id)!;
     ed.edit((doc) => {
       const moved = moveSel(doc, { parts: [c.id] }, [c.at[0] - p.at[0], c.at[1] - p.at[1]], ed.defOf);
-      return { ...moved, parts: moved.parts.map((x) => (x.id === c.id ? { ...x, flip: c.flip || undefined } : x)) };
+      return { ...moved, parts: moved.parts.map((x) => (x.id === c.id ? { ...x, flip: c.flip || undefined, rot: c.rot } : x)) };
     });
   }
 

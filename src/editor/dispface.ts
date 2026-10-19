@@ -3,7 +3,7 @@
 // Package dialog's face editor, painted from the simulation's bits.
 
 import type { HierNode } from '../sim/flatten';
-import { symbolGeom } from '../sim/geometry';
+import { type Rot, symbolGeom } from '../sim/geometry';
 import type { Sim } from '../sim/sim';
 import { B1, BX, BZ, type Bit, type ComponentDef } from '../sim/types';
 import { formatBits, pack, type Radix } from '../sim/values';
@@ -118,12 +118,12 @@ export function paintDisplay(d: DisplayEls, bits: Bit[] | null, radix: Radix): v
 }
 
 /** The displays a user chip shows on its box, each a display part's own face scaled into place. */
-export function drawFace(g: SVGGElement, def: ComponentDef, flip: boolean): FaceEls[] | undefined {
+export function drawFace(g: SVGGElement, def: ComponentDef, flip: boolean, rot?: Rot): FaceEls[] | undefined {
   const f = faceOf(def);
   if (!f) return undefined;
-  const w = symbolGeom(def).w;
+  const { w, h } = symbolGeom(def);
   return f.displays.map((d) => {
-    const b = shownBox(d, w, flip);
+    const b = shownBox(d, w, h, flip, rot);
     const sub = s('g', { class: 'ed-face-disp', transform: `translate(${b.x - d.crop.x * d.scale},${b.y - d.crop.y * d.scale}) scale(${d.scale})` });
     g.append(sub);
     if (d.kind === 'console' || d.kind === 'screen' || d.kind === 'switches') {

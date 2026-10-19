@@ -67,7 +67,7 @@ class Sketch {
     const p = this.doc.parts.find((q) => q.id === e.part)!;
     const d = partDef(p.ref, (id) => defs.get(id));
     if ('error' in d) throw new Error(`${this.doc.id}: ${p.id}: ${d.error}`);
-    return instPort(d, p.at, p.flip, e.port).pos;
+    return instPort(d, p.at, p.flip, e.port, p.rot).pos;
   }
 
   /** One wire; returns its id (to branch off it). */

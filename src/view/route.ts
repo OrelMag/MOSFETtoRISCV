@@ -4,7 +4,7 @@
 // net's wire is nudged along in half-grid steps (`place`). Authors untangle the rare hard
 // case with `trunk` (a preferred position) and `via` (fixed corners) on the NetDef.
 
-import { type ExitDir, instPort, type PortGeom, symbolGeom, type Vec } from '../sim/geometry';
+import { type ExitDir, instPort, orientGeom, type PortGeom, type Vec } from '../sim/geometry';
 import { type ComponentDef, type Netlist, parseEnd } from '../sim/types';
 
 export interface NetTag {
@@ -55,7 +55,7 @@ export function pinGeoms(def: ComponentDef, nl: Netlist): Map<string, PinGeom> {
   const m = new Map<string, PinGeom>();
   // Defaults for unplaced pins: inputs stacked on the left, outputs on the right.
   let xMax = 10;
-  for (const inst of nl.instances) if (inst.at) xMax = Math.max(xMax, inst.at[0] + symbolGeom(inst.def).w);
+  for (const inst of nl.instances) if (inst.at) xMax = Math.max(xMax, inst.at[0] + orientGeom(inst.def, inst.flip, inst.rot).w);
   let li = 0, ri = 0;
   for (const p of def.ports) {
     const placed = nl.pins?.[p.name];
@@ -74,7 +74,7 @@ function endGeom(def: ComponentDef, nl: Netlist, pins: Map<string, PinGeom>, end
     return g;
   }
   const i = nl.instances.find((x) => x.name === inst)!;
-  return instPort(i.def, i.at ?? [0, 0], i.flip, port);
+  return instPort(i.def, i.at ?? [0, 0], i.flip, port, i.rot);
 }
 
 /** Drops repeated points and the middle of three in a line. */
@@ -219,7 +219,7 @@ export function routeNetlist(def: ComponentDef, nl: Netlist): { nets: RoutedNet[
   const trunks = place(plans);
   const all = plans.map((n) => pathsOf(n, trunks[n.index]));
   const boxes = nl.instances.map((i): Rect => {
-    const g = symbolGeom(i.def), at = i.at ?? [0, 0];
+    const g = orientGeom(i.def, i.flip, i.rot), at = i.at ?? [0, 0];
     return { x: at[0], y: at[1], w: g.w, h: g.h };
   });
   untangle(plans, all, boxes);
@@ -645,7 +645,7 @@ export const overlaps = (a: Rect, b: Rect) =>
 function symbolRects(nl: Netlist): { what: string; r: Rect; inst: string }[] {
   const out: { what: string; r: Rect; inst: string }[] = [];
   for (const i of nl.instances) {
-    const at = i.at ?? [0, 0], g = symbolGeom(i.def);
+    const at = i.at ?? [0, 0], g = orientGeom(i.def, i.flip, i.rot);
     out.push({ what: `instance ${i.name}`, r: { x: at[0], y: at[1], w: g.w, h: g.h }, inst: i.name });
     if (i.def.symbol.kind === 'box' && i.def.prim !== 'alias') {
       const label = i.label ?? i.name;
@@ -677,7 +677,7 @@ export function tapLabels(nl: Netlist): TapLabel[] {
       const end = `${inst.name}.${p.name}`;
       const net = netOf.get(end);
       if (net === undefined) continue;
-      const g = instPort(inst.def, inst.at ?? [0, 0], inst.flip, p.name);
+      const g = instPort(inst.def, inst.at ?? [0, 0], inst.flip, p.name, inst.rot);
       const w = textWidth(text, size) + 0.1, h = size * 1.3;
       const x = g.exit === 'right' ? g.pos[0] + TAP_GAP : g.pos[0] - TAP_GAP - w;
       const rect = { x, y: g.pos[1] - h - 0.1, w, h };
@@ -831,7 +831,9 @@ export function splitterBars(nl: Netlist): { x: number; y0: number; y1: number }
   for (const i of nl.instances) {
     const k = i.def.symbol.kind;
     if (k !== 'split' && k !== 'merge') continue;
-    const g = symbolGeom(i.def);
+    // A quarter-turned splitter's bar lies across: no vertical bar to hop.
+    if ((i.rot ?? 0) % 2) continue;
+    const g = orientGeom(i.def, i.flip, i.rot);
     const at = i.at ?? [0, 0];
     const ys = i.def.ports.filter((p) => (k === 'split' ? p.dir === 'out' : p.dir === 'in')).map((p) => g.ports[p.name].pos[1]);
     out.push({ x: at[0] + 0.5, y0: at[1] + Math.min(...ys) - 0.4, y1: at[1] + Math.max(...ys) + 0.4 });

@@ -40,7 +40,7 @@ export class Sheet {
   /** Where a part's port is, and which way its wire leaves. */
   port(id: string, port: string) {
     const p = this.parts.find((q) => q.id === id)!;
-    return instPort(this.defs.get(id)!, p.at, p.flip, port);
+    return instPort(this.defs.get(id)!, p.at, p.flip, port, p.rot);
   }
 
   wire(a: string | EndRef, b: string | EndRef, pts: Vec[] = [], extra: Partial<WireDoc> = {}): string {

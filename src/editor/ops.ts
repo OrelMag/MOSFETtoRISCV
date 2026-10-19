@@ -8,7 +8,7 @@
 // vertical (a straight wire's breakpoints stay put), and branch points ride along on the wire
 // they sit on. dragWire / removeBend reshape one wire by its corners and segments.
 
-import { symbolGeom } from '../sim/geometry';
+import { centredAt, orientGeom } from '../sim/geometry';
 import {
   chipDeps, commentBox, endGeom, endKey, isIdent, nextId, onPolyline, onSegment, orthogonal, polyline, roundPt, straightLine, uniqueName,
   type ChipDoc, type CommentDoc, type DefOf, type EndRef, type ExitDir, type LabelDoc, type PartDoc, type PartRef,
@@ -403,13 +403,35 @@ export function deleteSel(doc: ChipDoc, sel: Sel): ChipDoc {
   return r.parts === doc.parts && r.pins === doc.pins && r.labels === doc.labels && r.wires === doc.wires && r.comments === doc.comments ? doc : r;
 }
 
-/** Mirrors parts left-right. With defOf, attached wires are refit to the mirrored ports. */
+/**
+ * Mirrors parts left-right as they are shown. With defOf, attached wires are refit to the mirrored ports. A turned
+ * part's mirror comes before its turn, so the screen's mirror of a quarter turn is the other quarter (M·R = R⁻¹·M).
+ */
 export function flipParts(doc: ChipDoc, ids: string[], defOf?: DefOf): ChipDoc {
   const s = new Set(ids);
   if (!doc.parts.some((p) => s.has(p.id))) return doc;
-  const parts = doc.parts.map((p) => (s.has(p.id) ? patched(p, { flip: p.flip ? undefined : true }) : p));
+  const parts = doc.parts.map((p) => (s.has(p.id) ? patched(p, { flip: p.flip ? undefined : true, rot: p.rot && p.rot !== 2 ? (4 - p.rot) as 1 | 3 : p.rot }) : p));
   const next = { ...doc, parts };
   return defOf ? refit(doc, next, defOf) : next;
+}
+
+/**
+ * Turns parts a quarter clockwise (turns 3: anticlockwise), each about its own middle, its ports kept on the grid;
+ * attached wires are refit. The caller leaves out parts that cannot turn (face.ts canTurn).
+ */
+export function rotateParts(doc: ChipDoc, ids: string[], turns: 1 | 2 | 3, defOf: DefOf): ChipDoc {
+  const s = new Set(ids);
+  let any = false;
+  const parts = doc.parts.map((p) => {
+    const d = s.has(p.id) && defOf(p);
+    if (!d) return p;
+    any = true;
+    const g = orientGeom(d, p.flip, p.rot);
+    const rot = (((p.rot ?? 0) + turns) % 4) as 0 | 1 | 2 | 3;
+    const at = centredAt(d, [p.at[0] + g.w / 2, p.at[1] + g.h / 2], p.flip, rot);
+    return patched(p, { at, rot: rot || undefined });
+  });
+  return any ? refit(doc, { ...doc, parts }, defOf) : doc;
 }
 
 function rewriteEnds(doc: ChipDoc, f: (e: EndRef) => EndRef): WireDoc[] {
@@ -720,7 +742,7 @@ export function boxSelect(doc: ChipDoc, rect: [Vec, Vec], defOf: DefOf): Sel {
   const parts = doc.parts.filter((p) => {
     const d = defOf(p);
     if (!d) return inn(p.at);
-    const g = symbolGeom(d);
+    const g = orientGeom(d, p.flip, p.rot);
     return inn(p.at) && inn(add(p.at, [g.w, g.h]));
   });
   const wires = doc.wires.filter((w) => {
