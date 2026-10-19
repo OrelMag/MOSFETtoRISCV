@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Camera, COVER_GAP, FOLD_BESIDE_PX, fitBox, freeRect, MIN_FIT_PX, type Rect, startFolded, underCover, type ViewBox } from '../src/view/camera';
+import { Camera, COVER_GAP, FOLD_BESIDE_PX, fitBox, freeArea, freeRect, MIN_FIT_H, MIN_FIT_PX, type Rect, roomBeside, startFolded, TOUCH_PX, touchZoom, underCover, type ViewBox } from '../src/view/camera';
 
 /** A host of a settable size and an svg that only records its view box: enough for Camera. */
 function rig(w: number, h: number) {
@@ -159,5 +159,58 @@ describe('fitting around the stage panels', () => {
     expect(underCover(vb, cpu, W, H, [panel(H - 24)])).toBe(true);
     const beside = fitBox(cpu, W, H, [panel(H - 24)]);
     expect(underCover(beside, cpu, W, H, [panel(380)])).toBe(false);
+  });
+});
+
+describe('the touch hint line on a phone', () => {
+  // #/workbench/rca4: four full adders stacked (tall), the one-line hint pill 12 px from the left, right and bottom.
+  const rca4: ViewBox = { x: -5, y: -6.9, w: 25, h: 56 };
+  const pill = (W: number, H: number): Rect => ({ x: 12, y: H - 10 - 27, w: W - 24, h: 27 });
+
+  it('a 390 × 844 phone: the circuit is fitted above the pill, clear of it', () => {
+    const W = 390, H = 373; // the canvas between the stage bar and the controls
+    expect(roomBeside(rca4, W, H, [pill(W, H)])).toBe(true);
+    const p = onScreen(fitBox(rca4, W, H, [pill(W, H)]), rca4, W, H);
+    expect(p.top).toBeGreaterThanOrEqual(-1e-6);
+    expect(p.bottom).toBeLessThanOrEqual(pill(W, H).y - COVER_GAP + 1e-6);
+  });
+
+  it('a short canvas (a 320 × 568 phone): too little above the pill, so the fit would take the whole canvas under it', () => {
+    const W = 320, H = 116;
+    expect(pill(W, H).y - COVER_GAP).toBeLessThan(MIN_FIT_H);
+    expect(freeArea(W, H, [pill(W, H)], rca4.w, rca4.h)).toBeNull();
+    expect(freeRect(W, H, [pill(W, H)], rca4.w, rca4.h)).toEqual({ x: 0, y: 0, w: W, h: H });
+    // the stage then hides the pill (Stage.placeHint)
+    expect(roomBeside(rca4, W, H, [pill(W, H)])).toBe(false);
+    expect(roomBeside(rca4, W, H, [])).toBe(true);
+  });
+
+  it('room is judged on the drawing widened to the minimum fit width, and an unsized host always has room', () => {
+    const tiny: ViewBox = { x: 0, y: 0, w: 1, h: 1 };
+    expect(roomBeside(tiny, 0, 0, [pill(390, 373)])).toBe(true);
+    expect(roomBeside(tiny, 390, 373, [pill(390, 373)])).toBe(true);
+    expect(freeArea(390, 373, [], 10, 10)).toEqual({ x: 0, y: 0, w: 390, h: 373 });
+  });
+});
+
+describe('the sandbox on a touch screen', () => {
+  const W = 390, H = 560;
+  it('a small circuit fitted on a phone is zoomed in to TOUCH_PX around its centre, which stays put', () => {
+    const bbox: ViewBox = { x: 0, y: 0, w: 36, h: 12 }; // 10.8 px per unit: a 4-unit NAND 43 px wide
+    const vb = fitBox(bbox, W, H, 0, 24);
+    const z = touchZoom(vb, W, [18, 6]);
+    expect(W / z.w).toBeCloseTo(TOUCH_PX);
+    expect(z.w / z.h).toBeCloseTo(vb.w / vb.h);
+    // the centre is at the same screen point before and after
+    const at = (v: ViewBox) => [(18 - v.x) * W / v.w, (6 - v.y) * W / v.w];
+    expect(at(z)[0]).toBeCloseTo(at(vb)[0]);
+    expect(at(z)[1]).toBeCloseTo(at(vb)[1]);
+  });
+
+  it('a circuit that already fits large enough, or a large one (Fit shows all of it), is left alone', () => {
+    const small = fitBox({ x: 0, y: 0, w: 20, h: 10 }, W, H, 0, 24);
+    expect(touchZoom(small, W, [10, 5])).toBe(small);
+    const cpu = fitBox({ x: 0, y: 0, w: 120, h: 90 }, W, H, 0, 24);
+    expect(touchZoom(cpu, W, [60, 45])).toBe(cpu);
   });
 });

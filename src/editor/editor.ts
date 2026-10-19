@@ -13,6 +13,7 @@ import type { PowerOnMode } from '../sim/sim';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { describeBits } from '../sim/values';
 import { coarsePointer, h, hintBadge, icon } from '../ui/dom';
+import { showKeySheet } from '../ui/keyhelp';
 import { settings } from '../ui/settings';
 import { closePopover } from '../view/popover';
 import type { Compiled, Diag } from './compile';
@@ -57,9 +58,10 @@ export interface EditorOptions {
    * A campaign level screen around one chip: tabs only for it and the chips it uses (no other
    * chips, no New chip), the toolbar actions listed in `actions`, the palette locked to purist
    * (the level's rule) without the groups in `hideGroups`, and the properties panel shown over the
-   * canvas while something is selected or while pinned.
+   * canvas while something is selected or while pinned. `first`: the palette groups listed first (default: the
+   * unlocked parts, the library's NAND, wiring, constants, My chips).
    */
-  level?: { chipId: string; actions: readonly string[]; hideGroups?: readonly string[] };
+  level?: { chipId: string; actions: readonly string[]; hideGroups?: readonly string[]; first?: readonly string[] };
   /** The project whose workspace is loaded and saved (projects.ts); default: the current one, the first for a level. */
   project?: string;
 }
@@ -207,6 +209,11 @@ export class Editor {
 
     this.palette = new PalettePanel(() => ({ ws: this.ws, chipId: this.chipId, canPlace: (c) => this.lib.canPlace(this.chipId, c) }), {
       pick: (item, e) => this.pickPart(item, e),
+      arm: (item, key) => {
+        this.tools.arm(item, key);
+        if (this.partsDrawer) this.showParts(false);
+        this.toast(`${item.name}: click the canvas to place it (Esc cancels)`);
+      },
       purist: () => !!this.level || !!this.ws.purist,
       setPurist: (v) => this.volatile({ ...this.ws, ...(v ? { purist: true } : { purist: undefined }) }),
       toggleFavorite: (key) => {
@@ -217,7 +224,7 @@ export class Editor {
       newFolder: this.level ? undefined : () => void this.newFolder(),
       renameFolder: this.level ? undefined : (from, to) => this.renameFolder(from, to),
       hidden: (g) => !!this.level?.hideGroups?.includes(g),
-      first: this.level ? ['unlocked', 'lib', 'wiring', 'const', 'mine'] : undefined,
+      first: this.level ? this.level.first ?? ['unlocked', 'lib', 'wiring', 'const', 'mine'] : undefined,
       closed: this.level ? ['io', 'disp'] : undefined,
     });
     this.props = new PropsPanel(this);
@@ -687,13 +694,16 @@ export class Editor {
   }
 
   /** The toolbar actions this editor shows (a level screen: its own list). */
-  private barActions(): ToolbarAction[] {
+  barActions(): ToolbarAction[] {
     const only = this.level?.actions;
     return actions.filter((a) => (only ? only.includes(a.id) : !a.levelOnly));
   }
 
   /** Redraw the top bar's buttons (a toggle changed state). */
   renderActions(): void {
+    // a toggle redraws the bar: the focus stays on the button pressed (or More, if it moved there)
+    const a = document.activeElement;
+    const focused = a instanceof HTMLElement && a !== this.moreBtn && this.actionsEl.contains(a) ? a.dataset.action : undefined;
     this.actionsEl.replaceChildren();
     for (const a of this.barActions()) {
       const b = h('button', { class: `btn ghost ${a.label ? 'sm' : 'icon-only'}`, title: a.title, 'aria-label': a.title, 'data-action': a.id, onclick: () => a.run(this) },
@@ -710,6 +720,10 @@ export class Editor {
     }
     this.moreBtn.hidden = !this.shed.size;
     this.actionsEl.append(this.moreBtn);
+    if (focused) {
+      const b = this.actionsEl.querySelector<HTMLElement>(`[data-action="${CSS.escape(focused)}"]`);
+      (b && !b.hidden ? b : this.moreBtn).focus({ preventScroll: true });
+    }
     if (this.moreMenu) this.fillMore();
     this.fitSoon();
   }
@@ -825,9 +839,23 @@ export class Editor {
       const st = this.tools.state;
       if (st.k !== 'place' || st.drag) return;
       this.showParts(false);
-      this.toast(`Tap the canvas to place ${item.name}`);
+      this.palette.clearSearch(); // the drawer reopens on the whole palette, not on this search's results
+      this.placeHint = `Tap the canvas to place ${item.name}`;
+      this.toast(this.placeHint);
     };
     document.addEventListener('pointerup', up);
+  }
+
+  /** The phone's tap-to-place hint while it may be on screen. */
+  private placeHint = '';
+
+  /** The armed part was placed or let go: its tap-to-place hint goes at once rather than after the toast's time. */
+  endPlaceHint(): void {
+    if (this.placeHint && this.toastEl.textContent === this.placeHint) {
+      if (this.toastTimer) clearTimeout(this.toastTimer);
+      this.toastEl.className = 'sb-toast';
+    }
+    this.placeHint = '';
   }
 
   /** The palette is a drawer (editor.css, max-width 760px) and open. */
@@ -1042,46 +1070,12 @@ export class Editor {
     area.select();
   }
 
+  /** The sandbox's key sheet (ui/keyhelp.ts, drawn from the key table ui/keys.ts), the mouse gestures folded under it. */
   showHelp(): void {
-    const keys: [string, string][] = [
-      ['Drag from a pin or port', 'draw a wire; click empty canvas to add a corner'],
-      ['Space or /', 'flip the wire\'s L (while drawing)'],
-      ['Backspace', 'remove the last corner (while drawing)'],
-      ['Click a pin, port, pointer or wire', 'finish the wire (on a wire: a branch)'],
-      ['Ctrl/Alt + drag a wire', 'start a branch from it'],
-      ['Drag a wire', 'reshape it: a corner moves, a segment slides (a simple connection bends)'],
-      ['Double-click a corner', 'remove that bend'],
-      ['Right-click a wire ▸ Add a bend here', 'a new corner on the cursor: move it, click to drop it'],
-      ['Wire colours ▸ Simple connections', 'new wires run straight between the points you click'],
-      ['☆ on a palette item', 'pin it to Favorites at the top of the palette (★ unpins)'],
-      ['1 … 9', 'pick favorite 1 to 9: click the canvas to place it (Shift: place several)'],
-      ['L', 'place a pointer (same name = same net)'],
-      ['Click a selected pointer / double-click', 'jump to the next pointer with that name'],
-      ['T', 'place a comment · double-click one to edit it'],
-      ['Click a selected name · double-click a name', 'rename a part or pin where it is drawn'],
-      ['F2', 'rename the selected part, pin or pointer (a comment: edit its text)'],
-      ['Right-click', 'actions for what is under the cursor (or the canvas)'],
-      ['Drag empty canvas', 'select with a rubber band (Shift: add)'],
-      ['Shift + click', 'add to / remove from the selection'],
-      ['Space + drag, middle drag, two fingers', 'pan · wheel or pinch: zoom'],
-      ['Ctrl+Z · Ctrl+Shift+Z / Ctrl+Y', 'undo · redo'],
-      ['Ctrl+C · X · V · D · A', 'copy · cut · paste · duplicate · select all'],
-      ['Delete / Backspace', 'delete the selection'],
-      ['F', 'flip the selection left–right'],
-      ['Arrows (Shift: ×5)', 'nudge the selection'],
-      ['Ctrl+Enter', 'run / pause the simulation'],
-      ['A key a Key part listens to', 'drives it while held (and is not a shortcut while that chip is open)'],
-      ['Any key, while running or with Type on', 'is typed into the chip\'s Keyboard parts'],
-      ['Esc', 'cancel · clear the selection · leave Type'],
-    ];
-    const close = () => ov.remove();
-    const ov = h('div', { class: 'sb-help', role: 'dialog', 'aria-label': 'Keyboard shortcuts', onclick: (e: Event) => { if (e.target === ov) close(); } },
-      h('div', { class: 'panel' },
-        h('div', { class: 'sb-help-head' }, h('h3', null, 'Sandbox shortcuts'), h('button', { class: 'btn ghost icon-only', 'aria-label': 'Close', onclick: close }, icon('close', 16))),
-        h('dl', null, keys.map(([k, v]) => [h('dt', null, k), h('dd', null, v)]))));
-    this.el.append(ov);
-    ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-    (ov.querySelector('button') as HTMLButtonElement).focus();
+    showKeySheet({
+      title: 'Sandbox keys', sub: 'Keys act on the canvas whenever focus is not in a text field or a panel.',
+      groups: ['place', 'wire', 'select', 'edit', 'view', 'panels'], taken: new Set(this.sim.keyBinds), mouse: MOUSE_HELP, cls: 'sb-keysheet',
+    });
   }
 
   destroy(): void {
@@ -1100,6 +1094,28 @@ export class Editor {
     closePopover();
   }
 }
+
+/** The sandbox's mouse gestures (its keys are in the key table, ui/keys.ts). */
+const MOUSE_HELP: [string, string][] = [
+  ['Drag from a pin or port', 'draw a wire; click empty canvas to add a corner'],
+  ['Click or tap an input knob', 'toggle it (a drag from its port side draws a wire, from the far side moves it)'],
+  ['Click a pin, port, pointer or wire', 'finish the wire (on a wire: a branch)'],
+  ['Ctrl/Alt + drag a wire', 'start a branch from it'],
+  ['Drag a wire', 'reshape it: a corner moves, a segment slides (a simple connection bends)'],
+  ['Double-click a corner', 'remove that bend'],
+  ['Right-click a wire ▸ Add a bend here', 'a new corner on the cursor: move it, click to drop it'],
+  ['Wire colours ▸ Simple connections', 'new wires run straight between the points you click'],
+  ['☆ on a palette item', 'pin it to Favorites at the top of the palette (★ unpins)'],
+  ['Click a selected pointer / double-click', 'jump to the next pointer with that name'],
+  ['Double-click a comment', 'edit it'],
+  ['Click a selected name · double-click a name', 'rename a part or pin where it is drawn'],
+  ['Right-click', 'actions for what is under the cursor (or the canvas)'],
+  ['Drag empty canvas', 'select with a rubber band (Shift: add)'],
+  ['Shift + click', 'add to / remove from the selection'],
+  ['Space + drag, middle drag, two fingers', 'pan · wheel or pinch: zoom'],
+  ['A key a Key part listens to', 'drives it while held (and is not a shortcut while that chip is open)'],
+  ['Any key, while running or with Type on', 'is typed into the chip\'s Keyboard parts'],
+];
 
 /** Simulations kept for chips that are not the active tab. */
 const KEEP_SIMS = 4;

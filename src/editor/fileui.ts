@@ -71,15 +71,21 @@ export function dialog(ed: Editor, title: string, body: (Node | string | null)[]
 // The File menu
 
 let menu: HTMLElement | null = null;
+/** What had the focus when the menu opened: Esc puts it back there. */
+let opener: HTMLElement | null = null;
 const onOutside = (e: PointerEvent) => {
   if (menu && !menu.contains(e.target as Node) && !(e.target as Element).closest?.('[data-action="file"]')) closeMenu();
 };
 const onMenuKey = (e: KeyboardEvent) => {
-  if (e.key === 'Escape') closeMenu();
+  if (e.key !== 'Escape') return;
+  const back = opener;
+  closeMenu();
+  if (back?.isConnected) back.focus();
 };
 function closeMenu(): void {
   menu?.remove();
   menu = null;
+  opener = null;
   document.removeEventListener('pointerdown', onOutside, true);
   document.removeEventListener('keydown', onMenuKey, true);
 }
@@ -104,6 +110,7 @@ const MENU: (MenuItem | null)[] = [
 function openMenu(ed: Editor): void {
   if (menu) return closeMenu();
   const btn = ed.actionAnchor('file');
+  opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : btn;
   const r = btn?.getBoundingClientRect() ?? new DOMRect(16, 60, 0, 0);
   menu = h('div', { class: 'sb-menu', role: 'menu', 'aria-label': 'File' });
   for (const it of MENU) {

@@ -5,7 +5,9 @@
 // from here" copies the partial circuit into the level's chip (one undo step); leaving removes the
 // scratch chip and the chips it brought, unless the learner took them. A step with a question (WalkStep.ask) keeps its
 // parts back until it is answered: predict first, then see. Build along: the learner places the step's parts on their
-// outlines and wires them, and Check step compares the result with the reference (campaign/buildalong.ts).
+// outlines and wires them, and Check step compares the result with the reference (campaign/buildalong.ts). The last
+// step never ends on a bare Done (which dropped the circuit): Build along's Finish makes the learner's circuit the
+// level's chip and checks it; Watch offers Use this answer (as Do it for me) or Build it myself (back to their own).
 
 import { checkBuild, snapCandidate, type BuildCheck } from '../../campaign/buildalong';
 import { codexById } from '../../campaign/codex';
@@ -135,6 +137,9 @@ export class WalkMode {
     this.mode = m;
     this.buildStep = -1;
     this.show(this.ed.ws);
+    // The other mode's circuit is a different one: values carried over from it (an output the reference drove, now
+    // undriven) would show a result nothing on the canvas produces.
+    this.ed.sim.reset();
   }
 
   /** Build along: is the learner's chip wired like the reference after this step? */
@@ -187,7 +192,7 @@ export class WalkMode {
       return openChip({ ...ws, chips }, this.levelChip);
     });
     ed.select({});
-    ed.toast('The circuit so far is yours to finish (Ctrl+Z brings your drawing back)');
+    ed.toast(this.last ? 'The circuit is your chip now (Ctrl+Z brings your drawing back)' : 'The circuit so far is yours to finish (Ctrl+Z brings your drawing back)');
   }
 
   /** Leave: the scratch chip and the chips it brought go, the level's chip comes back. */
@@ -224,7 +229,11 @@ export class WalkMode {
       h('p', null, h('button', { class: 'btn sm primary', onclick: () => this.checkStep() }, 'Check step')), verdict);
   }
 
-  panel(par: { nand?: number; depth?: number }, close: () => void, take: () => void): HTMLElement {
+  /**
+   * The walkthrough panel. `close` leaves (the learner's own circuit back), `take` copies the scratch chip into the
+   * level's chip, `finish` does that and runs Check (Build along's last step: the learner built it, so it is graded).
+   */
+  panel(par: { nand?: number; depth?: number }, close: () => void, take: () => void, finish: () => void): HTMLElement {
     const w = this.walk, s = w.steps[this.k];
     const list = h('ol', { class: 'lv-steps' }, w.steps.map((st, i) => h('li', { class: i < this.k ? 'done' : i === this.k ? 'cur' : '' },
       h('button', { onclick: () => this.go(i), title: `Go to step ${i + 1}` }, h('span', { class: 'k' }, i < this.k ? icon('check', 11) : String(i + 1)), h('span', null, st.title)))));
@@ -252,11 +261,20 @@ export class WalkMode {
       if (m.rows) out.push(h('p', { class: 'lv-rows' }, 'Rows right: ', m.rows.map((r, i) => [i ? ' · ' : '', h('b', { class: r.right === r.total ? 'ok' : '' }, `${r.out} ${r.right}/${r.total}`)])));
       meters.replaceChildren(...out);
     }, 0);
-    const nav = h('div', { class: 'lv-walknav' },
-      h('button', { class: 'btn sm', disabled: this.k === 0, onclick: () => this.go(this.k - 1) }, icon('chevL', 13), 'Back'),
-      this.last ? h('button', { class: 'btn sm primary', onclick: close }, 'Done') : h('button', { class: 'btn sm primary', onclick: () => this.go(this.k + 1) }, 'Next', icon('chevR', 13)),
-      h('span', { class: 'lv-spacer' }),
-      h('button', { class: 'btn sm', title: 'Copy the circuit so far into your chip and finish it yourself (one undo step)', onclick: take }, this.last ? 'Use this answer' : 'I\'ll take it from here'));
+    // The last step ends with a choice that says what happens to the circuit (a plain "Done" used to drop it).
+    const back = h('button', { class: 'btn sm', disabled: this.k === 0, onclick: () => this.go(this.k - 1) }, icon('chevL', 13), 'Back');
+    const nav = !this.last
+      ? h('div', { class: 'lv-walknav' }, back,
+        h('button', { class: 'btn sm primary', onclick: () => this.go(this.k + 1) }, 'Next', icon('chevR', 13)),
+        h('span', { class: 'lv-spacer' }),
+        h('button', { class: 'btn sm', title: 'Copy the circuit so far into your chip and finish it yourself (one undo step)', onclick: take }, 'I\'ll take it from here'))
+      : this.mode === 'build'
+        ? h('div', { class: 'lv-walknav' }, back,
+          h('button', { class: 'btn sm primary', title: 'Your circuit becomes the level\'s chip (one undo step) and Check grades it', onclick: finish }, icon('check', 13), 'Finish: check my circuit'))
+        : h('div', { class: 'lv-walknav' }, back,
+          h('button', { class: 'btn sm primary', title: 'Copy the reference answer into your chip (one undo step), as Do it for me does', onclick: take }, 'Use this answer'),
+          h('span', { class: 'lv-spacer' }),
+          h('button', { class: 'btn sm', title: 'Leave the walkthrough: your own circuit comes back as you left it', onclick: close }, 'Build it myself'));
     const modes = h('div', { class: 'lv-modes', role: 'tablist' },
       h('button', { class: this.mode === 'watch' ? 'on' : '', role: 'tab', onclick: () => this.setMode('watch') }, 'Watch'),
       h('button', { class: this.mode === 'build' ? 'on' : '', role: 'tab', title: 'Place each step\'s parts on their outlines and wire them yourself', onclick: () => this.setMode('build') }, 'Build along'));

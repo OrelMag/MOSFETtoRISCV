@@ -11,7 +11,7 @@ import { MC_FIELDS, MC_FSM_SPEC, MC_STATES, dualPipeCpu, microword, multicycleCp
 import { fsmView } from './fsmpanel';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { cacheLines, cpuState, retireCount, retiring } from '../riscv/cosim';
-import { ABI, decode, disasm } from '../riscv/isa';
+import { ABI, decode, disasm, regNumber } from '../riscv/isa';
 import { ISS, type ModelState } from '../riscv/iss';
 import { PROGRAMS } from '../riscv/programs';
 import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';
@@ -108,6 +108,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     let fieldsShown = '';
 
     const status = h('div', { class: 'cpu-status' });
+    // On a halt, in words: how long it ran, and the answer when the program names its register (Program.result).
+    const haltLine = h('div', { class: 'cpu-halt', role: 'status', hidden: true });
     const listing = h('div', { class: 'cpu-listing' });
     const regs = h('div', { class: 'cpu-regs' });
     const mem = h('div', { class: 'cpu-mem' });
@@ -221,7 +223,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     const body = h('div', { class: 'cpu-body' },
       h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, editBtn, runBtn),
       slowCtl.el,
-      editWrap, status, now,
+      editWrap, status, haltLine, now,
       h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its hardware')), listing, usePath,
       h('div', { class: 'cpu-sec' }, 'Fields', h('span', { class: 'cpu-sec-hint' }, 'point at a field: its wires')), fieldsBox,
       h('div', { class: 'cpu-sec' }, 'Trace', h('span', { class: 'cpu-sec-hint' }, 'retired instructions, newest last')), trace,
@@ -332,6 +334,13 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       ];
       if (halted) parts.push(h('span', { class: 'warn' }, 'halted'));
       status.replaceChildren(...parts);
+      haltLine.hidden = !halted || !!mismatch;
+      if (halted && !mismatch) {
+        const res = match?.result, r = res ? regNumber(res.reg) : null;
+        haltLine.replaceChildren(`Halted after ${iss.steps.toLocaleString()} instruction${iss.steps === 1 ? '' : 's'}`,
+          multiCycle ? ` (${stage.cycles.toLocaleString()} cycles)` : '',
+          res && r !== null ? h('span', { title: `The program leaves its answer in ${res.reg}` }, ' · result ', h('b', null, `${res.reg} = ${st.x[r] | 0}`), ` (${hex(st.x[r])})`) : '');
+      }
       const shownPc = opts.multicycle && !atBoundary ? iss.pc : st.pc;
       const w = asm.words[shownPc >>> 2] ?? 0x13;
       const d = decode(w);

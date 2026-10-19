@@ -55,3 +55,21 @@ export function better(a: { stars: number; m: Measured }, b: { stars: number; m:
   }
   return false;
 }
+
+/** The metrics the after-pass card draws area bars in. */
+export type AreaUnit = 'nand' | 'transistors' | 'relays' | 'tubes';
+
+/**
+ * The after-pass card's area bars: yours, par (when it differs from yours) and the level case's alternatives, in the
+ * level's area metric: relays or tube sections on a relay / tube level, transistors on a transistor level (it has no
+ * NANDs), else NANDs. Null when there is nothing to compare: a single bar, or every value 0.
+ */
+export function areaBars(m: Measured, par: Par, alts: readonly { name: string; cost: Partial<Record<AreaUnit, number>> }[]): { unit: AreaUnit; bars: [string, number, boolean][] } | null {
+  const unit: AreaUnit = par.relays !== undefined ? 'relays' : par.tubes !== undefined ? 'tubes'
+    : par.transistors !== undefined && par.nand === undefined ? 'transistors' : 'nand';
+  const bars: [string, number, boolean][] = [];
+  if (m[unit] !== undefined) bars.push(['Yours', m[unit]!, true]);
+  if (par[unit] !== undefined && par[unit] !== m[unit]) bars.push(['Par', par[unit]!, false]);
+  for (const a of alts) { const v = a.cost[unit]; if (v !== undefined) bars.push([a.name, v, false]); }
+  return bars.length > 1 && bars.some((b) => b[1] > 0) ? { unit, bars } : null;
+}

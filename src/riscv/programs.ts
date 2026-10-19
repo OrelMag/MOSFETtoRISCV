@@ -6,6 +6,8 @@ export interface Program {
   name: string;
   blurb: string;
   source: string;
+  /** The register the program leaves its answer in, and the answer (the CPU panel names it on halt; a test runs it). */
+  result?: { reg: string; value: number };
 }
 
 export const PROGRAMS: Program[] = [
@@ -13,6 +15,7 @@ export const PROGRAMS: Program[] = [
     id: 'sum',
     name: 'Sum 1..10',
     blurb: 'A loop with a counter and a branch. Leaves 55 in a0.',
+    result: { reg: 'a0', value: 55 },
     source: `# sum = 1 + 2 + ... + 10
         li   a0, 0          # sum
         li   t0, 1          # i
@@ -44,6 +47,7 @@ halt:   j    halt`,
     id: 'mul',
     name: 'Multiply (shift & add)',
     blurb: 'RV32I has no multiply instruction. Here is how software does it: 123 × 45.',
+    result: { reg: 'a0', value: 5535 },
     source: `# a0 = a1 * a2, by shifting and adding
         li   a1, 123
         li   a2, 45
@@ -97,6 +101,7 @@ halt:   j    halt`,
     id: 'gcd',
     name: 'Greatest common divisor',
     blurb: 'Euclid by subtraction: gcd(1071, 462) = 21. Uses a function call (jal / ret).',
+    result: { reg: 'a0', value: 21 },
     source: `# a0 = gcd(a0, a1), called as a function
         li   a0, 1071
         li   a1, 462
@@ -116,6 +121,7 @@ done:   ret`,
     id: 'primer',
     name: 'Primer test program',
     blurb: 'The test program from the NAND-to-CPU primer: every instruction class, hazards included.',
+    result: { reg: 'x1', value: 55 },
     source: `        addi x1, x0, 0        # sum = 0
         addi x2, x0, 1        # i = 1
         addi x3, x0, 11       # limit
