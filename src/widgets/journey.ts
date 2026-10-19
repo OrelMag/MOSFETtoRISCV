@@ -17,6 +17,7 @@ export const LADDER: Rung[] = [
   { title: 'A GPU', madeOf: 'lanes, warps, a rasterizer, frame buffers', chapter: 'lanes', num: 27 },
   { title: 'A chip on a wafer', madeOf: 'standard cells, placement, routing, masks', chapter: 'silicon', num: 26 },
   { title: 'Multi-core processor', madeOf: 'cores, arbiter, atomics, coherence', chapter: 'multicore', num: 25 },
+  { title: 'Out-of-order core', madeOf: 'renaming, issue queues, a reorder buffer, speculation', chapter: 'ooo', num: 24 },
   { title: 'Floating point & caches', madeOf: 'FPU, SRAM, tag arrays, a slow memory', chapter: 'cache', num: 21 },
   { title: 'Complete RV32IM system', madeOf: 'CSRs, traps, interrupts, I/O, multiply / divide', chapter: 'io', num: 18 },
   { title: 'Pipelined RISC-V core', madeOf: 'pipeline registers, hazard unit, branch predictor', chapter: 'pipeline', num: 16 },
