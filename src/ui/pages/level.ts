@@ -104,7 +104,9 @@ export class LevelPage implements Page {
     // A relay / tube level (a strict rule) lists its own parts under Unlocked parts and has no NAND.
     const strict = typeof ch.allowed === 'object' && !!ch.allowed.strict;
     const hide = ruleKind(ch.allowed) === 'transistors' ? [] : strict ? ['fets', 'switch', 'lib'] : ['fets', 'switch'];
-    this.editor = new Editor(chipId, { level: { chipId, actions: LEVEL_ACTIONS, hideGroups: hide } });
+    // A transistor level's own parts (transistors and rails) lead the palette, before wiring and NAND.
+    const first = ruleKind(ch.allowed) === 'transistors' ? ['fets', 'unlocked', 'wiring', 'const', 'switch', 'lib', 'mine'] : undefined;
+    this.editor = new Editor(chipId, { level: { chipId, actions: LEVEL_ACTIONS, hideGroups: hide, first } });
     if (this.editor.chipId !== chipId) this.editor.openChip(chipId);
     const hasWalk = !!walkOf(n)?.steps.length;
     this.chal = installChallenges(this.editor, {
