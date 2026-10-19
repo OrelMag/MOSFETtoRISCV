@@ -1776,3 +1776,35 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .bus-screen { display: block; width: 192px; max-width: 100%; aspect-ratio: 1; image-rendering: pixelated; border-radius: 4px; border: 1px solid var(--border); background: #000; }
 .bus-keys { display: flex; gap: 6px; align-items: center; }
 .bus-type { flex: 1 1 auto; min-width: 0; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); font: 12px var(--font-mono); }
+
+/* ---------- touch: hit areas of 40 px or more on a coarse pointer ----------
+   A finger needs ~40 px where a mouse is happy with 24 (WCAG 2.5.8 asks 24, the platform guides 44 / 48 dp).
+   Buttons, tabs and list rows grow to 40 px; icon buttons to 40 × 40. The footer's text links get 32 px lines
+   and take their line's height with inline padding. A mouse's layout is untouched.
+   The sandbox's own controls: editor.css. */
+@media (pointer: coarse) {
+  .btn { min-width: 40px; }
+  .stage-bar .btn, .tools .btn { justify-content: center; }
+  .btn, .seg button, .cp-tab, .bench-tab, .lib-item, .crumbs button, .in-toggle, .out-num .v, .pal-menu button { min-height: 40px; }
+  .btn.icon-only, .nav a, .brand { min-width: 40px; min-height: 40px; justify-content: center; }
+  .btn.xs { min-height: 0; min-width: 0; }
+  .bench-tab { display: flex; align-items: center; }
+  .lib-item { align-items: center; }
+  .in-num button { min-width: 40px; min-height: 40px; }
+  /* the footer's links sit in its text (inline links, which WCAG 2.5.8 exempts): 32 px lines, each link padded to its line's height */
+  .footer { line-height: 32px; }
+  .footer a { padding-block: 8px; }
+  .qn-list a, .qn-list button { min-height: 40px; }
+}
+/* A phone's top bar holds ten targets (home, five nav links, four tools) in 390 px: no gaps between them (each
+   is its own 40 px pad), and the nav's icons 36 wide on the narrowest, so the bar still fits without scrolling.
+   The stage bar's eight icon buttons fit on one line with 2 px between them. */
+@media (pointer: coarse) and (max-width: 760px) {
+  .topbar { padding: 0 4px; gap: 0; }
+  .nav { margin-left: 0; gap: 0; }
+  .topbar .tools { gap: 0; }
+  .stage-bar { gap: 2px; }
+}
+@media (pointer: coarse) and (max-width: 420px) {
+  .nav a { min-width: 36px; padding-inline: 8px; }
+}

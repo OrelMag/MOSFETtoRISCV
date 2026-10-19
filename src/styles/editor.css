@@ -459,3 +459,16 @@
 .sb-ctx-hues > span { font: 600 11px var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .sb-row-hues { grid-template-columns: minmax(0, 1fr); gap: 5px; }
 
+
+/* touch (app.css has the shared part): palette rows, group headers, the favourite star and the top bar's
+   tabs at 40 px; the star takes the row's full height and 40 px at its end */
+@media (pointer: coarse) {
+  .sb-item { min-height: 40px; align-items: center; }
+  .sb-star { align-self: stretch; width: 40px; margin: -4px -8px -4px 0; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .sb-group > summary, .sb-sec > summary { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }
+  .sb-addfolder { min-width: 40px; min-height: 40px; align-items: center; justify-content: center; }
+  .sb-tab-name, .sb-proj, .sb-menu button { min-height: 40px; }
+  /* the save state: a dot and a word in the bar, its tap area spread around it */
+  .sb-save { position: relative; }
+  .sb-save::after { content: ''; position: absolute; inset: -13px -9px; }
+}
