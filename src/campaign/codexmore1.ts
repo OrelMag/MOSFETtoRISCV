@@ -7,7 +7,7 @@ import type { CodexMore } from './codexmore';
 export const MORE1: Record<string, CodexMore> = {
   // ---- the big picture
   cpu: {
-    idea: `A processor is a state machine whose next-state function is chosen by data: the word at <code>imem[pc]</code> selects which transformation of (PC, registers, memory) happens this step. The program is an input, so one fixed circuit runs any program. In RV16 the architectural state is the 16-bit PC, seven 16-bit registers (x0 is a constant) and 64 K words of data memory; the program sits in a separate ROM the CPU never writes.<br>Everything else (control unit, immediate generator, ALU, multiplexers) is combinational logic computing the next state. The single-cycle core <code>rv16_cpu</code> is 5,236 NANDs; the only state it holds itself is 128 flip-flops (16 for the PC, 112 for x1–x7). The memories are outside it.`,
+    idea: `A processor is a state machine whose next-state function is chosen by data: the word at <code>imem[pc]</code> selects which transformation of (PC, registers, memory) happens this step. The program is an input, so one fixed circuit runs any program. In RV16 the architectural state is the 16-bit PC, seven 16-bit registers (x0 is a constant) and 64 K words of data memory; the program sits in a separate ROM the CPU never writes.<br>Everything else (control unit, immediate generator, ALU, multiplexers) is combinational logic computing the next state. The single-cycle core <code>rv16_cpu</code> is 4,720 NANDs; the only state it holds itself is 128 flip-flops (16 for the PC, 112 for x1–x7). The memories are outside it.`,
     example: {
       title: 'Five instructions, thirteen steps',
       body: `<pre>pc  instruction            state change
@@ -59,9 +59,9 @@ write back    result mux             4       93
 XOR                          4 NANDs
 full adder                   9 NANDs
 16-bit adder               144 NANDs   (16 full adders)
-16-bit ALU               1,250 NANDs
-rv16_cpu                 5,236 NANDs   (20,944 transistors)
-RV16 pipeline           10,016 NANDs</pre>`,
+16-bit ALU               1,055 NANDs
+rv16_cpu                 4,720 NANDs   (18,880 transistors)
+RV16 pipeline            9,218 NANDs</pre>`,
     },
     mistakes: [
       'Treating a black box as free: a 16:1 multiplexer is one symbol and 15 two-input muxes per bit inside.',
@@ -373,7 +373,7 @@ multicycle                 150      76      11,400</pre>51 instructions; cycles 
   },
 
   rv16: {
-    idea: `RV16 is RISC-V's base integer ISA cut down to 16 bits so that the whole CPU can be built from NANDs and tested exhaustively: 16-bit data and instructions, eight registers with x0 = 0, word addressing (pc + 1), separate instruction and data memories, 4-bit opcodes, 6-bit immediates. Left out, with their replacements: andi / ori / xori (li + the register form), sltiu, bltu / bgeu (<code>sltu</code> + <code>bnez</code>), auipc, byte and halfword access. Optional: MD (multiply / divide, op 3) and SYSTEM (CSRs, ecall, ebreak, mret, wfi, traps and interrupts, op 0).<br>Memory-mapped devices occupy the top seven data addresses, 0xFFF9–0xFFFF, all reachable as a negative offset from x0; 0xFFF7–0xFFF8 are reserved (they read 0 and drop stores). The golden model halts on <code>jal x0, 0</code> (0x000C); a branch to itself is a spin.`,
+    idea: `RV16 is RISC-V's base integer ISA cut down to 16 bits so that the whole CPU can be built from NANDs and tested exhaustively: 16-bit data and instructions, eight registers with x0 = 0, word addressing (pc + 1), separate instruction and data memories, 4-bit opcodes, 6-bit immediates. Left out, with their replacements: andi / ori / xori / slti / sltiu (li + the register form), bltu / bgeu (<code>sltu</code> + <code>bnez</code>), auipc, byte and halfword access. Optional: MD (multiply / divide, op 3) and SYSTEM (CSRs, ecall, ebreak, mret, wfi, traps and interrupts, op 0).<br>Memory-mapped devices occupy the top seven data addresses, 0xFFF9–0xFFFF, all reachable as a negative offset from x0; 0xFFF7–0xFFF8 are reserved (they read 0 and drop stores). Later cores add devices below them: act 9's frame core puts the rasterizer's registers at 0xFFF0–0xFFF6 and its screen at 0xF000, act 10's boot puzzle a DMA engine at 0xFFF0–0xFFF3 and read-only flash at 0x8000–0xBFFF. The golden model halts on <code>jal x0, 0</code> (0x000C); a branch to itself is a spin.`,
     example: {
       title: 'The opcode map',
       body: `<pre>op    name    fmt     op    name    fmt
@@ -496,7 +496,7 @@ x6–x7   t0–t1   temporaries           no</pre>`,
   },
 
   stack: {
-    idea: `The stack is the region of data memory below sp, used last-in first-out: a function claims words on entry by decrementing sp and returns them before it returns, so nested and recursive calls each get their own frame. RV16 has no stack instructions: <code>push r</code> expands to <code>addi sp, sp, -1</code>; <code>sw r, 0(sp)</code> and <code>pop r</code> to <code>lw r, 0(sp)</code>; <code>addi sp, sp, 1</code>, so sp always points at the last word pushed. A frame holds what must survive a call: ra in any function that calls, and values the caller needs afterwards.<br>Each push or pop is two instructions, so a larger frame is better allocated once (addi sp, sp, −k) and addressed as 0(sp) … (k − 1)(sp).`,
+    idea: `The stack is the region of data memory below sp, used last-in first-out: a function claims words on entry by decrementing sp and returns them before it returns, so nested and recursive calls each get their own frame. RV16 has no stack instructions: <code>push r</code> expands to <code>addi sp, sp, -1</code>; <code>sw r, 0(sp)</code> and <code>pop r</code> to <code>lw r, 0(sp)</code>; <code>addi sp, sp, 1</code>, so sp always points at the last word pushed. A frame holds what must survive a call: ra in any function that calls, and values the caller needs afterwards.<br>Each push or pop is two instructions, so a larger frame is better allocated once (addi sp, sp, −k) and addressed as 0(sp) … (k − 1)(sp).<br>Direction and pointer are conventions, as long as push and pop agree. RISC-V's call stack grows down with sp on the last word pushed (a full descending stack); chapter 10's hardware stack grows up with sp on the next free slot (empty ascending: push writes slot sp and increments it, the top is sp − 1).`,
     example: {
       title: 'Recursive sum(4)',
       body: `<pre>        li   sp, 0x100
@@ -525,7 +525,7 @@ base:   ret</pre>59 instructions on the golden model; sp goes from 0x100 down to
   },
 
   mmio: {
-    idea: `Memory-mapped I/O puts device registers in the data address space, so lw and sw reach devices with no new instructions. An address decoder in front of the data memory sends each access to the RAM or to a device: in RV16 the top seven addresses, 0xFFF9–0xFFFF, are devices, the two below them are reserved, and everything below those is RAM. A load from a device returns its state (the switches, the LEDs, the next input number); a store makes it act (set the LEDs, print a character, raise the interrupt line, stop the program).<br>Because offsets are sign-extended and x0 = 0, every device is one instruction away as <code>imm(x0)</code> with imm from −1 to −7. Device accesses have side effects, so they must reach the device every time: never cached, never merged or reordered.`,
+    idea: `Memory-mapped I/O puts device registers in the data address space, so lw and sw reach devices with no new instructions. An address decoder in front of the data memory sends each access to the RAM or to a device: in RV16 the top seven addresses, 0xFFF9–0xFFFF, are devices, the two below them are reserved, and on the plain cores everything below those is RAM (act 9's frame core and act 10's boot puzzle map more devices lower down: the rasterizer at 0xFFF0, a DMA engine, flash at 0x8000). A load from a device returns its state (the switches, the LEDs, the next input number); a store makes it act (set the LEDs, print a character, raise the interrupt line, stop the program).<br>Because offsets are sign-extended and x0 = 0, every device is one instruction away as <code>imm(x0)</code> with imm from −1 to −7. Device accesses have side effects, so they must reach the device every time: never cached, never merged or reordered.`,
     example: {
       title: 'The device map, and an echo loop',
       body: `<pre>0xFFFF  -1(x0)  EXIT       store: stop, value = exit code
@@ -552,7 +552,7 @@ echo:   lw   a0, -6(x0)    # 0xE836
 
   // ---- the CPU
   datapath: {
-    idea: `The datapath is the part of the CPU that holds and moves data: PC, instruction memory, register file, immediate generator, ALU, branch comparator, data memory, and the multiplexers that choose each block's inputs. Every instruction uses the same blocks; only the mux selects and the write enables differ, and those come from the control unit. Designing a datapath means walking the instruction set one instruction at a time and adding a path, and a mux input, for whatever the existing paths cannot do.<br>Multiplexers are most of the cost. In <code>rv16_cpu</code> 705 bits of two-input mux make 2,760 of its 5,236 NANDs: 336 in the register file's read ports and write enables, 208 in the ALU's operation select, and the rest in the result, immediate, operand and PC selects.`,
+    idea: `The datapath is the part of the CPU that holds and moves data: PC, instruction memory, register file, immediate generator, ALU, branch comparator, data memory, and the multiplexers that choose each block's inputs. Every instruction uses the same blocks; only the mux selects and the write enables differ, and those come from the control unit. Designing a datapath means walking the instruction set one instruction at a time and adding a path, and a mux input, for whatever the existing paths cannot do.<br>Multiplexers are the largest single cost. In <code>rv16_cpu</code> 705 bits of two-input mux make 2,265 of its 4,720 NANDs, nearly half: 336 in the register file's read ports and write enables, 208 in the ALU's operation select, and the rest in the result, immediate, operand and PC selects.`,
     example: {
       title: 'Settings per instruction (– = don\'t care)',
       body: `<pre>instr  rwe  ALU b  imm  result   mwe  next PC
@@ -576,12 +576,12 @@ lui     1   –      U    imm       0   pc + 1</pre>`,
   },
 
   singlecycle: {
-    idea: `A single-cycle CPU executes each instruction completely between two clock edges: fetch, decode, execute, memory and write back form one combinational path from the PC back to the PC and the register file. CPI is exactly 1, and control is a pure function of the instruction with no state machine, which makes it the simplest correct implementation and the reference the others are compared with. The price is the period: every instruction gets the time of the slowest one, a load, whose path passes through both memories and the ALU.<br><code>rv16_cpu</code> (5,236 NANDs) has a period of 98 NAND delays with 8-delay memories, and a jal, which needs neither the ALU nor the data memory, gets the same 98. Any long unit on the path stretches every cycle.`,
+    idea: `A single-cycle CPU executes each instruction completely between two clock edges: fetch, decode, execute, memory and write back form one combinational path from the PC back to the PC and the register file. CPI is exactly 1, and control is a pure function of the instruction with no state machine, which makes it the simplest correct implementation and the reference the others are compared with. The price is the period: every instruction gets the time of the slowest one, a load, whose path passes through both memories and the ALU.<br><code>rv16_cpu</code> (4,720 NANDs) has a period of 98 NAND delays with 8-delay memories, and a jal, which needs neither the ALU nor the data memory, gets the same 98. Any long unit on the path stretches every cycle.`,
     example: {
       title: 'One unit sets everyone\'s period',
-      body: `<pre>rv16_cpu                      5,236 NANDs   period  98
-  with Kogge–Stone adders     5,898 NANDs   period  76   (−22% time, +13% NANDs)
-  with the array multiplier   8,553 NANDs   period 191   (paid by every instruction)</pre>`,
+      body: `<pre>rv16_cpu                      4,720 NANDs   period  98
+  with a Kogge–Stone ALU      4,938 NANDs   period  76   (−22% time, +5% NANDs)
+  with the array multiplier   8,037 NANDs   period 191   (paid by every instruction)</pre>`,
     },
     mistakes: [
       'Timing the add path and calling it the clock: the period is set by the worst instruction, here a load.',
@@ -604,7 +604,7 @@ lui     1   –      U    imm       0   pc + 1</pre>`,
       body: `<pre>rv16_cpu, period 98:
   PC 3 → ROM 8 → control 13 → imm mux 5 → ALU-b mux 2
   → ALU 50 → RAM 8 → result mux 4 → register file 2 → setup 3
-Kogge–Stone adders, period 76: the load path still sets it
+A Kogge–Stone ALU, period 76: the load path still sets it
   PC 3 → ROM 8 → control 13 → imm mux 5 → ALU-b mux 2
   → ALU 28 → RAM 8 → result mux 4 → register file 2 → setup 3
 and the branch path is now two delays behind (74):
@@ -625,7 +625,7 @@ and the branch path is now two delays behind (74):
   },
 
   pipeline: {
-    idea: `Pipelining cuts the single-cycle path with registers so that each piece, a stage, takes one cycle and works on a different instruction: five are in flight, in F, D, E, M and W. Throughput rises to one instruction per (shorter) cycle; the latency of one instruction grows slightly, five cycles plus register overhead. The ideal period is the single-cycle path ÷ 5 + clk-to-q + setup, reached only if the stages are balanced and nothing stalls.<br>The RV16 pipeline shows both limits. Its period is 78 NAND delays against the single-cycle core's 98, because E holds the forwarding logic, the operand muxes and the ripple ALU in one stage (13 + 3 + 2 + 50 delays), and the branch path through the ripple comparator and the PC redirect is only one delay shorter. And each taken branch costs 2 cycles. Measured on the core tests, the plain pipeline is only 4% faster than the single-cycle core (116,610 against 121,128 NAND delays): its CPI eats most of the 20% the period gained, and on the nested loops below it is slower. With static branch prediction it is 12% faster there. The rest of the gain has to come from balancing E: a faster ALU and comparator, an earlier branch decision.`,
+    idea: `Pipelining cuts the single-cycle path with registers so that each piece, a stage, takes one cycle and works on a different instruction: five are in flight, in F, D, E, M and W. Throughput rises to one instruction per (shorter) cycle; the latency of one instruction grows slightly, five cycles plus register overhead. The ideal period is the single-cycle path ÷ 5 + clk-to-q + setup, reached only if the stages are balanced and nothing stalls.<br>The RV16 pipeline shows both limits. Its period is 78 NAND delays against the single-cycle core's 98, because E holds the forwarding logic, the operand muxes and the ripple ALU in one stage (13 + 3 + 2 + 50 delays, then 4 through the E/M register's clear and enable muxes, plus 6 of clk-to-q and setup), and the branch path through the ripple comparator and the PC redirect is only one delay shorter. And each taken branch costs 2 cycles. Measured on the core tests, the plain pipeline is only 4% faster than the single-cycle core (116,610 against 121,128 NAND delays): its CPI eats most of the 20% the period gained, and on the nested loops below it is slower. With static branch prediction it is 12% faster there. The rest of the gain has to come from balancing E: a faster ALU and comparator, an earlier branch decision.`,
     example: {
       title: 'Five in flight, and the measured cost',
       body: `<pre>cycle    1  2  3  4  5  6  7  8  9
@@ -641,7 +641,7 @@ pipeline                            534      78    41,652
 pipeline + static prediction        358      80    28,640</pre>534 = 333 + 3 (fill) + 2 × 99 taken branches.`,
     },
     mistakes: [
-      'Expecting 5× from 5 stages: unbalanced stages and register overhead (6 delays per stage here) eat most of it, and hazards add cycles.',
+      'Expecting 5× from 5 stages: unbalanced stages and register overhead (6 delays of clk-to-q and setup per stage here, 10 with a stage register\'s clear and enable muxes) eat most of it, and hazards add cycles.',
       'Judging by the period alone: on nested loops the pipeline\'s CPI of 1.6 (534 / 333) more than cancels its 20% shorter period.',
       'Forgetting what the stage registers carry: everything later stages need, so the RV16 pipeline has 368 flip-flops against the single-cycle core\'s 128.',
     ],
@@ -755,13 +755,13 @@ predict backward taken: wrong at the 10 inner exits and the outer
       { chapter: 'pipeline', step: 4, label: 'Control hazards' },
       { chapter: 'pipepay', step: 1, label: 'A comparator for branches' },
       { chapter: 'pipepay', step: 2, label: 'Predicting branches' },
-      { chapter: 'pipepay', step: 3, label: 'Two bits of history' },
+      { chapter: 'pipepay', step: 3, label: 'A 2-bit counter' },
     ],
   },
 
   // ---- system
   traps: {
-    idea: `A trap transfers control to a handler without a branch in the program. On an exception (ecall, ebreak, an illegal instruction) or an interrupt the CPU saves the PC in mepc and the reason in mcause, copies mstatus.MIE into MPIE and clears MIE (so the handler is not interrupted), and jumps to mtvec. mret reverses it: pc ← mepc, MIE ← MPIE. The handler runs with the program's registers, so it saves what it uses; mscratch can hold a pointer to a save area.<br>For an exception mepc is the trapping instruction itself, so a handler that continues after an ecall adds 1 to mepc before mret. RV16's mcause values: 2 illegal instruction, 3 breakpoint, 11 ecall, 0x800B external (bit 15 marks an interrupt). Adding traps to the single-cycle core (CSR file, illegal-instruction detector, system decode) takes it from 5,236 to 7,972 NANDs.`,
+    idea: `A trap transfers control to a handler without a branch in the program. On an exception (ecall, ebreak, an illegal instruction) or an interrupt the CPU saves the PC in mepc and the reason in mcause, copies mstatus.MIE into MPIE and clears MIE (so the handler is not interrupted), and jumps to mtvec. mret reverses it: pc ← mepc, MIE ← MPIE. The handler runs with the program's registers, so it saves what it uses; mscratch can hold a pointer to a save area.<br>For an exception mepc is the trapping instruction itself, so a handler that continues after an ecall adds 1 to mepc before mret. RV16's mcause values: 2 illegal instruction, 3 breakpoint, 11 ecall, 0x800B external (bit 15 marks an interrupt). Adding traps to the single-cycle core (CSR file, illegal-instruction detector, system decode) takes it from 4,720 to 7,257 NANDs.`,
     example: {
       title: 'An ecall at 0x0010, handled and resumed',
       body: `<pre>before: pc = 0x0010 (ecall), mstatus.MIE = 1, mtvec = h
@@ -943,7 +943,7 @@ bubble sort    multicycle     777   3.38     76    59,052
     mistakes: [
       'Cutting the path where it is convenient: here E holds 70 of the 76 delays while F and M hold one memory read each; unbalanced steps waste the short ones.',
       'Expecting the period to shrink by the number of steps: register overhead (clk-to-q + setup = 6) is paid in every step.',
-      'Keeping separate memories and adders: without sharing, the multicycle core is bigger than the single-cycle one (5,719 against 5,236 NANDs) and slower.',
+      'Keeping separate memories and adders: without sharing, the multicycle core is bigger than the single-cycle one (5,203 against 4,720 NANDs) and slower.',
     ],
     lib: 'rv16_mc',
     chapters: [
@@ -1009,6 +1009,7 @@ don't-cares taken as 1:         op[3] + op[2]        one OR, 3 NANDs</pre>`,
       'Testing a minimised circuit against a table that filled the don\'t-cares with 0: a correct circuit then fails.',
     ],
     anatomy: ['ctl'],
+    chapters: [{ chapter: 'registers', step: 10, label: 'State machines' }, { chapter: 'gates', step: 6, label: 'The multiplexer: a digital switch' }],
   },
 
   subtract: {
@@ -1140,9 +1141,9 @@ check:     −3 = 0xFFFF_FFFD
     example: {
       title: 'Four results per cycle, two ways',
       body: `<pre>                       NANDs   period   results / cycle
-single-cycle core      4,741     98       1
-four cores            18,964     98       4
-SIMD core, 4 lanes    15,774    100       4
+single-cycle core      4,720     98       1
+four cores            18,880     98       4
+SIMD core, 4 lanes    15,669    100       4
 
 3·x + y, 16 words      instructions   NAND delays
 one lane                   151          14,798
@@ -1157,17 +1158,17 @@ four lanes                  43           4,300</pre>Four cores also need four in
   },
 
   simd: {
-    idea: `Single instruction, multiple data: one instruction stream drives several datapaths. What depends only on the instruction is built once: PC, instruction memory and fetch, decode and control, the immediate, the next-PC logic. What depends on the data is built per lane: registers, ALU, memory port, result path. The cost model follows: shared logic is paid once, lane logic n times, so SIMD saves as much as the shared part weighs in a core.<br>In RV16 it weighs little: of the SIMD core's 15,774 NANDs, 1,818 are shared and 3,489 belong to each lane, and four single-cycle cores would be 18,964. The larger saving is outside the NAND count: one instruction memory and one fetch per four results instead of four. SIMD appears as vector extensions (one instruction over a vector register: SSE, AVX, RISC-V V) and as GPUs, whose SIMT model hides the lanes from the programmer.`,
+    idea: `Single instruction, multiple data: one instruction stream drives several datapaths. What depends only on the instruction is built once: PC, instruction memory and fetch, decode and control, the immediate, the next-PC logic. What depends on the data is built per lane: registers, ALU, memory port, result path. The cost model follows: shared logic is paid once, lane logic n times, so SIMD saves as much as the shared part weighs in a core.<br>In RV16 it weighs little: of the SIMD core's 15,669 NANDs, 1,797 are shared and 3,468 belong to each lane, and four single-cycle cores would be 18,880. The larger saving is outside the NAND count: one instruction memory and one fetch per four results instead of four. SIMD appears as vector extensions (one instruction over a vector register: SSE, AVX, RISC-V V) and as GPUs, whose SIMT model hides the lanes from the programmer.`,
     example: {
       title: 'The SIMD core\'s bill',
-      body: `<pre>shared, once                                  1,818
+      body: `<pre>shared, once                                  1,797
   next PC 421, branch 287, control 200, PC 144
   4:1 muxes (leader rs1, rs2; immediate) 441
-  mask 102, lane decoder 73, PC muxes 147, OR 3
-per lane, × 4                                 3,489
-  registers 2,193, ALU + mux + nz 1,149
+  mask 102, lane decoder 52, PC muxes 147, OR 3
+per lane, × 4                                 3,468
+  registers 2,172, ALU + mux + nz 1,149
   result muxes 147
-total                                        15,774</pre>The register files alone are 8,772: 56% of the core.`,
+total                                        15,669</pre>The register files alone are 8,688: 55% of the core.`,
     },
     mistakes: [
       'Assuming every instruction does n times the work: setup code, masked lanes and the tail of a reduction do less.',
@@ -1248,7 +1249,7 @@ split      14 instructions   stored 0, 3, 1, 9
   },
 
   simt: {
-    idea: `Single instruction, multiple threads: SIMD hardware with the programming model of independent threads. Each thread is an ordinary scalar program over its own registers, with its own ifs and loops; the hardware runs a warp of them on one PC and keeps the illusion with the active mask (which lanes write) and the reconvergence stack (which lanes are still owed the other side of an if). A correct program needs no knowledge of the lanes; a fast one does, because divergence and the tail of a reduction leave lanes idle.<br>The cost over SIMD is small: RV16's SIMT core is the SIMD core plus the stack, a PC mux and a mask mux, 17,837 NANDs against 15,774 (+13%), at the same period of 100. Its 25 test programs, the split ones among them, take 919 cycles. Nvidia named the model; Vortex, the open-source RISC-V GPU, adds split, join and tmc to RV32 as the campaign adds them to RV16.`,
+    idea: `Single instruction, multiple threads: SIMD hardware with the programming model of independent threads. Each thread is an ordinary scalar program over its own registers, with its own ifs and loops; the hardware runs a warp of them on one PC and keeps the illusion with the active mask (which lanes write) and the reconvergence stack (which lanes are still owed the other side of an if). A correct program needs no knowledge of the lanes; a fast one does, because divergence and the tail of a reduction leave lanes idle.<br>The cost over SIMD is small: RV16's SIMT core is the SIMD core plus the stack, a PC mux and a mask mux, 17,837 NANDs against 15,669 (+13%), at the same period of 100. Its 25 test programs, the split ones among them, take 919 cycles. Nvidia named the model; Vortex, the open-source RISC-V GPU, adds split, join and tmc to RV32 as the campaign adds them to RV16.`,
     example: {
       title: 'Nested ifs, four threads',
       body: `<pre>a0 = 0
@@ -1262,7 +1263,7 @@ store a0                   0, 0, 40, 41
 masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre>Each thread reads like scalar code; the warp ran 19 instructions, 59% of its lane-steps doing work.`,
     },
     mistakes: [
-      'Treating the threads of a warp as independent in time: a thread spinning on a flag that another thread of its warp will set never finishes, because the waiting side runs while the other is masked off.',
+      'Treating the threads of a warp as independent in time: a thread spinning on a flag that another thread of its warp will set never finishes, because the waiting side runs while the other is masked off. That holds here and on GPUs before Volta; since Volta (2017) Nvidia gives each thread its own PC and the scheduler interleaves the two sides, so the spin ends, slowly.',
       'Forgetting a join: the else lanes never run, and the mask never comes back.',
       'Measuring a kernel by the instructions of one thread: the warp pays for every path any of its threads takes.',
     ],
@@ -1378,7 +1379,7 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
     chapters: [{ chapter: 'pixels', step: 2, label: 'Walking tiles' }],
   },
   horner: {
-    idea: 'Multiplying a by an n-bit b needs no multiplier if time is cheaper than gates: Horner\'s rule, b = (…((b₇)·2 + b₆)·2 + …)·2 + b₀, turns a·b into n steps of acc ← 2·acc + (bₖ ? a : 0), most significant bit first. The doubling is wiring; the addition is the adder that is already there. A two\'s complement b weighs its top bit −2ⁿ⁻¹: that one step subtracts.<br>The rasterizer\'s set-up needs E = A·Δx + B·Δy − bias for each edge at the first tile, and each edge stepper already has an adder and a register. Interleaving the two products bit by bit, double-and-add A for bit k of Δx, then add B for bit k of Δy, computes both in one pass: E ← 0, two subtracting steps for the sign bits, fourteen steps for bits 6 … 0, one for the bias. The three edges run at once, 17 cycles a triangle, with nothing added but the muxes that feed the steppers.',
+    idea: 'Multiplying a by an n-bit b needs no multiplier if time is cheaper than gates: Horner\'s rule, b = (…((b₇)·2 + b₆)·2 + …)·2 + b₀, turns a·b into n steps of acc ← 2·acc + (bₖ ? a : 0), most significant bit first. The doubling is wiring; the addition is the adder that is already there. A two\'s complement b weighs its top bit −2ⁿ⁻¹: that one step subtracts.<br>The campaign\'s RV16 rasterizer (k_raster) uses it to stay multiplier-free. Its set-up needs E = A·Δx + B·Δy − bias for each edge at the first tile, and each edge stepper already has an adder and a register. Interleaving the two products bit by bit, double-and-add A for bit k of Δx, then add B for bit k of Δy, computes both in one pass: E ← 0, two subtracting steps for the sign bits, fourteen steps for bits 6 … 0, one for the bias. The three edges run at once, 17 cycles a triangle, with nothing added but the muxes that feed the steppers. Chapter 30\'s GPU spends gates instead: its edge set-up runs eight products on a Booth multiplier, and only its depth set-up evaluates z at the first tile by ten Horner steps.',
     example: { title: '−20 · 40 + 110 · 40, MSB first', body: '<pre>Δx = Δy = 40 = 0010 1000 (bits 7 … 0)\nE = 0\nbit 7: E − 0·A − 0·B          = 0\nbit 6: 2E + 0, + 0             = 0\nbit 5: 2E + A (−20), + B (110) = 90\nbit 4: 2E, + 0                 = 180\nbit 3: 2E + A, + B             = 450\nbit 2 … 0: doublings           = 3 600\nminus the bias 1               = 3 599</pre>' },
     mistakes: [
       'Least significant bit first with a fixed accumulator: then the operand must shift left each step, a second register.',
@@ -1386,7 +1387,7 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
       'Doubling between the A and B steps of one bit: both products share the doubling, once per bit.',
     ],
     lib: 'rv16_raster',
-    chapters: [{ chapter: 'pixels', step: 1, label: 'Inside a triangle' }],
+    chapters: [{ chapter: 'pixels', step: 3, label: 'Depth' }, { chapter: 'muldiv', step: 1, label: 'Or reuse one adder' }],
   },
   device: {
     idea: 'A processor drives other hardware through addresses: the device decodes the address bus, and a store to one of its registers configures it, another starts it. The rasterizer of k_frame listens to lane 0\'s memory port: six stores set the vertices, a seventh sets the colour and starts it. Its output is memory too: it writes the screen, words the lanes can also load and store.<br>A device that runs on its own for hundreds of cycles needs a rule for when the processor may touch it again. Software can poll a status word or wait for an interrupt; k_frame\'s core instead holds an instruction that would interfere, a store to the device or a load from the screen, until the rasterizer is done. A load from the screen then works as a fence: after it, the picture is complete. Stores to the screen are not held, so a program that clears the screen must fence first, or it races the drawing.',
@@ -1399,14 +1400,14 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
     chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 1, label: 'The pipeline' }],
   },
   minsky: {
-    idea: 'Rotating a point by a small angle ε exactly takes cos ε and sin ε: four multiplications. Approximating, x ← x − ε·y; y ← y + ε·x, is cheap but wrong in a way that grows: the matrix [[1, −ε], [ε, 1]] has determinant 1 + ε², so every step pushes the point outward, and after a few hundred steps the circle is a spiral. Minsky\'s version uses the new x in the second line. Its matrix, [[1, −ε], [ε, 1 − ε²]], has determinant exactly 1: the point moves on a closed ellipse, very close to a circle for small ε.<br>With ε = 1/8 both multiplications are arithmetic shifts by 3. In 8.8 fixed point (8 fraction bits) a square\'s corners stay within about 6 % of their radius over 2 000 frames; in whole quarter pixels the rounding errors build up to about 20 %. Marvin Minsky found it drawing circles on the PDP-1 display (HAKMEM, item 149).',
+    idea: 'Rotating a point by a small angle ε exactly takes cos ε and sin ε: four multiplications. Approximating, x ← x − ε·y; y ← y + ε·x, is cheap but wrong in a way that grows: the matrix [[1, −ε], [ε, 1]] has determinant 1 + ε², so every step pushes the point outward, and after a few hundred steps the circle is a spiral. Minsky\'s version uses the new x in the second line. Its matrix, [[1, −ε], [ε, 1 − ε²]], has determinant exactly 1: the point moves on a closed ellipse, very close to a circle for small ε.<br>With ε = 1/8 both multiplications are arithmetic shifts by 3. In 8.8 fixed point (8 fraction bits) a square\'s corners stay within about 6 % of their radius over 2 000 frames; in whole quarter pixels the rounding errors build up to about 20 %. Marvin Minsky found it drawing circles on the PDP-1 display (HAKMEM, item 149).<br>It is p_spin\'s rule, for RV16 warps with no multiplier. Chapter 31\'s GPU turns its triangle exactly instead: a 64-entry sine table and <code>mul</code> on lanes that have multipliers.',
     example: { title: 'One step of a corner, ε = 1/8', body: '<pre>x = −28·256 = −7 168, y = −7 168   (8.8: −28 quarter pixels)\nx ← x − (y &gt;&gt; 3) = −7 168 + 896 = −6 272\ny ← y + (x &gt;&gt; 3) = −7 168 − 784 = −7 952\nscreen: 64 + (x &gt;&gt; 8) = 64 − 25 = 39, 64 + (y &gt;&gt; 8) = 64 − 32 = 32</pre>' },
     mistakes: [
       'Updating y from the old x: the two lines then form the spiral, not the ellipse.',
       'Logical shifts: a negative coordinate turns into a large positive one.',
       'Rounding to whole pixels every step: the errors accumulate; keep the fraction and round only when drawing.',
     ],
-    chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 2, label: 'A spinning triangle' }],
+    chapters: [{ chapter: 'graphics', step: 0, label: 'Vertices are a kernel' }],
   },
   // ---- act 10: memory
   memwall: {
@@ -1422,14 +1423,14 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
     chapters: [{ chapter: 'dram', step: 4, label: 'Rows, columns, banks' }, { chapter: 'memctrl', step: 4, label: 'Banks and address mapping' }],
   },
   refresh: {
-    idea: 'The capacitor of a DRAM cell leaks through its access transistor and the junctions around it; a stored 1 decays towards the point where the amplifier can no longer tell it from VDD/2. Opening the row restores every cell of it to a full level, so a refresh is nothing but an activate (and a precharge). JEDEC chips guarantee 64 ms: 8 192 rows in 64 ms is a row every 7.8 µs.<br>Early DRAMs (the 4116) left the bookkeeping to the system: <b>RAS-only refresh</b>, the controller keeping a row counter and activating each row in turn, as m_bank does in cycles the requests leave free. DDR chips keep the counter inside: the controller only sends <b>REF</b> every tREFI with every bank closed, and the chip is busy for tRFC (350 ns for an 8 Gb DDR4). The cost is the same either way: a few percent of the cycles, more as chips grow.',
+    idea: 'The capacitor of a DRAM cell leaks through its access transistor and the junctions around it; a stored 1 decays towards the point where the amplifier can no longer tell it from VDD/2. Opening the row restores every cell of it to a full level, so a refresh is nothing but an activate (and a precharge). JEDEC chips guarantee 64 ms: 8 192 rows in 64 ms is a row every 7.8 µs.<br>Early DRAMs (the 4116) left the bookkeeping to the system: <b>RAS-only refresh</b>, the controller keeping a row counter and activating each row in turn, as m_bank does in cycles the requests leave free. From the mid-1980s chips kept the counter inside (CAS-before-RAS refresh), and DDR chips do too: the controller only sends <b>REF</b> every tREFI with every bank closed, and the chip is busy for tRFC (350 ns for an 8 Gb DDR4). The cost is the same either way: a few percent of the cycles, more as chips grow.',
     example: { title: 'm_bank\'s budget', body: '16 rows, each opened at least every 288 cycles: one refresh every 18 cycles on average. The reference refreshes when the port is idle and the timer has passed 8, and forces one at 15: at most 16 cycles apart, so every row comes round within 256.' },
     mistakes: [
       'Refreshing only when idle: a busy enough request stream then starves refresh until data is lost.',
       'Closing the open row to refresh another and losing the hit: leave the refreshed row open; the next request may want it.',
     ],
     lib: 'rv16_bank',
-    chapters: [{ chapter: 'dram', step: 3, label: 'Leaks and refresh' }, { chapter: 'memctrl', step: 2, label: 'Refresh' }],
+    chapters: [{ chapter: 'dram', step: 3, label: 'Leaks and refresh' }, { chapter: 'memctrl', step: 2, label: 'Refresh' }, { chapter: 'cache', step: 3, label: 'Leaks, refresh and sense amplifiers' }],
   },
   dramtiming: {
     idea: 'A DRAM chip has no clock of its own for its array: its rules are delays, set in nanoseconds by the physics of the array, and the controller counts them in its own cycles. <b>tRCD</b>: from ACT until the row is in the amplifiers and a column may be read or written. <b>tCAS</b> (CAS latency): from RD to the data. <b>tRAS</b>: from ACT until the row may close, the time the amplifiers need to restore the cells. <b>tRP</b>: from PRE until the bit lines are back at VDD/2 and another row may open. <b>tRFC</b>: a refresh keeps the chip busy.<br>DDR4-3200 says 13.75 ns for tRCD, tCAS and tRP and 32 ns for tRAS; at this campaign\'s 3.95 ns clock that is 4, 4, 4 and 9 cycles (rounded up: a command one cycle early is a broken rule, one late only slower). A controller keeps a counter per rule, or, with one request at a time, counters of the cycles since the last ACT and the last PRE.',
@@ -1455,7 +1456,7 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
     idea: 'When two masters want the bus in the same cycle, one waits. <b>Fixed priority</b> (master 0 always first) is a gate or two, and lets a busy master 0 starve master 1 forever. <b>Round robin</b> remembers who was served last and, when both ask, grants the other: each master waits at most one transfer of the other, at the cost of one flip-flop. With more masters it generalizes to a rotating priority (the library\'s arbiterN, chapter 24\'s dual-core).<br>The grant must also be <b>held</b>: a transfer that has started (valid up, ready not yet) keeps its master even if the round-robin rule would now pick the other, or the waiting slave would see its request change. m_bus does it with two more flip-flops: a transfer in progress, and whose.',
     mistakes: ['Re-arbitrating every cycle: the grant can move in the middle of a transfer to a slow slave.', 'Updating "served last" when a master is granted rather than when its transfer completes: under wait states the other master is then skipped.'],
     lib: 'rv16_bus',
-    chapters: [{ chapter: 'bus', step: 2, label: 'Two masters' }],
+    chapters: [{ chapter: 'bus', step: 2, label: 'Two masters' }, { chapter: 'multicore', step: 2, label: 'The arbiter' }],
   },
   ftl: {
     idea: 'A NAND flash chip reads and programs pages and erases blocks of many pages; programming only turns 1s into 0s, so a page holding data cannot be rewritten until its whole block is erased, and an erase takes milliseconds. The flash translation layer hides all of it. It writes every update to an erased page at the head of a log and records in a <b>mapping table</b> where the logical page now lives; the old copy is garbage.<br>Before the erased pages run out, a <b>garbage collector</b> picks a block, copies the pages of it that are still mapped to the head, and erases it. To know whether a page is live, each page stores the logical page number in its <b>spare area</b> (the out-of-band bytes every flash page has): the page is live if the table still points at it. Spare capacity gives the collector room: here 16 physical pages hold 8 logical ones, one block is always kept erased, and so at least a third of the 12 written pages are garbage at any time. Real FTLs also keep the table itself in flash, survive power loss mid-write and map out bad blocks.',
