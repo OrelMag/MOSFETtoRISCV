@@ -221,7 +221,9 @@ export class BenchmarksPage implements Page {
           h('td', { title: 'Energy over time at the clock static timing allows' }, fmtPower((runNj(r) * 1e-9) / (runUs(c, r) * 1e-6))),
           ...(d ? [h('td', null, fmt(r.dmiss ?? 0)), h('td', null, fmt(r.dstall ?? 0))] : []),
           ...(i ? [h('td', null, fmt(r.imiss ?? 0)), h('td', null, fmt(r.istall ?? 0))] : []))))),
-      h('p', null, extra ? `${fmt(extra)} cycles beyond one per instruction over the ${c.runs.length} programs${d || i ? ', misses included' : ''}.`
+      h('p', null, extra > 0 ? `${fmt(extra)} cycles beyond one per instruction over the ${c.runs.length} programs${d || i ? ', misses included' : ''}.`
+        // a CPU that retires several a cycle
+        : extra < 0 ? `${fmt(-extra)} cycles fewer than one per instruction over the ${c.runs.length} programs: ${fmt(c.runs.reduce((a, r) => a + r.instructions, 0) / c.runs.reduce((a, r) => a + r.cycles, 0), 2)} instructions per cycle.`
         : 'One cycle per instruction: every instruction completes in the cycle it is fetched.')));
   }
 

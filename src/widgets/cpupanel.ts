@@ -10,7 +10,7 @@ import { analyzeTiming } from '../sim/timing';
 import { MC_FIELDS, MC_FSM_SPEC, MC_STATES, microword, multicycleCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu } from '../lib';
 import { fsmView } from './fsmpanel';
 import { assemble, type AsmResult } from '../riscv/asm';
-import { cacheLines, cpuState, retiring } from '../riscv/cosim';
+import { cacheLines, cpuState, retireCount, retiring } from '../riscv/cosim';
 import { ABI, decode, disasm } from '../riscv/isa';
 import { ISS, type ModelState } from '../riscv/iss';
 import { PROGRAMS } from '../riscv/programs';
@@ -229,11 +229,12 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
     const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title, body);
 
     // Golden model in lock-step: it executes one instruction whenever the hardware retires one
-    // (every cycle for the single-cycle CPU; when a valid instruction leaves W for the pipeline).
-    let willRetire = false;
+    // (every cycle for the single-cycle CPU; when a valid instruction leaves W for the pipeline;
+    // as many as retire, oldest first, for a CPU that retires several a cycle).
+    let willRetire = 0;
     stage.edgeHooks.add({
       before: () => {
-        willRetire = !!stage.sim && retiring(stage.sim);
+        willRetire = stage.sim ? retireCount(stage.sim) : 0;
         stallRun = stage.sim && cacheStall(stage.sim) ? stallRun + 1 : 0;
         if (opts.dcache && stage.sim) {
           const dm = stage.sim.design.root.children!.get('dm')!;
@@ -252,10 +253,12 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult }): ScenePanel {
       after: () => {
         if (willRetire) slowCtl.retired();
         if (!willRetire || iss.halted || !stage.sim) return;
-        const info = iss.step();
-        log.push({ cycle: stage.cycles, pc: info.pc, text: info.text, effect: stepEffect(info) });
-        if (log.length > LOG_MAX) log.shift();
-        logSeq++;
+        for (let k = 0; k < willRetire && !iss.halted; k++) {
+          const info = iss.step();
+          log.push({ cycle: stage.cycles, pc: info.pc, text: info.text, effect: stepEffect(info) });
+          if (log.length > LOG_MAX) log.shift();
+          logSeq++;
+        }
         if (!mismatch) {
           const x = cpuState(stage.sim).x;
           const diff = x.findIndex((v, i) => v !== iss.x[i]);

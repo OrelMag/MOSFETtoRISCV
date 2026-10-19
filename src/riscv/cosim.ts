@@ -57,12 +57,28 @@ export function clockCycle(sim: Pick<Sim, 'setInput' | 'settle'>): void {
 }
 
 /**
- * Does an instruction retire at the next edge? Pipelines: a valid instruction is in write-back.
- * CPUs with multi-cycle instructions: their retire output. Otherwise: every cycle.
+ * How many instructions retire at the next edge, oldest first? Pipelines: a valid instruction is in
+ * write-back (validW). CPUs with multi-cycle instructions: their 1-bit retire output. CPUs that retire
+ * several a cycle: a retire output of more bits, the count (an X bit counts as 0). Otherwise: one every cycle.
  */
-export function retiring(sim: Pick<Sim, 'getBits' | 'design'>, root: HierNode = sim.design.root): boolean {
+export function retireCount(sim: Pick<Sim, 'getBits' | 'design'>, root: HierNode = sim.design.root): number {
   const port = root.ports.validW ?? root.ports.retire;
-  return port ? sim.getBits(port)[0] === 1 : true;
+  if (!port) return 1;
+  const bits = sim.getBits(port);
+  let n = 0;
+  for (let i = bits.length - 1; i >= 0; i--) n = n * 2 + (bits[i] === 1 ? 1 : 0);
+  return n;
+}
+
+/** Does an instruction retire at the next edge? (retireCount > 0) */
+export function retiring(sim: Pick<Sim, 'getBits' | 'design'>, root: HierNode = sim.design.root): boolean {
+  return retireCount(sim, root) > 0;
+}
+
+/** The PC of the oldest instruction retiring at the next edge (pcW0, else pcW), or null for a CPU that has none. */
+export function retirePc(sim: Pick<Sim, 'getBits'>, root: HierNode): number | null {
+  const port = root.ports.pcW0 ?? root.ports.pcW;
+  return port ? pack(sim.getBits(port)) >>> 0 : null;
 }
 
 export interface CacheLine { way: number; set: number; valid: boolean; dirty: boolean; tag: number; base: number; words: number[] }
