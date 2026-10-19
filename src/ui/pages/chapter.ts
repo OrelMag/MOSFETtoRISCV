@@ -7,9 +7,12 @@ import { Inspector } from '../../view/inspector';
 import { Stage } from '../../view/stage';
 import { transistorLeaf } from '../../widgets/mosfet';
 import { h, icon } from '../dom';
+import { drillLanded, drillSegs, syncDrill } from '../drillpath';
+import { bindKeys } from '../keys';
 import { toggleChapterMenu } from '../quicknav';
 import { quizBox } from '../quiz';
 import { settings } from '../settings';
+import { reveal, StageNotes } from '../stagenotes';
 import { litLine, wireLooks } from './looks';
 
 export interface Page {
@@ -28,9 +31,16 @@ export class ChapterPage implements Page {
   private step = -1;
   /** Has the stage shown anything yet (a step without a scene keeps the last one, or borrows a neighbour's)? */
   private shown = false;
+  /** Is the stage showing a scene (not a widget)? Only a scene has a drill path in the hash. */
+  private sceneShown = false;
+  /** Following the address bar (a route): the stage's moves are not new history entries. */
+  private routing = false;
   private unlisten: (() => void)[] = [];
+  /** The step's challenge goal and "done" toasts over the canvas: the text panel's cards are often out of sight. */
+  private notes = new StageNotes();
+  private unbindKeys: () => void;
 
-  constructor(chapter: Chapter, step: number) {
+  constructor(chapter: Chapter, step: number, path?: string[]) {
     this.chapter = chapter;
     this.inspector = new Inspector();
     this.stage = new Stage(this.inspector);
@@ -39,8 +49,54 @@ export class ChapterPage implements Page {
     this.body = h('div', { class: 'narrative-body' });
     this.foot = h('div', { class: 'narrative-foot' });
     const narrative = h('aside', { class: 'narrative' }, this.head, this.body, this.foot);
-    this.el = h('div', { class: 'layout' }, narrative, this.stage.el, this.inspector.el);
-    this.goStep(step);
+    this.el = h('div', { class: 'layout' }, narrative, this.stage.el, this.inspector.el, this.notes.live);
+    this.stage.el.querySelector('.canvas')?.append(this.notes.el);
+    // Each level opened is a history entry (ui/drillpath.ts): #/c/<chapter>/<step>/<instance>/…
+    this.stage.onNavigate(() => {
+      if (this.sceneShown) syncDrill(this.hash(), this.routing);
+    });
+    // [ ] step, { } change chapter (ui/keys.ts): ] and [ press the foot's Next and Back, whatever they lead to
+    const press = (el: Element | null) => (el instanceof HTMLButtonElement || el instanceof HTMLAnchorElement ? el.click() : false);
+    const jump = (d: number) => {
+      const c = chapters[chapters.indexOf(this.chapter) + d];
+      if (!c) return false;
+      location.hash = `#/c/${c.id}/0`;
+    };
+    this.unbindKeys = bindKeys({
+      'step.next': () => press(this.foot.lastElementChild),
+      'step.prev': () => press(this.foot.firstElementChild),
+      'chapter.next': () => jump(1),
+      'chapter.prev': () => jump(-1),
+    });
+    this.goStep(step, path);
+  }
+
+  /** This step's address, with the part open on the stage unless it is the scene's opening view. */
+  private hash(): string {
+    const drill = this.sceneShown ? drillSegs(this.stage.targetPath, this.stage.target?.path ?? []) : '';
+    return `#/c/${this.chapter.id}/${this.step}${drill}`;
+  }
+
+  private clamp(i: number): number {
+    return Math.max(0, Math.min(this.recap >= 0 ? this.recap : this.chapter.steps.length - 1, i));
+  }
+
+  /** The route: step `i` and the drill path after it (undefined: the scene's opening view). */
+  route(i: number, path?: string[]): void {
+    if (drillLanded()) {
+      // our own step back (Up, a breadcrumb) arrived: the stage is there, or has moved on since
+      if (this.sceneShown) syncDrill(this.hash());
+      return;
+    }
+    if (this.clamp(i) !== this.step) return this.goStep(i, path);
+    if (!this.sceneShown) return;
+    this.routing = true;
+    try {
+      this.stage.openPath(path ?? this.stage.target?.path ?? []);
+    } finally {
+      this.routing = false;
+    }
+    syncDrill(this.hash(), true);
   }
 
   /** The recap's index (one past the last step), or -1 without one. */
@@ -48,44 +104,57 @@ export class ChapterPage implements Page {
     return recapIndex(this.chapter) ?? -1;
   }
 
-  goStep(i: number): void {
+  /** `path`: open the scene this deep (a drill path from the address bar), else at its opening view. */
+  goStep(i: number, path?: string[]): void {
     const steps = this.chapter.steps;
-    i = Math.max(0, Math.min(this.recap >= 0 ? this.recap : steps.length - 1, i));
+    i = this.clamp(i);
     if (i === this.step) return;
     this.step = i;
     this.unlisten.forEach((f) => f());
     this.unlisten = [];
+    this.notes.clear();
     if (i === this.recap) {
-      this.show(steps.length - 1);
+      this.show(steps.length - 1, path);
       this.renderHead();
       this.renderRecap();
     } else {
       settings.visit(this.chapter.id, i);
-      this.show(i);
+      this.show(i, path);
       this.renderHead();
       this.renderBody(steps[i]);
     }
     this.renderFoot();
     this.body.scrollTop = 0;
-    const want = `#/c/${this.chapter.id}/${i}`;
+    const want = this.hash();
     if (location.hash !== want) history.replaceState(null, '', want);
   }
 
   /** Put step i's scene or widget on the stage; a step without either keeps what is shown, or borrows the nearest earlier one's. */
-  private show(i: number): void {
+  private show(i: number, path?: string[]): void {
     const steps = this.chapter.steps;
     const has = (k: number) => !!(steps[k].scene || steps[k].widget);
     let k = i;
     if (!has(k)) {
-      if (this.shown) return;
+      if (this.shown) {
+        if (path && this.sceneShown) {
+          this.routing = true;
+          try {
+            this.stage.openPath(path);
+          } finally {
+            this.routing = false;
+          }
+        }
+        return;
+      }
       while (k > 0 && !has(k)) k--;
       if (!has(k)) k = steps.findIndex((s) => s.scene || s.widget);
       if (k < 0) return;
     }
     const st = steps[k];
-    if (st.scene) this.stage.load(st.scene());
+    if (st.scene) this.stage.load(st.scene(), path);
     else this.stage.showWidget(st.widget!());
     this.shown = true;
+    this.sceneShown = !!st.scene;
     this.el.classList.toggle('no-inspector', !st.scene);
   }
 
@@ -162,7 +231,11 @@ export class ChapterPage implements Page {
         builds.map((x) => h('a', { class: 'ch-chip', href: `#/c/${x.id}/0` }, `${chapterNo(x)} · ${x.title}`))) : null);
   }
 
-  /** A .try box with a condition (Step.tries) ticks itself once the condition holds on the stage, and stays ticked. */
+  /**
+   * A .try box with a condition (Step.tries) ticks itself once the condition holds on the stage, and stays ticked. A try
+   * is practice, not one of the chapter's checks (challenges and recap questions, chapters/checks.ts): its tick says so,
+   * in the quiet style, so it does not read as a solved check the counter missed.
+   */
   private wireTries(prose: HTMLElement, st: Step): void {
     if (!st.tries?.length) return;
     const boxes = [...prose.querySelectorAll<HTMLElement>('.try')];
@@ -172,12 +245,14 @@ export class ChapterPage implements Page {
       const key = `${this.chapter.id}:${this.step}:try${k}`;
       const tick = () => {
         box.classList.add('tried');
-        box.append(h('span', { class: 'try-done' }, icon('check', 13), 'Done'));
+        box.append(h('span', { class: 'try-done', title: 'Tries are practice on the circuit; the checks counted at the top are the Challenge and Question boxes' },
+          icon('check', 13), 'Tried it', h('small', null, ' · practice, not a check')));
       };
       if (settings.isSolved(key)) return tick();
       this.unlisten.push(this.stage.onChange(() => {
         if (box.classList.contains('tried') || !cond(this.stage)) return;
         settings.solve(key);
+        this.notes.tried(box.textContent ?? '');
         tick();
       }));
     });
@@ -219,10 +294,20 @@ export class ChapterPage implements Page {
     row.append(show);
     box.append(hints, row, ans);
     if (settings.isSolved(key)) markSolved();
+    // The goal over the canvas too; a click on it shows this card (and lands keyboard focus there).
+    box.tabIndex = -1;
+    this.notes.goal(ch.goal, box.classList.contains('solved'), () => {
+      reveal(box);
+      box.focus({ preventScroll: true });
+    });
     this.unlisten.push(this.stage.onChange(() => {
       if (box.classList.contains('solved') || !ch.check(this.stage)) return;
       markSolved();
       this.renderHead();
+      this.notes.solved();
+      // Where the text panel scrolls on its own (not on a phone, where it sits above the stage and moving it would
+      // move the circuit away), bring the card, now green, into view.
+      if (this.textScrolls()) reveal(box);
     }));
     return box;
   }
@@ -262,10 +347,25 @@ export class ChapterPage implements Page {
       ? h('button', { class: 'btn primary', onclick: () => this.goStep(this.step + 1) }, this.step + 1 === this.recap ? 'Recap' : 'Next', icon('chevR', 16))
       : next ? h('a', { class: 'btn primary', href: `#/c/${next.id}/0` }, next.title, icon('chevR', 16))
         : h('a', { class: 'btn primary', href: '#/' }, 'Back to the map');
+    // the key on each (hidden on touch screens and with single-key shortcuts off: app.css)
+    if (prevBtn instanceof HTMLButtonElement || prevBtn instanceof HTMLAnchorElement) {
+      prevBtn.setAttribute('aria-keyshortcuts', '[');
+      prevBtn.append(h('kbd', { class: 'kbd-hint', 'aria-hidden': 'true' }, '['));
+    }
+    nextBtn.setAttribute('aria-keyshortcuts', ']');
+    nextBtn.append(h('kbd', { class: 'kbd-hint', 'aria-hidden': 'true' }, ']'));
     this.foot.replaceChildren(prevBtn, h('span', { class: 'count' }, this.step === this.recap ? 'Recap' : `${this.step + 1} / ${n}`), nextBtn);
   }
 
+  /** Does the text panel scroll by itself (side by side with the stage), rather than with the page (a phone)? */
+  private textScrolls(): boolean {
+    const o = getComputedStyle(this.body).overflowY;
+    return (o === 'auto' || o === 'scroll') && this.body.scrollHeight > this.body.clientHeight;
+  }
+
   destroy(): void {
+    this.notes.clear();
+    this.unbindKeys();
     this.unlisten.forEach((f) => f());
     this.stage.destroy();
   }

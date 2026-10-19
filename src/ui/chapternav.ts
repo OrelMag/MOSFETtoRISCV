@@ -110,3 +110,142 @@ export function snippet(e: NavEntry, query: string, n = 90): string {
   const to = Math.min(e.text.length, from + n);
   return `${from > 0 ? '…' : ''}${e.text.slice(from, to).trim()}${to < e.text.length ? '…' : ''}`;
 }
+
+// ---- the home page's Continue and chapter cards ----------------------------------------------------
+
+/** The part of a chapter Continue reads. */
+export interface ResumeChapter { id: string; steps: readonly unknown[] }
+
+/**
+ * Where Continue goes: the step last viewed (`last`), or, once every step of that chapter has been seen, the next
+ * chapter in book order at its first unseen step (`next`). Without a record of the last view (progress saved before
+ * it was kept): the last chapter started, at its furthest step. Null for a new visitor.
+ */
+export function resumeTarget<C extends ResumeChapter>(chs: readonly C[], visited: (id: string) => readonly number[], last?: { chapter: string; step: number }): { chapter: C; step: number; next: boolean } | null {
+  let i = last ? chs.findIndex((c) => c.id === last.chapter) : -1;
+  let step = i >= 0 ? last!.step : 0;
+  if (i < 0) {
+    for (let k = chs.length - 1; k >= 0 && i < 0; k--) if (visited(chs[k].id).length) i = k;
+    if (i < 0) return null;
+    step = Math.max(0, ...visited(chs[i].id));
+  }
+  const cur = chs[i];
+  // the recap is one past the last step
+  if (step < 0 || step > cur.steps.length) step = 0;
+  const allSeen = (c: C) => { const v = visited(c.id); return c.steps.every((_, k) => v.includes(k)); };
+  const nxt = chs[i + 1];
+  if (allSeen(cur) && nxt) {
+    const v = visited(nxt.id);
+    const first = nxt.steps.findIndex((_, k) => !v.includes(k));
+    return { chapter: nxt, step: Math.max(0, first), next: true };
+  }
+  return { chapter: cur, step, next: false };
+}
+
+/**
+ * A chapter card's mark: 'done' (the full tick) once every step was seen and every check solved, 'seen' when the
+ * steps were all seen but checks remain, else none. `seen` is the fraction of steps visited.
+ */
+export function chapterMark(seen: number, checks: { done: number; total: number }): 'done' | 'seen' | null {
+  if (seen < 1) return null;
+  return checks.done >= checks.total ? 'done' : 'seen';
+}
+
+// ---- search items of every kind (the search box's sources: ui/searchsources.ts) ----------------
+
+export type NavKind = 'chapter' | 'step' | 'component' | 'level' | 'codex' | 'action';
+
+/** One row the search can show: a place (href) or something to do (run). */
+export interface NavItem {
+  kind: NavKind;
+  /** Unique within its kind (recent items are kept by kind and id). */
+  id: string;
+  title: string;
+  /** The small line under the title. */
+  sub: string;
+  /** Also matched like the title, a little lower: ids, aliases, the act or category. */
+  alt?: string;
+  /** Matched last, and shown as a snippet. */
+  text?: string;
+  href?: string;
+  run?: () => void;
+  /** Its own shortcut, shown on the right (key caps). */
+  keys?: string[];
+  /** Left column: a chapter's number. */
+  no?: string;
+  /** A campaign level not open yet, a codex entry not discovered: listed, marked, its brief only. */
+  locked?: boolean;
+  /** Shown on the right: solved, read … */
+  badge?: string;
+  /** A chapter or step: ranked exactly like the chapter list (wordScore). */
+  entry?: NavEntry;
+}
+
+interface Low { t: string; a: string; x: string }
+const lows = new WeakMap<NavItem, Low>();
+const low = (it: NavItem): Low => {
+  let l = lows.get(it);
+  if (!l) lows.set(it, l = { t: it.title.toLowerCase(), a: (it.alt ?? '').toLowerCase(), x: (it.text ?? '').toLowerCase() });
+  return l;
+};
+
+/** How well one query word matches an item (0: not at all). Chapters and steps keep their own score. */
+export function itemWordScore(it: NavItem, w: string): number {
+  if (it.entry) return wordScore(it.entry, w);
+  const l = low(it);
+  if (l.t === w) return 70;
+  if (l.t.startsWith(w)) return 60;
+  if (wordStart(l.t, w)) return 50;
+  if (l.a && (l.a === w || l.a.split(/[\s·,/]+/).includes(w))) return 45;
+  if (l.t.includes(w)) return 35;
+  if (l.a && wordStart(l.a, w)) return 25;
+  if (l.a.includes(w)) return 12;
+  if (wordStart(l.x, w)) return 10;
+  if (l.x.includes(w)) return 5;
+  return 0;
+}
+
+/** Items matching every word of the query, best first (ties in the given order); an empty query keeps them all. */
+export function rankItems<T extends NavItem>(items: readonly T[], query: string): { item: T; score: number }[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return items.map((item) => ({ item, score: 0 }));
+  const hits: { item: T; score: number; i: number }[] = [];
+  items.forEach((item, i) => {
+    let s = 0;
+    for (const w of words) {
+      const ws = itemWordScore(item, w);
+      if (!ws) return;
+      s += ws;
+    }
+    hits.push({ item, score: s + (item.kind === 'chapter' ? 1 : 0) - (item.locked ? 2 : 0), i });
+  });
+  hits.sort((a, b) => b.score - a.score || a.i - b.i);
+  return hits.map(({ item, score }) => ({ item, score }));
+}
+
+/** The title cut into runs, `true` where a query word matches (at a word start where it can). */
+export function markRuns(title: string, query: string): [string, boolean][] {
+  const words = query.toLowerCase().split(/\s+/).filter((w) => w.length > 0 && !/^\d+$/.test(w));
+  const lt = title.toLowerCase();
+  const on = new Array<boolean>(title.length).fill(false);
+  for (const w of words) {
+    let at = -1;
+    for (let i = lt.indexOf(w); i >= 0; i = lt.indexOf(w, i + 1)) if (i === 0 || !/[\p{L}\p{N}]/u.test(lt[i - 1])) { at = i; break; }
+    if (at < 0) at = lt.indexOf(w);
+    if (at >= 0) on.fill(true, at, at + w.length);
+  }
+  const out: [string, boolean][] = [];
+  for (let i = 0; i < title.length; i++) {
+    const last = out[out.length - 1];
+    if (last && last[1] === on[i]) last[0] += title[i];
+    else out.push([title[i], on[i]]);
+  }
+  return out;
+}
+
+/** A snippet of the item's text around the first query word found in it. */
+export function itemSnippet(it: NavItem, query: string, n = 90): string {
+  if (it.entry) return snippet(it.entry, query, n);
+  const text = it.text ?? '';
+  return snippet({ text, lx: low(it).x } as NavEntry, query, n);
+}

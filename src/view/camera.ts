@@ -36,6 +36,12 @@ export function startFolded(canvasW: number, panelW: number): boolean {
  * no free rectangle is MIN_FIT_PX wide and MIN_FIT_H high.
  */
 export function freeRect(width: number, height: number, cover: Rect[], bw: number, bh: number, gap = COVER_GAP): Rect {
+  return freeArea(width, height, cover, bw, bh, gap) ?? { x: 0, y: 0, w: width, h: height };
+}
+
+/** freeRect's choice, or null when no rectangle clear of the covers is MIN_FIT_PX wide and MIN_FIT_H high (the
+ *  drawing would be fitted to the whole host, under the covers). */
+export function freeArea(width: number, height: number, cover: Rect[], bw: number, bh: number, gap = COVER_GAP): Rect | null {
   const host: Rect = { x: 0, y: 0, w: width, h: height };
   const boxes = cover.map((c) => {
     const x0 = Math.max(0, c.x - gap), y0 = Math.max(0, c.y - gap);
@@ -57,7 +63,17 @@ export function freeRect(width: number, height: number, cover: Rect[], bw: numbe
       if (!best || s > bestS * (1 + 1e-9) || (s >= bestS * (1 - 1e-9) && r.w * r.h > best.w * best.h)) { best = r; bestS = s; }
     }
   }
-  return best ?? host;
+  return best;
+}
+
+/**
+ * Does `bbox` (widened to `minW` as fitBox does) keep a place of its own on a `width` × `height` px host beside
+ * these covers? False when the fit would fall back to the whole host and the covers would hide part of it: the
+ * stage's how-to line gives way then (a short canvas: a small phone, a scene's panels).
+ */
+export function roomBeside(bbox: ViewBox, width: number, height: number, cover: Rect[], minW = 34): boolean {
+  if (!(width > 0 && height > 0)) return true;
+  return freeArea(width, height, cover, Math.max(bbox.w, minW), bbox.h) !== null;
 }
 
 /** A right overlay `insetRight` px wide (gap included) as a cover of a `width` × `height` host. */
@@ -90,6 +106,26 @@ export function underCover(vb: ViewBox, bbox: ViewBox, width: number, height: nu
   const s = width / vb.w;
   const r = { x: (bbox.x - vb.x) * s, y: (bbox.y - vb.y) * s, w: bbox.w * s, h: bbox.h * s };
   return cover.some((c) => overlaps(r, c));
+}
+
+/**
+ * On a touch screen the sandbox shows a small circuit at no fewer than this many px per grid unit: a NAND
+ * (4 units) 64 px wide, a pin's knob 26 px, inputs 2 units apart 32 px apart, so a finger can hit them.
+ */
+export const TOUCH_PX = 16;
+
+/**
+ * A fitted view box (`vb`, the host's aspect, `width` px wide) made touch-usable: when it shows fewer than
+ * `minPx` px per grid unit but at least `slack` of that (a small circuit, a little larger than the screen),
+ * it is zoomed in to `minPx` around `c` (the drawing's centre stays where the fit put it), and the rest of
+ * the circuit is a pan away. A large circuit (a CPU) keeps its fit: there Fit means "show me all of it".
+ */
+export function touchZoom(vb: ViewBox, width: number, c: Vec, minPx = TOUCH_PX, slack = 0.6): ViewBox {
+  if (!(width > 0 && vb.w > 0)) return vb;
+  const s = width / vb.w;
+  if (s >= minPx || s < minPx * slack) return vb;
+  const k = s / minPx;
+  return { x: c[0] - (c[0] - vb.x) * k, y: c[1] - (c[1] - vb.y) * k, w: vb.w * k, h: vb.h * k };
 }
 
 export class Camera {

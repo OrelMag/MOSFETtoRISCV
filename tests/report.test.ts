@@ -106,6 +106,7 @@ describe('problem reports', () => {
   });
 
   it('knows the site version', () => {
-    expect(siteVersion()).toMatch(/^\d+\.\d{3}\.\d{3} \(.+, \d{4}-\d{2}-\d{2}\)$/);
+    // the build number (commits on main) is padded to three digits, not cut: 1.000.1032 past a thousand
+    expect(siteVersion()).toMatch(/^\d+\.\d{3}\.\d{3,} \(.+, \d{4}-\d{2}-\d{2}\)$/);
   });
 });

@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { chapterById, chapters } from '../src/chapters';
 import { LADDER, ladderFocus } from '../src/widgets/journey';
-import { navEntries, plainText, searchNav, snippet, type NavChapter } from '../src/ui/chapternav';
+import { chapterMark, navEntries, plainText, resumeTarget, searchNav, snippet, type NavChapter } from '../src/ui/chapternav';
 
 const book: NavChapter[] = [
   { id: 'gates', num: 4, title: 'Logic gates', blurb: 'Everything from NAND.', level: 'Gates', steps: [
@@ -86,5 +86,49 @@ describe('the journey ladder', () => {
     expect(LADDER.at(-1)!.chapter).toBe(chapters.find((c) => c.num === 1 && !c.prologue && !c.appendix)!.id);
     expect(ladderFocus(() => false)).toBe(LADDER.length - 1);
     expect(LADDER[ladderFocus((id) => id === 'mosfet' || id === 'cpu' || id === 'alu')].chapter).toBe('cpu');
+  });
+});
+
+describe('Continue on the home page', () => {
+  const three = [
+    { id: 'a', steps: [1, 2, 3] },
+    { id: 'b', steps: [1, 2] },
+    { id: 'c', steps: [1] },
+  ];
+  const seen = (m: Record<string, number[]>) => (id: string) => m[id] ?? [];
+
+  it('is absent for a new visitor', () => {
+    expect(resumeTarget(three, seen({}))).toBeNull();
+  });
+
+  it('goes to the step last viewed, not to step 0', () => {
+    expect(resumeTarget(three, seen({ a: [0, 1] }), { chapter: 'a', step: 1 })).toEqual({ chapter: three[0], step: 1, next: false });
+    // the step last viewed, even when a later chapter was started before (Continue follows the learner, not book order)
+    expect(resumeTarget(three, seen({ a: [0], b: [0] }), { chapter: 'a', step: 0 })).toEqual({ chapter: three[0], step: 0, next: false });
+  });
+
+  it('offers the next chapter once every step of the last one has been seen', () => {
+    expect(resumeTarget(three, seen({ a: [0, 1, 2] }), { chapter: 'a', step: 2 })).toEqual({ chapter: three[1], step: 0, next: true });
+    // the next chapter partly seen: its first unseen step
+    expect(resumeTarget(three, seen({ a: [0, 1, 2], b: [0] }), { chapter: 'a', step: 1 })).toEqual({ chapter: three[1], step: 1, next: true });
+    // the last chapter of the book: stay on it
+    expect(resumeTarget(three, seen({ c: [0] }), { chapter: 'c', step: 0 })).toEqual({ chapter: three[2], step: 0, next: false });
+  });
+
+  it('falls back to the last started chapter and its furthest step without a record of the last view', () => {
+    expect(resumeTarget(three, seen({ a: [0], b: [1] }))).toEqual({ chapter: three[1], step: 1, next: false });
+    // a record naming a chapter that no longer exists, or a step past its end
+    expect(resumeTarget(three, seen({ a: [0] }), { chapter: 'gone', step: 4 })).toEqual({ chapter: three[0], step: 0, next: false });
+    expect(resumeTarget(three, seen({ b: [0] }), { chapter: 'b', step: 9 })).toEqual({ chapter: three[1], step: 0, next: false });
+  });
+});
+
+describe('a chapter card\'s mark', () => {
+  it('is the full tick only when every step was seen and every check done', () => {
+    expect(chapterMark(1, { done: 6, total: 6 })).toBe('done');
+    expect(chapterMark(1, { done: 0, total: 0 })).toBe('done');
+    expect(chapterMark(1, { done: 2, total: 6 })).toBe('seen');
+    expect(chapterMark(0.5, { done: 6, total: 6 })).toBeNull();
+    expect(chapterMark(0, { done: 0, total: 3 })).toBeNull();
   });
 });

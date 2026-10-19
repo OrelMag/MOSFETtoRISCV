@@ -13,6 +13,7 @@ import { memGridPanel } from '../../widgets/memgrid';
 import { transistorLeaf } from '../../widgets/mosfet';
 import { benchOpened, benchTabs } from '../benchtabs';
 import { h, icon } from '../dom';
+import { drillLanded, drillSegs, syncDrill } from '../drillpath';
 import type { Page } from './chapter';
 
 export class WorkbenchPage implements Page {
@@ -25,8 +26,10 @@ export class WorkbenchPage implements Page {
   /** On a phone the library is a drawer above the stage, closed until this button opens it (app.css). */
   private libBtn: HTMLButtonElement;
   private libName: HTMLElement;
+  /** Following the address bar (a route): the stage's moves are not new history entries. */
+  private routing = false;
 
-  constructor(id: string) {
+  constructor(id: string, path?: string[]) {
     const inspector = new Inspector();
     this.stage = new Stage(inspector);
     this.stage.leafFactory = transistorLeaf;
@@ -39,7 +42,25 @@ export class WorkbenchPage implements Page {
     this.libBtn = h('button', { class: 'btn sm bench-libbtn', 'aria-controls': 'bench-library', 'aria-expanded': 'false', title: 'Show or hide the component library',
       onclick: () => this.showLibrary(!this.el.classList.contains('lib-open')) }, icon('menu', 15), h('b', null, 'Components'), this.libName, icon('chevD', 14)) as HTMLButtonElement;
     this.el = h('div', { class: 'bench' }, this.libBtn, lib, this.stage.el, inspector.el);
-    this.open(id || 'rca4');
+    // Each level opened is a history entry (ui/drillpath.ts): #/workbench/<id>/<instance>/…
+    this.stage.onNavigate(() => {
+      if (this.current) syncDrill(this.hash(), this.routing);
+    });
+    this.open(id || 'rca4', path);
+  }
+
+  private hash(): string {
+    return `#/workbench/${this.current}${drillSegs(this.stage.targetPath)}`;
+  }
+
+  /** The route: `id` and the drill path after it (undefined: the top level). */
+  route(id: string, path?: string[]): void {
+    if (drillLanded()) {
+      // our own step back (Up, a breadcrumb) arrived: the stage is there, or has moved on since
+      syncDrill(this.hash());
+      return;
+    }
+    this.open(id, path, true);
   }
 
   private showLibrary(on: boolean): void {
@@ -47,10 +68,23 @@ export class WorkbenchPage implements Page {
     this.libBtn.setAttribute('aria-expanded', String(on));
   }
 
-  open(id: string): void {
+  /** `fromRoute`: following the address bar, so the stage's move corrects the entry rather than adding one. */
+  open(id: string, path?: string[], fromRoute = false): void {
     // A pick in the phone's drawer closes it, the circuit comes back into view.
     if (this.el?.classList.contains('lib-open')) this.showLibrary(false);
     const def = resolveComponent(id);
+    if (def && def.id === this.current && this.stage.target) {
+      // the part on the stage already: only the drill path moved (Back / Forward, a link, the Parts tab), or the
+      // library's pick of it again goes back to its top level
+      this.routing = fromRoute;
+      try {
+        this.stage.openPath(path ?? []);
+      } finally {
+        this.routing = false;
+      }
+      if (fromRoute) syncDrill(this.hash(), true);
+      return;
+    }
     if (!def) {
       // A stale or mistyped link: say so, offer the closest parts, and keep the library list to pick from.
       const near = suggestItems(id);
@@ -73,8 +107,9 @@ export class WorkbenchPage implements Page {
     const panels = /^ram\d/.test(def.id) ? [memGridPanel] : [];
     // the 6502's active-low lines start inactive (else the chip sits in reset)
     const inputs = def.id === 'm6502_core' ? { resb: 1, irqb: 1, nmib: 1 } : undefined;
-    this.stage.load({ root, panels, ...(inputs ? { inputs } : {}) });
-    const want = `#/workbench/${def.id}`;
+    this.stage.load({ root, panels, ...(inputs ? { inputs } : {}) }, path);
+    // a different part replaces the entry, as it always did (its drill entries behind are another part's)
+    const want = this.hash();
     if (location.hash !== want) history.replaceState(null, '', want);
     this.renderParams();
     this.renderList();
