@@ -221,6 +221,12 @@ export const chFastAdders: Chapter = {
         in levels in every model. Kogge–Stone's own price, n·log n cells and diagonals 2<sup>j</sup> rows long, is wiring.
         This model does not see wire length: a drawing's wires are not a layout's, and length is only real once a design is
         placed (<a href="#/c/silicon/0">chapter 27</a>).</p>
+        <p>The last two rows are loads every design has. A memory's row decoder is 7 NAND delays by unit delay and nearly
+        three times that under load: each address inverter feeds half the rows, and each word line three inputs per bit of
+        its word (the enable muxes). The clock is worse. Unit delay counts the NAND driving a 64-bit register's clock as one
+        delay; its 256 inputs make it, drawn with minimum-size gates, over three times slower than the whole 64-bit
+        Kogge–Stone. Real chips drive the clock through a buffer tree (about 6 units here) and balance its branches so
+        every flip-flop sees the edge at once.</p>
         <p>The Timing panels have the same <b>Unit / Load</b> switch, here and in the sandbox. The view menu's
         <b>Load-dependent delay</b> makes them open on Load. The other chapters quote unit delay.</p>`,
       widget: () => prefixDelays(),
