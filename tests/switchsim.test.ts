@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { GND, NAND, NMOS, NMOS_STRONG, NOR_CMOS, PMOS, PMOS_WEAK, SRAM_CELL, VDD } from '../src/lib';
 import { flatten } from '../src/sim/flatten';
-import { SwitchSim } from '../src/sim/switchsim';
+import { shortText, SwitchSim } from '../src/sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, type ComponentDef, type NetDef, netlistOf } from '../src/sim/types';
 
 const sw = (def: ComponentDef) => new SwitchSim(flatten(def, { mode: 'switch' }));
@@ -147,5 +147,65 @@ describe('SwitchSim: rails and inputs are terminals', () => {
     s.setInput('d', 0); s.setInput('g1', 1); s.setInputBit('g2', BX); s.setInput('e', 1); s.settle();
     expect(outBit(s, 'x')).toBe(B0); // d's other transistor (to y, which sees e = 1) does not reach x
     expect(outBit(s, 'y')).toBe(BX);
+  });
+});
+
+/** Pull-up and pull-down on separate inputs (a broken inverter): a = 0, b = 1 turns both on, a crowbar through y. */
+const CROWBAR: ComponentDef = {
+  id: 't_crowbar', name: 'crowbar', category: 'transistors',
+  ports: [{ name: 'a', width: 1, dir: 'in' }, { name: 'b', width: 1, dir: 'in' }, { name: 'y', width: 1, dir: 'out' }],
+  symbol: { kind: 'box', label: 'CB' },
+  netlist: () => ({
+    level: 'switch',
+    instances: [{ name: 'vdd', def: VDD }, { name: 'gnd', def: GND }, { name: 'p1', def: PMOS }, { name: 'n1', def: NMOS }],
+    nets: [
+      { name: 'a', ends: ['a', 'p1.g'] }, { name: 'b', ends: ['b', 'n1.g'] },
+      { name: 'vdd', ends: ['vdd.p', 'p1.s'] }, { name: 'gnd', ends: ['gnd.p', 'n1.s'] },
+      { name: 'y', ends: ['y', 'p1.d', 'n1.d'] },
+    ],
+  }),
+};
+
+const PASS_FIGHT: ComponentDef = {
+  id: 't_pass_fight', name: 'pass fight', category: 'transistors',
+  ports: [{ name: 'd', width: 1, dir: 'in' }, { name: 'g', width: 1, dir: 'in' }, { name: 'y', width: 1, dir: 'out' }],
+  symbol: { kind: 'box', label: 'PF' },
+  netlist: () => ({
+    level: 'switch',
+    instances: [{ name: 'gnd', def: GND }, { name: 'n2', def: NMOS }, { name: 'n1', def: NMOS }],
+    nets: [
+      { name: 'd', ends: ['d', 'n2.d'] }, { name: 'g', ends: ['g', 'n2.g', 'n1.g'] },
+      { name: 'gnd', ends: ['gnd.p', 'n1.s'] }, { name: 'y', ends: ['y', 'n2.s', 'n1.d'] },
+    ],
+  }),
+};
+
+describe('shorts', () => {
+  it('names the rails and the transistors between them', () => {
+    const s = sw(CROWBAR);
+    s.setInput('a', 0); s.setInput('b', 0); s.settle();
+    expect(s.hasShort).toBe(false);
+    expect(s.shorts()).toEqual([]);
+    s.setInput('b', 1); s.settle();
+    expect(s.hasShort).toBe(true);
+    const all = s.shorts();
+    expect(all).toHaveLength(1);
+    expect(all[0].nets).toEqual([s.design.root.ports.y[0]]);
+    expect(shortText(s, all[0])).toBe('VDD shorted to GND through p1, n1');
+  });
+  it('a driven input fighting a rail is named by its pin', () => {
+    // d passed onto y by n2 while n1 pulls y down: d = 1 against GND
+    const s = sw(PASS_FIGHT);
+    s.setInput('d', 1); s.setInput('g', 1); s.settle();
+    expect(s.shorts().map((x) => shortText(s, x))).toEqual(['d = 1 shorted to GND through n2, n1']);
+    s.setInput('d', 0); s.settle();
+    expect(s.hasShort).toBe(false);
+  });
+  it('a CMOS NAND never shorts', () => {
+    const s = sw(NAND);
+    for (const [a, b] of [[0, 0], [0, 1], [1, 0], [1, 1]]) {
+      s.setInput('a', a); s.setInput('b', b); s.settle();
+      expect(s.hasShort, `a=${a} b=${b}`).toBe(false);
+    }
   });
 });
