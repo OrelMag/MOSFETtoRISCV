@@ -212,8 +212,8 @@ export class TestPlayer {
       status,
       this.failed.length
         ? h('span', { class: 'sb-tp-fails' },
-          h('button', { class: 'btn ghost sm', title: 'The previous failing test', disabled: prevF === undefined, onclick: () => prevF !== undefined && this.jump(prevF) }, icon('chevL', 12), 'failure'),
-          h('button', { class: 'btn ghost sm', 'data-tp': 'nextfail', title: 'The next failing test', disabled: nextF === undefined, onclick: () => nextF !== undefined && this.jump(nextF) }, 'failure', icon('chevR', 12)),
+          h('button', { class: 'btn ghost sm', title: 'The previous failing test', disabled: prevF === undefined, onclick: () => prevF !== undefined && this.jump(prevF) }, icon('chevL', 12), 'previous failure'),
+          h('button', { class: 'btn ghost sm', 'data-tp': 'nextfail', title: 'The next failing test', disabled: nextF === undefined, onclick: () => nextF !== undefined && this.jump(nextF) }, 'next failure', icon('chevR', 12)),
           h('small', null, `${this.failed.length.toLocaleString()}${this.failed.length >= MAX_FAILED ? '+' : ''} failing`))
         : '');
     this.range.value = String(v.k);
