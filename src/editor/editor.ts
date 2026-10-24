@@ -678,7 +678,7 @@ export class Editor {
       if (!c) continue;
       const on = id === this.chipId;
       const tab = h('div', { class: `sb-tab${on ? ' on' : ''}`, role: 'tab', 'aria-selected': String(on), title: c.name, 'data-chip': id },
-        h('button', { class: 'sb-tab-name', onclick: () => this.openChip(id) }, icon('chip', 13), c.name, c.hdl ? h('span', { class: 'sb-tab-hdl', title: 'Drawn from Verilog' }, '.v') : null));
+        h('button', { class: 'sb-tab-name', title: c.name, onclick: () => this.openChip(id) }, icon('chip', 13), h('span', { class: 'sb-tab-label' }, c.name), c.hdl ? h('span', { class: 'sb-tab-hdl', title: 'Drawn from Verilog' }, '.v') : null));
       if (shown.length > 1 && id !== this.level?.chipId) tab.append(h('button', { class: 'sb-tab-x', title: `Close ${c.name}`, 'aria-label': `Close ${c.name}`, onclick: () => this.closeTab(id) }, icon('close', 12)));
       this.tabs.append(tab);
     }
@@ -692,12 +692,14 @@ export class Editor {
       sel.addEventListener('change', () => sel.value && this.openChip(sel.value));
       this.tabs.append(sel);
     }
-    this.tabs.append(h('button', { class: 'btn ghost sm sb-new', title: 'A new empty chip', onclick: () => this.newChip() }, icon('plus', 14), 'New chip'));
+    // New chip and its ▾ in one group that stays in view at the end of the tabs when they scroll (editor.css)
+    const grp = h('span', { class: 'sb-new-grp' }, h('button', { class: 'btn ghost sm sb-new', title: 'A new empty chip', onclick: () => this.newChip() }, icon('plus', 14), 'New chip'));
     if (newChipKinds.length) {
       const more: HTMLButtonElement = h('button', { class: 'btn ghost sm sb-new-more', title: 'Other kinds of new chip', 'aria-label': 'Other kinds of new chip', 'aria-haspopup': 'menu',
         onclick: () => this.newChipMenu(more) }, icon('chevD', 12));
-      this.tabs.append(more);
+      grp.append(more);
     }
+    this.tabs.append(grp);
   }
 
   /** New chip ▾: an empty chip or one of the registered kinds. */
@@ -791,7 +793,7 @@ export class Editor {
     let room = top.clientWidth - px(cs.paddingLeft) - px(cs.paddingRight);
     if (!matchMedia('(max-width: 1000px)').matches) {
       const gap = px(cs.columnGap);
-      const essential = [...this.tabs.children].filter((el) => el.matches('.sb-tab.on, .sb-open, .sb-new, .sb-trail')) as HTMLElement[];
+      const essential = [...this.tabs.children].filter((el) => el.matches('.sb-tab.on, .sb-open, .sb-new-grp, .sb-trail')) as HTMLElement[];
       const tabsGap = px(getComputedStyle(this.tabs).columnGap);
       const tabsNeed = essential.reduce((s, el) => s + el.offsetWidth, 0) + tabsGap * Math.max(0, essential.length - 1);
       const others = [this.partsBtn, this.slots.top].filter((el) => el.offsetWidth > 0);
