@@ -126,6 +126,9 @@ src/sim/       simulation core (no DOM)
                  carry, a settle the cycle engine refuses; the state handed over both ways; whyNot: why it is not on
                  the cycle engine now (tests/cyclesim*.test.ts, cyclekit.ts)
   switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes); `strength` levels:
+                 shorted / hasShort / shorts() (a crowbar: sure transistor paths to a 1 and a 0 source; per group the
+                 transistors to each source) and shortText ("VDD shorted to GND through p1, n1"): the views' `short`
+                 class (--wshort), the sandbox's diagnostics, the checks' failures;
                  rails/inputs > transistors (strength 4..2, ratioed logic) > resistors (prim 'res',
                  strength 1: pull-ups lose to any transistor; two opposing → X) > bias resistors (strength 0) > stored charge
                  (`cap` nets and prim 'cap' capacitors keep their value when undriven); charge levels (DRAM):

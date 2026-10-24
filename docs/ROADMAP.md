@@ -1037,12 +1037,15 @@ test player on the failing case, the campaign's pipeline / forwarding / hazard l
 links, bus taps, duplicate and pin reordering. The gaps:
 
 **CMOS realism** (at switch level, where bad habits form):
-- ⏳ Shorts named, not just X: a net where a path to VDD and a path to GND are both on (crowbar) drawn pulsing red /
-  orange, distinct from an X of unknown inputs; a floating net (Z) dashed. The solver already counts shorts
-  (switchsim); the view and the lint need the reason per net. Both themes, every wire palette
-- ⏳ Campaign transistor levels fail on a short with its own message ("row 3: VDD shorted to GND through …"), also where
-  the output happens to resolve, and on every input transition taken one bit at a time (the switch solver has no
-  time: a transition is the states between two vectors), so only complementary pull-up / pull-down networks pass
+- ✅ Shorts named, not just X: a net a 1 source and a 0 source both reach through transistors (a crowbar) is drawn in
+  its own colour (`--wshort`, every wire palette, both themes) and dash, pulsing unless motion is reduced, on the
+  stage and in the sandbox; a floating net (Z) stays dashed in `--wz`. SwitchSim.shorts() groups the shorted nets and
+  finds the transistors to each source, shortText says it ("VDD shorted to GND through p1, n1", an input by its pin);
+  the sandbox lists each short as a warning with its parts and wires marked, live with the inputs
+- ✅ Switch-level checks (the campaign's transistor, relay and tube levels, the sandbox challenges) fail on a short,
+  also where the output resolves ("a=1 → outputs right, but VDD shorted to GND through p1, n1"), and on the way between
+  two table rows, the inputs changed one bit at a time (stored charge remembers the order; relays skip the walk, which
+  would change the relay steps graded); every reference answer passes
 - ⏳ Weak levels (IEEE 1164 H / L): an nMOS passing a 1 or a pMOS passing a 0 drops a threshold; the net carries a weak
   level, drawn dimmed, and a gate input reading it is unreliable (X downstream) unless restored by an inverter or
   passed by a transmission gate. A new solver state (strength already exists: switchsim levels), so chapters 1–3's
