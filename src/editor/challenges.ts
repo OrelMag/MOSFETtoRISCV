@@ -9,7 +9,7 @@ import { flatten, type FlatDesign } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import type { Sim } from '../sim/sim';
 import { hasFeedback, logicDepth, stats } from '../sim/stats';
-import { SwitchSim } from '../sim/switchsim';
+import { shortText, SwitchSim } from '../sim/switchsim';
 import { analyzeTiming } from '../sim/timing';
 import { B0, B1, BZ, type Bit, type ComponentDef, isExternal, isSwitchPrim, netlistOf } from '../sim/types';
 import { ioInfo } from './ioparts';
@@ -431,27 +431,57 @@ function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], 
   // Relay steps: SwitchSim's time counts them (other simulators: no relays, no steps reported).
   const relays = sim instanceof SwitchSim && sim.hasRelays;
   let steps = 0;
-  const compare = (v: number[], got: Bit[][], row: number) => {
+  /** `short`: a short in this row or on the way to it (switch level), which fails it even with the outputs right. */
+  const compare = (v: number[], got: Bit[][], row: number, short?: string) => {
     const want = spec(v);
     const mask = care?.(v);
     const wrong = O.map((p, k) => (matches(got[k], want[k], mask?.[k]) ? null : `${p.name}=${fmtBits(got[k])}`));
-    if (wrong.every((w) => w === null)) return;
+    if (wrong.every((w) => w === null) && !short) return;
     bad++;
     if (failed.length < MAX_FAILED) failed.push(row);
     vector ??= Object.fromEntries(I.map((p, i) => [p.name, v[i]]));
     if (failures.length < SHOW) {
-      failures.push(`${fmtIns(I, v)} → ${wrong.filter(Boolean).join(' ')}, expected ${O.map((p, k) => (wrong[k] ? `${p.name}=${fmtNum(want[k], p.width)}` : '')).filter(Boolean).join(' ')}`);
+      const outs = wrong.some(Boolean)
+        ? `${wrong.filter(Boolean).join(' ')}, expected ${O.map((p, k) => (wrong[k] ? `${p.name}=${fmtNum(want[k], p.width)}` : '')).filter(Boolean).join(' ')}`
+        : 'outputs right';
+      failures.push(`${fmtIns(I, v)} → ${outs}${short ? `, but ${short}` : ''}`);
     }
+  };
+  // Switch level: a short (current from a 1 source to a 0 source) fails a row even where the stronger side wins, and
+  // so does one on the way from the row before, its inputs changed one bit at a time (stored charge remembers the
+  // order; only complementary pull-up / pull-down networks never short). Relays skip the walk: it would change the
+  // relay steps graded.
+  const sw = sim instanceof SwitchSim ? sim : null;
+  const walk = sw && !relays;
+  let last: number[] | null = null;
+  const shortNow = () => (sw?.hasShort ? shortText(sw, sw.shorts()[0]) : undefined);
+  const between = (from: number[], to: number[]): string | undefined => {
+    const cur = from.slice();
+    for (let i = 0; i < I.length; i++) {
+      for (let b = 0; b < I[i].width; b++) {
+        const bit = 2 ** b;
+        if (Math.floor(cur[i] / bit) % 2 === Math.floor(to[i] / bit) % 2) continue;
+        cur[i] += Math.floor(to[i] / bit) % 2 ? bit : -bit;
+        if (cur.every((x, k) => x === to[k])) return undefined; // the row itself: checked next
+        sim.setInput(I[i].name, cur[i]);
+        sim.settle();
+        const s = shortNow();
+        if (s) return `at ${fmtIns(I, cur)} on the way from ${fmtIns(I, from)}: ${s}`;
+      }
+    }
+    return undefined;
   };
   // The event-driven simulator sees X and Z (an unconnected output, a short); once the first
   // vectors pass, an acyclic NAND netlist is swept 32 vectors at a time.
   const slow = (v: number[], row: number) => {
+    const onTheWay = walk && last ? between(last, v) : undefined;
     I.forEach((p, i) => sim.setInput(p.name, v[i]));
     const t0 = sim.time;
     sim.settle();
     steps = Math.max(steps, sim.time - t0);
     if (sim.unstable) throw new Error(`it does not settle for ${fmtIns(I, v)} (it oscillates)`);
-    compare(v, O.map((p) => readBits(sim, p.name)), row);
+    compare(v, O.map((p) => readBits(sim, p.name)), row, shortNow() ?? onTheWay);
+    last = v;
   };
   const head = Math.min(vs.length, 64);
   for (let k = 0; k < head; k++) slow(vs[k], k);
@@ -495,12 +525,15 @@ function runSequence(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[
       const g = readBits(sim, p);
       return matches(g, want) ? [] : [[p, fmtBits(g), fmtNum(want, g.length)]];
     });
-    if (!wrong.length) return;
+    // switch level: a short at the end of a step fails it, outputs right or not (see runTable)
+    const short = sim instanceof SwitchSim && sim.hasShort ? shortText(sim, sim.shorts()[0]) : undefined;
+    if (!wrong.length && !short) return;
     bad++;
     if (failed.length < MAX_FAILED) failed.push(k);
     if (failures.length < SHOW) {
       const inputs = I.filter((p) => p.name !== clk || !st.tick).map((p) => `${p.name}=${fmtNum(vals[p.name], p.width)}`).join(' ');
-      failures.push(`step ${k + 1}: ${inputs}${st.tick ? ', clock edge' : ''} → ${wrong.map(([p, g]) => `${p}=${g}`).join(' ')}, expected ${wrong.map(([p, , w]) => `${p}=${w}`).join(' ')}`);
+      const outs = wrong.length ? `${wrong.map(([p, g]) => `${p}=${g}`).join(' ')}, expected ${wrong.map(([p, , w]) => `${p}=${w}`).join(' ')}` : 'outputs right';
+      failures.push(`step ${k + 1}: ${inputs}${st.tick ? ', clock edge' : ''} → ${outs}${short ? `, but ${short}` : ''}`);
     }
   });
   if (bad > failures.length) failures.push(`… ${bad - failures.length} more of ${check.steps.length} steps wrong`);

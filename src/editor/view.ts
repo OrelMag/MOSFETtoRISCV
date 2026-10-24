@@ -40,6 +40,9 @@ export interface ViewValues {
   labelBits(id: string): Bit[] | null;
   pinBits(name: string): Bit[] | null;
   conducting(part: string): number | undefined;
+  /** Switch level: the wire's / pointer's net carries a short. */
+  wireShorted(id: string): boolean;
+  labelShorted(id: string): boolean;
   /** The keys waiting in a keyboard part of this chip (null: not one). */
   keyboardQueue(part: string): number[] | null;
   /** The simulation itself (I/O part faces read their parts' state through it). */
@@ -637,7 +640,7 @@ export class EditorView {
         e.ants?.forEach((a) => setNetHue(a, hue));
       }
       const bits = v?.wireBits(e.doc.id);
-      const vcls = bits ? `wire ${valueClass(bits)}` : `wire${e.width > 1 ? ' bus' : ''} ed-dead`;
+      const vcls = bits ? `wire ${valueClass(bits)}${v!.wireShorted(e.doc.id) ? ' short' : ''}` : `wire${e.width > 1 ? ' bus' : ''} ed-dead`;
       this.paintWire(e, vcls);
       this.paintFlow(e, bits ?? null);
     }
@@ -673,11 +676,11 @@ export class EditorView {
     for (const e of this.labels.values()) {
       setNetHue(e.g, hues[built?.netOfLabel.get(e.doc.id) ?? -1]);
       const bits = v?.labelBits(e.doc.id);
-      const vc = bits ? valueClass(bits) : '';
+      const vc = bits ? `${valueClass(bits)}${v!.labelShorted(e.doc.id) ? ' short' : ''}` : '';
       if (vc !== e.cls) {
         e.cls = vc;
         e.stub.setAttribute('class', `wire ${vc}`);
-        e.g.classList.remove('v0', 'v1', 'vx', 'vz', 'bus', 'bus0', 'bus1');
+        e.g.classList.remove('v0', 'v1', 'vx', 'vz', 'bus', 'bus0', 'bus1', 'short');
         if (vc) e.g.classList.add(...vc.split(' '));
       }
     }
