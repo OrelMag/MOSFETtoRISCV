@@ -317,7 +317,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   display: flex; justify-content: space-between; align-items: center; gap: 8px;
   padding: 12px 22px; border-top: 1px solid var(--border);
 }
-.narrative-foot .count { font: 12px var(--font-mono); color: var(--muted); }
+.narrative-foot .count { font: 12px var(--font-mono); color: var(--muted); white-space: nowrap; flex: none; }
+/* a neighbouring chapter's title gives way (ellipsis) before the step count wraps */
+.narrative-foot .btn { min-width: 0; }
+.narrative-foot .btn .lbl { overflow: hidden; text-overflow: ellipsis; }
 
 /* challenge */
 .challenge {
@@ -473,6 +476,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none;
 }
 .stage-notes:empty { display: none; }
+/* a CPU panel holds the top right: the note goes under the level badge, clear of the panel */
+@media (min-width: 761px) { .canvas:has(> .cpu-panel:not(.collapsed)) > .stage-notes {
+  top: 44px; right: auto; left: 12px; align-items: flex-start; max-width: min(380px, calc(100% - 380px));
+} }
 .stage-goal {
   pointer-events: auto; display: flex; align-items: baseline; gap: 8px; max-width: 100%; text-align: left; cursor: pointer;
   font: 600 13px/1.35 var(--font-ui); color: var(--text); padding: 6px 10px; border-radius: 10px;

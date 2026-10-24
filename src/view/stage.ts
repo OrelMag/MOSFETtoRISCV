@@ -1152,6 +1152,8 @@ export class Stage {
     for (const el of this.controls.querySelectorAll<HTMLInputElement>('.in-num input')) {
       const p = this.scene!.root.ports.find((q) => q.name === el.dataset.port)!;
       if (document.activeElement !== el) el.value = formatNumber(this.getInput(p.name), p.width, settings.radix === 'bin' && p.width > 8 ? 'hex' : settings.radix);
+      // as wide as the value (monospace): a 32-bit word in hex no longer clips; 6 characters at least, as before
+      el.style.width = `calc(${Math.max(6, el.value.length)}ch + 18px)`;
     }
     if (this.backBtn) this.backBtn.disabled = !this.history.length;
     this.syncScope();

@@ -342,10 +342,10 @@ export class ChapterPage implements Page {
     const last = this.recap >= 0 ? this.recap : n - 1;
     const prevBtn = this.step > 0
       ? h('button', { class: 'btn', onclick: () => this.goStep(this.step - 1) }, icon('chevL', 16), 'Back')
-      : prev ? h('a', { class: 'btn', href: `#/c/${prev.id}/${recapIndex(prev) ?? prev.steps.length - 1}` }, icon('chevL', 16), prev.title) : h('span');
+      : prev ? h('a', { class: 'btn', title: prev.title, href: `#/c/${prev.id}/${recapIndex(prev) ?? prev.steps.length - 1}` }, icon('chevL', 16), h('span', { class: 'lbl' }, prev.title)) : h('span');
     const nextBtn = this.step < last
       ? h('button', { class: 'btn primary', onclick: () => this.goStep(this.step + 1) }, this.step + 1 === this.recap ? 'Recap' : 'Next', icon('chevR', 16))
-      : next ? h('a', { class: 'btn primary', href: `#/c/${next.id}/0` }, next.title, icon('chevR', 16))
+      : next ? h('a', { class: 'btn primary', title: next.title, href: `#/c/${next.id}/0` }, h('span', { class: 'lbl' }, next.title), icon('chevR', 16))
         : h('a', { class: 'btn primary', href: '#/' }, 'Back to the map');
     // the key on each (hidden on touch screens and with single-key shortcuts off: app.css)
     if (prevBtn instanceof HTMLButtonElement || prevBtn instanceof HTMLAnchorElement) {
