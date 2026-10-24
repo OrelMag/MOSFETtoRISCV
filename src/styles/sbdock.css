@@ -23,9 +23,12 @@
 .sb-dock-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .sb-dock-tabs:not([hidden]) + .sb-drawer, .sb-dock-tabs:not([hidden]) ~ .sb-drawer { border-top-left-radius: 0; }
 
-/* look inside stops at the dock (narrow screens: the dock covers it, as before) */
-.sb-overlay > .sb-inside { right: var(--dock-space, 0px); }
+/* Look inside stops at the dock while that leaves it --inside-min, else it covers the dock (above it) until closed:
+   a CPU drawer beside a 900 px canvas squeezed it into a 340 px strip with a cut breadcrumb. The clamp is a
+   switch: right = the dock's space when the room left is at least --inside-min, else 0. */
+.sb-overlay { --inside-min: 560px; }
+.sb-overlay > .sb-inside { right: clamp(0px, (100% - var(--dock-space, 0px) - var(--inside-min)) * 1000, var(--dock-space, 0px)); z-index: 6; }
 /* beside the circuit: 62 % of what the dock leaves, so neither the circuit nor the inside gets too narrow */
-.sb-overlay > .sb-inside:not(.wide) { left: calc((100% - var(--dock-space, 0px)) * 0.38); }
+.sb-overlay > .sb-inside:not(.wide) { left: max(0px, min((100% - var(--dock-space, 0px)) * 0.38, 100% - var(--dock-space, 0px) - var(--inside-min))); }
 @media (max-width: 900px) { .sb-overlay > .sb-inside, .sb-overlay > .sb-inside:not(.wide) { left: 0; right: 0; } }
 .sb-overlay > .sb-inside .sb-inside-bar { flex-wrap: wrap; row-gap: 4px; }
