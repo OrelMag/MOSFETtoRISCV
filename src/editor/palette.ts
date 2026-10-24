@@ -80,8 +80,8 @@ export interface PaletteCtx {
   ws: Workspace;
   chipId: string;
   canPlace(chip: string): boolean;
-  /** A campaign level screen: the level's own chip (EditorOptions.level). */
-  level?: string;
+  /** A campaign level screen: the level's own chip, and the walkthrough's chip while it is shown (EditorOptions.level). */
+  level?: readonly string[];
 }
 
 /**
@@ -89,8 +89,8 @@ export interface PaletteCtx {
  * default "Main", 0 → 0), the level's own chip (in the walkthrough it is not the open chip, so it was offered
  * inside the walkthrough's copy of itself) and the walkthrough's scratch chips.
  */
-export const levelHides = (c: ChipDoc, level: string): boolean =>
-  c.id === level || c.id.startsWith('u_walk_') || (!c.pins.length && !c.parts.length);
+export const levelHides = (c: ChipDoc, level: readonly string[]): boolean =>
+  level.includes(c.id) || c.id.startsWith('u_walk_') || (!c.pins.length && !c.parts.length);
 
 export interface PaletteGroup {
   id: string;

@@ -178,11 +178,14 @@ export class Editor {
 
   /** A campaign level screen: see EditorOptions.level. */
   readonly level: EditorOptions['level'];
+  /** The level's own chip: level.chipId names the walkthrough's chip while it is shown (levelwalk.ts). */
+  private readonly levelHome: string | undefined;
   /** The project this editor loads and saves. */
   readonly project: string;
 
   constructor(chipId?: string, opts: EditorOptions = {}) {
     this.level = opts.level;
+    this.levelHome = opts.level?.chipId;
     this.project = opts.project ?? (opts.level ? MAIN_PROJECT : readProjects().current);
     let ws = loadWorkspace(undefined, projectKey(this.project));
     if (!ws.open.length) ws = { ...ws, open: [Object.keys(ws.chips)[0]] };
@@ -215,7 +218,8 @@ export class Editor {
     this.sim.onChange = () => this.simChanged();
     this.sim.onHalt = () => this.halted();
 
-    this.palette = new PalettePanel(() => ({ ws: this.ws, chipId: this.chipId, canPlace: (c) => this.lib.canPlace(this.chipId, c), level: this.level?.chipId }), {
+    this.palette = new PalettePanel(() => ({ ws: this.ws, chipId: this.chipId, canPlace: (c) => this.lib.canPlace(this.chipId, c),
+      level: this.level ? [this.level.chipId, this.levelHome!] : undefined }), {
       pick: (item, e) => this.pickPart(item, e),
       arm: (item, key) => {
         this.tools.arm(item, key);
