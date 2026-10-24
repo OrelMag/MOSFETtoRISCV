@@ -31,7 +31,7 @@
 import { DualSim } from '../sim/dualsim';
 import { flatten } from '../sim/flatten';
 import type { PowerOnMode, Sim } from '../sim/sim';
-import { SwitchSim } from '../sim/switchsim';
+import { shortText, SwitchSim } from '../sim/switchsim';
 import { B1, type Bit, BZ, type ComponentDef, netlistOf } from '../sim/types';
 import { unpackBig } from '../sim/values';
 import type { HierNode } from '../sim/flatten';
@@ -130,7 +130,27 @@ export class EditorSim {
   /** The compile the simulator's net numbering belongs to (values are read through it). */
   built: Compiled | null = null;
   /** Why the chip cannot be simulated, when it cannot. */
-  diags: Diag[] = [];
+  private buildDiags: Diag[] = [];
+  /** Why it cannot be simulated, then the shorts of the present solution (switch level: they come and go with the inputs). */
+  get diags(): Diag[] {
+    return [...this.buildDiags, ...this.shortDiags()];
+  }
+  private shortDiags(): Diag[] {
+    const sim = this.sim, built = this.built;
+    if (!(sim instanceof SwitchSim) || !sim.hasShort || !built) return [];
+    const nets = sim.design.root.nets ?? [];
+    return sim.shorts().slice(0, 4).map((s) => {
+      const on = new Set(s.nets);
+      const roots = new Set(nets.flatMap((ns, i) => (ns.some((n) => on.has(n)) ? [i] : [])));
+      const parts = [...(s.hi?.via ?? []), ...(s.lo?.via ?? [])].map((li) => sim.design.leaves[li].node.path[0]);
+      return {
+        level: 'warn' as const,
+        msg: `short: ${shortText(sim, s)} (current flows rail to rail; the net reads X unless one side is stronger)`,
+        parts: [...new Set(parts)].filter(Boolean),
+        wires: [...built.netOfWire].filter(([, n]) => roots.has(n)).map(([id]) => id),
+      };
+    });
+  }
   mode: RunMode = 'cycle';
   running = false;
   hz = 10;
@@ -244,10 +264,10 @@ export class EditorSim {
       this.clocked = clocked;
       this.sim = sim;
       this.haltNets = haltNets(sim.design.root);
-      this.diags = [];
+      this.buildDiags = [];
     } catch (e) {
       const ds = checkSimulatable(c);
-      this.diags = ds.length ? ds : [{ level: 'error', msg: `cannot simulate: ${e instanceof Error ? e.message : String(e)}` }];
+      this.buildDiags = ds.length ? ds : [{ level: 'error', msg: `cannot simulate: ${e instanceof Error ? e.message : String(e)}` }];
       this.sim = null;
       this.haltNets = [];
       this.keyLeaves = [];
@@ -425,6 +445,18 @@ export class EditorSim {
   pinBits(name: string): Bit[] | null {
     const nets = this.sim?.design.root.ports[name];
     return nets ? this.sim!.getBits(nets) : null;
+  }
+  /** Switch level: is some bit of the net part of a short (a 1 source and a 0 source both reach it)? */
+  netShorted(i: number | undefined): boolean {
+    const sim = this.sim;
+    if (!(sim instanceof SwitchSim) || !sim.hasShort || i === undefined || i < 0) return false;
+    return sim.design.root.nets?.[i]?.some((n) => sim.shorted[n]) ?? false;
+  }
+  wireShorted(id: string): boolean {
+    return this.netShorted(this.built?.netOfWire.get(id));
+  }
+  labelShorted(id: string): boolean {
+    return this.netShorted(this.built?.netOfLabel.get(id));
   }
   /** Switch level: 1 conducting, 2 maybe (gate X), 0 off; undefined for anything else. */
   conducting(part: string): number | undefined {

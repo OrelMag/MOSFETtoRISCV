@@ -222,3 +222,18 @@ describe('starting and solving', () => {
     expect(importAnswer(ws, c).added).toEqual([]);
   });
 });
+
+describe('shorts fail a switch-level check', () => {
+  it('right outputs with current rail to rail: a pull-up always on, overpowered by a strong pull-down', () => {
+    const doc = chip('u_ch_t_inv', 'Inverter', {
+      pins: [pin('a', 'in', [0, 4]), pin('y', 'out', [24, 4])],
+      parts: [part('v', { lib: 'vdd' }, [10, -4]), part('p1', { lib: 'pmos' }, [10, 0]), part('n1', { lib: 'nmos_strong' }, [10, 6]),
+        part('g', { lib: 'gnd' }, [10, 12]), part('g2', { lib: 'gnd' }, [4, 0])],
+      wires: [wire('w1', 'pin:a', 'n1.g'), wire('w2', 'g2.p', 'p1.g'), wire('w3', 'v.p', 'p1.s'), wire('w4', 'g.p', 'n1.s'),
+        wire('w5', 'p1.d', 'pin:y'), wire('w6', 'n1.d', 'pin:y')],
+    });
+    const r = check(ch('t_inv'), doc);
+    expect(r.ok).toBe(false);
+    expect(r.failures).toEqual(['a=1 → outputs right, but VDD shorted to GND through p1, n1']);
+  });
+});
