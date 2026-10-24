@@ -68,6 +68,12 @@
 
 /* The strip under the canvas on the level screen. */
 .sb-chal-screen .sb-chal-head { padding: 7px 10px; gap: 12px; }
+/* A failed Check's result and the test player share the space under the canvas: the canvas keeps at least half the
+   height (a refit to a 230 px strip made the parts unreadable), the band under it scrolls, and with the player open
+   the result (its failures are the player's rows) takes a few lines. */
+.sb-levelmode .sb-mid { min-height: 50%; }
+.sb-levelmode .sb-bottom { min-height: 0; overflow-y: auto; }
+.sb-chal-screen:has(.sb-chal-tests) .sb-chal-body { max-height: 92px; }
 .sb-chal-sum { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; font: 12.5px var(--font-mono); color: var(--text-2); min-width: 0; }
 .sb-chal-sum.muted { font-family: var(--font-ui); color: var(--muted); }
 .sb-chal-sum .v { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-ui); }
