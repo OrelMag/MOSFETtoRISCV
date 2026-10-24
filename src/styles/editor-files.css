@@ -5,6 +5,8 @@
 .sb-menu {
   position: fixed; z-index: 50; min-width: 300px; display: grid; gap: 1px; padding: 6px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg);
+  /* max-height set where it is placed (ui/dom.ts placeMenu): a long menu scrolls inside the window */
+  max-width: calc(100vw - 16px); overflow-y: auto; overscroll-behavior: contain; align-content: start;
 }
 .sb-menu button {
   display: flex; align-items: flex-start; gap: 10px; text-align: left; border: 0; background: transparent; color: var(--text);

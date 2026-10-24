@@ -7,7 +7,7 @@
 import '../styles/memui.css';
 import { BANK_K, kWords, ramLeafState, ramWord } from '../lib/bigmem';
 import { B0, B1, BX } from '../sim/types';
-import { h, icon } from '../ui/dom';
+import { h, icon, placeMenu } from '../ui/dom';
 import { codeEditor } from '../widgets/codeedit';
 import type { CodeLang } from '../widgets/codetok';
 import { type Editor, registerToolbarAction } from './editor';
@@ -515,9 +515,9 @@ function examplesMenu(ed: Editor): void {
       ed.editWs((ws) => { const a = addExample(ws, ex); id = a.id; return a.ws; });
       ed.toast(`Loaded “${ed.ws.chips[id]?.name ?? ex.name}” (Ctrl+Z removes it)`);
     } }, h('b', null, ex.name), h('small', null, ex.blurb))));
-  const W = 320;
-  menu.style.left = `${Math.max(8, Math.min(r?.left ?? 8, innerWidth - W - 8))}px`;
-  menu.style.top = `${(r?.bottom ?? 48) + 6}px`;
+  // Wide enough for a title on one line; never wider than the window.
+  const W = Math.min(380, innerWidth - 16);
+  placeMenu(menu, { bottom: r?.bottom ?? 48 }, Math.max(8, Math.min(r?.left ?? 8, innerWidth - W - 8)));
   menu.style.width = `${W}px`;
   // A press outside closes it; the button's own click toggles it (run() above).
   const away = (e: Event) => { if (!menu.contains(e.target as Node) && !btn?.contains(e.target as Node)) close(); };

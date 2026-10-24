@@ -13,7 +13,7 @@ import type { Vec } from '../sim/geometry';
 import type { PowerOnMode } from '../sim/sim';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { describeBits } from '../sim/values';
-import { coarsePointer, h, hintBadge, icon } from '../ui/dom';
+import { coarsePointer, h, hintBadge, icon, placeMenu } from '../ui/dom';
 import { showKeySheet } from '../ui/keyhelp';
 import { settings } from '../ui/settings';
 import { closePopover } from '../view/popover';
@@ -713,8 +713,7 @@ export class Editor {
     menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { close(); anchor.focus(); } });
     this.el.append(menu);
     const r = anchor.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8))}px`;
-    menu.style.top = `${r.bottom + 6}px`;
+    placeMenu(menu, r, Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)));
     document.addEventListener('pointerdown', away, true);
     menu.querySelector('button')?.focus();
   }
@@ -817,8 +816,7 @@ export class Editor {
     this.fillMore();
     this.el.append(menu);
     const r = this.moreBtn.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(r.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8))}px`;
-    menu.style.top = `${r.bottom + 6}px`;
+    placeMenu(menu, r, Math.max(8, Math.min(r.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8)));
     this.moreBtn.setAttribute('aria-expanded', 'true');
     document.addEventListener('pointerdown', this.moreAway, true);
     document.addEventListener('keydown', this.moreKey, true);

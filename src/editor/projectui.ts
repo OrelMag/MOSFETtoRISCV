@@ -3,7 +3,7 @@
 // Import a file as a new project and Delete. Switching saves the current project and rebuilds the
 // editor on the other one (the page does that: ProjectHooks.switchTo).
 
-import { h, icon } from '../ui/dom';
+import { h, icon, placeMenu } from '../ui/dom';
 import type { Editor } from './editor';
 import { fileBase, workspaceFileName } from './files';
 import { dialog, glyph, MAX_FILE } from './fileui';
@@ -91,8 +91,7 @@ export function installProjects(ed: Editor, hooks: ProjectHooks): { destroy(): v
     ed.el.append(menu);
     btn.setAttribute('aria-expanded', 'true');
     const r = btn.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8))}px`;
-    menu.style.top = `${r.bottom + 6}px`;
+    placeMenu(menu, r, Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)));
     document.addEventListener('pointerdown', outside, true);
     document.addEventListener('keydown', key, true);
     menu.querySelector<HTMLElement>('button.cur, button')?.focus();
