@@ -736,7 +736,7 @@ with punch cards.
   - Done for the sandbox's ROMs (RV32 asm / hex, RV16, 4-bit CPU, custom ISAs: Save as deck / Load deck in the
     ROM properties and program editor, a .deck.json dropped on the canvas) and the chapters' CPU panel (cards/program.ts).
     Still to do: the campaign's RV16 programs
-- ⏳ A card-reader boot loader: a small sandbox example where the CPU starts from a boot ROM that reads cards from
+- ✅ A card-reader boot loader: a small sandbox example where the CPU starts from a boot ROM that reads cards from
   the reader part, word by word, into RAM and jumps to it, as IBM's machines loaded from cards (the 1401's Load
   key); the CPU drawer follows the loaded program like a ROM program, the golden model starting after the load
   - ✅ On chapter 37's bus computer: step "Booting from cards" (a card-reader slave AXI_CARDS at 0x7000_0000, the
@@ -1016,7 +1016,9 @@ unit, wires nothing). The fan-out capacitance per net is already computed for th
 - ✅ Where it changes the story: chapter 16's last step, "When fan-out costs": ripple, Brent–Kung and Sklansky (new to
   the library, lib/fastadd.ts prefixAdder) and Kogge–Stone, and a wide select, in unit, load and as-drawn delay.
   Unit delay ties Sklansky with Kogge–Stone; drawn without buffers the 64-bit Sklansky is the slowest of the three
-- ⏳ Still to show both numbers: a memory's row decoder, the clock net
+- ✅ Both numbers for the loads every design has: chapter 16's "When fan-out costs" table adds a 64-word memory's row decoder
+  (address to a word's flip-flops, the read tree left out: widgets/timing.ts rowDecoderDelays) and a register's clock net
+  (the one NAND driving every flip-flop's clock inputs, a buffer tree under load: clockNetDelays)
 - ⏳ Checked against silicon: per path, the load-weighted estimate against OpenSTA's after routing on the two sky130
   layouts (today one NAND delay is worth ≈157–171 ps there; a load model should narrow the spread path to path)
 - Wire length only where a design is placed (chapter 27's teaching placer, the OpenROAD runs), never from a
