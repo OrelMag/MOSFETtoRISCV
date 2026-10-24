@@ -94,6 +94,16 @@ export interface LibRule {
 /** The rule's kind, for badges and CSS ('lib' for a campaign rule). */
 export const ruleKind = (a: Allowed): 'transistors' | 'nand' | 'any' | 'lib' => (typeof a === 'string' ? a : 'lib');
 
+/**
+ * What a challenge's score line counts: transistors (act 0, and a switch-level level whose par is in transistors
+ * though its rule is the campaign's: m_sense), its own devices (a strict relay / tube rule), else NANDs and depth.
+ */
+export function scoreUnit(ch: BuildChallenge): 'transistors' | 'devices' | 'nand' {
+  if (typeof ch.allowed === 'object' && ch.allowed.strict) return 'devices';
+  const lim = ch.limits ?? {};
+  return ch.allowed === 'transistors' || (lim.maxTransistors !== undefined && lim.maxNand === undefined) ? 'transistors' : 'nand';
+}
+
 /** Does a library id match a rule's list (exact, or a `prefix*`)? */
 export function libAllowed(rule: LibRule, id: string): boolean {
   return rule.lib.some((g) => (g.endsWith('*') ? id.startsWith(g.slice(0, -1)) : g === id));
