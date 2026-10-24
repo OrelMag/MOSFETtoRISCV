@@ -178,7 +178,14 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
   .cp-panel { overflow: visible; }
   .cp-node-actions.sticky { bottom: 0; }
   .cp-map-scroll { max-height: 60vh; }
+  /* an entry open: the list above it folds to its button (campaign.ts browse), else the entry sat under every item */
+  .cp-codex.has-sel .cp-codex-list { padding: 8px 10px; }
+  .cp-codex.has-sel .cp-codex-list:not(.open) .cx-listbody { display: none; }
+  .cp-codex.has-sel .cx-browse { display: inline-flex; }
 }
+.cx-browse { display: none; align-items: center; gap: 6px; }
+.cp-codex-list.open .cx-browse svg:last-child { transform: rotate(180deg); }
+.cp-panel { scroll-margin-top: 8px; }
 /* A phone: the document scrolls, so .scroll must not be a scroller of its own (the action bar sticks to the screen). */
 @media (max-width: 760px) { .cp-page { overflow: visible; } }
 @media (max-width: 600px) {

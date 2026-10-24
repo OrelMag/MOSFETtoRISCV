@@ -56,7 +56,8 @@ export function testSet(ch: BuildChallenge): TestSet | null {
     let vals: Record<string, number> = Object.fromEntries(I.map((p) => [p.name, c.init?.[p.name] ?? 0]));
     const after = c.steps.map((st) => (vals = { ...vals, ...st.set }));
     return {
-      kind: 'sequence', n: c.steps.length, ports: ch.ports, inputs: I.filter((p) => p.name !== clock), outputs: O, clock,
+      // no clock pin (a level driven by its own strobes, m_sense): no clock, and no clock column in the player
+      kind: 'sequence', n: c.steps.length, ports: ch.ports, inputs: I.filter((p) => p.name !== clock), outputs: O, clock: I.some((p) => p.name === clock) ? clock : undefined,
       at: (k) => ({ inputs: after[k], expect: c.steps[k].expect, ...(c.steps[k].tick ? { tick: true } : {}) }),
     };
   }
@@ -200,7 +201,7 @@ export class TestReplay {
   private play(sim: Sim, k: number): boolean {
     const c = this.check;
     if (c.kind !== 'sequence') return false;
-    const clk = this.set.clock!;
+    const clk = this.set.clock ?? seqClock(this.set.ports);
     const ports = sim.design.root.def.ports;
     for (const p of ins(this.set.ports)) {
       if (!ports.some((q) => q.name === p.name && q.dir === 'in')) throw new Error(`the chip has no input pin '${p.name}'`);

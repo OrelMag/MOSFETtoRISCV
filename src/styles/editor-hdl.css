@@ -104,7 +104,7 @@
   /* stacked: the text above, the canvas below at its usual height */
   .sb-center:has(.hdl-pane:not([hidden])) { height: auto; }
   .sb-mid { flex-direction: column; }
-  .sb-mid > .sb-canvas { min-height: 60vh; }
+  .sb-mid:has(.hdl-pane:not([hidden])) > .sb-canvas { min-height: 60vh; }
   .hdl-pane { width: auto !important; max-width: none; height: 340px; border-right: 0; border-bottom: 1px solid var(--border); }
   .hdl-grip { display: none; }
   .hdl-banner { top: 6px; left: 6px; right: 6px; padding: 4px 6px; font-size: 12px; }

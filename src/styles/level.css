@@ -68,6 +68,12 @@
 
 /* The strip under the canvas on the level screen. */
 .sb-chal-screen .sb-chal-head { padding: 7px 10px; gap: 12px; }
+/* A failed Check's result and the test player share the space under the canvas: the canvas keeps at least half the
+   height (a refit to a 230 px strip made the parts unreadable), the band under it scrolls, and with the player open
+   the result (its failures are the player's rows) takes a few lines. */
+.sb-levelmode .sb-mid { min-height: 50%; }
+.sb-levelmode .sb-bottom { min-height: 0; overflow-y: auto; }
+.sb-chal-screen:has(.sb-chal-tests) .sb-chal-body { max-height: 92px; }
 .sb-chal-sum { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; font: 12.5px var(--font-mono); color: var(--text-2); min-width: 0; }
 .sb-chal-sum.muted { font-family: var(--font-ui); color: var(--muted); }
 .sb-chal-sum .v { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-ui); }
@@ -107,11 +113,28 @@
 .lv-unl a { color: var(--accent); }
 .lv-res-act { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 
+/* A phone or a narrow window: one screen high, the brief above the editor folded to its tabs (level.ts folded), the
+   editor taking the rest, so the canvas and Check are on screen without scrolling. */
 @media (max-width: 900px) {
-  .lv-page { height: auto; }
-  .lv-body { grid-template-columns: 1fr; }
-  .lv-side { border-right: 0; border-bottom: 1px solid var(--border); max-height: 45vh; }
-  .lv-ed { height: 80vh; }
+  .lv-page { height: calc(100dvh - var(--topbar-h)); }
+  .lv-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .lv-side { border-right: 0; border-bottom: 1px solid var(--border); max-height: 42dvh; }
+  .lv-side.folded .lv-sidebody { display: none; }
+  .lv-side.folded .lv-tabs { border-bottom: 0; }
+  .lv-tabs { padding-top: 2px; overflow-x: auto; scrollbar-width: none; }
+  .lv-tabs button { flex: none; }
+  .lv-bar { padding: 4px 10px; min-height: 0; gap: 6px 8px; }
+  .lv-ed { height: auto; min-height: 0; }
+  .sandbox.sb-levelmode { height: 100%; }
+}
+@media (max-width: 760px) {
+  .sandbox.sb-levelmode > .sb-center { height: auto; flex: 1 1 0; min-height: 200px; }
+  .sandbox.sb-levelmode > .sb-palette { max-height: 38dvh; }
+  /* a core level's pins fill a screen: the I/O bar scrolls inside its own band, the canvas keeps a usable height */
+  .sb-levelmode .sb-mid { min-height: 170px; }
+  .sb-levelmode .sb-iobar { max-height: 20dvh; overflow-y: auto; }
+  .sb-levelmode .sb-chal-sum.muted { display: none; }
+  .sb-levelmode .sb-controls { row-gap: 4px; padding-top: 4px; padding-bottom: 4px; }
 }
 
 /* The full codex entry (campaign/ui/codexentry.ts), on the campaign page. */
