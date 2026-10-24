@@ -81,6 +81,12 @@ export class Inspector {
     this.target = null;
   }
 
+  /** Forget the target and empty the panel (nothing on the stage to describe: an unknown workbench id). */
+  reset(): void {
+    this.target = null;
+    this.render();
+  }
+
   /** Cheap refresh of live values (called on every simulation change). */
   update(): void {
     if (this.tab === 'info' || this.tab === 'truth') this.render();

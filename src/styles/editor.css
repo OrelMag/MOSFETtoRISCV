@@ -85,6 +85,10 @@
 .sb-tab.on { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
 .sb-tab button { border: 0; background: transparent; cursor: pointer; color: inherit; }
 .sb-tab-name { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* a long name ends in an ellipsis before the close button (the text node of a flex button cannot) */
+.sb-tab-name { min-width: 0; }
+.sb-tab-name > svg, .sb-tab-x { flex: none; }
+.sb-tab-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .sb-tab-x { padding: 4px 6px 4px 0; opacity: 0.6; }
 .sb-tab-x:hover { opacity: 1; }
 .sb-open, .sb-controls select, .sb-props select, .sb-props input, .sb-props textarea {
@@ -92,6 +96,8 @@
   background: var(--surface); color: var(--text);
 }
 .sb-new { flex: none; }
+/* New chip ▾ stays in view at the end of the tabs when they scroll (it was cut under the autosave indicator) */
+.sb-new-grp { display: inline-flex; align-items: center; flex: none; position: sticky; right: 0; z-index: 1; background: var(--surface); }
 .sb-actions { display: flex; align-items: center; gap: 2px; flex: none; }
 /* never shrink: a touch screen's .btn min-width (40 px) replaces the automatic one, so a labelled button squeezed to
    40 px drew its label over the next; fitActions moves what does not fit into More instead */
@@ -426,6 +432,8 @@
   /* a vertical swipe scrolls the drawer (a drag would have to go down into the canvas anyway): a tap arms a part */
   .sb-item { touch-action: pan-y; }
   .sb-center { height: 70vh; }
+  /* the run bar wraps to two rows here: it keeps them, the canvas takes what is left */
+  .sb-center > .sb-controls { flex: none; }
   .sb-props { border-left: 0; border-top: 1px solid var(--border); }
 }
 

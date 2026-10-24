@@ -94,7 +94,8 @@ export class BenchmarksPage implements Page {
     this.chartHead.replaceChildren(h('h2', null, e ? 'Speed against energy' : 'Speed against cost'),
       h('p', null, `Mean time of the four RV32I programs (geometric mean) against ${e ? `their mean energy at ${VDD} V` : 'NAND gates'}. Down and left is better; the dashed line joins the CPUs no other beats on both.`),
       h('div', { class: 'bm-legend' }, h('span', { class: 'hw-chips' }, xChip('nands', 'Cost'), xChip('energy', 'Energy')),
-        ...FAMILIES.map((f) => h('span', null, h('i', { class: `bm-fam ${f.key}` }), f.label)), h('span', null, h('i', { class: 'bm-dash' }), 'best trade-off')));
+        ...FAMILIES.map((f) => h('span', null, h('i', { class: `bm-fam ${f.key}` }), f.label)), h('span', null, h('i', { class: 'bm-dash' }), 'best trade-off'),
+        h('span', { title: 'Main memory is a DRAM chip outside the CPU, so its NANDs and energy are not counted' }, h('i', { class: 'bm-fam off' }), 'memory off chip (DRAM not counted)')));
     this.tip.hidden = true;
     this.chartBox.replaceChildren(this.chart(), this.tip);
   }
@@ -106,7 +107,9 @@ export class BenchmarksPage implements Page {
     const xOf = (c: BenchCpu) => (e ? meanOf(c, 'energy') : c.nands / 1e3);
     const xs = cpus.map(xOf), ys = cpus.map((c) => meanOf(c, 'time'));
     const step = e ? niceStep((Math.max(...xs) - Math.min(...xs)) / 6) : 20;
-    const x0 = Math.floor(Math.min(...xs) / step) * step, x1 = Math.ceil(Math.max(...xs) / step) * step, y1 = Math.ceil(Math.max(...ys) / 5) * 5;
+    // a step of room on the left when the cheapest dot would sit on the y axis (the DRAM CPUs, ~42k NANDs)
+    const lo = Math.floor(Math.min(...xs) / step) * step;
+    const x0 = Math.min(...xs) - lo < step / 2 && lo - step >= 0 ? lo - step : lo, x1 = Math.ceil(Math.max(...xs) / step) * step, y1 = Math.ceil(Math.max(...ys) / 5) * 5;
     const X = (v: number) => L + ((v - x0) / (x1 - x0)) * (W - L - R), Y = (v: number) => T + (1 - v / y1) * (H - T - B);
     const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `Mean time per program against ${e ? 'mean energy' : 'NAND gates'}, one dot per CPU` });
     for (let v = x0; v <= x1 + step / 2; v += step) svg.append(s('line', { class: 'bm-grid', x1: X(v), x2: X(v), y1: T, y2: H - B }), s('text', { x: X(v), y: H - B + 16, 'text-anchor': 'middle' }, e ? fmt(v) : `${v}k`));
@@ -122,7 +125,21 @@ export class BenchmarksPage implements Page {
       hit.addEventListener('pointerleave', () => { this.tip.hidden = true; });
       svg.append(s('circle', { class: `bm-dot ${familyOf(c.id)}${c.offChip ? ' off' : ''}`, cx, cy, r: 6 }), hit);
     }
-    for (const c of fr) svg.append(s('text', { class: 'bm-lab', x: X(xOf(c)) + 10, y: Y(meanOf(c, 'time')) - 9 }, c.id));
+    // Each front label takes the first corner around its dot that covers no other dot and no earlier label.
+    const dots = cpus.map((c) => [X(xOf(c)), Y(meanOf(c, 'time'))] as const);
+    const taken: [number, number, number, number][] = [];
+    const hits = (b: [number, number, number, number]) =>
+      dots.some(([x, y]) => x + 7 > b[0] && x - 7 < b[2] && y + 7 > b[1] && y - 7 < b[3])
+      || taken.some((t) => t[0] < b[2] && t[2] > b[0] && t[1] < b[3] && t[3] > b[1]);
+    for (const c of fr) {
+      const [x, y] = [X(xOf(c)), Y(meanOf(c, 'time'))], w = c.id.length * 6.6, hgt = 12;
+      // the text's left / baseline for: above right, below right, above left, below left
+      const spots: [number, number][] = [[x + 10, y - 9], [x + 10, y + 19], [x - 10 - w, y - 9], [x - 10 - w, y + 19]];
+      const box = ([lx, by]: [number, number]): [number, number, number, number] => [lx, by - hgt + 2, lx + w, by + 2];
+      const at = spots.find((p) => !hits(box(p))) ?? spots[0];
+      taken.push(box(at));
+      svg.append(s('text', { class: 'bm-lab', x: at[0], y: at[1] }, c.id));
+    }
     return svg;
   }
 

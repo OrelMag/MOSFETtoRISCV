@@ -294,7 +294,7 @@ export class HwStatsPage implements Page {
           cell ? h('span', { class: 'hw-mhz hw-tval' }, `${fmtVolume(cell.n * (t === 'relay' ? RELAY_VOLUME : TUBE_VOLUME))}`) : null)];
     return h('tr', { class: member ? 'hw-member' : null },
       h('td', { class: 'hw-name' }, member ? null : h('span', { class: 'hw-chev-space' }), name,
-        r.cpu ? h('span', { class: 'hw-tag' }, 'chapter CPU') : h('code', null, r.id)),
+        r.cpu ? h('span', { class: 'hw-tag' }, 'chapter CPU') : h('code', { title: r.id }, r.id)),
       h('td', { class: 'hw-cat' }, dot(r.cat), CATEGORY_LABEL[r.cat]),
       ...tail);
   }

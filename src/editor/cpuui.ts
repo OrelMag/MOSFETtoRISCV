@@ -186,6 +186,7 @@ class CpuPanel {
       h('div', { class: 'io-row' }, h('div', null, h('div', { class: 'cpu-sec' }, 'LEDs'), this.leds), h('div', null, h('div', { class: 'cpu-sec' }, 'Switches'), this.sw)),
       h('div', { class: 'sb-cpu-irq' }, irq), h('div', { class: 'cpu-sec' }, 'Machine-mode CSRs'), this.csrs);
     this.none = h('div', { class: 'sb-cpu-none' });
+    this.oooSec.hidden = this.oooV.el.hidden = true; // until an out-of-order core is found (renderOoo)
     this.body = h('div', { class: 'sb-cpu-body' },
       h('div', { class: 'sb-btns sb-cpu-btns' }, this.runBtn, this.stepBtn, this.slowBtn, this.rateSel, reset),
       this.status, this.gaps, this.now,
@@ -483,6 +484,8 @@ class CpuPanel {
     this.renderButtons(mon);
     this.progHint.textContent = mon instanceof M6502Monitor ? 'at the CPU addresses the ROM answers at' : 'click a line: the parts it uses';
     this.regsSec.hidden = this.regs.hidden = false; // a custom table's view hides them
+    // Only an RV32 monitor on an out-of-order core shows it (renderOoo): never the 4-bit CPU, the 6502, RV16, lanes.
+    this.oooSec.hidden = this.oooV.el.hidden = true;
     if (mon instanceof MultiMonitor) return this.renderMulti(mon);
     if (mon instanceof Rv16Monitor) return this.renderRv16(mon);
     if (mon instanceof LaneMonitor) return this.renderLanes(mon);
