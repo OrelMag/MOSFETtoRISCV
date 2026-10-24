@@ -175,6 +175,70 @@ export class SwitchSim implements Sim {
     this.dirty = true;
   }
 
+  /** Is some net part of a short in the last solution? */
+  get hasShort(): boolean {
+    return this.shorted.includes(1);
+  }
+
+  /**
+   * The shorts of the last solution, one per group of shorted nets joined by conducting elements: for each, the
+   * nearest 1 source and 0 source (rails or driven inputs) and the conducting leaves on the way, nearest the source
+   * first. Computed on demand (a view or a check asks only when `hasShort`).
+   */
+  shorts(): Short[] {
+    if (!this.hasShort) return [];
+    const n = this.design.netCount, leaves = this.design.leaves;
+    const src = new Int8Array(n).fill(-1);
+    for (const l of leaves) {
+      if (l.kind === 'vdd') src[l.terminals![0]] = B1;
+      else if (l.kind === 'gnd') src[l.terminals![0]] = B0;
+    }
+    for (const [port, v] of this.inputs) {
+      const bits = this.inputBits(port, v);
+      this.inputNets.get(port)!.forEach((net, i) => { if (bits[i] === B0 || bits[i] === B1) src[net] = bits[i]; });
+    }
+    // the elements conducting now, as edges between nets (a relay: the contact its armature closes on each pole)
+    const adj: [number, number][][] = Array.from({ length: n }, () => []);
+    const edge = (a: number, b: number, li: number) => { adj[a].push([b, li]); adj[b].push([a, li]); };
+    leaves.forEach((l, li) => {
+      const t = l.terminals, c = this.conducting[li];
+      if (!t) return;
+      if ((l.kind === 'nmos' || l.kind === 'pmos' || l.kind === 'fgmos') && c === 1) edge(t[1], t[2], li);
+      // a relay: operated (1) closes c–no, released (0) c–nc
+      else if (l.kind === 'relay' && c !== 2) for (let p = 2; p + 2 < t.length; p += 3) edge(t[p], t[p + (c === 1 ? 1 : 2)], li);
+    });
+    const seen = new Uint8Array(n);
+    const out: Short[] = [];
+    for (let s0 = 0; s0 < n; s0++) {
+      if (!this.shorted[s0] || seen[s0]) continue;
+      // the group: shorted nets reachable without passing through a source
+      const group: number[] = [s0];
+      seen[s0] = 1;
+      for (let k = 0; k < group.length; k++) {
+        for (const [m] of adj[group[k]]) if (!seen[m] && src[m] < 0 && this.shorted[m]) { seen[m] = 1; group.push(m); }
+      }
+      // breadth first from the whole group to the nearest source of each value
+      const from = new Map<number, [number, number]>(group.map((g) => [g, [-1, -1]]));
+      const found: (number | undefined)[] = [undefined, undefined];
+      for (let q = [...group], k = 0; k < q.length && (found[0] === undefined || found[1] === undefined); k++) {
+        for (const [m, li] of adj[q[k]]) {
+          if (from.has(m)) continue;
+          from.set(m, [q[k], li]);
+          if (src[m] >= 0) found[src[m]] ??= m;
+          else q.push(m);
+        }
+      }
+      const pathTo = (end: number | undefined): ShortSide | null => {
+        if (end === undefined) return null;
+        const via: number[] = [];
+        for (let at = end; from.get(at)![1] >= 0; at = from.get(at)![0]) via.push(from.get(at)![1]);
+        return { source: end, via };
+      };
+      out.push({ nets: group, hi: pathTo(found[1]), lo: pathTo(found[0]) });
+    }
+    return out;
+  }
+
   /** Does the design have relays (then time counts relay steps)? */
   get hasRelays(): boolean {
     return this.relays.length > 0;
@@ -742,6 +806,28 @@ export class SwitchSim implements Sim {
 function decide(a: number, b: number, offset: number): number {
   if (!Number.isFinite(a) || !Number.isFinite(b) || Math.abs(a - b) < offset) return BX;
   return a > b ? B1 : B0;
+}
+
+/** One side of a short: the source it reaches (a net) and the conducting leaves from it to the shorted nets. */
+export interface ShortSide { source: number; via: number[] }
+/** A group of shorted nets and its two sides (null: not found among transistors, e.g. through a behaviour). */
+export interface Short { nets: number[]; hi: ShortSide | null; lo: ShortSide | null }
+
+/** A short in words: `VDD shorted to GND through p1, n1` (sources by rail or input pin, leaves by instance path). */
+export function shortText(sim: SwitchSim, s: Short): string {
+  const d = sim.design;
+  const srcName = (side: ShortSide | null, v: Bit): string => {
+    if (!side) return v === B1 ? 'a 1' : 'a 0';
+    for (const l of d.leaves) if ((l.kind === 'vdd' || l.kind === 'gnd') && l.terminals![0] === side.source) return l.kind === 'vdd' ? 'VDD' : 'GND';
+    for (const p of d.root.def.ports) {
+      const i = d.root.ports[p.name]?.indexOf(side.source) ?? -1;
+      if (i >= 0) return `${p.name}${p.width > 1 ? `[${i}]` : ''} = ${v === B1 ? 1 : 0}`;
+    }
+    return v === B1 ? 'a 1' : 'a 0';
+  };
+  const name = (li: number) => d.leaves[li].node.path.join('.') || d.leaves[li].node.name;
+  const via = [...(s.hi?.via ?? []).map(name), ...(s.lo?.via ?? []).map(name).reverse()];
+  return `${srcName(s.hi, B1)} shorted to ${srcName(s.lo, B0)}${via.length ? ` through ${[...new Set(via)].join(', ')}` : ''}`;
 }
 
 /** Solver levels (see the header): sources, the weakest transistor, stored charge. */

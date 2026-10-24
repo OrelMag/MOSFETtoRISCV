@@ -389,6 +389,8 @@ export class SchematicView {
     ctx.sync();
     const flow = this.flowMs > 0 && !reducedMotion();
     const lvSim = ctx.sim instanceof SwitchSim && ctx.sim.hasLevels ? ctx.sim : null;
+    // a crowbar: current from a 1 source to a 0 source through this net (its own look, not just X)
+    const shorts = ctx.sim instanceof SwitchSim && ctx.sim.hasShort ? ctx.sim.shorted : null;
     for (const w of this.wires) {
       const bits = ctx.netBits(w.net.index);
       let vcls = w.net.width > 1 ? busClass(bits) : bitClass(bits[0]);
@@ -403,6 +405,7 @@ export class SchematicView {
         }
         this.paintLevel(w, mid || (net !== undefined && lvSim.design.caps.has(net)) ? l : NaN);
       }
+      if (shorts && ctx.node.nets?.[w.net.index]?.some((n) => shorts[n])) vcls += ' short';
       if (vcls !== w.shown) {
         if (flow && w.shown !== undefined && w.paths.length) this.flowWire(w, vcls);
         else this.paintWire(w, vcls);

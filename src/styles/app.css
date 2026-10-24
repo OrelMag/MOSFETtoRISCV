@@ -777,6 +777,12 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .wire.v1 { stroke: var(--w1); stroke-width: calc(var(--wire-w1) * var(--wire-k, 1)); stroke-dasharray: none; filter: var(--wire-glow); }
 .wire.vx { stroke: var(--wx); stroke-dasharray: var(--wire-dash-x); }
 .wire.vz { stroke: var(--wz); stroke-dasharray: 0.25 0.35; }
+/* A short (switch level): a 1 source and a 0 source both reach the net, current flows rail to rail. Its own colour
+   and dash (long, dot: the print palette has no colour to spare), pulsing; not the X of unknown inputs. */
+.wire.short, .wire.bus.short { stroke: var(--wshort); stroke-width: calc(var(--wire-w1) * var(--wire-k, 1) * 1.3); stroke-dasharray: 0.9 0.3 0.15 0.3; opacity: 1; animation: short-pulse 0.9s ease-in-out infinite; }
+.dot.short { fill: var(--wshort); }
+@keyframes short-pulse { 50% { opacity: 0.4; } }
+@media (prefers-reduced-motion: reduce) { .wire.short { animation: none; } }
 .wire.bus { stroke-width: calc(var(--wire-bus) * var(--wire-k, 1)); stroke: var(--bus); opacity: var(--bus0-opacity); stroke-dasharray: none; }
 .wire.bus.bus1 { stroke: var(--bus1); opacity: 1; }
 .wire.bus.vx { stroke: var(--wx); opacity: 1; }

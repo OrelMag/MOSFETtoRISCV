@@ -259,3 +259,25 @@ describe('lint', () => {
     expect(lint(draft).diags.some((x) => x.msg.includes('driving nothing'))).toBe(false);
   });
 });
+
+describe('shorts in the sandbox', () => {
+  // the pull-up on a, the pull-down on b: a = 0, b = 1 turns both on
+  const crowbar = (b: number) => chip('u_cb', 'Crowbar', {
+    pins: [{ ...pin('a', 'in', [0, 2]), value: 0 }, { ...pin('b', 'in', [0, 6]), value: b }, pin('y', 'out', [20, 4])],
+    parts: [part('v', { lib: 'vdd' }, [8, -4]), part('p1', { lib: 'pmos' }, [8, 0]), part('n1', { lib: 'nmos' }, [8, 6]), part('g', { lib: 'gnd' }, [8, 12])],
+    wires: [wire('w1', 'pin:a', 'p1.g'), wire('w2', 'pin:b', 'n1.g'), wire('w3', 'v.p', 'p1.s'), wire('w4', 'g.p', 'n1.s'),
+      wire('w5', 'p1.d', 'pin:y'), wire('w6', 'n1.d', 'pin:y')],
+  });
+  it('a short is a diagnostic naming the rails and transistors, and marks its wires', () => {
+    const off = sim(crowbar(0)).s;
+    expect(off.diags).toEqual([]);
+    expect(off.wireShorted('w5')).toBe(false);
+    const { s } = sim(crowbar(1));
+    expect(s.diags).toHaveLength(1);
+    expect(s.diags[0].msg).toMatch(/^short: VDD shorted to GND through p1, n1/);
+    expect(s.diags[0].parts?.sort()).toEqual(['n1', 'p1']);
+    expect(s.diags[0].wires?.sort()).toEqual(['w5', 'w6']);
+    expect(s.wireShorted('w5')).toBe(true);
+    expect(s.wireShorted('w1')).toBe(false);
+  });
+});
