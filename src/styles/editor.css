@@ -297,9 +297,10 @@
 .ed-ghost { opacity: var(--ed-ghost); pointer-events: none; }
 /* Build along: the step's parts as dashed outlines where they go */
 .ed-guides { pointer-events: none; }
-.ed-guide { opacity: 0.7; }
-.ed-guide * { fill: none !important; stroke: var(--accent) !important; stroke-dasharray: 0.35 0.25; stroke-width: 0.1 !important; }
-.ed-guide text { fill: var(--accent) !important; stroke: none !important; }
+/* --ed-preview, not --accent: it follows the vivid look's dark board, where the light theme's accent was too faint */
+.ed-guide { opacity: 0.9; }
+.ed-guide * { fill: none !important; stroke: var(--ed-preview) !important; stroke-dasharray: 0.35 0.25; stroke-width: 0.12 !important; }
+.ed-guide text { fill: var(--ed-preview) !important; stroke: none !important; }
 .ed-guide .hit { display: none; }
 
 /* toast, prompt, help */
