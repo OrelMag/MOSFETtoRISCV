@@ -250,7 +250,8 @@ export class ChapterPage implements Page {
       };
       if (settings.isSolved(key)) return tick();
       this.unlisten.push(this.stage.onChange(() => {
-        if (box.classList.contains('tried') || !cond(this.stage)) return;
+        // not while the automatic clock runs untouched: the learner has not tried anything yet
+        if (box.classList.contains('tried') || this.stage.autoRunning || !cond(this.stage)) return;
         settings.solve(key);
         this.notes.tried(box.textContent ?? '');
         tick();

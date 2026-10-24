@@ -691,7 +691,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .ports { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ports td { padding: 4px 6px; border-top: 1px solid var(--border); }
 .ports td:first-child { font-family: var(--font-mono); font-weight: 600; }
-.ports td.val { font-family: var(--font-mono); text-align: right; }
+.ports td.val { font-family: var(--font-mono); text-align: right; overflow-wrap: anywhere; }
 .ports td.dir { color: var(--muted); font-size: 12px; }
 .insp-used { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 12px; font-size: 13px; }
 .insp-used summary { cursor: pointer; font-weight: 600; color: var(--text); }
@@ -1269,7 +1269,10 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .cpu-listing .ln:hover { background: var(--surface-2); }
 .cpu-listing .ln.sel { outline: 1.5px solid var(--hl); outline-offset: -1.5px; border-radius: 4px; }
 .cpu-listing .stg { margin-left: 6px; font: 700 10px var(--font-mono); padding: 0 4px; border-radius: 4px; background: var(--hl); color: var(--accent-text); }
-.cpu-listing .rom-btn { margin-left: auto; border: 1px solid var(--border); background: var(--surface); color: var(--accent); border-radius: 6px; font: 600 11px var(--font-ui); padding: 0 6px; cursor: pointer; }
+.cpu-listing .rom-btn { margin-left: auto; border: 1px solid var(--border); background: var(--surface); color: var(--accent); border-radius: 6px; font: 600 11px var(--font-ui); padding: 0 6px; cursor: pointer; flex: none; }
+/* the instruction text gives way (ellipsis) so stage tags and "in ROM" stay whole in a narrow panel */
+.cpu-listing .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cpu-listing .stg { flex: none; }
 .cpu-use { font-size: 12px; color: var(--text-2); margin: 4px 0 2px; }
 .cpu-use:empty { display: none; }
 .cpu-use code { font: 600 12px var(--font-mono); color: var(--text); }

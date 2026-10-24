@@ -153,7 +153,7 @@ export const chPipeline: Chapter = {
         register file with two read ports and a write port, its own adders for PC + 4 and the branch target. One memory port
         for both fetch and loads would collide on every <code>lw</code> and <code>sw</code>.</p>
         <div class="try">Pulse a few times and watch the pipeline diagram (bottom left): each instruction moves one stage per cycle. These eight instructions are independent, so after four cycles of fill one retires every cycle.</div>`,
-      scene: () => cpuScene({ source: INDEP, pipeline: true }),
+      scene: () => ({ ...cpuScene({ source: INDEP, pipeline: true }), autoClock: false }),
       tries: [(st) => st.cycles >= 5],
     },
     {
@@ -188,7 +188,7 @@ export const chPipeline: Chapter = {
         sees the new value. A bypass keeps every flip-flop on one edge, which keeps static timing to one
         register-to-register path per stage.</p></details>
         <div class="try">Pulse through and watch the event row of the diagram: M→E and W→E mark forwarding.</div>`,
-      scene: () => cpuScene({ source: HAZARDS, pipeline: true, highlight: ['hz', 'fwdA', 'fwdB', 'byA', 'byB'] }),
+      scene: () => ({ ...cpuScene({ source: HAZARDS, pipeline: true, highlight: ['hz', 'fwdA', 'fwdB', 'byA', 'byB'] }), autoClock: false }),
       tries: [(st) => { const p = snap(st); return !!p && (p.fwdA === 2 || p.fwdB === 2); }],
     },
     {
@@ -199,7 +199,7 @@ export const chPipeline: Chapter = {
         it freezes the <span data-show="pc">PC</span> and <span data-show="FD">IF/ID</span> for one cycle and clears
         <span data-show="DE">ID/EX</span>, inserting a bubble. Next cycle the load is in W and forwarding covers the rest.</p>
         <div class="try">Pulse until the hazard unit stalls: the diagram holds <code>addi t5</code> in D for a second cycle.</div>`,
-      scene: () => cpuScene({ source: HAZARDS, pipeline: true, highlight: ['hz', 'FD', 'DE'] }),
+      scene: () => ({ ...cpuScene({ source: HAZARDS, pipeline: true, highlight: ['hz', 'FD', 'DE'] }), autoClock: false }),
       tries: [(st) => !!snap(st)?.stall],
       challenge: {
         kind: 'quiz', question: 'Why can forwarding not remove the load-use bubble?',
@@ -227,7 +227,7 @@ export const chPipeline: Chapter = {
         Interrupts are taken between two instructions the same way. This pipeline takes no traps;
         <a href="#/c/traps/0">chapter 20</a> adds them to the single-cycle CPU, where every exception is precise for free.</p></details>
         <div class="try">Pulse until the loop branch is taken: two instructions turn into bubbles.</div>`,
-      scene: () => cpuScene({ source: src('sum'), pipeline: true, highlight: ['npc', 'hz', 'pcmux'] }),
+      scene: () => ({ ...cpuScene({ source: src('sum'), pipeline: true, highlight: ['npc', 'hz', 'pcmux'] }), autoClock: false }),
       tries: [(st) => !!snap(st)?.flush],
       challenge: {
         kind: 'quiz', question: 'A loop runs 10 times: its closing branch is taken 9 times and falls through once. How many cycles do its flushes cost?',

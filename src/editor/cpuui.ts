@@ -675,6 +675,7 @@ class CpuPanel {
     this.pipeSec.hidden = this.pipe.hidden = !snaps.length;
     if (!snaps.length) return;
     keyed(this.pipe, `${snaps[snaps.length - 1].cycle}|${snaps.length}|${this.listKey}`, () => pipeGridRows(snaps, (pc) => mon.wordAt(pc) ?? undefined, 7));
+    this.pipe.scrollLeft = this.pipe.scrollWidth;
   }
 
   /** The out-of-order core's listing tags: fetched, in the issue queue, executing, done in the reorder buffer. */

@@ -108,7 +108,7 @@ export const chPipePay: Chapter = {
         <span data-show="corr">correct PC</span>. Open the BTB: it is the register file's construction
         (decoder, registers, bundled bus, two read ports) holding 62-bit entries: ${fmt(nands(BTB))} NANDs, about as many as the ${fmt(nands(regfile(5, 32)))} of the register file.</p>
         <div class="try">Run the program and watch the diagram: after the first iteration the loop branch is predicted, and the flushes disappear.</div>`,
-      scene: () => cpuScene({ source: src('sum'), pipeline: true, balanced: true, predictor: true, adder: 'ks', highlight: ['btb', 'mis', 'corr'] }),
+      scene: () => ({ ...cpuScene({ source: src('sum'), pipeline: true, balanced: true, predictor: true, adder: 'ks', highlight: ['btb', 'mis', 'corr'] }), autoClock: false }),
       tries: [predicted],
     },
     {

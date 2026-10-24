@@ -549,6 +549,7 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
         record();
       }
       grid.replaceChildren(...pipeGridRows(history.snaps, (pc) => asm.words[pc >>> 2]));
+      grid.scrollLeft = grid.scrollWidth; // the newest cycle in view (a narrow panel scrolls the grid)
     };
     update();
     return { el, update };
