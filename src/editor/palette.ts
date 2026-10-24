@@ -12,7 +12,7 @@ import { libraryItems } from '../lib/catalog';
 import { h, icon } from '../ui/dom';
 import { sampleReaderRef } from './cardparts';
 import { folderGroups } from './folders';
-import type { PartRef, Workspace } from './model';
+import type { ChipDoc, PartRef, Workspace } from './model';
 
 export type PinKind = 'toggle' | 'button' | 'clock';
 
@@ -80,7 +80,17 @@ export interface PaletteCtx {
   ws: Workspace;
   chipId: string;
   canPlace(chip: string): boolean;
+  /** A campaign level screen: the level's own chip (EditorOptions.level). */
+  level?: string;
 }
+
+/**
+ * My chips on a level screen leaves out what placing would never make sense: an empty chip (the workspace's
+ * default "Main", 0 → 0), the level's own chip (in the walkthrough it is not the open chip, so it was offered
+ * inside the walkthrough's copy of itself) and the walkthrough's scratch chips.
+ */
+export const levelHides = (c: ChipDoc, level: string): boolean =>
+  c.id === level || c.id.startsWith('u_walk_') || (!c.pins.length && !c.parts.length);
 
 export interface PaletteGroup {
   id: string;
@@ -274,7 +284,7 @@ registerPaletteGroup({
 
 registerPaletteGroup({
   id: 'mine', title: 'My chips', order: 70, purist: true,
-  items: (ctx) => folderGroups(ctx.ws, (c) => c.id !== ctx.chipId).flatMap((g) => g.chips.map((c): PaletteItem => {
+  items: (ctx) => folderGroups(ctx.ws, (c) => c.id !== ctx.chipId && !(ctx.level && levelHides(c, ctx.level))).flatMap((g) => g.chips.map((c): PaletteItem => {
     const ins = c.pins.filter((p) => p.dir !== 'out').length, outs = c.pins.length - ins;
     return {
       id: c.id, name: c.name, place: { part: { chip: c.id } }, hue: c.hue ?? 250, tag: `${ins}→${outs}`, section: g.name ?? undefined,

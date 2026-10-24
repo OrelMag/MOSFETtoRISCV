@@ -215,7 +215,7 @@ export class Editor {
     this.sim.onChange = () => this.simChanged();
     this.sim.onHalt = () => this.halted();
 
-    this.palette = new PalettePanel(() => ({ ws: this.ws, chipId: this.chipId, canPlace: (c) => this.lib.canPlace(this.chipId, c) }), {
+    this.palette = new PalettePanel(() => ({ ws: this.ws, chipId: this.chipId, canPlace: (c) => this.lib.canPlace(this.chipId, c), level: this.level?.chipId }), {
       pick: (item, e) => this.pickPart(item, e),
       arm: (item, key) => {
         this.tools.arm(item, key);
