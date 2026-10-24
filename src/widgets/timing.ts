@@ -1,10 +1,11 @@
 // Static-timing panel for CPU scenes, and the adder cost/speed comparison.
 
-import { brentKung, busMux2, CLA4, koggeStone, rca, sklansky } from '../lib';
+import { brentKung, busMux2, CLA4, koggeStone, ram, rca, register, sklansky } from '../lib';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
 import { analyzeTiming, CLK_TO_Q, PS_NOTE, PS_PER_NAND, SETUP, type TimingReport } from '../sim/timing';
-import { DELAY_NOTE, type DelayModel, delayWord, fmtDelay, psPer } from '../sim/delay';
+import { DELAY_NOTE, type DelayModel, delayWord, fanoutOf, fmtDelay, nandDelay, netLoads, psPer } from '../sim/delay';
+import { type ComponentDef, netlistOf } from '../sim/types';
 import { h } from '../ui/dom';
 import { defaultDelay, delaySwitch, heavyList } from '../view/delayui';
 import type { ScenePanel, Stage, Widget } from '../view/stage';
@@ -81,7 +82,6 @@ export function adderComparison(): Widget {
       h('td', { class: 'num' }, String(d.kN)), h('td', { class: 'num' }, String(d.kD)), h('td', { class: 'barcell' }, bar(d.kD, 'k'))));
   }
   const cla = { nands: stats(CLA4).nands, depth: logicDepth(CLA4) ?? 0 };
-  void flatten;
   return {
     el: h('div', { class: 'widget' }, h('div', { class: 'panel' },
       h('h3', null, 'Cost versus speed, measured'),
@@ -95,31 +95,77 @@ export function adderComparison(): Widget {
   };
 }
 
+type Depths = { nands: number; unit: number; load: number; drawn: number; fanout: number };
+const rowCache = new Map<number, Depths>(), clockCache = new Map<number, Depths>();
+
+/**
+ * A 64-word memory's write path without its read tree: address → row decoder → word line → the word's n
+ * flip-flops (their enable muxes to d). The read tree is left out because the address pins also drive its
+ * selects, which would bury the decoder's own load under the address lines'.
+ */
+export function rowDecoderDelays(n: number): Depths {
+  const hit = rowCache.get(n);
+  if (hit) return hit;
+  const R = ram(6, n), nl = netlistOf(R)!;
+  const def: ComponentDef = {
+    ...R, id: `${R.id}_rows`, ports: R.ports.filter((p) => p.name !== 'dout'),
+    netlist: () => ({
+      ...nl,
+      pins: Object.fromEntries(Object.entries(nl.pins ?? {}).filter(([k]) => k !== 'dout')),
+      instances: nl.instances.filter((i) => i.name !== 'rmux'),
+      nets: nl.nets.filter((x) => x.name !== 'dout' && !/^q\d+$/.test(x.name ?? ''))
+        .map((x) => (x.name === 'addr' ? { ...x, ends: x.ends.filter((e) => e !== 'rmux.s'), via: undefined } : x)),
+    }),
+  };
+  const d = flatten(def, { mode: 'gate' });
+  const at = (m: DelayModel) => analyzeTiming(d, { delay: m })!;
+  const dec = netlistOf(def)!.instances.find((i) => i.name === 'dec')!.def;
+  const r: Depths = { nands: stats(dec).nands, unit: at('unit').logic, load: at('load').logic, drawn: at('drawn').logic, fanout: fanoutOf(netLoads(d)[d.root.children!.get('w0')!.ports.en[0]]) };
+  rowCache.set(n, r);
+  return r;
+}
+
+/** An n-bit register's clock net: the one NAND driving every flip-flop's clock inputs (a clock tree under 'load'). */
+export function clockNetDelays(n: number): Depths {
+  const hit = clockCache.get(n);
+  if (hit) return hit;
+  const d = flatten(register(n), { mode: 'gate' });
+  const load = netLoads(d)[d.root.ports.clk[0]];
+  const r: Depths = { nands: 0, unit: 1, load: nandDelay(load), drawn: nandDelay(load, false), fanout: fanoutOf(load) };
+  clockCache.set(n, r);
+  return r;
+}
+
 /** Chapter 16's last step: the prefix family (and a wide select) under unit delay, under load, and as drawn. */
 export function prefixDelays(): Widget {
   const body = h('div');
   const pick = h('div', { class: 'seg', role: 'group', 'aria-label': 'Width' });
-  const rowsOf = (n: number) => [
+  const rowsOf = (n: number): ({ name: string; def: ComponentDef } & Omit<Depths, 'fanout'> & { fanout?: number })[] => [
     { name: 'Ripple carry', def: rca(n) },
     { name: 'Brent–Kung', def: brentKung(n) },
     { name: 'Sklansky', def: sklansky(n) },
     { name: 'Kogge–Stone', def: koggeStone(n) },
     { name: `${n}-bit mux (one select)`, def: busMux2(n) },
-  ].map((r) => ({ ...r, nands: stats(r.def).nands, unit: logicDepth(r.def) ?? 0, load: logicDepth(r.def, 'load') ?? 0, drawn: logicDepth(r.def, 'drawn') ?? 0 }));
+  ].map((r) => ({ ...r, nands: stats(r.def).nands, unit: logicDepth(r.def) ?? 0, load: logicDepth(r.def, 'load') ?? 0, drawn: logicDepth(r.def, 'drawn') ?? 0 }))
+    .concat([
+      { name: `Row decoder, 64 × ${n} memory`, def: ram(6, n), ...rowDecoderDelays(n) },
+      { name: `Clock of a ${n}-bit register`, def: register(n), ...clockNetDelays(n) },
+    ]);
   const cache = new Map<number, ReturnType<typeof rowsOf>>();
   const show = (n: number) => {
     for (const b of pick.querySelectorAll('button')) b.classList.toggle('on', b.dataset.n === String(n));
     let rows = cache.get(n);
     if (!rows) cache.set(n, (rows = rowsOf(n)));
-    // Ripple carry is off this scale (it grows with n): its numbers only.
-    const max = Math.max(...rows.slice(1).map((r) => r.drawn));
+    // Ripple carry is off this scale (it grows with n): its numbers only. The scale is the prefix adders' and the
+    // mux's; the decoder and the clock run past it as drawn.
+    const max = Math.max(...rows.slice(1, 5).map((r) => r.drawn));
     const bar = (v: number, cls: string) => h('span', { class: `cbar ${cls}`, style: `width:${Math.min(100, (v / max) * 100)}%` });
     body.replaceChildren(h('table', { class: 'cmp pfx' },
       h('thead', null, h('tr', null, h('th', null, `${n} bits`), h('th', { class: 'num' }, 'NANDs'), h('th', { class: 'num', title: 'Every NAND one delay' }, 'unit'),
         h('th', { class: 'num', title: DELAY_NOTE }, 'load'), h('th', { class: 'num', title: 'By load, minimum-size gates, no buffers' }, 'as drawn'), h('th', null, ''))),
       h('tbody', null, rows.map((r, i) => h('tr', null,
-        h('td', null, h('a', { href: `#/workbench/${r.def.id}` }, r.name)),
-        h('td', { class: 'num' }, r.nands.toLocaleString()),
+        h('td', null, h('a', { href: `#/workbench/${r.def.id}` }, r.name), r.fanout !== undefined ? h('span', { class: 'sub' }, ` · drives ${r.fanout}`) : null),
+        h('td', { class: 'num', title: i === 5 ? "The decoder's own NANDs" : undefined }, r.nands ? r.nands.toLocaleString() : '—'),
         h('td', { class: 'num' }, String(r.unit)),
         h('td', { class: 'num' }, r.load.toFixed(1)),
         h('td', { class: 'num' }, r.drawn.toFixed(1)),
@@ -130,7 +176,7 @@ export function prefixDelays(): Widget {
   return {
     el: h('div', { class: 'widget' }, h('div', { class: 'panel' },
       h('h3', null, 'When fan-out costs ', pick),
-      h('p', { class: 'sub' }, 'Worst-case depth of each circuit from its netlist, in three models: every NAND one delay; each NAND by its load with buffer trees where they pay; by its load with minimum-size gates and no buffers. Measured between gates: each input driven by a minimum NAND, each output loading one NAND input.'),
+      h('p', { class: 'sub' }, "Worst-case depth of each circuit from its netlist, in three models: every NAND one delay; each NAND by its load with buffer trees where they pay; by its load with minimum-size gates and no buffers. Measured between gates: each input driven by a minimum NAND, each output loading one NAND input. The row decoder: address to a word's flip-flops, its word line loaded by the word's enable muxes. The clock: the one NAND that drives every flip-flop's clock inputs."),
       body,
       h('div', { class: 'pfx-legend sub' }, h('span', null, h('i', { class: 'u' }), 'unit'), h('span', null, h('i', { class: 'l' }), 'load'), h('span', null, h('i', { class: 'd' }), 'as drawn')))),
   };

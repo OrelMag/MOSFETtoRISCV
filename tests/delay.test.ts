@@ -8,6 +8,7 @@ import { flatten } from '../src/sim/flatten';
 import { FF_INPUT, FF_WIRE } from '../src/sim/netcap';
 import { logicDepth } from '../src/sim/stats';
 import { analyzeTiming, CLK_TO_Q, SETUP } from '../src/sim/timing';
+import { clockNetDelays, rowDecoderDelays } from '../src/widgets/timing';
 
 const fo = (n: number) => n * (FF_INPUT + FF_WIRE);
 
@@ -104,5 +105,16 @@ describe('chapter 16 quotes the prefix family as measured', () => {
     const step = chapterById('fastadd')!.steps.find((s) => s.title === 'When fan-out costs')!;
     const q = step.challenge!;
     expect(q.kind === 'quiz' && q.answer).toBe(0);
+  });
+  it('the prose: a row decoder and a clock net under load', () => {
+    const dec = rowDecoderDelays(64), clk = clockNetDelays(64);
+    expect(dec.unit).toBe(7);
+    expect(dec.load / dec.unit).toBeGreaterThan(2.5); // "nearly three times"
+    expect(dec.load / dec.unit).toBeLessThan(3);
+    expect(dec.fanout).toBe(3 * 64); // three inputs per bit
+    expect(clk.unit).toBe(1);
+    expect(clk.fanout).toBe(256);
+    expect(clk.drawn).toBeGreaterThan(3 * logicDepth(koggeStone(64), 'drawn')!);
+    expect(Math.round(clk.load)).toBe(6);
   });
 });
