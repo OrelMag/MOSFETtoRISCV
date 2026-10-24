@@ -152,7 +152,7 @@ describe('SwitchSim: rails and inputs are terminals', () => {
 
 /** Pull-up and pull-down on separate inputs (a broken inverter): a = 0, b = 1 turns both on, a crowbar through y. */
 const CROWBAR: ComponentDef = {
-  id: 't_crowbar', name: 'crowbar', category: 'transistors',
+  id: 't_crowbar', name: 'crowbar', category: 'transistor',
   ports: [{ name: 'a', width: 1, dir: 'in' }, { name: 'b', width: 1, dir: 'in' }, { name: 'y', width: 1, dir: 'out' }],
   symbol: { kind: 'box', label: 'CB' },
   netlist: () => ({
@@ -167,7 +167,7 @@ const CROWBAR: ComponentDef = {
 };
 
 const PASS_FIGHT: ComponentDef = {
-  id: 't_pass_fight', name: 'pass fight', category: 'transistors',
+  id: 't_pass_fight', name: 'pass fight', category: 'transistor',
   ports: [{ name: 'd', width: 1, dir: 'in' }, { name: 'g', width: 1, dir: 'in' }, { name: 'y', width: 1, dir: 'out' }],
   symbol: { kind: 'box', label: 'PF' },
   netlist: () => ({

@@ -217,6 +217,7 @@
 .ed-ptr.v1 .ed-ptr-name { fill: var(--w1); }
 .ed-ptr.v1 .ed-ptr-dot { fill: var(--w1); }
 .ed-ptr.vx .ed-flag { stroke: var(--wx); }
+.ed-ptr.short .ed-flag { stroke: var(--wshort); }
 .ed-ptr.bus .ed-flag { stroke: var(--bus); }
 .ed-ptr.bus.bus1 .ed-flag { fill: color-mix(in srgb, var(--bus) 10%, var(--surface)); }
 .ed-ptr.ed-sel .ed-flag { stroke: var(--ed-sel); stroke-width: 0.24; }
