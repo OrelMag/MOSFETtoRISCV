@@ -5,7 +5,7 @@
 
 import '../styles/editor-files.css';
 import { exportHdl } from '../sim/svexport';
-import { h, icon, s } from '../ui/dom';
+import { h, icon, placeMenu, s } from '../ui/dom';
 import { registerToolbarAction, type Editor } from './editor';
 import { openIsaEditor } from './isaui';
 import { dropDeckFile } from './cardui';
@@ -120,8 +120,7 @@ function openMenu(ed: Editor): void {
   }
   ed.el.append(menu);
   const w = menu.offsetWidth;
-  menu.style.left = `${Math.max(8, Math.min(r.right - w, innerWidth - w - 8))}px`;
-  menu.style.top = `${r.bottom + 6}px`;
+  placeMenu(menu, r, Math.max(8, Math.min(r.right - w, innerWidth - w - 8)));
   document.addEventListener('pointerdown', onOutside, true);
   document.addEventListener('keydown', onMenuKey, true);
   menu.querySelector('button')?.focus();

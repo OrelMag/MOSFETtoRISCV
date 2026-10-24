@@ -56,7 +56,7 @@ export const chLanes: Chapter = {
     {
       title: 'Latency or throughput',
       body: `
-        <p>Chapters <a href="#/c/fastadd/0">15</a> to <a href="#/c/float/0">23</a> spent gates on <em>latency</em>: forwarding, branch prediction and caches all make one instruction stream finish sooner. Many
+        <p>Chapters <a href="#/c/fastadd/0">16</a> to <a href="#/c/float/0">24</a> spent gates on <em>latency</em>: forwarding, branch prediction and caches all make one instruction stream finish sooner. Many
         workloads are instead thousands of independent copies of one small program: a pixel, a matrix element, a neuron's activation. For them the figure of
         merit is results per second per gate (and per watt), and the latency of any one result hardly matters.</p>
         <p><a href="#/c/multicore/0">Chapter 26</a> got parallelism by copying whole cores. The other way is to keep <strong>one instruction stream</strong> and copy only the datapath: one

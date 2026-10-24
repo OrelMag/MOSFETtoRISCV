@@ -47,7 +47,7 @@
 /* Examples menu */
 .sb-menu { position: fixed; z-index: 55; display: grid; gap: 2px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); }
 .sb-menu-head { font-size: 11.5px; color: var(--muted); padding: 2px 8px 4px; text-transform: uppercase; letter-spacing: 0.04em; }
-.sb-menu-item { display: grid; gap: 2px; text-align: left; padding: 7px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text); cursor: pointer; font: inherit; }
+.sb-menu .sb-menu-item { display: grid; justify-items: start; flex: none; gap: 2px; text-align: left; padding: 7px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text); cursor: pointer; font: inherit; }
 .sb-menu-item b { font-size: 13.5px; font-weight: 600; }
 .sb-menu-item small { font-size: 12px; color: var(--text-2); }
 .sb-menu-item:hover, .sb-menu-item:focus-visible { background: var(--surface-2); outline: none; }

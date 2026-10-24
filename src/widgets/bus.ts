@@ -113,7 +113,6 @@ function busBenchPanel(wait: number): ScenePanel {
         btn('Run until irq', 'Clock until the DMA raises its interrupt', op(runUntilIrq)),
         btn('Clock 10', 'Ten cycles with no request from the CPU', op(() => stage.runCycles(10)))),
       status, h('div', { class: 'cpu-sec' }, `Every cycle, the last ${TRACE}`), wave, h('div', { class: 'cpu-sec' }, 'Transactions'), txns, h('div', { class: 'cpu-sec' }, 'RAM from 0x100'), ram);
-    title.addEventListener('click', () => el.classList.toggle('collapsed'));
 
     const update = () => {
       const dmaBusy = port(['dma'], 'busy') === 1, irq = port(['dma'], 'irq') === 1;
@@ -289,7 +288,6 @@ const computerPanel = (full: boolean, cards = false): ScenePanel => (stage: Stag
   }
   parts.push(h('div', { class: 'cpu-sec' }, 'Console'), con, h('div', { class: 'cpu-sec' }, 'LEDs'), leds, h('div', { class: 'cpu-sec' }, 'Memory map'), map);
   const el = h('div', { class: 'mem-panel cpu-panel mc-panel bus-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, ...parts);
-  title.addEventListener('click', () => el.classList.toggle('collapsed'));
   function update() {
     const pc = out('pcOut') >>> 0;
     status.replaceChildren(h('span', null, 'PC ', h('b', null, hex(pc)), pc < 0x200 ? ' (boot ROM)' : ' (RAM)'),

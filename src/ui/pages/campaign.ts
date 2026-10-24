@@ -45,12 +45,15 @@ const html = (tag: 'div' | 'p' | 'span', cls: string, content: string) => {
  * Before `root` is redrawn: a function that puts the focus back on the redrawn twin of what had it (the
  * page is rebuilt on every selection and progress change: Enter on a map card or Skip in the panel would
  * otherwise drop a keyboard user at the top of the page). A map card, act button or diagram block by its
- * id; a panel button or link by its text, else the selected card.
+ * id; a panel button or link by its text, else the selected card. `selected`: the level the redraw selects;
+ * a card that had the focus but is no longer selected (another level opened by a link) hands it to that one,
+ * else the old card kept its focus ring beside the new selection.
  */
-function keepFocus(root: HTMLElement): () => void {
+function keepFocus(root: HTMLElement, selected?: string): () => void {
   const a = document.activeElement;
   if (!(a instanceof HTMLElement || a instanceof SVGElement) || !root.contains(a)) return () => {};
-  const sel = (['node', 'act', 'block'] as const).map((k) => [k, a.getAttribute(`data-${k}`)] as const).find(([, v]) => v !== null);
+  let sel = (['node', 'act', 'block'] as const).map((k) => [k, a.getAttribute(`data-${k}`)] as const).find(([, v]) => v !== null);
+  if (sel?.[0] === 'node' && selected !== undefined && sel[1] !== selected) sel = ['node', selected];
   const text = a.matches('button, a') ? a.textContent : null;
   return () => {
     if (document.activeElement !== document.body && document.activeElement !== null) return; // something took it already
@@ -68,6 +71,10 @@ export class CampaignPage implements Page {
   /** The codex list's search text and kind filter, kept across entries. */
   private cxQuery = '';
   private cxKind = '';
+  /** A narrow screen: the codex list folded under the open entry (a button opens it). */
+  private cxListOpen = false;
+  /** Until when a map redraw (its columns found) should bring the selected level into view again. */
+  private revealUntil = 0;
   readonly kind = 'campaign';
   readonly el: HTMLElement;
   private main = h('div', { class: 'cp-main' });
@@ -106,11 +113,13 @@ export class CampaignPage implements Page {
     if (sc) this.mapScroll = { left: sc.scrollLeft, top: sc.scrollTop };
     // The level panel redrawn for the same level (a tip shown, Done reading) keeps its place in the text.
     const route = this.parts.join('/');
-    const panelTop = route === this.drawn ? this.main.querySelector<HTMLElement>('.cp-panel')?.scrollTop ?? 0 : 0;
+    const changed = route !== this.drawn;
+    const panelTop = changed ? 0 : this.main.querySelector<HTMLElement>('.cp-panel')?.scrollTop ?? 0;
     this.drawn = route;
-    const refocus = keepFocus(this.main);
-    this.renderHead();
     const [a, b] = this.parts;
+    const refocus = keepFocus(this.main, a === 'n' ? b : undefined);
+    this.renderHead();
+    if (changed) this.cxListOpen = false;
     if (a === 'intro') this.main.replaceChildren(this.introView());
     else if (a === 'codex') this.main.replaceChildren(this.codexView(b));
     else this.main.replaceChildren(this.mapView(a === 'n' ? b : undefined));
@@ -122,6 +131,37 @@ export class CampaignPage implements Page {
     const panel = this.main.querySelector<HTMLElement>('.cp-panel');
     if (panel && panelTop) panel.scrollTop = panelTop;
     refocus();
+    if (changed && b) {
+      this.revealUntil = performance.now() + 1000;
+      requestAnimationFrame(() => (a === 'codex' ? this.revealEntry() : this.reveal()));
+    }
+  }
+
+  /**
+   * A level opened (a click, a link, a URL): its card scrolled into the map's view unless it is in view already
+   * (a click on a visible card does not move the map); on a narrow screen, where the panel sits under the map,
+   * the page scrolled to the panel unless its heading shows (it was under the fold and the sticky action bar).
+   */
+  private reveal(): void {
+    const sc = this.main.querySelector<HTMLElement>('.cp-map-scroll');
+    const node = sc?.querySelector<SVGGraphicsElement>('.cp-node.sel');
+    if (!sc || !node) return;
+    const behavior: ScrollBehavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    const r = node.getBoundingClientRect(), v = sc.getBoundingClientRect();
+    if (r.top < v.top || r.bottom > v.bottom || r.left < v.left || r.right > v.right) {
+      sc.scrollTo({ top: sc.scrollTop + r.top - v.top - (v.height - r.height) / 2, left: sc.scrollLeft + r.left - v.left - (v.width - r.width) / 2, behavior });
+    }
+    const head = this.main.querySelector<HTMLElement>('.cp-node-panel h2');
+    if (head && matchMedia('(max-width: 1000px)').matches) {
+      const hr = head.getBoundingClientRect(), bar = this.main.querySelector<HTMLElement>('.cp-node-actions.sticky')?.offsetHeight ?? 0;
+      if (hr.top < 0 || hr.bottom > innerHeight - bar) (head.closest<HTMLElement>('.cp-panel') ?? head).scrollIntoView({ block: 'start', behavior });
+    }
+  }
+
+  /** A codex entry opened: its top in view (on a narrow screen it may have been opened from far down the list). */
+  private revealEntry(): void {
+    const top = this.main.querySelector<HTMLElement>('.cp-codex-entry')?.getBoundingClientRect().top;
+    if (top !== undefined && (top < 0 || top > innerHeight * 0.6)) this.main.querySelector<HTMLElement>('.cp-codex-entry')!.scrollIntoView({ block: 'start' });
   }
 
   // ---- header ---------------------------------------------------------------------------------
@@ -210,6 +250,8 @@ export class CampaignPage implements Page {
       const refocus = keepFocus(scroll);
       scroll.replaceChildren(draw(cols));
       refocus();
+      // the first draw guessed the columns: the selected level moved
+      if (performance.now() < this.revealUntil) this.reveal();
     });
     this.mapFit.observe(scroll);
     return h('div', { class: 'cp-split' },
@@ -438,7 +480,7 @@ export class CampaignPage implements Page {
     const empty = h('p', { class: 'sub', hidden: true }, 'No entry matches.');
     const groups = CODEX_KINDS.map((k) => {
       const items = CODEX_ORDER.filter((e) => e.kind === k.id).map((e) => {
-        const li = h('li', { 'data-k': e.kind, 'data-t': e.title.toLowerCase(), 'data-s': plainSummary(e).toLowerCase() }, unlocked.has(e.id)
+        const li = h('li', { 'data-id': e.id, 'data-k': e.kind, 'data-t': e.title.toLowerCase(), 'data-s': plainSummary(e).toLowerCase() }, unlocked.has(e.id)
           ? h('a', { href: `#/campaign/codex/${e.id}`, class: e.id === sel ? 'on' : '' }, e.title)
           : h('a', { href: `#/campaign/codex/${e.id}`, class: `locked${e.id === sel ? ' on' : ''}`, title: 'Not discovered yet' }, icon('flag', 11), e.title));
         return li;
@@ -452,19 +494,29 @@ export class CampaignPage implements Page {
         let n = 0;
         for (const li of g.items) {
           const ok = (!this.cxKind || li.dataset.k === this.cxKind) && (!q || li.dataset.t!.includes(q) || li.dataset.s!.includes(q));
-          li.hidden = !ok;
-          if (ok) n++;
+          // the open entry stays listed (marked) when the search kept from before does not match it
+          li.hidden = !ok && li.dataset.id !== sel;
+          if (!li.hidden) n++;
+          if (ok) shown++;
         }
         g.head.hidden = g.ul.hidden = n === 0;
-        shown += n;
       }
       empty.hidden = shown > 0;
+      empty.textContent = sel ? 'No other entry matches.' : 'No entry matches.';
       for (const b of kinds.children) b.classList.toggle('on', (b as HTMLElement).dataset.k === this.cxKind);
     };
     search.addEventListener('input', () => { this.cxQuery = search.value; filter(); });
-    const list = h('nav', { class: 'cp-codex-list' },
-      h('p', { class: 'sub' }, `${[...unlocked].filter((u) => codexById(u)).length} of ${CODEX.length} entries discovered`),
-      search, kinds, empty, groups.flatMap((g) => [g.head, g.ul]));
+    // A narrow screen stacks the list and the entry: with an entry open, the entry comes first and the list folds
+    // behind a button (campaign.css), else the entry sat under all the items.
+    const browse = h('button', { class: 'btn sm cx-browse', 'aria-expanded': String(this.cxListOpen), onclick: () => {
+      this.cxListOpen = !this.cxListOpen;
+      list.classList.toggle('open', this.cxListOpen);
+      browse.setAttribute('aria-expanded', String(this.cxListOpen));
+    } }, icon('book', 14), `All ${CODEX.length} entries`, icon('chevD', 12));
+    const list = h('nav', { class: `cp-codex-list${this.cxListOpen ? ' open' : ''}` }, sel ? browse : null,
+      h('div', { class: 'cx-listbody' },
+        h('p', { class: 'sub' }, `${[...unlocked].filter((u) => codexById(u)).length} of ${CODEX.length} entries discovered`),
+        search, kinds, empty, groups.flatMap((g) => [g.head, g.ul])));
     filter();
     const e = sel ? codexById(sel) : undefined;
     let detail: HTMLElement;
@@ -490,7 +542,7 @@ export class CampaignPage implements Page {
       const sheets = sheet ? [sheetEl(sheet)] : e.kind === 'component' ? datasheets(e.id).map(sheetEl) : [];
       detail = codexEntryEl(e, more, p.view, sheets, this.checkOf(e.id));
     }
-    return h('div', { class: 'cp-codex' }, list, detail);
+    return h('div', { class: `cp-codex${sel ? ' has-sel' : ''}` }, list, detail);
   }
 }
 

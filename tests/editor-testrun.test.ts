@@ -187,3 +187,12 @@ describe('TestReplay', () => {
     expect(es.pinBits('a')).toEqual([0]); // the document's values (none: 0)
   });
 });
+
+describe('testSet: the clock of a sequence', () => {
+  it('a sequence without a clock pin has none (m_sense: no phantom clk column in the player)', () => {
+    const set = testSet(levelChallenge(nodeById('m_sense')!)!)!;
+    expect(set.kind).toBe('sequence');
+    expect(set.clock).toBeUndefined();
+    expect(set.inputs.map((p) => p.name)).toEqual(['pre', 'wl0', 'wl1', 'sae', 'we', 'd']);
+  });
+});

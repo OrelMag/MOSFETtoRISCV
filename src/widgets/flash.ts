@@ -122,7 +122,6 @@ function flashPanel(o: FlashSceneOptions): ScenePanel {
         btn('Program row', 'Program the 0 bits of the data into the row, a pulse at a time, verifying after each', op(() => { const n = program(sel.row, sel.data); if (n < 0) log.push('gave up: a bit will not program (it may need an erase first?)'); })),
         btn('Erase block', 'Every cell back to 1, all at once', op(erase))),
       grid, plot, msg);
-    title.addEventListener('click', () => el.classList.toggle('collapsed'));
 
     const drawPlot = (q: number) => {
       const W = 300, H = 120, L = 26, B = 18, T = 8, vx = (v: number) => L + (v / 7) * (W - L - 8), iy = (i: number) => H - B - i * (H - B - T);

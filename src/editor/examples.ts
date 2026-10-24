@@ -370,6 +370,8 @@ export interface Example {
   build(id: string, name: string, sub: Record<string, string>, docs: Record<string, ChipDoc>): ChipDoc;
   /** Chips the example places (its packaged blocks), added alongside it under fresh ids and names. */
   subchips?: Record<string, { name: string; build(id: string, name: string): ChipDoc }>;
+  /** A CPU running a program: its automatic clock's rate (ChipDoc.hz), so the output shows within seconds. */
+  hz?: number;
 }
 
 export const EXAMPLES: Example[] = [
@@ -382,18 +384,21 @@ export const EXAMPLES: Example[] = [
     blurb: 'An RV32I core, a program ROM, 4K words of RAM, a 64 × 64 screen, a console, LEDs and switches behind a memory map. Run: it greets, then paints.',
     build: (id, n, sub) => computerChip(id, n, { mem: sub.mem, dev: sub.dev }),
     subchips: { mem: { name: 'Memory', build: memoryChip }, dev: { name: 'Devices', build: devicesChip } },
+    hz: 10000,
   },
   {
     id: 'cpu4', name: '4-bit CPU (4004-inspired)',
     blurb: 'An accumulator machine with the 4004\'s instructions in six blocks you can open down to NANDs, a ROM in 4-bit assembly, four digits, LEDs, switches and a TEST key. Run: 1234 + 5876 in BCD.',
     build: (id, n, sub) => cpu4Chip(id, n, sub),
     subchips: CPU4_SUBCHIPS,
+    hz: 1000,
   },
   {
     id: 'm6502', name: '6502 computer (1975)',
     blurb: 'The MOS 6502 (cycle-exact; open it for its transistors), a 4K ROM in 6502 assembly, 2K of RAM, a console, LEDs and switches behind a memory map. Run: the Fibonacci numbers in decimal.',
     build: (id, n, _sub, docs) => computer6502Chip(id, n, { mem: docs.mem, dev: docs.dev }),
     subchips: { mem: { name: 'Memory map', build: memory6502Chip }, dev: { name: 'Devices', build: (id, n) => devicesChip(id, n, 'at $4000 ($4000 console, $4001 LEDs, $4002 switches)') } },
+    hz: 10000,
   },
   {
     id: 'bussystem', name: 'System on a bus',
@@ -427,6 +432,6 @@ export function addExample(ws: Workspace, ex: Example): { ws: Workspace; id: str
     chips[sid] = docs[k] = c.build(sid, uniqueName(c.name, Object.values(chips).map((x) => x.name)));
     sub[k] = sid;
   }
-  chips[id] = ex.build(id, name, sub, docs);
+  chips[id] = ex.hz ? { ...ex.build(id, name, sub, docs), hz: ex.hz } : ex.build(id, name, sub, docs);
   return { ws: openChip({ ...ws, chips }, id), id };
 }

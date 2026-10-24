@@ -9,7 +9,7 @@ import { BANK, bankTraces, DCMD, Dram16Model, DRAM16, FCMD, Flash16Model, runBan
 import { nodeById } from '../src/campaign/nodes';
 import { assemble16 } from '../src/riscv/rv16/asm16';
 import { DMA_DEV16, Iss16 } from '../src/riscv/rv16/iss16';
-import { checkChallenge } from '../src/editor/challenges';
+import { checkChallenge, scoreUnit } from '../src/editor/challenges';
 import type { Compiled } from '../src/editor/compile';
 import { levelChallenge } from '../src/campaign/levels';
 import { BANK16, bankOf, BUS16, busOf, CTRL16, ctrlOf, DMA16, dmaOf, DRAM_COL2, FLASH_STORE16, flashOf } from '../src/lib/rv16/mem16';
@@ -171,5 +171,14 @@ describe('act 10 schematics', () => {
     expect(labelOverlaps(d, nl)).toEqual([]);
     expect(boxTextOverlaps(d)).toEqual([]);
     expect(wireOverlaps(routeNetlist(d, nl).nets)).toEqual([]);
+  });
+});
+
+describe('scoreUnit: what a level is graded in', () => {
+  it('a level whose par is in transistors (m_sense, act 0) scores in transistors, not "0 NAND depth 0"', () => {
+    expect(scoreUnit(levelChallenge(nodeById('m_sense')!)!)).toBe('transistors');
+    expect(scoreUnit(levelChallenge(nodeById('t_inv')!)!)).toBe('transistors');
+    expect(scoreUnit(levelChallenge(nodeById('g_not')!)!)).toBe('nand');
+    expect(scoreUnit(levelChallenge(nodeById('r_nand')!)!)).toBe('devices');
   });
 });

@@ -155,6 +155,8 @@ export class Stage {
   private hint: HTMLElement;
   /** rightInset() when the cover was last synced: a fold, unfold or width change refits a fitted view. */
   private inset = 0;
+  /** The automatic clock started this scene and the learner has done nothing since (autoRunning). */
+  private autoRun = false;
   private status: HTMLElement;
   private leaf: { name: string; widget: Widget } | null = null;
   private widget: { w: Widget; host: HTMLElement } | null = null;
@@ -453,7 +455,7 @@ export class Stage {
     this.layoutDock(false);
     this.view.fit();
     this.refresh();
-    if (settings.autoClock && scene.autoClock !== false) this.startClock();
+    if (settings.autoClock && scene.autoClock !== false) { this.startClock(); this.autoRun = this.clockRunning; }
   }
 
   /**
@@ -768,7 +770,9 @@ export class Stage {
       this.refresh();
       return;
     }
+    const auto = this.autoRun;
     this.checkpoint();
+    this.autoRun = auto; // the running clock is not the learner
     this.rise(clk);
     const e = this.edge!;
     completeEdge(this.sim, e);
@@ -941,9 +945,15 @@ export class Stage {
 
   /** The stage's own Run: a full clock cycle every RUN_MS (the automatic clock starts it on load). */
   startClock(): void {
+    this.autoRun = false; // a Run by hand (load sets it again for the automatic one)
     if (this.runClock || !this.clockPort() || !this.sim || this.widget) return;
     this.runClock = setInterval(() => this.halfTick(), RUN_MS / 2);
     this.syncRunBtn();
+  }
+
+  /** Running only because the automatic clock started it: a Try condition that holds now was not the learner's doing. */
+  get autoRunning(): boolean {
+    return this.autoRun && this.runClock !== null;
   }
 
   get clockRunning(): boolean {
@@ -980,6 +990,8 @@ export class Stage {
    * halt, an instruction) takes one first, and the ones inside it then find nothing changed.
    */
   checkpoint(): void {
+    // the learner acted (every control saves a step for Back first): the circuit is no longer only running by itself
+    this.autoRun = false;
     if (!this.sim) return;
     const key = this.stateKey();
     if (this.history[this.history.length - 1]?.key === key) return;
@@ -1152,6 +1164,8 @@ export class Stage {
     for (const el of this.controls.querySelectorAll<HTMLInputElement>('.in-num input')) {
       const p = this.scene!.root.ports.find((q) => q.name === el.dataset.port)!;
       if (document.activeElement !== el) el.value = formatNumber(this.getInput(p.name), p.width, settings.radix === 'bin' && p.width > 8 ? 'hex' : settings.radix);
+      // as wide as the value (monospace): a 32-bit word in hex no longer clips; 6 characters at least, as before
+      el.style.width = `calc(${Math.max(6, el.value.length)}ch + 18px)`;
     }
     if (this.backBtn) this.backBtn.disabled = !this.history.length;
     this.syncScope();
@@ -1399,6 +1413,9 @@ export class Stage {
     const inset = this.rightInset();
     const refit = inset !== this.inset;
     this.inset = inset;
+    // the challenge note keeps clear of the right-docked panels, folded ones too (app.css .stage-notes)
+    const covered = this.panels.filter((p) => p.el.dataset.dock === 'right').map((p) => p.el.offsetWidth).filter((w) => w > 0);
+    this.canvas.style.setProperty('--panel-inset', `${covered.length ? Math.max(...covered) + 24 : 0}px`);
     this.dockOut();
     this.placeHint();
     this.view.setCover(this.covers(), refit);

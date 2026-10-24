@@ -250,6 +250,7 @@ export function sanitizeChip(c: unknown): ChipDoc | null {
     face: sanitizeFace(c.face, new Set(uniquePins.map((p) => p.id))),
     ff: sanitizeFf(c.ff),
     cpu: sanitizeCpu(c.cpu),
+    hz: num(c.hz) && c.hz > 0 ? c.hz : undefined,
     hdl: sanitizeHdl(c.hdl),
     pins: uniquePins, parts, wires, labels,
     comments: comments.length ? comments : undefined,

@@ -57,6 +57,8 @@ export function wireLooks(root: HTMLElement, stage: Stage): () => void {
   };
   for (const el of root.querySelectorAll<HTMLElement>('[data-show]')) {
     el.classList.add('look');
+    // a short name stays on one line; a phrase longer than that wraps (unbroken, it ran out of the text panel)
+    if ((el.textContent ?? '').length > 28) el.classList.add('long');
     el.tabIndex = 0;
     el.setAttribute('role', 'button');
     el.setAttribute('aria-pressed', 'false');

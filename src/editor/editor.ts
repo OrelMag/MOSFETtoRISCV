@@ -13,7 +13,7 @@ import type { Vec } from '../sim/geometry';
 import type { PowerOnMode } from '../sim/sim';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { describeBits } from '../sim/values';
-import { coarsePointer, h, hintBadge, icon } from '../ui/dom';
+import { coarsePointer, h, hintBadge, icon, placeMenu } from '../ui/dom';
 import { showKeySheet } from '../ui/keyhelp';
 import { settings } from '../ui/settings';
 import { closePopover } from '../view/popover';
@@ -178,11 +178,14 @@ export class Editor {
 
   /** A campaign level screen: see EditorOptions.level. */
   readonly level: EditorOptions['level'];
+  /** The level's own chip: level.chipId names the walkthrough's chip while it is shown (levelwalk.ts). */
+  private readonly levelHome: string | undefined;
   /** The project this editor loads and saves. */
   readonly project: string;
 
   constructor(chipId?: string, opts: EditorOptions = {}) {
     this.level = opts.level;
+    this.levelHome = opts.level?.chipId;
     this.project = opts.project ?? (opts.level ? MAIN_PROJECT : readProjects().current);
     let ws = loadWorkspace(undefined, projectKey(this.project));
     if (!ws.open.length) ws = { ...ws, open: [Object.keys(ws.chips)[0]] };
@@ -215,7 +218,8 @@ export class Editor {
     this.sim.onChange = () => this.simChanged();
     this.sim.onHalt = () => this.halted();
 
-    this.palette = new PalettePanel(() => ({ ws: this.ws, chipId: this.chipId, canPlace: (c) => this.lib.canPlace(this.chipId, c) }), {
+    this.palette = new PalettePanel(() => ({ ws: this.ws, chipId: this.chipId, canPlace: (c) => this.lib.canPlace(this.chipId, c),
+      level: this.level ? [this.level.chipId, this.levelHome!] : undefined }), {
       pick: (item, e) => this.pickPart(item, e),
       arm: (item, key) => {
         this.tools.arm(item, key);
@@ -595,7 +599,7 @@ export class Editor {
   /** settings.autoClock: a clocked chip starts running the first time it is simulated (EditorSim.autoStart). */
   private autoClock(): void {
     const sim = this.sim;
-    if (!settings.autoClock || sim.autoTried || !sim.autoStart(this.rateChosen ? sim.hz : AUTO_HZ)) return;
+    if (!settings.autoClock || sim.autoTried || !sim.autoStart(this.rateChosen ? sim.hz : this.doc.hz ?? AUTO_HZ)) return;
     if (this.rateSel && sim.mode === 'cycle') this.rateSel.value = String(sim.hz);
   }
 
@@ -678,7 +682,7 @@ export class Editor {
       if (!c) continue;
       const on = id === this.chipId;
       const tab = h('div', { class: `sb-tab${on ? ' on' : ''}`, role: 'tab', 'aria-selected': String(on), title: c.name, 'data-chip': id },
-        h('button', { class: 'sb-tab-name', onclick: () => this.openChip(id) }, icon('chip', 13), c.name, c.hdl ? h('span', { class: 'sb-tab-hdl', title: 'Drawn from Verilog' }, '.v') : null));
+        h('button', { class: 'sb-tab-name', title: c.name, onclick: () => this.openChip(id) }, icon('chip', 13), h('span', { class: 'sb-tab-label' }, c.name), c.hdl ? h('span', { class: 'sb-tab-hdl', title: 'Drawn from Verilog' }, '.v') : null));
       if (shown.length > 1 && id !== this.level?.chipId) tab.append(h('button', { class: 'sb-tab-x', title: `Close ${c.name}`, 'aria-label': `Close ${c.name}`, onclick: () => this.closeTab(id) }, icon('close', 12)));
       this.tabs.append(tab);
     }
@@ -692,12 +696,14 @@ export class Editor {
       sel.addEventListener('change', () => sel.value && this.openChip(sel.value));
       this.tabs.append(sel);
     }
-    this.tabs.append(h('button', { class: 'btn ghost sm sb-new', title: 'A new empty chip', onclick: () => this.newChip() }, icon('plus', 14), 'New chip'));
+    // New chip and its ▾ in one group that stays in view at the end of the tabs when they scroll (editor.css)
+    const grp = h('span', { class: 'sb-new-grp' }, h('button', { class: 'btn ghost sm sb-new', title: 'A new empty chip', onclick: () => this.newChip() }, icon('plus', 14), 'New chip'));
     if (newChipKinds.length) {
       const more: HTMLButtonElement = h('button', { class: 'btn ghost sm sb-new-more', title: 'Other kinds of new chip', 'aria-label': 'Other kinds of new chip', 'aria-haspopup': 'menu',
         onclick: () => this.newChipMenu(more) }, icon('chevD', 12));
-      this.tabs.append(more);
+      grp.append(more);
     }
+    this.tabs.append(grp);
   }
 
   /** New chip ▾: an empty chip or one of the registered kinds. */
@@ -713,8 +719,7 @@ export class Editor {
     menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { close(); anchor.focus(); } });
     this.el.append(menu);
     const r = anchor.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8))}px`;
-    menu.style.top = `${r.bottom + 6}px`;
+    placeMenu(menu, r, Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)));
     document.addEventListener('pointerdown', away, true);
     menu.querySelector('button')?.focus();
   }
@@ -792,7 +797,7 @@ export class Editor {
     let room = top.clientWidth - px(cs.paddingLeft) - px(cs.paddingRight);
     if (!matchMedia('(max-width: 1000px)').matches) {
       const gap = px(cs.columnGap);
-      const essential = [...this.tabs.children].filter((el) => el.matches('.sb-tab.on, .sb-open, .sb-new, .sb-trail')) as HTMLElement[];
+      const essential = [...this.tabs.children].filter((el) => el.matches('.sb-tab.on, .sb-open, .sb-new-grp, .sb-trail')) as HTMLElement[];
       const tabsGap = px(getComputedStyle(this.tabs).columnGap);
       const tabsNeed = essential.reduce((s, el) => s + el.offsetWidth, 0) + tabsGap * Math.max(0, essential.length - 1);
       const others = [this.partsBtn, this.slots.top].filter((el) => el.offsetWidth > 0);
@@ -817,8 +822,7 @@ export class Editor {
     this.fillMore();
     this.el.append(menu);
     const r = this.moreBtn.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(r.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8))}px`;
-    menu.style.top = `${r.bottom + 6}px`;
+    placeMenu(menu, r, Math.max(8, Math.min(r.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8)));
     this.moreBtn.setAttribute('aria-expanded', 'true');
     document.addEventListener('pointerdown', this.moreAway, true);
     document.addEventListener('keydown', this.moreKey, true);

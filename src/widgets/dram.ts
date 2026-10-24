@@ -181,7 +181,6 @@ function dramPanel(opts: DramSceneOptions): ScenePanel {
     const grid = h('div', { class: 'dram-grid' });
     const msg = h('div', { class: 'dram-note' });
     const title = h('h4', null, `DRAM ${p.rows} × ${p.cols}`, h('span', { class: 'fold-hint' }));
-    title.addEventListener('click', () => el.classList.toggle('collapsed'));
     const body = h('div', { class: 'dram-body' },
       h('div', { class: 'dram-sel' }, h('span', null, 'row'), rowSeg.el, h('span', null, 'column'), colSeg.el, h('span', null, 'data'), dinSeg.el),
       h('div', { class: 'dram-ops' },

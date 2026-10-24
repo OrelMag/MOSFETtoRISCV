@@ -15,6 +15,8 @@ import { bigMemTops, cpuTops, doomTops } from './tops';
 import { rv16Core } from '../src/lib/rv16/cpu';
 import { rv16Pipe } from '../src/lib/rv16/pipe';
 import { rv16SysCore } from '../src/lib/rv16/system';
+import { deckReader } from '../src/cards/reader';
+import { asmDeck } from '../src/lib/soc';
 
 // Build the parametric designs the chapters show, so their schematics are in the registry too.
 const words = assemble(PROGRAMS[0].source).words;
@@ -87,6 +89,15 @@ describe('box symbol text', () => {
   const boxes = [...registry.values()].filter((d) => d.symbol.kind === 'box');
   it.each(boxes.map((d) => [d.id, d] as const))('%s: no port name or label hides another', (_, d) => {
     expect(boxTextOverlaps(d)).toEqual([]);
+  });
+  it('the card reader\'s label keeps clear of its port names (not registered: built per deck)', () => {
+    const d = deckReader(asmDeck('t', 'li a0, 1\nloop: j loop'), 'word', { feed: 2 }), t = boxText(d);
+    const grow = (r: ReturnType<typeof labelRect>, m: number) => ({ x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m });
+    const l = grow(labelRect(t.label!), 0.15);
+    for (const p of t.ports) {
+      const r = portTextRect(p);
+      expect(l.x < r.x + r.w && r.x < l.x + l.w && l.y < r.y + r.h && r.y < l.y + l.h, p.name).toBe(false);
+    }
   });
   it('a short box with a clock at the bottom lifts its label clear of the clock\'s name', () => {
     const c = counter(8), t = boxText(c);

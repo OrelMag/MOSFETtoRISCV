@@ -133,3 +133,20 @@ describe('automatic clock', () => {
     kbd.destroy();
   });
 });
+
+describe('the examples with a CPU start fast', () => {
+  it('carry their automatic clock rate, kept by the store', async () => {
+    const { EXAMPLES, addExample } = await import('../src/editor/examples');
+    const { emptyWorkspace } = await import('../src/editor/model');
+    const { sanitizeChip } = await import('../src/editor/store');
+    for (const id of ['computer', 'cpu4', 'm6502']) {
+      const { ws, id: chipId } = addExample(emptyWorkspace(), EXAMPLES.find((e) => e.id === id)!);
+      const hz = ws.chips[chipId].hz!;
+      expect(hz).toBeGreaterThanOrEqual(1000); // at AUTO_HZ their programs showed nothing for minutes
+      expect(sanitizeChip(ws.chips[chipId])?.hz).toBe(hz);
+    }
+    const { ws, id } = addExample(emptyWorkspace(), EXAMPLES.find((e) => e.id === 'counter7')!);
+    expect(ws.chips[id].hz).toBeUndefined(); // a counter is meant to be watched at AUTO_HZ
+    expect(AUTO_HZ).toBe(2);
+  });
+});

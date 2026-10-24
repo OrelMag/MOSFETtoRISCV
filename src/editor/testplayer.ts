@@ -212,8 +212,8 @@ export class TestPlayer {
       status,
       this.failed.length
         ? h('span', { class: 'sb-tp-fails' },
-          h('button', { class: 'btn ghost sm', title: 'The previous failing test', disabled: prevF === undefined, onclick: () => prevF !== undefined && this.jump(prevF) }, icon('chevL', 12), 'failure'),
-          h('button', { class: 'btn ghost sm', 'data-tp': 'nextfail', title: 'The next failing test', disabled: nextF === undefined, onclick: () => nextF !== undefined && this.jump(nextF) }, 'failure', icon('chevR', 12)),
+          h('button', { class: 'btn ghost sm', title: 'The previous failing test', disabled: prevF === undefined, onclick: () => prevF !== undefined && this.jump(prevF) }, icon('chevL', 12), 'previous failure'),
+          h('button', { class: 'btn ghost sm', 'data-tp': 'nextfail', title: 'The next failing test', disabled: nextF === undefined, onclick: () => nextF !== undefined && this.jump(nextF) }, 'next failure', icon('chevR', 12)),
           h('small', null, `${this.failed.length.toLocaleString()}${this.failed.length >= MAX_FAILED ? '+' : ''} failing`))
         : '');
     this.range.value = String(v.k);
@@ -233,7 +233,7 @@ export class TestPlayer {
       const cells = [
         h('td', { class: 'n' }, String(k + 1)),
         ...set.inputs.map((p) => h('td', null, fmtNum(c.inputs[p.name], p.width))),
-        set.kind === 'sequence' ? h('td', { class: 'clk', title: c.tick ? 'a clock cycle after the inputs' : 'no clock cycle: the clock stays at this level' }, c.tick ? '↑' : String(c.inputs[set.clock!] ?? 0)) : null,
+        set.clock !== undefined ? h('td', { class: 'clk', title: c.tick ? 'a clock cycle after the inputs' : 'no clock cycle: the clock stays at this level' }, c.tick ? '↑' : String(c.inputs[set.clock!] ?? 0)) : null,
         ...set.outputs.map((p, i) => {
           const want = c.expect[p.name];
           if (!cur) return h('td', { class: want === undefined ? 'dc' : '' }, want === undefined ? '–' : fmtNum(want, p.width));
@@ -248,7 +248,8 @@ export class TestPlayer {
       rows.push(h('tr', { class: `${cur ? 'cur' : ''}${fails ? ' bad' : ''}`, onclick: cur ? null : () => this.jump(k) }, ...cells));
     }
     const head = h('tr', null, h('th', { class: 'n' }, '#'), ...set.inputs.map((p) => h('th', { class: 'in' }, p.name)),
-      set.kind === 'sequence' ? h('th', { class: 'clk' }, set.clock ?? 'clk') : null,
+      // a sequence without a clock pin (a switch-level level driven by its own strobes) has no clock column
+      set.clock !== undefined ? h('th', { class: 'clk' }, set.clock) : null,
       ...set.outputs.map((p) => h('th', { class: 'out' }, p.name)), h('th', { class: 'st' }, ''));
     return h('div', { class: 'sb-tp-table' }, h('table', null, h('thead', null, head), h('tbody', null, ...rows)));
   }

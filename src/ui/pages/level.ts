@@ -64,6 +64,8 @@ export class LevelPage implements Page {
   private side = h('aside', { class: 'lv-side', 'aria-label': 'The level' });
   private edWrap = h('div', { class: 'lv-ed' });
   private tab: Tab = 'why';
+  /** A phone: the brief is folded to its tabs (a tap opens one, a tap on the open one folds it) so the canvas and Check stay on screen. */
+  private folded = narrow();
   /** The Tips tab asks before it shows the whole solution. */
   private confirmSolution = false;
   private result: HTMLElement | null = null;
@@ -113,7 +115,7 @@ export class LevelPage implements Page {
       checked: (r, g) => this.checked(r, g),
       actions: () => (hasWalk ? [h('button', { class: 'btn sm', 'data-chal': 'walk', title: 'The reference answer built step by step, each step explained', onclick: () => this.startWalk(0) }, icon('play', 12), 'Walk me through it')] : []),
       // Show answer is the ladder's last rung: the Tips tab asks first.
-      showAnswer: () => { if (this.walk) return this.startWalk(Infinity); this.tab = 'tips'; this.confirmSolution = true; this.renderSide(); },
+      showAnswer: () => { if (this.walk) return this.startWalk(Infinity); this.tab = 'tips'; this.folded = false; this.confirmSolution = true; this.renderSide(); },
     });
     this.edWrap.append(this.editor.el);
     this.el = h('div', { class: 'lv-page' }, this.bar, h('div', { class: 'lv-body' }, this.side, this.edWrap));
@@ -179,9 +181,11 @@ export class LevelPage implements Page {
     const tabs: [Tab, string, string?][] = this.walk ? [['walk', 'Walkthrough'], ['why', 'Why'], ['task', 'Task']]
       : [['why', 'Why'], ['task', 'Task'], ['tips', 'Tips', tipsOf(n).length ? `${shownTips}/${tipsOf(n).length}` : undefined], ['codex', 'Codex', n.codex.length ? String(n.codex.length) : undefined]];
     if (!tabs.some(([id]) => id === this.tab)) this.tab = tabs[0][0];
-    const bar = h('div', { class: 'lv-tabs', role: 'tablist' }, tabs.map(([id, label, badge]) =>
-      h('button', { class: this.tab === id ? 'on' : '', role: 'tab', 'aria-selected': String(this.tab === id), onclick: () => { this.tab = id; this.renderSide(); } },
-        label, badge ? h('small', null, badge) : null)));
+    const bar = h('div', { class: 'lv-tabs', role: 'tablist' }, tabs.map(([id, label, badge]) => {
+      const on = this.tab === id && !this.folded;
+      return h('button', { class: on ? 'on' : '', role: 'tab', 'aria-selected': String(on), 'aria-expanded': narrow() ? String(on) : null,
+        onclick: () => { this.folded = narrow() && on; this.tab = id; this.renderSide(); } }, label, badge ? h('small', null, badge) : null);
+    }));
     const body = h('div', { class: 'lv-sidebody', role: 'tabpanel' });
     if (this.tab === 'walk' && this.walk) body.append(this.walk.panel(n.par ?? {}, () => this.leaveWalk(), () => this.takeWalk(), () => this.finishWalk()));
     else if (this.tab === 'why') this.whyTab(body);
@@ -189,6 +193,7 @@ export class LevelPage implements Page {
     else if (this.tab === 'tips') this.tipsTab(body);
     else this.codexTab(body);
     this.side.replaceChildren(bar, body);
+    this.side.classList.toggle('folded', this.folded);
     if (settings.glossary && this.tab !== 'codex') markTerms(body, 8);
     body.classList.toggle('walking', this.tab === 'walk');
   }
@@ -308,6 +313,7 @@ export class LevelPage implements Page {
     this.walk = WalkMode.open(this.editor!, this.node!, this.ch!, at, this.chipId, () => this.renderSide()) ?? null;
     if (!this.walk) return this.showAnswer();
     this.tab = 'walk';
+    this.folded = false;
     this.renderBar();
     this.renderSide();
   }
@@ -316,6 +322,7 @@ export class LevelPage implements Page {
     this.walk?.leave();
     this.walk = null;
     this.tab = 'why';
+    this.folded = narrow();
     this.renderBar();
     this.renderSide();
   }
@@ -324,6 +331,7 @@ export class LevelPage implements Page {
     this.walk?.takeOver();
     this.walk = null;
     this.tab = 'task';
+    this.folded = narrow();
     this.renderBar();
     this.renderSide();
   }
@@ -404,6 +412,9 @@ export class LevelPage implements Page {
     el.replaceChildren(...parts);
   }
 }
+
+/** The phone layout (level.css): the brief folds away above the editor. */
+const narrow = () => matchMedia('(max-width: 900px)').matches;
 
 /** The anatomy block a level builds, else the one its part first ends up in (the nearest later required level that names one). */
 function blockOf(n: CampaignNode): { id: string; own: boolean } | undefined {

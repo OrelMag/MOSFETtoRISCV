@@ -69,6 +69,17 @@ export function hintBadge(mouse: string, touch: string, key: string, cls = ''): 
   return el;
 }
 
+/**
+ * A fixed drop-down menu placed below `r` at `left`, its height bounded by the viewport so a long
+ * one scrolls instead of running off the bottom (the page under it does not scroll).
+ */
+export function placeMenu(menu: HTMLElement, r: { bottom: number }, left: number): void {
+  const top = r.bottom + 6;
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+  menu.style.maxHeight = `${Math.max(160, innerHeight - top - 8)}px`;
+}
+
 export function clear(el: Element): void {
   while (el.firstChild) el.firstChild.remove();
 }

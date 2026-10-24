@@ -317,7 +317,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   display: flex; justify-content: space-between; align-items: center; gap: 8px;
   padding: 12px 22px; border-top: 1px solid var(--border);
 }
-.narrative-foot .count { font: 12px var(--font-mono); color: var(--muted); }
+.narrative-foot .count { font: 12px var(--font-mono); color: var(--muted); white-space: nowrap; flex: none; }
+/* a neighbouring chapter's title gives way (ellipsis) before the step count wraps */
+.narrative-foot .btn { min-width: 0; }
+.narrative-foot .btn .lbl { overflow: hidden; text-overflow: ellipsis; }
 
 /* challenge */
 .challenge {
@@ -366,7 +369,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   color: var(--accent); border-bottom: 1.5px dotted currentColor; cursor: pointer; border-radius: 3px;
   transition: background 0.12s;
 }
-.prose .look { white-space: nowrap; }
+.prose .look:not(.long) { white-space: nowrap; }
 .look:hover, .look:focus-visible, .look.on { background: var(--accent-soft); outline: none; }
 .look.on { box-shadow: 0 0 0 1px var(--accent); }
 .lit-line {
@@ -473,6 +476,12 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none;
 }
 .stage-notes:empty { display: none; }
+/* a panel docked at the top right (the CPU, bus, DRAM, screen panels…, folded or not) holds that corner: the note goes
+   under the level badge, as wide as the canvas left of the panel allows (--panel-inset: stage.ts syncCover) */
+@media (min-width: 761px) { .canvas:has(> [data-dock='right']) > .stage-notes {
+  top: 44px; right: auto; left: 12px; align-items: flex-start; max-width: min(380px, calc(100% - var(--panel-inset, 0px) - 12px));
+} }
+@media (max-width: 760px) { .canvas:has(> [data-dock='right']) > .stage-notes { top: 56px; } }
 .stage-goal {
   pointer-events: auto; display: flex; align-items: baseline; gap: 8px; max-width: 100%; text-align: left; cursor: pointer;
   font: 600 13px/1.35 var(--font-ui); color: var(--text); padding: 6px 10px; border-radius: 10px;
@@ -682,7 +691,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .ports { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ports td { padding: 4px 6px; border-top: 1px solid var(--border); }
 .ports td:first-child { font-family: var(--font-mono); font-weight: 600; }
-.ports td.val { font-family: var(--font-mono); text-align: right; }
+.ports td.val { font-family: var(--font-mono); text-align: right; overflow-wrap: anywhere; }
 .ports td.dir { color: var(--muted); font-size: 12px; }
 .insp-used { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 12px; font-size: 13px; }
 .insp-used summary { cursor: pointer; font-weight: 600; color: var(--text); }
@@ -1117,7 +1126,8 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .hw-table tbody tr:hover { background: var(--surface-2); }
 .hw-table td.hw-name { white-space: normal; min-width: 220px; }
 .hw-name a { color: var(--text); font-weight: 500; }
-.hw-name code { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-left: 6px; }
+/* a generated id (soc_sys_rom_70ec…_dram_scr_kbd) is cut, whole in its tooltip: it widened the table past its frame */
+.hw-name code { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-left: 6px; display: inline-block; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 .hw-tag { color: var(--muted); font-size: 12px; margin-left: 6px; font-weight: 400; }
 .hw-cat { color: var(--text-2); }
 .hw-cat .hw-dot { margin-right: 6px; }
@@ -1142,6 +1152,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .bm-fam.multi { background: var(--series-2); }
 .bm-fam.pipe { background: var(--series-3); }
 .bm-fam.wide { background: var(--series-4); }
+.bm-fam.off { background: transparent; border: 1.5px dashed var(--text-2); box-sizing: border-box; width: 11px; height: 11px; }
 .bm-dash { display: inline-block; width: 18px; border-top: 1.5px dashed var(--text-2); }
 .bm-chart { position: relative; padding: 4px 8px 8px; }
 .bm-chart svg { display: block; width: 100%; height: auto; }
@@ -1266,7 +1277,10 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .cpu-listing .ln:hover { background: var(--surface-2); }
 .cpu-listing .ln.sel { outline: 1.5px solid var(--hl); outline-offset: -1.5px; border-radius: 4px; }
 .cpu-listing .stg { margin-left: 6px; font: 700 10px var(--font-mono); padding: 0 4px; border-radius: 4px; background: var(--hl); color: var(--accent-text); }
-.cpu-listing .rom-btn { margin-left: auto; border: 1px solid var(--border); background: var(--surface); color: var(--accent); border-radius: 6px; font: 600 11px var(--font-ui); padding: 0 6px; cursor: pointer; }
+.cpu-listing .rom-btn { margin-left: auto; border: 1px solid var(--border); background: var(--surface); color: var(--accent); border-radius: 6px; font: 600 11px var(--font-ui); padding: 0 6px; cursor: pointer; flex: none; }
+/* the instruction text gives way (ellipsis) so stage tags and "in ROM" stay whole in a narrow panel */
+.cpu-listing .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cpu-listing .stg { flex: none; }
 .cpu-use { font-size: 12px; color: var(--text-2); margin: 4px 0 2px; }
 .cpu-use:empty { display: none; }
 .cpu-use code { font: 600 12px var(--font-mono); color: var(--text); }

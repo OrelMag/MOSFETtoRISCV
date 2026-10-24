@@ -114,7 +114,6 @@ function memCtrlPanel(c: DramConfig): ScenePanel {
         btn('Idle 50', 'Clock 50 cycles with no request (a refresh may come)', idle(50)),
         btn('Idle 500', 'Clock 500 cycles with no request', idle(500))),
       status, banks, h('div', { class: 'cpu-sec' }, `Commands, the last ${TRACE} cycles`), timeline, h('div', { class: 'cpu-sec' }, 'Requests'), reqs);
-    title.addEventListener('click', () => el.classList.toggle('collapsed'));
 
     const update = () => {
       const s = sim();

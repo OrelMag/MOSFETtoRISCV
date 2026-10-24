@@ -33,7 +33,10 @@ export const portTextRect = (p: BoxPortText): Rect => {
   // rotate(-90) about (x, y): along the text is up the screen, its glyphs left of x
   return p.across ? { x: p.x - (p.y - r.y), y: p.y - (r.x + r.w - p.x), w: r.h, h: r.w } : r;
 };
-export const labelRect = (l: NonNullable<BoxText['label']>): Rect => textRect(l.x, l.y, l.text.length, LABEL_FONT, LABEL_EM, 'middle');
+/** Capitals in the label's bold UI font (and the cartoon look's rounded one) run wider than the average letter. */
+const LABEL_CAP_EM = 0.7;
+const labelChars = (s: string) => s.length + (LABEL_CAP_EM / LABEL_EM - 1) * (s.match(/[A-Z]/g)?.length ?? 0);
+export const labelRect = (l: NonNullable<BoxText['label']>): Rect => textRect(l.x, l.y, labelChars(l.text), LABEL_FONT, LABEL_EM, 'middle');
 
 const hit = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 

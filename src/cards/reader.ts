@@ -95,7 +95,7 @@ export function cardReader(spec: CardReaderSpec): ComponentDef {
       { name: 'ready', width: 1, dir: 'out', doc: `1 while a ${unit} waits at the station` },
       { name: 'empty', width: 1, dir: 'out', doc: '1 once the hopper is empty and the last card taken' },
     ],
-    symbol: { kind: 'box', label: 'CARD READER', w: 10, h: 8 },
+    symbol: { kind: 'box', label: 'CARD READER', w: 14, h: 8 },
     behavior: {
       // edge-triggered storage (the card at the station): the outputs follow the state alone, which moves only at
       // a rising clk edge, so the cycle engine may run a circuit whose logic carries data back into next
