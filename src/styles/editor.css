@@ -93,6 +93,9 @@
 }
 .sb-new { flex: none; }
 .sb-actions { display: flex; align-items: center; gap: 2px; flex: none; }
+/* never shrink: a touch screen's .btn min-width (40 px) replaces the automatic one, so a labelled button squeezed to
+   40 px drew its label over the next; fitActions moves what does not fit into More instead */
+.sb-actions > .btn { flex-shrink: 0; }
 /* The least used actions move into More when the bar is too narrow for them (editor.ts fitActions). */
 .sb-more { flex: none; }
 .sb-more-menu { min-width: 220px; }
