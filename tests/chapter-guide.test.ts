@@ -18,6 +18,20 @@ function quizOk(where: string, q: Quiz): void {
 }
 
 describe('chapter guide', () => {
+  it('a link whose text is a chapter number names the chapter it goes to (renumbering left stale ones)', async () => {
+    const { readdirSync, readFileSync } = await import('node:fs');
+    const bad: string[] = [];
+    for (const dir of ['src/chapters', 'src/widgets', 'src/campaign', 'src/ui', 'src/editor'])
+      for (const f of readdirSync(dir, { recursive: true }) as string[]) {
+        if (!f.endsWith('.ts')) continue;
+        for (const m of readFileSync(`${dir}/${f}`, 'utf8').matchAll(/#\/c\/([\w-]+)[^>]*>([^<]{0,60})</g)) {
+          const s = m[2].trim(), n = s.match(/^(?:[Cc]hapters? )?(\d+)$/) ?? s.match(/[Cc]hapters? (\d+)/);
+          // (a number past 99 is a name: "6502")
+          if (n && +n[1] < 100 && chapterById(m[1])?.num !== +n[1]) bad.push(`${dir}/${f}: #/c/${m[1]} is chapter ${chapterById(m[1])?.num}, the text says "${s}"`);
+        }
+      }
+    expect(bad).toEqual([]);
+  });
   it('names in the text and highlights resolve in the scene they point at', () => {
     for (const c of chapters) {
       c.steps.forEach((s, i) => {

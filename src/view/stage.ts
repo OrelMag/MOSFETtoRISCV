@@ -1401,6 +1401,9 @@ export class Stage {
     const inset = this.rightInset();
     const refit = inset !== this.inset;
     this.inset = inset;
+    // the challenge note keeps clear of the right-docked panels, folded ones too (app.css .stage-notes)
+    const covered = this.panels.filter((p) => p.el.dataset.dock === 'right').map((p) => p.el.offsetWidth).filter((w) => w > 0);
+    this.canvas.style.setProperty('--panel-inset', `${covered.length ? Math.max(...covered) + 24 : 0}px`);
     this.dockOut();
     this.placeHint();
     this.view.setCover(this.covers(), refit);

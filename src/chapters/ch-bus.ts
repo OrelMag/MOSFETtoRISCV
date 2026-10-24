@@ -214,7 +214,7 @@ export const chBus: Chapter = {
     {
       title: 'A computer on one bus',
       body: `
-        <p>The system <span data-show="cpu">CPU</span> of chapters <a href="#/c/io/0">18</a> and <a href="#/c/traps/0">19</a>, its memory moved onto the bus. In place of its data memory sits a
+        <p>The system <span data-show="cpu">CPU</span> of chapters <a href="#/c/io/0">19</a> and <a href="#/c/traps/0">20</a>, its memory moved onto the bus. In place of its data memory sits a
         <span data-show="cpu.dm">memory unit</span> (${nands(busMemUnit(7))} NANDs): instructions below 0x200 come from a boot ROM inside the CPU, any other address is fetched over the
         bus into an instruction register, and loads and stores go over the bus. The CPU waits (retire = 0) until both are done, and
         the decoder sees a NOP while an instruction is on its way. Console, LEDs and timer stay inside.</p>

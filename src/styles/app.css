@@ -369,7 +369,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   color: var(--accent); border-bottom: 1.5px dotted currentColor; cursor: pointer; border-radius: 3px;
   transition: background 0.12s;
 }
-.prose .look { white-space: nowrap; }
+.prose .look:not(.long) { white-space: nowrap; }
 .look:hover, .look:focus-visible, .look.on { background: var(--accent-soft); outline: none; }
 .look.on { box-shadow: 0 0 0 1px var(--accent); }
 .lit-line {
@@ -476,10 +476,12 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none;
 }
 .stage-notes:empty { display: none; }
-/* a CPU panel holds the top right: the note goes under the level badge, clear of the panel */
-@media (min-width: 761px) { .canvas:has(> .cpu-panel:not(.collapsed)) > .stage-notes {
-  top: 44px; right: auto; left: 12px; align-items: flex-start; max-width: min(380px, calc(100% - 380px));
+/* a panel docked at the top right (the CPU, bus, DRAM, screen panels…, folded or not) holds that corner: the note goes
+   under the level badge, as wide as the canvas left of the panel allows (--panel-inset: stage.ts syncCover) */
+@media (min-width: 761px) { .canvas:has(> [data-dock='right']) > .stage-notes {
+  top: 44px; right: auto; left: 12px; align-items: flex-start; max-width: min(380px, calc(100% - var(--panel-inset, 0px) - 12px));
 } }
+@media (max-width: 760px) { .canvas:has(> [data-dock='right']) > .stage-notes { top: 56px; } }
 .stage-goal {
   pointer-events: auto; display: flex; align-items: baseline; gap: 8px; max-width: 100%; text-align: left; cursor: pointer;
   font: 600 13px/1.35 var(--font-ui); color: var(--text); padding: 6px 10px; border-radius: 10px;
