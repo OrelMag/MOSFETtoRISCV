@@ -19,6 +19,7 @@ import type { Page } from './chapter';
 export class WorkbenchPage implements Page {
   readonly el: HTMLElement;
   private stage: Stage;
+  private inspector: Inspector;
   private list: HTMLElement;
   private params: HTMLElement;
   private current = '';
@@ -30,7 +31,7 @@ export class WorkbenchPage implements Page {
   private routing = false;
 
   constructor(id: string, path?: string[]) {
-    const inspector = new Inspector();
+    const inspector = this.inspector = new Inspector();
     this.stage = new Stage(inspector);
     this.stage.leafFactory = transistorLeaf;
     const search = h('input', { type: 'search', placeholder: 'Search components…', 'aria-label': 'Search components' }) as HTMLInputElement;
@@ -89,10 +90,13 @@ export class WorkbenchPage implements Page {
       // A stale or mistyped link: say so, offer the closest parts, and keep the library list to pick from.
       const near = suggestItems(id);
       this.current = '';
+      this.libName.textContent = '';
       this.stage.showWidget({ el: h('div', { class: 'widget' }, h('div', { class: 'panel' },
         h('h3', null, 'Unknown component'),
         h('p', { class: 'sub' }, `No component called "${id}". ${near.length ? 'Did you mean:' : 'Pick one from the library list, or search it.'}`),
         near.length ? h('div', { class: 'suggest' }, near.map((it) => h('button', { class: 'btn', onclick: () => this.open(it.id) }, it.name))) : null)) });
+      // the stage's last part is gone from view: its description must go too
+      this.inspector.reset();
       this.renderParams();
       this.renderList();
       this.showLibrary(true); // a phone: the list to pick from, opened
