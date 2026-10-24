@@ -14,8 +14,7 @@ export const memGridPanel: ScenePanel = (stage: Stage): Widget => {
   const title = h('h4', null, 'Memory contents', h('span', { style: 'font-weight:500;color:var(--muted)' }, ''));
   // docked right like the CPU panel: the fit leaves room for it, and it starts folded where it would hide the read mux
   const el = h('div', { class: 'mem-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title, rows);
-  title.title = 'Click to collapse / expand';
-  title.addEventListener('click', () => el.classList.toggle('collapsed'));
+  title.title = 'Click to collapse / expand'; // (the stage folds a right-docked panel: Stage.foldable)
   const update = () => {
     const root = stage.rootCtx;
     if (!root) return;
