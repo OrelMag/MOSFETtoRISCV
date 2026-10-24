@@ -595,7 +595,7 @@ export class Editor {
   /** settings.autoClock: a clocked chip starts running the first time it is simulated (EditorSim.autoStart). */
   private autoClock(): void {
     const sim = this.sim;
-    if (!settings.autoClock || sim.autoTried || !sim.autoStart(this.rateChosen ? sim.hz : AUTO_HZ)) return;
+    if (!settings.autoClock || sim.autoTried || !sim.autoStart(this.rateChosen ? sim.hz : this.doc.hz ?? AUTO_HZ)) return;
     if (this.rateSel && sim.mode === 'cycle') this.rateSel.value = String(sim.hz);
   }
 
