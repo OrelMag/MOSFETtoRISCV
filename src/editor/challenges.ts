@@ -9,7 +9,7 @@ import { flatten, type FlatDesign } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import type { Sim } from '../sim/sim';
 import { hasFeedback, logicDepth, stats } from '../sim/stats';
-import { shortText, SwitchSim } from '../sim/switchsim';
+import { shortText, SwitchSim, WEAK_H, weakTag } from '../sim/switchsim';
 import { analyzeTiming } from '../sim/timing';
 import { B0, B1, BZ, type Bit, type ComponentDef, isExternal, isSwitchPrim, netlistOf } from '../sim/types';
 import { ioInfo } from './ioparts';
@@ -442,10 +442,16 @@ function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], 
   const relays = sim instanceof SwitchSim && sim.hasRelays;
   let steps = 0;
   /** `short`: a short in this row or on the way to it (switch level), which fails it even with the outputs right. */
-  const compare = (v: number[], got: Bit[][], row: number, short?: string) => {
+  /** `weak`: per output, the weak level of its bit (switch level, 1-bit outputs): it does not reach its rail, so it fails. */
+  const compare = (v: number[], got: Bit[][], row: number, short?: string, weak?: number[]) => {
     const want = spec(v);
     const mask = care?.(v);
-    const wrong = O.map((p, k) => (matches(got[k], want[k], mask?.[k]) ? null : `${p.name}=${fmtBits(got[k])}`));
+    const wrong = O.map((p, k) => {
+      if (!matches(got[k], want[k], mask?.[k])) return `${p.name}=${fmtBits(got[k])}`;
+      const wk = weak?.[k];
+      if (!wk || (mask?.[k] !== undefined && !(mask[k] % 2))) return null;
+      return `${p.name}=${wk === WEAK_H ? 'H (a weak 1' : 'L (a weak 0'}, ${weakTag(wk).slice(4)})`;
+    });
     if (wrong.every((w) => w === null) && !short) return;
     bad++;
     if (failed.length < MAX_FAILED) failed.push(row);
@@ -490,7 +496,8 @@ function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], 
     sim.settle();
     steps = Math.max(steps, sim.time - t0);
     if (sim.unstable) throw new Error(`it does not settle for ${fmtIns(I, v)} (it oscillates)`);
-    compare(v, O.map((p) => readBits(sim, p.name)), row, shortNow() ?? onTheWay);
+    const weak = sw?.hasWeak ? O.map((p) => (p.width === 1 ? sw.weakOf(sim.design.root.ports[p.name][0]) : 0)) : undefined;
+    compare(v, O.map((p) => readBits(sim, p.name)), row, shortNow() ?? onTheWay, weak);
     last = v;
   };
   const head = Math.min(vs.length, 64);
@@ -533,7 +540,10 @@ function runSequence(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[
     seqStep(sim, clk, st, k, vals, (n) => { steps = Math.max(steps, n); });
     const wrong = Object.entries(st.expect).flatMap(([p, want]) => {
       const g = readBits(sim, p);
-      return matches(g, want) ? [] : [[p, fmtBits(g), fmtNum(want, g.length)]];
+      if (!matches(g, want)) return [[p, fmtBits(g), fmtNum(want, g.length)]];
+      // a weak level on a 1-bit output fails too (see runTable)
+      const wk = sim instanceof SwitchSim && g.length === 1 ? sim.weakOf(sim.design.root.ports[p][0]) : 0;
+      return wk ? [[p, `${wk === WEAK_H ? 'H (a weak 1' : 'L (a weak 0'}, ${weakTag(wk).slice(4)})`, fmtNum(want, 1)]] : [];
     });
     // switch level: a short at the end of a step fails it, outputs right or not (see runTable)
     const short = sim instanceof SwitchSim && sim.hasShort ? shortText(sim, sim.shorts()[0]) : undefined;
