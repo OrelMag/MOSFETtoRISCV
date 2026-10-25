@@ -415,7 +415,7 @@ export class SchematicView {
         tagText = weakTag(wk);
         for (const p of w.paths) p.style.setProperty('--lv', tag.toFixed(3));
       }
-      if (lvSim || w.level) this.paintLevel(w, tag, tagText);
+      if (lvSim || wk || w.level) this.paintLevel(w, tag, tagText);
       if (shorts && ctx.node.nets?.[w.net.index]?.some((n) => shorts[n])) vcls += ' short';
       if (vcls !== w.shown) {
         if (flow && w.shown !== undefined && w.paths.length) this.flowWire(w, vcls);
