@@ -87,9 +87,28 @@ export interface FsmDoc {
   form: TableDoc['form'];
   /** Codes no state has go to the reset state (else don't cares: cheapest). */
   safe?: true;
+  /** A datapath (fsmd.ts): registers the states load, data inputs and outputs, tests on the arcs. */
+  data?: FsmDataDoc;
+  /** Generated for this chip (a datapath machine's controller): edited only there. */
+  of?: string;
 }
 
-export interface FsmStateDoc { name: string; at: [number, number]; out?: string[] }
+/** A state machine's datapath: every data input, register and data output is `width` bits. */
+export interface FsmDataDoc {
+  width: number;
+  ins: string[];
+  regs: string[];
+  /** Data outputs: each shows a register or a data input. */
+  outs: { name: string; src: string }[];
+}
+
+export interface FsmStateDoc {
+  name: string;
+  at: [number, number];
+  out?: string[];
+  /** Register transfers at the clock edge leaving the state: reg := expr (fsmd.ts), at most one per register. */
+  act?: { reg: string; expr: string }[];
+}
 
 export interface FsmArcDoc {
   from: number;
@@ -98,6 +117,8 @@ export interface FsmArcDoc {
   when: Record<string, 0 | 1>;
   /** Mealy outputs at 1 while this arc is the one the next edge takes. */
   out?: string[];
+  /** Datapath tests the arc also needs (fsmd.ts): a comparison (a < b, x = 0) or a register bit (a[7]), true or false. */
+  test?: { expr: string; is: 0 | 1 }[];
   /** Drawn by hand: the curve's bend (a self-loop's angle in degrees), the label's offset. Absent: placed automatically. */
   bend?: number;
   loop?: number;

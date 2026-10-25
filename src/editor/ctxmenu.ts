@@ -17,8 +17,10 @@ import { canUnravel, pointersOf } from './unravel';
 import { hueSwatches } from './hueswatch';
 import { colourNets, hueOfNets } from './wirehue';
 
-interface Item { label: string; key?: string; run(): void; disabled?: boolean }
-type Entry = Item | null;
+export interface MenuItem { label: string; key?: string; run(): void; disabled?: boolean; checked?: boolean }
+type Item = MenuItem;
+export type MenuEntry = Item | null;
+type Entry = MenuEntry;
 
 let menu: HTMLElement | null = null;
 const onOutside = (e: PointerEvent) => { if (menu && !menu.contains(e.target as Node)) closeContextMenu(); };
@@ -162,13 +164,22 @@ export function openContextMenu(ed: Editor, x: number, y: number, at: Vec): void
         ed.edit((d) => colourNets(d, ed.compiled, wires, labels, hue));
       }, 'menuitemradio')), h('hr'));
   }
-  for (const it of entries(ed, at)) {
+  showMenu(x, y, entries(ed, at), m);
+}
+
+/** A menu of these entries at a screen point (null: a separator); `into` an element already holding a header. */
+export function showMenu(x: number, y: number, list: MenuEntry[], into?: HTMLElement): void {
+  if (!into) closeContextMenu();
+  const m = into ?? h('div', { class: 'sb-ctx', role: 'menu', 'aria-label': 'Actions' });
+  for (const it of list) {
     if (!it) { if (m.lastElementChild && m.lastElementChild.tagName !== 'HR') m.append(h('hr')); continue; }
+    const check = it.checked !== undefined;
     m.append(h('button', {
-      role: 'menuitem', disabled: it.disabled ? true : null,
+      role: check ? 'menuitemcheckbox' : 'menuitem', 'aria-checked': check ? String(it.checked) : null, disabled: it.disabled ? true : null,
       onclick: () => { closeContextMenu(); it.run(); },
-    }, h('span', null, it.label), it.key ? h('kbd', null, it.key) : null));
+    }, h('span', null, check ? `${it.checked ? '✓' : ' '} ${it.label}` : it.label), it.key ? h('kbd', null, it.key) : null));
   }
+  if (m.lastElementChild?.tagName === 'HR') m.lastElementChild.remove();
   menu = m;
   document.body.append(m);
   // Keep it on screen: open up / left of the cursor when it would overflow.
@@ -177,7 +188,7 @@ export function openContextMenu(ed: Editor, x: number, y: number, at: Vec): void
   m.style.top = `${Math.max(8, y + hh > innerHeight - 8 ? y - hh : y)}px`;
   document.addEventListener('pointerdown', onOutside, true);
   document.addEventListener('keydown', onKey, true);
-  m.querySelector<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)')?.focus();
+  m.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
 }
 
 registerEditorPlugin((ed) => {

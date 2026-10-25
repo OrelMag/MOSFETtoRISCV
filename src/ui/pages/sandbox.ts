@@ -11,6 +11,7 @@ import '../../styles/sbchips.css';
 import { Editor } from '../../editor/editor';
 import { SHARE_SEG, shareRoute } from '../../editor/files';
 import { FSM_TEMPLATE, newFsmChip } from '../../editor/fsmchip';
+import { GCD_FSMD } from '../../editor/fsmd';
 import type { Workspace } from '../../editor/model';
 import { newTableChip } from '../../editor/ttable';
 
@@ -43,7 +44,8 @@ export class SandboxPage implements Page {
 
   /** #/sandbox/new/<kind> (a chapter's link): a new chip of that kind, opened, the address then its own. */
   private makeNew(kind = location.hash.split('/')[3]): void {
-    const make = kind === 'fsm' ? (ws: Workspace) => newFsmChip(ws, FSM_TEMPLATE, '101 detector') : kind === 'table' ? (ws: Workspace) => newTableChip(ws) : null;
+    const make = kind === 'fsm' ? (ws: Workspace) => newFsmChip(ws, FSM_TEMPLATE, '101 detector') : kind === 'fsmd' ? (ws: Workspace) => newFsmChip(ws, GCD_FSMD, 'GCD')
+      : kind === 'table' ? (ws: Workspace) => newTableChip(ws) : null;
     if (!make) return void history.replaceState(null, '', '#/sandbox');
     let id = '';
     this.editor.editWs((ws) => { const r = make(ws); id = r.id; return r.ws; });

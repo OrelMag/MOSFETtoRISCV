@@ -17,10 +17,12 @@ import { type ChipDoc, emptyChip, type FsmDoc, isIdent, type TableDoc, uniqueNam
 import { partDef } from './parts';
 import { openChip } from './session';
 import { drawTable, tableCost, tableProblem } from './ttable';
+import { controllerOf, dataProblem, exprText, fsmdTopDef, parseExpr, planOf } from './fsmd';
+import { UserLibrary } from './library';
 
 export const FSM_MAX_STATES = 16;
 export const FSM_MAX_IN = 6;
-export const FSM_MAX_OUT = 8;
+export const FSM_MAX_OUT = 16;
 export type Encoding = FsmDoc['encoding'];
 export const ENCODINGS: Encoding[] = ['binary', 'gray', 'onehot'];
 
@@ -85,7 +87,8 @@ export function fsmWarnings(doc: FsmDoc): string[] {
     let taken = false;
     for (let c = 0; c < combos && !taken; c++) {
       const inp = doc.ins.map((_, i) => (c >> (doc.ins.length - 1 - i)) & 1);
-      taken = arcOf(doc, a.from, inp) === k;
+      const first = doc.arcs.findIndex((b, j) => b.from === a.from && (j === k || !b.test?.length) && doc.ins.every((x, i) => b.when[x] === undefined || b.when[x] === inp[i]));
+      taken = first === k;
     }
     if (!taken) out.push(`${doc.states[a.from].name} → ${doc.states[a.to].name} (${condText(doc, a.when)}) is never taken: an earlier arc out of ${doc.states[a.from].name} takes its inputs`);
   });
@@ -138,6 +141,9 @@ export function outTable(doc: FsmDoc, enc: Encoding = doc.encoding, of?: string)
 
 /** Why an encoding cannot be built (its tables would pass 8 inputs), or null. */
 export function encodingProblem(doc: FsmDoc, enc: Encoding): string | null {
+  const c = ctlOf(doc);
+  if ('error' in c) return c.error;
+  doc = c;
   const k = stateBits(doc.states.length, enc);
   if (k + doc.ins.length > 8) return `${k} state bits + ${doc.ins.length} inputs: more than the 8 a table takes`;
   return null;
@@ -153,7 +159,8 @@ export function encodingCosts(doc: FsmDoc): EncodingCost[] {
     const problem = encodingProblem(doc, enc) ?? undefined;
     const dffs = stateBits(doc.states.length, enc);
     if (problem) return { enc, dffs, nands: 0, logic: 0, problem };
-    const t1 = nextTable(doc, enc), t2 = outTable(doc, enc);
+    const c = ctlOf(doc) as FsmDoc;
+    const t1 = nextTable(c, enc), t2 = outTable(c, enc);
     // the reset gating: one AND (or OR) per bit, an inverter for rst
     const gate = dffs * stats(enc === 'onehot' ? OR : AND).nands + stats(NOT).nands;
     const logic = tableCost(t1).nands + tableCost(t2).nands + gate;
@@ -164,6 +171,15 @@ export function encodingCosts(doc: FsmDoc): EncodingCost[] {
 // ---- the chips ----------------------------------------------------------------------------------------
 
 export const childIds = (id: string): { next: string; out: string } => ({ next: `${id}_next`, out: `${id}_out` });
+
+/** A datapath machine's controller chip (its own two tables are childIds of it). */
+export const ctlId = (id: string): string => `${id}_ctl`;
+
+/** The machine a controller is drawn from: the doc itself, or a datapath machine's controller (the owner left empty). */
+function ctlOf(doc: FsmDoc): FsmDoc | { error: string } {
+  if (!doc.data) return doc;
+  return dataProblem(doc) ? { error: dataProblem(doc)! } : controllerOf(doc, '');
+}
 
 /** A generated table chip compiled as it will be placed. */
 function placed(chip: ChipDoc): ComponentDef | { error: string } {
@@ -212,8 +228,9 @@ function topDef(doc: FsmDoc, next: ComponentDef, out: ComponentDef, enc: Encodin
 export function setFsm(ws: Workspace, id: string, doc: FsmDoc): Workspace | { error: string } {
   const top = ws.chips[id];
   if (!top) return { error: 'no such chip' };
-  const why = fsmProblem(doc) ?? encodingProblem(doc, doc.encoding);
+  const why = fsmProblem(doc) ?? dataProblem(doc) ?? encodingProblem(doc, doc.encoding);
   if (why) return { error: why };
+  if (doc.data) return setFsmd(ws, id, doc);
   const ids = childIds(id);
   const chips = { ...ws.chips };
   const made: ComponentDef[] = [];
@@ -243,11 +260,39 @@ export function setFsm(ws: Workspace, id: string, doc: FsmDoc): Workspace | { er
   return { ...ws, chips };
 }
 
+/** A datapath machine: its controller chip (made or redrawn, with its tables), then the top level around it. */
+function setFsmd(ws: Workspace, id: string, doc: FsmDoc): Workspace | { error: string } {
+  const top = ws.chips[id], cid = ctlId(id);
+  const plan = planOf(doc);
+  const ctl = controllerOf(doc, id, plan);
+  if ('error' in ctl) return ctl;
+  const old = ws.chips[cid];
+  if (old && old.fsm?.of !== id) return { error: `a chip called ${cid} is in the way` };
+  const w1 = setFsm({ ...ws, chips: { ...ws.chips, [cid]: old ?? emptyChip(cid, `${top.name}: controller`) } }, cid, ctl);
+  if ('error' in w1) return { error: `controller: ${w1.error}` };
+  const lib = new UserLibrary(w1);
+  const c = lib.compiled(cid), ctlDef = lib.defOf(cid);
+  const err = c?.diags.find((d) => d.level === 'error');
+  if (!ctlDef || err) return { error: `controller: ${err?.msg ?? 'does not compile'}` };
+  const drawn = docFromDef(fsmdTopDef(doc, ctlDef, plan), { id, name: top.name, refOf: (d) => (d === ctlDef ? { chip: cid } : undefined) });
+  if ('error' in drawn) return drawn;
+  const prev = new Map(top.pins.map((p) => [p.name, p]));
+  const pins = drawn.pins.map((p) => {
+    const o = prev.get(p.name);
+    return o && o.dir === p.dir && o.width === p.width && o.value !== undefined ? { ...p, value: o.value } : p;
+  });
+  // the controller's tables of an earlier plain machine go
+  const chips = { ...w1.chips, [id]: { ...top, pins, parts: drawn.parts, wires: drawn.wires, labels: drawn.labels, fsm: doc } };
+  for (const t of Object.values(childIds(id))) if (chips[t]?.table?.of === id) delete chips[t];
+  return { ...w1, chips };
+}
+
 /** A new state-machine chip (the 101 detector), opened. */
 export function newFsmChip(ws: Workspace, doc: FsmDoc = FSM_TEMPLATE, name = 'State machine'): { ws: Workspace; id: string } {
   const taken = Object.keys(ws.chips);
   let id = uniqueName('u_fsm', taken);
-  while (taken.includes(childIds(id).next) || taken.includes(childIds(id).out)) id = uniqueName(`${id}_`, taken);
+  const clash = (x: string) => [childIds(x).next, childIds(x).out, ctlId(x), childIds(ctlId(x)).next, childIds(ctlId(x)).out].some((c) => taken.includes(c));
+  while (clash(id)) id = uniqueName(`${id}_`, taken);
   const r = setFsm({ ...ws, chips: { ...ws.chips, [id]: emptyChip(id, name) } }, id, doc);
   if ('error' in r) throw new Error(r.error);
   return { ws: openChip(r, id), id };
@@ -264,7 +309,17 @@ export function detachFsm(ws: Workspace, id: string): Workspace {
     const t = chips[cid]?.table;
     if (t?.of === id) { const { of: _o, ...free } = t; chips[cid] = { ...chips[cid], table: free }; }
   }
+  // a datapath machine's controller becomes a machine of its own
+  const f = chips[ctlId(id)]?.fsm;
+  if (f?.of === id) { const { of: _o, ...free } = f; chips[ctlId(id)] = { ...chips[ctlId(id)], fsm: free }; }
   return { ...ws, chips };
+}
+
+/** The datapath machine a controller chip is drawn for (present and still owning it), if any. */
+export function fsmOwnerOf(ws: Workspace, id: string): ChipDoc | undefined {
+  const of = ws.chips[id]?.fsm?.of;
+  const o = of ? ws.chips[of] : undefined;
+  return o?.fsm?.data ? o : undefined;
 }
 
 /** The state-machine chip whose machine a table chip follows (present and still owning it), if any. */
@@ -278,7 +333,7 @@ export function ownerOf(ws: Workspace, id: string): ChipDoc | undefined {
 
 /** Diagram drawing hints for each arc: a bend apart from a reverse arc or around a state in the way, loop angles. */
 function drawingOf(doc: FsmDoc): Pick<FsmArc, 'bend' | 'loop'>[] {
-  const loops = new Map<number, number>();
+  const loops = new Map<number, number>(), pairs = new Map<string, number>();
   return doc.arcs.map((a) => {
     if (a.from === a.to) {
       const k = loops.get(a.from) ?? 0;
@@ -294,12 +349,23 @@ function drawingOf(doc: FsmDoc): Pick<FsmArc, 'bend' | 'loop'>[] {
       if (t <= 0 || t >= 1) return false;
       return Math.hypot(A[0] + t * (B[0] - A[0]) - s.at[0], A[1] + t * (B[1] - A[1]) - s.at[1]) < 40;
     });
-    return { bend: blocked ? -70 : reverse ? 22 : 0 };
+    // every arc a gentle curve (a straight one reads as a wire), apart from a reverse arc, around a state in the way;
+    // more arcs between the same two states fan out
+    const k = pairs.get(`${a.from}>${a.to}`) ?? 0;
+    pairs.set(`${a.from}>${a.to}`, k + 1);
+    return { bend: blocked ? -70 - 30 * k : (reverse ? 24 : 16) + 30 * k };
   });
 }
 
 /** An arc's diagram label: its condition (inputs in order, – for either), then / and its Mealy outputs. */
 export function arcLabel(doc: FsmDoc, a: FsmDoc['arcs'][number]): string {
+  if (doc.data) {
+    // a datapath machine: its inputs and tests by name (x, ¬start, a < b)
+    const parts = [...doc.ins.filter((x) => a.when[x] !== undefined).map((x) => (a.when[x] ? x : `¬${x}`)),
+      ...(a.test ?? []).map((t) => (t.is ? t.expr : `¬(${t.expr})`))];
+    const outs = a.out?.length ? ` / ${a.out.join(' ')}` : '';
+    return parts.join(' · ') + outs;
+  }
   const cond = doc.ins.map((x) => (a.when[x] === undefined ? '–' : String(a.when[x]))).join('');
   return isMealy(doc) ? `${cond || '·'}/${doc.outs.map((o) => (a.out?.includes(o) ? 1 : 0)).join('')}` : cond;
 }
@@ -326,9 +392,10 @@ export function specOf(doc: FsmDoc, implicit = false): FsmSpec {
     title: 'state machine', shape: 'circle', size: [W, H],
     states: doc.states.map((s, i) => ({
       name: s.name, code: codes[i], at: [s.at[0], s.at[1]],
+      ...(s.act?.length ? { sub: s.act.map((t) => { const e = doc.data ? parseExpr(t.expr, doc.data) : null; return `${t.reg}:=${e && !('error' in e) ? exprText(e).replace(/ /g, '') : t.expr}`; }).join(' ') } : {}),
       ...(s.out?.length ? { out: Object.fromEntries(s.out.map((o) => [o, 1])), does: `Moore: ${s.out.join(', ')} = 1` } : {}),
     })),
     arcs, reset: doc.reset, inputs: [...doc.ins, 'rst'], outputs: [...doc.outs], resetIn: { rst: 1 },
-    stateBits: Array.from({ length: k }, (_, i) => `s${i}.q`), codeBits: k, entry: [Math.max(8, R[0] - 72), R[1]],
+    stateBits: Array.from({ length: k }, (_, i) => `${doc.data ? 'ctl.' : ''}s${i}.q`), codeBits: k, entry: [Math.max(8, R[0] - 72), R[1]],
   };
 }

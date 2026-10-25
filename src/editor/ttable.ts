@@ -20,7 +20,7 @@ import { isError, partDef } from './parts';
 import { openChip } from './session';
 
 export const TABLE_MAX_IN = 8;
-export const TABLE_MAX_OUT = 8;
+export const TABLE_MAX_OUT = 16;
 export type Cell = '0' | '1' | '-';
 /** Past this many terms the drawing joins terms to outputs by labels. */
 const LABELLED_TERMS = 8;
@@ -185,8 +185,9 @@ function chunks<T>(xs: T[], k: number): T[][] {
 
 /** The ROM part a table is stored in: 2^n words of 8 bits, output j in bit j (don't cares 0). */
 export function tableRomRef(t: TableDoc): Extract<PartRef, { rom: unknown }> {
+  const w = t.outs.length > 8 ? 16 : 8;
   const words = Array.from({ length: rowCount(t) }, (_, r) => t.rows.reduce((w, s, j) => w | (s[r] === '1' ? 1 << j : 0), 0));
-  return { rom: { k: t.ins.length, w: 8, addr: 'word', lang: 'hex', src: words.map((w) => w.toString(16)).join('\n') } };
+  return { rom: { k: t.ins.length, w, addr: 'word', lang: 'hex', src: words.map((w) => w.toString(16)).join('\n') } };
 }
 
 /** The ROM form: the inputs merged into the address (the first input most significant), the word split into the outputs. */
@@ -200,7 +201,7 @@ function romTableDef(t: TableDoc, id: string): { def: ComponentDef; rom: Compone
   b.next();
   const data = b.op1(rom, [addr], 'every row stored', 'rom');
   b.next();
-  const sp = b.op(splitter(ones(8)), [data], 'bits');
+  const sp = b.op(splitter(ones(t.outs.length > 8 ? 16 : 8)), [data], 'bits');
   b.next();
   t.outs.forEach((o, j) => b.wire(`${sp}.o${j}`, o));
   const R = Math.max(b.right, 30), pitch = 4;

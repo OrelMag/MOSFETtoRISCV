@@ -1,32 +1,46 @@
-// State-machine chips in the sandbox (plugin): the machine beside the canvas (a diagram to draw on: states dragged,
-// added, arcs drawn from state to state; the selection's properties; the encodings and what each costs; the
-// read-back of the built circuit), a banner on the canvas (Detach, Hide), New chip ▾ State machine. Every edit is
-// one undo step that redraws the chip and its two table chips (fsmchip.ts). While the chip runs, the diagram lights
-// the state its flip-flops hold.
+// State-machine chips in the sandbox (plugin): the machine beside the canvas (a diagram to draw on, the selection's
+// properties, the encodings and what each costs, the read-back of the built circuit), a banner on the canvas
+// (Detach, Hide), New chip ▾ State machine. Every edit is one undo step that redraws the chip and its two table chips
+// (fsmchip.ts). While the chip runs, the diagram lights the state its flip-flops hold.
+//
+// The diagram: states dragged (snapped to the grid) and nudged with the arrows; an arc drawn by dragging from a
+// state's rim to another state (or itself), or with the Arc tool; arcs bent, loops turned and labels moved by dragging
+// (double-click resets); a state renamed in place (double-click, F2); a right-click menu on a state, an arc or the
+// empty diagram. The pane resizes from its edge and expands to put the diagram beside its properties.
 
 import '../styles/editor-table.css';
 import '../styles/editor-fsm.css';
 import { fsmDiagram } from '../view/fsmdiagram';
 import { readbackOk, readFsm, fsmStateOf } from '../sim/fsmread';
 import { simulate } from '../sim/harness';
-import { h } from '../ui/dom';
+import { h, s } from '../ui/dom';
+import { type MenuEntry, showMenu } from './ctxmenu';
 import { type Editor, registerEditorPlugin, registerNewChipKind } from './editor';
 import type { FsmDoc } from './model';
 import {
-  arcLabel, arcOf, condText, detachFsm, type Encoding, encodingCosts, FSM_MAX_IN, FSM_MAX_OUT, FSM_MAX_STATES, fsmWarnings, newFsmChip, setFsm, specOf,
+  arcLabel, arcOf, condText, ctlId, detachFsm, type Encoding, encodingCosts, FSM_MAX_IN, FSM_MAX_OUT, FSM_MAX_STATES, fsmOwnerOf, fsmWarnings, newFsmChip, setFsm, specOf,
 } from './fsmchip';
+import { DATA_MAX, DATA_WIDTHS, fsmdCheck, GCD_FSMD } from './fsmd';
+import { stats } from '../sim/stats';
+import type { FsmDataDoc } from './model';
 
 const HIDDEN_KEY = 'mosfet2riscv:fsm-hidden';
+const WIDTH_KEY = 'mosfet2riscv:fsm-width';
+const WIDE_KEY = 'mosfet2riscv:fsm-wide';
 const load = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
 const save = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private window */ } };
 
 const ENC_LABEL: Record<Encoding, string> = { binary: 'Binary', gray: 'Gray', onehot: 'One-hot' };
 type Tool = 'select' | 'state' | 'arc';
 type Sel = { kind: 'state'; i: number } | { kind: 'arc'; i: number } | null;
+type Arc = FsmDoc['arcs'][number];
 
 const IN_NAMES = ['x', 'en', 'a', 'b', 'c', 'd', 'go', 'stop'];
 const OUT_NAMES = ['y', 'z', 'done', 'busy', 'p', 'q', 'u', 'v'];
 const nextName = (taken: string[], pool: string[], base: string) => pool.find((x) => !taken.includes(x)) ?? `${base}${taken.length}`;
+/** State circles' radius in diagram units (view/fsmdiagram.ts), and the grid states snap to. */
+const R = 30, GRID = 10;
+const snap = (v: number) => Math.max(40, Math.round(v / GRID) * GRID);
 
 class FsmUi {
   readonly pane: HTMLElement;
@@ -35,22 +49,30 @@ class FsmUi {
   private readonly unsub: () => void;
   private readonly paint = () => this.markLive();
   private hidden = new Set<string>(JSON.parse(load(HIDDEN_KEY) ?? '[]') as string[]);
+  private wide = load(WIDE_KEY) === '1';
   private tool: Tool = 'select';
   private sel: Sel = null;
   private arcFrom: number | null = null;
   private key = '';
   private diagram: ReturnType<typeof fsmDiagram> | null = null;
   private live = -1;
+  /** The last press (what, when): a second one soon after is a double-click, though the first redrew the diagram. */
+  private lastTap = { key: '', t: 0 };
   /** Read-back verdicts by machine (JSON), so a redraw does not simulate again. */
   private checks = new Map<string, { ok: boolean; why?: string }>();
 
   constructor(readonly ed: Editor) {
     this.body = h('div', { class: 'fsm-body' });
-    this.pane = h('div', { class: 'fsm-pane', hidden: true, role: 'region', 'aria-label': 'State machine' }, this.body);
+    const grip = h('div', { class: 'fsm-grip', role: 'separator', 'aria-orientation': 'vertical', title: 'Drag to resize' });
+    this.pane = h('div', { class: 'fsm-pane', hidden: true, role: 'region', 'aria-label': 'State machine' }, this.body, grip);
+    const w = Number(load(WIDTH_KEY));
+    if (w >= 320) this.pane.style.width = `${w}px`;
+    this.pane.classList.toggle('wide', this.wide);
     this.banner = h('div', { class: 'hdl-banner fsm-banner', hidden: true });
     ed.slots.left.append(this.pane);
     ed.slots.overlay.append(this.banner);
     this.pane.addEventListener('keydown', (e) => this.onKey(e));
+    grip.addEventListener('pointerdown', (e) => this.resize(e));
     this.unsub = ed.onChange(() => this.sync());
     ed.paintHooks.add(this.paint);
     this.sync();
@@ -72,14 +94,27 @@ class FsmUi {
     if (!doc) { this.key = ''; this.diagram = null; return; }
     this.renderBanner(id);
     if (this.sel && (this.sel.kind === 'state' ? !doc.states[this.sel.i] : !doc.arcs[this.sel.i])) this.sel = null;
-    const key = JSON.stringify([id, doc, this.tool, this.sel, this.arcFrom]);
+    const key = JSON.stringify([id, doc, this.tool, this.sel, this.arcFrom, this.wide]);
     if (key === this.key || this.pane.hidden) return;
     this.key = key;
+    const focused = this.pane.contains(document.activeElement);
     this.render(id, doc);
+    // keep the keyboard in the pane across the redraw an edit causes
+    if (focused && !this.pane.contains(document.activeElement)) this.body.querySelector<HTMLElement>('.fsm-canvas')?.focus();
   }
 
   private renderBanner(id: string): void {
     const hidden = this.hidden.has(id);
+    const owner = fsmOwnerOf(this.ed.ws, id);
+    this.pane.classList.toggle('ro', !!owner);
+    if (owner) {
+      this.banner.replaceChildren(
+        h('span', { class: 'hdl-badge fsm-badge-tag' }, 'FSM'),
+        h('span', { class: 'grow' }, 'The controller of ', h('b', null, owner.name), ' · drawn from its machine, edited there'),
+        h('button', { class: 'btn sm', onclick: () => this.ed.openChip(owner.id) }, 'Open the machine'),
+        h('button', { class: 'btn sm', onclick: () => this.toggleHidden(id) }, hidden ? 'Show machine' : 'Hide machine'));
+      return;
+    }
     this.banner.replaceChildren(
       h('span', { class: 'hdl-badge fsm-badge-tag' }, 'FSM'),
       h('span', { class: 'grow' }, 'Drawn from its ', h('b', null, 'state machine'), ' · edit the diagram to change it; double-click a block for its table'),
@@ -94,6 +129,26 @@ class FsmUi {
     this.sync();
   }
 
+  private toggleWide(): void {
+    this.wide = !this.wide;
+    save(WIDE_KEY, this.wide ? '1' : '0');
+    this.pane.classList.toggle('wide', this.wide);
+    this.sync();
+  }
+
+  private resize(e: PointerEvent): void {
+    e.preventDefault();
+    const x0 = e.clientX, w0 = this.pane.getBoundingClientRect().width;
+    const move = (ev: PointerEvent) => { this.pane.style.width = `${Math.max(320, Math.min(innerWidth * 0.85, w0 + ev.clientX - x0))}px`; };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      save(WIDTH_KEY, String(Math.round(this.pane.getBoundingClientRect().width)));
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
   private detach(): void {
     const name = this.ed.doc.name;
     this.ed.editWs((ws) => detachFsm(ws, this.ed.chipId));
@@ -104,6 +159,8 @@ class FsmUi {
   private apply(next: FsmDoc): void {
     const id = this.ed.chipId;
     if (next === this.doc) return;
+    const owner = fsmOwnerOf(this.ed.ws, id);
+    if (owner) { this.ed.toast(`This controller follows ${owner.name}: edit that machine`, 'err'); this.key = ''; this.sync(); return; }
     let err: string | null = null;
     this.ed.editWs((ws) => {
       const r = setFsm(ws, id, next);
@@ -111,6 +168,78 @@ class FsmUi {
       return r;
     });
     if (err) { this.ed.toast(`State machine: ${err}`, 'err'); this.key = ''; this.sync(); }
+  }
+
+  private tapped(key: string): boolean {
+    const now = performance.now(), twice = this.lastTap.key === key && now - this.lastTap.t < 450;
+    this.lastTap = { key, t: twice ? 0 : now };
+    return twice;
+  }
+
+  // ---- edits ------------------------------------------------------------------------------------------
+
+  private addState(doc: FsmDoc, at: [number, number]): void {
+    if (doc.states.length >= FSM_MAX_STATES) return void this.ed.toast(`At most ${FSM_MAX_STATES} states`, 'err');
+    let k = doc.states.length;
+    while (doc.states.some((s) => s.name === `S${k}`)) k++;
+    this.sel = { kind: 'state', i: doc.states.length };
+    this.tool = 'select';
+    this.apply({ ...doc, states: [...doc.states, { name: `S${k}`, at: [snap(at[0]), snap(at[1])] }] });
+  }
+
+  /** A spot for a new state: right of the others, on the grid. */
+  private freeSpot(doc: FsmDoc): [number, number] {
+    const xs = doc.states.map((s) => s.at[0]), ys = doc.states.map((s) => s.at[1]);
+    return [Math.max(...xs, 0) + 120, ys.length ? Math.round(ys.reduce((a, b) => a + b, 0) / ys.length) : 100];
+  }
+
+  private addArc(doc: FsmDoc, from: number, to: number): void {
+    this.arcFrom = null;
+    this.tool = 'select';
+    this.sel = { kind: 'arc', i: doc.arcs.length };
+    // the first input combination no arc out of its state takes yet (else, like a new arc, x = 1)
+    const n = doc.ins.length;
+    const free = Array.from({ length: 1 << n }, (_, c) => doc.ins.map((_, k) => (c >> (n - 1 - k)) & 1)).find((inp) => arcOf(doc, from, inp) < 0);
+    const when: Record<string, 0 | 1> = free ? Object.fromEntries(doc.ins.map((x, k) => [x, free[k] as 0 | 1])) : n ? { [doc.ins[0]]: 1 } : {};
+    this.apply({ ...doc, arcs: [...doc.arcs, { from, to, when }] });
+  }
+
+  private setArc(doc: FsmDoc, i: number, a: Arc): void { this.apply({ ...doc, arcs: doc.arcs.map((x, k) => (k === i ? a : x)) }); }
+
+  private deleteState(doc: FsmDoc, i: number): void {
+    if (doc.states.length <= 1) return void this.ed.toast('A machine keeps at least one state', 'err');
+    const re = (s: number) => (s > i ? s - 1 : s);
+    this.sel = null;
+    this.apply({
+      ...doc, states: doc.states.filter((_, k) => k !== i),
+      arcs: doc.arcs.filter((a) => a.from !== i && a.to !== i).map((a) => ({ ...a, from: re(a.from), to: re(a.to) })),
+      reset: doc.reset === i ? 0 : re(doc.reset),
+    });
+  }
+
+  private deleteSel(): void {
+    const doc = this.doc, sel = this.sel;
+    if (!doc || !sel) return;
+    if (sel.kind === 'arc') { this.sel = null; this.apply({ ...doc, arcs: doc.arcs.filter((_, k) => k !== sel.i) }); return; }
+    this.deleteState(doc, sel.i);
+  }
+
+  /** Swap arc i with the one before (−1) or after (+1) it among the arcs out of the same state: the first match wins. */
+  private reorder(doc: FsmDoc, i: number, dir: -1 | 1): void {
+    const same = doc.arcs.map((x, j) => [x, j] as const).filter(([x]) => x.from === doc.arcs[i].from).map(([, j]) => j);
+    const p = same.indexOf(i), j = same[p + dir];
+    if (j === undefined) return;
+    const arcs = [...doc.arcs];
+    [arcs[j], arcs[i]] = [arcs[i], arcs[j]];
+    this.sel = { kind: 'arc', i: j };
+    this.apply({ ...doc, arcs });
+  }
+
+  /** Clear an arc's hand placement: its curve (bend, loop), its label (dx, dy), or both. */
+  private unhand(doc: FsmDoc, i: number, what: 'curve' | 'label' | 'all'): void {
+    const { bend, loop, dx, dy, ...rest } = doc.arcs[i];
+    const keep = what === 'label' ? { bend, loop } : what === 'curve' ? { dx, dy } : {};
+    this.setArc(doc, i, { ...rest, ...Object.fromEntries(Object.entries(keep).filter(([, v]) => v !== undefined)) });
   }
 
   // ---- the read-back ----------------------------------------------------------------------------------
@@ -122,7 +251,10 @@ class FsmUi {
     try {
       const def = this.ed.lib.defOf(this.ed.chipId);
       if (!def) v = { ok: false, why: 'the chip does not compile' };
-      else {
+      else if (doc.data) {
+        const why = fsmdCheck(simulate(def), doc, 150);
+        v = why ? { ok: false, why } : { ok: true };
+      } else {
         const r = readFsm(simulate(def), specOf(doc, true));
         const bad = r.arcs.find((a) => !a.ok);
         v = readbackOk(r) ? { ok: true } : { ok: false, why: bad ? `from ${r.states[bad.from].name} on ${JSON.stringify(bad.inp)}` : 'a state appears twice' };
@@ -158,6 +290,7 @@ class FsmUi {
 
   private render(id: string, doc: FsmDoc): void {
     const head = h('div', { class: 'tt-head' }, h('span', { class: 'tt-title' }, 'State machine'), h('span', { class: 'grow' }),
+      h('button', { class: `btn sm${this.wide ? ' on' : ''}`, 'aria-pressed': String(this.wide), title: this.wide ? 'Back to a narrow pane' : 'A wide pane: the diagram large, its properties beside it', onclick: () => this.toggleWide() }, this.wide ? 'Narrow' : 'Expand'),
       h('button', { class: 'btn sm', title: 'Hide the machine (the banner shows it again)', 'aria-label': 'Hide the machine', onclick: () => this.toggleHidden(id) }, '◂'));
 
     const pins = h('div', { class: 'tt-pins' },
@@ -167,10 +300,11 @@ class FsmUi {
       h('div', { class: 'tt-pinrow' }, h('span', { class: 'tt-lbl' }, 'Outputs'),
         doc.outs.map((name, j) => this.pinField(doc, 'out', j, name)),
         h('button', { class: 'btn sm', disabled: doc.outs.length >= FSM_MAX_OUT, onclick: () => this.apply({ ...doc, outs: [...doc.outs, nextName([...doc.ins, ...doc.outs], OUT_NAMES, 'o')] }) }, '+ Output')),
-      h('p', { class: 'tt-note' }, 'The chip also gets rst (synchronous: back to the reset state) and clk.'));
+      h('p', { class: 'tt-note' }, 'The chip also gets rst (synchronous: back to the reset state) and clk.'),
+      this.dataRows(doc));
 
     const tools = h('div', { class: 'fsm-tools', role: 'toolbar', 'aria-label': 'Diagram tools' },
-      ([['select', 'Select', 'Click a state or an arc; drag a state to move it'], ['state', '+ State', 'Click the diagram to add a state there'], ['arc', 'Arc', 'Click the state it leaves, then the state it enters (the same one for a loop)']] as const)
+      ([['select', 'Select', 'Click a state or an arc; drag a state to move it, its rim to draw an arc'], ['state', '+ State', 'Click the diagram to add a state there (N, or double-click)'], ['arc', 'Arc', 'Click the state it leaves, then the state it enters (A; or drag from a state\'s rim)']] as const)
         .map(([t, label, title]) => h('button', { class: `btn sm${this.tool === t ? ' on' : ''}`, 'aria-pressed': String(this.tool === t), title, onclick: () => { this.tool = t; this.arcFrom = null; this.sync(); } }, label)),
       h('span', { class: 'grow' }),
       h('button', { class: 'btn sm', disabled: !this.sel, title: 'Delete the selection (Delete)', onclick: () => this.deleteSel() }, 'Delete'));
@@ -183,6 +317,8 @@ class FsmUi {
     this.mark();
     const hint = this.tool === 'arc' ? (this.arcFrom === null ? 'Arc: click the state it leaves' : `Arc from ${doc.states[this.arcFrom].name}: click the state it enters`)
       : this.tool === 'state' ? 'Click an empty spot to add a state' : '';
+    const canvas = h('div', { class: 'fsm-canvas', tabindex: 0, 'aria-label': 'State diagram: arrows move the selected state, Delete removes it, N adds a state, A draws an arc, F2 renames' },
+      svg, hint ? h('div', { class: 'fsm-hint' }, hint) : null);
 
     const costs = encodingCosts(doc);
     const best = Math.min(...costs.filter((c) => !c.problem).map((c) => c.nands));
@@ -205,11 +341,15 @@ class FsmUi {
     const v = this.verdict(doc);
     const status = h('div', { class: 'fsm-status' },
       warns.map((w) => h('div', { class: 'warn' }, '⚠ ', w)),
-      h('div', { class: v.ok ? 'ok' : 'bad' }, v.ok ? `✓ Read back from the circuit: ${doc.states.length} states, every arc as drawn` : `✕ The circuit differs from the diagram${v.why ? `: ${v.why}` : ''}`));
+      h('div', { class: v.ok ? 'ok' : 'bad' }, v.ok ? (doc.data ? '✓ The circuit follows the machine for 150 cycles of random inputs (registers, outputs, every state)' : `✓ Read back from the circuit: ${doc.states.length} states, every arc as drawn`) : `✕ The circuit differs from the machine${v.why ? `: ${v.why}` : ''}`),
+      doc.data ? this.dataCost(id) : null);
 
-    this.body.replaceChildren(head, pins, tools,
-      h('div', { class: 'fsm-canvas' }, svg, hint ? h('div', { class: 'fsm-hint' }, hint) : null),
-      this.props(doc), h('div', { class: 'fsm-sec' }, h('span', { class: 'tt-lbl' }, 'Encoding · each one built and counted'), encs, opts), status);
+    this.body.replaceChildren(head, pins,
+      h('div', { class: 'fsm-main' },
+        h('div', { class: 'fsm-left' }, tools, canvas,
+          h('p', { class: 'tt-note fsm-keys' }, 'Drag a state’s rim to another state for an arc · double-click empty space for a state, a state to rename it · right-click for more')),
+        h('div', { class: 'fsm-right' }, this.props(doc),
+          h('div', { class: 'fsm-sec' }, h('span', { class: 'tt-lbl' }, 'Encoding · each one built and counted'), encs, opts), status)));
   }
 
   /** A drag in progress: the diagram drawn from the machine as it would be, nothing committed. */
@@ -223,50 +363,85 @@ class FsmUi {
     this.mark();
   }
 
-  /** Pointer handling on the diagram: states selected / dragged / joined by an arc, arcs selected, states added. */
+  /** Pointer handling on the diagram. */
   private wireDiagram(svg: SVGSVGElement, doc: FsmDoc): void {
-    const pt = (e: PointerEvent): [number, number] => {
+    const pt = (e: { clientX: number; clientY: number }): [number, number] => {
       // the drawing on screen now (a drag's preview replaces it)
       const m = (this.body.querySelector<SVGSVGElement>('.fsm-canvas svg') ?? svg).getScreenCTM();
       if (!m) return [0, 0];
       const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
       return [Math.round(p.x), Math.round(p.y)];
     };
+    const stateAt = (p: [number, number]) => doc.states.findIndex((st) => Math.hypot(st.at[0] - p[0], st.at[1] - p[1]) <= R + 4);
+
+    // A ring around each state, under it: dragging from the rim draws an arc (a rubber band to the pointer).
     const states = [...svg.querySelectorAll<SVGGElement>('g.fsm-st')];
+    const firstState = states[0];
+    doc.states.forEach((st, i) => {
+      const ring = s('circle', { class: 'fsm-rim', cx: st.at[0], cy: st.at[1], r: R + 5 });
+      ring.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        const band = s('path', { class: 'fsm-band', d: '' });
+        svg.append(band);
+        const move = (ev: PointerEvent) => {
+          const [x, y] = pt(ev);
+          band.setAttribute('d', `M${st.at[0]},${st.at[1]} L${x},${y}`);
+          const t = stateAt([x, y]);
+          states.forEach((g, k) => g.classList.toggle('hover', k === t));
+        };
+        const up = (ev: PointerEvent) => {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+          band.remove();
+          const t = stateAt(pt(ev));
+          if (t >= 0) this.addArc(doc, i, t); else this.sync();
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+      });
+      svg.insertBefore(ring, firstState);
+    });
+
     states.forEach((g, i) => {
       g.setAttribute('role', 'button');
       g.setAttribute('tabindex', '0');
       g.setAttribute('aria-label', `State ${doc.states[i].name}${i === doc.reset ? ' (reset)' : ''}`);
       g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.pickState(doc, i); } });
+      g.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); this.sel = { kind: 'state', i }; this.sync(); this.stateMenu(doc, i, e); });
       g.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
         e.stopPropagation();
         if (this.tool !== 'select') { this.pickState(doc, i); return; }
+        if (this.tapped(`s${i}`)) { e.preventDefault(); this.sel = { kind: 'state', i }; this.rename(doc, i); return; }
         this.sel = { kind: 'state', i };
         const start = pt(e), at0 = doc.states[i].at;
         let moved: [number, number] | null = null;
-        g.setPointerCapture(e.pointerId);
         const move = (ev: PointerEvent) => {
           const p = pt(ev);
-          const nx = Math.max(36, at0[0] + p[0] - start[0]), ny = Math.max(36, at0[1] + p[1] - start[1]);
-          if (!moved && Math.hypot(nx - at0[0], ny - at0[1]) < 3) return;
+          const nx = snap(at0[0] + p[0] - start[0]), ny = snap(at0[1] + p[1] - start[1]);
+          if (!moved && Math.hypot(p[0] - start[0], p[1] - start[1]) < 4) return;
           moved = [nx, ny];
-          g.setAttribute('transform', `translate(${nx - at0[0]},${ny - at0[1]})`);
+          // the arcs follow the state while it moves
+          this.preview({ ...doc, states: doc.states.map((s2, k) => (k === i ? { ...s2, at: moved! } : s2)) });
         };
         const up = () => {
-          g.removeEventListener('pointermove', move);
-          g.removeEventListener('pointerup', up);
-          if (moved) this.apply({ ...doc, states: doc.states.map((s, k) => (k === i ? { ...s, at: moved! } : s)) });
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+          if (moved && (moved[0] !== at0[0] || moved[1] !== at0[1])) this.apply({ ...doc, states: doc.states.map((s2, k) => (k === i ? { ...s2, at: moved! } : s2)) });
           else this.sync();
         };
-        g.addEventListener('pointermove', move);
-        g.addEventListener('pointerup', up);
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
       });
     });
-    // arcs: their wide invisible hit paths, in doc order (specOf adds no others without `implicit`)
-    // Dragged: an arc bends (a self-loop turns), a label moves; double-click puts either back where it was drawn.
+
+    // Arcs: their wide invisible hit paths, in doc order. Dragged, an arc bends (a self-loop turns), a label moves.
     const hand = (i: number, e: PointerEvent, what: 'curve' | 'label') => {
+      if (e.button !== 0) return;
       e.stopPropagation();
       if (this.tool !== 'select') return;
+      if (this.tapped(`${what}${i}`)) { this.unhand(doc, i, what); return; }
       this.sel = { kind: 'arc', i };
       const a = doc.arcs[i], start = pt(e);
       const A = doc.states[a.from].at, B = doc.states[a.to].at;
@@ -275,7 +450,7 @@ class FsmUi {
       const move = (ev: PointerEvent) => {
         const p = pt(ev);
         if (!moved && Math.hypot(p[0] - start[0], p[1] - start[1]) < 3) return;
-        let next: FsmDoc['arcs'][number];
+        let next: Arc;
         if (what === 'label') next = { ...a, dx: (spec0.dx ?? 0) + p[0] - start[0], dy: (spec0.dy ?? 0) + p[1] - start[1] };
         else if (a.from === a.to) next = { ...a, loop: Math.round((Math.atan2(p[1] - A[1], p[0] - A[0]) * 180) / Math.PI) };
         else {
@@ -294,75 +469,159 @@ class FsmUi {
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up);
     };
-    const unhand = (i: number, what: 'curve' | 'label') => {
-      const { bend: _b, loop: _l, dx: _x, dy: _y, ...rest } = doc.arcs[i];
-      const keep = what === 'label' ? { bend: doc.arcs[i].bend, loop: doc.arcs[i].loop } : { dx: doc.arcs[i].dx, dy: doc.arcs[i].dy };
-      const a = { ...rest, ...Object.fromEntries(Object.entries(keep).filter(([, v]) => v !== undefined)) };
-      this.apply({ ...doc, arcs: doc.arcs.map((x, k) => (k === i ? a : x)) });
-    };
+    const arcMenu = (i: number, e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); this.sel = { kind: 'arc', i }; this.sync(); this.arcMenu(doc, i, e); };
     [...svg.querySelectorAll<SVGPathElement>('path.fsm-hit')].forEach((p, i) => {
       p.addEventListener('pointerdown', (e) => hand(i, e, 'curve'));
-      p.addEventListener('dblclick', () => unhand(i, 'curve'));
+      p.addEventListener('contextmenu', (e) => arcMenu(i, e));
     });
-    // labels: one per arc that has one, in arc order
+    // labels: one per arc that has one, in arc order, after every other label
     const labelled = doc.arcs.map((a, i) => [arcLabel(doc, a), i] as const).filter(([l]) => l).map(([, i]) => i);
-    [...svg.querySelectorAll<SVGTextElement>('text.fsm-al')].slice(-labelled.length || 0).forEach((t, k) => {
-      if (!labelled.length) return;
-      const i = labelled[k];
-      t.classList.add('fsm-drag');
-      t.addEventListener('pointerdown', (e) => hand(i, e, 'label'));
-      t.addEventListener('dblclick', () => unhand(i, 'label'));
-    });
+    if (labelled.length) {
+      [...svg.querySelectorAll<SVGTextElement>('text.fsm-al')].slice(-labelled.length).forEach((t, k) => {
+        const i = labelled[k];
+        t.classList.add('fsm-drag');
+        t.addEventListener('pointerdown', (e) => hand(i, e, 'label'));
+        t.addEventListener('contextmenu', (e) => arcMenu(i, e));
+      });
+    }
+
     svg.addEventListener('pointerdown', (e) => {
-      if (this.tool === 'state') {
-        const [x, y] = pt(e);
-        if (doc.states.length >= FSM_MAX_STATES) return void this.ed.toast(`At most ${FSM_MAX_STATES} states`, 'err');
-        let k = doc.states.length;
-        while (doc.states.some((s) => s.name === `S${k}`)) k++;
-        this.sel = { kind: 'state', i: doc.states.length };
-        this.tool = 'select';
-        this.apply({ ...doc, states: [...doc.states, { name: `S${k}`, at: [Math.max(36, x), Math.max(36, y)] }] });
-      } else if (this.tool === 'select' && this.sel) { this.sel = null; this.sync(); }
+      if (e.button !== 0) return;
+      if (this.tool === 'state' || (this.tool === 'select' && this.tapped('bg'))) this.addState(doc, pt(e));
+      else if (this.tool === 'select' && this.sel) { this.sel = null; this.sync(); }
+    });
+    svg.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const p = pt(e);
+      showMenu(e.clientX, e.clientY, [
+        { label: 'Add a state here', key: 'double-click', run: () => this.addState(doc, p) },
+        { label: 'Draw an arc…', key: 'A', run: () => { this.tool = 'arc'; this.arcFrom = null; this.sync(); } },
+        null,
+        { label: 'Straighten every arc’s placement', run: () => this.apply({ ...doc, arcs: doc.arcs.map(({ bend: _b, loop: _l, dx: _x, dy: _y, ...a }) => a) }), disabled: !doc.arcs.some((a) => a.bend !== undefined || a.loop !== undefined || a.dx !== undefined || a.dy !== undefined) },
+        { label: 'Arrange states in a circle', run: () => this.arrange(doc) },
+        null,
+        { label: this.wide ? 'Narrow pane' : 'Expand pane', run: () => this.toggleWide() },
+      ]);
+    });
+  }
+
+  /** States around a circle, the reset state on the left: a fresh start for a tangled drawing. */
+  private arrange(doc: FsmDoc): void {
+    const n = doc.states.length, r = Math.max(90, n * 30), cx = r + 70, cy = r + 60;
+    const order = [doc.reset, ...doc.states.map((_, i) => i).filter((i) => i !== doc.reset)];
+    const at = new Map(order.map((s2, k) => [s2, [snap(cx - r * Math.cos((2 * Math.PI * k) / n)), snap(cy - r * Math.sin((2 * Math.PI * k) / n))] as [number, number]]));
+    this.apply({ ...doc, states: doc.states.map((s2, i) => ({ ...s2, at: at.get(i)! })), arcs: doc.arcs.map(({ bend: _b, loop: _l, dx: _x, dy: _y, ...a }) => a) });
+  }
+
+  private stateMenu(doc: FsmDoc, i: number, e: MouseEvent): void {
+    const st = doc.states[i];
+    const items: MenuEntry[] = [
+      { label: 'Rename', key: 'F2', run: () => this.rename(doc, i) },
+      { label: 'Reset state', checked: i === doc.reset, run: () => i !== doc.reset && this.apply({ ...doc, reset: i }) },
+      null,
+      { label: 'Arc from here…', key: 'drag rim', run: () => { this.tool = 'arc'; this.arcFrom = i; this.sync(); } },
+      { label: 'Loop on itself', run: () => this.addArc(doc, i, i) },
+      null,
+      ...doc.outs.map((o): MenuEntry => ({
+        label: `Moore: ${o} = 1`, checked: !!st.out?.includes(o),
+        run: () => {
+          const out = st.out?.includes(o) ? st.out.filter((x) => x !== o) : [...(st.out ?? []), o];
+          this.apply({ ...doc, states: doc.states.map((t, k) => (k === i ? { ...t, out: out.length ? out : undefined } : t)) });
+        },
+      })),
+      null,
+      { label: 'Delete state', key: 'Del', run: () => this.deleteState(doc, i), disabled: doc.states.length <= 1 },
+    ];
+    showMenu(e.clientX, e.clientY, items);
+  }
+
+  private arcMenu(doc: FsmDoc, i: number, e: MouseEvent): void {
+    const a = doc.arcs[i];
+    const same = doc.arcs.map((x, j) => [x, j] as const).filter(([x]) => x.from === a.from).map(([, j]) => j);
+    const p = same.indexOf(i);
+    const items: MenuEntry[] = [
+      // the condition, one input at a time: 0 → 1 → either
+      ...doc.ins.map((x): MenuEntry => {
+        const v = a.when[x];
+        const nextV = v === 0 ? 1 : v === 1 ? undefined : 0;
+        return {
+          label: `${x}: ${v === undefined ? 'either' : v} → ${nextV === undefined ? 'either' : nextV}`,
+          run: () => { const when = { ...a.when }; if (nextV === undefined) delete when[x]; else when[x] = nextV; this.setArc(doc, i, { ...a, when }); },
+        };
+      }),
+      null,
+      ...doc.outs.map((o): MenuEntry => ({
+        label: `Mealy: ${o} = 1`, checked: !!a.out?.includes(o),
+        run: () => { const out = a.out?.includes(o) ? a.out.filter((x) => x !== o) : [...(a.out ?? []), o]; this.setArc(doc, i, { ...a, out: out.length ? out : undefined }); },
+      })),
+      null,
+      { label: 'Check earlier', run: () => this.reorder(doc, i, -1), disabled: p <= 0 },
+      { label: 'Check later', run: () => this.reorder(doc, i, 1), disabled: p < 0 || p >= same.length - 1 },
+      { label: 'Reverse direction', run: () => this.setArc(doc, i, { ...a, from: a.to, to: a.from }), disabled: a.from === a.to },
+      { label: 'Straight', run: () => this.setArc(doc, i, { ...a, bend: 0 }), disabled: a.from === a.to || a.bend === 0 },
+      { label: 'Automatic shape', key: 'double-click', run: () => this.unhand(doc, i, 'all'), disabled: a.bend === undefined && a.loop === undefined && a.dx === undefined && a.dy === undefined },
+      null,
+      { label: 'Delete arc', key: 'Del', run: () => { this.sel = null; this.apply({ ...doc, arcs: doc.arcs.filter((_, k) => k !== i) }); } },
+    ];
+    showMenu(e.clientX, e.clientY, items);
+  }
+
+  /** Rename state i in place: a field over the state on the diagram. */
+  private rename(doc: FsmDoc, i: number): void {
+    const canvas = this.body.querySelector<HTMLElement>('.fsm-canvas'), g = this.body.querySelectorAll<SVGGElement>('.fsm-canvas g.fsm-st')[i];
+    if (!canvas || !g) return;
+    const cr = canvas.getBoundingClientRect(), r = g.getBoundingClientRect();
+    const old = doc.states[i].name;
+    const inp = h('input', { class: 'fsm-rename', value: old, maxlength: 24, spellcheck: 'false', 'aria-label': `Rename ${old}`,
+      style: `left:${r.left - cr.left + r.width / 2 - 45}px;top:${r.top - cr.top + r.height / 2 - 14}px` }) as HTMLInputElement;
+    let done = false;
+    const finish = (keep: boolean) => {
+      if (done) return;
+      done = true;
+      const v = inp.value.trim().slice(0, 24);
+      inp.remove();
+      if (!keep || !v || v === old) return void canvas.focus();
+      if (doc.states.some((t, k) => k !== i && t.name === v)) return void this.ed.toast('State names are unique', 'err');
+      this.apply({ ...doc, states: doc.states.map((t, k) => (k === i ? { ...t, name: v } : t)) });
+    };
+    inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+    canvas.append(inp);
+    // after the press that opened it has finished moving the focus
+    requestAnimationFrame(() => {
+      inp.focus();
+      inp.select();
+      inp.addEventListener('blur', () => finish(true));
     });
   }
 
   private pickState(doc: FsmDoc, i: number): void {
     if (this.tool === 'arc') {
       if (this.arcFrom === null) { this.arcFrom = i; this.sync(); return; }
-      const from = this.arcFrom;
-      this.arcFrom = null;
-      this.tool = 'select';
-      this.sel = { kind: 'arc', i: doc.arcs.length };
-      // the first input combination no arc out of its state takes yet (else, like a new arc, x = 1)
-      const n = doc.ins.length;
-      const free = Array.from({ length: 1 << n }, (_, c) => doc.ins.map((_, k) => (c >> (n - 1 - k)) & 1)).find((inp) => arcOf(doc, from, inp) < 0);
-      const when: Record<string, 0 | 1> = free ? Object.fromEntries(doc.ins.map((x, k) => [x, free[k] as 0 | 1])) : n ? { [doc.ins[0]]: 1 } : {};
-      this.apply({ ...doc, arcs: [...doc.arcs, { from, to: i, when }] });
+      this.addArc(doc, this.arcFrom, i);
       return;
     }
     this.sel = { kind: 'state', i };
     this.sync();
   }
 
-  private deleteSel(): void {
-    const doc = this.doc, sel = this.sel;
-    if (!doc || !sel) return;
-    if (sel.kind === 'arc') { this.sel = null; this.apply({ ...doc, arcs: doc.arcs.filter((_, k) => k !== sel.i) }); return; }
-    if (doc.states.length <= 1) return void this.ed.toast('A machine keeps at least one state', 'err');
-    const i = sel.i, re = (s: number) => (s > i ? s - 1 : s);
-    this.sel = null;
-    this.apply({
-      ...doc, states: doc.states.filter((_, k) => k !== i),
-      arcs: doc.arcs.filter((a) => a.from !== i && a.to !== i).map((a) => ({ ...a, from: re(a.from), to: re(a.to) })),
-      reset: doc.reset === i ? 0 : re(doc.reset),
-    });
-  }
-
   private onKey(e: KeyboardEvent): void {
     const t = e.target as HTMLElement;
-    if (t.closest('input, select, textarea')) return;
-    if ((e.key === 'Delete' || e.key === 'Backspace') && this.sel) { e.preventDefault(); e.stopPropagation(); this.deleteSel(); }
-    else if (e.key === 'Escape' && (this.arcFrom !== null || this.tool !== 'select')) { e.stopPropagation(); this.arcFrom = null; this.tool = 'select'; this.sync(); }
+    if (t.closest('input, select, textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
+    const doc = this.doc;
+    if (!doc) return;
+    const sel = this.sel;
+    const stop = () => { e.preventDefault(); e.stopPropagation(); };
+    if ((e.key === 'Delete' || e.key === 'Backspace') && sel) { stop(); this.deleteSel(); }
+    else if (e.key === 'Escape' && (this.arcFrom !== null || this.tool !== 'select' || sel)) { stop(); this.arcFrom = null; this.tool = 'select'; this.sel = null; this.sync(); }
+    else if (e.key === 'F2' && sel?.kind === 'state') { stop(); this.rename(doc, sel.i); }
+    else if (e.key === 'n' || e.key === 'N') { stop(); this.addState(doc, this.freeSpot(doc)); }
+    else if (e.key === 'a' || e.key === 'A') { stop(); this.tool = 'arc'; this.arcFrom = sel?.kind === 'state' ? sel.i : null; this.sync(); }
+    else if (sel?.kind === 'state' && e.key.startsWith('Arrow')) {
+      stop();
+      const d = e.shiftKey ? 1 : GRID, st = doc.states[sel.i];
+      const [dx, dy] = e.key === 'ArrowLeft' ? [-d, 0] : e.key === 'ArrowRight' ? [d, 0] : e.key === 'ArrowUp' ? [0, -d] : [0, d];
+      this.apply({ ...doc, states: doc.states.map((s2, k) => (k === sel.i ? { ...s2, at: [Math.max(40, st.at[0] + dx), Math.max(40, st.at[1] + dy)] } : s2)) });
+    }
   }
 
   /** The selection's properties. */
@@ -375,46 +634,130 @@ class FsmUi {
         return h('label', { class: 'fsm-check' }, h('input', { type: 'checkbox', checked: has, onchange: () => set(has ? (on ?? []).filter((x) => x !== o) : [...(on ?? []), o]) }), ` ${o} = 1`);
       }));
     if (sel.kind === 'state') {
-      const s = doc.states[sel.i], i = sel.i;
-      const name = h('input', { class: 'tt-pin', value: s.name, size: Math.max(3, s.name.length), 'aria-label': 'State name' }) as HTMLInputElement;
+      const st = doc.states[sel.i], i = sel.i;
+      const name = h('input', { class: 'tt-pin', value: st.name, size: Math.max(3, st.name.length), 'aria-label': 'State name' }) as HTMLInputElement;
       name.addEventListener('change', () => {
         const v = name.value.trim().slice(0, 24);
-        if (!v || doc.states.some((t, k) => k !== i && t.name === v)) { name.value = s.name; return void this.ed.toast('State names are unique and not empty', 'err'); }
+        if (!v || doc.states.some((t, k) => k !== i && t.name === v)) { name.value = st.name; return void this.ed.toast('State names are unique and not empty', 'err'); }
         this.apply({ ...doc, states: doc.states.map((t, k) => (k === i ? { ...t, name: v } : t)) });
       });
       return h('div', { class: 'fsm-sec fsm-props' },
         h('div', { class: 'fsm-row' }, h('span', { class: 'tt-lbl' }, 'State'), name,
           i === doc.reset ? h('span', { class: 'fsm-tag' }, 'reset state') : h('button', { class: 'btn sm', title: 'rst and power-on lead here', onclick: () => this.apply({ ...doc, reset: i }) }, 'Make reset state')),
-        outChecks(s.out, (out) => this.apply({ ...doc, states: doc.states.map((t, k) => (k === i ? { ...t, out: out.length ? out : undefined } : t)) }), 'Moore'),
+        outChecks(st.out, (out) => this.apply({ ...doc, states: doc.states.map((t, k) => (k === i ? { ...t, out: out.length ? out : undefined } : t)) }), 'Moore'),
+        doc.data ? this.transfers(doc, i) : null,
         h('p', { class: 'tt-note' }, 'Moore outputs hold for the whole time the machine is in this state.'));
     }
     const a = doc.arcs[sel.i], k = sel.i;
-    const setArc = (next: FsmDoc['arcs'][number]) => this.apply({ ...doc, arcs: doc.arcs.map((x, j) => (j === k ? next : x)) });
     const sameFrom = doc.arcs.map((x, j) => [x, j] as const).filter(([x]) => x.from === a.from);
     const pos = sameFrom.findIndex(([, j]) => j === k);
-    const earlier = () => {
-      const j = sameFrom[pos - 1][1];
-      const arcs = [...doc.arcs];
-      [arcs[j], arcs[k]] = [arcs[k], arcs[j]];
-      this.sel = { kind: 'arc', i: j };
-      this.apply({ ...doc, arcs });
-    };
     return h('div', { class: 'fsm-sec fsm-props' },
       h('div', { class: 'fsm-row' }, h('span', { class: 'tt-lbl' }, 'Arc'), h('code', null, `${doc.states[a.from].name} → ${doc.states[a.to].name}`),
         h('code', { class: 'fsm-lab' }, arcLabel(doc, a)),
         sameFrom.length > 1 ? h('span', { class: 'tt-note' }, `checked ${pos + 1} of ${sameFrom.length}`) : null,
-        pos > 0 ? h('button', { class: 'btn sm', title: 'Check this arc before the one above it (the first that matches wins)', onclick: earlier }, '↑ Earlier') : null),
+        pos > 0 ? h('button', { class: 'btn sm', title: 'Check this arc before the one above it (the first that matches wins)', onclick: () => this.reorder(doc, k, -1) }, '↑ Earlier') : null),
       doc.ins.length ? h('div', { class: 'fsm-row fsm-when' }, h('span', { class: 'tt-lbl' }, 'When'),
         doc.ins.map((x) => h('span', { class: 'fsm-in' }, h('code', null, x),
           h('div', { class: 'hdl-seg', role: 'radiogroup', 'aria-label': `${x} for this arc` }, ([[0, '0'], [1, '1'], [undefined, 'either']] as const).map(([val, t]) => {
             const on = a.when[x] === val;
             return h('button', {
               class: on ? 'on' : '', role: 'radio', 'aria-checked': String(on),
-              onclick: () => { if (on) return; const when = { ...a.when }; if (val === undefined) delete when[x]; else when[x] = val; setArc({ ...a, when }); },
+              onclick: () => { if (on) return; const when = { ...a.when }; if (val === undefined) delete when[x]; else when[x] = val; this.setArc(doc, k, { ...a, when }); },
             }, t);
           }))))) : h('p', { class: 'tt-note' }, 'No inputs: the arc is always taken.'),
-      outChecks(a.out, (out) => setArc({ ...a, out: out.length ? out : undefined }), 'Mealy'),
+      doc.data ? this.tests(doc, k) : null,
+      outChecks(a.out, (out) => this.setArc(doc, k, { ...a, out: out.length ? out : undefined }), 'Mealy'),
       h('p', { class: 'tt-note' }, `Taken when ${condText(doc, a.when)}. Mealy outputs are 1 while the next edge would take this arc.`));
+  }
+
+  // ---- the datapath ---------------------------------------------------------------------------------
+
+  /** NANDs of the whole chip and of its controller (the rest is the datapath). */
+  private dataCost(id: string): HTMLElement | null {
+    const all = this.ed.lib.defOf(id), ctl = this.ed.lib.defOf(ctlId(id));
+    if (!all || !ctl) return null;
+    const a = stats(all).nands, c = stats(ctl).nands;
+    return h('div', { class: 'fsm-cost' }, h('b', null, String(a)), ' NAND in all: controller ', h('b', null, String(c)), ', datapath ', h('b', null, String(a - c)));
+  }
+
+  /** Width, data inputs, registers, data outputs (or a button that adds a datapath). */
+  private dataRows(doc: FsmDoc): HTMLElement {
+    const d = doc.data;
+    if (!d) return h('div', { class: 'tt-pinrow' }, h('span', { class: 'tt-lbl' }, 'Datapath'),
+      h('button', { class: 'btn sm', title: 'Registers the states load (reg := expr) and tests on the arcs (a < b): a controller and a datapath', onclick: () => this.apply({ ...doc, data: { width: 8, ins: ['x'], regs: ['a'], outs: [{ name: 'out', src: 'a' }] } }) }, '+ Registers'));
+    // a rename carries through every transfer and test (whole words only)
+    const setData = (nd: FsmDataDoc, ren?: [string, string]) => {
+      const rw = (t: string) => (ren ? t.replace(new RegExp(`\\b${ren[0]}\\b`, 'g'), ren[1]) : t);
+      this.apply({
+        ...doc, data: nd,
+        states: doc.states.map((st) => ({ ...st, act: st.act?.map((t) => ({ reg: rw(t.reg), expr: rw(t.expr) })).filter((t) => nd.regs.includes(t.reg)) })),
+        arcs: doc.arcs.map((a) => ({ ...a, test: a.test?.map((t) => ({ ...t, expr: rw(t.expr) })) })),
+      });
+    };
+    const taken = () => [...doc.ins, ...doc.outs, ...d.ins, ...d.regs, ...d.outs.map((o) => o.name)];
+    const nameBox = (name: string, title: string, rename: (v: string) => void, remove: (() => void) | null) => {
+      const inp = h('input', { class: 'tt-pin', value: name, size: Math.max(2, name.length), spellcheck: 'false', 'aria-label': title }) as HTMLInputElement;
+      inp.addEventListener('change', () => { const v = inp.value.trim(); if (v && v !== name) rename(v); });
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') inp.blur(); if (e.key === 'Escape') { inp.value = name; inp.blur(); } });
+      return h('span', { class: 'tt-pinbox data' }, inp, remove ? h('button', { class: 'tt-x', 'aria-label': `Remove ${name}`, title: `Remove ${name}`, onclick: remove }, '×') : null);
+    };
+    const fresh = (base: string) => { let k = 0; while (taken().includes(`${base}${k || ''}`)) k++; return `${base}${k || ''}`; };
+    const list = (what: 'ins' | 'regs', label: string, base: string) => h('div', { class: 'tt-pinrow' }, h('span', { class: 'tt-lbl' }, label),
+      d[what].map((n, i) => nameBox(n, `${label} ${i + 1} name`, (v) => setData({ ...d, [what]: d[what].map((x) => (x === n ? v : x)), outs: d.outs.map((o) => (o.src === n ? { ...o, src: v } : o)) }, [n, v]),
+        what === 'regs' && d.regs.length <= 1 ? null : () => setData({ ...d, [what]: d[what].filter((x) => x !== n), outs: d.outs.filter((o) => o.src !== n) }))),
+      h('button', { class: 'btn sm', disabled: d[what].length >= DATA_MAX, title: `Add ${what === 'ins' ? 'a data input' : 'a register'}`, onclick: () => setData({ ...d, [what]: [...d[what], fresh(base)] }) }, '+'));
+    const srcs = [...d.regs, ...d.ins];
+    const srcSelect = (o: { name: string; src: string }, j: number) => {
+      const sel = h('select', { 'aria-label': `${o.name} shows` }, srcs.map((x) => h('option', { value: x, selected: x === o.src }, x))) as HTMLSelectElement;
+      sel.addEventListener('change', () => setData({ ...d, outs: d.outs.map((x, k) => (k === j ? { ...x, src: sel.value } : x)) }));
+      return sel;
+    };
+    return h('div', { class: 'fsm-data' },
+      h('div', { class: 'tt-pinrow' }, h('span', { class: 'tt-lbl' }, 'Width'),
+        h('div', { class: 'hdl-seg', role: 'radiogroup', 'aria-label': 'Data width' }, DATA_WIDTHS.map((w) => h('button', { class: d.width === w ? 'on' : '', role: 'radio', 'aria-checked': String(d.width === w), onclick: () => d.width !== w && setData({ ...d, width: w }) }, `${w}`))),
+        h('span', { class: 'tt-note' }, 'bits, every register and data pin'),
+        h('button', { class: 'btn sm', title: 'Drop the registers, transfers and tests: a plain state machine', onclick: () => { const { data: _d, ...rest } = doc; this.apply({ ...rest, states: doc.states.map(({ act: _a, ...st }) => st), arcs: doc.arcs.map(({ test: _t, ...a }) => a) }); } }, 'Remove')),
+      list('ins', 'Data in', 'x'), list('regs', 'Registers', 'r'),
+      h('div', { class: 'tt-pinrow' }, h('span', { class: 'tt-lbl' }, 'Data out'),
+        d.outs.map((o, j) => h('span', { class: 'fsm-dout' },
+          nameBox(o.name, `Data output ${j + 1} name`, (v) => setData({ ...d, outs: d.outs.map((x, k) => (k === j ? { ...x, name: v } : x)) }), () => setData({ ...d, outs: d.outs.filter((_, k) => k !== j) })),
+          h('span', null, '='), srcSelect(o, j))),
+        h('button', { class: 'btn sm', disabled: d.outs.length >= DATA_MAX, title: 'Add a data output', onclick: () => setData({ ...d, outs: [...d.outs, { name: fresh('out'), src: d.regs[0] }] }) }, '+')));
+  }
+
+  /** A state's register transfers: reg := expr rows, each one register. */
+  private transfers(doc: FsmDoc, i: number): HTMLElement {
+    const d = doc.data!, st = doc.states[i], act = st.act ?? [];
+    const setAct = (next: { reg: string; expr: string }[]) => this.apply({ ...doc, states: doc.states.map((t, k) => (k === i ? { ...t, act: next.length ? next : undefined } : t)) });
+    const free = d.regs.filter((r) => !act.some((t) => t.reg === r));
+    return h('div', { class: 'fsm-row fsm-acts' }, h('span', { class: 'tt-lbl' }, 'Loads'),
+      h('div', { class: 'fsm-list' },
+        act.map((t, j) => {
+          const inp = h('input', { class: 'tt-expr', value: t.expr, spellcheck: 'false', 'aria-label': `${t.reg} :=`, placeholder: 'a - b' }) as HTMLInputElement;
+          inp.addEventListener('change', () => setAct(act.map((x, k) => (k === j ? { ...x, expr: inp.value.trim() } : x))));
+          inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') inp.blur(); });
+          return h('div', { class: 'fsm-item' }, h('code', null, `${t.reg} :=`), inp, h('button', { class: 'tt-x', 'aria-label': `Remove ${t.reg} :=`, onclick: () => setAct(act.filter((_, k) => k !== j)) }, '×'));
+        }),
+        free.length ? h('button', { class: 'btn sm', title: 'Load a register at the clock edge leaving this state', onclick: () => setAct([...act, { reg: free[0], expr: free[0] }]) }, `+ ${free[0]} :=`) : null,
+        h('span', { class: 'tt-note' }, 'a + b, a − b, a & b, a | b, a ^ b, a << 1, a >> 1; a register, a data input or a number')));
+  }
+
+  /** An arc's tests on the data: each must be true (or false) for the arc to be taken. */
+  private tests(doc: FsmDoc, k: number): HTMLElement {
+    const a = doc.arcs[k], ts = a.test ?? [];
+    const setTests = (next: { expr: string; is: 0 | 1 }[]) => this.setArc(doc, k, { ...a, test: next.length ? next : undefined });
+    return h('div', { class: 'fsm-row fsm-acts' }, h('span', { class: 'tt-lbl' }, 'Tests'),
+      h('div', { class: 'fsm-list' },
+        ts.map((t, j) => {
+          const inp = h('input', { class: 'tt-expr', value: t.expr, spellcheck: 'false', 'aria-label': `Test ${j + 1}`, placeholder: 'a < b' }) as HTMLInputElement;
+          inp.addEventListener('change', () => setTests(ts.map((x, i) => (i === j ? { ...x, expr: inp.value.trim() } : x))));
+          inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') inp.blur(); });
+          return h('div', { class: 'fsm-item' }, inp,
+            h('div', { class: 'hdl-seg' }, ([[1, 'true'], [0, 'false']] as const).map(([v, l]) => h('button', { class: t.is === v ? 'on' : '', 'aria-pressed': String(t.is === v), onclick: () => t.is !== v && setTests(ts.map((x, i) => (i === j ? { ...x, is: v } : x))) }, l))),
+            h('button', { class: 'tt-x', 'aria-label': `Remove test ${t.expr}`, onclick: () => setTests(ts.filter((_, i) => i !== j)) }, '×'));
+        }),
+        h('button', { class: 'btn sm', onclick: () => setTests([...ts, { expr: `${doc.data!.regs[0]} = 0`, is: 1 }]) }, '+ Test'),
+        h('span', { class: 'tt-note' }, 'a = b, a ≠ b, a < b, a ≤ b, a > b, a ≥ b (unsigned), or a bit: a[7]')));
   }
 
   private pinField(doc: FsmDoc, side: 'in' | 'out', k: number, name: string): HTMLElement {
@@ -425,13 +768,13 @@ class FsmUi {
       const ren = (xs: string[] | undefined) => xs?.map((x) => (x === name ? v : x));
       this.apply(side === 'in'
         ? { ...doc, ins: doc.ins.map((x, i) => (i === k ? v : x)), arcs: doc.arcs.map((a) => ({ ...a, when: Object.fromEntries(Object.entries(a.when).map(([x, b]) => [x === name ? v : x, b])) })) }
-        : { ...doc, outs: doc.outs.map((x, i) => (i === k ? v : x)), states: doc.states.map((s) => ({ ...s, out: ren(s.out) })), arcs: doc.arcs.map((a) => ({ ...a, out: ren(a.out) })) });
+        : { ...doc, outs: doc.outs.map((x, i) => (i === k ? v : x)), states: doc.states.map((st) => ({ ...st, out: ren(st.out) })), arcs: doc.arcs.map((a) => ({ ...a, out: ren(a.out) })) });
     });
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') inp.blur(); if (e.key === 'Escape') { inp.value = name; inp.blur(); } });
     const removable = side === 'in' || doc.outs.length > 1;
     const remove = () => this.apply(side === 'in'
       ? { ...doc, ins: doc.ins.filter((x) => x !== name), arcs: doc.arcs.map((a) => { const { [name]: _n, ...when } = a.when; return { ...a, when }; }) }
-      : { ...doc, outs: doc.outs.filter((x) => x !== name), states: doc.states.map((s) => ({ ...s, out: s.out?.filter((x) => x !== name) })), arcs: doc.arcs.map((a) => ({ ...a, out: a.out?.filter((x) => x !== name) })) });
+      : { ...doc, outs: doc.outs.filter((x) => x !== name), states: doc.states.map((st) => ({ ...st, out: st.out?.filter((x) => x !== name) })), arcs: doc.arcs.map((a) => ({ ...a, out: a.out?.filter((x) => x !== name) })) });
     return h('span', { class: `tt-pinbox ${side}` }, inp,
       removable ? h('button', { class: 'tt-x', title: side === 'in' ? `Remove ${name} (arcs stop reading it)` : `Remove ${name}`, 'aria-label': `Remove ${name}`, onclick: remove }, '×') : null);
   }
@@ -446,4 +789,9 @@ registerEditorPlugin((ed) => {
 registerNewChipKind({
   label: 'State machine', hint: 'draw a state diagram: the circuit is built from it', icon: 'flag',
   run: (ed) => ed.editWs((ws) => newFsmChip(ws).ws),
+});
+
+registerNewChipKind({
+  label: 'State machine + datapath', hint: 'states load registers, arcs test them (GCD to start from)', icon: 'flag',
+  run: (ed) => ed.editWs((ws) => newFsmChip(ws, GCD_FSMD, 'GCD').ws),
 });
