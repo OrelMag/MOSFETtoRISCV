@@ -9,7 +9,7 @@ import { RELAY, RELAY_STEP_MS, RELAY_SUPPLY, type RelayParams, relayPull, type R
 import { evalBool, parseBool } from '../lib/boolexpr';
 import { literals as lits, minimumCover, primes, type Term } from '../lib/sop';
 import { assemble16 } from '../riscv/rv16/asm16';
-import { decode16, disasm16 } from '../riscv/rv16/isa16';
+import { decode16, disasm16, REG_NAMES16 } from '../riscv/rv16/isa16';
 
 /** A seeded generator (mulberry32): the same seed gives the same questions. */
 export function rng(seed: number): () => number {
@@ -227,22 +227,122 @@ const boolean: Drill = {
 
 // ---- RV16 encoding --------------------------------------------------------------------------
 
-const ENC_SAMPLES = [
-  'add a0, a1, a2', 'sub t0, a0, a1', 'addi a0, a0, -1', 'addi sp, sp, 5', 'lw a1, 3(sp)', 'sw ra, -1(sp)', 'beq a0, zero, -4', 'bne a0, a1, 7',
-  'jal ra, 20', 'jalr zero, 0(ra)', 'lui a0, 3', 'slli a0, a0, 4', 'srai t1, a2, 15', 'and t0, t0, a2', 'xor a2, a2, a2', 'blt a1, a0, -32', 'sltu a0, zero, a1',
-];
+/** A random RV16I instruction as assembly text: every format, negative immediates half the time. */
+export function randomInstr16(r: () => number): string {
+  const reg = (lo = 1) => REG_NAMES16[int(r, lo, 7)];
+  const imm6 = () => (r() < 0.5 ? int(r, -32, -1) : int(r, 0, 31));
+  const pick = <T>(xs: readonly T[]): T => xs[int(r, 0, xs.length - 1)];
+  switch (pick(['R', 'I', 'SH', 'U', 'B', 'S', 'J'] as const)) {
+    case 'R': return `${pick(['add', 'sub', 'and', 'or', 'xor', 'sll', 'srl', 'sra', 'slt', 'sltu'])} ${reg()}, ${reg(0)}, ${reg(0)}`;
+    case 'I': {
+      const op = pick(['addi', 'lw', 'jalr']);
+      return op === 'addi' ? `addi ${reg()}, ${reg(0)}, ${imm6()}` : `${op} ${op === 'jalr' ? reg(0) : reg()}, ${imm6()}(${reg(0)})`;
+    }
+    case 'SH': return `${pick(['slli', 'srli', 'srai'])} ${reg()}, ${reg(0)}, ${int(r, 0, 15)}`;
+    case 'U': return `lui ${reg()}, ${int(r, 0, 1023)}`;
+    case 'B': return `${pick(['beq', 'bne', 'blt', 'bge'])} ${reg(0)}, ${reg(0)}, ${imm6()}`;
+    case 'S': return `sw ${reg(0)}, ${imm6()}(${reg(0)})`;
+    case 'J': {
+      const rd = reg(0), off = r() < 0.5 ? int(r, -256, -1) : int(r, 1, 255);
+      return `jal ${rd}, ${off}`;
+    }
+  }
+}
+
+/** A word's fields as its format cuts them: [bits, label] from bit 15 down. */
+function fieldCut(w: number): [string, string][] {
+  const d = decode16(w), f = d.spec?.fmt, b = bin(w, 16);
+  const cut = (widths: number[], labels: string[]): [string, string][] => {
+    let at = 0;
+    return widths.map((n, i) => [b.slice(at, (at += n)), labels[i]]);
+  };
+  if (f === 'R') return cut([3, 3, 3, 3, 4], ['f3', 'rs2', 'rs1', 'rd', 'op']);
+  if (f === 'I') return cut([6, 3, 3, 4], ['imm[5:0]', 'rs1', 'rd', 'op']);
+  if (f === 'SH') return cut([2, 4, 3, 3, 4], ['type', 'shift', 'rs1', 'rd', 'op']);
+  if (f === 'S' || f === 'B') return cut([3, 3, 3, 3, 4], ['imm[5:3]', 'rs2', 'rs1', 'imm[2:0]', 'op']);
+  if (f === 'J') return cut([9, 3, 4], ['imm[8:0]', 'rd', 'op']);
+  if (f === 'U') return cut([9, 3, 1, 3], ['imm[9:1]', 'rd', 'imm[0]', 'op']);
+  return cut([16], ['word']);
+}
+
+const regText = (k: number) => `${REG_NAMES16[k]} = x${k}`;
+
+/** Why a word is what it is, field by field (both directions of the drill show it). */
+export function explain16(w: number): string {
+  const d = decode16(w), s = d.spec!, op = w & 15;
+  const cut = fieldCut(w).map(([bits, l]) => `<code>${bits}</code> ${l}`).join(' · ');
+  const parts: string[] = [];
+  const signed = (bits: string, v: number) => `${bits} = ${v}${v < 0 ? ` (bit ${bits.length - 1} set: −${2 ** (bits.length - 1)} + ${v + 2 ** (bits.length - 1)})` : ''}`;
+  switch (s.fmt) {
+    case 'R':
+      parts.push(`op ${bin(op, 4)} = ${op === 1 ? 'OP' : 'OPX'}, R-format: f3 = ${bin((w >> 13) & 7, 3)} → <code>${s.name}</code>`, `rd ${regText(d.rd)}`, `rs1 ${regText(d.rs1)}`, `rs2 ${regText(d.rs2)}`);
+      break;
+    case 'I':
+      parts.push(`op ${bin(op, 4)} = ${s.name.toUpperCase()}, I-format`, `rd ${regText(d.rd)}`, `rs1 ${regText(d.rs1)}`, `imm = bits 15:10 = ${signed(bin(d.imm & 63, 6), d.imm)}`);
+      break;
+    case 'SH':
+      parts.push(`op 0101 = SHI: bits 15:14 = ${bin((w >> 14) & 3, 2)} → <code>${s.name}</code> (00 sll, 01 srl, 10 sra)`, `rd ${regText(d.rd)}`, `rs1 ${regText(d.rs1)}`, `shift = bits 13:10 = ${d.imm}`);
+      break;
+    case 'S': case 'B':
+      parts.push(`op ${bin(op, 4)} = ${s.name.toUpperCase()}, S/B-format: no rd, its bits 6:4 are imm[2:0]`, `rs1 ${regText(d.rs1)}`, `rs2 ${regText(d.rs2)}`,
+        `imm = {bits 15:13, bits 6:4} = {${bin((w >> 13) & 7, 3)}, ${bin((w >> 4) & 7, 3)}} = ${signed(bin(d.imm & 63, 6), d.imm)}`);
+      break;
+    case 'J':
+      parts.push('op 1100 = JAL, J-format', `rd ${regText(d.rd)}`, `imm = bits 15:7 = ${signed(bin(d.imm & 511, 9), d.imm)} words`);
+      break;
+    case 'U': {
+      const k = d.imm >> 6;
+      parts.push(`op ${bin(op, 4)}: bits 2:0 = 111 is LUI, bit 3 is imm[0]`, `rd ${regText(d.rd)}`, `imm10 = {bits 15:7, bit 3} = ${bin(k, 10)} = ${k}, loaded as ${k} × 64 = 0x${hex(d.imm, 16)}`);
+      break;
+    }
+    default:
+      break;
+  }
+  return `${cut}. ${parts.join('; ')}. <code>${grp(bin(w, 16))}</code> = 0x${hex(w, 16)} = <code>${disasm16(w)}</code>.`;
+}
+
+/** What differs between a decoded answer and the word asked about, named by field (null: the same instruction). */
+function decodeDiff(got: number, want: number): string | null {
+  if (decodeSame(got, want)) return null;
+  const a = decode16(got), b = decode16(want);
+  if (!a.spec || a.spec !== b.spec) return 'a different instruction: read op (bits 3:0) first, then f3 or the shift type';
+  const f = b.spec!.fmt, out: string[] = [];
+  if (!['S', 'B'].includes(f) && a.rd !== b.rd) out.push('rd');
+  if (!['U', 'J'].includes(f) && a.rs1 !== b.rs1) out.push('rs1');
+  if (['R', 'S', 'B'].includes(f) && a.rs2 !== b.rs2) out.push('rs2');
+  if (f !== 'R' && a.imm !== b.imm) out.push(f === 'SH' ? 'the shift amount' : 'the immediate');
+  if (!out.length) return 'a different instruction';
+  return `the right instruction, but ${out.join(' and ')} ${out.length > 1 ? 'differ' : 'differs'}`;
+}
+
+/** Which of the target word's fields a wrong encoding got wrong. */
+function encodeDiff(got: number, want: number): string {
+  let at = 15;
+  const wrong = fieldCut(want).filter(([bits]) => {
+    const hi = at, lo = (at -= bits.length) + 1;
+    const m = ((1 << (hi - lo + 1)) - 1) << lo;
+    return (got & m) !== (want & m);
+  }).map(([, l]) => l);
+  return `wrong in ${wrong.join(', ')}`;
+}
 
 const isa16: Drill = {
   id: 'isa16', title: 'Encode and decode', goal: 6,
-  how: 'Encode: give the 16-bit word in hex. Decode: write the instruction (register names or x0–x7; immediates in decimal). Fields: op [3:0], rd [6:4], rs1 [9:7], rs2 [12:10], f3 [15:13].',
+  how: 'Encode: give the 16-bit word in hex. Decode: write the instruction (zero ra sp a0 a1 a2 t0 t1, or x0–x7; immediates in decimal; a branch or jal offset as a number of words). Fields: op [3:0], rd [6:4], rs1 [9:7], rs2 [12:10], f3 [15:13]; S and B put imm[5:3] in 15:13 and imm[2:0] in 6:4.',
   make(r) {
-    const text = ENC_SAMPLES[int(r, 0, ENC_SAMPLES.length - 1)];
+    const text = randomInstr16(r);
     const a = assemble16(text);
     const w = a.words[0];
     if (r() < 0.5) {
+      const hexOk = numAnswer(w, 16);
       return {
-        prompt: `Encode <code>${text}</code> as a 16-bit word (hex).`, placeholder: '0x....', check: numAnswer(w, 16), answer: `0x${hex(w, 16)}`,
-        explain: `Fields: f3 ${(w >> 13) & 7}, rs2 ${(w >> 10) & 7}, rs1 ${(w >> 7) & 7}, rd ${(w >> 4) & 7}, op ${w & 15}: ${grp(bin(w, 16))}.`,
+        prompt: `Encode <code>${text}</code> as a 16-bit word (hex).`, placeholder: '0x....', answer: `0x${hex(w, 16)}`, explain: explain16(w),
+        check: (t) => {
+          const c = hexOk(t);
+          if (c.ok || c.why !== 'not that value') return c;
+          const v = parseNum(/^0x/i.test(t.trim()) ? t.trim().replace(/[_\s]/g, '') : `0x${t.trim().replace(/[_\s]/g, '')}`);
+          return { ok: false, why: v === null || v < 0 || v > 0xffff ? 'a 16-bit word: four hex digits' : encodeDiff(v, w) };
+        },
       };
     }
     return {
@@ -250,15 +350,17 @@ const isa16: Drill = {
       check: (t) => {
         const b = assemble16(t);
         if (b.errors.length) return { ok: false, why: b.errors[0].message };
-        return { ok: b.words.length === 1 && decodeSame(b.words[0], w), why: 'that is a different instruction' };
+        if (b.words.length !== 1) return { ok: false, why: 'one instruction, not a pseudo-instruction that expands to several' };
+        const why = decodeDiff(b.words[0], w);
+        return why ? { ok: false, why } : { ok: true };
       },
-      answer: disasm16(w), explain: `op = ${w & 15}: ${decode16(w).spec?.fmt}-format.`,
+      answer: disasm16(w), explain: explain16(w),
     };
   },
 };
 
 /** Same instruction, ignoring fields the format does not use. */
-function decodeSame(x: number, y: number): boolean {
+export function decodeSame(x: number, y: number): boolean {
   const a = decode16(x), b = decode16(y);
   if (!a.spec || a.spec !== b.spec) return false;
   const f = a.spec.fmt;
