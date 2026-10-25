@@ -6,7 +6,7 @@ import { actName, actTitle, nodeById } from '../nodes';
 import { isDone, type ProgressView } from '../graph';
 import { altCost } from '../measure';
 import type { CampaignNode } from '../types';
-import { actEnd, actNext, type Chain, sideQuest, whyStack, withinReach } from '../thread';
+import { actEnd, actNext, type Chain, closedAct, sideQuest, whyStack, withinReach } from '../thread';
 import { h, icon } from '../../ui/dom';
 
 export interface ThreadCtx {
@@ -118,4 +118,10 @@ export function reachEl(n: CampaignNode, ctx: ThreadCtx): { el: HTMLElement | nu
       h('span', null, h('a', { href: ctx.route(x.node) }, x.node.title), h('span', { class: 'th-act' }, actName(x.node.act)), x.clause ? [': ', x.clause] : null),
       h('span', { class: `th-meter${x.missing.length ? '' : ' ready'}` }, meter(x))))));
   return { el, next, side };
+}
+
+/** The way on after `n` is done: the next act's level when it closed its act, else the level it moved closest to ready (undefined: the caller's default). */
+export function nextAfter(n: CampaignNode, ctx: ThreadCtx): CampaignNode | undefined {
+  const end = closedAct(n, ctx.view) !== undefined ? actEnd(n.act) : undefined;
+  return (end && actNext(end, ctx.view, ctx.open)) || reachEl(n, ctx).next;
 }

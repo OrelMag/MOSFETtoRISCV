@@ -34,6 +34,8 @@ export interface Band {
 
 /** Subtitle and footer text: line height, the most lines of each, and an estimate of a character's width (11–12 px text). */
 export const SUB_LINE = 14, SUB_LINES = 2, FOOT_LINES = 3, CHAR_W = 6.2, FOOT_LABEL_W = 96;
+/** The subtitle's first baseline below its band's top (the title's is at 21). */
+export const SUB_Y = 38;
 
 /** `text` (markup stripped) in lines of at most `width` px; the last ends in … when it does not fit in `max`. */
 export function wrapText(text: string, width: number, max: number): string[] {

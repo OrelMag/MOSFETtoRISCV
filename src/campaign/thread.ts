@@ -102,18 +102,16 @@ export interface Chain {
   block?: { id: string; label: string } | 'all';
 }
 
-/** Shortest path over dependents (required ones only, unless `n` is optional) to the first node `hit` accepts. */
+/**
+ * A shortest path over dependents (required ones only, unless `n` is optional) to a node `hit` accepts: of those, the
+ * earliest act's, then the nearest (a NOT reaches Core I and a pipeline core alike: Core I is where it first runs).
+ */
 function pathTo(n: CampaignNode, hit: (m: CampaignNode) => boolean): CampaignNode[] | undefined {
   const req = !n.optional;
   const prev = new Map<string, CampaignNode | null>([[n.id, null]]);
-  let ring = [n];
+  let ring = [n], best: CampaignNode | undefined;
   while (ring.length) {
-    for (const m of ring) {
-      if (!hit(m)) continue;
-      const out: CampaignNode[] = [];
-      for (let c: CampaignNode | null = m; c; c = prev.get(c.id) ?? null) out.unshift(c);
-      return out;
-    }
+    for (const m of ring) if (hit(m) && (!best || m.act < best.act)) best = m;
     const next: CampaignNode[] = [];
     for (const m of ring) {
       for (const d of dependents(m.id)) {
@@ -124,7 +122,10 @@ function pathTo(n: CampaignNode, hit: (m: CampaignNode) => boolean): CampaignNod
     }
     ring = next;
   }
-  return undefined;
+  if (!best) return undefined;
+  const out: CampaignNode[] = [];
+  for (let c: CampaignNode | null = best; c; c = prev.get(c.id) ?? null) out.unshift(c);
+  return out;
 }
 
 /**

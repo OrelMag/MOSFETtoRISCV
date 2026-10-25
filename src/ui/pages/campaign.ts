@@ -35,7 +35,7 @@ import { settings } from '../settings';
 import type { Page } from './chapter';
 import { tipsOf } from '../../campaign/nudges';
 import { closedAct } from '../../campaign/thread';
-import { actEndEl, reachEl, type ThreadCtx, whyStackEl } from '../../campaign/ui/whystack';
+import { actEndEl, nextAfter, reachEl, type ThreadCtx, whyStackEl } from '../../campaign/ui/whystack';
 
 const html = (tag: 'div' | 'p' | 'span', cls: string, content: string) => {
   const el = h(tag, { class: cls });
@@ -413,7 +413,7 @@ export class CampaignPage implements Page {
     }
     // after a pass: the level it moved closest to ready, else the next open one in order; and its side quest
     const reach = isDone(p.view(n.id)) ? reachEl(n, this.ctx()) : undefined;
-    const next = reach ? reach.next ?? nextAvailable(p.view, p.unlockAll, n.id) : undefined;
+    const next = reach ? nextAfter(n, this.ctx()) ?? nextAvailable(p.view, p.unlockAll, n.id) : undefined;
     // the main action once nothing else is (a lesson read, a drill passed): where to go next
     if (next) {
       const main = !bar.querySelector('.btn.primary');

@@ -10,6 +10,7 @@ import { coreTests } from '../src/campaign/coretests';
 import { corePeriod, memLeaf } from '../src/campaign/corecheck';
 import { dependents, type NodeState } from '../src/campaign/graph';
 import { libCost } from '../src/campaign/measure';
+import { CHAR_W, FOOT_LABEL_W, mapLayout, NODE_H, SUB_LINE, SUB_LINES, SUB_Y, wrapText } from '../src/campaign/layout';
 import { ACTS, NODES, nodeById } from '../src/campaign/nodes';
 import {
   actDone, actEnd, actNext, blockUse, cardBlock, closedAct, goesInto, pitfallsOf, requiredOf, sideQuest, threadIds, threadOf, usedLater, whyStack, withinReach,
@@ -156,6 +157,8 @@ describe('the why stack', () => {
     // a universal brick goes everywhere; every chain ends in a core
     expect(goesInto('g_not')!.block).toBe('all');
     for (const id of ['g_dec', 'g_mux8', 'a_inc16', 'n_twos', 'g_not']) expect(goesInto(id)!.nodes.at(-1)!.kind, id).toBe('core');
+    // the earliest core that holds it, not a pipeline core one hop nearer
+    expect(goesInto('g_not')!.nodes.at(-1)!.id).toBe('c_core1');
   });
 
   it('lists the consumers, required first, with their clauses', () => {
@@ -170,6 +173,40 @@ describe('the why stack', () => {
     const mine = threadOf('a_slt')!.pitfalls!;
     const out = pitfallsOf(n, (c) => (c === 'overflow' ? ['New one.', mine[0]] : undefined));
     expect(out).toEqual([...mine, 'New one.']);
+  });
+});
+
+describe('the map\'s band texts', () => {
+  const text = { blurb: (a: number) => ACTS.find((x) => x.num === a)?.blurb, end: actEnd };
+  it('puts each blurb under its title and each end card at its band\'s foot, the levels between them', () => {
+    const ended = new Set([0, 1, 2, 3, 4, 5, 6, 7]);
+    for (const cols of [1, 2, 4, Infinity]) {
+      const L = mapLayout(cols, new Set(), text, ended);
+      for (const b of L.bands) {
+        if (b.folded) continue;
+        const ns = [...L.nodes.values()].filter((p) => p.node.act === b.act);
+        expect(b.sub?.length, `act ${b.act}`).toBeGreaterThan(0);
+        expect(b.sub!.length).toBeLessThanOrEqual(SUB_LINES);
+        const subBottom = b.y + SUB_Y + (b.sub!.length - 1) * SUB_LINE + 4;
+        for (const p of ns) expect(p.y, `${p.node.id} under the subtitle`).toBeGreaterThan(subBottom);
+        if (actEnd(b.act)) {
+          const f = b.foot!;
+          expect(f, `act ${b.act} foot`).toBeDefined();
+          for (const p of ns) expect(p.y + NODE_H, `${p.node.id} above the foot`).toBeLessThan(f.y - 28);
+          expect(f.y + (f.can.length + f.cannot.length - 1) * SUB_LINE).toBeLessThan(b.y + b.h);
+          // every line fits the map at the estimated character width
+          for (const line of [...f.can, ...f.cannot]) expect(16 + FOOT_LABEL_W + line.length * CHAR_W).toBeLessThanOrEqual(L.w);
+        }
+      }
+    }
+  });
+
+  it('wraps and cuts text', () => {
+    expect(wrapText('a b c', 1000, 2)).toEqual(['a b c']);
+    const w = wrapText('word '.repeat(100), 100, 2);
+    expect(w.length).toBe(2);
+    expect(w[1].endsWith('…')).toBe(true);
+    expect(wrapText('<b>bold</b> &lt;x&gt;', 1000, 1)).toEqual(['bold <x>']);
   });
 });
 

@@ -35,7 +35,7 @@ import type { Page } from './chapter';
 import { WalkMode } from './levelwalk';
 import { tipsOf } from '../../campaign/nudges';
 import { blockUse, closedAct, pitfallsOf } from '../../campaign/thread';
-import { actEndEl, reachEl, type ThreadCtx, whyStackEl } from '../../campaign/ui/whystack';
+import { actEndEl, nextAfter, reachEl, type ThreadCtx, whyStackEl } from '../../campaign/ui/whystack';
 
 /** The codex's mistakes (codexmore, a chunk of its own), once loaded: the Task tab's pitfalls add them. */
 let mistakesOf: ((id: string) => string[] | undefined) | undefined;
@@ -212,7 +212,7 @@ export class LevelPage implements Page {
   /** The level after a pass: the one it moved closest to ready, else the next open one in order. */
   private nextOf(): CampaignNode | undefined {
     const n = this.node!, p = progress();
-    return reachEl(n, this.ctx()).next ?? nextAvailable(p.view, p.unlockAll, n.id);
+    return nextAfter(n, this.ctx()) ?? nextAvailable(p.view, p.unlockAll, n.id);
   }
 
   private whyTab(el: HTMLElement): void {
@@ -419,7 +419,7 @@ export class LevelPage implements Page {
     const codex = n.codex.map((id) => codexById(id)).filter((e) => !!e);
     const ctx = this.ctx();
     const reach = reachEl(n, ctx);
-    const next = reach.next ?? nextAvailable(progress().view, progress().unlockAll, n.id);
+    const next = nextAfter(n, ctx) ?? nextAvailable(progress().view, progress().unlockAll, n.id);
     // the act this pass completes: what the machine can do now, and the next act's button in place of Next
     const ended = g.first && closedAct(n, progress().view) !== undefined ? actEndEl(n.act, ctx) : null;
     const close = () => { this.result?.remove(); this.result = null; };

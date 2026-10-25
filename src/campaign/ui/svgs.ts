@@ -4,7 +4,7 @@
 import { s } from '../../ui/dom';
 import { BLOCKS, blockNodes, LINKS, VIEW } from '../anatomy';
 import { ancestors, isDone, statusOf, type ProgressView } from '../graph';
-import { BAND_GAP, COL_GAP, FOOT_LABEL_W, LINE_GAP, mapLayout, NODE_H, NODE_W, OPTIONAL_ACTS, ROW_GAP, SUB_LINE } from '../layout';
+import { BAND_GAP, COL_GAP, FOOT_LABEL_W, LINE_GAP, mapLayout, NODE_H, NODE_W, OPTIONAL_ACTS, ROW_GAP, SUB_LINE, SUB_Y } from '../layout';
 import { actDone, actEnd, cardBlock } from '../thread';
 import { ACTS, actName, NODES } from '../nodes';
 import { levelCardLabel } from '../cardlabel';
@@ -91,7 +91,7 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
     ag.append(s('text', { class: 'cp-band-title', x: 16, y: b.y + 21, 'aria-hidden': 'true' }, name));
     if (b.sub) {
       // the whole blurb for assistive tech and as a tooltip; the drawing may cut it short
-      ag.append(s('text', { class: 'cp-band-sub', x: 16, y: b.y + 38, role: 'note', 'aria-label': act.blurb.replace(/<[^>]+>/g, '') },
+      ag.append(s('text', { class: 'cp-band-sub', x: 16, y: b.y + SUB_Y, role: 'note', 'aria-label': act.blurb.replace(/<[^>]+>/g, '') },
         s('title', null, act.blurb.replace(/<[^>]+>/g, '')),
         ...b.sub.map((line, i) => s('tspan', { x: 16, dy: i ? SUB_LINE : 0, 'aria-hidden': 'true' }, line))));
     }
