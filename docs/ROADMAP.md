@@ -949,15 +949,14 @@ the pipelines' 1-cycle data memory; RV32IM without traps; a cycle-exact model th
   2 330 cycles, 290 → 21 mispredictions, as much on the in-order machine; a reach challenge on the gates (the CRC of
   four words under 700 cycles: 807 → 610), with hints, Show answer and Do it for me. CI: long tests yield to the event
   loop (tests/yieldtick.ts: vitest's 60 s RPC timeout had failed a deploy with every test passing)
-- ⏳ 17e: an out-of-order lab you configure (Phase 19; FREESS's strength). `OooModel` already takes any width, ROB,
-  issue queue, store queue, latencies, predictor, BTB / RAS sizes, recovery point and in-order issue; what it lacks is
-  ports decoupled from width and units per port (today port 0 takes memory, port 1 mul / div). Generalize the model
-  (n ports, a unit mix per port, pipelined or iterative units, fetch / commit width separate from issue width), keep
-  `OOO_CORE` as one point the gates are checked against, then a widget on chapter 26 and the workbench: the knobs, a
-  program (the benchmarks, assembly, or chapter 15's Python), the per-cycle timeline, CPI and where the cycles go (front
-  end, full ROB / queue, port conflicts, mispredictions, divider). Its cost side from the gates: ROB, issue queue and
-  store queue sizes as parameters of lib/ooocore.ts (the core stays 2-wide), NANDs and period per size measured, so the
-  lab prices a configuration instead of only timing it
+- ✅ 17e: the out-of-order lab (mockup approved 2026-10-25): chapter 26's step "Your own core" and the workbench's Lab tab
+  (widgets/ooolab.ts). The model takes fetch / commit widths apart from its ports, any ports each with its own units, a
+  pipelined divider, and accounts for every commit slot (committed, or charged to what the oldest instruction waits for);
+  `OOO_CORE` runs cycle for cycle as before. The lab runs the benchmark set, one program, the learner's assembly or chapter
+  15's Python: CPI against our core, the slots, a timeline with each cycle's cause, kept shapes. Its price from the gates:
+  ROB 8 / 16 / 32, issue queue 4 / 8 / 16 and store queue 2 / 4 / 8 as parameters of lib/ooocore.ts, each size equal to the
+  model every cycle (tests/ooosizes.test.ts), NANDs and period of all 27 points in bench/ooosizes.json (286 574 to 509 252
+  NANDs, period 93 to 95); wider or otherwise different shapes are timed, not priced
 
 ### Phase 16 — Journey and campaign track: Memory ✅
 Memory in depth, past today's arrays (chapter 10), cells and caches (Phase 8): how a DRAM chip really answers, what
@@ -1073,7 +1072,7 @@ unit, wires nothing). The fan-out capacitance per net is already computed for th
 - Wire length only where a design is placed (chapter 28's teaching placer, the OpenROAD runs), never from a
   schematic's drawn wires: a drawing's length is not a layout's
 
-**Out of order you can configure** (FREESS: ROB size, issue width, functional units): Phase 17e. The gate-level
+**Out of order you can configure** (FREESS: ROB size, issue width, functional units): ✅ Phase 17e. The gate-level
 2-wide core (Phase 17c) stays fixed; the lab varies the model and prices sizes from the gates.
 
 **Circuits from other tools, tests you write** (gap review 2026-10-25; mockup approved 2026-10-25): Logisim-evolution

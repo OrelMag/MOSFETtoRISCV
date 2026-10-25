@@ -25,6 +25,12 @@
 //              (from its committed copy); fetch restarts at the right PC next cycle. With recover: 'resolve' the flush
 //              happens when the branch executes instead (the model only: it needs rename-table checkpoints).
 //
+// Beyond the core (the lab, chapter 26): fetch and commit widths apart from the ports, any number of ports each with
+// its own units (portsOf gives the ports above), and a pipelined divider. Every commit slot is accounted for
+// (stats.slots): committed, or charged to what the oldest instruction in flight waits for once issue is done (its
+// producer's unit, older stores for a load, a busy divider, a port or bus taken, the one store a cycle; from a flush
+// until an instruction fetched after it commits: the misprediction; an empty window otherwise: the front end).
+//
 // Timing does not depend on data values: loads wait for older stores whatever their addresses, and every unit has a
 // fixed latency. Only the correct path's control flow matters, which the golden model gives: it steps once per
 // correct-path instruction as it is fetched. Wrong-path instructions are fetched, renamed and executed like any other
@@ -36,9 +42,34 @@ import { classify, LAT, latencyOf, type Latencies, type UopClass } from './ilp';
 
 export type Predictor = 'perfect' | 'btb' | 'ras';
 
+/** What an issue port can run: ALU operations, branches and jalr, loads and stores, multiplies, divides. */
+export type Unit = 'alu' | 'branch' | 'mem' | 'mul' | 'div';
+export const UNITS: Unit[] = ['alu', 'branch', 'mem', 'mul', 'div'];
+export const UNIT_NAME: Record<Unit, string> = { alu: 'ALU operations', branch: 'branches', mem: 'loads and stores', mul: 'multiplies', div: 'divides' };
+
+/** The unit a class needs (jal and lui none: their value is known at dispatch). */
+export function unitOf(cls: UopClass): Unit | null {
+  switch (cls) {
+    case 'branch': case 'jalr': return 'branch';
+    case 'load': case 'store': return 'mem';
+    case 'mul': return 'mul';
+    case 'div': return 'div';
+    case 'jal': case 'lui': return null;
+    default: return 'alu';
+  }
+}
+
 export interface OooConfig {
-  /** Instructions fetched, dispatched, issued (ports) and committed per cycle. */
+  /** Instructions fetched, dispatched, issued (ports) and committed per cycle, unless fetch / commit / ports say otherwise. */
   width: number;
+  /** Instructions fetched and dispatched per cycle (default: width). */
+  fetch?: number;
+  /** Instructions committed per cycle (default: width). */
+  commit?: number;
+  /** The issue ports, each with the units it runs (default: portsOf(width, branchPorts)). */
+  ports?: Unit[][];
+  /** A divider takes one division at a time ('iterative', as the gates do; default) or a new one every cycle. */
+  divider?: 'iterative' | 'pipelined';
   rob: number;
   iq: number;
   sq: number;
@@ -49,7 +80,7 @@ export interface OooConfig {
   recover: 'commit' | 'resolve';
   /** Issue in program order (a scoreboarded in-order machine with the same front and back end). */
   inorder: boolean;
-  /** Branches and jalr on port 0 only, or on ports 0 and 1. */
+  /** Branches and jalr on port 0 only, or on ports 0 and 1 (the default ports only). */
   branchPorts: 1 | 2;
   /** How an instruction that several ports take picks one: alternate, or the port with fewer waiting. */
   bind: 'alternate' | 'balance';
@@ -59,6 +90,34 @@ export interface OooConfig {
 export const OOO_CORE: OooConfig = {
   width: 2, rob: 16, iq: 8, sq: 4, lat: LAT, predict: 'ras', btb: 16, ras: 4, recover: 'commit', inorder: false, branchPorts: 2, bind: 'balance',
 };
+
+/** The default ports for a width: port 0 ALU, branches, memory; port 1 ALU, branches, multiply, divide; ports 2+ ALU
+ *  (one port does everything when width is 1). */
+export function portsOf(width: number, branchPorts: 1 | 2 = 2): Unit[][] {
+  if (width === 1) return [UNITS.slice()];
+  return Array.from({ length: width }, (_, p): Unit[] =>
+    p === 0 ? ['alu', 'branch', 'mem'] : p === 1 ? (branchPorts === 2 ? ['alu', 'branch', 'mul', 'div'] : ['alu', 'mul', 'div']) : ['alu']);
+}
+
+export interface OooShape { fetch: number; commit: number; ports: Unit[][] }
+
+/** A configuration's widths and ports, defaults filled in. */
+export function shapeOf(cfg: OooConfig): OooShape {
+  return { fetch: cfg.fetch ?? cfg.width, commit: cfg.commit ?? cfg.width, ports: cfg.ports ?? portsOf(cfg.width, cfg.branchPorts) };
+}
+
+/** Why a configuration cannot run (none: it can). */
+export function configProblems(cfg: Partial<OooConfig>): string[] {
+  const c: OooConfig = { ...OOO_CORE, ...cfg }, sh = shapeOf(c), out: string[] = [];
+  for (const u of UNITS) if (!sh.ports.some((p) => p.includes(u))) out.push(`No port runs ${UNIT_NAME[u]}.`);
+  if (sh.fetch < 1 || sh.commit < 1) out.push('Fetch and commit need a width of 1 or more.');
+  if (c.rob < 1 || c.iq < 1 || c.sq < 1) out.push('The reorder buffer and both queues need an entry or more.');
+  return out;
+}
+
+/** Where a commit slot went: an instruction committed, or what the oldest one in flight was waiting for. */
+export type SlotCause = 'retired' | 'mispredict' | 'frontend' | 'dependency' | 'memory' | 'muldiv' | 'port' | 'store';
+export const SLOT_CAUSES: SlotCause[] = ['retired', 'mispredict', 'frontend', 'dependency', 'memory', 'muldiv', 'port', 'store'];
 
 export type UopState = 'fetched' | 'queued' | 'issued' | 'done' | 'committed' | 'flushed';
 
@@ -102,6 +161,8 @@ export interface CycleInfo {
   fetched: Uop[];
   /** Instructions flushed at the end of this cycle. */
   flushed: Uop[];
+  /** Where this cycle's empty commit slots went (null: none empty). */
+  lost: SlotCause | null;
 }
 
 export interface OooStats {
@@ -113,6 +174,8 @@ export interface OooStats {
   robFull: number;
   iqFull: number;
   sqFull: number;
+  /** Commit slots (commit width × cycles) by where they went; they add up to commit × cycles. */
+  slots: Record<SlotCause, number>;
 }
 
 interface BtbEntry { tag: number; target: number; ctr: number; jump: boolean }
@@ -121,7 +184,11 @@ export class OooModel {
   readonly cfg: OooConfig;
   cycle = 0;
   halted = false;
-  readonly stats: OooStats = { cycles: 0, instructions: 0, mispredicts: 0, wrongPath: 0, robFull: 0, iqFull: 0, sqFull: 0 };
+  readonly stats: OooStats = {
+    cycles: 0, instructions: 0, mispredicts: 0, wrongPath: 0, robFull: 0, iqFull: 0, sqFull: 0,
+    slots: { retired: 0, mispredict: 0, frontend: 0, dependency: 0, memory: 0, muldiv: 0, port: 0, store: 0 },
+  };
+  readonly shape: OooShape;
   /** In flight, in program order (dispatched: ROB entries). */
   readonly robList: Uop[] = [];
   /** The fetch register (fetched, waiting to dispatch). */
@@ -142,14 +209,24 @@ export class OooModel {
   private rasCommit: number[] = [];
   /** Per port: cycles whose bus is taken. */
   private busy: Set<number>[];
-  private div: Uop | null = null;
+  /** Per port: the division its iterative divider holds. */
+  private div: (Uop | null)[];
+  private readonly iterDiv: boolean;
+  /** The cycle of the last flush; until an instruction fetched after it commits, its slots go to the misprediction. */
+  private flushedAt = -1;
+  private recovering = false;
 
   constructor(readonly words: number[], cfg: Partial<OooConfig> = {}, opts: IssOptions = {}) {
     this.cfg = { ...OOO_CORE, ...cfg, lat: { ...OOO_CORE.lat, ...cfg.lat } };
+    const bad = configProblems(this.cfg);
+    if (bad.length) throw new Error(bad.join(' '));
+    this.shape = shapeOf(this.cfg);
+    this.iterDiv = (this.cfg.divider ?? 'iterative') === 'iterative';
     this.iss = new ISS(words, { m: true, ...opts });
     this.imem = opts.imemWords ?? 1 << 16;
     this.btb = new Array(this.cfg.btb).fill(null);
-    this.busy = Array.from({ length: this.cfg.width }, () => new Set<number>());
+    this.busy = this.shape.ports.map(() => new Set<number>());
+    this.div = this.shape.ports.map(() => null);
   }
 
   /** The issue queue: dispatched, not yet picked (program order). */
@@ -162,14 +239,11 @@ export class OooModel {
     return m;
   }
 
-  /** Ports that may run a class (width 1: one port does everything). */
+  /** Ports that may run a class. */
   private portsFor(cls: UopClass): number[] {
-    const w = this.cfg.width;
-    if (w === 1) return [0];
-    if (cls === 'branch' || cls === 'jalr') return this.cfg.branchPorts === 2 ? [0, 1] : [0];
-    if (cls === 'load' || cls === 'store') return [0];
-    if (cls === 'mul' || cls === 'div') return [1];
-    return Array.from({ length: w }, (_, i) => i);
+    const unit = unitOf(cls)!, out: number[] = [];
+    this.shape.ports.forEach((p, i) => { if (p.includes(unit)) out.push(i); });
+    return out;
   }
 
   private predict(pc: number, word: number): number {
@@ -229,20 +303,20 @@ export class OooModel {
   /** Advance one clock cycle. */
   step(): CycleInfo {
     const t = this.cycle, cfg = this.cfg;
-    const info: CycleInfo = { cycle: t, committed: [], issued: [], dispatched: [], fetched: [], flushed: [] };
+    const info: CycleInfo = { cycle: t, committed: [], issued: [], dispatched: [], fetched: [], flushed: [], lost: null };
     if (this.halted) return info;
 
-    // The divider's result takes its port's bus at the first free cycle once it is ready.
-    if (this.div && this.div.x < 0 && this.div.s + cfg.lat.div <= t && !this.busy[this.div.port].has(t)) {
-      this.div.x = t;
-      this.busy[this.div.port].add(t);
+    // An iterative divider's result takes its port's bus at the first free cycle once it is ready.
+    for (const d of this.div) if (d && d.x < 0 && d.s + cfg.lat.div <= t && !this.busy[d.port].has(t)) {
+      d.x = t;
+      this.busy[d.port].add(t);
     }
     for (const u of this.robList) if (u.state === 'issued' && u.x >= 0 && u.x <= t) u.state = 'done';
     for (const b of this.busy) for (const c of b) if (c < t) b.delete(c);
 
     // Commit: done entries (results written at the end of an earlier cycle), from the head, in order.
     let flushAfter: Uop | null = null, stores = 0;
-    while (info.committed.length < cfg.width && this.robList.length) {
+    while (info.committed.length < this.shape.commit && this.robList.length) {
       const u = this.robList[0];
       if (u.state !== 'done' || u.x >= t) break;
       if (u.cls === 'store' && stores++ >= 1) break;
@@ -264,6 +338,7 @@ export class OooModel {
 
     // Issue: each port picks the oldest ready instruction bound to it.
     if (!this.halted) this.issue(t, info);
+    this.account(t, info, stores > 1);
 
     // Dispatch the fetch register in order; stop at the first that does not fit.
     // Entries freed this cycle (committed, picked) are usable only from the next.
@@ -303,7 +378,7 @@ export class OooModel {
     // Fetch into the fetch register when it empties this cycle.
     if (!this.fd.length && !this.halted) {
       let pc = this.fetchPc;
-      for (let k = 0; k < cfg.width; k++) {
+      for (let k = 0; k < this.shape.fetch; k++) {
         const u = this.fetchOne(pc);
         info.fetched.push(u);
         pc = u.pnext;
@@ -324,6 +399,28 @@ export class OooModel {
     return info;
   }
 
+  /** This cycle's commit slots: the committed ones, the rest to what the oldest instruction left waits for (after issue). */
+  private account(t: number, info: CycleInfo, storeLimit: boolean): void {
+    const committed = info.committed, sl = this.stats.slots, empty = this.shape.commit - committed.length;
+    sl.retired += committed.length;
+    if (this.recovering && committed.some((u) => u.f > this.flushedAt)) this.recovering = false;
+    if (empty > 0) sl[info.lost = this.halted ? 'frontend' : this.headCause(t, storeLimit)] += empty;
+  }
+
+  /** What the oldest instruction in flight waits for in cycle t, once commit and issue are done. */
+  headCause(t: number, storeLimit = false): SlotCause {
+    const u = this.robList[0];
+    if (!u) return this.recovering ? 'mispredict' : 'frontend';
+    if (u.wrong || (this.recovering && u.f > this.flushedAt)) return 'mispredict';
+    if (u.state === 'done' && u.x < t) return storeLimit ? 'store' : 'frontend';
+    if (u.state === 'done' || u.state === 'issued') return unitCause(u.cls);
+    const lagging = u.deps.find((p) => !(p.x >= 0 && p.x <= t));
+    if (lagging) return unitCause(lagging.cls);
+    if (u.cls === 'load' && this.robList.some((o) => o.seq < u.seq && o.cls === 'store' && !(o.x >= 0 && o.x < t))) return 'memory';
+    if (u.cls === 'div' && this.iterDiv && this.div[u.port]) return 'muldiv';
+    return 'port';
+  }
+
   private issue(t: number, info: CycleInfo): void {
     const cfg = this.cfg;
     const ready = (u: Uop) => u.state === 'queued' && u.d < t && u.deps.every((p) => p.x >= 0 && p.x <= t);
@@ -332,13 +429,13 @@ export class OooModel {
     const can = (u: Uop) => {
       if (!ready(u)) return false;
       if (u.cls === 'load' && !storesExecuted(u)) return false;
-      if (u.cls === 'div') return !this.div || (this.div.x >= 0 && this.div.x <= t);
+      if (u.cls === 'div' && this.iterDiv) { const d = this.div[u.port]; return !d || (d.x >= 0 && d.x <= t); }
       return !this.busy[u.port].has(t + lat(u));
     };
     const pick = (u: Uop) => {
       u.state = 'issued';
       u.s = t;
-      if (u.cls === 'div') this.div = u;
+      if (u.cls === 'div' && this.iterDiv) this.div[u.port] = u;
       else { u.x = t + lat(u); this.busy[u.port].add(u.x); }
       info.issued.push(u);
     };
@@ -352,7 +449,7 @@ export class OooModel {
       }
       return;
     }
-    for (let p = 0; p < cfg.width; p++) {
+    for (let p = 0; p < this.shape.ports.length; p++) {
       const u = queued.find((q) => q.port === p && can(q));
       if (u) pick(u);
     }
@@ -367,7 +464,9 @@ export class OooModel {
       if (u.x > t) this.busy[u.port]?.delete(u.x);
       this.remember(u);
     }
-    if (this.div && this.div.seq > after.seq) this.div = null;
+    this.div = this.div.map((d) => (d && d.seq > after.seq ? null : d));
+    this.flushedAt = t;
+    this.recovering = true;
     const keep = this.robList.filter((u) => u.seq <= after.seq);
     this.robList.length = 0;
     this.robList.push(...keep);
@@ -400,4 +499,9 @@ export class OooModel {
 /** Cycles and instructions of a program on a configuration (to the commit of its final jump to itself). */
 export function oooRun(words: number[], cfg: Partial<OooConfig> = {}, opts: IssOptions = {}, max = 1_000_000): OooStats {
   return new OooModel(words, cfg, opts).run(max);
+}
+
+/** The cause charged to a slot the oldest instruction holds while it (or the producer it waits for) is in a unit. */
+function unitCause(cls: UopClass): SlotCause {
+  return cls === 'load' || cls === 'store' ? 'memory' : cls === 'mul' || cls === 'div' ? 'muldiv' : 'dependency';
 }

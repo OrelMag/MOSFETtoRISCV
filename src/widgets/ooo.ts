@@ -157,7 +157,7 @@ function runModel(words: number[], cfg: Partial<OooConfig>, maxCycles = 50_000):
 }
 
 /** Committed instructions k … k + n − 1 of a run, and the cycles they span. */
-function window(m: OooModel, k: number, n: number): { uops: Uop[]; c0: number; c1: number } {
+export function commitWindow(m: OooModel, k: number, n: number): { uops: Uop[]; c0: number; c1: number } {
   const done = m.history.filter((u) => u.state === 'committed');
   const uops = done.slice(k, k + n);
   if (!uops.length) return { uops, c0: 0, c1: 0 };
@@ -176,7 +176,7 @@ export function orderWidget(): Widget {
     const words = oooProgram(id).words;
     const runs = ([['In order', { inorder: true }], ['Out of order', {}]] as const).map(([name, cfg]) => [name, runModel(words, { ...cfg, lat })] as const);
     out.replaceChildren(...runs.map(([name, m]) => {
-      const w = window(m, start, N);
+      const w = commitWindow(m, start, N);
       return h('div', { class: 'ooo-run' },
         h('div', { class: 'cpu-sec' }, `${name}: ${m.stats.cycles} cycles for ${m.stats.instructions} instructions, CPI ${fix(m.stats.cycles / m.stats.instructions)}`),
         timeline(w.uops, w.c0, w.c1));

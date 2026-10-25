@@ -18,7 +18,7 @@ import type { Radix } from '../sim/values';
  */
 function stageTools(parts: string[]): { radix: boolean; slow: boolean } {
   const [key, sub] = parts;
-  const stage = key === 'c' || (key === 'workbench' && sub !== 'stats' && sub !== 'bench');
+  const stage = key === 'c' || (key === 'workbench' && sub !== 'stats' && sub !== 'bench' && sub !== 'lab');
   return { radix: stage || key === 'sandbox' || (key === 'campaign' && sub === 'play'), slow: stage };
 }
 
@@ -211,6 +211,14 @@ export function startApp(root: HTMLElement): void {
         if (seq === routeSeq) mount(new m.BenchmarksPage());
       }, (e) => {
         if (seq === routeSeq) view.replaceChildren(loadFailed('benchmarks', e));
+      });
+    } else if (key === 'workbench' && parts[1] === 'lab') {
+      // The out-of-order lab: a chunk of its own (the model and its widget).
+      if ((page as { kind?: string } | null)?.kind === 'ooolab') return;
+      import('./pages/ooolab').then((m) => {
+        if (seq === routeSeq) mount(new m.OooLabPage());
+      }, (e) => {
+        if (seq === routeSeq) view.replaceChildren(loadFailed('the out-of-order lab', e));
       });
     } else if (key === 'workbench') {
       const path = parseDrill(parts.slice(2));
