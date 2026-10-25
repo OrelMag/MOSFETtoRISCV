@@ -6,8 +6,11 @@
 // random ones, 32 at a time on BitSim's lanes (each lane its own program ROM). Values are read as BigInts.
 
 import { describe, expect, it } from 'vitest';
-import { storeAlign, loadExtract } from '../src/lib/lsu';
-import { wordUnit, xlenCpu, type Xlen } from '../src/lib/cpu64';
+import { alu } from '../src/lib/alu';
+import { wordUnit, xDecode, xlenCpu, type Xlen } from '../src/lib/cpu64';
+import { extWire, laneMemory, loadExtract, storeAlign } from '../src/lib/lsu';
+import { mUnit } from '../src/lib/muldiv';
+import { regfile } from '../src/lib/regfile';
 import { assemble } from '../src/riscv/asm';
 import { bitsBig, wideState } from '../src/riscv/cosim';
 import { ISS } from '../src/riscv/iss';
@@ -17,6 +20,7 @@ import { randomProgram64 } from '../src/riscv/randprog64';
 import { BitSim, LANES } from '../src/sim/bitsim';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
+import { logicDepth, stats } from '../src/sim/stats';
 import type { Bit, ComponentDef } from '../src/sim/types';
 import { unpackBig } from '../src/sim/values';
 import { tick } from './yieldtick';
@@ -272,6 +276,31 @@ describe('the 64-bit blocks', () => {
       expect(ev({ rdata, addr, funct3 }).value, `t=${t}`).toBe(want);
     }
   });
+});
+
+describe('XLEN_COSTS', () => {
+  it('are what the cores and blocks measure', async () => {
+    const { XLEN_COSTS: K } = await import('../src/lib/xlencosts');
+    const { measureCpu } = await import('./verify/bench');
+    const w = asm(32, 'halt: j halt');
+    expect(measureCpu(xlenCpu(w, { xlen: 32, m: true }))).toEqual(K.rv32im);
+    await tick();
+    expect(measureCpu(xlenCpu(w, { xlen: 64, m: true }))).toEqual(K.rv64im);
+    await tick();
+    expect(measureCpu(xlenCpu(w, { xlen: 32 }))).toEqual(K.rv32i);
+    await tick();
+    expect(measureCpu(xlenCpu(w, { xlen: 64 }))).toEqual(K.rv64i);
+    expect({ nands: stats(wordUnit(64)).nands, depth: logicDepth(wordUnit(64)) }).toEqual(K.wUnit);
+    expect(stats(extWire(32, 64, true)).nands).toBe(K.immExt);
+    for (const x of [32, 64] as const) {
+      expect(stats(mUnit(x)).nands).toBe(K.mUnit[x]);
+      expect(stats(storeAlign(x)).nands + stats(loadExtract(x)).nands).toBe(K.lsu[x]);
+      expect(stats(laneMemory(5, x)).nands).toBe(K.dmem[x]);
+      expect(stats(regfile(5, x)).nands).toBe(K.regfile[x]);
+      expect({ nands: stats(alu(x, 'ks')).nands, depth: logicDepth(alu(x, 'ks')) }).toEqual(K.alu[x]);
+      expect(stats(xDecode(x, true)).nands).toBe(K.decode[x]);
+    }
+  }, 120_000);
 });
 
 describe('the single-cycle core at 64 bits (RV64IM) against ISS64', () => {

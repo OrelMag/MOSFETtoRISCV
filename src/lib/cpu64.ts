@@ -439,7 +439,3 @@ export function xlenTops(program: number[]): ComponentDef[] {
   return [xlenCpu(program, { xlen: 32, m: true }), xlenCpu(program, { xlen: 64, m: true }), xlenCpu(program, { xlen: 64 })];
 }
 
-/** For scripts/xlen-check.ts. */
-export function checkTops(): ComponentDef[] {
-  return xlenTops([0x13, 0x00500093, 0x0000006f]);
-}
