@@ -8,7 +8,7 @@
 // way, their selects ORed) a NAND per non-zero bit, then a NAND across the recipes. The recipes are read off the
 // specification (riscv/rvc.ts decodeC) over all 65 536 parcels, so the wiring cannot disagree with it.
 
-import type { ComponentDef, PortDef } from '../sim/types';
+import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { decodeC } from '../riscv/rvc';
 import { Builder } from './builder';
 import { constWord } from './alu';
@@ -134,7 +134,9 @@ export function cField(fi: number): ComponentDef {
   const sw = b.op(splitter(ones(32)), ['w'], undefined, 'sw');
   b.next();
   // a recipe's select: the OR of its forms
-  const sel = recipes.map((r, g) => (r.forms.length === 1 ? `${sf}.o${r.forms[0]}` : b.op1(orN(r.forms.length), r.forms.map((k) => `${sf}.o${k}`), `${r.forms.length} forms`, `s${g}`)));
+  // (a recipe that leaves the whole field 0 needs no select: its forms just contribute nothing)
+  const sel = recipes.map((r, g) => (r.src.every((s) => s === 'zero') ? ''
+    : r.forms.length === 1 ? `${sf}.o${r.forms[0]}` : b.op1(orN(r.forms.length), r.forms.map((k) => `${sf}.o${k}`), `${r.forms.length} forms`, `s${g}`)));
   b.next();
   // per field bit, a NAND per recipe that sets it (constant 1: the select's inverse), then a NAND across them
   const terms: string[][] = Array.from({ length: W }, () => []);
@@ -266,26 +268,34 @@ const incCache = new Map<number, ComponentDef>();
 export function incCin(n: number): ComponentDef {
   let d = incCache.get(n);
   if (d) return d;
-  const b = new Builder(14, 10, 2);
-  b.pins('a', 'cin');
-  const sa = b.op(splitter(ones(n)), ['a'], undefined, 'sa');
-  b.next();
-  let carry = 'cin';
-  const ys: string[] = [];
+  // the incrementer's drawing (combinational.ts), its first carry a pin instead of a tie to 1
+  const P = 8, X = 10, Y0 = 4;
+  const instances: InstanceDef[] = [
+    { name: 'sa', def: splitter(ones(n), P), at: [5, Y0 + 2 - P / 2] },
+    { name: 'my', def: merger(ones(n), P), at: [20, Y0 + 2 - P / 2] },
+  ];
+  const nets: NetDef[] = [
+    { name: 'a', ends: ['a', 'sa.in'] },
+    { name: 'y', ends: ['my.out', 'y'] },
+    { name: 'cin', ends: ['cin', 'ha0.b'] },
+  ];
   for (let i = 0; i < n; i++) {
-    const h = b.op(HALF_ADDER, [`${sa}.o${i}`, carry], undefined, `ha${i}`);
-    ys.push(`${h}.s`);
-    carry = `${h}.c`;
+    instances.push({ name: `ha${i}`, def: HALF_ADDER, at: [X, Y0 + P * i] });
+    nets.push({ name: `a${i}`, ends: [`sa.o${i}`, `ha${i}.a`] });
+    nets.push({ name: `y${i}`, ends: [`ha${i}.s`, `my.i${i}`] });
+    if (i < n - 1) nets.push({ name: `c${i + 1}`, ends: [`ha${i}.c`, `ha${i + 1}.b`] });
   }
-  b.next();
-  b.wire(b.op1(merger(ones(n)), ys, undefined, 'my'), 'y');
   d = define({
     id: `inccin${n}`, name: `${n}-bit increment by a carry-in`, category: 'arithmetic',
     summary: `y = a + cin over ${n} bits: ${n} half adders in a chain, the carry-in where the incrementer has its constant 1.`,
-    ports: [bus('a', n, 'in'), bit('cin', 'in'), bus('y', n, 'out')],
+    ports: [bus('a', n, 'in'), bit('cin', 'in', 'top'), bus('y', n, 'out')],
     symbol: { kind: 'box', label: '+cin' },
     spec: ([a, c]) => [(a + c) % 2 ** n],
-    netlist: () => ({ pins: edgePins(b, ['a', 'cin'], ['y'], 4), instances: b.instances, nets: b.nets() }),
+    netlist: () => ({
+      pins: { a: [1, Y0 + 2 - P / 2 + (P * n) / 2], y: [25, Y0 + 2 - P / 2 + (P * n) / 2], cin: [X + 3, 0] },
+      pinDirs: { cin: 'down' },
+      instances, nets,
+    }),
   });
   incCache.set(n, d);
   return d;
