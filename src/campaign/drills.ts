@@ -86,10 +86,31 @@ function numAnswer(want: number, base: 2 | 10 | 16, width = 0): Question['check'
 
 const binary: Drill = {
   id: 'binary', title: 'Binary and hex', goal: 8,
-  how: 'Type the number in the base asked for. Prefixes (0x, 0b) are optional; spaces are ignored.',
+  how: 'Type the number in the base asked for (a bit as 0 or 1). Prefixes (0x, 0b) are optional; spaces are ignored. 8-bit and 16-bit words, unsigned.',
   make(r) {
-    const k = int(r, 0, 3);
+    const k = int(r, 0, 6);
     const v = int(r, 0, 255);
+    if (k >= 4) {
+      const w = int(r, 0, 0xffff);
+      if (k === 4) {
+        const i = int(r, 0, 15), bit = (w >> i) & 1, d = i >> 2;
+        return {
+          prompt: `What is bit <b>${i}</b> of <code>0x${hex(w, 16)}</code>? (Bit 0 is the least significant.)`, placeholder: '0 or 1', check: numAnswer(bit, 10), answer: String(bit),
+          explain: `Bit ${i} is bit ${i & 3} of hex digit ${d}, both counted from 0 at the right: <code>${hex(w, 16)[3 - d]}</code> = ${bin((w >> (4 * d)) & 15, 4)}, so ${bit}.`,
+        };
+      }
+      if (k === 5) {
+        return {
+          prompt: `Write <code>0x${hex(w, 16)}</code> in binary (16 bits).`, placeholder: '0000 0000 0000 0000', check: numAnswer(w, 2), answer: grp(bin(w, 16)),
+          explain: `Four bits per hex digit, in order: ${[...hex(w, 16)].map((c) => `${c} = ${bin(parseInt(c, 16), 4)}`).join(', ')}.`,
+        };
+      }
+      const n = [4, 6, 8, 10, 12, 16][int(r, 0, 5)];
+      return {
+        prompt: `The largest unsigned value ${n === 8 ? 'an' : 'a'} <b>${n}-bit</b> word holds, in decimal?`, check: numAnswer(2 ** n - 1, 10), answer: String(2 ** n - 1),
+        explain: `All ${n} bits 1: 2^${n} − 1 = ${2 ** n - 1}. ${n === 8 ? 'An' : 'A'} ${n}-bit word holds 2^${n} = ${2 ** n} values, 0 to ${2 ** n - 1}.`,
+      };
+    }
     if (k === 0) return { prompt: `Write <b>${v}</b> in binary (8 bits).`, placeholder: '0000 0000', check: numAnswer(v, 2), answer: grp(bin(v, 8)), explain: `${v} = ${[...bin(v, 8)].map((b, i) => (b === '1' ? 2 ** (7 - i) : 0)).filter(Boolean).join(' + ') || 0}.` };
     if (k === 1) return { prompt: `What is <code>${grp(bin(v, 8))}</code> in decimal?`, check: numAnswer(v, 10), answer: String(v), explain: `Add the weights of the 1 bits (128, 64, 32, 16, 8, 4, 2, 1).` };
     if (k === 2) return { prompt: `Write <code>${grp(bin(v, 8))}</code> in hexadecimal.`, placeholder: '0x..', check: numAnswer(v, 16), answer: `0x${hex(v, 8)}`, explain: `One hex digit per group of four bits: ${grp(bin(v, 8)).split(' ').map((g) => `${g} = ${parseInt(g, 2).toString(16).toUpperCase()}`).join(', ')}.` };
@@ -99,13 +120,44 @@ const binary: Drill = {
 };
 
 const s8 = (v: number) => (v & 0x80 ? v - 256 : v);
+const s16 = (v: number) => (v & 0x8000 ? v - 0x10000 : v);
 
 const twos: Drill = {
   id: 'twos', title: "Two's complement", goal: 8,
-  how: 'Answer in decimal (signed) or as asked. 8-bit two\'s complement: −128 … 127.',
+  how: 'Answer in decimal (signed), as a pattern, or yes / no, as asked. 8-bit two\'s complement: −128 … 127; 16-bit: −32 768 … 32 767.',
   make(r) {
-    const k = int(r, 0, 4);
+    const k = int(r, 0, 7);
     const v = int(r, 0, 255);
+    if (k >= 5) {
+      const w = int(r, 0, 0xffff);
+      if (k === 5) {
+        const x = r() < 0.7 ? w | 0x8000 : w;
+        return {
+          prompt: `The 16-bit pattern <code>0x${hex(x, 16)}</code> as a signed (two's-complement) number?`, check: numAnswer(s16(x), 10), answer: String(s16(x)),
+          explain: `The top bit weighs −32 768: ${x & 0x8000 ? `−32 768 + ${x & 0x7fff}` : String(x)} = ${s16(x)}. As unsigned the same bits are ${x}.`,
+        };
+      }
+      // a and b with different signs half the time: then the signed and unsigned orders disagree
+      let b = int(r, 0, 0xffff);
+      if (r() < 0.5 && ((w ^ b) & 0x8000) === 0) b ^= 0x8000;
+      if (b === w) b = (w + 1) & 0xffff;
+      const ltu = w < b, lt = s16(w) < s16(b);
+      const order = `As unsigned, ${w} ${ltu ? '<' : '≥'} ${b}; as signed, ${s16(w)} ${lt ? '<' : '≥'} ${s16(b)}.`;
+      if (k === 6) {
+        const signed = r() < 0.5;
+        return {
+          prompt: `Is <code>0x${hex(w, 16)}</code> &lt; <code>0x${hex(b, 16)}</code> as <b>${signed ? 'signed' : 'unsigned'}</b> 16-bit numbers? (yes / no)`, placeholder: 'yes / no',
+          check: yesNo(signed ? lt : ltu), answer: (signed ? lt : ltu) ? 'yes' : 'no',
+          explain: `${order} The orders differ exactly when the top bits do: signed, a word with bit 15 set is negative.`,
+        };
+      }
+      const cout = w >= b;
+      return {
+        prompt: `In 16 bits, a = <code>0x${hex(w, 16)}</code>, b = <code>0x${hex(b, 16)}</code>: does a + ¬b + 1 (that is a − b) carry out of bit 15? (yes / no)`, placeholder: 'yes / no',
+        check: yesNo(cout), answer: cout ? 'yes' : 'no',
+        explain: `a + ¬b + 1 = a + (65 536 − b): it carries out exactly when a ≥ b as unsigned numbers. ${order} So a &lt; b unsigned ⇔ no carry out: sltu is ¬cout.`,
+      };
+    }
     if (k === 0) return { prompt: `The 8-bit pattern <code>${grp(bin(v, 8))}</code> as a signed (two's-complement) number?`, check: numAnswer(s8(v), 10), answer: String(s8(v)), explain: `The top bit weighs −128: ${v & 0x80 ? `−128 + ${v & 0x7f}` : String(v)} = ${s8(v)}.` };
     if (k === 1) {
       const x = int(r, -128, 127);
@@ -195,17 +247,42 @@ const kmap: Drill = {
   },
 };
 
-/** Expressions to simplify, with a minimum literal count. */
-const SIMPLIFY: { src: string; vars: string[] }[] = [
-  { src: "a·b + a·b'", vars: ['a', 'b'] }, { src: "a + a·b", vars: ['a', 'b'] }, { src: "¬(¬a + ¬b)", vars: ['a', 'b'] },
-  { src: "a·b + a'·c + b·c", vars: ['a', 'b', 'c'] }, { src: "(a + b)(a + c)", vars: ['a', 'b', 'c'] }, { src: "¬(a·b)·¬(a'·b)", vars: ['a', 'b'] },
-  { src: "a'b'c + a'bc + ab'c + abc", vars: ['a', 'b', 'c'] }, { src: "¬(¬a·¬b) · ¬a", vars: ['a', 'b'] }, { src: "a·(a' + b)", vars: ['a', 'b'] },
-  { src: "(a + b')·(a' + b')", vars: ['a', 'b'] }, { src: "a·b·c + a·b·c' + a·b'·c", vars: ['a', 'b', 'c'] }, { src: "¬(a + b·¬a)", vars: ['a', 'b'] },
+/**
+ * Expressions to simplify, each with its derivation: `steps` are equal expressions, the last one minimal (its literal
+ * count is the target the checker uses; tests/content-acts012.test.ts proves every step equal to `src`), `why` names
+ * the laws used. One notation throughout: ¬ for NOT, · for AND. The second half come from the levels' circuits.
+ */
+export const SIMPLIFY: { src: string; vars: string[]; steps: string[]; why: string }[] = [
+  { src: 'a·b + a·¬b', vars: ['a', 'b'], steps: ['a·(b + ¬b)', 'a'], why: 'Distribute, then complement: b + ¬b = 1.' },
+  { src: 'a + a·b', vars: ['a', 'b'], steps: ['a·(1 + b)', 'a'], why: 'Absorption: 1 + b = 1.' },
+  { src: '¬(¬a + ¬b)', vars: ['a', 'b'], steps: ['¬¬a·¬¬b', 'a·b'], why: 'De Morgan, then double negation.' },
+  { src: 'a·b + ¬a·c + b·c', vars: ['a', 'b', 'c'], steps: ['a·b + ¬a·c + (a + ¬a)·b·c', 'a·b·(1 + c) + ¬a·c·(1 + b)', 'a·b + ¬a·c'], why: 'Consensus: b·c is covered by whichever of a·b, ¬a·c holds.' },
+  { src: '(a + b)·(a + c)', vars: ['a', 'b', 'c'], steps: ['a + a·c + a·b + b·c', 'a + b·c'], why: 'Multiply out (a·a = a), then absorption: the dual distributive law.' },
+  { src: '¬(a·b)·¬(¬a·b)', vars: ['a', 'b'], steps: ['(¬a + ¬b)·(a + ¬b)', '¬b + ¬a·a', '¬b'], why: 'De Morgan on both, then (x + y)·(z + y) = y + x·z and ¬a·a = 0.' },
+  { src: '¬a·¬b·c + ¬a·b·c + a·¬b·c + a·b·c', vars: ['a', 'b', 'c'], steps: ['¬a·c·(¬b + b) + a·c·(¬b + b)', '¬a·c + a·c', 'c'], why: 'Terms that differ in one variable merge, twice.' },
+  { src: '¬(¬a·¬b)·¬a', vars: ['a', 'b'], steps: ['(a + b)·¬a', 'a·¬a + ¬a·b', '¬a·b'], why: 'De Morgan, distribute, a·¬a = 0.' },
+  { src: 'a·(¬a + b)', vars: ['a', 'b'], steps: ['a·¬a + a·b', 'a·b'], why: 'Distribute, a·¬a = 0.' },
+  { src: '(a + ¬b)·(¬a + ¬b)', vars: ['a', 'b'], steps: ['¬b + a·¬a', '¬b'], why: '(x + y)·(z + y) = y + x·z, and a·¬a = 0.' },
+  { src: 'a·b·c + a·b·¬c + a·¬b·c', vars: ['a', 'b', 'c'], steps: ['a·b + a·¬b·c', 'a·(b + ¬b·c)', 'a·(b + c)', 'a·b + a·c'], why: 'Merge the first two, then b + ¬b·c = b + c. a·(b + c) has 3 literals but is not a sum of products; as one it is 4.' },
+  { src: '¬(a + b·¬a)', vars: ['a', 'b'], steps: ['¬(a + b)', '¬a·¬b'], why: 'a + ¬a·b = a + b, then De Morgan.' },
+  // from the levels
+  { src: '¬(a·a)', vars: ['a'], steps: ['¬a'], why: 'Idempotence, a·a = a: NOT from NAND, inputs tied.' },
+  { src: '¬(¬(a·b)·¬(a·b))', vars: ['a', 'b'], steps: ['¬¬(a·b)', 'a·b'], why: 'Idempotence, then double negation: AND from two NANDs.' },
+  { src: '¬(¬a·¬b)', vars: ['a', 'b'], steps: ['¬¬a + ¬¬b', 'a + b'], why: 'De Morgan: OR from three NANDs.' },
+  { src: '¬(¬(a·¬(a·b))·¬(b·¬(a·b)))', vars: ['a', 'b'], steps: ['a·¬(a·b) + b·¬(a·b)', 'a·(¬a + ¬b) + b·(¬a + ¬b)', 'a·¬b + ¬a·b'], why: 'De Morgan on the outer NAND and on the shared ¬(a·b): the 4-NAND XOR is a ⊕ b.' },
+  { src: '¬(¬(s·b)·¬(¬s·a))', vars: ['s', 'a', 'b'], steps: ['s·b + ¬s·a'], why: 'De Morgan: a NAND of NANDs is an OR of ANDs. The 2:1 multiplexer in NAND–NAND form.' },
+  { src: '¬s·a + s·b + a·b', vars: ['s', 'a', 'b'], steps: ['¬s·a + s·b'], why: 'Consensus: a·b holds only where ¬s·a or s·b already does. What is left is the 2:1 multiplexer.' },
+  { src: 'a·b + a·c + b·c + a·b·c', vars: ['a', 'b', 'c'], steps: ['a·b + a·c + b·c'], why: 'Absorption: a·b·c is inside a·b. The full adder\'s carry, the majority of three.' },
+  { src: 'a·b + c·(a ⊕ b)', vars: ['a', 'b', 'c'], steps: ['a·b + a·¬b·c + ¬a·b·c', 'a·b + a·c + b·c'], why: 'Expand the XOR; a·b + a·¬b·c = a·(b + c), and the same for b: the full adder\'s carry as par builds it is the majority.' },
+  { src: '¬(a + b + c + d)', vars: ['a', 'b', 'c', 'd'], steps: ['¬a·¬b·¬c·¬d'], why: 'De Morgan over four inputs: the zero detect.' },
+  { src: '¬(a ⊕ b)', vars: ['a', 'b'], steps: ['¬(a·¬b + ¬a·b)', '(¬a + b)·(a + ¬b)', 'a·b + ¬a·¬b'], why: 'De Morgan twice, multiply out, a·¬a = 0: one bit of the equality test.' },
+  { src: '¬a·¬b·c·e + ¬a·¬b·c·¬e', vars: ['a', 'b', 'c', 'e'], steps: ['¬a·¬b·c·(e + ¬e)', '¬a·¬b·c'], why: 'A decoder line ANDed with e and with ¬e: e drops out.' },
+  { src: '¬c·b·¬a + ¬c·b·a + c·¬b·a + c·b·a', vars: ['c', 'b', 'a'], steps: ['¬c·b·(¬a + a) + c·a·(¬b + b)', '¬c·b + c·a'], why: 'The primes below 8 (2, 3, 5, 7) merge in pairs: c ? a : b, a multiplexer, the prime detector\'s lower half.' },
 ];
 
 const boolean: Drill = {
   id: 'boolean', title: 'Simplify', goal: 6,
-  how: 'Write an equivalent expression with as few literals (variable occurrences) as the minimum. NOT: \' or ¬; AND: juxtaposition or ·; OR: +.',
+  how: 'Write an equivalent expression with no more literals (variable occurrences) than asked. NOT: ¬ (or \' or ~); AND: · or juxtaposition; OR: +.',
   make(r) {
     const q = SIMPLIFY[int(r, 0, SIMPLIFY.length - 1)];
     const p = parseBool(q.src, q.vars);
@@ -218,9 +295,9 @@ const boolean: Drill = {
     const k: KmapSpec = { vars: q.vars, ones, dc: [] };
     return {
       prompt: `Simplify <code>${q.src}</code> to ${constant ? 'a constant' : `${L} literal${L === 1 ? '' : 's'}`}.`,
-      placeholder: 'ab + c', answer: constant ?? sopText(min, q.vars),
+      placeholder: '¬a·b + c', answer: constant ?? q.steps[q.steps.length - 1],
       check: (t) => checkExpr(t, k, L),
-      explain: 'Use absorption (a + ab = a), complements (a + a\' = 1), consensus and De Morgan; or draw the K-map.',
+      explain: `<code>${[q.src, ...q.steps].join('</code> = <code>')}</code>. ${q.why}`,
     };
   },
 };
