@@ -13,6 +13,13 @@ export { chapterSkip } from '../glossary';
 let gloss: Glossary | null = null;
 let card: HTMLElement | null = null;
 let hideTimer: ReturnType<typeof setTimeout> | null = null;
+/** Opens an entry where the reader is instead of the codex page (the level screen: its pane keeps the circuit). */
+let opener: ((id: string) => void) | null = null;
+
+/** Set (or clear, null) where a card's "Open in the codex" goes. */
+export function setCodexOpener(f: ((id: string) => void) | null): void {
+  opener = f;
+}
 
 const SKIP = 'a, code, pre, h1, h2, h3, h4, button, .gl, svg, kbd, .no-gloss, [data-show]';
 
@@ -74,11 +81,19 @@ function show(el: HTMLElement): void {
     card.addEventListener('mouseenter', () => { if (hideTimer) clearTimeout(hideTimer); });
     card.addEventListener('mouseleave', hideSoon);
     document.body.append(card);
+    // A touch screen has no mouseleave: the card closes on its ×, and when the page scrolls under it.
+    addEventListener('scroll', () => { if (card && !card.hidden && coarse()) hideGlossary(); }, { capture: true, passive: true });
   }
   const sum = h('div', { class: 'gl-sum' });
   sum.innerHTML = e.body;
-  card.replaceChildren(h('div', { class: 'gl-title' }, h('b', null, e.title), h('span', { class: 'gl-kind' }, CODEX_KINDS.find((k) => k.id === e.kind)?.title.replace(/s$/, '') ?? e.kind)), sum,
-    h('a', { class: 'gl-more', href: `#/campaign/codex/${e.id}` }, 'Open in the codex', icon('chevR', 12)));
+  card.replaceChildren(h('div', { class: 'gl-title' }, h('b', null, e.title), h('span', { class: 'gl-kind' }, CODEX_KINDS.find((k) => k.id === e.kind)?.title.replace(/s$/, '') ?? e.kind),
+    coarse() ? h('button', { class: 'gl-close', 'aria-label': 'Close', onclick: hideGlossary }, icon('close', 14)) : null), sum,
+    h('a', { class: 'gl-more', href: `#/campaign/codex/${e.id}`, onclick: (ev: Event) => {
+      if (!opener) return;
+      ev.preventDefault();
+      hideGlossary();
+      opener(e.id);
+    } }, opener ? 'Read the entry' : 'Open in the codex', icon('chevR', 12)));
   card.hidden = false;
   const r = el.getBoundingClientRect();
   const w = Math.min(380, window.innerWidth - 24);
@@ -89,6 +104,8 @@ function show(el: HTMLElement): void {
   const ch = card.offsetHeight;
   card.style.top = `${below + ch < window.innerHeight - 8 ? below : Math.max(8, r.top - ch - 8)}px`;
 }
+
+const coarse = () => matchMedia('(pointer: coarse)').matches;
 
 function hideSoon(): void {
   if (hideTimer) clearTimeout(hideTimer);

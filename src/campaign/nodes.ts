@@ -226,7 +226,7 @@ export const NODES: CampaignNode[] = [
     id: 'g_mux8', act: 1, title: 'Bus multiplexer', kind: 'build', requires: ['g_mux'],
     why: 'Every choice in the datapath is 16 bits wide: sixteen 1-bit multiplexers on one select. Sharing ¬s makes the bus mux 49 NANDs instead of 64, and the single-cycle core holds 37 of them; trees of it are the register file\'s read ports.',
     tips: ['A wide mux is a row of 1-bit muxes sharing the select (and its inverter).', 'An 8:1 mux is a tree of 2:1 muxes, one select bit per level.', 'One ¬s for all sixteen bits: an inverter per bit costs 15 NANDs over par.'],
-    codex: ['mux', 'bus'], unlocks: ['rv16_mux*', 'mux*'], base: BUILD1.g_mux8, par: { nand: 49, depth: 3 },
+    codex: ['mux', 'bus', 'tristate'], unlocks: ['rv16_mux*', 'mux*'], base: BUILD1.g_mux8, par: { nand: 49, depth: 3 },
     chapters: [{ chapter: 'routing', step: 3, label: 'Switching whole buses' }, { chapter: 'routing', step: 4, label: '8 words in, 1 word out' }] },
   {
     id: 'g_eq16', act: 1, title: 'Equality', kind: 'build', requires: ['g_xor', 'g_wide'],
@@ -321,7 +321,7 @@ export const NODES: CampaignNode[] = [
     id: 's_dff', act: 3, title: 'D flip-flop', kind: 'build', requires: ['s_dlatch'], base: sandbox('s_dff'),
     why: 'A latch passes d as long as its enable is high, so in a loop (PC → incrementer → PC) a value can run round twice in one cycle. Two latches on opposite clock phases change q once, at the rising edge: 9 NANDs a bit, with setup and clk-to-q of 3 delays each. Every register from here on is built from them.',
     tips: ['Use your D latch twice: d into the master, the master\'s q into the slave.', 'The master is enabled by ¬clk, the slave by clk: 4 + 4 + 1 = 9 NANDs.', 'Both latches on clk make one transparent latch: the test changes d while clk is high, and q follows.'],
-    chapters: [{ chapter: 'latches', step: 3, label: 'The flip-flop: act only on the edge' }], codex: ['dff', 'edge', 'setuphold', 'metastability'], unlocks: ['rv16_dff'], par: { nand: 9 },
+    chapters: [{ chapter: 'latches', step: 3, label: 'The flip-flop: act only on the edge' }], codex: ['dff', 'edge', 'clock', 'setuphold', 'metastability'], unlocks: ['rv16_dff'], par: { nand: 9 },
   },
   {
     id: 's_reg4', act: 3, title: '4-bit register', kind: 'build', requires: ['s_dff', 'g_mux'], base: sandbox('s_reg4'),
@@ -344,7 +344,7 @@ export const NODES: CampaignNode[] = [
     id: 's_pc', act: 3, title: 'Program counter', kind: 'build', requires: ['s_reg16', 'a_inc16', 'g_mux8'],
     why: 'Nothing yet says which instruction runs. The PC holds its address: each cycle it becomes pc + 1, or a jump target, or 0 on reset, a 16-bit register in a loop with Act 2\'s incrementer. Par 302 NANDs at period 41, the incrementer inside the loop. Core I fetches from it; Core III loads it from next PC.',
     tips: ['A 16-bit register without enable (the PC loads every cycle), an incrementer and a bus mux for the load.', 'Reset only ever selects 0: an AND per bit with ¬rst does it for less than a second bus mux.', 'Reset must win over load: the AND goes after the load mux, so a jump during reset still gives 0.'],
-    unlocks: ['rv16_pc'], chapters: [{ chapter: 'registers', step: 2, label: 'A counter' }], codex: ['pc'], anatomy: ['pc', 'plus1'], base: BUILD1.s_pc, par: { nand: 302, period: 41 } },
+    unlocks: ['rv16_pc'], chapters: [{ chapter: 'registers', step: 2, label: 'A counter' }], codex: ['pc', 'reset'], anatomy: ['pc', 'plus1'], base: BUILD1.s_pc, par: { nand: 302, period: 41 } },
   {
     id: 's_fsm', act: 3, title: 'A state machine', kind: 'build', optional: true, requires: ['s_dff', 'd_kmap'],
     why: 'Some units take several cycles and must remember which one they are in: a divider counts its steps, a multicycle core walks fetch → execute → memory → write back. A state register plus next-state logic read off a table does it: this one spots 1, 0, 1 in a bit stream, 28 NANDs at par. Act 8\'s divider runs on one.',
@@ -418,7 +418,7 @@ export const NODES: CampaignNode[] = [
     id: 'p_print', act: 4, title: 'Print a number', kind: 'program', optional: true, requires: ['p_mul'], par: { size: 23, cycles: 78 },
     why: 'Numbers are binary inside and decimal on the console, and RV16I cannot divide. Each digit is how many times its power of ten can be subtracted before the rest drops below it: 23 words, 78 instructions on average at par, at most nine subtractions a digit.',
     tips: ['Keep 10000, 1000, 100, 10 in a .data table and walk it.', 'Unsigned compare: <code>sltu</code> then <code>bnez</code> (there is no bltu).', 'Skip leading zeros, but always print the last digit.'],
-    codex: [],
+    codex: ['bin2dec'],
   },
 
   // ---- Act 5 --------------------------------------------------------------------------------
@@ -498,7 +498,7 @@ export const NODES: CampaignNode[] = [
     id: 'pi_reg', act: 6, title: 'Pipeline register', kind: 'build', requires: ['s_reg16', 'g_mux8', 'g_or'], base: BUILD6.pi_reg, par: { nand: 260, period: 8 },
     why: 'A plain register can only load; between two stages one must also hold (a stall) and clear to a bubble that writes nothing (a flush). A mux to 0 in front does both: 260 NANDs, and the finished RV16 places 16 of them, 4 160 NANDs, a third of the chip. Pipeline I places the first twelve.',
     tips: ['Two controls, two questions: en decides whether to load at all, clr what is loaded.', 'A mux in front picks 0 when clr; the register loads when en or clr.', 'Clear wins over hold: a flush during a stall must still leave a bubble. Leaving clr out of the load enable is the classic miss.'],
-    codex: ['stall', 'flush'], unlocks: ['rv16_preg'], anatomy: ['p1', 'p2', 'p3', 'p4'], chapters: [{ chapter: 'pipeline', step: 1, label: 'Pipeline registers' }],
+    codex: ['preg', 'stall', 'flush'], unlocks: ['rv16_preg'], anatomy: ['p1', 'p2', 'p3', 'p4'], chapters: [{ chapter: 'pipeline', step: 1, label: 'Pipeline registers' }],
   },
   {
     id: 'pi_core0', act: 6, title: 'Pipeline I: five stages', kind: 'core', requires: ['pi_lesson', 'pi_reg'], base: BUILD6.pi_core0, par: { nand: 7062, period: 65, cycles: 2508 },
@@ -662,7 +662,7 @@ export const NODES: CampaignNode[] = [
     id: 'o_fpadd', act: 8, title: 'FP adder', kind: 'build', optional: true, requires: ['o_fpunpack', 'o_fpnorm'], base: BUILD8.o_fpadd, givesOf: fpGives(() => fpAdd(F16, RV16_MUX2)), par: { nand: 3732, depth: 163 },
     why: 'Adding floats means aligning their binary points, adding, then normalizing and rounding, and every block for that is built: 3 732 NANDs, depth 163, normalize & round 2 058 of them. RV16 has no F registers, so this and the other FP units stand alone: no core in the campaign runs them. The FP multiplier reuses its normalizer, wider.',
     tips: ['Swap so that |a| ≥ |b|, shift b right by the exponent difference (keep a sticky bit), add or subtract the significands.', 'Leave room: put the significands at bits 13..3 of a 15-bit word (a carry above, guard and sticky below), and hand normalize & round exponent + 1.', 'x − x is +0 (−0 in RDN). NaN in, or ∞ − ∞, gives the canonical NaN 0x7E00.'],
-    codex: ['ieee754', 'rounding'], chapters: [{ chapter: 'float', step: 3, label: 'Addition: align, add, normalize, round' }, { chapter: 'float', step: 13, label: 'An FPU in the CPU' }],
+    codex: ['fpadder', 'ieee754', 'rounding'], chapters: [{ chapter: 'float', step: 3, label: 'Addition: align, add, normalize, round' }, { chapter: 'float', step: 13, label: 'An FPU in the CPU' }],
   },
   {
     id: 'o_fpmul', act: 8, title: 'FP multiplier', kind: 'build', optional: true, requires: ['o_fpadd', 'o_mularr'], base: BUILD8.o_fpmul, givesOf: fpGives(() => fpMul(F16, RV16_MUX2)), par: { nand: 4912, depth: 150 },

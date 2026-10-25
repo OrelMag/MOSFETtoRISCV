@@ -80,6 +80,7 @@ registerSearchSource({
 registerSearchSource({
   id: 'codex', title: 'Codex', scope: 'Codex', order: (ctx) => (campaignFirst(ctx) ? 1 : 4),
   items: () => (cmod ? codex ??= cmod.codexItems() : null), load: loadCampaign,
+  rank: (items, text) => cmod!.rankCodexItems(items, text),
 });
 
 // ---- actions ------------------------------------------------------------------------------------------

@@ -4,6 +4,7 @@
 // the levels that list them (progress.ts codexUnlocked). No DOM.
 
 import { CODEX_NEW } from './codexnew';
+import { CODEX_NEW3 } from './codexnew3';
 
 export type CodexKind = 'component' | 'law' | 'tool' | 'concept' | 'trick';
 
@@ -48,9 +49,9 @@ export const CODEX: CodexEntry[] = [
   E('kmap', 'Karnaugh map', 'tool', 'The truth table drawn in Gray-code order so that neighbours differ in one variable (edges wrap around). Circle rectangles of 1, 2, 4, 8 ones: each rectangle is a product term without the variables that change inside it. Cover every 1 with the fewest, largest rectangles. Practical up to 4–5 variables.', ['sop', 'qm', 'dontcare']),
   E('qm', 'Quine–McCluskey', 'tool', 'The K-map as an algorithm: merge minterms differing in one bit into implicants, repeat until no merge is possible (prime implicants), then choose a minimum cover (essential primes first). Exact, exponential in the worst case; the site\'s PLA uses it (lib/storage.ts minimize).', ['kmap']),
   E('dontcare', "Don't-cares", 'trick', 'Inputs that never occur, or outputs nobody reads (a control signal of an instruction that ignores it), may be 0 or 1: put them in a K-map group when it makes the group larger. The control unit is full of them.', ['kmap', 'control']),
-  E('not', 'NOT', 'component', '1 NAND (inputs tied), depth 1.', ['inverter']),
-  E('and', 'AND', 'component', 'NAND + NOT: 2 NANDs, depth 2. Every enable in the CPU.', ['nand']),
-  E('or', 'OR', 'component', '¬(¬a·¬b): 3 NANDs, depth 2.', ['demorgan']),
+  E('not', 'NOT', 'component', 'NOT a = NAND(a, a): 1 NAND, depth 1. In CMOS a real inverter is 2 transistors, half a NAND; here every NOT counts as one NAND, and many vanish when a NAND already provides the complement.', ['inverter']),
+  E('and', 'AND', 'component', 'a·b = NOT(NAND(a, b)): 2 NANDs, depth 2. Every enable, mask and select term in the CPU; where an AND feeds another NAND, keep the NAND and drop the NOT.', ['nand']),
+  E('or', 'OR', 'component', 'a + b = NAND(¬a, ¬b) by De Morgan: 3 NANDs, depth 2, and 1 NAND where both complements are already wired (a decoder\'s rails).', ['demorgan']),
   E('xor', 'XOR', 'component', 'a ⊕ b = 1 when the inputs differ. 4 NANDs: n = ¬(a·b), y = ¬(¬(a·n)·¬(b·n)). Sum bit of an adder, controlled inverter (b ⊕ sub), one-bit inequality. XNOR = ¬XOR.', ['halfadder', 'comparator']),
   E('mux', 'Multiplexer', 'component', 'y = s ? b : a = s·b + ¬s·a. 4 NANDs, depth 3. A wide mux is one per bit (sharing ¬s saves 1 NAND per bit beyond the first: 3n + 1, 49 at 16 bits); an N:1 mux is a tree of log2 N levels. Muxes are where the control unit steers the datapath.', ['bus', 'control']),
   E('fanin', 'Fan-in and fan-out', 'concept', 'Fan-in: inputs of a gate (a 4-input NAND has 4 series NMOS: slower). Fan-out: inputs a net drives (more load: slower). Here every NAND costs one delay whatever its load; real cells do not.', ['depth']),
@@ -79,14 +80,14 @@ export const CODEX: CodexEntry[] = [
 
   // ---- state
   E('feedback', 'Feedback', 'concept', 'An output fed back to an input makes a circuit with state: its output depends on its past. Two inverters in a ring hold a bit; an odd ring oscillates.', ['latch']),
-  E('latch', 'SR latch', 'component', 'Two cross-coupled NANDs, active-low set and reset. Releasing both at once races (metastability). 2 NANDs.', ['dlatch']),
+  E('latch', 'SR latch', 'component', 'Two cross-coupled NANDs, active-low s̄ and r̄: 2 NANDs, 8 transistors. Both 1 holds the bit; releasing both from 0 at once races (metastability). Every latch and flip-flop here starts from it.', ['dlatch']),
   E('dlatch', 'D latch', 'component', 'Transparent while e = 1, holding while e = 0. 4 NANDs at best (the second gate takes the first one\'s output for ¬d); the library\'s, with an explicit inverter, has 5.', ['dff']),
   E('dff', 'D flip-flop', 'component', 'Master–slave: two latches on opposite clock phases capture d at the rising edge. 9 NANDs at best (the library one has 11); clk-to-q 3 delays, setup 3.', ['edge', 'setuphold']),
   E('edge', 'Edge triggering', 'concept', 'State changes only at clock edges, so all registers update together and every combinational path has a whole cycle to settle. This discipline is what makes large synchronous designs tractable.', ['dff']),
   E('setuphold', 'Setup and hold', 'concept', 'd must be stable for setup before the edge and hold after it. Period ≥ clk-to-q + logic delay + setup. Hold violations (paths too short) cannot be fixed by slowing the clock.', ['criticalpath']),
   E('register', 'Register', 'component', 'n flip-flops sharing a clock, each with a mux feeding q back when en = 0.', ['clockgating']),
   E('clockgating', 'Never gate the clock', 'trick', 'clk AND en glitches when en changes while clk is high, and delays the clock (skew). Use a mux (load enable) instead. Real clock gating uses a latch-based cell.', ['register']),
-  E('counter', 'Counter', 'component', 'Register + incrementer: q ← q + 1 at every edge while en = 1.', ['incrementer']),
+  E('counter', 'Counter', 'component', 'Register + incrementer: q ← q + 1 at every rising edge while en = 1, wrapping at 2<sup>n</sup>. The library’s 4-bit counter: 80 NANDs, period 17. The PC is a counter that can also load.', ['incrementer']),
   E('pc', 'Program counter', 'component', 'The register holding the current instruction\'s address. Next value: 0 on reset, pc + 1, a branch target, or a jump target (next-PC logic).', ['fde']),
   E('fsm', 'Finite-state machine', 'tool', 'A state register plus next-state and output logic. Design: list states, draw transitions, encode (binary, one-hot), write tables, minimise. Moore outputs depend on the state, Mealy on state and inputs.', ['microcode']),
   E('ram', 'RAM', 'component', 'Words of registers: a decoder enables the word written, a mux selects the word read. Real RAM is an array of 6T SRAM or 1T1C DRAM cells with sense amplifiers.', ['decoder']),
@@ -190,6 +191,7 @@ export const CODEX: CodexEntry[] = [
   E('loader', 'Loading a program', 'concept', 'Before ROM and disks a program arrived from outside: the Z3 read it off punched 35 mm film, the IBM 701 off cards. A <b>loader</b> is the small fixed machine that copies it into memory: an address counter, a write strobe for each word the reader offers, and a switch that hands memory to the processor once the hopper is empty. Done in software it is a boot loader: a few instructions that read the rest.', ['hollerith', 'boot']),
   // the journey's topics beyond the levels (codexnew.ts)
   ...CODEX_NEW,
+  ...CODEX_NEW3,
 ];
 
 export const codexById = (id: string): CodexEntry | undefined => CODEX.find((e) => e.id === id);

@@ -4,7 +4,13 @@
 import { describe, expect, it } from 'vitest';
 import { CODEX, codexById } from '../src/campaign/codex';
 import { CHECKS } from '../src/campaign/codexcheck';
-import { CODEX_ORDER, buildsOn, leadsTo, neighbours, seeAlso } from '../src/campaign/codexlinks';
+import { CODEX_ACTS, CODEX_ORDER, FURTHER, buildsOn, firstTaught, firstTeacher, leadsTo, neighbours, seeAlso } from '../src/campaign/codexlinks';
+import { caseOf } from '../src/campaign/cases';
+import { Glossary } from '../src/campaign/glossary';
+import { LESSONS } from '../src/campaign/lessons';
+import { levelChallenge } from '../src/campaign/levels';
+import { ACTS } from '../src/campaign/nodes';
+import { tipsOf } from '../src/campaign/nudges';
 import { hasCodexFigure } from '../src/campaign/ui/codexfigs';
 
 describe('codex guide', () => {
@@ -26,8 +32,40 @@ describe('codex guide', () => {
     }
   });
 
+  it('reads by act: acts in map order, each entry at its first teaching level, Further entries unnamed by it', () => {
+    const acts = CODEX_ACTS.map((g) => g.act);
+    expect(acts.filter((a) => a !== undefined)).toEqual(ACTS.map((a) => a.num).filter((n) => acts.includes(n)));
+    for (const g of CODEX_ACTS) {
+      const ks = g.main.map((e) => firstTaught(e.id));
+      expect([...ks].sort((a, b) => a - b), `act ${g.act}`).toEqual(ks);
+      for (const e of [...g.main, ...g.further]) expect(firstTeacher(e.id)?.act, e.id).toBe(g.act);
+    }
+    const gl = new Glossary();
+    for (const id of FURTHER) {
+      const n = firstTeacher(id)!;
+      expect(n, id).toBeTruthy();
+      const c = caseOf(n.id);
+      const text = [n.title, n.why, n.body ? LESSONS[n.body] ?? '' : '', levelChallenge(n)?.brief ?? '', ...tipsOf(n), c?.problem ?? '', c?.without ?? '', c?.cost ?? '']
+        .join(' ').replace(/<[^>]+>/g, ' ');
+      expect(gl.find(text).map((m) => m.id), `${n.id} names ${id}: no longer Further`).not.toContain(id);
+      expect(CODEX_ACTS.find((g) => g.act === n.act)!.further.map((e) => e.id)).toContain(id);
+    }
+  });
+
+  it('builds on only what is taught before, leads only to what is taught after', () => {
+    const back: string[] = [];
+    for (const e of CODEX) {
+      const at = firstTaught(e.id);
+      for (const x of buildsOn(e.id)) if (!(firstTaught(x.id) < at)) back.push(`${e.id} builds on ${x.id}`);
+      for (const x of leadsTo(e.id)) if (!(firstTaught(x.id) > at)) back.push(`${e.id} leads to ${x.id}`);
+    }
+    expect(back).toEqual([]);
+    expect(buildsOn('pipeline').map((x) => x.id)).not.toContain('stall');
+    expect(buildsOn('twos').map((x) => x.id)).not.toContain('ripple');
+  });
+
   it('figures and questions belong to entries', () => {
-    for (const id of ['positional', 'hex', 'twos', 'formats', 'pipeline', 'hazards', 'flush']) expect(hasCodexFigure(id), id).toBe(true);
+    for (const id of ['positional', 'hex', 'twos', 'formats', 'pipeline', 'hazards', 'flush', 'amdahl', 'cpi', 'memwall', 'rowbuffer', 'threecs', 'hollerith', 'relaystep', 'stdcell', 'skew', 'coherence', 'occupancy', 'scoreboard']) expect(hasCodexFigure(id), id).toBe(true);
     for (const id of Object.keys(CHECKS)) expect(codexById(id), `questions for '${id}'`).toBeTruthy();
   });
 
