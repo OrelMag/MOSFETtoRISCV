@@ -333,9 +333,9 @@ export class Editor {
     const doc = this.doc;
     const next = f(doc);
     if (next === doc) return;
-    // A chip drawn from Verilog: its body follows the text (name, colour, notes, face and comments stay editable).
+    // A chip drawn from Verilog or a truth table: its body follows the source (name, colour, notes, face and comments stay editable).
     if (isGenerated(this.ws, doc.id) && bodyKey(next) !== bodyKey(doc)) {
-      this.toast(`${doc.name} is drawn from Verilog: edit its text, or Detach it to draw on it`, 'err');
+      this.toast(`${doc.name} is drawn from ${doc.table ? 'a truth table: edit the table' : 'Verilog: edit its text'}, or Detach it to draw on it`, 'err');
       if (this.history.inTransaction) this.view.render(doc, this.defOf);
       return;
     }

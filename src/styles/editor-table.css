@@ -1,0 +1,88 @@
+/* Truth-table chips (editor/tableui.ts): the table pane left of the canvas, its Karnaugh map, the banner. */
+
+:root {
+  --tt-one: light-dark(#5b4bd6, #b3a8ff);
+  --tt-one-bg: light-dark(#ece9ff, #2c2650);
+  --tt-live: light-dark(#fff4d6, #3a3220);
+  --tt-hot: light-dark(#e6f6ee, #17352a);
+  --tt-l0: light-dark(#6d5ce7, #a99cff);
+  --tt-l1: light-dark(#c2410c, #f0a35c);
+  --tt-l2: light-dark(#047857, #34d399);
+  --tt-l3: light-dark(#be185d, #f9a8d4);
+  --tt-l4: light-dark(#0369a1, #7dd3fc);
+  --tt-l5: light-dark(#a16207, #fde047);
+}
+
+.tt-pane {
+  width: 460px; max-width: 60vw; display: flex; flex-direction: column; min-height: 0;
+  background: var(--surface); border-right: 1px solid var(--border);
+}
+.tt-body { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.tt-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.tt-head .grow { flex: 1; }
+.tt-title { font-weight: 600; font-size: 13px; }
+.tt-form button { padding-inline: 10px; white-space: nowrap; }
+.tt-lbl { font: 600 10.5px var(--font-ui, inherit); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.tt-note { margin: 0; font-size: 12px; color: var(--muted); }
+
+.tt-pins { display: grid; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.tt-pinrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tt-pinrow .tt-lbl { width: 56px; }
+.tt-pinbox { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+.tt-pinbox.out { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.tt-pin { border: 0; background: transparent; color: var(--text); font: 12.5px var(--font-mono); padding: 3px 6px; min-width: 2ch; }
+.tt-pin:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
+.tt-x { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0 6px; font-size: 14px; line-height: 22px; }
+.tt-x:hover { color: var(--bad); }
+
+.tt-main { display: flex; flex-wrap: wrap; gap: 14px; padding: 10px; min-height: 0; overflow: auto; flex: 1; align-items: flex-start; }
+.tt-side { display: flex; flex-direction: column; gap: 8px; flex: 1 1 200px; min-width: 0; }
+.tt-scroll { max-height: 100%; overflow: auto; flex: none; }
+
+.tt-table { border-collapse: collapse; font: 12.5px var(--font-mono); }
+.tt-table th { position: sticky; top: 0; background: var(--surface); color: var(--muted); font-weight: 600; padding: 3px 7px; border-bottom: 1px solid var(--border); }
+.tt-table td { padding: 1px 7px; text-align: center; color: var(--text-2); border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }
+.tt-table th.out, .tt-table td.out { padding-inline: 3px; }
+.tt-table .sep { border-left: 1px solid var(--border); }
+.tt-table th.sel { color: var(--accent); }
+.tt-table tr.live td { background: var(--tt-live); }
+.tt-table tr.hot td.in { background: var(--tt-hot); }
+.tt-cell, .tt-kc {
+  font: 600 12.5px var(--font-mono); border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--text-2);
+  cursor: pointer; padding: 0;
+}
+.tt-cell { width: 28px; height: 22px; }
+.tt-cell.c1, .tt-kc.c1 { background: var(--tt-one-bg); color: var(--tt-one); border-color: color-mix(in srgb, var(--tt-one) 55%, transparent); }
+.tt-cell.cd, .tt-kc.cd { color: var(--muted); border-style: dashed; }
+.tt-cell:focus-visible, .tt-kc:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.tt-kmap { position: relative; flex: none; }
+.tt-kmap > * { position: absolute; box-sizing: border-box; }
+.tt-kh { display: flex; align-items: center; justify-content: center; font: 11.5px var(--font-mono); color: var(--muted); }
+.tt-kh.corner { flex-direction: column; align-items: flex-end; justify-content: space-between; padding: 1px 6px; font-size: 10.5px; }
+.tt-kc { border-radius: 0; }
+.tt-loop { border: 2px solid var(--lc); border-radius: 12px; pointer-events: none; }
+.tt-loop.hot { border-width: 3px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--lc) 30%, transparent); }
+.tt-l0 { --lc: var(--tt-l0); } .tt-l1 { --lc: var(--tt-l1); } .tt-l2 { --lc: var(--tt-l2); }
+.tt-l3 { --lc: var(--tt-l3); } .tt-l4 { --lc: var(--tt-l4); } .tt-l5 { --lc: var(--tt-l5); }
+
+.tt-outs { align-self: flex-start; }
+.tt-eqs { display: grid; gap: 3px; font-size: 12.5px; }
+.tt-eq { color: var(--text-2); overflow-wrap: anywhere; }
+.tt-eq.sel { color: var(--text); }
+.tt-term { border-radius: 4px; padding: 0 2px; }
+.tt-term[class*='tt-l'] { color: var(--lc, inherit); cursor: default; }
+.tt-term.hot { background: color-mix(in srgb, var(--lc) 18%, transparent); }
+.tt-cost { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--text-2); }
+.tt-cost b { color: var(--text); }
+.tt-cost .ok { color: var(--good); }
+.tt-cost .warn { color: var(--warn); }
+.tt-badge { color: var(--tt-l1); border-color: color-mix(in srgb, var(--tt-l1) 50%, transparent); }
+
+@media (max-width: 760px) {
+  .tt-pane { width: 100%; max-width: none; max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--border); }
+}
+@media (pointer: coarse) {
+  .tt-cell { width: 40px; height: 40px; }
+  .tt-x { min-width: 40px; min-height: 40px; }
+}
