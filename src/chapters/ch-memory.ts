@@ -422,6 +422,9 @@ export const chRegisters: Chapter = {
         logic never planned for. FPGAs, rich in flip-flops, encode machines one-hot by default; ASIC flows weigh flip-flops against
         logic per machine. A ring counter is a one-hot machine with no inputs, and the campaign's multicycle core steps through F, E, M, W
         one-hot.</p></details>
+        <p>The sandbox does all of this for you: <a href="#/sandbox/new/fsm">open the detector as a state-machine chip</a>, draw on its
+        diagram (add the Moore S3, say) and it rebuilds the circuit, each encoding priced, the next-state logic a truth-table chip with its
+        Karnaugh map one double-click down.</p>
         <p>The diagram is drawn from the same table as the circuit, and a test reads the circuit back into it state by state. Hover an arc to light
         the gates that make that transition.</p>
         <div class="try">Set x and pulse: 1, 0, 1. Watch the dashed arc move when you flip x before the edge.</div>`,

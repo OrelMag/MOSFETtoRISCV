@@ -473,8 +473,13 @@ a datapath (register transfers on real adders and registers), the textbook way a
   essential primes, exact search within a step budget, else greedy and labelled near-minimal), equal terms shared,
   built as NAND–NAND or AND–OR and drawn by docFromDef; Karnaugh map with the cover's loops (wrap-around included)
   for 2–4 inputs, equations, NANDs / depth / literals; every edit one undo step (editor/ttable.ts, tableui.ts)
-- ⏳ 1b. Then: PLA and ROM forms; paste a table / fill an output from an expression; the campaign's K-map drills
-  answered on it; a lock in the levels it solves
+- ✅ 1b. PLA (both rails of every input, an AND plane of the shared terms, an OR plane) and ROM forms (every row a word
+  of a ROM part, don't cares 0: its cost beside the minimized logic's); an output filled from an expression over the pin
+  names (lib/boolexpr.ts, the drills' parser, whole identifiers for longer names); rows pasted as text (inputs + outputs,
+  or outputs in order). Campaign: Check refuses a truth-table chip in a challenge checked by a truth table and a
+  state-machine chip there or where a state machine is asked for (challenges.ts builderViolations); elsewhere both
+  panes work in levels too. The K-map drill keeps its own map (it shades the typed answer): the builder would show the
+  answer
 - ✅ 2. State machine → sequential circuit: New chip ▾ State machine (the 101 detector to start from); the diagram drawn
   on (states added and dragged, arcs from state to state, an input pattern and Mealy outputs per arc, Moore outputs and
   the reset state per state; arcs checked in order, none taken: the state stays); encoded binary, Gray or one-hot, each
@@ -482,8 +487,9 @@ a datapath (register transfers on real adders and registers), the textbook way a
   opened by double-click) around the state flip-flops with a synchronous rst; unused codes don't care or back to reset.
   Every edit is read back from the circuit (readFsm) against the diagram; arcs never taken and states never reached are
   named; the running chip lights its state (editor/fsmchip.ts, fsmchipui.ts)
-- ⏳ 2b. Then: chapter 9's 101 detector step and the campaign's `s_fsm` level (locked there) as uses; arc labels placed
-  by hand
+- ✅ 2b. Chapter 9's state-machine step links to `#/sandbox/new/fsm` (the detector as a state-machine chip; `new/table`
+  too); `s_fsm` refuses one (above); arcs placed by hand (drag a curve to bend it, a loop to turn it, a label to move it;
+  double-click puts it back); a machine's tables in any of the four forms (ROM: a microprogrammed controller)
 - ⏳ 3. State machine + datapath: states carry register transfers (`count := count + 1`, `acc := acc + x`) on library
   registers, adders and muxes; the controller is step 2, the datapath its control signals (the multicycle CPU's
   shape)

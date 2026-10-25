@@ -65,3 +65,4 @@
   .fsm-enc { min-height: 40px; }
   .fsm-check { min-height: 40px; }
 }
+.fsm-edit text.fsm-al.fsm-drag { pointer-events: auto; cursor: move; }

@@ -5,9 +5,11 @@ import { emptyWorkspace, type TableDoc, type Workspace } from '../src/editor/mod
 import { sanitizeChip } from '../src/editor/store';
 import { isGenerated } from '../src/editor/hdl';
 import {
-  addInput, addOutput, detachTable, equation, newTableChip, removeInput, removeOutput, setTable, tableCost, tableDef, tableLogic, tableMatches,
+  addInput, addOutput, detachTable, equation, newTableChip, pasteRows, removeInput, removeOutput, setTable, tableBuild, tableCost, tableDef, tableLogic, tableMatches,
 } from '../src/editor/ttable';
 import { cover, minimumCover } from '../src/lib/sop';
+import { evalBool, parseBool } from '../src/lib/boolexpr';
+import { builderViolations, type BuildChallenge } from '../src/editor/challenges';
 import { setUserResolver } from '../src/lib/resolve';
 import { evalOnce, simulate } from '../src/sim/harness';
 import { deadInstances } from '../src/sim/dead';
@@ -53,14 +55,16 @@ describe('two-level minimization (lib/sop.ts)', () => {
 });
 
 describe('truth-table chips (editor/ttable.ts)', () => {
-  it('builds every random table correctly, in both forms', () => {
+  it('builds every random table correctly, in every form', () => {
     const r = rng(7);
     for (let k = 0; k < 60; k++) {
       const n = 1 + Math.floor(r() * 5), m = 1 + Math.floor(r() * 3);
-      const t = randomTable(r, n, m, k % 2 ? 'andor' : 'nand');
-      const def = tableDef(t);
+      const t = randomTable(r, n, m, (['nand', 'andor', 'pla', 'rom'] as const)[k % 4]);
+      const def = tableBuild(t).def;
       checkDef(t, def);
-      expect(deadInstances(netlistOf(def)!, def.ports), JSON.stringify(t)).toEqual([]);
+      if (t.form === 'rom') continue;
+      // a PLA brings both rails of every input across its AND plane (as lib/storage.ts pla()): an unread rail is no fault
+      if (t.form !== 'pla') expect(deadInstances(netlistOf(def)!, def.ports), JSON.stringify(t)).toEqual([]);
     }
   });
 
@@ -107,6 +111,51 @@ describe('truth-table chips (editor/ttable.ts)', () => {
       const { ws, id } = newTableChip(emptyWorkspace(), t);
       checkDef(t, compileAll(ws, id));
     }
+  });
+
+  it('ROM and PLA forms draw as chips that compile to the table; the ROM stores every row', () => {
+    const t: TableDoc = { ins: ['d3', 'd2', 'd1', 'd0'], outs: ['p'], rows: ['0011010100------'], form: 'rom' };
+    const { ws, id } = newTableChip(emptyWorkspace(), t);
+    checkDef(t, compileAll(ws, id));
+    expect(ws.chips[id].parts.some((p) => 'rom' in p.ref)).toBe(true);
+    const pla = setTable(ws, id, { ...t, form: 'pla' });
+    if ('error' in pla) throw new Error(pla.error);
+    checkDef({ ...t, form: 'pla' }, compileAll(pla, id));
+    // a PLA keeps both rails of every input: four inverters
+    expect(pla.chips[id].parts.filter((p) => 'lib' in p.ref && p.ref.lib === 'not').length).toBe(4);
+    expect(tableCost(t).nands).toBeGreaterThan(tableCost({ ...t, form: 'nand' }).nands);
+  });
+
+  it('pastes rows (inputs + outputs, or outputs in order), skipping headers and comments', () => {
+    const t: TableDoc = { ins: ['a', 'b'], outs: ['y', 'z'], rows: ['0000', '0000'], form: 'nand' };
+    const r = pasteRows(t, 'a b | y z\n0 0 | 1 0\n01 x1  # comment\n\n11 11');
+    if ('error' in r) throw new Error(r.error);
+    expect(r.rows).toEqual(['1-01', '0101']);
+    const seq = pasteRows(t, '10\n01\n');
+    if ('error' in seq) throw new Error(seq.error);
+    expect(seq.rows).toEqual(['1000', '0100']);
+    expect(pasteRows(t, '012')).toHaveProperty('error');
+    expect(pasteRows(t, 'a b y z')).toHaveProperty('error');
+  });
+
+  it('expressions over pin names (longer names are whole identifiers)', () => {
+    const p = parseBool('¬d2·d1 + d2 d0', ['d3', 'd2', 'd1', 'd0']);
+    if ('error' in p) throw new Error(p.error);
+    const ones = Array.from({ length: 16 }, (_, x) => x).filter((x) => evalBool(p.ex, x, 4));
+    expect(ones).toEqual([2, 3, 5, 7, 10, 11, 13, 15]);
+    const q = parseBool("ab' + c", ['a', 'b', 'c']);
+    if ('error' in q) throw new Error(q.error);
+    expect(evalBool(q.ex, 0b100, 3)).toBe(1);
+    expect(parseBool('d9', ['d0'])).toHaveProperty('error');
+  });
+
+  it('the campaign lock: a table chip cannot hand in a truth-table challenge', () => {
+    const { ws, id } = newTableChip(emptyWorkspace());
+    const table = { check: { kind: 'table' } } as unknown as BuildChallenge;
+    const seq = { check: { kind: 'sequence', steps: [] } } as unknown as BuildChallenge;
+    expect(builderViolations(ws, [id], table).length).toBe(1);
+    expect(builderViolations(ws, [id], seq)).toEqual([]);
+    expect(builderViolations(detachTable(ws, id), [id], table)).toEqual([]);
   });
 
   it('adding / removing pins keeps the function', () => {

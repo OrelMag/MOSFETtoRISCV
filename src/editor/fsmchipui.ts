@@ -196,7 +196,9 @@ class FsmUi {
     const seg = (label: string, opts: [string, string, boolean, () => void][]) => h('div', { class: 'fsm-row' }, h('span', { class: 'tt-lbl' }, label),
       h('div', { class: 'hdl-seg' }, opts.map(([t, title, on, go]) => h('button', { class: on ? 'on' : '', 'aria-pressed': String(on), title, onclick: () => !on && go() }, t))));
     const opts = h('div', { class: 'fsm-opts' },
-      seg('Logic', [['NAND–NAND', 'Only NANDs and inverters', doc.form === 'nand', () => this.apply({ ...doc, form: 'nand' })], ['AND–OR', 'AND, OR and NOT gates', doc.form === 'andor', () => this.apply({ ...doc, form: 'andor' })]]),
+      seg('Logic', ([['nand', 'NAND', 'NAND–NAND: only NANDs and inverters'], ['andor', 'AND–OR', 'AND, OR and NOT gates'],
+        ['pla', 'PLA', 'Both tables as programmable logic arrays'], ['rom', 'ROM', 'Both tables stored as ROMs: the next state looked up, a microprogrammed controller']] as const)
+        .map(([f, t, title]): [string, string, boolean, () => void] => [t, title, doc.form === f, () => this.apply({ ...doc, form: f })])),
       seg('Unused codes', [['Don’t care', 'Cheapest: the minimizer may send them anywhere', !doc.safe, () => { const { safe: _s, ...d } = doc; this.apply(d); }], ['Go to reset', 'Safe: a code no state has leads back to the reset state', !!doc.safe, () => this.apply({ ...doc, safe: true })]]));
 
     const warns = fsmWarnings(doc);
@@ -210,10 +212,22 @@ class FsmUi {
       this.props(doc), h('div', { class: 'fsm-sec' }, h('span', { class: 'tt-lbl' }, 'Encoding · each one built and counted'), encs, opts), status);
   }
 
+  /** A drag in progress: the diagram drawn from the machine as it would be, nothing committed. */
+  private preview(doc: FsmDoc): void {
+    const old = this.body.querySelector<SVGSVGElement>('.fsm-canvas svg');
+    if (!old) return;
+    const d = fsmDiagram(specOf(doc));
+    d.el.classList.add('fsm-edit', 'tool-select');
+    old.replaceWith(d.el);
+    this.diagram = d;
+    this.mark();
+  }
+
   /** Pointer handling on the diagram: states selected / dragged / joined by an arc, arcs selected, states added. */
   private wireDiagram(svg: SVGSVGElement, doc: FsmDoc): void {
     const pt = (e: PointerEvent): [number, number] => {
-      const m = svg.getScreenCTM();
+      // the drawing on screen now (a drag's preview replaces it)
+      const m = (this.body.querySelector<SVGSVGElement>('.fsm-canvas svg') ?? svg).getScreenCTM();
       if (!m) return [0, 0];
       const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
       return [Math.round(p.x), Math.round(p.y)];
@@ -249,13 +263,55 @@ class FsmUi {
       });
     });
     // arcs: their wide invisible hit paths, in doc order (specOf adds no others without `implicit`)
+    // Dragged: an arc bends (a self-loop turns), a label moves; double-click puts either back where it was drawn.
+    const hand = (i: number, e: PointerEvent, what: 'curve' | 'label') => {
+      e.stopPropagation();
+      if (this.tool !== 'select') return;
+      this.sel = { kind: 'arc', i };
+      const a = doc.arcs[i], start = pt(e);
+      const A = doc.states[a.from].at, B = doc.states[a.to].at;
+      const spec0 = specOf(doc).arcs[i];
+      let moved: FsmDoc | null = null;
+      const move = (ev: PointerEvent) => {
+        const p = pt(ev);
+        if (!moved && Math.hypot(p[0] - start[0], p[1] - start[1]) < 3) return;
+        let next: FsmDoc['arcs'][number];
+        if (what === 'label') next = { ...a, dx: (spec0.dx ?? 0) + p[0] - start[0], dy: (spec0.dy ?? 0) + p[1] - start[1] };
+        else if (a.from === a.to) next = { ...a, loop: Math.round((Math.atan2(p[1] - A[1], p[0] - A[0]) * 180) / Math.PI) };
+        else {
+          // the curve's middle sits at half its bend along the chord's normal
+          const len = Math.hypot(B[0] - A[0], B[1] - A[1]) || 1, nx = -(B[1] - A[1]) / len, ny = (B[0] - A[0]) / len;
+          next = { ...a, bend: Math.round(2 * ((p[0] - (A[0] + B[0]) / 2) * nx + (p[1] - (A[1] + B[1]) / 2) * ny)) };
+        }
+        moved = { ...doc, arcs: doc.arcs.map((x, k) => (k === i ? next : x)) };
+        this.preview(moved);
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        if (moved) this.apply(moved); else this.sync();
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    };
+    const unhand = (i: number, what: 'curve' | 'label') => {
+      const { bend: _b, loop: _l, dx: _x, dy: _y, ...rest } = doc.arcs[i];
+      const keep = what === 'label' ? { bend: doc.arcs[i].bend, loop: doc.arcs[i].loop } : { dx: doc.arcs[i].dx, dy: doc.arcs[i].dy };
+      const a = { ...rest, ...Object.fromEntries(Object.entries(keep).filter(([, v]) => v !== undefined)) };
+      this.apply({ ...doc, arcs: doc.arcs.map((x, k) => (k === i ? a : x)) });
+    };
     [...svg.querySelectorAll<SVGPathElement>('path.fsm-hit')].forEach((p, i) => {
-      p.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
-        if (this.tool !== 'select') return;
-        this.sel = { kind: 'arc', i };
-        this.sync();
-      });
+      p.addEventListener('pointerdown', (e) => hand(i, e, 'curve'));
+      p.addEventListener('dblclick', () => unhand(i, 'curve'));
+    });
+    // labels: one per arc that has one, in arc order
+    const labelled = doc.arcs.map((a, i) => [arcLabel(doc, a), i] as const).filter(([l]) => l).map(([, i]) => i);
+    [...svg.querySelectorAll<SVGTextElement>('text.fsm-al')].slice(-labelled.length || 0).forEach((t, k) => {
+      if (!labelled.length) return;
+      const i = labelled[k];
+      t.classList.add('fsm-drag');
+      t.addEventListener('pointerdown', (e) => hand(i, e, 'label'));
+      t.addEventListener('dblclick', () => unhand(i, 'label'));
     });
     svg.addEventListener('pointerdown', (e) => {
       if (this.tool === 'state') {
@@ -382,7 +438,7 @@ class FsmUi {
 }
 
 registerEditorPlugin((ed) => {
-  if (ed.level) return; // campaign levels: not yet (it would solve the state-machine level)
+  // also in campaign levels: Check refuses a state-machine chip where the level is one (challenges.ts builderViolations)
   const ui = new FsmUi(ed);
   return () => ui.destroy();
 });

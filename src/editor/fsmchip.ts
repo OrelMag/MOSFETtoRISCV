@@ -316,6 +316,8 @@ export function specOf(doc: FsmDoc, implicit = false): FsmSpec {
   const when = (w: Record<string, 0 | 1>) => (inp: FsmInputs) => Object.entries(w).every(([x, v]) => inp[x] === v);
   const arcs: FsmArc[] = doc.arcs.map((a, i) => ({
     from: a.from, to: a.to, when: when(a.when), label: arcLabel(doc, a), ...hints[i],
+    ...(a.bend !== undefined && a.from !== a.to ? { bend: a.bend } : {}), ...(a.loop !== undefined && a.from === a.to ? { loop: a.loop } : {}),
+    ...(a.dx !== undefined ? { dx: a.dx } : {}), ...(a.dy !== undefined ? { dy: a.dy } : {}),
     ...(a.out?.length ? { out: Object.fromEntries(a.out.map((o) => [o, 1])) } : {}),
   }));
   if (implicit) doc.states.forEach((_, s) => arcs.push({ from: s, to: s, cls: 'implicit' }));

@@ -6,6 +6,7 @@
 import { objectCard, seqText, textCard, wordOf } from '../cards/card';
 import { CHARSET, charOf, punchOf, ROW9, ROWS, rowsOf, rowsOfChar } from '../cards/hollerith';
 import { RELAY, RELAY_STEP_MS, RELAY_SUPPLY, type RelayParams, relayPull, type RelayRun, relaySim, relayStatic, relaySummary, T_OFF, T_ON, Z3 } from '../phys/relay';
+import { evalBool, parseBool } from '../lib/boolexpr';
 import { literals as lits, minimumCover, primes, type Term } from '../lib/sop';
 import { assemble16 } from '../riscv/rv16/asm16';
 import { decode16, disasm16 } from '../riscv/rv16/isa16';
@@ -128,79 +129,9 @@ const twos: Drill = {
   },
 };
 
-// ---- Boolean expressions ------------------------------------------------------------------------
+// ---- Boolean expressions (lib/boolexpr.ts) --------------------------------------------------------
 
-type Ex = { k: 'v'; i: number } | { k: 'c'; v: 0 | 1 } | { k: 'not'; a: Ex } | { k: 'and' | 'or' | 'xor'; a: Ex; b: Ex };
-
-/**
- * Parse a Boolean expression over the given variables. NOT: prefix ¬ ~ ! or postfix ' ; AND: · * &
- * or juxtaposition; OR: + |; XOR: ^ ⊕; constants 0 / 1; parentheses.
- */
-export function parseBool(src: string, vars: string[]): { ex: Ex; literals: number } | { error: string } {
-  const toks = src.replace(/\s+/g, ' ').trim().match(/[A-Za-z]|[01]|[()¬~!'+|^⊕·*&]|./g) ?? [];
-  let pos = 0, literals = 0;
-  const peek = () => (pos < toks.length ? toks[pos] : '');
-  const fail = (m: string): never => { throw new Error(m); };
-  const atomStart = (t: string) => /[A-Za-z01(¬~!]/.test(t);
-  const orE = (): Ex => {
-    let a = xorE();
-    while (peek() === '+' || peek() === '|') { pos++; a = { k: 'or', a, b: xorE() }; }
-    return a;
-  };
-  const xorE = (): Ex => {
-    let a = andE();
-    while (peek() === '^' || peek() === '⊕') { pos++; a = { k: 'xor', a, b: andE() }; }
-    return a;
-  };
-  const andE = (): Ex => {
-    let a = unary();
-    for (;;) {
-      if (['·', '*', '&'].includes(peek())) { pos++; a = { k: 'and', a, b: unary() }; } else if (peek() === ' ') { pos++; } else if (atomStart(peek())) a = { k: 'and', a, b: unary() };
-      else return a;
-    }
-  };
-  const unary = (): Ex => {
-    while (peek() === ' ') pos++;
-    let e: Ex;
-    const t = peek();
-    if (t === '¬' || t === '~' || t === '!') { pos++; e = { k: 'not', a: unary() }; } else if (t === '(') {
-      pos++;
-      e = orE();
-      while (peek() === ' ') pos++;
-      if (peek() !== ')') fail('missing )');
-      pos++;
-    } else if (t === '0' || t === '1') { pos++; e = { k: 'c', v: t === '1' ? 1 : 0 }; } else if (/[A-Za-z]/.test(t)) {
-      const i = vars.indexOf(t.toLowerCase());
-      if (i < 0) fail(`unknown variable ${t} (use ${vars.join(', ')})`);
-      pos++;
-      literals++;
-      e = { k: 'v', i };
-    } else return fail(t ? `unexpected ${t}` : 'incomplete expression');
-    while (peek() === "'") { pos++; e = { k: 'not', a: e }; }
-    while (peek() === ' ' && toks[pos + 1] === "'") pos++;
-    return e;
-  };
-  try {
-    const ex = orE();
-    while (peek() === ' ') pos++;
-    if (pos < toks.length) fail(`unexpected ${peek()}`);
-    return { ex, literals };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : String(e) };
-  }
-}
-
-/** Evaluate with variable values packed in `x` (vars[0] is the most significant bit). */
-export function evalBool(e: Ex, x: number, n: number): number {
-  switch (e.k) {
-    case 'v': return (x >> (n - 1 - e.i)) & 1;
-    case 'c': return e.v;
-    case 'not': return evalBool(e.a, x, n) ^ 1;
-    case 'and': return evalBool(e.a, x, n) & evalBool(e.b, x, n);
-    case 'or': return evalBool(e.a, x, n) | evalBool(e.b, x, n);
-    default: return evalBool(e.a, x, n) ^ evalBool(e.b, x, n);
-  }
-}
+export { evalBool, parseBool };
 export { minimumCover, primes, type Term };
 
 export const termText = (t: Term, vars: string[]): string => {
