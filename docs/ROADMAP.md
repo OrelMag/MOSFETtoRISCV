@@ -1048,18 +1048,25 @@ links, bus taps, duplicate and pin reordering. The gaps:
   also where the output resolves ("a=1 → outputs right, but VDD shorted to GND through p1, n1"), and on the way between
   two table rows, the inputs changed one bit at a time (stored charge remembers the order; relays skip the walk, which
   would change the relay steps graded); every reference answer passes
-- ⏳ Weak levels (IEEE 1164 H / L): an nMOS passing a 1 or a pMOS passing a 0 drops a threshold; the net carries a weak
-  level, drawn dimmed, and a gate input reading it is unreliable (X downstream) unless restored by an inverter or
-  passed by a transmission gate. A new solver state (strength already exists: switchsim levels), so chapters 1–3's
-  pass-transistor steps and the campaign's act 0 can show it. Mockup first (a new visual state)
+- ✅ Weak levels (IEEE 1164 H / L; mockup approved 2026-10-25): SwitchSim.weakOf marks a driven 1 no path brings
+  without an NMOS H (VDD − Vt = 0.8 V) and a 0 no path brings without a PMOS L (0.3 V); the bit stands, a CMOS gate
+  reading it restores it and is marked partly on (`leaky`: static current), a 1 only an NMOS gated by H passes is X;
+  stored-charge nets keep their level. Drawn between the net's 0 and 1 colours with a tag "H · 0.80 V" (stage,
+  sandbox, its tooltip); the sandbox warns about a weak output pin and each leaky gate; a switch-level Check fails a
+  row whose output is weak ("a=1 → y=H (a weak 1, 0.80 V), expected y=1"). Chapter 2's step "The wrong way round:
+  weak levels" (WEAK_DEMO: the buffer with its NMOS to VDD beside a transmission gate)
 
 **Cross-layer debugging**:
 - ✅ The drill-down breadcrumb live (view/crumbvals.ts): each level's value at the opened instance (hex at the top,
   `bit [7] = 1` where a bus was sliced), following the simulation, in the chapters' stage and the sandbox's look
   inside. From the deepest level up, a level shows the output carrying the one below (the same flat nets), else its
   first; the top level only when its pins carry it
-- ⏳ A slack heatmap: every gate coloured by how close its arrival time is to the critical path's (unit or load
-  delay), a toggle on the Timing panel beside the drawn critical path
+- ✅ A slack heatmap (sim/slack.ts): every part at the level on screen tinted by its slack, the critical path's length
+  minus the longest path through it (arrival at it + the longest path on from it to a flip-flop, setup included), so
+  the whole critical path is hot from its launching flip-flop to its capturing one; unit or load delay, five bands
+  (critical, < 10 %, < 25 %, < 50 % of the period, more), parts no timed path crosses faded. A "Slack heatmap" toggle
+  beside the critical-path button on the chapters' Timing panel (following the drill level) and the sandbox's Timing
+  section (input → output on a chip without flip-flops), with a key; a part's tooltip gives its slack
 
 **Campaign and sandbox polish**:
 - ✅ Rotation (R) for parts in the sandbox: `rot` (quarter turns after the mirror) on a part and an InstanceDef,

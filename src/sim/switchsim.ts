@@ -18,6 +18,11 @@
 // overrides it (pseudo-NMOS, open-drain buses), and two resistors pulling opposite ways give X.
 // A short (`shorted`) is a fight between transistor paths; a resistor that loses draws current
 // by design (that static current is the cost of ratioed logic) and is not flagged.
+// Weak levels (`weakOf`): an NMOS passes a 1 only up to VDD − Vt, a PMOS a 0 only down to Vt. A driven 1 that no sure
+// path brings from a 1 source without an NMOS is H, a 0 no path brings without a PMOS is L (resistors, relays, tubes
+// and sense amplifiers pass both whole). The bit stands: a CMOS gate reading H reads 1, its output comes from its rails
+// (restored), and its PMOS is partly on (`leaky`: static current). A 1 that only an NMOS gated by H brings is X (0.8 V
+// at the gate passes 0.5 V), likewise a 0 only a PMOS gated by L brings. Stored-charge nets keep their charge's level.
 // Iteration starts from the previous solution, so storage loops (cross-coupled inverters)
 // remember their state; for loop-free circuits the result is unique anyway.
 //
@@ -97,6 +102,10 @@ export class SwitchSim implements Sim {
   readonly conducting: Uint8Array;
   /** Nets that are part of a VDD–GND short in the last solution. */
   readonly shorted: Uint8Array;
+  /** Per net: WEAK_H (a 1 an NMOS passed: VDD − Vt), WEAK_L (a 0 a PMOS passed: Vt) or 0 (full, or not a bit). */
+  private weak: Uint8Array;
+  /** Does the design have MOSFETs (else nothing can be weak)? */
+  private readonly mosfets: boolean;
   /** Per net: its level as a fraction of VDD (NaN: unknown or floating), see the header. */
   private lv: Float64Array;
   /** Sense amplifier leaves, and what each has latched: −1 off, 0 / 1 (the value on a), BX. */
@@ -121,6 +130,8 @@ export class SwitchSim implements Sim {
     this.val = new Uint8Array(design.netCount).fill(BZ);
     this.conducting = new Uint8Array(design.leaves.length);
     this.shorted = new Uint8Array(design.netCount);
+    this.weak = new Uint8Array(design.netCount);
+    this.mosfets = design.leaves.some((l) => l.kind === 'nmos' || l.kind === 'pmos' || l.kind === 'fgmos');
     this.lv = new Float64Array(design.netCount).fill(NaN);
     this.senses = design.leaves.flatMap((l, li) => (l.kind === 'sense' ? [li] : []));
     this.senseDec = new Int8Array(this.senses.length).fill(-1);
@@ -173,6 +184,22 @@ export class SwitchSim implements Sim {
     if (k < 0) return;
     this.fgQ[k] = Math.min(1, Math.max(0, q));
     this.dirty = true;
+  }
+
+  /** A net's weak level: WEAK_H, WEAK_L or 0 (see the header). */
+  weakOf(net: number): number {
+    return this.weak[net];
+  }
+  /** Is some net at a weak level? */
+  get hasWeak(): boolean {
+    return this.weak.includes(WEAK_H) || this.weak.includes(WEAK_L);
+  }
+  /** A transistor partly on: a PMOS whose gate is H (or an NMOS whose gate is L), so current leaks through its gate. */
+  leaky(leaf: number): boolean {
+    const l = this.design.leaves[leaf];
+    if (!l || (l.kind !== 'nmos' && l.kind !== 'pmos')) return false;
+    const g = l.terminals![0];
+    return l.kind === 'pmos' ? this.val[g] === B1 && this.weak[g] === WEAK_H : this.val[g] === B0 && this.weak[g] === WEAK_L;
   }
 
   /** Is some net part of a short in the last solution? */
@@ -384,7 +411,7 @@ export class SwitchSim implements Sim {
 
   saveState(): SimState {
     const st: SwitchState = {
-      val: this.val.slice(), conducting: this.conducting.slice(), shorted: this.shorted.slice(),
+      val: this.val.slice(), conducting: this.conducting.slice(), shorted: this.shorted.slice(), weak: this.weak.slice(),
       lv: this.lv.slice(), senseDec: this.senseDec.slice(), fgQ: this.fgQ.slice(), fgPrev: this.fgPrev.slice(),
       relayOp: this.relayOp.slice(), time: this.time, vLv: this.vLv.slice(),
       inputs: new Map([...this.inputs].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v])),
@@ -399,6 +426,7 @@ export class SwitchSim implements Sim {
     this.val.set(s.val);
     this.conducting.set(s.conducting);
     this.shorted.set(s.shorted);
+    this.weak.set(s.weak);
     this.lv.set(s.lv);
     this.senseDec.set(s.senseDec);
     this.fgQ.set(s.fgQ);
@@ -748,8 +776,40 @@ export class SwitchSim implements Sim {
         if (l < mLoL[rm]) mLoL[rm] = l;
         if (l > mHiL[rm]) mHiL[rm] = l;
       }
+      // Weak levels (see the header): per value, the sure paths that pass it whole (a 1: no NMOS; a 0: no PMOS) and
+      // the paths that pass it at all (not through an NMOS gated by H / a PMOS gated by L), from last iteration's levels.
+      const weak = this.weak;
+      let full1: UF | null = null, ok1: UF | null = null, full0: UF | null = null, ok0: UF | null = null;
+      const f1 = new Uint8Array(N), o1 = new Uint8Array(N), f0 = new Uint8Array(N), o0 = new Uint8Array(N);
+      if (this.mosfets) {
+        const F1 = (full1 = new UF(N)), O1 = (ok1 = new UF(N)), F0 = (full0 = new UF(N)), O0 = (ok0 = new UF(N));
+        const all = (a: number, b: number) => { F1.union(a, b); O1.union(a, b); F0.union(a, b); O0.union(a, b); };
+        fets.forEach((f, k) => {
+          if (!on[k]) return;
+          if (f.relay !== undefined) return all(f.a, f.b);
+          const gw = weak[f.g];
+          if (f.nmos) {
+            F0.union(f.a, f.b); O0.union(f.a, f.b);
+            if (gw !== WEAK_H) O1.union(f.a, f.b);
+          } else {
+            F1.union(f.a, f.b); O1.union(f.a, f.b);
+            if (gw !== WEAK_L) O0.union(f.a, f.b);
+          }
+        });
+        for (const r of ress) all(r.a, r.b);
+        for (const o of ows) {
+          if (o.sa === 2) all(o.ta, o.va);
+          if (o.sk === 2) all(o.tk, o.vk);
+        }
+        for (const sa of sas) if (dec[sa.k] >= 0) { all(sa.ta, sa.va); all(sa.tb, sa.vb); }
+        for (let i = 0; i < N; i++) {
+          if (srcLv[i] <= LV_CHARGE) continue;
+          if (srcV[i] === B1) { f1[F1.find(i)] = 1; o1[O1.find(i)] = 1; } else if (srcV[i] === B0) { f0[F0.find(i)] = 1; o0[O0.find(i)] = 1; }
+        }
+      }
       for (let i = 0; i < n; i++) {
         if (source[i] >= 0) {
+          weak[i] = 0;
           this.shorted[i] = 0;
           lv[i] = source[i] === HALF ? 0.5 : levelOfBit(source[i]);
           continue;
@@ -761,6 +821,22 @@ export class SwitchSim implements Sim {
         else if (d0[i] > d1[i] && d0[i] > dH[i] && d0[i] > m1[i] && d0[i] > mX[i] && d0[i] > mH[i]) v = B0;
         else if (dH[i] > d1[i] && dH[i] > d0[i] && dH[i] > m1[i] && dH[i] > m0[i] && dH[i] > mX[i]) { v = BX; l = 0.5; }
         else v = m1[i] || m0[i] || mX[i] || mH[i] ? BX : BZ;
+        // a weak level: the bit stands (stored-charge nets keep theirs: their level is the charge's), or X when only
+        // an NMOS gated by H brings the 1 (a PMOS gated by L the 0)
+        let w = 0;
+        if (full1 && (v === B0 || v === B1) && Math.max(d1[i], d0[i]) > LV_CHARGE && !this.design.caps.has(i)) {
+          if (v === B1 && !f1[full1.find(i)]) {
+            if (o1[ok1!.find(i)]) w = WEAK_H;
+            else v = BX;
+          } else if (v === B0 && !f0[full0!.find(i)]) {
+            if (o0[ok0!.find(i)]) w = WEAK_L;
+            else v = BX;
+          }
+        }
+        if (weak[i] !== w) {
+          weak[i] = w;
+          changed = true;
+        }
         if (v === B0 || v === B1) l = v;
         if (Math.max(d1[i], d0[i], dX[i], dH[i], m1[i], m0[i], mX[i], mH[i]) <= LV_CHARGE) {
           // only charge reaches this net: it holds its group's shared level
@@ -830,6 +906,13 @@ export function shortText(sim: SwitchSim, s: Short): string {
   return `${srcName(s.hi, B1)} shorted to ${srcName(s.lo, B0)}${via.length ? ` through ${[...new Set(via)].join(', ')}` : ''}`;
 }
 
+/** Weak levels (see the header): a 1 an NMOS passed, a 0 a PMOS passed; their voltages for display (VDD − Vt, Vt). */
+export const WEAK_H = 1, WEAK_L = 2;
+export const VT_VOLTS = 0.3;
+/** A weak level as a fraction of VDD (where its colour sits between the net's 0 and 1), and its tag: 'H · 0.80 V'. */
+export const weakLevel = (k: number): number => (k === WEAK_H ? (VDD_VOLTS - VT_VOLTS) / VDD_VOLTS : VT_VOLTS / VDD_VOLTS);
+export const weakTag = (k: number): string => `${k === WEAK_H ? 'H' : 'L'} · ${(weakLevel(k) * VDD_VOLTS).toFixed(2)} V`;
+
 /** Solver levels (see the header): sources, the weakest transistor, stored charge. */
 const LV_SOURCE = 7, LV_FET = 4, LV_CHARGE = 1;
 /** Relay steps settle() takes at most: a relay circuit still moving after them oscillates. */
@@ -870,7 +953,7 @@ class UF {
 }
 
 interface SwitchState {
-  val: Uint8Array; conducting: Uint8Array; shorted: Uint8Array; lv: Float64Array; senseDec: Int8Array; fgQ: Float64Array; fgPrev: Uint8Array; inputs: Map<string, number | Bit[]>; state: unknown[];
+  val: Uint8Array; conducting: Uint8Array; shorted: Uint8Array; weak: Uint8Array; lv: Float64Array; senseDec: Int8Array; fgQ: Float64Array; fgPrev: Uint8Array; inputs: Map<string, number | Bit[]>; state: unknown[];
   relayOp: Uint8Array; time: number; vLv: Uint8Array;
   unstable: boolean; evaluations: number; dirty: boolean;
 }

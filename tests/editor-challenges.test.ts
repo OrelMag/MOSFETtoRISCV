@@ -237,3 +237,18 @@ describe('shorts fail a switch-level check', () => {
     expect(r.failures).toEqual(['a=1 → outputs right, but VDD shorted to GND through p1, n1']);
   });
 });
+
+describe('weak levels fail a switch-level check', () => {
+  it('a buffer with its NMOS to VDD: right bits, a weak 1 at the output', () => {
+    const c: BuildChallenge = { ...ch('t_inv'), id: 'weak_buf', check: { kind: 'table', spec: ([a]) => [a] } };
+    const doc = chip('u_ch_weak_buf', 'Buffer', {
+      pins: [pin('a', 'in', [0, 4]), pin('y', 'out', [24, 4])],
+      parts: [part('v', { lib: 'vdd' }, [10, -4]), part('n1', { lib: 'nmos' }, [10, 0]), part('p1', { lib: 'pmos' }, [10, 6]), part('g', { lib: 'gnd' }, [10, 12])],
+      wires: [wire('w1', 'pin:a', 'n1.g'), wire('w2', 'pin:a', 'p1.g'), wire('w3', 'v.p', 'n1.d'), wire('w4', 'g.p', 'p1.d'),
+        wire('w5', 'n1.s', 'pin:y'), wire('w6', 'p1.s', 'pin:y')],
+    });
+    const r = check(c, doc);
+    expect(r.ok).toBe(false);
+    expect(r.failures).toEqual(['a=0 → y=L (a weak 0, 0.30 V), expected y=0', 'a=1 → y=H (a weak 1, 0.80 V), expected y=1']);
+  });
+});

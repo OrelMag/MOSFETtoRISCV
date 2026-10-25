@@ -31,7 +31,7 @@
 import { DualSim } from '../sim/dualsim';
 import { flatten } from '../sim/flatten';
 import type { PowerOnMode, Sim } from '../sim/sim';
-import { shortText, SwitchSim } from '../sim/switchsim';
+import { shortText, SwitchSim, WEAK_H, weakTag } from '../sim/switchsim';
 import { B1, type Bit, BZ, type ComponentDef, netlistOf } from '../sim/types';
 import { unpackBig } from '../sim/values';
 import type { HierNode } from '../sim/flatten';
@@ -131,9 +131,47 @@ export class EditorSim {
   built: Compiled | null = null;
   /** Why the chip cannot be simulated, when it cannot. */
   private buildDiags: Diag[] = [];
-  /** Why it cannot be simulated, then the shorts of the present solution (switch level: they come and go with the inputs). */
+  /** Why it cannot be simulated, then the shorts and weak levels of the present solution (switch level: they come and go with the inputs). */
   get diags(): Diag[] {
-    return [...this.buildDiags, ...this.shortDiags()];
+    return [...this.buildDiags, ...this.shortDiags(), ...this.weakDiags()];
+  }
+  /**
+   * Weak levels where they matter: on an output pin (it does not reach its rail), and at a gate they leave partly on
+   * (static current). A weak node inside a series stack reaches no gate and is not listed.
+   */
+  private weakDiags(): Diag[] {
+    const sim = this.sim, built = this.built;
+    if (!(sim instanceof SwitchSim) || !sim.hasWeak || !built) return [];
+    const d = sim.design, out: Diag[] = [];
+    const leafName = (li: number) => d.leaves[li].node.path.join('.');
+    const rootNets = d.root.nets ?? [];
+    const wiresOn = (net: number) => [...built.netOfWire].filter(([, n]) => rootNets[n]?.includes(net)).map(([id]) => id);
+    for (const p of d.root.def.ports) {
+      if (p.dir === 'in' || p.width !== 1) continue;
+      const net = d.root.ports[p.name][0], k = sim.weakOf(net);
+      if (!k) continue;
+      // the conducting transistors of the losing kind on the net: the ones that passed it
+      const kind = k === WEAK_H ? 'nmos' : 'pmos';
+      const by = d.leaves.flatMap((l, li) => (l.kind === kind && sim.conducting[li] === 1 && l.terminals!.slice(1).includes(net) ? [li] : []));
+      const what = k === WEAK_H ? 'an NMOS passing a 1. A PMOS to VDD' : 'a PMOS passing a 0. An NMOS to GND';
+      const who = by.length ? `${by.map(leafName).join(', ')} ${by.length > 1 ? 'are' : 'is'} ` : '';
+      out.push({
+        level: 'warn',
+        msg: `weak ${k === WEAK_H ? 1 : 0} on ${p.name} (${weakTag(k)}): ${who}${what}, or a transmission gate, passes it whole`,
+        pins: [p.name],
+        parts: [...new Set(by.map((li) => d.leaves[li].node.path[0]))].filter(Boolean),
+        wires: wiresOn(net),
+      });
+    }
+    for (const li of d.leaves.flatMap((_, i) => (sim.leaky(i) ? [i] : [])).slice(0, 4)) {
+      const l = d.leaves[li];
+      out.push({
+        level: 'warn',
+        msg: `static current in ${leafName(li)}: its gate reads ${weakTag(sim.weakOf(l.terminals![0]))}, so this ${l.kind === 'pmos' ? 'PMOS' : 'NMOS'} is partly on`,
+        parts: [l.node.path[0]].filter(Boolean),
+      });
+    }
+    return out;
   }
   private shortDiags(): Diag[] {
     const sim = this.sim, built = this.built;
@@ -451,6 +489,26 @@ export class EditorSim {
     const sim = this.sim;
     if (!(sim instanceof SwitchSim) || !sim.hasShort || i === undefined || i < 0) return false;
     return sim.design.root.nets?.[i]?.some((n) => sim.shorted[n]) ?? false;
+  }
+  /** Switch level: a 1-bit net's weak level (WEAK_H / WEAK_L, 0: full or not a bit). */
+  netWeak(i: number | undefined): number {
+    const sim = this.sim;
+    if (!(sim instanceof SwitchSim) || !sim.hasWeak || i === undefined || i < 0) return 0;
+    const ns = sim.design.root.nets?.[i];
+    return ns?.length === 1 ? sim.weakOf(ns[0]) : 0;
+  }
+  wireWeak(id: string): number {
+    return this.netWeak(this.built?.netOfWire.get(id));
+  }
+  labelWeak(id: string): number {
+    return this.netWeak(this.built?.netOfLabel.get(id));
+  }
+  /** Switch level: a transistor part of this chip partly on (its gate at a weak level). */
+  leaky(part: string): boolean {
+    const sim = this.sim;
+    if (!(sim instanceof SwitchSim) || !sim.hasWeak) return false;
+    const li = sim.design.root.children?.get(part)?.leafIndex;
+    return li !== undefined && sim.leaky(li);
   }
   wireShorted(id: string): boolean {
     return this.netShorted(this.built?.netOfWire.get(id));

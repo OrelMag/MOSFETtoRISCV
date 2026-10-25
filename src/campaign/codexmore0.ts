@@ -24,7 +24,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Driving a large load (a clock net, a long bus) from a minimum-size inverter: delay grows with the load, so real designs taper up through a chain of inverters.',
     ],
     lib: 'inv_cmos', compare: ['not', 'inv_pseudo'],
-    chapters: [{ chapter: 'inverter', step: 0, label: 'Pull up, pull down' }, { chapter: 'inverter', step: 1, label: 'Why this is brilliant' }, { chapter: 'inverter', step: 2, label: 'The cheaper, hotter way: a pull-up' }],
+    chapters: [{ chapter: 'inverter', step: 0, label: 'Pull up, pull down' }, { chapter: 'inverter', step: 1, label: 'Why this is brilliant' }, { chapter: 'inverter', step: 3, label: 'The cheaper, hotter way: a pull-up' }],
   },
   nand: {
     idea: 'NAND puts two NMOS in series between the output and ground and two PMOS in parallel from V<sub>DD</sub>. The output is pulled low only when both NMOS conduct (a = b = 1); otherwise at least one PMOS pulls it high. It is the cheapest 2-input CMOS gate that is also universal, and its series devices are the faster NMOS, so it is the brick of the gate level here: every count is in NANDs (4 transistors each) and every delay in NAND delays, one per gate regardless of load.<br>A 3-input NAND stacks three NMOS, and each series device slows the pull-down, so wide functions are built as trees of 2-input gates.',
