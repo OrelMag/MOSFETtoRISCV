@@ -418,7 +418,7 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
     };
 
     const title = h('h4', null, 'Screen 64 × 64, RGB332', h('span', { class: 'fold-hint' }));
-    const el = h('div', { class: 'mem-panel cpu-panel gfx-panel', 'data-dock': 'right' }, title,
+    const el = h('div', { class: 'mem-panel cpu-panel gfx-panel', 'data-dock': 'right', 'data-phone': 'flow' }, title,
       h('div', { class: 'cpu-body' },
         h('div', { class: 'param-row', style: 'margin-bottom:6px' }, ...(triSel ? [triSel] : []), speed),
         h('div', { class: 'gfx-screen-wrap' }, cv, memLabel),

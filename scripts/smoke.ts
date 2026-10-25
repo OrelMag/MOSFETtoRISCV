@@ -108,6 +108,10 @@ function routes(): Route[] {
   for (const v of VIEWPORTS) {
     for (const hash of ['#/', `#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/campaign', '#/sandbox']) add(hash, light, ` (${v.name})`, v);
   }
+  // Pages whose panels a phone once lost: the GPU screen and drawing pad, the Out of order panel, the level bar.
+  const phone = VIEWPORTS.find((v) => v.mobile)!;
+  for (const hash of ['#/c/pixels/5', '#/c/graphics/1', '#/c/ooo/8']) add(hash, light, ` (${phone.name})`, phone);
+  add(`#/campaign/play/${NODES.find((n) => n.kind === 'core')!.id}`, unlocked, ` (${phone.name})`, phone);
   // The sandbox's toolbar at the common desktop widths too (CLIPPED: no label cut, nothing scrolled out of view).
   for (const width of [1440, 1920]) add('#/sandbox', light, ` (${width}px)`, { width, height: 900, mobile: false, name: `${width}px` });
   const ex = examplesWorkspace();

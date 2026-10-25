@@ -7,6 +7,7 @@ import { BANK_K, bigRam, bigRamWithInit, ramLeafState, ramWords } from '../lib/b
 import { ram } from '../lib/memory';
 import { PROGRAMS } from '../riscv/programs';
 import { COMPUTER_PROGRAMS } from '../riscv/ioprograms';
+import { PONG16 } from '../riscv/rv16/pong16';
 import { disasm16 } from '../riscv/rv16/isa16';
 import { disasm4 } from '../isa4/isa4';
 import { PROGRAMS4 } from '../isa4/programs4';
@@ -149,6 +150,7 @@ export const ROM_SAMPLES: RomSample[] = [
   { id: 'squares', name: 'Squares 0–15', lang: 'hex', src: `# n * n for n = 0..15\n${hexDigits(Array.from({ length: 16 }, (_, i) => i * i))}` },
   { id: 'hello', name: 'ASCII "Hello, RISC-V"', lang: 'hex', src: `# one character per word\n${hexDigits([...'Hello, RISC-V'].map((c) => c.charCodeAt(0)))} 00` },
   { id: 'rv16leds', name: 'RV16: Fibonacci on the LEDs', lang: 'rv16', src: RV16_LEDS },
+  { id: 'rv16pong', name: 'RV16: Pong (a 32 × 32 screen at 0xF000, switches)', lang: 'rv16', src: PONG16 },
   ...PROGRAMS4.map((p): RomSample => ({ id: p.id, name: p.name, lang: 'cpu4', src: p.src })),
   ...SB_PROGRAMS_6502.map((p): RomSample => ({ id: p.id, name: p.name, lang: '6502', src: p.src })),
 ];

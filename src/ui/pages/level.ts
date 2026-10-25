@@ -150,26 +150,26 @@ export class LevelPage implements Page {
     if (this.walk) {
       this.bar.replaceChildren(
         h('a', { class: 'lv-back', href: `#/campaign/n/${n.id}`, title: 'The campaign map' }, icon('chevL', 14), 'Map'),
-        h('span', { class: 'lv-crumb' }, `${actName(n.act)} · ${actTitle(n.act)}`, h('span', { class: 'sep' }, '›'), h('b', null, n.title)),
+        h('span', { class: 'lv-crumb' }, h('span', { class: 'lv-act' }, `${actName(n.act)} · ${actTitle(n.act)}`, h('span', { class: 'sep' }, '›')), h('b', null, n.title)),
         h('span', { class: 'lv-badge acc' }, 'WALKTHROUGH'),
         h('span', { class: 'lv-spacer' }),
-        h('button', { class: 'btn sm ghost', title: 'Back to your own circuit, as you left it', onclick: () => this.leaveWalk() }, 'Leave the walkthrough'));
+        h('button', { class: 'btn sm ghost', title: 'Back to your own circuit, as you left it', 'aria-label': 'Leave the walkthrough', onclick: () => this.leaveWalk() }, h('span', null, 'Leave', h('span', { class: 'lbl' }, ' the walkthrough'))));
       return;
     }
     const parText = (Object.keys(par) as Metric[]).map((k) => `${k === 'depth' || k === 'period' ? `${k} ` : ''}${par[k]!.toLocaleString()}${k === 'depth' || k === 'period' ? '' : ` ${par[k] === 1 ? METRIC[k].unit.replace(/s$/, '') : METRIC[k].unit}`}`);
     this.bar.replaceChildren(...[
       h('a', { class: 'lv-back', href: `#/campaign/n/${n.id}`, title: 'The campaign map' }, icon('chevL', 14), 'Map'),
-      h('span', { class: 'lv-crumb' }, `${actName(n.act)} · ${actTitle(n.act)}`, h('span', { class: 'sep' }, '›'), h('b', null, n.title)),
-      h('span', { class: 'lv-badge' }, KIND_LABEL[n.kind]),
+      h('span', { class: 'lv-crumb' }, h('span', { class: 'lv-act' }, `${actName(n.act)} · ${actTitle(n.act)}`, h('span', { class: 'sep' }, '›')), h('b', null, n.title)),
+      h('span', { class: 'lv-badge lv-kind' }, KIND_LABEL[n.kind]),
       st === 'solved' ? h('span', { class: 'lv-badge good' }, 'SOLVED') : st === 'skipped' ? h('span', { class: 'lv-badge' }, 'SKIPPED') : null,
       parText.length ? h('span', { class: 'lv-par', title: 'Par: three stars at or under it on every metric' }, 'par ', h('b', null, parText.join(' · '))) : null,
       np?.stars ? h('span', { class: 'lv-stars', title: `Best: ${np.stars} of 3 stars` }, '★'.repeat(np.stars), h('span', { class: 'off' }, '★'.repeat(3 - np.stars))) : null,
       h('span', { class: 'lv-spacer' }),
-      h('a', { class: 'btn sm ghost', href: `#/sandbox/${levelChipId(n)}`, title: 'The same chip in the full sandbox editor' }, 'Open in sandbox', icon('open', 13)),
+      h('a', { class: 'btn sm ghost', href: `#/sandbox/${levelChipId(n)}`, title: 'The same chip in the full sandbox editor', 'aria-label': 'Open in sandbox' }, h('span', { class: 'lbl' }, 'Open in sandbox'), icon('open', 13)),
       st !== 'solved' ? (st === 'skipped'
         ? h('button', { class: 'btn sm ghost', title: 'Back to unfinished', onclick: () => p.unskip(n.id) }, 'Un-skip')
         : h('button', { class: 'btn sm ghost', title: 'Count this level as done: its part unlocks (the reference solution stands in for yours)', onclick: () => p.skip(n.id) }, 'Skip')) : null,
-      next ? h('a', { class: `btn sm${st === 'solved' ? ' primary' : ''}`, href: levelRoute(next), title: next.title }, `Next: ${next.title}`, icon('chevR', 13)) : null,
+      next ? h('a', { class: `btn sm${st === 'solved' ? ' primary' : ''}`, href: levelRoute(next), title: next.title, 'aria-label': `Next: ${next.title}` }, h('span', null, 'Next', h('span', { class: 'lbl' }, `: ${next.title}`)), icon('chevR', 13)) : null,
     ].filter((x): x is HTMLElement => !!x));
   }
 

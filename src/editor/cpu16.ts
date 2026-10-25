@@ -4,8 +4,14 @@
 // checked the way the campaign's core bench checks it: every register write the core reports on
 // its write port, and every store, in order. That needs nothing inside the core to be named, and
 // holds for single-cycle, multicycle and pipelined cores alike (their writes come in program order).
+// The model runs ahead of the hardware to its next write, except into a load from a switch bank (the
+// io bench's SWITCHES): it waits there for the hardware's register write, and takes the switches'
+// positions from it when they are ones the bank held lately (a pipelined core reads them a few
+// cycles before it reports the write). A screen part keeps the model's stores to SCREEN16_IO out of
+// its data memory; `screen` is the picture the matched stores painted. An edge with the core's rst
+// high counts nothing (the io bench holds it for the first cycle, as the level's bench does).
 
-import { disasm16, REG_NAMES16 } from '../riscv/rv16/isa16';
+import { decode16, disasm16, MMIO16, REG_NAMES16, SCREEN16_IO } from '../riscv/rv16/isa16';
 import { PUZZLE_NO_GOLDEN, simHasPuzzlePorts } from './puzzleparts';
 import { CARDS_NO_GOLDEN, simHasCardReader } from './cardparts';
 import { Iss16, type Step16 } from '../riscv/rv16/iss16';
@@ -15,6 +21,8 @@ import { partNode, refValue } from './cpu';
 import { romImage, type RomRef } from './memory';
 import type { ChipDoc, PartDoc } from './model';
 import { isError, partDef } from './parts';
+import { ioNodes, ioState, type SwitchState } from './ioparts';
+import type { HierNode } from '../sim/flatten';
 
 export interface Rv16Desc {
   /** The program ROM (a part of the chip). */
@@ -25,6 +33,10 @@ export interface Rv16Desc {
   system: boolean;
   /** The data memory: a RAM part of 16-bit words (a sandbox RAM, or the library's), decoded on its low address bits. */
   ram?: { id: string; k: number; init?: number[] };
+  /** A switch bank part: loads from SWITCHES read it (the io bench). */
+  switches?: true;
+  /** A screen part: stores to SCREEN16_IO paint it, not the data memory (the io bench). */
+  screen?: true;
 }
 
 /** The pins that make a part a core (CORE_PORTS of lib/rv16/cpu.ts). */
@@ -58,7 +70,10 @@ export function detectRv16(doc: ChipDoc, chips?: Chips): Rv16Desc | null {
         const m = 'lib' in q.ref ? /^ram(\d+)x16$/.exec(q.ref.lib) : null;
         return m ? [{ id: q.id, k: Math.round(Math.log2(Number(m[1]))) }] : [];
       });
-      return { rom: rom.id, core: p.id, system: ports.some((q) => q.name === 'irq' && q.dir === 'in'), ...(rams.length === 1 ? { ram: rams[0] } : {}) };
+      return {
+        rom: rom.id, core: p.id, system: ports.some((q) => q.name === 'irq' && q.dir === 'in'), ...(rams.length === 1 ? { ram: rams[0] } : {}),
+        ...(doc.parts.some((q) => 'switches' in q.ref) ? { switches: true as const } : {}), ...(doc.parts.some((q) => 'screen' in q.ref) ? { screen: true as const } : {}),
+      };
     }
   }
   return null;
@@ -75,7 +90,7 @@ export function rv16Program(doc: ChipDoc, rom: string): { words: number[]; k: nu
 }
 
 /** A write the model made: n orders register writes and stores (the model's step count). */
-interface Expect { n: number; pc: number; instr: number; rd?: number; addr?: number; value: number }
+interface Expect { n: number; pc: number; instr: number; rd?: number; addr?: number; value: number; sw?: true }
 
 const hex4 = (v: number) => `0x${(v & 0xffff).toString(16).padStart(4, '0')}`;
 const regName = (r: number) => `${REG_NAMES16[r]} (x${r})`;
@@ -94,6 +109,8 @@ export class Rv16Monitor {
   prog: { words: number[]; k: number } | null = null;
   /** The registers as the hardware's write port set them (x0 = 0). */
   readonly hw = new Uint16Array(8);
+  /** The screen as the matched stores to SCREEN16_IO painted it (RGB565, row by row; a screen part only). */
+  readonly screen = new Uint16Array(SCREEN16_IO.SIZE * SCREEN16_IO.SIZE);
   /** Which registers the last edge wrote (for highlighting). */
   lastWrite = -1;
   /** The cycle at which the model had halted with every write matched (-1: not yet). */
@@ -105,6 +122,12 @@ export class Rv16Monitor {
   private lastChips: Chips | undefined;
   private resets = -1;
   private sample: Record<string, number | null> = {};
+  /** A load from the switches the model waits at (its register write is the head of regQ, value unknown). */
+  private swWait: Expect | null = null;
+  /** The switch bank's positions at the last few edges, newest last. */
+  private swSeen: number[] = [];
+  private swNode: { sim: unknown; node: HierNode | null } | null = null;
+  private static readonly SW_SEEN = 16;
   private hook = { before: () => this.before(), after: () => this.after() };
   private static readonly LOG = 64;
   /** Instructions the model may run without a register write or a store (a halt loop ends earlier). */
@@ -149,13 +172,16 @@ export class Rv16Monitor {
     this.regQ = [];
     this.storeQ = [];
     this.endAt = -1;
+    this.swWait = null;
+    this.swSeen = [];
+    this.screen.fill(0);
     this.seq++;
     this.synced = this.es.cycles === 0;
     const d = this.desc;
     this.problem = !d ? 'no RV16 ROM and core' : !this.prog ? `the program in ROM '${d.rom}' does not build` : simHasPuzzlePorts(this.es.sim) ? PUZZLE_NO_GOLDEN : simHasCardReader(this.es.sim) ? CARDS_NO_GOLDEN : null;
     // A RAM decoded on its low bits: the model's memory wraps the same way and starts with its contents.
     const data = new Map((d?.ram?.init ?? []).map((v, i) => [i, v] as [number, number]));
-    this.iss = d && this.prog && !this.problem ? new Iss16(this.prog.words, { m: true, system: d.system, ...(d.ram ? { dmemWords: 2 ** d.ram.k, wrap: true } : {}) }, data) : null;
+    this.iss = d && this.prog && !this.problem ? new Iss16(this.prog.words, { m: true, system: d.system, screen: !!d.screen, ...(d.ram ? { dmemWords: 2 ** d.ram.k, wrap: true } : {}) }, data) : null;
     this.fill(this.regQ);
   }
 
@@ -174,7 +200,7 @@ export class Rv16Monitor {
     const r = this.regQ[0], st = this.storeQ[0];
     const e = r && st ? (r.n <= st.n ? r : st) : r ?? st;
     if (!e) return null;
-    const what = e.rd !== undefined ? `${REG_NAMES16[e.rd]} ← ${hex4(e.value)}` : `[${hex4(e.addr!)}] ← ${hex4(e.value)}`;
+    const what = e === this.swWait ? `${REG_NAMES16[e.rd!]} ← the switches` : e.rd !== undefined ? `${REG_NAMES16[e.rd]} ← ${hex4(e.value)}` : `[${hex4(e.addr!)}] ← ${hex4(e.value)}`;
     return `${what} from “${disasm16(e.instr, e.pc)}” @ ${hex4(e.pc)}`;
   }
 
@@ -196,10 +222,45 @@ export class Rv16Monitor {
     return pin ? refValue(this.es, this.doc(), { pin: pin.id }) : null;
   }
 
+  /** The switch bank's positions now (null: no bank, or unknown). */
+  private switchesNow(): number | null {
+    const sim = this.es.sim;
+    if (!sim || !this.desc?.switches) return null;
+    if (this.swNode?.sim !== sim) this.swNode = { sim, node: ioNodes(sim.design.root).find((n) => n.info.kind === 'switches')?.node ?? null };
+    const st = this.swNode.node ? ioState(sim, this.swNode.node) as SwitchState | undefined : undefined;
+    return st ? st.v : null;
+  }
+
   /** Step the model until the queue `q` has an event (or it halts, or stays quiet too long). */
   private fill(q: Expect[]): void {
     const iss = this.iss;
-    for (let n = 0; iss && !q.length && !iss.halted && n < Rv16Monitor.QUIET; n++) this.push(iss.step());
+    for (let n = 0; iss && !q.length && !iss.halted && n < Rv16Monitor.QUIET; n++) {
+      if (this.desc?.switches && iss.nextLoad() === MMIO16.SWITCHES) {
+        const rd = decode16(iss.imem[iss.pc] ?? 0).rd;
+        if (rd && !this.swWait && q === this.regQ) {
+          // wait here for the hardware's write: it says what the switches read when the core loaded them
+          this.swWait = { n: iss.steps + 1, pc: iss.pc, instr: iss.imem[iss.pc], rd, value: -1, sw: true };
+          this.regQ.push(this.swWait);
+          return;
+        }
+        // past it without that write (a store first): the positions now
+        iss.switches = this.switchesNow() ?? iss.switches;
+        if (this.swWait) {
+          this.settleSwitches(iss.switches);
+          continue;
+        }
+      }
+      this.push(iss.step());
+    }
+  }
+
+  /** Run the load the model waits at with the switches at `v`. */
+  private settleSwitches(v: number): void {
+    const e = this.swWait!, iss = this.iss!;
+    this.swWait = null;
+    iss.switches = v;
+    const s = iss.step();
+    e.value = s.reg?.value ?? 0;
   }
 
   private push(s: Step16): void {
@@ -211,6 +272,13 @@ export class Rv16Monitor {
   private before(): void {
     this.sample = {};
     if (!this.iss || !this.synced || this.mismatch) return;
+    const sw = this.switchesNow();
+    if (sw !== null) {
+      this.swSeen.push(sw);
+      if (this.swSeen.length > Rv16Monitor.SW_SEEN) this.swSeen.shift();
+    }
+    // a cycle in reset (the io bench's first): whatever the core does meanwhile does not count, as on the level's bench
+    if (this.port('rst') === 1) return;
     for (const p of ['rwe', 'rwa', 'rwd', 'dwe', 'daddr', 'dwdata']) this.sample[p] = this.port(p);
   }
 
@@ -231,8 +299,10 @@ export class Rv16Monitor {
     if (s.rwe === null || s.dwe === null || s.rwe < 0 || s.dwe < 0) return void fail('rwe', 'write enable', undefined, -1, 'rwe or dwe is X (unknown): the bench cannot tell whether the core writes');
     if (s.rwe === 1 && s.rwa !== 0) {
       this.fill(this.regQ);
-      const e = this.regQ.shift();
       const rwa = s.rwa ?? -1, rwd = s.rwd ?? -1;
+      // the load from the switches: what the hardware read, when the bank held it lately (else the positions now)
+      if (this.swWait && this.regQ[0] === this.swWait) this.settleSwitches(rwa === this.swWait.rd && this.swSeen.includes(rwd) ? rwd : this.swSeen.at(-1) ?? 0);
+      const e = this.regQ.shift();
       if (!e) return void fail(`x${rwa}`, 'register write', e, rwd, `an extra register write ${rwa < 0 ? 'x?' : regName(rwa)} ← ${rwd < 0 ? 'X' : hex4(rwd)}: the program has ended`);
       if (rwa !== e.rd || rwd !== e.value) {
         return void fail(`x${e.rd}`, regName(e.rd!), e, rwd, `register write ${rwa < 0 ? 'x?' : regName(rwa)} ← ${rwd < 0 ? 'X' : hex4(rwd)}; expected ${regName(e.rd!)} ← ${hex4(e.value)} from ${where(e)}`);
@@ -249,6 +319,7 @@ export class Rv16Monitor {
       if (a !== e.addr || v !== e.value) {
         return void fail('mem', `memory [${hex4(e.addr!)}]`, e, v, `store [${a < 0 ? 'X' : hex4(a)}] ← ${v < 0 ? 'X' : hex4(v)}; expected [${hex4(e.addr!)}] ← ${hex4(e.value)} from ${where(e)}`);
       }
+      if (this.desc?.screen && a >= SCREEN16_IO.BASE && a < SCREEN16_IO.BASE + this.screen.length) this.screen[a - SCREEN16_IO.BASE] = v;
       done(e, `[${hex4(a)}] ← ${hex4(v)}`);
     }
     // Run the model on to its next write: it may halt (then nothing more is expected).

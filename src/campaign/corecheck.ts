@@ -38,6 +38,8 @@ export interface CoreSpec {
   warps?: number;
   /** k_frame: the core has the rasterizer as a device and writes the screen through fa / fd / fwe. */
   raster?: boolean;
+  /** A scalar core that runs all of RV16I (branches, jumps, loads after use): a pass offers Pong on it (campaign/bench.ts addPongBench). */
+  rv16i?: boolean;
 }
 
 interface Event { pc: number; instr: number; rd?: number; addr?: number; value: number }

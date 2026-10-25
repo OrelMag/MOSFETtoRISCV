@@ -84,14 +84,14 @@ export const BUILD5: Record<string, () => BuildChallenge> = {
     id: 'c_core3', title: 'Core III: control flow', level: 'cpu', allowed: 'nand',
     brief: CORE_BRIEF('Branches and jumps: the branch comparator decides, the next-PC logic loads the PC with the target, jal / jalr write pc + 1. This is all of RV16I.'),
     ports: CORE_PINS,
-    check: coreCheck({ tests: () => coreTests(3), budget: { cpi: 1, extra: 2 } }, `${coreTests(3).length} programs (loops, calls, every branch condition, random code with forward branches): every register write and store, in order, one instruction per cycle.`),
+    check: coreCheck({ rv16i: true, tests: () => coreTests(3), budget: { cpi: 1, extra: 2 } }, `${coreTests(3).length} programs (loops, calls, every branch condition, random code with forward branches): every register write and store, in order, one instruction per cycle.`),
     answer: refOf('c_core3', () => rv16Core(true), 'Core III'),
   }),
   c_fast: () => ({
     id: 'c_fast', title: 'A faster core', level: 'cpu', allowed: 'nand',
     brief: CORE_BRIEF('The same programs as Core III, graded on the <b>clock period</b> (with 8-delay memories in the path). Find the critical path (the Timing panel draws it) and shorten it: the fast adders are unlocked.'),
     ports: CORE_PINS,
-    check: coreCheck({ tests: () => coreTests(3), budget: { cpi: 1, extra: 2 } }, `${coreTests(3).length} programs, as Core III; the clock period is measured with the memories in the path.`),
+    check: coreCheck({ rv16i: true, tests: () => coreTests(3), budget: { cpi: 1, extra: 2 } }, `${coreTests(3).length} programs, as Core III; the clock period is measured with the memories in the path.`),
     answer: refOf('c_fast', () => rv16Core(true, true), 'Faster core'),
   }),
 };
