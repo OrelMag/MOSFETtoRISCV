@@ -111,6 +111,8 @@ class CpuPanel {
   private descDoc: ChipDoc | null = null;
   private descChips: unknown = null;
   private desc: CpuDesc | null = null;
+  /** A CPU of some kind was found on the open chip (the toolbar shows its button). */
+  found = false;
   private multi: MultiDesc | null = null;
   /** An RV16 computer (an RV16 ROM and a placed core): checked through the core's write ports. */
   private rv16: Rv16Desc | null = null;
@@ -294,6 +296,11 @@ class CpuPanel {
         this.lanes = this.multi || this.desc || this.rv16 ? null : detectLanes16(ed.doc, chips);
         this.m6502 = this.multi || this.desc || this.rv16 || this.lanes ? null : detect6502(ed.doc, chips);
         this.cpu4 = this.multi || this.desc || this.rv16 || this.lanes || this.m6502 ? null : detectCpu4(ed.doc, chips);
+        const found = !!(this.multi || this.desc || this.rv16 || this.lanes || this.m6502 || this.cpu4);
+        if (found !== this.found) {
+          this.found = found;
+          ed.renderActions(); // the toolbar's CPU button comes or goes
+        }
       }
       const want = this.multi ? 'multi' : this.rv16 ? 'rv16' : this.lanes ? 'lanes' : this.m6502 ? 'm6502' : this.cpu4 ? 'cpu4' : 'cpu';
       // Monitors of chips that are gone, replaced by another simulation, or of another kind now.
@@ -1235,6 +1242,8 @@ registerToolbarAction({
   id: 'cpu', title: 'CPU panel: program, registers, memory, I/O, checked against the golden model', icon: 'code', label: 'CPU', order: 62,
   run: (ed) => panels.get(ed)?.toggle(),
   active: (ed) => !!panels.get(ed)?.open,
+  // only where there is a CPU to show (or while the panel is open: it can be closed)
+  shown: (ed) => { const p = panels.get(ed); return !!p && (p.open || p.found); },
 });
 
 // ---- properties: what makes this chip a CPU -------------------------------------------------

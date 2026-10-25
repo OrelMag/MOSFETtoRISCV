@@ -17,7 +17,8 @@ describe('palette widths', () => {
 
   it('a sized item places at its width, remembered, clamped to its range', () => {
     const ctx = { ws: { chips: {}, open: [] } as never, chipId: 'x', canPlace: () => true };
-    const items = paletteGroups().flatMap((g) => g.items(ctx).map((it) => [g.id, it] as const));
+    // Basics repeats parts of other groups
+    const items = paletteGroups().filter((g) => g.id !== 'basics').flatMap((g) => g.items(ctx).map((it) => [g.id, it] as const));
     const [gid, bus] = items.find(([, it]) => it.id === 'in8')!;
     const key = `${gid}/${bus.id}`;
     expect(itemWidth(key, bus)).toBe(8);

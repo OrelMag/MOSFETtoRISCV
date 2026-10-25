@@ -96,6 +96,7 @@ registerToolbarAction({
     k.typing = !k.typing;
     ed.renderActions();
   },
-  enabled: (ed) => ed.sim.hasKeyboard,
+  // only on a chip with a Keyboard part
+  shown: (ed) => ed.sim.hasKeyboard,
   active: (ed) => !!keys.get(ed)?.typing,
 });

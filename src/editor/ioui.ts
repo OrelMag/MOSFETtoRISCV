@@ -403,6 +403,7 @@ registerEditorPlugin((ed) => {
 registerToolbarAction({
   id: 'screens', title: 'Screens panel: every console, screen and switch bank in this chip and the chips it places, live', icon: 'screen', label: 'Screens', order: 63,
   run: (ed) => panels.get(ed)?.toggle(),
-  enabled: (ed) => !!panels.get(ed)?.open || !!panels.get(ed)?.hasAny,
+  // only on a chip with a console, screen or switch bank somewhere inside
+  shown: (ed) => !!panels.get(ed)?.open || !!panels.get(ed)?.hasAny,
   active: (ed) => !!panels.get(ed)?.open,
 });

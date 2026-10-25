@@ -43,6 +43,8 @@ registerPropsSection({
 
 registerPropsSection({
   id: 'chip-ff', order: 12,
+  // folded away unless the chip is marked, or has the pins a flip-flop needs
+  advanced: (ed) => !ed.doc.ff && !guessFf(ed.doc),
   render(ed) {
     if (!nothingSelected(ed)) return null;
     const doc = ed.doc;
@@ -101,6 +103,7 @@ registerPropsSection({
 let techOpen = false;
 registerPropsSection({
   id: 'chip-tech', order: 15.5,
+  advanced: (ed) => !ed.doc.parts.length,
   render(ed) {
     const def = ed.compiled?.def;
     if (!nothingSelected(ed) || !def) return null;

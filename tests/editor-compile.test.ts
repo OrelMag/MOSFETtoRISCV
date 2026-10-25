@@ -2,7 +2,7 @@
 // exports; every problem in the drawing becomes a diagnostic, never an exception.
 
 import { describe, expect, it } from 'vitest';
-import { checkSimulatable, compileChip, type Compiled } from '../src/editor/compile';
+import { checkSimulatable, compileChip, type Compiled, widthMismatch } from '../src/editor/compile';
 import { type ChipDoc, type PartDoc, polyline } from '../src/editor/model';
 import { partDef } from '../src/editor/parts';
 import { AND, XOR } from '../src/lib/gates';
@@ -94,6 +94,16 @@ describe('compileChip: a half adder', () => {
   });
 });
 
+describe('widthMismatch', () => {
+  it('names each end, then the split that takes the narrow width or the pin to resize', () => {
+    expect(widthMismatch([{ end: 'in1', width: 8, pin: 'p1' }, { end: 'g1.a', width: 1 }])).toEqual({
+      msg: 'in1 is 8 bits, g1.a is 1 bit.',
+      fix: 'A wire joins equal widths. Take one bit with Split 8 → 1×8, or set in1\'s width to 1.',
+    });
+    expect(widthMismatch([{ end: 'r.q', width: 16 }, { end: 'a.x', width: 4 }]).fix).toBe('A wire joins equal widths. Take 4 bits with a Split (Wiring).');
+  });
+});
+
 describe('compileChip: diagnostics', () => {
   const base = halfAdder();
 
@@ -102,7 +112,8 @@ describe('compileChip: diagnostics', () => {
     const c = compileLib(doc);
     const e = errors(c);
     expect(e).toHaveLength(1);
-    expect(e[0].msg).toMatch(/width mismatch/);
+    expect(e[0].msg).toMatch(/is 8 bits, .* is 1 bit\./);
+    expect(e[0].fix).toMatch(/^A wire joins equal widths\. Take one bit with Split 8 → 1×8/);
     expect(e[0].wires).toEqual(['w1', 'w2']);
     expect(e[0].pins).toEqual(['a']);
     expect(e[0].parts).toEqual(['x', 'n']);

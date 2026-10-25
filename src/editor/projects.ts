@@ -35,7 +35,7 @@ export interface ProjectIndex {
 export const projectKey = (id: string) => (id === MAIN_PROJECT ? KEY : `${PREFIX}${id}`);
 
 const ID = /^[a-z0-9]{1,24}$/;
-const DEFAULT_NAME = 'My chips';
+const DEFAULT_NAME = 'Main project';
 
 function storage(): ListKV | null {
   try {
