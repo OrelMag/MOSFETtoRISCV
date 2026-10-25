@@ -530,5 +530,7 @@ registerDiagSource((ed) => of.get(ed)?.lint().diags ?? []);
 
 registerPropsSection({
   id: 'timing', order: 15,
+  // nothing to time on an empty chip; a transistor-level one has no gate delays
+  advanced: (ed) => !ed.doc.parts.length || ed.compiled?.mode === 'switch',
   render: (ed) => (ed.selCount ? null : of.get(ed)?.timingSection() ?? null),
 });

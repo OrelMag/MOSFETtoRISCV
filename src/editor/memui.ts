@@ -155,8 +155,11 @@ registerPropsSection({
     const rows = romListing(r, img);
     const set = (patch: Partial<RomRef>) => setRom(ed, id, patch);
 
+    // by language, this ROM's own first
+    const langs = [...new Set([r.lang, ...ROM_SAMPLES.map((s) => s.lang)])].filter((l) => ROM_SAMPLES.some((s) => s.lang === l));
     const sample = h('select', { 'aria-label': 'Load a sample program' },
-      h('option', { value: '' }, 'Load a sample…'), ROM_SAMPLES.map((s) => h('option', { value: s.id }, `${s.name}${s.lang === 'hex' ? ' (hex)' : ''}`))) as HTMLSelectElement;
+      h('option', { value: '' }, 'Load a sample…'),
+      langs.map((l) => h('optgroup', { label: LANGS[l].name }, ROM_SAMPLES.filter((s) => s.lang === l).map((s) => h('option', { value: s.id }, s.name))))) as HTMLSelectElement;
     sample.addEventListener('change', () => {
       const s = ROM_SAMPLES.find((x) => x.id === sample.value);
       if (!s) return;

@@ -350,7 +350,10 @@ export class Editor {
       return;
     }
     if (this.history.inTransaction) this.history.update(withChip(this.ws, next));
-    else this.history.push(withChip(this.ws, next));
+    else {
+      this.leaving();
+      this.history.push(withChip(this.ws, next));
+    }
     this.changed();
   }
 
@@ -358,6 +361,7 @@ export class Editor {
   editWs(f: (ws: Workspace) => Workspace): void {
     const next = f(this.ws);
     if (next === this.ws) return;
+    this.leaving();
     this.history.push(next);
     this.changed();
   }
@@ -393,6 +397,7 @@ export class Editor {
 
   /** A drag: begin(), edit() on every move, commit() (or cancel()). */
   begin(): void {
+    if (!this.history.inTransaction) this.leaving();
     this.history.begin();
   }
   commit(): void {
@@ -415,16 +420,35 @@ export class Editor {
     const cur = this.ws;
     const prev = this.history.undo();
     if (!prev) return;
+    this.selAt.set(cur, this.sel);
     this.history.replace(keepVolatile(prev, cur));
-    this.changed();
+    this.restoreSel(prev);
   }
 
   redo(): void {
     const cur = this.ws;
     const next = this.history.redo();
     if (!next) return;
+    this.selAt.set(cur, this.sel);
     this.history.replace(keepVolatile(next, cur));
+    this.restoreSel(next);
+  }
+
+  /** The selection each undo step was left with (an undo puts it back, so the canvas and the panel agree on it). */
+  private selAt = new WeakMap<Workspace, Sel>();
+
+  /** Remember the selection of the state an edit is about to leave. */
+  private leaving(): void {
+    this.selAt.set(this.ws, this.sel);
+  }
+
+  /** After an undo / redo: that step's selection (what still exists of it), drawn and in the panel. */
+  private restoreSel(ws: Workspace): void {
+    this.sel = this.selAt.get(ws) ?? {};
     this.changed();
+    this.view.setSelection(this.sel);
+    this.props.update(true);
+    if (this.level) this.el.classList.toggle('props-sel', this.selCount > 0);
   }
 
   select(sel: Sel): void {
@@ -468,6 +492,7 @@ export class Editor {
   newChip(): void {
     const r = newChip(this.ws);
     this.tools.cancel();
+    this.leaving();
     this.history.push(r.ws);
     this.changed();
   }
@@ -610,6 +635,8 @@ export class Editor {
   /** settings.autoClock: a clocked chip starts running the first time it is simulated (EditorSim.autoStart). */
   private autoClock(): void {
     const sim = this.sim;
+    // only a chip with something besides its pins: an empty level's clock ticking over nothing reads as a running circuit
+    if (!this.doc.parts.length) return;
     if (!settings.autoClock || sim.autoTried || !sim.autoStart(this.rateChosen ? sim.hz : this.doc.hz ?? AUTO_HZ)) return;
     if (this.rateSel && sim.mode === 'cycle') this.rateSel.value = String(sim.hz);
   }
@@ -723,7 +750,8 @@ export class Editor {
   /** Scroll the open chip's tab into view, clear of the sticky Open… / New chip group (many tabs scroll). */
   private showActiveTab(): void {
     const t = this.tabs, on = t.querySelector<HTMLElement>('.sb-tab.on');
-    if (!on || t.scrollWidth <= t.clientWidth) return;
+    if (t.scrollWidth <= t.clientWidth) return void (t.scrollLeft = 0);
+    if (!on) return;
     const tail = t.querySelector<HTMLElement>(':scope > .sb-new-grp')?.offsetWidth ?? 0;
     const tr = t.getBoundingClientRect(), r = on.getBoundingClientRect();
     const left = r.left - tr.left + t.scrollLeft, view = t.clientWidth - tail - 6;
@@ -887,7 +915,7 @@ export class Editor {
 
   /**
    * Move the least used actions into More until the rest fit: beside the chip tabs (which keep room
-   * for the open tab, Open… and New chip), or below 1000 px on a row of their own (editor.css).
+   * for every tab, up to half the bar, and New chip), or below 1000 px on a row of their own (editor.css).
    */
   private fitActions(): void {
     const top = this.topEl, bar = this.actionsEl;
@@ -901,7 +929,7 @@ export class Editor {
     let room = top.clientWidth - px(cs.paddingLeft) - px(cs.paddingRight);
     if (!matchMedia('(max-width: 1000px)').matches) {
       const gap = px(cs.columnGap);
-      const essential = [...this.tabs.children].filter((el) => el.matches('.sb-tab.on, .sb-new-grp, .sb-trail')) as HTMLElement[];
+      const essential = [...this.tabs.children].filter((el) => el.matches('.sb-tab, .sb-new-grp, .sb-trail')) as HTMLElement[];
       const tabsGap = px(getComputedStyle(this.tabs).columnGap);
       const tabsNeed = essential.reduce((s, el) => s + el.offsetWidth, 0) + tabsGap * Math.max(0, essential.length - 1);
       const others = [this.partsBtn, this.slots.top].filter((el) => el.offsetWidth > 0);
@@ -1166,8 +1194,20 @@ export class Editor {
     });
     input.addEventListener('blur', () => finish(true));
     this.slots.overlay.append(box);
-    input.focus();
+    this.keepInCanvas(box);
+    input.focus({ preventScroll: true });
     input.select();
+  }
+
+  /**
+   * A box laid over the canvas, moved back inside it when it would stick out: the canvas clips, and focusing a field
+   * past its edge scrolled the whole canvas sideways (a dark band where the drawing ended).
+   */
+  private keepInCanvas(box: HTMLElement): void {
+    const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
+    const x = parseFloat(box.style.left) || 0, y = parseFloat(box.style.top) || 0;
+    box.style.left = `${Math.max(4, Math.min(x, W - box.offsetWidth - 4))}px`;
+    box.style.top = `${Math.max(4, Math.min(y, H - box.offsetHeight - 4))}px`;
   }
 
   /**
@@ -1199,7 +1239,8 @@ export class Editor {
     input.addEventListener('blur', () => finish(true));
     this.slots.overlay.append(input);
     if (list) this.slots.overlay.append(list);
-    input.focus();
+    this.keepInCanvas(input);
+    input.focus({ preventScroll: true });
     input.select();
   }
 
@@ -1238,7 +1279,8 @@ export class Editor {
     });
     area.addEventListener('blur', () => finish(true));
     this.slots.overlay.append(box);
-    area.focus();
+    this.keepInCanvas(box);
+    area.focus({ preventScroll: true });
     area.select();
   }
 

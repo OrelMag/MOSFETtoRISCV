@@ -404,8 +404,8 @@
 .sb-badges { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; align-items: center; }
 .sb-derived { font-size: 12px; color: var(--ed-warn); }
 .sb-derived.ok { color: var(--good); }
-.sb-hue-row { display: flex; align-items: center; gap: 8px; }
-.sb-hue-row input { flex: 1; accent-color: var(--accent); }
+.sb-hue-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sb-hue-row input { flex: 1; min-width: 0; width: 100%; accent-color: var(--accent); }
 .sb-hue { width: 18px; height: 18px; border-radius: 5px; flex: none; background: hsl(var(--chip-h) var(--chip-fill-s) var(--chip-fill-l)); border: 2px solid hsl(var(--chip-h) var(--chip-stroke-s) var(--chip-stroke-l)); }
 .sb-ports b, .sb-same b { font-size: 12.5px; }
 .sb-ports ol { margin: 4px 0 0; padding-left: 22px; font: 12.5px var(--font-mono); }
@@ -436,6 +436,9 @@
 @media (max-width: 1100px) {
   .sandbox { grid-template-columns: 200px minmax(0, 1fr) 240px; }
   .sb-hint:not(.touch) { display: none; }
+  /* a 200 px palette: the project's name before its label; Basics' number keys (still active) leave room for the names */
+  .sb-proj-name small { display: none; }
+  .sb-group[data-group=basics] .sb-fav-key { display: none; }
 }
 /* Below 1000 px the actions get a row of their own under the tabs, on one line: what does not fit is in More
    (editor.ts fitActions measures for this breakpoint). */
@@ -481,6 +484,10 @@
 .sb-tm-stages .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-tm-stages .bar { background: var(--ed-crit); }
 .sb-tech summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+/* props.ts: sections that do not apply to this chip yet, folded */
+.sb-advanced { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px; }
+.sb-advanced > summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--text-2); }
+.sb-advanced[open] > summary { margin-bottom: 4px; }
 .sb-tm-caps { font-size: 12px; color: var(--text-2); margin: 4px 0; }
 .sb-tm-caps ol { margin: 4px 0 0; padding-left: 20px; font: 11.5px var(--font-mono); }
 .sb-tm-caps li span { display: inline-block; min-width: 90px; }
@@ -513,7 +520,8 @@
   .sb-star { align-self: stretch; width: 40px; margin: -4px -8px -4px 0; display: flex; align-items: center; justify-content: center; font-size: 16px; }
   .sb-group > summary, .sb-sec > summary { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }
   .sb-addfolder { min-width: 40px; min-height: 40px; align-items: center; justify-content: center; }
-  .sb-tab-name, .sb-proj, .sb-menu button, .sb-toast-act { min-height: 40px; }
+  .sb-tab-name, .sb-proj, .sb-menu button, .sb-toast-act, .sb-diag-pill { min-height: 40px; }
+  .sb-advanced > summary { padding: 10px 0; }
   /* the save state: a dot and a word in the bar, its tap area spread around it */
   .sb-save { position: relative; }
   .sb-save::after { content: ''; position: absolute; inset: -13px -9px; }

@@ -35,6 +35,8 @@ export interface PropsSection {
   order: number;
   /** A section for the current state of the editor, or null when it has nothing to show. */
   render(ed: Editor): HTMLElement | null;
+  /** True where it does not apply yet (no flip-flop to mark, nothing to time): listed folded under Advanced. */
+  advanced?(ed: Editor): boolean;
 }
 
 const sections: PropsSection[] = [];
@@ -60,6 +62,8 @@ export class PropsPanel {
   private key = '';
   private diagKey = '';
   private depthTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The Advanced fold left open (this visit). */
+  private advOpen = false;
 
   constructor(private ed: Editor) {
     this.body = h('div', { class: 'sb-props-body' });
@@ -96,10 +100,19 @@ export class PropsPanel {
       this.body.replaceChildren();
       const own = none ? this.chip(doc) : objs.length > 1 ? this.many(objs.length) : this.one(doc);
       if (own) this.body.append(own);
+      let adv: HTMLDetailsElement | null = null;
       for (const sec of sections) {
         const el = sec.render(ed);
-        if (el) this.body.append(el);
+        if (!el) continue;
+        if (!sec.advanced?.(ed)) { this.body.append(el); continue; }
+        if (!adv) {
+          const d = adv = h('details', { class: 'sb-advanced' }, h('summary', null, 'Advanced')) as HTMLDetailsElement;
+          d.open = this.advOpen;
+          d.addEventListener('toggle', () => { this.advOpen = d.open; });
+        }
+        adv.append(el);
       }
+      if (adv) this.body.append(adv);
     }
     this.diags(ed.diags);
   }
