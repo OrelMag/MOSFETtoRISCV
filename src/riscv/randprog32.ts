@@ -31,7 +31,7 @@ export interface Rand32Options {
 }
 
 /** mulberry32: small, fast, good enough. */
-function rng(seed: number): () => number {
+export function rng(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;

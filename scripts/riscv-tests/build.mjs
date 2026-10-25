@@ -1,12 +1,14 @@
 // Build the official riscv-tests into the images tests/verify/riscv-tests/<env>.json, checked in so that
 // `npm test` needs no RISC-V toolchain. Run it again only to move to a new riscv-tests revision.
 //
-//   node scripts/riscv-tests/build.mjs <riscv-tests checkout> [--cc <riscv64-unknown-elf-gcc | riscv-none-elf-gcc>]
+//   node scripts/riscv-tests/build.mjs <riscv-tests checkout> [--cc <riscv64-unknown-elf-gcc | riscv-none-elf-gcc>] [--env <name>…]
 //
 // The checkout needs its env submodule (git submodule update --init env). A GNU toolchain: clang's integrated
 // assembler rejects GNU-isms of the sources (a .weak symbol made .global, the tcontrol CSR name). On Windows the
 // xPack riscv-none-elf-gcc zip works as is. Environments: p is the official one (CSRs, traps: the system CPU);
-// bare and bare-mp are ours (scripts/riscv-tests/env/bare: no CSRs), for the CPUs without traps.
+// bare and bare-mp are ours (scripts/riscv-tests/env/bare: no CSRs), for the CPUs without traps; bare64 is bare
+// for RV64 (rv64ui, rv64um: chapter 25's 64-bit core and its golden model, src/riscv/iss64.ts). --env builds only
+// the environments named (each file records its own toolchain).
 
 import { execFileSync, execFile } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -17,15 +19,18 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
 const args = process.argv.slice(2);
-const src = args.find((a) => !a.startsWith('--') && args[args.indexOf(a) - 1] !== '--cc');
+const src = args.find((a, i) => !a.startsWith('--') && !args[i - 1]?.startsWith('--'));
 if (!src) throw new Error('usage: build.mjs <riscv-tests checkout> [--cc <compiler>]');
 const cc = args.includes('--cc') ? args[args.indexOf('--cc') + 1] : 'riscv64-unknown-elf-gcc';
+const only = args.flatMap((a, i) => (args[i - 1] === '--env' ? [a] : []));
 
 const ENVS = {
   p: { inc: join(src, 'env/p'), defs: [], suites: ['rv32ui', 'rv32um', 'rv32mi'] },
   bare: { inc: join(here, 'env/bare'), defs: [], suites: ['rv32ui', 'rv32um', 'rv32uf'] },
   'bare-mp': { inc: join(here, 'env/bare'), defs: ['-DMOSFET_MP'], suites: ['rv32ui', 'rv32ua'] },
+  bare64: { inc: join(here, 'env/bare'), defs: [], suites: ['rv64ui', 'rv64um'], xlen: 64 },
 };
+const ARCH = { 32: ['-march=rv32g_zicsr_zifencei', '-mabi=ilp32'], 64: ['-march=rv64g_zicsr_zifencei', '-mabi=lp64'] };
 // The data section starts here (link.ld): word 0 of the data memory is tohost.
 const DATA_BASE = 0x10000;
 
@@ -36,21 +41,28 @@ const toolchain = execFileSync(cc, ['--version'], { encoding: 'utf8' }).split('\
 function compile(env, file, out) {
   const e = ENVS[env];
   // the official flags (riscv-tests' isa/Makefile), plus -mno-relax: no linker relaxation, the code is as assembled
-  const a = ['-march=rv32g_zicsr_zifencei', '-mabi=ilp32', '-mcmodel=medany', '-fvisibility=hidden', '-nostartfiles', '-mno-relax', '-nostdlib', '-static', ...e.defs, '-I', e.inc, '-I', join(src, 'env'), '-I', join(src, 'isa/macros/scalar'),
+  const a = [...ARCH[e.xlen ?? 32], '-mcmodel=medany', '-fvisibility=hidden', '-nostartfiles', '-mno-relax', '-nostdlib', '-static', ...e.defs, '-I', e.inc, '-I', join(src, 'env'), '-I', join(src, 'isa/macros/scalar'),
     '-T', join(here, 'link.ld'), file, '-o', out];
   return new Promise((ok, fail) => execFile(cc, a, (err, _o, se) => (err ? fail(new Error(`${basename(file)} (${env}): ${se || err.message}`)) : ok())));
 }
 
-/** The loadable bytes of an ELF32 little-endian file: code from address 0, data from DATA_BASE. */
+/** The loadable bytes of an ELF32 or ELF64 little-endian file: code from address 0, data from DATA_BASE. */
 function loadElf(buf) {
-  if (buf.readUInt32BE(0) !== 0x7f454c46 || buf[4] !== 1 || buf[5] !== 1) throw new Error('not a 32-bit little-endian ELF');
-  const phoff = buf.readUInt32LE(28), phentsize = buf.readUInt16LE(42), phnum = buf.readUInt16LE(44);
-  const shoff = buf.readUInt32LE(32), shentsize = buf.readUInt16LE(46), shnum = buf.readUInt16LE(48);
+  if (buf.readUInt32BE(0) !== 0x7f454c46 || (buf[4] !== 1 && buf[4] !== 2) || buf[5] !== 1) throw new Error('not a little-endian ELF');
+  const is64 = buf[4] === 2;
+  // the fields that differ between the classes: an address or offset is 4 or 8 bytes, and moves the rest
+  const addr = (o) => (is64 ? Number(buf.readBigUInt64LE(o)) : buf.readUInt32LE(o));
+  const E = is64 ? { phoff: 32, shoff: 40, phentsize: 54, phnum: 56, shentsize: 58, shnum: 60 } : { phoff: 28, shoff: 32, phentsize: 42, phnum: 44, shentsize: 46, shnum: 48 };
+  const P = is64 ? { off: 8, vaddr: 16, filesz: 32, memsz: 40 } : { off: 4, vaddr: 8, filesz: 16, memsz: 20 };
+  const S = is64 ? { off: 24, size: 32, link: 40 } : { off: 16, size: 20, link: 24 };
+  const SYM = is64 ? { size: 24, value: 8 } : { size: 16, value: 4 };
+  const phoff = addr(E.phoff), phentsize = buf.readUInt16LE(E.phentsize), phnum = buf.readUInt16LE(E.phnum);
+  const shoff = addr(E.shoff), shentsize = buf.readUInt16LE(E.shentsize), shnum = buf.readUInt16LE(E.shnum);
   const text = [], data = [];
   for (let i = 0; i < phnum; i++) {
     const o = phoff + i * phentsize;
     if (buf.readUInt32LE(o) !== 1) continue; // PT_LOAD
-    const off = buf.readUInt32LE(o + 4), vaddr = buf.readUInt32LE(o + 8), filesz = buf.readUInt32LE(o + 16), memsz = buf.readUInt32LE(o + 20);
+    const off = addr(o + P.off), vaddr = addr(o + P.vaddr), filesz = addr(o + P.filesz), memsz = addr(o + P.memsz);
     const bytes = Buffer.alloc(memsz);
     buf.copy(bytes, 0, off, off + filesz);
     (vaddr >= DATA_BASE ? data : text).push({ vaddr, bytes });
@@ -66,14 +78,14 @@ function loadElf(buf) {
   for (let i = 0; i < shnum; i++) {
     const o = shoff + i * shentsize;
     if (buf.readUInt32LE(o + 4) !== 2) continue; // SHT_SYMTAB
-    const so = buf.readUInt32LE(o + 16), size = buf.readUInt32LE(o + 20), link = buf.readUInt32LE(o + 24);
-    const stro = buf.readUInt32LE(shoff + link * shentsize + 16);
-    for (let s = so; s < so + size; s += 16) {
+    const so = addr(o + S.off), size = addr(o + S.size), link = buf.readUInt32LE(o + S.link);
+    const stro = addr(shoff + link * shentsize + S.off);
+    for (let s = so; s < so + size; s += SYM.size) {
       const n = buf.readUInt32LE(s);
       let e = stro + n;
       while (buf[e]) e++;
       const name = buf.toString('latin1', stro + n, e);
-      if (name === 'tohost' || name === 'fail' || name === 'pass') syms[name] = buf.readUInt32LE(s + 4);
+      if (name === 'tohost' || name === 'fail' || name === 'pass') syms[name] = addr(s + SYM.value);
     }
   }
   if (text.length === 0 || text[0].vaddr !== 0) throw new Error('code must start at address 0');
@@ -91,7 +103,7 @@ async function pool(jobs, n) {
 const tmp = mkdtempSync(join(tmpdir(), 'rvtests-'));
 const outDir = join(root, 'tests/verify/riscv-tests');
 mkdirSync(outDir, { recursive: true });
-for (const [env, e] of Object.entries(ENVS)) {
+for (const [env, e] of Object.entries(ENVS).filter(([k]) => !only.length || only.includes(k))) {
   const jobs = [];
   for (const suite of e.suites) {
     for (const f of readdirSync(join(src, 'isa', suite)).filter((f) => f.endsWith('.S')).sort()) {
