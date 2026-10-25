@@ -125,7 +125,7 @@ describe('acts 9–10: the thread is filled', () => {
 
   it('whys stay short enough for the map panel, and link real chapter steps', () => {
     for (const n of MINE) {
-      expect(plain(n.why).length, n.id).toBeLessThanOrEqual(470);
+      expect(plain(n.why).length, n.id).toBeLessThanOrEqual(250); // six lines on the map panel
       for (const c of n.chapters ?? []) {
         const ch = chapterById(c.chapter);
         expect(ch, `${n.id} → ${c.chapter}`).toBeDefined();
@@ -275,11 +275,11 @@ describe('acts 9–10: the memory numbers', () => {
   it('the computer\'s RAM, the cell and the bit line', () => {
     const ramN = stats(ram(6, 16)).nands, ramT = stats(ram(6, 16)).transistors;
     const c = par('c_computer').nand!;
-    expect(why('m_lesson')).toContain(`${fmt(c)} NANDs, and ${fmt(ramN)} of them (${pct(ramN, c)}%)`);
+    expect(why('m_lesson')).toContain(`${fmt(ramN)} of its ${fmt(c)} NANDs (${pct(ramN, c)}%)`);
     expect(why('m_lesson')).toContain(`about ${Math.round(ramT / (64 * 16))} transistors a bit`);
     expect(kase('m_lesson')).toContain(`${fmt(ramN)} of its ${fmt(c)} NANDs`);
     for (const t of [why('m_sense'), kase('m_lesson')]) expect(t).toContain(`${CELL_C} fF`);
-    expect(why('m_sense')).toContain(`${BITLINE_C} fF`);
+    expect(why('m_sense')).toContain(`${BITLINE_C} fF line`);
     expect(why('m_sense')).toContain(`${par('m_sense').transistors} transistors`);
   });
 
@@ -294,7 +294,7 @@ describe('acts 9–10: the memory numbers', () => {
     expect(kase('m_ctrl')).toContain(`(${TIMING.tRCD}, ${TIMING.tCAS}, ${TIMING.tRP} and ${TIMING.tRAS} cycles)`);
     expect(kase('m_ctrl')).toContain(`tREFI is ${DRAM16.tREFI} cycles here, ${fmt(TIMING.tREFI)} for the real 7.8 µs`);
     const hit = DRAM16.tCAS, miss = DRAM16.tRP + DRAM16.tRCD + DRAM16.tCAS;
-    expect(why('o_cache')).toContain(`tCAS = ${hit} cycles after its read, a word of another row only after tRP + tRCD + tCAS = ${miss}`);
+    expect(why('o_cache')).toContain(`${hit} cycles after a read on the open row and ${miss} on another`);
     expect(kase('o_cache')).toContain(`tCAS = ${hit} cycles on the open row, tRP + tRCD + tCAS = ${miss}`);
     expect(T('m_ctrl')).toContain(`${hit} cycles on an open row, ${miss} on another`);
     expect(T('m_ctrl')).toContain(`tRFC = ${DRAM16.tRFC}`);
