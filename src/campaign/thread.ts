@@ -145,7 +145,8 @@ function pathTo(n: CampaignNode, hit: (m: CampaignNode) => boolean): CampaignNod
  */
 export function goesInto(id: string): Chain | undefined {
   const n = nodeById(id);
-  if (!n) return undefined;
+  // a lesson builds nothing: a chain from it would just name the first levels after it
+  if (!n || n.kind === 'lesson') return undefined;
   const use = blockUse(n);
   const main = use && !use.all ? use.ids[0] : undefined;
   const toBlock = main ? pathTo(n, (m) => !!m.anatomy?.includes(main)) ?? [n] : [n];
