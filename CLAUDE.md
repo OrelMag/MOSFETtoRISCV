@@ -751,7 +751,17 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  shared), tableDef (Builder: inverters, terms, output gates; terms joined by labels past 8), drawTable /
                  setTable (docFromDef; input values kept by name), newTableChip, detachTable, pure table edits; generated
                  like a Verilog chip (hdl.ts isGenerated); tableui.ts: plugin, the table pane in slots.left (cells cycled or
-                 typed, the live row, Karnaugh map with loops for 2–4 inputs, equations, cost), banner, New chip ▾ Truth table
+                 typed, the live row, Karnaugh map with loops for 2–4 inputs, equations, cost), banner, New chip ▾ Truth table;
+                 a table with TableDoc.of (a state machine's) is read-only there, its banner opens the machine
+  fsmchip.ts     state-machine chips (ChipDoc.fsm: FsmDoc, 1-bit ins / outs, states with Moore outputs and positions, arcs on
+                 input patterns (first match wins, none: stay) with Mealy outputs, reset state, encoding binary | gray |
+                 onehot, form, safe: unused codes to reset): codesOf (reset = code 0, bit 0 one-hot), nextTable / outTable
+                 (ttable.ts tables), encodingCosts, setFsm (three chips: the top level places <id>_next and <id>_out, table
+                 chips with TableDoc.of, around DFFs s<i> with rst gating), newFsmChip, detachFsm, ownerOf, fsmWarnings,
+                 specOf (the FsmSpec: diagram, readFsm read-back with `implicit` stay arcs; stateBits s<i>.q);
+                 fsmchipui.ts: plugin, the machine pane (view/fsmdiagram.ts drawn on: Select / + State / Arc tools, states
+                 dragged, the selection's properties, encodings with their cost, the read-back verdict, the live state from
+                 paintHooks), banner, New chip ▾ State machine
   examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, console, screen, the computer, shared bus,
                  wired-AND / OR, RV16 Pong: campaign/bench.ts pongChip), addExample: new chip (and an example's
                  `subchips`, fresh ids), opened. The computer

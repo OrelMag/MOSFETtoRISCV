@@ -16,7 +16,7 @@ import { sanitizeReaderRef } from './cardparts';
 import { FACE_MAX, isEmptyFace, SCALE_MAX, SCALE_MIN, SIDES } from './face';
 import { PUZZLE_MAX_WIDTH } from './puzzleparts';
 import {
-  SCHEMA, chipDeps, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
+  type FsmDoc, SCHEMA, chipDeps, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
   type ChipDoc, type CommentDoc, type FaceDisplayDoc, type FaceDoc, type FacePinDoc, type FaceSide, type DisplayKind, type EndRef, type ExitDir, type FolderDoc, type LabelDoc, type NetHue, type PartDoc, type PartRef,
   type PinDoc, type PinValue, type Vec, type WireDoc, type Workspace,
 } from './model';
@@ -153,7 +153,32 @@ function sanitizeTable(x: unknown): ChipDoc['table'] {
   const ins = x.ins as string[], outs = x.outs as string[];
   if (ins.length < 1 || ins.length > 8 || outs.length < 1 || outs.length > 8 || x.rows.length !== outs.length) return undefined;
   if (!x.rows.every((r) => str(r) && r.length === 1 << ins.length && !/[^01-]/.test(r))) return undefined;
-  return { ins: [...ins], outs: [...outs], rows: [...(x.rows as string[])], form: x.form === 'andor' ? 'andor' : 'nand' };
+  return compact({ ins: [...ins], outs: [...outs], rows: [...(x.rows as string[])], form: x.form === 'andor' ? 'andor' as const : 'nand' as const, of: str(x.of) && isIdent(x.of) ? x.of : undefined });
+}
+
+/** A state-machine chip's machine (fsmchip.ts): names as pins, states with positions, arcs between them. */
+function sanitizeFsm(x: unknown): ChipDoc['fsm'] {
+  if (!isObj(x) || !Array.isArray(x.ins) || !Array.isArray(x.outs) || !Array.isArray(x.states) || !Array.isArray(x.arcs)) return undefined;
+  const ins = x.ins.filter((n): n is string => str(n) && isIdent(n)), outs = x.outs.filter((n): n is string => str(n) && isIdent(n));
+  if (ins.length !== x.ins.length || outs.length !== x.outs.length || ins.length > 6 || !outs.length || outs.length > 8) return undefined;
+  const states: NonNullable<ChipDoc['fsm']>['states'] = [];
+  for (const st of x.states) {
+    if (!isObj(st) || !str(st.name) || !st.name || st.name.length > 24 || !Array.isArray(st.at) || !num(st.at[0]) || !num(st.at[1])) return undefined;
+    const out = Array.isArray(st.out) ? st.out.filter((o): o is string => str(o) && outs.includes(o)) : [];
+    states.push(compact({ name: st.name, at: [st.at[0], st.at[1]] as [number, number], out: out.length ? out : undefined }));
+  }
+  if (!states.length || states.length > 16) return undefined;
+  const arcs: NonNullable<ChipDoc['fsm']>['arcs'] = [];
+  for (const a of x.arcs) {
+    if (!isObj(a) || !int(a.from, 0) || !int(a.to, 0) || a.from >= states.length || a.to >= states.length || !isObj(a.when)) return undefined;
+    const when: Record<string, 0 | 1> = {};
+    for (const [k, v] of Object.entries(a.when)) if (ins.includes(k) && (v === 0 || v === 1)) when[k] = v;
+    const out = Array.isArray(a.out) ? a.out.filter((o): o is string => str(o) && outs.includes(o)) : [];
+    arcs.push(compact({ from: a.from, to: a.to, when, out: out.length ? out : undefined }));
+  }
+  const reset = int(x.reset, 0) && x.reset < states.length ? x.reset : 0;
+  const encoding: FsmDoc['encoding'] = x.encoding === 'gray' || x.encoding === 'onehot' ? x.encoding : 'binary';
+  return compact({ ins, outs, states, arcs, reset, encoding, form: x.form === 'andor' ? 'andor' as const : 'nand' as const, safe: x.safe === true ? true as const : undefined });
 }
 
 function sanitizePart(p: unknown): PartDoc | null {
@@ -264,6 +289,7 @@ export function sanitizeChip(c: unknown): ChipDoc | null {
     hz: num(c.hz) && c.hz > 0 ? c.hz : undefined,
     hdl: sanitizeHdl(c.hdl),
     table: sanitizeTable(c.table),
+    fsm: sanitizeFsm(c.fsm),
     pins: uniquePins, parts, wires, labels,
     comments: comments.length ? comments : undefined,
   });

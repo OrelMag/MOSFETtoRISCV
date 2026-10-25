@@ -1,0 +1,67 @@
+/* State-machine chips (editor/fsmchipui.ts): the machine pane left of the canvas. Shares editor-table.css's tt-*. */
+
+.fsm-pane {
+  width: 480px; max-width: 60vw; display: flex; flex-direction: column; min-height: 0;
+  background: var(--surface); border-right: 1px solid var(--border);
+}
+.fsm-body { display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: auto; }
+.fsm-body > * { flex: none; }
+.fsm-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px 4px; }
+.fsm-tools .grow { flex: 1; }
+.fsm-tools .btn.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+.fsm-canvas { position: relative; margin: 4px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+.fsm-canvas svg { display: block; width: 100%; height: auto; touch-action: none; }
+.fsm-edit g.fsm-st { cursor: grab; }
+.fsm-edit g.fsm-st:focus-visible { outline: none; }
+.fsm-edit g.fsm-st:focus-visible circle, .fsm-edit g.fsm-st:focus-visible rect { stroke: var(--accent); stroke-width: 3; }
+.fsm-edit.tool-arc g.fsm-st, .fsm-edit.tool-state { cursor: crosshair; }
+.fsm-edit path.fsm-hit { cursor: pointer; }
+.fsm-hint {
+  position: absolute; left: 8px; bottom: 6px; font-size: 12px; color: var(--accent);
+  background: color-mix(in srgb, var(--surface) 85%, transparent); padding: 2px 6px; border-radius: 6px;
+}
+
+.fsm-sec { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--border); }
+.fsm-sec:first-of-type { border-top: 0; }
+.fsm-props { min-height: 64px; }
+.fsm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.fsm-row > .tt-lbl { width: 56px; flex: none; }
+.fsm-when { align-items: flex-start; }
+.fsm-in { display: inline-flex; align-items: center; gap: 6px; }
+.fsm-in code { font: 600 12.5px var(--font-mono); }
+.fsm-check { font: 12.5px var(--font-mono); color: var(--text-2); display: inline-flex; align-items: center; gap: 2px; cursor: pointer; }
+.fsm-tag { font-size: 12px; color: var(--good); border: 1px solid color-mix(in srgb, var(--good) 45%, transparent); border-radius: 999px; padding: 1px 8px; }
+.fsm-lab { color: var(--muted); }
+
+.fsm-encs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.fsm-enc {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 7px 9px;
+  border: 1px solid var(--border); border-radius: 9px; background: var(--bg); color: var(--text); font: inherit; font-size: 12px; cursor: pointer;
+}
+.fsm-enc b { font-size: 13px; }
+.fsm-enc .mono { font-family: var(--font-mono); color: var(--text-2); }
+.fsm-enc .best { color: var(--good); }
+.fsm-enc.on { border: 2px solid var(--accent); background: var(--accent-soft); padding: 6px 8px; }
+.fsm-enc:disabled { opacity: 0.55; cursor: not-allowed; }
+.fsm-enc:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fsm-opts { display: grid; gap: 6px; }
+.fsm-opts .tt-lbl { width: 96px; }
+.fsm-opts .hdl-seg button { white-space: nowrap; padding-inline: 10px; }
+
+.fsm-status { display: grid; gap: 4px; padding: 8px 10px 12px; font-size: 12.5px; }
+.fsm-status .ok { color: var(--good); }
+.fsm-status .bad { color: var(--bad); }
+.fsm-status .warn { color: var(--warn); }
+.fsm-badge-tag { color: var(--tt-l2); border-color: color-mix(in srgb, var(--tt-l2) 50%, transparent); }
+
+.tt-pane.ro .tt-cell, .tt-pane.ro .tt-kc { cursor: default; }
+.tt-pane.ro .tt-pins, .tt-pane.ro .tt-form, .tt-pane.ro .tt-howto { display: none; }
+
+@media (max-width: 760px) {
+  .fsm-pane { width: 100%; max-width: none; max-height: 50vh; border-right: 0; border-bottom: 1px solid var(--border); }
+}
+@media (pointer: coarse) {
+  .fsm-enc { min-height: 40px; }
+  .fsm-check { min-height: 40px; }
+}

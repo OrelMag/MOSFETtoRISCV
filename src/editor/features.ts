@@ -27,5 +27,7 @@ import './puzzleui';
 import './hdlui';
 // Truth-table chips: the table beside the canvas, the minimized logic drawn.
 import './tableui';
+// State-machine chips: the diagram beside the canvas, the circuit built from it.
+import './fsmchipui';
 // The editor's actions in the search box (`>`).
 import './searchactions';
