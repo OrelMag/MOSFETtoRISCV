@@ -17,6 +17,12 @@ export const NUDGES: Record<string, string> = {
   v_inv: 'Get one stage working first, then ask what levels the second one needs at its input and how to get there from the first one\'s output.',
   v_ff: 'Two stages that each keep the other off hold a bit; the level problem of the last level has not gone away.',
   h_loader: 'Every card needs a place to go and a moment to be written, and at the end the memory has to change hands.',
+  r_pull: 'Moving the armature takes more force than holding it once the gap is closed: expect two thresholds, not one.',
+  h_card: 'A letter is two holes, a zone at the top and a digit below; a digit is one.',
+  // act 1: drills
+  l_bool: 'Look for a term that already covers another, or a pair that differs in one variable only.',
+  n_bin: 'Split the bits into fours from the right end; each four is one hex digit.',
+  d_kmap: 'Draw the largest rectangles you can, of 1, 2, 4 or 8 cells, and let them wrap around the edges.',
   // act 1: gates
   g_not: 'Only one input to use, but the brick has two.',
   g_and: 'You already have the opposite of what you want.',
@@ -29,6 +35,7 @@ export const NUDGES: Record<string, string> = {
   g_mux8: 'The wide version is the narrow one many times over; see what the copies can share.',
   g_eq16: 'Equality is a question every bit position must answer the same way.',
   // act 2: arithmetic
+  n_twos: 'The top bit counts against you: in 8 bits it weighs −128, in 16 bits −32 768.',
   a_ha: 'Write out the four rows and look at each output column on its own; one of them hides inside a gate you already built.',
   a_fa: 'Count the 1s among the three inputs: the sum is the low bit of that count, the carry its high bit.',
   a_add4: 'Do what you do in decimal on paper: one column at a time, right to left.',
