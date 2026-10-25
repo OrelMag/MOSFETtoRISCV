@@ -22,12 +22,12 @@ export const ACT_ENDS: Record<number, ActEnd> = {
     next: 's_sr',
   },
   3: {
-    can: 'Hold state: the PC, eight registers (2 172 NANDs, nearly half the core to come), memories as parts.',
+    can: 'Hold state: the PC, a register file of seven registers and x0 (2 172 NANDs, nearly half the core to come), memories as parts.',
     cannot: 'Decide what to do with them: every mux and enable you built waits for someone to set it. The instruction word does that, so first learn what the words say, by programming. Act 4.',
     next: 'i_isa', sides: [{ node: 'm_ram' }],
   },
   4: {
-    can: 'On the golden model: loops, arrays, calls, a stack. Multiplying took 28 to 134 instructions per product, 74 on average.',
+    can: 'On the golden model: loops, arrays, function calls. Multiplying took 28 to 134 instructions per product, 74 on average.',
     cannot: 'Run any of it on hardware you built. Each instruction you used is a path through blocks you have; Act 5 wires them.',
     next: 'c_lesson', sides: [{ node: 'p_sort' }],
   },
