@@ -32,6 +32,34 @@ const CORE_PINS: PinSpec[] = CORE_PORTS.map((p) => ({ name: p.name, dir: p.dir =
 
 const CORE_BRIEF = (what: string) => `${what} Pins: <code>clk</code>, <code>rst</code> (hold the PC at 0), <code>instr</code> (the bench answers with imem[pc] in the same cycle), <code>drdata</code> (dmem[daddr], also at once) → <code>pc</code>, <code>daddr</code>, <code>dwdata</code>, <code>dwe</code> (a store at the clock edge), and the register-write port <code>rwe</code>, <code>rwa</code>, <code>rwd</code> (what is written to x[rwa] at the edge) through which the bench watches your core.`;
 
+/** The control table, a row per instruction class, read off controlSpec (X: not checked). */
+export const CTL_ROWS: { label: string; ops: string; word: number; alu?: string }[] = [
+  { label: 'OP', ops: '1', word: 0x0001, alu: '{0, f3}' },
+  { label: 'OPX', ops: '2', word: 0x0002, alu: '{1, f3}' },
+  { label: 'ADDI', ops: '4', word: 0x0004 },
+  { label: 'SHI', ops: '5', word: 0x0005, alu: '1 · 5 · 13 for f3[2:1] = 00 · 01 · 1x' },
+  { label: 'LW', ops: '6', word: 0x0006 },
+  { label: 'LUI', ops: '7, 15', word: 0x0007 },
+  { label: 'B', ops: '8–11', word: 0x0008 },
+  { label: 'JAL', ops: '12', word: 0x000c },
+  { label: 'JALR', ops: '13', word: 0x000d },
+  { label: 'SW', ops: '14', word: 0x000e },
+  { label: 'SYS, MD', ops: '0, 3', word: 0x0000 },
+];
+
+/** CTL_ROWS as an HTML table (the c_ctl brief). */
+export function ctlTable(): string {
+  const alu = CTL_OUTS.indexOf('alu');
+  const cell = (r: (typeof CTL_ROWS)[number], i: number): string => {
+    if (i === alu && r.alu) return r.alu;
+    const { out, care } = controlSpec(r.word);
+    return care[i] ? String(out[i]) : 'X';
+  };
+  const head = `<tr><th>op</th><th></th>${CTL_OUTS.map((n) => `<th>${n}</th>`).join('')}</tr>`;
+  const rows = CTL_ROWS.map((r) => `<tr><th>${r.ops}</th><th>${r.label}</th>${CTL_OUTS.map((_, i) => `<td>${cell(r, i)}</td>`).join('')}</tr>`);
+  return `<div style="overflow-x: auto"><table class="cp-laws">${head}${rows.join('')}</table></div>`;
+}
+
 export const BUILD5: Record<string, () => BuildChallenge> = {
   c_imm: () => ({
     id: 'c_imm', title: 'Immediate generator', level: 'cpu', allowed: 'nand',
@@ -41,7 +69,7 @@ export const BUILD5: Record<string, () => BuildChallenge> = {
   }),
   c_ctl: () => ({
     id: 'c_ctl', title: 'Control unit', level: 'cpu', allowed: 'nand',
-    brief: `The opcode table as logic. From <code>instr</code>: <b>rwe</b> (write rd), <b>bimm</b> (ALU b = immediate), <b>isel</b> (0 I, 1 S/B, 2 J, 3 U), <b>alu</b> ({OPX, f3}; addi / lw / sw: add; shifts: sll 1, srl 5, sra 13), <b>mwe</b> (sw), <b>wb</b> (0 ALU, 1 memory, 2 pc + 1, 3 the immediate), <b>br</b>, <b>jal</b>, <b>jalr</b>. MD and SYSTEM opcodes do nothing. Signals an instruction does not use are don't-cares: only the bits that matter are checked.`,
+    brief: `The opcode table as logic. From <code>instr</code>: <b>rwe</b> (write rd), <b>bimm</b> (ALU b = immediate), <b>isel</b> (0 I, 1 S/B, 2 J, 3 U), <b>alu</b> ({OPX, f3}; addi / lw / sw: add; shifts: sll 1, srl 5, sra 13), <b>mwe</b> (sw), <b>wb</b> (0 ALU, 1 memory, 2 pc + 1, 3 the immediate), <b>br</b>, <b>jal</b>, <b>jalr</b>. MD and SYSTEM opcodes do nothing. Signals an instruction does not use are don't-cares (X): only the bits that matter are checked.${ctlTable()}`,
     ports: pins([['instr', 16]], CTL_OUTS.map((n, i) => [n, CTL_WIDTHS[i]] as [string, number])),
     check: { kind: 'table', spec: ([w]) => controlSpec(w).out, care: ([w]) => controlSpec(w).care },
     answer: refOf('c_ctl', () => CTL16, 'Control unit'),
