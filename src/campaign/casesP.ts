@@ -5,6 +5,11 @@
 import type { LevelCase } from './cases';
 
 export const CASESP: Record<string, LevelCase> = {
+  r_pull: {
+    problem: 'A relay is a coil, an iron armature and a spring. The coil\'s pull grows as the gap closes, so the chapter\'s relay needs 15.2 V of its 24 to start moving but holds until the supply falls below 3.6 V: a switch with hysteresis. Its contact first touches 6.6 ms after switch-on, bounces 3 times and rests at 8.2 ms; it opens 3.4 ms after switch-off, while the collapsing field kicks the coil to −117 V. Every relay level after this one counts time in steps of that 8.2 ms.',
+    without: 'Without the step, a simulation of relay logic would have to follow every bounce, and a circuit read before its contacts rest reads noise. Relay machines paced themselves to it: the Z3 ran at 5 Hz.',
+    cost: 'The coil burns 1.44 W while it is on. The Z3\'s 2 600 relays drew about 4 kW.',
+  },
   r_nand: {
     problem: 'Every machine of the 1940s that was not built from tubes was built from relays: Zuse\'s Z3, Aiken\'s Harvard Mark I, the Bell Labs Model V. A relay NAND is the brick in that technology: two break contacts in parallel from the supply, so the output is on the supply unless both coils pull.',
     without: 'No inversion: make contacts alone give AND (in series) and OR (in parallel) but never NOT, and AND and OR alone are not complete.',
@@ -46,6 +51,11 @@ export const CASESP: Record<string, LevelCase> = {
     without: 'Without a bistable pair the only tube memory was a delay line or a storage tube, both far slower to reach than a register.',
     cost: 'Two triodes (one 6SN7 bulb) and two steering diodes. The NAND-mapped SR latch is two NANDs: two triodes and four diodes.',
     alts: [{ name: 'SR latch (two NANDs)', lib: 'sr_latch' }],
+  },
+  h_card: {
+    problem: 'A card is 80 columns of 12 rows. Hollerith\'s code puts a digit as one hole in rows 0–9 and a letter as a zone hole (12, 11 or 0) plus a digit, so a column reads as one character and a deck as lines of text: the source cards of a program. A machine reads the binary kind, an object card, as bits instead: a word in row 9, one bit a column, the most significant in column 1. Program on cards loads a deck of those, one instruction a card.',
+    without: 'Every word typed in by hand on a front panel\'s switches, each time the machine is switched on.',
+    cost: 'A card holds 80 characters; an object card\'s word takes as many columns as it has bits, so a 16-bit instruction is 16 columns of row 9 and the rest of the card is free for its source and a sequence number.',
   },
   h_loader: {
     problem: 'A stored-program machine starts with nothing in memory: something must copy the program in before the first fetch. Here the deck is in the reader, one 16-bit instruction a card, and the loader is the smallest machine that does it: a counter naming the next word, a write for each card the reader offers, and a switch that hands the memory\'s address lines to the CPU\'s pc once the hopper is empty. EDSAC\'s initial orders read its paper tape into memory this way (1949), the IBM 1401\'s Load key read a card and ran it, and a boot ROM copying firmware from flash (the bus chapter\'s computer) is the same step today.',
