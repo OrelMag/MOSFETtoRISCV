@@ -256,7 +256,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       ...(opts.dcache ? [h('div', { class: 'cpu-sec' }, opts.dcache === 'wb2' ? 'Data cache (2 sets × 2 ways × 4 words, write-back)' : opts.dcache === 'wb' ? 'Data cache (4 lines × 4 words, write-back)' : 'Data cache (4 lines × 4 words)'), dlines] : []),
       h('div', { class: 'cpu-sec' }, wb ? 'Memory as the program sees it (dirty lines included)' : opts.dcache ? 'Main memory (non-zero words)' : 'Data memory (non-zero words)'), mem);
     const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.wide ? 'RV32IM dual-issue pipeline' : opts.ooo ? 'RV32IM out-of-order core' : opts.pipeline ? (opts.m ? 'RV32IM pipeline' : 'RV32I pipeline') : 'RV32I CPU', h('span', { class: 'fold-hint' }));
-    const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title, body);
+    const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, title, body);
 
     // Golden model in lock-step: it executes one instruction whenever the hardware retires one
     // (every cycle for the single-cycle CPU; when a valid instruction leaves W for the pipeline;
@@ -537,7 +537,7 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
     const grid = h('div', { class: 'pipe-grid' });
     // folded by the stage (data-fold): it may start folded when it would squeeze the circuit
     const title = h('h4', null, h('span', null, 'Pipeline diagram ', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'stage × cycle')), h('span', { class: 'fold-hint' }));
-    const el = h('div', { class: 'mem-panel pipe-panel', 'data-dock': 'left', 'data-fold': 'narrow' }, title, grid);
+    const el = h('div', { class: 'mem-panel pipe-panel', 'data-dock': 'left', 'data-fold': 'narrow', 'data-phone': 'flow' }, title, grid);
     const record = () => {
       const sim = stage.sim, root = stage.rootCtx?.node;
       if (sim && root) history.record(sim, root, stage.cycles);
@@ -586,7 +586,7 @@ const ioPanel: ScenePanel = (stage: Stage): Widget => {
   // Folded by the stage (data-fold): it may start folded on a small stage. Two columns where the dock is wide
   // (app.css: a container query), so it takes half the height off the circuit.
   const title = h('h4', null, 'I/O & machine state', h('span', { class: 'fold-hint' }));
-  const el = h('div', { class: 'mem-panel io-panel', 'data-dock': 'left', 'data-fold': 'narrow' }, title,
+  const el = h('div', { class: 'mem-panel io-panel', 'data-dock': 'left', 'data-fold': 'narrow', 'data-phone': 'flow' }, title,
     h('div', { class: 'io-cols' },
       h('div', null,
         h('div', { class: 'cpu-sec' }, 'Console', h('span', { class: 'cpu-sec-hint' }, 'memory-mapped at 0x8000_0000')), con,
