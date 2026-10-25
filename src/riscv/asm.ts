@@ -2,6 +2,7 @@
 // .word. Errors are collected per line instead of thrown, so the editor can show them all.
 
 import { specOf, type CustomRow } from './custom';
+import { compress32, decodeC, scatter } from './rvc';
 import { BY_NAME, CSRS, encB, encI, encJ, encR, encR4, encS, encU, fregNumber, OPCODES, regNumber, RM_OPERANDS } from './isa';
 
 export interface AsmLine {
@@ -10,6 +11,8 @@ export interface AsmLine {
   /** Source text this word came from (pseudo-instructions produce several words). */
   text: string;
   srcLine: number;
+  /** 2: a 16-bit instruction (C extension), whose bits are word's low half. */
+  size?: 2;
 }
 
 export interface AsmResult {
@@ -25,7 +28,12 @@ interface Stmt {
   args: string[];
   text: string;
   addr: number;
+  /** Bytes. */
   size: number;
+  /** Each instruction's length in bytes (2 or 4: a pseudo-instruction has several; .align its padding). */
+  parts: number[];
+  /** Under .option rvc: compressed wherever a 16-bit form exists. */
+  rvc: boolean;
 }
 
 export class AsmError extends Error {}
@@ -96,56 +104,168 @@ export const PSEUDO_OPS: readonly string[] = [
   'fmv.s', 'fneg.s', 'fabs.s', 'frcsr', 'fscsr', 'frrm', 'fsrm', 'fsrmi', 'frflags', 'fsflags', 'fsflagsi',
 ];
 
-/** Directives: .word emits data, the others are accepted and ignored. */
-export const DIRECTIVES: readonly string[] = ['.word', '.text', '.globl', '.global', '.section', '.align'];
+/** Directives: .word / .half emit data, .option rvc / norvc turn compression on and off, .align pads to a word
+ *  with c.nop (only a program with 16-bit instructions can be off a word), the others are accepted and ignored. */
+export const DIRECTIVES: readonly string[] = ['.word', '.half', '.text', '.globl', '.global', '.section', '.align', '.option'];
 
 /** custom: the CPU's custom instructions (riscv/custom.ts), assembled like any other. */
 export function assemble(src: string, custom: readonly CustomRow[] = []): AsmResult {
   const stmts: Stmt[] = [];
   const labels = new Map<string, number>();
+  /** label → the statement it names (stmts.length: the end). */
+  const labelAt = new Map<string, number>();
   const errors: { line: number; message: string }[] = [];
-  let addr = 0;
+  let rvc = false;
 
-  // Pass 1: strip comments, collect labels, size every statement.
+  // Pass 1: strip comments, collect labels, split every statement into its instructions.
   src.split(/\r?\n/).forEach((raw, i) => {
     let ln = stripComment(raw).trim();
     while (true) {
       const m = ln.match(/^([A-Za-z_.$][\w.$]*)\s*:/);
       if (!m) break;
-      if (labels.has(m[1])) errors.push({ line: i + 1, message: `label "${m[1]}" defined twice` });
-      labels.set(m[1], addr);
+      if (labelAt.has(m[1])) errors.push({ line: i + 1, message: `label "${m[1]}" defined twice` });
+      labelAt.set(m[1], stmts.length);
       ln = ln.slice(m[0].length).trim();
     }
     if (!ln) return;
     const sp = ln.search(/\s/);
     const op = (sp < 0 ? ln : ln.slice(0, sp)).toLowerCase();
-    if (op === '.text' || op === '.globl' || op === '.global' || op === '.section' || op === '.align') return;
+    if (op === '.text' || op === '.globl' || op === '.global' || op === '.section') return;
     const args = splitArgs(sp < 0 ? '' : ln.slice(sp + 1));
-    const size = sizeOf(op, args);
-    stmts.push({ line: i + 1, op, args, text: ln, addr, size });
-    addr += 4 * size;
+    if (op === '.option') {
+      const o = args[0]?.toLowerCase();
+      if (o === 'rvc' || o === 'norvc') rvc = o === 'rvc';
+      else if (o !== 'push' && o !== 'pop') errors.push({ line: i + 1, message: '.option takes rvc or norvc' });
+      return;
+    }
+    const st: Stmt = { line: i + 1, op, args, text: ln, addr: 0, size: 0, parts: [], rvc };
+    st.parts = st.op.startsWith('c.') ? [2] : op === '.half' ? args.map(() => 2) : op === '.align' ? [] : Array(sizeOf(op, args)).fill(rvc && op !== '.word' ? 2 : 4);
+    stmts.push(st);
   });
 
-  // Pass 2: encode.
-  const words: number[] = [];
-  const lines: AsmLine[] = [];
-  for (const st of stmts) {
-    try {
-      const out = encode(st, labels, custom);
-      if (out.length !== st.size) throw new AsmError('internal: size mismatch');
+  // Pass 2: lay out and encode. A program without C is laid out once (every instruction 4 bytes); with C an
+  // instruction starts at 2 bytes and grows to 4 when it does not compress at the addresses that gives (a
+  // branch too far, say), until nothing changes: sizes only grow, so this ends.
+  const layout = () => {
+    let addr = 0;
+    for (const st of stmts) {
+      st.addr = addr;
+      if (st.op === '.align') {
+        let n = 2;
+        try { n = st.args.length ? parseImm(st.args[0]) : 2; } catch { /* reported below */ }
+        const pad = (-addr) & (Math.min(2 ** Math.max(n, 1), 4) - 1); // to 4 bytes at most: our words
+        st.parts = pad ? [pad] : [];
+      }
+      st.size = st.parts.reduce((s, p) => s + p, 0);
+      addr += st.size;
+    }
+    labels.clear();
+    for (const [l, k] of labelAt) labels.set(l, k < stmts.length ? stmts[k].addr : addr);
+    return addr;
+  };
+  const anyC = stmts.some((st) => st.parts.includes(2));
+  for (let pass = 0; ; pass++) {
+    layout();
+    if (!anyC) break;
+    let grew = false;
+    for (const st of stmts) {
+      if (!st.rvc || st.op.startsWith('c.') || st.op === '.half' || st.op === '.align') continue;
+      let out: number[];
+      try { out = encode(st, labels, custom); } catch { out = []; }
       out.forEach((w, k) => {
-        words.push(w >>> 0);
-        lines.push({ addr: st.addr + 4 * k, word: w >>> 0, text: st.text, srcLine: st.line });
+        if (st.parts[k] === 2 && compress32(w) === null) { st.parts[k] = 4; grew = true; }
       });
+    }
+    if (!grew || pass > 64) break;
+  }
+
+  const bytes: number[] = []; // halfwords, then packed into words
+  const lines: AsmLine[] = [];
+  const emit = (st: Stmt, at: number, bits: number, size: number) => {
+    if (size === 2) bytes.push(bits & 0xffff);
+    else bytes.push(bits & 0xffff, (bits >>> 16) & 0xffff);
+    lines.push({ addr: at, word: bits >>> 0, text: st.text, srcLine: st.line, ...(size === 2 ? { size: 2 as const } : {}) });
+  };
+  for (const st of stmts) {
+    let at = st.addr;
+    if (st.op === '.align') {
+      for (const p of st.parts) for (let k = 0; k < p; k += 2) { emit(st, at, 0x0001, 2); at += 2; } // c.nop
+      continue;
+    }
+    try {
+      if (st.op === '.half') {
+        st.args.forEach((a) => { emit(st, at, (labels.get(a.trim()) ?? parseImm(a)) & 0xffff, 2); at += 2; });
+        continue;
+      }
+      if (st.op.startsWith('c.')) { const h = encodeC(st, labels, custom); emit(st, at, h, 2); continue; }
+      const out = encode(st, labels, custom);
+      if (out.length !== st.parts.length) throw new AsmError('internal: size mismatch');
+      const bits = out.map((w, k) => (st.parts[k] === 2 ? compress32(w) : w >>> 0));
+      if (bits.includes(null)) throw new AsmError('internal: no 16-bit form');
+      bits.forEach((b, k) => { emit(st, at, b!, st.parts[k]); at += st.parts[k]; });
     } catch (e) {
       errors.push({ line: st.line, message: e instanceof Error ? e.message : String(e) });
-      for (let k = 0; k < st.size; k++) {
-        words.push(0x00000013);
-        lines.push({ addr: st.addr + 4 * k, word: 0x13, text: st.text, srcLine: st.line });
-      }
+      for (const p of st.parts) { emit(st, at, p === 2 ? 0x0001 : 0x00000013, p); at += p; }
     }
   }
+  if (bytes.length & 1) bytes.push(0x0001); // a word's last half: c.nop
+  const words: number[] = [];
+  for (let k = 0; k < bytes.length; k += 2) words.push((bytes[k] | (bytes[k + 1] << 16)) >>> 0);
   return { words, lines, labels, errors };
+}
+
+/** The 32-bit instruction each c.* mnemonic spells (operands rewritten), and what its 16-bit form needs. */
+const C_OPS: Record<string, { to: (a: string[]) => [string, string[]]; needs: string }> = {
+  'c.nop': { to: () => ['nop', []], needs: 'no operands' },
+  'c.ebreak': { to: () => ['ebreak', []], needs: 'no operands' },
+  'c.addi': { to: (a) => ['addi', [a[0], a[0], a[1]]], needs: 'rd ≠ x0 and a non-zero immediate in −32…31' },
+  'c.li': { to: (a) => ['addi', [a[0], 'x0', a[1]]], needs: 'rd ≠ x0 and an immediate in −32…31' },
+  'c.lui': { to: (a) => ['lui', a], needs: 'rd ≠ x0, sp and a non-zero value in −32…31 (0xfffe0…0x1f)' },
+  'c.addi16sp': { to: (a) => ['addi', ['sp', 'sp', a[a.length - 1]]], needs: 'a non-zero multiple of 16 in −512…496' },
+  'c.addi4spn': { to: (a) => ['addi', [a[0], 'sp', a[a.length - 1]]], needs: 'rd in x8–x15 and a non-zero multiple of 4 up to 1020' },
+  'c.slli': { to: (a) => ['slli', [a[0], a[0], a[1]]], needs: 'rd ≠ x0 and a shift of 1…31' },
+  'c.srli': { to: (a) => ['srli', [a[0], a[0], a[1]]], needs: 'rd in x8–x15 and a shift of 1…31' },
+  'c.srai': { to: (a) => ['srai', [a[0], a[0], a[1]]], needs: 'rd in x8–x15 and a shift of 1…31' },
+  'c.andi': { to: (a) => ['andi', [a[0], a[0], a[1]]], needs: 'rd in x8–x15 and an immediate in −32…31' },
+  'c.mv': { to: (a) => ['add', [a[0], 'x0', a[1]]], needs: 'rd ≠ x0 and rs ≠ x0' },
+  'c.add': { to: (a) => ['add', [a[0], a[0], a[1]]], needs: 'rd ≠ x0 and rs ≠ x0' },
+  'c.sub': { to: (a) => ['sub', [a[0], a[0], a[1]]], needs: 'both registers in x8–x15' },
+  'c.xor': { to: (a) => ['xor', [a[0], a[0], a[1]]], needs: 'both registers in x8–x15' },
+  'c.or': { to: (a) => ['or', [a[0], a[0], a[1]]], needs: 'both registers in x8–x15' },
+  'c.and': { to: (a) => ['and', [a[0], a[0], a[1]]], needs: 'both registers in x8–x15' },
+  'c.lw': { to: (a) => ['lw', a], needs: 'registers in x8–x15 and an offset 0…124 in steps of 4' },
+  'c.sw': { to: (a) => ['sw', a], needs: 'registers in x8–x15 and an offset 0…124 in steps of 4' },
+  'c.flw': { to: (a) => ['flw', a], needs: 'registers f8–f15 / x8–x15 and an offset 0…124 in steps of 4' },
+  'c.fsw': { to: (a) => ['fsw', a], needs: 'registers f8–f15 / x8–x15 and an offset 0…124 in steps of 4' },
+  'c.lwsp': { to: (a) => ['lw', a], needs: 'rd ≠ x0, base sp and an offset 0…252 in steps of 4' },
+  'c.swsp': { to: (a) => ['sw', a], needs: 'base sp and an offset 0…252 in steps of 4' },
+  'c.flwsp': { to: (a) => ['flw', a], needs: 'base sp and an offset 0…252 in steps of 4' },
+  'c.fswsp': { to: (a) => ['fsw', a], needs: 'base sp and an offset 0…252 in steps of 4' },
+  'c.j': { to: (a) => ['jal', ['x0', ...a]], needs: 'a target within ±2 KiB' },
+  'c.jal': { to: (a) => ['jal', ['ra', ...a]], needs: 'a target within ±2 KiB' },
+  'c.jr': { to: (a) => ['jalr', ['x0', `0(${a[0]})`]], needs: 'rs ≠ x0' },
+  'c.jalr': { to: (a) => ['jalr', ['ra', `0(${a[0]})`]], needs: 'rs ≠ x0' },
+  'c.beqz': { to: (a) => ['beq', [a[0], 'x0', a[1]]], needs: 'rs in x8–x15 and a target within ±256 bytes' },
+  'c.bnez': { to: (a) => ['bne', [a[0], 'x0', a[1]]], needs: 'rs in x8–x15 and a target within ±256 bytes' },
+};
+/** The C extension's mnemonics (for the highlighter). */
+export const C_MNEMONICS: readonly string[] = Object.keys(C_OPS);
+
+function encodeC(st: Stmt, labels: Map<string, number>, custom: readonly CustomRow[]): number {
+  const c = C_OPS[st.op];
+  if (!c) throw new AsmError(`unknown instruction "${st.op}"`);
+  const [op, args] = c.to(st.args);
+  if (st.args.some((a) => !a)) throw new AsmError(`${st.op}: missing operand`);
+  const words = encode({ ...st, op, args }, labels, custom);
+  let h = words.length === 1 ? compress32(words[0]) : null;
+  // addi sp, sp, 16k in −32…31 has two forms: c.addi is compress32's choice, c.addi16sp asked for here
+  if (st.op === 'c.addi16sp' && h !== null && decodeC(h)?.name === 'c.addi') {
+    const imm = (words[0] | 0) >> 20;
+    h = imm % 16 === 0 ? (3 << 13) | (2 << 7) | scatter(imm, 'addi16sp') | 1 : null;
+  }
+  // c.mv spells `add rd, x0, rs`; compress32 may pick another form of the same effect only for addi (mv)
+  if (h === null || decodeC(h)?.name !== st.op) throw new AsmError(`${st.op} needs ${c.needs}`);
+  return h;
 }
 
 function encode(st: Stmt, labels: Map<string, number>, custom: readonly CustomRow[] = []): number[] {

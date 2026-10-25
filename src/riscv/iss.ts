@@ -11,6 +11,7 @@ import type { BusMemory } from '../bus/model';
 import { aluCtlOf, aluOp, branchTaken, FMT_FIELDS, type CustomRow } from './custom';
 import { F32, fpAddX, fpClass, fpCmpX, fpDivX, fpFmaX, fpFromIntX, fpMinMaxX, fpMulX, fpSqrtX, fpToIntX, type FpResult } from '../sim/fpref';
 import { CSRS, decode, disasm, OPCODES } from './isa';
+import { disasmC, expand16 } from './rvc';
 
 export interface IssOptions {
   /** Data memory size in 32-bit words (power of two). */
@@ -38,6 +39,8 @@ export interface IssOptions {
   bus?: BusMemory;
   /** The CPU's custom instructions (riscv/custom.ts): each executes its control row. */
   custom?: readonly CustomRow[];
+  /** The C extension (riscv/rvc.ts): instructions are fetched as 16-bit parcels at any even address. */
+  c?: boolean;
 }
 
 /** Cycles a div / divu / rem / remu occupies on the iterative divider (1 load + 32 steps + 1 write). */
@@ -64,7 +67,10 @@ export function mExec(f3: number, a: number, b: number): number {
 
 export interface StepInfo {
   pc: number;
+  /** The instruction executed: a 16-bit one's expansion. */
   word: number;
+  /** A 16-bit instruction's own bits (C extension). */
+  half?: number;
   text: string;
   /** Register written (0 = none). */
   rd: number;
@@ -105,6 +111,8 @@ export class ISS {
   readonly m: boolean;
   readonly custom: readonly CustomRow[];
   readonly fext: boolean;
+  /** The C extension: 16-bit instructions, PC + 2 after one, jumps to any even address. */
+  readonly c: boolean;
   /** Floating-point registers (raw float32 bits). */
   readonly f = new Uint32Array(32);
   /** fcsr: accrued exception flags (NV DZ OF UF NX) and the dynamic rounding mode. */
@@ -150,6 +158,7 @@ export class ISS {
     this.m = !!opts.m;
     this.custom = opts.custom ?? [];
     this.fext = !!opts.f;
+    this.c = !!opts.c;
     this.hartid = opts.hartid ?? 0;
     this.bus = opts.bus;
   }
@@ -157,6 +166,11 @@ export class ISS {
   fetch(pc: number): number {
     if (this.bus && pc >>> 0 >= 4 * this.imemWords) return this.bus.read((pc & ~3) >>> 0);
     return this.imem[(pc >>> 2) % this.imemWords] ?? 0x00000013;
+  }
+
+  /** The 16-bit parcel at an even address of the instruction memory. */
+  private half(a: number): number {
+    return (this.fetch((a & ~3) >>> 0) >>> ((a & 2) * 8)) & 0xffff;
   }
 
   private wordIndex(addr: number): number {
@@ -245,7 +259,7 @@ export class ISS {
   csrRead(a: number): number | null {
     switch (a) {
       case CSRS.mstatus: return (this.mie ? 8 : 0) | (this.mpie ? 0x80 : 0) | 0x1800;
-      case CSRS.misa: return this.m ? 0x40001100 : 0x40000100;
+      case CSRS.misa: return (this.m ? 0x40001100 : 0x40000100) | (this.c ? 4 : 0);
       case CSRS.mie: return (this.mtie ? 0x80 : 0) | (this.meie ? 0x800 : 0);
       case CSRS.mtvec: return this.mtvec;
       case CSRS.mscratch: return this.mscratch;
@@ -269,7 +283,7 @@ export class ISS {
       case CSRS.mie: this.mtie = !!(v & 0x80); this.meie = !!(v & 0x800); break;
       case CSRS.mtvec: this.mtvec = (v & ~3) >>> 0; break;
       case CSRS.mscratch: this.mscratch = v; break;
-      case CSRS.mepc: this.mepc = (v & ~3) >>> 0; break;
+      case CSRS.mepc: this.mepc = (v & (this.c ? ~1 : ~3)) >>> 0; break;
       case CSRS.mcause: this.mcause = v; break;
       case CSRS.mtval: this.mtval = v; break;
       case CSRS.fflags: this.fflags = v & 31; break;
@@ -302,11 +316,18 @@ export class ISS {
         return { pc, word: 0, text: 'interrupt', rd: 0, trap: { cause, interrupt: true }, halted: false };
       }
     }
-    const word = this.fetch(pc);
+    // With C, a parcel whose low bits are not 11 is a 16-bit instruction: it runs as its expansion (an
+    // illegal one as 0, which decodes to nothing); otherwise the instruction is this parcel and the next.
+    let word: number, size = 4, half: number | undefined;
+    if (this.c) {
+      const lo = this.half(pc);
+      if ((lo & 3) !== 3) { half = lo; word = expand16(lo) ?? 0; size = 2; }
+      else word = (lo | (this.half(pc + 2) << 16)) >>> 0;
+    } else word = this.fetch(pc);
     const d = decode(word, this.custom);
     const x = this.x;
     const a = x[d.rs1] | 0, b = x[d.rs2] | 0, ua = x[d.rs1], ub = x[d.rs2];
-    let next = (pc + 4) >>> 0;
+    let next = (pc + size) >>> 0;
     let rd = 0, value: number | undefined, store: StepInfo['store'];
     let trap: Trap | null = null;
     const write = (v: number) => {
@@ -315,7 +336,7 @@ export class ISS {
     };
     const jumpTo = (t: number) => {
       t >>>= 0;
-      if (this.system && t & 3) trap = new Trap(CAUSE.MISALIGNED_FETCH, t);
+      if (this.system && t & (this.c ? 1 : 3)) trap = new Trap(CAUSE.MISALIGNED_FETCH, t);
       else next = t;
     };
     const isM = d.opcode === OPCODES.OP && d.funct7 === 1;
@@ -330,7 +351,7 @@ export class ISS {
       const y = aluOp(aluCtlOf(r, word), A, B);
       const old = r.regWrite && r.result === 'mem' ? this.load(y >>> 0, 2) : 0;
       if (r.memWrite) { this.store(y >>> 0, 2, b); store = { addr: y >>> 0, value: b >>> 0 }; }
-      if (r.regWrite && FMT_FIELDS[r.fmt].rd) write({ alu: y, mem: old, pc4: pc + 4, imm: d.imm }[r.result]);
+      if (r.regWrite && FMT_FIELDS[r.fmt].rd) write({ alu: y, mem: old, pc4: pc + size, imm: d.imm }[r.result]);
       if (r.next === 'branch') { if (branchTaken(d.funct3, a, b)) jumpTo(pc + d.imm); }
       else if (r.next === 'jump') jumpTo(pc + d.imm);
       else if (r.next === 'jalr') jumpTo(y & ~1);
@@ -375,8 +396,8 @@ export class ISS {
     } else switch (d.opcode) {
       case OPCODES.LUI: write(d.imm); break;
       case OPCODES.AUIPC: write(pc + d.imm); break;
-      case OPCODES.JAL: jumpTo(pc + d.imm); if (!trap) write(pc + 4); break;
-      case OPCODES.JALR: jumpTo((a + d.imm) & ~1); if (!trap) write(pc + 4); break;
+      case OPCODES.JAL: jumpTo(pc + d.imm); if (!trap) write(pc + size); break;
+      case OPCODES.JALR: jumpTo((a + d.imm) & ~1); if (!trap) write(pc + size); break;
       case OPCODES.BRANCH: {
         const take = [a === b, a !== b, false, false, a < b, a >= b, ua < ub, ua >= ub][d.funct3];
         if (take) jumpTo(pc + d.imm);
@@ -481,7 +502,8 @@ export class ISS {
     this.steps++;
     const t = trap as Trap | null;
     const fwrite = !t && fWrite !== undefined ? { rd: d.rd, value: fWrite >>> 0 } : undefined;
-    return { pc, word, text: disasm(word, pc, this.custom), rd, value, store, fwrite, trap: t ? { cause: t.cause, interrupt: false } : undefined, halted: this.halted };
+    const text = half !== undefined ? disasmC(half, pc) : disasm(word, pc, this.custom);
+    return { pc, word, ...(half !== undefined ? { half } : {}), text, rd, value, store, fwrite, trap: t ? { cause: t.cause, interrupt: false } : undefined, halted: this.halted };
   }
 
   run(maxSteps = 10000): number {
