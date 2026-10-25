@@ -449,6 +449,46 @@ assign lo = P[31:0];  assign hi = P[63:32];`,
   });
 })();
 
+/** MUL32's drawing at W bits (RV64M: 64×64 → 128 on a 65×65 signed tree): W = 32 is MUL32 itself. No spec past 53 bits. */
+export function mulWide(W: number): ComponentDef {
+  if (W === 32) return MUL32;
+  return memo(`mul${W}`, () => {
+    const T = treeMul(W + 1, true, 2 * W);
+    const tg = symbolGeom(T);
+    const S = splitter([W - 1, 1]), E = merger([W, 1]), O = splitter([W, W]);
+    return define({
+      id: `mul${W}`, name: `${W}×${W} multiplier (signed / unsigned)`, category: 'arithmetic',
+      summary: `Each operand is extended to ${W + 1} bits: with its sign bit if that operand is signed, with 0 if not. Then one ${W + 1}×${W + 1} signed tree multiplier serves all four instructions: the low ${W} bits for mul, the high ${W} for mulh / mulhsu / mulhu.`,
+      ports: [bus('a', W, 'in'), bus('b', W, 'in'), bit('sa', 'in'), bit('sb', 'in'), bus('lo', W, 'out'), bus('hi', W, 'out')],
+      symbol: { kind: 'box', label: `MUL${W}` },
+      netlist: () => ({
+        pins: { a: [0, 4], b: [0, 22], sa: [0, 10], sb: [0, 28], lo: [44 + tg.w, 14], hi: [44 + tg.w, 18] },
+        instances: [
+          { name: 'spa', def: S, at: [4, 2] }, { name: 'spb', def: S, at: [4, 20] },
+          { name: 'xa', def: AND, at: [10, 8] }, { name: 'xb', def: AND, at: [10, 26] },
+          { name: 'ea', def: E, at: [18, 3] }, { name: 'eb', def: E, at: [18, 21] },
+          { name: 'm', def: T, at: [24, 2] },
+          { name: 'sp', def: O, at: [30 + tg.w, 14] },
+        ],
+        nets: [
+          { name: 'a', ends: ['a', 'spa.in', 'ea.i0'] }, { name: 'b', ends: ['b', 'spb.in', 'eb.i0'] },
+          { name: `a${W - 1}`, ends: ['spa.o1', 'xa.a'] }, { name: `b${W - 1}`, ends: ['spb.o1', 'xb.a'] },
+          { name: 'sa', ends: ['sa', 'xa.b'] }, { name: 'sb', ends: ['sb', 'xb.b'] },
+          { name: `a${W}`, ends: ['xa.y', 'ea.i1'] }, { name: `b${W}`, ends: ['xb.y', 'eb.i1'] },
+          { name: 'A', ends: ['ea.out', 'm.a'] }, { name: 'B', ends: ['eb.out', 'm.b'] },
+          { name: 'P', ends: ['m.p', 'sp.in'] },
+          { name: 'lo', ends: ['sp.o0', 'lo'] }, { name: 'hi', ends: ['sp.o1', 'hi'] },
+        ],
+      }),
+      hdl: {
+        verilog: `wire signed [${W}:0] A = {sa & a[${W - 1}], a}, B = {sb & b[${W - 1}], b};
+wire signed [${2 * W + 1}:0] P = A * B;
+assign lo = P[${W - 1}:0];  assign hi = P[${2 * W - 1}:${W}];`,
+      },
+    });
+  });
+}
+
 // ---- Booth recoding ---------------------------------------------------------------------------------
 
 /**
@@ -737,17 +777,24 @@ export function condNegate(n: number): ComponentDef {
  * restored afterwards, with RISC-V's rules for division by zero (quotient −1, remainder = dividend)
  * and overflow (−2³¹ / −1 = −2³¹, remainder 0) falling out of the hardware for free.
  */
-export const MDU: ComponentDef = (() => {
-  const W = 32;
+export const MDU: ComponentDef = mduOf(32);
+
+/** The M unit at xlen bits: 32 → MDU; 64 → the same drawing on a 65×65 multiplier and a 64-step divider (66 cycles). */
+export function mUnit(xlen: 32 | 64): ComponentDef {
+  return xlen === 32 ? MDU : memo('mdu64', () => mduOf(64));
+}
+
+function mduOf(W: 32 | 64): ComponentDef {
+  const MUL = W === 32 ? MUL32 : mulWide(W);
   const M2 = busMux2(W), CN = condNegate(W), DV = seqDivider(W);
-  const mg = symbolGeom(MUL32), dg = symbolGeom(DV), cg = symbolGeom(CN), xg = symbolGeom(M2);
+  const mg = symbolGeom(MUL), dg = symbolGeom(DV), cg = symbolGeom(CN), xg = symbolGeom(M2);
   const xA = 14, xB = xA + Math.max(mg.w, cg.w) + 16, xC = xB + dg.w + 16, xD = xC + xg.w + 10, xE = xD + cg.w + 12, xF = xE + xg.w + 10;
   const yM = 2, yN = yM + mg.h + 10, yN2 = yN + cg.h + 6, yG = yN2 + cg.h + 10;
   const instances: InstanceDef[] = [
     { name: 'f3', def: splitter([1, 1, 1]), at: [2, yG] },
-    { name: 'sa', def: splitter([31, 1]), at: [6, yN - 4] },
-    { name: 'sb', def: splitter([31, 1]), at: [6, yN2 - 4] },
-    { name: 'mul', def: MUL32, at: [xA, yM], label: 'multiplier' },
+    { name: 'sa', def: splitter([W - 1, 1]), at: [6, yN - 4] },
+    { name: 'sb', def: splitter([W - 1, 1]), at: [6, yN2 - 4] },
+    { name: 'mul', def: MUL, at: [xA, yM], label: 'multiplier' },
     { name: 'mhi', def: M2, at: [xB, yM + 4], label: 'lo / hi' },
     { name: 'nga', def: CN, at: [xA, yN], label: '|a|' },
     { name: 'ngb', def: CN, at: [xA, yN2], label: '|b|' },
@@ -780,7 +827,7 @@ export const MDU: ComponentDef = (() => {
     { name: 'lo', ends: ['mul.lo', 'mhi.a'] }, { name: 'hi', ends: ['mul.hi', 'mhi.b'] },
     { name: 'mulOut', ends: ['mhi.y', 'out.a'] },
     { name: 'divSigned', ends: ['dsg.y', 'na.a', 'nb.a'], tags: ['nb.a'] },
-    { name: 'a31', ends: ['sa.o1', 'na.b'], tags: true }, { name: 'b31', ends: ['sb.o1', 'nb.b'], tags: true },
+    { name: `a${W - 1}`, ends: ['sa.o1', 'na.b'], tags: true }, { name: `b${W - 1}`, ends: ['sb.o1', 'nb.b'], tags: true },
     { name: 'negA', ends: ['na.y', 'nga.neg', 'sx.a', 'oneg.b'], tags: true },
     { name: 'negB', ends: ['nb.y', 'ngb.neg', 'sx.b'], tags: true },
     { name: '|a|', ends: ['nga.y', 'div.a'] }, { name: '|b|', ends: ['ngb.y', 'div.b'] },
@@ -804,8 +851,8 @@ export const MDU: ComponentDef = (() => {
     { name: 'busy', ends: ['div.busy', 'busy'], tags: true },
   ];
   return define({
-    id: 'mdu', name: 'Multiply / divide unit (RV32M)', category: 'cpu',
-    summary: 'mul, mulh, mulhsu, mulhu in one cycle on a 33×33 tree multiplier; div, divu, rem, remu on a 32-step iterative divider that stalls the CPU (34 cycles). Signed division divides magnitudes and fixes the sign afterwards.',
+    id: W === 32 ? 'mdu' : `mdu${W}`, name: `Multiply / divide unit (RV${W}M)`, category: 'cpu',
+    summary: `mul, mulh, mulhsu, mulhu in one cycle on a ${W + 1}×${W + 1} tree multiplier; div, divu, rem, remu on a ${W}-step iterative divider that stalls the CPU (${W + 2} cycles). Signed division divides magnitudes and fixes the sign afterwards.`,
     ports: [bit('clk', 'in', 'bottom', true), bus('a', W, 'in'), bus('b', W, 'in'), bus('funct3', 3, 'in'), bit('isM', 'in'), bit('noTrap', 'in'),
       bus('y', W, 'out'), bit('stall', 'out'), bit('busy', 'out')],
     symbol: { kind: 'box', label: 'M UNIT' },
@@ -814,17 +861,17 @@ export const MDU: ComponentDef = (() => {
       instances, nets,
     }),
     hdl: {
-      verilog: `// RV32M: funct3 = mul 0, mulh 1, mulhsu 2, mulhu 3, div 4, divu 5, rem 6, remu 7
+      verilog: `// RV${W}M: funct3 = mul 0, mulh 1, mulhsu 2, mulhu 3, div 4, divu 5, rem 6, remu 7
 wire signA = funct3[0] ^ funct3[1], signB = funct3 == 3'd1;
-wire [31:0] lo, hi;   mul32 mul (.a, .b, .sa(signA), .sb(signB), .lo, .hi);
+wire [${W - 1}:0] lo, hi;   mul${W} mul (.a, .b, .sa(signA), .sb(signB), .lo, .hi);
 wire divSigned = ~funct3[0];
-wire negA = divSigned & a[31], negB = divSigned & b[31];
+wire negA = divSigned & a[${W - 1}], negB = divSigned & b[${W - 1}];
 wire isDiv = isM & funct3[2];
-seq_divider #(32) div (.clk, .start(isDiv & noTrap), .a(negA ? -a : a), .b(negB ? -b : b), .q, .r, .done, .busy);
+seq_divider #(${W}) div (.clk, .start(isDiv & noTrap), .a(negA ? -a : a), .b(negB ? -b : b), .q, .r, .done, .busy);
 wire negOut = funct3[1] ? negA : (negA ^ negB) & (b != 0);
-wire [31:0] qr = funct3[1] ? r : q;
+wire [${W - 1}:0] qr = funct3[1] ? r : q;
 assign y = funct3[2] ? (negOut ? -qr : qr) : (funct3 != 0 ? hi : lo);
 assign stall = isDiv & noTrap & ~done;`,
     },
   });
-})();
+}

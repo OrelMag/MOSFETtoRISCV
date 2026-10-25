@@ -1,9 +1,9 @@
-// A two-pass RV32I assembler: labels, ABI register names, the common pseudo-instructions and
+// A two-pass RV32I assembler (RV64I / M with xlen 64): labels, ABI register names, the common pseudo-instructions and
 // .word. Errors are collected per line instead of thrown, so the editor can show them all.
 
 import { specOf, type CustomRow } from './custom';
 import { compress32, decodeC, scatter } from './rvc';
-import { BY_NAME, CSRS, encB, encI, encJ, encR, encR4, encS, encU, fregNumber, OPCODES, regNumber, RM_OPERANDS } from './isa';
+import { BY_NAME, BY_NAME64, CSRS, encB, encI, encJ, encR, encR4, encS, encU, fregNumber, OPCODES, regNumber, RM_OPERANDS, type Xlen } from './isa';
 
 export interface AsmLine {
   addr: number;
@@ -34,6 +34,12 @@ interface Stmt {
   parts: number[];
   /** Under .option rvc: compressed wherever a 16-bit form exists. */
   rvc: boolean;
+  xlen: Xlen;
+}
+
+export interface AsmOptions {
+  /** 64: RV64I / M (ld, sd, lwu, the W instructions, 6-bit shift amounts, li of any 64-bit constant). */
+  xlen?: Xlen;
 }
 
 export class AsmError extends Error {}
@@ -50,10 +56,41 @@ export function parseImm(s: string): number {
   return v;
 }
 
+/** A number as parseImm reads it, exact at any size (li on RV64). Throws. */
+export function parseBigImm(s: string): bigint {
+  const t = s.trim().toLowerCase().replace(/_/g, '');
+  const m = t.match(/^(-?)(0x[0-9a-f]+|0b[01]+|\d+)$/);
+  if (!m) return BigInt(parseImm(s));
+  const v = BigInt(m[2]);
+  return m[1] ? -v : v;
+}
+
 const fitsI = (v: number) => v >= -2048 && v <= 2047;
+const sext12 = (v: bigint) => BigInt.asIntN(12, v);
+
+/**
+ * RV64's li: a 32-bit value as lui + addiw (addiw, not addi: lui sign-extends, and the low part must wrap within 32
+ * bits); anything wider as the value above its low 12 bits (shifted down past its trailing zeros) loaded the same way,
+ * then slli and addi. Each step is exact mod 2^64.
+ */
+export function li64(v: bigint): ['addi' | 'lui' | 'addiw' | 'slli', number][] {
+  v = BigInt.asIntN(64, v);
+  const lo = sext12(v);
+  if (v >= -(2n ** 31n) && v < 2n ** 31n) {
+    const hi = Number(BigInt.asUintN(20, (v - lo) >> 12n));
+    if (hi === 0) return [['addi', Number(lo)]];
+    return lo ? [['lui', hi], ['addiw', Number(lo)]] : [['lui', hi]];
+  }
+  let h = (v - lo) >> 12n, sh = 12;
+  while (!(h & 1n)) { h >>= 1n; sh++; }
+  return [...li64(h), ['slli', sh], ...(lo ? [['addi', Number(lo)] as ['addi', number]] : [])];
+}
 
 /** Number of words a statement assembles to (decided in pass 1). */
-function sizeOf(op: string, args: string[]): number {
+function sizeOf(op: string, args: string[], xlen: Xlen): number {
+  if (op === 'li' && xlen === 64) {
+    try { return li64(parseBigImm(args[1] ?? '0')).length; } catch { return 2; }
+  }
   if (op === 'li') {
     try {
       const v = parseImm(args[1] ?? '0') | 0;
@@ -100,7 +137,7 @@ const stripComment = (line: string) => line.slice(0, commentStart(line));
 export const PSEUDO_OPS: readonly string[] = [
   'nop', 'mv', 'not', 'neg', 'seqz', 'snez', 'li', 'la', 'j', 'jr', 'ret', 'call', 'tail',
   'beqz', 'bnez', 'blez', 'bgez', 'bltz', 'bgtz', 'bgt', 'ble', 'bgtu', 'bleu',
-  'csrr', 'csrw', 'csrs', 'csrc', 'csrwi', 'csrsi', 'csrci',
+  'sext.w', 'negw', 'csrr', 'csrw', 'csrs', 'csrc', 'csrwi', 'csrsi', 'csrci',
   'fmv.s', 'fneg.s', 'fabs.s', 'frcsr', 'fscsr', 'frrm', 'fsrm', 'fsrmi', 'frflags', 'fsflags', 'fsflagsi',
 ];
 
@@ -109,7 +146,8 @@ export const PSEUDO_OPS: readonly string[] = [
 export const DIRECTIVES: readonly string[] = ['.word', '.half', '.text', '.globl', '.global', '.section', '.align', '.option'];
 
 /** custom: the CPU's custom instructions (riscv/custom.ts), assembled like any other. */
-export function assemble(src: string, custom: readonly CustomRow[] = []): AsmResult {
+export function assemble(src: string, custom: readonly CustomRow[] = [], opts: AsmOptions = {}): AsmResult {
+  const xlen = opts.xlen ?? 32;
   const stmts: Stmt[] = [];
   const labels = new Map<string, number>();
   /** label → the statement it names (stmts.length: the end). */
@@ -134,12 +172,13 @@ export function assemble(src: string, custom: readonly CustomRow[] = []): AsmRes
     const args = splitArgs(sp < 0 ? '' : ln.slice(sp + 1));
     if (op === '.option') {
       const o = args[0]?.toLowerCase();
-      if (o === 'rvc' || o === 'norvc') rvc = o === 'rvc';
+      if (o === 'rvc' && xlen === 64) errors.push({ line: i + 1, message: 'the C extension is RV32 only here' });
+      else if (o === 'rvc' || o === 'norvc') rvc = o === 'rvc';
       else if (o !== 'push' && o !== 'pop') errors.push({ line: i + 1, message: '.option takes rvc or norvc' });
       return;
     }
-    const st: Stmt = { line: i + 1, op, args, text: ln, addr: 0, size: 0, parts: [], rvc };
-    st.parts = st.op.startsWith('c.') ? [2] : op === '.half' ? args.map(() => 2) : op === '.align' ? [] : Array(sizeOf(op, args)).fill(rvc && op !== '.word' ? 2 : 4);
+    const st: Stmt = { line: i + 1, op, args, text: ln, addr: 0, size: 0, parts: [], rvc, xlen };
+    st.parts = st.op.startsWith('c.') ? [2] : op === '.half' ? args.map(() => 2) : op === '.align' ? [] : Array(sizeOf(op, args, xlen)).fill(rvc && op !== '.word' ? 2 : 4);
     stmts.push(st);
   });
 
@@ -269,7 +308,7 @@ function encodeC(st: Stmt, labels: Map<string, number>, custom: readonly CustomR
 }
 
 function encode(st: Stmt, labels: Map<string, number>, custom: readonly CustomRow[] = []): number[] {
-  const { op, args, addr } = st;
+  const { op, args, addr, xlen } = st;
   const need = (n: number) => {
     if (args.length !== n) throw new AsmError(`${op} expects ${n} operand${n === 1 ? '' : 's'}, got ${args.length}`);
   };
@@ -380,7 +419,20 @@ function encode(st: Stmt, labels: Map<string, number>, custom: readonly CustomRo
     case 'neg': need(2); return [encR(OPCODES.OP, reg(args[0]), 0, 0, reg(args[1]), 0x20)];
     case 'seqz': need(2); return [encI(OPCODES.OPIMM, reg(args[0]), 3, reg(args[1]), 1)];
     case 'snez': need(2); return [encR(OPCODES.OP, reg(args[0]), 3, 0, reg(args[1]), 0)];
+    case 'sext.w': case 'negw': {
+      if (xlen !== 64) throw new AsmError(`${op} is RV64 only`);
+      need(2);
+      return [op === 'negw' ? encR(OPCODES.OP32, reg(args[0]), 0, 0, reg(args[1]), 0x20) : encI(OPCODES.OPIMM32, reg(args[0]), 0, reg(args[1]), 0)];
+    }
     case 'li': {
+      if (xlen === 64) {
+        need(2);
+        const rd = reg(args[0]);
+        const big = parseBigImm(args[1]);
+        if (big < -(2n ** 63n) || big >= 2n ** 64n) throw new AsmError(`li: ${args[1].trim()} does not fit in 64 bits`);
+        return li64(big).map(([k, v], j) => (k === 'lui' ? encU(OPCODES.LUI, rd, v)
+          : encI(k === 'addiw' ? OPCODES.OPIMM32 : OPCODES.OPIMM, rd, k === 'slli' ? 1 : 0, k === 'addi' && j === 0 ? 0 : rd, v)));
+      }
       need(2);
       const rd = reg(args[0]);
       const v = parseImm(args[1]) | 0;
@@ -422,7 +474,8 @@ function encode(st: Stmt, labels: Map<string, number>, custom: readonly CustomRo
   }
 
   const own = custom.find((r) => r.name === op);
-  const spec = BY_NAME.get(op) ?? (own ? specOf(own) : undefined);
+  if (BY_NAME64.has(op) && xlen !== 64) throw new AsmError(`${op} is RV64 only`);
+  const spec = BY_NAME.get(op) ?? (xlen === 64 ? BY_NAME64.get(op) : undefined) ?? (own ? specOf(own) : undefined);
   if (!spec) throw new AsmError(`unknown instruction "${op}"`);
   if (spec.opcode === OPCODES.AMO) {
     need(3);
@@ -458,8 +511,8 @@ function encode(st: Stmt, labels: Map<string, number>, custom: readonly CustomRo
       }
       if (op === 'jalr' && args.length === 1) return [encI(spec.opcode, 1, 0, reg(args[0]), 0)];
       need(3);
-      if (op === 'slli' || op === 'srli' || op === 'srai') {
-        const sh = imm(args[2], 0, 31);
+      if (/^s(ll|rl|ra)iw?$/.test(op)) {
+        const sh = imm(args[2], 0, xlen === 64 && !op.endsWith('w') ? 63 : 31);
         return [encI(spec.opcode, reg(args[0]), f3, reg(args[1]), (spec.funct7! << 5) | sh)];
       }
       return [encI(spec.opcode, reg(args[0]), f3, reg(args[1]), imm(args[2], -2048, 2047))];

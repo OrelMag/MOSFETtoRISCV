@@ -12,7 +12,12 @@ export const OPCODES = {
   FMADD: 0b1000011, FMSUB: 0b1000111, FNMSUB: 0b1001011, FNMADD: 0b1001111,
   /** custom-0: the SIMT instructions of the lane cores (Vortex's encodings). */
   SIMT: 0b0001011,
+  /** RV64: the 32-bit ("word") arithmetic, its result sign-extended to 64 bits. */
+  OPIMM32: 0b0011011, OP32: 0b0111011,
 } as const;
+
+/** Register width: RV32 or RV64. */
+export type Xlen = 32 | 64;
 
 /** Register roles of a floating-point instruction: which operands live in the f registers. */
 export interface FpRoles { rd?: 'f' | 'x'; rs1?: 'f' | 'x'; rs2?: 'f' | 'x'; rs3?: 'f'; rm?: boolean; rs2fixed?: number }
@@ -103,6 +108,24 @@ export const INSTRS: InstrSpec[] = [
   ...([['tmc', ['rs1']], ['wspawn', ['rs1', 'rs2']], ['split', ['rs1']], ['join', []], ['bar', ['rs1', 'rs2']], ['pred', ['rs1', 'rs2']]] as const).map(
     ([name, simt], f3): InstrSpec => ({ name, fmt: 'R', opcode: OPCODES.SIMT, funct3: f3, funct7: 0, hw: false, simt: [...simt] })),
 ];
+
+/**
+ * What RV64I and RV64M add: doubleword loads and stores, a zero-extending word load, and the W instructions, which
+ * compute on the low 32 bits and sign-extend the result. Kept out of INSTRS so that every RV32 table (the builder's
+ * palette, the highlighter, custom slots) stays as it is; decode / disasm / the assembler read it at xlen 64.
+ */
+export const INSTRS64: InstrSpec[] = [
+  I('lwu', 6, OPCODES.LOAD, false), I('ld', 3, OPCODES.LOAD, false),
+  { name: 'sd', fmt: 'S', opcode: OPCODES.STORE, funct3: 3, hw: false },
+  I('addiw', 0, OPCODES.OPIMM32, false),
+  { name: 'slliw', fmt: 'I', opcode: OPCODES.OPIMM32, funct3: 1, funct7: 0, hw: false },
+  { name: 'srliw', fmt: 'I', opcode: OPCODES.OPIMM32, funct3: 5, funct7: 0, hw: false },
+  { name: 'sraiw', fmt: 'I', opcode: OPCODES.OPIMM32, funct3: 5, funct7: 0x20, hw: false },
+  ...([['addw', 0, 0], ['subw', 0, 0x20], ['sllw', 1, 0], ['srlw', 5, 0], ['sraw', 5, 0x20],
+    ['mulw', 0, 1], ['divw', 4, 1], ['divuw', 5, 1], ['remw', 6, 1], ['remuw', 7, 1]] as const).map(
+    ([name, f3, f7]): InstrSpec => ({ name, fmt: 'R', opcode: OPCODES.OP32, funct3: f3, funct7: f7, hw: false })),
+];
+export const BY_NAME64 = new Map(INSTRS64.map((i) => [i.name, i]));
 
 export const FABI = [
   'ft0', 'ft1', 'ft2', 'ft3', 'ft4', 'ft5', 'ft6', 'ft7', 'fs0', 'fs1', 'fa0', 'fa1', 'fa2', 'fa3', 'fa4', 'fa5',
@@ -224,19 +247,24 @@ export const IMM_SRC: Record<ImmFmt, (i: number) => number | 'zero'> = {
 export const IMM_TOP: Record<ImmFmt, number> = { I: 11, S: 11, B: 12, U: 31, J: 20 };
 
 /** custom: the CPU's custom instructions (riscv/custom.ts): a word on a custom slot is the slot's row, whatever its
- *  funct3 / funct7 (the control unit matches opcode[6:2] only). */
-export function decode(word: number, custom?: readonly CustomRow[]): Decoded {
+ *  funct3 / funct7 (the control unit matches opcode[6:2] only). xlen 64: RV64I / M (INSTRS64), and slli / srli / srai
+ *  take a 6-bit shift amount (instr[25] is shamt[5]). */
+export function decode(word: number, custom?: readonly CustomRow[], xlen: Xlen = 32): Decoded {
   const w = word >>> 0;
   const opcode = w & 0x7f, rd = (w >>> 7) & 31, funct3 = (w >>> 12) & 7, rs1 = (w >>> 15) & 31, rs2 = (w >>> 20) & 31, funct7 = w >>> 25;
+  const wide = xlen === 64;
   let spec: InstrSpec | null = null;
-  for (const s of INSTRS) {
+  for (const s of wide ? [...INSTRS, ...INSTRS64] : INSTRS) {
     if (s.opcode !== opcode) continue;
     if (s.funct3 !== undefined && s.funct3 !== funct3 && s.fmt !== 'U' && s.fmt !== 'J') continue;
     if (s.fmt === 'R' && s.funct7 !== (s.opcode === OPCODES.AMO ? funct7 & 0x7c : funct7)) continue;
     if (s.fmt === 'R4' && (funct7 & 3) !== 0) continue; // only fmt = S (single precision)
     if (s.fp?.rs2fixed !== undefined && s.fp.rs2fixed !== rs2) continue;
-    if (s.opcode === OPCODES.OPIMM && (funct3 === 1 || funct3 === 5) && s.funct7 !== undefined && s.funct7 !== funct7) continue; // RV32: shamt[5] = instr[25] must be 0
-    if (s.opcode === OPCODES.OPIMM && (funct3 === 1 || funct3 === 5) && s.funct7 === undefined) continue;
+    const shift = (s.opcode === OPCODES.OPIMM || s.opcode === OPCODES.OPIMM32) && (funct3 === 1 || funct3 === 5);
+    // RV32 and the W shifts: shamt[5] = instr[25] must be 0; RV64's slli / srli / srai: funct6 above a 6-bit shamt
+    const f7 = wide && s.opcode === OPCODES.OPIMM ? funct7 & ~1 : funct7;
+    if (shift && s.funct7 !== undefined && s.funct7 !== f7) continue;
+    if (shift && s.funct7 === undefined) continue;
     if (s.opcode === OPCODES.SYSTEM && funct3 === 0) {
       const imm = w >>> 20;
       const want = imm === 0 ? 'ecall' : imm === 1 ? 'ebreak' : imm === 0x302 ? 'mret' : imm === 0x105 ? 'wfi' : '';
@@ -252,7 +280,7 @@ export function decode(word: number, custom?: readonly CustomRow[]): Decoded {
   const fmt: Fmt = spec?.fmt ?? 'I';
   let imm = 0;
   switch (fmt) {
-    case 'I': imm = spec && (spec.name === 'slli' || spec.name === 'srli' || spec.name === 'srai') ? rs2 : immI(w); break;
+    case 'I': imm = !spec || !/^s(ll|rl|ra)iw?$/.test(spec.name) ? immI(w) : wide && spec.opcode === OPCODES.OPIMM ? (w >>> 20) & 63 : rs2; break;
     case 'S': imm = immS(w); break;
     case 'B': imm = immB(w); break;
     case 'U': imm = immU(w); break;
@@ -266,8 +294,8 @@ const rn = (r: number) => ABI[r];
 const frn = (r: number) => FABI[r];
 
 /** Disassemble one word; pc (if given) resolves branch / jump targets to absolute addresses. */
-export function disasm(word: number, pc?: number, custom?: readonly CustomRow[]): string {
-  const d = decode(word, custom);
+export function disasm(word: number, pc?: number, custom?: readonly CustomRow[], xlen: Xlen = 32): string {
+  const d = decode(word, custom, xlen);
   const tgt = (off: number) => (pc === undefined ? `${off}` : `0x${u32(pc + off).toString(16)}`);
   if (!d.spec) return `.word 0x${d.word.toString(16).padStart(8, '0')}`;
   const n = d.name;

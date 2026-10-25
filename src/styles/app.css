@@ -1414,6 +1414,8 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .cpu-regs .r.z .v { color: var(--muted); }
 .cpu-regs .r.chg { background: color-mix(in srgb, var(--w1) 22%, transparent); }
 .cpu-regs .n { color: var(--text-2); }
+.cpu-regs.cpu-regs64 { grid-template-columns: minmax(0, 1fr); }
+.cpu-regs.cpu-regs64 .v { font-variant-numeric: tabular-nums; }
 .cpu-mem { font: 11.5px var(--font-mono); }
 .cpu-mem .m { display: flex; gap: 10px; }
 .cpu-mem .n { color: var(--muted); width: 56px; }

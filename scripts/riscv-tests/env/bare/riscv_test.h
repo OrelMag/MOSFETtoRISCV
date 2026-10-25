@@ -1,5 +1,5 @@
 // The "bare" environment for the official riscv-tests, for our CPUs without CSRs or traps (single-cycle,
-// multicycle, pipelined, F). The test bodies (isa/rv64ui/*.S, isa/macros/scalar/test_macros.h) are
+// multicycle, pipelined, F; and with RVTEST_RV64U the 64-bit core: bare64). The test bodies (isa/rv64ui/*.S, isa/macros/scalar/test_macros.h) are
 // unchanged; only the environment differs from env/p: no trap vector, no ecall. Same contract: the test
 // number in gp, tohost written with 1 (pass) or (test << 1) | 1 (fail), then the hart halts on a jump to
 // itself. With MOSFET_MP every hart but hart 0 parks (csrr mhartid, as env/p does).

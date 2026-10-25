@@ -252,9 +252,12 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   random programs). Not yet: C in the sandbox (a core part reading a halfword window, the CPU drawer), the instruction
   builder's 16-bit formats, rv32uc images (needs GNU gcc), C on the pipelines
 - A extension (LR/SC, AMO): not now (decided 2026-10-25)
-- RV64I (and RV64M), chapter 25 part 2 (its steps shown as coming): the datapath generators are already parametric in width (alu(n), regfile(k, w), the adders and
-  shifters), so a 64-bit single-cycle core is mostly the W-suffixed instructions, sign extension of 32-bit results and a
-  golden model in BigInt or paired words; riscv-tests' rv64ui / rv64um and Spike's rv64 log then check it (Phase 19)
+- ✅ RV64I / RV64M, chapter 25 part 2 (steps 6–8): decode / disassembly / the assembler at xlen 64 (INSTRS64 beside INSTRS, li of any
+  64-bit constant), the golden model ISS64 (BigInt registers), one width-parametric single-cycle core xlenCpu at 32 and 64 bits (the
+  W unit around the 64-bit ALU and M unit, byte lanes for ld / sd / lwu), its own CPU panel on the stage; step 6 measures every generator
+  at both widths, step 7 the W instructions (the benchmarks' xorshift and CRC need W shifts on RV64), step 8 the core against itself at
+  32 bits (×2.35 NANDs, period 124 → 150). Checked by rv64ui / rv64um (65 of 67; fence_i and ma_data not applicable) on the golden model
+  and on the gates, rv32ui / rv32um on the 32-bit build, random RV64 programs in lock step, and Spike rv64im (1000 / 1000 per push)
 - Virtual memory (Sv32), TLB, U/S/M privilege levels (stretch)
 
 ### Phase 10 — Multi-core ✅ (chapter 27)
@@ -1058,7 +1061,7 @@ unit, wires nothing). The fan-out capacitance per net is already computed for th
 2-wide core (Phase 17c) stays fixed; the lab varies the model and prices sizes from the gates.
 
 **ISA breadth** (Ripes: RV64, the C extension): RV64I / RV64M and C in Phase 9, each checked by riscv-tests and Spike
-like the RV32 cores. ✅ C (chapter 25, part 1); ⏳ RV64I / M (part 2).
+like the RV32 cores. ✅ C (chapter 25, part 1); ✅ RV64I / M (part 2). Open: C and RV64 in the sandbox, the instruction builder's 16-bit and RV64 formats.
 
 ### Phase 20 — Reviewer feedback (2026-10-19) ⏳
 An outside review asked for CMOS realism, cross-layer debugging, campaign polish and an FPGA path. Much of it was
