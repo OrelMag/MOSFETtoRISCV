@@ -168,7 +168,8 @@ export function trapCause(b: Builder, ill: string, ecall: string, intr: string |
   b.next();
   const b3 = intr === null ? b.op1(NOT, [e], 'bit 3') : b.op1(NAND, [ni, e], 'bit 3');
   b.next();
-  return b.op1(merger([1, 1, 1, 1, 11, 1], 2), [b0, b.op1(TIE1, []), b.op1(TIE0, []), b3, b.op1(constWord(11, 0), []), intr ?? b.op1(TIE0, [])], 'cause');
+  const one = b.op1(TIE1, []), z = b.op1(TIE0, []);
+  return b.op1(merger([1, 1, 1, 1, 11, 1], 2), [b0, one, z, b3, b.op1(constWord(11, 0), []), intr ?? z], 'cause');
 }
 
 /** System decode: what a SYSTEM word is, and the CSR write value (csrrw / csrrs / csrrc). */

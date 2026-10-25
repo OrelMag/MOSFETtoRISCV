@@ -342,7 +342,7 @@ nothing depends on an ISA, so any CPU with a ROM can play.
 |---|---|
 | A ready computer (4-bit CPU, RV16, RV32I) | the CPU, a 256-word program ROM, RAM (RV16 / RV32I: 64 words), a halt detector and the two puzzle ports, wired |
 | One of your chips with a program ROM | a copy of it, with PUZZLE IN, PUZZLE OUT and (if it has none) a halt part placed beside it, unwired |
-| Your single-cycle campaign core (Core III, A faster core, Exceptions, Interrupts, Multiply / Divide in the core) | the RV16 computer around it |
+| Your single-cycle campaign core (Core III, Core IV, Exceptions, Interrupts, Multiply / Divide in the core) | the RV16 computer around it |
 
 How a program uses the ports on the ready computers:
 

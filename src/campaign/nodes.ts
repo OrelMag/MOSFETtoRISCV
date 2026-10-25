@@ -548,10 +548,16 @@ export const NODES: CampaignNode[] = [
     codex: ['interrupts', 'traps'],
   },
   {
-    id: 'y_final', act: 7, title: 'Finale: the complete RV16', kind: 'core', requires: ['pi_core3', 'y_irq', 'p_handler'], base: BUILD7.y_final, par: { nand: 12038, period: 81, cycles: 2399 },
-    why: 'The pipelined processor with precise traps and interrupts: every block you built, from the NAND up, in one chip that runs real programs, handles its own errors and answers the outside world.',
+    id: 'y_ptrap', act: 7, title: 'Pipeline V: precise exceptions', kind: 'core', requires: ['pi_core3', 'y_trap'], base: BUILD7.y_ptrap, par: { nand: 12031, period: 81, cycles: 2361 },
+    why: 'In the single-cycle core a trap was easy: one instruction at a time, so the trapping one was the only one. The pipeline has five in flight. A precise trap lets every older instruction finish, cancels every younger one, and leaves the culprit\'s address in mepc, so the handler can return to it. Take traps in E, where the instruction has changed nothing yet.',
     tips: ['Take traps in E: older instructions in M and W still complete, younger ones in F and D are flushed.', 'Carry a valid bit: a bubble\'s all-zero word would otherwise look like an illegal instruction.', 'A CSR instruction reads and writes in E; its old value travels down as the result.'],
-    codex: ['precise'],
+    codex: ['precise', 'flush'],
+  },
+  {
+    id: 'y_final', act: 7, title: 'Finale: interrupts in the pipeline', kind: 'core', requires: ['y_ptrap', 'y_irq', 'p_handler'], base: BUILD7.y_final, par: { nand: 12038, period: 81, cycles: 2399 },
+    why: 'The last piece is the outside world. Pipeline V already takes exceptions precisely in E; an interrupt is one more reason to trap there, taken only when enabled. Then every block you built, from the NAND up, is one chip that runs real programs, handles its own errors and answers a device: the machine your interrupt handler was written for.',
+    tips: ['intr = MIE · MEIE · irq comes from the CSR file: wire the pin in and OR the interrupt into the trap.', 'Gate the interrupt with the valid bit too: a bubble in E has no pc of its own (its D/E slot was cleared), so mepc would name an address the program never was at.', 'mcause for the interrupt is 0x800B (bit 15, external cause 11): it wins over every exception.'],
+    codex: ['interrupts'],
   },
 
   // ---- Act 8 --------------------------------------------------------------------------------

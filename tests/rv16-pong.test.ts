@@ -248,7 +248,7 @@ describe('Play Pong on your core', { timeout: 300000 }, () => {
     const { NODES } = await import('../src/campaign/nodes');
     const { coreSpecOf } = await import('../src/campaign/corecheck');
     const offered = NODES.filter((n) => n.kind === 'core' && levelChallenge(n) && coreSpecOf(levelChallenge(n)!.check)?.rv16i).map((n) => n.id);
-    expect(offered.sort()).toEqual(['c_core3', 'c_fast', 'o_bpred', 'o_dcore', 'o_mc', 'o_mcore', 'pi_core3', 'y_final', 'y_irq', 'y_trap']);
+    expect(offered.sort()).toEqual(['c_core3', 'c_fast', 'o_bpred', 'o_dcore', 'o_mc', 'o_mcore', 'pi_core3', 'y_final', 'y_irq', 'y_ptrap', 'y_trap']);
     for (const level of offered) {
       const coreDoc = levelChallenge(nodeById(level)!)!.answer().at(-1)!;
       let ws: Workspace = { ...emptyWorkspace(), chips: Object.fromEntries(levelChallenge(nodeById(level)!)!.answer().map((d) => [d.id, d])) };

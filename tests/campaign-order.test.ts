@@ -3,8 +3,11 @@
 // beats it once E's adders are fast too. The texts quoting them are checked against the measurement.
 
 import { describe, expect, it } from 'vitest';
-import { corePeriod, memLeaf, runCore } from '../src/campaign/corecheck';
-import { coreTests } from '../src/campaign/coretests';
+import { corePeriod, type CoreTest, memLeaf, runCore } from '../src/campaign/corecheck';
+import { coreTests, pipeTests, sysTests } from '../src/campaign/coretests';
+import { caseOf } from '../src/campaign/cases';
+import { WALKS } from '../src/campaign/walks';
+import { rv16SysCore } from '../src/lib/rv16/system';
 import { LESSONS } from '../src/campaign/lessons';
 import { nodeById } from '../src/campaign/nodes';
 import '../src/lib';
@@ -36,8 +39,8 @@ function span(core: ComponentDef, label: string): number {
   return on[on.length - 1].p.arrival - (first ? r.path[first - 1].arrival : 0);
 }
 
-const time = (def: ComponentDef) => {
-  const r = runCore(def, 'gate', { rv16i: true, tests: () => coreTests(3), budget: { cpi: 2.5, extra: 10 } });
+const time = (def: ComponentDef, tests: CoreTest[] = coreTests(3), system = false) => {
+  const r = runCore(def, 'gate', { rv16i: true, tests: () => tests, budget: { cpi: 2.5, extra: 10 }, system });
   expect(r.failures).toEqual([]);
   const period = corePeriod(def)!;
   const cycles = r.cycles!;
@@ -73,5 +76,32 @@ describe('Core IV and the pipeline', () => {
     const pct = (a: number, b: number) => Math.round(100 * (1 - a / b));
     expect(body).toContain(`that is ${p4.period} delays, and the pipeline is ${pct(p4.time, core3.time)}% faster`);
     expect(body).toContain(`its period falls to ${p4fast.period}, and it beats Core IV by ${pct(p4fast.time, core4.time)}%, for ${sp(p4fast.nand)} NANDs against ${sp(core4.nand)}`);
+  });
+});
+
+describe('the finale in two levels', () => {
+  const exc = [...sysTests(false), ...pipeTests(3)], all = [...sysTests(true), ...pipeTests(3)];
+  const p5 = time(pipe({ sys: 'exc' }), exc, true), fin = time(pipe({ sys: true }), all, true);
+  const trap1 = time(rv16SysCore(false), exc, true), irq1 = time(rv16SysCore(true), all, true);
+  const text = (id: string) => WALKS[id].map((s) => s.text).join(' ') + ' ' + caseOf(id)!.cost;
+
+  it('Pipeline V takes exceptions only; the finale adds the interrupt for 7 NANDs', () => {
+    expect(nodeById('y_ptrap')!.par).toEqual({ nand: p5.nand, period: p5.period, cycles: p5.cycles });
+    expect(nodeById('y_final')!.par).toEqual({ nand: fin.nand, period: fin.period, cycles: fin.cycles });
+    expect(nodeById('y_final')!.requires).toEqual(expect.arrayContaining(['y_ptrap', 'y_irq', 'p_handler']));
+    expect(fin.nand - p5.nand).toBe(7);
+    for (const [id, m, single, n] of [['y_ptrap', p5, trap1, exc.length], ['y_final', fin, irq1, all.length]] as const) {
+      const t = text(id);
+      expect(t, id).toContain(`${sp(m.nand)} NANDs`);
+      expect(t, id).toContain(`the ${n} programs`);
+      expect(t, id).toContain(`take ${sp(m.cycles)} cycles, ${sp(m.time)} NAND delays, against ${sp(single.time)} on the single-cycle core`);
+      expect(t, id).toContain(`(${sp(single.cycles)} cycles at period ${single.period})`);
+    }
+    expect(caseOf('y_final')!.cost).toContain(`${fin.nand - p5.nand} over Pipeline V`);
+  });
+
+  it('a predicting pipeline may keep its prediction in the finale', () => {
+    const r = runCore(pipe({ sys: true, predict: true }), 'gate', { rv16i: true, tests: () => all, budget: { cpi: 2.5, extra: 10 }, system: true });
+    expect(r.failures).toEqual([]);
   });
 });
