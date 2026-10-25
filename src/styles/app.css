@@ -801,6 +801,8 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 /* A charge level between the rails (switch level: a bit line at VDD/2, after charge sharing): mixed by its level. */
 .wire.vl { stroke: color-mix(in oklab, var(--w1) calc(var(--lv, 0.5) * 100%), var(--w0)); stroke-dasharray: none; }
 .dot.vl { fill: color-mix(in oklab, var(--w1) 50%, var(--w0)); }
+/* A weak level (H: a 1 an NMOS passed, L: a 0 a PMOS passed): the level colour, as wide as a 1, with its tag. */
+.wire.vl.weak { stroke-width: calc(var(--wire-w1) * var(--wire-k, 1)); }
 .level-tag { pointer-events: none; }
 .level-tag rect { fill: var(--surface); stroke: var(--border-strong); stroke-width: 0.06; }
 .level-tag text { font: 600 0.8px var(--font-mono); fill: var(--text); }
@@ -819,6 +821,8 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .sym-dep { stroke: var(--dep-load); stroke-width: 0.34; }
 .conducting .sym-channel { stroke: var(--channel-on); stroke-dasharray: none; stroke-width: 0.3; filter: drop-shadow(0 0 0.3px var(--channel-on)); }
 .maybe .sym-channel { stroke: var(--wx); }
+/* Partly on (switch level: its gate at a weak level): static current leaks through it, drawn in the current colour. */
+.leaky .sym-channel { stroke: var(--wshort); stroke-dasharray: 0.35 0.2; stroke-width: 0.3; }
 /* relays: the blade shown at the contact it touches; the coil lit while current flows (it pulls at the next relay step) */
 .relay-blade { stroke: var(--sym-stroke); stroke-width: 0.24; stroke-linecap: round; fill: none; }
 .relay-op, .conducting .relay-rel { display: none; }

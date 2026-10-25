@@ -91,7 +91,8 @@ RV16 pipeline            9,218 NANDs</pre>`,
     chapters: [
       { chapter: 'inverter', step: 0, label: 'Pull up, pull down' },
       { chapter: 'inverter', step: 1, label: 'Why this is brilliant' },
-      { chapter: 'inverter', step: 2, label: 'The cheaper, hotter way: a pull-up' },
+      { chapter: 'inverter', step: 2, label: 'The wrong way round: weak levels' },
+      { chapter: 'inverter', step: 3, label: 'The cheaper, hotter way: a pull-up' },
     ],
   },
 
