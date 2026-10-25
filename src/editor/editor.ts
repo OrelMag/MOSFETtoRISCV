@@ -224,7 +224,7 @@ export class Editor {
       h('div', { class: 'row' }, act('examples', 'Examples', 'book'), act('challenges', 'Challenges', 'flag'), act('puzzles', 'Puzzles', 'puzzle')));
     // Touch (tools.ts): one finger wires, moves and draws a band; two fingers pan and zoom (camera.ts).
     this.canvas.append(overlay, this.emptyEl, this.toastEl, this.tipEl,
-      hintBadge('drag from a pin to wire · L pointer · wheel zoom · Space+drag pan · ? shortcuts',
+      hintBadge('drag pin → pin: wire · L: pointer (a named wire: same name = connected) · wheel zoom · Space+drag pan · ? shortcuts',
         'drag from a pin: wire · double-tap: open · pinch: zoom', 'sandbox', ' sb-hint'));
     this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }), top: h('div', { class: 'sb-top-slot' }), left: h('div', { class: 'sb-left' }) };
 
@@ -1147,7 +1147,7 @@ export class Editor {
     const list = h('datalist', { id: 'sb-names' }, names.map((n) => h('option', { value: n })));
     const input = h('input', { type: 'text', value: initial, list: 'sb-names', spellcheck: 'false', 'aria-label': 'Pointer name', placeholder: 'name' }) as HTMLInputElement;
     const box = h('div', { class: 'sb-prompt', style: `left:${pt.x - r.left + 8}px;top:${pt.y - r.top - 16}px` }, input, list,
-      h('small', null, names.length ? 'Enter: same name = same net' : 'Enter to place'));
+      h('small', null, 'Name it. Every pointer with this name is the same wire. Enter to place.'));
     let finished = false;
     const finish = (ok: boolean) => {
       if (finished) return;

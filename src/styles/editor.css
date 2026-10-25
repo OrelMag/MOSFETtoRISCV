@@ -333,7 +333,7 @@
   border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: var(--shadow-lg);
 }
 .sb-prompt input { font: 600 13px var(--font-mono); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--accent); background: var(--surface); color: var(--text); width: 150px; outline: none; }
-.sb-prompt small { color: var(--muted); font-size: 11px; }
+.sb-prompt small { color: var(--muted); font-size: 11px; max-width: 150px; line-height: 1.35; }
 .sb-ctx {
   position: fixed; z-index: 70; min-width: 210px; display: grid; gap: 1px; padding: 5px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg);
