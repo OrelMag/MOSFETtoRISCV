@@ -6,6 +6,7 @@
 import { objectCard, seqText, textCard, wordOf } from '../cards/card';
 import { CHARSET, charOf, punchOf, ROW9, ROWS, rowsOf, rowsOfChar } from '../cards/hollerith';
 import { RELAY, RELAY_STEP_MS, RELAY_SUPPLY, type RelayParams, relayPull, type RelayRun, relaySim, relayStatic, relaySummary, T_OFF, T_ON, Z3 } from '../phys/relay';
+import { literals as lits, minimumCover, primes, type Term } from '../lib/sop';
 import { assemble16 } from '../riscv/rv16/asm16';
 import { decode16, disasm16 } from '../riscv/rv16/isa16';
 
@@ -200,58 +201,7 @@ export function evalBool(e: Ex, x: number, n: number): number {
     default: return evalBool(e.a, x, n) ^ evalBool(e.b, x, n);
   }
 }
-
-/** A product term: bits in mask are free; the others must equal val. */
-export interface Term { val: number; mask: number }
-
-const covers = (t: Term, m: number) => (m & ~t.mask) === t.val;
-const lits = (t: Term, n: number) => n - popcount(t.mask);
-function popcount(x: number): number {
-  let c = 0;
-  for (; x; x &= x - 1) c++;
-  return c;
-}
-
-/** Prime implicants of ones ∪ dc (Quine–McCluskey). */
-export function primes(ones: number[], dc: number[] = []): Term[] {
-  let cur: Term[] = [...new Set([...ones, ...dc])].map((m) => ({ val: m, mask: 0 }));
-  const out: Term[] = [];
-  const key = (t: Term) => `${t.val}/${t.mask}`;
-  while (cur.length) {
-    const used = new Set<string>(), next = new Map<string, Term>();
-    for (let i = 0; i < cur.length; i++) for (let j = i + 1; j < cur.length; j++) {
-      const a = cur[i], b = cur[j], d = a.val ^ b.val;
-      if (a.mask === b.mask && d && !(d & (d - 1))) {
-        const t = { val: a.val & ~d, mask: a.mask | d };
-        next.set(key(t), t);
-        used.add(key(a)).add(key(b));
-      }
-    }
-    for (const t of cur) if (!used.has(key(t)) && !out.some((p) => key(p) === key(t))) out.push(t);
-    cur = [...next.values()];
-  }
-  return out;
-}
-
-/** An exact minimum sum of products (fewest terms, then fewest literals) covering `ones`. */
-export function minimumCover(n: number, ones: number[], dc: number[] = []): Term[] {
-  if (!ones.length) return [];
-  const ps = primes(ones, dc).filter((p) => ones.some((m) => covers(p, m)));
-  let best: Term[] | null = null;
-  const cost = (ts: Term[]) => ts.length * 1000 + ts.reduce((a, t) => a + lits(t, n), 0);
-  const go = (left: number[], chosen: Term[]) => {
-    if (best && cost(chosen) >= cost(best)) return;
-    if (!left.length) { best = [...chosen]; return; }
-    // Branch on the first uncovered minterm's covering primes.
-    const m = left[0];
-    for (const p of ps) {
-      if (!covers(p, m)) continue;
-      go(left.filter((x) => !covers(p, x)), [...chosen, p]);
-    }
-  };
-  go(ones, []);
-  return best ?? [];
-}
+export { minimumCover, primes, type Term };
 
 export const termText = (t: Term, vars: string[]): string => {
   const n = vars.length;

@@ -41,8 +41,8 @@ export function hdlGroup(ws: Workspace, homeId: string): ChipDoc[] {
   return [home, ...Object.values(ws.chips).filter((c) => c.hdl?.of === homeId)];
 }
 
-/** Is the chip's body generated (so the canvas must not edit it)? */
-export const isGenerated = (ws: Workspace, id: string): boolean => !!hdlHome(ws, id);
+/** Is the chip's body generated, from Verilog or a truth table (ttable.ts), so the canvas must not edit it? */
+export const isGenerated = (ws: Workspace, id: string): boolean => !!hdlHome(ws, id) || !!ws.chips[id]?.table;
 
 /** The part of a chip a synthesis owns: changing it by hand is refused. */
 export function bodyKey(doc: ChipDoc): string {
