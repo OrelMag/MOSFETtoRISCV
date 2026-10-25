@@ -25,7 +25,8 @@ button.lv-chip { font: inherit; font-size: 12.5px; cursor: pointer; }
 
 /* a locked entry */
 .cx-lockbadge { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); border: 1px dashed var(--border-strong); background: none; }
-.cx-entry.locked .cx-check { display: grid; gap: 10px; }
+.cx-entry.locked .cx-check { display: grid; gap: 8px; }
+.cx-entry.locked .cx-check h4, .cx-entry.locked .cx-check > .sub { margin: 0; }
 
 /* the landing page */
 .cx-landing { display: grid; gap: 14px; }
