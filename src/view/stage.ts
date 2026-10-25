@@ -177,6 +177,10 @@ export class Stage {
   private probeBtn: HTMLButtonElement;
   private timingBtn: HTMLButtonElement;
   private panesBtn: HTMLButtonElement;
+  private moreBtn: HTMLButtonElement;
+  private moreMenu: HTMLElement;
+  /** The bar's buttons fitBar may move into More, in that order, with what each does there. */
+  private shedGroups: { els: HTMLElement[]; items: { label: string; hint?: string; icon: string; on?: () => boolean; run: () => void }[] }[] = [];
   /** Fixed clock period in gate delays (null: every edge waits for the logic to settle). */
   private period: number | null = null;
   private nextEdge = 0;
@@ -252,11 +256,53 @@ export class Stage {
       applyTheme();
     } }, icon('sidebar', 16)) as HTMLButtonElement;
     this.syncPanesBtn();
+    const imgWrap = h('div', { class: 'pal-wrap' }, imgBtn, imgMenu);
+    const zoomOut = btn('minus', 'Zoom out', () => this.view.zoom(1.25), ' zoom-btn');
+    const zoomIn = btn('plus', 'Zoom in', () => this.view.zoom(0.8), ' zoom-btn');
+    // More: the buttons fitBar takes off a bar too narrow for them and the open level's name, as menu items
+    const moreMenu = this.moreMenu = h('div', { class: 'pal-menu stage-more-menu', role: 'menu', 'aria-label': 'More tools' });
+    const more = this.moreBtn = h('button', {
+      class: 'btn ghost icon-only stage-more', title: 'More tools (the bar has no room for them)', 'aria-label': 'More tools',
+      'aria-haspopup': 'menu', 'aria-expanded': 'false', onclick: (e: Event) => {
+        e.stopPropagation();
+        this.toggleMore(!moreMenu.classList.contains('open'));
+      },
+    }, icon('more', 16)) as HTMLButtonElement;
+    const moreWrap = h('div', { class: 'pal-wrap stage-more-wrap', hidden: true }, more, moreMenu);
+    document.addEventListener('pointerdown', (e) => {
+      if (!moreWrap.contains(e.target as Node)) this.toggleMore(false);
+    });
+    moreMenu.addEventListener('keydown', (e) => {
+      const items = [...moreMenu.querySelectorAll<HTMLElement>('button')];
+      const i = items.indexOf(document.activeElement as HTMLElement);
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        this.toggleMore(false);
+        more.focus();
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
+      }
+    });
+    const pressed = (b: HTMLElement) => b.classList.contains('on');
+    // the order they go in: the least used first (a wheel or a pinch zooms; Up, Fit and the panes stay)
+    this.shedGroups = [
+      { els: [zoomOut, zoomIn], items: [{ label: 'Zoom out', icon: 'minus', run: () => this.view.zoom(1.25) }, { label: 'Zoom in', icon: 'plus', run: () => this.view.zoom(0.8) }] },
+      { els: [imgWrap], items: [
+        { label: 'Image as SVG', hint: 'This level, whole, as drawn in the current theme', icon: 'image', run: () => this.exportImage('svg') },
+        { label: 'Image as PNG', hint: 'The same at 2× resolution', icon: 'image', run: () => this.exportImage('png') }] },
+      { els: [layoutBtn], items: [{ label: 'Layout…', hint: 'Unravel pointers into wires, or reset this level', icon: 'move', run: () => {
+        const r = more.getBoundingClientRect();
+        this.view.layoutMenu(r.left, r.bottom + 6);
+      } }] },
+      { els: [remix], items: [{ label: 'Open in Sandbox', hint: 'An editable copy of the circuit on screen', icon: 'chip', run: () => this.remix() }] },
+      { els: [this.timingBtn], items: [{ label: 'Timing diagram', icon: 'wave', on: () => pressed(this.timingBtn), run: () => this.timingBtn.click() }] },
+      { els: [this.probeBtn], items: [{ label: 'Probe mode (P)', icon: 'probe', on: () => pressed(this.probeBtn), run: () => this.probeBtn.click() }] },
+    ];
     const bar = this.bar = h('div', { class: 'stage-bar' },
-      this.crumbs, remix, h('div', { class: 'pal-wrap' }, imgBtn, imgMenu), layoutBtn, this.probeBtn, this.timingBtn,
+      this.crumbs, remix, imgWrap, layoutBtn, this.probeBtn, this.timingBtn, moreWrap,
       btn('up', 'Up one level (Esc)', () => this.up()),
-      btn('minus', 'Zoom out', () => this.view.zoom(1.25), ' zoom-btn'),
-      btn('plus', 'Zoom in', () => this.view.zoom(0.8), ' zoom-btn'),
+      zoomOut, zoomIn,
       btn('fit', 'Fit to screen', () => this.view.fit()),
       this.panesBtn);
     this.canvas = h('div', { class: 'canvas' });
@@ -319,7 +365,32 @@ export class Stage {
       this.layoutDock(false);
       this.view.resized();
       this.fitBar();
+      this.fitControls();
     }).observe(this.canvas);
+  }
+
+  /** Open or close the bar's More menu, filled with the shed buttons' actions as they stand now. */
+  private toggleMore(open: boolean): void {
+    const menu = this.moreMenu, more = this.moreBtn;
+    if (open === menu.classList.contains('open')) return;
+    menu.classList.toggle('open', open);
+    more.setAttribute('aria-expanded', String(open));
+    if (!open) return;
+    menu.replaceChildren();
+    for (const g of this.shedGroups) {
+      if (!g.els[0].classList.contains('shed') || g.els[0].hidden) continue;
+      for (const it of g.items) {
+        const on = it.on?.();
+        menu.append(h('button', {
+          role: on === undefined ? 'menuitem' : 'menuitemcheckbox', ...(on === undefined ? {} : { 'aria-checked': String(on) }),
+          onclick: () => {
+            this.toggleMore(false);
+            it.run();
+          },
+        }, icon(it.icon, 16), h('span', null, h('b', null, it.label), it.hint ? h('small', null, it.hint) : null)));
+      }
+    }
+    menu.querySelector<HTMLElement>('button')?.focus();
   }
 
   private syncPanesBtn(): void {
@@ -561,15 +632,15 @@ export class Stage {
     const def: ComponentDef = lay && nl ? { ...shown, netlist: () => applyLayout(nl, lay) } : shown;
     import('../editor/remix').then((m) => {
       const r = m.remixIntoStorage(def);
-      if ('error' in r) this.status.replaceChildren(h('span', { class: 'pulse warn' }), `Cannot open in the sandbox: ${r.error}`);
+      if ('error' in r) this.setStatus(h('span', { class: 'pulse warn' }), `Cannot open in the sandbox: ${r.error}`);
       else location.hash = `#/sandbox/${r.id}`;
-    }, (e) => this.status.replaceChildren(h('span', { class: 'pulse warn' }), `The sandbox could not load: ${String(e)}`));
+    }, (e) => this.setStatus(h('span', { class: 'pulse warn' }), `The sandbox could not load: ${String(e)}`));
   }
 
   private exportImage(kind: 'svg' | 'png'): void {
     const def = this.ctx?.def;
     if (!def) return;
-    const fail = (e: unknown) => this.status.replaceChildren(h('span', { class: 'pulse warn' }), `Cannot export the image: ${e instanceof Error ? e.message : String(e)}`);
+    const fail = (e: unknown) => this.setStatus(h('span', { class: 'pulse warn' }), `Cannot export the image: ${e instanceof Error ? e.message : String(e)}`);
     import('./image').then((m) => m.exportSchematic(this.view, def.name, kind)).catch(fail);
   }
 
@@ -966,7 +1037,9 @@ export class Stage {
     const on = !!this.runClock;
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', String(on));
-    b.replaceChildren(icon(on ? 'pause' : 'play', 14), on ? 'Pause' : 'Run');
+    b.replaceChildren(icon(on ? 'pause' : 'play', 14), h('span', { class: 'lbl' }, on ? 'Pause' : 'Run'));
+    b.setAttribute('aria-label', on ? 'Pause the clock' : 'Run the clock');
+    this.fitControls();
   }
 
   /** Step one gate delay (works whether or not animation is on). */
@@ -1059,13 +1132,20 @@ export class Stage {
       c.append(h('span', { class: 'ctl-group out-strip' }, h('span', { class: 'label' }, 'Outputs'),
         outs.map((p) => (p.width === 1 ? this.bitLamp(p) : this.numOutput(p)))));
     }
+    // The clock, the stepping buttons and the status are one row that wraps as a whole below the pins (never a lone
+    // Reset or status on a row of its own); the status grows into what is left of it and is cut with an ellipsis
+    // rather than wrapping, so a message changing length during a run never resizes the canvas. fitControls drops
+    // the buttons' labels where that saves a row.
+    const acts = h('span', { class: 'ctl-acts' });
+    const labelled = (cls: string, title: string, ic: string, text: string, fn: () => void) =>
+      h('button', { class: `btn sm ${cls}`, title, 'aria-label': text, onclick: fn }, icon(ic, 14), h('span', { class: 'lbl' }, text));
     if (clk) {
-      c.append(h('span', { class: 'label', style: 'margin-left:6px' }, 'Clock'));
-      c.append(this.bitToggle(root.ports.find((q) => q.name === clk)!));
-      c.append(h('button', { class: 'btn sm', title: 'One full clock cycle (pauses a running clock)', onclick: () => this.pulse() }, icon('clock', 14), 'Pulse'));
+      acts.append(h('span', { class: 'label', style: 'margin-left:6px' }, 'Clock'));
+      acts.append(this.bitToggle(root.ports.find((q) => q.name === clk)!));
+      acts.append(labelled('', 'One full clock cycle (pauses a running clock)', 'clock', 'Pulse', () => this.pulse()));
       this.runBtn = h('button', { class: 'btn sm toggle', title: `Run the clock (${1000 / RUN_MS} cycles per second) / pause it`, onclick: () => (this.runClock ? this.stopClock() : this.startClock()) }) as HTMLButtonElement;
       this.syncRunBtn();
-      c.append(this.runBtn);
+      acts.append(this.runBtn);
       if (this.sim?.runUntil) {
         const per = h('input', { type: 'text', inputmode: 'numeric', placeholder: 'settle', 'aria-label': 'Clock period in gate delays', value: this.period ?? '' }) as HTMLInputElement;
         per.addEventListener('change', () => {
@@ -1073,17 +1153,36 @@ export class Stage {
           this.setPeriod(Number.isFinite(n) ? n : null);
           per.value = this.period ? String(this.period) : '';
         });
-        c.append(h('label', { class: 'period', title: 'Clock period in gate delays. Empty: each edge waits until the logic has settled. A number: edges come on time, settled or not.' }, 'period', per));
+        acts.append(h('label', { class: 'period', title: 'Clock period in gate delays. Empty: each edge waits until the logic has settled. A number: edges come on time, settled or not.' }, 'period', per));
       }
     }
-    this.backBtn = h('button', { class: 'btn sm ghost', title: 'Step back: undo the last step, clock cycle or input change', onclick: () => this.back() },
-      icon('stepBack', 14), 'Back') as HTMLButtonElement;
-    c.append(this.backBtn);
+    this.backBtn = labelled('ghost', 'Step back: undo the last step, clock cycle or input change', 'stepBack', 'Back', () => this.back()) as HTMLButtonElement;
+    acts.append(this.backBtn);
     if (this.sim?.kind === 'gate' || this.relayTime) {
-      c.append(h('button', { class: 'btn sm ghost', title: this.relayTime ? 'Advance one relay step (every armature follows its coil)' : 'Advance one gate delay', onclick: () => this.stepOnce() }, icon('step', 14), 'Step'));
+      acts.append(labelled('ghost', this.relayTime ? 'Advance one relay step (every armature follows its coil)' : 'Advance one gate delay', 'step', 'Step', () => this.stepOnce()));
     }
-    c.append(h('button', { class: 'btn sm ghost', title: 'Power-cycle the circuit', onclick: () => this.powerCycle() }, icon('reset', 14), 'Reset'));
-    c.append(this.status);
+    acts.append(labelled('ghost', 'Power-cycle the circuit', 'reset', 'Reset', () => this.powerCycle()));
+    c.append(h('span', { class: 'ctl-run' }, acts, this.status));
+    this.fitControls();
+  }
+
+  /**
+   * Drop the bottom bar's button labels (icons, tooltips and accessible names remain) when its controls would
+   * otherwise take another row or run past the bar's edge; measured with the labels shown, so they come back once
+   * there is room. Buttons on a row of their own that fit there keep their words.
+   */
+  private fitControls(): void {
+    const c = this.controls, run = c.querySelector<HTMLElement>(':scope > .ctl-run');
+    c.classList.remove('compact');
+    if (!run || !c.offsetWidth) return;
+    const first = [...c.children].find((k) => k instanceof HTMLElement && k.offsetWidth > 0 && !k.classList.contains('ctl-inner')) as HTMLElement;
+    const cut = () => run.scrollWidth > run.clientWidth + 1;
+    const wrapped = () => first !== run && run.offsetTop > first.offsetTop + 2;
+    const wasCut = cut();
+    if (!wasCut && !wrapped()) return;
+    c.classList.add('compact');
+    // icons only where they save a row or keep the buttons in the bar; a row of their own anyway: keep the words
+    if (!wasCut && wrapped()) c.classList.remove('compact');
   }
 
   powerCycle(): void {
@@ -1188,7 +1287,15 @@ export class Stage {
     else if (this.lastSettle !== null && sim.kind === 'gate') msg = `${this.clockPort() && this.cycles ? 'clock edge ' : ''}settled in ${this.lastSettle} gate delay${this.lastSettle === 1 ? '' : 's'}`;
     else msg = this.relayTime ? 'relays at rest' : sim.kind === 'switch' ? 'switch level: solved instantly' : 'settled';
     const warn = sim.unstable || (!!this.period && this.lateCount > 0);
-    this.status.replaceChildren(h('span', { class: `pulse${busy ? ' busy' : ''}${warn ? ' warn' : ''}` }), msg);
+    this.setStatus(h('span', { class: `pulse${busy ? ' busy' : ''}${warn ? ' warn' : ''}` }), msg);
+  }
+
+  /** The status line: a dot and a message, cut with an ellipsis where the bar is short of room (the whole of it is the tooltip). */
+  private setStatus(dot: HTMLElement, msg: string): void {
+    const t = this.status.lastElementChild as HTMLElement | null;
+    if (t && this.status.childElementCount === 2 && t.textContent === msg && (this.status.firstElementChild as HTMLElement).className === dot.className) return;
+    this.status.replaceChildren(dot, h('span', { class: 'status-txt' }, msg));
+    this.status.title = msg;
   }
 
   // ---- rendering --------------------------------------------------------------------------
@@ -1307,7 +1414,9 @@ export class Stage {
     const scope = this.scopeEl, inner = this.innerEl, ctx = this.ctx, root = this.rootCtx;
     if (!scope || !inner || !ctx || !root) return;
     const deep = ctx !== root || !!this.leaf;
+    const was = scope.hidden;
     scope.hidden = !deep;
+    if (was === deep) this.fitControls();
     if (deep && !scope.childElementCount) {
       scope.append(h('span', { class: 'label' }, 'Pins of'), h('b', null, root.def.name));
       scope.title = `These inputs and outputs are the pins of the whole ${root.def.name} (the top level), not of the part open on the canvas`;
@@ -1342,21 +1451,37 @@ export class Stage {
     }
   }
 
-  /** Drop the bar's button labels (icons and tooltips remain) when the hierarchy would otherwise
-   *  be cut or wrap; measured with the labels shown, so it comes back once there is room. Still cut
-   *  or wrapped without them (a phone: the buttons take the whole bar, the name read "4…"; a deep
-   *  path with its values beside the buttons), the hierarchy gets a row of its own above the buttons
-   *  (.stacked). */
+  /** Drop the bar's button labels (icons and tooltips remain) when the open level's name would otherwise be
+   *  cut; measured with the labels shown, so they come back once there is room. Still cut, the least used
+   *  buttons move into a More menu a group at a time (shedGroups: zoom, image, layout, sandbox, timing, probe),
+   *  and only then (a phone: the buttons take the whole bar, the name read "4…") the hierarchy gets a row of
+   *  its own above the buttons (.stacked), every button back in the bar. The levels above the open one shrink
+   *  first (app.css): cut with an ellipsis, their names in their tooltips. */
   private fitBar(): void {
     const bar = this.bar;
+    const moreWrap = this.moreBtn.parentElement!;
     bar.classList.remove('compact', 'stacked');
+    for (const g of this.shedGroups) g.els.forEach((el) => el.classList.remove('shed'));
+    moreWrap.hidden = true;
+    // only what the bar shows (not a scene's hidden Open in Sandbox, nor a phone's zoom buttons)
+    const live = this.shedGroups.filter((g) => g.els.some((el) => el.offsetWidth > 0));
+    const shed = (k: number) => live.forEach((g, i) => g.els.forEach((el) => el.classList.toggle('shed', i < k)));
     const items = [...this.crumbs.querySelectorAll('button')];
-    if (!items.length) return;
-    const cut = () => items.some((b) => b.scrollWidth > b.clientWidth + 1);
-    const wrapped = () => items[items.length - 1].offsetTop > items[0].offsetTop + 2;
-    if (!cut() && !wrapped()) return;
+    if (!items.length) return this.toggleMore(false);
+    const cur = items[items.length - 1];
+    const fits = () => cur.scrollWidth <= cur.clientWidth + 1 && cur.offsetTop <= items[0].offsetTop + 2;
+    if (fits()) return this.toggleMore(false);
     bar.classList.add('compact');
-    if (cut() || wrapped()) bar.classList.add('stacked');
+    if (fits()) return this.toggleMore(false);
+    moreWrap.hidden = false;
+    for (let k = 1; k <= live.length; k++) {
+      shed(k);
+      if (fits()) return;
+    }
+    shed(0);
+    moreWrap.hidden = true;
+    this.toggleMore(false);
+    bar.classList.add('stacked');
   }
 
   /** Open `path` and highlight (and bring into view) the instance `name` inside it. */

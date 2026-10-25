@@ -280,6 +280,31 @@ const CLIPPED = `(() => {
     else if (tabs.contains(el) && (b.left < tr.left - 1 || b.right > tr.right + 1)) out.push('toolbar item scrolled out of view: ' + name);
     else if (b.right > R + 1) out.push('toolbar item past the bar: ' + name);
   }
+  // the open tab slid under the sticky Open… / New chip group (many tabs: editor.ts showActiveTab)
+  const on = top.querySelector('.sb-tab.on'), grp = top.querySelector('.sb-new-grp');
+  if (on && grp && on.getBoundingClientRect().right > grp.getBoundingClientRect().left + 1) out.push('open tab under New chip: ' + on.textContent.trim().slice(0, 24));
+  return out;
+})()`;
+
+/**
+ * A chapter or workbench stage whose bars lost something: the open level's name cut on a one-row top bar (its
+ * buttons belong in More: Stage.fitBar), a button past either bar's edge, the run row's buttons cut
+ * (Stage.fitControls drops their labels instead). Checked on every route.
+ */
+const STAGE_BARS = `(() => {
+  const out = [];
+  for (const bar of document.querySelectorAll('.stage-bar, .stage .controls')) {
+    if (!bar.offsetWidth) continue;
+    const R = bar.getBoundingClientRect().right;
+    const cur = bar.querySelector('.crumbs > button:last-of-type');
+    if (cur && !bar.classList.contains('stacked') && cur.scrollWidth > cur.clientWidth + 1) out.push('stage bar: the open level\\'s name cut: ' + cur.textContent.trim().slice(0, 32));
+    for (const b of bar.querySelectorAll('button')) {
+      const r = b.getBoundingClientRect();
+      if (r.width && r.right > R + 1 && !b.closest('.pal-menu')) out.push('stage bar: button past the bar: ' + (b.getAttribute('aria-label') || b.textContent || b.title).trim().slice(0, 32));
+    }
+    const run = bar.querySelector('.ctl-run');
+    if (run && run.scrollWidth > run.clientWidth + 1) out.push('stage run bar cut (' + run.scrollWidth + ' px in ' + run.clientWidth + ')');
+  }
   return out;
 })()`;
 
@@ -376,6 +401,8 @@ class Tab {
       await this.settle(t0);
       const seen = (await this.send('Runtime.evaluate', { expression: INSPECT, returnByValue: true })).result.value as string[];
       for (const p of seen) this.errors.push(`page: ${p}`);
+      const bars = (await this.send('Runtime.evaluate', { expression: STAGE_BARS, returnByValue: true })).result.value as string[];
+      for (const p of bars) this.errors.push(p);
       if (route.viewport) {
         const wide = (await this.send('Runtime.evaluate', { expression: OVERFLOW, returnByValue: true })).result.value as string[];
         for (const p of wide) this.errors.push(`overflow: ${p}`);
