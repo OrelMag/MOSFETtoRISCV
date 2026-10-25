@@ -2,6 +2,7 @@ import { ageBit, iqEntry, RAT, SELECT8 } from '../lib/ooo';
 import { PAY } from '../lib/ooocore';
 import { PROGRAMS } from '../riscv/programs';
 import { cpuScene } from '../widgets/cpupanel';
+import { oooLabWidget } from '../widgets/ooolab';
 import { dataflowWidget, measuredWidget, orderWidget, robWidget, scoreboardWidget, speculationWidget } from '../widgets/ooo';
 import { cpuState } from '../riscv/cosim';
 import type { Stage } from '../view/stage';
@@ -409,6 +410,30 @@ export const chOoo: Chapter = {
         window (1.36). Each step costs more than the last, which is why chips since the mid-2000s spend their transistors on
         more cores rather than wider ones: the next chapter.</p>`,
       widget: measuredWidget,
+    },
+    {
+      title: 'Your own core',
+      body: `
+        <p>The model behind this chapter is the specification the gate-level core follows cycle for cycle. Here it takes
+        any shape: fetch and commit widths, issue ports and the units on each, the window, the predictor, where a
+        misprediction is recovered, the latencies. Run it on the benchmark set, one program, your own assembly or a
+        chapter 15 Python program (the same workbench page is the Lab tab).</p>
+        <p>Every commit slot is accounted for. Two a cycle make 2n slots in n cycles; each one either commits an
+        instruction or is charged to what the oldest instruction in flight waits for, since everything younger waits
+        behind it. On our core 50.2 % commit and 32.0 % go to mispredictions: the wait for a mispredicted branch to
+        reach the head, the flush, the refill. Perfect prediction alone takes CPI from 0.96 to 0.60; recovering when the
+        branch resolves instead of at commit (which needs a copy of the rename table per branch in flight) gives 0.88. A
+        reorder buffer of 64 changes nothing (0.96). Four wide with a 32-entry window reaches 0.79, and mispredictions
+        then take 40.5 % of the slots: a wider machine has more work in flight to throw away.</p>
+        <p>Make memory slow and the window matters more, but less than you would hope: at a load latency of 20 the
+        CPI is 1.78 with 51.6 % of the slots waiting on loads, and a 64-entry window only brings it to 1.68. This core
+        never lets a load pass an older store, so a slow load holds everything that depends on memory. Real cores
+        predict which loads do not alias and check later.</p>
+        <p>The price comes from the gates. Where the gate-level core can be built in your shape (it stays 2-wide with its
+        own ports, predictor and latencies; its window sizes vary), the lab gives its NANDs and its clock period, and the
+        period times the CPI is the time of an instruction. Other shapes are timed, not priced. Keep a shape to set it
+        beside the next.</p>`,
+      widget: oooLabWidget,
     },
     {
       title: 'Code that helps the hardware',

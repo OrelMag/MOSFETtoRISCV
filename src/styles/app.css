@@ -2125,3 +2125,4 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 @media (pointer: coarse) and (max-width: 420px) {
   .nav a { min-width: 36px; padding-inline: 8px; }
 }
+@media (pointer: coarse) { .lab-chip, .lab-unit, .lab-x, .lab-add { min-height: 40px; min-width: 40px; } .lab-num input, .lab-num select { min-height: 40px; } }

@@ -161,6 +161,8 @@ export interface CycleInfo {
   fetched: Uop[];
   /** Instructions flushed at the end of this cycle. */
   flushed: Uop[];
+  /** Where this cycle's empty commit slots went (null: none empty). */
+  lost: SlotCause | null;
 }
 
 export interface OooStats {
@@ -301,7 +303,7 @@ export class OooModel {
   /** Advance one clock cycle. */
   step(): CycleInfo {
     const t = this.cycle, cfg = this.cfg;
-    const info: CycleInfo = { cycle: t, committed: [], issued: [], dispatched: [], fetched: [], flushed: [] };
+    const info: CycleInfo = { cycle: t, committed: [], issued: [], dispatched: [], fetched: [], flushed: [], lost: null };
     if (this.halted) return info;
 
     // An iterative divider's result takes its port's bus at the first free cycle once it is ready.
@@ -336,7 +338,7 @@ export class OooModel {
 
     // Issue: each port picks the oldest ready instruction bound to it.
     if (!this.halted) this.issue(t, info);
-    this.account(t, info.committed, stores > 1);
+    this.account(t, info, stores > 1);
 
     // Dispatch the fetch register in order; stop at the first that does not fit.
     // Entries freed this cycle (committed, picked) are usable only from the next.
@@ -398,11 +400,11 @@ export class OooModel {
   }
 
   /** This cycle's commit slots: the committed ones, the rest to what the oldest instruction left waits for (after issue). */
-  private account(t: number, committed: Uop[], storeLimit: boolean): void {
-    const sl = this.stats.slots, empty = this.shape.commit - committed.length;
+  private account(t: number, info: CycleInfo, storeLimit: boolean): void {
+    const committed = info.committed, sl = this.stats.slots, empty = this.shape.commit - committed.length;
     sl.retired += committed.length;
     if (this.recovering && committed.some((u) => u.f > this.flushedAt)) this.recovering = false;
-    if (empty > 0) sl[this.halted ? 'frontend' : this.headCause(t, storeLimit)] += empty;
+    if (empty > 0) sl[info.lost = this.halted ? 'frontend' : this.headCause(t, storeLimit)] += empty;
   }
 
   /** What the oldest instruction in flight waits for in cycle t, once commit and issue are done. */
