@@ -302,6 +302,17 @@ export class ISS {
     this.pc = this.mtvec;
   }
 
+  /**
+   * The instruction at pc as step() runs it. With C, a parcel whose low bits are not 11 is a 16-bit instruction: it
+   * runs as its expansion (an illegal one as 0, which decodes to nothing); otherwise it is this parcel and the next.
+   */
+  instrAt(pc: number): { word: number; size: 2 | 4; half?: number } {
+    if (!this.c) return { word: this.fetch(pc), size: 4 };
+    const lo = this.half(pc);
+    if ((lo & 3) !== 3) return { word: expand16(lo) ?? 0, size: 2, half: lo };
+    return { word: (lo | (this.half(pc + 2) << 16)) >>> 0, size: 4 };
+  }
+
   step(): StepInfo {
     const pc = this.pc;
     if (this.system) {
@@ -316,14 +327,7 @@ export class ISS {
         return { pc, word: 0, text: 'interrupt', rd: 0, trap: { cause, interrupt: true }, halted: false };
       }
     }
-    // With C, a parcel whose low bits are not 11 is a 16-bit instruction: it runs as its expansion (an
-    // illegal one as 0, which decodes to nothing); otherwise the instruction is this parcel and the next.
-    let word: number, size = 4, half: number | undefined;
-    if (this.c) {
-      const lo = this.half(pc);
-      if ((lo & 3) !== 3) { half = lo; word = expand16(lo) ?? 0; size = 2; }
-      else word = (lo | (this.half(pc + 2) << 16)) >>> 0;
-    } else word = this.fetch(pc);
+    const { word, size, half } = this.instrAt(pc);
     const d = decode(word, this.custom);
     const x = this.x;
     const a = x[d.rs1] | 0, b = x[d.rs2] | 0, ua = x[d.rs1], ub = x[d.rs2];
