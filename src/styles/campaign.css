@@ -272,3 +272,74 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 .cx-kinds { display: flex; flex-wrap: wrap; gap: 4px; }
 .cx-kind { font: 11.5px var(--font-ui); padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2); cursor: pointer; }
 .cx-kind.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+
+/* ---- the thread (campaign/ui/whystack.ts): the why stack, act-end cards, now within reach; shared with the level screen */
+.th-why { display: grid; gap: 10px; margin-top: 12px; }
+.th-why h4 { margin: 0 0 3px; font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.th-why p { margin: 0; }
+.th-leadbox { border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 6px 12px 8px; }
+.th-leadbox h4 { color: var(--accent); }
+.th-lead { font-weight: 600; color: var(--text); }
+.th-sec p, .th-later li, .th-pits li { font-size: 13.5px; line-height: 1.5; }
+.th-chain { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.th-n { display: inline-flex; align-items: baseline; gap: 5px; padding: 2px 9px; border-radius: 99px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); text-decoration: none; font-size: 12.5px; }
+a.th-n:hover, a.th-n:focus-visible { border-color: var(--accent); color: var(--accent); }
+.th-n.me { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.th-n.done { border-color: var(--good); }
+.th-n.blk { border-style: dashed; color: var(--text-2); }
+.th-arr { color: var(--muted); font-size: 12px; }
+.th-act { font: 10.5px var(--font-mono); color: var(--muted); margin-left: 5px; }
+.th-n .th-act { margin-left: 0; }
+.th-later { margin: 0; padding-left: 18px; }
+.th-later li { margin: 2px 0; }
+.th-later a, .th-builds a { color: var(--accent); }
+.th-later a.done, .th-builds a.done { color: var(--good); }
+.th-builds { font-size: 13.5px; }
+.th-more summary { cursor: pointer; font-size: 13px; color: var(--accent); }
+.th-more[open] summary { margin-bottom: 8px; }
+.th-more-body { display: grid; gap: 10px; }
+.th-pits { margin: 0; padding-left: 18px; }
+.th-pits li { margin: 3px 0; }
+.th-pits li::marker { color: var(--warn); }
+
+.th-end { border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); padding: 10px 12px; display: grid; gap: 8px; margin-top: 12px; }
+.th-eyebrow { font: 600 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--good); }
+.th-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.th-cell { border-radius: var(--radius-sm); padding: 8px 10px; }
+.th-cell h4 { margin: 0 0 4px; font: 700 10.5px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; }
+.th-cell p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text); }
+.th-cell.can { background: var(--good-soft); }
+.th-cell.can h4 { color: var(--good); }
+.th-cell.cannot { background: var(--warn-soft); }
+.th-cell.cannot h4 { color: var(--warn); }
+.th-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.th-reach h4 { margin: 0 0 4px; font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.th-reach ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.th-reach li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-size: 13px; padding: 5px 8px; border-radius: var(--radius-sm); background: var(--surface-2); }
+.th-reach li.top { background: var(--accent-soft); }
+.th-reach a { color: var(--accent); font-weight: 600; }
+.th-meter { font: 11.5px var(--font-mono); color: var(--muted); }
+.th-meter.ready { color: var(--good); font-weight: 600; }
+
+/* the map: each act's blurb under its title, a finished act's end card at its foot, a level's block as a tab on its card */
+.cp-band-sub { font-size: 11.5px; fill: var(--muted); }
+.cp-foot-rule { stroke: var(--border-strong); stroke-dasharray: 3 3; }
+.cp-foot-head { font: 700 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; fill: var(--good); }
+.cp-foot-k { font: 700 10px var(--font-ui); text-transform: uppercase; letter-spacing: 0.06em; }
+.cp-foot-k.can { fill: var(--good); }
+.cp-foot-k.cannot { fill: var(--warn); }
+.cp-foot-t { font-size: 11.5px; fill: var(--text-2); }
+.cp-blk rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+.cp-blk circle { fill: var(--muted); }
+.cp-blk text { font: 600 9px var(--font-mono); fill: var(--muted); }
+.cp-node:hover .cp-blk rect, .cp-node:focus-visible .cp-blk rect, .cp-node.sel .cp-blk rect { stroke: var(--accent); fill: var(--accent-soft); }
+.cp-node:hover .cp-blk circle, .cp-node:focus-visible .cp-blk circle, .cp-node.sel .cp-blk circle { fill: var(--accent); }
+.cp-node:hover .cp-blk text, .cp-node:focus-visible .cp-blk text, .cp-node.sel .cp-blk text { fill: var(--accent); }
+.cp-blk.all circle { fill: none; stroke: var(--muted); stroke-width: 1.2; }
+.cp-foot-link { cursor: pointer; outline: none; }
+.cp-foot-link rect { fill: var(--accent); stroke: var(--accent); stroke-width: 1.2; }
+.cp-foot-link text { font: 600 10.5px var(--font-ui); fill: var(--accent-text); }
+.cp-foot-link.side rect { fill: var(--surface); stroke: var(--border-strong); }
+.cp-foot-link.side text { fill: var(--accent); }
+.cp-foot-link:hover rect, .cp-foot-link:focus-visible rect { stroke: var(--text); stroke-width: 2; }

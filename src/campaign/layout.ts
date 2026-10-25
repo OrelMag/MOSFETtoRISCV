@@ -51,6 +51,51 @@ export interface Band {
   folded?: boolean;
   /** Labelled rows (ACT_ROWS): each label's baseline. */
   rows?: { label: string; y: number }[];
+  /** The act's blurb as subtitle lines under its title (plain text). */
+  sub?: string[];
+  /** A finished act's end card at the band's foot (thread.ts ActEnd): its top and each half's lines. */
+  foot?: { y: number; can: string[]; cannot: string[]; links: FootLink[] };
+}
+
+/** A way on in a finished act's footer (the end card's next act and side quests), as a pill: its left, baseline and width. */
+export interface FootLink {
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+}
+
+/** Footer link pills: height, gap, padding around the label (10.5 px text). */
+export const LINK_H = 20, LINK_GAP = 8, LINK_PAD = 10, LINK_CHAR_W = 5.6;
+
+/** Subtitle and footer text: line height, the most lines of each, and an estimate of a character's width (11–12 px text). */
+export const SUB_LINE = 14, SUB_LINES = 2, FOOT_LINES = 3, CHAR_W = 6.2, FOOT_LABEL_W = 96;
+/** The subtitle's first baseline below its band's top (the title's is at 21). */
+export const SUB_Y = 38;
+
+/** `text` (markup stripped) in lines of at most `width` px; the last ends in … when it does not fit in `max`. */
+export function wrapText(text: string, width: number, max: number): string[] {
+  const words = text.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim().split(' ');
+  const per = Math.max(12, Math.floor(width / CHAR_W));
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    if (cur && cur.length + 1 + w.length > per) {
+      lines.push(cur);
+      cur = w;
+    } else cur = cur ? `${cur} ${w}` : w;
+  }
+  if (cur) lines.push(cur);
+  if (lines.length <= max) return lines;
+  const out = lines.slice(0, max);
+  out[max - 1] = `${out[max - 1].slice(0, per - 1).replace(/[\s,;:.]+\S*$/, '')}…`;
+  return out;
+}
+
+/** What a band shows besides its levels: an act's blurb, and the end card of a finished act. */
+export interface BandText {
+  blurb: (act: number) => string | undefined;
+  end: (act: number) => { can: string; cannot: string; links?: string[] } | undefined;
 }
 
 export interface MapLayout {
@@ -92,11 +137,16 @@ export function foldedActs(view: ProgressView, open: (act: number) => boolean | 
 
 const cached = new Map<string, MapLayout>();
 
-/** The map with at most `maxCols` columns on a line (Infinity: every act on one line); the acts in `folded` as headers only. */
-export function mapLayout(maxCols = Infinity, folded: ReadonlySet<number> = new Set()): MapLayout {
-  const key = `${maxCols}|${[...folded].sort((a, b) => a - b).join(',')}`;
+/**
+ * The map with at most `maxCols` columns on a line (Infinity: every act on one line); the acts in `folded` as headers only.
+ * With `text`, an open band carries its act's blurb under the title and an act in `ended` its end card at its foot.
+ */
+export function mapLayout(maxCols = Infinity, folded: ReadonlySet<number> = new Set(), text?: BandText, ended: ReadonlySet<number> = new Set()): MapLayout {
+  const key = `${maxCols}|${[...folded].sort((a, b) => a - b).join(',')}|${text ? 't' : ''}|${[...ended].sort((a, b) => a - b).join(',')}`;
   const hit = cached.get(key);
   if (hit) return hit;
+  // The band texts wrap to the map's width, which the columns alone set: taken from the layout without text.
+  const textW = text ? mapLayout(maxCols, folded).w - 2 * MARGIN - 8 : 0;
   const byId = new Map(NODES.map((n) => [n.id, n]));
   const col = new Map<string, number>();
   const colOf = (n: CampaignNode): number => {
@@ -127,7 +177,9 @@ export function mapLayout(maxCols = Infinity, folded: ReadonlySet<number> = new 
       ?? [{ label: undefined, ns }];
     const rowOfId = new Map(groups.flatMap((g, gi) => g.ns.map((n) => [n.id, gi] as const)));
     const rowLabels: { label: string; y: number }[] = [];
-    let top = y + BAND_HEAD, line = 0;
+    const blurb = text?.blurb(act.num);
+    const sub = blurb ? wrapText(blurb, textW, SUB_LINES) : undefined;
+    let top = y + BAND_HEAD + (sub ? sub.length * SUB_LINE + 4 : 0), line = 0;
     groups.forEach((g, gi) => {
       const cols: CampaignNode[][] = [];
       const colIn = (n: CampaignNode): number => (ACT_ROWS[act.num] ? rowCol(n) : colOf(n));
@@ -177,8 +229,24 @@ export function mapLayout(maxCols = Infinity, folded: ReadonlySet<number> = new 
         top += rows * (NODE_H + ROW_GAP) - ROW_GAP + (l < lines - 1 ? LINE_GAP : 0);
       }
     });
+    const end = ended.has(act.num) ? text?.end(act.num) : undefined;
+    let foot: Band['foot'];
+    if (end) {
+      // label column ("Can now", "Still can't") then the text
+      foot = { y: top + 36, can: wrapText(end.can, textW - FOOT_LABEL_W, FOOT_LINES), cannot: wrapText(end.cannot, textW - FOOT_LABEL_W, FOOT_LINES), links: [] };
+      top = foot.y + (foot.can.length + foot.cannot.length - 1) * SUB_LINE + 6;
+      // the ways on as pills under the text, wrapping like words
+      let lx = MARGIN, ly = top + 8 + LINK_H - 6;
+      for (const label of end.links ?? []) {
+        const w = Math.ceil(label.length * LINK_CHAR_W) + 2 * LINK_PAD;
+        if (lx > MARGIN && lx + w > MARGIN + textW) { lx = MARGIN; ly += LINK_H + 6; }
+        foot.links.push({ label, x: lx, y: ly, w });
+        lx += w + LINK_GAP;
+      }
+      if (foot.links.length) top = ly + 6;
+    }
     const h = top - y + 12;
-    bands.push({ act: act.num, y, h, ...(rowLabels.length ? { rows: rowLabels } : {}) });
+    bands.push({ act: act.num, y, h, ...(rowLabels.length ? { rows: rowLabels } : {}), ...(sub ? { sub } : {}), ...(foot ? { foot } : {}) });
     y += h + BAND_GAP;
   }
   // The last column keeps its channel on the right (an edge wrapping onto the next line runs down it).
