@@ -425,10 +425,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .stage-bar.stacked { flex-wrap: wrap; row-gap: 2px; padding-top: 4px; padding-bottom: 4px; }
 .stage-bar.stacked > .crumbs { flex: 1 1 100%; }
 /* One row: the levels above the open one give up their width first (cut, never below a few letters); the open
-   one is cut last, and Stage.fitBar moves buttons into More (.shed) before it lets that happen. */
+   one is never cut: Stage.fitBar moves buttons into More (.shed), then gives the hierarchy a row of its own. */
 .stage-bar:not(.stacked) .crumbs { flex-wrap: nowrap; }
 .stage-bar:not(.stacked) .crumbs > button { flex-shrink: 6; min-width: 3.2em; }
-.stage-bar:not(.stacked) .crumbs > button.cur { flex-shrink: 1; min-width: 0; }
+.stage-bar:not(.stacked) .crumbs > button.cur { flex-shrink: 0; min-width: 0; }
 .stage-bar .crumbs > .sep { flex: none; }
 .stage-bar .shed { display: none; }
 .stage-more-menu { min-width: 260px; }
@@ -606,7 +606,17 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   .ctl-inner { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; scrollbar-width: thin; }
   .ctl-inner > * { flex: none; }
   .ctl-inner .kind { display: none; }
+  /* the pins too: wrapped, a scene with many (ch 32's rasterizer) filled the whole stage with them */
+  .ctl-pins { display: flex; align-items: center; gap: 8px; flex: 1 1 100%; min-width: 0; overflow-x: auto; scrollbar-width: thin; padding-block: 2px; }
+  .ctl-pins > *, .ctl-pins .out-strip { flex: none; flex-wrap: nowrap; }
+  .controls { row-gap: 6px; }
 }
+/* No box of their own on a wide screen: the pins wrap in the bar's own flow. */
+.ctl-pins { display: contents; }
+@media (max-width: 760px) { .ctl-pins { display: flex; } }
+/* Still too wide with icons only (a phone): the buttons and the status wrap within their row. */
+.controls.tight .ctl-run { flex-wrap: wrap; row-gap: 6px; column-gap: 4px; }
+.controls.tight .ctl-acts { display: contents; }
 /* The clock, the stepping buttons and the status: one row that wraps as a whole below the pins; with .compact
    (Stage.fitControls) the buttons show icons only. The status takes what is left of it and is cut with an ellipsis
    (its title has it whole) rather than wrapping: a message that changed length during a run used to resize the

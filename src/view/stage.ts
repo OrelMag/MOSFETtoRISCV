@@ -1124,19 +1124,21 @@ export class Stage {
     this.innerEl = h('div', { class: 'ctl-inner', role: 'group', hidden: true });
     this.scopeEl = h('span', { class: 'ctl-scope', hidden: true });
     this.innerFor = null;
-    c.append(this.innerEl, this.scopeEl);
+    // the pins in a box of their own: no box on a wide screen (display: contents), one scrolled line on a phone (app.css)
+    const pins = h('div', { class: 'ctl-pins' }, this.scopeEl);
+    c.append(this.innerEl, pins);
     const root = this.scene!.root;
     const ins = inPorts(root).filter((p) => !(this.scene!.hiddenInputs ?? []).includes(p.name));
     const clk = this.clockPort();
-    if (ins.some((p) => p.name !== clk)) c.append(h('span', { class: 'label' }, 'Inputs'));
+    if (ins.some((p) => p.name !== clk)) pins.append(h('span', { class: 'label' }, 'Inputs'));
     for (const p of ins) {
       if (p.name === clk) continue;
-      c.append(p.width === 1 ? this.bitToggle(p) : this.numInput(p));
+      pins.append(p.width === 1 ? this.bitToggle(p) : this.numInput(p));
     }
     const outs = outPorts(root);
     if (outs.length) {
       // One sunken strip, so the label wraps together with its readouts.
-      c.append(h('span', { class: 'ctl-group out-strip' }, h('span', { class: 'label' }, 'Outputs'),
+      pins.append(h('span', { class: 'ctl-group out-strip' }, h('span', { class: 'label' }, 'Outputs'),
         outs.map((p) => (p.width === 1 ? this.bitLamp(p) : this.numOutput(p)))));
     }
     // The clock, the stepping buttons and the status are one row that wraps as a whole below the pins (never a lone
@@ -1180,9 +1182,9 @@ export class Stage {
    */
   private fitControls(): void {
     const c = this.controls, run = c.querySelector<HTMLElement>(':scope > .ctl-run');
-    c.classList.remove('compact');
+    c.classList.remove('compact', 'tight');
     if (!run || !c.offsetWidth) return;
-    const first = [...c.children].find((k) => k instanceof HTMLElement && k.offsetWidth > 0 && !k.classList.contains('ctl-inner')) as HTMLElement;
+    const first = [...c.querySelectorAll<HTMLElement>('.ctl-pins, .ctl-pins > *, :scope > .ctl-run')].find((k) => k.offsetWidth > 0)!;
     const cut = () => run.scrollWidth > run.clientWidth + 1;
     const wrapped = () => first !== run && run.offsetTop > first.offsetTop + 2;
     const wasCut = cut();
@@ -1190,6 +1192,8 @@ export class Stage {
     c.classList.add('compact');
     // icons only where they save a row or keep the buttons in the bar; a row of their own anyway: keep the words
     if (!wasCut && wrapped()) c.classList.remove('compact');
+    // a phone: still too wide without the words, the buttons wrap within their row
+    else if (cut()) c.classList.add('tight');
   }
 
   powerCycle(): void {
@@ -1476,7 +1480,8 @@ export class Stage {
     const items = [...this.crumbs.querySelectorAll('button')];
     if (!items.length) return this.toggleMore(false);
     const cur = items[items.length - 1];
-    const fits = () => cur.scrollWidth <= cur.clientWidth + 1 && cur.offsetTop <= items[0].offsetTop + 2;
+    const crumbs = this.crumbs;
+    const fits = () => cur.scrollWidth <= cur.clientWidth + 1 && crumbs.scrollWidth <= crumbs.clientWidth + 1 && cur.offsetTop <= items[0].offsetTop + 2;
     if (fits()) return this.toggleMore(false);
     bar.classList.add('compact');
     if (fits()) return this.toggleMore(false);
