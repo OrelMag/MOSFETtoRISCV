@@ -4,13 +4,7 @@
 // the model deliberately lacks (RV64_NOT_APPLICABLE).
 import { describe, expect, it } from 'vitest';
 import { ISS64 } from '../src/riscv/iss64';
-import { images, imageFile, loadable, verdict } from './verify/images';
-
-/** Tests whose subject the 64-bit core and its model do not have, with the reason. */
-export const RV64_NOT_APPLICABLE: Record<string, string> = {
-  'rv64ui-fence_i': 'self-modifying code: the instruction memory is a ROM',
-  'rv64ui-ma_data': 'misaligned loads and stores are not supported (an access stays inside its doubleword)',
-};
+import { images, imageFile, loadable, RV64_NOT_APPLICABLE, verdict } from './verify/images';
 
 describe('riscv-tests on the RV64 golden model', () => {
   const all = images('bare64');

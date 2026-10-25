@@ -12,6 +12,12 @@ import { readFileSync } from 'node:fs';
 /** bare64: bare for RV64 (rv64ui, rv64um), for chapter 25's 64-bit core and its golden model (src/riscv/iss64.ts). */
 export type Env = 'p' | 'bare' | 'bare-mp' | 'bare64';
 
+/** bare64 tests whose subject the 64-bit core and its model do not have, with the reason. */
+export const RV64_NOT_APPLICABLE: Record<string, string> = {
+  'rv64ui-fence_i': 'self-modifying code: the instruction memory is a ROM',
+  'rv64ui-ma_data': 'misaligned loads and stores are not supported (an access stays inside its doubleword)',
+};
+
 export interface ImageFile {
   env: Env;
   revision: Record<string, string>;

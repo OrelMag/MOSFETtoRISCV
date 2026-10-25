@@ -163,3 +163,27 @@ describe('PROGRAMS64', () => {
     }
   });
 });
+
+describe('W_ALU (chapter 25 step 7)', () => {
+  it('computes on 64 bits, or on 32 with the result sign-extended', async () => {
+    const { W_ALU } = await import('../src/lib');
+    const { simulate } = await import('../src/sim/harness');
+    const { unpackBig } = await import('../src/sim/values');
+    const { bitsBig } = await import('../src/riscv/cosim');
+    const sim = simulate(W_ALU);
+    const go = (a: bigint, b: bigint, w: number, f3: number, alt: number) => {
+      sim.setInputBits('a', unpackBig(u64(a), 64));
+      sim.setInputBits('b', unpackBig(u64(b), 64));
+      sim.setInput('w', w); sim.setInput('funct3', f3); sim.setInput('alt', alt);
+      sim.settle();
+      return [bitsBig(sim.getBits(sim.design.root.ports.y64)), bitsBig(sim.getBits(sim.design.root.ports.y))];
+    };
+    expect(go(0x7fffffffn, 1n, 0, 0, 0)).toEqual([0x80000000n, 0x80000000n]);
+    expect(go(0x7fffffffn, 1n, 1, 0, 0)).toEqual([0x80000000n, 0xffffffff80000000n]);
+    expect(go(0xffffffff80000000n, 4n, 1, 5, 0)[1]).toBe(0x08000000n); // srlw
+    expect(go(0xffffffff80000000n, 4n, 1, 5, 1)[1]).toBe(0xfffffffff8000000n); // sraw
+    expect(go(1n, 33n, 1, 1, 0)[1]).toBe(2n); // sllw moves by 33 mod 32
+    expect(go(1n, 33n, 0, 1, 0)[1]).toBe(1n << 33n);
+    expect(go(0n, 1n, 1, 0, 1)[1]).toBe(M64); // subw
+  });
+});

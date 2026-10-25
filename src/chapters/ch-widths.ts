@@ -1,6 +1,9 @@
 import { assemble } from '../riscv/asm';
 import { PROGRAMS } from '../riscv/programs';
-import { C_EXPAND, cFetch } from '../lib';
+import { C_EXPAND, cFetch, W_ALU } from '../lib';
+import { XLEN_COSTS } from '../lib/xlencosts';
+import { PROGRAMS64 } from '../riscv/programs64';
+import { cpu64Scene } from '../widgets/cpu64panel';
 import { cpuScene } from '../widgets/cpupanel';
 import { codeSizeWidget, cExplorer, RVC_COSTS } from '../widgets/rvc';
 import { WIDTH_COSTS, widthCostWidget } from '../widgets/rv64';
@@ -19,24 +22,28 @@ const straddle = assemble(STRADDLE).words;
 const K = RVC_COSTS;
 const C64 = (id: string) => WIDTH_COSTS.find((r) => r.id === id);
 const pct = (a: number, b: number) => Math.round((100 * (a - b)) / b);
+const X = XLEN_COSTS;
+const fmt = (n: number) => n.toLocaleString('en-US');
 
 export const chWidths: Chapter = {
   id: 'widths', num: 25, title: 'Sixteen bits and sixty-four', level: 'Processor',
-  blurb: 'The C extension: two thirds of real instructions in 16 bits, an expander in gates in front of the decoder, fetching at any halfword, and what that costs. RV64 comes next.',
+  blurb: 'The C extension: two thirds of real instructions in 16 bits, an expander in gates in front of the decoder, fetching at any halfword, and what that costs. Then the other way: the same core at 64 bits, the W instructions RV64 kept, and what width costs.',
   goals: [
     'measure how much of a program has a 16-bit form, and say what the saving buys (ROM, cache lines, fetch bandwidth)',
     'read a 16-bit parcel: its quadrant and funct3, its 3-bit register fields (x8–x15), its scattered immediate, and the 32-bit instruction it stands for',
-    'explain why an expander is mostly wiring and where its gates go',
-    'fetch a 32-bit instruction that straddles two words, and weigh the C core against the plain one in NANDs and clock period',
+    'explain why an expander is mostly wiring, and fetch a 32-bit instruction that straddles two words',
+    'say what 64 bits cost block by block, why RV64 kept 32-bit arithmetic (the W instructions), and weigh each core in NANDs and clock period',
   ],
   builds: ['cpu', 'python', 'cache', 'float'],
-  soon: ['The W instructions', 'The cost of width'],
   recap: {
     keep: [
       'Most instructions are short in what they say: copy a register, load a small constant, add a small number, touch the stack. The C extension gives those a 16-bit form. On our programs: 68 % of the compiled Python samples\' instructions, 34 % fewer bytes; the hand-written benchmarks 15–31 % fewer.',
       'A parcel is compressed when bits 1:0 ≠ 11, which leaves a quarter of the 16-bit space to the 32-bit instructions. The price of 16 bits: 3-bit register fields (x8–x15: s0, s1, a0–a5), the destination doubling as a source, 6-bit immediates, offsets scaled by the access size.',
       'Every 16-bit instruction is exactly one 32-bit instruction, so the hardware rewrites it before the decoder. The rewrite only moves bits and adds constants: the gates recognize which of the 30 forms it is and pick each field.',
       `The C single-cycle core: ${K.c.nands.toLocaleString()} NANDs against ${K.plain.nands.toLocaleString()} (+${((100 * (K.c.nands - K.plain.nands)) / K.plain.nands).toFixed(1)} %), period ${K.c.period} against ${K.plain.period} NAND delays (+${pct(K.c.period, K.plain.period)} %): the expander (${K.expander.depth} deep) and the second bank's index sit in series with decode. With a ROM per program, C saves storage and costs speed; it pays where instruction bytes are the bottleneck, a cache or a narrow memory.`,
+      'RV64 widens the registers, the PC and every ALU result to 64 bits and keeps every RV32 encoding. Per block: once per bit doubles (registers, the register file, multiplexers), a tree over the bits doubles and adds a level (adders, shifter), the multiplier quadruples, the iterative divider doubles in area and in time.',
+      `The W instructions (addw, subw, sllw, srlw, sraw, addiw, the shift immediates, mulw, divw, remw …) keep RV32's 32-bit arithmetic: operands cut to 32 bits and extended, the result's low half sign-extended. In gates, ${fmt(X.wUnit.nands)} NANDs and ${X.wUnit.depth} levels around the 64-bit ALU. lw sign-extends, lwu does not; ld / sd move a doubleword.`,
+      `The same single-cycle core at 64 bits: ${fmt(X.rv64im.nands)} NANDs against ${fmt(X.rv32im.nands)} (×${(X.rv64im.nands / X.rv32im.nands).toFixed(2)}), period ${X.rv64im.period} against ${X.rv32im.period}. On 32-bit programs it does the same instructions, slower; it pays when the values are 64 bits wide.`,
     ],
     check: [
       {
@@ -47,11 +54,11 @@ export const chWidths: Chapter = {
         why: ['', 'That removes the compressible instructions entirely; they still take 2 bytes each.', 'That takes the share of 16-bit instructions as the size; each of them still takes half of what it did.'],
       },
       {
-        question: 'Which of these has no 16-bit form?',
-        options: ['addi a0, a1, 1', 'lw a0, 8(s0)', 'addi sp, sp, -64', 'mv t0, t1'],
+        question: 'On RV64, a0 = 0x7FFF_FFFF. What does addiw a0, a0, 1 leave in a0?',
+        options: ['0xFFFF_FFFF_8000_0000', '0x0000_0000_8000_0000', '0x0000_0000_0000_0000'],
         answer: 0,
-        explain: 'c.addi adds to a register in place: rd must be rs1. c.lw reaches x8–x15 (a0 is x10, s0 x8) with an offset in 0…124; c.addi16sp moves sp by multiples of 16; c.mv takes any two registers.',
-        why: ['', 'Both registers are in x8–x15 and 8 is a multiple of 4 below 128: c.lw.', 'c.addi16sp adjusts sp by a non-zero multiple of 16 in −512…496.', 'c.mv (in quadrant 2) has full 5-bit register fields: any pair.'],
+        explain: 'addiw adds on 32 bits: 0x7FFF_FFFF + 1 = 0x8000_0000, whose bit 31 is 1, so the sign extension fills the upper half with ones: −2³¹, as on RV32. addi would give 0x0000_0000_8000_0000.',
+        why: ['', 'That is addi\'s answer: the 64-bit sum, not sign-extended from bit 31.', 'Only the carry out of bit 31 would be lost, not the whole sum.'],
       },
       {
         question: `The C core runs at ${K.c.period} NAND delays, the plain one at ${K.plain.period}, both one instruction a cycle. Which is faster on the same program?`,
@@ -214,6 +221,76 @@ export const chWidths: Chapter = {
         answer: 0,
         why: ['', `A prefix adder adds one level for twice the bits: ${C64('ks')!.depth![0]} → ${C64('ks')!.depth![1]} NAND delays.`, 'Each bit has its own selector; the width never reaches it.', 'Writing a register is the same for every bit at once.'],
         explain: `The ripple carry crosses every bit: ${C64('rca')!.depth![0]} → ${C64('rca')!.depth![1]} NAND delays. Width is cheap for anything bit-parallel and expensive for anything serial along the bits.`,
+      },
+    },
+    {
+      title: 'The W instructions',
+      body: `
+        <p>A program written for RV32 assembles for RV64 unchanged, and mostly runs the same. But not always: code that relies on
+        32-bit wrap-around now sees bits above bit 31. Our sort benchmark's random generator (xorshift32) shifts left by 13 and right by 17;
+        on 64-bit registers the bits shifted past bit 31 come back down, and the program sorts different numbers. Our CRC-32 shifts its register
+        right, and on RV64 the ones of a sign-extended value walk into bit 31.</p>
+        <p>RV64 therefore kept 32-bit arithmetic as instructions of their own, on two new opcodes: <code>addw</code>, <code>subw</code>,
+        <code>sllw</code>, <code>srlw</code>, <code>sraw</code>, their immediate forms (<code>addiw</code>, <code>slliw</code> …) and, with M,
+        <code>mulw</code>, <code>divw</code>, <code>divuw</code>, <code>remw</code>, <code>remuw</code>. Each computes on the low 32 bits and
+        <em>sign-extends</em> the result into 64, so a 32-bit value always sits in a register the same way, whatever produced it: <code>lw</code>
+        sign-extends too (<code>lwu</code> is the new zero-extending load), and so does <code>lui</code>. Our two benchmarks need four W shifts
+        between them to run correctly on RV64: the generator's three and the CRC's one.</p>
+        <p>In hardware this is not a second ALU. The <span data-show="wu">W unit</span> sits around the 64-bit <span data-show="alu">ALU</span>:
+        when <code>w = 1</code> it cuts each operand to 32 bits and extends it again (zeros for <code>srlw</code>, the sign for <code>sraw</code>),
+        clears the shift amount's bit 5, and sign-extends the result's low half. Three multiplexers and wiring:
+        ${fmt(X.wUnit.nands)} NANDs, ${X.wUnit.depth} levels. The decoder recognizes OP-32 and OP-IMM-32 by one opcode bit and hands
+        them to the control unit as OP and OP-IMM.</p>
+        <p class="try">Start from 0x7FFF_FFFF + 1 with w = 0, then set w = 1: y64 stays, y turns negative.</p>`,
+      scene: () => ({ root: W_ALU, inputs: { a: 0x7fffffff, b: 1, w: 0, funct3: 0, alt: 0 } }),
+      tries: [(st) => st.getInput('w') === 1 && st.getInput('a') === 0x7fffffff && st.getInput('b') === 1],
+      challenge: {
+        kind: 'reach', goal: 'Make sll and sllw of the same operands disagree completely: w = 1, funct3 = 1 (sll), y = 0 while y64 ≠ 0.',
+        check: (st) => st.getInput('w') === 1 && st.getInput('funct3') === 1 && st.value('y') === 0 && st.value('y64') !== 0,
+        hints: [
+          'sllw keeps only the low 32 bits of the shifted value; the 64-bit ALU result keeps the bits that moved past bit 31.',
+          'Start from a value whose only 1 is bit 31, and shift it left by one.',
+        ],
+        answer: 'a = 0x8000_0000, b = 1, funct3 = 1 (sll), w = 1: the ALU gives 0x1_0000_0000 (y64); the W unit keeps the low 32 bits, 0, sign-extended (y = 0).',
+        solve: (st) => st.setInputs({ a: 0x80000000, b: 1, funct3: 1, alt: 0, w: 1 }),
+      },
+    },
+    {
+      title: 'The cost of width',
+      body: `
+        <p>Here is the whole RV64IM single-cycle core, running in lock-step with the golden model. The same generator also builds it at
+        32 bits. Both widths run the riscv-tests (rv64ui / rv64um, rv32ui / rv32um) and random programs, and Spike checks the RV64 golden model.</p>
+        <table class="rvc-table">
+          <thead><tr><th>Single-cycle core</th><th class="num">RV32IM</th><th class="num">RV64IM</th></tr></thead>
+          <tbody>
+            <tr><td>NANDs (no ROM)</td><td class="num">${fmt(X.rv32im.nands)}</td><td class="num">${fmt(X.rv64im.nands)}</td></tr>
+            <tr><td>… register file</td><td class="num">${fmt(X.regfile[32])}</td><td class="num">${fmt(X.regfile[64])}</td></tr>
+            <tr><td>… data memory (32 words)</td><td class="num">${fmt(X.dmem[32])}</td><td class="num">${fmt(X.dmem[64])}</td></tr>
+            <tr><td>… M unit</td><td class="num">${fmt(X.mUnit[32])}</td><td class="num">${fmt(X.mUnit[64])}</td></tr>
+            <tr><td>… ALU</td><td class="num">${fmt(X.alu[32].nands)}</td><td class="num">${fmt(X.alu[64].nands)}</td></tr>
+            <tr><td>… loads and stores</td><td class="num">${fmt(X.lsu[32])}</td><td class="num">${fmt(X.lsu[64])}</td></tr>
+            <tr><td>… W unit</td><td class="num">·</td><td class="num">${fmt(X.wUnit.nands)}</td></tr>
+            <tr><td>Period (NAND delays)</td><td class="num">${X.rv32im.period}</td><td class="num">${X.rv64im.period}</td></tr>
+            <tr><td>Without M: NANDs / period</td><td class="num">${fmt(X.rv32i.nands)} / ${X.rv32i.period}</td><td class="num">${fmt(X.rv64i.nands)} / ${X.rv64i.period}</td></tr>
+            <tr><td>A divide</td><td class="num">34 cycles</td><td class="num">66 cycles</td></tr>
+          </tbody>
+        </table>
+        <p>×${(X.rv64im.nands / X.rv32im.nands).toFixed(2)} the gates, most of it in the multiplier (×${(X.mUnit[64] / X.mUnit[32]).toFixed(1)}) and in storage
+        that simply doubles. The period grows by ${pct(X.rv64im.period, X.rv32im.period)} %: the adders and the shifter gained a level, and a W instruction's
+        result passes the W unit. The benchmarks compute on 32-bit values, so the RV64 core runs the same loops (the generator's shifts and CRC-32's
+        as W shifts), and sort and CRC-32 run two more instructions each, once: an <code>li</code> of a constant above 2³¹, which is a positive number on
+        RV64 and no longer fits lui + addiw. It is ${(X.rv64im.period / X.rv32im.period).toFixed(2)} times slower on them and buys nothing.</p>
+        <p>It pays when the values are 64 bits wide: F(90) and 20! in the samples need one <code>add</code> or <code>mul</code> per step here.
+        On RV32 a 64-bit add is four instructions (add, sltu for the carry, add, add), and the low 64 bits of a product take four multiplies (mul, mulhu and two cross products) and two adds.
+        And it pays when memory is larger than 4 GiB, which is why desktop and phone processors went to 64 bits.</p>
+        <p class="try">Run "20! with mul" to its halt, then pick "Benchmark: CRC-32" and run it too.</p>`,
+      scene: () => cpu64Scene({ source: PROGRAMS64[0].source, timing: true }),
+      challenge: {
+        kind: 'quiz', question: 'Which block grew most from the 32-bit core to the 64-bit one?',
+        options: ['The M unit', 'The register file', 'The ALU', 'The W unit'],
+        answer: 0,
+        why: ['', `It doubles: ${fmt(X.regfile[32])} → ${fmt(X.regfile[64])}.`, `A little over twice: ${fmt(X.alu[32].nands)} → ${fmt(X.alu[64].nands)}.`, `It is new but small: ${fmt(X.wUnit.nands)} NANDs.`],
+        explain: `The M unit goes from ${fmt(X.mUnit[32])} to ${fmt(X.mUnit[64])} NANDs: the tree multiplier has a partial-product bit for every pair of operand bits, so twice the width is four times the partial products.`,
       },
     },
   ],

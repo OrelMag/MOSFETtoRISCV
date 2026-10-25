@@ -77,6 +77,63 @@ export function clearBit0(xlen: Xlen): ComponentDef {
   }));
 }
 
+/**
+ * Chapter 25's scene for the W instructions: the W unit around the 64-bit ALU, as the core wires them (operands
+ * through the unit, the ALU's result back into it). y64 is what the ALU computed, y what the register would get.
+ * funct3 and alt are the ALU's operation (alt = funct7[5]: sub, sra).
+ */
+export const W_ALU: ComponentDef = (() => {
+  const WU = wordUnit(64), AL = alu(64, 'ks');
+  const wg = symbolGeom(WU), ag = symbolGeom(AL);
+  const at = new Map<string, [number, number]>();
+  const wuAt: [number, number] = [6, 4];
+  const aluX = wuAt[0] + wg.w + 16;
+  const aluAt: [number, number] = [aluX, wuAt[1] + wg.ports.aw.pos[1] - ag.ports.a.pos[1]];
+  at.set('wu', wuAt).set('alu', aluAt);
+  const P = (inst: string, g: ReturnType<typeof symbolGeom>, port: string): [number, number] => [at.get(inst)![0] + g.ports[port].pos[0], at.get(inst)![1] + g.ports[port].pos[1]];
+  const ctlP = P('alu', ag, 'ctl');
+  const yP = P('alu', ag, 'y');
+  const bottom = Math.max(wuAt[1] + wg.h, aluAt[1] + ag.h);
+  const instances: InstanceDef[] = [
+    { name: 'wu', def: WU, at: wuAt, label: 'W unit' },
+    { name: 'alu', def: AL, at: aluAt, label: 'ALU' },
+    { name: 'ctl', def: merger([3, 1]), at: [ctlP[0] - 1, bottom + 6] },
+    { name: 'f7', def: merger([5, 1, 1]), at: [14, bottom + 6] },
+    { name: 'z5', def: constWord(5, 0), at: [4, bottom + 5] },
+    { name: 'gnd', def: TIE0, at: [4, bottom + 12] },
+  ];
+  const nets: NetDef[] = [
+    { name: 'a', ends: ['a', 'wu.a'] },
+    { name: 'b', ends: ['b', 'wu.b'] },
+    { name: 'w', ends: ['w', 'wu.w'] },
+    { name: 'aw', ends: ['wu.aw', 'alu.a'] },
+    { name: 'bw', ends: ['wu.bw', 'alu.b'] },
+    { name: 'y64', ends: ['alu.y', 'wu.r', 'y64'], tags: ['wu.r'] },
+    { name: 'y', ends: ['wu.rw', 'y'] },
+    { name: 'funct3', ends: ['funct3', 'ctl.i0', 'wu.funct3'], tags: ['wu.funct3'] },
+    { name: 'alt', ends: ['alt', 'ctl.i1', 'f7.i1'], tags: ['f7.i1'] },
+    { name: 'ctl', ends: ['ctl.out', 'alu.ctl'] },
+    { name: 'zero5', ends: ['z5.y', 'f7.i0'] },
+    { name: 'gnd', ends: ['gnd.y', 'f7.i2', 'wu.isM'], tags: ['wu.isM'] },
+    { name: 'funct7', ends: ['f7.out', 'wu.funct7'], tags: true },
+  ];
+  const right = aluAt[0] + ag.w + 12;
+  return define({
+    id: 'walu64', name: 'W unit and 64-bit ALU', category: 'cpu',
+    summary: 'The W unit wrapped around the 64-bit ALU, as in the RV64 core: with w = 0 the ALU computes on 64 bits; with w = 1 (addw, subw, sllw, srlw, sraw) the operands are cut to 32 bits and the result sign-extended from bit 31. y64 is the ALU\'s own result.',
+    ports: [bus('a', 64, 'in'), bus('b', 64, 'in'), bit('w', 'in'), bus('funct3', 3, 'in'), bit('alt', 'in'), bus('y64', 64, 'out'), bus('y', 64, 'out')],
+    symbol: { kind: 'box', label: 'W + ALU' },
+    netlist: () => ({
+      pins: {
+        a: [0, P('wu', wg, 'a')[1]], b: [0, P('wu', wg, 'b')[1]], w: [0, P('wu', wg, 'w')[1]],
+        funct3: [0, bottom + 18], alt: [0, bottom + 21],
+        y64: [right, yP[1]], y: [right, yP[1] + 10],
+      },
+      instances, nets,
+    }),
+  });
+})();
+
 // ---- the W unit -------------------------------------------------------------------------------------------------
 
 /**
