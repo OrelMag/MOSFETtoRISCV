@@ -89,13 +89,12 @@ circuit and an expression are the same object; algebra rewrites one into a cheap
 <p>To get a minimal sum of products from a truth table, use a <b>Karnaugh map</b> (next level) or,
 beyond 4–5 variables, <b>Quine–McCluskey</b>.</p>
 <h4>What the laws buy, worked</h4>
-<table class="cp-laws">
-  <tr><th>Block</th><th>As read off the table</th><th>Rewritten</th></tr>
-  <tr><td>OR</td><td>a + b: no OR cell</td><td>¬(¬a · ¬b), De Morgan: 3 NANDs</td></tr>
-  <tr><td>XOR</td><td>¬a·b + a·¬b: 5 NANDs</td><td>n = ¬(a·b) shared: ¬(¬(a·n) · ¬(b·n)), 4</td></tr>
-  <tr><td>2:1 mux</td><td>NOT, two ANDs, an OR: 8 NANDs, depth 5</td><td>¬(¬(s·b) · ¬(¬s·a)), NAND–NAND: 4, depth 3</td></tr>
-  <tr><td>Full adder</td><td>two half adders and an OR: 13 NANDs</td><td>the carry reuses both XORs' first NANDs: 9</td></tr>
-</table>
+<ul>
+  <li><b>OR</b>: a + b has no cell; ¬(¬a · ¬b), De Morgan: 3 NANDs.</li>
+  <li><b>XOR</b>: ¬a·b + a·¬b: 5 NANDs; with n = ¬(a·b) shared, ¬(¬(a·n) · ¬(b·n)): 4.</li>
+  <li><b>2:1 mux</b>: NOT, two ANDs, an OR: 8 NANDs, depth 5; ¬(¬(s·b) · ¬(¬s·a)), NAND–NAND: 4, depth 3.</li>
+  <li><b>Full adder</b>: two half adders and an OR: 13 NANDs; the carry reuses both XORs' first NANDs: 9.</li>
+</ul>
 <p>The single-cycle core has 705 bits of 2:1 mux and 64 full adders: rewrites at this scale are
 thousands of NANDs.</p>
 <h4>This act</h4>

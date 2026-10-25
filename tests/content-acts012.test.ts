@@ -45,7 +45,7 @@ describe('acts 0, P, 1, 2: the shape of the text', () => {
       const s = (n.why.match(/[.?!](\s|$)/g) ?? []).length;
       expect(s, `${n.id}: sentences`).toBeGreaterThanOrEqual(2);
       expect(s, `${n.id}: sentences`).toBeLessThanOrEqual(4);
-      expect(n.why.split(/\s+/).length, `${n.id}: words`).toBeLessThanOrEqual(70);
+      expect(n.why.split(/\s+/).length, `${n.id}: words`).toBeLessThanOrEqual(60);
       if (n.kind === 'build') expect(n.tips.length, `${n.id}: tips`).toBeGreaterThanOrEqual(2);
       if (n.kind === 'build' || n.kind === 'drill') expect(NUDGES[n.id], `${n.id}: nudge`).toBeTruthy();
     }
@@ -227,7 +227,7 @@ describe('act 2', () => {
     expect(why('a_add16')).toContain(`The ALU is 50 of the single-cycle core's ${par('c_core3').period}-delay period`);
     expect(why('o_fastadd')).toContain(`the ALU is 50 of its ${par('c_core3').period} delays`);
     expect(why('o_fastadd')).toContain(`${par('o_fastadd').nand} NANDs, depth ${par('o_fastadd').depth}, against the ripple adder's ${par('a_add16').nand} and ${par('a_add16').depth}`);
-    expect(why('o_fastadd')).toContain(`period to ${par('c_fast').period}`);
+    expect(why('o_fastadd')).toContain(`the ALU, period ${par('c_fast').period}`);
     expect(why('a_inc16')).toContain(`${par('a_inc16').nand} NANDs against the adder's ${par('a_add16').nand}`);
     expect(why('a_inc16')).toContain(`depth ${par('a_inc16').depth}, and alone sets the PC's period, ${par('s_pc').period}`);
     expect(tips('a_inc16')).toContain(`${cost('inc16').nand - par('a_inc16').nand!} NANDs over par`);
@@ -240,7 +240,7 @@ describe('act 2', () => {
     expect(copiesIn(def('rv16_branch'), def('rv16_cmp16'))).toBe(1);
     expect(lt.nand).toBe(par('a_slt').nand);
     expect(why('a_slt')).toContain(`${lt.nand} of the branch comparator's ${br.nand} NANDs and ${lt.depth} of its ${br.depth} delays`);
-    expect(kase('a_slt')).toContain(`${lt.nand} of its ${br.nand} NANDs, and ${lt.depth} of its ${br.depth} delays`);
+    expect(kase('a_slt')).toContain('its carry chain is the comparator\'s critical path');
     expect(kase('a_slt')).toContain(`${cost('xor').nand + cost('not').nand} NANDs more`);
     expect(alt('a_slt', 'Adder / subtractor').nand).toBe(par('a_addsub16').nand! + cost('xor').nand + cost('not').nand);
     expect(why('a_shift16')).toContain(`${par('a_shift16').nand} NANDs, depth ${par('a_shift16').depth}`);
