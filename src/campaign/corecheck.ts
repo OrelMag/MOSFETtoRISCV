@@ -18,6 +18,8 @@ import { Iss16 } from '../riscv/rv16/iss16';
 
 export interface CoreTest {
   name: string;
+  /** What a directed test aims at (its first comment line), for the task and failure texts. */
+  what?: string;
   /** Assembly, or the words (and data) directly. */
   src?: string;
   words?: number[];

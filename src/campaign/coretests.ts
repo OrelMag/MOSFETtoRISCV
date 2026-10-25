@@ -152,14 +152,17 @@ done:   sw   a0, -3(x0)
         halt
 `;
 
+/** A directed test: its `what` is the program's first comment line. */
+export const directed = (name: string, src: string): CoreTest => ({ name, src, what: src.match(/^#\s*(.+)/)?.[1].trim() });
+
 const rand = (level: 1 | 2 | 3, count: number, from = 1): CoreTest[] =>
   Array.from({ length: count }, (_, i) => ({ name: `random ${level}.${from + i}`, src: randomProgram(from + i, level, 30 + 5 * (i % 4)) }));
 
 /** The tests of a core stage (1: arithmetic, 2: + memory, 3: + branches and jumps). */
 export function coreTests(stage: 1 | 2 | 3): CoreTest[] {
-  const t: CoreTest[] = [{ name: 'arithmetic', src: ARITH }];
-  if (stage >= 2) t.push({ name: 'memory', src: MEMORY }, { name: 'table', src: UNROLLED });
-  if (stage >= 3) t.push({ name: 'branches', src: BRANCHES }, { name: 'calls', src: CALLS }, { name: 'gcd', src: GCD });
+  const t: CoreTest[] = [directed('arithmetic', ARITH)];
+  if (stage >= 2) t.push(directed('memory', MEMORY), directed('table', UNROLLED));
+  if (stage >= 3) t.push(directed('branches', BRANCHES), directed('calls', CALLS), directed('gcd', GCD));
   t.push(...rand(1, stage === 1 ? 14 : 6));
   if (stage >= 2) t.push(...rand(2, stage === 2 ? 10 : 6));
   if (stage >= 3) t.push(...rand(3, 10));
