@@ -472,11 +472,15 @@ a datapath (register transfers on real adders and registers), the textbook way a
   for 2–4 inputs, equations, NANDs / depth / literals; every edit one undo step (editor/ttable.ts, tableui.ts)
 - ⏳ 1b. Then: PLA and ROM forms; paste a table / fill an output from an expression; the campaign's K-map drills
   answered on it; a lock in the levels it solves
-- ⏳ 2. State machine → sequential circuit: a state diagram drawn as data (an `FsmSpec` with conditions as input
-  patterns: today's `when` is a function), synthesized into a chip: a state encoding (binary, Gray or one-hot, their
-  costs compared), a register of DFFs, the next-state and output logic through step 1 (unused codes as don't-cares, or
-  "go to reset"). Checked by reading the circuit back (fsmread.ts readFsm) against the spec; the built chip shows its
-  live diagram. Chapter 9's 101 detector and the campaign's `s_fsm` level as its first uses
+- ✅ 2. State machine → sequential circuit: New chip ▾ State machine (the 101 detector to start from); the diagram drawn
+  on (states added and dragged, arcs from state to state, an input pattern and Mealy outputs per arc, Moore outputs and
+  the reset state per state; arcs checked in order, none taken: the state stays); encoded binary, Gray or one-hot, each
+  built and its NANDs shown; the next-state and output functions become two truth-table chips (step 1, read-only there,
+  opened by double-click) around the state flip-flops with a synchronous rst; unused codes don't care or back to reset.
+  Every edit is read back from the circuit (readFsm) against the diagram; arcs never taken and states never reached are
+  named; the running chip lights its state (editor/fsmchip.ts, fsmchipui.ts)
+- ⏳ 2b. Then: chapter 9's 101 detector step and the campaign's `s_fsm` level (locked there) as uses; arc labels placed
+  by hand
 - ⏳ 3. State machine + datapath: states carry register transfers (`count := count + 1`, `acc := acc + x`) on library
   registers, adders and muxes; the controller is step 2, the datapath its control signals (the multicycle CPU's
   shape)
