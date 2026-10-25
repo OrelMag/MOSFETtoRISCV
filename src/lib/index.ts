@@ -53,3 +53,4 @@ export * from './raster';
 export * from './gfxpipe';
 export * from './m6502/core';
 export * from './rvc';
+export * from './cpu64';

@@ -12,6 +12,7 @@ import { wordRom } from '../src/editor/parts';
 import { bigRam } from '../src/lib/bigmem';
 import { m6502 } from '../src/lib/m6502/chip';
 import { DOOM_MAP, doomComputer, doomDevices } from '../src/lib/doompc';
+import { xlenTops } from '../src/lib/cpu64';
 
 export function cpuTops(): ComponentDef[] {
   const w = assemble(PROGRAMS[0].source).words, cw = assemble(CACHE_CPU_PROGRAMS[0].source).words;
@@ -30,6 +31,8 @@ export function cpuTops(): ComponentDef[] {
     systemCore(), systemCore({ m: true }),
     multicycleCpu(w, { control: 'fsm' }), multicycleCpu(w, { control: 'micro' }), dualCore(w),
     multiCore(w, 4), multiCore(w, 8, { dmemK: 10 }), laneCore(w, 4), laneCore(w, 8),
+    // chapter 25: one core at 32 and 64 bits (RV32IM, RV64IM, RV64I)
+    ...xlenTops(w),
     // Appendix A: the 6502 at transistor level (its blocks register when it is built)
     m6502(),
   ];

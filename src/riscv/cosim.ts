@@ -48,6 +48,39 @@ export function dmemWords(sim: Pick<Sim, 'getBits'> & Partial<Pick<Sim, 'leafSta
   return dmem;
 }
 
+/** A bus as an unsigned BigInt, exact at any width (an X or Z bit reads as 0). */
+export function bitsBig(bits: ArrayLike<number>): bigint {
+  let v = 0n;
+  for (let i = bits.length - 1; i >= 0; i--) v = (v << 1n) | (bits[i] === 1 ? 1n : 0n);
+  return v;
+}
+
+/**
+ * The architectural state of a core of any register width (lib/cpu64.ts xlenCpu, or any CPU with rf / dm as the
+ * chapters name them) as BigInts: never through a JS number, which rounds past 53 bits. dmem: the data memory's
+ * words at its own width (a byte-banked memory: word i = {b(L-1)[i], …, b0[i]}).
+ */
+export function wideState(sim: Pick<Sim, 'getBits' | 'design'>, root: HierNode = sim.design.root): { pc: bigint; x: bigint[]; dmem: bigint[] } {
+  const rf = root.children!.get('rf')!;
+  const x = [0n];
+  for (let i = 1; i < 32; i++) x.push(bitsBig(sim.getBits(rf.children!.get(`w${i}`)!.ports.q)));
+  const dm = root.children!.get('dm');
+  const dmem: bigint[] = [];
+  if (dm) {
+    const ram = dm.children!.get('ram');
+    const banks = ram ? [ram] : [...dm.children!.keys()].filter((n) => /^b\d+$/.test(n)).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1))).map((n) => dm.children!.get(n)!);
+    banks.forEach((bank, l) => {
+      for (const [name, n] of bank.children!) {
+        if (!/^w\d+$/.test(name)) continue;
+        const i = Number(name.slice(1));
+        dmem[i] = (dmem[i] ?? 0n) | (bitsBig(sim.getBits(n.ports.q)) << BigInt(8 * l));
+      }
+    });
+  }
+  const pcPort = root.ports.pcOut ?? root.ports.pcF;
+  return { pc: pcPort ? bitsBig(sim.getBits(pcPort)) : 0n, x, dmem };
+}
+
 /** One clock cycle: rising edge, settle, falling edge, settle. */
 export function clockCycle(sim: Pick<Sim, 'setInput' | 'settle'>): void {
   sim.setInput('clk', 1);
