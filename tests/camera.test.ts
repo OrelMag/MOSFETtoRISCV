@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Camera, COVER_GAP, FOLD_BESIDE_PX, fitBox, freeArea, freeRect, MIN_FIT_H, MIN_FIT_PX, type Rect, roomBeside, startFolded, TOUCH_PX, touchZoom, underCover, type ViewBox } from '../src/view/camera';
+import { Camera, chooseFolds, COVER_GAP, FOLD_BESIDE_PX, KEEP_SCALE, fitBox, freeArea, freeRect, MIN_FIT_H, MIN_FIT_PX, type Rect, roomBeside, startFolded, TOUCH_PX, touchZoom, underCover, type ViewBox } from '../src/view/camera';
 
 /** A host of a settable size and an svg that only records its view box: enough for Camera. */
 function rig(w: number, h: number) {
@@ -81,11 +81,31 @@ describe('fitting beside an overlay panel', () => {
   });
 
   it('starts a foldable panel folded when it would leave the circuit less than FOLD_BESIDE_PX', () => {
-    // 1280 px between the side panes: a 540 px canvas; 1440: 700 px; a phone: 390 px.
+    // A 540 px canvas (1280 px between full-width side panes), 700 px, a phone: 390 px.
     expect(startFolded(540, 330)).toBe(true);
     expect(startFolded(390, 330)).toBe(true);
     expect(startFolded(700, 330)).toBe(false);
     expect(startFolded(330 + 24 + FOLD_BESIDE_PX, 330)).toBe(false);
+  });
+
+  it('keeps as many panels open as leave the circuit KEEP_SCALE of its size with them all folded', () => {
+    // Scales measured on the stage (bit 0: the CPU panel folded, bit 1: the I/O panel folded).
+    // Chapter 14 at 1920 px: the CPU panel stays open (0.70); at 1440 px it folds (0.56).
+    expect(chooseFolds(1, (m) => [4.08, 5.84][m])).toBe(0);
+    expect(chooseFolds(1, (m) => [2.21, 3.96][m])).toBe(1);
+    // Chapter 19 at 1920 px: both stay open; at 1440 px one folds, the one leaving the larger circuit (the CPU panel).
+    expect(chooseFolds(2, (m) => [2.97, 2.97, 3.14, 3.43][m])).toBe(0);
+    expect(chooseFolds(2, (m) => [1.44, 1.72, 1.69, 2.46][m])).toBe(1);
+    // A choice not allowed (the CPU panel open beside a narrow circuit) is never taken.
+    expect(chooseFolds(2, (m) => [null, 1.09, null, 1.62][m])).toBe(1);
+    expect(chooseFolds(2, (m) => [null, 0.9, null, 1.62][m])).toBe(3);
+    // Nothing allowed: every free panel folds; the learner's own choice holds.
+    expect(chooseFolds(2, () => null, [false, null])).toBe(2);
+    // (with the CPU panel held open the best left is 1.69: the I/O panel open too costs little)
+    expect(chooseFolds(2, (m) => [1.44, 1.72, 1.69, 2.46][m], [false, null])).toBe(0);
+    expect(chooseFolds(2, (m) => [0.9, 1.72, 1.69, 2.46][m], [false, null])).toBe(2);
+    expect(chooseFolds(1, (m) => [1, 10][m], [false])).toBe(0);
+    expect(KEEP_SCALE).toBeGreaterThan(0.5);
   });
 
   it('Camera.fit uses the same box and counts as fitted', () => {

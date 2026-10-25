@@ -96,8 +96,10 @@
   background: var(--surface); color: var(--text);
 }
 .sb-new { flex: none; }
-/* New chip ▾ stays in view at the end of the tabs when they scroll (it was cut under the autosave indicator) */
-.sb-new-grp { display: inline-flex; align-items: center; flex: none; position: sticky; right: 0; z-index: 1; background: var(--surface); }
+/* Open… and New chip ▾ stay in view at the end of the tabs when they scroll (New chip was cut under the autosave
+   indicator; alone sticky, it covered Open…); the tabs slide under the group (editor.ts showActiveTab keeps the
+   open one clear of it) */
+.sb-new-grp { display: inline-flex; align-items: center; gap: 4px; padding-left: 4px; flex: none; position: sticky; right: 0; z-index: 1; background: var(--surface); }
 .sb-actions { display: flex; align-items: center; gap: 2px; flex: none; }
 /* never shrink: a touch screen's .btn min-width (40 px) replaces the automatic one, so a labelled button squeezed to
    40 px drew its label over the next; fitActions moves what does not fit into More instead */

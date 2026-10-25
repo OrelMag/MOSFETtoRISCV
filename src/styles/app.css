@@ -278,6 +278,12 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .layout.no-inspector { grid-template-columns: minmax(300px, 400px) 1fr 0; }
 .layout.no-inspector .inspector { display: none; }
+/* A laptop (1180–1440 px): narrower side panes, so the stage gets the room (at 1280 it was 540 px, and a scene's
+   own panels took most of that). */
+@media (min-width: 1181px) and (max-width: 1440px) {
+  .layout { grid-template-columns: minmax(300px, 340px) 1fr minmax(260px, 300px); }
+  .layout.no-inspector { grid-template-columns: minmax(300px, 340px) 1fr 0; }
+}
 
 .narrative {
   border-right: 1px solid var(--border); background: var(--surface);
@@ -321,6 +327,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 /* a neighbouring chapter's title gives way (ellipsis) before the step count wraps */
 .narrative-foot .btn { min-width: 0; }
 .narrative-foot .btn .lbl { overflow: hidden; text-overflow: ellipsis; }
+.narrative-foot .btn:not(:has(.lbl)) { flex: none; } /* a plain Back / Next keeps its key hint whole */
 
 /* challenge */
 .challenge {
@@ -426,6 +433,15 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .stage-bar.compact .btn .lbl { display: none; }
 .stage-bar.stacked { flex-wrap: wrap; row-gap: 2px; padding-top: 4px; padding-bottom: 4px; }
 .stage-bar.stacked > .crumbs { flex: 1 1 100%; }
+/* One row: the levels above the open one give up their width first (cut, never below a few letters); the open
+   one is never cut: Stage.fitBar moves buttons into More (.shed), then gives the hierarchy a row of its own. */
+.stage-bar:not(.stacked) .crumbs { flex-wrap: nowrap; }
+.stage-bar:not(.stacked) .crumbs > button { flex-shrink: 6; min-width: 3.2em; }
+.stage-bar:not(.stacked) .crumbs > button.cur { flex-shrink: 0; min-width: 0; }
+.stage-bar .crumbs > .sep { flex: none; }
+.stage-bar .shed { display: none; }
+.stage-more-menu { min-width: 260px; }
+.stage-more-menu button > svg { flex: none; color: var(--text-2); }
 /* manipulation: a double tap on the panels and badges over the circuit does not zoom the page either (the svg: none) */
 .canvas { flex: 1; position: relative; min-height: 0; overflow: hidden; touch-action: manipulation; }
 .canvas > svg.schematic { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; }
@@ -599,8 +615,30 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   .ctl-inner { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; scrollbar-width: thin; }
   .ctl-inner > * { flex: none; }
   .ctl-inner .kind { display: none; }
+  /* the pins too: wrapped, a scene with many (ch 32's rasterizer) filled the whole stage with them */
+  .ctl-pins { display: flex; align-items: center; gap: 8px; flex: 1 1 100%; min-width: 0; overflow-x: auto; scrollbar-width: thin; padding-block: 2px; }
+  .ctl-pins > *, .ctl-pins .out-strip { flex: none; flex-wrap: nowrap; }
+  .controls { row-gap: 6px; }
 }
+/* No box of their own on a wide screen: the pins wrap in the bar's own flow. */
+.ctl-pins { display: contents; }
+@media (max-width: 760px) { .ctl-pins { display: flex; } }
+/* Still too wide with icons only (a phone): the buttons and the status wrap within their row. */
+.controls.tight .ctl-run { flex-wrap: wrap; row-gap: 6px; column-gap: 4px; }
+.controls.tight .ctl-acts { display: contents; }
+/* The clock, the stepping buttons and the status: one row that wraps as a whole below the pins; with .compact
+   (Stage.fitControls) the buttons show icons only. The status takes what is left of it and is cut with an ellipsis
+   (its title has it whole) rather than wrapping: a message that changed length during a run used to resize the
+   canvas. Its size containment keeps its text out of the row's width, so only the buttons decide where it wraps. */
+.ctl-run { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; }
+.ctl-acts { display: flex; align-items: center; gap: 10px; flex: none; }
+.controls.compact .ctl-acts { gap: 4px; }
+.controls.compact .ctl-acts .lbl { display: none; }
+.controls.compact .ctl-acts .label { display: none; }
 .status { margin-left: auto; font: 12px var(--font-mono); color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.stage .controls .status { justify-content: flex-end; flex: 1 1 auto; min-width: 7em; contain: inline-size; }
+.status .pulse { flex: none; }
+.status-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
 .status .pulse.busy { background: var(--w1); animation: blink 0.6s infinite; }
 .status .pulse.warn { background: var(--wx); }
@@ -1121,7 +1159,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .mem-panel.collapsed .fold-hint::after { content: 'click to expand'; }
 /* Bottom-left panels (Stage.layoutDock sets `right` beside the right dock, and `row` when they fit side by side). */
 .panel-dock {
-  position: absolute; left: 12px; right: 12px; top: 44px; bottom: 12px; z-index: 3; pointer-events: none;
+  position: absolute; left: 12px; right: 12px; top: 44px; bottom: 12px; z-index: 3; pointer-events: none; container: dock / inline-size;
   display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; gap: 8px;
 }
 .panel-dock.row { flex-direction: row; align-items: flex-end; }
@@ -1470,14 +1508,19 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .pg-row.ev .pg-c { background: none; color: var(--warn); font-size: 9.5px; white-space: normal; line-height: 1.15; }
 
 .io-panel { width: 330px; }
+/* Where the dock beside the right panel is wide (a large stage), the I/O panel takes two columns and half the height. */
+@container dock (min-width: 640px) {
+  .io-panel { width: 620px; }
+  .io-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+}
 .console { background: #0b0d12; color: #9fe6a0; font: 12.5px var(--font-mono); border-radius: 8px; padding: 8px 10px; margin: 0;
   min-height: 48px; max-height: 120px; overflow: auto; white-space: pre-wrap; border: 1px solid var(--border); }
 .io-row { display: flex; gap: 16px; }
-.leds { display: flex; gap: 4px; }
+.leds { display: flex; gap: 3px; }
 .led { width: 14px; height: 14px; border-radius: 50%; background: var(--surface-3); border: 1px solid var(--border-strong); }
 .led.on { background: #ff3b3b; border-color: #ff3b3b; box-shadow: 0 0 8px #ff3b3b; }
-.switches { display: flex; gap: 3px; }
-.sw { width: 18px; height: 24px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface-2); font: 600 9px var(--font-mono); color: var(--muted); cursor: pointer; padding: 0; }
+.switches { display: flex; gap: 2px; }
+.sw { width: 16px; height: 24px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface-2); font: 600 9px var(--font-mono); color: var(--muted); cursor: pointer; padding: 0; }
 .sw.on { background: var(--w1); color: #fff; border-color: var(--w1); }
 .cpu-mem .m .n { width: 72px; }
 
