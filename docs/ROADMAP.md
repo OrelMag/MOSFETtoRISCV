@@ -1058,8 +1058,12 @@ links, bus taps, duplicate and pin reordering. The gaps:
   `bit [7] = 1` where a bus was sliced), following the simulation, in the chapters' stage and the sandbox's look
   inside. From the deepest level up, a level shows the output carrying the one below (the same flat nets), else its
   first; the top level only when its pins carry it
-- ⏳ A slack heatmap: every gate coloured by how close its arrival time is to the critical path's (unit or load
-  delay), a toggle on the Timing panel beside the drawn critical path
+- ✅ A slack heatmap (sim/slack.ts): every part at the level on screen tinted by its slack, the critical path's length
+  minus the longest path through it (arrival at it + the longest path on from it to a flip-flop, setup included), so
+  the whole critical path is hot from its launching flip-flop to its capturing one; unit or load delay, five bands
+  (critical, < 10 %, < 25 %, < 50 % of the period, more), parts no timed path crosses faded. A "Slack heatmap" toggle
+  beside the critical-path button on the chapters' Timing panel (following the drill level) and the sandbox's Timing
+  section (input → output on a chip without flip-flops), with a key; a part's tooltip gives its slack
 
 **Campaign and sandbox polish**:
 - ✅ Rotation (R) for parts in the sandbox: `rot` (quarter turns after the mirror) on a part and an InstanceDef,
