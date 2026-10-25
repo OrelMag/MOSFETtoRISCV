@@ -6,7 +6,7 @@ import { DFF } from '../src/lib/sequential';
 import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
 import { flatten } from '../src/sim/flatten';
-import { slackAt, slackBand, slackOf } from '../src/sim/slack';
+import { slackAt, slackBand, slackHeat, slackOf } from '../src/sim/slack';
 import { analyzeTiming, CLK_TO_Q, SETUP } from '../src/sim/timing';
 import type { ComponentDef } from '../src/sim/types';
 
@@ -41,6 +41,9 @@ describe('slack heatmap', () => {
     expect(m.get('r2')).toBe(2);
     expect(slackBand(m.get('n1')!, s.period)).toBe(0);
     expect(slackBand(m.get('s1')!, s.period)).toBe(2); // 2 / 9: within 25 %
+    const heat = slackHeat(s, []);
+    expect(heat.get('n1')).toEqual({ band: 0, tip: 'On the critical path (9 NAND delays): slack 0' });
+    expect(heat.get('s1')!.tip).toBe("Slack 2 NAND delays: the slowest path through it is 7 of the critical path's 9 (78 %)");
     // a level down: the NAND inside n2 is critical, the one inside s1 is not
     expect([...slackAt(s, ['n2']).values()]).toEqual([0]);
     expect([...slackAt(s, ['s1']).values()]).toEqual([2]);

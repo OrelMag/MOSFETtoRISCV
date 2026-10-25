@@ -5,7 +5,7 @@
 // Arrival times are timing.ts's (the same graph), so unit and load delay both work. A design without flip-flops is
 // timed input to output instead (the root's outputs as capture points, no setup).
 
-import type { DelayModel } from './delay';
+import { type DelayModel, fmtDelay } from './delay';
 import type { FlatDesign } from './flatten';
 import { SETUP, timingGraph } from './timing';
 
@@ -134,4 +134,19 @@ export function slackBand(slack: number, period: number): number {
   if (f <= 1e-9) return 0;
   for (let b = 1; b < SLACK_BANDS.length; b++) if (f < SLACK_BANDS[b]) return b;
   return SLACK_BANDS.length;
+}
+
+/** What the views draw: instance → heat band and a tooltip saying it, at a level (`at`). */
+export function slackHeat(s: SlackMap, at: readonly string[]): Map<string, { band: number; tip: string }> {
+  const out = new Map<string, { band: number; tip: string }>();
+  const f = (x: number) => fmtDelay(x, s.model), unit = s.model === 'unit' ? ' NAND delays' : ' units';
+  const whole = s.clocked ? 'the critical path' : 'the longest input → output path';
+  for (const [name, sl] of slackAt(s, at)) {
+    const band = slackBand(sl, s.period);
+    out.set(name, {
+      band, tip: band === 0 ? `On ${whole} (${f(s.period)}${unit}): slack 0`
+        : `Slack ${f(sl)}${unit}: the slowest path through it is ${f(s.period - sl)} of ${whole}'s ${f(s.period)} (${Math.round((1 - sl / s.period) * 100)} %)`,
+    });
+  }
+  return out;
 }

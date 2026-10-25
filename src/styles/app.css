@@ -850,6 +850,54 @@ svg.schematic.focus .inst:not(.hl):not(.plumbing) { opacity: 0.28; }
 svg.schematic.focus .faded { opacity: 0.18; }
 svg.schematic.focus .inst.hl .hit { animation: none; fill: color-mix(in srgb, var(--hl) 14%, transparent); }
 @keyframes hl { 50% { stroke-opacity: 0.45; } }
+/* The slack heatmap (sim/slack.ts, the Timing panels' toggle): part bodies tinted from hot (on the critical path) to
+   neutral (plenty of slack). Light bodies with dark text; dark ones in the dark theme; with the vivid look strong
+   fills under its white labels, the same in either theme and on its dark board. */
+:root {
+  --slack-0: #f47272;
+  --slack-1: #f9a65e;
+  --slack-2: #fbd66e;
+  --slack-3: #efeccb;
+  --slack-4: #e2e7ef;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --slack-0: #a33434;
+    --slack-1: #9c5119;
+    --slack-2: #7d6517;
+    --slack-3: #45473a;
+    --slack-4: #272d39;
+  }
+}
+:root[data-theme='dark'] {
+  --slack-0: #a33434;
+  --slack-1: #9c5119;
+  --slack-2: #7d6517;
+  --slack-3: #45473a;
+  --slack-4: #272d39;
+}
+:root[data-look='vivid'] {
+  --slack-0: hsl(0 72% 50%);
+  --slack-1: hsl(24 86% 47%);
+  --slack-2: hsl(42 82% 38%);
+  --slack-3: hsl(80 22% 36%);
+  --slack-4: hsl(220 14% 38%);
+}
+.inst[data-slack='0'], .slack-legend .sk0 { --slack-c: var(--slack-0); }
+.inst[data-slack='1'], .slack-legend .sk1 { --slack-c: var(--slack-1); }
+.inst[data-slack='2'], .slack-legend .sk2 { --slack-c: var(--slack-2); }
+.inst[data-slack='3'], .slack-legend .sk3 { --slack-c: var(--slack-3); }
+.inst[data-slack='4'], .slack-legend .sk4 { --slack-c: var(--slack-4); }
+/* above the module and vivid body colours */
+:root svg.schematic.slack-heat .inst[data-slack] .sym :is(.sym-body, .sym-box) { fill: var(--slack-c); }
+:root svg.schematic.slack-heat .inst[data-slack='0'] .sym :is(.sym-body, .sym-box) { stroke: color-mix(in oklab, var(--slack-0) 55%, var(--text)); }
+svg.schematic.slack-heat .inst:not([data-slack]):not(.plumbing) { opacity: 0.45; }
+.slack-legend { margin-top: 8px; font-size: 12px; color: var(--text-2); }
+.slack-legend .sk-key { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.slack-legend .sk-key span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.slack-legend i { width: 14px; height: 10px; border-radius: 3px; background: var(--slack-c); border: 1px solid var(--border-strong); }
+.slack-legend p { margin: 6px 0 0; line-height: 1.4; }
+.tm-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .open-badge { opacity: 0; transition: opacity 0.15s; cursor: pointer; }
 .open-badge circle { fill: var(--accent); }
 .open-badge .icon { color: #fff; stroke-width: 2.6; }

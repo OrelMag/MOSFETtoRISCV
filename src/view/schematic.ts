@@ -98,6 +98,8 @@ export class SchematicView {
   /** Extra classes per net (instruction fields); marked nets never fade. */
   private netMarks = new Map<number, string>();
   private lastHl: { names: string[]; focus: boolean } = { names: [], focus: false };
+  /** The slack heatmap on this level (instance → band and tooltip), kept across a relayout, dropped on another level. */
+  private heatMap: Map<string, { band: number; tip: string }> | null = null;
   private probeG: SVGGElement | null = null;
   private flowG: SVGGElement | null = null;
   private labelG: SVGGElement | null = null;
@@ -184,7 +186,7 @@ export class SchematicView {
     this.faded.clear();
     this.netMarks = new Map();
     this.closeMenu();
-    if (!keepView) this.group = new Set();
+    if (!keepView) { this.group = new Set(); this.heatMap = null; }
     const base = this.base = netlistOf(ctx.def) ?? null;
     this.el.replaceChildren();
     this.wires = [];
@@ -353,6 +355,7 @@ export class SchematicView {
       });
       this.insts.set(inst.name, g);
       instG.append(g);
+      this.paintHeat(inst.name, g);
     }
 
     // The component's own pins
@@ -635,6 +638,24 @@ export class SchematicView {
       for (const t of w.taps) t.classList.toggle('faded', !live);
       w.label?.classList.toggle('faded', !live);
     }
+  }
+
+  /**
+   * Tint instances by slack (band 0 = on the critical path … 4 = plenty of spare time; styles in app.css's
+   * slack tokens); instances left out stay untinted. null turns it off.
+   */
+  heat(map: Map<string, { band: number; tip: string }> | null): void {
+    this.heatMap = map;
+    this.el.classList.toggle('slack-heat', !!map);
+    for (const [name, g] of this.insts) this.paintHeat(name, g);
+  }
+
+  private paintHeat(name: string, g: SVGGElement): void {
+    const h = this.heatMap?.get(name);
+    g.querySelector(':scope > title.slack-tip')?.remove();
+    if (!h) return void g.removeAttribute('data-slack');
+    g.setAttribute('data-slack', String(h.band));
+    g.prepend(s('title', { class: 'slack-tip' }, h.tip));
   }
 
   select(name: string | null): void {
