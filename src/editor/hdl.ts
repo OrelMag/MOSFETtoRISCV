@@ -42,7 +42,7 @@ export function hdlGroup(ws: Workspace, homeId: string): ChipDoc[] {
 }
 
 /** Is the chip's body generated, from Verilog or a truth table (ttable.ts), so the canvas must not edit it? */
-export const isGenerated = (ws: Workspace, id: string): boolean => !!hdlHome(ws, id) || !!ws.chips[id]?.table;
+export const isGenerated = (ws: Workspace, id: string): boolean => !!hdlHome(ws, id) || !!ws.chips[id]?.table || !!ws.chips[id]?.fsm;
 
 /** The part of a chip a synthesis owns: changing it by hand is refused. */
 export function bodyKey(doc: ChipDoc): string {

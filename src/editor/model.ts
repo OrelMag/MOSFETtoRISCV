@@ -62,6 +62,38 @@ export interface TableDoc {
   rows: string[];
   /** NAND–NAND (NANDs and inverters only) or AND–OR (AND, OR, NOT gates). */
   form: 'nand' | 'andor';
+  /** Drawn for this state-machine chip (fsmchip.ts): its table follows the machine, edited only there. */
+  of?: string;
+}
+
+/**
+ * A chip drawn from a state machine (fsmchip.ts): 1-bit inputs and outputs, states (Moore outputs: the outputs at 1),
+ * arcs taken on an input pattern (the first matching arc out of a state wins; none: the state stays), with Mealy
+ * outputs. The chip gets rst (synchronous, to the reset state) and clk; its body places a next-state table chip, the
+ * state flip-flops and an output table chip (<id>_next, <id>_out: TableDoc.of names this chip).
+ */
+export interface FsmDoc {
+  ins: string[];
+  outs: string[];
+  states: FsmStateDoc[];
+  arcs: FsmArcDoc[];
+  /** Index of the reset (and power-on) state. */
+  reset: number;
+  encoding: 'binary' | 'gray' | 'onehot';
+  form: 'nand' | 'andor';
+  /** Codes no state has go to the reset state (else don't cares: cheapest). */
+  safe?: true;
+}
+
+export interface FsmStateDoc { name: string; at: [number, number]; out?: string[] }
+
+export interface FsmArcDoc {
+  from: number;
+  to: number;
+  /** Input values the arc needs (an input left out: either). */
+  when: Record<string, 0 | 1>;
+  /** Mealy outputs at 1 while this arc is the one the next edge takes. */
+  out?: string[];
 }
 
 export interface FolderDoc {
@@ -96,6 +128,8 @@ export interface ChipDoc {
   hdl?: HdlDoc;
   /** Drawn from a truth table (ttable.ts): its body is generated from it, edited only as the table. */
   table?: TableDoc;
+  /** Drawn from a state machine (fsmchip.ts): its body is generated, edited only as the machine. */
+  fsm?: FsmDoc;
   pins: PinDoc[];
   parts: PartDoc[];
   wires: WireDoc[];
