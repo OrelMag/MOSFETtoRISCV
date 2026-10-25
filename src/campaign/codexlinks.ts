@@ -11,7 +11,7 @@ import type { CampaignNode } from './types';
  * Entries a level unlocks although nothing on it (title, why, lesson, task, tips, case) names them: listed after
  * their act's own entries, under "Further" (tests/codex-guide.test.ts checks that the level still does not name them).
  */
-export const FURTHER = new Set(['vm', 'atomics', 'ordering', 'coherence', 'stdcell', 'metastability', 'rowhammer', 'ecc', 'amdahl', 'rv32i']);
+export const FURTHER = new Set(['vm', 'atomics', 'ordering', 'coherence', 'stdcell', 'metastability', 'rowhammer', 'ecc', 'amdahl', 'rv32i', 'tristate']);
 
 /** The codex by kind, then as written: the list's second view. */
 export const CODEX_BY_KIND: CodexEntry[] = CODEX_KINDS.flatMap((k) => CODEX.filter((e) => e.kind === k.id));

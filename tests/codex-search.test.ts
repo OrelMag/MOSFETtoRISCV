@@ -25,6 +25,10 @@ describe('codex search', () => {
     expect(first('nand')).toBe('nand');
     expect(first('NAND')).toBe('nand');
     expect(first('sign')).toBe('signext');
+    expect(first('tri-state')).toBe('tristate');
+    expect(first('tristate')).toBe('tristate');
+    expect(first('clock')).toBe('clock');
+    expect(first('reset')).toBe('reset');
   });
 
   it('ranks names above summaries', () => {

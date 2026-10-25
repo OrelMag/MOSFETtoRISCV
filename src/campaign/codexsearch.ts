@@ -11,7 +11,8 @@ import { ALIASES } from './glossary';
 const SEARCH_ONLY: Record<string, string[]> = {
   fsm: ['state machine', 'FSM'], dff: ['flip-flop', 'DFF', 'register bit'], kmap: ['K-map', 'Karnaugh'], not: ['inverter gate'],
   twos: ['twos complement', 'negative numbers'], signext: ['sign extend'], ieee754: ['floating point', 'float'],
-  stack: ['stack pointer'],
+  stack: ['stack pointer'], clock: ['clock', 'period', 'frequency'], reset: ['reset', 'power-on', 'rst'],
+  tristate: ['three-state', 'high impedance'], bin2dec: ['print a number', 'decimal digits', 'BCD'], preg: ['stage register'],
 };
 
 /** Dropped inside a word (two's → twos); separators below are dropped and start a word. */
