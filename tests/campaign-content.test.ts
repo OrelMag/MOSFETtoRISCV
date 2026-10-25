@@ -105,3 +105,26 @@ describe('codex links', () => {
     expect(c('pi_haz')).toContain('scoreboard');
   });
 });
+
+describe('s_pc', () => {
+  // The library PC resets with a second bus mux whose other input is 0 (49 NANDs); an AND per bit with ¬rst is 33 at
+  // the same depth. The level's reference and par take the cheaper one; the cores keep rv16_pc (their pars count it).
+  it('par is the AND reset, 16 NANDs under the library PC, at its period', async () => {
+    const { stats } = await import('../src/sim/stats');
+    const { checkChallenge } = await import('../src/editor/challenges');
+    const { UserLibrary } = await import('../src/editor/library');
+    const { emptyWorkspace } = await import('../src/editor/model');
+    const { levelChallenge } = await import('../src/campaign/levels');
+    const n = nodeById('s_pc')!, c = levelChallenge(n)!, chips = c.answer();
+    const ws = emptyWorkspace();
+    for (const d of chips) ws.chips[d.id] = d;
+    const r = checkChallenge(c, new UserLibrary(ws).compiled(chips[chips.length - 1].id));
+    expect(r.ok).toBe(true);
+    const lib = stats(resolveComponent('rv16_pc')!).nands;
+    expect(r.score.nand).toBe(n.par!.nand);
+    expect(lib - r.score.nand).toBe(16);
+    expect(r.score.period).toBe(n.par!.period);
+    expect(caseOf('s_pc')!.cost).toContain(`${r.score.nand} NANDs, clock period ${r.score.period}`);
+    expect(caseOf('s_pc')!.cost).toContain(`is built so: ${lib})`);
+  });
+});

@@ -7,8 +7,11 @@ import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc } from '../editor/model';
 import { aluSpec } from '../lib/alu';
 import { addSub } from '../lib/combinational';
+import { Builder } from '../lib/builder';
+import { merger, splitter } from '../lib/define';
 import { koggeStone } from '../lib/fastadd';
-import { ADD16, CMP16, DEC3, DET101, EQ16, INC16, MUX16, PC16, PRIME4, PRIMES4, RF8, RV16_ALU16, RV16_REG16, RV16_SHIFT16, WIDE16 } from '../lib/rv16/logic';
+import { AND, NOT } from '../lib/gates';
+import { ADD16, CMP16, DEC3, DET101, EQ16, INC16, MUX16, PRIME4, PRIMES4, RF8, RV16_ALU16, RV16_DREG16, RV16_REG16, RV16_SHIFT16, WIDE16 } from '../lib/rv16/logic';
 import { keepPorts } from '../sim/dead';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { rng } from './drills';
@@ -17,6 +20,58 @@ const pins = (ins: [string, number?][], outs: [string, number?][], clock?: strin
   ...ins.map(([name, width = 1]): PinSpec => ({ name, dir: 'in', width, ...(name === clock ? { clock: true } : {}) })),
   ...outs.map(([name, width = 1]): PinSpec => ({ name, dir: 'out', width })),
 ];
+
+/**
+ * s_pc's reference: rv16_pc with its reset as an AND per bit with ¬rst (33 NANDs) where the library block has a
+ * second bus mux with a constant-0 input (49), at the same depth on the data: 302 NANDs against 318. The cores keep
+ * rv16_pc (their pars count it). The 16 ANDs are a chip of their own, so the PC reads as four blocks.
+ */
+const CLEAR16: ComponentDef = (() => {
+  const b = new Builder(6, 8, 4);
+  b.pins('x', 'rst');
+  const sx = b.op(splitter(Array(16).fill(1), 8), ['x']);
+  const nr = b.name(b.op1(NOT, ['rst'], '¬rst'), 'run', true);
+  b.next();
+  const ys = Array.from({ length: 16 }, (_, i) => b.op1(AND, [`${sx}.o${i}`, nr]));
+  b.next();
+  b.wire(b.op1(merger(Array(16).fill(1), 8), ys), 'y');
+  return {
+    id: 'clear16', name: 'Clear on reset (16-bit)', category: 'custom', summary: 'y = rst ? 0 : x: an AND per bit with ¬rst.',
+    ports: [{ name: 'x', width: 16, dir: 'in' }, { name: 'rst', width: 1, dir: 'in' }, { name: 'y', width: 16, dir: 'out' }],
+    symbol: { kind: 'box', label: 'CLEAR' },
+    netlist: () => ({ pins: {}, instances: b.instances, nets: b.nets() }),
+  };
+})();
+
+const PC_REF: ComponentDef = (() => {
+  const b = new Builder(8, 12, 4);
+  b.pins('rst', 'ld', 'd', 'clk');
+  const inc = b.op(INC16, [''], 'pc + 1');
+  b.next();
+  const m1 = b.op1(MUX16, [`${inc}.y`, 'd', 'ld'], 'load?');
+  b.next();
+  const m2 = b.op1(CLEAR16, [m1, 'rst'], 'reset?');
+  b.next();
+  const r = b.op(RV16_DREG16, [m2, 'clk'], 'PC');
+  const pc = b.name(`${r}.q`, 'pc', true);
+  b.wire(pc, `${inc}.a`);
+  b.wire(pc, 'pc');
+  return {
+    id: 'pc16_ref', name: 'Program counter', category: 'custom', summary: 'pc ← rst ? 0 : ld ? d : pc + 1: sixteen flip-flops, an incrementer, a bus mux and an AND per bit for the reset.',
+    ports: [{ name: 'rst', width: 1, dir: 'in' }, { name: 'ld', width: 1, dir: 'in' }, { name: 'd', width: 16, dir: 'in' }, { name: 'clk', width: 1, dir: 'in', clock: true }, { name: 'pc', width: 16, dir: 'out' }],
+    symbol: { kind: 'box', label: 'PC' },
+    netlist: () => ({ pins: {}, instances: b.instances, nets: b.nets() }),
+  };
+})();
+
+let pcRef: ChipDoc[] | null = null;
+const pcAnswer = (): ChipDoc[] => {
+  if (pcRef) return pcRef;
+  const clear = docFromDef(CLEAR16, { id: 'u_ref_cp_s_pc_clear', name: 'Clear on reset ref' });
+  const main = docFromDef(PC_REF, { id: 'u_ref_cp_s_pc', name: 'Program counter ref', refOf: (d) => (d === CLEAR16 ? { chip: 'u_ref_cp_s_pc_clear' } : undefined) });
+  if ('error' in clear || 'error' in main) throw new Error(`reference s_pc: ${'error' in clear ? clear.error : 'error' in main ? main.error : ''}`);
+  return (pcRef = [{ ...clear, notes: 'Reference answer. y = rst ? 0 : x.' }, { ...main, notes: `Reference answer. ${PC_REF.summary}` }]);
+};
 
 const answers = new Map<string, ChipDoc[]>();
 /** The reference answer: the library block as one chip (every part placed by library id). */
@@ -226,7 +281,7 @@ export const BUILD1: Record<string, () => BuildChallenge> = {
     id: 's_pc', title: 'Program counter', level: 'sequential', allowed: 'nand',
     brief: 'At each rising edge: <b>pc ← 0</b> if <code>rst</code>, else <b>d</b> if <code>ld</code> (a jump), else <b>pc + 1</b>. Reset wins over load; pc wraps from 0xFFFF to 0.',
     ports: pins([['rst'], ['ld'], ['d', 16], ['clk']], [['pc', 16]], 'clk'), check: { kind: 'sequence', steps: pcSeq() },
-    answer: refOf('s_pc', () => PC16, 'Program counter'),
+    answer: pcAnswer,
   }),
   s_fsm: () => ({
     id: 's_fsm', title: '"101" detector', level: 'sequential', allowed: 'nand',

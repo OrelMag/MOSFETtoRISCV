@@ -325,8 +325,8 @@ export const NODES: CampaignNode[] = [
   {
     id: 's_pc', act: 3, title: 'Program counter', kind: 'build', requires: ['s_reg16', 'a_inc16', 'g_mux8'],
     why: 'The PC holds the address of the instruction being executed. Each cycle it becomes pc + 1, or a jump target; on reset, 0.',
-    tips: ['A 16-bit register without enable (the PC loads every cycle), an incrementer and two bus muxes (load, reset).'],
-    unlocks: ['rv16_pc'], codex: ['pc'], anatomy: ['pc', 'plus1'], base: BUILD1.s_pc, par: { nand: 318, period: 41 } },
+    tips: ['A 16-bit register without enable (the PC loads every cycle), an incrementer and a bus mux for the load.', 'Reset only ever selects 0: an AND per bit with ¬rst does it for less than a second bus mux.'],
+    unlocks: ['rv16_pc'], codex: ['pc'], anatomy: ['pc', 'plus1'], base: BUILD1.s_pc, par: { nand: 302, period: 41 } },
   {
     id: 's_fsm', act: 3, title: 'A state machine', kind: 'build', optional: true, requires: ['s_dff', 'd_kmap'],
     why: 'Multi-cycle units (a divider, a cache miss, microcode) are run by finite-state machines: state register + next-state logic from a table.',
