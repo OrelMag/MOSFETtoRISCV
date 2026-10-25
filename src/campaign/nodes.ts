@@ -155,7 +155,7 @@ export const NODES: CampaignNode[] = [
     id: 'l_bool', act: 1, title: 'Boolean algebra', kind: 'drill', requires: ['intro'],
     why: 'Circuits are equations. Algebra lets you transform one circuit into a cheaper equivalent before you build it: fewer gates, shorter paths. This is how every par in the campaign is reached.',
     body: 'bool', tips: [], codex: ['identities', 'demorgan', 'bubble', 'sop', 'truthtable'],
-    chapters: [{ chapter: 'gates', label: 'Gates from NAND' }], drill: 'boolean' },
+    chapters: [{ chapter: 'gates', label: 'Gates from NAND' }], drill: 'boolean', par: { mistakes: 2 } },
   {
     id: 'g_not', act: 1, title: 'NOT from NAND', kind: 'build', requires: ['t_nand'], base: sandbox('g_not'),
     why: 'Every control signal has a complement somewhere: the mux select, the subtract line, active-low resets. NOT is a NAND with its inputs tied.',
@@ -319,7 +319,7 @@ export const NODES: CampaignNode[] = [
   {
     id: 's_cnt4', act: 3, title: '4-bit counter', kind: 'build', optional: true, requires: ['s_reg4'], base: sandbox('s_cnt4'),
     why: 'A register plus an incrementer: the program counter in miniature, and every timer.',
-    tips: ['q ← rst ? 0 : q + 1 when en.'], codex: ['counter'], unlocks: ['counter4'],
+    tips: ['q ← rst ? 0 : q + 1 when en.'], codex: ['counter'], unlocks: ['counter4'], par: { nand: 79, period: 17 },
     chapters: [{ chapter: 'registers', label: 'Registers & counters' }],
   },
   {
@@ -336,7 +336,7 @@ export const NODES: CampaignNode[] = [
     id: 'm_ram', act: 3, title: '4 × 4 RAM', kind: 'build', optional: true, requires: ['s_reg4', 'g_dec', 'g_mux8'], base: sandbox('m_ram'),
     why: 'Memory is registers plus addressing: a decoder picks the word to write, a mux picks the word to read.',
     tips: ['Each word: a register whose en = we AND decoder output.'],
-    codex: ['ram', 'sram'], unlocks: ['ram4x4'], chapters: [{ chapter: 'memory', label: 'Memory arrays' }],
+    codex: ['ram', 'sram'], unlocks: ['ram4x4'], par: { nand: 274, period: 11 }, chapters: [{ chapter: 'memory', label: 'Memory arrays' }],
   },
   {
     id: 'm_rf', act: 3, title: 'Register file', kind: 'build', requires: ['s_reg16', 'g_dec', 'g_mux8'],

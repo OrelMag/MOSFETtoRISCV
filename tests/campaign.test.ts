@@ -98,6 +98,13 @@ describe('the campaign graph', () => {
 describe('every playable level', () => {
   const playable = NODES.filter((n) => levelChallenge(n));
 
+  // Without a par any pass is ★★★ (grade.ts stars).
+  it('has a par; every drill is graded on mistakes', () => {
+    const graded = NODES.filter((n) => n.kind !== 'lesson' && !n.soon);
+    expect(graded.filter((n) => !n.par || !Object.keys(n.par).length).map((n) => n.id)).toEqual([]);
+    expect(graded.filter((n) => n.kind === 'drill' && n.par?.mistakes === undefined).map((n) => n.id)).toEqual([]);
+  });
+
   it('has a chip of its own, separate from the sandbox challenge', () => {
     expect(playable.length).toBeGreaterThanOrEqual(15);
     for (const n of playable) {

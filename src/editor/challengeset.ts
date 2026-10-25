@@ -728,7 +728,7 @@ export const CHALLENGES: BuildChallenge[] = [
   },
   {
     id: 's_cnt4', title: '4-bit counter', level: 'sequential', allowed: 'nand',
-    brief: 'At each rising edge: <b>q ← 0</b> if <code>rst</code>, else <b>q ← q + 1</b> if <code>en</code>, else hold. Wraps from 15 to 0. Your register and incrementer do most of the work; a synchronous reset is an AND per bit.',
+    brief: 'At each rising edge: <b>q ← 0</b> if <code>rst</code>, else <b>q ← q + 1</b> if <code>en</code>, else hold. Wraps from 15 to 0. Your register holds q, an incrementer (a chain of half adders) makes q + 1; a synchronous reset is an AND per bit.',
     ports: pins([['en'], ['rst'], ['clk']], [['q', 4]], 'clk'), check: { kind: 'sequence', steps: counterSteps() }, answer: answer(refCnt4),
   },
   // memory
