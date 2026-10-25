@@ -8,7 +8,7 @@
 import { CODEX, type CodexEntry } from './codex';
 
 /** Other names an entry goes by in the chapters' prose. */
-const ALIASES: Record<string, string[]> = {
+export const ALIASES: Record<string, string[]> = {
   cpu: ['processor'], fde: ['fetch, decode, execute'], sop: ['sum of products'], nandnand: ['NAND–NAND', 'NAND-NAND'],
   kmap: ['K-map', 'Karnaugh map'], fanin: ['fan-in', 'fan-out'], comparator: ['equality comparator'],
   hex: ['hexadecimal'], twos: ['two’s complement'], signext: ['sign extension', 'sign-extend', 'sign-extended'],

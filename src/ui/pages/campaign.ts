@@ -8,10 +8,11 @@ import '../../styles/campaign.css';
 // The level screen's chips, bars and diagram frame, shared by the full codex entry.
 import '../../styles/level.css';
 import { BLOCKS, blockNodes } from '../../campaign/anatomy';
-import { CODEX, CODEX_KINDS, codexById } from '../../campaign/codex';
+import { CODEX, CODEX_KINDS, codexById, type CodexEntry } from '../../campaign/codex';
+import { searchCodex } from '../../campaign/codexsearch';
 import { type Datasheet, datasheetOf, datasheets } from '../../campaign/datasheet';
 import type { CodexMore } from '../../campaign/codexmore';
-import { CODEX_ORDER, plainSummary } from '../../campaign/codexlinks';
+import { CODEX_ORDER } from '../../campaign/codexlinks';
 import type { Quiz } from '../../chapters/types';
 import { codexEntryEl } from '../../campaign/ui/codexentry';
 import { ancestors, dependents, isDone, nextAvailable, statusOf } from '../../campaign/graph';
@@ -473,37 +474,46 @@ export class CampaignPage implements Page {
     const p = progress();
     const unlocked = p.codexUnlocked();
     const foundIn = (id: string) => NODES.filter((n) => n.codex.includes(id));
-    // Search (titles first, then summaries) and a kind filter, applied in place and kept across entries.
+    // Search (names and aliases first, then summaries: codexsearch.ts, as the Ctrl K box) and a kind filter, applied in
+    // place and kept across entries. While a query is typed the groups give way to one ranked list.
     const search = h('input', { class: 'cx-search', type: 'search', placeholder: `Search ${CODEX.length} entries`, 'aria-label': 'Search the codex', value: this.cxQuery });
     const kinds = h('div', { class: 'cx-kinds' }, [{ id: '', title: 'All' }, ...CODEX_KINDS].map((k) =>
-      h('button', { class: `cx-kind${this.cxKind === k.id ? ' on' : ''}`, 'data-k': k.id, onclick: () => { this.cxKind = k.id; filter(); } }, k.title)));
+      h('button', { class: `cx-kind${this.cxKind === k.id ? ' on' : ''}`, 'data-k': k.id, 'aria-pressed': String(this.cxKind === k.id), onclick: () => { this.cxKind = k.id; filter(); } }, k.title)));
     const empty = h('p', { class: 'sub', hidden: true }, 'No entry matches.');
+    const item = (e: CodexEntry) => h('li', { 'data-id': e.id, 'data-k': e.kind }, unlocked.has(e.id)
+      ? h('a', { href: `#/campaign/codex/${e.id}`, class: e.id === sel ? 'on' : '', ...(e.id === sel ? { 'aria-current': 'page' } : {}) }, e.title)
+      : h('a', { href: `#/campaign/codex/${e.id}`, class: `locked${e.id === sel ? ' on' : ''}`, title: 'Not discovered yet', ...(e.id === sel ? { 'aria-current': 'page' } : {}) }, icon('flag', 11), e.title));
     const groups = CODEX_KINDS.map((k) => {
-      const items = CODEX_ORDER.filter((e) => e.kind === k.id).map((e) => {
-        const li = h('li', { 'data-id': e.id, 'data-k': e.kind, 'data-t': e.title.toLowerCase(), 'data-s': plainSummary(e).toLowerCase() }, unlocked.has(e.id)
-          ? h('a', { href: `#/campaign/codex/${e.id}`, class: e.id === sel ? 'on' : '' }, e.title)
-          : h('a', { href: `#/campaign/codex/${e.id}`, class: `locked${e.id === sel ? ' on' : ''}`, title: 'Not discovered yet' }, icon('flag', 11), e.title));
-        return li;
-      });
+      const items = CODEX_ORDER.filter((e) => e.kind === k.id).map(item);
       return { head: h('h4', null, k.title), ul: h('ul', null, items), items };
     });
+    const ranked = h('ul', { class: 'cx-ranked', hidden: true });
     const filter = () => {
-      const q = this.cxQuery.trim().toLowerCase();
+      const q = this.cxQuery.trim();
       let shown = 0;
-      for (const g of groups) {
-        let n = 0;
-        for (const li of g.items) {
-          const ok = (!this.cxKind || li.dataset.k === this.cxKind) && (!q || li.dataset.t!.includes(q) || li.dataset.s!.includes(q));
-          // the open entry stays listed (marked) when the search kept from before does not match it
-          li.hidden = !ok && li.dataset.id !== sel;
-          if (!li.hidden) n++;
-          if (ok) shown++;
+      ranked.hidden = !q;
+      if (q) {
+        const hits = searchCodex(q).filter((e) => !this.cxKind || e.kind === this.cxKind);
+        ranked.replaceChildren(...hits.map(item));
+        shown = hits.length;
+        for (const g of groups) g.head.hidden = g.ul.hidden = true;
+      } else {
+        for (const g of groups) {
+          let n = 0;
+          for (const li of g.items) {
+            li.hidden = !!this.cxKind && li.dataset.k !== this.cxKind && li.dataset.id !== sel;
+            if (!li.hidden) n++;
+          }
+          shown += n;
+          g.head.hidden = g.ul.hidden = n === 0;
         }
-        g.head.hidden = g.ul.hidden = n === 0;
       }
       empty.hidden = shown > 0;
-      empty.textContent = sel ? 'No other entry matches.' : 'No entry matches.';
-      for (const b of kinds.children) b.classList.toggle('on', (b as HTMLElement).dataset.k === this.cxKind);
+      empty.textContent = 'No entry matches.';
+      for (const b of kinds.children) {
+        b.classList.toggle('on', (b as HTMLElement).dataset.k === this.cxKind);
+        b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.k === this.cxKind));
+      }
     };
     search.addEventListener('input', () => { this.cxQuery = search.value; filter(); });
     // A narrow screen stacks the list and the entry: with an entry open, the entry comes first and the list folds
@@ -516,7 +526,7 @@ export class CampaignPage implements Page {
     const list = h('nav', { class: `cp-codex-list${this.cxListOpen ? ' open' : ''}` }, sel ? browse : null,
       h('div', { class: 'cx-listbody' },
         h('p', { class: 'sub' }, `${[...unlocked].filter((u) => codexById(u)).length} of ${CODEX.length} entries discovered`),
-        search, kinds, empty, groups.flatMap((g) => [g.head, g.ul])));
+        search, kinds, empty, ranked, groups.flatMap((g) => [g.head, g.ul])));
     filter();
     const e = sel ? codexById(sel) : undefined;
     let detail: HTMLElement;

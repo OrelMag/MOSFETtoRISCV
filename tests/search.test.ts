@@ -152,5 +152,11 @@ describe('the built-in sources', () => {
     const r = searchGroups(searchSources(ctx), 'adder', ALL, ctx);
     expect(r.loading).toEqual([]);
     expect(r.groups.map((g) => g.id)).toEqual(expect.arrayContaining(['campaign', 'codex']));
+    // the codex group ranks as the codex page does: aliases and spellings (codexsearch.ts)
+    const top = (q: string) => searchGroups(searchSources(ctx), q, 'codex', ctx).groups.find((g) => g.id === 'codex')?.items[0]?.id;
+    expect(top('flipflop')).toBe('dff');
+    expect(top('k-map')).toBe('kmap');
+    expect(top('nand')).toBe('nand');
+    expect(top('fsm')).toBe('fsm');
   });
 });

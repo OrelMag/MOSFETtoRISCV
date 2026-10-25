@@ -4,6 +4,8 @@
 
 import { CODEX, CODEX_KINDS } from '../campaign/codex';
 import { plainSummary } from '../campaign/codexlinks';
+import { searchCodex } from '../campaign/codexsearch';
+import { ALIASES } from '../campaign/glossary';
 import { statusOf } from '../campaign/graph';
 import { actName, actTitle, NODES } from '../campaign/nodes';
 import { progress } from '../campaign/progress';
@@ -44,7 +46,13 @@ export function codexItems(): NavItem[] {
     return {
       kind: 'codex', id: e.id, title: e.title,
       sub: `${kinds.get(e.kind) ?? e.kind} · ${first}`,
-      alt: kinds.get(e.kind), text: sum, href: `#/campaign/codex/${e.id}`, locked: !open.has(e.id),
+      alt: [kinds.get(e.kind), ...(ALIASES[e.id] ?? [])].join(' · '), text: sum, href: `#/campaign/codex/${e.id}`, locked: !open.has(e.id),
     };
   });
+}
+
+/** The codex group's order for a query: the codex page's own search (aliases, spellings), over the items given. */
+export function rankCodexItems(items: readonly NavItem[], text: string): NavItem[] {
+  const byId = new Map(items.map((it) => [it.id, it]));
+  return searchCodex(text).map((e) => byId.get(e.id)).filter((x): x is NavItem => !!x);
 }

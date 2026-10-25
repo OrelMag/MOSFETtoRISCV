@@ -20,6 +20,8 @@ export interface SearchSource {
   /** The items now, or null until load() has finished. */
   items(ctx: SearchCtx): readonly NavItem[] | null;
   load?(): Promise<unknown>;
+  /** Its own ranking of a query over its items (the codex: aliases and spellings, campaign/codexsearch.ts); else rankItems. */
+  rank?(items: readonly NavItem[], text: string): NavItem[];
   /** With an empty query in All: listed after Recent and On this page (the chapters). */
   browse?(ctx: SearchCtx): readonly NavItem[];
   /** Reached only through its chip or a prefix (with an empty query in All it is not listed). */
@@ -159,7 +161,7 @@ export function searchGroups(srcs: readonly SearchSource[], raw: string, scope: 
       loading.push(s);
       continue;
     }
-    const ranked = !text && s.browse ? [...s.browse(ctx)] : rankItems(items, text).map((r) => r.item);
+    const ranked = !text && s.browse ? [...s.browse(ctx)] : s.rank ? s.rank(items, text) : rankItems(items, text).map((r) => r.item);
     counts.set(s.id, ranked.length);
     if (!ranked.length) continue;
     const n = scope === ALL ? per : 80;
@@ -170,7 +172,7 @@ export function searchGroups(srcs: readonly SearchSource[], raw: string, scope: 
     for (const s of srcs) {
       if (counts.has(s.id)) continue;
       const items = s.items(ctx);
-      if (items) counts.set(s.id, rankItems(items, text).length);
+      if (items) counts.set(s.id, s.rank ? s.rank(items, text).length : rankItems(items, text).length);
     }
   }
   return { groups, counts, loading, scope };
