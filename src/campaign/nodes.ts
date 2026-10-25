@@ -342,7 +342,7 @@ export const NODES: CampaignNode[] = [
     id: 'm_rf', act: 3, title: 'Register file', kind: 'build', requires: ['s_reg16', 'g_dec', 'g_mux8'],
     why: 'Eight 16-bit registers, two read ports (rs1, rs2) and one write port (rd): an R-type instruction reads two and writes one in the same cycle. x0 always reads 0.',
     tips: ['Write: decoder on wa, ANDed with we, enables one register.', 'Read: two 8:1 bus muxes. x0 needs no register at all.'],
-    codex: ['regfile'], unlocks: ['rv16_rf', 'regfile8x16'], anatomy: ['rf'], chapters: [{ chapter: 'regfile', label: 'The register file' }], base: BUILD1.m_rf, par: { nand: 2172, period: 11 } },
+    codex: ['regfile'], unlocks: ['rv16_rf'], anatomy: ['rf'], chapters: [{ chapter: 'regfile', label: 'The register file' }], base: BUILD1.m_rf, par: { nand: 2172, period: 11 } },
   {
     id: 'm_mem', act: 3, title: 'ROM and RAM', kind: 'lesson', requires: ['m_rf'],
     why: 'Programs live in ROM, data in RAM. Building memory from flip-flops is what you just did; real memories are dense arrays (SRAM, DRAM). From here on, memories are given.',

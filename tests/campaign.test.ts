@@ -98,6 +98,20 @@ describe('the campaign graph', () => {
 describe('every playable level', () => {
   const playable = NODES.filter((n) => levelChallenge(n));
 
+  // "Parts you may place" lists names: two parts under one name (rv16_rf and the library's regfile8x16, 2 172 and
+  // 2 627 NANDs) cannot be told apart.
+  it('lists no two unlocked parts under one name', () => {
+    for (const n of playable) {
+      const ids = ruleFor(n.id).lib.filter((u) => !u.endsWith('*'));
+      const byName = new Map<string, string[]>();
+      for (const u of ids) {
+        const d = resolveComponent(u), k = d?.name ?? u;
+        if (d?.category !== 'plumbing') byName.set(k, [...(byName.get(k) ?? []), u]); // constants: free, and named by value
+      }
+      expect([...byName.values()].filter((v) => v.length > 1), n.id).toEqual([]);
+    }
+  });
+
   // Without a par any pass is ★★★ (grade.ts stars).
   it('has a par; every drill is graded on mistakes', () => {
     const graded = NODES.filter((n) => n.kind !== 'lesson' && !n.soon);
