@@ -784,7 +784,7 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'm_ctrl', act: 10, title: 'Row-buffer controller', kind: 'build', optional: true, requires: ['m_bank'], base: BUILDM.m_ctrl, par: { nand: 779, period: 36, cycles: 10690 },
-    why: 'A DDR chip refreshes itself on REF but sets rules: tRCD, tCAS, tRAS, tRP. The controller issues each command at the earliest legal cycle: 779 NANDs against the bank\'s 319. RV32 computers put one behind their caches.',
+    why: 'Your bank refreshed its rows itself; a DDR chip does that on REF but sets rules: tRCD, tCAS, tRAS, tRP. The controller issues each command at the earliest legal cycle: 779 NANDs against the bank\'s 319. RV32 computers put one behind their caches.',
     tips: ['Per bank: an open flag and the open row. Counters of the cycles since the last ACT and since the last PRE, saturating at 15, cover tRCD, tRAS and tRP when one request is in flight at a time.', 'A read\'s data comes tCAS = 4 cycles after its RD: a 4-stage shift register of "RD issued" says when to raise ready, and that no command is needed meanwhile.', 'Refresh: count cycles since the last REF and make it pending well before 256 (128 is a bit test). Pending goes first: PREA once tRAS allows, then REF once tRP allows.', 'After REF nothing may happen for tRFC = 12 cycles: remember that the last close was a REF, and wait 12 instead of 4.'],
     codex: ['dramtiming', 'pagepolicy'], unlocks: ['rv16_dramctrl'], chapters: [{ chapter: 'memctrl', step: 0, label: 'Commands' }, { chapter: 'memctrl', step: 1, label: 'Open page or closed page' }, { chapter: 'memctrl', step: 2, label: 'Refresh' }],
   },
