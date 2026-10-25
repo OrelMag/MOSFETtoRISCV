@@ -15,10 +15,10 @@ describe('program puzzles', () => {
     expect(r.ok).toBe(true);
     const n = nodeById(id)!;
     expect(n.kind).toBe('program');
-    console.log(id, 'size', r.size, 'cycles', r.cycles, ...(p.lanes ? ['idle', r.idle] : []));
-    expect(stars({ size: r.size, cycles: r.cycles, idle: r.idle }, n.par)).toBe(3);
+    console.log(id, 'size', r.size, 'cycles', r.cycles, ...(p.lanes ? ['idle', r.idle, 'lane-ops', r.laneOps] : []));
+    expect(stars({ size: r.size, cycles: r.cycles, laneops: r.laneOps }, n.par)).toBe(3);
     // A kernel's par is its reference, measured.
-    if (p.lanes) expect(n.par).toEqual({ cycles: r.cycles, idle: r.idle });
+    if (p.lanes) expect(n.par).toEqual({ cycles: r.cycles, laneops: r.laneOps });
     else expect(r.idle).toBeUndefined();
     const s = runPuzzle(p, p.starter);
     expect(s.errors).toEqual([]);
@@ -62,7 +62,7 @@ describe('kernel puzzles (four lanes)', () => {
     expect(r.idle).toBe(Math.round(idles.reduce((a, b) => a + b, 0) / idles.length));
   });
 
-  it('a combine with split / join passes too; one every lane repeats keeps every lane busy', () => {
+  it('a combine with split / join passes too; one every lane repeats keeps every lane busy and loses ★★★ on lane-ops', () => {
     const partial = PUZZLES.p_reduce.ref.slice(0, PUZZLES.p_reduce.ref.indexOf('        li   t1, 1'));
     const split = runPuzzle(PUZZLES.p_reduce, `${partial}        seqz t1, t0
         split t1              # lane 0 runs on, the others wait
@@ -91,6 +91,12 @@ skip:   join
 `);
     expect(all.ok).toBe(true);
     expect(all.idle).toBe(0);
+    // A cycle faster (no tmc) and never masked, but three lanes add up a sum nobody needs: 20 lane-ops a test.
+    const ref = runPuzzle(PUZZLES.p_reduce, PUZZLES.p_reduce.ref), par = nodeById('p_reduce')!.par!;
+    expect(all.cycles).toBe(ref.cycles - 1);
+    expect(all.laneOps).toBe(ref.laneOps! + 20);
+    expect(stars({ cycles: all.cycles, laneops: all.laneOps }, par)).toBe(2);
+    expect(nodeById('p_reduce')!.tips[2]).toContain('20 lane-ops a test');
   });
 
   it('histogram: without the bar it is right only while the warps take turns', () => {

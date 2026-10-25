@@ -96,7 +96,7 @@ Each level has a **par** per metric:
 | Sequential | NANDs, clock period (static timing) |
 | CPU cores | NANDs, period, cycles; time = period × Σ cycles |
 | Program puzzles | size (words), cycles |
-| Kernel puzzles (act 9) | cycles (warp instructions), idle lanes (%) |
+| Kernel puzzles (act 9) | cycles (warp instructions), lane-ops (active lane-steps; idle lanes are reported, not graded) |
 | Memory controllers (act 10) | NANDs, period, cycles over the request traces |
 | Relay levels (act P) | relays, relay steps (the most steps one input change takes to rest) |
 | Tube levels (act P) | tube sections (triodes + diodes) |
@@ -379,8 +379,8 @@ adding levels to it never reopens a finished campaign. Its finale (finalCpu of t
 - ✅ `k_simd`: the 4-lane SIMD core: tid, tmc, branches by the leader (the lane decoder is given) ← k_lanes, k_vrf, k_mask
 - ✅ `k_stack`: the reconvergence stack (four entries; a sequence against `StackModel`) ← k_simd
 - ✅ `k_simt`: the SIMT core: split / join ← k_simd, k_stack
-- ✅ kernel puzzles `p_saxpy` ← k_simd and `p_reduce` ← k_simt, on the lane golden model, graded on cycles and idle
-  lanes (100 % − lane utilization)
+- ✅ kernel puzzles `p_saxpy` ← k_simd and `p_reduce` ← k_simt, on the lane golden model, graded on cycles and lane-ops (idle lanes until 2026-10-25: it rewarded a combine run on every lane)
+  (idle lanes, 100 % − lane utilization, still reported)
 - ✅ `k_coal`: the coalescer: the leader's line (address bits 15 … 2), the lanes served, the lanes left (a table) ← k_simd
 - ✅ `k_warps`: two warps taking turns every cycle over a data memory one cycle late; a second register write port for
   the returning loads; `bar` ← k_simt, k_coal

@@ -59,9 +59,9 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
       h('td', null, t.ok ? icon('check', 13) : icon('close', 13)), h('td', null, t.name), h('td', { class: 'n' }, `${t.steps}`),
       lanes ? h('td', { class: 'n' }, `${t.idle ?? 0} %`) : null, h('td', null, t.why ?? '')));
     const head = r.ok ? (() => {
-      const g = pr.solve(n.id, { size: r.size, cycles: r.cycles, ...(lanes ? { idle: r.idle } : {}) });
+      const g = pr.solve(n.id, { size: r.size, cycles: r.cycles, ...(lanes ? { laneops: r.laneOps } : {}) });
       return h('p', null, h('b', null, icon('check', 14), ' All tests pass '),
-        `${'★'.repeat(g.stars)}${'☆'.repeat(3 - g.stars)} · ${r.size} words · ${r.cycles} cycles on average${lanes ? ` · ${r.idle} % idle lanes` : ''}${g.best && !g.first ? ' (new best)' : ''}`);
+        `${'★'.repeat(g.stars)}${'☆'.repeat(3 - g.stars)} · ${r.size} words · ${r.cycles} cycles on average${lanes ? ` · ${r.laneOps} lane-ops · ${r.idle} % idle lanes` : ''}${g.best && !g.first ? ' (new best)' : ''}`);
     })() : h('p', null, h('b', null, `${r.results.filter((t) => !t.ok).length} of ${r.results.length} tests fail`), ` · ${r.size} words`);
     result.replaceChildren(head, h('table', { class: 'cp-pz-tests' },
       h('tr', null, h('th'), h('th', null, 'Test'), h('th', null, lanes ? 'Cycles' : 'Steps'),

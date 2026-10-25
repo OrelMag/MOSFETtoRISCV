@@ -1,8 +1,10 @@
 // Program puzzles: write RV16 assembly that turns each test's inputs into the expected outputs.
 // Run on the golden model (iss16); graded on size (instruction words) and cycles (instructions
 // executed, mean over the tests). Kernel puzzles (act 9, `lanes`) run on the lane golden model
-// (simt16): cycles are warp instructions, and idle (the share of lane-steps with the lane masked
-// off) is graded too. A kernel on two warps (warps16) counts issue slots: the warps take turns. Every puzzle has a reference solution that passes and meets par
+// (simt16): cycles are warp instructions, and lane-ops (instructions times the lanes switched on for
+// them: the work done) are graded too; idle lanes (the share of lane-steps masked off) are reported.
+// Idle is not graded: at a given cycle count it falls only as lane-ops rise, so it would reward lanes
+// that repeat work nobody needs (a reduction's combine run on every lane). A kernel on two warps (warps16) counts issue slots: the warps take turns. Every puzzle has a reference solution that passes and meets par
 // (tests/campaign-puzzles.test.ts). No DOM.
 
 import { assemble16 } from '../riscv/rv16/asm16';
@@ -35,7 +37,7 @@ export interface ProgramPuzzle {
   maxSteps: number;
   m?: boolean;
   system?: boolean;
-  /** A kernel: every test runs on a warp of this many lanes (Simt16), graded on idle lanes too. */
+  /** A kernel: every test runs on a warp of this many lanes (Simt16), graded on lane-ops too. */
   lanes?: number;
   /** A kernel on this many warps taking turns (Warps16): cycles are issue slots. */
   warps?: number;
@@ -48,12 +50,14 @@ export interface ProgramPuzzle {
 export interface PuzzleRun {
   ok: boolean;
   errors: { line: number; message: string }[];
-  results: { name: string; ok: boolean; why?: string; steps: number; idle?: number }[];
+  results: { name: string; ok: boolean; why?: string; steps: number; idle?: number; laneOps?: number }[];
   size: number;
   /** Mean steps over the tests (rounded up). */
   cycles: number;
-  /** Kernels: mean over the tests of each one's idle lane-steps, in % (rounded). */
+  /** Kernels: mean over the tests of each one's idle lane-steps, in % (rounded). Reported, not graded. */
   idle?: number;
+  /** Kernels: mean over the tests of the lane-steps that did work (rounded up), the graded metric `laneops`. */
+  laneOps?: number;
 }
 
 /** A test's machine for the stepper and runPuzzle: the scalar golden model, or a warp of lanes. */
@@ -98,7 +102,7 @@ function mismatch(t: PuzzleTest, mc: Iss16 | Simt16 | Warps16): string | null {
 export function runPuzzle(p: ProgramPuzzle, src: string): PuzzleRun {
   const a = assemble16(src);
   const size = a.words.length;
-  if (a.errors.length) return { ok: false, errors: a.errors, results: [], size, cycles: 0, ...(p.lanes ? { idle: 0 } : {}) };
+  if (a.errors.length) return { ok: false, errors: a.errors, results: [], size, cycles: 0, ...(p.lanes ? { idle: 0, laneOps: 0 } : {}) };
   const what = p.warps ? 'cycles' : p.lanes ? 'warp instructions' : 'instructions';
   const results = p.tests().map((t) => {
     const mc = puzzleMachine(p, a.words, a.data, t);
@@ -108,7 +112,7 @@ export function runPuzzle(p: ProgramPuzzle, src: string): PuzzleRun {
       mc.step();
     }
     const steps = mc.steps;
-    const idle = mc instanceof Iss16 ? {} : { idle: mc.idle };
+    const idle = mc instanceof Iss16 ? {} : { idle: mc.idle, laneOps: mc.activeLaneSteps };
     const fail = (why: string) => ({ name: t.name, ok: false, why, steps, ...idle });
     if (mc.error) return fail(mc.error);
     if (!mc.halted) return fail(`still running after ${p.maxSteps} ${what} (missing halt?)`);
@@ -131,13 +135,13 @@ export function runPuzzle(p: ProgramPuzzle, src: string): PuzzleRun {
   const ok = results.every((r) => r.ok);
   const mean = (f: (r: (typeof results)[number]) => number) => results.reduce((s, r) => s + f(r), 0) / Math.max(1, results.length);
   const cycles = Math.ceil(mean((r) => r.steps));
-  return { ok, errors: [], results, size, cycles, ...(p.lanes ? { idle: Math.round(mean((r) => r.idle ?? 0)) } : {}) };
+  return { ok, errors: [], results, size, cycles, ...(p.lanes ? { idle: Math.round(mean((r) => r.idle ?? 0)), laneOps: Math.ceil(mean((r) => r.laneOps ?? 0)) } : {}) };
 }
 
 const u16 = (v: number) => v & 0xffff;
 const s16 = (v: number) => ((v & 0xffff) ^ 0x8000) - 0x8000;
 
-const KERNEL_HELP = 'Four lanes run your program in lock-step, one shared memory: <code>csrr rd, tid</code> gives each its number (0 … 3); lane <i>t</i> takes elements <i>t</i>, <i>t</i> + 4, <i>t</i> + 8, …. Graded on cycles (warp instructions) and idle lanes.';
+const KERNEL_HELP = 'Four lanes run your program in lock-step, one shared memory: <code>csrr rd, tid</code> gives each its number (0 … 3); lane <i>t</i> takes elements <i>t</i>, <i>t</i> + 4, <i>t</i> + 8, …. Graded on cycles (warp instructions) and lane-ops (each instruction times the lanes switched on for it: the work done).';
 const IO_HELP = 'Read a word with <code>lw rd, -4(x0)</code> (IN), write one with <code>sw rs, -3(x0)</code> (OUT), stop with <code>halt</code>.';
 
 export const PUZZLES: Record<string, ProgramPuzzle> = {
@@ -342,7 +346,7 @@ loop:   lw   a2, 0(a0)
       + '<b>Two warps</b> of four lanes run your program, taking turns every cycle: <code>csrr rd, tid</code> gives each thread its number, 0 … 7 (warp · 4 + lane). '
       + 'RV16 has no atomic add: two threads that load, add 1 and store the same counter at once lose a count. Give every thread counters of its own; '
       + '<code>bar</code> waits until the other warp has arrived too (or has ended, with <code>tmc x0</code>), and after it every thread’s counts are in memory. '
-      + 'Graded on cycles (both warps’ turns) and idle lanes.',
+      + 'Graded on cycles (both warps’ turns) and lane-ops.',
     starter: `# thread tid (0 … 7) takes elements tid, tid + 8, tid + 16, …
         csrr t0, tid
         li   sp, 0x100
@@ -416,7 +420,7 @@ bin:    lw   a1, 0(a0)
     brief: '<b>Spin</b> a square for <i>n</i> frames (1 … 4, at 0x0FF). Its four corners are at 0x100 … 0x107 as (x, y) pairs in <b>8.8 fixed point</b>, quarter pixels around the screen\'s centre, clockwise on the screen. Each frame: turn every corner by <b>Minsky\'s rule</b>, x ← x − (y &gt;&gt; 3), then y ← y + (x &gt;&gt; 3) with the new x (arithmetic shifts; about 7° a frame, no multiplier and no sine table), '
       + 'clear the screen (0xF000 … 0xF3FF) to 0 and draw the square in the colour at 0x0FE as two triangles, corners 0, 1, 2 and 0, 2, 3, each vertex at 64 + (x &gt;&gt; 8), 64 + (y &gt;&gt; 8). Leave the turned corners in place. '
       + 'The rasterizer listens to lane 0: its stores to 0xFFF0 … 0xFFF5 set v0x … v2y, to 0xFFF6 the colour, which draws. Here it draws at once; on the hardware it takes a while, and a load from the screen waits until it is done: load a pixel before clearing. '
-      + '<b>Two warps</b> of four lanes run your program (tid 0 … 7): warp 0\'s lanes can turn a corner each while everyone clears; <code>bar</code> between the phases. Graded on cycles and idle lanes.',
+      + '<b>Two warps</b> of four lanes run your program (tid 0 … 7): warp 0\'s lanes can turn a corner each while everyone clears; <code>bar</code> between the phases. Graded on cycles and lane-ops.',
     starter: `# corners at 0x100 + 2·i (x, y), 8.8 fixed point; frames at 0x0FF; colour at 0x0FE
         csrr t0, tid
         li   a0, 0xff
