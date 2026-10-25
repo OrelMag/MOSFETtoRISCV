@@ -158,8 +158,14 @@ export class CampaignPage implements Page {
     }
   }
 
-  /** A codex entry opened: its top in view (on a narrow screen it may have been opened from far down the list). */
+  /** A codex entry opened: its top in view (on a narrow screen it may have been opened from far down the list), and its row in the sticky list's view. */
   private revealEntry(): void {
+    const list = this.main.querySelector<HTMLElement>('.cp-codex-list');
+    const row = list?.querySelector<HTMLElement>('a.on');
+    if (list && row && list.scrollHeight > list.clientHeight) {
+      const r = row.getBoundingClientRect(), v = list.getBoundingClientRect();
+      if (r.top < v.top + 40 || r.bottom > v.bottom - 8) list.scrollTop += r.top - v.top - list.clientHeight / 3;
+    }
     const top = this.main.querySelector<HTMLElement>('.cp-codex-entry')?.getBoundingClientRect().top;
     if (top !== undefined && (top < 0 || top > innerHeight * 0.6)) this.main.querySelector<HTMLElement>('.cp-codex-entry')!.scrollIntoView({ block: 'start' });
   }
@@ -352,7 +358,8 @@ export class CampaignPage implements Page {
         n.codex.map((c) => {
           const e = codexById(c);
           if (!e) return null;
-          return unlocked.has(c) ? h('a', { class: 'cp-chip', href: `#/campaign/codex/${c}` }, e.title) : h('span', { class: 'cp-chip locked', title: 'Unlocks when you finish this level' }, e.title);
+          return unlocked.has(c) ? h('a', { class: 'cp-chip', href: `#/campaign/codex/${c}` }, e.title)
+            : h('a', { class: 'cp-chip locked', href: `#/campaign/codex/${c}`, title: 'Unlocks when you finish this level: its summary and questions now' }, icon('lock', 11), e.title);
         })));
     }
     if (n.chapters?.length) {

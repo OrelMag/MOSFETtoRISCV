@@ -11,3 +11,6 @@
 .gl-kind { font: 600 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 1px 6px; border-radius: 6px; background: var(--surface-2); }
 .gl-sum code { font: 0.92em var(--font-mono); }
 .gl-more { display: inline-flex; align-items: center; gap: 2px; color: var(--accent); font-weight: 600; font-size: 12.5px; text-decoration: none; }
+.gl-close { margin-left: auto; display: inline-grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.gl-close:hover { background: var(--surface-2); color: var(--text); }
+@media (pointer: coarse) { .gl-close { width: 40px; height: 40px; margin: -8px -8px -8px auto; } }
