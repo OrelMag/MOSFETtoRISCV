@@ -247,7 +247,9 @@ src/lib/       the component library (registered in `registry` via define())
                  W unit: operands cut to 32 bits and extended in front, a W shift's b5 cleared, the result sign-extended behind; also
                  for mulw / divw …), xDecode (OP-32 / OP-IMM-32 shown to CONTROL as OP / OP-IMM, isW, isM), plus4 / clearBit0 (xlen);
                  lsu.ts storeAlign / loadExtract / laneMemory(k, xlen) and muldiv.ts mUnit / mulWide (32: the old objects);
-                 xlencosts.ts XLEN_COSTS (pinned by tests/cpu64.test.ts: lock step against ISS64 / ISS, BigInt readers cosim.ts wideState)
+                 xlencosts.ts XLEN_COSTS (pinned by tests/cpu64.test.ts: lock step against ISS64 / ISS, BigInt readers cosim.ts wideState);
+                 W_ALU (step 7's scene: the W unit around alu(64)); tests/verify-xlen.test.ts: riscv-tests at both widths, the benchmarks at 64;
+                 widgets/cpu64panel.ts cpu64Scene (step 8: its own CPU panel, ISS64 in lock step), widgets/rv64.ts WIDTH_COSTS (step 6)
   fastadd.ts     gp / gray / black prefix cells, CLA4, prefixAdder (one drawing for any prefix network): koggeStone(n),
                  brentKung(n), sklansky(n) (ksLevels / bkLevels / skLevels, prefixInfo), addSubFast(n)
   wide.ts        bitwise(op, n), orN(n) (shared by alu.ts and fastadd.ts to avoid an import cycle)
@@ -450,7 +452,8 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                parseLine, PALETTE; every instruction round-trips through asm.ts: tests/compose.test.ts; RV32_COMPOSE: its
                builder adapter, isa/composekit.ts), fastiss.ts (FastISS: the golden model's semantics, every ROM word predecoded by decode() into
                typed arrays, one switch, ~90 MIPS on Doom; RAM inline, other regions through overridable load / store / ioRead /
-               ioWrite; no F; tests/fastiss.test.ts: lock step over riscv-tests and random programs), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
+               ioWrite; no F; tests/fastiss.test.ts: lock step over riscv-tests and random programs), iss64.ts (ISS64: RV64I / M user level, BigInt registers, doubleword memory as word pairs;
+               decode / disasm / assemble take xlen 64: INSTRS64, li64; programs64.ts its samples; benchprograms.ts benchSource(b, 64)), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
                interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), ilp.ts (chapter 26: classify(word) → class /
                sources / rd / call / ret, traceOf (the golden model's run), dataflow (the limit: each instruction when its operands
                are ready; criticalPath)), ooomodel.ts (OooModel / OOO_CORE: the out-of-order core's rules cycle by cycle, the
