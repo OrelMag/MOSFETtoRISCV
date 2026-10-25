@@ -1,5 +1,5 @@
 // Our processors as placed and routed by the real open-source flow (Yosys + OpenROAD, SkyWater 130 nm):
-// the dual-core of chapter 26 and the RV32IM + Zicsr system core. The layout workflow publishes, per
+// the dual-core of chapter 27 and the RV32IM + Zicsr system core. The layout workflow publishes, per
 // design, summary.json (the flow's numbers, its critical path, and our own estimates of the same design),
 // cells.json and a tile pyramid rendered from the GDS by KLayout; the deploy copies them to layout/
 // (the dual-core) and layout/sys/ next to the site.

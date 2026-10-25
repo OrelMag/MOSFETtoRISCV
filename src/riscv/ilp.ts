@@ -1,4 +1,4 @@
-// Instruction-level parallelism from the golden model's traces (chapter 25): what each instruction reads and
+// Instruction-level parallelism from the golden model's traces (chapter 26): what each instruction reads and
 // writes, its unit and latency, and the dataflow schedule: every instruction as early as its operands allow, with
 // unlimited width, window and prediction. The critical path bounds every machine; N / path is the ceiling in IPC.
 // The out-of-order model (ooomodel.ts) classifies instructions with the same table.

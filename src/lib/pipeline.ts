@@ -598,7 +598,7 @@ export interface PipeOptions {
    * A miss freezes the whole pipeline until the line is in (main memory of 64 words).
    */
   dcache?: 'wt' | 'wb' | 'wb2';
-  /** With dcache 'wb' / 'wb2': main memory is a DRAM controller and device of this geometry (chapter 35). */
+  /** With dcache 'wb' / 'wb2': main memory is a DRAM controller and device of this geometry (chapter 36). */
   dram?: DramConfig;
   /**
    * The M extension: multiplies split across E and M (they behave like loads for hazards), divides on

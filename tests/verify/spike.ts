@@ -26,7 +26,7 @@ export const SPIKE_MEM = `0x${CODE.toString(16)}:0x10000,0x${DATA.toString(16)}:
 export interface OracleConfig {
   id: string;
   name: string;
-  isa: Pick<Rand32Options, 'sub' | 'm' | 'f' | 'system'>;
+  isa: Pick<Rand32Options, 'sub' | 'm' | 'f' | 'system' | 'c'>;
   /** Spike's --isa. */
   spike: string;
 }
@@ -39,6 +39,7 @@ export const ORACLE_CONFIGS: OracleConfig[] = [
   { id: 'user', name: 'RV32IMF, byte and halfword access', isa: { sub: true, m: true, f: true }, spike: 'rv32imf_zicsr' },
   { id: 'sys', name: 'RV32I + Zicsr, machine mode, traps', isa: { sub: true, system: true }, spike: 'rv32i_zicsr' },
   { id: 'sys-m', name: 'RV32IM + Zicsr, machine mode, traps', isa: { sub: true, system: true, m: true }, spike: 'rv32im_zicsr' },
+  { id: 'imc', name: 'RV32IMC, byte and halfword access', isa: { sub: true, m: true, c: true }, spike: 'rv32imc_zicsr' },
 ];
 
 /** Spike's command line for an ELF and a log file. */
@@ -77,7 +78,11 @@ export function oracleCase(cfg: OracleConfig, seed: number, n = 120): OracleCase
   if (asm.errors.length) throw new Error(`seed ${seed}: line ${asm.errors[0].line}: ${asm.errors[0].message}`);
   const halt = asm.labels.get('halt')!;
   const code = asm.words.slice();
-  code[halt / 4] = jal0(EXIT - (CODE + halt));
+  // the halt (a 16-bit c.j with C, possibly mid-word) becomes a 32-bit jal to the exit stub
+  const jal = jal0(EXIT - (CODE + halt));
+  const setHalf = (a: number, v: number) => { const k = a >>> 2, sh = (a & 2) * 8; code[k] = (((code[k] ?? 0) & ~(0xffff << sh)) | ((v & 0xffff) << sh)) >>> 0; };
+  setHalf(halt, jal);
+  setHalf(halt + 2, jal >>> 16);
   // boot: the FPU on (mstatus.FS = dirty: Spike traps FP instructions while it is off), then the program
   const boot = words(`${cfg.isa.f ? 'li t0, 0x6000\ncsrs mstatus, t0\n' : ''}li t0, ${CODE}\njr t0\n`);
   const exit = words(`li t0, ${TOHOST}\nli t1, 1\nsw t1, 0(t0)\nloop: j loop\n`);
@@ -90,7 +95,7 @@ export function oracleCase(cfg: OracleConfig, seed: number, n = 120): OracleCase
 
 /** Our ISS for a case, at the program's first instruction. */
 export function oracleIss(c: OracleCase): ISS {
-  const iss = new ISS(c.words, { system: !!c.cfg.isa.system, m: !!c.cfg.isa.m, f: !!c.cfg.isa.f, dmemWords: DMEM_WORDS, imemWords: 2 ** log2up(c.words.length) });
+  const iss = new ISS(c.words, { system: !!c.cfg.isa.system, m: !!c.cfg.isa.m, f: !!c.cfg.isa.f, c: !!c.cfg.isa.c, dmemWords: DMEM_WORDS, imemWords: 2 ** log2up(c.words.length) });
   iss.pc = CODE;
   return iss;
 }
@@ -199,7 +204,7 @@ export function compareWithSpike(c: OracleCase, events: SpikeEvent[], limit = 20
   while (iss.pc !== haltPc) {
     if (steps >= limit) return res(`our ISS did not reach the halt in ${limit} steps`);
     const ev = evs[i++];
-    const la = loadAddr(iss, iss.fetch(iss.pc));
+    const la = loadAddr(iss, iss.instrAt(iss.pc).word);
     const info = iss.step();
     steps++;
     if (!ev) return res(`${where(info)}: Spike's log ends here (it went elsewhere or stopped)`);
@@ -216,7 +221,8 @@ export function compareWithSpike(c: OracleCase, events: SpikeEvent[], limit = 20
       continue;
     }
     if (ev.kind === 'trap') return res(`${where(info, ev)}: Spike traps (${ev.name}${ev.tval !== undefined ? `, tval ${hex(ev.tval)}` : ''}), ours does not`);
-    if (ev.pc !== info.pc || ev.word !== info.word) return res(`${where(info, ev)}: Spike commits ${hex(ev.pc)} (${hex(ev.word)})`);
+    // Spike logs a 16-bit instruction's own bits
+    if (ev.pc !== info.pc || ev.word !== (info.half ?? info.word)) return res(`${where(info, ev)}: Spike commits ${hex(ev.pc)} (${hex(ev.word)})`);
     if (ev.priv !== 3) return res(`${where(info, ev)}: Spike in privilege ${ev.priv}, not machine mode`);
     const out: string[] = [];
     // integer register (x0 is never logged)
@@ -258,10 +264,11 @@ export function issAsSpikeLog(c: OracleCase): string {
   const L = ['core   0: 0x00001000 (0x00000297) auipc   t0, 0x0', 'core   0: 3 0x00001000 (0x00000297) x5  0x00001000'];
   const reg = (p: string, r: number, v: number) => ` ${p}${String(r).padEnd(2)} ${hex(v)}`;
   for (let n = 0; iss.pc !== CODE + c.halt && n < 20_000; n++) {
-    const la = loadAddr(iss, iss.fetch(iss.pc));
+    const la = loadAddr(iss, iss.instrAt(iss.pc).word);
     const ff = iss.fflags, frm = iss.frm;
     const info = iss.step();
-    L.push(`core   0: ${hex(info.pc)} (${hex(info.word)}) ${info.text}`);
+    const bits = info.half !== undefined ? hex(info.half, 4) : hex(info.word);
+    L.push(`core   0: ${hex(info.pc)} (${bits}) ${info.text}`);
     if (info.trap) {
       L.push(`core   0: exception trap_${CAUSE_NAMES[info.trap.cause]}, epc ${hex(info.pc)}`);
       const tval = info.trap.cause === CAUSE.ILLEGAL ? info.word : info.trap.cause === CAUSE.BREAKPOINT ? info.pc : iss.mtval;
@@ -269,7 +276,7 @@ export function issAsSpikeLog(c: OracleCase): string {
       if (info.trap.cause === CAUSE.ILLEGAL || info.trap.cause === CAUSE.BREAKPOINT) iss.mtval = tval;
       continue;
     }
-    let s = `core   0: 3 ${hex(info.pc)} (${hex(info.word)})`;
+    let s = `core   0: 3 ${hex(info.pc)} (${bits})`;
     const d = decode(info.word);
     const csrs: [number, number][] = [];
     if (iss.fflags !== ff) csrs.push([1, iss.fflags]);

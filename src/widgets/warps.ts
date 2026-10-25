@@ -1,5 +1,5 @@
-// Chapters 30–31 widgets: the warp core scene with its Warp panel (issue timeline, each warp's PC,
-// mask and scoreboard, the issuing warp's registers, golden-model lock-step; on chapter 31's core the
+// Chapters 31–32 widgets: the warp core scene with its Warp panel (issue timeline, each warp's PC,
+// mask and scoreboard, the issuing warp's registers, golden-model lock-step; on chapter 32's core the
 // accesses each memory instruction takes, the barrier and the shared memory), and the occupancy
 // widget (cycles against warps and load latency from the timing model, NANDs from the circuits).
 
@@ -29,7 +29,7 @@ export interface WarpSceneOptions {
   warps?: number;
   latency?: number;
   highlight?: string[];
-  /** Chapter 31's core (default: when the program needs it). */
+  /** Chapter 32's core (default: when the program needs it). */
   lsu?: boolean;
   sharedLatency?: number;
   globalEvery?: number;

@@ -142,7 +142,7 @@ export function instrMarks(def: ComponentDef, word: number, focus: FieldKey | nu
   return null;
 }
 
-// ---- the lane and warp cores (chapters 28–31) -------------------------------------------------
+// ---- the lane and warp cores (chapters 29–32) -------------------------------------------------
 
 /** Which core: lib/lanes.ts laneCore(…, n), or lib/warps.ts warpCore with W warps. */
 export interface LaneCoreShape {
@@ -150,7 +150,7 @@ export interface LaneCoreShape {
   n: number;
   /** The warp core: its warps (absent: the lane core). */
   W?: number;
-  /** Chapter 31's warp core (access unit, barrier, amoadd.w). */
+  /** Chapter 32's warp core (access unit, barrier, amoadd.w). */
   lsu?: boolean;
   /** Multipliers in the lanes (the warp core's mul). */
   mul?: boolean;
@@ -183,7 +183,7 @@ export function laneUse(word: number, core: LaneCoreShape, at: LaneAt = {}): Ins
   // a register write: the mask (on the lane core during a load, the served lane) gates each lane's write enable
   const write = warp ? ['rwx', 'nld', 'wn', 'wNow', 'fw', 'weN', 'weS'] : ['rw', 'wsel', 'wf', 'weg', 'we'];
   const imm = lsu ? ['imm', 'immA'] : ['imm'];
-  // the lane core's sequencer serves one lane a cycle; chapter 31's access unit a line (or a row per bank) a cycle
+  // the lane core's sequencer serves one lane a cycle; chapter 32's access unit a line (or a row per bank) a cycle
   const access = warp
     ? (lsu ? ['memop', 'mo', 'todo', 'acc', 'wait', 'go', 'srv', 'rest', 'doneG', 'heldN', 'heldW', 'left', ...(W > 1 ? ['heldG'] : [])] : [])
     : ['rs', 'nr1', 'isLoad', 'isMemG', 'mseq', 'mAd'];
@@ -231,7 +231,7 @@ export function laneUse(word: number, core: LaneCoreShape, at: LaneAt = {}): Ins
 }
 
 /**
- * The hardware an instruction uses on chapter 25's out-of-order core (lib/ooocore.ts), as its top-level instances:
+ * The hardware an instruction uses on chapter 26's out-of-order core (lib/ooocore.ts), as its top-level instances:
  * fetch, decode, rename and dispatch for every instruction, then the port it was bound to (`port`, -1: not yet bound),
  * and the reorder buffer and commit. Loads and stores run on port 0 (the data memory and the store queue), multiplies
  * and divides on port 1; jal and lui are done at decode (their value is known there).

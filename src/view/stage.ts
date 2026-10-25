@@ -23,7 +23,7 @@ import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from './crum
 import { Inspector } from './inspector';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber } from './popover';
-import { roomBeside, startFolded, type Rect } from './camera';
+import { chooseFolds, freeArea, roomBeside, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { SchematicView } from './schematic';
 import { matches, shortcutAllowed } from '../ui/keys';
@@ -110,8 +110,8 @@ type StageEdge = Edge & { held?: boolean };
 /** The direction mark of the bottom bar: before an input's name (into the circuit), after an output (out of it). */
 const DIR = () => h('span', { class: 'dir', 'aria-hidden': 'true' }, '▸');
 
-/** The learner's last fold or unfold of a foldable panel (see Stage.foldable): later scenes follow it. */
-let foldChoice: boolean | null = null;
+/** The learner's last fold or unfold of a foldable panel on each side (see Stage.foldable): later scenes follow it. */
+const foldChoice = new Map<string, boolean>();
 
 /** Scenes at least this big (NAND gates plus a quarter of the transistors) are built behind a "Building…" cue
  *  painted first: flattening, simulating and drawing chapter 14's CPU (56 000 NANDs) holds the page half a second. */
@@ -525,7 +525,7 @@ export class Stage {
     this.view.highlight(scene.highlight ?? []);
     this.panels = (scene.panels ?? []).map((f) => f(this));
     for (const p of this.panels) (p.el.dataset.dock === 'left' ? this.dock : this.canvas).append(p.el);
-    for (const p of this.panels) if (p.el.dataset.dock === 'right') this.foldable(p.el);
+    for (const p of this.panels) if (p.el.dataset.dock === 'right' || p.el.dataset.fold) this.foldable(p.el);
     for (const p of this.panels) this.panelSize.observe(p.el);
     this.foldPending = true;
     this.autoFold();
@@ -537,7 +537,7 @@ export class Stage {
   }
 
   /**
-   * Let go of the last scene before the next one is built: two designs of chapter 33's size at once
+   * Let go of the last scene before the next one is built: two designs of chapter 34's size at once
    * (each about half a gigabyte) are more than some browsers allow a tab, and the tab died.
    */
   private release(): void {
@@ -1526,26 +1526,43 @@ export class Stage {
   /**
    * A right-docked panel (`data-dock="right"`) floats over the canvas's right edge; the stage owns its
    * folding: a click on its title folds it to that title or unfolds it, and the fit leaves room for it
-   * while it is unfolded (syncInset). With `data-fold="narrow"` it starts folded when unfolded it would
-   * leave the circuit less than FOLD_BESIDE_PX (a laptop between the side panes, a phone), unless the
-   * learner already folded or unfolded one by hand (foldChoice, kept for the page's life).
+   * while it is unfolded (syncInset). A bottom-left panel (`data-dock="left"`) is the stage's to fold only with
+   * `data-fold` (the others fold themselves: one listener each, or a click would fold and unfold at once).
+   * With `data-fold="narrow"` a panel may start folded (autoFold), unless the learner already folded or unfolded
+   * one on that side by hand (foldChoice, kept for the page's life).
    */
   private foldable(el: HTMLElement): void {
     const title = el.querySelector(':scope > h4');
     title?.addEventListener('click', () => {
       el.classList.toggle('collapsed');
-      if (el.dataset.fold) foldChoice = el.classList.contains('collapsed');
+      if (el.dataset.fold) foldChoice.set(el.dataset.dock ?? '', el.classList.contains('collapsed'));
     });
   }
 
-  /** Decide, once the canvas and the scene's panels have a size, which foldable panels start folded. */
+  /** Decide, once the canvas and the scene's panels have a size, which foldable panels start folded: as many
+   *  open as leave the circuit at least KEEP_SCALE of its size with them all folded (chooseFolds), and none on the
+   *  right leaving it less than FOLD_BESIDE_PX (a laptop between the side panes, a phone). Each choice is laid out
+   *  and measured (a bottom-left panel's shape follows the room beside the right dock). */
   private autoFold(): void {
     if (!this.foldPending) return;
-    const w = this.canvas.clientWidth;
-    const fold = this.panels.filter((p) => p.el.dataset.dock === 'right' && p.el.dataset.fold === 'narrow');
-    if (w <= 0 || fold.some((p) => p.el.offsetWidth <= 0)) return;
+    const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
+    const fold = this.panels.filter((p) => p.el.dataset.fold === 'narrow').slice(0, 4);
+    if (W <= 0 || H <= 0 || fold.some((p) => p.el.offsetWidth <= 0)) return;
     this.foldPending = false;
-    for (const p of fold) p.el.classList.toggle('collapsed', foldChoice ?? startFolded(w, p.el.offsetWidth));
+    const apply = (mask: number) => {
+      fold.forEach((p, i) => p.el.classList.toggle('collapsed', ((mask >> i) & 1) === 1));
+      this.inset = this.rightInset();
+      this.dockOut();
+    };
+    const box = this.view.contentBox();
+    const bw = Math.max(box.w, 34), bh = Math.max(box.h, 1);
+    const scaleOf = (mask: number): number | null => {
+      apply(mask);
+      if (fold.some((p, i) => !((mask >> i) & 1) && p.el.dataset.dock === 'right' && startFolded(W, p.el.offsetWidth))) return null;
+      const r = freeArea(W, H, this.covers(false), bw, bh);
+      return r ? Math.min(r.w / bw, r.h / bh) : 0;
+    };
+    apply(chooseFolds(fold.length, scaleOf, fold.map((p) => foldChoice.get(p.el.dataset.dock ?? '') ?? null)));
   }
 
   /** A panel changed size (folded, unfolded, grew): make room for it, refitting a still-fitted view when the
@@ -1565,10 +1582,10 @@ export class Stage {
 
   /** Where the scene's panels and the how-to line sit on the canvas (px from its top-left corner): what the fit
    *  keeps clear. */
-  private covers(): Rect[] {
+  private covers(hint = true): Rect[] {
     const c = this.canvas.getBoundingClientRect();
     const out: Rect[] = [];
-    for (const el of [...this.panels.map((p) => p.el), this.hint]) {
+    for (const el of [...this.panels.map((p) => p.el), ...(hint ? [this.hint] : [])]) {
       const r = el.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) out.push({ x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height });
     }

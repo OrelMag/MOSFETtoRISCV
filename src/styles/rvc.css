@@ -1,0 +1,55 @@
+/* Chapter 25's C extension explorers (widgets/rvc.ts). Colours from the theme tokens and the field palette (--fld-*). */
+
+.rvc-all { margin: 6px 0 10px; color: var(--text-2); }
+.rvc-all b { color: var(--text); font-size: 1.15em; }
+
+.rvc-bars { display: grid; gap: 6px; margin: 10px 0; }
+.rvc-bar-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.rvc-bar-k { font: 600 12px var(--font-mono); color: var(--text-2); }
+.rvc-bar-track { height: 14px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.rvc-bar { display: block; height: 100%; border-radius: 3px; }
+.rvc-bar.b32 { background: var(--border-strong); }
+.rvc-bar.b16 { background: var(--accent); }
+.rvc-bar-v { font: 12px var(--font-mono); color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.rvc-forms { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 4px 0 10px; font-size: 12px; color: var(--muted); }
+.rvc-form code { color: var(--text); }
+
+.rvc-listing { max-height: 260px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; font: 12px var(--font-mono); background: var(--surface); }
+.rvc-ln { display: grid; grid-template-columns: 40px 70px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 1px 8px; color: var(--text-2); white-space: nowrap; }
+.rvc-ln > * { overflow: hidden; text-overflow: ellipsis; }
+.rvc-ln .a { color: var(--muted); }
+.rvc-ln .t { color: var(--muted); }
+.rvc-ln.c { background: var(--accent-soft); }
+.rvc-ln.c .w, .rvc-ln.c .d { color: var(--accent); }
+
+.rvc-k { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin: 10px 0 4px; }
+.rvc-bits16, .rvc-bits32 { display: flex; flex-wrap: wrap; gap: 2px; }
+.rvc-bit {
+  position: relative; display: inline-flex; align-items: flex-end; justify-content: center; width: 20px; height: 30px; padding: 0 0 3px;
+  border-radius: 3px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2);
+  font: 600 11px var(--font-mono); border-bottom: 3px solid var(--fc, var(--border-strong));
+}
+button.rvc-bit { cursor: pointer; }
+.rvc-bit .i { position: absolute; top: 1px; left: 0; right: 0; text-align: center; font-size: 8px; font-weight: 500; color: var(--muted); }
+.rvc-bit.on { background: color-mix(in srgb, var(--fc, var(--accent)) 22%, var(--surface)); color: var(--text); }
+.rvc-bit.const { border-style: dashed; border-bottom-style: solid; border-bottom-color: var(--border-strong); opacity: 0.8; }
+.rvc-bit.lit { box-shadow: 0 0 0 2px var(--accent); }
+.rvc-bit.gap { margin-left: 6px; }
+.rvc-bits32 .rvc-bit { width: 17px; }
+.rvc-info { display: grid; gap: 4px; margin-top: 10px; font-size: 13px; }
+.rvc-info .bad { color: var(--bad); }
+
+.rvc-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 6px 0 10px; }
+.rvc-table th, .rvc-table td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--border); }
+.rvc-table th { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.rvc-table td.num, .rvc-table th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+@media (max-width: 520px) {
+  .rvc-ln { grid-template-columns: 36px 64px minmax(0, 1fr); }
+  .rvc-ln .t { display: none; }
+  .rvc-bits32 .rvc-bit { width: 15px; }
+}
+@media (pointer: coarse) {
+  button.rvc-bit { width: 24px; height: 40px; }
+}

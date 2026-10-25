@@ -1,6 +1,6 @@
-// Chapter 34's last two steps: the row buffer over a request stream (banks, open / closed page,
+// Chapter 35's last two steps: the row buffer over a request stream (banks, open / closed page,
 // address mapping) and DDR4's timings in clock cycles at any CPU clock. Both from dram/timing.ts,
-// which the controller of chapter 35 is checked against.
+// which the controller of chapter 36 is checked against.
 
 import { accessCycles, CLOCK_NS, cyclesOf, DDR4_3200, type DramGeometry, type PagePolicy, RowBuffers, TIMING, type DramTiming } from '../dram/timing';
 import { h } from '../ui/dom';
@@ -131,7 +131,7 @@ export function timingWidget(): Widget {
         h('span', { class: `rb-kind ${o}` }, `row ${o}`), gantt(o, t, scale), h('span', { class: 'rb-cyc' }, `${accessCycles(o, t)} cycles`))),
       h('p', { class: 'sub' }, mhz === CLOCKS[0]
         ? `At our clock (${CLOCK_NS.toFixed(2)} ns) a row hit costs ${accessCycles('hit', t)} cycles: exactly the fixed miss penalty chapter 22's caches assume. They have been assuming a DRAM that always hits.`
-        : `The nanoseconds are the same; only the clock got faster. A row conflict now costs ${accessCycles('conflict', t)} cycles: the memory wall. Caches, row-buffer hits and reordering (chapter 35) are how a fast CPU lives with it.`));
+        : `The nanoseconds are the same; only the clock got faster. A row conflict now costs ${accessCycles('conflict', t)} cycles: the memory wall. Caches, row-buffer hits and reordering (chapter 36) are how a fast CPU lives with it.`));
   };
   const segs = [seg(CLOCKS.map((c, i) => [c, i ? `${c >= 1000 ? c / 1000 + ' GHz' : c + ' MHz'}` : `ours, ${Math.round(c)} MHz`] as [number, string]), () => mhz, (v) => { mhz = v; update(); }, 'CPU clock')];
   const el = h('div', { class: 'widget tm-widget' }, h('div', { class: 'rb-ctl' }, ...segs.map((s) => s.el)), out);

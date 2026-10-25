@@ -37,7 +37,7 @@ depth** (a DRAM at switch level, a DDR-style controller, flash with its translat
 DMA that boots a computer from flash).
 
 Before chapter 1, an optional **prologue** builds the same logic from relays, from vacuum tubes and
-from punched cards. After chapter 37, two **appendices**: the MOS 6502 rebuilt at transistor level, and
+from punched cards. After chapter 38, two **appendices**: the MOS 6502 rebuilt at transistor level, and
 Doom compiled for the site's RV32IM. Each chapter opens with its goals, closes with a recap and Check
 yourself questions, and has optional challenges, each with a revealable answer.
 
@@ -60,11 +60,11 @@ yourself questions, and has optional challenges, each with a revealable answer.
 </tr>
 <tr>
 <td><img src="docs/images/cache.png" alt="The cache explorer on a column-major matrix sum"><br><sub><b>Ch. 22</b>: caches on real address traces: size, line, ways, replacement, write policy, 3C misses.</sub></td>
-<td><img src="docs/images/ooo.png" alt="The out-of-order core running bubble sort with its reorder buffer and rename table"><br><sub><b>Ch. 25</b>: a 359k-NAND out-of-order core; its reorder buffer, issue queue and rename table read from the gates.</sub></td>
+<td><img src="docs/images/ooo.png" alt="The out-of-order core running bubble sort with its reorder buffer and rename table"><br><sub><b>Ch. 26</b>: a 359k-NAND out-of-order core; its reorder buffer, issue queue and rename table read from the gates.</sub></td>
 </tr>
 <tr>
-<td><img src="docs/images/drawpad.png" alt="A drawing of a house sent to the gate-level GPU and shown on its screen"><br><sub><b>Ch. 32</b>: draw a picture, cut it into triangles and send it to a 2.7M-NAND rasterizer; the screen is checked pixel for pixel.</sub></td>
-<td><img src="docs/images/dram.png" alt="A 4 × 4 DRAM array at switch level with each cell's charge"><br><sub><b>Ch. 34</b>: a DRAM read in slow motion: charge sharing on the bit line, the sense amplifier, leakage and refresh.</sub></td>
+<td><img src="docs/images/drawpad.png" alt="A drawing of a house sent to the gate-level GPU and shown on its screen"><br><sub><b>Ch. 33</b>: draw a picture, cut it into triangles and send it to a 2.7M-NAND rasterizer; the screen is checked pixel for pixel.</sub></td>
+<td><img src="docs/images/dram.png" alt="A 4 × 4 DRAM array at switch level with each cell's charge"><br><sub><b>Ch. 35</b>: a DRAM read in slow motion: charge sharing on the bit line, the sense amplifier, leakage and refresh.</sub></td>
 </tr>
 <tr>
 <td><img src="docs/images/m6502.png" alt="The 6502 at transistor level running a program, its bus cycles listed"><br><sub><b>Appendix A</b>: a 4,513-transistor NMOS 6502, every bus cycle in lock-step with a cycle-exact model.</sub></td>
@@ -192,8 +192,8 @@ also be priced in relays and tubes.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/silicon.jpg" alt="The dual-core placed and routed in SkyWater 130 nm, coloured by block"><br><sub><b>Ch. 27</b>: the dual-core after Yosys and OpenROAD on sky130: 14.8k standard cells, coloured by block.</sub></td>
-<td width="50%"><img src="docs/images/hall.png" alt="The single-cycle RV32I as 78 racks of relays, a person for scale"><br><sub><b>Ch. 27</b>: the same RV32I as 55,699 relays in 78 racks (1.27 s an instruction), or 75,779 tubes.</sub></td>
+<td width="50%"><img src="docs/images/silicon.jpg" alt="The dual-core placed and routed in SkyWater 130 nm, coloured by block"><br><sub><b>Ch. 28</b>: the dual-core after Yosys and OpenROAD on sky130: 14.8k standard cells, coloured by block.</sub></td>
+<td width="50%"><img src="docs/images/hall.png" alt="The single-cycle RV32I as 78 racks of relays, a person for scale"><br><sub><b>Ch. 28</b>: the same RV32I as 55,699 relays in 78 racks (1.27 s an instruction), or 75,779 tubes.</sub></td>
 </tr>
 </table>
 
@@ -229,7 +229,7 @@ also be priced in relays and tubes.
 - **Silicon**: `.github/workflows/layout.yml` runs the exported dual-core and the RV32IM system
   core (its memories outside its ports) through OpenROAD-flow-scripts on SkyWater 130 nm (synthesis,
   floorplan, placement, clock tree, routing); the GDS, tiles and reports are published into the site
-  (chapter 27), each beside our estimate of the same design: area per block from the NAND count,
+  (chapter 28), each beside our estimate of the same design: area per block from the NAND count,
   the critical path in NAND delays against OpenSTA's after routing.
 - **Every page**: `npm run smoke` opens every route of the built site in headless Chrome (both
   themes, a phone width for a few) and fails on any error; the deploy runs it.
@@ -275,7 +275,7 @@ The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next feat
 - **Verilog in the journey**: the same adder as text and as gates in a chapter step, and a Verilog
   chip's critical path mapped back to its source lines.
 - **An out-of-order lab**: width, ROB, queues, ports and units set by the learner on the model, on
-  the benchmarks or their own program, priced by the gates (chapter 25 already measures the four
+  the benchmarks or their own program, priced by the gates (chapter 26 already measures the four
   CPUs side by side and the model's width × window).
 - **ISA breadth**: RV64I / RV64M and the C extension; the rest of A (lr.w / sc.w) with private
   caches and a coherent bus in the gate-level cores.

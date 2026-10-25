@@ -1,4 +1,4 @@
-// Reordering (chapter 35, last step): requests from several sources wait in a queue; the controller
+// Reordering (chapter 36, last step): requests from several sources wait in a queue; the controller
 // serves one at a time. FCFS takes the oldest; FR-FCFS (first ready, first come first served) takes the
 // oldest row hit, and the oldest request only when nothing hits. Each service costs what its bank's row
 // buffer says (dram/timing.ts accessCycles), one after another on the data bus.

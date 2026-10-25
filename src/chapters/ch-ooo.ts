@@ -106,7 +106,7 @@ const olderBits = (order: number[]) => order.reduce((m, i, a) => order.slice(a +
 const IQ_PAY = PAY.reduce((a, [, w]) => a + w, 0);
 
 export const chOoo: Chapter = {
-  id: 'ooo', num: 25, title: 'Out of order', level: 'Processor',
+  id: 'ooo', num: 26, title: 'Out of order', level: 'Processor',
   blurb: 'More than one instruction per cycle: dependences, renaming, a reorder buffer and speculation, priced on real programs.',
   goals: [
     'measure how much parallelism a program holds (its dataflow limit) and what width, window and prediction take from it',

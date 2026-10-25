@@ -1,4 +1,4 @@
-// Programs for the warp cores (chapter 30): warp 0 starts the others with wspawn, then every thread
+// Programs for the warp cores (chapter 31): warp 0 starts the others with wspawn, then every thread
 // (tid = warp · lanes + lane) takes every T-th element, T = nwarps · nlanes. Their input is in data
 // memory from the start (`data`); `expect` gives result words computed here, independently of the
 // models and the hardware.
@@ -14,7 +14,7 @@ export interface WarpProgram {
   data: () => number[];
   /** Expected data-memory words after the run (word index → value). */
   expect: () => Map<number, number>;
-  /** Chapter 31's core only: it uses shared memory, bar or amoadd.w. */
+  /** Chapter 32's core only: it uses shared memory, bar or amoadd.w. */
   lsu?: boolean;
   /** It uses shared memory. */
   shared?: boolean;
@@ -25,7 +25,7 @@ export interface WarpProgram {
 }
 
 export const WARP_DMEM_K = 7;
-/** Shared memory of chapter 31's core: 2^6 words, 4 banks of 16. */
+/** Shared memory of chapter 32's core: 2^6 words, 4 banks of 16. */
 export const WARP_SMEM_K = 6;
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -85,7 +85,7 @@ end:    j     end`,
       return new Map(range(24).map((s) => [96 + s, d[4 * s] + d[4 * s + 1] + d[4 * s + 2] + d[4 * s + 3]]));
     },
   },
-  // ---- chapter 31 ----
+  // ---- chapter 32 ----
   groupSum('rows'),
   groupSum('cols'),
   reduce('seq'),
@@ -212,7 +212,7 @@ end:    j     end`,
   ...MESHES.map(vertexProgram),
 ];
 
-/** Chapter 33's vertex kernel for one mesh, frame 0: one warp of four lanes, the vertex buffer as its result. */
+/** Chapter 34's vertex kernel for one mesh, frame 0: one warp of four lanes, the vertex buffer as its result. */
 function vertexProgram(m: Mesh): WarpProgram {
   return {
     id: m.id === 'cube' ? 'vertexCube' : 'vertexTri',

@@ -1,4 +1,4 @@
-// The campaign's rasterizer (act 9: k_edge, k_tile, k_raster, k_frame), as plain arithmetic: chapter 32's edge
+// The campaign's rasterizer (act 9: k_edge, k_tile, k_raster, k_frame), as plain arithmetic: chapter 33's edge
 // functions, top-left rule and tile walk (gfx/raster.ts) at RV16 sizes. Vertices are 7-bit quarter pixels on a
 // 32 × 32 screen, so every E fits 16 bits (|E| ≤ 2·127² = 32 258), and the tiles are 0 … 7 each way. The set-up has
 // no multiplier: each stepper's own adder computes its E at the first tile by shift-and-add (18 cycles), then one
@@ -14,7 +14,7 @@ export const RAST16 = 0xfff0;
 /** Busy cycles of the set-up: load, 17 shift-and-add steps, the cull. The first TEST is in the next cycle. */
 export const SETUP16 = 19;
 
-/** Stepper commands: chapter 32's, and double (E ← 2E + a) for the set-up's shift-and-add. */
+/** Stepper commands: chapter 33's, and double (E ← 2E + a) for the set-up's shift-and-add. */
 export const CMD16 = { ...CMD, double: 7 } as const;
 
 const w16 = (v: number) => ((v % 0x10000) + 0x10000) % 0x10000;
@@ -91,7 +91,7 @@ export function rasterize16(v: Vtx[]): Raster16Run {
   if (v.some(([x, y]) => x < 0 || x > 127 || y < 0 || y > 127)) throw new Error('vertices are 7-bit quarter pixels');
   const r = rasterize(v);
   if (!r.setup.front) return { writes: [], cycles: SETUP16, front: false };
-  // chapter 32's walk starts at cycle 9; here after the 19 set-up cycles
+  // chapter 33's walk starts at cycle 9; here after the 19 set-up cycles
   const d = SETUP16 + 1 - 9;
   return { writes: r.writes.map((w) => ({ cycle: w.cycle + d, x: w.x, y: w.y })), cycles: r.cycles + d, front: true };
 }

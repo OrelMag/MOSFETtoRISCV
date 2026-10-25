@@ -23,6 +23,7 @@ import { MP_DECODE } from './mpdecode';
 import { regfile } from './regfile';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
+import { cFetch, PLUS2OR4 } from './rvc';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -483,7 +484,7 @@ export interface CpuOptions {
    * can stall); 'wb' = write-back, write-allocate; 'wb2' = 2-way write-back with LRU (loads and stores can stall).
    */
   dcache?: boolean | 'wb' | 'wb2';
-  /** With dcache 'wb' / 'wb2': main memory is a DRAM controller and device of this geometry (chapter 35), not a fixed latency. */
+  /** With dcache 'wb' / 'wb2': main memory is a DRAM controller and device of this geometry (chapter 36), not a fixed latency. */
   dram?: DramConfig;
   /** Fetch through an 8-line instruction cache in front of the ROM (fetch misses stall). */
   icache?: boolean;
@@ -501,6 +502,11 @@ export interface CpuOptions {
   imemK?: number;
   /** Custom instructions (riscv/custom.ts): the control unit gains an opcode class per row. */
   custom?: readonly CustomRow[];
+  /**
+   * The C extension (chapter 25): the ROM read at any even address through two halfword banks and the expander
+   * (lib/rvc.ts cFetch), PC + 2 after a 16-bit instruction. Not with the caches, the FPU or a shared memory.
+   */
+  c?: boolean;
 }
 
 /** PC + 4 with a parallel-prefix adder. */
@@ -535,19 +541,20 @@ export const PLUS4_FAST: ComponentDef = define({
  * the key buses for the waveform viewer.
  */
 export function singleCycleCpu(program: number[], opts: CpuOptions = {}): ComponentDef {
-  const IM = rom(program, opts.imemK ?? 6);
+  const IM = opts.c ? cFetch(program, opts.imemK ?? 6) : rom(program, opts.imemK ?? 6);
   const adder = opts.adder ?? 'rca';
-  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? `_dc${opts.dcache === true ? '' : opts.dcache}` : ''}${opts.fpu ? '_fp' : ''}${opts.shared ? '_mp' : ''}${opts.imemPort ? '_ip' : ''}${opts.icache ? '_ic' : ''}${opts.dram ? `_dram${cfgKey(opts.dram)}` : ''}${opts.custom?.length ? `_cx${rowsKey(opts.custom)}` : ''}`;
-  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, opts.dcache ?? false, !!opts.fpu, !!opts.shared, !!opts.imemPort, !!opts.icache, opts.imemK ?? 6, opts.dram, opts.custom ?? []));
+  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? `_dc${opts.dcache === true ? '' : opts.dcache}` : ''}${opts.fpu ? '_fp' : ''}${opts.shared ? '_mp' : ''}${opts.imemPort ? '_ip' : ''}${opts.icache ? '_ic' : ''}${opts.dram ? `_dram${cfgKey(opts.dram)}` : ''}${opts.custom?.length ? `_cx${rowsKey(opts.custom)}` : ''}${opts.c ? '_c' : ''}`;
+  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, opts.dcache ?? false, !!opts.fpu, !!opts.shared, !!opts.imemPort, !!opts.icache, opts.imemK ?? 6, opts.dram, opts.custom ?? [], !!opts.c));
 }
 
-function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: boolean | 'wb' | 'wb2' = false, fpu = false, shared = false, imemPort = false, icache = false, imemK = 6, dram?: DramConfig, custom: readonly CustomRow[] = []): ComponentDef {
+function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: boolean | 'wb' | 'wb2' = false, fpu = false, shared = false, imemPort = false, icache = false, imemK = 6, dram?: DramConfig, custom: readonly CustomRow[] = [], c = false): ComponentDef {
+  if (c && (dcache || icache || fpu || shared)) throw new Error('singleCycleCpu: c with a cache, the FPU or a shared memory is not supported');
   if (dram && dcache !== 'wb' && dcache !== 'wb2') throw new Error('singleCycleCpu: dram needs a write-back data cache');
   if (icache && (fpu || shared)) throw new Error('singleCycleCpu: icache with fpu or shared is not supported');
   const IMEM = icache ? iCache(IM, 3, imemK) : IM;
   const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dcache === 'wb' ? wbCache(dmemK, 2, 1, dram) : dcache === 'wb2' ? wbCache(dmemK, 1, 2, dram) : dcache ? cachedMemory(dmemK) : dataMemory(dmemK);
   const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = adder === 'ks' ? koggeStone(32) : rca(32), SI = splitter([7, 5, 3, 5, 5, 7]);
-  const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4;
+  const P4 = c ? PLUS2OR4 : adder === 'ks' ? PLUS4_FAST : PLUS4;
   const g = (d: ComponentDef) => symbolGeom(d);
   const at = new Map<string, [number, number]>();
   const defs = new Map<string, ComponentDef>();
@@ -602,6 +609,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     { name: 'en', ends: ['one.y', 'pc.en'] },
     { name: 'PC', ends: ['pc.q', 'imem.addr', 'plus4.a', 'srcA.b', 'target.a', 'pcOut'], trunk: pcq[0] + 3, tags: ['srcA.b', 'target.a', 'pcOut'] },
     { name: 'PCPlus4', ends: ['plus4.y', 'pcmux.d0', 'pcmux.d3', 'res.d2'], tags: true },
+    ...(c ? [{ name: 'C', ends: ['imem.c', 'plus4.c'], tags: true as const }] : []),
     { name: 'PCTarget', ends: ['target.s', 'pcmux.d1'], tags: true },
     { name: 'JalrTarget', ends: ['clr0.out', 'pcmux.d2'], tags: true },
     { name: 'PCSrc', ends: ['npc.pcSrc', 'pcmux.s'], tags: true },
@@ -878,7 +886,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       bus('memAddr', 32, 'out'), bus('memWData', 32, 'out'), bit('memWE', 'out'), bit('memReq', 'out'), bit('retire', 'out'));
   }
   return {
-    id: imemPort ? (custom.length ? `rv32i_cx${rowsKey(custom)}_core` : 'rv32i_core') : (custom.length ? `cx${rowsKey(custom)}_` : '') + key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
+    id: imemPort ? (custom.length ? `rv32i_cx${rowsKey(custom)}_core` : 'rv32i_core') : (custom.length ? `cx${rowsKey(custom)}_` : '') + key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''}${c ? 'C' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
     summary: dcache === 'wb' || dcache === 'wb2'
       ? `The single-cycle processor with its data memory behind a ${dcache === 'wb2' ? '2-way set-associative' : 'direct-mapped'} write-back cache. Loads and stores that miss hold the PC and the register write (retire = 0): ${dram ? `as long as the DRAM controller takes for the line (${dram.banks} banks, ${dram.policy} page): 8 cycles on a row hit, 12 on a closed bank, 16 on another open row, plus a write-back of a dirty victim first` : '8 cycles, or 12 when a dirty line must be written back first'}.`
       : dcache

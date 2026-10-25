@@ -79,7 +79,11 @@ export function laneLeaves(cfg: CpuConfig, design: FlatDesign, sim: BitSim, prog
   design.leaves.forEach((leaf, i) => {
     if (leaf.kind !== 'behavior' || leaf.inputs.length === 0) return;
     const b = leaf.def.behavior!;
-    if (leaf.node.path.includes('imem')) sim.setLaneBehavior(i, ([a], lane) => [prog(lane)[Math.floor(a / 4) % N] ?? 0x13]);
+    // the C core's fetch: two banks of halfwords, indexed by word (lib/rvc.ts halfRom)
+    if (leaf.node.path.includes('imem') && leaf.def.id.startsWith('hrom')) {
+      const high = leaf.def.id.endsWith('_high_halves');
+      sim.setLaneBehavior(i, ([a], lane) => { const w = prog(lane)[a % N] ?? 0x13; return [high ? w >>> 16 : w & 0xffff]; });
+    } else if (leaf.node.path.includes('imem')) sim.setLaneBehavior(i, ([a], lane) => [prog(lane)[Math.floor(a / 4) % N] ?? 0x13]);
     else if (b.seq) {
       const st = Array.from({ length: LANES }, () => b.init?.());
       states.set(i, st);

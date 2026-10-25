@@ -1,4 +1,4 @@
-// Chapter 25's quoted numbers, recomputed from the models (riscv/ilp.ts, ooomodel.ts, scoreboard.ts), so the prose
+// Chapter 26's quoted numbers, recomputed from the models (riscv/ilp.ts, ooomodel.ts, scoreboard.ts), so the prose
 // cannot drift from them.
 
 import { describe, expect, it } from 'vitest';
@@ -35,7 +35,7 @@ const text = [...chOoo.steps.map((s) => s.body), ...chOoo.recap!.keep].join(' ')
 const quoted = (v: string) => expect(text, v).toContain(v);
 const LONG = { lat: { alu: 1, load: 4, mul: 4, div: 19 } };
 
-describe('chapter 25: the numbers it quotes', () => {
+describe('chapter 26: the numbers it quotes', () => {
   it('dataflow ceilings', () => {
     const ipc = (id: string) => dataflow(traceOf(words(id), OPTS)).ipc;
     expect(ipc('fib').toFixed(1)).toBe('10.3');
@@ -99,7 +99,7 @@ const runScene = (title: string) => {
   return r;
 };
 
-describe('chapter 25: the gate-level steps', () => {
+describe('chapter 26: the gate-level steps', () => {
   it('what each unit costs', () => {
     const core = oooCpu(assemble(DUAL_SOURCE).words, { imemK: 6, dmemK: 6 });
     const part = (n: string) => nands(netlistOf(core)!.instances.find((i) => i.name === n)!.def);
@@ -171,7 +171,7 @@ describe('chapter 25: the gate-level steps', () => {
   }, 120_000);
 });
 
-describe('chapter 25: measured, and code that helps the hardware', () => {
+describe('chapter 26: measured, and code that helps the hardware', () => {
   const cpu = (id: string) => RESULTS.cpus.find((c) => c.id === id)!;
   it('the four CPUs: CPI, delays per instruction, energy, Pollack', () => {
     const row = (id: string) => { const c = cpu(id), m = meanOf(c, 'cpi'); return { cpi: m.toFixed(2), d: (m * c.period).toFixed(1), pj: meanOf(c, 'epi').toFixed(1) }; };

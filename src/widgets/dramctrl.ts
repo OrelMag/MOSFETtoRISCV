@@ -1,4 +1,4 @@
-// Chapter 35's controller panel: the scene is the gate-level controller driving a DRAM device; the
+// Chapter 36's controller panel: the scene is the gate-level controller driving a DRAM device; the
 // panel raises line requests (the cache's side of the handshake), clocks until done, and shows every
 // command the controller issued, the banks' open rows, the refresh counter and what each request cost.
 

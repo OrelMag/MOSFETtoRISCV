@@ -1,4 +1,4 @@
-// Phase 17b: the dual-issue in-order pipeline (pipe-2w, chapter 25). The balanced RV32IM pipeline with branch
+// Phase 17b: the dual-issue in-order pipeline (pipe-2w, chapter 26). The balanced RV32IM pipeline with branch
 // prediction, two lanes wide: fetch reads two words a cycle (pc, pc + 4) and decode issues them together when
 // they are independent. Lane 0 carries the older instruction and has everything (data memory, multiplier,
 // divider); lane 1 has an ALU, a branch comparator and the target adders.

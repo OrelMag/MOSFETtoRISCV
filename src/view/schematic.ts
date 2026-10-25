@@ -1022,7 +1022,7 @@ export class SchematicView {
 
   /**
    * Draw the level again after a layout edit. Routing a big level takes seconds (a hundred unravelled nets on one of
-   * chapter 31's blocks: ~7 s), so a badge says so first, painted before the work starts.
+   * chapter 32's blocks: ~7 s), so a badge says so first, painted before the work starts.
    */
   private redraw(after?: () => void): void {
     const ctx = this.ctx;

@@ -351,6 +351,42 @@
    ]
   },
   {
+   "id": "sc-c",
+   "name": "Single-cycle RV32IC",
+   "nands": 69794,
+   "period": 201,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 4881,
+     "switched": 976938562,
+     "functional": 289856304
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 2108,
+     "switched": 442914954,
+     "functional": 129507939
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 2353,
+     "switched": 399151388,
+     "functional": 134709522
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 3049,
+     "switched": 787415614,
+     "functional": 184403991
+    }
+   ]
+  },
+  {
    "id": "sc-f",
    "name": "Single-cycle RV32IF",
    "nands": 184321,

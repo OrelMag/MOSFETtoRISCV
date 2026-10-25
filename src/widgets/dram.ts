@@ -1,4 +1,4 @@
-// Chapter 34's DRAM panel: drives the switch-level array through its protocol (precharge, activate,
+// Chapter 35's DRAM panel: drives the switch-level array through its protocol (precharge, activate,
 // sense, read / write, close, refresh), lets cycles of leakage pass, and shows what the simulator
 // holds: every cell's charge, each bit line's level and its distance from VDD/2, what each sense
 // amplifier latched (the row buffer), and how long ago each row was last restored.

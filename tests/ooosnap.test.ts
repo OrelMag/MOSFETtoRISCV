@@ -72,7 +72,7 @@ function* check(source: string, { imemK = 6, dmemK = 6, max = 4000 } = {}): Gene
 }
 
 describe('the out-of-order core read from its gates equals the model', () => {
-  it('chapter 25\'s dot product', async () => { await stepped(check(DUAL_SOURCE)); }, 600_000);
+  it('chapter 26\'s dot product', async () => { await stepped(check(DUAL_SOURCE)); }, 600_000);
   it('fib (calls, returns, mispredictions)', async () => { await stepped(check(BENCHMARKS.find((b) => b.id === 'fib')!.source, { imemK: 7, dmemK: 7, max: 8000 })); }, 600_000);
   it('random programs (divides, loads behind stores, flushes)', async () => {
     for (const seed of [3, 7, 11]) await stepped(check(randomProgram32(seed, { m: true, dmemWords: 32 }), { imemK: 7, dmemK: 5 }));

@@ -134,7 +134,7 @@ class CpuPanel {
   private fieldsSec = h('div', { class: 'cpu-sec' }, 'Fields', h('span', { class: 'cpu-sec-hint' }, 'point at a field: its wires'));
   private fields = h('div', { class: 'cpu-fields' });
   private pipeSec = h('div', { class: 'cpu-sec' }, 'Pipeline', h('span', { class: 'cpu-sec-hint' }, 'stage × cycle, last 7 cycles'));
-  /** Chapter 25's out-of-order core: its structures read from the gates, and the model run beside them (widgets/ooopanel.ts). */
+  /** Chapter 26's out-of-order core: its structures read from the gates, and the model run beside them (widgets/ooopanel.ts). */
   private oooSec = h('div', { class: 'cpu-sec' }, 'Out of order', h('span', { class: 'cpu-sec-hint' }, 'read from the gates; click a row: its parts'));
   private oooV = oooView((pc, port) => this.select(pc, port));
   private oooF: { es: EditorSim; iss: unknown; f: OooFollower; hook: EdgeHook } | null = null;
