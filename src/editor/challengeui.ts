@@ -607,6 +607,6 @@ class ChallengeUi {
 }
 
 registerToolbarAction({
-  id: 'challenges', title: 'Build challenges: recreate every level, checked and scored', icon: 'flag', label: 'Challenges', order: 64,
+  id: 'challenges', title: 'Build challenges: recreate every level, checked and scored', icon: 'flag', label: 'Challenges', menu: 'Build challenges', order: 64, under: 'play',
   run: (ed) => (uis.get(ed) ?? (installChallenges(ed), uis.get(ed)!)).toggleList(),
 });

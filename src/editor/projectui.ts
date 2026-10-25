@@ -90,6 +90,7 @@ export function installProjects(ed: Editor, hooks: ProjectHooks): { destroy(): v
       item('upload', 'Import a file as a new project', 'Instead of merging it into this one', () => pickProjectFile(ed, hooks)),
       item('trash', 'Delete this project…', 'Asks first; export it to keep a copy', () => deleteDialog(ed, hooks),
         { disabled: ed.project === MAIN_PROJECT ? 'The first project holds your campaign levels: it can be renamed, not deleted' : undefined }));
+    ed.claimMenu(close);
     ed.el.append(menu);
     btn.setAttribute('aria-expanded', 'true');
     const r = btn.getBoundingClientRect();

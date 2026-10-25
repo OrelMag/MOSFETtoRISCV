@@ -37,7 +37,15 @@ describe('toolbar overflow (More menu)', () => {
     expect([...shed]).toEqual(['help', 'type', 'screens']);
     const tight = shedActions(BAR, 360, MORE, GAP);
     for (const id of ['file', 'undo', 'redo', 'fit']) expect(tight.has(id), id).toBe(false);
-    expect(tight.has('zin')).toBe(true);
+    expect(tight.has('package')).toBe(true);
+  });
+
+  it('Package stays until Tests, CPU and the Play menu have gone', () => {
+    const bar = [...BAR.filter((it) => !['probe', 'timing', 'challenges', 'puzzles'].includes(it.id)), { id: 'timingmenu', w: 90 }, { id: 'play', w: 70 }, { id: 'tests', w: 70 }];
+    for (let room = MORE; room <= width(bar); room += 5) {
+      const shed = shedActions(bar, room, MORE, GAP);
+      if (shed.has('package')) for (const id of ['tests', 'cpu', 'play']) expect(shed.has(id), `room ${room}: ${id}`).toBe(true);
+    }
   });
 
   it('a plugin action no one ranked goes first, the rightmost of them first', () => {

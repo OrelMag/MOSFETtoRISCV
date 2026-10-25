@@ -534,6 +534,7 @@ function examplesMenu(ed: Editor): void {
     closeMenu = null;
   };
   closeMenu = close;
+  ed.claimMenu(close);
   document.addEventListener('pointerdown', away, true);
   document.addEventListener('keydown', esc, true);
   ed.el.append(menu);

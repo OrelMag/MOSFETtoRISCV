@@ -512,6 +512,6 @@ registerEditorPlugin((ed) => {
 });
 
 registerToolbarAction({
-  id: 'puzzles', title: 'Program puzzles: write programs for a CPU, run on its gates and scored', icon: 'puzzle', label: 'Puzzles', order: 65,
+  id: 'puzzles', title: 'Program puzzles: write programs for a CPU, run on its gates and scored', icon: 'puzzle', label: 'Puzzles', menu: 'Program puzzles', order: 65, under: 'play',
   run: (ed) => uis.get(ed)?.toggleList(),
 });

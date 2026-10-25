@@ -51,6 +51,12 @@ export interface ToolbarAction {
   active?(ed: Editor): boolean;
   /** Only on a campaign level screen. */
   levelOnly?: boolean;
+  /** Offered only while this holds (the CPU panel: a CPU was found). */
+  shown?(ed: Editor): boolean;
+  /** A menu button: it lists the actions `under` it. */
+  group?: boolean;
+  /** The menu it is listed in, when that menu is on this bar (a level screen lists its own actions flat). */
+  under?: string;
 }
 
 const actions: ToolbarAction[] = [];
@@ -106,6 +112,9 @@ registerToolbarAction({ id: 'zout', title: 'Zoom out', icon: 'minus', order: 30,
 registerToolbarAction({ id: 'zin', title: 'Zoom in', icon: 'plus', order: 40, run: (ed) => ed.view.cam.zoom(0.8) });
 registerToolbarAction({ id: 'fit', title: 'Fit to screen', icon: 'fit', order: 50, run: (ed) => ed.fitView() });
 registerToolbarAction({ id: 'props', title: 'Properties of the selection or the chip', icon: 'sidebar', label: 'Properties', order: 85, levelOnly: true, run: (ed) => ed.toggleProps(), active: (ed) => ed.propsPinned });
+// Menus that gather actions used together, so the bar stays short.
+registerToolbarAction({ id: 'timingmenu', title: 'Timing: probe wires, and the timing panel that records them', icon: 'wave', label: 'Timing ▾', order: 61, group: true, run: (ed) => ed.groupMenu('timingmenu') });
+registerToolbarAction({ id: 'play', title: 'Play: build challenges and program puzzles', icon: 'flag', label: 'Play ▾', order: 64, group: true, run: (ed) => ed.groupMenu('play') });
 registerToolbarAction({ id: 'help', title: 'Keyboard shortcuts (?)', menu: 'Keyboard shortcuts', icon: 'info', order: 90, run: (ed) => ed.showHelp() });
 
 const withChip = (ws: Workspace, doc: ChipDoc): Workspace => ({ ...ws, chips: { ...ws.chips, [doc.id]: doc } });
@@ -204,7 +213,7 @@ export class Editor {
     const overlay = h('div', { class: 'sb-overlay' });
     // A toolbar action, shown when one is registered (the page imports the plugins after the editor).
     const act = (id: string, label: string, ic: string) => h('button', { class: 'btn sm', 'data-for': id,
-      onclick: () => this.actionsEl.querySelector<HTMLElement>(`[data-action=${id}]`)?.click() }, icon(ic, 14), label);
+      onclick: () => actions.find((x) => x.id === id)?.run(this) }, icon(ic, 14), label);
     this.emptyEl = h('div', { class: 'sb-empty-chip', hidden: true },
       h('h3', null, 'An empty chip'),
       coarsePointer()
@@ -735,6 +744,7 @@ export class Editor {
       item('Empty chip', 'draw it from parts', 'plus', () => this.newChip()),
       ...newChipKinds.map((k) => item(k.label, k.hint, k.icon, () => k.run(this))));
     menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { close(); anchor.focus(); } });
+    this.claimMenu(close);
     this.el.append(menu);
     const r = anchor.getBoundingClientRect();
     placeMenu(menu, r, Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)));
@@ -754,10 +764,85 @@ export class Editor {
     return [top, ...ws.open.filter((id) => id !== top && uses.has(id))];
   }
 
-  /** The toolbar actions this editor shows (a level screen: its own list). */
+  /** Every action this editor offers (a level screen: its own list), menus' members included, the menus themselves not. */
   barActions(): ToolbarAction[] {
+    return this.offered().filter((a) => !a.group);
+  }
+
+  private offered(): ToolbarAction[] {
     const only = this.level?.actions;
-    return actions.filter((a) => (only ? only.includes(a.id) : !a.levelOnly));
+    return actions.filter((a) => (only ? only.includes(a.id) : !a.levelOnly) && (!a.shown || a.shown(this)));
+  }
+
+  /** What the bar shows: actions, and menus in place of their members. */
+  private topActions(): ToolbarAction[] {
+    const all = this.offered();
+    const groups = new Set(all.filter((a) => a.group).map((a) => a.id));
+    const nested = (a: ToolbarAction) => !!a.under && groups.has(a.under);
+    const used = new Set(all.filter(nested).map((a) => a.under!));
+    return all.filter((a) => (a.group ? used.has(a.id) : !nested(a)));
+  }
+
+  /** A menu's members on this bar. */
+  private membersOf(id: string): ToolbarAction[] {
+    return this.offered().filter((a) => a.under === id);
+  }
+
+  private menuClose: (() => void) | null = null;
+
+  /** One toolbar menu at a time: a menu opening calls this, which closes the one open before it. */
+  claimMenu(close: () => void): void {
+    const prev = this.menuClose;
+    this.menuClose = close;
+    if (prev && prev !== close) prev();
+  }
+
+  private groupClose: (() => void) | null = null;
+  private groupMenuId = '';
+
+  /** A menu button's members as a menu under it (or under More); a second press closes it. */
+  groupMenu(id: string): void {
+    if (this.groupClose) {
+      const was = this.groupMenuId;
+      this.groupClose();
+      if (was === id) return;
+    }
+    const anchor = this.actionAnchor(id);
+    const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : anchor;
+    const g = actions.find((a) => a.id === id);
+    const menu = h('div', { class: 'sb-menu sb-group-menu', role: 'menu', 'aria-label': g?.label?.replace(/ ▾$/, '') ?? id });
+    const close = () => {
+      menu.remove();
+      document.removeEventListener('pointerdown', away, true);
+      document.removeEventListener('keydown', key, true);
+      if (this.groupClose === close) { this.groupClose = null; this.groupMenuId = ''; }
+    };
+    const away = (e: Event) => { if (!menu.contains(e.target as Node) && !anchor?.contains(e.target as Node)) close(); };
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      close();
+      (opener?.isConnected ? opener : anchor)?.focus();
+    };
+    for (const a of this.membersOf(id)) menu.append(this.menuItem(a, close));
+    this.claimMenu(close);
+    this.groupClose = close;
+    this.groupMenuId = id;
+    this.el.append(menu);
+    const r = (anchor ?? this.moreBtn).getBoundingClientRect();
+    placeMenu(menu, r, Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)));
+    document.addEventListener('pointerdown', away, true);
+    document.addEventListener('keydown', key, true);
+    menu.querySelector<HTMLElement>('button:not(:disabled)')?.focus();
+  }
+
+  /** An action as a menu row (More, a menu button's menu): a toggle shows its state. */
+  private menuItem(a: ToolbarAction, close: () => void): HTMLButtonElement {
+    const on = a.active?.(this);
+    const item = h('button', { role: a.active ? 'menuitemcheckbox' : 'menuitem', 'aria-checked': a.active ? String(!!on) : null, class: on ? 'on' : null, title: a.title,
+      onclick: () => { close(); a.run(this); } }, icon(a.icon, 16), h('span', null, h('b', null, a.menu ?? a.label ?? a.title))) as HTMLButtonElement;
+    if (a.enabled && !a.enabled(this)) item.disabled = true;
+    return item;
   }
 
   /** Redraw the top bar's buttons (a toggle changed state). */
@@ -766,10 +851,12 @@ export class Editor {
     const a = document.activeElement;
     const focused = a instanceof HTMLElement && a !== this.moreBtn && this.actionsEl.contains(a) ? a.dataset.action : undefined;
     this.actionsEl.replaceChildren();
-    for (const a of this.barActions()) {
-      const b = h('button', { class: `btn ghost ${a.label ? 'sm' : 'icon-only'}`, title: a.title, 'aria-label': a.title, 'data-action': a.id, onclick: () => a.run(this) },
-        icon(a.icon, 16), a.label ? h('span', null, a.label) : null) as HTMLButtonElement;
+    for (const a of this.topActions()) {
+      const b = h('button', { class: `btn ghost ${a.label ? 'sm' : 'icon-only'}`, title: a.title, 'aria-label': a.title, 'data-action': a.id, onclick: () => a.run(this),
+        'aria-haspopup': a.group ? 'menu' : null }, icon(a.icon, 16), a.label ? h('span', null, a.label) : null) as HTMLButtonElement;
       if (a.enabled && !a.enabled(this)) b.disabled = true;
+      // a menu button is drawn pressed while one of its toggles is on
+      if (a.group) b.classList.toggle('on', this.membersOf(a.id).some((m) => !!m.active?.(this)));
       if (a.active) {
         const on = a.active(this);
         b.classList.toggle('on', on);
@@ -831,6 +918,8 @@ export class Editor {
 
   /** Where an action's own menu opens: its button, or More when it is in there. */
   actionAnchor(id: string): HTMLElement | null {
+    const under = actions.find((a) => a.id === id)?.under;
+    if (under && this.topActions().some((a) => a.id === under)) return this.actionAnchor(under);
     const b = this.actionsEl.querySelector<HTMLElement>(`[data-action="${id}"]`);
     return b && !b.hidden ? b : this.shed.has(id) ? this.moreBtn : b;
   }
@@ -838,6 +927,7 @@ export class Editor {
   private toggleMore(): void {
     if (this.moreMenu) return this.closeMore();
     const menu = this.moreMenu = h('div', { class: 'sb-menu sb-more-menu', role: 'menu', 'aria-label': 'More tools' });
+    this.claimMenu(() => this.closeMore());
     this.fillMore();
     this.el.append(menu);
     const r = this.moreBtn.getBoundingClientRect();
@@ -851,13 +941,10 @@ export class Editor {
   private fillMore(): void {
     const menu = this.moreMenu!;
     menu.replaceChildren();
-    for (const a of this.barActions()) {
+    for (const a of this.topActions()) {
       if (!this.shed.has(a.id)) continue;
-      const on = a.active?.(this);
-      const item = h('button', { role: a.active ? 'menuitemcheckbox' : 'menuitem', 'aria-checked': a.active ? String(!!on) : null, class: on ? 'on' : null, title: a.title,
-        onclick: () => { this.closeMore(); a.run(this); } }, icon(a.icon, 16), h('span', null, h('b', null, a.menu ?? a.label ?? a.title))) as HTMLButtonElement;
-      if (a.enabled && !a.enabled(this)) item.disabled = true;
-      menu.append(item);
+      // a menu button shed into More lists its members there
+      for (const m of a.group ? this.membersOf(a.id) : [a]) menu.append(this.menuItem(m, () => this.closeMore()));
     }
   }
 
