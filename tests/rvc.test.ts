@@ -237,3 +237,21 @@ describe('C extension: the expander in gates', () => {
     expect(n).toBeLessThan(2000);
   });
 });
+
+describe('C extension: the chapter\'s numbers', () => {
+  it('RVC_COSTS are what the cores measure', async () => {
+    const { RVC_COSTS } = await import('../src/widgets/rvc');
+    const { singleCycleCpu, C_EXPAND, cFetch, PLUS2OR4, PLUS4 } = await import('../src/lib');
+    const { measureCpu } = await import('./verify/bench');
+    const { stats, logicDepth } = await import('../src/sim/stats');
+    const { PROGRAMS } = await import('../src/riscv/programs');
+    const w = assemble(PROGRAMS[0].source).words;
+    expect(measureCpu(singleCycleCpu(w, {}))).toEqual(RVC_COSTS.plain);
+    expect(measureCpu(singleCycleCpu(w, { c: true }))).toEqual(RVC_COSTS.c);
+    expect({ nands: stats(C_EXPAND).nands, depth: logicDepth(C_EXPAND) }).toEqual(RVC_COSTS.expander);
+    const f = cFetch(w, 6);
+    const banks = f.netlist!().instances.filter((i) => i.def.id.startsWith('hrom')).reduce((s, i) => s + stats(i.def).nands, 0);
+    expect(stats(f).nands - banks - stats(C_EXPAND).nands).toBe(RVC_COSTS.fetch);
+    expect(stats(PLUS2OR4).nands - stats(PLUS4).nands).toBe(RVC_COSTS.next);
+  }, 120_000);
+});

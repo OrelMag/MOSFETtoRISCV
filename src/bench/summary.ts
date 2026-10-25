@@ -57,7 +57,7 @@ export const familyOf = (id: string): Family => (WIDE.has(id) ? 'wide' : id.star
 
 /** The chapter that builds each CPU. */
 const CHAPTER: Record<string, string> = {
-  sc: 'cpu', 'sc-ks': 'fastadd', 'sc-dc': 'cache', 'sc-wb2': 'cache', 'sc-ic': 'cache', 'sc-wb-ic': 'cache', 'sc-f': 'float',
+  sc: 'cpu', 'sc-c': 'widths', 'sc-ks': 'fastadd', 'sc-dc': 'cache', 'sc-wb2': 'cache', 'sc-ic': 'cache', 'sc-wb-ic': 'cache', 'sc-f': 'float',
   'mc-fsm': 'multicycle', 'mc-micro': 'multicycle', pipe: 'pipeline', 'pipe-ks': 'pipepay', 'pipe-bal': 'pipepay',
   'pipe-bp': 'pipepay', 'pipe-bal-bp': 'pipepay', 'pipe-wb2': 'cache', 'pipe-wt-bal-bp': 'cache', 'pipe-m': 'muldiv',
   'pipe-m-bal-bp': 'muldiv', 'pipe-2w': 'ooo', ooo: 'ooo', fppipe: 'float', sys: 'traps', 'sys-m': 'muldiv', dual: 'multicore',
