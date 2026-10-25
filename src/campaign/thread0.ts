@@ -29,7 +29,11 @@ export const THREAD0: Record<string, NodeThread> = {
   // ---- Act 1 ----------------------------------------------------------------------------------
   l_bool: {
     uses: ['ctl'],
-    usedFor: { d_kmap: 'a K-map is x·y + x·¬y = x drawn: neighbouring cells merge' },
+    usedFor: {
+      g_or: 'De Morgan: a + b = ¬(¬a · ¬b), an OR from one NAND and two NOTs',
+      g_mux: 'y = s·b + ¬s·a is a sum of products: NAND–NAND makes it 4 NANDs',
+      d_kmap: 'a K-map is x·y + x·¬y = x drawn: neighbouring cells merge',
+    },
     pitfalls: [
       'De Morgan flips the operator and complements each term: ¬(a·b) = ¬a + ¬b, not ¬a·¬b.',
       'a + a·b absorbs to a, and a + ¬a·b to a + b: forgetting either leaves a gate too many.',
@@ -102,6 +106,7 @@ export const THREAD0: Record<string, NodeThread> = {
   },
   g_sop: {
     uses: ['ctl'],
+    usedFor: { c_ctl: 'the same method for each of its outputs: table, minimal sum, NAND–NAND, then what the sums share' },
     pitfalls: [
       '1 is not prime: a = 1 must give 0.',
       'A 4-input OR of products is not one cell here: its NAND costs 3 NANDs (two ANDs and a NAND).',
@@ -156,7 +161,6 @@ export const THREAD0: Record<string, NodeThread> = {
       c_br: 'beq / bne: 110 of the comparator\'s 287 NANDs',
       pi_fwd: '3-bit versions compare each source register with rd in M and W',
       pi_haz: 'a 3-bit version compares a load\'s rd with the next instruction\'s sources',
-      o_cache: 'a 5-bit version compares the tag',
     },
     pitfalls: [
       'eq is 1 when no bit differs: XOR, then zero detect; an OR of the XORs is ≠.',
@@ -164,10 +168,11 @@ export const THREAD0: Record<string, NodeThread> = {
     ],
   },
 
-  // ---- Act 2 ----------------------------------------------------------------------------------
-  n_bin: {
+  n_bin: { // act 1 since the reorder: the decoder and the prime detector read numbers
     uses: ['alu'],
     usedFor: {
+      g_sop: 'its input is a 4-bit number: the table is 0 to 15, the primes 2, 3, 5, 7, 11, 13',
+      g_dec: 'the 3-bit address is a number: output k lights for a = k',
       n_twos: 'the same bit patterns, with bit 15 weighing −2^15',
       a_ha: 'one column of binary addition: 1 + 1 = 10',
     },
@@ -176,10 +181,12 @@ export const THREAD0: Record<string, NodeThread> = {
       'Bit k weighs 2^k counting from 0: the top bit of a 16-bit word is bit 15 (32 768).',
     ],
   },
+  // ---- Act 2 ----------------------------------------------------------------------------------
   n_twos: {
     uses: ['alu', 'br'],
     usedFor: {
       a_addsub16: 'a − b = a + ¬b + 1: subtraction on the same adder',
+      a_shift16: 'sra fills with the sign bit, so a negative number stays negative',
       i_isa: 'immediates are two\'s complement, sign-extended to 16 bits',
       n_float: 'floats use a sign bit and a biased exponent instead',
     },
@@ -215,7 +222,6 @@ export const THREAD0: Record<string, NodeThread> = {
   },
   a_add16: {
     uses: ['alu', 'npc', 'br'],
-    side: 'o_fastadd',
     usedFor: {
       a_addsub16: 'wraps one in XORs: b ⊕ sub, with sub on cin',
       c_npc: 'holds two: pc + imm and rs1 + imm',
@@ -255,7 +261,6 @@ export const THREAD0: Record<string, NodeThread> = {
     uses: ['br'],
     usedFor: {
       c_br: 'blt / bge: 169 of the comparator\'s 287 NANDs',
-      a_alu16: 'the rule only: the ALU reads slt / sltu off its own adder / subtractor\'s flags',
     },
     pitfalls: [
       'ltu is ¬cout, not cout: a + ¬b + 1 carries out when a ≥ b.',

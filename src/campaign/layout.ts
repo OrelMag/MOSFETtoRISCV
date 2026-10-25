@@ -54,8 +54,19 @@ export interface Band {
   /** The act's blurb as subtitle lines under its title (plain text). */
   sub?: string[];
   /** A finished act's end card at the band's foot (thread.ts ActEnd): its top and each half's lines. */
-  foot?: { y: number; can: string[]; cannot: string[] };
+  foot?: { y: number; can: string[]; cannot: string[]; links: FootLink[] };
 }
+
+/** A way on in a finished act's footer (the end card's next act and side quests), as a pill: its left, baseline and width. */
+export interface FootLink {
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+}
+
+/** Footer link pills: height, gap, padding around the label (10.5 px text). */
+export const LINK_H = 20, LINK_GAP = 8, LINK_PAD = 10, LINK_CHAR_W = 5.6;
 
 /** Subtitle and footer text: line height, the most lines of each, and an estimate of a character's width (11–12 px text). */
 export const SUB_LINE = 14, SUB_LINES = 2, FOOT_LINES = 3, CHAR_W = 6.2, FOOT_LABEL_W = 96;
@@ -84,7 +95,7 @@ export function wrapText(text: string, width: number, max: number): string[] {
 /** What a band shows besides its levels: an act's blurb, and the end card of a finished act. */
 export interface BandText {
   blurb: (act: number) => string | undefined;
-  end: (act: number) => { can: string; cannot: string } | undefined;
+  end: (act: number) => { can: string; cannot: string; links?: string[] } | undefined;
 }
 
 export interface MapLayout {
@@ -222,8 +233,17 @@ export function mapLayout(maxCols = Infinity, folded: ReadonlySet<number> = new 
     let foot: Band['foot'];
     if (end) {
       // label column ("Can now", "Still can't") then the text
-      foot = { y: top + 36, can: wrapText(end.can, textW - FOOT_LABEL_W, FOOT_LINES), cannot: wrapText(end.cannot, textW - FOOT_LABEL_W, FOOT_LINES) };
+      foot = { y: top + 36, can: wrapText(end.can, textW - FOOT_LABEL_W, FOOT_LINES), cannot: wrapText(end.cannot, textW - FOOT_LABEL_W, FOOT_LINES), links: [] };
       top = foot.y + (foot.can.length + foot.cannot.length - 1) * SUB_LINE + 6;
+      // the ways on as pills under the text, wrapping like words
+      let lx = MARGIN, ly = top + 8 + LINK_H - 6;
+      for (const label of end.links ?? []) {
+        const w = Math.ceil(label.length * LINK_CHAR_W) + 2 * LINK_PAD;
+        if (lx > MARGIN && lx + w > MARGIN + textW) { lx = MARGIN; ly += LINK_H + 6; }
+        foot.links.push({ label, x: lx, y: ly, w });
+        lx += w + LINK_GAP;
+      }
+      if (foot.links.length) top = ly + 6;
     }
     const h = top - y + 12;
     bands.push({ act: act.num, y, h, ...(rowLabels.length ? { rows: rowLabels } : {}), ...(sub ? { sub } : {}), ...(foot ? { foot } : {}) });

@@ -337,3 +337,9 @@ a.th-n:hover, a.th-n:focus-visible { border-color: var(--accent); color: var(--a
 .cp-node:hover .cp-blk circle, .cp-node:focus-visible .cp-blk circle, .cp-node.sel .cp-blk circle { fill: var(--accent); }
 .cp-node:hover .cp-blk text, .cp-node:focus-visible .cp-blk text, .cp-node.sel .cp-blk text { fill: var(--accent); }
 .cp-blk.all circle { fill: none; stroke: var(--muted); stroke-width: 1.2; }
+.cp-foot-link { cursor: pointer; outline: none; }
+.cp-foot-link rect { fill: var(--accent); stroke: var(--accent); stroke-width: 1.2; }
+.cp-foot-link text { font: 600 10.5px var(--font-ui); fill: var(--accent-text); }
+.cp-foot-link.side rect { fill: var(--surface); stroke: var(--border-strong); }
+.cp-foot-link.side text { fill: var(--accent); }
+.cp-foot-link:hover rect, .cp-foot-link:focus-visible rect { stroke: var(--text); stroke-width: 2; }

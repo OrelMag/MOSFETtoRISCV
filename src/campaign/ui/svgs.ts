@@ -4,8 +4,8 @@
 import { s } from '../../ui/dom';
 import { BLOCKS, blockNodes, LINKS, VIEW } from '../anatomy';
 import { ancestors, isDone, statusOf, type ProgressView } from '../graph';
-import { BAND_GAP, COL_GAP, FOOT_LABEL_W, mapLayout, NODE_H, NODE_W, OPTIONAL_ACTS, ROW_GAP, SUB_LINE, SUB_Y } from '../layout';
-import { actDone, actEnd, cardBlock } from '../thread';
+import { BAND_GAP, COL_GAP, FOOT_LABEL_W, mapLayout, NODE_H, NODE_W, OPTIONAL_ACTS, ROW_GAP, SUB_LINE, SUB_Y, LINK_H, LINK_PAD } from '../layout';
+import { actDone, actEnd, cardBlock, endLinks } from '../thread';
 import { ACTS, actName, NODES } from '../nodes';
 import { levelCardLabel } from '../cardlabel';
 import type { CampaignNode } from '../types';
@@ -59,7 +59,11 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
   folded: ReadonlySet<number> = new Set(), fold?: (act: number, folded: boolean) => void): SVGSVGElement {
   // Each act's blurb under its title; a finished act's end card at its foot.
   const ended = new Set(ACTS.map((a) => a.num).filter((a) => actEnd(a) && actDone(a, view)));
-  const L = mapLayout(maxCols, folded, { blurb: (a) => ACTS.find((x) => x.num === a)?.blurb, end: actEnd }, ended);
+  const endOf = (a: number) => {
+    const e = actEnd(a);
+    return e && { can: e.can, cannot: e.cannot, links: endLinks(e).map((l) => l.label) };
+  };
+  const L = mapLayout(maxCols, folded, { blurb: (a) => ACTS.find((x) => x.num === a)?.blurb, end: endOf }, ended);
   const svg = s('svg', { class: 'cp-map', viewBox: `0 0 ${L.w} ${L.h}`, width: L.w, height: L.h, role: 'group', 'aria-label': 'The campaign map' });
   // Painted bottom up: the bands, the edges, then each act's title, buttons and cards (the edges run under the cards).
   const bands = s('g', { class: 'cp-bands', 'aria-hidden': 'true' });
@@ -110,6 +114,15 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
         s('text', { class: 'cp-foot-head', x: 16, y: f.y - 14 }, `✓ ${actName(act.num)} complete`),
         ...half('Can now', f.can, f.y, 'can'),
         ...half('Still can’t', f.cannot, f.y + f.can.length * SUB_LINE, 'cannot')));
+      // the ways on: the next act, the side quests (buttons, after the note they follow)
+      endLinks(end).forEach((l, i) => {
+        const p = f.links[i];
+        if (!p) return;
+        ag.append(pressable(s('g', { class: `cp-foot-link${l.side ? ' side' : ''}`, tabindex: 0, role: 'button', 'data-to': l.node.id, 'aria-label': l.label },
+          s('title', null, `${l.node.title} (${actName(l.node.act)})`),
+          s('rect', { x: p.x, y: p.y - LINK_H + 6, width: p.w, height: LINK_H, rx: LINK_H / 2 }),
+          s('text', { x: p.x + LINK_PAD, y: p.y }, l.label)), () => go(l.node.id)));
+      });
     }
     if (fold && OPTIONAL_ACTS.has(act.num)) {
       ag.append(pressable(s('g', { class: 'cp-fold', 'data-act': act.num, tabindex: 0, role: 'button', 'aria-expanded': 'true', 'aria-label': `Fold ${name}` },

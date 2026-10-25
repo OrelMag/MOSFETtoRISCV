@@ -36,11 +36,22 @@ export interface ActEnd {
   cannot: string;
   /** The level to go on with (the next act's first). */
   next?: string;
-  /** An optional level to offer beside it. */
-  side?: string;
-  /** Button texts (default: "<act>: <title>" of the next level's act, "Side quest: <title>"). */
+  /** Its button text (default: "<act>: <title>" of the next level). */
   nextLabel?: string;
-  sideLabel?: string;
+  /** Optional levels to offer beside it, in order (label default: "Side quest: <title>"). */
+  sides?: { node: string; label?: string }[];
+}
+
+/** An end card's ways on as buttons: the next level first (when it has one), then its side quests. Static: what the card names. */
+export function endLinks(end: ActEnd): { node: CampaignNode; label: string; side: boolean }[] {
+  const out: { node: CampaignNode; label: string; side: boolean }[] = [];
+  const n = end.next ? nodeById(end.next) : undefined;
+  if (n) out.push({ node: n, label: end.nextLabel ?? `${ACTS.find((a) => a.num === n.act)?.label ?? `Act ${n.act}`}: ${n.title}`, side: false });
+  for (const s of end.sides ?? []) {
+    const m = nodeById(s.node);
+    if (m) out.push({ node: m, label: s.label ?? `Side quest: ${m.title}`, side: true });
+  }
+  return out;
 }
 
 const ALL: Record<string, NodeThread> = { ...THREAD0, ...THREAD1, ...THREAD2, ...THREAD3 };

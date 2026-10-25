@@ -6,7 +6,7 @@ import { actName, actTitle, nodeById } from '../nodes';
 import { isDone, type ProgressView } from '../graph';
 import { altCost } from '../measure';
 import type { CampaignNode } from '../types';
-import { actEnd, actNext, type Chain, closedAct, sideQuest, whyStack, withinReach } from '../thread';
+import { actEnd, actNext, type Chain, closedAct, endLinks, sideQuest, whyStack, withinReach } from '../thread';
 import { h, icon } from '../../ui/dom';
 
 export interface ThreadCtx {
@@ -93,16 +93,16 @@ export function actEndEl(act: number, ctx: ThreadCtx, primary = true): HTMLEleme
   const e = actEnd(act);
   if (!e) return null;
   const next = actNext(e, ctx.view, ctx.open);
-  const side = e.side ? nodeById(e.side) : undefined;
-  const sideOk = side && !side.soon && !isDone(ctx.view(side.id));
+  // the side quests still worth offering (built, not done), in the card's order
+  const sides = endLinks(e).filter((l) => l.side && !l.node.soon && !isDone(ctx.view(l.node.id)));
   return h('div', { class: 'th-end', role: 'group', 'aria-label': `${actName(act)} complete` },
     h('div', { class: 'th-eyebrow' }, `${actName(act)} complete · ${actTitle(act)}`),
     h('div', { class: 'th-grid' },
       h('div', { class: 'th-cell can' }, h('h4', null, 'Your machine can now'), rich('p', e.can)),
       h('div', { class: 'th-cell cannot' }, h('h4', null, 'It still can’t'), rich('p', e.cannot))),
-    next || sideOk ? h('div', { class: 'th-row' },
+    next || sides.length ? h('div', { class: 'th-row' },
       next ? h('a', { class: `btn${primary ? ' primary' : ''}`, href: ctx.route(next) }, e.nextLabel && next.id === e.next ? e.nextLabel : `${actName(next.act)}: ${next.title}`, icon('chevR', 14)) : null,
-      sideOk ? h('a', { class: 'btn', href: ctx.route(side!) }, e.sideLabel ?? `Side quest: ${side!.title}`) : null) : null);
+      sides.map((l) => h('a', { class: 'btn', href: ctx.route(l.node) }, l.label))) : null);
 }
 
 /** "Now within reach": the required levels the pass moved forward, and the primary way on (the closest to ready, if open). */

@@ -13,7 +13,7 @@ import { libCost } from '../src/campaign/measure';
 import { CHAR_W, FOOT_LABEL_W, mapLayout, NODE_H, SUB_LINE, SUB_LINES, SUB_Y, wrapText } from '../src/campaign/layout';
 import { ACTS, NODES, nodeById } from '../src/campaign/nodes';
 import {
-  actDone, actEnd, actNext, blockUse, cardBlock, closedAct, goesInto, pitfallsOf, requiredOf, sideQuest, threadIds, threadOf, usedLater, whyStack, withinReach,
+  actDone, actEnd, actNext, endLinks, blockUse, cardBlock, closedAct, goesInto, pitfallsOf, requiredOf, sideQuest, threadIds, threadOf, usedLater, whyStack, withinReach,
 } from '../src/campaign/thread';
 import { CTL_WIDTHS, rv16Core } from '../src/lib/rv16/cpu';
 import { resolveComponent } from '../src/lib/resolve';
@@ -64,7 +64,24 @@ describe('thread data', () => {
         expect(n.optional).toBeFalsy();
         expect(n.act).not.toBe(Number(k));
       }
-      if (e.side) expect(nodeById(e.side)?.optional, e.side).toBe(true);
+      for (const sq of e.sides ?? []) expect(nodeById(sq.node)?.optional, sq.node).toBe(true);
+    }
+  });
+
+  it('offers act 7’s three optional acts, memory first, as links on the card and the map footer', () => {
+    const links = endLinks(ACT_ENDS[7]);
+    expect(links.map((l) => [l.node.id, l.node.act, l.side])).toEqual([['m_lesson', 10, true], ['k_lesson', 9, true], ['o_lesson', 8, true]]);
+    for (const l of links) expect(l.label).toContain(`Act ${l.node.act}`);
+    // act 5 closes with Core IV and goes on to the pipeline; the next level leads, its label kept
+    expect(endLinks(ACT_ENDS[5])[0]).toMatchObject({ side: false, label: 'Act 6: cut the path into stages' });
+    expect(endLinks(ACT_ENDS[5])[0].node.id).toBe('pi_lesson');
+    expect(requiredOf(5).map((n) => n.id)).toContain('c_fast');
+    const L = mapLayout(1, new Set(), { blurb: () => undefined, end: (a) => ({ ...ACT_ENDS[a], links: endLinks(ACT_ENDS[a]).map((l) => l.label) }) }, new Set([7]));
+    const foot = L.bands.find((b) => b.act === 7)!.foot!;
+    expect(foot.links.map((p) => p.label)).toEqual(links.map((l) => l.label));
+    for (const p of foot.links) {
+      expect(p.x + p.w).toBeLessThanOrEqual(L.w);
+      expect(p.y).toBeLessThan(L.bands.find((b) => b.act === 7)!.y + L.bands.find((b) => b.act === 7)!.h);
     }
   });
 });
@@ -79,6 +96,7 @@ describe('the numbers the thread quotes', () => {
     expect(e(1)).toContain(`decoder, ${par('g_dec').nand} NANDs`);
     expect(e(1)).toContain(`${par('g_eq16').nand} NANDs, depth ${par('g_eq16').depth}`);
     expect(e(2)).toContain(`${fmt(par('a_alu16').nand!)} NANDs, depth ${par('a_alu16').depth}`);
+    expect(e(2)).toContain(`depth ${par('o_fastadd').depth} instead of ${par('a_add16').depth}, for ${par('o_fastadd').nand} NANDs instead of ${par('a_add16').nand}`);
     expect(e(3)).toContain(`${fmt(par('m_rf').nand!)} NANDs`);
     const half = par('m_rf').nand! / par('c_core3').nand!;
     expect(half).toBeGreaterThan(0.4);
@@ -87,10 +105,13 @@ describe('the numbers the thread quotes', () => {
     expect(plain(caseOf('p_mul')!.cost!)).toContain('28 to 134');
     const c3 = par('c_core3');
     expect(e(5)).toContain(`${fmt(c3.nand!)} NANDs, one instruction per ${c3.period}-delay cycle, the ${coreTests(3).length} test programs in ${fmt(c3.period! * c3.cycles!)} NAND delays`);
-    expect(ACT_ENDS[5].sideLabel).toContain(`period ${par('c_fast').period}`);
+    const c4 = par('c_fast');
+    expect(c4.cycles).toBe(c3.cycles);
+    expect(e(5)).toContain(`${fmt(stats(rv16Core(true, true)).nands)} NANDs at period ${c4.period}, ${fmt(c4.period! * c4.cycles!)} delays`);
     const p3 = par('pi_core3');
     expect(e(6)).toContain(`period ${p3.period} (${fmt(p3.nand!)} NANDs)`);
-    expect(e(6)).toContain(`${Math.round(100 * (1 - (p3.period! * p3.cycles!) / (c3.period! * c3.cycles!)))}% faster`);
+    expect(e(6)).toContain(`${Math.round(100 * (1 - (p3.period! * p3.cycles!) / (c3.period! * c3.cycles!)))}% faster than Core III, and slower than Core IV`);
+    expect(p3.period! * p3.cycles!).toBeGreaterThan(c4.period! * c4.cycles!);
     expect(e(7)).toContain(`${fmt(par('y_final').nand!)} NANDs`);
   });
 
@@ -110,7 +131,7 @@ describe('the numbers the thread quotes', () => {
     const r = analyzeTiming(flatten(bench, { mode: 'gate' }))!;
     const alu = netlistOf(core)!.instances.find((i) => i.def.id === 'rv16_alu16')!.name;
     const inAlu = r.path.filter((p) => p.node[0] === 'core' && p.node[1] === alu).length;
-    expect(plain(ACT_ENDS[5].cannot)).toContain(`${inAlu} of the ${r.period} delays`);
+    expect(plain(ACT_ENDS[5].can)).toContain(`ALU was ${inAlu} of those ${r.period} delays`);
   });
 
   it('pins the pilot\'s clauses and pitfalls', () => {
@@ -236,8 +257,9 @@ describe('after a pass', () => {
   });
 
   it('offers the side quest the thread names, else an optional dependent', () => {
-    expect(sideQuest('a_add16', view([]))?.id).toBe('o_fastadd');
-    expect(sideQuest('a_add16', view(['o_fastadd']))?.id).not.toBe('o_fastadd');
+    // fast adders are required now: the 16-bit adder's side quests are the multipliers
+    expect(sideQuest('a_add16', view([]))?.optional).toBe(true);
+    expect(sideQuest('a_add16', view([]))?.id).not.toBe('o_fastadd');
     expect(sideQuest('t_inv', view([]))?.id).toBe('t_nor');
   });
 
