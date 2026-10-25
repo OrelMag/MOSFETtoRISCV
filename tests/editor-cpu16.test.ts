@@ -99,6 +99,13 @@ describe('debug a failing core test in the sandbox', { timeout: 120000 }, () => 
     expect(m.mismatch).not.toBeNull();
   });
 
+  it('the multicycle core starts: the bench holds it in reset for its first cycle, as the level’s bench does', async () => {
+    const { m } = await bench('o_mc', 'o_mc', 'calls');
+    expect(m.mismatch).toBeNull();
+    expect(m.retired).toBeGreaterThan(10);
+    expect(m.done).toBe(true);
+  });
+
   it('a pipeline test given as words, and a core with an interrupt line', async () => {
     const { m } = await bench('pi_core0', 'pi_core0', 'memory');
     expect(m.mismatch).toBeNull();

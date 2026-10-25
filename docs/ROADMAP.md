@@ -1078,8 +1078,13 @@ links, bus taps, duplicate and pin reordering. The gaps:
   paddles on the switches (7 / 6 yours, 1 / 0 a second player's with switch 4, else the computer's, which reacts
   once the ball passes column 40), the return angle set by where the ball meets the paddle, the score on the LEDs,
   ten points a game; checked pixel for pixel on the gates and played out on the golden model
-- ⏳ Pong on the campaign's RV16 bench: its only screen is the lane bench's 32 × 32 rasterizer screen, so this needs
-  a screen on the core bench first
+- ✅ Pong on the campaign's RV16 bench: the core bench with io (campaign/bench.ts addPongBench / pongChip) adds a
+  32 × 32 RGB565 screen at 0xF000 + 32·y + x (write-only, Iss16Options.screen), eight switches at 0xFFFA and a reset
+  for the first cycle; riscv/rv16/pong16.ts plays as the RV32 one does (switches 7 / 6, 1 / 0 with 4, the computer
+  past column 20, the score on the LEDs, five points a game, state in RAM words 0–8). A passing RV16I core level
+  offers "Play Pong on your core"; Examples ▸ RV16: Pong runs it on the reference core. The CPU drawer's model waits
+  at a load from the switches for the core's write (a pipeline reads them cycles earlier); every offering level's
+  reference plays it in lock step, the screen equal pixel for pixel (tests/rv16-pong.test.ts)
 - Separate stars for area and for speed (functional / area-optimal / speed-optimal) instead of one rating over every
   metric: a grading change across 125 levels' pars; decide before building
 

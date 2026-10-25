@@ -128,6 +128,13 @@
   .sandbox.sb-levelmode { height: 100%; }
 }
 @media (max-width: 760px) {
+  /* the level bar on one row (it wrapped to three): the act, the kind and the par are in the Task tab, stars say solved,
+     the buttons keep their icon or first word (their full names in aria-label / title) */
+  .lv-bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .lv-bar > * { flex: none; }
+  .lv-bar > .lv-crumb { flex: 0 1 auto; }
+  .lv-bar > .lv-spacer { flex: 1 0 0; }
+  .lv-act, .lv-kind, .lv-par, .lv-bar .lbl, .lv-bar:has(.lv-stars) .lv-badge.good { display: none; }
   .sandbox.sb-levelmode > .sb-center { height: auto; flex: 1 1 0; min-height: 200px; }
   .sandbox.sb-levelmode > .sb-palette { max-height: 38dvh; }
   /* a core level's pins fill a screen: the I/O bar scrolls inside its own band, the canvas keeps a usable height */

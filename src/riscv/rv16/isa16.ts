@@ -79,6 +79,12 @@ export const CAUSE = { illegal: 2, breakpoint: 3, ecall: 11, external: 0x800b } 
  */
 export const MMIO16 = { EXIT: 0xffff, CONSOLE: 0xfffe, OUT: 0xfffd, IN: 0xfffc, LEDS: 0xfffb, SWITCHES: 0xfffa, IRQ: 0xfff9 } as const;
 export const MMIO_BASE = 0xfff7;
+/**
+ * The core benches' screen (campaign/bench.ts with io, Iss16Options.screen): 32 × 32 pixels, RGB565, pixel (x, y) at
+ * BASE + 32·y + x. Write-only: a store paints, a load reads the data memory as at any other address. The lane bench's
+ * screen memory sits at the same words (gfx/raster16.ts FB16).
+ */
+export const SCREEN16_IO = { BASE: 0xf000, SIZE: 32 } as const;
 
 export const sext = (v: number, bits: number) => {
   const m = 1 << (bits - 1);
