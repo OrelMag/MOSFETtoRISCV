@@ -143,6 +143,23 @@ MPIE ← MIE, MIE ← 0, pc ← mtvec. <code>mret</code> undoes it: pc ← mepc,
 is the next instruction to run. In a pipeline, traps must be <b>precise</b>: everything older
 completes, nothing younger leaves a trace.</p>`,
 
+  arith: `
+<p>Act 4 multiplied in software: a shift-and-add loop of 28 to 134 instructions per product. This act
+builds that arithmetic in hardware, more than one way, and every level measures the result: the unit's
+NANDs and its depth or period, and on the core levels the cycles your programs take.</p>
+<h4>Multiply and divide</h4>
+<p>The <b>shift-and-add multiplier</b> is the Act 4 loop as a circuit: one adder used once a clock,
+18 cycles a product on 1 169 NANDs. The <b>array multiplier</b> forms every partial product at once:
+16 × 16 is 2 672 NANDs and 150 delays deep, a product in one pass. Put the array in your single-cycle
+core and every instruction pays for it: the period goes from 98 to 191, so a program without a single
+multiply runs 1.95 times slower. A <b>divider</b> is iterative however you build it, so the core must
+hold its PC until the quotient is ready: its first instruction that takes more than one cycle.</p>
+<h4>Floating point</h4>
+<p>Binary16 by hand first, then its units one rung each: unpack, the rounding decision, the sticky
+shifter, the leading-zero counter, and normalize &amp; round (2 058 NANDs), which every operation ends
+in. On those the adder is 3 732 NANDs and the multiplier 4 912. They stay units of their own: RV16 has
+no F registers and no FP instructions, so no core here runs them.</p>`,
+
   gpu: `
 <p>Your core is built for <b>latency</b>: one program, each instruction done as soon as
 possible. The pipeline of Act 6 goes further the same way: forwarding, stalls, flushes and

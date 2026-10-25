@@ -8,7 +8,7 @@ import { BLOCKS, blockNodes, LINKS } from '../src/campaign/anatomy';
 import { CODEX, codexById } from '../src/campaign/codex';
 import { measured, stars } from '../src/campaign/grade';
 import { ancestors, nextAvailable, ruleFor, statusOf, topo } from '../src/campaign/graph';
-import { FOLDED_H, foldedActs, MAP_MIN_SCALE, MAP_MIN_W, mapColsFor, mapLayout, NODE_H, NODE_W, OPTIONAL_ACTS } from '../src/campaign/layout';
+import { ACT_ROWS, FOLDED_H, foldedActs, MAP_MIN_SCALE, MAP_MIN_W, mapColsFor, mapLayout, NODE_H, NODE_W, OPTIONAL_ACTS } from '../src/campaign/layout';
 import { LESSONS } from '../src/campaign/lessons';
 import { levelChallenge, levelChipId, nodeOfChip, startCandidates, startFrom } from '../src/campaign/levels';
 import { ACTS, NODES, nodeById } from '../src/campaign/nodes';
@@ -199,11 +199,43 @@ describe('the map and the anatomy', () => {
     for (const cols of [2, 3, 4, 5]) {
       const L = mapLayout(cols);
       for (const b of L.bands) {
-        const ps = [...L.nodes.values()].filter((p) => p.node.act === b.act);
-        const perLine = new Map<number, Set<number>>();
-        for (const p of ps) perLine.set(p.line, (perLine.get(p.line) ?? new Set()).add(p.x));
-        const counts = [...perLine.values()].map((s) => s.size);
-        expect(Math.max(...counts) - Math.min(...counts), `${cols}: act ${b.act}`).toBeLessThanOrEqual(1);
+        // per labelled row (ACT_ROWS): each row wraps on its own
+        const inAct = [...L.nodes.values()].filter((p) => p.node.act === b.act);
+        for (const row of new Set(inAct.map((p) => p.row))) {
+          const perLine = new Map<number, Set<number>>();
+          for (const p of inAct.filter((q) => q.row === row)) perLine.set(p.line, (perLine.get(p.line) ?? new Set()).add(p.x));
+          const counts = [...perLine.values()].map((s) => s.size);
+          expect(Math.max(...counts) - Math.min(...counts), `${cols}: act ${b.act} row ${row}`).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+  });
+
+  it('every level\'s title fits its map card', () => {
+    // 26 characters ("Core IV: the critical path") is the most a 168 px card shows in its 13 px title
+    for (const n of NODES) expect(n.title.length, n.title).toBeLessThanOrEqual(26);
+  });
+
+  it('draws the side quests and the GPU as labelled rows: every level in one row, none requiring a later row', () => {
+    for (const [act, rows] of Object.entries(ACT_ROWS)) {
+      const ids = rows.flatMap((r) => r.ids);
+      expect(new Set(ids).size, `act ${act}`).toBe(ids.length);
+      expect([...ids].sort(), `act ${act}`).toEqual(NODES.filter((n) => n.act === +act).map((n) => n.id).sort());
+      const rowOf = new Map(rows.flatMap((r, i) => r.ids.map((id) => [id, i] as const)));
+      for (const id of ids) for (const r of nodeById(id)!.requires) if (rowOf.has(r)) expect(rowOf.get(r)!, `${id} ← ${r}`).toBeLessThanOrEqual(rowOf.get(id)!);
+    }
+    for (const cols of [Infinity, 4, 1]) {
+      const L = mapLayout(cols);
+      for (const [act, rows] of Object.entries(ACT_ROWS)) {
+        const b = L.bands.find((x) => x.act === +act)!;
+        expect(b.rows?.map((r) => r.label)).toEqual(rows.map((r) => r.label));
+        // each label sits above its row's first line and below whatever came before it
+        rows.forEach((r, i) => {
+          const ps = r.ids.map((id) => L.nodes.get(id)!);
+          const top = Math.min(...ps.map((p) => p.y));
+          expect(b.rows![i].y, `${cols}: ${r.label}`).toBeLessThan(top);
+          expect(b.rows![i].y - 12, `${cols}: ${r.label}`).toBeGreaterThan(i ? Math.max(...rows[i - 1].ids.map((id) => L.nodes.get(id)!.y + NODE_H)) : b.y + 21);
+        });
       }
     }
   });

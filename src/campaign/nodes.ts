@@ -39,7 +39,7 @@ export const ACTS: Act[] = [
   { num: 5, title: 'A single-cycle CPU', blurb: 'Wire your blocks into a datapath, add the control that tells them what to do, and run your own programs on your own processor.' },
   { num: 6, title: 'Pipelining', blurb: 'Five instructions in flight at once: a shorter clock period, and the hazards that come with it. Forwarding, stalls and flushes keep it correct.' },
   { num: 7, title: 'The system: traps and interrupts', blurb: 'A real processor reacts to the outside world and to its own mistakes. CSRs, exceptions and interrupts, precise even in the pipeline: the finale.' },
-  { num: 8, title: 'Side quests', blurb: 'Optional: faster adders, multipliers and dividers, floating point, caches, microcode. Each one is a trade of area for time.' },
+  { num: 8, title: 'Side quests', blurb: 'Optional: multiply and divide, and floating point. Each trades area or cycles against your core\'s NANDs, period and cycles, and each level measures which way the trade went.' },
   { num: 9, title: 'Throughput: a GPU', blurb: 'Optional, from Core III on: the same bricks arranged for throughput instead of latency: one instruction stream, four lanes, each with its own registers. Then the hard part: what the lanes do when they disagree.' },
   { num: 10, title: 'Memory', blurb: 'Optional, from A computer on: what sits behind the data port. Charge on a bit line, a row buffer that leaks, a controller that keeps a chip\'s timings and refreshes it.' },
 ];
@@ -554,19 +554,24 @@ export const NODES: CampaignNode[] = [
     codex: ['interrupts', 'traps'],
   },
   {
-    id: 'y_ptrap', act: 7, title: 'Pipeline V: precise exceptions', kind: 'core', requires: ['pi_core3', 'y_trap'], base: BUILD7.y_ptrap, par: { nand: 12031, period: 81, cycles: 2361 },
+    id: 'y_ptrap', act: 7, title: 'Pipeline V: exceptions', kind: 'core', requires: ['pi_core3', 'y_trap'], base: BUILD7.y_ptrap, par: { nand: 12031, period: 81, cycles: 2361 },
     why: 'In the single-cycle core a trap was easy: one instruction at a time, so the trapping one was the only one. The pipeline has five in flight. A precise trap lets every older instruction finish, cancels every younger one, and leaves the culprit\'s address in mepc, so the handler can return to it. Take traps in E, where the instruction has changed nothing yet.',
     tips: ['Take traps in E: older instructions in M and W still complete, younger ones in F and D are flushed.', 'Carry a valid bit: a bubble\'s all-zero word would otherwise look like an illegal instruction.', 'A CSR instruction reads and writes in E; its old value travels down as the result.'],
     codex: ['precise', 'flush'],
   },
   {
-    id: 'y_final', act: 7, title: 'Finale: interrupts in the pipeline', kind: 'core', requires: ['y_ptrap', 'y_irq', 'p_handler'], base: BUILD7.y_final, par: { nand: 12038, period: 81, cycles: 2399 },
+    id: 'y_final', act: 7, title: 'Finale: interrupts', kind: 'core', requires: ['y_ptrap', 'y_irq', 'p_handler'], base: BUILD7.y_final, par: { nand: 12038, period: 81, cycles: 2399 },
     why: 'The last piece is the outside world. Pipeline V already takes exceptions precisely in E; an interrupt is one more reason to trap there, taken only when enabled. Then every block you built, from the NAND up, is one chip that runs real programs, handles its own errors and answers a device: the machine your interrupt handler was written for.',
     tips: ['intr = MIE · MEIE · irq comes from the CSR file: wire the pin in and OR the interrupt into the trap.', 'Gate the interrupt with the valid bit too: a bubble in E has no pc of its own (its D/E slot was cleared), so mepc would name an address the program never was at.', 'mcause for the interrupt is 0x800B (bit 15, external cause 11): it wins over every exception.'],
     codex: ['interrupts'],
   },
 
   // ---- Act 8 --------------------------------------------------------------------------------
+  {
+    id: 'o_lesson', act: 8, title: 'Area or time', kind: 'lesson', optional: true, requires: ['c_core3'], body: 'arith',
+    why: 'Your core adds, shifts and compares in one cycle, and has no multiply, divide or floating point. Each of those can be built for area or for time, and each choice shows up in the numbers your core is graded on: NANDs, period and cycles.',
+    tips: [], codex: ['mext', 'ieee754'], chapters: [{ chapter: 'muldiv', label: 'Multiply & divide' }, { chapter: 'float', label: 'Floating point' }],
+  },
   {
     id: 'o_mulseq', act: 8, title: 'Shift-and-add multiplier', kind: 'build', optional: true, requires: ['a_add16', 's_reg16', 'p_mul'], base: BUILD8.o_mulseq, givesOf: partsOf(() => seqMul(16)), par: { nand: 1169, period: 48 },
     why: 'Software multiplication (Act 4) in hardware: one adder reused once per clock. Small; sixteen times as many cycles as an array, about 5.5 times the time (its clock is shorter).',

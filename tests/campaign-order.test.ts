@@ -121,3 +121,26 @@ describe('the moved side quests', () => {
     expect(cache.why).toContain(`tRP + tRCD + tCAS = ${DRAM16.tRP + DRAM16.tRCD + DRAM16.tCAS}`);
   });
 });
+
+describe('act 8 has a frame', () => {
+  it('the lesson\'s numbers are the levels\' and the library\'s', async () => {
+    const { PUZZLES, runPuzzle } = await import('../src/campaign/puzzles');
+    const { resolveComponent } = await import('../src/lib/resolve');
+    const { logicDepth } = await import('../src/sim/stats');
+    const { ACTS } = await import('../src/campaign/nodes');
+    const body = LESSONS.arith, par = (id: string) => nodeById(id)!.par!;
+    const sw = runPuzzle(PUZZLES.p_mul, PUZZLES.p_mul.ref).results.map((r) => r.steps);
+    expect(body).toContain(`a shift-and-add loop of ${Math.min(...sw)} to ${Math.max(...sw)} instructions per product`);
+    expect(body).toContain(`${16 + 2} cycles a product on ${sp(par('o_mulseq').nand!)} NANDs`); // seqMul(n): n + 2 cycles
+    const arr = resolveComponent('amul16')!;
+    expect(body).toContain(`16 × 16 is ${sp(stats(arr).nands)} NANDs and ${logicDepth(arr)} delays deep`);
+    expect(body).toContain(`the period goes from ${par('c_core3').period} to ${par('o_mcore').period}`);
+    expect(body).toContain(`runs ${(par('o_mcore').period! / par('c_core3').period!).toFixed(2)} times slower`);
+    expect(body).toContain(`normalize &amp; round (${sp(par('o_fpnorm').nand!)} NANDs)`);
+    expect(body).toContain(`the adder is ${sp(par('o_fpadd').nand!)} NANDs and the multiplier ${sp(par('o_fpmul').nand!)}`);
+    const n = nodeById('o_lesson')!;
+    expect([n.act, n.kind, n.optional, n.requires, n.body]).toEqual([8, 'lesson', true, ['c_core3'], 'arith']);
+    // the act's blurb promises what it holds: no fast adders (act 2), no cache (act 10), no microcode level
+    expect(ACTS.find((a) => a.num === 8)!.blurb).not.toMatch(/adder|cache|microcode/);
+  });
+});
