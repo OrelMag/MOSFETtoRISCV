@@ -145,6 +145,17 @@ function sanitizeHdl(x: unknown): ChipDoc['hdl'] {
   return compact({ module: x.module, src, of: src ? undefined : of, stale: x.stale === true ? true as const : undefined });
 }
 
+/** A truth-table chip's table (ttable.ts): 1–8 inputs and outputs, distinct pin names, a row string per output. */
+function sanitizeTable(x: unknown): ChipDoc['table'] {
+  if (!isObj(x) || !Array.isArray(x.ins) || !Array.isArray(x.outs) || !Array.isArray(x.rows)) return undefined;
+  const names = [...x.ins, ...x.outs];
+  if (!names.every((n) => str(n) && isIdent(n) && !n.includes('.')) || new Set(names).size !== names.length) return undefined;
+  const ins = x.ins as string[], outs = x.outs as string[];
+  if (ins.length < 1 || ins.length > 8 || outs.length < 1 || outs.length > 8 || x.rows.length !== outs.length) return undefined;
+  if (!x.rows.every((r) => str(r) && r.length === 1 << ins.length && !/[^01-]/.test(r))) return undefined;
+  return { ins: [...ins], outs: [...outs], rows: [...(x.rows as string[])], form: x.form === 'andor' ? 'andor' : 'nand' };
+}
+
 function sanitizePart(p: unknown): PartDoc | null {
   if (!isObj(p) || !str(p.id) || !isIdent(p.id)) return null;
   const ref = sanitizeRef(p.ref);
@@ -252,6 +263,7 @@ export function sanitizeChip(c: unknown): ChipDoc | null {
     cpu: sanitizeCpu(c.cpu),
     hz: num(c.hz) && c.hz > 0 ? c.hz : undefined,
     hdl: sanitizeHdl(c.hdl),
+    table: sanitizeTable(c.table),
     pins: uniquePins, parts, wires, labels,
     comments: comments.length ? comments : undefined,
   });

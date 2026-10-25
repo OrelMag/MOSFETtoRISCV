@@ -333,9 +333,9 @@ export class Editor {
     const doc = this.doc;
     const next = f(doc);
     if (next === doc) return;
-    // A chip drawn from Verilog: its body follows the text (name, colour, notes, face and comments stay editable).
+    // A chip drawn from Verilog or a truth table: its body follows the source (name, colour, notes, face and comments stay editable).
     if (isGenerated(this.ws, doc.id) && bodyKey(next) !== bodyKey(doc)) {
-      this.toast(`${doc.name} is drawn from Verilog: edit its text, or Detach it to draw on it`, 'err');
+      this.toast(`${doc.name} is drawn from ${doc.table ? 'a truth table: edit the table' : 'Verilog: edit its text'}, or Detach it to draw on it`, 'err');
       if (this.history.inTransaction) this.view.render(doc, this.defOf);
       return;
     }
@@ -688,6 +688,9 @@ export class Editor {
       this.tabs.append(tab);
     }
     if (this.level) return;
+    // Open… and New chip ▾ in one group that stays in view at the end of the tabs when they scroll (editor.css): with
+    // New chip alone sticky, many tabs slid Open… under it
+    const grp = h('span', { class: 'sb-new-grp' });
     const others = Object.values(ws.chips).filter((c) => !ws.open.includes(c.id));
     if (others.length) {
       const opt = (c: ChipDoc) => h('option', { value: c.id }, c.name);
@@ -695,16 +698,27 @@ export class Editor {
         h('option', { value: '' }, `Open… (${others.length})`),
         folderGroups(ws, (c) => !ws.open.includes(c.id)).flatMap((g) => (!g.chips.length ? [] : g.name === null ? g.chips.map(opt) : [h('optgroup', { label: g.name }, g.chips.map(opt))]))) as HTMLSelectElement;
       sel.addEventListener('change', () => sel.value && this.openChip(sel.value));
-      this.tabs.append(sel);
+      grp.append(sel);
     }
-    // New chip and its ▾ in one group that stays in view at the end of the tabs when they scroll (editor.css)
-    const grp = h('span', { class: 'sb-new-grp' }, h('button', { class: 'btn ghost sm sb-new', title: 'A new empty chip', onclick: () => this.newChip() }, icon('plus', 14), 'New chip'));
+    grp.append(h('button', { class: 'btn ghost sm sb-new', title: 'A new empty chip', onclick: () => this.newChip() }, icon('plus', 14), 'New chip'));
     if (newChipKinds.length) {
       const more: HTMLButtonElement = h('button', { class: 'btn ghost sm sb-new-more', title: 'Other kinds of new chip', 'aria-label': 'Other kinds of new chip', 'aria-haspopup': 'menu',
         onclick: () => this.newChipMenu(more) }, icon('chevD', 12));
       grp.append(more);
     }
     this.tabs.append(grp);
+    this.showActiveTab();
+  }
+
+  /** Scroll the open chip's tab into view, clear of the sticky Open… / New chip group (many tabs scroll). */
+  private showActiveTab(): void {
+    const t = this.tabs, on = t.querySelector<HTMLElement>('.sb-tab.on');
+    if (!on || t.scrollWidth <= t.clientWidth) return;
+    const tail = t.querySelector<HTMLElement>(':scope > .sb-new-grp')?.offsetWidth ?? 0;
+    const tr = t.getBoundingClientRect(), r = on.getBoundingClientRect();
+    const left = r.left - tr.left + t.scrollLeft, view = t.clientWidth - tail - 6;
+    if (left < t.scrollLeft) t.scrollLeft = left - 6;
+    else if (left + r.width > t.scrollLeft + view) t.scrollLeft = left + r.width - view;
   }
 
   /** New chip ▾: an empty chip or one of the registered kinds. */
@@ -798,7 +812,7 @@ export class Editor {
     let room = top.clientWidth - px(cs.paddingLeft) - px(cs.paddingRight);
     if (!matchMedia('(max-width: 1000px)').matches) {
       const gap = px(cs.columnGap);
-      const essential = [...this.tabs.children].filter((el) => el.matches('.sb-tab.on, .sb-open, .sb-new-grp, .sb-trail')) as HTMLElement[];
+      const essential = [...this.tabs.children].filter((el) => el.matches('.sb-tab.on, .sb-new-grp, .sb-trail')) as HTMLElement[];
       const tabsGap = px(getComputedStyle(this.tabs).columnGap);
       const tabsNeed = essential.reduce((s, el) => s + el.offsetWidth, 0) + tabsGap * Math.max(0, essential.length - 1);
       const others = [this.partsBtn, this.slots.top].filter((el) => el.offsetWidth > 0);
@@ -809,6 +823,7 @@ export class Editor {
     this.moreBtn.hidden = !this.shed.size;
     if (!this.shed.size) this.closeMore();
     else if (this.moreMenu) this.fillMore();
+    this.showActiveTab();
   }
 
   /** Where an action's own menu opens: its button, or More when it is in there. */

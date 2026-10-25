@@ -28,6 +28,38 @@ export function startFolded(canvasW: number, panelW: number): boolean {
   return canvasW - (panelW + 24) < FOLD_BESIDE_PX;
 }
 
+/** A scene's foldable panels stay open while the circuit keeps at least this share of the size it would get with
+ *  them all folded (chooseFolds): a CPU panel beside a wide datapath stays open, an I/O panel that would squeeze
+ *  the circuit into a corner of a laptop's stage starts folded. */
+export const KEEP_SCALE = 0.6;
+
+/**
+ * Which of `n` foldable panels start folded, as a bit mask (bit i: panel i folded). `scaleOf(mask)` is the circuit's
+ * scale with those folded (px per unit; null: a choice not allowed, e.g. a right panel leaving the circuit less
+ * than FOLD_BESIDE_PX), `fixed[i]` the learner's own choice for panel i (true folded, false open, null free). Of the
+ * allowed choices whose scale is at least KEEP_SCALE of the best one, the one keeping the most panels open; on a tie
+ * the larger circuit. With none allowed, every free panel folds.
+ */
+export function chooseFolds(n: number, scaleOf: (mask: number) => number | null, fixed: (boolean | null)[] = []): number {
+  const bits = (m: number) => { let c = 0; for (; m; m &= m - 1) c++; return c; };
+  let open = 0, shut = 0;
+  fixed.forEach((f, i) => { if (f === true) shut |= 1 << i; else if (f === false) open |= 1 << i; });
+  const masks: [number, number][] = [];
+  for (let m = 0; m < 1 << n; m++) {
+    if ((m & shut) !== shut || (m & open) !== 0) continue;
+    const s = scaleOf(m);
+    if (s !== null) masks.push([m, s]);
+  }
+  if (!masks.length) return ((1 << n) - 1) & ~open;
+  const best = Math.max(...masks.map(([, s]) => s));
+  let pick = masks[0];
+  for (const c of masks) {
+    if (c[1] < KEEP_SCALE * best - 1e-9) continue;
+    if (pick[1] < KEEP_SCALE * best - 1e-9 || bits(c[0]) < bits(pick[0]) || (bits(c[0]) === bits(pick[0]) && c[1] > pick[1] * (1 + 1e-9))) pick = c;
+  }
+  return pick[0];
+}
+
 /**
  * Where a drawing of `bw` × `bh` (any unit) shows largest on a `width` × `height` px host part of which floating
  * panels `cover` (each kept `gap` px clear): of the rectangles that touch no cover, the one giving the largest

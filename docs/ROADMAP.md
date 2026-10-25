@@ -463,9 +463,26 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
 - ⏳ Microcode painter: the multicycle CPU's microprogram (MC_MICRO) as a grid of control signals × microinstructions,
   painted like the encoding designer; each microword lights its datapath, the result is checked against MC_STATES;
   microcode for a new instruction, or a shorter sequence and fewer cycles
-- ⏳ Karnaugh map painter: 1s, 0s and don't-cares painted on a K-map or truth table, the minimal cover drawn as loops
-  (minimize()), the circuit opened as two-level gates or a PLA with its NAND count; the campaign's K-map drills answered
-  on it
+State machine and truth table builders (requested 2026-10-25; mockup approved: sandbox chips whose body is generated,
+like a Verilog chip, Detach to draw on it; in the campaign everywhere except the levels they would solve). A truth
+table covers any combinational block and a state machine any synchronous one in principle, but only small ones in
+practice (2^n rows, two-level logic, no asynchronous logic or second clock), so the third step is a state machine with
+a datapath (register transfers on real adders and registers), the textbook way a controller and its data meet.
+- ✅ 1. Truth-table chips (Karnaugh map painter): New chip ▾ Truth table, 1–8 inputs and outputs; cells cycled or typed
+  0 / 1 / – (don't care), the row the chip's inputs select lit; each output minimized (lib/sop.ts: Quine–McCluskey,
+  essential primes, exact search within a step budget, else greedy and labelled near-minimal), equal terms shared,
+  built as NAND–NAND or AND–OR and drawn by docFromDef; Karnaugh map with the cover's loops (wrap-around included)
+  for 2–4 inputs, equations, NANDs / depth / literals; every edit one undo step (editor/ttable.ts, tableui.ts)
+- ⏳ 1b. Then: PLA and ROM forms; paste a table / fill an output from an expression; the campaign's K-map drills
+  answered on it; a lock in the levels it solves
+- ⏳ 2. State machine → sequential circuit: a state diagram drawn as data (an `FsmSpec` with conditions as input
+  patterns: today's `when` is a function), synthesized into a chip: a state encoding (binary, Gray or one-hot, their
+  costs compared), a register of DFFs, the next-state and output logic through step 1 (unused codes as don't-cares, or
+  "go to reset"). Checked by reading the circuit back (fsmread.ts readFsm) against the spec; the built chip shows its
+  live diagram. Chapter 9's 101 detector and the campaign's `s_fsm` level as its first uses
+- ⏳ 3. State machine + datapath: states carry register transfers (`count := count + 1`, `acc := acc + x`) on library
+  registers, adders and muxes; the controller is step 2, the datapath its control signals (the multicycle CPU's
+  shape)
 - ⏳ Memory-map designer: address regions (RAM, ROM, screen, console, keys) dragged onto the address space, overlaps and
   gaps shown, the address decoder opened as a chip (the ISA decoder's match lines over address bits); chapter 37's bus
   and the sandbox computer's map

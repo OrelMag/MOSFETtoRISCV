@@ -48,7 +48,9 @@ from the code (chapter steps in both themes, each workbench family's default, ca
 level, sandbox and its examples seeded in localStorage) as a fresh load in parallel tabs (`--tabs n`), each in its own
 browser context; it fails on exceptions, console / browser errors, failed requests (`OPTIONAL`: layout/ and Google Fonts),
 "could not load" panels, editor error toasts / diagnostics, an empty main view, and horizontal overflow at 1280 px and on
-a 390 px phone (a few pages), and a sandbox toolbar label cut or scrolled out of view (also at 1440 and 1920 px). `--only <substring>`, `--headful`, `--dwell <ms>` (wait after settling, default 600).
+a 390 px phone (a few pages), and a sandbox toolbar label cut or scrolled out of view (also at 1440 and 1920 px), the open tab under Open… / New chip, and on every
+route a stage bar's button past its edge, the open level's name cut on a one-row stage bar (view/stage.ts fitBar: labels off, then
+buttons into More, then a row for the hierarchy) or the run row cut (fitControls: icons only, then wrapped within its row). `--only <substring>`, `--headful`, `--dwell <ms>` (wait after settling, default 600).
 
 CI (`.github/workflows/deploy.yml`) runs tests beside build + smoke (one job) and deploys `dist/` to GitHub Pages
 on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-export.ts <design>`, one parallel job per design (multi, sys, sys-m, core-m: the system core with ports on tests/syscorebench.ts, the layout flow's design)
@@ -217,6 +219,8 @@ src/lib/       the component library (registered in `registry` via define())
                  palette's Timer: wraps every period edges, irq held until ack)
   storage.ts     romArray(preset), minimize() (Quine–McCluskey), pla(preset), fifo(k, w), stack(k, w), cam(k, w),
                  regfileMP(k, w, reads, writes)
+  sop.ts         two-level minimization with don't-cares: primes (Quine–McCluskey), cover (essential primes, then an
+                 exact search within EXACT_BUDGET steps, else greedy: `exact` says which), minimumCover (exact: drills)
   isadecoder.ts  isaDecoder(doc): a Custom ISA table's decoder in gates (not registered: built per table, opened by the
                  Design tab through remixDef): complement rails where a pattern needs a 0, one AND per instruction over its
                  fixed bits, the NOT of each more specific overlapping pattern, valid = OR; matchNames; its NANDs equal
@@ -742,6 +746,12 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  volatile change), the canvas banner (Detach, Hide text), the 'hdl' props section (top, gates, modules),
                  registerFileImporter for .v / .sv and Yosys JSON, registerNewChipKind (New chip ▾ Verilog chip);
                  examplehdl.ts: Examples ▸ The same adder in Verilog
+  ttable.ts      truth-table chips (ChipDoc.table: 1–8 one-bit inputs / outputs, a row string per output of 0 / 1 / -, the
+                 first input most significant, form nand | andor): tableLogic (lib/sop.ts cover per output, equal terms
+                 shared), tableDef (Builder: inverters, terms, output gates; terms joined by labels past 8), drawTable /
+                 setTable (docFromDef; input values kept by name), newTableChip, detachTable, pure table edits; generated
+                 like a Verilog chip (hdl.ts isGenerated); tableui.ts: plugin, the table pane in slots.left (cells cycled or
+                 typed, the live row, Karnaugh map with loops for 2–4 inputs, equations, cost), banner, New chip ▾ Truth table
   examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, console, screen, the computer, shared bus,
                  wired-AND / OR, RV16 Pong: campaign/bench.ts pongChip), addExample: new chip (and an example's
                  `subchips`, fresh ids), opened. The computer
@@ -1173,6 +1183,11 @@ with the CPU panel (listing, registers, memory, golden-model lock-step) and opti
 pipeline diagram and the static-timing panel; `ooo`: the out-of-order core on the cycle engine with the Out of order panel
 (widgets/ooopanel.ts; the two panels share the selected instruction through an OooLink). Panels observe clock edges through
 `stage.edgeHooks` (before / after every rising edge), so they stay correct during fast runs.
+Scene panels dock right (`data-dock="right"`: the stage folds them on a title click) or bottom-left (`left`: they fold
+themselves, unless `data-fold` hands that to the stage; never both, or a click folds and unfolds). `data-fold="narrow"`
+panels may start folded (Stage.autoFold): every fold choice is laid out and measured, and as many stay open as leave the
+circuit KEEP_SCALE (60 %) of its size with them all folded (camera.ts chooseFolds); the learner's own fold per side holds.
+The I/O panel takes two columns where the dock is wide (a container query on `.panel-dock`).
 The pipeline's golden model steps when a valid instruction is in W (`retiring()`); a CPU that retires several a cycle
 gives their count on `retire` and the golden model steps that many times before the state is compared (`retireCount()`:
 the CPU panel, the sandbox's CpuMonitor, fuzz replay, benchmark lanes and energy runs).
