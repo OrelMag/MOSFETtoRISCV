@@ -664,7 +664,7 @@ export const NODES: CampaignNode[] = [
   {
     id: 'k_lanes', act: 9, title: 'Four lanes', kind: 'build', optional: true, requires: ['k_lesson'], base: BUILDK.k_lanes, par: { nand: 4596, depth: 55 },
     why: 'The datapath, four times: four ALUs fed by one set of control signals and one immediate. Every lane computes the same operation on its own operands.',
-    tips: ['Your ALU and the 49-NAND bus mux are unlocked: one mux and one ALU per lane.', 'nz: OR the 16 bits of each a<i>i</i>, then merge the four bits.'],
+    tips: ['Your ALU and the 49-NAND bus mux are unlocked: one mux and one ALU per lane.', 'nz: OR the 16 bits of each a<sub>i</sub>, then merge the four bits.'],
     codex: ['lane'], unlocks: ['rv16_lanes4'], chapters: [{ chapter: 'lanes', label: 'Lanes' }],
   },
   {
