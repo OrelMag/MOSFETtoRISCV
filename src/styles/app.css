@@ -1128,7 +1128,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .panel-dock > .mem-panel { position: relative; inset: auto; pointer-events: auto; flex: 0 1 auto; min-height: 38px; max-width: 100%; max-height: 100%; }
 .panel-dock.row > .mem-panel { flex-shrink: 0; }
 
-/* A phone: a panel marked data-phone="flow" (chapters 32–33's screen and drawing pad, chapter 25's Out of order) over a
+/* A phone: a panel marked data-phone="flow" (chapters 33–34's screen and drawing pad, chapter 26's Out of order) over a
    390 px canvas hid the whole circuit, or was cut to a few rows. While one is unfolded the panels leave the overlay for the
    canvas's flow, full width under a strip of circuit (the fit keeps the circuit clear of them: Stage.covers), and the
    stage grows to hold them; folded, they float over the canvas as on a desktop. */
