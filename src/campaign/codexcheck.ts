@@ -8,7 +8,8 @@ import { CHECK1 } from './codexcheck1';
 import { CHECK2 } from './codexcheck2';
 import { CHECK3 } from './codexcheck3';
 import { CHECK4 } from './codexcheck4';
+import { CHECK5 } from './codexcheck5';
 
-export const CHECKS: Record<string, Quiz[]> = { ...CHECK0, ...CHECK1, ...CHECK2, ...CHECK3, ...CHECK4 };
+export const CHECKS: Record<string, Quiz[]> = { ...CHECK0, ...CHECK1, ...CHECK2, ...CHECK3, ...CHECK4, ...CHECK5 };
 
 export const checkOf = (id: string): Quiz[] => CHECKS[id] ?? [];

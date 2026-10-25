@@ -8,16 +8,16 @@ import '../../styles/campaign.css';
 // The level screen's chips, bars and diagram frame, shared by the full codex entry.
 import '../../styles/level.css';
 import { BLOCKS, blockNodes } from '../../campaign/anatomy';
-import { CODEX, CODEX_KINDS, codexById } from '../../campaign/codex';
-import { type Datasheet, datasheetOf, datasheets } from '../../campaign/datasheet';
+import { CODEX, CODEX_KINDS, codexById, type CodexEntry } from '../../campaign/codex';
+import { searchCodex } from '../../campaign/codexsearch';
 import type { CodexMore } from '../../campaign/codexmore';
-import { CODEX_ORDER, plainSummary } from '../../campaign/codexlinks';
+import { CODEX_ACTS, CODEX_BY_KIND, CODEX_FROM, CODEX_ORDER } from '../../campaign/codexlinks';
 import type { Quiz } from '../../chapters/types';
-import { codexEntryEl } from '../../campaign/ui/codexentry';
+import { codexEntryEl, entrySheets, lockedEntryEl } from '../../campaign/ui/codexentry';
 import { ancestors, dependents, isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { LESSONS } from '../../campaign/lessons';
 import { levelChallenge, levelChipId, startCandidates, startFrom } from '../../campaign/levels';
-import { ACTS, actName, NODES, nodeById } from '../../campaign/nodes';
+import { ACTS, actName, actTitle, NODES, nodeById } from '../../campaign/nodes';
 import { exportCampaign, importCampaign, progress } from '../../campaign/progress';
 import type { CampaignNode } from '../../campaign/types';
 import { PUZZLES } from '../../campaign/puzzles';
@@ -36,6 +36,9 @@ import type { Page } from './chapter';
 import { tipsOf } from '../../campaign/nudges';
 import { closedAct } from '../../campaign/thread';
 import { actEndEl, nextAfter, reachEl, type ThreadCtx, whyStackEl } from '../../campaign/ui/whystack';
+
+/** localStorage: the codex list's order (act or kind). */
+const CX_VIEW_KEY = 'mosfet2riscv:codex-view';
 
 const html = (tag: 'div' | 'p' | 'span', cls: string, content: string) => {
   const el = h(tag, { class: cls });
@@ -73,6 +76,10 @@ export class CampaignPage implements Page {
   /** The codex list's search text and kind filter, kept across entries. */
   private cxQuery = '';
   private cxKind = '';
+  /** The codex list by act (the reading order) or by kind, as the reader last chose. */
+  private cxView: 'act' | 'kind' = (() => { try { return localStorage.getItem(CX_VIEW_KEY) === 'kind' ? 'kind' : 'act'; } catch { return 'act'; } })();
+  /** Locked entries the reader asked to see anyway (this visit). */
+  private cxPeek = new Set<string>();
   /** A narrow screen: the codex list folded under the open entry (a button opens it). */
   private cxListOpen = false;
   /** Until when a map redraw (its columns found) should bring the selected level into view again. */
@@ -160,8 +167,14 @@ export class CampaignPage implements Page {
     }
   }
 
-  /** A codex entry opened: its top in view (on a narrow screen it may have been opened from far down the list). */
+  /** A codex entry opened: its top in view (on a narrow screen it may have been opened from far down the list), and its row in the sticky list's view. */
   private revealEntry(): void {
+    const list = this.main.querySelector<HTMLElement>('.cp-codex-list');
+    const row = list?.querySelector<HTMLElement>('a.on');
+    if (list && row && list.scrollHeight > list.clientHeight) {
+      const r = row.getBoundingClientRect(), v = list.getBoundingClientRect();
+      if (r.top < v.top + 40 || r.bottom > v.bottom - 8) list.scrollTop += r.top - v.top - list.clientHeight / 3;
+    }
     const top = this.main.querySelector<HTMLElement>('.cp-codex-entry')?.getBoundingClientRect().top;
     if (top !== undefined && (top < 0 || top > innerHeight * 0.6)) this.main.querySelector<HTMLElement>('.cp-codex-entry')!.scrollIntoView({ block: 'start' });
   }
@@ -352,7 +365,8 @@ export class CampaignPage implements Page {
         n.codex.map((c) => {
           const e = codexById(c);
           if (!e) return null;
-          return unlocked.has(c) ? h('a', { class: 'cp-chip', href: `#/campaign/codex/${c}` }, e.title) : h('span', { class: 'cp-chip locked', title: 'Unlocks when you finish this level' }, e.title);
+          return unlocked.has(c) ? h('a', { class: 'cp-chip', href: `#/campaign/codex/${c}` }, e.title)
+            : h('a', { class: 'cp-chip locked', href: `#/campaign/codex/${c}`, title: 'Unlocks when you finish this level: its summary and questions now' }, icon('lock', 11), e.title);
         })));
     }
     if (n.chapters?.length) {
@@ -486,38 +500,67 @@ export class CampaignPage implements Page {
   private codexView(sel: string | undefined): HTMLElement {
     const p = progress();
     const unlocked = p.codexUnlocked();
-    const foundIn = (id: string) => NODES.filter((n) => n.codex.includes(id));
-    // Search (titles first, then summaries) and a kind filter, applied in place and kept across entries.
+    // Search (names and aliases first, then summaries: codexsearch.ts, as the Ctrl K box) and a kind filter, applied in
+    // place and kept across entries. While a query is typed the groups give way to one ranked list.
     const search = h('input', { class: 'cx-search', type: 'search', placeholder: `Search ${CODEX.length} entries`, 'aria-label': 'Search the codex', value: this.cxQuery });
-    const kinds = h('div', { class: 'cx-kinds' }, [{ id: '', title: 'All' }, ...CODEX_KINDS].map((k) =>
-      h('button', { class: `cx-kind${this.cxKind === k.id ? ' on' : ''}`, 'data-k': k.id, onclick: () => { this.cxKind = k.id; filter(); } }, k.title)));
+    const kinds = h('div', { class: 'cx-kinds', role: 'group', 'aria-label': 'Kinds' }, [{ id: '', title: 'All' }, ...CODEX_KINDS].map((k) =>
+      h('button', { class: `cx-kind${this.cxKind === k.id ? ' on' : ''}`, 'data-k': k.id, 'aria-pressed': String(this.cxKind === k.id), onclick: () => { this.cxKind = k.id; filter(); } }, k.title)));
+    const views = h('div', { class: 'cx-views', role: 'group', 'aria-label': 'Order' }, (['act', 'kind'] as const).map((v) =>
+      h('button', { class: `cx-kind${this.cxView === v ? ' on' : ''}`, 'aria-pressed': String(this.cxView === v), onclick: () => {
+        if (this.cxView === v) return;
+        this.cxView = v;
+        try { localStorage.setItem(CX_VIEW_KEY, v); } catch { /* not kept */ }
+        this.redrawCodex(sel);
+        this.main.querySelector<HTMLElement>('.cx-views .on')?.focus();
+      } }, v === 'act' ? 'By act' : 'By kind')));
     const empty = h('p', { class: 'sub', hidden: true }, 'No entry matches.');
-    const groups = CODEX_KINDS.map((k) => {
-      const items = CODEX_ORDER.filter((e) => e.kind === k.id).map((e) => {
-        const li = h('li', { 'data-id': e.id, 'data-k': e.kind, 'data-t': e.title.toLowerCase(), 'data-s': plainSummary(e).toLowerCase() }, unlocked.has(e.id)
-          ? h('a', { href: `#/campaign/codex/${e.id}`, class: e.id === sel ? 'on' : '' }, e.title)
-          : h('a', { href: `#/campaign/codex/${e.id}`, class: `locked${e.id === sel ? ' on' : ''}`, title: 'Not discovered yet' }, icon('flag', 11), e.title));
-        return li;
-      });
-      return { head: h('h4', null, k.title), ul: h('ul', null, items), items };
+    const item = (e: CodexEntry) => h('li', { 'data-id': e.id, 'data-k': e.kind }, h('a', {
+      href: `#/campaign/codex/${e.id}`, class: `${unlocked.has(e.id) ? '' : 'locked'}${e.id === sel ? ' on' : ''}`,
+      ...(unlocked.has(e.id) ? {} : { title: 'Not discovered yet' }), ...(e.id === sel ? { 'aria-current': 'page' } : {}),
+    }, unlocked.has(e.id) ? null : icon('lock', 11), e.title));
+    // The groups: by act (the reading order, Further entries under their act) or by kind.
+    const groups = this.cxView === 'act'
+      ? CODEX_ACTS.map((g) => ({
+        head: g.act === undefined ? 'Elsewhere' : `${actName(g.act)} · ${actTitle(g.act)}`,
+        parts: [{ sub: '', ul: h('ul', null, g.main.map(item)) }, ...(g.further.length ? [{ sub: 'Further', ul: h('ul', null, g.further.map(item)) }] : [])],
+      }))
+      : CODEX_KINDS.map((k) => ({ head: k.title, parts: [{ sub: '', ul: h('ul', null, CODEX_BY_KIND.filter((e) => e.kind === k.id).map(item)) }] }));
+    const sections = groups.map((g) => {
+      const parts = g.parts.map((x) => ({ ...x, h: x.sub ? h('h5', { title: x.sub === 'Further' ? 'Unlocked by this act\'s levels, which do not need them: read beyond the task' : '' }, x.sub) : null }));
+      return { el: h('section', { class: 'cx-grp' }, h('h4', null, g.head), parts.flatMap((x) => [x.h, x.ul])), parts };
     });
+    const ranked = h('ul', { class: 'cx-ranked', hidden: true });
     const filter = () => {
-      const q = this.cxQuery.trim().toLowerCase();
+      const q = this.cxQuery.trim();
       let shown = 0;
-      for (const g of groups) {
-        let n = 0;
-        for (const li of g.items) {
-          const ok = (!this.cxKind || li.dataset.k === this.cxKind) && (!q || li.dataset.t!.includes(q) || li.dataset.s!.includes(q));
-          // the open entry stays listed (marked) when the search kept from before does not match it
-          li.hidden = !ok && li.dataset.id !== sel;
-          if (!li.hidden) n++;
-          if (ok) shown++;
+      ranked.hidden = !q;
+      if (q) {
+        const hits = searchCodex(q).filter((e) => !this.cxKind || e.kind === this.cxKind);
+        ranked.replaceChildren(...hits.map(item));
+        shown = hits.length;
+        for (const g of sections) g.el.hidden = true;
+      } else {
+        for (const g of sections) {
+          let any = 0;
+          for (const x of g.parts) {
+            let n = 0;
+            for (const li of x.ul.children as HTMLCollectionOf<HTMLElement>) {
+              li.hidden = !!this.cxKind && li.dataset.k !== this.cxKind && li.dataset.id !== sel;
+              if (!li.hidden) n++;
+            }
+            x.ul.hidden = n === 0;
+            if (x.h) x.h.hidden = n === 0;
+            any += n;
+          }
+          g.el.hidden = any === 0;
+          shown += any;
         }
-        g.head.hidden = g.ul.hidden = n === 0;
       }
       empty.hidden = shown > 0;
-      empty.textContent = sel ? 'No other entry matches.' : 'No entry matches.';
-      for (const b of kinds.children) b.classList.toggle('on', (b as HTMLElement).dataset.k === this.cxKind);
+      for (const b of kinds.children) {
+        b.classList.toggle('on', (b as HTMLElement).dataset.k === this.cxKind);
+        b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.k === this.cxKind));
+      }
     };
     search.addEventListener('input', () => { this.cxQuery = search.value; filter(); });
     // A narrow screen stacks the list and the entry: with an entry open, the entry comes first and the list folds
@@ -527,50 +570,81 @@ export class CampaignPage implements Page {
       list.classList.toggle('open', this.cxListOpen);
       browse.setAttribute('aria-expanded', String(this.cxListOpen));
     } }, icon('book', 14), `All ${CODEX.length} entries`, icon('chevD', 12));
-    const list = h('nav', { class: `cp-codex-list${this.cxListOpen ? ' open' : ''}` }, sel ? browse : null,
+    const list = h('nav', { class: `cp-codex-list${this.cxListOpen ? ' open' : ''}`, 'aria-label': 'Codex entries' }, sel ? browse : null,
       h('div', { class: 'cx-listbody' },
         h('p', { class: 'sub' }, `${[...unlocked].filter((u) => codexById(u)).length} of ${CODEX.length} entries discovered`),
-        search, kinds, empty, groups.flatMap((g) => [g.head, g.ul])));
+        search, h('div', { class: 'cx-filters' }, views, kinds), empty, ranked, sections.map((g) => g.el)));
     filter();
     const e = sel ? codexById(sel) : undefined;
     let detail: HTMLElement;
     if (!e) {
-      detail = h('div', { class: 'cp-codex-entry' }, h('h2', null, 'Codex'),
-        h('p', null, 'Every component you build, every law and tool you use, collected as you go. Entries unlock when you finish (or skip) the level that teaches them; Unlock all reveals them all.'));
-    } else if (!unlocked.has(e.id)) {
-      const where = foundIn(e.id);
-      // The one-line summary is no secret (the hover cards show it): the rest unlocks with the level.
-      detail = h('div', { class: 'cp-codex-entry locked' }, h('h2', null, e.title), html('div', 'cx-sum', e.body),
-        h('p', null, 'The full entry unlocks when you pass ', where.map((n, i) => [i ? (i === where.length - 1 ? ' or ' : ', ') : '', h('a', { href: `#/campaign/n/${n.id}` }, n.title)]), '.'));
+      detail = this.codexLanding(unlocked);
     } else if (this.moreOf === undefined) {
-      // The fuller texts are a chunk of their own: load them, then draw the entry.
+      // The fuller texts (and the questions) are a chunk of their own: load them, then draw the entry.
       detail = h('div', { class: 'cp-codex-entry' }, h('h2', null, e.title), html('div', 'cp-codex-body', e.body));
       import('../../campaign/codexmore').then((m) => {
         this.moreOf = m.moreOf;
         this.checkOf = m.checkOf;
-        if (location.hash === `#/campaign/codex/${e.id}`) this.main.replaceChildren(this.codexView(e.id));
+        if (location.hash !== `#/campaign/codex/${e.id}`) return;
+        this.main.replaceChildren(this.codexView(e.id));
+        requestAnimationFrame(() => this.revealEntry());
       }, () => { this.moreOf = () => undefined; });
+    } else if (!unlocked.has(e.id) && !this.cxPeek.has(e.id)) {
+      detail = lockedEntryEl(e, this.moreOf(e.id), this.checkOf(e.id), () => {
+        this.cxPeek.add(e.id);
+        this.redrawCodex(e.id);
+      });
     } else {
       const more = this.moreOf(e.id);
-      const sheet = more?.lib ? datasheetOf(more.lib) : undefined;
-      const sheets = sheet ? [sheetEl(sheet)] : e.kind === 'component' ? datasheets(e.id).map(sheetEl) : [];
-      detail = codexEntryEl(e, more, p.view, sheets, this.checkOf(e.id));
+      detail = codexEntryEl(e, more, p.view, entrySheets(e, more), this.checkOf(e.id));
+      if (!unlocked.has(e.id)) detail.querySelector('.cx-head h2')?.append(h('span', { class: 'cp-badge cx-lockbadge' }, icon('lock', 11), 'not discovered: shown anyway'));
     }
+    // Come from a level's Codex tab: the way back to it (its chip and undo history were saved, the level reopens as left).
+    let from: string | null = null;
+    try { from = sessionStorage.getItem(CODEX_FROM); } catch { /* none */ }
+    const fromNode = from ? nodeById(from) : undefined;
+    if (fromNode) detail.prepend(h('a', { class: 'lv-chip acc cx-from', href: levelChallenge(fromNode) && !fromNode.soon ? `#/campaign/play/${fromNode.id}` : `#/campaign/n/${fromNode.id}` }, icon('chevL', 12), `Back to ${fromNode.title}`));
     return h('div', { class: `cp-codex${sel ? ' has-sel' : ''}` }, list, detail);
   }
-}
 
-/** A library part's datasheet: cost, pins, and a small part's truth table. */
-function sheetEl(d: Datasheet): HTMLElement {
-  const fmt = (v: number, w: number) => (w > 4 ? `0x${v.toString(16)}` : w > 1 ? v.toString(2).padStart(w, '0') : String(v));
-  const ins = d.pins.filter((p) => p.dir !== 'out').length;
-  const widths = [...d.pins.filter((p) => p.dir !== 'out'), ...d.pins.filter((p) => p.dir === 'out')].map((p) => p.width);
-  return h('div', { class: 'cp-sheet' },
-    h('h4', null, 'Datasheet: ', h('a', { href: `#/workbench/${d.id}`, title: 'Open it in the workbench' }, d.name)),
-    h('p', { class: 'sub' }, `${d.nand.toLocaleString('en')} NAND · ${d.transistors.toLocaleString('en')} transistors · ${d.depth !== null ? `depth ${d.depth}` : 'sequential'}`),
-    h('div', { class: 'cp-sheet-cols' },
-      h('table', null, h('tr', null, h('th', null, 'pin'), h('th', null, 'dir'), h('th', null, 'bits')),
-        d.pins.map((p) => h('tr', null, h('td', null, p.name), h('td', null, p.dir), h('td', null, String(p.width))))),
-      d.table ? h('table', null, h('tr', null, d.table.head.map((x, i) => h('th', i >= ins ? { class: 'out' } : null, x))),
-        d.table.rows.map((r) => h('tr', null, r.map((v, i) => h('td', i >= ins ? { class: 'out' } : null, fmt(v, widths[i])))))) : null));
+  /** The codex view drawn again in place (an order switched, an entry shown anyway), the list where it was scrolled. */
+  private redrawCodex(sel: string | undefined): void {
+    const top = this.main.querySelector<HTMLElement>('.cp-codex-list')?.scrollTop ?? 0;
+    this.main.replaceChildren(this.codexView(sel));
+    const list = this.main.querySelector<HTMLElement>('.cp-codex-list');
+    if (list) list.scrollTop = top;
+  }
+
+  /** The codex with no entry open: what was found lately, what the next level adds, each act's count, where to start. */
+  private codexLanding(unlocked: Set<string>): HTMLElement {
+    const p = progress();
+    const link = (e: CodexEntry) => h('a', { class: `cp-chip${unlocked.has(e.id) ? '' : ' locked'}`, href: `#/campaign/codex/${e.id}` }, unlocked.has(e.id) ? null : icon('lock', 11), e.title);
+    // Recently discovered: the entries of the levels solved last.
+    const solved = NODES.map((n) => ({ n, at: p.get(n.id)?.at ?? 0 })).filter((x) => x.at > 0).sort((a, b) => b.at - a.at);
+    const recent = [...new Set(solved.flatMap((x) => x.n.codex))].map((id) => codexById(id)).filter((x): x is CodexEntry => !!x && unlocked.has(x.id)).slice(0, 8);
+    const next = nextAvailable(p.view, p.unlockAll);
+    const coming = (next?.codex ?? []).map((id) => codexById(id)).filter((x): x is CodexEntry => !!x && !unlocked.has(x.id));
+    const firstNew = CODEX_ORDER.find((x) => !unlocked.has(x.id));
+    return h('div', { class: 'cp-codex-entry cx-landing' },
+      h('h2', null, 'Codex'),
+      h('p', null, `Every component you build, every law and tool you use, collected as you go: ${CODEX.length} entries in the order the map teaches them. An entry unlocks when you finish (or skip) the level that teaches it; one not discovered yet still shows its summary and questions.`),
+      h('p', { class: 'cx-landing-go' },
+        h('a', { class: 'btn primary', href: `#/campaign/codex/${CODEX_ORDER[0].id}` }, `Start reading: ${CODEX_ORDER[0].title}`, icon('chevR', 14)),
+        firstNew && firstNew !== CODEX_ORDER[0] ? h('a', { class: 'btn ghost', href: `#/campaign/codex/${firstNew.id}`, title: 'The first entry in reading order you have not discovered' }, `First undiscovered: ${firstNew.title}`) : null),
+      recent.length ? h('section', null, h('h4', null, 'Recently discovered'), h('div', null, recent.map(link))) : null,
+      next ? h('section', null, h('h4', null, 'Next to discover'),
+        h('p', { class: 'sub' }, 'With ', h('a', { href: levelChallenge(next) && !next.soon ? `#/campaign/play/${next.id}` : `#/campaign/n/${next.id}` }, next.title), coming.length ? ':' : ': nothing new for the codex.'),
+        coming.length ? h('div', null, coming.map(link)) : null) : null,
+      h('section', null, h('h4', null, 'By act'),
+        h('table', { class: 'cx-acts' }, CODEX_ACTS.map((g) => {
+          const all = [...g.main, ...g.further];
+          const have = all.filter((x) => unlocked.has(x.id)).length;
+          const first = all.find((x) => !unlocked.has(x.id)) ?? all[0];
+          return h('tr', null,
+            h('td', null, h('a', { href: `#/campaign/codex/${first.id}` }, g.act === undefined ? 'Elsewhere' : `${actName(g.act)} · ${actTitle(g.act)}`)),
+            h('td', { class: 'n' }, `${have} / ${all.length}`),
+            h('td', { class: 'bar' }, h('span', { class: 'track' }, h('i', { style: `width:${(100 * have / all.length).toFixed(0)}%` }))));
+        }))));
+  }
+
 }

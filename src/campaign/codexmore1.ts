@@ -1055,7 +1055,7 @@ N alone would answer "not less"</pre>`,
   },
 
   clockgating: {
-    idea: `The tempting way to make a register load only when en = 1 is to AND the clock with en. It breaks two assumptions of synchronous design. Glitches: en comes from logic clocked by the same rising edge, so it changes while clk is high, and when it goes 0 → 1 then, clk · en rises mid-cycle and the register captures a value that has not settled. Skew: the gated clock arrives a gate later than everyone else's (2 NAND delays for an AND here), shifting this register's edge against the registers it exchanges data with and eating the hold margin.<br>The safe form leaves the clock alone and recirculates the data: a 2:1 mux in front of each flip-flop selects d when en = 1 and q when en = 0. It costs 4 NANDs per bit (a D flip-flop with enable is 15 NANDs against 11) and a mux delay on the d path. Low-power chips do gate clocks, with an integrated clock-gating cell: a latch transparent while clk is low captures en, so the AND sees an enable that cannot change while clk is high.`,
+    idea: `The tempting way to make a register load only when en = 1 is to AND the clock with en. It breaks two assumptions of synchronous design. Glitches: en comes from logic clocked by the same rising edge, so it changes while clk is high, and when it goes 0 → 1 then, clk · en rises mid-cycle and the register captures a value that has not settled. Skew: the gated clock arrives a gate later than everyone else's (2 NAND delays for an AND here), shifting this register's edge against the registers it exchanges data with and eating the hold margin.<br>The safe form leaves the clock alone and recirculates the data: a 2:1 mux in front of each flip-flop selects d when en = 1 and q when en = 0. It costs 4 NANDs per bit (a D flip-flop with enable is 15 NANDs against 11) and a mux delay on the d path. Low-power chips do gate clocks, with an integrated clock-gating cell: a latch transparent while clk is low captures en, so the AND sees an enable that cannot change while clk is high.<br>Act P's loader is that exception built by hand: it holds the 4-bit CPU back with clk AND run, and run comes from a flip-flop clocked on the falling edge, so it changes only while clk is low and the AND passes whole pulses or none. The rule is about the enable: an AND is safe exactly when its enable cannot change while clk is high.`,
     example: {
       title: 'A 16-bit register two ways',
       body: `<pre>mux enable:   16 × (flip-flop 11 + mux 4) = 240 NANDs   (reg16)
@@ -1419,7 +1419,11 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
   },
   rowbuffer: {
     idea: 'A DRAM array is read a row at a time: the word line joins every cell of the row to its bit line, and every column\'s sense amplifier latches its bit. Those amplifiers now hold the row, thousands of bits of it in a real chip: the <b>row buffer</b>. Column accesses read or write words of it at the speed of the column path (tCAS), while the row stays open.<br>Another row of the same bank needs the bit lines back at VDD/2 first: a precharge (PRE, tRP), then an activate (ACT, tRCD). Each bank has its own amplifiers, so a chip with 2 to 16 banks can keep that many rows open, and requests that alternate between banks never conflict. Which address bits pick the bank is the controller\'s choice: the low bits above the column put neighbouring rows in different banks.',
-    mistakes: ['Treating a row hit as free: tCAS still applies; the row buffer saves tRP and tRCD, not the column access.'],
+    example: { title: 'Three reads in one bank (m_ctrl\'s chip)', body: '<pre>cycle  0  ACT row 5        the bank was closed\ncycle  4  RD word 0        tRCD = 4\ncycle  8  data; RD word 1  tCAS = 4: the first read took 8\ncycle 12  data; PRE        a row hit: 4 (tRAS = 9 has passed)\ncycle 16  ACT row 9        tRP = 4\ncycle 20  RD word 0        tRCD\ncycle 24  data             a row conflict: 12</pre>Had row 9 been in bank 1, no PRE: ACT at 12, RD at 16, data at 20, 8 cycles, and row 5 still open in bank 0 for the next hit.' },
+    mistakes: [
+      'Treating a row hit as free: tCAS still applies; the row buffer saves tRP and tRCD, not the column access.',
+      'Mapping consecutive rows into one bank: a loop that walks two arrays then conflicts on every access, where rows in different banks would both stay open.',
+    ],
     lib: 'rv16_bank',
     chapters: [{ chapter: 'dram', step: 4, label: 'Rows, columns, banks' }, { chapter: 'memctrl', step: 4, label: 'Banks and address mapping' }],
   },
@@ -1442,7 +1446,11 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
   },
   pagepolicy: {
     idea: 'After an access the controller can leave the row open (<b>open page</b>) or close it at once (<b>closed page</b>). Open, the next access to the same row is a row hit (tCAS); an access to another row of that bank pays a precharge on top (tRP + tRCD + tCAS). Closed, every access finds the bank precharged: always tRCD + tCAS, never the conflict, never the hit.<br>Which wins depends on locality. Instruction fetches, array walks and cache-line fills stay in a row: open page. Many independent streams, or random accesses to a large table, rarely hit: closed page, or an adaptive policy that closes a row after it has been idle for a while. Chapter 36 measures both on the benchmarks; m_ctrl\'s traces include runs along a row, so open page is par.',
-    mistakes: ['Closing the row before tRAS has passed: closed page still has to wait for the restore.'],
+    example: { title: 'Rows 3, 3, 3, 7 in one bank, one read at a time', body: '<pre>open page    ACT 0  RD 4  data 8, RD 8 → 12, RD 12 → 16\n             PRE 16  ACT 20  RD 24  data 28          28 cycles\nclosed page  ACT 0  RD 4  data 8  PRE 9 (tRAS)\n             ACT 13  RD 17  data 21  PRE 22\n             ACT 26  RD 30  data 34  PRE 35\n             ACT 39  RD 43  data 47                   47 cycles</pre>Closed page wins on gaps, not on a busy stream: a read of row 7 arriving at cycle 30, after one of row 3 at 0, finds the bank already precharged (PRE at 9) and takes 8 cycles, where open page pays PRE, ACT, RD: 12.' },
+    mistakes: [
+      'Closing the row before tRAS has passed: closed page still has to wait for the restore.',
+      'Judging the policy on back-to-back conflicts: with one request at a time both pay ACT, tRAS and tRP (13 cycles an access here); the difference is the hits open page keeps and the idle time closed page precharges in.',
+    ],
     lib: 'rv16_dramctrl',
     chapters: [{ chapter: 'memctrl', step: 1, label: 'Open page or closed page' }],
   },
@@ -1455,6 +1463,7 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
   },
   arbitration: {
     idea: 'When two masters want the bus in the same cycle, one waits. <b>Fixed priority</b> (master 0 always first) is a gate or two, and lets a busy master 0 starve master 1 forever. <b>Round robin</b> remembers who was served last and, when both ask, grants the other: each master waits at most one transfer of the other, at the cost of one flip-flop. With more masters it generalizes to a rotating priority (the library\'s arbiterN, chapter 27\'s dual-core).<br>The grant must also be <b>held</b>: a transfer that has started (valid up, ready not yet) keeps its master even if the round-robin rule would now pick the other, or the waiting slave would see its request change. m_bus does it with two more flip-flops: a transfer in progress, and whose.',
+    example: { title: 'Both masters on the slow slave (m_bus\'s gates)', body: '<pre>cycle  asking   held round robin       re-arbitrated every cycle\n  1    m1       m1, slave 0: done      m1, slave 0: done\n  2    m1       m1, slave 1 waits      m1, slave 1 waits\n  3    m0 m1    m1 waits               m0: the address changes\n  4    m0 m1    m1 done                m0 done, on m1\'s wait states\n  5    m0 m1    m0                     m1 starts again\n  6    m0 m1    m0                     m1\n  7    m0 m1    m0 done                m1 done</pre>Slave 1 has 2 wait states. Without the hold, round robin hands m0 the bus in cycle 3 because m1 was served last, and the slave, already counting, answers m0 after 2 cycles. Fixed priority does the same in cycle 3 and then serves m0 for as long as it asks.' },
     mistakes: ['Re-arbitrating every cycle: the grant can move in the middle of a transfer to a slow slave.', 'Updating "served last" when a master is granted rather than when its transfer completes: under wait states the other master is then skipped.'],
     lib: 'rv16_bus',
     chapters: [{ chapter: 'bus', step: 2, label: 'Two masters' }, { chapter: 'multicore', step: 2, label: 'The arbiter' }],
@@ -1474,7 +1483,11 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
   },
   wearlevel: {
     idea: 'Each program and erase pushes charge through the floating gate\'s oxide and damages it a little; after some thousands (TLC) to a hundred thousand (SLC) erases a block no longer holds its charge reliably. A file system that rewrites one sector in place would destroy that sector\'s block in an afternoon.<br>An FTL that writes as a log already spreads the erases of hot data: every write goes to the head, and the head walks through all blocks. <b>Static</b> wear levelling goes further: blocks holding cold data (written once, never again) would otherwise never be erased, so the FTL moves that data now and then to put those blocks back into rotation. m_flash\'s log walks the four blocks in turn, so its erases spread evenly by construction.',
-    mistakes: ['Picking the victim block by "fewest live pages" alone (greedy): it is fastest, but the same blocks keep getting collected; real FTLs weigh the age and the erase count too.'],
+    example: { title: 'One hot page, 100 rewrites', body: '<pre>8 blocks of 4 pages, 16 logical pages written once,\nthen logical page 0 rewritten 100 times\n\nin place          block 0 erased 100 times, 4 programs a write\nlog (chapter 37)  erases per block 0 0 0 0 8 8 7 0,\n                  write amplification 1.00</pre>The log spreads the hot page over the free blocks, but blocks 0–3 hold the 16 cold pages and are never erased: that is what static levelling fixes. On m_flash\'s chip an in-place rewrite also costs time: an erase (tE = 20 cycles) and four programs (tP = 6), 44 cycles against one program, 6.' },
+    mistakes: [
+      'Picking the victim block by "fewest live pages" alone (greedy): it is fastest, but the same blocks keep getting collected; real FTLs weigh the age and the erase count too.',
+      'Counting only the host\'s writes: garbage collection\'s copies wear the flash too (write amplification), and a nearly full drive copies more.',
+    ],
     lib: 'rv16_flashstore',
     chapters: [{ chapter: 'flash', step: 4, label: 'Garbage, wear and bad blocks' }],
   },

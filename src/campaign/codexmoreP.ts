@@ -73,8 +73,13 @@ export const MOREP: Record<string, CodexMore> = {
     chapters: [{ chapter: 'cards', step: 2, label: 'Eighty columns' }, { chapter: 'cards', step: 3, label: 'A program on cards' }],
   },
   loader: {
-    idea: 'A stored-program computer starts with nothing in its memory. Before ROM chips, something had to put the first program there: switches on the front panel, a punched tape, a deck of cards. The <b>loader</b> is the small fixed machine that does it: a counter that addresses memory, a write for each word the reader offers, a signal that takes the card so the next one comes, and a switch that hands memory to the processor once the hopper is empty.<br>Done in hardware it is a few counters and gates; done in software it is a boot loader, a handful of instructions in ROM that read the rest. The Z3 read its program off punched 35 mm film as it ran, the IBM 701 loaded one card into memory and ran it, and that card loaded the rest.',
-    mistakes: ['Writing every clock edge instead of only when a card waits: the reader has a feed delay, and the gaps would be written too.', 'Letting the processor run while memory is still filling: it executes whatever is there.'],
+    idea: 'A stored-program computer starts with nothing in its memory. Before ROM chips, something had to put the first program there: switches on the front panel, a punched tape, a deck of cards. The <b>loader</b> is the small fixed machine that does it: a counter that addresses memory, a write for each word the reader offers, a signal that takes the card so the next one comes, and a switch that hands memory to the processor once the hopper is empty.<br>Done in hardware it is a few counters and gates; done in software it is a boot loader, a handful of instructions in ROM that read the rest. The Z3 read its program off punched 35 mm film as it ran, the IBM 701 loaded one card into memory and ran it, and that card loaded the rest.<br>h_loader holds the CPU back by its clock, clk AND run: the one safe clock gate (Never gate the clock). run is taken on the falling edge, so it changes only while clk is low, and the AND passes whole pulses or none.',
+    example: { title: 'h_loader against par', body: '<pre>a card every 4 edges: 3 to feed it, 1 to take it\n23-card deck  1 + 22 × 4 = 89 cycles until run = 1\n24-card deck  1 + 23 × 4 = 93\nboth         182: par</pre>The reader sets the pace; a loader that writes in the edge that takes the card and raises run in the half cycle after the last one adds nothing to it.' },
+    mistakes: [
+      'Writing every clock edge instead of only when a card waits: the reader has a feed delay, and the gaps would be written too.',
+      'Letting the processor run while memory is still filling: it executes whatever is there.',
+      'Taking run on the rising edge: it rises while clk is high, and clk AND run hands the CPU half a pulse before its first word is through the address mux.',
+    ],
     chapters: [{ chapter: 'cards', step: 4, label: 'A machine that reads them' }],
   },
 };

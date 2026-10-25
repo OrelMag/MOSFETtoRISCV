@@ -8,7 +8,7 @@
 import { CODEX, type CodexEntry } from './codex';
 
 /** Other names an entry goes by in the chapters' prose. */
-const ALIASES: Record<string, string[]> = {
+export const ALIASES: Record<string, string[]> = {
   cpu: ['processor'], fde: ['fetch, decode, execute'], sop: ['sum of products'], nandnand: ['NAND–NAND', 'NAND-NAND'],
   kmap: ['K-map', 'Karnaugh map'], fanin: ['fan-in', 'fan-out'], comparator: ['equality comparator'],
   hex: ['hexadecimal'], twos: ['two’s complement'], signext: ['sign extension', 'sign-extend', 'sign-extended'],
@@ -38,6 +38,8 @@ const ALIASES: Record<string, string[]> = {
   amdahl: ['Amdahl’s law', 'Amdahl'], vm: ['page table', 'page fault'], ecc: ['Hamming code', 'SEC-DED'],
   stdcell: ['standard-cell', 'cell library'], metastability: ['metastable'], carrysave: ['carry-save', '3:2 compressor'],
   booth: ['Booth'], zbuffer: ['z-buffer', 'depth test'], rowhammer: ['Rowhammer'],
+  clock: ['clock period'], reset: ['power-on state', 'synchronous reset', 'asynchronous reset'], fpadder: ['floating-point adder'],
+  tristate: ['tri-state', 'tri-state buffer', 'tri-state driver', 'tristate'], bin2dec: ['double dabble'],
 };
 
 /** Entries never marked automatically: their names are everyday words in the prose. */
