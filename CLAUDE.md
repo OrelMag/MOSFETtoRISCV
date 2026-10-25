@@ -72,7 +72,7 @@ into dist/layout/ (widgets/chiplayout.ts).
 - Vite + TypeScript (strict, `verbatimModuleSyntax`: use `import type` for types). No UI
   framework: plain DOM + SVG with small helpers in `src/ui/dom.ts`. Keep the bundle small.
 - Hash routing (`#/c/<chapter>/<step>[/<inst>…]`, `#/workbench/<componentId>[/<inst>…]` — the optional segments are the
-  part opened on the stage, one history entry per level, `~` for the top when the scene opens deeper (ui/drillpath.ts) — `#/workbench/stats`, `#/workbench/bench`, `#/sandbox/<chipId>`, `#/campaign[/n/<node> | /play/<node> | /intro | /codex[/<id>]]`,
+  part opened on the stage, one history entry per level, `~` for the top when the scene opens deeper (ui/drillpath.ts) — `#/workbench/stats`, `#/workbench/bench`, `#/workbench/lab`, `#/sandbox/<chipId>`, `#/campaign[/n/<node> | /play/<node> | /intro | /codex[/<id>]]`,
   `#/sandbox/s/<payload>` for a share link) so the site works on
   any static host or sub-path.
 - Theme: CSS custom properties in `src/styles/`; `data-theme="light|dark"` on `<html>`, or
@@ -443,7 +443,8 @@ src/lib/       the component library (registered in `registry` via define())
 src/bench/     results.json (scripts/benchmarks.ts --write, checked in; each run's switched C from a GateSim rerun:
                tests/verify/bench.ts benchEnergy), summary.ts (DOM-free: times, energies, geometric means over
                the four RV32I programs, the cost / speed front, each CPU's family and chapter): the workbench's Benchmarks
-               tab (ui/pages/benchmarks.ts, its own chunk)
+               tab (ui/pages/benchmarks.ts, its own chunk); ooprice.ts: priceOf(shape) (an out-of-order shape's NANDs and period
+               from the gates, only where gateShape: the core's 2-wide shape with measured window sizes; else null: timed, unpriced)
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
                instructions; assemble(src, custom); c.* mnemonics and `.option rvc` / `norvc`: sizes in bytes settle by
                relaxation (a form grows to 32 bits when its target is out of reach), parcels packed little-endian into
@@ -462,8 +463,10 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                sources / rd / call / ret, traceOf (the golden model's run), dataflow (the limit: each instruction when its operands
                are ready; criticalPath)), ooomodel.ts (OooModel / OOO_CORE: the out-of-order core's rules cycle by cycle, the
                header is the spec the gate-level core follows; CycleInfo per cycle: committed / issued (Uop.port) / dispatched /
-               fetched / flushed; wrong-path instructions run until the flush; the golden model steps at fetch on the correct path;
-               tests/ooomodel.test.ts), scoreboard.ts (CDC 6600), oooprograms.ts (the chapter's loops), simt.ts
+               fetched / flushed / lost; wrong-path instructions run until the flush; the golden model steps at fetch on the correct path;
+               beyond the core (the lab): fetch / commit widths, ports as unit lists (portsOf: the default; configProblems), a
+               pipelined divider; stats.slots: every commit slot committed or charged to what the oldest instruction waits for
+               (SLOT_CAUSES; from a flush until a refetched instruction commits: mispredict); tests/ooomodel.test.ts), scoreboard.ts (CDC 6600), oooprograms.ts (the chapter's loops), simt.ts
                (SimtISS: a warp of n lanes, one PC, leader, mask, split / join stack, one cycle per active lane for memory),
                simtprograms.ts (the lane kernels, each with its result computed in TypeScript), warps.ts (WarpISS: W SimtISS warps over one
                memory, wspawn, bar (one barrier), shared memory at 0x1000 (simt.ts LaneISS), mul only with multipliers; steps the warp the
@@ -529,7 +532,10 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                cExplorer: a parcel's bits next to its expansion's, wired from cRecipes; RVC_COSTS, pinned by tests/rvc.test.ts;
                cpuScene({ c }) runs the program with .option rvc); ooo.ts: chapter 26's explorers
                (dataflow schedule, in-order against out-of-order timelines, the scoreboard, the reorder-buffer explorer, the
-               speculation table; measuredWidget: the four CPUs from results.json and width × window on the model; styles/ooo.css); bus.ts: chapter 38's panels
+               speculation table; measuredWidget: the four CPUs from results.json and width × window on the model; styles/ooo.css); ooolab.ts:
+               the out-of-order lab (chapter 26's "Your own core" and the workbench's Lab tab, ui/pages/ooolab.ts): knobs (LAB_PRESETS,
+               fullShape), the benchmark set / a program / the learner's assembly or Python, CPI against OOO_CORE, the commit slots,
+               a timeline with each cycle's lost-slot cause, kept shapes, the price from bench/ooprice.ts; tests/ooolab.test.ts; bus.ts: chapter 38's panels
                (busBenchScene: reads / writes / a DMA copy on the bus bench, a per-cycle trace of handshakes and grants;
                busComputerScene: the computer booting from flash, console, LEDs, memory map); flash.ts: chapter 37's flash panel
                (flashScene: the NOR / NAND array read, programmed pulse by pulse with verify, erased; thresholds per cell and
