@@ -50,7 +50,7 @@ const FIB = ROM_SAMPLES.find((s) => s.id === 'fib')!.src;
 const WALK = '# one hex word per entry; @n moves to word n\n01 02 04 08 10 20 40 80';
 
 registerPaletteGroup({
-  id: 'memory', title: 'Memory', order: 55,
+  id: 'memory', title: 'Memory', order: 55, collapsed: true,
   items: () => [
     { id: 'prog_rom', name: 'Program ROM (RV32)', title: '64 words of 32 bits, byte addressed like a PC, holding a RISC-V program (Edit program… in the properties)',
       place: { part: { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src: FIB } } } },

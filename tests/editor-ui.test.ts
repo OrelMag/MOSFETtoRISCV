@@ -276,8 +276,19 @@ describe('palette', () => {
     expect(toggleFavorite(['lib/nand', 'io/clock'], 'lib/nand')).toEqual(['io/clock']);
   });
 
+  it('Basics leads with what a first circuit needs; the rare I/O parts sit in a section of their own', () => {
+    const basics = paletteGroups()[0];
+    expect(basics.id).toBe('basics');
+    expect(visibleItems(basics, ctx, true).map((i) => i.name)).toEqual(['Input', 'Output', 'Clock', 'Input bus', 'Output bus', 'NAND', 'Constant 0', 'Constant 1', 'LED', 'Pointer', 'Split 8 → 1×8', 'Merge 1×8 → 8']);
+    const io = visibleItems(paletteGroups().find((g) => g.id === 'io')!, ctx, false);
+    expect(io.filter((i) => i.section === 'Special I/O').map((i) => i.id)).toEqual(['key', 'keyboard', 'pzin', 'pzout', 'cards']);
+    // a section is one run of items: the special ones come last
+    expect(io.findIndex((i) => i.section)).toBe(io.length - 5);
+    for (const id of ['sources', 'fets', 'switch', 'devices']) expect(paletteGroups().find((g) => g.id === id)?.collapsed, id).toBe(true);
+  });
+
   it('later phases register groups', () => {
-    registerPaletteGroup({ id: 'test', title: 'Test', order: 5, items: () => [{ id: 't', name: 'T', place: { pointer: true } }] });
+    registerPaletteGroup({ id: 'test', title: 'Test', order: 1, items: () => [{ id: 't', name: 'T', place: { pointer: true } }] });
     expect(paletteGroups()[0].id).toBe('test');
     expect(visibleItems(paletteGroups()[0], ctx, false, 'zz')).toEqual([]);
   });

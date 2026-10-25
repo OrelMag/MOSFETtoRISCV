@@ -20,8 +20,9 @@ import { levelChallenge, nodeOfChip } from '../campaign/levels';
 import { actName, actTitle } from '../campaign/nodes';
 import { progress } from '../campaign/progress';
 import type { CampaignNode } from '../campaign/types';
-import { libraryItems } from '../lib/catalog';
+import { CATS, libraryItems } from '../lib/catalog';
 import { resolveComponent } from '../lib/resolve';
+import { stats } from '../sim/stats';
 import { h, icon } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { CHALLENGES } from './challengeset';
@@ -66,19 +67,35 @@ function deviceItems(r: CheckResult, lim: Limits, item: (v: number, unit: string
 /** The campaign rule of the chip being edited (set by the strip), listed by the palette group. */
 let activeRule: LibRule | null = null;
 
+/** A part's NAND count as a short tag ('9 NAND', '1.2k NAND'); memoized: the palette re-lists on every render. */
+const nandTags = new Map<string, string | undefined>();
+function nandTag(id: string): string | undefined {
+  if (!nandTags.has(id)) {
+    const d = resolveComponent(id);
+    const n = d ? stats(d).nands : 0;
+    nandTags.set(id, n ? `${n < 1000 ? n : `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`} NAND` : undefined);
+  }
+  return nandTags.get(id);
+}
+
+/** Every unlocked part in a section by its library category (catalog order), each tagged with what it costs. */
 function unlockedItems(r: LibRule): PaletteItem[] {
-  const out = new Map<string, PaletteItem>();
+  const out = new Map<string, PaletteItem & { rank: number }>();
+  const title = (cat: string) => CATS.find(([c]) => c === cat)?.[1] ?? 'Other parts';
+  const rank = (cat: string) => { const i = CATS.findIndex(([c]) => c === cat); return i < 0 ? CATS.length : i; };
+  const item = (id: string, name: string, cat: string) => ({ id, name, section: title(cat), tag: nandTag(id), rank: rank(cat), place: { part: { lib: id } } });
   for (const c of libraryItems()) {
     for (const it of c.items) {
-      if (it.id !== 'nand' && libAllowed(r, it.id)) out.set(it.id, { id: it.id, name: it.name, section: c.title, place: { part: { lib: it.id } } });
+      if (it.id !== 'nand' && libAllowed(r, it.id)) out.set(it.id, item(it.id, it.name, c.cat));
     }
   }
   for (const id of r.lib) {
     if (id.endsWith('*') || id === 'nand' || out.has(id)) continue;
     const d = resolveComponent(id);
-    if (d) out.set(id, { id, name: d.name, place: { part: { lib: id } } });
+    if (d) out.set(id, item(id, d.name, d.category));
   }
-  return [...out.values()];
+  // stable: catalog order within a category, then the rule's
+  return [...out.values()].sort((a, b) => a.rank - b.rank).map(({ rank: _, ...it }) => it);
 }
 
 registerPaletteGroup({

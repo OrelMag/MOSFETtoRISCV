@@ -24,7 +24,7 @@ import { History } from './history';
 import { UserLibrary } from './library';
 import { chipDeps, type ChipDoc, type DefOf, type PartRef, type PinValue, type Workspace } from './model';
 import type { Sel } from './ops';
-import { PalettePanel, toggleFavorite, type PaletteItem } from './palette';
+import { BASICS_ID, PalettePanel, toggleFavorite, type PaletteItem } from './palette';
 import { isError, keyLabel, partDef } from './parts';
 import { MAIN_PROJECT, projectKey, readProjects, touchProject } from './projects';
 import { PropsPanel } from './props';
@@ -205,9 +205,9 @@ export class Editor {
       onclick: () => this.actionsEl.querySelector<HTMLElement>(`[data-action=${id}]`)?.click() }, icon(ic, 14), label);
     this.emptyEl = h('div', { class: 'sb-empty-chip', hidden: true },
       h('h3', null, 'An empty chip'),
-      h('p', null, coarsePointer()
-        ? 'Tap a part in the Parts list, then tap the canvas to place it: an Input, a NAND and an Output make a first circuit. Wire them by dragging from pin to pin.'
-        : 'Drag a part from the palette: an Input, a NAND and an Output make a first circuit. Wire them by dragging from pin to pin.'),
+      coarsePointer()
+        ? h('p', null, 'Tap ', h('b', null, 'Input'), ', ', h('b', null, 'NAND'), ' and ', h('b', null, 'Output'), ' under ', h('i', null, 'Basics'), ' in the Parts list, then tap the canvas to place each; drag from a pin’s dot to another pin to wire.')
+        : h('p', null, 'Drag ', h('b', null, 'Input'), ', ', h('b', null, 'NAND'), ' and ', h('b', null, 'Output'), ' from ', h('i', null, 'Basics'), ' on the left; drag from a pin’s dot to another pin to wire.'),
       h('div', { class: 'row' }, act('examples', 'Examples', 'book'), act('challenges', 'Challenges', 'flag'), act('puzzles', 'Puzzles', 'puzzle')));
     // Touch (tools.ts): one finger wires, moves and draws a band; two fingers pan and zoom (camera.ts).
     this.canvas.append(overlay, this.emptyEl, this.toastEl, this.tipEl,
@@ -236,7 +236,8 @@ export class Editor {
       locked: !!this.level,
       newFolder: this.level ? undefined : () => void this.newFolder(),
       renameFolder: this.level ? undefined : (from, to) => this.renameFolder(from, to),
-      hidden: (g) => !!this.level?.hideGroups?.includes(g),
+      // a level lists its own parts first; Basics would repeat them (and NAND where the rule has none)
+      hidden: (g) => !!this.level && (g === BASICS_ID || !!this.level.hideGroups?.includes(g)),
       first: this.level ? this.level.first ?? ['unlocked', 'lib', 'wiring', 'const', 'mine'] : undefined,
       closed: this.level ? ['io', 'disp'] : undefined,
     });
