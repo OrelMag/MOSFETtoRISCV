@@ -116,6 +116,10 @@ export const NUDGES: Record<string, string> = {
   k_tile: 'Visit tiles rather than pixels, and only enter a tile that passes its test.',
   k_raster: 'Everything the walk needs can be worked out once per triangle, on hardware the walk already has.',
   k_frame: 'The new unit is just another device at a few addresses, and the core must not race it.',
+  p_saxpy: 'Every lane runs the same program: what makes lane 2 work on different elements from lane 0?',
+  p_reduce: 'The many-to-one step at the end is the only part that cannot use every lane: keep it short, and let only the lanes it needs take part.',
+  p_hist: 'Two threads must never write the same word before the end: give each its own, and decide when everyone may read the others\' words.',
+  p_spin: 'Count what a frame costs before writing it: one part of it touches every word of the screen.',
   // act 10: memory in depth
   m_sense: 'A small change on a large line must be compared against something that started exactly where it did.',
   m_bank: 'Requests and refresh compete for the same rows: decide who goes first, and when an open row is worth keeping.',
@@ -123,6 +127,7 @@ export const NUDGES: Record<string, string> = {
   m_bus: 'Decide who owns the wires, and make sure nobody loses them in the middle of a transfer.',
   m_dma: 'It is a loop of a read and a write, run by hardware, that has to know when it is done without being told twice.',
   m_flash: 'You can never write in place: write somewhere new each time, remember where, and win the space back before it runs out.',
+  p_boot: 'The copy runs on its own: the question is what the processor does while it waits.',
 };
 
 /** A level's tips in the order they are revealed: its nudge first, then its own tips. */
