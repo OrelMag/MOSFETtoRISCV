@@ -70,14 +70,14 @@ export const BUILD9: Record<string, () => BuildChallenge> = {
     id: 'o_mcore', title: 'Multiply in the core', level: 'cpu', allowed: 'nand',
     brief: `Core III plus the MD opcode's multiplies: <b>mul</b> (low half), <b>mulh</b> (high half, both signed), <b>mulhsu</b> (a signed, b unsigned), <b>mulhu</b> (both unsigned), one per cycle. A 16 × 16 unsigned array multiplier is given; the high half of a signed product is the unsigned one minus b when a &lt; 0 (and minus a when b &lt; 0). ${CORE_NOTE} Divides are not tested here.`,
     ports: CORE_PINS,
-    check: coreCheck({ tests: () => mdTests('mul'), budget: { cpi: 1, extra: 2 }, m: true }, `${mdTests('mul').length} programs: every multiply on edge values, random code with multiplies, and Core III's own tests.`),
+    check: coreCheck({ rv16i: true, tests: () => mdTests('mul'), budget: { cpi: 1, extra: 2 }, m: true }, `${mdTests('mul').length} programs: every multiply on edge values, random code with multiplies, and Core III's own tests.`),
     answer: refOf('o_mcore', () => rv16Core(true, false, 'mul'), 'Multiply core', () => [[MUL16, 'MD multiplier']]),
   }),
   o_dcore: () => ({
     id: 'o_dcore', title: 'Divide in the core', level: 'cpu', allowed: 'nand',
     brief: `Add <b>div</b>, <b>divu</b>, <b>rem</b>, <b>remu</b>. The iterative divider is given: start it, hold the PC (and write nothing) until done, then write the result. Signed: divide |a| by |b|, then the quotient takes the sign a XOR b and the remainder the sign of a. RISC-V's rules: x / 0 = −1 (all ones), x rem 0 = x; −32768 / −1 = −32768, remainder 0. ${CORE_NOTE}`,
     ports: CORE_PINS,
-    check: coreCheck({ tests: () => mdTests('all'), budget: { cpi: 20, extra: 20 }, m: true }, `${mdTests('all').length} programs: every divide on edge values (by zero, overflow, mixed signs), a digit loop, random code with multiplies and divides.`),
+    check: coreCheck({ rv16i: true, tests: () => mdTests('all'), budget: { cpi: 20, extra: 20 }, m: true }, `${mdTests('all').length} programs: every divide on edge values (by zero, overflow, mixed signs), a digit loop, random code with multiplies and divides.`),
     answer: refOf('o_dcore', () => rv16Core(true, false, 'div'), 'Divide core', () => [[DIV16, 'MD divider']]),
   }),
   o_cache: () => ({
@@ -94,14 +94,14 @@ export const BUILD9: Record<string, () => BuildChallenge> = {
     id: 'o_mc', title: 'Multicycle CPU', level: 'cpu', allowed: 'nand',
     brief: `All of RV16I again, but each instruction over several short cycles run by a state machine: <b>F</b> loads an instruction register, <b>E</b> computes into an ALU register, <b>M</b> (loads and stores) uses memory, <b>W</b> writes the register file and the PC. Keep the PC on the instruction until W. ${CORE_NOTE} Graded on NANDs, clock period and cycles: compare period × cycles with Core III.`,
     ports: CORE_PINS,
-    check: coreCheck({ tests: () => coreTests(3), budget: { cpi: 5, extra: 4 } }, `${coreTests(3).length} programs, as Core III, within 5 cycles per instruction.`),
+    check: coreCheck({ rv16i: true, tests: () => coreTests(3), budget: { cpi: 5, extra: 4 } }, `${coreTests(3).length} programs, as Core III, within 5 cycles per instruction.`),
     answer: refOf('o_mc', () => RV16_MULTI, 'Multicycle core'),
   }),
   o_bpred: () => ({
     id: 'o_bpred', title: 'Branch prediction', level: 'cpu', allowed: 'nand',
     brief: 'Pipeline IV loses two cycles on every taken branch or jump. Guess in F instead: decode the fetched word, and when it is a jal or a backward branch (a loop), fetch from pc + imm at once. E then checks the guess and redirects only when it was wrong (to the target, or back to pc + 1). Same pins and bench as the pipelines; graded on cycles first.',
     ports: CORE_PINS,
-    check: coreCheck({ tests: () => predictTests(), budget: { cpi: 3, extra: 8 } }, `${predictTests().length} programs: nested loops, a copy loop with calls, a sort, then Pipeline IV's tests.`),
+    check: coreCheck({ rv16i: true, tests: () => predictTests(), budget: { cpi: 3, extra: 8 } }, `${predictTests().length} programs: nested loops, a copy loop with calls, a sort, then Pipeline IV's tests.`),
     answer: refOf('o_bpred', () => rv16Pipe({ fwd: true, stall: true, flush: true, predict: true }), 'Predicting pipeline'),
   }),
 };

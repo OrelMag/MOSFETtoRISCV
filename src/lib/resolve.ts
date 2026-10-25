@@ -7,7 +7,7 @@ import { addSub, andN, busMux2, decoder, equal, incrementer, muxTree, rca } from
 import { registry } from './define';
 import { ram } from './memory';
 import { BANK_K, bigRam, ramBank } from './bigmem';
-import { alu, bitwise, isZero, orN, shifter, zext } from './alu';
+import { alu, bitwise, constWord, isZero, orN, shifter, zext } from './alu';
 import { singleCycleCpu } from './cpu';
 import { addSubFast, brentKung, fanout, koggeStone, sklansky } from './fastadd';
 import { csrUnit, sysDecode } from './system';
@@ -47,6 +47,8 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^mux2tree(\d+)$/, (m) => muxTree(1, +m[1])],
   [/^mux(\d+)x(\d+)(?:_p(\d+))?$/, (m) => muxTree(log2(+m[1]), +m[2], m[3] ? +m[3] : 2)],
   [/^reg(\d+)$/, (m) => register(+m[1])],
+  // a constant word (constWord's id: const<w>_<hex>), placed by id by generated benches (campaign/bench.ts: I/O addresses)
+  [/^const(\d+)_([0-9a-f]+)$/, (m) => constWord(+m[1], parseInt(m[2], 16))],
   [/^counter(\d+)$/, (m) => counter(+m[1])],
   // past 64 words a RAM is the large one (lib/bigmem.ts): a lookup whose banks open down to gates
   [/^ram(\d+)x(\d+)$/, (m) => (log2(+m[1]) > BANK_K ? bigRam : ram)(log2(+m[1]), +m[2])],

@@ -46,7 +46,7 @@ const PIPE_BRIEF = (what: string) => `${what} Same pins as the single-cycle core
 
 const pipeLevel = (id: string, title: string, stage: 0 | 1 | 2 | 3, o: Rv16PipeOptions, cpi: number, brief: string, what: string) => (): BuildChallenge => ({
   id, title, level: 'cpu', allowed: 'nand', brief: PIPE_BRIEF(brief), ports: CORE_PINS,
-  check: coreCheck({ tests: () => pipeTests(stage), budget: { cpi, extra: 8 } }, `${pipeTests(stage).length} programs: ${what}`),
+  check: coreCheck({ tests: () => pipeTests(stage), budget: { cpi, extra: 8 }, ...(stage === 3 ? { rv16i: true } : {}) }, `${pipeTests(stage).length} programs: ${what}`),
   answer: refOf(id, () => rv16Pipe(o), title),
 });
 
