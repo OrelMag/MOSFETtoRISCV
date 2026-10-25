@@ -124,7 +124,11 @@ with five instructions in flight.</p>
 has not written back yet. <b>Forwarding</b> takes the value from the E/M or M/W register instead.
 A load's value only exists after M, so a dependent instruction right behind it must <b>stall</b> one
 cycle. A <b>control hazard</b>: by the time a branch is resolved in E, two younger instructions were
-fetched from the wrong path: <b>flush</b> them. CPI rises above 1, and the shorter period has to pay for it: in RV16's plain pipeline it only just does (4% faster than the single-cycle core).</p>`,
+fetched from the wrong path: <b>flush</b> them. CPI rises above 1, and the shorter period has to pay for it.</p>
+<p>In RV16 it pays only once E is short too. E holds the forwarding muxes and then the ALU, the branch
+comparator and next PC side by side: with ripple adders that is 78 delays, and the pipeline is 4% faster
+than Core III but slower than Core IV. With Kogge–Stone adders in E (the ALU, the comparator's less-than,
+next PC) its period falls to 56, and it beats Core IV by 11%, for 10 102 NANDs against 4 938.</p>`,
 
   traps: `
 <p>Programs make mistakes (an illegal instruction), ask for help (<code>ecall</code>), and the world

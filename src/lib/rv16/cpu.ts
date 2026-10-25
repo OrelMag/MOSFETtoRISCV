@@ -12,7 +12,7 @@ import { define, merger, splitter } from '../define';
 import { AND, MUX2, NOT, OR, XOR } from '../gates';
 import { orN } from '../wide';
 import { TIE0 } from '../transistors';
-import { ADD16, choose4, CMP16, EQ16, INC16, MUX16, PC16, RF8, RV16_ALU16, RV16_ALU16KS, RV16_DREG16 } from './logic';
+import { ADD16, choose4, CMP16, cmpWith, EQ16, INC16, MUX16, PC16, RF8, RV16_ALU16, RV16_ALU16KS, RV16_DREG16 } from './logic';
 import { DIV16, MUL16 } from './md';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
@@ -142,20 +142,24 @@ export const CTL16: ComponentDef = (() => {
   });
 })();
 
-/** Branch decision: cond = op[1:0]: 00 eq, 01 ne, 10 lt, 11 ge (bit 0 inverts). */
-export const BRANCH16: ComponentDef = (() => {
+const branches = new Map<boolean, ComponentDef>();
+
+/** Branch decision: cond = op[1:0]: 00 eq, 01 ne, 10 lt, 11 ge (bit 0 inverts). fast: a Kogge–Stone less-than. */
+export function branch16(fast: boolean): ComponentDef {
+  const known = branches.get(fast);
+  if (known) return known;
   const b = new Builder(8, 14, 6);
   b.pins('a', 'b', 'cond');
   const c = b.op(splitter([1, 1], 4), ['cond']);
   const eq = b.op(EQ16, ['a', 'b'], 'a = b');
-  const lt = b.op(CMP16, ['a', 'b'], 'a < b');
+  const lt = b.op(fast ? cmpWith(koggeStone(16), 'rv16_cmp16ks', 'Less-than (16-bit, signed and unsigned, Kogge–Stone)') : CMP16, ['a', 'b'], 'a < b');
   b.next();
   const pick = b.op1(MUX2, [`${eq}.eq`, `${lt}.lt`, `${c}.o1`], 'eq or lt');
   b.next();
   b.wire(b.op1(XOR, [pick, `${c}.o0`], 'invert?'), 'take');
   const R = b.right;
-  return define({
-    id: 'rv16_branch', name: 'Branch comparator (RV16)', category: 'cpu',
+  const d = define({
+    id: fast ? 'rv16_branch_ks' : 'rv16_branch', name: fast ? 'Branch comparator (RV16, Kogge–Stone)' : 'Branch comparator (RV16)', category: 'cpu',
     summary: 'take = beq: a = b, bne: a ≠ b, blt: a < b (signed), bge: a ≥ b. Bit 1 of the condition picks equality or less-than, bit 0 inverts.',
     ports: [bus('a', 16, 'in'), bus('b', 16, 'in'), bus('cond', 2, 'in'), bit('take', 'out')],
     symbol: { kind: 'box', label: 'BRANCH' },
@@ -166,7 +170,11 @@ export const BRANCH16: ComponentDef = (() => {
     },
     netlist: () => ({ pins: { ...pinsAt(['a', 'b', 'cond'], 0), take: [R, 8] }, instances: b.instances, nets: b.nets() }),
   });
-})();
+  branches.set(fast, d);
+  return d;
+}
+
+export const BRANCH16 = branch16(false);
 
 /** Next PC: pc + 1, or pc + imm (taken branch, jal), or rs1 + imm (jalr). fast: Kogge–Stone adders. */
 function nextPc(fast: boolean): ComponentDef {

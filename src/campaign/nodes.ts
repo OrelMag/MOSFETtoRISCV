@@ -280,8 +280,8 @@ export const NODES: CampaignNode[] = [
     tips: ['Compute everything in parallel, select one result with a mux tree.', 'Share the one adder between add, sub and the comparisons.'],
     codex: ['alu'], unlocks: ['rv16_alu16'], anatomy: ['alu'], chapters: [{ chapter: 'alu', label: 'The ALU' }], base: BUILD1.a_alu16, par: { nand: 1055, depth: 64 } },
   {
-    id: 'o_fastadd', act: 2, title: 'Fast adders', kind: 'build', optional: true, requires: ['a_add16'],
-    why: 'The ripple adder\'s carry chain is the CPU\'s critical path. Computing carries with a prefix tree takes log2(n) levels: more gates, a faster clock.',
+    id: 'o_fastadd', act: 2, title: 'Fast adders', kind: 'build', requires: ['a_add16'],
+    why: 'The ripple adder\'s carry chain will be the CPU\'s critical path (Core IV, at the end of Act 5, comes back for it). Computing carries with a prefix tree takes log2(n) levels: more gates, a faster clock.',
     tips: ['Generate g = a·b, propagate p = a ⊕ b; (g, p) pairs combine associatively.', 'Kogge–Stone: log2(16) = 4 levels of combining.'],
     codex: ['cla', 'prefix', 'carryselect'], unlocks: ['ks16', 'cla4', 'rv16_alu16ks', 'rv16_nextpc_ks'], chapters: [{ chapter: 'fastadd', label: 'Faster adders' }], base: BUILD1.o_fastadd, par: { nand: 362, depth: 14 }, gives: ['gp', 'graycell', 'blackcell'] },
 
@@ -458,16 +458,16 @@ export const NODES: CampaignNode[] = [
     codex: ['mmio', 'harvard'], anatomy: ['mmio'],
   },
   {
-    id: 'c_fast', act: 5, title: 'A faster core', kind: 'core', optional: true, requires: ['c_core3', 'o_fastadd'], base: BUILD5.c_fast, par: { period: 76, cycles: 1236 },
-    why: 'Same instructions, shorter clock period: the critical path runs through the adders. Static timing finds it; fast adders shorten it.',
-    tips: ['The Timing panel shows the critical path through your core.', 'Swap the ripple adders on that path for the unlocked Kogge–Stone ALU and adders.'],
+    id: 'c_fast', act: 5, title: 'Core IV: the critical path', kind: 'core', requires: ['c_core3', 'o_fastadd'], base: BUILD5.c_fast, par: { period: 76, cycles: 1236 },
+    why: 'Core III\'s clock period is 98 NAND delays, and 50 of them are the ripple ALU: every instruction waits for a carry to cross 16 bits, the ones that never add included. Static timing names that path; the fast adders you built shorten it. Swap only what lies on it: the same 1 236 cycles, a shorter cycle.',
+    tips: ['The Timing panel shows the critical path through your core.', 'Swap the ripple adders on that path for the unlocked Kogge–Stone ALU and adders.', 'After the swap, look again: the path has moved. A fast adder that is now off it costs NANDs and buys no delay.'],
     codex: ['criticalpath', 'cla', 'skew'],
   },
 
   // ---- Act 6 --------------------------------------------------------------------------------
   {
-    id: 'pi_lesson', act: 6, title: 'Pipelining', kind: 'lesson', requires: ['c_core3'], body: 'pipe',
-    why: 'Cut the datapath into five stages with registers: five instructions in flight, and a clock period set by the slowest stage instead of the whole path.',
+    id: 'pi_lesson', act: 6, title: 'Pipelining', kind: 'lesson', requires: ['c_fast'], body: 'pipe',
+    why: 'Core IV runs at 76 delays a cycle, and the adders are no longer the whole problem: the cycle must fit a whole load, instruction ROM → decode → ALU → data RAM → result mux → register file, one after the other. Put registers between those steps and each cycle only has to fit one of them, with five instructions in flight. The price is hazards: an instruction needs a value its predecessor has not written yet, and a branch is decided after two more instructions were fetched. This act builds the pipeline, then forwarding, the load-use stall and the flush. Expect it to lose at first: the 28 Core III programs take 1 495 cycles instead of 1 236, and with ripple adders E alone (forwarding, then the ALU) is 78 delays. Kogge–Stone adders in E win it back: period 56, 83 720 NAND delays against Core IV\'s 93 936.',
     tips: [], codex: ['pipeline', 'hazards'], chapters: [{ chapter: 'pipeline', label: 'Pipelining' }],
   },
   {
