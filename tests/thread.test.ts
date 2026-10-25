@@ -1,0 +1,220 @@
+// The thread (campaign/thread.ts): its data names real levels, dependents and anatomy blocks; every act of the
+// main path has an end card; the numbers its texts quote are measured; and the derived pieces (the "Goes into"
+// chain, the anatomy a level lights, "Now within reach", act seams) behave.
+
+import { describe, expect, it } from 'vitest';
+import { ACT_ENDS } from '../src/campaign/actends';
+import { BLOCKS } from '../src/campaign/anatomy';
+import { caseIds, caseOf } from '../src/campaign/cases';
+import { coreTests } from '../src/campaign/coretests';
+import { corePeriod, memLeaf } from '../src/campaign/corecheck';
+import { dependents, type NodeState } from '../src/campaign/graph';
+import { libCost } from '../src/campaign/measure';
+import { ACTS, NODES, nodeById } from '../src/campaign/nodes';
+import {
+  actDone, actEnd, actNext, blockUse, cardBlock, closedAct, goesInto, pitfallsOf, requiredOf, sideQuest, threadIds, threadOf, usedLater, whyStack, withinReach,
+} from '../src/campaign/thread';
+import { CTL_WIDTHS, rv16Core } from '../src/lib/rv16/cpu';
+import { resolveComponent } from '../src/lib/resolve';
+import { flatten } from '../src/sim/flatten';
+import { stats } from '../src/sim/stats';
+import { analyzeTiming } from '../src/sim/timing';
+import type { ComponentDef } from '../src/sim/types';
+import { netlistOf } from '../src/sim/types';
+
+const par = (id: string) => nodeById(id)!.par!;
+const nand = (id: string) => libCost(id)!.nand;
+/** As the texts write numbers: a space between thousands. */
+const fmt = (v: number) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const plain = (html: string) => html.replace(/<[^>]+>/g, '');
+const blocks = new Set(BLOCKS.map((b) => b.id));
+const view = (done: string[]) => (id: string): NodeState | undefined => (done.includes(id) ? { status: 'solved' } : undefined);
+
+describe('thread data', () => {
+  it('names real levels, dependents, blocks and side quests', () => {
+    for (const id of threadIds()) {
+      const n = nodeById(id);
+      expect(n, id).toBeDefined();
+      const t = threadOf(id)!;
+      const deps = new Set(dependents(id).map((d) => d.id));
+      for (const k of Object.keys(t.usedFor ?? {})) expect(deps.has(k), `${id}.usedFor.${k} is not a dependent`).toBe(true);
+      for (const b of t.uses ?? []) expect(b === 'all' || blocks.has(b), `${id}.uses ${b}`).toBe(true);
+      if (t.side) expect(nodeById(t.side)?.optional, `${id}.side`).toBe(true);
+      for (const p of t.pitfalls ?? []) expect(p.length).toBeGreaterThan(10);
+    }
+  });
+
+  it('fills acts 1–2 (the pilot): uses, a clause for every required consumer, pitfalls', () => {
+    for (const n of NODES.filter((m) => (m.act === 1 || m.act === 2))) {
+      const t = threadOf(n.id);
+      expect(t?.uses?.length || n.anatomy?.length, `${n.id} uses`).toBeTruthy();
+      expect(t?.pitfalls?.length, `${n.id} pitfalls`).toBeTruthy();
+      for (const d of dependents(n.id)) if (!d.optional) expect(t?.usedFor?.[d.id], `${n.id} → ${d.id}`).toBeTruthy();
+    }
+  });
+
+  it('has an end card for every act of the main path', () => {
+    for (let a = 0; a <= 7; a++) expect(actEnd(a), `act ${a}`).toBeDefined();
+    for (const [k, e] of Object.entries(ACT_ENDS)) {
+      expect(ACTS.some((a) => a.num === Number(k))).toBe(true);
+      if (e.next) {
+        const n = nodeById(e.next)!;
+        expect(n, e.next).toBeDefined();
+        expect(n.optional).toBeFalsy();
+        expect(n.act).not.toBe(Number(k));
+      }
+      if (e.side) expect(nodeById(e.side)?.optional, e.side).toBe(true);
+    }
+  });
+});
+
+describe('the numbers the thread quotes', () => {
+  const T = (id: string) => Object.values(threadOf(id)?.usedFor ?? {}).concat(threadOf(id)?.pitfalls ?? []).join(' ');
+
+  it('pins the act-end cards', () => {
+    const e = (a: number) => plain(`${ACT_ENDS[a].can} ${ACT_ENDS[a].cannot}`);
+    expect(libCost('nand')!.transistors).toBe(4);
+    expect(e(0)).toContain('four transistors');
+    expect(e(1)).toContain(`decoder, ${par('g_dec').nand} NANDs`);
+    expect(e(1)).toContain(`${par('g_eq16').nand} NANDs, depth ${par('g_eq16').depth}`);
+    expect(e(2)).toContain(`${fmt(par('a_alu16').nand!)} NANDs, depth ${par('a_alu16').depth}`);
+    expect(e(3)).toContain(`${fmt(par('m_rf').nand!)} NANDs`);
+    const half = par('m_rf').nand! / par('c_core3').nand!;
+    expect(half).toBeGreaterThan(0.4);
+    expect(half).toBeLessThan(0.5);
+    expect(e(4)).toContain(`${par('p_mul').cycles} on average`);
+    expect(plain(caseOf('p_mul')!.cost!)).toContain('28 to 134');
+    const c3 = par('c_core3');
+    expect(e(5)).toContain(`${fmt(c3.nand!)} NANDs, one instruction per ${c3.period}-delay cycle, the ${coreTests(3).length} test programs in ${fmt(c3.period! * c3.cycles!)} NAND delays`);
+    expect(ACT_ENDS[5].sideLabel).toContain(`period ${par('c_fast').period}`);
+    const p3 = par('pi_core3');
+    expect(e(6)).toContain(`period ${p3.period} (${fmt(p3.nand!)} NANDs)`);
+    expect(e(6)).toContain(`${Math.round(100 * (1 - (p3.period! * p3.cycles!) / (c3.period! * c3.cycles!)))}% faster`);
+    expect(e(7)).toContain(`${fmt(par('y_final').nand!)} NANDs`);
+  });
+
+  it('pins the ALU\'s share of the single-cycle critical path', () => {
+    const core = rv16Core(true);
+    expect(corePeriod(core)).toBe(par('c_core3').period);
+    const IMEM = memLeaf('bench_imem', 'instruction memory'), DMEM = memLeaf('bench_dmem', 'data memory');
+    const bench: ComponentDef = {
+      id: 'bench_thread', name: 'core bench', category: 'cpu', symbol: { kind: 'box' },
+      ports: [{ name: 'clk', width: 1, dir: 'in' }, { name: 'rst', width: 1, dir: 'in' }],
+      netlist: () => ({
+        instances: [{ name: 'core', def: core }, { name: 'imem', def: IMEM }, { name: 'dmem', def: DMEM }],
+        nets: [{ ends: ['clk', 'core.clk'] }, { ends: ['rst', 'core.rst'] }, { ends: ['core.pc', 'imem.addr'] }, { ends: ['imem.data', 'core.instr'] },
+          { ends: ['core.daddr', 'dmem.addr'] }, { ends: ['dmem.data', 'core.drdata'] }],
+      }),
+    };
+    const r = analyzeTiming(flatten(bench, { mode: 'gate' }))!;
+    const alu = netlistOf(core)!.instances.find((i) => i.def.id === 'rv16_alu16')!.name;
+    const inAlu = r.path.filter((p) => p.node[0] === 'core' && p.node[1] === alu).length;
+    expect(plain(ACT_ENDS[5].cannot)).toContain(`${inAlu} of the ${r.period} delays`);
+  });
+
+  it('pins the pilot\'s clauses and pitfalls', () => {
+    expect(T('g_eq16')).toContain(`${nand('rv16_eq16')} of the comparator's ${nand('rv16_branch')} NANDs`);
+    expect(T('a_slt')).toContain(`${nand('rv16_cmp16')} of the comparator's ${nand('rv16_branch')} NANDs`);
+    expect(T('a_shift16')).toContain(`${nand('rv16_shift16')} of its ${fmt(nand('rv16_alu16'))} NANDs`);
+    expect(T('g_wide')).toContain(`${nand('rv16_wide16')} of its ${nand('rv16_eq16')} NANDs`);
+    expect(T('g_wide')).toContain(`depth ${par('g_wide').depth}`);
+    expect(T('a_add16')).toContain(`depth ${par('a_add16').depth} against ${par('o_fastadd').depth}`);
+    expect(T('a_ha')).toContain(`${nand('full_adder_ha')} NANDs; par ${par('a_fa').nand}`);
+    expect(T('a_ha')).toContain(`par ${par('a_ha').nand}`);
+    expect(T('a_inc16')).toContain(`${nand('inc16') - par('a_inc16').nand!} NANDs over par`);
+    expect(T('g_mux8')).toContain(`${nand('mux2x16') - par('g_mux8').nand!} NANDs over par`);
+    expect(T('g_mux')).toContain(`${par('g_mux').nand} NANDs, depth ${par('g_mux').depth}`);
+    expect(T('g_or')).toContain(`par is ${par('g_xor').nand}`);
+    expect(T('g_sop')).toContain(`par ${par('g_sop').nand}`);
+    expect(T('o_fastadd')).toContain(`from ${par('c_core3').period} to ${par('c_fast').period}`);
+    expect(T('d_kmap')).toContain(`${CTL_WIDTHS.reduce((a, b) => a + b, 0)} output bits`);
+    const rf = resolveComponent('rv16_rf')!;
+    const read = netlistOf(rf)!.instances.filter((i) => stats(i.def).nands > 300);
+    expect(read.length).toBe(2);
+    expect(T('g_mux8')).toContain(`two 8:1 read ports, ${stats(read[0].def).nands} NANDs each`);
+  });
+});
+
+describe('the why stack', () => {
+  it('leads with the why and carries every case (map panel and level screen render this stack)', () => {
+    for (const id of caseIds()) {
+      const w = whyStack(id)!;
+      expect(w, id).toBeDefined();
+      expect(w.lead).toBe(nodeById(id)!.why);
+      expect(w.problem).toBe(caseOf(id)!.problem);
+    }
+    // the program levels' cases, once shown nowhere
+    for (const id of ['p_add', 'p_loop', 'p_mem', 'p_call', 'p_mul', 'p_handler', 'p_boot']) expect(whyStack(id)?.problem, id).toBeTruthy();
+  });
+
+  it('draws the 16-bit adder\'s chain to the ALU block', () => {
+    const c = goesInto('a_add16')!;
+    expect(c.nodes.map((n) => n.id)).toEqual(['a_add16', 'a_addsub16', 'a_alu16', 'c_core1']);
+    expect(c.block).toEqual({ id: 'alu', label: 'ALU' });
+    expect(goesInto('a_slt')!.nodes.slice(0, 2).map((n) => n.id)).toEqual(['a_slt', 'c_br']);
+    expect(goesInto('a_slt')!.block).toEqual({ id: 'br', label: 'Branch' });
+    // a universal brick goes everywhere; every chain ends in a core
+    expect(goesInto('g_not')!.block).toBe('all');
+    for (const id of ['g_dec', 'g_mux8', 'a_inc16', 'n_twos', 'g_not']) expect(goesInto(id)!.nodes.at(-1)!.kind, id).toBe('core');
+  });
+
+  it('lists the consumers, required first, with their clauses', () => {
+    const l = usedLater('a_add16');
+    expect(l[0].node.optional).toBeFalsy();
+    expect(l.find((u) => u.node.id === 'c_npc')?.clause).toContain('pc + imm');
+    expect(l.findIndex((u) => u.node.optional)).toBeGreaterThan(l.findIndex((u) => u.node.id === 'c_npc'));
+  });
+
+  it('merges a level\'s pitfalls with its codex mistakes, each once', () => {
+    const n = nodeById('a_slt')!;
+    const mine = threadOf('a_slt')!.pitfalls!;
+    const out = pitfallsOf(n, (c) => (c === 'overflow' ? ['New one.', mine[0]] : undefined));
+    expect(out).toEqual([...mine, 'New one.']);
+  });
+});
+
+describe('anatomy', () => {
+  it('lights the blocks a level names, all of them for a brick, the old rule otherwise', () => {
+    expect(blockUse(nodeById('t_nand')!)).toMatchObject({ all: true, own: false });
+    expect(blockUse(nodeById('t_nand')!)!.ids.length).toBe(BLOCKS.length);
+    expect(blockUse(nodeById('a_slt')!)!.ids).toEqual(['br']);
+    expect(blockUse(nodeById('a_alu16')!)).toEqual({ ids: ['alu'], all: false, own: true });
+    // the inverter no longer lights the F/D pipeline register
+    expect(blockUse(nodeById('t_inv')!)!.ids).not.toEqual(['p1']);
+    expect(cardBlock(nodeById('g_not')!)).toEqual({ label: 'everywhere', all: true });
+    expect(cardBlock(nodeById('m_rf')!)?.label).toBe('Registers');
+  });
+});
+
+describe('after a pass', () => {
+  it('lists what is now within reach, closest to ready first', () => {
+    const r = withinReach('g_dec', view(['intro', 't_inv', 't_nand', 'g_not', 'g_and', 'g_or', 'g_wide', 'g_dec', 'g_mux', 'g_mux8']));
+    const rf = r.find((x) => x.node.id === 'm_rf')!;
+    expect(rf.done).toBe(2);
+    expect(rf.total).toBe(3);
+    expect(rf.missing.map((m) => m.id)).toEqual(['s_reg16']);
+    expect(rf.clause).toBeTruthy();
+    expect(r.every((x) => !x.node.optional)).toBe(true);
+    for (let i = 1; i < r.length; i++) expect(r[i].missing.length).toBeGreaterThanOrEqual(r[i - 1].missing.length);
+  });
+
+  it('offers the side quest the thread names, else an optional dependent', () => {
+    expect(sideQuest('a_add16', view([]))?.id).toBe('o_fastadd');
+    expect(sideQuest('a_add16', view(['o_fastadd']))?.id).not.toBe('o_fastadd');
+    expect(sideQuest('t_inv', view([]))?.id).toBe('t_nor');
+  });
+
+  it('knows when a pass closes an act, and where its card leads', () => {
+    const act1 = requiredOf(1).map((n) => n.id);
+    const v = view(['intro', 't_inv', 't_nand', ...act1]);
+    expect(actDone(1, v)).toBe(true);
+    expect(closedAct(nodeById('g_eq16')!, v)).toBe(1);
+    expect(closedAct(nodeById('g_eq16')!, view(act1.slice(1)))).toBeUndefined();
+    expect(actDone(1, view([]))).toBe(false);
+    // the next act's first level, or its first open one when that is done
+    const open = () => true;
+    expect(actNext(ACT_ENDS[1], v, open)?.id).toBe('a_ha');
+    expect(actNext(ACT_ENDS[1], view([...act1, 'a_ha']), open)?.act).toBe(2);
+    expect(actNext(ACT_ENDS[1], view([...act1, 'a_ha']), open)?.id).not.toBe('a_ha');
+  });
+});
