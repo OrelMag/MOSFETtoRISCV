@@ -1,6 +1,6 @@
 # Verification
 
-How the RV32 CPUs are checked, what that found, and what it does not prove. The CPUs and the
+How the RV32 CPUs (and chapter 25's RV64 golden model, `src/riscv/iss64.ts`) are checked, what that found, and what it does not prove. The CPUs and the
 instruction-set simulator in `src/riscv/` (the golden model every CPU is co-simulated against) were
 written by the same author, so a misreading of the specification shared by both passes every
 lock-step test. The checks below do not rely on that model alone.
@@ -9,8 +9,9 @@ lock-step test. The checks below do not rely on that model alone.
 |---|---|---|---|
 | Lock-step co-simulation of the chapters' programs | our golden model | `tests/cpu.test.ts`, `pipeline`, `system`, … | yes |
 | **Official riscv-tests** (rv32ui, rv32um, rv32uf, rv32ua, rv32mi) | the tests themselves (self-checking) | `tests/verify-*.test.ts`, `scripts/rvtests.ts` | all of them, every CPU |
+| **Official riscv-tests for RV64** (rv64ui, rv64um) | the tests themselves | `tests/verify-rv64-iss.test.ts` | all of them, on the RV64 golden model |
 | **Random programs** | our golden model, final state | `tests/verify-*.test.ts`, `scripts/fuzz32.ts` | seeds 1–32 per CPU |
-| **Spike**, the reference simulator, on random programs | Spike, commit by commit | `scripts/spike-oracle.ts`, `.github/workflows/spike.yml` | its plumbing only (no Spike); CI on every ISA change |
+| **Spike**, the reference simulator, on random programs (RV32 variants and RV64IM) | Spike, commit by commit | `scripts/spike-oracle.ts`, `.github/workflows/spike.yml` | its plumbing only (no Spike); CI on every ISA change |
 | **Coverage** of the riscv-tests and random programs | — | `tests/verify-*.test.ts`, `scripts/coverage.ts` | no gaps allowed |
 | Exported Verilog (dual-core, system CPUs, the system core with ports), synthesized by Yosys | our gate-level simulation | `scripts/verify-export.ts` | CI gate before deploy |
 
@@ -28,7 +29,8 @@ environment, with the source revision and toolchain), so `npm test` needs no RIS
   system CPUs. The other CPUs have no CSRs or traps, so they get `bare`
   (`scripts/riscv-tests/env/bare`): the same test bodies and the same `tohost` contract, with a store
   and a jump-to-self instead of `ecall`. `bare-mp` adds env/p's `csrr mhartid` park so hart 1 of the
-  dual-core waits while hart 0 runs the test.
+  dual-core waits while hart 0 runs the test. `bare64` is `bare` built for RV64 (`-march=rv64g`,
+  `-mabi=lp64`; the bare header already maps `RVTEST_RV64U`): rv64ui and rv64um (see RV64 below).
 - **Harvard memory.** Code is linked at 0 (the ROM), data at `0x10000`, which is word 0 of any data
   memory up to 16 K words (it wraps), with `tohost` first. Our CPUs have no loader, so the image gets a
   few instructions appended (`lui` / `addi` / `sw` per non-zero data word, encoded by hand rather than by
@@ -46,7 +48,8 @@ environment, with the source revision and toolchain), so `npm test` needs no RIS
 To rebuild the images (a new riscv-tests revision): clone riscv-tests with its `env` submodule, get a
 GNU RISC-V toolchain (`riscv64-unknown-elf-gcc`, or xPack's `riscv-none-elf-gcc` on Windows; clang's
 assembler rejects a few GNU-isms in the sources), and run
-`node scripts/riscv-tests/build.mjs <riscv-tests> --cc <gcc>`. The build is deterministic.
+`node scripts/riscv-tests/build.mjs <riscv-tests> --cc <gcc>` (`--env bare64` builds one environment; each file
+records its own toolchain). The build is deterministic; it reads ELF32 and ELF64.
 
 ### Results
 
@@ -100,6 +103,17 @@ No failures.
 
 <!-- riscv-tests:end -->
 
+### RV64
+
+`tests/verify/riscv-tests/bare64.json`: the 54 rv64ui and 13 rv64um tests of the same revision, built with
+xPack riscv-none-elf-gcc 15.2.0. `tests/verify-rv64-iss.test.ts` runs each on ISS64 as the 64-bit core will get
+it: the image with the same data loader appended (`lui` sign-extends on RV64, but `sw` stores the low word, so
+the data lands as on RV32: a doubleword as its low and high words, low first, which is how ISS64 and the core keep
+their data memories), `tohost` read from data word 0. 52 of 54 rv64ui and 13 of 13 rv64um pass; two are not
+applicable: `rv64ui-fence_i` (self-modifying code: the instruction memory is a ROM) and `rv64ui-ma_data`
+(misaligned access: an access stays inside its doubleword). With M switched off the rv64um tests fail, as they
+should: the verdict discriminates.
+
 ## Random programs
 
 `src/riscv/randprog32.ts` draws a program from a seed for what a CPU implements: ALU operations on
@@ -124,6 +138,15 @@ first difference and the program.
 --out failures.json` runs any range; the scheduled workflow `.github/workflows/verify.yml` runs a new
 range every night and keeps the failures as an artifact.
 
+`src/riscv/randprog64.ts` (`randomProgram64(seed, { n, m, dmemWords, dataBase })`, assembled with
+`assemble(src, undefined, { xlen: 64 })`) draws RV64I / M programs the same way, weighted toward what is new at 64
+bits: 64-bit constants by `li` (up to eight-instruction `lui` / `addiw` / `slli` / `addi` chains, mid-program
+too), every W operation (`addw` … `sraw`, `addiw`, `slliw` / `srliw` / `sraiw`, `mulw`, `divw`, `divuw`,
+`remw`, `remuw`) and `sext.w` / `negw`, 6-bit shift amounts, `ld` / `sd` / `lwu` beside the byte, halfword and
+word accesses, edge values around 2^31 and 2^63. Every access is aligned to its size (the core keeps an access
+inside its doubleword; Spike would trap on a misaligned one). `tests/randprog64.test.ts` checks that 48 seeds
+assemble, halt, stay aligned inside the window and execute every RV64I / M instruction between them.
+
 ## Spike: a second oracle for the golden model
 
 The random programs above compare the CPUs with our golden model; [Spike](https://github.com/riscv-software-src/riscv-isa-sim),
@@ -136,15 +159,20 @@ instruction at a time (`tests/verify/spike.ts`, `scripts/spike-oracle.ts`).
   jumps. Two options keep them runnable on Spike and leave every other program unchanged: `dataBase`
   moves the data window to 0x2_0000 (Spike is von Neumann; the code sits at 0x1_0000, and our ISS's
   memories wrap, so it sees the same machine), and `timer: false` drops the timer interrupt (it needs our
-  memory-mapped `mtime`; Spike's CLINT ticks on its own schedule).
+  memory-mapped `mtime`; Spike's CLINT ticks on its own schedule). A seventh, `imc`, adds the C extension; an
+  eighth, `rv64im` (`tests/verify/spike64.ts`), runs `randomProgram64` with M on ISS64 against
+  `--isa=rv64im_zicsr`.
 - **The image.** An ELF32 written in TypeScript (`tests/verify/elf.ts`, no toolchain): the program, a boot
   stub (turns the FPU on, `mstatus.FS`, which Spike requires and our ISS does not model, then jumps to
-  the program) and an exit stub writing `tohost`, where the final jump-to-self went.
+  the program) and an exit stub writing `tohost`, where the final jump-to-self went. For `rv64im`, an ELF64
+  (`writeElf64`: Spike loads an ELF of its own XLEN) at the same addresses.
 - **The comparison.** Spike runs with `--priv=m -l --log-commits`; each commit line is matched with one
   step of our ISS: pc and instruction word, the integer register written and its value, the f register,
   the store (address, width, data), the load address, every CSR Spike reports written (ours must read the
   same value), and each trap (cause, `mepc`, `mtval`). The first difference ends the run with the step,
-  the instruction and both sides; the program, the ELF and Spike's log are kept.
+  the instruction and both sides; the program, the ELF and Spike's log are kept. At 64 bits the log's values are
+  16 hex digits and read as BigInt (`parseSpikeLog64`), registers and stores compared at full width; the programs
+  are user level, so a trap, a CSR or an f register in Spike's log is a difference.
 - **Allowed differences.** On an illegal instruction Spike writes the instruction to `mtval`, on `ebreak`
   the pc; ours writes 0. Both are legal; the comparison takes Spike's value (counted as an allowance) so a
   later `csrr mtval` agrees. Spike's `mret` also writes zero to `tcontrol` (Sdtrig debug triggers), which
@@ -153,7 +181,8 @@ instruction at a time (`tests/verify/spike.ts`, `scripts/spike-oracle.ts`).
 - **Where it runs.** `.github/workflows/spike.yml` builds Spike once at a pinned revision (cached) and
   runs seeds 1–1000 per variant on every push touching `src/riscv/`, `fpref.ts` or the oracle, and a new
   range of 4000 every night. Locally (no Spike on Windows), `--self` checks the plumbing against a
-  Spike-format log of our own ISS, as `tests/spike-oracle.test.ts` does in `npm test`.
+  Spike-format log of our own ISS, as `tests/spike-oracle.test.ts` (and `spike-oracle64.test.ts` for ISS64) does
+  in `npm test`. The workflow runs every config by default, `rv64im` included; `spike-oracle.ts rv64im` runs it alone.
 - **Result.** Seeds 1–1000 on all six variants (Spike revision `5a76066`): 6000 programs, 1 236 958
   instructions compared, no difference in what a program computes. The first run stopped every system program
   at its first `mret`, where Spike wrote `mstatush` and `tcontrol`: `tcontrol` belongs to an extension we do
@@ -264,6 +293,9 @@ riscv-tests suites).
   shows (a CSR written as a side effect of a trap is not in it).
 - **`bare` is our environment.** The test bodies are the official ones; the code around them (start,
   pass / fail reporting) is ours, as env/p's would be on any core without traps.
+- **RV64 is checked at the golden model.** The rv64ui / rv64um images and Spike check ISS64; the gate-level
+  64-bit core is compared with ISS64 (on randprog64 programs), not with Spike directly. Spike's
+  `rv64im` results come from CI (no Spike on Windows); locally only the plumbing is tested.
 - **Features we do not claim are not tested**: byte / halfword access outside the system CPUs,
   misaligned access in hardware, `fence.i` and self-modifying code (the ROM is read-only), atomics
   beyond `amoswap.w` / `amoadd.w`, PMP, debug triggers, `instret`. The matrix lists them as n/a.
