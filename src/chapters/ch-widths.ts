@@ -3,6 +3,7 @@ import { PROGRAMS } from '../riscv/programs';
 import { C_EXPAND, cFetch } from '../lib';
 import { cpuScene } from '../widgets/cpupanel';
 import { codeSizeWidget, cExplorer, RVC_COSTS } from '../widgets/rvc';
+import { WIDTH_COSTS, widthCostWidget } from '../widgets/rv64';
 import type { Chapter } from './types';
 
 /** A 32-bit instruction that starts mid-word (0x002) and ends in the next word. */
@@ -16,6 +17,7 @@ halt:   c.j    halt           # 0x00e`;
 const straddle = assemble(STRADDLE).words;
 
 const K = RVC_COSTS;
+const C64 = (id: string) => WIDTH_COSTS.find((r) => r.id === id);
 const pct = (a: number, b: number) => Math.round((100 * (a - b)) / b);
 
 export const chWidths: Chapter = {
@@ -28,7 +30,7 @@ export const chWidths: Chapter = {
     'fetch a 32-bit instruction that straddles two words, and weigh the C core against the plain one in NANDs and clock period',
   ],
   builds: ['cpu', 'python', 'cache', 'float'],
-  soon: ['Sixty-four bits', 'The W instructions', 'The cost of width'],
+  soon: ['The W instructions', 'The cost of width'],
   recap: {
     keep: [
       'Most instructions are short in what they say: copy a register, load a small constant, add a small number, touch the stack. The C extension gives those a 16-bit form. On our programs: 68 % of the compiled Python samples\' instructions, 34 % fewer bytes; the hand-written benchmarks 15–31 % fewer.',
@@ -177,7 +179,7 @@ export const chWidths: Chapter = {
         shows the path. On this machine, with a ROM that delivers a full window every cycle, C makes the program a quarter smaller and the computer a quarter
         slower. It pays where bytes are what limits: an instruction cache that holds a third more of the program, a flash or a bus that delivers 16 bits at a
         time, or a chip whose ROM is most of its area. A pipeline also hides the depth: the expander becomes part of fetch or decode, a stage of its own.</p>
-        <p>Next in this chapter, when it is built: the other direction, a 64-bit core from the same width-parametric parts.</p>`,
+        <p>Next: the other direction, a 64-bit core from the same width-parametric parts.</p>`,
       scene: () => cpuScene({ source: PROGRAMS[0].source, c: true, timing: true }),
       challenge: {
         kind: 'quiz', question: 'The incrementer that gives the low bank its index sits in series with the ROM. How could it leave the path?',
@@ -185,6 +187,33 @@ export const chWidths: Chapter = {
         answer: 0,
         why: ['', 'The ALU is not on this part of the path; the fetch is.', 'The bank\'s size does not change which word it must read.'],
         explain: 'The next PC is known a few gates before the edge; adding one to its word index then, into a second register, moves the incrementer onto the PC-update path, which has slack. The fetch then starts both banks at once.',
+      },
+    },
+    {
+      title: 'Sixty-four bits',
+      body: `
+        <p>RV64 keeps every RV32 instruction and its encoding. What changes is <em>XLEN</em>, the width of the registers, the PC and every
+        value the ALU computes: 64 bits, so an address reaches 16 EiB and a counter never wraps. <code>add</code> now adds 64 bits; <code>lw</code>
+        still loads 32, sign-extended into 64. A handful of instructions are new (next step).</p>
+        <p>Our generators take the width as a parameter: <code>regfile(5, n)</code>, <code>alu(n)</code>, the adders, the shifter, the multiplier.
+        So the question "what does a 64-bit core cost?" has an exact answer, block by block, and the blocks fall into four kinds:</p>
+        <ul>
+          <li><strong>Once per bit</strong>: registers, the register file, multiplexers. Twice the bits, twice the gates, the same delay. The register
+          file alone is ${(C64('rf')!.nands[1] - C64('rf')!.nands[0]).toLocaleString()} more NANDs.</li>
+          <li><strong>A tree over the bits</strong>: the Kogge–Stone adder, the shifter, the zero test. A little over twice the gates, one more level:
+          the 64-bit ALU is ${C64('alu')!.depth![1] - C64('alu')!.depth![0]} NAND delays slower than the 32-bit one. A ripple adder would have doubled its delay.</li>
+          <li><strong>Every bit with every bit</strong>: the multiplier's partial products. Four times the gates.</li>
+          <li><strong>One bit per cycle</strong>: the iterative divider. Twice the gates and twice the time.</li>
+        </ul>
+        <p>The immediate generator does not grow at all: a 12- or 20-bit immediate becomes 64 bits by copying its sign bit, and copies are wires.</p>
+        <p class="try">Pick the multiplier, then the divider: which one would you rather make faster, and at what price?</p>`,
+      widget: widthCostWidget,
+      challenge: {
+        kind: 'quiz', question: 'Going from 32 to 64 bits, which of these gets slower by the most?',
+        options: ['A ripple-carry adder', 'A Kogge–Stone adder', 'A 2:1 multiplexer', 'The register file\'s write'],
+        answer: 0,
+        why: ['', `A prefix adder adds one level for twice the bits: ${C64('ks')!.depth![0]} → ${C64('ks')!.depth![1]} NAND delays.`, 'Each bit has its own selector; the width never reaches it.', 'Writing a register is the same for every bit at once.'],
+        explain: `The ripple carry crosses every bit: ${C64('rca')!.depth![0]} → ${C64('rca')!.depth![1]} NAND delays. Width is cheap for anything bit-parallel and expensive for anything serial along the bits.`,
       },
     },
   ],

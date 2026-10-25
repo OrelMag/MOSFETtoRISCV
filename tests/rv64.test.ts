@@ -122,3 +122,21 @@ describe('ISS64', () => {
     expect(mExec64(0, 0x7fffffffn, 2n, true)).toBe(u64(-2n));
   });
 });
+
+describe('WIDTH_COSTS', () => {
+  it('are what the generators measure', async () => {
+    const { WIDTH_COSTS } = await import('../src/widgets/rv64');
+    const L = await import('../src/lib');
+    const { stats, logicDepth } = await import('../src/sim/stats');
+    const make: Record<string, (n: number) => import('../src/sim/types').ComponentDef> = {
+      reg: (n) => L.register(n), rf: (n) => L.regfile(5, n), mux: (n) => L.busMux2(n), rca: (n) => L.rca(n), ks: (n) => L.koggeStone(n),
+      sh: (n) => L.shifter(n), zero: (n) => L.isZero(n), alu: (n) => L.alu(n, 'ks'), mul: (n) => L.treeMul(n, true), div: (n) => L.seqDivider(n),
+    };
+    for (const r of WIDTH_COSTS) {
+      const d = [make[r.id](32), make[r.id](64)];
+      expect(d.map((x) => stats(x).nands), r.id).toEqual(r.nands);
+      if (r.growth === 'time') expect(r.depth).toEqual([34, 66]);
+      else expect(r.depth ? d.map((x) => logicDepth(x)) : [logicDepth(d[0]), logicDepth(d[1])], r.id).toEqual(r.depth ?? [null, null]);
+    }
+  });
+});
