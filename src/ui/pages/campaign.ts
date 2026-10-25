@@ -26,7 +26,7 @@ import { puzzleCard } from '../../campaign/ui/puzzleui';
 import { criteria, gradeTable } from '../../campaign/ui/levelinfo';
 import { foldedActs, mapColsFor } from '../../campaign/layout';
 import { anatomySvg, mapSvg } from '../../campaign/ui/svgs';
-import { KIND_LABEL, STATUS_LABEL } from '../../campaign/cardlabel';
+import { KIND_LABEL, partNames, STATUS_LABEL } from '../../campaign/cardlabel';
 import { type BuildChallenge, importAnswer, startChallenge } from '../../editor/challenges';
 import { loadWorkspace, saveWorkspace } from '../../editor/store';
 import { resolveComponent } from '../../lib/resolve';
@@ -329,11 +329,11 @@ export class CampaignPage implements Page {
 
     // What it builds on, what it unlocks.
     const req = n.requires.map((r) => nodeById(r)).filter((x): x is CampaignNode => !!x);
-    const unlocks = (n.unlocks ?? []).map((u) => (u.endsWith('*') ? `${u.slice(0, -1)}…` : resolveComponent(u)?.name ?? u));
+    const unlocks = partNames(n.unlocks ?? [], (u) => resolveComponent(u)?.name);
     const rule = ch && typeof ch.allowed === 'object' ? ch.allowed.lib.filter((x) => x !== 'nand') : [];
     el.append(h('div', { class: 'cp-deps' },
       req.length ? h('p', null, h('b', null, 'Builds on: '), req.map((r, i) => [i ? ', ' : '', h('a', { href: `#/campaign/n/${r.id}`, class: isDone(p.view(r.id)) ? 'done' : '' }, r.title)])) : null,
-      rule.length ? h('p', null, h('b', null, 'Parts you may place: '), 'NAND, ', rule.map((u) => (u.endsWith('*') ? `${u.slice(0, -1)}…` : resolveComponent(u)?.name ?? u)).join(', ')) : null,
+      rule.length ? h('p', null, h('b', null, 'Parts you may place: '), 'NAND, ', partNames(rule, (u) => resolveComponent(u)?.name).join(', ')) : null,
       unlocks.length ? h('p', null, h('b', null, 'Unlocks: '), unlocks.join(', ')) : null,
       dependents(n.id).length ? h('p', null, h('b', null, 'Leads to: '), dependents(n.id).map((d, i) => [i ? ', ' : '', h('a', { href: `#/campaign/n/${d.id}` }, d.title)])) : null));
 

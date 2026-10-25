@@ -8,6 +8,7 @@ import { BitSim } from '../sim/bitsim';
 import { flatten, type FlatDesign } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import type { Sim } from '../sim/sim';
+import { reachesTransistors } from '../sim/harness';
 import { hasFeedback, logicDepth, stats } from '../sim/stats';
 import { shortText, SwitchSim, WEAK_H, weakTag } from '../sim/switchsim';
 import { analyzeTiming } from '../sim/timing';
@@ -89,7 +90,16 @@ export interface LibRule {
    * no MOSFET, no NAND unless listed). Without it every switch-level part is allowed and NAND always is.
    */
   strict?: boolean;
+  /**
+   * Gate level: no transistor-level part (a MOSFET, a rail, a resistor, a cell drawn from them: act 0's inverter, a
+   * DRAM column), not even inside the learner's own chips. Such a level is scored in NANDs, where a transistor counts
+   * as none (graph.ts ruleFor sets it on every campaign level that is not itself switch level).
+   */
+  gates?: boolean;
 }
+
+/** Below the NAND brick: a switch-level primitive, or a part whose gate-level flatten reaches one (not NAND itself). */
+export const transistorLevel = (d: ComponentDef): boolean => d.prim !== 'nand' && (isSwitchPrim(d) || reachesTransistors(d));
 
 /** The rule's kind, for badges and CSS ('lib' for a campaign rule). */
 export const ruleKind = (a: Allowed): 'transistors' | 'nand' | 'any' | 'lib' => (typeof a === 'string' ? a : 'lib');
@@ -304,6 +314,7 @@ function allowedLeaf(d: ComponentDef, allowed: Allowed): string | null {
   if (isExternal(d) || ioInfo(d)) return null; // keys, keyboards, switches, consoles, screens: zero cost, and a check reads the sources released (0)
   const lib = typeof allowed === 'object' ? allowed : null;
   if (lib?.strict) return libAllowed(lib, d.id) || d.category === 'plumbing' ? null : `${d.name}: not one of this level's parts (${lib.label ?? lib.lib.join(', ')})`;
+  if (lib?.gates && transistorLevel(d)) return `${d.name}: transistor level, and this level is built and scored in NAND gates (a transistor would count as none)`;
   if (isSwitchPrim(d)) return null; // transistors, rails, resistors, capacitors (your own NAND stays usable)
   if (d.id === 'tie0' || d.id === 'tie1' || d.id.startsWith('sb_const') || /^const\d+_[0-9a-f]+$/.test(d.id)) return null;
   if (d.prim === 'nand') return allowed === 'transistors' ? 'a library NAND: build it from transistors' : null;

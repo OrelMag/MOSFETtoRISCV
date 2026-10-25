@@ -627,7 +627,7 @@ export const CHALLENGES: BuildChallenge[] = [
   // gates
   {
     id: 'g_not', title: 'NOT from NAND', level: 'gates', allowed: 'nand',
-    brief: 'NAND is the only gate allowed. Make <b>y = ¬a</b>.',
+    brief: 'Make <b>y = ¬a</b> from NAND gates.',
     ports: pins([['a']], [['y']]), check: { kind: 'table', spec: ([a]) => [a ^ 1] }, limits: { maxNand: 1, maxDepth: 1 }, answer: answer(refNot),
   },
   {

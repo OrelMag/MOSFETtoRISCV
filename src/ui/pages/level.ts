@@ -10,6 +10,7 @@ import '../../styles/editor.css';
 import '../../styles/sbchips.css';
 import '../../styles/campaign.css';
 import '../../styles/level.css';
+import { partNames } from '../../campaign/cardlabel';
 import { caseOf } from '../../campaign/cases';
 import { codexById } from '../../campaign/codex';
 import { type AreaUnit, areaBars, METRIC, measured } from '../../campaign/grade';
@@ -245,11 +246,11 @@ export class LevelPage implements Page {
       gradeTable(n));
     const req = n.requires.map((r) => nodeById(r)).filter((x): x is CampaignNode => !!x);
     const rule = typeof ch.allowed === 'object' ? ch.allowed.lib.filter((x) => x !== 'nand') : [];
-    const name = (u: string) => (u.endsWith('*') ? `${u.slice(0, -1)}…` : resolveComponent(u)?.name ?? u);
+    const names = (ids: readonly string[]) => partNames(ids, (u) => resolveComponent(u)?.name).join(', ');
     el.append(h('section', { class: 'cp-deps' },
       req.length ? h('p', null, h('b', null, 'Builds on: '), req.map((r, i) => [i ? ', ' : '', h('a', { href: levelRoute(r) }, r.title)])) : null,
-      rule.length ? h('p', null, h('b', null, 'Parts you may place: '), 'NAND, ', rule.map(name).join(', ')) : null,
-      n.unlocks?.length ? h('p', null, h('b', null, 'Unlocks: '), n.unlocks.map(name).join(', ')) : null));
+      rule.length ? h('p', null, h('b', null, 'Parts you may place: '), 'NAND, ', names(rule)) : null,
+      n.unlocks?.length ? h('p', null, h('b', null, 'Unlocks: '), names(n.unlocks)) : null));
   }
 
   /** The hint ladder: the tips one at a time (a nudge first), then the walkthrough from step 1, then the solution. */

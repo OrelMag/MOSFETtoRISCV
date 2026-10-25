@@ -16,3 +16,17 @@ export function levelCardLabel(n: Pick<CampaignNode, 'kind' | 'title' | 'optiona
   if (n.optional) parts.push('optional');
   return `${KIND_LABEL[n.kind]}: ${n.title}, ${parts.join(', ')}`;
 }
+
+/** What a rule's `prefix*` stands for, in words (a family of library parts of any size). */
+const FAMILY: Record<string, string> = {
+  'andx*': 'bitwise AND (any width)', 'orx*': 'bitwise OR (any width)', 'xorx*': 'bitwise XOR (any width)',
+  'zero*': 'zero detect (any width)', 'eq*': 'equality comparators (any width)', 'dec*': 'decoders (any size)',
+  'mux*': 'multiplexers (any size)', 'rv16_mux*': 'RV16 bus multiplexers', 'lzc*': 'leading-zero counters (any width)',
+  'ram*': 'RAMs (any size)', 'sb_rom*': 'ROMs (any size)',
+};
+
+/** Library ids (exact or `prefix*`) as the names a level lists: "CMOS inverter", "decoders (any size)"; duplicates once. */
+export function partNames(ids: readonly string[], nameOf: (id: string) => string | undefined): string[] {
+  const names = ids.map((u) => (u.endsWith('*') ? FAMILY[u] ?? `${u.slice(0, -1)}… (any size)` : nameOf(u) ?? u));
+  return [...new Set(names)];
+}
