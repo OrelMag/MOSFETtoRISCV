@@ -22,6 +22,8 @@ export type Cell = bigint | 'X' | 'Z' | 'C';
 
 export interface TestRow {
   cells: Cell[];
+  /** Columns computed by an expression: wrapped to the pin's width (Digital's (n+1) past 15 on 4 bits), not refused. */
+  computed?: boolean[];
   /** Source line (1-based) and, inside repeat / loop, the variables' values ("n = 3"). */
   line: number;
   where?: string;
@@ -332,23 +334,30 @@ class Runner {
     return Number(n);
   }
 
-  private push(cells: Cell[], line: number, where?: string): void {
+  private push(cells: Cell[], line: number, where?: string, computed?: boolean[]): void {
     if (cells.length !== this.width) throw new Fail(`${cells.length} value${cells.length === 1 ? '' : 's'} for ${this.width} signal${this.width === 1 ? '' : 's'}`, line);
     if (this.rows.length >= MAX_ROWS) throw new Fail(`at most ${MAX_ROWS} rows`, line);
-    this.rows.push(where ? { cells, line, where } : { cells, line });
+    const row: TestRow = { cells, line };
+    if (where) row.where = where;
+    if (computed?.some((c) => c)) row.computed = computed;
+    this.rows.push(row);
   }
 
   private row(r: Stmt & { k: 'row' }, where?: string): void {
     const cells: Cell[] = [];
+    const computed: boolean[] = [];
     for (const c of r.cells) {
       if (c.k === 'lit') cells.push(c.v);
-      else if (c.k === 'val') cells.push(this.ev(c.e));
+      else if (c.k === 'val') {
+        computed[cells.length] = c.e.k !== 'num';
+        cells.push(this.ev(c.e));
+      }
       else {
         const n = this.count(c.n, c.line), v = this.ev(c.e);
         for (let b = n - 1; b >= 0; b--) cells.push((v >> BigInt(b)) & 1n);
       }
     }
-    this.push(cells, r.line, where);
+    this.push(cells, r.line, where, computed);
   }
 
   private where(): string | undefined {
@@ -475,7 +484,7 @@ export function planTest(def: ComponentDef, test: TestDoc): TestPlan | TestError
         if (p.dir === 'in') free.push({ name: p.name, width: p.width });
         continue;
       }
-      const v = fit(c, p.width);
+      const v = row.computed?.[i] ? fit(BigInt.asUintN(p.width, c), p.width) : fit(c, p.width);
       if (v === null) return { error: `${c} does not fit '${p.name}' (${p.width} bit${p.width > 1 ? 's' : ''})${p.width > 53 ? ': tables take up to 53 bits a column' : ''}`, line: row.line };
       (p.dir === 'in' ? set : expect)[p.name] = v;
     }

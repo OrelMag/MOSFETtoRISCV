@@ -127,3 +127,14 @@ describe('a table on a chip', () => {
     expect(starterTest(main, 'first').src).toBe('a b s c\n0 0 X X\n');
   });
 });
+
+describe('widths', () => {
+  it('an expression wraps to the pin width; a literal that does not fit is refused', () => {
+    const { def, mode } = ref('s_cnt4');
+    const names = ['clk', 'en', 'rst', 'q'];
+    const p = plan(def, 'clk en rst q\nC 0 1 0\nrepeat(20) C 1 0 (n+1)\n');
+    expect(runTest(def, mode, p, names).failed).toEqual([]);
+    const lit = planTest(def, { name: 't', src: 'clk en rst q\nC 0 1 16\n' });
+    expect('error' in lit && lit.error).toContain('does not fit');
+  });
+});

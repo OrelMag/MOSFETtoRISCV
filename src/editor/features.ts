@@ -15,6 +15,8 @@ import './iobar';
 import './keys';
 // The analysis tools plug into every editor (probes, timing, lint).
 import './analysis';
+// Test tables on a chip (Digital's test syntax), run after every edit.
+import './testsui';
 // The CPU panel: program, registers, memory and the golden model for a chip that is a processor.
 import './cpuui';
 // Consoles, switch banks and screens: their property sections and the Screens drawer.
