@@ -431,8 +431,10 @@ export const chOoo: Chapter = {
         predict which loads do not alias and check later.</p>
         <p>The price comes from the gates. Where the gate-level core can be built in your shape (it stays 2-wide with its
         own ports, predictor and latencies; its window sizes vary), the lab gives its NANDs and its clock period, and the
-        period times the CPI is the time of an instruction. Other shapes are timed, not priced. Keep a shape to set it
-        beside the next.</p>`,
+        period times the CPI is the time of an instruction. Other shapes are timed, not priced. The window costs area,
+        hardly any clock: from a reorder buffer of 8, an issue queue of 4 and a store queue of 2 (286 574 NANDs) to 32,
+        16 and 8 (509 252) the period only goes from 93 to 95 NAND delays, since the critical path runs from the divider's
+        result through the operand bypass, not through wakeup and select. Keep a shape to set it beside the next.</p>`,
       widget: oooLabWidget,
     },
     {

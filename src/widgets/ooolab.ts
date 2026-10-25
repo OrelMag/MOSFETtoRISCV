@@ -252,6 +252,7 @@ export function oooLabWidget(): Widget {
     nandEl.textContent = price ? nands(price.nands) : 'not built in gates';
     nandEl.title = price ? '' : 'The gate-level core is 2-wide with its own ports, predictor and latencies; only its window sizes vary.';
     perEl.textContent = price ? `${price.period} · ${fix(price.period * cpi, 1)}` : '–';
+    perEl.title = price ? `Under the load-dependent delay model: a period of ${price.periodLoad} units, ${fix(price.periodLoad * cpi, 1)} per instruction.` : '';
     // commit slots, summed over the programs
     const slots = Object.fromEntries(SLOT_CAUSES.map((c) => [c, runs.reduce((a, r) => a + r.stats.slots[c], 0)])) as Record<SlotCause, number>;
     const total = SLOT_CAUSES.reduce((a, c) => a + slots[c], 0) || 1;

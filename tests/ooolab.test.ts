@@ -39,6 +39,10 @@ describe('the out-of-order lab', () => {
     quoted(`take ${wide.share('mispredict')} % of the slots`);
     const slow = onSet({ lat: { alu: 1, load: 20, mul: 2, div: 19 } });
     quoted(`CPI is ${slow.cpi} with ${slow.share('memory')} %`);
+    const lo = priceOf({ rob: 8, iq: 4, sq: 2 })!, hi = priceOf({ rob: 32, iq: 16, sq: 8 })!;
+    quoted(`(${lo.nands.toLocaleString('en').replace(/,/g, ' ')} NANDs)`);
+    quoted(`(${hi.nands.toLocaleString('en').replace(/,/g, ' ')})`);
+    quoted(`from ${lo.period} to ${hi.period} NAND delays`);
     quoted(`only brings it to ${onSet({ lat: { alu: 1, load: 20, mul: 2, div: 19 }, rob: 64, iq: 32, sq: 16 }).cpi}`);
   });
 
@@ -66,6 +70,8 @@ describe('the out-of-order lab', () => {
     expect(priceOf({})).toMatchObject({ nands: RESULTS.cpus.find((c) => c.id === 'ooo')!.nands, period: RESULTS.cpus.find((c) => c.id === 'ooo')!.period });
     expect(priceOf(fullShape({}))).not.toBeNull();
     expect(gateShape({ rob: 8, iq: 4, sq: 2 })).toBe(true);
+    for (const rob of [8, 16, 32]) for (const iq of [4, 8, 16]) for (const sq of [2, 4, 8]) expect(priceOf({ rob, iq, sq })).not.toBeNull();
+    expect(priceOf({ rob: 64 })).toBeNull();
     for (const c of [{ width: 4 }, { inorder: true }, { predict: 'perfect' as const }, { commit: 1 }, { divider: 'pipelined' as const },
       { lat: { ...OOO_CORE.lat, load: 3 } }, { ports: [['alu', 'branch', 'mem'], ['alu', 'branch', 'mul', 'div'], ['alu']] as OooConfig['ports'] }]) {
       expect(gateShape(c), JSON.stringify(c)).toBe(false);

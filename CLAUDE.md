@@ -288,7 +288,9 @@ src/lib/       the component library (registered in `registry` via define())
                  (forwarding from the youngest older store to the word: before the tail the load saw), dataMemory2(k) (a read
                  and a write address). Rows on shared wires (rowArray): the sandbox round trip of a block drawn with hundreds
                  of labels takes minutes
-  ooocore.ts     chapter 26's out-of-order core: oooCpu(program, { imemK, dmemK }) (`ooo`), equal to riscv/ooomodel.ts's
+  ooocore.ts     chapter 26's out-of-order core: oooCpu(program, { imemK, dmemK, rob, iq, sq }) (`ooo`; window sizes: powers of two, ROB ≥ 8, IQ ≥ 4,
+                 SQ ≥ 2, the units in lib/ooo.ts generators with the old constants as defaults; scripts/ooo-sizes.ts --write measures
+                 the 27-point grid into bench/ooosizes.json; tests/ooosizes.test.ts each size against the model), equal to riscv/ooomodel.ts's
                  OOO_CORE every cycle (tests/ooocore.test.ts: commits and each port's pick per cycle, the golden model after
                  every commit, on targeted programs, the benchmarks and random programs). Fetch (rom2, FETCH_OOO: the model's
                  prediction, ras2, btbCommit; the fetch register refilled when dispatch empties it), dispatch (OOO_CLASS: the

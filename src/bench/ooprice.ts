@@ -4,13 +4,13 @@
 // store-queue sizes. Everything else the lab times but does not price.
 
 import { OOO_CORE, shapeOf, portsOf, type OooConfig } from '../riscv/ooomodel';
-import RESULTS from './results.json';
+import SIZES from './ooosizes.json';
 
-export interface Price { rob: number; iq: number; sq: number; nands: number; period: number }
+/** NANDs (no program ROM), the static-timing period in NAND delays, and under the load-dependent delay model. */
+export interface Price { rob: number; iq: number; sq: number; nands: number; period: number; periodLoad: number }
 
-const core = RESULTS.cpus.find((c) => c.id === 'ooo')!;
-/** Measured points (the core's own from the benchmark runs). */
-export const PRICE_POINTS: Price[] = [{ rob: OOO_CORE.rob, iq: OOO_CORE.iq, sq: OOO_CORE.sq, nands: core.nands, period: core.period }];
+/** The measured grid (scripts/ooo-sizes.ts --write; tests/ooosizes-cost.test.ts checks it against the gates). */
+export const PRICE_POINTS: Price[] = SIZES.points.map(({ rob, iq, sq, nands, period, periodLoad }) => ({ rob, iq, sq, nands, period, periodLoad }));
 
 /** Whether the gate-level core can be built in this shape, sizes aside. */
 export function gateShape(cfg: Partial<OooConfig>): boolean {
