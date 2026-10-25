@@ -91,3 +91,17 @@ describe('numbers in the level text', () => {
     expect(BUILDM.m_ctrl().brief).toContain(`a real chip's 7.8 µs is about ${TIMING.tREFI.toLocaleString('en').replace(/,/g, ' ')} cycles`);
   });
 });
+
+describe('codex links', () => {
+  // RASTER16 has no depth buffer, k_frame one screen, and the barrel's one-cycle-late memory needs no scoreboard: those
+  // entries hang where the text says what is missing (p_spin) or where the idea first appears (the load-use interlock).
+  it('point at what the level has', () => {
+    const c = (id: string) => nodeById(id)!.codex;
+    expect(c('k_raster')).not.toContain('zbuffer');
+    expect(c('k_frame')).not.toContain('doublebuffer');
+    expect(c('k_warps')).not.toContain('scoreboard');
+    expect(c('p_spin')).toEqual(expect.arrayContaining(['doublebuffer', 'zbuffer']));
+    expect(nodeById('p_spin')!.why).toMatch(/One screen and no depth buffer/);
+    expect(c('pi_haz')).toContain('scoreboard');
+  });
+});

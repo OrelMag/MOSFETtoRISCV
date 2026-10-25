@@ -497,7 +497,7 @@ export const NODES: CampaignNode[] = [
     id: 'pi_haz', act: 6, title: 'Hazard unit', kind: 'build', requires: ['g_eq16', 'pi_lesson'], base: BUILD6.pi_haz, par: { nand: 53, depth: 12 },
     why: 'A load\'s value only exists after M. If the very next instruction needs it, no forwarding can help: hold it one cycle.',
     tips: ['A load in E: rwe and wb = memory.', 'Being conservative is allowed (a stall too many only costs a cycle).'],
-    codex: ['loaduse'], unlocks: ['rv16_haz'], anatomy: ['haz'],
+    codex: ['loaduse', 'scoreboard'], unlocks: ['rv16_haz'], anatomy: ['haz'],
   },
   {
     id: 'pi_core2', act: 6, title: 'Pipeline III: load-use', kind: 'core', requires: ['pi_core1', 'pi_haz'], base: BUILD6.pi_core2, par: { nand: 7531, period: 78, cycles: 917 },
@@ -720,7 +720,7 @@ export const NODES: CampaignNode[] = [
     id: 'k_warps', act: 9, title: 'Two warps', kind: 'core', optional: true, requires: ['k_simt', 'k_coal'], base: BUILDK.k_warps, par: { nand: 29974, period: 95, cycles: 2093 },
     why: 'Real memory answers late. While one warp waits for its word, let the other issue: latency hidden by switching threads instead of by forwarding or stalling. With a memory one cycle late and two warps taking turns, every load is back before its warp issues again.',
     tips: ['Start from your SIMT core: fetch, decode, control and the lanes stay shared. Duplicate what is state: PC, mask, stack, lane registers.', 'The warp bit is a flip-flop that toggles every cycle (0 after reset); 2:1 muxes pick the issuing warp’s PC, register reads and mask.', 'A load: hold its lanes (mask · rwe) and rd for one cycle, then write drdata into the other warp’s registers. In any cycle each register file has one writer: its warp’s results, or the returning load.', 'bar: a waiting bit per warp. Arriving first sets yours, arriving second clears the other’s. A warp goes only if it is not held at bar (or the other has no lanes) and has lanes of its own; a PC moves only when its warp goes.'],
-    codex: ['barrel', 'barrier', 'scoreboard', 'occupancy'], chapters: [{ chapter: 'warps', label: 'Hiding latency' }],
+    codex: ['barrel', 'barrier', 'occupancy'], chapters: [{ chapter: 'warps', label: 'Hiding latency' }],
   },
   {
     id: 'p_hist', act: 9, title: 'Histogram', kind: 'program', optional: true, requires: ['k_warps'], par: { cycles: 176, laneops: 702 },
@@ -744,19 +744,19 @@ export const NODES: CampaignNode[] = [
     id: 'k_raster', act: 9, title: 'Rasterizer', kind: 'build', optional: true, requires: ['k_tile'], base: BUILDK.k_raster, par: { nand: 9188, period: 145, cycles: 7439 },
     why: 'The edge steppers and the tile walk, plus the set-up that starts them: each edge\'s A and B, the top-left bias, the box in tiles, and E at the first tile. That last one is a product, and there is no multiplier here: each stepper computes its own by shift-and-add, a doubling per bit, on the adder it already has.',
     tips: ['A, B, Δx = ox − xᵢ, Δy = oy − yᵢ: 8-bit subtractions (two 4-bit adders, the subtrahend inverted, carry in 1). ox = 16·tx0 + 2.', 'The first tile is the smallest (v + 1) >> 4 of the three vertices; the last the largest (v − 2) >> 4, 0 if negative. A comparison is an adder\'s carry.', 'E = A·Δx + B·Δy − bias, MSB first: E ← 0; E ← E − A·Δx₇ (the sign bit weighs −128); E ← E − B·Δy₇; then for bits 6 … 0: E ← 2E + (Δxₖ ? A : 0), E ← E + (Δyₖ ? B : 0); last E ← E − bias. Then load E into itself, so R starts there too.', 'The sum of the three E plus the three biases is twice the area: ≤ 0 is a back face, done.', 'The tile test: a second adder per edge, E + 12·(A⁺ + B⁺), its sign.'],
-    codex: ['horner', 'zbuffer'], unlocks: ['rv16_raster'], chapters: [{ chapter: 'pixels', step: 1, label: 'Inside a triangle' }],
+    codex: ['horner', 'shiftadd'], unlocks: ['rv16_raster'], chapters: [{ chapter: 'pixels', step: 1, label: 'Inside a triangle' }],
   },
   {
     id: 'k_frame', act: 9, title: 'A frame', kind: 'core', optional: true, requires: ['k_raster', 'k_warps'], base: BUILDK.k_frame, par: { nand: 40275, period: 147, cycles: 7635 },
     why: 'A GPU in miniature: programmable lanes compute where the vertices go, a fixed-function rasterizer turns triangles into pixels, the screen is memory both write. The core talks to the rasterizer through addresses, as to any device, and must not touch the screen or the device while it draws.',
     tips: ['Start from your two-warp core; add the rasterizer, six 7-bit vertex registers and a 16-bit colour register, written from lane 0\'s port when its address is 0xFFF0 … 0xFFF6.', 'A store to 0xFFF6 sets a flip-flop that is the rasterizer\'s go in the next cycle; busy for the core is that flip-flop OR the rasterizer\'s busy.', 'Hold: busy AND (lane 0 is active, the instruction stores, address in 0xFFF0 … 0xFFF6, OR it loads and an active lane\'s address is in 0xF000 … 0xF3FF). AND its inverse into the warp\'s go: nothing of that instruction happens, and its next turn tries again.', 'Use the instruction\'s own signals for the hold, not the write enables it gates: those depend on go.'],
-    codex: ['device', 'doublebuffer'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 1, label: 'The pipeline' }],
+    codex: ['device', 'mmio'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 1, label: 'The pipeline' }],
   },
   {
     id: 'p_spin', act: 9, title: 'Spin', kind: 'program', optional: true, requires: ['k_frame'], par: { cycles: 1432, laneops: 5282 },
-    why: 'A spinning square, a few frames of it, on the device you built: warp 0 turns the corners, both warps clear the screen, lane 0 hands two triangles to the rasterizer. No multiplier and no sine table: Minsky\'s rule turns a point with two shifts and two adds.',
+    why: 'A spinning square, a few frames of it, on the device you built: warp 0 turns the corners, both warps clear the screen, lane 0 hands two triangles to the rasterizer. No multiplier and no sine table: Minsky\'s rule turns a point with two shifts and two adds. One screen and no depth buffer: the clear must wait for the draw (the second bar), and nothing sorts what overlaps; the GPU chapters add a back frame to draw into and a depth per pixel.',
     tips: ['Clearing is most of the work: give all eight threads a share, several stores per pass.', 'Lane i of warp 0 turns corner i; store each corner\'s screen position (64 + (x >> 8)) where lane 0 can load it.', 'Two bars per frame: after clearing and turning (lane 0 needs the corners and a clean screen), and after drawing (nobody clears a frame still being drawn).', 'On the hardware a load from the screen waits for the rasterizer: one before the clear makes the program right there too.'],
-    codex: ['minsky'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 2, label: 'A spinning triangle' }],
+    codex: ['minsky', 'doublebuffer', 'zbuffer'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 2, label: 'A spinning triangle' }],
   },
   // ---- Act 10 -------------------------------------------------------------------------------
   {
