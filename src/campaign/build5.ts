@@ -34,10 +34,10 @@ const CORE_BRIEF = (what: string) => `${what} Pins: <code>clk</code>, <code>rst<
 
 /** The control table, a row per instruction class, read off controlSpec (X: not checked). */
 export const CTL_ROWS: { label: string; ops: string; word: number; alu?: string }[] = [
-  { label: 'OP', ops: '1', word: 0x0001, alu: '{0, f3}' },
-  { label: 'OPX', ops: '2', word: 0x0002, alu: '{1, f3}' },
+  { label: 'OP', ops: '1', word: 0x0001, alu: '{0,f3}' },
+  { label: 'OPX', ops: '2', word: 0x0002, alu: '{1,f3}' },
   { label: 'ADDI', ops: '4', word: 0x0004 },
-  { label: 'SHI', ops: '5', word: 0x0005, alu: '1 · 5 · 13 for f3[2:1] = 00 · 01 · 1x' },
+  { label: 'SHI', ops: '5', word: 0x0005, alu: '1/5/13*' },
   { label: 'LW', ops: '6', word: 0x0006 },
   { label: 'LUI', ops: '7, 15', word: 0x0007 },
   { label: 'B', ops: '8–11', word: 0x0008 },
@@ -55,9 +55,12 @@ export function ctlTable(): string {
     const { out, care } = controlSpec(r.word);
     return care[i] ? String(out[i]) : 'X';
   };
-  const head = `<tr><th>op</th><th></th>${CTL_OUTS.map((n) => `<th>${n}</th>`).join('')}</tr>`;
-  const rows = CTL_ROWS.map((r) => `<tr><th>${r.ops}</th><th>${r.label}</th>${CTL_OUTS.map((_, i) => `<td>${cell(r, i)}</td>`).join('')}</tr>`);
-  return `<div style="overflow-x: auto"><table class="cp-laws">${head}${rows.join('')}</table></div>`;
+  // narrow cells: the table sits in a 340 px side panel
+  const pad = 'style="padding: 2px 3px"';
+  const head = `<tr><th ${pad}>op</th>${CTL_OUTS.map((n) => `<th ${pad}>${n}</th>`).join('')}</tr>`;
+  const rows = CTL_ROWS.map((r) => `<tr><th ${pad}>${r.label} ${r.ops}</th>${CTL_OUTS.map((_, i) => `<td ${pad}>${cell(r, i)}</td>`).join('')}</tr>`);
+  return `<div style="overflow-x: auto"><table class="cp-laws" style="font-size: 11px">${head}${rows.join('')}</table></div>`
+    + '<div>* SHI: alu = 1 (sll), 5 (srl) or 13 (sra) for f3[2:1] = 00, 01, 1x. X: not checked.</div>';
 }
 
 export const BUILD5: Record<string, () => BuildChallenge> = {

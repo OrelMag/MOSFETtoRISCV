@@ -301,13 +301,13 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 's_dff', act: 3, title: 'D flip-flop', kind: 'build', requires: ['s_dlatch'], base: sandbox('s_dff'),
-    why: 'A latch is open while its enable is high: in a loop (PC → incrementer → PC) the value runs round as often as the high phase allows. Two latches on opposite phases fix it: q changes once, at the rising edge, for 9 NANDs a bit. The price is two timing rules, a setup time before the edge and clk-to-q after it, 3 delays each here. The PC, the register file and every pipeline register are these 9 NANDs a bit.',
+    why: 'A latch passes d as long as its enable is high, so in a loop (PC → incrementer → PC) a value can run round twice in one cycle. Two latches on opposite clock phases change q once, at the rising edge: 9 NANDs a bit, with setup and clk-to-q of 3 delays each. Every register from here on is built from them.',
     tips: ['Use your D latch twice: d into the master, the master\'s q into the slave.', 'The master is enabled by ¬clk, the slave by clk: 4 + 4 + 1 = 9 NANDs.', 'Both latches on clk make one transparent latch: the test changes d while clk is high, and q follows.'],
     chapters: [{ chapter: 'latches', step: 3, label: 'The flip-flop: act only on the edge' }], codex: ['dff', 'edge', 'setuphold', 'metastability'], unlocks: ['rv16_dff'], par: { nand: 9 },
   },
   {
     id: 's_reg4', act: 3, title: '4-bit register', kind: 'build', requires: ['s_dff', 'g_mux'], base: sandbox('s_reg4'),
-    why: 'A flip-flop takes d at every edge, but most state must hold until written: x[rd] only when an instruction names it, a pipeline register not while its stage waits. A mux in front of each flip-flop feeds q back while en = 0: 13 NANDs a bit, 52 for four at par. The 16-bit register next is four of these; never gate the clock instead.',
+    why: 'A flip-flop takes d at every edge, but most state must hold until written: x[rd] only when an instruction names it. A mux in front of each flip-flop feeds q back while en = 0: 13 NANDs a bit, 52 for four at par. Never gate the clock instead; the 16-bit register next is four of these.',
     tips: ['Build a 1-bit flip-flop with enable first, then use it four times.', 'The mux: en = 1 selects d, en = 0 selects the flip-flop\'s own q: 9 + 4 = 13 NANDs a bit.', 'Do not AND en into clk: a change of en while clk is high makes an edge of its own, and the AND delays this clock against every other.'],
     chapters: [{ chapter: 'latches', step: 4, label: 'Load enable' }], codex: ['register', 'clockgating'], unlocks: ['rv16_dffe', 'rv16_reg4'], par: { nand: 52 },
   },
@@ -406,7 +406,7 @@ export const NODES: CampaignNode[] = [
   // ---- Act 5 --------------------------------------------------------------------------------
   {
     id: 'c_lesson', act: 5, title: 'The datapath', kind: 'lesson', requires: ['i_isa', 'a_alu16', 'm_rf'],
-    why: 'You have every block: an ALU (1 055 NANDs), a register file (2 172), a PC, memories, and Act 4\'s programs. Follow one instruction through them: every other instruction takes the same path with different mux settings, and the control unit is the table of those settings. This act builds the table, the immediates and the branch decision, three cores, then Core IV: the ripple ALU is 50 of Core III\'s 98 delays.',
+    why: 'You have every block: an ALU (1 055 NANDs), a register file (2 172), a PC, memories, Act 4\'s programs. Every instruction takes one path through them with different mux settings, and the control unit is the table of those settings. This act builds the table, then three cores, then Core IV: the ripple ALU is 50 of Core III\'s 98 delays.',
     body: 'datapath', tips: [], codex: ['datapath', 'control'], chapters: [{ chapter: 'cpu', step: 0, label: 'The datapath' }],
   },
   {
@@ -417,7 +417,7 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'c_ctl', act: 5, title: 'Control unit', kind: 'build', requires: ['i_enc', 'g_dec', 'd_kmap', 'g_sop'], base: BUILD5.c_ctl, par: { nand: 200, depth: 13 },
-    why: 'The datapath\'s muxes and write enables have nobody to set them. The control unit is the opcode table as logic: a 4→16 decoder gives one line per opcode, and each signal is the OR of the lines that need it, 200 NANDs and 13 delays at par. Core I\'s path starts here: the ALU learns its operation 13 delays after the word arrives.',
+    why: 'The datapath\'s muxes and write enables have nobody to set them. The control unit is the opcode table as logic: a 4→16 decoder, then an OR per signal of the opcodes that need it, 200 NANDs and 13 delays at par. Core I\'s ALU learns its operation 13 delays after the word arrives.',
     tips: ['A 4→16 decoder on op gives one line per opcode.', 'Read the table a column at a time: each bit is an OR of rows. rwe = OP + OPX + ADDI + SHI + LW + LUI + JAL + JALR; isel0 = B + SW + LUI, isel1 = JAL + LUI; wb0 = LW + LUI, wb1 = JAL + JALR + LUI.', 'alu = {OPX, f3} for OP and OPX, from f3[2:1] for SHI, else add (0). An X is free: give it whatever shortens an OR.'],
     chapters: [{ chapter: 'cpu', step: 1, label: 'ALU instructions' }], codex: ['control', 'dontcare'], unlocks: ['rv16_ctl'], anatomy: ['ctl'],
   },
@@ -435,7 +435,7 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'c_core1', act: 5, title: 'Core I: arithmetic', kind: 'core', requires: ['c_lesson', 'c_imm', 'c_ctl', 's_pc', 'm_rf', 'a_alu16'], base: BUILD5.c_core1, par: { nand: 3892, period: 84, cycles: 701 },
-    why: 'The blocks of acts 1–5 become one loop that runs a program by itself. Start with the instructions that touch only registers: PC → instruction memory → control → register file → ALU → register file is the spine every later instruction adds to, 3 892 NANDs and period 84 at par. Core II hangs the data memory on it, Core III next PC, Core IV shortens it.',
+    why: 'The blocks of acts 1–5 become one loop that runs a program by itself. First the instructions that touch only registers: PC → instruction memory → control → register file → ALU → register file, the spine every later core adds to. 3 892 NANDs and period 84 at par.',
     tips: ['Wire the instruction\'s fields straight to the register file: rs1 = instr[9:7], rs2 = instr[12:10], rd = instr[6:4].', 'A mux picks the ALU\'s b (rs2 or the immediate); another picks what is written back (the ALU\'s result, or the immediate for lui).', 'Use pointers (net labels) for long wires: pc, imm, the result.'],
     chapters: [{ chapter: 'cpu', step: 1, label: 'ALU instructions' }], codex: ['singlecycle', 'datapath'],
   },

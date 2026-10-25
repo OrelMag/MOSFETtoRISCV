@@ -169,7 +169,7 @@ straight to the register file's read ports; the control unit sees op = OP and se
 the ALU adds; the result goes back to the register file's write port with rd as its address and
 we = 1; the PC becomes PC + 1 at the clock edge.</p>
 <h4>One path, different settings</h4>
-<table class="cp-laws">
+<div style="overflow-x: auto"><table class="cp-laws">
   <tr><th></th><td>ALU b</td><td>immediate</td><td>ALU op</td><td>rd ←</td><td>memory</td><td>next PC</td></tr>
   <tr><th>R-type</th><td>rs2</td><td>–</td><td>{OPX, f3}</td><td>ALU</td><td>–</td><td>pc + 1</td></tr>
   <tr><th>addi</th><td>imm</td><td>I</td><td>add</td><td>ALU</td><td>–</td><td>pc + 1</td></tr>
@@ -180,7 +180,7 @@ we = 1; the PC becomes PC + 1 at the clock edge.</p>
   <tr><th>branches</th><td>–</td><td>S/B</td><td>–</td><td>no write</td><td>–</td><td>take ? pc + imm : pc + 1</td></tr>
   <tr><th>jal</th><td>–</td><td>J</td><td>–</td><td>pc + 1</td><td>–</td><td>pc + imm</td></tr>
   <tr><th>jalr</th><td>–</td><td>I</td><td>–</td><td>pc + 1</td><td>–</td><td>rs1 + imm</td></tr>
-</table>
+</table></div>
 <p>A dash is a don't-care. The table is the control unit; the rest is wiring between blocks you own:
 the register file 2 172 NANDs, the ALU 1 055, the branch comparator 287, next PC 421, control 200.
 Core III is 4 720 NANDs, nearly half of it the register file.</p>
