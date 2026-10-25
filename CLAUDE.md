@@ -668,7 +668,8 @@ src/cards/      punched cards (DOM-free): hollerith.ts (the IBM 029 code: punchO
                deckWidget with the sorter, readerPanel: the card at the reader's station on a scene)
 src/import/    other tools' circuits in: report.ts (DOM-free contract: ImportResult = chips (top last), part mappings, problems;
                MappingTally), digital.ts (Digital .dig, several files a project, Testcase → ChipDoc.tests), logisim.ts
-               (Logisim-evolution .circ; logisimVectors: a test-vector file → Digital test syntax), importui.ts (CircuitReader,
+               (Logisim-evolution .circ; logisimVectors: a test-vector file → Digital test syntax; a .txt dropped alone becomes a table
+               on the open chip), xml.ts (a DOM-free XML reader, XStream references), circuits.ts (the readers registered), importui.ts (CircuitReader,
                registerCircuitReader: picked / dropped files → the summary dialog → chips in a folder of their own, one undo step)
 src/hdl/       HDL in (DOM-free): yosysjson.ts (importYosysJson: Yosys's write_json → ChipDocs, one per module, instances as
                placed chips; every fine-grained cell as library parts, parseFf: the $_DFF* / $_SDFF* / $_DLATCH* family from

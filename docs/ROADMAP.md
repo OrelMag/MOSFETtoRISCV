@@ -1078,7 +1078,7 @@ unit, wires nothing). The fan-out capacitance per net is already computed for th
 
 **Circuits from other tools, tests you write** (gap review 2026-10-25; mockup approved 2026-10-25): Logisim-evolution
 and Digital are what courses already use, and Digital lets a student write tests for any circuit.
-- ⏳ Digital `.dig` (a project's files together) and Logisim-evolution `.circ` import: every circuit a chip in a folder of its
+- ✅ Digital `.dig` (a project's files together) and Logisim-evolution `.circ` import: every circuit a chip in a folder of its
   own, the file's drawing kept, each part mapped to ours (a table of what became what), parts with no equivalent an empty
   chip with the same pins; Digital's Testcase tables and Logisim test vectors come in as test tables
 - ✅ Test tables on any chip (editor/testtable.ts, testsui.ts): Digital's test syntax, a Tests pane run after every edit,
