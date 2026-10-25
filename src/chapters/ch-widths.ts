@@ -276,8 +276,9 @@ export const chWidths: Chapter = {
           </tbody>
         </table>
         <p>×${(X.rv64im.nands / X.rv32im.nands).toFixed(2)} the gates, most of it in the multiplier (×${(X.mUnit[64] / X.mUnit[32]).toFixed(1)}) and in storage
-        that simply doubles. The period grows by ${pct(X.rv64im.period, X.rv32im.period)} %: the adders and the shifter gained a level, and a W instruction's
-        result passes the W unit. The benchmarks compute on 32-bit values, so the RV64 core runs the same loops (the generator's shifts and CRC-32's
+        that simply doubles. The period grows by ${pct(X.rv64im.period, X.rv32im.period)} %. The Timing panel shows the critical path running through the
+        multiplier, whose tree gained levels and whose final adder doubled; without M the core goes from ${X.rv32i.period} to ${X.rv64i.period} delays,
+        because the adders and the shifter gained a level and a W instruction's result passes the W unit. The benchmarks compute on 32-bit values, so the RV64 core runs the same loops (the generator's shifts and CRC-32's
         as W shifts), and sort and CRC-32 run two more instructions each, once: an <code>li</code> of a constant above 2³¹, which is a positive number on
         RV64 and no longer fits lui + addiw. It is ${(X.rv64im.period / X.rv32im.period).toFixed(2)} times slower on them and buys nothing.</p>
         <p>It pays when the values are 64 bits wide: F(90) and 20! in the samples need one <code>add</code> or <code>mul</code> per step here.

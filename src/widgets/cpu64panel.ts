@@ -39,16 +39,18 @@ export function cpu64Scene(opts: Cpu64SceneOptions): Scene {
   const xlen = opts.xlen ?? 64;
   const asm = assemble(opts.source, [], { xlen });
   const m = opts.m ?? true;
+  // the smallest ROM that holds the program, 64 words at least: the size XLEN_COSTS measures
+  const imemK = opts.imemK ?? Math.max(6, Math.ceil(Math.log2(Math.max(1, asm.words.length))));
   return {
-    root: xlenCpu(asm.words, { xlen, m, imemK: opts.imemK ?? 7, dmemK: opts.dmemK ?? 5 }),
+    root: xlenCpu(asm.words, { xlen, m, imemK, dmemK: opts.dmemK ?? 5 }),
     inputs: { clk: 0 },
-    panels: [cpu64Panel({ ...opts, xlen, m }, asm), ...(opts.timing ? [timingPanel] : [])],
+    panels: [cpu64Panel({ ...opts, xlen, m, imemK }, asm), ...(opts.timing ? [timingPanel] : [])],
   };
 }
 
 function cpu64Panel(opts: Cpu64SceneOptions & { xlen: 32 | 64; m: boolean }, asm: AsmResult): ScenePanel {
   return (stage: Stage): Widget => {
-    const imemWords = 2 ** (opts.imemK ?? 7), dmemWords = 2 ** (opts.dmemK ?? 5) * (opts.xlen / 32);
+    const imemWords = 2 ** opts.imemK!, dmemWords = 2 ** (opts.dmemK ?? 5) * (opts.xlen / 32);
     const fresh = () => new ISS64(asm.words, { m: opts.m, imemWords, dmemWords });
     let iss = fresh();
     let mismatch: string | null = null;
@@ -71,7 +73,7 @@ function cpu64Panel(opts: Cpu64SceneOptions & { xlen: 32 | 64; m: boolean }, asm
     sel.value = match ? match.id : '__custom';
     sel.addEventListener('change', () => {
       const p = PROGS.find((q) => q.id === sel.value);
-      if (p) stage.load(cpu64Scene({ ...opts, source: p.source }));
+      if (p) stage.load(cpu64Scene({ ...opts, imemK: undefined, source: p.source }));
     });
 
     const runBtn = h('button', { class: 'btn sm primary', title: 'Run until the program halts' }, 'Run to halt');
@@ -106,7 +108,7 @@ function cpu64Panel(opts: Cpu64SceneOptions & { xlen: 32 | 64; m: boolean }, asm
             const r = assemble(editor.value, [], { xlen: opts.xlen });
             editor.setDiagnostics(r.errors);
             if (r.errors.length) return void (errBox.textContent = r.errors.map((e) => `line ${e.line}: ${e.message}`).join('\n'));
-            stage.load(cpu64Scene({ ...opts, source: editor.value }));
+            stage.load(cpu64Scene({ ...opts, imemK: undefined, source: editor.value }));
           },
         }, 'Assemble & load'),
         h('button', { class: 'btn sm', onclick: () => { editWrap.style.display = 'none'; } }, 'Close')));
