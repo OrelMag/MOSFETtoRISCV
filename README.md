@@ -141,7 +141,9 @@ simulator, so whatever you build is a real component of the site. The full guide
   and imported back, a chip (a whole RV32I CPU among the tests) simulates equal to the original.
 - **Truth-table and state-machine chips** (New chip ▾): fill a table (or paint a Karnaugh map) and get
   it minimized and built as NAND–NAND, AND–OR, a PLA or a ROM, each priced; draw a state diagram and get
-  it encoded binary, Gray or one-hot around flip-flops, read back from the circuit against the diagram.
+  it encoded binary, Gray or one-hot around flip-flops, read back from the circuit against the diagram;
+  give it registers, and states carry register transfers (`a := a − b`) and arcs tests (`a < b`), built
+  as that controller over a datapath of library registers, adders and comparators (GCD to start from).
 - Wide pins up to 1024 bits, exact; autosave, chip files, share links, Verilog and image export, and
   **File ▸ Export Verilog for FPGA**: a board top for a Sipeed Tang Nano 9K (clock divider, reset,
   buttons and LEDs) with its pin constraints.
@@ -285,8 +287,8 @@ The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next feat
 
 - **Load-dependent delay, further**: the gate simulator on the loaded delays (glitches and races
   following the loads), and the estimate checked path by path against the sky130 runs.
-- **State machine + datapath**: states carrying register transfers (`count := count + 1`) on library
-  registers, adders and muxes, the state-machine chip as their controller; then a memory-map designer.
+- **A memory-map designer**: address regions (RAM, ROM, screen, console, keys) dragged onto the address
+  space, overlaps and gaps shown, the address decoder opened as a chip.
 - **Verilog in the journey**: the same adder as text and as gates in a chapter step, and a Verilog
   chip's critical path mapped back to its source lines.
 - **An out-of-order lab**: width, ROB, queues, ports and units set by the learner on the model, on
