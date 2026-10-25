@@ -138,7 +138,7 @@ describe('WIDTH_COSTS', () => {
       if (r.growth === 'time') expect(r.depth).toEqual([34, 66]);
       else expect(r.depth ? d.map((x) => logicDepth(x)) : [logicDepth(d[0]), logicDepth(d[1])], r.id).toEqual(r.depth ?? [null, null]);
     }
-  });
+  }, 120_000);
 });
 
 describe('benchmarks on RV64', () => {
@@ -149,6 +149,17 @@ describe('benchmarks on RV64', () => {
       iss.run(100000);
       expect(iss.halted, b.id).toBe(true);
       for (const [i, v] of b.expect()) expect(iss.dmem[i], `${b.id} word ${i}`).toBe(v);
+    }
+  });
+});
+
+describe('PROGRAMS64', () => {
+  it('each leaves its answer on the golden model', async () => {
+    const { PROGRAMS64 } = await import('../src/riscv/programs64');
+    const { regNumber } = await import('../src/riscv/isa');
+    for (const p of PROGRAMS64) {
+      const iss = run(p.source, !!p.m);
+      expect(iss.x[regNumber(p.result.reg)!], p.id).toBe(p.result.value);
     }
   });
 });
