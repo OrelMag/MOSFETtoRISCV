@@ -73,9 +73,11 @@ export const NUDGES: Record<string, string> = {
   y_csr: 'Some of these registers change when software writes them, some when a trap happens, and one every cycle.',
   y_trap: 'A trap replaces the instruction: decide what must be remembered, and where execution goes instead.',
   y_irq: 'An interrupt is a trap no instruction caused, and it may only come when it is allowed.',
+  p_handler: 'Whatever the handler changes, main must not notice; and the device must hear that it was served before the handler leaves.',
   y_ptrap: 'Pick one stage where traps take effect, and decide what happens to the older and the younger instructions around it.',
   y_final: 'An interrupt belongs to no instruction: ask which instruction it should look as if it came before, and whether the stage holds one at all.',
   // act 8: side quests
+  n_float: 'Write the value as a power of two times a number between 1 and 2, then find where each part goes.',
   o_mulseq: 'Multiply as by hand, one digit of b per cycle, with the same hardware every time.',
   o_mularr: 'Lay out the long multiplication you would write on paper, and build all of it at once.',
   o_mcore: 'The new opcode only needs a path from the operands to the register write.',
