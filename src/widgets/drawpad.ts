@@ -289,7 +289,7 @@ function drawPanel(link: DrawLink): ScenePanel {
     };
 
     const title = h('h4', null, 'Your drawing', h('span', { class: 'fold-hint' }));
-    const el = h('div', { class: 'mem-panel cpu-panel gfx-panel gfx-draw-panel', 'data-dock': 'left' }, title,
+    const el = h('div', { class: 'mem-panel cpu-panel gfx-panel gfx-draw-panel', 'data-dock': 'left', 'data-phone': 'flow' }, title,
       h('div', { class: 'cpu-body' },
         toolRow, swatches,
         h('div', { class: 'gfx-pad-wrap' }, pad),
