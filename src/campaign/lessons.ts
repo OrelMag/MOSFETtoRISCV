@@ -173,16 +173,38 @@ instruction on its own operands: four results per cycle for one fetch and one de
 <code>csrr rd, tid</code> gives each lane its <b>thread number</b>, the only thing that tells them
 apart at the start.</p>
 <h4>What it costs</h4>
-<p>The control is cheap: the SIMD core you will build adds about 11 000 NANDs to your single-cycle
-core for three extra lanes. Most of that is <b>registers</b>: four register files are 8 688 NANDs.
-A real GPU is the same, with its register file the largest structure on the chip.</p>
+<p>The control is cheap: the SIMD core you will build is 15 669 NANDs, 10 949 more than your
+single-cycle core for three extra lanes, and four single-cycle cores would be 18 880. Most of the
+difference is <b>registers</b>: four register files are 8 688 NANDs. A real GPU is the same, with its
+register file the largest structure on the chip.</p>
+<h4>Five new instructions</h4>
+<p>Everything else is RV16 unchanged. <code>csrr rd, tid</code> reads CSR 7, the thread's number
+(warp · 4 + lane). The other four take SYSTEM's free funct3 values 4 to 7: <code>split rs1</code> and
+<code>join</code> (an if whose lanes disagree, on the reconvergence stack), <code>tmc rs1</code> (the
+mask := the leader's rs1) and <code>bar</code> (wait for the other warp). A lane decoder you are
+given recognizes the first four; <code>bar</code> comes with the two-warp core.</p>
+<h4>Why the single-cycle core</h4>
+<p>A pipeline speeds up one instruction stream by overlapping its instructions, and pays in
+forwarding muxes on the operands, which here would sit in every lane. A GPU overlaps different
+threads instead: while one warp waits, another issues, and a warp's own instructions never overlap.
+That comes second.</p>
 <h4>The hard part</h4>
 <p>One PC cannot go two ways. When the lanes disagree on a branch, something has to give: an
 <b>active mask</b> turns lanes off (they compute, but write nothing), and a <b>stack</b> remembers
 the lanes waiting for the other side of an if. Each side then runs with some lanes idle:
 <b>lane utilization</b>, not the clock, becomes the number to watch.</p>
-<p>This act builds the lanes, their register file, the mask, then a SIMD core; then the
-reconvergence stack and the SIMT core, on which every lane runs like a thread of its own.</p>`,
+<h4>The act in three parts</h4>
+<ul>
+  <li><b>Lanes</b>: the four lanes, their register file and the mask, then the SIMD core; the
+  reconvergence stack, then the SIMT core, on which every lane runs like a thread of its own.</li>
+  <li><b>Warps</b>: a memory that answers a cycle late, and a second warp that issues while the
+  first waits: +12 242 NANDs, 8 688 of them its lane registers. A warp costs its state.</li>
+  <li><b>Pixels</b>: an edge stepper, a tile walk and a rasterizer (9 188 NANDs), fixed-function
+  hardware beside the lanes, with the screen as memory both write.</li>
+</ul>
+<p>Four kernels run on the golden model of the core each part ends with: saxpy (SIMD), a
+reduction (SIMT), a histogram (two warps) and a spinning square (the frame). Each is graded on
+cycles and on lane-ops, the lane-steps that did work.</p>`,
   memwall: `
 <p>Every core of this campaign reads its data memory in the cycle it asks. A real main memory
 cannot: it is <b>DRAM</b>, one transistor and one capacitor per bit, and a bit is a few tens of
@@ -201,7 +223,25 @@ chip), and nothing in the processor does it: the <b>controller</b> does, row by 
 from the requests. Early chips (the 4116) left the row counter to the controller; from the mid-1980s
 chips kept it inside (CAS-before-RAS refresh, then SDRAM's and DDR's auto refresh), so today's only need
 a <b>REF</b> command every 7.8 µs (tREFI), with every bank closed.</p>
-<p>This act builds that path: a column at switch level, a bank that refreshes itself around a cell
-array, then a controller that turns requests into commands at the earliest cycle a chip's timing
-rules allow, and decides how long a row stays open.</p>`,
+<h4>What it costs a processor</h4>
+<p>Behind a cache, DRAM's latency is paid on misses only. The RV32I single-cycle core with chapter
+22's 2-way write-back cache misses 73 times on matmul whatever is behind it. With a fixed line fill
+(8 cycles, 12 when a dirty line goes back first) those misses stall it 676 cycles, 3 029 in all; over
+chapter 36's DRAM controller with open pages 1 022 (3 375); with closed pages 1 341 (3 694). The cache
+decides how often the core goes to DRAM; the controller, how long each trip takes.</p>
+<h4>Other masters, other memories</h4>
+<p>A display, a DMA engine or a second core want memory too, so the data port becomes a <b>bus</b>:
+a handshake either side can stretch, and an arbiter that starves nobody. Copying is what a processor
+is worst at, a load and a store per word, so a <b>DMA engine</b> does it as a second master. And DRAM
+forgets at power-off, so the program starts in <b>flash</b>: non-volatile, but programmed a page at a
+time, only after its whole block is erased, a few thousand times.</p>
+<h4>This act</h4>
+<ul>
+  <li>A DRAM column at switch level, a bank that keeps its row open and refreshes around a cell
+  array, then a controller that issues DDR-style commands at the earliest legal cycle, and a cache in
+  front of it.</li>
+  <li>A bus for two masters and three slaves, and a DMA engine on it.</li>
+  <li>A flash page store that never writes in place.</li>
+  <li>A boot from flash: a program that sums a table the DMA engine is still copying.</li>
+</ul>`,
 };
