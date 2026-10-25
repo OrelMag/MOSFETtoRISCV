@@ -1376,6 +1376,11 @@ export class Stage {
     this.view.highlight(names, focus);
   }
 
+  /** Tint the current view's instances by slack (sim/slack.ts slackHeat; null clears); dropped on navigation. */
+  heat(map: Map<string, { band: number; tip: string }> | null): void {
+    this.view.heat(map);
+  }
+
   /** Colour nets of the current view (index in its netlist → classes); cleared on navigation. */
   markNets(marks: Map<number, string>): void {
     this.view.markNets(marks);

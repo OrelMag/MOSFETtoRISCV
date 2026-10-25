@@ -7,7 +7,8 @@ import { analyzeTiming, CLK_TO_Q, PS_NOTE, PS_PER_NAND, SETUP, type TimingReport
 import { DELAY_NOTE, type DelayModel, delayWord, fanoutOf, fmtDelay, nandDelay, netLoads, psPer } from '../sim/delay';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { h } from '../ui/dom';
-import { defaultDelay, delaySwitch, heavyList } from '../view/delayui';
+import { slackHeat, slackOf } from '../sim/slack';
+import { defaultDelay, delaySwitch, heatLegend, heatToggle, heavyList } from '../view/delayui';
 import type { ScenePanel, Stage, Widget } from '../view/stage';
 
 const reports = { unit: new WeakMap<object, TimingReport | null>(), load: new WeakMap<object, TimingReport | null>(), drawn: new WeakMap<object, TimingReport | null>() };
@@ -33,9 +34,16 @@ export const timingPanel: ScenePanel = (stage: Stage): Widget => {
     stage.highlight(on && r ? [...new Set(r.stages.map((s) => s.inst))] : []);
   };
   btn.addEventListener('click', () => { on = !on; apply(); });
+  // The slack heatmap follows the level on screen (any drill level of the design the stage simulates).
+  let heat = false;
+  const applyHeat = () => {
+    const sl = heat ? slackOf(design, model) : null;
+    stage.heat(sl ? slackHeat(sl, stage.path) : null);
+  };
+  const offNav = stage.onNavigate(applyHeat);
   const render = () => {
     const r = reportOf(model);
-    sw.replaceChildren(delaySwitch(model, (m) => { model = m; render(); apply(); }));
+    sw.replaceChildren(delaySwitch(model, (m) => { model = m; render(); apply(); applyHeat(); }));
     if (!r) return void body.replaceChildren(h('p', { class: 'sub' }, 'No flip-flops: nothing to time.'));
     const other = reportOf(model === 'load' ? 'unit' : 'load')!;
     const ps = psPer(model, PS_PER_NAND), mhz = 1e6 / (r.period * ps);
@@ -58,12 +66,13 @@ export const timingPanel: ScenePanel = (stage: Stage): Widget => {
       h('p', { class: 'sub', style: 'margin:6px 0 0;font-size:12px' }, model === 'load'
         ? `Unit delay: ${other.period} NAND delays, ${otherMhz.toFixed(0)} MHz.`
         : `Under load: ${fmtDelay(other.period, 'load')} units, ${otherMhz.toFixed(0)} MHz.`),
-      h('div', { style: 'margin-top:8px' }, btn),
+      h('div', { class: 'tm-btns' }, btn, heatToggle(heat, () => { heat = !heat; render(); applyHeat(); })),
+      ...(heat ? [heatLegend(true)] : []),
     );
   };
   render();
   apply();
-  return { el, destroy: () => stage.highlight([]) };
+  return { el, destroy: () => { offNav(); stage.highlight([]); stage.heat(null); } };
 };
 
 export function adderComparison(): Widget {

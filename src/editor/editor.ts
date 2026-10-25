@@ -11,6 +11,7 @@ import { setUserResolver } from '../lib/resolve';
 import { bodyKey, isGenerated } from './hdl';
 import type { Vec } from '../sim/geometry';
 import type { PowerOnMode } from '../sim/sim';
+import { WEAK_H, weakTag } from '../sim/switchsim';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { describeBits } from '../sim/values';
 import { coarsePointer, h, hintBadge, icon, placeMenu } from '../ui/dom';
@@ -996,7 +997,9 @@ export class Editor {
     const nd = built && net >= 0 ? netlistOf(built.def)?.nets[net] : undefined;
     const name = nd?.name ?? nd?.ends[0] ?? id;
     const val = bits ? describeBits(bits) : 'not connected';
-    this.tipEl.textContent = `${name}${bits && bits.length > 1 ? `[${bits.length - 1}:0]` : ''} = ${val}`;
+    const wk = this.sim.wireWeak(id);
+    const weak = wk ? ` (${weakTag(wk)}: a weak ${wk === WEAK_H ? '1 an NMOS passed, VDD − Vt' : '0 a PMOS passed, Vt'})` : '';
+    this.tipEl.textContent = `${name}${bits && bits.length > 1 ? `[${bits.length - 1}:0]` : ''} = ${val}${weak}`;
     const r = this.canvas.getBoundingClientRect();
     this.tipEl.style.left = `${e.clientX - r.left + 14}px`;
     this.tipEl.style.top = `${e.clientY - r.top + 14}px`;

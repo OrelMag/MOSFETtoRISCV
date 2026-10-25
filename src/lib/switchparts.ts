@@ -105,6 +105,44 @@ export const TGATE: ComponentDef = define({
 });
 
 /**
+ * Chapter 2's weak levels, side by side: a buffer drawn the wrong way round (the CMOS inverter's places, the NMOS to
+ * VDD and the PMOS to GND: y is a weak copy of a), and a transmission gate passing d whole while en = 1.
+ */
+export const WEAK_DEMO: ComponentDef = define({
+  id: 'weak_demo', name: 'Weak levels', category: 'transistor',
+  summary: 'An NMOS to VDD passes a weak 1 (H), a PMOS to GND a weak 0 (L); a transmission gate passes both whole.',
+  ports: [
+    { name: 'a', width: 1, dir: 'in' }, { name: 'd', width: 1, dir: 'in' }, { name: 'en', width: 1, dir: 'in' },
+    { name: 'y', width: 1, dir: 'out', doc: 'a, through the wrong transistors: H or L' },
+    { name: 'q', width: 1, dir: 'out', doc: 'd through the transmission gate while en = 1: full' },
+  ],
+  symbol: { kind: 'box', label: 'weak levels' },
+  spec: ([a, d, en]) => [a, en ? d : -1],
+  netlist: () => ({
+    level: 'switch',
+    pins: { a: [1, 8], y: [12, 8], en: [18, 3], d: [18, 8], q: [31, 8] },
+    instances: [
+      { name: 'vdd', def: VDD, at: [7, 0] },
+      { name: 'n1', def: NMOS, at: [5, 3] },
+      { name: 'p1', def: PMOS, at: [5, 9] },
+      { name: 'gnd', def: GND, at: [7, 14] },
+      { name: 'tg', def: TGATE, at: [23, 6] },
+      { name: 'inv', def: INV_CMOS, at: [21, 12] },
+    ],
+    nets: [
+      { name: 'a', ends: ['a', 'n1.g', 'p1.g'], trunk: 3 },
+      { name: 'vdd', ends: ['vdd.p', 'n1.d'] },
+      { name: 'y', ends: ['n1.s', 'p1.s', 'y'] },
+      { name: 'gnd', ends: ['gnd.p', 'p1.d'] },
+      { name: 'd', ends: ['d', 'tg.a'] },
+      { name: 'en', ends: ['en', 'tg.en', 'inv.a'], trunk: 19.5 },
+      { name: 'en_n', ends: ['inv.y', 'tg.en_n'] },
+      { name: 'q', ends: ['tg.b', 'q'] },
+    ],
+  }),
+});
+
+/**
  * Tri-state inverter (clocked CMOS): an inverter with an enable transistor in each half. en = 0
  * opens both stacks and the output floats.
  */

@@ -52,10 +52,35 @@ function hasInnerFf(def: ComponentDef): boolean {
   return r;
 }
 
-/** `outputs`: the root's outputs are capture points too (due at the next edge, no setup), as a synthesis
- *  constraint with zero output delay counts them: a core whose memories sit outside its ports.
- *  `delay`: the delay model (default 'unit': every NAND 1). */
-export function analyzeTiming(design: FlatDesign, opts: { outputs?: boolean; delay?: DelayModel } = {}): TimingReport | null {
+/** The timing graph analyzeTiming and slack.ts share: boundaries, drivers, delays and the arrival time at any net
+ *  (computed on demand, memoized). */
+export interface TimingGraph {
+  model: DelayModel;
+  leaves: FlatDesign['leaves'];
+  /** Leaves inside a boundary flip-flop: not traversed. */
+  excluded: Uint8Array;
+  /** Net -> path of the flip-flop launching it. */
+  qSource: Map<number, string[]>;
+  /** Capture points: a flip-flop's d / en, an edge-triggered behaviour's inputs, with `outputs` the root's outputs (pin). */
+  captures: { net: number; dff: string[]; pin?: boolean }[];
+  /** Net -> the non-excluded leaf driving it (-1: an input or undriven). */
+  driver: Int32Array;
+  /** Per leaf, the input nets a path goes through (an edge-triggered behaviour: its comb inputs only). */
+  tin: number[][][];
+  /** Edge-triggered behaviour leaves (their outputs launch at clk-to-q at the earliest). */
+  seq0: Uint8Array;
+  delays: ArrayLike<number>;
+  /** Per-net loads under a load model (null under 'unit'). */
+  loads: ReturnType<typeof netLoads> | null;
+  clkToQ: (net: number) => number;
+  /** Arrival time at a net (filled in `arrival`; `via` the critical input net of its driver). */
+  arr: (net: number) => number;
+  arrival: Float64Array;
+  via: Int32Array;
+}
+
+/** `outputs`: the root's outputs are capture points too (see analyzeTiming). */
+export function timingGraph(design: FlatDesign, opts: { outputs?: boolean; delay?: DelayModel } = {}): TimingGraph {
   const model = opts.delay ?? 'unit';
   const leaves = design.leaves;
   const excluded = new Uint8Array(leaves.length);
@@ -93,7 +118,6 @@ export function analyzeTiming(design: FlatDesign, opts: { outputs?: boolean; del
   };
   walk(design.root, false);
   if (opts.outputs) for (const p of design.root.def.ports) if (p.dir === 'out') for (const net of design.root.ports[p.name]) captures.push({ net, dff: [p.name], pin: true });
-  if (!captures.length) return null;
 
   const driver = new Int32Array(design.netCount).fill(-1);
   leaves.forEach((l, i) => {
@@ -132,6 +156,16 @@ export function analyzeTiming(design: FlatDesign, opts: { outputs?: boolean; del
     }
     return arrival[start];
   };
+  return { model, leaves, excluded, qSource, captures, driver, tin, seq0, delays, loads, clkToQ, arr, arrival, via };
+}
+
+/** `outputs`: the root's outputs are capture points too (due at the next edge, no setup), as a synthesis
+ *  constraint with zero output delay counts them: a core whose memories sit outside its ports.
+ *  `delay`: the delay model (default 'unit': every NAND 1). */
+export function analyzeTiming(design: FlatDesign, opts: { outputs?: boolean; delay?: DelayModel } = {}): TimingReport | null {
+  const g = timingGraph(design, opts);
+  const { model, leaves, qSource, captures, driver, seq0, loads, clkToQ, arr, arrival, via } = g;
+  if (!captures.length) return null;
 
   let worst = -1, cap = captures[0];
   const byInst = new Map<string, number>();
