@@ -16,7 +16,7 @@ sky130 layouts, whose reports stand beside the site's own area and timing estima
 both ways: any circuit exports as Verilog, and Verilog written in the sandbox is synthesized by Yosys
 in the page into chips that open down to the transistors like everything else.
 
-Four ways in: the **[journey](https://orelmag.github.io/MOSFETtoRISCV/#/c/map/0)** (37 chapters,
+Four ways in: the **[journey](https://orelmag.github.io/MOSFETtoRISCV/#/c/map/0)** (38 chapters,
 three prologue chapters and two appendices), the **[campaign](https://orelmag.github.io/MOSFETtoRISCV/#/campaign)**
 (125 levels: build it to unlock it), the **[workbench](https://orelmag.github.io/MOSFETtoRISCV/#/workbench/rca4)**
 (any component on its own, with statistics and benchmarks) and the
@@ -24,13 +24,15 @@ three prologue chapters and two appendices), the **[campaign](https://orelmag.gi
 
 ## The journey
 
-**37 chapters**, from the MOSFET, the CMOS inverter and NAND, through gates, binary numbers,
+**38 chapters**, from the MOSFET, the CMOS inverter and NAND, through gates, binary numbers,
 adders, multiplexers, latches, registers and memory arrays, to the ALU, the register file, RV32I
 assembly and a single-cycle CPU. Then Python compiled to RV32I by the site's own compiler and run on
 those gates, faster adders, pipelining (hazards, forwarding, branch prediction), bytes and
 memory-mapped I/O, traps and interrupts, multiply / divide, caches, multicycle and microcoded control,
-floating point (RV32F), a gate-level out-of-order core (renaming, a reorder buffer, speculation), many
-cores (atomics, coherence) and place and route on silicon. Two tracks follow: a **GPU** (a lane core,
+floating point (RV32F), the C extension (an expander in gates in front of the decoder) and RV64 (the
+same core at 64 bits, the W instructions, what width costs block by block), a gate-level out-of-order
+core (renaming, a reorder buffer, speculation), many cores (atomics, coherence) and place and route on
+silicon. Two tracks follow: a **GPU** (a lane core,
 SIMT warps with divergence, latency hiding, coalescing and banked shared memory, a rasterizer with
 depth and blending, and a graphics pipeline whose vertex kernel runs on the warp core) and **memory in
 depth** (a DRAM at switch level, a DDR-style controller, flash with its translation layer, a bus with
@@ -137,7 +139,12 @@ simulator, so whatever you build is a real component of the site. The full guide
   every module becomes a chip that opens down to NANDs and transistors. `.v` / `.sv` files and
   Yosys JSON netlists import the same way, and File ▸ Export Verilog goes the other way: exported
   and imported back, a chip (a whole RV32I CPU among the tests) simulates equal to the original.
-- Wide pins up to 1024 bits, exact; autosave, chip files, share links, Verilog and image export.
+- **Truth-table and state-machine chips** (New chip ▾): fill a table (or paint a Karnaugh map) and get
+  it minimized and built as NAND–NAND, AND–OR, a PLA or a ROM, each priced; draw a state diagram and get
+  it encoded binary, Gray or one-hot around flip-flops, read back from the circuit against the diagram.
+- Wide pins up to 1024 bits, exact; autosave, chip files, share links, Verilog and image export, and
+  **File ▸ Export Verilog for FPGA**: a board top for a Sipeed Tang Nano 9K (clock divider, reset,
+  buttons and LEDs) with its pin constraints.
 - 21 optional **build challenges**, from a CMOS inverter to an instruction fetch unit, with a test
   player that steps through the failing cases.
 
@@ -148,7 +155,7 @@ at run time over a real hierarchy of banks you can open down to the latches. A c
 them: storage, found by its structure (library flip-flops or ones drawn from NANDs, latches,
 resets), becomes verified tables and the rest is levelized, and every net equals the event-driven
 simulator's after every settle. The single-cycle RV32I runs at about 9 k cycles/s in Node and
-4–5 kHz in the browser. **Examples ▸** has twelve ready-made circuits, among them:
+4–5 kHz in the browser. **Examples ▸** has fourteen ready-made circuits, among them:
 
 - **Computer**: the RV32I core, a program ROM in assembly, a memory chip, a 64 × 64 screen and a
   devices chip with the console, LEDs and switches. It greets you, paints a picture and halts, with
@@ -156,7 +163,8 @@ simulator's after every settle. The single-cycle RV32I runs at about 9 k cycles/
 - **4-bit CPU** (4004-inspired, 3 357 NANDs), **6502 computer** (the transistor-level 6502 as a
   part, a ROM in 6502 assembly), **System on a bus** (CPU and DMA masters, RAM, flash, screen,
   keyboard, timer behind an AXI-lite-style bus) and **Boot from cards** (a loader reading a punched
-  deck into RAM, then running it).
+  deck into RAM, then running it). **RV16: Pong** puts the campaign's RV16 core on a bench with a
+  screen and switches; a passed core level offers the same game on your own core.
 
 ## Measured, not drawn
 
@@ -168,6 +176,8 @@ Every number on screen comes from the circuit it describes:
 | Full adder (9-NAND) | 9 | 36 | 6 gate delays |
 | 8-bit ripple-carry adder | 72 | 288 | 20 gate delays |
 | Single-cycle RV32I | 68,339 | | period 158 NAND delays |
+| Single-cycle RV32IC (compressed instructions) | 69,794 | | period 201: the expander sits in front of decode |
+| Single-cycle RV64IM | 172,285 | | period 150; the same generator at 32 bits: 73,384, period 124 |
 | Five-stage pipelined RV32I | 80,798 | | forwarding, load-use stall, branch flush; period 145 |
 | Pipelined RV32IM, balanced, with a predictor | 141,655 | | period 79 |
 | Dual-issue pipelined RV32IM | 193,768 | | period 80 |
@@ -184,7 +194,7 @@ false paths included, and in unit against load-dependent delay, where a prefix t
 being free);
 array, Wallace-tree and Booth multipliers; restoring, non-restoring and SRT dividers; single-cycle,
 multicycle (hardwired and microcoded), pipelined, dual-issue and out-of-order CPUs on clock period ×
-CPI. The workbench's Benchmarks tab runs one program set on all 27 gate-level CPUs (cycles, period,
+CPI. The workbench's Benchmarks tab runs one program set on all 28 gate-level CPUs (cycles, period,
 time, NANDs, misses, energy), and dynamic power is estimated from the circuit too: the gate simulator
 counts every net's toggles, glitches included, so the inspector splits a part's energy among its
 blocks and the CPU panel shows the energy per instruction as the program runs. Every component can
@@ -202,19 +212,21 @@ also be priced in relays and tubes.
 - **Components**: every combinational component carries a specification and is tested against its
   structure, exhaustively up to 12 input bits and on random vectors above; behavioural models
   (used to keep large designs fast) are proven equal to the structure they stand for.
-- **CPUs**: each of the 27 (single-cycle, multicycle, pipelined, dual-issue, out-of-order, with caches
-  and a DRAM controller, system, M, F, dual-core) is co-simulated against the instruction-set
+- **CPUs**: each of the 28 (single-cycle, multicycle, pipelined, dual-issue, out-of-order, with caches
+  and a DRAM controller, system, M, F, C, dual-core) is co-simulated against the instruction-set
   simulator in `src/riscv/`, which steps in lock-step and compares registers, PC and memory at every
   retirement. Independently of that model, every RV32 CPU passes the official
   [riscv-tests](https://github.com/riscv-software-src/riscv-tests) its ISA covers at gate level
   (rv32ui, rv32um, rv32uf, rv32ua, rv32mi), runs seeded random programs against the golden model, and
   must reach every instruction and hardware event it has (forwarding paths, stalls, mispredictions,
   cache misses, traps). The out-of-order core also matches a cycle-exact model of its rules every
-  cycle. Matrix, coverage and the bugs this found: [docs/VERIFICATION.md](docs/VERIFICATION.md). The
-  campaign's RV16 cores are fuzzed too.
+  cycle. Chapter 25's single-cycle core runs in lock-step with the golden model at both widths, and
+  the RV64 golden model passes rv64ui and rv64um. Matrix, coverage and the bugs this found:
+  [docs/VERIFICATION.md](docs/VERIFICATION.md). The campaign's RV16 cores are fuzzed too.
 - **The golden model itself**: [Spike](https://github.com/riscv-software-src/riscv-isa-sim) runs in CI
-  on random programs for six ISA variants, its commit log compared with ours instruction by
-  instruction: 6,000 programs (1.2 M instructions) on every change to the ISS, new seeds each night.
+  on random programs for eight ISA variants (seven RV32, the C extension among them, and RV64IM), its
+  commit log compared with ours instruction by instruction: 8,000 programs on every change to the ISS,
+  new seeds each night.
 - **The 6502**: the cycle-exact model passes all 1.51 M SingleStepTests cases and Klaus Dormann's
   functional test; the transistor-level chip matches it on every bus cycle of both.
 - **Drawings**: every registered schematic is checked for nets sharing a line, overlapping symbols
@@ -225,7 +237,8 @@ also be priced in relays and tubes.
   simulation under the same inputs (irq pulses, switches). The deploy waits on it. Import is checked
   the same way: both of our exporters' Verilog, through Yosys and back into chips, matches the
   original every output every cycle (library parts and the single-cycle CPU), and all 74 of Yosys's
-  flip-flop and latch cells match its own definitions.
+  flip-flop and latch cells match its own definitions. The FPGA export goes through Yosys's
+  `synth_gowin` before every deploy.
 - **Silicon**: `.github/workflows/layout.yml` runs the exported dual-core and the RV32IM system
   core (its memories outside its ports) through OpenROAD-flow-scripts on SkyWater 130 nm (synthesis,
   floorplan, placement, clock tree, routing); the GDS, tiles and reports are published into the site
@@ -260,7 +273,8 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
 - **The CPUs are teaching microarchitectures**: a cache miss freezes the whole pipeline, the
   dual-core's atomics are atomic because a round-robin arbiter serializes every access, and the
   out-of-order core is one fixed point (2-wide, ROB 16, issue queue 8) of a model that takes any size.
-  The ISA is RV32 (I, M, F, Zicsr, the atomics the dual-core needs): no RV64, no C extension yet.
+  The ISA is RV32 (I, M, F, C, Zicsr, the atomics the dual-core needs), and RV64I / M on chapter 25's
+  single-cycle core and its golden model; no lr.w / sc.w, and no RV64 in the pipelines yet.
 - **Doom runs on an interpreter of our ISA** (checked against the golden model), not on the gates:
   a frame would take about 13 minutes on the gate-level CPU in the page. Appendix B's last step
   hands the running game to the gates for a window of cycles.
@@ -270,15 +284,15 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
 The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next features:
 
 - **Load-dependent delay, further**: the gate simulator on the loaded delays (glitches and races
-  following the loads), a memory's row decoder and the clock net in both units, and the estimate
-  checked path by path against the sky130 runs.
+  following the loads), and the estimate checked path by path against the sky130 runs.
+- **State machine + datapath**: states carrying register transfers (`count := count + 1`) on library
+  registers, adders and muxes, the state-machine chip as their controller; then a memory-map designer.
 - **Verilog in the journey**: the same adder as text and as gates in a chapter step, and a Verilog
   chip's critical path mapped back to its source lines.
 - **An out-of-order lab**: width, ROB, queues, ports and units set by the learner on the model, on
   the benchmarks or their own program, priced by the gates (chapter 26 already measures the four
   CPUs side by side and the model's width × window).
-- **ISA breadth**: RV64I / RV64M and the C extension; the rest of A (lr.w / sc.w) with private
-  caches and a coherent bus in the gate-level cores.
+- **ISA breadth, further**: lr.w / sc.w with private caches and a coherent bus in the gate-level cores.
 - **Python on the pipeline** (stalls and flushes per line), with RV32IM, strings and a heap.
 
 ## Run it
