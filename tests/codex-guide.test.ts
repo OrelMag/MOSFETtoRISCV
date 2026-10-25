@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { CODEX, codexById } from '../src/campaign/codex';
 import { CHECKS } from '../src/campaign/codexcheck';
-import { CODEX_ORDER, buildsOn, leadsTo, neighbours, seeAlso } from '../src/campaign/codexlinks';
+import { CODEX_ORDER, buildsOn, firstTaught, leadsTo, neighbours, seeAlso } from '../src/campaign/codexlinks';
 import { hasCodexFigure } from '../src/campaign/ui/codexfigs';
 
 describe('codex guide', () => {

@@ -4,7 +4,8 @@
 
 import { CODEX, CODEX_KINDS, codexById, type CodexEntry } from './codex';
 import { ruleFor } from './graph';
-import { NODES, nodeById } from './nodes';
+import { ACTS, NODES, nodeById } from './nodes';
+import type { CampaignNode } from './types';
 
 /** The codex in reading order: by kind as the list shows them, then as written. */
 export const CODEX_ORDER: CodexEntry[] = CODEX_KINDS.flatMap((k) => CODEX.filter((e) => e.kind === k.id));
@@ -17,26 +18,50 @@ export const teachingLevels = (id: string) => NODES.filter((n) => n.codex.includ
 
 const MAX = 6;
 
+/** A level's place on the map: acts in map order (ACTS: act P after act 0), then as listed. */
+const levelRank = (() => {
+  const act = new Map(ACTS.map((a, i) => [a.num, i]));
+  const at = new Map(NODES.map((n, i) => [n.id, (act.get(n.act) ?? ACTS.length) * 10000 + i]));
+  return (n: CampaignNode) => at.get(n.id) ?? Infinity;
+})();
+
+/** The first level on the map that teaches an entry (undefined: none does). */
+export function firstTeacher(id: string): CampaignNode | undefined {
+  let best: CampaignNode | undefined;
+  for (const n of teachingLevels(id)) if (!best || levelRank(n) < levelRank(best)) best = n;
+  return best;
+}
+
+/** Where an entry is first taught, as a number that orders the map (Infinity: no level teaches it). */
+export const firstTaught = (id: string): number => {
+  const n = firstTeacher(id);
+  return n ? levelRank(n) : Infinity;
+};
+
 /** Entries in codex order, without `id`, at most MAX. */
 function pick(ids: Set<string>, id: string): CodexEntry[] {
   ids.delete(id);
   return CODEX_ORDER.filter((e) => ids.has(e.id)).slice(0, MAX);
 }
 
-/** Entries taught by the levels that the entry's own levels require directly. */
+/**
+ * Entries taught by the levels its first teaching level requires directly, those first taught before it only (an
+ * entry taught again later is read where it is first met: Pipelining does not build on Stall).
+ */
 export function buildsOn(id: string): CodexEntry[] {
-  const own = teachingLevels(id);
-  const ownIds = new Set(own.map((n) => n.id));
-  const req = new Set(own.flatMap((n) => n.requires).filter((r) => !ownIds.has(r)));
-  const taughtHere = new Set(own.flatMap((n) => n.codex));
-  return pick(new Set(NODES.filter((n) => req.has(n.id)).flatMap((n) => n.codex).filter((c) => !taughtHere.has(c))), id);
+  const own = firstTeacher(id);
+  if (!own) return [];
+  const at = levelRank(own);
+  const req = new Set(own.requires);
+  return pick(new Set(NODES.filter((n) => req.has(n.id)).flatMap((n) => n.codex).filter((c) => !own.codex.includes(c) && firstTaught(c) < at)), id);
 }
 
-/** Entries taught by the levels that directly require one of the entry's levels. */
+/** Entries taught by the levels that directly require its first teaching level, those first taught after it only. */
 export function leadsTo(id: string): CodexEntry[] {
-  const own = new Set(teachingLevels(id).map((n) => n.id));
-  const taughtHere = new Set(teachingLevels(id).flatMap((n) => n.codex));
-  return pick(new Set(NODES.filter((n) => !own.has(n.id) && n.requires.some((r) => own.has(r))).flatMap((n) => n.codex).filter((c) => !taughtHere.has(c))), id);
+  const own = firstTeacher(id);
+  if (!own) return [];
+  const at = levelRank(own);
+  return pick(new Set(NODES.filter((n) => n.id !== own.id && n.requires.includes(own.id)).flatMap((n) => n.codex).filter((c) => !own.codex.includes(c) && firstTaught(c) > at)), id);
 }
 
 /**
