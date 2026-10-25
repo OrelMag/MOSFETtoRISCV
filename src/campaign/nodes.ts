@@ -139,7 +139,7 @@ export const NODES: CampaignNode[] = [
   {
     id: 'h_loader', act: 11, title: 'Program on cards', kind: 'build', optional: true, requires: ['h_card', 'r_clock', 's_dff'], base: BUILDCARD.h_loader,
     par: { relays: 233, cycles: 182 }, gives: ['not', 'and', 'or', 'dff', 'counter8', 'mux2x8', 'cpu4_proc', 'ram256x16'],
-    why: 'A computer with an empty memory and a deck in the reader. Build the loader: a counter that addresses the memory, a write for each card, and the switch that hands memory to the 4-bit CPU once the hopper is empty. The Z3 read its program off punched film the same way, and the loader is priced as the Z3 was built: in relays.',
+    why: 'A computer with an empty memory and a deck in the reader. Build the loader: a counter that addresses the memory, a write for each card, and the switch that hands memory to the 4-bit CPU once the hopper is empty. The Z3 never did this: it ran its film as it read it. A stored-program machine copies the deck into memory first: that copy is a loader. It is priced as the Z3 was built: in relays.',
     tips: [
       'Tie the reader\'s next to 1: it takes a card at every rising edge one waits. Then ready is the write enable: the card\'s word goes into the RAM word the counter addresses, and the counter (enabled by ready) moves on at the same edge.',
       'The RAM\'s address is a 2:1 mux on run: the counter while loading, the CPU\'s pc after. Tie test and sw to 0.',
@@ -155,7 +155,7 @@ export const NODES: CampaignNode[] = [
     id: 'l_bool', act: 1, title: 'Boolean algebra', kind: 'drill', requires: ['intro'],
     why: 'Circuits are equations. Algebra lets you transform one circuit into a cheaper equivalent before you build it: fewer gates, shorter paths. This is how every par in the campaign is reached.',
     body: 'bool', tips: [], codex: ['identities', 'demorgan', 'bubble', 'sop', 'truthtable'],
-    chapters: [{ chapter: 'gates', label: 'Gates from NAND' }], drill: 'boolean' },
+    chapters: [{ chapter: 'gates', label: 'Gates from NAND' }], drill: 'boolean', par: { mistakes: 2 } },
   {
     id: 'n_bin', act: 1, title: 'Binary and hex', kind: 'drill', requires: ['intro'], drill: 'binary', par: { mistakes: 2 },
     why: 'Every value inside the machine is a pattern of bits; the meaning is a convention. Read and write unsigned binary and hexadecimal fluently: the rest of the campaign speaks them.',
@@ -198,13 +198,13 @@ export const NODES: CampaignNode[] = [
     codex: ['kmap', 'qm', 'dontcare'],
   },
   {
-    id: 'g_sop', act: 1, title: 'A function from its table', kind: 'build', requires: ['d_kmap', 'g_and', 'g_or', 'n_bin'],
+    id: 'g_sop', act: 1, title: 'Prime detector', kind: 'build', requires: ['d_kmap', 'g_and', 'g_or', 'n_bin'],
     why: 'The control unit is specified as a table (opcode → signals) and built as logic. Practise the method on one function: K-map, sum of products, NAND–NAND.',
-    tips: ['Minimise first: every literal saved is a gate input saved.', 'An SoP maps one-to-one onto two levels of NANDs: 20 here. Par is less than half that.', 'Compare the map\'s two halves (a3 = 0, a3 = 1): one is a function you have built, the other almost the same.'],
+    tips: ['Minimise first: every literal saved is a gate input saved.', 'An SoP maps one-to-one onto NAND–NAND: 20 NANDs here, depth 7 (the 3-literal products and the 4-input OR are built from 2-input gates). Par is less than half that.', 'Compare the map\'s two halves (a3 = 0, a3 = 1): one is a function you have built, the other almost the same.'],
     unlocks: ['rv16_prime4'], codex: ['sop', 'nandnand'], base: BUILD1.g_sop, par: { nand: 8, depth: 5 } },
   {
-    id: 'g_wide', act: 1, title: 'Wide gates', kind: 'build', requires: ['g_and', 'g_or'],
-    why: 'The equality test behind beq and bne asks "is a ⊕ b zero?": a 16-input NOR. A chain of 2-input gates is 15 deep; a tree is 4. Depth, not gate count, sets the clock.',
+    id: 'g_wide', act: 1, title: 'Zero detect', kind: 'build', requires: ['g_and', 'g_or'],
+    why: 'The equality test behind beq and bne asks "is a ⊕ b zero?": a 16-input NOR. A chain of 2-input ORs is 15 gates deep, 31 NAND delays with the NOT; a balanced tree is 4 gates, 9 delays. Depth, not gate count, sets the clock.',
     tips: ['Balance the tree: pairs, then pairs of pairs.', 'The chain and the tree cost the same NANDs: only the depth differs.'],
     codex: ['fanin', 'depth', 'bubble'], unlocks: ['rv16_wide16', 'and3', 'and4', 'and8', 'or3', 'or4', 'or8', 'or16', 'zero*', 'andx*', 'orx*', 'xorx*'], base: BUILD1.g_wide, par: { nand: 46, depth: 9 } },
   {
@@ -319,14 +319,14 @@ export const NODES: CampaignNode[] = [
   {
     id: 's_cnt4', act: 3, title: '4-bit counter', kind: 'build', optional: true, requires: ['s_reg4', 'a_inc16'], base: sandbox('s_cnt4'),
     why: 'A register plus an incrementer: the program counter in miniature, and every timer.',
-    tips: ['q ← rst ? 0 : q + 1 when en.'], codex: ['counter'], unlocks: ['counter4'],
+    tips: ['q ← rst ? 0 : q + 1 when en.'], codex: ['counter'], unlocks: ['counter4'], par: { nand: 79, period: 17 },
     chapters: [{ chapter: 'registers', label: 'Registers & counters' }],
   },
   {
     id: 's_pc', act: 3, title: 'Program counter', kind: 'build', requires: ['s_reg16', 'a_inc16', 'g_mux8'],
     why: 'The PC holds the address of the instruction being executed. Each cycle it becomes pc + 1, or a jump target; on reset, 0.',
-    tips: ['A 16-bit register without enable (the PC loads every cycle), an incrementer and two bus muxes (load, reset).'],
-    unlocks: ['rv16_pc'], codex: ['pc'], anatomy: ['pc', 'plus1'], base: BUILD1.s_pc, par: { nand: 318, period: 41 } },
+    tips: ['A 16-bit register without enable (the PC loads every cycle), an incrementer and a bus mux for the load.', 'Reset only ever selects 0: an AND per bit with ¬rst does it for less than a second bus mux.'],
+    unlocks: ['rv16_pc'], codex: ['pc'], anatomy: ['pc', 'plus1'], base: BUILD1.s_pc, par: { nand: 302, period: 41 } },
   {
     id: 's_fsm', act: 3, title: 'A state machine', kind: 'build', optional: true, requires: ['s_dff', 'd_kmap'],
     why: 'Multi-cycle units (a divider, a cache miss, microcode) are run by finite-state machines: state register + next-state logic from a table.',
@@ -336,13 +336,13 @@ export const NODES: CampaignNode[] = [
     id: 'm_ram', act: 3, title: '4 × 4 RAM', kind: 'build', optional: true, requires: ['s_reg4', 'g_dec', 'g_mux8'], base: sandbox('m_ram'),
     why: 'Memory is registers plus addressing: a decoder picks the word to write, a mux picks the word to read.',
     tips: ['Each word: a register whose en = we AND decoder output.'],
-    codex: ['ram', 'sram'], unlocks: ['ram4x4'], chapters: [{ chapter: 'memory', label: 'Memory arrays' }],
+    codex: ['ram', 'sram'], unlocks: ['ram4x4'], par: { nand: 274, period: 11 }, chapters: [{ chapter: 'memory', label: 'Memory arrays' }],
   },
   {
     id: 'm_rf', act: 3, title: 'Register file', kind: 'build', requires: ['s_reg16', 'g_dec', 'g_mux8'],
     why: 'Eight 16-bit registers, two read ports (rs1, rs2) and one write port (rd): an R-type instruction reads two and writes one in the same cycle. x0 always reads 0.',
     tips: ['Write: decoder on wa, ANDed with we, enables one register.', 'Read: two 8:1 bus muxes. x0 needs no register at all.'],
-    codex: ['regfile'], unlocks: ['rv16_rf', 'regfile8x16'], anatomy: ['rf'], chapters: [{ chapter: 'regfile', label: 'The register file' }], base: BUILD1.m_rf, par: { nand: 2172, period: 11 } },
+    codex: ['regfile'], unlocks: ['rv16_rf'], anatomy: ['rf'], chapters: [{ chapter: 'regfile', label: 'The register file' }], base: BUILD1.m_rf, par: { nand: 2172, period: 11 } },
   {
     id: 'm_mem', act: 3, title: 'ROM and RAM', kind: 'lesson', requires: ['m_rf'],
     why: 'Programs live in ROM, data in RAM. Building memory from flip-flops is what you just did; real memories are dense arrays (SRAM, DRAM). From here on, memories are given.',
@@ -503,7 +503,7 @@ export const NODES: CampaignNode[] = [
     id: 'pi_haz', act: 6, title: 'Hazard unit', kind: 'build', requires: ['g_eq16', 'pi_core1'], base: BUILD6.pi_haz, par: { nand: 53, depth: 12 },
     why: 'A load\'s value only exists after M. If the very next instruction needs it, no forwarding can help: hold it one cycle.',
     tips: ['A load in E: rwe and wb = memory.', 'Being conservative is allowed (a stall too many only costs a cycle).'],
-    codex: ['loaduse'], unlocks: ['rv16_haz'], anatomy: ['haz'],
+    codex: ['loaduse', 'scoreboard'], unlocks: ['rv16_haz'], anatomy: ['haz'],
   },
   {
     id: 'pi_core2', act: 6, title: 'Pipeline III: load-use', kind: 'core', requires: ['pi_core1', 'pi_haz'], base: BUILD6.pi_core2, par: { nand: 7531, period: 78, cycles: 917 },
@@ -574,7 +574,7 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'o_mulseq', act: 8, title: 'Shift-and-add multiplier', kind: 'build', optional: true, requires: ['a_add16', 's_reg16', 'p_mul'], base: BUILD8.o_mulseq, givesOf: partsOf(() => seqMul(16)), par: { nand: 1169, period: 48 },
-    why: 'Software multiplication (Act 4) in hardware: one adder reused once per clock. Small; sixteen times as many cycles as an array, about 5.5 times the time (its clock is shorter).',
+    why: 'Software multiplication (Act 4) in hardware: one adder reused once per clock. 18 cycles of a 48-delay clock against one 150-deep pass: about 5.8 times the time, on less than half the NANDs (1 169 against 2 672).',
     tips: ['The product register starts as {0, b}; each step adds a to its upper half if its lowest bit is 1, then shifts everything right.'],
     codex: ['shiftadd'], chapters: [{ chapter: 'muldiv', label: 'Multiply & divide' }],
   },
@@ -669,7 +669,7 @@ export const NODES: CampaignNode[] = [
   {
     id: 'k_lanes', act: 9, title: 'Four lanes', kind: 'build', optional: true, requires: ['k_lesson'], base: BUILDK.k_lanes, par: { nand: 4596, depth: 55 },
     why: 'The datapath, four times: four ALUs fed by one set of control signals and one immediate. Every lane computes the same operation on its own operands.',
-    tips: ['Your ALU and the 49-NAND bus mux are unlocked: one mux and one ALU per lane.', 'nz: OR the 16 bits of each a<i>i</i>, then merge the four bits.'],
+    tips: ['Your ALU and the 49-NAND bus mux are unlocked: one mux and one ALU per lane.', 'nz: OR the 16 bits of each a<sub>i</sub>, then merge the four bits.'],
     codex: ['lane'], unlocks: ['rv16_lanes4'], chapters: [{ chapter: 'lanes', label: 'Lanes' }],
   },
   {
@@ -703,15 +703,15 @@ export const NODES: CampaignNode[] = [
     codex: ['simt'], chapters: [{ chapter: 'simt', label: 'Threads in lock-step' }],
   },
   {
-    id: 'p_saxpy', act: 9, title: 'saxpy', kind: 'program', optional: true, requires: ['k_simd'], par: { cycles: 90, idle: 0 },
+    id: 'p_saxpy', act: 9, title: 'saxpy', kind: 'program', optional: true, requires: ['k_simd'], par: { cycles: 90, laneops: 360 },
     why: 'The classic kernel: y ← a·x + y over an array. Each lane takes every fourth element; nobody waits for anybody.',
     tips: ['Thread i handles elements i, i + 4, i + 8, …: start at tid, step by 4.', 'n is a multiple of 4, so every lane runs the loop the same number of times: no lane idles.'],
     codex: ['utilization'], chapters: [{ chapter: 'lanes', label: 'Lanes' }],
   },
   {
-    id: 'p_reduce', act: 9, title: 'Reduction', kind: 'program', optional: true, requires: ['k_simt'], par: { cycles: 35, idle: 19 },
+    id: 'p_reduce', act: 9, title: 'Reduction', kind: 'program', optional: true, requires: ['k_simt'], par: { cycles: 35, laneops: 114 },
     why: 'Summing an array is the opposite of saxpy: four partial sums must become one. Every step of the final combine has fewer useful lanes: the cost of a reduction is the lanes left with nothing to do at its end.',
-    tips: ['First each lane sums its strided share, all lanes busy.', 'Then combine through memory: lanes store their partial sums, fewer lanes add pairs.', 'Idle counts masked lanes, not useless ones: every lane can repeat the whole combine and none is ever masked. Busy, but three of the four compute a sum nobody needs.'],
+    tips: ['First each lane sums its strided share, all lanes busy.', 'Then combine through memory: lanes store their partial sums, fewer lanes add pairs.', 'Lane-ops count the work: every lane repeating the whole combine saves the tmc (a cycle) and masks no lane, but three of the four compute a sum nobody needs, 20 lane-ops a test. Mask them off.'],
     codex: ['reduction'], chapters: [{ chapter: 'simt', label: 'Threads in lock-step' }],
   },
   // Phases 3 and 4 of the GPU track: warps and memory, then graphics.
@@ -725,10 +725,10 @@ export const NODES: CampaignNode[] = [
     id: 'k_warps', act: 9, title: 'Two warps', kind: 'core', optional: true, requires: ['k_simt', 'k_coal'], base: BUILDK.k_warps, par: { nand: 29974, period: 95, cycles: 2093 },
     why: 'Real memory answers late. While one warp waits for its word, let the other issue: latency hidden by switching threads instead of by forwarding or stalling. With a memory one cycle late and two warps taking turns, every load is back before its warp issues again.',
     tips: ['Start from your SIMT core: fetch, decode, control and the lanes stay shared. Duplicate what is state: PC, mask, stack, lane registers.', 'The warp bit is a flip-flop that toggles every cycle (0 after reset); 2:1 muxes pick the issuing warp’s PC, register reads and mask.', 'A load: hold its lanes (mask · rwe) and rd for one cycle, then write drdata into the other warp’s registers. In any cycle each register file has one writer: its warp’s results, or the returning load.', 'bar: a waiting bit per warp. Arriving first sets yours, arriving second clears the other’s. A warp goes only if it is not held at bar (or the other has no lanes) and has lanes of its own; a PC moves only when its warp goes.'],
-    codex: ['barrel', 'barrier', 'scoreboard', 'occupancy'], chapters: [{ chapter: 'warps', label: 'Hiding latency' }],
+    codex: ['barrel', 'barrier', 'occupancy'], chapters: [{ chapter: 'warps', label: 'Hiding latency' }],
   },
   {
-    id: 'p_hist', act: 9, title: 'Histogram', kind: 'program', optional: true, requires: ['k_warps'], par: { cycles: 176, idle: 0 },
+    id: 'p_hist', act: 9, title: 'Histogram', kind: 'program', optional: true, requires: ['k_warps'], par: { cycles: 176, laneops: 702 },
     why: 'Eight threads count values into sixteen bins. Two threads that meet the same value would update one counter at once, and RV16 has no atomic add: one of the two counts would be lost. Count into private counters, wait at a barrier until both warps have counted, then add the counters up with every thread.',
     tips: ['Thread t counts value v in the word 8·v + t: then bin b’s eight counters sit in a row, at 8·b.', 'Thread t takes elements t, t + 8, …: n is a multiple of 8, so every lane has the same number.', 'After bar, every thread adds up two bins: their sixteen counters are the words 16·tid … 16·tid + 15.', 'The warps take turns, so a kernel without bar can look right. The grader also lets warp 1 run ahead of warp 0.'],
     codex: ['privatization', 'barrier'], chapters: [{ chapter: 'feed', label: 'Feeding the lanes' }],
@@ -749,19 +749,19 @@ export const NODES: CampaignNode[] = [
     id: 'k_raster', act: 9, title: 'Rasterizer', kind: 'build', optional: true, requires: ['k_tile'], base: BUILDK.k_raster, par: { nand: 9188, period: 145, cycles: 7439 },
     why: 'The edge steppers and the tile walk, plus the set-up that starts them: each edge\'s A and B, the top-left bias, the box in tiles, and E at the first tile. That last one is a product, and there is no multiplier here: each stepper computes its own by shift-and-add, a doubling per bit, on the adder it already has.',
     tips: ['A, B, Δx = ox − xᵢ, Δy = oy − yᵢ: 8-bit subtractions (two 4-bit adders, the subtrahend inverted, carry in 1). ox = 16·tx0 + 2.', 'The first tile is the smallest (v + 1) >> 4 of the three vertices; the last the largest (v − 2) >> 4, 0 if negative. A comparison is an adder\'s carry.', 'E = A·Δx + B·Δy − bias, MSB first: E ← 0; E ← E − A·Δx₇ (the sign bit weighs −128); E ← E − B·Δy₇; then for bits 6 … 0: E ← 2E + (Δxₖ ? A : 0), E ← E + (Δyₖ ? B : 0); last E ← E − bias. Then load E into itself, so R starts there too.', 'The sum of the three E plus the three biases is twice the area: ≤ 0 is a back face, done.', 'The tile test: a second adder per edge, E + 12·(A⁺ + B⁺), its sign.'],
-    codex: ['horner', 'zbuffer'], unlocks: ['rv16_raster'], chapters: [{ chapter: 'pixels', step: 1, label: 'Inside a triangle' }],
+    codex: ['horner', 'shiftadd'], unlocks: ['rv16_raster'], chapters: [{ chapter: 'pixels', step: 1, label: 'Inside a triangle' }],
   },
   {
     id: 'k_frame', act: 9, title: 'A frame', kind: 'core', optional: true, requires: ['k_raster', 'k_warps'], base: BUILDK.k_frame, par: { nand: 40275, period: 147, cycles: 7635 },
     why: 'A GPU in miniature: programmable lanes compute where the vertices go, a fixed-function rasterizer turns triangles into pixels, the screen is memory both write. The core talks to the rasterizer through addresses, as to any device, and must not touch the screen or the device while it draws.',
     tips: ['Start from your two-warp core; add the rasterizer, six 7-bit vertex registers and a 16-bit colour register, written from lane 0\'s port when its address is 0xFFF0 … 0xFFF6.', 'A store to 0xFFF6 sets a flip-flop that is the rasterizer\'s go in the next cycle; busy for the core is that flip-flop OR the rasterizer\'s busy.', 'Hold: busy AND (lane 0 is active, the instruction stores, address in 0xFFF0 … 0xFFF6, OR it loads and an active lane\'s address is in 0xF000 … 0xF3FF). AND its inverse into the warp\'s go: nothing of that instruction happens, and its next turn tries again.', 'Use the instruction\'s own signals for the hold, not the write enables it gates: those depend on go.'],
-    codex: ['device', 'doublebuffer'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 1, label: 'The pipeline' }],
+    codex: ['device', 'mmio'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 1, label: 'The pipeline' }],
   },
   {
-    id: 'p_spin', act: 9, title: 'Spin', kind: 'program', optional: true, requires: ['k_frame'], par: { cycles: 1432, idle: 8 },
-    why: 'A spinning square, a few frames of it, on the device you built: warp 0 turns the corners, both warps clear the screen, lane 0 hands two triangles to the rasterizer. No multiplier and no sine table: Minsky\'s rule turns a point with two shifts and two adds.',
+    id: 'p_spin', act: 9, title: 'Spin', kind: 'program', optional: true, requires: ['k_frame'], par: { cycles: 1432, laneops: 5282 },
+    why: 'A spinning square, a few frames of it, on the device you built: warp 0 turns the corners, both warps clear the screen, lane 0 hands two triangles to the rasterizer. No multiplier and no sine table: Minsky\'s rule turns a point with two shifts and two adds. One screen and no depth buffer: the clear must wait for the draw (the second bar), and nothing sorts what overlaps; the GPU chapters add a back frame to draw into and a depth per pixel.',
     tips: ['Clearing is most of the work: give all eight threads a share, several stores per pass.', 'Lane i of warp 0 turns corner i; store each corner\'s screen position (64 + (x >> 8)) where lane 0 can load it.', 'Two bars per frame: after clearing and turning (lane 0 needs the corners and a clean screen), and after drawing (nobody clears a frame still being drawn).', 'On the hardware a load from the screen waits for the rasterizer: one before the clear makes the program right there too.'],
-    codex: ['minsky'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 2, label: 'A spinning triangle' }],
+    codex: ['minsky', 'doublebuffer', 'zbuffer'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 2, label: 'A spinning triangle' }],
   },
   // ---- Act 10 -------------------------------------------------------------------------------
   {
@@ -815,7 +815,7 @@ export const NODES: CampaignNode[] = [
   {
     id: 'p_boot', act: 10, title: 'Boot from flash', kind: 'program', optional: true, requires: ['m_dma', 'm_flash'], par: { size: 18, cycles: 253 },
     why: 'At power-on everything a program needs is in flash, which keeps it without power but is slow to read. A boot loader brings it into RAM first. Let the DMA engine do the copying, and the processor can work while it runs.',
-    tips: ['Loading the table straight from flash works: 8 stall cycles a word. The DMA copies a word every 4.', 'Simplest: start the copy, wait until 0xFFF9 reads 1, clear it, then sum the copy in RAM.', 'Faster: don\'t wait for the whole copy. 0xFFF2 says how many words are left, so you know how many have landed: sum each one as soon as it is there.', 'RV16 is word addressed and its offsets reach −32 … 31: the device registers are -16(x0) … -13(x0), irq is -7(x0), OUT is -3(x0).'],
+    tips: ['Loading the table straight from flash works: 8 stall cycles a word. The DMA copies a word every 4.', 'Simplest: start the copy, wait until 0xFFF9 reads 1, clear it, then sum the copy in RAM.', 'Faster: don\'t wait for the whole copy. The bench\'s engine, unlike your m_dma, lets you read its count: a load from 0xFFF2 gives the words left, so you know how many have landed. Sum each one as soon as it is there.', 'RV16 is word addressed and its offsets reach −32 … 31: the device registers are -16(x0) … -13(x0), irq is -7(x0), OUT is -3(x0).'],
     codex: ['boot'], chapters: [{ chapter: 'bus', step: 4, label: 'A computer on one bus' }],
   },
 ];

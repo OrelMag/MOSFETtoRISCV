@@ -16,7 +16,7 @@ export interface ChapterLink {
 }
 
 /** Metrics a level is graded on (lower is better). */
-export type Metric = 'nand' | 'transistors' | 'depth' | 'period' | 'cycles' | 'size' | 'mistakes' | 'idle' | 'relays' | 'tubes' | 'steps';
+export type Metric = 'nand' | 'transistors' | 'depth' | 'period' | 'cycles' | 'size' | 'mistakes' | 'idle' | 'laneops' | 'relays' | 'tubes' | 'steps';
 
 export type Par = Partial<Record<Metric, number>>;
 

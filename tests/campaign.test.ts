@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { BLOCKS, blockNodes, LINKS } from '../src/campaign/anatomy';
+import { partNames } from '../src/campaign/cardlabel';
 import { CODEX, codexById } from '../src/campaign/codex';
 import { measured, stars } from '../src/campaign/grade';
 import { ancestors, nextAvailable, ruleFor, statusOf, topo } from '../src/campaign/graph';
@@ -14,7 +15,7 @@ import { levelChallenge, levelChipId, nodeOfChip, startCandidates, startFrom } f
 import { ACTS, NODES, nodeById } from '../src/campaign/nodes';
 import { CAMPAIGN_KEY, exportCampaign, importCampaign, mergeCampaign, Progress, sanitizeCampaign } from '../src/campaign/progress';
 import { chapterById } from '../src/chapters';
-import { checkChallenge, libAllowed, startChallenge } from '../src/editor/challenges';
+import { checkChallenge, type LibRule, libAllowed, startChallenge } from '../src/editor/challenges';
 import { checkSimulatable } from '../src/editor/compile';
 import { UserLibrary } from '../src/editor/library';
 import { deadParts, openInputs } from '../src/editor/lint';
@@ -97,6 +98,27 @@ describe('the campaign graph', () => {
 describe('every playable level', () => {
   const playable = NODES.filter((n) => levelChallenge(n));
 
+  // "Parts you may place" lists names: two parts under one name (rv16_rf and the library's regfile8x16, 2 172 and
+  // 2 627 NANDs) cannot be told apart.
+  it('lists no two unlocked parts under one name', () => {
+    for (const n of playable) {
+      const ids = ruleFor(n.id).lib.filter((u) => !u.endsWith('*'));
+      const byName = new Map<string, string[]>();
+      for (const u of ids) {
+        const d = resolveComponent(u), k = d?.name ?? u;
+        if (d?.category !== 'plumbing') byName.set(k, [...(byName.get(k) ?? []), u]); // constants: free, and named by value
+      }
+      expect([...byName.values()].filter((v) => v.length > 1), n.id).toEqual([]);
+    }
+  });
+
+  // Without a par any pass is ★★★ (grade.ts stars).
+  it('has a par; every drill is graded on mistakes', () => {
+    const graded = NODES.filter((n) => n.kind !== 'lesson' && !n.soon);
+    expect(graded.filter((n) => !n.par || !Object.keys(n.par).length).map((n) => n.id)).toEqual([]);
+    expect(graded.filter((n) => n.kind === 'drill' && n.par?.mistakes === undefined).map((n) => n.id)).toEqual([]);
+  });
+
   it('has a chip of its own, separate from the sandbox challenge', () => {
     expect(playable.length).toBeGreaterThanOrEqual(15);
     for (const n of playable) {
@@ -165,6 +187,46 @@ describe('the campaign rule in a check', () => {
     expect(r.restrictionViolations.join()).toMatch(/not unlocked/);
     // The same circuit for the half adder's XOR part is fine: g_xor is below a_ha.
     expect(libAllowed(ruleFor('a_ha'), 'xor')).toBe(true);
+  });
+
+  // A gate-level level is scored in NANDs, where a transistor counts as none: act 0's cells (unlocked by t_inv,
+  // t_nor) and raw MOSFETs would make g_not free and g_mux cheaper than par.
+  it('keeps transistor-level parts out of every gate-level level', async () => {
+    const lv = NODES.filter((n) => levelChallenge(n));
+    const gateLevel = lv.filter((n) => {
+      const a = levelChallenge(n)!.allowed;
+      return typeof a === 'object' && !a.strict && !(n.par?.transistors !== undefined && n.par.nand === undefined);
+    });
+    expect(gateLevel.length).toBeGreaterThan(80);
+    for (const n of gateLevel) {
+      const rule = levelChallenge(n)!.allowed as LibRule;
+      for (const id of ['inv_cmos', 'nor_cmos', 'rv16_dramcol']) expect(libAllowed(rule, id), `${n.id}: ${id}`).toBe(false);
+      expect(rule.gates, n.id).toBe(true);
+    }
+    // m_sense is switch level: its rule keeps them.
+    expect((levelChallenge(nodeById('m_sense')!)!.allowed as LibRule).gates).toBeFalsy();
+    const io = [pin('a', 'in', [0, 8]), pin('y', 'out', [30, 8])];
+    const cell = chip('u_n', 'n', { pins: io, parts: [part('g', { lib: 'inv_cmos' }, [10, 0])], wires: [wire('w1', 'pin:a', 'g.a'), wire('w2', 'g.y', 'pin:y')] });
+    const fets = chip('u_f', 'f', {
+      pins: io,
+      parts: [part('v', { lib: 'vdd' }, [12, 0]), part('p', { lib: 'pmos' }, [10, 3]), part('m', { lib: 'nmos' }, [10, 11]), part('z', { lib: 'gnd' }, [12, 18])],
+      wires: [wire('w1', 'pin:a', 'p.g'), wire('w2', 'pin:a', 'm.g'), wire('w3', 'v.p', 'p.s'), wire('w4', 'p.d', 'pin:y'), wire('w5', 'm.d', 'pin:y'), wire('w6', 'm.s', 'z.p')],
+    });
+    // What the level lists is that rule: g_not is NAND only, and the brief states no rule of its own.
+    const { criteria } = await import('../src/campaign/ui/levelinfo');
+    expect(criteria(levelChallenge(nodeById('g_not')!)!).at(-1)).toBe('Built from NAND gates, wiring, constants and your own chips made of them (no transistors: the level is scored in NANDs).');
+    expect(ruleFor('g_not')).toMatchObject({ lib: ['nand'], label: 'NAND only' });
+    for (const n of lv) expect(levelChallenge(n)!.brief, n.id).not.toMatch(/only gate allowed|NAND only/i);
+    // Families are listed by name, not as globs.
+    const names = partNames(ruleFor('g_eq16').lib.filter((x) => x !== 'nand'), (u) => resolveComponent(u)?.name);
+    expect(names).toContain('zero detect (any width)');
+    expect(names.join()).not.toMatch(/…|\*/);
+    expect(partNames(['rv16_mux*', 'mux2'], (u) => resolveComponent(u)?.name)).toEqual(['RV16 bus multiplexers', '2:1 Multiplexer']);
+    for (const [c, why] of [[cell, /CMOS inverter: transistor level/], [fets, /transistor: transistor level/]] as const) {
+      const r = checkChallenge(levelChallenge(nodeById('g_not')!)!, new UserLibrary(workspace(c)).compiled(c.id));
+      expect(r.ok, c.id).toBe(false);
+      expect(r.restrictionViolations.join(), c.id).toMatch(why);
+    }
   });
 });
 

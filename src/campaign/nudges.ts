@@ -91,7 +91,7 @@ export const NUDGES: Record<string, string> = {
   o_fpcmp: 'The format was built so that the bit patterns are almost in order: find where "almost" fails.',
   o_fpcvt: 'An integer is already a significand: you only need its size and its sign.',
   o_cache: 'A small fast memory must know, for every slot, whether it holds anything and which address it holds.',
-  o_mc: 'Break each instruction into steps that each use one shared resource, and let a sequencer walk them.',
+  o_mc: 'Cut the long path with registers, and let a small state machine decide which step each register and write belongs to.',
   // act 9: lanes and graphics
   k_lanes: 'Same control for everyone, separate data for each.',
   k_vrf: 'Every lane needs its own copy of the state, addressed the same way.',

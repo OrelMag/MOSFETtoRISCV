@@ -627,7 +627,7 @@ export const CHALLENGES: BuildChallenge[] = [
   // gates
   {
     id: 'g_not', title: 'NOT from NAND', level: 'gates', allowed: 'nand',
-    brief: 'NAND is the only gate allowed. Make <b>y = ¬a</b>.',
+    brief: 'Make <b>y = ¬a</b> from NAND gates.',
     ports: pins([['a']], [['y']]), check: { kind: 'table', spec: ([a]) => [a ^ 1] }, limits: { maxNand: 1, maxDepth: 1 }, answer: answer(refNot),
   },
   {
@@ -708,7 +708,7 @@ export const CHALLENGES: BuildChallenge[] = [
   },
   {
     id: 's_dff', title: 'Edge-triggered D flip-flop', level: 'sequential', allowed: 'nand',
-    brief: 'q takes d at the <b>rising</b> edge of clk, and only then: d changing while clk is high or low must not reach q. Two D latches, master and slave, enabled on opposite clock phases (par 9 NANDs; the classic 7474 needs 6).',
+    brief: 'q takes d at the <b>rising</b> edge of clk, and only then: d changing while clk is high or low must not reach q. Two D latches, master and slave, enabled on opposite clock phases (par 9 NANDs; the classic 7474 needs six, but 3-input NANDs, in a different structure).',
     ports: pins([['d'], ['clk']], [['q']], 'clk'),
     check: {
       kind: 'sequence', steps: [
@@ -728,7 +728,7 @@ export const CHALLENGES: BuildChallenge[] = [
   },
   {
     id: 's_cnt4', title: '4-bit counter', level: 'sequential', allowed: 'nand',
-    brief: 'At each rising edge: <b>q ← 0</b> if <code>rst</code>, else <b>q ← q + 1</b> if <code>en</code>, else hold. Wraps from 15 to 0. Your register and incrementer do most of the work; a synchronous reset is an AND per bit.',
+    brief: 'At each rising edge: <b>q ← 0</b> if <code>rst</code>, else <b>q ← q + 1</b> if <code>en</code>, else hold. Wraps from 15 to 0. Your register holds q, an incrementer (a chain of half adders) makes q + 1; a synchronous reset is an AND per bit.',
     ports: pins([['en'], ['rst'], ['clk']], [['q', 4]], 'clk'), check: { kind: 'sequence', steps: counterSteps() }, answer: answer(refCnt4),
   },
   // memory
