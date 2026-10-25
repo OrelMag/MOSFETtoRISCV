@@ -833,8 +833,15 @@ function buildCircuit(ctx: Ctx, circ: LCirc): void {
   for (const [a, b] of circ.wires) { addNode(a); addNode(b); geo.union(key(a), key(b)); }
   for (const t of terms) addNode(t.at);
   /** Wire index → its nodes (ends and points on it), in order along it. */
+  // nodes by row and column: Logisim's wires are horizontal or vertical
+  const byX = new Map<number, Vec[]>(), byY = new Map<number, Vec[]>();
+  for (const p of nodes.values()) {
+    (byX.get(p[0]) ?? byX.set(p[0], []).get(p[0])!).push(p);
+    (byY.get(p[1]) ?? byY.set(p[1], []).get(p[1])!).push(p);
+  }
   const onWire: Vec[][] = circ.wires.map(([a, b]) => {
-    const pts = [...nodes.values()].filter((p) => onSegment(a, b, p));
+    const near = a[0] === b[0] ? byX.get(a[0]) ?? [] : a[1] === b[1] ? byY.get(a[1]) ?? [] : [...nodes.values()];
+    const pts = near.filter((p) => onSegment(a, b, p));
     for (const p of pts) geo.union(key(p), key(a));
     return pts.sort((p, q) => (p[0] - a[0]) ** 2 + (p[1] - a[1]) ** 2 - ((q[0] - a[0]) ** 2 + (q[1] - a[1]) ** 2));
   });
@@ -1006,7 +1013,7 @@ function buildCircuit(ctx: Ctx, circ: LCirc): void {
             wire({ part: p.id, port: sub.clock }, label(iface.clock!, [g.pos[0] + 2 * e[0], g.pos[1] + 2 * e[1]], g.exit));
           }
         }
-        ctx.tally.add('subcircuit', 'your chip');
+        ctx.tally.add(c.name, 'chip (its circuit)');
         return;
       }
       case 'unknown': {

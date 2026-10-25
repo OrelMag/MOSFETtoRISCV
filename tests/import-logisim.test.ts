@@ -119,6 +119,29 @@ describe('Logisim import', () => {
     forEachInput(top, ([i0, i1, s, p, q]) => expect(evalOnce(sim, [i0, i1, s, p, q])).toEqual([s ? i1 : i0, p & q]));
   });
 
+  it('a Logisim 2.7 subcircuit: the classic box, ports 10 px apart', () => {
+    const ha = readFileSync(new URL('./import/halfadder.circ', import.meta.url), 'utf8');
+    const sub = /<circuit name="half_adder">[\s\S]*?<\/circuit>/.exec(ha)![0]
+      .replace(/<a name="appearance" val="logisim_evolution"\/>/, '')
+      .replace(/<a name="type" val="output"\/>/g, '<a name="output" val="true"/>');
+    const pin = (x: number, y: number, l: string, out = false) =>
+      `<comp lib="0" loc="(${x},${y})" name="Pin"><a name="label" val="${l}"/>${out ? '<a name="facing" val="west"/><a name="output" val="true"/>' : ''}</comp>`;
+    const xml = `<project source="2.7.1" version="1.0"><lib desc="#Wiring" name="0"/><lib desc="#Gates" name="1"/><lib desc="#Base" name="8"/>
+      <main name="main"/><circuit name="main">${pin(100, 100, 'X')}${pin(100, 110, 'Y')}${pin(300, 100, 'S0', true)}${pin(300, 110, 'C0', true)}
+      <comp loc="(200,100)" name="half_adder"/>
+      <wire from="(100,100)" to="(170,100)"/><wire from="(100,110)" to="(170,110)"/><wire from="(200,100)" to="(300,100)"/><wire from="(200,110)" to="(300,110)"/>
+      </circuit>${sub}</project>`;
+    const r = importLogisim([{ name: 'old.circ', text: xml }], { taken: new Set() });
+    if ('error' in r) throw new Error(r.error);
+    const chips: Record<string, ChipDoc> = {};
+    for (const c of r.chips) chips[c.id] = c;
+    const lib = new UserLibrary({ schema: SCHEMA, chips, open: [] });
+    expect(errorsOf(lib, r)).toEqual([]);
+    const top = lib.defOf(r.top)!;
+    const sim = simulate(top);
+    forEachInput(top, ([x, y]) => expect(evalOnce(sim, [x, y])).toEqual([x ^ y, x & y]));
+  });
+
   it('every imported chip passes the store\'s sanitizer unchanged', () => {
     for (const f of ['halfadder.circ', 'fulladder.circ', 'bus.circ', 'counter.circ', 'rom.circ', 'old27.circ']) {
       const { r } = load(f);
