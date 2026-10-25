@@ -1,4 +1,4 @@
-// Chapter 37's bus, in gates: AXI-lite-shaped channels with valid / ready, one transaction at a time.
+// Chapter 38's bus, in gates: AXI-lite-shaped channels with valid / ready, one transaction at a time.
 // A write is an address (AW) and its data (W), here always handshaken together, then a response (B); a
 // read is an address (AR), then data (R). A transfer happens on the rising edge where valid and ready
 // are both 1. The interconnect grants the bus to one master (round robin, arbiterN), decodes the address
@@ -306,7 +306,7 @@ export function axiRam(k: number, wait = 0): ComponentDef {
 
 /**
  * A screen on the bus: an n × n frame buffer, a byte a pixel (RGB332: rrrgggbb), pixel (x, y) at byte n·y + x.
- * It is the RAM slave (four byte lanes, so sb writes one pixel); a display reads the lanes as chapter 32's
+ * It is the RAM slave (four byte lanes, so sb writes one pixel); a display reads the lanes as chapter 33's
  * scan-out reads its frame (here the panel paints them).
  */
 export function axiScreen(n = 64): ComponentDef {
@@ -314,7 +314,7 @@ export function axiScreen(n = 64): ComponentDef {
   if (!Number.isInteger(k)) throw new Error('axiScreen: n must be a power of two');
   const id = `axiscreen${n}`;
   return memo(id, () => ramSlave(id, k, 0, `Screen slave (${n} × ${n}, RGB332)`, 'SCREEN',
-    `A frame buffer behind the bus: ${n} × ${n} pixels, one byte each (RGB332: rrrgggbb), pixel (x, y) at byte ${n}·y + x, in four byte lanes so that sb writes one pixel. The display reads it as the scan-out of chapter 32 reads its frame.`));
+    `A frame buffer behind the bus: ${n} × ${n} pixels, one byte each (RGB332: rrrgggbb), pixel (x, y) at byte ${n}·y + x, in four byte lanes so that sb writes one pixel. The display reads it as the scan-out of chapter 33 reads its frame.`));
 }
 
 function ramSlave(id: string, k: number, wait: number, name: string, label: string, summary: string): ComponentDef {
@@ -342,11 +342,11 @@ function ramSlave(id: string, k: number, wait: number, name: string, label: stri
   }
 }
 
-/** Chapter 37's DRAM: 2^12 words (16 KB), 2 banks of 16-word rows, open page (chapter 35's controller). */
+/** Chapter 38's DRAM: 2^12 words (16 KB), 2 banks of 16-word rows, open page (chapter 36's controller). */
 export const BUS_DRAM: DramConfig = { k: 12, banks: 2, rowWords: 16, policy: 'open' };
 
 /**
- * A DRAM behind the bus: chapter 35's controller and device, and an adapter. The bus moves a word with byte
+ * A DRAM behind the bus: chapter 36's controller and device, and an adapter. The bus moves a word with byte
  * strobes; the controller moves 4-word lines. A load reads the line and keeps its word; a store writes the
  * line with the device's data mask (DDR's DM pins) on the strobed bytes of its word only, so a byte store
  * needs no read first. The request is latched at the handshake; the response comes the cycle after the
@@ -389,7 +389,7 @@ export function axiDram(c: DramConfig = BUS_DRAM): ComponentDef {
     const ports: PortDef[] = [...slavePorts(), bit('clk', 'in', 'bottom', true)];
     return define({
       id, name: `DRAM slave (${2 ** c.k} words, ${c.banks} banks)`, category: 'memory',
-      summary: `Chapter 35's controller and a DRAM of ${2 ** c.k} words behind the bus. A load reads its word's 4-word line; a store writes the line with the data mask set on its own strobed bytes only, so a byte store needs no read first. The response comes the cycle after the controller's done: a row hit, a closed bank and another open row each cost more (chapter 35).`,
+      summary: `Chapter 36's controller and a DRAM of ${2 ** c.k} words behind the bus. A load reads its word's 4-word line; a store writes the line with the data mask set on its own strobed bytes only, so a byte store needs no read first. The response comes the cycle after the controller's done: a row hit, a closed bank and another open row each cost more (chapter 36).`,
       ports, symbol: { kind: 'box', label: 'DRAM' },
       netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
     });
@@ -623,7 +623,7 @@ function hashWords(a: ArrayLike<number>): string {
 }
 
 /**
- * A bus bench (chapter 37's scenes, the tests): a request port standing in for the CPU (req, we, addr,
+ * A bus bench (chapter 38's scenes, the tests): a request port standing in for the CPU (req, we, addr,
  * wdata, be → done, rdata), the DMA engine, the interconnect, a flash holding `image`, a RAM of 2^k
  * words with `wait` wait states, and the default slave. The computer's map (bus/model.ts MAP): RAM from
  * 0, flash at 0x1000_0000, the DMA's registers at 0x4000_0000.
@@ -779,7 +779,7 @@ export const AXI_PIXEL: ComponentDef = (() => {
 /**
  * A flash's read window over a ROM part of 2^k words (the ROM holds the contents; this is the timing): a
  * page buffer tag (16-word pages) and a counter. A word of the page in the buffer is answered 2 cycles after
- * its address, any other after a page read of `read` cycles, as chapter 36's flash (axiFlash). addr: the word
+ * its address, any other after a page read of `read` cycles, as chapter 37's flash (axiFlash). addr: the word
  * the ROM must show (held from the address handshake), data: what it shows. Writes are answered and dropped.
  */
 export function axiFlashWindow(k: number, read = FLASH_TIMES.read): ComponentDef {
@@ -822,7 +822,7 @@ export function axiFlashWindow(k: number, read = FLASH_TIMES.read): ComponentDef
     const ports: PortDef[] = [...slavePorts(), bus('data', 32, 'in'), bit('clk', 'in', 'bottom', true), bus('addr', k, 'out')];
     return define({
       id, name: `Flash window (${2 ** k} words, 16-word pages)`, category: 'memory',
-      summary: `A flash's timing over a ROM of ${2 ** k} words that holds its contents (addr out, data in): a word of the page in the buffer comes 2 cycles after its address, any other after a page read of ${read} cycles (chapter 36). Writes are dropped.`,
+      summary: `A flash's timing over a ROM of ${2 ** k} words that holds its contents (addr out, data in): a word of the page in the buffer comes 2 cycles after its address, any other after a page read of ${read} cycles (chapter 37). Writes are dropped.`,
       ports, symbol: { kind: 'box', label: 'FLASH' },
       netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
     });

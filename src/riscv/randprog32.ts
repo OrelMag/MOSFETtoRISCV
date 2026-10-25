@@ -25,6 +25,9 @@ export interface Rand32Options {
   dataBase?: number;
   /** The system mode's timer interrupt (default on): it needs our memory-mapped mtime / mtimecmp. */
   timer?: boolean;
+  /** The C extension: assembled with .option rvc, and about a third of the units are C forms (registers x8–x15,
+   * rd = rs1, short immediates, loads and stores off a prime register or sp, short jumps). Unchanged without it. */
+  c?: boolean;
 }
 
 /** mulberry32: small, fast, good enough. */
@@ -52,6 +55,8 @@ const RM = ['rne', 'rtz', 'rdn', 'rup', 'rmm', 'dyn'];
 /** Body registers; x24–x31 are kept for the loop counter, memory base, address temporary and trap handler. */
 const POOL = ['ra', 'sp', 'gp', 'tp', 't0', 't1', 't2', 's0', 's1', 'a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7'];
 const FPOOL = ['ft0', 'ft1', 'ft2', 'ft3', 'ft4', 'ft5', 'ft6', 'ft7'];
+/** The registers a 3-bit field reaches (x8–x15). */
+const PRIME = ['s0', 's1', 'a0', 'a1', 'a2', 'a3', 'a4', 'a5'];
 const LOOP = 's10', BASE = 's11', ADDR = 't6', JR = 't5', H0 = 't3', H1 = 't4', T0 = 's8', T1 = 's9';
 /** Interesting words: where datapaths break. */
 const EDGE = [0, 1, -1, 2, 0x7fffffff, -0x80000000, 0x80000001, 0xffff, 0x8000, 0x7fff, 31, 32, 0xff, 0x80];
@@ -67,7 +72,7 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
   const int = (lo: number, hi: number) => lo + Math.floor(r() * (hi - lo + 1));
   const word = () => (r() < 0.5 ? pick(EDGE) : (r() * 2 ** 32) | 0);
   const n = o.n ?? 60, W = o.dmemWords ?? 32, B = 4 * W;
-  const out: string[] = [];
+  const out: string[] = o.c ? ['        .option rvc'] : [];
   const emit = (s: string) => out.push(`        ${s}`);
   // a source register: often one written in the last few instructions (a hazard), sometimes x0
   const recent: string[] = [];
@@ -139,8 +144,44 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
       emit(`${op} ${reg}, ${off}(${BASE})`);
     }
   };
+  /** A C form with operands it accepts (o.c only: draws no random numbers otherwise). */
+  const cUnit = (i: number) => {
+    const note = (d: string) => { recent.push(d); if (recent.length > 6) recent.shift(); return d; };
+    const pd = () => note(pick(PRIME));
+    const ps = () => (recent.length && r() < 0.5 && PRIME.includes(recent[recent.length - 1]) ? recent[recent.length - 1] : pick(PRIME));
+    const rd = () => note(pick(POOL));
+    const nz6 = () => (r() < 0.5 ? int(-32, -1) : int(1, 31));
+    const ahead = (): string => { const l = `L${label++}`; pending.push({ label: l, at: i + int(1, 3) }); return l; };
+    const maxOff = Math.min(B / 2 - 4, 124);
+    const v = r();
+    if (v < 0.08) emit(`c.addi ${rd()}, ${nz6()}`);
+    else if (v < 0.15) emit(`c.li ${rd()}, ${int(-32, 31)}`);
+    else if (v < 0.19) emit(`c.lui ${note(pick(POOL.filter((x) => x !== 'sp')))}, ${r() < 0.5 ? int(1, 31) : int(0xfffe0, 0xfffff)}`);
+    else if (v < 0.26) emit(`c.mv ${rd()}, ${pick(POOL)}`);
+    else if (v < 0.32) emit(`c.add ${rd()}, ${pick(POOL)}`);
+    else if (v < 0.36) emit(`c.slli ${rd()}, ${int(1, 31)}`);
+    else if (v < 0.42) emit(`${pick(['c.srli', 'c.srai'])} ${pd()}, ${int(1, 31)}`);
+    else if (v < 0.46) emit(`c.andi ${pd()}, ${int(-32, 31)}`);
+    else if (v < 0.55) { const b = ps(); emit(`${pick(['c.sub', 'c.xor', 'c.or', 'c.and'])} ${pd()}, ${b}`); }
+    else if (v < 0.63) {
+      // off a prime register holding the window's middle
+      const base = pick(PRIME);
+      emit(`mv ${base}, ${BASE}`);
+      if (r() < 0.5) emit(`c.lw ${pd()}, ${4 * int(0, maxOff / 4)}(${base})`);
+      else emit(`c.sw ${ps()}, ${4 * int(0, maxOff / 4)}(${base})`);
+    } else if (v < 0.7) {
+      emit(`mv sp, ${BASE}`);
+      if (r() < 0.5) emit(`c.lwsp ${rd()}, ${4 * int(0, maxOff / 4)}(sp)`);
+      else emit(`c.swsp ${pick(POOL)}, ${4 * int(0, maxOff / 4)}(sp)`);
+    } else if (v < 0.74) emit(`c.addi4spn ${pd()}, sp, ${4 * int(1, 255)}`);
+    else if (v < 0.77) emit(`c.addi16sp sp, ${16 * (r() < 0.5 ? int(-32, -1) : int(1, 31))}`);
+    else if (v < 0.84) emit(`${pick(['c.beqz', 'c.bnez'])} ${ps()}, ${ahead()}`);
+    else if (v < 0.91) emit(`${pick(['c.j', 'c.jal'])} ${ahead()}`);
+    else { emit(`la ${JR}, ${ahead()}`); emit(`${pick(['c.jr', 'c.jalr'])} ${JR}`); }
+  };
   for (let i = 0; i < n; i++) {
     for (const p of pending.filter((q) => q.at === i)) out.push(`${p.label}:`);
+    if (o.c && r() < 0.35) { cUnit(i); continue; }
     const u = r();
     if (u < 0.1) {
       // forward branch or jal over 1–4 units
@@ -150,9 +191,11 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
       else emit(`jal ${dst()}, ${l}`);
     } else if (u < 0.14) {
       // jalr over the next instruction (its base register forwarded from the auipc); misaligned in system mode
+      if (o.c) emit('.option norvc'); // the offset counts 4-byte instructions
       emit(`auipc ${JR}, 0`);
       emit(`jalr ${dst()}, ${o.system && r() < 0.2 ? 10 : 12}(${JR})`);
       emit(`addi ${dst()}, ${src()}, 1`);
+      if (o.c) emit('.option rvc');
     } else if (u < 0.17) {
       // a short loop: a backward branch taken k − 1 times
       const l = `B${label++}`;

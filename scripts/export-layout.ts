@@ -2,7 +2,7 @@
 // (SkyWater 130 nm, sky130hd), with our own estimates of it (NAND count per block, static timing) in
 // source.json for the site to set beside the flow's reports.
 // Run: npx vite-node scripts/export-layout.ts [dual | sys] [outDir]
-//   dual: the dual-core of chapter 26 (program ROMs as instruction ports, the shared memory inside)
+//   dual: the dual-core of chapter 27 (program ROMs as instruction ports, the shared memory inside)
 //   sys:  the RV32IM + Zicsr system core (systemCore({ m: true }), both memories outside its ports,
 //         as SRAM macros would be; the module verify-export.ts checks as core-m)
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -15,7 +15,7 @@ import { netlistOf } from '../src/sim/types';
 import { synthVerilog } from '../src/sim/vexport';
 
 const DESIGNS = {
-  dual: { top: () => dualCore([], 5, true), name: 'Dual-core RV32I (chapter 26)' },
+  dual: { top: () => dualCore([], 5, true), name: 'Dual-core RV32I (chapter 27)' },
   sys: { top: () => systemCore({ m: true }), name: 'System CPU core, RV32IM + Zicsr' },
 };
 const design = (process.argv[2] ?? 'dual') as keyof typeof DESIGNS;

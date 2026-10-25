@@ -1,4 +1,4 @@
-// Phase 17c-2: the out-of-order core (chapter 25's `ooo`), built from lib/ooo.ts's units. P6 style: values wait in
+// Phase 17c-2: the out-of-order core (chapter 26's `ooo`), built from lib/ooo.ts's units. P6 style: values wait in
 // the reorder buffer, the rename table maps a register to the ROB entry of its youngest in-flight writer. 2-wide:
 // fetch, dispatch, two issue ports with a result bus each, commit two a cycle. It reproduces riscv/ooomodel.ts's
 // OOO_CORE cycle for cycle (the plan's "core's cycle, stage by stage"); tests/ooocore.test.ts holds it to that.
@@ -414,7 +414,7 @@ export interface OooOptions {
   dmemK?: number;
 }
 
-/** Chapter 25's out-of-order core (`ooo`): RV32IM, word loads and stores, as the pipelines. */
+/** Chapter 26's out-of-order core (`ooo`): RV32IM, word loads and stores, as the pipelines. */
 export function oooCpu(program: number[], opts: OooOptions = {}): ComponentDef {
   const IM = rom2(program, opts.imemK ?? 6), dk = opts.dmemK ?? 5;
   return memo(`ooo_${IM.id}_${dk}`, () => buildOoo(IM, dk));

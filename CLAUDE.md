@@ -96,7 +96,7 @@ src/sim/       simulation core (no DOM)
   flatten.ts     hierarchy → flat 1-bit nets + leaves, keeping a HierNode tree mapping every
                  level's ports/wires to flat nets (this is what makes every box transparent);
                  powerOn hints may be dotted paths into children ('w3.ff0.ff.slave.sr.q'); one array per net, shared by the ports
-                 on it and the leaves reading it (never mutate one), HierNode.path computed from the parents (memory: ch 33's
+                 on it and the leaves reading it (never mutate one), HierNode.path computed from the parents (memory: ch 34's
                  413 501 leaves)
   gatesim.ts     event-driven 3-valued (0/1/X) simulator, unit NAND delay, transport delay,
                  relaxation for power-on and oscillation resolution; runUntil(t) for a
@@ -234,9 +234,14 @@ src/lib/       the component library (registered in `registry` via define())
   regfile.ts     regfile(k, w) with x0 = 0, two read ports fed by one bundled word bus; regfile2w(k, w): 4 read, 2 write
                  ports (writeSelect per register: port 1, the younger instruction, wins), w<i> names like regfile
   cpu.ts         single-cycle RV32I: rom (preferBehavior), dataMemory, IMM_GEN, OPCODE_DECODER,
-                 CONTROL, NEXT_PC, PLUS4(_FAST), singleCycleCpu(program, { adder, custom }); opcodeDecoder(extra) /
+                 CONTROL, NEXT_PC, PLUS4(_FAST), singleCycleCpu(program, { adder, custom, c }) (c: rvc.ts cFetch + PLUS2OR4); opcodeDecoder(extra) /
                  control(custom): the generators (OPCODE_DECODER / CONTROL are the no-customs case): a custom row is
                  one more class and an OR input per signal it asserts (riscv/custom.ts signalsOf)
+  rvc.ts         chapter 25's C extension in gates: C_FORMS (the parcel's form one-hot over C_FORM_NAMES, pass, illegal),
+                 cField(i) per field of C_FIELDS (one-hot AND-OR over cRecipes(): forms that fill a field alike share a
+                 recipe, read off riscv/rvc.ts decodeC over all 65 536 parcels), C_EXPAND (window → instr, c, illegal;
+                 expandWindow its spec), incCin(n), PLUS2OR4, halfRom (a halfword bank: preferBehavior, id hrom…; verify
+                 lanes give each bank its program), cFetch(program, k) (two banks, the low one a word on when pc[1] = 1, swaps)
   fastadd.ts     gp / gray / black prefix cells, CLA4, prefixAdder (one drawing for any prefix network): koggeStone(n),
                  brentKung(n), sklansky(n) (ksLevels / bkLevels / skLevels, prefixInfo), addSubFast(n)
   wide.ts        bitwise(op, n), orN(n) (shared by alu.ts and fastadd.ts to avoid an import cycle)
@@ -249,7 +254,7 @@ src/lib/       the component library (registered in `registry` via define())
                  pipelinedCpu(program, { adder, balanced, predictor, dcache, m }) (a cache miss in M freezes every stage;
                  m: multiply split E/M, behaving like a load for hazards; divide stalls F/D/E); btbOf(1 | 2): the BTB with
                  one or two fetch read ports (BTB = btbOf(1), unchanged)
-  pipe2w.ts      chapter 25's dual-issue in-order RV32IM pipeline: dualPipeCpu(program, { imemK, dmemK }) (pipe-2w): rom2 (two
+  pipe2w.ts      chapter 26's dual-issue in-order RV32IM pipeline: dualPipeCpu(program, { imemK, dmemK }) (pipe-2w): rom2 (two
                  ROM reads, pc and pc + 4; not registered, like rom), PREDECODE (calls / returns from the word), FETCH_PRED (the
                  pair's next PC: return stack, BTB, pc + 8; slot 1 only when slot 0 is not predicted taken), ISSUE_CLASS,
                  PAIR_CHECK (slot 1 issues unless it needs lane 0's memory / multiplier / divider, is a second control
@@ -261,7 +266,7 @@ src/lib/       the component library (registered in `registry` via define())
   ras.ts         the return-address stack: ras(n, w) (speculative + committed copies of {valid, address} entries,
                  restore from the committed copy's next state; the model's rules: rasNext), rasStack(n, w); ras2(n, w) (two
                  operations a cycle per copy, in order: rasOp chained; top1 / any1 after slot 0's: the out-of-order core's)
-  ooo.ts         chapter 25's out-of-order core's units, each following riscv/ooomodel.ts's rules (tests/ooounits.test.ts
+  ooo.ts         chapter 26's out-of-order core's units, each following riscv/ooomodel.ts's rules (tests/ooounits.test.ts
                  checks them against the model's data structures, cycle by cycle): btbCommit (looked up for both fetch slots,
                  trained at commit by up to two in order, BTB_TRAIN: the model's rules, not the pipelines'), issueQueue(P)
                  (iqEntry: operands ready or tagged, woken by either result bus and passed on the same cycle, a load's store
@@ -271,7 +276,7 @@ src/lib/       the component library (registered in `registry` via define())
                  (forwarding from the youngest older store to the word: before the tail the load saw), dataMemory2(k) (a read
                  and a write address). Rows on shared wires (rowArray): the sandbox round trip of a block drawn with hundreds
                  of labels takes minutes
-  ooocore.ts     chapter 25's out-of-order core: oooCpu(program, { imemK, dmemK }) (`ooo`), equal to riscv/ooomodel.ts's
+  ooocore.ts     chapter 26's out-of-order core: oooCpu(program, { imemK, dmemK }) (`ooo`), equal to riscv/ooomodel.ts's
                  OOO_CORE every cycle (tests/ooocore.test.ts: commits and each port's pick per cycle, the golden model after
                  every commit, on targeted programs, the benchmarks and random programs). Fetch (rom2, FETCH_OOO: the model's
                  prediction, ras2, btbCommit; the fetch register refilled when dispatch empties it), dispatch (OOO_CLASS: the
@@ -289,13 +294,13 @@ src/lib/       the component library (registered in `registry` via define())
                  in place of the data memory, the AXI master ports at the CPU's pins, retire
   cells.ts       NMOS_STRONG / PMOS_WEAK, SRAM_CELL (6T), SRAM_COLUMN, DRAM_CELL (switch level)
   arrays.ts      WRITE_DRIVER, SENSE_AMP (latch type), sramColumn(R), sramArray(R, C): switch-level SRAM with periphery
-  dramctrl.ts    chapter 35: dramCtrl(cfg) (CtrlModel in gates, tests/dramctrl.test.ts compares every output every cycle),
+  dramctrl.ts    chapter 36: dramCtrl(cfg) (CtrlModel in gates, tests/dramctrl.test.ts compares every output every cycle),
                  dramDevice(cfg, init?) (DeviceModel as a seq behaviour leaf, no input → output path), dramSystem(cfg) (both,
                  the chapter's scene); wbCache(k, ib, ways, dram) puts them behind the write-back cache (a miss: write-back
                  request, then fill, until done); singleCycleCpu / pipelinedCpu({ dram }); CPUs sc-wb2-dram, sc-wb2-dramc,
                  pipe-wb2-dram (tests/verify/cpus.ts; BitSim lanes give a seq leaf a state each: run.ts laneLeaves; their
                  benchmark rows are offChip: kept out of the cost comparisons)
-  axi.ts         chapter 37's bus (AXI-lite-shaped: AW + W together, B, AR, R; valid / ready; one transaction at a time):
+  axi.ts         chapter 38's bus (AXI-lite-shaped: AW + W together, B, AR, R; valid / ready; one transaction at a time):
                  AXI_PORT (a load / store → a transaction, done), axiBus(M, codes) (arbiterN round robin, decode on the top
                  nibble, the last slave the default; grant and slave held to the response), axiRam(k, wait) (four bigRam byte
                  lanes, wait states), AXI_DEFAULT, DMA_ENGINE (registers src / dst / len / ctrl as a slave, a copying master,
@@ -316,11 +321,11 @@ src/lib/       the component library (registered in `registry` via define())
                  (instance kbd); DMA irq → CPU irq; socDevices(o): BusModel's devices), chapterComputer / CHAPTER_COMPUTER
                  (bus/programs.ts: a boot ROM that DMA-copies a program from flash to RAM 0x400 and jumps), SYSTEM_COMPUTER
                  (every slave; SYSTEM_SOURCE: keys to the console, a line in DRAM, blocks on the screen); busCore(imemK) (the
-                 bus CPU with its boot ROM outside: romData in), SANDBOX_PARTS (bundled parts on SANDBOX_MAP, chapter 37's map
+                 bus CPU with its boot ROM outside: romData in), SANDBOX_PARTS (bundled parts on SANDBOX_MAP, chapter 38's map
                  with the I/O port at 0x6…) for Examples ▸ System on a bus; { cards: Deck, cardFeed }: AXI_CARDS at 0x7… (instance
                  cardport) and the deck's reader leaf (cards/reader.ts deckReader, instance cards); asmDeck(name, src) (a program as
                  object cards, each printed with its source line), CARD_DECK, cardComputer(deck, feed) / CARD_COMPUTER (the card boot
-                 ROM, no flash: chapter 37's "Booting from cards")
+                 ROM, no flash: chapter 38's "Booting from cards")
   relays.ts      prologue P1's relays at switch level: relay(n) (1–6 poles, ids relay, relay2 …), RELAY_NOT / NAND / XOR,
                  RELAY_FA (the carry through contacts on two rails, ci / nci: a contact cannot invert), relayAdder(n) (one
                  relay step for any width), RELAY_LATCH (self-holding), RELAY_BUZZER (a coil through its own break contact);
@@ -339,11 +344,11 @@ src/lib/       the component library (registered in `registry` via define())
                  triode.ts, the Z3 and ENIAC (tests hold them equal); cabinets (racks / panels), withoutParts (a CPU without
                  its program ROM), fmt* and TECH_NOTE; techsteps.ts designSteps(def): depth, period or relay steps
                  (SwitchSim); view/techtable.ts the table (inspector, sandbox chip properties, chapter 3's techcompare widget)
-  flash.ts       chapter 36's flash at switch level: FG_CELL (prim 'fgmos'), vtOf / V_READ, norArray(R, C) (cells between
+  flash.ts       chapter 37's flash at switch level: FG_CELL (prim 'fgmos'), vtOf / V_READ, norArray(R, C) (cells between
                  bit lines and a source line held high while programming), nandBlock(S, N) (strings with string / ground
                  selects, the other rows at the pass voltage); per column a pull-up, an output inverter and a NOR-gated
                  strong write driver (din 0 pulls the bit line low: program; 1 inhibits)
-  dram.ts        chapter 34's DRAM at switch level: VHALF (prim 'vhalf'), DRAM_SA (prim 'sense', drawn with 8 transistors),
+  dram.ts        chapter 35's DRAM at switch level: VHALF (prim 'vhalf'), DRAM_SA (prim 'sense', drawn with 8 transistors),
                  DRAM_BIT (1T1C, a leaking CELL_C capacitor, bl two-way), dramColumn(R) (precharge / equalize to VDD/2, a
                  reference bit line of BITLINE_C, column select, the amplifier), dramArray(R, C) (row / column decoders, write
                  driver, output inverter; protocol: precharge, activate, sense, read / write, close), DRAM4X4, DRAM8X8;
@@ -373,28 +378,28 @@ src/lib/       the component library (registered in `registry` via define())
                  end, n laneUnit(n) boxes = registers + ALU + result mux, hand-placed in two bands), lowestOne(n) (the leader /
                  the next lane to serve), onehotMux(n, w), simtDecode(n) (custom-0 ops, lane CSRs 0xCC0–0xCC4), simtControl(n)
                  (inverted mask + 4-entry shift-register split / join stack, stackEntryWidth), memSequencer(n) (one lane per cycle)
-  warps.ts       chapter 30's warp core: warpCore(program, { warps, lanes, latency, dmemK, data }): warpSlot (PC, simtControl, run
+  warps.ts       chapter 31's warp core: warpCore(program, { warps, lanes, latency, dmemK, data }): warpSlot (PC, simtControl, run
                  bit, SCOREBOARD: a pending bit per register), SB_CHECK (hazardSpec: the next instruction uses a pending register),
                  arbiterN over the ready warps, warpLane (a register bank per warp; a returning load writes its warp's bank, so
                  that warp sits out the cycle), memPipe (L − 1 request registers before lanePortMemory: a port per lane, initial
-                 words as power-on hints), warpDecode (wspawn, CSRs warp / nwarps). Chapter 31: warpCore(…, { lsu, smemK,
+                 words as power-on hints), warpDecode (wspawn, CSRs warp / nwarps). Chapter 32: warpCore(…, { lsu, smemK,
                  sharedLatency, globalEvery, mul }): a memory instruction holds the issue port one cycle per access (registers
                  heldW / left; its warp moves on after the last), atBar (bar: popcount of the waiting bits + 1 against rs2),
                  EXT_DECODE (amoadd.w shown to CONTROL as lw, its immediate zeroed; bar; mul), sbCheck(amo), warpLane(…, mul).
-                 Chapter 33: warpCore(…, { host }): launch (warp 0 again at PC 0, every lane on: a dispatch) and a spare read port
+                 Chapter 34: warpCore(…, { host }): launch (warp 0 again at PC 0, every lane on: a dispatch) and a spare read port
                  into the data memory (xa → xq; lanePortMemory / memPipe xport). A one-warp core keeps its unused wspawn decode
-                 (chapter 30 quotes a warp as nands(2) − nands(1)). lanePortMemory is hand-placed (decoders, words in columns of
+                 (chapter 31 quotes a warp as nands(2) − nands(1)). lanePortMemory is hand-placed (decoders, words in columns of
                  32 rows, read trees; labels between): the registry-wide schematic tests never build one, tests/route-bigmem.test.ts
                  checks the chapters' sizes. The top level is hand-placed (warpCoreDrawing: four bands, a row per warp / decode
                  and wspawn / lanes, leader and next PC / memory, lsu's access, done and barrier rows; Placer places by name and
                  skips parts a variant lacks; wires within a block, labels between, unique net names); tests/warplayout.test.ts
                  checks its variants (the registry-wide schematic tests never build the warp core's top level)
-  warpmem.ts     chapter 31's memory: serveLanes / accessesOf (the access rule, also the timing model's), accessUnit(n)
+  warpmem.ts     chapter 32's memory: serveLanes / accessesOf (the access rule, also the timing model's), accessUnit(n)
                  (leader's 16-byte line; per bank the lowest lane picks the row; amoadd.w the leader alone), quadMemory(k,
                  banked) (4 columns: one row = a line, or a row per bank), lsuMemory (the pipeline: shared accesses enter
                  Ls − 1 stages from the end, slotBusy; globalBusy: a global access in the last B − 1 stages; old + data for
                  amoadd.w; the highest served lane wins a word)
-  raster.ts      chapter 32's graphics hardware (reference: gfx/raster.ts, cycle for cycle): edgeStep(n, tile) (E and the band
+  raster.ts      chapter 33's graphics hardware (reference: gfx/raster.ts, cycle for cycle): edgeStep(n, tile) (E and the band
                  start R, one add/sub; tile test E + off), RAST_SETUP (A, B, bias, steps, tile offsets, bounding box in tiles;
                  eight products on one 10 × 10 Booth multiplier: area, then each edge at the first tile), RAST_WALK (phase s:
                  idle, S1–S8, TEST, 16 pixels; bands of 4 × 4 tiles, column serpentine; waits in S8 for `ready`),
@@ -402,13 +407,13 @@ src/lib/       the component library (registered in `registry` via define())
                  screen), BLEND332, ROP (depth buffer, test, blend, clear), pixelBuffer (4 byte banks of bigRam), frameBuffers
                  (front / back by address muxes), SCAN_OUT (a word a cycle, vsync, flip at vsync or at once), displayTop, GPU30,
                  GPU30Z (the scenes' tops)
-  gfxpipe.ts     chapter 33: CMD_UNIT (one flip-flop a state, CU_STATES / cuState: launch the kernel on the next frame and
+  gfxpipe.ts     chapter 34: CMD_UNIT (one flip-flop a state, CU_STATES / cuState: launch the kernel on the next frame and
                  clear, read the count, per triangle its word and three vertices on the core's spare port, go, wait; swap, wait
                  for the flip and the kernel, the other vertex buffer), gpu31(mesh) (one-warp core with mul and host port,
                  the command unit, rasterizer(true), ROP, frameBuffers, SCAN_OUT; same instance names as GPU30Z). Step 5:
                  gpu31(mesh, { clear: 'word' }): CLEAR_UNIT (a 10-bit word counter, instance 'clear'), cmdUnit(true) (cstart /
                  cbusy, the rasterizer only draws), ROP_W (raster.ts: depth in four banks zbuf0…3, cwe writes a word: wall),
-                 frameBuffers(…, wide) (an `all` input per frame); ch 32's parts and ids unchanged; PIPE_COSTS.word / *_w frames
+                 frameBuffers(…, wide) (an `all` input per frame); ch 33's parts and ids unchanged; PIPE_COSTS.word / *_w frames
   builder.ts     Builder: column-by-column netlist builder for blocks read by drilling in (fpu, fppipe, coding, divide)
   coding.ts      magComparator(n, signed), priorityEncoder(n), encoder(n), demux(k, w), popcount(n), absValue(n),
                  parity(n), hammingEnc/Dec(k) (SEC-DED, with TS reference models), eccChannel(k)
@@ -428,7 +433,11 @@ src/bench/     results.json (scripts/benchmarks.ts --write, checked in; each run
                the four RV32I programs, the cost / speed front, each CPU's family and chapter): the workbench's Benchmarks
                tab (ui/pages/benchmarks.ts, its own chunk)
 src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
-               instructions; assemble(src, custom)), custom.ts (CustomRow: a custom instruction as a slot, a format and a row
+               instructions; assemble(src, custom); c.* mnemonics and `.option rvc` / `norvc`: sizes in bytes settle by
+               relaxation (a form grows to 32 bits when its target is out of reach), parcels packed little-endian into
+               words, AsmLine.size 2 for a 16-bit one; .half, .align pads to a word with c.nop), rvc.ts (the C extension's
+               specification: decodeC / expand16, compress32 (addi rd, rs, 0 → c.mv), disasmC, IMM_MAPS: instruction bit →
+               immediate bit per layout, parcelAt; ISS({ c }) fetches parcels, ISS.instrAt(pc), StepInfo.half), custom.ts (CustomRow: a custom instruction as a slot, a format and a row
                of control signals; problemsOf, signalsOf, meaning, execCustom / aluCtlOf as the hardware's ALU decoder;
                decode / disasm / ISS({ custom }) take the rows; sanitizeRows, rowsKey), compose.ts (the instruction builder's model: a spec + operands both ways, slotsOf in assembly
                order with bank / range, encodeParts / partsOf (null: bits it would not set), retarget, textOf (a target by label),
@@ -436,7 +445,7 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                builder adapter, isa/composekit.ts), fastiss.ts (FastISS: the golden model's semantics, every ROM word predecoded by decode() into
                typed arrays, one switch, ~90 MIPS on Doom; RAM inline, other regions through overridable load / store / ioRead /
                ioWrite; no F; tests/fastiss.test.ts: lock step over riscv-tests and random programs), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
-               interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), ilp.ts (chapter 25: classify(word) → class /
+               interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), ilp.ts (chapter 26: classify(word) → class /
                sources / rd / call / ret, traceOf (the golden model's run), dataflow (the limit: each instruction when its operands
                are ready; criticalPath)), ooomodel.ts (OooModel / OOO_CORE: the out-of-order core's rules cycle by cycle, the
                header is the spec the gate-level core follows; CycleInfo per cycle: committed / issued (Uop.port) / dispatched /
@@ -484,10 +493,10 @@ src/dram/      timing.ts: DDR4-3200 in our cycles (CLOCK_NS = the single-cycle C
                held until done; IDLE / WPRE / WACT / BURST / CLOSE / WCLOSE / WREF1 / WREF2, one wait counter, refresh first;
                open / closed page, XOR bank hash; transfer / idle drive both); workload.ts: a program's line requests through
                the CPUs' 2-way write-back cache model, price() on the models (equal to the gate-level CPUs to the cycle);
-               schedule.ts: FCFS against FR-FCFS over a queue (chapter 35's last step)
+               schedule.ts: FCFS against FR-FCFS over a queue (chapter 36's last step)
 src/bus/       model.ts: BusMemory / BusModel (the computer's map for the golden model: RAM, flash, DMA registers whose
                copy is instant, and with BusDevices a DRAM, a screen, a key queue; ISS({ bus }) fetches beyond its ROM and loads / stores through it); programs.ts: chapter
-               36's boot ROM and payload
+               37's boot ROM and payload
                Card reader: BusDevices.cards { items, feed } → CardModel, the one time-dependent device: whoever steps the ISS sets
                BusModel.now (rising edges so far, at the retiring edge); a read sees the reader CARD_LAG (2) edges earlier and a DATA
                read takes the card 2 edges after that, so lock-step stays exact at any feed. programs.ts CARD_BOOT_SOURCE (poll
@@ -503,34 +512,36 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                the gate-level CPU (PY_IMEM_K / PY_DMEM_K via cpuScene's imemK / dmemK) with the Python panel bottom-left
                through cpuScene's extraPanels: the line from the PC, its cycles and toggles from edgeHooks, variables from
                the compiler's homes, output, the stack labelled by the stores; Step line, Back via historyHooks; the editor
-               in codeedit's 'py' language); ooo.ts: chapter 25's explorers
+               in codeedit's 'py' language); rvc.ts: chapter 25's (codeSizeWidget: every program assembled both ways;
+               cExplorer: a parcel's bits next to its expansion's, wired from cRecipes; RVC_COSTS, pinned by tests/rvc.test.ts;
+               cpuScene({ c }) runs the program with .option rvc); ooo.ts: chapter 26's explorers
                (dataflow schedule, in-order against out-of-order timelines, the scoreboard, the reorder-buffer explorer, the
-               speculation table; measuredWidget: the four CPUs from results.json and width × window on the model; styles/ooo.css); bus.ts: chapter 37's panels
+               speculation table; measuredWidget: the four CPUs from results.json and width × window on the model; styles/ooo.css); bus.ts: chapter 38's panels
                (busBenchScene: reads / writes / a DMA copy on the bus bench, a per-cycle trace of handshakes and grants;
-               busComputerScene: the computer booting from flash, console, LEDs, memory map); flash.ts: chapter 36's flash panel
+               busComputerScene: the computer booting from flash, console, LEDs, memory map); flash.ts: chapter 37's flash panel
                (flashScene: the NOR / NAND array read, programmed pulse by pulse with verify, erased; thresholds per cell and
-               an Id–Vg plot), ftlWidget (4 blocks × 4 pages), wearWidget (write amplification, erase counts, wear-out); dram.ts: chapter 34's DRAM panel
+               an Id–Vg plot), ftlWidget (4 blocks × 4 pages), wearWidget (write amplification, erase counts, wear-out); dram.ts: chapter 35's DRAM panel
                (dramScene: the 4 × 4 array driven through its protocol, every cell's charge, bit-line ΔV, the latched row,
                cycles since each row's restore, Wait = SwitchSim.leak; dramState for challenges); dramtiming.ts: the row
-               buffer over request streams and DDR4's timings at any clock; dramctrl.ts: chapter 35's controller panel
+               buffer over request streams and DDR4's timings at any clock; dramctrl.ts: chapter 36's controller panel
                (memCtrlScene: line requests, command timeline, open rows, refresh counter); dramwork.ts: the workloads priced
-               by policy / banks / mapping, and the FR-FCFS queue; cell3d.ts: chapter 27's
+               by policy / banks / mapping, and the FR-FCFS queue; cell3d.ts: chapter 28's
                standard cells in 3D (orbit camera, painter's order over boxes);
-               lanes.ts / warps.ts: chapters 28–31 (the Warp panels: mask grid, stack, issue timeline, scoreboards; on chapter 31's
+               lanes.ts / warps.ts: chapters 29–32 (the Warp panels: mask grid, stack, issue timeline, scoreboards; on chapter 32's
                core each access, the barrier, shared memory by bank, a kernel switcher; lanes against cores; the occupancy widget,
-               from riscv/warptiming.ts); feed.ts: chapter 31's access widget (the gate-level access unit on a stride / offset)
+               from riscv/warptiming.ts); feed.ts: chapter 32's access widget (the gate-level access unit on a stride / offset)
                and the tiling chart (plain against tiled matmul over globalEvery);
-               framemem.ts: chapters 32–33's memory view inside the screen panels (FrameMemory: thumbnails of the screen, both frames
+               framemem.ts: chapters 33–34's memory view inside the screen panels (FrameMemory: thumbnails of the screen, both frames
                with FRONT / BACK, the depth buffer, one shown large; the back frame's pixels not written since the flip dimmed, fresh
                draws glowing, from the write port fb.we / fb.wa watched at every edge; who writes it now: rasterizer phase and
-               tile, ROP counts, extra rows (ch 33: command unit, warp core), scan-out row; filmstrip of the frame rebuilt;
-               frameOf / depthOf read the memory leaves); screen.ts: chapter 32 (the screen panel: what the gate-level scan-out sent, or the back frame from the memory
+               tile, ROP counts, extra rows (ch 34: command unit, warp core), scan-out row; filmstrip of the frame rebuilt;
+               frameOf / depthOf read the memory leaves); screen.ts: chapter 33 (the screen panel: what the gate-level scan-out sent, or the back frame from the memory
                leaves with the walk's tile; Run on a 12 ms frame budget or a cycles/s cap, Draw, Swap, vsync wait, draw scripts;
                the edge-function explorer; ScanCapture: what the scan-out sent, backFrame; draws fed from inside the cycle loop, one
-               starting the cycle busy falls; DrawLink: another panel plays draws and gets the frame shown); drawpad.ts: chapter 32's
+               starting the cycle busy falls; DrawLink: another panel plays draws and gets the frame shown); drawpad.ts: chapter 33's
                last step (GPU30Z on the cycle engine, its pins hidden; the drawing pad: triangle / polygon / brush, 16 RGB332
                colours, opacity, undo, kept in localStorage; Send through DrawLink, the screen checked against drawingPicture; both
-               panels slim to 240 px on a narrow stage); gfxpipe.ts: chapter 33 (pipelineScene:
+               panels slim to 240 px on a narrow stage); gfxpipe.ts: chapter 34 (pipelineScene:
                gpu31 on the cycle engine; the panel: screen, frames per second, the last frame's timeline from FrameRecorder, the
                vertex kernel in lock-step with WarpISS (launch()), every frame against framePicture; costWidget: PIPE_COSTS);
                composer.ts: the instruction builder over any ComposeIsa (instrComposer({ isa }): palette, asm / hex input,
@@ -541,7 +552,7 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                sketch lit from instrUse); chapter 13's explorer and editor/romcompose.ts host it.
                insthw.ts maps an instruction to the units it uses (and pipeline stage units; laneUse(word, core, at): the lane /
                warp cores' instances, tests/insthw.test.ts: every kernel instruction, every warp count; oooUse(word, port): the
-               out-of-order core's, by the port it went to); ooopanel.ts: chapter 25's Out of order panel (oooView: Reorder
+               out-of-order core's, by the port it went to); ooopanel.ts: chapter 26's Out of order panel (oooView: Reorder
                buffer / Queues from ooosnap, Timeline from the model; OooFollower: the model stepped at every edge beside the gates,
                commits and port picks compared, replayed after a Reset or Back; the sandbox's CPU drawer shows the same view);
                slowctl.ts: what the CPU
@@ -553,7 +564,7 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                and the campaign's state-machine level reads the learner's circuit back (editor/fsmui.ts, BuildChallenge.fsm)
 src/chapters/  narrative content: chapters → steps → scene / widget / challenge; a prologue chapter (num 0, `prologue: 'P1'`,
                between the map and chapter 1, in brass: styles/prologue.css) and an appendix chapter (`appendix: 'A'`) show
-               their label instead of a number (chapterNo)
+               their label instead of a number (chapterNo); Chapter.soon: titles of steps not built yet (dashed dots)
 src/lib/rv16/  the campaign's RV16 hardware, every block built only from parts its level's requirements unlock:
                logic.ts (acts 1–3), cpu.ts (immediates, control, branch, next PC, single-cycle cores),
                pipe.ts (pipeline register, forwarding, hazard, rv16Pipe with fwd / stall / flush / sys),
@@ -926,11 +937,11 @@ src/gl/        the hand-written WebGL2 renderer (its own lazy chunk, no library)
 src/gfx/       raster16.ts: the campaign's (7-bit vertices, 32 × 32, RGB565; Edge16 / Walk16 models, rasterize16 with the
                19-cycle set-up, draw16, rgb565); raster.ts: the rasterizer's reference model (setup, rasterize: pixel writes
                with their cycles, zPlane / zAt / zStore, blend332, RefFrame: a framebuffer and depth buffer drawn as the
-               hardware does; Z_WALK_START, CLEAR_CYCLES); tessellate.ts: chapter 32's drawing pad as triangles (polygonTriangles: ear
+               hardware does; Z_WALK_START, CLEAR_CYCLES); tessellate.ts: chapter 33's drawing pad as triangles (polygonTriangles: ear
                clipping, a fan when it crosses itself; strokeTriangles: RDP-thinned path, mitred strip, square caps; frontFace),
                drawingOps (a clear, then each shape one depth plane nearer than the last, depth test on: a shape blends once where its
                own triangles overlap), drawingCost (cycles from the reference: clear, triangles, set-up), drawingPicture;
-               pipeline.ts: chapter 33's reference (frameOps / framePicture: frame f of a mesh), FrameRecorder (a frame's spans per
+               pipeline.ts: chapter 34's reference (frameOps / framePicture: frame f of a mesh), FrameRecorder (a frame's spans per
                unit and its cycles by phase, from one sample a cycle), PIPE_COSTS (measured, pinned by tests/gfxpipe.test.ts).
                The kernels and meshes are riscv/gfxprograms.ts (16.16 rotation with mul, vertex buffers f mod 2, the memory map;
                SOFT_CLEAR / SOFT_TRIANGLE: the same frame in software on four warps)
@@ -1027,7 +1038,7 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  fa / fd / fwe in order against the golden model's draws, applied to the screen); rastercheck.ts k_raster's
                  bench (64 triangles on BitSim lanes, writes in walk order, cycles graded); buildk.ts act 9's levels;
                  puzzles.ts kernels on two warps (`warps`) also run with warp 1 ahead (a missing bar fails)
-  buildm.ts      act 10's levels (memory, Phase 16e): m_sense (a DRAM column at switch level: senseSeq, chapter 34's
+  buildm.ts      act 10's levels (memory, Phase 16e): m_sense (a DRAM column at switch level: senseSeq, chapter 35's
                  protocol), m_bank, m_ctrl, m_bus (busSeq: a sequence from a model of the bus and its bench), m_dma,
                  m_flash; memcheck.ts their benches: the device on the bench as a JS model that names the first rule
                  broken (ArrayModel: 16 × 16 words, ACT / RW / PRE, rows leak after BANK.RET; Dram16Model: two banks,
@@ -1216,9 +1227,9 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
   its panel, which is the memory on the chip's pins and checks every bus cycle against the ISS; m6502isa.ts the opcode
   matrix, m6502ledger.ts the transistor ledger). A chapter with `appendix: 'A'` is shown by its letter after the
   journey (map divider, menu group, header; chapterNo()).
-- `Scene.engine: 'cycle'` runs a scene on DualSim with the cycle engine preferred (chapter 33: 413 501 leaves): settled
+- `Scene.engine: 'cycle'` runs a scene on DualSim with the cycle engine preferred (chapter 34: 413 501 leaves): settled
   values only, so the timing and probe buttons are hidden (the analyzer's trace listener would pin it to GateSim) and
-  the inspector has no power estimate; stepping and slow-motion edges still go through GateSim. Chapters 28–31's lane and
+  the inspector has no power estimate; stepping and slow-motion edges still go through GateSim. Chapters 29–32's lane and
   warp core scenes too (laneCoreScene / warpCoreScene; `engine: 'gate'` keeps GateSim; tests/gpu-cycle.test.ts).
 
 ### Sandbox editor

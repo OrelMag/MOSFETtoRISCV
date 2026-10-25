@@ -73,6 +73,8 @@ export interface Chapter {
    */
   recap?: { keep: string[]; check?: Quiz[]; practise?: string[] };
   steps: Step[];
+  /** Titles of steps not built yet: dashed dots after the steps, not clickable. */
+  soon?: string[];
 }
 
 /** How a chapter is numbered on screen: 07, P1 for a prologue chapter, A for an appendix. */

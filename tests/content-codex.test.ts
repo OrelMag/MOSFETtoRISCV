@@ -197,7 +197,7 @@ describe('the glossary in the chapters', () => {
   });
 
   it('keeps the GPU act\'s terms out of the chapters before it', () => {
-    for (const c of chapters) expect([...chapterSkip(c)].sort(), c.id).toEqual(c.num < 28 ? ['barrier', 'lane', 'warp'] : []);
+    for (const c of chapters) expect([...chapterSkip(c)].sort(), c.id).toEqual(c.num < 29 ? ['barrier', 'lane', 'warp'] : []);
     // The loom's warp in the prologue is found by the glossary but skipped there.
     const cards = chapters.find((c) => c.id === 'cards')!;
     const found = cards.steps.flatMap((s) => ids(plain(s.body)));

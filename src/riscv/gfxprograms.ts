@@ -1,4 +1,4 @@
-// Chapter 33's vertex kernels and their data: a mesh (model vertices, triangles), a sine table, two vertex
+// Chapter 34's vertex kernels and their data: a mesh (model vertices, triangles), a sine table, two vertex
 // buffers. The kernel runs on one warp of four lanes with multipliers, one thread a vertex: it rotates the
 // model by the frame's angle in 16.16 fixed point and packs each screen vertex into one word for the command
 // unit (lib/gfxpipe.ts), which reads the triangles and the vertex buffer from the same memory.
@@ -185,9 +185,9 @@ export function transformed(m: Mesh, f: number): V3[] {
 /** A packed vertex-buffer word. */
 export const packVertex = (v: V3) => v[0] | (v[1] << 8) | (v[2] << 16);
 
-// ---- the same frame in software (chapter 33, "Where the gates go") ---------------------------------------
+// ---- the same frame in software (chapter 34, "Where the gates go") ---------------------------------------
 //
-// Two kernels for chapter 30's core (four warps of four lanes, multipliers): a clear, then one triangle by the
+// Two kernels for chapter 31's core (four warps of four lanes, multipliers): a clear, then one triangle by the
 // same edge functions and top-left rule as the rasterizer, so the picture is the same byte for byte. Data
 // memory: the triangle at words 0 … 6 (v0x, v0y, v1x, v1y, v2x, v2y in quarter pixels, the colour), the 64 × 64
 // frame at byte SOFT_FB + 64·y + x. Thread tid takes the columns x ≡ px0 + tid (mod 16) of the bounding box;

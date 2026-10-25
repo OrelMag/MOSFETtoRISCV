@@ -1,4 +1,4 @@
-// The machine hall (Phase 14c, chapter 27: "The same CPU in relays and tubes"). This entry stays tiny: it shows a
+// The machine hall (Phase 14c, chapter 28: "The same CPU in relays and tubes"). This entry stays tiny: it shows a
 // placeholder and loads the hall (widgets/hallview.ts: layout, simulation, drawing) and, inside it, the WebGL
 // renderer as their own chunks, so the chapter does not grow the main bundle.
 

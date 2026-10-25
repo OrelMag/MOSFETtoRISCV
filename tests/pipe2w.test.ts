@@ -100,7 +100,7 @@ describe('dual-issue pipeline vs golden model', () => {
   });
 });
 
-describe('chapter 25, step 2', () => {
+describe('chapter 26, step 2', () => {
   it('its program runs on the scene\'s CPU and leaves a · b = 72 at 0x80', () => {
     const words = assemble(DUAL_SOURCE).words;
     const iss = new ISS(words, { dmemWords: 64 });
