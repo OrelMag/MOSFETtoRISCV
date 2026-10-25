@@ -1075,6 +1075,15 @@ unit, wires nothing). The fan-out capacitance per net is already computed for th
 **Out of order you can configure** (FREESS: ROB size, issue width, functional units): ✅ Phase 17e. The gate-level
 2-wide core (Phase 17c) stays fixed; the lab varies the model and prices sizes from the gates.
 
+**Circuits from other tools, tests you write** (gap review 2026-10-25; mockup approved 2026-10-25): Logisim-evolution
+and Digital are what courses already use, and Digital lets a student write tests for any circuit.
+- ✅ Digital `.dig` (a project's files together) and Logisim-evolution `.circ` import: every circuit a chip in a folder of its
+  own, the file's drawing kept, each part mapped to ours (a table of what became what), parts with no equivalent an empty
+  chip with the same pins; Digital's Testcase tables and Logisim test vectors come in as test tables
+- ✅ Test tables on any chip (editor/testtable.ts, testsui.ts): Digital's test syntax, a Tests pane run after every edit,
+  rows with what the circuit showed, Fill outputs from the circuit, a failing row in the test player
+- Later: placing an imported circuit again by logic depth (the Verilog import's placer, generalized); `.dig` export
+
 **ISA breadth** (Ripes: RV64, the C extension): RV64I / RV64M and C in Phase 9, each checked by riscv-tests and Spike
 like the RV32 cores. ✅ C (chapter 25, part 1); ✅ RV64I / M (part 2). Open: C and RV64 in the sandbox, the instruction builder's 16-bit and RV64 formats.
 

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project source="3.8.0" version="1.0">
+  <lib desc="#Wiring" name="0"/>
+  <lib desc="#Memory" name="4"/>
+  <lib desc="#I/O" name="5"/>
+  <lib desc="#Base" name="8"/>
+  <main name="main"/>
+  <circuit name="main">
+    <comp lib="0" loc="(100,210)" name="Pin">
+      <a name="label" val="A"/>
+      <a name="width" val="2"/>
+    </comp>
+    <comp lib="4" loc="(200,200)" name="ROM">
+      <a name="addrWidth" val="2"/>
+      <a name="dataWidth" val="4"/>
+      <a name="contents">addr/data: 2 4
+3 5 a f
+</a>
+    </comp>
+    <comp lib="0" loc="(500,260)" name="Pin">
+      <a name="facing" val="west"/>
+      <a name="label" val="D"/>
+      <a name="type" val="output"/>
+      <a name="width" val="4"/>
+    </comp>
+    <comp lib="5" loc="(470,330)" name="Joystick"/>
+    <comp lib="5" loc="(480,200)" name="Hex Digit Display"/>
+    <wire from="(100,210)" to="(200,210)"/>
+    <wire from="(440,260)" to="(480,260)"/>
+    <wire from="(480,260)" to="(500,260)"/>
+    <wire from="(480,260)" to="(480,200)"/>
+    <wire from="(480,260)" to="(480,330)"/>
+    <wire from="(480,330)" to="(470,330)"/>
+  </circuit>
+</project>

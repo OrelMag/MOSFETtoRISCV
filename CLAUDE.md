@@ -674,6 +674,11 @@ src/cards/      punched cards (DOM-free): hollerith.ts (the IBM 029 code: punchO
                (sorterPass: a pass on one column into pockets 0–9 + rejects, sorterColumns, sortOnSorter: the radix sort);
                prologue P3 is chapters/ch-cards.ts with widgets/cards.ts (loomWidget, censusWidget, cardEditorWidget,
                deckWidget with the sorter, readerPanel: the card at the reader's station on a scene)
+src/import/    other tools' circuits in: report.ts (DOM-free contract: ImportResult = chips (top last), part mappings, problems;
+               MappingTally), digital.ts (Digital .dig, several files a project, Testcase → ChipDoc.tests), logisim.ts
+               (Logisim-evolution .circ; logisimVectors: a test-vector file → Digital test syntax; a .txt dropped alone becomes a table
+               on the open chip), xml.ts (a DOM-free XML reader, XStream references), circuits.ts (the readers registered), importui.ts (CircuitReader,
+               registerCircuitReader: picked / dropped files → the summary dialog → chips in a folder of their own, one undo step)
 src/hdl/       HDL in (DOM-free): yosysjson.ts (importYosysJson: Yosys's write_json → ChipDocs, one per module, instances as
                placed chips; every fine-grained cell as library parts, parseFf: the $_DFF* / $_SDFF* / $_DLATCH* family from
                dff / dffe / dff_r / d_latch(_r) and gates (a set = a reset of the inverted value); place(): columns by logic
@@ -951,6 +956,14 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   testplayer.ts  the test player (Turing Complete style): step, scrub, play at a rate stopping at a failure,
                  jump between failures, a window of cases with the live row; an edit while paused replays the
                  case on the rebuilt circuit; Run / Step / a clock / Reset or an input set by hand ends it
+  testtable.ts   test tables on any chip (ChipDoc.tests: name + source text, kept out of the compile hash), in Digital's
+                 test syntax: parseTest (header of pin names; 0 / 1 / X / Z / C / numbers / (expr), bits(n, e), repeat(n),
+                 loop(v, n) … end loop, while, let; rows unrolled with their line and loop variables, MAX_ROWS),
+                 planTest (a BuildChallenge sequence over the compiled chip: X inputs expanded, X outputs unchecked, a C
+                 column the clock; expression values wrap to the pin width, literals that do not fit are refused),
+                 runTest (Check's seqStart / seqStep, keeping every output), fillOutputs (plain rows' outputs from a run),
+                 starterTest; testsui.ts: plugin, the Tests pane in slots.bottom (a tab per table, text beside its rows,
+                 run after every edit up to AUTO_STEPS, Fill outputs from the circuit, a failing row → the test player)
   puzzleui.ts    plugin: the Puzzles drawer, the start dialog (puzzles/start.ts candidates), and while a puzzle chip
                  (u_pz_<id>) is open the strip: brief, tests (a click plays one: puzzles/replay.ts), Check, score
                  against par, the cycles / NANDs chart, Show answer, Do it for me; PUZZLE IN gets the selected test's

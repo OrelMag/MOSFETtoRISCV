@@ -55,6 +55,16 @@ export interface HdlDoc {
  * '-' for don't care); a row's index is the inputs read as a binary number, the first input most significant. The
  * body is the minimized logic, redrawn on every edit of the table.
  */
+/**
+ * A test table on a chip, in Digital's test syntax (testtable.ts): a line of signal names (the chip's pins), then rows
+ * of 0 / 1 / X / Z / C / numbers / (expressions), repeat(n), loop(v, n) … end loop, let, bits(n, e). Kept as text: what
+ * the learner typed is what is stored, and a Digital Testcase imports unchanged.
+ */
+export interface TestDoc {
+  name: string;
+  src: string;
+}
+
 export interface TableDoc {
   ins: string[];
   outs: string[];
@@ -160,6 +170,8 @@ export interface ChipDoc {
   table?: TableDoc;
   /** Drawn from a state machine (fsmchip.ts): its body is generated, edited only as the machine. */
   fsm?: FsmDoc;
+  /** Test tables run against the chip (testtable.ts): never compiled, so editing one rebuilds nothing. */
+  tests?: TestDoc[];
   pins: PinDoc[];
   parts: PartDoc[];
   wires: WireDoc[];

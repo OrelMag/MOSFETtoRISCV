@@ -94,7 +94,7 @@ interface MenuItem { icon: string; label: string; hint: string; run(ed: Editor):
 const MENU: (MenuItem | null)[] = [
   { icon: 'download', label: 'Export this chip…', hint: 'the chip and every chip inside it, as a .json file', run: (ed) => exportChip(ed) },
   { icon: 'download', label: 'Export all chips…', hint: 'this project, its folders and favorites, as a .json file', run: (ed) => exportAll(ed) },
-  { icon: 'upload', label: 'Import…', hint: 'chips from an exported file, Verilog (.v, .sv) or a Yosys netlist (or drop it on the canvas)', run: (ed) => pickImport(ed) },
+  { icon: 'upload', label: 'Import…', hint: 'chips from an exported file, Verilog (.v, .sv), Digital (.dig) or Logisim (.circ) circuits, or a Yosys netlist (or drop it on the canvas)', run: (ed) => pickImport(ed) },
   null,
   { icon: 'link', label: 'Share link…', hint: 'the circuit packed into a URL: nothing is uploaded', run: (ed) => void shareDialog(ed) },
   null,
@@ -146,10 +146,11 @@ function exportAll(ed: Editor): void {
 
 function pickImport(ed: Editor): void {
   const input = h('input', { type: 'file', accept: ['.json,application/json', ...importers.flatMap((i) => i.accept)].join(','), style: 'display:none' }) as HTMLInputElement;
+  input.multiple = true;
   input.addEventListener('change', () => {
-    const f = input.files?.[0];
+    const files = [...(input.files ?? [])];
     input.remove();
-    if (f) void importFile(ed, f);
+    if (files.length) void importFiles(ed, files);
   });
   ed.el.append(input);
   input.click();
@@ -165,12 +166,35 @@ export interface FileImporter {
   /** Does it take this file (by name, or by its text)? */
   takes(name: string, text: string): boolean;
   run(ed: Editor, name: string, text: string): void;
+  /**
+   * Several files it takes, picked or dropped together (a Digital project: a .dig per circuit, which place each other
+   * by file name). Absent: run() on each.
+   */
+  runMany?(ed: Editor, files: { name: string; text: string }[]): void;
 }
 const importers: FileImporter[] = [];
 export function registerFileImporter(i: FileImporter): void {
   importers.push(i);
 }
 const importable = (name: string) => /\.json$/i.test(name) || importers.some((i) => i.accept.some((x) => name.toLowerCase().endsWith(x)));
+
+/** Several files at once: those one importer takes with runMany go to it together, the first other one alone. */
+async function importFiles(ed: Editor, fs: File[]): Promise<void> {
+  if (fs.length === 1) return importFile(ed, fs[0]);
+  const read: { name: string; text: string }[] = [];
+  for (const f of fs) {
+    if (f.size > MAX_FILE) { ed.toast(`${f.name}: too large (${kb(f.size)})`, 'err'); continue; }
+    try { read.push({ name: f.name, text: await f.text() }); } catch { ed.toast(`${f.name}: could not be read`, 'err'); }
+  }
+  for (const imp of importers) {
+    if (!imp.runMany) continue;
+    const mine = read.filter((r) => imp.takes(r.name, r.text));
+    if (mine.length) return imp.runMany(ed, mine);
+  }
+  const f = fs.find((x) => importable(x.name) || x.type === 'application/json') ?? fs[0];
+  ed.toast(`One file at a time: importing ${f.name}`);
+  return importFile(ed, f);
+}
 
 async function importFile(ed: Editor, f: File): Promise<void> {
   if (f.size > MAX_FILE) return void ed.toast(`${f.name}: too large for a sandbox export (${kb(f.size)})`, 'err');
@@ -578,10 +602,9 @@ export function installFiles(ed: Editor): FilesUi {
     // A deck of cards goes into the selected ROM or card reader, else onto a new reader where it fell.
     const deck = files.find((x) => isDeckFile(x.name));
     if (deck) return void dropDeckFile(ed, deck, ed.view.cam.toWorld(e.clientX, e.clientY));
-    const f = files.find((x) => importable(x.name) || x.type === 'application/json');
-    if (!f) return void ed.toast('Drop a .json file exported from the sandbox, Verilog (.v, .sv), a Yosys netlist or a deck of cards (.deck.json)', 'err');
-    if (files.length > 1) ed.toast(`One file at a time: importing ${f.name}`);
-    void importFile(ed, f);
+    const ok = files.filter((x) => importable(x.name) || x.type === 'application/json');
+    if (!ok.length) return void ed.toast('Drop a .json file exported from the sandbox, Verilog (.v, .sv), a Digital (.dig) or Logisim (.circ) circuit, a Yosys netlist or a deck of cards (.deck.json)', 'err');
+    void importFiles(ed, ok);
   };
   // The whole editor accepts the drop (a file dropped on the palette must not navigate away).
   ed.el.addEventListener('dragenter', onEnter);

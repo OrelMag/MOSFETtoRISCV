@@ -1,0 +1,51 @@
+/* The Tests pane (editor/testsui.ts): tabs, the table's text beside its rows. Colours from the theme tokens only. */
+.sb-tests { display: none; flex-direction: column; height: 260px; min-height: 140px; flex: none; border-top: 1px solid var(--border); background: var(--surface); font-size: 13px; }
+.sb-tests.on { display: flex; }
+.sb-tests-head { display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.sb-tests-head > b { margin-right: 6px; }
+.sb-tests-head .spacer { flex: 1; }
+.sb-tests-tab { gap: 6px; }
+.sb-tests-tab.sel { background: var(--accent-soft); border-color: var(--accent); }
+.sb-tests-tab .mark { font-weight: 700; }
+.sb-tests-tab.pass .mark { color: var(--good); }
+.sb-tests-tab.fail .mark { color: var(--bad); }
+.sb-tests-tab.none .mark { color: var(--muted); }
+.sb-tests-auto { display: flex; align-items: center; gap: 6px; color: var(--text-2); white-space: nowrap; }
+.sb-tests-body { flex: 1; display: flex; min-height: 0; }
+.sb-tests-left { width: min(44%, 520px); flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--border); }
+.sb-tests-src { flex: 1; resize: none; border: 0; margin: 0; padding: 8px 12px; font: 13px/1.6 var(--font-mono); background: var(--surface-2); color: var(--text); tab-size: 4; white-space: pre; overflow: auto; }
+.sb-tests-src:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sb-tests-tools { display: flex; gap: 4px; align-items: center; padding: 4px 8px; border-top: 1px solid var(--border); }
+.sb-tests-help { margin-left: auto; color: var(--muted); font-size: 12px; }
+.sb-tests-res { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sb-tests-sum { margin: 0; padding: 6px 12px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--border); }
+.sb-tests-sum .ok, .sb-tests-props .ok { color: var(--good); font-weight: 600; }
+.sb-tests-sum .bad, .sb-tests-props .bad { color: var(--bad); font-weight: 600; }
+.sb-tests-res .muted { color: var(--muted); }
+.sb-tests-err { margin: 8px 12px; padding: 8px 10px; border-radius: 8px; background: var(--bad-soft); color: var(--text); }
+.sb-tests-scroll { flex: 1; overflow: auto; min-height: 0; }
+.sb-tests-grid { border-collapse: collapse; font: 12.5px var(--font-mono); }
+.sb-tests-grid th { position: sticky; top: 0; background: var(--surface); color: var(--muted); font-weight: 500; text-align: left; padding: 4px 10px; white-space: nowrap; }
+.sb-tests-grid td { padding: 3px 10px; white-space: nowrap; }
+.sb-tests-grid tr.bad td { background: var(--bad-soft); }
+.sb-tests-grid td.wrong { color: var(--bad); font-weight: 600; }
+.sb-tests-grid tr.notrun td { color: var(--muted); }
+.sb-tests-grid td.mark { color: var(--good); }
+.sb-tests-grid tr.bad td.mark { color: var(--bad); }
+.sb-tests-grid tbody tr { cursor: default; }
+.sb-tests-more { margin: 0; padding: 4px 12px; font-size: 12px; }
+.sb-tests-fail { margin: 6px 12px 8px; padding: 8px 10px; border-radius: 8px; background: var(--bad-soft); display: flex; gap: 12px; align-items: center; }
+.sb-tests-fail span { flex: 1; }
+.sb-tests-play { background: var(--bad); border-color: var(--bad); color: var(--surface); }
+.sb-tests-empty { margin: 12px; color: var(--muted); }
+.sb-tests .sb-chal-tests { border-top: 1px solid var(--border); }
+@media (max-width: 760px) {
+  .sb-tests { height: 340px; }
+  .sb-tests-body { flex-direction: column; }
+  .sb-tests-left { width: auto; height: 40%; border-right: 0; border-bottom: 1px solid var(--border); }
+}
+@media (pointer: coarse) {
+  .sb-tests-tab, .sb-tests-head .btn, .sb-tests-tools .btn { min-height: 40px; }
+}
+.sb-tests.playing .sb-tests-body { display: none; }
+.sb-tests.playing { height: auto; max-height: 50vh; }
