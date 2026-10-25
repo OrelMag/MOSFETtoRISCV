@@ -13,7 +13,7 @@ import { koggeStone } from './fastadd';
 import { AND, NOT, OR, XOR } from './gates';
 import { BRANCH_CMP, nonZero } from './pipeline';
 import { PREDECODE, rom2 } from './pipe2w';
-import { btbCommit, dataMemory2, issueQueue, RAT, reorderBuffer, STORE_QUEUE } from './ooo';
+import { btbCommit, dataMemory2, issueQueue, OOO_SIZES, type OooSizes, ratTable, reorderBuffer, sizeBits, storeQueue, TAG } from './ooo';
 import { ras2 } from './ras';
 import { regfile2w } from './regfile';
 import { divE, MUL_E, MUL_M } from './pipem';
@@ -24,6 +24,13 @@ import { bitwise, orN } from './wide';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
+
+const cache = new Map<string, ComponentDef>();
+function memo(key: string, f: () => ComponentDef): ComponentDef {
+  let d = cache.get(key);
+  if (!d) cache.set(key, (d = f()));
+  return d;
+}
 
 /** Pins at the left (inputs) and right (outputs), 2 apart, for a Builder part. */
 function pinsOf(ins: string[], outs: string[], R: number): Record<string, [number, number]> {
@@ -120,21 +127,22 @@ export const DISPATCH_CTL: ComponentDef = (() => {
  * (cnt0 / cnt1, early) and the picks (go0 / go1) late, after select: so every comparison binding may need, of
  * D = cnt0 − cnt1 against −2 … 2, is made early, and the late signals only choose among them.
  */
-export const BIND: ComponentDef = (() => {
+export function bind(CW: number): ComponentDef {
+  return memo(`bind${CW}`, () => {
   const b = new Builder(16, 18);
   const ins = ['cnt0', 'cnt1', 'go0', 'go1', 'need0', 'both0', 'p1only0', 'both1', 'p1only1'];
   b.pins(...ins);
   const one = b.op1(TIE1, [], undefined, 'one');
   const z1 = (nm: string) => b.op1(constWord(1, 0), [], undefined, nm);
-  const c0 = b.op1(merger([4, 1]), ['cnt0', z1('za')], undefined, 'c05'), c1 = b.op1(merger([4, 1]), ['cnt1', z1('zb')], undefined, 'c15');
+  const c0 = b.op1(merger([CW, 1]), ['cnt0', z1('za')], undefined, 'c05'), c1 = b.op1(merger([CW, 1]), ['cnt1', z1('zb')], undefined, 'c15');
   const sel = b.name(b.op1(merger([1, 1]), ['go0', 'go1'], undefined, 'picks'), 'picks', true);
   b.next();
-  const D = b.name(b.op1(addSub(5), [c0, c1, one], undefined, 'D'), 'cnt0 − cnt1', true);
+  const D = b.name(b.op1(addSub(CW + 1), [c0, c1, one], undefined, 'D'), 'cnt0 − cnt1', true);
   b.next();
-  // gt[k]: D > k, i.e. D − (k + 1) not negative (five bits: no overflow for D in −8 … 8)
+  // gt[k]: D > k, i.e. D − (k + 1) not negative (CW + 1 bits: no overflow for D within ± the queue's size)
   const gt: Record<number, string> = {};
   for (const k of [-2, -1, 0, 1, 2]) {
-    const s = b.op(addSub(5), [D, b.op1(constWord(5, (k + 1) & 31), [], undefined, `k${k + 2}`), one], undefined, `d${k + 2}`);
+    const s = b.op(addSub(CW + 1), [D, b.op1(constWord(CW + 1, (k + 1) & (2 ** (CW + 1) - 1)), [], undefined, `k${k + 2}`), one], undefined, `d${k + 2}`);
     gt[k] = b.name(b.op1(NOT, [`${s}.n`], undefined, `gt${k + 2}`), `D > ${k}`, true);
   }
   b.next();
@@ -153,9 +161,9 @@ export const BIND: ComponentDef = (() => {
   b.wire(b.op1(OR, ['p1only1', b.op1(AND, ['both1', lt1], undefined, 'pick1')], undefined, 'port1'), 'port1');
   const R = b.right;
   return define({
-    id: 'bind', name: 'Port binding', category: 'cpu',
+    id: CW === 4 ? 'bind' : `bind${CW}`, name: 'Port binding', category: 'cpu',
     summary: 'Binds each dispatched instruction to an issue port: multiply and divide to port 1, loads and stores to port 0, anything both ports run to the one with fewer instructions waiting once this cycle\'s picks have left (port 0 on a tie). The second instruction of a pair counts the first one\'s choice. Every comparison it may need is made before the picks are known.',
-    ports: [bus('cnt0', 4, 'in'), bus('cnt1', 4, 'in'), bit('go0', 'in'), bit('go1', 'in'), bit('need0', 'in'), bit('both0', 'in'), bit('p1only0', 'in'), bit('both1', 'in'), bit('p1only1', 'in'),
+    ports: [bus('cnt0', CW, 'in'), bus('cnt1', CW, 'in'), bit('go0', 'in'), bit('go1', 'in'), bit('need0', 'in'), bit('both0', 'in'), bit('p1only0', 'in'), bit('both1', 'in'), bit('p1only1', 'in'),
       bit('port0', 'out'), bit('port1', 'out')],
     symbol: { kind: 'box', label: 'BIND' },
     spec: ([cnt0, cnt1, go0, go1, need0, both0, p10, both1, p11]) => {
@@ -166,7 +174,9 @@ export const BIND: ComponentDef = (() => {
     },
     netlist: () => ({ pins: pinsOf(ins, ['port0', 'port1'], R), instances: b.instances, nets: b.nets() }),
   });
-})();
+  });
+}
+export const BIND = bind(4);
 
 /**
  * Commit: the head retires when done (since an earlier cycle); the next with it when done too, unless both are
@@ -248,14 +258,15 @@ export const EXEC: ComponentDef = (() => {
  * else waits in a register until it is. busy: a divide in flight (the issue queue holds the next one back), out: the
  * result on the bus now.
  */
-export const DIV_UNIT: ComponentDef = (() => {
+export function divUnit(TW: number): ComponentDef {
+  return memo(`divunit${TW}`, () => {
   const b = new Builder(16, 20);
   const ins = ['start', 'a', 'b', 'f', 'tag', 'info', 'busFree', 'flush', 'clk'];
   b.pins(...ins);
   const one = b.op1(TIE1, [], undefined, 'one');
   const nFlush = b.op1(NOT, ['flush'], undefined, 'nFlush');
-  b.op(register(2 + 4 + 33), [b.op1(merger([2, 4, 33]), ['f', 'tag', 'info'], undefined, 'in'), 'start', 'clk'], 'divide', 'held');
-  const hs = b.op(splitter([2, 4, 33]), ['held.q'], undefined, 'hs');
+  b.op(register(2 + TW + 33), [b.op1(merger([2, TW, 33]), ['f', 'tag', 'info'], undefined, 'in'), 'start', 'clk'], 'divide', 'held');
+  const hs = b.op(splitter([2, TW, 33]), ['held.q'], undefined, 'hs');
   b.next();
   const go = b.name(b.op1(OR, ['start', 'run.q'], undefined, 'go'), 'go', true);
   const f = b.op1(busMux2(2), [`${hs}.o0`, 'f', 'start'], undefined, 'fNow');
@@ -280,16 +291,18 @@ export const DIV_UNIT: ComponentDef = (() => {
   b.wire(`${hs}.o2`, 'infoQ');
   b.wire(b.op1(orN(3), ['start', 'run.q', 'wait.q'], undefined, 'busyN'), 'busy');
   const R = b.right;
-  const W: Record<string, number> = { a: 32, b: 32, f: 2, tag: 4, info: 33 };
+  const W: Record<string, number> = { a: 32, b: 32, f: 2, tag: TW, info: 33 };
   return define({
-    id: 'divunit', name: 'Divider (out of order)', category: 'cpu',
+    id: TW === 4 ? 'divunit' : `divunit${TW}`, name: 'Divider (out of order)', category: 'cpu',
     summary: 'The divide beside port 1: it takes the operands from the execute stage and runs 19 cycles on its own, so port 1 goes on issuing other instructions meanwhile. Done, its result goes on port 1\'s result bus if no other instruction claimed that cycle, else it waits. One divide at a time.',
     ports: [...ins.map((n) => (n === 'clk' ? bit('clk', 'in', 'bottom', true) : W[n] ? bus(n, W[n], 'in') : bit(n, 'in'))),
-      bus('y', 32, 'out'), bit('out', 'out'), bus('tagQ', 4, 'out'), bus('infoQ', 33, 'out'), bit('busy', 'out')],
+      bus('y', 32, 'out'), bit('out', 'out'), bus('tagQ', TW, 'out'), bus('infoQ', 33, 'out'), bit('busy', 'out')],
     symbol: { kind: 'box', label: 'DIVIDE' },
     netlist: () => ({ pins: pinsOf(ins, ['y', 'out', 'tagQ', 'infoQ', 'busy'], R), instances: b.instances, nets: b.nets() }),
   });
-})();
+  });
+}
+export const DIV_UNIT = divUnit(4);
 
 /**
  * A source operand at dispatch: not used (ready), the register file's value (no instruction in flight writes it),
@@ -297,12 +310,13 @@ export const DIV_UNIT: ComponentDef = (() => {
  * self: the first instruction of the pair writes it (its ROB entry is being allocated: never read it); then ready
  * only when decode knows that value (jal, lui).
  */
-export const OPERAND: ComponentDef = (() => {
+export function operand(TW: number): ComponentDef {
+  return memo(`operand${TW}`, () => {
   const b = new Builder(16, 18);
   const ins = ['used', 'mapped', 'tag', 'robDone', 'robVal', 'rfVal', 'bv0', 'bt0', 'bx0', 'bv1', 'bt1', 'bx1', 'self', 'selfKnown', 'selfVal', 'selfTag'];
   b.pins(...ins);
-  const h0 = b.op1(AND, ['bv0', b.op1(equal(4), ['bt0', 'tag'], undefined, 'e0')], undefined, 'h0');
-  const h1 = b.op1(AND, ['bv1', b.op1(equal(4), ['bt1', 'tag'], undefined, 'e1')], undefined, 'h1');
+  const h0 = b.op1(AND, ['bv0', b.op1(equal(TW), ['bt0', 'tag'], undefined, 'e0')], undefined, 'h0');
+  const h1 = b.op1(AND, ['bv1', b.op1(equal(TW), ['bt1', 'tag'], undefined, 'e1')], undefined, 'h1');
   b.next();
   const rdyM = b.op1(orN(3), ['robDone', h0, h1], undefined, 'rdyM');
   const valM = b.op1(busMux2(32), [b.op1(busMux2(32), ['bx1', 'bx0', h0], undefined, 'onBus'), 'robVal', 'robDone'], undefined, 'valM');
@@ -314,17 +328,19 @@ export const OPERAND: ComponentDef = (() => {
   b.next();
   b.wire(b.op1(OR, [b.op1(NOT, ['used'], undefined, 'nu'), rdyS], undefined, 'rdy'), 'rdy');
   b.wire(b.op1(busMux2(32), [valR, 'selfVal', 'self'], undefined, 'val'), 'val');
-  b.wire(b.op1(busMux2(4), ['tag', 'selfTag', 'self'], undefined, 'tagO'), 'tagO');
+  b.wire(b.op1(busMux2(TW), ['tag', 'selfTag', 'self'], undefined, 'tagO'), 'tagO');
   const R = b.right;
-  const W: Record<string, number> = { tag: 4, robVal: 32, rfVal: 32, bt0: 4, bx0: 32, bt1: 4, bx1: 32, selfVal: 32, selfTag: 4 };
+  const W: Record<string, number> = { tag: TW, robVal: 32, rfVal: 32, bt0: TW, bx0: 32, bt1: TW, bx1: 32, selfVal: 32, selfTag: TW };
   return define({
-    id: 'operand', name: 'Operand at dispatch', category: 'cpu',
+    id: TW === 4 ? 'operand' : `operand${TW}`, name: 'Operand at dispatch', category: 'cpu',
     summary: 'Where a source operand comes from as an instruction enters the issue queue: the register file (nothing in flight writes it), the reorder buffer (its producer is done), a result bus (its producer finishes now), or nowhere yet: then it waits for its producer\'s tag. The second instruction of a pair reading the first one\'s result waits for it, unless decode already knows it (jal, lui).',
-    ports: [...ins.map((n) => (W[n] ? bus(n, W[n], 'in') : bit(n, 'in'))), bit('rdy', 'out'), bus('val', 32, 'out'), bus('tagO', 4, 'out')],
+    ports: [...ins.map((n) => (W[n] ? bus(n, W[n], 'in') : bit(n, 'in'))), bit('rdy', 'out'), bus('val', 32, 'out'), bus('tagO', TW, 'out')],
     symbol: { kind: 'box', label: 'OPERAND' },
     netlist: () => ({ pins: pinsOf(ins, ['rdy', 'val', 'tagO'], R), instances: b.instances, nets: b.nets() }),
   });
-})();
+  });
+}
+export const OPERAND = operand(4);
 
 /** jal and lui are done at decode: jal's value pc + 4 and next pc + imm, lui's value imm and next pc + 4; mis if fetch guessed otherwise. */
 export const KNOWN: ComponentDef = (() => {
@@ -388,17 +404,10 @@ export const FETCH_OOO: ComponentDef = (() => {
 
 // ---- the core ---------------------------------------------------------------------------------------------------------
 
-const cache = new Map<string, ComponentDef>();
-function memo(key: string, f: () => ComponentDef): ComponentDef {
-  let d = cache.get(key);
-  if (!d) cache.set(key, (d = f()));
-  return d;
-}
-
-/** The issue queue's payload: what execute needs beyond the operands. */
-export const PAY: [string, number][] = [['tag', 4], ['pc', 32], ['imm', 32], ['pnext', 32], ['aluCtl', 4], ['aluSrcA', 1], ['aluSrcB', 1], ['resultSrc', 2], ['funct3', 3],
-  ['branch', 1], ['jalr', 1], ['store', 1], ['sqIdx', 2], ['ltail', 3]];
-const PW = PAY.reduce((a, [, w]) => a + w, 0);
+/** The issue queue's payload: what execute needs beyond the operands (tw: the tag's bits, sk: a store-queue index's). */
+export const payOf = (tw: number, sk: number): [string, number][] => [['tag', tw], ['pc', 32], ['imm', 32], ['pnext', 32], ['aluCtl', 4], ['aluSrcA', 1], ['aluSrcB', 1],
+  ['resultSrc', 2], ['funct3', 3], ['branch', 1], ['jalr', 1], ['store', 1], ['sqIdx', sk], ['ltail', sk + 1]];
+export const PAY = payOf(TAG, 2);
 const pi = (n: string) => PAY.findIndex(([f]) => f === n);
 /** A reorder-buffer entry: what dispatch writes (D), and the result (V). */
 export const ROB_D: [string, number][] = [['rd', 5], ['pc', 32], ['store', 1], ['branch', 1], ['jal', 1], ['jalr', 1], ['call', 1], ['ret', 1]];
@@ -412,15 +421,36 @@ export interface OooOptions {
   imemK?: number;
   /** Data memory of 2^dmemK words (default 5). */
   dmemK?: number;
+  /** Reorder-buffer entries (default 16; 8 or more, a power of two). */
+  rob?: number;
+  /** Issue-queue entries (default 8; 4 or more, a power of two). */
+  iq?: number;
+  /** Store-queue entries (default 4; 2 or more, a power of two). */
+  sq?: number;
 }
 
-/** Chapter 26's out-of-order core (`ooo`): RV32IM, word loads and stores, as the pipelines. */
+/** The window sizes of a core's options, defaults filled in (checked: powers of two in range). */
+export function oooSizes(opts: OooOptions = {}): OooSizes {
+  const z = { rob: opts.rob ?? OOO_SIZES.rob, iq: opts.iq ?? OOO_SIZES.iq, sq: opts.sq ?? OOO_SIZES.sq };
+  sizeBits(z.rob); sizeBits(z.iq); sizeBits(z.sq);
+  if (z.rob < 8 || z.iq < 4) throw new Error('out-of-order core: a reorder buffer of 8 entries or more, an issue queue of 4 or more');
+  return z;
+}
+
+/**
+ * Chapter 26's out-of-order core (`ooo`): RV32IM, word loads and stores, as the pipelines. rob / iq / sq size its
+ * windows (the lab's knobs): riscv/ooomodel.ts's OooModel with the same sizes is its reference, cycle for cycle.
+ */
 export function oooCpu(program: number[], opts: OooOptions = {}): ComponentDef {
-  const IM = rom2(program, opts.imemK ?? 6), dk = opts.dmemK ?? 5;
-  return memo(`ooo_${IM.id}_${dk}`, () => buildOoo(IM, dk));
+  const IM = rom2(program, opts.imemK ?? 6), dk = opts.dmemK ?? 5, z = oooSizes(opts);
+  const dflt = z.rob === OOO_SIZES.rob && z.iq === OOO_SIZES.iq && z.sq === OOO_SIZES.sq;
+  return memo(`ooo_${IM.id}_${dk}${dflt ? '' : `_r${z.rob}_q${z.iq}_s${z.sq}`}`, () => buildOoo(IM, dk, z, dflt));
 }
 
-function buildOoo(IM: ComponentDef, dmemK: number): ComponentDef {
+function buildOoo(IM: ComponentDef, dmemK: number, sz: OooSizes, dflt: boolean): ComponentDef {
+  // the windows: a tag names a reorder-buffer entry, a store-queue index its entry (pointers one bit wider)
+  const TW = sizeBits(sz.rob), SK = sizeBits(sz.sq), SQ = sz.sq;
+  const PAYZ = payOf(TW, SK), PW = PAYZ.reduce((a, [, w]) => a + w, 0);
   const b = new Builder(10, 16, 4);
   const put = (def: ComponentDef, name: string, conns: Record<string, string>, label?: string): string => {
     b.add(def, label, name);
@@ -487,9 +517,10 @@ function buildOoo(IM: ComponentDef, dmemK: number): ComponentDef {
     v0: 'fd0s.o0', v1: 'fd1s.o0', need0: 'cls0.needIq', need1: 'cls1.needIq', st0: 'cls0.store', st1: 'cls1.store',
     rob1: 'rob.free1', rob2: 'rob.free2', iq1: 'iq.free1', iq2: 'iq.free2', sq1: 'sq.free1', sq2: 'sq.free2',
   }, 'dispatch?');
-  put(BIND, 'bind', { cnt0: 'iq.cnt0', cnt1: 'iq.cnt1', go0: 'iq.go0', go1: 'iq.go1', need0: 'cls0.needIq', both0: 'cls0.both', p1only0: 'cls0.p1only', both1: 'cls1.both', p1only1: 'cls1.p1only' }, 'port binding');
+  const IQ = issueQueue(PW, TW, sz.iq, SQ), CW = IQ.ports.find((p) => p.name === 'cnt0')!.width;
+  put(bind(CW), 'bind', { cnt0: 'iq.cnt0', cnt1: 'iq.cnt1', go0: 'iq.go0', go1: 'iq.go1', need0: 'cls0.needIq', both0: 'cls0.both', p1only0: 'cls0.p1only', both1: 'cls1.both', p1only1: 'cls1.p1only' }, 'port binding');
   const wr = S.map((s) => and(`dc.d${s}`, `cls${s}.wrd`, `wr${s}`));
-  put(RAT, 'rat', {
+  put(ratTable(TW), 'rat', {
     rs1_0: 'si0.o3', rs2_0: 'si0.o4', rs1_1: 'si1.o3', rs2_1: 'si1.o4', rd0: 'si0.o1', we0: wr[0], tag0: 'rob.tailTag', rd1: 'si1.o1', we1: wr[1], tag1: 'rob.tail1Tag',
     crd0: 'hd0.o0', cv0: 'cm.c0', ctag0: 'rob.headTag', crd1: 'hd1.o0', cv1: 'cm.c1', ctag1: 'rob.head1Tag', flush: 'cm.flush', clk: 'clk',
   }, 'rename');
@@ -503,7 +534,7 @@ function buildOoo(IM: ComponentDef, dmemK: number): ComponentDef {
   const known0 = b.op1(OR, ['cls0.jal', 'cls0.lui'], undefined, 'known0');
   srcs.forEach(([nm, s, rs, used, r], k) => {
     const self = s ? and(wr[0], and(b.op1(equal(5), [rs, 'si0.o1'], undefined, `same${nm}`), b.op1(nonZero(5), [rs], undefined, `nz${nm}`), `self${nm}0`), `self${nm}`) : zero;
-    put(OPERAND, `op${nm}`, {
+    put(operand(TW), `op${nm}`, {
       used, mapped: `rat.${r}v`, tag: `rat.${r}t`, robDone: `rob.rdone${k}`, robVal: `rob.rval${k}`, rfVal: `rf.rd${k + 1}`,
       bv0: 'bus0v.y', bt0: 'bus0t.y', bx0: 'bus0x.o0', bv1: 'bus1v.y', bt1: 'bus1t.y', bx1: 'bus1x.o0',
       self, selfKnown: known0, selfVal: 'kn0.value', selfTag: 'rob.tailTag',
@@ -512,14 +543,14 @@ function buildOoo(IM: ComponentDef, dmemK: number): ComponentDef {
   b.next();
   // the load's store mask: stores not yet executed (and slot 0's, if it is a store dispatched beside it)
   const st0d = and('dc.d0', 'cls0.store', 'st0d');
-  const fan4 = (x: string, nm: string) => b.op1(merger([1, 1, 1, 1]), [x, x, x, x], undefined, nm);
-  put(decoder(2, true, 4), 'st0bit', { a: 'sq.idx0', en: st0d });
-  const st0m = b.op1(merger([1, 1, 1, 1]), ['st0bit.y0', 'st0bit.y1', 'st0bit.y2', 'st0bit.y3'], undefined, 'st0m');
-  const mask0 = b.op1(bitwise('and', 4), ['sq.pend', fan4('cls0.load', 'ld0f')], undefined, 'mask0');
-  const mask1 = b.op1(bitwise('and', 4), [b.op1(bitwise('or', 4), ['sq.pend', st0m], undefined, 'pend1'), fan4('cls1.load', 'ld1f')], undefined, 'mask1');
-  const ltail1 = b.op1(rca(3), ['sq.tail', b.op1(merger([1, 2]), [st0d, z(2, 'z2')], undefined, 'st0n'), zero], undefined, 'ltail1');
+  const fan4 = (x: string, nm: string) => b.op1(merger(Array(SQ).fill(1)), Array(SQ).fill(x), undefined, nm);
+  put(decoder(SK, true, 4), 'st0bit', { a: 'sq.idx0', en: st0d });
+  const st0m = b.op1(merger(Array(SQ).fill(1)), Array.from({ length: SQ }, (_, e) => `st0bit.y${e}`), undefined, 'st0m');
+  const mask0 = b.op1(bitwise('and', SQ), ['sq.pend', fan4('cls0.load', 'ld0f')], undefined, 'mask0');
+  const mask1 = b.op1(bitwise('and', SQ), [b.op1(bitwise('or', SQ), ['sq.pend', st0m], undefined, 'pend1'), fan4('cls1.load', 'ld1f')], undefined, 'mask1');
+  const ltail1 = b.op1(rca(SK + 1), ['sq.tail', b.op1(merger([1, SK]), [st0d, z(SK, 'z2')], undefined, 'st0n'), zero], undefined, 'ltail1');
   const tags = ['rob.tailTag', 'rob.tail1Tag'], ltails = ['sq.tail', ltail1], sqIdx = ['sq.idx0', 'sq.idx1'], masks = [mask0, mask1];
-  const pays = S.map((s) => b.op1(merger(PAY.map(([, w]) => w)), [tags[s], `fd${s}s.o1`, `imm${s}.imm`, `fd${s}s.o3`, `ctl${s}.aluCtl`, `ctl${s}.aluSrcA`, `ctl${s}.aluSrcB`,
+  const pays = S.map((s) => b.op1(merger(PAYZ.map(([, w]) => w)), [tags[s], `fd${s}s.o1`, `imm${s}.imm`, `fd${s}s.o3`, `ctl${s}.aluCtl`, `ctl${s}.aluSrcA`, `ctl${s}.aluSrcB`,
     `ctl${s}.resultSrc`, `si${s}.o2`, `cls${s}.branch`, `cls${s}.jalr`, `cls${s}.store`, sqIdx[s], ltails[s]], undefined, `pay${s}`));
   b.next();
   const slot = (s: 0 | 1) => {
@@ -530,7 +561,7 @@ function buildOoo(IM: ComponentDef, dmemK: number): ComponentDef {
       [`s${s}_smask`]: masks[s], [`s${s}_pay`]: pays[s],
     };
   };
-  put(issueQueue(PW), 'iq', {
+  put(IQ, 'iq', {
     alloc0: and('dc.d0', 'cls0.needIq', 'al0'), alloc1: and('dc.d1', 'cls1.needIq', 'al1'), ...slot(0), ...slot(1),
     bv0: 'bus0v.y', bt0: 'bus0t.y', bx0: 'bus0x.o0', bv1: 'bus1v.y', bt1: 'bus1t.y', bx1: 'bus1x.o0', sdone: 'sq.done',
     busNext0: 'r2_0.q', busNext1: 'r2_1.q', divFree: b.op1(OR, [not('div.busy', 'nDivBusy'), 'div.out'], undefined, 'divFree'), flush: 'cm.flush', clk: 'clk',
@@ -539,12 +570,12 @@ function buildOoo(IM: ComponentDef, dmemK: number): ComponentDef {
   const robD = S.map((s) => b.op1(merger(ROB_D.map(([, w]) => w)), [b.op1(busMux2(5), [z(5, `zrd${s}`), `si${s}.o1`, `cls${s}.wrd`], undefined, `rd${s}`), `fd${s}s.o1`,
     `cls${s}.store`, `cls${s}.branch`, `cls${s}.jal`, `cls${s}.jalr`, `dpd${s}.call`, `dpd${s}.ret`], undefined, `robD${s}`));
   const robV = S.map((s) => b.op1(merger(ROB_V.map(([, w]) => w)), [`kn${s}.value`, `kn${s}.next`, `kn${s}.mis`], undefined, `robV${s}`));
-  put(reorderBuffer(43, 65), 'rob', {
+  put(reorderBuffer(43, 65, sz.rob), 'rob', {
     a0: 'dc.d0', a1: 'dc.d1', dd0: robD[0], dd1: robD[1], dn0: known0, dn1: b.op1(OR, ['cls1.jal', 'cls1.lui'], undefined, 'known1'), dv0: robV[0], dv1: robV[1],
     bw0: 'bus0v.y', btag0: 'bus0t.y', bv0: 'bus0V.y', bw1: 'bus1v.y', btag1: 'bus1t.y', bv1: 'bus1V.y', ce0: 'cm.c0', ce1: 'cm.c1', flush: 'cm.flush',
     rtag0: 'rat.a0t', rtag1: 'rat.b0t', rtag2: 'rat.a1t', rtag3: 'rat.b1t', clk: 'clk',
   }, 'reorder buffer');
-  put(STORE_QUEUE, 'sq', {
+  put(storeQueue(SQ), 'sq', {
     al0: st0d, al1: and('dc.d1', 'cls1.store', 'st1d'), sw: and('e1s0.o0', `pp0.o${pi('store')}`, 'sw'), sidx: `pp0.o${pi('sqIdx')}`, saddr: 'ex0.addr', sdata: 'e1s0.o5',
     cs: 'cs.y', flush: 'cm.flush', ltail: `pp0.o${pi('ltail')}`, laddr: 'ex0.addr', clk: 'clk',
   }, 'store queue');
@@ -560,7 +591,7 @@ function buildOoo(IM: ComponentDef, dmemK: number): ComponentDef {
       en: one, clk: 'clk',
     }, `issued, port ${p}`);
     put(splitter(E1F), `e1s${p}`, { in: `e1_${p}.q` });
-    put(splitter(PAY.map(([, w]) => w)), `pp${p}`, { in: `e1s${p}.o6` });
+    put(splitter(PAYZ.map(([, w]) => w)), `pp${p}`, { in: `e1s${p}.o6` });
     put(EXEC, `ex${p}`, {
       opA: `e1s${p}.o4`, opB: `e1s${p}.o5`, pc: `pp${p}.o${pi('pc')}`, imm: `pp${p}.o${pi('imm')}`, pnext: `pp${p}.o${pi('pnext')}`, aluCtl: `pp${p}.o${pi('aluCtl')}`,
       aluSrcA: `pp${p}.o${pi('aluSrcA')}`, aluSrcB: `pp${p}.o${pi('aluSrcB')}`, resultSrc: `pp${p}.o${pi('resultSrc')}`, funct3: `pp${p}.o${pi('funct3')}`,
@@ -573,21 +604,21 @@ function buildOoo(IM: ComponentDef, dmemK: number): ComponentDef {
   put(splitter([2, 1]), 'f3p1', { in: `pp1.o${pi('funct3')}` });
   // port 0, 2 cycles: a load (memory, or the youngest older store to the word)
   const ldv = b.op1(busMux2(32), ['dm.rd', 'sq.fwdData', 'sq.fwdHit'], undefined, 'ldv');
-  const E2_0 = [1, 4, 32, 32, 1];
-  put(register(70), 'e2_0', {
+  const E2_0 = [1, TW, 32, 32, 1];
+  put(register(E2_0.reduce((a, w) => a + w, 0)), 'e2_0', {
     d: b.op1(merger(E2_0), [and(and('e1s0.o0', 'e1s0.o3', 'ld2'), 'nFlush.y', 'v2n0'), `pp0.o${pi('tag')}`, ldv, 'ex0.next', 'ex0.mis'], undefined, 'e2in0'), en: one, clk: 'clk',
   }, 'loaded');
   put(splitter(E2_0), 'e2s0', { in: 'e2_0.q' });
   // port 1, 2 cycles: a multiply (the Booth tree, then the final add)
   put(MUL_E, 'mule', { a: 'e1s1.o4', b: 'e1s1.o5', f: 'f3p1.o0' }, 'multiply (E1)');
-  const E2_1 = [1, 4, 64, 64, 2, 32, 1];
-  put(register(168), 'e2_1', {
+  const E2_1 = [1, TW, 64, 64, 2, 32, 1];
+  put(register(E2_1.reduce((a, w) => a + w, 0)), 'e2_1', {
     d: b.op1(merger(E2_1), [and(and('e1s1.o0', 'e1s1.o3', 'mu2'), 'nFlush.y', 'v2n1'), `pp1.o${pi('tag')}`, 'mule.s', 'mule.c', 'f3p1.o0', 'ex1.next', 'ex1.mis'], undefined, 'e2in1'), en: one, clk: 'clk',
   }, 'multiplying');
   put(splitter(E2_1), 'e2s1', { in: 'e2_1.q' });
   put(MUL_M, 'mulm', { s: 'e2s1.o2', c: 'e2s1.o3', f: 'e2s1.o4' }, 'multiply (E2)');
   // port 1: the divider, which takes the bus when it is done and no other result claimed it
-  put(DIV_UNIT, 'div', {
+  put(divUnit(TW), 'div', {
     start: and('e1s1.o0', 'e1s1.o2', 'dstart'), a: 'e1s1.o4', b: 'e1s1.o5', f: 'f3p1.o0', tag: `pp1.o${pi('tag')}`,
     info: b.op1(merger([32, 1]), ['ex1.next', 'ex1.mis'], undefined, 'dinfo'), busFree: b.op1(NOT, [b.op1(OR, ['now1.y', 'e2s1.o0'], undefined, 'taken1')], undefined, 'free1'), flush: 'cm.flush', clk: 'clk',
   }, 'divide');
@@ -597,9 +628,9 @@ function buildOoo(IM: ComponentDef, dmemK: number): ComponentDef {
     const v1 = b.op1(merger(ROB_V.map(([, w]) => w)), [`ex${p}.value`, `ex${p}.next`, `ex${p}.mis`], undefined, `v1_${p}`);
     const v2 = b.op1(merger(ROB_V.map(([, w]) => w)), [p ? 'mulm.y' : 'e2s0.o2', `e2s${p}.o${p ? 5 : 3}`, `e2s${p}.o${p ? 6 : 4}`], undefined, `v2_${p}`);
     const vd = p ? b.op1(merger([32, 33]), ['div.y', 'div.infoQ'], undefined, 'vd') : v2;
-    const t2 = p ? b.op1(busMux2(4), ['div.tagQ', 'e2s1.o1', 'e2s1.o0'], undefined, 't2d') : 'e2s0.o1';
+    const t2 = p ? b.op1(busMux2(TW), ['div.tagQ', 'e2s1.o1', 'e2s1.o0'], undefined, 't2d') : 'e2s0.o1';
     const V2 = p ? b.op1(busMux2(65), [vd, v2, 'e2s1.o0'], undefined, 'V2d') : v2;
-    b.op1(busMux2(4), [t2, `pp${p}.o${pi('tag')}`, `now${p}.y`], `bus ${p}`, `bus${p}t`);
+    b.op1(busMux2(TW), [t2, `pp${p}.o${pi('tag')}`, `now${p}.y`], `bus ${p}`, `bus${p}t`);
     b.op1(busMux2(65), [V2, v1, `now${p}.y`], undefined, `bus${p}V`);
     b.op1(orN(3), [`now${p}.y`, `e2s${p}.o0`, p ? 'div.out' : zero], undefined, `bus${p}v`);
     put(splitter([32, 33]), `bus${p}x`, { in: `bus${p}V.y` });
@@ -641,7 +672,8 @@ function buildOoo(IM: ComponentDef, dmemK: number): ComponentDef {
   for (const [d, n] of Object.entries(names)) b.name(d, n, true);
   const { pins, nets } = oooDrawing(b, ['pcF', 'retire', 'pcW0', 'halted']);
   return {
-    id: `ooo_${IM.id.replace(/^rom2_/, '')}_d${dmemK}`, name: 'Out-of-order RV32IM CPU (2-wide, ROB 16, issue queue 8)', category: 'cpu',
+    id: `ooo_${IM.id.replace(/^rom2_/, '')}_d${dmemK}${dflt ? '' : `_r${sz.rob}_q${sz.iq}_s${sz.sq}`}`,
+    name: `Out-of-order RV32IM CPU (2-wide, ROB ${sz.rob}, issue queue ${sz.iq}${dflt ? '' : `, store queue ${sz.sq}`})`, category: 'cpu',
     summary: 'Fetches and dispatches two instructions a cycle in order, renames their registers to reorder-buffer entries, issues them out of order to two ports as their operands arrive on the result buses, and commits them in order, two a cycle: the register file and memory only ever see results in program order. A misprediction is found at execute and recovered from at commit.',
     ports: [bit('clk', 'in', 'left', true), bus('pcF', 32, 'out'), bus('retire', 2, 'out'), bus('pcW0', 32, 'out'), bit('halted', 'out')],
     symbol: { kind: 'box', label: 'RV32IM OUT OF ORDER' },
