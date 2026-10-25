@@ -463,6 +463,13 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
 - ⏳ Karnaugh map painter: 1s, 0s and don't-cares painted on a K-map or truth table, the minimal cover drawn as loops
   (minimize()), the circuit opened as two-level gates or a PLA with its NAND count; the campaign's K-map drills answered
   on it
+- ⏳ State machine → sequential circuit (requested 2026-10-25): a state diagram drawn as data (an `FsmSpec`: states,
+  arcs with their input condition, Moore / Mealy outputs, the reset state, as in the live diagram panels) synthesized
+  into a chip: a state encoding (binary, Gray or one-hot, with their cost compared), a register of DFFs, the next-state
+  and output logic as truth tables minimized by minimize() (unused codes as don't-cares), opened as gates or a PLA.
+  Checked by reading the circuit back (fsmread.ts readFsm) against the spec; the built chip shows its live diagram.
+  Shares the truth-table → logic step with the Karnaugh map painter (today pla() only builds fixed presets); chapter
+  9's 101 detector and the campaign's `s_fsm` level as its first uses
 - ⏳ Memory-map designer: address regions (RAM, ROM, screen, console, keys) dragged onto the address space, overlaps and
   gaps shown, the address decoder opened as a chip (the ISA decoder's match lines over address bits); chapter 37's bus
   and the sandbox computer's map
