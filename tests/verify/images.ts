@@ -3,11 +3,14 @@
 // in place by code appended to the image (lui / addi / sw per non-zero word), reached by retargeting the
 // reset jump at address 0 and jumping back to where it went. The tests then find their data exactly where
 // they were linked. Encodings are written out here, not assembled by our assembler: nothing of ours
-// stands between the official binaries and the hardware.
+// stands between the official binaries and the hardware. The loader is the same for RV64 (bare64): lui
+// sign-extends there, but sw stores the low 32 bits, so the words land as they do on RV32, a doubleword as its
+// low and high words, low first, which is how ISS64 and the 64-bit core keep their data memories.
 
 import { readFileSync } from 'node:fs';
 
-export type Env = 'p' | 'bare' | 'bare-mp';
+/** bare64: bare for RV64 (rv64ui, rv64um), for chapter 25's 64-bit core and its golden model (src/riscv/iss64.ts). */
+export type Env = 'p' | 'bare' | 'bare-mp' | 'bare64';
 
 export interface ImageFile {
   env: Env;
