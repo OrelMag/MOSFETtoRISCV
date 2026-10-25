@@ -179,12 +179,17 @@ src/sim/       simulation core (no DOM)
                  toggles; breakdown(node): switched C by the child driving each net, the clock and inputs at the root),
                  measurePower(def) on seeded random vectors / clock cycles, vectorPower, fmtEnergy / fmtPower, POWER_NOTE
   timing.ts      static timing: register-to-register critical path, per-capture-stage periods (a `seq` leaf:
-                 inputs captured, comb inputs → outputs launched at clk-to-q); { delay: 'load' } times by delay.ts
+                 inputs captured, comb inputs → outputs launched at clk-to-q); { delay: 'load' } times by delay.ts;
+                 timingGraph: the graph it walks (boundaries, drivers, delays, arrival on demand), shared with slack.ts
+  slack.ts       slackOf(design, model): every leaf's and flip-flop's longest path through it (arrival + the longest path on
+                 to a capture), input → output without flip-flops; slackAt(s, path): slack per instance of a drill level;
+                 slackBand / SLACK_BANDS, slackHeat (band + tooltip): the Timing panels' heatmap (view/delayui.ts heatToggle /
+                 heatLegend; Stage.heat / SchematicView.heat set data-slack on instances, app.css --slack-0…4)
   netcap.ts      FF_INPUT / FF_DRIVER / FF_WIRE, netCaps, driverOf (shared by power.ts and delay.ts; power re-exports them)
   delay.ts       load-dependent delay (Phase 19): logical effort per NAND (d = p + g·h), DelayModel 'unit' | 'load'
                  (buffer chain where it pays) | 'drawn' (none); netLoads (outputs load one input), inputArrivals (inputs
                  driven by a minimum NAND), leafDelays, heavyNets, PS_PER_UNIT, DELAY_NOTE; logicDepth(def, model);
-                 view/delayui.ts the Timing panels' Unit / Load switch (settings.loadDelay the default)
+                 view/delayui.ts the Timing panels' Unit / Load switch (settings.loadDelay the default) and the slack heatmap's toggle and key
   verilog.ts     structural Verilog generated from any netlist (identifiers sanitized, alias
                  boxes from their bit map)
   svexport.ts    exportHdl(def, 'structure' | 'synth', testbench?): whole hierarchy in one file,
