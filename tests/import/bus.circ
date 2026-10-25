@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project source="3.8.0" version="1.0">
+  This file is intended to be loaded by Logisim-evolution v3.8.0(https://github.com/logisim-evolution/).
+
+  <lib desc="#Wiring" name="0"/>
+  <lib desc="#Gates" name="1"/>
+  <lib desc="#Base" name="8"/>
+  <main name="main"/>
+  <circuit name="main">
+    <a name="appearance" val="logisim_evolution"/>
+    <a name="circuit" val="main"/>
+    <comp lib="0" loc="(100,200)" name="Pin">
+      <a name="label" val="X"/>
+      <a name="width" val="4"/>
+    </comp>
+    <comp lib="0" loc="(150,200)" name="Splitter">
+      <a name="fanout" val="4"/>
+      <a name="incoming" val="4"/>
+    </comp>
+    <comp lib="0" loc="(190,160)" name="Tunnel"><a name="label" val="b0"/></comp>
+    <comp lib="0" loc="(190,170)" name="Tunnel"><a name="label" val="b1"/></comp>
+    <comp lib="0" loc="(190,180)" name="Tunnel"><a name="label" val="b2"/></comp>
+    <comp lib="0" loc="(190,190)" name="Tunnel"><a name="label" val="b3"/></comp>
+    <comp lib="0" loc="(300,210)" name="Tunnel"><a name="facing" val="east"/><a name="label" val="b3"/></comp>
+    <comp lib="0" loc="(300,220)" name="Tunnel"><a name="facing" val="east"/><a name="label" val="b2"/></comp>
+    <comp lib="0" loc="(300,230)" name="Tunnel"><a name="facing" val="east"/><a name="label" val="b1"/></comp>
+    <comp lib="0" loc="(300,240)" name="Tunnel"><a name="facing" val="east"/><a name="label" val="b0"/></comp>
+    <comp lib="0" loc="(340,200)" name="Splitter">
+      <a name="facing" val="west"/>
+      <a name="fanout" val="4"/>
+      <a name="incoming" val="4"/>
+    </comp>
+    <comp lib="0" loc="(400,200)" name="Pin">
+      <a name="facing" val="west"/>
+      <a name="label" val="Y"/>
+      <a name="type" val="output"/>
+      <a name="width" val="4"/>
+    </comp>
+    <comp lib="0" loc="(200,420)" name="Constant">
+      <a name="value" val="0x5"/>
+      <a name="width" val="4"/>
+    </comp>
+    <comp lib="1" loc="(300,400)" name="AND Gate">
+      <a name="width" val="4"/>
+    </comp>
+    <comp lib="0" loc="(400,400)" name="Pin">
+      <a name="facing" val="west"/>
+      <a name="label" val="Y2"/>
+      <a name="type" val="output"/>
+      <a name="width" val="4"/>
+    </comp>
+    <comp lib="0" loc="(450,300)" name="Probe"/>
+    <wire from="(100,200)" to="(120,200)"/>
+    <wire from="(120,200)" to="(150,200)"/>
+    <wire from="(120,200)" to="(120,380)"/>
+    <wire from="(120,380)" to="(250,380)"/>
+    <wire from="(170,160)" to="(190,160)"/>
+    <wire from="(170,170)" to="(190,170)"/>
+    <wire from="(170,180)" to="(190,180)"/>
+    <wire from="(170,190)" to="(190,190)"/>
+    <wire from="(300,210)" to="(320,210)"/>
+    <wire from="(300,220)" to="(320,220)"/>
+    <wire from="(300,230)" to="(320,230)"/>
+    <wire from="(300,240)" to="(320,240)"/>
+    <wire from="(340,200)" to="(400,200)"/>
+    <wire from="(200,420)" to="(250,420)"/>
+    <wire from="(300,400)" to="(400,400)"/>
+  </circuit>
+</project>

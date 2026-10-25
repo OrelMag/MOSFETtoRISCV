@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project source="3.8.0" version="1.0">
+  This file is intended to be loaded by Logisim-evolution v3.8.0(https://github.com/logisim-evolution/).
+
+  <lib desc="#Wiring" name="0"/>
+  <lib desc="#Gates" name="1"/>
+  <lib desc="#Memory" name="4"/>
+  <lib desc="#Base" name="8"/>
+  <main name="counter"/>
+  <circuit name="counter">
+    <a name="appearance" val="logisim_evolution"/>
+    <a name="circuit" val="counter"/>
+    <comp lib="0" loc="(200,250)" name="Clock"/>
+    <comp lib="4" loc="(300,200)" name="D Flip-Flop"/>
+    <comp lib="4" loc="(300,400)" name="D Flip-Flop"/>
+    <comp lib="1" loc="(250,410)" name="XOR Gate"/>
+    <comp lib="0" loc="(450,210)" name="Pin">
+      <a name="facing" val="west"/>
+      <a name="label" val="Q0"/>
+      <a name="type" val="output"/>
+    </comp>
+    <comp lib="0" loc="(450,410)" name="Pin">
+      <a name="facing" val="west"/>
+      <a name="label" val="Q1"/>
+      <a name="type" val="output"/>
+    </comp>
+    <wire from="(350,250)" to="(370,250)"/>
+    <wire from="(370,250)" to="(370,290)"/>
+    <wire from="(370,290)" to="(270,290)"/>
+    <wire from="(270,290)" to="(270,210)"/>
+    <wire from="(270,210)" to="(290,210)"/>
+    <wire from="(200,250)" to="(230,250)"/>
+    <wire from="(230,250)" to="(290,250)"/>
+    <wire from="(230,250)" to="(230,450)"/>
+    <wire from="(230,450)" to="(290,450)"/>
+    <wire from="(350,210)" to="(400,210)"/>
+    <wire from="(400,210)" to="(450,210)"/>
+    <wire from="(400,210)" to="(400,330)"/>
+    <wire from="(400,330)" to="(170,330)"/>
+    <wire from="(170,330)" to="(170,390)"/>
+    <wire from="(170,390)" to="(190,390)"/>
+    <wire from="(350,410)" to="(420,410)"/>
+    <wire from="(420,410)" to="(450,410)"/>
+    <wire from="(420,410)" to="(420,470)"/>
+    <wire from="(420,470)" to="(150,470)"/>
+    <wire from="(150,470)" to="(150,430)"/>
+    <wire from="(150,430)" to="(190,430)"/>
+    <wire from="(250,410)" to="(290,410)"/>
+  </circuit>
+</project>
