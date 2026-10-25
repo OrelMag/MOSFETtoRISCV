@@ -43,3 +43,17 @@ button.lv-chip { font: inherit; font-size: 12.5px; cursor: pointer; }
   .cp-codex:not(.has-sel) .cx-landing { order: -1; }
   .cx-acts td.bar { display: none; }
 }
+
+/* figures from the chapters' widgets (codexfigs.ts lazy): a chapter-width widget scrolls inside the figure */
+.cx-lazy { overflow-x: auto; }
+.cx-lazy > .widget { margin: 0; }
+.cx-amdahl { padding: 8px 10px 2px; }
+.cx-amdahl svg { width: 100%; height: auto; display: block; }
+.cx-amdahl .amd-l { fill: none; stroke-width: 2; }
+.cx-amdahl .amd-0 { stroke: var(--muted); }
+.cx-amdahl .amd-1 { stroke: var(--accent); }
+.cx-amdahl .amd-2 { stroke: var(--good); }
+.cx-amdahl .amd-3 { stroke: var(--warn); }
+.cx-amdahl .amd-cap { stroke: var(--border-strong); stroke-dasharray: 4 3; fill: none; }
+.cx-amdahl .amd-g { stroke: var(--border); fill: none; }
+.cx-amdahl text { font: 10.5px var(--font-ui); fill: var(--text-2); }

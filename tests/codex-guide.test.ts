@@ -65,7 +65,7 @@ describe('codex guide', () => {
   });
 
   it('figures and questions belong to entries', () => {
-    for (const id of ['positional', 'hex', 'twos', 'formats', 'pipeline', 'hazards', 'flush']) expect(hasCodexFigure(id), id).toBe(true);
+    for (const id of ['positional', 'hex', 'twos', 'formats', 'pipeline', 'hazards', 'flush', 'amdahl', 'cpi', 'memwall', 'rowbuffer', 'threecs', 'hollerith', 'relaystep', 'stdcell', 'skew', 'coherence', 'occupancy', 'scoreboard']) expect(hasCodexFigure(id), id).toBe(true);
     for (const id of Object.keys(CHECKS)) expect(codexById(id), `questions for '${id}'`).toBeTruthy();
   });
 

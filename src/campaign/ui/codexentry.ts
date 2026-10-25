@@ -187,7 +187,7 @@ export function codexEntryEl(e: CodexEntry, more: CodexMore | undefined, view: P
   const compare = [more?.lib, ...(more?.compare ?? [])].filter((x): x is string => !!x).map((id) => ({ id, name: resolveComponent(id)?.name ?? id, c: libCost(id) }));
   const max = Math.max(1, ...compare.map((x) => x.c?.nand ?? 0));
   const right = h('div', { class: 'cx-col' },
-    figure ? h('figure', { class: 'cx-fig cx-widget' }, figure.el, h('figcaption', null, figure.caption)) : null,
+    figure && !figure.wide ? h('figure', { class: 'cx-fig cx-widget' }, figure.el, h('figcaption', null, figure.caption)) : null,
     fig ? h('figure', { class: 'cx-fig' }, fig,
       h('figcaption', null, 'The library part, simulated: click an input to flip it. ', h('a', { href: `#/workbench/${more!.lib}` }, 'Open it on the workbench'), ' to drill down to transistors.')) : null,
     fsm ? h('figure', { class: 'cx-fig' }, fsmDiagram(fsm).el,
@@ -200,7 +200,8 @@ export function codexEntryEl(e: CodexEntry, more: CodexMore | undefined, view: P
         h('span', { class: 'v' }, `${x.c?.nand.toLocaleString() ?? '—'}${x.c?.depth !== null && x.c?.depth !== undefined ? ` · d ${x.c.depth}` : ''}`)])),
       h('p', { class: 'sub' }, 'NANDs (bar) and depth in NAND delays, measured.')) : null);
   const article = h('article', { class: `cp-codex-entry cx-entry${opts.narrow ? ' narrow' : ''}` }, head,
-    h('div', { class: `cx-cols${right.childElementCount ? '' : ' solo'}` }, left, right.childElementCount ? right : null), prevNextEl(e.id));
+    h('div', { class: `cx-cols${right.childElementCount ? '' : ' solo'}` }, left, right.childElementCount ? right : null),
+    figure?.wide ? h('section', { class: 'cx-wide' }, h('h4', null, 'Explore it'), h('figure', { class: 'cx-fig cx-widget' }, figure.el, h('figcaption', null, figure.caption))) : null, prevNextEl(e.id));
   // Hover definitions inside the entry's own text (not for itself): a chunk of its own, marked once it arrives.
   if (settings.glossary) {
     import('./glossaryui').then((m) => {
