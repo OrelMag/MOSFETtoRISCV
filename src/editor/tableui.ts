@@ -11,6 +11,7 @@ import {
   addInput, addOutput, type Cell, detachTable, equation, inBit, newTableChip, nextCell, removeInput, removeOutput, renamePin, rowCount, setCell,
   setTable, TABLE_MAX_IN, TABLE_MAX_OUT, tableCost, tableDef, tableLogic, type TableLogic, termCovers, termText,
 } from './ttable';
+import { ownerOf } from './fsmchip';
 
 const HIDDEN_KEY = 'mosfet2riscv:table-hidden';
 const load = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -59,8 +60,10 @@ class TableUi {
     this.banner.hidden = !t;
     this.pane.hidden = !t || this.hidden.has(id);
     if (!t) { this.key = ''; return; }
-    this.renderBanner(id);
-    const key = JSON.stringify([id, t, this.liveRow(t), this.mapOut.get(id) ?? 0, this.hot]);
+    const owner = ownerOf(this.ed.ws, id);
+    this.pane.classList.toggle('ro', !!owner);
+    this.renderBanner(id, owner?.id, owner?.name);
+    const key = JSON.stringify([id, owner?.id, t, this.liveRow(t), this.mapOut.get(id) ?? 0, this.hot]);
     if (key === this.key || this.pane.hidden) return;
     this.key = key;
     this.render(id, t);
@@ -78,8 +81,16 @@ class TableUi {
     return r;
   }
 
-  private renderBanner(id: string): void {
+  private renderBanner(id: string, owner?: string, ownerName?: string): void {
     const hidden = this.hidden.has(id);
+    if (owner) {
+      this.banner.replaceChildren(
+        h('span', { class: 'hdl-badge tt-badge' }, 'TT'),
+        h('span', { class: 'grow' }, 'Part of the state machine ', h('b', null, ownerName ?? owner), ' · its table follows the machine'),
+        h('button', { class: 'btn sm', onclick: () => this.ed.openChip(owner) }, 'Open the machine'),
+        h('button', { class: 'btn sm', onclick: () => this.toggleHidden(id) }, hidden ? 'Show table' : 'Hide table'));
+      return;
+    }
     this.banner.replaceChildren(
       h('span', { class: 'hdl-badge tt-badge' }, 'TT'),
       h('span', { class: 'grow' }, 'Drawn from its ', h('b', null, 'truth table'), ' · edit the table to change it'),
@@ -104,6 +115,8 @@ class TableUi {
   private apply(next: TableDoc): void {
     const id = this.ed.chipId;
     if (next === this.table) return;
+    const owner = ownerOf(this.ed.ws, id);
+    if (owner) { this.ed.toast(`This table follows the state machine ${owner.name}: edit the machine`, 'err'); return; }
     let err: string | null = null;
     this.ed.editWs((ws) => {
       const r = setTable(ws, id, next);
@@ -171,7 +184,7 @@ class TableUi {
     this.body.replaceChildren(head, pins,
       h('div', { class: 'tt-main' }, grid,
         h('div', { class: 'tt-side' }, h('span', { class: 'tt-lbl' }, 'Karnaugh map'), outTabs, kmap, h('span', { class: 'tt-lbl' }, 'Minimized'), eqs, costLine,
-          h('p', { class: 'tt-note' }, 'A click on an output cycles 0 → 1 → – (don’t care). On a cell, type 0, 1 or - (x too): the next row gets the focus.'))));
+          h('p', { class: 'tt-note tt-howto' }, 'A click on an output cycles 0 → 1 → – (don’t care). On a cell, type 0, 1 or - (x too): the next row gets the focus.'))));
 
     if (this.focusAt) {
       const { j, r } = this.focusAt;

@@ -294,7 +294,7 @@ function drawingOf(doc: FsmDoc): Pick<FsmArc, 'bend' | 'loop'>[] {
       if (t <= 0 || t >= 1) return false;
       return Math.hypot(A[0] + t * (B[0] - A[0]) - s.at[0], A[1] + t * (B[1] - A[1]) - s.at[1]) < 40;
     });
-    return { bend: blocked ? 70 : reverse ? 22 : 0 };
+    return { bend: blocked ? -70 : reverse ? 22 : 0 };
   });
 }
 
