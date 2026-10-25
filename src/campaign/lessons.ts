@@ -140,8 +140,9 @@ is the next instruction to run. In a pipeline, traps must be <b>precise</b>: eve
 completes, nothing younger leaves a trace.</p>`,
 
   gpu: `
-<p>Your pipeline is built for <b>latency</b>: one program, each instruction done as soon as
-possible. Forwarding, stalls, flushes and prediction all serve that one instruction stream. But
+<p>Your core is built for <b>latency</b>: one program, each instruction done as soon as
+possible. The pipeline of Act 6 goes further the same way: forwarding, stalls, flushes and
+prediction all serve that one instruction stream. But
 much of computing is the <b>same short program over many data</b>: every pixel of a frame, every
 element of an array. There the useful number is <b>throughput</b>, results per second, and the
 instructions of different data do not depend on each other at all.</p>
