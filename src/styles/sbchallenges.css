@@ -141,6 +141,9 @@ a.sb-chal-flag:hover { filter: brightness(1.1); text-decoration: underline; }
 .sb-tp-prog.bad { color: var(--text); border-color: color-mix(in srgb, var(--ed-err) 50%, var(--border)); }
 .sb-tp-prog.bad .icon { color: var(--ed-err); }
 .sb-tp-prog:hover { background: var(--surface-2); }
+.sb-tp-prog.pong { font-family: inherit; color: var(--accent-text); border-color: var(--accent); background: var(--accent); }
+.sb-tp-prog.pong:hover { background: color-mix(in srgb, var(--accent) 85%, var(--text)); }
+.sb-tp-prog.pong .icon { color: var(--accent-text); }
 
 /* state-machine read-back drawer (editor/fsmui.ts) */
 .sb-fsm { flex: 1; min-height: 0; padding: 10px 12px; overflow: auto; font-size: 12.5px; color: var(--text-2); }

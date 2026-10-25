@@ -523,7 +523,13 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
     write and the first mismatch. (The RV32 drawer keeps its own monitor: it reads register files by name.)
   - ✅ **Debug this test in the sandbox** (`src/campaign/bench.ts`): a failing core level offers a button that
     builds the failing program into a computer around the learner's core (ROM, a 64-word RAM decoded on its
-    low bits with the golden model wrapping the same way, LEDs, the IRQ line) and opens it with the drawer.
+    low bits with the golden model wrapping the same way, LEDs, the IRQ line, the core held in reset for its first
+    cycle as on the level's bench, so the multicycle core starts) and opens it with the drawer.
+  - ✅ **Play Pong on your core**: a passing core level that runs all of RV16I (CoreSpec.rv16i: Core III, the fast
+    core, Pipeline IV, branch prediction, the trap / interrupt / finale cores, multiply, divide, multicycle) offers Pong
+    (`src/riscv/rv16/pong16.ts`) on the io bench: the debug bench plus a 32 × 32 RGB565 screen at 0xF000 + 32·y + x,
+    eight switches at 0xFFFA (7 / 6 your paddle). Examples ▸
+    RV16: Pong on the campaign core runs it on the reference single-cycle core.
   - ✅ **Start from your previous core** on the campaign page: a core level can begin as a copy of the
     nearest earlier core level's chip, with the new level's pins added.
 - ✅ **E. Pipeline.** Pipeline blocks and the reference pipelined cores; Act 6.

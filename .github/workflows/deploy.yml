@@ -88,8 +88,23 @@ jobs:
       - run: npm ci
       - run: pip install yowasp-yosys
       - run: npx vite-node scripts/verify-export.ts ${{ matrix.design }}
+  # the sandbox's File > Export Verilog for FPGA on its examples, through Yosys's Gowin synthesis (Tang Nano 9K)
+  fpga:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: pip install yowasp-yosys
+      - run: npx vite-node scripts/fpga-export.ts counter7 computer
   deploy:
-    needs: [test, build, verify-hdl]
+    needs: [test, build, verify-hdl, fpga]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

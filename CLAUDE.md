@@ -55,6 +55,8 @@ on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-
 (Yosys synthesizes the exported dual-core and the RV32I / RV32IM system CPUs, each netlist is simulated against ours,
 every output every cycle, on their programs with irq pulses and switch changes). Run it locally (`npx vite-node scripts/verify-export.ts all`, needs `pip install yowasp-yosys`)
 before merging a change to the exporters, the dual-core or the system CPU (one design: `verify-export.ts sys-m`).
+It also waits on `fpga`: `scripts/fpga-export.ts counter7 computer` (the sandbox's FPGA export of those examples, through
+editor/fpga.ts as the File menu runs it, then Yosys `synth_gowin` on the design with its Tang Nano 9K board top; files in layout/fpga/).
 `.github/workflows/spike.yml` (every push touching `src/riscv/`, fpref.ts or the oracle; nightly on new seeds) runs
 the golden model against Spike, commit by commit (`scripts/spike-oracle.ts`, docs/VERIFICATION.md); a change to the
 ISS should leave it green before merging (its failure artifact keeps the program, ELF and Spike's log).
@@ -194,7 +196,9 @@ src/sim/       simulation core (no DOM)
                  boxes from their bit map)
   svexport.ts    exportHdl(def, 'structure' | 'synth', testbench?): whole hierarchy in one file,
                  self-checking testbench from our simulation (checked against Yosys when installed)
-  vexport.ts     synthesizable Verilog-2005 (flip-flops as processes, `hdl.synth` bodies) for Yosys / OpenROAD
+  vexport.ts     synthesizable Verilog-2005 (flip-flops as processes, `hdl.synth` bodies) for Yosys / OpenROAD;
+                 externalPorts (+ ioPart): sandbox I/O parts (isExternal, displays) punched up as ports x_<path>_<port>
+                 of every module above them; ExportResult.ports: the top's ports (TopPort, `external`: where from)
   vcd.ts         toVcd(): Value Change Dump of recorded traces
   fsmread.ts     readFsm(sim, spec): a circuit explored from reset (every input combination, breadth first; a state =
                  every net's value, so nothing needs naming), its states paired with the spec's; readbackSpec draws it
@@ -582,7 +586,10 @@ src/lib/rv16/  the campaign's RV16 hardware, every block built only from parts i
 src/riscv/rv16/ isa16.ts (fields, encode / decode / disasm), asm16.ts, iss16.ts (golden model: MMIO, CSRs, traps,
                interrupts; halts on jal x0, 0; SIMT words are illegal; `dma`: the boot puzzle's DMA engine (DMA_DEV16
                registers at 0xFFF0 … 0xFFF3, a word every 4 cycles, the interrupt line when done) and flash at 0x8000 …
-               0xBFFF, read-only, 8 stall cycles a load: steps then count cycles), simt16.ts (Simt16: a warp of RV16 lanes over one
+               0xBFFF, read-only, 8 stall cycles a load: steps then count cycles; `screen`: the io bench's 32 × 32 RGB565
+               screen, stores to SCREEN16_IO (isa16.ts: 0xF000 + 32·y + x) paint `screen`, not the data memory, loads there
+               read the data memory; nextLoad(): the address the next step loads from), pong16.ts (PONG16: Pong on the io
+               bench, state in RAM words 0–8 (PONG16_RAM), five points a game: PONG16_WIN), simt16.ts (Simt16: a warp of RV16 lanes over one
                memory: mask, leader, split / join stack, tmc, csrr rd, tid; utilization / idle), warps16.ts (Warps16: W warps over
                one memory taking turns, warp 0 first, wasted turns counted; bar waits for the other warp or its end (mask 0);
                stepWarp(w) for other issue orders; raster: lane 0's stores to 0xFFF0 … 0xFFF6 draw at once into 0xF000, draws
@@ -727,7 +734,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  registerFileImporter for .v / .sv and Yosys JSON, registerNewChipKind (New chip ▾ Verilog chip);
                  examplehdl.ts: Examples ▸ The same adder in Verilog
   examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, console, screen, the computer, shared bus,
-                 wired-AND / OR), addExample: new chip (and an example's `subchips`, fresh ids), opened. The computer
+                 wired-AND / OR, RV16 Pong: campaign/bench.ts pongChip), addExample: new chip (and an example's
+                 `subchips`, fresh ids), opened. The computer
                  (computerChip, ~60 × 64 units: readable at fit with the CPU drawer): rv32i_core (lib/resolve.ts
                  pattern), a 1K ROM (riscv/ioprograms.ts), a Memory chip (memoryChip: decoder, 4K × 32 RAM, the
                  devices' buses x / y / byte), a 64 × 64 RGB332 screen at 0xC000_0000 + 256·y + 4·x on the top level,
@@ -808,7 +816,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  after stores or at a pipeline's halt, console, LEDs; without the pins: a console part's text, a switch
                  bank's positions, an LED bank named leds, here or one chip down), first mismatch, Run to halt
   cpu16.ts       detectRv16 (an RV16 ROM + a part with the core pins), Rv16Monitor: Iss16 in lock-step through the
-                 core's write and store ports in program order (the campaign bench, live; RAM wrap, drain, next write)
+                 core's write and store ports in program order (the campaign bench, live; RAM wrap, drain, next write);
+                 a switch bank part (desc.switches): the model waits at a load from SWITCHES for the core's write and takes
+                 its value when the bank held it in the last 16 edges (a pipeline reads it cycles earlier); a screen part
+                 (desc.screen): Iss16's screen option, `screen` = the picture the matched stores painted; an edge with the
+                 core's rst high counts nothing
   lanemon.ts     detectLanes16 (an RV16 ROM + a lane core: 2 / 4 / 8 lanes, warp + load port, fa / fd / fwe), LaneMonitor:
                  Simt16 / Warps16 in lock-step as lanecheck / warpcheck check (per-thread queues, the load port as the
                  previous cycle's warp's, pixel writes in draw order; the model runs ahead to the next write); the CPU
@@ -844,7 +856,13 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   props.ts       properties of the selection or the chip, diagnostics; registerPropsSection
   fileui.ts      File menu (export / import / share link / Verilog / images / chip manager: grouped by folder,
                  rows dragged onto folders), share banner, drag-and-drop import, autosave indicator, backup notice;
-                 installFiles(ed) per page
+                 installFiles(ed) per page; Export Verilog for FPGA… (fpga.ts / zip.ts loaded on demand: the report in a
+                 dialog, the files as one stored .zip)
+  fpga.ts        DOM-free FPGA export: fpgaExport(def, base) → files (design .v through vexport with external ports and
+                 powerOnZero, <base>_board.v: 27 MHz ÷ 2^DIV_LOG2 clock, power-on reset, boardPlan's buttons / LEDs /
+                 header pins, tangnano9k.cst labelled an example, README.txt) + issues (latchLoops: NAND SCCs outside
+                 processes, named by the smallest instance holding them; ff chips with extra pins; initial contents;
+                 asynchronous-read memories; pins with no board pin); zip.ts zipFiles (stored, CRC-32)
   projectui.ts   the project switcher above the palette's search (New, Duplicate, Rename, Export, Import a file as a
                  new project, Delete); the page (ui/pages/sandbox.ts) rebuilds the editor on another project, and a
                  campaign level's chip (u_ch_cp_*) always opens in the first project
@@ -981,7 +999,11 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  decision, sticky shifter, leading-zero counter, normalize & round, compare, int → float), whose blocks
                  (FP_BLOCK) are never given, only unlocked by the rung that built them (fpGives)
   bench.ts       addBench: a failing core test as a computer chip around the learner's core (RV16 ROM, 64-word
-                 RAM, LEDs, IRQ line), opened with the CPU drawer; failingTest names it from a failure line;
+                 RAM, LEDs, IRQ line, a power-on reset for the first cycle), opened with the CPU drawer; failingTest names
+                 it from a failure line; benchChip(…, { io }): plus a 32 × 32 RGB565 screen at 0xF000 (daddr[15:10] =
+                 111100, write-only) and eight switches at SWITCHES (0xFFFA); addPongBench (Pong around a
+                 learner's core: the challenge strip's "Play Pong on your core" on a passing CoreSpec.rv16i level),
+                 pongChip (around the reference rv16_cpu: Examples ▸ RV16: Pong);
                  addLaneBench: the same for a lane core (act 9): a power-on reset for the first cycle, a lane address chip
                  per lane (data 0x000–0x3FF; raster: the screen 0xF000), a RAM part with a port per lane (ports: n),
                  warps: a register after each read (a cycle late), raster: the screen memory with a fifth port for fa / fd /

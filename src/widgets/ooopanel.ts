@@ -163,7 +163,7 @@ export function oooPanel(words: number[], mem: { imemWords: number; dmemWords: n
     const status = h('div', { class: 'cpu-status' });
     const view = oooView((pc, port) => link.select?.(link.selected?.() === pc ? null : pc, port));
     const title = h('h4', null, 'Out of order', h('span', { class: 'fold-hint' }));
-    const el = h('div', { class: 'mem-panel ooo-panel', 'data-dock': 'left' }, title, status, view.el);
+    const el = h('div', { class: 'mem-panel ooo-panel', 'data-dock': 'left', 'data-phone': 'flow' }, title, status, view.el);
     title.addEventListener('click', () => el.classList.toggle('collapsed'));
     stage.edgeHooks.add({
       before: () => { if (stage.sim && stage.rootCtx) f.before(stage.sim, stage.rootCtx.node); },

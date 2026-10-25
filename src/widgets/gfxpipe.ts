@@ -266,7 +266,7 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
       tl.replaceChildren(h('div', { class: 'cpu-sec' }, rec.last ? `The last frame: ${fmt(rec.last.cycles)} cycles` : 'The last frame'), timeline(rec.last), legend(rec.last));
     };
     const title = h('h4', null, 'Screen 64 × 64 · the pipeline', h('span', { class: 'fold-hint' }));
-    const el = h('div', { class: 'mem-panel cpu-panel gfx-panel', 'data-dock': 'right' }, title,
+    const el = h('div', { class: 'mem-panel cpu-panel gfx-panel', 'data-dock': 'right', 'data-phone': 'flow' }, title,
       h('div', { class: 'cpu-body' },
         h('div', { class: 'param-row', style: 'margin-bottom:6px' }, meshSel, ...(opts.clearSwitch ? [clearSel] : [])),
         h('div', { class: 'gfx-screen-wrap' }, cv, memLabel),

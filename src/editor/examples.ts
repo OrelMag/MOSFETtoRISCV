@@ -12,6 +12,7 @@ import { computer6502Chip, memory6502Chip } from './example6502';
 import { busSystemChip } from './examplebus';
 import { cardsBootChip } from './examplecards';
 import { add4VerilogChip, sameAdderChip } from './examplehdl';
+import { PONG_HZ, pongChip } from '../campaign/bench';
 
 const pin = (id: string, dir: PinDoc['dir'], at: Vec, width = 1, extra: Partial<PinDoc> = {}): PinDoc => ({ id, name: id, dir, width, at, ...extra });
 const part = (id: string, ref: PartRef, at: Vec, extra: Partial<PartDoc> = {}): PartDoc => ({ id, ref, at, ...extra });
@@ -415,6 +416,12 @@ export const EXAMPLES: Example[] = [
     id: 'cardboot', name: 'Boot from cards',
     blurb: 'An RV32I core whose boot ROM reads a deck from a card reader into RAM and jumps to it, like the IBM 1401\'s Load key. Run; then drop the deck, Reset and Run, and sort it.',
     build: (id, n) => cardsBootChip(id, n),
+  },
+  {
+    id: 'rv16pong', name: 'RV16: Pong on the campaign core',
+    blurb: 'The campaign’s single-cycle RV16 core on its bench with a 32 × 32 screen and switches: Pong in RV16 assembly, the golden model in lock step. Run; switches 7 and 6 move your paddle.',
+    build: pongChip,
+    hz: PONG_HZ,
   },
   { id: 'sharedbus', name: 'Shared bus', blurb: 'Two tri-state drivers and a pull-down on one wire: a value, a held 0, or a fight (X).', build: sharedBusChip },
   { id: 'wiredand', name: 'Wired-AND', blurb: 'Open-drain NMOS stages and a pull-up: the wire is 1 only when every stage lets go.', build: (id, n) => wiredChip(id, n, 'and') },

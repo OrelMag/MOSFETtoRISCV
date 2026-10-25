@@ -1128,6 +1128,20 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .panel-dock > .mem-panel { position: relative; inset: auto; pointer-events: auto; flex: 0 1 auto; min-height: 38px; max-width: 100%; max-height: 100%; }
 .panel-dock.row > .mem-panel { flex-shrink: 0; }
 
+/* A phone: a panel marked data-phone="flow" (chapters 32–33's screen and drawing pad, chapter 25's Out of order) over a
+   390 px canvas hid the whole circuit, or was cut to a few rows. While one is unfolded the panels leave the overlay for the
+   canvas's flow, full width under a strip of circuit (the fit keeps the circuit clear of them: Stage.covers), and the
+   stage grows to hold them; folded, they float over the canvas as on a desktop. */
+@media (max-width: 760px) {
+  .stage:not(.widget-mode):has(> .canvas > [data-phone='flow']:not(.collapsed), > .canvas > .panel-dock > [data-phone='flow']:not(.collapsed)) { height: auto; }
+  .stage:not(.widget-mode) > .canvas:has(> [data-phone='flow']:not(.collapsed), > .panel-dock > [data-phone='flow']:not(.collapsed)) {
+    flex: none; display: flex; flex-direction: column; gap: 8px; padding: max(200px, 30vh) 12px 12px;
+  }
+  .stage:not(.widget-mode) > .canvas:has(> [data-phone='flow']:not(.collapsed), > .panel-dock > [data-phone='flow']:not(.collapsed)) > [data-phone='flow'],
+  .stage:not(.widget-mode) > .canvas:has(> [data-phone='flow']:not(.collapsed), > .panel-dock > [data-phone='flow']:not(.collapsed)) > .panel-dock > [data-phone='flow'] { position: relative; inset: auto; width: auto; max-height: none; overflow: visible; }
+  .stage:not(.widget-mode) > .canvas:has(> [data-phone='flow']:not(.collapsed), > .panel-dock > [data-phone='flow']:not(.collapsed)) > .panel-dock { position: relative; inset: auto !important; order: -1; align-items: stretch; flex-direction: column; }
+}
+
 /* Side panes hidden (stage bar button, settings.wide): the stage takes the whole width. Not while the stage shows a
    widget: widget mode hides the stage bar, and with it the only button that brings the panes back. */
 :root[data-wide] :is(.layout, .bench):not(:has(> .stage.widget-mode)) { grid-template-columns: 1fr; }
