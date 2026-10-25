@@ -140,3 +140,15 @@ describe('WIDTH_COSTS', () => {
     }
   });
 });
+
+describe('benchmarks on RV64', () => {
+  it('every integer benchmark leaves its expected memory on ISS64', async () => {
+    const { BENCHMARKS, benchSource } = await import('../src/riscv/benchprograms');
+    for (const b of BENCHMARKS.filter((x) => !x.needs?.f)) {
+      const iss = new ISS64(asm64(benchSource(b, 64)), { m: true, dmemWords: 128, imemWords: 128 });
+      iss.run(100000);
+      expect(iss.halted, b.id).toBe(true);
+      for (const [i, v] of b.expect()) expect(iss.dmem[i], `${b.id} word ${i}`).toBe(v);
+    }
+  });
+});

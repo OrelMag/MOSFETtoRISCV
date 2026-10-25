@@ -10,6 +10,8 @@ export interface Benchmark {
   /** Extensions the program needs (it runs only on CPUs that have them). */
   needs?: { m?: boolean; f?: boolean };
   source: string;
+  /** The program for RV64 (chapter 25), where it differs: its 32-bit arithmetic made explicit with the W instructions. */
+  source64?: string;
   /** Data-memory words the program leaves behind (word index → value), computed in TypeScript. */
   expect(): Map<number, number>;
 }
@@ -36,6 +38,12 @@ const GEN = `gen:    slli t3, t0, 13      # xorshift32
         sw   t0, 0(t1)
         addi t1, t1, 4
         bne  t1, t2, gen`;
+
+/** The same generator on RV64: the shifts must stay within 32 bits (slliw / srliw), or bits shifted past bit 31 come back. */
+const GEN64 = GEN.replace(/slli t3/g, 'slliw t3').replace('srli t3', 'srliw t3');
+
+/** A benchmark's source for a CPU of this width. */
+export const benchSource = (b: Benchmark, xlen: 32 | 64 = 32) => (xlen === 64 && b.source64) || b.source;
 
 const words = (base: number, vs: number[]) => new Map(vs.map((v, i) => [base + i, v >>> 0]));
 
@@ -187,6 +195,7 @@ place:  sw   t3, 0(t4)
         addi t1, t1, 4
         bne  t1, t2, outer
 halt:   j    halt`,
+    get source64() { return this.source.replace(GEN, GEN64); },
     expect: () => words(0, xorshift32(0x92d68ca2, 32).map((x) => x | 0).sort((a, b) => a - b)),
   },
   {
@@ -230,6 +239,7 @@ next:   addi t4, t4, -1
         not  a0, a0
         sw   a0, 64(zero)
 halt:   j    halt`,
+    get source64() { return this.source.replace(GEN, GEN64).replace('srli a0, a0, 1', 'srliw a0, a0, 1  # the CRC is 32 bits: keep the shift there'); },
     expect: () => { const d = xorshift32(0x2545f491, 16); return new Map([...words(0, d), [16, crc32(d)]]); },
   },
   {
