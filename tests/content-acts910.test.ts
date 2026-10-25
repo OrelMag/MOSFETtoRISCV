@@ -294,11 +294,11 @@ describe('acts 9–10: the memory numbers', () => {
     expect(kase('m_ctrl')).toContain(`(${TIMING.tRCD}, ${TIMING.tCAS}, ${TIMING.tRP} and ${TIMING.tRAS} cycles)`);
     expect(kase('m_ctrl')).toContain(`tREFI is ${DRAM16.tREFI} cycles here, ${fmt(TIMING.tREFI)} for the real 7.8 µs`);
     const hit = DRAM16.tCAS, miss = DRAM16.tRP + DRAM16.tRCD + DRAM16.tCAS;
-    expect(why('o_cache')).toContain(`${hit} cycles after a read on the open row and ${miss} on another`);
+    expect(why('o_cache')).toContain(`tCAS = ${hit} cycles after a read on the open row, tRP + tRCD + tCAS = ${miss} on another`);
     expect(kase('o_cache')).toContain(`tCAS = ${hit} cycles on the open row, tRP + tRCD + tCAS = ${miss}`);
     expect(T('m_ctrl')).toContain(`${hit} cycles on an open row, ${miss} on another`);
     expect(T('m_ctrl')).toContain(`tRFC = ${DRAM16.tRFC}`);
-    expect(why('o_cache')).toContain(`${fmt(par('o_cache').nand!)} NANDs for 128 data bits`);
+    expect(why('o_cache')).toContain(`${fmt(par('o_cache').nand!)} NANDs`);
   });
 
   it('what DRAM costs a processor: the benchmarks\' matmul behind a cache', () => {

@@ -790,7 +790,7 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'o_cache', act: 10, title: 'A cache', kind: 'build', optional: true, requires: ['m_ctrl'], base: BUILD9.o_cache, par: { nand: 3497, period: 36 },
-    why: 'Your controller answers 4 cycles after a read on the open row and 12 on another; every core assumed one. A small memory of recent words, each with a tag and a valid bit, answers most at once: 3 497 NANDs for 128 data bits.',
+    why: 'Your controller answers tCAS = 4 cycles after a read on the open row, tRP + tRCD + tCAS = 12 on another; every core assumed one. A small memory of recent words, a tag and a valid bit each, answers most at once: 3 497 NANDs.',
     tips: ['Two small RAMs indexed by addr[2:0]: one for the data, one for {valid, tag}.', 'hit = valid AND (stored tag = addr[7:3]): a 5-bit equality comparator.', 'Write the line when wr, or when rd and not hit; its data is wdata on a write, mdata on a fill.', 'At power-on every valid bit is 0: nothing hits until it is filled.'],
     codex: ['cache', 'threecs', 'assoc', 'writepolicy'], chapters: [{ chapter: 'cache', step: 6, label: 'A direct-mapped cache' }, { chapter: 'memctrl', step: 3, label: 'The CPU behind it' }],
   },
