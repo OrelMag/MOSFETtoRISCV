@@ -314,6 +314,25 @@ function allowedLeaf(d: ComponentDef, allowed: Allowed): string | null {
 
 const isUserChip = (d: ComponentDef) => d.category === 'custom' && d.id.startsWith('u_');
 
+/**
+ * The builders hand in the answer of the challenges they would solve: a truth-table chip (or a state machine's
+ * table) where the check is a truth table, a state-machine chip there or where the circuit must be a given state
+ * machine. `chips`: the chip under check and every chip it places (library.ts deps). Elsewhere they are tools.
+ */
+export function builderViolations(ws: Workspace, chips: string[], ch: BuildChallenge): string[] {
+  const out: string[] = [];
+  const docs = chips.map((id) => ws.chips[id]).filter((c): c is ChipDoc => !!c);
+  if (ch.check.kind === 'table') {
+    const t = docs.find((c) => c.table && !c.table.of);
+    if (t) out.push(`${t.name} is drawn from a truth table: this challenge is building that logic by hand`);
+  }
+  if (ch.fsm || ch.check.kind === 'table') {
+    const f = docs.find((c) => c.fsm);
+    if (f) out.push(`${f.name} is drawn from a state machine: this challenge is building it by hand`);
+  }
+  return out;
+}
+
 /** Parts the restriction forbids, anywhere in the hierarchy (each kind reported once). */
 function violations(def: ComponentDef, allowed: Allowed): string[] {
   if (allowed === 'any') return [];

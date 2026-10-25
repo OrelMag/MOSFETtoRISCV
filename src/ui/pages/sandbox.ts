@@ -10,6 +10,11 @@ import '../../styles/editor.css';
 import '../../styles/sbchips.css';
 import { Editor } from '../../editor/editor';
 import { SHARE_SEG, shareRoute } from '../../editor/files';
+import { FSM_TEMPLATE, newFsmChip } from '../../editor/fsmchip';
+import type { Workspace } from '../../editor/model';
+import { newTableChip } from '../../editor/ttable';
+
+const NEW_SEG = 'new';
 import { installChallenges } from '../../editor/challengeui';
 import { installFiles, type FilesUi } from '../../editor/fileui';
 import { installProjects } from '../../editor/projectui';
@@ -29,10 +34,21 @@ export class SandboxPage implements Page {
   private files!: FilesUi;
 
   constructor(chipId?: string) {
-    const share = chipId === SHARE_SEG;
-    this.editor = this.build(share ? undefined : chipId, this.projectFor(chipId));
+    const share = chipId === SHARE_SEG, made = chipId === NEW_SEG;
+    this.editor = this.build(share || made ? undefined : chipId, this.projectFor(chipId));
     this.el = this.editor.el;
     if (share) this.files.openShare(shareRoute(location.hash));
+    if (made) this.makeNew();
+  }
+
+  /** #/sandbox/new/<kind> (a chapter's link): a new chip of that kind, opened, the address then its own. */
+  private makeNew(): void {
+    const kind = location.hash.split('/')[3];
+    const make = kind === 'fsm' ? (ws: Workspace) => newFsmChip(ws, FSM_TEMPLATE, '101 detector') : kind === 'table' ? (ws: Workspace) => newTableChip(ws) : null;
+    if (!make) return void history.replaceState(null, '', '#/sandbox');
+    let id = '';
+    this.editor.editWs((ws) => { const r = make(ws); id = r.id; return r.ws; });
+    history.replaceState(null, '', id ? `#/sandbox/${id}` : '#/sandbox');
   }
 
   /** The project to open a chip in: the first one for a level's chip, else the current one. */
@@ -65,6 +81,7 @@ export class SandboxPage implements Page {
   /** The hash changed to another chip (#/sandbox/<id>) or to a share link. */
   open(chipId?: string): void {
     if (chipId === SHARE_SEG) return this.files.openShare(shareRoute(location.hash));
+    if (chipId === NEW_SEG) return this.makeNew();
     if (isLevelChip(chipId) && this.editor.project !== MAIN_PROJECT) return this.switchTo(MAIN_PROJECT, chipId);
     if (chipId && chipId !== this.editor.chipId) this.editor.openChip(chipId);
   }

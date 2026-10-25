@@ -9,9 +9,10 @@ import type { TableDoc } from './model';
 import { pinBig } from './model';
 import {
   addInput, addOutput, type Cell, detachTable, equation, inBit, newTableChip, nextCell, removeInput, removeOutput, renamePin, rowCount, setCell,
-  setTable, TABLE_MAX_IN, TABLE_MAX_OUT, tableCost, tableDef, tableLogic, type TableLogic, termCovers, termText,
+  pasteRows, fillOutput, setTable, TABLE_MAX_IN, TABLE_MAX_OUT, tableBuild, tableCost, tableLogic, type TableLogic, termCovers, termText,
 } from './ttable';
 import { ownerOf } from './fsmchip';
+import { evalBool, parseBool } from '../lib/boolexpr';
 
 const HIDDEN_KEY = 'mosfet2riscv:table-hidden';
 const load = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -130,14 +131,16 @@ class TableUi {
 
   private render(id: string, t: TableDoc): void {
     const logic = tableLogic(t);
-    const def = tableDef(t, 'tt', logic);
+    const def = tableBuild(t, 'tt', logic).def;
     const cost = tableCost(t, logic, def);
     const live = this.liveRow(t);
     const sel = Math.min(this.mapOut.get(id) ?? 0, t.outs.length - 1);
     const n = t.ins.length;
 
     const form = h('div', { class: 'hdl-seg tt-form', role: 'radiogroup', 'aria-label': 'Built as' },
-      ([['nand', 'NAND–NAND', 'Only NAND gates and inverters: the two-level form the brick gives'], ['andor', 'AND–OR', 'AND gates into OR gates, with inverters: the textbook drawing']] as const)
+      ([['nand', 'NAND', 'NAND–NAND: only NAND gates and inverters, the two-level form the brick gives'], ['andor', 'AND–OR', 'AND gates into OR gates, with inverters: the textbook drawing'],
+        ['pla', 'PLA', 'A programmable logic array: both rails of every input, an AND plane of the terms (shared), an OR plane'],
+        ['rom', 'ROM', 'Every row stored as a word, nothing minimized (don’t cares stored as 0): what a lookup table costs']] as const)
         .map(([k, label, title]) => h('button', {
           class: t.form === k ? 'on' : '', role: 'radio', 'aria-checked': String(t.form === k), title,
           onclick: () => t.form !== k && this.apply({ ...t, form: k }),
@@ -177,13 +180,30 @@ class TableUi {
     const costLine = h('div', { class: 'tt-cost' },
       h('span', null, h('b', null, String(cost.nands)), ' NAND'),
       h('span', null, 'depth ', h('b', null, cost.depth === null ? '–' : String(cost.depth))),
-      h('span', null, h('b', null, String(cost.terms)), ` term${cost.terms === 1 ? '' : 's'}, `, h('b', null, String(cost.literals)), ' literals'),
+      t.form === 'rom' ? h('span', null, h('b', null, String(rowCount(t))), ' words stored') : h('span', null, h('b', null, String(cost.terms)), ` term${cost.terms === 1 ? '' : 's'}, `, h('b', null, String(cost.literals)), ' literals'),
       h('span', { class: cost.exact ? 'ok' : 'warn', title: cost.exact ? 'Fewest terms, then fewest literals, for every output (proved by search)' : 'The search for a proven minimum was too long: a greedy cover from the prime implicants, close to minimal' },
         cost.exact ? '✓ minimal' : '≈ near-minimal'));
 
+    const fill = h('input', { class: 'tt-expr', spellcheck: 'false', placeholder: `e.g. ${t.ins.slice(0, 2).join('·')}${t.ins[2] ? ` + ¬${t.ins[2]}` : ''}`, 'aria-label': `Fill ${t.outs[sel]} from an expression` }) as HTMLInputElement;
+    const doFill = () => {
+      const p = parseBool(fill.value, t.ins);
+      if ('error' in p) return void this.ed.toast(`${t.outs[sel]}: ${p.error}`, 'err');
+      this.apply(fillOutput(t, sel, (r) => (evalBool(p.ex, r, n) ? '1' : '0')));
+    };
+    fill.addEventListener('keydown', (e) => { if (e.key === 'Enter') doFill(); });
+    const paste = h('textarea', { class: 'tt-paste', rows: 4, spellcheck: 'false', placeholder: `${t.ins.map(() => '0').join('')} ${t.outs.map(() => '1').join('')}   (inputs, outputs)\nor just the outputs, a row a line`, 'aria-label': 'Rows to paste' }) as HTMLTextAreaElement;
+    const doPaste = () => {
+      const r = pasteRows(t, paste.value);
+      if ('error' in r) return void this.ed.toast(`Paste: ${r.error}`, 'err');
+      this.apply(r);
+    };
+    const tools = h('div', { class: 'tt-tools tt-howto' },
+      h('div', { class: 'tt-fill' }, h('code', null, `${t.outs[sel]} =`), fill, h('button', { class: 'btn sm', onclick: doFill, title: 'NOT: ¬ ~ ! or a trailing apostrophe; AND: · * & or a space; OR: + |; XOR: ^' }, 'Fill')),
+      h('details', { class: 'tt-pastebox' }, h('summary', null, 'Paste rows…'), paste, h('button', { class: 'btn sm', onclick: doPaste }, 'Apply')));
+
     this.body.replaceChildren(head, pins,
       h('div', { class: 'tt-main' }, grid,
-        h('div', { class: 'tt-side' }, h('span', { class: 'tt-lbl' }, 'Karnaugh map'), outTabs, kmap, h('span', { class: 'tt-lbl' }, 'Minimized'), eqs, costLine,
+        h('div', { class: 'tt-side' }, h('span', { class: 'tt-lbl' }, 'Karnaugh map'), outTabs, kmap, h('span', { class: 'tt-lbl' }, 'Minimized'), eqs, costLine, tools,
           h('p', { class: 'tt-note tt-howto' }, 'A click on an output cycles 0 → 1 → – (don’t care). On a cell, type 0, 1 or - (x too): the next row gets the focus.'))));
 
     if (this.focusAt) {
@@ -296,7 +316,7 @@ class TableUi {
 }
 
 registerEditorPlugin((ed) => {
-  if (ed.level) return; // campaign levels: not yet (it would solve the levels that teach minimization)
+  // also in campaign levels: Check refuses a table chip where the level is a truth table (challenges.ts builderViolations)
   const ui = new TableUi(ed);
   return () => ui.destroy();
 });

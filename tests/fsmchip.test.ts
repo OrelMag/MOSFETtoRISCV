@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
 import {
-  codesOf, detachFsm, ENCODINGS, encodingCosts, encodingProblem, FSM_TEMPLATE, fsmProblem, fsmWarnings, newFsmChip, nextTable, outTable, ownerOf, setFsm, specOf,
+  childIds, codesOf, detachFsm, ENCODINGS, encodingCosts, encodingProblem, FSM_TEMPLATE, fsmProblem, fsmWarnings, newFsmChip, nextTable, outTable, ownerOf, setFsm, specOf,
 } from '../src/editor/fsmchip';
 import { isGenerated } from '../src/editor/hdl';
+import { builderViolations, type BuildChallenge } from '../src/editor/challenges';
 import { UserLibrary } from '../src/editor/library';
 import { emptyWorkspace, type FsmDoc, type Workspace } from '../src/editor/model';
 import { sanitizeChip } from '../src/editor/store';
@@ -55,7 +56,7 @@ describe('state-machine chips (editor/fsmchip.ts)', () => {
   });
 
   it('builds the template in every encoding and form, with and without safe codes', () => {
-    for (const encoding of ENCODINGS) for (const form of ['nand', 'andor'] as const) for (const safe of [undefined, true as const]) {
+    for (const encoding of ENCODINGS) for (const form of ['nand', 'andor', 'pla', 'rom'] as const) for (const safe of [undefined, true as const]) {
       check({ ...FSM_TEMPLATE, encoding, form, ...(safe ? { safe } : {}) });
     }
   });
@@ -74,6 +75,19 @@ describe('state-machine chips (editor/fsmchip.ts)', () => {
     const wrong: FsmDoc = { ...FSM_TEMPLATE, arcs: FSM_TEMPLATE.arcs.map((a) => (a.out ? { ...a, out: undefined } : a)), outs: ['y'] };
     const r = readFsm(simulate(compileAll(ws, id)), specOf({ ...wrong, states: wrong.states.map((s, i) => (i === 1 ? { ...s, out: ['y'] } : s)) }, true));
     expect(readbackOk(r)).toBe(false);
+  });
+
+  it('arcs placed by hand survive the store and reach the diagram; the lock refuses a machine where one is asked for', () => {
+    const doc: FsmDoc = { ...FSM_TEMPLATE, arcs: FSM_TEMPLATE.arcs.map((a, i) => (i === 5 ? { ...a, bend: -40, dx: 6, dy: -3 } : i === 0 ? { ...a, loop: 180 } : a)) };
+    const { ws, id } = newFsmChip(emptyWorkspace(), doc);
+    const back = sanitizeChip(JSON.parse(JSON.stringify(ws.chips[id])))!.fsm!;
+    expect(back.arcs[5]).toMatchObject({ bend: -40, dx: 6, dy: -3 });
+    expect(back.arcs[0].loop).toBe(180);
+    const spec = specOf(back);
+    expect(spec.arcs[5]).toMatchObject({ bend: -40, dx: 6, dy: -3 });
+    expect(spec.arcs[0].loop).toBe(180);
+    const fsmLevel = { fsm: 'rv16_det101', check: { kind: 'sequence', steps: [] } } as unknown as BuildChallenge;
+    expect(builderViolations(ws, [id, ...childIds(id) ? [childIds(id).next, childIds(id).out] : []], fsmLevel).length).toBe(1);
   });
 
   it('codes: the reset state is zero (bit 0 one-hot)', () => {

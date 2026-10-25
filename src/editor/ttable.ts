@@ -5,6 +5,7 @@
 // change to the body itself (isGenerated, as for a Verilog chip), and Detach keeps the drawing as an ordinary chip.
 
 import { Builder } from '../lib/builder';
+import { merger, ones, splitter } from '../lib/define';
 import { andN } from '../lib/combinational';
 import { AND, NOT, OR } from '../lib/gates';
 import { NAND3 } from '../lib/seqparts';
@@ -14,7 +15,8 @@ import { orN } from '../lib/wide';
 import { logicDepth, stats } from '../sim/stats';
 import type { ComponentDef } from '../sim/types';
 import { docFromDef } from './fromdef';
-import { type ChipDoc, emptyChip, isIdent, type TableDoc, uniqueName, type Workspace } from './model';
+import { type ChipDoc, emptyChip, isIdent, type PartRef, type TableDoc, uniqueName, type Workspace } from './model';
+import { isError, partDef } from './parts';
 import { openChip } from './session';
 
 export const TABLE_MAX_IN = 8;
@@ -100,7 +102,7 @@ export function tableDef(t: TableDoc, id = 'tt', logic = tableLogic(t)): Compone
   const n = t.ins.length;
   const b = new Builder(8, 10, 2);
   b.pins(...t.ins);
-  const nand = t.form === 'nand';
+  const nand = t.form === 'nand', pla = t.form === 'pla';
   // Inputs whose complement a term reads (NAND–NAND also reads the complement of a one-literal term: its NOT).
   const needNeg = new Set<number>();
   const litsOf = (p: Term) => t.ins.flatMap((_, i) => (p.mask & (1 << (n - 1 - i)) ? [] : [{ i, pos: !!(p.val & (1 << (n - 1 - i))) }]));
@@ -114,6 +116,8 @@ export function tableDef(t: TableDoc, id = 'tt', logic = tableLogic(t)): Compone
     }
   }
   const neg = new Map<number, string>();
+  // a PLA brings both rails of every input across its AND plane, used or not
+  if (pla) for (let i = 0; i < n; i++) needNeg.add(i);
   for (let i = 0; i < n; i++) if (needNeg.has(i)) neg.set(i, b.name(b.op1(NOT, [t.ins[i]], `¬${t.ins[i]}`), `${t.ins[i]}_n`, true));
   b.next();
   const rail = (i: number, pos: boolean) => (pos ? t.ins[i] : neg.get(i)!);
@@ -179,9 +183,49 @@ function chunks<T>(xs: T[], k: number): T[][] {
   return out;
 }
 
+/** The ROM part a table is stored in: 2^n words of 8 bits, output j in bit j (don't cares 0). */
+export function tableRomRef(t: TableDoc): Extract<PartRef, { rom: unknown }> {
+  const words = Array.from({ length: rowCount(t) }, (_, r) => t.rows.reduce((w, s, j) => w | (s[r] === '1' ? 1 << j : 0), 0));
+  return { rom: { k: t.ins.length, w: 8, addr: 'word', lang: 'hex', src: words.map((w) => w.toString(16)).join('\n') } };
+}
+
+/** The ROM form: the inputs merged into the address (the first input most significant), the word split into the outputs. */
+function romTableDef(t: TableDoc, id: string): { def: ComponentDef; rom: ComponentDef; ref: PartRef } {
+  const n = t.ins.length, ref = tableRomRef(t);
+  const rom = partDef(ref, () => undefined);
+  if (isError(rom)) throw new Error(rom.error);
+  const b = new Builder(8, 10, 2);
+  b.pins(...t.ins);
+  const addr = b.op1(merger(ones(n)), [...t.ins].reverse(), 'address');
+  b.next();
+  const data = b.op1(rom, [addr], 'every row stored', 'rom');
+  b.next();
+  const sp = b.op(splitter(ones(8)), [data], 'bits');
+  b.next();
+  t.outs.forEach((o, j) => b.wire(`${sp}.o${j}`, o));
+  const R = Math.max(b.right, 30), pitch = 4;
+  const def: ComponentDef = {
+    id, name: 'Truth table (ROM)', category: 'memory', summary: 'A truth table stored as a ROM: every row a word.',
+    ports: [...t.ins.map((p) => ({ name: p, width: 1, dir: 'in' as const })), ...t.outs.map((p) => ({ name: p, width: 1, dir: 'out' as const }))],
+    symbol: { kind: 'box', label: 'ROM' },
+    netlist: () => ({
+      pins: Object.fromEntries([...t.ins.map((p, i) => [p, [0, 2 + pitch * i]]), ...t.outs.map((p, j) => [p, [R, 2 + pitch * j]])]),
+      instances: b.instances, nets: b.nets(),
+    }),
+  };
+  return { def, rom, ref };
+}
+
+/** The table's circuit in its form, and how docFromDef places a part it cannot name by id (the ROM). */
+export function tableBuild(t: TableDoc, id = 'tt', logic?: TableLogic): { def: ComponentDef; refOf?: (d: ComponentDef) => PartRef | undefined } {
+  if (t.form !== 'rom') return { def: tableDef(t, id, logic) };
+  const r = romTableDef(t, id);
+  return { def: r.def, refOf: (d) => (d === r.rom ? r.ref : undefined) };
+}
+
 export interface TableCost { nands: number; depth: number | null; terms: number; literals: number; exact: boolean }
 
-export function tableCost(t: TableDoc, logic = tableLogic(t), def = tableDef(t, 'tt', logic)): TableCost {
+export function tableCost(t: TableDoc, logic = tableLogic(t), def = tableBuild(t, 'tt', logic).def): TableCost {
   return {
     nands: stats(def).nands, depth: logicDepth(def), terms: logic.terms.length,
     literals: logic.terms.reduce((a, p) => a + literals(p, t.ins.length), 0), exact: logic.exact,
@@ -209,7 +253,8 @@ export function tableProblem(t: TableDoc): string | null {
 export function drawTable(chip: ChipDoc, table: TableDoc): ChipDoc | { error: string } {
   const why = tableProblem(table);
   if (why) return { error: why };
-  const doc = docFromDef(tableDef(table, `tt_${chip.id}`), { id: chip.id, name: chip.name });
+  const b = tableBuild(table, `tt_${chip.id}`);
+  const doc = docFromDef(b.def, { id: chip.id, name: chip.name, refOf: b.refOf });
   if ('error' in doc) return doc;
   const old = new Map(chip.pins.map((p) => [p.name, p]));
   const pins = doc.pins.map((p) => {
@@ -289,6 +334,40 @@ export const nextCell = (c: string): Cell => (c === '0' ? '1' : c === '1' ? '-' 
 /** Output j filled from a function of the row (a starting point: "fill from an expression"). */
 export function fillOutput(t: TableDoc, j: number, f: (r: number) => Cell): TableDoc {
   return { ...t, rows: t.rows.map((x, k) => (k === j ? Array.from({ length: rowCount(t) }, (_, r) => f(r)).join('') : x)) };
+}
+
+/**
+ * Rows pasted as text: a line is the inputs then the outputs (n + m symbols), or just the outputs (m symbols: the next
+ * row in order); 0 1 - x are the symbols, spaces, | , and tabs are ignored, a line with other letters (a header) or after
+ * # or // is skipped. Rows the text leaves out keep their values.
+ */
+export function pasteRows(t: TableDoc, text: string): TableDoc | { error: string } {
+  const n = t.ins.length, m = t.outs.length;
+  const rows = t.rows.map((s) => [...s]);
+  let next = 0, used = 0;
+  const lines = text.split(/\r?\n/);
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li].replace(/(#|\/\/).*$/, '').trim();
+    if (!line) continue;
+    if (/[A-WYZa-wyz_]/.test(line)) continue; // a header
+    const sym = line.replace(/[\s|,;:=]/g, '').replace(/[xX]/g, '-');
+    if (/[^01-]/.test(sym)) return { error: `line ${li + 1}: only 0, 1 and - (or x)` };
+    let r: number, outs: string;
+    if (sym.length === n + m) {
+      if (sym.slice(0, n).includes('-')) return { error: `line ${li + 1}: an input cannot be a don't care` };
+      r = parseInt(sym.slice(0, n), 2);
+      outs = sym.slice(n);
+    } else if (sym.length === m) {
+      r = next;
+      outs = sym;
+    } else return { error: `line ${li + 1}: ${sym.length} symbols, expected ${n + m} (inputs and outputs) or ${m} (outputs)` };
+    if (r >= rowCount(t)) return { error: `line ${li + 1}: past the last row` };
+    for (let j = 0; j < m; j++) rows[j][r] = outs[j];
+    next = r + 1;
+    used++;
+  }
+  if (!used) return { error: 'no rows in the text' };
+  return { ...t, rows: rows.map((s) => s.join('')) };
 }
 
 /** Is row r covered by term p (for the K-map's loops)? */

@@ -60,8 +60,11 @@ export interface TableDoc {
   outs: string[];
   /** Per output, 2^ins.length characters. */
   rows: string[];
-  /** NAND–NAND (NANDs and inverters only) or AND–OR (AND, OR, NOT gates). */
-  form: 'nand' | 'andor';
+  /**
+   * NAND–NAND (NANDs and inverters only), AND–OR (AND, OR, NOT gates), PLA (both rails of every input, an AND plane
+   * of the shared terms, an OR plane) or ROM (every row stored, don't cares as 0: nothing minimized).
+   */
+  form: 'nand' | 'andor' | 'pla' | 'rom';
   /** Drawn for this state-machine chip (fsmchip.ts): its table follows the machine, edited only there. */
   of?: string;
 }
@@ -80,7 +83,8 @@ export interface FsmDoc {
   /** Index of the reset (and power-on) state. */
   reset: number;
   encoding: 'binary' | 'gray' | 'onehot';
-  form: 'nand' | 'andor';
+  /** How its two tables are built (TableDoc.form): a ROM next-state function is a microprogrammed controller. */
+  form: TableDoc['form'];
   /** Codes no state has go to the reset state (else don't cares: cheapest). */
   safe?: true;
 }
@@ -94,6 +98,11 @@ export interface FsmArcDoc {
   when: Record<string, 0 | 1>;
   /** Mealy outputs at 1 while this arc is the one the next edge takes. */
   out?: string[];
+  /** Drawn by hand: the curve's bend (a self-loop's angle in degrees), the label's offset. Absent: placed automatically. */
+  bend?: number;
+  loop?: number;
+  dx?: number;
+  dy?: number;
 }
 
 export interface FolderDoc {

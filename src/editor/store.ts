@@ -16,7 +16,7 @@ import { sanitizeReaderRef } from './cardparts';
 import { FACE_MAX, isEmptyFace, SCALE_MAX, SCALE_MIN, SIDES } from './face';
 import { PUZZLE_MAX_WIDTH } from './puzzleparts';
 import {
-  type FsmDoc, SCHEMA, chipDeps, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
+  type FsmDoc, type TableDoc, SCHEMA, chipDeps, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
   type ChipDoc, type CommentDoc, type FaceDisplayDoc, type FaceDoc, type FacePinDoc, type FaceSide, type DisplayKind, type EndRef, type ExitDir, type FolderDoc, type LabelDoc, type NetHue, type PartDoc, type PartRef,
   type PinDoc, type PinValue, type Vec, type WireDoc, type Workspace,
 } from './model';
@@ -153,7 +153,7 @@ function sanitizeTable(x: unknown): ChipDoc['table'] {
   const ins = x.ins as string[], outs = x.outs as string[];
   if (ins.length < 1 || ins.length > 8 || outs.length < 1 || outs.length > 8 || x.rows.length !== outs.length) return undefined;
   if (!x.rows.every((r) => str(r) && r.length === 1 << ins.length && !/[^01-]/.test(r))) return undefined;
-  return compact({ ins: [...ins], outs: [...outs], rows: [...(x.rows as string[])], form: x.form === 'andor' ? 'andor' as const : 'nand' as const, of: str(x.of) && isIdent(x.of) ? x.of : undefined });
+  return compact({ ins: [...ins], outs: [...outs], rows: [...(x.rows as string[])], form: (x.form === 'andor' || x.form === 'pla' || x.form === 'rom' ? x.form : 'nand') as TableDoc['form'], of: str(x.of) && isIdent(x.of) ? x.of : undefined });
 }
 
 /** A state-machine chip's machine (fsmchip.ts): names as pins, states with positions, arcs between them. */
@@ -174,11 +174,12 @@ function sanitizeFsm(x: unknown): ChipDoc['fsm'] {
     const when: Record<string, 0 | 1> = {};
     for (const [k, v] of Object.entries(a.when)) if (ins.includes(k) && (v === 0 || v === 1)) when[k] = v;
     const out = Array.isArray(a.out) ? a.out.filter((o): o is string => str(o) && outs.includes(o)) : [];
-    arcs.push(compact({ from: a.from, to: a.to, when, out: out.length ? out : undefined }));
+    const fin = (v: unknown, lim: number) => (num(v) && Math.abs(v) <= lim ? Math.round(v) : undefined);
+    arcs.push(compact({ from: a.from, to: a.to, when, out: out.length ? out : undefined, bend: fin(a.bend, 400), loop: fin(a.loop, 360), dx: fin(a.dx, 400), dy: fin(a.dy, 400) }));
   }
   const reset = int(x.reset, 0) && x.reset < states.length ? x.reset : 0;
   const encoding: FsmDoc['encoding'] = x.encoding === 'gray' || x.encoding === 'onehot' ? x.encoding : 'binary';
-  return compact({ ins, outs, states, arcs, reset, encoding, form: x.form === 'andor' ? 'andor' as const : 'nand' as const, safe: x.safe === true ? true as const : undefined });
+  return compact({ ins, outs, states, arcs, reset, encoding, form: (x.form === 'andor' || x.form === 'pla' || x.form === 'rom' ? x.form : 'nand') as TableDoc['form'], safe: x.safe === true ? true as const : undefined });
 }
 
 function sanitizePart(p: unknown): PartDoc | null {

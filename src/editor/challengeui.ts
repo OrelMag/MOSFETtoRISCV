@@ -26,7 +26,7 @@ import { h, icon } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { CHALLENGES } from './challengeset';
 import {
-  type Allowed, type BuildChallenge, challengeChipId, challengeOf, type CheckResult, checkChallenge, importAnswer, LEVELS, libAllowed, type LibRule, type Limits,
+  type Allowed, type BuildChallenge, challengeChipId, challengeOf, type CheckResult, builderViolations, checkChallenge, importAnswer, LEVELS, libAllowed, type LibRule, type Limits,
   ruleKind, scoreUnit, solveChallenge, solvedKey, startChallenge,
 } from './challenges';
 import { dockPane, paneShown, showPane, undockPane } from './dock';
@@ -426,6 +426,9 @@ class ChallengeUi {
     // so a new result never opens over an old replay.
     this.closePlayer();
     const r = checkChallenge(ch, ed.compiled);
+    // the truth-table and state-machine builders would hand in the answer here (challenges.ts builderViolations)
+    const locked = builderViolations(ed.ws, [ed.chipId, ...ed.lib.deps(ed.chipId)], ch);
+    if (locked.length) { r.restrictionViolations.push(...locked); r.ok = false; }
     this.results.set(ed.chipId, { r, conn: ed.compiled?.connKey ?? '' });
     this.version++;
     this.collapsed = false;
