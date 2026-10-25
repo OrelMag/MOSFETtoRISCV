@@ -116,32 +116,78 @@ it reads; SW writes rs2 to memory and nothing to a register; branches compare rs
 the PC with PC + imm; JAL writes PC + 1 and jumps. The control unit is the table of those settings.</p>`,
 
   pipe: `
-<p>A single-cycle CPU's clock period must fit the slowest instruction end to end. Cut the datapath
-into five <b>stages</b> (fetch, decode, execute, memory, write back) with <b>pipeline registers</b>
-between them, and each clock period only has to fit the slowest stage: up to five times faster,
+<p>A single-cycle CPU's clock period must fit the slowest instruction end to end: a load, through
+the instruction ROM, decode and the register file, the ALU, the data RAM and back to the register file.
+That is 98 delays on Core III and 76 on Core IV, and while a load crosses the data RAM the decoder and
+the ALU sit idle. Cut the datapath into five <b>stages</b> (fetch, decode, execute, memory, write back)
+with <b>pipeline registers</b> between them, and each clock period only has to fit the slowest stage,
 with five instructions in flight.</p>
-<p>The price is <b>hazards</b>. A <b>data hazard</b>: an instruction needs a register its predecessor
-has not written back yet. <b>Forwarding</b> takes the value from the E/M or M/W register instead.
-A load's value only exists after M, so a dependent instruction right behind it must <b>stall</b> one
-cycle. A <b>control hazard</b>: by the time a branch is resolved in E, two younger instructions were
-fetched from the wrong path: <b>flush</b> them. CPI rises above 1, and the shorter period has to pay for it.</p>
-<p>In RV16 it pays only once E is short too. E holds the forwarding muxes and then the ALU, the branch
+<p>"Up to five times faster" needs five equal stages, and RV16's are not. E holds the whole ALU: in
+Pipeline I it is the slowest stage by far, 65 delays, most of them the ripple ALU, so the period falls
+from 98 to 65, not to a fifth of it. The registers are not free either: 260 NANDs each, twelve in
+Pipeline I (3 120 NANDs), sixteen in the finished chip (4 160, a third of it).</p>
+<h4>The hazards, one level each</h4>
+<p>Five instructions in flight see each other's unfinished work. This act pays for that one hazard at
+a time, and every level runs real programs against the golden model:</p>
+<ul>
+  <li><b>Pipeline I</b> handles none: its programs keep every producer two instructions from its user and
+  never branch. The register file writes at the falling edge, so an instruction three behind its producer
+  already reads the new value. Two nops after every instruction: 2 508 cycles on 19 programs.</li>
+  <li><b>Data hazards</b>: a result exists at the end of E but reaches the register file from W, two
+  cycles later. <b>Forwarding</b> (Pipeline II) takes it from M or W: the unit is 110 NANDs, but its
+  13 delays land on E (period 65 → 78), and the nops go: 970 cycles.</li>
+  <li>A load's word exists only after M, so its very next user must <b>stall</b> one cycle
+  (Pipeline III: a 53-NAND hazard unit, 917 cycles). The stall is paid only when the next instruction
+  reads the loaded register; a nop after every load was paid always.</li>
+  <li><b>Control hazards</b>: a branch resolves in E, after two younger words were fetched on the guess
+  "not taken". They are <b>flushed</b> when it is taken (Pipeline IV), so every taken branch or jump
+  costs two cycles: 1 495 cycles on Core III's 28 programs against its 1 236.</li>
+</ul>
+<h4>The bill</h4>
+<p>CPI rises above 1, and the shorter period has to pay for it. In RV16 it pays only once E is short too. E holds the forwarding muxes and then the ALU, the branch
 comparator and next PC side by side: with ripple adders that is 78 delays, and the pipeline is 4% faster
 than Core III but slower than Core IV. With Kogge–Stone adders in E (the ALU, the comparator's less-than,
-next PC) its period falls to 56, and it beats Core IV by 11%, for 10 102 NANDs against 4 938.</p>`,
+next PC) its period falls to 56, and it beats Core IV by 11%, for 10 102 NANDs against 4 938.
+Branch prediction, the act's optional level, attacks the cycles instead: 13% fewer on its loop
+programs, at period 80, still slower than Core IV on its own. Real pipelines do both, and resolve
+branches earlier.</p>
+<h4>This act</h4>
+<p>The pipeline register first (hold and clear), then Pipeline I; then each hazard as a unit and the
+core that wires it in: forwarding and Pipeline II, the hazard unit and Pipeline III, then the flush,
+Pipeline IV. Act 7 builds on Pipeline IV: precise traps, then interrupts. The multicycle core, before this
+lesson on the map, is the older answer to the same long path, and shows why this one replaced it.</p>`,
 
   traps: `
-<p>Programs make mistakes (an illegal instruction), ask for help (<code>ecall</code>), and the world
-interrupts them (a device raises a line). In each case the CPU must stop what it is doing <b>between two
-instructions</b>, remember where it was, and run a <b>handler</b>.</p>
-<p>The trap machinery is a handful of <b>CSRs</b>: <code>mtvec</code> (the handler's address),
-<code>mepc</code> (where to come back), <code>mcause</code> (why; bit 15 = interrupt),
-<code>mstatus</code> (MIE: interrupts enabled; MPIE: its saved copy) and <code>mie</code> / <code>mip</code>
-(which interrupts are enabled / pending). A trap does, atomically: mepc ← pc, mcause ← cause,
-MPIE ← MIE, MIE ← 0, pc ← mtvec. <code>mret</code> undoes it: pc ← mepc, MIE ← MPIE.</p>
-<p>An exception's mepc is the faulting instruction (the handler adds 1 to skip it); an interrupt's
-is the next instruction to run. In a pipeline, traps must be <b>precise</b>: everything older
-completes, nothing younger leaves a trace.</p>`,
+<p>Core III runs any correct program. A real processor also meets three events it cannot handle
+inline: a word that is no instruction (today it executes as whatever its bits select), a request to the
+system (<code>ecall</code>), and a device that needs service now, which polling either catches late or
+wastes cycles waiting for. In each case the CPU stops <b>between two instructions</b>, remembers where it
+was and why, and runs a <b>handler</b>.</p>
+<h4>The state: CSRs</h4>
+<p>The trap machinery keeps its state in <b>CSRs</b>, apart from the eight registers the program owns:
+<code>mtvec</code> (the handler's address), <code>mepc</code> (where to come back), <code>mcause</code>
+(why: 2 an illegal instruction, 3 <code>ebreak</code>, 11 <code>ecall</code>, 0x800B the external
+interrupt; bit 15 marks an interrupt), <code>mstatus</code> (MIE: interrupts on; MPIE: its saved copy)
+and <code>mie</code> / <code>mip</code> (which interrupts are enabled / pending).</p>
+<p>A trap does, on one edge: mepc ← pc, mcause ← cause, MPIE ← MIE, MIE ← 0 (so the handler is not
+interrupted in turn), pc ← mtvec. <code>mret</code> undoes it: pc ← mepc, MIE ← MPIE.</p>
+<h4>The protocol</h4>
+<ul>
+  <li>An exception's mepc is the faulting instruction, so an <code>ecall</code> handler adds 1 before
+  returning (RV16 is word-addressed). An interrupt's mepc is the instruction that has not run yet, and the
+  handler returns there unchanged.</li>
+  <li>Software enables in order: mtvec, then mie, then MIE last, so no interrupt arrives before the handler
+  exists.</li>
+  <li>The handler acknowledges the device before <code>mret</code>, or the line is still high when MIE
+  comes back on and the same interrupt is taken again at once. It saves every register it touches: main
+  never knew it was there.</li>
+</ul>
+<h4>This act</h4>
+<p>It builds the machinery twice. First on the single-cycle core: the CSR file (1 765 NANDs), exceptions
+(2 537 over Core III) and the interrupt (0 more NANDs: what that level adds is the protocol above). Then in
+the pipeline, where a trap must be <b>precise</b>: every older instruction completes and no younger one
+leaves a trace. Pipeline V takes exceptions precisely (2 813 over Pipeline IV); the finale adds the
+interrupt for 7 more, 12 038 NANDs in all. The interrupt handler, a program, is written in between.</p>`,
 
   arith: `
 <p>Act 4 multiplied in software: a shift-and-add loop of 28 to 134 instructions per product. This act
@@ -152,13 +198,24 @@ NANDs and its depth or period, and on the core levels the cycles your programs t
 18 cycles a product on 1 169 NANDs. The <b>array multiplier</b> forms every partial product at once:
 16 × 16 is 2 672 NANDs and 150 delays deep, a product in one pass. Put the array in your single-cycle
 core and every instruction pays for it: the period goes from 98 to 191, so a program without a single
-multiply runs 1.95 times slower. A <b>divider</b> is iterative however you build it, so the core must
-hold its PC until the quotient is ready: its first instruction that takes more than one cycle.</p>
+multiply runs 1.95 times slower. A <b>divider</b> in one pass is 4 464 NANDs on a 613-deep path, so it
+iterates (1 445 NANDs, 18 cycles), and the core must hold its PC until the quotient is ready: its first
+instruction that takes more than one cycle.</p>
 <h4>Floating point</h4>
 <p>Binary16 by hand first, then its units one rung each: unpack, the rounding decision, the sticky
 shifter, the leading-zero counter, and normalize &amp; round (2 058 NANDs), which every operation ends
 in. On those the adder is 3 732 NANDs and the multiplier 4 912. They stay units of their own: RV16 has
-no F registers and no FP instructions, so no core here runs them.</p>`,
+no F registers and no FP instructions, so no core here runs them. The chapters' RV32 FPU is where such
+units meet a register file.</p>
+<h4>Two tracks</h4>
+<ul>
+  <li><b>Multiply and divide</b>, into the core: shift-and-add or the array multiplier (either first), then
+  Multiply in the core (on the array), the divider, Divide in the core. The core levels are graded on your
+  core's NANDs, period and cycles, so the trade shows where it lands.</li>
+  <li><b>Floating point</b>, units only: the binary16 drill, then unpack, the rounding decision, the sticky
+  shifter and the leading-zero counter in any order; normalize &amp; round from the last three; then the
+  adder, the multiplier, the comparator and int → float. Each block, once built, is a part of the next.</li>
+</ul>`,
 
   gpu: `
 <p>Your core is built for <b>latency</b>: one program, each instruction done as soon as
