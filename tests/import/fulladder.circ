@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project source="3.8.0" version="1.0">
+  This file is intended to be loaded by Logisim-evolution v3.8.0(https://github.com/logisim-evolution/).
+
+  <lib desc="#Wiring" name="0"/>
+  <lib desc="#Gates" name="1"/>
+  <lib desc="#Plexers" name="2"/>
+  <lib desc="#Arithmetic" name="3"/>
+  <lib desc="#Memory" name="4"/>
+  <lib desc="#I/O" name="5"/>
+  <lib desc="#Base" name="8"/>
+  <main name="full_adder"/>
+  <options>
+    <a name="gateUndefined" val="ignore"/>
+  </options>
+  <circuit name="full_adder">
+    <a name="appearance" val="logisim_evolution"/>
+    <a name="circuit" val="full_adder"/>
+    <a name="circuitnamedboxfixedsize" val="true"/>
+    <comp lib="0" loc="(100,200)" name="Pin">
+      <a name="label" val="A"/>
+    </comp>
+    <comp lib="0" loc="(100,220)" name="Pin">
+      <a name="label" val="B"/>
+    </comp>
+    <comp lib="0" loc="(100,300)" name="Pin">
+      <a name="label" val="Cin"/>
+    </comp>
+    <comp lib="0" loc="(850,280)" name="Pin">
+      <a name="facing" val="west"/>
+      <a name="label" val="Sum"/>
+      <a name="type" val="output"/>
+    </comp>
+    <comp lib="0" loc="(850,250)" name="Pin">
+      <a name="facing" val="west"/>
+      <a name="label" val="Cout"/>
+      <a name="type" val="output"/>
+    </comp>
+    <comp loc="(400,200)" name="half_adder">
+      <a name="label" val="ha1"/>
+    </comp>
+    <comp loc="(700,280)" name="half_adder">
+      <a name="label" val="ha2"/>
+    </comp>
+    <comp lib="1" loc="(800,250)" name="OR Gate"/>
+    <wire from="(100,200)" to="(180,200)"/>
+    <wire from="(100,220)" to="(180,220)"/>
+    <wire from="(100,300)" to="(480,300)"/>
+    <wire from="(400,200)" to="(460,200)"/>
+    <wire from="(460,200)" to="(460,280)"/>
+    <wire from="(460,280)" to="(480,280)"/>
+    <wire from="(400,220)" to="(450,220)"/>
+    <wire from="(450,220)" to="(450,230)"/>
+    <wire from="(450,230)" to="(750,230)"/>
+    <wire from="(700,300)" to="(720,300)"/>
+    <wire from="(720,300)" to="(720,270)"/>
+    <wire from="(720,270)" to="(750,270)"/>
+    <wire from="(800,250)" to="(850,250)"/>
+    <wire from="(700,280)" to="(850,280)"/>
+  </circuit>
+  <circuit name="half_adder">
+    <a name="appearance" val="logisim_evolution"/>
+    <a name="circuit" val="half_adder"/>
+    <a name="circuitnamedboxfixedsize" val="true"/>
+    <comp lib="0" loc="(100,170)" name="Pin">
+      <a name="label" val="A"/>
+    </comp>
+    <comp lib="0" loc="(100,210)" name="Pin">
+      <a name="label" val="B"/>
+    </comp>
+    <comp lib="0" loc="(330,190)" name="Pin">
+      <a name="facing" val="west"/>
+      <a name="label" val="S"/>
+      <a name="type" val="output"/>
+    </comp>
+    <comp lib="0" loc="(330,260)" name="Pin">
+      <a name="facing" val="west"/>
+      <a name="label" val="C"/>
+      <a name="type" val="output"/>
+    </comp>
+    <comp lib="1" loc="(250,190)" name="XOR Gate"/>
+    <comp lib="1" loc="(250,260)" name="AND Gate"/>
+    <wire from="(100,170)" to="(150,170)"/>
+    <wire from="(150,170)" to="(190,170)"/>
+    <wire from="(150,170)" to="(150,240)"/>
+    <wire from="(150,240)" to="(200,240)"/>
+    <wire from="(100,210)" to="(130,210)"/>
+    <wire from="(130,210)" to="(190,210)"/>
+    <wire from="(130,210)" to="(130,280)"/>
+    <wire from="(130,280)" to="(200,280)"/>
+    <wire from="(250,190)" to="(330,190)"/>
+    <wire from="(250,260)" to="(330,260)"/>
+  </circuit>
+</project>
