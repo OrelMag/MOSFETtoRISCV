@@ -1,7 +1,7 @@
 name: Spike oracle
 
-# Our golden model (src/riscv/iss.ts) against Spike, the RISC-V reference simulator, on random programs, commit
-# by commit: pc, word, register and f-register writes, stores, load addresses, CSR writes, traps
+# Our golden models (src/riscv/iss.ts; iss64.ts for RV64, config rv64im) against Spike, the RISC-V reference
+# simulator, on random programs, commit by commit: pc, word, register and f-register writes, stores, load addresses, CSR writes, traps
 # (tests/verify/spike.ts, docs/VERIFICATION.md). On every push that touches the ISA code, seeds 1..1000 per ISA
 # variant; each night a new range of 4000. Failures (program, ELF, Spike's log, the first difference) are kept
 # as an artifact. Spike is built once at a pinned revision and cached.
@@ -11,6 +11,7 @@ on:
       - 'src/riscv/**'
       - 'src/sim/fpref.ts'
       - 'tests/verify/spike.ts'
+      - 'tests/verify/spike64.ts'
       - 'tests/verify/elf.ts'
       - 'scripts/spike-oracle.ts'
       - '.github/workflows/spike.yml'

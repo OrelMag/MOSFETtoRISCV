@@ -1,7 +1,7 @@
 // Our golden model against Spike on random programs, commit by commit (tests/verify/spike.ts, docs/VERIFICATION.md).
 //   npx vite-node scripts/spike-oracle.ts [config ids…] [--seeds <from>..<to>] [--n <units>] [--spike <path>]
 //     [--jobs <n>] [--out <dir>] [--self]
-// Configs: i im if user sys sys-m (default all). --out keeps each failure's program, ELF and Spike log, and a
+// Configs: i im if user sys sys-m imc, and rv64im (ISS64: tests/verify/spike64.ts) (default all). --out keeps each failure's program, ELF and Spike log, and a
 // summary.json, for a CI artifact. --self compares the ISS with a Spike-format log of itself (no Spike needed:
 // the plumbing alone). Exits 1 on a difference.
 import { execFile } from 'node:child_process';
@@ -9,7 +9,22 @@ import { cpus } from 'node:os';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { compareWithSpike, issAsSpikeLog, ORACLE_CONFIGS, oracleCase, parseSpikeLog, spikeArgs, type OracleCase, type OracleResult } from '../tests/verify/spike';
+import { compareWithSpike, issAsSpikeLog, ORACLE_CONFIGS, oracleCase, parseSpikeLog, spikeArgs, type OracleResult } from '../tests/verify/spike';
+import { compareWithSpike64, issAsSpikeLog64, ORACLE_CONFIGS64, oracleCase64, parseSpikeLog64, spikeArgs64 } from '../tests/verify/spike64';
+
+/** One case, whichever XLEN: the program, its ELF, Spike's command line, the comparison with a log, our own log. */
+interface Case { seed: number; source: string; elf: Uint8Array; args: (elf: string, log: string) => string[]; compare: (log: string) => OracleResult; selfLog: () => string }
+interface Config { id: string; make: (seed: number, n: number) => Case }
+const ALL: Config[] = [
+  ...ORACLE_CONFIGS.map((cfg): Config => ({ id: cfg.id, make: (seed, n) => {
+    const c = oracleCase(cfg, seed, n);
+    return { seed, source: c.source, elf: c.elf, args: (e, l) => spikeArgs(cfg, e, l), compare: (log) => compareWithSpike(c, parseSpikeLog(log)), selfLog: () => issAsSpikeLog(c) };
+  } })),
+  ...ORACLE_CONFIGS64.map((cfg): Config => ({ id: cfg.id, make: (seed, n) => {
+    const c = oracleCase64(cfg, seed, n);
+    return { seed, source: c.source, elf: c.elf, args: (e, l) => spikeArgs64(cfg, e, l), compare: (log) => compareWithSpike64(c, parseSpikeLog64(log)), selfLog: () => issAsSpikeLog64(c) };
+  } })),
+];
 
 const args = process.argv.slice(2);
 const opt = (k: string) => (args.includes(k) ? args[args.indexOf(k) + 1] : undefined);
@@ -20,18 +35,18 @@ const jobs = Number(opt('--jobs') ?? cpus().length);
 const out = opt('--out');
 const self = args.includes('--self');
 const ids = args.filter((a, i) => !a.startsWith('--') && !args[i - 1]?.startsWith('--'));
-const configs = ORACLE_CONFIGS.filter((c) => !ids.length || ids.includes(c.id));
-if (ids.some((id) => !ORACLE_CONFIGS.some((c) => c.id === id))) throw new Error(`configs: ${ORACLE_CONFIGS.map((c) => c.id).join(' ')}`);
+const configs = ALL.filter((c) => !ids.length || ids.includes(c.id));
+if (ids.some((id) => !ALL.some((c) => c.id === id))) throw new Error(`configs: ${ALL.map((c) => c.id).join(' ')}`);
 
 const tmp = mkdtempSync(join(tmpdir(), 'spike-'));
 
 /** Spike's log of a case ('' and the error when Spike failed to start or crashed). */
-function runSpike(c: OracleCase): Promise<{ log: string; error?: string }> {
-  const base = join(tmp, `${c.cfg.id}-${c.seed}`), elf = `${base}.elf`, log = `${base}.log`;
+function runSpike(id: string, c: Case): Promise<{ log: string; error?: string }> {
+  const base = join(tmp, `${id}-${c.seed}`), elf = `${base}.elf`, log = `${base}.log`;
   writeFileSync(elf, c.elf);
   return new Promise((ok) => {
     // a program gone astray never writes tohost: the timeout ends it, and its log so far shows where
-    execFile(spike, spikeArgs(c.cfg, elf, log), { timeout: 20_000, maxBuffer: 1 << 26 }, (err, _so, se) => {
+    execFile(spike, c.args(elf, log), { timeout: 20_000, maxBuffer: 1 << 26 }, (err, _so, se) => {
       let text = '';
       try { text = readFileSync(log, 'utf8'); } catch { /* none written */ }
       rmSync(elf, { force: true }); rmSync(log, { force: true });
@@ -50,14 +65,14 @@ for (const cfg of configs) {
   const seeds = Array.from({ length: to - from + 1 }, (_, i) => from + i);
   let next = 0;
   const one = async (seed: number): Promise<void> => {
-    const c = oracleCase(cfg, seed, n);
+    const c = cfg.make(seed, n);
     let r: OracleResult;
     let log = '';
-    if (self) r = compareWithSpike(c, parseSpikeLog((log = issAsSpikeLog(c))));
+    if (self) r = c.compare((log = c.selfLog()));
     else {
-      const sp = await runSpike(c);
+      const sp = await runSpike(cfg.id, c);
       log = sp.log;
-      r = sp.error ? { seed, cfg: cfg.id, ok: false, steps: 0, diff: `Spike failed: ${sp.error.trim().split('\n').slice(0, 4).join(' | ')}`, allowances: 0 } : compareWithSpike(c, parseSpikeLog(log));
+      r = sp.error ? { seed, cfg: cfg.id, ok: false, steps: 0, diff: `Spike failed: ${sp.error.trim().split('\n').slice(0, 4).join(' | ')}`, allowances: 0 } : c.compare(log);
     }
     s.programs++; s.steps += r.steps; s.allowances += r.allowances;
     if (r.ok) { s.matched++; return; }

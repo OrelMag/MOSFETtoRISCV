@@ -9,7 +9,7 @@ import { image, imageFile, images, jalTarget, loadable, verdict, type Env } from
 import { cpuJobs, runLanes, runOnCpu, runOnIss } from './verify/run';
 
 /** The golden model's ISA in each environment: everything it implements. */
-const GOLDEN: Record<Env, Isa> = {
+const GOLDEN: Record<Exclude<Env, 'bare64'>, Isa> = { // bare64: ISS64, tests/verify-rv64-iss.test.ts
   bare: { sub: true, m: true, f: true },
   'bare-mp': { sub: true, mp: true },
   p: { sub: true, m: true, system: true },
