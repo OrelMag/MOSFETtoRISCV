@@ -459,7 +459,7 @@ broken, rather than given parts that read X. References: `src/lib/rv16/mem16.ts`
   0xBFFF, the interrupt line when done). Reference: sum each word as soon as it has landed, 18 words, 253 cycles
   (waiting for the interrupt first: 316; loading from flash: 442)
 
-### Act 8 — Side quests (all optional)
+### Act 8 — Arithmetic units (all optional)
 Drawn as two labelled rows (layout.ts `ACT_ROWS`: Multiply & divide · Floating point); act 9 as three (Lanes · Warps · Pixels).
 - ✅ `o_lesson`: Area or time, the act's frame (numbers pinned in tests/campaign-order.test.ts) ← c_core3
 - ✅ `o_mulseq`: shift-and-add multiplier ← a_add16, s_reg16, p_mul

@@ -39,7 +39,7 @@ export const ACTS: Act[] = [
   { num: 5, title: 'A single-cycle CPU', blurb: 'Wire your blocks into a datapath, add the control that tells them what to do, and run your own programs on your own processor.' },
   { num: 6, title: 'Pipelining', blurb: 'Five instructions in flight at once: a shorter clock period, and the hazards that come with it. Forwarding, stalls and flushes keep it correct.' },
   { num: 7, title: 'The system: traps and interrupts', blurb: 'A real processor reacts to the outside world and to its own mistakes. CSRs, exceptions and interrupts, precise even in the pipeline: the finale.' },
-  { num: 8, title: 'Side quests', blurb: 'Optional: multiply and divide, and floating point. Each trades area or cycles against your core\'s NANDs, period and cycles, and each level measures which way the trade went.' },
+  { num: 8, title: 'Arithmetic units', blurb: 'Optional: multiply and divide, and floating point. Each trades area or cycles against your core\'s NANDs, period and cycles, and each level measures which way the trade went.' },
   { num: 9, title: 'Throughput: a GPU', blurb: 'Optional, from Core III on: throughput. Lanes: one instruction stream, four datapaths, a mask and a stack. Warps: hide memory latency. Pixels: a rasterizer beside the lanes.' },
   { num: 10, title: 'Memory', blurb: 'Optional, from A computer on: what sits behind the data port. DRAM, its controller and a cache; a bus other masters share, a DMA engine, and flash to boot from.' },
 ];
