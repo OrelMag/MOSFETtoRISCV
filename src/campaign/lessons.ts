@@ -68,14 +68,26 @@ beyond 4–5 variables, <b>Quine–McCluskey</b>.</p>`,
   mem: `
 <p>You built memory from flip-flops: 13 NANDs per bit (a 9-NAND flip-flop and its 4-NAND enable
 mux), a decoder on the write port and an 8:1 bus mux per read port. Your register file is about 2 200 NANDs
-for 112 bits of state: some 20 NANDs, 80 transistors, a bit. Real memories use 6-transistor SRAM cells (caches, register files) or 1-transistor-1-capacitor DRAM cells (main
-memory), with sense amplifiers to read them. From here on, memories are given as parts: the
-instruction <b>ROM</b> (the program) and the data <b>RAM</b>.</p>`,
+for 112 bits of state: some 20 NANDs, 80 transistors, a bit. A 64-word RAM built the same way is 20 166
+NANDs, over four times the whole single-cycle core of Act 5.</p>
+<p>Real memories are <b>arrays</b>: an SRAM bit is 6 transistors (caches, register files), a DRAM bit one
+transistor and a capacitor (main memory), read through shared bit lines and sense amplifiers. Act 10
+builds both. From here on they are given parts:</p>
+<table class="cp-laws">
+  <tr><th>ROM</th><td>the program</td><td>word = rom[addr], combinational: no clock</td></tr>
+  <tr><th>RAM</th><td>the data</td><td>read combinationally; written at the rising edge when we = 1</td></tr>
+</table>
+<h4>Why two</h4>
+<p>A single-cycle core fetches an instruction and loads a data word in the same cycle, so it needs two
+ports: an instruction memory and a data memory (<b>Harvard</b>). On the core levels the bench plays both,
+answering in the same cycle and counting 8 NAND delays each in the clock period. <i>A computer</i>, at the
+end of Act 5, wires real ones to your core.</p>`,
 
   isa: `
 <p>An <b>instruction set</b> is the contract between software and hardware: what state exists,
 what each instruction does to it, and how instructions are encoded as bits. Software is written
-against it; the hardware may implement it any way it likes (single-cycle, pipelined…).</p>
+against it; the hardware may implement it any way it likes (single-cycle, pipelined…). This act
+programs RV16 on its golden model; Act 5 builds the hardware, one path per instruction class you used.</p>
 <h4>RV16 in one table</h4>
 <table class="cp-laws">
   <tr><th>State</th><td colspan="2">pc (16 bits, a word address) · x0…x7 (x0 = 0) · 64 K words of data memory</td></tr>
@@ -85,6 +97,15 @@ against it; the hardware may implement it any way it likes (single-cycle, pipeli
   <tr><th>Branches</th><td>beq bne blt bge</td><td>pc ← pc + imm6 if the condition holds</td></tr>
   <tr><th>Jumps</th><td>jal rd, imm9 · jalr rd, imm(rs1)</td><td>rd ← pc + 1, then jump</td></tr>
 </table>
+<h4>Registers by name</h4>
+<table class="cp-laws">
+  <tr><th>x0</th><td>zero</td><td>always 0; writes are dropped</td></tr>
+  <tr><th>x1</th><td>ra</td><td>return address: <code>call</code> writes it</td></tr>
+  <tr><th>x2</th><td>sp</td><td>stack pointer, counts down, kept across calls</td></tr>
+  <tr><th>x3–x5</th><td>a0–a2</td><td>arguments; a0 the result; a call may change them</td></tr>
+  <tr><th>x6–x7</th><td>t0–t1</td><td>temporaries</td></tr>
+</table>
+<p>a0 is x3, not RISC-V's x10: three-bit register fields leave room for eight registers.</p>
 <h4>Encoding: fields never move</h4>
 <table class="cp-laws">
   <tr><th>bits</th><td>15:13</td><td>12:10</td><td>9:7</td><td>6:4</td><td>3:0</td></tr>
@@ -98,22 +119,85 @@ against it; the hardware may implement it any way it likes (single-cycle, pipeli
 14 SW, 0 SYSTEM, 3 MD (multiply / divide, optional). The ALU control is just {op = OPX, f3}. Because
 rs1 and rs2 are always in the same place, the register file is read while the control unit is still
 decoding.</p>
+<h4>Ranges</h4>
+<table class="cp-laws">
+  <tr><th>imm6</th><td>−32 … 31</td><td>addi, lw / sw offsets, jalr, branch distances (words)</td></tr>
+  <tr><th>imm9</th><td>−256 … 255</td><td>jal distance (words)</td></tr>
+  <tr><th>imm10</th><td>0 … 1023</td><td>lui: the value loaded is imm10 × 64</td></tr>
+  <tr><th>shift</th><td>0 … 15</td><td>slli srli srai; sll srl sra use rs2's low four bits</td></tr>
+</table>
+<p>Farther than 32 words from a base, the address goes into a register first.</p>
+<h4>Devices: the top of data memory</h4>
+<p>Seven addresses are devices, reached from x0 with a negative offset (<code>lw a0, -4(x0)</code> reads IN):</p>
+<table class="cp-laws">
+  <tr><th>−1</th><td>0xFFFF</td><td>EXIT: a store ends the program</td></tr>
+  <tr><th>−2</th><td>0xFFFE</td><td>CONSOLE: a store prints a character</td></tr>
+  <tr><th>−3</th><td>0xFFFD</td><td>OUT: a store writes a word to the output</td></tr>
+  <tr><th>−4</th><td>0xFFFC</td><td>IN: a load takes the next input word</td></tr>
+  <tr><th>−5</th><td>0xFFFB</td><td>LEDS: a store sets the lights</td></tr>
+  <tr><th>−6</th><td>0xFFFA</td><td>SWITCHES: a load reads them</td></tr>
+  <tr><th>−7</th><td>0xFFF9</td><td>IRQ: a store of 1 raises the interrupt line, of 0 clears it (Act 7)</td></tr>
+</table>
 <h4>Assembly</h4>
-<p>One instruction per line, <code>label:</code> names an address, <code>#</code> starts a comment.
-Pseudo-instructions expand to real ones: <code>li a0, 1000</code> (lui + addi), <code>mv</code>,
-<code>j</code>, <code>call</code> / <code>ret</code>, <code>beqz</code>, <code>push</code> / <code>pop</code>,
-<code>halt</code> (<code>jal x0, 0</code>). Memory-mapped I/O sits at the top of data memory:
-<code>lw a0, -4(x0)</code> reads IN, <code>sw a0, -3(x0)</code> writes OUT, <code>-2</code> is the console.</p>`,
+<p>One instruction per line, <code>label:</code> names an address, <code>#</code> starts a comment,
+<code>.data</code> / <code>.word</code> place data. Pseudo-instructions expand to real ones:</p>
+<table class="cp-laws">
+  <tr><th>li rd, v</th><td>1 word</td><td>addi rd, x0, v if v fits imm6; lui alone for a multiple of 64</td></tr>
+  <tr><th></th><td>2 words</td><td>lui + addi otherwise; <code>la</code> always</td></tr>
+  <tr><th>push r</th><td>2 words</td><td>addi sp, sp, −1 · sw r, 0(sp)</td></tr>
+  <tr><th>pop r</th><td>2 words</td><td>lw r, 0(sp) · addi sp, sp, 1</td></tr>
+  <tr><th>call f · ret</th><td>1 word each</td><td>jal ra, f · jalr x0, 0(ra)</td></tr>
+  <tr><th>mv · j · beqz</th><td>1 word each</td><td>addi rd, rs, 0 · jal x0, t · beq rs, x0, t</td></tr>
+  <tr><th>halt</th><td>0x000C</td><td>jal x0, 0: a jump to itself, which the golden model and the benches stop on</td></tr>
+  <tr><th>nop</th><td>0x0004</td><td>addi x0, x0, 0</td></tr>
+  <tr><th>seqz rd, rs</th><td>3 words</td><td>there is no sltiu</td></tr>
+</table>
+<h4>What is left out, and what it costs</h4>
+<p>No <code>andi</code> / <code>ori</code> / <code>xori</code>: put the constant in a register first, one
+instruction more. No <code>slti</code>, <code>bltu</code> or <code>bgeu</code>: <code>sltu</code> then
+<code>bnez</code>. No bytes: memory is word addressed, so a pointer steps by 1. Each omission is decoder
+logic and an immediate format the core does not have to pay for.</p>`,
 
   datapath: `
+<p>A single-cycle core does one instruction between two rising edges. Everything in between is
+combinational; only three things change at the edge: the PC, x[rd] (if <code>rwe</code>) and M[daddr]
+(if <code>dwe</code>). So the datapath is one loop: PC → instruction memory → fields, control, immediate →
+register file → ALU → data memory → result mux → back into the register file, and through next PC into
+the PC.</p>
 <p>Follow <code>add a0, a1, a2</code>: the PC addresses the ROM; the word's rs1 and rs2 fields go
 straight to the register file's read ports; the control unit sees op = OP and sets the ALU to f3;
 the ALU adds; the result goes back to the register file's write port with rd as its address and
-we = 1; the PC becomes PC + 1 at the clock edge. Everything happens between two edges.</p>
-<p>Other instructions reuse the same path with different <b>mux settings</b>: ADDI takes the ALU's
-second operand from the immediate; LW sends the ALU result to the data memory and writes back what
-it reads; SW writes rs2 to memory and nothing to a register; branches compare rs1 and rs2 and load
-the PC with PC + imm; JAL writes PC + 1 and jumps. The control unit is the table of those settings.</p>`,
+we = 1; the PC becomes PC + 1 at the clock edge.</p>
+<h4>One path, different settings</h4>
+<table class="cp-laws">
+  <tr><th></th><td>ALU b</td><td>immediate</td><td>ALU op</td><td>rd ←</td><td>memory</td><td>next PC</td></tr>
+  <tr><th>R-type</th><td>rs2</td><td>–</td><td>{OPX, f3}</td><td>ALU</td><td>–</td><td>pc + 1</td></tr>
+  <tr><th>addi</th><td>imm</td><td>I</td><td>add</td><td>ALU</td><td>–</td><td>pc + 1</td></tr>
+  <tr><th>slli srli srai</th><td>imm</td><td>I</td><td>sll srl sra</td><td>ALU</td><td>–</td><td>pc + 1</td></tr>
+  <tr><th>lui</th><td>–</td><td>U</td><td>–</td><td>imm</td><td>–</td><td>pc + 1</td></tr>
+  <tr><th>lw</th><td>imm</td><td>I</td><td>add</td><td>memory</td><td>read</td><td>pc + 1</td></tr>
+  <tr><th>sw</th><td>imm</td><td>S/B</td><td>add</td><td>no write</td><td>write rs2</td><td>pc + 1</td></tr>
+  <tr><th>branches</th><td>–</td><td>S/B</td><td>–</td><td>no write</td><td>–</td><td>take ? pc + imm : pc + 1</td></tr>
+  <tr><th>jal</th><td>–</td><td>J</td><td>–</td><td>pc + 1</td><td>–</td><td>pc + imm</td></tr>
+  <tr><th>jalr</th><td>–</td><td>I</td><td>–</td><td>pc + 1</td><td>–</td><td>rs1 + imm</td></tr>
+</table>
+<p>A dash is a don't-care. The table is the control unit; the rest is wiring between blocks you own:
+the register file 2 172 NANDs, the ALU 1 055, the branch comparator 287, next PC 421, control 200.
+Core III is 4 720 NANDs, nearly half of it the register file.</p>
+<h4>Where the clock period goes</h4>
+<p>The slowest instruction sets the period for all of them, and that is a load: PC → instruction memory →
+control (13 delays) → ALU → data memory → result mux → register file, 98 NAND delays with the bench's
+8-delay memories, 50 of them in the ripple ALU. An <code>add</code> needs less and waits anyway; Core I,
+with no loads, runs at 84. There are two ways out: shorten the path (fast adders: Core IV, period 76,
+the last level of this act) or cut it into stages (Act 6's pipeline, period 78).</p>
+<h4>In this act</h4>
+<p>The immediate generator, the control unit and the branch comparator first, then next PC; then three
+cores, each the last one grown: Core I runs arithmetic, Core II adds loads and stores, Core III branches
+and jumps. <i>A computer</i> puts real memories and LEDs around Core III, and Core IV shortens its
+critical path.</p>
+<p>The usual mistakes: <code>sw</code> writing a register (its bits 6:4 are imm[2:0], so rwe must be 0); a
+branch target taken from the ALU; <code>jal</code> writing pc + imm instead of pc + 1; <code>lui</code>
+sent through the ALU.</p>`,
 
   pipe: `
 <p>A single-cycle CPU's clock period must fit the slowest instruction end to end. Cut the datapath

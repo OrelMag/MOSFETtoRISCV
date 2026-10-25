@@ -8,7 +8,16 @@
 import type { LevelCase } from './cases';
 
 export const CASES1: Record<string, LevelCase> = {
-  // ---- Act 4: programs ------------------------------------------------------------------------
+  // ---- Act 4: the instruction set and programs ------------------------------------------------
+  i_isa: {
+    problem: 'Hardware needs a specification before it can be built: which state exists (pc, x0–x7, 64 K words of data), what each instruction does to it, and how it is spelled in bits. RV16 is RISC-V cut to 16 bits: load / store (only <code>lw</code> and <code>sw</code> touch memory), fixed field positions (rs1, rs2 and rd never move, so the register file is read while the opcode is still being decoded) and x0 = 0 (a constant and a discard target, which makes <code>mv</code>, <code>nop</code>, <code>j</code> and <code>beqz</code> pseudo-instructions with no opcode of their own).',
+    without: 'Act 5\'s blocks would have nothing to be checked against: the golden model every core bench compares with, register write by register write, is this specification run in software.',
+    cost: '23 instructions in 16-bit words. The width sets the costs downstream: three-bit register fields mean eight registers, so the register file is 2 172 NANDs; immediates that never move make the immediate generator 0 NANDs; a 4-bit opcode makes the control unit\'s first stage a 4→16 decoder, 100 of its 200 NANDs. The price is paid in instructions: 6-bit offsets, no <code>andi</code>, no <code>bltu</code>, no bytes.',
+  },
+  i_enc: {
+    problem: 'Decoding is reading a word\'s fields. op[3:0] names the format, and the format says which of the other fields are registers and which are pieces of an immediate. The register file and the immediate generator take their fields without asking, since they never move; only the control unit has to look at the opcode. Encoding is the assembler\'s half of the same table.',
+    cost: 'Six right answers pass; ★★★ allows two mistakes. In hardware this decode is the Control unit level: 200 NANDs and 13 delays at par, of which the 4→16 opcode decoder is 100 NANDs and 5 delays.',
+  },
   p_add: {
     problem: 'The smallest complete program: <code>lw a0, -4(x0)</code> twice reads two words from the input device, <code>add</code> sums them, <code>sw a0, -3(x0)</code> hands the sum to the output device, <code>halt</code> (<code>jal x0, 0</code>, a jump to itself) stops. The devices sit at the top of the address space (IN = 0xFFFC, OUT = 0xFFFD), so a device address is computed like any other: x0 plus the sign-extended offset, in the ALU. Loads, ALU operations, stores and a jump: every class the core must implement except conditional branches.',
     cost: 'Five words, five cycles on the single-cycle core, one per instruction. Nothing shorter exists: two inputs need two loads, then one add, one store and the halt.',
@@ -42,6 +51,11 @@ export const CASES1: Record<string, LevelCase> = {
   },
 
   // ---- Act 5: the single-cycle core -----------------------------------------------------------
+  c_lesson: {
+    problem: 'Acts 1–3 built blocks that compute and remember; Act 4\'s programs say what to compute. The datapath is the wiring between them: one loop through the PC, the instruction memory, the register file, the ALU and the data memory, the same for every instruction, with muxes whose settings differ by instruction class. The control unit is the table of those settings.',
+    without: 'A path per instruction class: separate adders for addresses and branch targets beside the ALU, separate write paths into the register file. Sharing one path and switching it is what keeps the core small.',
+    cost: 'Core III, the whole of RV16I: 4 720 NANDs, of which the register file is 2 172, the ALU 1 055, next PC 421, the branch comparator 287 and control 200; the other 585 are bus muxes and the PC\'s flip-flops. Its period, 98 NAND delays, is set by a load\'s path, and 50 of those delays are the ripple ALU: the act ends with Core IV, which shortens exactly that.',
+  },
   c_imm: {
     problem: 'Constants travel inside instructions, in four formats: <b>I</b> = instr[15:10] (<code>addi</code>, <code>lw</code>, <code>jalr</code>), <b>S/B</b> = {instr[15:13], instr[6:4]}, in the f3 and rd positions (<code>sw</code> and the branch offsets), <b>J</b> = instr[15:7] (<code>jal</code>), <b>U</b> = {instr[15:7], instr[3]} &lt;&lt; 6 (<code>lui</code>). The generator delivers all four, sign-extended to 16 bits, and the core\'s 4:1 bus mux, steered by the control unit\'s <code>isel</code>, picks one. The sign bit is instr[15] in every format, so sign extension is a fan-out.',
     without: 'No instruction can carry a constant: no <code>addi</code>, no load or store offset, no branch or jump target.',
