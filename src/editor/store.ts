@@ -156,6 +156,15 @@ function sanitizeTable(x: unknown): ChipDoc['table'] {
   return compact({ ins: [...ins], outs: [...outs], rows: [...(x.rows as string[])], form: (x.form === 'andor' || x.form === 'pla' || x.form === 'rom' ? x.form : 'nand') as TableDoc['form'], of: str(x.of) && isIdent(x.of) ? x.of : undefined });
 }
 
+/** A chip's test tables (testtable.ts): a name and the source text each, at most MAX_TESTS of MAX_TEST_SRC characters. */
+const MAX_TESTS = 64, MAX_TEST_SRC = 1 << 18;
+function sanitizeTests(x: unknown): ChipDoc['tests'] {
+  if (!Array.isArray(x)) return undefined;
+  const t = x.filter((d): d is { name: string; src: string } => isObj(d) && str(d.name) && str(d.src) && d.src.length <= MAX_TEST_SRC)
+    .slice(0, MAX_TESTS).map((d) => ({ name: d.name.trim() || 'test', src: d.src }));
+  return t.length ? t : undefined;
+}
+
 /** A state-machine chip's machine (fsmchip.ts): names as pins, states with positions, arcs between them. */
 function sanitizeFsm(x: unknown): ChipDoc['fsm'] {
   if (!isObj(x) || !Array.isArray(x.ins) || !Array.isArray(x.outs) || !Array.isArray(x.states) || !Array.isArray(x.arcs)) return undefined;
@@ -302,6 +311,7 @@ export function sanitizeChip(c: unknown): ChipDoc | null {
     hdl: sanitizeHdl(c.hdl),
     table: sanitizeTable(c.table),
     fsm: sanitizeFsm(c.fsm),
+    tests: sanitizeTests(c.tests),
     pins: uniquePins, parts, wires, labels,
     comments: comments.length ? comments : undefined,
   });

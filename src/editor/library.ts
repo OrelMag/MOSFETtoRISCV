@@ -18,7 +18,7 @@ import { partDef } from './parts';
 const docHashes = new WeakMap<ChipDoc, string>();
 function docHash(doc: ChipDoc): string {
   let h = docHashes.get(doc);
-  if (h === undefined) docHashes.set(doc, (h = hash(JSON.stringify(doc, function (k, v) { return ((k === 'comments' || k === 'hdl' || k === 'table' || k === 'fsm' || k === 'hz') && this === doc) || (k === 'hue' && this !== doc) ? undefined : v; }))));
+  if (h === undefined) docHashes.set(doc, (h = hash(JSON.stringify(doc, function (k, v) { return ((k === 'comments' || k === 'hdl' || k === 'table' || k === 'fsm' || k === 'hz' || k === 'tests') && this === doc) || (k === 'hue' && this !== doc) ? undefined : v; }))));
   return h;
 }
 
