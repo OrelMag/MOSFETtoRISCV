@@ -27,6 +27,8 @@ import './cardui';
 import './puzzleui';
 // Verilog chips: the text beside the canvas, Yosys in the page, .v / Yosys JSON import.
 import './hdlui';
+// Circuits from other tools (Digital .dig, Logisim .circ): the import dialog.
+import '../import/circuits';
 // Truth-table chips: the table beside the canvas, the minimized logic drawn.
 import './tableui';
 // State-machine chips: the diagram beside the canvas, the circuit built from it.
