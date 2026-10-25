@@ -181,7 +181,7 @@ class TableUi {
       h('span', null, h('b', null, String(cost.nands)), ' NAND'),
       h('span', null, 'depth ', h('b', null, cost.depth === null ? '–' : String(cost.depth))),
       t.form === 'rom' ? h('span', null, h('b', null, String(rowCount(t))), ' words stored') : h('span', null, h('b', null, String(cost.terms)), ` term${cost.terms === 1 ? '' : 's'}, `, h('b', null, String(cost.literals)), ' literals'),
-      h('span', { class: cost.exact ? 'ok' : 'warn', title: cost.exact ? 'Fewest terms, then fewest literals, for every output (proved by search)' : 'The search for a proven minimum was too long: a greedy cover from the prime implicants, close to minimal' },
+      t.form === 'rom' ? h('span', { class: 'tt-note' }, 'nothing minimized: the equations show what the gates would be') : h('span', { class: cost.exact ? 'ok' : 'warn', title: cost.exact ? 'Fewest terms, then fewest literals, for every output (proved by search)' : 'The search for a proven minimum was too long: a greedy cover from the prime implicants, close to minimal' },
         cost.exact ? '✓ minimal' : '≈ near-minimal'));
 
     const fill = h('input', { class: 'tt-expr', spellcheck: 'false', placeholder: `e.g. ${t.ins.slice(0, 2).join('·')}${t.ins[2] ? ` + ¬${t.ins[2]}` : ''}`, 'aria-label': `Fill ${t.outs[sel]} from an expression` }) as HTMLInputElement;

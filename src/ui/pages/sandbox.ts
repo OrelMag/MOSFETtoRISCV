@@ -34,16 +34,15 @@ export class SandboxPage implements Page {
   private files!: FilesUi;
 
   constructor(chipId?: string) {
-    const share = chipId === SHARE_SEG, made = chipId === NEW_SEG;
-    this.editor = this.build(share || made ? undefined : chipId, this.projectFor(chipId));
+    const share = chipId === SHARE_SEG, made = chipId === NEW_SEG ? location.hash.split('/')[3] ?? '' : null;
+    this.editor = this.build(share || made !== null ? undefined : chipId, this.projectFor(chipId));
     this.el = this.editor.el;
     if (share) this.files.openShare(shareRoute(location.hash));
-    if (made) this.makeNew();
+    if (made !== null) this.makeNew(made);
   }
 
   /** #/sandbox/new/<kind> (a chapter's link): a new chip of that kind, opened, the address then its own. */
-  private makeNew(): void {
-    const kind = location.hash.split('/')[3];
+  private makeNew(kind = location.hash.split('/')[3]): void {
     const make = kind === 'fsm' ? (ws: Workspace) => newFsmChip(ws, FSM_TEMPLATE, '101 detector') : kind === 'table' ? (ws: Workspace) => newTableChip(ws) : null;
     if (!make) return void history.replaceState(null, '', '#/sandbox');
     let id = '';
