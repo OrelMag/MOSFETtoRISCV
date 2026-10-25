@@ -98,7 +98,8 @@ const MENU: (MenuItem | null)[] = [
   null,
   { icon: 'link', label: 'Share link…', hint: 'the circuit packed into a URL: nothing is uploaded', run: (ed) => void shareDialog(ed) },
   null,
-  { icon: 'code', label: 'Export Verilog', hint: 'the whole hierarchy, structural SystemVerilog (.sv)', run: (ed) => exportVerilog(ed) },
+  { icon: 'code', label: 'Export Verilog', hint: 'the whole hierarchy as drawn, structural SystemVerilog (.sv) for simulators', run: (ed) => exportVerilog(ed) },
+  { icon: 'code', label: 'Export Verilog for FPGA…', hint: 'synthesizable: flip-flops as processes, a board top and pins for a Tang Nano 9K (.zip)', run: (ed) => void exportFpga(ed) },
   { icon: 'image', label: 'Export image (SVG)', hint: 'the canvas as drawn, in the current theme', run: (ed) => exportImage(ed, 'svg') },
   { icon: 'image', label: 'Export image (PNG)', hint: 'the same at 2× resolution', run: (ed) => void exportImage(ed, 'png') },
   null,
@@ -264,6 +265,35 @@ function exportVerilog(ed: Editor): void {
   } catch (e) {
     ed.toast(`Cannot export Verilog: ${(e as Error).message}`, 'err');
   }
+}
+
+/** The FPGA export (editor/fpga.ts, loaded on demand): its report in a dialog, the files as one .zip. */
+async function exportFpga(ed: Editor): Promise<void> {
+  const c = ed.compiled;
+  if (!c || !ed.doc.parts.length) return void ed.toast('Nothing to export: the chip is empty', 'err');
+  if (c.diags.some((d) => d.level === 'error')) return void ed.toast('Fix the errors in this chip first (see the properties panel)', 'err');
+  const [{ fpgaExport, BOARD }, { zipFiles }] = await Promise.all([import('./fpga'), import('./zip')]);
+  const base = fileBase(ed.doc.name);
+  const out = fpgaExport(c.def, base);
+  const LEVEL = { error: 'Error', warn: 'Warning', info: 'Note' } as const;
+  const report = out.issues.length
+    ? h('ul', { class: 'sb-fpga-report' }, out.issues.map((i) => h('li', { class: i.level }, h('b', null, `${LEVEL[i.level]}: `), i.text)))
+    : h('p', { class: 'sb-dlg-msg ok' }, 'Nothing to report: every storage element is a flip-flop process.');
+  const save = () => {
+    saveFile(`${base}-fpga.zip`, new Blob([zipFiles(out.files) as Uint8Array<ArrayBuffer>], { type: 'application/zip' }));
+    d.close();
+  };
+  const d = dialog(ed, 'Export Verilog for FPGA', [
+    out.ok
+      ? h('p', { class: 'sb-dlg-lead' }, `Synthesizable Verilog of ${plural(out.modules, 'module')} (top `, h('code', null, out.top), `), flip-flops as clocked processes, with a board top (`,
+        h('code', null, out.board), `) and pin constraints for a ${BOARD.name}. The pins are an example: check them against your board before programming it.`)
+      : h('p', { class: 'sb-dlg-lead' }, 'This chip cannot be written as synthesizable Verilog.'),
+    report,
+    out.ok ? h('p', { class: 'sb-dlg-lead' }, 'The .zip holds ', out.files.map((f, i) => [i ? ', ' : '', h('code', null, f.name)]).flat(), '. README.txt says how to synthesize it with Gowin EDA or Yosys and nextpnr.') : null,
+  ], [
+    h('button', { class: 'btn ghost sm', onclick: () => d.close() }, out.ok ? 'Cancel' : 'Close'),
+    ...(out.ok ? [h('button', { class: 'btn primary sm', onclick: save }, glyph('download', 14), 'Download .zip')] : []),
+  ]);
 }
 
 async function exportImage(ed: Editor, kind: 'svg' | 'png'): Promise<void> {
