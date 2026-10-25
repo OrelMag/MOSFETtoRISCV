@@ -23,7 +23,31 @@ build it. Built blocks light up.</p>
 <h4>Why this machine</h4>
 <p><b>RV16</b> is RISC-V shrunk to 16 bits: 16-bit data and instructions, 8 registers with
 x0 = 0, load / store, fixed field positions. Small enough to build by hand and test
-thoroughly, real enough to run loops, functions, a stack and interrupt handlers.</p>
+thoroughly, real enough to run loops, functions, a stack and interrupt handlers. It counts in
+<b>words</b>, not bytes: an address names a 16-bit word, so the next instruction is at <b>pc + 1</b>
+(RISC-V's is pc + 4).</p>
+<h4>Why in this order</h4>
+<p>Each act supplies what the next one needs; nothing is placed before it is built.</p>
+<ol>
+  <li><b>Act 0</b> makes the one primitive, a CMOS NAND: 4 transistors, 1 delay, the unit every
+  cost is counted in. <b>Act P</b>, optional beside it, builds the same logic in relays and tubes and loads a program from cards.</li>
+  <li><b>Act 1, logic</b>: the gates, then what the control and the datapath are made of. Multiplexers
+  route operands, a decoder picks the register to write (30 NANDs), an equality test decides
+  <code>beq</code> (110).</li>
+  <li><b>Act 2, arithmetic</b>: bits get a meaning, so one adder does add, sub, comparisons and every
+  address. The ALU is 1 055 NANDs, depth 64; the fast adder (362 NANDs, depth 14 against the ripple
+  adder's 36) waits for Core IV.</li>
+  <li><b>Act 3, state</b>: feedback is the only way to remember. Latches, flip-flops, the PC, the register
+  file: 2 172 NANDs, nearly half the core to come.</li>
+  <li><b>Act 4, the instruction set</b>: what the hardware must do, learnt by programming it on the
+  golden model before any of it is wired.</li>
+  <li><b>Act 5, the single-cycle CPU</b>: your blocks wired into Cores I, II and III (4 720 NANDs, one
+  instruction per 98-delay cycle) and a computer around them. It ends with <b>Core IV</b>, the fast adder
+  on the critical path: period 76.</li>
+  <li><b>Act 6</b> overlaps five instructions in a pipeline (9 218 NANDs, period 78); <b>act 7</b> lets it
+  survive its own errors and listen to devices: traps and interrupts, 12 038 NANDs, the finale.</li>
+  <li>Acts 8, 9 and 10 are optional: arithmetic units, a GPU, the memory behind the data port.</li>
+</ol>
 <h4>How the campaign works</h4>
 <ul>
   <li>Every level builds one block from blocks you already have. It starts as a chip in the
@@ -63,7 +87,24 @@ circuit and an expression are the same object; algebra rewrites one into a cheap
   ¬(a·b) between both halves; the full adder's carry reuses the XORs' first NANDs.</li>
 </ul>
 <p>To get a minimal sum of products from a truth table, use a <b>Karnaugh map</b> (next level) or,
-beyond 4–5 variables, <b>Quine–McCluskey</b>.</p>`,
+beyond 4–5 variables, <b>Quine–McCluskey</b>.</p>
+<h4>What the laws buy, worked</h4>
+<ul>
+  <li><b>OR</b>: a + b has no cell; ¬(¬a · ¬b), De Morgan: 3 NANDs.</li>
+  <li><b>XOR</b>: ¬a·b + a·¬b: 5 NANDs; with n = ¬(a·b) shared, ¬(¬(a·n) · ¬(b·n)): 4.</li>
+  <li><b>2:1 mux</b>: NOT, two ANDs, an OR: 8 NANDs, depth 5; ¬(¬(s·b) · ¬(¬s·a)), NAND–NAND: 4, depth 3.</li>
+  <li><b>Full adder</b>: two half adders and an OR: 13 NANDs; the carry reuses both XORs' first NANDs: 9.</li>
+</ul>
+<p>The single-cycle core has 705 bits of 2:1 mux and 64 full adders: rewrites at this scale are
+thousands of NANDs.</p>
+<h4>This act</h4>
+<p>Act 1 builds, in this order: <b>NOT, AND, OR, XOR</b> (every later block is made of them); the
+<b>2:1 multiplexer</b> (choosing between two values); <b>K-maps</b> and the <b>prime detector</b> (the
+method the control unit of act 5 is built with); the <b>zero detect</b> (a wide gate, where depth
+first matters: 31 delays as a chain, 9 as a tree); and three blocks the datapath reads: the
+<b>decoder</b> (which register is written), the <b>bus multiplexer</b> (16 bits chosen at once) and
+<b>equality</b> (<code>beq</code>, <code>bne</code>). Binary numbers come alongside, because the decoder and the prime
+detector read their inputs as numbers.</p>`,
 
   mem: `
 <p>You built memory from flip-flops: 13 NANDs per bit (a 9-NAND flip-flop and its 4-NAND enable
