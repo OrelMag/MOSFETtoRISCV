@@ -192,13 +192,13 @@ export const NODES: CampaignNode[] = [
     codex: ['kmap', 'qm', 'dontcare'],
   },
   {
-    id: 'g_sop', act: 1, title: 'A function from its table', kind: 'build', requires: ['d_kmap', 'g_and', 'g_or'],
+    id: 'g_sop', act: 1, title: 'Prime detector', kind: 'build', requires: ['d_kmap', 'g_and', 'g_or'],
     why: 'The control unit is specified as a table (opcode → signals) and built as logic. Practise the method on one function: K-map, sum of products, NAND–NAND.',
-    tips: ['Minimise first: every literal saved is a gate input saved.', 'An SoP maps one-to-one onto two levels of NANDs: 20 here. Par is less than half that.', 'Compare the map\'s two halves (a3 = 0, a3 = 1): one is a function you have built, the other almost the same.'],
+    tips: ['Minimise first: every literal saved is a gate input saved.', 'An SoP maps one-to-one onto NAND–NAND: 20 NANDs here, depth 7 (the 3-literal products and the 4-input OR are built from 2-input gates). Par is less than half that.', 'Compare the map\'s two halves (a3 = 0, a3 = 1): one is a function you have built, the other almost the same.'],
     unlocks: ['rv16_prime4'], codex: ['sop', 'nandnand'], base: BUILD1.g_sop, par: { nand: 8, depth: 5 } },
   {
-    id: 'g_wide', act: 1, title: 'Wide gates', kind: 'build', requires: ['g_and', 'g_or'],
-    why: 'The equality test behind beq and bne asks "is a ⊕ b zero?": a 16-input NOR. A chain of 2-input gates is 15 deep; a tree is 4. Depth, not gate count, sets the clock.',
+    id: 'g_wide', act: 1, title: 'Zero detect', kind: 'build', requires: ['g_and', 'g_or'],
+    why: 'The equality test behind beq and bne asks "is a ⊕ b zero?": a 16-input NOR. A chain of 2-input ORs is 15 gates deep, 31 NAND delays with the NOT; a balanced tree is 4 gates, 9 delays. Depth, not gate count, sets the clock.',
     tips: ['Balance the tree: pairs, then pairs of pairs.', 'The chain and the tree cost the same NANDs: only the depth differs.'],
     codex: ['fanin', 'depth', 'bubble'], unlocks: ['rv16_wide16', 'and3', 'and4', 'and8', 'or3', 'or4', 'or8', 'or16', 'zero*', 'andx*', 'orx*', 'xorx*'], base: BUILD1.g_wide, par: { nand: 46, depth: 9 } },
   {
@@ -557,7 +557,7 @@ export const NODES: CampaignNode[] = [
   // ---- Act 8 --------------------------------------------------------------------------------
   {
     id: 'o_mulseq', act: 8, title: 'Shift-and-add multiplier', kind: 'build', optional: true, requires: ['a_add16', 's_reg16'], base: BUILD8.o_mulseq, givesOf: partsOf(() => seqMul(16)), par: { nand: 1169, period: 48 },
-    why: 'Software multiplication (Act 4) in hardware: one adder reused once per clock. Small; sixteen times as many cycles as an array, about 5.5 times the time (its clock is shorter).',
+    why: 'Software multiplication (Act 4) in hardware: one adder reused once per clock. 18 cycles of a 48-delay clock against one 150-deep pass: about 5.8 times the time, on less than half the NANDs (1 169 against 2 672).',
     tips: ['The product register starts as {0, b}; each step adds a to its upper half if its lowest bit is 1, then shifts everything right.'],
     codex: ['shiftadd'], chapters: [{ chapter: 'muldiv', label: 'Multiply & divide' }],
   },

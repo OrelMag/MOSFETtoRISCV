@@ -708,7 +708,7 @@ export const CHALLENGES: BuildChallenge[] = [
   },
   {
     id: 's_dff', title: 'Edge-triggered D flip-flop', level: 'sequential', allowed: 'nand',
-    brief: 'q takes d at the <b>rising</b> edge of clk, and only then: d changing while clk is high or low must not reach q. Two D latches, master and slave, enabled on opposite clock phases (par 9 NANDs; the classic 7474 needs 6).',
+    brief: 'q takes d at the <b>rising</b> edge of clk, and only then: d changing while clk is high or low must not reach q. Two D latches, master and slave, enabled on opposite clock phases (par 9 NANDs; the classic 7474 needs six, but 3-input NANDs, in a different structure).',
     ports: pins([['d'], ['clk']], [['q']], 'clk'),
     check: {
       kind: 'sequence', steps: [

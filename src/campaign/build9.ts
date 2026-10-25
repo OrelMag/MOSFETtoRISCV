@@ -99,7 +99,7 @@ export const BUILD9: Record<string, () => BuildChallenge> = {
   }),
   o_bpred: () => ({
     id: 'o_bpred', title: 'Branch prediction', level: 'cpu', allowed: 'nand',
-    brief: 'Pipeline IV loses two cycles on every taken branch or jump. Guess in F instead: decode the fetched word, and when it is a jal or a backward branch (a loop), fetch from pc + imm at once. E then checks the guess and redirects only when it was wrong (to the target, or back to pc + 1). Same pins and bench as the pipelines; graded on cycles first.',
+    brief: 'Pipeline IV loses two cycles on every taken branch or jump. Guess in F instead: decode the fetched word, and when it is a jal or a backward branch (a loop), fetch from pc + imm at once. E then checks the guess and redirects only when it was wrong (to the target, or back to pc + 1). Same pins and bench as the pipelines; graded on NANDs, period and cycles alike: the prediction pays in cycles, and must not cost more than it saves elsewhere.',
     ports: CORE_PINS,
     check: coreCheck({ rv16i: true, tests: () => predictTests(), budget: { cpi: 3, extra: 8 } }, `${predictTests().length} programs: nested loops, a copy loop with calls, a sort, then Pipeline IV's tests.`),
     answer: refOf('o_bpred', () => rv16Pipe({ fwd: true, stall: true, flush: true, predict: true }), 'Predicting pipeline'),

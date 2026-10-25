@@ -60,3 +60,34 @@ describe('the fuller codex', () => {
     expect(CODEX.filter((e) => !moreOf(e.id)).map((e) => e.id)).toEqual([]);
   });
 });
+
+// Numbers the text quotes, measured (they drifted when typed by hand).
+describe('numbers in the level text', () => {
+  it('the single-cycle core: 79 delays alone, 98 on the bench with its 8-delay memories', async () => {
+    const { corePeriod } = await import('../src/campaign/corecheck');
+    const { analyzeTiming } = await import('../src/sim/timing');
+    const { flatten } = await import('../src/sim/flatten');
+    const cpu = resolveComponent('rv16_cpu')!;
+    const alone = analyzeTiming(flatten(cpu, { mode: 'gate' }))!.period, bench = corePeriod(cpu)!;
+    expect(bench).toBe(nodeById('c_core3')!.par!.period);
+    const say = `${alone} delays without memories (${bench} with the bench\'s 8-delay memories)`;
+    for (const id of ['a_inc16', 's_pc']) expect(caseOf(id)!.cost, id).toContain(say);
+    expect(caseOf('o_fastadd')!.cost).toContain(`(with the bench's 8-delay memories) falls from ${bench} to ${nodeById('c_fast')!.par!.period} delays`);
+  });
+
+  it('o_mulseq against the 16 × 16 array', async () => {
+    const { stats, logicDepth } = await import('../src/sim/stats');
+    const n = nodeById('o_mulseq')!, arr = resolveComponent('amul16')!;
+    const cycles = 18, depth = logicDepth(arr)!, nand = stats(arr).nands;
+    const fmt = (v: number) => v.toLocaleString('en').replace(/,/g, ' ');
+    expect(n.why).toContain(`${cycles} cycles of a ${n.par!.period}-delay clock against one ${depth}-deep pass: about ${(cycles * n.par!.period! / depth).toFixed(1)} times the time`);
+    expect(n.why).toContain(`(${fmt(n.par!.nand!)} against ${fmt(nand)})`);
+    expect(caseOf('o_mulseq')!.problem).toContain(`${cycles} cycles per product`);
+  });
+
+  it('m_ctrl says its refresh interval is scaled from the real one', async () => {
+    const { TIMING } = await import('../src/dram/timing');
+    const { BUILDM } = await import('../src/campaign/buildm');
+    expect(BUILDM.m_ctrl().brief).toContain(`a real chip's 7.8 µs is about ${TIMING.tREFI.toLocaleString('en').replace(/,/g, ' ')} cycles`);
+  });
+});

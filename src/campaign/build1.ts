@@ -135,7 +135,7 @@ export const BUILD1: Record<string, () => BuildChallenge> = {
   }),
   g_wide: () => ({
     id: 'g_wide', title: 'Zero detect', level: 'gates', allowed: 'nand',
-    brief: '<b>any</b> = 1 if any of the 16 bits of <code>a</code> is 1; <b>zero</b> = ¬any. A chain of ORs is 15 gates deep; a balanced tree is 4. Graded on depth.',
+    brief: '<b>any</b> = 1 if any of the 16 bits of <code>a</code> is 1; <b>zero</b> = ¬any. A chain of ORs is 15 gates deep (31 NAND delays with the NOT); a balanced tree is 4 (9). Graded on depth.',
     ports: pins([['a', 16]], [['any'], ['zero']]), check: { kind: 'table', spec: ([a]) => [a ? 1 : 0, a ? 0 : 1] },
     answer: refOf('g_wide', () => WIDE16, 'Zero detect'),
   }),
