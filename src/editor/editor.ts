@@ -51,6 +51,8 @@ export interface ToolbarAction {
   active?(ed: Editor): boolean;
   /** Only on a campaign level screen. */
   levelOnly?: boolean;
+  /** The label on a level screen's bar, where icon-only buttons are not yet familiar ('Keys'). */
+  levelLabel?: string;
   /** Offered only while this holds (the CPU panel: a CPU was found). */
   shown?(ed: Editor): boolean;
   /** A menu button: it lists the actions `under` it. */
@@ -115,7 +117,7 @@ registerToolbarAction({ id: 'props', title: 'Properties of the selection or the 
 // Menus that gather actions used together, so the bar stays short.
 registerToolbarAction({ id: 'timingmenu', title: 'Timing: probe wires, and the timing panel that records them', icon: 'wave', label: 'Timing ▾', order: 61, group: true, run: (ed) => ed.groupMenu('timingmenu') });
 registerToolbarAction({ id: 'play', title: 'Play: build challenges and program puzzles', icon: 'flag', label: 'Play ▾', order: 64, group: true, run: (ed) => ed.groupMenu('play') });
-registerToolbarAction({ id: 'help', title: 'Keyboard shortcuts (?)', menu: 'Keyboard shortcuts', icon: 'info', order: 90, run: (ed) => ed.showHelp() });
+registerToolbarAction({ id: 'help', title: 'Keyboard shortcuts (?)', menu: 'Keyboard shortcuts', levelLabel: 'Keys', icon: 'keyboard', order: 90, run: (ed) => ed.showHelp() });
 
 const withChip = (ws: Workspace, doc: ChipDoc): Workspace => ({ ...ws, chips: { ...ws.chips, [doc.id]: doc } });
 
@@ -852,8 +854,9 @@ export class Editor {
     const focused = a instanceof HTMLElement && a !== this.moreBtn && this.actionsEl.contains(a) ? a.dataset.action : undefined;
     this.actionsEl.replaceChildren();
     for (const a of this.topActions()) {
-      const b = h('button', { class: `btn ghost ${a.label ? 'sm' : 'icon-only'}`, title: a.title, 'aria-label': a.title, 'data-action': a.id, onclick: () => a.run(this),
-        'aria-haspopup': a.group ? 'menu' : null }, icon(a.icon, 16), a.label ? h('span', null, a.label) : null) as HTMLButtonElement;
+      const label = a.label ?? (this.level ? a.levelLabel : undefined);
+      const b = h('button', { class: `btn ghost ${label ? 'sm' : 'icon-only'}`, title: a.title, 'aria-label': a.title, 'data-action': a.id, onclick: () => a.run(this),
+        'aria-haspopup': a.group ? 'menu' : null }, icon(a.icon, 16), label ? h('span', null, label) : null) as HTMLButtonElement;
       if (a.enabled && !a.enabled(this)) b.disabled = true;
       // a menu button is drawn pressed while one of its toggles is on
       if (a.group) b.classList.toggle('on', this.membersOf(a.id).some((m) => !!m.active?.(this)));

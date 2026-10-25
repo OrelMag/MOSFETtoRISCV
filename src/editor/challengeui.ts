@@ -51,6 +51,28 @@ function rule(a: Allowed): [string, string] {
   return [a.label ?? 'unlocked parts', `NAND, wiring, constants, your own chips, and the parts unlocked by the levels this one builds on: ${a.lib.filter((x) => x !== 'nand').join(', ') || 'none yet'}`];
 }
 
+/** The level screen's idle line: what to build, from what, and par ("Goal: NOT from NAND · NAND only · par 1 NAND, depth 1"). */
+export function goalText(ch: BuildChallenge): { goal: string; rule: string; par: string } {
+  const l = ch.limits ?? {};
+  const n = (v: number) => v.toLocaleString();
+  const par = [
+    l.maxTransistors !== undefined ? `${n(l.maxTransistors)} transistor${l.maxTransistors === 1 ? '' : 's'}` : '',
+    l.maxNand !== undefined ? `${n(l.maxNand)} NAND` : '',
+    l.maxRelays !== undefined ? `${n(l.maxRelays)} relay${l.maxRelays === 1 ? '' : 's'}` : '',
+    l.maxTubes !== undefined ? `${n(l.maxTubes)} tube section${l.maxTubes === 1 ? '' : 's'}` : '',
+    l.maxSteps !== undefined ? `${n(l.maxSteps)} relay step${l.maxSteps === 1 ? '' : 's'}` : '',
+    l.maxDepth !== undefined ? `depth ${n(l.maxDepth)}` : '',
+    l.maxPeriod !== undefined ? `period ${n(l.maxPeriod)}` : '',
+    l.maxCycles !== undefined ? `${n(l.maxCycles)} cycles` : '',
+  ].filter(Boolean).join(', ');
+  return { goal: ch.title, rule: rule(ch.allowed)[0], par };
+}
+
+function goalEl(ch: BuildChallenge): HTMLElement {
+  const g = goalText(ch);
+  return h('span', { class: 'sb-chal-sum sb-chal-goal', title: rule(ch.allowed)[1] }, 'Goal: ', h('b', null, g.goal), ` · ${g.rule}`, g.par ? ` · par ${g.par}` : '');
+}
+
 function deviceItems(r: CheckResult, lim: Limits, item: (v: number, unit: string, par?: number, before?: boolean) => HTMLElement | null): (HTMLElement | null)[] {
   const s = r.score;
   return [
@@ -132,6 +154,8 @@ class ChallengeUi {
   /** Last check per challenge chip, with the connectivity it was run on (an edit makes it stale). */
   private results = new Map<string, { r: CheckResult; conn: string }>();
   private collapsed = false;
+  /** The level screen's failing result in full (null: none shown yet, the first opens). */
+  private openResult: boolean | null = null;
   private confirming = false;
   private lastChip = '';
   /** Purist mode was switched on by a challenge (and is switched off when leaving it). */
@@ -273,6 +297,9 @@ class ChallengeUi {
   /** The level screen's strip: Check and its result, the walkthrough, Show answer, Do it for me. */
   private renderScreen(ch: BuildChallenge, res: { r: CheckResult } | undefined, stale: boolean): void {
     const sc = this.screen!;
+    const failing = !!res && (!res.r.ok || res.r.failures.length > 0 || res.r.restrictionViolations.length > 0);
+    // the first failing result opens in full; later ones fold to a line, so the canvas keeps its height
+    if (failing && this.openResult === null) this.openResult = true;
     const actions = this.confirming
       ? [h('span', { class: 'sb-chal-ask' }, 'Replace your circuit with the answer?'),
         h('button', { class: 'btn sm primary', 'data-chal': 'solve-yes', onclick: () => this.solve() }, 'Replace'),
@@ -281,13 +308,25 @@ class ChallengeUi {
         h('button', { class: 'btn sm ghost', 'data-chal': 'answer', title: 'The reference answer', onclick: () => (sc.showAnswer ? sc.showAnswer() : this.showAnswer()) }, 'Show answer'),
         h('button', { class: 'btn sm ghost', 'data-chal': 'solve', title: 'Replace this chip\'s circuit with the reference answer (one undo step)', onclick: () => { this.confirming = true; this.render(); } }, 'Do it for me')];
     this.panel.append(h('header', { class: 'sb-chal-head' },
-      h('button', { class: 'btn sm primary', 'data-chal': 'check', title: 'Run the chip against the specification', onclick: () => this.check() }, icon('check', 14), 'Check'),
-      res ? this.summaryEl(ch, res.r, stale) : h('span', { class: 'sb-chal-sum muted' }, 'Check runs every test and scores your circuit against par.'),
+      h('button', { class: 'btn sm primary', 'data-chal': 'check', title: 'Check runs every test and scores your circuit against par.', onclick: () => this.check() }, icon('check', 14), 'Check'),
+      res ? this.summaryEl(ch, res.r, stale) : goalEl(ch),
+      failing ? this.foldEl(ch, res!.r) : null,
       h('span', { class: 'sb-chal-actions' }, ...actions)));
-    if (res && (!res.r.ok || res.r.failures.length || res.r.restrictionViolations.length || coreSpecOf(ch.check))) {
+    if (res && ((failing && this.openResult) || (!failing && coreSpecOf(ch.check)))) {
       this.panel.append(h('div', { class: 'sb-chal-body' }, this.resultEl(ch, res.r, stale)));
     }
     if (this.player) this.panel.append(this.player.el);
+  }
+
+  /** A failing result's size, and Show / Hide for the details. */
+  private foldEl(ch: BuildChallenge, r: CheckResult): HTMLElement {
+    const bad = r.failed?.length ?? 0;
+    const what = ch.check.kind === 'table' ? 'rows' : ch.check.kind === 'custom' ? 'programs' : 'steps';
+    const text = r.restrictionViolations.length && !bad ? `${r.restrictionViolations.length} part${r.restrictionViolations.length > 1 ? 's' : ''} not allowed`
+      : r.tested ? `${bad} of ${r.tested} ${what} wrong` : 'not simulated';
+    const open = !!this.openResult;
+    return h('span', { class: 'sb-chal-fold-line' }, text, ' · ',
+      h('button', { class: 'btn-link', 'data-chal': 'details', 'aria-expanded': String(open), onclick: () => { this.openResult = !open; this.version++; this.render(); } }, open ? 'Hide' : 'Show'));
   }
 
   /** One line: pass or not, and the score against par. */
@@ -432,7 +471,10 @@ class ChallengeUi {
         period !== undefined && period !== null ? item(period, 'period', lim.maxPeriod, true) : null,
         r.score.cycles !== undefined ? item(r.score.cycles, 'cycles', lim.maxCycles) : null,
         h('span', null, h('b', null, r.score.transistors.toLocaleString()), ' transistors')];
-    return h('p', { class: 'sb-chal-score' }, ...parts);
+    // a metric par grades that this circuit could not be measured on
+    const unmeasured = lim.maxDepth !== undefined && r.score.depth === null && unit !== 'transistors' && unit !== 'devices';
+    return h('div', null, h('p', { class: 'sb-chal-score' }, ...parts, unmeasured ? h('span', { class: 'over' }, 'depth —', h('small', null, ` par ${lim.maxDepth}`)) : null),
+      unmeasured ? h('p', { class: 'sb-chal-note' }, 'Depth: not measured (transistor-level parts have no gate delay). Build it from NANDs to be graded on depth.') : null);
   }
 
   check(): void {
@@ -462,8 +504,11 @@ class ChallengeUi {
     }
     if (!r.ok) this.screen?.checked(r);
     if (paneShown(ed, 'fsm-states')) this.showStates(ch);
+    // The level screen: after the first failing result, later ones fold to a line (Show opens them), the player stays shut.
+    const fold = !!this.screen && this.openResult !== null;
+    if (fold) this.openResult = false;
     // A failure opens the player on the first failing test: the circuit shows it.
-    if (!r.ok && r.failed?.length && ch.check.kind !== 'custom') this.openPlayer(ch, r, r.failed[0]);
+    if (!fold && !r.ok && r.failed?.length && ch.check.kind !== 'custom') this.openPlayer(ch, r, r.failed[0]);
     else this.render();
     if (this.drawer) this.renderList();
   }

@@ -20,6 +20,9 @@ const PREF = 'mosfet2riscv:sandbox:iobar';
 /** Shown unless the user hid it (per browser; storage may be unavailable). */
 let wanted = (() => { try { return localStorage.getItem(PREF) !== '0'; } catch { return true; } })();
 
+/** More pins than this and a level screen opens with the bar folded. */
+export const LEVEL_PINS = 6;
+
 const DIR = () => h('span', { class: 'dir', 'aria-hidden': 'true' }, '▸');
 const label = (t: string) => h('span', { class: 'label' }, t);
 
@@ -36,13 +39,23 @@ class IoBar {
   /** Nested banks past IOBAR_BANKS shown (per editor, this session). */
   private allBanks = false;
 
+  /** Shown or hidden by the I/O button on this editor (null: the browser-wide choice, or a level's default). */
+  own: boolean | null = null;
+
   constructor(private ed: Editor) {
     ed.slots.bottom.append(this.el);
     this.update();
   }
 
+  /** A level with many pins starts with the bar folded: the canvas keeps its height (the pins are on it too). */
+  get want(): boolean {
+    if (this.own !== null) return this.own;
+    if (this.ed.level && this.ed.doc.pins.length > LEVEL_PINS) return false;
+    return wanted;
+  }
+
   get visible(): boolean {
-    return wanted && (this.ed.doc.pins.length > 0 || nestedControls(this.ed.sim.sim).length > 0);
+    return this.want && (this.ed.doc.pins.length > 0 || nestedControls(this.ed.sim.sim).length > 0);
   }
 
   /** After every repaint: rebuild when the pins changed, else refresh the values. */
@@ -240,10 +253,15 @@ registerEditorPlugin((ed) => {
 registerToolbarAction({
   id: 'iobar', title: 'Inputs and outputs bar: the chip\'s pins above the run bar', icon: 'io', label: 'I/O', order: 59,
   run: (ed) => {
-    wanted = !wanted;
-    try { localStorage.setItem(PREF, wanted ? '1' : '0'); } catch { /* per session only */ }
-    bars.get(ed)?.update();
+    const bar = bars.get(ed);
+    // a level folded by default: this editor's own choice, the browser-wide one untouched
+    if (bar && (bar.own !== null || (ed.level && ed.doc.pins.length > LEVEL_PINS))) bar.own = !bar.want;
+    else {
+      wanted = !wanted;
+      try { localStorage.setItem(PREF, wanted ? '1' : '0'); } catch { /* per session only */ }
+    }
+    bar?.update();
     ed.renderActions();
   },
-  active: () => wanted,
+  active: (ed) => bars.get(ed)?.want ?? wanted,
 });
