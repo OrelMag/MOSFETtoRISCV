@@ -12,7 +12,7 @@
 // "Unlocked parts" group.
 
 import '../styles/sbchallenges.css';
-import { addBench, addLaneBench, failingTest } from '../campaign/bench';
+import { addBench, addLaneBench, addPongBench, failingTest } from '../campaign/bench';
 import { coreSpecOf } from '../campaign/corecheck';
 import { measured } from '../campaign/grade';
 import { isDone, nextAvailable } from '../campaign/graph';
@@ -372,6 +372,11 @@ class ChallengeUi {
     const what = spec.lanes ? `a data memory with a port per lane${spec.raster ? ', the screen' : ''}` : 'a RAM and LEDs';
     return h('div', { class: 'sb-tp-progs' },
       h('span', { class: 'sb-tp-progs-h', title: `Each opens a new chip: the program in a ROM, your core, ${what}, with the CPU panel running it against the golden model` }, 'Watch a program run:'),
+      // a core that runs every RV16I program it was given: a game on it, on the bench with a screen and switches
+      r.ok && spec.rv16i && !spec.lanes
+        ? h('button', { class: 'sb-tp-prog pong', 'data-chal': 'pong', title: 'A new chip: Pong in a ROM, your core, a RAM, LEDs, eight switches and a 32 × 32 screen; the CPU panel checks every write against the golden model while you play', onclick: () => this.pong() },
+          icon('play', 11), 'Play Pong on your core')
+        : null,
       tests.map(({ t, bad: b }) => h('button', { class: `sb-tp-prog${b ? ' bad' : ''}`, 'data-chal': 'program', title: `${b ? 'Fails' : 'Passes'}: open “${t.name}” on a bench around your core`, onclick: () => this.debug(t) },
         icon(b ? 'close' : 'check', 11), t.name)));
   }
@@ -457,6 +462,21 @@ class ChallengeUi {
     // The level screen shows only the level's chips: the bench opens in the full sandbox.
     if (!err && this.screen) location.hash = `#/sandbox/${ed.chipId}`;
     else ed.toast(err ? `Cannot build the bench: ${err}` : `New chip “${ed.doc.name}”: Run to halt in the CPU panel (Ctrl+Z removes it)`);
+  }
+
+  /** Pong on a bench around this core (a passing RV16I core level). */
+  private pong(): void {
+    const ed = this.ed;
+    const core = ed.compiled?.def, coreId = ed.chipId;
+    if (!core) return;
+    let err = '';
+    ed.editWs((ws) => {
+      const b = addPongBench(ws, core, coreId);
+      if ('error' in b) { err = b.error; return ws; }
+      return b.ws;
+    });
+    if (!err && this.screen) location.hash = `#/sandbox/${ed.chipId}`;
+    else ed.toast(err ? `Cannot build the bench: ${err}` : `New chip “${ed.doc.name}”: Run, then switches 7 and 6 move your paddle (Ctrl+Z removes it)`);
   }
 
   private showAnswer(): void {
