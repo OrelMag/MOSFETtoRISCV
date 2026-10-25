@@ -18,7 +18,13 @@ import { SchematicView } from '../../view/schematic';
 import { fsmOf } from '../../lib/fsms';
 import { resolveComponent } from '../../lib/resolve';
 import { fsmDiagram } from '../../view/fsmdiagram';
-import { CODEX_KINDS, type CodexEntry } from '../codex';
+import '../../styles/codex.css';
+import { CODEX_KINDS, codexById, type CodexEntry } from '../codex';
+import { type Datasheet, datasheetOf, datasheets } from '../datasheet';
+import { statusOf } from '../graph';
+import { levelChallenge } from '../levels';
+import { progress } from '../progress';
+import type { CampaignNode } from '../types';
 import { buildsOn, leadsTo, neighbours, seeAlso, teachingLevels } from '../codexlinks';
 import type { CodexMore } from '../codexmore';
 import { DRILLS, rng, type Drill } from '../drills';
@@ -112,11 +118,17 @@ function tryOne(d: Drill): HTMLElement {
 
 const chip = (cls: string, href: string, ...body: (string | Node)[]) => h('a', { class: `lv-chip ${cls}`.trim(), href }, ...body);
 
+/** Where a teaching level opens: its own screen when it is built in the editor and open to the reader, else its panel. */
+function levelHref(n: CampaignNode): string {
+  const p = progress();
+  return levelChallenge(n) && !n.soon && statusOf(n, p.view, p.unlockAll) !== 'locked' ? `#/campaign/play/${n.id}` : `#/campaign/n/${n.id}`;
+}
+
 /** The rows under the summary: where to learn it, then how it connects (each entry shown once, the closest relation first). */
 function linksEl(e: CodexEntry, more: CodexMore | undefined): HTMLElement {
   const learn = [
     ...(more?.chapters ?? []).map((c) => chip('acc', `#/c/${c.chapter}/${c.step ?? 0}`, icon('book', 12), c.label)),
-    ...teachingLevels(e.id).map((n) => chip('acc', `#/campaign/n/${n.id}`, icon('flag', 12), n.title)),
+    ...teachingLevels(e.id).map((n) => chip('acc', levelHref(n), icon('flag', 12), n.title)),
   ];
   const seen = new Set<string>([e.id]);
   const once = (xs: CodexEntry[]) => xs.filter((x) => !seen.has(x.id) && !!seen.add(x.id));
@@ -148,7 +160,12 @@ function anatomyEl(view: ProgressView, blocks: string[]): HTMLElement {
   return h('div', null, chips.childElementCount ? chips : null, holder);
 }
 
-export function codexEntryEl(e: CodexEntry, more: CodexMore | undefined, view: ProgressView, sheets: HTMLElement[], checks: Quiz[] = []): HTMLElement {
+export interface EntryOptions {
+  /** One column (the level screen's pane). */
+  narrow?: boolean;
+}
+
+export function codexEntryEl(e: CodexEntry, more: CodexMore | undefined, view: ProgressView, sheets: HTMLElement[], checks: Quiz[] = [], opts: EntryOptions = {}): HTMLElement {
   const kind = CODEX_KINDS.find((k) => k.id === e.kind)!.title.replace(/s$/, '');
   const cost = more?.lib ? libCost(more.lib) : undefined;
   const head = h('header', { class: 'cx-head' },
@@ -182,7 +199,8 @@ export function codexEntryEl(e: CodexEntry, more: CodexMore | undefined, view: P
         h('span', { class: 'track' }, h('i', { class: i === 0 ? 'you' : '', style: `width:${(100 * (x.c?.nand ?? 0) / max).toFixed(1)}%` })),
         h('span', { class: 'v' }, `${x.c?.nand.toLocaleString() ?? '—'}${x.c?.depth !== null && x.c?.depth !== undefined ? ` · d ${x.c.depth}` : ''}`)])),
       h('p', { class: 'sub' }, 'NANDs (bar) and depth in NAND delays, measured.')) : null);
-  const article = h('article', { class: 'cp-codex-entry cx-entry' }, head, h('div', { class: 'cx-cols' }, left, right), prevNextEl(e.id));
+  const article = h('article', { class: `cp-codex-entry cx-entry${opts.narrow ? ' narrow' : ''}` }, head,
+    h('div', { class: `cx-cols${right.childElementCount ? '' : ' solo'}` }, left, right.childElementCount ? right : null), prevNextEl(e.id));
   // Hover definitions inside the entry's own text (not for itself): a chunk of its own, marked once it arrives.
   if (settings.glossary) {
     import('./glossaryui').then((m) => {
@@ -190,4 +208,34 @@ export function codexEntryEl(e: CodexEntry, more: CodexMore | undefined, view: P
     }, () => {});
   }
   return article;
+}
+
+/** A library part's datasheet: cost, pins, and a small part's truth table. */
+export function sheetEl(d: Datasheet): HTMLElement {
+  const fmt = (v: number, w: number) => (w > 4 ? `0x${v.toString(16)}` : w > 1 ? v.toString(2).padStart(w, '0') : String(v));
+  const ins = d.pins.filter((p) => p.dir !== 'out').length;
+  const widths = [...d.pins.filter((p) => p.dir !== 'out'), ...d.pins.filter((p) => p.dir === 'out')].map((p) => p.width);
+  return h('div', { class: 'cp-sheet' },
+    h('h4', null, 'Datasheet: ', h('a', { href: `#/workbench/${d.id}`, title: 'Open it in the workbench' }, d.name)),
+    h('p', { class: 'sub' }, `${d.nand.toLocaleString('en')} NAND · ${d.transistors.toLocaleString('en')} transistors · ${d.depth !== null ? `depth ${d.depth}` : 'sequential'}`),
+    h('div', { class: 'cp-sheet-cols' },
+      h('table', null, h('tr', null, h('th', null, 'pin'), h('th', null, 'dir'), h('th', null, 'bits')),
+        d.pins.map((p) => h('tr', null, h('td', null, p.name), h('td', null, p.dir), h('td', null, String(p.width))))),
+      d.table ? h('table', null, h('tr', null, d.table.head.map((x, i) => h('th', i >= ins ? { class: 'out' } : null, x))),
+        d.table.rows.map((r) => h('tr', null, r.map((v, i) => h('td', i >= ins ? { class: 'out' } : null, fmt(v, widths[i])))))) : null));
+}
+
+/** The datasheets an entry shows: its own part's, else (a component) those of the parts its levels unlock. */
+export function entrySheets(e: CodexEntry, more: CodexMore | undefined): HTMLElement[] {
+  const sheet = more?.lib ? datasheetOf(more.lib) : undefined;
+  return sheet ? [sheetEl(sheet)] : e.kind === 'component' ? datasheets(e.id).map(sheetEl) : [];
+}
+
+/** The full entry, the fuller texts loaded first (their own chunk); null for an unknown id. */
+export async function loadFullEntry(id: string, opts: EntryOptions = {}): Promise<HTMLElement | null> {
+  const e = codexById(id);
+  if (!e) return null;
+  const m = await import('../codexmore');
+  const more = m.moreOf(id);
+  return codexEntryEl(e, more, progress().view, entrySheets(e, more), m.checkOf(id), opts);
 }

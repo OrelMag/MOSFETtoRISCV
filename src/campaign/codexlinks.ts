@@ -3,10 +3,14 @@
 // directions, and its neighbours in the codex's reading order. Nothing here is authored twice.
 
 import { CODEX, CODEX_KINDS, codexById, type CodexEntry } from './codex';
-import { NODES } from './nodes';
+import { ruleFor } from './graph';
+import { NODES, nodeById } from './nodes';
 
 /** The codex in reading order: by kind as the list shows them, then as written. */
 export const CODEX_ORDER: CodexEntry[] = CODEX_KINDS.flatMap((k) => CODEX.filter((e) => e.kind === k.id));
+
+/** sessionStorage: the level the reader left for the codex page (the page's "Back to" chip). */
+export const CODEX_FROM = 'mosfet2riscv:codex-from';
 
 /** The levels that teach an entry. */
 export const teachingLevels = (id: string) => NODES.filter((n) => n.codex.includes(id));
@@ -33,6 +37,34 @@ export function leadsTo(id: string): CodexEntry[] {
   const own = new Set(teachingLevels(id).map((n) => n.id));
   const taughtHere = new Set(teachingLevels(id).flatMap((n) => n.codex));
   return pick(new Set(NODES.filter((n) => !own.has(n.id) && n.requires.some((r) => own.has(r))).flatMap((n) => n.codex).filter((c) => !taughtHere.has(c))), id);
+}
+
+/**
+ * What a level uses that it does not teach: the entries its own entries build on, and the entries of the earlier
+ * levels that unlocked the parts it may place, the nearest levels first (fewest requires between), at most `max`.
+ */
+export function levelUses(nodeId: string, max = 12): CodexEntry[] {
+  const n = nodeById(nodeId);
+  if (!n) return [];
+  // distance back through requires
+  const dist = new Map<string, number>([[n.id, 0]]);
+  for (let ring = [n.id], d = 1; ring.length; d++) {
+    ring = ring.flatMap((id) => nodeById(id)?.requires ?? []).filter((r) => !dist.has(r));
+    ring = [...new Set(ring)];
+    for (const r of ring) dist.set(r, d);
+  }
+  const own = new Set(n.codex);
+  const rank = new Map<string, number>();
+  const add = (id: string, d: number) => { if (!own.has(id) && codexById(id) && (rank.get(id) ?? Infinity) > d) rank.set(id, d); };
+  for (const c of n.codex) for (const e of buildsOn(c)) add(e.id, 1);
+  const parts = new Set(ruleFor(n.id).lib);
+  for (const m of NODES) {
+    const d = dist.get(m.id);
+    if (d === undefined || d === 0 || !(m.unlocks ?? []).some((u) => parts.has(u))) continue;
+    for (const c of m.codex) add(c, d);
+  }
+  const order = new Map(CODEX_ORDER.map((e, i) => [e.id, i]));
+  return [...rank.keys()].sort((a, b) => rank.get(a)! - rank.get(b)! || order.get(a)! - order.get(b)!).slice(0, max).map((id) => codexById(id)!);
 }
 
 /** Related entries both ways: those it names and those that name it. */

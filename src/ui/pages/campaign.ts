@@ -10,11 +10,10 @@ import '../../styles/level.css';
 import { BLOCKS, blockNodes } from '../../campaign/anatomy';
 import { CODEX, CODEX_KINDS, codexById, type CodexEntry } from '../../campaign/codex';
 import { searchCodex } from '../../campaign/codexsearch';
-import { type Datasheet, datasheetOf, datasheets } from '../../campaign/datasheet';
 import type { CodexMore } from '../../campaign/codexmore';
-import { CODEX_ORDER } from '../../campaign/codexlinks';
+import { CODEX_FROM, CODEX_ORDER } from '../../campaign/codexlinks';
 import type { Quiz } from '../../chapters/types';
-import { codexEntryEl } from '../../campaign/ui/codexentry';
+import { codexEntryEl, entrySheets } from '../../campaign/ui/codexentry';
 import { ancestors, dependents, isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { LESSONS } from '../../campaign/lessons';
 import { levelChallenge, levelChipId, startCandidates, startFrom } from '../../campaign/levels';
@@ -548,25 +547,13 @@ export class CampaignPage implements Page {
       }, () => { this.moreOf = () => undefined; });
     } else {
       const more = this.moreOf(e.id);
-      const sheet = more?.lib ? datasheetOf(more.lib) : undefined;
-      const sheets = sheet ? [sheetEl(sheet)] : e.kind === 'component' ? datasheets(e.id).map(sheetEl) : [];
-      detail = codexEntryEl(e, more, p.view, sheets, this.checkOf(e.id));
+      detail = codexEntryEl(e, more, p.view, entrySheets(e, more), this.checkOf(e.id));
     }
+    // Come from a level's Codex tab: the way back to it (its chip and undo history were saved, the level reopens as left).
+    let from: string | null = null;
+    try { from = sessionStorage.getItem(CODEX_FROM); } catch { /* none */ }
+    const fromNode = from ? nodeById(from) : undefined;
+    if (fromNode) detail.prepend(h('a', { class: 'lv-chip acc cx-from', href: levelChallenge(fromNode) && !fromNode.soon ? `#/campaign/play/${fromNode.id}` : `#/campaign/n/${fromNode.id}` }, icon('chevL', 12), `Back to ${fromNode.title}`));
     return h('div', { class: `cp-codex${sel ? ' has-sel' : ''}` }, list, detail);
   }
-}
-
-/** A library part's datasheet: cost, pins, and a small part's truth table. */
-function sheetEl(d: Datasheet): HTMLElement {
-  const fmt = (v: number, w: number) => (w > 4 ? `0x${v.toString(16)}` : w > 1 ? v.toString(2).padStart(w, '0') : String(v));
-  const ins = d.pins.filter((p) => p.dir !== 'out').length;
-  const widths = [...d.pins.filter((p) => p.dir !== 'out'), ...d.pins.filter((p) => p.dir === 'out')].map((p) => p.width);
-  return h('div', { class: 'cp-sheet' },
-    h('h4', null, 'Datasheet: ', h('a', { href: `#/workbench/${d.id}`, title: 'Open it in the workbench' }, d.name)),
-    h('p', { class: 'sub' }, `${d.nand.toLocaleString('en')} NAND · ${d.transistors.toLocaleString('en')} transistors · ${d.depth !== null ? `depth ${d.depth}` : 'sequential'}`),
-    h('div', { class: 'cp-sheet-cols' },
-      h('table', null, h('tr', null, h('th', null, 'pin'), h('th', null, 'dir'), h('th', null, 'bits')),
-        d.pins.map((p) => h('tr', null, h('td', null, p.name), h('td', null, p.dir), h('td', null, String(p.width))))),
-      d.table ? h('table', null, h('tr', null, d.table.head.map((x, i) => h('th', i >= ins ? { class: 'out' } : null, x))),
-        d.table.rows.map((r) => h('tr', null, r.map((v, i) => h('td', i >= ins ? { class: 'out' } : null, fmt(v, widths[i])))))) : null));
 }

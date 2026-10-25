@@ -12,6 +12,7 @@ import '../../styles/campaign.css';
 import '../../styles/level.css';
 import { caseOf } from '../../campaign/cases';
 import { codexById } from '../../campaign/codex';
+import { CODEX_FROM, levelUses, teachingLevels } from '../../campaign/codexlinks';
 import { type AreaUnit, areaBars, METRIC, measured } from '../../campaign/grade';
 import { dependents, isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { levelChallenge, levelChipId } from '../../campaign/levels';
@@ -21,7 +22,7 @@ import { actName, actTitle, nodeById } from '../../campaign/nodes';
 import { progress } from '../../campaign/progress';
 import type { CampaignNode, Metric, Par } from '../../campaign/types';
 import { criteria, gradeTable } from '../../campaign/ui/levelinfo';
-import { hideGlossary, markTerms } from '../../campaign/ui/glossaryui';
+import { hideGlossary, markTerms, setCodexOpener } from '../../campaign/ui/glossaryui';
 import { anatomySvg } from '../../campaign/ui/svgs';
 import { installChallenges } from '../../editor/challengeui';
 import { type BuildChallenge, type CheckResult, importAnswer, ruleKind, startChallenge } from '../../editor/challenges';
@@ -72,6 +73,10 @@ export class LevelPage implements Page {
   /** The walkthrough, while it is shown. */
   private walk: WalkMode | null = null;
   private chipId = '';
+  /** The codex entries read in the Codex tab, the last on top (empty: the tab's list). */
+  private cxStack: string[] = [];
+  /** The open entry's element once loaded, kept across redraws of the side panel (a progress change). */
+  private cxEl: { id: string; el: HTMLElement } | null = null;
   private offs: (() => void)[] = [];
 
   constructor(nodeId: string) {
@@ -120,12 +125,25 @@ export class LevelPage implements Page {
     this.edWrap.append(this.editor.el);
     this.el = h('div', { class: 'lv-page' }, this.bar, h('div', { class: 'lv-body' }, this.side, this.edWrap));
     this.offs.push(p.onChange(() => { this.renderBar(); this.renderSide(); }));
+    // Codex links anywhere on the screen (the tab, an entry's own links, the after-pass card) open the entry in the
+    // side pane, and so do the hover cards: leaving for the codex page would tear down the editor, its undo history
+    // and its simulation.
+    this.el.addEventListener('click', (ev) => {
+      const a = (ev.target as Element | null)?.closest?.('a[href^="#/campaign/codex/"]');
+      const me = ev as MouseEvent;
+      if (!a || (a as HTMLElement).dataset.page !== undefined || me.ctrlKey || me.metaKey || me.shiftKey) return;
+      ev.preventDefault();
+      this.readCodex(a.getAttribute('href')!.slice('#/campaign/codex/'.length));
+    });
+    setCodexOpener((id) => this.readCodex(id));
+    try { sessionStorage.removeItem(CODEX_FROM); } catch { /* not kept */ }
     this.renderBar();
     this.renderSide();
   }
 
   destroy(): void {
     hideGlossary();
+    setCodexOpener(null);
     this.walk?.leave();
     this.walk = null;
     this.offs.forEach((f) => f());
@@ -194,6 +212,7 @@ export class LevelPage implements Page {
     else this.codexTab(body);
     this.side.replaceChildren(bar, body);
     this.side.classList.toggle('folded', this.folded);
+    this.el.querySelector('.lv-body')?.classList.toggle('reading', this.tab === 'codex' && this.cxStack.length > 0 && !this.folded);
     if (settings.glossary && this.tab !== 'codex') markTerms(body, 8);
     body.classList.toggle('walking', this.tab === 'walk');
   }
@@ -283,17 +302,66 @@ export class LevelPage implements Page {
     el.append(h('div', { class: 'lv-ladder' }, rungs));
   }
 
+  /** Open a codex entry in the side pane, on top of the one read now. */
+  private readCodex(id: string): void {
+    if (!codexById(id) || !this.node) return;
+    this.result?.remove();
+    this.result = null;
+    if (this.cxStack[this.cxStack.length - 1] !== id) this.cxStack.push(id);
+    this.tab = 'codex';
+    this.folded = false;
+    this.renderSide();
+    this.side.querySelector('.lv-sidebody')?.scrollTo({ top: 0 });
+  }
+
   private codexTab(el: HTMLElement): void {
     const n = this.node!;
     const unlocked = progress().codexUnlocked();
-    if (!n.codex.length) return void el.append(h('p', { class: 'sub' }, 'This level adds nothing to the codex.'));
-    for (const id of n.codex) {
-      const e = codexById(id);
+    const id = this.cxStack[this.cxStack.length - 1];
+    if (id) return this.codexReader(el, id, unlocked.has(id));
+    const read = (x: string, label: string) => h('button', { class: 'lv-more', onclick: () => this.readCodex(x) }, label, icon('chevR', 12));
+    if (!n.codex.length) el.append(h('p', { class: 'sub' }, 'This level adds nothing to the codex.'));
+    for (const cid of n.codex) {
+      const e = codexById(cid);
       if (!e) continue;
-      el.append(unlocked.has(id)
-        ? h('section', { class: 'lv-cx' }, h('h4', null, e.title), rich('p', e.body), h('a', { class: 'lv-more', href: `#/campaign/codex/${id}` }, 'Open in the codex', icon('chevR', 12)))
+      el.append(unlocked.has(cid)
+        ? h('section', { class: 'lv-cx' }, h('h4', null, e.title), rich('p', e.body), read(cid, 'Read the full entry'))
         : h('section', { class: 'lv-cx locked' }, h('h4', null, e.title), rich('p', e.body), h('p', { class: 'sub' }, 'The full entry is added to the codex when you pass or skip this level.')));
     }
+    const uses = levelUses(n.id);
+    if (uses.length) {
+      el.append(h('section', { class: 'lv-cx-uses' }, h('h4', null, 'Uses'),
+        h('p', { class: 'sub' }, 'Taught by the levels before this one: what its parts and ideas rest on.'),
+        h('div', { class: 'lv-chips' }, uses.map((e) => h('button', { class: `lv-chip${unlocked.has(e.id) ? '' : ' locked'}`, title: unlocked.has(e.id) ? 'Read it here' : 'Not discovered yet: its summary', onclick: () => this.readCodex(e.id) }, e.title)))));
+    }
+  }
+
+  /** One entry in the pane: Back (to the entry before, or the list), the entry in its narrow layout, a link to the codex page. */
+  private codexReader(el: HTMLElement, id: string, open: boolean): void {
+    const e = codexById(id)!;
+    const before = this.cxStack.length > 1 ? codexById(this.cxStack[this.cxStack.length - 2])?.title : undefined;
+    const back = h('button', { class: 'btn sm ghost lv-cx-back', onclick: () => {
+      this.cxStack.pop();
+      this.renderSide();
+    } }, icon('chevL', 13), before ? `Back to ${before}` : 'Back to the level’s entries');
+    const page = h('a', { class: 'lv-more', href: `#/campaign/codex/${id}`, 'data-page': '', title: 'The codex page (leaves the level: your chip is saved)', onclick: () => {
+      try { sessionStorage.setItem(CODEX_FROM, this.node!.id); } catch { /* not kept */ }
+    } }, 'Codex page', icon('open', 12));
+    el.append(h('div', { class: 'lv-cx-nav' }, back, page));
+    if (!open) {
+      const where = teachingLevels(id);
+      el.append(h('section', { class: 'lv-cx locked' }, h('h4', null, e.title), rich('p', e.body),
+        h('p', { class: 'sub' }, `The full entry unlocks when you pass or skip ${where.map((w) => w.title).join(' or ') || 'its level'}.`)));
+      return;
+    }
+    if (this.cxEl?.id === id) return void el.append(this.cxEl.el);
+    const wait = h('p', { class: 'sub' }, 'Loading the entry…');
+    el.append(wait);
+    void import('../../campaign/ui/codexentry').then((m) => m.loadFullEntry(id, { narrow: true })).then((entry) => {
+      if (!entry) return void (wait.textContent = 'This entry could not be found.');
+      this.cxEl = { id, el: entry };
+      if (wait.isConnected) wait.replaceWith(entry);
+    }, () => { wait.textContent = 'The entry could not load.'; });
   }
 
   // ---- checks ------------------------------------------------------------------------------------

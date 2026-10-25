@@ -1,0 +1,16 @@
+/* The codex entry beyond level.css's .cx-* rules: one column without figures or in the level screen's pane, the
+   reader in that pane, the codex page's grouped list, landing and locked pages. Colours from the theme tokens only. */
+.cx-cols.solo { grid-template-columns: minmax(0, 1fr); }
+.cx-entry.narrow { padding: 0; border: 0; background: none; max-width: none; }
+.cx-entry.narrow .cx-cols { grid-template-columns: minmax(0, 1fr); }
+.cx-entry.narrow h2 { font-size: 18px; margin-top: 0; }
+.cx-from { margin-bottom: 8px; }
+
+/* the level screen's Codex tab: an entry read in the pane, which widens while it is open */
+@media (min-width: 901px) { .lv-body.reading { grid-template-columns: min(560px, 46vw) minmax(0, 1fr); } }
+.lv-cx-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.lv-cx-nav .lv-more { margin-top: 0; }
+button.lv-more { font: inherit; font-weight: 600; font-size: 12.5px; border: 0; background: none; padding: 0; cursor: pointer; }
+button.lv-chip { font: inherit; font-size: 12.5px; cursor: pointer; }
+.lv-chip.locked { color: var(--muted); border-style: dashed; }
+.lv-cx-uses .sub { margin-bottom: 6px; }
