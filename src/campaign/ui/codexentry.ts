@@ -239,3 +239,26 @@ export async function loadFullEntry(id: string, opts: EntryOptions = {}): Promis
   const more = m.moreOf(id);
   return codexEntryEl(e, more, progress().view, entrySheets(e, more), m.checkOf(id), opts);
 }
+
+/**
+ * An entry not discovered yet: the summary (no secret: the hover cards show it), where it unlocks, where to read about
+ * it in the chapters, its Check-yourself questions, and a button that shows the full entry anyway.
+ */
+export function lockedEntryEl(e: CodexEntry, more: CodexMore | undefined, checks: Quiz[], peek: () => void): HTMLElement {
+  const where = teachingLevels(e.id);
+  const kind = CODEX_KINDS.find((k) => k.id === e.kind)!.title.replace(/s$/, '');
+  const chapters = (more?.chapters ?? []).map((c) => chip('acc', `#/c/${c.chapter}/${c.step ?? 0}`, icon('book', 12), c.label));
+  return h('article', { class: 'cp-codex-entry cx-entry locked' },
+    h('header', { class: 'cx-head' },
+      h('h2', null, e.title, h('span', { class: 'cp-badge kind' }, kind), h('span', { class: 'cp-badge cx-lockbadge' }, icon('lock', 11), 'not discovered')),
+      rich('div', e.body, 'cx-sum'),
+      h('div', { class: 'cx-rows' },
+        where.length ? h('div', { class: 'cx-row' }, h('span', { class: 'cx-row-k' }, 'Unlocks with'), ...where.map((n) => chip('', levelHref(n), icon('flag', 12), n.title))) : null,
+        chapters.length ? h('div', { class: 'cx-row' }, h('span', { class: 'cx-row-k' }, 'Read in'), ...chapters) : null)),
+    checks.length ? h('section', { class: 'cx-check' }, h('h4', null, 'Check yourself'),
+      h('p', { class: 'sub' }, 'Already know it? These are the entry\'s own questions.'),
+      ...checks.map((q, k) => quizBox(q, `codex:${e.id}:${k}`, `${k + 1} of ${checks.length}`, () => {}))) : null,
+    h('p', null, h('button', { class: 'btn sm', onclick: peek }, 'Show the full entry anyway'),
+      h('span', { class: 'sub' }, ' It stays undiscovered: the level still unlocks it.')),
+    prevNextEl(e.id));
+}

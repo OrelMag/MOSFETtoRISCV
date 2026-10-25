@@ -14,3 +14,32 @@ button.lv-more { font: inherit; font-weight: 600; font-size: 12.5px; border: 0; 
 button.lv-chip { font: inherit; font-size: 12.5px; cursor: pointer; }
 .lv-chip.locked { color: var(--muted); border-style: dashed; }
 .lv-cx-uses .sub { margin-bottom: 6px; }
+
+/* the codex page's list: order switch beside the kind chips, acts as groups, Further under them */
+.cx-filters { display: grid; gap: 6px; margin: 6px 0 2px; }
+.cx-views { display: flex; gap: 4px; }
+.cp-codex-list .cx-grp h4 { text-transform: none; letter-spacing: 0; font-size: 12.5px; color: var(--text); margin-top: 16px; }
+.cp-codex-list h5 { margin: 8px 0 2px 8px; font: 600 10.5px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); cursor: help; }
+.cp-codex-list a.locked svg { flex: none; opacity: 0.8; }
+.cx-ranked { margin-top: 8px !important; }
+
+/* a locked entry */
+.cx-lockbadge { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); border: 1px dashed var(--border-strong); background: none; }
+.cx-entry.locked .cx-check { display: grid; gap: 10px; }
+
+/* the landing page */
+.cx-landing { display: grid; gap: 14px; }
+.cx-landing p { margin: 0; }
+.cx-landing h4 { margin: 0 0 6px; font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.cx-landing-go { display: flex; flex-wrap: wrap; gap: 8px; }
+.cx-acts { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+.cx-acts td { padding: 4px 8px 4px 0; vertical-align: middle; }
+.cx-acts td.n { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-2); white-space: nowrap; text-align: right; }
+.cx-acts td.bar { width: 30%; }
+.cx-acts .track { display: block; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.cx-acts .track i { display: block; height: 100%; background: var(--accent); }
+@media (max-width: 1000px) {
+  /* a phone: with no entry open, the landing above the list */
+  .cp-codex:not(.has-sel) .cx-landing { order: -1; }
+  .cx-acts td.bar { display: none; }
+}

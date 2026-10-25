@@ -7,8 +7,21 @@ import { ruleFor } from './graph';
 import { ACTS, NODES, nodeById } from './nodes';
 import type { CampaignNode } from './types';
 
-/** The codex in reading order: by kind as the list shows them, then as written. */
-export const CODEX_ORDER: CodexEntry[] = CODEX_KINDS.flatMap((k) => CODEX.filter((e) => e.kind === k.id));
+/**
+ * Entries a level unlocks although nothing on it (title, why, lesson, task, tips, case) names them: listed after
+ * their act's own entries, under "Further" (tests/codex-guide.test.ts checks that the level still does not name them).
+ */
+export const FURTHER = new Set(['vm', 'atomics', 'ordering', 'coherence', 'stdcell', 'metastability', 'rowhammer', 'ecc', 'amdahl', 'rv32i']);
+
+/** The codex by kind, then as written: the list's second view. */
+export const CODEX_BY_KIND: CodexEntry[] = CODEX_KINDS.flatMap((k) => CODEX.filter((e) => e.kind === k.id));
+
+export interface ActGroup {
+  /** The act's number (undefined: entries no level teaches). */
+  act?: number;
+  main: CodexEntry[];
+  further: CodexEntry[];
+}
 
 /** sessionStorage: the level the reader left for the codex page (the page's "Back to" chip). */
 export const CODEX_FROM = 'mosfet2riscv:codex-from';
@@ -37,6 +50,27 @@ export const firstTaught = (id: string): number => {
   const n = firstTeacher(id);
   return n ? levelRank(n) : Infinity;
 };
+
+/**
+ * The codex by act, the reading order: each entry where its first teaching level sits on the map (acts in map order,
+ * act P after act 0; ties in the order the level lists them), an act's Further entries after its own.
+ */
+export const CODEX_ACTS: ActGroup[] = (() => {
+  const groups = new Map<number | undefined, { main: { e: CodexEntry; k: number }[]; further: { e: CodexEntry; k: number }[] }>();
+  for (const a of ACTS) groups.set(a.num, { main: [], further: [] });
+  for (const [i, e] of CODEX.entries()) {
+    const n = firstTeacher(e.id);
+    const k = n ? levelRank(n) + n.codex.indexOf(e.id) / 100 : i;
+    if (!groups.has(n?.act)) groups.set(n?.act, { main: [], further: [] });
+    groups.get(n?.act)![n && FURTHER.has(e.id) ? 'further' : 'main'].push({ e, k });
+  }
+  const sorted = (xs: { e: CodexEntry; k: number }[]) => xs.sort((a, b) => a.k - b.k).map((x) => x.e);
+  return [...groups].map(([act, g]) => ({ ...(act === undefined ? {} : { act }), main: sorted(g.main), further: sorted(g.further) }))
+    .filter((g) => g.main.length + g.further.length > 0);
+})();
+
+/** The codex in reading order: by act (CODEX_ACTS), as the list shows it by default; Prev / Next follow it. */
+export const CODEX_ORDER: CodexEntry[] = CODEX_ACTS.flatMap((g) => [...g.main, ...g.further]);
 
 /** Entries in codex order, without `id`, at most MAX. */
 function pick(ids: Set<string>, id: string): CodexEntry[] {
