@@ -180,6 +180,7 @@ registerActions((ctx) => {
     act('go.sandbox', 'Open the sandbox', 'build your own chips', go('#/sandbox')),
     act('go.stats', 'Workbench statistics', 'gate counts and delays of every component', go('#/workbench/stats')),
     act('go.bench', 'Benchmarks', 'every CPU on the benchmark set', go('#/workbench/bench')),
+    act('go.ooolab', 'Out-of-order lab', 'the out-of-order core in any shape: CPI, lost slots, price', go('#/workbench/lab')),
   );
   return out;
 });

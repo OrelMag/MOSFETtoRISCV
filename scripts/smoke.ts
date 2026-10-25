@@ -92,6 +92,7 @@ function routes(): Route[] {
   for (const f of families) add(`#/workbench/${f.key(initialParams(f))}`, light);
   add('#/workbench/stats', light);
   add('#/workbench/bench', light);
+  add('#/workbench/lab', light);
   add('#/campaign', light);
   add('#/campaign/intro', light);
   add('#/campaign/codex', unlocked);

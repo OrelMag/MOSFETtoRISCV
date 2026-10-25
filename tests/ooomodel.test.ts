@@ -6,7 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { assemble } from '../src/riscv/asm';
 import { BENCHMARKS } from '../src/riscv/benchprograms';
 import { criticalPath, dataflow, traceOf } from '../src/riscv/ilp';
-import { OooModel, OOO_CORE, type OooConfig, type Uop } from '../src/riscv/ooomodel';
+import { configProblems, OooModel, OOO_CORE, portsOf, SLOT_CAUSES, unitOf, type OooConfig, type Uop } from '../src/riscv/ooomodel';
+import { OOO_PROGRAMS } from '../src/riscv/oooprograms';
 import { randomProgram32 } from '../src/riscv/randprog32';
 
 const pow2 = (n: number) => 2 ** Math.ceil(Math.log2(Math.max(2, n)));
@@ -25,7 +26,8 @@ function check(words: number[], cfg: Partial<OooConfig>, dmemWords: number): { c
     expect(m.robList.length).toBeLessThanOrEqual(c.rob);
     expect(m.iqList().length).toBeLessThanOrEqual(c.iq);
     expect(m.robList.filter((u) => u.cls === 'store').length).toBeLessThanOrEqual(c.sq);
-    expect(info.committed.length).toBeLessThanOrEqual(c.width);
+    expect(info.committed.length).toBeLessThanOrEqual(m.shape.commit);
+    expect(info.fetched.length).toBeLessThanOrEqual(m.shape.fetch);
     expect(info.committed.filter((u) => u.cls === 'store').length).toBeLessThanOrEqual(1);
     for (const u of info.committed) {
       expect(u.wrong).toBe(false);
@@ -36,6 +38,7 @@ function check(words: number[], cfg: Partial<OooConfig>, dmemWords: number): { c
     expect(new Set(ports).size).toBe(ports.length);
     for (const u of info.issued) {
       expect(u.d).toBeLessThan(t);
+      expect(m.shape.ports[u.port]).toContain(unitOf(u.cls));
       for (const p of u.deps) { expect(p.x).toBeGreaterThanOrEqual(0); expect(p.x).toBeLessThanOrEqual(t); }
       if (u.cls === 'load') for (const o of m.robList) if (o.cls === 'store' && o.seq < u.seq) expect(o.x, `${u.text} after ${o.text}`).toBeLessThan(t);
     }
@@ -50,6 +53,9 @@ function check(words: number[], cfg: Partial<OooConfig>, dmemWords: number): { c
     expect(bus.has(k), `two results on port ${u.port} at cycle ${u.x}`).toBe(false);
     bus.add(k);
   }
+  // Every commit slot is accounted for, the committed ones exactly.
+  expect(SLOT_CAUSES.reduce((a, k) => a + m.stats.slots[k], 0)).toBe(m.shape.commit * m.stats.cycles);
+  expect(m.stats.slots.retired).toBe(m.stats.instructions);
   return { cycles: m.stats.cycles, instructions: m.stats.instructions };
 }
 
@@ -61,6 +67,9 @@ const SHAPES: [string, Partial<OooConfig>][] = [
   ['perfect, long latencies', { predict: 'perfect', lat: { alu: 1, load: 4, mul: 4, div: 7 } }],
   ['4-wide, big window', { width: 4, rob: 32, iq: 16, sq: 8 }],
   ['tiny', { rob: 4, iq: 2, sq: 1, btb: 4, ras: 1 }],
+  ['fetch 4, commit 2, four ports', { fetch: 4, commit: 2, rob: 32, iq: 16, sq: 8,
+    ports: [['alu', 'branch', 'mem'], ['alu', 'mul', 'div'], ['alu', 'mem'], ['branch', 'div']] }],
+  ['commit 1, one port for everything else', { commit: 1, ports: [['alu', 'branch', 'mem', 'mul', 'div'], ['alu']], divider: 'pipelined' }],
 ];
 
 describe('out-of-order model', () => {
@@ -87,6 +96,37 @@ describe('out-of-order model', () => {
     expect(core).toBeLessThan(run({ inorder: true }));
     expect(run({ predict: 'perfect' })).toBeLessThan(core);
     expect(OOO_CORE.width).toBe(2);
+  });
+
+  it('ports given as the defaults run cycle for cycle as the defaults', () => {
+    const words = assemble(BENCHMARKS.find((b) => b.id === 'matmul-m')!.source).words;
+    for (const cfg of [{}, { width: 1 }, { width: 3, branchPorts: 1 as const }, { width: 4, inorder: true }]) {
+      const c = { ...OOO_CORE, ...cfg };
+      const a = new OooModel(words, cfg), b = new OooModel(words, { ...cfg, ports: portsOf(c.width, c.branchPorts), fetch: c.width, commit: c.width });
+      while (!a.halted) {
+        const x = a.step(), y = b.step();
+        expect(y.issued.map((u) => `${u.seq}@${u.port}`)).toEqual(x.issued.map((u) => `${u.seq}@${u.port}`));
+        expect(y.committed.map((u) => u.seq)).toEqual(x.committed.map((u) => u.seq));
+      }
+      expect(b.halted).toBe(true);
+    }
+  });
+
+  it('a configuration that cannot run says why', () => {
+    expect(configProblems({})).toEqual([]);
+    expect(configProblems({ ports: [['alu', 'branch', 'mem', 'mul']] })).toEqual(['No port runs divides.']);
+    expect(() => new OooModel([0x6f], { ports: [['alu']] })).toThrow(/branches/);
+  });
+
+  it('a pipelined divider overlaps independent divides; mispredictions show in the slots', () => {
+    const words = assemble(OOO_PROGRAMS.find((p) => p.id === 'chains')!.source).words;
+    const iter = check(words, {}, 64).cycles;
+    expect(check(words, { divider: 'pipelined', ports: [['alu', 'branch', 'mem'], ['alu', 'branch', 'mul', 'div'], ['div']] }, 64).cycles).toBeLessThan(iter);
+    const m = new OooModel(assemble(BENCHMARKS.find((b) => b.id === 'matmul')!.source).words, {}, { dmemWords: 64, imemWords: 128 });
+    const s = m.run();
+    expect(s.slots.mispredict).toBeGreaterThan(0.3 * 2 * s.cycles);
+    const p = new OooModel(m.words, { predict: 'perfect' }, { dmemWords: 64, imemWords: 128 }).run();
+    expect(p.slots.mispredict).toBe(0);
   });
 
   it('dataflow: the critical path is a chain of dependences whose length is the bound', () => {
