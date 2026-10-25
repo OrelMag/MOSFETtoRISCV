@@ -44,6 +44,11 @@
 .sb-dlg-msg { min-height: 1.4em; margin: 8px 0 0; font-size: 13px; color: var(--text-2); }
 .sb-dlg-msg.err { color: var(--ed-err); }
 .sb-dlg-msg.ok { color: var(--good); }
+/* the FPGA export's report (the editor's tokens, defined for both themes) */
+.sb-fpga-report { margin: 8px 0; padding-left: 18px; line-height: 1.45; color: var(--text-2); }
+.sb-fpga-report li { margin: 4px 0; }
+.sb-fpga-report li.error b { color: var(--ed-err); }
+.sb-fpga-report li.warn b { color: var(--ed-warn); }
 
 /* Delete local data: the two scopes, and the one destructive button. */
 .sb-del-opts { display: grid; gap: 6px; margin: 10px 0 2px; }

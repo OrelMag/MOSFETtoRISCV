@@ -55,6 +55,8 @@ on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-
 (Yosys synthesizes the exported dual-core and the RV32I / RV32IM system CPUs, each netlist is simulated against ours,
 every output every cycle, on their programs with irq pulses and switch changes). Run it locally (`npx vite-node scripts/verify-export.ts all`, needs `pip install yowasp-yosys`)
 before merging a change to the exporters, the dual-core or the system CPU (one design: `verify-export.ts sys-m`).
+It also waits on `fpga`: `scripts/fpga-export.ts counter7 computer` (the sandbox's FPGA export of those examples, through
+editor/fpga.ts as the File menu runs it, then Yosys `synth_gowin` on the design with its Tang Nano 9K board top; files in layout/fpga/).
 `.github/workflows/spike.yml` (every push touching `src/riscv/`, fpref.ts or the oracle; nightly on new seeds) runs
 the golden model against Spike, commit by commit (`scripts/spike-oracle.ts`, docs/VERIFICATION.md); a change to the
 ISS should leave it green before merging (its failure artifact keeps the program, ELF and Spike's log).
@@ -194,7 +196,9 @@ src/sim/       simulation core (no DOM)
                  boxes from their bit map)
   svexport.ts    exportHdl(def, 'structure' | 'synth', testbench?): whole hierarchy in one file,
                  self-checking testbench from our simulation (checked against Yosys when installed)
-  vexport.ts     synthesizable Verilog-2005 (flip-flops as processes, `hdl.synth` bodies) for Yosys / OpenROAD
+  vexport.ts     synthesizable Verilog-2005 (flip-flops as processes, `hdl.synth` bodies) for Yosys / OpenROAD;
+                 externalPorts (+ ioPart): sandbox I/O parts (isExternal, displays) punched up as ports x_<path>_<port>
+                 of every module above them; ExportResult.ports: the top's ports (TopPort, `external`: where from)
   vcd.ts         toVcd(): Value Change Dump of recorded traces
   fsmread.ts     readFsm(sim, spec): a circuit explored from reset (every input combination, breadth first; a state =
                  every net's value, so nothing needs naming), its states paired with the spec's; readbackSpec draws it
@@ -833,7 +837,13 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   props.ts       properties of the selection or the chip, diagnostics; registerPropsSection
   fileui.ts      File menu (export / import / share link / Verilog / images / chip manager: grouped by folder,
                  rows dragged onto folders), share banner, drag-and-drop import, autosave indicator, backup notice;
-                 installFiles(ed) per page
+                 installFiles(ed) per page; Export Verilog for FPGA… (fpga.ts / zip.ts loaded on demand: the report in a
+                 dialog, the files as one stored .zip)
+  fpga.ts        DOM-free FPGA export: fpgaExport(def, base) → files (design .v through vexport with external ports and
+                 powerOnZero, <base>_board.v: 27 MHz ÷ 2^DIV_LOG2 clock, power-on reset, boardPlan's buttons / LEDs /
+                 header pins, tangnano9k.cst labelled an example, README.txt) + issues (latchLoops: NAND SCCs outside
+                 processes, named by the smallest instance holding them; ff chips with extra pins; initial contents;
+                 asynchronous-read memories; pins with no board pin); zip.ts zipFiles (stored, CRC-32)
   projectui.ts   the project switcher above the palette's search (New, Duplicate, Rename, Export, Import a file as a
                  new project, Delete); the page (ui/pages/sandbox.ts) rebuilds the editor on another project, and a
                  campaign level's chip (u_ch_cp_*) always opens in the first project
