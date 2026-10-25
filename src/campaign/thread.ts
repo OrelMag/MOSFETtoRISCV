@@ -81,13 +81,16 @@ export function blockUse(n: CampaignNode): BlockUse | undefined {
   return undefined;
 }
 
+/** A block's name in a tag or a chain (the diagram's '+1' alone says little). */
+export const blockLabel = (id: string): string => (id === 'plus1' ? 'PC + 1' : BLOCKS.find((b) => b.id === id)?.label ?? id);
+
 /** The block a map card is tagged with: named by the level itself (anatomy or uses), never guessed. */
 export function cardBlock(n: CampaignNode): { label: string; all: boolean } | undefined {
   const id = n.anatomy?.[0] ?? threadOf(n.id)?.uses?.[0];
   if (!id) return undefined;
   if (id === UNIVERSAL) return { label: 'everywhere', all: true };
   const b = BLOCKS.find((x) => x.id === id);
-  return b ? { label: b.label, all: false } : undefined;
+  return b ? { label: blockLabel(b.id), all: false } : undefined;
 }
 
 // ---- "Goes into" --------------------------------------------------------------------------------
@@ -138,7 +141,7 @@ export function goesInto(id: string): Chain | undefined {
   const toCore = last.kind === 'core' ? [last] : pathTo(last, (m) => m.kind === 'core') ?? [last];
   const nodes = [...toBlock, ...toCore.slice(1)];
   const b = main ? BLOCKS.find((x) => x.id === main) : undefined;
-  const block = use?.all ? 'all' as const : b ? { id: b.id, label: b.label } : undefined;
+  const block = use?.all ? 'all' as const : b ? { id: b.id, label: blockLabel(b.id) } : undefined;
   if (nodes.length < 2 && !block) return undefined;
   return { nodes, block };
 }

@@ -4,7 +4,8 @@
 import { s } from '../../ui/dom';
 import { BLOCKS, blockNodes, LINKS, VIEW } from '../anatomy';
 import { ancestors, isDone, statusOf, type ProgressView } from '../graph';
-import { BAND_GAP, COL_GAP, LINE_GAP, mapLayout, NODE_H, NODE_W, OPTIONAL_ACTS, ROW_GAP } from '../layout';
+import { BAND_GAP, COL_GAP, FOOT_LABEL_W, LINE_GAP, mapLayout, NODE_H, NODE_W, OPTIONAL_ACTS, ROW_GAP, SUB_LINE } from '../layout';
+import { actDone, actEnd, cardBlock } from '../thread';
 import { ACTS, actName, NODES } from '../nodes';
 import { levelCardLabel } from '../cardlabel';
 import type { CampaignNode } from '../types';
@@ -56,7 +57,9 @@ function pressable<T extends SVGElement>(g: T, f: () => void): T {
  */
 export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string | undefined, go: (id: string) => void, maxCols = Infinity,
   folded: ReadonlySet<number> = new Set(), fold?: (act: number, folded: boolean) => void): SVGSVGElement {
-  const L = mapLayout(maxCols, folded);
+  // Each act's blurb under its title; a finished act's end card at its foot.
+  const ended = new Set(ACTS.map((a) => a.num).filter((a) => actEnd(a) && actDone(a, view)));
+  const L = mapLayout(maxCols, folded, { blurb: (a) => ACTS.find((x) => x.num === a)?.blurb, end: actEnd }, ended);
   const svg = s('svg', { class: 'cp-map', viewBox: `0 0 ${L.w} ${L.h}`, width: L.w, height: L.h, role: 'group', 'aria-label': 'The campaign map' });
   // Painted bottom up: the bands, the edges, then each act's title, buttons and cards (the edges run under the cards).
   const bands = s('g', { class: 'cp-bands', 'aria-hidden': 'true' });
@@ -86,6 +89,27 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
     bands.append(s('rect', { class: 'cp-band', x: 4, y: b.y, width: L.w - 8, height: b.h, rx: 10 }));
     // the group is named after the act: its title would be read twice
     ag.append(s('text', { class: 'cp-band-title', x: 16, y: b.y + 21, 'aria-hidden': 'true' }, name));
+    if (b.sub) {
+      // the whole blurb for assistive tech and as a tooltip; the drawing may cut it short
+      ag.append(s('text', { class: 'cp-band-sub', x: 16, y: b.y + 38, role: 'note', 'aria-label': act.blurb.replace(/<[^>]+>/g, '') },
+        s('title', null, act.blurb.replace(/<[^>]+>/g, '')),
+        ...b.sub.map((line, i) => s('tspan', { x: 16, dy: i ? SUB_LINE : 0, 'aria-hidden': 'true' }, line))));
+    }
+    const end = b.foot ? actEnd(act.num) : undefined;
+    if (b.foot && end) {
+      const f = b.foot, tx = 16 + FOOT_LABEL_W;
+      const half = (label: string, lines: string[], y0: number, cls: string) => [
+        s('text', { class: `cp-foot-k ${cls}`, x: 16, y: y0 }, label),
+        s('text', { class: 'cp-foot-t', x: tx, y: y0 }, ...lines.map((line, i) => s('tspan', { x: tx, dy: i ? SUB_LINE : 0 }, line))),
+      ];
+      const plain = (t: string) => t.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+      ag.append(s('g', { class: 'cp-foot', role: 'note', 'aria-label': `${actName(act.num)} complete. Can now: ${plain(end.can)} Still can't: ${plain(end.cannot)}` },
+        s('title', null, `Can now: ${plain(end.can)}\nStill can’t: ${plain(end.cannot)}`),
+        s('line', { class: 'cp-foot-rule', x1: 16, x2: L.w - 16, y1: f.y - 28, y2: f.y - 28 }),
+        s('text', { class: 'cp-foot-head', x: 16, y: f.y - 14 }, `✓ ${actName(act.num)} complete`),
+        ...half('Can now', f.can, f.y, 'can'),
+        ...half('Still can’t', f.cannot, f.y + f.can.length * SUB_LINE, 'cannot')));
+    }
     if (fold && OPTIONAL_ACTS.has(act.num)) {
       ag.append(pressable(s('g', { class: 'cp-fold', 'data-act': act.num, tabindex: 0, role: 'button', 'aria-expanded': 'true', 'aria-label': `Fold ${name}` },
         s('title', null, 'Fold this optional act to one line'),
@@ -125,7 +149,8 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
     const st = statusOf(n, view, unlockAll);
     const stars = view(n.id)?.stars ?? 0;
     // A locked level opens too (its panel says what it needs), so it is a working button that says "locked", not a disabled one.
-    const label = levelCardLabel(n, st, stars);
+    const blk = cardBlock(n);
+    const label = `${levelCardLabel(n, st, stars)}${blk ? (blk.all ? ', used in every block' : `, part of the ${blk.label} block`) : ''}`;
     const g = s('g', {
       class: `cp-node ${st}${n.optional ? ' opt' : ''}${n.soon ? ' soon' : ''}${n.id === selected ? ' sel' : ''}`,
       transform: `translate(${p.x},${p.y})`, tabindex: 0, role: 'button', 'data-node': n.id,
@@ -138,6 +163,14 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
     st === 'solved' && n.kind !== 'lesson' ? s('text', { class: 'cp-node-stars', x: NODE_W - 8, y: 15, 'text-anchor': 'end' }, '★'.repeat(stars) + '☆'.repeat(3 - stars)) : null,
     st === 'skipped' ? s('text', { class: 'cp-node-skip', x: NODE_W - 8, y: 15, 'text-anchor': 'end' }, 'skipped') : null,
     st === 'locked' ? s('text', { class: 'cp-node-lock', x: NODE_W - 8, y: 15, 'text-anchor': 'end' }, 'locked') : null);
+    if (blk) {
+      // the block it ends up in, as a tab on the card's bottom edge (lit while the card is pointed at)
+      const w = 16 + blk.label.length * 5.6;
+      g.append(s('g', { class: `cp-blk${blk.all ? ' all' : ''}`, transform: `translate(${NODE_W - 10 - w},${NODE_H - 6})`, 'aria-hidden': 'true' },
+        s('rect', { width: w, height: 12, rx: 6 }),
+        s('circle', { cx: 7, cy: 6, r: 2.5 }),
+        s('text', { x: 12, y: 9 }, blk.label)));
+    }
     const from = crossIn.get(n.id);
     if (from) {
       g.append(s('circle', { class: 'cp-port', cx: 0, cy: NODE_H / 2, r: 4, 'aria-hidden': 'true' },
@@ -163,7 +196,8 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
 }
 
 /** The anatomy diagram; a click on a block calls `pick`. Without `pick` it is a picture (the level panel's, inside a link). */
-export function anatomySvg(view: ProgressView, selected: string | undefined, pick?: (id: string) => void): SVGSVGElement {
+export function anatomySvg(view: ProgressView, selected: string | ReadonlySet<string> | undefined, pick?: (id: string) => void): SVGSVGElement {
+  const isSel = (id: string) => (typeof selected === 'string' ? id === selected : !!selected?.has(id));
   const by = blockNodes();
   const svg = s('svg', { class: 'cp-anatomy', viewBox: `0 0 ${VIEW.w} ${VIEW.h}`, role: pick ? 'group' : 'img', 'aria-label': 'Block diagram of the pipelined RV16 processor' });
   const pos = new Map(BLOCKS.map((b) => [b.id, b]));
@@ -189,7 +223,7 @@ export function anatomySvg(view: ProgressView, selected: string | undefined, pic
   for (const b of BLOCKS) {
     const ids = by.get(b.id) ?? [];
     const built = ids.length > 0 && ids.every((id) => isDone(view(id)));
-    const g = s('g', { class: `cp-block${b.kind ? ` ${b.kind}` : ''}${built ? ' built' : ''}${b.id === selected ? ' sel' : ''}`, 'data-block': b.id },
+    const g = s('g', { class: `cp-block${b.kind ? ` ${b.kind}` : ''}${built ? ' built' : ''}${isSel(b.id) ? ' sel' : ''}`, 'data-block': b.id },
       s('title', null, `${b.label}${built ? ' (built)' : ''}`),
       s('rect', { x: b.x, y: b.y, width: b.w, height: b.h, rx: b.kind === 'preg' ? 3 : 7 }),
       b.kind === 'preg'
@@ -199,7 +233,7 @@ export function anatomySvg(view: ProgressView, selected: string | undefined, pic
       g.setAttribute('tabindex', '0');
       g.setAttribute('role', 'button');
       g.setAttribute('aria-label', `${b.label}${built ? ', built' : ''}`);
-      if (b.id === selected) g.setAttribute('aria-current', 'true');
+      if (isSel(b.id)) g.setAttribute('aria-current', 'true');
       pressable(g, () => pick(b.id));
     }
     svg.append(g);

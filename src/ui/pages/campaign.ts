@@ -34,6 +34,8 @@ import { h, icon } from '../dom';
 import { settings } from '../settings';
 import type { Page } from './chapter';
 import { tipsOf } from '../../campaign/nudges';
+import { closedAct } from '../../campaign/thread';
+import { actEndEl, reachEl, type ThreadCtx, whyStackEl } from '../../campaign/ui/whystack';
 
 const html = (tag: 'div' | 'p' | 'span', cls: string, content: string) => {
   const el = h(tag, { class: cls });
@@ -286,7 +288,7 @@ export class CampaignPage implements Page {
         n.optional ? h('span', { class: 'cp-badge opt' }, 'optional') : null,
         n.soon ? h('span', { class: 'cp-badge soon' }, 'coming soon') : h('span', { class: `cp-badge st ${st}` }, STATUS_LABEL[st]),
         np?.stars ? h('span', { class: 'cp-badge stars', title: 'Best result' }, '★'.repeat(np.stars) + '☆'.repeat(3 - np.stars)) : null),
-      h('div', { class: 'cp-why' }, h('h4', null, 'Why you need it'), html('p', '', n.why)));
+      whyStackEl(n, this.ctx(), 'map', { title: 'Why you need it' }));
 
     if (n.id === 'intro') {
       el.append(h('a', { class: 'cp-mini-anatomy', href: '#/campaign/intro', title: 'Open the full diagram', 'aria-label': 'The CPU: open the full block diagram' }, anatomySvg(p.view, undefined)));
@@ -327,15 +329,13 @@ export class CampaignPage implements Page {
       el.append(gradeTable(n));
     }
 
-    // What it builds on, what it unlocks.
-    const req = n.requires.map((r) => nodeById(r)).filter((x): x is CampaignNode => !!x);
+    // The parts it may use, what it unlocks.
     const unlocks = (n.unlocks ?? []).map((u) => (u.endsWith('*') ? `${u.slice(0, -1)}…` : resolveComponent(u)?.name ?? u));
     const rule = ch && typeof ch.allowed === 'object' ? ch.allowed.lib.filter((x) => x !== 'nand') : [];
+    // (what it builds on and what uses it sit in the why stack, above)
     el.append(h('div', { class: 'cp-deps' },
-      req.length ? h('p', null, h('b', null, 'Builds on: '), req.map((r, i) => [i ? ', ' : '', h('a', { href: `#/campaign/n/${r.id}`, class: isDone(p.view(r.id)) ? 'done' : '' }, r.title)])) : null,
       rule.length ? h('p', null, h('b', null, 'Parts you may place: '), 'NAND, ', rule.map((u) => (u.endsWith('*') ? `${u.slice(0, -1)}…` : resolveComponent(u)?.name ?? u)).join(', ')) : null,
-      unlocks.length ? h('p', null, h('b', null, 'Unlocks: '), unlocks.join(', ')) : null,
-      dependents(n.id).length ? h('p', null, h('b', null, 'Leads to: '), dependents(n.id).map((d, i) => [i ? ', ' : '', h('a', { href: `#/campaign/n/${d.id}` }, d.title)])) : null));
+      unlocks.length ? h('p', null, h('b', null, 'Unlocks: '), unlocks.join(', ')) : null));
 
     // Tips, one at a time.
     if (tipsOf(n).length && !n.soon) {
@@ -359,8 +359,19 @@ export class CampaignPage implements Page {
       el.append(h('div', { class: 'cp-chapters' }, h('h4', null, 'Go deeper'),
         n.chapters.map((c) => h('a', { class: 'cp-chip', href: `#/c/${c.chapter}/${c.step ?? 0}` }, icon('book', 13), c.label))));
     }
+    // A done level that closes its act (the last of a chain in it): what the machine can do now.
+    if (closedAct(n, p.view) !== undefined && !dependents(n.id).some((d) => d.act === n.act && !d.optional)) {
+      const end = actEndEl(n.act, this.ctx(), false);
+      if (end) el.append(end);
+    }
     el.append(this.actions(n, st, ch));
     return el;
+  }
+
+  /** How the thread's links open a level here: its panel on the map. */
+  private ctx(): ThreadCtx {
+    const p = progress();
+    return { view: p.view, route: (m) => `#/campaign/n/${m.id}`, open: (m) => !m.soon && statusOf(m, p.view, p.unlockAll) !== 'locked' };
   }
 
   private actions(n: CampaignNode, st: ReturnType<typeof statusOf>, ch: BuildChallenge | undefined): HTMLElement {
@@ -400,7 +411,9 @@ export class CampaignPage implements Page {
         ? h('button', { class: 'btn ghost', title: 'Back to unfinished', onclick: () => p.unskip(n.id) }, 'Un-skip')
         : h('button', { class: 'btn ghost', title: 'Count this level as done: its part unlocks (the reference solution stands in for yours)', onclick: () => p.skip(n.id) }, 'Skip'));
     }
-    const next = isDone(p.view(n.id)) ? nextAvailable(p.view, p.unlockAll, n.id) : undefined;
+    // after a pass: the level it moved closest to ready, else the next open one in order; and its side quest
+    const reach = isDone(p.view(n.id)) ? reachEl(n, this.ctx()) : undefined;
+    const next = reach ? reach.next ?? nextAvailable(p.view, p.unlockAll, n.id) : undefined;
     // the main action once nothing else is (a lesson read, a drill passed): where to go next
     if (next) {
       const main = !bar.querySelector('.btn.primary');
@@ -409,6 +422,7 @@ export class CampaignPage implements Page {
       if (main && n.kind === 'lesson') bar.insertBefore(go, bar.children[1] ?? null);
       else bar.append(go);
     }
+    if (reach?.side && reach.side.id !== next?.id) bar.append(h('a', { class: 'btn ghost', href: `#/campaign/n/${reach.side.id}` }, `Side quest: ${reach.side.title}`));
     // sticky (campaign.css) only with a main action to keep in reach: a drill's lone Skip stays at the end
     bar.classList.toggle('sticky', !!bar.querySelector('.btn.primary'));
     return bar;
