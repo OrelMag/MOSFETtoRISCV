@@ -192,6 +192,29 @@ describe('Digital import', () => {
     expect(r.mapping.map((m) => m.from)).toEqual(expect.arrayContaining(['Counter', 'Register', 'ROM']));
   });
 
+  it('a RAM: written at the clock edge with str, read on D', () => {
+    const { r, top } = load(['ram.dig']);
+    const sim = run(top);
+    sim.set({ C: 0, str: 1, ld: 1, A: 2, Din: 7 });
+    sim.set({ C: 1 });
+    sim.set({ C: 0, A: 1, Din: 9 });
+    sim.set({ C: 1 });
+    sim.set({ C: 0, str: 0, A: 2 });
+    expect(sim.get('D')).toBe(7);
+    sim.set({ A: 1 });
+    expect(sim.get('D')).toBe(9);
+    expect(r.problems).toEqual(['ram ▸ RAMDualPort: ld is ignored: the RAM always drives D']);
+  });
+
+  it("follows XStream's references and reads version-0 files on their 10 px grid", () => {
+    const el = (rot: string, x: number) => `<visualElement><elementName>Not</elementName><elementAttributes><entry><string>rotation</string>${rot}</entry></elementAttributes><pos x="${x}" y="50"/></visualElement>`;
+    const text = `<circuit><version>2</version><attributes/><visualElements>${el('<rotation rotation="1"/>', 100)}${el('<rotation reference="../../../../visualElement[1]/elementAttributes/entry/rotation"/>', 200)}</visualElements><wires/></circuit>`;
+    const r = importDigital([{ name: 'refs.dig', text }], { taken: new Set() }) as ImportResult;
+    expect(r.chips[0].parts.map((p) => p.rot)).toEqual([3, 3]);
+    const old = importDigital([{ name: 'old.dig', text: '<circuit><visualElements><visualElement><elementName>In</elementName><elementAttributes><entry><string>Label</string><string>x</string></entry></elementAttributes><pos x="30" y="40"/></visualElement></visualElements><wires/></circuit>' }], { taken: new Set() }) as ImportResult;
+    expect(old.chips[0].pins[0].at).toEqual([6, 8]);
+  });
+
   it('elements it cannot draw and files it was not given become empty chips with their pins', () => {
     const { r, lib } = load(['unknown.dig']);
     allWiresKept(r, lib);

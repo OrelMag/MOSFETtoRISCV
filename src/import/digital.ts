@@ -1073,7 +1073,7 @@ class Sheet {
       if (w) pin.width = w;
     }
 
-    for (const n of this.ifWired) if (live(key(n.at))) this.problem(n.e, n.msg);
+    for (const n of this.ifWired) if (this.used.has(key(n.at))) this.problem(n.e, n.msg);
     // stubs: pins as Digital draws them, or inferred from the wire ends around the element
     for (const s of this.pending) {
       this.cur = s.e;
