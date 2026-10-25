@@ -178,6 +178,8 @@ export class Stage {
   private timingBtn: HTMLButtonElement;
   private panesBtn: HTMLButtonElement;
   private moreBtn: HTMLButtonElement;
+  /** Aborted by destroy(): the document listeners this stage added. */
+  private life = new AbortController();
   private moreMenu: HTMLElement;
   /** The bar's buttons fitBar may move into More, in that order, with what each does there. */
   private shedGroups: { els: HTMLElement[]; items: { label: string; hint?: string; icon: string; on?: () => boolean; run: () => void }[] }[] = [];
@@ -236,7 +238,7 @@ export class Stage {
     } }, icon('image', 15), h('span', { class: 'lbl' }, 'Image'));
     document.addEventListener('pointerdown', (e) => {
       if (!imgMenu.contains(e.target as Node) && !imgBtn.contains(e.target as Node)) imgMenu.classList.remove('open');
-    });
+    }, { signal: this.life.signal });
     // The learner's layout of this level (view/layout.ts): unravel its pointers, reset it. The menu closes on any
     // press outside it, this button's too: a press that found it open only closes it.
     let layoutWasOpen = false;
@@ -271,7 +273,7 @@ export class Stage {
     const moreWrap = h('div', { class: 'pal-wrap stage-more-wrap', hidden: true }, more, moreMenu);
     document.addEventListener('pointerdown', (e) => {
       if (!moreWrap.contains(e.target as Node)) this.toggleMore(false);
-    });
+    }, { signal: this.life.signal });
     moreMenu.addEventListener('keydown', (e) => {
       const items = [...moreMenu.querySelectorAll<HTMLElement>('button')];
       const i = items.indexOf(document.activeElement as HTMLElement);
@@ -367,6 +369,11 @@ export class Stage {
       this.fitBar();
       this.fitControls();
     }).observe(this.canvas);
+    // web fonts change every label's width without resizing the canvas (a weight first used later loads later)
+    document.fonts?.addEventListener('loadingdone', () => {
+      this.fitBar();
+      this.fitControls();
+    }, { signal: this.life.signal });
   }
 
   /** Open or close the bar's More menu, filled with the shed buttons' actions as they stand now. */
@@ -1633,5 +1640,6 @@ export class Stage {
     this.panels.forEach((p) => p.destroy?.());
     this.leaf?.widget.destroy?.();
     closePopover();
+    this.life.abort();
   }
 }
