@@ -139,7 +139,7 @@ export const NODES: CampaignNode[] = [
   {
     id: 'h_loader', act: 11, title: 'Program on cards', kind: 'build', optional: true, requires: ['h_card', 'r_clock'], base: BUILDCARD.h_loader,
     par: { relays: 233, cycles: 182 }, gives: ['not', 'and', 'or', 'dff', 'counter8', 'mux2x8', 'cpu4_proc', 'ram256x16'],
-    why: 'A computer with an empty memory and a deck in the reader. Build the loader: a counter that addresses the memory, a write for each card, and the switch that hands memory to the 4-bit CPU once the hopper is empty. The Z3 read its program off punched film the same way, and the loader is priced as the Z3 was built: in relays.',
+    why: 'A computer with an empty memory and a deck in the reader. Build the loader: a counter that addresses the memory, a write for each card, and the switch that hands memory to the 4-bit CPU once the hopper is empty. The Z3 never did this: it ran its film as it read it. A stored-program machine copies the deck into memory first: that copy is a loader. It is priced as the Z3 was built: in relays.',
     tips: [
       'Tie the reader\'s next to 1: it takes a card at every rising edge one waits. Then ready is the write enable: the card\'s word goes into the RAM word the counter addresses, and the counter (enabled by ready) moves on at the same edge.',
       'The RAM\'s address is a 2:1 mux on run: the counter while loading, the CPU\'s pc after. Tie test and sw to 0.',
