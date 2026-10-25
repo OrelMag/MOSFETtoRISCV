@@ -5,7 +5,7 @@
 // to EXIT.
 
 import {
-  CAUSE, CSR16, decode16, MIP_MEIP, CSR16_UNUSED, MMIO16, MMIO_BASE, MSTATUS_MIE, MSTATUS_MPIE, sext,
+  CAUSE, CSR16, decode16, MIP_MEIP, CSR16_UNUSED, MMIO16, MMIO_BASE, MSTATUS_MIE, MSTATUS_MPIE, SCREEN16_IO, sext,
 } from './isa16';
 
 export interface Iss16Options {
@@ -25,6 +25,11 @@ export interface Iss16Options {
    * each load stalling the processor DMA_DEV16.STALL cycles. Steps then count cycles, stalls included.
    */
   dma?: boolean;
+  /**
+   * The core benches' screen (SCREEN16_IO): a store to BASE … BASE + 1023 paints pixel (x, y) = (a & 31, (a >> 5) & 31)
+   * of `screen` instead of writing the data memory; a load there reads the data memory as at any other address.
+   */
+  screen?: boolean;
 }
 
 /** The boot puzzle's devices (Iss16Options.dma): DMA registers below the MMIO block, flash in the upper half. */
@@ -66,12 +71,14 @@ export class Iss16 {
   written = 0b1;
   /** The DMA engine (opts.dma): its pointers, the words left, the cycles towards the next word. */
   dma = { src: 0, dst: 0, left: 0, acc: 0 };
+  /** The screen's pixels (opts.screen), RGB565, row by row. */
+  screen = new Uint16Array(SCREEN16_IO.SIZE * SCREEN16_IO.SIZE);
   /** Cycles the current instruction stalls (a flash load). */
   private stall = 0;
   readonly opts: Required<Iss16Options>;
 
   constructor(program: ArrayLike<number>, opts: Iss16Options = {}, data?: Map<number, number>) {
-    this.opts = { dmemWords: 65536, m: false, system: false, strictInit: false, wrap: false, dma: false, ...opts };
+    this.opts = { dmemWords: 65536, m: false, system: false, strictInit: false, wrap: false, dma: false, screen: false, ...opts };
     this.imem = new Uint16Array(Math.max(1, program.length));
     this.imem.set(Array.from(program, (w) => w & M16));
     this.dmem = new Uint16Array(this.opts.dmemWords);
@@ -123,6 +130,10 @@ export class Iss16 {
         case DMA_DEV16.CLEAR: this.irq = 0; return;
       }
       if (a >= DMA_DEV16.FLASH && a <= DMA_DEV16.FLASH_END) throw new Error(`a store to flash (0x${a.toString(16)}): flash is not written by stores`);
+    }
+    if (this.opts.screen && a >= SCREEN16_IO.BASE && a < SCREEN16_IO.BASE + this.screen.length) {
+      this.screen[a - SCREEN16_IO.BASE] = v;
+      return;
     }
     if (a >= MMIO_BASE) {
       switch (a) {
@@ -281,6 +292,15 @@ export class Iss16 {
     return info;
   }
 
+  /** The data address the next step loads from (null: it is no load, or the machine halts or takes an interrupt first). */
+  nextLoad(): number | null {
+    if (this.halted) return null;
+    const c = this.csr;
+    if (this.opts.system && this.irq && c[CSR16.mstatus] & MSTATUS_MIE && c[CSR16.mie] & MIP_MEIP) return null;
+    const d = decode16(this.pc < this.imem.length ? this.imem[this.pc] : 0);
+    return d.spec?.name === 'lw' ? (this.x[d.rs1] + d.imm) & M16 : null;
+  }
+
   /** Run to a halt or `max` steps; returns the steps executed. */
   run(max = 100000): number {
     const s0 = this.steps;
@@ -292,17 +312,17 @@ export class Iss16 {
     return {
       pc: this.pc, x: this.x.slice(), dmem: this.dmem.slice(), csr: this.csr.slice(), steps: this.steps, halted: this.halted, error: this.error,
       exitCode: this.exitCode, console: this.console, out: [...this.out], input: [...this.input], leds: this.leds, switches: this.switches,
-      irq: this.irq, written: this.written, dma: { ...this.dma },
+      irq: this.irq, written: this.written, dma: { ...this.dma }, screen: this.screen.slice(),
     };
   }
 
   restore(v: Iss16State): void {
-    Object.assign(this, { ...v, x: v.x.slice(), dmem: v.dmem.slice(), csr: v.csr.slice(), out: [...v.out], input: [...v.input], dma: { ...v.dma } });
+    Object.assign(this, { ...v, x: v.x.slice(), dmem: v.dmem.slice(), csr: v.csr.slice(), out: [...v.out], input: [...v.input], dma: { ...v.dma }, screen: v.screen.slice() });
   }
 }
 
 export interface Iss16State {
   pc: number; x: Uint16Array; dmem: Uint16Array; csr: Uint16Array; steps: number; halted: boolean; error: string | null;
   exitCode: number | null; console: string; out: number[]; input: number[]; leds: number; switches: number;
-  irq: number; written: number; dma: { src: number; dst: number; left: number; acc: number };
+  irq: number; written: number; dma: { src: number; dst: number; left: number; acc: number }; screen: Uint16Array;
 }
