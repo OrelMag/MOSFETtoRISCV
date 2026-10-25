@@ -1,7 +1,8 @@
 // Where each level sits on the campaign map: one horizontal band per act; inside an act, a
 // node's column is the longest chain of same-act requirements before it, and nodes in a column
 // are ordered by the rows of what they require (fewer crossings). An act with more columns than
-// the map's width holds wraps them onto further lines, like text, as evenly as it can. No DOM.
+// the map's width holds wraps them onto further lines, like text, as evenly as it can. An act with
+// labelled rows (ACT_ROWS) does all that per row, the rows one under the other. No DOM.
 
 import type { ProgressView } from './graph';
 import { ACTS, NODES, nodeById } from './nodes';
@@ -10,14 +11,36 @@ import type { CampaignNode } from './types';
 export const NODE_W = 168, NODE_H = 46, COL_GAP = 32, ROW_GAP = 14, LINE_GAP = 26, BAND_HEAD = 34, BAND_GAP = 18, MARGIN = 16;
 /** A folded act's band: its title and a line saying what it holds. */
 export const FOLDED_H = 54;
+/** A labelled row's header line. */
+export const ROW_HEAD = 22;
+
+/**
+ * Acts drawn as labelled rows, each laid out like an act of its own: the side quests by subject, the GPU by
+ * what it adds. Every level of such an act is in exactly one row; no level requires one in a later row.
+ */
+export const ACT_ROWS: Readonly<Record<number, readonly { label: string; ids: readonly string[] }[]>> = {
+  8: [
+    { label: 'Multiply & divide', ids: ['o_lesson', 'o_mulseq', 'o_mularr', 'o_mcore', 'o_div', 'o_dcore'] },
+    { label: 'Floating point', ids: ['n_float', 'o_fpunpack', 'o_fpround', 'o_fpsticky', 'o_fplzc', 'o_fpnorm', 'o_fpadd', 'o_fpmul', 'o_fpcmp', 'o_fpcvt'] },
+  ],
+  9: [
+    { label: 'Lanes', ids: ['k_lesson', 'k_lanes', 'k_vrf', 'k_mask', 'k_simd', 'k_stack', 'k_simt', 'p_saxpy', 'p_reduce'] },
+    { label: 'Warps', ids: ['k_coal', 'k_warps', 'p_hist'] },
+    { label: 'Pixels', ids: ['k_edge', 'k_tile', 'k_raster', 'k_frame', 'p_spin'] },
+  ],
+};
 
 export interface Placed {
   node: CampaignNode;
   x: number;
   y: number;
-  /** The act's line it sits on (0 unless the act wraps), and the top of that line's first row. */
+  /** The act's line it sits on (0 unless the act wraps; numbered on through an act's labelled rows), and the top of that line's first row. */
   line: number;
   lineY: number;
+  /** The channel above its line that edges from the act's earlier lines run along. */
+  chanY: number;
+  /** Its labelled row in the act (ACT_ROWS), 0 in an act without rows. */
+  row: number;
 }
 
 export interface Band {
@@ -26,6 +49,53 @@ export interface Band {
   h: number;
   /** Drawn as a header only: none of its levels is placed. */
   folded?: boolean;
+  /** Labelled rows (ACT_ROWS): each label's baseline. */
+  rows?: { label: string; y: number }[];
+  /** The act's blurb as subtitle lines under its title (plain text). */
+  sub?: string[];
+  /** A finished act's end card at the band's foot (thread.ts ActEnd): its top and each half's lines. */
+  foot?: { y: number; can: string[]; cannot: string[]; links: FootLink[] };
+}
+
+/** A way on in a finished act's footer (the end card's next act and side quests), as a pill: its left, baseline and width. */
+export interface FootLink {
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+}
+
+/** Footer link pills: height, gap, padding around the label (10.5 px text). */
+export const LINK_H = 20, LINK_GAP = 8, LINK_PAD = 10, LINK_CHAR_W = 5.6;
+
+/** Subtitle and footer text: line height, the most lines of each, and an estimate of a character's width (11–12 px text). */
+export const SUB_LINE = 14, SUB_LINES = 2, FOOT_LINES = 3, CHAR_W = 6.2, FOOT_LABEL_W = 96;
+/** The subtitle's first baseline below its band's top (the title's is at 21). */
+export const SUB_Y = 38;
+
+/** `text` (markup stripped) in lines of at most `width` px; the last ends in … when it does not fit in `max`. */
+export function wrapText(text: string, width: number, max: number): string[] {
+  const words = text.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim().split(' ');
+  const per = Math.max(12, Math.floor(width / CHAR_W));
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    if (cur && cur.length + 1 + w.length > per) {
+      lines.push(cur);
+      cur = w;
+    } else cur = cur ? `${cur} ${w}` : w;
+  }
+  if (cur) lines.push(cur);
+  if (lines.length <= max) return lines;
+  const out = lines.slice(0, max);
+  out[max - 1] = `${out[max - 1].slice(0, per - 1).replace(/[\s,;:.]+\S*$/, '')}…`;
+  return out;
+}
+
+/** What a band shows besides its levels: an act's blurb, and the end card of a finished act. */
+export interface BandText {
+  blurb: (act: number) => string | undefined;
+  end: (act: number) => { can: string; cannot: string; links?: string[] } | undefined;
 }
 
 export interface MapLayout {
@@ -67,11 +137,16 @@ export function foldedActs(view: ProgressView, open: (act: number) => boolean | 
 
 const cached = new Map<string, MapLayout>();
 
-/** The map with at most `maxCols` columns on a line (Infinity: every act on one line); the acts in `folded` as headers only. */
-export function mapLayout(maxCols = Infinity, folded: ReadonlySet<number> = new Set()): MapLayout {
-  const key = `${maxCols}|${[...folded].sort((a, b) => a - b).join(',')}`;
+/**
+ * The map with at most `maxCols` columns on a line (Infinity: every act on one line); the acts in `folded` as headers only.
+ * With `text`, an open band carries its act's blurb under the title and an act in `ended` its end card at its foot.
+ */
+export function mapLayout(maxCols = Infinity, folded: ReadonlySet<number> = new Set(), text?: BandText, ended: ReadonlySet<number> = new Set()): MapLayout {
+  const key = `${maxCols}|${[...folded].sort((a, b) => a - b).join(',')}|${text ? 't' : ''}|${[...ended].sort((a, b) => a - b).join(',')}`;
   const hit = cached.get(key);
   if (hit) return hit;
+  // The band texts wrap to the map's width, which the columns alone set: taken from the layout without text.
+  const textW = text ? mapLayout(maxCols, folded).w - 2 * MARGIN - 8 : 0;
   const byId = new Map(NODES.map((n) => [n.id, n]));
   const col = new Map<string, number>();
   const colOf = (n: CampaignNode): number => {
@@ -97,33 +172,81 @@ export function mapLayout(maxCols = Infinity, folded: ReadonlySet<number> = new 
       y += FOLDED_H + BAND_GAP;
       continue;
     }
-    const cols: CampaignNode[][] = [];
-    for (const n of ns) (cols[colOf(n)] ??= []).push(n);
-    // Order each column by the mean row of its requirements already placed (barycentre).
-    const rowOf = new Map<string, number>();
-    cols.forEach((c) => {
-      const key = (n: CampaignNode) => {
-        const rs = n.requires.map((r) => rowOf.get(r) ?? (placed.get(r) ? -1 : undefined)).filter((v): v is number => v !== undefined);
-        return rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : 0;
+    // An act with labelled rows lays each row out as an act of its own (columns from the row's chains), one under the other.
+    const groups = ACT_ROWS[act.num]?.map((r) => ({ label: r.label as string | undefined, ns: ns.filter((n) => r.ids.includes(n.id)) }))
+      ?? [{ label: undefined, ns }];
+    const rowOfId = new Map(groups.flatMap((g, gi) => g.ns.map((n) => [n.id, gi] as const)));
+    const rowLabels: { label: string; y: number }[] = [];
+    const blurb = text?.blurb(act.num);
+    const sub = blurb ? wrapText(blurb, textW, SUB_LINES) : undefined;
+    let top = y + BAND_HEAD + (sub ? sub.length * SUB_LINE + 4 : 0), line = 0;
+    groups.forEach((g, gi) => {
+      const cols: CampaignNode[][] = [];
+      const colIn = (n: CampaignNode): number => (ACT_ROWS[act.num] ? rowCol(n) : colOf(n));
+      const rc = new Map<string, number>();
+      const rowCol = (n: CampaignNode): number => {
+        const c = rc.get(n.id);
+        if (c !== undefined) return c;
+        rc.set(n.id, 0);
+        let v = 0;
+        for (const r of n.requires) if (rowOfId.get(r) === gi && byId.get(r)?.act === n.act) v = Math.max(v, rowCol(byId.get(r)!) + 1);
+        rc.set(n.id, v);
+        return v;
       };
-      c.sort((a, b) => key(a) - key(b) || Number(!!a.optional) - Number(!!b.optional));
-      c.forEach((n, i) => rowOf.set(n.id, i));
+      for (const n of g.ns) (cols[colIn(n)] ??= []).push(n);
+      // Order each column by the mean row of its requirements already placed (barycentre).
+      const rowOf = new Map<string, number>();
+      cols.forEach((c) => {
+        const key = (n: CampaignNode) => {
+          const rs = n.requires.map((r) => rowOf.get(r) ?? (placed.get(r) ? -1 : undefined)).filter((v): v is number => v !== undefined);
+          return rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : 0;
+        };
+        c.sort((a, b) => key(a) - key(b) || Number(!!a.optional) - Number(!!b.optional));
+        c.forEach((n, i) => rowOf.set(n.id, i));
+      });
+      // The row's label, with the channel for edges from the rows above it between the two.
+      let chan = top - LINE_GAP / 2;
+      if (g.label) {
+        if (gi > 0) {
+          chan = top + LINE_GAP / 2;
+          top += LINE_GAP;
+        }
+        rowLabels.push({ label: g.label, y: top + ROW_HEAD - 8 });
+        top += ROW_HEAD;
+      }
+      // Balanced wrapping: 5 columns in lines of 4 would leave one alone, so 3 + 2 (and 7 in threes: 3 + 2 + 2).
+      const lines = Math.max(1, Math.ceil(cols.length / Math.max(1, maxCols)));
+      const small = Math.floor(cols.length / lines), big = cols.length % lines;
+      used = Math.max(used, small + (big ? 1 : 0));
+      let first = 0;
+      for (let l = 0; l < lines; l++, line++) {
+        const lc = cols.slice(first, first += small + (l < big ? 1 : 0));
+        const rows = Math.max(...lc.map((c) => c.length));
+        const chanY = l ? top - LINE_GAP / 2 : chan;
+        lc.forEach((c, ci) => c.forEach((n, ri) => {
+          placed.set(n.id, { node: n, x: MARGIN + ci * (NODE_W + COL_GAP), y: top + ri * (NODE_H + ROW_GAP), line, lineY: top, chanY, row: gi });
+        }));
+        top += rows * (NODE_H + ROW_GAP) - ROW_GAP + (l < lines - 1 ? LINE_GAP : 0);
+      }
     });
-    // Balanced wrapping: 5 columns in lines of 4 would leave one alone, so 3 + 2 (and 7 in threes: 3 + 2 + 2).
-    const lines = Math.max(1, Math.ceil(cols.length / Math.max(1, maxCols)));
-    const small = Math.floor(cols.length / lines), big = cols.length % lines;
-    used = Math.max(used, small + (big ? 1 : 0));
-    let top = y + BAND_HEAD, first = 0;
-    for (let l = 0; l < lines; l++) {
-      const lc = cols.slice(first, first += small + (l < big ? 1 : 0));
-      const rows = Math.max(...lc.map((c) => c.length));
-      lc.forEach((c, ci) => c.forEach((n, ri) => {
-        placed.set(n.id, { node: n, x: MARGIN + ci * (NODE_W + COL_GAP), y: top + ri * (NODE_H + ROW_GAP), line: l, lineY: top });
-      }));
-      top += rows * (NODE_H + ROW_GAP) - ROW_GAP + (l < lines - 1 ? LINE_GAP : 0);
+    const end = ended.has(act.num) ? text?.end(act.num) : undefined;
+    let foot: Band['foot'];
+    if (end) {
+      // label column ("Can now", "Still can't") then the text
+      foot = { y: top + 36, can: wrapText(end.can, textW - FOOT_LABEL_W, FOOT_LINES), cannot: wrapText(end.cannot, textW - FOOT_LABEL_W, FOOT_LINES), links: [] };
+      top = foot.y + (foot.can.length + foot.cannot.length - 1) * SUB_LINE + 6;
+      // the ways on as pills under the text, wrapping like words
+      let lx = MARGIN, ly = top + 8 + LINK_H - 6;
+      for (const label of end.links ?? []) {
+        const w = Math.ceil(label.length * LINK_CHAR_W) + 2 * LINK_PAD;
+        if (lx > MARGIN && lx + w > MARGIN + textW) { lx = MARGIN; ly += LINK_H + 6; }
+        foot.links.push({ label, x: lx, y: ly, w });
+        lx += w + LINK_GAP;
+      }
+      if (foot.links.length) top = ly + 6;
     }
     const h = top - y + 12;
-    bands.push({ act: act.num, y, h });
+    bands.push({ act: act.num, y, h, ...(rowLabels.length ? { rows: rowLabels } : {}), ...(sub ? { sub } : {}), ...(foot ? { foot } : {}) });
     y += h + BAND_GAP;
   }
   // The last column keeps its channel on the right (an edge wrapping onto the next line runs down it).

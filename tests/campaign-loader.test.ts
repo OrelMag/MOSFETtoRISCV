@@ -4,7 +4,9 @@
 // relay price leaves the given parts out. The CPU core is cpu4() without its ROM.
 
 import { describe, expect, it } from 'vitest';
-import { loaderDecks, loaderParts, loaderRelays, LOADER_PORTS, runLoader } from '../src/campaign/buildcard';
+import { LOADER_FEED, loaderDecks, loaderLogic, loaderParts, loaderRelays, LOADER_PORTS, runLoader } from '../src/campaign/buildcard';
+import { caseOf } from '../src/campaign/cases';
+import { price } from '../src/lib/tech';
 import { levelChallenge } from '../src/campaign/levels';
 import { nodeById } from '../src/campaign/nodes';
 import { checkChallenge } from '../src/editor/challenges';
@@ -87,6 +89,19 @@ describe('the card loader level', () => {
     expect(v.failures).toEqual([]);
     expect(v.cycles).toBe(r.score.cycles);
     expect(loaderRelays(loader())).toBe(r.score.relays);
+  });
+
+  it('quotes its measured price in the level case and says the Z3 did not load its film', () => {
+    const n = nodeById('h_loader')!;
+    const nands = stats(loaderLogic(loader())).nands, relays = loaderRelays(loader());
+    expect(relays).toBe(n.par!.relays);
+    const cnt = price(counter(8), 'relay', null)!.devices;
+    const cost = caseOf('h_loader')!.cost!;
+    expect(cost).toContain(`${relays} relays at par: ${nands} NANDs of logic, a coil each, and ${relays - nands} more for fan-out`);
+    expect(cost).toContain(`the 8-bit counter alone is ${cnt} of them`);
+    expect(cost).toContain(`${n.par!.cycles} cycles over the two decks`);
+    expect(cost).toContain(`a card every ${["", "one", "two", "three", "four", "five"][LOADER_FEED + 1]} edges`);
+    expect(n.why).toMatch(/The Z3 never did this/);
   });
 
   it('fails a loader that never raises run', () => {

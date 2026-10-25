@@ -10,10 +10,11 @@ import '../../styles/editor.css';
 import '../../styles/sbchips.css';
 import '../../styles/campaign.css';
 import '../../styles/level.css';
+import { partNames } from '../../campaign/cardlabel';
 import { caseOf } from '../../campaign/cases';
 import { codexById } from '../../campaign/codex';
 import { type AreaUnit, areaBars, METRIC, measured } from '../../campaign/grade';
-import { dependents, isDone, nextAvailable, statusOf } from '../../campaign/graph';
+import { isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { levelChallenge, levelChipId } from '../../campaign/levels';
 import { altCost, copiesInFinal, countedPart, finalCpu } from '../../campaign/measure';
 import { walkOf } from '../../campaign/walk';
@@ -34,6 +35,11 @@ import { settings } from '../settings';
 import type { Page } from './chapter';
 import { WalkMode } from './levelwalk';
 import { tipsOf } from '../../campaign/nudges';
+import { blockUse, closedAct, pitfallsOf } from '../../campaign/thread';
+import { actEndEl, nextAfter, reachEl, type ThreadCtx, whyStackEl } from '../../campaign/ui/whystack';
+
+/** The codex's mistakes (codexmore, a chunk of its own), once loaded: the Task tab's pitfalls add them. */
+let mistakesOf: ((id: string) => string[] | undefined) | undefined;
 
 type Tab = 'walk' | 'why' | 'task' | 'tips' | 'codex';
 
@@ -145,7 +151,7 @@ export class LevelPage implements Page {
     const np = p.get(n.id);
     const st = statusOf(n, p.view, p.unlockAll);
     const done = isDone(p.view(n.id));
-    const next = done ? nextAvailable(p.view, p.unlockAll, n.id) : undefined;
+    const next = done ? this.nextOf() : undefined;
     const par = n.par ?? {};
     if (this.walk) {
       this.bar.replaceChildren(
@@ -198,17 +204,38 @@ export class LevelPage implements Page {
     body.classList.toggle('walking', this.tab === 'walk');
   }
 
+  /** How the thread's links open a level here: its own screen, or its panel on the map. */
+  private ctx(): ThreadCtx {
+    const p = progress();
+    return { view: p.view, route: levelRoute, open: (m) => !m.soon && statusOf(m, p.view, p.unlockAll) !== 'locked' };
+  }
+
+  /** The level after a pass: the one it moved closest to ready, else the next open one in order. */
+  private nextOf(): CampaignNode | undefined {
+    const n = this.node!, p = progress();
+    return nextAfter(n, this.ctx()) ?? nextAvailable(p.view, p.unlockAll, n.id);
+  }
+
   private whyTab(el: HTMLElement): void {
     const n = this.node!, p = progress();
     const c = caseOf(n.id);
-    const blk = blockOf(n);
+    const blk = blockUse(n);
     if (blk) {
-      el.append(h('div', { class: 'lv-anat', title: blk.own ? 'The CPU you will finish: this level builds the lit block' : 'The CPU you will finish: this level\'s part ends up in the lit block' },
-        anatomySvg(p.view, blk.id, () => {})));
+      const cap = h('p', { class: 'lv-anat-cap sub' });
+      el.append(h('div', { class: 'lv-anat', title: blk.own ? 'The CPU you will finish: this level builds the lit block' : 'The CPU you will finish: this level\'s part ends up in the lit blocks' },
+        anatomySvg(p.view, new Set(blk.ids), () => {})));
+      // a brick in every block: how many of it the finished CPU holds (compiling it takes a moment)
+      if (blk.all) {
+        cap.textContent = 'Everywhere: every block is built from it.';
+        el.append(cap);
+        setTimeout(() => {
+          const k = copiesInFinal(n);
+          if (k > 0) cap.textContent = `Everywhere: ${k.toLocaleString()} copies in the finished CPU.`;
+        }, 0);
+      }
     }
-    el.append(h('section', null, h('h4', null, 'The problem'), rich('p', c?.problem ?? n.why)));
-    if (c?.without) el.append(h('section', null, h('h4', null, 'Without it'), rich('p', c.without)));
     const alts = (c?.alts ?? []).map((a) => ({ a, cost: altCost(a) }));
+    let costSec: HTMLElement | undefined;
     if (c?.cost || alts.length || n.par) {
       const sec = h('section', null, h('h4', null, 'What it costs'));
       if (c?.cost) sec.append(rich('p', c.cost));
@@ -231,10 +258,9 @@ export class LevelPage implements Page {
         const k = copiesInFinal(n), part = countedPart(n);
         if (k > 0 && part) copies.replaceChildren(h('b', null, k.toLocaleString()), ` × ${part.name} in the finished CPU (${finalCpu(n)?.node.title ?? ''}).`);
       }, 0);
-      el.append(sec);
+      costSec = sec;
     }
-    const later = dependents(n.id);
-    if (later.length) el.append(h('section', null, h('h4', null, 'Used later in'), h('div', { class: 'lv-chips' }, later.map((d) => h('a', { class: 'lv-chip', href: levelRoute(d) }, d.title)))));
+    el.append(whyStackEl(n, this.ctx(), 'level', { cost: costSec, pitfalls: () => { this.tab = 'task'; this.folded = false; this.renderSide(); } }));
     if (n.chapters?.length) el.append(h('section', null, h('h4', null, 'Go deeper'), h('div', { class: 'lv-chips' }, n.chapters.map((c2) => h('a', { class: 'lv-chip', href: `#/c/${c2.chapter}/${c2.step ?? 0}` }, icon('book', 12), c2.label)))));
   }
 
@@ -243,13 +269,29 @@ export class LevelPage implements Page {
     el.append(h('section', null, h('h4', null, 'The task'), rich('p', ch.brief)),
       h('section', { class: 'cp-criteria' }, h('h4', null, 'Success criteria'), h('ul', null, criteria(ch).map((c) => h('li', null, c)))),
       gradeTable(n));
-    const req = n.requires.map((r) => nodeById(r)).filter((x): x is CampaignNode => !!x);
     const rule = typeof ch.allowed === 'object' ? ch.allowed.lib.filter((x) => x !== 'nand') : [];
-    const name = (u: string) => (u.endsWith('*') ? `${u.slice(0, -1)}…` : resolveComponent(u)?.name ?? u);
+    const names = (ids: readonly string[]) => partNames(ids, (u) => resolveComponent(u)?.name).join(', ');
     el.append(h('section', { class: 'cp-deps' },
-      req.length ? h('p', null, h('b', null, 'Builds on: '), req.map((r, i) => [i ? ', ' : '', h('a', { href: levelRoute(r) }, r.title)])) : null,
-      rule.length ? h('p', null, h('b', null, 'Parts you may place: '), 'NAND, ', rule.map(name).join(', ')) : null,
-      n.unlocks?.length ? h('p', null, h('b', null, 'Unlocks: '), n.unlocks.map(name).join(', ')) : null));
+      rule.length ? h('p', null, h('b', null, 'Parts you may place: '), 'NAND, ', names(rule)) : null,
+      n.unlocks?.length ? h('p', null, h('b', null, 'Unlocks: '), names(n.unlocks)) : null));
+    this.pitfalls(el);
+  }
+
+  /** The level's pitfalls, then the mistakes of the codex entries it teaches, each once; past four behind a fold. */
+  private pitfalls(el: HTMLElement): void {
+    const n = this.node!;
+    if (!mistakesOf) {
+      import('../../campaign/codexmore').then((m) => {
+        mistakesOf = (id) => m.moreOf(id)?.mistakes;
+        if (this.tab === 'task' && !this.walk) this.renderSide();
+      }, () => { mistakesOf = () => undefined; });
+    }
+    const all = pitfallsOf(n, mistakesOf);
+    if (!all.length) return;
+    const li = (t: string) => rich('li', t);
+    el.append(h('section', { class: 'lv-pits' }, h('h4', null, 'Pitfalls'),
+      h('ul', { class: 'th-pits' }, all.slice(0, 4).map(li)),
+      all.length > 4 ? h('details', { class: 'th-more' }, h('summary', null, `${all.length - 4} more`), h('ul', { class: 'th-pits' }, all.slice(4).map(li))) : null));
   }
 
   /** The hint ladder: the tips one at a time (a nudge first), then the walkthrough from step 1, then the solution. */
@@ -376,12 +418,16 @@ export class LevelPage implements Page {
     const callout = h('div', { class: 'lv-callout' });
     const unlocks = (n.unlocks ?? []).filter((u) => !u.endsWith('*')).map((u) => resolveComponent(u)?.name ?? u);
     const codex = n.codex.map((id) => codexById(id)).filter((e) => !!e);
-    const next = nextAvailable(progress().view, progress().unlockAll, n.id);
+    const ctx = this.ctx();
+    const reach = reachEl(n, ctx);
+    const next = nextAfter(n, ctx) ?? nextAvailable(progress().view, progress().unlockAll, n.id);
+    // the act this pass completes: what the machine can do now, and the next act's button in place of Next
+    const ended = g.first && closedAct(n, progress().view) !== undefined ? actEndEl(n.act, ctx) : null;
     const close = () => { this.result?.remove(); this.result = null; };
     const card = h('div', { class: 'lv-result', role: 'dialog', 'aria-label': 'Level passed' },
       h('h3', null, h('span', { class: 'lv-big' }, '★'.repeat(g.stars), h('span', { class: 'off' }, '★'.repeat(3 - g.stars))),
         g.stars === 3 ? 'Passed at par' : g.first ? 'Passed' : g.best ? 'New best' : 'Passes'),
-      table, barEl, callout,
+      table, barEl, callout, ended, ended ? null : reach.el,
       unlocks.length || codex.length ? h('p', { class: 'lv-unl' },
         unlocks.length ? [h('b', null, 'Unlocked: '), unlocks.join(', '), ' (placeable from the next level on)'] : null,
         unlocks.length && codex.length ? ' · ' : null,
@@ -389,7 +435,8 @@ export class LevelPage implements Page {
       h('div', { class: 'lv-res-act' },
         h('button', { class: 'btn ghost', onclick: close }, g.stars < 3 ? 'Keep improving' : 'Close'),
         h('a', { class: 'btn', href: `#/campaign/n/${n.id}` }, 'Back to the map'),
-        next ? h('a', { class: 'btn primary', href: levelRoute(next) }, `Next: ${next.title}`, icon('chevR', 14)) : null));
+        reach.side && !ended ? h('a', { class: 'btn', href: levelRoute(reach.side) }, `Side quest: ${reach.side.title}`) : null,
+        next && !ended ? h('a', { class: 'btn primary', href: levelRoute(next) }, `Next: ${next.title}`, icon('chevR', 14)) : null));
     this.result = h('div', { class: 'lv-veil', onclick: (e: Event) => { if (e.target === this.result) close(); } }, card);
     this.result.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Escape') close(); });
     this.edWrap.append(this.result);
@@ -415,20 +462,6 @@ export class LevelPage implements Page {
 
 /** The phone layout (level.css): the brief folds away above the editor. */
 const narrow = () => matchMedia('(max-width: 900px)').matches;
-
-/** The anatomy block a level builds, else the one its part first ends up in (the nearest later required level that names one). */
-function blockOf(n: CampaignNode): { id: string; own: boolean } | undefined {
-  if (n.anatomy?.length) return { id: n.anatomy[0], own: true };
-  const seen = new Set([n.id]);
-  let ring = dependents(n.id).filter((d) => !d.optional);
-  while (ring.length) {
-    const hit = ring.find((d) => d.anatomy?.length);
-    if (hit) return { id: hit.anatomy![0], own: false };
-    ring.forEach((d) => seen.add(d.id));
-    ring = ring.flatMap((d) => dependents(d.id)).filter((d) => !d.optional && !seen.has(d.id));
-  }
-  return undefined;
-}
 
 /** Relays, tube sections and relay steps of `c`, those the level grades (`par`) only. */
 function deviceText(c: { relays?: number; tubes?: number; steps?: number }, par: Par): string {

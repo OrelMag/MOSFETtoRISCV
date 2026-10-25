@@ -169,7 +169,7 @@ export const chTraps: Chapter = {
       'Priority: interrupts (external, then timer), then illegal instruction, ebreak, ecall, misaligned fetch, load, store. CSR unit, trap unit and system decoder: about 10 000 NANDs.',
       'The hardware saves only the PC and the cause: a handler saves every register it uses (mscratch gives it a register to swap with sp), nests only by saving mepc and mcause and setting MIE again, and an idle loop waits in <code>wfi</code>. Machine mode is the only mode here; with user mode, mstatus.MPP says where a trap came from and ecall\'s cause is 8 from U, 11 from M.',
     ],
-    practise: ['y_csr', 'y_trap', 'y_irq', 'p_handler', 'y_final'],
+    practise: ['y_csr', 'y_trap', 'y_irq', 'p_handler', 'y_ptrap', 'y_final'],
     check: [
       {
         question: 'An <code>ecall</code> traps to a handler. What must the handler do before <code>mret</code> so that the program continues after the ecall?',

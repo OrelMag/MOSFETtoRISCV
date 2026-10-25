@@ -124,7 +124,11 @@ with five instructions in flight.</p>
 has not written back yet. <b>Forwarding</b> takes the value from the E/M or M/W register instead.
 A load's value only exists after M, so a dependent instruction right behind it must <b>stall</b> one
 cycle. A <b>control hazard</b>: by the time a branch is resolved in E, two younger instructions were
-fetched from the wrong path: <b>flush</b> them. CPI rises above 1, and the shorter period has to pay for it: in RV16's plain pipeline it only just does (4% faster than the single-cycle core).</p>`,
+fetched from the wrong path: <b>flush</b> them. CPI rises above 1, and the shorter period has to pay for it.</p>
+<p>In RV16 it pays only once E is short too. E holds the forwarding muxes and then the ALU, the branch
+comparator and next PC side by side: with ripple adders that is 78 delays, and the pipeline is 4% faster
+than Core III but slower than Core IV. With Kogge–Stone adders in E (the ALU, the comparator's less-than,
+next PC) its period falls to 56, and it beats Core IV by 11%, for 10 102 NANDs against 4 938.</p>`,
 
   traps: `
 <p>Programs make mistakes (an illegal instruction), ask for help (<code>ecall</code>), and the world
@@ -139,9 +143,27 @@ MPIE ← MIE, MIE ← 0, pc ← mtvec. <code>mret</code> undoes it: pc ← mepc,
 is the next instruction to run. In a pipeline, traps must be <b>precise</b>: everything older
 completes, nothing younger leaves a trace.</p>`,
 
+  arith: `
+<p>Act 4 multiplied in software: a shift-and-add loop of 28 to 134 instructions per product. This act
+builds that arithmetic in hardware, more than one way, and every level measures the result: the unit's
+NANDs and its depth or period, and on the core levels the cycles your programs take.</p>
+<h4>Multiply and divide</h4>
+<p>The <b>shift-and-add multiplier</b> is the Act 4 loop as a circuit: one adder used once a clock,
+18 cycles a product on 1 169 NANDs. The <b>array multiplier</b> forms every partial product at once:
+16 × 16 is 2 672 NANDs and 150 delays deep, a product in one pass. Put the array in your single-cycle
+core and every instruction pays for it: the period goes from 98 to 191, so a program without a single
+multiply runs 1.95 times slower. A <b>divider</b> is iterative however you build it, so the core must
+hold its PC until the quotient is ready: its first instruction that takes more than one cycle.</p>
+<h4>Floating point</h4>
+<p>Binary16 by hand first, then its units one rung each: unpack, the rounding decision, the sticky
+shifter, the leading-zero counter, and normalize &amp; round (2 058 NANDs), which every operation ends
+in. On those the adder is 3 732 NANDs and the multiplier 4 912. They stay units of their own: RV16 has
+no F registers and no FP instructions, so no core here runs them.</p>`,
+
   gpu: `
-<p>Your pipeline is built for <b>latency</b>: one program, each instruction done as soon as
-possible. Forwarding, stalls, flushes and prediction all serve that one instruction stream. But
+<p>Your core is built for <b>latency</b>: one program, each instruction done as soon as
+possible. The pipeline of Act 6 goes further the same way: forwarding, stalls, flushes and
+prediction all serve that one instruction stream. But
 much of computing is the <b>same short program over many data</b>: every pixel of a frame, every
 element of an array. There the useful number is <b>throughput</b>, results per second, and the
 instructions of different data do not depend on each other at all.</p>
