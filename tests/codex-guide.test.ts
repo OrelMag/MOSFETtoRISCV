@@ -26,6 +26,18 @@ describe('codex guide', () => {
     }
   });
 
+  it('builds on only what is taught before, leads only to what is taught after', () => {
+    const back: string[] = [];
+    for (const e of CODEX) {
+      const at = firstTaught(e.id);
+      for (const x of buildsOn(e.id)) if (!(firstTaught(x.id) < at)) back.push(`${e.id} builds on ${x.id}`);
+      for (const x of leadsTo(e.id)) if (!(firstTaught(x.id) > at)) back.push(`${e.id} leads to ${x.id}`);
+    }
+    expect(back).toEqual([]);
+    expect(buildsOn('pipeline').map((x) => x.id)).not.toContain('stall');
+    expect(buildsOn('twos').map((x) => x.id)).not.toContain('ripple');
+  });
+
   it('figures and questions belong to entries', () => {
     for (const id of ['positional', 'hex', 'twos', 'formats', 'pipeline', 'hazards', 'flush']) expect(hasCodexFigure(id), id).toBe(true);
     for (const id of Object.keys(CHECKS)) expect(codexById(id), `questions for '${id}'`).toBeTruthy();
