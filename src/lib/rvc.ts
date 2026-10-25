@@ -11,9 +11,10 @@
 import type { ComponentDef, PortDef } from '../sim/types';
 import { decodeC } from '../riscv/rvc';
 import { Builder } from './builder';
-import { andN, decoder } from './combinational';
+import { constWord } from './alu';
+import { andN, busMux2, decoder, HALF_ADDER, muxTree } from './combinational';
 import { define, merger, ones, splitter } from './define';
-import { AND, NOT } from './gates';
+import { AND, NOT, OR, XOR } from './gates';
 import { NAND } from './transistors';
 import { orN } from './wide';
 
@@ -250,3 +251,143 @@ export const C_EXPAND: ComponentDef = (() => {
     netlist: () => ({ pins: edgePins(b, ['w'], ['instr', 'c', 'illegal'], 4), instances: b.instances, nets: b.nets() }),
   });
 })();
+
+// ---- fetching on halfwords ------------------------------------------------------------------------
+
+function hash(words: number[]): string {
+  let h = 2166136261;
+  for (const w of words) { h ^= w; h = Math.imul(h, 16777619) >>> 0; }
+  return h.toString(16);
+}
+
+const incCache = new Map<number, ComponentDef>();
+
+/** a + cin over n bits: a chain of half adders, the carry-in where the incrementer has its constant 1. */
+export function incCin(n: number): ComponentDef {
+  let d = incCache.get(n);
+  if (d) return d;
+  const b = new Builder(14, 10, 2);
+  b.pins('a', 'cin');
+  const sa = b.op(splitter(ones(n)), ['a'], undefined, 'sa');
+  b.next();
+  let carry = 'cin';
+  const ys: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const h = b.op(HALF_ADDER, [`${sa}.o${i}`, carry], undefined, `ha${i}`);
+    ys.push(`${h}.s`);
+    carry = `${h}.c`;
+  }
+  b.next();
+  b.wire(b.op1(merger(ones(n)), ys, undefined, 'my'), 'y');
+  d = define({
+    id: `inccin${n}`, name: `${n}-bit increment by a carry-in`, category: 'arithmetic',
+    summary: `y = a + cin over ${n} bits: ${n} half adders in a chain, the carry-in where the incrementer has its constant 1.`,
+    ports: [bus('a', n, 'in'), bit('cin', 'in'), bus('y', n, 'out')],
+    symbol: { kind: 'box', label: '+cin' },
+    spec: ([a, c]) => [(a + c) % 2 ** n],
+    netlist: () => ({ pins: edgePins(b, ['a', 'cin'], ['y'], 4), instances: b.instances, nets: b.nets() }),
+  });
+  incCache.set(n, d);
+  return d;
+}
+
+/** PC + 2 after a 16-bit instruction, PC + 4 after a 32-bit one. */
+export const PLUS2OR4: ComponentDef = (() => {
+  const b = new Builder(14, 10, 4);
+  b.pins('a', 'c');
+  const sa = b.op(splitter([1, 1, 30]), ['a'], undefined, 'sa');
+  b.next();
+  const x1 = b.op1(XOR, [`${sa}.o1`, 'c'], 'bit 1', 'x1');
+  const nc = b.op1(NOT, ['c'], undefined, 'nc');
+  b.next();
+  const cin = b.op1(OR, [nc, `${sa}.o1`], 'carry', 'cy');
+  b.next();
+  const inc = b.op1(incCin(30), [`${sa}.o2`, cin], undefined, 'inc');
+  b.next();
+  b.wire(b.op1(merger([1, 1, 30]), [`${sa}.o0`, x1, inc], undefined, 'my'), 'y');
+  return define({
+    id: 'plus2or4', name: 'PC + 2 or + 4', category: 'arithmetic',
+    summary: 'The next instruction is 2 bytes on after a 16-bit one (c = 1), 4 after a 32-bit one. Adding 2 flips bit 1 and carries on when it was 1; adding 4 leaves bit 1 and always carries. So bit 1 is a[1] XOR c and bits 31:2 take a carry-in of a[1] OR NOT c: one XOR, one OR and the PC + 4 chain.',
+    ports: [bus('a', 32, 'in'), bit('c', 'in', 'bottom'), bus('y', 32, 'out')],
+    symbol: { kind: 'box', label: '+2/+4' },
+    spec: ([a, c]) => [(a + (c ? 2 : 4)) % 2 ** 32],
+    netlist: () => ({ pins: edgePins(b, ['a', 'c'], ['y'], 4), instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+const halfRomCache = new Map<string, ComponentDef>();
+
+/** A ROM of 2^k halfwords (one bank of the fetch): index in, 16 bits out. Simulated as a lookup, like the instruction ROM. */
+export function halfRom(halves: number[], k: number, label: string): ComponentDef {
+  const N = 2 ** k;
+  const content = Array.from({ length: N }, (_, i) => (halves[i] ?? 0) & 0xffff);
+  const key = `hrom${k}_${hash(content)}_${label.replace(/\W+/g, '_')}`;
+  let d = halfRomCache.get(key);
+  if (d) return d;
+  const b = new Builder(14, 8, 2);
+  b.pins('a');
+  const cs = content.map((v, i) => b.op1(constWord(16, v), [], `[${i}]`, `c${i}`));
+  b.next();
+  b.wire(b.op1(muxTree(k, 16, 4), [...cs, 'a'], undefined, 'mux'), 'data');
+  d = {
+    id: key, name: `Instruction memory, ${label}`, category: 'memory',
+    summary: `${N} halfwords of the program (the ${label} of its words), read-only: a multiplexer tree whose inputs are tied to constants.`,
+    ports: [bus('a', k, 'in'), bus('data', 16, 'out')],
+    symbol: { kind: 'box', label: label.toUpperCase() },
+    behavior: { eval: ([a]) => [a < 0 ? -1 : content[a % N]], delay: 3 * k },
+    preferBehavior: true,
+    netlist: () => ({ pins: edgePins(b, ['a'], ['data'], 4), instances: b.instances, nets: b.nets() }),
+    notes: 'Simulated as a lookup table for speed. Its structure (shown when you open it) is the real circuit.',
+  } satisfies ComponentDef;
+  halfRomCache.set(key, d);
+  return d;
+}
+
+const fetchCache = new Map<string, ComponentDef>();
+
+/**
+ * The C core's instruction memory: the 32 bits starting at any even address, expanded. The program's words are
+ * split into two banks of halfwords, the low halves and the high halves. The high bank reads word pc >> 2; the low
+ * bank reads the same word, or the next one when pc[1] = 1 (a 32-bit instruction that starts in the middle of a word
+ * ends in the next). pc[1] puts the two in order, and C_EXPAND turns the window into the instruction.
+ */
+export function cFetch(program: number[], k = 6): ComponentDef {
+  const N = 2 ** k;
+  const words = Array.from({ length: N }, (_, i) => (program[i] ?? 0x00000013) >>> 0);
+  const key = `cfetch${k}_${hash(words)}`;
+  let d = fetchCache.get(key);
+  if (d) return d;
+  const b = new Builder(14, 12, 4);
+  b.pins('addr');
+  const sa = b.op(splitter([1, 1, k, 30 - k]), ['addr'], undefined, 'sa');
+  b.next();
+  const ix0 = b.op1(incCin(k), [`${sa}.o2`, `${sa}.o1`], 'next word if pc[1]', 'ix');
+  b.next();
+  const lo = b.op1(halfRom(words.map((w) => w & 0xffff), k, 'low halves'), [ix0], undefined, 'lo');
+  const hi = b.op1(halfRom(words.map((w) => w >>> 16), k, 'high halves'), [`${sa}.o2`], undefined, 'hi');
+  b.next();
+  const p0 = b.op1(busMux2(16), [lo, hi, `${sa}.o1`], 'parcel at pc', 'p0');
+  const p1 = b.op1(busMux2(16), [hi, lo, `${sa}.o1`], 'parcel at pc + 2', 'p1');
+  b.next();
+  const win = b.op1(merger([16, 16]), [p0, p1], undefined, 'win');
+  b.next();
+  const x = b.op(C_EXPAND, [win], undefined, 'cx');
+  b.wire(`${x}.instr`, 'data');
+  b.wire(`${x}.c`, 'c');
+  b.wire(`${x}.illegal`, 'illegal');
+  d = define({
+    id: key, name: 'Instruction memory (C)', category: 'memory',
+    summary: `${N} words of program read at any even address: two banks of halfwords, a swap on pc[1], and the C expander. data: the instruction to run; c: it was 16 bits.`,
+    ports: [bus('addr', 32, 'in'), bus('data', 32, 'out'), bit('c', 'out'), bit('illegal', 'out')],
+    symbol: { kind: 'box', label: 'INSTR MEM + C' },
+    spec: ([a]) => {
+      const at = (x: number) => (words[(x >>> 2) % N] >>> ((x & 2) * 8)) & 0xffff;
+      const w = (at(a & ~1) | (at((a & ~1) + 2) << 16)) >>> 0;
+      const e = expandWindow(w);
+      return [e.instr, e.c, e.illegal];
+    },
+    netlist: () => ({ pins: edgePins(b, ['addr'], ['data', 'c', 'illegal'], 4), instances: b.instances, nets: b.nets() }),
+  });
+  fetchCache.set(key, d);
+  return d;
+}

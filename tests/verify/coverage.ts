@@ -4,6 +4,7 @@
 // lane still running its program. An event a CPU has but no program triggered shows as 0: a gap to fill.
 
 import { decode } from '../../src/riscv/isa';
+import { decodeC } from '../../src/riscv/rvc';
 import type { StepInfo } from '../../src/riscv/iss';
 import type { BitSim } from '../../src/sim/bitsim';
 import type { FlatDesign, HierNode } from '../../src/sim/flatten';
@@ -137,6 +138,9 @@ export class IsaCoverage {
     // an instruction that traps was still executed (ecall, a misaligned load); an illegal word is not one
     const n = decode(s.word).name;
     if (n !== 'unknown') this.instrs.set(n, (this.instrs.get(n) ?? 0) + 1);
+    // a 16-bit instruction counts as its own form too (c.lw as well as lw)
+    const c = s.half !== undefined ? decodeC(s.half)?.name : undefined;
+    if (c) this.instrs.set(c, (this.instrs.get(c) ?? 0) + 1);
   }
 }
 
@@ -146,11 +150,14 @@ const SUB = ['lb', 'lh', 'lbu', 'lhu', 'sb', 'sh'];
 const M = ['mul', 'mulh', 'mulhsu', 'mulhu', 'div', 'divu', 'rem', 'remu'];
 const F = ['flw', 'fsw', 'fadd.s', 'fsub.s', 'fmul.s', 'fdiv.s', 'fsqrt.s', 'fmadd.s', 'fmsub.s', 'fnmsub.s', 'fnmadd.s', 'fsgnj.s', 'fsgnjn.s',
   'fsgnjx.s', 'fmin.s', 'fmax.s', 'feq.s', 'flt.s', 'fle.s', 'fcvt.w.s', 'fcvt.wu.s', 'fcvt.s.w', 'fcvt.s.wu', 'fmv.x.w', 'fmv.w.x', 'fclass.s'];
+/** The C forms the random programs reach (no F, and c.nop / c.ebreak are left out). */
+const C = ['c.addi', 'c.li', 'c.lui', 'c.mv', 'c.add', 'c.slli', 'c.srli', 'c.srai', 'c.andi', 'c.sub', 'c.xor', 'c.or', 'c.and', 'c.j', 'c.jal',
+  'c.beqz', 'c.bnez', 'c.lw', 'c.sw', 'c.lwsp', 'c.swsp', 'c.addi4spn', 'c.addi16sp', 'c.jr', 'c.jalr'];
 const SYS = ['csrrw', 'csrrs', 'csrrc', 'csrrwi', 'csrrsi', 'csrrci', 'ecall', 'ebreak', 'mret'];
 
 /** The instructions a CPU claims (fence and wfi left out: no-ops here). */
 export function isaInstrs(isa: Isa): string[] {
-  return [...RV32I, ...(isa.sub ? SUB : []), ...(isa.m ? M : []), ...(isa.f ? F : []), ...(isa.system ? SYS : []), ...(isa.mp ? ['amoswap.w', 'amoadd.w'] : [])];
+  return [...RV32I, ...(isa.sub ? SUB : []), ...(isa.m ? M : []), ...(isa.f ? F : []), ...(isa.system ? SYS : []), ...(isa.mp ? ['amoswap.w', 'amoadd.w'] : []), ...(isa.c ? C : [])];
 }
 
 export const CAUSE_NAMES: Record<number, string> = {

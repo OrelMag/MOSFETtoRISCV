@@ -18,6 +18,8 @@ export interface Isa {
   system?: boolean;
   /** csrr mhartid, amoswap.w, amoadd.w (the multi-core). */
   mp?: boolean;
+  /** The C extension: programs are assembled with .option rvc. */
+  c?: boolean;
 }
 
 export interface CpuConfig {
@@ -48,6 +50,7 @@ export const CPUS: CpuConfig[] = [
   { id: 'sc-wb2-dramc', name: 'Single-cycle, 2-way write-back D-cache over DRAM (closed page)', isa: {}, env: 'bare', fixedDmemK: 6, cpi: 40, build: (w, imemK) => singleCycleCpu(w, { imemK, dmemK: 6, dcache: 'wb2', adder: 'ks', dram: DRAM_CLOSED }) },
   { id: 'sc-ic', name: 'Single-cycle, I-cache', isa: {}, env: 'bare', cpi: 9, build: (w, imemK, dmemK) => singleCycleCpu(w, { imemK, dmemK, icache: true, adder: 'ks' }) },
   { id: 'sc-wb-ic', name: 'Single-cycle, write-back D-cache + I-cache', isa: {}, env: 'bare', fixedDmemK: 6, cpi: 22, build: (w, imemK) => singleCycleCpu(w, { imemK, dmemK: 6, dcache: 'wb', icache: true }) },
+  { id: 'sc-c', name: 'Single-cycle RV32IC', isa: { c: true }, env: 'bare', cpi: 1, build: (w, imemK, dmemK) => singleCycleCpu(w, { imemK, dmemK, c: true }) },
   { id: 'sc-f', name: 'Single-cycle RV32IF', isa: { f: true }, env: 'bare', cpi: 30, build: (w, imemK, dmemK) => singleCycleCpu(w, { imemK, dmemK, fpu: true, adder: 'ks' }) },
   { id: 'mc-fsm', name: 'Multicycle, hardwired control', isa: {}, env: 'bare', cpi: 5, build: (w, imemK, dmemK) => multicycleCpu(w, { imemK, dmemK, control: 'fsm' }) },
   { id: 'mc-micro', name: 'Multicycle, microcode', isa: {}, env: 'bare', cpi: 5, build: (w, imemK, dmemK) => multicycleCpu(w, { imemK, dmemK, control: 'micro' }) },
@@ -98,5 +101,5 @@ export function notApplicable(cfg: Pick<CpuConfig, 'isa' | 'fixedDmemK'>, name: 
 
 /** The golden model configured like a CPU's ISA. */
 export function issOptions(isa: Isa): IssOptions {
-  return { system: !!isa.system, m: !!isa.m, f: !!isa.f };
+  return { system: !!isa.system, m: !!isa.m, f: !!isa.f, c: !!isa.c };
 }

@@ -13,6 +13,7 @@ import { assemble, type AsmResult } from '../riscv/asm';
 import { cacheLines, cpuState, retireCount, retiring } from '../riscv/cosim';
 import { ABI, decode, disasm, regNumber } from '../riscv/isa';
 import { ISS, type ModelState } from '../riscv/iss';
+import { disasmC, expand16, parcelAt } from '../riscv/rvc';
 import { PROGRAMS } from '../riscv/programs';
 import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';
 import { M_PROGRAMS } from '../riscv/mprograms';
@@ -75,6 +76,8 @@ export interface CpuSceneOptions {
   dmemK?: number;
   /** Panels docked beside the CPU panel (chapter 15's Python panel); with them the program is theirs to choose. */
   extraPanels?: ScenePanel[];
+  /** The single-cycle RV32IC CPU (chapter 25): 16-bit instructions in the listing at 2-byte addresses. */
+  c?: boolean;
 }
 
 /** The out-of-order core's instruction ROM: 2^k words, at least 64. */
@@ -94,7 +97,7 @@ export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
       : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram })
-        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK }),
+        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK, c: opts.c }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
     panels: [cpuPanel({ ...opts, asm, link }), ...(opts.pipeline ? [pipeDiagram(asm)] : []),
@@ -106,7 +109,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
   return (stage: Stage): Widget => {
     const asm = opts.asm;
     const issOpts = opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.ooo ? { dmemWords: 64, imemWords: 2 ** oooImemK(asm.words) } : opts.dcache || opts.wide ? { dmemWords: 64 }
-      : { ...(opts.imemK ? { imemWords: 2 ** opts.imemK } : {}), ...(opts.dmemK ? { dmemWords: 2 ** opts.dmemK } : {}) };
+      : { ...(opts.imemK ? { imemWords: 2 ** opts.imemK } : {}), ...(opts.dmemK ? { dmemWords: 2 ** opts.dmemK } : {}), ...(opts.c ? { c: true } : {}) };
     let iss = new ISS(asm.words, issOpts);
     let lastX: number[] = new Array(32).fill(0);
     let changed = new Set<number>();
@@ -366,12 +369,13 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
           res && r !== null ? h('span', { title: `The program leaves its answer in ${res.reg}` }, ' · result ', h('b', null, `${res.reg} = ${st.x[r] | 0}`), ` (${hex(st.x[r])})`) : '');
       }
       const shownPc = opts.multicycle && !atBoundary ? iss.pc : st.pc;
-      const w = asm.words[shownPc >>> 2] ?? 0x13;
+      const w = wordAt(shownPc);
       const d = decode(w);
+      const short = opts.c ? parcelAt(asm.words, shownPc) : null;
       now.replaceChildren(
-        h('span', { class: 'fmt' }, `${d.fmt}-type`),
-        h('code', null, disasm(w, shownPc)),
-        h('span', { class: 'hexw' }, hex(w)),
+        h('span', { class: 'fmt' }, short?.size === 2 ? `16-bit → ${d.fmt}-type` : `${d.fmt}-type`),
+        h('code', null, dis(shownPc)),
+        h('span', { class: 'hexw' }, short?.size === 2 ? hex(short.bits, 4) : hex(w)),
       );
       // Pipelined CPU: where every in-flight instruction is right now.
       const inFlight = new Map<number, string[]>();
@@ -400,10 +404,11 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
         const sel = l.addr === selPc;
         const line = h('div', { class: `ln${l.addr === shownPc ? ' cur' : ''}${sel ? ' sel' : ''}`, title: 'Show the hardware this instruction uses' },
           h('span', { class: 'a' }, l.addr.toString(16).padStart(4, '0')),
-          h('span', { class: 'w' }, l.word.toString(16).padStart(8, '0')),
+          h('span', { class: 'w' }, l.word.toString(16).padStart(l.size === 2 ? 4 : 8, '0')),
           h('span', { class: 't' }, l.text),
           ...(inFlight.get(l.addr) ?? []).map((s) => h('span', { class: 'stg' }, s)),
-          sel && stage.rootCtx?.canOpen('imem') ? h('button', { class: 'rom-btn', title: 'Open the instruction memory at the word that holds this instruction', onclick: (e: Event) => {
+          // the C core's ROM is two banks of halfwords: no single word to open at
+          sel && !opts.c && stage.rootCtx?.canOpen('imem') ? h('button', { class: 'rom-btn', title: 'Open the instruction memory at the word that holds this instruction', onclick: (e: Event) => {
             e.stopPropagation();
             stage.reveal(opts.icache ? ['imem', 'rom'] : ['imem'], `c${(l.addr >>> 2)}`);
           } }, 'in ROM ↗') : null);
@@ -439,7 +444,16 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       mem.replaceChildren(...(words.length ? words.map(([i, v]) => h('div', { class: 'm' },
         h('span', { class: 'n' }, `[${hex(i * 4, 2)}]`), h('span', { class: 'v' }, hex(v)), h('span', { class: 'd' }, String(v | 0)))) : [h('div', { class: 'm z' }, 'all zero')]));
     };
-    const wordAt = (pc: number) => asm.words[pc >>> 2] ?? 0x13;
+    /** The instruction at pc as the core runs it (a 16-bit one: its expansion), and as written. */
+    const wordAt = (pc: number) => {
+      if (!opts.c) return asm.words[pc >>> 2] ?? 0x13;
+      const p = parcelAt(asm.words, pc);
+      return p.size === 2 ? expand16(p.bits) ?? 0 : p.bits;
+    };
+    const dis = (pc: number) => {
+      const p = opts.c ? parcelAt(asm.words, pc) : null;
+      return p?.size === 2 ? disasmC(p.bits, pc) : disasm(wordAt(pc), pc);
+    };
     const fieldFocus = () => fieldHover ?? fieldPin;
     /** Colour the fields of `word` and light `units` (slowctl.ts markInstr). Returns a note for the use line. */
     const markFields = (word: number | null, units: string[]): string | undefined => markInstr(stage, word, units, fieldFocus());
@@ -450,7 +464,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       if (key !== fieldsShown) {
         fieldsShown = key;
         fieldsBox.replaceChildren(
-          h('div', { class: 'cpu-fields-head' }, h('code', null, disasm(w, pc)), h('span', null, role)),
+          h('div', { class: 'cpu-fields-head' }, h('code', null, dis(pc)), h('span', null, opts.c && dis(pc).startsWith('c.') ? `${role} · runs as ${disasm(w, pc)}` : role)),
           instrBreakdown(w, {
             compact: true, onField: (k, sticky) => {
               if (sticky) fieldPin = fieldPin === k ? null : k;
@@ -493,7 +507,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       // the out-of-order core decodes in two slots: no single set of field wires to colour
       const carried = !opts.ooo && (!opts.pipeline || !stages.length || stages.includes('D'));
       const note = markFields(carried ? w : null, stages.length && !opts.ooo ? stages.flatMap((s) => stageUse(s as keyof typeof STAGE_UNITS, use)) : use.units);
-      usePath.replaceChildren(h('code', null, disasm(w, pc)), h('span', null,
+      usePath.replaceChildren(h('code', null, dis(pc)), h('span', null,
         opts.ooo ? (stages.length ? ` · now ${stages.join(' + ')} (F fetched, IQ waiting, EX executing, ROB done); highlighted: all the hardware it uses.` : ' · not in flight now; highlighted: all the hardware it uses.')
           : opts.pipeline ? (stages.length ? ` · now in ${stages.join(' + ')}; highlighted: that stage's part of the work.` : ' · not in the pipeline now; highlighted: all the hardware it uses.') : ''),
         h('div', null, use.path),
