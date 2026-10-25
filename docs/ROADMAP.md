@@ -1048,10 +1048,13 @@ links, bus taps, duplicate and pin reordering. The gaps:
   also where the output resolves ("a=1 → outputs right, but VDD shorted to GND through p1, n1"), and on the way between
   two table rows, the inputs changed one bit at a time (stored charge remembers the order; relays skip the walk, which
   would change the relay steps graded); every reference answer passes
-- ⏳ Weak levels (IEEE 1164 H / L): an nMOS passing a 1 or a pMOS passing a 0 drops a threshold; the net carries a weak
-  level, drawn dimmed, and a gate input reading it is unreliable (X downstream) unless restored by an inverter or
-  passed by a transmission gate. A new solver state (strength already exists: switchsim levels), so chapters 1–3's
-  pass-transistor steps and the campaign's act 0 can show it. Mockup first (a new visual state)
+- ✅ Weak levels (IEEE 1164 H / L; mockup approved 2026-10-25): SwitchSim.weakOf marks a driven 1 no path brings
+  without an NMOS H (VDD − Vt = 0.8 V) and a 0 no path brings without a PMOS L (0.3 V); the bit stands, a CMOS gate
+  reading it restores it and is marked partly on (`leaky`: static current), a 1 only an NMOS gated by H passes is X;
+  stored-charge nets keep their level. Drawn between the net's 0 and 1 colours with a tag "H · 0.80 V" (stage,
+  sandbox, its tooltip); the sandbox warns about a weak output pin and each leaky gate; a switch-level Check fails a
+  row whose output is weak ("a=1 → y=H (a weak 1, 0.80 V), expected y=1"). Chapter 2's step "The wrong way round:
+  weak levels" (WEAK_DEMO: the buffer with its NMOS to VDD beside a transmission gate)
 
 **Cross-layer debugging**:
 - ✅ The drill-down breadcrumb live (view/crumbvals.ts): each level's value at the opened instance (hex at the top,

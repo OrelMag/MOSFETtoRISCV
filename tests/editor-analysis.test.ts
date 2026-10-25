@@ -281,3 +281,22 @@ describe('shorts in the sandbox', () => {
     expect(s.wireShorted('w1')).toBe(false);
   });
 });
+
+describe('weak levels in the sandbox', () => {
+  // the buffer drawn the wrong way round (NMOS to VDD), then a CMOS inverter reading its output
+  const doc = (a: number) => chip('u_wk', 'Weak', {
+    pins: [{ ...pin('a', 'in', [0, 4]), value: a }, pin('y', 'out', [30, 4]), pin('z', 'out', [40, 4])],
+    parts: [part('v', { lib: 'vdd' }, [10, -4]), part('n1', { lib: 'nmos' }, [10, 0]), part('p1', { lib: 'pmos' }, [10, 6]), part('g', { lib: 'gnd' }, [10, 12]),
+      part('inv', { lib: 'inv_cmos' }, [24, 2])],
+    wires: [wire('w1', 'pin:a', 'n1.g'), wire('w2', 'pin:a', 'p1.g'), wire('w3', 'v.p', 'n1.d'), wire('w4', 'g.p', 'p1.d'),
+      wire('w5', 'n1.s', 'pin:y'), wire('w6', 'p1.s', 'pin:y'), wire('w7', 'n1.s', 'inv.a'), wire('w8', 'inv.y', 'pin:z')],
+  });
+  it('a weak output and the gate it leaves partly on are warnings; the wire knows its level', () => {
+    const { s } = sim(doc(1));
+    expect(s.wireWeak('w5')).toBe(1);
+    expect(s.wireWeak('w8')).toBe(0);
+    const msgs = s.diags.map((d) => d.msg);
+    expect(msgs).toContain('weak 1 on y (H · 0.80 V): n1 is an NMOS passing a 1. A PMOS to VDD, or a transmission gate, passes it whole');
+    expect(msgs.some((m) => /^static current in inv\.\w+: its gate reads H · 0\.80 V, so this PMOS is partly on$/.test(m))).toBe(true);
+  });
+});

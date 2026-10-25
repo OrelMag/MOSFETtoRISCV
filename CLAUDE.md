@@ -128,7 +128,9 @@ src/sim/       simulation core (no DOM)
   switchsim.ts   switch-level MOSFET solver (0/1/X/Z, shorts, floating nodes); `strength` levels:
                  shorted / hasShort / shorts() (a crowbar: sure transistor paths to a 1 and a 0 source; per group the
                  transistors to each source) and shortText ("VDD shorted to GND through p1, n1"): the views' `short`
-                 class (--wshort), the sandbox's diagnostics, the checks' failures;
+                 class (--wshort), the sandbox's diagnostics, the checks' failures; weakOf / hasWeak / leaky (weak
+                 levels: WEAK_H a 1 only NMOS pass, WEAK_L a 0 only PMOS pass, VT_VOLTS; weakLevel / weakTag "H · 0.80 V";
+                 the bit stands, an NMOS gated by H passing a 1 → X; drawn `vl weak`, checks fail a weak output);
                  rails/inputs > transistors (strength 4..2, ratioed logic) > resistors (prim 'res',
                  strength 1: pull-ups lose to any transistor; two opposing → X) > bias resistors (strength 0) > stored charge
                  (`cap` nets and prim 'cap' capacitors keep their value when undriven); charge levels (DRAM):
