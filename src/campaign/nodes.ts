@@ -473,7 +473,7 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'pi_lesson', act: 6, title: 'Pipelining', kind: 'lesson', requires: ['c_fast'], body: 'pipe',
-    why: 'Core IV runs at 76 delays a cycle because every instruction must fit a whole load end to end: instruction ROM, decode, ALU, data RAM, register file. Registers between those steps let each cycle fit one of them, with five instructions in flight; the price is hazards, which make the 28 Core III programs take 1 495 cycles instead of 1 236, and with ripple adders E alone is 78 delays. With Kogge–Stone adders in E it wins: period 56, 83 720 NAND delays against Core IV\'s 93 936. This act builds the pipeline one hazard at a time; Act 7 adds traps to it.',
+    why: 'Core IV runs at 76 delays a cycle because every instruction must fit a whole load end to end. Registers between its steps let each cycle fit one of them, with five instructions in flight; the price is hazards, which make the 28 Core III programs take 1 495 cycles instead of 1 236, and with ripple adders E alone is 78 delays. With Kogge–Stone adders in E it wins: period 56, 83 720 NAND delays against Core IV\'s 93 936. This act builds it one hazard at a time; Act 7 adds traps.',
     tips: [], codex: ['pipeline', 'hazards'], chapters: [{ chapter: 'pipeline', label: 'Pipelining' }, { chapter: 'pipeline', step: 5, label: 'Does it pay? Measured' }],
   },
   {
