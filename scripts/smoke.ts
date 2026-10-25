@@ -302,9 +302,11 @@ const STAGE_BARS = `(() => {
     const R = bar.getBoundingClientRect().right;
     const cur = bar.querySelector('.crumbs > button:last-of-type');
     if (cur && !bar.classList.contains('stacked') && cur.scrollWidth > cur.clientWidth + 1) out.push('stage bar: the open level\\'s name cut: ' + cur.textContent.trim().slice(0, 32));
+    // a row that scrolls sideways (a phone's pins: app.css .ctl-pins) keeps its buttons reachable
+    const scrolls = (b) => { for (let e = b.parentElement; e && e !== bar; e = e.parentElement) if (/auto|scroll/.test(getComputedStyle(e).overflowX)) return true; return false; };
     for (const b of bar.querySelectorAll('button')) {
       const r = b.getBoundingClientRect();
-      if (r.width && r.right > R + 1 && !b.closest('.pal-menu')) out.push('stage bar: button past the bar: ' + (b.getAttribute('aria-label') || b.textContent || b.title).trim().slice(0, 32));
+      if (r.width && r.right > R + 1 && !b.closest('.pal-menu') && !scrolls(b)) out.push('stage bar: button past the bar: ' + (b.getAttribute('aria-label') || b.textContent || b.title).trim().slice(0, 32));
     }
     const run = bar.querySelector('.ctl-run');
     if (run && run.scrollWidth > run.clientWidth + 1) out.push('stage run bar cut (' + run.scrollWidth + ' px in ' + run.clientWidth + ')');
