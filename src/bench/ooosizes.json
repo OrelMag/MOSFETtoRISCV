@@ -1,0 +1,595 @@
+{
+ "note": "The gate-level out-of-order core (lib/ooocore.ts) by window size: NANDs without the program ROM and the static-timing period in NAND delays, as src/bench/results.json measures a CPU (the default point is its ooo row); periodLoad: the period under the load-dependent delay model (sim/delay.ts); path: the top-level instances the critical path crosses; units: NANDs of the reorder buffer, issue queue, store queue and rename table. Written by scripts/ooo-sizes.ts.",
+ "psPerNand": 25,
+ "imemWords": 128,
+ "dmemWords": 64,
+ "default": {
+  "rob": 16,
+  "iq": 8,
+  "sq": 4
+ },
+ "rob": [
+  8,
+  16,
+  32
+ ],
+ "iq": [
+  4,
+  8,
+  16
+ ],
+ "sq": [
+  2,
+  4,
+  8
+ ],
+ "points": [
+  {
+   "rob": 8,
+   "iq": 4,
+   "sq": 2,
+   "nands": 286574,
+   "period": 93,
+   "periodLoad": 152,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "opA1",
+    "iq"
+   ],
+   "units": {
+    "rob": 34644,
+    "iq": 26432,
+    "sq": 4083,
+    "rat": 10902
+   }
+  },
+  {
+   "rob": 8,
+   "iq": 4,
+   "sq": 4,
+   "nands": 291583,
+   "period": 93,
+   "periodLoad": 152,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "opA1",
+    "iq"
+   ],
+   "units": {
+    "rob": 34644,
+    "iq": 26884,
+    "sq": 8544,
+    "rat": 10902
+   }
+  },
+  {
+   "rob": 8,
+   "iq": 4,
+   "sq": 8,
+   "nands": 301546,
+   "period": 93,
+   "periodLoad": 152,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "opA1",
+    "iq"
+   ],
+   "units": {
+    "rob": 34644,
+    "iq": 27568,
+    "sq": 17693,
+    "rat": 10902
+   }
+  },
+  {
+   "rob": 8,
+   "iq": 8,
+   "sq": 2,
+   "nands": 315438,
+   "period": 93,
+   "periodLoad": 152,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "opA1",
+    "iq"
+   ],
+   "units": {
+    "rob": 34644,
+    "iq": 55218,
+    "sq": 4083,
+    "rat": 10902
+   }
+  },
+  {
+   "rob": 8,
+   "iq": 8,
+   "sq": 4,
+   "nands": 320911,
+   "period": 93,
+   "periodLoad": 152,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "opA1",
+    "iq"
+   ],
+   "units": {
+    "rob": 34644,
+    "iq": 56134,
+    "sq": 8544,
+    "rat": 10902
+   }
+  },
+  {
+   "rob": 8,
+   "iq": 8,
+   "sq": 8,
+   "nands": 331570,
+   "period": 93,
+   "periodLoad": 152,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "opA1",
+    "iq"
+   ],
+   "units": {
+    "rob": 34644,
+    "iq": 57514,
+    "sq": 17693,
+    "rat": 10902
+   }
+  },
+  {
+   "rob": 8,
+   "iq": 16,
+   "sq": 2,
+   "nands": 376658,
+   "period": 95,
+   "periodLoad": 152,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "iq",
+    "e1_0"
+   ],
+   "units": {
+    "rob": 34644,
+    "iq": 116360,
+    "sq": 4083,
+    "rat": 10902
+   }
+  },
+  {
+   "rob": 8,
+   "iq": 16,
+   "sq": 4,
+   "nands": 383059,
+   "period": 95,
+   "periodLoad": 152,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "iq",
+    "e1_0"
+   ],
+   "units": {
+    "rob": 34644,
+    "iq": 118204,
+    "sq": 8544,
+    "rat": 10902
+   }
+  },
+  {
+   "rob": 8,
+   "iq": 16,
+   "sq": 8,
+   "nands": 395110,
+   "period": 95,
+   "periodLoad": 152,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "iq",
+    "e1_0"
+   ],
+   "units": {
+    "rob": 34644,
+    "iq": 120976,
+    "sq": 17693,
+    "rat": 10902
+   }
+  },
+  {
+   "rob": 16,
+   "iq": 4,
+   "sq": 2,
+   "nands": 324545,
+   "period": 93,
+   "periodLoad": 154.5,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "opA1",
+    "iq"
+   ],
+   "units": {
+    "rob": 70541,
+    "iq": 26806,
+    "sq": 4083,
+    "rat": 12443
+   }
+  },
+  {
+   "rob": 16,
+   "iq": 4,
+   "sq": 4,
+   "nands": 329554,
+   "period": 93,
+   "periodLoad": 154.5,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "opA1",
+    "iq"
+   ],
+   "units": {
+    "rob": 70541,
+    "iq": 27258,
+    "sq": 8544,
+    "rat": 12443
+   }
+  },
+  {
+   "rob": 16,
+   "iq": 4,
+   "sq": 8,
+   "nands": 339517,
+   "period": 93,
+   "periodLoad": 154.5,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "opA1",
+    "iq"
+   ],
+   "units": {
+    "rob": 70541,
+    "iq": 27942,
+    "sq": 17693,
+    "rat": 12443
+   }
+  },
+  {
+   "rob": 16,
+   "iq": 8,
+   "sq": 2,
+   "nands": 353789,
+   "period": 93,
+   "periodLoad": 154.5,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "opA1",
+    "iq"
+   ],
+   "units": {
+    "rob": 70541,
+    "iq": 55972,
+    "sq": 4083,
+    "rat": 12443
+   }
+  },
+  {
+   "rob": 16,
+   "iq": 8,
+   "sq": 4,
+   "nands": 359262,
+   "period": 93,
+   "periodLoad": 154.5,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "opA1",
+    "iq"
+   ],
+   "units": {
+    "rob": 70541,
+    "iq": 56888,
+    "sq": 8544,
+    "rat": 12443
+   }
+  },
+  {
+   "rob": 16,
+   "iq": 8,
+   "sq": 8,
+   "nands": 369921,
+   "period": 93,
+   "periodLoad": 154.5,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "opA1",
+    "iq"
+   ],
+   "units": {
+    "rob": 70541,
+    "iq": 58268,
+    "sq": 17693,
+    "rat": 12443
+   }
+  },
+  {
+   "rob": 16,
+   "iq": 16,
+   "sq": 2,
+   "nands": 415769,
+   "period": 95,
+   "periodLoad": 154.5,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "iq",
+    "e1_0"
+   ],
+   "units": {
+    "rob": 70541,
+    "iq": 117874,
+    "sq": 4083,
+    "rat": 12443
+   }
+  },
+  {
+   "rob": 16,
+   "iq": 16,
+   "sq": 4,
+   "nands": 422170,
+   "period": 95,
+   "periodLoad": 154.5,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "iq",
+    "e1_0"
+   ],
+   "units": {
+    "rob": 70541,
+    "iq": 119718,
+    "sq": 8544,
+    "rat": 12443
+   }
+  },
+  {
+   "rob": 16,
+   "iq": 16,
+   "sq": 8,
+   "nands": 434221,
+   "period": 95,
+   "periodLoad": 154.5,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "iq",
+    "e1_0"
+   ],
+   "units": {
+    "rob": 70541,
+    "iq": 122490,
+    "sq": 17693,
+    "rat": 12443
+   }
+  },
+  {
+   "rob": 32,
+   "iq": 4,
+   "sq": 2,
+   "nands": 398436,
+   "period": 94,
+   "periodLoad": 157.1,
+   "path": [
+    "rob",
+    "link0",
+    "seq0",
+    "tk0",
+    "btb"
+   ],
+   "units": {
+    "rob": 142358,
+    "iq": 27180,
+    "sq": 4083,
+    "rat": 13984
+   }
+  },
+  {
+   "rob": 32,
+   "iq": 4,
+   "sq": 4,
+   "nands": 403445,
+   "period": 94,
+   "periodLoad": 157.1,
+   "path": [
+    "rob",
+    "link0",
+    "seq0",
+    "tk0",
+    "btb"
+   ],
+   "units": {
+    "rob": 142358,
+    "iq": 27632,
+    "sq": 8544,
+    "rat": 13984
+   }
+  },
+  {
+   "rob": 32,
+   "iq": 4,
+   "sq": 8,
+   "nands": 413408,
+   "period": 94,
+   "periodLoad": 157.1,
+   "path": [
+    "rob",
+    "link0",
+    "seq0",
+    "tk0",
+    "btb"
+   ],
+   "units": {
+    "rob": 142358,
+    "iq": 28316,
+    "sq": 17693,
+    "rat": 13984
+   }
+  },
+  {
+   "rob": 32,
+   "iq": 8,
+   "sq": 2,
+   "nands": 428060,
+   "period": 94,
+   "periodLoad": 157.1,
+   "path": [
+    "rob",
+    "link0",
+    "seq0",
+    "tk0",
+    "btb"
+   ],
+   "units": {
+    "rob": 142358,
+    "iq": 56726,
+    "sq": 4083,
+    "rat": 13984
+   }
+  },
+  {
+   "rob": 32,
+   "iq": 8,
+   "sq": 4,
+   "nands": 433533,
+   "period": 94,
+   "periodLoad": 157.1,
+   "path": [
+    "rob",
+    "link0",
+    "seq0",
+    "tk0",
+    "btb"
+   ],
+   "units": {
+    "rob": 142358,
+    "iq": 57642,
+    "sq": 8544,
+    "rat": 13984
+   }
+  },
+  {
+   "rob": 32,
+   "iq": 8,
+   "sq": 8,
+   "nands": 444192,
+   "period": 94,
+   "periodLoad": 157.1,
+   "path": [
+    "rob",
+    "link0",
+    "seq0",
+    "tk0",
+    "btb"
+   ],
+   "units": {
+    "rob": 142358,
+    "iq": 59022,
+    "sq": 17693,
+    "rat": 13984
+   }
+  },
+  {
+   "rob": 32,
+   "iq": 16,
+   "sq": 2,
+   "nands": 490800,
+   "period": 95,
+   "periodLoad": 157.1,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "iq",
+    "e1_0"
+   ],
+   "units": {
+    "rob": 142358,
+    "iq": 119388,
+    "sq": 4083,
+    "rat": 13984
+   }
+  },
+  {
+   "rob": 32,
+   "iq": 16,
+   "sq": 4,
+   "nands": 497201,
+   "period": 95,
+   "periodLoad": 157.1,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "iq",
+    "e1_0"
+   ],
+   "units": {
+    "rob": 142358,
+    "iq": 121232,
+    "sq": 8544,
+    "rat": 13984
+   }
+  },
+  {
+   "rob": 32,
+   "iq": 16,
+   "sq": 8,
+   "nands": 509252,
+   "period": 95,
+   "periodLoad": 157.1,
+   "path": [
+    "div",
+    "V2d",
+    "bus1V",
+    "iq",
+    "e1_0"
+   ],
+   "units": {
+    "rob": 142358,
+    "iq": 124004,
+    "sq": 17693,
+    "rat": 13984
+   }
+  }
+ ]
+}
