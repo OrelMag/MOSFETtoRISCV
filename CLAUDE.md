@@ -217,6 +217,8 @@ src/lib/       the component library (registered in `registry` via define())
                  palette's Timer: wraps every period edges, irq held until ack)
   storage.ts     romArray(preset), minimize() (Quine–McCluskey), pla(preset), fifo(k, w), stack(k, w), cam(k, w),
                  regfileMP(k, w, reads, writes)
+  sop.ts         two-level minimization with don't-cares: primes (Quine–McCluskey), cover (essential primes, then an
+                 exact search within EXACT_BUDGET steps, else greedy: `exact` says which), minimumCover (exact: drills)
   isadecoder.ts  isaDecoder(doc): a Custom ISA table's decoder in gates (not registered: built per table, opened by the
                  Design tab through remixDef): complement rails where a pattern needs a 0, one AND per instruction over its
                  fixed bits, the NOT of each more specific overlapping pattern, valid = OR; matchNames; its NANDs equal
@@ -733,6 +735,12 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  volatile change), the canvas banner (Detach, Hide text), the 'hdl' props section (top, gates, modules),
                  registerFileImporter for .v / .sv and Yosys JSON, registerNewChipKind (New chip ▾ Verilog chip);
                  examplehdl.ts: Examples ▸ The same adder in Verilog
+  ttable.ts      truth-table chips (ChipDoc.table: 1–8 one-bit inputs / outputs, a row string per output of 0 / 1 / -, the
+                 first input most significant, form nand | andor): tableLogic (lib/sop.ts cover per output, equal terms
+                 shared), tableDef (Builder: inverters, terms, output gates; terms joined by labels past 8), drawTable /
+                 setTable (docFromDef; input values kept by name), newTableChip, detachTable, pure table edits; generated
+                 like a Verilog chip (hdl.ts isGenerated); tableui.ts: plugin, the table pane in slots.left (cells cycled or
+                 typed, the live row, Karnaugh map with loops for 2–4 inputs, equations, cost), banner, New chip ▾ Truth table
   examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, console, screen, the computer, shared bus,
                  wired-AND / OR, RV16 Pong: campaign/bench.ts pongChip), addExample: new chip (and an example's
                  `subchips`, fresh ids), opened. The computer

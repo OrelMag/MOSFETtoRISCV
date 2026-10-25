@@ -25,5 +25,7 @@ import './cardui';
 import './puzzleui';
 // Verilog chips: the text beside the canvas, Yosys in the page, .v / Yosys JSON import.
 import './hdlui';
+// Truth-table chips: the table beside the canvas, the minimized logic drawn.
+import './tableui';
 // The editor's actions in the search box (`>`).
 import './searchactions';
