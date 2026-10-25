@@ -112,7 +112,7 @@ export const chCache: Chapter = {
         <p>The sense amplifier is a latch: while <code>sae</code> (sense amplifier enable) = 0 it follows the bit lines (unpowered, so it never drives them); when
         <code>sae</code> rises it isolates itself and latches the value, which it holds while the bit lines are precharged for the next access.
         In silicon it also <em>amplifies</em>: it fires when the bit lines differ by ~100 mV, long before a small cell could swing a long
-        bit line fully. Here the swing is full; <a href="#/c/dram/0">chapter 34</a> opens a DRAM, where it is not.</p>
+        bit line fully. Here the swing is full; <a href="#/c/dram/0">chapter 35</a> opens a DRAM, where it is not.</p>
         <p>Cost of this 4×4: 320 transistors, of which the cells are 96. The periphery is shared per row and per column, so it amortizes:
         at 8×8 the cells are 43 %, and in a real 32 KB array over 90 %. Sixteen bits of flip-flop registers would cost 960.</p>
         <div class="try">Use the buttons: Precharge, set <code>din</code> and <code>addr</code>, Write; then Precharge and Read.</div>`,
@@ -163,7 +163,7 @@ export const chCache: Chapter = {
     },
     {
       title: 'Leaks, refresh and sense amplifiers',
-      body: '<p>The stored charge leaks through the off transistor and the junction, so every row must be read and rewritten periodically. A read only produces a small voltage on the bit line. <a href="#/c/dram/0">Chapter 34</a> builds the array, the precharge to VDD/2 and the sense amplifier at transistor level, with the charge sharing measured in millivolts.</p>',
+      body: '<p>The stored charge leaks through the off transistor and the junction, so every row must be read and rewritten periodically. A read only produces a small voltage on the bit line. <a href="#/c/dram/0">Chapter 35</a> builds the array, the precharge to VDD/2 and the sense amplifier at transistor level, with the charge sharing measured in millivolts.</p>',
       widget: dramWidget,
     },
     {
@@ -282,7 +282,7 @@ export const chCache: Chapter = {
         miss whose victim is dirty must write it back first: 12 cycles instead of 8. <span data-show="dm.fsm">The miss controller</span> is a 4-bit counter: 0–3 write the
         victim back, 4–7 wait, 8–11 fill, and a clean victim jumps from 0 to 5.</p>
         <p>The panel's memory view now shows the memory <em>as the program sees it</em>: main memory overlaid with the dirty lines, which are
-        the only up-to-date copy. That is the coherence problem of <a href="#/c/multicore/0">chapter 26</a> in its simplest form.</p>
+        the only up-to-date copy. That is the coherence problem of <a href="#/c/multicore/0">chapter 27</a> in its simplest form.</p>
         <div class="try">Run "Update an array in place": 48 stores, every one a hit, because each follows a load of the same word; the first pass's loads miss 4 times and bring the lines in. Open <span data-show="dm.ram"><code>dm</code> → <code>ram</code></span>: main memory is still all zero.</div>`,
       scene: () => cpuScene({ source: csrc('inplace'), dcache: 'wb', adder: 'ks', highlight: ['dm'] }),
       challenge: {

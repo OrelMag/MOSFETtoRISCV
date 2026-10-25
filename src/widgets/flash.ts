@@ -1,4 +1,4 @@
-// Chapter 36's flash panels: the switch-level arrays driven as a flash chip drives them (read a row,
+// Chapter 37's flash panels: the switch-level arrays driven as a flash chip drives them (read a row,
 // program a row pulse by pulse with a verify read after each, erase the block), every cell's threshold
 // shown; the translation layer on a small device; and garbage collection and wear over a long workload.
 

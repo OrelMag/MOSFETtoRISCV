@@ -330,7 +330,7 @@ export function memSequencer(n: number): ComponentDef {
     b.wire(`${lo}.y`, 'served'); b.wire(`${lo}.any`, 'any'); b.wire(stall, 'stall');
     return define({
       id: `memseq${n}`, name: 'Memory sequencer', category: 'cpu',
-      summary: `One memory port for ${n} lanes: a load or store serves the lowest active lane not yet served, one per cycle, and stalls the PC until none is left. A load with every lane active costs ${n} cycles (a coalescer, chapter 31, merges neighbouring words into one access).`,
+      summary: `One memory port for ${n} lanes: a load or store serves the lowest active lane not yet served, one per cycle, and stalls the PC until none is left. A load with every lane active costs ${n} cycles (a coalescer, chapter 32, merges neighbouring words into one access).`,
       ports: [bit('isMem', 'in'), bus('mask', n, 'in'), clkPort, bus('served', n, 'out'), bit('any', 'out'), bit('stall', 'out')],
       symbol: { kind: 'box', label: 'MEM SEQUENCER' },
       netlist: () => ({ pins: edgePins(b, ins, ['served', 'any', 'stall'], 3), instances: b.instances, nets: b.nets() }),

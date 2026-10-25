@@ -36,7 +36,7 @@ export interface BenchCase {
 
 /** The program as cfg runs it (on a multi-core the other harts park first), run on the golden model. */
 export function benchCase(b: Benchmark, cfg: CpuConfig): BenchCase {
-  const asm = assemble((cfg.isa.mp ? PARK : '') + b.source);
+  const asm = assemble((cfg.isa.c ? '.option rvc\n' : '') + (cfg.isa.mp ? PARK : '') + b.source);
   if (asm.errors.length) throw new Error(`${b.id}: line ${asm.errors[0].line}: ${asm.errors[0].message}`);
   const words = asm.words, dmemWords = 2 ** BENCH_DMEM_K, imemWords = 2 ** BENCH_IMEM_K;
   if (words.length > imemWords) throw new Error(`${b.id}: ${words.length} words do not fit the ${imemWords}-word ROM`);
@@ -83,7 +83,7 @@ export function measureCpu(def: ComponentDef): CpuMeasure {
     if (!nl) return 0;
     return nl.instances.reduce((s, i) => {
       const imem = inImem || i.name === 'imem';
-      if (imem && i.def.id.startsWith('rom_')) return s + stats(i.def).nands;
+      if (imem && (i.def.id.startsWith('rom_') || i.def.id.startsWith('hrom'))) return s + stats(i.def).nands; // hrom: the C core's halfword banks
       return s + (i.name === 'imem' || /^core\d$/.test(i.name) ? rom(i.def, imem) : 0);
     }, 0);
   };

@@ -24,7 +24,7 @@ export interface BenchCpu {
   nands: number;
   /** NAND delays (static timing). */
   period: number;
-  /** Main memory is an off-chip DRAM device (chapter 35): not in `nands`, so kept out of the cost comparisons. */
+  /** Main memory is an off-chip DRAM device (chapter 36): not in `nands`, so kept out of the cost comparisons. */
   offChip?: boolean;
   runs: BenchRun[];
 }
@@ -50,14 +50,14 @@ export const FAMILIES: { key: Family; label: string }[] = [
   { key: 'wide', label: 'Two-wide (dual issue, out of order)' },
 ];
 
-/** CPUs that issue two instructions a cycle (chapter 25). */
+/** CPUs that issue two instructions a cycle (chapter 26). */
 const WIDE = new Set(['pipe-2w', 'ooo']);
 /** The system CPUs and the dual-core are single-cycle cores. */
 export const familyOf = (id: string): Family => (WIDE.has(id) ? 'wide' : id.startsWith('mc') ? 'multi' : id.startsWith('pipe') || id === 'fppipe' ? 'pipe' : 'single');
 
 /** The chapter that builds each CPU. */
 const CHAPTER: Record<string, string> = {
-  sc: 'cpu', 'sc-ks': 'fastadd', 'sc-dc': 'cache', 'sc-wb2': 'cache', 'sc-ic': 'cache', 'sc-wb-ic': 'cache', 'sc-f': 'float',
+  sc: 'cpu', 'sc-c': 'widths', 'sc-ks': 'fastadd', 'sc-dc': 'cache', 'sc-wb2': 'cache', 'sc-ic': 'cache', 'sc-wb-ic': 'cache', 'sc-f': 'float',
   'mc-fsm': 'multicycle', 'mc-micro': 'multicycle', pipe: 'pipeline', 'pipe-ks': 'pipepay', 'pipe-bal': 'pipepay',
   'pipe-bp': 'pipepay', 'pipe-bal-bp': 'pipepay', 'pipe-wb2': 'cache', 'pipe-wt-bal-bp': 'cache', 'pipe-m': 'muldiv',
   'pipe-m-bal-bp': 'muldiv', 'pipe-2w': 'ooo', ooo: 'ooo', fppipe: 'float', sys: 'traps', 'sys-m': 'muldiv', dual: 'multicore',

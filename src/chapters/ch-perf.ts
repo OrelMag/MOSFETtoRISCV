@@ -166,7 +166,7 @@ export const chFastAdders: Chapter = {
         program: start at every flip-flop output (clk→q), propagate arrival times through every gate, and take the
         latest arrival at any flip-flop input (+ setup). The panel shows the result and highlights the path. Its clock rate
         converts NAND delays at an illustrative 25 ps each, a loaded NAND2 at 28 nm; real sign-off timing comes from a
-        characterized cell library, with slew, load and wire RC per arc (<a href="#/c/silicon/0">chapter 27</a> runs our dual-core through one).</p>
+        characterized cell library, with slew, load and wire RC per arc (<a href="#/c/silicon/0">chapter 28</a> runs our dual-core through one).</p>
         <p>Surprise: it is not <code>lw</code>. It is a <strong>branch</strong>: <span data-show="pc">PC</span> →
         <span data-show="imem">instruction memory</span> → <span data-show="ctl">decode</span> →
         <span data-show="imm">immediate mux</span> → <span data-show="srcB">SrcB</span> → 32-bit subtract in the
@@ -220,7 +220,7 @@ export const chFastAdders: Chapter = {
         trees it comes back to within a few units of Kogge–Stone, and the buffers are not in its NAND count. Brent–Kung pays
         in levels in every model. Kogge–Stone's own price, n·log n cells and diagonals 2<sup>j</sup> rows long, is wiring.
         This model does not see wire length: a drawing's wires are not a layout's, and length is only real once a design is
-        placed (<a href="#/c/silicon/0">chapter 27</a>).</p>
+        placed (<a href="#/c/silicon/0">chapter 28</a>).</p>
         <p>The last two rows are loads every design has. A memory's row decoder is 7 NAND delays by unit delay and nearly
         three times that under load: each address inverter feeds half the rows, and each word line three inputs per bit of
         its word (the enable muxes). The clock is worse. Unit delay counts the NAND driving a 64-bit register's clock as one

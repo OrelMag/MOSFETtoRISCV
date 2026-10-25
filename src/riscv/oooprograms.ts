@@ -1,4 +1,4 @@
-// Chapter 25's small programs: loops short enough to read in a timeline. Each ends in a jump to itself.
+// Chapter 26's small programs: loops short enough to read in a timeline. Each ends in a jump to itself.
 
 export interface OooProgram { id: string; name: string; blurb: string; source: string }
 

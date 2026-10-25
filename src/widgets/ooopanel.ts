@@ -1,4 +1,4 @@
-// Chapter 25's Out of order panel, over the gate-level core (lib/ooocore.ts): the reorder buffer, the issue queue,
+// Chapter 26's Out of order panel, over the gate-level core (lib/ooocore.ts): the reorder buffer, the issue queue,
 // the rename table and the store queue as its registers hold them (riscv/ooosnap.ts), and the instructions in flight
 // as a timeline from riscv/ooomodel.ts, stepped in lock-step with the gates and checked every cycle (the commits and
 // the instruction each port picks). A row's instruction lights its hardware through the CPU panel (OooLink). The

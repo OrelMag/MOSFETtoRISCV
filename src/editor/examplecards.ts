@@ -22,7 +22,7 @@ export const CARDS_RAM_K = 6;
 
 const hex = (v: number) => `0x${v.toString(16)}`;
 
-/** The boot ROM: read the deck into RAM until the hopper is empty, then run it (chapter 37's CARD_BOOT_SOURCE on this map). */
+/** The boot ROM: read the deck into RAM until the hopper is empty, then run it (chapter 38's CARD_BOOT_SOURCE on this map). */
 export const CARDS_LOADER_SOURCE = `# boot ROM: read the deck word by word into RAM at ${hex(CARDS_LOAD_AT)}, then jump there
 boot:   li   s0, ${hex(CARDS_READER_AT)}     # card reader: STATUS +0, DATA +4
         li   s1, ${hex(CARDS_LOAD_AT)}          # RAM address

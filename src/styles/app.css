@@ -355,6 +355,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .steps-dots button.solved.cur { background: var(--accent); box-shadow: 0 0 0 2px var(--good-soft), 0 0 0 3px var(--good); }
 .steps-dots button.recap { width: 12px; background: transparent; box-shadow: inset 0 0 0 1.5px var(--border-strong); }
 .steps-dots button.recap.cur { background: var(--accent); box-shadow: none; }
+/* a step not built yet (Chapter.soon) */
+.steps-dots .soon { width: 22px; height: 6px; align-self: center; border-radius: 3px; box-shadow: inset 0 0 0 1.5px var(--border-strong); background: repeating-linear-gradient(90deg, var(--border-strong) 0 3px, transparent 3px 6px); opacity: 0.7; }
 .checks-count { font: 11.5px var(--font-mono); color: var(--muted); white-space: nowrap; }
 .ch-goals {
   border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
@@ -1133,7 +1135,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .panel-dock > .mem-panel { position: relative; inset: auto; pointer-events: auto; flex: 0 1 auto; min-height: 38px; max-width: 100%; max-height: 100%; }
 .panel-dock.row > .mem-panel { flex-shrink: 0; }
 
-/* A phone: a panel marked data-phone="flow" (chapters 32–33's screen and drawing pad, chapter 25's Out of order) over a
+/* A phone: a panel marked data-phone="flow" (chapters 33–34's screen and drawing pad, chapter 26's Out of order) over a
    390 px canvas hid the whole circuit, or was cut to a few rows. While one is unfolded the panels leave the overlay for the
    canvas's flow, full width under a strip of circuit (the fit keeps the circuit clear of them: Stage.covers), and the
    stage grows to hold them; folded, they float over the canvas as on a desktop. */
@@ -1622,7 +1624,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .fx-line .subnormal { fill: #d97706; }
 .fx-line .zero { fill: var(--text); }
 
-/* chapter 26: dual-core panel, coherence explorer */
+/* chapter 27: dual-core panel, coherence explorer */
 .dual-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .dual-core .cpu-mem .m .n { width: 30px; }
 .coh-grid { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
@@ -1638,7 +1640,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .btn.xs { padding: 0 5px; font-size: 10px; height: 18px; line-height: 16px; }
 .coh-log { font-size: 12px; display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow: auto; margin-top: 6px; }
 
-/* chapter 27: layout, fab, P&R, clock tree, floorplan, wafer */
+/* chapter 28: layout, fab, P&R, clock tree, floorplan, wafer */
 .lay-svg { width: 100%; max-width: 360px; display: block; margin: 8px auto; }
 .lay-svg .L-nwell { fill: rgba(250, 204, 21, 0.14); stroke: rgba(250, 204, 21, 0.5); stroke-width: 0.15; stroke-dasharray: 0.6 0.4; }
 .lay-svg .L-pdiff { fill: #c8a26a; }
@@ -1715,7 +1717,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .footer-meta { margin-top: 6px; font-size: 12px; color: var(--muted); }
 .footer-meta a { color: inherit; }
 
-/* chapters 28–29: the Warp panel, lanes against cores */
+/* chapters 29–30: the Warp panel, lanes against cores */
 .warp-grid table { border-collapse: separate; border-spacing: 2px; font: 10.5px var(--font-mono); }
 .warp-grid th { font-weight: 500; color: var(--muted); min-width: 14px; }
 .warp-grid td { width: 14px; height: 13px; border-radius: 3px; background: var(--surface-3); }
@@ -1775,7 +1777,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .err-banner { right: 8px; left: 8px; bottom: 8px; width: auto; }
 }
 
-/* chapter 30: the warps' issue timeline, their scoreboards, the occupancy chart */
+/* chapter 31: the warps' issue timeline, their scoreboards, the occupancy chart */
 .warp-issue td.w0, .warp-slots .dot.w0, .cpu-listing .warp-at i.w0 { background: var(--series-1); }
 .warp-issue td.w1, .warp-slots .dot.w1, .cpu-listing .warp-at i.w1 { background: var(--series-2); }
 .warp-issue td.w2, .warp-slots .dot.w2, .cpu-listing .warp-at i.w2 { background: var(--series-3); }
@@ -1798,7 +1800,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .warp-occ-chart { max-width: 560px; }
 .warp-occ .lvc-bars .tot { font: 600 11.5px var(--font-mono); fill: var(--text); }
 
-/* chapter 31: accesses in the issue timeline, the barrier, shared memory by bank, the access widget */
+/* chapter 32: accesses in the issue timeline, the barrier, shared memory by bank, the access widget */
 .warp-issue td.more { opacity: 0.55; }
 .warp-issue td.blocked { opacity: 0.35; }
 .warp-issue td.bar { background: repeating-linear-gradient(0deg, var(--warn) 0 2px, transparent 2px 5px); }
@@ -1833,7 +1835,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .feed-step .w { margin-left: 8px; color: var(--text-2); font: 11.5px var(--font-mono); }
 .feed-tile .feed-cross { stroke: var(--muted); stroke-dasharray: 4 3; }
 
-/* chapter 32: the screen panel and the edge-function explorer */
+/* chapter 33: the screen panel and the edge-function explorer */
 .gfx-panel { width: 300px; }
 .gfx-panel select.gfx-reset { width: 6.5em; }
 .gfx-screen-wrap { position: relative; background: #000; border-radius: var(--radius-sm); padding: 4px; line-height: 0; }
@@ -1846,7 +1848,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .gfx-edge-info .v { font: 600 12.5px var(--font-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .gfx-edge-info .v.good { color: var(--good); }
 .gfx-edge-info .v.bad { color: var(--bad); }
-/* chapter 32's drawing pad (widgets/drawpad.ts): the drawing's own colours are data, the chrome follows the theme */
+/* chapter 33's drawing pad (widgets/drawpad.ts): the drawing's own colours are data, the chrome follows the theme */
 .gfx-draw-panel .cpu-body > * + * { margin-top: 6px; }
 .gfx-tools .btn.on { background: var(--accent-soft); border-color: var(--accent); }
 .gfx-draw-panel { overflow-y: auto; }
@@ -1858,7 +1860,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 /* the pad gives way on a short window, so the controls below it stay in view */
 .gfx-pad { display: block; margin: 0 auto; width: 100%; max-width: max(180px, calc(100vh - 590px)); height: auto; aspect-ratio: 1; border-radius: var(--radius-sm); touch-action: none; cursor: crosshair; }
 .gfx-pad:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-/* chapters 32–33: every memory beside the screen (widgets/framemem.ts); pixels are data, the chrome follows the theme */
+/* chapters 33–34: every memory beside the screen (widgets/framemem.ts); pixels are data, the chrome follows the theme */
 .gfx-mem-label { position: absolute; left: 10px; top: 10px; font: 600 10.5px/1.5 var(--font-mono); color: #fff; background: rgba(0,0,0,0.55); padding: 1px 6px; border-radius: 4px; pointer-events: none; }
 .gfx-mem { display: grid; gap: 6px; margin: 6px 0; }
 .gfx-mem .cpu-sec { margin: 0; }
@@ -1897,7 +1899,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .gfx-vbuf table { width: 100%; border-collapse: collapse; font: 9.5px var(--font-mono); font-variant-numeric: tabular-nums; }
 .gfx-vbuf th { font-weight: 600; color: var(--muted); text-align: left; padding: 0 2px; }
 .gfx-vbuf td { padding: 0 2px; color: var(--text-2); }
-/* chapter 33: the pipeline panel's timeline, the cost tables */
+/* chapter 34: the pipeline panel's timeline, the cost tables */
 .gfx-tl-wrap { margin-top: 6px; }
 .gfx-timeline { display: block; width: 100%; height: auto; margin: 2px 0 4px; }
 .gfx-tl-name { font-size: 9.5px; fill: var(--text-2); }
@@ -1924,7 +1926,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .gfx-help dt { font-weight: 600; color: var(--text); margin-top: 6px; }
 .gfx-help dd { margin: 2px 0 0; line-height: 1.4; }
 
-/* ---------- chapter 34: the DRAM panel (widgets/dram.ts) ---------- */
+/* ---------- chapter 35: the DRAM panel (widgets/dram.ts) ---------- */
 .dram-panel { width: 372px; }
 .dram-sel { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; color: var(--text-2); font-size: 12px; margin-bottom: 6px; }
 .dram-seg button { padding: 2px 9px; font: 600 11.5px var(--font-mono); }
@@ -1949,7 +1951,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .dcell.x { background: color-mix(in oklab, var(--wx) 25%, var(--surface)); color: var(--wx); }
 .dcell.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
 .dram-note { font-size: 11.5px; color: var(--text-2); margin-top: 6px; min-height: 2.6em; }
-/* chapter 34: row buffer and timing widgets (widgets/dramtiming.ts) */
+/* chapter 35: row buffer and timing widgets (widgets/dramtiming.ts) */
 .rb-ctl { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .rb-sum { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 13px; color: var(--text-2); margin: 8px 0; max-width: 560px; }
 .rb-sum b { font: 600 12.5px var(--font-mono); color: var(--text); }
@@ -1975,7 +1977,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .tm-table th:first-child, .tm-table td:first-child { text-align: left; }
 .tm-table .t { text-align: left; white-space: normal; font: 13px var(--font-ui); color: var(--text-2); min-width: 260px; }
 @media (max-width: 640px) { .rb-line { grid-template-columns: 54px minmax(0, 1fr) 30px; } .rb-line .rb-br, .rb-line .rb-kind { display: none; } }
-/* chapter 35: the controller panel (widgets/dramctrl.ts) and the reordering bar (widgets/dramwork.ts) */
+/* chapter 36: the controller panel (widgets/dramctrl.ts) and the reordering bar (widgets/dramwork.ts) */
 .mc-panel { width: 360px; }
 .mc-row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-bottom: 6px; font-size: 12px; color: var(--text-2); }
 .mc-sel { font: 12px var(--font-mono); padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
@@ -2000,7 +2002,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .ro-s.hit { opacity: 0.5; }
 .ro-k { display: inline-block; width: 14px; height: 10px; border-radius: 3px; }
 .ce-table td { text-align: right; } .ce-table td:first-child { text-align: left; }
-/* chapter 36: the flash panel and widgets (widgets/flash.ts) */
+/* chapter 37: the flash panel and widgets (widgets/flash.ts) */
 .fl-panel { width: 352px; }
 .fl-grid { display: flex; flex-direction: column; gap: 3px; font: 11px var(--font-mono); margin-top: 4px; }
 .fl-row { display: grid; grid-template-columns: 52px repeat(4, minmax(0, 1fr)); gap: 3px; align-items: center; }
@@ -2036,7 +2038,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .wear-bar i { width: 100%; background: var(--probe-0); border-radius: 3px 3px 0 0; min-height: 1px; }
 .wear-bar.bad i { background: var(--wx); }
 .wear-bar em { font: normal 10px var(--font-mono); color: var(--muted); margin-top: 2px; }
-/* chapter 37: the bus panels (widgets/bus.ts) */
+/* chapter 38: the bus panels (widgets/bus.ts) */
 .bus-panel { width: 372px; }
 .bus-wave { display: flex; flex-direction: column; gap: 2px; font: 600 9px var(--font-mono); overflow-x: auto; }
 .bus-row { display: flex; gap: 1px; align-items: center; }

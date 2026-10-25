@@ -1,4 +1,4 @@
-// Chapter 32's drawing pad: the tessellator (gfx/tessellate.ts) and a drawing on the gate-level GPU.
+// Chapter 33's drawing pad: the tessellator (gfx/tessellate.ts) and a drawing on the gate-level GPU.
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
 import { chPixels } from '../src/chapters/ch-gfx';
@@ -100,7 +100,7 @@ describe('tessellation', () => {
     expect(drawingPicture(d).includes(blend332(0xe0, once, 3))).toBe(true);
   });
 
-  it('chapter 32 quotes the house\'s numbers', () => {
+  it('chapter 33 quotes the house\'s numbers', () => {
     const d = SAMPLE_DRAWINGS[0].d, c = drawingCost(d);
     expect([d.shapes.length, c.triangles, c.culled, c.pixels, c.clear, c.draw, c.setup]).toEqual([7, 25, 0, 2136, CLEAR_CYCLES + 1, 6453, 2125]);
     expect(Z_WALK_START).toBe(85);

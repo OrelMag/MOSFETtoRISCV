@@ -8,7 +8,7 @@ import { orN } from '../src/lib/wide';
 import { netlistOf } from '../src/sim/types';
 import { backwardEnds, labelOverlaps, routeNetlist, symbolOverlaps, wireOverlaps } from '../src/view/route';
 
-// The warp cores' data memories (chapters 30, 31, 33) are built on demand, so the registry-wide
+// The warp cores' data memories (chapters 31, 32, 34) are built on demand, so the registry-wide
 // layout tests never see them. Laid out in columns, routing lanePortMemory(7, 4) took half an hour
 // and froze the tab that opened it.
 describe('lanePortMemory schematic', () => {

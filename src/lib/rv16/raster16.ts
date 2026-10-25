@@ -1,4 +1,4 @@
-// Act 9's graphics levels (roadmap Phase 15, 4c): chapter 32's rasterizer at RV16 sizes, each block built only
+// Act 9's graphics levels (roadmap Phase 15, 4c): chapter 33's rasterizer at RV16 sizes, each block built only
 // from parts its level unlocks, so each is that level's reference. The reference model is gfx/raster16.ts.
 //
 //   EDGE16    one edge function: E and the band start R (16 bits), one adder / subtractor; a command a cycle:

@@ -161,7 +161,7 @@ export class ChapterPage implements Page {
   private renderHead(): void {
     const c = this.chapter;
     const visited = settings.visited(c.id);
-    const dots = c.steps.map((s, i) => {
+    const dots: HTMLElement[] = c.steps.map((s, i) => {
       const solved = !!s.challenge && settings.isSolved(`${c.id}:${i}`);
       return h('button', {
         class: [i === this.step ? 'cur' : visited.includes(i) ? 'done' : '', solved ? 'solved' : ''].filter(Boolean).join(' '),
@@ -170,6 +170,7 @@ export class ChapterPage implements Page {
         onclick: () => this.goStep(i),
       });
     });
+    for (const t of c.soon ?? []) dots.push(h('span', { class: 'soon', role: 'img', title: `Coming: ${t}`, 'aria-label': `Coming later: ${t}` }));
     if (this.recap >= 0) {
       dots.push(h('button', {
         class: `recap${this.step === this.recap ? ' cur' : ''}`, title: 'Recap', 'aria-label': 'Recap', onclick: () => this.goStep(this.recap),

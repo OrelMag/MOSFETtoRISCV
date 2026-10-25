@@ -1,4 +1,4 @@
-// Chapter 25's explorers, all computed: the dataflow limit of a trace (riscv/ilp.ts), in-order against out-of-order
+// Chapter 26's explorers, all computed: the dataflow limit of a trace (riscv/ilp.ts), in-order against out-of-order
 // timelines, the reorder-buffer explorer and the speculation table (riscv/ooomodel.ts, the gate-level core's
 // reference), and the CDC 6600 scoreboard (riscv/scoreboard.ts).
 
