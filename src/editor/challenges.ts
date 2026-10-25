@@ -372,7 +372,7 @@ export function fmtBits(bits: Bit[]): string {
 
 const fmtIns = (ps: PinSpec[], vals: number[]) => ps.map((p, i) => `${p.name}=${fmtNum(vals[i], p.width)}`).join(' ');
 
-function simFor(def: ComponentDef, mode: 'gate' | 'switch'): { sim: Sim; design: FlatDesign } {
+export function simFor(def: ComponentDef, mode: 'gate' | 'switch'): { sim: Sim; design: FlatDesign } {
   const design = flatten(def, { mode });
   return { sim: mode === 'switch' ? new SwitchSim(design) : new GateSim(design), design };
 }
