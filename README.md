@@ -19,7 +19,7 @@ in the page into chips that open down to the transistors like everything else.
 Four ways in: the **[journey](https://orelmag.github.io/MOSFETtoRISCV/#/c/map/0)** (38 chapters,
 three prologue chapters and two appendices), the **[campaign](https://orelmag.github.io/MOSFETtoRISCV/#/campaign)**
 (127 levels: build it to unlock it), the **[workbench](https://orelmag.github.io/MOSFETtoRISCV/#/workbench/rca4)**
-(any component on its own, with statistics and benchmarks) and the
+(any component on its own, with statistics, benchmarks and the out-of-order lab) and the
 **[sandbox](https://orelmag.github.io/MOSFETtoRISCV/#/sandbox)** (your own circuits, up to whole computers).
 
 ## The journey
@@ -31,7 +31,9 @@ those gates, faster adders, pipelining (hazards, forwarding, branch prediction),
 memory-mapped I/O, traps and interrupts, multiply / divide, caches, multicycle and microcoded control,
 floating point (RV32F), the C extension (an expander in gates in front of the decoder) and RV64 (the
 same core at 64 bits, the W instructions, what width costs block by block), a gate-level out-of-order
-core (renaming, a reorder buffer, speculation), many cores (atomics, coherence) and place and route on
+core (renaming, a reorder buffer, speculation) and a lab to reshape it (width, ports, window sizes, on
+the benchmarks, your assembly or your Python, each commit slot accounted for, the window sizes priced
+from the gates), many cores (atomics, coherence) and place and route on
 silicon. Two tracks follow: a **GPU** (a lane core,
 SIMT warps with divergence, latency hiding, coalescing and banked shared memory, a rasterizer with
 depth and blending, and a graphics pipeline whose vertex kernel runs on the warp core) and **memory in
@@ -86,19 +88,24 @@ frames.
 
 A tree of **127 levels in twelve acts**, in the spirit of *Turing Complete*, from a NAND made of
 transistors to a pipelined, interrupt-capable 16-bit RISC-V-like CPU (RV16), with four optional acts:
-before the transistor (relays, tubes, cards), side quests (floating point, multiply, divide), a GPU
+before the transistor (relays, tubes, cards), arithmetic units (floating point, multiply, divide), a GPU
 (four lanes, the active mask, a reconvergence stack, two warps, a rasterizer) and memory (a DRAM column,
 a controller, a bus with DMA, a flash store). Each level is built only from parts earlier levels
-unlocked, checked by a full test set and graded against par (NANDs, transistors, depth, clock period).
+unlocked, checked by a full test set and graded against par (NANDs, transistors, depth, clock period;
+every level has one). The order follows use: a level comes just before the first one that needs it,
+and its why reads as a thread (the problem, what it costs, where it goes next and which later levels
+reuse it), closing each act with what is now within reach.
 
 ![A level passed at par: the learner's adder against two alternatives, and its copies in the finished CPU](docs/images/level.png)
 
 Each level plays on a screen of its own: the brief, why the CPU needs the block (its measured cost
 against the alternatives and its copies in the finished CPU), the level's parts only, a hint ladder
 from a nudge to the full walkthrough, and Build along (the next step's parts as outlines, the
-learner's wiring checked against the reference). Number and Boolean drills, assembly puzzles on the
-golden model and a codex of 171 entries (each with a live figure, Check yourself questions and links
-both ways, also shown as hover definitions in the chapters) sit alongside. Plan and status in
+learner's wiring checked against the reference). Number and Boolean drills (generated, with exact
+checkers), assembly puzzles on the golden model and a codex of 177 entries sit alongside: each with a
+live figure, a worked example, Check yourself questions and links to what it builds on and leads to,
+searchable by alias, read beside the level without leaving it, and shown as hover definitions in the
+chapters. Plan and status in
 [docs/CAMPAIGN.md](docs/CAMPAIGN.md).
 
 ## Sandbox
@@ -109,8 +116,10 @@ A circuit editor in the spirit of Sebastian Lague's *Digital Logic Sim*, built o
 simulator, so whatever you build is a real component of the site. The full guide is
 [docs/SANDBOX.md](docs/SANDBOX.md).
 
-- Place parts from the whole library (or only NAND and transistors in *purist* mode), draw wires
-  freehand with corners and branches, and connect distant nets with **pointers** (named net labels).
+- Place parts from the whole library (a Basics group first, search by alias, or only NAND and
+  transistors in *purist* mode), draw wires freehand with corners and branches, and connect distant
+  nets with **pointers** (named net labels). A problems pill lists what is wrong with the circuit,
+  each with how to fix it.
 - Watch values live, per clock cycle or one gate delay at a time; probe wires into a timing
   diagram (VCD export), and read a chip's static timing with its critical path drawn on it, in
   NAND delays or by load (logical effort: a gate driving many inputs is slower), with the heaviest
@@ -144,6 +153,11 @@ simulator, so whatever you build is a real component of the site. The full guide
   it encoded binary, Gray or one-hot around flip-flops, read back from the circuit against the diagram;
   give it registers, and states carry register transfers (`a := a − b`) and arcs tests (`a < b`), built
   as that controller over a datapath of library registers, adders and comparators (GCD to start from).
+- **Digital and Logisim circuits import**: a `.dig` project or a Logisim-evolution `.circ` becomes
+  chips in a folder, the file's drawing kept, each part mapped to ours (with a table of what became
+  what). **Test tables** on any chip, in Digital's test syntax: a Tests pane runs them after every
+  edit, fills outputs from the circuit, and opens a failing row in the test player; the imported
+  files' own tests come along.
 - Wide pins up to 1024 bits, exact; autosave, chip files, share links, Verilog and image export, and
   **File ▸ Export Verilog for FPGA**: a board top for a Sipeed Tang Nano 9K (clock divider, reset,
   buttons and LEDs) with its pin constraints.
@@ -274,7 +288,9 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
   so a design can settle; real power-up depends on mismatch, noise and ramp.
 - **The CPUs are teaching microarchitectures**: a cache miss freezes the whole pipeline, the
   dual-core's atomics are atomic because a round-robin arbiter serializes every access, and the
-  out-of-order core is one fixed point (2-wide, ROB 16, issue queue 8) of a model that takes any size.
+  out-of-order core is built in gates only 2-wide (ROB 8–32, issue queue 4–16, store queue 2–8; the
+  site's is ROB 16, issue queue 8): the lab's other shapes run on its cycle-exact model, timed but not
+  priced.
   The ISA is RV32 (I, M, F, C, Zicsr, the atomics the dual-core needs), and RV64I / M on chapter 25's
   single-cycle core and its golden model; no lr.w / sc.w, and no RV64 in the pipelines yet.
 - **Doom runs on an interpreter of our ISA** (checked against the golden model), not on the gates:
@@ -291,10 +307,9 @@ The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next feat
   space, overlaps and gaps shown, the address decoder opened as a chip.
 - **Verilog in the journey**: the same adder as text and as gates in a chapter step, and a Verilog
   chip's critical path mapped back to its source lines.
-- **An out-of-order lab**: width, ROB, queues, ports and units set by the learner on the model, on
-  the benchmarks or their own program, priced by the gates (chapter 26 already measures the four
-  CPUs side by side and the model's width × window).
-- **ISA breadth, further**: lr.w / sc.w with private caches and a coherent bus in the gate-level cores.
+- **ISA breadth, further**: the C extension and RV64 in the sandbox, lr.w / sc.w with private caches
+  and a coherent bus in the gate-level cores.
+- **Imported circuits placed again** by logic depth (the Verilog import's placer), and `.dig` export.
 - **Python on the pipeline** (stalls and flushes per line), with RV32IM, strings and a heap.
 
 ## Run it
