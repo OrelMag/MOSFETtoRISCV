@@ -40,7 +40,9 @@ export function installProjects(ed: Editor, hooks: ProjectHooks): { destroy(): v
   const btn = h('button', { class: 'sb-proj', 'aria-haspopup': 'menu', title: 'Projects: separate sets of chips' }) as HTMLButtonElement;
   const label = () => {
     const n = Object.keys(ed.ws.chips).length;
-    btn.replaceChildren(icon('project', 14), h('b', null, projectName(ed)), h('small', null, plural(n, 'chip')), icon('chevD', 12));
+    // "Project:" keeps it apart from the palette's My chips group
+    btn.replaceChildren(icon('project', 14), h('span', { class: 'sb-proj-name' }, h('small', null, 'Project:'), h('b', null, projectName(ed))), icon('chevD', 12));
+    btn.title = `Project ${projectName(ed)}, ${plural(n, 'chip')}: switch, copy or export projects (separate sets of chips)`;
   };
   label();
   ed.palette.top.append(btn);

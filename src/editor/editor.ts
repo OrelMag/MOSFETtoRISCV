@@ -18,7 +18,7 @@ import { coarsePointer, h, hintBadge, icon, placeMenu } from '../ui/dom';
 import { showKeySheet } from '../ui/keyhelp';
 import { settings } from '../ui/settings';
 import { closePopover } from '../view/popover';
-import type { Compiled, Diag } from './compile';
+import { type Compiled, type Diag, diagText } from './compile';
 import { addFolder, findFolder, folderGroups, moveToFolder, newFolderName, renameFolder } from './folders';
 import { History } from './history';
 import { UserLibrary } from './library';
@@ -155,6 +155,8 @@ export class Editor {
   private topResize: ResizeObserver;
   private controls: HTMLElement;
   private status: HTMLElement;
+  /** The run bar's problem count (props.ts fills it; a click shows the first one). */
+  readonly diagPill = h('button', { class: 'btn sm sb-diag-pill', type: 'button', hidden: true, onclick: () => this.props.showFirstDiag() }) as HTMLButtonElement;
   private toastEl: HTMLElement;
   private tipEl: HTMLElement;
   /** Shown over a chip with nothing on it: where to start. */
@@ -949,7 +951,7 @@ export class Editor {
       (['zero', 'x', 'random'] as PowerOnMode[]).map((m) => h('option', { value: m, selected: m === sim.powerOn }, m === 'zero' ? 'to 0' : m === 'x' ? 'to X' : 'random'))) as HTMLSelectElement;
     pon.addEventListener('change', () => { sim.powerOn = pon.value as PowerOnMode; });
     const reset = h('button', { class: 'btn sm ghost', title: 'Power-cycle the circuit', onclick: () => sim.reset(pon.value as PowerOnMode) }, icon('reset', 14), 'Reset');
-    c.append(seg, this.runBtn, step, h('span', { class: 'sb-rate' }, this.rateSel), reset, h('span', { class: 'sb-rate' }, pon), this.status);
+    c.append(seg, this.runBtn, step, h('span', { class: 'sb-rate' }, this.rateSel), reset, h('span', { class: 'sb-rate' }, pon), this.diagPill, this.status);
     this.updateStatus();
   }
 
@@ -1012,10 +1014,18 @@ export class Editor {
     const net = built?.netOfWire.get(id) ?? -1;
     const nd = built && net >= 0 ? netlistOf(built.def)?.nets[net] : undefined;
     const name = nd?.name ?? nd?.ends[0] ?? id;
+    // a wire on a broken net says why, not just "not connected"
+    const diag = this.diags.find((d) => d.wires?.includes(id));
+    if (diag && diag.level === 'error') return void this.wireTip(diagText(diag), e, true);
     const val = bits ? describeBits(bits) : 'not connected';
     const wk = this.sim.wireWeak(id);
     const weak = wk ? ` (${weakTag(wk)}: a weak ${wk === WEAK_H ? '1 an NMOS passed, VDD − Vt' : '0 a PMOS passed, Vt'})` : '';
-    this.tipEl.textContent = `${name}${bits && bits.length > 1 ? `[${bits.length - 1}:0]` : ''} = ${val}${weak}`;
+    this.wireTip(`${name}${bits && bits.length > 1 ? `[${bits.length - 1}:0]` : ''} = ${val}${weak}`, e, false);
+  }
+
+  private wireTip(text: string, e: PointerEvent, err: boolean): void {
+    this.tipEl.textContent = text;
+    this.tipEl.classList.toggle('err', err);
     const r = this.canvas.getBoundingClientRect();
     this.tipEl.style.left = `${e.clientX - r.left + 14}px`;
     this.tipEl.style.top = `${e.clientY - r.top + 14}px`;
@@ -1023,11 +1033,19 @@ export class Editor {
   }
 
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
-  toast(msg: string, level: 'info' | 'err' = 'info'): void {
+  /** A message over the canvas; with an action, a button on it (and it stays long enough to reach). */
+  toast(msg: string, level: 'info' | 'err' = 'info', action?: { label: string; run(): void }): void {
     this.toastEl.textContent = msg;
-    this.toastEl.className = `sb-toast show ${level}`;
+    if (action) this.toastEl.append(' ', h('button', { type: 'button', class: 'btn sm sb-toast-act', onclick: () => { this.toastEl.className = 'sb-toast'; action.run(); } }, action.label));
+    this.toastEl.className = `sb-toast show ${level}${action ? ' act' : ''}`;
     if (this.toastTimer) clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => (this.toastEl.className = 'sb-toast'), 2800);
+    this.toastTimer = setTimeout(() => (this.toastEl.className = 'sb-toast'), action ? 7000 : 2800);
+  }
+
+  /** Scroll the palette to an item ('<group>/<item>') and flash it (the phone's drawer opens first). */
+  revealPart(key: string): void {
+    if (matchMedia('(max-width: 760px)').matches) this.showParts(true);
+    this.palette.reveal(key);
   }
 
   /** Inline name entry over the canvas at a world point (pointer names), with suggestions. */

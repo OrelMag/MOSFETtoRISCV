@@ -145,6 +145,10 @@
 .sb-item small { white-space: nowrap; flex: none; }
 .sb-item.disabled { opacity: 0.45; cursor: not-allowed; }
 .sb-item.on { background: var(--accent-soft); color: var(--accent); }
+/* palette.reveal: the item a toast's Show pointed at */
+.sb-item.sb-flash { animation: sb-flash 0.5s ease-in-out 3; }
+@keyframes sb-flash { 50% { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); } }
+@media (prefers-reduced-motion: reduce) { .sb-item.sb-flash { animation: none; background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); } }
 .sb-item > span:not([class]) { flex: 1; min-width: 0; }
 /* The favorite star: shown on hover (always on touch screens), always once pinned. */
 .sb-star { flex: none; width: 14px; text-align: center; font-size: 13px; line-height: 1; color: var(--muted); opacity: 0; cursor: pointer; transition: opacity 0.1s; }
@@ -174,7 +178,9 @@
 .sb-proj:hover, .sb-proj:focus-visible, .sb-proj[aria-expanded=true] { border-color: var(--border-strong); outline: none; }
 .sb-proj > svg { flex: none; color: var(--text-2); }
 .sb-proj b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.sb-proj small { margin-left: auto; flex: none; color: var(--muted); font-weight: 500; font-size: 11.5px; }
+.sb-proj > small { margin-left: auto; flex: none; color: var(--muted); font-weight: 500; font-size: 11.5px; }
+.sb-proj-name { min-width: 0; display: flex; align-items: baseline; gap: 4px; margin-right: auto; }
+.sb-proj-name small { flex: none; color: var(--muted); font-weight: 500; font-size: 11.5px; }
 .sb-fav-key { flex: none; font: 600 10px var(--font-mono); color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; line-height: 15px; }
 .sb-empty { color: var(--muted); font-size: 13px; padding: 12px; }
 
@@ -320,6 +326,8 @@
 }
 .sb-toast.show { opacity: 1; transform: translate(-50%, 0); }
 .sb-toast.err { background: var(--ed-err); color: #fff; }
+.sb-toast.act { pointer-events: auto; }
+.sb-toast-act { margin-left: 8px; }
 .sb-prompt {
   position: absolute; display: flex; flex-direction: column; gap: 3px; background: var(--surface); padding: 6px;
   border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: var(--shadow-lg);
@@ -415,6 +423,15 @@
 .sb-diag:hover { background: var(--surface-2); color: var(--text); }
 .sb-diag .sb-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; margin-top: 5px; background: var(--ed-warn); }
 .sb-diag.error .sb-dot { background: var(--ed-err); }
+.sb-diag b { color: var(--text); font-weight: 600; }
+.sb-diags.top { padding: 0 0 8px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
+.sb-diag.sb-flash { animation: sb-flash 0.5s ease-in-out 3; }
+/* the run bar's problem count (props.ts pill): the glyph and border carry the colour, the text stays AA */
+.sb-diag-pill { border-color: var(--ed-warn); }
+.sb-diag-pill > span { color: var(--ed-warn); }
+.sb-diag-pill.err { border-color: var(--ed-err); }
+.sb-diag-pill.err > span { color: var(--ed-err); }
+.wire-tip.err { border-color: var(--ed-err); max-width: 340px; white-space: normal; }
 
 @media (max-width: 1100px) {
   .sandbox { grid-template-columns: 200px minmax(0, 1fr) 240px; }
@@ -496,7 +513,7 @@
   .sb-star { align-self: stretch; width: 40px; margin: -4px -8px -4px 0; display: flex; align-items: center; justify-content: center; font-size: 16px; }
   .sb-group > summary, .sb-sec > summary { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }
   .sb-addfolder { min-width: 40px; min-height: 40px; align-items: center; justify-content: center; }
-  .sb-tab-name, .sb-proj, .sb-menu button { min-height: 40px; }
+  .sb-tab-name, .sb-proj, .sb-menu button, .sb-toast-act { min-height: 40px; }
   /* the save state: a dot and a word in the bar, its tap area spread around it */
   .sb-save { position: relative; }
   .sb-save::after { content: ''; position: absolute; inset: -13px -9px; }

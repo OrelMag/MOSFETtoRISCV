@@ -613,6 +613,21 @@ export class PalettePanel {
     this.render();
   }
 
+  /** Open the groups and sections around an item, scroll it into view and flash it. */
+  reveal(key: string): void {
+    this.clearSearch();
+    const b = this.list.querySelector<HTMLElement>(`.sb-item[data-item="${CSS.escape(key)}"]`);
+    if (!b) return;
+    for (let d = b.parentElement?.closest('details'); d; d = d.parentElement?.closest('details')) {
+      (d as HTMLDetailsElement).open = true;
+    }
+    b.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    b.classList.remove('sb-flash');
+    void b.offsetWidth; // restart the animation
+    b.classList.add('sb-flash');
+    setTimeout(() => b.classList.remove('sb-flash'), 1600);
+  }
+
   setArmed(key: string | null): void {
     this.armed = key;
     for (const b of this.list.querySelectorAll<HTMLElement>('.sb-item')) b.classList.toggle('on', b.dataset.item === key);

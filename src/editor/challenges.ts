@@ -13,7 +13,7 @@ import { shortText, SwitchSim, WEAK_H, weakTag } from '../sim/switchsim';
 import { analyzeTiming } from '../sim/timing';
 import { B0, B1, BZ, type Bit, type ComponentDef, isExternal, isSwitchPrim, netlistOf } from '../sim/types';
 import { ioInfo } from './ioparts';
-import type { Compiled } from './compile';
+import { type Compiled, diagText } from './compile';
 import { type ChipDoc, emptyChip, type PartDoc, type PinDoc, type Workspace } from './model';
 import { openChip } from './session';
 import { importChips } from './store';
@@ -240,7 +240,7 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
     res.score = scoreOf(def, compiled.mode, ch.check.kind !== 'table');
     res.restrictionViolations = violations(def, ch.allowed);
     const pinProblems = checkPins(def, ch.ports);
-    const errors = compiled.diags.filter((d) => d.level === 'error').map((d) => `error: ${d.msg}`);
+    const errors = compiled.diags.filter((d) => d.level === 'error').map((d) => `error: ${diagText(d)}`);
     res.failures.push(...pinProblems, ...errors.slice(0, 3));
     if (errors.length > 3) res.failures.push(`… and ${errors.length - 3} more errors`);
     if (!res.failures.length && ch.rules) res.failures.push(...ch.rules(def));

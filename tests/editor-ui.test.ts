@@ -14,7 +14,7 @@ import { addPart, addPin, addWire, moveSel } from '../src/editor/ops';
 import { favoriteItems, paletteGroups, registerPaletteGroup, toggleFavorite, visibleItems, type PaletteCtx } from '../src/editor/palette';
 import { partDef } from '../src/editor/parts';
 import { EditorSim, FrameBudget, simKey } from '../src/editor/runtime';
-import { activeChip, closeChip, keepVolatile, newChip, openChip, setPinValue } from '../src/editor/session';
+import { activeChip, closeChip, keepVolatile, newChip, openChip, setPinValue, isDefaultName } from '../src/editor/session';
 import { docFromDef } from '../src/editor/fromdef';
 import { RF8 } from '../src/lib/rv16/logic';
 import { symbolGeom } from '../src/sim/geometry';
@@ -204,16 +204,21 @@ describe('WireDraft', () => {
 describe('session', () => {
   it('tabs: open moves to the top, close keeps one, new chips get unique names and ids', () => {
     let ws = emptyWorkspace();
+    // Main is the first chip: new ones count on from 2
     const a = newChip(ws);
-    expect(a.id).toBe('u_chip');
+    expect(a.id).toBe('u_chip_2');
+    expect(a.ws.chips[a.id].name).toBe('Chip 2');
     const b = newChip(a.ws);
-    expect(b.ws.chips[b.id].name).toBe('Chip 2');
+    expect(b.ws.chips[b.id].name).toBe('Chip 3');
+    expect(newChip(b.ws, 'XOR').ws.chips.u_xor.name).toBe('XOR');
+    expect(['Main', 'Chip', 'Chip 12'].every(isDefaultName)).toBe(true);
+    expect(isDefaultName('Chip A')).toBe(false);
     ws = b.ws;
     expect(activeChip(ws)).toBe(b.id);
     ws = openChip(ws, 'u_main');
-    expect(ws.open).toEqual(['u_chip', 'u_chip_2', 'u_main']);
-    ws = closeChip(closeChip(closeChip(ws, 'u_main'), 'u_chip'), 'u_chip_2');
-    expect(ws.open).toEqual(['u_chip_2']);
+    expect(ws.open).toEqual(['u_chip_2', 'u_chip_3', 'u_main']);
+    ws = closeChip(closeChip(closeChip(ws, 'u_main'), 'u_chip_2'), 'u_chip_3');
+    expect(ws.open).toEqual(['u_chip_3']);
   });
 
   it('undo keeps input values and tabs', () => {

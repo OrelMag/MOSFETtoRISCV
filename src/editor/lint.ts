@@ -75,7 +75,7 @@ export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<strin
   let shown = 0;
   for (const p of pairs.values()) {
     if (shown++ >= MAX_OVERLAPS) break;
-    diags.push({ level: 'warn', msg: `two nets drawn on one line (${p.at}): ${name(p.nets[0])} and ${name(p.nets[1])}`, wires: [...p.wires] });
+    diags.push({ level: 'warn', msg: `two nets drawn on one line (${p.at}): ${name(p.nets[0])} and ${name(p.nets[1])}`, fix: 'They look joined but are not. Drag a segment of one aside.', wires: [...p.wires] });
   }
   if (pairs.size > MAX_OVERLAPS) diags.push({ level: 'warn', msg: `${pairs.size - MAX_OVERLAPS} more places where two nets are drawn on one line` });
 
@@ -86,17 +86,19 @@ export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<strin
     if (count.get(l.name) !== 1) continue;
     const ws = doc.wires.filter((w) => ('label' in w.a && w.a.label === l.id) || ('label' in w.b && w.b.label === l.id)).map((w) => w.id);
     diags.push(ws.length
-      ? { level: 'warn', msg: `pointer '${l.name}' has no twin: its wire ends there`, labels: [l.id], wires: ws }
-      : { level: 'warn', msg: `pointer '${l.name}' connects nothing`, labels: [l.id] });
+      ? { level: 'warn', msg: `pointer '${l.name}' has no twin: its wire ends there`, fix: `Place another pointer named ${l.name} where the wire goes on (same name = connected).`, labels: [l.id], wires: ws }
+      : { level: 'warn', msg: `pointer '${l.name}' connects nothing`, fix: 'Wire it to a pin, or delete it (Del).', labels: [l.id] });
   }
 
   // ---- inputs left open ----
   const open = openInputs(built);
   if (open.length) {
     const list = open.slice(0, 6).map((o) => `${o.part}.${o.port}`).join(', ');
+    const one = open.length === 1;
     diags.push({
       level: 'warn',
-      msg: `${open.length} input${open.length > 1 ? 's' : ''} not connected, reading X: ${list}${open.length > 6 ? ', …' : ''}`,
+      msg: open.length > 6 ? `${open.length} inputs (${list}, …) are not connected` : `${list} ${one ? 'is' : 'are'} not connected`,
+      fix: one ? 'and reads X. Wire it, or tie it with Constant 0 / 1.' : 'and read X. Wire them, or tie them with Constant 0 / 1.',
       parts: [...new Set(open.map((o) => o.part))],
     });
   }
@@ -106,9 +108,11 @@ export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<strin
   if (dead.length) {
     const label = new Map(doc.parts.map((p) => [p.id, p.label]));
     const list = dead.slice(0, 6).map((id) => (label.get(id) ? `${id} (${label.get(id)})` : id)).join(', ');
+    const one = dead.length === 1;
     diags.push({
       level: 'warn',
-      msg: `${dead.length} part${dead.length > 1 ? 's' : ''} driving nothing that reaches an output: ${list}${dead.length > 6 ? ', …' : ''}`,
+      msg: one ? `${list} drives nothing that reaches an output.` : dead.length > 6 ? `${dead.length} parts (${list}, …) drive nothing that reaches an output.` : `${list} drive nothing that reaches an output.`,
+      fix: one ? 'Wire its output on, or delete it (Del).' : 'Wire their outputs on, or delete them (Del).',
       parts: dead,
     });
   }
