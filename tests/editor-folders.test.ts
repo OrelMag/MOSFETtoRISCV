@@ -165,12 +165,12 @@ describe('files carry folders', () => {
 describe('projects', () => {
   it('starts with the first project on the old key, whatever the index says', () => {
     const kv = new MapKV();
-    expect(readProjects(kv)).toEqual({ current: MAIN_PROJECT, list: [{ id: MAIN_PROJECT, name: 'My chips' }] });
+    expect(readProjects(kv)).toEqual({ current: MAIN_PROJECT, list: [{ id: MAIN_PROJECT, name: 'Main project' }] });
     expect(projectKey(MAIN_PROJECT)).toBe(KEY);
     kv.setItem(PROJECTS_KEY, '{not json');
     expect(readProjects(kv).list.map((p) => p.id)).toEqual([MAIN_PROJECT]);
     kv.setItem(PROJECTS_KEY, JSON.stringify({ current: 'gone', list: [{ id: 'abc', name: 'Other' }, { id: 'BAD id' }] }));
-    expect(readProjects(kv)).toEqual({ current: MAIN_PROJECT, list: [{ id: MAIN_PROJECT, name: 'My chips' }, { id: 'abc', name: 'Other' }] });
+    expect(readProjects(kv)).toEqual({ current: MAIN_PROJECT, list: [{ id: MAIN_PROJECT, name: 'Main project' }, { id: 'abc', name: 'Other' }] });
   });
 
   it('creates, renames, duplicates and deletes projects, each in its own key', () => {
@@ -207,7 +207,7 @@ describe('projects', () => {
     touchProject(a.id, ws(chip('u_a')), kv, 9);
     expect(readProjects(kv).list[1]).toMatchObject({ chips: 1, modified: 9 });
     kv.removeItem(PROJECTS_KEY);
-    expect(readProjects(kv).list).toEqual([{ id: MAIN_PROJECT, name: 'My chips' }, { id: a.id, name: `Recovered project ${a.id}` }]);
+    expect(readProjects(kv).list).toEqual([{ id: MAIN_PROJECT, name: 'Main project' }, { id: a.id, name: `Recovered project ${a.id}` }]);
   });
 
   it('deleting the sandbox data takes every project and the index', () => {

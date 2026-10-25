@@ -86,6 +86,6 @@ class InspectDrawer {
 }
 
 registerToolbarAction({
-  id: 'inspect', title: 'Inspect the selected part, or this chip: info, truth table, Verilog', menu: 'Inspect', icon: 'table', order: 70,
+  id: 'inspect', title: 'Inspect the selected part, or this chip: info, truth table, Verilog', menu: 'Inspect', levelLabel: 'Inspect', icon: 'search', order: 70,
   run: (ed) => inspect(ed, ed.sel.parts?.length === 1 ? ed.sel.parts[0] : undefined),
 });

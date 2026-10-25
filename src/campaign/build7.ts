@@ -1,5 +1,5 @@
 // Act 7's build levels: the CSR file (a long random sequence against a model), and the cores with
-// traps, then interrupts, then the finale: the pipeline with precise traps and interrupts. No DOM.
+// traps, then interrupts; the pipeline with precise exceptions, then the finale: interrupts in that pipeline. No DOM.
 
 import type { BuildChallenge, PinSpec, SeqStep } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
@@ -82,9 +82,17 @@ export const BUILD7: Record<string, () => BuildChallenge> = {
     check: coreCheck({ rv16i: true, tests: () => sysTests(true), budget: { cpi: 1, extra: 2 }, system: true }, `${sysTests(true).length} programs, one of them interrupt-driven.`),
     answer: refOf('y_irq', () => rv16SysCore(true), 'Core with interrupts'),
   }),
+  y_ptrap: () => ({
+    id: 'y_ptrap', title: 'Pipeline V: exceptions', level: 'cpu', allowed: 'nand',
+    brief: 'Your pipeline (forwarding, load-use stall, branch flush) with the CSR file and the exceptions of Exceptions: <code>csrrw</code> / <code>csrrs</code> / <code>csrrc</code>, <code>ecall</code>, <code>ebreak</code>, illegal words, <code>mret</code>. No interrupts yet: the <code>irq</code> pin is there and ignored. Traps must be <b>precise</b>: take them in one stage (E is natural: the instruction there has not changed anything yet), let older instructions finish, flush the younger ones, and never trap on a bubble (carry a valid bit down the pipeline). Same pins as Exceptions.',
+    ports: SYS_PINS,
+    check: coreCheck({ rv16i: true, tests: () => [...sysTests(false), ...pipeTests(3)], budget: { cpi: 2.5, extra: 10 }, system: true },
+      `${sysTests(false).length + pipeTests(3).length} programs: traps, CSRs, loops, calls and random code, within 2.5 cycles per instruction.`),
+    answer: refOf('y_ptrap', () => rv16Pipe({ fwd: true, stall: true, flush: true, sys: 'exc' }), 'Pipeline with precise exceptions'),
+  }),
   y_final: () => ({
-    id: 'y_final', title: 'Finale: the complete RV16', level: 'cpu', allowed: 'nand',
-    brief: 'Everything at once: your pipeline (forwarding, load-use stall, branch flush) with the CSR file, exceptions and the external interrupt. Traps must be <b>precise</b>: take them in one stage (E is natural: the instruction there has not changed anything yet), let older instructions finish, flush the younger ones, and never trap on a bubble (carry a valid bit down the pipeline). Same pins as Interrupts.',
+    id: 'y_final', title: 'Finale: interrupts', level: 'cpu', allowed: 'nand',
+    brief: 'Pipeline V plus the external interrupt: when <b>intr</b> (MIE · MEIE · irq, from the CSR file) is 1, the instruction in E does not run: take it there like an exception, with mcause 0x800B, older instructions completing and younger ones flushed. Only on a valid instruction: a bubble has no pc of its own, and mepc must name the instruction to resume. The bench raises <code>irq</code> after a program stores 1 to IRQ (0xFFF9) and lowers it after a store of 0. Same pins as Interrupts.',
     ports: SYS_PINS,
     check: coreCheck({ rv16i: true, tests: () => [...sysTests(true), ...pipeTests(3)], budget: { cpi: 2.5, extra: 10 }, system: true },
       `${sysTests(true).length + pipeTests(3).length} programs: traps, CSRs, an interrupt, loops, calls and random code, within 2.5 cycles per instruction.`),

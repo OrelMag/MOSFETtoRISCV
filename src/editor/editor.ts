@@ -18,13 +18,13 @@ import { coarsePointer, h, hintBadge, icon, placeMenu } from '../ui/dom';
 import { showKeySheet } from '../ui/keyhelp';
 import { settings } from '../ui/settings';
 import { closePopover } from '../view/popover';
-import type { Compiled, Diag } from './compile';
+import { type Compiled, type Diag, diagText } from './compile';
 import { addFolder, findFolder, folderGroups, moveToFolder, newFolderName, renameFolder } from './folders';
 import { History } from './history';
 import { UserLibrary } from './library';
 import { chipDeps, type ChipDoc, type DefOf, type PartRef, type PinValue, type Workspace } from './model';
 import type { Sel } from './ops';
-import { PalettePanel, toggleFavorite, type PaletteItem } from './palette';
+import { BASICS_ID, PalettePanel, toggleFavorite, type PaletteItem } from './palette';
 import { isError, keyLabel, partDef } from './parts';
 import { MAIN_PROJECT, projectKey, readProjects, touchProject } from './projects';
 import { PropsPanel } from './props';
@@ -51,6 +51,14 @@ export interface ToolbarAction {
   active?(ed: Editor): boolean;
   /** Only on a campaign level screen. */
   levelOnly?: boolean;
+  /** The label on a level screen's bar, where icon-only buttons are not yet familiar ('Keys'). */
+  levelLabel?: string;
+  /** Offered only while this holds (the CPU panel: a CPU was found). */
+  shown?(ed: Editor): boolean;
+  /** A menu button: it lists the actions `under` it. */
+  group?: boolean;
+  /** The menu it is listed in, when that menu is on this bar (a level screen lists its own actions flat). */
+  under?: string;
 }
 
 const actions: ToolbarAction[] = [];
@@ -106,7 +114,10 @@ registerToolbarAction({ id: 'zout', title: 'Zoom out', icon: 'minus', order: 30,
 registerToolbarAction({ id: 'zin', title: 'Zoom in', icon: 'plus', order: 40, run: (ed) => ed.view.cam.zoom(0.8) });
 registerToolbarAction({ id: 'fit', title: 'Fit to screen', icon: 'fit', order: 50, run: (ed) => ed.fitView() });
 registerToolbarAction({ id: 'props', title: 'Properties of the selection or the chip', icon: 'sidebar', label: 'Properties', order: 85, levelOnly: true, run: (ed) => ed.toggleProps(), active: (ed) => ed.propsPinned });
-registerToolbarAction({ id: 'help', title: 'Keyboard shortcuts (?)', menu: 'Keyboard shortcuts', icon: 'info', order: 90, run: (ed) => ed.showHelp() });
+// Menus that gather actions used together, so the bar stays short.
+registerToolbarAction({ id: 'timingmenu', title: 'Timing: probe wires, and the timing panel that records them', icon: 'wave', label: 'Timing ▾', order: 61, group: true, run: (ed) => ed.groupMenu('timingmenu') });
+registerToolbarAction({ id: 'play', title: 'Play: build challenges and program puzzles', icon: 'flag', label: 'Play ▾', order: 64, group: true, run: (ed) => ed.groupMenu('play') });
+registerToolbarAction({ id: 'help', title: 'Keyboard shortcuts (?)', menu: 'Keyboard shortcuts', levelLabel: 'Keys', icon: 'keyboard', order: 90, run: (ed) => ed.showHelp() });
 
 const withChip = (ws: Workspace, doc: ChipDoc): Workspace => ({ ...ws, chips: { ...ws.chips, [doc.id]: doc } });
 
@@ -155,6 +166,8 @@ export class Editor {
   private topResize: ResizeObserver;
   private controls: HTMLElement;
   private status: HTMLElement;
+  /** The run bar's problem count (props.ts fills it; a click shows the first one). */
+  readonly diagPill = h('button', { class: 'btn sm sb-diag-pill', type: 'button', hidden: true, onclick: () => this.props.showFirstDiag() }) as HTMLButtonElement;
   private toastEl: HTMLElement;
   private tipEl: HTMLElement;
   /** Shown over a chip with nothing on it: where to start. */
@@ -202,16 +215,16 @@ export class Editor {
     const overlay = h('div', { class: 'sb-overlay' });
     // A toolbar action, shown when one is registered (the page imports the plugins after the editor).
     const act = (id: string, label: string, ic: string) => h('button', { class: 'btn sm', 'data-for': id,
-      onclick: () => this.actionsEl.querySelector<HTMLElement>(`[data-action=${id}]`)?.click() }, icon(ic, 14), label);
+      onclick: () => actions.find((x) => x.id === id)?.run(this) }, icon(ic, 14), label);
     this.emptyEl = h('div', { class: 'sb-empty-chip', hidden: true },
       h('h3', null, 'An empty chip'),
-      h('p', null, coarsePointer()
-        ? 'Tap a part in the Parts list, then tap the canvas to place it: an Input, a NAND and an Output make a first circuit. Wire them by dragging from pin to pin.'
-        : 'Drag a part from the palette: an Input, a NAND and an Output make a first circuit. Wire them by dragging from pin to pin.'),
+      coarsePointer()
+        ? h('p', null, 'Tap ', h('b', null, 'Input'), ', ', h('b', null, 'NAND'), ' and ', h('b', null, 'Output'), ' under ', h('i', null, 'Basics'), ' in the Parts list, then tap the canvas to place each; drag from a pin’s dot to another pin to wire.')
+        : h('p', null, 'Drag ', h('b', null, 'Input'), ', ', h('b', null, 'NAND'), ' and ', h('b', null, 'Output'), ' from ', h('i', null, 'Basics'), ' on the left; drag from a pin’s dot to another pin to wire.'),
       h('div', { class: 'row' }, act('examples', 'Examples', 'book'), act('challenges', 'Challenges', 'flag'), act('puzzles', 'Puzzles', 'puzzle')));
     // Touch (tools.ts): one finger wires, moves and draws a band; two fingers pan and zoom (camera.ts).
     this.canvas.append(overlay, this.emptyEl, this.toastEl, this.tipEl,
-      hintBadge('drag from a pin to wire · L pointer · wheel zoom · Space+drag pan · ? shortcuts',
+      hintBadge('drag pin → pin: wire · L: pointer (a named wire: same name = connected) · wheel zoom · Space+drag pan · ? shortcuts',
         'drag from a pin: wire · double-tap: open · pinch: zoom', 'sandbox', ' sb-hint'));
     this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }), top: h('div', { class: 'sb-top-slot' }), left: h('div', { class: 'sb-left' }) };
 
@@ -222,11 +235,7 @@ export class Editor {
     this.palette = new PalettePanel(() => ({ ws: this.ws, chipId: this.chipId, canPlace: (c) => this.lib.canPlace(this.chipId, c),
       level: this.level ? [this.level.chipId, this.levelHome!] : undefined }), {
       pick: (item, e) => this.pickPart(item, e),
-      arm: (item, key) => {
-        this.tools.arm(item, key);
-        if (this.partsDrawer) this.showParts(false);
-        this.toast(`${item.name}: click the canvas to place it (Esc cancels)`);
-      },
+      arm: (item, key) => this.armPart(item, key),
       purist: () => !!this.level || !!this.ws.purist,
       setPurist: (v) => this.volatile({ ...this.ws, ...(v ? { purist: true } : { purist: undefined }) }),
       toggleFavorite: (key) => {
@@ -236,7 +245,8 @@ export class Editor {
       locked: !!this.level,
       newFolder: this.level ? undefined : () => void this.newFolder(),
       renameFolder: this.level ? undefined : (from, to) => this.renameFolder(from, to),
-      hidden: (g) => !!this.level?.hideGroups?.includes(g),
+      // a level lists its own parts first; Basics would repeat them (and NAND where the rule has none)
+      hidden: (g) => !!this.level && (g === BASICS_ID || !!this.level.hideGroups?.includes(g)),
       first: this.level ? this.level.first ?? ['unlocked', 'lib', 'wiring', 'const', 'mine'] : undefined,
       closed: this.level ? ['io', 'disp'] : undefined,
     });
@@ -340,7 +350,10 @@ export class Editor {
       return;
     }
     if (this.history.inTransaction) this.history.update(withChip(this.ws, next));
-    else this.history.push(withChip(this.ws, next));
+    else {
+      this.leaving();
+      this.history.push(withChip(this.ws, next));
+    }
     this.changed();
   }
 
@@ -348,6 +361,7 @@ export class Editor {
   editWs(f: (ws: Workspace) => Workspace): void {
     const next = f(this.ws);
     if (next === this.ws) return;
+    this.leaving();
     this.history.push(next);
     this.changed();
   }
@@ -383,6 +397,7 @@ export class Editor {
 
   /** A drag: begin(), edit() on every move, commit() (or cancel()). */
   begin(): void {
+    if (!this.history.inTransaction) this.leaving();
     this.history.begin();
   }
   commit(): void {
@@ -405,16 +420,35 @@ export class Editor {
     const cur = this.ws;
     const prev = this.history.undo();
     if (!prev) return;
+    this.selAt.set(cur, this.sel);
     this.history.replace(keepVolatile(prev, cur));
-    this.changed();
+    this.restoreSel(prev);
   }
 
   redo(): void {
     const cur = this.ws;
     const next = this.history.redo();
     if (!next) return;
+    this.selAt.set(cur, this.sel);
     this.history.replace(keepVolatile(next, cur));
+    this.restoreSel(next);
+  }
+
+  /** The selection each undo step was left with (an undo puts it back, so the canvas and the panel agree on it). */
+  private selAt = new WeakMap<Workspace, Sel>();
+
+  /** Remember the selection of the state an edit is about to leave. */
+  private leaving(): void {
+    this.selAt.set(this.ws, this.sel);
+  }
+
+  /** After an undo / redo: that step's selection (what still exists of it), drawn and in the panel. */
+  private restoreSel(ws: Workspace): void {
+    this.sel = this.selAt.get(ws) ?? {};
     this.changed();
+    this.view.setSelection(this.sel);
+    this.props.update(true);
+    if (this.level) this.el.classList.toggle('props-sel', this.selCount > 0);
   }
 
   select(sel: Sel): void {
@@ -458,6 +492,7 @@ export class Editor {
   newChip(): void {
     const r = newChip(this.ws);
     this.tools.cancel();
+    this.leaving();
     this.history.push(r.ws);
     this.changed();
   }
@@ -600,6 +635,8 @@ export class Editor {
   /** settings.autoClock: a clocked chip starts running the first time it is simulated (EditorSim.autoStart). */
   private autoClock(): void {
     const sim = this.sim;
+    // only a chip with something besides its pins: an empty level's clock ticking over nothing reads as a running circuit
+    if (!this.doc.parts.length) return;
     if (!settings.autoClock || sim.autoTried || !sim.autoStart(this.rateChosen ? sim.hz : this.doc.hz ?? AUTO_HZ)) return;
     if (this.rateSel && sim.mode === 'cycle') this.rateSel.value = String(sim.hz);
   }
@@ -713,7 +750,8 @@ export class Editor {
   /** Scroll the open chip's tab into view, clear of the sticky Open… / New chip group (many tabs scroll). */
   private showActiveTab(): void {
     const t = this.tabs, on = t.querySelector<HTMLElement>('.sb-tab.on');
-    if (!on || t.scrollWidth <= t.clientWidth) return;
+    if (t.scrollWidth <= t.clientWidth) return void (t.scrollLeft = 0);
+    if (!on) return;
     const tail = t.querySelector<HTMLElement>(':scope > .sb-new-grp')?.offsetWidth ?? 0;
     const tr = t.getBoundingClientRect(), r = on.getBoundingClientRect();
     const left = r.left - tr.left + t.scrollLeft, view = t.clientWidth - tail - 6;
@@ -732,6 +770,7 @@ export class Editor {
       item('Empty chip', 'draw it from parts', 'plus', () => this.newChip()),
       ...newChipKinds.map((k) => item(k.label, k.hint, k.icon, () => k.run(this))));
     menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { close(); anchor.focus(); } });
+    this.claimMenu(close);
     this.el.append(menu);
     const r = anchor.getBoundingClientRect();
     placeMenu(menu, r, Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)));
@@ -751,10 +790,85 @@ export class Editor {
     return [top, ...ws.open.filter((id) => id !== top && uses.has(id))];
   }
 
-  /** The toolbar actions this editor shows (a level screen: its own list). */
+  /** Every action this editor offers (a level screen: its own list), menus' members included, the menus themselves not. */
   barActions(): ToolbarAction[] {
+    return this.offered().filter((a) => !a.group);
+  }
+
+  private offered(): ToolbarAction[] {
     const only = this.level?.actions;
-    return actions.filter((a) => (only ? only.includes(a.id) : !a.levelOnly));
+    return actions.filter((a) => (only ? only.includes(a.id) : !a.levelOnly) && (!a.shown || a.shown(this)));
+  }
+
+  /** What the bar shows: actions, and menus in place of their members. */
+  private topActions(): ToolbarAction[] {
+    const all = this.offered();
+    const groups = new Set(all.filter((a) => a.group).map((a) => a.id));
+    const nested = (a: ToolbarAction) => !!a.under && groups.has(a.under);
+    const used = new Set(all.filter(nested).map((a) => a.under!));
+    return all.filter((a) => (a.group ? used.has(a.id) : !nested(a)));
+  }
+
+  /** A menu's members on this bar. */
+  private membersOf(id: string): ToolbarAction[] {
+    return this.offered().filter((a) => a.under === id);
+  }
+
+  private menuClose: (() => void) | null = null;
+
+  /** One toolbar menu at a time: a menu opening calls this, which closes the one open before it. */
+  claimMenu(close: () => void): void {
+    const prev = this.menuClose;
+    this.menuClose = close;
+    if (prev && prev !== close) prev();
+  }
+
+  private groupClose: (() => void) | null = null;
+  private groupMenuId = '';
+
+  /** A menu button's members as a menu under it (or under More); a second press closes it. */
+  groupMenu(id: string): void {
+    if (this.groupClose) {
+      const was = this.groupMenuId;
+      this.groupClose();
+      if (was === id) return;
+    }
+    const anchor = this.actionAnchor(id);
+    const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : anchor;
+    const g = actions.find((a) => a.id === id);
+    const menu = h('div', { class: 'sb-menu sb-group-menu', role: 'menu', 'aria-label': g?.label?.replace(/ ▾$/, '') ?? id });
+    const close = () => {
+      menu.remove();
+      document.removeEventListener('pointerdown', away, true);
+      document.removeEventListener('keydown', key, true);
+      if (this.groupClose === close) { this.groupClose = null; this.groupMenuId = ''; }
+    };
+    const away = (e: Event) => { if (!menu.contains(e.target as Node) && !anchor?.contains(e.target as Node)) close(); };
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      close();
+      (opener?.isConnected ? opener : anchor)?.focus();
+    };
+    for (const a of this.membersOf(id)) menu.append(this.menuItem(a, close));
+    this.claimMenu(close);
+    this.groupClose = close;
+    this.groupMenuId = id;
+    this.el.append(menu);
+    const r = (anchor ?? this.moreBtn).getBoundingClientRect();
+    placeMenu(menu, r, Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)));
+    document.addEventListener('pointerdown', away, true);
+    document.addEventListener('keydown', key, true);
+    menu.querySelector<HTMLElement>('button:not(:disabled)')?.focus();
+  }
+
+  /** An action as a menu row (More, a menu button's menu): a toggle shows its state. */
+  private menuItem(a: ToolbarAction, close: () => void): HTMLButtonElement {
+    const on = a.active?.(this);
+    const item = h('button', { role: a.active ? 'menuitemcheckbox' : 'menuitem', 'aria-checked': a.active ? String(!!on) : null, class: on ? 'on' : null, title: a.title,
+      onclick: () => { close(); a.run(this); } }, icon(a.icon, 16), h('span', null, h('b', null, a.menu ?? a.label ?? a.title))) as HTMLButtonElement;
+    if (a.enabled && !a.enabled(this)) item.disabled = true;
+    return item;
   }
 
   /** Redraw the top bar's buttons (a toggle changed state). */
@@ -763,10 +877,13 @@ export class Editor {
     const a = document.activeElement;
     const focused = a instanceof HTMLElement && a !== this.moreBtn && this.actionsEl.contains(a) ? a.dataset.action : undefined;
     this.actionsEl.replaceChildren();
-    for (const a of this.barActions()) {
-      const b = h('button', { class: `btn ghost ${a.label ? 'sm' : 'icon-only'}`, title: a.title, 'aria-label': a.title, 'data-action': a.id, onclick: () => a.run(this) },
-        icon(a.icon, 16), a.label ? h('span', null, a.label) : null) as HTMLButtonElement;
+    for (const a of this.topActions()) {
+      const label = a.label ?? (this.level ? a.levelLabel : undefined);
+      const b = h('button', { class: `btn ghost ${label ? 'sm' : 'icon-only'}`, title: a.title, 'aria-label': a.title, 'data-action': a.id, onclick: () => a.run(this),
+        'aria-haspopup': a.group ? 'menu' : null }, icon(a.icon, 16), label ? h('span', null, label) : null) as HTMLButtonElement;
       if (a.enabled && !a.enabled(this)) b.disabled = true;
+      // a menu button is drawn pressed while one of its toggles is on
+      if (a.group) b.classList.toggle('on', this.membersOf(a.id).some((m) => !!m.active?.(this)));
       if (a.active) {
         const on = a.active(this);
         b.classList.toggle('on', on);
@@ -798,7 +915,7 @@ export class Editor {
 
   /**
    * Move the least used actions into More until the rest fit: beside the chip tabs (which keep room
-   * for the open tab, Open… and New chip), or below 1000 px on a row of their own (editor.css).
+   * for every tab, up to half the bar, and New chip), or below 1000 px on a row of their own (editor.css).
    */
   private fitActions(): void {
     const top = this.topEl, bar = this.actionsEl;
@@ -812,7 +929,7 @@ export class Editor {
     let room = top.clientWidth - px(cs.paddingLeft) - px(cs.paddingRight);
     if (!matchMedia('(max-width: 1000px)').matches) {
       const gap = px(cs.columnGap);
-      const essential = [...this.tabs.children].filter((el) => el.matches('.sb-tab.on, .sb-new-grp, .sb-trail')) as HTMLElement[];
+      const essential = [...this.tabs.children].filter((el) => el.matches('.sb-tab, .sb-new-grp, .sb-trail')) as HTMLElement[];
       const tabsGap = px(getComputedStyle(this.tabs).columnGap);
       const tabsNeed = essential.reduce((s, el) => s + el.offsetWidth, 0) + tabsGap * Math.max(0, essential.length - 1);
       const others = [this.partsBtn, this.slots.top].filter((el) => el.offsetWidth > 0);
@@ -828,6 +945,8 @@ export class Editor {
 
   /** Where an action's own menu opens: its button, or More when it is in there. */
   actionAnchor(id: string): HTMLElement | null {
+    const under = actions.find((a) => a.id === id)?.under;
+    if (under && this.topActions().some((a) => a.id === under)) return this.actionAnchor(under);
     const b = this.actionsEl.querySelector<HTMLElement>(`[data-action="${id}"]`);
     return b && !b.hidden ? b : this.shed.has(id) ? this.moreBtn : b;
   }
@@ -835,6 +954,7 @@ export class Editor {
   private toggleMore(): void {
     if (this.moreMenu) return this.closeMore();
     const menu = this.moreMenu = h('div', { class: 'sb-menu sb-more-menu', role: 'menu', 'aria-label': 'More tools' });
+    this.claimMenu(() => this.closeMore());
     this.fillMore();
     this.el.append(menu);
     const r = this.moreBtn.getBoundingClientRect();
@@ -848,13 +968,10 @@ export class Editor {
   private fillMore(): void {
     const menu = this.moreMenu!;
     menu.replaceChildren();
-    for (const a of this.barActions()) {
+    for (const a of this.topActions()) {
       if (!this.shed.has(a.id)) continue;
-      const on = a.active?.(this);
-      const item = h('button', { role: a.active ? 'menuitemcheckbox' : 'menuitem', 'aria-checked': a.active ? String(!!on) : null, class: on ? 'on' : null, title: a.title,
-        onclick: () => { this.closeMore(); a.run(this); } }, icon(a.icon, 16), h('span', null, h('b', null, a.menu ?? a.label ?? a.title))) as HTMLButtonElement;
-      if (a.enabled && !a.enabled(this)) item.disabled = true;
-      menu.append(item);
+      // a menu button shed into More lists its members there
+      for (const m of a.group ? this.membersOf(a.id) : [a]) menu.append(this.menuItem(m, () => this.closeMore()));
     }
   }
 
@@ -948,7 +1065,7 @@ export class Editor {
       (['zero', 'x', 'random'] as PowerOnMode[]).map((m) => h('option', { value: m, selected: m === sim.powerOn }, m === 'zero' ? 'to 0' : m === 'x' ? 'to X' : 'random'))) as HTMLSelectElement;
     pon.addEventListener('change', () => { sim.powerOn = pon.value as PowerOnMode; });
     const reset = h('button', { class: 'btn sm ghost', title: 'Power-cycle the circuit', onclick: () => sim.reset(pon.value as PowerOnMode) }, icon('reset', 14), 'Reset');
-    c.append(seg, this.runBtn, step, h('span', { class: 'sb-rate' }, this.rateSel), reset, h('span', { class: 'sb-rate' }, pon), this.status);
+    c.append(seg, this.runBtn, step, h('span', { class: 'sb-rate' }, this.rateSel), reset, h('span', { class: 'sb-rate' }, pon), this.diagPill, this.status);
     this.updateStatus();
   }
 
@@ -1011,10 +1128,18 @@ export class Editor {
     const net = built?.netOfWire.get(id) ?? -1;
     const nd = built && net >= 0 ? netlistOf(built.def)?.nets[net] : undefined;
     const name = nd?.name ?? nd?.ends[0] ?? id;
+    // a wire on a broken net says why, not just "not connected"
+    const diag = this.diags.find((d) => d.wires?.includes(id));
+    if (diag && diag.level === 'error') return void this.wireTip(diagText(diag), e, true);
     const val = bits ? describeBits(bits) : 'not connected';
     const wk = this.sim.wireWeak(id);
     const weak = wk ? ` (${weakTag(wk)}: a weak ${wk === WEAK_H ? '1 an NMOS passed, VDD − Vt' : '0 a PMOS passed, Vt'})` : '';
-    this.tipEl.textContent = `${name}${bits && bits.length > 1 ? `[${bits.length - 1}:0]` : ''} = ${val}${weak}`;
+    this.wireTip(`${name}${bits && bits.length > 1 ? `[${bits.length - 1}:0]` : ''} = ${val}${weak}`, e, false);
+  }
+
+  private wireTip(text: string, e: PointerEvent, err: boolean): void {
+    this.tipEl.textContent = text;
+    this.tipEl.classList.toggle('err', err);
     const r = this.canvas.getBoundingClientRect();
     this.tipEl.style.left = `${e.clientX - r.left + 14}px`;
     this.tipEl.style.top = `${e.clientY - r.top + 14}px`;
@@ -1022,11 +1147,26 @@ export class Editor {
   }
 
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
-  toast(msg: string, level: 'info' | 'err' = 'info'): void {
+  /** A message over the canvas; with an action, a button on it (and it stays long enough to reach). */
+  toast(msg: string, level: 'info' | 'err' = 'info', action?: { label: string; run(): void }): void {
     this.toastEl.textContent = msg;
-    this.toastEl.className = `sb-toast show ${level}`;
+    if (action) this.toastEl.append(' ', h('button', { type: 'button', class: 'btn sm sb-toast-act', onclick: () => { this.toastEl.className = 'sb-toast'; action.run(); } }, action.label));
+    this.toastEl.className = `sb-toast show ${level}${action ? ' act' : ''}`;
     if (this.toastTimer) clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => (this.toastEl.className = 'sb-toast'), 2800);
+    this.toastTimer = setTimeout(() => (this.toastEl.className = 'sb-toast'), action ? 7000 : 2800);
+  }
+
+  /** Arm a palette item: the next click on the canvas places it (the phone's drawer closes). */
+  armPart(item: PaletteItem, key: string): void {
+    this.tools.arm(item, key);
+    if (this.partsDrawer) this.showParts(false);
+    this.toast(`${item.name}: ${coarsePointer() ? 'tap' : 'click'} the canvas to place it (Esc cancels)`);
+  }
+
+  /** Scroll the palette to an item ('<group>/<item>') and flash it (the phone's drawer opens first). */
+  revealPart(key: string): void {
+    if (matchMedia('(max-width: 760px)').matches) this.showParts(true);
+    this.palette.reveal(key);
   }
 
   /** Inline name entry over the canvas at a world point (pointer names), with suggestions. */
@@ -1038,7 +1178,7 @@ export class Editor {
     const list = h('datalist', { id: 'sb-names' }, names.map((n) => h('option', { value: n })));
     const input = h('input', { type: 'text', value: initial, list: 'sb-names', spellcheck: 'false', 'aria-label': 'Pointer name', placeholder: 'name' }) as HTMLInputElement;
     const box = h('div', { class: 'sb-prompt', style: `left:${pt.x - r.left + 8}px;top:${pt.y - r.top - 16}px` }, input, list,
-      h('small', null, names.length ? 'Enter: same name = same net' : 'Enter to place'));
+      h('small', null, 'Name it. Every pointer with this name is the same wire. Enter to place.'));
     let finished = false;
     const finish = (ok: boolean) => {
       if (finished) return;
@@ -1054,8 +1194,20 @@ export class Editor {
     });
     input.addEventListener('blur', () => finish(true));
     this.slots.overlay.append(box);
-    input.focus();
+    this.keepInCanvas(box);
+    input.focus({ preventScroll: true });
     input.select();
+  }
+
+  /**
+   * A box laid over the canvas, moved back inside it when it would stick out: the canvas clips, and focusing a field
+   * past its edge scrolled the whole canvas sideways (a dark band where the drawing ended).
+   */
+  private keepInCanvas(box: HTMLElement): void {
+    const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
+    const x = parseFloat(box.style.left) || 0, y = parseFloat(box.style.top) || 0;
+    box.style.left = `${Math.max(4, Math.min(x, W - box.offsetWidth - 4))}px`;
+    box.style.top = `${Math.max(4, Math.min(y, H - box.offsetHeight - 4))}px`;
   }
 
   /**
@@ -1087,7 +1239,8 @@ export class Editor {
     input.addEventListener('blur', () => finish(true));
     this.slots.overlay.append(input);
     if (list) this.slots.overlay.append(list);
-    input.focus();
+    this.keepInCanvas(input);
+    input.focus({ preventScroll: true });
     input.select();
   }
 
@@ -1126,7 +1279,8 @@ export class Editor {
     });
     area.addEventListener('blur', () => finish(true));
     this.slots.overlay.append(box);
-    area.focus();
+    this.keepInCanvas(box);
+    area.focus({ preventScroll: true });
     area.select();
   }
 

@@ -24,10 +24,14 @@ export function closeChip(ws: Workspace, id: string): Workspace {
 }
 
 /** A new empty chip named `name` (made unique), opened as the active tab. */
-export function newChip(ws: Workspace, name = 'Chip'): { ws: Workspace; id: string } {
+/** A name the editor gave, not the learner (the first chip's Main, a new chip's Chip 2). */
+export const isDefaultName = (name: string) => /^(Main|Chip( \d+)?)$/.test(name);
+
+/** A new empty chip, opened; unnamed it is Chip 2, Chip 3, … (Main being the first). */
+export function newChip(ws: Workspace, name?: string): { ws: Workspace; id: string } {
   const names = Object.values(ws.chips).map((c) => c.name);
-  let nm = name;
-  for (let i = 2; names.includes(nm); i++) nm = `${name} ${i}`;
+  let nm = name ?? 'Chip 2';
+  for (let i = name ? 2 : 3; names.includes(nm); i++) nm = `${name ?? 'Chip'} ${i}`;
   const id = uniqueName(`u_${slug(nm)}`, Object.keys(ws.chips));
   const chips = { ...ws.chips, [id]: emptyChip(id, nm) };
   return { ws: { ...ws, chips, open: [...ws.open.filter((o) => ws.chips[o]), id] }, id };

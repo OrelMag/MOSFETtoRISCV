@@ -230,7 +230,9 @@ describe('lint', () => {
     expect(over[0].msg).toBe('two nets drawn on one line (y = 1): a and b');
     // g2.b is open; the outputs g1.y and g2.y are not inputs.
     expect(r.open).toEqual([{ part: 'g2', port: 'b' }]);
-    expect(r.diags.some((d) => /1 input not connected, reading X: g2\.b/.test(d.msg) && !!d.parts?.includes('g2'))).toBe(true);
+    const open = r.diags.find((d) => d.msg === 'g2.b is not connected');
+    expect(open?.parts).toContain('g2');
+    expect(open?.fix).toBe('and reads X. Wire it, or tie it with Constant 0 / 1.');
   });
 
   it('flags a pointer that has no twin', () => {
@@ -252,11 +254,13 @@ describe('lint', () => {
       parts: [part('g1', { lib: 'not' }, [8, 1]), part('g2', { lib: 'not' }, [8, 6]), part('g3', { lib: 'not' }, [16, 6])],
       wires: [wire('w1', 'pin:a', 'g1.a'), wire('w2', 'g1.y', 'pin:y'), wire('w3', 'pin:a', 'g2.a'), wire('w4', 'g2.y', 'g3.a')],
     });
-    const d = lint(doc).diags.find((x) => x.msg.includes('driving nothing'));
+    const d = lint(doc).diags.find((x) => x.msg.includes('drive nothing'));
     expect(d?.parts).toEqual(['g2', 'g3']);
+    expect(d?.msg).toBe('g2, g3 drive nothing that reaches an output.');
+    expect(d?.fix).toBe('Wire their outputs on, or delete them (Del).');
     // A chip with no output (nothing to reach yet) is still being drawn: no warning.
     const draft = { ...doc, pins: [doc.pins[0]], wires: doc.wires.filter((w) => w.id !== 'w2') };
-    expect(lint(draft).diags.some((x) => x.msg.includes('driving nothing'))).toBe(false);
+    expect(lint(draft).diags.some((x) => x.msg.includes('drive'))).toBe(false);
   });
 });
 

@@ -87,7 +87,7 @@ export const CASES0: Record<string, LevelCase> = {
     alts: [{ name: 'Sixteen 4-NAND muxes (library)', lib: 'mux2x16' }],
   },
   g_eq16: {
-    problem: 'beq and bne branch on rs1 = rs2. Two words are equal when no bit differs, that is when a ⊕ b is zero: 16 XORs feeding the zero detect. The branch comparator uses this one; the pipeline\'s forwarding and hazard units use 3-bit versions to compare register numbers.',
+    problem: 'beq and bne branch on rs1 = rs2. Two words are equal when no bit differs, that is when a ⊕ b is zero: 16 XORs feeding the zero detect. The finished CPU holds one, in the branch comparator; its forwarding and hazard units compare 3-bit register numbers with 3-bit copies of their own.',
     without: 'beq would zero-detect the a + ¬b + 1 the branch comparator already computes for blt: 46 more NANDs, but the answer would wait for the carry chain (depth 46 instead of 12).',
     cost: '16 XORs (64) and the zero detect (46): 110 NANDs, depth 12, par equal to the reference. XNOR per bit and a 16-input AND come to the same 110 NANDs and depth 12.',
     alts: [
@@ -118,13 +118,13 @@ export const CASES0: Record<string, LevelCase> = {
   a_add16: {
     problem: 'RV16 words are 16 bits. Four 4-bit adders, the carry out of each into the next, add them. The next-PC logic has two: pc + imm for taken branches and jal, rs1 + imm for jalr. The ALU\'s adder / subtractor and the branch comparator\'s less-than carry the same chain.',
     without: 'No branch or jump targets and no 16-bit arithmetic: the ALU, the comparator and the next-PC logic all start from this adder.',
-    cost: '144 NANDs, depth 36: the carry crosses every bit, and the single-cycle core\'s critical path runs through such chains. A 16-bit Kogge–Stone adder (the side quest of this act) is 362 NANDs, depth 14 as its level builds it (the library\'s, listed below, 366 and 16); a carry-select adder 312 NANDs, depth 20.',
+    cost: '144 NANDs, depth 36: the carry crosses every bit, and the single-cycle core\'s critical path runs through such chains. A 16-bit Kogge–Stone adder (Fast adders, later in this act) is 362 NANDs, depth 14 as its level builds it (the library\'s, listed below, 366 and 16); a carry-select adder 312 NANDs, depth 20.',
     alts: [{ name: 'Kogge–Stone (parallel prefix)', lib: 'ks16' }, { name: 'Carry-select, 4-bit blocks', lib: 'csel16_4' }],
   },
   a_inc16: {
     problem: 'The PC advances by one word every cycle, and jal / jalr save pc + 1 as the return address. Adding the constant 1 needs no b input: bit 0 is ¬a0 and the carry into bit k is a0·…·a(k−1), so a chain of half adders does it. The PC level builds one into its loop; in the complete core the next-PC logic\'s pc + 1 feeds both the PC and the link value, so one incrementer serves both.',
     without: 'A 16-bit adder with b = 0 and cin = 1 does the same work for 144 NANDs, depth 36.',
-    cost: 'Bit 0 is a NOT (its carry out is a0 itself) and bits 1–15 are half adders: 76 NANDs, depth 31. Sixteen half adders, as the library builds it, are 80 NANDs, depth 33. A prefix incrementer is 159 NANDs, depth 11: a PC built on it clocks at 21 delays instead of 41, which the single-cycle core does not need, since its own critical path takes 79.',
+    cost: 'Bit 0 is a NOT (its carry out is a0 itself) and bits 1–15 are half adders: 76 NANDs, depth 31. Sixteen half adders, as the library builds it, are 80 NANDs, depth 33. A prefix incrementer is 159 NANDs, depth 11: a PC built on it clocks at 21 delays instead of 41, which the single-cycle core does not need: its own clock period is 79 delays without memories (98 with the bench\'s 8-delay memories).',
     alts: [{ name: 'Sixteen half adders (library)', lib: 'inc16' }, { name: 'Ripple adder with b = 0, cin = 1', lib: 'rca16' }, { name: 'Prefix incrementer', lib: 'incf16' }],
   },
   a_addsub16: {
@@ -160,7 +160,7 @@ export const CASES0: Record<string, LevelCase> = {
   o_fastadd: {
     problem: 'In a ripple adder the carry crosses every bit at 2 delays each, and that chain is on the single-cycle core\'s critical path: the ALU, the branch comparator and the next-PC adders all ripple. A parallel-prefix adder computes every carry from generate / propagate pairs (g = a·b, p = a ⊕ b), combined in log2(16) = 4 levels, so the carry into bit k no longer waits for bit k − 1.',
     without: 'Depth doubles with the width: 36 for a 16-bit ripple adder, 68 for 32 bits.',
-    cost: 'Kogge–Stone: 362 NANDs, depth 14 (the library\'s version 366, depth 16), against the ripple adder\'s 144 and 36; carry-select sits between them (312, depth 20). In the core, the fast ALU makes it 4938 NANDs instead of 4720, and the core level\'s clock period falls from 98 to 76 delays; fast next-PC adders on top would cost 444 more and buy nothing, being off the critical path.',
+    cost: 'Kogge–Stone: 362 NANDs, depth 14 (the library\'s version 366, depth 16), against the ripple adder\'s 144 and 36; carry-select sits between them (312, depth 20). In the core, the fast ALU makes it 4938 NANDs instead of 4720, and the core level\'s clock period (with the bench\'s 8-delay memories) falls from 98 to 76 delays; fast next-PC adders on top would cost 444 more and buy nothing, being off the critical path.',
     alts: [{ name: 'Ripple carry', lib: 'rca16' }, { name: 'Carry-select, 4-bit blocks', lib: 'csel16_4' }],
   },
 
@@ -180,7 +180,7 @@ export const CASES0: Record<string, LevelCase> = {
   s_dff: {
     problem: 'A latch is transparent for half the cycle, so a value can run around a loop (PC → incrementer → PC) several times while the clock is high. Two latches on opposite phases fix that: the master follows d while clk = 0, the slave copies the master while clk = 1, and q changes only at the rising edge. The PC, the register file, the CSRs and every pipeline register are built from it.',
     without: 'A register of latches would pass its new value straight on to the logic computing its next one: the PC would race ahead within one clock phase.',
-    cost: 'Par 9 NANDs: two 4-NAND latches and a NOT on clk. The library\'s flip-flop is 11 (each latch inverts d). The classic 7474 uses six NAND gates in a different edge-triggered structure.',
+    cost: 'Par 9 NANDs: two 4-NAND latches and a NOT on clk. The library\'s flip-flop is 11 (each latch inverts d). The classic 7474 uses six 3-input NAND gates (with its preset and clear) in a different edge-triggered structure.',
     alts: [{ name: 'Library flip-flop (latches invert d)', lib: 'dff' }, { name: 'With an asynchronous reset', lib: 'dff_r' }],
   },
   s_reg4: {
@@ -206,10 +206,10 @@ export const CASES0: Record<string, LevelCase> = {
     alts: [{ name: 'Library counter (no reset)', lib: 'counter4' }],
   },
   s_pc: {
-    problem: 'The PC holds the address of the instruction being fetched: the instruction ROM reads the word at pc every cycle. At each rising edge it becomes pc + 1, or the target when the next-PC logic asserts ld (a taken branch, jal, jalr), or 0 while rst is held, reset winning over load. Sixteen flip-flops, an incrementer and two bus muxes.',
+    problem: 'The PC holds the address of the instruction being fetched: the instruction ROM reads the word at pc every cycle. At each rising edge it becomes pc + 1, or the target when the next-PC logic asserts ld (a taken branch, jal, jalr), or 0 while rst is held, reset winning over load. Sixteen flip-flops, an incrementer, a bus mux and a reset.',
     without: 'No sequencing: the CPU could only ever execute the instruction at one fixed address.',
-    cost: 'The PC loads at every edge, so it needs no enable: 16 flip-flops 144, incrementer 76, two bus muxes 98: 318 NANDs, clock period 41, the incrementer\'s 31 delays inside the loop. A 16-bit register with enable would add 64 NANDs that do no work. A prefix incrementer brings the period to 21 for 401 NANDs; the single-cycle core does not need it, its own period being 79.',
-    alts: [{ name: 'With a prefix incrementer', nand: 401, note: 'incf16 (159 NANDs, depth 11) in place of the ripple incrementer: clock period 21 instead of 41 (static timing).' }, { name: 'With an enabled register, en tied to 1', nand: 382, note: 'A 16-bit register with enable (208) in place of the 16 bare flip-flops (144).' }],
+    cost: 'The PC loads at every edge, so it needs no enable: 16 flip-flops 144, incrementer 76, the load mux 49 and the reset as an AND per bit with ¬rst 33: 302 NANDs, clock period 41, the incrementer\'s 31 delays inside the loop. A 16-bit register with enable would add 64 NANDs that do no work. A second bus mux for the reset, its other input the constant 0, is 16 NANDs more at the same depth (the library\'s PC, which the cores place, is built so: 318). A prefix incrementer brings the period to 21 for 385 NANDs; the single-cycle core does not need it, its own period being 79 delays without memories (98 with the bench\'s 8-delay memories).',
+    alts: [{ name: 'Reset by a second bus mux (the library\'s PC)', lib: 'rv16_pc' }, { name: 'With a prefix incrementer', nand: 385, note: 'incf16 (159 NANDs, depth 11) in place of the ripple incrementer: clock period 21 instead of 41 (static timing).' }, { name: 'With an enabled register, en tied to 1', nand: 366, note: 'A 16-bit register with enable (208) in place of the 16 bare flip-flops (144).' }],
   },
   s_fsm: {
     problem: 'Some units take several cycles and must remember where they are: the iterative divider keeps a busy flag and a step count, the multicycle core walks fetch → execute → memory → write back. A finite-state machine is a state register plus next-state logic read from a table. This one recognises 1, 0, 1 on a serial input: three states in two flip-flops, with a Mealy output.',

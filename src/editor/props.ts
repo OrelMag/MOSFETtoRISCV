@@ -15,7 +15,7 @@ import { logicDepth, stats } from '../sim/stats';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { parseBig } from '../sim/values';
 import { h, icon } from '../ui/dom';
-import type { Diag } from './compile';
+import { type Diag, diagText } from './compile';
 import type { Editor } from './editor';
 import { pinKnob, pointerGeom } from './geom';
 import { renamePin } from './chips';
@@ -35,6 +35,8 @@ export interface PropsSection {
   order: number;
   /** A section for the current state of the editor, or null when it has nothing to show. */
   render(ed: Editor): HTMLElement | null;
+  /** True where it does not apply yet (no flip-flop to mark, nothing to time): listed folded under Advanced. */
+  advanced?(ed: Editor): boolean;
 }
 
 const sections: PropsSection[] = [];
@@ -60,6 +62,8 @@ export class PropsPanel {
   private key = '';
   private diagKey = '';
   private depthTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The Advanced fold left open (this visit). */
+  private advOpen = false;
 
   constructor(private ed: Editor) {
     this.body = h('div', { class: 'sb-props-body' });
@@ -96,10 +100,19 @@ export class PropsPanel {
       this.body.replaceChildren();
       const own = none ? this.chip(doc) : objs.length > 1 ? this.many(objs.length) : this.one(doc);
       if (own) this.body.append(own);
+      let adv: HTMLDetailsElement | null = null;
       for (const sec of sections) {
         const el = sec.render(ed);
-        if (el) this.body.append(el);
+        if (!el) continue;
+        if (!sec.advanced?.(ed)) { this.body.append(el); continue; }
+        if (!adv) {
+          const d = adv = h('details', { class: 'sb-advanced' }, h('summary', null, 'Advanced')) as HTMLDetailsElement;
+          d.open = this.advOpen;
+          d.addEventListener('toggle', () => { this.advOpen = d.open; });
+        }
+        adv.append(el);
       }
+      if (adv) this.body.append(adv);
     }
     this.diags(ed.diags);
   }
@@ -444,18 +457,57 @@ export class PropsPanel {
   // ---- diagnostics -------------------------------------------------------------------------
 
   private diags(ds: Diag[]): void {
+    // errors before warnings; on the chip's own panel (nothing selected) they lead it
+    ds = [...ds.filter((d) => d.level === 'error'), ...ds.filter((d) => d.level !== 'error')];
+    const top = !this.ed.selCount && ds.length > 0;
+    if (top !== (this.el.firstChild === this.diagEl)) {
+      if (top) this.el.prepend(this.diagEl);
+      else this.el.append(this.diagEl);
+      this.diagEl.classList.toggle('top', top);
+    }
+    this.pill(ds);
     const key = JSON.stringify(ds);
     if (key === this.diagKey) return;
     this.diagKey = key;
     this.diagEl.replaceChildren();
     if (!ds.length) return;
     const errs = ds.filter((d) => d.level === 'error').length;
-    this.diagEl.append(h('h3', null, errs ? `${errs} problem${errs > 1 ? 's' : ''}` : 'Warnings', ds.length > errs ? h('small', null, ` · ${ds.length - errs} warning${ds.length - errs > 1 ? 's' : ''}`) : null));
-    for (const d of ds.slice(0, 50)) {
-      const b = h('button', { class: `sb-diag ${d.level}`, title: 'Show where' }, h('span', { class: 'sb-dot' }), d.msg);
+    const warns = ds.length - errs;
+    this.diagEl.append(h('h3', null, errs ? `${errs} problem${errs > 1 ? 's' : ''}` : `${warns} warning${warns > 1 ? 's' : ''}`, errs && warns ? h('small', null, ` · ${warns} warning${warns > 1 ? 's' : ''}`) : null));
+    ds.slice(0, 50).forEach((d, i) => {
+      const b = h('button', { class: `sb-diag ${d.level}`, title: 'Show where', 'data-diag': i }, h('span', { class: 'sb-dot' }),
+        h('span', null, h('b', null, d.msg), d.fix ? ' ' : null, d.fix ?? null));
       b.addEventListener('click', () => this.locate(d));
       this.diagEl.append(b);
-    }
+    });
+  }
+
+  /** The run bar's "⚠ n problems · m warnings": a click shows the first one on the circuit and its message here. */
+  private pill(ds: Diag[]): void {
+    const el = this.ed.diagPill;
+    const errs = ds.filter((d) => d.level === 'error').length, warns = ds.length - errs;
+    const text = ds.length ? [errs ? `${errs} problem${errs > 1 ? 's' : ''}` : '', warns ? `${warns} warning${warns > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ') : '';
+    el.hidden = !ds.length;
+    el.classList.toggle('err', errs > 0);
+    if (el.dataset.text === text) return;
+    el.dataset.text = text;
+    el.replaceChildren(h('span', { 'aria-hidden': 'true' }, '⚠ '), text);
+    el.title = ds.length ? `${diagText(ds[0])} (click to show it)` : '';
+  }
+
+  /** Select the first diagnostic's objects, centre them, and scroll its message into view. */
+  showFirstDiag(): void {
+    const ds = this.ed.diags;
+    const d = ds.find((x) => x.level === 'error') ?? ds[0];
+    if (!d) return;
+    this.locate(d);
+    this.update(true);
+    const b = this.diagEl.querySelector<HTMLElement>('[data-diag="0"]');
+    if (!b) return;
+    b.scrollIntoView({ block: 'nearest' });
+    b.classList.remove('sb-flash');
+    void b.offsetWidth;
+    b.classList.add('sb-flash');
   }
 
   private locate(d: Diag): void {

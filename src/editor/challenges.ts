@@ -8,12 +8,13 @@ import { BitSim } from '../sim/bitsim';
 import { flatten, type FlatDesign } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import type { Sim } from '../sim/sim';
+import { reachesTransistors } from '../sim/harness';
 import { hasFeedback, logicDepth, stats } from '../sim/stats';
 import { shortText, SwitchSim, WEAK_H, weakTag } from '../sim/switchsim';
 import { analyzeTiming } from '../sim/timing';
 import { B0, B1, BZ, type Bit, type ComponentDef, isExternal, isSwitchPrim, netlistOf } from '../sim/types';
 import { ioInfo } from './ioparts';
-import type { Compiled } from './compile';
+import { type Compiled, diagText } from './compile';
 import { type ChipDoc, emptyChip, type PartDoc, type PinDoc, type Workspace } from './model';
 import { openChip } from './session';
 import { importChips } from './store';
@@ -89,7 +90,16 @@ export interface LibRule {
    * no MOSFET, no NAND unless listed). Without it every switch-level part is allowed and NAND always is.
    */
   strict?: boolean;
+  /**
+   * Gate level: no transistor-level part (a MOSFET, a rail, a resistor, a cell drawn from them: act 0's inverter, a
+   * DRAM column), not even inside the learner's own chips. Such a level is scored in NANDs, where a transistor counts
+   * as none (graph.ts ruleFor sets it on every campaign level that is not itself switch level).
+   */
+  gates?: boolean;
 }
+
+/** Below the NAND brick: a switch-level primitive, or a part whose gate-level flatten reaches one (not NAND itself). */
+export const transistorLevel = (d: ComponentDef): boolean => d.prim !== 'nand' && (isSwitchPrim(d) || reachesTransistors(d));
 
 /** The rule's kind, for badges and CSS ('lib' for a campaign rule). */
 export const ruleKind = (a: Allowed): 'transistors' | 'nand' | 'any' | 'lib' => (typeof a === 'string' ? a : 'lib');
@@ -193,6 +203,15 @@ export function challengeOf(chipId: string, all: readonly BuildChallenge[]): Bui
 const stripHtml = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 
 /**
+ * How far right a new challenge chip's outputs start: 40 units, or 20 on a phone, where 40 units fit the screen only
+ * at ~9 px each (pins too small for a finger); at 20 the first fit reaches camera.ts TOUCH_PX with both sides in view.
+ */
+function pinSpan(): number {
+  const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+  return mm?.('(pointer: coarse) and (max-width: 760px)').matches ? 20 : 40;
+}
+
+/**
  * The challenge's chip, created with its pins in place (inputs on the left, outputs on the
  * right) and the brief in its notes, and opened. An existing one is only opened: the learner's
  * work is never replaced.
@@ -201,7 +220,7 @@ export function startChallenge(ws: Workspace, ch: BuildChallenge): { ws: Workspa
   const id = challengeChipId(ch);
   if (ws.chips[id]) return { ws: openChip(ws, id), chipId: id, created: false };
   const ins = ch.ports.filter((p) => p.dir === 'in'), outs = ch.ports.filter((p) => p.dir === 'out');
-  const right = Math.max(40, ...(ch.given ?? []).map((p) => p.at[0] + 24));
+  const right = Math.max(pinSpan(), ...(ch.given ?? []).map((p) => p.at[0] + 24));
   const pins: PinDoc[] = [
     ...ins.map((p, i): PinDoc => ({ id: p.name, name: p.name, dir: 'in', width: p.width, at: [0, 2 + 4 * i], ...(p.clock ? { kind: 'clock' } : {}) })),
     ...outs.map((p, i): PinDoc => ({ id: p.name, name: p.name, dir: 'out', width: p.width, at: [right, 2 + 4 * i] })),
@@ -240,7 +259,7 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
     res.score = scoreOf(def, compiled.mode, ch.check.kind !== 'table');
     res.restrictionViolations = violations(def, ch.allowed);
     const pinProblems = checkPins(def, ch.ports);
-    const errors = compiled.diags.filter((d) => d.level === 'error').map((d) => `error: ${d.msg}`);
+    const errors = compiled.diags.filter((d) => d.level === 'error').map((d) => `error: ${diagText(d)}`);
     res.failures.push(...pinProblems, ...errors.slice(0, 3));
     if (errors.length > 3) res.failures.push(`… and ${errors.length - 3} more errors`);
     if (!res.failures.length && ch.rules) res.failures.push(...ch.rules(def));
@@ -304,6 +323,7 @@ function allowedLeaf(d: ComponentDef, allowed: Allowed): string | null {
   if (isExternal(d) || ioInfo(d)) return null; // keys, keyboards, switches, consoles, screens: zero cost, and a check reads the sources released (0)
   const lib = typeof allowed === 'object' ? allowed : null;
   if (lib?.strict) return libAllowed(lib, d.id) || d.category === 'plumbing' ? null : `${d.name}: not one of this level's parts (${lib.label ?? lib.lib.join(', ')})`;
+  if (lib?.gates && transistorLevel(d)) return `${d.name}: transistor level, and this level is built and scored in NAND gates (a transistor would count as none)`;
   if (isSwitchPrim(d)) return null; // transistors, rails, resistors, capacitors (your own NAND stays usable)
   if (d.id === 'tie0' || d.id === 'tie1' || d.id.startsWith('sb_const') || /^const\d+_[0-9a-f]+$/.test(d.id)) return null;
   if (d.prim === 'nand') return allowed === 'transistors' ? 'a library NAND: build it from transistors' : null;

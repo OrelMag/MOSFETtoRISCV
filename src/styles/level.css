@@ -247,3 +247,9 @@
 .cx-prevnext a { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); text-decoration: none; }
 .cx-prevnext a:hover { text-decoration: underline; }
 .cp-codex-entry.locked .cx-sum { margin: 6px 0 12px; }
+
+/* the thread on the level screen (whystack.ts styles live in campaign.css) */
+.lv-anat-cap { margin: -4px 0 0; font-size: 12.5px; }
+.lv-sidebody .th-why { margin-top: 0; }
+.lv-pits .th-pits { font-size: 13px; }
+.lv-result .th-end { margin-top: 0; }

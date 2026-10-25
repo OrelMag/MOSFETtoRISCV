@@ -1,7 +1,8 @@
 // The campaign as a graph: closures, the parts a level may use, and each level's status from
 // the learner's progress. No DOM.
 
-import type { LibRule } from '../editor/challenges';
+import { type LibRule, transistorLevel } from '../editor/challenges';
+import { resolveComponent } from '../lib/resolve';
 import { NODES, nodeById } from './nodes';
 import type { CampaignNode, Status } from './types';
 
@@ -39,17 +40,23 @@ export function topo(nodes: readonly CampaignNode[] = NODES): CampaignNode[] {
   return out;
 }
 
+/** A switch-level level: graded in transistors, not NANDs (act 0, m_sense). */
+export const switchLevel = (n: CampaignNode | undefined): boolean => n?.par?.transistors !== undefined && n.par.nand === undefined;
+
 /**
  * What a level may be built from: NAND, wiring, constants, displays, the learner's own chips and
  * the library parts unlocked by every level it builds on. Fixed per level (not per learner), so
- * a reference answer that passes once passes for everyone.
+ * a reference answer that passes once passes for everyone. A level scored in NANDs takes no
+ * transistor-level part (act 0's cells, MOSFETs, the DRAM column): there a transistor would cost nothing.
  */
 export function ruleFor(id: string): LibRule {
   const n0 = nodeById(id);
+  const gates = !switchLevel(n0);
   const lib = new Set<string>(['nand', ...(n0?.gives ?? []), ...(n0?.givesOf?.() ?? [])]);
   for (const a of ancestors(id)) for (const u of nodeById(a)?.unlocks ?? []) lib.add(u);
+  if (gates) for (const u of lib) { const d = u.endsWith('*') ? undefined : resolveComponent(u); if (d && transistorLevel(d)) lib.delete(u); }
   const n = lib.size - 1;
-  return { lib: [...lib].sort(), label: n ? `NAND + ${n} unlocked part${n === 1 ? '' : 's'}` : 'NAND only' };
+  return { lib: [...lib].sort(), label: n ? `NAND + ${n} unlocked part${n === 1 ? '' : 's'}` : 'NAND only', ...(gates ? { gates } : {}) };
 }
 
 /** A node's progress as the graph needs it. */

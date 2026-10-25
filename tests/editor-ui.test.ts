@@ -11,10 +11,10 @@ import {
 } from '../src/editor/geom';
 import { emptyWorkspace, type ChipDoc, type DefOf, type PartRef } from '../src/editor/model';
 import { addPart, addPin, addWire, moveSel } from '../src/editor/ops';
-import { favoriteItems, paletteGroups, registerPaletteGroup, toggleFavorite, visibleItems, type PaletteCtx } from '../src/editor/palette';
+import { aliasesOf, favoriteItems, paletteGroups, registerPaletteGroup, toggleFavorite, visibleItems, wordStarts, type PaletteCtx } from '../src/editor/palette';
 import { partDef } from '../src/editor/parts';
 import { EditorSim, FrameBudget, simKey } from '../src/editor/runtime';
-import { activeChip, closeChip, keepVolatile, newChip, openChip, setPinValue } from '../src/editor/session';
+import { activeChip, closeChip, keepVolatile, newChip, openChip, setPinValue, isDefaultName } from '../src/editor/session';
 import { docFromDef } from '../src/editor/fromdef';
 import { RF8 } from '../src/lib/rv16/logic';
 import { symbolGeom } from '../src/sim/geometry';
@@ -204,16 +204,21 @@ describe('WireDraft', () => {
 describe('session', () => {
   it('tabs: open moves to the top, close keeps one, new chips get unique names and ids', () => {
     let ws = emptyWorkspace();
+    // Main is the first chip: new ones count on from 2
     const a = newChip(ws);
-    expect(a.id).toBe('u_chip');
+    expect(a.id).toBe('u_chip_2');
+    expect(a.ws.chips[a.id].name).toBe('Chip 2');
     const b = newChip(a.ws);
-    expect(b.ws.chips[b.id].name).toBe('Chip 2');
+    expect(b.ws.chips[b.id].name).toBe('Chip 3');
+    expect(newChip(b.ws, 'XOR').ws.chips.u_xor.name).toBe('XOR');
+    expect(['Main', 'Chip', 'Chip 12'].every(isDefaultName)).toBe(true);
+    expect(isDefaultName('Chip A')).toBe(false);
     ws = b.ws;
     expect(activeChip(ws)).toBe(b.id);
     ws = openChip(ws, 'u_main');
-    expect(ws.open).toEqual(['u_chip', 'u_chip_2', 'u_main']);
-    ws = closeChip(closeChip(closeChip(ws, 'u_main'), 'u_chip'), 'u_chip_2');
-    expect(ws.open).toEqual(['u_chip_2']);
+    expect(ws.open).toEqual(['u_chip_2', 'u_chip_3', 'u_main']);
+    ws = closeChip(closeChip(closeChip(ws, 'u_main'), 'u_chip_2'), 'u_chip_3');
+    expect(ws.open).toEqual(['u_chip_3']);
   });
 
   it('undo keeps input values and tabs', () => {
@@ -276,8 +281,32 @@ describe('palette', () => {
     expect(toggleFavorite(['lib/nand', 'io/clock'], 'lib/nand')).toEqual(['io/clock']);
   });
 
+  it('Basics leads with what a first circuit needs; the rare I/O parts sit in a section of their own', () => {
+    const basics = paletteGroups()[0];
+    expect(basics.id).toBe('basics');
+    expect(visibleItems(basics, ctx, true).map((i) => i.name)).toEqual(['Input', 'Output', 'Clock', 'Input bus', 'Output bus', 'NAND', 'Constant 0', 'Constant 1', 'LED', 'Pointer', 'Split 8 → 1×8', 'Merge 1×8 → 8']);
+    const io = visibleItems(paletteGroups().find((g) => g.id === 'io')!, ctx, false);
+    expect(io.filter((i) => i.section === 'Special I/O').map((i) => i.id)).toEqual(['key', 'keyboard', 'pzin', 'pzout', 'cards']);
+    // a section is one run of items: the special ones come last
+    expect(io.findIndex((i) => i.section)).toBe(io.length - 5);
+    for (const id of ['sources', 'fets', 'switch', 'devices']) expect(paletteGroups().find((g) => g.id === id)?.collapsed, id).toBe(true);
+  });
+
+  it('search matches at word starts, and through aliases', () => {
+    const names = (q: string) => paletteGroups().filter((g) => g.id !== 'basics').flatMap((g) => visibleItems(g, ctx, false, q).map((i) => i.name));
+    expect(wordStarts('Bundled request bus', 'led')).toBe(false);
+    expect(names('led')).toContain('LED');
+    expect(names('led').every((n) => /(^|[^a-z])led/i.test(n))).toBe(true);
+    for (const q of ['label', 'tunnel', 'tun', 'net']) expect(names(q), q).toContain('Pointer');
+    expect(names('splitter')).toEqual(expect.arrayContaining(['Split 8 → 1×8', 'Merge 1×8 → 8']));
+    expect(names('7seg')).toContain('7-segment');
+    expect(names('seven segment')).toContain('7-segment');
+    expect(names('dff').some((n) => /flip-flop/i.test(n))).toBe(true);
+    expect(aliasesOf('Pointer pointer')).toEqual(expect.arrayContaining(['label', 'tunnel', 'net', 'wire']));
+  });
+
   it('later phases register groups', () => {
-    registerPaletteGroup({ id: 'test', title: 'Test', order: 5, items: () => [{ id: 't', name: 'T', place: { pointer: true } }] });
+    registerPaletteGroup({ id: 'test', title: 'Test', order: 1, items: () => [{ id: 't', name: 'T', place: { pointer: true } }] });
     expect(paletteGroups()[0].id).toBe('test');
     expect(visibleItems(paletteGroups()[0], ctx, false, 'zz')).toEqual([]);
   });

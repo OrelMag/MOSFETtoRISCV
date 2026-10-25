@@ -516,12 +516,12 @@ registerEditorPlugin((ed) => {
 });
 
 registerToolbarAction({
-  id: 'probe', title: 'Probe mode (P): click wires to record them in the timing panel', icon: 'probe', label: 'Probe', order: 60,
+  id: 'probe', title: 'Probe mode (P): click wires to record them in the timing panel', icon: 'probe', label: 'Probe', menu: 'Probe mode (P)', order: 60, under: 'timingmenu',
   run: (ed) => { const a = of.get(ed); a?.setProbing(!a.probing); },
   active: (ed) => !!of.get(ed)?.probing,
 });
 registerToolbarAction({
-  id: 'timing', title: 'Timing panel: pins and probed wires over time, in gate delays', icon: 'wave', label: 'Timing', order: 61,
+  id: 'timing', title: 'Timing panel: pins and probed wires over time, in gate delays', icon: 'wave', label: 'Timing', menu: 'Timing panel', order: 61, under: 'timingmenu',
   run: (ed) => { const a = of.get(ed); a?.setOpen(!a.open); },
   active: (ed) => !!of.get(ed)?.open,
 });
@@ -530,5 +530,7 @@ registerDiagSource((ed) => of.get(ed)?.lint().diags ?? []);
 
 registerPropsSection({
   id: 'timing', order: 15,
+  // nothing to time on an empty chip; a transistor-level one has no gate delays
+  advanced: (ed) => !ed.doc.parts.length || ed.compiled?.mode === 'switch',
   render: (ed) => (ed.selCount ? null : of.get(ed)?.timingSection() ?? null),
 });

@@ -114,6 +114,7 @@ function openMenu(ed: Editor): void {
   opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : btn;
   const r = btn?.getBoundingClientRect() ?? new DOMRect(16, 60, 0, 0);
   menu = h('div', { class: 'sb-menu', role: 'menu', 'aria-label': 'File' });
+  ed.claimMenu(closeMenu);
   for (const it of MENU) {
     if (!it) { menu.append(h('hr')); continue; }
     menu.append(h('button', { role: 'menuitem', onclick: () => { closeMenu(); it.run(ed); } },

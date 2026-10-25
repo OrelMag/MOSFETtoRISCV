@@ -39,7 +39,10 @@ import { MAX_WIDTH, type PartResult } from './parts';
 
 export interface Diag {
   level: 'error' | 'warn';
+  /** The cause, shown bold ("g1.b is not connected"). */
   msg: string;
+  /** What follows the cause: its consequence and how to fix it ("and reads X. Wire it, or …"). */
+  fix?: string;
   parts?: string[];
   pins?: string[];
   wires?: string[];
@@ -267,19 +270,21 @@ function compile(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult): Compiled
     }
     const widths = uniq(g.eps.map((e) => e.width));
     if (widths.length > 1) {
-      err(`width mismatch on one net: ${g.eps.map((e) => `${e.end} (${e.width})`).join(', ')}`, where);
+      const m = widthMismatch(g.eps);
+      err(m.msg, { ...where, fix: m.fix });
       drop();
       continue;
     }
     const drivers = g.eps.filter((e) => e.role === 'drv');
     const bis = g.eps.filter((e) => e.role === 'bi');
     if (!drivers.length && !bis.length) {
-      warn(`nothing drives ${g.eps.map((e) => e.end).join(', ')}`, where);
+      warn(`nothing drives ${g.eps.map((e) => e.end).join(', ')}`, { ...where, fix: 'It reads X. Wire an output or an input pin to it.' });
       drop();
       continue;
     }
     if (mode === 'gate' && drivers.length > 1) {
       err(`${drivers.length} outputs drive one net: ${drivers.map((e) => e.end).join(', ')}`, {
+        fix: 'One wire, one driver: delete a wire, or combine them through a gate (OR, a multiplexer).',
         ...where, parts: uniq(drivers.flatMap((e) => (e.part ? [e.part] : []))), pins: drivers.flatMap((e) => (e.pin ? [e.pin] : [])),
       });
       drop();
@@ -446,6 +451,25 @@ const structOf = (d: ComponentDef) => structKeys.get(d) ?? `lib:${d.id}`;
 const deriveCache = new Map<string, Derived>();
 const ffCache = new Map<string, string | null>();
 const CACHE_SIZE = 32;
+/** A diagnostic as one line of text (tooltips, the challenge check's errors). */
+export const diagText = (d: Diag) => (d.fix ? `${d.msg} ${d.fix}` : d.msg);
+
+const bitsOf = (w: number) => `${w} bit${w === 1 ? '' : 's'}`;
+
+/** A width mismatch as cause + fix: each end's width, then the split that would take the narrow width, or the pin to resize. */
+export function widthMismatch(eps: readonly { end: string; width: number; pin?: string }[]): { msg: string; fix: string } {
+  const msg = `${eps.map((e) => `${e.end} is ${bitsOf(e.width)}`).join(', ')}.`;
+  const ws = eps.map((e) => e.width);
+  const wide = Math.max(...ws), narrow = Math.min(...ws);
+  const split = wide === 4 || wide === 8 ? `Split ${wide} → 1×${wide}` : 'a Split (Wiring)';
+  const take = narrow === 1 ? `Take one bit with ${split}` : `Take ${narrow} bits with a Split (Wiring)`;
+  // a pin is the easiest end to resize: to the width of the other ends, when they agree
+  const pin = eps.find((e) => e.pin);
+  const others = pin ? [...new Set(eps.filter((e) => e !== pin).map((e) => e.width))] : [];
+  const resize = pin && others.length === 1 ? `, or set ${pin.end}'s width to ${others[0]}` : '';
+  return { msg, fix: `A wire joins equal widths. ${take}${resize}.` };
+}
+
 function cached<T>(m: Map<string, T>, key: string, make: () => T): T {
   if (m.has(key)) {
     const v = m.get(key)!;
