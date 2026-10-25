@@ -96,7 +96,7 @@ Each level has a **par** per metric:
 | Sequential | NANDs, clock period (static timing) |
 | CPU cores | NANDs, period, cycles; time = period × Σ cycles |
 | Program puzzles | size (words), cycles |
-| Kernel puzzles (act 9) | cycles (warp instructions), idle lanes (%) |
+| Kernel puzzles (act 9) | cycles (warp instructions), lane-ops (active lane-steps; idle lanes are reported, not graded) |
 | Memory controllers (act 10) | NANDs, period, cycles over the request traces |
 | Relay levels (act P) | relays, relay steps (the most steps one input change takes to rest) |
 | Tube levels (act P) | tube sections (triodes + diodes) |
@@ -277,7 +277,7 @@ Show / Hide is remembered per act (`layout.ts foldedActs`, `settings.actOpen`).
   mockup said "2 triodes")
 - ✅ drill `h_card`: Hollerith code both ways, a short source card, object cards (row 9 → value, value → columns,
   column 1 the most significant bit) ← intro
-- ✅ `h_loader`: program on cards ← h_card, r_clock. Given: a card reader (23 object cards, feed 3 edges), a 256 × 16
+- ✅ `h_loader`: program on cards ← h_card, r_clock, s_dff. Given: a card reader (23 object cards, feed 3 edges), a 256 × 16
   RAM and the 4-bit CPU without its ROM (`cpu4_proc`: instr in, pc out). The learner builds the loader (address counter,
   a write per card, run once the hopper is empty, the RAM's address from the counter or the pc, the CPU's clock gated by
   run) from a strict rule of NAND, NOT, AND, OR, DFF, an 8-bit counter, a 2:1 8-bit mux. The bench (GateSim) runs two
@@ -288,20 +288,20 @@ Show / Hide is remembered per act (`layout.ts foldedActs`, `settings.actOpen`).
 
 ### Act 1 — Logic
 - ✅ `l_bool`: Boolean algebra (identities, De Morgan, bubble pushing), lesson + simplification drill ← intro
+- ✅ `n_bin`: binary and hex drill ← intro (in act 1 since 2026-10-25: the decoder and the table level use it first)
 - ✅ `g_not` (ex) ← t_nand
 - ✅ `g_and` (ex) ← g_not
-- ✅ `g_or` (ex) ← g_not
+- ✅ `g_or` (ex) ← g_not, l_bool
 - ✅ `g_xor` (ex) ← g_and, g_or
-- ✅ `g_mux` (ex) ← g_not
+- ✅ `g_mux` (ex) ← g_not, l_bool
 - ✅ `d_kmap`: K-map drill ← l_bool
-- ✅ `g_sop`: a prime detector from its truth table via SoP / K-map, graded on NANDs ← d_kmap, g_and, g_or
+- ✅ `g_sop`: a prime detector from its truth table via SoP / K-map, graded on NANDs ← d_kmap, g_and, g_or, n_bin
 - ✅ `g_wide`: 16-bit OR / zero detect as a tree, graded on depth ← g_and, g_or
-- ✅ `g_dec`: 3→8 decoder ← g_wide
+- ✅ `g_dec`: 3→8 decoder ← g_wide, n_bin
 - ✅ `g_mux8`: 2:1 × 16 bus mux (unlocks the wider muxes) ← g_mux
 - ✅ `g_eq16`: 16-bit equality ← g_xor, g_wide
 
 ### Act 2 — Numbers and arithmetic
-- ✅ `n_bin`: binary and hex drill ← intro
 - ✅ `n_twos`: two's complement, overflow drill ← n_bin
 - ✅ `a_ha` (ex) ← g_xor, n_bin
 - ✅ `a_fa` (ex) ← a_ha
@@ -310,9 +310,9 @@ Show / Hide is remembered per act (`layout.ts foldedActs`, `settings.actOpen`).
 - ✅ `a_inc16` ← a_ha
 - ✅ `a_addsub16` ← a_add16, n_twos
 - ✅ `a_slt` ← a_addsub16
-- ✅ `a_shift16`: barrel shifter ← g_mux8, g_and
-- ✅ `a_alu16` ← a_addsub16, a_slt, a_shift16, g_wide
-- ✅ *opt* `o_fastadd`: parallel-prefix adder, graded on depth (the g / p cells are given) ← a_add16
+- ✅ `a_shift16`: barrel shifter ← g_mux8, g_and, n_twos
+- ✅ `a_alu16` ← a_addsub16, a_shift16, g_wide (its slt is its own; `a_slt` feeds the branch comparator)
+- ✅ `o_fastadd`: parallel-prefix adder, graded on depth (the g / p cells are given) ← a_add16 (required since 2026-10-25: Core IV uses it)
 
 ### Act 3 — State and memory
 - ✅ `s_sr` (ex) ← g_not
@@ -320,7 +320,7 @@ Show / Hide is remembered per act (`layout.ts foldedActs`, `settings.actOpen`).
 - ✅ `s_dff` (ex) ← s_dlatch
 - ✅ `s_reg4` (ex) ← s_dff, g_mux
 - ✅ `s_reg16` ← s_reg4
-- ✅ *opt* `s_cnt4` (ex) ← s_reg4
+- ✅ *opt* `s_cnt4` (ex) ← s_reg4, a_inc16
 - ✅ `s_pc`: program counter with reset and load ← s_reg16, a_inc16, g_mux8
 - ✅ *opt* `s_fsm`: a "101" detector (Mealy machine) from its state table ← s_dff, d_kmap
 - ✅ *opt* `m_ram` (ex) ← s_reg4, g_dec
@@ -341,52 +341,58 @@ Show / Hide is remembered per act (`layout.ts foldedActs`, `settings.actOpen`).
 ### Act 5 — A single-cycle CPU
 - ✅ `c_lesson`: the datapath ← i_isa, a_alu16, m_rf
 - ✅ `c_imm`: immediate generator ← i_isa, g_mux8
-- ✅ `c_ctl`: decoder / control unit (checked with don't-cares) ← i_enc, g_dec, d_kmap
+- ✅ `c_ctl`: decoder / control unit (checked with don't-cares) ← i_enc, g_dec, d_kmap, g_sop
 - ✅ `c_br`: branch comparator ← g_eq16, a_slt, g_mux
 - ✅ `c_npc`: next-PC logic ← a_add16, a_inc16, c_br, g_mux8
 - ✅ `c_core1`: OP / OPX / ADDI / SHI / LUI ← c_lesson, c_imm, c_ctl, s_pc, m_rf, a_alu16
 - ✅ `c_core2`: + LW / SW ← c_core1, m_mem
 - ✅ `c_core3`: all of RV16I ← c_core2, c_npc
 - ✅ `c_computer`: core + ROM + RAM + LED register with partial address decoding, checked cycle by cycle; then load your own RV16 program ← c_core3, p_loop
-- ✅ *opt* `c_fast`: graded on clock period ← c_core3, o_fastadd
+- ✅ `c_fast`: **Core IV: the critical path**, graded on clock period (the ripple ALU is 50 of Core III's 98 delays; the
+  Kogge–Stone ALU brings it to 76) ← c_core3, o_fastadd
 
 ### Act 6 — Pipelining
-- ✅ `pi_lesson` ← c_core3
+- ✅ *opt* `o_mc`: multicycle CPU (one-hot FSM: F, E, M, W), the argument for pipelining (period 76, 2.4 × slower) ← c_core3
+- ✅ `pi_lesson` ← c_fast (starts from Core IV: with ripple adders the pipeline is slower than Core IV, with
+  Kogge–Stone adders in E it runs at 56 and wins by 11 %; `rv16Pipe({ fast })`, tests/campaign-order.test.ts)
 - ✅ `pi_reg`: pipeline register with stall / flush ← s_reg16, g_mux8, g_or
 - ✅ `pi_core0`: 5 stages, programs without hazards ← pi_lesson, pi_reg
 - ✅ `pi_fwd`: forwarding unit ← g_eq16, pi_lesson
 - ✅ `pi_core1`: + forwarding ← pi_core0, pi_fwd
-- ✅ `pi_haz`: load-use hazard detection ← g_eq16, pi_lesson
+- ✅ `pi_haz`: load-use hazard detection ← g_eq16, pi_core1
 - ✅ `pi_core2`: + load-use stall ← pi_core1, pi_haz
 - ✅ `pi_core3`: + branch / jump flush ← pi_core2
 - ✅ *opt* `o_bpred`: static branch prediction in F (jal and backward branches taken), graded on cycles over loop programs ← pi_core3
 
 ### Act 7 — The system: traps and interrupts
-- ✅ `y_lesson` ← c_core3
+- ✅ `y_lesson` ← c_core3, c_computer
 - ✅ `y_csr`: CSR file (a long random sequence against a model) ← s_reg16, g_dec, g_mux8, y_lesson
 - ✅ `y_trap`: CSR instructions, ecall / ebreak / illegal, mret (the illegal-instruction detector and the system decoder are given) ← c_core3, y_csr
 - ✅ `y_irq`: interrupts ← y_trap
 - ✅ `p_handler`: an interrupt-driven program ← y_lesson, p_call
-- ✅ **`y_final`**: the pipelined RV16 with precise traps and interrupts ← pi_core3, y_irq
+- ✅ `y_ptrap`: **Pipeline V: exceptions**: precise traps in E, the valid bit, CSR access in E, no interrupts
+  (`rv16Pipe({ sys: 'exc' })`, 12 031 NANDs) ← pi_core3, y_trap
+- ✅ **`y_final`**: **Finale: interrupts**: Pipeline V plus the external interrupt (7 NANDs more); a predicting
+  pipeline passes too ← y_ptrap, y_irq, p_handler
 
 ### Act 9 — Throughput: a GPU (roadmap Phase 15)
 Optional as a whole (decided 2026-10-13): it goes past the campaign's goal, a pipelined RV16, like the side quests, and
-adding levels to it never reopens a finished campaign. Its finale (finalCpu of the act 9 track) is still its last core.
-- ✅ `k_lesson`: latency or throughput ← y_final
+adding levels to it never reopens a finished campaign. It opens after Core III (since 2026-10-25). Its finale (finalCpu of the act 9 track) is still its last core.
+- ✅ `k_lesson`: latency or throughput ← c_core3 (it builds on the single-cycle core)
 - ✅ `k_lanes`: four ALUs and their operand muxes, one control (a table on random and directed vectors) ← k_lesson
 - ✅ `k_vrf`: four register files, one write enable per lane ← k_lesson
 - ✅ `k_mask`: the active mask (all on at reset), the leader, the masked write enables ← k_lesson
 - ✅ `k_simd`: the 4-lane SIMD core: tid, tmc, branches by the leader (the lane decoder is given) ← k_lanes, k_vrf, k_mask
 - ✅ `k_stack`: the reconvergence stack (four entries; a sequence against `StackModel`) ← k_simd
 - ✅ `k_simt`: the SIMT core: split / join ← k_simd, k_stack
-- ✅ kernel puzzles `p_saxpy` ← k_simd and `p_reduce` ← k_simt, on the lane golden model, graded on cycles and idle
-  lanes (100 % − lane utilization)
+- ✅ kernel puzzles `p_saxpy` ← k_simd and `p_reduce` ← k_simt, on the lane golden model, graded on cycles and lane-ops (idle lanes until 2026-10-25: it rewarded a combine run on every lane)
+  (idle lanes, 100 % − lane utilization, still reported)
 - ✅ `k_coal`: the coalescer: the leader's line (address bits 15 … 2), the lanes served, the lanes left (a table) ← k_simd
 - ✅ `k_warps`: two warps taking turns every cycle over a data memory one cycle late; a second register write port for
   the returning loads; `bar` ← k_simt, k_coal
 - ✅ kernel puzzle `p_hist` ← k_warps: 16 bins, 8 threads on two warps, no atomics (private counters, a bar, a combine);
   each test also runs with warp 1 ahead, so a kernel missing its bar fails
-- ✅ `k_edge` ← k_simd: one edge function stepped with one adder (E and the band start R; load, right, skip, down, up,
+- ✅ `k_edge` ← k_lesson: one edge function stepped with one adder (E and the band start R; load, right, skip, down, up,
   band, double), 963 NANDs; a sequence against `Edge16`
 - ✅ `k_tile` ← k_edge: the tile walk over 4 × 4 tiles in bands, a TEST cycle per tile, a column serpentine, the
   steppers' commands, 479 NANDs; a sequence against `Walk16`
@@ -416,10 +422,10 @@ writes and stores belong to the warp issuing now, load-port writes to the warp t
 thread's events are compared in order with `Warps16` (riscv/rv16/warps16.ts: the warps taking turns, warp 0 first).
 
 ### Act 10 — Memory (roadmap Phase 16e)
-Optional as a whole, after `y_final`, like act 9 (decided 2026-10-16 with the Phase 16 mockup; details 2026-10-17).
+Optional as a whole, after `c_computer` (since 2026-10-25; it was `y_final`), like act 9 (decided 2026-10-16 with the Phase 16 mockup; details 2026-10-17).
 The devices a level drives are on its bench (`memcheck.ts`), JS models that know their rules and name the first one
 broken, rather than given parts that read X. References: `src/lib/rv16/mem16.ts`, from campaign parts only.
-- ✅ `m_lesson`: where the cycles go (DRAM cells, the row buffer, refresh) ← y_final
+- ✅ `m_lesson`: where the cycles go (DRAM cells, the row buffer, refresh) ← c_computer
 - ✅ `m_sense`: a DRAM column of two cells at switch level ← m_lesson. Given: the cells, a bit line capacitance part
   (`blcap`, 100 fF: a sandbox wire has no capacitance value), the sense amplifier, VDD/2, the write driver; the
   learner adds precharge and equalize and wires the twin lines. The amplifier stays a primitive: SwitchSim reads a
@@ -432,6 +438,8 @@ broken, rather than given parts that read X. References: `src/lib/rv16/mem16.ts`
 - ✅ `m_ctrl`: a two-bank DRAM chip on the bench (64 rows of 16 words per bank, chapter 36's command encoding):
   tRCD / tCAS / tRP 4, tRAS 9, tRFC 12, a REF at least every 256 cycles; one word per command, a write's data with
   its WR ← m_bank. 779 NANDs, period 36, 10 690 cycles
+- ✅ *act 10* `o_cache`: direct-mapped cache, 8 one-word lines, write-through; on a hit the bench serves junk for memory;
+  its bench answers a miss in the same cycle, so it grades the cache's own cost ← m_ctrl
 - ✅ `m_bus`: two masters, three slaves (0 below 0x8000, 1 from 0x8000 with 2 wait states, 2 from 0xC000 with 1),
   valid / ready on both sides, round robin with the grant held through a transfer ← m_lesson. A sequence from a
   model of the bus and the bench (`busSeq`), including a master asking while the other waits on the slow slave;
@@ -452,7 +460,9 @@ broken, rather than given parts that read X. References: `src/lib/rv16/mem16.ts`
   (waiting for the interrupt first: 316; loading from flash: 442)
 
 ### Act 8 — Side quests (all optional)
-- ✅ `o_mulseq`: shift-and-add multiplier ← a_add16, s_reg16
+Drawn as two labelled rows (layout.ts `ACT_ROWS`: Multiply & divide · Floating point); act 9 as three (Lanes · Warps · Pixels).
+- ✅ `o_lesson`: Area or time, the act's frame (numbers pinned in tests/campaign-order.test.ts) ← c_core3
+- ✅ `o_mulseq`: shift-and-add multiplier ← a_add16, s_reg16, p_mul
 - ✅ `o_mularr`: 8 × 8 array multiplier ← a_add16
 - ✅ `o_mcore`: the MD opcode's multiplies in your core (a 16 × 16 array is given; signed high halves by correction) ← c_core3, o_mularr
 - ✅ `o_div`: sequential divider ← a_addsub16, s_fsm
@@ -466,8 +476,7 @@ broken, rather than given parts that read X. References: `src/lib/rv16/mem16.ts`
   `o_fpnorm` (normalize & round: binary16 from a 15-bit significand, exponent and sticky bit, flags) ← o_fpround, o_fpsticky, o_fplzc
 - ✅ `o_fpadd`, `o_fpmul`: binary16 adder and multiplier, all five rounding modes, from the rungs above (only generic parts and the 11 × 11 significand multiplier given) ← o_fpunpack, o_fpnorm / o_fpadd, o_mularr
 - ✅ `o_fpcmp` (feq / flt / fle, unordered, signaling) ← o_fpunpack; `o_fpcvt` (16-bit integer → binary16) ← o_fpnorm
-- ✅ `o_cache`: direct-mapped cache, 8 one-word lines, write-through; on a hit the bench serves junk for memory ← m_mem, g_eq16
-- ✅ `o_mc`: multicycle CPU (one-hot FSM: F, E, M, W) ← c_core3, s_fsm
+- (`o_cache` moved to act 10, `o_mc` to act 6 on 2026-10-25.)
 
 ---
 
@@ -699,3 +708,30 @@ per flip-flop, 15 per enable flip-flop). The levels now unlock campaign cells at
 116 610 NAND delays against Core III's 1 236 × 98 = 121 128: about 4 % faster (before, at period 82, it was 1 %
 slower). Its CPI of 1.2 still eats most of the period's 20 % gain; prediction (its own test set) and earlier branch
 resolution are what make it pay more. The guided chapters measure the RV32 cores and are unaffected.
+
+## 10. Order changes (2026-10-25)
+
+From the campaign audit (the moderate reorder the author chose). Level ids are unchanged, so progress (keyed by id)
+carries over; what a learner already solved stays solved.
+
+- **Prerequisites** follow what each level uses: the shifter needs two's complement, OR / mux Boolean algebra, the
+  decoder and the table level Binary and hex (moved to act 1, which uses it first), the control unit `g_sop`, the
+  shift-and-add multiplier the software multiply, act 7 `c_computer`, the finale `p_handler`; the hazard unit opens
+  after Pipeline II, the card loader after the flip-flop, the 4-bit counter after the incrementer; the ALU no longer
+  waits for `a_slt`. Acts 9 and 10 open after Core III and A computer instead of the finale; the edge stepper needs
+  only the GPU lesson.
+- **Core IV: the critical path** (`c_fast`, with `o_fastadd`) is required, and the pipeline lesson starts from it.
+  Measured and said: Pipeline IV with ripple adders (period 78, 1 495 cycles) is slower than Core IV (76, 1 236);
+  with Kogge–Stone adders in E (`rv16Pipe({ fast })`: ALU, branch comparator, next PC) it runs at 56, 11 % faster
+  for twice the NANDs.
+- **The finale is split**: `y_ptrap` Pipeline V: exceptions (precise traps, valid bit, CSRs in E, no interrupts),
+  then `y_final` Finale: interrupts (7 NANDs more). Running the learner's own handler program on the finale was not
+  cheap (the core bench has no IN device or timed irq), so the finale only requires `p_handler`.
+- **Moves**: the multicycle core to act 6 (optional, its why the argument for pipelining); the cache to act 10 after
+  the row-buffer controller (optional; its bench still answers a miss in the same cycle, said in its why).
+- **Act 8** gets a lesson (`o_lesson`, Area or time), a blurb that matches what it holds, and two labelled rows on
+  the map; act 9 three (layout.ts `ACT_ROWS`).
+
+**A finished campaign has new required levels**: `o_fastadd`, `c_fast` (if they were skipped as side quests) and
+`y_ptrap` now count among the 67 required levels, so a learner who had finished every required level sees those
+open (or locked behind nothing: their requirements are done) and the finale still solved.

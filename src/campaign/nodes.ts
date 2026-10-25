@@ -39,9 +39,9 @@ export const ACTS: Act[] = [
   { num: 5, title: 'A single-cycle CPU', blurb: 'Wire your blocks into a datapath, add the control that tells them what to do, and run your own programs on your own processor.' },
   { num: 6, title: 'Pipelining', blurb: 'Five instructions in flight at once: a shorter clock period, and the hazards that come with it. Forwarding, stalls and flushes keep it correct.' },
   { num: 7, title: 'The system: traps and interrupts', blurb: 'A real processor reacts to the outside world and to its own mistakes. CSRs, exceptions and interrupts, precise even in the pipeline: the finale.' },
-  { num: 8, title: 'Side quests', blurb: 'Optional: faster adders, multipliers and dividers, floating point, caches, microcode. Each one is a trade of area for time.' },
-  { num: 9, title: 'Throughput: a GPU', blurb: 'Optional, after the finale: the same bricks arranged for throughput instead of latency: one instruction stream, four lanes, each with its own registers. Then the hard part: what the lanes do when they disagree.' },
-  { num: 10, title: 'Memory', blurb: 'Optional, after the finale: what sits behind the data port. Charge on a bit line, a row buffer that leaks, a controller that keeps a chip\'s timings and refreshes it.' },
+  { num: 8, title: 'Side quests', blurb: 'Optional: multiply and divide, and floating point. Each trades area or cycles against your core\'s NANDs, period and cycles, and each level measures which way the trade went.' },
+  { num: 9, title: 'Throughput: a GPU', blurb: 'Optional, from Core III on: the same bricks arranged for throughput instead of latency: one instruction stream, four lanes, each with its own registers. Then the hard part: what the lanes do when they disagree.' },
+  { num: 10, title: 'Memory', blurb: 'Optional, from A computer on: what sits behind the data port. Charge on a bit line, a row buffer that leaks, a controller that keeps a chip\'s timings and refreshes it.' },
 ];
 
 /** An act's name as the map and the crumbs show it: "Act 3", or its own label ("Act P"). */
@@ -137,9 +137,9 @@ export const NODES: CampaignNode[] = [
     chapters: [{ chapter: 'cards', step: 2, label: 'Eighty columns' }],
   },
   {
-    id: 'h_loader', act: 11, title: 'Program on cards', kind: 'build', optional: true, requires: ['h_card', 'r_clock'], base: BUILDCARD.h_loader,
+    id: 'h_loader', act: 11, title: 'Program on cards', kind: 'build', optional: true, requires: ['h_card', 'r_clock', 's_dff'], base: BUILDCARD.h_loader,
     par: { relays: 233, cycles: 182 }, gives: ['not', 'and', 'or', 'dff', 'counter8', 'mux2x8', 'cpu4_proc', 'ram256x16'],
-    why: 'A computer with an empty memory and a deck in the reader. Build the loader: a counter that addresses the memory, a write for each card, and the switch that hands memory to the 4-bit CPU once the hopper is empty. The Z3 read its program off punched film the same way, and the loader is priced as the Z3 was built: in relays.',
+    why: 'A computer with an empty memory and a deck in the reader. Build the loader: a counter that addresses the memory, a write for each card, and the switch that hands memory to the 4-bit CPU once the hopper is empty. The Z3 never did this: it ran its film as it read it. A stored-program machine copies the deck into memory first: that copy is a loader. It is priced as the Z3 was built: in relays.',
     tips: [
       'Tie the reader\'s next to 1: it takes a card at every rising edge one waits. Then ready is the write enable: the card\'s word goes into the RAM word the counter addresses, and the counter (enabled by ready) moves on at the same edge.',
       'The RAM\'s address is a 2:1 mux on run: the counter while loading, the CPU\'s pc after. Tie test and sw to 0.',
@@ -155,7 +155,13 @@ export const NODES: CampaignNode[] = [
     id: 'l_bool', act: 1, title: 'Boolean algebra', kind: 'drill', requires: ['intro'],
     why: 'Circuits are equations. Algebra lets you transform one circuit into a cheaper equivalent before you build it: fewer gates, shorter paths. This is how every par in the campaign is reached.',
     body: 'bool', tips: [], codex: ['identities', 'demorgan', 'bubble', 'sop', 'truthtable'],
-    chapters: [{ chapter: 'gates', label: 'Gates from NAND' }], drill: 'boolean' },
+    chapters: [{ chapter: 'gates', label: 'Gates from NAND' }], drill: 'boolean', par: { mistakes: 2 } },
+  {
+    id: 'n_bin', act: 1, title: 'Binary and hex', kind: 'drill', requires: ['intro'], drill: 'binary', par: { mistakes: 2 },
+    why: 'Every value inside the machine is a pattern of bits; the meaning is a convention. Read and write unsigned binary and hexadecimal fluently: the rest of the campaign speaks them.',
+    tips: ['Each hex digit is exactly four bits.', 'Bit k weighs 2^k.'],
+    codex: ['positional', 'hex'], chapters: [{ chapter: 'binary', label: 'Binary numbers' }],
+  },
   {
     id: 'g_not', act: 1, title: 'NOT from NAND', kind: 'build', requires: ['t_nand'], base: sandbox('g_not'),
     why: 'Every control signal has a complement somewhere: the mux select, the subtract line, active-low resets. NOT is a NAND with its inputs tied.',
@@ -168,7 +174,7 @@ export const NODES: CampaignNode[] = [
     tips: ['AND = NOT(NAND).'], codex: ['and'], unlocks: ['and'], par: { nand: 2, depth: 2 },
   },
   {
-    id: 'g_or', act: 1, title: 'OR from NAND', kind: 'build', requires: ['g_not'], base: sandbox('g_or'),
+    id: 'g_or', act: 1, title: 'OR from NAND', kind: 'build', requires: ['g_not', 'l_bool'], base: sandbox('g_or'),
     why: 'OR merges conditions: "take the branch if beq-and-equal OR bne-and-unequal", "the result is zero unless any bit is 1". De Morgan turns it into NANDs.',
     tips: ['a + b = ¬(¬a · ¬b).', 'Invert both inputs (two NANDs as NOTs), then one NAND.'],
     codex: ['or', 'demorgan'], unlocks: ['or'], par: { nand: 3, depth: 2 },
@@ -180,7 +186,7 @@ export const NODES: CampaignNode[] = [
     codex: ['xor'], unlocks: ['xor', 'xnor'], par: { nand: 4, depth: 3 },
   },
   {
-    id: 'g_mux', act: 1, title: '2:1 multiplexer', kind: 'build', requires: ['g_not'], base: sandbox('g_mux'),
+    id: 'g_mux', act: 1, title: '2:1 multiplexer', kind: 'build', requires: ['g_not', 'l_bool'], base: sandbox('g_mux'),
     why: 'A multiplexer is a switch for data: the ALU\'s second operand is a register or an immediate, the PC is PC + 1 or a branch target, the written value is the ALU result or a loaded word. Wherever two paths meet, there is a mux.',
     tips: ['y = s·b + ¬s·a: a sum of products.', 'Sum of products → NAND–NAND: ¬(¬(s·b) · ¬(¬s·a)).'],
     codex: ['mux', 'sop'], unlocks: ['mux2'], par: { nand: 4, depth: 3 },
@@ -192,17 +198,17 @@ export const NODES: CampaignNode[] = [
     codex: ['kmap', 'qm', 'dontcare'],
   },
   {
-    id: 'g_sop', act: 1, title: 'A function from its table', kind: 'build', requires: ['d_kmap', 'g_and', 'g_or'],
+    id: 'g_sop', act: 1, title: 'Prime detector', kind: 'build', requires: ['d_kmap', 'g_and', 'g_or', 'n_bin'],
     why: 'The control unit is specified as a table (opcode → signals) and built as logic. Practise the method on one function: K-map, sum of products, NAND–NAND.',
-    tips: ['Minimise first: every literal saved is a gate input saved.', 'An SoP maps one-to-one onto two levels of NANDs: 20 here. Par is less than half that.', 'Compare the map\'s two halves (a3 = 0, a3 = 1): one is a function you have built, the other almost the same.'],
+    tips: ['Minimise first: every literal saved is a gate input saved.', 'An SoP maps one-to-one onto NAND–NAND: 20 NANDs here, depth 7 (the 3-literal products and the 4-input OR are built from 2-input gates). Par is less than half that.', 'Compare the map\'s two halves (a3 = 0, a3 = 1): one is a function you have built, the other almost the same.'],
     unlocks: ['rv16_prime4'], codex: ['sop', 'nandnand'], base: BUILD1.g_sop, par: { nand: 8, depth: 5 } },
   {
-    id: 'g_wide', act: 1, title: 'Wide gates', kind: 'build', requires: ['g_and', 'g_or'],
-    why: 'The equality test behind beq and bne asks "is a ⊕ b zero?": a 16-input NOR. A chain of 2-input gates is 15 deep; a tree is 4. Depth, not gate count, sets the clock.',
+    id: 'g_wide', act: 1, title: 'Zero detect', kind: 'build', requires: ['g_and', 'g_or'],
+    why: 'The equality test behind beq and bne asks "is a ⊕ b zero?": a 16-input NOR. A chain of 2-input ORs is 15 gates deep, 31 NAND delays with the NOT; a balanced tree is 4 gates, 9 delays. Depth, not gate count, sets the clock.',
     tips: ['Balance the tree: pairs, then pairs of pairs.', 'The chain and the tree cost the same NANDs: only the depth differs.'],
     codex: ['fanin', 'depth', 'bubble'], unlocks: ['rv16_wide16', 'and3', 'and4', 'and8', 'or3', 'or4', 'or8', 'or16', 'zero*', 'andx*', 'orx*', 'xorx*'], base: BUILD1.g_wide, par: { nand: 46, depth: 9 } },
   {
-    id: 'g_dec', act: 1, title: '3→8 decoder', kind: 'build', requires: ['g_wide'],
+    id: 'g_dec', act: 1, title: '3→8 decoder', kind: 'build', requires: ['g_wide', 'n_bin'],
     why: 'Eight registers, one write port: a decoder turns the 3-bit register number into eight enable lines, only one of them 1. Decoders also select memory words and MMIO devices.',
     tips: ['Output k is the AND of the address bits or their complements matching k, and of the enable.', 'Eight 4-input ANDs cost 51. Decode two inputs at a time first: each partial line then serves several outputs.'],
     codex: ['decoder'], unlocks: ['rv16_dec3', 'dec*'], base: BUILD1.g_dec, par: { nand: 30, depth: 5 } },
@@ -218,12 +224,6 @@ export const NODES: CampaignNode[] = [
     codex: ['comparator'], unlocks: ['rv16_eq16', 'eq*'], base: BUILD1.g_eq16, par: { nand: 110, depth: 12 } },
 
   // ---- Act 2 --------------------------------------------------------------------------------
-  {
-    id: 'n_bin', act: 2, title: 'Binary and hex', kind: 'drill', requires: ['intro'], drill: 'binary', par: { mistakes: 2 },
-    why: 'Every value inside the machine is a pattern of bits; the meaning is a convention. Read and write unsigned binary and hexadecimal fluently: the rest of the campaign speaks them.',
-    tips: ['Each hex digit is exactly four bits.', 'Bit k weighs 2^k.'],
-    codex: ['positional', 'hex'], chapters: [{ chapter: 'binary', label: 'Binary numbers' }],
-  },
   {
     id: 'n_twos', act: 2, title: "Two's complement", kind: 'drill', requires: ['n_bin'], drill: 'twos', par: { mistakes: 2 },
     why: 'Negative numbers without a sign bit circuit: in two\'s complement the top bit weighs −2^(n−1), so the same adder adds signed and unsigned numbers. Only comparison and overflow differ.',
@@ -270,18 +270,18 @@ export const NODES: CampaignNode[] = [
     tips: ['Unsigned: a < b ⇔ no carry out of a + ¬b + 1. Only the carry is read, so ¬b needs 16 NOTs, not the subtractor\'s XORs.', 'Signed: if the signs differ, a < b ⇔ a is negative; if they agree the difference cannot overflow and the unsigned answer holds. (N ⊕ V also works, at the subtractor\'s price.)'],
     unlocks: ['rv16_cmp16'], codex: ['flags', 'overflow'], base: BUILD1.a_slt, par: { nand: 169, depth: 39 } },
   {
-    id: 'a_shift16', act: 2, title: 'Barrel shifter', kind: 'build', requires: ['g_mux8', 'g_and'],
+    id: 'a_shift16', act: 2, title: 'Barrel shifter', kind: 'build', requires: ['g_mux8', 'g_and', 'n_twos'],
     why: 'sll / srl / sra by any amount in one cycle: four levels of muxes, shifting by 1, 2, 4 and 8.',
     tips: ['Level k shifts by 2^k when shamt bit k is 1.', 'Arithmetic right shift fills with the sign bit instead of 0.'],
     codex: ['shifter'], unlocks: ['rv16_shift16'], base: BUILD1.a_shift16, par: { nand: 299, depth: 14 } },
   {
-    id: 'a_alu16', act: 2, title: 'The ALU', kind: 'build', requires: ['a_addsub16', 'a_slt', 'a_shift16', 'g_wide'],
+    id: 'a_alu16', act: 2, title: 'The ALU', kind: 'build', requires: ['a_addsub16', 'a_shift16', 'g_wide'],
     why: 'The execute stage: ten operations selected by a 4-bit control word from the instruction\'s op and f3 fields. Every arithmetic and logic instruction and every load / store address goes through it; branches compare in their own unit.',
     tips: ['Compute everything in parallel, select one result with a mux tree.', 'Share the one adder between add, sub and the comparisons.'],
     codex: ['alu'], unlocks: ['rv16_alu16'], anatomy: ['alu'], chapters: [{ chapter: 'alu', label: 'The ALU' }], base: BUILD1.a_alu16, par: { nand: 1055, depth: 64 } },
   {
-    id: 'o_fastadd', act: 2, title: 'Fast adders', kind: 'build', optional: true, requires: ['a_add16'],
-    why: 'The ripple adder\'s carry chain is the CPU\'s critical path. Computing carries with a prefix tree takes log2(n) levels: more gates, a faster clock.',
+    id: 'o_fastadd', act: 2, title: 'Fast adders', kind: 'build', requires: ['a_add16'],
+    why: 'The ripple adder\'s carry chain will be the CPU\'s critical path (Core IV, at the end of Act 5, comes back for it). Computing carries with a prefix tree takes log2(n) levels: more gates, a faster clock.',
     tips: ['Generate g = a·b, propagate p = a ⊕ b; (g, p) pairs combine associatively.', 'Kogge–Stone: log2(16) = 4 levels of combining.'],
     codex: ['cla', 'prefix', 'carryselect'], unlocks: ['ks16', 'cla4', 'rv16_alu16ks', 'rv16_nextpc_ks'], chapters: [{ chapter: 'fastadd', label: 'Faster adders' }], base: BUILD1.o_fastadd, par: { nand: 362, depth: 14 }, gives: ['gp', 'graycell', 'blackcell'] },
 
@@ -317,16 +317,16 @@ export const NODES: CampaignNode[] = [
     tips: ['Four of your 4-bit registers sharing clk and en.'],
     codex: ['register'], unlocks: ['rv16_reg16', 'rv16_dreg16'], base: BUILD1.s_reg16, par: { nand: 208, period: 8 } },
   {
-    id: 's_cnt4', act: 3, title: '4-bit counter', kind: 'build', optional: true, requires: ['s_reg4'], base: sandbox('s_cnt4'),
+    id: 's_cnt4', act: 3, title: '4-bit counter', kind: 'build', optional: true, requires: ['s_reg4', 'a_inc16'], base: sandbox('s_cnt4'),
     why: 'A register plus an incrementer: the program counter in miniature, and every timer.',
-    tips: ['q ← rst ? 0 : q + 1 when en.'], codex: ['counter'], unlocks: ['counter4'],
+    tips: ['q ← rst ? 0 : q + 1 when en.'], codex: ['counter'], unlocks: ['counter4'], par: { nand: 79, period: 17 },
     chapters: [{ chapter: 'registers', label: 'Registers & counters' }],
   },
   {
     id: 's_pc', act: 3, title: 'Program counter', kind: 'build', requires: ['s_reg16', 'a_inc16', 'g_mux8'],
     why: 'The PC holds the address of the instruction being executed. Each cycle it becomes pc + 1, or a jump target; on reset, 0.',
-    tips: ['A 16-bit register without enable (the PC loads every cycle), an incrementer and two bus muxes (load, reset).'],
-    unlocks: ['rv16_pc'], codex: ['pc'], anatomy: ['pc', 'plus1'], base: BUILD1.s_pc, par: { nand: 318, period: 41 } },
+    tips: ['A 16-bit register without enable (the PC loads every cycle), an incrementer and a bus mux for the load.', 'Reset only ever selects 0: an AND per bit with ¬rst does it for less than a second bus mux.'],
+    unlocks: ['rv16_pc'], codex: ['pc'], anatomy: ['pc', 'plus1'], base: BUILD1.s_pc, par: { nand: 302, period: 41 } },
   {
     id: 's_fsm', act: 3, title: 'A state machine', kind: 'build', optional: true, requires: ['s_dff', 'd_kmap'],
     why: 'Multi-cycle units (a divider, a cache miss, microcode) are run by finite-state machines: state register + next-state logic from a table.',
@@ -336,13 +336,13 @@ export const NODES: CampaignNode[] = [
     id: 'm_ram', act: 3, title: '4 × 4 RAM', kind: 'build', optional: true, requires: ['s_reg4', 'g_dec', 'g_mux8'], base: sandbox('m_ram'),
     why: 'Memory is registers plus addressing: a decoder picks the word to write, a mux picks the word to read.',
     tips: ['Each word: a register whose en = we AND decoder output.'],
-    codex: ['ram', 'sram'], unlocks: ['ram4x4'], chapters: [{ chapter: 'memory', label: 'Memory arrays' }],
+    codex: ['ram', 'sram'], unlocks: ['ram4x4'], par: { nand: 274, period: 11 }, chapters: [{ chapter: 'memory', label: 'Memory arrays' }],
   },
   {
     id: 'm_rf', act: 3, title: 'Register file', kind: 'build', requires: ['s_reg16', 'g_dec', 'g_mux8'],
     why: 'Eight 16-bit registers, two read ports (rs1, rs2) and one write port (rd): an R-type instruction reads two and writes one in the same cycle. x0 always reads 0.',
     tips: ['Write: decoder on wa, ANDed with we, enables one register.', 'Read: two 8:1 bus muxes. x0 needs no register at all.'],
-    codex: ['regfile'], unlocks: ['rv16_rf', 'regfile8x16'], anatomy: ['rf'], chapters: [{ chapter: 'regfile', label: 'The register file' }], base: BUILD1.m_rf, par: { nand: 2172, period: 11 } },
+    codex: ['regfile'], unlocks: ['rv16_rf'], anatomy: ['rf'], chapters: [{ chapter: 'regfile', label: 'The register file' }], base: BUILD1.m_rf, par: { nand: 2172, period: 11 } },
   {
     id: 'm_mem', act: 3, title: 'ROM and RAM', kind: 'lesson', requires: ['m_rf'],
     why: 'Programs live in ROM, data in RAM. Building memory from flip-flops is what you just did; real memories are dense arrays (SRAM, DRAM). From here on, memories are given.',
@@ -416,7 +416,7 @@ export const NODES: CampaignNode[] = [
     codex: ['immediates', 'signext'], unlocks: ['rv16_imm'], anatomy: ['imm'],
   },
   {
-    id: 'c_ctl', act: 5, title: 'Control unit', kind: 'build', requires: ['i_enc', 'g_dec', 'd_kmap'], base: BUILD5.c_ctl, par: { nand: 200, depth: 13 },
+    id: 'c_ctl', act: 5, title: 'Control unit', kind: 'build', requires: ['i_enc', 'g_dec', 'd_kmap', 'g_sop'], base: BUILD5.c_ctl, par: { nand: 200, depth: 13 },
     why: 'The datapath has muxes and enables; something must set them for each instruction. The control unit is a table (opcode → signals) turned into logic: decode the opcode, then each signal is an OR of the opcodes that need it.',
     tips: ['A 4→16 decoder on op gives one line per opcode.', 'rwe: OP, OPX, ADDI, SHI, LW, LUI (op 7 and 15), JAL, JALR.', 'Don\'t-cares (signals an instruction ignores) are free: choose whatever makes the logic smaller.'],
     codex: ['control', 'dontcare'], unlocks: ['rv16_ctl'], anatomy: ['ctl'],
@@ -458,16 +458,22 @@ export const NODES: CampaignNode[] = [
     codex: ['mmio', 'harvard'], anatomy: ['mmio'],
   },
   {
-    id: 'c_fast', act: 5, title: 'A faster core', kind: 'core', optional: true, requires: ['c_core3', 'o_fastadd'], base: BUILD5.c_fast, par: { period: 76, cycles: 1236 },
-    why: 'Same instructions, shorter clock period: the critical path runs through the adders. Static timing finds it; fast adders shorten it.',
-    tips: ['The Timing panel shows the critical path through your core.', 'Swap the ripple adders on that path for the unlocked Kogge–Stone ALU and adders.'],
+    id: 'c_fast', act: 5, title: 'Core IV: the critical path', kind: 'core', requires: ['c_core3', 'o_fastadd'], base: BUILD5.c_fast, par: { period: 76, cycles: 1236 },
+    why: 'Core III\'s clock period is 98 NAND delays, and 50 of them are the ripple ALU: every instruction waits for a carry to cross 16 bits, the ones that never add included. Static timing names that path; the fast adders you built shorten it. Swap only what lies on it: the same 1 236 cycles, a shorter cycle.',
+    tips: ['The Timing panel shows the critical path through your core.', 'Swap the ripple adders on that path for the unlocked Kogge–Stone ALU and adders.', 'After the swap, look again: the path has moved. A fast adder that is now off it costs NANDs and buys no delay.'],
     codex: ['criticalpath', 'cla', 'skew'],
   },
 
   // ---- Act 6 --------------------------------------------------------------------------------
   {
-    id: 'pi_lesson', act: 6, title: 'Pipelining', kind: 'lesson', requires: ['c_core3'], body: 'pipe',
-    why: 'Cut the datapath into five stages with registers: five instructions in flight, and a clock period set by the slowest stage instead of the whole path.',
+    id: 'o_mc', act: 6, title: 'Multicycle CPU', kind: 'core', optional: true, requires: ['c_core3'], base: BUILD9.o_mc, par: { nand: 5203, period: 76, cycles: 3865 },
+    why: 'A multicycle core runs each instruction as 3 or 4 short steps under a state machine. In the 1960s–80s that let one ALU and one memory serve every step, saving hardware a single-cycle core duplicates. Here the memories stay separate, so it saves nothing: two registers cut the long path (period 98 → 76), and each instruction takes 3 or 4 cycles. Measure period × cycles against Core III. It is why pipelines replaced this design: cut the path the same way, but keep every step busy.',
+    tips: ['One-hot states (a flip-flop each): F → E → M → W → F, skipping M unless the instruction loads or stores; reset → F.', 'The instruction register loads in F; everything after decodes from it, not from instr.', 'Registers cut the long path: the ALU result is registered at the end of E, and memory reads it in M.', 'Write rd and load the PC only in W; stores only in M.'],
+    codex: ['multicycle', 'fsm', 'microcode', 'cpi'], chapters: [{ chapter: 'multicycle', label: 'Multicycle & microcode' }],
+  },
+  {
+    id: 'pi_lesson', act: 6, title: 'Pipelining', kind: 'lesson', requires: ['c_fast'], body: 'pipe',
+    why: 'Core IV runs at 76 delays a cycle, and the adders are no longer the whole problem: the cycle must fit a whole load, instruction ROM → decode → ALU → data RAM → result mux → register file, one after the other. Put registers between those steps and each cycle only has to fit one of them, with five instructions in flight. The price is hazards: an instruction needs a value its predecessor has not written yet, and a branch is decided after two more instructions were fetched. This act builds the pipeline, then forwarding, the load-use stall and the flush. Expect it to lose at first: the 28 Core III programs take 1 495 cycles instead of 1 236, and with ripple adders E alone (forwarding, then the ALU) is 78 delays. Kogge–Stone adders in E win it back: period 56, 83 720 NAND delays against Core IV\'s 93 936.',
     tips: [], codex: ['pipeline', 'hazards'], chapters: [{ chapter: 'pipeline', label: 'Pipelining' }],
   },
   {
@@ -494,10 +500,10 @@ export const NODES: CampaignNode[] = [
     codex: ['forwarding'],
   },
   {
-    id: 'pi_haz', act: 6, title: 'Hazard unit', kind: 'build', requires: ['g_eq16', 'pi_lesson'], base: BUILD6.pi_haz, par: { nand: 53, depth: 12 },
+    id: 'pi_haz', act: 6, title: 'Hazard unit', kind: 'build', requires: ['g_eq16', 'pi_core1'], base: BUILD6.pi_haz, par: { nand: 53, depth: 12 },
     why: 'A load\'s value only exists after M. If the very next instruction needs it, no forwarding can help: hold it one cycle.',
     tips: ['A load in E: rwe and wb = memory.', 'Being conservative is allowed (a stall too many only costs a cycle).'],
-    codex: ['loaduse'], unlocks: ['rv16_haz'], anatomy: ['haz'],
+    codex: ['loaduse', 'scoreboard'], unlocks: ['rv16_haz'], anatomy: ['haz'],
   },
   {
     id: 'pi_core2', act: 6, title: 'Pipeline III: load-use', kind: 'core', requires: ['pi_core1', 'pi_haz'], base: BUILD6.pi_core2, par: { nand: 7531, period: 78, cycles: 917 },
@@ -519,7 +525,7 @@ export const NODES: CampaignNode[] = [
 
   // ---- Act 7 --------------------------------------------------------------------------------
   {
-    id: 'y_lesson', act: 7, title: 'Traps and interrupts', kind: 'lesson', requires: ['c_core3'], body: 'traps',
+    id: 'y_lesson', act: 7, title: 'Traps and interrupts', kind: 'lesson', requires: ['c_core3', 'c_computer'], body: 'traps',
     why: 'When the program errs or the world calls, the CPU must stop, save where it was, and jump to a handler.',
     tips: [], codex: ['traps', 'csr'], chapters: [{ chapter: 'traps', label: 'Traps and interrupts' }],
   },
@@ -548,16 +554,27 @@ export const NODES: CampaignNode[] = [
     codex: ['interrupts', 'traps'],
   },
   {
-    id: 'y_final', act: 7, title: 'Finale: the complete RV16', kind: 'core', requires: ['pi_core3', 'y_irq'], base: BUILD7.y_final, par: { nand: 12038, period: 81, cycles: 2399 },
-    why: 'The pipelined processor with precise traps and interrupts: every block you built, from the NAND up, in one chip that runs real programs, handles its own errors and answers the outside world.',
+    id: 'y_ptrap', act: 7, title: 'Pipeline V: exceptions', kind: 'core', requires: ['pi_core3', 'y_trap'], base: BUILD7.y_ptrap, par: { nand: 12031, period: 81, cycles: 2361 },
+    why: 'In the single-cycle core a trap was easy: one instruction at a time, so the trapping one was the only one. The pipeline has five in flight. A precise trap lets every older instruction finish, cancels every younger one, and leaves the culprit\'s address in mepc, so the handler can return to it. Take traps in E, where the instruction has changed nothing yet.',
     tips: ['Take traps in E: older instructions in M and W still complete, younger ones in F and D are flushed.', 'Carry a valid bit: a bubble\'s all-zero word would otherwise look like an illegal instruction.', 'A CSR instruction reads and writes in E; its old value travels down as the result.'],
-    codex: ['precise'],
+    codex: ['precise', 'flush'],
+  },
+  {
+    id: 'y_final', act: 7, title: 'Finale: interrupts', kind: 'core', requires: ['y_ptrap', 'y_irq', 'p_handler'], base: BUILD7.y_final, par: { nand: 12038, period: 81, cycles: 2399 },
+    why: 'The last piece is the outside world. Pipeline V already takes exceptions precisely in E; an interrupt is one more reason to trap there, taken only when enabled. Then every block you built, from the NAND up, is one chip that runs real programs, handles its own errors and answers a device: the machine your interrupt handler was written for.',
+    tips: ['intr = MIE · MEIE · irq comes from the CSR file: wire the pin in and OR the interrupt into the trap.', 'Gate the interrupt with the valid bit too: a bubble in E has no pc of its own (its D/E slot was cleared), so mepc would name an address the program never was at.', 'mcause for the interrupt is 0x800B (bit 15, external cause 11): it wins over every exception.'],
+    codex: ['interrupts'],
   },
 
   // ---- Act 8 --------------------------------------------------------------------------------
   {
-    id: 'o_mulseq', act: 8, title: 'Shift-and-add multiplier', kind: 'build', optional: true, requires: ['a_add16', 's_reg16'], base: BUILD8.o_mulseq, givesOf: partsOf(() => seqMul(16)), par: { nand: 1169, period: 48 },
-    why: 'Software multiplication (Act 4) in hardware: one adder reused once per clock. Small; sixteen times as many cycles as an array, about 5.5 times the time (its clock is shorter).',
+    id: 'o_lesson', act: 8, title: 'Area or time', kind: 'lesson', optional: true, requires: ['c_core3'], body: 'arith',
+    why: 'Your core adds, shifts and compares in one cycle, and has no multiply, divide or floating point. Each of those can be built for area or for time, and each choice shows up in the numbers your core is graded on: NANDs, period and cycles.',
+    tips: [], codex: ['mext', 'ieee754'], chapters: [{ chapter: 'muldiv', label: 'Multiply & divide' }, { chapter: 'float', label: 'Floating point' }],
+  },
+  {
+    id: 'o_mulseq', act: 8, title: 'Shift-and-add multiplier', kind: 'build', optional: true, requires: ['a_add16', 's_reg16', 'p_mul'], base: BUILD8.o_mulseq, givesOf: partsOf(() => seqMul(16)), par: { nand: 1169, period: 48 },
+    why: 'Software multiplication (Act 4) in hardware: one adder reused once per clock. 18 cycles of a 48-delay clock against one 150-deep pass: about 5.8 times the time, on less than half the NANDs (1 169 against 2 672).',
     tips: ['The product register starts as {0, b}; each step adds a to its upper half if its lowest bit is 1, then shifts everything right.'],
     codex: ['shiftadd'], chapters: [{ chapter: 'muldiv', label: 'Multiply & divide' }],
   },
@@ -643,28 +660,16 @@ export const NODES: CampaignNode[] = [
     tips: ['|x| = signed and x < 0 ? −x : x (a conditional negate).', 'The integer\'s top bit weighs 2^15: the exponent you hand normalize & round is 15 + bias.'],
     codex: ['normalize'],
   },
-  {
-    id: 'o_cache', act: 8, title: 'A cache', kind: 'build', optional: true, requires: ['m_mem', 'g_eq16'], base: BUILD9.o_cache, par: { nand: 3497, period: 36 },
-    why: 'Main memory is far slower than the core. A small memory that keeps the words used recently answers most accesses at once: programs use the same words again and again (locality). It must know which word each line holds: a tag, and a valid bit.',
-    tips: ['Two small RAMs indexed by addr[2:0]: one for the data, one for {valid, tag}.', 'hit = valid AND (stored tag = addr[7:3]): a 5-bit equality comparator.', 'Write the line when wr, or when rd and not hit; its data is wdata on a write, mdata on a fill.', 'At power-on every valid bit is 0: nothing hits until it is filled.'],
-    codex: ['cache', 'threecs', 'assoc', 'writepolicy'], chapters: [{ chapter: 'cache', label: 'Caches' }],
-  },
-  {
-    id: 'o_mc', act: 8, title: 'Multicycle CPU', kind: 'core', optional: true, requires: ['c_core3', 's_fsm'], base: BUILD9.o_mc, par: { nand: 5203, period: 76, cycles: 3865 },
-    why: 'Before pipelines, processors ran each instruction as a sequence of short steps under a state machine (or microcode). The clock gets faster, the instruction slower: measure whether it pays here.',
-    tips: ['One-hot states (a flip-flop each): F → E → M → W → F, skipping M unless the instruction loads or stores; reset → F.', 'The instruction register loads in F; everything after decodes from it, not from instr.', 'Registers cut the long path: the ALU result is registered at the end of E, and memory reads it in M.', 'Write rd and load the PC only in W; stores only in M.'],
-    codex: ['multicycle', 'fsm', 'microcode', 'cpi'], chapters: [{ chapter: 'multicycle', label: 'Multicycle & microcode' }],
-  },
   // ---- Act 9 --------------------------------------------------------------------------------
   {
-    id: 'k_lesson', act: 9, title: 'Latency or throughput', kind: 'lesson', optional: true, requires: ['y_final'], body: 'gpu',
-    why: 'Your pipeline makes one program fast. Many workloads are the same small program over thousands of data: pixels, vertices, array elements. For them the useful number is results per second, and one control unit can feed several datapaths.',
+    id: 'k_lesson', act: 9, title: 'Latency or throughput', kind: 'lesson', optional: true, requires: ['c_core3'], body: 'gpu',
+    why: 'Your core runs one program as fast as its clock allows. Many workloads are the same small program over thousands of data: pixels, vertices, array elements. For them the useful number is results per second, and one control unit can feed several datapaths.',
     tips: [], codex: ['throughput', 'simd', 'amdahl'], chapters: [{ chapter: 'lanes', label: 'Lanes' }],
   },
   {
     id: 'k_lanes', act: 9, title: 'Four lanes', kind: 'build', optional: true, requires: ['k_lesson'], base: BUILDK.k_lanes, par: { nand: 4596, depth: 55 },
     why: 'The datapath, four times: four ALUs fed by one set of control signals and one immediate. Every lane computes the same operation on its own operands.',
-    tips: ['Your ALU and the 49-NAND bus mux are unlocked: one mux and one ALU per lane.', 'nz: OR the 16 bits of each a<i>i</i>, then merge the four bits.'],
+    tips: ['Your ALU and the 49-NAND bus mux are unlocked: one mux and one ALU per lane.', 'nz: OR the 16 bits of each a<sub>i</sub>, then merge the four bits.'],
     codex: ['lane'], unlocks: ['rv16_lanes4'], chapters: [{ chapter: 'lanes', label: 'Lanes' }],
   },
   {
@@ -698,15 +703,15 @@ export const NODES: CampaignNode[] = [
     codex: ['simt'], chapters: [{ chapter: 'simt', label: 'Threads in lock-step' }],
   },
   {
-    id: 'p_saxpy', act: 9, title: 'saxpy', kind: 'program', optional: true, requires: ['k_simd'], par: { cycles: 90, idle: 0 },
+    id: 'p_saxpy', act: 9, title: 'saxpy', kind: 'program', optional: true, requires: ['k_simd'], par: { cycles: 90, laneops: 360 },
     why: 'The classic kernel: y ← a·x + y over an array. Each lane takes every fourth element; nobody waits for anybody.',
     tips: ['Thread i handles elements i, i + 4, i + 8, …: start at tid, step by 4.', 'n is a multiple of 4, so every lane runs the loop the same number of times: no lane idles.'],
     codex: ['utilization'], chapters: [{ chapter: 'lanes', label: 'Lanes' }],
   },
   {
-    id: 'p_reduce', act: 9, title: 'Reduction', kind: 'program', optional: true, requires: ['k_simt'], par: { cycles: 35, idle: 19 },
+    id: 'p_reduce', act: 9, title: 'Reduction', kind: 'program', optional: true, requires: ['k_simt'], par: { cycles: 35, laneops: 114 },
     why: 'Summing an array is the opposite of saxpy: four partial sums must become one. Every step of the final combine has fewer useful lanes: the cost of a reduction is the lanes left with nothing to do at its end.',
-    tips: ['First each lane sums its strided share, all lanes busy.', 'Then combine through memory: lanes store their partial sums, fewer lanes add pairs.', 'Idle counts masked lanes, not useless ones: every lane can repeat the whole combine and none is ever masked. Busy, but three of the four compute a sum nobody needs.'],
+    tips: ['First each lane sums its strided share, all lanes busy.', 'Then combine through memory: lanes store their partial sums, fewer lanes add pairs.', 'Lane-ops count the work: every lane repeating the whole combine saves the tmc (a cycle) and masks no lane, but three of the four compute a sum nobody needs, 20 lane-ops a test. Mask them off.'],
     codex: ['reduction'], chapters: [{ chapter: 'simt', label: 'Threads in lock-step' }],
   },
   // Phases 3 and 4 of the GPU track: warps and memory, then graphics.
@@ -720,16 +725,16 @@ export const NODES: CampaignNode[] = [
     id: 'k_warps', act: 9, title: 'Two warps', kind: 'core', optional: true, requires: ['k_simt', 'k_coal'], base: BUILDK.k_warps, par: { nand: 29974, period: 95, cycles: 2093 },
     why: 'Real memory answers late. While one warp waits for its word, let the other issue: latency hidden by switching threads instead of by forwarding or stalling. With a memory one cycle late and two warps taking turns, every load is back before its warp issues again.',
     tips: ['Start from your SIMT core: fetch, decode, control and the lanes stay shared. Duplicate what is state: PC, mask, stack, lane registers.', 'The warp bit is a flip-flop that toggles every cycle (0 after reset); 2:1 muxes pick the issuing warp’s PC, register reads and mask.', 'A load: hold its lanes (mask · rwe) and rd for one cycle, then write drdata into the other warp’s registers. In any cycle each register file has one writer: its warp’s results, or the returning load.', 'bar: a waiting bit per warp. Arriving first sets yours, arriving second clears the other’s. A warp goes only if it is not held at bar (or the other has no lanes) and has lanes of its own; a PC moves only when its warp goes.'],
-    codex: ['barrel', 'barrier', 'scoreboard', 'occupancy'], chapters: [{ chapter: 'warps', label: 'Hiding latency' }],
+    codex: ['barrel', 'barrier', 'occupancy'], chapters: [{ chapter: 'warps', label: 'Hiding latency' }],
   },
   {
-    id: 'p_hist', act: 9, title: 'Histogram', kind: 'program', optional: true, requires: ['k_warps'], par: { cycles: 176, idle: 0 },
+    id: 'p_hist', act: 9, title: 'Histogram', kind: 'program', optional: true, requires: ['k_warps'], par: { cycles: 176, laneops: 702 },
     why: 'Eight threads count values into sixteen bins. Two threads that meet the same value would update one counter at once, and RV16 has no atomic add: one of the two counts would be lost. Count into private counters, wait at a barrier until both warps have counted, then add the counters up with every thread.',
     tips: ['Thread t counts value v in the word 8·v + t: then bin b’s eight counters sit in a row, at 8·b.', 'Thread t takes elements t, t + 8, …: n is a multiple of 8, so every lane has the same number.', 'After bar, every thread adds up two bins: their sixteen counters are the words 16·tid … 16·tid + 15.', 'The warps take turns, so a kernel without bar can look right. The grader also lets warp 1 run ahead of warp 0.'],
     codex: ['privatization', 'barrier'], chapters: [{ chapter: 'feed', label: 'Feeding the lanes' }],
   },
   {
-    id: 'k_edge', act: 9, title: 'Edge stepper', kind: 'build', optional: true, requires: ['k_simd'], base: BUILDK.k_edge, par: { nand: 963, period: 58 },
+    id: 'k_edge', act: 9, title: 'Edge stepper', kind: 'build', optional: true, requires: ['k_lesson'], base: BUILDK.k_edge, par: { nand: 963, period: 58 },
     why: 'Is a pixel inside a triangle? Each edge splits the plane: E = A·(x − x\u1d62) + B·(y − y\u1d62) is positive on one side, negative on the other, and inside means all three are ≥ 0. E is linear, so the pixel to the right has E + 4A and the one below E + 4B: one adder per edge replaces every multiplication of the walk.',
     tips: ['Two 16-bit registers: E, and R, where the current band started (a band is four rows of pixels).', 'One adder / subtractor: its first operand is E, R (band) or 2E (double, a wired shift); its second a, 4a, b or 4b (wired shifts too); subtract only for up.', 'Load and band write R as well as E; hold writes neither.', 'inside: NOT of E\'s bit 15.'],
     codex: ['edgefn'], unlocks: ['rv16_edge'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }],
@@ -744,23 +749,23 @@ export const NODES: CampaignNode[] = [
     id: 'k_raster', act: 9, title: 'Rasterizer', kind: 'build', optional: true, requires: ['k_tile'], base: BUILDK.k_raster, par: { nand: 9188, period: 145, cycles: 7439 },
     why: 'The edge steppers and the tile walk, plus the set-up that starts them: each edge\'s A and B, the top-left bias, the box in tiles, and E at the first tile. That last one is a product, and there is no multiplier here: each stepper computes its own by shift-and-add, a doubling per bit, on the adder it already has.',
     tips: ['A, B, Δx = ox − xᵢ, Δy = oy − yᵢ: 8-bit subtractions (two 4-bit adders, the subtrahend inverted, carry in 1). ox = 16·tx0 + 2.', 'The first tile is the smallest (v + 1) >> 4 of the three vertices; the last the largest (v − 2) >> 4, 0 if negative. A comparison is an adder\'s carry.', 'E = A·Δx + B·Δy − bias, MSB first: E ← 0; E ← E − A·Δx₇ (the sign bit weighs −128); E ← E − B·Δy₇; then for bits 6 … 0: E ← 2E + (Δxₖ ? A : 0), E ← E + (Δyₖ ? B : 0); last E ← E − bias. Then load E into itself, so R starts there too.', 'The sum of the three E plus the three biases is twice the area: ≤ 0 is a back face, done.', 'The tile test: a second adder per edge, E + 12·(A⁺ + B⁺), its sign.'],
-    codex: ['horner', 'zbuffer'], unlocks: ['rv16_raster'], chapters: [{ chapter: 'pixels', step: 1, label: 'Inside a triangle' }],
+    codex: ['horner', 'shiftadd'], unlocks: ['rv16_raster'], chapters: [{ chapter: 'pixels', step: 1, label: 'Inside a triangle' }],
   },
   {
     id: 'k_frame', act: 9, title: 'A frame', kind: 'core', optional: true, requires: ['k_raster', 'k_warps'], base: BUILDK.k_frame, par: { nand: 40275, period: 147, cycles: 7635 },
     why: 'A GPU in miniature: programmable lanes compute where the vertices go, a fixed-function rasterizer turns triangles into pixels, the screen is memory both write. The core talks to the rasterizer through addresses, as to any device, and must not touch the screen or the device while it draws.',
     tips: ['Start from your two-warp core; add the rasterizer, six 7-bit vertex registers and a 16-bit colour register, written from lane 0\'s port when its address is 0xFFF0 … 0xFFF6.', 'A store to 0xFFF6 sets a flip-flop that is the rasterizer\'s go in the next cycle; busy for the core is that flip-flop OR the rasterizer\'s busy.', 'Hold: busy AND (lane 0 is active, the instruction stores, address in 0xFFF0 … 0xFFF6, OR it loads and an active lane\'s address is in 0xF000 … 0xF3FF). AND its inverse into the warp\'s go: nothing of that instruction happens, and its next turn tries again.', 'Use the instruction\'s own signals for the hold, not the write enables it gates: those depend on go.'],
-    codex: ['device', 'doublebuffer'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 1, label: 'The pipeline' }],
+    codex: ['device', 'mmio'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 1, label: 'The pipeline' }],
   },
   {
-    id: 'p_spin', act: 9, title: 'Spin', kind: 'program', optional: true, requires: ['k_frame'], par: { cycles: 1432, idle: 8 },
-    why: 'A spinning square, a few frames of it, on the device you built: warp 0 turns the corners, both warps clear the screen, lane 0 hands two triangles to the rasterizer. No multiplier and no sine table: Minsky\'s rule turns a point with two shifts and two adds.',
+    id: 'p_spin', act: 9, title: 'Spin', kind: 'program', optional: true, requires: ['k_frame'], par: { cycles: 1432, laneops: 5282 },
+    why: 'A spinning square, a few frames of it, on the device you built: warp 0 turns the corners, both warps clear the screen, lane 0 hands two triangles to the rasterizer. No multiplier and no sine table: Minsky\'s rule turns a point with two shifts and two adds. One screen and no depth buffer: the clear must wait for the draw (the second bar), and nothing sorts what overlaps; the GPU chapters add a back frame to draw into and a depth per pixel.',
     tips: ['Clearing is most of the work: give all eight threads a share, several stores per pass.', 'Lane i of warp 0 turns corner i; store each corner\'s screen position (64 + (x >> 8)) where lane 0 can load it.', 'Two bars per frame: after clearing and turning (lane 0 needs the corners and a clean screen), and after drawing (nobody clears a frame still being drawn).', 'On the hardware a load from the screen waits for the rasterizer: one before the clear makes the program right there too.'],
-    codex: ['minsky'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 2, label: 'A spinning triangle' }],
+    codex: ['minsky', 'doublebuffer', 'zbuffer'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 2, label: 'A spinning triangle' }],
   },
   // ---- Act 10 -------------------------------------------------------------------------------
   {
-    id: 'm_lesson', act: 10, title: 'Where the cycles go', kind: 'lesson', optional: true, requires: ['y_final'], body: 'memwall',
+    id: 'm_lesson', act: 10, title: 'Where the cycles go', kind: 'lesson', optional: true, requires: ['c_computer'], body: 'memwall',
     why: 'Every core so far read its memory in the same cycle. Real memory is a capacitor per bit, read by a sense amplifier, a row at a time, behind a controller that keeps a chip\'s timing rules and refreshes it before it forgets. This act builds that path, from the bit line up.',
     tips: [], codex: ['memwall', 'rowbuffer', 'amat'], chapters: [{ chapter: 'dram', label: 'Inside a DRAM' }, { chapter: 'memctrl', label: 'A memory controller' }],
   },
@@ -784,6 +789,12 @@ export const NODES: CampaignNode[] = [
     codex: ['dramtiming', 'pagepolicy'], unlocks: ['rv16_dramctrl'], chapters: [{ chapter: 'memctrl', step: 0, label: 'Commands' }, { chapter: 'memctrl', step: 1, label: 'Open page or closed page' }],
   },
   {
+    id: 'o_cache', act: 10, title: 'A cache', kind: 'build', optional: true, requires: ['m_ctrl'], base: BUILD9.o_cache, par: { nand: 3497, period: 36 },
+    why: 'Your controller hands over a word of the open row tCAS = 4 cycles after its read command, and a word of another row only after tRP + tRCD + tCAS = 12, where every core assumed one. Programs use the same words again and again (locality): a small memory that keeps the recent ones answers most accesses at once. It must know which word each line holds: a tag, and a valid bit. Its bench still answers a miss in the same cycle, so the level proves the cache right and grades its own NANDs and period, not the cycles it would save.',
+    tips: ['Two small RAMs indexed by addr[2:0]: one for the data, one for {valid, tag}.', 'hit = valid AND (stored tag = addr[7:3]): a 5-bit equality comparator.', 'Write the line when wr, or when rd and not hit; its data is wdata on a write, mdata on a fill.', 'At power-on every valid bit is 0: nothing hits until it is filled.'],
+    codex: ['cache', 'threecs', 'assoc', 'writepolicy'], chapters: [{ chapter: 'cache', label: 'Caches' }],
+  },
+  {
     id: 'm_bus', act: 10, title: 'Two masters, one bus', kind: 'build', optional: true, requires: ['m_lesson'], base: BUILDM.m_bus, par: { nand: 282, period: 26 },
     why: 'A processor is not the only thing that wants memory: a DMA engine, a display, a second core do too. A bus lets several masters reach several slaves over one set of wires, one transfer at a time, with a handshake each side can stretch and an arbiter that keeps either master from starving.',
     tips: ['Three flip-flops of state: who was served last, whether a transfer is in progress, and whose it is.', 'The grant: while a transfer is in progress, its owner; else if both ask, the one not served last; else whoever asks.', 'Two 16-bit muxes take the granted master\'s address and data to every slave; the top two address bits pick whose valid rises, and the same bits pick whose ready and data come back.', 'A transfer is done when the granted master\'s valid and the chosen slave\'s ready are both 1: only that master sees ready.'],
@@ -804,7 +815,7 @@ export const NODES: CampaignNode[] = [
   {
     id: 'p_boot', act: 10, title: 'Boot from flash', kind: 'program', optional: true, requires: ['m_dma', 'm_flash'], par: { size: 18, cycles: 253 },
     why: 'At power-on everything a program needs is in flash, which keeps it without power but is slow to read. A boot loader brings it into RAM first. Let the DMA engine do the copying, and the processor can work while it runs.',
-    tips: ['Loading the table straight from flash works: 8 stall cycles a word. The DMA copies a word every 4.', 'Simplest: start the copy, wait until 0xFFF9 reads 1, clear it, then sum the copy in RAM.', 'Faster: don\'t wait for the whole copy. 0xFFF2 says how many words are left, so you know how many have landed: sum each one as soon as it is there.', 'RV16 is word addressed and its offsets reach −32 … 31: the device registers are -16(x0) … -13(x0), irq is -7(x0), OUT is -3(x0).'],
+    tips: ['Loading the table straight from flash works: 8 stall cycles a word. The DMA copies a word every 4.', 'Simplest: start the copy, wait until 0xFFF9 reads 1, clear it, then sum the copy in RAM.', 'Faster: don\'t wait for the whole copy. The bench\'s engine, unlike your m_dma, lets you read its count: a load from 0xFFF2 gives the words left, so you know how many have landed. Sum each one as soon as it is there.', 'RV16 is word addressed and its offsets reach −32 … 31: the device registers are -16(x0) … -13(x0), irq is -7(x0), OUT is -3(x0).'],
     codex: ['boot'], chapters: [{ chapter: 'bus', step: 4, label: 'A computer on one bus' }],
   },
 ];

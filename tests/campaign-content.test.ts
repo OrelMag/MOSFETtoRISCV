@@ -60,3 +60,71 @@ describe('the fuller codex', () => {
     expect(CODEX.filter((e) => !moreOf(e.id)).map((e) => e.id)).toEqual([]);
   });
 });
+
+// Numbers the text quotes, measured (they drifted when typed by hand).
+describe('numbers in the level text', () => {
+  it('the single-cycle core: 79 delays alone, 98 on the bench with its 8-delay memories', async () => {
+    const { corePeriod } = await import('../src/campaign/corecheck');
+    const { analyzeTiming } = await import('../src/sim/timing');
+    const { flatten } = await import('../src/sim/flatten');
+    const cpu = resolveComponent('rv16_cpu')!;
+    const alone = analyzeTiming(flatten(cpu, { mode: 'gate' }))!.period, bench = corePeriod(cpu)!;
+    expect(bench).toBe(nodeById('c_core3')!.par!.period);
+    const say = `${alone} delays without memories (${bench} with the bench\'s 8-delay memories)`;
+    for (const id of ['a_inc16', 's_pc']) expect(caseOf(id)!.cost, id).toContain(say);
+    expect(caseOf('o_fastadd')!.cost).toContain(`(with the bench's 8-delay memories) falls from ${bench} to ${nodeById('c_fast')!.par!.period} delays`);
+  });
+
+  it('o_mulseq against the 16 × 16 array', async () => {
+    const { stats, logicDepth } = await import('../src/sim/stats');
+    const n = nodeById('o_mulseq')!, arr = resolveComponent('amul16')!;
+    const cycles = 18, depth = logicDepth(arr)!, nand = stats(arr).nands;
+    const fmt = (v: number) => v.toLocaleString('en').replace(/,/g, ' ');
+    expect(n.why).toContain(`${cycles} cycles of a ${n.par!.period}-delay clock against one ${depth}-deep pass: about ${(cycles * n.par!.period! / depth).toFixed(1)} times the time`);
+    expect(n.why).toContain(`(${fmt(n.par!.nand!)} against ${fmt(nand)})`);
+    expect(caseOf('o_mulseq')!.problem).toContain(`${cycles} cycles per product`);
+  });
+
+  it('m_ctrl says its refresh interval is scaled from the real one', async () => {
+    const { TIMING } = await import('../src/dram/timing');
+    const { BUILDM } = await import('../src/campaign/buildm');
+    expect(BUILDM.m_ctrl().brief).toContain(`a real chip's 7.8 µs is about ${TIMING.tREFI.toLocaleString('en').replace(/,/g, ' ')} cycles`);
+  });
+});
+
+describe('codex links', () => {
+  // RASTER16 has no depth buffer, k_frame one screen, and the barrel's one-cycle-late memory needs no scoreboard: those
+  // entries hang where the text says what is missing (p_spin) or where the idea first appears (the load-use interlock).
+  it('point at what the level has', () => {
+    const c = (id: string) => nodeById(id)!.codex;
+    expect(c('k_raster')).not.toContain('zbuffer');
+    expect(c('k_frame')).not.toContain('doublebuffer');
+    expect(c('k_warps')).not.toContain('scoreboard');
+    expect(c('p_spin')).toEqual(expect.arrayContaining(['doublebuffer', 'zbuffer']));
+    expect(nodeById('p_spin')!.why).toMatch(/One screen and no depth buffer/);
+    expect(c('pi_haz')).toContain('scoreboard');
+  });
+});
+
+describe('s_pc', () => {
+  // The library PC resets with a second bus mux whose other input is 0 (49 NANDs); an AND per bit with ¬rst is 33 at
+  // the same depth. The level's reference and par take the cheaper one; the cores keep rv16_pc (their pars count it).
+  it('par is the AND reset, 16 NANDs under the library PC, at its period', async () => {
+    const { stats } = await import('../src/sim/stats');
+    const { checkChallenge } = await import('../src/editor/challenges');
+    const { UserLibrary } = await import('../src/editor/library');
+    const { emptyWorkspace } = await import('../src/editor/model');
+    const { levelChallenge } = await import('../src/campaign/levels');
+    const n = nodeById('s_pc')!, c = levelChallenge(n)!, chips = c.answer();
+    const ws = emptyWorkspace();
+    for (const d of chips) ws.chips[d.id] = d;
+    const r = checkChallenge(c, new UserLibrary(ws).compiled(chips[chips.length - 1].id));
+    expect(r.ok).toBe(true);
+    const lib = stats(resolveComponent('rv16_pc')!).nands;
+    expect(r.score.nand).toBe(n.par!.nand);
+    expect(lib - r.score.nand).toBe(16);
+    expect(r.score.period).toBe(n.par!.period);
+    expect(caseOf('s_pc')!.cost).toContain(`${r.score.nand} NANDs, clock period ${r.score.period}`);
+    expect(caseOf('s_pc')!.cost).toContain(`is built so: ${lib})`);
+  });
+});

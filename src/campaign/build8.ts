@@ -61,14 +61,14 @@ export const BUILD8: Record<string, () => BuildChallenge> = {
   }),
   o_mulseq: () => ({
     id: 'o_mulseq', title: 'Shift-and-add multiplier', level: 'sequential', allowed: 'nand',
-    brief: 'At a rising edge with <code>start</code> = 1, load a and b; then add and shift once per clock: after the 17th edge, <b>done</b> = 1 for one cycle with <b>p</b> = a × b (32 bits). One 16-bit adder instead of an array: the trade of area for time. The iteration counter is given.',
+    brief: 'At a rising edge with <code>start</code> = 1, load a and b; then add and shift once per clock: after the 17th edge (counting the one that loads), <b>done</b> = 1 for one cycle with <b>p</b> = a × b (32 bits), so a product takes 18 cycles with its done cycle. One 16-bit adder instead of an array: the trade of area for time. The iteration counter is given.',
     ports: pins([['clk'], ['start'], ['a', 16], ['b', 16]], [['p', 32], ['done']], 'clk'),
     check: { kind: 'sequence', init: { start: 0 }, steps: iterSeq(16, pairs16(5, 6), (a, b) => ({ p: a * b })) },
     answer: refOf('o_mulseq', () => seqMul(16), 'Shift-and-add multiplier'),
   }),
   o_div: () => ({
     id: 'o_div', title: 'Divider', level: 'sequential', allowed: 'nand',
-    brief: 'Restoring division, one quotient bit per clock: start loads a and b; after the 17th edge, <b>done</b> = 1 with <b>q</b> = a ÷ b and <b>r</b> = a mod b (unsigned; b = 0 gives q = 0xFFFF, r = a, as RISC-V does). The division step and the counter parts are given.',
+    brief: 'Restoring division, one quotient bit per clock: start loads a and b; after the 17th edge (counting the one that loads; 18 cycles with the done cycle), <b>done</b> = 1 with <b>q</b> = a ÷ b and <b>r</b> = a mod b (unsigned; b = 0 gives q = 0xFFFF, r = a, as RISC-V does). The division step and the counter parts are given.',
     ports: pins([['clk'], ['start'], ['a', 16], ['b', 16]], [['q', 16], ['r', 16], ['done']], 'clk'),
     check: { kind: 'sequence', init: { start: 0 }, steps: iterSeq(16, pairs16(9, 6), (a, b) => (b ? { q: Math.floor(a / b), r: a % b } : { q: 0xffff, r: a })) },
     answer: refOf('o_div', () => seqDivider(16, RV16_MUX2), 'Divider'),

@@ -248,14 +248,14 @@ export const BUILDK: Record<string, () => BuildChallenge> = {
   }),
   k_lanes: () => ({
     id: 'k_lanes', title: 'Four lanes', level: 'cpu', allowed: 'nand',
-    brief: 'Four datapaths, one control: lane <i>i</i> computes <b>y<i>i</i> = ALU(a<i>i</i>, bimm ? imm : b<i>i</i>)</b> with the ALU operation <code>alu</code> (the same for every lane, as your ALU encodes it), and <b>nz</b> bit <i>i</i> = 1 when a<i>i</i> ≠ 0 (split will test it).',
+    brief: 'Four datapaths, one control: lane <i>i</i> computes <b>y<sub>i</sub> = ALU(a<sub>i</sub>, bimm ? imm : b<sub>i</sub>)</b> with the ALU operation <code>alu</code> (the same for every lane, as your ALU encodes it), and <b>nz</b> bit <i>i</i> = 1 when a<sub>i</sub> ≠ 0 (split will test it).',
     ports: pins([...each('a'), ...each('b'), ['imm', 16], ['bimm'], ['alu', 4]], [...each('y'), ['nz', NL]]),
     check: { kind: 'table', spec: LANES16.spec!, vectors: lanesVectors },
     answer: refOf('k_lanes', () => LANES16, 'Four lanes'),
   }),
   k_vrf: () => ({
     id: 'k_vrf', title: 'Lane register file', level: 'cpu', allowed: 'nand',
-    brief: 'Every lane has its own eight registers. All lanes read the same register numbers (<code>ra1</code> → a<i>i</i>, <code>ra2</code> → b<i>i</i>, combinationally) and, at the clock edge, write their own word <code>wd<i>i</i></code> to register <code>wa</code> when bit <i>i</i> of <code>we</code> is 1. x0 reads 0 in every lane.',
+    brief: 'Every lane has its own eight registers. All lanes read the same register numbers (<code>ra1</code> → a<sub>i</sub>, <code>ra2</code> → b<sub>i</sub>, combinationally) and, at the clock edge, write their own word <code>wd<i>i</i></code> to register <code>wa</code> when bit <i>i</i> of <code>we</code> is 1. x0 reads 0 in every lane.',
     ports: pins([['wa', 3], ['we', NL], ...each('wd'), ['ra1', 3], ['ra2', 3], ['clk']], [...each('a'), ...each('b')], 'clk'),
     check: { kind: 'sequence', steps: vrfSeq() },
     answer: refOf('k_vrf', () => VRF16, 'Lane register file'),
@@ -286,8 +286,8 @@ export const BUILDK: Record<string, () => BuildChallenge> = {
   }),
   k_coal: () => ({
     id: 'k_coal', title: 'Coalescer', level: 'cpu', allowed: 'nand',
-    brief: 'One memory port for four lanes: serve at once every active lane whose word is in the same <b>line</b>. RV16 is word-addressed with 16-bit words, so a line is four words: the address with bits 1 … 0 dropped, <b>a<i>i</i>[15:2]</b>. '
-      + 'The lowest active lane (the leader, as in your mask) picks the line: <b>line</b> = its a[15:2]; <b>served</b> bit <i>i</i> = 1 when lane <i>i</i> is active and its a<i>i</i>[15:2] equals line; <b>left</b> = the active lanes not served, for the next access. '
+    brief: 'One memory port for four lanes: serve at once every active lane whose word is in the same <b>line</b>. RV16 is word-addressed with 16-bit words, so a line is four words: the address with bits 1 … 0 dropped, <b>a<sub>i</sub>[15:2]</b>. '
+      + 'The lowest active lane (the leader, as in your mask) picks the line: <b>line</b> = its a[15:2]; <b>served</b> bit <i>i</i> = 1 when lane <i>i</i> is active and its a<sub>i</sub>[15:2] equals line; <b>left</b> = the active lanes not served, for the next access. '
       + 'With no lane active, served and left are 0 and line is anything.',
     ports: pins([...each('a'), ['mask', NL]], [['line', 14], ['served', NL], ['left', NL]]),
     check: { kind: 'table', spec: COAL16.spec!, vectors: coalVectors, care: (v) => [v[4] ? 0x3fff : 0, 15, 15] },

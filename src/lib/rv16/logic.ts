@@ -315,8 +315,11 @@ export const INC16: ComponentDef = (() => {
   });
 })();
 
-/** Signed and unsigned less-than from one subtraction, a + ¬b + 1, of which only the carry is read. */
-export const CMP16: ComponentDef = (() => {
+/**
+ * Signed and unsigned less-than from one subtraction, a + ¬b + 1, of which only the carry is read; `adder`
+ * (a, b, cin → s, cout) does the subtraction (the ripple ADD16, or a Kogge–Stone adder: cpu.ts).
+ */
+export function cmpWith(adder: ComponentDef, id: string, name: string): ComponentDef {
   const b = new Builder(8, 12, 2);
   b.pins('a', 'b');
   const one = b.op1(TIE1, []);
@@ -324,7 +327,7 @@ export const CMP16: ComponentDef = (() => {
   b.next();
   const nb = Array.from({ length: 16 }, (_, i) => b.op1(NOT, [`${sb}.o${i}`]));
   b.next();
-  const d = b.op(ADD16, ['a', b.op1(merger(Array(16).fill(1), 2), nb, '¬b'), one], 'a + ¬b + 1');
+  const d = b.op(adder, ['a', b.op1(merger(Array(16).fill(1), 2), nb, '¬b'), one], 'a + ¬b + 1');
   const sa = b.op(splitter([15, 1], 2), ['a'], 'sign of a');
   const sbs = b.op(splitter([15, 1], 2), ['b'], 'sign of b');
   b.next();
@@ -338,14 +341,16 @@ export const CMP16: ComponentDef = (() => {
   b.wire(ltu, 'ltu');
   const R = b.right;
   return define({
-    id: 'rv16_cmp16', name: 'Less-than (16-bit, signed and unsigned)', category: 'arithmetic',
-    summary: 'From a + ¬b + 1: unsigned a < b ⇔ no carry out. Signed: if the signs differ, a < b ⇔ a is negative; if they agree the difference cannot overflow and the unsigned answer holds. Only the carry is read, so ¬b needs inverters, not XORs.',
+    id, name, category: 'arithmetic',
+    summary: 'From a + ¬b + 1: unsigned a < b ⇔ no carry out. Signed: if the signs differ, a < b ⇔ a is negative; if they agree the difference cannot overflow and the unsigned answer holds. Only the carry is read, so ¬b needs inverters, not XORs.' + (adder === ADD16 ? '' : ' A Kogge–Stone subtraction.'),
     ports: [bus('a', 16, 'in'), bus('b', 16, 'in'), bit('lt', 'out'), bit('ltu', 'out')],
     symbol: { kind: 'box', label: 'A < B' },
     spec: ([a, b]) => [((a << 16) >> 16) < ((b << 16) >> 16) ? 1 : 0, a < b ? 1 : 0],
     netlist: () => ({ pins: { a: [0, 6], b: [0, 10], lt: [R, 6], ltu: [R, 10] }, instances: b.instances, nets: b.nets() }),
   });
-})();
+}
+
+export const CMP16 = cmpWith(ADD16, 'rv16_cmp16', 'Less-than (16-bit, signed and unsigned)');
 
 // ---- storage at the learner's cost: what s_dlatch … s_reg16 build, so the parts they unlock
 // (and every later reference) cost what the levels' pars count. The library's D latch has an

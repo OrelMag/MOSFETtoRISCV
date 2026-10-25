@@ -73,7 +73,8 @@ export const NUDGES: Record<string, string> = {
   y_csr: 'Some of these registers change when software writes them, some when a trap happens, and one every cycle.',
   y_trap: 'A trap replaces the instruction: decide what must be remembered, and where execution goes instead.',
   y_irq: 'An interrupt is a trap no instruction caused, and it may only come when it is allowed.',
-  y_final: 'Pick one stage where traps take effect, and decide what happens to the older and the younger instructions around it.',
+  y_ptrap: 'Pick one stage where traps take effect, and decide what happens to the older and the younger instructions around it.',
+  y_final: 'An interrupt belongs to no instruction: ask which instruction it should look as if it came before, and whether the stage holds one at all.',
   // act 8: side quests
   o_mulseq: 'Multiply as by hand, one digit of b per cycle, with the same hardware every time.',
   o_mularr: 'Lay out the long multiplication you would write on paper, and build all of it at once.',
@@ -90,7 +91,7 @@ export const NUDGES: Record<string, string> = {
   o_fpcmp: 'The format was built so that the bit patterns are almost in order: find where "almost" fails.',
   o_fpcvt: 'An integer is already a significand: you only need its size and its sign.',
   o_cache: 'A small fast memory must know, for every slot, whether it holds anything and which address it holds.',
-  o_mc: 'Break each instruction into steps that each use one shared resource, and let a sequencer walk them.',
+  o_mc: 'Cut the long path with registers, and let a small state machine decide which step each register and write belongs to.',
   // act 9: lanes and graphics
   k_lanes: 'Same control for everyone, separate data for each.',
   k_vrf: 'Every lane needs its own copy of the state, addressed the same way.',

@@ -10,6 +10,7 @@ import '../../styles/editor.css';
 import '../../styles/sbchips.css';
 import '../../styles/campaign.css';
 import '../../styles/level.css';
+import { partNames } from '../../campaign/cardlabel';
 import { caseOf } from '../../campaign/cases';
 import { codexById } from '../../campaign/codex';
 import { type AreaUnit, areaBars, METRIC, measured } from '../../campaign/grade';
@@ -269,10 +270,10 @@ export class LevelPage implements Page {
       h('section', { class: 'cp-criteria' }, h('h4', null, 'Success criteria'), h('ul', null, criteria(ch).map((c) => h('li', null, c)))),
       gradeTable(n));
     const rule = typeof ch.allowed === 'object' ? ch.allowed.lib.filter((x) => x !== 'nand') : [];
-    const name = (u: string) => (u.endsWith('*') ? `${u.slice(0, -1)}…` : resolveComponent(u)?.name ?? u);
+    const names = (ids: readonly string[]) => partNames(ids, (u) => resolveComponent(u)?.name).join(', ');
     el.append(h('section', { class: 'cp-deps' },
-      rule.length ? h('p', null, h('b', null, 'Parts you may place: '), 'NAND, ', rule.map(name).join(', ')) : null,
-      n.unlocks?.length ? h('p', null, h('b', null, 'Unlocks: '), n.unlocks.map(name).join(', ')) : null));
+      rule.length ? h('p', null, h('b', null, 'Parts you may place: '), 'NAND, ', names(rule)) : null,
+      n.unlocks?.length ? h('p', null, h('b', null, 'Unlocks: '), names(n.unlocks)) : null));
     this.pitfalls(el);
   }
 

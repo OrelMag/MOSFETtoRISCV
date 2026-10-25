@@ -88,7 +88,7 @@ export const BUILD5: Record<string, () => BuildChallenge> = {
     answer: refOf('c_core3', () => rv16Core(true), 'Core III'),
   }),
   c_fast: () => ({
-    id: 'c_fast', title: 'A faster core', level: 'cpu', allowed: 'nand',
+    id: 'c_fast', title: 'Core IV: the critical path', level: 'cpu', allowed: 'nand',
     brief: CORE_BRIEF('The same programs as Core III, graded on the <b>clock period</b> (with 8-delay memories in the path). Find the critical path (the Timing panel draws it) and shorten it: the fast adders are unlocked.'),
     ports: CORE_PINS,
     check: coreCheck({ rv16i: true, tests: () => coreTests(3), budget: { cpi: 1, extra: 2 } }, `${coreTests(3).length} programs, as Core III; the clock period is measured with the memories in the path.`),

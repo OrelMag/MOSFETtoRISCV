@@ -4,7 +4,7 @@
 import { s } from '../../ui/dom';
 import { BLOCKS, blockNodes, LINKS, VIEW } from '../anatomy';
 import { ancestors, isDone, statusOf, type ProgressView } from '../graph';
-import { BAND_GAP, COL_GAP, FOOT_LABEL_W, LINE_GAP, mapLayout, NODE_H, NODE_W, OPTIONAL_ACTS, ROW_GAP, SUB_LINE, SUB_Y } from '../layout';
+import { BAND_GAP, COL_GAP, FOOT_LABEL_W, mapLayout, NODE_H, NODE_W, OPTIONAL_ACTS, ROW_GAP, SUB_LINE, SUB_Y } from '../layout';
 import { actDone, actEnd, cardBlock } from '../thread';
 import { ACTS, actName, NODES } from '../nodes';
 import { levelCardLabel } from '../cardlabel';
@@ -89,6 +89,7 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
     bands.append(s('rect', { class: 'cp-band', x: 4, y: b.y, width: L.w - 8, height: b.h, rx: 10 }));
     // the group is named after the act: its title would be read twice
     ag.append(s('text', { class: 'cp-band-title', x: 16, y: b.y + 21, 'aria-hidden': 'true' }, name));
+    for (const r of b.rows ?? []) ag.append(s('text', { class: 'cp-row-title', x: 16, y: r.y, 'aria-hidden': 'true' }, r.label));
     if (b.sub) {
       // the whole blurb for assistive tech and as a tooltip; the drawing may cut it short
       ag.append(s('text', { class: 'cp-band-sub', x: 16, y: b.y + SUB_Y, role: 'note', 'aria-label': act.blurb.replace(/<[^>]+>/g, '') },
@@ -137,7 +138,7 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
       if (!cross && q.line === p.line && x2 - x1 <= COL_GAP + 1) d = `M${x1},${y1} C${x1 + 24},${y1} ${x2 - 24},${y2} ${x2},${y2}`;
       else {
         const band = L.bands.find((b) => b.act === p.node.act)!;
-        const yc = cross ? band.y - BAND_GAP / 2 : q.line !== p.line ? p.lineY - LINE_GAP / 2 : p.y - ROW_GAP / 2;
+        const yc = cross ? band.y - BAND_GAP / 2 : q.line !== p.line ? p.chanY : p.y - ROW_GAP / 2;
         d = rounded([[x1, y1], [xa, y1], [xa, yc], [xb, yc], [xb, y2], [x2, y2]]);
       }
       const done = isDone(view(r));

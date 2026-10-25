@@ -159,15 +159,17 @@ export const CSR16F: ComponentDef = (() => {
  * 0x800B external, in that priority after the interrupt): bit 1 is always 1, bit 15 is intr,
  * bit 0 = intr + ¬ill, bit 3 = intr + ¬ill · ecall. Five NANDs; returns the 16-bit cause.
  */
-export function trapCause(b: Builder, ill: string, ecall: string, intr: string): string {
-  const ni = b.op1(NOT, [intr], '¬intr'), nill = b.op1(NOT, [ill], '¬ill');
+export function trapCause(b: Builder, ill: string, ecall: string, intr: string | null): string {
+  // Without interrupts (null): bit 0 = ¬ill, bit 3 = ¬ill · ecall, bit 15 = 0: three NANDs.
+  const ni = intr === null ? '' : b.op1(NOT, [intr], '¬intr'), nill = b.op1(NOT, [ill], '¬ill');
   b.next();
-  const b0 = b.op1(NAND, [ni, ill], 'bit 0');
+  const b0 = intr === null ? nill : b.op1(NAND, [ni, ill], 'bit 0');
   const e = b.op1(NAND, [nill, ecall], '¬(¬ill·ecall)');
   b.next();
-  const b3 = b.op1(NAND, [ni, e], 'bit 3');
+  const b3 = intr === null ? b.op1(NOT, [e], 'bit 3') : b.op1(NAND, [ni, e], 'bit 3');
   b.next();
-  return b.op1(merger([1, 1, 1, 1, 11, 1], 2), [b0, b.op1(TIE1, []), b.op1(TIE0, []), b3, b.op1(constWord(11, 0), []), intr], 'cause');
+  const one = b.op1(TIE1, []), z = b.op1(TIE0, []);
+  return b.op1(merger([1, 1, 1, 1, 11, 1], 2), [b0, one, z, b3, b.op1(constWord(11, 0), []), intr ?? z], 'cause');
 }
 
 /** System decode: what a SYSTEM word is, and the CSR write value (csrrw / csrrs / csrrc). */

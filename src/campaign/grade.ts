@@ -19,6 +19,7 @@ export const METRIC: Record<Metric, { label: string; unit: string; hint: string 
   tubes: { label: 'Tube sections', unit: 'sections', hint: 'Triode and diode sections (a 6SN7 bulb holds two triodes, a 6AL5 two diodes)' },
   steps: { label: 'Relay steps', unit: 'steps', hint: 'Most relay steps (about 8 ms each) one input change takes to come to rest' },
   idle: { label: 'Idle lanes', unit: '%', hint: 'Lane-steps with the lane switched off, as a share of all lane-steps (100 % − lane utilization), mean over the tests' },
+  laneops: { label: 'Lane-ops', unit: 'lane-ops', hint: 'Instructions times the lanes switched on for them (the work done), mean over the tests. Idle lanes are not graded: at the same cycles they fall only as this rises' },
 };
 
 /** A challenge score as measured metrics. */

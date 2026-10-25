@@ -8,11 +8,12 @@ import { constWord, isZero } from '../alu';
 import { Builder } from '../builder';
 import { equal } from '../combinational';
 import { define, merger, splitter } from '../define';
+import { koggeStone } from '../fastadd';
 import { orN } from '../wide';
 import { AND, NOT, OR, XOR } from '../gates';
 import { TIE0, TIE1 } from '../transistors';
-import { BRANCH16, CTL16, IMM16, NEXTPC16 } from './cpu';
-import { ADD16, choose4, INC16, MUX16, RF8, RV16_ALU16, RV16_DFF, RV16_DREG16, RV16_REG16 } from './logic';
+import { BRANCH16, branch16, CTL16, IMM16, NEXTPC16, NEXTPC16F } from './cpu';
+import { ADD16, choose4, INC16, MUX16, RF8, RV16_ALU16, RV16_ALU16KS, RV16_DFF, RV16_DREG16, RV16_REG16 } from './logic';
 import { CSR16F, ILL16, SYSDEC16, trapCause } from './system';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
@@ -113,13 +114,19 @@ export interface Rv16PipeOptions {
   stall: boolean;
   /** Branches and jumps redirect the PC and flush the two wrong-path instructions. */
   flush: boolean;
-  /** CSRs, precise traps and the external interrupt, taken in E (needs flush). */
-  sys?: boolean;
   /**
-   * Static branch prediction in F (needs flush, not sys): jal and backward branches are taken at
-   * once (target = pc + imm, computed in F); E redirects only when the guess was wrong.
+   * CSRs and precise traps, taken in E (needs flush): true also takes the external interrupt there;
+   * 'exc' only exceptions (the irq pin is there, as on the single-cycle core with traps, but unused).
+   */
+  sys?: boolean | 'exc';
+  /**
+   * Static branch prediction in F (needs flush): jal and backward branches are taken at once
+   * (target = pc + imm, computed in F); E redirects only when the guess was wrong. With sys a trap
+   * or mret overrides it as it overrides a branch.
    */
   predict?: boolean;
+  /** Kogge–Stone adders: in E the ALU (Core IV's), the branch comparator's less-than and next PC; predict's target in F. */
+  fast?: boolean;
 }
 
 const pipes = new Map<string, ComponentDef>();
@@ -131,7 +138,7 @@ const pipes = new Map<string, ComponentDef>();
  * resolves in E, redirecting the PC and flushing F/D and D/E.
  */
 export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
-  const key = `${+o.fwd}${+o.stall}${+o.flush}${o.sys ? 's' : ''}${o.predict ? 'p' : ''}`;
+  const key = `${+o.fwd}${+o.stall}${+o.flush}${o.sys === 'exc' ? 'e' : o.sys ? 's' : ''}${o.predict ? 'p' : ''}${o.fast ? 'k' : ''}`;
   let d = pipes.get(key);
   if (d) return d;
   const b = new Builder(10, 16, 6);
@@ -155,7 +162,7 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
     const isJal = b.op1(AND, [b.op1(AND, [`${op}.o3`, `${op}.o2`]), b.op1(NOT, [b.op1(OR, [`${op}.o1`, `${op}.o0`])])], 'jal?');
     b.next();
     predF = b.name(b.op1(OR, [b.op1(AND, [isBr, `${op}.o5`], 'backward'), isJal], 'predict taken'), 'predF', true);
-    tgtF = b.op(ADD16, ['', b.op1(MUX16, [`${immF}.sb`, `${immF}.j`, isJal]), zero1], 'pc + imm (F)');
+    tgtF = b.op(o.fast ? koggeStone(16) : ADD16, ['', b.op1(MUX16, [`${immF}.sb`, `${immF}.j`, isJal]), zero1], 'pc + imm (F)');
     b.next();
     seq = b.op1(MUX16, [seq, `${tgtF}.s`, predF], 'predicted');
   }
@@ -233,14 +240,14 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
   const aE = b.name(a, 'aE', true), bE = b.name(bReg, 'bE', true);
   const bsrc = b.op1(MUX16, [bE, immE, bimmE], 'ALU b');
   b.next();
-  let yE = b.name(`${b.op(RV16_ALU16, [aE, bsrc, aluE], 'ALU')}.y`, 'yE', true);
+  let yE = b.name(`${b.op(o.fast ? RV16_ALU16KS : RV16_ALU16, [aE, bsrc, aluE], 'ALU')}.y`, 'yE', true);
   // Without flushes the pipeline does not branch (its programs have no branches or jumps): no
   // comparator, no next PC, and no pc + 1 to write back for jal / jalr.
   let np = '', redirect = '', target = '';
   if (o.flush) {
-    const take = b.op1(BRANCH16, [aE, bE, condE], 'branch?');
+    const take = b.op1(o.fast ? branch16(true) : BRANCH16, [aE, bE, condE], 'branch?');
     b.next();
-    np = b.op(NEXTPC16, [pcE, immE, aE, brE, take, jalE, jalrE], 'next PC');
+    np = b.op(o.fast ? NEXTPC16F : NEXTPC16, [pcE, immE, aE, brE, take, jalE, jalrE], 'next PC');
     redirect = b.name(`${np}.ld`, 'redirect', true);
     target = `${np}.target`;
   } else void [brE, jalE, jalrE, condE];
@@ -255,27 +262,28 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
     // ---- traps, taken in E: the instruction in E does not run, older ones complete (precise) ----
     const ill = b.op1(ILL16, [instrE], 'illegal?');
     const sd = b.op(SYSDEC16, [instrE, aE, ''], 'system decode');
-    const csr = b.op(CSR16F, [`${re}.o2`, `${sd}.wdata`, '', '', '', pcE, '', 'irq', 'clk'], 'CSRs');
+    const irq = o.sys === true;
+    const csr = b.op(CSR16F, [`${re}.o2`, `${sd}.wdata`, '', '', '', pcE, '', irq ? 'irq' : zero1, 'clk'], 'CSRs');
     b.wire(`${csr}.rdata`, `${sd}.old`);
     b.next();
     const exc = b.op1(AND, [b.op1(orN(3), [ill, `${sd}.ecall`, `${sd}.ebreak`]), validE], 'exception');
-    const intr = b.op1(AND, [`${csr}.intr`, validE], 'interrupt');
+    const intr = irq ? b.op1(AND, [`${csr}.intr`, validE], 'interrupt') : zero1;
     const mret = b.op1(AND, [`${sd}.mret`, validE], 'mret');
     b.wire(b.op1(AND, [`${sd}.csrwe`, validE]), `${csr}.we`);
     b.wire(mret, `${csr}.mret`);
     b.next();
-    const trap = b.name(b.op1(OR, [exc, intr], 'trap'), 'trap', true);
+    const trap = b.name(irq ? b.op1(OR, [exc, intr], 'trap') : exc, 'trap', true);
     const ntrap = b.op1(NOT, [trap]);
-    b.wire(trapCause(b, ill, `${sd}.ecall`, intr), `${csr}.cause`);
+    b.wire(trapCause(b, ill, `${sd}.ecall`, irq ? intr : null), `${csr}.cause`);
     b.wire(trap, `${csr}.trap`);
     rweE = b.op1(AND, [b.op1(OR, [rweE, `${sd}.csr`]), ntrap], 'rwe (E)');
     mweE = b.op1(AND, [mweE, ntrap], 'mwe (E)');
     yE = b.name(b.op1(MUX16, [yE, `${csr}.rdata`, `${sd}.csr`], 'or a CSR'), 'yE2', true);
-    const t1 = b.op1(MUX16, [`${np}.target`, `${csr}.mepc`, mret]);
+    const t1 = b.op1(MUX16, [target, `${csr}.mepc`, mret]);
     b.next();
     target = b.op1(MUX16, [t1, `${csr}.mtvec`, trap], 'target');
     // A trap wins in the target mux, so a branch's ld needs no ¬trap: ld·¬trap + trap = ld + trap.
-    redirect = b.name(b.op1(orN(3), [`${np}.ld`, trap, mret], 'redirect'), 'redirect2', true);
+    redirect = b.name(b.op1(orN(3), [redirect, trap, mret], 'redirect'), o.predict ? 'redirect3' : 'redirect2', true);
     b.next();
   }
   // A load in E (rwe and wb = 01), for the hazard unit (only a core that stalls has one).
@@ -351,12 +359,12 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
     b.wire(redirect, `${inst(deClr)}.i2`);
   } else void redirect;
   const R = b.right;
-  const name = o.predict ? 'RV16 pipeline with branch prediction' : o.sys ? 'RV16 pipeline with traps and interrupts' : o.flush ? 'RV16 pipeline' : o.stall ? 'RV16 pipeline (no branches)' : o.fwd ? 'RV16 pipeline (forwarding only)' : 'RV16 pipeline (no hazard handling)';
+  const name = o.sys === 'exc' ? 'RV16 pipeline with precise exceptions' : o.sys && o.predict ? 'RV16 pipeline with traps, interrupts and branch prediction' : o.predict ? 'RV16 pipeline with branch prediction' : o.sys ? 'RV16 pipeline with traps and interrupts' : o.flush ? 'RV16 pipeline' : o.stall ? 'RV16 pipeline (no branches)' : o.fwd ? 'RV16 pipeline (forwarding only)' : 'RV16 pipeline (no hazard handling)';
   d = define({
     id: `rv16_pipe_${key}`, name, category: 'cpu',
     summary: 'Five stages, F D E M W, with pipeline registers between them; the register file is written at the falling edge. '
       + (o.predict ? 'jal and backward branches are predicted taken in F (target = pc + imm there); E redirects only on a wrong guess. ' : '')
-      + (o.fwd ? 'Forwarding from M and W into E. ' : '') + (o.stall ? 'A load followed by a user stalls one cycle. ' : '') + (o.flush ? 'Branches and jumps resolve in E and flush two instructions. ' : '') + (o.sys ? 'Traps and the external interrupt are taken in E: precise, with a valid bit so bubbles never trap.' : ''),
+      + (o.fwd ? 'Forwarding from M and W into E. ' : '') + (o.stall ? 'A load followed by a user stalls one cycle. ' : '') + (o.flush ? 'Branches and jumps resolve in E and flush two instructions. ' : '') + (o.sys === 'exc' ? 'Exceptions are taken in E: precise, with a valid bit so bubbles never trap; no interrupts.' : o.sys ? 'Traps and the external interrupt are taken in E: precise, with a valid bit so bubbles never trap.' : '') + (o.fast ? ' Kogge–Stone adders in E: ALU, branch comparator, next PC.' : ''),
     ports: [{ name: 'clk', width: 1, dir: 'in', clock: true }, bit('rst', 'in'), bus('instr', 16, 'in'), bus('drdata', 16, 'in'), ...(o.sys ? [bit('irq', 'in')] : []),
       bus('pc', 16, 'out'), bus('daddr', 16, 'out'), bus('dwdata', 16, 'out'), bit('dwe', 'out'), bit('rwe', 'out'), bus('rwa', 3, 'out'), bus('rwd', 16, 'out')],
     symbol: { kind: 'box', label: 'RV16 PIPE' },

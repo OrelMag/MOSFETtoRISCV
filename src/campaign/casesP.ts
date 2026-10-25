@@ -47,4 +47,9 @@ export const CASESP: Record<string, LevelCase> = {
     cost: 'Two triodes (one 6SN7 bulb) and two steering diodes. The NAND-mapped SR latch is two NANDs: two triodes and four diodes.',
     alts: [{ name: 'SR latch (two NANDs)', lib: 'sr_latch' }],
   },
+  h_loader: {
+    problem: 'A stored-program machine starts with nothing in memory: something must copy the program in before the first fetch. Here the deck is in the reader, one 16-bit instruction a card, and the loader is the smallest machine that does it: a counter naming the next word, a write for each card the reader offers, and a switch that hands the memory\'s address lines to the CPU\'s pc once the hopper is empty. EDSAC\'s initial orders read its paper tape into memory this way (1949), the IBM 1401\'s Load key read a card and ran it, and a boot ROM copying firmware from flash (the bus chapter\'s computer) is the same step today.',
+    without: 'The program runs straight off the medium, as the Z3 ran its punched film: once, in order; a loop meant gluing the film into a ring, and no instruction could be jumped to. Or every word goes in by hand on a front panel.',
+    cost: '233 relays at par: 206 NANDs of logic, a coil each, and 27 more for fan-out; the 8-bit counter alone is 172 of them. 182 cycles over the two decks: the reader sets the pace (a card every four edges), so only the ends are yours: take the first card as soon as it is ready, raise run in the cycle the last one goes.',
+  },
 };

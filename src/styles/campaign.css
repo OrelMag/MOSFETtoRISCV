@@ -35,6 +35,7 @@
 .cp-map { display: block; max-width: 100%; height: auto; font-family: var(--font-ui); }
 .cp-band { fill: var(--surface-2); opacity: 0.55; }
 .cp-band-title { font-size: 12px; font-weight: 700; fill: var(--text-2); letter-spacing: 0.02em; text-transform: uppercase; }
+.cp-row-title { font-size: 12px; font-weight: 600; fill: var(--muted); letter-spacing: 0.02em; }
 /* an optional act folded to its header, or the Hide button of an open one */
 .cp-fold { cursor: pointer; outline: none; }
 .cp-fold.folded .cp-band { stroke: var(--border-strong); stroke-dasharray: 5 3; stroke-width: 1.2; }
