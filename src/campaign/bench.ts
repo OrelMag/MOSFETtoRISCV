@@ -3,9 +3,9 @@
 // the low address bits, as the sandbox's RAM is the size it is), an LED register at LEDS and the
 // interrupt line set by stores to IRQ, as the core bench does. The sandbox's CPU drawer then runs it
 // against the golden model (editor/cpu16.ts, wrapping its memory the same way) and stops at the
-// first wrong register write or store, with probes and the timing panel at hand. The io bench adds a
-// 32 × 32 RGB565 screen at SCREEN16_IO (0xF000 + 32·y + x, write-only), eight switches at SWITCHES and a
-// reset for the first cycle: Pong (riscv/rv16/pong16.ts) on a passing core, or on the reference core from
+// first wrong register write or store, with probes and the timing panel at hand. The core is held in
+// reset for its first cycle, as on the level's bench. The io bench adds a 32 × 32 RGB565 screen at
+// SCREEN16_IO (0xF000 + 32·y + x, write-only) and eight switches at SWITCHES: Pong (riscv/rv16/pong16.ts) on a passing core, or on the reference core from
 // Examples ▸. No DOM.
 
 import { docFromDef } from '../editor/fromdef';
@@ -72,7 +72,7 @@ export interface BenchOptions {
 
 /**
  * The bench chip for test `t` around `core` (the chip `coreId`, or opts.coreRef), not added to a workspace. system:
- * the core has an irq input, driven by stores to IRQ. Without opts.io the bench is the debug bench, part for part.
+ * the core has an irq input, driven by stores to IRQ. Without opts.io it is the debug bench.
  */
 export function benchChip(core: ComponentDef, coreId: string, coreName: string, t: CoreTest, opts: BenchOptions = {}, taken: { ids: string[]; names: string[] } = { ids: [], names: [] }): ChipDoc | { error: string } {
   const prog = sourceOf(t);
@@ -97,10 +97,10 @@ export function benchChip(core: ComponentDef, coreId: string, coreName: string, 
 
   const b = new Builder(12, 16, 8);
   b.pins('clk', 'rst');
-  // io: the core is held in reset for its first cycle, as on the level's bench (a multicycle core's state machine
+  // the core is held in reset for its first cycle, as on the level's bench (a multicycle core's state machine
   // starts there): a flip-flop powered on at 0 holds rst for one cycle, and again after every Reset
-  const rst = io ? b.op1(OR, ['rst', b.op1(NOT, [b.op1(DFF, [b.op1(TIE1, []), 'clk'], 'powered on')])], 'reset, first cycle') : 'rst';
-  if (io) b.next();
+  const rst = b.op1(OR, ['rst', b.op1(NOT, [b.op1(DFF, [b.op1(TIE1, []), 'clk'], 'powered on')])], 'reset, first cycle');
+  b.next();
   const c = b.op(core, ['clk', rst, '', '', ...(irq ? [''] : [])], 'your core');
   b.next();
   const pcs = b.op(splitter([k, 16 - k], 4), [`${c}.pc`]);

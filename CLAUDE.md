@@ -971,9 +971,9 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  decision, sticky shifter, leading-zero counter, normalize & round, compare, int → float), whose blocks
                  (FP_BLOCK) are never given, only unlocked by the rung that built them (fpGives)
   bench.ts       addBench: a failing core test as a computer chip around the learner's core (RV16 ROM, 64-word
-                 RAM, LEDs, IRQ line), opened with the CPU drawer; failingTest names it from a failure line;
-                 benchChip(…, { io }): plus a 32 × 32 RGB565 screen at 0xF000 (daddr[15:10] = 111100, write-only), eight
-                 switches at SWITCHES (0xFFFA) and a power-on reset for the first cycle; addPongBench (Pong around a
+                 RAM, LEDs, IRQ line, a power-on reset for the first cycle), opened with the CPU drawer; failingTest names
+                 it from a failure line; benchChip(…, { io }): plus a 32 × 32 RGB565 screen at 0xF000 (daddr[15:10] =
+                 111100, write-only) and eight switches at SWITCHES (0xFFFA); addPongBench (Pong around a
                  learner's core: the challenge strip's "Play Pong on your core" on a passing CoreSpec.rv16i level),
                  pongChip (around the reference rv16_cpu: Examples ▸ RV16: Pong);
                  addLaneBench: the same for a lane core (act 9): a power-on reset for the first cycle, a lane address chip
