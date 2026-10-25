@@ -19,6 +19,8 @@ export interface FsmState {
   at: [number, number];
   /** Drawing extras (the read-back's unknown and duplicate states). */
   cls?: string;
+  /** A second line under the name in place of the code (a datapath machine's register transfers). */
+  sub?: string;
 }
 
 export interface FsmArc {

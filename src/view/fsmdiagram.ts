@@ -109,8 +109,9 @@ export function fsmDiagram(spec: FsmSpec, opts: FsmDiagramOptions = {}): FsmDiag
     const [w, hh] = size(spec, st), [x, y] = st.at;
     const shape = spec.shape === 'circle' ? s('circle', { cx: x, cy: y, r: R }) : s('rect', { x: f(x - w / 2), y: f(y - hh / 2), width: f(w), height: hh, rx: hh / 2 });
     const g = s('g', { class: `fsm-st${st.cls ? ` ${st.cls}` : ''}` }, shape,
-      s('text', { class: 'n', x, y: spec.shape === 'circle' && spec.codeBits && st.code >= 0 ? y - 6 : y }, st.name));
-    if (spec.shape === 'circle' && spec.codeBits && st.code >= 0) g.append(s('text', { class: 'c', x, y: y + 11 }, st.code.toString(2).padStart(spec.codeBits, '0')));
+      s('text', { class: 'n', x, y: spec.shape === 'circle' && (st.sub || (spec.codeBits && st.code >= 0)) ? y - 6 : y }, st.name));
+    if (spec.shape === 'circle' && st.sub) g.append(s('text', { class: 'c sub', x, y: y + 11, textLength: st.sub.length > 11 ? 52 : null, lengthAdjust: 'spacingAndGlyphs' }, st.sub));
+    else if (spec.shape === 'circle' && spec.codeBits && st.code >= 0) g.append(s('text', { class: 'c', x, y: y + 11 }, st.code.toString(2).padStart(spec.codeBits, '0')));
     const badge = s('g', { class: 'fsm-badge', transform: `translate(${f(x - w / 2 - 2)},${f(y - hh / 2 - 2)})` }, s('circle', { r: 8 }), s('text', { y: 0.5 }));
     badge.style.display = 'none';
     g.append(s('title', null, st.does ? `${st.name}: ${st.does}` : st.name));

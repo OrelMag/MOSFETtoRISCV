@@ -151,7 +151,7 @@ function sanitizeTable(x: unknown): ChipDoc['table'] {
   const names = [...x.ins, ...x.outs];
   if (!names.every((n) => str(n) && isIdent(n) && !n.includes('.')) || new Set(names).size !== names.length) return undefined;
   const ins = x.ins as string[], outs = x.outs as string[];
-  if (ins.length < 1 || ins.length > 8 || outs.length < 1 || outs.length > 8 || x.rows.length !== outs.length) return undefined;
+  if (ins.length < 1 || ins.length > 8 || outs.length < 1 || outs.length > 16 || x.rows.length !== outs.length) return undefined;
   if (!x.rows.every((r) => str(r) && r.length === 1 << ins.length && !/[^01-]/.test(r))) return undefined;
   return compact({ ins: [...ins], outs: [...outs], rows: [...(x.rows as string[])], form: (x.form === 'andor' || x.form === 'pla' || x.form === 'rom' ? x.form : 'nand') as TableDoc['form'], of: str(x.of) && isIdent(x.of) ? x.of : undefined });
 }
@@ -160,12 +160,13 @@ function sanitizeTable(x: unknown): ChipDoc['table'] {
 function sanitizeFsm(x: unknown): ChipDoc['fsm'] {
   if (!isObj(x) || !Array.isArray(x.ins) || !Array.isArray(x.outs) || !Array.isArray(x.states) || !Array.isArray(x.arcs)) return undefined;
   const ins = x.ins.filter((n): n is string => str(n) && isIdent(n)), outs = x.outs.filter((n): n is string => str(n) && isIdent(n));
-  if (ins.length !== x.ins.length || outs.length !== x.outs.length || ins.length > 6 || !outs.length || outs.length > 8) return undefined;
+  if (ins.length !== x.ins.length || outs.length !== x.outs.length || ins.length > 6 || !outs.length || outs.length > 16) return undefined;
   const states: NonNullable<ChipDoc['fsm']>['states'] = [];
   for (const st of x.states) {
     if (!isObj(st) || !str(st.name) || !st.name || st.name.length > 24 || !Array.isArray(st.at) || !num(st.at[0]) || !num(st.at[1])) return undefined;
     const out = Array.isArray(st.out) ? st.out.filter((o): o is string => str(o) && outs.includes(o)) : [];
-    states.push(compact({ name: st.name, at: [st.at[0], st.at[1]] as [number, number], out: out.length ? out : undefined }));
+    const act = Array.isArray(st.act) ? st.act.filter((t): t is { reg: string; expr: string } => isObj(t) && str(t.reg) && isIdent(t.reg) && str(t.expr) && t.expr.length <= 60).map((t) => ({ reg: t.reg, expr: t.expr })) : [];
+    states.push(compact({ name: st.name, at: [st.at[0], st.at[1]] as [number, number], out: out.length ? out : undefined, act: act.length ? act : undefined }));
   }
   if (!states.length || states.length > 16) return undefined;
   const arcs: NonNullable<ChipDoc['fsm']>['arcs'] = [];
@@ -175,11 +176,21 @@ function sanitizeFsm(x: unknown): ChipDoc['fsm'] {
     for (const [k, v] of Object.entries(a.when)) if (ins.includes(k) && (v === 0 || v === 1)) when[k] = v;
     const out = Array.isArray(a.out) ? a.out.filter((o): o is string => str(o) && outs.includes(o)) : [];
     const fin = (v: unknown, lim: number) => (num(v) && Math.abs(v) <= lim ? Math.round(v) : undefined);
-    arcs.push(compact({ from: a.from, to: a.to, when, out: out.length ? out : undefined, bend: fin(a.bend, 400), loop: fin(a.loop, 360), dx: fin(a.dx, 400), dy: fin(a.dy, 400) }));
+    const test = Array.isArray(a.test) ? a.test.filter((t): t is { expr: string; is: 0 | 1 } => isObj(t) && str(t.expr) && t.expr.length <= 60 && (t.is === 0 || t.is === 1)).map((t) => ({ expr: t.expr, is: t.is })) : [];
+    arcs.push(compact({ from: a.from, to: a.to, when, out: out.length ? out : undefined, test: test.length ? test : undefined, bend: fin(a.bend, 400), loop: fin(a.loop, 360), dx: fin(a.dx, 400), dy: fin(a.dy, 400) }));
   }
   const reset = int(x.reset, 0) && x.reset < states.length ? x.reset : 0;
   const encoding: FsmDoc['encoding'] = x.encoding === 'gray' || x.encoding === 'onehot' ? x.encoding : 'binary';
-  return compact({ ins, outs, states, arcs, reset, encoding, form: (x.form === 'andor' || x.form === 'pla' || x.form === 'rom' ? x.form : 'nand') as TableDoc['form'], safe: x.safe === true ? true as const : undefined });
+  return compact({ ins, outs, states, arcs, reset, encoding, form: (x.form === 'andor' || x.form === 'pla' || x.form === 'rom' ? x.form : 'nand') as TableDoc['form'], safe: x.safe === true ? true as const : undefined,
+    data: sanitizeData(x.data), of: str(x.of) && isIdent(x.of) ? x.of : undefined });
+}
+
+/** A state machine's datapath: names as pins, one width (fsmd.ts checks the rest when it builds). */
+function sanitizeData(x: unknown): NonNullable<ChipDoc['fsm']>['data'] {
+  if (!isObj(x) || !int(x.width, 1) || x.width > 32 || !Array.isArray(x.ins) || !Array.isArray(x.regs) || !Array.isArray(x.outs)) return undefined;
+  const names = (xs: unknown[]) => xs.filter((n): n is string => str(n) && isIdent(n)).slice(0, 6);
+  const outs = x.outs.filter((o): o is { name: string; src: string } => isObj(o) && str(o.name) && isIdent(o.name) && str(o.src) && isIdent(o.src)).slice(0, 6).map((o) => ({ name: o.name, src: o.src }));
+  return { width: x.width, ins: names(x.ins), regs: names(x.regs), outs };
 }
 
 function sanitizePart(p: unknown): PartDoc | null {

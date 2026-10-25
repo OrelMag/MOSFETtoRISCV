@@ -96,3 +96,19 @@
   .fsm-rim { stroke-width: 16; }
   .fsm-grip { width: 16px; right: -8px; }
 }
+
+/* The datapath: width, data pins, registers; a state's transfers and an arc's tests as rows. */
+.fsm-data { display: grid; gap: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
+.tt-pinbox.data { border-color: color-mix(in srgb, var(--tt-l2) 50%, var(--border)); }
+.fsm-dout { display: inline-flex; align-items: center; gap: 4px; }
+.fsm-dout select { font: 12.5px var(--font-mono); background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 2px 4px; }
+.fsm-acts { align-items: flex-start; }
+.fsm-list { display: grid; gap: 4px; flex: 1; min-width: 0; justify-items: start; }
+.fsm-item { display: flex; align-items: center; gap: 6px; width: 100%; }
+.fsm-item code { font: 600 12.5px var(--font-mono); white-space: nowrap; }
+.fsm-item .tt-expr { flex: 1; min-width: 60px; }
+.fsm-cost { color: var(--text-2); }
+.fsm-cost b { color: var(--text); }
+.fsm-st text.c.sub { font-size: 9px; }
+.fsm-pane.ro .fsm-tools, .fsm-pane.ro .tt-pins, .fsm-pane.ro .fsm-keys { display: none; }
+.fsm-data .tt-pinrow .tt-lbl { width: 76px; }

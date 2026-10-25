@@ -18,8 +18,11 @@ import { type MenuEntry, showMenu } from './ctxmenu';
 import { type Editor, registerEditorPlugin, registerNewChipKind } from './editor';
 import type { FsmDoc } from './model';
 import {
-  arcLabel, arcOf, condText, detachFsm, type Encoding, encodingCosts, FSM_MAX_IN, FSM_MAX_OUT, FSM_MAX_STATES, fsmWarnings, newFsmChip, setFsm, specOf,
+  arcLabel, arcOf, condText, ctlId, detachFsm, type Encoding, encodingCosts, FSM_MAX_IN, FSM_MAX_OUT, FSM_MAX_STATES, fsmOwnerOf, fsmWarnings, newFsmChip, setFsm, specOf,
 } from './fsmchip';
+import { DATA_MAX, DATA_WIDTHS, fsmdCheck, GCD_FSMD } from './fsmd';
+import { stats } from '../sim/stats';
+import type { FsmDataDoc } from './model';
 
 const HIDDEN_KEY = 'mosfet2riscv:fsm-hidden';
 const WIDTH_KEY = 'mosfet2riscv:fsm-width';
@@ -102,6 +105,16 @@ class FsmUi {
 
   private renderBanner(id: string): void {
     const hidden = this.hidden.has(id);
+    const owner = fsmOwnerOf(this.ed.ws, id);
+    this.pane.classList.toggle('ro', !!owner);
+    if (owner) {
+      this.banner.replaceChildren(
+        h('span', { class: 'hdl-badge fsm-badge-tag' }, 'FSM'),
+        h('span', { class: 'grow' }, 'The controller of ', h('b', null, owner.name), ' · drawn from its machine, edited there'),
+        h('button', { class: 'btn sm', onclick: () => this.ed.openChip(owner.id) }, 'Open the machine'),
+        h('button', { class: 'btn sm', onclick: () => this.toggleHidden(id) }, hidden ? 'Show machine' : 'Hide machine'));
+      return;
+    }
     this.banner.replaceChildren(
       h('span', { class: 'hdl-badge fsm-badge-tag' }, 'FSM'),
       h('span', { class: 'grow' }, 'Drawn from its ', h('b', null, 'state machine'), ' · edit the diagram to change it; double-click a block for its table'),
@@ -146,6 +159,8 @@ class FsmUi {
   private apply(next: FsmDoc): void {
     const id = this.ed.chipId;
     if (next === this.doc) return;
+    const owner = fsmOwnerOf(this.ed.ws, id);
+    if (owner) { this.ed.toast(`This controller follows ${owner.name}: edit that machine`, 'err'); this.key = ''; this.sync(); return; }
     let err: string | null = null;
     this.ed.editWs((ws) => {
       const r = setFsm(ws, id, next);
@@ -236,7 +251,10 @@ class FsmUi {
     try {
       const def = this.ed.lib.defOf(this.ed.chipId);
       if (!def) v = { ok: false, why: 'the chip does not compile' };
-      else {
+      else if (doc.data) {
+        const why = fsmdCheck(simulate(def), doc, 150);
+        v = why ? { ok: false, why } : { ok: true };
+      } else {
         const r = readFsm(simulate(def), specOf(doc, true));
         const bad = r.arcs.find((a) => !a.ok);
         v = readbackOk(r) ? { ok: true } : { ok: false, why: bad ? `from ${r.states[bad.from].name} on ${JSON.stringify(bad.inp)}` : 'a state appears twice' };
@@ -282,7 +300,8 @@ class FsmUi {
       h('div', { class: 'tt-pinrow' }, h('span', { class: 'tt-lbl' }, 'Outputs'),
         doc.outs.map((name, j) => this.pinField(doc, 'out', j, name)),
         h('button', { class: 'btn sm', disabled: doc.outs.length >= FSM_MAX_OUT, onclick: () => this.apply({ ...doc, outs: [...doc.outs, nextName([...doc.ins, ...doc.outs], OUT_NAMES, 'o')] }) }, '+ Output')),
-      h('p', { class: 'tt-note' }, 'The chip also gets rst (synchronous: back to the reset state) and clk.'));
+      h('p', { class: 'tt-note' }, 'The chip also gets rst (synchronous: back to the reset state) and clk.'),
+      this.dataRows(doc));
 
     const tools = h('div', { class: 'fsm-tools', role: 'toolbar', 'aria-label': 'Diagram tools' },
       ([['select', 'Select', 'Click a state or an arc; drag a state to move it, its rim to draw an arc'], ['state', '+ State', 'Click the diagram to add a state there (N, or double-click)'], ['arc', 'Arc', 'Click the state it leaves, then the state it enters (A; or drag from a state\'s rim)']] as const)
@@ -322,7 +341,8 @@ class FsmUi {
     const v = this.verdict(doc);
     const status = h('div', { class: 'fsm-status' },
       warns.map((w) => h('div', { class: 'warn' }, '⚠ ', w)),
-      h('div', { class: v.ok ? 'ok' : 'bad' }, v.ok ? `✓ Read back from the circuit: ${doc.states.length} states, every arc as drawn` : `✕ The circuit differs from the diagram${v.why ? `: ${v.why}` : ''}`));
+      h('div', { class: v.ok ? 'ok' : 'bad' }, v.ok ? (doc.data ? '✓ The circuit follows the machine for 150 cycles of random inputs (registers, outputs, every state)' : `✓ Read back from the circuit: ${doc.states.length} states, every arc as drawn`) : `✕ The circuit differs from the machine${v.why ? `: ${v.why}` : ''}`),
+      doc.data ? this.dataCost(id) : null);
 
     this.body.replaceChildren(head, pins,
       h('div', { class: 'fsm-main' },
@@ -625,6 +645,7 @@ class FsmUi {
         h('div', { class: 'fsm-row' }, h('span', { class: 'tt-lbl' }, 'State'), name,
           i === doc.reset ? h('span', { class: 'fsm-tag' }, 'reset state') : h('button', { class: 'btn sm', title: 'rst and power-on lead here', onclick: () => this.apply({ ...doc, reset: i }) }, 'Make reset state')),
         outChecks(st.out, (out) => this.apply({ ...doc, states: doc.states.map((t, k) => (k === i ? { ...t, out: out.length ? out : undefined } : t)) }), 'Moore'),
+        doc.data ? this.transfers(doc, i) : null,
         h('p', { class: 'tt-note' }, 'Moore outputs hold for the whole time the machine is in this state.'));
     }
     const a = doc.arcs[sel.i], k = sel.i;
@@ -644,8 +665,99 @@ class FsmUi {
               onclick: () => { if (on) return; const when = { ...a.when }; if (val === undefined) delete when[x]; else when[x] = val; this.setArc(doc, k, { ...a, when }); },
             }, t);
           }))))) : h('p', { class: 'tt-note' }, 'No inputs: the arc is always taken.'),
+      doc.data ? this.tests(doc, k) : null,
       outChecks(a.out, (out) => this.setArc(doc, k, { ...a, out: out.length ? out : undefined }), 'Mealy'),
       h('p', { class: 'tt-note' }, `Taken when ${condText(doc, a.when)}. Mealy outputs are 1 while the next edge would take this arc.`));
+  }
+
+  // ---- the datapath ---------------------------------------------------------------------------------
+
+  /** NANDs of the whole chip and of its controller (the rest is the datapath). */
+  private dataCost(id: string): HTMLElement | null {
+    const all = this.ed.lib.defOf(id), ctl = this.ed.lib.defOf(ctlId(id));
+    if (!all || !ctl) return null;
+    const a = stats(all).nands, c = stats(ctl).nands;
+    return h('div', { class: 'fsm-cost' }, h('b', null, String(a)), ' NAND in all: controller ', h('b', null, String(c)), ', datapath ', h('b', null, String(a - c)));
+  }
+
+  /** Width, data inputs, registers, data outputs (or a button that adds a datapath). */
+  private dataRows(doc: FsmDoc): HTMLElement {
+    const d = doc.data;
+    if (!d) return h('div', { class: 'tt-pinrow' }, h('span', { class: 'tt-lbl' }, 'Datapath'),
+      h('button', { class: 'btn sm', title: 'Registers the states load (reg := expr) and tests on the arcs (a < b): a controller and a datapath', onclick: () => this.apply({ ...doc, data: { width: 8, ins: ['x'], regs: ['a'], outs: [{ name: 'out', src: 'a' }] } }) }, '+ Registers'));
+    // a rename carries through every transfer and test (whole words only)
+    const setData = (nd: FsmDataDoc, ren?: [string, string]) => {
+      const rw = (t: string) => (ren ? t.replace(new RegExp(`\\b${ren[0]}\\b`, 'g'), ren[1]) : t);
+      this.apply({
+        ...doc, data: nd,
+        states: doc.states.map((st) => ({ ...st, act: st.act?.map((t) => ({ reg: rw(t.reg), expr: rw(t.expr) })).filter((t) => nd.regs.includes(t.reg)) })),
+        arcs: doc.arcs.map((a) => ({ ...a, test: a.test?.map((t) => ({ ...t, expr: rw(t.expr) })) })),
+      });
+    };
+    const taken = () => [...doc.ins, ...doc.outs, ...d.ins, ...d.regs, ...d.outs.map((o) => o.name)];
+    const nameBox = (name: string, title: string, rename: (v: string) => void, remove: (() => void) | null) => {
+      const inp = h('input', { class: 'tt-pin', value: name, size: Math.max(2, name.length), spellcheck: 'false', 'aria-label': title }) as HTMLInputElement;
+      inp.addEventListener('change', () => { const v = inp.value.trim(); if (v && v !== name) rename(v); });
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') inp.blur(); if (e.key === 'Escape') { inp.value = name; inp.blur(); } });
+      return h('span', { class: 'tt-pinbox data' }, inp, remove ? h('button', { class: 'tt-x', 'aria-label': `Remove ${name}`, title: `Remove ${name}`, onclick: remove }, '×') : null);
+    };
+    const fresh = (base: string) => { let k = 0; while (taken().includes(`${base}${k || ''}`)) k++; return `${base}${k || ''}`; };
+    const list = (what: 'ins' | 'regs', label: string, base: string) => h('div', { class: 'tt-pinrow' }, h('span', { class: 'tt-lbl' }, label),
+      d[what].map((n, i) => nameBox(n, `${label} ${i + 1} name`, (v) => setData({ ...d, [what]: d[what].map((x) => (x === n ? v : x)), outs: d.outs.map((o) => (o.src === n ? { ...o, src: v } : o)) }, [n, v]),
+        what === 'regs' && d.regs.length <= 1 ? null : () => setData({ ...d, [what]: d[what].filter((x) => x !== n), outs: d.outs.filter((o) => o.src !== n) }))),
+      h('button', { class: 'btn sm', disabled: d[what].length >= DATA_MAX, title: `Add ${what === 'ins' ? 'a data input' : 'a register'}`, onclick: () => setData({ ...d, [what]: [...d[what], fresh(base)] }) }, '+'));
+    const srcs = [...d.regs, ...d.ins];
+    const srcSelect = (o: { name: string; src: string }, j: number) => {
+      const sel = h('select', { 'aria-label': `${o.name} shows` }, srcs.map((x) => h('option', { value: x, selected: x === o.src }, x))) as HTMLSelectElement;
+      sel.addEventListener('change', () => setData({ ...d, outs: d.outs.map((x, k) => (k === j ? { ...x, src: sel.value } : x)) }));
+      return sel;
+    };
+    return h('div', { class: 'fsm-data' },
+      h('div', { class: 'tt-pinrow' }, h('span', { class: 'tt-lbl' }, 'Width'),
+        h('div', { class: 'hdl-seg', role: 'radiogroup', 'aria-label': 'Data width' }, DATA_WIDTHS.map((w) => h('button', { class: d.width === w ? 'on' : '', role: 'radio', 'aria-checked': String(d.width === w), onclick: () => d.width !== w && setData({ ...d, width: w }) }, `${w}`))),
+        h('span', { class: 'tt-note' }, 'bits, every register and data pin'),
+        h('button', { class: 'btn sm', title: 'Drop the registers, transfers and tests: a plain state machine', onclick: () => { const { data: _d, ...rest } = doc; this.apply({ ...rest, states: doc.states.map(({ act: _a, ...st }) => st), arcs: doc.arcs.map(({ test: _t, ...a }) => a) }); } }, 'Remove')),
+      list('ins', 'Data in', 'x'), list('regs', 'Registers', 'r'),
+      h('div', { class: 'tt-pinrow' }, h('span', { class: 'tt-lbl' }, 'Data out'),
+        d.outs.map((o, j) => h('span', { class: 'fsm-dout' },
+          nameBox(o.name, `Data output ${j + 1} name`, (v) => setData({ ...d, outs: d.outs.map((x, k) => (k === j ? { ...x, name: v } : x)) }), () => setData({ ...d, outs: d.outs.filter((_, k) => k !== j) })),
+          h('span', null, '='), srcSelect(o, j))),
+        h('button', { class: 'btn sm', disabled: d.outs.length >= DATA_MAX, title: 'Add a data output', onclick: () => setData({ ...d, outs: [...d.outs, { name: fresh('out'), src: d.regs[0] }] }) }, '+')));
+  }
+
+  /** A state's register transfers: reg := expr rows, each one register. */
+  private transfers(doc: FsmDoc, i: number): HTMLElement {
+    const d = doc.data!, st = doc.states[i], act = st.act ?? [];
+    const setAct = (next: { reg: string; expr: string }[]) => this.apply({ ...doc, states: doc.states.map((t, k) => (k === i ? { ...t, act: next.length ? next : undefined } : t)) });
+    const free = d.regs.filter((r) => !act.some((t) => t.reg === r));
+    return h('div', { class: 'fsm-row fsm-acts' }, h('span', { class: 'tt-lbl' }, 'Loads'),
+      h('div', { class: 'fsm-list' },
+        act.map((t, j) => {
+          const inp = h('input', { class: 'tt-expr', value: t.expr, spellcheck: 'false', 'aria-label': `${t.reg} :=`, placeholder: 'a - b' }) as HTMLInputElement;
+          inp.addEventListener('change', () => setAct(act.map((x, k) => (k === j ? { ...x, expr: inp.value.trim() } : x))));
+          inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') inp.blur(); });
+          return h('div', { class: 'fsm-item' }, h('code', null, `${t.reg} :=`), inp, h('button', { class: 'tt-x', 'aria-label': `Remove ${t.reg} :=`, onclick: () => setAct(act.filter((_, k) => k !== j)) }, '×'));
+        }),
+        free.length ? h('button', { class: 'btn sm', title: 'Load a register at the clock edge leaving this state', onclick: () => setAct([...act, { reg: free[0], expr: free[0] }]) }, `+ ${free[0]} :=`) : null,
+        h('span', { class: 'tt-note' }, 'a + b, a − b, a & b, a | b, a ^ b, a << 1, a >> 1; a register, a data input or a number')));
+  }
+
+  /** An arc's tests on the data: each must be true (or false) for the arc to be taken. */
+  private tests(doc: FsmDoc, k: number): HTMLElement {
+    const a = doc.arcs[k], ts = a.test ?? [];
+    const setTests = (next: { expr: string; is: 0 | 1 }[]) => this.setArc(doc, k, { ...a, test: next.length ? next : undefined });
+    return h('div', { class: 'fsm-row fsm-acts' }, h('span', { class: 'tt-lbl' }, 'Tests'),
+      h('div', { class: 'fsm-list' },
+        ts.map((t, j) => {
+          const inp = h('input', { class: 'tt-expr', value: t.expr, spellcheck: 'false', 'aria-label': `Test ${j + 1}`, placeholder: 'a < b' }) as HTMLInputElement;
+          inp.addEventListener('change', () => setTests(ts.map((x, i) => (i === j ? { ...x, expr: inp.value.trim() } : x))));
+          inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') inp.blur(); });
+          return h('div', { class: 'fsm-item' }, inp,
+            h('div', { class: 'hdl-seg' }, ([[1, 'true'], [0, 'false']] as const).map(([v, l]) => h('button', { class: t.is === v ? 'on' : '', 'aria-pressed': String(t.is === v), onclick: () => t.is !== v && setTests(ts.map((x, i) => (i === j ? { ...x, is: v } : x))) }, l))),
+            h('button', { class: 'tt-x', 'aria-label': `Remove test ${t.expr}`, onclick: () => setTests(ts.filter((_, i) => i !== j)) }, '×'));
+        }),
+        h('button', { class: 'btn sm', onclick: () => setTests([...ts, { expr: `${doc.data!.regs[0]} = 0`, is: 1 }]) }, '+ Test'),
+        h('span', { class: 'tt-note' }, 'a = b, a ≠ b, a < b, a ≤ b, a > b, a ≥ b (unsigned), or a bit: a[7]')));
   }
 
   private pinField(doc: FsmDoc, side: 'in' | 'out', k: number, name: string): HTMLElement {
@@ -677,4 +789,9 @@ registerEditorPlugin((ed) => {
 registerNewChipKind({
   label: 'State machine', hint: 'draw a state diagram: the circuit is built from it', icon: 'flag',
   run: (ed) => ed.editWs((ws) => newFsmChip(ws).ws),
+});
+
+registerNewChipKind({
+  label: 'State machine + datapath', hint: 'states load registers, arcs test them (GCD to start from)', icon: 'flag',
+  run: (ed) => ed.editWs((ws) => newFsmChip(ws, GCD_FSMD, 'GCD').ws),
 });

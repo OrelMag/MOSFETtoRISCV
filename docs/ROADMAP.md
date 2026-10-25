@@ -490,9 +490,19 @@ a datapath (register transfers on real adders and registers), the textbook way a
 - ✅ 2b. Chapter 9's state-machine step links to `#/sandbox/new/fsm` (the detector as a state-machine chip; `new/table`
   too); `s_fsm` refuses one (above); arcs placed by hand (drag a curve to bend it, a loop to turn it, a label to move it;
   double-click puts it back); a machine's tables in any of the four forms (ROM: a microprogrammed controller)
-- ⏳ 3. State machine + datapath: states carry register transfers (`count := count + 1`, `acc := acc + x`) on library
-  registers, adders and muxes; the controller is step 2, the datapath its control signals (the multicycle CPU's
-  shape)
+- ✅ 3. State machine + datapath (mockup approved 2026-10-25, board 4): New chip ▾ State machine + datapath (GCD by
+  subtraction to start from), or + Registers on any machine. One data width (4 / 8 / 12 / 16); data inputs, registers,
+  data outputs; a state's register transfers (reg := a + b, a − b, & | ^, a << k, a >> k, an operand) at the edge leaving
+  it; an arc's tests (a = b, ≠ < ≤ > ≥, a[k]) beside its input pattern. Built as a controller chip (step 2's machine over
+  the inputs and one status bit per test; Moore outputs load and steer) and a datapath of library blocks: reg<w> per
+  register (held during rst) behind a source mux, one operator unit per kind and per transfers a state needs at once
+  (operand muxes in front: GCD's SUBA and SUBB share one subtractor), a comparator per pair compared. Checked against
+  a reference interpreter every cycle (150 random cycles in the pane, random machines in tests); the cost split between
+  controller and datapath (editor/fsmd.ts)
+- ✅ The state-machine editor, honed (asked 2026-10-25): the pane resizes and expands (diagram beside its properties);
+  arcs curve by default, parallel ones fan out; right-click menus on a state, an arc and the diagram; an arc drawn by
+  dragging from a state's rim; double-click renames in place or adds a state; N, A, F2, Delete, Esc, arrows (a 10-unit
+  grid); arrange in a circle
 - ⏳ Memory-map designer: address regions (RAM, ROM, screen, console, keys) dragged onto the address space, overlaps and
   gaps shown, the address decoder opened as a chip (the ISA decoder's match lines over address bits); chapter 37's bus
   and the sandbox computer's map

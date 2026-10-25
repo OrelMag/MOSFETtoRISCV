@@ -765,8 +765,16 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  specOf (the FsmSpec: diagram, readFsm read-back with `implicit` stay arcs; stateBits s<i>.q; an arc's bend /
                  loop / dx / dy drawn by hand over the automatic ones);
                  fsmchipui.ts: plugin, the machine pane (view/fsmdiagram.ts drawn on: Select / + State / Arc tools, states
-                 dragged, the selection's properties, encodings with their cost, the read-back verdict, the live state from
-                 paintHooks), banner, New chip ▾ State machine
+                 dragged on a 10-unit grid, arcs from a state's rim (fsm-rim), right-click menus (ctxmenu.ts showMenu),
+                 rename in place, keys N A F2 Delete Esc arrows; double-clicks detected by the last tap (lastTap: a press
+                 redraws the diagram); the selection's properties, encodings with their cost, the read-back verdict, the
+                 live state from paintHooks; resize grip, Expand), banner, New chip ▾ State machine / + datapath
+  fsmd.ts        a state machine with a datapath (FsmDoc.data: width, data ins, regs, data outs; FsmStateDoc.act reg := expr;
+                 FsmArcDoc.test): parseExpr / parseTest, the reference (fsmdStep: rst holds the registers), planOf (each
+                 register's sources, operator units by conflict colouring, tests, comparator pairs), controllerOf (an
+                 FsmDoc with `of`: ins + st<i>, outs + ld_<reg> sel_<reg><b> u<k>s<b>), fsmdTopDef (Builder: controller
+                 chip `ctl`, op<k> units, r_<reg> registers, cmp<i>, st<i>), fsmdCheck (circuit against the reference per
+                 cycle), GCD_FSMD; fsmchip.ts setFsm builds <id>_ctl (fsmOwnerOf: read-only there) then the top level
   examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, console, screen, the computer, shared bus,
                  wired-AND / OR, RV16 Pong: campaign/bench.ts pongChip), addExample: new chip (and an example's
                  `subchips`, fresh ids), opened. The computer
