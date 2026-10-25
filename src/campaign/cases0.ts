@@ -118,7 +118,7 @@ export const CASES0: Record<string, LevelCase> = {
   a_add16: {
     problem: 'RV16 words are 16 bits. Four 4-bit adders, the carry out of each into the next, add them. The next-PC logic has two: pc + imm for taken branches and jal, rs1 + imm for jalr. The ALU\'s adder / subtractor and the branch comparator\'s less-than carry the same chain.',
     without: 'No branch or jump targets and no 16-bit arithmetic: the ALU, the comparator and the next-PC logic all start from this adder.',
-    cost: '144 NANDs, depth 36: the carry crosses every bit, and the single-cycle core\'s critical path runs through such chains. A 16-bit Kogge–Stone adder (the side quest of this act) is 362 NANDs, depth 14 as its level builds it (the library\'s, listed below, 366 and 16); a carry-select adder 312 NANDs, depth 20.',
+    cost: '144 NANDs, depth 36: the carry crosses every bit, and the single-cycle core\'s critical path runs through such chains. A 16-bit Kogge–Stone adder (Fast adders, later in this act) is 362 NANDs, depth 14 as its level builds it (the library\'s, listed below, 366 and 16); a carry-select adder 312 NANDs, depth 20.',
     alts: [{ name: 'Kogge–Stone (parallel prefix)', lib: 'ks16' }, { name: 'Carry-select, 4-bit blocks', lib: 'csel16_4' }],
   },
   a_inc16: {

@@ -725,7 +725,7 @@ export const WALKS2: Record<string, WalkScript> = {
     },
   ],
 
-  y_final: [
+  y_ptrap: [
     {
       title: 'Pipeline IV\'s front end',
       text: 'The PC with the stall hold and the redirect mux; F/D instr and F/D pc with en = ¬stall and clr = rst + redirect.',
@@ -760,23 +760,56 @@ export const WALKS2: Record<string, WalkScript> = {
     },
     {
       title: 'E: CSRs',
-      text: 'The detectors and the CSR file work in E, on pcE, with irq from the pin. A CSR instruction reads and writes there, its write gated by valid; the old value travels down as its result.',
-      parts: ['u42', 'u43', 'u44', 'u49'], codex: ['csr'],
+      text: 'The detectors and the CSR file work in E, on pcE; its irq input is tied to 0 (no interrupts yet). A CSR instruction reads and writes there, its write gated by valid; the old value travels down as its result.',
+      parts: ['u42', 'u43', 'u44', 'u48'], codex: ['csr'],
     },
     {
       title: 'A precise trap',
-      text: 'exception = (ill + ecall + ebreak)·valid, interrupt = intr·valid, mret·valid. The interrupt needs valid too: a bubble has no pc of its own (its D/E slot was cleared), so an interrupt taken on it would save a wrong mepc, and the handler would resume where the program never was. trap = exception + interrupt, with the single-cycle core\'s five cause NANDs. The instruction in E has written nothing yet; the older ones in M and W complete, the younger ones in F and D are flushed.',
-      parts: ['u45', 'u46', 'u47', 'u48', 'u50', 'u52', 'u53', 'u54', 'u55', 'u56', 'u60'], codex: ['precise', 'traps'],
+      text: 'exception = (ill + ecall + ebreak)·valid, and mret·valid: a bubble never traps and never returns. Here trap = exception. Its cause takes three NANDs: bit 1 is always 1, bit 0 = ¬ill, bit 3 = ¬ill·ecall (2 illegal, 11 ecall, 3 ebreak). The instruction in E has written nothing yet; the older ones in M and W complete, the younger ones in F and D are flushed.',
+      parts: ['u45', 'u46', 'u47', 'u50', 'u51', 'u52', 'u56'], codex: ['precise', 'traps'],
     },
     {
       title: 'Cancel and redirect',
       text: '¬trap gates rwe and mwe in E, and a CSR instruction\'s old value replaces the ALU result. target = mtvec on a trap, mepc on mret; redirect = ld + trap + mret loads the PC and flushes F/D and D/E. The 3-input OR lengthens the flush path: period 81 (+3).',
-      parts: ['u51', 'u61', 'u62', 'u63', 'u64', 'u65', 'u66', 'u67'], codex: ['flush'],
+      parts: ['u49', 'u57', 'u58', 'u59', 'u60', 'u61', 'u62', 'u63'], codex: ['flush'],
     },
     {
       title: 'Load-use, M and W',
-      text: 'As in Pipeline IV, except that loadE uses rwe after the ¬trap gate, so a load interrupted in E raises no stall. 12 038 NANDs; the 45 programs take 2 399 cycles, 194 319 NAND delays, against 197 600 on the single-cycle core with traps (1 976 cycles at period 100).',
-      parts: ['u68', 'u69', 'u70', 'u71', 'u73', 'u74', 'u75', 'u76', 'u77', 'u78', 'u79', 'pick84', 'u80', 'u81', 'u83', 'u84', 'u85', 'u86', 'u87'], codex: ['loaduse'],
+      text: 'As in Pipeline IV, except that loadE uses rwe after the ¬trap gate, so a load that traps in E raises no stall. 12 031 NANDs; the 44 programs take 2 361 cycles, 191 241 NAND delays, against 194 800 on the single-cycle core with traps (1 948 cycles at period 100).',
+      parts: ['u64', 'u65', 'u66', 'u67', 'u69', 'u70', 'u71', 'u72', 'u73', 'u74', 'u75', 'pick80', 'u76', 'u77', 'u79', 'u80', 'u81', 'u82', 'u83'], codex: ['loaduse'],
+    },
+  ],
+
+  y_final: [
+    {
+      title: 'Pipeline V',
+      text: 'Your pipeline with precise exceptions, as it was: the valid bit, D/E instr, the detectors and the CSR file in E, trap and mret on the redirect. Its CSR file now reads irq from the pin, so mip and intr see the device.',
+      parts: ['u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'u11', 'u12', 'u13', 'u14', 'u15', 'u16', 'u17', 'u18', 'u19', 'u20', 'u21', 'u22', 'u24', 'u25', 'u26', 'u27', 'u28', 'u29', 'u30', 'u31', 'u32',
+        'u33', 'u34', 'u35', 'sel36', 'pick36', 'u36', 'sel39', 'pick39', 'u37', 'u38', 'u39', 'u40', 'u41', 'u42', 'u43', 'u44', 'u45', 'u46', 'u48', 'u49', 'u51', 'u53', 'u55',
+        'u61', 'u62', 'u63', 'u64', 'u65', 'u66', 'u67', 'u68', 'u69', 'u70', 'u71', 'u73', 'u74', 'u75', 'u76', 'u77', 'u78', 'u79', 'sel84', 'pick84', 'u80', 'u81', 'u83', 'u84', 'u85', 'u86', 'u87'],
+      codex: ['precise'],
+    },
+    {
+      title: 'An interrupt, on a valid instruction',
+      text: 'interrupt = intr·valid, one AND. The instruction in E does not run; it is the one mepc names, and mret runs it again.',
+      parts: ['u47'], codex: ['interrupts'],
+      ask: {
+        question: 'An interrupt belongs to no instruction. Must it wait for a valid one in E?',
+        options: ['Yes: a bubble has no pc of its own, so mepc would be wrong', 'No: any cycle will do, since the interrupt does not depend on the program', 'No: bubbles never reach E'],
+        answer: 0,
+        explain: 'A bubble\'s D/E slot was cleared, pc included: taken on it, the interrupt would save mepc = 0, and mret would restart the program instead of resuming it.',
+        why: ['', 'The handler returns to mepc: the interrupt must look as if it came just before a real instruction, so one must be in E.', 'A stall or a flush puts one in D/E: the load-use stall, and two after every taken branch.'],
+      },
+    },
+    {
+      title: 'Into the trap',
+      text: 'trap = exception + interrupt: an OR in front of everything Pipeline V already does on a trap (cancel E, flush, PC ← mtvec).',
+      parts: ['u50'], codex: ['traps'],
+    },
+    {
+      title: 'The cause',
+      text: 'mcause 0x800B for the interrupt, ahead of every exception: bit 15 = intr, bit 0 = intr + ¬ill, bit 3 = intr + ¬ill·ecall, the single-cycle core\'s five NANDs. 12 038 NANDs, 7 over Pipeline V, period 81; the 45 programs take 2 399 cycles, 194 319 NAND delays, against 197 600 on the single-cycle core with interrupts (1 976 cycles at period 100).',
+      parts: ['u52', 'u54', 'u56', 'u60'], codex: ['interrupts'],
     },
   ],
 };
