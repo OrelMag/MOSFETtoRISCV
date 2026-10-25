@@ -1,4 +1,4 @@
-import { INV_CMOS, INV_PSEUDO, NAND, NMOS_SWITCH, NOR_CMOS, PMOS_SWITCH, rca } from '../lib';
+import { INV_CMOS, INV_PSEUDO, NAND, NMOS_SWITCH, NOR_CMOS, PMOS_SWITCH, rca, WEAK_DEMO } from '../lib';
 import {
   NAND2_UM2, PLATE_FANOUT, RELAY_CONTACTS, RELAY_MASS, RELAY_POWER, RELAY_VOLUME, TECH, TUBE_BRICK_POWER, fmtMass, fmtTime, fmtVolume,
 } from '../lib/tech';
@@ -335,6 +335,32 @@ export const chInverter: Chapter = {
         <a href="#/c/mosfet/1">chapter 1</a>'s off transistor, and "almost no static power" is milliwatts to watts on a
         large chip, not zero.</p></details>`,
       scene: () => ({ root: INV_CMOS, inputs: { a: 1 } }),
+    },
+    {
+      title: 'The wrong way round: weak levels',
+      body: `
+        <p>Swap the two: <span data-show="n1">an NMOS</span> to VDD, <span data-show="p1">a PMOS</span> to ground. With
+        <code>a = 1</code> the NMOS conducts, but only while its gate is a threshold above its source: <code>y</code>
+        rises to VDD − V<sub>t</sub> = 1.1 − 0.3 = <strong>0.8 V</strong> and the channel pinches off. That is a
+        <strong>weak 1</strong>, drawn between the 0 and 1 colours and tagged <strong>H</strong>. With <code>a = 0</code>
+        the PMOS stops at V<sub>t</sub>: a weak 0, <strong>L</strong> at 0.3 V. The bits are right; the levels are not.</p>
+        <p>A CMOS gate reading H still reads 1 and drives a full 0 from its rails, so the level is restored one gate
+        later. The price is in that gate: its PMOS sees 0.8 V against 1.1 V, right at threshold, partly on, and a
+        current flows from VDD to ground all the time. A 1 passed by an NMOS whose own gate is H is worse: 0.8 − 0.3 =
+        0.5 V, which no gate reads as anything: X.</p>
+        <p><span data-show="tg">A transmission gate</span> puts a PMOS beside the NMOS, gated by the complement
+        (<span data-show="inv">an inverter</span> makes <code>en_n</code>): the NMOS carries a 0 whole, the PMOS the
+        last 0.3 V of a 1, so <code>q</code> follows <code>d</code> at full swing. Two transistors and an inverted
+        enable instead of one transistor; muxes and latches built from them still come out smaller than in NANDs.</p>
+        <div class="try">Toggle <code>a</code> and read y's tag; set <code>en = 1</code> and toggle <code>d</code>:
+        <code>q</code> has no tag.</div>`,
+      scene: () => ({ root: WEAK_DEMO, inputs: { a: 1, d: 1, en: 1 } }),
+      challenge: {
+        kind: 'quiz', question: 'An NMOS whose gate is at VDD passes a 1 from VDD. What reaches its other side?',
+        options: ['VDD − Vt: a weak 1', 'VDD: a full 1', 'Vt: a weak 0', 'Nothing: it is off'], answer: 0,
+        why: ['', 'It stops conducting once its source is within Vt of its gate: the last Vt never arrives. A PMOS (or a transmission gate) carries a 1 whole.', 'That is a PMOS passing a 0.', 'A gate at VDD turns an NMOS on; it conducts until its source reaches VDD − Vt.'],
+        explain: 'VDD − Vt. An NMOS needs Vgs > Vt to conduct; as the far side rises toward VDD, Vgs shrinks to Vt and the channel closes. That is why pull-ups are PMOS and pull-downs NMOS in every static CMOS gate.',
+      },
     },
     {
       title: 'The cheaper, hotter way: a pull-up',
