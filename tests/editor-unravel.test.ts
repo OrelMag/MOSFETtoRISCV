@@ -222,10 +222,11 @@ describe('connectivity never changes', () => {
     expect(names.length).toBeGreaterThan(0);
   }, 400_000);
 
+  // (the largest, the rasterizer's set-up, takes ~38 s on a loaded machine: past the default 30 s)
   it.each(docs.map((d) => [d.id, d] as const))('library: %s', (_, d) => {
     const ws = workspace(d);
     if (errors(compileChip(d, (ref) => partDef(ref, () => undefined))).length) return;
     const { names } = roundTrip(ws, d.id);
     expect(names.length).toBeGreaterThan(0);
-  });
+  }, 120_000);
 });
