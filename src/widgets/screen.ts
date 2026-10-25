@@ -1,4 +1,4 @@
-// Chapter 32 widgets: the screen panel (what the scan-out sends, or the back frame being drawn, with the
+// Chapter 33 widgets: the screen panel (what the scan-out sends, or the back frame being drawn, with the
 // rasterizer's position), the scenes it sits in (the display alone, the rasterizer drawing into it) and the
 // edge-function explorer.
 

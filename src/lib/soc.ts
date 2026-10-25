@@ -1,4 +1,4 @@
-// Chapter 37's computer: the RV32I system CPU on a bus (systemCpu({ bus })) with a DMA engine as a second
+// Chapter 38's computer: the RV32I system CPU on a bus (systemCpu({ bus })) with a DMA engine as a second
 // master, and as slaves a RAM from address 0, a flash at 0x1000_0000 and the DMA's registers at
 // 0x4000_0000 (bus/model.ts is the golden model's view of the same map). The DMA's irq is the CPU's
 // external interrupt. Console, LEDs, switches and the timer stay inside the CPU at 0x8000_0000. Options add a
@@ -26,7 +26,7 @@ export interface SocOptions {
   ramK?: number;
   /** Wait states of the RAM (default 0). */
   ramWait?: number;
-  /** A DRAM at 0x2000_0000 (BUS_DRAM: chapter 35's controller, 16 KB). */
+  /** A DRAM at 0x2000_0000 (BUS_DRAM: chapter 36's controller, 16 KB). */
   dram?: boolean;
   /** A 64 × 64 screen at 0x5000_0000. */
   screen?: boolean;
@@ -99,7 +99,7 @@ export function busComputer(program: number[], flashImage: ArrayLike<number> = [
   const R = b.right, cg = symbolGeom(CPU), cpuY = b.instances.find((i) => i.name === cpu)!.at![1];
   d = define({
     id, name: `Computer on a bus (CPU, DMA, RAM, flash${o.dram ? ', DRAM' : ''}${o.screen ? ', screen' : ''}${o.keys ? ', keyboard' : ''}${RD ? ', card reader' : ''})`, category: 'cpu',
-    summary: `The system CPU and a DMA engine share one bus to a ${4 * 2 ** ramK}-byte RAM at 0, a flash at 0x1000_0000 and the DMA's registers at 0x4000_0000. The boot ROM (${4 * 2 ** imemK} bytes) holds the first instructions; everything else is fetched over the bus. The DMA's done interrupt is the CPU's external interrupt.${o.dram ? ' A DRAM (chapter 35\'s controller) at 0x2000_0000.' : ''}${o.screen ? ` A ${SOC_SCREEN} × ${SOC_SCREEN} screen (a byte a pixel) at 0x5000_0000.` : ''}${o.keys ? ' A keyboard at 0x6000_0000 (+0 the oldest key, taken when read; +4 status).' : ''}${RD ? ` A card reader at 0x7000_0000 holding a deck of ${o.cards!.cards.length} cards (+0 status: bit 0 a card waits, bit 1 the hopper is empty; +4 the card's word, taken when read).` : ''}`,
+    summary: `The system CPU and a DMA engine share one bus to a ${4 * 2 ** ramK}-byte RAM at 0, a flash at 0x1000_0000 and the DMA's registers at 0x4000_0000. The boot ROM (${4 * 2 ** imemK} bytes) holds the first instructions; everything else is fetched over the bus. The DMA's done interrupt is the CPU's external interrupt.${o.dram ? ' A DRAM (chapter 36\'s controller) at 0x2000_0000.' : ''}${o.screen ? ` A ${SOC_SCREEN} × ${SOC_SCREEN} screen (a byte a pixel) at 0x5000_0000.` : ''}${o.keys ? ' A keyboard at 0x6000_0000 (+0 the oldest key, taken when read; +4 status).' : ''}${RD ? ` A card reader at 0x7000_0000 holding a deck of ${o.cards!.cards.length} cards (+0 status: bit 0 a card waits, bit 1 the hopper is empty; +4 the card's word, taken when read).` : ''}`,
     ports: [bit('clk', 'in', 'left', true), bus('switches', 8, 'in'), bus('pcOut', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out'), bit('retire', 'out'), bit('dmaBusy', 'out')],
     symbol: { kind: 'box', label: 'COMPUTER' },
     netlist: () => ({ pins: { clk: [0, cpuY + cg.ports.clk.pos[1]], switches: [0, cpuY + cg.ports.switches.pos[1]], pcOut: [R, 4], consoleData: [R, 7], consoleValid: [R, 10], leds: [R, 13], retire: [R, 16], dmaBusy: [R, 19] }, instances: b.instances, nets: b.nets() }),
@@ -110,17 +110,17 @@ export function busComputer(program: number[], flashImage: ArrayLike<number> = [
 
 const words = (src: string) => { const a = assemble(src); if (a.errors.length) throw new Error(a.errors[0].message); return a.words; };
 
-/** Chapter 37's computer: the boot ROM and the flash holding the program it loads (bus/programs.ts). */
+/** Chapter 38's computer: the boot ROM and the flash holding the program it loads (bus/programs.ts). */
 export function chapterComputer(): ComponentDef {
   return busComputer(words(BOOT_SOURCE), words(PAYLOAD_SOURCE));
 }
 
 export const CHAPTER_COMPUTER = chapterComputer();
 
-/** The slaves of chapter 37's last computer. */
+/** The slaves of chapter 38's last computer. */
 export const SYSTEM_OPTIONS: SocOptions = { dram: true, screen: true, keys: true };
 
-/** Chapter 37's last computer: every slave; the boot ROM loads SYSTEM_SOURCE (keys to console, DRAM and screen). */
+/** Chapter 38's last computer: every slave; the boot ROM loads SYSTEM_SOURCE (keys to console, DRAM and screen). */
 export function systemComputer(): ComponentDef {
   const payload = words(SYSTEM_SOURCE);
   if (payload.length > SYSTEM_WORDS) throw new Error(`SYSTEM_SOURCE: ${payload.length} words, the boot ROM copies ${SYSTEM_WORDS}`);
@@ -136,10 +136,10 @@ export function asmDeck(name: string, src: string): Deck {
   return programDeck(name, a.lines.map((l) => ({ word: l.word, source: l.text })));
 }
 
-/** The deck of chapter 37's card computer: CARD_PAYLOAD_SOURCE. */
+/** The deck of chapter 38's card computer: CARD_PAYLOAD_SOURCE. */
 export const CARD_DECK = asmDeck('CARDS', CARD_PAYLOAD_SOURCE);
 
-/** Chapter 37's card computer: the card boot ROM, an empty flash, the reader holding `deck`. */
+/** Chapter 38's card computer: the card boot ROM, an empty flash, the reader holding `deck`. */
 export function cardComputer(deck: Deck = CARD_DECK, feed = CARD_FEED): ComponentDef {
   return busComputer(words(CARD_BOOT_SOURCE), [], { cards: deck, cardFeed: feed });
 }
@@ -159,7 +159,7 @@ export function busCore(imemK = 7): ComponentDef {
   const base = systemCpu([], { imemK, bus: true });
   d = define({
     id, name: 'RV32I system core on a bus (boot ROM outside)', category: 'cpu',
-    summary: `The system CPU of chapter 37 with its boot ROM outside: instructions below ${4 * 2 ** imemK} bytes come from a ROM on pcOut → romData, any other is fetched over the bus, and loads and stores go over the bus. Console, LEDs, switches and the timer (mtime) stay inside at 0x8000_0000; irq is the external interrupt.`,
+    summary: `The system CPU of chapter 38 with its boot ROM outside: instructions below ${4 * 2 ** imemK} bytes come from a ROM on pcOut → romData, any other is fetched over the bus, and loads and stores go over the bus. Console, LEDs, switches and the timer (mtime) stay inside at 0x8000_0000; irq is the external interrupt.`,
     ports: [...base.ports.filter((p) => p.dir === 'in'), bus('romData', 32, 'in'), ...base.ports.filter((p) => p.dir === 'out')],
     symbol: { kind: 'box', label: 'RV32I BUS CORE' },
     netlist: () => {
@@ -178,7 +178,7 @@ export function busCore(imemK = 7): ComponentDef {
   return d;
 }
 
-/** The sandbox system's map (chapter 37's): RAM, flash, DRAM, DMA, screen, I/O (keyboard and timer), then the default slave. */
+/** The sandbox system's map (chapter 38's): RAM, flash, DRAM, DMA, screen, I/O (keyboard and timer), then the default slave. */
 export const SANDBOX_MAP = [MAP.ram, MAP.flash, MAP.dram, MAP.dma, MAP.screen, MAP.keys, 0xf];
 
 /** The sandbox system's parts, by role (library ids the example places). */

@@ -1,7 +1,7 @@
-// Chapter 36's flash as reference models: a NAND device (pages programmed once per erase, only 1 → 0;
+// Chapter 37's flash as reference models: a NAND device (pages programmed once per erase, only 1 → 0;
 // blocks erased whole; busy times; blocks that wear out) and the flash translation layer a controller
 // runs on it (a logical-to-physical table, writes out of place, greedy garbage collection, wear
-// levelling, bad blocks skipped). Chapter 37's system reads its flash through FlashDevice.
+// levelling, bad blocks skipped). Chapter 38's system reads its flash through FlashDevice.
 
 /** Busy time of each operation in our clock cycles: SLC NAND's 25 µs / 200 µs / 1.5 ms scaled by about 1/100, the ratios kept. */
 export const FLASH_TIMES = { read: 64, program: 512, erase: 4096 } as const;

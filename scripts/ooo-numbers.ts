@@ -1,4 +1,4 @@
-// The numbers chapter 25's prose quotes (tests/ooo-chapter.test.ts pins them).
+// The numbers chapter 26's prose quotes (tests/ooo-chapter.test.ts pins them).
 import { assemble } from '../src/riscv/asm';
 import { BENCHMARKS } from '../src/riscv/benchprograms';
 import { dataflow, traceOf } from '../src/riscv/ilp';

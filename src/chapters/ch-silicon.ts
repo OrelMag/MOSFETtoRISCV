@@ -75,7 +75,7 @@ function hallStep(): Step {
 }
 
 export const chSilicon: Chapter = {
-  id: 'silicon', num: 27, title: 'From netlist to silicon', level: 'Physical design',
+  id: 'silicon', num: 28, title: 'From netlist to silicon', level: 'Physical design',
   blurb: 'Standard cells in layout, how they are made, technology mapping, place and route, the clock tree, a floorplan of our dual-core, the real flow on two of our CPUs against our own estimates, and wafer economics.',
   goals: [
     'read a standard cell\'s layout: transistors where polysilicon crosses diffusion, PMOS in the n-well, NMOS below',
@@ -193,7 +193,7 @@ export const chSilicon: Chapter = {
         power. <strong>Clock gating</strong> is the cheapest cure: an enable, latched so that it cannot glitch, stops the clock of a register that is
         not being written; synthesis inserts it from enables such as the register file's write enables.</p>
         <p><strong>Leakage</strong> is the other part: an off transistor still conducts a little, a current that grows about tenfold for every 60 to
-        100 mV less threshold voltage. It flows whether the logic switches or not (the reason Dennard scaling ended, <a href="#/c/multicore/0">chapter 26</a>),
+        100 mV less threshold voltage. It flows whether the logic switches or not (the reason Dennard scaling ended, <a href="#/c/multicore/0">chapter 27</a>),
         and is fought with high-threshold cells off the critical path and power gating, switching an idle block's supply off. The current arrives through a
         <strong>power grid</strong>: wide straps on the top metal layers down to each cell row's VDD and GND rails. Its resistance drops the supply (IR drop)
         and slows the cells far from the pads, so the grid is sized and checked like the timing.</p></details>`,
@@ -202,7 +202,7 @@ export const chSilicon: Chapter = {
     {
       title: 'A floorplan of our dual-core',
       body: `
-        <p>Put it all together: the dual-core of <a href="#/c/multicore/0">chapter 26</a>, sized from its netlist. In the open SkyWater 130 nm process its logic would fill about 0.73 mm × 0.73 mm.
+        <p>Put it all together: the dual-core of <a href="#/c/multicore/0">chapter 27</a>, sized from its netlist. In the open SkyWater 130 nm process its logic would fill about 0.73 mm × 0.73 mm.
         At 28 nm it shrinks to about 0.2 mm on a side, and then the ring of bond pads, not the logic, sets the die size (pad-limited). Real systems-on-chip are the opposite: billions of transistors, with memories as dense SRAM macros, not flip-flops.</p>
         <p>The open-source flow is real: Yosys (synthesis) and OpenROAD (placement, clock tree, routing) take Verilog like the structural Verilog on every component's Verilog tab and produce
         a layout that SkyWater can manufacture. The next step does it, and its table puts this estimate (each NAND equivalent priced as one NAND2 cell)
@@ -245,8 +245,8 @@ export const chSilicon: Chapter = {
         <p>That is the whole path: a voltage-controlled switch, a NAND, gates, adders, latches, memories, an ALU, a single-cycle RISC-V, a pipeline, interrupts,
         multiplication, caches, microcode, floating point, several instructions a cycle out of order, two cores, and geometry on a wafer. Every value on every wire along the way was computed, not drawn, and every box can still be opened all the way down to
         the four transistors of a NAND.</p>
-        <p>The journey goes on with the same bricks arranged for throughput: <a href="#/c/lanes/0">chapters 28–33</a> build a GPU, from lanes sharing
-        one instruction stream to a rasterizer drawing into a frame buffer. <a href="#/c/dram/0">Chapters 34–37</a> go below the caches: a DRAM
+        <p>The journey goes on with the same bricks arranged for throughput: <a href="#/c/lanes/0">chapters 29–34</a> build a GPU, from lanes sharing
+        one instruction stream to a rasterizer drawing into a frame buffer. <a href="#/c/dram/0">Chapters 35–38</a> go below the caches: a DRAM
         cell by cell, its controller, flash, and a bus with DMA that boots a computer from flash. The appendices rebuild a real chip, the
         <a href="#/c/appendix-6502/0">6502</a>, in NMOS transistors, and run <a href="#/c/appendix-doom/0">Doom</a> on the RV32IM system, a window of it
         on the gates.</p>

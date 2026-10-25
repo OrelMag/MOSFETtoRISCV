@@ -57,7 +57,7 @@ export interface CpuSceneOptions {
   m?: boolean;
   /** Single-cycle CPU with a data cache in front of a slow main memory (adds cache statistics): see CpuOptions.dcache. */
   dcache?: boolean | 'wb' | 'wb2';
-  /** With dcache 'wb' / 'wb2': main memory is chapter 35's DRAM controller and device. */
+  /** With dcache 'wb' / 'wb2': main memory is chapter 36's DRAM controller and device. */
   dram?: DramConfig;
   /** Fetch through an instruction cache (adds fetch-miss stalls). */
   icache?: boolean;
@@ -67,9 +67,9 @@ export interface CpuSceneOptions {
   fpu?: boolean;
   /** Show the program editor. */
   editable?: boolean;
-  /** The dual-issue RV32IM pipeline of chapter 25 (implies pipeline and m: two lanes in the listing and the diagram). */
+  /** The dual-issue RV32IM pipeline of chapter 26 (implies pipeline and m: two lanes in the listing and the diagram). */
   wide?: boolean;
-  /** Chapter 25's out-of-order core (implies m; runs on the cycle engine; adds the Out of order panel). */
+  /** Chapter 26's out-of-order core (implies m; runs on the cycle engine; adds the Out of order panel). */
   ooo?: boolean;
   /** The single-cycle CPU's ROM (2^imemK words) and data memory (2^dmemK words), when not the defaults (6 and 5). */
   imemK?: number;

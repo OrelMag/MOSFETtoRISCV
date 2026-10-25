@@ -16,7 +16,7 @@ const u = (sim: GateSim, node: HierNode, port: string) => pack(sim.getBits(node.
 const child = (n: HierNode, ...path: string[]) => path.reduce((x, p) => x.children!.get(p)!, n);
 
 export interface CosimOptions {
-  /** Chapter 31's core (shared memory, bar, amoadd.w, accesses per line or bank). */
+  /** Chapter 32's core (shared memory, bar, amoadd.w, accesses per line or bank). */
   lsu?: boolean;
   sharedLatency?: number;
   globalEvery?: number;
@@ -98,7 +98,7 @@ describe('warp core (gate level) vs the warp golden model', () => {
   it('sum4: 4 warps, 8-cycle loads', () => { cosimWarps(sum4, 4, 4, 8); }, 600000);
 });
 
-describe('the numbers chapter 30 quotes', () => {
+describe('the numbers chapter 31 quotes', () => {
   it('saxpy cycles and instructions on 1, 2 and 4 warps with 8-cycle loads; what a warp costs', () => {
     const p = WARP_PROGRAMS.find((x) => x.id === 'saxpy64')!;
     const words = assemble(p.source(4)).words;
@@ -111,7 +111,7 @@ describe('the numbers chapter 30 quotes', () => {
   });
 });
 
-describe('chapter 31 core (gate level): access unit, shared memory, bar, amoadd.w, mul', () => {
+describe('chapter 32 core (gate level): access unit, shared memory, bar, amoadd.w, mul', () => {
   const P = (id: string) => WARP_PROGRAMS.find((p) => p.id === id)!;
   it('cols: coalesced, one line per load', () => { cosimWarps(P('cols'), 4, 4, 8, { lsu: true }); }, 600000);
   it('rows: a line per lane', () => { cosimWarps(P('rows'), 4, 4, 8, { lsu: true }); }, 600000);
@@ -121,10 +121,10 @@ describe('chapter 31 core (gate level): access unit, shared memory, bar, amoadd.
   it('hist: 4 warps', () => { cosimWarps(P('hist'), 4, 4, 8, { lsu: true }); }, 600000);
   it('matmul: mul in the lanes, a global line every 3 cycles', () => { cosimWarps(P('matmul'), 4, 4, 8, { lsu: true, globalEvery: 3 }); }, 600000);
   it('matmulTiled: tiles in shared memory, bar, slots taken by global requests', () => { cosimWarps(P('matmulTiled'), 4, 4, 8, { lsu: true, globalEvery: 2 }); }, 600000);
-  it('saxpy: as chapter 30 (every load one line)', () => { expect(cosimWarps(P('saxpy64'), 4, 4, 8, { lsu: true }).cycles).toBe(172); }, 600000);
+  it('saxpy: as chapter 31 (every load one line)', () => { expect(cosimWarps(P('saxpy64'), 4, 4, 8, { lsu: true }).cycles).toBe(172); }, 600000);
 });
 
-describe('the numbers chapter 31 quotes', () => {
+describe('the numbers chapter 32 quotes', () => {
   const P = (id: string) => WARP_PROGRAMS.find((p) => p.id === id)!;
   const run = (id: string) => {
     const p = P(id);

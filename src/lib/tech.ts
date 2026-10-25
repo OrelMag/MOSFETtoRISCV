@@ -56,7 +56,7 @@ export const FOLLOWER_FANOUT = 10;
 export const TUBE_VOLUME = (ENIAC_PANEL.w * ENIAC_PANEL.d * ENIAC_PANEL.h) / ENIAC_PANEL.tubes;
 export const TUBE_MASS = ENIAC.mass / ENIAC.tubes;
 
-/** A NAND2 in a 28 nm-class process (µm², chapter 27's floorplan) at 70 % utilization. */
+/** A NAND2 in a 28 nm-class process (µm², chapter 28's floorplan) at 70 % utilization. */
 export const NAND2_UM2 = 0.3;
 export const UTILIZATION = 0.7;
 

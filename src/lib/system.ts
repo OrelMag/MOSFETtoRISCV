@@ -471,7 +471,7 @@ export interface SystemCpuOptions {
   imemK?: number;
   dmemK?: number;
   /**
-   * Memory over a bus (chapter 37): no data memory inside, but a bus master port (busMemUnit). The ROM
+   * Memory over a bus (chapter 38): no data memory inside, but a bus master port (busMemUnit). The ROM
    * holds the first 2^imemK words of instructions; any other address is fetched over the bus, and loads
    * and stores go over it too (I/O at 0x8000_0000 stays inside). The CPU stalls until each is done
    * (retire = 0) and takes an interrupt only between bus accesses.

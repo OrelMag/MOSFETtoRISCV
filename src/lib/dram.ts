@@ -1,4 +1,4 @@
-// A DRAM array at switch level (chapter 34). 1T1C cells hang on a bit line; a second bit line of
+// A DRAM array at switch level (chapter 35). 1T1C cells hang on a bit line; a second bit line of
 // the same capacitance, with no cells, is the reference. Both are precharged and equalized to VDD/2;
 // raising a word line shares the cell's charge with its bit line, which moves by a few tens of
 // millivolts (SwitchSim's charge levels); the sense amplifier compares the pair, drives them to the

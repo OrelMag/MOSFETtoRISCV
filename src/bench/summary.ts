@@ -24,7 +24,7 @@ export interface BenchCpu {
   nands: number;
   /** NAND delays (static timing). */
   period: number;
-  /** Main memory is an off-chip DRAM device (chapter 35): not in `nands`, so kept out of the cost comparisons. */
+  /** Main memory is an off-chip DRAM device (chapter 36): not in `nands`, so kept out of the cost comparisons. */
   offChip?: boolean;
   runs: BenchRun[];
 }
@@ -50,7 +50,7 @@ export const FAMILIES: { key: Family; label: string }[] = [
   { key: 'wide', label: 'Two-wide (dual issue, out of order)' },
 ];
 
-/** CPUs that issue two instructions a cycle (chapter 25). */
+/** CPUs that issue two instructions a cycle (chapter 26). */
 const WIDE = new Set(['pipe-2w', 'ooo']);
 /** The system CPUs and the dual-core are single-cycle cores. */
 export const familyOf = (id: string): Family => (WIDE.has(id) ? 'wide' : id.startsWith('mc') ? 'multi' : id.startsWith('pipe') || id === 'fppipe' ? 'pipe' : 'single');
