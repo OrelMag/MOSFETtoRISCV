@@ -278,7 +278,7 @@ export function ownerOf(ws: Workspace, id: string): ChipDoc | undefined {
 
 /** Diagram drawing hints for each arc: a bend apart from a reverse arc or around a state in the way, loop angles. */
 function drawingOf(doc: FsmDoc): Pick<FsmArc, 'bend' | 'loop'>[] {
-  const loops = new Map<number, number>();
+  const loops = new Map<number, number>(), pairs = new Map<string, number>();
   return doc.arcs.map((a) => {
     if (a.from === a.to) {
       const k = loops.get(a.from) ?? 0;
@@ -294,7 +294,11 @@ function drawingOf(doc: FsmDoc): Pick<FsmArc, 'bend' | 'loop'>[] {
       if (t <= 0 || t >= 1) return false;
       return Math.hypot(A[0] + t * (B[0] - A[0]) - s.at[0], A[1] + t * (B[1] - A[1]) - s.at[1]) < 40;
     });
-    return { bend: blocked ? -70 : reverse ? 22 : 0 };
+    // every arc a gentle curve (a straight one reads as a wire), apart from a reverse arc, around a state in the way;
+    // more arcs between the same two states fan out
+    const k = pairs.get(`${a.from}>${a.to}`) ?? 0;
+    pairs.set(`${a.from}>${a.to}`, k + 1);
+    return { bend: blocked ? -70 - 30 * k : (reverse ? 24 : 16) + 30 * k };
   });
 }
 

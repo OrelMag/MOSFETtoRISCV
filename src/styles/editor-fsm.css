@@ -66,3 +66,33 @@
   .fsm-check { min-height: 40px; }
 }
 .fsm-edit text.fsm-al.fsm-drag { pointer-events: auto; cursor: move; }
+
+/* Layout: narrow, everything stacked; wide (Expand), the diagram large beside its properties. */
+.fsm-pane { position: relative; }
+/* wide: the pane takes the space beside the canvas, the canvas keeps a strip (its live circuit) */
+.sb-left:has(> .fsm-pane.wide:not([hidden])) { flex: 1 1 auto; min-width: 0; }
+.fsm-pane.wide { width: 100% !important; max-width: none; }
+.sb-mid:has(.fsm-pane.wide:not([hidden])) > .sb-canvas { flex: 0 0 180px; }
+.fsm-grip { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 3; }
+.fsm-grip:hover { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.fsm-main { display: flex; flex-wrap: wrap; align-items: flex-start; }
+.fsm-left { flex: 1 1 100%; min-width: 0; }
+.fsm-right { flex: 1 1 100%; min-width: 0; }
+.fsm-pane.wide .fsm-left { flex: 1 1 400px; }
+.fsm-pane.wide .fsm-right { flex: 0 1 310px; border-left: 1px solid var(--border); }
+.fsm-pane.wide .fsm-right > .fsm-sec:first-child { border-top: 0; }
+.fsm-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fsm-keys { padding: 2px 12px 8px; }
+
+/* Drawing on the diagram: a state's rim starts an arc, the rubber band follows the pointer, a name edits in place. */
+.fsm-rim { fill: none; stroke: transparent; stroke-width: 9; pointer-events: stroke; cursor: crosshair; }
+.fsm-rim:hover { stroke: color-mix(in srgb, var(--accent) 35%, transparent); }
+.fsm-band { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 4; pointer-events: none; }
+.fsm-rename {
+  position: absolute; width: 90px; box-sizing: border-box; text-align: center; font: 600 13px var(--font-ui, inherit);
+  color: var(--text); background: var(--surface); border: 2px solid var(--accent); border-radius: 6px; padding: 3px 4px; z-index: 2;
+}
+@media (pointer: coarse) {
+  .fsm-rim { stroke-width: 16; }
+  .fsm-grip { width: 16px; right: -8px; }
+}
