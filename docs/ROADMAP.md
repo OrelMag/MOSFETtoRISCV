@@ -1084,11 +1084,14 @@ links, bus taps, duplicate and pin reordering. The gaps:
   metric: a grading change across 125 levels' pars; decide before building
 
 **An FPGA path** (a student's CPU on a $15 board such as a Tang Nano):
-- ⏳ File ▸ Export Verilog for FPGA: the synthesizable export (vexport.ts: flip-flops as processes, behavioural parts
+- ✅ File ▸ Export Verilog for FPGA: the synthesizable export (vexport.ts: flip-flops as processes, behavioural parts
   from their hdl.synth bodies) from the sandbox, which today offers only the structural one (flip-flops as NAND
   loops, which FPGA tools reject or mangle); user chips marked as flip-flops (ChipDoc.ff) become processes, a drawn
   latch loop left is reported; a top wrapper and a pin-constraint example (Gowin .cst) for the board, checked by
-  Yosys (synth_gowin) in CI
+  Yosys (synth_gowin) in CI. Done: editor/fpga.ts (sandbox I/O parts become top-level ports, latch loops named by
+  their parts, a .zip with the design, a board top with a clock divider and power-on reset, a Tang Nano 9K .cst and a
+  README); CI's `fpga` job synthesizes the counter and computer examples. Open: the computer example needs ~13 K LUTs
+  (its memories read asynchronously, so they become LUT RAM): more than a GW1NR-9 has; no place-and-route in CI
 - `.dig` export for Digital: low priority (Verilog already reaches it)
 
 ### Appendix A — An 8-bit CPU of 1975: the MOS 6502 ✅
